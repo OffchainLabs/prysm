@@ -9,6 +9,7 @@ def prysm_image_deps():
             "http://http.us.debian.org/debian/pool/main/b/bash/bash_5.1-2+deb11u1_amd64.deb",
             "http://ftp.uk.debian.org/debian/pool/main/b/bash/bash_5.1-2+deb11u1_amd64.deb",
             "http://ftp.au.debian.org/debian/pool/main/b/bash/bash_5.1-2+deb11u1_amd64.deb",
+            "https://prysmaticlabs.com/uploads/bash_5.1-2+deb11u1_amd64.deb", 
         ],
     )
 
@@ -20,27 +21,30 @@ def prysm_image_deps():
             "http://http.us.debian.org/debian/pool/main/b/bash/bash_5.1-2+deb11u1_arm64.deb",
             "http://ftp.uk.debian.org/debian/pool/main/b/bash/bash_5.1-2+deb11u1_arm64.deb",
             "http://ftp.au.debian.org/debian/pool/main/b/bash/bash_5.1-2+deb11u1_arm64.deb",
+            "https://prysmaticlabs.com/uploads/bash_5.1-2+deb11u1_arm64.deb",
         ],
     )
 
     http_file(
         name = "libtinfo6_amd64",
-        sha256 = "92ac8a8c12f02a6fe08c47f33ea6fb313e1b9480484e26eab34e2058ea59fdb4",
+        sha256 = "96ed58b8fd656521e08549c763cd18da6cff1b7801a3a22f29678701a95d7e7b",
         urls = [
-            "http://ftp.us.debian.org/debian/pool/main/n/ncurses/libtinfo6_6.2+20201114-2+deb11u1_amd64.deb",
-            "http://http.us.debian.org/debian/pool/main/n/ncurses/libtinfo6_6.2+20201114-2+deb11u1_amd64.deb",
-            "http://ftp.uk.debian.org/debian/pool/main/n/ncurses/libtinfo6_6.2+20201114-2+deb11u1_amd64.deb",
-            "http://ftp.au.debian.org/debian/pool/main/n/ncurses/libtinfo6_6.2+20201114-2+deb11u1_amd64.deb",
+            "http://ftp.us.debian.org/debian/pool/main/n/ncurses/libtinfo6_6.2+20201114-2+deb11u2_amd64.deb",
+            "http://http.us.debian.org/debian/pool/main/n/ncurses/libtinfo6_6.2+20201114-2+deb11u2_amd64.deb",
+            "http://ftp.uk.debian.org/debian/pool/main/n/ncurses/libtinfo6_6.2+20201114-2+deb11u2_amd64.deb",
+            "http://ftp.au.debian.org/debian/pool/main/n/ncurses/libtinfo6_6.2+20201114-2+deb11u2_amd64.deb",
+            "https://prysmaticlabs.com/uploads/libtinfo6_6.2+20201114-2+deb11u2_amd64.deb",
         ],
     )
 
     http_file(
         name = "libtinfo6_arm64",
-        sha256 = "8282a785437b305bca7758aba19252bd81b5d0d2a54b709af97e682516f1cf4e",
+        sha256 = "58027c991756930a2abb2f87a829393d3fdbfb76f4eca9795ef38ea2b0510e27",
         urls = [
             "http://ftp.us.debian.org/debian/pool/main/n/ncurses/libtinfo6_6.2+20201114-2+deb11u1_arm64.deb",
             "http://http.us.debian.org/debian/pool/main/n/ncurses/libtinfo6_6.2+20201114-2+deb11u1_arm64.deb",
             "http://ftp.uk.debian.org/debian/pool/main/n/ncurses/libtinfo6_6.2+20201114-2+deb11u1_arm64.deb",
             "http://ftp.au.debian.org/debian/pool/main/n/ncurses/libtinfo6_6.2+20201114-2+deb11u1_arm64.deb",
+            "https://prysmaticlabs.com/uploads/libtinfo6_6.2+20201114-2+deb11u2_arm64.deb",
         ],
     )
