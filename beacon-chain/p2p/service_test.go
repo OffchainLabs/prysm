@@ -181,17 +181,6 @@ func TestListenForNewNodes(t *testing.T) {
 	require.NoError(t, err)
 	defer bootListener.Close()
 
-	// Allow bootnode's table to have its initial refresh. This allows
-	// inbound nodes to be added in.
-	time.Sleep(5 * time.Second)
-
-	// Use shorter period for testing.
-	currentPeriod := pollingPeriod
-	pollingPeriod = testPollingPeriod
-	defer func() {
-		pollingPeriod = currentPeriod
-	}()
-
 	bootNode := bootListener.Self()
 
 	// Setup other nodes.
