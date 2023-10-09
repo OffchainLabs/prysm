@@ -12,7 +12,9 @@ import "testing"
 func SetupTestConfigCleanup(t testing.TB) {
 	prevDefaultBeaconConfig := mainnetBeaconConfig.Copy()
 	temp := configs.getActive().Copy()
+	cfgrw.Lock()
 	undo, err := SetActiveWithUndo(temp)
+	cfgrw.Unlock()
 	if err != nil {
 		t.Error(err)
 	}
@@ -25,6 +27,8 @@ func SetupTestConfigCleanup(t testing.TB) {
 		if err != nil {
 			t.Error(err)
 		}
+		networkConfigLock.Lock()
 		networkConfig = prevNetworkCfg
+		networkConfigLock.Unlock()
 	})
 }
