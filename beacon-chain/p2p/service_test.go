@@ -299,12 +299,18 @@ func TestService_JoinLeaveTopic(t *testing.T) {
 	s, err := NewService(ctx, &Config{StateNotifier: &mock.MockStateNotifier{}, ClockWaiter: gs, DB: testDB.SetupDB(t)})
 	require.NoError(t, err)
 
+	wait := make(chan struct{})
+	go func() {
+		s.awaitStateInitialized()
+		wait <- struct{}{}
+	}()
 	fd := initializeStateWithForkDigest(ctx, t, gs)
 	s.setAllForkDigests()
 	s.awaitStateInitialized()
 
 	assert.Equal(t, 0, len(s.joinedTopics))
 
+	<-wait
 	topic := fmt.Sprintf(AttestationSubnetTopicFormat, fd, 42) + "/" + encoder.ProtocolSuffixSSZSnappy
 	topicHandle, err := s.JoinTopic(topic)
 	assert.NoError(t, err)
