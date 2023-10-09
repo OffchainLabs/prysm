@@ -2,7 +2,6 @@ package params
 
 import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/mohae/deepcopy"
 )
 
 // NetworkConfig defines the spec based network parameters.
@@ -19,27 +18,6 @@ type NetworkConfig struct {
 }
 
 var networkConfig = mainnetNetworkConfig
-
-// BeaconNetworkConfig returns the current network config for
-// the beacon chain.
-func BeaconNetworkConfig() *NetworkConfig {
-	return networkConfig
-}
-
-// OverrideBeaconNetworkConfig will override the network
-// config with the added argument.
-func OverrideBeaconNetworkConfig(cfg *NetworkConfig) {
-	networkConfig = cfg.Copy()
-}
-
-// Copy returns Copy of the config object.
-func (c *NetworkConfig) Copy() *NetworkConfig {
-	config, ok := deepcopy.Copy(*c).(NetworkConfig)
-	if !ok {
-		config = *networkConfig
-	}
-	return &config
-}
 
 // MaxRequestBlock determines the maximum number of blocks that can be requested in a single
 // request for a given epoch. If the epoch is at or beyond config's `DenebForkEpoch`,
