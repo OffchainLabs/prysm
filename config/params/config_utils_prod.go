@@ -1,5 +1,7 @@
 //go:build !develop
 
+//go:test !develop
+
 package params
 
 import (

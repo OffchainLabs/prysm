@@ -1,8 +1,10 @@
+//go:build !develop
+
+//go:test !develop
+
 package params
 
-import (
-	"testing"
-)
+import "testing"
 
 const (
 	EnvNameOverrideAccept = "PRYSM_API_OVERRIDE_ACCEPT"

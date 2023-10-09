@@ -1,13 +1,15 @@
 //go:build develop
 
+//go:test develop
+
 package params
 
 import "testing"
 
-// SetupTestConfigCleanupWithLock preserves configurations allowing to modify them within tests without any
+// SetupTestConfigCleanup preserves configurations allowing to modify them within tests without any
 // restrictions, everything is restored after the test. This locks our config when undoing our config
 // change in order to satisfy the race detector.
-func SetupTestConfigCleanupWithLock(t testing.TB) {
+func SetupTestConfigCleanup(t testing.TB) {
 	prevDefaultBeaconConfig := mainnetBeaconConfig.Copy()
 	temp := configs.getActive().Copy()
 	undo, err := SetActiveWithUndo(temp)
