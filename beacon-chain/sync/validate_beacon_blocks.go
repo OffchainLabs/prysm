@@ -3,6 +3,8 @@ package sync
 import (
 	"context"
 	"fmt"
+	"os"
+	"runtime/pprof"
 	"time"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -35,10 +37,47 @@ var (
 	errRejectCommitmentLen = errors.New("[REJECT] The length of KZG commitments is less than or equal to the limitation defined in Consensus Layer")
 )
 
+func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, msg *pubsub.Message) (pubsub.ValidationResult, error) {
+	done := make(chan struct {
+		result pubsub.ValidationResult
+		err    error
+	})
+
+	go func() {
+		result, err := func() (pubsub.ValidationResult, error) {
+			return s.validateBeaconBlockPubSubInternal(ctx, pid, msg)
+		}()
+		done <- struct {
+			result pubsub.ValidationResult
+			err    error
+		}{result, err}
+	}()
+
+	select {
+	case res := <-done:
+		return res.result, res.err
+	case <-time.After(12 * time.Second):
+		filePath := "/tmp/pre-confirm-blocks.goroutine"
+		file, err := os.Create(filePath)
+		if err != nil {
+			log.WithError(err).Error("Could not create file for goroutine dump")
+		}
+		defer func() {
+			if err := file.Close(); err != nil {
+				log.WithError(err).Error("Could not close file for goroutine dump")
+			}
+		}()
+		if err := pprof.Lookup("goroutine").WriteTo(file, 2); err != nil {
+			log.WithError(err).Error("Could not write goroutine dump to file")
+		}
+	}
+	return pubsub.ValidationIgnore, nil
+}
+
 // validateBeaconBlockPubSub checks that the incoming block has a valid BLS signature.
 // Blocks that have already been seen are ignored. If the BLS signature is any valid signature,
 // this method rebroadcasts the message.
-func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, msg *pubsub.Message) (pubsub.ValidationResult, error) {
+func (s *Service) validateBeaconBlockPubSubInternal(ctx context.Context, pid peer.ID, msg *pubsub.Message) (pubsub.ValidationResult, error) {
 	receivedTime := prysmTime.Now()
 	// Validation runs on publish (not just subscriptions), so we should approve any message from
 	// ourselves.

@@ -82,6 +82,7 @@ type FastGetter interface {
 	DependentRoot(primitives.Epoch) ([32]byte, error)
 	TargetRootForEpoch([32]byte, primitives.Epoch) ([32]byte, error)
 	UnrealizedJustifiedPayloadBlockHash() [32]byte
+	SafeHeadPayloadBlockHash() [32]byte
 	Weight(root [32]byte) (uint64, error)
 	ParentRoot(root [32]byte) ([32]byte, error)
 }

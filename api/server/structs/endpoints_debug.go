@@ -31,6 +31,7 @@ type GetForkChoiceDumpResponse struct {
 type ForkChoiceDumpExtraData struct {
 	UnrealizedJustifiedCheckpoint *Checkpoint `json:"unrealized_justified_checkpoint"`
 	UnrealizedFinalizedCheckpoint *Checkpoint `json:"unrealized_finalized_checkpoint"`
+	SafeHeadRoot                  string      `json:"safe_head_root"`
 	ProposerBoostRoot             string      `json:"proposer_boost_root"`
 	PreviousProposerBoostRoot     string      `json:"previous_proposer_boost_root"`
 	HeadRoot                      string      `json:"head_root"`

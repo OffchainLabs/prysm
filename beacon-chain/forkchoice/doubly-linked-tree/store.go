@@ -62,6 +62,39 @@ func (s *Store) head(ctx context.Context) ([32]byte, error) {
 	return bestDescendant.root, nil
 }
 
+// safeHead starts from justified root and then follows the best descendant links
+// to find the best safe head block.
+func (s *Store) safeHead(ctx context.Context) ([32]byte, error) {
+	ctx, span := trace.StartSpan(ctx, "doublyLinkedForkchoice.safeHead")
+	defer span.End()
+
+	if err := ctx.Err(); err != nil {
+		return [32]byte{}, err
+	}
+
+	// JustifiedRoot has to be known
+	justifiedNode, ok := s.nodeByRoot[s.justifiedCheckpoint.Root]
+	if !ok || justifiedNode == nil {
+		// If the justifiedCheckpoint is from genesis, then the root is
+		// zeroHash. In this case it should be the root of forkchoice
+		// tree.
+		if s.justifiedCheckpoint.Epoch == params.BeaconConfig().GenesisEpoch {
+			justifiedNode = s.treeRootNode
+		} else {
+			return [32]byte{}, errors.WithMessage(errUnknownJustifiedRoot, fmt.Sprintf("%#x", s.justifiedCheckpoint.Root))
+		}
+	}
+
+	// If the justified node doesn't have a best confirmed descendant,
+	// the best node is itself.
+	bestConfirmedDescendant := justifiedNode.bestConfirmedDescendant
+	if bestConfirmedDescendant == nil {
+		bestConfirmedDescendant = justifiedNode
+	}
+
+	return bestConfirmedDescendant.root, nil
+}
+
 // insert registers a new block node to the fork choice store's node list.
 // It then updates the new node's parent with the best child and descendant node.
 func (s *Store) insert(ctx context.Context,
@@ -143,7 +176,12 @@ func (s *Store) insert(ctx context.Context,
 		// Update best descendants
 		jEpoch := s.justifiedCheckpoint.Epoch
 		fEpoch := s.finalizedCheckpoint.Epoch
-		if err := s.treeRootNode.updateBestDescendant(ctx, jEpoch, fEpoch, slots.ToEpoch(currentSlot)); err != nil {
+		secondsSinceSlotStart, err := slots.SecondsSinceSlotStart(currentSlot, s.genesisTime, uint64(time.Now().Unix()))
+		if err != nil {
+			log.WithError(err).Error("could not compute seconds since slot start")
+			secondsSinceSlotStart = 0
+		}
+		if err := s.treeRootNode.updateBestDescendant(ctx, jEpoch, fEpoch, currentSlot, secondsSinceSlotStart, s.committeeWeight); err != nil {
 			_, remErr := s.removeNode(ctx, n)
 			if remErr != nil {
 				log.WithError(remErr).Error("could not remove node")
