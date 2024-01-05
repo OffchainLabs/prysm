@@ -210,7 +210,7 @@ func TestForkChoice_IsCanonicalReorg(t *testing.T) {
 	require.Equal(t, uint64(10), f.store.nodeByRoot[[32]byte{'1'}].weight)
 	require.Equal(t, uint64(0), f.store.nodeByRoot[[32]byte{'2'}].weight)
 
-	require.NoError(t, f.store.treeRootNode.updateBestDescendant(ctx, 1, 1, 1))
+	require.NoError(t, f.store.treeRootNode.updateBestDescendant(ctx, 1, 1, 6, f.store.committeeWeight))
 	require.DeepEqual(t, [32]byte{'3'}, f.store.treeRootNode.bestDescendant.root)
 
 	r1 := [32]byte{'1'}

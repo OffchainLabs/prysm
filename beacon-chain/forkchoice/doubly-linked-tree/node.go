@@ -36,14 +36,34 @@ func (n *Node) applyWeightChanges(ctx context.Context) error {
 	return nil
 }
 
+func (n *Node) isOneConfirmed(currentSlot primitives.Slot, committeeWeight uint64) bool {
+	proposerBoostWeight := (committeeWeight * params.BeaconConfig().ProposerScoreBoost) / 100
+	if n.parent != nil {
+		maxPossibleSupport := uint64(currentSlot-n.parent.slot) * committeeWeight
+		if maxPossibleSupport == 0 {
+			return true
+		}
+		safeThreshold := (1 + proposerBoostWeight/maxPossibleSupport) / 2
+		return n.balance/maxPossibleSupport > safeThreshold
+	} else {
+		maxPossibleSupport := uint64(currentSlot-n.slot+1) * committeeWeight
+		if maxPossibleSupport == 0 {
+			return true
+		}
+		safeThreshold := (1 + proposerBoostWeight/maxPossibleSupport) / 2
+		return n.balance/maxPossibleSupport > safeThreshold
+	}
+}
+
 // updateBestDescendant updates the best descendant of this node and its
 // children.
-func (n *Node) updateBestDescendant(ctx context.Context, justifiedEpoch, finalizedEpoch, currentEpoch primitives.Epoch) error {
+func (n *Node) updateBestDescendant(ctx context.Context, justifiedEpoch primitives.Epoch, finalizedEpoch primitives.Epoch, currentSlot primitives.Slot, committeeWeight uint64) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 	if len(n.children) == 0 {
 		n.bestDescendant = nil
+		n.bestConfirmedDescendant = nil
 		return nil
 	}
 
@@ -54,9 +74,10 @@ func (n *Node) updateBestDescendant(ctx context.Context, justifiedEpoch, finaliz
 		if child == nil {
 			return errors.Wrap(ErrNilNode, "could not update best descendant")
 		}
-		if err := child.updateBestDescendant(ctx, justifiedEpoch, finalizedEpoch, currentEpoch); err != nil {
+		if err := child.updateBestDescendant(ctx, justifiedEpoch, finalizedEpoch, currentSlot, committeeWeight); err != nil {
 			return err
 		}
+		currentEpoch := slots.ToEpoch(currentSlot)
 		childLeadsToViableHead := child.leadsToViableHead(justifiedEpoch, currentEpoch)
 		if childLeadsToViableHead && !hasViableDescendant {
 			// The child leads to a viable head, but the current
@@ -78,13 +99,30 @@ func (n *Node) updateBestDescendant(ctx context.Context, justifiedEpoch, finaliz
 		}
 	}
 	if hasViableDescendant {
+		// This node has a viable descendant.
 		if bestChild.bestDescendant == nil {
+			// The best descendant is the best child.
 			n.bestDescendant = bestChild
 		} else {
+			// The best descendant is more than 1 hop away.
 			n.bestDescendant = bestChild.bestDescendant
+		}
+		if bestChild.isOneConfirmed(currentSlot, committeeWeight) {
+			// The best child is confirmed.
+			if bestChild.bestConfirmedDescendant == nil {
+				// The best child does not have confirmed descendants.
+				n.bestConfirmedDescendant = bestChild
+			} else {
+				// The best child has confirmed descendants.
+				n.bestConfirmedDescendant = bestChild.bestConfirmedDescendant
+			}
+		} else {
+			// The best child is not confirmed. There is no confirmed descendant.
+			n.bestConfirmedDescendant = nil
 		}
 	} else {
 		n.bestDescendant = nil
+		n.bestConfirmedDescendant = nil
 	}
 	return nil
 }

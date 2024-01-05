@@ -61,6 +61,8 @@ type Node struct {
 	bestDescendant           *Node                        // bestDescendant node of this node.
 	optimistic               bool                         // whether the block has been fully validated or not
 	timestamp                uint64                       // The timestamp when the node was inserted.
+	isConfirmed              bool                         // whether this block is confirmed or not.
+	bestConfirmedDescendant  *Node                        // bestConfirmedDescendant node of this node.
 }
 
 // Vote defines an individual validator's vote.

@@ -3,7 +3,6 @@ package doublylinkedtree
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
@@ -71,8 +70,8 @@ func (f *ForkChoice) Head(
 
 	jc := f.JustifiedCheckpoint()
 	fc := f.FinalizedCheckpoint()
-	currentEpoch := slots.EpochsSinceGenesis(time.Unix(int64(f.store.genesisTime), 0))
-	if err := f.store.treeRootNode.updateBestDescendant(ctx, jc.Epoch, fc.Epoch, currentEpoch); err != nil {
+	currentSlot := slots.CurrentSlot(f.store.genesisTime)
+	if err := f.store.treeRootNode.updateBestDescendant(ctx, jc.Epoch, fc.Epoch, currentSlot, f.store.committeeWeight); err != nil {
 		return [32]byte{}, errors.Wrap(err, "could not update best descendant")
 	}
 	return f.store.head(ctx)
