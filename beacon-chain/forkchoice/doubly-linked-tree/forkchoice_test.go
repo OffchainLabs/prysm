@@ -19,6 +19,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"github.com/prysmaticlabs/prysm/v5/testing/util"
+	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
 // prepareForkchoiceState prepares a beacon State with the given data to mock
@@ -860,4 +861,78 @@ func TestForkChoiceSlot(t *testing.T) {
 	slot, err := f.Slot(root)
 	require.NoError(t, err)
 	require.Equal(t, primitives.Slot(3), slot)
+}
+
+func TestForkChoiceSafeHead(t *testing.T) {
+	f := setup(0, 0)
+	ctx := context.Background()
+	balances := []uint64{32, 32, 32, 32, 32, 32, 32, 32, 32, 32}
+	f.balancesByRoot = func(context.Context, [32]byte) ([]uint64, error) {
+		return balances, nil
+	}
+	require.NoError(t, f.updateJustifiedBalances(context.Background(), [32]byte{}))
+	require.Equal(t, uint64(len(balances)), f.numActiveValidators)
+	require.Equal(t, uint64(10), f.store.committeeWeight)
+	require.DeepEqual(t, balances, f.justifiedBalances)
+	proposerScoreBoost := params.BeaconConfig().ProposerScoreBoost
+	require.Equal(t, uint64(40), proposerScoreBoost)
+
+	st, blkRoot, err := prepareForkchoiceState(ctx, 1, indexToHash(1), params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
+	st, blkRoot, err = prepareForkchoiceState(ctx, 2, indexToHash(2), indexToHash(1), params.BeaconConfig().ZeroHash, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
+	st, blkRoot, err = prepareForkchoiceState(ctx, 3, indexToHash(3), indexToHash(2), params.BeaconConfig().ZeroHash, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
+
+	tests := []struct {
+		name         string
+		currentSlot  primitives.Slot
+		nodeBalances []uint64
+		wantRoot     [32]byte
+	}{
+		{
+			name:         "safeHead is head",
+			currentSlot:  primitives.Slot(3),
+			nodeBalances: []uint64{5, 5, 5, 8},
+			wantRoot:     indexToHash(3),
+		},
+		{
+			name:         "safeHead is parent of head",
+			currentSlot:  primitives.Slot(3),
+			nodeBalances: []uint64{5, 5, 6, 7},
+			wantRoot:     indexToHash(2),
+		},
+		{
+			name:         "safeHead is deeper ancestor of head",
+			currentSlot:  primitives.Slot(3),
+			nodeBalances: []uint64{5, 6, 5, 7},
+			wantRoot:     indexToHash(1),
+		},
+		{
+			name:         "safeHead is justified",
+			currentSlot:  primitives.Slot(3),
+			nodeBalances: []uint64{5, 0, 0, 0},
+			wantRoot:     params.BeaconConfig().ZeroHash,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			driftGenesisTime(f, tc.currentSlot, 0)
+			require.Equal(t, tc.currentSlot, slots.CurrentSlot(f.store.genesisTime))
+
+			s := f.store
+			s.nodeByRoot[params.BeaconConfig().ZeroHash].balance = tc.nodeBalances[0]
+			s.nodeByRoot[indexToHash(1)].balance = tc.nodeBalances[1]
+			s.nodeByRoot[indexToHash(2)].balance = tc.nodeBalances[2]
+			s.nodeByRoot[indexToHash(3)].balance = tc.nodeBalances[3]
+
+			safeHead, err := f.SafeHead(ctx)
+			require.NoError(t, err)
+			require.Equal(t, tc.wantRoot, safeHead)
+		})
+	}
 }

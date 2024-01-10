@@ -43,15 +43,15 @@ func (n *Node) isOneConfirmed(currentSlot primitives.Slot, committeeWeight uint6
 		if maxPossibleSupport == 0 {
 			return true
 		}
-		safeThreshold := (1 + proposerBoostWeight/maxPossibleSupport) / 2
-		return n.balance/maxPossibleSupport > safeThreshold
+		safeThreshold := (maxPossibleSupport + proposerBoostWeight) / 2
+		return n.weight > safeThreshold
 	} else {
 		maxPossibleSupport := uint64(currentSlot-n.slot+1) * committeeWeight
 		if maxPossibleSupport == 0 {
 			return true
 		}
-		safeThreshold := (1 + proposerBoostWeight/maxPossibleSupport) / 2
-		return n.balance/maxPossibleSupport > safeThreshold
+		safeThreshold := (maxPossibleSupport + proposerBoostWeight) / 2
+		return n.weight > safeThreshold
 	}
 }
 
