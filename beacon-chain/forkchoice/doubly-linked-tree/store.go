@@ -95,17 +95,14 @@ func (s *Store) safeHead(ctx context.Context) ([32]byte, error) {
 			bestConfirmedDescendant.slot, bestConfirmedDescendant.weight/10e9, bestConfirmedDescendant.finalizedEpoch, bestConfirmedDescendant.justifiedEpoch, s.finalizedCheckpoint.Epoch, s.justifiedCheckpoint.Epoch)
 	}
 
-	return bestConfirmedDescendant.root, nil
-}
-
-// updateSafeHead updates the store's safeHeadRoot
-func (s *Store) updateSafeHead(ctx context.Context) error {
-	safeHead, err := s.safeHead(ctx)
-	if err != nil {
-		return errors.WithMessage(err, "could not update safe head")
+	// Update metrics.
+	if bestConfirmedDescendant.root != s.safeHeadRoot {
+		safeHeadChangesCount.Inc()
+		safeHeadSlotNumber.Set(float64(bestConfirmedDescendant.slot))
+		s.safeHeadRoot = bestConfirmedDescendant.root
 	}
-	s.safeHeadRoot = safeHead
-	return nil
+
+	return bestConfirmedDescendant.root, nil
 }
 
 // insert registers a new block node to the fork choice store's node list.
@@ -178,8 +175,6 @@ func (s *Store) insert(ctx context.Context,
 		if err := s.treeRootNode.updateBestDescendant(ctx, jEpoch, fEpoch, currentSlot, s.committeeWeight); err != nil {
 			return n, err
 		}
-		// Update safe head
-		s.updateSafeHead(ctx)
 	}
 	// Update metrics.
 	processedBlockCount.Inc()

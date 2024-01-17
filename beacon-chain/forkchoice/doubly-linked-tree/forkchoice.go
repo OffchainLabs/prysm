@@ -14,6 +14,7 @@ import (
 	forkchoice2 "github.com/prysmaticlabs/prysm/v5/consensus-types/forkchoice"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	prysmMath "github.com/prysmaticlabs/prysm/v5/math"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
@@ -75,8 +76,54 @@ func (f *ForkChoice) Head(
 	if err := f.store.treeRootNode.updateBestDescendant(ctx, jc.Epoch, fc.Epoch, currentSlot, f.store.committeeWeight); err != nil {
 		return [32]byte{}, errors.Wrap(err, "could not update best descendant")
 	}
-	f.store.updateSafeHead(ctx)
+	f.UpdateSafeHead(ctx)
 	return f.store.head(ctx)
+}
+
+// UpdateSafeHead updates the safe head in the fork choice store.
+func (f *ForkChoice) UpdateSafeHead(
+	ctx context.Context,
+) error {
+	oldSafeHeadRoot := f.store.safeHeadRoot
+	newSafeHeadRoot, err := f.store.safeHead(ctx)
+	if err != nil {
+		return errors.WithMessage(err, "could not update safe head")
+	}
+	commonRoot, forkSlot, err := f.CommonAncestor(ctx, oldSafeHeadRoot, newSafeHeadRoot)
+	if err != nil {
+		log.WithError(err).Error("Could not find common ancestor root")
+		commonRoot = params.BeaconConfig().ZeroHash
+	}
+	if commonRoot != oldSafeHeadRoot {
+		// The safe head has reorged.
+		oldSafeHeadNode, ok := f.store.nodeByRoot[oldSafeHeadRoot]
+		if !ok || oldSafeHeadNode == nil {
+			return ErrNilNode
+		}
+		newSafeHeadNode, ok := f.store.nodeByRoot[newSafeHeadRoot]
+		if !ok || newSafeHeadNode == nil {
+			return ErrNilNode
+		}
+		oldSafeHeadSlot := oldSafeHeadNode.slot
+		newSafeHeadSlot := newSafeHeadNode.slot
+		dis := oldSafeHeadSlot + newSafeHeadSlot - 2*forkSlot
+		dep := prysmMath.Max(uint64(oldSafeHeadSlot-forkSlot), uint64(newSafeHeadSlot-forkSlot))
+		log.WithFields(logrus.Fields{
+			"newSafeHeadSlot":    fmt.Sprintf("%d", newSafeHeadSlot),
+			"newSafeHeadRoot":    fmt.Sprintf("%#x", newSafeHeadRoot),
+			"oldSafeHeadSlot":    fmt.Sprintf("%d", oldSafeHeadSlot),
+			"oldSafeHeadRoot":    fmt.Sprintf("%#x", oldSafeHeadRoot),
+			"commonAncestorRoot": fmt.Sprintf("%#x", commonRoot),
+			"distance":           dis,
+			"depth":              dep,
+		}).Info("Safe head reorg occurred")
+		safeHeadReorgDistance.Observe(float64(dis))
+		safeHeadReorgDepth.Observe(float64(dep))
+		safeHeadReorgCount.Inc()
+	}
+
+	f.store.safeHeadRoot = newSafeHeadRoot
+	return nil
 }
 
 // SafeHead returns the safe head from the fork choice store.
