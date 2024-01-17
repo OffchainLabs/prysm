@@ -29,6 +29,7 @@ func New() *ForkChoice {
 		unrealizedFinalizedCheckpoint: &forkchoicetypes.Checkpoint{},
 		prevJustifiedCheckpoint:       &forkchoicetypes.Checkpoint{},
 		finalizedCheckpoint:           &forkchoicetypes.Checkpoint{},
+		safeHeadRoot:                  [32]byte{},
 		proposerBoostRoot:             [32]byte{},
 		nodeByRoot:                    make(map[[fieldparams.RootLength]byte]*Node),
 		nodeByPayload:                 make(map[[fieldparams.RootLength]byte]*Node),
@@ -86,7 +87,10 @@ func (f *ForkChoice) SafeHead(
 	defer span.End()
 
 	// Call Head() for balance and block tree recomputations.
-	f.Head(ctx)
+	_, err := f.Head(ctx)
+	if err != nil {
+		return [32]byte{0}, err
+	}
 	return f.store.safeHead(ctx)
 }
 
@@ -565,6 +569,17 @@ func (f *ForkChoice) UnrealizedJustifiedPayloadBlockHash() [32]byte {
 	return node.payloadHash
 }
 
+// SafeHeadPayloadBlockHash returns the hash of the payload at the safe head
+func (f *ForkChoice) SafeHeadPayloadBlockHash() [32]byte {
+	safeHeadRoot := f.store.safeHeadRoot
+	node, ok := f.store.nodeByRoot[safeHeadRoot]
+	if !ok || node == nil {
+		// This should not happen
+		return [32]byte{}
+	}
+	return node.payloadHash
+}
+
 // ForkChoiceDump returns a full dump of forkchoice.
 func (f *ForkChoice) ForkChoiceDump(ctx context.Context) (*forkchoice2.Dump, error) {
 	jc := &ethpb.Checkpoint{
@@ -598,6 +613,7 @@ func (f *ForkChoice) ForkChoiceDump(ctx context.Context) (*forkchoice2.Dump, err
 	resp := &forkchoice2.Dump{
 		JustifiedCheckpoint:           jc,
 		UnrealizedJustifiedCheckpoint: ujc,
+		SafeHeadRoot:                  f.store.safeHeadRoot[:],
 		FinalizedCheckpoint:           fc,
 		UnrealizedFinalizedCheckpoint: ufc,
 		ProposerBoostRoot:             f.store.proposerBoostRoot[:],

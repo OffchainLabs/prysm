@@ -189,6 +189,7 @@ func (s *Server) GetForkChoice(w http.ResponseWriter, r *http.Request) {
 		ExtraData: &structs.ForkChoiceDumpExtraData{
 			UnrealizedJustifiedCheckpoint: structs.CheckpointFromConsensus(dump.UnrealizedJustifiedCheckpoint),
 			UnrealizedFinalizedCheckpoint: structs.CheckpointFromConsensus(dump.UnrealizedFinalizedCheckpoint),
+			SafeHeadRoot:                  hexutil.Encode(dump.SafeHeadRoot),
 			ProposerBoostRoot:             hexutil.Encode(dump.ProposerBoostRoot),
 			PreviousProposerBoostRoot:     hexutil.Encode(dump.PreviousProposerBoostRoot),
 			HeadRoot:                      hexutil.Encode(dump.HeadRoot),
