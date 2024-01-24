@@ -36,23 +36,46 @@ func (n *Node) applyWeightChanges(ctx context.Context) error {
 	return nil
 }
 
+func (n *Node) getMaxPossibleSupport(currentSlot primitives.Slot, committeeWeight uint64) uint64 {
+	startSlot := n.slot
+	if n.parent != nil {
+		startSlot = n.parent.slot + 1
+	}
+	startEpoch := slots.ToEpoch(startSlot)
+	currentEpoch := slots.ToEpoch(currentSlot)
+	slotsPerEpoch := uint64(params.BeaconConfig().SlotsPerEpoch)
+
+	// If the span of slots does not cover an epoch boundary, simply return the number of slots times committee weight.
+	if startEpoch == currentEpoch {
+		return committeeWeight * uint64(currentSlot-startSlot+1)
+	}
+
+	// If the entire validator set is covered between startSlot and currentSlot,
+	// return the 32 * committeeWeight
+	if currentEpoch > startEpoch+1 ||
+		(currentEpoch == startEpoch+1 && uint64(startSlot)%slotsPerEpoch == 0) {
+		return committeeWeight * slotsPerEpoch
+	}
+
+	// The span of slots goes across an epoch boundary, but does not cover any full epoch.
+	// Do a pro-rate calculation of how many committees are contained.
+	slotsInStartEpoch := slotsPerEpoch - (uint64(startSlot) % slotsPerEpoch)
+	slotsInCurrentEpoch := (uint64(currentSlot) % slotsPerEpoch) + 1
+	slotsRemainingInCurrentEpoch := slotsPerEpoch - slotsInCurrentEpoch
+	weightFromCurrentEpoch := committeeWeight * slotsInCurrentEpoch
+	weightFromStartEpoch := committeeWeight * slotsInStartEpoch * slotsRemainingInCurrentEpoch / slotsPerEpoch
+	return weightFromCurrentEpoch + weightFromStartEpoch
+}
+
 func (n *Node) isOneConfirmed(currentSlot primitives.Slot, committeeWeight uint64) bool {
 	proposerBoostWeight := (committeeWeight * params.BeaconConfig().ProposerScoreBoost) / 100
-	if n.parent != nil {
-		maxPossibleSupport := uint64(currentSlot-n.parent.slot) * committeeWeight
-		if maxPossibleSupport == 0 {
-			return true
-		}
-		safeThreshold := (maxPossibleSupport + proposerBoostWeight) / 2
-		return n.weight > safeThreshold
-	} else {
-		maxPossibleSupport := uint64(currentSlot-n.slot+1) * committeeWeight
-		if maxPossibleSupport == 0 {
-			return true
-		}
-		safeThreshold := (maxPossibleSupport + proposerBoostWeight) / 2
-		return n.weight > safeThreshold
+	maxPossibleSupport := n.getMaxPossibleSupport(currentSlot, committeeWeight)
+	if maxPossibleSupport == 0 {
+		return true
 	}
+	safeThreshold := (maxPossibleSupport + proposerBoostWeight) / 2
+	// TODO: Does n.weight also contain proposer boost?
+	return n.weight > safeThreshold
 }
 
 // updateBestDescendant updates the best descendant of this node and its
