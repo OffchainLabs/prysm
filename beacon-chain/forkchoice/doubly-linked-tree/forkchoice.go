@@ -2,6 +2,7 @@ package doublylinkedtree
 
 import (
 	"context"
+	goErrors "errors"
 	"fmt"
 
 	"github.com/pkg/errors"
@@ -76,10 +77,9 @@ func (f *ForkChoice) Head(
 	if err := f.store.treeRootNode.updateBestDescendant(ctx, jc.Epoch, fc.Epoch, currentSlot, f.store.committeeWeight); err != nil {
 		return [32]byte{}, errors.Wrap(err, "could not update best descendant")
 	}
-	if err := f.UpdateSafeHead(ctx); err != nil {
-		return [32]byte{}, errors.Wrap(err, "could not update safe head")
-	}
-	return f.store.head(ctx)
+	safeHeadUpdateErr := f.UpdateSafeHead(ctx)
+	head, err := f.store.head(ctx)
+	return head, goErrors.Join(err, safeHeadUpdateErr)
 }
 
 // UpdateSafeHead updates the safe head in the fork choice store.
