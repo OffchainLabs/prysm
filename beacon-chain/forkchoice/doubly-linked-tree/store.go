@@ -95,13 +95,6 @@ func (s *Store) safeHead(ctx context.Context) ([32]byte, error) {
 			bestConfirmedDescendant.slot, bestConfirmedDescendant.weight/10e9, bestConfirmedDescendant.finalizedEpoch, bestConfirmedDescendant.justifiedEpoch, s.finalizedCheckpoint.Epoch, s.justifiedCheckpoint.Epoch)
 	}
 
-	// Update metrics.
-	if bestConfirmedDescendant.root != s.safeHeadRoot {
-		safeHeadChangesCount.Inc()
-		safeHeadSlotNumber.Set(float64(bestConfirmedDescendant.slot))
-		s.safeHeadRoot = bestConfirmedDescendant.root
-	}
-
 	return bestConfirmedDescendant.root, nil
 }
 

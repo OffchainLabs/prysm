@@ -91,40 +91,58 @@ func (f *ForkChoice) UpdateSafeHead(
 	if err != nil {
 		return errors.WithMessage(err, "could not update safe head")
 	}
-	commonRoot, forkSlot, err := f.CommonAncestor(ctx, oldSafeHeadRoot, newSafeHeadRoot)
-	if err != nil {
-		log.WithError(err).Error("Could not find common ancestor root")
-		commonRoot = params.BeaconConfig().ZeroHash
-	}
-	if commonRoot != oldSafeHeadRoot {
-		// The safe head has reorged.
-		oldSafeHeadNode, ok := f.store.nodeByRoot[oldSafeHeadRoot]
-		if !ok || oldSafeHeadNode == nil {
-			return ErrNilNode
-		}
+
+	// The safe head root has changed.
+	if oldSafeHeadRoot != newSafeHeadRoot {
 		newSafeHeadNode, ok := f.store.nodeByRoot[newSafeHeadRoot]
 		if !ok || newSafeHeadNode == nil {
 			return ErrNilNode
 		}
-		oldSafeHeadSlot := oldSafeHeadNode.slot
 		newSafeHeadSlot := newSafeHeadNode.slot
-		dis := oldSafeHeadSlot + newSafeHeadSlot - 2*forkSlot
-		dep := prysmMath.Max(uint64(oldSafeHeadSlot-forkSlot), uint64(newSafeHeadSlot-forkSlot))
-		log.WithFields(logrus.Fields{
-			"newSafeHeadSlot":    fmt.Sprintf("%d", newSafeHeadSlot),
-			"newSafeHeadRoot":    fmt.Sprintf("%#x", newSafeHeadRoot),
-			"oldSafeHeadSlot":    fmt.Sprintf("%d", oldSafeHeadSlot),
-			"oldSafeHeadRoot":    fmt.Sprintf("%#x", oldSafeHeadRoot),
-			"commonAncestorRoot": fmt.Sprintf("%#x", commonRoot),
-			"distance":           dis,
-			"depth":              dep,
-		}).Info("Safe head reorg occurred")
-		safeHeadReorgDistance.Observe(float64(dis))
-		safeHeadReorgDepth.Observe(float64(dep))
-		safeHeadReorgCount.Inc()
-	}
 
-	f.store.safeHeadRoot = newSafeHeadRoot
+		// Update metrics.
+		safeHeadChangesCount.Inc()
+		safeHeadSlotNumber.Set(float64(newSafeHeadSlot))
+
+		// Check if the safe head reorged.
+		commonRoot, forkSlot, err := f.CommonAncestor(ctx, oldSafeHeadRoot, newSafeHeadRoot)
+		if err != nil {
+			log.WithError(err).Error("Could not find common ancestor root")
+			commonRoot = params.BeaconConfig().ZeroHash
+		}
+
+		if commonRoot != oldSafeHeadRoot {
+			// The safe head has reorged.
+			oldSafeHeadNode, ok := f.store.nodeByRoot[oldSafeHeadRoot]
+			if !ok || oldSafeHeadNode == nil {
+				return ErrNilNode
+			}
+			newSafeHeadNode, ok := f.store.nodeByRoot[newSafeHeadRoot]
+			if !ok || newSafeHeadNode == nil {
+				return ErrNilNode
+			}
+			// Calculate reorg metrics.
+			oldSafeHeadSlot := oldSafeHeadNode.slot
+			newSafeHeadSlot := newSafeHeadNode.slot
+			dis := oldSafeHeadSlot + newSafeHeadSlot - 2*forkSlot
+			dep := prysmMath.Max(uint64(oldSafeHeadSlot-forkSlot), uint64(newSafeHeadSlot-forkSlot))
+			log.WithFields(logrus.Fields{
+				"newSafeHeadSlot":    fmt.Sprintf("%d", newSafeHeadSlot),
+				"newSafeHeadRoot":    fmt.Sprintf("%#x", newSafeHeadRoot),
+				"oldSafeHeadSlot":    fmt.Sprintf("%d", oldSafeHeadSlot),
+				"oldSafeHeadRoot":    fmt.Sprintf("%#x", oldSafeHeadRoot),
+				"commonAncestorRoot": fmt.Sprintf("%#x", commonRoot),
+				"distance":           dis,
+				"depth":              dep,
+			}).Info("Safe head reorg occurred")
+			// Update reorg metrics.
+			safeHeadReorgDistance.Observe(float64(dis))
+			safeHeadReorgDepth.Observe(float64(dep))
+			safeHeadReorgCount.Inc()
+		}
+		// Update safe head
+		f.store.safeHeadRoot = newSafeHeadRoot
+	}
 	return nil
 }
 
