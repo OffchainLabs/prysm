@@ -76,7 +76,9 @@ func (f *ForkChoice) Head(
 	if err := f.store.treeRootNode.updateBestDescendant(ctx, jc.Epoch, fc.Epoch, currentSlot, f.store.committeeWeight); err != nil {
 		return [32]byte{}, errors.Wrap(err, "could not update best descendant")
 	}
-	f.UpdateSafeHead(ctx)
+	if err := f.UpdateSafeHead(ctx); err != nil {
+		return [32]byte{}, errors.Wrap(err, "could not update safe head")
+	}
 	return f.store.head(ctx)
 }
 
