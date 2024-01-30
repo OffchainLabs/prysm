@@ -3,6 +3,7 @@ package doublylinkedtree
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/pkg/errors"
@@ -18,22 +19,31 @@ const ProcessAttestationsThreshold = 10
 
 // applyWeightChanges recomputes the weight of the node passed as an argument and all of its descendants,
 // using the current balance stored in each node.
-func (n *Node) applyWeightChanges(ctx context.Context) error {
+func (n *Node) applyWeightChanges(ctx context.Context, proposerBoostRoot [32]byte, proposerBootScore uint64) error {
 	// Recursively calling the children to sum their weights.
 	childrenWeight := uint64(0)
+	childrenVoteOnlyWeight := uint64(0)
 	for _, child := range n.children {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		if err := child.applyWeightChanges(ctx); err != nil {
+		if err := child.applyWeightChanges(ctx, proposerBoostRoot, proposerBootScore); err != nil {
 			return err
 		}
 		childrenWeight += child.weight
+		childrenVoteOnlyWeight += child.voteOnlyWeight
 	}
 	if n.root == params.BeaconConfig().ZeroHash {
 		return nil
 	}
 	n.weight = n.balance + childrenWeight
+	n.voteOnlyWeight = n.balance + childrenVoteOnlyWeight
+	if n.root == proposerBoostRoot {
+		if n.balance < proposerBootScore {
+			return errors.New(fmt.Sprintf("invalid node weight %d is lesser than proposer boost score %d for root %#x", n.balance, proposerBoostRoot, n.root))
+		}
+		n.voteOnlyWeight -= proposerBootScore
+	}
 	return nil
 }
 
@@ -75,8 +85,7 @@ func (n *Node) isOneConfirmed(currentSlot primitives.Slot, committeeWeight uint6
 		return true
 	}
 	safeThreshold := (maxPossibleSupport + proposerBoostWeight) / 2
-	// TODO: Does n.weight also contain proposer boost?
-	return n.weight > safeThreshold
+	return n.voteOnlyWeight > safeThreshold
 }
 
 // updateBestDescendant updates the best descendant of this node and its

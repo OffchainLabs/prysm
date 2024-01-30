@@ -32,7 +32,7 @@ func TestNode_ApplyWeightChanges_PositiveChange(t *testing.T) {
 	s.nodeByRoot[indexToHash(2)].balance = 100
 	s.nodeByRoot[indexToHash(3)].balance = 100
 
-	assert.NoError(t, s.treeRootNode.applyWeightChanges(ctx))
+	assert.NoError(t, s.treeRootNode.applyWeightChanges(ctx, params.BeaconConfig().ZeroHash, 0))
 
 	assert.Equal(t, uint64(300), s.nodeByRoot[indexToHash(1)].weight)
 	assert.Equal(t, uint64(200), s.nodeByRoot[indexToHash(2)].weight)
@@ -62,7 +62,7 @@ func TestNode_ApplyWeightChanges_NegativeChange(t *testing.T) {
 	s.nodeByRoot[indexToHash(2)].balance = 100
 	s.nodeByRoot[indexToHash(3)].balance = 100
 
-	assert.NoError(t, s.treeRootNode.applyWeightChanges(ctx))
+	assert.NoError(t, s.treeRootNode.applyWeightChanges(ctx, params.BeaconConfig().ZeroHash, 0))
 
 	assert.Equal(t, uint64(300), s.nodeByRoot[indexToHash(1)].weight)
 	assert.Equal(t, uint64(200), s.nodeByRoot[indexToHash(2)].weight)

@@ -67,7 +67,7 @@ func (f *ForkChoice) Head(
 		return [32]byte{}, errors.Wrap(err, "could not apply proposer boost score")
 	}
 
-	if err := f.store.treeRootNode.applyWeightChanges(ctx); err != nil {
+	if err := f.store.treeRootNode.applyWeightChanges(ctx, f.store.proposerBoostRoot, f.store.previousProposerBoostScore); err != nil {
 		return [32]byte{}, errors.Wrap(err, "could not apply weight changes")
 	}
 
