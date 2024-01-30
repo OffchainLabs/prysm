@@ -36,8 +36,8 @@ func (s *Service) SetForkChoiceGenesisTime(timestamp uint64) {
 	s.cfg.ForkChoiceStore.SetGenesisTime(timestamp)
 }
 
-// GetSafeHeadPayloadHash returns safe head payload block hash from forkchoice.
-func (s *Service) GetSafeHeadPayloadHash() [32]byte {
+// GetSafeHeadPayloadBlockHash returns safe head payload block hash from forkchoice.
+func (s *Service) GetSafeHeadPayloadBlockHash() [32]byte {
 	s.cfg.ForkChoiceStore.RLock()
 	defer s.cfg.ForkChoiceStore.RUnlock()
 	return s.cfg.ForkChoiceStore.SafeHeadPayloadBlockHash()

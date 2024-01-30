@@ -112,7 +112,7 @@ func (vs *Server) getLocalPayload(ctx context.Context, blk interfaces.ReadOnlyBe
 	// Blocks before Bellatrix don't have execution payloads. Use zeros as the hash.
 	if st.Version() >= version.Bellatrix {
 		finalizedBlockHash = vs.FinalizationFetcher.FinalizedBlockHash()
-		safeBlockHash = vs.ForkchoiceFetcher.GetSafeHeadPayloadHash()
+		safeBlockHash = vs.ForkchoiceFetcher.GetSafeHeadPayloadBlockHash()
 	}
 
 	f := &enginev1.ForkchoiceState{
