@@ -58,7 +58,7 @@ func (n *Node) getMaxPossibleSupport(currentSlot primitives.Slot, committeeWeigh
 	}
 
 	// The span of slots goes across an epoch boundary, but does not cover any full epoch.
-	// Do a pro-rate calculation of how many committees are contained.
+	// Do a pro-rata calculation of how many committees are contained.
 	slotsInStartEpoch := slotsPerEpoch - (uint64(startSlot) % slotsPerEpoch)
 	slotsInCurrentEpoch := (uint64(currentSlot) % slotsPerEpoch) + 1
 	slotsRemainingInCurrentEpoch := slotsPerEpoch - slotsInCurrentEpoch
@@ -130,7 +130,7 @@ func (n *Node) updateBestDescendant(ctx context.Context, justifiedEpoch primitiv
 			// The best descendant is more than 1 hop away.
 			n.bestDescendant = bestChild.bestDescendant
 		}
-		if bestChild.isOneConfirmed(currentSlot, committeeWeight) {
+		if bestChild.slot < currentSlot-2 && bestChild.isOneConfirmed(currentSlot, committeeWeight) {
 			// The best child is confirmed.
 			if bestChild.bestConfirmedDescendant == nil {
 				// The best child does not have confirmed descendants.

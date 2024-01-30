@@ -9,6 +9,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
 func TestNode_ApplyWeightChanges_PositiveChange(t *testing.T) {
@@ -326,4 +327,77 @@ func TestNode_TimeStampsChecks(t *testing.T) {
 	late, err = f.store.headNode.arrivedAfterOrphanCheck(f.store.genesisTime)
 	require.ErrorContains(t, "invalid timestamp", err)
 	require.Equal(t, false, late)
+}
+
+func TestNode_MaxPossibleSupport(t *testing.T) {
+	f := setup(0, 0)
+	ctx := context.Background()
+
+	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+	require.Equal(t, primitives.Slot(32), slotsPerEpoch)
+
+	state, blkRoot, err := prepareForkchoiceState(ctx, 1, indexToHash(1), params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, state, blkRoot))
+	for i := 2; i < 64; i++ {
+		state, blkRoot, err = prepareForkchoiceState(ctx, primitives.Slot(i), indexToHash(uint64(i)), indexToHash(uint64(i-1)), params.BeaconConfig().ZeroHash, 0, 0)
+		require.NoError(t, err)
+		require.NoError(t, f.InsertNode(ctx, state, blkRoot))
+	}
+
+	tests := []struct {
+		name            string
+		nodeIndex       uint64
+		currentSlot     primitives.Slot
+		committeeWeight uint64
+		wantValue       uint64
+	}{
+		{
+			name:            "2 slots in same epoch",
+			nodeIndex:       32,
+			currentSlot:     33,
+			committeeWeight: 1,
+			wantValue:       2,
+		},
+		{
+			name:            "31 slots in same epoch",
+			nodeIndex:       32,
+			currentSlot:     63,
+			committeeWeight: 1,
+			wantValue:       32,
+		},
+		{
+			name:            "one full epoch",
+			nodeIndex:       32,
+			currentSlot:     64,
+			committeeWeight: 100,
+			wantValue:       3200,
+		},
+		{
+			name:            "more than one full epoch",
+			nodeIndex:       32,
+			currentSlot:     100,
+			committeeWeight: 100,
+			wantValue:       3200,
+		},
+		{
+			name:            "epoch mid to epoch mid",
+			nodeIndex:       16,
+			currentSlot:     48,
+			committeeWeight: 100,
+			wantValue:       2450,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			driftGenesisTime(f, tc.currentSlot, 0)
+			require.Equal(t, tc.currentSlot, slots.CurrentSlot(f.store.genesisTime))
+
+			s := f.store
+			node := s.nodeByRoot[indexToHash(tc.nodeIndex)]
+			mps := node.getMaxPossibleSupport(tc.currentSlot, tc.committeeWeight)
+			require.Equal(t, tc.wantValue, mps)
+		})
+	}
 }
