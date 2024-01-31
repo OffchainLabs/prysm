@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
@@ -90,7 +89,7 @@ func (n *Node) isOneConfirmed(currentSlot primitives.Slot, committeeWeight uint6
 
 // updateBestDescendant updates the best descendant of this node and its
 // children.
-func (n *Node) updateBestDescendant(ctx context.Context, justifiedEpoch primitives.Epoch, finalizedEpoch primitives.Epoch, genesisTime uint64, committeeWeight uint64) error {
+func (n *Node) updateBestDescendant(ctx context.Context, justifiedEpoch primitives.Epoch, finalizedEpoch primitives.Epoch, currentSlot primitives.Slot, committeeWeight uint64) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -103,12 +102,11 @@ func (n *Node) updateBestDescendant(ctx context.Context, justifiedEpoch primitiv
 	var bestChild *Node
 	bestWeight := uint64(0)
 	hasViableDescendant := false
-	currentSlot := slots.CurrentSlot(genesisTime)
 	for _, child := range n.children {
 		if child == nil {
 			return errors.Wrap(ErrNilNode, "could not update best descendant")
 		}
-		if err := child.updateBestDescendant(ctx, justifiedEpoch, finalizedEpoch, genesisTime, committeeWeight); err != nil {
+		if err := child.updateBestDescendant(ctx, justifiedEpoch, finalizedEpoch, currentSlot, committeeWeight); err != nil {
 			return err
 		}
 		currentEpoch := slots.ToEpoch(currentSlot)
@@ -142,18 +140,7 @@ func (n *Node) updateBestDescendant(ctx context.Context, justifiedEpoch primitiv
 			n.bestDescendant = bestChild.bestDescendant
 		}
 
-		// For safe head computation, consider the current slot as the latest slot for which we have received most of the attestations.
-		safeHeadLatestSlot := currentSlot
-		secsIntoSlot, err := slots.SecondsSinceSlotStart(currentSlot, genesisTime, uint64(time.Now().Unix()))
-		if err != nil {
-			return err
-		}
-		// If we are more than 10 seconds into the slot, assume that we have received most attestations from that slot.
-		if secsIntoSlot < 10 {
-			// If we are less than 10 seconds into the slot, set safeHeadLatestSlot to the previous slot.
-			safeHeadLatestSlot = max(0, currentSlot-1)
-		}
-		if bestChild.slot < safeHeadLatestSlot-2 && bestChild.isOneConfirmed(safeHeadLatestSlot, committeeWeight) {
+		if bestChild.slot < currentSlot-2 && bestChild.isOneConfirmed(currentSlot-1, committeeWeight) {
 			// The best child is confirmed.
 			if bestChild.bestConfirmedDescendant == nil {
 				// The best child does not have confirmed descendants.
