@@ -52,6 +52,9 @@ func (n *Node) getMaxPossibleSupport(currentSlot primitives.Slot, committeeWeigh
 	if n.parent != nil {
 		startSlot = n.parent.slot + 1
 	}
+	if startSlot > currentSlot {
+		return 0
+	}
 	startEpoch := slots.ToEpoch(startSlot)
 	currentEpoch := slots.ToEpoch(currentSlot)
 	slotsPerEpoch := uint64(params.BeaconConfig().SlotsPerEpoch)
@@ -80,18 +83,20 @@ func (n *Node) getMaxPossibleSupport(currentSlot primitives.Slot, committeeWeigh
 
 // isOneConfirmed computes whether this node individually satisfies the LMD safety rule.
 func (n *Node) isOneConfirmed(currentSlot primitives.Slot, committeeWeight uint64) bool {
+	if n.slot >= currentSlot {
+		return false
+	}
 	proposerBoostWeight := (committeeWeight * params.BeaconConfig().ProposerScoreBoost) / 100
 	maxPossibleSupport := n.getMaxPossibleSupport(currentSlot, committeeWeight)
-	if maxPossibleSupport == 0 {
-		return true
-	}
 	safeThreshold := (maxPossibleSupport + proposerBoostWeight) / 2
 	return n.voteOnlyWeight > safeThreshold
 }
 
 // updateBestDescendant updates the best descendant of this node and its
 // children.
-func (n *Node) updateBestDescendant(ctx context.Context, justifiedEpoch primitives.Epoch, finalizedEpoch primitives.Epoch, currentSlot primitives.Slot, committeeWeight uint64) error {
+func (n *Node) updateBestDescendant(ctx context.Context,
+	justifiedEpoch primitives.Epoch, finalizedEpoch primitives.Epoch,
+	currentSlot primitives.Slot, secondsSinceSlotStart uint64, committeeWeight uint64) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -108,7 +113,9 @@ func (n *Node) updateBestDescendant(ctx context.Context, justifiedEpoch primitiv
 		if child == nil {
 			return errors.Wrap(ErrNilNode, "could not update best descendant")
 		}
-		if err := child.updateBestDescendant(ctx, justifiedEpoch, finalizedEpoch, currentSlot, committeeWeight); err != nil {
+		if err := child.updateBestDescendant(ctx,
+			justifiedEpoch, finalizedEpoch,
+			currentSlot, secondsSinceSlotStart, committeeWeight); err != nil {
 			return err
 		}
 		currentEpoch := slots.ToEpoch(currentSlot)
@@ -141,20 +148,23 @@ func (n *Node) updateBestDescendant(ctx context.Context, justifiedEpoch primitiv
 			// The best descendant is more than 1 hop away.
 			n.bestDescendant = bestChild.bestDescendant
 		}
-		// Do safe head computations for blocks that are lower than the current slot.
-		// Attestations from the current slot are not accounted for in the fork choice - so compute safe head on the basis of the previous slot
-		if bestChild.slot < currentSlot && bestChild.isOneConfirmed(currentSlot-1, committeeWeight) {
-			// The best child is confirmed.
-			if bestChild.bestConfirmedDescendant == nil {
-				// The best child does not have confirmed descendants.
-				n.bestConfirmedDescendant = bestChild
+		// Compute safe head only if we are in the first interval of the slot.
+		// This prevents current epoch attestations from affecting the node's weight for safe head computation.
+		if secondsSinceSlotStart < params.BeaconConfig().SecondsPerSlot/params.BeaconConfig().IntervalsPerSlot {
+			// Attestations from the current slot are not accounted for in the fork choice - so compute safe head on the basis of the previous slot
+			if bestChild.isOneConfirmed(currentSlot-1, committeeWeight) {
+				// The best child is confirmed.
+				if bestChild.bestConfirmedDescendant == nil {
+					// The best child does not have confirmed descendants.
+					n.bestConfirmedDescendant = bestChild
+				} else {
+					// The best child has confirmed descendants.
+					n.bestConfirmedDescendant = bestChild.bestConfirmedDescendant
+				}
 			} else {
-				// The best child has confirmed descendants.
-				n.bestConfirmedDescendant = bestChild.bestConfirmedDescendant
+				// The best child is not confirmed. There is no confirmed descendant.
+				n.bestConfirmedDescendant = nil
 			}
-		} else {
-			// The best child is not confirmed. There is no confirmed descendant.
-			n.bestConfirmedDescendant = nil
 		}
 	} else {
 		n.bestDescendant = nil

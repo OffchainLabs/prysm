@@ -111,7 +111,7 @@ func TestNode_UpdateBestDescendant_HigherWeightChild(t *testing.T) {
 	s := f.store
 	s.nodeByRoot[indexToHash(1)].weight = 100
 	s.nodeByRoot[indexToHash(2)].weight = 200
-	assert.NoError(t, s.treeRootNode.updateBestDescendant(ctx, 1, 1, 2, f.store.committeeWeight))
+	assert.NoError(t, s.treeRootNode.updateBestDescendant(ctx, 1, 1, 2, 0, f.store.committeeWeight))
 
 	assert.Equal(t, 2, len(s.treeRootNode.children))
 	assert.Equal(t, s.treeRootNode.children[1], s.treeRootNode.bestDescendant)
@@ -131,7 +131,7 @@ func TestNode_UpdateBestDescendant_LowerWeightChild(t *testing.T) {
 	s := f.store
 	s.nodeByRoot[indexToHash(1)].weight = 200
 	s.nodeByRoot[indexToHash(2)].weight = 100
-	assert.NoError(t, s.treeRootNode.updateBestDescendant(ctx, 1, 1, 2, f.store.committeeWeight))
+	assert.NoError(t, s.treeRootNode.updateBestDescendant(ctx, 1, 1, 2, 0, f.store.committeeWeight))
 
 	assert.Equal(t, 2, len(s.treeRootNode.children))
 	assert.Equal(t, s.treeRootNode.children[0], s.treeRootNode.bestDescendant)

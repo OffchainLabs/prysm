@@ -4,6 +4,7 @@ import (
 	"context"
 	goErrors "errors"
 	"fmt"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
@@ -74,7 +75,12 @@ func (f *ForkChoice) Head(
 	jc := f.JustifiedCheckpoint()
 	fc := f.FinalizedCheckpoint()
 	currentSlot := slots.CurrentSlot(f.store.genesisTime)
-	if err := f.store.treeRootNode.updateBestDescendant(ctx, jc.Epoch, fc.Epoch, currentSlot, f.store.committeeWeight); err != nil {
+	secondsSinceSlotStart, err := slots.SecondsSinceSlotStart(currentSlot, f.store.genesisTime, uint64(time.Now().Unix()))
+	if err != nil {
+		log.WithError(err).Error("could not compute seconds since slot start")
+		secondsSinceSlotStart = 0
+	}
+	if err := f.store.treeRootNode.updateBestDescendant(ctx, jc.Epoch, fc.Epoch, currentSlot, secondsSinceSlotStart, f.store.committeeWeight); err != nil {
 		return [32]byte{}, errors.Wrap(err, "could not update best descendant")
 	}
 	safeHeadUpdateErr := f.UpdateSafeHead(ctx)
@@ -99,6 +105,18 @@ func (f *ForkChoice) UpdateSafeHead(
 			return ErrNilNode
 		}
 		newSafeHeadSlot := newSafeHeadNode.slot
+		currentSlot := slots.CurrentSlot(f.store.genesisTime)
+		secondsSinceSlotStart, err := slots.SecondsSinceSlotStart(currentSlot, f.store.genesisTime, uint64(time.Now().Unix()))
+		if err != nil {
+			log.WithError(err).Error("could not compute seconds since slot start")
+		}
+		log.WithFields(logrus.Fields{
+			"currentSlot":        fmt.Sprintf("%d", currentSlot),
+			"sinceSlotStartTime": fmt.Sprintf("%d", secondsSinceSlotStart),
+			"newSafeHeadSlot":    fmt.Sprintf("%d", newSafeHeadSlot),
+			"newSafeHeadRoot":    fmt.Sprintf("%#x", newSafeHeadRoot),
+			"oldSafeHeadRoot":    fmt.Sprintf("%#x", oldSafeHeadRoot),
+		}).Info("Safe head has changed")
 
 		// Update metrics.
 		safeHeadChangesCount.Inc()
@@ -113,20 +131,17 @@ func (f *ForkChoice) UpdateSafeHead(
 
 		if commonRoot != oldSafeHeadRoot {
 			// The safe head has reorged.
+			// Calculate reorg metrics.
 			oldSafeHeadNode, ok := f.store.nodeByRoot[oldSafeHeadRoot]
 			if !ok || oldSafeHeadNode == nil {
 				return ErrNilNode
 			}
-			newSafeHeadNode, ok := f.store.nodeByRoot[newSafeHeadRoot]
-			if !ok || newSafeHeadNode == nil {
-				return ErrNilNode
-			}
-			// Calculate reorg metrics.
 			oldSafeHeadSlot := oldSafeHeadNode.slot
-			newSafeHeadSlot := newSafeHeadNode.slot
 			dis := oldSafeHeadSlot + newSafeHeadSlot - 2*forkSlot
 			dep := prysmMath.Max(uint64(oldSafeHeadSlot-forkSlot), uint64(newSafeHeadSlot-forkSlot))
 			log.WithFields(logrus.Fields{
+				"currentSlot":        fmt.Sprintf("%d", currentSlot),
+				"sinceSlotStartTime": fmt.Sprintf("%d", secondsSinceSlotStart),
 				"newSafeHeadSlot":    fmt.Sprintf("%d", newSafeHeadSlot),
 				"newSafeHeadRoot":    fmt.Sprintf("%#x", newSafeHeadRoot),
 				"oldSafeHeadSlot":    fmt.Sprintf("%d", oldSafeHeadSlot),
@@ -134,7 +149,7 @@ func (f *ForkChoice) UpdateSafeHead(
 				"commonAncestorRoot": fmt.Sprintf("%#x", commonRoot),
 				"distance":           dis,
 				"depth":              dep,
-			}).Info("Safe head reorg occurred")
+			}).Debug("Safe head reorg occurred")
 			// Update reorg metrics.
 			safeHeadReorgDistance.Observe(float64(dis))
 			safeHeadReorgDepth.Observe(float64(dep))
