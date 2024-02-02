@@ -350,7 +350,7 @@ func TestNode_MaxPossibleSupport(t *testing.T) {
 		nodeIndex       uint64
 		currentSlot     primitives.Slot
 		committeeWeight uint64
-		wantValue       uint64
+		wantValue       float64
 	}{
 		{
 			name:            "2 slots in same epoch",
