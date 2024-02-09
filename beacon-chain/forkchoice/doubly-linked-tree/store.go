@@ -89,11 +89,6 @@ func (s *Store) safeHead(ctx context.Context) ([32]byte, error) {
 	if bestConfirmedDescendant == nil {
 		bestConfirmedDescendant = justifiedNode
 	}
-	currentEpoch := slots.EpochsSinceGenesis(time.Unix(int64(s.genesisTime), 0))
-	if !bestConfirmedDescendant.viableForHead(s.justifiedCheckpoint.Epoch, currentEpoch) {
-		return [32]byte{}, fmt.Errorf("safe head at slot %d with weight %d is not eligible, finalizedEpoch, justified Epoch %d, %d != %d, %d",
-			bestConfirmedDescendant.slot, bestConfirmedDescendant.weight/10e9, bestConfirmedDescendant.finalizedEpoch, bestConfirmedDescendant.justifiedEpoch, s.finalizedCheckpoint.Epoch, s.justifiedCheckpoint.Epoch)
-	}
 
 	return bestConfirmedDescendant.root, nil
 }
