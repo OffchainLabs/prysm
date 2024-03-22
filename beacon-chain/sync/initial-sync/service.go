@@ -340,7 +340,7 @@ func (s *Service) fetchOriginBlobs(pids []peer.ID) error {
 		if len(sidecars) != len(req) {
 			continue
 		}
-		bv := newBlobBatchVerifier(s.newBlobVerifier)
+		bv := verification.NewBlobBatchVerifier(s.newBlobVerifier, verification.InitsyncSidecarRequirements)
 		avs := das.NewLazilyPersistentStore(s.cfg.BlobStorage, bv)
 		current := s.clock.CurrentSlot()
 		if err := avs.Persist(current, sidecars...); err != nil {
@@ -361,4 +361,10 @@ func shufflePeers(pids []peer.ID) {
 	rg.Shuffle(len(pids), func(i, j int) {
 		pids[i], pids[j] = pids[j], pids[i]
 	})
+}
+
+func newBlobVerifierFromInitializer(ini *verification.Initializer) verification.NewBlobVerifier {
+	return func(b blocks.ROBlob, reqs []verification.Requirement) verification.BlobVerifier {
+		return ini.NewBlobVerifier(b, reqs)
+	}
 }

@@ -151,14 +151,14 @@ func (s *Service) sendAndSaveBlobSidecars(ctx context.Context, request types.Blo
 	if len(sidecars) != len(request) {
 		return fmt.Errorf("received %d blob sidecars, expected %d for RPC", len(sidecars), len(request))
 	}
+	bv := verification.NewBlobBatchVerifier(s.newBlobVerifier, verification.PendingQueueSidecarRequirements)
 	for _, sidecar := range sidecars {
 		if err := verify.BlobAlignsWithBlock(sidecar, RoBlock); err != nil {
 			return err
 		}
 		log.WithFields(blobFields(sidecar)).Debug("Received blob sidecar RPC")
 	}
-
-	vscs, err := verification.BlobSidecarSliceNoop(sidecars)
+	vscs, err := bv.VerifiedROBlobs(ctx, RoBlock, sidecars)
 	if err != nil {
 		return err
 	}

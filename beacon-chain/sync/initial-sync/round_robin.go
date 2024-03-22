@@ -12,6 +12,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/das"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
@@ -167,7 +168,7 @@ func (s *Service) processFetchedDataRegSync(
 	if len(bwb) == 0 {
 		return
 	}
-	bv := newBlobBatchVerifier(s.newBlobVerifier)
+	bv := verification.NewBlobBatchVerifier(s.newBlobVerifier, verification.InitsyncSidecarRequirements)
 	avs := das.NewLazilyPersistentStore(s.cfg.BlobStorage, bv)
 	batchFields := logrus.Fields{
 		"firstSlot":        data.bwb[0].Block.Block().Slot(),
@@ -326,7 +327,7 @@ func (s *Service) processBatchedBlocks(ctx context.Context, genesis time.Time,
 			errParentDoesNotExist, first.Block().ParentRoot(), first.Block().Slot())
 	}
 
-	bv := newBlobBatchVerifier(s.newBlobVerifier)
+	bv := verification.NewBlobBatchVerifier(s.newBlobVerifier, verification.InitsyncSidecarRequirements)
 	avs := das.NewLazilyPersistentStore(s.cfg.BlobStorage, bv)
 	s.logBatchSyncStatus(genesis, first, len(bwb))
 	for _, bb := range bwb {

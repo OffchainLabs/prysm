@@ -70,6 +70,9 @@ var InitsyncSidecarRequirements = requirementList(GossipSidecarRequirements).exc
 // BackfillSidecarRequirements is the same as InitsyncSidecarRequirements.
 var BackfillSidecarRequirements = requirementList(InitsyncSidecarRequirements).excluding()
 
+// PendingQueueSidecarRequirements is the same as InitsyncSidecarRequirements, used by the pending blocks queue.
+var PendingQueueSidecarRequirements = requirementList(InitsyncSidecarRequirements).excluding()
+
 var (
 	ErrBlobInvalid = errors.New("blob failed verification")
 	// ErrBlobIndexInvalid means RequireBlobIndexInBounds failed.
