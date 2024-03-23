@@ -375,8 +375,7 @@ func TestRequestPendingBlobs(t *testing.T) {
 		require.NoError(t, s.sendAndSaveBlobSidecars(context.Background(), request, "test", b))
 	})
 	t.Run("empty commitment block should not fail", func(t *testing.T) {
-		b, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlock())
-		require.NoError(t, err)
+		b, _ := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 0, 0)
 		request, err := s.pendingBlobsRequestForBlock([32]byte{}, b)
 		require.NoError(t, err)
 		require.NoError(t, s.sendAndSaveBlobSidecars(context.Background(), request, "test", b))
@@ -406,10 +405,7 @@ func TestRequestPendingBlobs(t *testing.T) {
 				blobStorage: filesystem.NewEphemeralBlobStorage(t),
 			},
 		}
-		b := util.NewBeaconBlockDeneb()
-		b.Block.Body.BlobKzgCommitments = make([][]byte, 1)
-		b1, err := blocks.NewSignedBeaconBlock(b)
-		require.NoError(t, err)
+		b1, _ := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 0, 1)
 		request, err := s.pendingBlobsRequestForBlock([32]byte{}, b1)
 		require.NoError(t, err)
 		require.ErrorContains(t, "protocols not supported", s.sendAndSaveBlobSidecars(context.Background(), request, p2.PeerID(), b1))

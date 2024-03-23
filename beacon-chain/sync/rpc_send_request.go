@@ -12,6 +12,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/encoder"
 	p2ptypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
@@ -184,7 +185,7 @@ func SendBlobsByRangeRequest(ctx context.Context, tor blockchain.TemporalOracle,
 
 func SendBlobSidecarByRoot(
 	ctx context.Context, tor blockchain.TemporalOracle, p2pApi p2p.P2P, pid peer.ID,
-	ctxMap ContextByteVersions, req *p2ptypes.BlobSidecarsByRootReq,
+	ctxMap ContextByteVersions, req *p2ptypes.BlobSidecarsByRootReq, bvs ...BlobResponseValidation,
 ) ([]blocks.ROBlob, error) {
 	if uint64(len(*req)) > params.BeaconConfig().MaxRequestBlobSidecars {
 		return nil, errors.Wrapf(p2ptypes.ErrMaxBlobReqExceeded, "length=%d", len(*req))
@@ -205,7 +206,11 @@ func SendBlobSidecarByRoot(
 	if max > uint64(len(*req))*fieldparams.MaxBlobsPerBlock {
 		max = uint64(len(*req)) * fieldparams.MaxBlobsPerBlock
 	}
-	return readChunkEncodedBlobs(stream, p2pApi.Encoding(), ctxMap, blobValidatorFromRootReq(req), max)
+	vfuncs := []BlobResponseValidation{blobValidatorFromRootReq(req)}
+	if len(bvs) > 0 {
+		vfuncs = append(vfuncs, bvs...)
+	}
+	return readChunkEncodedBlobs(stream, p2pApi.Encoding(), ctxMap, composeBlobValidations(vfuncs...), max)
 }
 
 // BlobResponseValidation represents a function that can validate aspects of a single unmarshaled blob
@@ -373,4 +378,24 @@ func readChunkedBlobSidecar(stream network.Stream, encoding encoder.NetworkEncod
 	}
 
 	return rob, nil
+}
+
+// Save bandwidth by stopping chunked reading as soon as we get an unwanted blob.
+func (s *Service) decoderValidation(block blocks.ROBlock) BlobResponseValidation {
+	return func(sc blocks.ROBlob) error {
+		if block.Signature() != bytesutil.ToBytes96(sc.SignedBlockHeader.Signature) {
+			return verification.ErrInvalidProposerSignature
+		}
+		bv := s.newBlobVerifier(sc, verification.InitsyncSidecarRequirements)
+		if err := bv.BlobIndexInBounds(); err != nil {
+			return err
+		}
+		if err := bv.SidecarInclusionProven(); err != nil {
+			return err
+		}
+		if err := bv.SidecarKzgProofVerified(); err != nil {
+			return err
+		}
+		return nil
+	}
 }

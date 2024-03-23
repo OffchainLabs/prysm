@@ -139,15 +139,15 @@ func (s *Service) sendAndSaveBlobSidecars(ctx context.Context, request types.Blo
 		return nil
 	}
 
-	sidecars, err := SendBlobSidecarByRoot(ctx, s.cfg.clock, s.cfg.p2p, peerID, s.ctxMap, &request)
-	if err != nil {
-		return err
-	}
-
 	RoBlock, err := blocks.NewROBlock(block)
 	if err != nil {
 		return err
 	}
+	sidecars, err := SendBlobSidecarByRoot(ctx, s.cfg.clock, s.cfg.p2p, peerID, s.ctxMap, &request, s.decoderValidation(RoBlock))
+	if err != nil {
+		return err
+	}
+
 	if len(sidecars) != len(request) {
 		return fmt.Errorf("received %d blob sidecars, expected %d for RPC", len(sidecars), len(request))
 	}

@@ -604,14 +604,13 @@ func TestBlobValidatorFromRangeReq(t *testing.T) {
 }
 
 func TestSeqBlobValid(t *testing.T) {
-	one, oneBlobs := generateTestBlockWithSidecars(t, [32]byte{}, 0, 3)
-	r1, err := one.Block.HashTreeRoot()
-	require.NoError(t, err)
-	two, twoBlobs := generateTestBlockWithSidecars(t, r1, 1, 3)
-	r2, err := two.Block.HashTreeRoot()
-	require.NoError(t, err)
-	_, oops := generateTestBlockWithSidecars(t, r2, 0, 4)
-	oops[1].SignedBlockHeader.Header.ParentRoot = bytesutil.PadTo([]byte("derp"), 32)
+	one, oneBlobs := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 0, 3)
+	r1 := one.Root()
+	two, twoBlobs := util.GenerateTestDenebBlockWithSidecar(t, r1, 1, 3)
+	r2 := two.Root()
+	_, oops := util.GenerateTestDenebBlockWithSidecar(t, r2, 0, 4)
+	_, wrongParent := util.GenerateTestDenebBlockWithSidecar(t, bytesutil.ToBytes32([]byte("derp")), 0, 4)
+	oops[1] = wrongParent[1]
 	wrongRoot, err := blocks.NewROBlobWithRoot(oops[2].BlobSidecar, bytesutil.ToBytes32([]byte("parentderp")))
 	require.NoError(t, err)
 	oob := oops[3]

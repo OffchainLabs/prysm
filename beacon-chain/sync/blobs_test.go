@@ -2,14 +2,10 @@ package sync
 
 import (
 	"context"
-	"encoding/binary"
 	"math"
-	"math/big"
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	gethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
@@ -22,12 +18,10 @@ import (
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	types "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	leakybucket "github.com/prysmaticlabs/prysm/v5/container/leaky-bucket"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/v5/network/forks"
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"github.com/prysmaticlabs/prysm/v5/testing/util"
@@ -56,88 +50,6 @@ type expectedDefiner func(t *testing.T, scs []blocks.ROBlob, req interface{}) []
 type requestFromSidecars func([]blocks.ROBlob) interface{}
 type oldestSlotCallback func(t *testing.T) types.Slot
 type expectedRequirer func(*testing.T, *Service, []*expectedBlobChunk) func(network.Stream)
-
-func generateTestBlockWithSidecars(t *testing.T, parent [32]byte, slot types.Slot, nblobs int) (*ethpb.SignedBeaconBlockDeneb, []blocks.ROBlob) {
-	// Start service with 160 as allowed blocks capacity (and almost zero capacity recovery).
-	stateRoot := bytesutil.PadTo([]byte("stateRoot"), fieldparams.RootLength)
-	receiptsRoot := bytesutil.PadTo([]byte("receiptsRoot"), fieldparams.RootLength)
-	logsBloom := bytesutil.PadTo([]byte("logs"), fieldparams.LogsBloomLength)
-	parentHash := bytesutil.PadTo([]byte("parentHash"), fieldparams.RootLength)
-	tx := gethTypes.NewTransaction(
-		0,
-		common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87"),
-		big.NewInt(0), 0, big.NewInt(0),
-		nil,
-	)
-	txs := []*gethTypes.Transaction{tx}
-	encodedBinaryTxs := make([][]byte, 1)
-	var err error
-	encodedBinaryTxs[0], err = txs[0].MarshalBinary()
-	require.NoError(t, err)
-	blockHash := bytesutil.ToBytes32([]byte("foo"))
-	payload := &enginev1.ExecutionPayloadDeneb{
-		ParentHash:    parentHash,
-		FeeRecipient:  make([]byte, fieldparams.FeeRecipientLength),
-		StateRoot:     stateRoot,
-		ReceiptsRoot:  receiptsRoot,
-		LogsBloom:     logsBloom,
-		PrevRandao:    blockHash[:],
-		BlockNumber:   0,
-		GasLimit:      0,
-		GasUsed:       0,
-		Timestamp:     0,
-		ExtraData:     make([]byte, 0),
-		BaseFeePerGas: bytesutil.PadTo([]byte("baseFeePerGas"), fieldparams.RootLength),
-		ExcessBlobGas: 0,
-		BlobGasUsed:   0,
-		BlockHash:     blockHash[:],
-		Transactions:  encodedBinaryTxs,
-	}
-	block := util.NewBeaconBlockDeneb()
-	block.Block.Body.ExecutionPayload = payload
-	block.Block.Slot = slot
-	block.Block.ParentRoot = parent[:]
-	commitments := make([][48]byte, nblobs)
-	block.Block.Body.BlobKzgCommitments = make([][]byte, nblobs)
-	for i := range commitments {
-		binary.LittleEndian.PutUint64(commitments[i][:], uint64(i))
-		block.Block.Body.BlobKzgCommitments[i] = commitments[i][:]
-	}
-
-	root, err := block.Block.HashTreeRoot()
-	require.NoError(t, err)
-
-	sbb, err := blocks.NewSignedBeaconBlock(block)
-	require.NoError(t, err)
-	sidecars := make([]blocks.ROBlob, len(commitments))
-	for i, c := range block.Block.Body.BlobKzgCommitments {
-		sidecars[i] = generateTestSidecar(t, root, sbb, i, c)
-	}
-	return block, sidecars
-}
-
-func generateTestSidecar(t *testing.T, root [32]byte, block interfaces.ReadOnlySignedBeaconBlock, index int, commitment []byte) blocks.ROBlob {
-	header, err := block.Header()
-	require.NoError(t, err)
-	blob := make([]byte, fieldparams.BlobSize)
-	binary.LittleEndian.PutUint64(blob, uint64(index))
-	pb := &ethpb.BlobSidecar{
-		Index:             uint64(index),
-		Blob:              blob,
-		KzgCommitment:     commitment,
-		KzgProof:          commitment,
-		SignedBlockHeader: header,
-	}
-	pb.CommitmentInclusionProof = fakeEmptyProof(t, block, pb)
-
-	sc, err := blocks.NewROBlobWithRoot(pb, root)
-	require.NoError(t, err)
-	return sc
-}
-
-func fakeEmptyProof(_ *testing.T, _ interfaces.ReadOnlySignedBeaconBlock, _ *ethpb.BlobSidecar) [][]byte {
-	return util.HydrateCommitmentInclusionProofs()
-}
 
 type expectedBlobChunk struct {
 	code    uint8
@@ -204,12 +116,12 @@ func (c *blobsTestCase) setup(t *testing.T) (*Service, []blocks.ROBlob, func()) 
 		} else {
 			bs = oldest + types.Slot(i)
 		}
-		block, bsc := generateTestBlockWithSidecars(t, parentRoot, bs, maxBlobs)
-		root, err := block.Block.HashTreeRoot()
-		require.NoError(t, err)
+		block, bsc := util.GenerateTestDenebBlockWithSidecar(t, parentRoot, bs, maxBlobs)
 		sidecars = append(sidecars, bsc...)
-		util.SaveBlock(t, context.Background(), d, block)
-		parentRoot = root
+		pb, err := block.Proto()
+		require.NoError(t, err)
+		util.SaveBlock(t, context.Background(), d, pb)
+		parentRoot = block.Root()
 	}
 
 	client := p2ptest.NewTestP2P(t)
