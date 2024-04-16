@@ -2297,7 +2297,7 @@ func TestMissingIndices(t *testing.T) {
 	for _, c := range cases {
 		bm, bs := filesystem.NewEphemeralBlobStorageWithMocker(t)
 		t.Run(c.name, func(t *testing.T) {
-			require.NoError(t, bm.CreateFakeIndices(c.root, c.present...))
+			require.NoError(t, bm.CreateFakeIndices(c.root, 0, c.present...))
 			missing, err := missingIndices(bs, c.root, c.expected, 0)
 			if c.err != nil {
 				require.ErrorIs(t, err, c.err)

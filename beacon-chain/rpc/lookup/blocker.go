@@ -235,7 +235,7 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, indices []uint64
 		return make([]*blocks.VerifiedROBlob, 0), nil
 	}
 	if len(indices) == 0 {
-		m, err := p.BlobStorage.Indices(bytesutil.ToBytes32(root), b.Block().Slot())
+		m, err := p.BlobStorage.Indices(bytesutil.ToBytes32(root))
 		if err != nil {
 			log.WithFields(log.Fields{
 				"blockRoot": hexutil.Encode(root),

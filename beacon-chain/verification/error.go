@@ -1,6 +1,9 @@
 package verification
 
-import "github.com/pkg/errors"
+import (
+	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+)
 
 var (
 	// ErrFromFutureSlot means RequireSlotNotTooEarly failed.
@@ -67,4 +70,13 @@ func (ve VerificationMultiError) Failures() map[Requirement]error {
 
 func newVerificationMultiError(r *results, err error) VerificationMultiError {
 	return VerificationMultiError{r: r, err: err}
+}
+
+// VerifiedROBlobError can be used by methods that have a VerifiedROBlob return type but do not have permission to
+// create a value of that type in order to generate an error return value.
+func VerifiedROBlobError(err error) (blocks.VerifiedROBlob, error) {
+	if err == nil {
+		panic("VerifiedROBlobError used to create a VerifiedROBlob without a checkable error.")
+	}
+	return blocks.VerifiedROBlob{}, err
 }

@@ -14,7 +14,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
@@ -181,15 +180,15 @@ func (s *Service) pendingBlobsRequestForBlock(root [32]byte, b interfaces.ReadOn
 	if len(cc) == 0 {
 		return nil, nil
 	}
-	return s.constructPendingBlobsRequest(root, len(cc), b.Block().Slot())
+	return s.constructPendingBlobsRequest(root, len(cc))
 }
 
 // constructPendingBlobsRequest creates a request for BlobSidecars by root, considering blobs already in DB.
-func (s *Service) constructPendingBlobsRequest(root [32]byte, commitments int, slot primitives.Slot) (types.BlobSidecarsByRootReq, error) {
+func (s *Service) constructPendingBlobsRequest(root [32]byte, commitments int) (types.BlobSidecarsByRootReq, error) {
 	if commitments == 0 {
 		return nil, nil
 	}
-	stored, err := s.cfg.blobStorage.Indices(root, slot)
+	stored, err := s.cfg.blobStorage.Indices(root)
 	if err != nil {
 		return nil, err
 	}

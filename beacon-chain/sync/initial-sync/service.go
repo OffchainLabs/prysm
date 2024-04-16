@@ -292,7 +292,7 @@ func missingBlobRequest(blk blocks.ROBlock, store *filesystem.BlobStorage) (p2pt
 	if len(cmts) == 0 {
 		return nil, nil
 	}
-	onDisk, err := store.Indices(r, blk.Block().Slot())
+	onDisk, err := store.Indices(r)
 	if err != nil {
 		return nil, errors.Wrapf(err, "error checking existing blobs for checkpoint sync block root %#x", r)
 	}

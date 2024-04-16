@@ -3,24 +3,27 @@ package filesystem
 import (
 	"sync"
 
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 )
+
+const bytesPerSidecar = 131928
 
 // blobIndexMask is a bitmask representing the set of blob indices that are currently set.
 type blobIndexMask []bool
 
 // BlobStorageSummary represents cached information about the BlobSidecars on disk for each root the cache knows about.
 type BlobStorageSummary struct {
-	slot primitives.Slot
-	mask blobIndexMask
+	epoch primitives.Epoch
+	mask  blobIndexMask
 }
 
 // HasIndex returns true if the BlobSidecar at the given index is available in the filesystem.
 func (s BlobStorageSummary) HasIndex(idx uint64) bool {
 	// Protect from panic, but assume callers are sophisticated enough to not need an error telling them they have an invalid idx.
-	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlock(s.slot)
+	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlockAtEpoch(s.epoch)
 	if idx >= uint64(maxBlobsPerBlock) {
 		return false
 	}
@@ -32,7 +35,7 @@ func (s BlobStorageSummary) HasIndex(idx uint64) bool {
 
 // AllAvailable returns true if we have all blobs for all indices from 0 to count-1.
 func (s BlobStorageSummary) AllAvailable(count int) bool {
-	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlock(s.slot)
+	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlockAtEpoch(s.epoch)
 	if count > maxBlobsPerBlock {
 		return false
 	}
@@ -63,7 +66,7 @@ var _ BlobStorageSummarizer = &blobStorageCache{}
 
 func newBlobStorageCache() *blobStorageCache {
 	return &blobStorageCache{
-		cache: make(map[[32]byte]BlobStorageSummary, params.BeaconConfig().MinEpochsForBlobsSidecarsRequest*fieldparams.SlotsPerEpoch),
+		cache: make(map[[32]byte]BlobStorageSummary),
 	}
 }
 
@@ -75,52 +78,74 @@ func (s *blobStorageCache) Summary(root [32]byte) BlobStorageSummary {
 	return s.cache[root]
 }
 
-func (s *blobStorageCache) ensure(key [32]byte, slot primitives.Slot, idx uint64) error {
-	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlock(slot)
-	if idx >= uint64(maxBlobsPerBlock) {
+func (s *blobStorageCache) ensure(ident blobIdent) error {
+	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlockAtEpoch(ident.epoch)
+	if ident.index >= uint64(maxBlobsPerBlock) {
 		return errIndexOutOfBounds
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	v := s.cache[key]
-	v.slot = slot
+	v := s.cache[ident.root]
+	v.epoch = ident.epoch
 	if v.mask == nil {
 		v.mask = make(blobIndexMask, maxBlobsPerBlock)
 	}
-	if !v.mask[idx] {
+	if !v.mask[ident.index] {
 		s.updateMetrics(1)
 	}
-	v.mask[idx] = true
-	s.cache[key] = v
+	v.mask[ident.index] = true
+	s.cache[ident.root] = v
 	return nil
 }
 
-func (s *blobStorageCache) slot(key [32]byte) (primitives.Slot, bool) {
+func (s *blobStorageCache) get(key [32]byte) (BlobStorageSummary, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	v, ok := s.cache[key]
-	if !ok {
-		return 0, false
-	}
-	return v.slot, ok
+	return v, ok
 }
 
-func (s *blobStorageCache) evict(key [32]byte) {
-	var deleted float64
+func (s *blobStorageCache) identForIdx(key [32]byte, idx uint64) (blobIdent, error) {
+	v, ok := s.get(key)
+	if !ok || !v.HasIndex(idx) {
+		return blobIdent{}, db.ErrNotFound
+	}
+	return blobIdent{
+		root:  key,
+		index: idx,
+		epoch: v.epoch,
+	}, nil
+}
+
+func (s *blobStorageCache) identForRoot(key [32]byte) (blobIdent, error) {
+	v, ok := s.get(key)
+	if !ok {
+		return blobIdent{}, db.ErrNotFound
+	}
+	return blobIdent{
+		root:  key,
+		epoch: v.epoch,
+	}, nil
+}
+
+func (s *blobStorageCache) evict(key [32]byte) int {
+	deleted := 0
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	v, ok := s.cache[key]
-	if ok {
-		for i := range v.mask {
-			if v.mask[i] {
-				deleted += 1
-			}
+	if !ok {
+		return 0
+	}
+	for i := range v.mask {
+		if v.mask[i] {
+			deleted += 1
 		}
 	}
 	delete(s.cache, key)
-	s.mu.Unlock()
 	if deleted > 0 {
-		s.updateMetrics(-deleted)
+		s.updateMetrics(-float64(deleted))
 	}
+	return deleted
 }
 
 func (s *blobStorageCache) updateMetrics(delta float64) {

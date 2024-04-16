@@ -27,7 +27,7 @@ func (s *Service) streamBlobBatch(ctx context.Context, batch blockBatch, wQuota 
 	defer span.End()
 	for _, b := range batch.canonical() {
 		root := b.Root()
-		idxs, err := s.cfg.blobStorage.Indices(b.Root(), b.Block().Slot())
+		idxs, err := s.cfg.blobStorage.Indices(root)
 		if err != nil {
 			s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
 			return wQuota, errors.Wrapf(err, "could not retrieve sidecars for block root %#x", root)

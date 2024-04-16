@@ -42,8 +42,7 @@ func TestBlobs(t *testing.T) {
 	denebBlock, blobs := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 123, 4)
 	require.NoError(t, db.SaveBlock(context.Background(), denebBlock))
 	bs := filesystem.NewEphemeralBlobStorage(t)
-	testSidecars, err := verification.BlobSidecarSliceNoop(blobs)
-	require.NoError(t, err)
+	testSidecars := verification.FakeVerifySliceForTest(t, blobs)
 	for i := range testSidecars {
 		require.NoError(t, bs.Save(testSidecars[i]))
 	}

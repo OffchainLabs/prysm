@@ -512,7 +512,7 @@ func missingIndices(bs *filesystem.BlobStorage, root [32]byte, expected [][]byte
 	if len(expected) > maxBlobsPerBlock {
 		return nil, errMaxBlobsExceeded
 	}
-	indices, err := bs.Indices(root, slot)
+	indices, err := bs.Indices(root)
 	if err != nil {
 		return nil, err
 	}

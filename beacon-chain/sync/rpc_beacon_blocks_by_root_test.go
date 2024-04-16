@@ -423,7 +423,7 @@ func TestConstructPendingBlobsRequest(t *testing.T) {
 	// No unknown indices.
 	root := [32]byte{1}
 	count := 3
-	actual, err := s.constructPendingBlobsRequest(root, count, 100)
+	actual, err := s.constructPendingBlobsRequest(root, count)
 	require.NoError(t, err)
 	require.Equal(t, 3, len(actual))
 	for i, id := range actual {
@@ -444,8 +444,7 @@ func TestConstructPendingBlobsRequest(t *testing.T) {
 		util.GenerateTestDenebBlobSidecar(t, root, header, 0, bytesutil.PadTo([]byte{}, 48), make([][]byte, 0)),
 		util.GenerateTestDenebBlobSidecar(t, root, header, 2, bytesutil.PadTo([]byte{}, 48), make([][]byte, 0)),
 	}
-	vscs, err := verification.BlobSidecarSliceNoop(blobSidecars)
-	require.NoError(t, err)
+	vscs := verification.FakeVerifySliceForTest(t, blobSidecars)
 	for i := range vscs {
 		require.NoError(t, bs.Save(vscs[i]))
 	}
@@ -453,7 +452,7 @@ func TestConstructPendingBlobsRequest(t *testing.T) {
 	expected := []*ethpb.BlobIdentifier{
 		{Index: 1, BlockRoot: root[:]},
 	}
-	actual, err = s.constructPendingBlobsRequest(root, count, 100)
+	actual, err = s.constructPendingBlobsRequest(root, count)
 	require.NoError(t, err)
 	require.Equal(t, expected[0].Index, actual[0].Index)
 	require.DeepEqual(t, expected[0].BlockRoot, actual[0].BlockRoot)
