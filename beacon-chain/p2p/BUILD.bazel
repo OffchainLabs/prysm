@@ -60,6 +60,7 @@ go_library(
         "//consensus-types/primitives:go_default_library",
         "//consensus-types/wrapper:go_default_library",
         "//container/leaky-bucket:go_default_library",
+        "//container/slice:go_default_library",
         "//crypto/ecdsa:go_default_library",
         "//crypto/hash:go_default_library",
         "//encoding/bytesutil:go_default_library",

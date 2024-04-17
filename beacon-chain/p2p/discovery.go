@@ -133,17 +133,21 @@ func (l *listenerWrapper) RebootListener() error {
 	return nil
 }
 
-// RefreshENR uses an epoch to refresh the enr entry for our node
-// with the tracked committee ids for the epoch, allowing our node
-// to be dynamically discoverable by others given our tracked committee ids.
-func (s *Service) RefreshENR() {
-	// return early if discv5 isn't running
+// RefreshPersistentSubnets checks that we are tracking our local persistent subnets for a variety of gossip topics.
+// This routine checks for our attestation, sync committee and data column subnets and updates them if they have
+// been rotated.
+func (s *Service) RefreshPersistentSubnets() {
+	// return early if discv5 isnt running
 	if s.dv5Listener == nil || !s.isInitialized() {
 		return
 	}
 	currEpoch := slots.ToEpoch(slots.CurrentSlot(uint64(s.genesisTime.Unix())))
 	if err := initializePersistentSubnets(s.dv5Listener.LocalNode().ID(), currEpoch); err != nil {
 		log.WithError(err).Error("Could not initialize persistent subnets")
+		return
+	}
+	if err := initializePersistentColumnSubnets(s.dv5Listener.LocalNode().ID()); err != nil {
+		log.WithError(err).Error("Could not initialize persistent column subnets")
 		return
 	}
 

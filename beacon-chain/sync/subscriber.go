@@ -145,6 +145,9 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 			params.BeaconConfig().BlobsidecarSubnetCount,
 		)
 	}
+	if features.Get().EnablePeerDAS {
+		// TODO: Subscribe to persistent column subnets here
+	}
 }
 
 // subscribe to a given topic with a given validator and subscription handler.

@@ -367,8 +367,8 @@ func (_ *TestP2P) FindPeersWithSubnet(_ context.Context, _ string, _ uint64, _ i
 	return false, nil
 }
 
-// RefreshENR mocks the p2p func.
-func (_ *TestP2P) RefreshENR() {}
+// RefreshPersistentSubnets mocks the p2p func.
+func (_ *TestP2P) RefreshPersistentSubnets() {}
 
 // ForkDigest mocks the p2p func.
 func (p *TestP2P) ForkDigest() ([4]byte, error) {

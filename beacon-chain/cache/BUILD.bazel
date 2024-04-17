@@ -8,6 +8,7 @@ go_library(
         "attestation_data.go",
         "balance_cache_key.go",
         "checkpoint_state.go",
+        "column_subnet_ids.go",
         "committee.go",
         "committee_disabled.go",  # keep
         "committees.go",

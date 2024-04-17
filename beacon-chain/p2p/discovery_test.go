@@ -499,7 +499,7 @@ func addPeer(t *testing.T, p *peers.Status, state peerdata.PeerConnectionState, 
 	return id
 }
 
-func TestRefreshENR_ForkBoundaries(t *testing.T) {
+func TestRefreshPersistentSubnets_ForkBoundaries(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	// Clean up caches after usage.
 	defer cache.SubnetIDs.EmptyAllCaches()
@@ -680,7 +680,7 @@ func TestRefreshENR_ForkBoundaries(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := tt.svcBuilder(t)
-			s.RefreshENR()
+			s.RefreshPersistentSubnets()
 			tt.postValidation(t, s)
 			s.dv5Listener.Close()
 			cache.SubnetIDs.EmptyAllCaches()
