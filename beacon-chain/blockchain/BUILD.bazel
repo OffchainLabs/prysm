@@ -25,6 +25,7 @@ go_library(
         "receive_attestation.go",
         "receive_blob.go",
         "receive_block.go",
+        "receive_sidecar.go",
         "service.go",
         "tracked_proposer.go",
         "weak_subjectivity_checks.go",

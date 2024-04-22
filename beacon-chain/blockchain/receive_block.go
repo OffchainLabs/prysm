@@ -53,6 +53,12 @@ type BlobReceiver interface {
 	ReceiveBlob(context.Context, blocks.VerifiedROBlob) error
 }
 
+// DataColumnReceiver interface defines the methods of chain service for receiving new
+// data columns
+type DataColumnReceiver interface {
+	ReceiveDataColumn(context.Context, *ethpb.DataColumnSidecar) error
+}
+
 // SlashingReceiver interface defines the methods of chain service for receiving validated slashing over the wire.
 type SlashingReceiver interface {
 	ReceiveAttesterSlashing(ctx context.Context, slashing ethpb.AttSlashing)

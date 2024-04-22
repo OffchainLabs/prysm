@@ -137,16 +137,32 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 
 	// New Gossip Topic in Deneb
 	if epoch >= params.BeaconConfig().DenebForkEpoch {
-		s.subscribeStaticWithSubnets(
-			p2p.BlobSubnetTopicFormat,
-			s.validateBlob,   /* validator */
-			s.blobSubscriber, /* message handler */
-			digest,
-			params.BeaconConfig().BlobsidecarSubnetCount,
-		)
-	}
-	if features.Get().EnablePeerDAS {
-		// TODO: Subscribe to persistent column subnets here
+		if features.Get().EnablePeerDAS {
+			if flags.Get().SubscribeToAllSubnets {
+				s.subscribeStaticWithSubnets(
+					p2p.DataColumnSubnetTopicFormat,
+					s.validateDataColumn,   /* validator */
+					s.dataColumnSubscriber, /* message handler */
+					digest,
+					params.BeaconConfig().DataColumnSidecarSubnetCount,
+				)
+			} else {
+				s.subscribeDynamicWithColumnSubnets(
+					p2p.DataColumnSubnetTopicFormat,
+					s.validateDataColumn,   /* validator */
+					s.dataColumnSubscriber, /* message handler */
+					digest,
+				)
+			}
+		} else {
+			s.subscribeStaticWithSubnets(
+				p2p.BlobSubnetTopicFormat,
+				s.validateBlob,   /* validator */
+				s.blobSubscriber, /* message handler */
+				digest,
+				params.BeaconConfig().BlobsidecarSubnetCount,
+			)
+		}
 	}
 }
 
@@ -649,6 +665,87 @@ func (s *Service) subscribeDynamicWithSyncSubnets(
 	}()
 }
 
+// subscribe missing subnets for our persistent columns.
+func (s *Service) subscribeColumnSubnet(
+	subscriptions map[uint64]*pubsub.Subscription,
+	idx uint64,
+	digest [4]byte,
+	validate wrappedVal,
+	handle subHandler,
+) {
+	// do not subscribe if we have no peers in the same
+	// subnet
+	topic := p2p.GossipTypeMapping[reflect.TypeOf(&ethpb.DataColumnSidecar{})]
+	subnetTopic := fmt.Sprintf(topic, digest, idx)
+	// check if subscription exists and if not subscribe the relevant subnet.
+	if _, exists := subscriptions[idx]; !exists {
+		subscriptions[idx] = s.subscribeWithBase(subnetTopic, validate, handle)
+	}
+	if !s.validPeersExist(subnetTopic) {
+		log.Debugf("No peers found subscribed to column gossip subnet with "+
+			"column index %d. Searching network for peers subscribed to the subnet.", idx)
+		_, err := s.cfg.p2p.FindPeersWithSubnet(s.ctx, subnetTopic, idx, flags.Get().MinimumPeersPerSubnet)
+		if err != nil {
+			log.WithError(err).Debug("Could not search for peers")
+		}
+	}
+}
+
+func (s *Service) subscribeDynamicWithColumnSubnets(
+	topicFormat string,
+	validate wrappedVal,
+	handle subHandler,
+	digest [4]byte,
+) {
+	genRoot := s.cfg.clock.GenesisValidatorsRoot()
+	_, e, err := forks.RetrieveForkDataFromDigest(digest, genRoot[:])
+	if err != nil {
+		panic(err)
+	}
+	base := p2p.GossipTopicMappings(topicFormat, e)
+	if base == nil {
+		panic(fmt.Sprintf("%s is not mapped to any message in GossipTopicMappings", topicFormat))
+	}
+	subscriptions := make(map[uint64]*pubsub.Subscription, params.BeaconConfig().DataColumnSidecarSubnetCount)
+	genesis := s.cfg.clock.GenesisTime()
+	ticker := slots.NewSlotTicker(genesis, params.BeaconConfig().SecondsPerSlot)
+
+	go func() {
+		for {
+			select {
+			case <-s.ctx.Done():
+				ticker.Done()
+				return
+			case <-ticker.C():
+				if s.chainStarted.IsSet() && s.cfg.initialSync.Syncing() {
+					continue
+				}
+				valid, err := isDigestValid(digest, genesis, genRoot)
+				if err != nil {
+					log.Error(err)
+					continue
+				}
+				if !valid {
+					log.Warnf("Column subnets with digest %#x are no longer valid, unsubscribing from all of them.", digest)
+					// Unsubscribes from all our current subnets.
+					s.reValidateSubscriptions(subscriptions, []uint64{}, topicFormat, digest)
+					ticker.Done()
+					return
+				}
+
+				wantedSubs := s.retrieveActiveColumnSubnets()
+				// Resize as appropriate.
+				s.reValidateSubscriptions(subscriptions, wantedSubs, topicFormat, digest)
+
+				// subscribe desired column subnets.
+				for _, idx := range wantedSubs {
+					s.subscribeColumnSubnet(subscriptions, idx, digest, validate, handle)
+				}
+			}
+		}
+	}()
+}
+
 // lookup peers for attester specific subnets.
 func (s *Service) lookupAttesterSubnets(digest [4]byte, idx uint64) {
 	topic := p2p.GossipTypeMapping[reflect.TypeOf(&ethpb.Attestation{})]
@@ -698,6 +795,14 @@ func (s *Service) retrievePersistentSubs(currSlot primitives.Slot) []uint64 {
 func (*Service) retrieveActiveSyncSubnets(currEpoch primitives.Epoch) []uint64 {
 	subs := cache.SyncSubnetIDs.GetAllSubnets(currEpoch)
 	return slice.SetUint64(subs)
+}
+
+func (*Service) retrieveActiveColumnSubnets() []uint64 {
+	subs, ok, _ := cache.ColumnSubnetIDs.GetColumnSubnets()
+	if !ok {
+		return nil
+	}
+	return subs
 }
 
 // filters out required peers for the node to function, not
