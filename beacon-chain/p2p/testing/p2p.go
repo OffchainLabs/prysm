@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/libp2p/go-libp2p"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -268,6 +269,11 @@ func (p *TestP2P) Host() host.Host {
 // ENR returns the enr of the local peer.
 func (_ *TestP2P) ENR() *enr.Record {
 	return new(enr.Record)
+}
+
+// NodeID returns the node id of the local peer.
+func (_ *TestP2P) NodeID() enode.ID {
+	return [32]byte{}
 }
 
 // DiscoveryAddresses --

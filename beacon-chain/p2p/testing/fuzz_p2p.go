@@ -3,6 +3,7 @@ package testing
 import (
 	"context"
 
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/control"
@@ -53,6 +54,11 @@ func (_ *FakeP2P) PeerID() peer.ID {
 // ENR returns the enr of the local peer.
 func (_ *FakeP2P) ENR() *enr.Record {
 	return new(enr.Record)
+}
+
+// NodeID returns the node id of the local peer.
+func (_ *FakeP2P) NodeID() enode.ID {
+	return [32]byte{}
 }
 
 // DiscoveryAddresses -- fake

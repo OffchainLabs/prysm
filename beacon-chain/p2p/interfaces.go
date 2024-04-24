@@ -3,6 +3,7 @@ package p2p
 import (
 	"context"
 
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/connmgr"
@@ -81,6 +82,7 @@ type PeerManager interface {
 	PeerID() peer.ID
 	Host() host.Host
 	ENR() *enr.Record
+	NodeID() enode.ID
 	DiscoveryAddresses() ([]multiaddr.Multiaddr, error)
 	RefreshPersistentSubnets()
 	FindPeersWithSubnet(ctx context.Context, topic string, subIndex uint64, threshold int) (bool, error)

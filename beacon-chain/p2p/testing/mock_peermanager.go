@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -37,6 +38,11 @@ func (m *MockPeerManager) Host() host.Host {
 // ENR .
 func (m MockPeerManager) ENR() *enr.Record {
 	return m.Enr
+}
+
+// NodeID .
+func (m MockPeerManager) NodeID() enode.ID {
+	return [32]byte{}
 }
 
 // DiscoveryAddresses .

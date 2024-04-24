@@ -208,6 +208,29 @@ func SendBlobSidecarByRoot(
 	return readChunkEncodedBlobs(stream, p2pApi.Encoding(), ctxMap, blobValidatorFromRootReq(req), max)
 }
 
+func SendDataColumnSidecarByRoot(
+	ctx context.Context, tor blockchain.TemporalOracle, p2pApi p2p.P2P, pid peer.ID,
+	ctxMap ContextByteVersions, req *p2ptypes.BlobSidecarsByRootReq,
+) ([]blocks.ROBlob, error) {
+	if uint64(len(*req)) > params.BeaconConfig().MaxRequestDataColumnSidecars {
+		return nil, errors.Wrapf(p2ptypes.ErrMaxDataColumnReqExceeded, "length=%d", len(*req))
+	}
+
+	topic, err := p2p.TopicFromMessage(p2p.DataColumnSidecarsByRootName, slots.ToEpoch(tor.CurrentSlot()))
+	if err != nil {
+		return nil, err
+	}
+	log.WithField("topic", topic).Debug("Sending data column sidecar request")
+	stream, err := p2pApi.Send(ctx, req, topic, pid)
+	if err != nil {
+		return nil, err
+	}
+	defer closeStream(stream, log)
+
+	maxCol := params.BeaconConfig().MaxRequestDataColumnSidecars
+	return readChunkEncodedBlobs(stream, p2pApi.Encoding(), ctxMap, blobValidatorFromRootReq(req), maxCol)
+}
+
 // BlobResponseValidation represents a function that can validate aspects of a single unmarshaled blob
 // that was received from a peer in response to an rpc request.
 type BlobResponseValidation func(blocks.ROBlob) error

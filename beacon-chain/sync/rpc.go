@@ -14,6 +14,7 @@ import (
 	ssz "github.com/prysmaticlabs/fastssz"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
 	p2ptypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
+	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
@@ -99,6 +100,13 @@ func (s *Service) registerRPCHandlersAltair() {
 }
 
 func (s *Service) registerRPCHandlersDeneb() {
+	if features.Get().EnablePeerDAS {
+		s.registerRPC(
+			p2p.RPCDataColumnSidecarsByRootTopicV1,
+			s.dataColumnSidecarByRootRPCHandler,
+		)
+		return
+	}
 	s.registerRPC(
 		p2p.RPCBlobSidecarsByRangeTopicV1,
 		s.blobSidecarsByRangeRPCHandler,

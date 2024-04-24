@@ -358,6 +358,15 @@ func (s *Service) ENR() *enr.Record {
 	return s.dv5Listener.Self().Record()
 }
 
+// NodeID returns the local node's node ID
+// for discovery.
+func (s *Service) NodeID() enode.ID {
+	if s.dv5Listener == nil {
+		return [32]byte{}
+	}
+	return s.dv5Listener.Self().ID()
+}
+
 // DiscoveryAddresses represents our enr addresses as multiaddresses.
 func (s *Service) DiscoveryAddresses() ([]multiaddr.Multiaddr, error) {
 	if s.dv5Listener == nil {

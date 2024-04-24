@@ -239,7 +239,7 @@ func computeSubscribedSubnets(nodeID enode.ID, epoch primitives.Epoch) ([]uint64
 	return subs, nil
 }
 
-func computeCustodyColumns(nodeID enode.ID) ([]uint64, error) {
+func ComputeCustodyColumns(nodeID enode.ID) ([]uint64, error) {
 	subs, err := computeSubscribedColumnSubnets(nodeID)
 	if err != nil {
 		return nil, err
