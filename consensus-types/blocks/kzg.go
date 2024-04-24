@@ -80,6 +80,32 @@ func MerkleProofKZGCommitment(body interfaces.ReadOnlyBeaconBlockBody, index int
 	return proof, nil
 }
 
+// MerkleProofKZGCommitments constructs a Merkle proof of inclusion of the KZG
+// commitments into the Beacon Block with the given `body`
+func MerkleProofKZGCommitments(body interfaces.ReadOnlyBeaconBlockBody) ([][]byte, error) {
+	bodyVersion := body.Version()
+	if bodyVersion < version.Deneb {
+		return nil, errUnsupportedBeaconBlockBody
+	}
+
+	membersRoots, err := topLevelRoots(body)
+	if err != nil {
+		return nil, errors.Wrap(err, "top level roots")
+	}
+
+	sparse, err := trie.GenerateTrieFromItems(membersRoots, logBodyLength)
+	if err != nil {
+		return nil, errors.Wrap(err, "generate trie from items")
+	}
+
+	proof, err := sparse.MerkleProof(kzgPosition)
+	if err != nil {
+		return nil, errors.Wrap(err, "merkle proof")
+	}
+
+	return proof, nil
+}
+
 // leavesFromCommitments hashes each commitment to construct a slice of roots
 func leavesFromCommitments(commitments [][]byte) [][]byte {
 	leaves := make([][]byte, len(commitments))

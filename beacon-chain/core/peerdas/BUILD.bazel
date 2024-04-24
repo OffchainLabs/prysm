@@ -1,0 +1,21 @@
+load("@prysm//tools/go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = ["helpers.go"],
+    importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//config/fieldparams:go_default_library",
+        "//config/params:go_default_library",
+        "//consensus-types/blocks:go_default_library",
+        "//consensus-types/interfaces:go_default_library",
+        "//crypto/hash:go_default_library",
+        "//encoding/bytesutil:go_default_library",
+        "//proto/prysm/v1alpha1:go_default_library",
+        "@com_github_ethereum_c_kzg_4844//bindings/go:go_default_library",
+        "@com_github_ethereum_go_ethereum//p2p/enode:go_default_library",
+        "@com_github_holiman_uint256//:go_default_library",
+        "@com_github_pkg_errors//:go_default_library",
+    ],
+)
