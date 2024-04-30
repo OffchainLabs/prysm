@@ -82,5 +82,5 @@ type AttesterSlashingReceivedData struct {
 }
 
 type DataColumnSidecarReceivedData struct {
-	DataColumn *ethpb.DataColumnSidecar
+	DataColumn *blocks.VerifiedRODataColumn
 }

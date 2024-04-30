@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	cKzg4844 "github.com/ethereum/c-kzg-4844/bindings/go"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	emptypb "github.com/golang/protobuf/ptypes/empty"
@@ -19,9 +20,12 @@ import (
 	blockfeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/block"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/operation"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/kv"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v5/config/features"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
@@ -261,7 +265,15 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 }
 
 // ProposeBeaconBlock handles the proposal of beacon blocks.
+// TODO: Add tests
 func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSignedBeaconBlock) (*ethpb.ProposeResponse, error) {
+	var (
+		blobSidecars       []*ethpb.BlobSidecar
+		dataColumnSideCars []*ethpb.DataColumnSidecar
+	)
+
+	isPeerDASEnabled := features.Get().EnablePeerDAS
+
 	ctx, span := trace.StartSpan(ctx, "ProposerServer.ProposeBeaconBlock")
 	defer span.End()
 
@@ -274,11 +286,10 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 		return nil, status.Errorf(codes.InvalidArgument, "%s: %v", "decode block failed", err)
 	}
 
-	var sidecars []*ethpb.BlobSidecar
 	if block.IsBlinded() {
-		block, sidecars, err = vs.handleBlindedBlock(ctx, block)
+		block, blobSidecars, dataColumnSideCars, err = vs.handleBlindedBlock(ctx, block, isPeerDASEnabled)
 	} else if block.Version() >= version.Deneb {
-		sidecars, err = vs.blobSidecarsFromUnblindedBlock(block, req)
+		blobSidecars, dataColumnSideCars, err = vs.handleUnblindedBlock(block, req, isPeerDASEnabled)
 	}
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "%s: %v", "handle block failed", err)
@@ -302,8 +313,14 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 		errChan <- nil
 	}()
 
-	if err := vs.broadcastAndReceiveBlobs(ctx, sidecars, root); err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not broadcast/receive blobs: %v", err)
+	if isPeerDASEnabled {
+		if err := vs.broadcastAndReceiveDataColumns(ctx, dataColumnSideCars, root); err != nil {
+			return nil, status.Errorf(codes.Internal, "Could not broadcast/receive data columns: %v", err)
+		}
+	} else {
+		if err := vs.broadcastAndReceiveBlobs(ctx, blobSidecars, root); err != nil {
+			return nil, status.Errorf(codes.Internal, "Could not broadcast/receive blobs: %v", err)
+		}
 	}
 
 	wg.Wait()
@@ -315,46 +332,85 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 }
 
 // handleBlindedBlock processes blinded beacon blocks.
-func (vs *Server) handleBlindedBlock(ctx context.Context, block interfaces.SignedBeaconBlock) (interfaces.SignedBeaconBlock, []*ethpb.BlobSidecar, error) {
+func (vs *Server) handleBlindedBlock(ctx context.Context, block interfaces.SignedBeaconBlock, isPeerDASEnabled bool) (interfaces.SignedBeaconBlock, []*ethpb.BlobSidecar, []*ethpb.DataColumnSidecar, error) {
 	if block.Version() < version.Bellatrix {
-		return nil, nil, errors.New("pre-Bellatrix blinded block")
+		return nil, nil, nil, errors.New("pre-Bellatrix blinded block")
 	}
+
 	if vs.BlockBuilder == nil || !vs.BlockBuilder.Configured() {
-		return nil, nil, errors.New("unconfigured block builder")
+		return nil, nil, nil, errors.New("unconfigured block builder")
 	}
 
 	copiedBlock, err := block.Copy()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, errors.Wrap(err, "block copy")
 	}
 
 	payload, bundle, err := vs.BlockBuilder.SubmitBlindedBlock(ctx, block)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "submit blinded block failed")
+		return nil, nil, nil, errors.Wrap(err, "submit blinded block")
 	}
 
 	if err := copiedBlock.Unblind(payload); err != nil {
-		return nil, nil, errors.Wrap(err, "unblind failed")
+		return nil, nil, nil, errors.Wrap(err, "unblind")
 	}
 
-	sidecars, err := unblindBlobsSidecars(copiedBlock, bundle)
+	if isPeerDASEnabled {
+		dataColumnSideCars, err := unblindDataColumnsSidecars(copiedBlock, bundle)
+		if err != nil {
+			return nil, nil, nil, errors.Wrap(err, "unblind data columns sidecars")
+		}
+
+		return copiedBlock, nil, dataColumnSideCars, nil
+	}
+
+	blobSidecars, err := unblindBlobsSidecars(copiedBlock, bundle)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "unblind sidecars failed")
+		return nil, nil, nil, errors.Wrap(err, "unblind blobs sidecars")
 	}
 
-	return copiedBlock, sidecars, nil
+	return copiedBlock, blobSidecars, nil, nil
 }
 
-func (vs *Server) blobSidecarsFromUnblindedBlock(block interfaces.SignedBeaconBlock, req *ethpb.GenericSignedBeaconBlock) ([]*ethpb.BlobSidecar, error) {
+func (vs *Server) handleUnblindedBlock(
+	block interfaces.SignedBeaconBlock,
+	req *ethpb.GenericSignedBeaconBlock,
+	isPeerDASEnabled bool,
+) ([]*ethpb.BlobSidecar, []*ethpb.DataColumnSidecar, error) {
 	rawBlobs, proofs, err := blobsAndProofs(req)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return BuildBlobSidecars(block, rawBlobs, proofs)
+
+	if isPeerDASEnabled {
+		// Convert blobs from slices to array.
+		blobs := make([]cKzg4844.Blob, 0, len(rawBlobs))
+		for _, blob := range rawBlobs {
+			if len(blob) != cKzg4844.BytesPerBlob {
+				return nil, nil, errors.Errorf("invalid blob size. expected %d bytes, got %d bytes", cKzg4844.BytesPerBlob, len(blob))
+			}
+
+			blobs = append(blobs, cKzg4844.Blob(blob))
+		}
+
+		dataColumnSideCars, err := peerdas.DataColumnSidecars(block, blobs)
+		if err != nil {
+			return nil, nil, errors.Wrap(err, "data column sidecars")
+		}
+
+		return nil, dataColumnSideCars, nil
+	}
+
+	blobSidecars, err := BuildBlobSidecars(block, rawBlobs, proofs)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "build blob sidecars")
+	}
+
+	return blobSidecars, nil, nil
 }
 
 // broadcastReceiveBlock broadcasts a block and handles its reception.
-func (vs *Server) broadcastReceiveBlock(ctx context.Context, block interfaces.SignedBeaconBlock, root [32]byte) error {
+func (vs *Server) broadcastReceiveBlock(ctx context.Context, block interfaces.SignedBeaconBlock, root [fieldparams.RootLength]byte) error {
 	protoBlock, err := block.Proto()
 	if err != nil {
 		return errors.Wrap(err, "protobuf conversion failed")
@@ -370,7 +426,7 @@ func (vs *Server) broadcastReceiveBlock(ctx context.Context, block interfaces.Si
 }
 
 // broadcastAndReceiveBlobs handles the broadcasting and reception of blob sidecars.
-func (vs *Server) broadcastAndReceiveBlobs(ctx context.Context, sidecars []*ethpb.BlobSidecar, root [32]byte) error {
+func (vs *Server) broadcastAndReceiveBlobs(ctx context.Context, sidecars []*ethpb.BlobSidecar, root [fieldparams.RootLength]byte) error {
 	eg, eCtx := errgroup.WithContext(ctx)
 	for i, sc := range sidecars {
 		// Copy the iteration instance to a local variable to give each go-routine its own copy to play with.
@@ -397,6 +453,31 @@ func (vs *Server) broadcastAndReceiveBlobs(ctx context.Context, sidecars []*ethp
 		})
 	}
 	return eg.Wait()
+}
+
+// broadcastAndReceiveDataColumns handles the broadcasting and reception of data columns sidecars.
+func (vs *Server) broadcastAndReceiveDataColumns(ctx context.Context, sidecars []*ethpb.DataColumnSidecar, root [fieldparams.RootLength]byte) error {
+	for i, sidecar := range sidecars {
+		if err := vs.P2P.BroadcastDataColumn(ctx, uint64(i), sidecar); err != nil {
+			return errors.Wrap(err, "broadcast data column")
+		}
+
+		roDataColumn, err := blocks.NewRODataColumnWithRoot(sidecar, root)
+		if err != nil {
+			return errors.Wrap(err, "new read-only data column with root")
+		}
+
+		verifiedRODataColumn := blocks.NewVerifiedRODataColumn(roDataColumn)
+		if err := vs.DataColumnReceiver.ReceiveDataColumn(ctx, verifiedRODataColumn); err != nil {
+			return errors.Wrap(err, "receive data column")
+		}
+
+		vs.OperationNotifier.OperationFeed().Send(&feed.Event{
+			Type: operation.DataColumnSidecarReceived,
+			Data: &operation.DataColumnSidecarReceivedData{DataColumn: &verifiedRODataColumn},
+		})
+	}
+	return nil
 }
 
 // PrepareBeaconProposer caches and updates the fee recipient for the given proposer.

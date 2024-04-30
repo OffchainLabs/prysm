@@ -18,9 +18,6 @@ import (
 )
 
 const (
-	// Number of field elements per extended blob
-	fieldElementsPerExtBlob = 2 * cKzg4844.FieldElementsPerBlob
-
 	// Bytes per cell
 	bytesPerCell = cKzg4844.FieldElementsPerCell * cKzg4844.BytesPerFieldElement
 
@@ -38,12 +35,8 @@ type (
 )
 
 var (
-	errCustodySubnetCountTooLarge          = errors.New("custody subnet count larger than data column sidecar subnet count")
-	errCellNotFound                        = errors.New("cell not found (should never happen)")
-	errCurveOrder                          = errors.New("could not set bls curve order as big int")
-	errBlsFieldElementNil                  = errors.New("bls field element is nil")
-	errBlsFieldElementBiggerThanCurveOrder = errors.New("bls field element higher than curve order")
-	errBlsFieldElementDoesNotFit           = errors.New("bls field element does not fit in BytesPerFieldElement")
+	errCustodySubnetCountTooLarge = errors.New("custody subnet count larger than data column sidecar subnet count")
+	errCellNotFound               = errors.New("cell not found (should never happen)")
 )
 
 // https://github.com/ethereum/consensus-specs/blob/dev/specs/_features/eip7594/das-core.md#helper-functions
@@ -100,9 +93,9 @@ func CustodyColumnSubnets(nodeId enode.ID, custodySubnetCount uint64) (map[uint6
 	return subnetIds, nil
 }
 
-// computeExtendedMatrix computes the extended matrix from the blobs.
+// ComputeExtendedMatrix computes the extended matrix from the blobs.
 // https://github.com/ethereum/consensus-specs/blob/dev/specs/_features/eip7594/das-core.md#compute_extended_matrix
-func computeExtendedMatrix(blobs []cKzg4844.Blob) (extendedMatrix, error) {
+func ComputeExtendedMatrix(blobs []cKzg4844.Blob) (extendedMatrix, error) {
 	matrix := make(extendedMatrix, 0, extendedMatrixSize)
 
 	for i := range blobs {
@@ -119,9 +112,9 @@ func computeExtendedMatrix(blobs []cKzg4844.Blob) (extendedMatrix, error) {
 	return matrix, nil
 }
 
-// recoverMatrix recovers the extended matrix from some cells.
+// RecoverMatrix recovers the extended matrix from some cells.
 // https://github.com/ethereum/consensus-specs/blob/dev/specs/_features/eip7594/das-core.md#recover_matrix
-func recoverMatrix(cellFromCoordinate map[cellCoordinate]cKzg4844.Cell, blobCount uint64) (extendedMatrix, error) {
+func RecoverMatrix(cellFromCoordinate map[cellCoordinate]cKzg4844.Cell, blobCount uint64) (extendedMatrix, error) {
 	matrix := make(extendedMatrix, 0, extendedMatrixSize)
 
 	for blobIndex := uint64(0); blobIndex < blobCount; blobIndex++ {
@@ -160,7 +153,7 @@ func recoverMatrix(cellFromCoordinate map[cellCoordinate]cKzg4844.Cell, blobCoun
 }
 
 // https://github.com/ethereum/consensus-specs/blob/dev/specs/_features/eip7594/das-core.md#recover_matrix
-func dataColumnSidecars(signedBlock interfaces.SignedBeaconBlock, blobs []cKzg4844.Blob) ([]ethpb.DataColumnSidecar, error) {
+func DataColumnSidecars(signedBlock interfaces.SignedBeaconBlock, blobs []cKzg4844.Blob) ([]*ethpb.DataColumnSidecar, error) {
 	blobsCount := len(blobs)
 
 	// Get the signed block header.
@@ -201,7 +194,7 @@ func dataColumnSidecars(signedBlock interfaces.SignedBeaconBlock, blobs []cKzg48
 	}
 
 	// Get the column sidecars.
-	sidecars := make([]ethpb.DataColumnSidecar, cKzg4844.CellsPerExtBlob)
+	sidecars := make([]*ethpb.DataColumnSidecar, cKzg4844.CellsPerExtBlob)
 	for columnIndex := uint64(0); columnIndex < cKzg4844.CellsPerExtBlob; columnIndex++ {
 		column := make([]cKzg4844.Cell, 0, blobsCount)
 		kzgProofOfColumn := make([]cKzg4844.KZGProof, 0, blobsCount)
@@ -231,14 +224,16 @@ func dataColumnSidecars(signedBlock interfaces.SignedBeaconBlock, blobs []cKzg48
 			kzgProofOfColumnBytes = append(kzgProofOfColumnBytes, kzgProof[:])
 		}
 
-		sidecars = append(sidecars, ethpb.DataColumnSidecar{
+		sidecar := &ethpb.DataColumnSidecar{
 			ColumnIndex:                  columnIndex,
 			DataColumn:                   columnBytes,
 			KzgCommitments:               blobKzgCommitments,
 			KzgProof:                     kzgProofOfColumnBytes,
 			SignedBlockHeader:            signedBlockHeader,
 			KzgCommitmentsInclusionProof: kzgCommitmentsInclusionProof,
-		})
+		}
+
+		sidecars = append(sidecars, sidecar)
 	}
 
 	return sidecars, nil

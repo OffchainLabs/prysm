@@ -1,3 +1,5 @@
+# gazelle:ignore
+
 load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 
 go_library(
@@ -45,6 +47,7 @@ go_library(
         "//beacon-chain/core/feed/operation:go_default_library",
         "//beacon-chain/core/feed/state:go_default_library",
         "//beacon-chain/core/helpers:go_default_library",
+        "//beacon-chain/core/peerdas:go_default_library",
         "//beacon-chain/core/signing:go_default_library",
         "//beacon-chain/core/time:go_default_library",
         "//beacon-chain/core/transition:go_default_library",
@@ -91,6 +94,7 @@ go_library(
         "//runtime/version:go_default_library",
         "//time:go_default_library",
         "//time/slots:go_default_library",
+        "@com_github_ethereum_c_kzg_4844//bindings/go:go_default_library",
         "@com_github_ethereum_go_ethereum//common:go_default_library",
         "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",
         "@com_github_golang_protobuf//ptypes/empty",
@@ -177,7 +181,6 @@ common_deps = [
     "@org_golang_google_protobuf//types/known/emptypb:go_default_library",
 ]
 
-# gazelle:ignore
 go_test(
     name = "go_default_test",
     timeout = "moderate",

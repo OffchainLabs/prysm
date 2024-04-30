@@ -48,6 +48,12 @@ func (m *MockBroadcaster) BroadcastBlob(context.Context, uint64, *ethpb.BlobSide
 	return nil
 }
 
+// BroadcastDataColumn broadcasts a data column for mock.
+func (m *MockBroadcaster) BroadcastDataColumn(context.Context, uint64, *ethpb.DataColumnSidecar) error {
+	m.BroadcastCalled.Store(true)
+	return nil
+}
+
 // NumMessages returns the number of messages broadcasted.
 func (m *MockBroadcaster) NumMessages() int {
 	m.msgLock.Lock()

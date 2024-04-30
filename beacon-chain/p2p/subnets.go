@@ -34,8 +34,8 @@ var syncCommsSubnetEnrKey = params.BeaconNetworkConfig().SyncCommsSubnetKey
 // The value used with the subnet, in order
 // to create an appropriate key to retrieve
 // the relevant lock. This is used to differentiate
-// sync subnets from attestation subnets. This is deliberately
-// chosen as more than 64(attestation subnet count).
+// sync subnets from others. This is deliberately
+// chosen as more than 64 (attestation subnet count).
 const syncLockerVal = 100
 
 // The value used with the blob sidecar subnet, in order
@@ -44,6 +44,13 @@ const syncLockerVal = 100
 // blob subnets from others. This is deliberately
 // chosen more than sync and attestation subnet combined.
 const blobSubnetLockerVal = 110
+
+// The value used with the data column sidecar subnet, in order
+// to create an appropriate key to retrieve
+// the relevant lock. This is used to differentiate
+// data column subnets from others. This is deliberately
+// chosen more than sync, attestation and blob subnet (6) combined.
+const dataColumnSubnetVal = 150
 
 // FindPeersWithSubnet performs a network search for peers
 // subscribed to a particular subnet. Then it tries to connect
@@ -375,10 +382,11 @@ func syncBitvector(record *enr.Record) (bitfield.Bitvector4, error) {
 
 // The subnet locker is a map which keeps track of all
 // mutexes stored per subnet. This locker is re-used
-// between both the attestation and sync subnets. In
-// order to differentiate between attestation and sync
-// subnets. Sync subnets are stored by (subnet+syncLockerVal). This
-// is to prevent conflicts while allowing both subnets
+// between both the attestation, sync and blob subnets.
+// Sync subnets are stored by (subnet+syncLockerVal).
+// Blob subnets are stored by (subnet+blobSubnetLockerVal).
+// Data column subnets are stored by (subnet+dataColumnSubnetVal).
+// This is to prevent conflicts while allowing subnets
 // to use a single locker.
 func (s *Service) subnetLocker(i uint64) *sync.RWMutex {
 	s.subnetsLockLock.Lock()

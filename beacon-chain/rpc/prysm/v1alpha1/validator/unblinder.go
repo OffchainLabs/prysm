@@ -3,7 +3,10 @@ package validator
 import (
 	"bytes"
 
+	cKzg4844 "github.com/ethereum/c-kzg-4844/bindings/go"
+
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	consensusblocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
@@ -67,4 +70,30 @@ func unblindBlobsSidecars(block interfaces.SignedBeaconBlock, bundle *enginev1.B
 		}
 	}
 	return sidecars, nil
+}
+
+// TODO: Add tests
+func unblindDataColumnsSidecars(block interfaces.SignedBeaconBlock, bundle *enginev1.BlobsBundle) ([]*ethpb.DataColumnSidecar, error) {
+	// Check if the block is at least a Deneb block.
+	if block.Version() < version.Deneb {
+		return nil, nil
+	}
+
+	// Convert blobs from slices to array.
+	blobs := make([]cKzg4844.Blob, 0, len(bundle.Blobs))
+	for _, blob := range bundle.Blobs {
+		if len(blob) != cKzg4844.BytesPerBlob {
+			return nil, errors.Errorf("invalid blob size. expected %d bytes, got %d bytes", cKzg4844.BytesPerBlob, len(blob))
+		}
+
+		blobs = append(blobs, cKzg4844.Blob(blob))
+	}
+
+	// Retrieve data columns from blobs.
+	dataColumnSidecars, err := peerdas.DataColumnSidecars(block, blobs)
+	if err != nil {
+		return nil, errors.Wrap(err, "data column sidecars")
+	}
+
+	return dataColumnSidecars, nil
 }

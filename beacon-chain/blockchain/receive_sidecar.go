@@ -3,10 +3,10 @@ package blockchain
 import (
 	"context"
 
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 )
 
-func (s *Service) ReceiveDataColumn(ctx context.Context, ds *ethpb.DataColumnSidecar) error {
+func (s *Service) ReceiveDataColumn(ctx context.Context, verifiedRODataColumn blocks.VerifiedRODataColumn) error {
 	// TODO
 	return nil
 }

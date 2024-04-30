@@ -154,6 +154,11 @@ func (_ *FakeP2P) BroadcastBlob(_ context.Context, _ uint64, _ *ethpb.BlobSideca
 	return nil
 }
 
+// BroadcastDataColumn -- fake.
+func (_ *FakeP2P) BroadcastDataColumn(_ context.Context, _ uint64, _ *ethpb.DataColumnSidecar) error {
+	return nil
+}
+
 // InterceptPeerDial -- fake.
 func (_ *FakeP2P) InterceptPeerDial(peer.ID) (allow bool) {
 	return true

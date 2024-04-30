@@ -9,10 +9,13 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
+	coreBlocks "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	prysmTime "github.com/prysmaticlabs/prysm/v5/time"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
@@ -98,7 +101,7 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 		return pubsub.ValidationIgnore, err
 	}
 
-	if err := blocks.VerifyBlockHeaderSignatureUsingCurrentFork(parentState, ds.SignedBlockHeader); err != nil {
+	if err := coreBlocks.VerifyBlockHeaderSignatureUsingCurrentFork(parentState, ds.SignedBlockHeader); err != nil {
 		return pubsub.ValidationReject, err
 	}
 	// In the event the block is more than an epoch ahead from its
@@ -129,8 +132,27 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 		"validationTime":     validationTime,
 	}).Debug("Received data column sidecar")
 
-	msg.ValidatorData = ds
+	// TODO: Transform this whole function so it looks like to the `validateBlob`
+	// with the tiny verifiers inside.
+	roDataColumn, err := blocks.NewRODataColumn(ds)
+	if err != nil {
+		return pubsub.ValidationReject, errors.Wrap(err, "new RO data columns")
+	}
+
+	verifiedRODataColumn := blocks.NewVerifiedRODataColumn(roDataColumn)
+
+	msg.ValidatorData = verifiedRODataColumn
 	return pubsub.ValidationAccept, nil
+}
+
+// Sets the data column with the same slot, proposer index, and data column index as seen.
+func (s *Service) setSeenDataColumnIndex(slot primitives.Slot, proposerIndex primitives.ValidatorIndex, index uint64) {
+	s.seenDataColumnLock.Lock()
+	defer s.seenDataColumnLock.Unlock()
+
+	b := append(bytesutil.Bytes32(uint64(slot)), bytesutil.Bytes32(uint64(proposerIndex))...)
+	b = append(b, bytesutil.Bytes32(index)...)
+	s.seenDataColumnCache.Add(string(b), true)
 }
 
 func computeSubnetForColumnSidecar(colIdx uint64) uint64 {

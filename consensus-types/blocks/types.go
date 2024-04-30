@@ -29,6 +29,7 @@ var (
 	// ErrUnsupportedVersion for beacon block methods.
 	ErrUnsupportedVersion    = errors.New("unsupported beacon block version")
 	errNilBlob               = errors.New("received nil blob sidecar")
+	errNilDataColumn         = errors.New("received nil data column sidecar")
 	errNilBlock              = errors.New("received nil beacon block")
 	errNilBlockBody          = errors.New("received nil beacon block body")
 	errIncorrectBlockVersion = errors.New(incorrectBlockVersion)

@@ -703,7 +703,7 @@ func (c *ChainService) ReceiveBlob(_ context.Context, b blocks.VerifiedROBlob) e
 }
 
 // ReceiveDataColumn implements the same method in chain service
-func (c *ChainService) ReceiveDataColumn(_ context.Context, _ *ethpb.DataColumnSidecar) error {
+func (c *ChainService) ReceiveDataColumn(_ context.Context, _ blocks.VerifiedRODataColumn) error {
 	return nil
 }
 

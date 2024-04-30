@@ -57,6 +57,7 @@ go_library(
         "//beacon-chain/startup:go_default_library",
         "//cmd/beacon-chain/flags:go_default_library",
         "//config/features:go_default_library",
+        "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//consensus-types/wrapper:go_default_library",

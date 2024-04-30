@@ -66,6 +66,7 @@ type Server struct {
 	SyncCommitteePool      synccommittee.Pool
 	BlockReceiver          blockchain.BlockReceiver
 	BlobReceiver           blockchain.BlobReceiver
+	DataColumnReceiver     blockchain.DataColumnReceiver
 	MockEth1Votes          bool
 	Eth1BlockFetcher       execution.POWBlockFetcher
 	PendingDepositsFetcher depositsnapshot.PendingDepositsFetcher

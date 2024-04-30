@@ -6,27 +6,26 @@ import (
 
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
 	opfeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/operation"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"google.golang.org/protobuf/proto"
 )
 
 func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) error {
-	b, ok := msg.(*ethpb.DataColumnSidecar)
+	dc, ok := msg.(blocks.VerifiedRODataColumn)
 	if !ok {
-		return fmt.Errorf("message was not type DataColumnSidecar, type=%T", msg)
+		return fmt.Errorf("message was not type blocks.VerifiedRODataColumn, type=%T", msg)
 	}
 
-	// TODO:Change to new one for data columns
-	s.setSeenBlobIndex(b.SignedBlockHeader.Header.Slot, b.SignedBlockHeader.Header.ProposerIndex, b.ColumnIndex)
+	s.setSeenDataColumnIndex(dc.SignedBlockHeader.Header.Slot, dc.SignedBlockHeader.Header.ProposerIndex, dc.ColumnIndex)
 
-	if err := s.cfg.chain.ReceiveDataColumn(ctx, b); err != nil {
+	if err := s.cfg.chain.ReceiveDataColumn(ctx, dc); err != nil {
 		return err
 	}
 
 	s.cfg.operationNotifier.OperationFeed().Send(&feed.Event{
 		Type: opfeed.DataColumnSidecarReceived,
 		Data: &opfeed.DataColumnSidecarReceivedData{
-			DataColumn: b,
+			DataColumn: &dc,
 		},
 	})
 
