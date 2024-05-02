@@ -259,6 +259,7 @@ type BeaconChainConfig struct {
 	SamplesPerSlot                        uint64           `yaml:"SAMPLES_PER_SLOT"`                             // SamplesPerSlot refers to the humber of random samples a node queries per slot.
 	CustodyRequirement                    uint64           `yaml:"CUSTODY_REQUIREMENT"`                          // CustodyRequirement refers to the minimum amount of subnets a peer must custody and serve samples from.
 	MinEpochsForDataColumnSidecarsRequest primitives.Epoch `yaml:"MIN_EPOCHS_FOR_DATA_COLUMN_SIDECARS_REQUESTS"` // MinEpochsForDataColumnSidecarsRequest is the minimum number of epochs the node will keep the data columns for.
+	MaxCellsInExtendMatrix                uint64           `yaml:"MAX_CELLS_IN_EXTENDED_MATRIX"`                 // MaxCellsInExtendMatrix is the maximum number of cells in the extended data matrix.
 
 	// Networking Specific Parameters
 	GossipMaxSize                   uint64          `yaml:"GOSSIP_MAX_SIZE" spec:"true"`                    // GossipMaxSize is the maximum allowed size of uncompressed gossip messages.

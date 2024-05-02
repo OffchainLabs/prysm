@@ -2,11 +2,11 @@ package peerdas
 
 import (
 	"encoding/binary"
+	"math"
 
 	cKzg4844 "github.com/ethereum/c-kzg-4844/bindings/go"
-	"github.com/holiman/uint256"
-
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/holiman/uint256"
 	errors "github.com/pkg/errors"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
@@ -26,7 +26,7 @@ const (
 )
 
 type (
-	extendedMatrix []cKzg4844.Cell
+	ExtendedMatrix []cKzg4844.Cell
 
 	cellCoordinate struct {
 		blobIndex uint64
@@ -35,10 +35,15 @@ type (
 )
 
 var (
+	// Custom errors
 	errCustodySubnetCountTooLarge = errors.New("custody subnet count larger than data column sidecar subnet count")
 	errCellNotFound               = errors.New("cell not found (should never happen)")
+
+	// maxUint256 is the maximum value of a uint256.
+	maxUint256 = &uint256.Int{math.MaxUint64, math.MaxUint64, math.MaxUint64, math.MaxUint64}
 )
 
+// CustodyColumns computes the columns the node should custody.
 // https://github.com/ethereum/consensus-specs/blob/dev/specs/_features/eip7594/das-core.md#helper-functions
 func CustodyColumns(nodeId enode.ID, custodySubnetCount uint64) (map[uint64]bool, error) {
 	dataColumnSidecarSubnetCount := params.BeaconConfig().DataColumnSidecarSubnetCount
@@ -75,19 +80,34 @@ func CustodyColumnSubnets(nodeId enode.ID, custodySubnetCount uint64) (map[uint6
 	// First, compute the subnet IDs that the node should participate in.
 	subnetIds := make(map[uint64]bool, custodySubnetCount)
 
-	for i := uint64(0); uint64(len(subnetIds)) < custodySubnetCount; i++ {
-		nodeIdUInt256, nextNodeIdUInt256 := new(uint256.Int), new(uint256.Int)
-		nodeIdUInt256.SetBytes(nodeId.Bytes())
-		nextNodeIdUInt256.Add(nodeIdUInt256, uint256.NewInt(i))
-		nextNodeIdUInt64 := nextNodeIdUInt256.Uint64()
-		nextNodeId := bytesutil.Uint64ToBytesLittleEndian(nextNodeIdUInt64)
+	// Convert the node ID to a big int.
+	nodeIdUInt256 := new(uint256.Int).SetBytes(nodeId.Bytes())
 
-		hashedNextNodeId := hash.Hash(nextNodeId)
-		subnetId := binary.LittleEndian.Uint64(hashedNextNodeId[:8]) % dataColumnSidecarSubnetCount
+	// Handle the maximum value of a uint256 case.
+	if nodeIdUInt256.Cmp(maxUint256) == 0 {
+		nodeIdUInt256 = uint256.NewInt(0)
+	}
 
-		if _, exists := subnetIds[subnetId]; !exists {
-			subnetIds[subnetId] = true
-		}
+	one := uint256.NewInt(1)
+
+	for i := uint256.NewInt(0); uint64(len(subnetIds)) < custodySubnetCount; i.Add(i, one) {
+		// Augment the node ID with the index.
+		augmentedNodeIdUInt256 := new(uint256.Int).Add(nodeIdUInt256, i)
+
+		// Convert to big endian bytes.
+		augmentedNodeIdBytesBigEndian := augmentedNodeIdUInt256.Bytes()
+
+		// Convert to little endian.
+		augmentedNodeIdBytesLittleEndian := bytesutil.ReverseByteOrder(augmentedNodeIdBytesBigEndian)
+
+		// Hash the result.
+		hashedAugmentedNodeId := hash.Hash(augmentedNodeIdBytesLittleEndian)
+
+		// Get the subnet ID.
+		subnetId := binary.LittleEndian.Uint64(hashedAugmentedNodeId[:8]) % dataColumnSidecarSubnetCount
+
+		// Add the subnet to the map.
+		subnetIds[subnetId] = true
 	}
 
 	return subnetIds, nil
@@ -95,8 +115,8 @@ func CustodyColumnSubnets(nodeId enode.ID, custodySubnetCount uint64) (map[uint6
 
 // ComputeExtendedMatrix computes the extended matrix from the blobs.
 // https://github.com/ethereum/consensus-specs/blob/dev/specs/_features/eip7594/das-core.md#compute_extended_matrix
-func ComputeExtendedMatrix(blobs []cKzg4844.Blob) (extendedMatrix, error) {
-	matrix := make(extendedMatrix, 0, extendedMatrixSize)
+func ComputeExtendedMatrix(blobs []cKzg4844.Blob) (ExtendedMatrix, error) {
+	matrix := make(ExtendedMatrix, 0, extendedMatrixSize)
 
 	for i := range blobs {
 		// Chunk a non-extended blob into cells representing the corresponding extended blob.
@@ -114,8 +134,8 @@ func ComputeExtendedMatrix(blobs []cKzg4844.Blob) (extendedMatrix, error) {
 
 // RecoverMatrix recovers the extended matrix from some cells.
 // https://github.com/ethereum/consensus-specs/blob/dev/specs/_features/eip7594/das-core.md#recover_matrix
-func RecoverMatrix(cellFromCoordinate map[cellCoordinate]cKzg4844.Cell, blobCount uint64) (extendedMatrix, error) {
-	matrix := make(extendedMatrix, 0, extendedMatrixSize)
+func RecoverMatrix(cellFromCoordinate map[cellCoordinate]cKzg4844.Cell, blobCount uint64) (ExtendedMatrix, error) {
+	matrix := make(ExtendedMatrix, 0, extendedMatrixSize)
 
 	for blobIndex := uint64(0); blobIndex < blobCount; blobIndex++ {
 		// Filter all cells that belong to the current blob.
@@ -152,6 +172,7 @@ func RecoverMatrix(cellFromCoordinate map[cellCoordinate]cKzg4844.Cell, blobCoun
 	return matrix, nil
 }
 
+// DataColumnSidecars computes the data column sidecars from the signed block and blobs.
 // https://github.com/ethereum/consensus-specs/blob/dev/specs/_features/eip7594/das-core.md#recover_matrix
 func DataColumnSidecars(signedBlock interfaces.SignedBeaconBlock, blobs []cKzg4844.Blob) ([]*ethpb.DataColumnSidecar, error) {
 	blobsCount := len(blobs)

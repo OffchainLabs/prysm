@@ -1,0 +1,12 @@
+load("@prysm//tools/go:def.bzl", "go_test")
+
+go_test(
+    name = "go_default_test",
+    size = "small",
+    srcs = ["custody_columns_test.go"],
+    data = glob(["*.yaml"]) + [
+        "@consensus_spec_tests_minimal//:test_data",
+    ],
+    tags = ["spectest"],
+    deps = ["//testing/spectest/shared/eip7594/networking:go_default_library"],
+)

@@ -1,0 +1,17 @@
+load("@prysm//tools/go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    testonly = True,
+    srcs = ["custody_columns.go"],
+    importpath = "github.com/prysmaticlabs/prysm/v5/testing/spectest/shared/eip7594/networking",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//beacon-chain/core/peerdas:go_default_library",
+        "//testing/require:go_default_library",
+        "//testing/spectest/utils:go_default_library",
+        "//testing/util:go_default_library",
+        "@com_github_ethereum_go_ethereum//p2p/enode:go_default_library",
+        "@in_gopkg_yaml_v3//:go_default_library",
+    ],
+)
