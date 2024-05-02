@@ -19,6 +19,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/attestations"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/blstoexec"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
+	p2pTesting "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stategen"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
@@ -43,6 +44,11 @@ func (mbn *mockBeaconNode) StateFeed() event.SubscriberSender {
 
 type mockBroadcaster struct {
 	broadcastCalled bool
+}
+
+type mockAccesser struct {
+	mockBroadcaster
+	p2pTesting.MockPeerManager
 }
 
 func (mb *mockBroadcaster) Broadcast(_ context.Context, _ proto.Message) error {

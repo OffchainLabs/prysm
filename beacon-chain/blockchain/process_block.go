@@ -8,6 +8,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	coreTime "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/das"
@@ -517,12 +518,35 @@ func missingIndices(bs *filesystem.BlobStorage, root [32]byte, expected [][]byte
 	return missing, nil
 }
 
+func missingDataColumns(bs *filesystem.BlobStorage, root [32]byte, expected map[uint64]bool) (map[uint64]bool, error) {
+	if len(expected) == 0 {
+		return nil, nil
+	}
+	if len(expected) > int(params.BeaconConfig().NumberOfColumns) {
+		return nil, errMaxDataColumnsExceeded
+	}
+	indices, err := bs.ColumnIndices(root)
+	if err != nil {
+		return nil, err
+	}
+	missing := make(map[uint64]bool, len(expected))
+	for col := range expected {
+		if !indices[col] {
+			missing[col] = true
+		}
+	}
+	return missing, nil
+}
+
 // isDataAvailable blocks until all BlobSidecars committed to in the block are available,
 // or an error or context cancellation occurs. A nil result means that the data availability check is successful.
 // The function will first check the database to see if all sidecars have been persisted. If any
 // sidecars are missing, it will then read from the blobNotifier channel for the given root until the channel is
 // closed, the context hits cancellation/timeout, or notifications have been received for all the missing sidecars.
 func (s *Service) isDataAvailable(ctx context.Context, root [32]byte, signed interfaces.ReadOnlySignedBeaconBlock) error {
+	if features.Get().EnablePeerDAS {
+		return s.isDataAvailableDataColumns(ctx, root, signed)
+	}
 	if signed.Version() < version.Deneb {
 		return nil
 	}
@@ -560,6 +584,86 @@ func (s *Service) isDataAvailable(ctx context.Context, root [32]byte, signed int
 	}
 
 	// The gossip handler for blobs writes the index of each verified blob referencing the given
+	// root to the channel returned by blobNotifiers.forRoot.
+	nc := s.blobNotifiers.forRoot(root)
+
+	// Log for DA checks that cross over into the next slot; helpful for debugging.
+	nextSlot := slots.BeginsAt(signed.Block().Slot()+1, s.genesisTime)
+	// Avoid logging if DA check is called after next slot start.
+	if nextSlot.After(time.Now()) {
+		nst := time.AfterFunc(time.Until(nextSlot), func() {
+			if len(missing) == 0 {
+				return
+			}
+			log.WithFields(daCheckLogFields(root, signed.Block().Slot(), expected, len(missing))).
+				Error("Still waiting for DA check at slot end.")
+		})
+		defer nst.Stop()
+	}
+	for {
+		select {
+		case idx := <-nc:
+			// Delete each index seen in the notification channel.
+			delete(missing, idx)
+			// Read from the channel until there are no more missing sidecars.
+			if len(missing) > 0 {
+				continue
+			}
+			// Once all sidecars have been observed, clean up the notification channel.
+			s.blobNotifiers.delete(root)
+			return nil
+		case <-ctx.Done():
+			return errors.Wrapf(ctx.Err(), "context deadline waiting for blob sidecars slot: %d, BlockRoot: %#x", block.Slot(), root)
+		}
+	}
+}
+
+func (s *Service) isDataAvailableDataColumns(ctx context.Context, root [32]byte, signed interfaces.ReadOnlySignedBeaconBlock) error {
+	if signed.Version() < version.Deneb {
+		return nil
+	}
+
+	block := signed.Block()
+	if block == nil {
+		return errors.New("invalid nil beacon block")
+	}
+	// We are only required to check within MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUESTS
+	if !params.WithinDAPeriod(slots.ToEpoch(block.Slot()), slots.ToEpoch(s.CurrentSlot())) {
+		return nil
+	}
+	body := block.Body()
+	if body == nil {
+		return errors.New("invalid nil beacon block body")
+	}
+	kzgCommitments, err := body.BlobKzgCommitments()
+	if err != nil {
+		return errors.Wrap(err, "could not get KZG commitments")
+	}
+	// If block has not commitments there is nothing to wait for.
+	if len(kzgCommitments) == 0 {
+		return nil
+	}
+
+	colMap, err := peerdas.CustodyColumns(s.cfg.P2P.NodeID(), params.BeaconConfig().CustodyRequirement)
+	if err != nil {
+		return err
+	}
+	// expected is the number of custodied data columnns a node is expected to have.
+	expected := len(colMap)
+	if expected == 0 {
+		return nil
+	}
+	// get a map of data column indices that are not currently available.
+	missing, err := missingDataColumns(s.blobStorage, root, colMap)
+	if err != nil {
+		return err
+	}
+	// If there are no missing indices, all data column sidecars are available.
+	if len(missing) == 0 {
+		return nil
+	}
+
+	// The gossip handler for data columns writes the index of each verified data column referencing the given
 	// root to the channel returned by blobNotifiers.forRoot.
 	nc := s.blobNotifiers.forRoot(root)
 

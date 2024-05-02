@@ -31,6 +31,11 @@ type P2P interface {
 	MetadataProvider
 }
 
+type Acceser interface {
+	Broadcaster
+	PeerManager
+}
+
 // Broadcaster broadcasts messages to peers over the p2p pubsub protocol.
 type Broadcaster interface {
 	Broadcast(context.Context, proto.Message) error
