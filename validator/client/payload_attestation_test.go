@@ -11,7 +11,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
+	"github.com/prysmaticlabs/prysm/v5/testing/util/random"
 	"go.uber.org/mock/gomock"
 )
 
@@ -32,7 +32,7 @@ func Test_validator_signPayloadAttestation(t *testing.T) {
 		}, nil)
 
 	// Generate random payload attestation data
-	pa := util.GenerateRandomPayloadAttestationData(t)
+	pa := random.PayloadAttestationData(t)
 	pa.Slot = primitives.Slot(e) * params.BeaconConfig().SlotsPerEpoch // Verify that go mock EXPECT() gets the correct epoch.
 
 	// Perform the signature operation
