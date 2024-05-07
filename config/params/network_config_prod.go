@@ -1,6 +1,5 @@
 //go:build !develop
 
-//go:test !develop
 package params
 
 import "github.com/mohae/deepcopy"
