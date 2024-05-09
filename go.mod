@@ -16,7 +16,7 @@ require (
 	github.com/dgraph-io/ristretto v0.0.4-0.20210318174700-74754f61e018
 	github.com/dustin/go-humanize v1.0.0
 	github.com/emicklei/dot v0.11.0
-	github.com/ethereum/c-kzg-4844 v1.0.1-0.20240422190800-13be436f5927
+	github.com/ethereum/c-kzg-4844 v1.0.2-0.20240507203752-26d3b4156f7a
 	github.com/ethereum/go-ethereum v1.13.5
 	github.com/fjl/memsize v0.0.0-20190710130421-bcb5799ab5e5
 	github.com/fsnotify/fsnotify v1.6.0
