@@ -22,7 +22,7 @@ func SlashingParamsPerVersion(v int) (slashingQuotient, proposerRewardQuotient, 
 		slashingQuotient = cfg.MinSlashingPenaltyQuotientBellatrix
 		proposerRewardQuotient = cfg.ProposerRewardQuotient
 		whistleblowerRewardQuotient = cfg.WhistleBlowerRewardQuotient
-	case version.Electra:
+	case version.Electra, version.EPBS:
 		slashingQuotient = cfg.MinSlashingPenaltyQuotientElectra
 		proposerRewardQuotient = cfg.ProposerRewardQuotient
 		whistleblowerRewardQuotient = cfg.WhistleBlowerRewardQuotientElectra
