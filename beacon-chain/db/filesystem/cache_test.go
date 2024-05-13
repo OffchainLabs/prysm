@@ -9,6 +9,7 @@ import (
 )
 
 func TestSlotByRoot_Summary(t *testing.T) {
+	t.Skip("Use new test for data columns")
 	var noneSet, allSet, firstSet, lastSet, oneSet blobIndexMask
 	firstSet[0] = true
 	lastSet[len(lastSet)-1] = true

@@ -107,15 +107,17 @@ var ErrMissingClockSetter = errors.New("blockchain Service initialized without a
 type blobNotifierMap struct {
 	sync.RWMutex
 	notifiers map[[32]byte]chan uint64
-	seenIndex map[[32]byte][fieldparams.MaxBlobsPerBlock]bool
+	seenIndex map[[32]byte][fieldparams.NumberOfColumns]bool
 }
 
 // notifyIndex notifies a blob by its index for a given root.
 // It uses internal maps to keep track of seen indices and notifier channels.
 func (bn *blobNotifierMap) notifyIndex(root [32]byte, idx uint64) {
-	if idx >= fieldparams.MaxBlobsPerBlock {
-		return
-	}
+	// TODO: Separate Data Columns from blobs
+	/*
+		if idx >= fieldparams.MaxBlobsPerBlock {
+			return
+		}*/
 
 	bn.Lock()
 	seen := bn.seenIndex[root]
@@ -129,7 +131,7 @@ func (bn *blobNotifierMap) notifyIndex(root [32]byte, idx uint64) {
 	// Retrieve or create the notifier channel for the given root.
 	c, ok := bn.notifiers[root]
 	if !ok {
-		c = make(chan uint64, fieldparams.MaxBlobsPerBlock)
+		c = make(chan uint64, fieldparams.NumberOfColumns)
 		bn.notifiers[root] = c
 	}
 
@@ -143,7 +145,7 @@ func (bn *blobNotifierMap) forRoot(root [32]byte) chan uint64 {
 	defer bn.Unlock()
 	c, ok := bn.notifiers[root]
 	if !ok {
-		c = make(chan uint64, fieldparams.MaxBlobsPerBlock)
+		c = make(chan uint64, fieldparams.NumberOfColumns)
 		bn.notifiers[root] = c
 	}
 	return c
@@ -169,7 +171,7 @@ func NewService(ctx context.Context, opts ...Option) (*Service, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	bn := &blobNotifierMap{
 		notifiers: make(map[[32]byte]chan uint64),
-		seenIndex: make(map[[32]byte][fieldparams.MaxBlobsPerBlock]bool),
+		seenIndex: make(map[[32]byte][fieldparams.NumberOfColumns]bool),
 	}
 	srv := &Service{
 		ctx:                  ctx,

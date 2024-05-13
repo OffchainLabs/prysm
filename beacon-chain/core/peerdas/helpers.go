@@ -38,6 +38,8 @@ var (
 	// Custom errors
 	errCustodySubnetCountTooLarge = errors.New("custody subnet count larger than data column sidecar subnet count")
 	errCellNotFound               = errors.New("cell not found (should never happen)")
+	errIndexTooLarge              = errors.New("column index is larger than the specified number of columns")
+	errMismatchLength             = errors.New("mismatch in the length of the commitments and proofs")
 
 	// maxUint256 is the maximum value of a uint256.
 	maxUint256 = &uint256.Int{math.MaxUint64, math.MaxUint64, math.MaxUint64, math.MaxUint64}
@@ -176,6 +178,9 @@ func RecoverMatrix(cellFromCoordinate map[cellCoordinate]cKzg4844.Cell, blobCoun
 // https://github.com/ethereum/consensus-specs/blob/dev/specs/_features/eip7594/das-core.md#recover_matrix
 func DataColumnSidecars(signedBlock interfaces.SignedBeaconBlock, blobs []cKzg4844.Blob) ([]*ethpb.DataColumnSidecar, error) {
 	blobsCount := len(blobs)
+	if blobsCount == 0 {
+		return nil, nil
+	}
 
 	// Get the signed block header.
 	signedBlockHeader, err := signedBlock.Header()
@@ -215,7 +220,7 @@ func DataColumnSidecars(signedBlock interfaces.SignedBeaconBlock, blobs []cKzg48
 	}
 
 	// Get the column sidecars.
-	sidecars := make([]*ethpb.DataColumnSidecar, cKzg4844.CellsPerExtBlob)
+	sidecars := make([]*ethpb.DataColumnSidecar, 0, cKzg4844.CellsPerExtBlob)
 	for columnIndex := uint64(0); columnIndex < cKzg4844.CellsPerExtBlob; columnIndex++ {
 		column := make([]cKzg4844.Cell, 0, blobsCount)
 		kzgProofOfColumn := make([]cKzg4844.KZGProof, 0, blobsCount)
@@ -234,7 +239,8 @@ func DataColumnSidecars(signedBlock interfaces.SignedBeaconBlock, blobs []cKzg48
 
 			cellBytes := make([]byte, 0, bytesPerCell)
 			for _, fieldElement := range cell {
-				cellBytes = append(cellBytes, fieldElement[:]...)
+				copiedElem := fieldElement
+				cellBytes = append(cellBytes, copiedElem[:]...)
 			}
 
 			columnBytes = append(columnBytes, cellBytes)
@@ -242,7 +248,8 @@ func DataColumnSidecars(signedBlock interfaces.SignedBeaconBlock, blobs []cKzg48
 
 		kzgProofOfColumnBytes := make([][]byte, 0, blobsCount)
 		for _, kzgProof := range kzgProofOfColumn {
-			kzgProofOfColumnBytes = append(kzgProofOfColumnBytes, kzgProof[:])
+			copiedProof := kzgProof
+			kzgProofOfColumnBytes = append(kzgProofOfColumnBytes, copiedProof[:])
 		}
 
 		sidecar := &ethpb.DataColumnSidecar{
@@ -258,4 +265,42 @@ func DataColumnSidecars(signedBlock interfaces.SignedBeaconBlock, blobs []cKzg48
 	}
 
 	return sidecars, nil
+}
+
+// VerifyDataColumnSidecarKZGProofs verifies the provided KZG Proofs for the particular
+// data column.
+func VerifyDataColumnSidecarKZGProofs(sc *ethpb.DataColumnSidecar) (bool, error) {
+	if sc.ColumnIndex >= params.BeaconConfig().NumberOfColumns {
+		return false, errIndexTooLarge
+	}
+	if len(sc.DataColumn) != len(sc.KzgCommitments) || len(sc.KzgCommitments) != len(sc.KzgProof) {
+		return false, errMismatchLength
+	}
+	blobsCount := len(sc.DataColumn)
+
+	rowIdx := make([]uint64, 0, blobsCount)
+	colIdx := make([]uint64, 0, blobsCount)
+	for i := 0; i < len(sc.DataColumn); i++ {
+		copiedI := uint64(i)
+		rowIdx = append(rowIdx, copiedI)
+		colI := sc.ColumnIndex
+		colIdx = append(colIdx, colI)
+	}
+	ckzgComms := make([]cKzg4844.Bytes48, 0, len(sc.KzgCommitments))
+	for _, com := range sc.KzgCommitments {
+		ckzgComms = append(ckzgComms, cKzg4844.Bytes48(com))
+	}
+	var cells []cKzg4844.Cell
+	for _, ce := range sc.DataColumn {
+		var newCell []cKzg4844.Bytes32
+		for i := 0; i < len(ce); i += 32 {
+			newCell = append(newCell, cKzg4844.Bytes32(ce[i:i+32]))
+		}
+		cells = append(cells, cKzg4844.Cell(newCell))
+	}
+	var proofs []cKzg4844.Bytes48
+	for _, p := range sc.KzgProof {
+		proofs = append(proofs, cKzg4844.Bytes48(p))
+	}
+	return cKzg4844.VerifyCellKZGProofBatch(ckzgComms, rowIdx, colIdx, cells, proofs)
 }

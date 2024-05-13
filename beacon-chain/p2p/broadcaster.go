@@ -289,7 +289,7 @@ func (s *Service) BroadcastDataColumn(ctx context.Context, columnSubnet uint64, 
 
 	// Ensure the data column sidecar is not nil.
 	if dataColumnSidecar == nil {
-		return errors.New("attempted to broadcast nil data column sidecar")
+		return errors.Errorf("attempted to broadcast nil data column sidecar at subnet %d", columnSubnet)
 	}
 
 	// Retrieve the current fork digest.
@@ -364,7 +364,7 @@ func (s *Service) internalBroadcastDataColumn(
 
 	// Broadcast the data column sidecar to the network.
 	if err := s.broadcastObject(ctx, dataColumnSidecar, topic); err != nil {
-		log.WithError(err).Error("Failed to broadcast blob sidecar")
+		log.WithError(err).Error("Failed to broadcast data column sidecar")
 		tracing.AnnotateError(span, err)
 	}
 

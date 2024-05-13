@@ -457,27 +457,35 @@ func (vs *Server) broadcastAndReceiveBlobs(ctx context.Context, sidecars []*ethp
 
 // broadcastAndReceiveDataColumns handles the broadcasting and reception of data columns sidecars.
 func (vs *Server) broadcastAndReceiveDataColumns(ctx context.Context, sidecars []*ethpb.DataColumnSidecar, root [fieldparams.RootLength]byte) error {
-	for i, sidecar := range sidecars {
-		if err := vs.P2P.BroadcastDataColumn(ctx, uint64(i), sidecar); err != nil {
-			return errors.Wrap(err, "broadcast data column")
-		}
+	eg, _ := errgroup.WithContext(ctx)
+	for i, sd := range sidecars {
+		// Copy the iteration instance to a local variable to give each go-routine its own copy to play with.
+		// See https://golang.org/doc/faq#closures_and_goroutines for more details.
+		colIdx := i
+		sidecar := sd
+		eg.Go(func() error {
+			if err := vs.P2P.BroadcastDataColumn(ctx, uint64(colIdx)%params.BeaconConfig().DataColumnSidecarSubnetCount, sidecar); err != nil {
+				return errors.Wrap(err, "broadcast data column")
+			}
 
-		roDataColumn, err := blocks.NewRODataColumnWithRoot(sidecar, root)
-		if err != nil {
-			return errors.Wrap(err, "new read-only data column with root")
-		}
+			roDataColumn, err := blocks.NewRODataColumnWithRoot(sidecar, root)
+			if err != nil {
+				return errors.Wrap(err, "new read-only data column with root")
+			}
 
-		verifiedRODataColumn := blocks.NewVerifiedRODataColumn(roDataColumn)
-		if err := vs.DataColumnReceiver.ReceiveDataColumn(ctx, verifiedRODataColumn); err != nil {
-			return errors.Wrap(err, "receive data column")
-		}
+			verifiedRODataColumn := blocks.NewVerifiedRODataColumn(roDataColumn)
+			if err := vs.DataColumnReceiver.ReceiveDataColumn(ctx, verifiedRODataColumn); err != nil {
+				return errors.Wrap(err, "receive data column")
+			}
 
-		vs.OperationNotifier.OperationFeed().Send(&feed.Event{
-			Type: operation.DataColumnSidecarReceived,
-			Data: &operation.DataColumnSidecarReceivedData{DataColumn: &verifiedRODataColumn},
+			vs.OperationNotifier.OperationFeed().Send(&feed.Event{
+				Type: operation.DataColumnSidecarReceived,
+				Data: &operation.DataColumnSidecarReceivedData{DataColumn: &verifiedRODataColumn},
+			})
+			return nil
 		})
 	}
-	return nil
+	return eg.Wait()
 }
 
 // PrepareBeaconProposer caches and updates the fee recipient for the given proposer.

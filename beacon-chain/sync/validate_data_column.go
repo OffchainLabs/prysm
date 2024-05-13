@@ -11,6 +11,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
 	coreBlocks "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
@@ -92,10 +93,18 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 	if !s.cfg.chain.InForkchoice([32]byte(ds.SignedBlockHeader.Header.ParentRoot)) {
 		return pubsub.ValidationReject, blockchain.ErrNotDescendantOfFinalized
 	}
-	// TODO Verify KZG inclusion proof of data column sidecar
 
-	// TODO Verify KZG proofs of column sidecar
+	if err := blocks.VerifyKZGInclusionProofColumn(ds); err != nil {
+		return pubsub.ValidationReject, err
+	}
 
+	verified, err := peerdas.VerifyDataColumnSidecarKZGProofs(ds)
+	if err != nil {
+		return pubsub.ValidationReject, err
+	}
+	if !verified {
+		return pubsub.ValidationReject, errors.New("failed to verify kzg proof of column")
+	}
 	parentState, err := s.cfg.stateGen.StateByRoot(ctx, [32]byte(ds.SignedBlockHeader.Header.ParentRoot))
 	if err != nil {
 		return pubsub.ValidationIgnore, err
@@ -130,6 +139,7 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 	log.WithFields(logrus.Fields{
 		"sinceSlotStartTime": sinceSlotStartTime,
 		"validationTime":     validationTime,
+		"columnIndex":        ds.ColumnIndex,
 	}).Debug("Received data column sidecar")
 
 	// TODO: Transform this whole function so it looks like to the `validateBlob`
