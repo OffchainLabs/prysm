@@ -2,6 +2,7 @@ package das
 
 import (
 	"bytes"
+	"reflect"
 
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
@@ -38,6 +39,10 @@ func keyFromSidecar(sc blocks.ROBlob) cacheKey {
 	return cacheKey{slot: sc.Slot(), root: sc.BlockRoot()}
 }
 
+func keyFromColumn(sc blocks.RODataColumn) cacheKey {
+	return cacheKey{slot: sc.Slot(), root: sc.BlockRoot()}
+}
+
 // keyFromBlock is a convenience method for constructing a cacheKey from a ROBlock value.
 func keyFromBlock(b blocks.ROBlock) cacheKey {
 	return cacheKey{slot: b.Block().Slot(), root: b.Root()}
@@ -61,6 +66,7 @@ func (c *cache) delete(key cacheKey) {
 // cacheEntry holds a fixed-length cache of BlobSidecars.
 type cacheEntry struct {
 	scs         [fieldparams.MaxBlobsPerBlock]*blocks.ROBlob
+	colScs      [fieldparams.NumberOfColumns]*blocks.RODataColumn
 	diskSummary filesystem.BlobStorageSummary
 }
 
@@ -79,6 +85,17 @@ func (e *cacheEntry) stash(sc *blocks.ROBlob) error {
 		return errors.Wrapf(ErrDuplicateSidecar, "root=%#x, index=%d, commitment=%#x", sc.BlockRoot(), sc.Index, sc.KzgCommitment)
 	}
 	e.scs[sc.Index] = sc
+	return nil
+}
+
+func (e *cacheEntry) stashColumns(sc *blocks.RODataColumn) error {
+	if sc.ColumnIndex >= fieldparams.NumberOfColumns {
+		return errors.Wrapf(errIndexOutOfBounds, "index=%d", sc.ColumnIndex)
+	}
+	if e.colScs[sc.ColumnIndex] != nil {
+		return errors.Wrapf(ErrDuplicateSidecar, "root=%#x, index=%d, commitment=%#x", sc.BlockRoot(), sc.ColumnIndex, sc.KzgCommitments)
+	}
+	e.colScs[sc.ColumnIndex] = sc
 	return nil
 }
 
@@ -117,6 +134,35 @@ func (e *cacheEntry) filter(root [32]byte, kc safeCommitmentArray) ([]blocks.ROB
 	return scs, nil
 }
 
+func (e *cacheEntry) filterColumns(root [32]byte, kc safeCommitmentsArray) ([]blocks.RODataColumn, error) {
+	if e.diskSummary.AllAvailable(kc.count()) {
+		return nil, nil
+	}
+	scs := make([]blocks.RODataColumn, 0, kc.count())
+	for i := uint64(0); i < fieldparams.NumberOfColumns; i++ {
+		// We already have this blob, we don't need to write it or validate it.
+		if e.diskSummary.HasIndex(i) {
+			continue
+		}
+		if kc[i] == nil {
+			if e.colScs[i] != nil {
+				return nil, errors.Wrapf(errCommitmentMismatch, "root=%#x, index=%#x, commitment=%#x, no block commitment", root, i, e.scs[i].KzgCommitment)
+			}
+			continue
+		}
+
+		if e.colScs[i] == nil {
+			return nil, errors.Wrapf(errMissingSidecar, "root=%#x, index=%#x", root, i)
+		}
+		if !reflect.DeepEqual(kc[i], e.colScs[i].KzgCommitments) {
+			return nil, errors.Wrapf(errCommitmentMismatch, "root=%#x, index=%#x, commitment=%#x, block commitment=%#x", root, i, e.colScs[i].KzgCommitments, kc[i])
+		}
+		scs = append(scs, *e.colScs[i])
+	}
+
+	return scs, nil
+}
+
 // safeCommitmentArray is a fixed size array of commitment byte slices. This is helpful for avoiding
 // gratuitous bounds checks.
 type safeCommitmentArray [fieldparams.MaxBlobsPerBlock][]byte
@@ -128,4 +174,15 @@ func (s safeCommitmentArray) count() int {
 		}
 	}
 	return fieldparams.MaxBlobsPerBlock
+}
+
+type safeCommitmentsArray [fieldparams.NumberOfColumns][][]byte
+
+func (s safeCommitmentsArray) count() int {
+	for i := range s {
+		if s[i] == nil {
+			return i
+		}
+	}
+	return fieldparams.NumberOfColumns
 }

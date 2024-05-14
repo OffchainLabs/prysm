@@ -46,6 +46,9 @@ const BlobSidecarsByRootName = "/blob_sidecars_by_root"
 // DataColumnSidecarsByRootName is the name for the DataColumnSidecarsByRoot v1 message topic.
 const DataColumnSidecarsByRootName = "/data_column_sidecars_by_root"
 
+// DataColumnSidecarsByRangeName is the name for the DataColumnSidecarsByRange v1 message topic.
+const DataColumnSidecarsByRangeName = "/data_column_sidecars_by_range"
+
 const (
 	// V1 RPC Topics
 	// RPCStatusTopicV1 defines the v1 topic for the status rpc method.
@@ -71,6 +74,9 @@ const (
 	// RPCDataColumnSidecarsByRootTopicV1 is a topic for requesting data column sidecars by their block root. New in PeerDAS.
 	// /eth2/beacon_chain/req/data_column_sidecars_by_root/1
 	RPCDataColumnSidecarsByRootTopicV1 = protocolPrefix + DataColumnSidecarsByRootName + SchemaVersionV1
+	// RPCDataColumnSidecarsByRangeTopicV1 is a topic for requesting data column sidecars by their slot. New in PeerDAS.
+	// /eth2/beacon_chain/req/data_column_sidecars_by_range/1
+	RPCDataColumnSidecarsByRangeTopicV1 = protocolPrefix + DataColumnSidecarsByRangeName + SchemaVersionV1
 
 	// V2 RPC Topics
 	// RPCBlocksByRangeTopicV2 defines v2 the topic for the blocks by range rpc method.
@@ -107,6 +113,10 @@ var RPCTopicMappings = map[string]interface{}{
 	RPCBlobSidecarsByRangeTopicV1: new(pb.BlobSidecarsByRangeRequest),
 	// BlobSidecarsByRoot v1 Message
 	RPCBlobSidecarsByRootTopicV1: new(p2ptypes.BlobSidecarsByRootReq),
+	// DataColumnSidecarsByRange v1 Message
+	RPCDataColumnSidecarsByRangeTopicV1: new(pb.DataColumnSidecarsByRangeRequest),
+	// DataColumnSidecarsByRoot v1 Message
+	RPCDataColumnSidecarsByRootTopicV1: new(p2ptypes.BlobSidecarsByRootReq),
 }
 
 // Maps all registered protocol prefixes.
@@ -125,6 +135,8 @@ var messageMapping = map[string]bool{
 	MetadataMessageName:            true,
 	BlobSidecarsByRangeName:        true,
 	BlobSidecarsByRootName:         true,
+	DataColumnSidecarsByRootName:   true,
+	DataColumnSidecarsByRangeName:  true,
 }
 
 // Maps all the RPC messages which are to updated in altair.

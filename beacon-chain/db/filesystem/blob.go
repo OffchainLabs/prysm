@@ -426,7 +426,7 @@ func (bs *BlobStorage) ColumnIndices(root [32]byte) ([fieldparams.NumberOfColumn
 			return mask, errors.Wrapf(err, "unexpected directory entry breaks listing, %s", parts[0])
 		}
 		if u >= fieldparams.NumberOfColumns {
-			return mask, errIndexOutOfBounds
+			return mask, errors.Wrapf(errIndexOutOfBounds, "invalid index %d", u)
 		}
 		mask[u] = true
 	}

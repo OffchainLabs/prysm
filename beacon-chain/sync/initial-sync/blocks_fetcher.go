@@ -10,6 +10,7 @@ import (
 
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
@@ -18,6 +19,7 @@ import (
 	prysmsync "github.com/prysmaticlabs/prysm/v5/beacon-chain/sync"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/verify"
 	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
+	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	blocks2 "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
@@ -316,11 +318,19 @@ func (f *blocksFetcher) handleRequest(ctx context.Context, start primitives.Slot
 
 	response.bwb, response.pid, response.err = f.fetchBlocksFromPeer(ctx, start, count, peers)
 	if response.err == nil {
-		bwb, err := f.fetchBlobsFromPeer(ctx, response.bwb, response.pid, peers)
-		if err != nil {
-			response.err = err
+		if features.Get().EnablePeerDAS {
+			bwb, err := f.fetchColumnsFromPeer(ctx, response.bwb, response.pid, peers)
+			if err != nil {
+				response.err = err
+			}
+			response.bwb = bwb
+		} else {
+			bwb, err := f.fetchBlobsFromPeer(ctx, response.bwb, response.pid, peers)
+			if err != nil {
+				response.err = err
+			}
+			response.bwb = bwb
 		}
-		response.bwb = bwb
 	}
 	return response
 }
@@ -465,6 +475,16 @@ func (r *blobRange) Request() *p2ppb.BlobSidecarsByRangeRequest {
 	}
 }
 
+func (r *blobRange) RequestDataColumns() *p2ppb.DataColumnSidecarsByRangeRequest {
+	if r == nil {
+		return nil
+	}
+	return &p2ppb.DataColumnSidecarsByRangeRequest{
+		StartSlot: r.low,
+		Count:     uint64(r.high.SubSlot(r.low)) + 1,
+	}
+}
+
 var errBlobVerification = errors.New("peer unable to serve aligned BlobSidecarsByRange and BeaconBlockSidecarsByRange responses")
 var errMissingBlobsForBlockCommitments = errors.Wrap(errBlobVerification, "blobs unavailable for processing block with kzg commitments")
 
@@ -479,6 +499,28 @@ func verifyAndPopulateBlobs(bwb []blocks2.BlockWithROBlobs, blobs []blocks.ROBlo
 	}
 	for i := range bwb {
 		bwi, err := populateBlock(bwb[i], blobsByRoot[bwb[i].Block.Root()], req, bss)
+		if err != nil {
+			if errors.Is(err, errDidntPopulate) {
+				continue
+			}
+			return bwb, err
+		}
+		bwb[i] = bwi
+	}
+	return bwb, nil
+}
+
+func verifyAndPopulateColumns(bwb []blocks2.BlockWithROBlobs, columns []blocks.RODataColumn, req *p2ppb.DataColumnSidecarsByRangeRequest, bss filesystem.BlobStorageSummarizer) ([]blocks2.BlockWithROBlobs, error) {
+	columnsByRoot := make(map[[32]byte][]blocks.RODataColumn)
+	for i := range columns {
+		if columns[i].Slot() < req.StartSlot {
+			continue
+		}
+		br := columns[i].BlockRoot()
+		columnsByRoot[br] = append(columnsByRoot[br], columns[i])
+	}
+	for i := range bwb {
+		bwi, err := populateBlockWithColumns(bwb[i], columnsByRoot[bwb[i].Block.Root()], req, bss)
 		if err != nil {
 			if errors.Is(err, errDidntPopulate) {
 				continue
@@ -517,6 +559,31 @@ func populateBlock(bw blocks2.BlockWithROBlobs, blobs []blocks.ROBlob, req *p2pp
 		}
 	}
 	bw.Blobs = blobs
+	return bw, nil
+}
+
+func populateBlockWithColumns(bw blocks2.BlockWithROBlobs, columns []blocks.RODataColumn, req *p2ppb.DataColumnSidecarsByRangeRequest, bss filesystem.BlobStorageSummarizer) (blocks2.BlockWithROBlobs, error) {
+	blk := bw.Block
+	if blk.Version() < version.Deneb || blk.Block().Slot() < req.StartSlot {
+		return bw, errDidntPopulate
+	}
+	commits, err := blk.Block().Body().BlobKzgCommitments()
+	if err != nil {
+		return bw, errDidntPopulate
+	}
+	if len(commits) == 0 {
+		return bw, errDidntPopulate
+	}
+	colsPersub := params.BeaconConfig().NumberOfColumns / params.BeaconConfig().DataColumnSidecarSubnetCount
+	if len(columns) != int(params.BeaconConfig().CustodyRequirement*colsPersub) {
+		return bw, errors.Errorf("unequal custodied columns provided, got %d instead of %d", len(columns), int(params.BeaconConfig().CustodyRequirement))
+	}
+	for ci := range columns {
+		if err := verify.ColumnAlignsWithBlock(columns[ci], blk); err != nil {
+			return bw, err
+		}
+	}
+	bw.Columns = columns
 	return bw, nil
 }
 
@@ -564,6 +631,71 @@ func (f *blocksFetcher) fetchBlobsFromPeer(ctx context.Context, bwb []blocks2.Bl
 		robs, err := verifyAndPopulateBlobs(bwb, blobs, req, f.bs)
 		if err != nil {
 			log.WithField("peer", p).WithError(err).Debug("Invalid BeaconBlobsByRange response")
+			continue
+		}
+		return robs, err
+	}
+	return nil, errNoPeersAvailable
+}
+
+// fetchColumnsFromPeer fetches blocks from a single randomly selected peer.
+func (f *blocksFetcher) fetchColumnsFromPeer(ctx context.Context, bwb []blocks2.BlockWithROBlobs, pid peer.ID, peers []peer.ID) ([]blocks2.BlockWithROBlobs, error) {
+	ctx, span := trace.StartSpan(ctx, "initialsync.fetchColumnsFromPeer")
+	defer span.End()
+	if slots.ToEpoch(f.clock.CurrentSlot()) < params.BeaconConfig().DenebForkEpoch {
+		return bwb, nil
+	}
+	columnWindowStart, err := prysmsync.DataColumnsRPCMinValidSlot(f.clock.CurrentSlot())
+	if err != nil {
+		return nil, err
+	}
+	// Construct request message based on observed interval of blocks in need of columns.
+	req := countCommitments(bwb, columnWindowStart).blobRange(f.bs).RequestDataColumns()
+	if req == nil {
+		return bwb, nil
+	}
+	// Construct request message based on required custodied columns.
+	custodyCols, err := peerdas.CustodyColumns(f.p2p.NodeID(), params.BeaconConfig().CustodyRequirement)
+	if err != nil {
+		return nil, err
+	}
+
+	colIdxs := make([]uint64, 0, len(custodyCols))
+	for c, _ := range custodyCols {
+		colIdxs = append(colIdxs, c)
+	}
+	req.Columns = colIdxs
+	peers = f.filterPeers(ctx, peers, peersPercentagePerRequest)
+	// We dial the initial peer first to ensure that we get the desired set of columns.
+	wantedPeers := append([]peer.ID{pid}, peers...)
+	bestPeers := f.hasSufficientBandwidth(wantedPeers, req.Count)
+	// We append the best peers to the front so that higher capacity
+	// peers are dialed first. If all of them fail, we fallback to the
+	// initial peer we wanted to request blobs from.
+	peers = append(bestPeers, pid)
+	for i := 0; i < len(peers); i++ {
+		p := peers[i]
+		nid, err := p2p.ConvertPeerIDToNodeID(pid)
+		if err != nil {
+			return nil, err
+		}
+		remoteCustody, err := peerdas.CustodyColumns(nid, params.BeaconConfig().CustodyRequirement)
+		if err != nil {
+			return nil, err
+		}
+		if !remotePeerHasCustody(req.Columns, remoteCustody) {
+			// TODO: For easier interop we do not skip for now
+			log.Warnf("Remote peer %s does not have wanted columns", p.String())
+		}
+		columns, err := f.requestColumns(ctx, req, p)
+		if err != nil {
+			log.WithField("peer", p).WithError(err).Debug("Could not request data columns by range from peer")
+			continue
+		}
+		f.p2p.Peers().Scorers().BlockProviderScorer().Touch(p)
+		robs, err := verifyAndPopulateColumns(bwb, columns, req, f.bs)
+		if err != nil {
+			log.WithField("peer", p).WithError(err).Debug("Invalid DataColumnByRange response")
 			continue
 		}
 		return robs, err
@@ -625,7 +757,36 @@ func (f *blocksFetcher) requestBlobs(ctx context.Context, req *p2ppb.BlobSidecar
 	}
 	f.rateLimiter.Add(pid.String(), int64(req.Count))
 	l.Unlock()
+
 	return prysmsync.SendBlobsByRangeRequest(ctx, f.clock, f.p2p, pid, f.ctxMap, req)
+}
+
+func (f *blocksFetcher) requestColumns(ctx context.Context, req *p2ppb.DataColumnSidecarsByRangeRequest, pid peer.ID) ([]blocks.RODataColumn, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	l := f.peerLock(pid)
+	l.Lock()
+	log.WithFields(logrus.Fields{
+		"peer":     pid,
+		"start":    req.StartSlot,
+		"count":    req.Count,
+		"capacity": f.rateLimiter.Remaining(pid.String()),
+		"score":    f.p2p.Peers().Scorers().BlockProviderScorer().FormatScorePretty(pid),
+	}).Debug("Requesting Columns")
+	// We're intentionally abusing the block rate limit here, treating data column requests as if they were block requests.
+	// Since column requests take more bandwidth than blocks, we should improve how we account for the different kinds
+	// of requests, more in proportion to the cost of serving them.
+	if f.rateLimiter.Remaining(pid.String()) < int64(req.Count) {
+		if err := f.waitForBandwidth(pid, req.Count); err != nil {
+			l.Unlock()
+			return nil, err
+		}
+	}
+	f.rateLimiter.Add(pid.String(), int64(req.Count))
+	l.Unlock()
+
+	return prysmsync.SendDataColumnsByRangeRequest(ctx, f.clock, f.p2p, pid, f.ctxMap, req)
 }
 
 // requestBlocksByRoot is a wrapper for handling BeaconBlockByRootsReq requests/streams.
@@ -727,4 +888,13 @@ func dedupPeers(peers []peer.ID) []peer.ID {
 		peerExists[peers[i]] = true
 	}
 	return newPeerList
+}
+
+func remotePeerHasCustody(wantedIdxs []uint64, remoteCustMap map[uint64]bool) bool {
+	for _, wIdx := range wantedIdxs {
+		if !remoteCustMap[wIdx] {
+			return false
+		}
+	}
+	return true
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
+	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
@@ -172,26 +173,51 @@ func (s *Service) processFetchedDataRegSync(
 	if len(bwb) == 0 {
 		return
 	}
-	bv := verification.NewBlobBatchVerifier(s.newBlobVerifier, verification.InitsyncSidecarRequirements)
-	avs := das.NewLazilyPersistentStore(s.cfg.BlobStorage, bv)
-	batchFields := logrus.Fields{
-		"firstSlot":        data.bwb[0].Block.Block().Slot(),
-		"firstUnprocessed": bwb[0].Block.Block().Slot(),
-	}
-	for _, b := range bwb {
-		if err := avs.Persist(s.clock.CurrentSlot(), b.Blobs...); err != nil {
-			log.WithError(err).WithFields(batchFields).WithFields(syncFields(b.Block)).Warn("Batch failure due to BlobSidecar issues")
-			return
+	if features.Get().EnablePeerDAS {
+		avs := das.NewLazilyPersistentStoreColumn(s.cfg.BlobStorage, emptyVerifier{}, s.cfg.P2P.NodeID())
+		batchFields := logrus.Fields{
+			"firstSlot":        data.bwb[0].Block.Block().Slot(),
+			"firstUnprocessed": bwb[0].Block.Block().Slot(),
 		}
-		if err := s.processBlock(ctx, genesis, b, s.cfg.Chain.ReceiveBlock, avs); err != nil {
-			switch {
-			case errors.Is(err, errParentDoesNotExist):
-				log.WithFields(batchFields).WithField("missingParent", fmt.Sprintf("%#x", b.Block.Block().ParentRoot())).
-					WithFields(syncFields(b.Block)).Debug("Could not process batch blocks due to missing parent")
+		for _, b := range bwb {
+			if err := avs.PersistColumns(s.clock.CurrentSlot(), b.Columns...); err != nil {
+				log.WithError(err).WithFields(batchFields).WithFields(syncFields(b.Block)).Warn("Batch failure due to DataColumnSidecar issues")
 				return
-			default:
-				log.WithError(err).WithFields(batchFields).WithFields(syncFields(b.Block)).Warn("Block processing failure")
+			}
+			if err := s.processBlock(ctx, genesis, b, s.cfg.Chain.ReceiveBlock, avs); err != nil {
+				switch {
+				case errors.Is(err, errParentDoesNotExist):
+					log.WithFields(batchFields).WithField("missingParent", fmt.Sprintf("%#x", b.Block.Block().ParentRoot())).
+						WithFields(syncFields(b.Block)).Debug("Could not process batch blocks due to missing parent")
+					return
+				default:
+					log.WithError(err).WithFields(batchFields).WithFields(syncFields(b.Block)).Warn("Block processing failure")
+					return
+				}
+			}
+		}
+	} else {
+		bv := verification.NewBlobBatchVerifier(s.newBlobVerifier, verification.InitsyncSidecarRequirements)
+		avs := das.NewLazilyPersistentStore(s.cfg.BlobStorage, bv)
+		batchFields := logrus.Fields{
+			"firstSlot":        data.bwb[0].Block.Block().Slot(),
+			"firstUnprocessed": bwb[0].Block.Block().Slot(),
+		}
+		for _, b := range bwb {
+			if err := avs.Persist(s.clock.CurrentSlot(), b.Blobs...); err != nil {
+				log.WithError(err).WithFields(batchFields).WithFields(syncFields(b.Block)).Warn("Batch failure due to BlobSidecar issues")
 				return
+			}
+			if err := s.processBlock(ctx, genesis, b, s.cfg.Chain.ReceiveBlock, avs); err != nil {
+				switch {
+				case errors.Is(err, errParentDoesNotExist):
+					log.WithFields(batchFields).WithField("missingParent", fmt.Sprintf("%#x", b.Block.Block().ParentRoot())).
+						WithFields(syncFields(b.Block)).Debug("Could not process batch blocks due to missing parent")
+					return
+				default:
+					log.WithError(err).WithFields(batchFields).WithFields(syncFields(b.Block)).Warn("Block processing failure")
+					return
+				}
 			}
 		}
 	}
@@ -330,20 +356,34 @@ func (s *Service) processBatchedBlocks(ctx context.Context, genesis time.Time,
 		return fmt.Errorf("%w: %#x (in processBatchedBlocks, slot=%d)",
 			errParentDoesNotExist, first.Block().ParentRoot(), first.Block().Slot())
 	}
-
-	bv := verification.NewBlobBatchVerifier(s.newBlobVerifier, verification.InitsyncSidecarRequirements)
-	avs := das.NewLazilyPersistentStore(s.cfg.BlobStorage, bv)
-	s.logBatchSyncStatus(genesis, first, len(bwb))
-	for _, bb := range bwb {
-		if len(bb.Blobs) == 0 {
-			continue
+	var aStore das.AvailabilityStore
+	if features.Get().EnablePeerDAS {
+		avs := das.NewLazilyPersistentStoreColumn(s.cfg.BlobStorage, emptyVerifier{}, s.cfg.P2P.NodeID())
+		s.logBatchSyncStatus(genesis, first, len(bwb))
+		for _, bb := range bwb {
+			if len(bb.Columns) == 0 {
+				continue
+			}
+			if err := avs.PersistColumns(s.clock.CurrentSlot(), bb.Columns...); err != nil {
+				return err
+			}
 		}
-		if err := avs.Persist(s.clock.CurrentSlot(), bb.Blobs...); err != nil {
-			return err
+		aStore = avs
+	} else {
+		bv := verification.NewBlobBatchVerifier(s.newBlobVerifier, verification.InitsyncSidecarRequirements)
+		avs := das.NewLazilyPersistentStore(s.cfg.BlobStorage, bv)
+		s.logBatchSyncStatus(genesis, first, len(bwb))
+		for _, bb := range bwb {
+			if len(bb.Blobs) == 0 {
+				continue
+			}
+			if err := avs.Persist(s.clock.CurrentSlot(), bb.Blobs...); err != nil {
+				return err
+			}
 		}
+		aStore = avs
 	}
-
-	return bFunc(ctx, blocks.BlockWithROBlobsSlice(bwb).ROBlocks(), avs)
+	return bFunc(ctx, blocks.BlockWithROBlobsSlice(bwb).ROBlocks(), aStore)
 }
 
 // updatePeerScorerStats adjusts monitored metrics for a peer.
@@ -379,4 +419,16 @@ func (s *Service) isProcessedBlock(ctx context.Context, blk blocks.ROBlock) bool
 		return true
 	}
 	return false
+}
+
+type emptyVerifier struct {
+}
+
+func (_ emptyVerifier) VerifiedRODataColumns(_ context.Context, _ blocks.ROBlock, cols []blocks.RODataColumn) ([]blocks.VerifiedRODataColumn, error) {
+	var verCols []blocks.VerifiedRODataColumn
+	for _, col := range cols {
+		vCol := blocks.NewVerifiedRODataColumn(col)
+		verCols = append(verCols, vCol)
+	}
+	return verCols, nil
 }

@@ -25,6 +25,7 @@ go_library(
         "rpc_blob_sidecars_by_range.go",
         "rpc_blob_sidecars_by_root.go",
         "rpc_chunked_response.go",
+        "rpc_data_column_sidecars_by_range.go",
         "rpc_data_column_sidecars_by_root.go",
         "rpc_goodbye.go",
         "rpc_metadata.go",
