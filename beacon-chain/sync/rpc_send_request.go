@@ -349,7 +349,7 @@ func readChunkedDataColumnSideCar(
 	}
 
 	// Decode the data column sidecar from the stream.
-	dataColumnSidecar := &pb.DataColumnSidecar{}
+	dataColumnSidecar := new(pb.DataColumnSidecar)
 	if err := p2pApi.Encoding().DecodeWithMaxLength(stream, dataColumnSidecar); err != nil {
 		return nil, errors.Wrap(err, "failed to decode the protobuf-encoded BlobSidecar message from RPC chunk stream")
 	}

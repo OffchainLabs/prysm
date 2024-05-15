@@ -379,6 +379,11 @@ func (s *Service) createLocalNode(
 
 	if features.Get().EnablePeerDAS {
 		custodySubnetEntry := custodySubnetCount(params.BeaconConfig().CustodyRequirement)
+
+		if flags.Get().SubscribeToAllSubnets {
+			custodySubnetEntry = custodySubnetCount(params.BeaconConfig().DataColumnSidecarSubnetCount)
+		}
+
 		localNode.Set(custodySubnetEntry)
 	}
 

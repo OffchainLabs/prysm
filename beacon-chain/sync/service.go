@@ -36,6 +36,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/backfill/coverage"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
 	lruwrpr "github.com/prysmaticlabs/prysm/v5/cache/lru"
+	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
@@ -49,18 +50,20 @@ import (
 
 var _ runtime.Service = (*Service)(nil)
 
-const rangeLimit uint64 = 1024
-const seenBlockSize = 1000
-const seenBlobSize = seenBlockSize * 6         // Each block can have max 6 blobs.
-const seenDataColumnSize = seenBlockSize * 128 // Each block can have max 128 data columns.
-const seenUnaggregatedAttSize = 20000
-const seenAggregatedAttSize = 16384
-const seenSyncMsgSize = 1000         // Maximum of 512 sync committee members, 1000 is a safe amount.
-const seenSyncContributionSize = 512 // Maximum of SYNC_COMMITTEE_SIZE as specified by the spec.
-const seenExitSize = 100
-const seenProposerSlashingSize = 100
-const badBlockSize = 1000
-const syncMetricsInterval = 10 * time.Second
+const (
+	rangeLimit               uint64 = 1024
+	seenBlockSize                   = 1000
+	seenBlobSize                    = seenBlockSize * 6   // Each block can have max 6 blobs.
+	seenDataColumnSize              = seenBlockSize * 128 // Each block can have max 128 data columns.
+	seenUnaggregatedAttSize         = 20000
+	seenAggregatedAttSize           = 16384
+	seenSyncMsgSize                 = 1000 // Maximum of 512 sync committee members, 1000 is a safe amount.
+	seenSyncContributionSize        = 512  // Maximum of SYNC_COMMITTEE_SIZE as specified by the spec.
+	seenExitSize                    = 100
+	seenProposerSlashingSize        = 100
+	badBlockSize                    = 1000
+	syncMetricsInterval             = 10 * time.Second
+)
 
 var (
 	// Seconds in one epoch.
@@ -243,6 +246,11 @@ func (s *Service) Start() {
 
 	// Update sync metrics.
 	async.RunEvery(s.ctx, syncMetricsInterval, s.updateMetrics)
+
+	// Run data column sampling
+	if features.Get().EnablePeerDAS {
+		go s.dataColumnSampling(s.ctx)
+	}
 }
 
 // Stop the regular sync service.

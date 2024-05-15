@@ -661,7 +661,7 @@ func (f *blocksFetcher) fetchColumnsFromPeer(ctx context.Context, bwb []blocks2.
 	}
 
 	colIdxs := make([]uint64, 0, len(custodyCols))
-	for c, _ := range custodyCols {
+	for c := range custodyCols {
 		colIdxs = append(colIdxs, c)
 	}
 	req.Columns = colIdxs
