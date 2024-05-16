@@ -7,11 +7,12 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/pkg/errors"
+	ssz "github.com/prysmaticlabs/fastssz"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
 	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
@@ -57,18 +58,18 @@ func (s *Service) sampleDataColumns(requestedRoot [fieldparams.RootLength]byte, 
 		}
 
 		peerCustodiedSubnetCount := params.BeaconConfig().CustodyRequirement
-		peerActualCustodiedSubnetCount := new(uint16)
 
 		if peerRecord != nil {
 			// Load the `custody_subnet_count`
 			// TODO: Do not harcode `custody_subnet_count`
-			entry := enr.WithEntry("custody_subnet_count", peerActualCustodiedSubnetCount)
-			if err := peerRecord.Load(entry); err != nil {
+			custodyBytes := make([]byte, 8)
+			if err := peerRecord.Load(p2p.CustodySubnetCount(custodyBytes)); err != nil {
 				return nil, errors.Wrap(err, "load custody_subnet_count")
 			}
+			actualCustodyCount := ssz.UnmarshallUint64(custodyBytes)
 
-			if uint64(*peerActualCustodiedSubnetCount) > peerCustodiedSubnetCount {
-				peerCustodiedSubnetCount = uint64(*peerActualCustodiedSubnetCount)
+			if actualCustodyCount > peerCustodiedSubnetCount {
+				peerCustodiedSubnetCount = actualCustodyCount
 			}
 		}
 

@@ -14,6 +14,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	ma "github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
+	ssz "github.com/prysmaticlabs/fastssz"
 	"github.com/prysmaticlabs/go-bitfield"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
 	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
@@ -49,7 +50,7 @@ const (
 
 type (
 	quicProtocol       uint16
-	custodySubnetCount uint64
+	CustodySubnetCount []byte
 )
 
 // quicProtocol is the "quic" key, which holds the QUIC port of the node.
@@ -137,7 +138,7 @@ func (l *listenerWrapper) RebootListener() error {
 }
 
 // https://github.com/ethereum/consensus-specs/blob/dev/specs/_features/eip7594/p2p-interface.md#the-discovery-domain-discv5
-func (custodySubnetCount) ENRKey() string { return "custody_subnet_count" }
+func (CustodySubnetCount) ENRKey() string { return "custody_subnet_count" }
 
 // RefreshPersistentSubnets checks that we are tracking our local persistent subnets for a variety of gossip topics.
 // This routine checks for our attestation, sync committee and data column subnets and updates them if they have
@@ -378,10 +379,14 @@ func (s *Service) createLocalNode(
 	}
 
 	if features.Get().EnablePeerDAS {
-		custodySubnetEntry := custodySubnetCount(params.BeaconConfig().CustodyRequirement)
+		var custodyBytes []byte
+		custodyBytes = ssz.MarshalUint64(custodyBytes, params.BeaconConfig().CustodyRequirement)
+		custodySubnetEntry := CustodySubnetCount(custodyBytes)
 
 		if flags.Get().SubscribeToAllSubnets {
-			custodySubnetEntry = custodySubnetCount(params.BeaconConfig().DataColumnSidecarSubnetCount)
+			var allCustodyBytes []byte
+			allCustodyBytes = ssz.MarshalUint64(allCustodyBytes, params.BeaconConfig().DataColumnSidecarSubnetCount)
+			custodySubnetEntry = CustodySubnetCount(allCustodyBytes)
 		}
 
 		localNode.Set(custodySubnetEntry)

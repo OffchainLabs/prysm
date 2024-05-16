@@ -132,7 +132,6 @@ go_library(
         "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",
         "@com_github_ethereum_go_ethereum//common/math:go_default_library",
         "@com_github_ethereum_go_ethereum//crypto:go_default_library",
-        "@com_github_ethereum_go_ethereum//p2p/enr:go_default_library",
         "@com_github_hashicorp_golang_lru//:go_default_library",
         "@com_github_libp2p_go_libp2p//core:go_default_library",
         "@com_github_libp2p_go_libp2p//core/host:go_default_library",
