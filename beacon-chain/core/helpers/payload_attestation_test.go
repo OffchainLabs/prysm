@@ -84,6 +84,7 @@ func TestGetPayloadTimelinessCommittee(t *testing.T) {
 
 	ptc, err := helpers.GetPayloadTimelinessCommittee(ctx, state, state.Slot())
 	require.NoError(t, err)
+	require.Equal(t, fieldparams.PTCSize, len(ptc))
 
 	committee1, err := helpers.BeaconCommitteeFromState(ctx, state, state.Slot(), 0)
 	require.NoError(t, err)

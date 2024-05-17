@@ -76,7 +76,7 @@ func GetPayloadTimelinessCommittee(ctx context.Context, state state.ReadOnlyBeac
 	}
 	committeesPerSlot := math.LargestPowerOfTwo(math.Min(SlotCommitteeCount(activeCount), fieldparams.PTCSize))
 	membersPerCommittee := fieldparams.PTCSize / committeesPerSlot
-	for i := uint64(0); i <= committeesPerSlot; i++ {
+	for i := uint64(0); i < committeesPerSlot; i++ {
 		committee, err := BeaconCommitteeFromState(ctx, state, slot, primitives.CommitteeIndex(i))
 		if err != nil {
 			return nil, err
