@@ -504,7 +504,7 @@ func missingIndices(bs *filesystem.BlobStorage, root [32]byte, expected [][]byte
 	}
 	indices, err := bs.Indices(root)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "indices")
 	}
 	missing := make(map[uint64]struct{}, len(expected))
 	for i := range expected {
@@ -576,7 +576,7 @@ func (s *Service) isDataAvailable(ctx context.Context, root [32]byte, signed int
 	// get a map of BlobSidecar indices that are not currently available.
 	missing, err := missingIndices(s.blobStorage, root, kzgCommitments)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "missing indices")
 	}
 	// If there are no missing indices, all BlobSidecars are available.
 	if len(missing) == 0 {

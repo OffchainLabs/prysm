@@ -57,7 +57,7 @@ func (s *Service) sendRecentBeaconBlocksRequest(ctx context.Context, requests *t
 		}
 		request, err := s.pendingBlobsRequestForBlock(blkRoot, blk)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "pending blobs request for block")
 		}
 		if len(request) == 0 {
 			continue
@@ -181,7 +181,13 @@ func (s *Service) pendingBlobsRequestForBlock(root [32]byte, b interfaces.ReadOn
 	if len(cc) == 0 {
 		return nil, nil
 	}
-	return s.constructPendingBlobsRequest(root, len(cc))
+
+	blobIdentifiers, err := s.constructPendingBlobsRequest(root, len(cc))
+	if err != nil {
+		return nil, errors.Wrap(err, "construct pending blobs request")
+	}
+
+	return blobIdentifiers, nil
 }
 
 // constructPendingBlobsRequest creates a request for BlobSidecars by root, considering blobs already in DB.
@@ -191,7 +197,7 @@ func (s *Service) constructPendingBlobsRequest(root [32]byte, commitments int) (
 	}
 	stored, err := s.cfg.blobStorage.Indices(root)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "indices")
 	}
 
 	return requestsForMissingIndices(stored, commitments, root), nil

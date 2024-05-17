@@ -82,34 +82,28 @@ func CustodyColumnSubnets(nodeId enode.ID, custodySubnetCount uint64) (map[uint6
 	// First, compute the subnet IDs that the node should participate in.
 	subnetIds := make(map[uint64]bool, custodySubnetCount)
 
-	// Convert the node ID to a big int.
-	nodeIdUInt256 := new(uint256.Int).SetBytes(nodeId.Bytes())
-
-	// Handle the maximum value of a uint256 case.
-	if nodeIdUInt256.Cmp(maxUint256) == 0 {
-		nodeIdUInt256 = uint256.NewInt(0)
-	}
-
 	one := uint256.NewInt(1)
 
-	for i := uint256.NewInt(0); uint64(len(subnetIds)) < custodySubnetCount; i.Add(i, one) {
-		// Augment the node ID with the index.
-		augmentedNodeIdUInt256 := new(uint256.Int).Add(nodeIdUInt256, i)
-
+	for currentId := new(uint256.Int).SetBytes(nodeId.Bytes()); uint64(len(subnetIds)) < custodySubnetCount; currentId.Add(currentId, one) {
 		// Convert to big endian bytes.
-		augmentedNodeIdBytesBigEndian := augmentedNodeIdUInt256.Bytes()
+		currentIdBytesBigEndian := currentId.Bytes32()
 
 		// Convert to little endian.
-		augmentedNodeIdBytesLittleEndian := bytesutil.ReverseByteOrder(augmentedNodeIdBytesBigEndian)
+		currentIdBytesLittleEndian := bytesutil.ReverseByteOrder(currentIdBytesBigEndian[:])
 
 		// Hash the result.
-		hashedAugmentedNodeId := hash.Hash(augmentedNodeIdBytesLittleEndian)
+		hashedCurrentId := hash.Hash(currentIdBytesLittleEndian)
 
 		// Get the subnet ID.
-		subnetId := binary.LittleEndian.Uint64(hashedAugmentedNodeId[:8]) % dataColumnSidecarSubnetCount
+		subnetId := binary.LittleEndian.Uint64(hashedCurrentId[:8]) % dataColumnSidecarSubnetCount
 
 		// Add the subnet to the map.
 		subnetIds[subnetId] = true
+
+		// Overflow prevention.
+		if currentId.Cmp(maxUint256) == 0 {
+			currentId = uint256.NewInt(0)
+		}
 	}
 
 	return subnetIds, nil

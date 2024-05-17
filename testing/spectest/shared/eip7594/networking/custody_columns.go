@@ -32,8 +32,8 @@ func RunCustodyColumnsTest(t *testing.T, config string) {
 	for _, folder := range testFolders {
 		t.Run(folder.Name(), func(t *testing.T) {
 			var (
-				config      Config
-				nodeIdBytes [32]byte
+				config        Config
+				nodeIdBytes32 [32]byte
 			)
 
 			// Load the test vector.
@@ -45,8 +45,10 @@ func RunCustodyColumnsTest(t *testing.T, config string) {
 			require.NoError(t, err, "failed to unmarshal the YAML file")
 
 			// Get the node ID.
-			copy(nodeIdBytes[:], config.NodeId.Bytes())
-			nodeId := enode.ID(nodeIdBytes)
+			nodeIdBytes := make([]byte, 32)
+			config.NodeId.FillBytes(nodeIdBytes)
+			copy(nodeIdBytes32[:], nodeIdBytes)
+			nodeId := enode.ID(nodeIdBytes32)
 
 			// Compute the custodied columns.
 			actual, err := peerdas.CustodyColumns(nodeId, config.CustodySubnetCount)
