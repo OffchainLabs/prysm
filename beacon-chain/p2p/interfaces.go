@@ -29,6 +29,7 @@ type P2P interface {
 	ConnectionHandler
 	PeersProvider
 	MetadataProvider
+	CustodyHandler
 }
 
 type Acceser interface {
@@ -109,4 +110,9 @@ type PeersProvider interface {
 type MetadataProvider interface {
 	Metadata() metadata.Metadata
 	MetadataSeq() uint64
+}
+
+type CustodyHandler interface {
+	CustodyCountFromRemotePeer(peer.ID) (uint64, error)
+	GetValidCustodyPeers([]peer.ID) ([]peer.ID, error)
 }

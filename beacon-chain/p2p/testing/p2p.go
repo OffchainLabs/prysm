@@ -426,3 +426,11 @@ func (_ *TestP2P) InterceptSecured(network.Direction, peer.ID, network.ConnMulti
 func (_ *TestP2P) InterceptUpgraded(network.Conn) (allow bool, reason control.DisconnectReason) {
 	return true, 0
 }
+
+func (_ *TestP2P) CustodyCountFromRemotePeer(peer.ID) (uint64, error) {
+	return 0, nil
+}
+
+func (_ *TestP2P) GetValidCustodyPeers(peers []peer.ID) ([]peer.ID, error) {
+	return peers, nil
+}

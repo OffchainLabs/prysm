@@ -8,11 +8,9 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
-	ssz "github.com/prysmaticlabs/fastssz"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
 	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
@@ -44,37 +42,19 @@ func (s *Service) sampleDataColumns(requestedRoot [fieldparams.RootLength]byte, 
 
 	// Sampling is done sequentially peer by peer.
 	// TODO: Add parallelism if (probably) needed.
-	for _, peer := range activePeers {
+	for _, pid := range activePeers {
 		// Early exit if all needed columns are already sampled.
 		// This is the happy path.
 		if len(missingIndices) == 0 {
 			return nil, nil
 		}
-
-		// Retrieve the ENR of the peer.
-		peerRecord, err := s.cfg.p2p.Peers().ENR(peer)
+		peerCustodiedSubnetCount, err := s.cfg.p2p.CustodyCountFromRemotePeer(pid)
 		if err != nil {
-			return nil, errors.Wrap(err, "ENR")
-		}
-
-		peerCustodiedSubnetCount := params.BeaconConfig().CustodyRequirement
-
-		if peerRecord != nil {
-			// Load the `custody_subnet_count`
-			// TODO: Do not harcode `custody_subnet_count`
-			custodyBytes := make([]byte, 8)
-			if err := peerRecord.Load(p2p.CustodySubnetCount(custodyBytes)); err != nil {
-				return nil, errors.Wrap(err, "load custody_subnet_count")
-			}
-			actualCustodyCount := ssz.UnmarshallUint64(custodyBytes)
-
-			if actualCustodyCount > peerCustodiedSubnetCount {
-				peerCustodiedSubnetCount = actualCustodyCount
-			}
+			return nil, err
 		}
 
 		// Retrieve the public key object of the peer under "crypto" form.
-		pubkeyObjCrypto, err := peer.ExtractPublicKey()
+		pubkeyObjCrypto, err := pid.ExtractPublicKey()
 		if err != nil {
 			return nil, errors.Wrap(err, "extract public key")
 		}
@@ -129,7 +109,7 @@ func (s *Service) sampleDataColumns(requestedRoot [fieldparams.RootLength]byte, 
 		}
 
 		// Sample data columns.
-		roDataColumns, err := SendDataColumnSidecarByRoot(s.ctx, s.cfg.clock, s.cfg.p2p, peer, s.ctxMap, &dataColumnIdentifiers)
+		roDataColumns, err := SendDataColumnSidecarByRoot(s.ctx, s.cfg.clock, s.cfg.p2p, pid, s.ctxMap, &dataColumnIdentifiers)
 		if err != nil {
 			return nil, errors.Wrap(err, "send data column sidecar by root")
 		}

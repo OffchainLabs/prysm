@@ -13,6 +13,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/async"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
 	p2ptypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
+	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
@@ -204,19 +205,39 @@ func (s *Service) processAndBroadcastBlock(ctx context.Context, b interfaces.Rea
 			return err
 		}
 	}
-
-	request, err := s.pendingBlobsRequestForBlock(blkRoot, b)
-	if err != nil {
-		return err
-	}
-	if len(request) > 0 {
-		peers := s.getBestPeers()
-		peerCount := len(peers)
-		if peerCount == 0 {
-			return errors.Wrapf(errNoPeersForPending, "block root=%#x", blkRoot)
-		}
-		if err := s.sendAndSaveBlobSidecars(ctx, request, peers[rand.NewGenerator().Int()%peerCount], b); err != nil {
+	if features.Get().EnablePeerDAS {
+		request, err := s.pendingDataColumnRequestForBlock(blkRoot, b)
+		if err != nil {
 			return err
+		}
+		if len(request) > 0 {
+			peers := s.getBestPeers()
+			peers, err = s.cfg.p2p.GetValidCustodyPeers(peers)
+			if err != nil {
+				return err
+			}
+			peerCount := len(peers)
+			if peerCount == 0 {
+				return errors.Wrapf(errNoPeersForPending, "block root=%#x", blkRoot)
+			}
+			if err := s.sendAndSaveDataColumnSidecars(ctx, request, peers[rand.NewGenerator().Int()%peerCount], b); err != nil {
+				return err
+			}
+		}
+	} else {
+		request, err := s.pendingBlobsRequestForBlock(blkRoot, b)
+		if err != nil {
+			return err
+		}
+		if len(request) > 0 {
+			peers := s.getBestPeers()
+			peerCount := len(peers)
+			if peerCount == 0 {
+				return errors.Wrapf(errNoPeersForPending, "block root=%#x", blkRoot)
+			}
+			if err := s.sendAndSaveBlobSidecars(ctx, request, peers[rand.NewGenerator().Int()%peerCount], b); err != nil {
+				return err
+			}
 		}
 	}
 

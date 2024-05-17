@@ -8,6 +8,7 @@ import (
 	"github.com/pkg/errors"
 	p2pTypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
 	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
+	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
@@ -236,18 +237,18 @@ func (f *blocksFetcher) findForkWithPeer(ctx context.Context, pid peer.ID, slot 
 		Count:     reqCount,
 		Step:      1,
 	}
-	blocks, err := f.requestBlocks(ctx, req, pid)
+	reqBlocks, err := f.requestBlocks(ctx, req, pid)
 	if err != nil {
 		return nil, fmt.Errorf("cannot fetch blocks: %w", err)
 	}
-	if len(blocks) == 0 {
+	if len(reqBlocks) == 0 {
 		return nil, errNoAlternateBlocks
 	}
 
 	// If the first block is not connected to the current canonical chain, we'll stop processing this batch.
 	// Instead, we'll work backwards from the first block until we find a common ancestor,
 	// and then begin processing from there.
-	first := blocks[0]
+	first := reqBlocks[0]
 	if !f.chain.HasBlock(ctx, first.Block().ParentRoot()) {
 		// Backtrack on a root, to find a common ancestor from which we can resume syncing.
 		fork, err := f.findAncestor(ctx, pid, first)
@@ -260,8 +261,8 @@ func (f *blocksFetcher) findForkWithPeer(ctx context.Context, pid peer.ID, slot 
 	// Traverse blocks, and if we've got one that doesn't have parent in DB, backtrack on it.
 	// Note that we start from the second element in the array, because we know that the first element is in the db,
 	// otherwise we would have gone into the findAncestor early return path above.
-	for i := 1; i < len(blocks); i++ {
-		block := blocks[i]
+	for i := 1; i < len(reqBlocks); i++ {
+		block := reqBlocks[i]
 		parentRoot := block.Block().ParentRoot()
 		// Step through blocks until we find one that is not in the chain. The goal is to find the point where the
 		// chain observed in the peer diverges from the locally known chain, and then collect up the remainder of the
@@ -274,16 +275,25 @@ func (f *blocksFetcher) findForkWithPeer(ctx context.Context, pid peer.ID, slot 
 			"slot": block.Block().Slot(),
 			"root": fmt.Sprintf("%#x", parentRoot),
 		}).Debug("Block with unknown parent root has been found")
-		altBlocks, err := sortedBlockWithVerifiedBlobSlice(blocks[i-1:])
+		altBlocks, err := sortedBlockWithVerifiedBlobSlice(reqBlocks[i-1:])
 		if err != nil {
 			return nil, errors.Wrap(err, "invalid blocks received in findForkWithPeer")
 		}
+		var bwb []blocks.BlockWithROBlobs
+		if features.Get().EnablePeerDAS {
+			bwb, err = f.fetchColumnsFromPeer(ctx, altBlocks, pid, []peer.ID{pid})
+			if err != nil {
+				return nil, errors.Wrap(err, "unable to retrieve blobs for blocks found in findForkWithPeer")
+			}
+		} else {
+			bwb, err = f.fetchBlobsFromPeer(ctx, altBlocks, pid, []peer.ID{pid})
+			if err != nil {
+				return nil, errors.Wrap(err, "unable to retrieve blobs for blocks found in findForkWithPeer")
+			}
+		}
 		// We need to fetch the blobs for the given alt-chain if any exist, so that we can try to verify and import
 		// the blocks.
-		bwb, err := f.fetchBlobsFromPeer(ctx, altBlocks, pid, []peer.ID{pid})
-		if err != nil {
-			return nil, errors.Wrap(err, "unable to retrieve blobs for blocks found in findForkWithPeer")
-		}
+
 		// The caller will use the BlocksWith VerifiedBlobs in bwb as the starting point for
 		// round-robin syncing the alternate chain.
 		return &forkData{peer: pid, bwb: bwb}, nil
@@ -302,9 +312,16 @@ func (f *blocksFetcher) findAncestor(ctx context.Context, pid peer.ID, b interfa
 			if err != nil {
 				return nil, errors.Wrap(err, "received invalid blocks in findAncestor")
 			}
-			bwb, err = f.fetchBlobsFromPeer(ctx, bwb, pid, []peer.ID{pid})
-			if err != nil {
-				return nil, errors.Wrap(err, "unable to retrieve blobs for blocks found in findAncestor")
+			if features.Get().EnablePeerDAS {
+				bwb, err = f.fetchColumnsFromPeer(ctx, bwb, pid, []peer.ID{pid})
+				if err != nil {
+					return nil, errors.Wrap(err, "unable to retrieve columns for blocks found in findAncestor")
+				}
+			} else {
+				bwb, err = f.fetchBlobsFromPeer(ctx, bwb, pid, []peer.ID{pid})
+				if err != nil {
+					return nil, errors.Wrap(err, "unable to retrieve blobs for blocks found in findAncestor")
+				}
 			}
 			return &forkData{
 				peer: pid,
