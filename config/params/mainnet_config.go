@@ -300,7 +300,6 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	SamplesPerSlot:                        8,
 	CustodyRequirement:                    1,
 	MinEpochsForDataColumnSidecarsRequest: 4096,
-	MaxCellsInExtendMatrix:                768,
 
 	// Values related to networking parameters.
 	GossipMaxSize:                   10 * 1 << 20, // 10 MiB

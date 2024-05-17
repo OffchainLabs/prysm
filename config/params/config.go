@@ -259,7 +259,8 @@ type BeaconChainConfig struct {
 	SamplesPerSlot                        uint64           `yaml:"SAMPLES_PER_SLOT"`                             // SamplesPerSlot refers to the humber of random samples a node queries per slot.
 	CustodyRequirement                    uint64           `yaml:"CUSTODY_REQUIREMENT"`                          // CustodyRequirement refers to the minimum amount of subnets a peer must custody and serve samples from.
 	MinEpochsForDataColumnSidecarsRequest primitives.Epoch `yaml:"MIN_EPOCHS_FOR_DATA_COLUMN_SIDECARS_REQUESTS"` // MinEpochsForDataColumnSidecarsRequest is the minimum number of epochs the node will keep the data columns for.
-	MaxCellsInExtendMatrix                uint64           `yaml:"MAX_CELLS_IN_EXTENDED_MATRIX"`                 // MaxCellsInExtendMatrix is the maximum number of cells in the extended data matrix.
+	MaxCellsInExtendedMatrix              uint64           `yaml:"MAX_CELLS_IN_EXTENDED_MATRIX" spec:"true"`     // MaxCellsInExtendedMatrix is the full data of one-dimensional erasure coding extended blobs (in row major format).
+	NumberOfColumns                       uint64           `yaml:"NUMBER_OF_COLUMNS" spec:"true"`                // NumberOfColumns in the extended data matrix.
 
 	// Networking Specific Parameters
 	GossipMaxSize                   uint64          `yaml:"GOSSIP_MAX_SIZE" spec:"true"`                    // GossipMaxSize is the maximum allowed size of uncompressed gossip messages.
@@ -278,10 +279,6 @@ type BeaconChainConfig struct {
 	AttestationSubnetPrefixBits     uint64          `yaml:"ATTESTATION_SUBNET_PREFIX_BITS" spec:"true"`     // AttestationSubnetPrefixBits is defined as (ceillog2(ATTESTATION_SUBNET_COUNT) + ATTESTATION_SUBNET_EXTRA_BITS).
 	SubnetsPerNode                  uint64          `yaml:"SUBNETS_PER_NODE" spec:"true"`                   // SubnetsPerNode is the number of long-lived subnets a beacon node should be subscribed to.
 	NodeIdBits                      uint64          `yaml:"NODE_ID_BITS" spec:"true"`                       // NodeIdBits defines the bit length of a node id.
-
-	// PeerDAS
-	NumberOfColumns          uint64 `yaml:"NUMBER_OF_COLUMNS" spec:"true"`            // NumberOfColumns in the extended data matrix.
-	MaxCellsInExtendedMatrix uint64 `yaml:"MAX_CELLS_IN_EXTENDED_MATRIX" spec:"true"` // MaxCellsInExtendedMatrix is the full data of one-dimensional erasure coding extended blobs (in row major format).
 }
 
 // InitializeForkSchedule initializes the schedules forks baked into the config.
