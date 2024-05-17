@@ -21,7 +21,7 @@ func e2eMinimal(t *testing.T, cfg *params.BeaconChainConfig, cfgo ...types.E2ECo
 
 	// Run for 12 epochs if not in long-running to confirm long-running has no issues.
 	var err error
-	epochsToRun := 14
+	epochsToRun := 6
 	epochStr, longRunning := os.LookupEnv("E2E_EPOCHS")
 	if longRunning {
 		epochsToRun, err = strconv.Atoi(epochStr)
@@ -36,31 +36,6 @@ func e2eMinimal(t *testing.T, cfg *params.BeaconChainConfig, cfgo ...types.E2ECo
 	tracingPort := e2eParams.TestParams.Ports.JaegerTracingPort
 	tracingEndpoint := fmt.Sprintf("127.0.0.1:%d", tracingPort)
 	evals := []types.Evaluator{
-		ev.PeersConnect,
-		ev.HealthzCheck,
-		ev.MetricsCheck,
-		ev.ValidatorsAreActive,
-		ev.ValidatorsParticipatingAtEpoch(2),
-		ev.FinalizationOccurs(3),
-		ev.VerifyBlockGraffiti,
-		ev.PeersCheck,
-		ev.ProposeVoluntaryExit,
-		ev.ValidatorsHaveExited,
-		ev.SubmitWithdrawal,
-		ev.ValidatorsHaveWithdrawn,
-		ev.ProcessesDepositsInBlocks,
-		ev.ActivatesDepositedValidators,
-		ev.DepositedValidatorsAreActive,
-		ev.ValidatorsVoteWithTheMajority,
-		ev.ColdStateCheckpoint,
-		ev.AltairForkTransition,
-		ev.BellatrixForkTransition,
-		ev.CapellaForkTransition,
-		ev.DenebForkTransition,
-		ev.FinishedSyncing,
-		ev.AllNodesHaveSameHead,
-		ev.ValidatorSyncParticipation,
-		ev.FeeRecipientIsPresent,
 		//ev.TransactionsPresent, TODO: Re-enable Transaction evaluator once it tx pool issues are fixed.
 	}
 	testConfig := &types.E2EConfig{

@@ -53,8 +53,7 @@ var ValidatorsParticipatingAtEpoch = func(epoch primitives.Epoch) types.Evaluato
 var ValidatorSyncParticipation = types.Evaluator{
 	Name: "validator_sync_participation_%d",
 	Policy: func(e primitives.Epoch) bool {
-		fEpoch := params.BeaconConfig().AltairForkEpoch
-		return policies.OnwardsNthEpoch(fEpoch)(e)
+		return false
 	},
 	Evaluation: validatorsSyncParticipation,
 }

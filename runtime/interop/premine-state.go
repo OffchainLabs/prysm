@@ -151,7 +151,14 @@ func (s *PremineGenesisConfig) empty() (state.BeaconState, error) {
 			return nil, err
 		}
 	case version.Deneb:
-		e, err = state_native.InitializeFromProtoDeneb(&ethpb.BeaconStateDeneb{})
+		e, err = state_native.InitializeFromProtoDeneb(&ethpb.BeaconStateDeneb{
+			BlockRoots:       bRoots,
+			StateRoots:       sRoots,
+			RandaoMixes:      mixes,
+			Balances:         []uint64{},
+			InactivityScores: []uint64{},
+			Validators:       []*ethpb.Validator{},
+		})
 		if err != nil {
 			return nil, err
 		}

@@ -9,6 +9,6 @@ import (
 )
 
 func TestEndToEnd_MinimalConfig(t *testing.T) {
-	r := e2eMinimal(t, types.InitForkCfg(version.Phase0, version.Deneb, params.E2ETestConfig()), types.WithCheckpointSync())
+	r := e2eMinimal(t, types.InitForkCfg(version.Deneb, version.Deneb, params.E2ETestConfig()), types.WithCheckpointSync())
 	r.run()
 }

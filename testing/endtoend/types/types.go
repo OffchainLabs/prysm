@@ -84,6 +84,9 @@ type E2EConfig struct {
 
 func GenesisFork() int {
 	cfg := params.BeaconConfig()
+	if cfg.DenebForkEpoch == 0 {
+		return version.Deneb
+	}
 	if cfg.CapellaForkEpoch == 0 {
 		return version.Capella
 	}

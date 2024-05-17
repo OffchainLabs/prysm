@@ -84,7 +84,6 @@ func (vs *Server) getLocalPayloadFromEngine(
 	}
 	setFeeRecipientIfBurnAddress(&val)
 
-	var err error
 	if ok && payloadId != [8]byte{} {
 		// Payload ID is cache hit. Return the cached payload ID.
 		var pid primitives.PayloadID
