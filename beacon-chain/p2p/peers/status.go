@@ -159,6 +159,14 @@ func (p *Status) Add(record *enr.Record, pid peer.ID, address ma.Multiaddr, dire
 	p.addIpToTracker(pid)
 }
 
+func (p *Status) UpdateENR(record *enr.Record, pid peer.ID) {
+	p.store.Lock()
+	defer p.store.Unlock()
+	if peerData, ok := p.store.PeerData(pid); ok {
+		peerData.Enr = record
+	}
+}
+
 // Address returns the multiaddress of the given remote peer.
 // This will error if the peer does not exist.
 func (p *Status) Address(pid peer.ID) (ma.Multiaddr, error) {

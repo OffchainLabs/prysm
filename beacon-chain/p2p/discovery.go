@@ -483,6 +483,8 @@ func (s *Service) filterPeer(node *enode.Node) bool {
 
 	// Ignore nodes that are already active.
 	if s.peers.IsActive(peerData.ID) {
+		// Constantly update enr for known peers
+		s.peers.UpdateENR(node.Record(), peerData.ID)
 		return false
 	}
 
