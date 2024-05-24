@@ -116,6 +116,21 @@ func PowerOf2(n uint64) uint64 {
 	return 1 << n
 }
 
+// LargestPowerOfTwo returns the largest power of 2 that is lower or equal than
+// the parameter
+func LargestPowerOfTwo(n uint64) uint64 {
+	if n == 0 {
+		return 0
+	}
+	n |= n >> 1
+	n |= n >> 2
+	n |= n >> 4
+	n |= n >> 8
+	n |= n >> 16
+	n |= n >> 32
+	return n - (n >> 1)
+}
+
 // Max returns the larger integer of the two
 // given ones.This is used over the Max function
 // in the standard math library because that max function
