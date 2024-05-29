@@ -230,10 +230,12 @@ func (bs *BlobStorage) SaveDataColumn(column blocks.VerifiedRODataColumn) error 
 	if err != nil {
 		return err
 	}
+
 	if exists {
-		log.Debug("Ignoring a duplicate data column sidecar save attempt")
+		log.Trace("Ignoring a duplicate data column sidecar save attempt")
 		return nil
 	}
+
 	if bs.pruner != nil {
 		hRoot, err := column.SignedBlockHeader.Header.HashTreeRoot()
 		if err != nil {
@@ -399,38 +401,58 @@ func (bs *BlobStorage) Indices(root [32]byte) ([fieldparams.MaxBlobsPerBlock]boo
 }
 
 // ColumnIndices retrieve the stored column indexes from our filesystem.
-func (bs *BlobStorage) ColumnIndices(root [32]byte) ([fieldparams.NumberOfColumns]bool, error) {
-	var mask [fieldparams.NumberOfColumns]bool
+func (bs *BlobStorage) ColumnIndices(root [32]byte) (map[uint64]bool, error) {
+	custody := make(map[uint64]bool, fieldparams.NumberOfColumns)
+
+	// Get all the files in the directory.
 	rootDir := blobNamer{root: root}.dir()
 	entries, err := afero.ReadDir(bs.fs, rootDir)
 	if err != nil {
+		// If the directory does not exist, we do not custody any columns.
 		if os.IsNotExist(err) {
-			return mask, nil
+			return nil, nil
 		}
-		return mask, err
+
+		return nil, errors.Wrap(err, "read directory")
 	}
-	for i := range entries {
-		if entries[i].IsDir() {
+
+	// Iterate over all the entries in the directory.
+	for _, entry := range entries {
+		// If the entry is a directory, skip it.
+		if entry.IsDir() {
 			continue
 		}
-		name := entries[i].Name()
+
+		// If the entry does not have the correct extension, skip it.
+		name := entry.Name()
 		if !strings.HasSuffix(name, sszExt) {
 			continue
 		}
+
+		// The file should be in the `<index>.<extension>` format.
+		// Skip the file if it does not match the format.
 		parts := strings.Split(name, ".")
 		if len(parts) != 2 {
 			continue
 		}
-		u, err := strconv.ParseUint(parts[0], 10, 64)
+
+		// Get the column index from the file name.
+		columnIndexStr := parts[0]
+		columnIndex, err := strconv.ParseUint(columnIndexStr, 10, 64)
 		if err != nil {
-			return mask, errors.Wrapf(err, "unexpected directory entry breaks listing, %s", parts[0])
+			return nil, errors.Wrapf(err, "unexpected directory entry breaks listing, %s", parts[0])
 		}
-		if u >= fieldparams.NumberOfColumns {
-			return mask, errors.Wrapf(errIndexOutOfBounds, "invalid index %d", u)
+
+		// If the column index is out of bounds, return an error.
+		if columnIndex >= fieldparams.NumberOfColumns {
+			return nil, errors.Wrapf(errIndexOutOfBounds, "invalid index %d", columnIndex)
 		}
-		mask[u] = true
+
+		// Mark the column index as in custody.
+		custody[columnIndex] = true
 	}
-	return mask, nil
+
+	return custody, nil
 }
 
 // Clear deletes all files on the filesystem.

@@ -15,6 +15,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
 	blockfeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/block"
 	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/das"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
@@ -25,6 +26,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
 	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/crypto/rand"
@@ -314,30 +316,56 @@ func missingBlobRequest(blk blocks.ROBlock, store *filesystem.BlobStorage) (p2pt
 	return req, nil
 }
 
-func missingColumnRequest(blk blocks.ROBlock, store *filesystem.BlobStorage) (p2ptypes.BlobSidecarsByRootReq, error) {
-	r := blk.Root()
-	if blk.Version() < version.Deneb {
+func (s *Service) missingColumnRequest(roBlock blocks.ROBlock, store *filesystem.BlobStorage) (p2ptypes.BlobSidecarsByRootReq, error) {
+	// No columns for pre-Deneb blocks.
+	if roBlock.Version() < version.Deneb {
 		return nil, nil
 	}
-	cmts, err := blk.Block().Body().BlobKzgCommitments()
+
+	// Get the block root.
+	blockRoot := roBlock.Root()
+
+	// Get the commitments from the block.
+	commitments, err := roBlock.Block().Body().BlobKzgCommitments()
 	if err != nil {
-		log.WithField("root", r).Error("Error reading commitments from checkpoint sync origin block")
-		return nil, err
+		return nil, errors.Wrap(err, "failed to get blob KZG commitments")
 	}
-	if len(cmts) == 0 {
+
+	// Return early if there are no commitments.
+	if len(commitments) == 0 {
 		return nil, nil
 	}
-	onDisk, err := store.ColumnIndices(r)
+
+	// Check which columns are already on disk.
+	storedColumns, err := store.ColumnIndices(blockRoot)
 	if err != nil {
-		return nil, errors.Wrapf(err, "error checking existing blobs for checkpoint sync block root %#x", r)
+		return nil, errors.Wrapf(err, "error checking existing blobs for checkpoint sync block root %#x", blockRoot)
 	}
-	req := make(p2ptypes.BlobSidecarsByRootReq, 0, len(cmts))
-	for i := range cmts {
-		if onDisk[i] {
-			continue
+
+	// Get the number of columns we should custody.
+	custodyRequirement := params.BeaconConfig().CustodyRequirement
+	if features.Get().EnablePeerDAS {
+		custodyRequirement = fieldparams.NumberOfColumns
+	}
+
+	// Get our node ID.
+	nodeID := s.cfg.P2P.NodeID()
+
+	// Get the custodied columns.
+	custodiedColumns, err := peerdas.CustodyColumns(nodeID, custodyRequirement)
+	if err != nil {
+		return nil, errors.Wrap(err, "custody columns")
+	}
+
+	// Build blob sidecars by root requests based on missing columns.
+	req := make(p2ptypes.BlobSidecarsByRootReq, 0, len(commitments))
+	for columnIndex := range custodiedColumns {
+		isColumnAvailable := storedColumns[columnIndex]
+		if !isColumnAvailable {
+			req = append(req, &eth.BlobIdentifier{BlockRoot: blockRoot[:], Index: columnIndex})
 		}
-		req = append(req, &eth.BlobIdentifier{BlockRoot: r[:], Index: uint64(i)})
 	}
+
 	return req, nil
 }
 
@@ -408,7 +436,7 @@ func (s *Service) fetchOriginColumns(pids []peer.ID) error {
 	if err != nil {
 		return err
 	}
-	req, err := missingColumnRequest(rob, s.cfg.BlobStorage)
+	req, err := s.missingColumnRequest(rob, s.cfg.BlobStorage)
 	if err != nil {
 		return err
 	}

@@ -113,6 +113,6 @@ type MetadataProvider interface {
 }
 
 type CustodyHandler interface {
-	CustodyCountFromRemotePeer(peer.ID) (uint64, error)
+	CustodyCountFromRemotePeer(peer.ID) uint64
 	GetValidCustodyPeers([]peer.ID) ([]peer.ID, error)
 }

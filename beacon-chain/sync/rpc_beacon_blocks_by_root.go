@@ -264,20 +264,34 @@ func (s *Service) constructPendingBlobsRequest(root [32]byte, commitments int) (
 }
 
 func (s *Service) constructPendingColumnRequest(root [32]byte) (types.BlobSidecarsByRootReq, error) {
-	stored, err := s.cfg.blobStorage.ColumnIndices(root)
+	// Retrieve the storedColumns columns for the current root.
+	storedColumns, err := s.cfg.blobStorage.ColumnIndices(root)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "column indices")
 	}
+
+	// Compute how many subnets we should custody.
 	custodiedSubnetCount := params.BeaconConfig().CustodyRequirement
 	if flags.Get().SubscribeToAllSubnets {
 		custodiedSubnetCount = params.BeaconConfig().DataColumnSidecarSubnetCount
 	}
+
+	// Retrieve the columns we should custody.
 	custodiedColumns, err := peerdas.CustodyColumns(s.cfg.p2p.NodeID(), custodiedSubnetCount)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "custody columns")
 	}
 
-	return requestsForMissingColumnIndices(stored, custodiedColumns, root), nil
+	// Build the request for the missing columns.
+	req := make(types.BlobSidecarsByRootReq, 0, len(custodiedColumns))
+	for column := range custodiedColumns {
+		isColumnStored := storedColumns[column]
+		if !isColumnStored {
+			req = append(req, &eth.BlobIdentifier{Index: column, BlockRoot: root[:]})
+		}
+	}
+
+	return req, nil
 }
 
 // requestsForMissingIndices constructs a slice of BlobIdentifiers that are missing from
@@ -286,16 +300,6 @@ func (s *Service) constructPendingColumnRequest(root [32]byte) (types.BlobSideca
 func requestsForMissingIndices(storedIndices [fieldparams.MaxBlobsPerBlock]bool, commitments int, root [32]byte) []*eth.BlobIdentifier {
 	var ids []*eth.BlobIdentifier
 	for i := uint64(0); i < uint64(commitments); i++ {
-		if !storedIndices[i] {
-			ids = append(ids, &eth.BlobIdentifier{Index: i, BlockRoot: root[:]})
-		}
-	}
-	return ids
-}
-
-func requestsForMissingColumnIndices(storedIndices [fieldparams.NumberOfColumns]bool, wantedIndices map[uint64]bool, root [32]byte) []*eth.BlobIdentifier {
-	var ids []*eth.BlobIdentifier
-	for i := range wantedIndices {
 		if !storedIndices[i] {
 			ids = append(ids, &eth.BlobIdentifier{Index: i, BlockRoot: root[:]})
 		}

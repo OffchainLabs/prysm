@@ -164,6 +164,7 @@ type Service struct {
 	verifierWaiter                   *verification.InitializerWaiter
 	newBlobVerifier                  verification.NewBlobVerifier
 	availableBlocker                 coverage.AvailableBlocker
+	dataColumsnReconstructionLock    sync.Mutex
 	ctxMap                           ContextByteVersions
 }
 

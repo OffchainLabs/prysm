@@ -126,7 +126,6 @@ func GethPragueTime(genesisTime uint64, cfg *clparams.BeaconChainConfig) *uint64
 // like in an e2e test. The parameters are minimal but the full value is returned unmarshaled so that it can be
 // customized as desired.
 func GethTestnetGenesis(genesisTime uint64, cfg *clparams.BeaconChainConfig) *core.Genesis {
-
 	shanghaiTime := GethShanghaiTime(genesisTime, cfg)
 	cancunTime := GethCancunTime(genesisTime, cfg)
 	pragueTime := GethPragueTime(genesisTime, cfg)

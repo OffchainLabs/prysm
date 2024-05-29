@@ -184,8 +184,8 @@ func (_ *FakeP2P) InterceptUpgraded(network.Conn) (allow bool, reason control.Di
 	return true, 0
 }
 
-func (_ *FakeP2P) CustodyCountFromRemotePeer(peer.ID) (uint64, error) {
-	return 0, nil
+func (_ *FakeP2P) CustodyCountFromRemotePeer(peer.ID) uint64 {
+	return 0
 }
 
 func (_ *FakeP2P) GetValidCustodyPeers(peers []peer.ID) ([]peer.ID, error) {

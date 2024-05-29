@@ -28,10 +28,13 @@ import (
 func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg interface{}, stream libp2pcore.Stream) error {
 	ctx, span := trace.StartSpan(ctx, "sync.dataColumnSidecarByRootRPCHandler")
 	defer span.End()
+
 	ctx, cancel := context.WithTimeout(ctx, ttfbTimeout)
 	defer cancel()
+
 	SetRPCStreamDeadlines(stream)
 	log := log.WithField("handler", p2p.DataColumnSidecarsByRootName[1:]) // slice the leading slash off the name var
+
 	// We use the same type as for blobs as they are the same data structure.
 	// TODO: Make the type naming more generic to be extensible to data columns
 	ref, ok := msg.(*types.BlobSidecarsByRootReq)
@@ -39,19 +42,25 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 		return errors.New("message is not type BlobSidecarsByRootReq")
 	}
 
-	columnIdents := *ref
-	if err := validateDataColummnsByRootRequest(columnIdents); err != nil {
+	requestedColumnIdents := *ref
+	if err := validateDataColummnsByRootRequest(requestedColumnIdents); err != nil {
 		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(stream.Conn().RemotePeer())
 		s.writeErrorResponseToStream(responseCodeInvalidRequest, err.Error(), stream)
-		return err
+		return errors.Wrap(err, "validate data columns by root request")
 	}
+
 	// Sort the identifiers so that requests for the same blob root will be adjacent, minimizing db lookups.
-	sort.Sort(columnIdents)
+	sort.Sort(requestedColumnIdents)
+
+	requestedColumnsList := make([]uint64, 0, len(requestedColumnIdents))
+	for _, ident := range requestedColumnIdents {
+		requestedColumnsList = append(requestedColumnsList, ident.Index)
+	}
 
 	// TODO: Customize data column batches too
 	batchSize := flags.Get().BlobBatchLimit
 	var ticker *time.Ticker
-	if len(columnIdents) > batchSize {
+	if len(requestedColumnIdents) > batchSize {
 		ticker = time.NewTicker(time.Second)
 	}
 
@@ -69,25 +78,50 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 	}
 
 	custodiedColumns, err := peerdas.CustodyColumns(s.cfg.p2p.NodeID(), custodiedSubnets)
-
 	if err != nil {
 		log.WithError(err).Errorf("unexpected error retrieving the node id")
 		s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)
-		return err
+		return errors.Wrap(err, "custody columns")
 	}
 
-	for i := range columnIdents {
+	custodiedColumnsList := make([]uint64, 0, len(custodiedColumns))
+	for column := range custodiedColumns {
+		custodiedColumnsList = append(custodiedColumnsList, column)
+	}
+
+	// Sort the custodied columns by index.
+	sort.Slice(custodiedColumnsList, func(i, j int) bool {
+		return custodiedColumnsList[i] < custodiedColumnsList[j]
+	})
+
+	log.WithFields(logrus.Fields{
+		"custodied":      custodiedColumnsList,
+		"requested":      requestedColumnsList,
+		"custodiedCount": len(custodiedColumnsList),
+		"requestedCount": len(requestedColumnsList),
+	}).Debug("Received data column sidecar by root request")
+
+	for i := range requestedColumnIdents {
 		if err := ctx.Err(); err != nil {
 			closeStream(stream, log)
-			return err
+			return errors.Wrap(err, "context error")
 		}
 
 		// Throttle request processing to no more than batchSize/sec.
 		if ticker != nil && i != 0 && i%batchSize == 0 {
-			<-ticker.C
+			for {
+				select {
+				case <-ticker.C:
+					log.Debug("Throttling data column sidecar request")
+				case <-ctx.Done():
+					log.Debug("Context closed, exiting routine")
+					return nil
+				}
+			}
 		}
+
 		s.rateLimiter.add(stream, 1)
-		root, idx := bytesutil.ToBytes32(columnIdents[i].BlockRoot), columnIdents[i].Index
+		root, idx := bytesutil.ToBytes32(requestedColumnIdents[i].BlockRoot), requestedColumnIdents[i].Index
 
 		isCustodied := custodiedColumns[idx]
 		if !isCustodied {
@@ -124,7 +158,7 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 				log.WithError(err).Errorf("unexpected db error retrieving data column, root=%x, index=%d", root, idx)
 				s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)
 
-				return err
+				return errors.Wrap(err, "get column")
 			}
 
 			break
@@ -137,7 +171,7 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 		if sc.SignedBlockHeader.Header.Slot < minReqSlot {
 			s.writeErrorResponseToStream(responseCodeResourceUnavailable, types.ErrDataColumnLTMinRequest.Error(), stream)
 			log.WithError(types.ErrDataColumnLTMinRequest).
-				Debugf("requested data column for block %#x before minimum_request_epoch", columnIdents[i].BlockRoot)
+				Debugf("requested data column for block %#x before minimum_request_epoch", requestedColumnIdents[i].BlockRoot)
 			return types.ErrDataColumnLTMinRequest
 		}
 
@@ -149,6 +183,7 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 			return chunkErr
 		}
 	}
+
 	closeStream(stream, log)
 	return nil
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
 	opfeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/operation"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
@@ -28,6 +29,11 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 			DataColumn: &dc,
 		},
 	})
+
+	// Reconstruct the data columns if needed.
+	if err := s.reconstructDataColumns(ctx, dc); err != nil {
+		return errors.Wrap(err, "reconstruct data columns")
+	}
 
 	return nil
 }
