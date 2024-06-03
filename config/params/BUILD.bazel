@@ -26,7 +26,7 @@ go_library(
         "testnet_sepolia_config.go",
         "testutils.go",
         "testutils_develop.go",  # keep
-        "test_utils_prod.go",
+        "testutils_prod.go",
         "values.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v6/config/params",
