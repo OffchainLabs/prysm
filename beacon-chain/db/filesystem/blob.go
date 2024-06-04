@@ -12,6 +12,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/async/event"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
@@ -39,8 +40,15 @@ const (
 	directoryPermissions = 0700
 )
 
-// BlobStorageOption is a functional option for configuring a BlobStorage.
-type BlobStorageOption func(*BlobStorage) error
+type (
+	// BlobStorageOption is a functional option for configuring a BlobStorage.
+	BlobStorageOption func(*BlobStorage) error
+
+	RootIndexPair struct {
+		Root  [fieldparams.RootLength]byte
+		Index uint64
+	}
+)
 
 // WithBasePath is a required option that sets the base path of blob storage.
 func WithBasePath(base string) BlobStorageOption {
@@ -70,7 +78,10 @@ func WithSaveFsync(fsync bool) BlobStorageOption {
 // attempt to hold a file lock to guarantee exclusive control of the blob storage directory, so this should only be
 // initialized once per beacon node.
 func NewBlobStorage(opts ...BlobStorageOption) (*BlobStorage, error) {
-	b := &BlobStorage{}
+	b := &BlobStorage{
+		DataColumnFeed: new(event.Feed),
+	}
+
 	for _, o := range opts {
 		if err := o(b); err != nil {
 			return nil, errors.Wrap(err, "failed to create blob storage")
@@ -99,6 +110,7 @@ type BlobStorage struct {
 	fsync           bool
 	fs              afero.Fs
 	pruner          *blobPruner
+	DataColumnFeed  *event.Feed
 }
 
 // WarmCache runs the prune routine with an expiration of slot of 0, so nothing will be pruned, but the pruner's cache
@@ -312,6 +324,13 @@ func (bs *BlobStorage) SaveDataColumn(column blocks.VerifiedRODataColumn) error 
 		return errors.Wrap(err, "failed to rename partial file to final name")
 	}
 	partialMoved = true
+
+	// Notify the data column notifier that a new data column has been saved.
+	bs.DataColumnFeed.Send(RootIndexPair{
+		Root:  column.BlockRoot(),
+		Index: column.ColumnIndex,
+	})
+
 	// TODO: Use new metrics for data columns
 	blobsWrittenCounter.Inc()
 	blobSaveLatency.Observe(float64(time.Since(startTime).Milliseconds()))

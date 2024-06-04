@@ -11,6 +11,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
 	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
@@ -20,7 +21,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/sirupsen/logrus"
 )
@@ -71,12 +71,13 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 		return errors.Wrapf(err, "unexpected error computing min valid blob request slot, current_slot=%d", cs)
 	}
 
-	// Compute all custodied columns.
+	// Compute all custodied subnets.
 	custodiedSubnets := params.BeaconConfig().CustodyRequirement
 	if flags.Get().SubscribeToAllSubnets {
 		custodiedSubnets = params.BeaconConfig().DataColumnSidecarSubnetCount
 	}
 
+	// Compute all custodied columns.
 	custodiedColumns, err := peerdas.CustodyColumns(s.cfg.p2p.NodeID(), custodiedSubnets)
 	if err != nil {
 		log.WithError(err).Errorf("unexpected error retrieving the node id")
@@ -101,6 +102,11 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 		"requestedCount": len(requestedColumnsList),
 	}).Debug("Received data column sidecar by root request")
 
+	// Subscribe to the data column feed.
+	rootIndexChan := make(chan filesystem.RootIndexPair)
+	subscription := s.cfg.blobStorage.DataColumnFeed.Subscribe(rootIndexChan)
+	defer subscription.Unsubscribe()
+
 	for i := range requestedColumnIdents {
 		if err := ctx.Err(); err != nil {
 			closeStream(stream, log)
@@ -121,9 +127,10 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 		}
 
 		s.rateLimiter.add(stream, 1)
-		root, idx := bytesutil.ToBytes32(requestedColumnIdents[i].BlockRoot), requestedColumnIdents[i].Index
+		requestedRoot, requestedIndex := bytesutil.ToBytes32(requestedColumnIdents[i].BlockRoot), requestedColumnIdents[i].Index
 
-		isCustodied := custodiedColumns[idx]
+		// Decrease the peer's score if it requests a column that is not custodied.
+		isCustodied := custodiedColumns[requestedIndex]
 		if !isCustodied {
 			s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(stream.Conn().RemotePeer())
 			s.writeErrorResponseToStream(responseCodeInvalidRequest, types.ErrInvalidColumnIndex.Error(), stream)
@@ -133,42 +140,54 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 		// TODO: Differentiate between blobs and columns for our storage engine
 		// If the data column is nil, it means it is not yet available in the db.
 		// We wait for it to be available.
-		// TODO: Use a real feed like `nc := s.blobNotifiers.forRoot(root)` instead of this for/sleep loop looking in the DB.
-		var sc *eth.DataColumnSidecar
 
-		for {
-			sc, err = s.cfg.blobStorage.GetColumn(root, idx)
-			if err != nil {
-				if ctxErr := ctx.Err(); ctxErr != nil {
-					closeStream(stream, log)
-					return ctxErr
-				}
+		// Retrieve the data column from the database.
+		dataColumnSidecar, err := s.cfg.blobStorage.GetColumn(requestedRoot, requestedIndex)
 
-				if db.IsNotFound(err) {
-					fields := logrus.Fields{
-						"root":  fmt.Sprintf("%#x", root),
-						"index": idx,
-					}
+		if err != nil && !db.IsNotFound(err) {
+			s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)
+			return errors.Wrap(err, "get column")
+		}
 
-					log.WithFields(fields).Debugf("Peer requested data column sidecar by root not found in db, waiting for it to be available")
-					time.Sleep(100 * time.Millisecond) // My heart is crying
-					continue
-				}
-
-				log.WithError(err).Errorf("unexpected db error retrieving data column, root=%x, index=%d", root, idx)
-				s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)
-
-				return errors.Wrap(err, "get column")
+		if err != nil && db.IsNotFound(err) {
+			fields := logrus.Fields{
+				"root":  fmt.Sprintf("%#x", requestedRoot),
+				"index": requestedIndex,
 			}
 
-			break
+			log.WithFields(fields).Debug("Peer requested data column sidecar by root not found in db, waiting for it to be available")
+
+		loop:
+			for {
+				select {
+				case receivedRootIndex := <-rootIndexChan:
+					if receivedRootIndex.Root == requestedRoot && receivedRootIndex.Index == requestedIndex {
+						// This is the data column we are looking for.
+						log.WithFields(fields).Debug("Data column sidecar by root is now available in the db")
+
+						break loop
+					}
+
+				case <-ctx.Done():
+					closeStream(stream, log)
+					return errors.Errorf("context closed while waiting for data column with root %#x and index %d", requestedRoot, requestedIndex)
+				}
+			}
+
+			// Retrieve the data column from the db.
+			dataColumnSidecar, err = s.cfg.blobStorage.GetColumn(requestedRoot, requestedIndex)
+			if err != nil {
+				// This time, no error (even not found error) should be returned.
+				s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)
+				return errors.Wrap(err, "get column")
+			}
 		}
 
 		// If any root in the request content references a block earlier than minimum_request_epoch,
 		// peers MAY respond with error code 3: ResourceUnavailable or not include the data column in the response.
 		// note: we are deviating from the spec to allow requests for data column that are before minimum_request_epoch,
 		// up to the beginning of the retention period.
-		if sc.SignedBlockHeader.Header.Slot < minReqSlot {
+		if dataColumnSidecar.SignedBlockHeader.Header.Slot < minReqSlot {
 			s.writeErrorResponseToStream(responseCodeResourceUnavailable, types.ErrDataColumnLTMinRequest.Error(), stream)
 			log.WithError(types.ErrDataColumnLTMinRequest).
 				Debugf("requested data column for block %#x before minimum_request_epoch", requestedColumnIdents[i].BlockRoot)
@@ -176,7 +195,7 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 		}
 
 		SetStreamWriteDeadline(stream, defaultWriteDuration)
-		if chunkErr := WriteDataColumnSidecarChunk(stream, s.cfg.chain, s.cfg.p2p.Encoding(), sc); chunkErr != nil {
+		if chunkErr := WriteDataColumnSidecarChunk(stream, s.cfg.chain, s.cfg.p2p.Encoding(), dataColumnSidecar); chunkErr != nil {
 			log.WithError(chunkErr).Debug("Could not send a chunked response")
 			s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)
 			tracing.AnnotateError(span, chunkErr)
