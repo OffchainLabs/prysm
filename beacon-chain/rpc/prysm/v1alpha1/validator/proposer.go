@@ -458,14 +458,28 @@ func (vs *Server) broadcastAndReceiveBlobs(ctx context.Context, sidecars []*ethp
 // broadcastAndReceiveDataColumns handles the broadcasting and reception of data columns sidecars.
 func (vs *Server) broadcastAndReceiveDataColumns(ctx context.Context, sidecars []*ethpb.DataColumnSidecar, root [fieldparams.RootLength]byte) error {
 	eg, _ := errgroup.WithContext(ctx)
+
+	dataColumnsWithholdCount := features.Get().DataColumnsWithholdCount
+
 	for i, sd := range sidecars {
 		// Copy the iteration instance to a local variable to give each go-routine its own copy to play with.
 		// See https://golang.org/doc/faq#closures_and_goroutines for more details.
-		colIdx := i
-		sidecar := sd
+		colIdx, sidecar := i, sd
+
 		eg.Go(func() error {
-			if err := vs.P2P.BroadcastDataColumn(ctx, uint64(colIdx)%params.BeaconConfig().DataColumnSidecarSubnetCount, sidecar); err != nil {
-				return errors.Wrap(err, "broadcast data column")
+			// Compute the subnet index based on the column index.
+			subnet := uint64(colIdx) % params.BeaconConfig().DataColumnSidecarSubnetCount
+
+			if colIdx < dataColumnsWithholdCount {
+				log.WithFields(logrus.Fields{
+					"root":            fmt.Sprintf("%#x", root),
+					"subnet":          subnet,
+					"dataColumnIndex": colIdx,
+				}).Warning("Withholding data column")
+			} else {
+				if err := vs.P2P.BroadcastDataColumn(ctx, subnet, sidecar); err != nil {
+					return errors.Wrap(err, "broadcast data column")
+				}
 			}
 
 			roDataColumn, err := blocks.NewRODataColumnWithRoot(sidecar, root)

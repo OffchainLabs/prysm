@@ -86,6 +86,9 @@ type Flags struct {
 	// changed on disk. This feature is for advanced use cases only.
 	KeystoreImportDebounceInterval time.Duration
 
+	// DataColumnsWithholdCount specifies the likelihood of withholding a data column sidecar when proposing a block (percentage)
+	DataColumnsWithholdCount int
+
 	// AggregateIntervals specifies the time durations at which we aggregate attestations preparing for forkchoice.
 	AggregateIntervals [3]time.Duration
 }
@@ -273,6 +276,11 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 	if ctx.IsSet(EnablePeerDAS.Name) {
 		logEnabled(EnablePeerDAS)
 		cfg.EnablePeerDAS = true
+	}
+
+	if ctx.IsSet(DataColumnsWithholdCount.Name) {
+		logEnabled(DataColumnsWithholdCount)
+		cfg.DataColumnsWithholdCount = ctx.Int(DataColumnsWithholdCount.Name)
 	}
 
 	cfg.AggregateIntervals = [3]time.Duration{aggregateFirstInterval.Value, aggregateSecondInterval.Value, aggregateThirdInterval.Value}
