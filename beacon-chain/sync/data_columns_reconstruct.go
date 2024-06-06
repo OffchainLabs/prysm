@@ -10,7 +10,9 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
 	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
+	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
@@ -153,6 +155,17 @@ func (s *Service) reconstructDataColumns(ctx context.Context, verifiedRODataColu
 		return nil
 	}
 
+	// Retrieve the custodied columns.
+	custodiedSubnetCount := params.BeaconConfig().CustodyRequirement
+	if flags.Get().SubscribeToAllSubnets {
+		custodiedSubnetCount = params.BeaconConfig().DataColumnSidecarSubnetCount
+	}
+
+	custodiedColumns, err := peerdas.CustodyColumns(s.cfg.p2p.NodeID(), custodiedSubnetCount)
+	if err != nil {
+		return errors.Wrap(err, "custodied columns")
+	}
+
 	// Load the data columns sidecars.
 	dataColumnSideCars := make([]*ethpb.DataColumnSidecar, 0, storedColumnsCount)
 	for index := range storedColumnsIndices {
@@ -184,6 +197,12 @@ func (s *Service) reconstructDataColumns(ctx context.Context, verifiedRODataColu
 
 	// Save the data columns sidecars in the database.
 	for _, dataColumnSidecar := range dataColumnSidecars {
+		shouldSave := custodiedColumns[dataColumnSidecar.ColumnIndex]
+		if !shouldSave {
+			// We do not custody this column, so we dot not need to save it.
+			continue
+		}
+
 		roDataColumn, err := blocks.NewRODataColumnWithRoot(dataColumnSidecar, blockRoot)
 		if err != nil {
 			return errors.Wrap(err, "new read-only data column with root")
@@ -195,7 +214,7 @@ func (s *Service) reconstructDataColumns(ctx context.Context, verifiedRODataColu
 		}
 	}
 
-	log.WithField("root", fmt.Sprintf("%x", blockRoot)).Debug("Data columns reconstructed successfully")
+	log.WithField("root", fmt.Sprintf("%x", blockRoot)).Debug("Data columns reconstructed and saved successfully")
 
 	return nil
 }
