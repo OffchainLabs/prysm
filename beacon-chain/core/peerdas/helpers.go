@@ -261,6 +261,82 @@ func DataColumnSidecars(signedBlock interfaces.ReadOnlySignedBeaconBlock, blobs 
 	return sidecars, nil
 }
 
+// DataColumnSidecarsForReconstruct is a TEMPORARY function until there is an official specification for it.
+// It is scheduled for deletion.
+func DataColumnSidecarsForReconstruct(
+	blobKzgCommitments [][]byte,
+	signedBlockHeader *ethpb.SignedBeaconBlockHeader,
+	kzgCommitmentsInclusionProof [][]byte,
+	blobs []cKzg4844.Blob,
+) ([]*ethpb.DataColumnSidecar, error) {
+	blobsCount := len(blobs)
+	if blobsCount == 0 {
+		return nil, nil
+	}
+
+	// Compute cells and proofs.
+	cells := make([][cKzg4844.CellsPerExtBlob]cKzg4844.Cell, 0, blobsCount)
+	proofs := make([][cKzg4844.CellsPerExtBlob]cKzg4844.KZGProof, 0, blobsCount)
+
+	for i := range blobs {
+		blob := &blobs[i]
+		blobCells, blobProofs, err := cKzg4844.ComputeCellsAndKZGProofs(blob)
+		if err != nil {
+			return nil, errors.Wrap(err, "compute cells and KZG proofs")
+		}
+
+		cells = append(cells, blobCells)
+		proofs = append(proofs, blobProofs)
+	}
+
+	// Get the column sidecars.
+	sidecars := make([]*ethpb.DataColumnSidecar, 0, cKzg4844.CellsPerExtBlob)
+	for columnIndex := uint64(0); columnIndex < cKzg4844.CellsPerExtBlob; columnIndex++ {
+		column := make([]cKzg4844.Cell, 0, blobsCount)
+		kzgProofOfColumn := make([]cKzg4844.KZGProof, 0, blobsCount)
+
+		for rowIndex := 0; rowIndex < blobsCount; rowIndex++ {
+			cell := cells[rowIndex][columnIndex]
+			column = append(column, cell)
+
+			kzgProof := proofs[rowIndex][columnIndex]
+			kzgProofOfColumn = append(kzgProofOfColumn, kzgProof)
+		}
+
+		columnBytes := make([][]byte, 0, blobsCount)
+		for i := range column {
+			cell := column[i]
+
+			cellBytes := make([]byte, 0, bytesPerCell)
+			for _, fieldElement := range cell {
+				copiedElem := fieldElement
+				cellBytes = append(cellBytes, copiedElem[:]...)
+			}
+
+			columnBytes = append(columnBytes, cellBytes)
+		}
+
+		kzgProofOfColumnBytes := make([][]byte, 0, blobsCount)
+		for _, kzgProof := range kzgProofOfColumn {
+			copiedProof := kzgProof
+			kzgProofOfColumnBytes = append(kzgProofOfColumnBytes, copiedProof[:])
+		}
+
+		sidecar := &ethpb.DataColumnSidecar{
+			ColumnIndex:                  columnIndex,
+			DataColumn:                   columnBytes,
+			KzgCommitments:               blobKzgCommitments,
+			KzgProof:                     kzgProofOfColumnBytes,
+			SignedBlockHeader:            signedBlockHeader,
+			KzgCommitmentsInclusionProof: kzgCommitmentsInclusionProof,
+		}
+
+		sidecars = append(sidecars, sidecar)
+	}
+
+	return sidecars, nil
+}
+
 // VerifyDataColumnSidecarKZGProofs verifies the provided KZG Proofs for the particular
 // data column.
 func VerifyDataColumnSidecarKZGProofs(sc *ethpb.DataColumnSidecar) (bool, error) {

@@ -37,6 +37,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
 	lruwrpr "github.com/prysmaticlabs/prysm/v5/cache/lru"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
@@ -165,6 +166,8 @@ type Service struct {
 	newBlobVerifier                  verification.NewBlobVerifier
 	availableBlocker                 coverage.AvailableBlocker
 	dataColumsnReconstructionLock    sync.Mutex
+	receivedDataColumnsFromRoot      map[[fieldparams.RootLength]byte]map[uint64]bool
+	receivedDataColumnsFromRootLock  sync.RWMutex
 	ctxMap                           ContextByteVersions
 }
 
@@ -173,14 +176,15 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 	c := gcache.New(pendingBlockExpTime /* exp time */, 0 /* disable janitor */)
 	ctx, cancel := context.WithCancel(ctx)
 	r := &Service{
-		ctx:                  ctx,
-		cancel:               cancel,
-		chainStarted:         abool.New(),
-		cfg:                  &config{clock: startup.NewClock(time.Unix(0, 0), [32]byte{})},
-		slotToPendingBlocks:  c,
-		seenPendingBlocks:    make(map[[32]byte]bool),
-		blkRootToPendingAtts: make(map[[32]byte][]ethpb.SignedAggregateAttAndProof),
-		signatureChan:        make(chan *signatureVerifier, verifierLimit),
+		ctx:                         ctx,
+		cancel:                      cancel,
+		chainStarted:                abool.New(),
+		cfg:                         &config{clock: startup.NewClock(time.Unix(0, 0), [32]byte{})},
+		slotToPendingBlocks:         c,
+		seenPendingBlocks:           make(map[[32]byte]bool),
+		blkRootToPendingAtts:        make(map[[32]byte][]ethpb.SignedAggregateAttAndProof),
+		signatureChan:               make(chan *signatureVerifier, verifierLimit),
+		receivedDataColumnsFromRoot: make(map[[32]byte]map[uint64]bool),
 	}
 	for _, opt := range opts {
 		if err := opt(r); err != nil {

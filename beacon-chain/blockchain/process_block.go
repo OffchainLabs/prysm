@@ -596,8 +596,13 @@ func (s *Service) isDataAvailable(ctx context.Context, root [32]byte, signed int
 			if len(missing) == 0 {
 				return
 			}
-			log.WithFields(daCheckLogFields(root, signed.Block().Slot(), expected, len(missing))).
-				Error("Still waiting for DA check at slot end.")
+
+			log.WithFields(logrus.Fields{
+				"slot":          signed.Block().Slot(),
+				"root":          fmt.Sprintf("%#x", root),
+				"blobsExpected": expected,
+				"blobsWaiting":  len(missing),
+			}).Error("Still waiting for blobs DA check at slot end.")
 		})
 		defer nst.Stop()
 	}
@@ -653,24 +658,28 @@ func (s *Service) isDataAvailableDataColumns(ctx context.Context, root [32]byte,
 	if err != nil {
 		return err
 	}
-	// expected is the number of custodied data columnns a node is expected to have.
+	// Expected is the number of custodied data columnns a node is expected to have.
 	expected := len(colMap)
 	if expected == 0 {
 		return nil
 	}
-	// get a map of data column indices that are not currently available.
+
+	// Subscribe to newsly data columns stored in the database.
+	rootIndexChan := make(chan filesystem.RootIndexPair)
+	subscription := s.blobStorage.DataColumnFeed.Subscribe(rootIndexChan)
+	defer subscription.Unsubscribe()
+
+	// Get a map of data column indices that are not currently available.
 	missing, err := missingDataColumns(s.blobStorage, root, colMap)
 	if err != nil {
 		return err
 	}
+
 	// If there are no missing indices, all data column sidecars are available.
+	// This is the happy path.
 	if len(missing) == 0 {
 		return nil
 	}
-
-	// The gossip handler for data columns writes the index of each verified data column referencing the given
-	// root to the channel returned by blobNotifiers.forRoot.
-	nc := s.blobNotifiers.forRoot(root)
 
 	// Log for DA checks that cross over into the next slot; helpful for debugging.
 	nextSlot := slots.BeginsAt(signed.Block().Slot()+1, s.genesisTime)
@@ -680,40 +689,39 @@ func (s *Service) isDataAvailableDataColumns(ctx context.Context, root [32]byte,
 			if len(missing) == 0 {
 				return
 			}
-			log.WithFields(daCheckLogFields(root, signed.Block().Slot(), expected, len(missing))).
-				Error("Still waiting for DA check at slot end.")
+
+			log.WithFields(logrus.Fields{
+				"slot":            signed.Block().Slot(),
+				"root":            fmt.Sprintf("%#x", root),
+				"columnsExpected": expected,
+				"columnsWaiting":  len(missing),
+			}).Error("Still waiting for data columns DA check at slot end.")
 		})
 		defer nst.Stop()
 	}
 	for {
 		select {
-		case idx := <-nc:
-			// Delete each index seen in the notification channel.
-			delete(missing, idx)
-			// Read from the channel until there are no more missing sidecars.
-			if len(missing) > 0 {
+		case rootIndex := <-rootIndexChan:
+			if rootIndex.Root != root {
+				// This is not the root we are looking for.
 				continue
 			}
-			// Once all sidecars have been observed, clean up the notification channel.
-			s.blobNotifiers.delete(root)
-			return nil
+
+			// Remove the index from the missing map.
+			delete(missing, rootIndex.Index)
+
+			// Exit if there is no more missing data columns.
+			if len(missing) == 0 {
+				return nil
+			}
 		case <-ctx.Done():
 			missingIndexes := make([]uint64, 0, len(missing))
 			for val := range missing {
 				copiedVal := val
 				missingIndexes = append(missingIndexes, copiedVal)
 			}
-			return errors.Wrapf(ctx.Err(), "context deadline waiting for blob sidecars slot: %d, BlockRoot: %#x, missing %v", block.Slot(), root, missingIndexes)
+			return errors.Wrapf(ctx.Err(), "context deadline waiting for data column sidecars slot: %d, BlockRoot: %#x, missing %v", block.Slot(), root, missingIndexes)
 		}
-	}
-}
-
-func daCheckLogFields(root [32]byte, slot primitives.Slot, expected, missing int) logrus.Fields {
-	return logrus.Fields{
-		"slot":          slot,
-		"root":          fmt.Sprintf("%#x", root),
-		"blobsExpected": expected,
-		"blobsWaiting":  missing,
 	}
 }
 

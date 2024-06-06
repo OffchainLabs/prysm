@@ -3,21 +3,22 @@ package sync
 import (
 	"context"
 	"fmt"
+	"sort"
 	"time"
 
 	cKzg4844 "github.com/ethereum/c-kzg-4844/bindings/go"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
-	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/sirupsen/logrus"
 )
+
+const broadCastMissingDataColumnsTimeIntoSlot = 3 * time.Second
 
 // recoverBlobs recovers the blobs from the data column sidecars.
 func recoverBlobs(
@@ -86,52 +87,6 @@ func recoverBlobs(
 	return recoveredBlobs, nil
 }
 
-// getSignedBlock retrieves the signed block corresponding to the given root.
-// If the block is not available, it waits for it.
-func (s *Service) getSignedBlock(
-	ctx context.Context,
-	blockRoot [fieldparams.RootLength]byte,
-) (interfaces.ReadOnlySignedBeaconBlock, error) {
-	blocksChannel := make(chan *feed.Event, 1)
-	blockSub := s.cfg.blockNotifier.BlockFeed().Subscribe(blocksChannel)
-	defer blockSub.Unsubscribe()
-
-	// Get the signedBlock corresponding to this root.
-	signedBlock, err := s.cfg.beaconDB.Block(ctx, blockRoot)
-	if err != nil {
-		return nil, errors.Wrap(err, "block")
-	}
-
-	// If the block is here, return it.
-	if signedBlock != nil {
-		return signedBlock, nil
-	}
-
-	// Wait for the block to be available.
-	for {
-		select {
-		case blockEvent := <-blocksChannel:
-			// Check the type of the event.
-			data, ok := blockEvent.Data.(*statefeed.BlockProcessedData)
-			if !ok || data == nil {
-				continue
-			}
-
-			// Check if the block is the one we are looking for.
-			if data.BlockRoot != blockRoot {
-				continue
-			}
-
-			// This is the block we are looking for.
-			return data.SignedBlock, nil
-		case err := <-blockSub.Err():
-			return nil, errors.Wrap(err, "block subscriber error")
-		case <-ctx.Done():
-			return nil, errors.New("context canceled")
-		}
-	}
-}
-
 func (s *Service) reconstructDataColumns(ctx context.Context, verifiedRODataColumn blocks.VerifiedRODataColumn) error {
 	// Lock to prevent concurrent reconstruction.
 	s.dataColumsnReconstructionLock.Lock()
@@ -141,12 +96,12 @@ func (s *Service) reconstructDataColumns(ctx context.Context, verifiedRODataColu
 	blockRoot := verifiedRODataColumn.BlockRoot()
 
 	// Get the columns we store.
-	storedColumnsIndices, err := s.cfg.blobStorage.ColumnIndices(blockRoot)
+	storedDataColumns, err := s.cfg.blobStorage.ColumnIndices(blockRoot)
 	if err != nil {
 		return errors.Wrap(err, "columns indices")
 	}
 
-	storedColumnsCount := len(storedColumnsIndices)
+	storedColumnsCount := len(storedDataColumns)
 	numberOfColumns := fieldparams.NumberOfColumns
 
 	// If less than half of the columns are stored, reconstruction is not possible.
@@ -168,7 +123,7 @@ func (s *Service) reconstructDataColumns(ctx context.Context, verifiedRODataColu
 
 	// Load the data columns sidecars.
 	dataColumnSideCars := make([]*ethpb.DataColumnSidecar, 0, storedColumnsCount)
-	for index := range storedColumnsIndices {
+	for index := range storedDataColumns {
 		dataColumnSidecar, err := s.cfg.blobStorage.GetColumn(blockRoot, index)
 		if err != nil {
 			return errors.Wrap(err, "get column")
@@ -183,14 +138,13 @@ func (s *Service) reconstructDataColumns(ctx context.Context, verifiedRODataColu
 		return errors.Wrap(err, "recover blobs")
 	}
 
-	// Get the signed block.
-	signedBlock, err := s.getSignedBlock(ctx, blockRoot)
-	if err != nil {
-		return errors.Wrap(err, "get signed block")
-	}
-
 	// Reconstruct the data columns sidecars.
-	dataColumnSidecars, err := peerdas.DataColumnSidecars(signedBlock, recoveredBlobs)
+	dataColumnSidecars, err := peerdas.DataColumnSidecarsForReconstruct(
+		verifiedRODataColumn.KzgCommitments,
+		verifiedRODataColumn.SignedBlockHeader,
+		verifiedRODataColumn.KzgCommitmentsInclusionProof,
+		recoveredBlobs,
+	)
 	if err != nil {
 		return errors.Wrap(err, "data column sidecars")
 	}
@@ -216,5 +170,167 @@ func (s *Service) reconstructDataColumns(ctx context.Context, verifiedRODataColu
 
 	log.WithField("root", fmt.Sprintf("%x", blockRoot)).Debug("Data columns reconstructed and saved successfully")
 
+	// Schedule the broadcast.
+	if err := s.scheduleReconstructedDataColumnsBroadcast(ctx, blockRoot, verifiedRODataColumn); err != nil {
+		return errors.Wrap(err, "schedule reconstructed data columns broadcast")
+	}
+
 	return nil
+}
+
+func (s *Service) scheduleReconstructedDataColumnsBroadcast(
+	ctx context.Context,
+	blockRoot [fieldparams.RootLength]byte,
+	dataColumn blocks.VerifiedRODataColumn,
+) error {
+	// Retrieve the slot of the block.
+	slot := dataColumn.Slot()
+
+	// Get the time corresponding to the start of the slot.
+	slotStart, err := slots.ToTime(uint64(s.cfg.chain.GenesisTime().Unix()), slot)
+	if err != nil {
+		return errors.Wrap(err, "to time")
+	}
+
+	// Compute when to broadcast the missing data columns.
+	broadcastTime := slotStart.Add(broadCastMissingDataColumnsTimeIntoSlot)
+
+	// Compute the waiting time. This could be negative. In such a case, broadcast immediately.
+	waitingTime := time.Until(broadcastTime)
+
+	time.AfterFunc(waitingTime, func() {
+		s.dataColumsnReconstructionLock.Lock()
+		defer s.deleteReceivedDataColumns(blockRoot)
+		defer s.dataColumsnReconstructionLock.Unlock()
+
+		// Get the received by gossip data columns.
+		receivedDataColumns := s.receivedDataColumns(blockRoot)
+		if receivedDataColumns == nil {
+			log.WithField("root", fmt.Sprintf("%x", blockRoot)).Error("No received data columns")
+		}
+
+		// Get the data columns we should store.
+		custodiedSubnetCount := params.BeaconConfig().CustodyRequirement
+		if flags.Get().SubscribeToAllSubnets {
+			custodiedSubnetCount = params.BeaconConfig().DataColumnSidecarSubnetCount
+		}
+
+		custodiedDataColumns, err := peerdas.CustodyColumns(s.cfg.p2p.NodeID(), custodiedSubnetCount)
+		if err != nil {
+			log.WithError(err).Error("Custody columns")
+		}
+
+		// Get the data columns we actually store.
+		storedDataColumns, err := s.cfg.blobStorage.ColumnIndices(blockRoot)
+		if err != nil {
+			log.WithField("root", fmt.Sprintf("%x", blockRoot)).WithError(err).Error("Columns indices")
+			return
+		}
+
+		// Compute the missing data columns (data columns we should custody but we do not have received via gossip.)
+		missingColumns := make(map[uint64]bool, len(custodiedDataColumns))
+		for column := range custodiedDataColumns {
+			if ok := receivedDataColumns[column]; !ok {
+				missingColumns[column] = true
+			}
+		}
+
+		// Exit early if there are no missing data columns.
+		// This is the happy path.
+		if len(missingColumns) == 0 {
+			return
+		}
+
+		for column := range missingColumns {
+			if ok := storedDataColumns[column]; !ok {
+				// This column was not received nor reconstructed. This should not happen.
+				log.WithFields(logrus.Fields{
+					"root":   fmt.Sprintf("%x", blockRoot),
+					"slot":   slot,
+					"column": column,
+				}).Error("Data column not received nor reconstructed.")
+				continue
+			}
+
+			// Get the non received but reconstructed data column.
+			dataColumnSidecar, err := s.cfg.blobStorage.GetColumn(blockRoot, column)
+			if err != nil {
+				log.WithError(err).Error("Get column")
+				continue
+			}
+
+			// Compute the subnet for this column.
+			subnet := column % params.BeaconConfig().DataColumnSidecarSubnetCount
+
+			// Broadcast the missing data column.
+			if err := s.cfg.p2p.BroadcastDataColumn(ctx, subnet, dataColumnSidecar); err != nil {
+				log.WithError(err).Error("Broadcast data column")
+			}
+		}
+
+		// Get the missing data columns under sorted form.
+		missingColumnsList := make([]uint64, 0, len(missingColumns))
+		for column := range missingColumns {
+			missingColumnsList = append(missingColumnsList, column)
+		}
+
+		// Sort the missing data columns.
+		sort.Slice(missingColumnsList, func(i, j int) bool {
+			return missingColumnsList[i] < missingColumnsList[j]
+		})
+
+		log.WithFields(logrus.Fields{
+			"root":         fmt.Sprintf("%x", blockRoot),
+			"slot":         slot,
+			"timeIntoSlot": broadCastMissingDataColumnsTimeIntoSlot,
+			"columns":      missingColumnsList,
+		}).Debug("Broadcasting not seen via gossip but reconstructed data columns.")
+	})
+
+	return nil
+}
+
+// setReceivedDataColumn marks the data column for a given root as received.
+func (s *Service) setReceivedDataColumn(root [fieldparams.RootLength]byte, columnIndex uint64) {
+	s.receivedDataColumnsFromRootLock.Lock()
+	defer s.receivedDataColumnsFromRootLock.Unlock()
+
+	// Get all the received data columns for this root.
+	receivedDataColumns, ok := s.receivedDataColumnsFromRoot[root]
+	if !ok {
+		// Create the map for this block root if needed.
+		receivedDataColumns = make(map[uint64]bool, params.BeaconConfig().NumberOfColumns)
+		s.receivedDataColumnsFromRoot[root] = receivedDataColumns
+	}
+
+	// Mark the data column as received.
+	receivedDataColumns[columnIndex] = true
+}
+
+// receivedDataColumns returns the received data columns for a given root.
+func (s *Service) receivedDataColumns(root [fieldparams.RootLength]byte) map[uint64]bool {
+	s.receivedDataColumnsFromRootLock.RLock()
+	defer s.receivedDataColumnsFromRootLock.RUnlock()
+
+	// Get all the received data columns for this root.
+	receivedDataColumns, ok := s.receivedDataColumnsFromRoot[root]
+	if !ok {
+		return nil
+	}
+
+	// Copy the received data columns.
+	copied := make(map[uint64]bool, len(receivedDataColumns))
+	for column, received := range receivedDataColumns {
+		copied[column] = received
+	}
+
+	return copied
+}
+
+// deleteReceivedDataColumns deletes the received data columns for a given root.
+func (s *Service) deleteReceivedDataColumns(root [fieldparams.RootLength]byte) {
+	s.receivedDataColumnsFromRootLock.Lock()
+	defer s.receivedDataColumnsFromRootLock.Unlock()
+
+	delete(s.receivedDataColumnsFromRoot, root)
 }
