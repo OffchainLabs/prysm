@@ -20,6 +20,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/go-bitfield"
+	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/wrapper"
 	ecdsaprysm "github.com/prysmaticlabs/prysm/v5/crypto/ecdsa"
 	"github.com/prysmaticlabs/prysm/v5/io/file"
@@ -66,6 +67,7 @@ func privKey(cfg *Config) (*ecdsa.PrivateKey, error) {
 	}
 
 	if defaultKeysExist {
+		log.WithField("filePath", defaultKeyPath).Info("Reading static P2P private key from a file. To generate a new random private key at every start, please remove this file.")
 		return privKeyFromFile(defaultKeyPath)
 	}
 
@@ -75,8 +77,8 @@ func privKey(cfg *Config) (*ecdsa.PrivateKey, error) {
 		return nil, err
 	}
 
-	// If the StaticPeerID flag is not set, return the private key.
-	if !cfg.StaticPeerID {
+	// If the StaticPeerID flag is not set and if peerDAS is not enabled, return the private key.
+	if !(cfg.StaticPeerID || features.Get().EnablePeerDAS) {
 		return ecdsaprysm.ConvertFromInterfacePrivKey(priv)
 	}
 
@@ -93,7 +95,7 @@ func privKey(cfg *Config) (*ecdsa.PrivateKey, error) {
 		return nil, err
 	}
 
-	log.Info("Wrote network key to file")
+	log.WithField("path", defaultKeyPath).Info("Wrote network key to file")
 	// Read the key from the defaultKeyPath file just written
 	// for the strongest guarantee that the next start will be the same as this one.
 	return privKeyFromFile(defaultKeyPath)

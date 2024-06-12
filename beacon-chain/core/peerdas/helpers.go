@@ -8,7 +8,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/holiman/uint256"
 	errors "github.com/pkg/errors"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
@@ -17,27 +16,12 @@ import (
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
-const (
-	// Bytes per cell
-	bytesPerCell = cKzg4844.FieldElementsPerCell * cKzg4844.BytesPerFieldElement
-
-	// Number of cells in the extended matrix
-	extendedMatrixSize = fieldparams.MaxBlobsPerBlock * cKzg4844.CellsPerExtBlob
-)
-
-type (
-	ExtendedMatrix []cKzg4844.Cell
-
-	cellCoordinate struct {
-		blobIndex uint64
-		cellID    uint64
-	}
-)
+// Bytes per cell
+const bytesPerCell = cKzg4844.FieldElementsPerCell * cKzg4844.BytesPerFieldElement
 
 var (
 	// Custom errors
 	errCustodySubnetCountTooLarge = errors.New("custody subnet count larger than data column sidecar subnet count")
-	errCellNotFound               = errors.New("cell not found (should never happen)")
 	errIndexTooLarge              = errors.New("column index is larger than the specified number of columns")
 	errMismatchLength             = errors.New("mismatch in the length of the commitments and proofs")
 
@@ -45,32 +29,7 @@ var (
 	maxUint256 = &uint256.Int{math.MaxUint64, math.MaxUint64, math.MaxUint64, math.MaxUint64}
 )
 
-// CustodyColumns computes the columns the node should custody.
-// https://github.com/ethereum/consensus-specs/blob/dev/specs/_features/eip7594/das-core.md#helper-functions
-func CustodyColumns(nodeId enode.ID, custodySubnetCount uint64) (map[uint64]bool, error) {
-	dataColumnSidecarSubnetCount := params.BeaconConfig().DataColumnSidecarSubnetCount
-
-	// Compute the custodied subnets.
-	subnetIds, err := CustodyColumnSubnets(nodeId, custodySubnetCount)
-	if err != nil {
-		return nil, errors.Wrap(err, "custody subnets")
-	}
-
-	columnsPerSubnet := cKzg4844.CellsPerExtBlob / dataColumnSidecarSubnetCount
-
-	// Knowing the subnet ID and the number of columns per subnet, select all the columns the node should custody.
-	// Columns belonging to the same subnet are contiguous.
-	columnIndices := make(map[uint64]bool, custodySubnetCount*columnsPerSubnet)
-	for i := uint64(0); i < columnsPerSubnet; i++ {
-		for subnetId := range subnetIds {
-			columnIndex := dataColumnSidecarSubnetCount*i + subnetId
-			columnIndices[columnIndex] = true
-		}
-	}
-
-	return columnIndices, nil
-}
-
+// CustodyColumnSubnets computes the subnets the node should participate in for custody.
 func CustodyColumnSubnets(nodeId enode.ID, custodySubnetCount uint64) (map[uint64]bool, error) {
 	dataColumnSidecarSubnetCount := params.BeaconConfig().DataColumnSidecarSubnetCount
 
@@ -109,63 +68,30 @@ func CustodyColumnSubnets(nodeId enode.ID, custodySubnetCount uint64) (map[uint6
 	return subnetIds, nil
 }
 
-// ComputeExtendedMatrix computes the extended matrix from the blobs.
-// https://github.com/ethereum/consensus-specs/blob/dev/specs/_features/eip7594/das-core.md#compute_extended_matrix
-func ComputeExtendedMatrix(blobs []cKzg4844.Blob) (ExtendedMatrix, error) {
-	matrix := make(ExtendedMatrix, 0, extendedMatrixSize)
+// CustodyColumns computes the columns the node should custody.
+// https://github.com/ethereum/consensus-specs/blob/dev/specs/_features/eip7594/das-core.md#helper-functions
+func CustodyColumns(nodeId enode.ID, custodySubnetCount uint64) (map[uint64]bool, error) {
+	dataColumnSidecarSubnetCount := params.BeaconConfig().DataColumnSidecarSubnetCount
 
-	for i := range blobs {
-		// Chunk a non-extended blob into cells representing the corresponding extended blob.
-		blob := &blobs[i]
-		cells, err := cKzg4844.ComputeCells(blob)
-		if err != nil {
-			return nil, errors.Wrap(err, "compute cells for blob")
-		}
-
-		matrix = append(matrix, cells[:]...)
+	// Compute the custodied subnets.
+	subnetIds, err := CustodyColumnSubnets(nodeId, custodySubnetCount)
+	if err != nil {
+		return nil, errors.Wrap(err, "custody subnets")
 	}
 
-	return matrix, nil
-}
+	columnsPerSubnet := cKzg4844.CellsPerExtBlob / dataColumnSidecarSubnetCount
 
-// RecoverMatrix recovers the extended matrix from some cells.
-// https://github.com/ethereum/consensus-specs/blob/dev/specs/_features/eip7594/das-core.md#recover_matrix
-func RecoverMatrix(cellFromCoordinate map[cellCoordinate]cKzg4844.Cell, blobCount uint64) (ExtendedMatrix, error) {
-	matrix := make(ExtendedMatrix, 0, extendedMatrixSize)
-
-	for blobIndex := uint64(0); blobIndex < blobCount; blobIndex++ {
-		// Filter all cells that belong to the current blob.
-		cellIds := make([]uint64, 0, cKzg4844.CellsPerExtBlob)
-		for coordinate := range cellFromCoordinate {
-			if coordinate.blobIndex == blobIndex {
-				cellIds = append(cellIds, coordinate.cellID)
-			}
+	// Knowing the subnet ID and the number of columns per subnet, select all the columns the node should custody.
+	// Columns belonging to the same subnet are contiguous.
+	columnIndices := make(map[uint64]bool, custodySubnetCount*columnsPerSubnet)
+	for i := uint64(0); i < columnsPerSubnet; i++ {
+		for subnetId := range subnetIds {
+			columnIndex := dataColumnSidecarSubnetCount*i + subnetId
+			columnIndices[columnIndex] = true
 		}
-
-		// Retrieve cells corresponding to all `cellIds`.
-		cellIdsCount := len(cellIds)
-
-		cells := make([]cKzg4844.Cell, 0, cellIdsCount)
-		for _, cellId := range cellIds {
-			coordinate := cellCoordinate{blobIndex: blobIndex, cellID: cellId}
-			cell, ok := cellFromCoordinate[coordinate]
-			if !ok {
-				return matrix, errCellNotFound
-			}
-
-			cells = append(cells, cell)
-		}
-
-		// Recover all cells.
-		allCellsForRow, err := cKzg4844.RecoverAllCells(cellIds, cells)
-		if err != nil {
-			return matrix, errors.Wrap(err, "recover all cells")
-		}
-
-		matrix = append(matrix, allCellsForRow[:]...)
 	}
 
-	return matrix, nil
+	return columnIndices, nil
 }
 
 // DataColumnSidecars computes the data column sidecars from the signed block and blobs.
