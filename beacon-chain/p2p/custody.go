@@ -1,13 +1,13 @@
 package p2p
 
 import (
-	ssz "github.com/ferranbt/fastssz"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
+
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/sirupsen/logrus"
 )
 
 func (s *Service) GetValidCustodyPeers(peers []peer.ID) ([]peer.ID, error) {
@@ -66,18 +66,16 @@ func (s *Service) CustodyCountFromRemotePeer(pid peer.ID) uint64 {
 	}
 
 	// Load the `custody_subnet_count`
-	custodyObj := CustodySubnetCount(make([]byte, 8))
-	if err := peerRecord.Load(&custodyObj); err != nil {
+	var csc CustodySubnetCount
+	if err := peerRecord.Load(&csc); err != nil {
 		log.WithField("peerID", pid).Error("Cannot load the custody_subnet_count from peer")
 		return peerCustodyCountCount
 	}
 
-	// Unmarshal the custody count from the peer's ENR.
-	peerCustodyCountFromRecord := ssz.UnmarshallUint64(custodyObj)
 	log.WithFields(logrus.Fields{
 		"peerID":       pid,
-		"custodyCount": peerCustodyCountFromRecord,
+		"custodyCount": csc,
 	}).Debug("Custody count read from peer's ENR")
 
-	return peerCustodyCountFromRecord
+	return uint64(csc)
 }

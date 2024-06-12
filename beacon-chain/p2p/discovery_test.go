@@ -20,6 +20,8 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/prysmaticlabs/go-bitfield"
+	logTest "github.com/sirupsen/logrus/hooks/test"
+
 	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers"
@@ -27,6 +29,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers/scorers"
 	testp2p "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
+	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/wrapper"
 	leakybucket "github.com/prysmaticlabs/prysm/v5/container/leaky-bucket"
@@ -37,7 +40,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
-	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
 var discoveryWaitTime = 1 * time.Second
@@ -131,6 +133,11 @@ func TestStartDiscV5_DiscoverAllPeers(t *testing.T) {
 }
 
 func TestCreateLocalNode(t *testing.T) {
+	resetFn := features.InitWithReset(&features.Flags{
+		EnablePeerDAS: true,
+	})
+	defer resetFn()
+
 	testCases := []struct {
 		name          string
 		cfg           *Config
@@ -227,6 +234,11 @@ func TestCreateLocalNode(t *testing.T) {
 			syncSubnets := new([]byte)
 			require.NoError(t, localNode.Node().Record().Load(enr.WithEntry(syncCommsSubnetEnrKey, syncSubnets)))
 			require.DeepSSZEqual(t, []byte{0}, *syncSubnets)
+
+			// Check custody_subnet_count config.
+			custodySubnetCount := new(uint64)
+			require.NoError(t, localNode.Node().Record().Load(enr.WithEntry(custodySubnetCountEnrKey, custodySubnetCount)))
+			require.Equal(t, uint64(1), *custodySubnetCount)
 		})
 	}
 }
