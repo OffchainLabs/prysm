@@ -9,14 +9,20 @@ import (
 	"testing"
 	"time"
 
+	cKzg4844 "github.com/ethereum/c-kzg-4844/bindings/go"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/prysmaticlabs/go-bitfield"
+	"google.golang.org/protobuf/proto"
+
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/kzg"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers/scorers"
 	p2ptest "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/wrapper"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
@@ -24,7 +30,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"github.com/prysmaticlabs/prysm/v5/testing/util"
-	"google.golang.org/protobuf/proto"
 )
 
 func TestService_Broadcast(t *testing.T) {
@@ -517,5 +522,72 @@ func TestService_BroadcastBlob(t *testing.T) {
 
 	// Broadcast to peers and wait.
 	require.NoError(t, p.BroadcastBlob(ctx, subnet, blobSidecar))
+	require.Equal(t, false, util.WaitTimeout(&wg, 1*time.Second), "Failed to receive pubsub within 1s")
+}
+
+func TestService_BroadcastDataColumn(t *testing.T) {
+	require.NoError(t, kzg.Start())
+	p1 := p2ptest.NewTestP2P(t)
+	p2 := p2ptest.NewTestP2P(t)
+	p1.Connect(p2)
+	require.NotEqual(t, 0, len(p1.BHost.Network().Peers()), "No peers")
+
+	p := &Service{
+		host:                  p1.BHost,
+		pubsub:                p1.PubSub(),
+		joinedTopics:          map[string]*pubsub.Topic{},
+		cfg:                   &Config{},
+		genesisTime:           time.Now(),
+		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
+		subnetsLock:           make(map[uint64]*sync.RWMutex),
+		subnetsLockLock:       sync.Mutex{},
+		peers: peers.NewStatus(context.Background(), &peers.StatusConfig{
+			ScorerParams: &scorers.Config{},
+		}),
+	}
+
+	b, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlockElectra())
+	require.NoError(t, err)
+	blobs := make([]cKzg4844.Blob, fieldparams.MaxBlobsPerBlock)
+	sidecars, err := peerdas.DataColumnSidecars(b, blobs)
+	require.NoError(t, err)
+
+	sidecar := sidecars[0]
+	subnet := uint64(0)
+	topic := DataColumnSubnetTopicFormat
+	GossipTypeMapping[reflect.TypeOf(sidecar)] = topic
+	digest, err := p.currentForkDigest()
+	require.NoError(t, err)
+	topic = fmt.Sprintf(topic, digest, subnet)
+
+	// External peer subscribes to the topic.
+	topic += p.Encoding().ProtocolSuffix()
+	sub, err := p2.SubscribeToTopic(topic)
+	require.NoError(t, err)
+
+	time.Sleep(50 * time.Millisecond) // libp2p fails without this delay...
+
+	// Async listen for the pubsub, must be before the broadcast.
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func(tt *testing.T) {
+		defer wg.Done()
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		defer cancel()
+
+		msg, err := sub.Next(ctx)
+		require.NoError(t, err)
+
+		result := &ethpb.DataColumnSidecar{}
+		require.NoError(t, p.Encoding().DecodeGossip(msg.Data, result))
+		require.DeepEqual(t, result, sidecar)
+	}(t)
+
+	// Attempt to broadcast nil object should fail.
+	ctx := context.Background()
+	require.ErrorContains(t, "attempted to broadcast nil", p.BroadcastDataColumn(ctx, subnet, nil))
+
+	// Broadcast to peers and wait.
+	require.NoError(t, p.BroadcastDataColumn(ctx, subnet, sidecar))
 	require.Equal(t, false, util.WaitTimeout(&wg, 1*time.Second), "Failed to receive pubsub within 1s")
 }

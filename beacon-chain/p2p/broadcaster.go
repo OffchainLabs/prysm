@@ -369,7 +369,7 @@ func (s *Service) internalBroadcastDataColumn(
 	}
 
 	// Increase the number of successful broadcasts.
-	blobSidecarBroadcasts.Inc()
+	dataColumnSidecarBroadcasts.Inc()
 }
 
 // method to broadcast messages to other peers in our gossip mesh.

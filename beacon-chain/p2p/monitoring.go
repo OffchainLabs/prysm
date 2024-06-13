@@ -72,6 +72,10 @@ var (
 		Name: "p2p_blob_sidecar_committee_attempted_broadcasts",
 		Help: "The number of blob sidecar messages that were attempted to be broadcast.",
 	})
+	dataColumnSidecarBroadcasts = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "p2p_data_column_sidecar_broadcasts",
+		Help: "The number of data column sidecar messages that were broadcasted.",
+	})
 	dataColumnSidecarBroadcastAttempts = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "p2p_data_column_sidecar_attempted_broadcasts",
 		Help: "The number of data column sidecar messages that were attempted to be broadcast.",
