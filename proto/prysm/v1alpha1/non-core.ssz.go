@@ -611,6 +611,124 @@ func (b *BlobSidecarsByRangeRequest) HashTreeRootWith(hh *ssz.Hasher) (err error
 	return
 }
 
+// MarshalSSZ ssz marshals the DataColumnSidecarsByRangeRequest object
+func (d *DataColumnSidecarsByRangeRequest) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(d)
+}
+
+// MarshalSSZTo ssz marshals the DataColumnSidecarsByRangeRequest object to a target array
+func (d *DataColumnSidecarsByRangeRequest) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(20)
+
+	// Field (0) 'StartSlot'
+	dst = ssz.MarshalUint64(dst, uint64(d.StartSlot))
+
+	// Field (1) 'Count'
+	dst = ssz.MarshalUint64(dst, d.Count)
+
+	// Offset (2) 'Columns'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(d.Columns) * 8
+
+	// Field (2) 'Columns'
+	if size := len(d.Columns); size > 128 {
+		err = ssz.ErrListTooBigFn("--.Columns", size, 128)
+		return
+	}
+	for ii := 0; ii < len(d.Columns); ii++ {
+		dst = ssz.MarshalUint64(dst, d.Columns[ii])
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the DataColumnSidecarsByRangeRequest object
+func (d *DataColumnSidecarsByRangeRequest) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 20 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o2 uint64
+
+	// Field (0) 'StartSlot'
+	d.StartSlot = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
+
+	// Field (1) 'Count'
+	d.Count = ssz.UnmarshallUint64(buf[8:16])
+
+	// Offset (2) 'Columns'
+	if o2 = ssz.ReadOffset(buf[16:20]); o2 > size {
+		return ssz.ErrOffset
+	}
+
+	if o2 != 20 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Field (2) 'Columns'
+	{
+		buf = tail[o2:]
+		num, err := ssz.DivideInt2(len(buf), 8, 128)
+		if err != nil {
+			return err
+		}
+		d.Columns = ssz.ExtendUint64(d.Columns, num)
+		for ii := 0; ii < num; ii++ {
+			d.Columns[ii] = ssz.UnmarshallUint64(buf[ii*8 : (ii+1)*8])
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the DataColumnSidecarsByRangeRequest object
+func (d *DataColumnSidecarsByRangeRequest) SizeSSZ() (size int) {
+	size = 20
+
+	// Field (2) 'Columns'
+	size += len(d.Columns) * 8
+
+	return
+}
+
+// HashTreeRoot ssz hashes the DataColumnSidecarsByRangeRequest object
+func (d *DataColumnSidecarsByRangeRequest) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(d)
+}
+
+// HashTreeRootWith ssz hashes the DataColumnSidecarsByRangeRequest object with a hasher
+func (d *DataColumnSidecarsByRangeRequest) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'StartSlot'
+	hh.PutUint64(uint64(d.StartSlot))
+
+	// Field (1) 'Count'
+	hh.PutUint64(d.Count)
+
+	// Field (2) 'Columns'
+	{
+		if size := len(d.Columns); size > 128 {
+			err = ssz.ErrListTooBigFn("--.Columns", size, 128)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range d.Columns {
+			hh.AppendUint64(i)
+		}
+		hh.FillUpTo32()
+
+		numItems := uint64(len(d.Columns))
+		hh.MerkleizeWithMixin(subIndx, numItems, ssz.CalculateLimit(128, numItems, 8))
+	}
+
+	hh.Merkleize(indx)
+	return
+}
+
 // MarshalSSZ ssz marshals the DepositSnapshot object
 func (d *DepositSnapshot) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(d)

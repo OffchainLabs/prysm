@@ -8,6 +8,8 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
+
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/encoder"
@@ -21,7 +23,6 @@ import (
 	pb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
-	"github.com/sirupsen/logrus"
 )
 
 var errBlobChunkedReadFailure = errors.New("failed to read stream of chunk-encoded blobs")
@@ -214,7 +215,7 @@ func SendDataColumnSidecarByRoot(
 	p2pApi p2p.P2P,
 	pid peer.ID,
 	ctxMap ContextByteVersions,
-	req *p2ptypes.BlobSidecarsByRootReq,
+	req *p2ptypes.DataColumnSidecarsByRootReq,
 ) ([]blocks.RODataColumn, error) {
 	reqCount := uint64(len(*req))
 	maxRequestDataColumnSideCar := params.BeaconConfig().MaxRequestDataColumnSidecars
@@ -471,14 +472,14 @@ func blobValidatorFromRangeReq(req *pb.BlobSidecarsByRangeRequest) BlobResponseV
 	}
 }
 
-func dataColumnValidatorFromRootReq(req *p2ptypes.BlobSidecarsByRootReq) DataColumnResponseValidation {
+func dataColumnValidatorFromRootReq(req *p2ptypes.DataColumnSidecarsByRootReq) DataColumnResponseValidation {
 	columnIds := make(map[[32]byte]map[uint64]bool)
 	for _, sc := range *req {
 		blockRoot := bytesutil.ToBytes32(sc.BlockRoot)
 		if columnIds[blockRoot] == nil {
 			columnIds[blockRoot] = make(map[uint64]bool)
 		}
-		columnIds[blockRoot][sc.Index] = true
+		columnIds[blockRoot][sc.ColumnIndex] = true
 	}
 	return func(sc blocks.RODataColumn) error {
 		columnIndices := columnIds[sc.BlockRoot()]

@@ -10,6 +10,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
+
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
 	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
@@ -19,7 +21,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/crypto/rand"
 	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/sirupsen/logrus"
 )
 
 // reandomIntegers returns a map of `count` random integers in the range [0, max[.
@@ -124,11 +125,11 @@ func (s *Service) sampleDataColumnFromPeer(
 	peerRequestedColumnsList := sortedListFromMap(peerRequestedColumns)
 
 	// Get the data column identifiers to sample from this peer.
-	dataColumnIdentifiers := make(types.BlobSidecarsByRootReq, 0, len(peerRequestedColumns))
+	dataColumnIdentifiers := make(types.DataColumnSidecarsByRootReq, 0, len(peerRequestedColumns))
 	for index := range peerRequestedColumns {
-		dataColumnIdentifiers = append(dataColumnIdentifiers, &eth.BlobIdentifier{
-			BlockRoot: requestedRoot[:],
-			Index:     index,
+		dataColumnIdentifiers = append(dataColumnIdentifiers, &eth.DataColumnIdentifier{
+			BlockRoot:   requestedRoot[:],
+			ColumnIndex: index,
 		})
 	}
 

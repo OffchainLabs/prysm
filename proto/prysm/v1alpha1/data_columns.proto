@@ -34,3 +34,8 @@ message DataColumnSidecar {
   SignedBeaconBlockHeader signed_block_header = 5;
   repeated bytes kzg_commitments_inclusion_proof = 6  [(ethereum.eth.ext.ssz_size) = "kzg_commitments_inclusion_proof_depth.size,32"];
 }
+
+message DataColumnIdentifier {
+  bytes block_root = 1 [(ethereum.eth.ext.ssz_size) = "32"];
+  uint64 column_index = 2;
+}

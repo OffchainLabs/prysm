@@ -7,6 +7,7 @@ import (
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
+
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/execution"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
@@ -186,7 +187,7 @@ func (s *Service) sendAndSaveBlobSidecars(ctx context.Context, request types.Blo
 	return nil
 }
 
-func (s *Service) sendAndSaveDataColumnSidecars(ctx context.Context, request types.BlobSidecarsByRootReq, peerID peer.ID, block interfaces.ReadOnlySignedBeaconBlock) error {
+func (s *Service) sendAndSaveDataColumnSidecars(ctx context.Context, request types.DataColumnSidecarsByRootReq, peerID peer.ID, block interfaces.ReadOnlySignedBeaconBlock) error {
 	if len(request) == 0 {
 		return nil
 	}
@@ -236,7 +237,7 @@ func (s *Service) pendingBlobsRequestForBlock(root [32]byte, b interfaces.ReadOn
 	return blobIdentifiers, nil
 }
 
-func (s *Service) pendingDataColumnRequestForBlock(root [32]byte, b interfaces.ReadOnlySignedBeaconBlock) (types.BlobSidecarsByRootReq, error) {
+func (s *Service) pendingDataColumnRequestForBlock(root [32]byte, b interfaces.ReadOnlySignedBeaconBlock) (types.DataColumnSidecarsByRootReq, error) {
 	if b.Version() < version.Deneb {
 		return nil, nil // Block before deneb has no blob.
 	}
@@ -263,7 +264,7 @@ func (s *Service) constructPendingBlobsRequest(root [32]byte, commitments int) (
 	return requestsForMissingIndices(stored, commitments, root), nil
 }
 
-func (s *Service) constructPendingColumnRequest(root [32]byte) (types.BlobSidecarsByRootReq, error) {
+func (s *Service) constructPendingColumnRequest(root [32]byte) (types.DataColumnSidecarsByRootReq, error) {
 	// Retrieve the storedColumns columns for the current root.
 	storedColumns, err := s.cfg.blobStorage.ColumnIndices(root)
 	if err != nil {
@@ -283,11 +284,14 @@ func (s *Service) constructPendingColumnRequest(root [32]byte) (types.BlobSideca
 	}
 
 	// Build the request for the missing columns.
-	req := make(types.BlobSidecarsByRootReq, 0, len(custodiedColumns))
+	req := make(types.DataColumnSidecarsByRootReq, 0, len(custodiedColumns))
 	for column := range custodiedColumns {
 		isColumnStored := storedColumns[column]
 		if !isColumnStored {
-			req = append(req, &eth.BlobIdentifier{Index: column, BlockRoot: root[:]})
+			req = append(req, &eth.DataColumnIdentifier{
+				BlockRoot:   root[:],
+				ColumnIndex: column,
+			})
 		}
 	}
 

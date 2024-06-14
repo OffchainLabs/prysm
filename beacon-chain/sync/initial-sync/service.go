@@ -11,6 +11,8 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/paulbellamy/ratecounter"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
+
 	"github.com/prysmaticlabs/prysm/v5/async/abool"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
 	blockfeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/block"
@@ -35,7 +37,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	prysmTime "github.com/prysmaticlabs/prysm/v5/time"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
-	"github.com/sirupsen/logrus"
 )
 
 var _ runtime.Service = (*Service)(nil)
@@ -316,7 +317,7 @@ func missingBlobRequest(blk blocks.ROBlock, store *filesystem.BlobStorage) (p2pt
 	return req, nil
 }
 
-func (s *Service) missingColumnRequest(roBlock blocks.ROBlock, store *filesystem.BlobStorage) (p2ptypes.BlobSidecarsByRootReq, error) {
+func (s *Service) missingColumnRequest(roBlock blocks.ROBlock, store *filesystem.BlobStorage) (p2ptypes.DataColumnSidecarsByRootReq, error) {
 	// No columns for pre-Deneb blocks.
 	if roBlock.Version() < version.Deneb {
 		return nil, nil
@@ -358,11 +359,14 @@ func (s *Service) missingColumnRequest(roBlock blocks.ROBlock, store *filesystem
 	}
 
 	// Build blob sidecars by root requests based on missing columns.
-	req := make(p2ptypes.BlobSidecarsByRootReq, 0, len(commitments))
+	req := make(p2ptypes.DataColumnSidecarsByRootReq, 0, len(commitments))
 	for columnIndex := range custodiedColumns {
 		isColumnAvailable := storedColumns[columnIndex]
 		if !isColumnAvailable {
-			req = append(req, &eth.BlobIdentifier{BlockRoot: blockRoot[:], Index: columnIndex})
+			req = append(req, &eth.DataColumnIdentifier{
+				BlockRoot:   blockRoot[:],
+				ColumnIndex: columnIndex,
+			})
 		}
 	}
 

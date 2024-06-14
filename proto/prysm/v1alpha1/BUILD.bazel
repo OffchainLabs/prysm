@@ -142,6 +142,7 @@ ssz_deneb_objs = [
     "LightClientHeaderDeneb",
     "LightClientOptimisticUpdateDeneb",
     "LightClientUpdateDeneb",
+    "DataColumnIdentifier",
     "DataColumnSidecar",
     "SignedBeaconBlockContentsDeneb",
     "SignedBeaconBlockDeneb",
