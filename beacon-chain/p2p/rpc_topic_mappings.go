@@ -116,7 +116,7 @@ var RPCTopicMappings = map[string]interface{}{
 	// DataColumnSidecarsByRange v1 Message
 	RPCDataColumnSidecarsByRangeTopicV1: new(pb.DataColumnSidecarsByRangeRequest),
 	// DataColumnSidecarsByRoot v1 Message
-	RPCDataColumnSidecarsByRootTopicV1: new(p2ptypes.BlobSidecarsByRootReq),
+	RPCDataColumnSidecarsByRootTopicV1: new(p2ptypes.DataColumnSidecarsByRootReq),
 }
 
 // Maps all registered protocol prefixes.

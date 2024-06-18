@@ -37,9 +37,9 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 
 	// We use the same type as for blobs as they are the same data structure.
 	// TODO: Make the type naming more generic to be extensible to data columns
-	ref, ok := msg.(*types.BlobSidecarsByRootReq)
+	ref, ok := msg.(*types.DataColumnSidecarsByRootReq)
 	if !ok {
-		return errors.New("message is not type BlobSidecarsByRootReq")
+		return errors.New("message is not type DataColumnSidecarsByRootReq")
 	}
 
 	requestedColumnIdents := *ref
@@ -54,7 +54,7 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 
 	requestedColumnsList := make([]uint64, 0, len(requestedColumnIdents))
 	for _, ident := range requestedColumnIdents {
-		requestedColumnsList = append(requestedColumnsList, ident.Index)
+		requestedColumnsList = append(requestedColumnsList, ident.ColumnIndex)
 	}
 
 	// TODO: Customize data column batches too
@@ -127,7 +127,7 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 		}
 
 		s.rateLimiter.add(stream, 1)
-		requestedRoot, requestedIndex := bytesutil.ToBytes32(requestedColumnIdents[i].BlockRoot), requestedColumnIdents[i].Index
+		requestedRoot, requestedIndex := bytesutil.ToBytes32(requestedColumnIdents[i].BlockRoot), requestedColumnIdents[i].ColumnIndex
 
 		// Decrease the peer's score if it requests a column that is not custodied.
 		isCustodied := custodiedColumns[requestedIndex]
@@ -207,7 +207,7 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 	return nil
 }
 
-func validateDataColummnsByRootRequest(colIdents types.BlobSidecarsByRootReq) error {
+func validateDataColummnsByRootRequest(colIdents types.DataColumnSidecarsByRootReq) error {
 	if uint64(len(colIdents)) > params.BeaconConfig().MaxRequestDataColumnSidecars {
 		return types.ErrMaxDataColumnReqExceeded
 	}
