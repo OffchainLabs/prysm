@@ -15,7 +15,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
 	forkchoicetypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/types"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
@@ -649,12 +648,8 @@ func (s *Service) isDataAvailableDataColumns(ctx context.Context, root [32]byte,
 	if len(kzgCommitments) == 0 {
 		return nil
 	}
-	custodiedSubnetCount := params.BeaconConfig().CustodyRequirement
-	if flags.Get().SubscribeToAllSubnets {
-		custodiedSubnetCount = params.BeaconConfig().DataColumnSidecarSubnetCount
-	}
 
-	colMap, err := peerdas.CustodyColumns(s.cfg.P2P.NodeID(), custodiedSubnetCount)
+	colMap, err := peerdas.CustodyColumns(s.cfg.P2P.NodeID(), peerdas.CustodySubnetCount())
 	if err != nil {
 		return err
 	}

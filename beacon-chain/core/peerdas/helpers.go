@@ -8,6 +8,8 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/holiman/uint256"
 	errors "github.com/pkg/errors"
+
+	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
@@ -299,4 +301,13 @@ func VerifyDataColumnSidecarKZGProofs(sc *ethpb.DataColumnSidecar) (bool, error)
 		proofs = append(proofs, cKzg4844.Bytes48(p))
 	}
 	return cKzg4844.VerifyCellKZGProofBatch(ckzgComms, rowIdx, colIdx, cells, proofs)
+}
+
+// CustodySubnetCount returns the number of subnets the node should participate in for custody.
+func CustodySubnetCount() uint64 {
+	count := params.BeaconConfig().CustodyRequirement
+	if flags.Get().SubscribeToAllSubnets {
+		count = params.BeaconConfig().DataColumnSidecarSubnetCount
+	}
+	return count
 }

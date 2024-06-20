@@ -8,14 +8,14 @@ import (
 
 	cKzg4844 "github.com/ethereum/c-kzg-4844/bindings/go"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
+
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
-	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
-	"github.com/sirupsen/logrus"
 )
 
 const broadCastMissingDataColumnsTimeIntoSlot = 3 * time.Second
@@ -111,12 +111,7 @@ func (s *Service) reconstructDataColumns(ctx context.Context, verifiedRODataColu
 	}
 
 	// Retrieve the custodied columns.
-	custodiedSubnetCount := params.BeaconConfig().CustodyRequirement
-	if flags.Get().SubscribeToAllSubnets {
-		custodiedSubnetCount = params.BeaconConfig().DataColumnSidecarSubnetCount
-	}
-
-	custodiedColumns, err := peerdas.CustodyColumns(s.cfg.p2p.NodeID(), custodiedSubnetCount)
+	custodiedColumns, err := peerdas.CustodyColumns(s.cfg.p2p.NodeID(), peerdas.CustodySubnetCount())
 	if err != nil {
 		return errors.Wrap(err, "custodied columns")
 	}
@@ -210,12 +205,7 @@ func (s *Service) scheduleReconstructedDataColumnsBroadcast(
 		}
 
 		// Get the data columns we should store.
-		custodiedSubnetCount := params.BeaconConfig().CustodyRequirement
-		if flags.Get().SubscribeToAllSubnets {
-			custodiedSubnetCount = params.BeaconConfig().DataColumnSidecarSubnetCount
-		}
-
-		custodiedDataColumns, err := peerdas.CustodyColumns(s.cfg.p2p.NodeID(), custodiedSubnetCount)
+		custodiedDataColumns, err := peerdas.CustodyColumns(s.cfg.p2p.NodeID(), peerdas.CustodySubnetCount())
 		if err != nil {
 			log.WithError(err).Error("Custody columns")
 		}

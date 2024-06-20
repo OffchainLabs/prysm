@@ -13,7 +13,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/verify"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
-	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
@@ -271,14 +270,8 @@ func (s *Service) constructPendingColumnRequest(root [32]byte) (types.DataColumn
 		return nil, errors.Wrap(err, "column indices")
 	}
 
-	// Compute how many subnets we should custody.
-	custodiedSubnetCount := params.BeaconConfig().CustodyRequirement
-	if flags.Get().SubscribeToAllSubnets {
-		custodiedSubnetCount = params.BeaconConfig().DataColumnSidecarSubnetCount
-	}
-
 	// Retrieve the columns we should custody.
-	custodiedColumns, err := peerdas.CustodyColumns(s.cfg.p2p.NodeID(), custodiedSubnetCount)
+	custodiedColumns, err := peerdas.CustodyColumns(s.cfg.p2p.NodeID(), peerdas.CustodySubnetCount())
 	if err != nil {
 		return nil, errors.Wrap(err, "custody columns")
 	}

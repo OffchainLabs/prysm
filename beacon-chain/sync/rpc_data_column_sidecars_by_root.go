@@ -71,14 +71,8 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 		return errors.Wrapf(err, "unexpected error computing min valid blob request slot, current_slot=%d", cs)
 	}
 
-	// Compute all custodied subnets.
-	custodiedSubnets := params.BeaconConfig().CustodyRequirement
-	if flags.Get().SubscribeToAllSubnets {
-		custodiedSubnets = params.BeaconConfig().DataColumnSidecarSubnetCount
-	}
-
 	// Compute all custodied columns.
-	custodiedColumns, err := peerdas.CustodyColumns(s.cfg.p2p.NodeID(), custodiedSubnets)
+	custodiedColumns, err := peerdas.CustodyColumns(s.cfg.p2p.NodeID(), peerdas.CustodySubnetCount())
 	if err != nil {
 		log.WithError(err).Errorf("unexpected error retrieving the node id")
 		s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)

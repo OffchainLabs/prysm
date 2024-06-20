@@ -6,16 +6,11 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
-	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 )
 
 func (s *Service) GetValidCustodyPeers(peers []peer.ID) ([]peer.ID, error) {
-	custodiedSubnetCount := params.BeaconConfig().CustodyRequirement
-	if flags.Get().SubscribeToAllSubnets {
-		custodiedSubnetCount = params.BeaconConfig().DataColumnSidecarSubnetCount
-	}
-	custodiedColumns, err := peerdas.CustodyColumns(s.NodeID(), custodiedSubnetCount)
+	custodiedColumns, err := peerdas.CustodyColumns(s.NodeID(), peerdas.CustodySubnetCount())
 	if err != nil {
 		return nil, err
 	}

@@ -28,7 +28,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
 	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/crypto/rand"
@@ -343,17 +342,11 @@ func (s *Service) missingColumnRequest(roBlock blocks.ROBlock, store *filesystem
 		return nil, errors.Wrapf(err, "error checking existing blobs for checkpoint sync block root %#x", blockRoot)
 	}
 
-	// Get the number of columns we should custody.
-	custodyRequirement := params.BeaconConfig().CustodyRequirement
-	if features.Get().EnablePeerDAS {
-		custodyRequirement = fieldparams.NumberOfColumns
-	}
-
 	// Get our node ID.
 	nodeID := s.cfg.P2P.NodeID()
 
 	// Get the custodied columns.
-	custodiedColumns, err := peerdas.CustodyColumns(nodeID, custodyRequirement)
+	custodiedColumns, err := peerdas.CustodyColumns(nodeID, peerdas.CustodySubnetCount())
 	if err != nil {
 		return nil, errors.Wrap(err, "custody columns")
 	}

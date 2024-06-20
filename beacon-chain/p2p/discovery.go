@@ -17,6 +17,7 @@ import (
 	"github.com/prysmaticlabs/go-bitfield"
 
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
@@ -384,11 +385,7 @@ func (s *Service) createLocalNode(
 	}
 
 	if features.Get().EnablePeerDAS {
-		custodySubnetEntry := CustodySubnetCount(params.BeaconConfig().CustodyRequirement)
-		if flags.Get().SubscribeToAllSubnets {
-			custodySubnetEntry = CustodySubnetCount(params.BeaconConfig().DataColumnSidecarSubnetCount)
-		}
-		localNode.Set(custodySubnetEntry)
+		localNode.Set(CustodySubnetCount(peerdas.CustodySubnetCount()))
 	}
 
 	localNode.SetFallbackIP(ipAddr)
