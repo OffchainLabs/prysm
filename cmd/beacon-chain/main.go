@@ -12,6 +12,9 @@ import (
 	golog "github.com/ipfs/go-log/v2"
 	joonix "github.com/joonix/log"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
+	"github.com/urfave/cli/v2"
+
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/builder"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/node"
 	"github.com/prysmaticlabs/prysm/v5/cmd"
@@ -35,8 +38,6 @@ import (
 	_ "github.com/prysmaticlabs/prysm/v5/runtime/maxprocs"
 	"github.com/prysmaticlabs/prysm/v5/runtime/tos"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/sirupsen/logrus"
-	"github.com/urfave/cli/v2"
 )
 
 var appFlags = []cli.Flag{
@@ -59,6 +60,8 @@ var appFlags = []cli.Flag{
 	flags.BlockBatchLimitBurstFactor,
 	flags.BlobBatchLimit,
 	flags.BlobBatchLimitBurstFactor,
+	flags.DataColumnBatchLimit,
+	flags.DataColumnBatchLimitBurstFactor,
 	flags.InteropMockEth1DataVotesFlag,
 	flags.InteropNumValidatorsFlag,
 	flags.InteropGenesisTimeFlag,

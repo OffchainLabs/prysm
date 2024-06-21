@@ -7,13 +7,14 @@ import (
 
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
+	"github.com/trailofbits/go-mutexasserts"
+
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
 	p2ptypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
 	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	leakybucket "github.com/prysmaticlabs/prysm/v5/container/leaky-bucket"
-	"github.com/sirupsen/logrus"
-	"github.com/trailofbits/go-mutexasserts"
 )
 
 const defaultBurstLimit = 5
@@ -43,9 +44,13 @@ func newRateLimiter(p2pProvider p2p.P2P) *limiter {
 	allowedBlocksPerSecond := float64(flags.Get().BlockBatchLimit)
 	allowedBlocksBurst := int64(flags.Get().BlockBatchLimitBurstFactor * flags.Get().BlockBatchLimit)
 
+	// Initialize blob limits.
+	allowedBlobsPerSecond := float64(flags.Get().BlobBatchLimit)
+	allowedBlobsBurst := int64(flags.Get().BlobBatchLimitBurstFactor * flags.Get().BlobBatchLimit)
+
 	// Initialize data column limits.
-	allowedDataColumnsPerSecond := float64(flags.Get().BlobBatchLimit * int(params.BeaconConfig().CustodyRequirement))
-	allowedDataColumnsBurst := int64(flags.Get().BlobBatchLimitBurstFactor * flags.Get().BlobBatchLimit * int(params.BeaconConfig().CustodyRequirement))
+	allowedDataColumnsPerSecond := float64(flags.Get().DataColumnBatchLimit * int(params.BeaconConfig().CustodyRequirement))
+	allowedDataColumnsBurst := int64(flags.Get().DataColumnBatchLimitBurstFactor * flags.Get().BlobBatchLimit * int(params.BeaconConfig().CustodyRequirement))
 
 	// Set topic map for all rpc topics.
 	topicMap := make(map[string]*leakybucket.Collector, len(p2p.RPCTopicMappings))
@@ -65,7 +70,8 @@ func newRateLimiter(p2pProvider p2p.P2P) *limiter {
 	blockCollectorV2 := leakybucket.NewCollector(allowedBlocksPerSecond, allowedBlocksBurst, blockBucketPeriod, false /* deleteEmptyBuckets */)
 
 	// for BlobSidecarsByRoot and BlobSidecarsByRange
-	blobCollector := leakybucket.NewCollector(allowedDataColumnsPerSecond, allowedDataColumnsBurst, blockBucketPeriod, false)
+	blobCollector := leakybucket.NewCollector(allowedBlobsPerSecond, allowedBlobsBurst, blockBucketPeriod, false)
+
 	// for DataColumnSidecarsByRoot and DataColumnSidecarsByRange
 	columnCollector := leakybucket.NewCollector(allowedDataColumnsPerSecond, allowedDataColumnsBurst, blockBucketPeriod, false)
 

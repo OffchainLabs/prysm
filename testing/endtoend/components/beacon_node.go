@@ -14,6 +14,7 @@ import (
 
 	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/pkg/errors"
+
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	cmdshared "github.com/prysmaticlabs/prysm/v5/cmd"
 	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
@@ -270,6 +271,8 @@ func (node *BeaconNode) Start(ctx context.Context) error {
 		fmt.Sprintf("--%s=%d", flags.BlockBatchLimitBurstFactor.Name, 8),
 		fmt.Sprintf("--%s=%d", flags.BlobBatchLimitBurstFactor.Name, 16),
 		fmt.Sprintf("--%s=%d", flags.BlobBatchLimit.Name, 256),
+		fmt.Sprintf("--%s=%d", flags.DataColumnBatchLimit.Name, 128),
+		fmt.Sprintf("--%s=%d", flags.DataColumnBatchLimitBurstFactor.Name, 2),
 		fmt.Sprintf("--%s=%s", cmdshared.ChainConfigFileFlag.Name, cfgPath),
 		"--" + cmdshared.ValidatorMonitorIndicesFlag.Name + "=1",
 		"--" + cmdshared.ValidatorMonitorIndicesFlag.Name + "=2",

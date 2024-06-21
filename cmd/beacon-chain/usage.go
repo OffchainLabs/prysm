@@ -5,6 +5,8 @@ import (
 	"io"
 	"sort"
 
+	"github.com/urfave/cli/v2"
+
 	"github.com/prysmaticlabs/prysm/v5/cmd"
 	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
 	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/storage"
@@ -13,7 +15,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/sync/genesis"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/prysmaticlabs/prysm/v5/runtime/debug"
-	"github.com/urfave/cli/v2"
 )
 
 var appHelpTemplate = `NAME:
@@ -115,6 +116,8 @@ var appHelpFlagGroups = []flagGroup{
 			flags.BlockBatchLimitBurstFactor,
 			flags.BlobBatchLimit,
 			flags.BlobBatchLimitBurstFactor,
+			flags.DataColumnBatchLimit,
+			flags.DataColumnBatchLimitBurstFactor,
 			flags.DisableDebugRPCEndpoints,
 			flags.SubscribeToAllSubnets,
 			flags.HistoricalSlasherNode,

@@ -57,8 +57,7 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 		requestedColumnsList = append(requestedColumnsList, ident.ColumnIndex)
 	}
 
-	// TODO: Customize data column batches too
-	batchSize := flags.Get().BlobBatchLimit
+	batchSize := flags.Get().DataColumnBatchLimit
 	var ticker *time.Ticker
 	if len(requestedColumnIdents) > batchSize {
 		ticker = time.NewTicker(time.Second)
