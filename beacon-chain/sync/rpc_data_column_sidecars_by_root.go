@@ -43,7 +43,7 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 	}
 
 	requestedColumnIdents := *ref
-	if err := validateDataColummnsByRootRequest(requestedColumnIdents); err != nil {
+	if err := validateDataColumnsByRootRequest(requestedColumnIdents); err != nil {
 		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(stream.Conn().RemotePeer())
 		s.writeErrorResponseToStream(responseCodeInvalidRequest, err.Error(), stream)
 		return errors.Wrap(err, "validate data columns by root request")
@@ -200,7 +200,7 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 	return nil
 }
 
-func validateDataColummnsByRootRequest(colIdents types.DataColumnSidecarsByRootReq) error {
+func validateDataColumnsByRootRequest(colIdents types.DataColumnSidecarsByRootReq) error {
 	if uint64(len(colIdents)) > params.BeaconConfig().MaxRequestDataColumnSidecars {
 		return types.ErrMaxDataColumnReqExceeded
 	}

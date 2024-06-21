@@ -49,15 +49,9 @@ const (
 	udp6
 )
 
-const (
-	quickProtocolEnrKey      = "quic"
-	custodySubnetCountEnrKey = "csc"
-)
+const quickProtocolEnrKey = "quic"
 
-type (
-	quicProtocol       uint16
-	CustodySubnetCount uint64
-)
+type quicProtocol uint16
 
 // quicProtocol is the "quic" key, which holds the QUIC port of the node.
 func (quicProtocol) ENRKey() string { return quickProtocolEnrKey }
@@ -142,9 +136,6 @@ func (l *listenerWrapper) RebootListener() error {
 	l.listener = newListener
 	return nil
 }
-
-// https://github.com/ethereum/consensus-specs/blob/dev/specs/_features/eip7594/p2p-interface.md#the-discovery-domain-discv5
-func (CustodySubnetCount) ENRKey() string { return custodySubnetCountEnrKey }
 
 // RefreshPersistentSubnets checks that we are tracking our local persistent subnets for a variety of gossip topics.
 // This routine checks for our attestation, sync committee and data column subnets and updates them if they have
@@ -385,7 +376,7 @@ func (s *Service) createLocalNode(
 	}
 
 	if features.Get().EnablePeerDAS {
-		localNode.Set(CustodySubnetCount(peerdas.CustodySubnetCount()))
+		localNode.Set(peerdas.Csc(peerdas.CustodySubnetCount()))
 	}
 
 	localNode.SetFallbackIP(ipAddr)

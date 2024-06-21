@@ -24,6 +24,7 @@ import (
 
 	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers/peerdata"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers/scorers"
@@ -237,7 +238,7 @@ func TestCreateLocalNode(t *testing.T) {
 
 			// Check custody_subnet_count config.
 			custodySubnetCount := new(uint64)
-			require.NoError(t, localNode.Node().Record().Load(enr.WithEntry(custodySubnetCountEnrKey, custodySubnetCount)))
+			require.NoError(t, localNode.Node().Record().Load(enr.WithEntry(peerdas.CustodySubnetCountEnrKey, custodySubnetCount)))
 			require.Equal(t, uint64(1), *custodySubnetCount)
 		})
 	}

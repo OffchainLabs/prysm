@@ -120,6 +120,7 @@ go_test(
         "addr_factory_test.go",
         "broadcaster_test.go",
         "connection_gater_test.go",
+        "custody_test.go",
         "dial_relay_node_test.go",
         "discovery_test.go",
         "fork_test.go",

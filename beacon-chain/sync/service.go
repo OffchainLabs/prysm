@@ -254,7 +254,7 @@ func (s *Service) Start() {
 
 	// Run data column sampling
 	if features.Get().EnablePeerDAS {
-		go s.dataColumnSampling(s.ctx)
+		go s.DataColumnSamplingRoutine(s.ctx)
 	}
 }
 
