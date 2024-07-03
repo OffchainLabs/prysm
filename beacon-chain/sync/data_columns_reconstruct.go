@@ -6,10 +6,10 @@ import (
 	"sort"
 	"time"
 
-	cKzg4844 "github.com/ethereum/c-kzg-4844/bindings/go"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/kzg"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
@@ -25,7 +25,7 @@ func recoverBlobs(
 	dataColumnSideCars []*ethpb.DataColumnSidecar,
 	columnsCount int,
 	blockRoot [fieldparams.RootLength]byte,
-) ([]cKzg4844.Blob, error) {
+) ([]kzg.Blob, error) {
 	if len(dataColumnSideCars) == 0 {
 		return nil, errors.New("no data column sidecars")
 	}
@@ -40,13 +40,13 @@ func recoverBlobs(
 		}
 	}
 
-	recoveredBlobs := make([]cKzg4844.Blob, 0, blobCount)
+	recoveredBlobs := make([]kzg.Blob, 0, blobCount)
 
 	for blobIndex := 0; blobIndex < blobCount; blobIndex++ {
 		start := time.Now()
 
 		cellsId := make([]uint64, 0, columnsCount)
-		cKzgCells := make([]cKzg4844.Cell, 0, columnsCount)
+		cKzgCells := make([]kzg.Cell, 0, columnsCount)
 
 		for _, sidecar := range dataColumnSideCars {
 			// Build the cell ids.
@@ -57,8 +57,8 @@ func recoverBlobs(
 			cell := column[blobIndex]
 
 			// Transform the cell as a cKzg cell.
-			var ckzgCell cKzg4844.Cell
-			for i := 0; i < cKzg4844.FieldElementsPerCell; i++ {
+			var ckzgCell kzg.Cell
+			for i := 0; i < kzg.FieldElementsPerCell; i++ {
 				copy(ckzgCell[i][:], cell[32*i:32*(i+1)])
 			}
 
@@ -66,12 +66,12 @@ func recoverBlobs(
 		}
 
 		// Recover the blob.
-		recoveredCells, err := cKzg4844.RecoverAllCells(cellsId, cKzgCells)
+		recoveredCells, err := kzg.RecoverAllCells(cellsId, cKzgCells)
 		if err != nil {
 			return nil, errors.Wrapf(err, "recover all cells for blob %d", blobIndex)
 		}
 
-		recoveredBlob, err := cKzg4844.CellsToBlob(recoveredCells)
+		recoveredBlob, err := kzg.CellsToBlob(&recoveredCells)
 		if err != nil {
 			return nil, errors.Wrapf(err, "cells to blob for blob %d", blobIndex)
 		}

@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	cKzg4844 "github.com/ethereum/c-kzg-4844/bindings/go"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/prysmaticlabs/go-bitfield"
@@ -548,7 +547,7 @@ func TestService_BroadcastDataColumn(t *testing.T) {
 
 	b, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlockElectra())
 	require.NoError(t, err)
-	blobs := make([]cKzg4844.Blob, fieldparams.MaxBlobsPerBlock)
+	blobs := make([]kzg.Blob, fieldparams.MaxBlobsPerBlock)
 	sidecars, err := peerdas.DataColumnSidecars(b, blobs)
 	require.NoError(t, err)
 

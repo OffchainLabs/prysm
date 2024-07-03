@@ -9,7 +9,6 @@ import (
 
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
 	GoKZG "github.com/crate-crypto/go-kzg-4844"
-	ckzg4844 "github.com/ethereum/c-kzg-4844/bindings/go"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/kzg"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
@@ -41,8 +40,8 @@ func GetRandFieldElement(seed int64) [32]byte {
 }
 
 // Returns a random blob using the passed seed as entropy
-func GetRandBlob(seed int64) ckzg4844.Blob {
-	var blob ckzg4844.Blob
+func GetRandBlob(seed int64) kzg.Blob {
+	var blob kzg.Blob
 	bytesPerBlob := GoKZG.ScalarsPerBlob * GoKZG.SerializedScalarSize
 	for i := 0; i < bytesPerBlob; i += GoKZG.SerializedScalarSize {
 		fieldElementBytes := GetRandFieldElement(seed + int64(i))
@@ -51,14 +50,14 @@ func GetRandBlob(seed int64) ckzg4844.Blob {
 	return blob
 }
 
-func GenerateCommitmentAndProof(blob ckzg4844.Blob) (ckzg4844.KZGCommitment, ckzg4844.KZGProof, error) {
-	commitment, err := ckzg4844.BlobToKZGCommitment(&blob)
+func GenerateCommitmentAndProof(blob kzg.Blob) (kzg.Commitment, kzg.Proof, error) {
+	commitment, err := kzg.BlobToKZGCommitment(&blob)
 	if err != nil {
-		return ckzg4844.KZGCommitment{}, ckzg4844.KZGProof{}, err
+		return kzg.Commitment{}, kzg.Proof{}, err
 	}
-	proof, err := ckzg4844.ComputeBlobKZGProof(&blob, ckzg4844.Bytes48(commitment))
+	proof, err := kzg.ComputeBlobKZGProof(&blob, commitment)
 	if err != nil {
-		return ckzg4844.KZGCommitment{}, ckzg4844.KZGProof{}, err
+		return kzg.Commitment{}, kzg.Proof{}, err
 	}
 	return commitment, proof, err
 }
@@ -67,8 +66,10 @@ func TestVerifyDataColumnSidecarKZGProofs(t *testing.T) {
 	dbBlock := util.NewBeaconBlockDeneb()
 	require.NoError(t, kzg.Start())
 
-	comms := [][]byte{}
-	blobs := []ckzg4844.Blob{}
+	var (
+		comms [][]byte
+		blobs []kzg.Blob
+	)
 	for i := int64(0); i < 6; i++ {
 		blob := GetRandBlob(i)
 		commitment, _, err := GenerateCommitmentAndProof(blob)
