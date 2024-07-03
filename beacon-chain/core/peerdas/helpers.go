@@ -10,7 +10,8 @@ import (
 	"github.com/holiman/uint256"
 	errors "github.com/pkg/errors"
 
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/kzg"
+	kzg "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/kzg"
+
 	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
@@ -205,26 +206,13 @@ func DataColumnSidecarsForReconstruct(
 	blobKzgCommitments [][]byte,
 	signedBlockHeader *ethpb.SignedBeaconBlockHeader,
 	kzgCommitmentsInclusionProof [][]byte,
-	blobs []kzg.Blob,
+	cellsAndProofs []kzg.CellsAndProofs,
 ) ([]*ethpb.DataColumnSidecar, error) {
-	blobsCount := len(blobs)
+	// Each CellsAndProofs corresponds to a Blob
+	// So we can get the BlobCount by checking the length of CellsAndProofs
+	blobsCount := len(cellsAndProofs)
 	if blobsCount == 0 {
 		return nil, nil
-	}
-
-	// Compute cells and proofs.
-	cells := make([][kzg.CellsPerExtBlob]kzg.Cell, 0, blobsCount)
-	proofs := make([][kzg.CellsPerExtBlob]kzg.Proof, 0, blobsCount)
-
-	for i := range blobs {
-		blob := &blobs[i]
-		blobCells, blobProofs, err := kzg.ComputeCellsAndKZGProofs(blob)
-		if err != nil {
-			return nil, errors.Wrap(err, "compute cells and KZG proofs")
-		}
-
-		cells = append(cells, blobCells)
-		proofs = append(proofs, blobProofs)
 	}
 
 	// Get the column sidecars.
@@ -234,10 +222,13 @@ func DataColumnSidecarsForReconstruct(
 		kzgProofOfColumn := make([]kzg.Proof, 0, blobsCount)
 
 		for rowIndex := 0; rowIndex < blobsCount; rowIndex++ {
-			cell := cells[rowIndex][columnIndex]
+			cellsForRow := cellsAndProofs[rowIndex].Cells
+			proofsForRow := cellsAndProofs[rowIndex].Proofs
+
+			cell := cellsForRow[columnIndex]
 			column = append(column, cell)
 
-			kzgProof := proofs[rowIndex][columnIndex]
+			kzgProof := proofsForRow[columnIndex]
 			kzgProofOfColumn = append(kzgProofOfColumn, kzgProof)
 		}
 

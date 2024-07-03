@@ -42,6 +42,13 @@ const CellsPerExtBlob = ckzg4844.CellsPerExtBlob
 // TODO: Note that callers of this package rely on `BytesPerCell`
 type Cell ckzg4844.Cell
 
+// CellsAndProofs represents the Cells and Proofs corresponding to
+// a single blob.
+type CellsAndProofs struct {
+	Cells  [ckzg4844.CellsPerExtBlob]Cell
+	Proofs [ckzg4844.CellsPerExtBlob]Proof
+}
+
 func BlobToKZGCommitment(blob *Blob) (Commitment, error) {
 	comm, err := kzg4844.BlobToCommitment(kzg4844.Blob(*blob))
 	if err != nil {
