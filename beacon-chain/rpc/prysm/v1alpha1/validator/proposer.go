@@ -21,6 +21,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/operation"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
+	coreTime "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/kv"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
@@ -272,8 +273,6 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 		dataColumnSideCars []*ethpb.DataColumnSidecar
 	)
 
-	isPeerDASEnabled := features.Get().EnablePeerDAS
-
 	ctx, span := trace.StartSpan(ctx, "ProposerServer.ProposeBeaconBlock")
 	defer span.End()
 
@@ -285,6 +284,7 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "%s: %v", "decode block failed", err)
 	}
+	isPeerDASEnabled := coreTime.PeerDASIsActive(block.Block().Slot())
 
 	if block.IsBlinded() {
 		block, blobSidecars, dataColumnSideCars, err = vs.handleBlindedBlock(ctx, block, isPeerDASEnabled)

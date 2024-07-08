@@ -10,12 +10,12 @@ import (
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
+	coreTime "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
 	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
@@ -209,12 +209,12 @@ func validateDataColumnsByRootRequest(colIdents types.DataColumnSidecarsByRootRe
 
 func DataColumnsRPCMinValidSlot(current primitives.Slot) (primitives.Slot, error) {
 	// Avoid overflow if we're running on a config where deneb is set to far future epoch.
-	if params.BeaconConfig().DenebForkEpoch == math.MaxUint64 || !features.Get().EnablePeerDAS {
+	if params.BeaconConfig().DenebForkEpoch == math.MaxUint64 || !coreTime.PeerDASIsActive(current) {
 		return primitives.Slot(math.MaxUint64), nil
 	}
 	minReqEpochs := params.BeaconConfig().MinEpochsForDataColumnSidecarsRequest
 	currEpoch := slots.ToEpoch(current)
-	minStart := params.BeaconConfig().DenebForkEpoch
+	minStart := params.BeaconConfig().Eip7594ForkEpoch
 	if currEpoch > minReqEpochs && currEpoch-minReqEpochs > minStart {
 		minStart = currEpoch - minReqEpochs
 	}

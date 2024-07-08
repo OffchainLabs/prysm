@@ -166,6 +166,7 @@ type BeaconChainConfig struct {
 	DenebForkEpoch       primitives.Epoch `yaml:"DENEB_FORK_EPOCH" spec:"true"`       // DenebForkEpoch is used to represent the assigned fork epoch for deneb.
 	ElectraForkVersion   []byte           `yaml:"ELECTRA_FORK_VERSION" spec:"true"`   // ElectraForkVersion is used to represent the fork version for electra.
 	ElectraForkEpoch     primitives.Epoch `yaml:"ELECTRA_FORK_EPOCH" spec:"true"`     // ElectraForkEpoch is used to represent the assigned fork epoch for electra.
+	Eip7594ForkEpoch     primitives.Epoch `yaml:"EIP7594_FORK_EPOCH" spec:"true"`     // EIP7594ForkEpoch is used to represent the assigned fork epoch for peer das.
 
 	ForkVersionSchedule map[[fieldparams.VersionLength]byte]primitives.Epoch // Schedule of fork epochs by version.
 	ForkVersionNames    map[[fieldparams.VersionLength]byte]string           // Human-readable names of fork versions.
@@ -361,6 +362,12 @@ func (b *BeaconChainConfig) MaximumGossipClockDisparityDuration() time.Duration 
 // kind of check and remove them post-deneb.
 func DenebEnabled() bool {
 	return BeaconConfig().DenebForkEpoch < math.MaxUint64
+}
+
+// PeerDASEnabled centralizes the check to determine if code paths
+// that are specific to peerdas should be allowed to execute.
+func PeerDASEnabled() bool {
+	return BeaconConfig().Eip7594ForkEpoch < math.MaxUint64
 }
 
 // WithinDAPeriod checks if the block epoch is within MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUESTS of the given current epoch.

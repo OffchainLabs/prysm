@@ -12,8 +12,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/async"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
+	coreTime "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
 	p2ptypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
@@ -205,7 +205,8 @@ func (s *Service) processAndBroadcastBlock(ctx context.Context, b interfaces.Rea
 			return err
 		}
 	}
-	if features.Get().EnablePeerDAS {
+
+	if coreTime.PeerDASIsActive(b.Block().Slot()) {
 		request, err := s.pendingDataColumnRequestForBlock(blkRoot, b)
 		if err != nil {
 			return err

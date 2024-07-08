@@ -544,7 +544,7 @@ func missingDataColumns(bs *filesystem.BlobStorage, root [32]byte, expected map[
 // sidecars are missing, it will then read from the blobNotifier channel for the given root until the channel is
 // closed, the context hits cancellation/timeout, or notifications have been received for all the missing sidecars.
 func (s *Service) isDataAvailable(ctx context.Context, root [32]byte, signed interfaces.ReadOnlySignedBeaconBlock) error {
-	if features.Get().EnablePeerDAS {
+	if coreTime.PeerDASIsActive(signed.Block().Slot()) {
 		return s.isDataAvailableDataColumns(ctx, root, signed)
 	}
 	if signed.Version() < version.Deneb {

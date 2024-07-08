@@ -16,6 +16,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/altair"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
+	coreTime "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers"
 	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
@@ -137,7 +138,7 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 
 	// New Gossip Topic in Deneb
 	if epoch >= params.BeaconConfig().DenebForkEpoch {
-		if features.Get().EnablePeerDAS {
+		if coreTime.PeerDASIsActive(slots.UnsafeEpochStart(epoch)) {
 			if flags.Get().SubscribeToAllSubnets {
 				s.subscribeStaticWithSubnets(
 					p2p.DataColumnSubnetTopicFormat,

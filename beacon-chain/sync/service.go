@@ -36,7 +36,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/backfill/coverage"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
 	lruwrpr "github.com/prysmaticlabs/prysm/v5/cache/lru"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
@@ -253,7 +252,7 @@ func (s *Service) Start() {
 	async.RunEvery(s.ctx, syncMetricsInterval, s.updateMetrics)
 
 	// Run data column sampling
-	if features.Get().EnablePeerDAS {
+	if params.PeerDASEnabled() {
 		go s.DataColumnSamplingRoutine(s.ctx)
 	}
 }

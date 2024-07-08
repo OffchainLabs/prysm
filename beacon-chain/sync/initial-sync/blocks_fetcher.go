@@ -11,6 +11,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
+	coreTime "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
@@ -19,7 +20,6 @@ import (
 	prysmsync "github.com/prysmaticlabs/prysm/v5/beacon-chain/sync"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/verify"
 	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	blocks2 "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
@@ -318,7 +318,7 @@ func (f *blocksFetcher) handleRequest(ctx context.Context, start primitives.Slot
 
 	response.bwb, response.pid, response.err = f.fetchBlocksFromPeer(ctx, start, count, peers)
 	if response.err == nil {
-		if features.Get().EnablePeerDAS {
+		if coreTime.PeerDASIsActive(start) {
 			bwb, err := f.fetchColumnsFromPeer(ctx, response.bwb, response.pid, peers)
 			if err != nil {
 				response.err = err

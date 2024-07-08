@@ -375,7 +375,7 @@ func (s *Service) createLocalNode(
 		localNode.Set(quicEntry)
 	}
 
-	if features.Get().EnablePeerDAS {
+	if params.PeerDASEnabled() {
 		localNode.Set(peerdas.Csc(peerdas.CustodySubnetCount()))
 	}
 

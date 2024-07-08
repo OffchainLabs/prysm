@@ -9,11 +9,11 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
+	coreTime "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/execution"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/verify"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
@@ -58,7 +58,7 @@ func (s *Service) sendRecentBeaconBlocksRequest(ctx context.Context, requests *t
 		if err != nil {
 			return err
 		}
-		if features.Get().EnablePeerDAS {
+		if coreTime.PeerDASIsActive(blk.Block().Slot()) {
 			request, err := s.pendingDataColumnRequestForBlock(blkRoot, blk)
 			if err != nil {
 				return errors.Wrap(err, "pending data column request for block")

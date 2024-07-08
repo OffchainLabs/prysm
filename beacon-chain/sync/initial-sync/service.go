@@ -18,6 +18,7 @@ import (
 	blockfeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/block"
 	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
+	coreTime "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/das"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
@@ -27,7 +28,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
 	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/crypto/rand"
@@ -187,7 +187,7 @@ func (s *Service) Start() {
 		log.WithError(err).Error("Error waiting for minimum number of peers")
 		return
 	}
-	if features.Get().EnablePeerDAS {
+	if coreTime.PeerDASIsActive(s.cfg.Chain.HeadSlot()) {
 		if err := s.fetchOriginColumns(peers); err != nil {
 			log.WithError(err).Error("Failed to fetch missing columns for checkpoint origin")
 			return

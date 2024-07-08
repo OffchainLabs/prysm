@@ -30,7 +30,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers/scorers"
 	testp2p "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/wrapper"
 	leakybucket "github.com/prysmaticlabs/prysm/v5/container/leaky-bucket"
@@ -134,11 +133,10 @@ func TestStartDiscV5_DiscoverAllPeers(t *testing.T) {
 }
 
 func TestCreateLocalNode(t *testing.T) {
-	resetFn := features.InitWithReset(&features.Flags{
-		EnablePeerDAS: true,
-	})
-	defer resetFn()
-
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.Eip7594ForkEpoch = 1
+	params.OverrideBeaconConfig(cfg)
 	testCases := []struct {
 		name          string
 		cfg           *Config

@@ -14,7 +14,6 @@ import (
 	ssz "github.com/prysmaticlabs/fastssz"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
 	p2ptypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
@@ -100,17 +99,6 @@ func (s *Service) registerRPCHandlersAltair() {
 }
 
 func (s *Service) registerRPCHandlersDeneb() {
-	if features.Get().EnablePeerDAS {
-		s.registerRPC(
-			p2p.RPCDataColumnSidecarsByRootTopicV1,
-			s.dataColumnSidecarByRootRPCHandler,
-		)
-		s.registerRPC(
-			p2p.RPCDataColumnSidecarsByRangeTopicV1,
-			s.dataColumnSidecarsByRangeRPCHandler,
-		)
-		return
-	}
 	s.registerRPC(
 		p2p.RPCBlobSidecarsByRangeTopicV1,
 		s.blobSidecarsByRangeRPCHandler,
@@ -118,6 +106,17 @@ func (s *Service) registerRPCHandlersDeneb() {
 	s.registerRPC(
 		p2p.RPCBlobSidecarsByRootTopicV1,
 		s.blobSidecarByRootRPCHandler,
+	)
+}
+
+func (s *Service) registerRPCHandlersPeerDAS() {
+	s.registerRPC(
+		p2p.RPCDataColumnSidecarsByRootTopicV1,
+		s.dataColumnSidecarByRootRPCHandler,
+	)
+	s.registerRPC(
+		p2p.RPCDataColumnSidecarsByRangeTopicV1,
+		s.dataColumnSidecarsByRangeRPCHandler,
 	)
 }
 
@@ -131,6 +130,14 @@ func (s *Service) unregisterPhase0Handlers() {
 	s.cfg.p2p.Host().RemoveStreamHandler(protocol.ID(fullBlockRangeTopic))
 	s.cfg.p2p.Host().RemoveStreamHandler(protocol.ID(fullBlockRootTopic))
 	s.cfg.p2p.Host().RemoveStreamHandler(protocol.ID(fullMetadataTopic))
+}
+
+func (s *Service) unregisterBlobHandlers() {
+	fullBlobRangeTopic := p2p.RPCBlobSidecarsByRangeTopicV1 + s.cfg.p2p.Encoding().ProtocolSuffix()
+	fullBlobRootTopic := p2p.RPCBlobSidecarsByRootTopicV1 + s.cfg.p2p.Encoding().ProtocolSuffix()
+
+	s.cfg.p2p.Host().RemoveStreamHandler(protocol.ID(fullBlobRangeTopic))
+	s.cfg.p2p.Host().RemoveStreamHandler(protocol.ID(fullBlobRootTopic))
 }
 
 // registerRPC for a given topic with an expected protobuf message type.

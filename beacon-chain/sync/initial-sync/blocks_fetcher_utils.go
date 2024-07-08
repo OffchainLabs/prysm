@@ -6,9 +6,9 @@ import (
 
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
+	coreTime "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
 	p2pTypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
 	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
@@ -280,7 +280,7 @@ func (f *blocksFetcher) findForkWithPeer(ctx context.Context, pid peer.ID, slot 
 			return nil, errors.Wrap(err, "invalid blocks received in findForkWithPeer")
 		}
 		var bwb []blocks.BlockWithROBlobs
-		if features.Get().EnablePeerDAS {
+		if coreTime.PeerDASIsActive(block.Block().Slot()) {
 			bwb, err = f.fetchColumnsFromPeer(ctx, altBlocks, pid, []peer.ID{pid})
 			if err != nil {
 				return nil, errors.Wrap(err, "unable to retrieve blobs for blocks found in findForkWithPeer")
@@ -312,7 +312,7 @@ func (f *blocksFetcher) findAncestor(ctx context.Context, pid peer.ID, b interfa
 			if err != nil {
 				return nil, errors.Wrap(err, "received invalid blocks in findAncestor")
 			}
-			if features.Get().EnablePeerDAS {
+			if coreTime.PeerDASIsActive(b.Block().Slot()) {
 				bwb, err = f.fetchColumnsFromPeer(ctx, bwb, pid, []peer.ID{pid})
 				if err != nil {
 					return nil, errors.Wrap(err, "unable to retrieve columns for blocks found in findAncestor")

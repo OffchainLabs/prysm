@@ -216,6 +216,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	DenebForkEpoch:       mainnetDenebForkEpoch,
 	ElectraForkVersion:   []byte{5, 0, 0, 0},
 	ElectraForkEpoch:     mainnetElectraForkEpoch,
+	Eip7594ForkEpoch:     math.MaxUint64,
 
 	// New values introduced in Altair hard fork 1.
 	// Participation flag indices.

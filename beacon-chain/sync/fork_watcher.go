@@ -67,6 +67,11 @@ func (s *Service) registerForUpcomingFork(currEpoch primitives.Epoch) error {
 			s.registerRPCHandlersDeneb()
 		}
 	}
+	// Specially handle peerDAS
+	if params.PeerDASEnabled() && currEpoch+1 == params.BeaconConfig().Eip7594ForkEpoch {
+		s.registerRPCHandlersPeerDAS()
+	}
+
 	return nil
 }
 
@@ -120,6 +125,10 @@ func (s *Service) deregisterFromPastFork(currEpoch primitives.Epoch) error {
 				s.unSubscribeFromTopic(t)
 			}
 		}
+	}
+	// Handle PeerDAS as its a special case.
+	if params.PeerDASEnabled() && currEpoch > 0 && (currEpoch-1) == params.BeaconConfig().Eip7594ForkEpoch {
+		s.unregisterBlobHandlers()
 	}
 	return nil
 }

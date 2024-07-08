@@ -7,6 +7,7 @@ import (
 
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
+	coreTime "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
 	"github.com/sirupsen/logrus"
 
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
@@ -354,6 +355,10 @@ func (s *Service) DataColumnSamplingRoutine(ctx context.Context) {
 
 			if data.SignedBlock.Version() < version.Deneb {
 				log.Debug("Pre Deneb block, skipping data column sampling")
+				continue
+			}
+			if coreTime.PeerDASIsActive(data.Slot) {
+				// We do not trigger sampling if peerDAS is not active yet.
 				continue
 			}
 

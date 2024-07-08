@@ -9,12 +9,12 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/paulbellamy/ratecounter"
 	"github.com/pkg/errors"
+	coreTime "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/das"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
@@ -173,7 +173,7 @@ func (s *Service) processFetchedDataRegSync(
 	if len(bwb) == 0 {
 		return
 	}
-	if features.Get().EnablePeerDAS {
+	if coreTime.PeerDASIsActive(startSlot) {
 		avs := das.NewLazilyPersistentStoreColumn(s.cfg.BlobStorage, emptyVerifier{}, s.cfg.P2P.NodeID())
 		batchFields := logrus.Fields{
 			"firstSlot":        data.bwb[0].Block.Block().Slot(),
@@ -357,7 +357,7 @@ func (s *Service) processBatchedBlocks(ctx context.Context, genesis time.Time,
 			errParentDoesNotExist, first.Block().ParentRoot(), first.Block().Slot())
 	}
 	var aStore das.AvailabilityStore
-	if features.Get().EnablePeerDAS {
+	if coreTime.PeerDASIsActive(first.Block().Slot()) {
 		avs := das.NewLazilyPersistentStoreColumn(s.cfg.BlobStorage, emptyVerifier{}, s.cfg.P2P.NodeID())
 		s.logBatchSyncStatus(genesis, first, len(bwb))
 		for _, bb := range bwb {
