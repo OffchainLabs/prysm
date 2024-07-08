@@ -94,7 +94,7 @@ func (s *Service) CustodyCountFromRemotePeer(pid peer.ID) uint64 {
 		log.WithError(err).WithFields(logrus.Fields{
 			"peerID":       pid,
 			"defaultValue": custodyRequirement,
-		}).Error("Failed to retrieve custody count from ENR for peer, defaulting to the default value")
+		}).Debug("Failed to retrieve custody count from ENR for peer, defaulting to the default value")
 
 		return custodyRequirement
 	}
