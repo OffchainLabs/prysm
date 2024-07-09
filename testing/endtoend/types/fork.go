@@ -24,9 +24,11 @@ func InitForkCfg(start, end int, c *params.BeaconChainConfig) *params.BeaconChai
 	}
 	if start >= version.Deneb {
 		c.DenebForkEpoch = 0
+		c.Eip7594ForkEpoch = 0
 	}
 	if end < version.Deneb {
 		c.DenebForkEpoch = math.MaxUint64
+		c.Eip7594ForkEpoch = math.MaxUint64
 	}
 	if end < version.Capella {
 		c.CapellaForkEpoch = math.MaxUint64

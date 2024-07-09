@@ -50,7 +50,7 @@ func newRateLimiter(p2pProvider p2p.P2P) *limiter {
 
 	// Initialize data column limits.
 	allowedDataColumnsPerSecond := float64(flags.Get().DataColumnBatchLimit * int(params.BeaconConfig().CustodyRequirement))
-	allowedDataColumnsBurst := int64(flags.Get().DataColumnBatchLimitBurstFactor * flags.Get().BlobBatchLimit * int(params.BeaconConfig().CustodyRequirement))
+	allowedDataColumnsBurst := int64(flags.Get().DataColumnBatchLimitBurstFactor * flags.Get().DataColumnBatchLimit * int(params.BeaconConfig().CustodyRequirement))
 
 	// Set topic map for all rpc topics.
 	topicMap := make(map[string]*leakybucket.Collector, len(p2p.RPCTopicMappings))

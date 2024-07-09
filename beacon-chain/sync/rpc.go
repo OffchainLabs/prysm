@@ -12,6 +12,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
+	coreTime "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
 	p2ptypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
@@ -51,7 +52,9 @@ func (s *Service) registerRPCHandlers() {
 			s.pingHandler,
 		)
 		s.registerRPCHandlersAltair()
-		if currEpoch >= params.BeaconConfig().DenebForkEpoch {
+		if coreTime.PeerDASIsActive(slots.UnsafeEpochStart(currEpoch)) {
+			s.registerRPCHandlersPeerDAS()
+		} else if currEpoch >= params.BeaconConfig().DenebForkEpoch {
 			s.registerRPCHandlersDeneb()
 		}
 		return

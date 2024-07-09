@@ -44,7 +44,7 @@ func E2ETestConfig() *BeaconChainConfig {
 	e2eConfig.CapellaForkEpoch = CapellaE2EForkEpoch
 	e2eConfig.DenebForkEpoch = DenebE2EForkEpoch
 	e2eConfig.ElectraForkEpoch = ElectraE2EForkEpoch
-	e2eConfig.Eip7594ForkEpoch = ElectraE2EForkEpoch
+	e2eConfig.Eip7594ForkEpoch = DenebE2EForkEpoch
 
 	// Terminal Total Difficulty.
 	e2eConfig.TerminalTotalDifficulty = "480"
@@ -89,7 +89,7 @@ func E2EMainnetTestConfig() *BeaconChainConfig {
 	e2eConfig.CapellaForkEpoch = CapellaE2EForkEpoch
 	e2eConfig.DenebForkEpoch = DenebE2EForkEpoch
 	e2eConfig.ElectraForkEpoch = ElectraE2EForkEpoch
-	e2eConfig.Eip7594ForkEpoch = ElectraE2EForkEpoch
+	e2eConfig.Eip7594ForkEpoch = DenebE2EForkEpoch
 
 	// Terminal Total Difficulty.
 	e2eConfig.TerminalTotalDifficulty = "480"

@@ -209,7 +209,7 @@ var (
 		Name:  "data-column-batch-limit",
 		Usage: "The amount of data columns the local peer is bounded to request and respond to in a batch.",
 		// TODO: determine a good default value for this flag.
-		Value: 128,
+		Value: 4096,
 	}
 	// DataColumnBatchLimitBurstFactor specifies the factor by which data column batch size may increase.
 	DataColumnBatchLimitBurstFactor = &cli.IntFlag{
