@@ -17,6 +17,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/crypto/rand"
 	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
@@ -77,8 +78,78 @@ func (s *Service) custodyColumnsFromPeer(pid peer.ID) (map[uint64]bool, error) {
 	return custodyColumns, nil
 }
 
+// verifyColumn verifies the retrieved column against the root, the index,
+// the KZG inclusion and the KZG proof.
+func verifyColumn(
+	roDataColumn blocks.RODataColumn,
+	root [32]byte,
+	pid peer.ID,
+	requestedColumns map[uint64]bool,
+) bool {
+	retrievedColumn := roDataColumn.ColumnIndex
+
+	// Filter out columns with incorrect root.
+	actualRoot := roDataColumn.BlockRoot()
+	if actualRoot != root {
+		log.WithFields(logrus.Fields{
+			"peerID":        pid,
+			"requestedRoot": fmt.Sprintf("%#x", root),
+			"actualRoot":    fmt.Sprintf("%#x", actualRoot),
+		}).Debug("Retrieved root does not match requested root")
+
+		return false
+	}
+
+	// Filter out columns that were not requested.
+	if !requestedColumns[retrievedColumn] {
+		columnsToSampleList := sortedSliceFromMap(requestedColumns)
+
+		log.WithFields(logrus.Fields{
+			"peerID":           pid,
+			"requestedColumns": columnsToSampleList,
+			"retrievedColumn":  retrievedColumn,
+		}).Debug("Retrieved column was not requested")
+
+		return false
+	}
+
+	// Filter out columns which did not pass the KZG inclusion proof verification.
+	if err := blocks.VerifyKZGInclusionProofColumn(roDataColumn.DataColumnSidecar); err != nil {
+		log.WithFields(logrus.Fields{
+			"peerID": pid,
+			"root":   fmt.Sprintf("%#x", root),
+			"index":  retrievedColumn,
+		}).Debug("Failed to verify KZG inclusion proof for retrieved column")
+
+		return false
+	}
+
+	// Filter out columns which did not pass the KZG proof verification.
+	verified, err := peerdas.VerifyDataColumnSidecarKZGProofs(roDataColumn.DataColumnSidecar)
+	if err != nil {
+		log.WithFields(logrus.Fields{
+			"peerID": pid,
+			"root":   fmt.Sprintf("%#x", root),
+			"index":  retrievedColumn,
+		}).Debug("Error when verifying KZG proof for retrieved column")
+
+		return false
+	}
+
+	if !verified {
+		log.WithFields(logrus.Fields{
+			"peerID": pid,
+			"root":   fmt.Sprintf("%#x", root),
+			"index":  retrievedColumn,
+		}).Debug("Failed to verify KZG proof for retrieved column")
+
+		return false
+	}
+
+	return true
+}
+
 // sampleDataColumnsFromPeer samples data columns from a peer.
-// It filters out columns that were not requested and columns with incorrect root.
 // It returns the retrieved columns.
 func (s *Service) sampleDataColumnsFromPeer(
 	pid peer.ID,
@@ -102,39 +173,10 @@ func (s *Service) sampleDataColumnsFromPeer(
 
 	retrievedColumns := make(map[uint64]bool, len(roDataColumns))
 
-	// Remove retrieved items from rootsByDataColumnIndex.
 	for _, roDataColumn := range roDataColumns {
-		retrievedColumn := roDataColumn.ColumnIndex
-
-		actualRoot := roDataColumn.BlockRoot()
-
-		// Filter out columns with incorrect root.
-		if actualRoot != root {
-			// TODO: Should we decrease the peer score here?
-			log.WithFields(logrus.Fields{
-				"peerID":        pid,
-				"requestedRoot": fmt.Sprintf("%#x", root),
-				"actualRoot":    fmt.Sprintf("%#x", actualRoot),
-			}).Warning("Actual root does not match requested root")
-
-			continue
+		if verifyColumn(roDataColumn, root, pid, requestedColumns) {
+			retrievedColumns[roDataColumn.ColumnIndex] = true
 		}
-
-		// Filter out columns that were not requested.
-		if !requestedColumns[retrievedColumn] {
-			// TODO: Should we decrease the peer score here?
-			columnsToSampleList := sortedSliceFromMap(requestedColumns)
-
-			log.WithFields(logrus.Fields{
-				"peerID":           pid,
-				"requestedColumns": columnsToSampleList,
-				"retrievedColumn":  retrievedColumn,
-			}).Warning("Retrieved column was not requested")
-
-			continue
-		}
-
-		retrievedColumns[retrievedColumn] = true
 	}
 
 	if len(retrievedColumns) == len(requestedColumns) {
@@ -337,66 +379,7 @@ func (s *Service) DataColumnSamplingRoutine(ctx context.Context) {
 	for {
 		select {
 		case e := <-stateChannel:
-			if e.Type != statefeed.BlockProcessed {
-				continue
-			}
-
-			data, ok := e.Data.(*statefeed.BlockProcessedData)
-			if !ok {
-				log.Error("Event feed data is not of type *statefeed.BlockProcessedData")
-				continue
-			}
-
-			if !data.Verified {
-				// We only process blocks that have been verified
-				log.Error("Data is not verified")
-				continue
-			}
-
-			if data.SignedBlock.Version() < version.Deneb {
-				log.Debug("Pre Deneb block, skipping data column sampling")
-				continue
-			}
-			if coreTime.PeerDASIsActive(data.Slot) {
-				// We do not trigger sampling if peerDAS is not active yet.
-				continue
-			}
-
-			// Get the commitments for this block.
-			commitments, err := data.SignedBlock.Block().Body().BlobKzgCommitments()
-			if err != nil {
-				log.WithError(err).Error("Failed to get blob KZG commitments")
-				continue
-			}
-
-			// Skip if there are no commitments.
-			if len(commitments) == 0 {
-				log.Debug("No commitments in block, skipping data column sampling")
-				continue
-			}
-
-			// Ramdomize all columns.
-			randomizedColumns := randomizeColumns(nonCustodyColums)
-
-			// Sample data columns with incremental DAS.
-			ok, _, err = s.incrementalDAS(data.BlockRoot, randomizedColumns, samplesCount)
-			if err != nil {
-				log.WithError(err).Error("Error during incremental DAS")
-			}
-
-			if ok {
-				log.WithFields(logrus.Fields{
-					"root":        fmt.Sprintf("%#x", data.BlockRoot),
-					"columns":     randomizedColumns,
-					"sampleCount": samplesCount,
-				}).Debug("Data column sampling successful")
-			} else {
-				log.WithFields(logrus.Fields{
-					"root":        fmt.Sprintf("%#x", data.BlockRoot),
-					"columns":     randomizedColumns,
-					"sampleCount": samplesCount,
-				}).Warning("Data column sampling failed")
-			}
+			s.processEvent(e, nonCustodyColums, samplesCount)
 
 		case <-s.ctx.Done():
 			log.Debug("Context closed, exiting goroutine")
@@ -405,5 +388,69 @@ func (s *Service) DataColumnSamplingRoutine(ctx context.Context) {
 		case err := <-stateSub.Err():
 			log.WithError(err).Error("Subscription to state feed failed")
 		}
+	}
+}
+
+func (s *Service) processEvent(e *feed.Event, nonCustodyColums map[uint64]bool, samplesCount uint64) {
+	if e.Type != statefeed.BlockProcessed {
+		return
+	}
+
+	data, ok := e.Data.(*statefeed.BlockProcessedData)
+	if !ok {
+		log.Error("Event feed data is not of type *statefeed.BlockProcessedData")
+		return
+	}
+
+	if !data.Verified {
+		// We only process blocks that have been verified
+		log.Error("Data is not verified")
+		return
+	}
+
+	if data.SignedBlock.Version() < version.Deneb {
+		log.Debug("Pre Deneb block, skipping data column sampling")
+		return
+	}
+
+	if coreTime.PeerDASIsActive(data.Slot) {
+		// We do not trigger sampling if peerDAS is not active yet.
+		return
+	}
+
+	// Get the commitments for this block.
+	commitments, err := data.SignedBlock.Block().Body().BlobKzgCommitments()
+	if err != nil {
+		log.WithError(err).Error("Failed to get blob KZG commitments")
+		return
+	}
+
+	// Skip if there are no commitments.
+	if len(commitments) == 0 {
+		log.Debug("No commitments in block, skipping data column sampling")
+		return
+	}
+
+	// Ramdomize all columns.
+	randomizedColumns := randomizeColumns(nonCustodyColums)
+
+	// Sample data columns with incremental DAS.
+	ok, _, err = s.incrementalDAS(data.BlockRoot, randomizedColumns, samplesCount)
+	if err != nil {
+		log.WithError(err).Error("Error during incremental DAS")
+	}
+
+	if ok {
+		log.WithFields(logrus.Fields{
+			"root":        fmt.Sprintf("%#x", data.BlockRoot),
+			"columns":     randomizedColumns,
+			"sampleCount": samplesCount,
+		}).Debug("Data column sampling successful")
+	} else {
+		log.WithFields(logrus.Fields{
+			"root":        fmt.Sprintf("%#x", data.BlockRoot),
+			"columns":     randomizedColumns,
+			"sampleCount": samplesCount,
+		}).Warning("Data column sampling failed")
 	}
 }

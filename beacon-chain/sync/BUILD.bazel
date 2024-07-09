@@ -204,6 +204,7 @@ go_test(
     deps = [
         "//async/abool:go_default_library",
         "//beacon-chain/blockchain:go_default_library",
+        "//beacon-chain/blockchain/kzg:go_default_library",
         "//beacon-chain/blockchain/testing:go_default_library",
         "//beacon-chain/cache:go_default_library",
         "//beacon-chain/core/altair:go_default_library",
@@ -261,6 +262,8 @@ go_test(
         "//testing/util:go_default_library",
         "//time:go_default_library",
         "//time/slots:go_default_library",
+        "@com_github_consensys_gnark_crypto//ecc/bls12-381/fr:go_default_library",
+        "@com_github_crate_crypto_go_kzg_4844//:go_default_library",
         "@com_github_d4l3k_messagediff//:go_default_library",
         "@com_github_ethereum_go_ethereum//common:go_default_library",
         "@com_github_ethereum_go_ethereum//core/types:go_default_library",

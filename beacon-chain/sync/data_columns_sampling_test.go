@@ -1,22 +1,30 @@
 package sync
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/binary"
 	"testing"
 
+	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
+	GoKZG "github.com/crate-crypto/go-kzg-4844"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/network"
+	kzg "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/kzg"
 	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers"
 	p2ptest "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
 	p2pTypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/util"
+	"github.com/sirupsen/logrus"
 )
 
 func TestRandomizeColumns(t *testing.T) {
@@ -52,17 +60,11 @@ func createAndConnectPeer(
 	t *testing.T,
 	p2pService *p2ptest.TestP2P,
 	chainService *mock.ChainService,
-	header *ethpb.BeaconBlockHeader,
+	dataColumnSidecars []*ethpb.DataColumnSidecar,
 	custodyCount uint64,
 	columnsNotToRespond map[uint64]bool,
 	offset int,
 ) {
-	emptyRoot := [fieldparams.RootLength]byte{}
-	emptySignature := [fieldparams.BLSSignatureLength]byte{}
-	emptyKzgCommitmentInclusionProof := [4][]byte{
-		emptyRoot[:], emptyRoot[:], emptyRoot[:], emptyRoot[:],
-	}
-
 	// Create the private key, depending on the offset.
 	privateKeyBytes := make([]byte, 32)
 	for i := 0; i < 32; i++ {
@@ -89,17 +91,10 @@ func createAndConnectPeer(
 			}
 
 			// Create the response.
-			resp := ethpb.DataColumnSidecar{
-				ColumnIndex: identifier.ColumnIndex,
-				SignedBlockHeader: &ethpb.SignedBeaconBlockHeader{
-					Header:    header,
-					Signature: emptySignature[:],
-				},
-				KzgCommitmentsInclusionProof: emptyKzgCommitmentInclusionProof[:],
-			}
+			resp := dataColumnSidecars[identifier.ColumnIndex]
 
 			// Send the response.
-			err := WriteDataColumnSidecarChunk(stream, chainService, p2pService.Encoding(), &resp)
+			err := WriteDataColumnSidecarChunk(stream, chainService, p2pService.Encoding(), resp)
 			require.NoError(t, err)
 		}
 
@@ -117,17 +112,84 @@ func createAndConnectPeer(
 	p2pService.Connect(peer)
 }
 
-func TestIncrementalDAS(t *testing.T) {
-	const custodyRequirement uint64 = 1
+func deterministicRandomness(seed int64) [32]byte {
+	// Converts an int64 to a byte slice
+	buf := new(bytes.Buffer)
+	err := binary.Write(buf, binary.BigEndian, seed)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to write int64 to bytes buffer")
+		return [32]byte{}
+	}
+	bytes := buf.Bytes()
 
-	emptyRoot := [fieldparams.RootLength]byte{}
-	emptyHeader := &ethpb.BeaconBlockHeader{
-		ParentRoot: emptyRoot[:],
-		StateRoot:  emptyRoot[:],
-		BodyRoot:   emptyRoot[:],
+	return sha256.Sum256(bytes)
+}
+
+// Returns a serialized random field element in big-endian
+func getRandFieldElement(seed int64) [32]byte {
+	bytes := deterministicRandomness(seed)
+	var r fr.Element
+	r.SetBytes(bytes[:])
+
+	return GoKZG.SerializeScalar(r)
+}
+
+// Returns a random blob using the passed seed as entropy
+func getRandBlob(seed int64) kzg.Blob {
+	var blob kzg.Blob
+	for i := 0; i < len(blob); i += 32 {
+		fieldElementBytes := getRandFieldElement(seed + int64(i))
+		copy(blob[i:i+32], fieldElementBytes[:])
+	}
+	return blob
+}
+
+func generateCommitmentAndProof(blob *kzg.Blob) (*kzg.Commitment, *kzg.Proof, error) {
+	commitment, err := kzg.BlobToKZGCommitment(blob)
+	if err != nil {
+		return nil, nil, err
+	}
+	proof, err := kzg.ComputeBlobKZGProof(blob, commitment)
+	if err != nil {
+		return nil, nil, err
+	}
+	return &commitment, &proof, err
+}
+
+func TestIncrementalDAS(t *testing.T) {
+	const (
+		blobCount                 = 3
+		custodyRequirement uint64 = 1
+	)
+
+	err := kzg.Start()
+	require.NoError(t, err)
+
+	// Generate random blobs, commitments and inclusion proofs.
+	blobs := make([]kzg.Blob, blobCount)
+	kzgCommitments := make([][]byte, blobCount)
+	kzgProofs := make([][]byte, blobCount)
+
+	for i := int64(0); i < blobCount; i++ {
+		blob := getRandBlob(int64(i))
+
+		kzgCommitment, kzgProof, err := generateCommitmentAndProof(&blob)
+		require.NoError(t, err)
+
+		blobs[i] = blob
+		kzgCommitments[i] = kzgCommitment[:]
+		kzgProofs[i] = kzgProof[:]
 	}
 
-	emptyHeaderRoot, err := emptyHeader.HashTreeRoot()
+	dbBlock := util.NewBeaconBlockDeneb()
+	dbBlock.Block.Body.BlobKzgCommitments = kzgCommitments
+	sBlock, err := blocks.NewSignedBeaconBlock(dbBlock)
+	require.NoError(t, err)
+
+	dataColumnSidecars, err := peerdas.DataColumnSidecars(sBlock, blobs)
+	require.NoError(t, err)
+
+	blockRoot, err := dataColumnSidecars[0].GetSignedBlockHeader().Header.HashTreeRoot()
 	require.NoError(t, err)
 
 	testCases := []struct {
@@ -198,13 +260,13 @@ func TestIncrementalDAS(t *testing.T) {
 		chainService, clock := defaultMockChain(t)
 
 		// Custody columns: [6, 38, 70, 102]
-		createAndConnectPeer(t, p2pService, chainService, emptyHeader, custodyRequirement, tc.columnsNotToRespond, 1)
+		createAndConnectPeer(t, p2pService, chainService, dataColumnSidecars, custodyRequirement, tc.columnsNotToRespond, 1)
 
 		// Custody columns: [3, 35, 67, 99]
-		createAndConnectPeer(t, p2pService, chainService, emptyHeader, custodyRequirement, tc.columnsNotToRespond, 2)
+		createAndConnectPeer(t, p2pService, chainService, dataColumnSidecars, custodyRequirement, tc.columnsNotToRespond, 2)
 
 		// Custody columns: [12, 44, 76, 108]
-		createAndConnectPeer(t, p2pService, chainService, emptyHeader, custodyRequirement, tc.columnsNotToRespond, 3)
+		createAndConnectPeer(t, p2pService, chainService, dataColumnSidecars, custodyRequirement, tc.columnsNotToRespond, 3)
 
 		service := &Service{
 			cfg: &config{
@@ -215,7 +277,7 @@ func TestIncrementalDAS(t *testing.T) {
 			ctxMap: map[[4]byte]int{{245, 165, 253, 66}: version.Deneb},
 		}
 
-		actualSuccess, actualRoundSummaries, err := service.incrementalDAS(emptyHeaderRoot, tc.possibleColumnsToRequest, tc.samplesCount)
+		actualSuccess, actualRoundSummaries, err := service.incrementalDAS(blockRoot, tc.possibleColumnsToRequest, tc.samplesCount)
 
 		require.NoError(t, err)
 		require.Equal(t, tc.expectedSuccess, actualSuccess)

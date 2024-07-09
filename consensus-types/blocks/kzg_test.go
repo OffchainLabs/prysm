@@ -259,3 +259,119 @@ func Test_VerifyKZGInclusionProof(t *testing.T) {
 	proof[2] = make([]byte, 32)
 	require.ErrorIs(t, errInvalidInclusionProof, VerifyKZGInclusionProof(blob))
 }
+
+func Test_VerifyKZGInclusionProofColumn(t *testing.T) {
+	const (
+		blobCount   = 3
+		columnIndex = 0
+	)
+
+	// Generate random KZG commitments `blobCount` blobs.
+	kzgCommitments := make([][]byte, blobCount)
+
+	for i := 0; i < blobCount; i++ {
+		kzgCommitments[i] = make([]byte, 48)
+		_, err := rand.Read(kzgCommitments[i])
+		require.NoError(t, err)
+	}
+
+	pbBody := &ethpb.BeaconBlockBodyDeneb{
+		RandaoReveal: make([]byte, 96),
+		Eth1Data: &ethpb.Eth1Data{
+			DepositRoot: make([]byte, fieldparams.RootLength),
+			BlockHash:   make([]byte, fieldparams.RootLength),
+		},
+		Graffiti: make([]byte, 32),
+		SyncAggregate: &ethpb.SyncAggregate{
+			SyncCommitteeBits:      make([]byte, fieldparams.SyncAggregateSyncCommitteeBytesLength),
+			SyncCommitteeSignature: make([]byte, fieldparams.BLSSignatureLength),
+		},
+		ExecutionPayload: &enginev1.ExecutionPayloadDeneb{
+			ParentHash:    make([]byte, fieldparams.RootLength),
+			FeeRecipient:  make([]byte, 20),
+			StateRoot:     make([]byte, fieldparams.RootLength),
+			ReceiptsRoot:  make([]byte, fieldparams.RootLength),
+			LogsBloom:     make([]byte, 256),
+			PrevRandao:    make([]byte, fieldparams.RootLength),
+			BaseFeePerGas: make([]byte, fieldparams.RootLength),
+			BlockHash:     make([]byte, fieldparams.RootLength),
+			Transactions:  make([][]byte, 0),
+			ExtraData:     make([]byte, 0),
+		},
+		BlobKzgCommitments: kzgCommitments,
+	}
+
+	root, err := pbBody.HashTreeRoot()
+	require.NoError(t, err)
+
+	body, err := NewBeaconBlockBody(pbBody)
+	require.NoError(t, err)
+
+	kzgCommitmentsInclusionProof, err := MerkleProofKZGCommitments(body)
+	require.NoError(t, err)
+
+	testCases := []struct {
+		name              string
+		expectedError     error
+		dataColumnSidecar *ethpb.DataColumnSidecar
+	}{
+		{
+			name:              "nilSignedBlockHeader",
+			expectedError:     errNilBlockHeader,
+			dataColumnSidecar: &ethpb.DataColumnSidecar{},
+		},
+		{
+			name:          "nilHeader",
+			expectedError: errNilBlockHeader,
+			dataColumnSidecar: &ethpb.DataColumnSidecar{
+				SignedBlockHeader: &ethpb.SignedBeaconBlockHeader{},
+			},
+		},
+		{
+			name:          "invalidBodyRoot",
+			expectedError: errInvalidBodyRoot,
+			dataColumnSidecar: &ethpb.DataColumnSidecar{
+				SignedBlockHeader: &ethpb.SignedBeaconBlockHeader{
+					Header: &ethpb.BeaconBlockHeader{},
+				},
+			},
+		},
+		{
+			name:          "unverifiedMerkleProof",
+			expectedError: errInvalidInclusionProof,
+			dataColumnSidecar: &ethpb.DataColumnSidecar{
+				SignedBlockHeader: &ethpb.SignedBeaconBlockHeader{
+					Header: &ethpb.BeaconBlockHeader{
+						BodyRoot: make([]byte, 32),
+					},
+				},
+				KzgCommitments: kzgCommitments,
+			},
+		},
+		{
+			name:          "nominal",
+			expectedError: nil,
+			dataColumnSidecar: &ethpb.DataColumnSidecar{
+				KzgCommitments: kzgCommitments,
+				SignedBlockHeader: &ethpb.SignedBeaconBlockHeader{
+					Header: &ethpb.BeaconBlockHeader{
+						BodyRoot: root[:],
+					},
+				},
+				KzgCommitmentsInclusionProof: kzgCommitmentsInclusionProof,
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := VerifyKZGInclusionProofColumn(tc.dataColumnSidecar)
+			if tc.expectedError == nil {
+				require.NoError(t, err)
+				return
+			}
+
+			require.ErrorIs(t, tc.expectedError, err)
+		})
+	}
+}
