@@ -138,18 +138,16 @@ func DataColumnSidecars(signedBlock interfaces.ReadOnlySignedBeaconBlock, blobs 
 	}
 
 	// Compute cells and proofs.
-	cells := make([][kzg.CellsPerExtBlob]kzg.Cell, 0, blobsCount)
-	proofs := make([][kzg.CellsPerExtBlob]kzg.Proof, 0, blobsCount)
+	cellsAndProofs := make([]kzg.CellsAndProofs, 0, blobsCount)
 
 	for i := range blobs {
 		blob := &blobs[i]
-		blobCells, blobProofs, err := kzg.ComputeCellsAndKZGProofs(blob)
+		blobCellsAndProofs, err := kzg.ComputeCellsAndKZGProofs(blob)
 		if err != nil {
 			return nil, errors.Wrap(err, "compute cells and KZG proofs")
 		}
 
-		cells = append(cells, blobCells)
-		proofs = append(proofs, blobProofs)
+		cellsAndProofs = append(cellsAndProofs, blobCellsAndProofs)
 	}
 
 	// Get the column sidecars.
@@ -159,10 +157,13 @@ func DataColumnSidecars(signedBlock interfaces.ReadOnlySignedBeaconBlock, blobs 
 		kzgProofOfColumn := make([]kzg.Proof, 0, blobsCount)
 
 		for rowIndex := 0; rowIndex < blobsCount; rowIndex++ {
-			cell := cells[rowIndex][columnIndex]
+			cellsForRow := cellsAndProofs[rowIndex].Cells
+			proofsForRow := cellsAndProofs[rowIndex].Proofs
+
+			cell := cellsForRow[columnIndex]
 			column = append(column, cell)
 
-			kzgProof := proofs[rowIndex][columnIndex]
+			kzgProof := proofsForRow[columnIndex]
 			kzgProofOfColumn = append(kzgProofOfColumn, kzgProof)
 		}
 
