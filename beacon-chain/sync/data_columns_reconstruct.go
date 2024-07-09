@@ -47,7 +47,7 @@ func recoverCellsAndProofs(
 		start := time.Now()
 
 		cellsId := make([]uint64, 0, columnsCount)
-		cKzgCells := make([]kzg.Cell, 0, columnsCount)
+		cells := make([]kzg.Cell, 0, columnsCount)
 
 		for _, sidecar := range dataColumnSideCars {
 			// Build the cell ids.
@@ -57,17 +57,11 @@ func recoverCellsAndProofs(
 			column := sidecar.DataColumn
 			cell := column[blobIndex]
 
-			// Transform the cell as a cKzg cell.
-			var ckzgCell kzg.Cell
-			for i := 0; i < kzg.FieldElementsPerCell; i++ {
-				copy(ckzgCell[i][:], cell[32*i:32*(i+1)])
-			}
-
-			cKzgCells = append(cKzgCells, ckzgCell)
+			cells = append(cells, kzg.Cell(cell))
 		}
 
 		// Recover the blob.
-		recoveredCells, err := kzg.RecoverAllCells(cellsId, cKzgCells)
+		recoveredCells, err := kzg.RecoverAllCells(cellsId, cells)
 		if err != nil {
 			return nil, errors.Wrapf(err, "recover all cells for blob %d", blobIndex)
 		}

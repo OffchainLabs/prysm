@@ -168,15 +168,7 @@ func DataColumnSidecars(signedBlock interfaces.ReadOnlySignedBeaconBlock, blobs 
 
 		columnBytes := make([][]byte, 0, blobsCount)
 		for i := range column {
-			cell := column[i]
-
-			cellBytes := make([]byte, 0, kzg.BytesPerCell)
-			for _, fieldElement := range cell {
-				copiedElem := fieldElement
-				cellBytes = append(cellBytes, copiedElem[:]...)
-			}
-
-			columnBytes = append(columnBytes, cellBytes)
+			columnBytes = append(columnBytes, column[i][:])
 		}
 
 		kzgProofOfColumnBytes := make([][]byte, 0, blobsCount)
@@ -234,15 +226,7 @@ func DataColumnSidecarsForReconstruct(
 
 		columnBytes := make([][]byte, 0, blobsCount)
 		for i := range column {
-			cell := column[i]
-
-			cellBytes := make([]byte, 0, kzg.BytesPerCell)
-			for _, fieldElement := range cell {
-				copiedElem := fieldElement
-				cellBytes = append(cellBytes, copiedElem[:]...)
-			}
-
-			columnBytes = append(columnBytes, cellBytes)
+			columnBytes = append(columnBytes, column[i][:])
 		}
 
 		kzgProofOfColumnBytes := make([][]byte, 0, blobsCount)
@@ -290,12 +274,8 @@ func VerifyDataColumnSidecarKZGProofs(sc *ethpb.DataColumnSidecar) (bool, error)
 		ckzgComms = append(ckzgComms, kzg.Bytes48(com))
 	}
 	var cells []kzg.Cell
-	for _, ce := range sc.DataColumn {
-		var newCell []kzg.Bytes32
-		for i := 0; i < len(ce); i += 32 {
-			newCell = append(newCell, kzg.Bytes32(ce[i:i+32]))
-		}
-		cells = append(cells, kzg.Cell(newCell))
+	for _, cell := range sc.DataColumn {
+		cells = append(cells, kzg.Cell(cell))
 	}
 	var proofs []kzg.Bytes48
 	for _, p := range sc.KzgProof {
