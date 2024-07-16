@@ -357,3 +357,11 @@ func CustodyCountFromRecord(record *enr.Record) (uint64, error) {
 
 	return uint64(csc), nil
 }
+
+func CanSelfReconstruct(numCol uint64) bool {
+	total := params.BeaconConfig().NumberOfColumns
+	// if total is odd, then we need total / 2 + 1 columns to reconstruct
+	// if total is even, then we need total / 2 columns to reconstruct
+	columnsNeeded := total/2 + total%2
+	return numCol >= columnsNeeded
+}

@@ -15,6 +15,8 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	gcache "github.com/patrickmn/go-cache"
 	"github.com/pkg/errors"
+	"github.com/trailofbits/go-mutexasserts"
+
 	"github.com/prysmaticlabs/prysm/v5/async"
 	"github.com/prysmaticlabs/prysm/v5/async/abool"
 	"github.com/prysmaticlabs/prysm/v5/async/event"
@@ -45,7 +47,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/runtime"
 	prysmTime "github.com/prysmaticlabs/prysm/v5/time"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
-	"github.com/trailofbits/go-mutexasserts"
 )
 
 var _ runtime.Service = (*Service)(nil)
@@ -168,6 +169,7 @@ type Service struct {
 	receivedDataColumnsFromRoot      map[[fieldparams.RootLength]byte]map[uint64]bool
 	receivedDataColumnsFromRootLock  sync.RWMutex
 	ctxMap                           ContextByteVersions
+	sampler                          DataColumnSampler
 }
 
 // NewService initializes new regular sync service.
@@ -253,7 +255,8 @@ func (s *Service) Start() {
 
 	// Run data column sampling
 	if params.PeerDASEnabled() {
-		go s.DataColumnSamplingRoutine(s.ctx)
+		s.sampler = newDataColumnSampler1D(s.cfg.p2p, s.cfg.clock, s.ctxMap, s.cfg.stateNotifier)
+		go s.sampler.Run(s.ctx)
 	}
 }
 
