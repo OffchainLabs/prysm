@@ -255,6 +255,10 @@ type BeaconChainConfig struct {
 	MaxDepositRequestsPerPayload          uint64 `yaml:"MAX_DEPOSIT_REQUESTS_PER_PAYLOAD" spec:"true"`           // MaxDepositRequestsPerPayload is the maximum number of execution layer deposits in each payload
 	UnsetDepositRequestsStartIndex        uint64 `yaml:"UNSET_DEPOSIT_REQUESTS_START_INDEX" spec:"true"`         // UnsetDepositRequestsStartIndex is used to check the start index for eip6110
 
+	// PeerDAS Values
+	SamplesPerSlot     uint64 `yaml:"SAMPLES_PER_SLOT"`    // SamplesPerSlot refers to the humber of random samples a node queries per slot.
+	CustodyRequirement uint64 `yaml:"CUSTODY_REQUIREMENT"` // CustodyRequirement refers to the minimum amount of subnets a peer must custody and serve samples from.
+
 	// Networking Specific Parameters
 	GossipMaxSize                   uint64          `yaml:"GOSSIP_MAX_SIZE" spec:"true"`                    // GossipMaxSize is the maximum allowed size of uncompressed gossip messages.
 	MaxChunkSize                    uint64          `yaml:"MAX_CHUNK_SIZE" spec:"true"`                     // MaxChunkSize is the maximum allowed size of uncompressed req/resp chunked responses.

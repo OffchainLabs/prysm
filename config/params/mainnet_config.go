@@ -297,6 +297,8 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	// PeerDAS
 	NumberOfColumns:          128,
 	MaxCellsInExtendedMatrix: 768,
+	SamplesPerSlot:           8,
+	CustodyRequirement:       1,
 
 	// Values related to networking parameters.
 	GossipMaxSize:                   10 * 1 << 20, // 10 MiB

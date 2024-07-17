@@ -25,7 +25,6 @@ import (
 // IMPORTANT: Use one field per line and sort these alphabetically to reduce conflicts.
 var placeholderFields = []string{
 	"BYTES_PER_LOGS_BLOOM", // Compile time constant on ExecutionPayload.logs_bloom.
-	"CUSTODY_REQUIREMENT",
 	"EIP6110_FORK_EPOCH",
 	"EIP6110_FORK_VERSION",
 	"EIP7002_FORK_EPOCH",
@@ -43,7 +42,6 @@ var placeholderFields = []string{
 	"MAX_REQUEST_PAYLOADS",           // Compile time constant on BeaconBlockBody.ExecutionRequests
 	"MAX_TRANSACTIONS_PER_PAYLOAD",   // Compile time constant on ExecutionPayload.transactions.
 	"REORG_HEAD_WEIGHT_THRESHOLD",
-	"SAMPLES_PER_SLOT",
 	"TARGET_NUMBER_OF_PEERS",
 	"UPDATE_TIMEOUT",
 	"WHISK_EPOCHS_PER_SHUFFLING_PHASE",
