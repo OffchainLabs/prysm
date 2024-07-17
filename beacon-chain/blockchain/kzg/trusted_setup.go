@@ -17,32 +17,47 @@ var (
 	kzgLoaded            bool
 )
 
+type TrustedSetup struct {
+	G1Monomial [GoKZG.ScalarsPerBlob]GoKZG.G1CompressedHexStr `json:"g1_monomial"`
+	G1Lagrange [GoKZG.ScalarsPerBlob]GoKZG.G1CompressedHexStr `json:"g1_lagrange"`
+	G2Monomial [65]GoKZG.G2CompressedHexStr                   `json:"g2_monomial"`
+}
+
 func Start() error {
-	parsedSetup := &GoKZG.JSONTrustedSetup{}
-	err := json.Unmarshal(embeddedTrustedSetup, parsedSetup)
+	trustedSetup := &TrustedSetup{}
+	err := json.Unmarshal(embeddedTrustedSetup, trustedSetup)
 	if err != nil {
 		return errors.Wrap(err, "could not parse trusted setup JSON")
 	}
-	kzgContext, err = GoKZG.NewContext4096(parsedSetup)
+	kzgContext, err = GoKZG.NewContext4096(&GoKZG.JSONTrustedSetup{
+		SetupG2:         trustedSetup.G2Monomial[:],
+		SetupG1Lagrange: trustedSetup.G1Lagrange})
 	if err != nil {
 		return errors.Wrap(err, "could not initialize go-kzg context")
 	}
-	g1Lagrange := &parsedSetup.SetupG1Lagrange
 
 	// Length of a G1 point, converted from hex to binary.
-	g1s := make([]byte, len(g1Lagrange)*(len(g1Lagrange[0])-2)/2)
-	for i, g1 := range g1Lagrange {
-		copy(g1s[i*(len(g1)-2)/2:], hexutil.MustDecode(g1))
+	g1MonomialBytes := make([]byte, len(trustedSetup.G1Monomial)*(len(trustedSetup.G1Monomial[0])-2)/2)
+	for i, g1 := range &trustedSetup.G1Monomial {
+		copy(g1MonomialBytes[i*(len(g1)-2)/2:], hexutil.MustDecode(g1))
+	}
+	// Length of a G1 point, converted from hex to binary.
+	g1LagrangeBytes := make([]byte, len(trustedSetup.G1Lagrange)*(len(trustedSetup.G1Lagrange[0])-2)/2)
+	for i, g1 := range &trustedSetup.G1Lagrange {
+		copy(g1LagrangeBytes[i*(len(g1)-2)/2:], hexutil.MustDecode(g1))
 	}
 	// Length of a G2 point, converted from hex to binary.
-	g2s := make([]byte, len(parsedSetup.SetupG2)*(len(parsedSetup.SetupG2[0])-2)/2)
-	for i, g2 := range parsedSetup.SetupG2 {
-		copy(g2s[i*(len(g2)-2)/2:], hexutil.MustDecode(g2))
+	g2MonomialBytes := make([]byte, len(trustedSetup.G2Monomial)*(len(trustedSetup.G2Monomial[0])-2)/2)
+	for i, g2 := range &trustedSetup.G2Monomial {
+		copy(g2MonomialBytes[i*(len(g2)-2)/2:], hexutil.MustDecode(g2))
 	}
 	if !kzgLoaded {
+		// TODO: Provide a configuration option for this.
+		var precompute uint = 0
+
 		// Free the current trusted setup before running this method. CKZG
 		// panics if the same setup is run multiple times.
-		if err = CKZG.LoadTrustedSetup(g1s, g2s); err != nil {
+		if err = CKZG.LoadTrustedSetup(g1MonomialBytes, g1LagrangeBytes, g2MonomialBytes, precompute); err != nil {
 			panic(err)
 		}
 	}

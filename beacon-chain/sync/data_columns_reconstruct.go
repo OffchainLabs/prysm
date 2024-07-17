@@ -46,12 +46,12 @@ func recoverCellsAndProofs(
 	for blobIndex := 0; blobIndex < blobCount; blobIndex++ {
 		start := time.Now()
 
-		cellsId := make([]uint64, 0, columnsCount)
+		cellsIndices := make([]uint64, 0, columnsCount)
 		cells := make([]kzg.Cell, 0, columnsCount)
 
 		for _, sidecar := range dataColumnSideCars {
-			// Build the cell ids.
-			cellsId = append(cellsId, sidecar.ColumnIndex)
+			// Build the cell indices.
+			cellsIndices = append(cellsIndices, sidecar.ColumnIndex)
 
 			// Get the cell.
 			column := sidecar.DataColumn
@@ -61,7 +61,7 @@ func recoverCellsAndProofs(
 		}
 
 		// Recover the cells and proofs for the corresponding blob
-		cellsAndProofs, err := kzg.RecoverCellsAndKZGProofs(cellsId, cells)
+		cellsAndProofs, err := kzg.RecoverCellsAndKZGProofs(cellsIndices, cells)
 
 		if err != nil {
 			return nil, errors.Wrapf(err, "recover cells and KZG proofs for blob %d", blobIndex)

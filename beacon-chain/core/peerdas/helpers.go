@@ -5,6 +5,8 @@ import (
 	"math"
 	"math/big"
 
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/holiman/uint256"
@@ -92,7 +94,7 @@ func CustodyColumns(nodeId enode.ID, custodySubnetCount uint64) (map[uint64]bool
 		return nil, errors.Wrap(err, "custody subnets")
 	}
 
-	columnsPerSubnet := kzg.CellsPerExtBlob / dataColumnSidecarSubnetCount
+	columnsPerSubnet := fieldparams.NumberOfColumns / dataColumnSidecarSubnetCount
 
 	// Knowing the subnet ID and the number of columns per subnet, select all the columns the node should custody.
 	// Columns belonging to the same subnet are contiguous.
@@ -151,8 +153,8 @@ func DataColumnSidecars(signedBlock interfaces.ReadOnlySignedBeaconBlock, blobs 
 	}
 
 	// Get the column sidecars.
-	sidecars := make([]*ethpb.DataColumnSidecar, 0, kzg.CellsPerExtBlob)
-	for columnIndex := uint64(0); columnIndex < kzg.CellsPerExtBlob; columnIndex++ {
+	sidecars := make([]*ethpb.DataColumnSidecar, 0, fieldparams.NumberOfColumns)
+	for columnIndex := uint64(0); columnIndex < fieldparams.NumberOfColumns; columnIndex++ {
 		column := make([]kzg.Cell, 0, blobsCount)
 		kzgProofOfColumn := make([]kzg.Proof, 0, blobsCount)
 
@@ -209,8 +211,8 @@ func DataColumnSidecarsForReconstruct(
 	}
 
 	// Get the column sidecars.
-	sidecars := make([]*ethpb.DataColumnSidecar, 0, kzg.CellsPerExtBlob)
-	for columnIndex := uint64(0); columnIndex < kzg.CellsPerExtBlob; columnIndex++ {
+	sidecars := make([]*ethpb.DataColumnSidecar, 0, fieldparams.NumberOfColumns)
+	for columnIndex := uint64(0); columnIndex < fieldparams.NumberOfColumns; columnIndex++ {
 		column := make([]kzg.Cell, 0, blobsCount)
 		kzgProofOfColumn := make([]kzg.Proof, 0, blobsCount)
 
@@ -260,29 +262,19 @@ func VerifyDataColumnSidecarKZGProofs(sc *ethpb.DataColumnSidecar) (bool, error)
 	if len(sc.DataColumn) != len(sc.KzgCommitments) || len(sc.KzgCommitments) != len(sc.KzgProof) {
 		return false, errMismatchLength
 	}
-	blobsCount := len(sc.DataColumn)
 
-	rowIdx := make([]uint64, 0, blobsCount)
-	colIdx := make([]uint64, 0, blobsCount)
-	for i := 0; i < len(sc.DataColumn); i++ {
-		copiedI := uint64(i)
-		rowIdx = append(rowIdx, copiedI)
-		colI := sc.ColumnIndex
-		colIdx = append(colIdx, colI)
-	}
-	ckzgComms := make([]kzg.Bytes48, 0, len(sc.KzgCommitments))
-	for _, com := range sc.KzgCommitments {
-		ckzgComms = append(ckzgComms, kzg.Bytes48(com))
-	}
+	var commitments []kzg.Bytes48
+	var indices []uint64
 	var cells []kzg.Cell
-	for _, cell := range sc.DataColumn {
-		cells = append(cells, kzg.Cell(cell))
-	}
 	var proofs []kzg.Bytes48
-	for _, p := range sc.KzgProof {
-		proofs = append(proofs, kzg.Bytes48(p))
+	for i := range sc.DataColumn {
+		commitments = append(commitments, kzg.Bytes48(sc.KzgCommitments[i]))
+		indices = append(indices, sc.ColumnIndex)
+		cells = append(cells, kzg.Cell(sc.DataColumn[i]))
+		proofs = append(proofs, kzg.Bytes48(sc.KzgProof[i]))
 	}
-	return kzg.VerifyCellKZGProofBatch(ckzgComms, rowIdx, colIdx, cells, proofs)
+
+	return kzg.VerifyCellKZGProofBatch(commitments, indices, cells, proofs)
 }
 
 // CustodySubnetCount returns the number of subnets the node should participate in for custody.
