@@ -80,8 +80,10 @@ func (s *Service) FindPeersWithSubnet(ctx context.Context, topic string,
 		iterator = filterNodes(ctx, iterator, s.filterPeerForAttSubnet(index))
 	case strings.Contains(topic, GossipSyncCommitteeMessage):
 		iterator = filterNodes(ctx, iterator, s.filterPeerForSyncSubnet(index))
+	case strings.Contains(topic, GossipDataColumnSidecarMessage):
+		iterator = filterNodes(ctx, iterator, s.filterPeerForDataColumnsSubnet(index))
 	default:
-		return false, errors.New("no subnet exists for provided topic")
+		return false, errors.Errorf("no subnet exists for provided topic: %s", topic)
 	}
 
 	wg := new(sync.WaitGroup)
@@ -158,6 +160,22 @@ func (s *Service) filterPeerForSyncSubnet(index uint64) func(node *enode.Node) b
 			}
 		}
 		return indExists
+	}
+}
+
+// returns a method with filters peers specifically for a particular data column subnet.
+func (s *Service) filterPeerForDataColumnsSubnet(index uint64) func(node *enode.Node) bool {
+	return func(node *enode.Node) bool {
+		if !s.filterPeer(node) {
+			return false
+		}
+
+		subnets, err := dataColumnSubnets(node.ID(), node.Record())
+		if err != nil {
+			return false
+		}
+
+		return subnets[index]
 	}
 }
 
@@ -354,6 +372,25 @@ func syncSubnets(record *enr.Record) ([]uint64, error) {
 		}
 	}
 	return committeeIdxs, nil
+}
+
+func dataColumnSubnets(nodeID enode.ID, record *enr.Record) (map[uint64]bool, error) {
+	custodyRequirement := params.BeaconConfig().CustodyRequirement
+
+	// Retrieve the custody count from the ENR.
+	custodyCount, err := peerdas.CustodyCountFromRecord(record)
+	if err != nil {
+		// If we fail to retrieve the custody count, we default to the custody requirement.
+		custodyCount = custodyRequirement
+	}
+
+	// Retrieve the custody subnets from the remote peer
+	custodyColumnsSubnets, err := peerdas.CustodyColumnSubnets(nodeID, custodyCount)
+	if err != nil {
+		return nil, errors.Wrap(err, "custody column subnets")
+	}
+
+	return custodyColumnsSubnets, nil
 }
 
 // Parses the attestation subnets ENR entry in a node and extracts its value
