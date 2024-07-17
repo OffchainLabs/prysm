@@ -10,9 +10,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
 	coreBlocks "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
@@ -146,20 +144,13 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 	if err := coreBlocks.VerifyBlockHeaderSignatureUsingCurrentFork(parentState, ds.SignedBlockHeader); err != nil {
 		return pubsub.ValidationReject, err
 	}
-
-	parentRoot := ds.SignedBlockHeader.Header.ParentRoot
-	parentState, err = transition.ProcessSlotsUsingNextSlotCache(ctx, parentState, parentRoot, ds.SignedBlockHeader.Header.Slot)
+	roDataColumn, err := blocks.NewRODataColumn(ds)
 	if err != nil {
-		return pubsub.ValidationIgnore, err
+		return pubsub.ValidationReject, errors.Wrap(err, "new RO data columns")
 	}
 
-	idx, err := helpers.BeaconProposerIndex(ctx, parentState)
-	if err != nil {
-		return pubsub.ValidationIgnore, err
-	}
-
-	if ds.SignedBlockHeader.Header.ProposerIndex != idx {
-		return pubsub.ValidationReject, errors.New("incorrect proposer index")
+	if err := s.newColumnProposerVerifier(ctx, roDataColumn); err != nil {
+		return pubsub.ValidationReject, errors.Wrap(err, "could not verify proposer")
 	}
 
 	// Get the time at slot start.
@@ -178,11 +169,6 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 
 	// TODO: Transform this whole function so it looks like to the `validateBlob`
 	// with the tiny verifiers inside.
-	roDataColumn, err := blocks.NewRODataColumn(ds)
-	if err != nil {
-		return pubsub.ValidationReject, errors.Wrap(err, "new RO data columns")
-	}
-
 	verifiedRODataColumn := blocks.NewVerifiedRODataColumn(roDataColumn)
 
 	msg.ValidatorData = verifiedRODataColumn

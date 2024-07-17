@@ -29,3 +29,7 @@ type BlobVerifier interface {
 // NewBlobVerifier is a function signature that can be used by code that needs to be
 // able to mock Initializer.NewBlobVerifier without complex setup.
 type NewBlobVerifier func(b blocks.ROBlob, reqs []Requirement) BlobVerifier
+
+// NewColumnVerifier is a function signature that can be used to mock a setup where a
+// column verifier can be easily initialized.
+type NewColumnVerifier func(ctx context.Context, dc blocks.RODataColumn) error
