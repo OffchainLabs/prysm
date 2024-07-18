@@ -8,6 +8,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 
 	kzg "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/kzg"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
@@ -26,6 +27,8 @@ func recoverCellsAndProofs(
 	columnsCount int,
 	blockRoot [fieldparams.RootLength]byte,
 ) ([]kzg.CellsAndProofs, error) {
+	var wg errgroup.Group
+
 	if len(dataColumnSideCars) == 0 {
 		return nil, errors.New("no data column sidecars")
 	}
@@ -40,40 +43,47 @@ func recoverCellsAndProofs(
 		}
 	}
 
-	// Recover cells and compute proofs.
-	recoveredCellsAndProofs := make([]kzg.CellsAndProofs, 0, blobCount)
+	// Recover cells and compute proofs in parallel.
+	recoveredCellsAndProofs := make([]kzg.CellsAndProofs, blobCount)
 
 	for blobIndex := 0; blobIndex < blobCount; blobIndex++ {
-		start := time.Now()
+		bIndex := blobIndex
+		wg.Go(func() error {
+			start := time.Now()
 
-		cellsIndices := make([]uint64, 0, columnsCount)
-		cells := make([]kzg.Cell, 0, columnsCount)
+			cellsIndices := make([]uint64, 0, columnsCount)
+			cells := make([]kzg.Cell, 0, columnsCount)
 
-		for _, sidecar := range dataColumnSideCars {
-			// Build the cell indices.
-			cellsIndices = append(cellsIndices, sidecar.ColumnIndex)
+			for _, sidecar := range dataColumnSideCars {
+				// Build the cell indices.
+				cellsIndices = append(cellsIndices, sidecar.ColumnIndex)
 
-			// Get the cell.
-			column := sidecar.DataColumn
-			cell := column[blobIndex]
+				// Get the cell.
+				column := sidecar.DataColumn
+				cell := column[bIndex]
 
-			cells = append(cells, kzg.Cell(cell))
-		}
+				cells = append(cells, kzg.Cell(cell))
+			}
 
-		// Recover the cells and proofs for the corresponding blob
-		cellsAndProofs, err := kzg.RecoverCellsAndKZGProofs(cellsIndices, cells)
+			// Recover the cells and proofs for the corresponding blob
+			cellsAndProofs, err := kzg.RecoverCellsAndKZGProofs(cellsIndices, cells)
 
-		if err != nil {
-			return nil, errors.Wrapf(err, "recover cells and KZG proofs for blob %d", blobIndex)
-		}
+			if err != nil {
+				return errors.Wrapf(err, "recover cells and KZG proofs for blob %d", bIndex)
+			}
 
-		recoveredCellsAndProofs = append(recoveredCellsAndProofs, cellsAndProofs)
+			recoveredCellsAndProofs[bIndex] = cellsAndProofs
+			log.WithFields(logrus.Fields{
+				"elapsed": time.Since(start),
+				"index":   bIndex,
+				"root":    fmt.Sprintf("%x", blockRoot),
+			}).Debug("Recovered cells and proofs")
+			return nil
+		})
+	}
 
-		log.WithFields(logrus.Fields{
-			"elapsed": time.Since(start),
-			"index":   blobIndex,
-			"root":    fmt.Sprintf("%x", blockRoot),
-		}).Debug("Recovered cells and proofs")
+	if err := wg.Wait(); err != nil {
+		return nil, err
 	}
 
 	return recoveredCellsAndProofs, nil
