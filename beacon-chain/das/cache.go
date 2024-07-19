@@ -134,7 +134,7 @@ func (e *cacheEntry) filter(root [32]byte, kc safeCommitmentArray) ([]blocks.ROB
 	return scs, nil
 }
 
-func (e *cacheEntry) filterColumns(root [32]byte, kc safeCommitmentsArray) ([]blocks.RODataColumn, error) {
+func (e *cacheEntry) filterColumns(root [32]byte, kc *safeCommitmentsArray) ([]blocks.RODataColumn, error) {
 	if e.diskSummary.AllAvailable(kc.count()) {
 		return nil, nil
 	}
@@ -178,7 +178,7 @@ func (s safeCommitmentArray) count() int {
 
 type safeCommitmentsArray [fieldparams.NumberOfColumns][][]byte
 
-func (s safeCommitmentsArray) count() int {
+func (s *safeCommitmentsArray) count() int {
 	for i := range s {
 		if s[i] == nil {
 			return i

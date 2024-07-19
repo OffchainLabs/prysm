@@ -176,10 +176,8 @@ func (s *Service) getBlocksInQueue(slot primitives.Slot) []interfaces.ReadOnlySi
 func (s *Service) removeBlockFromQueue(b interfaces.ReadOnlySignedBeaconBlock, blkRoot [32]byte) error {
 	s.pendingQueueLock.Lock()
 	defer s.pendingQueueLock.Unlock()
-	if err := s.deleteBlockFromPendingQueue(b.Block().Slot(), b, blkRoot); err != nil {
-		return err
-	}
-	return nil
+
+	return s.deleteBlockFromPendingQueue(b.Block().Slot(), b, blkRoot)
 }
 
 // isBlockInQueue checks if a block's parent root is in the pending queue.

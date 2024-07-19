@@ -20,7 +20,7 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 	s.setSeenDataColumnIndex(dc.SignedBlockHeader.Header.Slot, dc.SignedBlockHeader.Header.ProposerIndex, dc.ColumnIndex)
 	s.setReceivedDataColumn(dc.BlockRoot(), dc.ColumnIndex)
 
-	if err := s.cfg.chain.ReceiveDataColumn(ctx, dc); err != nil {
+	if err := s.cfg.chain.ReceiveDataColumn(dc); err != nil {
 		return errors.Wrap(err, "receive data column")
 	}
 

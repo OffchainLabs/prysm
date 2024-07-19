@@ -488,7 +488,7 @@ func (vs *Server) broadcastAndReceiveDataColumns(ctx context.Context, sidecars [
 			}
 
 			verifiedRODataColumn := blocks.NewVerifiedRODataColumn(roDataColumn)
-			if err := vs.DataColumnReceiver.ReceiveDataColumn(ctx, verifiedRODataColumn); err != nil {
+			if err := vs.DataColumnReceiver.ReceiveDataColumn(verifiedRODataColumn); err != nil {
 				return errors.Wrap(err, "receive data column")
 			}
 

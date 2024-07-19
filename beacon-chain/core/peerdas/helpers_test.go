@@ -50,12 +50,12 @@ func GetRandBlob(seed int64) kzg.Blob {
 	return blob
 }
 
-func GenerateCommitmentAndProof(blob kzg.Blob) (*kzg.Commitment, *kzg.Proof, error) {
-	commitment, err := kzg.BlobToKZGCommitment(&blob)
+func GenerateCommitmentAndProof(blob *kzg.Blob) (*kzg.Commitment, *kzg.Proof, error) {
+	commitment, err := kzg.BlobToKZGCommitment(blob)
 	if err != nil {
 		return nil, nil, err
 	}
-	proof, err := kzg.ComputeBlobKZGProof(&blob, commitment)
+	proof, err := kzg.ComputeBlobKZGProof(blob, commitment)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -72,7 +72,7 @@ func TestVerifyDataColumnSidecarKZGProofs(t *testing.T) {
 	)
 	for i := int64(0); i < 6; i++ {
 		blob := GetRandBlob(i)
-		commitment, _, err := GenerateCommitmentAndProof(blob)
+		commitment, _, err := GenerateCommitmentAndProof(&blob)
 		require.NoError(t, err)
 		comms = append(comms, commitment[:])
 		blobs = append(blobs, blob)

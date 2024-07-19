@@ -39,8 +39,9 @@ func NewLazilyPersistentStoreColumn(store *filesystem.BlobStorage, verifier Colu
 	}
 }
 
+// Persist do nothing at the moment.
 // TODO: Very Ugly, change interface to allow for columns and blobs
-func (s *LazilyPersistentStoreColumn) Persist(current primitives.Slot, sc ...blocks.ROBlob) error {
+func (*LazilyPersistentStoreColumn) Persist(_ primitives.Slot, _ ...blocks.ROBlob) error {
 	return nil
 }
 
@@ -100,7 +101,7 @@ func (s *LazilyPersistentStoreColumn) IsDataAvailable(ctx context.Context, curre
 	// Verify we have all the expected sidecars, and fail fast if any are missing or inconsistent.
 	// We don't try to salvage problematic batches because this indicates a misbehaving peer and we'd rather
 	// ignore their response and decrease their peer score.
-	sidecars, err := entry.filterColumns(root, blockCommitments)
+	sidecars, err := entry.filterColumns(root, &blockCommitments)
 	if err != nil {
 		return errors.Wrap(err, "incomplete BlobSidecar batch")
 	}

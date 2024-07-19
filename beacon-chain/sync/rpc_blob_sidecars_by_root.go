@@ -40,7 +40,7 @@ func (s *Service) blobSidecarByRootRPCHandler(ctx context.Context, msg interface
 		return err
 	}
 	// Sort the identifiers so that requests for the same blob root will be adjacent, minimizing db lookups.
-	sort.Sort(blobIdents)
+	sort.Sort(&blobIdents)
 
 	batchSize := flags.Get().BlobBatchLimit
 	var ticker *time.Ticker

@@ -50,7 +50,7 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 	}
 
 	// Sort the identifiers so that requests for the same blob root will be adjacent, minimizing db lookups.
-	sort.Sort(requestedColumnIdents)
+	sort.Sort(&requestedColumnIdents)
 
 	requestedColumnsList := make([]uint64, 0, len(requestedColumnIdents))
 	for _, ident := range requestedColumnIdents {

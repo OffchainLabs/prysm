@@ -45,7 +45,7 @@ func (c *blobsTestCase) filterExpectedByRoot(t *testing.T, scs []blocks.ROBlob, 
 			message: p2pTypes.ErrBlobLTMinRequest.Error(),
 		}}
 	}
-	sort.Sort(req)
+	sort.Sort(&req)
 	var expect []*expectedBlobChunk
 	blockOffset := 0
 	if len(scs) == 0 {
