@@ -89,7 +89,7 @@ func TestGetPayloadTimelinessCommittee(t *testing.T) {
 	committee1, err := helpers.BeaconCommitteeFromState(ctx, state, state.Slot(), 0)
 	require.NoError(t, err)
 
-	require.DeepEqual(t, committee1[len(committee1)-64:], ptc[:64])
+	require.DeepEqual(t, committee1[:64], ptc[:64])
 }
 
 func Test_PtcAllocation(t *testing.T) {
