@@ -356,11 +356,8 @@ func PTCAssignments(committee []primitives.ValidatorIndex,
 		return assignments
 	}
 
-	// Calculate the starting index for PTC committee.
-	ptcStartIndex := committeeLength - membersPerCommittee
-
 	// Loop through the selected committee members for PTC assignments.
-	for i := ptcStartIndex; i < committeeLength; i++ {
+	for i := uint64(0); i < membersPerCommittee; i++ {
 		vIndex := committee[i]
 
 		assignment, exists := assignments[vIndex]

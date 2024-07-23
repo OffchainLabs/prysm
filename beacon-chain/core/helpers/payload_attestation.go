@@ -83,8 +83,7 @@ func GetPayloadTimelinessCommittee(ctx context.Context, state state.ReadOnlyBeac
 		if uint64(len(committee)) < membersPerCommittee {
 			return nil, errCommitteeOverflow
 		}
-		start := uint64(len(committee)) - membersPerCommittee
-		indices = append(indices, committee[start:]...)
+		indices = append(indices, committee[:membersPerCommittee]...)
 	}
 	return
 }
