@@ -16,6 +16,7 @@ import (
 	kzg "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/kzg"
 	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers"
 	p2ptest "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
 	p2pTypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
@@ -56,7 +57,10 @@ func TestRandomizeColumns(t *testing.T) {
 }
 
 // createAndConnectPeer creates a peer with a private key `offset` fixed.
-// The peer is added and connected to `p2pService`
+// The peer is added and connected to `p2pService`.
+// If a `RPCDataColumnSidecarsByRootTopicV1` request is made with column index `i`,
+// then the peer will respond with the `dataColumnSidecars[i]` if it is not in `columnsNotToRespond`.
+// (If `len(dataColumnSidecars) < i`, then this function will panic.)
 func createAndConnectPeer(
 	t *testing.T,
 	p2pService *p2ptest.TestP2P,
@@ -78,8 +82,7 @@ func createAndConnectPeer(
 	// Create the peer.
 	peer := p2ptest.NewTestP2P(t, libp2p.Identity(privateKey))
 
-	// TODO: Do not hardcode the topic.
-	peer.SetStreamHandler("/eth2/beacon_chain/req/data_column_sidecars_by_root/1/ssz_snappy", func(stream network.Stream) {
+	peer.SetStreamHandler(p2p.RPCDataColumnSidecarsByRootTopicV1+"/ssz_snappy", func(stream network.Stream) {
 		// Decode the request.
 		req := new(p2pTypes.DataColumnSidecarsByRootReq)
 		err := peer.Encoding().DecodeWithMaxLength(stream, req)

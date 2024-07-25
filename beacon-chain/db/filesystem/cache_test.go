@@ -149,3 +149,108 @@ func TestAllAvailable(t *testing.T) {
 		})
 	}
 }
+
+func TestHasDataColumnIndex(t *testing.T) {
+	storedIndices := map[uint64]bool{
+		1: true,
+		3: true,
+		5: true,
+	}
+
+	cases := []struct {
+		name     string
+		idx      uint64
+		expected bool
+	}{
+		{
+			name:     "index is too high",
+			idx:      fieldparams.NumberOfColumns,
+			expected: false,
+		},
+		{
+			name:     "non existing index",
+			idx:      2,
+			expected: false,
+		},
+		{
+			name:     "existing index",
+			idx:      3,
+			expected: true,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var mask blobIndexMask
+
+			for idx := range storedIndices {
+				mask[idx] = true
+			}
+
+			sum := BlobStorageSummary{mask: mask}
+			require.Equal(t, c.expected, sum.HasDataColumnIndex(c.idx))
+		})
+	}
+}
+
+func TestAllDataColumnAvailable(t *testing.T) {
+	tooManyColumns := make(map[uint64]bool, fieldparams.NumberOfColumns+1)
+	for i := uint64(0); i < fieldparams.NumberOfColumns+1; i++ {
+		tooManyColumns[i] = true
+	}
+
+	columns346 := map[uint64]bool{
+		3: true,
+		4: true,
+		6: true,
+	}
+
+	columns36 := map[uint64]bool{
+		3: true,
+		6: true,
+	}
+
+	cases := []struct {
+		name          string
+		storedIndices map[uint64]bool
+		testedIndices map[uint64]bool
+		expected      bool
+	}{
+		{
+			name:          "no tested indices",
+			storedIndices: columns346,
+			testedIndices: map[uint64]bool{},
+			expected:      true,
+		},
+		{
+			name:          "too many tested indices",
+			storedIndices: columns346,
+			testedIndices: tooManyColumns,
+			expected:      false,
+		},
+		{
+			name:          "not all tested indices are stored",
+			storedIndices: columns36,
+			testedIndices: columns346,
+			expected:      false,
+		},
+		{
+			name:          "all tested indices are stored",
+			storedIndices: columns346,
+			testedIndices: columns36,
+			expected:      true,
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var mask blobIndexMask
+
+			for idx := range c.storedIndices {
+				mask[idx] = true
+			}
+
+			sum := BlobStorageSummary{mask: mask}
+			require.Equal(t, c.expected, sum.AllDataColumnsAvailable(c.testedIndices))
+		})
+	}
+}

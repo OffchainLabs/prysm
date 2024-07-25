@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sort"
 
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -38,7 +39,6 @@ var (
 	errChunkResponseIndexNotAsc       = errors.Wrap(ErrInvalidFetchedData, "blob indices for a block must start at 0 and increase by 1")
 	errUnrequested                    = errors.Wrap(ErrInvalidFetchedData, "received BlobSidecar in response that was not requested")
 	errBlobResponseOutOfBounds        = errors.Wrap(ErrInvalidFetchedData, "received BlobSidecar with slot outside BlobSidecarsByRangeRequest bounds")
-	errDataColumnResponseOutOfBounds  = errors.Wrap(ErrInvalidFetchedData, "received DataColumnSidecar with slot outside DataColumnSidecarsByRangeRequest bounds")
 	errChunkResponseBlockMismatch     = errors.Wrap(ErrInvalidFetchedData, "blob block details do not match")
 	errChunkResponseParentMismatch    = errors.Wrap(ErrInvalidFetchedData, "parent root for response element doesn't match previous element root")
 )
@@ -251,6 +251,10 @@ func SendDataColumnSidecarByRoot(
 			break
 		}
 
+		if roDataColumn == nil {
+			return nil, errors.Wrap(err, "validation error")
+		}
+
 		if err != nil {
 			return nil, errors.Wrap(err, "read chunked data column sidecar")
 		}
@@ -267,15 +271,82 @@ func SendDataColumnSidecarByRoot(
 	return roDataColumns, nil
 }
 
-func SendDataColumnsByRangeRequest(ctx context.Context, tor blockchain.TemporalOracle, p2pApi p2p.P2P, pid peer.ID, ctxMap ContextByteVersions, req *pb.DataColumnSidecarsByRangeRequest) ([]blocks.RODataColumn, error) {
+// dataColumnValidatorFromRangeReq verifies that the slot of the data column sidecar is within the bounds of the request.
+func dataColumnValidatorFromRangeReq(req *pb.DataColumnSidecarsByRangeRequest) DataColumnResponseValidation {
+	end := req.StartSlot + primitives.Slot(req.Count)
+
+	return func(sc blocks.RODataColumn) bool {
+		slot := sc.Slot()
+		valid := slot >= req.StartSlot && slot < end
+
+		if valid {
+			return true
+		}
+
+		log.WithFields(logrus.Fields{
+			"reqStartSlot": req.StartSlot,
+			"reqCount":     req.Count,
+			"respSlot":     slot,
+			"respRoot":     fmt.Sprintf("%#x", sc.BlockRoot()),
+		}).Debug("Data column sidecar slot out of range")
+
+		return false
+	}
+}
+
+// dataColumnIndexValidatorFromRangeReq verifies that the data column sidecar is requested in the request.
+func dataColumnIndexValidatorFromRangeReq(req *pb.DataColumnSidecarsByRangeRequest) DataColumnResponseValidation {
+	columnIds := make(map[uint64]bool)
+	for _, col := range req.Columns {
+		columnIds[col] = true
+	}
+
+	return func(sc blocks.RODataColumn) bool {
+		columnIndex := sc.ColumnIndex
+
+		valid := columnIds[columnIndex]
+
+		if valid {
+			return true
+		}
+
+		columnsIdsSlice := make([]uint64, 0, len(columnIds))
+		for k := range columnIds {
+			columnsIdsSlice = append(columnsIdsSlice, k)
+		}
+
+		sort.Slice(columnsIdsSlice, func(i, j int) bool {
+			return columnsIdsSlice[i] < columnsIdsSlice[j]
+		})
+
+		log.WithFields(logrus.Fields{
+			"reqColumns": columnsIdsSlice,
+			"respColumn": columnIndex,
+			"respRoot":   fmt.Sprintf("%#x", sc.BlockRoot()),
+		}).Debug("Data column sidecar column index not requested")
+
+		return false
+	}
+}
+
+func SendDataColumnsByRangeRequest(
+	ctx context.Context,
+	tor blockchain.TemporalOracle,
+	p2pApi p2p.P2P,
+	pid peer.ID,
+	ctxMap ContextByteVersions,
+	req *pb.DataColumnSidecarsByRangeRequest,
+) ([]blocks.RODataColumn, error) {
 	topic, err := p2p.TopicFromMessage(p2p.DataColumnSidecarsByRangeName, slots.ToEpoch(tor.CurrentSlot()))
 	if err != nil {
 		return nil, err
 	}
 	log.WithFields(logrus.Fields{
-		"topic":     topic,
-		"startSlot": req.StartSlot,
-		"count":     req.Count,
+		"topic":      topic,
+		"startSlot":  req.StartSlot,
+		"count":      req.Count,
+		"columns":    req.Columns,
+		"totalCount": req.Count * uint64(len(req.Columns)),
 	}).Debug("Sending data column by range request")
 	stream, err := p2pApi.Send(ctx, req, topic, pid)
 	if err != nil {
@@ -288,7 +359,11 @@ func SendDataColumnsByRangeRequest(ctx context.Context, tor blockchain.TemporalO
 	if max > req.Count*fieldparams.NumberOfColumns {
 		max = req.Count * fieldparams.NumberOfColumns
 	}
-	vfuncs := []DataColumnResponseValidation{dataColumnValidatorFromRangeReq(req), dataColumnIndexValidatorFromRangeReq(req)}
+
+	vfuncs := []DataColumnResponseValidation{
+		dataColumnValidatorFromRangeReq(req),
+		dataColumnIndexValidatorFromRangeReq(req),
+	}
 
 	// Read the data column sidecars from the stream.
 	roDataColumns := make([]blocks.RODataColumn, 0, max)
@@ -301,13 +376,20 @@ func SendDataColumnsByRangeRequest(ctx context.Context, tor blockchain.TemporalO
 		}
 
 		if err != nil {
-			return nil, errors.Wrap(err, "read chunked data column sidecar")
+			log.WithError(err).WithField("peer", pid).Debug("Error reading chunked data column sidecar")
+			break
+		}
+
+		if roDataColumn == nil {
+			log.WithError(err).WithField("peer", pid).Debug("Validation error")
+			continue
 		}
 
 		if i >= max {
 			// The response MUST contain no more than `reqCount` blocks.
 			// (`reqCount` is already capped by `maxRequestDataColumnSideCar`.)
-			return nil, errors.Wrap(ErrInvalidFetchedData, "response contains more data column sidecars than maximum")
+			log.WithError(err).WithField("peer", pid).Debug("Response contains more data column sidecars than maximum")
+			break
 		}
 
 		roDataColumns = append(roDataColumns, *roDataColumn)
@@ -360,9 +442,11 @@ func readChunkedDataColumnSideCar(
 	if err != nil {
 		return nil, errors.Wrap(err, "new read only data column")
 	}
+
+	// Run validation functions.
 	for _, val := range validation {
-		if err := val(roDataColumn); err != nil {
-			return nil, err
+		if !val(roDataColumn) {
+			return nil, nil
 		}
 	}
 	return &roDataColumn, nil
@@ -374,7 +458,7 @@ type BlobResponseValidation func(blocks.ROBlob) error
 
 // DataColumnResponseValidation represents a function that can validate aspects of a single unmarshaled data column
 // that was received from a peer in response to an rpc request.
-type DataColumnResponseValidation func(column blocks.RODataColumn) error
+type DataColumnResponseValidation func(column blocks.RODataColumn) bool
 
 func composeBlobValidations(vf ...BlobResponseValidation) BlobResponseValidation {
 	return func(blob blocks.ROBlob) error {
@@ -473,48 +557,47 @@ func blobValidatorFromRangeReq(req *pb.BlobSidecarsByRangeRequest) BlobResponseV
 }
 
 func dataColumnValidatorFromRootReq(req *p2ptypes.DataColumnSidecarsByRootReq) DataColumnResponseValidation {
-	columnIds := make(map[[32]byte]map[uint64]bool)
+	columnsIndexFromRoot := make(map[[fieldparams.RootLength]byte]map[uint64]bool)
+
 	for _, sc := range *req {
 		blockRoot := bytesutil.ToBytes32(sc.BlockRoot)
-		if columnIds[blockRoot] == nil {
-			columnIds[blockRoot] = make(map[uint64]bool)
+		if columnsIndexFromRoot[blockRoot] == nil {
+			columnsIndexFromRoot[blockRoot] = make(map[uint64]bool)
 		}
-		columnIds[blockRoot][sc.ColumnIndex] = true
-	}
-	return func(sc blocks.RODataColumn) error {
-		columnIndices := columnIds[sc.BlockRoot()]
-		if columnIndices == nil {
-			return errors.Wrapf(errUnrequested, "root=%#x", sc.BlockRoot())
-		}
-		requested := columnIndices[sc.ColumnIndex]
-		if !requested {
-			return errors.Wrapf(errUnrequested, "root=%#x index=%d", sc.BlockRoot(), sc.ColumnIndex)
-		}
-		return nil
-	}
-}
 
-func dataColumnIndexValidatorFromRangeReq(req *pb.DataColumnSidecarsByRangeRequest) DataColumnResponseValidation {
-	columnIds := make(map[uint64]bool)
-	for _, col := range req.Columns {
-		columnIds[col] = true
+		columnsIndexFromRoot[blockRoot][sc.ColumnIndex] = true
 	}
-	return func(sc blocks.RODataColumn) error {
-		requested := columnIds[sc.ColumnIndex]
-		if !requested {
-			return errors.Wrapf(errUnrequested, "root=%#x index=%d", sc.BlockRoot(), sc.ColumnIndex)
-		}
-		return nil
-	}
-}
 
-func dataColumnValidatorFromRangeReq(req *pb.DataColumnSidecarsByRangeRequest) DataColumnResponseValidation {
-	end := req.StartSlot + primitives.Slot(req.Count)
-	return func(sc blocks.RODataColumn) error {
-		if sc.Slot() < req.StartSlot || sc.Slot() >= end {
-			return errors.Wrapf(errDataColumnResponseOutOfBounds, "req start,end:%d,%d, resp:%d", req.StartSlot, end, sc.Slot())
+	return func(sc blocks.RODataColumn) bool {
+		root := sc.BlockRoot()
+		columnsIndex, ok := columnsIndexFromRoot[root]
+
+		if !ok {
+			log.WithField("root", fmt.Sprintf("%#x", root)).Debug("Data column sidecar root not requested")
+			return false
 		}
-		return nil
+
+		if !columnsIndex[sc.ColumnIndex] {
+			columnsIndexSlice := make([]uint64, 0, len(columnsIndex))
+
+			for index := range columnsIndex {
+				columnsIndexSlice = append(columnsIndexSlice, index)
+			}
+
+			sort.Slice(columnsIndexSlice, func(i, j int) bool {
+				return columnsIndexSlice[i] < columnsIndexSlice[j]
+			})
+
+			log.WithFields(logrus.Fields{
+				"root":              fmt.Sprintf("%#x", root),
+				"column":            sc.ColumnIndex,
+				"reaquestedColumns": columnsIndexSlice,
+			}).Debug("Data column sidecar column index not requested")
+
+			return false
+		}
+
+		return true
 	}
 }
 

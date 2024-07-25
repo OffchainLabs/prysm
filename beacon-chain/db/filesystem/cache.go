@@ -26,6 +26,15 @@ func (s BlobStorageSummary) HasIndex(idx uint64) bool {
 	return s.mask[idx]
 }
 
+// HasDataColumnIndex true if the DataColumnSidecar at the given index is available in the filesystem.
+func (s BlobStorageSummary) HasDataColumnIndex(idx uint64) bool {
+	// Protect from panic, but assume callers are sophisticated enough to not need an error telling them they have an invalid idx.
+	if idx >= fieldparams.NumberOfColumns {
+		return false
+	}
+	return s.mask[idx]
+}
+
 // AllAvailable returns true if we have all blobs for all indices from 0 to count-1.
 func (s BlobStorageSummary) AllAvailable(count int) bool {
 	if count > fieldparams.MaxBlobsPerBlock {
@@ -36,6 +45,21 @@ func (s BlobStorageSummary) AllAvailable(count int) bool {
 			return false
 		}
 	}
+	return true
+}
+
+// AllDataColumnsAvailable returns true if we have all datacolumns for corresponding indices.
+func (s BlobStorageSummary) AllDataColumnsAvailable(indices map[uint64]bool) bool {
+	if uint64(len(indices)) > fieldparams.NumberOfColumns {
+		return false
+	}
+
+	for indice := range indices {
+		if !s.mask[indice] {
+			return false
+		}
+	}
+
 	return true
 }
 

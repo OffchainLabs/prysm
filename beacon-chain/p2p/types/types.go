@@ -208,9 +208,9 @@ func (s *BlobSidecarsByRootReq) Len() int {
 	return len(*s)
 }
 
-// =====================================
+// ===================================
 // DataColumnSidecarsByRootReq section
-// =====================================
+// ===================================
 var _ ssz.Marshaler = (*DataColumnSidecarsByRootReq)(nil)
 var _ ssz.Unmarshaler = (*DataColumnSidecarsByRootReq)(nil)
 var _ sort.Interface = (*DataColumnSidecarsByRootReq)(nil)

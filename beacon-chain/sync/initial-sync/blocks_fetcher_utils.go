@@ -275,19 +275,16 @@ func (f *blocksFetcher) findForkWithPeer(ctx context.Context, pid peer.ID, slot 
 			"slot": block.Block().Slot(),
 			"root": fmt.Sprintf("%#x", parentRoot),
 		}).Debug("Block with unknown parent root has been found")
-		altBlocks, err := sortedBlockWithVerifiedBlobSlice(reqBlocks[i-1:])
+		bwb, err := sortedBlockWithVerifiedBlobSlice(reqBlocks[i-1:])
 		if err != nil {
 			return nil, errors.Wrap(err, "invalid blocks received in findForkWithPeer")
 		}
-		var bwb []blocks.BlockWithROBlobs
 		if coreTime.PeerDASIsActive(block.Block().Slot()) {
-			bwb, err = f.fetchColumnsFromPeer(ctx, altBlocks, pid, []peer.ID{pid})
-			if err != nil {
+			if err := f.fetchDataColumnsFromPeers(ctx, bwb, []peer.ID{pid}); err != nil {
 				return nil, errors.Wrap(err, "unable to retrieve blobs for blocks found in findForkWithPeer")
 			}
 		} else {
-			bwb, err = f.fetchBlobsFromPeer(ctx, altBlocks, pid, []peer.ID{pid})
-			if err != nil {
+			if err = f.fetchBlobsFromPeer(ctx, bwb, pid, []peer.ID{pid}); err != nil {
 				return nil, errors.Wrap(err, "unable to retrieve blobs for blocks found in findForkWithPeer")
 			}
 		}
@@ -313,13 +310,11 @@ func (f *blocksFetcher) findAncestor(ctx context.Context, pid peer.ID, b interfa
 				return nil, errors.Wrap(err, "received invalid blocks in findAncestor")
 			}
 			if coreTime.PeerDASIsActive(b.Block().Slot()) {
-				bwb, err = f.fetchColumnsFromPeer(ctx, bwb, pid, []peer.ID{pid})
-				if err != nil {
+				if err := f.fetchDataColumnsFromPeers(ctx, bwb, []peer.ID{pid}); err != nil {
 					return nil, errors.Wrap(err, "unable to retrieve columns for blocks found in findAncestor")
 				}
 			} else {
-				bwb, err = f.fetchBlobsFromPeer(ctx, bwb, pid, []peer.ID{pid})
-				if err != nil {
+				if err = f.fetchBlobsFromPeer(ctx, bwb, pid, []peer.ID{pid}); err != nil {
 					return nil, errors.Wrap(err, "unable to retrieve blobs for blocks found in findAncestor")
 				}
 			}

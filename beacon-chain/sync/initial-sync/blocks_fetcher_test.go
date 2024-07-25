@@ -1,7 +1,10 @@
 package initialsync
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/binary"
 	"fmt"
 	"math"
 	"sort"
@@ -9,14 +12,23 @@ import (
 	"testing"
 	"time"
 
+	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
+	GoKZG "github.com/crate-crypto/go-kzg-4844"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/enr"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
+	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	swarmt "github.com/libp2p/go-libp2p/p2p/net/swarm/testing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/kzg"
 	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
 	dbtest "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
-	p2pm "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
-	p2pt "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers"
+	p2ptest "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
 	beaconsync "github.com/prysmaticlabs/prysm/v5/beacon-chain/sync"
 	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
@@ -27,8 +39,11 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	leakybucket "github.com/prysmaticlabs/prysm/v5/container/leaky-bucket"
 	"github.com/prysmaticlabs/prysm/v5/container/slice"
+	ecdsaprysm "github.com/prysmaticlabs/prysm/v5/crypto/ecdsa"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/network/forks"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"github.com/prysmaticlabs/prysm/v5/testing/util"
@@ -267,7 +282,7 @@ func TestBlocksFetcher_RoundRobin(t *testing.T) {
 
 			beaconDB := dbtest.SetupDB(t)
 
-			p := p2pt.NewTestP2P(t)
+			p := p2ptest.NewTestP2P(t)
 			connectPeers(t, p, tt.peers, p.Peers())
 			cache.RLock()
 			genesisRoot := cache.rootCache[0]
@@ -532,9 +547,9 @@ func TestBlocksFetcher_requestBeaconBlocksByRange(t *testing.T) {
 }
 
 func TestBlocksFetcher_RequestBlocksRateLimitingLocks(t *testing.T) {
-	p1 := p2pt.NewTestP2P(t)
-	p2 := p2pt.NewTestP2P(t)
-	p3 := p2pt.NewTestP2P(t)
+	p1 := p2ptest.NewTestP2P(t)
+	p2 := p2ptest.NewTestP2P(t)
+	p3 := p2ptest.NewTestP2P(t)
 	p1.Connect(p2)
 	p1.Connect(p3)
 	require.Equal(t, 2, len(p1.BHost.Network().Peers()), "Expected peers to be connected")
@@ -544,7 +559,7 @@ func TestBlocksFetcher_RequestBlocksRateLimitingLocks(t *testing.T) {
 		Count:     64,
 	}
 
-	topic := p2pm.RPCBlocksByRangeTopicV1
+	topic := p2p.RPCBlocksByRangeTopicV1
 	protocol := libp2pcore.ProtocolID(topic + p2.Encoding().ProtocolSuffix())
 	streamHandlerFn := func(stream network.Stream) {
 		assert.NoError(t, stream.Close())
@@ -603,15 +618,15 @@ func TestBlocksFetcher_RequestBlocksRateLimitingLocks(t *testing.T) {
 }
 
 func TestBlocksFetcher_WaitForBandwidth(t *testing.T) {
-	p1 := p2pt.NewTestP2P(t)
-	p2 := p2pt.NewTestP2P(t)
+	p1 := p2ptest.NewTestP2P(t)
+	p2 := p2ptest.NewTestP2P(t)
 	p1.Connect(p2)
 	require.Equal(t, 1, len(p1.BHost.Network().Peers()), "Expected peers to be connected")
 	req := &ethpb.BeaconBlocksByRangeRequest{
 		Count: 64,
 	}
 
-	topic := p2pm.RPCBlocksByRangeTopicV1
+	topic := p2p.RPCBlocksByRangeTopicV1
 	protocol := libp2pcore.ProtocolID(topic + p2.Encoding().ProtocolSuffix())
 	streamHandlerFn := func(stream network.Stream) {
 		assert.NoError(t, stream.Close())
@@ -639,7 +654,7 @@ func TestBlocksFetcher_WaitForBandwidth(t *testing.T) {
 }
 
 func TestBlocksFetcher_requestBlocksFromPeerReturningInvalidBlocks(t *testing.T) {
-	p1 := p2pt.NewTestP2P(t)
+	p1 := p2ptest.NewTestP2P(t)
 	tests := []struct {
 		name         string
 		req          *ethpb.BeaconBlocksByRangeRequest
@@ -884,7 +899,7 @@ func TestBlocksFetcher_requestBlocksFromPeerReturningInvalidBlocks(t *testing.T)
 		},
 	}
 
-	topic := p2pm.RPCBlocksByRangeTopicV1
+	topic := p2p.RPCBlocksByRangeTopicV1
 	protocol := libp2pcore.ProtocolID(topic + p1.Encoding().ProtocolSuffix())
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -894,7 +909,7 @@ func TestBlocksFetcher_requestBlocksFromPeerReturningInvalidBlocks(t *testing.T)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p2 := p2pt.NewTestP2P(t)
+			p2 := p2ptest.NewTestP2P(t)
 			p1.Connect(p2)
 
 			p2.BHost.SetStreamHandler(protocol, tt.handlerGenFn(tt.req))
@@ -1027,17 +1042,11 @@ func TestBlobRequest(t *testing.T) {
 }
 
 func TestCountCommitments(t *testing.T) {
-	// no blocks
-	// blocks before retention start filtered
-	// blocks without commitments filtered
-	// pre-deneb filtered
-	// variety of commitment counts are accurate, from 1 to max
 	type testcase struct {
-		name      string
-		bwb       func(t *testing.T, c testcase) []blocks.BlockWithROBlobs
-		numBlocks int
-		retStart  primitives.Slot
-		resCount  int
+		name     string
+		bwb      func(t *testing.T, c testcase) []blocks.BlockWithROBlobs
+		retStart primitives.Slot
+		resCount int
 	}
 	cases := []testcase{
 		{
@@ -1208,7 +1217,7 @@ func TestVerifyAndPopulateBlobs(t *testing.T) {
 		}
 		require.Equal(t, len(blobs), len(expectedCommits))
 
-		bwb, err := verifyAndPopulateBlobs(bwb, blobs, testReqFromResp(bwb), nil)
+		err := verifyAndPopulateBlobs(bwb, blobs, testReqFromResp(bwb), nil)
 		require.NoError(t, err)
 		for _, bw := range bwb {
 			commits, err := bw.Block.Block().Body().BlobKzgCommitments()
@@ -1229,7 +1238,7 @@ func TestVerifyAndPopulateBlobs(t *testing.T) {
 	})
 	t.Run("missing blobs", func(t *testing.T) {
 		bwb, blobs := testSequenceBlockWithBlob(t, 10)
-		_, err := verifyAndPopulateBlobs(bwb, blobs[1:], testReqFromResp(bwb), nil)
+		err := verifyAndPopulateBlobs(bwb, blobs[1:], testReqFromResp(bwb), nil)
 		require.ErrorIs(t, err, errMissingBlobsForBlockCommitments)
 	})
 	t.Run("no blobs for last block", func(t *testing.T) {
@@ -1241,7 +1250,7 @@ func TestVerifyAndPopulateBlobs(t *testing.T) {
 		blobs = blobs[0 : len(blobs)-len(cmts)]
 		lastBlk, _ = util.GenerateTestDenebBlockWithSidecar(t, lastBlk.Block().ParentRoot(), lastBlk.Block().Slot(), 0)
 		bwb[lastIdx].Block = lastBlk
-		_, err = verifyAndPopulateBlobs(bwb, blobs, testReqFromResp(bwb), nil)
+		err = verifyAndPopulateBlobs(bwb, blobs, testReqFromResp(bwb), nil)
 		require.NoError(t, err)
 	})
 	t.Run("blobs not copied if all locally available", func(t *testing.T) {
@@ -1255,7 +1264,7 @@ func TestVerifyAndPopulateBlobs(t *testing.T) {
 			r7: {0, 1, 2, 3, 4, 5},
 		}
 		bss := filesystem.NewMockBlobStorageSummarizer(t, onDisk)
-		bwb, err := verifyAndPopulateBlobs(bwb, blobs, testReqFromResp(bwb), bss)
+		err := verifyAndPopulateBlobs(bwb, blobs, testReqFromResp(bwb), bss)
 		require.NoError(t, err)
 		require.Equal(t, 6, len(bwb[i1].Blobs))
 		require.Equal(t, 0, len(bwb[i7].Blobs))
@@ -1302,4 +1311,814 @@ func TestBlockFetcher_HasSufficientBandwidth(t *testing.T) {
 		}
 	}
 	assert.Equal(t, 2, len(receivedPeers))
+}
+
+func TestSortedSliceFromMap(t *testing.T) {
+	m := map[uint64]bool{1: true, 3: true, 2: true, 4: true}
+	expected := []uint64{1, 2, 3, 4}
+
+	actual := sortedSliceFromMap(m)
+	require.DeepSSZEqual(t, expected, actual)
+}
+
+type blockParams struct {
+	slot     primitives.Slot
+	hasBlobs bool
+}
+
+func rootFromUint64(u uint64) [fieldparams.RootLength]byte {
+	var root [fieldparams.RootLength]byte
+	binary.LittleEndian.PutUint64(root[:], u)
+	return root
+}
+
+func createPeer(t *testing.T, privateKeyOffset int, custodyCount uint64) (*enr.Record, peer.ID) {
+	privateKeyBytes := make([]byte, 32)
+	for i := 0; i < 32; i++ {
+		privateKeyBytes[i] = byte(privateKeyOffset + i)
+	}
+
+	unmarshalledPrivateKey, err := crypto.UnmarshalSecp256k1PrivateKey(privateKeyBytes)
+	require.NoError(t, err)
+
+	privateKey, err := ecdsaprysm.ConvertFromInterfacePrivKey(unmarshalledPrivateKey)
+	require.NoError(t, err)
+
+	peerID, err := peer.IDFromPrivateKey(unmarshalledPrivateKey)
+	require.NoError(t, err)
+
+	record := &enr.Record{}
+	record.Set(peerdas.Csc(custodyCount))
+	record.Set(enode.Secp256k1(privateKey.PublicKey))
+
+	return record, peerID
+}
+
+func TestCustodyAllNeededColumns(t *testing.T) {
+	const dataColumnsCount = 31
+
+	p2p := p2ptest.NewTestP2P(t)
+
+	dataColumns := make(map[uint64]bool, dataColumnsCount)
+	for i := range dataColumnsCount {
+		dataColumns[uint64(i)] = true
+	}
+
+	custodyCounts := [...]uint64{4, 32, 4, 32}
+
+	peersID := make([]peer.ID, 0, len(custodyCounts))
+	for _, custodyCount := range custodyCounts {
+		peerRecord, peerID := createPeer(t, len(peersID), custodyCount)
+		peersID = append(peersID, peerID)
+		p2p.Peers().Add(peerRecord, peerID, nil, network.DirOutbound)
+	}
+
+	expected := []peer.ID{peersID[1], peersID[3]}
+
+	blocksFetcher := newBlocksFetcher(context.Background(), &blocksFetcherConfig{
+		p2p: p2p,
+	})
+
+	actual, err := blocksFetcher.custodyAllNeededColumns(peersID, dataColumns)
+	require.NoError(t, err)
+
+	require.DeepSSZEqual(t, expected, actual)
+}
+
+func TestCustodyColumns(t *testing.T) {
+	blocksFetcher := newBlocksFetcher(context.Background(), &blocksFetcherConfig{
+		p2p: p2ptest.NewTestP2P(t),
+	})
+
+	expected := map[uint64]bool{6: true, 38: true, 70: true, 102: true}
+
+	actual, err := blocksFetcher.custodyColumns()
+	require.NoError(t, err)
+
+	require.Equal(t, len(expected), len(actual))
+	for column := range expected {
+		require.Equal(t, true, actual[column])
+	}
+}
+
+func TestMinInt(t *testing.T) {
+	input := []int{1, 2, 3, 4, 5, 5, 4, 3, 2, 1}
+	const expected = 1
+
+	actual := minInt(input)
+
+	require.Equal(t, expected, actual)
+}
+
+func TestMaxInt(t *testing.T) {
+	input := []int{1, 2, 3, 4, 5, 5, 4, 3, 2, 1}
+	const expected = 5
+
+	actual := maxInt(input)
+
+	require.Equal(t, expected, actual)
+}
+
+// deterministicRandomness returns a random bytes array based on the seed
+func deterministicRandomness(t *testing.T, seed int64) [32]byte {
+	buf := new(bytes.Buffer)
+	err := binary.Write(buf, binary.BigEndian, seed)
+	require.NoError(t, err)
+	bytes := buf.Bytes()
+
+	return sha256.Sum256(bytes)
+}
+
+// getRandFieldElement returns a serialized random field element in big-endian
+func getRandFieldElement(t *testing.T, seed int64) [32]byte {
+	bytes := deterministicRandomness(t, seed)
+	var r fr.Element
+	r.SetBytes(bytes[:])
+
+	return GoKZG.SerializeScalar(r)
+}
+
+// getRandBlob returns a random blob using the passed seed as entropy
+func getRandBlob(t *testing.T, seed int64) kzg.Blob {
+	var blob kzg.Blob
+	for i := 0; i < len(blob); i += 32 {
+		fieldElementBytes := getRandFieldElement(t, seed+int64(i))
+		copy(blob[i:i+32], fieldElementBytes[:])
+	}
+	return blob
+}
+
+type (
+	responseParams struct {
+		slot        primitives.Slot
+		columnIndex uint64
+		alterate    bool
+	}
+
+	peerParams struct {
+		// Custody subnet count
+		csc uint64
+
+		// key: RPCDataColumnSidecarsByRangeTopicV1 stringified
+		// value: The list of all slotxindex to respond by request number
+		toRespond map[string][][]responseParams
+	}
+)
+
+// createAndConnectPeer creates a peer and connects it to the p2p service.
+// The peer will respond to the `RPCDataColumnSidecarsByRangeTopicV1` topic.
+func createAndConnectPeer(
+	t *testing.T,
+	p2pService *p2ptest.TestP2P,
+	chainService *mock.ChainService,
+	dataColumnsSidecarFromSlot map[primitives.Slot][]*ethpb.DataColumnSidecar,
+	peerParams peerParams,
+	offset int,
+) *p2ptest.TestP2P {
+	// Create the private key, depending on the offset.
+	privateKeyBytes := make([]byte, 32)
+	for i := 0; i < 32; i++ {
+		privateKeyBytes[i] = byte(offset + i)
+	}
+
+	privateKey, err := crypto.UnmarshalSecp256k1PrivateKey(privateKeyBytes)
+	require.NoError(t, err)
+
+	// Create the peer.
+	peer := p2ptest.NewTestP2P(t, swarmt.OptPeerPrivateKey(privateKey))
+
+	// Create a call counter.
+	countFromRequest := make(map[string]int, len(peerParams.toRespond))
+
+	peer.SetStreamHandler(p2p.RPCDataColumnSidecarsByRangeTopicV1+"/ssz_snappy", func(stream network.Stream) {
+		// Decode the request.
+		req := new(ethpb.DataColumnSidecarsByRangeRequest)
+
+		err := peer.Encoding().DecodeWithMaxLength(stream, req)
+		require.NoError(t, err)
+
+		// Convert the request to a string.
+		reqString := req.String()
+
+		// Get the response to send.
+		items, ok := peerParams.toRespond[reqString]
+		require.Equal(t, true, ok)
+
+		for _, responseParams := range items[countFromRequest[reqString]] {
+			// Get data columns sidecars for this slot.
+			dataColumnsSidecar, ok := dataColumnsSidecarFromSlot[responseParams.slot]
+			require.Equal(t, true, ok)
+
+			// Get the data column sidecar.
+			dataColumn := dataColumnsSidecar[responseParams.columnIndex]
+
+			// Alter the data column if needed.
+			initialValue0, initialValue1 := dataColumn.DataColumn[0][0], dataColumn.DataColumn[0][1]
+
+			if responseParams.alterate {
+				dataColumn.DataColumn[0][0] = 0
+				dataColumn.DataColumn[0][1] = 0
+			}
+
+			// Send the response.
+			err := beaconsync.WriteDataColumnSidecarChunk(stream, chainService, p2pService.Encoding(), dataColumn)
+			require.NoError(t, err)
+
+			if responseParams.alterate {
+				// Restore the data column.
+				dataColumn.DataColumn[0][0] = initialValue0
+				dataColumn.DataColumn[0][1] = initialValue1
+			}
+		}
+
+		// Close the stream.
+		err = stream.Close()
+		require.NoError(t, err)
+
+		// Increment the call counter.
+		countFromRequest[reqString]++
+	})
+
+	// Create the record and set the custody count.
+	enr := &enr.Record{}
+	enr.Set(peerdas.Csc(peerParams.csc))
+
+	// Add the peer and connect it.
+	p2pService.Peers().Add(enr, peer.PeerID(), nil, network.DirOutbound)
+	p2pService.Peers().SetConnectionState(peer.PeerID(), peers.PeerConnected)
+	p2pService.Connect(peer)
+
+	return peer
+}
+
+func defaultMockChain(t *testing.T, currentSlot uint64) (*mock.ChainService, *startup.Clock) {
+	de := params.BeaconConfig().DenebForkEpoch
+	df, err := forks.Fork(de)
+	require.NoError(t, err)
+	denebBuffer := params.BeaconConfig().MinEpochsForBlobsSidecarsRequest + 1000
+	ce := de + denebBuffer
+	fe := ce - 2
+	cs, err := slots.EpochStart(ce)
+	require.NoError(t, err)
+	now := time.Now()
+	genOffset := primitives.Slot(params.BeaconConfig().SecondsPerSlot) * cs
+	genesisTime := now.Add(-1 * time.Second * time.Duration(int64(genOffset)))
+
+	clock := startup.NewClock(genesisTime, [32]byte{}, startup.WithNower(
+		func() time.Time {
+			return genesisTime.Add(time.Duration(currentSlot*params.BeaconConfig().SecondsPerSlot) * time.Second)
+		},
+	))
+
+	chain := &mock.ChainService{
+		FinalizedCheckPoint: &ethpb.Checkpoint{Epoch: fe},
+		Fork:                df,
+	}
+
+	return chain, clock
+}
+
+func TestFirstLastIndices(t *testing.T) {
+	missingColumnsFromRoot := map[[fieldparams.RootLength]byte]map[uint64]bool{
+		rootFromUint64(42): {1: true, 3: true, 5: true},
+		rootFromUint64(43): {2: true, 4: true, 6: true},
+		rootFromUint64(44): {7: true, 8: true, 9: true},
+	}
+
+	indicesFromRoot := map[[fieldparams.RootLength]byte][]int{
+		rootFromUint64(42): {5, 6, 7},
+		rootFromUint64(43): {8, 9},
+		rootFromUint64(44): {3, 2, 1},
+	}
+
+	const (
+		expectedFirst = 1
+		expectedLast  = 9
+	)
+
+	actualFirst, actualLast := firstLastIndices(missingColumnsFromRoot, indicesFromRoot)
+
+	require.Equal(t, expectedFirst, actualFirst)
+	require.Equal(t, expectedLast, actualLast)
+}
+
+func TestFetchDataColumnsFromPeers(t *testing.T) {
+	const blobsCount = 6
+
+	testCases := []struct {
+		// Name of the test case.
+		name string
+
+		// INPUTS
+		// ------
+
+		// Fork epochs.
+		denebForkEpoch   primitives.Epoch
+		eip7954ForkEpoch primitives.Epoch
+
+		// Current slot.
+		currentSlot uint64
+
+		// Blocks with blobs parameters.
+		blocksParams []blockParams
+
+		// - Position in the slice: Stored data columns in the store for the
+		//   nth position in the input bwb.
+		// - Key                  : Column index
+		// - Value                : Always true
+		storedDataColumns []map[int]bool
+
+		peersParams []peerParams
+
+		// OUTPUTS
+		// -------
+
+		// Data columns that should be added to `bwb`.
+		addedRODataColumns [][]int
+	}{
+		{
+			name:           "Deneb fork epoch not reached",
+			denebForkEpoch: primitives.Epoch(math.MaxUint64),
+			blocksParams: []blockParams{
+				{slot: 1, hasBlobs: true},
+				{slot: 2, hasBlobs: true},
+				{slot: 3, hasBlobs: true},
+			},
+			addedRODataColumns: [][]int{nil, nil, nil},
+		},
+		{
+			name:             "All blocks are before EIP-7954 fork epoch",
+			denebForkEpoch:   0,
+			eip7954ForkEpoch: 1,
+			currentSlot:      40,
+			blocksParams: []blockParams{
+				{slot: 25, hasBlobs: false},
+				{slot: 26, hasBlobs: false},
+				{slot: 27, hasBlobs: false},
+				{slot: 28, hasBlobs: false},
+			},
+			addedRODataColumns: [][]int{nil, nil, nil, nil},
+		},
+		{
+			name:             "All blocks with commitments before are EIP-7954 fork epoch",
+			denebForkEpoch:   0,
+			eip7954ForkEpoch: 1,
+			currentSlot:      40,
+			blocksParams: []blockParams{
+				{slot: 25, hasBlobs: false},
+				{slot: 26, hasBlobs: true},
+				{slot: 27, hasBlobs: true},
+				{slot: 32, hasBlobs: false},
+				{slot: 33, hasBlobs: false},
+			},
+			addedRODataColumns: [][]int{nil, nil, nil, nil, nil},
+		},
+		{
+			name:             "Some blocks with blobs but without any missing data columns",
+			denebForkEpoch:   0,
+			eip7954ForkEpoch: 1,
+			currentSlot:      40,
+			blocksParams: []blockParams{
+				{slot: 25, hasBlobs: false},
+				{slot: 26, hasBlobs: true},
+				{slot: 27, hasBlobs: true},
+				{slot: 32, hasBlobs: false},
+				{slot: 33, hasBlobs: true},
+			},
+			storedDataColumns: []map[int]bool{
+				nil,
+				nil,
+				nil,
+				nil,
+				{6: true, 38: true, 70: true, 102: true},
+			},
+			addedRODataColumns: [][]int{nil, nil, nil, nil, nil},
+		},
+		{
+			name:             "Some blocks with blobs with missing data columns - one round needed",
+			denebForkEpoch:   0,
+			eip7954ForkEpoch: 1,
+			currentSlot:      40,
+			blocksParams: []blockParams{
+				{slot: 25, hasBlobs: false},
+				{slot: 27, hasBlobs: true},
+				{slot: 32, hasBlobs: false},
+				{slot: 33, hasBlobs: true},
+				{slot: 34, hasBlobs: true},
+				{slot: 35, hasBlobs: false},
+				{slot: 36, hasBlobs: true},
+				{slot: 37, hasBlobs: true},
+				{slot: 38, hasBlobs: true},
+				{slot: 39, hasBlobs: false},
+			},
+			storedDataColumns: []map[int]bool{
+				nil,
+				nil,
+				nil,
+				{6: true, 38: true, 70: true, 102: true},
+				{6: true, 70: true},
+				nil,
+				{6: true, 38: true, 70: true, 102: true},
+				{38: true, 102: true},
+				{6: true, 38: true, 70: true, 102: true},
+				nil,
+			},
+			peersParams: []peerParams{
+				{
+					csc: 32,
+					toRespond: map[string][][]responseParams{
+						(&ethpb.DataColumnSidecarsByRangeRequest{
+							StartSlot: 34,
+							Count:     4,
+							Columns:   []uint64{6, 38, 70, 102},
+						}).String(): {
+							{
+								{slot: 34, columnIndex: 6},
+								{slot: 34, columnIndex: 38},
+								{slot: 34, columnIndex: 70},
+								{slot: 34, columnIndex: 102},
+								{slot: 36, columnIndex: 6},
+								{slot: 36, columnIndex: 38},
+								{slot: 36, columnIndex: 70},
+								{slot: 36, columnIndex: 102},
+								{slot: 37, columnIndex: 6},
+								{slot: 37, columnIndex: 38},
+								{slot: 37, columnIndex: 70},
+								{slot: 37, columnIndex: 102},
+							},
+						},
+					},
+				},
+				{
+					csc: 32,
+					toRespond: map[string][][]responseParams{
+						(&ethpb.DataColumnSidecarsByRangeRequest{
+							StartSlot: 34,
+							Count:     4,
+							Columns:   []uint64{6, 38, 70, 102},
+						}).String(): {
+							{
+								{slot: 34, columnIndex: 6},
+								{slot: 34, columnIndex: 38},
+								{slot: 34, columnIndex: 70},
+								{slot: 34, columnIndex: 102},
+								{slot: 36, columnIndex: 6},
+								{slot: 36, columnIndex: 38},
+								{slot: 36, columnIndex: 70},
+								{slot: 36, columnIndex: 102},
+								{slot: 37, columnIndex: 6},
+								{slot: 37, columnIndex: 38},
+								{slot: 37, columnIndex: 70},
+								{slot: 37, columnIndex: 102},
+							},
+						},
+					},
+				},
+				{
+					csc: 32,
+					toRespond: map[string][][]responseParams{
+						(&ethpb.DataColumnSidecarsByRangeRequest{
+							StartSlot: 34,
+							Count:     4,
+							Columns:   []uint64{6, 38, 70, 102},
+						}).String(): {
+							{},
+						},
+					},
+				},
+				{
+					csc: 32,
+					toRespond: map[string][][]responseParams{
+						(&ethpb.DataColumnSidecarsByRangeRequest{
+							StartSlot: 34,
+							Count:     4,
+							Columns:   []uint64{6, 38, 70, 102},
+						}).String(): {
+							{},
+						},
+					},
+				},
+			},
+			addedRODataColumns: [][]int{
+				nil,
+				nil,
+				nil,
+				nil,
+				{38, 102},
+				nil,
+				nil,
+				{6, 70},
+				nil,
+				nil,
+			},
+		},
+		{
+			name:             "Some blocks with blobs with missing data columns - several rounds needed",
+			denebForkEpoch:   0,
+			eip7954ForkEpoch: 1,
+			currentSlot:      40,
+			blocksParams: []blockParams{
+				{slot: 25, hasBlobs: false},
+				{slot: 27, hasBlobs: true},
+				{slot: 32, hasBlobs: false},
+				{slot: 33, hasBlobs: true},
+				{slot: 34, hasBlobs: true},
+				{slot: 35, hasBlobs: false},
+				{slot: 37, hasBlobs: true},
+				{slot: 38, hasBlobs: true},
+				{slot: 39, hasBlobs: false},
+			},
+			storedDataColumns: []map[int]bool{
+				nil,
+				nil,
+				nil,
+				{6: true, 38: true, 70: true, 102: true},
+				{6: true, 70: true},
+				nil,
+				{38: true, 102: true},
+				{6: true, 38: true, 70: true, 102: true},
+				nil,
+			},
+			peersParams: []peerParams{
+				{
+					csc: 32,
+					toRespond: map[string][][]responseParams{
+						(&ethpb.DataColumnSidecarsByRangeRequest{
+							StartSlot: 34,
+							Count:     4,
+							Columns:   []uint64{6, 38, 70, 102},
+						}).String(): {
+							{
+								{slot: 34, columnIndex: 38},
+							},
+						},
+						(&ethpb.DataColumnSidecarsByRangeRequest{
+							StartSlot: 34,
+							Count:     4,
+							Columns:   []uint64{6, 70, 102},
+						}).String(): {
+							{
+								{slot: 34, columnIndex: 102},
+							},
+						},
+						(&ethpb.DataColumnSidecarsByRangeRequest{
+							StartSlot: 37,
+							Count:     1,
+							Columns:   []uint64{6, 70},
+						}).String(): {
+							{
+								{slot: 37, columnIndex: 6},
+								{slot: 37, columnIndex: 70},
+							},
+						},
+					},
+				},
+				{csc: 0},
+				{csc: 0},
+			},
+			addedRODataColumns: [][]int{
+				nil,
+				nil,
+				nil,
+				nil,
+				{38, 102},
+				nil,
+				{6, 70},
+				nil,
+				nil,
+			},
+		},
+		{
+			name:             "Some blocks with blobs with missing data columns - no peers response at first",
+			denebForkEpoch:   0,
+			eip7954ForkEpoch: 1,
+			currentSlot:      40,
+			blocksParams: []blockParams{
+				{slot: 38, hasBlobs: true},
+			},
+			storedDataColumns: []map[int]bool{
+				{38: true, 102: true},
+			},
+			peersParams: []peerParams{
+				{
+					csc: 32,
+					toRespond: map[string][][]responseParams{
+						(&ethpb.DataColumnSidecarsByRangeRequest{
+							StartSlot: 38,
+							Count:     1,
+							Columns:   []uint64{6, 70},
+						}).String(): {
+							nil,
+							{
+								{slot: 38, columnIndex: 6},
+								{slot: 38, columnIndex: 70},
+							},
+						},
+					},
+				},
+				{
+					csc: 32,
+					toRespond: map[string][][]responseParams{
+						(&ethpb.DataColumnSidecarsByRangeRequest{
+							StartSlot: 38,
+							Count:     1,
+							Columns:   []uint64{6, 70},
+						}).String(): {
+							nil,
+							{
+								{slot: 38, columnIndex: 6},
+								{slot: 38, columnIndex: 70},
+							},
+						},
+					},
+				},
+			},
+			addedRODataColumns: [][]int{
+				{6, 70},
+			},
+		},
+		{
+			name:             "Some blocks with blobs with missing data columns - first response is invalid",
+			denebForkEpoch:   0,
+			eip7954ForkEpoch: 1,
+			currentSlot:      40,
+			blocksParams: []blockParams{
+				{slot: 38, hasBlobs: true},
+			},
+			storedDataColumns: []map[int]bool{
+				{38: true, 102: true},
+			},
+			peersParams: []peerParams{
+				{
+					csc: 32,
+					toRespond: map[string][][]responseParams{
+						(&ethpb.DataColumnSidecarsByRangeRequest{
+							StartSlot: 38,
+							Count:     1,
+							Columns:   []uint64{6, 70},
+						}).String(): {
+							{
+								{slot: 38, columnIndex: 6, alterate: true},
+								{slot: 38, columnIndex: 70},
+							},
+						},
+						(&ethpb.DataColumnSidecarsByRangeRequest{
+							StartSlot: 38,
+							Count:     1,
+							Columns:   []uint64{6},
+						}).String(): {
+							{
+								{slot: 38, columnIndex: 6},
+							},
+						},
+					},
+				},
+			},
+			addedRODataColumns: [][]int{
+				{70, 6},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		// Consistency checks.
+		require.Equal(t, len(tc.blocksParams), len(tc.addedRODataColumns))
+
+		// Create a context.
+		ctx := context.Background()
+
+		// Initialize the trusted setup.
+		err := kzg.Start()
+		require.NoError(t, err)
+
+		// Create blocks, RO data columns and data columns sidecar from slot.
+		roBlocks := make([]blocks.ROBlock, len(tc.blocksParams))
+		roDatasColumns := make([][]blocks.RODataColumn, len(tc.blocksParams))
+		dataColumnsSidecarFromSlot := make(map[primitives.Slot][]*ethpb.DataColumnSidecar, len(tc.blocksParams))
+
+		for i, blockParams := range tc.blocksParams {
+			pbSignedBeaconBlock := util.NewBeaconBlockDeneb()
+			pbSignedBeaconBlock.Block.Slot = blockParams.slot
+
+			if blockParams.hasBlobs {
+				blobs := make([]kzg.Blob, blobsCount)
+				blobKzgCommitments := make([][]byte, blobsCount)
+
+				for j := range blobsCount {
+					blob := getRandBlob(t, int64(i+j))
+					blobs[j] = blob
+
+					blobKzgCommitment, err := kzg.BlobToKZGCommitment(&blob)
+					require.NoError(t, err)
+
+					blobKzgCommitments[j] = blobKzgCommitment[:]
+				}
+
+				pbSignedBeaconBlock.Block.Body.BlobKzgCommitments = blobKzgCommitments
+				signedBeaconBlock, err := blocks.NewSignedBeaconBlock(pbSignedBeaconBlock)
+				require.NoError(t, err)
+
+				pbDataColumnsSidecar, err := peerdas.DataColumnSidecars(signedBeaconBlock, blobs)
+				require.NoError(t, err)
+
+				dataColumnsSidecarFromSlot[blockParams.slot] = pbDataColumnsSidecar
+
+				roDataColumns := make([]blocks.RODataColumn, 0, len(pbDataColumnsSidecar))
+				for _, pbDataColumnSidecar := range pbDataColumnsSidecar {
+					roDataColumn, err := blocks.NewRODataColumn(pbDataColumnSidecar)
+					require.NoError(t, err)
+
+					roDataColumns = append(roDataColumns, roDataColumn)
+				}
+
+				roDatasColumns[i] = roDataColumns
+			}
+
+			signedBeaconBlock, err := blocks.NewSignedBeaconBlock(pbSignedBeaconBlock)
+			require.NoError(t, err)
+
+			roBlock, err := blocks.NewROBlock(signedBeaconBlock)
+			require.NoError(t, err)
+
+			roBlocks[i] = roBlock
+		}
+
+		// Set the Deneb fork epoch.
+		params.BeaconConfig().DenebForkEpoch = tc.denebForkEpoch
+
+		// Set the EIP-7594 fork epoch.
+		params.BeaconConfig().Eip7594ForkEpoch = tc.eip7954ForkEpoch
+
+		// Save the blocks in the store.
+		storage := make(map[[fieldparams.RootLength]byte][]int)
+		for index, columns := range tc.storedDataColumns {
+			root := roBlocks[index].Root()
+
+			columnsSlice := make([]int, 0, len(columns))
+			for column := range columns {
+				columnsSlice = append(columnsSlice, column)
+			}
+
+			storage[root] = columnsSlice
+		}
+
+		blobStorageSummarizer := filesystem.NewMockBlobStorageSummarizer(t, storage)
+
+		// Create a chain and a clock.
+		chain, clock := defaultMockChain(t, tc.currentSlot)
+
+		// Create the P2P service.
+		p2p := p2ptest.NewTestP2P(t)
+
+		// Connect the peers.
+		peers := make([]*p2ptest.TestP2P, 0, len(tc.peersParams))
+		for i, peerParams := range tc.peersParams {
+			peer := createAndConnectPeer(t, p2p, chain, dataColumnsSidecarFromSlot, peerParams, i)
+			peers = append(peers, peer)
+		}
+
+		peersID := make([]peer.ID, 0, len(peers))
+		for _, peer := range peers {
+			peerID := peer.PeerID()
+			peersID = append(peersID, peerID)
+		}
+
+		// Create `bwb`.
+		bwb := make([]blocks.BlockWithROBlobs, 0, len(tc.blocksParams))
+		for _, roBlock := range roBlocks {
+			bwb = append(bwb, blocks.BlockWithROBlobs{Block: roBlock})
+		}
+
+		// Create the block fetcher.
+		blocksFetcher := newBlocksFetcher(ctx, &blocksFetcherConfig{
+			clock:  clock,
+			ctxMap: map[[4]byte]int{{245, 165, 253, 66}: version.Deneb},
+			p2p:    p2p,
+			bs:     blobStorageSummarizer,
+		})
+
+		// Fetch the data columns from the peers.
+		err = blocksFetcher.fetchDataColumnsFromPeers(ctx, bwb, peersID)
+		require.NoError(t, err)
+
+		// Check the added RO data columns.
+		for i := range bwb {
+			blockWithROBlobs := bwb[i]
+			addedRODataColumns := tc.addedRODataColumns[i]
+
+			if addedRODataColumns == nil {
+				require.Equal(t, 0, len(blockWithROBlobs.Columns))
+				continue
+			}
+
+			expectedRODataColumns := make([]blocks.RODataColumn, 0, len(tc.addedRODataColumns[i]))
+			for _, column := range addedRODataColumns {
+				roDataColumn := roDatasColumns[i][column]
+				expectedRODataColumns = append(expectedRODataColumns, roDataColumn)
+			}
+
+			actualRODataColumns := blockWithROBlobs.Columns
+			require.DeepSSZEqual(t, expectedRODataColumns, actualRODataColumns)
+		}
+	}
 }

@@ -4,6 +4,7 @@ import (
 	"reflect"
 
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
@@ -55,6 +56,7 @@ func ColumnAlignsWithBlock(col blocks.RODataColumn, block blocks.ROBlock) error 
 	if block.Version() < version.Deneb {
 		return nil
 	}
+
 	if col.ColumnIndex >= fieldparams.NumberOfColumns {
 		return errors.Wrapf(ErrIncorrectColumnIndex, "index %d exceeds NUMBERS_OF_COLUMN %d", col.ColumnIndex, fieldparams.NumberOfColumns)
 	}
@@ -64,12 +66,29 @@ func ColumnAlignsWithBlock(col blocks.RODataColumn, block blocks.ROBlock) error 
 	}
 
 	// Verify commitment byte values match
-	commits, err := block.Block().Body().BlobKzgCommitments()
+	commitments, err := block.Block().Body().BlobKzgCommitments()
 	if err != nil {
 		return err
 	}
-	if !reflect.DeepEqual(commits, col.KzgCommitments) {
-		return errors.Wrapf(ErrMismatchedColumnCommitments, "commitment %#v != block commitment %#v for block root %#x at slot %d ", col.KzgCommitments, commits, block.Root(), col.Slot())
+
+	if !reflect.DeepEqual(commitments, col.KzgCommitments) {
+		return errors.Wrapf(ErrMismatchedColumnCommitments, "commitment %#v != block commitment %#v for block root %#x at slot %d ", col.KzgCommitments, commitments, block.Root(), col.Slot())
 	}
+
+	// Filter out columns which did not pass the KZG inclusion proof verification.
+	if err := blocks.VerifyKZGInclusionProofColumn(col.DataColumnSidecar); err != nil {
+		return err
+	}
+
+	// Filter out columns which did not pass the KZG proof verification.
+	verified, err := peerdas.VerifyDataColumnSidecarKZGProofs(col.DataColumnSidecar)
+	if err != nil {
+		return err
+	}
+
+	if !verified {
+		return errors.New("data column sidecar KZG proofs failed verification")
+	}
+
 	return nil
 }
