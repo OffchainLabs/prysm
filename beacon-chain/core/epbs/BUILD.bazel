@@ -1,0 +1,19 @@
+load("@prysm//tools/go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = ["attestation.go"],
+    importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/epbs",
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["attestation_test.go"],
+    deps = [
+        ":go_default_library",
+        "//beacon-chain/core/altair:go_default_library",
+        "//config/params:go_default_library",
+        "//testing/require:go_default_library",
+    ],
+)
