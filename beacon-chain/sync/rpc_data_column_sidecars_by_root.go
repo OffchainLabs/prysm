@@ -93,7 +93,7 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 		"requested":      requestedColumnsList,
 		"custodiedCount": len(custodiedColumnsList),
 		"requestedCount": len(requestedColumnsList),
-	}).Debug("Received data column sidecar by root request")
+	}).Debug("Data column sidecar by root request received")
 
 	// Subscribe to the data column feed.
 	rootIndexChan := make(chan filesystem.RootIndexPair)

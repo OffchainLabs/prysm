@@ -232,7 +232,6 @@ func SendDataColumnSidecarByRoot(
 	}
 
 	// Send the request to the peer.
-	log.WithField("topic", topic).Debug("Sending data column sidecar request")
 	stream, err := p2pApi.Send(ctx, req, topic, pid)
 	if err != nil {
 		return nil, errors.Wrap(err, "send")

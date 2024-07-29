@@ -239,7 +239,7 @@ func (s *Service) Start() {
 	s.newColumnProposerVerifier = v.VerifyProposer
 
 	go s.verifierRoutine()
-	go s.registerHandlers()
+	go s.startTasksPostInitialSync()
 
 	s.cfg.p2p.AddConnectionHandler(s.reValidatePeer, s.sendGoodbye)
 	s.cfg.p2p.AddDisconnectionHandler(func(_ context.Context, _ peer.ID) error {
@@ -254,12 +254,6 @@ func (s *Service) Start() {
 
 	// Update sync metrics.
 	async.RunEvery(s.ctx, syncMetricsInterval, s.updateMetrics)
-
-	// Run data column sampling
-	if params.PeerDASEnabled() {
-		s.sampler = newDataColumnSampler1D(s.cfg.p2p, s.cfg.clock, s.ctxMap, s.cfg.stateNotifier)
-		go s.sampler.Run(s.ctx)
-	}
 }
 
 // Stop the regular sync service.
@@ -337,23 +331,37 @@ func (s *Service) waitForChainStart() {
 	s.markForChainStart()
 }
 
-func (s *Service) registerHandlers() {
+func (s *Service) startTasksPostInitialSync() {
+	// Wait for the chain to start.
 	s.waitForChainStart()
+
 	select {
 	case <-s.initialSyncComplete:
-		// Register respective pubsub handlers at state synced event.
-		digest, err := s.currentForkDigest()
+		// Compute the current epoch.
+		currentSlot := slots.CurrentSlot(uint64(s.cfg.clock.GenesisTime().Unix()))
+		currentEpoch := slots.ToEpoch(currentSlot)
+
+		// Compute the current fork forkDigest.
+		forkDigest, err := s.currentForkDigest()
 		if err != nil {
 			log.WithError(err).Error("Could not retrieve current fork digest")
 			return
 		}
-		currentEpoch := slots.ToEpoch(slots.CurrentSlot(uint64(s.cfg.clock.GenesisTime().Unix())))
-		s.registerSubscribers(currentEpoch, digest)
+
+		// Register respective pubsub handlers at state synced event.
+		s.registerSubscribers(currentEpoch, forkDigest)
+
+		// Start the fork watcher.
 		go s.forkWatcher()
-		return
+
+		// Start data columns sampling if peerDAS is enabled.
+		if params.PeerDASEnabled() {
+			s.sampler = newDataColumnSampler1D(s.cfg.p2p, s.cfg.clock, s.ctxMap, s.cfg.stateNotifier)
+			go s.sampler.Run(s.ctx)
+		}
+
 	case <-s.ctx.Done():
 		log.Debug("Context closed, exiting goroutine")
-		return
 	}
 }
 

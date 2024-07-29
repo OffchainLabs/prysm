@@ -170,8 +170,6 @@ func (d *dataColumnSampler1D) refreshPeerInfo() {
 		}
 	}
 
-	log.WithField("columnFromPeer", d.columnFromPeer).Debug("Peer info refreshed")
-
 	columnWithNoPeers := make([]uint64, 0)
 	for column, peers := range d.peerFromColumn {
 		if len(peers) == 0 {
@@ -228,7 +226,7 @@ func (d *dataColumnSampler1D) handleStateNotification(ctx context.Context, event
 		return
 	}
 
-	if coreTime.PeerDASIsActive(data.Slot) {
+	if !coreTime.PeerDASIsActive(data.Slot) {
 		// We do not trigger sampling if peerDAS is not active yet.
 		return
 	}
@@ -249,21 +247,11 @@ func (d *dataColumnSampler1D) handleStateNotification(ctx context.Context, event
 	// Randomize columns for sample selection.
 	randomizedColumns := randomizeColumns(d.nonCustodyColumns)
 	samplesCount := min(params.BeaconConfig().SamplesPerSlot, uint64(len(d.nonCustodyColumns))-params.BeaconConfig().NumberOfColumns/2)
-	ok, _, err = d.incrementalDAS(ctx, data.BlockRoot, randomizedColumns, samplesCount)
+
+	// TODO: Use the first output of `incrementalDAS` as input of the fork choice rule.
+	_, _, err = d.incrementalDAS(ctx, data.BlockRoot, randomizedColumns, samplesCount)
 	if err != nil {
 		log.WithError(err).Error("Failed to run incremental DAS")
-	}
-
-	if ok {
-		log.WithFields(logrus.Fields{
-			"root":    fmt.Sprintf("%#x", data.BlockRoot),
-			"columns": randomizedColumns,
-		}).Debug("Data column sampling successful")
-	} else {
-		log.WithFields(logrus.Fields{
-			"root":    fmt.Sprintf("%#x", data.BlockRoot),
-			"columns": randomizedColumns,
-		}).Warning("Data column sampling failed")
 	}
 }
 
@@ -280,16 +268,27 @@ func (d *dataColumnSampler1D) incrementalDAS(
 	firstColumnToSample, extendedSampleCount := uint64(0), peerdas.ExtendedSampleCount(sampleCount, allowedFailures)
 	roundSummaries := make([]roundSummary, 0, 1) // We optimistically allocate only one round summary.
 
+	start := time.Now()
+
 	for round := 1; ; /*No exit condition */ round++ {
 		if extendedSampleCount > uint64(len(columns)) {
 			// We already tried to sample all possible columns, this is the unhappy path.
-			log.WithField("root", fmt.Sprintf("%#x", root)).Warning("Some columns are still missing after sampling all possible columns")
+			log.WithFields(logrus.Fields{
+				"root":  fmt.Sprintf("%#x", root),
+				"round": round - 1,
+			}).Warning("Some columns are still missing after trying to sample all possible columns")
 			return false, roundSummaries, nil
 		}
 
 		// Get the columns to sample for this round.
 		columnsToSample := columns[firstColumnToSample:extendedSampleCount]
 		columnsToSampleCount := extendedSampleCount - firstColumnToSample
+
+		log.WithFields(logrus.Fields{
+			"root":    fmt.Sprintf("%#x", root),
+			"columns": columnsToSample,
+			"round":   round,
+		}).Debug("Start data columns sampling")
 
 		// Sample data columns from peers in parallel.
 		retrievedSamples := d.sampleDataColumns(ctx, root, columnsToSample)
@@ -311,7 +310,8 @@ func (d *dataColumnSampler1D) incrementalDAS(
 			// All columns were correctly sampled, this is the happy path.
 			log.WithFields(logrus.Fields{
 				"root":         fmt.Sprintf("%#x", root),
-				"roundsNeeded": round,
+				"neededRounds": round,
+				"duration":     time.Since(start),
 			}).Debug("All columns were successfully sampled")
 			return true, roundSummaries, nil
 		}
@@ -429,14 +429,14 @@ func (d *dataColumnSampler1D) sampleDataColumnsFromPeer(
 			"peerID":           pid,
 			"root":             fmt.Sprintf("%#x", root),
 			"requestedColumns": sortedSliceFromMap(requestedColumns),
-		}).Debug("All requested columns were successfully sampled from peer")
+		}).Debug("Sampled columns from peer successfully")
 	} else {
 		log.WithFields(logrus.Fields{
 			"peerID":           pid,
 			"root":             fmt.Sprintf("%#x", root),
 			"requestedColumns": sortedSliceFromMap(requestedColumns),
 			"retrievedColumns": sortedSliceFromMap(retrievedColumns),
-		}).Debug("Some requested columns were not sampled from peer")
+		}).Debug("Sampled columns from peer with some errors")
 	}
 
 	return retrievedColumns
