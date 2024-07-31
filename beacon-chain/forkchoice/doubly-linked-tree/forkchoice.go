@@ -79,7 +79,7 @@ func (f *ForkChoice) Head(
 
 // ProcessAttestation processes attestation for vote accounting, it iterates around validator indices
 // and update their votes accordingly.
-func (f *ForkChoice) ProcessAttestation(ctx context.Context, validatorIndices []uint64, blockRoot [32]byte, targetEpoch primitives.Epoch) {
+func (f *ForkChoice) ProcessAttestation(ctx context.Context, validatorIndices []uint64, blockRoot [32]byte, attSlot primitives.Slot) {
 	_, span := trace.StartSpan(ctx, "doublyLinkedForkchoice.ProcessAttestation")
 	defer span.End()
 
@@ -93,9 +93,9 @@ func (f *ForkChoice) ProcessAttestation(ctx context.Context, validatorIndices []
 		newVote := f.votes[index].nextRoot == params.BeaconConfig().ZeroHash &&
 			f.votes[index].currentRoot == params.BeaconConfig().ZeroHash
 
-		// Vote gets updated if it's newly allocated or high target epoch.
-		if newVote || targetEpoch > f.votes[index].nextEpoch {
-			f.votes[index].nextEpoch = targetEpoch
+		// Vote gets updated if it's newly allocated or higher attestation slot.
+		if newVote || attSlot > f.votes[index].slot {
+			f.votes[index].slot = attSlot
 			f.votes[index].nextRoot = blockRoot
 		}
 	}

@@ -375,7 +375,7 @@ func (s *Service) handleBlockAttestations(ctx context.Context, blk interfaces.Re
 		}
 		r := bytesutil.ToBytes32(a.GetData().BeaconBlockRoot)
 		if s.cfg.ForkChoiceStore.HasNode(r) {
-			s.cfg.ForkChoiceStore.ProcessAttestation(ctx, indices, r, a.GetData().Target.Epoch)
+			s.cfg.ForkChoiceStore.ProcessAttestation(ctx, indices, r, a.GetData().Slot)
 		} else if err := s.cfg.AttPool.SaveBlockAttestation(a); err != nil {
 			return err
 		}

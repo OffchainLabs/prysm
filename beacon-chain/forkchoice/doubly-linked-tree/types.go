@@ -67,5 +67,5 @@ type Node struct {
 type Vote struct {
 	currentRoot [fieldparams.RootLength]byte // current voting root.
 	nextRoot    [fieldparams.RootLength]byte // next voting root.
-	nextEpoch   primitives.Epoch             // epoch of next voting period.
+	slot        primitives.Slot              // slot of the last vote by this validator
 }
