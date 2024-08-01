@@ -21,6 +21,7 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//beacon-chain/cache:go_default_library",
+        "//beacon-chain/core/signing:go_default_library",
         "//beacon-chain/core/time:go_default_library",
         "//beacon-chain/forkchoice/types:go_default_library",
         "//beacon-chain/state:go_default_library",
@@ -73,6 +74,7 @@ go_test(
     tags = ["CI_race_detection"],
     deps = [
         "//beacon-chain/cache:go_default_library",
+        "//beacon-chain/core/signing:go_default_library",
         "//beacon-chain/core/time:go_default_library",
         "//beacon-chain/forkchoice/types:go_default_library",
         "//beacon-chain/state:go_default_library",
@@ -82,7 +84,9 @@ go_test(
         "//consensus-types/epbs:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//container/slice:go_default_library",
+        "//crypto/bls:go_default_library",
         "//crypto/hash:go_default_library",
+        "//crypto/rand:go_default_library",
         "//encoding/bytesutil:go_default_library",
         "//math:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",

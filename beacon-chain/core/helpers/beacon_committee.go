@@ -295,7 +295,7 @@ func CommitteeAssignments(ctx context.Context, state state.BeaconState, epoch pr
 	if err := verifyAssignmentEpoch(epoch, state); err != nil {
 		return nil, err
 	}
-	startSlot, err := slots.EpochStart(epoch)
+	slot, err := slots.EpochStart(epoch)
 	if err != nil {
 		return nil, err
 	}
@@ -305,20 +305,16 @@ func CommitteeAssignments(ctx context.Context, state state.BeaconState, epoch pr
 	}
 	assignments := make(map[primitives.ValidatorIndex]*CommitteeAssignment)
 
-	activeValidatorCount, err := ActiveValidatorCount(ctx, state, epoch)
+	committees, err := BeaconCommittees(ctx, state, slot)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "could not compute beacon committees")
 	}
-	ptcPerSlot, PtcMembersPerCommittee := PtcAllocation(activeValidatorCount)
-
+	ptcPerSlot, ptcMembersPerCommittee := PtcAllocation(len(committees))
 	// Compute committee assignments for each slot in the epoch.
-	for slot := startSlot; slot < startSlot+params.BeaconConfig().SlotsPerEpoch; slot++ {
-		committees, err := BeaconCommittees(ctx, state, slot)
-		if err != nil {
-			return nil, errors.Wrap(err, "could not compute beacon committees")
-		}
+	endSlot := slot + params.BeaconConfig().SlotsPerEpoch
+	for {
 		for j, committee := range committees {
-			for _, vIndex := range committee {
+			for i, vIndex := range committee {
 				if _, ok := vals[vIndex]; !ok { // Skip if the validator is not in the provided validators slice.
 					continue
 				}
@@ -328,48 +324,21 @@ func CommitteeAssignments(ctx context.Context, state state.BeaconState, epoch pr
 				assignments[vIndex].Committee = committee
 				assignments[vIndex].AttesterSlot = slot
 				assignments[vIndex].CommitteeIndex = primitives.CommitteeIndex(j)
+				if uint64(j) < ptcPerSlot && uint64(i) < ptcMembersPerCommittee {
+					assignments[vIndex].PtcSlot = slot
+				}
 			}
-
-			// We only need to assign PTC slots for the first `PTCPerSlot` committees of a given slot.
-			if uint64(j) < ptcPerSlot {
-				assignments = PTCAssignments(committee, assignments, PtcMembersPerCommittee, slot)
-			}
+		}
+		slot++
+		if slot == endSlot {
+			break
+		}
+		committees, err = BeaconCommittees(ctx, state, slot)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not compute beacon committees")
 		}
 	}
 	return assignments, nil
-}
-
-// PTCAssignments updates the PTC slot assignments for the given committee members.
-// committee: a slice of ValidatorIndex representing committee members.
-// assignments: a map of ValidatorIndex to CommitteeAssignment where assignments will be updated.
-// membersPerCommittee: the number of members to be assigned to the PTC committee.
-// slot: the slot to be assigned for PTC assignment.
-// Returns the updated assignments map.
-func PTCAssignments(committee []primitives.ValidatorIndex,
-	assignments map[primitives.ValidatorIndex]*CommitteeAssignment,
-	membersPerCommittee uint64,
-	slot primitives.Slot) map[primitives.ValidatorIndex]*CommitteeAssignment {
-	committeeLength := uint64(len(committee))
-	// If the number of PTC members is greater than Beacon members,
-	// return the current assignments without changes.
-	if membersPerCommittee > committeeLength {
-		return assignments
-	}
-
-	// Loop through the selected committee members for PTC assignments.
-	for i := uint64(0); i < membersPerCommittee; i++ {
-		vIndex := committee[i]
-
-		assignment, exists := assignments[vIndex]
-		if !exists {
-			assignment = &CommitteeAssignment{}
-			assignments[vIndex] = assignment
-		}
-
-		assignment.PtcSlot = slot
-	}
-
-	return assignments
 }
 
 // VerifyBitfieldLength verifies that a bitfield length matches the given committee size.

@@ -101,24 +101,24 @@ func TestGetPayloadTimelinessCommittee(t *testing.T) {
 
 func Test_PtcAllocation(t *testing.T) {
 	tests := []struct {
-		totalActive        uint64
+		committeeCount     int
 		memberPerCommittee uint64
 		committeesPerSlot  uint64
 	}{
-		{64, 512, 1},
-		{params.BeaconConfig().MinGenesisActiveValidatorCount, 128, 4},
-		{25600, 128, 4},
-		{256000, 16, 32},
-		{1024000, 8, 64},
+		{1, 512, 1},
+		{4, 128, 4},
+		{128, 4, 128},
+		{512, 1, 512},
+		{1024, 1, 512},
 	}
 
 	for _, test := range tests {
-		committeesPerSlot, memberPerCommittee := helpers.PtcAllocation(test.totalActive)
+		committeesPerSlot, memberPerCommittee := helpers.PtcAllocation(test.committeeCount)
 		if memberPerCommittee != test.memberPerCommittee {
-			t.Errorf("memberPerCommittee(%d) = %d; expected %d", test.totalActive, memberPerCommittee, test.memberPerCommittee)
+			t.Errorf("memberPerCommittee(%d) = %d; expected %d", test.committeeCount, memberPerCommittee, test.memberPerCommittee)
 		}
 		if committeesPerSlot != test.committeesPerSlot {
-			t.Errorf("committeesPerSlot(%d) = %d; expected %d", test.totalActive, committeesPerSlot, test.committeesPerSlot)
+			t.Errorf("committeesPerSlot(%d) = %d; expected %d", test.committeeCount, committeesPerSlot, test.committeesPerSlot)
 		}
 	}
 }
