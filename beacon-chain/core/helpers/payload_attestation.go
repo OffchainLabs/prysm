@@ -74,16 +74,14 @@ func GetPayloadTimelinessCommittee(ctx context.Context, state state.ReadOnlyBeac
 	if state.Version() < version.EPBS {
 		return nil, errPreEPBSState
 	}
-	epoch := slots.ToEpoch(slot)
-	activeCount, err := ActiveValidatorCount(ctx, state, epoch)
+	committees, err := BeaconCommittees(ctx, state, slot)
 	if err != nil {
-		return nil, errors.Wrap(err, "could not compute active validator count")
+		return nil, errors.Wrap(err, "could not get beacon committees")
 	}
-	committeesPerSlot, membersPerCommittee := PtcAllocation(activeCount)
-	for i := uint64(0); i < committeesPerSlot; i++ {
-		committee, err := BeaconCommitteeFromState(ctx, state, slot, primitives.CommitteeIndex(i))
-		if err != nil {
-			return nil, err
+	committeesPerSlot, membersPerCommittee := PtcAllocation(len(committees))
+	for i, committee := range committees {
+		if uint64(i) >= committeesPerSlot {
+			return
 		}
 		if uint64(len(committee)) < membersPerCommittee {
 			return nil, errCommitteeOverflow
@@ -96,9 +94,8 @@ func GetPayloadTimelinessCommittee(ctx context.Context, state state.ReadOnlyBeac
 // PtcAllocation returns:
 // 1. The number of beacon committees that PTC will borrow from in a slot.
 // 2. The number of validators that PTC will borrow from in a beacon committee.
-func PtcAllocation(totalActive uint64) (committeesPerSlot, membersPerCommittee uint64) {
-	slotCommittees := SlotCommitteeCount(totalActive)
-	committeesPerSlot = math.LargestPowerOfTwo(math.Min(slotCommittees, fieldparams.PTCSize))
+func PtcAllocation(slotCommittees int) (committeesPerSlot, membersPerCommittee uint64) {
+	committeesPerSlot = math.LargestPowerOfTwo(math.Min(uint64(slotCommittees), fieldparams.PTCSize))
 	membersPerCommittee = fieldparams.PTCSize / committeesPerSlot
 	return
 }
