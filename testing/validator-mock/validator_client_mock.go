@@ -366,7 +366,6 @@ func (mr *MockValidatorClientMockRecorder) SubmitPayloadAttestation(arg0, arg1 a
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitPayloadAttestation", reflect.TypeOf((*MockValidatorClient)(nil).SubmitPayloadAttestation), arg0, arg1)
 }
 
-
 // SubmitSignedAggregateSelectionProof mocks base method.
 func (m *MockValidatorClient) SubmitSignedAggregateSelectionProof(arg0 context.Context, arg1 *eth.SignedAggregateSubmitRequest) (*eth.SignedAggregateSubmitResponse, error) {
 	m.ctrl.T.Helper()
