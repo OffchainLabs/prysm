@@ -7,8 +7,10 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func TestMappingHasNoDuplicates(t *testing.T) {
@@ -31,6 +33,7 @@ func TestGossipTopicMappings_CorrectType(t *testing.T) {
 	denebForkEpoch := primitives.Epoch(400)
 	electraForkEpoch := primitives.Epoch(500)
 	fuluForkEpoch := primitives.Epoch(600)
+	epbsForkEpoch := primitives.Epoch(700)
 
 	bCfg.AltairForkEpoch = altairForkEpoch
 	bCfg.BellatrixForkEpoch = bellatrixForkEpoch
@@ -38,12 +41,14 @@ func TestGossipTopicMappings_CorrectType(t *testing.T) {
 	bCfg.DenebForkEpoch = denebForkEpoch
 	bCfg.ElectraForkEpoch = electraForkEpoch
 	bCfg.FuluForkEpoch = fuluForkEpoch
+	bCfg.EPBSForkEpoch = epbsForkEpoch
 	bCfg.ForkVersionSchedule[bytesutil.ToBytes4(bCfg.AltairForkVersion)] = primitives.Epoch(100)
 	bCfg.ForkVersionSchedule[bytesutil.ToBytes4(bCfg.BellatrixForkVersion)] = primitives.Epoch(200)
 	bCfg.ForkVersionSchedule[bytesutil.ToBytes4(bCfg.CapellaForkVersion)] = primitives.Epoch(300)
 	bCfg.ForkVersionSchedule[bytesutil.ToBytes4(bCfg.DenebForkVersion)] = primitives.Epoch(400)
 	bCfg.ForkVersionSchedule[bytesutil.ToBytes4(bCfg.ElectraForkVersion)] = primitives.Epoch(500)
 	bCfg.ForkVersionSchedule[bytesutil.ToBytes4(bCfg.FuluForkVersion)] = primitives.Epoch(600)
+	bCfg.ForkVersionSchedule[bytesutil.ToBytes4(bCfg.EPBSForkVersion)] = primitives.Epoch(700)
 	params.OverrideBeaconConfig(bCfg)
 
 	// Phase 0
@@ -129,4 +134,9 @@ func TestGossipTopicMappings_CorrectType(t *testing.T) {
 	pMessage = GossipTopicMappings(AggregateAndProofSubnetTopicFormat, electraForkEpoch)
 	_, ok = pMessage.(*ethpb.SignedAggregateAttestationAndProofElectra)
 	assert.Equal(t, true, ok)
+
+	// Epbs fork
+	pMessage = GossipTopicMappings(SignedExecutionPayloadHeaderTopicFormat, epbsForkEpoch)
+	_, ok = pMessage.(*enginev1.SignedExecutionPayloadHeader)
+	require.Equal(t, true, ok)
 }
