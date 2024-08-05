@@ -8,9 +8,10 @@ import (
 // NetworkConfig defines the spec based network parameters.
 type NetworkConfig struct {
 	// DiscoveryV5 Config
-	ETH2Key                    string // ETH2Key is the ENR key of the Ethereum consensus object in an enr.
-	AttSubnetKey               string // AttSubnetKey is the ENR key of the subnet bitfield in the enr.
-	SyncCommsSubnetKey         string // SyncCommsSubnetKey is the ENR key of the sync committee subnet bitfield in the enr.
+	ETH2Key                    string // ETH2Key is the ENR key of the Ethereum consensus object.
+	AttSubnetKey               string // AttSubnetKey is the ENR key of the subnet bitfield.
+	SyncCommsSubnetKey         string // SyncCommsSubnetKey is the ENR key of the sync committee subnet bitfield.
+	CustodySubnetCountKey      string // CustodySubnetCountKey is the ENR key of the custody subnet count.
 	MinimumPeersInSubnetSearch uint64 // PeersInSubnetSearch is the required amount of peers that we need to be able to lookup in a subnet search.
 
 	// Chain Network Config

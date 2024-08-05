@@ -266,6 +266,7 @@ ssz_gen_marshal(
         "DataColumnSidecarsByRangeRequest",
         "MetaDataV0",
         "MetaDataV1",
+        "MetaDataV2",
         "SignedValidatorRegistrationV1",
         "ValidatorRegistrationV1",
         "BuilderBid",

@@ -250,7 +250,6 @@ go_test(
         "//crypto/bls:go_default_library",
         "//crypto/rand:go_default_library",
         "//encoding/bytesutil:go_default_library",
-        "//encoding/ssz/equality:go_default_library",
         "//network/forks:go_default_library",
         "//proto/engine/v1:go_default_library",
         "//proto/eth/v2:go_default_library",

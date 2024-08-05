@@ -38,8 +38,11 @@ import (
 
 // We have to declare this again here to prevent a circular dependency
 // with the main p2p package.
-const metatadataV1Topic = "/eth2/beacon_chain/req/metadata/1"
-const metatadataV2Topic = "/eth2/beacon_chain/req/metadata/2"
+const (
+	metadataV1Topic = "/eth2/beacon_chain/req/metadata/1"
+	metadataV2Topic = "/eth2/beacon_chain/req/metadata/2"
+	metadataV3Topic = "/eth2/beacon_chain/req/metadata/3"
+)
 
 // TestP2P represents a p2p implementation that can be used for testing.
 type TestP2P struct {
@@ -340,6 +343,8 @@ func (p *TestP2P) AddDisconnectionHandler(f func(ctx context.Context, id peer.ID
 
 // Send a message to a specific peer.
 func (p *TestP2P) Send(ctx context.Context, msg interface{}, topic string, pid peer.ID) (network.Stream, error) {
+	metadataTopics := map[string]bool{metadataV1Topic: true, metadataV2Topic: true, metadataV3Topic: true}
+
 	t := topic
 	if t == "" {
 		return nil, fmt.Errorf("protocol doesn't exist for proto message: %v", msg)
@@ -349,7 +354,7 @@ func (p *TestP2P) Send(ctx context.Context, msg interface{}, topic string, pid p
 		return nil, err
 	}
 
-	if topic != metatadataV1Topic && topic != metatadataV2Topic {
+	if !metadataTopics[topic] {
 		castedMsg, ok := msg.(ssz.Marshaler)
 		if !ok {
 			p.t.Fatalf("%T doesn't support ssz marshaler", msg)

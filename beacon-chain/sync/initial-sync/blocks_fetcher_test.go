@@ -16,11 +16,11 @@ import (
 	GoKZG "github.com/crate-crypto/go-kzg-4844"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
+	"github.com/libp2p/go-libp2p"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
-	swarmt "github.com/libp2p/go-libp2p/p2p/net/swarm/testing"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/kzg"
 	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
@@ -1485,7 +1485,7 @@ func createAndConnectPeer(
 	require.NoError(t, err)
 
 	// Create the peer.
-	peer := p2ptest.NewTestP2P(t, swarmt.OptPeerPrivateKey(privateKey))
+	peer := p2ptest.NewTestP2P(t, libp2p.Identity(privateKey))
 
 	// Create a call counter.
 	countFromRequest := make(map[string]int, len(peerParams.toRespond))

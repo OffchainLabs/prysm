@@ -87,10 +87,10 @@ func InitializeDataMaps() {
 			return wrapper.WrappedMetadataV1(&ethpb.MetaDataV1{}), nil
 		},
 		bytesutil.ToBytes4(params.BeaconConfig().DenebForkVersion): func() (metadata.Metadata, error) {
-			return wrapper.WrappedMetadataV1(&ethpb.MetaDataV1{}), nil
+			return wrapper.WrappedMetadataV2(&ethpb.MetaDataV2{}), nil
 		},
 		bytesutil.ToBytes4(params.BeaconConfig().ElectraForkVersion): func() (metadata.Metadata, error) {
-			return wrapper.WrappedMetadataV1(&ethpb.MetaDataV1{}), nil
+			return wrapper.WrappedMetadataV2(&ethpb.MetaDataV2{}), nil
 		},
 	}
 

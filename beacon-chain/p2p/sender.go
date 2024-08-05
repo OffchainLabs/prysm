@@ -42,7 +42,7 @@ func (s *Service) Send(ctx context.Context, message interface{}, baseTopic strin
 		return nil, err
 	}
 	// do not encode anything if we are sending a metadata request
-	if baseTopic != RPCMetaDataTopicV1 && baseTopic != RPCMetaDataTopicV2 {
+	if baseTopic != RPCMetaDataTopicV1 && baseTopic != RPCMetaDataTopicV2 && baseTopic != RPCMetaDataTopicV3 {
 		castedMsg, ok := message.(ssz.Marshaler)
 		if !ok {
 			return nil, errors.Errorf("%T does not support the ssz marshaller interface", message)

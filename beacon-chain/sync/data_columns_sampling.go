@@ -139,6 +139,9 @@ func (d *dataColumnSampler1D) samplingRoutine(ctx context.Context) {
 
 // Refresh peer information.
 func (d *dataColumnSampler1D) refreshPeerInfo() {
+	dataColumnSidecarSubnetCount := params.BeaconConfig().DataColumnSidecarSubnetCount
+	columnsPerSubnet := fieldparams.NumberOfColumns / dataColumnSidecarSubnetCount
+
 	d.Lock()
 	defer d.Unlock()
 
@@ -146,19 +149,23 @@ func (d *dataColumnSampler1D) refreshPeerInfo() {
 	d.prunePeerInfo(activePeers)
 
 	for _, pid := range activePeers {
-		if _, ok := d.columnFromPeer[pid]; ok {
-			// TODO: need to update peer info here after validator custody.
+		csc := d.p2p.CustodyCountFromRemotePeer(pid)
+
+		columns, ok := d.columnFromPeer[pid]
+		columnsCount := uint64(len(columns))
+
+		if ok && columnsCount == csc*columnsPerSubnet {
+			// No change for this peer.
 			continue
 		}
 
-		csc := d.p2p.CustodyCountFromRemotePeer(pid)
 		nid, err := p2p.ConvertPeerIDToNodeID(pid)
 		if err != nil {
 			log.WithError(err).WithField("peerID", pid).Error("Failed to convert peer ID to node ID")
 			continue
 		}
 
-		columns, err := peerdas.CustodyColumns(nid, csc)
+		columns, err = peerdas.CustodyColumns(nid, csc)
 		if err != nil {
 			log.WithError(err).WithField("peerID", pid).Error("Failed to determine peer custody columns")
 			continue

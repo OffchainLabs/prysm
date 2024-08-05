@@ -19,9 +19,14 @@ var ColumnSubnetIDs = newColumnSubnetIDs()
 const columnKey = "columns"
 
 func newColumnSubnetIDs() *columnSubnetIDs {
-	epochDuration := time.Duration(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot))
+	secondsPerSlot := params.BeaconConfig().SecondsPerSlot
+	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+	epochDuration := time.Duration(slotsPerEpoch.Mul(secondsPerSlot))
+
 	// Set the default duration of a column subnet subscription as the column expiry period.
-	subLength := epochDuration * time.Duration(params.BeaconConfig().MinEpochsForDataColumnSidecarsRequest)
+	minEpochsForDataColumnSidecarsRequest := time.Duration(params.BeaconConfig().MinEpochsForDataColumnSidecarsRequest)
+	subLength := epochDuration * minEpochsForDataColumnSidecarsRequest
+
 	persistentCache := cache.New(subLength*time.Second, epochDuration*time.Second)
 	return &columnSubnetIDs{colSubCache: persistentCache}
 }

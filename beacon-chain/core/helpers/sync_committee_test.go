@@ -78,6 +78,7 @@ func TestIsCurrentEpochSyncCommittee_UsingCommittee(t *testing.T) {
 
 func TestIsCurrentEpochSyncCommittee_DoesNotExist(t *testing.T) {
 	helpers.ClearCache()
+	params.SetupTestConfigCleanup(t)
 
 	validators := make([]*ethpb.Validator, params.BeaconConfig().SyncCommitteeSize)
 	syncCommittee := &ethpb.SyncCommittee{
@@ -264,6 +265,7 @@ func TestCurrentEpochSyncSubcommitteeIndices_UsingCommittee(t *testing.T) {
 }
 
 func TestCurrentEpochSyncSubcommitteeIndices_DoesNotExist(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
 	helpers.ClearCache()
 
 	validators := make([]*ethpb.Validator, params.BeaconConfig().SyncCommitteeSize)

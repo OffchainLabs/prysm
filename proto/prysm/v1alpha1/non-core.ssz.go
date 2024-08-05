@@ -551,6 +551,106 @@ func (m *MetaDataV1) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	return
 }
 
+// MarshalSSZ ssz marshals the MetaDataV2 object
+func (m *MetaDataV2) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(m)
+}
+
+// MarshalSSZTo ssz marshals the MetaDataV2 object to a target array
+func (m *MetaDataV2) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+
+	// Field (0) 'SeqNumber'
+	dst = ssz.MarshalUint64(dst, m.SeqNumber)
+
+	// Field (1) 'Attnets'
+	if size := len(m.Attnets); size != 8 {
+		err = ssz.ErrBytesLengthFn("--.Attnets", size, 8)
+		return
+	}
+	dst = append(dst, m.Attnets...)
+
+	// Field (2) 'Syncnets'
+	if size := len(m.Syncnets); size != 1 {
+		err = ssz.ErrBytesLengthFn("--.Syncnets", size, 1)
+		return
+	}
+	dst = append(dst, m.Syncnets...)
+
+	// Field (3) 'CustodySubnetCount'
+	dst = ssz.MarshalUint64(dst, m.CustodySubnetCount)
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the MetaDataV2 object
+func (m *MetaDataV2) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size != 25 {
+		return ssz.ErrSize
+	}
+
+	// Field (0) 'SeqNumber'
+	m.SeqNumber = ssz.UnmarshallUint64(buf[0:8])
+
+	// Field (1) 'Attnets'
+	if cap(m.Attnets) == 0 {
+		m.Attnets = make([]byte, 0, len(buf[8:16]))
+	}
+	m.Attnets = append(m.Attnets, buf[8:16]...)
+
+	// Field (2) 'Syncnets'
+	if cap(m.Syncnets) == 0 {
+		m.Syncnets = make([]byte, 0, len(buf[16:17]))
+	}
+	m.Syncnets = append(m.Syncnets, buf[16:17]...)
+
+	// Field (3) 'CustodySubnetCount'
+	m.CustodySubnetCount = ssz.UnmarshallUint64(buf[17:25])
+
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the MetaDataV2 object
+func (m *MetaDataV2) SizeSSZ() (size int) {
+	size = 25
+	return
+}
+
+// HashTreeRoot ssz hashes the MetaDataV2 object
+func (m *MetaDataV2) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(m)
+}
+
+// HashTreeRootWith ssz hashes the MetaDataV2 object with a hasher
+func (m *MetaDataV2) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'SeqNumber'
+	hh.PutUint64(m.SeqNumber)
+
+	// Field (1) 'Attnets'
+	if size := len(m.Attnets); size != 8 {
+		err = ssz.ErrBytesLengthFn("--.Attnets", size, 8)
+		return
+	}
+	hh.PutBytes(m.Attnets)
+
+	// Field (2) 'Syncnets'
+	if size := len(m.Syncnets); size != 1 {
+		err = ssz.ErrBytesLengthFn("--.Syncnets", size, 1)
+		return
+	}
+	hh.PutBytes(m.Syncnets)
+
+	// Field (3) 'CustodySubnetCount'
+	hh.PutUint64(m.CustodySubnetCount)
+
+	hh.Merkleize(indx)
+	return
+}
+
 // MarshalSSZ ssz marshals the BlobSidecarsByRangeRequest object
 func (b *BlobSidecarsByRangeRequest) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(b)

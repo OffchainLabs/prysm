@@ -105,6 +105,8 @@ func (ds *Server) getPeer(pid peer.ID) (*ethpb.DebugPeerResponse, error) {
 			peerInfo.MetadataV0 = metadata.MetadataObjV0()
 		case metadata.MetadataObjV1() != nil:
 			peerInfo.MetadataV1 = metadata.MetadataObjV1()
+		case metadata.MetadataObjV2() != nil:
+			peerInfo.MetadataV2 = metadata.MetadataObjV2()
 		}
 	}
 	addresses := peerStore.Addrs(pid)

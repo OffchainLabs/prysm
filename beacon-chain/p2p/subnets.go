@@ -30,6 +30,7 @@ var syncCommsSubnetCount = params.BeaconConfig().SyncCommitteeSubnetCount
 
 var attSubnetEnrKey = params.BeaconNetworkConfig().AttSubnetKey
 var syncCommsSubnetEnrKey = params.BeaconNetworkConfig().SyncCommsSubnetKey
+var custodySubnetCountEnrKey = params.BeaconNetworkConfig().CustodySubnetCountKey
 
 // The value used with the subnet, in order
 // to create an appropriate key to retrieve
@@ -215,6 +216,35 @@ func (s *Service) updateSubnetRecordWithMetadataV2(bitVAtt bitfield.Bitvector64,
 		SeqNumber: s.metaData.SequenceNumber() + 1,
 		Attnets:   bitVAtt,
 		Syncnets:  bitVSync,
+	})
+}
+
+// updateSubnetRecordWithMetadataV3 updates:
+// - attestation subnet tracked,
+// - sync subnets tracked, and
+// - custody subnet count
+// both in the node's record and in the node's metadata.
+func (s *Service) updateSubnetRecordWithMetadataV3(
+	bitVAtt bitfield.Bitvector64,
+	bitVSync bitfield.Bitvector4,
+	custodySubnetCount uint64,
+) {
+	attSubnetsEntry := enr.WithEntry(attSubnetEnrKey, &bitVAtt)
+	syncSubnetsEntry := enr.WithEntry(syncCommsSubnetEnrKey, &bitVSync)
+	custodySubnetCountEntry := enr.WithEntry(custodySubnetCountEnrKey, custodySubnetCount)
+
+	localNode := s.dv5Listener.LocalNode()
+	localNode.Set(attSubnetsEntry)
+	localNode.Set(syncSubnetsEntry)
+	localNode.Set(custodySubnetCountEntry)
+
+	newSeqNumber := s.metaData.SequenceNumber() + 1
+
+	s.metaData = wrapper.WrappedMetadataV2(&pb.MetaDataV2{
+		SeqNumber:          newSeqNumber,
+		Attnets:            bitVAtt,
+		Syncnets:           bitVSync,
+		CustodySubnetCount: custodySubnetCount,
 	})
 }
 

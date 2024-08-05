@@ -17,8 +17,11 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers/scorers"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/wrapper"
 	ecdsaprysm "github.com/prysmaticlabs/prysm/v5/crypto/ecdsa"
 	prysmNetwork "github.com/prysmaticlabs/prysm/v5/network"
+	pb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/metadata"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
@@ -104,11 +107,12 @@ func TestGetValidCustodyPeers(t *testing.T) {
 
 func TestCustodyCountFromRemotePeer(t *testing.T) {
 	const (
-		expected uint64 = 7
-		pid             = "test-id"
+		expectedENR      uint64 = 7
+		expectedMetadata uint64 = 8
+		pid                     = "test-id"
 	)
 
-	csc := peerdas.Csc(expected)
+	csc := peerdas.Csc(expectedENR)
 
 	// Define a nil record
 	var nilRecord *enr.Record = nil
@@ -120,25 +124,48 @@ func TestCustodyCountFromRemotePeer(t *testing.T) {
 	nominalRecord := &enr.Record{}
 	nominalRecord.Set(csc)
 
+	// Define a metadata with zero custody.
+	zeroMetadata := wrapper.WrappedMetadataV2(&pb.MetaDataV2{
+		CustodySubnetCount: 0,
+	})
+
+	// Define a nominal metadata.
+	nominalMetadata := wrapper.WrappedMetadataV2(&pb.MetaDataV2{
+		CustodySubnetCount: expectedMetadata,
+	})
+
 	testCases := []struct {
 		name     string
 		record   *enr.Record
+		metadata metadata.Metadata
 		expected uint64
 	}{
 		{
-			name:     "nominal",
-			record:   nominalRecord,
-			expected: expected,
-		},
-		{
-			name:     "nil",
+			name:     "No metadata - No ENR",
 			record:   nilRecord,
 			expected: params.BeaconConfig().CustodyRequirement,
 		},
 		{
-			name:     "empty",
+			name:     "No metadata - Empty ENR",
 			record:   emptyRecord,
 			expected: params.BeaconConfig().CustodyRequirement,
+		},
+		{
+			name:     "No Metadata - ENR",
+			record:   nominalRecord,
+			expected: expectedENR,
+		},
+		{
+			name:     "Metadata with 0 value - ENR",
+			record:   nominalRecord,
+			metadata: zeroMetadata,
+			expected: expectedENR,
+		},
+		{
+			name:     "Metadata - ENR",
+			record:   nominalRecord,
+			metadata: nominalMetadata,
+			expected: expectedMetadata,
 		},
 	}
 
@@ -149,12 +176,18 @@ func TestCustodyCountFromRemotePeer(t *testing.T) {
 				ScorerParams: &scorers.Config{},
 			})
 
+			// Set the metadata.
+			if tc.metadata != nil {
+				peers.SetMetadata(pid, tc.metadata)
+			}
+
 			// Add a new peer with the record.
 			peers.Add(tc.record, pid, nil, network.DirOutbound)
 
 			// Create a new service.
 			service := &Service{
-				peers: peers,
+				peers:    peers,
+				metaData: tc.metadata,
 			}
 
 			// Retrieve the custody count from the remote peer.
