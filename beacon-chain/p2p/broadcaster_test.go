@@ -19,11 +19,13 @@ import (
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/wrapper"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	testpb "github.com/prysmaticlabs/prysm/v5/proto/testing"
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"github.com/prysmaticlabs/prysm/v5/testing/util"
+	"github.com/prysmaticlabs/prysm/v5/testing/util/random"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -518,4 +520,65 @@ func TestService_BroadcastBlob(t *testing.T) {
 	// Broadcast to peers and wait.
 	require.NoError(t, p.BroadcastBlob(ctx, subnet, blobSidecar))
 	require.Equal(t, false, util.WaitTimeout(&wg, 1*time.Second), "Failed to receive pubsub within 1s")
+}
+
+func TestService_BroadcastExecutionPayloadHeader(t *testing.T) {
+	p1 := p2ptest.NewTestP2P(t)
+	p2 := p2ptest.NewTestP2P(t)
+	p1.Connect(p2)
+
+	if len(p1.BHost.Network().Peers()) == 0 {
+		t.Fatal("No peers")
+	}
+
+	p := &Service{
+		host:                  p1.BHost,
+		pubsub:                p1.PubSub(),
+		joinedTopics:          map[string]*pubsub.Topic{},
+		cfg:                   &Config{},
+		genesisTime:           time.Now(),
+		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
+	}
+
+	msg := random.SignedExecutionPayloadHeader(t)
+
+	// External peer subscribes to the topic.
+	topic := SignedExecutionPayloadHeaderTopicFormat
+	GossipTypeMapping[reflect.TypeOf(msg)] = topic
+
+	digest, err := p.currentForkDigest()
+	require.NoError(t, err)
+
+	topic = fmt.Sprintf("%s%s", fmt.Sprintf(topic, digest), p.Encoding().ProtocolSuffix())
+	sub, err := p2.SubscribeToTopic(topic)
+	require.NoError(t, err)
+
+	time.Sleep(50 * time.Millisecond) // Necessary delay for libp2p.
+
+	// Async listen for the pubsub, must be before the broadcast.
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		defer cancel()
+
+		incomingMessage, err := sub.Next(ctx)
+		require.NoError(t, err)
+
+		// Same message received from other peer.
+		result := &enginev1.SignedExecutionPayloadHeader{}
+		require.NoError(t, p.Encoding().DecodeGossip(incomingMessage.Data, result))
+		require.DeepEqual(t, result, msg)
+	}()
+
+	// Unknown message to broadcast.
+	ctx := context.Background()
+	require.ErrorContains(t, "message type is not mapped to a PubSub topic", p.Broadcast(ctx, nil))
+
+	// Broadcast to second peer and wait.
+	require.NoError(t, p.Broadcast(context.Background(), msg))
+	if util.WaitTimeout(&wg, 1*time.Second) {
+		t.Error("Failed to receive pubsub within 1s")
+	}
 }
