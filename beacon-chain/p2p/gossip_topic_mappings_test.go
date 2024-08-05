@@ -136,4 +136,10 @@ func TestGossipTopicMappings_CorrectType(t *testing.T) {
 	pMessage = GossipTopicMappings(SignedExecutionPayloadHeaderTopicFormat, epbsForkEpoch)
 	_, ok = pMessage.(*enginev1.SignedExecutionPayloadHeader)
 	require.Equal(t, true, ok)
+	pMessage = GossipTopicMappings(SignedExecutionPayloadEnvelopeTopicFormat, epbsForkEpoch)
+	_, ok = pMessage.(*enginev1.SignedExecutionPayloadEnvelope)
+	require.Equal(t, true, ok)
+	pMessage = GossipTopicMappings(PayloadAttestationMessageTopicFormat, epbsForkEpoch)
+	_, ok = pMessage.(*ethpb.PayloadAttestationMessage)
+	require.Equal(t, true, ok)
 }

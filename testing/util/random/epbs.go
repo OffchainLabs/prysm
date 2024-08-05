@@ -349,6 +349,15 @@ func PayloadAttestationData(t *testing.T) *ethpb.PayloadAttestationData {
 	}
 }
 
+// PayloadAttestationMessage creates a random PayloadAttestationMessage for testing purposes.
+func PayloadAttestationMessage(t *testing.T) *ethpb.PayloadAttestationMessage {
+	return &ethpb.PayloadAttestationMessage{
+		ValidatorIndex: primitives.ValidatorIndex(randomUint64(t)),
+		Data:           PayloadAttestationData(t),
+		Signature:      randomBytes(96, t),
+	}
+}
+
 // SignedExecutionPayloadEnvelope creates a random SignedExecutionPayloadEnvelope for testing purposes.
 func SignedExecutionPayloadEnvelope(t *testing.T) *enginev1.SignedExecutionPayloadEnvelope {
 	return &enginev1.SignedExecutionPayloadEnvelope{
@@ -432,7 +441,7 @@ func WithdrawalRequest(t *testing.T) *enginev1.WithdrawalRequest {
 func ConsolidationRequest(t *testing.T) *enginev1.ConsolidationRequest {
 	return &enginev1.ConsolidationRequest{
 		SourceAddress: randomBytes(20, t),
-		SourcePubkey:  randomBytes(20, t),
+		SourcePubkey:  randomBytes(48, t),
 		TargetPubkey:  randomBytes(48, t),
 	}
 }
