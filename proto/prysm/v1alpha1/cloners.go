@@ -74,7 +74,7 @@ func CopySignedBeaconBlockEPBS(sigBlock *SignedBeaconBlockEpbs) *SignedBeaconBlo
 	}
 }
 
-// CopyBeaconBlockEPBS copies the provided CopyBeaconBlockEPBS.
+// CopyBeaconBlockEPBS copies the provided BeaconBlockEPBS.
 func CopyBeaconBlockEPBS(block *BeaconBlockEpbs) *BeaconBlockEpbs {
 	if block == nil {
 		return nil
@@ -88,7 +88,7 @@ func CopyBeaconBlockEPBS(block *BeaconBlockEpbs) *BeaconBlockEpbs {
 	}
 }
 
-// CopyBeaconBlockBodyEPBS copies the provided CopyBeaconBlockBodyEPBS.
+// CopyBeaconBlockBodyEPBS copies the provided BeaconBlockBodyEPBS.
 func CopyBeaconBlockBodyEPBS(body *BeaconBlockBodyEpbs) *BeaconBlockBodyEpbs {
 	if body == nil {
 		return nil
@@ -105,7 +105,7 @@ func CopyBeaconBlockBodyEPBS(body *BeaconBlockBodyEpbs) *BeaconBlockBodyEpbs {
 		SyncAggregate:                body.SyncAggregate.Copy(),
 		BlsToExecutionChanges:        CopySlice(body.BlsToExecutionChanges),
 		SignedExecutionPayloadHeader: CopySignedExecutionPayloadHeader(body.SignedExecutionPayloadHeader),
-		PayloadAttestations:          CopyPayloadAttestation(body.PayloadAttestations),
+		PayloadAttestations:          CopyPayloadAttestations(body.PayloadAttestations),
 	}
 }
 
@@ -137,18 +137,14 @@ func CopyExecutionPayloadHeaderEPBS(payload *enginev1.ExecutionPayloadHeaderEPBS
 	}
 }
 
-// CopyPayloadAttestation copies the provided PayloadAttestation array.
-func CopyPayloadAttestation(attestations []*PayloadAttestation) []*PayloadAttestation {
+// CopyPayloadAttestations copies the provided PayloadAttestation array.
+func CopyPayloadAttestations(attestations []*PayloadAttestation) []*PayloadAttestation {
 	if attestations == nil {
 		return nil
 	}
 	newAttestations := make([]*PayloadAttestation, len(attestations))
 	for i, att := range attestations {
-		newAttestations[i] = &PayloadAttestation{
-			AggregationBits: bytesutil.SafeCopyBytes(att.AggregationBits),
-			Data:            CopyPayloadAttestationData(att.Data),
-			Signature:       bytesutil.SafeCopyBytes(att.Signature),
-		}
+		newAttestations[i] = CopyPayloadAttestation(att)
 	}
 	return newAttestations
 }
@@ -162,5 +158,17 @@ func CopyPayloadAttestationData(data *PayloadAttestationData) *PayloadAttestatio
 		BeaconBlockRoot: bytesutil.SafeCopyBytes(data.BeaconBlockRoot),
 		Slot:            data.Slot,
 		PayloadStatus:   data.PayloadStatus,
+	}
+}
+
+// CopyPayloadAttestation copies the provided PayloadAttestation.
+func CopyPayloadAttestation(a *PayloadAttestation) *PayloadAttestation {
+	if a == nil {
+		return nil
+	}
+	return &PayloadAttestation{
+		AggregationBits: bytesutil.SafeCopyBytes(a.AggregationBits),
+		Data:            CopyPayloadAttestationData(a.Data),
+		Signature:       bytesutil.SafeCopyBytes(a.Signature),
 	}
 }

@@ -107,6 +107,22 @@ func (p *PayloadAttestationCache) Add(att *eth.PayloadAttestationMessage, idx ui
 	return nil
 }
 
+// Get returns the aggregated PayloadAttestation for the given root and status
+// if the root doesn't exist or status is invalid, the function returns nil.
+func (p *PayloadAttestationCache) Get(root [32]byte, status primitives.PTCStatus) *eth.PayloadAttestation {
+	p.Lock()
+	defer p.Unlock()
+
+	if p.root != root {
+		return nil
+	}
+	if status >= primitives.PAYLOAD_INVALID_STATUS {
+		return nil
+	}
+
+	return eth.CopyPayloadAttestation(p.attestations[status])
+}
+
 // Clear clears the internal map
 func (p *PayloadAttestationCache) Clear() {
 	p.Lock()

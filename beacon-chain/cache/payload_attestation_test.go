@@ -93,3 +93,51 @@ func TestPayloadAttestationCache(t *testing.T) {
 	indices = att.AggregationBits.BitIndices()
 	require.DeepEqual(t, []int{int(idx)}, indices)
 }
+
+func TestPayloadAttestationCache_Get(t *testing.T) {
+	root := [32]byte{1, 2, 3}
+	wrongRoot := [32]byte{4, 5, 6}
+	status := primitives.PAYLOAD_PRESENT
+	invalidStatus := primitives.PAYLOAD_INVALID_STATUS
+
+	cache := &PayloadAttestationCache{
+		root: root,
+		attestations: [primitives.PAYLOAD_INVALID_STATUS]*eth.PayloadAttestation{
+			{
+				Signature: []byte{1},
+			},
+			{
+				Signature: []byte{2},
+			},
+			{
+				Signature: []byte{3},
+			},
+		},
+	}
+
+	t.Run("valid root and status", func(t *testing.T) {
+		result := cache.Get(root, status)
+		require.NotNil(t, result, "Expected a non-nil result")
+		require.DeepEqual(t, cache.attestations[status], result)
+	})
+
+	t.Run("invalid root", func(t *testing.T) {
+		result := cache.Get(wrongRoot, status)
+		require.IsNil(t, result)
+	})
+
+	t.Run("status out of bound", func(t *testing.T) {
+		result := cache.Get(root, invalidStatus)
+		require.IsNil(t, result)
+	})
+
+	t.Run("no attestation", func(t *testing.T) {
+		emptyCache := &PayloadAttestationCache{
+			root:         root,
+			attestations: [primitives.PAYLOAD_INVALID_STATUS]*eth.PayloadAttestation{},
+		}
+
+		result := emptyCache.Get(root, status)
+		require.IsNil(t, result)
+	})
+}
