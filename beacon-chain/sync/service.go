@@ -41,6 +41,7 @@ import (
 	lruwrpr "github.com/prysmaticlabs/prysm/v5/cache/lru"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	payloadattestation "github.com/prysmaticlabs/prysm/v5/consensus-types/epbs/payload-attestation"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	leakybucket "github.com/prysmaticlabs/prysm/v5/container/leaky-bucket"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
@@ -222,6 +223,12 @@ func newBlobVerifierFromInitializer(ini *verification.Initializer) verification.
 	}
 }
 
+func newPayloadAttestationMessageFromInitializer(ini *verification.Initializer) verification.NewPayloadAttestationMsgVerifier {
+	return func(pa payloadattestation.ROMessage, reqs []verification.Requirement) verification.PayloadAttestationMsgVerifier {
+		return ini.NewPayloadAttestationMsgVerifier(pa, reqs)
+	}
+}
+
 // Start the regular sync service.
 func (s *Service) Start() {
 	v, err := s.verifierWaiter.WaitForInitializer(s.ctx)
@@ -230,6 +237,7 @@ func (s *Service) Start() {
 		return
 	}
 	s.newBlobVerifier = newBlobVerifierFromInitializer(v)
+	s.newPayloadAttestationVerifier = newPayloadAttestationMessageFromInitializer(v)
 
 	go s.verifierRoutine()
 	go s.startTasksPostInitialSync()
