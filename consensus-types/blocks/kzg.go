@@ -8,7 +8,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v5/container/trie"
 	"github.com/prysmaticlabs/prysm/v5/encoding/ssz"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 )
 
@@ -50,7 +49,7 @@ func VerifyKZGInclusionProof(blob ROBlob) error {
 
 // VerifyKZGInclusionProofColumn verifies the Merkle proof in a data column sidecar against
 // the beacon block body root.
-func VerifyKZGInclusionProofColumn(sc *ethpb.DataColumnSidecar) error {
+func VerifyKZGInclusionProofColumn(sc RODataColumn) error {
 	if sc.SignedBlockHeader == nil {
 		return errNilBlockHeader
 	}

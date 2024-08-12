@@ -365,7 +365,7 @@ func Test_VerifyKZGInclusionProofColumn(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := VerifyKZGInclusionProofColumn(tc.dataColumnSidecar)
+			err = VerifyKZGInclusionProofColumn(RODataColumn{DataColumnSidecar: tc.dataColumnSidecar})
 			if tc.expectedError == nil {
 				require.NoError(t, err)
 				return

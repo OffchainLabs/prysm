@@ -529,7 +529,7 @@ func verifyColumn(
 	}
 
 	// Filter out columns which did not pass the KZG inclusion proof verification.
-	if err := blocks.VerifyKZGInclusionProofColumn(roDataColumn.DataColumnSidecar); err != nil {
+	if err := blocks.VerifyKZGInclusionProofColumn(roDataColumn); err != nil {
 		log.WithFields(logrus.Fields{
 			"peerID": pid,
 			"root":   fmt.Sprintf("%#x", root),
@@ -540,7 +540,7 @@ func verifyColumn(
 	}
 
 	// Filter out columns which did not pass the KZG proof verification.
-	verified, err := peerdas.VerifyDataColumnSidecarKZGProofs(roDataColumn.DataColumnSidecar)
+	verified, err := peerdas.VerifyDataColumnSidecarKZGProofs(roDataColumn)
 	if err != nil {
 		log.WithFields(logrus.Fields{
 			"peerID": pid,

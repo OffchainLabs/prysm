@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/kzg"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	forkchoicetypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/types"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
@@ -56,6 +57,16 @@ func (ini *Initializer) NewBlobVerifier(b blocks.ROBlob, reqs []Requirement) *RO
 		blob:                 b,
 		results:              newResults(reqs...),
 		verifyBlobCommitment: kzg.Verify,
+	}
+}
+
+// NewColumnVerifier creates a DataColumnVerifier for a single data column, with the given set of requirements.
+func (ini *Initializer) NewColumnVerifier(d blocks.RODataColumn, reqs []Requirement) *RODataColumnVerifier {
+	return &RODataColumnVerifier{
+		sharedResources:            ini.shared,
+		dataColumn:                 d,
+		results:                    newResults(reqs...),
+		verifyDataColumnCommitment: peerdas.VerifyDataColumnSidecarKZGProofs,
 	}
 }
 

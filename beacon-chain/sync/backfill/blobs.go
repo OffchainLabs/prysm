@@ -107,7 +107,7 @@ type blobBatchVerifier struct {
 
 func (bbv *blobBatchVerifier) newVerifier(rb blocks.ROBlob) verification.BlobVerifier {
 	m := bbv.verifiers[rb.BlockRoot()]
-	m[rb.Index] = bbv.newBlobVerifier(rb, verification.BackfillSidecarRequirements)
+	m[rb.Index] = bbv.newBlobVerifier(rb, verification.BackfillBlobSidecarRequirements)
 	bbv.verifiers[rb.BlockRoot()] = m
 	return m[rb.Index]
 }

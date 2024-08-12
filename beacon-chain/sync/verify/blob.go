@@ -76,12 +76,12 @@ func ColumnAlignsWithBlock(col blocks.RODataColumn, block blocks.ROBlock) error 
 	}
 
 	// Filter out columns which did not pass the KZG inclusion proof verification.
-	if err := blocks.VerifyKZGInclusionProofColumn(col.DataColumnSidecar); err != nil {
+	if err := blocks.VerifyKZGInclusionProofColumn(col); err != nil {
 		return err
 	}
 
 	// Filter out columns which did not pass the KZG proof verification.
-	verified, err := peerdas.VerifyDataColumnSidecarKZGProofs(col.DataColumnSidecar)
+	verified, err := peerdas.VerifyDataColumnSidecarKZGProofs(col)
 	if err != nil {
 		return err
 	}

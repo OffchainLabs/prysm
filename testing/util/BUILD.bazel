@@ -31,9 +31,11 @@ go_library(
     importpath = "github.com/prysmaticlabs/prysm/v5/testing/util",
     visibility = ["//visibility:public"],
     deps = [
+        "//beacon-chain/blockchain/kzg:go_default_library",
         "//beacon-chain/core/altair:go_default_library",
         "//beacon-chain/core/blocks:go_default_library",
         "//beacon-chain/core/helpers:go_default_library",
+        "//beacon-chain/core/peerdas:go_default_library",
         "//beacon-chain/core/signing:go_default_library",
         "//beacon-chain/core/time:go_default_library",
         "//beacon-chain/core/transition:go_default_library",

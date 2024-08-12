@@ -2,7 +2,10 @@ load("@prysm//tools/go:def.bzl", "go_library")
 
 go_library(
     name = "go_default_library",
-    srcs = ["blob.go"],
+    srcs = [
+        "blob.go",
+        "data_column.go",
+    ],
     importpath = "github.com/prysmaticlabs/prysm/v5/runtime/logging",
     visibility = ["//visibility:public"],
     deps = [

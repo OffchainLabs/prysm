@@ -164,7 +164,7 @@ type Service struct {
 	initialSyncComplete              chan struct{}
 	verifierWaiter                   *verification.InitializerWaiter
 	newBlobVerifier                  verification.NewBlobVerifier
-	newColumnProposerVerifier        verification.NewColumnVerifier
+	newColumnVerifier                verification.NewColumnVerifier
 	availableBlocker                 coverage.AvailableBlocker
 	dataColumsnReconstructionLock    sync.Mutex
 	receivedDataColumnsFromRoot      map[[fieldparams.RootLength]byte]map[uint64]bool
@@ -228,6 +228,12 @@ func newBlobVerifierFromInitializer(ini *verification.Initializer) verification.
 	}
 }
 
+func newColumnVerifierFromInitializer(ini *verification.Initializer) verification.NewColumnVerifier {
+	return func(d blocks.RODataColumn, reqs []verification.Requirement) verification.DataColumnVerifier {
+		return ini.NewColumnVerifier(d, reqs)
+	}
+}
+
 // Start the regular sync service.
 func (s *Service) Start() {
 	v, err := s.verifierWaiter.WaitForInitializer(s.ctx)
@@ -236,7 +242,7 @@ func (s *Service) Start() {
 		return
 	}
 	s.newBlobVerifier = newBlobVerifierFromInitializer(v)
-	s.newColumnProposerVerifier = v.VerifyProposer
+	s.newColumnVerifier = newColumnVerifierFromInitializer(v)
 
 	go s.verifierRoutine()
 	go s.startTasksPostInitialSync()

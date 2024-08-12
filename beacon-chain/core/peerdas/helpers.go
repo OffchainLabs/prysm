@@ -255,7 +255,7 @@ func DataColumnSidecarsForReconstruct(
 
 // VerifyDataColumnSidecarKZGProofs verifies the provided KZG Proofs for the particular
 // data column.
-func VerifyDataColumnSidecarKZGProofs(sc *ethpb.DataColumnSidecar) (bool, error) {
+func VerifyDataColumnSidecarKZGProofs(sc blocks.RODataColumn) (bool, error) {
 	if sc.ColumnIndex >= params.BeaconConfig().NumberOfColumns {
 		return false, errIndexTooLarge
 	}

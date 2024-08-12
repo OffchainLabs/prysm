@@ -197,7 +197,7 @@ func (s *Service) processFetchedDataRegSync(
 			}
 		}
 	} else {
-		bv := verification.NewBlobBatchVerifier(s.newBlobVerifier, verification.InitsyncSidecarRequirements)
+		bv := verification.NewBlobBatchVerifier(s.newBlobVerifier, verification.InitsyncBlobSidecarRequirements)
 		avs := das.NewLazilyPersistentStore(s.cfg.BlobStorage, bv)
 		batchFields := logrus.Fields{
 			"firstSlot":        data.bwb[0].Block.Block().Slot(),
@@ -370,7 +370,7 @@ func (s *Service) processBatchedBlocks(ctx context.Context, genesis time.Time,
 		}
 		aStore = avs
 	} else {
-		bv := verification.NewBlobBatchVerifier(s.newBlobVerifier, verification.InitsyncSidecarRequirements)
+		bv := verification.NewBlobBatchVerifier(s.newBlobVerifier, verification.InitsyncBlobSidecarRequirements)
 		avs := das.NewLazilyPersistentStore(s.cfg.BlobStorage, bv)
 		s.logBatchSyncStatus(genesis, first, len(bwb))
 		for _, bb := range bwb {

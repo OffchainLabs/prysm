@@ -169,7 +169,7 @@ func TestBatchVerifier(t *testing.T) {
 			blk, blbs := c.bandb(t, c.nblobs)
 			reqs := c.reqs
 			if reqs == nil {
-				reqs = InitsyncSidecarRequirements
+				reqs = InitsyncBlobSidecarRequirements
 			}
 			bbv := NewBlobBatchVerifier(c.nv(), reqs)
 			if c.cv == nil {
