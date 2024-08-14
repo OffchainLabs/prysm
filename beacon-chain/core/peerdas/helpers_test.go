@@ -4,14 +4,20 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"testing"
 
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
 	GoKZG "github.com/crate-crypto/go-kzg-4844"
+	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/kzg"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
+	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"github.com/prysmaticlabs/prysm/v5/testing/util"
 	"github.com/sirupsen/logrus"
@@ -93,6 +99,192 @@ func TestVerifyDataColumnSidecarKZGProofs(t *testing.T) {
 	}
 }
 
+func TestDataColumnSidecars(t *testing.T) {
+	var expected []*ethpb.DataColumnSidecar = nil
+	actual, err := peerdas.DataColumnSidecars(nil, []kzg.Blob{})
+	require.NoError(t, err)
+
+	require.DeepSSZEqual(t, expected, actual)
+}
+
+func TestBlobs(t *testing.T) {
+	blobsIndice := map[uint64]bool{}
+
+	almostAllColumns := make([]*ethpb.DataColumnSidecar, 0, fieldparams.NumberOfColumns/2)
+	for i := 2; i < fieldparams.NumberOfColumns/2+2; i++ {
+		almostAllColumns = append(almostAllColumns, &ethpb.DataColumnSidecar{
+			ColumnIndex: uint64(i),
+		})
+	}
+
+	testCases := []struct {
+		name     string
+		input    []*ethpb.DataColumnSidecar
+		expected []*blocks.VerifiedROBlob
+		err      error
+	}{
+		{
+			name:     "empty input",
+			input:    []*ethpb.DataColumnSidecar{},
+			expected: nil,
+			err:      errors.New("some columns are missing: [0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63]"),
+		},
+		{
+			name:     "missing columns",
+			input:    almostAllColumns,
+			expected: nil,
+			err:      errors.New("some columns are missing: [0 1]"),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual, err := peerdas.Blobs(blobsIndice, tc.input)
+			if tc.err != nil {
+				require.Equal(t, tc.err.Error(), err.Error())
+			} else {
+				require.NoError(t, err)
+			}
+			require.DeepSSZEqual(t, tc.expected, actual)
+		})
+	}
+}
+
+func TestDataColumnsSidecarsBlobsRoundtrip(t *testing.T) {
+	const blobCount = 5
+	blobsIndex := map[uint64]bool{}
+
+	// Start the trusted setup.
+	err := kzg.Start()
+	require.NoError(t, err)
+
+	// Create a protobuf signed beacon block.
+	signedBeaconBlockPb := util.NewBeaconBlockDeneb()
+
+	// Generate random blobs and their corresponding commitments and proofs.
+	blobs := make([]kzg.Blob, 0, blobCount)
+	blobKzgCommitments := make([]*kzg.Commitment, 0, blobCount)
+	blobKzgProofs := make([]*kzg.Proof, 0, blobCount)
+
+	for blobIndex := range blobCount {
+		// Create a random blob.
+		blob := GetRandBlob(int64(blobIndex))
+		blobs = append(blobs, blob)
+
+		// Generate a blobKZGCommitment for the blob.
+		blobKZGCommitment, proof, err := GenerateCommitmentAndProof(&blob)
+		require.NoError(t, err)
+
+		blobKzgCommitments = append(blobKzgCommitments, blobKZGCommitment)
+		blobKzgProofs = append(blobKzgProofs, proof)
+	}
+
+	// Set the commitments into the block.
+	blobZkgCommitmentsBytes := make([][]byte, 0, blobCount)
+	for _, blobKZGCommitment := range blobKzgCommitments {
+		blobZkgCommitmentsBytes = append(blobZkgCommitmentsBytes, blobKZGCommitment[:])
+	}
+
+	signedBeaconBlockPb.Block.Body.BlobKzgCommitments = blobZkgCommitmentsBytes
+
+	// Generate verified RO blobs.
+	verifiedROBlobs := make([]*blocks.VerifiedROBlob, 0, blobCount)
+
+	// Create a signed beacon block from the protobuf.
+	signedBeaconBlock, err := blocks.NewSignedBeaconBlock(signedBeaconBlockPb)
+	require.NoError(t, err)
+
+	commitmentInclusionProof, err := blocks.MerkleProofKZGCommitments(signedBeaconBlock.Block().Body())
+	require.NoError(t, err)
+
+	for blobIndex := range blobCount {
+		blob := blobs[blobIndex]
+		blobKZGCommitment := blobKzgCommitments[blobIndex]
+		blobKzgProof := blobKzgProofs[blobIndex]
+
+		// Get the signed beacon block header.
+		signedBeaconBlockHeader, err := signedBeaconBlock.Header()
+		require.NoError(t, err)
+
+		blobSidecar := &ethpb.BlobSidecar{
+			Index:                    uint64(blobIndex),
+			Blob:                     blob[:],
+			KzgCommitment:            blobKZGCommitment[:],
+			KzgProof:                 blobKzgProof[:],
+			SignedBlockHeader:        signedBeaconBlockHeader,
+			CommitmentInclusionProof: commitmentInclusionProof,
+		}
+
+		roBlob, err := blocks.NewROBlob(blobSidecar)
+		require.NoError(t, err)
+
+		verifiedROBlob := blocks.NewVerifiedROBlob(roBlob)
+		verifiedROBlobs = append(verifiedROBlobs, &verifiedROBlob)
+	}
+
+	// Compute data columns sidecars from the signed beacon block and from the blobs.
+	dataColumnsSidecar, err := peerdas.DataColumnSidecars(signedBeaconBlock, blobs)
+	require.NoError(t, err)
+
+	// Compute the blobs from the data columns sidecar.
+	roundtripBlobs, err := peerdas.Blobs(blobsIndex, dataColumnsSidecar)
+	require.NoError(t, err)
+
+	// Check that the blobs are the same.
+	require.DeepSSZEqual(t, verifiedROBlobs, roundtripBlobs)
+}
+
+func TestCustodySubnetCount(t *testing.T) {
+	testCases := []struct {
+		name                  string
+		subscribeToAllSubnets bool
+		expected              uint64
+	}{
+		{
+			name:                  "subscribeToAllSubnets=false",
+			subscribeToAllSubnets: false,
+			expected:              params.BeaconConfig().CustodyRequirement,
+		},
+		{
+			name:                  "subscribeToAllSubnets=true",
+			subscribeToAllSubnets: true,
+			expected:              params.BeaconConfig().DataColumnSidecarSubnetCount,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Set flags.
+			resetFlags := flags.Get()
+			defer func() {
+				flags.Init(resetFlags)
+			}()
+
+			params.SetupTestConfigCleanup(t)
+			gFlags := new(flags.GlobalFlags)
+			gFlags.SubscribeToAllSubnets = tc.subscribeToAllSubnets
+			flags.Init(gFlags)
+
+			// Get the custody subnet count.
+			actual := peerdas.CustodySubnetCount()
+			require.Equal(t, tc.expected, actual)
+		})
+	}
+}
+
+func TestCustodyColumnCount(t *testing.T) {
+	const expected uint64 = 8
+
+	params.SetupTestConfigCleanup(t)
+	config := params.BeaconConfig().Copy()
+	config.DataColumnSidecarSubnetCount = 32
+	config.CustodyRequirement = 2
+	params.OverrideBeaconConfig(config)
+
+	actual := peerdas.CustodyColumnCount()
+	require.Equal(t, expected, actual)
+}
+
 func TestHypergeomCDF(t *testing.T) {
 	// Test case from https://en.wikipedia.org/wiki/Hypergeometric_distribution
 	// Population size: 1000, number of successes in population: 500, sample size: 10, number of successes in sample: 5
@@ -141,6 +333,212 @@ func TestExtendedSampleCount(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			result := peerdas.ExtendedSampleCount(samplesPerSlot, tc.allowedMissings)
 			require.Equal(t, tc.extendedSampleCount, result)
+		})
+	}
+}
+
+func TestCustodyCountFromRecord(t *testing.T) {
+	const expected uint64 = 7
+
+	// Create an Ethereum record.
+	record := &enr.Record{}
+	record.Set(peerdas.Csc(expected))
+
+	actual, err := peerdas.CustodyCountFromRecord(record)
+	require.NoError(t, err)
+	require.Equal(t, expected, actual)
+}
+
+func TestCanSelfReconstruct(t *testing.T) {
+	testCases := []struct {
+		name                   string
+		totalNumberOfColumns   uint64
+		custodyNumberOfColumns uint64
+		expected               bool
+	}{
+		{
+			name:                   "totalNumberOfColumns=64, custodyNumberOfColumns=31",
+			totalNumberOfColumns:   64,
+			custodyNumberOfColumns: 31,
+			expected:               false,
+		},
+		{
+			name:                   "totalNumberOfColumns=64, custodyNumberOfColumns=32",
+			totalNumberOfColumns:   64,
+			custodyNumberOfColumns: 32,
+			expected:               true,
+		},
+		{
+			name:                   "totalNumberOfColumns=65, custodyNumberOfColumns=32",
+			totalNumberOfColumns:   65,
+			custodyNumberOfColumns: 32,
+			expected:               false,
+		},
+		{
+			name:                   "totalNumberOfColumns=63, custodyNumberOfColumns=33",
+			totalNumberOfColumns:   65,
+			custodyNumberOfColumns: 33,
+			expected:               true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Set the total number of columns.
+			params.SetupTestConfigCleanup(t)
+			cfg := params.BeaconConfig().Copy()
+			cfg.NumberOfColumns = tc.totalNumberOfColumns
+			params.OverrideBeaconConfig(cfg)
+
+			// Check if reconstuction is possible.
+			actual := peerdas.CanSelfReconstruct(tc.custodyNumberOfColumns)
+			require.Equal(t, tc.expected, actual)
+		})
+	}
+}
+
+func TestReconstructionRoundTrip(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+
+	const blobCount = 5
+
+	var blockRoot [fieldparams.RootLength]byte
+
+	signedBeaconBlockPb := util.NewBeaconBlockDeneb()
+	require.NoError(t, kzg.Start())
+
+	// Generate random blobs and their corresponding commitments.
+	var (
+		blobsKzgCommitments [][]byte
+		blobs               []kzg.Blob
+	)
+	for i := range blobCount {
+		blob := GetRandBlob(int64(i))
+		commitment, _, err := GenerateCommitmentAndProof(&blob)
+		require.NoError(t, err)
+
+		blobsKzgCommitments = append(blobsKzgCommitments, commitment[:])
+		blobs = append(blobs, blob)
+	}
+
+	// Generate a signed beacon block.
+	signedBeaconBlockPb.Block.Body.BlobKzgCommitments = blobsKzgCommitments
+	signedBeaconBlock, err := blocks.NewSignedBeaconBlock(signedBeaconBlockPb)
+	require.NoError(t, err)
+
+	// Get the signed beacon block header.
+	signedBeaconBlockHeader, err := signedBeaconBlock.Header()
+	require.NoError(t, err)
+
+	// Convert data columns sidecars from signed block and blobs.
+	dataColumnSidecars, err := peerdas.DataColumnSidecars(signedBeaconBlock, blobs)
+	require.NoError(t, err)
+
+	// Create verified RO data columns.
+	verifiedRoDataColumns := make([]*blocks.VerifiedRODataColumn, 0, blobCount)
+	for _, dataColumnSidecar := range dataColumnSidecars {
+		roDataColumn, err := blocks.NewRODataColumn(dataColumnSidecar)
+		require.NoError(t, err)
+
+		verifiedRoDataColumn := blocks.NewVerifiedRODataColumn(roDataColumn)
+		verifiedRoDataColumns = append(verifiedRoDataColumns, &verifiedRoDataColumn)
+	}
+
+	verifiedRoDataColumn := verifiedRoDataColumns[0]
+
+	numberOfColumns := params.BeaconConfig().NumberOfColumns
+
+	var noDataColumns []*ethpb.DataColumnSidecar
+	dataColumnsWithDifferentLengths := []*ethpb.DataColumnSidecar{
+		{DataColumn: [][]byte{{}, {}}},
+		{DataColumn: [][]byte{{}}},
+	}
+	notEnoughDataColumns := dataColumnSidecars[:numberOfColumns/2-1]
+	originalDataColumns := dataColumnSidecars[:numberOfColumns/2]
+	extendedDataColumns := dataColumnSidecars[numberOfColumns/2:]
+	evenDataColumns := make([]*ethpb.DataColumnSidecar, 0, numberOfColumns/2)
+	oddDataColumns := make([]*ethpb.DataColumnSidecar, 0, numberOfColumns/2)
+	allDataColumns := dataColumnSidecars
+
+	for i, dataColumn := range dataColumnSidecars {
+		if i%2 == 0 {
+			evenDataColumns = append(evenDataColumns, dataColumn)
+		} else {
+			oddDataColumns = append(oddDataColumns, dataColumn)
+		}
+	}
+
+	testCases := []struct {
+		name               string
+		dataColumnsSidecar []*ethpb.DataColumnSidecar
+		isError            bool
+	}{
+		{
+			name:               "No data columns sidecars",
+			dataColumnsSidecar: noDataColumns,
+			isError:            true,
+		},
+		{
+			name:               "Data columns sidecar with different lengths",
+			dataColumnsSidecar: dataColumnsWithDifferentLengths,
+			isError:            true,
+		},
+		{
+			name:               "All columns are present (no actual need to reconstruct)",
+			dataColumnsSidecar: allDataColumns,
+			isError:            false,
+		},
+		{
+			name:               "Only original columns are present",
+			dataColumnsSidecar: originalDataColumns,
+			isError:            false,
+		},
+		{
+			name:               "Only extended columns are present",
+			dataColumnsSidecar: extendedDataColumns,
+			isError:            false,
+		},
+		{
+			name:               "Only even columns are present",
+			dataColumnsSidecar: evenDataColumns,
+			isError:            false,
+		},
+		{
+			name:               "Only odd columns are present",
+			dataColumnsSidecar: oddDataColumns,
+			isError:            false,
+		},
+		{
+			name:               "Not enough columns to reconstruct",
+			dataColumnsSidecar: notEnoughDataColumns,
+			isError:            true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Recover cells and proofs from available data columns sidecars.
+			cellsAndProofs, err := peerdas.RecoverCellsAndProofs(tc.dataColumnsSidecar, blockRoot)
+			isError := (err != nil)
+			require.Equal(t, tc.isError, isError)
+
+			if isError {
+				return
+			}
+
+			// Recover all data columns sidecars from cells and proofs.
+			reconstructedDataColumnsSideCars, err := peerdas.DataColumnSidecarsForReconstruct(
+				blobsKzgCommitments,
+				signedBeaconBlockHeader,
+				verifiedRoDataColumn.KzgCommitmentsInclusionProof,
+				cellsAndProofs,
+			)
+
+			require.NoError(t, err)
+
+			expected := dataColumnSidecars
+			actual := reconstructedDataColumnsSideCars
+			require.DeepSSZEqual(t, expected, actual)
 		})
 	}
 }

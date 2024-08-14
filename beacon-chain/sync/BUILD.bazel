@@ -70,7 +70,6 @@ go_library(
         "//async/abool:go_default_library",
         "//async/event:go_default_library",
         "//beacon-chain/blockchain:go_default_library",
-        "//beacon-chain/blockchain/kzg:go_default_library",
         "//beacon-chain/cache:go_default_library",
         "//beacon-chain/core/altair:go_default_library",
         "//beacon-chain/core/blocks:go_default_library",
@@ -150,7 +149,6 @@ go_library(
         "@com_github_trailofbits_go_mutexasserts//:go_default_library",
         "@io_opentelemetry_go_otel_trace//:go_default_library",
         "@org_golang_google_protobuf//proto:go_default_library",
-        "@org_golang_x_sync//errgroup:go_default_library",
     ],
 )
 

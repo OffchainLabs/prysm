@@ -400,13 +400,13 @@ func Test_parseIndices(t *testing.T) {
 	tests := []struct {
 		name    string
 		query   string
-		want    []uint64
+		want    map[uint64]bool
 		wantErr string
 	}{
 		{
 			name:  "happy path with duplicate indices within bound and other query parameters ignored",
 			query: "indices=1&indices=2&indices=1&indices=3&bar=bar",
-			want:  []uint64{1, 2, 3},
+			want:  map[uint64]bool{1: true, 2: true, 3: true},
 		},
 		{
 			name:    "out of bounds indices throws error",

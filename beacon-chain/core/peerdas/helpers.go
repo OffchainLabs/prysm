@@ -2,17 +2,22 @@ package peerdas
 
 import (
 	"encoding/binary"
+	"fmt"
 	"math"
 	"math/big"
+	"slices"
+	"time"
 
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/holiman/uint256"
 	errors "github.com/pkg/errors"
 
-	kzg "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/kzg"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/kzg"
 
 	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
@@ -195,6 +200,143 @@ func DataColumnSidecars(signedBlock interfaces.ReadOnlySignedBeaconBlock, blobs 
 	return sidecars, nil
 }
 
+// populateAndFilterIndices returns a sorted slices of indices, setting all indices if none are provided,
+// and filtering out indices higher than the blob count.
+func populateAndFilterIndices(indices map[uint64]bool, blobCount uint64) []uint64 {
+	// If no indices are provided, provide all blobs.
+	if len(indices) == 0 {
+		for i := range blobCount {
+			indices[uint64(i)] = true
+		}
+	}
+
+	// Filter blobs index higher than the blob count.
+	filteredIndices := make(map[uint64]bool, len(indices))
+	for i := range indices {
+		if i < blobCount {
+			filteredIndices[i] = true
+		}
+	}
+
+	// Transform set to slice.
+	indicesSlice := make([]uint64, 0, len(filteredIndices))
+	for i := range filteredIndices {
+		indicesSlice = append(indicesSlice, i)
+	}
+
+	// Sort the indices.
+	slices.Sort[[]uint64](indicesSlice)
+
+	return indicesSlice
+}
+
+// Blobs extract blobs from `dataColumnsSidecar`.
+// This can be seen as the reciprocal function of DataColumnSidecars.
+// `dataColumnsSidecar` needs to contain the datacolumns corresponding to the non-extended matrix,
+// else an error will be returned.
+// (`dataColumnsSidecar` can contain extra columns, but they will be ignored.)
+func Blobs(indices map[uint64]bool, dataColumnsSidecar []*ethpb.DataColumnSidecar) ([]*blocks.VerifiedROBlob, error) {
+	columnCount := fieldparams.NumberOfColumns
+
+	neededColumnCount := columnCount / 2
+
+	// Check if all needed columns are present.
+	sliceIndexFromColumnIndex := make(map[uint64]int, len(dataColumnsSidecar))
+	for i := range dataColumnsSidecar {
+		dataColumnSideCar := dataColumnsSidecar[i]
+		columnIndex := dataColumnSideCar.ColumnIndex
+
+		if columnIndex < uint64(neededColumnCount) {
+			sliceIndexFromColumnIndex[columnIndex] = i
+		}
+	}
+
+	actualColumnCount := len(sliceIndexFromColumnIndex)
+
+	// Get missing columns.
+	if actualColumnCount < neededColumnCount {
+		missingColumns := make(map[int]bool, neededColumnCount-actualColumnCount)
+		for i := range neededColumnCount {
+			if _, ok := sliceIndexFromColumnIndex[uint64(i)]; !ok {
+				missingColumns[i] = true
+			}
+		}
+
+		missingColumnsSlice := make([]int, 0, len(missingColumns))
+		for i := range missingColumns {
+			missingColumnsSlice = append(missingColumnsSlice, i)
+		}
+
+		slices.Sort[[]int](missingColumnsSlice)
+		return nil, errors.Errorf("some columns are missing: %v", missingColumnsSlice)
+	}
+
+	// It is safe to retrieve the first column since we already checked that `dataColumnsSidecar` is not empty.
+	firstDataColumnSidecar := dataColumnsSidecar[0]
+
+	blobCount := uint64(len(firstDataColumnSidecar.DataColumn))
+
+	// Check all colums have te same length.
+	for i := range dataColumnsSidecar {
+		if uint64(len(dataColumnsSidecar[i].DataColumn)) != blobCount {
+			return nil, errors.Errorf("mismatch in the length of the data columns, expected %d, got %d", blobCount, len(dataColumnsSidecar[i].DataColumn))
+		}
+	}
+
+	// Reconstruct verified RO blobs from columns.
+	verifiedROBlobs := make([]*blocks.VerifiedROBlob, 0, blobCount)
+
+	// Populate and filter indices.
+	indicesSlice := populateAndFilterIndices(indices, blobCount)
+
+	for _, blobIndex := range indicesSlice {
+		var blob kzg.Blob
+
+		// Compute the content of the blob.
+		for columnIndex := range neededColumnCount {
+			sliceIndex, ok := sliceIndexFromColumnIndex[uint64(columnIndex)]
+			if !ok {
+				return nil, errors.Errorf("missing column %d, this should never happen", columnIndex)
+			}
+
+			dataColumnSideCar := dataColumnsSidecar[sliceIndex]
+			cell := dataColumnSideCar.DataColumn[blobIndex]
+
+			for i := 0; i < len(cell); i++ {
+				blob[columnIndex*kzg.BytesPerCell+i] = cell[i]
+			}
+		}
+
+		// Retrieve the blob KZG commitment.
+		blobKZGCommitment := kzg.Commitment(firstDataColumnSidecar.KzgCommitments[blobIndex])
+
+		// Compute the blob KZG proof.
+		blobKzgProof, err := kzg.ComputeBlobKZGProof(&blob, blobKZGCommitment)
+		if err != nil {
+			return nil, errors.Wrap(err, "compute blob KZG proof")
+		}
+
+		blobSidecar := &ethpb.BlobSidecar{
+			Index:                    uint64(blobIndex),
+			Blob:                     blob[:],
+			KzgCommitment:            blobKZGCommitment[:],
+			KzgProof:                 blobKzgProof[:],
+			SignedBlockHeader:        firstDataColumnSidecar.SignedBlockHeader,
+			CommitmentInclusionProof: firstDataColumnSidecar.KzgCommitmentsInclusionProof,
+		}
+
+		roBlob, err := blocks.NewROBlob(blobSidecar)
+		if err != nil {
+			return nil, errors.Wrap(err, "new RO blob")
+		}
+
+		verifiedROBlob := blocks.NewVerifiedROBlob(roBlob)
+		verifiedROBlobs = append(verifiedROBlobs, &verifiedROBlob)
+	}
+
+	return verifiedROBlobs, nil
+}
+
 // DataColumnSidecarsForReconstruct is a TEMPORARY function until there is an official specification for it.
 // It is scheduled for deletion.
 func DataColumnSidecarsForReconstruct(
@@ -286,6 +428,23 @@ func CustodySubnetCount() uint64 {
 	return count
 }
 
+// CustodyColumnCount returns the number of columns the node should custody.
+func CustodyColumnCount() uint64 {
+	// Get the number of subnets.
+	dataColumnSidecarSubnetCount := params.BeaconConfig().DataColumnSidecarSubnetCount
+
+	// Compute the number of columns per subnet.
+	columnsPerSubnet := fieldparams.NumberOfColumns / dataColumnSidecarSubnetCount
+
+	// Get the number of subnets we custody
+	custodySubnetCount := CustodySubnetCount()
+
+	// Finally, compute the number of columns we should custody.
+	custodyColumnCount := custodySubnetCount * columnsPerSubnet
+
+	return custodyColumnCount
+}
+
 // HypergeomCDF computes the hypergeometric cumulative distribution function.
 // https://en.wikipedia.org/wiki/Hypergeometric_distribution
 func HypergeomCDF(k, M, n, N uint64) float64 {
@@ -356,4 +515,73 @@ func CanSelfReconstruct(numCol uint64) bool {
 	// if total is even, then we need total / 2 columns to reconstruct
 	columnsNeeded := total/2 + total%2
 	return numCol >= columnsNeeded
+}
+
+// RecoverCellsAndProofs recovers the cells and proofs from the data column sidecars.
+func RecoverCellsAndProofs(
+	dataColumnSideCars []*ethpb.DataColumnSidecar,
+	blockRoot [fieldparams.RootLength]byte,
+) ([]kzg.CellsAndProofs, error) {
+	var wg errgroup.Group
+
+	dataColumnSideCarsCount := len(dataColumnSideCars)
+
+	if dataColumnSideCarsCount == 0 {
+		return nil, errors.New("no data column sidecars")
+	}
+
+	// Check if all columns have the same length.
+	blobCount := len(dataColumnSideCars[0].DataColumn)
+	for _, sidecar := range dataColumnSideCars {
+		length := len(sidecar.DataColumn)
+
+		if length != blobCount {
+			return nil, errors.New("columns do not have the same length")
+		}
+	}
+
+	// Recover cells and compute proofs in parallel.
+	recoveredCellsAndProofs := make([]kzg.CellsAndProofs, blobCount)
+
+	for blobIndex := 0; blobIndex < blobCount; blobIndex++ {
+		bIndex := blobIndex
+		wg.Go(func() error {
+			start := time.Now()
+
+			cellsIndices := make([]uint64, 0, dataColumnSideCarsCount)
+			cells := make([]kzg.Cell, 0, dataColumnSideCarsCount)
+
+			for _, sidecar := range dataColumnSideCars {
+				// Build the cell indices.
+				cellsIndices = append(cellsIndices, sidecar.ColumnIndex)
+
+				// Get the cell.
+				column := sidecar.DataColumn
+				cell := column[bIndex]
+
+				cells = append(cells, kzg.Cell(cell))
+			}
+
+			// Recover the cells and proofs for the corresponding blob
+			cellsAndProofs, err := kzg.RecoverCellsAndKZGProofs(cellsIndices, cells)
+
+			if err != nil {
+				return errors.Wrapf(err, "recover cells and KZG proofs for blob %d", bIndex)
+			}
+
+			recoveredCellsAndProofs[bIndex] = cellsAndProofs
+			log.WithFields(logrus.Fields{
+				"elapsed": time.Since(start),
+				"index":   bIndex,
+				"root":    fmt.Sprintf("%x", blockRoot),
+			}).Debug("Recovered cells and proofs")
+			return nil
+		})
+	}
+
+	if err := wg.Wait(); err != nil {
+		return nil, err
+	}
+
+	return recoveredCellsAndProofs, nil
 }

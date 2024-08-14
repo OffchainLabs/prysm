@@ -8,9 +8,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/sync/errgroup"
 
-	kzg "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/kzg"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
@@ -20,74 +18,6 @@ import (
 )
 
 const broadCastMissingDataColumnsTimeIntoSlot = 3 * time.Second
-
-// recoverCellsAndProofs recovers the cells and proofs from the data column sidecars.
-func recoverCellsAndProofs(
-	dataColumnSideCars []*ethpb.DataColumnSidecar,
-	columnsCount int,
-	blockRoot [fieldparams.RootLength]byte,
-) ([]kzg.CellsAndProofs, error) {
-	var wg errgroup.Group
-
-	if len(dataColumnSideCars) == 0 {
-		return nil, errors.New("no data column sidecars")
-	}
-
-	// Check if all columns have the same length.
-	blobCount := len(dataColumnSideCars[0].DataColumn)
-	for _, sidecar := range dataColumnSideCars {
-		length := len(sidecar.DataColumn)
-
-		if length != blobCount {
-			return nil, errors.New("columns do not have the same length")
-		}
-	}
-
-	// Recover cells and compute proofs in parallel.
-	recoveredCellsAndProofs := make([]kzg.CellsAndProofs, blobCount)
-
-	for blobIndex := 0; blobIndex < blobCount; blobIndex++ {
-		bIndex := blobIndex
-		wg.Go(func() error {
-			start := time.Now()
-
-			cellsIndices := make([]uint64, 0, columnsCount)
-			cells := make([]kzg.Cell, 0, columnsCount)
-
-			for _, sidecar := range dataColumnSideCars {
-				// Build the cell indices.
-				cellsIndices = append(cellsIndices, sidecar.ColumnIndex)
-
-				// Get the cell.
-				column := sidecar.DataColumn
-				cell := column[bIndex]
-
-				cells = append(cells, kzg.Cell(cell))
-			}
-
-			// Recover the cells and proofs for the corresponding blob
-			cellsAndProofs, err := kzg.RecoverCellsAndKZGProofs(cellsIndices, cells)
-
-			if err != nil {
-				return errors.Wrapf(err, "recover cells and KZG proofs for blob %d", bIndex)
-			}
-
-			recoveredCellsAndProofs[bIndex] = cellsAndProofs
-			log.WithFields(logrus.Fields{
-				"elapsed": time.Since(start),
-				"index":   bIndex,
-				"root":    fmt.Sprintf("%x", blockRoot),
-			}).Debug("Recovered cells and proofs")
-			return nil
-		})
-	}
-
-	if err := wg.Wait(); err != nil {
-		return nil, err
-	}
-
-	return recoveredCellsAndProofs, nil
-}
 
 func (s *Service) reconstructDataColumns(ctx context.Context, verifiedRODataColumn blocks.VerifiedRODataColumn) error {
 	// Lock to prevent concurrent reconstruction.
@@ -130,7 +60,7 @@ func (s *Service) reconstructDataColumns(ctx context.Context, verifiedRODataColu
 	}
 
 	// Recover cells and proofs
-	recoveredCellsAndProofs, err := recoverCellsAndProofs(dataColumnSideCars, storedColumnsCount, blockRoot)
+	recoveredCellsAndProofs, err := peerdas.RecoverCellsAndProofs(dataColumnSideCars, blockRoot)
 	if err != nil {
 		return errors.Wrap(err, "recover cells and proofs")
 	}

@@ -326,10 +326,12 @@ func (bs *BlobStorage) SaveDataColumn(column blocks.VerifiedRODataColumn) error 
 	partialMoved = true
 
 	// Notify the data column notifier that a new data column has been saved.
-	bs.DataColumnFeed.Send(RootIndexPair{
-		Root:  column.BlockRoot(),
-		Index: column.ColumnIndex,
-	})
+	if bs.DataColumnFeed != nil {
+		bs.DataColumnFeed.Send(RootIndexPair{
+			Root:  column.BlockRoot(),
+			Index: column.ColumnIndex,
+		})
+	}
 
 	// TODO: Use new metrics for data columns
 	blobsWrittenCounter.Inc()
