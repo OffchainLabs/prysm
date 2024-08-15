@@ -206,7 +206,7 @@ func populateAndFilterIndices(indices map[uint64]bool, blobCount uint64) []uint6
 	// If no indices are provided, provide all blobs.
 	if len(indices) == 0 {
 		for i := range blobCount {
-			indices[uint64(i)] = true
+			indices[i] = true
 		}
 	}
 
@@ -317,7 +317,7 @@ func Blobs(indices map[uint64]bool, dataColumnsSidecar []*ethpb.DataColumnSideca
 		}
 
 		blobSidecar := &ethpb.BlobSidecar{
-			Index:                    uint64(blobIndex),
+			Index:                    blobIndex,
 			Blob:                     blob[:],
 			KzgCommitment:            blobKZGCommitment[:],
 			KzgProof:                 blobKzgProof[:],
