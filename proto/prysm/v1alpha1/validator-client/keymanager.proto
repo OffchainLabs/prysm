@@ -86,6 +86,7 @@ message SignRequest {
     ethereum.eth.v1alpha1.PayloadAttestationData payload_attestation_data = 123;
     ethereum.eth.v1alpha1.BeaconBlockEpbs block_epbs = 124;
     ethereum.engine.v1.ExecutionPayloadHeaderEPBS execution_payload_header_epbs = 125;
+    ethereum.engine.v1.ExecutionPayloadEnvelope execution_payload_envelope = 126;
   }
 
   reserved 4, 5; // Reserving old, deleted fields.
