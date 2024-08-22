@@ -29,8 +29,8 @@ var ExecutionPayloadEnvelopeGossipRequirements = []Requirement{
 	RequireSignatureValid,
 }
 
-// GossipExecutionPayloadEnvelopeRequirements is a requirement list for gossip payload attestation messages.
-var GossipExecutionPayloadEnvelopeRequirements = RequirementList(PayloadAttGossipRequirements)
+// GossipExecutionPayloadEnvelopeRequirements is a requirement list for gossip execution payload envelopes.
+var GossipExecutionPayloadEnvelopeRequirements = RequirementList(ExecutionPayloadEnvelopeGossipRequirements)
 
 var (
 	ErrEnvelopeBlockRootNotSeen   = errors.New("block root not seen")
