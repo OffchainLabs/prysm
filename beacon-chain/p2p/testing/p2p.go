@@ -48,6 +48,7 @@ const (
 type TestP2P struct {
 	t               *testing.T
 	BHost           host.Host
+	EnodeID         enode.ID
 	pubsub          *pubsub.PubSub
 	joinedTopics    map[string]*pubsub.Topic
 	BroadcastCalled atomic.Bool
@@ -292,8 +293,8 @@ func (*TestP2P) ENR() *enr.Record {
 }
 
 // NodeID returns the node id of the local peer.
-func (*TestP2P) NodeID() enode.ID {
-	return [32]byte{}
+func (p *TestP2P) NodeID() enode.ID {
+	return p.EnodeID
 }
 
 // DiscoveryAddresses --

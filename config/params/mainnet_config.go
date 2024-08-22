@@ -300,7 +300,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	NumberOfColumns:                       128,
 	MaxCellsInExtendedMatrix:              768,
 	SamplesPerSlot:                        8,
-	CustodyRequirement:                    1,
+	CustodyRequirement:                    4,
 	MinEpochsForDataColumnSidecarsRequest: 4096,
 
 	// Values related to networking parameters.

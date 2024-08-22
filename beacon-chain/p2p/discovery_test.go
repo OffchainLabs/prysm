@@ -237,7 +237,7 @@ func TestCreateLocalNode(t *testing.T) {
 			// Check custody_subnet_count config.
 			custodySubnetCount := new(uint64)
 			require.NoError(t, localNode.Node().Record().Load(enr.WithEntry(peerdas.CustodySubnetCountEnrKey, custodySubnetCount)))
-			require.Equal(t, uint64(1), *custodySubnetCount)
+			require.Equal(t, params.BeaconConfig().CustodyRequirement, *custodySubnetCount)
 		})
 	}
 }
@@ -629,7 +629,7 @@ func TestRefreshPersistentSubnets(t *testing.T) {
 		eip7594ForkEpoch = 10
 	)
 
-	custodySubnetCount := uint64(1)
+	custodySubnetCount := params.BeaconConfig().CustodyRequirement
 
 	// Set up epochs.
 	defaultCfg := params.BeaconConfig()

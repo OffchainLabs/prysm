@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"math"
 	"sort"
@@ -1364,7 +1365,11 @@ func TestCustodyAllNeededColumns(t *testing.T) {
 		dataColumns[uint64(i)] = true
 	}
 
-	custodyCounts := [...]uint64{4, 32, 4, 32}
+	custodyCounts := [...]uint64{
+		4 * params.BeaconConfig().CustodyRequirement,
+		32 * params.BeaconConfig().CustodyRequirement,
+		4 * params.BeaconConfig().CustodyRequirement,
+		32 * params.BeaconConfig().CustodyRequirement}
 
 	peersID := make([]peer.ID, 0, len(custodyCounts))
 	for _, custodyCount := range custodyCounts {
@@ -1390,15 +1395,12 @@ func TestCustodyColumns(t *testing.T) {
 		p2p: p2ptest.NewTestP2P(t),
 	})
 
-	expected := map[uint64]bool{6: true, 38: true, 70: true, 102: true}
+	expected := params.BeaconConfig().CustodyRequirement
 
 	actual, err := blocksFetcher.custodyColumns()
 	require.NoError(t, err)
 
-	require.Equal(t, len(expected), len(actual))
-	for column := range expected {
-		require.Equal(t, true, actual[column])
-	}
+	require.Equal(t, int(expected), len(actual))
 }
 
 func TestMinInt(t *testing.T) {
@@ -1725,7 +1727,7 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 			},
 			peersParams: []peerParams{
 				{
-					csc: 32,
+					csc: 128,
 					toRespond: map[string][][]responseParams{
 						(&ethpb.DataColumnSidecarsByRangeRequest{
 							StartSlot: 34,
@@ -1750,7 +1752,7 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 					},
 				},
 				{
-					csc: 32,
+					csc: 128,
 					toRespond: map[string][][]responseParams{
 						(&ethpb.DataColumnSidecarsByRangeRequest{
 							StartSlot: 34,
@@ -1775,7 +1777,7 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 					},
 				},
 				{
-					csc: 32,
+					csc: 128,
 					toRespond: map[string][][]responseParams{
 						(&ethpb.DataColumnSidecarsByRangeRequest{
 							StartSlot: 34,
@@ -1787,7 +1789,7 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 					},
 				},
 				{
-					csc: 32,
+					csc: 128,
 					toRespond: map[string][][]responseParams{
 						(&ethpb.DataColumnSidecarsByRangeRequest{
 							StartSlot: 34,
@@ -1841,7 +1843,7 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 			},
 			peersParams: []peerParams{
 				{
-					csc: 32,
+					csc: 128,
 					toRespond: map[string][][]responseParams{
 						(&ethpb.DataColumnSidecarsByRangeRequest{
 							StartSlot: 34,
@@ -1901,7 +1903,7 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 			},
 			peersParams: []peerParams{
 				{
-					csc: 32,
+					csc: 128,
 					toRespond: map[string][][]responseParams{
 						(&ethpb.DataColumnSidecarsByRangeRequest{
 							StartSlot: 38,
@@ -1917,7 +1919,7 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 					},
 				},
 				{
-					csc: 32,
+					csc: 128,
 					toRespond: map[string][][]responseParams{
 						(&ethpb.DataColumnSidecarsByRangeRequest{
 							StartSlot: 38,
@@ -1950,7 +1952,7 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 			},
 			peersParams: []peerParams{
 				{
-					csc: 32,
+					csc: 128,
 					toRespond: map[string][][]responseParams{
 						(&ethpb.DataColumnSidecarsByRangeRequest{
 							StartSlot: 38,
@@ -1981,144 +1983,160 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		// Consistency checks.
-		require.Equal(t, len(tc.blocksParams), len(tc.addedRODataColumns))
+		t.Run(tc.name, func(t *testing.T) {
+			// Consistency checks.
+			require.Equal(t, len(tc.blocksParams), len(tc.addedRODataColumns))
 
-		// Create a context.
-		ctx := context.Background()
+			// Create a context.
+			ctx := context.Background()
 
-		// Initialize the trusted setup.
-		err := kzg.Start()
-		require.NoError(t, err)
+			// Initialize the trusted setup.
+			err := kzg.Start()
+			require.NoError(t, err)
 
-		// Create blocks, RO data columns and data columns sidecar from slot.
-		roBlocks := make([]blocks.ROBlock, len(tc.blocksParams))
-		roDatasColumns := make([][]blocks.RODataColumn, len(tc.blocksParams))
-		dataColumnsSidecarFromSlot := make(map[primitives.Slot][]*ethpb.DataColumnSidecar, len(tc.blocksParams))
+			// Create blocks, RO data columns and data columns sidecar from slot.
+			roBlocks := make([]blocks.ROBlock, len(tc.blocksParams))
+			roDatasColumns := make([][]blocks.RODataColumn, len(tc.blocksParams))
+			dataColumnsSidecarFromSlot := make(map[primitives.Slot][]*ethpb.DataColumnSidecar, len(tc.blocksParams))
 
-		for i, blockParams := range tc.blocksParams {
-			pbSignedBeaconBlock := util.NewBeaconBlockDeneb()
-			pbSignedBeaconBlock.Block.Slot = blockParams.slot
+			for i, blockParams := range tc.blocksParams {
+				pbSignedBeaconBlock := util.NewBeaconBlockDeneb()
+				pbSignedBeaconBlock.Block.Slot = blockParams.slot
 
-			if blockParams.hasBlobs {
-				blobs := make([]kzg.Blob, blobsCount)
-				blobKzgCommitments := make([][]byte, blobsCount)
+				if blockParams.hasBlobs {
+					blobs := make([]kzg.Blob, blobsCount)
+					blobKzgCommitments := make([][]byte, blobsCount)
 
-				for j := range blobsCount {
-					blob := getRandBlob(t, int64(i+j))
-					blobs[j] = blob
+					for j := range blobsCount {
+						blob := getRandBlob(t, int64(i+j))
+						blobs[j] = blob
 
-					blobKzgCommitment, err := kzg.BlobToKZGCommitment(&blob)
+						blobKzgCommitment, err := kzg.BlobToKZGCommitment(&blob)
+						require.NoError(t, err)
+
+						blobKzgCommitments[j] = blobKzgCommitment[:]
+					}
+
+					pbSignedBeaconBlock.Block.Body.BlobKzgCommitments = blobKzgCommitments
+					signedBeaconBlock, err := blocks.NewSignedBeaconBlock(pbSignedBeaconBlock)
 					require.NoError(t, err)
 
-					blobKzgCommitments[j] = blobKzgCommitment[:]
+					pbDataColumnsSidecar, err := peerdas.DataColumnSidecars(signedBeaconBlock, blobs)
+					require.NoError(t, err)
+
+					dataColumnsSidecarFromSlot[blockParams.slot] = pbDataColumnsSidecar
+
+					roDataColumns := make([]blocks.RODataColumn, 0, len(pbDataColumnsSidecar))
+					for _, pbDataColumnSidecar := range pbDataColumnsSidecar {
+						roDataColumn, err := blocks.NewRODataColumn(pbDataColumnSidecar)
+						require.NoError(t, err)
+
+						roDataColumns = append(roDataColumns, roDataColumn)
+					}
+
+					roDatasColumns[i] = roDataColumns
 				}
 
-				pbSignedBeaconBlock.Block.Body.BlobKzgCommitments = blobKzgCommitments
 				signedBeaconBlock, err := blocks.NewSignedBeaconBlock(pbSignedBeaconBlock)
 				require.NoError(t, err)
 
-				pbDataColumnsSidecar, err := peerdas.DataColumnSidecars(signedBeaconBlock, blobs)
+				roBlock, err := blocks.NewROBlock(signedBeaconBlock)
 				require.NoError(t, err)
 
-				dataColumnsSidecarFromSlot[blockParams.slot] = pbDataColumnsSidecar
+				roBlocks[i] = roBlock
+			}
 
-				roDataColumns := make([]blocks.RODataColumn, 0, len(pbDataColumnsSidecar))
-				for _, pbDataColumnSidecar := range pbDataColumnsSidecar {
-					roDataColumn, err := blocks.NewRODataColumn(pbDataColumnSidecar)
-					require.NoError(t, err)
+			// Set the Deneb fork epoch.
+			params.BeaconConfig().DenebForkEpoch = tc.denebForkEpoch
 
-					roDataColumns = append(roDataColumns, roDataColumn)
+			// Set the EIP-7594 fork epoch.
+			params.BeaconConfig().Eip7594ForkEpoch = tc.eip7954ForkEpoch
+
+			// Save the blocks in the store.
+			storage := make(map[[fieldparams.RootLength]byte][]int)
+			for index, columns := range tc.storedDataColumns {
+				root := roBlocks[index].Root()
+
+				columnsSlice := make([]int, 0, len(columns))
+				for column := range columns {
+					columnsSlice = append(columnsSlice, column)
 				}
 
-				roDatasColumns[i] = roDataColumns
+				storage[root] = columnsSlice
 			}
 
-			signedBeaconBlock, err := blocks.NewSignedBeaconBlock(pbSignedBeaconBlock)
+			blobStorageSummarizer := filesystem.NewMockBlobStorageSummarizer(t, storage)
+
+			// Create a chain and a clock.
+			chain, clock := defaultMockChain(t, tc.currentSlot)
+
+			// Create the P2P service.
+			p2pSvc := p2ptest.NewTestP2P(t, libp2p.Identity(genFixedCustodyPeer(t)))
+			nodeID, err := p2p.ConvertPeerIDToNodeID(p2pSvc.PeerID())
 			require.NoError(t, err)
+			p2pSvc.EnodeID = nodeID
 
-			roBlock, err := blocks.NewROBlock(signedBeaconBlock)
-			require.NoError(t, err)
-
-			roBlocks[i] = roBlock
-		}
-
-		// Set the Deneb fork epoch.
-		params.BeaconConfig().DenebForkEpoch = tc.denebForkEpoch
-
-		// Set the EIP-7594 fork epoch.
-		params.BeaconConfig().Eip7594ForkEpoch = tc.eip7954ForkEpoch
-
-		// Save the blocks in the store.
-		storage := make(map[[fieldparams.RootLength]byte][]int)
-		for index, columns := range tc.storedDataColumns {
-			root := roBlocks[index].Root()
-
-			columnsSlice := make([]int, 0, len(columns))
-			for column := range columns {
-				columnsSlice = append(columnsSlice, column)
+			// Connect the peers.
+			peers := make([]*p2ptest.TestP2P, 0, len(tc.peersParams))
+			for i, peerParams := range tc.peersParams {
+				peer := createAndConnectPeer(t, p2pSvc, chain, dataColumnsSidecarFromSlot, peerParams, i)
+				peers = append(peers, peer)
 			}
 
-			storage[root] = columnsSlice
-		}
+			peersID := make([]peer.ID, 0, len(peers))
+			for _, peer := range peers {
+				peerID := peer.PeerID()
+				peersID = append(peersID, peerID)
+			}
 
-		blobStorageSummarizer := filesystem.NewMockBlobStorageSummarizer(t, storage)
+			// Create `bwb`.
+			bwb := make([]blocks.BlockWithROBlobs, 0, len(tc.blocksParams))
+			for _, roBlock := range roBlocks {
+				bwb = append(bwb, blocks.BlockWithROBlobs{Block: roBlock})
+			}
 
-		// Create a chain and a clock.
-		chain, clock := defaultMockChain(t, tc.currentSlot)
+			// Create the block fetcher.
+			blocksFetcher := newBlocksFetcher(ctx, &blocksFetcherConfig{
+				clock:  clock,
+				ctxMap: map[[4]byte]int{{245, 165, 253, 66}: version.Deneb},
+				p2p:    p2pSvc,
+				bs:     blobStorageSummarizer,
+			})
 
-		// Create the P2P service.
-		p2p := p2ptest.NewTestP2P(t)
+			// Fetch the data columns from the peers.
+			err = blocksFetcher.fetchDataColumnsFromPeers(ctx, bwb, peersID)
+			require.NoError(t, err)
 
-		// Connect the peers.
-		peers := make([]*p2ptest.TestP2P, 0, len(tc.peersParams))
-		for i, peerParams := range tc.peersParams {
-			peer := createAndConnectPeer(t, p2p, chain, dataColumnsSidecarFromSlot, peerParams, i)
-			peers = append(peers, peer)
-		}
+			// Check the added RO data columns.
+			for i := range bwb {
+				blockWithROBlobs := bwb[i]
+				addedRODataColumns := tc.addedRODataColumns[i]
 
-		peersID := make([]peer.ID, 0, len(peers))
-		for _, peer := range peers {
-			peerID := peer.PeerID()
-			peersID = append(peersID, peerID)
-		}
+				if addedRODataColumns == nil {
+					require.Equal(t, 0, len(blockWithROBlobs.Columns))
+					continue
+				}
 
-		// Create `bwb`.
-		bwb := make([]blocks.BlockWithROBlobs, 0, len(tc.blocksParams))
-		for _, roBlock := range roBlocks {
-			bwb = append(bwb, blocks.BlockWithROBlobs{Block: roBlock})
-		}
+				expectedRODataColumns := make([]blocks.RODataColumn, 0, len(tc.addedRODataColumns[i]))
+				for _, column := range addedRODataColumns {
+					roDataColumn := roDatasColumns[i][column]
+					expectedRODataColumns = append(expectedRODataColumns, roDataColumn)
+				}
 
-		// Create the block fetcher.
-		blocksFetcher := newBlocksFetcher(ctx, &blocksFetcherConfig{
-			clock:  clock,
-			ctxMap: map[[4]byte]int{{245, 165, 253, 66}: version.Deneb},
-			p2p:    p2p,
-			bs:     blobStorageSummarizer,
+				actualRODataColumns := blockWithROBlobs.Columns
+				require.DeepSSZEqual(t, expectedRODataColumns, actualRODataColumns)
+			}
 		})
-
-		// Fetch the data columns from the peers.
-		err = blocksFetcher.fetchDataColumnsFromPeers(ctx, bwb, peersID)
-		require.NoError(t, err)
-
-		// Check the added RO data columns.
-		for i := range bwb {
-			blockWithROBlobs := bwb[i]
-			addedRODataColumns := tc.addedRODataColumns[i]
-
-			if addedRODataColumns == nil {
-				require.Equal(t, 0, len(blockWithROBlobs.Columns))
-				continue
-			}
-
-			expectedRODataColumns := make([]blocks.RODataColumn, 0, len(tc.addedRODataColumns[i]))
-			for _, column := range addedRODataColumns {
-				roDataColumn := roDatasColumns[i][column]
-				expectedRODataColumns = append(expectedRODataColumns, roDataColumn)
-			}
-
-			actualRODataColumns := blockWithROBlobs.Columns
-			require.DeepSSZEqual(t, expectedRODataColumns, actualRODataColumns)
-		}
 	}
+}
+
+// This generates a peer which custodies the columns of 6,38,70 and 102.
+func genFixedCustodyPeer(t *testing.T) crypto.PrivKey {
+	rawObj, err := hex.DecodeString("58f40e5010e67d07e5fb37c62d6027964de2bef532acf06cf4f1766f5273ae95")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pkey, err := crypto.UnmarshalSecp256k1PrivateKey(rawObj)
+	require.NoError(t, err)
+	return pkey
 }
