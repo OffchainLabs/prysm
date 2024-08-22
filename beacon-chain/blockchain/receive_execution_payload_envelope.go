@@ -26,7 +26,7 @@ import (
 func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, envelope interfaces.ROExecutionPayloadEnvelope, _ das.AvailabilityStore) error {
 	receivedTime := time.Now()
 	root := envelope.BeaconBlockRoot()
-	s.payloadBeingSynced.set(root)
+	s.payloadBeingSynced.set(envelope)
 	defer s.payloadBeingSynced.unset(root)
 
 	preState, err := s.getPayloadEnvelopePrestate(ctx, envelope)

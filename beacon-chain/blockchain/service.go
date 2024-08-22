@@ -183,7 +183,7 @@ func NewService(ctx context.Context, opts ...Option) (*Service, error) {
 		blobNotifiers:        bn,
 		cfg:                  &config{},
 		blockBeingSynced:     &currentlySyncingBlock{roots: make(map[[32]byte]struct{})},
-		payloadBeingSynced:   &currentlySyncingPayload{roots: make(map[[32]byte]struct{})},
+		payloadBeingSynced:   &currentlySyncingPayload{roots: make(map[[32]byte]primitives.PTCStatus)},
 	}
 	for _, opt := range opts {
 		if err := opt(srv); err != nil {

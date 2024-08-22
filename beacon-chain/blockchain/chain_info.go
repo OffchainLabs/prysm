@@ -545,8 +545,9 @@ func (s *Service) recoverStateSummary(ctx context.Context, blockRoot [32]byte) (
 	return nil, errBlockDoesNotExist
 }
 
-// PayloadBeingSynced returns whether the payload for the block with the given root is currently being synced
-func (s *Service) PayloadBeingSynced(root [32]byte) bool {
+// PayloadBeingSynced returns whether the payload for the block with the given
+// root is currently being synced and what is the withheld status in the payload
+func (s *Service) PayloadBeingSynced(root [32]byte) (primitives.PTCStatus, bool) {
 	return s.payloadBeingSynced.isSyncing(root)
 }
 
