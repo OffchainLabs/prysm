@@ -362,7 +362,7 @@ func (s *Service) startTasksPostInitialSync() {
 
 		// Start data columns sampling if peerDAS is enabled.
 		if params.PeerDASEnabled() {
-			s.sampler = newDataColumnSampler1D(s.cfg.p2p, s.cfg.clock, s.ctxMap, s.cfg.stateNotifier)
+			s.sampler = newDataColumnSampler1D(s.cfg.p2p, s.cfg.clock, s.ctxMap, s.cfg.stateNotifier, s.newColumnVerifier)
 			go s.sampler.Run(s.ctx)
 		}
 

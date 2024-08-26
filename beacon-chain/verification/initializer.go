@@ -13,8 +13,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/network/forks"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
-	log "github.com/sirupsen/logrus"
 )
 
 // Forkchoicer represents the forkchoice methods that the verifiers need.
@@ -68,37 +66,6 @@ func (ini *Initializer) NewColumnVerifier(d blocks.RODataColumn, reqs []Requirem
 		results:                    newResults(reqs...),
 		verifyDataColumnCommitment: peerdas.VerifyDataColumnSidecarKZGProofs,
 	}
-}
-
-func (ini *Initializer) VerifyProposer(ctx context.Context, dc blocks.RODataColumn) error {
-	e := slots.ToEpoch(dc.Slot())
-	if e > 0 {
-		e = e - 1
-	}
-	r, err := ini.shared.fc.TargetRootForEpoch(dc.ParentRoot(), e)
-	if err != nil {
-		return ErrSidecarUnexpectedProposer
-	}
-	c := &forkchoicetypes.Checkpoint{Root: r, Epoch: e}
-	idx, cached := ini.shared.pc.Proposer(c, dc.Slot())
-	if !cached {
-		pst, err := ini.shared.sr.StateByRoot(ctx, dc.ParentRoot())
-		if err != nil {
-			log.WithError(err).Debug("state replay to parent_root failed")
-			return ErrSidecarUnexpectedProposer
-		}
-		idx, err = ini.shared.pc.ComputeProposer(ctx, dc.ParentRoot(), dc.Slot(), pst)
-		if err != nil {
-			log.WithError(err).Debug("error computing proposer index from parent state")
-			return ErrSidecarUnexpectedProposer
-		}
-	}
-	if idx != dc.ProposerIndex() {
-		log.WithError(ErrSidecarUnexpectedProposer).WithField("expectedProposer", idx).
-			Debug("unexpected blob proposer")
-		return ErrSidecarUnexpectedProposer
-	}
-	return nil
 }
 
 // InitializerWaiter provides an Initializer once all dependent resources are ready

@@ -11,6 +11,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
 	beaconsync "github.com/prysmaticlabs/prysm/v5/beacon-chain/sync"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
@@ -71,6 +72,8 @@ type blocksQueueConfig struct {
 	db                  db.ReadOnlyDatabase
 	mode                syncMode
 	bs                  filesystem.BlobStorageSummarizer
+	bv                  verification.NewBlobVerifier
+	cv                  verification.NewColumnVerifier
 }
 
 // blocksQueue is a priority queue that serves as a intermediary between block fetchers (producers)
@@ -113,6 +116,8 @@ func newBlocksQueue(ctx context.Context, cfg *blocksQueueConfig) *blocksQueue {
 			db:     cfg.db,
 			clock:  cfg.clock,
 			bs:     cfg.bs,
+			bv:     cfg.bv,
+			cv:     cfg.cv,
 		})
 	}
 	highestExpectedSlot := cfg.highestExpectedSlot

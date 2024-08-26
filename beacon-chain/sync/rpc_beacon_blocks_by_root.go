@@ -201,7 +201,7 @@ func (s *Service) sendAndSaveDataColumnSidecars(ctx context.Context, request typ
 		return err
 	}
 	for _, sidecar := range sidecars {
-		if err := verify.ColumnAlignsWithBlock(sidecar, RoBlock); err != nil {
+		if err := verify.ColumnAlignsWithBlock(sidecar, RoBlock, s.newColumnVerifier); err != nil {
 			return err
 		}
 		log.WithFields(columnFields(sidecar)).Debug("Received data column sidecar RPC")

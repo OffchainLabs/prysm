@@ -9,6 +9,7 @@ import (
 
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
 	"github.com/sirupsen/logrus"
 
 	"github.com/prysmaticlabs/prysm/v5/async"
@@ -57,6 +58,8 @@ type dataColumnSampler1D struct {
 	columnFromPeer map[peer.ID]map[uint64]bool
 	// peerFromColumn maps a column to the peer responsible for custody.
 	peerFromColumn map[uint64]map[peer.ID]bool
+	// columnVerifier verifies a column according to the specified requirements.
+	columnVerifier verification.NewColumnVerifier
 }
 
 // newDataColumnSampler1D creates a new 1D data column sampler.
@@ -65,6 +68,7 @@ func newDataColumnSampler1D(
 	clock *startup.Clock,
 	ctxMap ContextByteVersions,
 	stateNotifier statefeed.Notifier,
+	colVerifier verification.NewColumnVerifier,
 ) *dataColumnSampler1D {
 	numColumns := params.BeaconConfig().NumberOfColumns
 	peerFromColumn := make(map[uint64]map[peer.ID]bool, numColumns)
@@ -79,6 +83,7 @@ func newDataColumnSampler1D(
 		stateNotifier:  stateNotifier,
 		columnFromPeer: make(map[peer.ID]map[uint64]bool),
 		peerFromColumn: peerFromColumn,
+		columnVerifier: colVerifier,
 	}
 }
 
@@ -426,7 +431,7 @@ func (d *dataColumnSampler1D) sampleDataColumnsFromPeer(
 	}
 
 	for _, roDataColumn := range roDataColumns {
-		if verifyColumn(roDataColumn, root, pid, requestedColumns) {
+		if verifyColumn(roDataColumn, root, pid, requestedColumns, d.columnVerifier) {
 			retrievedColumns[roDataColumn.ColumnIndex] = true
 		}
 	}
@@ -500,6 +505,7 @@ func verifyColumn(
 	root [32]byte,
 	pid peer.ID,
 	requestedColumns map[uint64]bool,
+	columnVerifier verification.NewColumnVerifier,
 ) bool {
 	retrievedColumn := roDataColumn.ColumnIndex
 
@@ -528,38 +534,25 @@ func verifyColumn(
 		return false
 	}
 
+	vf := columnVerifier(roDataColumn, verification.SamplingColumnSidecarRequirements)
 	// Filter out columns which did not pass the KZG inclusion proof verification.
-	if err := blocks.VerifyKZGInclusionProofColumn(roDataColumn); err != nil {
+	if err := vf.SidecarInclusionProven(); err != nil {
 		log.WithFields(logrus.Fields{
 			"peerID": pid,
 			"root":   fmt.Sprintf("%#x", root),
 			"index":  retrievedColumn,
-		}).Debug("Failed to verify KZG inclusion proof for retrieved column")
-
+		}).WithError(err).Debug("Failed to verify KZG inclusion proof for retrieved column")
 		return false
 	}
 
 	// Filter out columns which did not pass the KZG proof verification.
-	verified, err := peerdas.VerifyDataColumnSidecarKZGProofs(roDataColumn)
-	if err != nil {
+	if err := vf.SidecarKzgProofVerified(); err != nil {
 		log.WithFields(logrus.Fields{
 			"peerID": pid,
 			"root":   fmt.Sprintf("%#x", root),
 			"index":  retrievedColumn,
-		}).Debug("Error when verifying KZG proof for retrieved column")
-
+		}).WithError(err).Debug("Failed to verify KZG proof for retrieved column")
 		return false
 	}
-
-	if !verified {
-		log.WithFields(logrus.Fields{
-			"peerID": pid,
-			"root":   fmt.Sprintf("%#x", root),
-			"index":  retrievedColumn,
-		}).Debug("Failed to verify KZG proof for retrieved column")
-
-		return false
-	}
-
 	return true
 }

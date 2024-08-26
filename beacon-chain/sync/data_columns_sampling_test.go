@@ -21,6 +21,8 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers"
 	p2ptest "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
 	p2pTypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
@@ -195,7 +197,12 @@ func setupDataColumnSamplerTest(t *testing.T, blobCount uint64) (*dataSamplerTes
 		kzgProofs:          kzgProofs,
 		dataColumnSidecars: dataColumnSidecars,
 	}
-	sampler := newDataColumnSampler1D(p2pSvc, clock, test.ctxMap, nil)
+	clockSync := startup.NewClockSynchronizer()
+	require.NoError(t, clockSync.SetClock(clock))
+	iniWaiter := verification.NewInitializerWaiter(clockSync, nil, nil)
+	ini, err := iniWaiter.WaitForInitializer(context.Background())
+	require.NoError(t, err)
+	sampler := newDataColumnSampler1D(p2pSvc, clock, test.ctxMap, nil, newColumnVerifierFromInitializer(ini))
 
 	return test, sampler
 }

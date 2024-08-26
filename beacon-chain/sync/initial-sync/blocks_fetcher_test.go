@@ -32,6 +32,7 @@ import (
 	p2ptest "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
 	beaconsync "github.com/prysmaticlabs/prysm/v5/beacon-chain/sync"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
 	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
@@ -2094,6 +2095,11 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 			for _, roBlock := range roBlocks {
 				bwb = append(bwb, blocks.BlockWithROBlobs{Block: roBlock})
 			}
+			clockSync := startup.NewClockSynchronizer()
+			require.NoError(t, clockSync.SetClock(clock))
+			iniWaiter := verification.NewInitializerWaiter(clockSync, nil, nil)
+			ini, err := iniWaiter.WaitForInitializer(ctx)
+			require.NoError(t, err)
 
 			// Create the block fetcher.
 			blocksFetcher := newBlocksFetcher(ctx, &blocksFetcherConfig{
@@ -2101,6 +2107,7 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 				ctxMap: map[[4]byte]int{{245, 165, 253, 66}: version.Deneb},
 				p2p:    p2pSvc,
 				bs:     blobStorageSummarizer,
+				cv:     newColumnVerifierFromInitializer(ini),
 			})
 
 			// Fetch the data columns from the peers.

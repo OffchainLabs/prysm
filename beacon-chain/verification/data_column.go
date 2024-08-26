@@ -40,11 +40,9 @@ var GossipColumnSidecarRequirements = requirementList(allColumnSidecarRequiremen
 var SpectestColumnSidecarRequirements = requirementList(GossipColumnSidecarRequirements).excluding(
 	RequireSidecarParentSeen, RequireSidecarParentValid)
 
-// InitsyncColumnSidecarRequirements is the list of verification requirements to be used by the init-sync service
-// for batch-mode syncing. Because we only perform batch verification as part of the IsDataAvailable method
-// for data columns after the block has been verified, and the blobs to be verified are keyed in the cache by the
-// block root, the list of required verifications is much shorter than gossip.
-var InitsyncColumnSidecarRequirements = requirementList(GossipColumnSidecarRequirements).excluding(
+// SamplingColumnSidecarRequirements are the column verification requirements that are necessary for columns
+// received via sampling.
+var SamplingColumnSidecarRequirements = requirementList(allColumnSidecarRequirements).excluding(
 	RequireNotFromFutureSlot,
 	RequireSlotAboveFinalized,
 	RequireSidecarParentSeen,
@@ -53,6 +51,12 @@ var InitsyncColumnSidecarRequirements = requirementList(GossipColumnSidecarRequi
 	RequireSidecarDescendsFromFinalized,
 	RequireSidecarProposerExpected,
 )
+
+// InitsyncColumnSidecarRequirements is the list of verification requirements to be used by the init-sync service
+// for batch-mode syncing. Because we only perform batch verification as part of the IsDataAvailable method
+// for data columns after the block has been verified, and the blobs to be verified are keyed in the cache by the
+// block root, the list of required verifications is much shorter than gossip.
+var InitsyncColumnSidecarRequirements = requirementList(SamplingColumnSidecarRequirements).excluding()
 
 // BackfillColumnSidecarRequirements is the same as InitsyncColumnSidecarRequirements.
 var BackfillColumnSidecarRequirements = requirementList(InitsyncColumnSidecarRequirements).excluding()

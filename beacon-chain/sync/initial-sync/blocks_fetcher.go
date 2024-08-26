@@ -20,6 +20,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
 	prysmsync "github.com/prysmaticlabs/prysm/v5/beacon-chain/sync"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/verify"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
 	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
@@ -81,6 +82,8 @@ type blocksFetcherConfig struct {
 	peerFilterCapacityWeight float64
 	mode                     syncMode
 	bs                       filesystem.BlobStorageSummarizer
+	bv                       verification.NewBlobVerifier
+	cv                       verification.NewColumnVerifier
 }
 
 // blocksFetcher is a service to fetch chain data from peers.
@@ -97,6 +100,8 @@ type blocksFetcher struct {
 	p2p             p2p.P2P
 	db              db.ReadOnlyDatabase
 	bs              filesystem.BlobStorageSummarizer
+	bv              verification.NewBlobVerifier
+	cv              verification.NewColumnVerifier
 	blocksPerPeriod uint64
 	rateLimiter     *leakybucket.Collector
 	peerLocks       map[peer.ID]*peerLock
@@ -156,6 +161,8 @@ func newBlocksFetcher(ctx context.Context, cfg *blocksFetcherConfig) *blocksFetc
 		p2p:             cfg.p2p,
 		db:              cfg.db,
 		bs:              cfg.bs,
+		bv:              cfg.bv,
+		cv:              cfg.cv,
 		blocksPerPeriod: uint64(blocksPerPeriod),
 		rateLimiter:     rateLimiter,
 		peerLocks:       make(map[peer.ID]*peerLock),
@@ -956,6 +963,7 @@ func processRetrievedDataColumns(
 	indicesFromRoot map[[fieldparams.RootLength]byte][]int,
 	missingColumnsFromRoot map[[fieldparams.RootLength]byte]map[uint64]bool,
 	bwb []blocks.BlockWithROBlobs,
+	colVerifier verification.NewColumnVerifier,
 ) {
 	retrievedColumnsFromRoot := make(map[[fieldparams.RootLength]byte]map[uint64]bool)
 
@@ -976,7 +984,7 @@ func processRetrievedDataColumns(
 		}
 
 		// Verify the data column.
-		if err := verify.ColumnAlignsWithBlock(dataColumn, blockFromRoot[root]); err != nil {
+		if err := verify.ColumnAlignsWithBlock(dataColumn, blockFromRoot[root], colVerifier); err != nil {
 			// TODO: Should we downscore the peer for that?
 			continue
 		}
@@ -1071,7 +1079,7 @@ func (f *blocksFetcher) retrieveMissingDataColumnsFromPeers(ctx context.Context,
 		}
 
 		// Process the retrieved data columns.
-		processRetrievedDataColumns(roDataColumns, blockFromRoot, indicesFromRoot, missingColumnsFromRoot, bwb)
+		processRetrievedDataColumns(roDataColumns, blockFromRoot, indicesFromRoot, missingColumnsFromRoot, bwb, f.cv)
 
 		if len(missingColumnsFromRoot) > 0 {
 			for root, columns := range missingColumnsFromRoot {

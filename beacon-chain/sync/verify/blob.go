@@ -4,7 +4,7 @@ import (
 	"reflect"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
@@ -52,13 +52,9 @@ func BlobAlignsWithBlock(blob blocks.ROBlob, block blocks.ROBlock) error {
 	return nil
 }
 
-func ColumnAlignsWithBlock(col blocks.RODataColumn, block blocks.ROBlock) error {
+func ColumnAlignsWithBlock(col blocks.RODataColumn, block blocks.ROBlock, colVerifier verification.NewColumnVerifier) error {
 	if block.Version() < version.Deneb {
 		return nil
-	}
-
-	if col.ColumnIndex >= fieldparams.NumberOfColumns {
-		return errors.Wrapf(ErrIncorrectColumnIndex, "index %d exceeds NUMBERS_OF_COLUMN %d", col.ColumnIndex, fieldparams.NumberOfColumns)
 	}
 
 	if col.BlockRoot() != block.Root() {
@@ -74,21 +70,19 @@ func ColumnAlignsWithBlock(col blocks.RODataColumn, block blocks.ROBlock) error 
 	if !reflect.DeepEqual(commitments, col.KzgCommitments) {
 		return errors.Wrapf(ErrMismatchedColumnCommitments, "commitment %#v != block commitment %#v for block root %#x at slot %d ", col.KzgCommitments, commitments, block.Root(), col.Slot())
 	}
+	vf := colVerifier(col, verification.InitsyncColumnSidecarRequirements)
+	if err := vf.DataColumnIndexInBounds(); err != nil {
+		return err
+	}
 
 	// Filter out columns which did not pass the KZG inclusion proof verification.
-	if err := blocks.VerifyKZGInclusionProofColumn(col); err != nil {
+	if err := vf.SidecarInclusionProven(); err != nil {
 		return err
 	}
 
 	// Filter out columns which did not pass the KZG proof verification.
-	verified, err := peerdas.VerifyDataColumnSidecarKZGProofs(col)
-	if err != nil {
+	if err := vf.SidecarKzgProofVerified(); err != nil {
 		return err
 	}
-
-	if !verified {
-		return errors.New("data column sidecar KZG proofs failed verification")
-	}
-
 	return nil
 }
