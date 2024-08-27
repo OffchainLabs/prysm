@@ -578,7 +578,11 @@ func (m *MetaDataV2) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = append(dst, m.Syncnets...)
 
 	// Field (3) 'CustodySubnetCount'
-	dst = ssz.MarshalUint64(dst, m.CustodySubnetCount)
+	if size := len(m.CustodySubnetCount); size != 1 {
+		err = ssz.ErrBytesLengthFn("--.CustodySubnetCount", size, 1)
+		return
+	}
+	dst = append(dst, m.CustodySubnetCount...)
 
 	return
 }
@@ -587,7 +591,7 @@ func (m *MetaDataV2) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 func (m *MetaDataV2) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size != 25 {
+	if size != 18 {
 		return ssz.ErrSize
 	}
 
@@ -607,14 +611,17 @@ func (m *MetaDataV2) UnmarshalSSZ(buf []byte) error {
 	m.Syncnets = append(m.Syncnets, buf[16:17]...)
 
 	// Field (3) 'CustodySubnetCount'
-	m.CustodySubnetCount = ssz.UnmarshallUint64(buf[17:25])
+	if cap(m.CustodySubnetCount) == 0 {
+		m.CustodySubnetCount = make([]byte, 0, len(buf[17:18]))
+	}
+	m.CustodySubnetCount = append(m.CustodySubnetCount, buf[17:18]...)
 
 	return err
 }
 
 // SizeSSZ returns the ssz encoded size in bytes for the MetaDataV2 object
 func (m *MetaDataV2) SizeSSZ() (size int) {
-	size = 25
+	size = 18
 	return
 }
 
@@ -645,7 +652,11 @@ func (m *MetaDataV2) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	hh.PutBytes(m.Syncnets)
 
 	// Field (3) 'CustodySubnetCount'
-	hh.PutUint64(m.CustodySubnetCount)
+	if size := len(m.CustodySubnetCount); size != 1 {
+		err = ssz.ErrBytesLengthFn("--.CustodySubnetCount", size, 1)
+		return
+	}
+	hh.PutBytes(m.CustodySubnetCount)
 
 	hh.Merkleize(indx)
 	return

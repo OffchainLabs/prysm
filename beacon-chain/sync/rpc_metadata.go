@@ -104,7 +104,7 @@ func (s *Service) metaDataHandler(_ context.Context, _ interface{}, stream libp2
 					Attnets:            metadata.AttnetsBitfield(),
 					SeqNumber:          metadata.SequenceNumber(),
 					Syncnets:           bitfield.Bitvector4{byte(0x00)},
-					CustodySubnetCount: 0,
+					CustodySubnetCount: []byte{0},
 				})
 		case version.Altair:
 			metadata = wrapper.WrappedMetadataV2(
@@ -112,7 +112,7 @@ func (s *Service) metaDataHandler(_ context.Context, _ interface{}, stream libp2
 					Attnets:            metadata.AttnetsBitfield(),
 					SeqNumber:          metadata.SequenceNumber(),
 					Syncnets:           metadata.SyncnetsBitfield(),
-					CustodySubnetCount: 0,
+					CustodySubnetCount: []byte{0},
 				})
 		}
 	}

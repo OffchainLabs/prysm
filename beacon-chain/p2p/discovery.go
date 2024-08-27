@@ -261,7 +261,7 @@ func (s *Service) RefreshPersistentSubnets() {
 	// Get the custody subnet count in our metadata.
 	inMetadataCustodySubnetCount := s.Metadata().CustodySubnetCount()
 
-	isCustodySubnetCountUpToDate := (custodySubnetCount == inRecordCustodySubnetCount && custodySubnetCount == inMetadataCustodySubnetCount)
+	isCustodySubnetCountUpToDate := custodySubnetCount == inRecordCustodySubnetCount && custodySubnetCount == uint64(inMetadataCustodySubnetCount)
 
 	if isBitVUpToDate && isBitSUpToDate && isCustodySubnetCountUpToDate {
 		// Nothing to do, return early.

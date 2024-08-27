@@ -11,7 +11,7 @@ type Metadata interface {
 	SequenceNumber() uint64
 	AttnetsBitfield() bitfield.Bitvector64
 	SyncnetsBitfield() bitfield.Bitvector4
-	CustodySubnetCount() uint64
+	CustodySubnetCount() uint8
 	InnerObject() interface{}
 	IsNil() bool
 	Copy() Metadata

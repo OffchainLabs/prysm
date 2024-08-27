@@ -66,6 +66,14 @@ func Bytes32(x uint64) []byte {
 	return bytes
 }
 
+// FromBytes1 returns an integer from a byte slice with a size of 1.
+func FromBytes1(x []byte) uint8 {
+	if len(x) < 1 {
+		return 0
+	}
+	return x[0]
+}
+
 // FromBytes2 returns an integer which is stored in the little-endian format(2, 'little')
 // from a byte array.
 func FromBytes2(x []byte) uint16 {
