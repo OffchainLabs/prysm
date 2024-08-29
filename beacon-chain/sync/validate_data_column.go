@@ -15,6 +15,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/crypto/rand"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/runtime/logging"
 	prysmTime "github.com/prysmaticlabs/prysm/v5/time"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
@@ -51,13 +52,15 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 		log.WithField("message", m).Error("Message is not of type *eth.DataColumnSidecar")
 		return pubsub.ValidationReject, errWrongMessage
 	}
+
 	ds, err := blocks.NewRODataColumn(dspb)
 	if err != nil {
 		return pubsub.ValidationReject, errors.Wrap(err, "roDataColumn conversion failure")
 	}
-	vf := s.newColumnVerifier(ds, verification.GossipColumnSidecarRequirements)
 
-	if err := vf.DataColumnIndexInBounds(); err != nil {
+	verifier := s.newColumnVerifier(ds, verification.GossipColumnSidecarRequirements)
+
+	if err := verifier.DataColumnIndexInBounds(); err != nil {
 		return pubsub.ValidationReject, err
 	}
 
@@ -68,7 +71,7 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 		return pubsub.ValidationReject, fmt.Errorf("wrong topic name: %s", *msg.Topic)
 	}
 
-	if err := vf.NotFromFutureSlot(); err != nil {
+	if err := verifier.NotFromFutureSlot(); err != nil {
 		return pubsub.ValidationIgnore, err
 	}
 
@@ -77,40 +80,40 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 		return pubsub.ValidationIgnore, nil
 	}
 
-	if err := vf.SlotAboveFinalized(); err != nil {
+	if err := verifier.SlotAboveFinalized(); err != nil {
 		return pubsub.ValidationIgnore, err
 	}
-	if err := vf.SidecarParentSeen(s.hasBadBlock); err != nil {
+	if err := verifier.SidecarParentSeen(s.hasBadBlock); err != nil {
 		go func() {
 			if err := s.sendBatchRootRequest(context.Background(), [][32]byte{ds.ParentRoot()}, rand.NewGenerator()); err != nil {
-				log.WithError(err).WithFields(columnFields(ds)).Debug("Failed to send batch root request")
+				log.WithError(err).WithFields(logging.DataColumnFields(ds)).Debug("Failed to send batch root request")
 			}
 		}()
 		return pubsub.ValidationIgnore, err
 	}
-	if err := vf.SidecarParentValid(s.hasBadBlock); err != nil {
+	if err := verifier.SidecarParentValid(s.hasBadBlock); err != nil {
 		return pubsub.ValidationReject, err
 	}
 
-	if err := vf.SidecarParentSlotLower(); err != nil {
+	if err := verifier.SidecarParentSlotLower(); err != nil {
 		return pubsub.ValidationReject, err
 	}
 
-	if err := vf.SidecarDescendsFromFinalized(); err != nil {
+	if err := verifier.SidecarDescendsFromFinalized(); err != nil {
 		return pubsub.ValidationReject, err
 	}
 
-	if err := vf.SidecarInclusionProven(); err != nil {
+	if err := verifier.SidecarInclusionProven(); err != nil {
 		return pubsub.ValidationReject, err
 	}
 
-	if err := vf.SidecarKzgProofVerified(); err != nil {
+	if err := verifier.SidecarKzgProofVerified(); err != nil {
 		return pubsub.ValidationReject, err
 	}
-	if err := vf.ValidProposerSignature(ctx); err != nil {
+	if err := verifier.ValidProposerSignature(ctx); err != nil {
 		return pubsub.ValidationReject, err
 	}
-	if err := vf.SidecarProposerExpected(ctx); err != nil {
+	if err := verifier.SidecarProposerExpected(ctx); err != nil {
 		return pubsub.ValidationReject, err
 	}
 
@@ -120,19 +123,20 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 		return pubsub.ValidationIgnore, err
 	}
 
-	fields := columnFields(ds)
-	sinceSlotStartTime := receivedTime.Sub(startTime)
-	validationTime := s.cfg.clock.Now().Sub(receivedTime)
-	fields["sinceSlotStartTime"] = sinceSlotStartTime
-	fields["validationTime"] = validationTime
-	log.WithFields(fields).Debug("Received data column sidecar gossip")
-
-	verifiedRODataColumn, err := vf.VerifiedRODataColumn()
+	verifiedRODataColumn, err := verifier.VerifiedRODataColumn()
 	if err != nil {
 		return pubsub.ValidationReject, err
 	}
 
 	msg.ValidatorData = verifiedRODataColumn
+
+	fields := logging.DataColumnFields(ds)
+	sinceSlotStartTime := receivedTime.Sub(startTime)
+	validationTime := s.cfg.clock.Now().Sub(receivedTime)
+	fields["sinceSlotStartTime"] = sinceSlotStartTime
+	fields["validationTime"] = validationTime
+
+	log.WithFields(fields).Debug("Accepted data column sidecar gossip")
 	return pubsub.ValidationAccept, nil
 }
 

@@ -169,16 +169,6 @@ func blobFields(b blocks.ROBlob) logrus.Fields {
 	}
 }
 
-func columnFields(b blocks.RODataColumn) logrus.Fields {
-	return logrus.Fields{
-		"slot":           b.Slot(),
-		"proposerIndex":  b.ProposerIndex(),
-		"blockRoot":      fmt.Sprintf("%#x", b.BlockRoot()),
-		"kzgCommitments": fmt.Sprintf("%#x", b.KzgCommitments),
-		"columnIndex":    b.ColumnIndex,
-	}
-}
-
 func computeSubnetForBlobSidecar(index uint64) uint64 {
 	return index % params.BeaconConfig().BlobsidecarSubnetCount
 }

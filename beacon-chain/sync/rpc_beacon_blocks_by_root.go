@@ -19,6 +19,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/runtime/logging"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
@@ -204,7 +205,7 @@ func (s *Service) sendAndSaveDataColumnSidecars(ctx context.Context, request typ
 		if err := verify.ColumnAlignsWithBlock(sidecar, RoBlock, s.newColumnVerifier); err != nil {
 			return err
 		}
-		log.WithFields(columnFields(sidecar)).Debug("Received data column sidecar RPC")
+		log.WithFields(logging.DataColumnFields(sidecar)).Debug("Received data column sidecar RPC")
 	}
 
 	for i := range sidecars {

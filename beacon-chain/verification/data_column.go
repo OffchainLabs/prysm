@@ -13,7 +13,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/v5/runtime/logging"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
-	log "github.com/sirupsen/logrus"
 )
 
 var allColumnSidecarRequirements = []Requirement{
@@ -135,7 +134,7 @@ func (dv *RODataColumnVerifier) NotFromFutureSlot() (err error) {
 	earliestStart := dv.clock.SlotStart(dv.dataColumn.Slot()).Add(-1 * params.BeaconConfig().MaximumGossipClockDisparityDuration())
 	// If the system time is still before earliestStart, we consider the column from a future slot and return an error.
 	if dv.clock.Now().Before(earliestStart) {
-		log.WithFields(logging.DataColumnFields(dv.dataColumn)).Debug("sidecar slot is too far in the future")
+		log.WithFields(logging.DataColumnFields(dv.dataColumn)).Debug("Sidecar slot is too far in the future")
 		return columnErrBuilder(ErrFromFutureSlot)
 	}
 	return nil
@@ -152,7 +151,7 @@ func (dv *RODataColumnVerifier) SlotAboveFinalized() (err error) {
 		return errors.Wrapf(columnErrBuilder(ErrSlotNotAfterFinalized), "error computing epoch start slot for finalized checkpoint (%d) %s", fcp.Epoch, err.Error())
 	}
 	if dv.dataColumn.Slot() <= fSlot {
-		log.WithFields(logging.DataColumnFields(dv.dataColumn)).Debug("sidecar slot is not after finalized checkpoint")
+		log.WithFields(logging.DataColumnFields(dv.dataColumn)).Debug("Sidecar slot is not after finalized checkpoint")
 		return columnErrBuilder(ErrSlotNotAfterFinalized)
 	}
 	return nil
@@ -168,7 +167,7 @@ func (dv *RODataColumnVerifier) ValidProposerSignature(ctx context.Context) (err
 	if seen {
 		columnVerificationProposerSignatureCache.WithLabelValues("hit-valid").Inc()
 		if err != nil {
-			log.WithFields(logging.DataColumnFields(dv.dataColumn)).WithError(err).Debug("reusing failed proposer signature validation from cache")
+			log.WithFields(logging.DataColumnFields(dv.dataColumn)).WithError(err).Debug("Reusing failed proposer signature validation from cache")
 			blobVerificationProposerSignatureCache.WithLabelValues("hit-invalid").Inc()
 			return columnErrBuilder(ErrInvalidProposerSignature)
 		}
@@ -179,12 +178,12 @@ func (dv *RODataColumnVerifier) ValidProposerSignature(ctx context.Context) (err
 	// Retrieve the parent state to fallback to full verification.
 	parent, err := dv.parentState(ctx)
 	if err != nil {
-		log.WithFields(logging.DataColumnFields(dv.dataColumn)).WithError(err).Debug("could not replay parent state for column signature verification")
+		log.WithFields(logging.DataColumnFields(dv.dataColumn)).WithError(err).Debug("Could not replay parent state for column signature verification")
 		return columnErrBuilder(ErrInvalidProposerSignature)
 	}
 	// Full verification, which will subsequently be cached for anything sharing the signature cache.
 	if err = dv.sc.VerifySignature(sd, parent); err != nil {
-		log.WithFields(logging.DataColumnFields(dv.dataColumn)).WithError(err).Debug("signature verification failed")
+		log.WithFields(logging.DataColumnFields(dv.dataColumn)).WithError(err).Debug("Signature verification failed")
 		return columnErrBuilder(ErrInvalidProposerSignature)
 	}
 	return nil
@@ -201,7 +200,7 @@ func (dv *RODataColumnVerifier) SidecarParentSeen(parentSeen func([32]byte) bool
 	if dv.fc.HasNode(dv.dataColumn.ParentRoot()) {
 		return nil
 	}
-	log.WithFields(logging.DataColumnFields(dv.dataColumn)).Debug("parent root has not been seen")
+	log.WithFields(logging.DataColumnFields(dv.dataColumn)).Debug("Parent root has not been seen")
 	return columnErrBuilder(ErrSidecarParentNotSeen)
 }
 
@@ -210,7 +209,7 @@ func (dv *RODataColumnVerifier) SidecarParentSeen(parentSeen func([32]byte) bool
 func (dv *RODataColumnVerifier) SidecarParentValid(badParent func([32]byte) bool) (err error) {
 	defer dv.recordResult(RequireSidecarParentValid, &err)
 	if badParent != nil && badParent(dv.dataColumn.ParentRoot()) {
-		log.WithFields(logging.DataColumnFields(dv.dataColumn)).Debug("parent root is invalid")
+		log.WithFields(logging.DataColumnFields(dv.dataColumn)).Debug("Parent root is invalid")
 		return columnErrBuilder(ErrSidecarParentInvalid)
 	}
 	return nil
@@ -236,7 +235,7 @@ func (dv *RODataColumnVerifier) SidecarParentSlotLower() (err error) {
 func (dv *RODataColumnVerifier) SidecarDescendsFromFinalized() (err error) {
 	defer dv.recordResult(RequireSidecarDescendsFromFinalized, &err)
 	if !dv.fc.HasNode(dv.dataColumn.ParentRoot()) {
-		log.WithFields(logging.DataColumnFields(dv.dataColumn)).Debug("parent root not in forkchoice")
+		log.WithFields(logging.DataColumnFields(dv.dataColumn)).Debug("Parent root not in forkchoice")
 		return columnErrBuilder(ErrSidecarNotFinalizedDescendent)
 	}
 	return nil
@@ -247,7 +246,7 @@ func (dv *RODataColumnVerifier) SidecarDescendsFromFinalized() (err error) {
 func (dv *RODataColumnVerifier) SidecarInclusionProven() (err error) {
 	defer dv.recordResult(RequireSidecarInclusionProven, &err)
 	if err = blocks.VerifyKZGInclusionProofColumn(dv.dataColumn); err != nil {
-		log.WithError(err).WithFields(logging.DataColumnFields(dv.dataColumn)).Debug("sidecar inclusion proof verification failed")
+		log.WithError(err).WithFields(logging.DataColumnFields(dv.dataColumn)).Debug("Sidecar inclusion proof verification failed")
 		return columnErrBuilder(ErrSidecarInclusionProofInvalid)
 	}
 	return nil
@@ -259,11 +258,11 @@ func (dv *RODataColumnVerifier) SidecarKzgProofVerified() (err error) {
 	defer dv.recordResult(RequireSidecarKzgProofVerified, &err)
 	ok, err := dv.verifyDataColumnCommitment(dv.dataColumn)
 	if err != nil {
-		log.WithError(err).WithFields(logging.DataColumnFields(dv.dataColumn)).Debug("kzg commitment proof verification failed")
+		log.WithError(err).WithFields(logging.DataColumnFields(dv.dataColumn)).Debug("KZG commitment proof verification failed")
 		return columnErrBuilder(ErrSidecarKzgProofInvalid)
 	}
 	if !ok {
-		log.WithFields(logging.DataColumnFields(dv.dataColumn)).Debug("kzg commitment proof verification failed")
+		log.WithFields(logging.DataColumnFields(dv.dataColumn)).Debug("KZG commitment proof verification failed")
 		return columnErrBuilder(ErrSidecarKzgProofInvalid)
 	}
 	return nil
@@ -289,12 +288,12 @@ func (dv *RODataColumnVerifier) SidecarProposerExpected(ctx context.Context) (er
 	if !cached {
 		pst, err := dv.parentState(ctx)
 		if err != nil {
-			log.WithError(err).WithFields(logging.DataColumnFields(dv.dataColumn)).Debug("state replay to parent_root failed")
+			log.WithError(err).WithFields(logging.DataColumnFields(dv.dataColumn)).Debug("State replay to parent_root failed")
 			return columnErrBuilder(ErrSidecarUnexpectedProposer)
 		}
 		idx, err = dv.pc.ComputeProposer(ctx, dv.dataColumn.ParentRoot(), dv.dataColumn.Slot(), pst)
 		if err != nil {
-			log.WithError(err).WithFields(logging.DataColumnFields(dv.dataColumn)).Debug("error computing proposer index from parent state")
+			log.WithError(err).WithFields(logging.DataColumnFields(dv.dataColumn)).Debug("Error computing proposer index from parent state")
 			return columnErrBuilder(ErrSidecarUnexpectedProposer)
 		}
 	}

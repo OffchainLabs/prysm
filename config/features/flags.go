@@ -179,7 +179,7 @@ var (
 		Usage: "Enables Prysm to run with the experimental peer data availability sampling scheme.",
 	}
 	// DataColumnsWithholdCount is a flag for withholding data columns when proposing a block.
-	DataColumnsWithholdCount = &cli.IntFlag{
+	DataColumnsWithholdCount = &cli.Uint64Flag{
 		Name:   "data-columns-withhold-count",
 		Usage:  "Number of columns to withhold when proposing a block. DO NOT USE IN PRODUCTION.",
 		Value:  0,

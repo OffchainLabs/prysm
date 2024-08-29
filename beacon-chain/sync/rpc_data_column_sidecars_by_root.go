@@ -88,12 +88,19 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 		return custodiedColumnsList[i] < custodiedColumnsList[j]
 	})
 
-	log.WithFields(logrus.Fields{
-		"custodied":      custodiedColumnsList,
+	fields := logrus.Fields{
 		"requested":      requestedColumnsList,
 		"custodiedCount": len(custodiedColumnsList),
 		"requestedCount": len(requestedColumnsList),
-	}).Debug("Data column sidecar by root request received")
+	}
+
+	if uint64(len(custodiedColumnsList)) == params.BeaconConfig().NumberOfColumns {
+		fields["custodied"] = "all"
+	} else {
+		fields["custodied"] = custodiedColumnsList
+	}
+
+	log.WithFields(fields).Debug("Data column sidecar by root request received")
 
 	// Subscribe to the data column feed.
 	rootIndexChan := make(chan filesystem.RootIndexPair)

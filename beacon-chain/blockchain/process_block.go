@@ -3,6 +3,7 @@ package blockchain
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/pkg/errors"
@@ -661,9 +662,8 @@ func (s *Service) isDataColumnsAvailable(ctx context.Context, root [32]byte, sig
 		return errors.Wrap(err, "custody columns")
 	}
 
-	// Expected is the number of custody data columnns a node is expected to have.
-	expected := len(colMap)
-	if expected == 0 {
+	// colMap represents the data columnns a node is expected to custody.
+	if len(colMap) == 0 {
 		return nil
 	}
 
@@ -687,14 +687,14 @@ func (s *Service) isDataColumnsAvailable(ctx context.Context, root [32]byte, sig
 	}
 
 	// Get a map of data column indices that are not currently available.
-	missing, err := missingDataColumns(s.blobStorage, root, colMap)
+	missingMap, err := missingDataColumns(s.blobStorage, root, colMap)
 	if err != nil {
 		return err
 	}
 
 	// If there are no missing indices, all data column sidecars are available.
 	// This is the happy path.
-	if len(missing) == 0 {
+	if len(missingMap) == 0 {
 		return nil
 	}
 
@@ -702,8 +702,24 @@ func (s *Service) isDataColumnsAvailable(ctx context.Context, root [32]byte, sig
 	nextSlot := slots.BeginsAt(signed.Block().Slot()+1, s.genesisTime)
 	// Avoid logging if DA check is called after next slot start.
 	if nextSlot.After(time.Now()) {
+		// Compute sorted slice of expected columns.
+		expected := make([]uint64, 0, len(colMap))
+		for col := range colMap {
+			expected = append(expected, col)
+		}
+
+		slices.Sort[[]uint64](expected)
+
+		// Compute sorted slice of missing columns.
+		missing := make([]uint64, 0, len(missingMap))
+		for col := range missingMap {
+			missing = append(missing, col)
+		}
+
+		slices.Sort[[]uint64](missing)
+
 		nst := time.AfterFunc(time.Until(nextSlot), func() {
-			if len(missing) == 0 {
+			if len(missingMap) == 0 {
 				return
 			}
 
@@ -711,7 +727,7 @@ func (s *Service) isDataColumnsAvailable(ctx context.Context, root [32]byte, sig
 				"slot":            signed.Block().Slot(),
 				"root":            fmt.Sprintf("%#x", root),
 				"columnsExpected": expected,
-				"columnsWaiting":  len(missing),
+				"columnsWaiting":  missing,
 			}).Error("Still waiting for data columns DA check at slot end.")
 		})
 		defer nst.Stop()
@@ -726,7 +742,7 @@ func (s *Service) isDataColumnsAvailable(ctx context.Context, root [32]byte, sig
 			}
 
 			// This is a data column we are expecting.
-			if _, ok := missing[rootIndex.Index]; ok {
+			if _, ok := missingMap[rootIndex.Index]; ok {
 				retrievedDataColumnsCount++
 			}
 
@@ -737,15 +753,15 @@ func (s *Service) isDataColumnsAvailable(ctx context.Context, root [32]byte, sig
 			}
 
 			// Remove the index from the missing map.
-			delete(missing, rootIndex.Index)
+			delete(missingMap, rootIndex.Index)
 
 			// Exit if there is no more missing data columns.
-			if len(missing) == 0 {
+			if len(missingMap) == 0 {
 				return nil
 			}
 		case <-ctx.Done():
-			missingIndexes := make([]uint64, 0, len(missing))
-			for val := range missing {
+			missingIndexes := make([]uint64, 0, len(missingMap))
+			for val := range missingMap {
 				copiedVal := val
 				missingIndexes = append(missingIndexes, copiedVal)
 			}

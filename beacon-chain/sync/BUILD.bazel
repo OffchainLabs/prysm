@@ -126,6 +126,7 @@ go_library(
         "//proto/prysm/v1alpha1/attestation:go_default_library",
         "//proto/prysm/v1alpha1/metadata:go_default_library",
         "//runtime:go_default_library",
+        "//runtime/logging:go_default_library",
         "//runtime/messagehandler:go_default_library",
         "//runtime/version:go_default_library",
         "//time:go_default_library",

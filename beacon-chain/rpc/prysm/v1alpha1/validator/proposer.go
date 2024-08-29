@@ -300,9 +300,10 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 		return nil, status.Errorf(codes.Internal, "Could not hash tree root: %v", err)
 	}
 
+	slot := block.Block().Slot()
+
 	var wg sync.WaitGroup
 	errChan := make(chan error, 1)
-
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -314,7 +315,7 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 	}()
 
 	if isPeerDASEnabled {
-		if err := vs.broadcastAndReceiveDataColumns(ctx, dataColumnSideCars, root); err != nil {
+		if err := vs.broadcastAndReceiveDataColumns(ctx, dataColumnSideCars, root, slot); err != nil {
 			return nil, status.Errorf(codes.Internal, "Could not broadcast/receive data columns: %v", err)
 		}
 	} else {
@@ -456,25 +457,31 @@ func (vs *Server) broadcastAndReceiveBlobs(ctx context.Context, sidecars []*ethp
 }
 
 // broadcastAndReceiveDataColumns handles the broadcasting and reception of data columns sidecars.
-func (vs *Server) broadcastAndReceiveDataColumns(ctx context.Context, sidecars []*ethpb.DataColumnSidecar, root [fieldparams.RootLength]byte) error {
+func (vs *Server) broadcastAndReceiveDataColumns(
+	ctx context.Context,
+	sidecars []*ethpb.DataColumnSidecar,
+	root [fieldparams.RootLength]byte,
+	slot primitives.Slot,
+) error {
 	eg, _ := errgroup.WithContext(ctx)
 
 	dataColumnsWithholdCount := features.Get().DataColumnsWithholdCount
 
-	for i, sd := range sidecars {
+	for _, sd := range sidecars {
 		// Copy the iteration instance to a local variable to give each go-routine its own copy to play with.
 		// See https://golang.org/doc/faq#closures_and_goroutines for more details.
-		colIdx, sidecar := i, sd
+		sidecar := sd
 
 		eg.Go(func() error {
 			// Compute the subnet index based on the column index.
-			subnet := uint64(colIdx) % params.BeaconConfig().DataColumnSidecarSubnetCount
+			subnet := sidecar.ColumnIndex % params.BeaconConfig().DataColumnSidecarSubnetCount
 
-			if colIdx < dataColumnsWithholdCount {
+			if sidecar.ColumnIndex < dataColumnsWithholdCount {
 				log.WithFields(logrus.Fields{
 					"root":            fmt.Sprintf("%#x", root),
+					"slot":            slot,
 					"subnet":          subnet,
-					"dataColumnIndex": colIdx,
+					"dataColumnIndex": sidecar.ColumnIndex,
 				}).Warning("Withholding data column")
 			} else {
 				if err := vs.P2P.BroadcastDataColumn(ctx, subnet, sidecar); err != nil {

@@ -20,10 +20,6 @@ import (
 const broadCastMissingDataColumnsTimeIntoSlot = 3 * time.Second
 
 func (s *Service) reconstructDataColumns(ctx context.Context, verifiedRODataColumn blocks.VerifiedRODataColumn) error {
-	// Lock to prevent concurrent reconstruction.
-	s.dataColumsnReconstructionLock.Lock()
-	defer s.dataColumsnReconstructionLock.Unlock()
-
 	// Get the block root.
 	blockRoot := verifiedRODataColumn.BlockRoot()
 
@@ -41,6 +37,18 @@ func (s *Service) reconstructDataColumns(ctx context.Context, verifiedRODataColu
 	if storedColumnsCount < numberOfColumns/2 || storedColumnsCount == numberOfColumns {
 		return nil
 	}
+
+	// Reconstruction is possible.
+	// Lock to prevent concurrent reconstruction.
+	if !s.dataColumsnReconstructionLock.TryLock() {
+		// If the mutex is already locked, it means that another goroutine is already reconstructing the data columns.
+		// In this case, no need to reconstruct again.
+		// TODO: Implement the (pathological) case where we want to reconstruct data columns corresponding to different blocks at the same time.
+		//       This should be a rare case and we can ignore it for now, but it needs to be addressed in the future.
+		return nil
+	}
+
+	defer s.dataColumsnReconstructionLock.Unlock()
 
 	// Retrieve the custodied columns.
 	custodiedColumns, err := peerdas.CustodyColumns(s.cfg.p2p.NodeID(), peerdas.CustodySubnetCount())
@@ -206,7 +214,7 @@ func (s *Service) scheduleReconstructedDataColumnsBroadcast(
 			"slot":         slot,
 			"timeIntoSlot": broadCastMissingDataColumnsTimeIntoSlot,
 			"columns":      missingColumnsList,
-		}).Debug("Broadcasting not seen via gossip but reconstructed data columns.")
+		}).Debug("Broadcasting not seen via gossip but reconstructed data columns")
 	})
 
 	return nil
