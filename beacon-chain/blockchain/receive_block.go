@@ -47,6 +47,12 @@ type BlockReceiver interface {
 	BlockBeingSynced([32]byte) bool
 }
 
+// PayloadAttestationReceiver defines methods of the chain service for receiving
+// and processing new payload attestations and payload attestation messages
+type PayloadAttestationReceiver interface {
+	ReceivePayloadAttestationMessage(ctx context.Context, a *ethpb.PayloadAttestationMessage) error
+}
+
 // BlobReceiver interface defines the methods of chain service for receiving new
 // blobs
 type BlobReceiver interface {

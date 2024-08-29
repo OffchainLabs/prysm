@@ -713,3 +713,8 @@ func (c *ChainService) TargetRootForEpoch(_ [32]byte, _ primitives.Epoch) ([32]b
 func (c *ChainService) HashInForkchoice([32]byte) bool {
 	return false
 }
+
+// ReceivePayloadAttestationMessage mocks the same method in the chain service
+func (c *ChainService) ReceivePayloadAttestationMessage(_ context.Context, _ *ethpb.PayloadAttestationMessage) error {
+	return nil
+}
