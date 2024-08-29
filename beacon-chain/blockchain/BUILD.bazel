@@ -27,6 +27,7 @@ go_library(
         "receive_blob.go",
         "receive_block.go",
         "receive_execution_payload_envelope.go",
+        "receive_payload_attestation_message.go",
         "service.go",
         "tracked_proposer.go",
         "weak_subjectivity_checks.go",
