@@ -711,6 +711,10 @@ func (s *Service) subscribeDynamicWithColumnSubnets(
 	genesis := s.cfg.clock.GenesisTime()
 	ticker := slots.NewSlotTicker(genesis, params.BeaconConfig().SecondsPerSlot)
 
+	wantedSubs := s.retrieveActiveColumnSubnets()
+	for _, idx := range wantedSubs {
+		s.subscribeWithBase(s.addDigestAndIndexToTopic(topicFormat, digest, idx), validate, handle)
+	}
 	go func() {
 		for {
 			select {

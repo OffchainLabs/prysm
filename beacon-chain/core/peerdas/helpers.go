@@ -1,6 +1,7 @@
 package peerdas
 
 import (
+	"context"
 	"encoding/binary"
 	"fmt"
 	"math"
@@ -145,16 +146,24 @@ func DataColumnSidecars(signedBlock interfaces.ReadOnlySignedBeaconBlock, blobs 
 	}
 
 	// Compute cells and proofs.
-	cellsAndProofs := make([]kzg.CellsAndProofs, 0, blobsCount)
+	cellsAndProofs := make([]kzg.CellsAndProofs, blobsCount)
 
+	eg, _ := errgroup.WithContext(context.Background())
 	for i := range blobs {
-		blob := &blobs[i]
-		blobCellsAndProofs, err := kzg.ComputeCellsAndKZGProofs(blob)
-		if err != nil {
-			return nil, errors.Wrap(err, "compute cells and KZG proofs")
-		}
+		blobIndex := i
+		eg.Go(func() error {
+			blob := &blobs[blobIndex]
+			blobCellsAndProofs, err := kzg.ComputeCellsAndKZGProofs(blob)
+			if err != nil {
+				return errors.Wrap(err, "compute cells and KZG proofs")
+			}
 
-		cellsAndProofs = append(cellsAndProofs, blobCellsAndProofs)
+			cellsAndProofs[blobIndex] = blobCellsAndProofs
+			return nil
+		})
+	}
+	if err := eg.Wait(); err != nil {
+		return nil, err
 	}
 
 	// Get the column sidecars.
