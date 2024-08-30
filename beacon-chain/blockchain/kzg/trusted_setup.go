@@ -53,7 +53,7 @@ func Start() error {
 	}
 	if !kzgLoaded {
 		// TODO: Provide a configuration option for this.
-		var precompute uint = 0
+		var precompute uint = 8
 
 		// Free the current trusted setup before running this method. CKZG
 		// panics if the same setup is run multiple times.
