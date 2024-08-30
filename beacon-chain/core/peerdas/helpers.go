@@ -118,6 +118,7 @@ func CustodyColumns(nodeId enode.ID, custodySubnetCount uint64) (map[uint64]bool
 // DataColumnSidecars computes the data column sidecars from the signed block and blobs.
 // https://github.com/ethereum/consensus-specs/blob/dev/specs/_features/eip7594/das-core.md#recover_matrix
 func DataColumnSidecars(signedBlock interfaces.ReadOnlySignedBeaconBlock, blobs []kzg.Blob) ([]*ethpb.DataColumnSidecar, error) {
+	startTime := time.Now()
 	blobsCount := len(blobs)
 	if blobsCount == 0 {
 		return nil, nil
@@ -205,7 +206,7 @@ func DataColumnSidecars(signedBlock interfaces.ReadOnlySignedBeaconBlock, blobs 
 
 		sidecars = append(sidecars, sidecar)
 	}
-
+	dataColumnComputationTime.Observe(float64(time.Since(startTime).Milliseconds()))
 	return sidecars, nil
 }
 
