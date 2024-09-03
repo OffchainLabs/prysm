@@ -305,7 +305,7 @@ func (*TestP2P) DiscoveryAddresses() ([]multiaddr.Multiaddr, error) {
 // AddConnectionHandler handles the connection with a newly connected peer.
 func (p *TestP2P) AddConnectionHandler(f, _ func(ctx context.Context, id peer.ID) error) {
 	p.BHost.Network().Notify(&network.NotifyBundle{
-		ConnectedF: func(net network.Network, conn network.Conn) {
+		ConnectedF: func(_ network.Network, conn network.Conn) {
 			// Must be handled in a goroutine as this callback cannot be blocking.
 			go func() {
 				p.peers.Add(new(enr.Record), conn.RemotePeer(), conn.RemoteMultiaddr(), conn.Stat().Direction)
@@ -329,7 +329,7 @@ func (p *TestP2P) AddConnectionHandler(f, _ func(ctx context.Context, id peer.ID
 // AddDisconnectionHandler --
 func (p *TestP2P) AddDisconnectionHandler(f func(ctx context.Context, id peer.ID) error) {
 	p.BHost.Network().Notify(&network.NotifyBundle{
-		DisconnectedF: func(net network.Network, conn network.Conn) {
+		DisconnectedF: func(_ network.Network, conn network.Conn) {
 			// Must be handled in a goroutine as this callback cannot be blocking.
 			go func() {
 				p.peers.SetConnectionState(conn.RemotePeer(), peers.PeerDisconnecting)

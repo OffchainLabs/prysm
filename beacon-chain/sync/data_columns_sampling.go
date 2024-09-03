@@ -3,6 +3,7 @@ package sync
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -182,14 +183,17 @@ func (d *dataColumnSampler1D) refreshPeerInfo() {
 		}
 	}
 
-	columnWithNoPeers := make([]uint64, 0)
+	columnsWithoutPeers := make([]uint64, 0)
 	for column, peers := range d.peerFromColumn {
 		if len(peers) == 0 {
-			columnWithNoPeers = append(columnWithNoPeers, column)
+			columnsWithoutPeers = append(columnsWithoutPeers, column)
 		}
 	}
-	if len(columnWithNoPeers) > 0 {
-		log.WithField("columnWithNoPeers", columnWithNoPeers).Warn("Some columns have no peers responsible for custody")
+
+	slices.Sort[[]uint64](columnsWithoutPeers)
+
+	if len(columnsWithoutPeers) > 0 {
+		log.WithField("columns", columnsWithoutPeers).Warn("Some columns have no peers responsible for custody")
 	}
 }
 

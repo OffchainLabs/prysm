@@ -202,12 +202,13 @@ func (s *Service) Start() {
 			s.startupErr = err
 			return
 		}
-		err = s.connectToBootnodes()
-		if err != nil {
-			log.WithError(err).Error("Could not add bootnode to the exclusion list")
+
+		if err := s.connectToBootnodes(); err != nil {
+			log.WithError(err).Error("Could not connect to boot nodes")
 			s.startupErr = err
 			return
 		}
+
 		s.dv5Listener = listener
 		go s.listenForNewNodes()
 	}
@@ -393,12 +394,17 @@ func (s *Service) AddPingMethod(reqFunc func(ctx context.Context, id peer.ID) er
 	s.pingMethodLock.Unlock()
 }
 
-func (s *Service) pingPeers() {
+func (s *Service) pingPeersAndLogEnr() {
 	s.pingMethodLock.RLock()
 	defer s.pingMethodLock.RUnlock()
+
+	localENR := s.dv5Listener.Self()
+	log.WithField("ENR", localENR).Info("New node record")
+
 	if s.pingMethod == nil {
 		return
 	}
+
 	for _, pid := range s.peers.Connected() {
 		go func(id peer.ID) {
 			if err := s.pingMethod(s.ctx, id); err != nil {

@@ -147,6 +147,7 @@ func configureTestnet(ctx *cli.Context) error {
 	} else {
 		if ctx.IsSet(cmd.ChainConfigFileFlag.Name) {
 			log.Warn("Running on custom Ethereum network specified in a chain configuration yaml file")
+			params.UseCustomNetworkConfig()
 		} else {
 			log.Info("Running on Ethereum Mainnet")
 		}
@@ -158,11 +159,11 @@ func configureTestnet(ctx *cli.Context) error {
 }
 
 // Insert feature flags within the function to be enabled for Sepolia testnet.
-func applySepoliaFeatureFlags(ctx *cli.Context) {
+func applySepoliaFeatureFlags(_ *cli.Context) {
 }
 
 // Insert feature flags within the function to be enabled for Holesky testnet.
-func applyHoleskyFeatureFlags(ctx *cli.Context) {
+func applyHoleskyFeatureFlags(_ *cli.Context) {
 }
 
 // ConfigureBeaconChain sets the global config based

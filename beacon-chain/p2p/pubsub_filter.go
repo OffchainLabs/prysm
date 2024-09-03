@@ -10,16 +10,27 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/encoder"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/network/forks"
+	"github.com/sirupsen/logrus"
 )
 
 var _ pubsub.SubscriptionFilter = (*Service)(nil)
 
 // It is set at this limit to handle the possibility
 // of double topic subscriptions at fork boundaries.
-// -> 64 Attestation Subnets * 2.
-// -> 4 Sync Committee Subnets * 2.
-// -> Block,Aggregate,ProposerSlashing,AttesterSlashing,Exits,SyncContribution * 2.
-const pubsubSubscriptionRequestLimit = 200
+// -> BeaconBlock              * 2 = 2
+// -> BeaconAggregateAndProof  * 2 = 2
+// -> VoluntaryExit            * 2 = 2
+// -> ProposerSlashing         * 2 = 2
+// -> AttesterSlashing         * 2 = 2
+// -> 64 Beacon Attestation    * 2 = 128
+// -> SyncContributionAndProof * 2 = 2
+// -> 4 SyncCommitteeSubnets   * 2 = 8
+// -> BlsToExecutionChange     * 2 = 2
+// -> 128 DataColumnSidecar    * 2 = 256
+// -------------------------------------
+// TOTAL                           = 406
+// (Note: BlobSidecar is not included in this list since it is superseded by DataColumnSidecar)
+const pubsubSubscriptionRequestLimit = 500
 
 // CanSubscribe returns true if the topic is of interest and we could subscribe to it.
 func (s *Service) CanSubscribe(topic string) bool {
@@ -95,8 +106,15 @@ func (s *Service) CanSubscribe(topic string) bool {
 // FilterIncomingSubscriptions is invoked for all RPCs containing subscription notifications.
 // This method returns only the topics of interest and may return an error if the subscription
 // request contains too many topics.
-func (s *Service) FilterIncomingSubscriptions(_ peer.ID, subs []*pubsubpb.RPC_SubOpts) ([]*pubsubpb.RPC_SubOpts, error) {
+func (s *Service) FilterIncomingSubscriptions(peerID peer.ID, subs []*pubsubpb.RPC_SubOpts) ([]*pubsubpb.RPC_SubOpts, error) {
 	if len(subs) > pubsubSubscriptionRequestLimit {
+		subsCount := len(subs)
+		log.WithFields(logrus.Fields{
+			"peerID":             peerID,
+			"subscriptionCounts": subsCount,
+			"subscriptionLimit":  pubsubSubscriptionRequestLimit,
+		}).Debug("Too many incoming subscriptions, filtering them")
+
 		return nil, pubsub.ErrTooManySubscriptions
 	}
 

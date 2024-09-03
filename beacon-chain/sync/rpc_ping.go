@@ -142,7 +142,7 @@ func (s *Service) sendPingRequest(ctx context.Context, peerID peer.ID) error {
 	// If the peer responded with an error, increment the bad responses scorer.
 	if code != 0 {
 		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
-		return errors.New(errMsg)
+		return errors.Errorf("code: %d - %s", code, errMsg)
 	}
 
 	// Decode the sequence number from the peer.
