@@ -346,13 +346,12 @@ func (s *Service) updateSubnetRecordWithMetadataV3(
 	localNode.Set(custodySubnetCountEntry)
 
 	newSeqNumber := s.metaData.SequenceNumber() + 1
-	cscBytes := []byte{uint8(custodySubnetCount)}
 
 	s.metaData = wrapper.WrappedMetadataV2(&pb.MetaDataV2{
 		SeqNumber:          newSeqNumber,
 		Attnets:            bitVAtt,
 		Syncnets:           bitVSync,
-		CustodySubnetCount: cscBytes,
+		CustodySubnetCount: custodySubnetCount,
 	})
 }
 

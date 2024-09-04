@@ -2,7 +2,6 @@ package wrapper
 
 import (
 	"github.com/prysmaticlabs/go-bitfield"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	pb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/metadata"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
@@ -38,7 +37,7 @@ func (m MetadataV0) SyncnetsBitfield() bitfield.Bitvector4 {
 }
 
 // CustodySubnetCount returns custody subnet count from the metadata.
-func (m MetadataV0) CustodySubnetCount() uint8 {
+func (m MetadataV0) CustodySubnetCount() uint64 {
 	return 0
 }
 
@@ -132,7 +131,7 @@ func (m MetadataV1) SyncnetsBitfield() bitfield.Bitvector4 {
 }
 
 // CustodySubnetCount returns custody subnet count from the metadata.
-func (m MetadataV1) CustodySubnetCount() uint8 {
+func (m MetadataV1) CustodySubnetCount() uint64 {
 	return 0
 }
 
@@ -226,8 +225,8 @@ func (m MetadataV2) SyncnetsBitfield() bitfield.Bitvector4 {
 }
 
 // CustodySubnetCount returns custody subnet count from the metadata.
-func (m MetadataV2) CustodySubnetCount() uint8 {
-	return bytesutil.FromBytes1(m.md.CustodySubnetCount)
+func (m MetadataV2) CustodySubnetCount() uint64 {
+	return m.md.CustodySubnetCount
 }
 
 // InnerObject returns the underlying metadata protobuf structure.

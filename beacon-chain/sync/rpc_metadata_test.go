@@ -153,7 +153,7 @@ func TestMetadataRPCHandler_SendMetadataRequest(t *testing.T) {
 				SeqNumber:          seqNumber,
 				Attnets:            attnets,
 				Syncnets:           syncnets,
-				CustodySubnetCount: []byte{custodySubnetCount},
+				CustodySubnetCount: custodySubnetCount,
 			}),
 			expected: wrapper.WrappedMetadataV0(&pb.MetaDataV0{
 				SeqNumber: seqNumber,
@@ -200,7 +200,7 @@ func TestMetadataRPCHandler_SendMetadataRequest(t *testing.T) {
 				SeqNumber:          seqNumber,
 				Attnets:            attnets,
 				Syncnets:           syncnets,
-				CustodySubnetCount: []byte{custodySubnetCount},
+				CustodySubnetCount: custodySubnetCount,
 			}),
 			expected: wrapper.WrappedMetadataV1(&pb.MetaDataV1{
 				SeqNumber: seqNumber,
@@ -221,7 +221,7 @@ func TestMetadataRPCHandler_SendMetadataRequest(t *testing.T) {
 				SeqNumber:          seqNumber,
 				Attnets:            attnets,
 				Syncnets:           bitfield.Bitvector4{byte(0x00)},
-				CustodySubnetCount: []byte{0},
+				CustodySubnetCount: 0,
 			}),
 		},
 		{
@@ -238,7 +238,7 @@ func TestMetadataRPCHandler_SendMetadataRequest(t *testing.T) {
 				SeqNumber:          seqNumber,
 				Attnets:            attnets,
 				Syncnets:           syncnets,
-				CustodySubnetCount: []byte{0},
+				CustodySubnetCount: 0,
 			}),
 		},
 		{
@@ -250,13 +250,13 @@ func TestMetadataRPCHandler_SendMetadataRequest(t *testing.T) {
 				SeqNumber:          seqNumber,
 				Attnets:            attnets,
 				Syncnets:           syncnets,
-				CustodySubnetCount: []byte{custodySubnetCount},
+				CustodySubnetCount: custodySubnetCount,
 			}),
 			expected: wrapper.WrappedMetadataV2(&pb.MetaDataV2{
 				SeqNumber:          seqNumber,
 				Attnets:            attnets,
 				Syncnets:           syncnets,
-				CustodySubnetCount: []byte{custodySubnetCount},
+				CustodySubnetCount: custodySubnetCount,
 			}),
 		},
 	}

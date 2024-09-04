@@ -126,12 +126,12 @@ func TestCustodyCountFromRemotePeer(t *testing.T) {
 
 	// Define a metadata with zero custody.
 	zeroMetadata := wrapper.WrappedMetadataV2(&pb.MetaDataV2{
-		CustodySubnetCount: []byte{0},
+		CustodySubnetCount: 0,
 	})
 
 	// Define a nominal metadata.
 	nominalMetadata := wrapper.WrappedMetadataV2(&pb.MetaDataV2{
-		CustodySubnetCount: []byte{uint8(expectedMetadata)},
+		CustodySubnetCount: expectedMetadata,
 	})
 
 	testCases := []struct {

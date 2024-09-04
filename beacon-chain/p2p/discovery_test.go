@@ -537,7 +537,7 @@ type check struct {
 	metadataSequenceNumber uint64
 	attestationSubnets     []uint64
 	syncSubnets            []uint64
-	custodySubnetCount     *uint8
+	custodySubnetCount     *uint64
 }
 
 func checkPingCountCacheMetadataRecord(
@@ -606,7 +606,7 @@ func checkPingCountCacheMetadataRecord(
 
 	if expected.custodySubnetCount != nil {
 		// Check custody subnet count in ENR.
-		var actualCustodySubnetCount uint8
+		var actualCustodySubnetCount uint64
 		err := service.dv5Listener.LocalNode().Node().Record().Load(enr.WithEntry(peerdas.CustodySubnetCountEnrKey, &actualCustodySubnetCount))
 		require.NoError(t, err)
 		require.Equal(t, *expected.custodySubnetCount, actualCustodySubnetCount)
@@ -629,7 +629,7 @@ func TestRefreshPersistentSubnets(t *testing.T) {
 		eip7594ForkEpoch = 10
 	)
 
-	custodySubnetCount := uint8(params.BeaconConfig().CustodyRequirement)
+	custodySubnetCount := params.BeaconConfig().CustodyRequirement
 
 	// Set up epochs.
 	defaultCfg := params.BeaconConfig()

@@ -86,7 +86,7 @@ func (s *Service) CustodyCountFromRemotePeer(pid peer.ID) uint64 {
 	if metadata != nil {
 		custodyCount := metadata.CustodySubnetCount()
 		if custodyCount > 0 {
-			return uint64(custodyCount)
+			return custodyCount
 		}
 	}
 

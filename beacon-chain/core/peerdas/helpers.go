@@ -34,7 +34,7 @@ const (
 )
 
 // https://github.com/ethereum/consensus-specs/blob/dev/specs/_features/eip7594/p2p-interface.md#the-discovery-domain-discv5
-type Csc uint8
+type Csc uint64
 
 func (Csc) ENRKey() string { return CustodySubnetCountEnrKey }
 
