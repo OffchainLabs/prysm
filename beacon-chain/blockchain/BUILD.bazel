@@ -114,6 +114,7 @@ go_test(
         "chain_info_norace_test.go",
         "chain_info_test.go",
         "checktags_test.go",
+        "epbs_test.go",
         "error_test.go",
         "execution_engine_test.go",
         "forkchoice_update_execution_test.go",

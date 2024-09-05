@@ -83,6 +83,7 @@ type FastGetter interface {
 	UnrealizedJustifiedPayloadBlockHash() [32]byte
 	Weight(root [32]byte) (uint64, error)
 	ParentRoot(root [32]byte) ([32]byte, error)
+	GetPTCVote() primitives.PTCStatus
 }
 
 // Setter allows to set forkchoice information

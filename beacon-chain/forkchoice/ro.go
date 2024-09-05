@@ -183,3 +183,10 @@ func (ro *ROForkChoice) ParentRoot(root [32]byte) ([32]byte, error) {
 	defer ro.l.RUnlock()
 	return ro.getter.ParentRoot(root)
 }
+
+// GetPTCVote delegates to the underlying forkchoice call, under a lock.
+func (ro *ROForkChoice) GetPTCVote() primitives.PTCStatus {
+	ro.l.RLock()
+	defer ro.l.RUnlock()
+	return ro.getter.GetPTCVote()
+}

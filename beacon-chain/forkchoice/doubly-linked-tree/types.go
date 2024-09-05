@@ -62,9 +62,10 @@ type Node struct {
 	balance                  uint64                       // the balance that voted for this node directly
 	weight                   uint64                       // weight of this node: the total balance including children
 	bestDescendant           *Node                        // bestDescendant node of this node.
-	optimistic               bool                         // whether the block has been fully validated or not
 	timestamp                uint64                       // The timestamp when the node was inserted.
 	ptcVote                  []primitives.PTCStatus       // tracks the Payload Timeliness Committee (PTC) votes for the node
+	withheld                 bool                         // whether the builder sent a withheld message for this payload
+	optimistic               bool                         // whether the block has been fully validated or not
 }
 
 // Vote defines an individual validator's vote.

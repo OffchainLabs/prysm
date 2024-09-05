@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
@@ -76,4 +77,24 @@ func TestStore_Insert_PayloadContent(t *testing.T) {
 	n2, err := s.insert(ctx, 3, ggfr, gr, ggfp, gp, 0, 0)
 	require.NoError(t, err)
 	require.Equal(t, n, n2)
+}
+
+func TestGetPTCVote(t *testing.T) {
+	ctx := context.Background()
+	f := setup(0, 0)
+	s := f.store
+	require.NotNil(t, s.highestReceivedNode)
+	fr := [32]byte{}
+
+	// Insert a child with a payload
+	cr := [32]byte{'a'}
+	cp := [32]byte{'p'}
+	n, err := s.insert(ctx, 1, cr, fr, cp, fr, 0, 0)
+	require.NoError(t, err)
+	require.Equal(t, n, s.highestReceivedNode)
+	require.Equal(t, primitives.PAYLOAD_ABSENT, f.GetPTCVote())
+	driftGenesisTime(f, 1, 0)
+	require.Equal(t, primitives.PAYLOAD_PRESENT, f.GetPTCVote())
+	n.withheld = true
+	require.Equal(t, primitives.PAYLOAD_WITHHELD, f.GetPTCVote())
 }

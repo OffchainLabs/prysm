@@ -100,3 +100,22 @@ func (s *Service) ParentRoot(root [32]byte) ([32]byte, error) {
 	defer s.cfg.ForkChoiceStore.RUnlock()
 	return s.cfg.ForkChoiceStore.ParentRoot(root)
 }
+
+// GetPTCVote wraps a call to the corresponding method in forkchoice and checks
+// the currently syncing status
+// Warning: this method will return the current PTC status regardless of
+// timeliness. A client MUST call this method when about to submit a PTC
+// attestation, that is exactly at the threshold to submit the attestation.
+func (s *Service) GetPTCVote(root [32]byte) primitives.PTCStatus {
+	s.cfg.ForkChoiceStore.RLock()
+	f := s.cfg.ForkChoiceStore.GetPTCVote()
+	s.cfg.ForkChoiceStore.RUnlock()
+	if f != primitives.PAYLOAD_ABSENT {
+		return f
+	}
+	f, isSyncing := s.payloadBeingSynced.isSyncing(root)
+	if isSyncing {
+		return f
+	}
+	return primitives.PAYLOAD_ABSENT
+}
