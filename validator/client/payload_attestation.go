@@ -2,14 +2,18 @@ package client
 
 import (
 	"context"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
+	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	validatorpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/validator-client"
+	prysmTime "github.com/prysmaticlabs/prysm/v5/time"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
@@ -82,4 +86,26 @@ func (v *validator) signPayloadAttestation(ctx context.Context, p *ethpb.Payload
 
 	// Marshal the signature into bytes
 	return sig.Marshal(), nil
+}
+
+// waitUntilPtcDuty waits until PTC duty time which is defined as 3/4 of slot time.
+func (v *validator) waitUntilPtcDuty(ctx context.Context, slot primitives.Slot) {
+	ctx, span := trace.StartSpan(ctx, "validator.waitUntilPtcDuty")
+	defer span.End()
+
+	startTime := slots.StartTime(v.genesisTime, slot)
+	dutyTime := startTime.Add(3 * slots.DivideSlotBy(4))
+	wait := prysmTime.Until(dutyTime)
+	if wait <= 0 {
+		return
+	}
+	t := time.NewTimer(wait)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		tracing.AnnotateError(span, ctx.Err())
+		return
+	case <-t.C:
+		return
+	}
 }

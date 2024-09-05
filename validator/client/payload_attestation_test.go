@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
@@ -110,4 +111,33 @@ func Test_validator_signPayloadAttestation(t *testing.T) {
 	sr, err := signing.ComputeSigningRoot(pa, bytesutil.PadTo([]byte("signatureDomain"), 32))
 	require.NoError(t, err)
 	require.Equal(t, true, signature.Verify(pb, sr[:]))
+}
+
+func TestWaitUntilPtcDuty_Reached(t *testing.T) {
+	validator, _, _, finish := setup(t, true)
+	defer finish()
+	currentTime := time.Now()
+	numOfSlots := primitives.Slot(4)
+	validator.genesisTime = uint64(currentTime.Unix()) - uint64(numOfSlots.Mul(params.BeaconConfig().SecondsPerSlot))
+	timeToSleep := 3 * slots.DivideSlotBy(4)
+
+	threeQuartersTime := currentTime.Add(timeToSleep)
+	validator.waitUntilPtcDuty(context.Background(), numOfSlots)
+	currentTime = time.Now()
+	require.Equal(t, threeQuartersTime.Unix(), currentTime.Unix())
+}
+
+func TestWaitUntilPtcDuty_Return(t *testing.T) {
+	validator, _, _, finish := setup(t, true)
+	defer finish()
+	currentTime := time.Now()
+	numOfSlots := primitives.Slot(4)
+	validator.genesisTime = uint64(currentTime.Unix()) - 2*uint64(numOfSlots.Mul(params.BeaconConfig().SecondsPerSlot))
+
+	expectedTime := time.Now()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	validator.waitUntilPtcDuty(ctx, numOfSlots)
+	currentTime = time.Now()
+	require.Equal(t, expectedTime.Unix(), currentTime.Unix())
 }
