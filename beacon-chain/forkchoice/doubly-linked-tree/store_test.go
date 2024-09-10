@@ -338,7 +338,8 @@ func TestForkChoice_ReceivedBlocksLastEpoch(t *testing.T) {
 	count, err := f.ReceivedBlocksLastEpoch()
 	require.NoError(t, err)
 	require.Equal(t, uint64(1), count)
-	require.Equal(t, primitives.Slot(1), f.HighestReceivedBlockSlot())
+	slot, _ := f.HighestReceivedBlockSlotRoot()
+	require.Equal(t, primitives.Slot(1), slot)
 	require.Equal(t, primitives.Slot(0), f.HighestReceivedBlockDelay())
 
 	// 64
@@ -351,7 +352,8 @@ func TestForkChoice_ReceivedBlocksLastEpoch(t *testing.T) {
 	count, err = f.ReceivedBlocksLastEpoch()
 	require.NoError(t, err)
 	require.Equal(t, uint64(1), count)
-	require.Equal(t, primitives.Slot(64), f.HighestReceivedBlockSlot())
+	slot, _ = f.HighestReceivedBlockSlotRoot()
+	require.Equal(t, primitives.Slot(64), slot)
 	require.Equal(t, primitives.Slot(0), f.HighestReceivedBlockDelay())
 
 	// 64 65
@@ -364,7 +366,8 @@ func TestForkChoice_ReceivedBlocksLastEpoch(t *testing.T) {
 	count, err = f.ReceivedBlocksLastEpoch()
 	require.NoError(t, err)
 	require.Equal(t, uint64(2), count)
-	require.Equal(t, primitives.Slot(65), f.HighestReceivedBlockSlot())
+	slot, _ = f.HighestReceivedBlockSlotRoot()
+	require.Equal(t, primitives.Slot(65), slot)
 	require.Equal(t, primitives.Slot(1), f.HighestReceivedBlockDelay())
 
 	// 64 65 66
@@ -377,7 +380,8 @@ func TestForkChoice_ReceivedBlocksLastEpoch(t *testing.T) {
 	count, err = f.ReceivedBlocksLastEpoch()
 	require.NoError(t, err)
 	require.Equal(t, uint64(3), count)
-	require.Equal(t, primitives.Slot(66), f.HighestReceivedBlockSlot())
+	slot, _ = f.HighestReceivedBlockSlotRoot()
+	require.Equal(t, primitives.Slot(66), slot)
 
 	// 64 65 66
 	//       98
@@ -390,7 +394,8 @@ func TestForkChoice_ReceivedBlocksLastEpoch(t *testing.T) {
 	count, err = f.ReceivedBlocksLastEpoch()
 	require.NoError(t, err)
 	require.Equal(t, uint64(1), count)
-	require.Equal(t, primitives.Slot(98), f.HighestReceivedBlockSlot())
+	slot, _ = f.HighestReceivedBlockSlotRoot()
+	require.Equal(t, primitives.Slot(98), slot)
 
 	// 64 65 66
 	//       98
@@ -404,7 +409,8 @@ func TestForkChoice_ReceivedBlocksLastEpoch(t *testing.T) {
 	count, err = f.ReceivedBlocksLastEpoch()
 	require.NoError(t, err)
 	require.Equal(t, uint64(1), count)
-	require.Equal(t, primitives.Slot(132), f.HighestReceivedBlockSlot())
+	slot, _ = f.HighestReceivedBlockSlotRoot()
+	require.Equal(t, primitives.Slot(132), slot)
 
 	// 64 65 66
 	//       98
@@ -419,7 +425,8 @@ func TestForkChoice_ReceivedBlocksLastEpoch(t *testing.T) {
 	count, err = f.ReceivedBlocksLastEpoch()
 	require.NoError(t, err)
 	require.Equal(t, uint64(1), count)
-	require.Equal(t, primitives.Slot(132), f.HighestReceivedBlockSlot())
+	slot, _ = f.HighestReceivedBlockSlotRoot()
+	require.Equal(t, primitives.Slot(132), slot)
 
 	// 64 65 66
 	//       98
@@ -434,7 +441,8 @@ func TestForkChoice_ReceivedBlocksLastEpoch(t *testing.T) {
 	count, err = f.ReceivedBlocksLastEpoch()
 	require.NoError(t, err)
 	require.Equal(t, uint64(1), count)
-	require.Equal(t, primitives.Slot(132), f.HighestReceivedBlockSlot())
+	slot, _ = f.HighestReceivedBlockSlotRoot()
+	require.Equal(t, primitives.Slot(132), slot)
 
 	// 64 65 66
 	//       98
@@ -449,7 +457,8 @@ func TestForkChoice_ReceivedBlocksLastEpoch(t *testing.T) {
 	count, err = f.ReceivedBlocksLastEpoch()
 	require.NoError(t, err)
 	require.Equal(t, uint64(2), count)
-	require.Equal(t, primitives.Slot(132), f.HighestReceivedBlockSlot())
+	slot, _ = f.HighestReceivedBlockSlotRoot()
+	require.Equal(t, primitives.Slot(132), slot)
 
 	s.genesisTime = uint64(time.Now().Add(time.Duration(-134*int64(params.BeaconConfig().SecondsPerSlot)) * time.Second).Unix())
 	count, err = f.ReceivedBlocksLastEpoch()

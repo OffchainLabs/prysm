@@ -57,7 +57,7 @@ func (vs *Server) circuitBreakBuilder(s primitives.Slot) (bool, error) {
 	}
 
 	// Circuit breaker is active if the missing consecutive slots greater than `MaxBuilderConsecutiveMissedSlots`.
-	highestReceivedSlot := vs.ForkchoiceFetcher.HighestReceivedBlockSlot()
+	highestReceivedSlot, _ := vs.ForkchoiceFetcher.HighestReceivedBlockSlotRoot()
 	maxConsecutiveSkipSlotsAllowed := params.BeaconConfig().MaxBuilderConsecutiveMissedSlots
 	diff, err := s.SafeSubSlot(highestReceivedSlot)
 	if err != nil {

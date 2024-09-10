@@ -43,7 +43,7 @@ type ForkchoiceFetcher interface {
 	GetProposerHead() [32]byte
 	SetForkChoiceGenesisTime(uint64)
 	UpdateHead(context.Context, primitives.Slot)
-	HighestReceivedBlockSlot() primitives.Slot
+	HighestReceivedBlockSlotRoot() (primitives.Slot, [32]byte)
 	ReceivedBlocksLastEpoch() (uint64, error)
 	InsertNode(context.Context, state.BeaconState, consensus_blocks.ROBlock) error
 	ForkChoiceDump(context.Context) (*forkchoice.Dump, error)
@@ -51,6 +51,7 @@ type ForkchoiceFetcher interface {
 	ProposerBoost() [32]byte
 	RecentBlockSlot(root [32]byte) (primitives.Slot, error)
 	IsCanonical(ctx context.Context, blockRoot [32]byte) (bool, error)
+	GetPTCVote(root [32]byte) primitives.PTCStatus
 }
 
 // TimeFetcher retrieves the Ethereum consensus data that's related to time.
@@ -543,12 +544,6 @@ func (s *Service) recoverStateSummary(ctx context.Context, blockRoot [32]byte) (
 		return summary, nil
 	}
 	return nil, errBlockDoesNotExist
-}
-
-// PayloadBeingSynced returns whether the payload for the block with the given
-// root is currently being synced and what is the withheld status in the payload
-func (s *Service) PayloadBeingSynced(root [32]byte) (primitives.PTCStatus, bool) {
-	return s.payloadBeingSynced.isSyncing(root)
 }
 
 // BlockBeingSynced returns whether the block with the given root is currently being synced
