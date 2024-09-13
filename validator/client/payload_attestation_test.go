@@ -27,9 +27,9 @@ func TestValidator_SubmitPayloadAttestationMessage(t *testing.T) {
 	copy(pubKey[:], validatorKey.PublicKey().Marshal())
 
 	// Map to associate public keys with validator indices.
-	validator.pubkeyToValidatorIndex = make(map[[fieldparams.BLSPubkeyLength]byte]primitives.ValidatorIndex)
+	validator.pubkeyToStatus = make(map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus)
 	validatorIndex := primitives.ValidatorIndex(1)
-	validator.pubkeyToValidatorIndex[pubKey] = validatorIndex
+	validator.pubkeyToStatus[pubKey] = &validatorStatus{index: validatorIndex}
 
 	// Generate random payload attestation data for the test.
 	d := random.PayloadAttestationData(t)
