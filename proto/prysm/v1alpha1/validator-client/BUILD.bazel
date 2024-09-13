@@ -19,6 +19,7 @@ proto_library(
     visibility = ["//visibility:public"],
     deps = [
         "//proto/eth/ext:proto",
+        "//proto/engine/v1:proto",
         "//proto/prysm/v1alpha1:proto",
         "@com_google_protobuf//:any_proto",
         "@com_google_protobuf//:descriptor_proto",
@@ -41,6 +42,7 @@ go_proto_library(
         "//consensus-types/primitives:go_default_library",
         "//consensus-types/validator:go_default_library",
         "//proto/eth/ext:go_default_library",
+        "//proto/engine/v1:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "@com_github_golang_protobuf//proto:go_default_library",
         "@com_github_prysmaticlabs_go_bitfield//:go_default_library",
@@ -68,6 +70,7 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//proto/eth/ext:go_default_library",
+        "//proto/engine/v1:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "@com_github_golang_protobuf//proto:go_default_library",
         "@com_github_prysmaticlabs_go_bitfield//:go_default_library",  # keep

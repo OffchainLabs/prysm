@@ -7,6 +7,7 @@ import "proto/prysm/v1alpha1/payload_attestation.proto";
 import "proto/prysm/v1alpha1/beacon_block.proto";
 import "proto/prysm/v1alpha1/beacon_state.proto";
 import "proto/prysm/v1alpha1/sync_committee.proto";
+import "proto/engine/v1/epbs.proto";
 
 option csharp_namespace = "Ethereum.Validator.Accounts.V2";
 option go_package = "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/validator-client;validatorpb";
@@ -70,6 +71,7 @@ message SignRequest {
         // ePBS objects.
         ethereum.eth.v1alpha1.PayloadAttestationData payload_attestation_data = 121;
         ethereum.eth.v1alpha1.BeaconBlockEpbs block_epbs = 122;
+        ethereum.engine.v1.ExecutionPayloadHeaderEPBS execution_payload_header_epbs = 123;
     }
     reserved 4, 5; // Reserving old, deleted fields.
     uint64 signing_slot = 6 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"];
