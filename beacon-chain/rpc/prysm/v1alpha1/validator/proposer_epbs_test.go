@@ -6,7 +6,12 @@ import (
 
 	"github.com/pkg/errors"
 	mockChain "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
+	dbutil "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
+	mockExecution "github.com/prysmaticlabs/prysm/v5/beacon-chain/execution/testing"
+	doublylinkedtree "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/doubly-linked-tree"
 	p2ptest "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stategen"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"github.com/prysmaticlabs/prysm/v5/testing/util"
@@ -40,4 +45,35 @@ func TestServer_SubmitSignedExecutionPayloadEnvelope(t *testing.T) {
 		_, err := s.SubmitSignedExecutionPayloadEnvelope(context.Background(), env)
 		require.ErrorContains(t, "failed to receive execution payload envelope: receive failed", err)
 	})
+}
+
+func TestProposer_ComputePostPayloadStateRoot(t *testing.T) {
+	db := dbutil.SetupDB(t)
+	ctx := context.Background()
+
+	proposerServer := &Server{
+		ChainStartFetcher: &mockExecution.Chain{},
+		Eth1InfoFetcher:   &mockExecution.Chain{},
+		Eth1BlockFetcher:  &mockExecution.Chain{},
+		StateGen:          stategen.New(db, doublylinkedtree.New()),
+	}
+
+	bh := [32]byte{'h'}
+	root := [32]byte{'r'}
+	expectedStateRoot := [32]byte{22, 85, 188, 95, 44, 156, 240, 10, 30, 106, 216, 244, 24, 39, 130, 196, 151, 118, 200, 94, 28, 42, 13, 170, 109, 206, 33, 83, 97, 154, 53, 251}
+	p := &enginev1.ExecutionPayloadEnvelope{
+		Payload:            &enginev1.ExecutionPayloadElectra{},
+		BeaconBlockRoot:    root[:],
+		BlobKzgCommitments: make([][]byte, 0),
+		StateRoot:          expectedStateRoot[:],
+	}
+	p.Payload.BlockHash = bh[:]
+	e, err := blocks.WrappedROExecutionPayloadEnvelope(p)
+	require.NoError(t, err)
+
+	st, _ := util.DeterministicGenesisStateEpbs(t, 64)
+	require.NoError(t, db.SaveState(ctx, st, e.BeaconBlockRoot()))
+	stateRoot, err := proposerServer.computePostPayloadStateRoot(ctx, e)
+	require.NoError(t, err)
+	require.DeepEqual(t, expectedStateRoot[:], stateRoot)
 }

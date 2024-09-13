@@ -29,7 +29,7 @@ func TestProcessPayloadStateTransition(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, [32]byte{}, [32]byte(lbh))
 
-	require.NoError(t, processPayloadStateTransition(ctx, st, e))
+	require.NoError(t, ProcessPayloadStateTransition(ctx, st, e))
 
 	lbh, err = st.LatestBlockHash()
 	require.NoError(t, err)
