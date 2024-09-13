@@ -72,25 +72,9 @@ loop:
 	return validPeers, nil
 }
 
-// CustodyCountFromRemotePeer retrieves the custody count from a remote peer.
-func (s *Service) CustodyCountFromRemotePeer(pid peer.ID) uint64 {
+func (s *Service) custodyCountFromRemotePeerEnr(pid peer.ID) uint64 {
 	// By default, we assume the peer custodies the minimum number of subnets.
 	custodyRequirement := params.BeaconConfig().CustodyRequirement
-
-	// First, try to get the custody count from the peer's metadata.
-	metadata, err := s.peers.Metadata(pid)
-	if err != nil {
-		log.WithError(err).WithField("peerID", pid).Debug("Failed to retrieve metadata for peer, defaulting to the ENR value")
-	}
-
-	if metadata != nil {
-		custodyCount := metadata.CustodySubnetCount()
-		if custodyCount > 0 {
-			return custodyCount
-		}
-	}
-
-	log.WithField("peerID", pid).Debug("Failed to retrieve custody count from metadata for peer, defaulting to the ENR value")
 
 	// Retrieve the ENR of the peer.
 	record, err := s.peers.ENR(pid)
@@ -112,6 +96,33 @@ func (s *Service) CustodyCountFromRemotePeer(pid peer.ID) uint64 {
 		}).Debug("Failed to retrieve custody count from ENR for peer, defaulting to the default value")
 
 		return custodyRequirement
+	}
+
+	return custodyCount
+}
+
+// CustodyCountFromRemotePeer retrieves the custody count from a remote peer.
+func (s *Service) CustodyCountFromRemotePeer(pid peer.ID) uint64 {
+	// Try to get the custody count from the peer's metadata.
+	metadata, err := s.peers.Metadata(pid)
+	if err != nil {
+		log.WithError(err).WithField("peerID", pid).Debug("Failed to retrieve metadata for peer, defaulting to the ENR value")
+		return s.custodyCountFromRemotePeerEnr(pid)
+	}
+
+	// If the metadata is nil, default to the ENR value.
+	if metadata == nil {
+		log.WithField("peerID", pid).Debug("Metadata is nil, defaulting to the ENR value")
+		return s.custodyCountFromRemotePeerEnr(pid)
+	}
+
+	// Get the custody subnets count from the metadata.
+	custodyCount := metadata.CustodySubnetCount()
+
+	// If the custody count is null, default to the ENR value.
+	if custodyCount == 0 {
+		log.WithField("peerID", pid).Debug("The custody count extracted from the metadata equals to 0, defaulting to the ENR value")
+		return s.custodyCountFromRemotePeerEnr(pid)
 	}
 
 	return custodyCount

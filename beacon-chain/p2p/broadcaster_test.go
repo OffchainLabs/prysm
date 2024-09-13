@@ -229,11 +229,11 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 	require.NoError(t, err)
 	defer bootListener.Close()
 
-	// Use shorter period for testing.
-	currentPeriod := pollingPeriod
-	pollingPeriod = 1 * time.Second
+	// Use smaller batch size for testing.
+	currentBatchSize := batchSize
+	batchSize = 2
 	defer func() {
-		pollingPeriod = currentPeriod
+		batchSize = currentBatchSize
 	}()
 
 	bootNode := bootListener.Self()

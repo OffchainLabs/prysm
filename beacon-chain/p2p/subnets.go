@@ -76,11 +76,11 @@ func (s *Service) nodeFilter(topic string, index uint64) (func(node *enode.Node)
 func searchForPeers(
 	iterator enode.Iterator,
 	batchSize int,
-	peersToFindCount int,
+	peersToFindCount uint,
 	filter func(node *enode.Node) bool,
 ) []*enode.Node {
 	nodeFromNodeID := make(map[enode.ID]*enode.Node, batchSize)
-	for i := 0; i < batchSize && len(nodeFromNodeID) <= peersToFindCount && iterator.Next(); i++ {
+	for i := 0; i < batchSize && uint(len(nodeFromNodeID)) <= peersToFindCount && iterator.Next(); i++ {
 		node := iterator.Node()
 
 		// Filter out nodes that do not meet the criteria.
@@ -141,7 +141,7 @@ func (s *Service) FindPeersWithSubnet(
 	index uint64,
 	threshold int,
 ) (bool, error) {
-	const batchSize = 2000
+	const minLogInterval = 1 * time.Minute
 
 	ctx, span := trace.StartSpan(ctx, "p2p.FindPeersWithSubnet")
 	defer span.End()
@@ -180,19 +180,17 @@ func (s *Service) FindPeersWithSubnet(
 		return true, nil
 	}
 
-	log.WithFields(logrus.Fields{
-		"topic":            topic,
-		"currentPeerCount": peerCountForTopic,
-		"targetPeerCount":  threshold,
-	}).Debug("Searching for new peers in the network - Start")
+	log := log.WithFields(logrus.Fields{
+		"topic":           topic,
+		"targetPeerCount": threshold,
+	})
+
+	log.WithField("currentPeerCount", peerCountForTopic).Debug("Searching for new peers for a subnet - start")
+
+	lastLogTime := time.Now()
 
 	wg := new(sync.WaitGroup)
 	for {
-		// If we have enough peers, we can exit the loop. This is the happy path.
-		if missingPeerCountForTopic == 0 {
-			break
-		}
-
 		// If the context is done, we can exit the loop. This is the unhappy path.
 		if err := ctx.Err(); err != nil {
 			return false, errors.Errorf(
@@ -202,7 +200,7 @@ func (s *Service) FindPeersWithSubnet(
 		}
 
 		// Search for new peers in the network.
-		nodes := searchForPeers(iterator, batchSize, missingPeerCountForTopic, filter)
+		nodes := searchForPeers(iterator, batchSize, uint(missingPeerCountForTopic), filter)
 
 		// Restrict dials if limit is applied.
 		maxConcurrentDials := math.MaxInt
@@ -221,10 +219,20 @@ func (s *Service) FindPeersWithSubnet(
 			wg.Wait()
 		}
 
-		_, missingPeerCountForTopic = peersSummary(topic, threshold)
+		peerCountForTopic, missingPeerCountForTopic := peersSummary(topic, threshold)
+
+		// If we have enough peers, we can exit the loop. This is the happy path.
+		if missingPeerCountForTopic == 0 {
+			break
+		}
+
+		if time.Since(lastLogTime) > minLogInterval {
+			lastLogTime = time.Now()
+			log.WithField("currentPeerCount", peerCountForTopic).Debug("Searching for new peers for a subnet - continue")
+		}
 	}
 
-	log.WithField("topic", topic).Debug("Searching for new peers in the network - Success")
+	log.WithField("currentPeerCount", threshold).Debug("Searching for new peers for a subnet - success")
 	return true, nil
 }
 

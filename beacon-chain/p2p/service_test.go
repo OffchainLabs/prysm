@@ -202,11 +202,11 @@ func TestListenForNewNodes(t *testing.T) {
 	require.NoError(t, err)
 	defer bootListener.Close()
 
-	// Use shorter period for testing.
-	currentPeriod := pollingPeriod
-	pollingPeriod = 1 * time.Second
+	// Use shorter batch size for testing.
+	currentBatchSize := batchSize
+	batchSize = 5
 	defer func() {
-		pollingPeriod = currentPeriod
+		batchSize = currentBatchSize
 	}()
 
 	bootNode := bootListener.Self()
