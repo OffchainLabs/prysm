@@ -31,11 +31,12 @@ func (v *validator) SubmitPayloadAttestationMessage(ctx context.Context, slot pr
 		return
 	}
 
-	index, found := v.pubkeyToValidatorIndex[pubKey]
+	status, found := v.pubkeyToStatus[pubKey]
 	if !found {
 		log.WithField("pubkey", pubKey).Error("could not find validator index for pubkey")
 		return
 	}
+	index := status.index
 
 	message := &ethpb.PayloadAttestationMessage{
 		ValidatorIndex: index,
