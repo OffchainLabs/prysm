@@ -614,10 +614,34 @@ func TestServer_WaitToSlotOneThird_CanWait(t *testing.T) {
 
 	timeToSleep := params.BeaconConfig().SecondsPerSlot / 3
 	oneThird := currentTime + timeToSleep
-	v.waitOneThirdOrValidBlock(context.Background(), currentSlot)
+	v.waitAttesterDuty(context.Background(), currentSlot)
 
 	if oneThird != uint64(time.Now().Unix()) {
 		t.Errorf("Wanted %d time for slot one third but got %d", oneThird, currentTime)
+	}
+}
+
+func TestServer_WaitAttesterDutyEpbs_CanWait(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.EPBSForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	currentTime := uint64(time.Now().Unix())
+	currentSlot := primitives.Slot(4)
+	genesisTime := currentTime - uint64(currentSlot.Mul(params.BeaconConfig().SecondsPerSlot))
+
+	v := &validator{
+		genesisTime: genesisTime,
+		slotFeed:    new(event.Feed),
+	}
+
+	timeToSleep := params.BeaconConfig().SecondsPerSlot / params.BeaconConfig().IntervalsPerSlotEPBS
+	dutyTime := currentTime + timeToSleep
+	v.waitAttesterDuty(context.Background(), currentSlot)
+
+	if dutyTime != uint64(time.Now().Unix()) {
+		t.Errorf("Wanted %d time for slot one third but got %d", dutyTime, currentTime)
 	}
 }
 
@@ -632,7 +656,7 @@ func TestServer_WaitToSlotOneThird_SameReqSlot(t *testing.T) {
 		highestValidSlot: currentSlot,
 	}
 
-	v.waitOneThirdOrValidBlock(context.Background(), currentSlot)
+	v.waitAttesterDuty(context.Background(), currentSlot)
 
 	if currentTime != uint64(time.Now().Unix()) {
 		t.Errorf("Wanted %d time for slot one third but got %d", uint64(time.Now().Unix()), currentTime)
@@ -660,7 +684,7 @@ func TestServer_WaitToSlotOneThird_ReceiveBlockSlot(t *testing.T) {
 		wg.Done()
 	}()
 
-	v.waitOneThirdOrValidBlock(context.Background(), currentSlot)
+	v.waitAttesterDuty(context.Background(), currentSlot)
 
 	if currentTime != uint64(time.Now().Unix()) {
 		t.Errorf("Wanted %d time for slot one third but got %d", uint64(time.Now().Unix()), currentTime)

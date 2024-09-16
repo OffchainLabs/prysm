@@ -78,7 +78,7 @@ func (v *validator) SubmitAggregateAndProof(ctx context.Context, slot primitives
 	// As specified in spec, an aggregator should wait until two thirds of the way through slot
 	// to broadcast the best aggregate to the global aggregate channel.
 	// https://github.com/ethereum/consensus-specs/blob/v0.9.3/specs/validator/0_beacon-chain-validator.md#broadcast-aggregate
-	v.waitToSlotTwoThirds(ctx, slot)
+	v.waitAggregatorDuty(ctx, slot)
 
 	postElectra := slots.ToEpoch(slot) >= params.BeaconConfig().ElectraForkEpoch
 
@@ -199,16 +199,18 @@ func (v *validator) signSlotWithSelectionProof(ctx context.Context, pubKey [fiel
 	return sig.Marshal(), nil
 }
 
-// waitToSlotTwoThirds waits until two third through the current slot period
-// such that any attestations from this slot have time to reach the beacon node
-// before creating the aggregated attestation.
-func (v *validator) waitToSlotTwoThirds(ctx context.Context, slot primitives.Slot) {
-	ctx, span := trace.StartSpan(ctx, "validator.waitToSlotTwoThirds")
+// waitAggregatorDuty waits for aggregator duty given the slot intervals.
+func (v *validator) waitAggregatorDuty(ctx context.Context, slot primitives.Slot) {
+	ctx, span := trace.StartSpan(ctx, "validator.waitAggregatorDuty")
 	defer span.End()
 
-	oneThird := slots.DivideSlotBy(3 /* one third of slot duration */)
-	twoThird := oneThird + oneThird
-	delay := twoThird
+	var delay time.Duration
+	if slots.ToEpoch(slot) >= params.BeaconConfig().EPBSForkEpoch {
+		delay = slots.DivideSlotBy(int64(params.BeaconConfig().IntervalsPerSlotEPBS))
+	} else {
+		delay = slots.DivideSlotBy(int64(params.BeaconConfig().IntervalsPerSlot))
+	}
+	delay *= 2
 
 	startTime := slots.StartTime(v.genesisTime, slot)
 	finalTime := startTime.Add(delay)

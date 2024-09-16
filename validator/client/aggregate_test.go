@@ -261,11 +261,31 @@ func TestWaitForSlotTwoThird_WaitCorrectly(t *testing.T) {
 			timeToSleep := oneThird + oneThird
 
 			twoThirdTime := currentTime.Add(timeToSleep)
-			validator.waitToSlotTwoThirds(context.Background(), numOfSlots)
+			validator.waitAggregatorDuty(context.Background(), numOfSlots)
 			currentTime = time.Now()
 			assert.Equal(t, twoThirdTime.Unix(), currentTime.Unix())
 		})
 	}
+}
+
+func TestServer_WaitAggregatorDutyEpbs_CanWait(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.EPBSForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	validator, _, _, finish := setup(t, true)
+	defer finish()
+	currentTime := time.Now()
+	numOfSlots := primitives.Slot(4)
+	validator.genesisTime = uint64(currentTime.Unix()) - uint64(numOfSlots.Mul(params.BeaconConfig().SecondsPerSlot))
+	delay := slots.DivideSlotBy(int64(params.BeaconConfig().IntervalsPerSlotEPBS))
+	timeToSleep := delay + delay
+
+	twoThirdTime := currentTime.Add(timeToSleep)
+	validator.waitAggregatorDuty(context.Background(), numOfSlots)
+	currentTime = time.Now()
+	assert.Equal(t, twoThirdTime.Unix(), currentTime.Unix())
 }
 
 func TestWaitForSlotTwoThird_DoneContext_ReturnsImmediately(t *testing.T) {
@@ -280,7 +300,7 @@ func TestWaitForSlotTwoThird_DoneContext_ReturnsImmediately(t *testing.T) {
 			expectedTime := time.Now()
 			ctx, cancel := context.WithCancel(context.Background())
 			cancel()
-			validator.waitToSlotTwoThirds(ctx, numOfSlots)
+			validator.waitAggregatorDuty(ctx, numOfSlots)
 			currentTime = time.Now()
 			assert.Equal(t, expectedTime.Unix(), currentTime.Unix())
 		})
