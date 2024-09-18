@@ -170,7 +170,6 @@ type Service struct {
 	receivedDataColumnsFromRoot      map[[fieldparams.RootLength]byte]map[uint64]bool
 	receivedDataColumnsFromRootLock  sync.RWMutex
 	ctxMap                           ContextByteVersions
-	sampler                          DataColumnSampler
 }
 
 // NewService initializes new regular sync service.
@@ -359,12 +358,6 @@ func (s *Service) startTasksPostInitialSync() {
 
 		// Start the fork watcher.
 		go s.forkWatcher()
-
-		// Start data columns sampling if peerDAS is enabled.
-		if params.PeerDASEnabled() {
-			s.sampler = newDataColumnSampler1D(s.cfg.p2p, s.cfg.clock, s.ctxMap, s.cfg.stateNotifier, s.newColumnVerifier)
-			go s.sampler.Run(s.ctx)
-		}
 
 	case <-s.ctx.Done():
 		log.Debug("Context closed, exiting goroutine")

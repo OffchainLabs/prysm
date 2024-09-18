@@ -306,55 +306,120 @@ func (s *Service) sendBatchRootRequest(ctx context.Context, roots [][32]byte, ra
 	ctx, span := prysmTrace.StartSpan(ctx, "sendBatchRootRequest")
 	defer span.End()
 
-	roots = dedupRoots(roots)
-	s.pendingQueueLock.RLock()
-	for i := len(roots) - 1; i >= 0; i-- {
-		r := roots[i]
-		if s.seenPendingBlocks[r] || s.cfg.chain.BlockBeingSynced(r) {
-			roots = append(roots[:i], roots[i+1:]...)
-		} else {
-			log.WithField("blockRoot", fmt.Sprintf("%#x", r)).Debug("Requesting block by root")
-		}
-	}
-	s.pendingQueueLock.RUnlock()
-
+	// Exit early if there are no roots to request.
 	if len(roots) == 0 {
 		return nil
 	}
-	bestPeers := s.getBestPeers()
-	if len(bestPeers) == 0 {
+
+	// Remove duplicates (if any) from the list of roots.
+	roots = dedupRoots(roots)
+
+	// Reversly iterate through the list of roots to request blocks, and filter out roots that are already
+	// seen in pending blocks or being synced.
+	func() {
+		s.pendingQueueLock.RLock()
+		defer s.pendingQueueLock.RUnlock()
+
+		for i := len(roots) - 1; i >= 0; i-- {
+			r := roots[i]
+			if s.seenPendingBlocks[r] || s.cfg.chain.BlockBeingSynced(r) {
+				roots = append(roots[:i], roots[i+1:]...)
+				continue
+			}
+
+			log.WithField("blockRoot", fmt.Sprintf("%#x", r)).Debug("Requesting block by root")
+		}
+	}()
+
+	// Nothing to do, exit early.
+	if len(roots) == 0 {
 		return nil
 	}
-	// Randomly choose a peer to query from our best peers. If that peer cannot return
-	// all the requested blocks, we randomly select another peer.
-	pid := bestPeers[randGen.Int()%len(bestPeers)]
-	for i := 0; i < numOfTries; i++ {
+
+	// Fetch best peers to request blocks from.
+	bestPeers := s.getBestPeers()
+
+	// Filter out peers that do not custody a superset of our columns.
+	// (Very likely, keep only supernode peers)
+	// TODO: Change this to be able to fetch from all peers.
+	headSlot := s.cfg.chain.HeadSlot()
+	peerDASIsActive := coreTime.PeerDASIsActive(headSlot)
+
+	if peerDASIsActive {
+		var err error
+		bestPeers, err = s.cfg.p2p.GetValidCustodyPeers(bestPeers)
+		if err != nil {
+			return errors.Wrap(err, "get valid custody peers")
+		}
+	}
+
+	// No suitable peer, exit early.
+	if len(bestPeers) == 0 {
+		log.WithField("roots", fmt.Sprintf("%#x", roots)).Debug("Send batch root request: No suited peers")
+		return nil
+	}
+
+	// Randomly choose a peer to query from our best peers.
+	// If that peer cannot return all the requested blocks,
+	// we randomly select another peer.
+	randomIndex := randGen.Int() % len(bestPeers)
+	pid := bestPeers[randomIndex]
+
+	for range numOfTries {
 		req := p2ptypes.BeaconBlockByRootsReq(roots)
-		currentEpoch := slots.ToEpoch(s.cfg.clock.CurrentSlot())
+
+		// Get the current epoch.
+		currentSlot := s.cfg.clock.CurrentSlot()
+		currentEpoch := slots.ToEpoch(currentSlot)
+
+		// Trim the request to the maximum number of blocks we can request if needed.
 		maxReqBlock := params.MaxRequestBlock(currentEpoch)
-		if uint64(len(roots)) > maxReqBlock {
+		rootCount := uint64(len(roots))
+		if rootCount > maxReqBlock {
 			req = roots[:maxReqBlock]
 		}
+
+		// Send the request to the peer.
 		if err := s.sendRecentBeaconBlocksRequest(ctx, &req, pid); err != nil {
 			tracing.AnnotateError(span, err)
 			log.WithError(err).Debug("Could not send recent block request")
 		}
-		newRoots := make([][32]byte, 0, len(roots))
-		s.pendingQueueLock.RLock()
-		for _, rt := range roots {
-			if !s.seenPendingBlocks[rt] {
-				newRoots = append(newRoots, rt)
+
+		// Filter out roots that are already seen in pending blocks.
+		newRoots := make([][32]byte, 0, rootCount)
+		func() {
+			s.pendingQueueLock.RLock()
+			defer s.pendingQueueLock.RUnlock()
+
+			for _, rt := range roots {
+				if !s.seenPendingBlocks[rt] {
+					newRoots = append(newRoots, rt)
+				}
 			}
-		}
-		s.pendingQueueLock.RUnlock()
+		}()
+
+		// Exit early if all roots have been seen.
+		// This is the happy path.
 		if len(newRoots) == 0 {
-			break
+			return nil
 		}
-		// Choosing a new peer with the leftover set of
-		// roots to request.
+
+		// There is still some roots that have not been seen.
+		// Choosing a new peer with the leftover set of oots to request.
 		roots = newRoots
-		pid = bestPeers[randGen.Int()%len(bestPeers)]
+
+		// Choose a new peer to query.
+		randomIndex = randGen.Int() % len(bestPeers)
+		pid = bestPeers[randomIndex]
 	}
+
+	// Some roots are still missing after all allowed tries.
+	// This is the unhappy path.
+	log.WithFields(logrus.Fields{
+		"roots": fmt.Sprintf("%#x", roots),
+		"tries": numOfTries,
+	}).Debug("Send batch root request: Some roots are still missing after all allowed tries")
+
 	return nil
 }
 

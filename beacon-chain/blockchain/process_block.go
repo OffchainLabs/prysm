@@ -550,8 +550,9 @@ func missingDataColumns(bs *filesystem.BlobStorage, root [32]byte, expected map[
 // closed, the context hits cancellation/timeout, or notifications have been received for all the missing sidecars.
 func (s *Service) isDataAvailable(ctx context.Context, root [32]byte, signed interfaces.ReadOnlySignedBeaconBlock) error {
 	if coreTime.PeerDASIsActive(signed.Block().Slot()) {
-		return s.isDataColumnsAvailable(ctx, root, signed)
+		return s.areDataColumnsAvailable(ctx, root, signed)
 	}
+
 	if signed.Version() < version.Deneb {
 		return nil
 	}
@@ -628,7 +629,17 @@ func (s *Service) isDataAvailable(ctx context.Context, root [32]byte, signed int
 	}
 }
 
-func (s *Service) isDataColumnsAvailable(ctx context.Context, root [32]byte, signed interfaces.ReadOnlySignedBeaconBlock) error {
+// uint64MapToSortedSlice produces a sorted uint64 slice from a map.
+func uint64MapToSortedSlice(input map[uint64]bool) []uint64 {
+	output := make([]uint64, 0, len(input))
+	for idx := range input {
+		output = append(output, idx)
+	}
+	slices.Sort[[]uint64](output)
+	return output
+}
+
+func (s *Service) areDataColumnsAvailable(ctx context.Context, root [32]byte, signed interfaces.ReadOnlySignedBeaconBlock) error {
 	if signed.Version() < version.Deneb {
 		return nil
 	}
@@ -657,7 +668,12 @@ func (s *Service) isDataColumnsAvailable(ctx context.Context, root [32]byte, sig
 		return nil
 	}
 
-	colMap, err := peerdas.CustodyColumns(s.cfg.P2P.NodeID(), peerdas.CustodySubnetCount())
+	// All columns to sample need to be available for the block to be considered available.
+	// https://github.com/ethereum/consensus-specs/blob/dev/specs/_features/eip7594/das-core.md#subnet-sampling
+	nodeID := s.cfg.P2P.NodeID()
+	subnetSamplingSize := peerdas.SubnetSamplingSize()
+
+	colMap, err := peerdas.CustodyColumns(nodeID, subnetSamplingSize)
 	if err != nil {
 		return errors.Wrap(err, "custody columns")
 	}
@@ -702,25 +718,27 @@ func (s *Service) isDataColumnsAvailable(ctx context.Context, root [32]byte, sig
 	nextSlot := slots.BeginsAt(signed.Block().Slot()+1, s.genesisTime)
 	// Avoid logging if DA check is called after next slot start.
 	if nextSlot.After(time.Now()) {
-		// Compute sorted slice of expected columns.
-		expected := make([]uint64, 0, len(colMap))
-		for col := range colMap {
-			expected = append(expected, col)
-		}
-
-		slices.Sort[[]uint64](expected)
-
-		// Compute sorted slice of missing columns.
-		missing := make([]uint64, 0, len(missingMap))
-		for col := range missingMap {
-			missing = append(missing, col)
-		}
-
-		slices.Sort[[]uint64](missing)
-
 		nst := time.AfterFunc(time.Until(nextSlot), func() {
-			if len(missingMap) == 0 {
+			missingMapCount := uint64(len(missingMap))
+
+			if missingMapCount == 0 {
 				return
+			}
+
+			var (
+				expected interface{} = "all"
+				missing  interface{} = "all"
+			)
+
+			numberOfColumns := params.BeaconConfig().NumberOfColumns
+			colMapCount := uint64(len(colMap))
+
+			if colMapCount < numberOfColumns {
+				expected = uint64MapToSortedSlice(colMap)
+			}
+
+			if missingMapCount < numberOfColumns {
+				missing = uint64MapToSortedSlice(missingMap)
 			}
 
 			log.WithFields(logrus.Fields{
@@ -728,8 +746,9 @@ func (s *Service) isDataColumnsAvailable(ctx context.Context, root [32]byte, sig
 				"root":            fmt.Sprintf("%#x", root),
 				"columnsExpected": expected,
 				"columnsWaiting":  missing,
-			}).Error("Still waiting for data columns DA check at slot end.")
+			}).Error("Some data columns are still unavailable at slot end.")
 		})
+
 		defer nst.Stop()
 	}
 

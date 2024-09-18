@@ -61,28 +61,31 @@ func (vs *Server) GetBeaconBlock(ctx context.Context, req *ethpb.BlockRequest) (
 	if err != nil {
 		log.WithError(err).Error("Could not convert slot to time")
 	}
-	log.WithFields(logrus.Fields{
-		"slot":               req.Slot,
-		"sinceSlotStartTime": time.Since(t),
-	}).Info("Begin building block")
+
+	log := log.WithField("slot", req.Slot)
+	log.WithField("sinceSlotStartTime", time.Since(t)).Info("Begin building block")
 
 	// A syncing validator should not produce a block.
 	if vs.SyncChecker.Syncing() {
+		log.Error("Fail to build block: node is syncing")
 		return nil, status.Error(codes.Unavailable, "Syncing to latest head, not ready to respond")
 	}
 	// An optimistic validator MUST NOT produce a block (i.e., sign across the DOMAIN_BEACON_PROPOSER domain).
 	if slots.ToEpoch(req.Slot) >= params.BeaconConfig().BellatrixForkEpoch {
 		if err := vs.optimisticStatus(ctx); err != nil {
+			log.WithError(err).Error("Fail to build block: node is optimistic")
 			return nil, status.Errorf(codes.Unavailable, "Validator is not ready to propose: %v", err)
 		}
 	}
 
 	head, parentRoot, err := vs.getParentState(ctx, req.Slot)
 	if err != nil {
+		log.WithError(err).Error("Fail to build block: could not get parent state")
 		return nil, err
 	}
 	sBlk, err := getEmptyBlock(req.Slot)
 	if err != nil {
+		log.WithError(err).Error("Fail to build block: could not get empty block")
 		return nil, status.Errorf(codes.Internal, "Could not prepare block: %v", err)
 	}
 	// Set slot, graffiti, randao reveal, and parent root.
@@ -94,6 +97,7 @@ func (vs *Server) GetBeaconBlock(ctx context.Context, req *ethpb.BlockRequest) (
 	// Set proposer index.
 	idx, err := helpers.BeaconProposerIndex(ctx, head)
 	if err != nil {
+		log.WithError(err).Error("Fail to build block: could not calculate proposer index")
 		return nil, fmt.Errorf("could not calculate proposer index %w", err)
 	}
 	sBlk.SetProposerIndex(idx)
@@ -104,14 +108,17 @@ func (vs *Server) GetBeaconBlock(ctx context.Context, req *ethpb.BlockRequest) (
 	}
 
 	resp, err := vs.BuildBlockParallel(ctx, sBlk, head, req.SkipMevBoost, builderBoostFactor)
-	log.WithFields(logrus.Fields{
-		"slot":               req.Slot,
-		"sinceSlotStartTime": time.Since(t),
-		"validator":          sBlk.Block().ProposerIndex(),
-	}).Info("Finished building block")
 	if err != nil {
+		log.WithError(err).Error("Fail to build block: could not build block in parallel")
 		return nil, errors.Wrap(err, "could not build block in parallel")
 	}
+
+	log.WithFields(logrus.Fields{
+		"sinceSlotStartTime": time.Since(t),
+		"validator":          sBlk.Block().ProposerIndex(),
+		"parentRoot":         fmt.Sprintf("%#x", parentRoot),
+	}).Info("Finished building block")
+
 	return resp, nil
 }
 

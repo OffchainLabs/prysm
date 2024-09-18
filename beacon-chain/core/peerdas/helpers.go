@@ -431,11 +431,20 @@ func VerifyDataColumnSidecarKZGProofs(sc blocks.RODataColumn) (bool, error) {
 
 // CustodySubnetCount returns the number of subnets the node should participate in for custody.
 func CustodySubnetCount() uint64 {
-	count := params.BeaconConfig().CustodyRequirement
 	if flags.Get().SubscribeToAllSubnets {
-		count = params.BeaconConfig().DataColumnSidecarSubnetCount
+		return params.BeaconConfig().DataColumnSidecarSubnetCount
 	}
-	return count
+
+	return params.BeaconConfig().CustodyRequirement
+}
+
+// SubnetSamplingSize returns the number of subnets the node should sample from.
+// https://github.com/ethereum/consensus-specs/blob/dev/specs/_features/eip7594/das-core.md#subnet-sampling
+func SubnetSamplingSize() uint64 {
+	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
+	custodySubnetCount := CustodySubnetCount()
+
+	return max(samplesPerSlot, custodySubnetCount)
 }
 
 // CustodyColumnCount returns the number of columns the node should custody.

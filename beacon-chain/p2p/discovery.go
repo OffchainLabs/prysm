@@ -498,7 +498,8 @@ func (s *Service) createLocalNode(
 	}
 
 	if params.PeerDASEnabled() {
-		localNode.Set(peerdas.Csc(peerdas.CustodySubnetCount()))
+		custodySubnetCount := peerdas.CustodySubnetCount()
+		localNode.Set(peerdas.Csc(custodySubnetCount))
 	}
 
 	localNode.SetFallbackIP(ipAddr)

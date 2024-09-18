@@ -377,22 +377,29 @@ func initializePersistentSubnets(id enode.ID, epoch primitives.Epoch) error {
 	return nil
 }
 
+// initializePersistentColumnSubnets initialize persisten column subnets
 func initializePersistentColumnSubnets(id enode.ID) error {
+	// Check if the column subnets are already cached.
 	_, ok, expTime := cache.ColumnSubnetIDs.GetColumnSubnets()
 	if ok && expTime.After(time.Now()) {
 		return nil
 	}
-	subsMap, err := peerdas.CustodyColumnSubnets(id, peerdas.CustodySubnetCount())
+
+	// Retrieve the subnets we should be subscribed to.
+	subnetSamplingSize := peerdas.SubnetSamplingSize()
+	subnetsMap, err := peerdas.CustodyColumnSubnets(id, subnetSamplingSize)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "custody column subnets")
 	}
 
-	subs := make([]uint64, 0, len(subsMap))
-	for sub := range subsMap {
-		subs = append(subs, sub)
+	subnets := make([]uint64, 0, len(subnetsMap))
+	for subnet := range subnetsMap {
+		subnets = append(subnets, subnet)
 	}
 
-	cache.ColumnSubnetIDs.AddColumnSubnets(subs)
+	// Add the subnets to the cache.
+	cache.ColumnSubnetIDs.AddColumnSubnets(subnets)
+
 	return nil
 }
 
