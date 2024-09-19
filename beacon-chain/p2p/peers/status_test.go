@@ -347,7 +347,7 @@ func TestPeerBadResponses(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	assert.Equal(t, false, p.IsBad(id), "Peer marked as bad when should be good")
+	assert.NoError(t, p.IsBad(id), "Peer marked as bad when should be good")
 
 	address, err := ma.NewMultiaddr("/ip4/213.202.254.180/tcp/13000")
 	require.NoError(t, err, "Failed to create address")
@@ -358,25 +358,25 @@ func TestPeerBadResponses(t *testing.T) {
 	resBadResponses, err := scorer.Count(id)
 	require.NoError(t, err)
 	assert.Equal(t, 0, resBadResponses, "Unexpected bad responses")
-	assert.Equal(t, false, p.IsBad(id), "Peer marked as bad when should be good")
+	assert.NoError(t, p.IsBad(id), "Peer marked as bad when should be good")
 
 	scorer.Increment(id)
 	resBadResponses, err = scorer.Count(id)
 	require.NoError(t, err)
 	assert.Equal(t, 1, resBadResponses, "Unexpected bad responses")
-	assert.Equal(t, false, p.IsBad(id), "Peer marked as bad when should be good")
+	assert.NoError(t, p.IsBad(id), "Peer marked as bad when should be good")
 
 	scorer.Increment(id)
 	resBadResponses, err = scorer.Count(id)
 	require.NoError(t, err)
 	assert.Equal(t, 2, resBadResponses, "Unexpected bad responses")
-	assert.Equal(t, true, p.IsBad(id), "Peer not marked as bad when it should be")
+	assert.NotNil(t, p.IsBad(id), "Peer not marked as bad when it should be")
 
 	scorer.Increment(id)
 	resBadResponses, err = scorer.Count(id)
 	require.NoError(t, err)
 	assert.Equal(t, 3, resBadResponses, "Unexpected bad responses")
-	assert.Equal(t, true, p.IsBad(id), "Peer not marked as bad when it should be")
+	assert.NotNil(t, p.IsBad(id), "Peer not marked as bad when it should be")
 }
 
 func TestAddMetaData(t *testing.T) {
@@ -574,7 +574,7 @@ func TestPeerIPTracker(t *testing.T) {
 		badPeers = append(badPeers, createPeer(t, p, addr, network.DirUnknown, peerdata.PeerConnectionState(ethpb.ConnectionState_DISCONNECTED)))
 	}
 	for _, pr := range badPeers {
-		assert.Equal(t, true, p.IsBad(pr), "peer with bad ip is not bad")
+		assert.NotNil(t, p.IsBad(pr), "peer with bad ip is not bad")
 	}
 
 	// Add in bad peers, so that our records are trimmed out
@@ -587,7 +587,7 @@ func TestPeerIPTracker(t *testing.T) {
 	p.Prune()
 
 	for _, pr := range badPeers {
-		assert.Equal(t, false, p.IsBad(pr), "peer with good ip is regarded as bad")
+		assert.NoError(t, p.IsBad(pr), "peer with good ip is regarded as bad")
 	}
 }
 

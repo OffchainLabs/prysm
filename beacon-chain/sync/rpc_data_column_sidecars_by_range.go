@@ -118,7 +118,12 @@ func (s *Service) dataColumnSidecarsByRangeRPCHandler(ctx context.Context, msg i
 	}
 	if err := batch.error(); err != nil {
 		log.WithError(err).Debug("error in DataColumnSidecarsByRange batch")
-		s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
+
+		// If we hit a rate limit, the error response has already been written, and the stream is already closed.
+		if !errors.Is(err, p2ptypes.ErrRateLimited) {
+			s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
+		}
+
 		tracing.AnnotateError(span, err)
 		return err
 	}

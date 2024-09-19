@@ -185,6 +185,13 @@ var (
 		Value:  0,
 		Hidden: true,
 	}
+	// DataColumnsWithholdCount is a flag for withholding data columns when proposing a block.
+	DataColumnsIgnoreSlotMultiple = &cli.Uint64Flag{
+		Name:   "data-columns-ignore-slot-multiple",
+		Usage:  "Ignore all data columns for slots that are a multiple of this value. DO NOT USE IN PRODUCTION.",
+		Value:  0,
+		Hidden: true,
+	}
 )
 
 // devModeFlags holds list of flags that are set when development mode is on.
@@ -245,6 +252,7 @@ var BeaconChainFlags = append(deprecatedBeaconFlags, append(deprecatedFlags, []c
 	EnableDiscoveryReboot,
 	EnablePeerDAS,
 	DataColumnsWithholdCount,
+	DataColumnsIgnoreSlotMultiple,
 }...)...)
 
 // E2EBeaconChainFlags contains a list of the beacon chain feature flags to be tested in E2E.

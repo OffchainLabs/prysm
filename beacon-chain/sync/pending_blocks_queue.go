@@ -355,7 +355,7 @@ func (s *Service) sendBatchRootRequest(ctx context.Context, roots [][32]byte, ra
 
 	// No suitable peer, exit early.
 	if len(bestPeers) == 0 {
-		log.WithField("roots", fmt.Sprintf("%#x", roots)).Debug("Send batch root request: No suited peers")
+		log.WithField("roots", fmt.Sprintf("%#x", roots)).Debug("Send batch root request: No suitable peers")
 		return nil
 	}
 

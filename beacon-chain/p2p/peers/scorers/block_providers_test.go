@@ -481,8 +481,8 @@ func TestScorers_BlockProvider_BadPeerMarking(t *testing.T) {
 	})
 	scorer := peerStatuses.Scorers().BlockProviderScorer()
 
-	assert.Equal(t, false, scorer.IsBadPeer("peer1"), "Unexpected status for unregistered peer")
+	assert.NoError(t, scorer.IsBadPeer("peer1"), "Unexpected status for unregistered peer")
 	scorer.IncrementProcessedBlocks("peer1", 64)
-	assert.Equal(t, false, scorer.IsBadPeer("peer1"))
+	assert.NoError(t, scorer.IsBadPeer("peer1"))
 	assert.Equal(t, 0, len(scorer.BadPeers()))
 }

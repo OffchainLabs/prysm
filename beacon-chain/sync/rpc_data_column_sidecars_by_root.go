@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 	"time"
 
@@ -25,6 +26,17 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// uint64MapToSortedSlice produces a sorted uint64 slice from a map.
+func uint64MapToSortedSlice(input map[uint64]bool) []uint64 {
+	output := make([]uint64, 0, len(input))
+	for idx := range input {
+		output = append(output, idx)
+	}
+
+	slices.Sort[[]uint64](output)
+	return output
+}
+
 func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg interface{}, stream libp2pcore.Stream) error {
 	ctx, span := trace.StartSpan(ctx, "sync.dataColumnSidecarByRootRPCHandler")
 	defer span.End()
@@ -43,6 +55,8 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 	}
 
 	requestedColumnIdents := *ref
+	requestedColumnsCount := uint64(len(requestedColumnIdents))
+
 	if err := validateDataColumnsByRootRequest(requestedColumnIdents); err != nil {
 		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(stream.Conn().RemotePeer())
 		s.writeErrorResponseToStream(responseCodeInvalidRequest, err.Error(), stream)
@@ -78,29 +92,35 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 		return errors.Wrap(err, "custody columns")
 	}
 
+	numberOfColumns := params.BeaconConfig().NumberOfColumns
+
+	var (
+		custodied interface{} = "all"
+		requested interface{} = "all"
+	)
+
+	custodiedColumnsCount := uint64(len(custodiedColumns))
+
+	if custodiedColumnsCount != numberOfColumns {
+		custodied = uint64MapToSortedSlice(custodiedColumns)
+	}
+
+	if requestedColumnsCount != numberOfColumns {
+		requested = requestedColumnsList
+	}
+
 	custodiedColumnsList := make([]uint64, 0, len(custodiedColumns))
 	for column := range custodiedColumns {
 		custodiedColumnsList = append(custodiedColumnsList, column)
 	}
 
 	// Sort the custodied columns by index.
-	sort.Slice(custodiedColumnsList, func(i, j int) bool {
-		return custodiedColumnsList[i] < custodiedColumnsList[j]
-	})
+	slices.Sort[[]uint64](custodiedColumnsList)
 
-	fields := logrus.Fields{
-		"requested":      requestedColumnsList,
-		"custodiedCount": len(custodiedColumnsList),
-		"requestedCount": len(requestedColumnsList),
-	}
-
-	if uint64(len(custodiedColumnsList)) == params.BeaconConfig().NumberOfColumns {
-		fields["custodied"] = "all"
-	} else {
-		fields["custodied"] = custodiedColumnsList
-	}
-
-	log.WithFields(fields).Debug("Data column sidecar by root request received")
+	log.WithFields(logrus.Fields{
+		"custodied": custodied,
+		"requested": requested,
+	}).Debug("Data column sidecar by root request received")
 
 	// Subscribe to the data column feed.
 	rootIndexChan := make(chan filesystem.RootIndexPair)

@@ -481,8 +481,8 @@ func (s *Service) connectWithPeer(ctx context.Context, info peer.AddrInfo) error
 	if info.ID == s.host.ID() {
 		return nil
 	}
-	if s.Peers().IsBad(info.ID) {
-		return errors.New("refused to connect to bad peer")
+	if err := s.Peers().IsBad(info.ID); err != nil {
+		return errors.Wrap(err, "refused to connect to bad peer")
 	}
 	ctx, cancel := context.WithTimeout(ctx, maxDialTimeout)
 	defer cancel()

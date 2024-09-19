@@ -84,8 +84,11 @@ type Flags struct {
 	// changed on disk. This feature is for advanced use cases only.
 	KeystoreImportDebounceInterval time.Duration
 
-	// DataColumnsWithholdCount specifies the likelihood of withholding a data column sidecar when proposing a block (percentage)
+	// DataColumnsWithholdCount specifies the number of data columns that should be withheld when proposing a block.
 	DataColumnsWithholdCount uint64
+
+	// DataColumnsIgnoreSlotMultiple specifies the multiple of slot number where data columns should be ignored.
+	DataColumnsIgnoreSlotMultiple uint64
 
 	// AggregateIntervals specifies the time durations at which we aggregate attestations preparing for forkchoice.
 	AggregateIntervals [3]time.Duration
@@ -274,6 +277,11 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 	if ctx.IsSet(DataColumnsWithholdCount.Name) {
 		logEnabled(DataColumnsWithholdCount)
 		cfg.DataColumnsWithholdCount = ctx.Uint64(DataColumnsWithholdCount.Name)
+	}
+
+	if ctx.IsSet(DataColumnsIgnoreSlotMultiple.Name) {
+		logEnabled(DataColumnsIgnoreSlotMultiple)
+		cfg.DataColumnsIgnoreSlotMultiple = ctx.Uint64(DataColumnsIgnoreSlotMultiple.Name)
 	}
 
 	cfg.AggregateIntervals = [3]time.Duration{aggregateFirstInterval.Value, aggregateSecondInterval.Value, aggregateThirdInterval.Value}

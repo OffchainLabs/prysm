@@ -164,6 +164,9 @@ func (s *Service) registerRPC(baseTopic string, handle rpcHandler) {
 		ctx, cancel := context.WithTimeout(s.ctx, ttfbTimeout)
 		defer cancel()
 
+		conn := stream.Conn()
+		remotePeer := conn.RemotePeer()
+
 		// Resetting after closing is a no-op so defer a reset in case something goes wrong.
 		// It's up to the handler to Close the stream (send an EOF) if
 		// it successfully writes a response. We don't blindly call
@@ -183,12 +186,13 @@ func (s *Service) registerRPC(baseTopic string, handle rpcHandler) {
 		ctx, span := trace.StartSpan(ctx, "sync.rpc")
 		defer span.End()
 		span.SetAttributes(trace.StringAttribute("topic", topic))
-		span.SetAttributes(trace.StringAttribute("peer", stream.Conn().RemotePeer().String()))
+		span.SetAttributes(trace.StringAttribute("peer", remotePeer.String()))
 		log := log.WithField("peer", stream.Conn().RemotePeer().String()).WithField("topic", string(stream.Protocol()))
 
 		// Check before hand that peer is valid.
-		if s.cfg.p2p.Peers().IsBad(stream.Conn().RemotePeer()) {
-			if err := s.sendGoodByeAndDisconnect(ctx, p2ptypes.GoodbyeCodeBanned, stream.Conn().RemotePeer()); err != nil {
+		if err := s.cfg.p2p.Peers().IsBad(remotePeer); err != nil {
+			log.WithError(err).WithField("peer", remotePeer).Debug("Sending goodbye and disconnect")
+			if err := s.sendGoodByeAndDisconnect(ctx, p2ptypes.GoodbyeCodeBanned, remotePeer); err != nil {
 				log.WithError(err).Debug("Could not disconnect from peer")
 			}
 			return

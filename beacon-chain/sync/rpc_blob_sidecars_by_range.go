@@ -99,6 +99,7 @@ func (s *Service) blobSidecarsByRangeRPCHandler(ctx context.Context, msg interfa
 	}
 
 	var batch blockBatch
+
 	wQuota := params.BeaconConfig().MaxRequestBlobSidecars
 	for batch, ok = batcher.next(ctx, stream); ok; batch, ok = batcher.next(ctx, stream) {
 		batchStart := time.Now()
@@ -114,7 +115,12 @@ func (s *Service) blobSidecarsByRangeRPCHandler(ctx context.Context, msg interfa
 	}
 	if err := batch.error(); err != nil {
 		log.WithError(err).Debug("error in BlobSidecarsByRange batch")
-		s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
+
+		// If we hit a rate limit, the error response has already been written, and the stream is already closed.
+		if !errors.Is(err, p2ptypes.ErrRateLimited) {
+			s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
+		}
+
 		tracing.AnnotateError(span, err)
 		return err
 	}

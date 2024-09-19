@@ -746,7 +746,7 @@ func (s *Service) areDataColumnsAvailable(ctx context.Context, root [32]byte, si
 				"root":            fmt.Sprintf("%#x", root),
 				"columnsExpected": expected,
 				"columnsWaiting":  missing,
-			}).Error("Some data columns are still unavailable at slot end.")
+			}).Error("Some data columns are still unavailable at slot end")
 		})
 
 		defer nst.Stop()
@@ -779,12 +779,15 @@ func (s *Service) areDataColumnsAvailable(ctx context.Context, root [32]byte, si
 				return nil
 			}
 		case <-ctx.Done():
-			missingIndexes := make([]uint64, 0, len(missingMap))
-			for val := range missingMap {
-				copiedVal := val
-				missingIndexes = append(missingIndexes, copiedVal)
+			var missingIndices interface{} = "all"
+			numberOfColumns := params.BeaconConfig().NumberOfColumns
+			missingIndicesCount := uint64(len(missingMap))
+
+			if missingIndicesCount < numberOfColumns {
+				missingIndices = uint64MapToSortedSlice(missingMap)
 			}
-			return errors.Wrapf(ctx.Err(), "context deadline waiting for data column sidecars slot: %d, BlockRoot: %#x, missing %v", block.Slot(), root, missingIndexes)
+
+			return errors.Wrapf(ctx.Err(), "context deadline waiting for data column sidecars slot: %d, BlockRoot: %#x, missing %v", block.Slot(), root, missingIndices)
 		}
 	}
 }
