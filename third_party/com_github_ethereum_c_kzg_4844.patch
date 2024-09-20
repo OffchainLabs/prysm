@@ -17,7 +17,8 @@ index 7e49df7..1d476f7 100644
 +        "-Iexternal/com_github_ethereum_c_kzg_4844/src",
 +        "-Iexternal/com_github_ethereum_c_kzg_4844/bindings/go/blst_headers",
      ],
-     importpath = "github.com/ethereum/c-kzg-4844/bindings/go",
+     importpath = "github.com/ethereum/c-kzg-4844/v2/bindings/go",
+     importpath_aliases = ["github.com/ethereum/c-kzg-4844/bindings/go"],
      visibility = ["//visibility:public"],
 diff --git a/bindings/go/blst_headers/BUILD.bazel b/bindings/go/blst_headers/BUILD.bazel
 new file mode 100644
@@ -35,12 +36,9 @@ new file mode 100644
 index 0000000..b3f845d
 --- /dev/null
 +++ b/src/BUILD.bazel
-@@ -0,0 +1,8 @@
+@@ -0,0 +1,5 @@
 +cc_library(
 +    name = "kzg",
-+    hdrs = [
-+        "c_kzg_4844.c",
-+        "c_kzg_4844.h",
-+    ],
++    hdrs = glob(["ckzg.*", "*/*.c", "*/*.h"]),
 +    visibility = ["//visibility:public"],
 +)
