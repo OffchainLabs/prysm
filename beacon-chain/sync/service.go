@@ -38,7 +38,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/backfill/coverage"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
 	lruwrpr "github.com/prysmaticlabs/prysm/v5/cache/lru"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
@@ -167,26 +166,34 @@ type Service struct {
 	newColumnVerifier                verification.NewColumnVerifier
 	availableBlocker                 coverage.AvailableBlocker
 	dataColumsnReconstructionLock    sync.Mutex
-	receivedDataColumnsFromRoot      map[[fieldparams.RootLength]byte]map[uint64]bool
+	receivedDataColumnsFromRoot      *gcache.Cache
 	receivedDataColumnsFromRootLock  sync.RWMutex
+	storedDataColumnsFromRoot        *gcache.Cache
+	storedDataColumnsFromRootLock    sync.RWMutex
 	ctxMap                           ContextByteVersions
 }
 
 // NewService initializes new regular sync service.
 func NewService(ctx context.Context, opts ...Option) *Service {
-	c := gcache.New(pendingBlockExpTime /* exp time */, 0 /* disable janitor */)
+	const (
+		dataColumnCacheExpiration      = 1 * time.Minute
+		dataColumnCacheCleanupInterval = 2 * time.Minute
+	)
+
 	ctx, cancel := context.WithCancel(ctx)
 	r := &Service{
 		ctx:                         ctx,
 		cancel:                      cancel,
 		chainStarted:                abool.New(),
 		cfg:                         &config{clock: startup.NewClock(time.Unix(0, 0), [32]byte{})},
-		slotToPendingBlocks:         c,
+		slotToPendingBlocks:         gcache.New(pendingBlockExpTime /* exp time */, 0 /* disable janitor */),
 		seenPendingBlocks:           make(map[[32]byte]bool),
 		blkRootToPendingAtts:        make(map[[32]byte][]ethpb.SignedAggregateAttAndProof),
 		signatureChan:               make(chan *signatureVerifier, verifierLimit),
-		receivedDataColumnsFromRoot: make(map[[32]byte]map[uint64]bool),
+		receivedDataColumnsFromRoot: gcache.New(dataColumnCacheExpiration, dataColumnCacheCleanupInterval),
+		storedDataColumnsFromRoot:   gcache.New(dataColumnCacheExpiration, dataColumnCacheCleanupInterval),
 	}
+
 	for _, opt := range opts {
 		if err := opt(r); err != nil {
 			return nil

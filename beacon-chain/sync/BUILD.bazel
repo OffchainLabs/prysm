@@ -162,6 +162,7 @@ go_test(
         "block_batcher_test.go",
         "broadcast_bls_changes_test.go",
         "context_test.go",
+        "data_columns_reconstruct_test.go",
         "data_columns_sampling_test.go",
         "decode_pubsub_test.go",
         "error_test.go",

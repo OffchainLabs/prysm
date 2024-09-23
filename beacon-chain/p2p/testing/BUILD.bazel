@@ -21,6 +21,7 @@ go_library(
         "//beacon-chain/p2p/encoder:go_default_library",
         "//beacon-chain/p2p/peers:go_default_library",
         "//beacon-chain/p2p/peers/scorers:go_default_library",
+        "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "//proto/prysm/v1alpha1/metadata:go_default_library",

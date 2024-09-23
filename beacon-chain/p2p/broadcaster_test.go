@@ -584,9 +584,10 @@ func TestService_BroadcastDataColumn(t *testing.T) {
 
 	// Attempt to broadcast nil object should fail.
 	ctx := context.Background()
-	require.ErrorContains(t, "attempted to broadcast nil", p.BroadcastDataColumn(ctx, subnet, nil))
+	var root [fieldparams.RootLength]byte
+	require.ErrorContains(t, "attempted to broadcast nil", p.BroadcastDataColumn(ctx, root, subnet, nil))
 
 	// Broadcast to peers and wait.
-	require.NoError(t, p.BroadcastDataColumn(ctx, subnet, sidecar))
+	require.NoError(t, p.BroadcastDataColumn(ctx, root, subnet, sidecar))
 	require.Equal(t, false, util.WaitTimeout(&wg, 1*time.Second), "Failed to receive pubsub within 1s")
 }

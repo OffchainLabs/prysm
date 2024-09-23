@@ -13,6 +13,7 @@ import (
 	"github.com/multiformats/go-multiaddr"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/encoder"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/metadata"
 	"google.golang.org/protobuf/proto"
@@ -155,7 +156,7 @@ func (*FakeP2P) BroadcastBlob(_ context.Context, _ uint64, _ *ethpb.BlobSidecar)
 }
 
 // BroadcastDataColumn -- fake.
-func (*FakeP2P) BroadcastDataColumn(_ context.Context, _ uint64, _ *ethpb.DataColumnSidecar) error {
+func (*FakeP2P) BroadcastDataColumn(_ context.Context, _ [fieldparams.RootLength]byte, _ uint64, _ *ethpb.DataColumnSidecar) error {
 	return nil
 }
 

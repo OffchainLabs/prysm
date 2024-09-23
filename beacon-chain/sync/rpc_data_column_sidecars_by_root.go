@@ -14,9 +14,9 @@ import (
 	coreTime "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
 	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
@@ -45,7 +45,6 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 	defer cancel()
 
 	SetRPCStreamDeadlines(stream)
-	log := log.WithField("handler", p2p.DataColumnSidecarsByRootName[1:]) // slice the leading slash off the name var
 
 	// We use the same type as for blobs as they are the same data structure.
 	// TODO: Make the type naming more generic to be extensible to data columns
@@ -55,7 +54,6 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 	}
 
 	requestedColumnIdents := *ref
-	requestedColumnsCount := uint64(len(requestedColumnIdents))
 
 	if err := validateDataColumnsByRootRequest(requestedColumnIdents); err != nil {
 		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(stream.Conn().RemotePeer())
@@ -66,9 +64,29 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 	// Sort the identifiers so that requests for the same blob root will be adjacent, minimizing db lookups.
 	sort.Sort(&requestedColumnIdents)
 
-	requestedColumnsList := make([]uint64, 0, len(requestedColumnIdents))
-	for _, ident := range requestedColumnIdents {
-		requestedColumnsList = append(requestedColumnsList, ident.ColumnIndex)
+	numberOfColumns := params.BeaconConfig().NumberOfColumns
+
+	requestedColumnsByRoot := make(map[[fieldparams.RootLength]byte]map[uint64]bool)
+	for _, columnIdent := range requestedColumnIdents {
+		var root [fieldparams.RootLength]byte
+		copy(root[:], columnIdent.BlockRoot)
+
+		columnIndex := columnIdent.ColumnIndex
+
+		if _, ok := requestedColumnsByRoot[root]; !ok {
+			requestedColumnsByRoot[root] = map[uint64]bool{columnIndex: true}
+			continue
+		}
+
+		requestedColumnsByRoot[root][columnIndex] = true
+	}
+
+	requestedColumnsByRootLog := make(map[[fieldparams.RootLength]byte]interface{})
+	for root, columns := range requestedColumnsByRoot {
+		requestedColumnsByRootLog[root] = "all"
+		if uint64(len(columns)) != numberOfColumns {
+			requestedColumnsByRootLog[root] = uint64MapToSortedSlice(columns)
+		}
 	}
 
 	batchSize := flags.Get().DataColumnBatchLimit
@@ -84,43 +102,41 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 		return errors.Wrapf(err, "unexpected error computing min valid blob request slot, current_slot=%d", cs)
 	}
 
-	// Compute all custodied columns.
-	custodiedColumns, err := peerdas.CustodyColumns(s.cfg.p2p.NodeID(), peerdas.CustodySubnetCount())
+	// Compute all custody columns.
+	nodeID := s.cfg.p2p.NodeID()
+	custodySubnetCount := peerdas.CustodySubnetCount()
+	custodyColumns, err := peerdas.CustodyColumns(nodeID, custodySubnetCount)
+	custodyColumnsCount := uint64(len(custodyColumns))
+
 	if err != nil {
 		log.WithError(err).Errorf("unexpected error retrieving the node id")
 		s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)
 		return errors.Wrap(err, "custody columns")
 	}
 
-	numberOfColumns := params.BeaconConfig().NumberOfColumns
+	var custody interface{} = "all"
 
-	var (
-		custodied interface{} = "all"
-		requested interface{} = "all"
-	)
-
-	custodiedColumnsCount := uint64(len(custodiedColumns))
-
-	if custodiedColumnsCount != numberOfColumns {
-		custodied = uint64MapToSortedSlice(custodiedColumns)
+	if custodyColumnsCount != numberOfColumns {
+		custody = uint64MapToSortedSlice(custodyColumns)
 	}
 
-	if requestedColumnsCount != numberOfColumns {
-		requested = requestedColumnsList
+	remotePeer := stream.Conn().RemotePeer()
+	log := log.WithFields(logrus.Fields{
+		"peer":    remotePeer,
+		"custody": custody,
+	})
+
+	i := 0
+	for root, columns := range requestedColumnsByRootLog {
+		log = log.WithFields(logrus.Fields{
+			fmt.Sprintf("root%d", i):    fmt.Sprintf("%#x", root),
+			fmt.Sprintf("columns%d", i): columns,
+		})
+
+		i++
 	}
 
-	custodiedColumnsList := make([]uint64, 0, len(custodiedColumns))
-	for column := range custodiedColumns {
-		custodiedColumnsList = append(custodiedColumnsList, column)
-	}
-
-	// Sort the custodied columns by index.
-	slices.Sort[[]uint64](custodiedColumnsList)
-
-	log.WithFields(logrus.Fields{
-		"custodied": custodied,
-		"requested": requested,
-	}).Debug("Data column sidecar by root request received")
+	log.Debug("Serving data column sidecar by root request")
 
 	// Subscribe to the data column feed.
 	rootIndexChan := make(chan filesystem.RootIndexPair)
@@ -150,7 +166,7 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 		requestedRoot, requestedIndex := bytesutil.ToBytes32(requestedColumnIdents[i].BlockRoot), requestedColumnIdents[i].ColumnIndex
 
 		// Decrease the peer's score if it requests a column that is not custodied.
-		isCustodied := custodiedColumns[requestedIndex]
+		isCustodied := custodyColumns[requestedIndex]
 		if !isCustodied {
 			s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(stream.Conn().RemotePeer())
 			s.writeErrorResponseToStream(responseCodeInvalidRequest, types.ErrInvalidColumnIndex.Error(), stream)

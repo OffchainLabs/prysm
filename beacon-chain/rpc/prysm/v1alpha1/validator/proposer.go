@@ -471,7 +471,6 @@ func (vs *Server) broadcastAndReceiveDataColumns(
 	slot primitives.Slot,
 ) error {
 	eg, _ := errgroup.WithContext(ctx)
-
 	dataColumnsWithholdCount := features.Get().DataColumnsWithholdCount
 
 	for _, sd := range sidecars {
@@ -487,11 +486,10 @@ func (vs *Server) broadcastAndReceiveDataColumns(
 				log.WithFields(logrus.Fields{
 					"root":            fmt.Sprintf("%#x", root),
 					"slot":            slot,
-					"subnet":          subnet,
 					"dataColumnIndex": sidecar.ColumnIndex,
 				}).Warning("Withholding data column")
 			} else {
-				if err := vs.P2P.BroadcastDataColumn(ctx, subnet, sidecar); err != nil {
+				if err := vs.P2P.BroadcastDataColumn(ctx, root, subnet, sidecar); err != nil {
 					return errors.Wrap(err, "broadcast data column")
 				}
 			}
