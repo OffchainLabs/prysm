@@ -2,7 +2,6 @@ package verification
 
 import (
 	"context"
-	goErrors "errors"
 
 	"github.com/pkg/errors"
 	forkchoicetypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/types"
@@ -329,5 +328,5 @@ func columnToSignatureData(d blocks.RODataColumn) SignatureData {
 }
 
 func columnErrBuilder(baseErr error) error {
-	return goErrors.Join(ErrColumnInvalid, baseErr)
+	return errors.Wrap(baseErr, ErrColumnInvalid.Error())
 }

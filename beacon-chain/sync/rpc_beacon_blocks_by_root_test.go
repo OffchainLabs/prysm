@@ -253,7 +253,7 @@ func TestRecentBeaconBlocks_RPCRequestSent(t *testing.T) {
 	})
 
 	p1.Connect(p2)
-	require.NoError(t, r.sendRecentBeaconBlocksRequest(context.Background(), &expectedRoots, p2.PeerID()))
+	require.NoError(t, r.sendBeaconBlocksRequest(context.Background(), &expectedRoots, p2.PeerID()))
 
 	if util.WaitTimeout(&wg, 1*time.Second) {
 		t.Fatal("Did not receive stream within 1 sec")
@@ -328,7 +328,7 @@ func TestRecentBeaconBlocks_RPCRequestSent_IncorrectRoot(t *testing.T) {
 	})
 
 	p1.Connect(p2)
-	require.ErrorContains(t, "received unexpected block with root", r.sendRecentBeaconBlocksRequest(context.Background(), &expectedRoots, p2.PeerID()))
+	require.ErrorContains(t, "received unexpected block with root", r.sendBeaconBlocksRequest(context.Background(), &expectedRoots, p2.PeerID()))
 }
 
 func TestRecentBeaconBlocksRPCHandler_HandleZeroBlocks(t *testing.T) {

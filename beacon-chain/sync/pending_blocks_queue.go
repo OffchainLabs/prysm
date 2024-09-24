@@ -205,13 +205,13 @@ func (s *Service) processAndBroadcastBlock(ctx context.Context, b interfaces.Rea
 	}
 
 	if coreTime.PeerDASIsActive(b.Block().Slot()) {
-		request, err := s.pendingDataColumnRequestForBlock(blkRoot, b)
+		request, err := s.buildRequestsForMissingDataColumns(blkRoot, b)
 		if err != nil {
 			return err
 		}
 		if len(request) > 0 {
 			peers := s.getBestPeers()
-			peers, err = s.cfg.p2p.GetValidCustodyPeers(peers)
+			peers, err = s.cfg.p2p.DataColumnsAdmissibleCustodyPeers(peers)
 			if err != nil {
 				return err
 			}
@@ -219,7 +219,7 @@ func (s *Service) processAndBroadcastBlock(ctx context.Context, b interfaces.Rea
 			if peerCount == 0 {
 				return errors.Wrapf(errNoPeersForPending, "block root=%#x", blkRoot)
 			}
-			if err := s.sendAndSaveDataColumnSidecars(ctx, request, peers[rand.NewGenerator().Int()%peerCount], b); err != nil {
+			if err := s.requestAndSaveDataColumnSidecars(ctx, request, peers[rand.NewGenerator().Int()%peerCount], b); err != nil {
 				return err
 			}
 		}
@@ -314,8 +314,7 @@ func (s *Service) sendBatchRootRequest(ctx context.Context, roots [][32]byte, ra
 	// Remove duplicates (if any) from the list of roots.
 	roots = dedupRoots(roots)
 
-	// Reversly iterate through the list of roots to request blocks, and filter out roots that are already
-	// seen in pending blocks or being synced.
+	// Filters out in place roots that are already seen in pending blocks or being synced.
 	func() {
 		s.pendingQueueLock.RLock()
 		defer s.pendingQueueLock.RUnlock()
@@ -347,9 +346,9 @@ func (s *Service) sendBatchRootRequest(ctx context.Context, roots [][32]byte, ra
 
 	if peerDASIsActive {
 		var err error
-		bestPeers, err = s.cfg.p2p.GetValidCustodyPeers(bestPeers)
+		bestPeers, err = s.cfg.p2p.DataColumnsAdmissibleSubnetSamplingPeers(bestPeers)
 		if err != nil {
-			return errors.Wrap(err, "get valid custody peers")
+			return errors.Wrap(err, "data columns admissible subnet sampling peers")
 		}
 	}
 
@@ -380,7 +379,7 @@ func (s *Service) sendBatchRootRequest(ctx context.Context, roots [][32]byte, ra
 		}
 
 		// Send the request to the peer.
-		if err := s.sendRecentBeaconBlocksRequest(ctx, &req, pid); err != nil {
+		if err := s.sendBeaconBlocksRequest(ctx, &req, pid); err != nil {
 			tracing.AnnotateError(span, err)
 			log.WithError(err).Debug("Could not send recent block request")
 		}

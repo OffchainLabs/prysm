@@ -787,7 +787,7 @@ func (s *Service) areDataColumnsAvailable(ctx context.Context, root [32]byte, si
 				missingIndices = uint64MapToSortedSlice(missingMap)
 			}
 
-			return errors.Wrapf(ctx.Err(), "context deadline waiting for data column sidecars slot: %d, BlockRoot: %#x, missing %v", block.Slot(), root, missingIndices)
+			return errors.Wrapf(ctx.Err(), "data column sidecars slot: %d, BlockRoot: %#x, missing %v", block.Slot(), root, missingIndices)
 		}
 	}
 }

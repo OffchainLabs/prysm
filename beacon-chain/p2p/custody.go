@@ -9,18 +9,35 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 )
 
-// GetValidCustodyPeers returns a list of peers that custody a super set of the local node's custody columns.
-func (s *Service) GetValidCustodyPeers(peers []peer.ID) ([]peer.ID, error) {
+// DataColumnsAdmissibleCustodyPeers returns a list of peers that custody a super set of the local node's custody columns.
+func (s *Service) DataColumnsAdmissibleCustodyPeers(peers []peer.ID) ([]peer.ID, error) {
+	localCustodySubnetCount := peerdas.CustodySubnetCount()
+	return s.dataColumnsAdmissiblePeers(peers, localCustodySubnetCount)
+}
+
+// DataColumnsAdmissibleSubnetSamplingPeers returns a list of peers that custody a super set of the local node's sampling columns.
+func (s *Service) DataColumnsAdmissibleSubnetSamplingPeers(peers []peer.ID) ([]peer.ID, error) {
+	localSubnetSamplingSize := peerdas.SubnetSamplingSize()
+	return s.dataColumnsAdmissiblePeers(peers, localSubnetSamplingSize)
+}
+
+// dataColumnsAdmissiblePeers computes the first columns of the local node corresponding to `subnetCount`, then
+// filters out `peers` that do not custody a super set of these columns.
+func (s *Service) dataColumnsAdmissiblePeers(peers []peer.ID, subnetCount uint64) ([]peer.ID, error) {
 	// Get the total number of columns.
 	numberOfColumns := params.BeaconConfig().NumberOfColumns
 
-	localCustodySubnetCount := peerdas.CustodySubnetCount()
-	localCustodyColumns, err := peerdas.CustodyColumns(s.NodeID(), localCustodySubnetCount)
+	// Retrieve the local node ID.
+	localNodeId := s.NodeID()
+
+	// Retrieve the needed columns.
+	neededColumns, err := peerdas.CustodyColumns(localNodeId, subnetCount)
 	if err != nil {
 		return nil, errors.Wrap(err, "custody columns for local node")
 	}
 
-	localCustotyColumnsCount := uint64(len(localCustodyColumns))
+	// Get the number of needed columns.
+	localneededColumnsCount := uint64(len(neededColumns))
 
 	// Find the valid peers.
 	validPeers := make([]peer.ID, 0, len(peers))
@@ -28,7 +45,7 @@ func (s *Service) GetValidCustodyPeers(peers []peer.ID) ([]peer.ID, error) {
 loop:
 	for _, pid := range peers {
 		// Get the custody subnets count of the remote peer.
-		remoteCustodySubnetCount := s.CustodyCountFromRemotePeer(pid)
+		remoteCustodySubnetCount := s.DataColumnsCustodyCountFromRemotePeer(pid)
 
 		// Get the remote node ID from the peer ID.
 		remoteNodeID, err := ConvertPeerIDToNodeID(pid)
@@ -44,8 +61,8 @@ loop:
 
 		remoteCustodyColumnsCount := uint64(len(remoteCustodyColumns))
 
-		// If the remote peer custodies less columns than the local node, skip it.
-		if remoteCustodyColumnsCount < localCustotyColumnsCount {
+		// If the remote peer custodies less columns than the local node needs, skip it.
+		if remoteCustodyColumnsCount < localneededColumnsCount {
 			continue
 		}
 
@@ -57,7 +74,7 @@ loop:
 		}
 
 		// Filter out invalid peers.
-		for c := range localCustodyColumns {
+		for c := range neededColumns {
 			if !remoteCustodyColumns[c] {
 				continue loop
 			}
@@ -101,8 +118,8 @@ func (s *Service) custodyCountFromRemotePeerEnr(pid peer.ID) uint64 {
 	return custodyCount
 }
 
-// CustodyCountFromRemotePeer retrieves the custody count from a remote peer.
-func (s *Service) CustodyCountFromRemotePeer(pid peer.ID) uint64 {
+// DataColumnsCustodyCountFromRemotePeer retrieves the custody count from a remote peer.
+func (s *Service) DataColumnsCustodyCountFromRemotePeer(pid peer.ID) uint64 {
 	// Try to get the custody count from the peer's metadata.
 	metadata, err := s.peers.Metadata(pid)
 	if err != nil {

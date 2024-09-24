@@ -717,7 +717,7 @@ loop:
 		}
 
 		// Get the custody columns count from the peer.
-		custodyCount := f.p2p.CustodyCountFromRemotePeer(peer)
+		custodyCount := f.p2p.DataColumnsCustodyCountFromRemotePeer(peer)
 
 		// Get the custody columns from the peer.
 		remoteCustodyColumns, err := peerdas.CustodyColumns(nodeID, custodyCount)

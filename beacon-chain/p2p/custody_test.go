@@ -47,7 +47,7 @@ func createPeer(t *testing.T, privateKeyOffset int, custodyCount uint64) (*enr.R
 	return record, peerID, privateKey
 }
 
-func TestGetValidCustodyPeers(t *testing.T) {
+func TestDataColumnsAdmissibleCustodyPeers(t *testing.T) {
 	genesisValidatorRoot := make([]byte, 32)
 
 	for i := 0; i < 32; i++ {
@@ -98,14 +98,14 @@ func TestGetValidCustodyPeers(t *testing.T) {
 	service.peers.Add(peer3Record, peer3ID, nil, network.DirOutbound)
 	service.peers.Add(peer4Record, peer4ID, nil, network.DirOutbound)
 
-	actual, err := service.GetValidCustodyPeers([]peer.ID{peer1ID, peer2ID, peer3ID, peer4ID})
+	actual, err := service.DataColumnsAdmissibleCustodyPeers([]peer.ID{peer1ID, peer2ID, peer3ID, peer4ID})
 	require.NoError(t, err)
 
 	expected := []peer.ID{peer1ID, peer2ID}
 	require.DeepSSZEqual(t, expected, actual)
 }
 
-func TestCustodyCountFromRemotePeer(t *testing.T) {
+func TestDataColumnsCustodyCountFromRemotePeer(t *testing.T) {
 	const (
 		expectedENR      uint64 = 7
 		expectedMetadata uint64 = 8
@@ -191,7 +191,7 @@ func TestCustodyCountFromRemotePeer(t *testing.T) {
 			}
 
 			// Retrieve the custody count from the remote peer.
-			actual := service.CustodyCountFromRemotePeer(pid)
+			actual := service.DataColumnsCustodyCountFromRemotePeer(pid)
 
 			// Verify the result.
 			require.Equal(t, tc.expected, actual)

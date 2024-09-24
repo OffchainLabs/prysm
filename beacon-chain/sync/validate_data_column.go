@@ -10,6 +10,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
@@ -66,8 +67,9 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 
 	if dataColumnsIgnoreSlotMultiple != 0 && blockSlot%dataColumnsIgnoreSlotMultiple == 0 {
 		log.WithFields(logrus.Fields{
-			"slot":  blockSlot,
-			"topic": msg.Topic,
+			"slot":        blockSlot,
+			"columnIndex": ds.ColumnIndex,
+			"blockRoot":   fmt.Sprintf("%#x", ds.BlockRoot()),
 		}).Warning("Voluntary ignore data column sidecar gossip")
 
 		return pubsub.ValidationIgnore, err
@@ -99,11 +101,17 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 		return pubsub.ValidationIgnore, err
 	}
 	if err := verifier.SidecarParentSeen(s.hasBadBlock); err != nil {
+		// If we haven't seen the parent, request it asynchronously.
 		go func() {
-			if err := s.sendBatchRootRequest(context.Background(), [][32]byte{ds.ParentRoot()}, rand.NewGenerator()); err != nil {
+			customCtx := context.Background()
+			parentRoot := ds.ParentRoot()
+			roots := [][fieldparams.RootLength]byte{parentRoot}
+			randGenerator := rand.NewGenerator()
+			if err := s.sendBatchRootRequest(customCtx, roots, randGenerator); err != nil {
 				log.WithError(err).WithFields(logging.DataColumnFields(ds)).Debug("Failed to send batch root request")
 			}
 		}()
+
 		return pubsub.ValidationIgnore, err
 	}
 	if err := verifier.SidecarParentValid(s.hasBadBlock); err != nil {

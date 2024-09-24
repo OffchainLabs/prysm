@@ -209,7 +209,9 @@ func SendBlobSidecarByRoot(
 	return readChunkEncodedBlobs(stream, p2pApi.Encoding(), ctxMap, blobValidatorFromRootReq(req), max)
 }
 
-func SendDataColumnSidecarByRoot(
+// SendDataColumnSidecarsByRootRequest sends a request for data column sidecars by root
+// and returns the fetched data column sidecars.
+func SendDataColumnSidecarsByRootRequest(
 	ctx context.Context,
 	tor blockchain.TemporalOracle,
 	p2pApi p2p.P2P,

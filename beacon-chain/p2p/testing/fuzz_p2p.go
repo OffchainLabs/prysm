@@ -185,10 +185,14 @@ func (*FakeP2P) InterceptUpgraded(network.Conn) (allow bool, reason control.Disc
 	return true, 0
 }
 
-func (*FakeP2P) CustodyCountFromRemotePeer(peer.ID) uint64 {
+func (*FakeP2P) DataColumnsCustodyCountFromRemotePeer(peer.ID) uint64 {
 	return 0
 }
 
-func (*FakeP2P) GetValidCustodyPeers(peers []peer.ID) ([]peer.ID, error) {
+func (*FakeP2P) DataColumnsAdmissibleCustodyPeers(peers []peer.ID) ([]peer.ID, error) {
+	return peers, nil
+}
+
+func (*FakeP2P) DataColumnsAdmissibleSubnetSamplingPeers(peers []peer.ID) ([]peer.ID, error) {
 	return peers, nil
 }
