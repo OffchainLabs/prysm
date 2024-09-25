@@ -64,10 +64,10 @@ func InitializeFromProtoUnsafeEpbs(st *ethpb.BeaconStateEPBS) (*BeaconState, err
 		pendingConsolidations:         st.PendingConsolidations,
 
 		// ePBS fields
-		latestBlockHash:        bytesutil.ToBytes32(st.LatestBlockHash),
-		latestFullSlot:         st.LatestFullSlot,
-		executionPayloadHeader: st.LatestExecutionPayloadHeader,
-		lastWithdrawalsRoot:    bytesutil.ToBytes32(st.LastWithdrawalsRoot),
+		latestBlockHash:                  bytesutil.ToBytes32(st.LatestBlockHash),
+		latestFullSlot:                   st.LatestFullSlot,
+		latestExecutionPayloadHeaderEPBS: st.LatestExecutionPayloadHeader,
+		lastWithdrawalsRoot:              bytesutil.ToBytes32(st.LastWithdrawalsRoot),
 
 		dirtyFields:      make(map[types.FieldIndex]bool, fieldCount),
 		dirtyIndices:     make(map[types.FieldIndex][]uint64, fieldCount),

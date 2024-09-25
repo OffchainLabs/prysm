@@ -6,5 +6,5 @@ import (
 )
 
 func (b *BeaconState) executionPayloadHeaderVal() *enginev1.ExecutionPayloadHeaderEPBS {
-	return eth.CopyExecutionPayloadHeaderEPBS(b.executionPayloadHeader)
+	return eth.CopyExecutionPayloadHeaderEPBS(b.latestExecutionPayloadHeaderEPBS)
 }
