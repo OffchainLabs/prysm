@@ -62,48 +62,49 @@ func TestRateLimiter_ExceedCapacity(t *testing.T) {
 	}
 }
 
-func TestRateLimiter_ExceedRawCapacity(t *testing.T) {
-	p1 := mockp2p.NewTestP2P(t)
-	p2 := mockp2p.NewTestP2P(t)
-	p1.Connect(p2)
-	p1.Peers().Add(nil, p2.PeerID(), p2.BHost.Addrs()[0], network.DirOutbound)
+// TODO: Uncomment out of devnet
+// func TestRateLimiter_ExceedRawCapacity(t *testing.T) {
+// 	p1 := mockp2p.NewTestP2P(t)
+// 	p2 := mockp2p.NewTestP2P(t)
+// 	p1.Connect(p2)
+// 	p1.Peers().Add(nil, p2.PeerID(), p2.BHost.Addrs()[0], network.DirOutbound)
 
-	rlimiter := newRateLimiter(p1)
+// 	rlimiter := newRateLimiter(p1)
 
-	// BlockByRange
-	topic := p2p.RPCBlocksByRangeTopicV1 + p1.Encoding().ProtocolSuffix()
+// 	// BlockByRange
+// 	topic := p2p.RPCBlocksByRangeTopicV1 + p1.Encoding().ProtocolSuffix()
 
-	wg := sync.WaitGroup{}
-	p2.BHost.SetStreamHandler(protocol.ID(topic), func(stream network.Stream) {
-		defer wg.Done()
-		code, errMsg, err := readStatusCodeNoDeadline(stream, p2.Encoding())
-		require.NoError(t, err, "could not read incoming stream")
-		assert.Equal(t, responseCodeInvalidRequest, code, "not equal response codes")
-		assert.Equal(t, p2ptypes.ErrRateLimited.Error(), errMsg, "not equal errors")
-	})
-	wg.Add(1)
-	stream, err := p1.BHost.NewStream(context.Background(), p2.PeerID(), protocol.ID(topic))
-	require.NoError(t, err, "could not create stream")
+// 	wg := sync.WaitGroup{}
+// 	p2.BHost.SetStreamHandler(protocol.ID(topic), func(stream network.Stream) {
+// 		defer wg.Done()
+// 		code, errMsg, err := readStatusCodeNoDeadline(stream, p2.Encoding())
+// 		require.NoError(t, err, "could not read incoming stream")
+// 		assert.Equal(t, responseCodeInvalidRequest, code, "not equal response codes")
+// 		assert.Equal(t, p2ptypes.ErrRateLimited.Error(), errMsg, "not equal errors")
+// 	})
+// 	wg.Add(1)
+// 	stream, err := p1.BHost.NewStream(context.Background(), p2.PeerID(), protocol.ID(topic))
+// 	require.NoError(t, err, "could not create stream")
 
-	for i := 0; i < 2*defaultBurstLimit; i++ {
-		err = rlimiter.validateRawRpcRequest(stream)
-		rlimiter.addRawStream(stream)
-		require.NoError(t, err, "could not validate incoming request")
-	}
-	// Triggers rate limit error on burst.
-	assert.ErrorContains(t, p2ptypes.ErrRateLimited.Error(), rlimiter.validateRawRpcRequest(stream))
+// 	for i := 0; i < 2*defaultBurstLimit; i++ {
+// 		err = rlimiter.validateRawRpcRequest(stream)
+// 		rlimiter.addRawStream(stream)
+// 		require.NoError(t, err, "could not validate incoming request")
+// 	}
+// 	// Triggers rate limit error on burst.
+// 	assert.ErrorContains(t, p2ptypes.ErrRateLimited.Error(), rlimiter.validateRawRpcRequest(stream))
 
-	// Make Peer bad.
-	for i := 0; i < defaultBurstLimit; i++ {
-		assert.ErrorContains(t, p2ptypes.ErrRateLimited.Error(), rlimiter.validateRawRpcRequest(stream))
-	}
-	assert.NotNil(t, p1.Peers().IsBad(p2.PeerID()), "peer is not marked as a bad peer")
-	require.NoError(t, stream.Close(), "could not close stream")
+// 	// Make Peer bad.
+// 	for i := 0; i < defaultBurstLimit; i++ {
+// 		assert.ErrorContains(t, p2ptypes.ErrRateLimited.Error(), rlimiter.validateRawRpcRequest(stream))
+// 	}
+// 	assert.NotNil(t, p1.Peers().IsBad(p2.PeerID()), "peer is not marked as a bad peer")
+// 	require.NoError(t, stream.Close(), "could not close stream")
 
-	if util.WaitTimeout(&wg, 1*time.Second) {
-		t.Fatal("Did not receive stream within 1 sec")
-	}
-}
+// 	if util.WaitTimeout(&wg, 1*time.Second) {
+// 		t.Fatal("Did not receive stream within 1 sec")
+// 	}
+// }
 
 func Test_limiter_retrieveCollector_requiresLock(t *testing.T) {
 	l := limiter{}

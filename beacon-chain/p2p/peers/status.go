@@ -47,6 +47,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/metadata"
 	prysmTime "github.com/prysmaticlabs/prysm/v5/time"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -1018,7 +1019,14 @@ func (p *Status) isfromBadIP(pid peer.ID) error {
 
 	if val, ok := p.ipTracker[ip.String()]; ok {
 		if val > CollocationLimit {
-			return errors.Errorf("colocation limit exceeded: got %d - limit %d", val, CollocationLimit)
+			// TODO: Remove this out of denvet.
+			// return errors.Errorf("colocation limit exceeded: got %d - limit %d", val, CollocationLimit)
+			log.WithFields(logrus.Fields{
+				"pid":             pid,
+				"ip":              ip.String(),
+				"colocationCount": val,
+				"colocationLimit": CollocationLimit,
+			}).Debug("Colocation limit exceeded. Peer should be banned.")
 		}
 	}
 

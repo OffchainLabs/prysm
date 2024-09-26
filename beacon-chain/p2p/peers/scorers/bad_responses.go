@@ -4,8 +4,8 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers/peerdata"
+	"github.com/sirupsen/logrus"
 )
 
 var _ Scorer = (*BadResponsesScorer)(nil)
@@ -128,7 +128,13 @@ func (s *BadResponsesScorer) IsBadPeer(pid peer.ID) error {
 func (s *BadResponsesScorer) isBadPeerNoLock(pid peer.ID) error {
 	if peerData, ok := s.store.PeerData(pid); ok {
 		if peerData.BadResponses >= s.config.Threshold {
-			return errors.Errorf("peer exceeded bad responses threshold: got %d, threshold %d", peerData.BadResponses, s.config.Threshold)
+			// TODO: Remote this out of devnet
+			// return errors.Errorf("peer exceeded bad responses threshold: got %d, threshold %d", peerData.BadResponses, s.config.Threshold)
+			log.WithFields(logrus.Fields{
+				"peerID":       pid,
+				"badResponses": peerData.BadResponses,
+				"threshold":    s.config.Threshold,
+			}).Debug("Peer exceeded bad responses threshold. Peer should be banned.")
 		}
 
 		return nil

@@ -191,7 +191,6 @@ func (s *Service) registerRPC(baseTopic string, handle rpcHandler) {
 
 		// Check before hand that peer is valid.
 		if err := s.cfg.p2p.Peers().IsBad(remotePeer); err != nil {
-			log.WithError(err).WithField("peer", remotePeer).Debug("Sending goodbye and disconnect")
 			if err := s.sendGoodByeAndDisconnect(ctx, p2ptypes.GoodbyeCodeBanned, remotePeer); err != nil {
 				log.WithError(err).Debug("Could not disconnect from peer")
 			}
