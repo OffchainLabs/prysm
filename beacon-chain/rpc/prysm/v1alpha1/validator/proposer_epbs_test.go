@@ -92,6 +92,7 @@ func TestProposer_ComputePostPayloadStateRoot(t *testing.T) {
 	expectedStateRoot := [32]byte{22, 85, 188, 95, 44, 156, 240, 10, 30, 106, 216, 244, 24, 39, 130, 196, 151, 118, 200, 94, 28, 42, 13, 170, 109, 206, 33, 83, 97, 154, 53, 251}
 	p := &enginev1.ExecutionPayloadEnvelope{
 		Payload:            &enginev1.ExecutionPayloadElectra{},
+		ExecutionRequests:  &enginev1.ExecutionRequests{},
 		BeaconBlockRoot:    root[:],
 		BlobKzgCommitments: make([][]byte, 0),
 		StateRoot:          expectedStateRoot[:],

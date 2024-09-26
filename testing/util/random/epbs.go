@@ -371,17 +371,21 @@ func SignedExecutionPayloadEnvelope(t *testing.T) *enginev1.SignedExecutionPaylo
 func ExecutionPayloadEnvelope(t *testing.T) *enginev1.ExecutionPayloadEnvelope {
 	withheld := randomUint64(t)%2 == 0
 	return &enginev1.ExecutionPayloadEnvelope{
-		Payload: ExecutionPayload(t),
-		ExecutionRequests: &enginev1.ExecutionRequests{
-			Deposits:       []*enginev1.DepositRequest{DepositRequest(t), DepositRequest(t), DepositRequest(t), DepositRequest(t)},
-			Withdrawals:    WithdrawalRequests(t),
-			Consolidations: []*enginev1.ConsolidationRequest{ConsolidationRequest(t)},
-		},
-		BuilderIndex:       primitives.ValidatorIndex(randomUint64(t)),
+		Payload:           ExecutionPayload(t),
+		ExecutionRequests: ExecutionRequests(t), BuilderIndex: primitives.ValidatorIndex(randomUint64(t)),
 		BeaconBlockRoot:    randomBytes(32, t),
 		BlobKzgCommitments: [][]byte{randomBytes(48, t), randomBytes(48, t), randomBytes(48, t)},
 		PayloadWithheld:    withheld,
 		StateRoot:          randomBytes(32, t),
+	}
+}
+
+// ExecutionRequests creates a random Execution request object for testing purposes
+func ExecutionRequests(t *testing.T) *enginev1.ExecutionRequests {
+	return &enginev1.ExecutionRequests{
+		Deposits:       []*enginev1.DepositRequest{DepositRequest(t), DepositRequest(t), DepositRequest(t), DepositRequest(t)},
+		Withdrawals:    WithdrawalRequests(t),
+		Consolidations: []*enginev1.ConsolidationRequest{ConsolidationRequest(t)},
 	}
 }
 
