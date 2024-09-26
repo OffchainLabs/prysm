@@ -91,7 +91,7 @@ func (s *Service) dataColumnSidecarsByRangeRPCHandler(ctx context.Context, msg i
 	defer ticker.Stop()
 	batcher, err := newBlockRangeBatcher(rp, s.cfg.beaconDB, s.rateLimiter, s.cfg.chain.IsCanonical, ticker)
 	if err != nil {
-		log.WithError(err).Info("error in DataColumnSidecarsByRange batch")
+		log.WithError(err).Info("Error in DataColumnSidecarsByRange batch")
 		s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
 		tracing.AnnotateError(span, err)
 		return err

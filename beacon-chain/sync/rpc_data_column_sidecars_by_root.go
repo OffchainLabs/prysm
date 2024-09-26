@@ -165,18 +165,7 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 		s.rateLimiter.add(stream, 1)
 		requestedRoot, requestedIndex := bytesutil.ToBytes32(requestedColumnIdents[i].BlockRoot), requestedColumnIdents[i].ColumnIndex
 
-		// Decrease the peer's score if it requests a column that is not custodied.
-		isCustodied := custodyColumns[requestedIndex]
-		if !isCustodied {
-			s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(stream.Conn().RemotePeer())
-			s.writeErrorResponseToStream(responseCodeInvalidRequest, types.ErrInvalidColumnIndex.Error(), stream)
-			return types.ErrInvalidColumnIndex
-		}
-
 		// TODO: Differentiate between blobs and columns for our storage engine
-		// If the data column is nil, it means it is not yet available in the db.
-		// We wait for it to be available.
-
 		// Retrieve the data column from the database.
 		dataColumnSidecar, err := s.cfg.blobStorage.GetColumn(requestedRoot, requestedIndex)
 
@@ -185,38 +174,9 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 			return errors.Wrap(err, "get column")
 		}
 
+		// If the data column is not found in the db, just skip it.
 		if err != nil && db.IsNotFound(err) {
-			fields := logrus.Fields{
-				"root":  fmt.Sprintf("%#x", requestedRoot),
-				"index": requestedIndex,
-			}
-
-			log.WithFields(fields).Debug("Peer requested data column sidecar by root not found in db, waiting for it to be available")
-
-		loop:
-			for {
-				select {
-				case receivedRootIndex := <-rootIndexChan:
-					if receivedRootIndex.Root == requestedRoot && receivedRootIndex.Index == requestedIndex {
-						// This is the data column we are looking for.
-						log.WithFields(fields).Debug("Data column sidecar by root is now available in the db")
-
-						break loop
-					}
-
-				case <-ctx.Done():
-					closeStream(stream, log)
-					return errors.Errorf("context closed while waiting for data column with root %#x and index %d", requestedRoot, requestedIndex)
-				}
-			}
-
-			// Retrieve the data column from the db.
-			dataColumnSidecar, err = s.cfg.blobStorage.GetColumn(requestedRoot, requestedIndex)
-			if err != nil {
-				// This time, no error (even not found error) should be returned.
-				s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)
-				return errors.Wrap(err, "get column")
-			}
+			continue
 		}
 
 		// If any root in the request content references a block earlier than minimum_request_epoch,

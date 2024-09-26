@@ -744,11 +744,13 @@ func (f *blocksFetcher) filterPeersForDataColumns(
 	dataColumns map[uint64]bool,
 	peers []peer.ID,
 ) ([]peer.ID, error) {
-	// Filter peers based on the percentage of peers to be used in a request.
-	peers = f.filterPeers(ctx, peers, peersPercentagePerRequest)
+	// TODO: Uncomment when we are not in devnet any more.
+	// TODO: Find a way to have this uncommented without being in devnet.
+	// // Filter peers based on the percentage of peers to be used in a request.
+	// peers = f.filterPeers(ctx, peers, peersPercentagePerRequest)
 
-	// Filter peers on bandwidth.
-	peers = f.hasSufficientBandwidth(peers, blocksCount)
+	// // Filter peers on bandwidth.
+	// peers = f.hasSufficientBandwidth(peers, blocksCount)
 
 	// Select peers which custody ALL wanted columns.
 	// Basically, it is very unlikely that a non-supernode peer will have custody of all columns.
@@ -892,6 +894,7 @@ func (f *blocksFetcher) requestDataColumnsFromPeers(
 				"capacity": f.rateLimiter.Remaining(peer.String()),
 				"score":    f.p2p.Peers().Scorers().BlockProviderScorer().FormatScorePretty(peer),
 			}).Debug("Requesting data columns")
+
 			// We're intentionally abusing the block rate limit here, treating data column requests as if they were block requests.
 			// Since column requests take more bandwidth than blocks, we should improve how we account for the different kinds
 			// of requests, more in proportion to the cost of serving them.
@@ -918,7 +921,6 @@ func (f *blocksFetcher) requestDataColumnsFromPeers(
 
 		// If the peer did not return any data columns, go to the next peer.
 		if len(roDataColumns) == 0 {
-			log.WithField("peer", peer).Warning("Peer did not return any data columns")
 			continue
 		}
 
@@ -1017,8 +1019,10 @@ func processRetrievedDataColumns(
 // This function:
 // - Mutate `bwb` by adding the retrieved data columns.
 // - Mutate `missingColumnsFromRoot` by removing the columns that have been retrieved.
-// This function returns when all the missing data columns have been retrieved.
-func (f *blocksFetcher) retrieveMissingDataColumnsFromPeers(ctx context.Context,
+// This function returns when all the missing data columns have been retrieved,
+// or when the context is canceled.
+func (f *blocksFetcher) retrieveMissingDataColumnsFromPeers(
+	ctx context.Context,
 	bwb []blocks.BlockWithROBlobs,
 	missingColumnsFromRoot map[[fieldparams.RootLength]byte]map[uint64]bool,
 	indicesFromRoot map[[fieldparams.RootLength]byte][]int,
@@ -1048,13 +1052,19 @@ func (f *blocksFetcher) retrieveMissingDataColumnsFromPeers(ctx context.Context,
 		}
 
 		// Filter peers.
-		peers, err := f.filterPeersForDataColumns(ctx, blocksCount, missingDataColumns, peers)
+		filteredPeers, err := f.filterPeersForDataColumns(ctx, blocksCount, missingDataColumns, peers)
 		if err != nil {
 			return errors.Wrap(err, "filter peers for data columns")
 		}
 
-		if len(peers) == 0 {
-			log.Warning("No peers available to retrieve missing data columns, retrying in 5 seconds")
+		if len(filteredPeers) == 0 {
+			log.
+				WithFields(logrus.Fields{
+					"nonFilteredPeersCount": len(peers),
+					"filteredPeersCount":    len(filteredPeers),
+				}).
+				Debug("No peers available to retrieve missing data columns, retrying in 5 seconds")
+
 			time.Sleep(5 * time.Second)
 			continue
 		}
@@ -1072,22 +1082,38 @@ func (f *blocksFetcher) retrieveMissingDataColumnsFromPeers(ctx context.Context,
 		// Get all the blocks and data columns we should retrieve.
 		blockFromRoot := blockFromRoot(bwb[firstIndex : lastIndex+1])
 
-		// Iterate request over all peers, and exit as soon as at least one data column is retrieved.
-		roDataColumns, peer, err := f.requestDataColumnsFromPeers(ctx, request, peers)
+		// Iterate requests over all peers, and exits as soon as at least one data column is retrieved.
+		roDataColumns, peer, err := f.requestDataColumnsFromPeers(ctx, request, filteredPeers)
 		if err != nil {
 			return errors.Wrap(err, "request data columns from peers")
+		}
+
+		if len(roDataColumns) == 0 {
+			log.Debug("No data columns returned from any peer, retrying in 5 seconds")
+			time.Sleep(5 * time.Second)
+			continue
 		}
 
 		// Process the retrieved data columns.
 		processRetrievedDataColumns(roDataColumns, blockFromRoot, indicesFromRoot, missingColumnsFromRoot, bwb, f.cv)
 
 		if len(missingColumnsFromRoot) > 0 {
-			for root, columns := range missingColumnsFromRoot {
+			numberOfColumns := params.BeaconConfig().NumberOfColumns
+
+			for root, missingColumns := range missingColumnsFromRoot {
+				missingColumnsCount := uint64(len(missingColumns))
+				var missingColumnsLog interface{} = "all"
+
+				if missingColumnsCount < numberOfColumns {
+					missingColumnsLog = sortedSliceFromMap(missingColumns)
+				}
+
+				slot := blockFromRoot[root].Block().Slot()
 				log.WithFields(logrus.Fields{
-					"peer":    peer,
-					"root":    fmt.Sprintf("%#x", root),
-					"slot":    blockFromRoot[root].Block().Slot(),
-					"columns": columns,
+					"peer":           peer,
+					"root":           fmt.Sprintf("%#x", root),
+					"slot":           slot,
+					"missingColumns": missingColumnsLog,
 				}).Debug("Peer did not correctly return data columns")
 			}
 		}

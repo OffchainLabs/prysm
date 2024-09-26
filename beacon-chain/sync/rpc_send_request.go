@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"slices"
 	"sort"
 
 	"github.com/libp2p/go-libp2p/core/network"
@@ -340,15 +341,28 @@ func SendDataColumnsByRangeRequest(
 ) ([]blocks.RODataColumn, error) {
 	topic, err := p2p.TopicFromMessage(p2p.DataColumnSidecarsByRangeName, slots.ToEpoch(tor.CurrentSlot()))
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "topic from message")
 	}
+
+	var columnsLog interface{} = "all"
+	numberOfColumns := params.BeaconConfig().NumberOfColumns
+	columnsCount := uint64(len(req.Columns))
+
+	if columnsCount < numberOfColumns {
+		columns := req.Columns
+		slices.Sort[[]uint64](columns)
+		columnsLog = columns
+	}
+
 	log.WithFields(logrus.Fields{
+		"peer":       pid,
 		"topic":      topic,
 		"startSlot":  req.StartSlot,
 		"count":      req.Count,
-		"columns":    req.Columns,
+		"columns":    columnsLog,
 		"totalCount": req.Count * uint64(len(req.Columns)),
 	}).Debug("Sending data column by range request")
+
 	stream, err := p2pApi.Send(ctx, req, topic, pid)
 	if err != nil {
 		return nil, err
