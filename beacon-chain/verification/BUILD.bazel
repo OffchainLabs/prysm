@@ -86,6 +86,7 @@ go_test(
         "//runtime/interop:go_default_library",
         "//testing/require:go_default_library",
         "//testing/util:go_default_library",
+        "//testing/util/random:go_default_library",
         "//time/slots:go_default_library",
         "@com_github_pkg_errors//:go_default_library",
         "@com_github_stretchr_testify//require:go_default_library",
