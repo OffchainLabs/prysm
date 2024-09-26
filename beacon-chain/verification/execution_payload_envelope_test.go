@@ -13,6 +13,7 @@ import (
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"github.com/prysmaticlabs/prysm/v5/testing/util"
+	"github.com/prysmaticlabs/prysm/v5/testing/util/random"
 )
 
 func TestExecutionPayloadEnvelope_VerifyBlockRootSeen(t *testing.T) {
@@ -188,6 +189,7 @@ func TestExecutionPayloadEnvelope_VerifySignature(t *testing.T) {
 			BaseFeePerGas: make([]byte, 32),
 			BlockHash:     make([]byte, 32),
 		},
+		ExecutionRequests:  random.ExecutionRequests(t),
 		BuilderIndex:       builderIndexWanted,
 		BeaconBlockRoot:    make([]byte, 32),
 		BlobKzgCommitments: [][]byte{make([]byte, 48), make([]byte, 48), make([]byte, 48)},
