@@ -698,10 +698,10 @@ func (s *Service) subscribeDynamicWithSyncSubnets(
 	// Retrieve the current slot.
 	currentSlot := s.cfg.clock.CurrentSlot()
 
-	// Subscribe to the sync subnets.
-	s.subscribeToSyncSubnets(topicFormat, digest, genesisValidatorsRoot, genesisTime, subscriptions, currentSlot, validate, handle)
-
 	go func() {
+		// Subscribe to the sync subnets.
+		s.subscribeToSyncSubnets(topicFormat, digest, genesisValidatorsRoot, genesisTime, subscriptions, currentSlot, validate, handle)
+
 		for {
 			select {
 			case currentSlot := <-ticker.C():
