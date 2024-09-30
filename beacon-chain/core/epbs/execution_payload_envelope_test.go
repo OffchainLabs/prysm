@@ -17,6 +17,7 @@ func TestProcessPayloadStateTransition(t *testing.T) {
 	bh := [32]byte{'h'}
 	p := random.ExecutionPayloadEnvelope(t)
 	p.Payload.BlockHash = bh[:]
+	p.ExecutionRequests = &enginev1.ExecutionRequests{}
 	e, err := blocks.WrappedROExecutionPayloadEnvelope(p)
 	require.NoError(t, err)
 	validators := make([]*ethpb.Validator, 0)

@@ -80,6 +80,7 @@ func Test_ReceiveExecutionPayloadEnvelope(t *testing.T) {
 		BeaconBlockRoot:    service.originBlockRoot[:],
 		BlobKzgCommitments: make([][]byte, 0),
 		StateRoot:          make([]byte, 32),
+		ExecutionRequests:  &enginev1.ExecutionRequests{},
 	}
 	e, err := blocks.WrappedROExecutionPayloadEnvelope(p)
 	require.NoError(t, err)
