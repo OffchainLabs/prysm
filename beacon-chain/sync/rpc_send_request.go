@@ -354,14 +354,14 @@ func SendDataColumnsByRangeRequest(
 		columnsLog = columns
 	}
 
-	log.WithFields(logrus.Fields{
+	log := log.WithFields(logrus.Fields{
 		"peer":       pid,
 		"topic":      topic,
 		"startSlot":  req.StartSlot,
 		"count":      req.Count,
 		"columns":    columnsLog,
 		"totalCount": req.Count * uint64(len(req.Columns)),
-	}).Debug("Sending data column by range request")
+	})
 
 	stream, err := p2pApi.Send(ctx, req, topic, pid)
 	if err != nil {
@@ -391,19 +391,19 @@ func SendDataColumnsByRangeRequest(
 		}
 
 		if err != nil {
-			log.WithError(err).WithField("peer", pid).Debug("Error reading chunked data column sidecar")
+			log.WithError(err).Debug("Error reading chunked data column sidecar")
 			break
 		}
 
 		if roDataColumn == nil {
-			log.WithError(err).WithField("peer", pid).Debug("Validation error")
+			log.WithError(err).Debug("Validation error")
 			continue
 		}
 
 		if i >= max {
 			// The response MUST contain no more than `reqCount` blocks.
 			// (`reqCount` is already capped by `maxRequestDataColumnSideCar`.)
-			log.WithError(err).WithField("peer", pid).Debug("Response contains more data column sidecars than maximum")
+			log.WithError(err).Debug("Response contains more data column sidecars than maximum")
 			break
 		}
 
