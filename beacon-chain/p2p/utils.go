@@ -184,18 +184,21 @@ func ConvertPeerIDToNodeID(pid peer.ID) (enode.ID, error) {
 	// Retrieve the public key object of the peer under "crypto" form.
 	pubkeyObjCrypto, err := pid.ExtractPublicKey()
 	if err != nil {
-		return [32]byte{}, errors.Wrap(err, "extract public key")
+		return [32]byte{}, errors.Wrapf(err, "extract public key from peer ID `%s`", pid)
 	}
+
 	// Extract the bytes representation of the public key.
 	compressedPubKeyBytes, err := pubkeyObjCrypto.Raw()
 	if err != nil {
 		return [32]byte{}, errors.Wrap(err, "public key raw")
 	}
+
 	// Retrieve the public key object of the peer under "SECP256K1" form.
 	pubKeyObjSecp256k1, err := btcec.ParsePubKey(compressedPubKeyBytes)
 	if err != nil {
 		return [32]byte{}, errors.Wrap(err, "parse public key")
 	}
+
 	newPubkey := &ecdsa.PublicKey{Curve: gCrypto.S256(), X: pubKeyObjSecp256k1.X(), Y: pubKeyObjSecp256k1.Y()}
 	return enode.PubkeyToIDV4(newPubkey), nil
 }

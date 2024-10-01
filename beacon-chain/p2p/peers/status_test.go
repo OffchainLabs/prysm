@@ -603,8 +603,11 @@ func TestTrimmedOrderedPeers(t *testing.T) {
 		},
 	})
 
-	expectedTarget := primitives.Epoch(2)
-	maxPeers := 3
+	const (
+		expectedTarget = primitives.Epoch(2)
+		maxPeers       = 3
+	)
+
 	var mockroot2 [32]byte
 	var mockroot3 [32]byte
 	var mockroot4 [32]byte
@@ -613,6 +616,7 @@ func TestTrimmedOrderedPeers(t *testing.T) {
 	copy(mockroot3[:], "three")
 	copy(mockroot4[:], "four")
 	copy(mockroot5[:], "five")
+
 	// Peer 1
 	pid1 := addPeer(t, p, peers.PeerConnected)
 	p.SetChainState(pid1, &pb.Status{
@@ -620,6 +624,7 @@ func TestTrimmedOrderedPeers(t *testing.T) {
 		FinalizedEpoch: 3,
 		FinalizedRoot:  mockroot3[:],
 	})
+
 	// Peer 2
 	pid2 := addPeer(t, p, peers.PeerConnected)
 	p.SetChainState(pid2, &pb.Status{
@@ -627,6 +632,7 @@ func TestTrimmedOrderedPeers(t *testing.T) {
 		FinalizedEpoch: 4,
 		FinalizedRoot:  mockroot4[:],
 	})
+
 	// Peer 3
 	pid3 := addPeer(t, p, peers.PeerConnected)
 	p.SetChainState(pid3, &pb.Status{
@@ -634,6 +640,7 @@ func TestTrimmedOrderedPeers(t *testing.T) {
 		FinalizedEpoch: 5,
 		FinalizedRoot:  mockroot5[:],
 	})
+
 	// Peer 4
 	pid4 := addPeer(t, p, peers.PeerConnected)
 	p.SetChainState(pid4, &pb.Status{
@@ -641,6 +648,7 @@ func TestTrimmedOrderedPeers(t *testing.T) {
 		FinalizedEpoch: 2,
 		FinalizedRoot:  mockroot2[:],
 	})
+
 	// Peer 5
 	pid5 := addPeer(t, p, peers.PeerConnected)
 	p.SetChainState(pid5, &pb.Status{
@@ -867,14 +875,14 @@ func TestStatus_BestPeer(t *testing.T) {
 		headSlot       primitives.Slot
 		finalizedEpoch primitives.Epoch
 	}
+
 	tests := []struct {
-		name              string
-		peers             []*peerConfig
-		limitPeers        int
-		ourFinalizedEpoch primitives.Epoch
-		targetEpoch       primitives.Epoch
-		// targetEpochSupport denotes how many peers support returned epoch.
-		targetEpochSupport int
+		name               string
+		peers              []*peerConfig
+		limitPeers         int
+		ourFinalizedEpoch  primitives.Epoch
+		targetEpoch        primitives.Epoch
+		targetEpochSupport int // Denotes how many peers support returned epoch.
 	}{
 		{
 			name: "head slot matches finalized epoch",
@@ -887,6 +895,7 @@ func TestStatus_BestPeer(t *testing.T) {
 				{finalizedEpoch: 3, headSlot: 3 * params.BeaconConfig().SlotsPerEpoch},
 			},
 			limitPeers:         15,
+			ourFinalizedEpoch:  0,
 			targetEpoch:        4,
 			targetEpochSupport: 4,
 		},
@@ -904,6 +913,7 @@ func TestStatus_BestPeer(t *testing.T) {
 				{finalizedEpoch: 3, headSlot: 4 * params.BeaconConfig().SlotsPerEpoch},
 			},
 			limitPeers:         15,
+			ourFinalizedEpoch:  0,
 			targetEpoch:        4,
 			targetEpochSupport: 4,
 		},
@@ -918,6 +928,7 @@ func TestStatus_BestPeer(t *testing.T) {
 				{finalizedEpoch: 3, headSlot: 42 * params.BeaconConfig().SlotsPerEpoch},
 			},
 			limitPeers:         15,
+			ourFinalizedEpoch:  0,
 			targetEpoch:        4,
 			targetEpochSupport: 4,
 		},
@@ -932,8 +943,8 @@ func TestStatus_BestPeer(t *testing.T) {
 				{finalizedEpoch: 3, headSlot: 46 * params.BeaconConfig().SlotsPerEpoch},
 				{finalizedEpoch: 6, headSlot: 6 * params.BeaconConfig().SlotsPerEpoch},
 			},
-			ourFinalizedEpoch:  5,
 			limitPeers:         15,
+			ourFinalizedEpoch:  5,
 			targetEpoch:        6,
 			targetEpochSupport: 1,
 		},
@@ -952,8 +963,8 @@ func TestStatus_BestPeer(t *testing.T) {
 				{finalizedEpoch: 7, headSlot: 7 * params.BeaconConfig().SlotsPerEpoch},
 				{finalizedEpoch: 8, headSlot: 8 * params.BeaconConfig().SlotsPerEpoch},
 			},
-			ourFinalizedEpoch:  5,
 			limitPeers:         15,
+			ourFinalizedEpoch:  5,
 			targetEpoch:        6,
 			targetEpochSupport: 5,
 		},
@@ -972,8 +983,8 @@ func TestStatus_BestPeer(t *testing.T) {
 				{finalizedEpoch: 7, headSlot: 7 * params.BeaconConfig().SlotsPerEpoch},
 				{finalizedEpoch: 8, headSlot: 8 * params.BeaconConfig().SlotsPerEpoch},
 			},
-			ourFinalizedEpoch:  5,
 			limitPeers:         4,
+			ourFinalizedEpoch:  5,
 			targetEpoch:        6,
 			targetEpochSupport: 4,
 		},
@@ -988,8 +999,8 @@ func TestStatus_BestPeer(t *testing.T) {
 				{finalizedEpoch: 8, headSlot: 8 * params.BeaconConfig().SlotsPerEpoch},
 				{finalizedEpoch: 8, headSlot: 8 * params.BeaconConfig().SlotsPerEpoch},
 			},
-			ourFinalizedEpoch:  5,
 			limitPeers:         15,
+			ourFinalizedEpoch:  5,
 			targetEpoch:        8,
 			targetEpochSupport: 3,
 		},

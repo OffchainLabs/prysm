@@ -1606,7 +1606,10 @@ func TestFirstLastIndices(t *testing.T) {
 }
 
 func TestFetchDataColumnsFromPeers(t *testing.T) {
-	const blobsCount = 6
+	const (
+		blobsCount    = 6
+		peersHeadSlot = 100
+	)
 
 	testCases := []struct {
 		// Name of the test case.
@@ -2088,6 +2091,12 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 			for _, peer := range peers {
 				peerID := peer.PeerID()
 				peersID = append(peersID, peerID)
+			}
+
+			status := &ethpb.Status{HeadSlot: peersHeadSlot}
+
+			for _, peerID := range peersID {
+				p2pSvc.Peers().SetChainState(peerID, status)
 			}
 
 			// Create `bwb`.

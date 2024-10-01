@@ -104,8 +104,6 @@ func (s *Service) beaconBlocksByRangeRPCHandler(ctx context.Context, msg interfa
 		return err
 	}
 
-	log.Debug("Serving block by range request")
-
 	closeStream(stream, log)
 	return nil
 }
