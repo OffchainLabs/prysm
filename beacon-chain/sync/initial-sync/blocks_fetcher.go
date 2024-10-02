@@ -1061,6 +1061,7 @@ func (f *blocksFetcher) retrieveMissingDataColumnsFromPeers(
 		// Reduce blocks count until the total number of elements is less than the batch size.
 		for missingDataColumnsCount*blocksCount > batchSize {
 			blocksCount /= 2
+			lastSlot = firstSlot + primitives.Slot(blocksCount-1)
 		}
 
 		// If no peer is specified, get all connected peers.
@@ -1103,7 +1104,7 @@ func (f *blocksFetcher) retrieveMissingDataColumnsFromPeers(
 		blockFromRoot := blockFromRoot(bwb[firstIndex : lastIndex+1])
 
 		// Iterate requests over all peers, and exits as soon as at least one data column is retrieved.
-		roDataColumns, _, err := f.requestDataColumnsFromPeers(ctx, request, filteredPeers)
+		roDataColumns, peer, err := f.requestDataColumnsFromPeers(ctx, request, filteredPeers)
 		if err != nil {
 			return errors.Wrap(err, "request data columns from peers")
 		}
@@ -1126,6 +1127,36 @@ func (f *blocksFetcher) retrieveMissingDataColumnsFromPeers(
 
 		// Process the retrieved data columns.
 		processRetrievedDataColumns(roDataColumns, blockFromRoot, indicesFromRoot, missingColumnsFromRoot, bwb, f.cv)
+
+		// Log missing columns after request.
+		if len(missingColumnsFromRoot) > 0 {
+			for root, missingColumns := range missingColumnsFromRoot {
+				slot := blockFromRoot[root].Block().Slot()
+
+				// It's normal to have missing columns for slots higher than the last requested slot.
+				// Skip logging those.
+				if slot > lastSlot {
+					continue
+				}
+
+				missingColumnsCount := uint64(len(missingColumns))
+				var missingColumnsLog interface{} = "all"
+
+				if missingColumnsCount < numberOfColumns {
+					missingColumnsLog = sortedSliceFromMap(missingColumns)
+				}
+
+				log.WithFields(logrus.Fields{
+					"peer":             peer,
+					"root":             fmt.Sprintf("%#x", root),
+					"slot":             slot,
+					"missingColumns":   missingColumnsLog,
+					"requestedColumns": requestedColumnsLog,
+					"requestedStart":   startSlot,
+					"requestedCount":   blocksCount,
+				}).Debug("Peer did not return all requested data columns")
+			}
+		}
 	}
 
 	log.WithField("duration", time.Since(start)).Debug("Retrieving missing data columns from peers - success")
