@@ -134,33 +134,37 @@ func (e *cacheEntry) filter(root [32]byte, kc safeCommitmentArray) ([]blocks.ROB
 	return scs, nil
 }
 
-func (e *cacheEntry) filterColumns(root [32]byte, kc *safeCommitmentsArray) ([]blocks.RODataColumn, error) {
-	if e.diskSummary.AllAvailable(kc.count()) {
+func (e *cacheEntry) filterColumns(root [32]byte, commitmentsArray *safeCommitmentsArray) ([]blocks.RODataColumn, error) {
+	nonEmptyIndices := commitmentsArray.nonEmptyIndices()
+	if e.diskSummary.AllDataColumnsAvailable(nonEmptyIndices) {
 		return nil, nil
 	}
-	scs := make([]blocks.RODataColumn, 0, kc.count())
+
+	commitmentsCount := commitmentsArray.count()
+	sidecars := make([]blocks.RODataColumn, 0, commitmentsCount)
+
 	for i := uint64(0); i < fieldparams.NumberOfColumns; i++ {
-		// We already have this blob, we don't need to write it or validate it.
+		// Skip if we arleady store this data column.
 		if e.diskSummary.HasIndex(i) {
 			continue
 		}
-		if kc[i] == nil {
-			if e.colScs[i] != nil {
-				return nil, errors.Wrapf(errCommitmentMismatch, "root=%#x, index=%#x, commitment=%#x, no block commitment", root, i, e.scs[i].KzgCommitment)
-			}
+
+		if commitmentsArray[i] == nil {
 			continue
 		}
 
 		if e.colScs[i] == nil {
 			return nil, errors.Wrapf(errMissingSidecar, "root=%#x, index=%#x", root, i)
 		}
-		if !reflect.DeepEqual(kc[i], e.colScs[i].KzgCommitments) {
-			return nil, errors.Wrapf(errCommitmentMismatch, "root=%#x, index=%#x, commitment=%#x, block commitment=%#x", root, i, e.colScs[i].KzgCommitments, kc[i])
+
+		if !reflect.DeepEqual(commitmentsArray[i], e.colScs[i].KzgCommitments) {
+			return nil, errors.Wrapf(errCommitmentMismatch, "root=%#x, index=%#x, commitment=%#x, block commitment=%#x", root, i, e.colScs[i].KzgCommitments, commitmentsArray[i])
 		}
-		scs = append(scs, *e.colScs[i])
+
+		sidecars = append(sidecars, *e.colScs[i])
 	}
 
-	return scs, nil
+	return sidecars, nil
 }
 
 // safeCommitmentArray is a fixed size array of commitment byte slices. This is helpful for avoiding
@@ -176,13 +180,32 @@ func (s safeCommitmentArray) count() int {
 	return fieldparams.MaxBlobsPerBlock
 }
 
+// safeCommitmentsArray is a fixed size array of commitments.
+// This is helpful for avoiding gratuitous bounds checks.
 type safeCommitmentsArray [fieldparams.NumberOfColumns][][]byte
 
+// count returns the number of commitments in the array.
 func (s *safeCommitmentsArray) count() int {
+	count := 0
+
 	for i := range s {
-		if s[i] == nil {
-			return i
+		if s[i] != nil {
+			count++
 		}
 	}
-	return fieldparams.NumberOfColumns
+
+	return count
+}
+
+// nonEmptyIndices returns a map of indices that are non-nil in the array.
+func (s *safeCommitmentsArray) nonEmptyIndices() map[uint64]bool {
+	columns := make(map[uint64]bool)
+
+	for i := range s {
+		if s[i] != nil {
+			columns[uint64(i)] = true
+		}
+	}
+
+	return columns
 }

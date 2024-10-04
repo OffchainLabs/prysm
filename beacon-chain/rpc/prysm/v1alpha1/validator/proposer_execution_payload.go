@@ -101,7 +101,7 @@ func (vs *Server) getLocalPayloadFromEngine(
 			return nil, errors.Wrap(err, "could not get cached payload from execution client")
 		}
 	}
-	log.WithFields(logFields).Debug("payload ID cache miss")
+	log.WithFields(logFields).Debug("Payload ID cache miss")
 	parentHash, err := vs.getParentBlockHash(ctx, st, slot)
 	switch {
 	case errors.Is(err, errActivationNotReached) || errors.Is(err, errNoTerminalBlockHash):
@@ -190,7 +190,7 @@ func (vs *Server) getLocalPayloadFromEngine(
 	}
 
 	warnIfFeeRecipientDiffers(val.FeeRecipient[:], res.ExecutionData.FeeRecipient())
-	log.WithField("value", res.Bid).Debug("received execution payload from local engine")
+	log.WithField("value", res.Bid).Debug("Received execution payload from local engine")
 	return res, nil
 }
 

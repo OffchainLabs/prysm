@@ -243,7 +243,9 @@ func (s *Service) handleDA(
 		if err != nil {
 			return 0, err
 		}
-		if err := avs.IsDataAvailable(ctx, s.CurrentSlot(), rob); err != nil {
+
+		nodeID := s.cfg.P2P.NodeID()
+		if err := avs.IsDataAvailable(ctx, nodeID, s.CurrentSlot(), rob); err != nil {
 			return 0, errors.Wrap(err, "could not validate blob data availability (AvailabilityStore.IsDataAvailable)")
 		}
 	} else {

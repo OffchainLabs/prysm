@@ -5,6 +5,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	errors "github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
@@ -124,18 +125,18 @@ func TestLazilyPersistent_Missing(t *testing.T) {
 
 	// Only one commitment persisted, should return error with other indices
 	require.NoError(t, as.Persist(1, scs[2]))
-	err := as.IsDataAvailable(ctx, 1, blk)
+	err := as.IsDataAvailable(ctx, enode.ID{}, 1, blk)
 	require.ErrorIs(t, err, errMissingSidecar)
 
 	// All but one persisted, return missing idx
 	require.NoError(t, as.Persist(1, scs[0]))
-	err = as.IsDataAvailable(ctx, 1, blk)
+	err = as.IsDataAvailable(ctx, enode.ID{}, 1, blk)
 	require.ErrorIs(t, err, errMissingSidecar)
 
 	// All persisted, return nil
 	require.NoError(t, as.Persist(1, scs...))
 
-	require.NoError(t, as.IsDataAvailable(ctx, 1, blk))
+	require.NoError(t, as.IsDataAvailable(ctx, enode.ID{}, 1, blk))
 }
 
 func TestLazilyPersistent_Mismatch(t *testing.T) {
@@ -150,7 +151,7 @@ func TestLazilyPersistent_Mismatch(t *testing.T) {
 
 	// Only one commitment persisted, should return error with other indices
 	require.NoError(t, as.Persist(1, scs[0]))
-	err := as.IsDataAvailable(ctx, 1, blk)
+	err := as.IsDataAvailable(ctx, enode.ID{}, 1, blk)
 	require.NotNil(t, err)
 	require.ErrorIs(t, err, errCommitmentMismatch)
 }

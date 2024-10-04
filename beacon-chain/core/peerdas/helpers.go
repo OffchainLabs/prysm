@@ -94,7 +94,7 @@ func CustodyColumnSubnets(nodeId enode.ID, custodySubnetCount uint64) (map[uint6
 func CustodyColumns(nodeId enode.ID, custodySubnetCount uint64) (map[uint64]bool, error) {
 	dataColumnSidecarSubnetCount := params.BeaconConfig().DataColumnSidecarSubnetCount
 
-	// Compute the custodied subnets.
+	// Compute the custody subnets.
 	subnetIds, err := CustodyColumnSubnets(nodeId, custodySubnetCount)
 	if err != nil {
 		return nil, errors.Wrap(err, "custody subnets")
@@ -408,17 +408,23 @@ func DataColumnSidecarsForReconstruct(
 // VerifyDataColumnSidecarKZGProofs verifies the provided KZG Proofs for the particular
 // data column.
 func VerifyDataColumnSidecarKZGProofs(sc blocks.RODataColumn) (bool, error) {
-	if sc.ColumnIndex >= params.BeaconConfig().NumberOfColumns {
+	numberOfColumns := params.BeaconConfig().NumberOfColumns
+
+	if sc.ColumnIndex >= numberOfColumns {
 		return false, errIndexTooLarge
 	}
+
 	if len(sc.DataColumn) != len(sc.KzgCommitments) || len(sc.KzgCommitments) != len(sc.KzgProof) {
 		return false, errMismatchLength
 	}
 
-	var commitments []kzg.Bytes48
-	var indices []uint64
-	var cells []kzg.Cell
-	var proofs []kzg.Bytes48
+	count := len(sc.DataColumn)
+
+	commitments := make([]kzg.Bytes48, 0, count)
+	indices := make([]uint64, 0, count)
+	cells := make([]kzg.Cell, 0, count)
+	proofs := make([]kzg.Bytes48, 0, count)
+
 	for i := range sc.DataColumn {
 		commitments = append(commitments, kzg.Bytes48(sc.KzgCommitments[i]))
 		indices = append(indices, sc.ColumnIndex)

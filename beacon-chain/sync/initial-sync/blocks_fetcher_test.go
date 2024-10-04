@@ -1370,25 +1370,36 @@ func TestCustodyAllNeededColumns(t *testing.T) {
 		4 * params.BeaconConfig().CustodyRequirement,
 		32 * params.BeaconConfig().CustodyRequirement,
 		4 * params.BeaconConfig().CustodyRequirement,
-		32 * params.BeaconConfig().CustodyRequirement}
-
-	peersID := make([]peer.ID, 0, len(custodyCounts))
-	for _, custodyCount := range custodyCounts {
-		peerRecord, peerID := createPeer(t, len(peersID), custodyCount)
-		peersID = append(peersID, peerID)
-		p2p.Peers().Add(peerRecord, peerID, nil, network.DirOutbound)
+		32 * params.BeaconConfig().CustodyRequirement,
 	}
 
-	expected := []peer.ID{peersID[1], peersID[3]}
+	expected := make(map[peer.ID]bool)
 
-	blocksFetcher := newBlocksFetcher(context.Background(), &blocksFetcherConfig{
-		p2p: p2p,
-	})
+	peersID := make(map[peer.ID]bool, len(custodyCounts))
+	for _, custodyCount := range custodyCounts {
+		peerRecord, peerID := createPeer(t, len(peersID), custodyCount)
+		peersID[peerID] = true
+		p2p.Peers().Add(peerRecord, peerID, nil, network.DirOutbound)
+		if custodyCount == 32*params.BeaconConfig().CustodyRequirement {
+			expected[peerID] = true
+		}
+	}
+
+	blocksFetcher := newBlocksFetcher(
+		context.Background(),
+		&blocksFetcherConfig{
+			p2p: p2p,
+		},
+	)
 
 	actual, err := blocksFetcher.custodyAllNeededColumns(peersID, dataColumns)
 	require.NoError(t, err)
 
-	require.DeepSSZEqual(t, expected, actual)
+	require.Equal(t, len(expected), len(actual))
+	for peerID := range expected {
+		_, ok := actual[peerID]
+		require.Equal(t, true, ok)
+	}
 }
 
 func TestCustodyColumns(t *testing.T) {

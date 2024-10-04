@@ -3,6 +3,7 @@ package das
 import (
 	"context"
 
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 )
@@ -16,7 +17,7 @@ type MockAvailabilityStore struct {
 var _ AvailabilityStore = &MockAvailabilityStore{}
 
 // IsDataAvailable satisfies the corresponding method of the AvailabilityStore interface in a way that is useful for tests.
-func (m *MockAvailabilityStore) IsDataAvailable(ctx context.Context, current primitives.Slot, b blocks.ROBlock) error {
+func (m *MockAvailabilityStore) IsDataAvailable(ctx context.Context, _ enode.ID, current primitives.Slot, b blocks.ROBlock) error {
 	if m.VerifyAvailabilityCallback != nil {
 		return m.VerifyAvailabilityCallback(ctx, current, b)
 	}

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/paulbellamy/ratecounter"
 	"github.com/pkg/errors"
@@ -408,7 +409,10 @@ func (s *Service) fetchOriginBlobs(pids []peer.ID) error {
 		if err := avs.Persist(current, sidecars...); err != nil {
 			return err
 		}
-		if err := avs.IsDataAvailable(s.ctx, current, rob); err != nil {
+
+		// node ID is not used for checking blobs data availability.
+		emptyNodeID := enode.ID{}
+		if err := avs.IsDataAvailable(s.ctx, emptyNodeID, current, rob); err != nil {
 			log.WithField("root", fmt.Sprintf("%#x", r)).WithField("peerID", pids[i]).Warn("Blobs from peer for origin block were unusable")
 			continue
 		}
@@ -462,7 +466,9 @@ func (s *Service) fetchOriginColumns(pids []peer.ID) error {
 		if err := avs.PersistColumns(current, sidecars...); err != nil {
 			return err
 		}
-		if err := avs.IsDataAvailable(s.ctx, current, rob); err != nil {
+
+		nodeID := s.cfg.P2P.NodeID()
+		if err := avs.IsDataAvailable(s.ctx, nodeID, current, rob); err != nil {
 			log.WithField("root", fmt.Sprintf("%#x", r)).WithField("peerID", pids[i]).Warn("Columns from peer for origin block were unusable")
 			continue
 		}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	errors "github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
@@ -80,7 +81,7 @@ func (s *LazilyPersistentStore) Persist(current primitives.Slot, sc ...blocks.RO
 
 // IsDataAvailable returns nil if all the commitments in the given block are persisted to the db and have been verified.
 // BlobSidecars already in the db are assumed to have been previously verified against the block.
-func (s *LazilyPersistentStore) IsDataAvailable(ctx context.Context, current primitives.Slot, b blocks.ROBlock) error {
+func (s *LazilyPersistentStore) IsDataAvailable(ctx context.Context, _ enode.ID, current primitives.Slot, b blocks.ROBlock) error {
 	blockCommitments, err := commitmentsToCheck(b, current)
 	if err != nil {
 		return errors.Wrapf(err, "could check data availability for block %#x", b.Root())

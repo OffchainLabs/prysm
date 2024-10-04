@@ -104,6 +104,7 @@ func setupBeaconChain(t *testing.T, beaconDB db.Database) *Service {
 		WithStateGen(stateGen),
 		WithPayloadIDCache(cache.NewPayloadIDCache()),
 		WithClockSynchronizer(startup.NewClockSynchronizer()),
+		WithP2PBroadcaster(&mockAccesser{}),
 	}
 
 	chainService, err := NewService(ctx, opts...)

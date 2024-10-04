@@ -705,11 +705,11 @@ func (f *blocksFetcher) blocksWithMissingDataColumnsBoundaries(
 }
 
 // custodyAllNeededColumns filter `inputPeers` that custody all columns in `columns`.
-func (f *blocksFetcher) custodyAllNeededColumns(inputPeers []peer.ID, columns map[uint64]bool) ([]peer.ID, error) {
-	outputPeers := make([]peer.ID, 0, len(inputPeers))
+func (f *blocksFetcher) custodyAllNeededColumns(inputPeers map[peer.ID]bool, columns map[uint64]bool) (map[peer.ID]bool, error) {
+	outputPeers := make(map[peer.ID]bool, len(inputPeers))
 
 loop:
-	for _, peer := range inputPeers {
+	for peer := range inputPeers {
 		// Get the node ID from the peer ID.
 		nodeID, err := p2p.ConvertPeerIDToNodeID(peer)
 		if err != nil {
@@ -731,7 +731,7 @@ loop:
 			}
 		}
 
-		outputPeers = append(outputPeers, peer)
+		outputPeers[peer] = true
 	}
 
 	return outputPeers, nil
@@ -842,11 +842,16 @@ func maxInt(slice []int) int {
 func (f *blocksFetcher) requestDataColumnsFromPeers(
 	ctx context.Context,
 	request *p2ppb.DataColumnSidecarsByRangeRequest,
-	peers []peer.ID,
+	peers map[peer.ID]bool,
 ) ([]blocks.RODataColumn, peer.ID, error) {
+	peersSlice := make([]peer.ID, 0, len(peers))
+	for peer := range peers {
+		peersSlice = append(peersSlice, peer)
+	}
+
 	// Shuffle peers to avoid always querying the same peers
-	f.rand.Shuffle(len(peers), func(i, j int) {
-		peers[i], peers[j] = peers[j], peers[i]
+	f.rand.Shuffle(len(peersSlice), func(i, j int) {
+		peersSlice[i], peersSlice[j] = peersSlice[j], peersSlice[i]
 	})
 
 	var columnsLog interface{} = "all"
@@ -863,7 +868,7 @@ func (f *blocksFetcher) requestDataColumnsFromPeers(
 		"items":   request.Count * columnsCount,
 	})
 
-	for _, peer := range peers {
+	for _, peer := range peersSlice {
 		log := log.WithField("peer", peer)
 
 		if ctx.Err() != nil {
@@ -1071,7 +1076,7 @@ func (f *blocksFetcher) retrieveMissingDataColumnsFromPeers(
 		}
 
 		// Filter peers.
-		filteredPeers, err := f.peersWithSlotAndDataColumns(peersToFilter, lastSlot, missingDataColumns)
+		filteredPeers, descriptions, err := f.peersWithSlotAndDataColumns(peersToFilter, lastSlot, missingDataColumns)
 		if err != nil {
 			return errors.Wrap(err, "peers with slot and data columns")
 		}
@@ -1081,10 +1086,15 @@ func (f *blocksFetcher) retrieveMissingDataColumnsFromPeers(
 				WithFields(logrus.Fields{
 					"peers":         peersToFilter,
 					"filteredPeers": filteredPeers,
-					"delay":         delay,
+					"waitDuration":  delay,
 					"targetSlot":    lastSlot,
 				}).
 				Warning("No peers available to retrieve missing data columns, retrying later")
+
+			// If no peers are available, log the descriptions to help debugging.
+			for _, description := range descriptions {
+				log.Debug(description)
+			}
 
 			time.Sleep(delay)
 			continue
@@ -1112,7 +1122,7 @@ func (f *blocksFetcher) retrieveMissingDataColumnsFromPeers(
 		if len(roDataColumns) == 0 {
 			log.
 				WithFields(logrus.Fields{
-					"peers":         peers,
+					"peers":         peersToFilter,
 					"filteredPeers": filteredPeers,
 					"delay":         delay,
 					"start":         startSlot,

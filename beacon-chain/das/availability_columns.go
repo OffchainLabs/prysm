@@ -6,6 +6,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	errors "github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
@@ -75,39 +76,58 @@ func (s *LazilyPersistentStoreColumn) PersistColumns(current primitives.Slot, sc
 
 // IsDataAvailable returns nil if all the commitments in the given block are persisted to the db and have been verified.
 // BlobSidecars already in the db are assumed to have been previously verified against the block.
-func (s *LazilyPersistentStoreColumn) IsDataAvailable(ctx context.Context, current primitives.Slot, b blocks.ROBlock) error {
-	blockCommitments, err := fullCommitmentsToCheck(b, current)
+func (s *LazilyPersistentStoreColumn) IsDataAvailable(
+	ctx context.Context,
+	nodeID enode.ID,
+	currentSlot primitives.Slot,
+	block blocks.ROBlock,
+) error {
+	blockCommitments, err := fullCommitmentsToCheck(nodeID, block, currentSlot)
 	if err != nil {
-		return errors.Wrapf(err, "could check data availability for block %#x", b.Root())
+		return errors.Wrapf(err, "full commitments to check with block root `%#x` and current slot `%d`", block.Root(), currentSlot)
 	}
-	// Return early for blocks that are pre-deneb or which do not have any commitments.
+
+	// Return early for blocks that do not have any commitments.
 	if blockCommitments.count() == 0 {
 		return nil
 	}
 
-	key := keyFromBlock(b)
+	// Build the cache key for the block.
+	key := keyFromBlock(block)
+
+	// Retrieve the cache entry for the block, or create an empty one if it doesn't exist.
 	entry := s.cache.ensure(key)
+
+	// Delete the cache entry for the block at the end.
 	defer s.cache.delete(key)
-	root := b.Root()
-	sumz, err := s.store.WaitForSummarizer(ctx)
+
+	// Get the root of the block.
+	blockRoot := block.Root()
+
+	// Wait for the summarizer to be ready before proceeding.
+	summarizer, err := s.store.WaitForSummarizer(ctx)
 	if err != nil {
-		log.WithField("root", fmt.Sprintf("%#x", b.Root())).
+		log.
+			WithField("root", fmt.Sprintf("%#x", blockRoot)).
 			WithError(err).
 			Debug("Failed to receive BlobStorageSummarizer within IsDataAvailable")
 	} else {
-		entry.setDiskSummary(sumz.Summary(root))
+		// Get the summary for the block, and set it in the cache entry.
+		summary := summarizer.Summary(blockRoot)
+		entry.setDiskSummary(summary)
 	}
 
 	// Verify we have all the expected sidecars, and fail fast if any are missing or inconsistent.
 	// We don't try to salvage problematic batches because this indicates a misbehaving peer and we'd rather
 	// ignore their response and decrease their peer score.
-	sidecars, err := entry.filterColumns(root, &blockCommitments)
+	sidecars, err := entry.filterColumns(blockRoot, blockCommitments)
 	if err != nil {
 		return errors.Wrap(err, "incomplete BlobSidecar batch")
 	}
-	// Do thorough verifications of each BlobSidecar for the block.
-	// Same as above, we don't save BlobSidecars if there are any problems with the batch.
-	vscs, err := s.verifier.VerifiedRODataColumns(ctx, b, sidecars)
+
+	// Do thorough verifications of each RODataColumns for the block.
+	// Same as above, we don't save DataColumnsSidecars if there are any problems with the batch.
+	vscs, err := s.verifier.VerifiedRODataColumns(ctx, block, sidecars)
 	if err != nil {
 		var me verification.VerificationMultiError
 		ok := errors.As(err, &me)
@@ -120,33 +140,62 @@ func (s *LazilyPersistentStoreColumn) IsDataAvailable(ctx context.Context, curre
 			log.WithFields(lf).
 				Debug("invalid ColumnSidecars received")
 		}
-		return errors.Wrapf(err, "invalid ColumnSidecars received for block %#x", root)
+		return errors.Wrapf(err, "invalid ColumnSidecars received for block %#x", blockRoot)
 	}
+
 	// Ensure that each column sidecar is written to disk.
 	for i := range vscs {
 		if err := s.store.SaveDataColumn(vscs[i]); err != nil {
-			return errors.Wrapf(err, "failed to save ColumnSidecar index %d for block %#x", vscs[i].ColumnIndex, root)
+			return errors.Wrapf(err, "save data columns for index `%d` for block `%#x`", vscs[i].ColumnIndex, blockRoot)
 		}
 	}
-	// All ColumnSidecars are persisted - da check succeeds.
+
+	// All ColumnSidecars are persisted - data availability check succeeds.
 	return nil
 }
 
-func fullCommitmentsToCheck(b blocks.ROBlock, current primitives.Slot) (safeCommitmentsArray, error) {
-	var ar safeCommitmentsArray
-	if b.Version() < version.Deneb {
-		return ar, nil
+// fullCommitmentsToCheck returns the commitments to check for a given block.
+func fullCommitmentsToCheck(nodeID enode.ID, block blocks.ROBlock, currentSlot primitives.Slot) (*safeCommitmentsArray, error) {
+	// Return early for blocks that are pre-deneb.
+	if block.Version() < version.Deneb {
+		return &safeCommitmentsArray{}, nil
 	}
-	// We are only required to check within MIN_EPOCHS_FOR_DATA_COLUMN_SIDECARS_REQUESTS
-	if !params.WithinDAPeriod(slots.ToEpoch(b.Block().Slot()), slots.ToEpoch(current)) {
-		return ar, nil
+
+	// Compute the block epoch.
+	blockSlot := block.Block().Slot()
+	blockEpoch := slots.ToEpoch(blockSlot)
+
+	// Compute the current spoch.
+	currentEpoch := slots.ToEpoch(currentSlot)
+
+	// Return early if the request is out of the MIN_EPOCHS_FOR_DATA_COLUMN_SIDECARS_REQUESTS window.
+	if !params.WithinDAPeriod(blockEpoch, currentEpoch) {
+		return &safeCommitmentsArray{}, nil
 	}
-	kc, err := b.Block().Body().BlobKzgCommitments()
+
+	// Retrieve the KZG commitments for the block.
+	kzgCommitments, err := block.Block().Body().BlobKzgCommitments()
 	if err != nil {
-		return ar, err
+		return nil, errors.Wrap(err, "blob KZG commitments")
 	}
-	for i := range ar {
-		copy(ar[i], kc)
+
+	// Return early if there are no commitments in the block.
+	if len(kzgCommitments) == 0 {
+		return &safeCommitmentsArray{}, nil
 	}
-	return ar, nil
+
+	// Retrieve the custody columns.
+	custodySubnetCount := peerdas.CustodySubnetCount()
+	custodyColumns, err := peerdas.CustodyColumns(nodeID, custodySubnetCount)
+	if err != nil {
+		return nil, errors.Wrap(err, "custody columns")
+	}
+
+	// Create a safe commitments array for the custody columns.
+	commitmentsArray := &safeCommitmentsArray{}
+	for column := range custodyColumns {
+		commitmentsArray[column] = kzgCommitments
+	}
+
+	return commitmentsArray, nil
 }

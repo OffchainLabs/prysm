@@ -233,7 +233,9 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 				return err
 			}
 		}
-		if err := avs.IsDataAvailable(ctx, s.CurrentSlot(), b); err != nil {
+
+		nodeID := s.cfg.P2P.NodeID()
+		if err := avs.IsDataAvailable(ctx, nodeID, s.CurrentSlot(), b); err != nil {
 			return errors.Wrapf(err, "could not validate blob data availability at slot %d", b.Block().Slot())
 		}
 		args := &forkchoicetypes.BlockAndCheckpoints{Block: b,

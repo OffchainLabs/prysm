@@ -234,12 +234,18 @@ func syncFields(b blocks.ROBlock) logrus.Fields {
 }
 
 // highestFinalizedEpoch returns the absolute highest finalized epoch of all connected peers.
-// Note this can be lower than our finalized epoch if we have no peers or peers that are all behind us.
+// It returns `0` if no peers are connected.
+// Note this can be lower than our finalized epoch if our connected peers are all behind us.
 func (s *Service) highestFinalizedEpoch() primitives.Epoch {
 	highest := primitives.Epoch(0)
 	for _, pid := range s.cfg.P2P.Peers().Connected() {
 		peerChainState, err := s.cfg.P2P.Peers().ChainState(pid)
-		if err == nil && peerChainState != nil && peerChainState.FinalizedEpoch > highest {
+
+		if err != nil || peerChainState == nil {
+			continue
+		}
+
+		if peerChainState.FinalizedEpoch > highest {
 			highest = peerChainState.FinalizedEpoch
 		}
 	}
