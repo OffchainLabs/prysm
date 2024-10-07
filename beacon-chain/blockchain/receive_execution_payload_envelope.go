@@ -25,10 +25,7 @@ import (
 //  3. Save latest head info
 func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, envelope interfaces.ROExecutionPayloadEnvelope, _ das.AvailabilityStore) error {
 	receivedTime := time.Now()
-	root, err := envelope.BeaconBlockRoot()
-	if err != nil {
-		return errors.Wrap(err, "could not get beacon block root")
-	}
+	root := envelope.BeaconBlockRoot()
 	s.payloadBeingSynced.set(root)
 	defer s.payloadBeingSynced.unset(root)
 
@@ -81,22 +78,14 @@ func (s *Service) notifyNewEnvelope(ctx context.Context, envelope interfaces.ROE
 		return false, errors.Wrap(err, "could not get execution payload")
 	}
 
-	var lastValidHash []byte
-	var versionedHashes []common.Hash
-	versionedHashes, err = envelope.VersionedHashes()
-	if err != nil {
-		return false, errors.Wrap(err, "could not get versioned hashes to feed the engine")
-	}
-	root, err := envelope.BeaconBlockRoot()
-	if err != nil {
-		return false, errors.Wrap(err, "could not get beacon block root")
-	}
+	versionedHashes := envelope.VersionedHashes()
+	root := envelope.BeaconBlockRoot()
 	parentRoot, err := s.ParentRoot(root)
 	if err != nil {
 		return false, errors.Wrap(err, "could not get parent block root")
 	}
 	pr := common.Hash(parentRoot)
-	lastValidHash, err = s.cfg.ExecutionEngineCaller.NewPayload(ctx, payload, versionedHashes, &pr)
+	lastValidHash, err := s.cfg.ExecutionEngineCaller.NewPayload(ctx, payload, versionedHashes, &pr)
 	switch {
 	case err == nil:
 		newPayloadValidNodeCount.Inc()
@@ -124,10 +113,7 @@ func (s *Service) validateExecutionOnEnvelope(ctx context.Context, e interfaces.
 	if err == nil {
 		return isValidPayload, nil
 	}
-	blockRoot, rootErr := e.BeaconBlockRoot()
-	if rootErr != nil {
-		return false, errors.Wrap(rootErr, "could not get beacon block root")
-	}
+	blockRoot := e.BeaconBlockRoot()
 	parentRoot, rootErr := s.ParentRoot(blockRoot)
 	if rootErr != nil {
 		return false, errors.Wrap(rootErr, "could not get parent block root")
@@ -143,10 +129,7 @@ func (s *Service) getPayloadEnvelopePrestate(ctx context.Context, e interfaces.R
 	defer span.End()
 
 	// Verify incoming payload has a valid pre state.
-	root, err := e.BeaconBlockRoot()
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get beacon block root")
-	}
+	root := e.BeaconBlockRoot()
 	// Verify the referred block is known to forkchoice
 	if !s.InForkchoice(root) {
 		return nil, errors.New("Cannot import execution payload envelope for unknown block")

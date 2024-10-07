@@ -95,15 +95,9 @@ func (v *PayloadAttMsgVerifier) VerifyPayloadStatus() (err error) {
 // [IGNORE] The attestation's data.beacon_block_root has been seen (via both gossip and non-gossip sources).
 func (v *PayloadAttMsgVerifier) VerifyBlockRootSeen(parentSeen func([32]byte) bool) (err error) {
 	defer v.record(RequireBlockRootSeen, &err)
-
 	if parentSeen != nil && parentSeen(v.pa.BeaconBlockRoot()) {
 		return nil
 	}
-
-	if v.fc.HasNode(v.pa.BeaconBlockRoot()) {
-		return nil
-	}
-
 	log.WithFields(logFields(v.pa)).Error(ErrPayloadAttBlockRootNotSeen.Error())
 	return ErrPayloadAttBlockRootNotSeen
 }

@@ -103,6 +103,7 @@ type BeaconNode struct {
 	depositCache            cache.DepositCache
 	trackedValidatorsCache  *cache.TrackedValidatorsCache
 	payloadAttestationCache *cache.PayloadAttestationCache
+	payloadEnvelopeCache    *sync.Map
 	payloadIDCache          *cache.PayloadIDCache
 	stateFeed               *event.Feed
 	blockFeed               *event.Feed
@@ -155,6 +156,7 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 		blsToExecPool:           blstoexec.NewPool(),
 		trackedValidatorsCache:  cache.NewTrackedValidatorsCache(),
 		payloadAttestationCache: &cache.PayloadAttestationCache{},
+		payloadEnvelopeCache:    &sync.Map{},
 		payloadIDCache:          cache.NewPayloadIDCache(),
 		slasherBlockHeadersFeed: new(event.Feed),
 		slasherAttestationsFeed: new(event.Feed),
@@ -776,6 +778,7 @@ func (b *BeaconNode) registerBlockchainService(fc forkchoice.ForkChoicer, gs *st
 		blockchain.WithBlobStorage(b.BlobStorage),
 		blockchain.WithTrackedValidatorsCache(b.trackedValidatorsCache),
 		blockchain.WithPayloadAttestationCache(b.payloadAttestationCache),
+		blockchain.WithPayloadEnvelopeCache(b.payloadEnvelopeCache),
 		blockchain.WithPayloadIDCache(b.payloadIDCache),
 		blockchain.WithSyncChecker(b.syncChecker),
 	)
@@ -856,6 +859,7 @@ func (b *BeaconNode) registerSyncService(initialSyncComplete chan struct{}, bFil
 		regularsync.WithSlasherAttestationsFeed(b.slasherAttestationsFeed),
 		regularsync.WithSlasherBlockHeadersFeed(b.slasherBlockHeadersFeed),
 		regularsync.WithPayloadAttestationCache(b.payloadAttestationCache),
+		regularsync.WithPayloadEnvelopeCache(b.payloadEnvelopeCache),
 		regularsync.WithPayloadReconstructor(web3Service),
 		regularsync.WithClockWaiter(b.clockWaiter),
 		regularsync.WithInitialSyncComplete(initialSyncComplete),

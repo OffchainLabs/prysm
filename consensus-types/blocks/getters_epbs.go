@@ -2,7 +2,7 @@ package blocks
 
 import (
 	consensus_types "github.com/prysmaticlabs/prysm/v5/consensus-types"
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 )
@@ -16,9 +16,9 @@ func (b *BeaconBlockBody) PayloadAttestations() ([]*ethpb.PayloadAttestation, er
 }
 
 // SignedExecutionPayloadHeader returns the signed execution payload header in the block.
-func (b *BeaconBlockBody) SignedExecutionPayloadHeader() (*enginev1.SignedExecutionPayloadHeader, error) {
+func (b *BeaconBlockBody) SignedExecutionPayloadHeader() (interfaces.ROSignedExecutionPayloadHeader, error) {
 	if b.version < version.EPBS {
 		return nil, consensus_types.ErrNotSupported("SignedExecutionPayloadHeader", b.version)
 	}
-	return b.signedExecutionPayloadHeader, nil
+	return WrappedROSignedExecutionPayloadHeader(b.signedExecutionPayloadHeader)
 }

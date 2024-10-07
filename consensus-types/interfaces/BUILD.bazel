@@ -7,6 +7,7 @@ go_library(
         "error.go",
         "light_client.go",
         "execution_payload_envelope.go",
+        "signed_execution_payload_header.go",
         "utils.go",
         "validator.go",
     ],

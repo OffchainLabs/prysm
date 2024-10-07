@@ -7,10 +7,10 @@ import (
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	consensus_types "github.com/prysmaticlabs/prysm/v5/consensus-types"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
 	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/util/random"
 )
 
 func Test_EpbsBlock_SetPayloadAttestations(t *testing.T) {
@@ -55,21 +55,11 @@ func Test_EpbsBlock_SetSignedExecutionPayloadHeader(t *testing.T) {
 	b = &SignedBeaconBlock{version: version.EPBS,
 		block: &BeaconBlock{version: version.EPBS,
 			body: &BeaconBlockBody{version: version.EPBS}}}
-	signedExecutionPayloadHeader := &enginev1.SignedExecutionPayloadHeader{
-		Message: &enginev1.ExecutionPayloadHeaderEPBS{
-			ParentBlockHash:        []byte("parentBlockHash"),
-			ParentBlockRoot:        []byte("parentBlockRoot"),
-			BlockHash:              []byte("blockHash"),
-			BuilderIndex:           1,
-			Slot:                   2,
-			Value:                  3,
-			BlobKzgCommitmentsRoot: []byte("blobKzgCommitmentsRoot"),
-			GasLimit:               4,
-		},
-		Signature: []byte("signature"),
-	}
+	signedExecutionPayloadHeader := random.SignedExecutionPayloadHeader(t)
+	ws, err := WrappedROSignedExecutionPayloadHeader(signedExecutionPayloadHeader)
+	require.NoError(t, err)
 	require.NoError(t, b.SetSignedExecutionPayloadHeader(signedExecutionPayloadHeader))
 	expectedHeader, err := b.block.body.SignedExecutionPayloadHeader()
 	require.NoError(t, err)
-	require.DeepEqual(t, expectedHeader, signedExecutionPayloadHeader)
+	require.DeepEqual(t, expectedHeader, ws)
 }

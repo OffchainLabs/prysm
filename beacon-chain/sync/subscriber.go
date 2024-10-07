@@ -181,6 +181,12 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 			s.payloadAttestationSubscriber,
 			digest,
 		)
+		s.subscribe(
+			p2p.SignedExecutionPayloadEnvelopeTopicFormat,
+			s.validateExecutionPayloadEnvelope,
+			s.executionPayloadEnvelopeSubscriber,
+			digest,
+		)
 	}
 }
 

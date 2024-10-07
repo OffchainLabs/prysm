@@ -7,10 +7,11 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/das"
 	mockExecution "github.com/prysmaticlabs/prysm/v5/beacon-chain/execution/testing"
 	forkchoicetypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/types"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/epbs"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"github.com/prysmaticlabs/prysm/v5/testing/util"
+	"github.com/prysmaticlabs/prysm/v5/testing/util/random"
 )
 
 func Test_getPayloadEnvelopePrestate(t *testing.T) {
@@ -21,11 +22,9 @@ func Test_getPayloadEnvelopePrestate(t *testing.T) {
 	require.NoError(t, service.saveGenesisData(ctx, gs))
 	require.NoError(t, fcs.UpdateFinalizedCheckpoint(&forkchoicetypes.Checkpoint{Root: service.originBlockRoot}))
 
-	p := &enginev1.ExecutionPayloadEnvelope{
-		Payload:         &enginev1.ExecutionPayloadElectra{},
-		BeaconBlockRoot: service.originBlockRoot[:],
-	}
-	e, err := epbs.WrappedROExecutionPayloadEnvelope(p)
+	p := random.ExecutionPayloadEnvelope(t)
+	p.BeaconBlockRoot = service.originBlockRoot[:]
+	e, err := blocks.WrappedROExecutionPayloadEnvelope(p)
 	require.NoError(t, err)
 
 	_, err = service.getPayloadEnvelopePrestate(ctx, e)
@@ -38,11 +37,9 @@ func Test_notifyNewEnvelope(t *testing.T) {
 	gs, _ := util.DeterministicGenesisStateEpbs(t, 32)
 	require.NoError(t, service.saveGenesisData(ctx, gs))
 	require.NoError(t, fcs.UpdateFinalizedCheckpoint(&forkchoicetypes.Checkpoint{Root: service.originBlockRoot}))
-	p := &enginev1.ExecutionPayloadEnvelope{
-		Payload:         &enginev1.ExecutionPayloadElectra{},
-		BeaconBlockRoot: service.originBlockRoot[:],
-	}
-	e, err := epbs.WrappedROExecutionPayloadEnvelope(p)
+	p := random.ExecutionPayloadEnvelope(t)
+	p.BeaconBlockRoot = service.originBlockRoot[:]
+	e, err := blocks.WrappedROExecutionPayloadEnvelope(p)
 	require.NoError(t, err)
 	engine := &mockExecution.EngineClient{}
 	service.cfg.ExecutionEngineCaller = engine
@@ -57,11 +54,9 @@ func Test_validateExecutionOnEnvelope(t *testing.T) {
 	gs, _ := util.DeterministicGenesisStateEpbs(t, 32)
 	require.NoError(t, service.saveGenesisData(ctx, gs))
 	require.NoError(t, fcs.UpdateFinalizedCheckpoint(&forkchoicetypes.Checkpoint{Root: service.originBlockRoot}))
-	p := &enginev1.ExecutionPayloadEnvelope{
-		Payload:         &enginev1.ExecutionPayloadElectra{},
-		BeaconBlockRoot: service.originBlockRoot[:],
-	}
-	e, err := epbs.WrappedROExecutionPayloadEnvelope(p)
+	p := random.ExecutionPayloadEnvelope(t)
+	p.BeaconBlockRoot = service.originBlockRoot[:]
+	e, err := blocks.WrappedROExecutionPayloadEnvelope(p)
 	require.NoError(t, err)
 	engine := &mockExecution.EngineClient{}
 	service.cfg.ExecutionEngineCaller = engine
@@ -86,7 +81,7 @@ func Test_ReceiveExecutionPayloadEnvelope(t *testing.T) {
 		BlobKzgCommitments: make([][]byte, 0),
 		StateRoot:          make([]byte, 32),
 	}
-	e, err := epbs.WrappedROExecutionPayloadEnvelope(p)
+	e, err := blocks.WrappedROExecutionPayloadEnvelope(p)
 	require.NoError(t, err)
 	das := &das.MockAvailabilityStore{}
 

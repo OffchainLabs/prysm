@@ -37,6 +37,13 @@ func (ro *ROForkChoice) HasNode(root [32]byte) bool {
 	return ro.getter.HasNode(root)
 }
 
+// HasHash delegates to the underlying forkchoice call, under a lock.
+func (ro *ROForkChoice) HasHash(root [32]byte) bool {
+	ro.l.RLock()
+	defer ro.l.RUnlock()
+	return ro.getter.HasHash(root)
+}
+
 // ProposerBoost delegates to the underlying forkchoice call, under a lock.
 func (ro *ROForkChoice) ProposerBoost() [fieldparams.RootLength]byte {
 	ro.l.RLock()
