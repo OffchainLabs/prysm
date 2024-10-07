@@ -119,6 +119,12 @@ type OptimisticModeFetcher interface {
 	IsOptimisticForRoot(ctx context.Context, root [32]byte) (bool, error)
 }
 
+// ExecutionPayloadFetcher defines a common interface that returns forkchoice
+// information about payload block hashes
+type ExecutionPayloadFetcher interface {
+	HashInForkchoice([32]byte) bool
+}
+
 // FinalizedCheckpt returns the latest finalized checkpoint from chain store.
 func (s *Service) FinalizedCheckpt() *ethpb.Checkpoint {
 	s.cfg.ForkChoiceStore.RLock()
@@ -398,6 +404,14 @@ func (s *Service) InForkchoice(root [32]byte) bool {
 	s.cfg.ForkChoiceStore.RLock()
 	defer s.cfg.ForkChoiceStore.RUnlock()
 	return s.cfg.ForkChoiceStore.HasNode(root)
+}
+
+// HashInForkchoice returns true if the given payload block hash is found in
+// forkchoice
+func (s *Service) HashInForkchoice(hash [32]byte) bool {
+	s.cfg.ForkChoiceStore.RLock()
+	defer s.cfg.ForkChoiceStore.RUnlock()
+	return s.cfg.ForkChoiceStore.HasHash(hash)
 }
 
 // IsOptimisticForRoot takes the root as argument instead of the current head

@@ -58,7 +58,7 @@ func (s *Service) validatePayloadAttestation(ctx context.Context, pid peer.ID, m
 		return pubsub.ValidationReject, err
 	}
 
-	if err := v.VerifyBlockRootSeen(s.hasBadBlock); err != nil {
+	if err := v.VerifyBlockRootSeen(s.seenBlockRoot); err != nil {
 		return pubsub.ValidationIgnore, err
 	}
 

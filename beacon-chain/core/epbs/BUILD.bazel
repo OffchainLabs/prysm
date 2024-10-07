@@ -28,10 +28,11 @@ go_test(
         "//beacon-chain/core/altair:go_default_library",
         "//beacon-chain/state/state-native:go_default_library",
         "//config/params:go_default_library",
-        "//consensus-types/epbs:go_default_library",
+        "//consensus-types/blocks:go_default_library",
         "//proto/engine/v1:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "//testing/require:go_default_library",
         "//testing/util:go_default_library",
+        "//testing/util/random:go_default_library",
     ],
 )

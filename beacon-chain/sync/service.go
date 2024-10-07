@@ -119,49 +119,51 @@ type blockchainService interface {
 // Service is responsible for handling all run time p2p related operations as the
 // main entry point for network messages.
 type Service struct {
-	cfg                              *config
-	ctx                              context.Context
-	cancel                           context.CancelFunc
-	slotToPendingBlocks              *gcache.Cache
-	seenPendingBlocks                map[[32]byte]bool
-	blkRootToPendingAtts             map[[32]byte][]ethpb.SignedAggregateAttAndProof
-	subHandler                       *subTopicHandler
-	payloadAttestationCache          *cache.PayloadAttestationCache
-	pendingAttsLock                  sync.RWMutex
-	pendingQueueLock                 sync.RWMutex
-	chainStarted                     *abool.AtomicBool
-	validateBlockLock                sync.RWMutex
-	rateLimiter                      *limiter
-	seenBlockLock                    sync.RWMutex
-	seenBlockCache                   *lru.Cache
-	seenBlobLock                     sync.RWMutex
-	seenBlobCache                    *lru.Cache
-	seenAggregatedAttestationLock    sync.RWMutex
-	seenAggregatedAttestationCache   *lru.Cache
-	seenUnAggregatedAttestationLock  sync.RWMutex
-	seenUnAggregatedAttestationCache *lru.Cache
-	seenExitLock                     sync.RWMutex
-	seenExitCache                    *lru.Cache
-	seenProposerSlashingLock         sync.RWMutex
-	seenProposerSlashingCache        *lru.Cache
-	seenAttesterSlashingLock         sync.RWMutex
-	seenAttesterSlashingCache        map[uint64]bool
-	seenSyncMessageLock              sync.RWMutex
-	seenSyncMessageCache             *lru.Cache
-	seenSyncContributionLock         sync.RWMutex
-	seenSyncContributionCache        *lru.Cache
-	badBlockCache                    *lru.Cache
-	badBlockLock                     sync.RWMutex
-	syncContributionBitsOverlapLock  sync.RWMutex
-	syncContributionBitsOverlapCache *lru.Cache
-	signatureChan                    chan *signatureVerifier
-	clockWaiter                      startup.ClockWaiter
-	initialSyncComplete              chan struct{}
-	verifierWaiter                   *verification.InitializerWaiter
-	newBlobVerifier                  verification.NewBlobVerifier
-	newPayloadAttestationVerifier    verification.NewPayloadAttestationMsgVerifier
-	availableBlocker                 coverage.AvailableBlocker
-	ctxMap                           ContextByteVersions
+	cfg                                 *config
+	ctx                                 context.Context
+	cancel                              context.CancelFunc
+	slotToPendingBlocks                 *gcache.Cache
+	seenPendingBlocks                   map[[32]byte]bool
+	blkRootToPendingAtts                map[[32]byte][]ethpb.SignedAggregateAttAndProof
+	subHandler                          *subTopicHandler
+	payloadAttestationCache             *cache.PayloadAttestationCache
+	payloadEnvelopeCache                *sync.Map
+	pendingAttsLock                     sync.RWMutex
+	pendingQueueLock                    sync.RWMutex
+	chainStarted                        *abool.AtomicBool
+	validateBlockLock                   sync.RWMutex
+	rateLimiter                         *limiter
+	seenBlockLock                       sync.RWMutex
+	seenBlockCache                      *lru.Cache
+	seenBlobLock                        sync.RWMutex
+	seenBlobCache                       *lru.Cache
+	seenAggregatedAttestationLock       sync.RWMutex
+	seenAggregatedAttestationCache      *lru.Cache
+	seenUnAggregatedAttestationLock     sync.RWMutex
+	seenUnAggregatedAttestationCache    *lru.Cache
+	seenExitLock                        sync.RWMutex
+	seenExitCache                       *lru.Cache
+	seenProposerSlashingLock            sync.RWMutex
+	seenProposerSlashingCache           *lru.Cache
+	seenAttesterSlashingLock            sync.RWMutex
+	seenAttesterSlashingCache           map[uint64]bool
+	seenSyncMessageLock                 sync.RWMutex
+	seenSyncMessageCache                *lru.Cache
+	seenSyncContributionLock            sync.RWMutex
+	seenSyncContributionCache           *lru.Cache
+	badBlockCache                       *lru.Cache
+	badBlockLock                        sync.RWMutex
+	syncContributionBitsOverlapLock     sync.RWMutex
+	syncContributionBitsOverlapCache    *lru.Cache
+	signatureChan                       chan *signatureVerifier
+	clockWaiter                         startup.ClockWaiter
+	initialSyncComplete                 chan struct{}
+	verifierWaiter                      *verification.InitializerWaiter
+	newBlobVerifier                     verification.NewBlobVerifier
+	newPayloadAttestationVerifier       verification.NewPayloadAttestationMsgVerifier
+	newExecutionPayloadEnvelopeVerifier verification.NewExecutionPayloadEnvelopeVerifier
+	availableBlocker                    coverage.AvailableBlocker
+	ctxMap                              ContextByteVersions
 }
 
 // NewService initializes new regular sync service.

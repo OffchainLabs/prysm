@@ -67,7 +67,9 @@ func Test_EpbsBlock_Copy(t *testing.T) {
 	require.Equal(t, true, ok)
 	copiedHeader, err := copiedBody.SignedExecutionPayloadHeader()
 	require.NoError(t, err)
-	require.DeepEqual(t, copiedHeader, signedHeader)
+	wh, err := WrappedROSignedExecutionPayloadHeader(signedHeader)
+	require.NoError(t, err)
+	require.DeepEqual(t, copiedHeader, wh)
 
 	copiedPayloadAtts, err := copiedBody.PayloadAttestations()
 	require.NoError(t, err)

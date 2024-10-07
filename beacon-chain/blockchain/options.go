@@ -1,6 +1,8 @@
 package blockchain
 
 import (
+	"sync"
+
 	"github.com/prysmaticlabs/prysm/v5/async/event"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
 	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
@@ -73,6 +75,14 @@ func WithDepositCache(c cache.DepositCache) Option {
 func WithPayloadAttestationCache(c *cache.PayloadAttestationCache) Option {
 	return func(s *Service) error {
 		s.cfg.PayloadAttestationCache = c
+		return nil
+	}
+}
+
+// WithPayloadEnvelopeCache for payload envelope cache.
+func WithPayloadEnvelopeCache(c *sync.Map) Option {
+	return func(s *Service) error {
+		s.cfg.PayloadEnvelopeCache = c
 		return nil
 	}
 }

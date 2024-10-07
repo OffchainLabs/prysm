@@ -11,6 +11,7 @@ go_library(
         "decode_pubsub.go",
         "doc.go",
         "error.go",
+        "execution_payload_envelope.go",
         "fork_watcher.go",
         "fuzz_exports.go",  # keep
         "log.go",
@@ -116,6 +117,7 @@ go_library(
         "//monitoring/tracing:go_default_library",
         "//monitoring/tracing/trace:go_default_library",
         "//network/forks:go_default_library",
+        "//proto/engine/v1:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "//proto/prysm/v1alpha1/attestation:go_default_library",
         "//proto/prysm/v1alpha1/metadata:go_default_library",
@@ -157,6 +159,7 @@ go_test(
         "context_test.go",
         "decode_pubsub_test.go",
         "error_test.go",
+        "execution_payload_envelope_test.go",
         "fork_watcher_test.go",
         "payload_attestations_test.go",
         "pending_attestations_queue_test.go",

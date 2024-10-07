@@ -71,7 +71,7 @@ type ReadOnlyBeaconBlockBody interface {
 	BlobKzgCommitments() ([][]byte, error)
 	ExecutionRequests() (*enginev1.ExecutionRequests, error)
 	PayloadAttestations() ([]*ethpb.PayloadAttestation, error)
-	SignedExecutionPayloadHeader() (*enginev1.SignedExecutionPayloadHeader, error)
+	SignedExecutionPayloadHeader() (ROSignedExecutionPayloadHeader, error)
 }
 
 type SignedBeaconBlock interface {

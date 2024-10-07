@@ -95,7 +95,11 @@ func TestVerifyBlockRootSeen(t *testing.T) {
 			},
 			Signature: make([]byte, 96),
 		}, init)
-		require.NoError(t, pa.VerifyBlockRootSeen(nil))
+		require.NoError(t, pa.VerifyBlockRootSeen(
+			func(_ [32]byte) bool {
+				return true
+			},
+		))
 		require.Equal(t, true, pa.results.executed(RequireBlockRootSeen))
 		require.NoError(t, pa.results.result(RequireBlockRootSeen))
 	})

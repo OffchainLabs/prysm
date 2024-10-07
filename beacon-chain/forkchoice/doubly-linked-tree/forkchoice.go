@@ -160,6 +160,13 @@ func (f *ForkChoice) HasNode(root [32]byte) bool {
 	return ok
 }
 
+// HasHash returns true if the node with the given payload hash exists in fork choice store,
+// false else wise.
+func (f *ForkChoice) HasHash(hash [32]byte) bool {
+	_, ok := f.store.nodeByPayload[hash]
+	return ok
+}
+
 // IsCanonical returns true if the given root is part of the canonical chain.
 func (f *ForkChoice) IsCanonical(root [32]byte) bool {
 	node, ok := f.store.nodeByRoot[root]

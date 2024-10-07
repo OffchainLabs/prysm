@@ -12,7 +12,6 @@ import (
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	consensusblocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/epbs"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
@@ -23,6 +22,7 @@ import (
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/util/random"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
@@ -1513,7 +1513,9 @@ func TestProcessWithdrawalsEPBS(t *testing.T) {
 			}
 			st, err = state_native.InitializeFromProtoUnsafeEpbs(spb)
 			require.NoError(t, err)
-			wp, err := epbs.WrappedROExecutionPayloadEnvelope(&enginev1.ExecutionPayloadEnvelope{Payload: &enginev1.ExecutionPayloadElectra{Withdrawals: test.Args.Withdrawals}})
+			env := random.ExecutionPayloadEnvelope(t)
+			env.Payload.Withdrawals = test.Args.Withdrawals
+			wp, err := consensusblocks.WrappedROExecutionPayloadEnvelope(env)
 			require.NoError(t, err)
 			p, err = wp.Execution()
 			require.NoError(t, err)

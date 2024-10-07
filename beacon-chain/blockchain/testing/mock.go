@@ -54,6 +54,7 @@ type ChainService struct {
 	DB                          db.Database
 	State                       state.BeaconState
 	Block                       interfaces.ReadOnlySignedBeaconBlock
+	ExecutionPayloadEnvelope    interfaces.ROExecutionPayloadEnvelope
 	VerifyBlkDescendantErr      error
 	stateNotifier               statefeed.Notifier
 	BlocksReceived              []interfaces.ReadOnlySignedBeaconBlock
@@ -68,6 +69,7 @@ type ChainService struct {
 	Genesis                     time.Time
 	ForkChoiceStore             forkchoice.ForkChoicer
 	ReceiveBlockMockErr         error
+	ReceiveEnvelopeMockErr      error
 	OptimisticCheckRootReceived [32]byte
 	FinalizedRoots              map[[32]byte]bool
 	OptimisticRoots             map[[32]byte]bool

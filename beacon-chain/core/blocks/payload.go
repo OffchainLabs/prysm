@@ -244,10 +244,11 @@ func GetBlockPayloadHash(blk interfaces.ReadOnlyBeaconBlock) ([32]byte, error) {
 		if err != nil {
 			return payloadHash, err
 		}
-		if header.Message == nil {
-			return payloadHash, errors.New("nil execution header")
+		payload, err := header.Header()
+		if err != nil {
+			return payloadHash, err
 		}
-		return [32]byte(header.Message.BlockHash), nil
+		return payload.BlockHash(), nil
 	}
 	if blk.Version() >= version.Bellatrix {
 		payload, err := blk.Body().Execution()
@@ -267,10 +268,11 @@ func GetBlockParentHash(blk interfaces.ReadOnlyBeaconBlock) ([32]byte, error) {
 		if err != nil {
 			return parentHash, err
 		}
-		if header.Message == nil {
-			return parentHash, errors.New("nil execution header")
+		payload, err := header.Header()
+		if err != nil {
+			return parentHash, err
 		}
-		return [32]byte(header.Message.ParentBlockHash), nil
+		return payload.ParentBlockHash(), nil
 	}
 	if blk.Version() >= version.Bellatrix {
 		payload, err := blk.Body().Execution()
