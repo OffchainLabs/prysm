@@ -39,7 +39,11 @@ func (v *validator) signPayloadAttestation(ctx context.Context, p *ethpb.Payload
 	}
 
 	// Sign the payload attestation data
-	sig, err := v.keyManager.Sign(ctx, signReq)
+	m, err := v.Keymanager()
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get key manager")
+	}
+	sig, err := m.Sign(ctx, signReq)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not sign payload attestation")
 	}
