@@ -265,13 +265,9 @@ func BeaconState(t *testing.T) *ethpb.BeaconStateEPBS {
 				TargetIndex: primitives.ValidatorIndex(randomUint64(t)),
 			},
 		},
-		PreviousInclusionListProposer: primitives.ValidatorIndex(randomUint64(t)),
-		PreviousInclusionListSlot:     primitives.Slot(randomUint64(t)),
-		LatestInclusionListProposer:   primitives.ValidatorIndex(randomUint64(t)),
-		LatestInclusionListSlot:       primitives.Slot(randomUint64(t)),
-		LatestBlockHash:               randomBytes(32, t),
-		LatestFullSlot:                primitives.Slot(randomUint64(t)),
-		ExecutionPayloadHeader: &enginev1.ExecutionPayloadHeaderEPBS{
+		LatestBlockHash: randomBytes(32, t),
+		LatestFullSlot:  primitives.Slot(randomUint64(t)),
+		LatestExecutionPayloadHeader: &enginev1.ExecutionPayloadHeaderEPBS{
 			ParentBlockHash:        randomBytes(32, t),
 			ParentBlockRoot:        randomBytes(32, t),
 			BlockHash:              randomBytes(32, t),
@@ -279,6 +275,7 @@ func BeaconState(t *testing.T) *ethpb.BeaconStateEPBS {
 			Slot:                   primitives.Slot(randomUint64(t)),
 			Value:                  randomUint64(t),
 			BlobKzgCommitmentsRoot: randomBytes(32, t),
+			GasLimit:               randomUint64(t),
 		},
 		LastWithdrawalsRoot: randomBytes(32, t),
 	}
@@ -302,6 +299,7 @@ func ExecutionPayloadHeader(t *testing.T) *enginev1.ExecutionPayloadHeaderEPBS {
 		Slot:                   primitives.Slot(randomUint64(t)),
 		Value:                  randomUint64(t),
 		BlobKzgCommitmentsRoot: randomBytes(32, t),
+		GasLimit:               randomUint64(t),
 	}
 }
 
@@ -363,21 +361,18 @@ func SignedExecutionPayloadEnvelope(t *testing.T) *enginev1.SignedExecutionPaylo
 func ExecutionPayloadEnvelope(t *testing.T) *enginev1.ExecutionPayloadEnvelope {
 	withheld := randomUint64(t)%2 == 0
 	return &enginev1.ExecutionPayloadEnvelope{
-		Payload:                    ExecutionPayload(t),
-		BuilderIndex:               primitives.ValidatorIndex(randomUint64(t)),
-		BeaconBlockRoot:            randomBytes(32, t),
-		BlobKzgCommitments:         [][]byte{randomBytes(48, t), randomBytes(48, t), randomBytes(48, t)},
-		InclusionListProposerIndex: primitives.ValidatorIndex(randomUint64(t)),
-		InclusionListSlot:          primitives.Slot(randomUint64(t)),
-		InclusionListSignature:     randomBytes(96, t),
-		PayloadWithheld:            withheld,
-		StateRoot:                  randomBytes(32, t),
+		Payload:            ExecutionPayload(t),
+		BuilderIndex:       primitives.ValidatorIndex(randomUint64(t)),
+		BeaconBlockRoot:    randomBytes(32, t),
+		BlobKzgCommitments: [][]byte{randomBytes(48, t), randomBytes(48, t), randomBytes(48, t)},
+		PayloadWithheld:    withheld,
+		StateRoot:          randomBytes(32, t),
 	}
 }
 
 // ExecutionPayload creates a random ExecutionPayloadEPBS for testing purposes.
-func ExecutionPayload(t *testing.T) *enginev1.ExecutionPayloadEPBS {
-	return &enginev1.ExecutionPayloadEPBS{
+func ExecutionPayload(t *testing.T) *enginev1.ExecutionPayloadElectra {
+	return &enginev1.ExecutionPayloadElectra{
 		ParentHash:    randomBytes(32, t),
 		FeeRecipient:  randomBytes(20, t),
 		StateRoot:     randomBytes(32, t),
@@ -400,40 +395,45 @@ func ExecutionPayload(t *testing.T) *enginev1.ExecutionPayloadEPBS {
 				Amount:         randomUint64(t),
 			},
 		},
-		BlobGasUsed:          randomUint64(t),
-		ExcessBlobGas:        randomUint64(t),
-		InclusionListSummary: [][]byte{randomBytes(20, t), randomBytes(20, t), randomBytes(20, t)},
+		BlobGasUsed:           randomUint64(t),
+		ExcessBlobGas:         randomUint64(t),
+		DepositRequests:       []*enginev1.DepositRequest{DepositRequest(t), DepositRequest(t), DepositRequest(t), DepositRequest(t)},
+		WithdrawalRequests:    WithdrawalRequests(t),
+		ConsolidationRequests: []*enginev1.ConsolidationRequest{ConsolidationRequest(t)},
 	}
 }
 
-// InclusionList creates a random InclusionList for testing purposes.
-func InclusionList(t *testing.T) *enginev1.InclusionList {
-	return &enginev1.InclusionList{
-		SignedSummary: &enginev1.SignedInclusionListSummary{
-			Message:   InclusionSummary(t),
-			Signature: randomBytes(96, t),
-		},
-		ParentBlockHash: randomBytes(32, t),
-		Transactions: [][]byte{
-			randomBytes(123, t),
-			randomBytes(456, t),
-			randomBytes(789, t),
-			randomBytes(1011, t),
-		},
+func DepositRequest(t *testing.T) *enginev1.DepositRequest {
+	return &enginev1.DepositRequest{
+		Pubkey:                randomBytes(48, t),
+		WithdrawalCredentials: randomBytes(32, t),
+		Amount:                randomUint64(t),
+		Signature:             randomBytes(96, t),
+		Index:                 randomUint64(t),
 	}
 }
 
-// InclusionSummary creates a random InclusionListSummary for testing purposes.
-func InclusionSummary(t *testing.T) *enginev1.InclusionListSummary {
-	return &enginev1.InclusionListSummary{
-		ProposerIndex: primitives.ValidatorIndex(randomUint64(t)),
-		Slot:          primitives.Slot(randomUint64(t)),
-		Summary: [][]byte{
-			randomBytes(20, t),
-			randomBytes(20, t),
-			randomBytes(20, t),
-			randomBytes(20, t),
-		},
+func WithdrawalRequests(t *testing.T) []*enginev1.WithdrawalRequest {
+	requests := make([]*enginev1.WithdrawalRequest, fieldparams.MaxWithdrawalRequestsPerPayload)
+	for i := range requests {
+		requests[i] = WithdrawalRequest(t)
+	}
+	return requests
+}
+
+func WithdrawalRequest(t *testing.T) *enginev1.WithdrawalRequest {
+	return &enginev1.WithdrawalRequest{
+		SourceAddress:   randomBytes(20, t),
+		ValidatorPubkey: randomBytes(48, t),
+		Amount:          randomUint64(t),
+	}
+}
+
+func ConsolidationRequest(t *testing.T) *enginev1.ConsolidationRequest {
+	return &enginev1.ConsolidationRequest{
+		SourceAddress: randomBytes(20, t),
+		SourcePubkey:  randomBytes(20, t),
+		TargetPubkey:  randomBytes(48, t),
 	}
 }
 
@@ -449,15 +449,12 @@ func SignedBlindPayloadEnvelope(t *testing.T) *ethpb.SignedBlindPayloadEnvelope 
 func BlindPayloadEnvelope(t *testing.T) *ethpb.BlindPayloadEnvelope {
 	withheld := randomUint64(t)%2 == 0
 	return &ethpb.BlindPayloadEnvelope{
-		PayloadRoot:                randomBytes(32, t),
-		BuilderIndex:               primitives.ValidatorIndex(randomUint64(t)),
-		BeaconBlockRoot:            randomBytes(32, t),
-		BlobKzgCommitments:         [][]byte{randomBytes(48, t), randomBytes(48, t), randomBytes(48, t)},
-		InclusionListProposerIndex: primitives.ValidatorIndex(randomUint64(t)),
-		InclusionListSlot:          primitives.Slot(randomUint64(t)),
-		InclusionListSignature:     randomBytes(96, t),
-		PayloadWithheld:            withheld,
-		StateRoot:                  randomBytes(32, t),
+		PayloadRoot:        randomBytes(32, t),
+		BuilderIndex:       primitives.ValidatorIndex(randomUint64(t)),
+		BeaconBlockRoot:    randomBytes(32, t),
+		BlobKzgCommitments: [][]byte{randomBytes(48, t), randomBytes(48, t), randomBytes(48, t)},
+		PayloadWithheld:    withheld,
+		StateRoot:          randomBytes(32, t),
 	}
 }
 

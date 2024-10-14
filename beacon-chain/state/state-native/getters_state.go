@@ -250,13 +250,9 @@ func (b *BeaconState) ToProtoUnsafe() interface{} {
 			PendingBalanceDeposits:        b.pendingBalanceDeposits,
 			PendingPartialWithdrawals:     b.pendingPartialWithdrawals,
 			PendingConsolidations:         b.pendingConsolidations,
-			PreviousInclusionListProposer: b.previousInclusionListProposer,
-			PreviousInclusionListSlot:     b.previousInclusionListSlot,
-			LatestInclusionListProposer:   b.latestInclusionListProposer,
-			LatestInclusionListSlot:       b.latestInclusionListSlot,
 			LatestBlockHash:               b.latestBlockHash[:],
 			LatestFullSlot:                b.latestFullSlot,
-			ExecutionPayloadHeader:        b.executionPayloadHeader,
+			LatestExecutionPayloadHeader:  b.executionPayloadHeader,
 			LastWithdrawalsRoot:           b.lastWithdrawalsRoot[:],
 		}
 	default:
@@ -506,13 +502,9 @@ func (b *BeaconState) ToProto() interface{} {
 			PendingBalanceDeposits:        b.pendingBalanceDepositsVal(),
 			PendingPartialWithdrawals:     b.pendingPartialWithdrawalsVal(),
 			PendingConsolidations:         b.pendingConsolidationsVal(),
-			PreviousInclusionListProposer: b.previousInclusionListProposer,
-			PreviousInclusionListSlot:     b.previousInclusionListSlot,
-			LatestInclusionListProposer:   b.latestInclusionListProposer,
-			LatestInclusionListSlot:       b.latestInclusionListSlot,
 			LatestBlockHash:               LatestBlockHashCopy[:],
 			LatestFullSlot:                b.latestFullSlot,
-			ExecutionPayloadHeader:        b.executionPayloadHeaderVal(),
+			LatestExecutionPayloadHeader:  b.executionPayloadHeaderVal(),
 			LastWithdrawalsRoot:           lastWithdrawalsRootCopy[:],
 		}
 	default:

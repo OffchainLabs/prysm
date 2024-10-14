@@ -12,27 +12,15 @@ func Test_InitializeFromProtoEpbs(t *testing.T) {
 	st := random.BeaconState(t)
 
 	// Cache initial values to check against after initialization.
-	prevInclusionListProposer := st.PreviousInclusionListProposer
-	prevInclusionListSlot := st.PreviousInclusionListSlot
-	latestInclusionListProposer := st.LatestInclusionListProposer
-	latestInclusionListSlot := st.LatestInclusionListSlot
 	latestBlockHash := st.LatestBlockHash
 	latestFullSlot := st.LatestFullSlot
-	header := st.ExecutionPayloadHeader
+	header := st.LatestExecutionPayloadHeader
 	lastWithdrawalsRoot := st.LastWithdrawalsRoot
 
 	s, err := InitializeFromProtoEpbs(st)
 	require.NoError(t, err)
 
 	// Assert that initial values match those in the new state.
-	gotPrevInclusionListProposer := s.PreviousInclusionListProposer()
-	require.Equal(t, prevInclusionListProposer, gotPrevInclusionListProposer)
-	gotPrevInclusionListSlot := s.PreviousInclusionListSlot()
-	require.Equal(t, prevInclusionListSlot, gotPrevInclusionListSlot)
-	gotLatestInclusionListProposer := s.LatestInclusionListProposer()
-	require.Equal(t, latestInclusionListProposer, gotLatestInclusionListProposer)
-	gotLatestInclusionListSlot := s.LatestInclusionListSlot()
-	require.Equal(t, latestInclusionListSlot, gotLatestInclusionListSlot)
 	gotLatestBlockHash := s.LatestBlockHash()
 	require.DeepEqual(t, latestBlockHash, gotLatestBlockHash)
 	gotLatestFullSlot := s.LatestFullSlot()

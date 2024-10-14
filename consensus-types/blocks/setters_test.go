@@ -62,6 +62,7 @@ func Test_EpbsBlock_SetSignedExecutionPayloadHeader(t *testing.T) {
 			Slot:                   2,
 			Value:                  3,
 			BlobKzgCommitmentsRoot: []byte("blobKzgCommitmentsRoot"),
+			GasLimit:               4,
 		},
 		Signature: []byte("signature"),
 	}

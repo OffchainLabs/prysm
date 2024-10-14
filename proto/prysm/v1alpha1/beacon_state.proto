@@ -454,6 +454,7 @@ message BeaconStateEPBS {
 
   // Fields introduced in Bellatrix fork [10001-11000]
   // ethereum.engine.v1.ExecutionPayloadHeaderDeneb latest_execution_payload_header = 10001; [Removed in ePBS]
+  ethereum.engine.v1.ExecutionPayloadHeaderEPBS latest_execution_payload_header = 10001;
 
   // Fields introduced in Capella fork [11001-12000]
   uint64 next_withdrawal_index = 11001;
@@ -473,14 +474,9 @@ message BeaconStateEPBS {
   repeated PendingConsolidation pending_consolidations = 12009 [(ethereum.eth.ext.ssz_max) = "pending_consolidations_limit"];
 
   // Fields introduced in ePBS fork [13001-14000]
-  uint64 previous_inclusion_list_proposer = 13001 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.ValidatorIndex"];
-  uint64 previous_inclusion_list_slot = 13002 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"];
-  uint64 latest_inclusion_list_proposer = 13003 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.ValidatorIndex"];
-  uint64 latest_inclusion_list_slot = 13004 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"];
-  bytes latest_block_hash = 13005 [(ethereum.eth.ext.ssz_size) = "32"];
-  uint64 latest_full_slot = 13006 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"];
-  ethereum.engine.v1.ExecutionPayloadHeaderEPBS execution_payload_header = 13007;
-  bytes last_withdrawals_root = 13008 [(ethereum.eth.ext.ssz_size) = "32"];
+  bytes latest_block_hash = 13001 [(ethereum.eth.ext.ssz_size) = "32"];
+  uint64 latest_full_slot = 13002 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"];
+  bytes last_withdrawals_root = 13003 [(ethereum.eth.ext.ssz_size) = "32"];
 }
 
 

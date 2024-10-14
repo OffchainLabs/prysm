@@ -126,11 +126,7 @@ var epbsFields = append(
 	types.PendingBalanceDeposits,
 	types.PendingPartialWithdrawals,
 	types.PendingConsolidations,
-	types.PreviousInclusionListProposer, // ePBS fields start here
-	types.PreviousInclusionListSlot,
-	types.LatestInclusionListProposer,
-	types.LatestInclusionListSlot,
-	types.LatestBlockHash,
+	types.LatestBlockHash, // ePBS fields start here
 	types.LatestFullSlot,
 	types.ExecutionPayloadHeader,
 	types.LastWithdrawalsRoot,
@@ -902,10 +898,6 @@ func (b *BeaconState) Copy() state.BeaconState {
 		earliestExitEpoch:             b.earliestExitEpoch,
 		consolidationBalanceToConsume: b.consolidationBalanceToConsume,
 		earliestConsolidationEpoch:    b.earliestConsolidationEpoch,
-		previousInclusionListProposer: b.previousInclusionListProposer,
-		previousInclusionListSlot:     b.previousInclusionListSlot,
-		latestInclusionListProposer:   b.latestInclusionListProposer,
-		latestInclusionListSlot:       b.latestInclusionListSlot,
 		latestBlockHash:               b.latestBlockHash,
 		latestFullSlot:                b.latestFullSlot,
 		lastWithdrawalsRoot:           b.lastWithdrawalsRoot,
@@ -1348,14 +1340,6 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 		return stateutil.PendingPartialWithdrawalsRoot(b.pendingPartialWithdrawals)
 	case types.PendingConsolidations:
 		return stateutil.PendingConsolidationsRoot(b.pendingConsolidations)
-	case types.PreviousInclusionListProposer:
-		return ssz.Uint64Root(uint64(b.previousInclusionListProposer)), nil
-	case types.PreviousInclusionListSlot:
-		return ssz.Uint64Root(uint64(b.previousInclusionListSlot)), nil
-	case types.LatestInclusionListProposer:
-		return ssz.Uint64Root(uint64(b.latestInclusionListProposer)), nil
-	case types.LatestInclusionListSlot:
-		return ssz.Uint64Root(uint64(b.latestInclusionListSlot)), nil
 	case types.LatestBlockHash:
 		return b.latestBlockHash, nil
 	case types.LatestFullSlot:

@@ -30,7 +30,6 @@ const (
 	MaxBlobsPerBlock                      = 6             // MaxBlobsPerBlock defines the maximum number of blobs with respect to consensus rule can be included in a block.
 	MaxBlobCommitmentsPerBlock            = 16            // MaxBlobCommitmentsPerBlock defines the theoretical limit of blobs can be included in a block.
 	MaxPayloadAttestationsPerBlock        = 4             // MAX_PAYLOAD_ATTESTATIONS [New in ePBS]
-	MaxTransactionsPerInclusionList       = 16            // MAX_TRANSACTIONS_PER_INCLUSION_LIST	[New in ePBS]
 	LogMaxBlobCommitments                 = 4             // Log_2 of MaxBlobCommitmentsPerBlock
 	BlobLength                            = 131072        // BlobLength defines the byte length of a blob.
 	BlobSize                              = 131072        // defined to match blob.size in bazel ssz codegen

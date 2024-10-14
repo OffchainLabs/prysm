@@ -330,22 +330,6 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 	}
 
 	if state.version >= version.EPBS {
-		// Previous inclusion list proposer root.
-		prevInclusionListProposerRoot := ssz.Uint64Root(uint64(state.previousInclusionListProposer))
-		fieldRoots[types.PreviousInclusionListProposer.RealPosition()] = prevInclusionListProposerRoot[:]
-
-		// Previous inclusion list slot root.
-		prevInclusionListSlotRoot := ssz.Uint64Root(uint64(state.previousInclusionListSlot))
-		fieldRoots[types.PreviousInclusionListSlot.RealPosition()] = prevInclusionListSlotRoot[:]
-
-		// Latest inclusion list proposer root.
-		latestInclusionListProposerRoot := ssz.Uint64Root(uint64(state.latestInclusionListProposer))
-		fieldRoots[types.LatestInclusionListProposer.RealPosition()] = latestInclusionListProposerRoot[:]
-
-		// Latest inclusion list slot root.
-		latestInclusionListSlotRoot := ssz.Uint64Root(uint64(state.latestInclusionListSlot))
-		fieldRoots[types.LatestInclusionListSlot.RealPosition()] = latestInclusionListSlotRoot[:]
-
 		// Latest block hash root.
 		latestBlockHashRoot := state.latestBlockHash[:]
 		fieldRoots[types.LatestBlockHash.RealPosition()] = latestBlockHashRoot

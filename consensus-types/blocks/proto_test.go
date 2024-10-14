@@ -1771,6 +1771,7 @@ func getFields() fields {
 			Slot:                   2,
 			Value:                  3,
 			BlobKzgCommitmentsRoot: bytesutil.PadTo([]byte("blobkzgcommitmentsroot"), fieldparams.RootLength),
+			GasLimit:               4,
 		},
 		Signature: bytesutil.PadTo([]byte("signature"), fieldparams.BLSSignatureLength),
 	}
