@@ -59,6 +59,11 @@ type BlobReceiver interface {
 	ReceiveBlob(context.Context, blocks.VerifiedROBlob) error
 }
 
+// ExecutionPayloadReceiver interface defines the methods of chain service for receiving `ROExecutionPayloadEnvelope`.
+type ExecutionPayloadReceiver interface {
+	ReceiveExecutionPayloadEnvelope(ctx context.Context, envelope interfaces.ROExecutionPayloadEnvelope, _ das.AvailabilityStore) error
+}
+
 // SlashingReceiver interface defines the methods of chain service for receiving validated slashing over the wire.
 type SlashingReceiver interface {
 	ReceiveAttesterSlashing(ctx context.Context, slashing ethpb.AttSlashing)

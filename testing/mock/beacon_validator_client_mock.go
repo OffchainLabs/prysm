@@ -13,6 +13,7 @@ import (
 	context "context"
 	reflect "reflect"
 
+	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
 	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	gomock "go.uber.org/mock/gomock"
 	grpc "google.golang.org/grpc"
@@ -476,6 +477,33 @@ func (m *MockBeaconNodeValidatorClient) SubmitAggregateSelectionProofElectra(arg
 	return ret0, ret1
 }
 
+// SubmitAggregateSelectionProofElectra indicates an expected call of SubmitAggregateSelectionProofElectra.
+func (mr *MockBeaconNodeValidatorClientMockRecorder) SubmitAggregateSelectionProofElectra(arg0, arg1 any, arg2 ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitAggregateSelectionProofElectra", reflect.TypeOf((*MockBeaconNodeValidatorClient)(nil).SubmitAggregateSelectionProofElectra), varargs...)
+}
+
+// SubmitSignedExecutionPayloadEnvelope mocks base method.
+func (m *MockBeaconNodeValidatorClient) SubmitSignedExecutionPayloadEnvelope(arg0 context.Context, arg1 *enginev1.SignedExecutionPayloadEnvelope, arg2 ...grpc.CallOption) (*emptypb.Empty, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "SubmitSignedExecutionPayloadEnvelope", varargs...)
+	ret0, _ := ret[0].(*emptypb.Empty)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SubmitSignedExecutionPayloadEnvelope indicates an expected call of SubmitSignedExecutionPayloadEnvelope.
+func (mr *MockBeaconNodeValidatorClientMockRecorder) SubmitSignedExecutionPayloadEnvelope(arg0, arg1 any, arg2 ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitSignedExecutionPayloadEnvelope", reflect.TypeOf((*MockBeaconNodeValidatorClient)(nil).SubmitSignedExecutionPayloadEnvelope), varargs...)
+}
+
 // SubmitPayloadAttestation mocks base method.
 func (m *MockBeaconNodeValidatorClient) SubmitPayloadAttestation(arg0 context.Context, arg1 *eth.PayloadAttestationMessage, arg2 ...grpc.CallOption) (*emptypb.Empty, error) {
 	m.ctrl.T.Helper()
@@ -487,13 +515,6 @@ func (m *MockBeaconNodeValidatorClient) SubmitPayloadAttestation(arg0 context.Co
 	ret0, _ := ret[0].(*emptypb.Empty)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
-}
-
-// SubmitAggregateSelectionProofElectra indicates an expected call of SubmitAggregateSelectionProofElectra.
-func (mr *MockBeaconNodeValidatorClientMockRecorder) SubmitAggregateSelectionProofElectra(arg0, arg1 any, arg2 ...any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1}, arg2...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitAggregateSelectionProofElectra", reflect.TypeOf((*MockBeaconNodeValidatorClient)(nil).SubmitAggregateSelectionProofElectra), varargs...)
 }
 
 // SubmitPayloadAttestation indicates an expected call of SubmitPayloadAttestation.

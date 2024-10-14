@@ -345,6 +345,12 @@ func (m *MockValidatorClient) SubmitAggregateSelectionProofElectra(arg0 context.
 	return ret0, ret1
 }
 
+// SubmitAggregateSelectionProofElectra indicates an expected call of SubmitAggregateSelectionProofElectra.
+func (mr *MockValidatorClientMockRecorder) SubmitAggregateSelectionProofElectra(arg0, arg1, arg2, arg3 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitAggregateSelectionProofElectra", reflect.TypeOf((*MockValidatorClient)(nil).SubmitAggregateSelectionProofElectra), arg0, arg1, arg2, arg3)
+}
+
 // SubmitPayloadAttestation mocks base method.
 func (m *MockValidatorClient) SubmitPayloadAttestation(arg0 context.Context, arg1 *eth.PayloadAttestationMessage) (*emptypb.Empty, error) {
 	m.ctrl.T.Helper()
@@ -352,12 +358,6 @@ func (m *MockValidatorClient) SubmitPayloadAttestation(arg0 context.Context, arg
 	ret0, _ := ret[0].(*emptypb.Empty)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
-}
-
-// SubmitAggregateSelectionProofElectra indicates an expected call of SubmitAggregateSelectionProofElectra.
-func (mr *MockValidatorClientMockRecorder) SubmitAggregateSelectionProofElectra(arg0, arg1, arg2, arg3 any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitAggregateSelectionProofElectra", reflect.TypeOf((*MockValidatorClient)(nil).SubmitAggregateSelectionProofElectra), arg0, arg1, arg2, arg3)
 }
 
 // SubmitPayloadAttestation indicates an expected call of SubmitPayloadAttestation.

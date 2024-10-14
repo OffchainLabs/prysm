@@ -13,6 +13,7 @@ import (
 	context "context"
 	reflect "reflect"
 
+	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
 	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	gomock "go.uber.org/mock/gomock"
 	metadata "google.golang.org/grpc/metadata"
@@ -364,6 +365,27 @@ func (m *MockBeaconNodeValidatorServer) SubmitAggregateSelectionProofElectra(arg
 	return ret0, ret1
 }
 
+// SubmitAggregateSelectionProofElectra indicates an expected call of SubmitAggregateSelectionProofElectra.
+func (mr *MockBeaconNodeValidatorServerMockRecorder) SubmitAggregateSelectionProofElectra(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitAggregateSelectionProofElectra", reflect.TypeOf((*MockBeaconNodeValidatorServer)(nil).SubmitAggregateSelectionProofElectra), arg0, arg1)
+}
+
+// SubmitSignedExecutionPayloadEnvelope mocks base method.
+func (m *MockBeaconNodeValidatorServer) SubmitSignedExecutionPayloadEnvelope(arg0 context.Context, arg1 *enginev1.SignedExecutionPayloadEnvelope) (*emptypb.Empty, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SubmitSignedExecutionPayloadEnvelope", arg0, arg1)
+	ret0, _ := ret[0].(*emptypb.Empty)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SubmitSignedExecutionPayloadEnvelope indicates an expected call of SubmitSignedExecutionPayloadEnvelope.
+func (mr *MockBeaconNodeValidatorServerMockRecorder) SubmitSignedExecutionPayloadEnvelope(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitSignedExecutionPayloadEnvelope", reflect.TypeOf((*MockBeaconNodeValidatorServer)(nil).SubmitSignedExecutionPayloadEnvelope), arg0, arg1)
+}
+
 // SubmitPayloadAttestation mocks base method.
 func (m *MockBeaconNodeValidatorServer) SubmitPayloadAttestation(arg0 context.Context, arg1 *eth.PayloadAttestationMessage) (*emptypb.Empty, error) {
 	m.ctrl.T.Helper()
@@ -371,12 +393,6 @@ func (m *MockBeaconNodeValidatorServer) SubmitPayloadAttestation(arg0 context.Co
 	ret0, _ := ret[0].(*emptypb.Empty)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
-}
-
-// SubmitAggregateSelectionProofElectra indicates an expected call of SubmitAggregateSelectionProofElectra.
-func (mr *MockBeaconNodeValidatorServerMockRecorder) SubmitAggregateSelectionProofElectra(arg0, arg1 any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitAggregateSelectionProofElectra", reflect.TypeOf((*MockBeaconNodeValidatorServer)(nil).SubmitAggregateSelectionProofElectra), arg0, arg1)
 }
 
 // SubmitPayloadAttestation indicates an expected call of SubmitPayloadAttestation.
