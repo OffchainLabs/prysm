@@ -12,6 +12,7 @@ go_library(
         "doc.go",
         "error.go",
         "execution_payload_envelope.go",
+        "execution_payload_header.go",
         "fork_watcher.go",
         "fuzz_exports.go",  # keep
         "log.go",
@@ -160,6 +161,7 @@ go_test(
         "decode_pubsub_test.go",
         "error_test.go",
         "execution_payload_envelope_test.go",
+        "execution_payload_header_test.go",
         "fork_watcher_test.go",
         "payload_attestations_test.go",
         "pending_attestations_queue_test.go",

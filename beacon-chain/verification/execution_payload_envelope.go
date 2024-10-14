@@ -37,7 +37,6 @@ var (
 	ErrEnvelopeBlockRootInvalid   = errors.New("block root invalid")
 	ErrIncorrectEnvelopeBuilder   = errors.New("builder index does not match committed header")
 	ErrIncorrectEnvelopeBlockHash = errors.New("block hash does not match committed header")
-	ErrInvalidEnvelope            = errors.New("invalid payload attestation message")
 )
 
 var _ ExecutionPayloadEnvelopeVerifier = &EnvelopeVerifier{}

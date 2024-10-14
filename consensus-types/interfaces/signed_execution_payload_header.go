@@ -8,6 +8,7 @@ import (
 type ROSignedExecutionPayloadHeader interface {
 	Header() (ROExecutionPayloadHeaderEPBS, error)
 	Signature() [field_params.BLSSignatureLength]byte
+	SigningRoot([]byte) ([32]byte, error)
 	IsNil() bool
 }
 

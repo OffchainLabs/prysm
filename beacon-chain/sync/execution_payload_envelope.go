@@ -9,8 +9,8 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
+	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	v1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	"go.opencensus.io/trace"
 	"google.golang.org/protobuf/proto"
 )
 

@@ -22,8 +22,8 @@ go_library(
     importpath = "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks",
     visibility = ["//visibility:public"],
     deps = [
-        "//beacon-chain/state/stateutil:go_default_library",
         "//beacon-chain/core/signing:go_default_library",
+        "//beacon-chain/state/stateutil:go_default_library",
         "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types:go_default_library",

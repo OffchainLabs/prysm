@@ -137,6 +137,13 @@ func WithPayloadAttestationCache(r *cache.PayloadAttestationCache) Option {
 	}
 }
 
+func WithExecutionPayloadHeaderCache(r *cache.ExecutionPayloadHeaders) Option {
+	return func(s *Service) error {
+		s.executionPayloadHeaderCache = r
+		return nil
+	}
+}
+
 func WithPayloadEnvelopeCache(r *sync.Map) Option {
 	return func(s *Service) error {
 		s.payloadEnvelopeCache = r
