@@ -51,8 +51,8 @@ const (
 	MaxDeposits                           = 16                // Maximum number of deposits in a block.
 	MaxVoluntaryExits                     = 16                // Maximum number of voluntary exits in a block.
 	MaxBlsToExecutionChanges              = 16                // Maximum number of bls to execution changes in a block.
-	MaxRandomByte                         = uint64(1<<8 - 1)  // Maximum value for a random value using for proposer and sync committee sampling.
-	MaxRandomValueElectra                 = uint64(1<<16 - 1) // Maximum value for a random value using for proposer and sync committee sampling.
+	MaxRandomByte                         = uint64(1<<8 - 1)  // MaxRandomByte defines max for a random byte using for proposer and sync committee sampling.
+	MaxRandomValueElectra                 = uint64(1<<16 - 1) // MaxRandomValueElectra defines max for a random value using for proposer and sync committee sampling.
 	PTCSize                               = 32                // PTC_SIZE [New in ePBS]
 	MaxPayloadAttestationsPerBlock        = 4                 // MAX_PAYLOAD_ATTESTATIONS [New in ePBS]
 	MaxTransactionsPerInclusionList       = 16                // MAX_TRANSACTIONS_PER_INCLUSION_LIST	[New in ePBS]

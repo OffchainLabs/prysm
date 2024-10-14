@@ -33,43 +33,6 @@ func Test_SetExecutionPayloadHeader(t *testing.T) {
 	require.DeepEqual(t, got, header)
 }
 
-func Test_UpdatePreviousInclusionListData(t *testing.T) {
-	s := &BeaconState{version: version.EPBS, dirtyFields: make(map[types.FieldIndex]bool)}
-	p := s.PreviousInclusionListProposer()
-	require.Equal(t, primitives.ValidatorIndex(0), p)
-	ss := s.PreviousInclusionListSlot()
-	require.Equal(t, primitives.Slot(0), ss)
-
-	s.SetLatestInclusionListProposer(1)
-	s.SetLatestInclusionListSlot(2)
-	s.UpdatePreviousInclusionListData()
-	require.Equal(t, true, s.dirtyFields[types.PreviousInclusionListProposer])
-	require.Equal(t, true, s.dirtyFields[types.PreviousInclusionListSlot])
-
-	p = s.PreviousInclusionListProposer()
-	require.Equal(t, primitives.ValidatorIndex(1), p)
-	ss = s.PreviousInclusionListSlot()
-	require.Equal(t, primitives.Slot(2), ss)
-}
-
-func Test_SetLatestInclusionListProposer(t *testing.T) {
-	s := &BeaconState{version: version.EPBS, dirtyFields: make(map[types.FieldIndex]bool)}
-	s.SetLatestInclusionListProposer(1)
-	require.Equal(t, true, s.dirtyFields[types.LatestInclusionListProposer])
-
-	got := s.LatestInclusionListProposer()
-	require.Equal(t, primitives.ValidatorIndex(1), got)
-}
-
-func Test_SetLatestInclusionListSlot(t *testing.T) {
-	s := &BeaconState{version: version.EPBS, dirtyFields: make(map[types.FieldIndex]bool)}
-	s.SetLatestInclusionListSlot(2)
-	require.Equal(t, true, s.dirtyFields[types.LatestInclusionListSlot])
-
-	got := s.LatestInclusionListSlot()
-	require.Equal(t, primitives.Slot(2), got)
-}
-
 func Test_SetLatestBlockHash(t *testing.T) {
 	s := &BeaconState{version: version.EPBS, dirtyFields: make(map[types.FieldIndex]bool)}
 	b := make([]byte, fieldparams.RootLength)

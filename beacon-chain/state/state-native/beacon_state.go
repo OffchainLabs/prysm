@@ -60,14 +60,10 @@ type BeaconState struct {
 	nextWithdrawalValidatorIndex primitives.ValidatorIndex
 	historicalSummaries          []*ethpb.HistoricalSummary
 	// ePBS fields
-	previousInclusionListProposer primitives.ValidatorIndex
-	previousInclusionListSlot     primitives.Slot
-	latestInclusionListProposer   primitives.ValidatorIndex
-	latestInclusionListSlot       primitives.Slot
-	latestBlockHash               [32]byte
-	latestFullSlot                primitives.Slot
-	executionPayloadHeader        *enginev1.ExecutionPayloadHeaderEPBS
-	lastWithdrawalsRoot           [32]byte
+	latestBlockHash        [32]byte
+	latestFullSlot         primitives.Slot
+	executionPayloadHeader *enginev1.ExecutionPayloadHeaderEPBS
+	lastWithdrawalsRoot    [32]byte
 
 	// Electra fields
 	depositRequestsStartIndex     uint64

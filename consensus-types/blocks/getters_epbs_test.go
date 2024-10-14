@@ -23,6 +23,7 @@ func Test_EpbsBlock_Copy(t *testing.T) {
 			Slot:                   2,
 			Value:                  3,
 			BlobKzgCommitmentsRoot: bytesutil.PadTo([]byte("blobkzgcommitmentsroot"), fieldparams.RootLength),
+			GasLimit:               4,
 		},
 		Signature: bytesutil.PadTo([]byte("signature"), fieldparams.BLSSignatureLength),
 	}
