@@ -197,6 +197,10 @@ func (*FakeValidator) SubmitAggregateAndProof(_ context.Context, _ primitives.Sl
 func (*FakeValidator) SubmitSyncCommitteeMessage(_ context.Context, _ primitives.Slot, _ [fieldparams.BLSPubkeyLength]byte) {
 }
 
+// SubmitPayloadAttestationMessage for mocking.
+func (*FakeValidator) SubmitPayloadAttestationMessage(_ context.Context, _ primitives.Slot, _ [fieldparams.BLSPubkeyLength]byte) {
+}
+
 // LogSubmittedAtts for mocking.
 func (*FakeValidator) LogSubmittedAtts(_ primitives.Slot) {}
 

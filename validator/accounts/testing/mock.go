@@ -170,6 +170,10 @@ func (_ *Validator) SubmitSignedContributionAndProof(_ context.Context, _ primit
 	panic("implement me")
 }
 
+func (_ *Validator) SubmitPayloadAttestationMessage(_ context.Context, _ primitives.Slot, _ [48]byte) {
+	panic("implement me")
+}
+
 func (_ *Validator) LogSubmittedAtts(_ primitives.Slot) {
 	panic("implement me")
 }

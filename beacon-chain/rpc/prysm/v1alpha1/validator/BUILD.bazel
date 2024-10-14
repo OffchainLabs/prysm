@@ -25,6 +25,7 @@ go_library(
         "proposer_exits.go",
         "proposer_slashings.go",
         "proposer_sync_aggregate.go",
+        "ptc_attester.go",
         "server.go",
         "status.go",
         "sync_committee.go",

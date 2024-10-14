@@ -158,6 +158,14 @@ func (*grpcValidatorClient) AggregatedSyncSelections(context.Context, []iface.Sy
 	return nil, iface.ErrNotSupported
 }
 
+func (c *grpcValidatorClient) GetPayloadAttestationData(ctx context.Context, in *ethpb.GetPayloadAttestationDataRequest) (*ethpb.PayloadAttestationData, error) {
+	return c.beaconNodeValidatorClient.GetPayloadAttestationData(ctx, in)
+}
+
+func (c *grpcValidatorClient) SubmitPayloadAttestation(ctx context.Context, in *ethpb.PayloadAttestationMessage) (*empty.Empty, error) {
+	return c.beaconNodeValidatorClient.SubmitPayloadAttestation(ctx, in)
+}
+
 func NewGrpcValidatorClient(cc grpc.ClientConnInterface) iface.ValidatorClient {
 	return &grpcValidatorClient{ethpb.NewBeaconNodeValidatorClient(cc), false}
 }

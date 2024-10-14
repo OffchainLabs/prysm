@@ -203,6 +203,26 @@ func (mr *MockBeaconNodeValidatorClientMockRecorder) GetFeeRecipientByPubKey(arg
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFeeRecipientByPubKey", reflect.TypeOf((*MockBeaconNodeValidatorClient)(nil).GetFeeRecipientByPubKey), varargs...)
 }
 
+// GetPayloadAttestationData mocks base method.
+func (m *MockBeaconNodeValidatorClient) GetPayloadAttestationData(arg0 context.Context, arg1 *eth.GetPayloadAttestationDataRequest, arg2 ...grpc.CallOption) (*eth.PayloadAttestationData, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetPayloadAttestationData", varargs...)
+	ret0, _ := ret[0].(*eth.PayloadAttestationData)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPayloadAttestationData indicates an expected call of GetPayloadAttestationData.
+func (mr *MockBeaconNodeValidatorClientMockRecorder) GetPayloadAttestationData(arg0, arg1 any, arg2 ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPayloadAttestationData", reflect.TypeOf((*MockBeaconNodeValidatorClient)(nil).GetPayloadAttestationData), varargs...)
+}
+
 // GetSyncCommitteeContribution mocks base method.
 func (m *MockBeaconNodeValidatorClient) GetSyncCommitteeContribution(arg0 context.Context, arg1 *eth.SyncCommitteeContributionRequest, arg2 ...grpc.CallOption) (*eth.SyncCommitteeContribution, error) {
 	m.ctrl.T.Helper()
@@ -456,11 +476,31 @@ func (m *MockBeaconNodeValidatorClient) SubmitAggregateSelectionProofElectra(arg
 	return ret0, ret1
 }
 
+// SubmitPayloadAttestation mocks base method.
+func (m *MockBeaconNodeValidatorClient) SubmitPayloadAttestation(arg0 context.Context, arg1 *eth.PayloadAttestationMessage, arg2 ...grpc.CallOption) (*emptypb.Empty, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "SubmitPayloadAttestation", varargs...)
+	ret0, _ := ret[0].(*emptypb.Empty)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
 // SubmitAggregateSelectionProofElectra indicates an expected call of SubmitAggregateSelectionProofElectra.
 func (mr *MockBeaconNodeValidatorClientMockRecorder) SubmitAggregateSelectionProofElectra(arg0, arg1 any, arg2 ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{arg0, arg1}, arg2...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitAggregateSelectionProofElectra", reflect.TypeOf((*MockBeaconNodeValidatorClient)(nil).SubmitAggregateSelectionProofElectra), varargs...)
+}
+
+// SubmitPayloadAttestation indicates an expected call of SubmitPayloadAttestation.
+func (mr *MockBeaconNodeValidatorClientMockRecorder) SubmitPayloadAttestation(arg0, arg1 any, arg2 ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitPayloadAttestation", reflect.TypeOf((*MockBeaconNodeValidatorClient)(nil).SubmitPayloadAttestation), varargs...)
 }
 
 // SubmitSignedAggregateSelectionProof mocks base method.

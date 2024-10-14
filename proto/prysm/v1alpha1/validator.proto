@@ -24,6 +24,7 @@ import "proto/eth/ext/options.proto";
 import "proto/prysm/v1alpha1/beacon_block.proto";
 import "proto/prysm/v1alpha1/sync_committee.proto";
 import "proto/prysm/v1alpha1/attestation.proto";
+import "proto/prysm/v1alpha1/payload_attestation.proto";
 
 option csharp_namespace = "Ethereum.Eth.V1";
 option go_package = "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1;eth";
@@ -351,6 +352,13 @@ service BeaconNodeValidator {
             get: "/eth/v1alpha1/validator/blocks/aggregated_sig_and_aggregation_bits"
         };
     }
+
+    rpc GetPayloadAttestationData(GetPayloadAttestationDataRequest) returns (PayloadAttestationData) {}
+    rpc SubmitPayloadAttestation(PayloadAttestationMessage) returns (google.protobuf.Empty) {}
+}
+
+message GetPayloadAttestationDataRequest {
+    uint64 slot = 1 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"];
 }
 
 // SyncMessageBlockRootResponse for beacon chain validator to retrieve and
