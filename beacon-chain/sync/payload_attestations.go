@@ -12,8 +12,8 @@ import (
 	payloadattestation "github.com/prysmaticlabs/prysm/v5/consensus-types/epbs/payload-attestation"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
+	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"go.opencensus.io/trace"
 	"google.golang.org/protobuf/proto"
 )
 

@@ -41,3 +41,19 @@ type ExecutionPayloadEnvelopeVerifier interface {
 // NewExecutionPayloadEnvelopeVerifier is a function signature that can be used by code that needs to be
 // able to mock Initializer.NewExecutionPayloadEnvelopeVerifier without complex setup.
 type NewExecutionPayloadEnvelopeVerifier func(e interfaces.ROSignedExecutionPayloadEnvelope, reqs []Requirement) ExecutionPayloadEnvelopeVerifier
+
+// ExecutionPayloadHeaderVerifier defines the methods implemented by the ROSignedExecutionPayloadHeader.
+// It is similar to BlobVerifier, but for signed execution payload header.
+type ExecutionPayloadHeaderVerifier interface {
+	VerifyBuilderActiveNotSlashed() error
+	VerifyBuilderSufficientBalance() error
+	VerifyParentBlockHashSeen(func([32]byte) bool) error
+	VerifyParentBlockRootSeen(seen func([32]byte) bool) (err error)
+	VerifyCurrentOrNextSlot() error
+	VerifySignature() error
+	SatisfyRequirement(Requirement)
+}
+
+// NewExecutionPayloadHeaderVerifier is a function signature that can be used by code that needs to be
+// able to mock Initializer.NewExecutionPayloadHeaderVerifier without complex setup.
+type NewExecutionPayloadHeaderVerifier func(e interfaces.ROSignedExecutionPayloadHeader, st state.ReadOnlyBeaconState, reqs []Requirement) ExecutionPayloadHeaderVerifier

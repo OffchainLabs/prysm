@@ -119,6 +119,7 @@ type blockchainService interface {
 	blockchain.OptimisticModeFetcher
 	blockchain.SlashingReceiver
 	blockchain.ForkchoiceFetcher
+	blockchain.ExecutionPayloadFetcher
 }
 
 // Service is responsible for handling all run time p2p related operations as the
@@ -132,6 +133,7 @@ type Service struct {
 	blkRootToPendingAtts                map[[32]byte][]ethpb.SignedAggregateAttAndProof
 	subHandler                          *subTopicHandler
 	payloadAttestationCache             *cache.PayloadAttestationCache
+	executionPayloadHeaderCache         *cache.ExecutionPayloadHeaders
 	payloadEnvelopeCache                *sync.Map
 	pendingAttsLock                     sync.RWMutex
 	pendingQueueLock                    sync.RWMutex
@@ -167,6 +169,7 @@ type Service struct {
 	newBlobVerifier                     verification.NewBlobVerifier
 	newPayloadAttestationVerifier       verification.NewPayloadAttestationMsgVerifier
 	newExecutionPayloadEnvelopeVerifier verification.NewExecutionPayloadEnvelopeVerifier
+	newExecutionPayloadHeaderVerifier   verification.NewExecutionPayloadHeaderVerifier
 	availableBlocker                    coverage.AvailableBlocker
 	ctxMap                              ContextByteVersions
 }

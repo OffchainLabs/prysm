@@ -21,6 +21,7 @@ go_library(
         "electra_state.go",
         "epbs_block.go",
         "epbs_state.go",
+        "execution_payload_header.go",
         "helpers.go",
         "lightclient.go",
         "logging.go",

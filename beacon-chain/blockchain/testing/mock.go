@@ -708,3 +708,8 @@ func (c *ChainService) ReceiveBlob(_ context.Context, b blocks.VerifiedROBlob) e
 func (c *ChainService) TargetRootForEpoch(_ [32]byte, _ primitives.Epoch) ([32]byte, error) {
 	return c.TargetRoot, nil
 }
+
+// HashInForkchoice mocks the same method in the chain service
+func (c *ChainService) HashInForkchoice([32]byte) bool {
+	return false
+}

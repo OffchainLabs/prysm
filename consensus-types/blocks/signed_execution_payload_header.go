@@ -1,6 +1,7 @@
 package blocks
 
 import (
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
 	consensus_types "github.com/prysmaticlabs/prysm/v5/consensus-types"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
@@ -67,6 +68,11 @@ func WrappedROExecutionPayloadHeaderEPBS(p *enginev1.ExecutionPayloadHeaderEPBS)
 // Header returns the wrapped object as an interface
 func (s signedExecutionPayloadHeader) Header() (interfaces.ROExecutionPayloadHeaderEPBS, error) {
 	return WrappedROExecutionPayloadHeaderEPBS(s.s.Message)
+}
+
+// SigningRoot returns the signing root for the given domain
+func (s signedExecutionPayloadHeader) SigningRoot(domain []byte) (root [32]byte, err error) {
+	return signing.ComputeSigningRoot(s.s.Message, domain)
 }
 
 // Signature returns the wrapped signature

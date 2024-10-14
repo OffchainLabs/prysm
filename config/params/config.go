@@ -303,6 +303,9 @@ type BeaconChainConfig struct {
 	// DeprecatedTargetBlobsPerBlockElectra defines the target number of blobs per block post Electra hard fork.
 	// Deprecated: This field is no longer supported. Avoid using it.
 	DeprecatedTargetBlobsPerBlockElectra int `yaml:"TARGET_BLOBS_PER_BLOCK_ELECTRA" spec:"true"`
+
+	// Builder
+	MinBuilderBalance uint64 `yaml:"MIN_BUILDER_BALANCE" spec:"true"` // MinBuilderBalance defines the minimal builder balance to accept bid from.
 }
 
 // InitializeForkSchedule initializes the schedules forks baked into the config.
