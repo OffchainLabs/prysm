@@ -8,6 +8,7 @@ go_library(
     deps = [
         "//config/fieldparams:go_default_library",
         "//consensus-types/primitives:go_default_library",
+        "//math:go_default_library",
         "//proto/engine/v1:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "@com_github_prysmaticlabs_go_bitfield//:go_default_library",

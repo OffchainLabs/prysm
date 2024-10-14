@@ -230,6 +230,31 @@ func BeaconState(t *testing.T) *ethpb.BeaconStateEPBS {
 			BlockSummaryRoot: randomBytes(32, t),
 			StateSummaryRoot: randomBytes(32, t),
 		}},
+		DepositRequestsStartIndex:     randomUint64(t),
+		DepositBalanceToConsume:       primitives.Gwei(randomUint64(t)),
+		ExitBalanceToConsume:          primitives.Gwei(randomUint64(t)),
+		EarliestExitEpoch:             primitives.Epoch(randomUint64(t)),
+		ConsolidationBalanceToConsume: primitives.Gwei(randomUint64(t)),
+		EarliestConsolidationEpoch:    primitives.Epoch(randomUint64(t)),
+		PendingBalanceDeposits: []*ethpb.PendingBalanceDeposit{
+			{
+				Index:  primitives.ValidatorIndex(randomUint64(t)),
+				Amount: randomUint64(t),
+			},
+		},
+		PendingPartialWithdrawals: []*ethpb.PendingPartialWithdrawal{
+			{
+				Index:             primitives.ValidatorIndex(randomUint64(t)),
+				Amount:            randomUint64(t),
+				WithdrawableEpoch: primitives.Epoch(randomUint64(t)),
+			},
+		},
+		PendingConsolidations: []*ethpb.PendingConsolidation{
+			{
+				SourceIndex: primitives.ValidatorIndex(randomUint64(t)),
+				TargetIndex: primitives.ValidatorIndex(randomUint64(t)),
+			},
+		},
 		PreviousInclusionListProposer: primitives.ValidatorIndex(randomUint64(t)),
 		PreviousInclusionListSlot:     primitives.Slot(randomUint64(t)),
 		LatestInclusionListProposer:   primitives.ValidatorIndex(randomUint64(t)),
@@ -245,7 +270,7 @@ func BeaconState(t *testing.T) *ethpb.BeaconStateEPBS {
 			Value:                  randomUint64(t),
 			BlobKzgCommitmentsRoot: randomBytes(32, t),
 		},
-		LatestWithdrawalsRoot: randomBytes(32, t),
+		LastWithdrawalsRoot: randomBytes(32, t),
 	}
 }
 

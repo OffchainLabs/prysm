@@ -460,6 +460,18 @@ message BeaconStateEPBS {
   uint64 next_withdrawal_validator_index = 11002 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.ValidatorIndex"];
   repeated HistoricalSummary historical_summaries = 11003 [(ethereum.eth.ext.ssz_max) = "16777216"];
 
+  // Fields introduced in Electra fork [12001-13000]
+  uint64 deposit_requests_start_index = 12001;
+  uint64 deposit_balance_to_consume = 12002 [(ethereum.eth.ext.cast_type) =
+"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Gwei"];
+  uint64 exit_balance_to_consume = 12003 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Gwei"];
+  uint64 earliest_exit_epoch = 12004 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Epoch"];
+  uint64 consolidation_balance_to_consume = 12005 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Gwei"];
+  uint64 earliest_consolidation_epoch = 12006 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Epoch"];
+  repeated PendingBalanceDeposit pending_balance_deposits = 12007 [(ethereum.eth.ext.ssz_max) = "pending_balance_deposits_limit"];
+  repeated PendingPartialWithdrawal pending_partial_withdrawals = 12008 [(ethereum.eth.ext.ssz_max) = "pending_partial_withdrawals_limit"];
+  repeated PendingConsolidation pending_consolidations = 12009 [(ethereum.eth.ext.ssz_max) = "pending_consolidations_limit"];
+
   // Fields introduced in ePBS fork [13001-14000]
   uint64 previous_inclusion_list_proposer = 13001 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.ValidatorIndex"];
   uint64 previous_inclusion_list_slot = 13002 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"];
@@ -468,7 +480,7 @@ message BeaconStateEPBS {
   bytes latest_block_hash = 13005 [(ethereum.eth.ext.ssz_size) = "32"];
   uint64 latest_full_slot = 13006 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"];
   ethereum.engine.v1.ExecutionPayloadHeaderEPBS execution_payload_header = 13007;
-  bytes latest_withdrawals_root = 13008 [(ethereum.eth.ext.ssz_size) = "32"];
+  bytes last_withdrawals_root = 13008 [(ethereum.eth.ext.ssz_size) = "32"];
 }
 
 
