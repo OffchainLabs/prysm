@@ -30,6 +30,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/v5/network/forks"
+	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"google.golang.org/grpc/codes"
@@ -42,44 +43,45 @@ import (
 // and committees in which particular validators need to perform their responsibilities,
 // and more.
 type Server struct {
-	Ctx                        context.Context
-	PayloadIDCache             *cache.PayloadIDCache
-	TrackedValidatorsCache     *cache.TrackedValidatorsCache
-	HeadFetcher                blockchain.HeadFetcher
-	ForkFetcher                blockchain.ForkFetcher
-	ForkchoiceFetcher          blockchain.ForkchoiceFetcher
-	GenesisFetcher             blockchain.GenesisFetcher
-	FinalizationFetcher        blockchain.FinalizationFetcher
-	TimeFetcher                blockchain.TimeFetcher
-	BlockFetcher               execution.POWBlockFetcher
-	DepositFetcher             cache.DepositFetcher
-	ChainStartFetcher          execution.ChainStartFetcher
-	Eth1InfoFetcher            execution.ChainInfoFetcher
-	OptimisticModeFetcher      blockchain.OptimisticModeFetcher
-	SyncChecker                sync.Checker
-	StateNotifier              statefeed.Notifier
-	BlockNotifier              blockfeed.Notifier
-	P2P                        p2p.Broadcaster
-	AttPool                    attestations.Pool
-	SlashingsPool              slashings.PoolManager
-	ExitPool                   voluntaryexits.PoolManager
-	SyncCommitteePool          synccommittee.Pool
-	BlockReceiver              blockchain.BlockReceiver
-	BlobReceiver               blockchain.BlobReceiver
-	PayloadAttestationReceiver blockchain.PayloadAttestationReceiver
-	ExecutionPayloadReceiver   blockchain.ExecutionPayloadReceiver
-	MockEth1Votes              bool
-	Eth1BlockFetcher           execution.POWBlockFetcher
-	PendingDepositsFetcher     depositsnapshot.PendingDepositsFetcher
-	OperationNotifier          opfeed.Notifier
-	StateGen                   stategen.StateManager
-	ReplayerBuilder            stategen.ReplayerBuilder
-	BeaconDB                   db.HeadAccessDatabase
-	ExecutionEngineCaller      execution.EngineCaller
-	BlockBuilder               builder.BlockBuilder
-	BLSChangesPool             blstoexec.PoolManager
-	ClockWaiter                startup.ClockWaiter
-	CoreService                *core.Service
+	Ctx                          context.Context
+	PayloadIDCache               *cache.PayloadIDCache
+	TrackedValidatorsCache       *cache.TrackedValidatorsCache
+	HeadFetcher                  blockchain.HeadFetcher
+	ForkFetcher                  blockchain.ForkFetcher
+	ForkchoiceFetcher            blockchain.ForkchoiceFetcher
+	GenesisFetcher               blockchain.GenesisFetcher
+	FinalizationFetcher          blockchain.FinalizationFetcher
+	TimeFetcher                  blockchain.TimeFetcher
+	BlockFetcher                 execution.POWBlockFetcher
+	DepositFetcher               cache.DepositFetcher
+	ChainStartFetcher            execution.ChainStartFetcher
+	Eth1InfoFetcher              execution.ChainInfoFetcher
+	OptimisticModeFetcher        blockchain.OptimisticModeFetcher
+	SyncChecker                  sync.Checker
+	StateNotifier                statefeed.Notifier
+	BlockNotifier                blockfeed.Notifier
+	P2P                          p2p.Broadcaster
+	AttPool                      attestations.Pool
+	SlashingsPool                slashings.PoolManager
+	ExitPool                     voluntaryexits.PoolManager
+	SyncCommitteePool            synccommittee.Pool
+	BlockReceiver                blockchain.BlockReceiver
+	BlobReceiver                 blockchain.BlobReceiver
+	PayloadAttestationReceiver   blockchain.PayloadAttestationReceiver
+	ExecutionPayloadReceiver     blockchain.ExecutionPayloadReceiver
+	MockEth1Votes                bool
+	Eth1BlockFetcher             execution.POWBlockFetcher
+	PendingDepositsFetcher       depositsnapshot.PendingDepositsFetcher
+	OperationNotifier            opfeed.Notifier
+	StateGen                     stategen.StateManager
+	ReplayerBuilder              stategen.ReplayerBuilder
+	BeaconDB                     db.HeadAccessDatabase
+	ExecutionEngineCaller        execution.EngineCaller
+	BlockBuilder                 builder.BlockBuilder
+	BLSChangesPool               blstoexec.PoolManager
+	ClockWaiter                  startup.ClockWaiter
+	CoreService                  *core.Service
+	signedExecutionPayloadHeader *enginev1.SignedExecutionPayloadHeader
 }
 
 // WaitForActivation checks if a validator public key exists in the active validator registry of the current

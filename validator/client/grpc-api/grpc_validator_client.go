@@ -12,6 +12,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
+	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
 	log "github.com/sirupsen/logrus"
@@ -164,6 +165,10 @@ func (c *grpcValidatorClient) GetPayloadAttestationData(ctx context.Context, in 
 
 func (c *grpcValidatorClient) SubmitPayloadAttestation(ctx context.Context, in *ethpb.PayloadAttestationMessage) (*empty.Empty, error) {
 	return c.beaconNodeValidatorClient.SubmitPayloadAttestation(ctx, in)
+}
+
+func (c *grpcValidatorClient) SubmitSignedExecutionPayloadHeader(ctx context.Context, in *enginev1.SignedExecutionPayloadHeader) (*empty.Empty, error) {
+	return c.beaconNodeValidatorClient.SubmitSignedExecutionPayloadHeader(ctx, in)
 }
 
 func NewGrpcValidatorClient(cc grpc.ClientConnInterface) iface.ValidatorClient {

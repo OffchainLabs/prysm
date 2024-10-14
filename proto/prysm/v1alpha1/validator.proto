@@ -357,7 +357,9 @@ service BeaconNodeValidator {
     rpc GetPayloadAttestationData(GetPayloadAttestationDataRequest) returns (PayloadAttestationData) {}
     rpc SubmitPayloadAttestation(PayloadAttestationMessage) returns (google.protobuf.Empty) {}
 
+    // ePBS RPC endpoints
     rpc SubmitSignedExecutionPayloadEnvelope(ethereum.engine.v1.SignedExecutionPayloadEnvelope) returns (google.protobuf.Empty) {}
+    rpc SubmitSignedExecutionPayloadHeader(ethereum.engine.v1.SignedExecutionPayloadHeader) returns (google.protobuf.Empty) {}
 }
 
 message GetPayloadAttestationDataRequest {
