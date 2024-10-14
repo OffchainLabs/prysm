@@ -59,7 +59,7 @@ func InitializeFromProtoUnsafeEpbs(st *ethpb.BeaconStateEPBS) (*BeaconState, err
 		earliestExitEpoch:             st.EarliestExitEpoch,
 		consolidationBalanceToConsume: st.ConsolidationBalanceToConsume,
 		earliestConsolidationEpoch:    st.EarliestConsolidationEpoch,
-		pendingBalanceDeposits:        st.PendingBalanceDeposits,
+		pendingDeposits:               st.PendingDeposits,
 		pendingPartialWithdrawals:     st.PendingPartialWithdrawals,
 		pendingConsolidations:         st.PendingConsolidations,
 
@@ -69,12 +69,11 @@ func InitializeFromProtoUnsafeEpbs(st *ethpb.BeaconStateEPBS) (*BeaconState, err
 		latestExecutionPayloadHeaderEPBS: st.LatestExecutionPayloadHeader,
 		lastWithdrawalsRoot:              bytesutil.ToBytes32(st.LastWithdrawalsRoot),
 
-		dirtyFields:         make(map[types.FieldIndex]bool, fieldCount),
-		dirtyIndices:        make(map[types.FieldIndex][]uint64, fieldCount),
-		stateFieldLeaves:    make(map[types.FieldIndex]*fieldtrie.FieldTrie, fieldCount),
-		rebuildTrie:         make(map[types.FieldIndex]bool, fieldCount),
-		valMapHandler:       stateutil.NewValMapHandler(st.Validators),
-		validatorIndexCache: newFinalizedValidatorIndexCache(), // only used in post-electra and only populates when finalizing, otherwise it falls back to processing the full validator set
+		dirtyFields:      make(map[types.FieldIndex]bool, fieldCount),
+		dirtyIndices:     make(map[types.FieldIndex][]uint64, fieldCount),
+		stateFieldLeaves: make(map[types.FieldIndex]*fieldtrie.FieldTrie, fieldCount),
+		rebuildTrie:      make(map[types.FieldIndex]bool, fieldCount),
+		valMapHandler:    stateutil.NewValMapHandler(st.Validators),
 	}
 
 	if features.Get().EnableExperimentalState {
@@ -129,7 +128,7 @@ func InitializeFromProtoUnsafeEpbs(st *ethpb.BeaconStateEPBS) (*BeaconState, err
 	b.sharedFieldReferences[types.PreviousEpochParticipationBits] = stateutil.NewRef(1)
 	b.sharedFieldReferences[types.CurrentEpochParticipationBits] = stateutil.NewRef(1)
 	b.sharedFieldReferences[types.HistoricalSummaries] = stateutil.NewRef(1)
-	b.sharedFieldReferences[types.PendingBalanceDeposits] = stateutil.NewRef(1)
+	b.sharedFieldReferences[types.PendingDeposits] = stateutil.NewRef(1)
 	b.sharedFieldReferences[types.PendingPartialWithdrawals] = stateutil.NewRef(1)
 	b.sharedFieldReferences[types.PendingConsolidations] = stateutil.NewRef(1)
 	if !features.Get().EnableExperimentalState {

@@ -151,7 +151,7 @@ func WithPayloadEnvelopeCache(r *sync.Map) Option {
 	}
 }
 
-func WithPayloadReconstructor(r execution.PayloadReconstructor) Option {
+func WithReconstructor(r execution.Reconstructor) Option {
 	return func(s *Service) error {
 		s.cfg.executionReconstructor = r
 		return nil

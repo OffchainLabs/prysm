@@ -123,7 +123,7 @@ var epbsFields = append(
 	types.EarliestExitEpoch,
 	types.ConsolidationBalanceToConsume,
 	types.EarliestConsolidationEpoch,
-	types.PendingBalanceDeposits,
+	types.PendingDeposits,
 	types.PendingPartialWithdrawals,
 	types.PendingConsolidations,
 	types.LatestBlockHash, // ePBS fields start here

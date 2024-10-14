@@ -88,7 +88,8 @@ func (s *Service) notifyNewEnvelope(ctx context.Context, envelope interfaces.ROE
 		return false, errors.Wrap(err, "could not get parent block root")
 	}
 	pr := common.Hash(parentRoot)
-	lastValidHash, err := s.cfg.ExecutionEngineCaller.NewPayload(ctx, payload, versionedHashes, &pr)
+	requests := envelope.ExecutionRequests()
+	lastValidHash, err := s.cfg.ExecutionEngineCaller.NewPayload(ctx, payload, versionedHashes, &pr, requests)
 	switch {
 	case err == nil:
 		newPayloadValidNodeCount.Inc()

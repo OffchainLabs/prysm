@@ -247,10 +247,13 @@ func BeaconState(t *testing.T) *ethpb.BeaconStateEPBS {
 		EarliestExitEpoch:             primitives.Epoch(randomUint64(t)),
 		ConsolidationBalanceToConsume: primitives.Gwei(randomUint64(t)),
 		EarliestConsolidationEpoch:    primitives.Epoch(randomUint64(t)),
-		PendingBalanceDeposits: []*ethpb.PendingBalanceDeposit{
+		PendingDeposits: []*ethpb.PendingDeposit{
 			{
-				Index:  primitives.ValidatorIndex(randomUint64(t)),
-				Amount: randomUint64(t),
+				PublicKey:             randomBytes(48, t),
+				WithdrawalCredentials: randomBytes(32, t),
+				Amount:                randomUint64(t),
+				Signature:             randomBytes(96, t),
+				Slot:                  primitives.Slot(randomUint64(t)),
 			},
 		},
 		PendingPartialWithdrawals: []*ethpb.PendingPartialWithdrawal{
