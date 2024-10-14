@@ -91,3 +91,27 @@ func TestGetPayloadTimelinessCommittee(t *testing.T) {
 
 	require.DeepEqual(t, committee1[len(committee1)-64:], ptc[:64])
 }
+
+func Test_PtcAllocation(t *testing.T) {
+	tests := []struct {
+		totalActive        uint64
+		memberPerCommittee uint64
+		committeesPerSlot  uint64
+	}{
+		{64, 512, 1},
+		{params.BeaconConfig().MinGenesisActiveValidatorCount, 128, 4},
+		{25600, 128, 4},
+		{256000, 16, 32},
+		{1024000, 8, 64},
+	}
+
+	for _, test := range tests {
+		committeesPerSlot, memberPerCommittee := helpers.PtcAllocation(test.totalActive)
+		if memberPerCommittee != test.memberPerCommittee {
+			t.Errorf("memberPerCommittee(%d) = %d; expected %d", test.totalActive, memberPerCommittee, test.memberPerCommittee)
+		}
+		if committeesPerSlot != test.committeesPerSlot {
+			t.Errorf("committeesPerSlot(%d) = %d; expected %d", test.totalActive, committeesPerSlot, test.committeesPerSlot)
+		}
+	}
+}

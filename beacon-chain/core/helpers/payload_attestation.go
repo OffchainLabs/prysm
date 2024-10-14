@@ -74,8 +74,7 @@ func GetPayloadTimelinessCommittee(ctx context.Context, state state.ReadOnlyBeac
 	if err != nil {
 		return nil, errors.Wrap(err, "could not compute active validator count")
 	}
-	committeesPerSlot := math.LargestPowerOfTwo(math.Min(SlotCommitteeCount(activeCount), fieldparams.PTCSize))
-	membersPerCommittee := fieldparams.PTCSize / committeesPerSlot
+	committeesPerSlot, membersPerCommittee := PtcAllocation(activeCount)
 	for i := uint64(0); i < committeesPerSlot; i++ {
 		committee, err := BeaconCommitteeFromState(ctx, state, slot, primitives.CommitteeIndex(i))
 		if err != nil {
@@ -87,5 +86,15 @@ func GetPayloadTimelinessCommittee(ctx context.Context, state state.ReadOnlyBeac
 		start := uint64(len(committee)) - membersPerCommittee
 		indices = append(indices, committee[start:]...)
 	}
+	return
+}
+
+// PtcAllocation returns:
+// 1. The number of beacon committees that PTC will borrow from in a slot.
+// 2. The number of validators that PTC will borrow from in a beacon committee.
+func PtcAllocation(totalActive uint64) (committeesPerSlot, membersPerCommittee uint64) {
+	slotCommittees := SlotCommitteeCount(totalActive)
+	committeesPerSlot = math.LargestPowerOfTwo(math.Min(slotCommittees, fieldparams.PTCSize))
+	membersPerCommittee = fieldparams.PTCSize / committeesPerSlot
 	return
 }

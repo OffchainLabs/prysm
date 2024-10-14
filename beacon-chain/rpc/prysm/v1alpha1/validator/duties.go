@@ -108,6 +108,7 @@ func (vs *Server) duties(ctx context.Context, req *ethpb.DutiesRequest) (*ethpb.
 				assignment.Committee = ca.Committee
 				assignment.AttesterSlot = ca.AttesterSlot
 				assignment.CommitteeIndex = ca.CommitteeIndex
+				assignment.PtcSlot = ca.PtcSlot
 			}
 			// Save the next epoch assignments.
 			ca, ok = nextEpochAssignments[idx]
@@ -115,6 +116,7 @@ func (vs *Server) duties(ctx context.Context, req *ethpb.DutiesRequest) (*ethpb.
 				nextAssignment.Committee = ca.Committee
 				nextAssignment.AttesterSlot = ca.AttesterSlot
 				nextAssignment.CommitteeIndex = ca.CommitteeIndex
+				nextAssignment.PtcSlot = ca.PtcSlot
 			}
 		} else {
 			// If the validator isn't in the beacon state, try finding their deposit to determine their status.
