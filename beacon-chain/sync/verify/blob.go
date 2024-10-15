@@ -53,10 +53,12 @@ func BlobAlignsWithBlock(blob blocks.ROBlob, block blocks.ROBlock) error {
 }
 
 func ColumnAlignsWithBlock(col blocks.RODataColumn, block blocks.ROBlock, colVerifier verification.NewColumnVerifier) error {
+	// Exit early if the block is not at least a Deneb block.
 	if block.Version() < version.Deneb {
 		return nil
 	}
 
+	// Check if the block root in the column sidecar matches the block root.
 	if col.BlockRoot() != block.Root() {
 		return ErrColumnBlockMisaligned
 	}
@@ -64,25 +66,27 @@ func ColumnAlignsWithBlock(col blocks.RODataColumn, block blocks.ROBlock, colVer
 	// Verify commitment byte values match
 	commitments, err := block.Block().Body().BlobKzgCommitments()
 	if err != nil {
-		return err
+		return errors.Wrap(err, "blob KZG commitments")
 	}
 
 	if !reflect.DeepEqual(commitments, col.KzgCommitments) {
 		return errors.Wrapf(ErrMismatchedColumnCommitments, "commitment %#v != block commitment %#v for block root %#x at slot %d ", col.KzgCommitments, commitments, block.Root(), col.Slot())
 	}
+
 	vf := colVerifier(col, verification.InitsyncColumnSidecarRequirements)
 	if err := vf.DataColumnIndexInBounds(); err != nil {
-		return err
+		return errors.Wrap(err, "data column index out of bounds")
 	}
 
 	// Filter out columns which did not pass the KZG inclusion proof verification.
 	if err := vf.SidecarInclusionProven(); err != nil {
-		return err
+		return errors.Wrap(err, "inclusion proof verification")
 	}
 
 	// Filter out columns which did not pass the KZG proof verification.
 	if err := vf.SidecarKzgProofVerified(); err != nil {
-		return err
+		return errors.Wrap(err, "KZG proof verification")
 	}
+
 	return nil
 }

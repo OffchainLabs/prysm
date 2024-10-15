@@ -157,12 +157,15 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 	validationTime := s.cfg.clock.Now().Sub(receivedTime)
 
 	peerGossipScore := s.cfg.p2p.Peers().Scorers().GossipScorer().Score(pid)
+
+	pidString := pid.String()
+
 	log.
 		WithFields(logging.DataColumnFields(ds)).
 		WithFields(logrus.Fields{
 			"sinceSlotStartTime": sinceSlotStartTime,
 			"validationTime":     validationTime,
-			"peer":               pid[len(pid)-6:],
+			"peer":               pidString[len(pidString)-6:],
 			"peerGossipScore":    peerGossipScore,
 		}).
 		Debug("Accepted data column sidecar gossip")

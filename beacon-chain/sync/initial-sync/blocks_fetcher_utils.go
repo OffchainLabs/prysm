@@ -6,7 +6,9 @@ import (
 
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	coreTime "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
 	p2pTypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
 	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
@@ -369,21 +371,54 @@ func (f *blocksFetcher) calculateHeadAndTargetEpochs() (headEpoch, targetEpoch p
 	return headEpoch, targetEpoch, peers
 }
 
+// custodyAllNeededColumns filter `inputPeers` that custody all columns in `columns`.
+func (f *blocksFetcher) custodyAllNeededColumns(inputPeers map[peer.ID]bool, columns map[uint64]bool) (map[peer.ID]bool, error) {
+	outputPeers := make(map[peer.ID]bool, len(inputPeers))
+
+loop:
+	for peer := range inputPeers {
+		// Get the node ID from the peer ID.
+		nodeID, err := p2p.ConvertPeerIDToNodeID(peer)
+		if err != nil {
+			return nil, errors.Wrap(err, "convert peer ID to node ID")
+		}
+
+		// Get the custody columns count from the peer.
+		custodyCount := f.p2p.DataColumnsCustodyCountFromRemotePeer(peer)
+
+		// Get the custody columns from the peer.
+		remoteCustodyColumns, err := peerdas.CustodyColumns(nodeID, custodyCount)
+		if err != nil {
+			return nil, errors.Wrap(err, "custody columns")
+		}
+
+		for column := range columns {
+			if !remoteCustodyColumns[column] {
+				continue loop
+			}
+		}
+
+		outputPeers[peer] = true
+	}
+
+	return outputPeers, nil
+}
+
 // peersWithSlotAndDataColumns returns a list of peers that should custody all needed data columns for the given slot.
 func (f *blocksFetcher) peersWithSlotAndDataColumns(
+	ctx context.Context,
 	peers []peer.ID,
 	targetSlot primitives.Slot,
 	dataColumns map[uint64]bool,
-) (map[peer.ID]bool, []string, error) {
+	count uint64,
+) ([]peer.ID, []string, error) {
 	peersCount := len(peers)
 
-	// TODO: Uncomment when we are not in devnet any more.
-	// TODO: Find a way to have this uncommented without being in devnet.
-	// // Filter peers based on the percentage of peers to be used in a request.
-	// peers = f.filterPeers(ctx, peers, peersPercentagePerRequest)
+	// Filter peers based on the percentage of peers to be used in a request.
+	peers = f.filterPeers(ctx, peers, peersPercentagePerRequestDataColumns)
 
 	// // Filter peers on bandwidth.
-	// peers = f.hasSufficientBandwidth(peers, blocksCount)
+	peers = f.hasSufficientBandwidth(peers, count)
 
 	// Select peers which custody ALL wanted columns.
 	// Basically, it is very unlikely that a non-supernode peer will have custody of all columns.
@@ -443,5 +478,16 @@ func (f *blocksFetcher) peersWithSlotAndDataColumns(
 		}
 	}
 
-	return finalPeers, descriptions, nil
+	// Convert the map to a slice.
+	finalPeersSlice := make([]peer.ID, 0, len(finalPeers))
+	for peer := range finalPeers {
+		finalPeersSlice = append(finalPeersSlice, peer)
+	}
+
+	// Shuffle the peers.
+	f.rand.Shuffle(len(finalPeersSlice), func(i, j int) {
+		finalPeersSlice[i], finalPeersSlice[j] = finalPeersSlice[j], finalPeersSlice[i]
+	})
+
+	return finalPeersSlice, descriptions, nil
 }
