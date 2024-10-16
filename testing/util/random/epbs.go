@@ -8,6 +8,7 @@ import (
 
 	"github.com/prysmaticlabs/go-bitfield"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
@@ -118,8 +119,12 @@ func AttestationData(t *testing.T) *ethpb.AttestationData {
 
 // Deposit creates a random Deposit for testing purposes.
 func Deposit(t *testing.T) *ethpb.Deposit {
+	proof := make([][]byte, 33)
+	for i := 0; i < 33; i++ {
+		proof[i] = randomBytes(32, t)
+	}
 	return &ethpb.Deposit{
-		Proof: [][]byte{randomBytes(32, t), randomBytes(32, t), randomBytes(32, t)},
+		Proof: proof,
 		Data:  DepositData(t),
 	}
 }
@@ -169,6 +174,11 @@ func VoluntaryExit(t *testing.T) *ethpb.VoluntaryExit {
 
 // BeaconState creates a random BeaconStateEPBS for testing purposes.
 func BeaconState(t *testing.T) *ethpb.BeaconStateEPBS {
+	slashing := make([]uint64, params.BeaconConfig().EpochsPerSlashingsVector)
+	pubkeys := make([][]byte, 512)
+	for i := range pubkeys {
+		pubkeys[i] = randomBytes(48, t)
+	}
 	return &ethpb.BeaconStateEPBS{
 		GenesisTime:           randomUint64(t),
 		GenesisValidatorsRoot: randomBytes(32, t),
@@ -208,7 +218,7 @@ func BeaconState(t *testing.T) *ethpb.BeaconStateEPBS {
 		},
 		Balances:                    []uint64{randomUint64(t)},
 		RandaoMixes:                 [][]byte{randomBytes(32, t), randomBytes(32, t), randomBytes(32, t)},
-		Slashings:                   []uint64{randomUint64(t)},
+		Slashings:                   slashing,
 		PreviousEpochParticipation:  randomBytes(32, t),
 		CurrentEpochParticipation:   randomBytes(32, t),
 		JustificationBits:           randomBytes(1, t),
@@ -217,11 +227,11 @@ func BeaconState(t *testing.T) *ethpb.BeaconStateEPBS {
 		FinalizedCheckpoint:         &ethpb.Checkpoint{Epoch: primitives.Epoch(randomUint64(t)), Root: randomBytes(32, t)},
 		InactivityScores:            []uint64{randomUint64(t)},
 		CurrentSyncCommittee: &ethpb.SyncCommittee{
-			Pubkeys:         [][]byte{randomBytes(48, t), randomBytes(48, t), randomBytes(48, t)},
+			Pubkeys:         pubkeys,
 			AggregatePubkey: randomBytes(48, t),
 		},
 		NextSyncCommittee: &ethpb.SyncCommittee{
-			Pubkeys:         [][]byte{randomBytes(48, t), randomBytes(48, t), randomBytes(48, t)},
+			Pubkeys:         pubkeys,
 			AggregatePubkey: randomBytes(48, t),
 		},
 		NextWithdrawalIndex:          randomUint64(t),
@@ -424,6 +434,30 @@ func InclusionSummary(t *testing.T) *enginev1.InclusionListSummary {
 			randomBytes(20, t),
 			randomBytes(20, t),
 		},
+	}
+}
+
+// SignedBlindPayloadEnvelope creates a random SignedBlindPayloadEnvelope for testing purposes.
+func SignedBlindPayloadEnvelope(t *testing.T) *ethpb.SignedBlindPayloadEnvelope {
+	return &ethpb.SignedBlindPayloadEnvelope{
+		Message:   BlindPayloadEnvelope(t),
+		Signature: randomBytes(96, t),
+	}
+}
+
+// BlindPayloadEnvelope creates a random BlindPayloadEnvelope for testing purposes.
+func BlindPayloadEnvelope(t *testing.T) *ethpb.BlindPayloadEnvelope {
+	withheld := randomUint64(t)%2 == 0
+	return &ethpb.BlindPayloadEnvelope{
+		PayloadRoot:                randomBytes(32, t),
+		BuilderIndex:               primitives.ValidatorIndex(randomUint64(t)),
+		BeaconBlockRoot:            randomBytes(32, t),
+		BlobKzgCommitments:         [][]byte{randomBytes(48, t), randomBytes(48, t), randomBytes(48, t)},
+		InclusionListProposerIndex: primitives.ValidatorIndex(randomUint64(t)),
+		InclusionListSlot:          primitives.Slot(randomUint64(t)),
+		InclusionListSignature:     randomBytes(96, t),
+		PayloadWithheld:            withheld,
+		StateRoot:                  randomBytes(32, t),
 	}
 }
 

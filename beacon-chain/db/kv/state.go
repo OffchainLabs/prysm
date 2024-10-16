@@ -252,6 +252,10 @@ func (s *Store) saveStatesEfficientInternal(ctx context.Context, tx *bolt.Tx, bl
 			if err := s.processElectra(ctx, rawType, rt[:], bucket, valIdxBkt, validatorKeys[i]); err != nil {
 				return err
 			}
+		case *ethpb.BeaconStateEPBS:
+			if err := s.processEPBS(ctx, rawType, rt[:], bucket, valIdxBkt, validatorKeys[i]); err != nil {
+				return err
+			}
 		default:
 			return errors.New("invalid state type")
 		}
@@ -357,6 +361,24 @@ func (s *Store) processElectra(ctx context.Context, pbState *ethpb.BeaconStateEl
 		return err
 	}
 	encodedState := snappy.Encode(nil, append(electraKey, rawObj...))
+	if err := bucket.Put(rootHash, encodedState); err != nil {
+		return err
+	}
+	pbState.Validators = valEntries
+	if err := valIdxBkt.Put(rootHash, validatorKey); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *Store) processEPBS(ctx context.Context, pbState *ethpb.BeaconStateEPBS, rootHash []byte, bucket, valIdxBkt *bolt.Bucket, validatorKey []byte) error {
+	valEntries := pbState.Validators
+	pbState.Validators = make([]*ethpb.Validator, 0)
+	rawObj, err := pbState.MarshalSSZ()
+	if err != nil {
+		return err
+	}
+	encodedState := snappy.Encode(nil, append(epbsKey, rawObj...))
 	if err := bucket.Put(rootHash, encodedState); err != nil {
 		return err
 	}
@@ -516,6 +538,19 @@ func (s *Store) unmarshalState(_ context.Context, enc []byte, validatorEntries [
 	}
 
 	switch {
+	case hasEpbsKey(enc):
+		protoState := &ethpb.BeaconStateEPBS{}
+		if err := protoState.UnmarshalSSZ(enc[len(epbsKey):]); err != nil {
+			return nil, errors.Wrap(err, "failed to unmarshal encoding for EPBS")
+		}
+		ok, err := s.isStateValidatorMigrationOver()
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			protoState.Validators = validatorEntries
+		}
+		return statenative.InitializeFromProtoEpbs(protoState)
 	case hasElectraKey(enc):
 		protoState := &ethpb.BeaconStateElectra{}
 		if err := protoState.UnmarshalSSZ(enc[len(electraKey):]); err != nil {
@@ -675,6 +710,19 @@ func marshalState(ctx context.Context, st state.ReadOnlyBeaconState) ([]byte, er
 			return nil, err
 		}
 		return snappy.Encode(nil, append(electraKey, rawObj...)), nil
+	case *ethpb.BeaconStateEPBS:
+		rState, ok := st.ToProtoUnsafe().(*ethpb.BeaconStateEPBS)
+		if !ok {
+			return nil, errors.New("non valid inner state")
+		}
+		if rState == nil {
+			return nil, errors.New("nil state")
+		}
+		rawObj, err := rState.MarshalSSZ()
+		if err != nil {
+			return nil, err
+		}
+		return snappy.Encode(nil, append(epbsKey, rawObj...)), nil
 	default:
 		return nil, errors.New("invalid inner state")
 	}

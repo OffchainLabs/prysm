@@ -65,3 +65,10 @@ func hasElectraBlindKey(enc []byte) bool {
 	}
 	return bytes.Equal(enc[:len(electraBlindKey)], electraBlindKey)
 }
+
+func hasEpbsKey(enc []byte) bool {
+	if len(epbsKey) >= len(enc) {
+		return false
+	}
+	return bytes.Equal(enc[:len(epbsKey)], epbsKey)
+}

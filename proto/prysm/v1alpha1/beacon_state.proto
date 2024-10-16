@@ -468,7 +468,7 @@ message BeaconStateEPBS {
   uint64 earliest_exit_epoch = 12004 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Epoch"];
   uint64 consolidation_balance_to_consume = 12005 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Gwei"];
   uint64 earliest_consolidation_epoch = 12006 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Epoch"];
-  repeated PendingBalanceDeposit pending_balance_deposits = 12007 [(ethereum.eth.ext.ssz_max) = "pending_balance_deposits_limit"];
+  repeated PendingDeposit pending_deposits = 12007 [(ethereum.eth.ext.ssz_max) = "pending_deposits_limit"];
   repeated PendingPartialWithdrawal pending_partial_withdrawals = 12008 [(ethereum.eth.ext.ssz_max) = "pending_partial_withdrawals_limit"];
   repeated PendingConsolidation pending_consolidations = 12009 [(ethereum.eth.ext.ssz_max) = "pending_consolidations_limit"];
 

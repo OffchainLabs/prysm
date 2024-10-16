@@ -174,10 +174,15 @@ ssz_electra_objs = [
 
 ssz_epbs_objs = [
 	"BeaconBlockEpbs",
+	"BeaconStateEPBS",
 	"SignedBeaconBlockEpbs",
 	"PayloadAttestationData",
 	"PayloadAttestation",
 	"PayloadAttestationMessage",
+	"BuilderBid",
+	"DepositSnapshot",
+	"SignedBlindPayloadEnvelope",
+	"BlindPayloadEnvelope",
 ]
 
 ssz_gen_marshal(
@@ -287,8 +292,6 @@ ssz_gen_marshal(
         "MetaDataV1",
         "SignedValidatorRegistrationV1",
         "ValidatorRegistrationV1",
-        "BuilderBid",
-        "DepositSnapshot",
     ],
 )
 
@@ -376,6 +379,7 @@ ssz_proto_files(
         "blobs.proto",
         "light_client.proto",
         "payload_attestation.proto",
+        "blind_payload_envelope.proto",
         "sync_committee.proto",
         "withdrawals.proto",
     ],
