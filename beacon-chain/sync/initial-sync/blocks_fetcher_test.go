@@ -15,7 +15,6 @@ import (
 
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
 	GoKZG "github.com/crate-crypto/go-kzg-4844"
-	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/libp2p/go-libp2p"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
@@ -41,7 +40,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	leakybucket "github.com/prysmaticlabs/prysm/v5/container/leaky-bucket"
 	"github.com/prysmaticlabs/prysm/v5/container/slice"
-	ecdsaprysm "github.com/prysmaticlabs/prysm/v5/crypto/ecdsa"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/v5/network/forks"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
@@ -1328,28 +1326,6 @@ type blockParams struct {
 	hasBlobs bool
 }
 
-func createPeer(t *testing.T, privateKeyOffset int, custodyCount uint64) (*enr.Record, peer.ID) {
-	privateKeyBytes := make([]byte, 32)
-	for i := 0; i < 32; i++ {
-		privateKeyBytes[i] = byte(privateKeyOffset + i)
-	}
-
-	unmarshalledPrivateKey, err := crypto.UnmarshalSecp256k1PrivateKey(privateKeyBytes)
-	require.NoError(t, err)
-
-	privateKey, err := ecdsaprysm.ConvertFromInterfacePrivKey(unmarshalledPrivateKey)
-	require.NoError(t, err)
-
-	peerID, err := peer.IDFromPrivateKey(unmarshalledPrivateKey)
-	require.NoError(t, err)
-
-	record := &enr.Record{}
-	record.Set(peerdas.Csc(custodyCount))
-	record.Set(enode.Secp256k1(privateKey.PublicKey))
-
-	return record, peerID
-}
-
 func TestCustodyColumns(t *testing.T) {
 	blocksFetcher := newBlocksFetcher(context.Background(), &blocksFetcherConfig{
 		p2p: p2ptest.NewTestP2P(t),
@@ -1446,7 +1422,7 @@ func createAndConnectPeer(
 
 		// Get the response to send.
 		items, ok := peerParams.toRespond[reqString]
-		require.Equal(t, true, ok)
+		require.Equal(t, true, ok, "no response to send for request %s", reqString)
 
 		for _, responseParams := range items[countFromRequest[reqString]] {
 			// Get data columns sidecars for this slot.
@@ -1707,7 +1683,13 @@ func TestBuildBwbSlices(t *testing.T) {
 				blockRoot := bwb.Block.Root()
 				missingColumnsByRoot[blockRoot] = missingColumns
 			}
-			bwbSlices, err := buildBwbSlices(bwbs, missingColumnsByRoot)
+
+			wrappedBwbsMissingColumns := &bwbsMissingColumns{
+				bwbs:                 bwbs,
+				missingColumnsByRoot: missingColumnsByRoot,
+			}
+
+			bwbSlices, err := buildBwbSlices(wrappedBwbsMissingColumns)
 			require.NoError(t, err)
 			require.Equal(t, true, areBwbSlicesEqual(tt.bwbSlices, bwbSlices))
 		})
@@ -1718,6 +1700,7 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 	const (
 		blobsCount    = 6
 		peersHeadSlot = 100
+		delay         = 0 * time.Second
 	)
 
 	testCases := []struct {
@@ -1746,11 +1729,15 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 		// For the exact same data columns by range request, the peer will respond in the order they are specified.
 		peersParams []peerParams
 
+		// The max count of data columns that will be requested in each batch.
+		batchSize uint64
+
 		// OUTPUTS
 		// -------
 
 		// Data columns that should be added to `bwb`.
 		addedRODataColumns [][]int
+		isError            bool
 	}{
 		{
 			name:           "Deneb fork epoch not reached",
@@ -1760,7 +1747,9 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 				{slot: 2, hasBlobs: true}, // Before deneb fork epoch
 				{slot: 3, hasBlobs: true}, // Before deneb fork epoch
 			},
+			batchSize:          32,
 			addedRODataColumns: [][]int{nil, nil, nil},
+			isError:            false,
 		},
 		{
 			name:             "All blocks are before EIP-7954 fork epoch",
@@ -1773,7 +1762,9 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 				{slot: 27, hasBlobs: false}, // Before EIP-7954 fork epoch
 				{slot: 28, hasBlobs: false}, // Before EIP-7954 fork epoch
 			},
+			batchSize:          32,
 			addedRODataColumns: [][]int{nil, nil, nil, nil},
+			isError:            false,
 		},
 		{
 			name:             "All blocks with commitments before are EIP-7954 fork epoch",
@@ -1787,6 +1778,7 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 				{slot: 32, hasBlobs: false},
 				{slot: 33, hasBlobs: false},
 			},
+			batchSize:          32,
 			addedRODataColumns: [][]int{nil, nil, nil, nil, nil},
 		},
 		{
@@ -1808,7 +1800,9 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 				nil,
 				{6: true, 38: true, 70: true, 102: true},
 			},
+			batchSize:          32,
 			addedRODataColumns: [][]int{nil, nil, nil, nil, nil},
+			isError:            false,
 		},
 		{
 			name:             "Some blocks with blobs with missing data columns - one round needed",
@@ -1841,21 +1835,8 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 			},
 			peersParams: []peerParams{
 				{
-					// This peer custodies all the columns we need but
-					// will never respond any column.
-					csc: 128,
-					toRespond: map[string][][]responseParams{
-						(&ethpb.DataColumnSidecarsByRangeRequest{
-							StartSlot: 33,
-							Count:     4,
-							Columns:   []uint64{70, 102},
-						}).String(): {{}},
-						(&ethpb.DataColumnSidecarsByRangeRequest{
-							StartSlot: 37,
-							Count:     1,
-							Columns:   []uint64{6, 70},
-						}).String(): {{}},
-					},
+					csc:       0,
+					toRespond: map[string][][]responseParams{},
 				},
 				{
 					csc: 128,
@@ -1887,28 +1868,36 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 					},
 				},
 				{
-					// This peer custodies all the columns we need but
-					// will never respond any column.
 					csc: 128,
 					toRespond: map[string][][]responseParams{
 						(&ethpb.DataColumnSidecarsByRangeRequest{
 							StartSlot: 33,
 							Count:     4,
 							Columns:   []uint64{70, 102},
-						}).String(): {{}},
+						}).String(): {
+							{
+								{slot: 33, columnIndex: 70},
+								{slot: 33, columnIndex: 102},
+								{slot: 34, columnIndex: 70},
+								{slot: 34, columnIndex: 102},
+								{slot: 36, columnIndex: 70},
+								{slot: 36, columnIndex: 102},
+							},
+						},
 						(&ethpb.DataColumnSidecarsByRangeRequest{
 							StartSlot: 37,
 							Count:     1,
 							Columns:   []uint64{6, 70},
-						}).String(): {{}},
+						}).String(): {
+							{
+								{slot: 37, columnIndex: 6},
+								{slot: 37, columnIndex: 70},
+							},
+						},
 					},
 				},
-				{
-					// This peer should not be requested.
-					csc:       2,
-					toRespond: map[string][][]responseParams{},
-				},
 			},
+			batchSize: 32,
 			addedRODataColumns: [][]int{
 				nil,       // Slot 25
 				nil,       // Slot 27
@@ -1921,6 +1910,7 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 				nil,       // Slot 38
 				nil,       // Slot 39
 			},
+			isError: false,
 		},
 		{
 			name:             "Some blocks with blobs with missing data columns - partial responses",
@@ -1957,38 +1947,6 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 						(&ethpb.DataColumnSidecarsByRangeRequest{
 							StartSlot: 33,
 							Count:     4,
-							Columns:   []uint64{70},
-						}).String(): {
-							{
-								{slot: 33, columnIndex: 70},
-								{slot: 34, columnIndex: 70},
-								{slot: 36, columnIndex: 70},
-							},
-						},
-						(&ethpb.DataColumnSidecarsByRangeRequest{
-							StartSlot: 33,
-							Count:     4,
-							Columns:   []uint64{102},
-						}).String(): {{}},
-					},
-				},
-				{
-					csc: 128,
-					toRespond: map[string][][]responseParams{
-						(&ethpb.DataColumnSidecarsByRangeRequest{
-							StartSlot: 33,
-							Count:     4,
-							Columns:   []uint64{70, 102},
-						}).String(): {
-							{
-								{slot: 33, columnIndex: 102},
-								{slot: 34, columnIndex: 102},
-								{slot: 36, columnIndex: 102},
-							},
-						},
-						(&ethpb.DataColumnSidecarsByRangeRequest{
-							StartSlot: 33,
-							Count:     4,
 							Columns:   []uint64{102},
 						}).String(): {
 							{
@@ -1997,14 +1955,10 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 								{slot: 36, columnIndex: 102},
 							},
 						},
-						(&ethpb.DataColumnSidecarsByRangeRequest{
-							StartSlot: 33,
-							Count:     4,
-							Columns:   []uint64{70},
-						}).String(): {{}},
 					},
 				},
 			},
+			batchSize: 32,
 			addedRODataColumns: [][]int{
 				{70, 102}, // Slot 33
 				{70, 102}, // Slot 34
@@ -2020,9 +1974,7 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 			blocksParams: []blockParams{
 				{slot: 38, hasBlobs: true},
 			},
-			storedDataColumns: []map[int]bool{
-				{38: true, 102: true},
-			},
+			storedDataColumns: []map[int]bool{{38: true, 102: true}},
 			peersParams: []peerParams{
 				{
 					csc: 128,
@@ -2049,21 +2001,17 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 					},
 				},
 			},
-			addedRODataColumns: [][]int{
-				{6, 70},
-			},
+			batchSize:          32,
+			addedRODataColumns: [][]int{{6, 70}},
+			isError:            false,
 		},
 		{
-			name:             "Some blocks with blobs with missing data columns - first response is empty",
-			denebForkEpoch:   0,
-			eip7954ForkEpoch: 1,
-			currentSlot:      40,
-			blocksParams: []blockParams{
-				{slot: 38, hasBlobs: true},
-			},
-			storedDataColumns: []map[int]bool{
-				{38: true, 102: true},
-			},
+			name:              "Some blocks with blobs with missing data columns - first response is empty",
+			denebForkEpoch:    0,
+			eip7954ForkEpoch:  1,
+			currentSlot:       40,
+			blocksParams:      []blockParams{{slot: 38, hasBlobs: true}},
+			storedDataColumns: []map[int]bool{{38: true, 102: true}},
 			peersParams: []peerParams{
 				{
 					csc: 128,
@@ -2082,9 +2030,86 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 					},
 				},
 			},
-			addedRODataColumns: [][]int{
-				{6, 70},
+			batchSize:          32,
+			addedRODataColumns: [][]int{{6, 70}},
+			isError:            false,
+		},
+		{
+			name:              "Some blocks with blobs with missing data columns - no response at all",
+			denebForkEpoch:    0,
+			eip7954ForkEpoch:  1,
+			currentSlot:       40,
+			blocksParams:      []blockParams{{slot: 38, hasBlobs: true}},
+			storedDataColumns: []map[int]bool{{38: true, 102: true}},
+			peersParams: []peerParams{
+				{
+					csc: 128,
+					toRespond: map[string][][]responseParams{
+						(&ethpb.DataColumnSidecarsByRangeRequest{
+							StartSlot: 38,
+							Count:     1,
+							Columns:   []uint64{6, 70},
+						}).String(): {{}, {}, {}, {}, {}, {}, {}, {}, {}, {}},
+					},
+				},
 			},
+			batchSize:          32,
+			addedRODataColumns: [][]int{{}},
+			isError:            true,
+		},
+		{
+			name:             "Some blocks with blobs with missing data columns - request has to be split",
+			denebForkEpoch:   0,
+			eip7954ForkEpoch: 1,
+			currentSlot:      40,
+			blocksParams: []blockParams{
+				{slot: 32, hasBlobs: true}, {slot: 33, hasBlobs: true}, {slot: 34, hasBlobs: true}, {slot: 35, hasBlobs: true}, // 4
+				{slot: 36, hasBlobs: true}, {slot: 37, hasBlobs: true}, // 6
+			},
+			storedDataColumns: []map[int]bool{
+				nil, nil, nil, nil, // 4
+				nil, nil, // 6
+
+			},
+			peersParams: []peerParams{
+				{
+					csc: 128,
+					toRespond: map[string][][]responseParams{
+						(&ethpb.DataColumnSidecarsByRangeRequest{
+							StartSlot: 32,
+							Count:     4,
+							Columns:   []uint64{6, 38, 70, 102},
+						}).String(): {
+							{
+								{slot: 32, columnIndex: 6}, {slot: 32, columnIndex: 38}, {slot: 32, columnIndex: 70}, {slot: 32, columnIndex: 102},
+								{slot: 33, columnIndex: 6}, {slot: 33, columnIndex: 38}, {slot: 33, columnIndex: 70}, {slot: 33, columnIndex: 102},
+								{slot: 34, columnIndex: 6}, {slot: 34, columnIndex: 38}, {slot: 34, columnIndex: 70}, {slot: 34, columnIndex: 102},
+								{slot: 35, columnIndex: 6}, {slot: 35, columnIndex: 38}, {slot: 35, columnIndex: 70}, {slot: 35, columnIndex: 102},
+							},
+						},
+						(&ethpb.DataColumnSidecarsByRangeRequest{
+							StartSlot: 36,
+							Count:     2,
+							Columns:   []uint64{6, 38, 70, 102},
+						}).String(): {
+							{
+								{slot: 36, columnIndex: 6}, {slot: 36, columnIndex: 38}, {slot: 36, columnIndex: 70}, {slot: 36, columnIndex: 102},
+								{slot: 37, columnIndex: 6}, {slot: 37, columnIndex: 38}, {slot: 37, columnIndex: 70}, {slot: 37, columnIndex: 102},
+							},
+						},
+					},
+				},
+			},
+			batchSize: 4,
+			addedRODataColumns: [][]int{
+				{6, 38, 70, 102}, // Slot 32
+				{6, 38, 70, 102}, // Slot 33
+				{6, 38, 70, 102}, // Slot 34
+				{6, 38, 70, 102}, // Slot 35
+				{6, 38, 70, 102}, // Slot 36
+				{6, 38, 70, 102}, // Slot 37
+			},
+			isError: false,
 		},
 	}
 
@@ -2222,8 +2247,13 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 			})
 
 			// Fetch the data columns from the peers.
-			err = blocksFetcher.fetchDataColumnsFromPeers(ctx, bwb, peersID)
-			require.NoError(t, err)
+			err = blocksFetcher.fetchDataColumnsFromPeers(ctx, bwb, peersID, delay, tc.batchSize)
+			if !tc.isError {
+				require.NoError(t, err)
+			} else {
+				require.NotNil(t, err)
+				return
+			}
 
 			// Check the added RO data columns.
 			for i := range bwb {

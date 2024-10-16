@@ -2,6 +2,7 @@ package initialsync
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
@@ -644,48 +645,210 @@ func TestBlocksFetcher_currentHeadAndTargetEpochs(t *testing.T) {
 	}
 }
 
-func TestCustodyAllNeededColumns(t *testing.T) {
-	const dataColumnsCount = 31
+func TestSelectPeersToFetchDataColumnsFrom(t *testing.T) {
+	testCases := []struct {
+		name string
 
-	p2p := p2pt.NewTestP2P(t)
+		// Inputs
+		neededDataColumns map[uint64]bool
+		dataColumnsByPeer map[peer.ID]map[uint64]bool
 
-	dataColumns := make(map[uint64]bool, dataColumnsCount)
-	for i := range dataColumnsCount {
-		dataColumns[uint64(i)] = true
-	}
-
-	custodyCounts := [...]uint64{
-		4 * params.BeaconConfig().CustodyRequirement,
-		32 * params.BeaconConfig().CustodyRequirement,
-		4 * params.BeaconConfig().CustodyRequirement,
-		32 * params.BeaconConfig().CustodyRequirement,
-	}
-
-	expected := make(map[peer.ID]bool)
-
-	peersID := make(map[peer.ID]bool, len(custodyCounts))
-	for _, custodyCount := range custodyCounts {
-		peerRecord, peerID := createPeer(t, len(peersID), custodyCount)
-		peersID[peerID] = true
-		p2p.Peers().Add(peerRecord, peerID, nil, network.DirOutbound)
-		if custodyCount == 32*params.BeaconConfig().CustodyRequirement {
-			expected[peerID] = true
-		}
-	}
-
-	blocksFetcher := newBlocksFetcher(
-		context.Background(),
-		&blocksFetcherConfig{
-			p2p: p2p,
+		// Expected outputs
+		dataColumnsToFetchByPeer map[peer.ID][]uint64
+		err                      error
+	}{
+		{
+			name:              "no data columns needed",
+			neededDataColumns: map[uint64]bool{},
+			dataColumnsByPeer: map[peer.ID]map[uint64]bool{
+				peer.ID("peer1"): {1: true, 2: true},
+				peer.ID("peer2"): {3: true, 4: true},
+			},
+			dataColumnsToFetchByPeer: map[peer.ID][]uint64{},
+			err:                      nil,
 		},
-	)
+		{
+			name:              "one peer has all data columns needed",
+			neededDataColumns: map[uint64]bool{1: true, 3: true, 5: true},
+			dataColumnsByPeer: map[peer.ID]map[uint64]bool{
+				peer.ID("peer1"): {2: true, 4: true},
+				peer.ID("peer2"): {1: true, 3: true, 5: true, 7: true, 9: true},
+				peer.ID("peer3"): {6: true},
+			},
+			dataColumnsToFetchByPeer: map[peer.ID][]uint64{
+				peer.ID("peer2"): {1, 3, 5},
+			},
+			err: nil,
+		},
+		{
+			name:              "multiple peers are needed - 1",
+			neededDataColumns: map[uint64]bool{1: true, 3: true, 5: true, 7: true, 9: true},
+			dataColumnsByPeer: map[peer.ID]map[uint64]bool{
+				peer.ID("peer1"): {3: true, 7: true},
+				peer.ID("peer2"): {1: true, 3: true, 5: true, 9: true, 10: true},
+				peer.ID("peer3"): {6: true, 10: true, 12: true, 14: true, 16: true, 18: true, 20: true},
+				peer.ID("peer4"): {9: true},
+			},
+			dataColumnsToFetchByPeer: map[peer.ID][]uint64{
+				peer.ID("peer2"): {1, 3, 5, 9},
+				peer.ID("peer1"): {7},
+			},
+			err: nil,
+		},
+		{
+			name:              "multiple peers are needed - 2",
+			neededDataColumns: map[uint64]bool{1: true, 3: true, 5: true, 7: true, 9: true},
+			dataColumnsByPeer: map[peer.ID]map[uint64]bool{
+				peer.ID("peer1"): {9: true, 10: true},
+				peer.ID("peer2"): {3: true, 7: true},
+				peer.ID("peer3"): {1: true, 5: true},
+			},
+			dataColumnsToFetchByPeer: map[peer.ID][]uint64{
+				peer.ID("peer1"): {9},
+				peer.ID("peer2"): {3, 7},
+				peer.ID("peer3"): {1, 5},
+			},
+			err: nil,
+		},
+		{
+			name:              "some columns are not owned by any peer",
+			neededDataColumns: map[uint64]bool{1: true, 3: true, 5: true, 7: true, 9: true},
+			dataColumnsByPeer: map[peer.ID]map[uint64]bool{
+				peer.ID("peer1"): {9: true, 10: true},
+				peer.ID("peer2"): {2: true, 6: true},
+				peer.ID("peer3"): {1: true, 5: true},
+			},
+			dataColumnsToFetchByPeer: map[peer.ID][]uint64{
+				peer.ID("peer1"): {9},
+				peer.ID("peer3"): {1, 5},
+			},
+			err: errors.New("no peer to fetch the following data columns: [3 7]"),
+		},
+	}
 
-	actual, err := blocksFetcher.custodyAllNeededColumns(peersID, dataColumns)
-	require.NoError(t, err)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual, err := selectPeersToFetchDataColumnsFrom(tc.neededDataColumns, tc.dataColumnsByPeer)
 
-	require.Equal(t, len(expected), len(actual))
-	for peerID := range expected {
-		_, ok := actual[peerID]
-		require.Equal(t, true, ok)
+			if tc.err != nil {
+				require.Equal(t, tc.err.Error(), err.Error())
+			} else {
+				require.NoError(t, err)
+			}
+
+			expected := tc.dataColumnsToFetchByPeer
+			require.Equal(t, len(expected), len(actual))
+
+			for peerID, expectedDataColumns := range expected {
+				actualDataColumns, ok := actual[peerID]
+				require.Equal(t, true, ok)
+				require.DeepSSZEqual(t, expectedDataColumns, actualDataColumns)
+			}
+		})
+	}
+
+}
+
+func TestBuildDataColumnSidecarsByRangeRequest(t *testing.T) {
+	const batchSize = 32
+	testCases := []struct {
+		name      string
+		startSlot primitives.Slot
+		count     uint64
+		columns   []uint64
+		expected  []*ethpb.DataColumnSidecarsByRangeRequest
+	}{
+		{
+			name:      "one item - 1",
+			startSlot: 20,
+			count:     10,
+			columns:   []uint64{1, 2, 3, 4, 5},
+			expected: []*ethpb.DataColumnSidecarsByRangeRequest{
+				{
+					StartSlot: 20,
+					Count:     10,
+					Columns:   []uint64{1, 2, 3, 4, 5},
+				},
+			},
+		},
+		{
+			name:      "one item - 2",
+			startSlot: 20,
+			count:     32,
+			columns:   []uint64{1, 2, 3, 4, 5},
+			expected: []*ethpb.DataColumnSidecarsByRangeRequest{
+				{
+					StartSlot: 20,
+					Count:     32,
+					Columns:   []uint64{1, 2, 3, 4, 5},
+				},
+			},
+		},
+		{
+			name:      "two items - 1",
+			startSlot: 20,
+			count:     33,
+			columns:   []uint64{1, 2, 3, 4, 5},
+			expected: []*ethpb.DataColumnSidecarsByRangeRequest{
+				{
+					StartSlot: 20,
+					Count:     32,
+					Columns:   []uint64{1, 2, 3, 4, 5},
+				},
+				{
+					StartSlot: 52,
+					Count:     1,
+					Columns:   []uint64{1, 2, 3, 4, 5},
+				},
+			},
+		},
+		{
+			name:      "two items - 2",
+			startSlot: 20,
+			count:     64,
+			columns:   []uint64{1, 2, 3, 4, 5},
+			expected: []*ethpb.DataColumnSidecarsByRangeRequest{
+				{
+					StartSlot: 20,
+					Count:     32,
+					Columns:   []uint64{1, 2, 3, 4, 5},
+				},
+				{
+					StartSlot: 52,
+					Count:     32,
+					Columns:   []uint64{1, 2, 3, 4, 5},
+				},
+			},
+		},
+		{
+			name:      "three items",
+			startSlot: 20,
+			count:     66,
+			columns:   []uint64{1, 2, 3, 4, 5},
+			expected: []*ethpb.DataColumnSidecarsByRangeRequest{
+				{
+					StartSlot: 20,
+					Count:     32,
+					Columns:   []uint64{1, 2, 3, 4, 5},
+				},
+				{
+					StartSlot: 52,
+					Count:     32,
+					Columns:   []uint64{1, 2, 3, 4, 5},
+				},
+				{
+					StartSlot: 84,
+					Count:     2,
+					Columns:   []uint64{1, 2, 3, 4, 5},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := buildDataColumnSidecarsByRangeRequests(tc.startSlot, tc.count, tc.columns, batchSize)
+			require.DeepSSZEqual(t, tc.expected, actual)
+		})
 	}
 }

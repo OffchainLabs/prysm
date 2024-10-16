@@ -113,19 +113,20 @@ func (l *limiter) validateRequest(stream network.Stream, amt uint64) error {
 	defer l.RUnlock()
 
 	topic := string(stream.Protocol())
+	remotePeer := stream.Conn().RemotePeer()
 
 	collector, err := l.retrieveCollector(topic)
 	if err != nil {
 		return err
 	}
-	key := stream.Conn().RemotePeer().String()
-	remaining := collector.Remaining(key)
+
+	remaining := collector.Remaining(remotePeer.String())
 	// Treat each request as a minimum of 1.
 	if amt == 0 {
 		amt = 1
 	}
 	if amt > uint64(remaining) {
-		l.p2p.Peers().Scorers().BadResponsesScorer().Increment(stream.Conn().RemotePeer())
+		l.p2p.Peers().Scorers().BadResponsesScorer().Increment(remotePeer)
 		writeErrorResponseToStream(responseCodeInvalidRequest, p2ptypes.ErrRateLimited.Error(), stream, l.p2p)
 		return p2ptypes.ErrRateLimited
 	}
