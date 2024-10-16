@@ -7,13 +7,13 @@ import (
 	v1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
 )
 
-// MarshalSSZ ssz marshals the BeaconBlockePBS object
-func (b *BeaconBlockePBS) MarshalSSZ() ([]byte, error) {
+// MarshalSSZ ssz marshals the BeaconBlockEpbs object
+func (b *BeaconBlockEpbs) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(b)
 }
 
-// MarshalSSZTo ssz marshals the BeaconBlockePBS object to a target array
-func (b *BeaconBlockePBS) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+// MarshalSSZTo ssz marshals the BeaconBlockEpbs object to a target array
+func (b *BeaconBlockEpbs) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
 	offset := int(84)
 
@@ -40,7 +40,7 @@ func (b *BeaconBlockePBS) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	// Offset (4) 'Body'
 	dst = ssz.WriteOffset(dst, offset)
 	if b.Body == nil {
-		b.Body = new(BeaconBlockBodyePBS)
+		b.Body = new(BeaconBlockBodyEpbs)
 	}
 	offset += b.Body.SizeSSZ()
 
@@ -52,8 +52,8 @@ func (b *BeaconBlockePBS) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	return
 }
 
-// UnmarshalSSZ ssz unmarshals the BeaconBlockePBS object
-func (b *BeaconBlockePBS) UnmarshalSSZ(buf []byte) error {
+// UnmarshalSSZ ssz unmarshals the BeaconBlockEpbs object
+func (b *BeaconBlockEpbs) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
 	if size < 84 {
@@ -94,7 +94,7 @@ func (b *BeaconBlockePBS) UnmarshalSSZ(buf []byte) error {
 	{
 		buf = tail[o4:]
 		if b.Body == nil {
-			b.Body = new(BeaconBlockBodyePBS)
+			b.Body = new(BeaconBlockBodyEpbs)
 		}
 		if err = b.Body.UnmarshalSSZ(buf); err != nil {
 			return err
@@ -103,26 +103,26 @@ func (b *BeaconBlockePBS) UnmarshalSSZ(buf []byte) error {
 	return err
 }
 
-// SizeSSZ returns the ssz encoded size in bytes for the BeaconBlockePBS object
-func (b *BeaconBlockePBS) SizeSSZ() (size int) {
+// SizeSSZ returns the ssz encoded size in bytes for the BeaconBlockEpbs object
+func (b *BeaconBlockEpbs) SizeSSZ() (size int) {
 	size = 84
 
 	// Field (4) 'Body'
 	if b.Body == nil {
-		b.Body = new(BeaconBlockBodyePBS)
+		b.Body = new(BeaconBlockBodyEpbs)
 	}
 	size += b.Body.SizeSSZ()
 
 	return
 }
 
-// HashTreeRoot ssz hashes the BeaconBlockePBS object
-func (b *BeaconBlockePBS) HashTreeRoot() ([32]byte, error) {
+// HashTreeRoot ssz hashes the BeaconBlockEpbs object
+func (b *BeaconBlockEpbs) HashTreeRoot() ([32]byte, error) {
 	return ssz.HashWithDefaultHasher(b)
 }
 
-// HashTreeRootWith ssz hashes the BeaconBlockePBS object with a hasher
-func (b *BeaconBlockePBS) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+// HashTreeRootWith ssz hashes the BeaconBlockEpbs object with a hasher
+func (b *BeaconBlockEpbs) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
 
 	// Field (0) 'Slot'
@@ -154,15 +154,15 @@ func (b *BeaconBlockePBS) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	return
 }
 
-// MarshalSSZ ssz marshals the BeaconBlockBodyePBS object
-func (b *BeaconBlockBodyePBS) MarshalSSZ() ([]byte, error) {
+// MarshalSSZ ssz marshals the BeaconBlockBodyEpbs object
+func (b *BeaconBlockBodyEpbs) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(b)
 }
 
-// MarshalSSZTo ssz marshals the BeaconBlockBodyePBS object to a target array
-func (b *BeaconBlockBodyePBS) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+// MarshalSSZTo ssz marshals the BeaconBlockBodyEpbs object to a target array
+func (b *BeaconBlockBodyEpbs) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
-	offset := int(392)
+	offset := int(644)
 
 	// Field (0) 'RandaoReveal'
 	if size := len(b.RandaoReveal); size != 96 {
@@ -224,12 +224,13 @@ func (b *BeaconBlockBodyePBS) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = ssz.WriteOffset(dst, offset)
 	offset += len(b.BlsToExecutionChanges) * 172
 
-	// Offset (10) 'SignedExecutionPayloadHeader'
-	dst = ssz.WriteOffset(dst, offset)
+	// Field (10) 'SignedExecutionPayloadHeader'
 	if b.SignedExecutionPayloadHeader == nil {
 		b.SignedExecutionPayloadHeader = new(v1.SignedExecutionPayloadHeader)
 	}
-	offset += b.SignedExecutionPayloadHeader.SizeSSZ()
+	if dst, err = b.SignedExecutionPayloadHeader.MarshalSSZTo(dst); err != nil {
+		return
+	}
 
 	// Offset (11) 'PayloadAttestations'
 	dst = ssz.WriteOffset(dst, offset)
@@ -315,11 +316,6 @@ func (b *BeaconBlockBodyePBS) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 		}
 	}
 
-	// Field (10) 'SignedExecutionPayloadHeader'
-	if dst, err = b.SignedExecutionPayloadHeader.MarshalSSZTo(dst); err != nil {
-		return
-	}
-
 	// Field (11) 'PayloadAttestations'
 	if size := len(b.PayloadAttestations); size > 4 {
 		err = ssz.ErrListTooBigFn("--.PayloadAttestations", size, 4)
@@ -334,16 +330,16 @@ func (b *BeaconBlockBodyePBS) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	return
 }
 
-// UnmarshalSSZ ssz unmarshals the BeaconBlockBodyePBS object
-func (b *BeaconBlockBodyePBS) UnmarshalSSZ(buf []byte) error {
+// UnmarshalSSZ ssz unmarshals the BeaconBlockBodyEpbs object
+func (b *BeaconBlockBodyEpbs) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size < 392 {
+	if size < 644 {
 		return ssz.ErrSize
 	}
 
 	tail := buf
-	var o3, o4, o5, o6, o7, o9, o10, o11 uint64
+	var o3, o4, o5, o6, o7, o9, o11 uint64
 
 	// Field (0) 'RandaoReveal'
 	if cap(b.RandaoReveal) == 0 {
@@ -370,7 +366,7 @@ func (b *BeaconBlockBodyePBS) UnmarshalSSZ(buf []byte) error {
 		return ssz.ErrOffset
 	}
 
-	if o3 != 392 {
+	if o3 != 644 {
 		return ssz.ErrInvalidVariableOffset
 	}
 
@@ -407,13 +403,16 @@ func (b *BeaconBlockBodyePBS) UnmarshalSSZ(buf []byte) error {
 		return ssz.ErrOffset
 	}
 
-	// Offset (10) 'SignedExecutionPayloadHeader'
-	if o10 = ssz.ReadOffset(buf[384:388]); o10 > size || o9 > o10 {
-		return ssz.ErrOffset
+	// Field (10) 'SignedExecutionPayloadHeader'
+	if b.SignedExecutionPayloadHeader == nil {
+		b.SignedExecutionPayloadHeader = new(v1.SignedExecutionPayloadHeader)
+	}
+	if err = b.SignedExecutionPayloadHeader.UnmarshalSSZ(buf[384:640]); err != nil {
+		return err
 	}
 
 	// Offset (11) 'PayloadAttestations'
-	if o11 = ssz.ReadOffset(buf[388:392]); o11 > size || o10 > o11 {
+	if o11 = ssz.ReadOffset(buf[640:644]); o11 > size || o9 > o11 {
 		return ssz.ErrOffset
 	}
 
@@ -442,10 +441,10 @@ func (b *BeaconBlockBodyePBS) UnmarshalSSZ(buf []byte) error {
 		if err != nil {
 			return err
 		}
-		b.AttesterSlashings = make([]*AttesterSlashing, num)
+		b.AttesterSlashings = make([]*AttesterSlashingElectra, num)
 		err = ssz.UnmarshalDynamic(buf, num, func(indx int, buf []byte) (err error) {
 			if b.AttesterSlashings[indx] == nil {
-				b.AttesterSlashings[indx] = new(AttesterSlashing)
+				b.AttesterSlashings[indx] = new(AttesterSlashingElectra)
 			}
 			if err = b.AttesterSlashings[indx].UnmarshalSSZ(buf); err != nil {
 				return err
@@ -464,10 +463,10 @@ func (b *BeaconBlockBodyePBS) UnmarshalSSZ(buf []byte) error {
 		if err != nil {
 			return err
 		}
-		b.Attestations = make([]*Attestation, num)
+		b.Attestations = make([]*AttestationElectra, num)
 		err = ssz.UnmarshalDynamic(buf, num, func(indx int, buf []byte) (err error) {
 			if b.Attestations[indx] == nil {
-				b.Attestations[indx] = new(Attestation)
+				b.Attestations[indx] = new(AttestationElectra)
 			}
 			if err = b.Attestations[indx].UnmarshalSSZ(buf); err != nil {
 				return err
@@ -517,7 +516,7 @@ func (b *BeaconBlockBodyePBS) UnmarshalSSZ(buf []byte) error {
 
 	// Field (9) 'BlsToExecutionChanges'
 	{
-		buf = tail[o9:o10]
+		buf = tail[o9:o11]
 		num, err := ssz.DivideInt2(len(buf), 172, 16)
 		if err != nil {
 			return err
@@ -530,17 +529,6 @@ func (b *BeaconBlockBodyePBS) UnmarshalSSZ(buf []byte) error {
 			if err = b.BlsToExecutionChanges[ii].UnmarshalSSZ(buf[ii*172 : (ii+1)*172]); err != nil {
 				return err
 			}
-		}
-	}
-
-	// Field (10) 'SignedExecutionPayloadHeader'
-	{
-		buf = tail[o10:o11]
-		if b.SignedExecutionPayloadHeader == nil {
-			b.SignedExecutionPayloadHeader = new(v1.SignedExecutionPayloadHeader)
-		}
-		if err = b.SignedExecutionPayloadHeader.UnmarshalSSZ(buf); err != nil {
-			return err
 		}
 	}
 
@@ -564,9 +552,9 @@ func (b *BeaconBlockBodyePBS) UnmarshalSSZ(buf []byte) error {
 	return err
 }
 
-// SizeSSZ returns the ssz encoded size in bytes for the BeaconBlockBodyePBS object
-func (b *BeaconBlockBodyePBS) SizeSSZ() (size int) {
-	size = 392
+// SizeSSZ returns the ssz encoded size in bytes for the BeaconBlockBodyEpbs object
+func (b *BeaconBlockBodyEpbs) SizeSSZ() (size int) {
+	size = 644
 
 	// Field (3) 'ProposerSlashings'
 	size += len(b.ProposerSlashings) * 416
@@ -592,25 +580,19 @@ func (b *BeaconBlockBodyePBS) SizeSSZ() (size int) {
 	// Field (9) 'BlsToExecutionChanges'
 	size += len(b.BlsToExecutionChanges) * 172
 
-	// Field (10) 'SignedExecutionPayloadHeader'
-	if b.SignedExecutionPayloadHeader == nil {
-		b.SignedExecutionPayloadHeader = new(v1.SignedExecutionPayloadHeader)
-	}
-	size += b.SignedExecutionPayloadHeader.SizeSSZ()
-
 	// Field (11) 'PayloadAttestations'
 	size += len(b.PayloadAttestations) * 208
 
 	return
 }
 
-// HashTreeRoot ssz hashes the BeaconBlockBodyePBS object
-func (b *BeaconBlockBodyePBS) HashTreeRoot() ([32]byte, error) {
+// HashTreeRoot ssz hashes the BeaconBlockBodyEpbs object
+func (b *BeaconBlockBodyEpbs) HashTreeRoot() ([32]byte, error) {
 	return ssz.HashWithDefaultHasher(b)
 }
 
-// HashTreeRootWith ssz hashes the BeaconBlockBodyePBS object with a hasher
-func (b *BeaconBlockBodyePBS) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+// HashTreeRootWith ssz hashes the BeaconBlockBodyEpbs object with a hasher
+func (b *BeaconBlockBodyEpbs) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
 
 	// Field (0) 'RandaoReveal'
@@ -758,20 +740,20 @@ func (b *BeaconBlockBodyePBS) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	return
 }
 
-// MarshalSSZ ssz marshals the SignedBeaconBlockePBS object
-func (s *SignedBeaconBlockePBS) MarshalSSZ() ([]byte, error) {
+// MarshalSSZ ssz marshals the SignedBeaconBlockEpbs object
+func (s *SignedBeaconBlockEpbs) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(s)
 }
 
-// MarshalSSZTo ssz marshals the SignedBeaconBlockePBS object to a target array
-func (s *SignedBeaconBlockePBS) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+// MarshalSSZTo ssz marshals the SignedBeaconBlockEpbs object to a target array
+func (s *SignedBeaconBlockEpbs) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
 	offset := int(100)
 
 	// Offset (0) 'Block'
 	dst = ssz.WriteOffset(dst, offset)
 	if s.Block == nil {
-		s.Block = new(BeaconBlockePBS)
+		s.Block = new(BeaconBlockEpbs)
 	}
 	offset += s.Block.SizeSSZ()
 
@@ -790,8 +772,8 @@ func (s *SignedBeaconBlockePBS) MarshalSSZTo(buf []byte) (dst []byte, err error)
 	return
 }
 
-// UnmarshalSSZ ssz unmarshals the SignedBeaconBlockePBS object
-func (s *SignedBeaconBlockePBS) UnmarshalSSZ(buf []byte) error {
+// UnmarshalSSZ ssz unmarshals the SignedBeaconBlockEpbs object
+func (s *SignedBeaconBlockEpbs) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
 	if size < 100 {
@@ -820,7 +802,7 @@ func (s *SignedBeaconBlockePBS) UnmarshalSSZ(buf []byte) error {
 	{
 		buf = tail[o0:]
 		if s.Block == nil {
-			s.Block = new(BeaconBlockePBS)
+			s.Block = new(BeaconBlockEpbs)
 		}
 		if err = s.Block.UnmarshalSSZ(buf); err != nil {
 			return err
@@ -829,26 +811,26 @@ func (s *SignedBeaconBlockePBS) UnmarshalSSZ(buf []byte) error {
 	return err
 }
 
-// SizeSSZ returns the ssz encoded size in bytes for the SignedBeaconBlockePBS object
-func (s *SignedBeaconBlockePBS) SizeSSZ() (size int) {
+// SizeSSZ returns the ssz encoded size in bytes for the SignedBeaconBlockEpbs object
+func (s *SignedBeaconBlockEpbs) SizeSSZ() (size int) {
 	size = 100
 
 	// Field (0) 'Block'
 	if s.Block == nil {
-		s.Block = new(BeaconBlockePBS)
+		s.Block = new(BeaconBlockEpbs)
 	}
 	size += s.Block.SizeSSZ()
 
 	return
 }
 
-// HashTreeRoot ssz hashes the SignedBeaconBlockePBS object
-func (s *SignedBeaconBlockePBS) HashTreeRoot() ([32]byte, error) {
+// HashTreeRoot ssz hashes the SignedBeaconBlockEpbs object
+func (s *SignedBeaconBlockEpbs) HashTreeRoot() ([32]byte, error) {
 	return ssz.HashWithDefaultHasher(s)
 }
 
-// HashTreeRootWith ssz hashes the SignedBeaconBlockePBS object with a hasher
-func (s *SignedBeaconBlockePBS) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+// HashTreeRootWith ssz hashes the SignedBeaconBlockEpbs object with a hasher
+func (s *SignedBeaconBlockEpbs) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
 
 	// Field (0) 'Block'
@@ -862,6 +844,1466 @@ func (s *SignedBeaconBlockePBS) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 		return
 	}
 	hh.PutBytes(s.Signature)
+
+	hh.Merkleize(indx)
+	return
+}
+
+// MarshalSSZ ssz marshals the BeaconStateEPBS object
+func (b *BeaconStateEPBS) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(b)
+}
+
+// MarshalSSZTo ssz marshals the BeaconStateEPBS object to a target array
+func (b *BeaconStateEPBS) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(2736941)
+
+	// Field (0) 'GenesisTime'
+	dst = ssz.MarshalUint64(dst, b.GenesisTime)
+
+	// Field (1) 'GenesisValidatorsRoot'
+	if size := len(b.GenesisValidatorsRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.GenesisValidatorsRoot", size, 32)
+		return
+	}
+	dst = append(dst, b.GenesisValidatorsRoot...)
+
+	// Field (2) 'Slot'
+	dst = ssz.MarshalUint64(dst, uint64(b.Slot))
+
+	// Field (3) 'Fork'
+	if b.Fork == nil {
+		b.Fork = new(Fork)
+	}
+	if dst, err = b.Fork.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (4) 'LatestBlockHeader'
+	if b.LatestBlockHeader == nil {
+		b.LatestBlockHeader = new(BeaconBlockHeader)
+	}
+	if dst, err = b.LatestBlockHeader.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (5) 'BlockRoots'
+	if size := len(b.BlockRoots); size != 8192 {
+		err = ssz.ErrVectorLengthFn("--.BlockRoots", size, 8192)
+		return
+	}
+	for ii := 0; ii < 8192; ii++ {
+		if size := len(b.BlockRoots[ii]); size != 32 {
+			err = ssz.ErrBytesLengthFn("--.BlockRoots[ii]", size, 32)
+			return
+		}
+		dst = append(dst, b.BlockRoots[ii]...)
+	}
+
+	// Field (6) 'StateRoots'
+	if size := len(b.StateRoots); size != 8192 {
+		err = ssz.ErrVectorLengthFn("--.StateRoots", size, 8192)
+		return
+	}
+	for ii := 0; ii < 8192; ii++ {
+		if size := len(b.StateRoots[ii]); size != 32 {
+			err = ssz.ErrBytesLengthFn("--.StateRoots[ii]", size, 32)
+			return
+		}
+		dst = append(dst, b.StateRoots[ii]...)
+	}
+
+	// Offset (7) 'HistoricalRoots'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.HistoricalRoots) * 32
+
+	// Field (8) 'Eth1Data'
+	if b.Eth1Data == nil {
+		b.Eth1Data = new(Eth1Data)
+	}
+	if dst, err = b.Eth1Data.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Offset (9) 'Eth1DataVotes'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.Eth1DataVotes) * 72
+
+	// Field (10) 'Eth1DepositIndex'
+	dst = ssz.MarshalUint64(dst, b.Eth1DepositIndex)
+
+	// Offset (11) 'Validators'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.Validators) * 121
+
+	// Offset (12) 'Balances'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.Balances) * 8
+
+	// Field (13) 'RandaoMixes'
+	if size := len(b.RandaoMixes); size != 65536 {
+		err = ssz.ErrVectorLengthFn("--.RandaoMixes", size, 65536)
+		return
+	}
+	for ii := 0; ii < 65536; ii++ {
+		if size := len(b.RandaoMixes[ii]); size != 32 {
+			err = ssz.ErrBytesLengthFn("--.RandaoMixes[ii]", size, 32)
+			return
+		}
+		dst = append(dst, b.RandaoMixes[ii]...)
+	}
+
+	// Field (14) 'Slashings'
+	if size := len(b.Slashings); size != 8192 {
+		err = ssz.ErrVectorLengthFn("--.Slashings", size, 8192)
+		return
+	}
+	for ii := 0; ii < 8192; ii++ {
+		dst = ssz.MarshalUint64(dst, b.Slashings[ii])
+	}
+
+	// Offset (15) 'PreviousEpochParticipation'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.PreviousEpochParticipation)
+
+	// Offset (16) 'CurrentEpochParticipation'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.CurrentEpochParticipation)
+
+	// Field (17) 'JustificationBits'
+	if size := len(b.JustificationBits); size != 1 {
+		err = ssz.ErrBytesLengthFn("--.JustificationBits", size, 1)
+		return
+	}
+	dst = append(dst, b.JustificationBits...)
+
+	// Field (18) 'PreviousJustifiedCheckpoint'
+	if b.PreviousJustifiedCheckpoint == nil {
+		b.PreviousJustifiedCheckpoint = new(Checkpoint)
+	}
+	if dst, err = b.PreviousJustifiedCheckpoint.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (19) 'CurrentJustifiedCheckpoint'
+	if b.CurrentJustifiedCheckpoint == nil {
+		b.CurrentJustifiedCheckpoint = new(Checkpoint)
+	}
+	if dst, err = b.CurrentJustifiedCheckpoint.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (20) 'FinalizedCheckpoint'
+	if b.FinalizedCheckpoint == nil {
+		b.FinalizedCheckpoint = new(Checkpoint)
+	}
+	if dst, err = b.FinalizedCheckpoint.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Offset (21) 'InactivityScores'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.InactivityScores) * 8
+
+	// Field (22) 'CurrentSyncCommittee'
+	if b.CurrentSyncCommittee == nil {
+		b.CurrentSyncCommittee = new(SyncCommittee)
+	}
+	if dst, err = b.CurrentSyncCommittee.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (23) 'NextSyncCommittee'
+	if b.NextSyncCommittee == nil {
+		b.NextSyncCommittee = new(SyncCommittee)
+	}
+	if dst, err = b.NextSyncCommittee.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (24) 'LatestExecutionPayloadHeader'
+	if b.LatestExecutionPayloadHeader == nil {
+		b.LatestExecutionPayloadHeader = new(v1.ExecutionPayloadHeaderEPBS)
+	}
+	if dst, err = b.LatestExecutionPayloadHeader.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (25) 'NextWithdrawalIndex'
+	dst = ssz.MarshalUint64(dst, b.NextWithdrawalIndex)
+
+	// Field (26) 'NextWithdrawalValidatorIndex'
+	dst = ssz.MarshalUint64(dst, uint64(b.NextWithdrawalValidatorIndex))
+
+	// Offset (27) 'HistoricalSummaries'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.HistoricalSummaries) * 64
+
+	// Field (28) 'DepositRequestsStartIndex'
+	dst = ssz.MarshalUint64(dst, b.DepositRequestsStartIndex)
+
+	// Field (29) 'DepositBalanceToConsume'
+	dst = ssz.MarshalUint64(dst, uint64(b.DepositBalanceToConsume))
+
+	// Field (30) 'ExitBalanceToConsume'
+	dst = ssz.MarshalUint64(dst, uint64(b.ExitBalanceToConsume))
+
+	// Field (31) 'EarliestExitEpoch'
+	dst = ssz.MarshalUint64(dst, uint64(b.EarliestExitEpoch))
+
+	// Field (32) 'ConsolidationBalanceToConsume'
+	dst = ssz.MarshalUint64(dst, uint64(b.ConsolidationBalanceToConsume))
+
+	// Field (33) 'EarliestConsolidationEpoch'
+	dst = ssz.MarshalUint64(dst, uint64(b.EarliestConsolidationEpoch))
+
+	// Offset (34) 'PendingDeposits'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.PendingDeposits) * 192
+
+	// Offset (35) 'PendingPartialWithdrawals'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.PendingPartialWithdrawals) * 24
+
+	// Offset (36) 'PendingConsolidations'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.PendingConsolidations) * 16
+
+	// Field (37) 'LatestBlockHash'
+	if size := len(b.LatestBlockHash); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.LatestBlockHash", size, 32)
+		return
+	}
+	dst = append(dst, b.LatestBlockHash...)
+
+	// Field (38) 'LatestFullSlot'
+	dst = ssz.MarshalUint64(dst, uint64(b.LatestFullSlot))
+
+	// Field (39) 'LastWithdrawalsRoot'
+	if size := len(b.LastWithdrawalsRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.LastWithdrawalsRoot", size, 32)
+		return
+	}
+	dst = append(dst, b.LastWithdrawalsRoot...)
+
+	// Field (7) 'HistoricalRoots'
+	if size := len(b.HistoricalRoots); size > 16777216 {
+		err = ssz.ErrListTooBigFn("--.HistoricalRoots", size, 16777216)
+		return
+	}
+	for ii := 0; ii < len(b.HistoricalRoots); ii++ {
+		if size := len(b.HistoricalRoots[ii]); size != 32 {
+			err = ssz.ErrBytesLengthFn("--.HistoricalRoots[ii]", size, 32)
+			return
+		}
+		dst = append(dst, b.HistoricalRoots[ii]...)
+	}
+
+	// Field (9) 'Eth1DataVotes'
+	if size := len(b.Eth1DataVotes); size > 2048 {
+		err = ssz.ErrListTooBigFn("--.Eth1DataVotes", size, 2048)
+		return
+	}
+	for ii := 0; ii < len(b.Eth1DataVotes); ii++ {
+		if dst, err = b.Eth1DataVotes[ii].MarshalSSZTo(dst); err != nil {
+			return
+		}
+	}
+
+	// Field (11) 'Validators'
+	if size := len(b.Validators); size > 1099511627776 {
+		err = ssz.ErrListTooBigFn("--.Validators", size, 1099511627776)
+		return
+	}
+	for ii := 0; ii < len(b.Validators); ii++ {
+		if dst, err = b.Validators[ii].MarshalSSZTo(dst); err != nil {
+			return
+		}
+	}
+
+	// Field (12) 'Balances'
+	if size := len(b.Balances); size > 1099511627776 {
+		err = ssz.ErrListTooBigFn("--.Balances", size, 1099511627776)
+		return
+	}
+	for ii := 0; ii < len(b.Balances); ii++ {
+		dst = ssz.MarshalUint64(dst, b.Balances[ii])
+	}
+
+	// Field (15) 'PreviousEpochParticipation'
+	if size := len(b.PreviousEpochParticipation); size > 1099511627776 {
+		err = ssz.ErrBytesLengthFn("--.PreviousEpochParticipation", size, 1099511627776)
+		return
+	}
+	dst = append(dst, b.PreviousEpochParticipation...)
+
+	// Field (16) 'CurrentEpochParticipation'
+	if size := len(b.CurrentEpochParticipation); size > 1099511627776 {
+		err = ssz.ErrBytesLengthFn("--.CurrentEpochParticipation", size, 1099511627776)
+		return
+	}
+	dst = append(dst, b.CurrentEpochParticipation...)
+
+	// Field (21) 'InactivityScores'
+	if size := len(b.InactivityScores); size > 1099511627776 {
+		err = ssz.ErrListTooBigFn("--.InactivityScores", size, 1099511627776)
+		return
+	}
+	for ii := 0; ii < len(b.InactivityScores); ii++ {
+		dst = ssz.MarshalUint64(dst, b.InactivityScores[ii])
+	}
+
+	// Field (27) 'HistoricalSummaries'
+	if size := len(b.HistoricalSummaries); size > 16777216 {
+		err = ssz.ErrListTooBigFn("--.HistoricalSummaries", size, 16777216)
+		return
+	}
+	for ii := 0; ii < len(b.HistoricalSummaries); ii++ {
+		if dst, err = b.HistoricalSummaries[ii].MarshalSSZTo(dst); err != nil {
+			return
+		}
+	}
+
+	// Field (34) 'PendingDeposits'
+	if size := len(b.PendingDeposits); size > 134217728 {
+		err = ssz.ErrListTooBigFn("--.PendingDeposits", size, 134217728)
+		return
+	}
+	for ii := 0; ii < len(b.PendingDeposits); ii++ {
+		if dst, err = b.PendingDeposits[ii].MarshalSSZTo(dst); err != nil {
+			return
+		}
+	}
+
+	// Field (35) 'PendingPartialWithdrawals'
+	if size := len(b.PendingPartialWithdrawals); size > 134217728 {
+		err = ssz.ErrListTooBigFn("--.PendingPartialWithdrawals", size, 134217728)
+		return
+	}
+	for ii := 0; ii < len(b.PendingPartialWithdrawals); ii++ {
+		if dst, err = b.PendingPartialWithdrawals[ii].MarshalSSZTo(dst); err != nil {
+			return
+		}
+	}
+
+	// Field (36) 'PendingConsolidations'
+	if size := len(b.PendingConsolidations); size > 262144 {
+		err = ssz.ErrListTooBigFn("--.PendingConsolidations", size, 262144)
+		return
+	}
+	for ii := 0; ii < len(b.PendingConsolidations); ii++ {
+		if dst, err = b.PendingConsolidations[ii].MarshalSSZTo(dst); err != nil {
+			return
+		}
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the BeaconStateEPBS object
+func (b *BeaconStateEPBS) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 2736941 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o7, o9, o11, o12, o15, o16, o21, o27, o34, o35, o36 uint64
+
+	// Field (0) 'GenesisTime'
+	b.GenesisTime = ssz.UnmarshallUint64(buf[0:8])
+
+	// Field (1) 'GenesisValidatorsRoot'
+	if cap(b.GenesisValidatorsRoot) == 0 {
+		b.GenesisValidatorsRoot = make([]byte, 0, len(buf[8:40]))
+	}
+	b.GenesisValidatorsRoot = append(b.GenesisValidatorsRoot, buf[8:40]...)
+
+	// Field (2) 'Slot'
+	b.Slot = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[40:48]))
+
+	// Field (3) 'Fork'
+	if b.Fork == nil {
+		b.Fork = new(Fork)
+	}
+	if err = b.Fork.UnmarshalSSZ(buf[48:64]); err != nil {
+		return err
+	}
+
+	// Field (4) 'LatestBlockHeader'
+	if b.LatestBlockHeader == nil {
+		b.LatestBlockHeader = new(BeaconBlockHeader)
+	}
+	if err = b.LatestBlockHeader.UnmarshalSSZ(buf[64:176]); err != nil {
+		return err
+	}
+
+	// Field (5) 'BlockRoots'
+	b.BlockRoots = make([][]byte, 8192)
+	for ii := 0; ii < 8192; ii++ {
+		if cap(b.BlockRoots[ii]) == 0 {
+			b.BlockRoots[ii] = make([]byte, 0, len(buf[176:262320][ii*32:(ii+1)*32]))
+		}
+		b.BlockRoots[ii] = append(b.BlockRoots[ii], buf[176:262320][ii*32:(ii+1)*32]...)
+	}
+
+	// Field (6) 'StateRoots'
+	b.StateRoots = make([][]byte, 8192)
+	for ii := 0; ii < 8192; ii++ {
+		if cap(b.StateRoots[ii]) == 0 {
+			b.StateRoots[ii] = make([]byte, 0, len(buf[262320:524464][ii*32:(ii+1)*32]))
+		}
+		b.StateRoots[ii] = append(b.StateRoots[ii], buf[262320:524464][ii*32:(ii+1)*32]...)
+	}
+
+	// Offset (7) 'HistoricalRoots'
+	if o7 = ssz.ReadOffset(buf[524464:524468]); o7 > size {
+		return ssz.ErrOffset
+	}
+
+	if o7 != 2736941 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Field (8) 'Eth1Data'
+	if b.Eth1Data == nil {
+		b.Eth1Data = new(Eth1Data)
+	}
+	if err = b.Eth1Data.UnmarshalSSZ(buf[524468:524540]); err != nil {
+		return err
+	}
+
+	// Offset (9) 'Eth1DataVotes'
+	if o9 = ssz.ReadOffset(buf[524540:524544]); o9 > size || o7 > o9 {
+		return ssz.ErrOffset
+	}
+
+	// Field (10) 'Eth1DepositIndex'
+	b.Eth1DepositIndex = ssz.UnmarshallUint64(buf[524544:524552])
+
+	// Offset (11) 'Validators'
+	if o11 = ssz.ReadOffset(buf[524552:524556]); o11 > size || o9 > o11 {
+		return ssz.ErrOffset
+	}
+
+	// Offset (12) 'Balances'
+	if o12 = ssz.ReadOffset(buf[524556:524560]); o12 > size || o11 > o12 {
+		return ssz.ErrOffset
+	}
+
+	// Field (13) 'RandaoMixes'
+	b.RandaoMixes = make([][]byte, 65536)
+	for ii := 0; ii < 65536; ii++ {
+		if cap(b.RandaoMixes[ii]) == 0 {
+			b.RandaoMixes[ii] = make([]byte, 0, len(buf[524560:2621712][ii*32:(ii+1)*32]))
+		}
+		b.RandaoMixes[ii] = append(b.RandaoMixes[ii], buf[524560:2621712][ii*32:(ii+1)*32]...)
+	}
+
+	// Field (14) 'Slashings'
+	b.Slashings = ssz.ExtendUint64(b.Slashings, 8192)
+	for ii := 0; ii < 8192; ii++ {
+		b.Slashings[ii] = ssz.UnmarshallUint64(buf[2621712:2687248][ii*8 : (ii+1)*8])
+	}
+
+	// Offset (15) 'PreviousEpochParticipation'
+	if o15 = ssz.ReadOffset(buf[2687248:2687252]); o15 > size || o12 > o15 {
+		return ssz.ErrOffset
+	}
+
+	// Offset (16) 'CurrentEpochParticipation'
+	if o16 = ssz.ReadOffset(buf[2687252:2687256]); o16 > size || o15 > o16 {
+		return ssz.ErrOffset
+	}
+
+	// Field (17) 'JustificationBits'
+	if cap(b.JustificationBits) == 0 {
+		b.JustificationBits = make([]byte, 0, len(buf[2687256:2687257]))
+	}
+	b.JustificationBits = append(b.JustificationBits, buf[2687256:2687257]...)
+
+	// Field (18) 'PreviousJustifiedCheckpoint'
+	if b.PreviousJustifiedCheckpoint == nil {
+		b.PreviousJustifiedCheckpoint = new(Checkpoint)
+	}
+	if err = b.PreviousJustifiedCheckpoint.UnmarshalSSZ(buf[2687257:2687297]); err != nil {
+		return err
+	}
+
+	// Field (19) 'CurrentJustifiedCheckpoint'
+	if b.CurrentJustifiedCheckpoint == nil {
+		b.CurrentJustifiedCheckpoint = new(Checkpoint)
+	}
+	if err = b.CurrentJustifiedCheckpoint.UnmarshalSSZ(buf[2687297:2687337]); err != nil {
+		return err
+	}
+
+	// Field (20) 'FinalizedCheckpoint'
+	if b.FinalizedCheckpoint == nil {
+		b.FinalizedCheckpoint = new(Checkpoint)
+	}
+	if err = b.FinalizedCheckpoint.UnmarshalSSZ(buf[2687337:2687377]); err != nil {
+		return err
+	}
+
+	// Offset (21) 'InactivityScores'
+	if o21 = ssz.ReadOffset(buf[2687377:2687381]); o21 > size || o16 > o21 {
+		return ssz.ErrOffset
+	}
+
+	// Field (22) 'CurrentSyncCommittee'
+	if b.CurrentSyncCommittee == nil {
+		b.CurrentSyncCommittee = new(SyncCommittee)
+	}
+	if err = b.CurrentSyncCommittee.UnmarshalSSZ(buf[2687381:2712005]); err != nil {
+		return err
+	}
+
+	// Field (23) 'NextSyncCommittee'
+	if b.NextSyncCommittee == nil {
+		b.NextSyncCommittee = new(SyncCommittee)
+	}
+	if err = b.NextSyncCommittee.UnmarshalSSZ(buf[2712005:2736629]); err != nil {
+		return err
+	}
+
+	// Field (24) 'LatestExecutionPayloadHeader'
+	if b.LatestExecutionPayloadHeader == nil {
+		b.LatestExecutionPayloadHeader = new(v1.ExecutionPayloadHeaderEPBS)
+	}
+	if err = b.LatestExecutionPayloadHeader.UnmarshalSSZ(buf[2736629:2736789]); err != nil {
+		return err
+	}
+
+	// Field (25) 'NextWithdrawalIndex'
+	b.NextWithdrawalIndex = ssz.UnmarshallUint64(buf[2736789:2736797])
+
+	// Field (26) 'NextWithdrawalValidatorIndex'
+	b.NextWithdrawalValidatorIndex = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[2736797:2736805]))
+
+	// Offset (27) 'HistoricalSummaries'
+	if o27 = ssz.ReadOffset(buf[2736805:2736809]); o27 > size || o21 > o27 {
+		return ssz.ErrOffset
+	}
+
+	// Field (28) 'DepositRequestsStartIndex'
+	b.DepositRequestsStartIndex = ssz.UnmarshallUint64(buf[2736809:2736817])
+
+	// Field (29) 'DepositBalanceToConsume'
+	b.DepositBalanceToConsume = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Gwei(ssz.UnmarshallUint64(buf[2736817:2736825]))
+
+	// Field (30) 'ExitBalanceToConsume'
+	b.ExitBalanceToConsume = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Gwei(ssz.UnmarshallUint64(buf[2736825:2736833]))
+
+	// Field (31) 'EarliestExitEpoch'
+	b.EarliestExitEpoch = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Epoch(ssz.UnmarshallUint64(buf[2736833:2736841]))
+
+	// Field (32) 'ConsolidationBalanceToConsume'
+	b.ConsolidationBalanceToConsume = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Gwei(ssz.UnmarshallUint64(buf[2736841:2736849]))
+
+	// Field (33) 'EarliestConsolidationEpoch'
+	b.EarliestConsolidationEpoch = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Epoch(ssz.UnmarshallUint64(buf[2736849:2736857]))
+
+	// Offset (34) 'PendingDeposits'
+	if o34 = ssz.ReadOffset(buf[2736857:2736861]); o34 > size || o27 > o34 {
+		return ssz.ErrOffset
+	}
+
+	// Offset (35) 'PendingPartialWithdrawals'
+	if o35 = ssz.ReadOffset(buf[2736861:2736865]); o35 > size || o34 > o35 {
+		return ssz.ErrOffset
+	}
+
+	// Offset (36) 'PendingConsolidations'
+	if o36 = ssz.ReadOffset(buf[2736865:2736869]); o36 > size || o35 > o36 {
+		return ssz.ErrOffset
+	}
+
+	// Field (37) 'LatestBlockHash'
+	if cap(b.LatestBlockHash) == 0 {
+		b.LatestBlockHash = make([]byte, 0, len(buf[2736869:2736901]))
+	}
+	b.LatestBlockHash = append(b.LatestBlockHash, buf[2736869:2736901]...)
+
+	// Field (38) 'LatestFullSlot'
+	b.LatestFullSlot = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[2736901:2736909]))
+
+	// Field (39) 'LastWithdrawalsRoot'
+	if cap(b.LastWithdrawalsRoot) == 0 {
+		b.LastWithdrawalsRoot = make([]byte, 0, len(buf[2736909:2736941]))
+	}
+	b.LastWithdrawalsRoot = append(b.LastWithdrawalsRoot, buf[2736909:2736941]...)
+
+	// Field (7) 'HistoricalRoots'
+	{
+		buf = tail[o7:o9]
+		num, err := ssz.DivideInt2(len(buf), 32, 16777216)
+		if err != nil {
+			return err
+		}
+		b.HistoricalRoots = make([][]byte, num)
+		for ii := 0; ii < num; ii++ {
+			if cap(b.HistoricalRoots[ii]) == 0 {
+				b.HistoricalRoots[ii] = make([]byte, 0, len(buf[ii*32:(ii+1)*32]))
+			}
+			b.HistoricalRoots[ii] = append(b.HistoricalRoots[ii], buf[ii*32:(ii+1)*32]...)
+		}
+	}
+
+	// Field (9) 'Eth1DataVotes'
+	{
+		buf = tail[o9:o11]
+		num, err := ssz.DivideInt2(len(buf), 72, 2048)
+		if err != nil {
+			return err
+		}
+		b.Eth1DataVotes = make([]*Eth1Data, num)
+		for ii := 0; ii < num; ii++ {
+			if b.Eth1DataVotes[ii] == nil {
+				b.Eth1DataVotes[ii] = new(Eth1Data)
+			}
+			if err = b.Eth1DataVotes[ii].UnmarshalSSZ(buf[ii*72 : (ii+1)*72]); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Field (11) 'Validators'
+	{
+		buf = tail[o11:o12]
+		num, err := ssz.DivideInt2(len(buf), 121, 1099511627776)
+		if err != nil {
+			return err
+		}
+		b.Validators = make([]*Validator, num)
+		for ii := 0; ii < num; ii++ {
+			if b.Validators[ii] == nil {
+				b.Validators[ii] = new(Validator)
+			}
+			if err = b.Validators[ii].UnmarshalSSZ(buf[ii*121 : (ii+1)*121]); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Field (12) 'Balances'
+	{
+		buf = tail[o12:o15]
+		num, err := ssz.DivideInt2(len(buf), 8, 1099511627776)
+		if err != nil {
+			return err
+		}
+		b.Balances = ssz.ExtendUint64(b.Balances, num)
+		for ii := 0; ii < num; ii++ {
+			b.Balances[ii] = ssz.UnmarshallUint64(buf[ii*8 : (ii+1)*8])
+		}
+	}
+
+	// Field (15) 'PreviousEpochParticipation'
+	{
+		buf = tail[o15:o16]
+		if len(buf) > 1099511627776 {
+			return ssz.ErrBytesLength
+		}
+		if cap(b.PreviousEpochParticipation) == 0 {
+			b.PreviousEpochParticipation = make([]byte, 0, len(buf))
+		}
+		b.PreviousEpochParticipation = append(b.PreviousEpochParticipation, buf...)
+	}
+
+	// Field (16) 'CurrentEpochParticipation'
+	{
+		buf = tail[o16:o21]
+		if len(buf) > 1099511627776 {
+			return ssz.ErrBytesLength
+		}
+		if cap(b.CurrentEpochParticipation) == 0 {
+			b.CurrentEpochParticipation = make([]byte, 0, len(buf))
+		}
+		b.CurrentEpochParticipation = append(b.CurrentEpochParticipation, buf...)
+	}
+
+	// Field (21) 'InactivityScores'
+	{
+		buf = tail[o21:o27]
+		num, err := ssz.DivideInt2(len(buf), 8, 1099511627776)
+		if err != nil {
+			return err
+		}
+		b.InactivityScores = ssz.ExtendUint64(b.InactivityScores, num)
+		for ii := 0; ii < num; ii++ {
+			b.InactivityScores[ii] = ssz.UnmarshallUint64(buf[ii*8 : (ii+1)*8])
+		}
+	}
+
+	// Field (27) 'HistoricalSummaries'
+	{
+		buf = tail[o27:o34]
+		num, err := ssz.DivideInt2(len(buf), 64, 16777216)
+		if err != nil {
+			return err
+		}
+		b.HistoricalSummaries = make([]*HistoricalSummary, num)
+		for ii := 0; ii < num; ii++ {
+			if b.HistoricalSummaries[ii] == nil {
+				b.HistoricalSummaries[ii] = new(HistoricalSummary)
+			}
+			if err = b.HistoricalSummaries[ii].UnmarshalSSZ(buf[ii*64 : (ii+1)*64]); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Field (34) 'PendingDeposits'
+	{
+		buf = tail[o34:o35]
+		num, err := ssz.DivideInt2(len(buf), 192, 134217728)
+		if err != nil {
+			return err
+		}
+		b.PendingDeposits = make([]*PendingDeposit, num)
+		for ii := 0; ii < num; ii++ {
+			if b.PendingDeposits[ii] == nil {
+				b.PendingDeposits[ii] = new(PendingDeposit)
+			}
+			if err = b.PendingDeposits[ii].UnmarshalSSZ(buf[ii*192 : (ii+1)*192]); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Field (35) 'PendingPartialWithdrawals'
+	{
+		buf = tail[o35:o36]
+		num, err := ssz.DivideInt2(len(buf), 24, 134217728)
+		if err != nil {
+			return err
+		}
+		b.PendingPartialWithdrawals = make([]*PendingPartialWithdrawal, num)
+		for ii := 0; ii < num; ii++ {
+			if b.PendingPartialWithdrawals[ii] == nil {
+				b.PendingPartialWithdrawals[ii] = new(PendingPartialWithdrawal)
+			}
+			if err = b.PendingPartialWithdrawals[ii].UnmarshalSSZ(buf[ii*24 : (ii+1)*24]); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Field (36) 'PendingConsolidations'
+	{
+		buf = tail[o36:]
+		num, err := ssz.DivideInt2(len(buf), 16, 262144)
+		if err != nil {
+			return err
+		}
+		b.PendingConsolidations = make([]*PendingConsolidation, num)
+		for ii := 0; ii < num; ii++ {
+			if b.PendingConsolidations[ii] == nil {
+				b.PendingConsolidations[ii] = new(PendingConsolidation)
+			}
+			if err = b.PendingConsolidations[ii].UnmarshalSSZ(buf[ii*16 : (ii+1)*16]); err != nil {
+				return err
+			}
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the BeaconStateEPBS object
+func (b *BeaconStateEPBS) SizeSSZ() (size int) {
+	size = 2736941
+
+	// Field (7) 'HistoricalRoots'
+	size += len(b.HistoricalRoots) * 32
+
+	// Field (9) 'Eth1DataVotes'
+	size += len(b.Eth1DataVotes) * 72
+
+	// Field (11) 'Validators'
+	size += len(b.Validators) * 121
+
+	// Field (12) 'Balances'
+	size += len(b.Balances) * 8
+
+	// Field (15) 'PreviousEpochParticipation'
+	size += len(b.PreviousEpochParticipation)
+
+	// Field (16) 'CurrentEpochParticipation'
+	size += len(b.CurrentEpochParticipation)
+
+	// Field (21) 'InactivityScores'
+	size += len(b.InactivityScores) * 8
+
+	// Field (27) 'HistoricalSummaries'
+	size += len(b.HistoricalSummaries) * 64
+
+	// Field (34) 'PendingDeposits'
+	size += len(b.PendingDeposits) * 192
+
+	// Field (35) 'PendingPartialWithdrawals'
+	size += len(b.PendingPartialWithdrawals) * 24
+
+	// Field (36) 'PendingConsolidations'
+	size += len(b.PendingConsolidations) * 16
+
+	return
+}
+
+// HashTreeRoot ssz hashes the BeaconStateEPBS object
+func (b *BeaconStateEPBS) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(b)
+}
+
+// HashTreeRootWith ssz hashes the BeaconStateEPBS object with a hasher
+func (b *BeaconStateEPBS) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'GenesisTime'
+	hh.PutUint64(b.GenesisTime)
+
+	// Field (1) 'GenesisValidatorsRoot'
+	if size := len(b.GenesisValidatorsRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.GenesisValidatorsRoot", size, 32)
+		return
+	}
+	hh.PutBytes(b.GenesisValidatorsRoot)
+
+	// Field (2) 'Slot'
+	hh.PutUint64(uint64(b.Slot))
+
+	// Field (3) 'Fork'
+	if err = b.Fork.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (4) 'LatestBlockHeader'
+	if err = b.LatestBlockHeader.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (5) 'BlockRoots'
+	{
+		if size := len(b.BlockRoots); size != 8192 {
+			err = ssz.ErrVectorLengthFn("--.BlockRoots", size, 8192)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range b.BlockRoots {
+			if len(i) != 32 {
+				err = ssz.ErrBytesLength
+				return
+			}
+			hh.Append(i)
+		}
+		hh.Merkleize(subIndx)
+	}
+
+	// Field (6) 'StateRoots'
+	{
+		if size := len(b.StateRoots); size != 8192 {
+			err = ssz.ErrVectorLengthFn("--.StateRoots", size, 8192)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range b.StateRoots {
+			if len(i) != 32 {
+				err = ssz.ErrBytesLength
+				return
+			}
+			hh.Append(i)
+		}
+		hh.Merkleize(subIndx)
+	}
+
+	// Field (7) 'HistoricalRoots'
+	{
+		if size := len(b.HistoricalRoots); size > 16777216 {
+			err = ssz.ErrListTooBigFn("--.HistoricalRoots", size, 16777216)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range b.HistoricalRoots {
+			if len(i) != 32 {
+				err = ssz.ErrBytesLength
+				return
+			}
+			hh.Append(i)
+		}
+
+		numItems := uint64(len(b.HistoricalRoots))
+		hh.MerkleizeWithMixin(subIndx, numItems, 16777216)
+	}
+
+	// Field (8) 'Eth1Data'
+	if err = b.Eth1Data.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (9) 'Eth1DataVotes'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(b.Eth1DataVotes))
+		if num > 2048 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range b.Eth1DataVotes {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 2048)
+	}
+
+	// Field (10) 'Eth1DepositIndex'
+	hh.PutUint64(b.Eth1DepositIndex)
+
+	// Field (11) 'Validators'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(b.Validators))
+		if num > 1099511627776 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range b.Validators {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 1099511627776)
+	}
+
+	// Field (12) 'Balances'
+	{
+		if size := len(b.Balances); size > 1099511627776 {
+			err = ssz.ErrListTooBigFn("--.Balances", size, 1099511627776)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range b.Balances {
+			hh.AppendUint64(i)
+		}
+		hh.FillUpTo32()
+
+		numItems := uint64(len(b.Balances))
+		hh.MerkleizeWithMixin(subIndx, numItems, ssz.CalculateLimit(1099511627776, numItems, 8))
+	}
+
+	// Field (13) 'RandaoMixes'
+	{
+		if size := len(b.RandaoMixes); size != 65536 {
+			err = ssz.ErrVectorLengthFn("--.RandaoMixes", size, 65536)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range b.RandaoMixes {
+			if len(i) != 32 {
+				err = ssz.ErrBytesLength
+				return
+			}
+			hh.Append(i)
+		}
+		hh.Merkleize(subIndx)
+	}
+
+	// Field (14) 'Slashings'
+	{
+		if size := len(b.Slashings); size != 8192 {
+			err = ssz.ErrVectorLengthFn("--.Slashings", size, 8192)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range b.Slashings {
+			hh.AppendUint64(i)
+		}
+		hh.Merkleize(subIndx)
+	}
+
+	// Field (15) 'PreviousEpochParticipation'
+	{
+		elemIndx := hh.Index()
+		byteLen := uint64(len(b.PreviousEpochParticipation))
+		if byteLen > 1099511627776 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		hh.PutBytes(b.PreviousEpochParticipation)
+		hh.MerkleizeWithMixin(elemIndx, byteLen, (1099511627776+31)/32)
+	}
+
+	// Field (16) 'CurrentEpochParticipation'
+	{
+		elemIndx := hh.Index()
+		byteLen := uint64(len(b.CurrentEpochParticipation))
+		if byteLen > 1099511627776 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		hh.PutBytes(b.CurrentEpochParticipation)
+		hh.MerkleizeWithMixin(elemIndx, byteLen, (1099511627776+31)/32)
+	}
+
+	// Field (17) 'JustificationBits'
+	if size := len(b.JustificationBits); size != 1 {
+		err = ssz.ErrBytesLengthFn("--.JustificationBits", size, 1)
+		return
+	}
+	hh.PutBytes(b.JustificationBits)
+
+	// Field (18) 'PreviousJustifiedCheckpoint'
+	if err = b.PreviousJustifiedCheckpoint.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (19) 'CurrentJustifiedCheckpoint'
+	if err = b.CurrentJustifiedCheckpoint.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (20) 'FinalizedCheckpoint'
+	if err = b.FinalizedCheckpoint.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (21) 'InactivityScores'
+	{
+		if size := len(b.InactivityScores); size > 1099511627776 {
+			err = ssz.ErrListTooBigFn("--.InactivityScores", size, 1099511627776)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range b.InactivityScores {
+			hh.AppendUint64(i)
+		}
+		hh.FillUpTo32()
+
+		numItems := uint64(len(b.InactivityScores))
+		hh.MerkleizeWithMixin(subIndx, numItems, ssz.CalculateLimit(1099511627776, numItems, 8))
+	}
+
+	// Field (22) 'CurrentSyncCommittee'
+	if err = b.CurrentSyncCommittee.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (23) 'NextSyncCommittee'
+	if err = b.NextSyncCommittee.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (24) 'LatestExecutionPayloadHeader'
+	if err = b.LatestExecutionPayloadHeader.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (25) 'NextWithdrawalIndex'
+	hh.PutUint64(b.NextWithdrawalIndex)
+
+	// Field (26) 'NextWithdrawalValidatorIndex'
+	hh.PutUint64(uint64(b.NextWithdrawalValidatorIndex))
+
+	// Field (27) 'HistoricalSummaries'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(b.HistoricalSummaries))
+		if num > 16777216 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range b.HistoricalSummaries {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 16777216)
+	}
+
+	// Field (28) 'DepositRequestsStartIndex'
+	hh.PutUint64(b.DepositRequestsStartIndex)
+
+	// Field (29) 'DepositBalanceToConsume'
+	hh.PutUint64(uint64(b.DepositBalanceToConsume))
+
+	// Field (30) 'ExitBalanceToConsume'
+	hh.PutUint64(uint64(b.ExitBalanceToConsume))
+
+	// Field (31) 'EarliestExitEpoch'
+	hh.PutUint64(uint64(b.EarliestExitEpoch))
+
+	// Field (32) 'ConsolidationBalanceToConsume'
+	hh.PutUint64(uint64(b.ConsolidationBalanceToConsume))
+
+	// Field (33) 'EarliestConsolidationEpoch'
+	hh.PutUint64(uint64(b.EarliestConsolidationEpoch))
+
+	// Field (34) 'PendingDeposits'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(b.PendingDeposits))
+		if num > 134217728 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range b.PendingDeposits {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 134217728)
+	}
+
+	// Field (35) 'PendingPartialWithdrawals'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(b.PendingPartialWithdrawals))
+		if num > 134217728 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range b.PendingPartialWithdrawals {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 134217728)
+	}
+
+	// Field (36) 'PendingConsolidations'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(b.PendingConsolidations))
+		if num > 262144 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range b.PendingConsolidations {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 262144)
+	}
+
+	// Field (37) 'LatestBlockHash'
+	if size := len(b.LatestBlockHash); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.LatestBlockHash", size, 32)
+		return
+	}
+	hh.PutBytes(b.LatestBlockHash)
+
+	// Field (38) 'LatestFullSlot'
+	hh.PutUint64(uint64(b.LatestFullSlot))
+
+	// Field (39) 'LastWithdrawalsRoot'
+	if size := len(b.LastWithdrawalsRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.LastWithdrawalsRoot", size, 32)
+		return
+	}
+	hh.PutBytes(b.LastWithdrawalsRoot)
+
+	hh.Merkleize(indx)
+	return
+}
+
+// MarshalSSZ ssz marshals the SignedBlindPayloadEnvelope object
+func (s *SignedBlindPayloadEnvelope) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(s)
+}
+
+// MarshalSSZTo ssz marshals the SignedBlindPayloadEnvelope object to a target array
+func (s *SignedBlindPayloadEnvelope) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(100)
+
+	// Offset (0) 'Message'
+	dst = ssz.WriteOffset(dst, offset)
+	if s.Message == nil {
+		s.Message = new(BlindPayloadEnvelope)
+	}
+	offset += s.Message.SizeSSZ()
+
+	// Field (1) 'Signature'
+	if size := len(s.Signature); size != 96 {
+		err = ssz.ErrBytesLengthFn("--.Signature", size, 96)
+		return
+	}
+	dst = append(dst, s.Signature...)
+
+	// Field (0) 'Message'
+	if dst, err = s.Message.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the SignedBlindPayloadEnvelope object
+func (s *SignedBlindPayloadEnvelope) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 100 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o0 uint64
+
+	// Offset (0) 'Message'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
+	}
+
+	if o0 != 100 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Field (1) 'Signature'
+	if cap(s.Signature) == 0 {
+		s.Signature = make([]byte, 0, len(buf[4:100]))
+	}
+	s.Signature = append(s.Signature, buf[4:100]...)
+
+	// Field (0) 'Message'
+	{
+		buf = tail[o0:]
+		if s.Message == nil {
+			s.Message = new(BlindPayloadEnvelope)
+		}
+		if err = s.Message.UnmarshalSSZ(buf); err != nil {
+			return err
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the SignedBlindPayloadEnvelope object
+func (s *SignedBlindPayloadEnvelope) SizeSSZ() (size int) {
+	size = 100
+
+	// Field (0) 'Message'
+	if s.Message == nil {
+		s.Message = new(BlindPayloadEnvelope)
+	}
+	size += s.Message.SizeSSZ()
+
+	return
+}
+
+// HashTreeRoot ssz hashes the SignedBlindPayloadEnvelope object
+func (s *SignedBlindPayloadEnvelope) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(s)
+}
+
+// HashTreeRootWith ssz hashes the SignedBlindPayloadEnvelope object with a hasher
+func (s *SignedBlindPayloadEnvelope) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'Message'
+	if err = s.Message.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (1) 'Signature'
+	if size := len(s.Signature); size != 96 {
+		err = ssz.ErrBytesLengthFn("--.Signature", size, 96)
+		return
+	}
+	hh.PutBytes(s.Signature)
+
+	hh.Merkleize(indx)
+	return
+}
+
+// MarshalSSZ ssz marshals the BlindPayloadEnvelope object
+func (b *BlindPayloadEnvelope) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(b)
+}
+
+// MarshalSSZTo ssz marshals the BlindPayloadEnvelope object to a target array
+func (b *BlindPayloadEnvelope) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(109)
+
+	// Field (0) 'PayloadRoot'
+	if size := len(b.PayloadRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.PayloadRoot", size, 32)
+		return
+	}
+	dst = append(dst, b.PayloadRoot...)
+
+	// Field (1) 'BuilderIndex'
+	dst = ssz.MarshalUint64(dst, uint64(b.BuilderIndex))
+
+	// Field (2) 'BeaconBlockRoot'
+	if size := len(b.BeaconBlockRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.BeaconBlockRoot", size, 32)
+		return
+	}
+	dst = append(dst, b.BeaconBlockRoot...)
+
+	// Offset (3) 'BlobKzgCommitments'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.BlobKzgCommitments) * 48
+
+	// Field (4) 'PayloadWithheld'
+	dst = ssz.MarshalBool(dst, b.PayloadWithheld)
+
+	// Field (5) 'StateRoot'
+	if size := len(b.StateRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.StateRoot", size, 32)
+		return
+	}
+	dst = append(dst, b.StateRoot...)
+
+	// Field (3) 'BlobKzgCommitments'
+	if size := len(b.BlobKzgCommitments); size > 4096 {
+		err = ssz.ErrListTooBigFn("--.BlobKzgCommitments", size, 4096)
+		return
+	}
+	for ii := 0; ii < len(b.BlobKzgCommitments); ii++ {
+		if size := len(b.BlobKzgCommitments[ii]); size != 48 {
+			err = ssz.ErrBytesLengthFn("--.BlobKzgCommitments[ii]", size, 48)
+			return
+		}
+		dst = append(dst, b.BlobKzgCommitments[ii]...)
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the BlindPayloadEnvelope object
+func (b *BlindPayloadEnvelope) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 109 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o3 uint64
+
+	// Field (0) 'PayloadRoot'
+	if cap(b.PayloadRoot) == 0 {
+		b.PayloadRoot = make([]byte, 0, len(buf[0:32]))
+	}
+	b.PayloadRoot = append(b.PayloadRoot, buf[0:32]...)
+
+	// Field (1) 'BuilderIndex'
+	b.BuilderIndex = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[32:40]))
+
+	// Field (2) 'BeaconBlockRoot'
+	if cap(b.BeaconBlockRoot) == 0 {
+		b.BeaconBlockRoot = make([]byte, 0, len(buf[40:72]))
+	}
+	b.BeaconBlockRoot = append(b.BeaconBlockRoot, buf[40:72]...)
+
+	// Offset (3) 'BlobKzgCommitments'
+	if o3 = ssz.ReadOffset(buf[72:76]); o3 > size {
+		return ssz.ErrOffset
+	}
+
+	if o3 != 109 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Field (4) 'PayloadWithheld'
+	b.PayloadWithheld, err = ssz.DecodeBool(buf[76:77])
+	if err != nil {
+		return err
+	}
+
+	// Field (5) 'StateRoot'
+	if cap(b.StateRoot) == 0 {
+		b.StateRoot = make([]byte, 0, len(buf[77:109]))
+	}
+	b.StateRoot = append(b.StateRoot, buf[77:109]...)
+
+	// Field (3) 'BlobKzgCommitments'
+	{
+		buf = tail[o3:]
+		num, err := ssz.DivideInt2(len(buf), 48, 4096)
+		if err != nil {
+			return err
+		}
+		b.BlobKzgCommitments = make([][]byte, num)
+		for ii := 0; ii < num; ii++ {
+			if cap(b.BlobKzgCommitments[ii]) == 0 {
+				b.BlobKzgCommitments[ii] = make([]byte, 0, len(buf[ii*48:(ii+1)*48]))
+			}
+			b.BlobKzgCommitments[ii] = append(b.BlobKzgCommitments[ii], buf[ii*48:(ii+1)*48]...)
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the BlindPayloadEnvelope object
+func (b *BlindPayloadEnvelope) SizeSSZ() (size int) {
+	size = 109
+
+	// Field (3) 'BlobKzgCommitments'
+	size += len(b.BlobKzgCommitments) * 48
+
+	return
+}
+
+// HashTreeRoot ssz hashes the BlindPayloadEnvelope object
+func (b *BlindPayloadEnvelope) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(b)
+}
+
+// HashTreeRootWith ssz hashes the BlindPayloadEnvelope object with a hasher
+func (b *BlindPayloadEnvelope) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'PayloadRoot'
+	if size := len(b.PayloadRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.PayloadRoot", size, 32)
+		return
+	}
+	hh.PutBytes(b.PayloadRoot)
+
+	// Field (1) 'BuilderIndex'
+	hh.PutUint64(uint64(b.BuilderIndex))
+
+	// Field (2) 'BeaconBlockRoot'
+	if size := len(b.BeaconBlockRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.BeaconBlockRoot", size, 32)
+		return
+	}
+	hh.PutBytes(b.BeaconBlockRoot)
+
+	// Field (3) 'BlobKzgCommitments'
+	{
+		if size := len(b.BlobKzgCommitments); size > 4096 {
+			err = ssz.ErrListTooBigFn("--.BlobKzgCommitments", size, 4096)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range b.BlobKzgCommitments {
+			if len(i) != 48 {
+				err = ssz.ErrBytesLength
+				return
+			}
+			hh.PutBytes(i)
+		}
+
+		numItems := uint64(len(b.BlobKzgCommitments))
+		hh.MerkleizeWithMixin(subIndx, numItems, 4096)
+	}
+
+	// Field (4) 'PayloadWithheld'
+	hh.PutBool(b.PayloadWithheld)
+
+	// Field (5) 'StateRoot'
+	if size := len(b.StateRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.StateRoot", size, 32)
+		return
+	}
+	hh.PutBytes(b.StateRoot)
 
 	hh.Merkleize(indx)
 	return

@@ -9,6 +9,10 @@ go_library(
         "//config/fieldparams:go_default_library",
         "//consensus-types/interfaces:go_default_library",
         "//consensus-types/primitives:go_default_library",
+<<<<<<< HEAD
+=======
+        "//proto/engine/v1:go_default_library",
+>>>>>>> 294a24616b (fix build)
         "//proto/eth/v1:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "//proto/prysm/v1alpha1/validator-client:go_default_library",

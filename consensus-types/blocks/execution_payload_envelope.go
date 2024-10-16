@@ -100,6 +100,11 @@ func (p *executionPayloadEnvelope) Execution() (interfaces.ExecutionData, error)
 	return WrappedExecutionPayloadElectra(p.p.Payload)
 }
 
+// ExecutionRequests returns the execution requests in the payload envelope
+func (p *executionPayloadEnvelope) ExecutionRequests() *enginev1.ExecutionRequests {
+	return p.p.ExecutionRequests
+}
+
 // BuilderIndex returns the wrapped value
 func (p *executionPayloadEnvelope) BuilderIndex() primitives.ValidatorIndex {
 	return p.p.BuilderIndex

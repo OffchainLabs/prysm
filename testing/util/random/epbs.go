@@ -371,7 +371,12 @@ func SignedExecutionPayloadEnvelope(t *testing.T) *enginev1.SignedExecutionPaylo
 func ExecutionPayloadEnvelope(t *testing.T) *enginev1.ExecutionPayloadEnvelope {
 	withheld := randomUint64(t)%2 == 0
 	return &enginev1.ExecutionPayloadEnvelope{
-		Payload:            ExecutionPayload(t),
+		Payload: ExecutionPayload(t),
+		ExecutionRequests: &enginev1.ExecutionRequests{
+			Deposits:       []*enginev1.DepositRequest{DepositRequest(t), DepositRequest(t), DepositRequest(t), DepositRequest(t)},
+			Withdrawals:    WithdrawalRequests(t),
+			Consolidations: []*enginev1.ConsolidationRequest{ConsolidationRequest(t)},
+		},
 		BuilderIndex:       primitives.ValidatorIndex(randomUint64(t)),
 		BeaconBlockRoot:    randomBytes(32, t),
 		BlobKzgCommitments: [][]byte{randomBytes(48, t), randomBytes(48, t), randomBytes(48, t)},
@@ -405,11 +410,8 @@ func ExecutionPayload(t *testing.T) *enginev1.ExecutionPayloadElectra {
 				Amount:         randomUint64(t),
 			},
 		},
-		BlobGasUsed:           randomUint64(t),
-		ExcessBlobGas:         randomUint64(t),
-		DepositRequests:       []*enginev1.DepositRequest{DepositRequest(t), DepositRequest(t), DepositRequest(t), DepositRequest(t)},
-		WithdrawalRequests:    WithdrawalRequests(t),
-		ConsolidationRequests: []*enginev1.ConsolidationRequest{ConsolidationRequest(t)},
+		BlobGasUsed:   randomUint64(t),
+		ExcessBlobGas: randomUint64(t),
 	}
 }
 
