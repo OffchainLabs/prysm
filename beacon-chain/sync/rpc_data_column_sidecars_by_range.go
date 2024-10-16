@@ -2,6 +2,7 @@ package sync
 
 import (
 	"context"
+	"slices"
 	"time"
 
 	libp2pcore "github.com/libp2p/go-libp2p/core"
@@ -19,7 +20,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func (s *Service) streamDataColumnBatch(ctx context.Context, batch blockBatch, wQuota uint64, wantedDataColumnIndices map[uint64]bool, stream libp2pcore.Stream) (uint64, error) {
+func (s *Service) streamDataColumnBatch(ctx context.Context, batch blockBatch, wQuota uint64, wantedDataColumnIndices []uint64, stream libp2pcore.Stream) (uint64, error) {
 	_, span := trace.StartSpan(ctx, "sync.streamDataColumnBatch")
 	defer span.End()
 
@@ -40,7 +41,7 @@ func (s *Service) streamDataColumnBatch(ctx context.Context, batch blockBatch, w
 			return wQuota, errors.Wrapf(err, "could not retrieve data columns indice for block root %#x", blockRoot)
 		}
 
-		for dataColumnIndex := range wantedDataColumnIndices {
+		for _, dataColumnIndex := range wantedDataColumnIndices {
 			isDataColumnStored := storedDataColumnsIndices[dataColumnIndex]
 
 			// Skip if the data column is not stored.
@@ -157,10 +158,11 @@ func (s *Service) dataColumnSidecarsByRangeRPCHandler(ctx context.Context, msg i
 	}
 
 	// Derive the wanted columns for the request.
-	wantedColumns := make(map[uint64]bool, len(r.Columns))
-	for _, c := range r.Columns {
-		wantedColumns[c] = true
-	}
+	wantedColumns := make([]uint64, len(r.Columns))
+	copy(wantedColumns, r.Columns)
+
+	// Sort the wanted columns.
+	slices.Sort[[]uint64](wantedColumns)
 
 	var batch blockBatch
 	wQuota := params.BeaconConfig().MaxRequestDataColumnSidecars
