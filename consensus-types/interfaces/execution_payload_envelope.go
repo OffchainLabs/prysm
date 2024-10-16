@@ -4,6 +4,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	field_params "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
 )
 
 type ROSignedExecutionPayloadEnvelope interface {
@@ -15,6 +16,7 @@ type ROSignedExecutionPayloadEnvelope interface {
 
 type ROExecutionPayloadEnvelope interface {
 	Execution() (ExecutionData, error)
+	ExecutionRequests() *enginev1.ExecutionRequests
 	BuilderIndex() primitives.ValidatorIndex
 	BeaconBlockRoot() [field_params.RootLength]byte
 	BlobKzgCommitments() [][]byte

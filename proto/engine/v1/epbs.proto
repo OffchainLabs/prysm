@@ -17,6 +17,7 @@ package ethereum.engine.v1;
 
 import "proto/eth/ext/options.proto";
 import "proto/engine/v1/execution_engine.proto";
+import "proto/engine/v1/electra.proto";
 
 option csharp_namespace = "Ethereum.Engine.V1";
 option go_package = "github.com/prysmaticlabs/prysm/v5/proto/engine/v1;enginev1";
@@ -43,11 +44,12 @@ message SignedExecutionPayloadHeader{
 
 message ExecutionPayloadEnvelope {
 	ExecutionPayloadDeneb payload 		= 1;
-	uint64 builder_index 	     		= 2 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.ValidatorIndex"];
-    	bytes beacon_block_root 		= 3 [(ethereum.eth.ext.ssz_size) = "32"];
-    	repeated bytes blob_kzg_commitments 	= 4 [(ethereum.eth.ext.ssz_size) = "?,48", (ethereum.eth.ext.ssz_max)  = "max_blob_commitments.size"];
-	bool payload_withheld 			= 8;
-    	bytes state_root 			= 9 [(ethereum.eth.ext.ssz_size) = "32"];
+        ExecutionRequests execution_requests    = 2;
+	uint64 builder_index 	     		= 3 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.ValidatorIndex"];
+    	bytes beacon_block_root 		= 4 [(ethereum.eth.ext.ssz_size) = "32"];
+    	repeated bytes blob_kzg_commitments 	= 5 [(ethereum.eth.ext.ssz_size) = "?,48", (ethereum.eth.ext.ssz_max)  = "max_blob_commitments.size"];
+	bool payload_withheld 			= 6;
+    	bytes state_root 			= 7 [(ethereum.eth.ext.ssz_size) = "32"];
 }
 
 message SignedExecutionPayloadEnvelope {
