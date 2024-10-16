@@ -36,6 +36,10 @@ mainnet = {
     "pending_partial_withdrawals_limit": "134217728",
     "pending_consolidations_limit": "262144",
     "max_consolidation_requests_per_payload.size": "1",
+    "max_inclusion_list.size": "1024", #MAX_TRANSACTIONS_PER_INCLUSION_LIST
+    "ptc.size": "64", #PTC_SIZE
+    "ptc.type": "github.com/prysmaticlabs/go-bitfield.Bitvector512",
+    "payload_attestation.size": "4",
 }
 
 minimal = {
@@ -68,6 +72,10 @@ minimal = {
     "pending_partial_withdrawals_limit": "64",
     "pending_consolidations_limit": "64",
     "max_consolidation_requests_per_payload.size": "1",
+    "max_inclusion_list.size": "16", #MAX_TRANSACTIONS_PER_INCLUSION_LIST
+    "ptc.size": "4", #PTC_SIZE
+    "ptc.type": "github.com/prysmaticlabs/go-bitfield.Bitvector32",
+    "payload_attestation.size": "4",
 }
 
 ###### Rules definitions #######
