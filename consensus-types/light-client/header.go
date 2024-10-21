@@ -53,6 +53,10 @@ func (h *headerAltair) SizeSSZ() int {
 	return h.p.SizeSSZ()
 }
 
+func (h *headerAltair) Proto() proto.Message {
+	return h.p
+}
+
 func (h *headerAltair) Version() int {
 	return version.Altair
 }
@@ -114,6 +118,10 @@ func (h *headerCapella) SizeSSZ() int {
 	return h.p.SizeSSZ()
 }
 
+func (h *headerCapella) Proto() proto.Message {
+	return h.p
+}
+
 func (h *headerCapella) Version() int {
 	return version.Capella
 }
@@ -173,6 +181,10 @@ func (h *headerDeneb) MarshalSSZ() ([]byte, error) {
 
 func (h *headerDeneb) SizeSSZ() int {
 	return h.p.SizeSSZ()
+}
+
+func (h *headerDeneb) Proto() proto.Message {
+	return h.p
 }
 
 func (h *headerDeneb) Version() int {

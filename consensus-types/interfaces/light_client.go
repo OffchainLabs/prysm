@@ -5,6 +5,7 @@ import (
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	pb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"google.golang.org/protobuf/proto"
 )
 
 type LightClientExecutionBranch = [fieldparams.ExecutionBranchDepth][fieldparams.RootLength]byte
@@ -14,6 +15,7 @@ type LightClientFinalityBranch = [fieldparams.FinalityBranchDepth][fieldparams.R
 
 type LightClientHeader interface {
 	ssz.Marshaler
+	Proto() proto.Message
 	Version() int
 	Beacon() *pb.BeaconBlockHeader
 	Execution() (ExecutionData, error)
@@ -31,19 +33,29 @@ type LightClientBootstrap interface {
 
 type LightClientUpdate interface {
 	ssz.Marshaler
+	Proto() proto.Message
 	Version() int
 	AttestedHeader() LightClientHeader
+	SetAttestedHeader(header LightClientHeader)
 	NextSyncCommittee() *pb.SyncCommittee
+	SetNextSyncCommittee(sc *pb.SyncCommittee)
 	NextSyncCommitteeBranch() (LightClientSyncCommitteeBranch, error)
+	SetNextSyncCommitteeBranch(branch [][]byte) error
 	NextSyncCommitteeBranchElectra() (LightClientSyncCommitteeBranchElectra, error)
+	SetNextSyncCommitteeBranchElectra(branch [][]byte) error
 	FinalizedHeader() LightClientHeader
+	SetFinalizedHeader(header LightClientHeader)
 	FinalityBranch() LightClientFinalityBranch
+	SetFinalityBranch(branch [][]byte) error
 	SyncAggregate() *pb.SyncAggregate
+	SetSyncAggregate(sa *pb.SyncAggregate)
 	SignatureSlot() primitives.Slot
+	SetSignatureSlot(slot primitives.Slot)
 }
 
 type LightClientFinalityUpdate interface {
 	ssz.Marshaler
+	Proto() proto.Message
 	Version() int
 	AttestedHeader() LightClientHeader
 	FinalizedHeader() LightClientHeader
@@ -54,6 +66,7 @@ type LightClientFinalityUpdate interface {
 
 type LightClientOptimisticUpdate interface {
 	ssz.Marshaler
+	Proto() proto.Message
 	Version() int
 	AttestedHeader() LightClientHeader
 	SyncAggregate() *pb.SyncAggregate

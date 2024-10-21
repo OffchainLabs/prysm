@@ -511,28 +511,30 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 			return jsonMarshalReader(eventName, structs.FinalizedCheckpointEventFromV1(v))
 		}, nil
 	case *ethpbv2.LightClientFinalityUpdateWithVersion:
-		cv, err := structs.LightClientFinalityUpdateFromConsensus(v.Data)
+		// TODO: Get back to this when revisiting events
+		/*cv, err := structs.LightClientFinalityUpdateFromConsensus(v.Data)
 		if err != nil {
 			return nil, errors.Wrap(err, "LightClientFinalityUpdateWithVersion event conversion failure")
 		}
 		ev := &structs.LightClientFinalityUpdateEvent{
 			Version: version.String(int(v.Version)),
 			Data:    cv,
-		}
+		}*/
 		return func() io.Reader {
-			return jsonMarshalReader(eventName, ev)
+			return jsonMarshalReader(eventName, struct{}{})
 		}, nil
 	case *ethpbv2.LightClientOptimisticUpdateWithVersion:
-		cv, err := structs.LightClientOptimisticUpdateFromConsensus(v.Data)
+		// TODO: Get back to this when revisiting events
+		/*cv, err := structs.LightClientOptimisticUpdateFromConsensus(v.Data)
 		if err != nil {
 			return nil, errors.Wrap(err, "LightClientOptimisticUpdateWithVersion event conversion failure")
 		}
 		ev := &structs.LightClientOptimisticUpdateEvent{
 			Version: version.String(int(v.Version)),
 			Data:    cv,
-		}
+		}*/
 		return func() io.Reader {
-			return jsonMarshalReader(eventName, ev)
+			return jsonMarshalReader(eventName, struct{}{})
 		}, nil
 	case *ethpb.EventChainReorg:
 		return func() io.Reader {

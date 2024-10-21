@@ -24,8 +24,6 @@ go_library(
         "//consensus-types/primitives:go_default_library",
         "//monitoring/tracing/trace:go_default_library",
         "//network/httputil:go_default_library",
-        "//proto/eth/v2:go_default_library",
-        "//proto/migration:go_default_library",
         "//runtime/version:go_default_library",
         "//time/slots:go_default_library",
         "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",

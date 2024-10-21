@@ -7,8 +7,6 @@ import (
 	"context"
 	"io"
 
-	ethpbv2 "github.com/prysmaticlabs/prysm/v5/proto/eth/v2"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filters"
 	slashertypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/slasher/types"
@@ -59,8 +57,8 @@ type ReadOnlyDatabase interface {
 	FeeRecipientByValidatorID(ctx context.Context, id primitives.ValidatorIndex) (common.Address, error)
 	RegistrationByValidatorID(ctx context.Context, id primitives.ValidatorIndex) (*ethpb.ValidatorRegistrationV1, error)
 	// light client operations
-	LightClientUpdates(ctx context.Context, startPeriod, endPeriod uint64) (map[uint64]*ethpbv2.LightClientUpdateWithVersion, error)
-	LightClientUpdate(ctx context.Context, period uint64) (*ethpbv2.LightClientUpdateWithVersion, error)
+	LightClientUpdates(ctx context.Context, startPeriod, endPeriod uint64) (map[uint64]interfaces.LightClientUpdate, error)
+	LightClientUpdate(ctx context.Context, period uint64) (interfaces.LightClientUpdate, error)
 
 	// origin checkpoint sync support
 	OriginCheckpointBlockRoot(ctx context.Context) ([32]byte, error)
@@ -98,7 +96,7 @@ type NoHeadAccessDatabase interface {
 	SaveFeeRecipientsByValidatorIDs(ctx context.Context, ids []primitives.ValidatorIndex, addrs []common.Address) error
 	SaveRegistrationsByValidatorIDs(ctx context.Context, ids []primitives.ValidatorIndex, regs []*ethpb.ValidatorRegistrationV1) error
 	// light client operations
-	SaveLightClientUpdate(ctx context.Context, period uint64, update *ethpbv2.LightClientUpdateWithVersion) error
+	SaveLightClientUpdate(ctx context.Context, period uint64, update interfaces.LightClientUpdate) error
 
 	CleanUpDirtyStates(ctx context.Context, slotsPerArchivedPoint primitives.Slot) error
 }

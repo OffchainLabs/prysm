@@ -807,7 +807,7 @@ func tDStringToUint256(td string) (*uint256.Int, error) {
 	return i, nil
 }
 
-func buildEmptyExecutionPayload(v int) (proto.Message, error) {
+func EmptyExecutionPayload(v int) (proto.Message, error) {
 	switch v {
 	case version.Bellatrix:
 		return &pb.ExecutionPayload{

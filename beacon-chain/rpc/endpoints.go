@@ -867,10 +867,11 @@ func (*Service) configEndpoints() []endpoint {
 
 func (s *Service) lightClientEndpoints(blocker lookup.Blocker, stater lookup.Stater) []endpoint {
 	server := &lightclient.Server{
-		Blocker:     blocker,
-		Stater:      stater,
-		HeadFetcher: s.cfg.HeadFetcher,
-		BeaconDB:    s.cfg.BeaconDB,
+		Blocker:          blocker,
+		Stater:           stater,
+		HeadFetcher:      s.cfg.HeadFetcher,
+		ChainInfoFetcher: s.cfg.ChainInfoFetcher,
+		BeaconDB:         s.cfg.BeaconDB,
 	}
 
 	const namespace = "lightclient"
