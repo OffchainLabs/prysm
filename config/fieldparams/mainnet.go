@@ -15,6 +15,7 @@ const (
 	SlashingsLength                       = 8192          // EPOCHS_PER_SLASHINGS_VECTOR
 	SyncCommitteeLength                   = 512           // SYNC_COMMITTEE_SIZE
 	PTCSize                               = 512           // PTC_SIZE [New in ePBS]
+	PayloadTimelyThreshold                = 256           // PTC_SIZE / 2 [New in ePBS]
 	RootLength                            = 32            // RootLength defines the byte length of a Merkle root.
 	BLSSignatureLength                    = 96            // BLSSignatureLength defines the byte length of a BLSSignature.
 	BLSPubkeyLength                       = 48            // BLSPubkeyLength defines the byte length of a BLSSignature.

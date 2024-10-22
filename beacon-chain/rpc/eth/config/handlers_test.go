@@ -193,7 +193,7 @@ func TestGetSpec(t *testing.T) {
 	data, ok := resp.Data.(map[string]interface{})
 	require.Equal(t, true, ok)
 
-	assert.Equal(t, 158, len(data))
+	assert.Equal(t, 163, len(data))
 	for k, v := range data {
 		t.Run(k, func(t *testing.T) {
 			switch k {
@@ -530,6 +530,16 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "93", v)
 			case "MAX_PENDING_DEPOSITS_PER_EPOCH":
 				assert.Equal(t, "94", v)
+			case "PROPOSER_SCORE_BOOST_EPBS":
+				assert.Equal(t, "20", v)
+			case "PAYLOAD_REVEAL_BOOST":
+				assert.Equal(t, "40", v)
+			case "PAYLOAD_WITHHOLD_BOOST":
+				assert.Equal(t, "40", v)
+			case "PAYLOAD_TIMELY_THRESHOLD":
+				assert.Equal(t, "256", v)
+			case "INTERVALS_PER_SLOT_EPBS":
+				assert.Equal(t, "4", v)
 			case "MIN_BUILDER_BALANCE":
 				assert.Equal(t, "0", v)
 			default:
