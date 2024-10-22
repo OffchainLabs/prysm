@@ -240,23 +240,13 @@ func PayloadProof(ctx context.Context, block interfaces.ReadOnlyBeaconBlock) ([]
 		return nil, errors.New("failed to cast block body")
 	}
 
-	blockBodyFieldRoots, err := ComputeBlockBodyFieldRoots(ctx, blockBody)
+	fieldRoots, err := ComputeBlockBodyFieldRoots(ctx, blockBody)
 	if err != nil {
 		return nil, err
 	}
 
-	blockBodyFieldRootsTrie := stateutil.Merkleize(blockBodyFieldRoots)
-	blockBodyProof := trie.ProofFromMerkleLayers(blockBodyFieldRootsTrie, payloadFieldIndex)
+	fieldRootsTrie := stateutil.Merkleize(fieldRoots)
+	proof := trie.ProofFromMerkleLayers(fieldRootsTrie, payloadFieldIndex)
 
-	beaconBlockFieldRoots, err := ComputeBlockFieldRoots(ctx, block)
-	if err != nil {
-		return nil, err
-	}
-
-	beaconBlockFieldRootsTrie := stateutil.Merkleize(beaconBlockFieldRoots)
-	beaconBlockProof := trie.ProofFromMerkleLayers(beaconBlockFieldRootsTrie, bodyFieldIndex)
-
-	finalProof := append(blockBodyProof, beaconBlockProof...)
-
-	return finalProof, nil
+	return proof, nil
 }
