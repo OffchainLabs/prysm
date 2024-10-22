@@ -75,7 +75,7 @@ message ExecutionPayloadEPBS {
 }
 
 message SignedExecutionPayloadHeader{
-	ExecutionPayloadHeader 	message  = 1;
+	ExecutionPayloadHeaderEPBS 	message  = 1;
     	bytes signature 	  	 = 2 [(ethereum.eth.ext.ssz_size) = "96"];
 }
 

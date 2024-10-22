@@ -5,6 +5,7 @@ import (
 
 	"github.com/prysmaticlabs/go-bitfield"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
@@ -31,9 +32,11 @@ type fields struct {
 	execPayloadHeaderCapella *enginev1.ExecutionPayloadHeaderCapella
 	execPayloadDeneb         *enginev1.ExecutionPayloadDeneb
 	execPayloadHeaderDeneb   *enginev1.ExecutionPayloadHeaderDeneb
+	signedPayloadHeader      *enginev1.SignedExecutionPayloadHeader
 	blsToExecutionChanges    []*eth.SignedBLSToExecutionChange
 	kzgCommitments           [][]byte
 	execRequests             *enginev1.ExecutionRequests
+	payloadAttestation       []*eth.PayloadAttestation
 }
 
 func Test_SignedBeaconBlock_Proto(t *testing.T) {
@@ -319,6 +322,19 @@ func Test_SignedBeaconBlock_Proto(t *testing.T) {
 				ParentRoot:    f.root[:],
 				StateRoot:     f.root[:],
 				Body:          bodyPbElectra(),
+			}
+		}
+	}
+	t.Run("ePBS", func(t *testing.T) {
+		slot := primitives.Slot(12345)
+		proposerIndex := primitives.ValidatorIndex(23434)
+		expectedBlock := &eth.SignedBeaconBlockEpbs{
+			Block: &eth.BeaconBlockEpbs{
+				Slot:          slot,
+				ProposerIndex: proposerIndex,
+				ParentRoot:    f.root[:],
+				StateRoot:     f.root[:],
+				Body:          bodyPbEpbs(),
 			},
 			Signature: f.sig[:],
 		}
@@ -331,6 +347,16 @@ func Test_SignedBeaconBlock_Proto(t *testing.T) {
 				parentRoot:    f.root,
 				stateRoot:     f.root,
 				body:          bodyElectra(t),
+			},
+		}
+			version: version.EPBS,
+			block: &BeaconBlock{
+				version:       version.EPBS,
+				slot:          slot,
+				proposerIndex: proposerIndex,
+				parentRoot:    f.root,
+				stateRoot:     f.root,
+				body:          bodyEpbs(),
 			},
 			signature: f.sig,
 		}
@@ -2106,6 +2132,18 @@ func getFields() fields {
 		BlobGasUsed:      128,
 		ExcessBlobGas:    128,
 	}
+	signedExecutionPayloadHeader := &enginev1.SignedExecutionPayloadHeader{
+		Message: &enginev1.ExecutionPayloadHeaderEPBS{
+			ParentBlockHash:        bytesutil.PadTo([]byte("parentblockhash"), fieldparams.RootLength),
+			ParentBlockRoot:        bytesutil.PadTo([]byte("parentblockroot"), fieldparams.RootLength),
+			BlockHash:              bytesutil.PadTo([]byte("blockhash"), fieldparams.RootLength),
+			BuilderIndex:           1,
+			Slot:                   2,
+			Value:                  3,
+			BlobKzgCommitmentsRoot: bytesutil.PadTo([]byte("blobkzgcommitmentsroot"), fieldparams.RootLength),
+		},
+		Signature: bytesutil.PadTo([]byte("signature"), fieldparams.BLSSignatureLength),
+	}
 
 	kzgCommitments := [][]byte{
 		bytesutil.PadTo([]byte{123}, 48),
@@ -2132,9 +2170,19 @@ func getFields() fields {
 			SourcePubkey:  b48,
 			TargetPubkey:  b48,
 		}},
+		payloadAttestation := []*eth.PayloadAttestation{
+	{
+		AggregationBits: bitfield.NewBitvector512(),
+		Data: &eth.PayloadAttestationData{
+		BeaconBlockRoot: bytesutil.PadTo([]byte{123}, 32),
+		Slot:            1,
+		PayloadStatus:   2,
+	},
+		Signature: bytesutil.PadTo([]byte("signature"), fieldparams.BLSSignatureLength),
+	},
 	}
 
-	return fields{
+		return fields{
 		root:                     root,
 		sig:                      sig,
 		deposits:                 deposits,
@@ -2151,8 +2199,11 @@ func getFields() fields {
 		execPayloadHeaderCapella: execPayloadHeaderCapella,
 		execPayloadDeneb:         execPayloadDeneb,
 		execPayloadHeaderDeneb:   execPayloadHeaderDeneb,
+		signedPayloadHeader:      signedExecutionPayloadHeader,
 		blsToExecutionChanges:    blsToExecutionChanges,
 		kzgCommitments:           kzgCommitments,
 		execRequests:             execRequests,
+		payloadAttestation:       payloadAttestation,
+	}
 	}
 }

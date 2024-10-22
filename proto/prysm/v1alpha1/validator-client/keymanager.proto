@@ -83,6 +83,7 @@ message SignRequest {
 
     // ePBS objects.
     ethereum.eth.v1alpha1.PayloadAttestationData payload_attestation_data = 123;
+    ethereum.eth.v1alpha1.BeaconBlockEpbs block_epbs = 124;
   }
 
   reserved 4, 5; // Reserving old, deleted fields.

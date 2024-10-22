@@ -3,8 +3,156 @@ package eth
 
 import (
 	ssz "github.com/prysmaticlabs/fastssz"
+	github_com_prysmaticlabs_prysm_v5_consensus_types_primitives "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	v1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
 )
+
+// MarshalSSZ ssz marshals the BeaconBlockePBS object
+func (b *BeaconBlockePBS) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(b)
+}
+
+// MarshalSSZTo ssz marshals the BeaconBlockePBS object to a target array
+func (b *BeaconBlockePBS) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(84)
+
+	// Field (0) 'Slot'
+	dst = ssz.MarshalUint64(dst, uint64(b.Slot))
+
+	// Field (1) 'ProposerIndex'
+	dst = ssz.MarshalUint64(dst, uint64(b.ProposerIndex))
+
+	// Field (2) 'ParentRoot'
+	if size := len(b.ParentRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.ParentRoot", size, 32)
+		return
+	}
+	dst = append(dst, b.ParentRoot...)
+
+	// Field (3) 'StateRoot'
+	if size := len(b.StateRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.StateRoot", size, 32)
+		return
+	}
+	dst = append(dst, b.StateRoot...)
+
+	// Offset (4) 'Body'
+	dst = ssz.WriteOffset(dst, offset)
+	if b.Body == nil {
+		b.Body = new(BeaconBlockBodyePBS)
+	}
+	offset += b.Body.SizeSSZ()
+
+	// Field (4) 'Body'
+	if dst, err = b.Body.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the BeaconBlockePBS object
+func (b *BeaconBlockePBS) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 84 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o4 uint64
+
+	// Field (0) 'Slot'
+	b.Slot = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
+
+	// Field (1) 'ProposerIndex'
+	b.ProposerIndex = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[8:16]))
+
+	// Field (2) 'ParentRoot'
+	if cap(b.ParentRoot) == 0 {
+		b.ParentRoot = make([]byte, 0, len(buf[16:48]))
+	}
+	b.ParentRoot = append(b.ParentRoot, buf[16:48]...)
+
+	// Field (3) 'StateRoot'
+	if cap(b.StateRoot) == 0 {
+		b.StateRoot = make([]byte, 0, len(buf[48:80]))
+	}
+	b.StateRoot = append(b.StateRoot, buf[48:80]...)
+
+	// Offset (4) 'Body'
+	if o4 = ssz.ReadOffset(buf[80:84]); o4 > size {
+		return ssz.ErrOffset
+	}
+
+	if o4 != 84 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Field (4) 'Body'
+	{
+		buf = tail[o4:]
+		if b.Body == nil {
+			b.Body = new(BeaconBlockBodyePBS)
+		}
+		if err = b.Body.UnmarshalSSZ(buf); err != nil {
+			return err
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the BeaconBlockePBS object
+func (b *BeaconBlockePBS) SizeSSZ() (size int) {
+	size = 84
+
+	// Field (4) 'Body'
+	if b.Body == nil {
+		b.Body = new(BeaconBlockBodyePBS)
+	}
+	size += b.Body.SizeSSZ()
+
+	return
+}
+
+// HashTreeRoot ssz hashes the BeaconBlockePBS object
+func (b *BeaconBlockePBS) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(b)
+}
+
+// HashTreeRootWith ssz hashes the BeaconBlockePBS object with a hasher
+func (b *BeaconBlockePBS) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'Slot'
+	hh.PutUint64(uint64(b.Slot))
+
+	// Field (1) 'ProposerIndex'
+	hh.PutUint64(uint64(b.ProposerIndex))
+
+	// Field (2) 'ParentRoot'
+	if size := len(b.ParentRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.ParentRoot", size, 32)
+		return
+	}
+	hh.PutBytes(b.ParentRoot)
+
+	// Field (3) 'StateRoot'
+	if size := len(b.StateRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.StateRoot", size, 32)
+		return
+	}
+	hh.PutBytes(b.StateRoot)
+
+	// Field (4) 'Body'
+	if err = b.Body.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	hh.Merkleize(indx)
+	return
+}
 
 // MarshalSSZ ssz marshals the BeaconBlockBodyePBS object
 func (b *BeaconBlockBodyePBS) MarshalSSZ() ([]byte, error) {
@@ -403,10 +551,10 @@ func (b *BeaconBlockBodyePBS) UnmarshalSSZ(buf []byte) error {
 		if err != nil {
 			return err
 		}
-		b.PayloadAttestations = make([]*v1.PayloadAttestation, num)
+		b.PayloadAttestations = make([]*PayloadAttestation, num)
 		for ii := 0; ii < num; ii++ {
 			if b.PayloadAttestations[ii] == nil {
-				b.PayloadAttestations[ii] = new(v1.PayloadAttestation)
+				b.PayloadAttestations[ii] = new(PayloadAttestation)
 			}
 			if err = b.PayloadAttestations[ii].UnmarshalSSZ(buf[ii*208 : (ii+1)*208]); err != nil {
 				return err
@@ -605,6 +753,390 @@ func (b *BeaconBlockBodyePBS) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 		}
 		hh.MerkleizeWithMixin(subIndx, num, 4)
 	}
+
+	hh.Merkleize(indx)
+	return
+}
+
+// MarshalSSZ ssz marshals the SignedBeaconBlockePBS object
+func (s *SignedBeaconBlockePBS) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(s)
+}
+
+// MarshalSSZTo ssz marshals the SignedBeaconBlockePBS object to a target array
+func (s *SignedBeaconBlockePBS) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(100)
+
+	// Offset (0) 'Block'
+	dst = ssz.WriteOffset(dst, offset)
+	if s.Block == nil {
+		s.Block = new(BeaconBlockePBS)
+	}
+	offset += s.Block.SizeSSZ()
+
+	// Field (1) 'Signature'
+	if size := len(s.Signature); size != 96 {
+		err = ssz.ErrBytesLengthFn("--.Signature", size, 96)
+		return
+	}
+	dst = append(dst, s.Signature...)
+
+	// Field (0) 'Block'
+	if dst, err = s.Block.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the SignedBeaconBlockePBS object
+func (s *SignedBeaconBlockePBS) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 100 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o0 uint64
+
+	// Offset (0) 'Block'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
+	}
+
+	if o0 != 100 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Field (1) 'Signature'
+	if cap(s.Signature) == 0 {
+		s.Signature = make([]byte, 0, len(buf[4:100]))
+	}
+	s.Signature = append(s.Signature, buf[4:100]...)
+
+	// Field (0) 'Block'
+	{
+		buf = tail[o0:]
+		if s.Block == nil {
+			s.Block = new(BeaconBlockePBS)
+		}
+		if err = s.Block.UnmarshalSSZ(buf); err != nil {
+			return err
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the SignedBeaconBlockePBS object
+func (s *SignedBeaconBlockePBS) SizeSSZ() (size int) {
+	size = 100
+
+	// Field (0) 'Block'
+	if s.Block == nil {
+		s.Block = new(BeaconBlockePBS)
+	}
+	size += s.Block.SizeSSZ()
+
+	return
+}
+
+// HashTreeRoot ssz hashes the SignedBeaconBlockePBS object
+func (s *SignedBeaconBlockePBS) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(s)
+}
+
+// HashTreeRootWith ssz hashes the SignedBeaconBlockePBS object with a hasher
+func (s *SignedBeaconBlockePBS) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'Block'
+	if err = s.Block.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (1) 'Signature'
+	if size := len(s.Signature); size != 96 {
+		err = ssz.ErrBytesLengthFn("--.Signature", size, 96)
+		return
+	}
+	hh.PutBytes(s.Signature)
+
+	hh.Merkleize(indx)
+	return
+}
+
+// MarshalSSZ ssz marshals the PayloadAttestationData object
+func (p *PayloadAttestationData) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(p)
+}
+
+// MarshalSSZTo ssz marshals the PayloadAttestationData object to a target array
+func (p *PayloadAttestationData) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+
+	// Field (0) 'BeaconBlockRoot'
+	if size := len(p.BeaconBlockRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.BeaconBlockRoot", size, 32)
+		return
+	}
+	dst = append(dst, p.BeaconBlockRoot...)
+
+	// Field (1) 'Slot'
+	dst = ssz.MarshalUint64(dst, uint64(p.Slot))
+
+	// Field (2) 'PayloadStatus'
+	dst = ssz.MarshalUint64(dst, uint64(p.PayloadStatus))
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the PayloadAttestationData object
+func (p *PayloadAttestationData) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size != 48 {
+		return ssz.ErrSize
+	}
+
+	// Field (0) 'BeaconBlockRoot'
+	if cap(p.BeaconBlockRoot) == 0 {
+		p.BeaconBlockRoot = make([]byte, 0, len(buf[0:32]))
+	}
+	p.BeaconBlockRoot = append(p.BeaconBlockRoot, buf[0:32]...)
+
+	// Field (1) 'Slot'
+	p.Slot = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[32:40]))
+
+	// Field (2) 'PayloadStatus'
+	p.PayloadStatus = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.PTCStatus(ssz.UnmarshallUint64(buf[40:48]))
+
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the PayloadAttestationData object
+func (p *PayloadAttestationData) SizeSSZ() (size int) {
+	size = 48
+	return
+}
+
+// HashTreeRoot ssz hashes the PayloadAttestationData object
+func (p *PayloadAttestationData) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(p)
+}
+
+// HashTreeRootWith ssz hashes the PayloadAttestationData object with a hasher
+func (p *PayloadAttestationData) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'BeaconBlockRoot'
+	if size := len(p.BeaconBlockRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.BeaconBlockRoot", size, 32)
+		return
+	}
+	hh.PutBytes(p.BeaconBlockRoot)
+
+	// Field (1) 'Slot'
+	hh.PutUint64(uint64(p.Slot))
+
+	// Field (2) 'PayloadStatus'
+	hh.PutUint64(uint64(p.PayloadStatus))
+
+	hh.Merkleize(indx)
+	return
+}
+
+// MarshalSSZ ssz marshals the PayloadAttestation object
+func (p *PayloadAttestation) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(p)
+}
+
+// MarshalSSZTo ssz marshals the PayloadAttestation object to a target array
+func (p *PayloadAttestation) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+
+	// Field (0) 'AggregationBits'
+	if size := len(p.AggregationBits); size != 64 {
+		err = ssz.ErrBytesLengthFn("--.AggregationBits", size, 64)
+		return
+	}
+	dst = append(dst, p.AggregationBits...)
+
+	// Field (1) 'Data'
+	if p.Data == nil {
+		p.Data = new(PayloadAttestationData)
+	}
+	if dst, err = p.Data.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (2) 'Signature'
+	if size := len(p.Signature); size != 96 {
+		err = ssz.ErrBytesLengthFn("--.Signature", size, 96)
+		return
+	}
+	dst = append(dst, p.Signature...)
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the PayloadAttestation object
+func (p *PayloadAttestation) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size != 208 {
+		return ssz.ErrSize
+	}
+
+	// Field (0) 'AggregationBits'
+	if cap(p.AggregationBits) == 0 {
+		p.AggregationBits = make([]byte, 0, len(buf[0:64]))
+	}
+	p.AggregationBits = append(p.AggregationBits, buf[0:64]...)
+
+	// Field (1) 'Data'
+	if p.Data == nil {
+		p.Data = new(PayloadAttestationData)
+	}
+	if err = p.Data.UnmarshalSSZ(buf[64:112]); err != nil {
+		return err
+	}
+
+	// Field (2) 'Signature'
+	if cap(p.Signature) == 0 {
+		p.Signature = make([]byte, 0, len(buf[112:208]))
+	}
+	p.Signature = append(p.Signature, buf[112:208]...)
+
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the PayloadAttestation object
+func (p *PayloadAttestation) SizeSSZ() (size int) {
+	size = 208
+	return
+}
+
+// HashTreeRoot ssz hashes the PayloadAttestation object
+func (p *PayloadAttestation) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(p)
+}
+
+// HashTreeRootWith ssz hashes the PayloadAttestation object with a hasher
+func (p *PayloadAttestation) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'AggregationBits'
+	if size := len(p.AggregationBits); size != 64 {
+		err = ssz.ErrBytesLengthFn("--.AggregationBits", size, 64)
+		return
+	}
+	hh.PutBytes(p.AggregationBits)
+
+	// Field (1) 'Data'
+	if err = p.Data.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (2) 'Signature'
+	if size := len(p.Signature); size != 96 {
+		err = ssz.ErrBytesLengthFn("--.Signature", size, 96)
+		return
+	}
+	hh.PutBytes(p.Signature)
+
+	hh.Merkleize(indx)
+	return
+}
+
+// MarshalSSZ ssz marshals the PayloadAttestationMessage object
+func (p *PayloadAttestationMessage) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(p)
+}
+
+// MarshalSSZTo ssz marshals the PayloadAttestationMessage object to a target array
+func (p *PayloadAttestationMessage) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+
+	// Field (0) 'ValidatorIndex'
+	dst = ssz.MarshalUint64(dst, uint64(p.ValidatorIndex))
+
+	// Field (1) 'Data'
+	if p.Data == nil {
+		p.Data = new(PayloadAttestationData)
+	}
+	if dst, err = p.Data.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (2) 'Signature'
+	if size := len(p.Signature); size != 96 {
+		err = ssz.ErrBytesLengthFn("--.Signature", size, 96)
+		return
+	}
+	dst = append(dst, p.Signature...)
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the PayloadAttestationMessage object
+func (p *PayloadAttestationMessage) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size != 152 {
+		return ssz.ErrSize
+	}
+
+	// Field (0) 'ValidatorIndex'
+	p.ValidatorIndex = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[0:8]))
+
+	// Field (1) 'Data'
+	if p.Data == nil {
+		p.Data = new(PayloadAttestationData)
+	}
+	if err = p.Data.UnmarshalSSZ(buf[8:56]); err != nil {
+		return err
+	}
+
+	// Field (2) 'Signature'
+	if cap(p.Signature) == 0 {
+		p.Signature = make([]byte, 0, len(buf[56:152]))
+	}
+	p.Signature = append(p.Signature, buf[56:152]...)
+
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the PayloadAttestationMessage object
+func (p *PayloadAttestationMessage) SizeSSZ() (size int) {
+	size = 152
+	return
+}
+
+// HashTreeRoot ssz hashes the PayloadAttestationMessage object
+func (p *PayloadAttestationMessage) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(p)
+}
+
+// HashTreeRootWith ssz hashes the PayloadAttestationMessage object with a hasher
+func (p *PayloadAttestationMessage) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'ValidatorIndex'
+	hh.PutUint64(uint64(p.ValidatorIndex))
+
+	// Field (1) 'Data'
+	if err = p.Data.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (2) 'Signature'
+	if size := len(p.Signature); size != 96 {
+		err = ssz.ErrBytesLengthFn("--.Signature", size, 96)
+		return
+	}
+	hh.PutBytes(p.Signature)
 
 	hh.Merkleize(indx)
 	return
