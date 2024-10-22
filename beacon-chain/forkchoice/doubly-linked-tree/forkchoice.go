@@ -681,3 +681,62 @@ func (f *ForkChoice) ParentRoot(root [32]byte) ([32]byte, error) {
 	}
 	return n.parent.root, nil
 }
+
+// UpdateVotesOnPayloadAttestation processes a new aggregated
+// payload attestation message and updates
+// the Payload Timeliness Committee (PTC) votes for the corresponding block.
+func (s *Store) updateVotesOnPayloadAttestation(
+	payloadAttestation *ethpb.PayloadAttestation) error {
+	// Extract the attestation data and convert the beacon block root to a 32-byte array
+	data := payloadAttestation.Data
+	blockRoot := bytesutil.ToBytes32(data.BeaconBlockRoot)
+
+	// Check if the block exists in the store
+	node, ok := s.nodeByRoot[blockRoot]
+	if !ok || node == nil {
+		return ErrNilNode
+	}
+
+	// Update the PTC votes based on the attestation
+	// We only set the vote if it hasn't been set before
+	// to handle potential equivocations
+	for i := uint64(0); i < fieldparams.PTCSize; i++ {
+		if payloadAttestation.AggregationBits.BitAt(i) && node.ptcVote[i] == primitives.PAYLOAD_ABSENT {
+			node.ptcVote[i] = data.PayloadStatus
+		}
+	}
+
+	return nil
+}
+
+// updatePayloadBoosts checks the PTC votes for a given node and updates
+// the payload reveal and withhold boost roots if the necessary thresholds are met.
+func (s *Store) updatePayloadBoosts(node *Node) {
+	presentCount := 0
+	withheldCount := 0
+
+	// Count the number of PRESENT and WITHHELD votes
+	for _, vote := range node.ptcVote {
+		if vote == primitives.PAYLOAD_PRESENT {
+			presentCount++
+		} else if vote == primitives.PAYLOAD_WITHHELD {
+			withheldCount++
+		}
+	}
+
+	// If the number of PRESENT votes exceeds the threshold,
+	// update the payload reveal boost root
+	if presentCount > int(params.BeaconConfig().PayloadTimelyThreshold) {
+		s.payloadRevealBoostRoot = node.root
+		return
+	}
+	// If the number of WITHHELD votes exceeds the threshold,
+	// update the payload reveal boost root
+	if withheldCount > int(params.BeaconConfig().PayloadTimelyThreshold) {
+		if node.parent != nil {
+			s.payloadWithholdBoostRoot = node.parent.root
+			// A node is considered "full" if it has a non-zero payload hash
+			s.payloadWithholdBoostFull = node.parent.payloadHash != [32]byte{}
+		}
+	}
+}

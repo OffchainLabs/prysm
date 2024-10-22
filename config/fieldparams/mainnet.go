@@ -56,4 +56,5 @@ const (
 	PTCSize                               = 512               // PTC_SIZE [New in ePBS]
 	MaxPayloadAttestationsPerBlock        = 4                 // MAX_PAYLOAD_ATTESTATIONS [New in ePBS]
 	MaxTransactionsPerInclusionList       = 1024              // MAX_TRANSACTIONS_PER_INCLUSION_LIST	[New in ePBS]
+	PayloadTimelyThreshold                = 256               // PTC_SIZE / 2 [New in ePBS]
 )
