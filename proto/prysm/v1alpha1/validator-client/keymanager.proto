@@ -69,6 +69,7 @@ message SignRequest {
 
         // ePBS objects.
         ethereum.eth.v1alpha1.PayloadAttestationData payload_attestation_data = 121;
+        ethereum.eth.v1alpha1.BeaconBlockEpbs block_epbs = 122;
     }
     reserved 4, 5; // Reserving old, deleted fields.
     uint64 signing_slot = 6 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"];

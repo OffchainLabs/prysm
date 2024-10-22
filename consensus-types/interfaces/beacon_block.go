@@ -72,6 +72,12 @@ type ReadOnlyBeaconBlockBody interface {
 	ExecutionRequests() (*enginev1.ExecutionRequests, error)
 }
 
+type ROBlockBodyEpbs interface {
+	ReadOnlyBeaconBlockBody
+	PayloadAttestations() []*ethpb.PayloadAttestation
+	SignedExecutionPayloadHeader() *enginev1.SignedExecutionPayloadHeader
+}
+
 type SignedBeaconBlock interface {
 	ReadOnlySignedBeaconBlock
 	SetExecution(ExecutionData) error
@@ -93,6 +99,8 @@ type SignedBeaconBlock interface {
 	SetSignature(sig []byte)
 	SetExecutionRequests(er *enginev1.ExecutionRequests) error
 	Unblind(e ExecutionData) error
+	SetSignedExecutionPayloadHeader(h *enginev1.SignedExecutionPayloadHeader) error
+	SetPayloadAttestations([]*ethpb.PayloadAttestation) error
 }
 
 // ExecutionData represents execution layer information that is contained

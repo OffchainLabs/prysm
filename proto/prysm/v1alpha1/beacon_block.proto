@@ -62,7 +62,7 @@ message GenericSignedBeaconBlock {
         // Representing a signed, post-Electra fork blinded beacon block.
         SignedBlindedBeaconBlockElectra blinded_electra  = 10;
 	// Representing a signed ePBS block
-	SignedBeaconBlockePBS epbs = 11;
+	SignedBeaconBlockEpbs epbs = 11;
     }
     bool is_blinded = 100;
     reserved 101; // Deprecated fields
@@ -100,7 +100,7 @@ message GenericBeaconBlock {
         // Representing a post-Electra fork blinded beacon block.
         BlindedBeaconBlockElectra blinded_electra  = 10;
 	// ePBS block
-	BeaconBlockePBS epbs = 11;
+	BeaconBlockEpbs epbs = 11;
     }
     bool is_blinded = 100;
     string payload_value = 101;
@@ -962,7 +962,7 @@ message BlobSidecars {
     repeated BlobSidecar sidecars = 1 [(ethereum.eth.ext.ssz_max) = "max_blobs_per_block.size"];
 }
 
-message BeaconBlockePBS {
+message BeaconBlockEpbs {
     // Beacon chain slot that this block represents.
     uint64 slot = 1 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"];
 
@@ -976,10 +976,10 @@ message BeaconBlockePBS {
     bytes state_root = 4 [(ethereum.eth.ext.ssz_size) = "32"];
 
     // The beacon block body.
-    BeaconBlockBodyePBS body = 5;
+    BeaconBlockBodyEpbs body = 5;
 }
 
-message BeaconBlockBodyePBS {
+message BeaconBlockBodyEpbs {
     // The validators RANDAO reveal 96 byte value.
     bytes randao_reveal = 1 [(ethereum.eth.ext.ssz_size) = "96"];
 
@@ -1021,9 +1021,9 @@ message BeaconBlockBodyePBS {
     repeated PayloadAttestation payload_attestations = 12 [(ethereum.eth.ext.ssz_max) = "payload_attestation.size"];
 }
 
-message SignedBeaconBlockePBS {
+message SignedBeaconBlockEpbs {
     // The unsigned beacon block itself.
-    BeaconBlockePBS block = 1;
+    BeaconBlockEpbs block = 1;
 
     // 96 byte BLS signature from the validator that produced this block.
     bytes signature = 2 [(ethereum.eth.ext.ssz_size) = "96"];

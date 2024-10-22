@@ -173,8 +173,8 @@ ssz_electra_objs = [
 ]
 
 ssz_epbs_objs = [
-	"BeaconBlockePBS",
-	"SignedBeaconBlockePBS",
+	"BeaconBlockEpbs",
+	"SignedBeaconBlockEpbs",
 	"PayloadAttestationData",
 	"PayloadAttestation",
 	"PayloadAttestationMessage",
@@ -374,11 +374,8 @@ ssz_proto_files(
         "beacon_block.proto",
         "beacon_state.proto",
         "blobs.proto",
-<<<<<<< HEAD
         "light_client.proto",
-=======
         "payload_attestation.proto",
->>>>>>> e2111041f2 (Helper for Payload Attestation Signing (#13901))
         "sync_committee.proto",
         "withdrawals.proto",
     ],

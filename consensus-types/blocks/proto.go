@@ -156,6 +156,16 @@ func (b *SignedBeaconBlock) Proto() (proto.Message, error) { // nolint:gocognit
 			Block:     block,
 			Signature: b.signature[:],
 		}, nil
+	case version.EPBS:
+		block, ok := blockMessage.(*eth.BeaconBlockEpbs)
+		if !ok {
+			return nil, errIncorrectBlockVersion
+		}
+
+		return &eth.SignedBeaconBlockEpbs{
+			Block:     block,
+			Signature: b.signature[:],
+		}, nil
 	default:
 		return nil, errors.New("unsupported signed beacon block version")
 	}
@@ -331,6 +341,18 @@ func (b *BeaconBlock) Proto() (proto.Message, error) { // nolint:gocognit
 			}
 		}
 		return &eth.BeaconBlockElectra{
+			Slot:          b.slot,
+			ProposerIndex: b.proposerIndex,
+			ParentRoot:    b.parentRoot[:],
+			StateRoot:     b.stateRoot[:],
+			Body:          body,
+		}, nil
+	case version.EPBS:
+		body, ok := bodyMessage.(*eth.BeaconBlockBodyEpbs)
+		if !ok {
+			return nil, errIncorrectBodyVersion
+		}
+		return &eth.BeaconBlockEpbs{
 			Slot:          b.slot,
 			ProposerIndex: b.proposerIndex,
 			ParentRoot:    b.parentRoot[:],
@@ -558,6 +580,21 @@ func (b *BeaconBlockBody) Proto() (proto.Message, error) {
 			ExecutionRequests:     b.executionRequests,
 		}, nil
 
+	case version.EPBS:
+		return &eth.BeaconBlockBodyEpbs{
+			RandaoReveal:                 b.randaoReveal[:],
+			Eth1Data:                     b.eth1Data,
+			Graffiti:                     b.graffiti[:],
+			ProposerSlashings:            b.proposerSlashings,
+			AttesterSlashings:            b.attesterSlashings,
+			Attestations:                 b.attestations,
+			Deposits:                     b.deposits,
+			VoluntaryExits:               b.voluntaryExits,
+			SyncAggregate:                b.syncAggregate,
+			BlsToExecutionChanges:        b.blsToExecutionChanges,
+			SignedExecutionPayloadHeader: b.signedExecutionPayloadHeader,
+			PayloadAttestations:          b.payloadAttestations,
+		}, nil
 	default:
 		return nil, errors.New("unsupported beacon block body version")
 	}
@@ -659,6 +696,22 @@ func initSignedBlockFromProtoElectra(pb *eth.SignedBeaconBlockElectra) (*SignedB
 	}
 	b := &SignedBeaconBlock{
 		version:   version.Electra,
+		block:     block,
+		signature: bytesutil.ToBytes96(pb.Signature),
+	}
+	return b, nil
+}
+
+func initSignedBlockFromProtoEPBS(pb *eth.SignedBeaconBlockEpbs) (*SignedBeaconBlock, error) {
+	if pb == nil {
+		return nil, errNilBlock
+	}
+	block, err := initBlockFromProtoEpbs(pb.Block)
+	if err != nil {
+		return nil, err
+	}
+	b := &SignedBeaconBlock{
+		version:   version.EPBS,
 		block:     block,
 		signature: bytesutil.ToBytes96(pb.Signature),
 	}
@@ -857,13 +910,31 @@ func initBlockFromProtoElectra(pb *eth.BeaconBlockElectra) (*BeaconBlock, error)
 	if pb == nil {
 		return nil, errNilBlock
 	}
-
 	body, err := initBlockBodyFromProtoElectra(pb.Body)
 	if err != nil {
 		return nil, err
 	}
 	b := &BeaconBlock{
 		version:       version.Electra,
+		slot:          pb.Slot,
+		proposerIndex: pb.ProposerIndex,
+		parentRoot:    bytesutil.ToBytes32(pb.ParentRoot),
+		stateRoot:     bytesutil.ToBytes32(pb.StateRoot),
+		body:          body,
+	}
+	return b, nil
+}
+
+func initBlockFromProtoEpbs(pb *eth.BeaconBlockEpbs) (*BeaconBlock, error) {
+	if pb == nil {
+		return nil, errNilBlock
+	}
+	body, err := initBlockBodyFromProtoEpbs(pb.Body)
+	if err != nil {
+		return nil, err
+	}
+	b := &BeaconBlock{
+		version:       version.EPBS,
 		slot:          pb.Slot,
 		proposerIndex: pb.ProposerIndex,
 		parentRoot:    bytesutil.ToBytes32(pb.ParentRoot),
@@ -1102,6 +1173,29 @@ func initBlockBodyFromProtoDeneb(pb *eth.BeaconBlockBodyDeneb) (*BeaconBlockBody
 		executionPayload:      p,
 		blsToExecutionChanges: pb.BlsToExecutionChanges,
 		blobKzgCommitments:    pb.BlobKzgCommitments,
+	}
+	return b, nil
+}
+
+func initBlockBodyFromProtoEpbs(pb *eth.BeaconBlockBodyEpbs) (*BeaconBlockBody, error) {
+	if pb == nil {
+		return nil, errNilBlockBody
+	}
+
+	b := &BeaconBlockBody{
+		version:                      version.EPBS,
+		randaoReveal:                 bytesutil.ToBytes96(pb.RandaoReveal),
+		eth1Data:                     pb.Eth1Data,
+		graffiti:                     bytesutil.ToBytes32(pb.Graffiti),
+		proposerSlashings:            pb.ProposerSlashings,
+		attesterSlashings:            pb.AttesterSlashings,
+		attestations:                 pb.Attestations,
+		deposits:                     pb.Deposits,
+		voluntaryExits:               pb.VoluntaryExits,
+		syncAggregate:                pb.SyncAggregate,
+		blsToExecutionChanges:        pb.BlsToExecutionChanges,
+		signedExecutionPayloadHeader: pb.SignedExecutionPayloadHeader,
+		payloadAttestations:          pb.PayloadAttestations,
 	}
 	return b, nil
 }

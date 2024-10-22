@@ -74,6 +74,10 @@ func NewSignedBeaconBlock(i interface{}) (interfaces.SignedBeaconBlock, error) {
 		return initBlindedSignedBlockFromProtoElectra(b)
 	case *eth.GenericSignedBeaconBlock_BlindedElectra:
 		return initBlindedSignedBlockFromProtoElectra(b.BlindedElectra)
+	case *eth.GenericSignedBeaconBlock_Epbs:
+		return initSignedBlockFromProtoEPBS(b.Epbs)
+	case *eth.SignedBeaconBlockEpbs:
+		return initSignedBlockFromProtoEPBS(b)
 	default:
 		return nil, errors.Wrapf(ErrUnsupportedSignedBeaconBlock, "unable to create block from type %T", i)
 	}
@@ -124,6 +128,10 @@ func NewBeaconBlock(i interface{}) (interfaces.ReadOnlyBeaconBlock, error) {
 		return initBlindedBlockFromProtoElectra(b)
 	case *eth.GenericBeaconBlock_BlindedElectra:
 		return initBlindedBlockFromProtoElectra(b.BlindedElectra)
+	case *eth.GenericBeaconBlock_Epbs:
+		return initBlockFromProtoEpbs(b.Epbs)
+	case *eth.BeaconBlockEpbs:
+		return initBlockFromProtoEpbs(b)
 	default:
 		return nil, errors.Wrapf(errUnsupportedBeaconBlock, "unable to create block from type %T", i)
 	}
@@ -154,6 +162,8 @@ func NewBeaconBlockBody(i interface{}) (interfaces.ReadOnlyBeaconBlockBody, erro
 		return initBlockBodyFromProtoElectra(b)
 	case *eth.BlindedBeaconBlockBodyElectra:
 		return initBlindedBlockBodyFromProtoElectra(b)
+	case *eth.BeaconBlockBodyEpbs:
+		return initBlockBodyFromProtoEpbs(b)
 	default:
 		return nil, errors.Wrapf(errUnsupportedBeaconBlockBody, "unable to create block body from type %T", i)
 	}
@@ -233,6 +243,12 @@ func BuildSignedBeaconBlock(blk interfaces.ReadOnlyBeaconBlock, signature []byte
 			return nil, errIncorrectBlockVersion
 		}
 		return NewSignedBeaconBlock(&eth.SignedBeaconBlockElectra{Block: pb, Signature: signature})
+	case version.EPBS:
+		pb, ok := pb.(*eth.BeaconBlockEpbs)
+		if !ok {
+			return nil, errIncorrectBlockVersion
+		}
+		return NewSignedBeaconBlock(&eth.SignedBeaconBlockEpbs{Block: pb, Signature: signature})
 	default:
 		return nil, errUnsupportedBeaconBlock
 	}
@@ -286,6 +302,9 @@ func BuildSignedBeaconBlockFromExecutionPayload(blk interfaces.ReadOnlySignedBea
 	}
 	if !blk.IsBlinded() {
 		return nil, errNonBlindedSignedBeaconBlock
+	}
+	if blk.Version() >= version.EPBS {
+		return nil, errors.Wrap(errUnsupportedBeaconBlock, "post epbs blocks no longer need to be unblind")
 	}
 	b := blk.Block()
 	payloadHeader, err := b.Body().Execution()

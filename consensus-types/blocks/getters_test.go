@@ -464,6 +464,9 @@ func Test_BeaconBlockBody_Execution(t *testing.T) {
 	gas, err = eDenebHeader.ExcessBlobGas()
 	require.NoError(t, err)
 	require.DeepEqual(t, gas, uint64(223))
+
+	bb = &SignedBeaconBlock{version: version.EPBS, block: &BeaconBlock{version: version.EPBS, body: &BeaconBlockBody{version: version.EPBS}}}
+	require.ErrorContains(t, "Execution is not supported for epbs: unsupported getter", bb.SetExecution(nil))
 }
 
 func Test_BeaconBlockBody_HashTreeRoot(t *testing.T) {
