@@ -331,7 +331,9 @@ func dataColumnIndexValidatorFromRangeReq(req *pb.DataColumnSidecarsByRangeReque
 	}
 }
 
-func SendDataColumnsByRangeRequest(
+// SendDataColumnSidecarsByRangeRequest sends a request for data column sidecars by range
+// and returns the fetched data column sidecars.
+func SendDataColumnSidecarsByRangeRequest(
 	ctx context.Context,
 	tor blockchain.TemporalOracle,
 	p2pApi p2p.P2P,

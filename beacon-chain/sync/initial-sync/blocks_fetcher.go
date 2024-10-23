@@ -82,7 +82,7 @@ type blocksFetcherConfig struct {
 	mode                     syncMode
 	bs                       filesystem.BlobStorageSummarizer
 	bv                       verification.NewBlobVerifier
-	cv                       verification.NewColumnVerifier
+	cv                       verification.NewDataColumnsVerifier
 }
 
 // blocksFetcher is a service to fetch chain data from peers.
@@ -100,7 +100,7 @@ type blocksFetcher struct {
 	db              db.ReadOnlyDatabase
 	bs              filesystem.BlobStorageSummarizer
 	bv              verification.NewBlobVerifier
-	cv              verification.NewColumnVerifier
+	cv              verification.NewDataColumnsVerifier
 	blocksPerPeriod uint64
 	rateLimiter     *leakybucket.Collector
 	peerLocks       map[peer.ID]*peerLock
@@ -1155,67 +1155,91 @@ func (f *blocksFetcher) waitForPeersForDataColumns(
 	return dataColumnsByAdmissiblePeer, nil
 }
 
-// processDataColumn mutates `bwbs` argument by adding the data column,
+// processDataColumns mutates `bwbs` argument by adding the data column,
 // and mutates `missingColumnsByRoot` by removing the data column if the
 // data column passes all the check.
-func processDataColumn(
+func (f *blocksFetcher) processDataColumns(
 	wrappedBwbsMissingColumns *bwbsMissingColumns,
-	columnVerifier verification.NewColumnVerifier,
-	blocksByRoot map[[fieldparams.RootLength]byte]blocks.ROBlock,
+	blockByRoot map[[fieldparams.RootLength]byte]blocks.ROBlock,
 	indicesByRoot map[[fieldparams.RootLength]byte][]int,
-	dataColumn blocks.RODataColumn,
+	dataColumns []blocks.RODataColumn,
 ) bool {
-	// Extract the block root from the data column.
-	blockRoot := dataColumn.BlockRoot()
+	// Fiter out data columns:
+	// - that are not expected and,
+	// - which correspond to blocks before Deneb.
 
-	// Find the position of the block in `bwbs` that corresponds to this block root.
-	indices, ok := indicesByRoot[blockRoot]
-	if !ok {
-		// The peer returned a data column that we did not expect.
-		// This is among others possible when the peer is not on the same fork.
-		return false
+	// Not expected data columns are among others possible when
+	// the peer is not on the same fork, due to the nature of
+	// data columns by range requests.
+	wrappedBlockDataColumns := make([]verify.WrappedBlockDataColumn, 0, len(dataColumns))
+	for _, dataColumn := range dataColumns {
+		// Extract the block root from the data column.
+		blockRoot := dataColumn.BlockRoot()
+
+		// Skip if the block root is not expected.
+		// This is possible when the peer is not on the same fork.
+		_, ok := indicesByRoot[blockRoot]
+		if !ok {
+			continue
+		}
+
+		// Retrieve the block from the block root.
+		block, ok := blockByRoot[blockRoot]
+		if !ok {
+			// This should never happen.
+			log.WithField("blockRoot", fmt.Sprintf("%#x", blockRoot)).Error("Fetch data columns from peers - block not found for root")
+			return false
+		}
+
+		// Skip if the block is before Deneb.
+		if block.Version() < version.Deneb {
+			continue
+		}
+
+		wrappedBlockDataColumn := verify.WrappedBlockDataColumn{
+			ROBlock:      block.Block(),
+			RODataColumn: dataColumn,
+		}
+
+		wrappedBlockDataColumns = append(wrappedBlockDataColumns, wrappedBlockDataColumn)
 	}
 
-	// Extract the block from the block root.
-	block, ok := blocksByRoot[blockRoot]
-	if !ok {
-		// This should never happen.
-		log.WithField("blockRoot", fmt.Sprintf("%#x", blockRoot)).Error("Fetch data columns from peers - block not found")
-		return false
-	}
-
-	// Verify the data column.
-	if err := verify.ColumnAlignsWithBlock(dataColumn, block, columnVerifier); err != nil {
-		log.WithError(err).WithFields(logrus.Fields{
-			"root":   fmt.Sprintf("%#x", blockRoot),
-			"slot":   block.Block().Slot(),
-			"column": dataColumn.ColumnIndex,
-		}).Warning("Fetch data columns from peers - fetched data column does not align with block")
-
+	// Verify the data columns.
+	if err := verify.DataColumnsAlignWithBlock(wrappedBlockDataColumns, f.cv); err != nil {
 		// TODO: Should we downscore the peer for that?
 		return false
 	}
 
-	// Populate the corresponding items in `bwbs`.
-	func() {
-		mu := &wrappedBwbsMissingColumns.mu
+	wrappedBwbsMissingColumns.mu.Lock()
+	defer wrappedBwbsMissingColumns.mu.Unlock()
 
-		mu.Lock()
-		defer mu.Unlock()
+	bwbs := wrappedBwbsMissingColumns.bwbs
+	missingColumnsByRoot := wrappedBwbsMissingColumns.missingColumnsByRoot
 
-		bwbs := wrappedBwbsMissingColumns.bwbs
-		missingColumnsByRoot := wrappedBwbsMissingColumns.missingColumnsByRoot
+	for _, wrappedBlockDataColumn := range wrappedBlockDataColumns {
+		dataColumn := wrappedBlockDataColumn.RODataColumn
 
+		// Extract the block root from the data column.
+		blockRoot := dataColumn.BlockRoot()
+
+		// Extract the indices in bwb corresponding to the block root.
+		indices, ok := indicesByRoot[blockRoot]
+		if !ok {
+			// This should never happen.
+			log.WithField("blockRoot", fmt.Sprintf("%#x", blockRoot)).Error("Fetch data columns from peers - indices not found for root")
+			return false
+		}
+
+		// Populate the corresponding items in `bwbs`.
 		for _, index := range indices {
 			bwbs[index].Columns = append(bwbs[index].Columns, dataColumn)
 		}
-
 		// Remove the column from the missing columns.
 		delete(missingColumnsByRoot[blockRoot], dataColumn.ColumnIndex)
 		if len(missingColumnsByRoot[blockRoot]) == 0 {
 			delete(missingColumnsByRoot, blockRoot)
 		}
-	}()
+	}
 
 	return true
 }
@@ -1288,7 +1312,7 @@ func (f *blocksFetcher) fetchDataColumnFromPeer(
 	}
 
 	// Send the request to the peer.
-	roDataColumns, err := prysmsync.SendDataColumnsByRangeRequest(ctx, f.clock, f.p2p, peer, f.ctxMap, request)
+	roDataColumns, err := prysmsync.SendDataColumnSidecarsByRangeRequest(ctx, f.clock, f.p2p, peer, f.ctxMap, request)
 	if err != nil {
 		log.WithError(err).Warning("Fetch data columns from peers - could not send data columns by range request")
 		return
@@ -1299,17 +1323,8 @@ func (f *blocksFetcher) fetchDataColumnFromPeer(
 		return
 	}
 
-	globalSuccess := false
-
-	for _, dataColumn := range roDataColumns {
-		success := processDataColumn(wrappedBwbsMissingColumns, f.cv, blocksByRoot, indicesByRoot, dataColumn)
-		if success {
-			globalSuccess = true
-		}
-	}
-
-	if !globalSuccess {
-		log.Debug("Fetch data columns from peers - no valid data column returned")
+	if !f.processDataColumns(wrappedBwbsMissingColumns, blocksByRoot, indicesByRoot, roDataColumns) {
+		log.Warning("Fetch data columns from peers - at least one data column is invalid")
 		return
 	}
 

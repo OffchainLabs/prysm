@@ -414,6 +414,7 @@ func TestBlocksFetcher_scheduleRequest(t *testing.T) {
 			fetcher.scheduleRequest(context.Background(), 1, blockBatchLimit))
 	})
 }
+
 func TestBlocksFetcher_handleRequest(t *testing.T) {
 	blockBatchLimit := flags.Get().BlockBatchLimit
 	chainConfig := struct {
@@ -1988,14 +1989,9 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 								{slot: 38, columnIndex: 6, alterate: true},
 								{slot: 38, columnIndex: 70},
 							},
-						},
-						(&ethpb.DataColumnSidecarsByRangeRequest{
-							StartSlot: 38,
-							Count:     1,
-							Columns:   []uint64{6},
-						}).String(): {
 							{
 								{slot: 38, columnIndex: 6},
+								{slot: 38, columnIndex: 70},
 							},
 						},
 					},
@@ -2243,7 +2239,7 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 				ctxMap: map[[4]byte]int{{245, 165, 253, 66}: version.Deneb},
 				p2p:    p2pSvc,
 				bs:     blobStorageSummarizer,
-				cv:     newColumnVerifierFromInitializer(ini),
+				cv:     newDataColumnsVerifierFromInitializer(ini),
 			})
 
 			// Fetch the data columns from the peers.

@@ -211,6 +211,7 @@ go_test(
         "//beacon-chain/core/altair:go_default_library",
         "//beacon-chain/core/feed:go_default_library",
         "//beacon-chain/core/feed/operation:go_default_library",
+        "//beacon-chain/core/feed/state:go_default_library",
         "//beacon-chain/core/helpers:go_default_library",
         "//beacon-chain/core/peerdas:go_default_library",
         "//beacon-chain/core/signing:go_default_library",

@@ -8,7 +8,6 @@ import (
 	errors "github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
@@ -21,22 +20,14 @@ import (
 // This implementation will hold any blobs passed to Persist until the IsDataAvailable is called for their
 // block, at which time they will undergo full verification and be saved to the disk.
 type LazilyPersistentStoreColumn struct {
-	store    *filesystem.BlobStorage
-	cache    *cache
-	verifier ColumnBatchVerifier
-	nodeID   enode.ID
+	store *filesystem.BlobStorage
+	cache *cache
 }
 
-type ColumnBatchVerifier interface {
-	VerifiedRODataColumns(ctx context.Context, blk blocks.ROBlock, sc []blocks.RODataColumn) ([]blocks.VerifiedRODataColumn, error)
-}
-
-func NewLazilyPersistentStoreColumn(store *filesystem.BlobStorage, verifier ColumnBatchVerifier, id enode.ID) *LazilyPersistentStoreColumn {
+func NewLazilyPersistentStoreColumn(store *filesystem.BlobStorage) *LazilyPersistentStoreColumn {
 	return &LazilyPersistentStoreColumn{
-		store:    store,
-		cache:    newCache(),
-		verifier: verifier,
-		nodeID:   id,
+		store: store,
+		cache: newCache(),
 	}
 }
 
@@ -120,33 +111,23 @@ func (s *LazilyPersistentStoreColumn) IsDataAvailable(
 	// Verify we have all the expected sidecars, and fail fast if any are missing or inconsistent.
 	// We don't try to salvage problematic batches because this indicates a misbehaving peer and we'd rather
 	// ignore their response and decrease their peer score.
-	sidecars, err := entry.filterColumns(blockRoot, blockCommitments)
+	roDataColumns, err := entry.filterColumns(blockRoot, blockCommitments)
 	if err != nil {
 		return errors.Wrap(err, "incomplete BlobSidecar batch")
 	}
 
-	// Do thorough verifications of each RODataColumns for the block.
-	// Same as above, we don't save DataColumnsSidecars if there are any problems with the batch.
-	vscs, err := s.verifier.VerifiedRODataColumns(ctx, block, sidecars)
-	if err != nil {
-		var me verification.VerificationMultiError
-		ok := errors.As(err, &me)
-		if ok {
-			fails := me.Failures()
-			lf := make(log.Fields, len(fails))
-			for i := range fails {
-				lf[fmt.Sprintf("fail_%d", i)] = fails[i].Error()
-			}
-			log.WithFields(lf).
-				Debug("invalid ColumnSidecars received")
-		}
-		return errors.Wrapf(err, "invalid ColumnSidecars received for block %#x", blockRoot)
+	// Create verified RO data columns from RO data columns.
+	verifiedRODataColumns := make([]blocks.VerifiedRODataColumn, 0, len(roDataColumns))
+
+	for _, roDataColumn := range roDataColumns {
+		verifiedRODataColumn := blocks.NewVerifiedRODataColumn(roDataColumn)
+		verifiedRODataColumns = append(verifiedRODataColumns, verifiedRODataColumn)
 	}
 
 	// Ensure that each column sidecar is written to disk.
-	for i := range vscs {
-		if err := s.store.SaveDataColumn(vscs[i]); err != nil {
-			return errors.Wrapf(err, "save data columns for index `%d` for block `%#x`", vscs[i].ColumnIndex, blockRoot)
+	for _, verifiedRODataColumn := range verifiedRODataColumns {
+		if err := s.store.SaveDataColumn(verifiedRODataColumn); err != nil {
+			return errors.Wrapf(err, "save data columns for index `%d` for block `%#x`", verifiedRODataColumn.ColumnIndex, blockRoot)
 		}
 	}
 

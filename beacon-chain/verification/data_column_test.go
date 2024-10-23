@@ -20,557 +20,878 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
-func TestColumnIndexInBounds(t *testing.T) {
-	ini := &Initializer{}
-	_, cols := util.GenerateTestDenebBlockWithColumns(t, [32]byte{}, 0, 1)
-	b := cols[0]
-	// set Index to a value that is out of bounds
-	v := ini.NewColumnVerifier(b, GossipColumnSidecarRequirements)
-	require.NoError(t, v.DataColumnIndexInBounds())
-	require.Equal(t, true, v.results.executed(RequireDataColumnIndexInBounds))
-	require.NoError(t, v.results.result(RequireDataColumnIndexInBounds))
+func TestDataColumnsIndexInBounds(t *testing.T) {
+	testCases := []struct {
+		name         string
+		columnsIndex uint64
+		isError      bool
+	}{
+		{
+			name:         "column index in bounds",
+			columnsIndex: 0,
+			isError:      false,
+		},
+		{
+			name:         "column index out of bounds",
+			columnsIndex: fieldparams.NumberOfColumns,
+			isError:      true,
+		},
+	}
 
-	b.ColumnIndex = fieldparams.NumberOfColumns
-	v = ini.NewColumnVerifier(b, GossipColumnSidecarRequirements)
-	require.ErrorIs(t, v.DataColumnIndexInBounds(), ErrColumnIndexInvalid)
-	require.Equal(t, true, v.results.executed(RequireDataColumnIndexInBounds))
-	require.NotNil(t, v.results.result(RequireDataColumnIndexInBounds))
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			const (
+				columnSlot = 0
+				blobCount  = 1
+			)
+
+			parentRoot := [32]byte{}
+			initializer := Initializer{}
+
+			_, columns := util.GenerateTestDenebBlockWithColumns(t, parentRoot, columnSlot, blobCount)
+			for _, column := range columns {
+				column.ColumnIndex = tc.columnsIndex
+			}
+
+			verifier := initializer.NewDataColumnsVerifier(columns, GossipColumnSidecarRequirements)
+
+			err := verifier.DataColumnsIndexInBounds()
+			require.Equal(t, true, verifier.results.executed(RequireDataColumnIndexInBounds))
+
+			if tc.isError {
+				require.ErrorIs(t, err, ErrColumnIndexInvalid)
+				require.NotNil(t, verifier.results.result(RequireDataColumnIndexInBounds))
+				return
+			}
+
+			require.NoError(t, err)
+			require.NoError(t, verifier.results.result(RequireDataColumnIndexInBounds))
+		})
+	}
 }
 
-func TestColumnSlotNotTooEarly(t *testing.T) {
-	now := time.Now()
-	// make genesis 1 slot in the past
-	genesis := now.Add(-1 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
+func TestNotFromFutureSlot(t *testing.T) {
+	maximumGossipClockDisparity := params.BeaconConfig().MaximumGossipClockDisparityDuration()
 
-	_, columns := util.GenerateTestDenebBlockWithColumns(t, [32]byte{}, 0, 1)
-	c := columns[0]
-	// slot 1 should be 12 seconds after genesis
-	c.SignedBlockHeader.Header.Slot = 1
+	testCases := []struct {
+		name                    string
+		currentSlot, columnSlot primitives.Slot
+		timeBeforeCurrentSlot   time.Duration
+		isError                 bool
+	}{
+		{
+			name:                  "column slot == current slot",
+			currentSlot:           42,
+			columnSlot:            42,
+			timeBeforeCurrentSlot: 0,
+			isError:               false,
+		},
+		{
+			name:                  "within maximum gossip clock disparity",
+			currentSlot:           42,
+			columnSlot:            42,
+			timeBeforeCurrentSlot: maximumGossipClockDisparity / 2,
+			isError:               false,
+		},
+		{
+			name:                  "outside maximum gossip clock disparity",
+			currentSlot:           42,
+			columnSlot:            42,
+			timeBeforeCurrentSlot: maximumGossipClockDisparity * 2,
+			isError:               true,
+		},
+		{
+			name:                  "too far in the future",
+			currentSlot:           10,
+			columnSlot:            42,
+			timeBeforeCurrentSlot: 0,
+			isError:               true,
+		},
+	}
 
-	// This clock will give a current slot of 1 on the nose
-	happyClock := startup.NewClock(genesis, [32]byte{}, startup.WithNower(func() time.Time { return now }))
-	ini := Initializer{shared: &sharedResources{clock: happyClock}}
-	v := ini.NewColumnVerifier(c, GossipColumnSidecarRequirements)
-	require.NoError(t, v.NotFromFutureSlot())
-	require.Equal(t, true, v.results.executed(RequireNotFromFutureSlot))
-	require.NoError(t, v.results.result(RequireNotFromFutureSlot))
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			const blobCount = 1
 
-	// Since we have an early return for slots that are directly equal, give a time that is less than max disparity
-	// but still in the previous slot.
-	closeClock := startup.NewClock(genesis, [32]byte{}, startup.WithNower(func() time.Time { return now.Add(-1 * params.BeaconConfig().MaximumGossipClockDisparityDuration() / 2) }))
-	ini = Initializer{shared: &sharedResources{clock: closeClock}}
-	v = ini.NewColumnVerifier(c, GossipColumnSidecarRequirements)
-	require.NoError(t, v.NotFromFutureSlot())
+			now := time.Now()
+			secondsPerSlot := time.Duration(params.BeaconConfig().SecondsPerSlot)
+			genesis := now.Add(-time.Duration(tc.currentSlot) * secondsPerSlot * time.Second)
 
-	// This clock will give a current slot of 0, with now coming more than max clock disparity before slot 1
-	disparate := now.Add(-2 * params.BeaconConfig().MaximumGossipClockDisparityDuration())
-	dispClock := startup.NewClock(genesis, [32]byte{}, startup.WithNower(func() time.Time { return disparate }))
-	// Set up initializer to use the clock that will set now to a little to far before slot 1
-	ini = Initializer{shared: &sharedResources{clock: dispClock}}
-	v = ini.NewColumnVerifier(c, GossipColumnSidecarRequirements)
-	require.ErrorIs(t, v.NotFromFutureSlot(), ErrFromFutureSlot)
-	require.Equal(t, true, v.results.executed(RequireNotFromFutureSlot))
-	require.NotNil(t, v.results.result(RequireNotFromFutureSlot))
+			clock := startup.NewClock(
+				genesis,
+				[fieldparams.RootLength]byte{},
+				startup.WithNower(func() time.Time {
+					return now.Add(-tc.timeBeforeCurrentSlot)
+				}),
+			)
+
+			parentRoot := [fieldparams.RootLength]byte{}
+			initializer := Initializer{shared: &sharedResources{clock: clock}}
+
+			_, columns := util.GenerateTestDenebBlockWithColumns(t, parentRoot, tc.columnSlot, blobCount)
+			verifier := initializer.NewDataColumnsVerifier(columns, GossipColumnSidecarRequirements)
+
+			err := verifier.NotFromFutureSlot()
+			require.Equal(t, true, verifier.results.executed(RequireNotFromFutureSlot))
+
+			if tc.isError {
+				require.ErrorIs(t, err, ErrFromFutureSlot)
+				require.NotNil(t, verifier.results.result(RequireNotFromFutureSlot))
+				return
+			}
+
+			require.NoError(t, err)
+			require.NoError(t, verifier.results.result(RequireNotFromFutureSlot))
+		})
+	}
 }
 
 func TestColumnSlotAboveFinalized(t *testing.T) {
-	ini := &Initializer{shared: &sharedResources{}}
-	cases := []struct {
-		name          string
-		slot          primitives.Slot
-		finalizedSlot primitives.Slot
-		err           error
+	testCases := []struct {
+		name                      string
+		finalizedSlot, columnSlot primitives.Slot
+		isErr                     bool
 	}{
 		{
-			name: "finalized epoch < column epoch",
-			slot: 32,
+			name:          "finalized epoch < column epoch",
+			finalizedSlot: 10,
+			columnSlot:    96,
+			isErr:         false,
 		},
 		{
-			name: "finalized slot < column slot (same epoch)",
-			slot: 31,
+			name:          "finalized slot < column slot (same epoch)",
+			finalizedSlot: 32,
+			columnSlot:    33,
+			isErr:         false,
+		},
+		{
+			name:          "finalized slot == column slot",
+			finalizedSlot: 64,
+			columnSlot:    64,
+			isErr:         true,
 		},
 		{
 			name:          "finalized epoch > column epoch",
 			finalizedSlot: 32,
-			err:           ErrSlotNotAfterFinalized,
-		},
-		{
-			name:          "finalized slot == column slot",
-			slot:          35,
-			finalizedSlot: 35,
+			columnSlot:    31,
+			isErr:         true,
 		},
 	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			finalizedCB := func() *forkchoicetypes.Checkpoint {
+	for _, tc := range testCases {
+		const blobCount = 1
+
+		t.Run(tc.name, func(t *testing.T) {
+			finalizedCheckpoint := func() *forkchoicetypes.Checkpoint {
 				return &forkchoicetypes.Checkpoint{
-					Epoch: slots.ToEpoch(c.finalizedSlot),
-					Root:  [32]byte{},
+					Epoch: slots.ToEpoch(tc.finalizedSlot),
+					Root:  [fieldparams.RootLength]byte{},
 				}
 			}
-			ini.shared.fc = &mockForkchoicer{FinalizedCheckpointCB: finalizedCB}
-			_, columns := util.GenerateTestDenebBlockWithColumns(t, [32]byte{}, 0, 1)
-			col := columns[0]
-			col.SignedBlockHeader.Header.Slot = c.slot
-			v := ini.NewColumnVerifier(col, GossipColumnSidecarRequirements)
+
+			parentRoot := [fieldparams.RootLength]byte{}
+			initializer := &Initializer{shared: &sharedResources{
+				fc: &mockForkchoicer{FinalizedCheckpointCB: finalizedCheckpoint},
+			}}
+
+			_, columns := util.GenerateTestDenebBlockWithColumns(t, parentRoot, tc.columnSlot, blobCount)
+
+			v := initializer.NewDataColumnsVerifier(columns, GossipColumnSidecarRequirements)
+
 			err := v.SlotAboveFinalized()
 			require.Equal(t, true, v.results.executed(RequireSlotAboveFinalized))
-			if c.err == nil {
-				require.NoError(t, err)
-				require.NoError(t, v.results.result(RequireSlotAboveFinalized))
-			} else {
-				require.ErrorIs(t, err, c.err)
+
+			if tc.isErr {
+				require.ErrorIs(t, err, ErrSlotNotAfterFinalized)
 				require.NotNil(t, v.results.result(RequireSlotAboveFinalized))
+				return
 			}
+
+			require.NoError(t, err)
+			require.NoError(t, v.results.result(RequireSlotAboveFinalized))
 		})
 	}
 }
 
-func TestDataColumnValidProposerSignature_Cached(t *testing.T) {
-	ctx := context.Background()
-	_, columns := util.GenerateTestDenebBlockWithColumns(t, [32]byte{}, 0, 1)
-	col := columns[0]
-	expectedSd := columnToSignatureData(col)
-	sc := &mockSignatureCache{
-		svcb: func(sig SignatureData) (bool, error) {
-			if sig != expectedSd {
-				t.Error("Did not see expected SignatureData")
-			}
-			return true, nil
-		},
-		vscb: func(sig SignatureData, v ValidatorAtIndexer) (err error) {
-			t.Error("VerifySignature should not be called if the result is cached")
-			return nil
-		},
-	}
-	ini := Initializer{shared: &sharedResources{sc: sc, sr: &mockStateByRooter{sbr: sbrErrorIfCalled(t)}}}
-	v := ini.NewColumnVerifier(col, GossipColumnSidecarRequirements)
-	require.NoError(t, v.ValidProposerSignature(ctx))
-	require.Equal(t, true, v.results.executed(RequireValidProposerSignature))
-	require.NoError(t, v.results.result(RequireValidProposerSignature))
+func TestValidProposerSignature(t *testing.T) {
+	const (
+		columnSlot = 0
+		blobCount  = 1
+	)
 
-	// simulate an error in the cache - indicating the previous verification failed
-	sc.svcb = func(sig SignatureData) (bool, error) {
-		if sig != expectedSd {
-			t.Error("Did not see expected SignatureData")
-		}
-		return true, errors.New("derp")
+	parentRoot := [fieldparams.RootLength]byte{}
+	validator := &ethpb.Validator{}
+
+	_, columns := util.GenerateTestDenebBlockWithColumns(t, parentRoot, columnSlot, blobCount)
+	firstColumn := columns[0]
+
+	// The signature data does not depend on the data column itself, so we can use the first one.
+	expectedSignatureData := columnToSignatureData(firstColumn)
+
+	testCases := []struct {
+		isError         bool
+		vscbShouldError bool
+		svcbReturn      bool
+		stateByRooter   StateByRooter
+		vscbError       error
+		svcbError       error
+		name            string
+	}{
+		{
+			name:            "cache hit - success",
+			svcbReturn:      true,
+			svcbError:       nil,
+			vscbShouldError: true,
+			vscbError:       nil,
+			stateByRooter:   &mockStateByRooter{sbr: sbrErrorIfCalled(t)},
+			isError:         false,
+		},
+		{
+			name:            "cache hit - error",
+			svcbReturn:      true,
+			svcbError:       errors.New("derp"),
+			vscbShouldError: true,
+			vscbError:       nil,
+			stateByRooter:   &mockStateByRooter{sbr: sbrErrorIfCalled(t)},
+			isError:         true,
+		},
+		{
+			name:            "cache miss - success",
+			svcbReturn:      false,
+			svcbError:       nil,
+			vscbShouldError: false,
+			vscbError:       nil,
+			stateByRooter:   sbrForValOverride(firstColumn.ProposerIndex(), validator),
+			isError:         false,
+		},
+		{
+			name:            "cache miss - state not found",
+			svcbReturn:      false,
+			svcbError:       nil,
+			vscbShouldError: false,
+			vscbError:       nil,
+			stateByRooter:   sbrNotFound(t, expectedSignatureData.Parent),
+			isError:         true,
+		},
+		{
+			name:            "cache miss - signature failure",
+			svcbReturn:      false,
+			svcbError:       nil,
+			vscbShouldError: false,
+			vscbError:       errors.New("signature, not so good!"),
+			stateByRooter:   sbrForValOverride(firstColumn.ProposerIndex(), validator),
+			isError:         true,
+		},
 	}
-	ini = Initializer{shared: &sharedResources{sc: sc, sr: &mockStateByRooter{sbr: sbrErrorIfCalled(t)}}}
-	v = ini.NewColumnVerifier(col, GossipColumnSidecarRequirements)
-	require.ErrorIs(t, v.ValidProposerSignature(ctx), ErrInvalidProposerSignature)
-	require.Equal(t, true, v.results.executed(RequireValidProposerSignature))
-	require.NotNil(t, v.results.result(RequireValidProposerSignature))
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			signatureCache := &mockSignatureCache{
+				svcb: func(signatureData SignatureData) (bool, error) {
+					if signatureData != expectedSignatureData {
+						t.Error("Did not see expected SignatureData")
+					}
+					return tc.svcbReturn, tc.svcbError
+				},
+				vscb: func(signatureData SignatureData, _ ValidatorAtIndexer) (err error) {
+					if tc.vscbShouldError {
+						t.Error("VerifySignature should not be called if the result is cached")
+						return nil
+					}
+
+					if expectedSignatureData != signatureData {
+						t.Error("unexpected signature data")
+					}
+
+					return tc.vscbError
+				},
+			}
+
+			initializer := Initializer{
+				shared: &sharedResources{
+					sc: signatureCache,
+					sr: tc.stateByRooter,
+				},
+			}
+
+			verifier := initializer.NewDataColumnsVerifier(columns, GossipColumnSidecarRequirements)
+			err := verifier.ValidProposerSignature(context.Background())
+			require.Equal(t, true, verifier.results.executed(RequireValidProposerSignature))
+
+			if tc.isError {
+				require.ErrorIs(t, err, ErrInvalidProposerSignature)
+				require.NotNil(t, verifier.results.result(RequireValidProposerSignature))
+				return
+			}
+
+			require.NoError(t, err)
+			require.NoError(t, verifier.results.result(RequireValidProposerSignature))
+		})
+	}
 }
 
-func TestColumnValidProposerSignature_CacheMiss(t *testing.T) {
-	ctx := context.Background()
-	_, columns := util.GenerateTestDenebBlockWithColumns(t, [32]byte{}, 0, 1)
-	col := columns[0]
-	expectedSd := columnToSignatureData(col)
-	sc := &mockSignatureCache{
-		svcb: func(sig SignatureData) (bool, error) {
-			return false, nil
-		},
-		vscb: func(sig SignatureData, v ValidatorAtIndexer) (err error) {
-			if expectedSd != sig {
-				t.Error("unexpected signature data")
-			}
-			return nil
-		},
-	}
-	ini := Initializer{shared: &sharedResources{sc: sc, sr: sbrForValOverride(col.ProposerIndex(), &ethpb.Validator{})}}
-	v := ini.NewColumnVerifier(col, GossipColumnSidecarRequirements)
-	require.NoError(t, v.ValidProposerSignature(ctx))
-	require.Equal(t, true, v.results.executed(RequireValidProposerSignature))
-	require.NoError(t, v.results.result(RequireValidProposerSignature))
+func TestDataColumnsSidecarParentSeen(t *testing.T) {
+	const (
+		columnSlot = 0
+		blobCount  = 1
+	)
 
-	// simulate state not found
-	ini = Initializer{shared: &sharedResources{sc: sc, sr: sbrNotFound(t, expectedSd.Parent)}}
-	v = ini.NewColumnVerifier(col, GossipColumnSidecarRequirements)
-	require.ErrorIs(t, v.ValidProposerSignature(ctx), ErrInvalidProposerSignature)
-	require.Equal(t, true, v.results.executed(RequireValidProposerSignature))
-	require.NotNil(t, v.results.result(RequireValidProposerSignature))
+	parentRoot := [fieldparams.RootLength]byte{}
 
-	// simulate successful state lookup, but sig failure
-	sbr := sbrForValOverride(col.ProposerIndex(), &ethpb.Validator{})
-	sc = &mockSignatureCache{
-		svcb: sc.svcb,
-		vscb: func(sig SignatureData, v ValidatorAtIndexer) (err error) {
-			if expectedSd != sig {
-				t.Error("unexpected signature data")
-			}
-			return errors.New("signature, not so good!")
-		},
-	}
-	ini = Initializer{shared: &sharedResources{sc: sc, sr: sbr}}
-	v = ini.NewColumnVerifier(col, GossipColumnSidecarRequirements)
-
-	// make sure all the histories are clean before calling the method
-	// so we don't get polluted by previous usages
-	require.Equal(t, false, sbr.calledForRoot[expectedSd.Parent])
-	require.Equal(t, false, sc.svCalledForSig[expectedSd])
-	require.Equal(t, false, sc.vsCalledForSig[expectedSd])
-
-	// Here we're mainly checking that all the right interfaces get used in the unhappy path
-	require.ErrorIs(t, v.ValidProposerSignature(ctx), ErrInvalidProposerSignature)
-	require.Equal(t, true, sbr.calledForRoot[expectedSd.Parent])
-	require.Equal(t, true, sc.svCalledForSig[expectedSd])
-	require.Equal(t, true, sc.vsCalledForSig[expectedSd])
-	require.Equal(t, true, v.results.executed(RequireValidProposerSignature))
-	require.NotNil(t, v.results.result(RequireValidProposerSignature))
-}
-
-func TestColumnSidecarParentSeen(t *testing.T) {
-	_, columns := util.GenerateTestDenebBlockWithColumns(t, [32]byte{}, 0, 1)
-	col := columns[0]
+	_, columns := util.GenerateTestDenebBlockWithColumns(t, parentRoot, columnSlot, blobCount)
+	firstColumn := columns[0]
 
 	fcHas := &mockForkchoicer{
-		HasNodeCB: func(parent [32]byte) bool {
-			if parent != col.ParentRoot() {
+		HasNodeCB: func(parent [fieldparams.RootLength]byte) bool {
+			if parent != firstColumn.ParentRoot() {
 				t.Error("forkchoice.HasNode called with unexpected parent root")
 			}
+
 			return true
 		},
 	}
+
 	fcLacks := &mockForkchoicer{
-		HasNodeCB: func(parent [32]byte) bool {
-			if parent != col.ParentRoot() {
+		HasNodeCB: func(parent [fieldparams.RootLength]byte) bool {
+			if parent != firstColumn.ParentRoot() {
 				t.Error("forkchoice.HasNode called with unexpected parent root")
 			}
+
 			return false
 		},
 	}
 
-	t.Run("happy path", func(t *testing.T) {
-		ini := Initializer{shared: &sharedResources{fc: fcHas}}
-		v := ini.NewColumnVerifier(col, GossipColumnSidecarRequirements)
-		require.NoError(t, v.SidecarParentSeen(nil))
-		require.Equal(t, true, v.results.executed(RequireSidecarParentSeen))
-		require.NoError(t, v.results.result(RequireSidecarParentSeen))
-	})
-	t.Run("HasNode false, no badParent cb, expected error", func(t *testing.T) {
-		ini := Initializer{shared: &sharedResources{fc: fcLacks}}
-		v := ini.NewColumnVerifier(col, GossipColumnSidecarRequirements)
-		require.ErrorIs(t, v.SidecarParentSeen(nil), ErrSidecarParentNotSeen)
-		require.Equal(t, true, v.results.executed(RequireSidecarParentSeen))
-		require.NotNil(t, v.results.result(RequireSidecarParentSeen))
-	})
+	testCases := []struct {
+		name        string
+		forkChoicer Forkchoicer
+		parentSeen  func([fieldparams.RootLength]byte) bool
+		isError     bool
+	}{
+		{
+			name:        "happy path",
+			forkChoicer: fcHas,
+			parentSeen:  nil,
+			isError:     false,
+		},
+		{
+			name:        "HasNode false, no badParent cb, expected error",
+			forkChoicer: fcLacks,
+			parentSeen:  nil,
+			isError:     true,
+		},
+		{
+			name:        "HasNode false, badParent true",
+			forkChoicer: fcLacks,
+			parentSeen:  badParentCb(t, firstColumn.ParentRoot(), true),
+			isError:     false,
+		},
+		{
+			name:        "HasNode false, badParent false",
+			forkChoicer: fcLacks,
+			parentSeen:  badParentCb(t, firstColumn.ParentRoot(), false),
+			isError:     true,
+		},
+	}
 
-	t.Run("HasNode false, badParent true", func(t *testing.T) {
-		ini := Initializer{shared: &sharedResources{fc: fcLacks}}
-		v := ini.NewColumnVerifier(col, GossipColumnSidecarRequirements)
-		require.NoError(t, v.SidecarParentSeen(badParentCb(t, col.ParentRoot(), true)))
-		require.Equal(t, true, v.results.executed(RequireSidecarParentSeen))
-		require.NoError(t, v.results.result(RequireSidecarParentSeen))
-	})
-	t.Run("HasNode false, badParent false", func(t *testing.T) {
-		ini := Initializer{shared: &sharedResources{fc: fcLacks}}
-		v := ini.NewColumnVerifier(col, GossipColumnSidecarRequirements)
-		require.ErrorIs(t, v.SidecarParentSeen(badParentCb(t, col.ParentRoot(), false)), ErrSidecarParentNotSeen)
-		require.Equal(t, true, v.results.executed(RequireSidecarParentSeen))
-		require.NotNil(t, v.results.result(RequireSidecarParentSeen))
-	})
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			initializer := Initializer{shared: &sharedResources{fc: tc.forkChoicer}}
+			verifier := initializer.NewDataColumnsVerifier(columns, GossipColumnSidecarRequirements)
+			err := verifier.SidecarParentSeen(tc.parentSeen)
+			require.Equal(t, true, verifier.results.executed(RequireSidecarParentSeen))
+
+			if tc.isError {
+				require.ErrorIs(t, err, ErrSidecarParentNotSeen)
+				require.NotNil(t, verifier.results.result(RequireSidecarParentSeen))
+				return
+			}
+
+			require.NoError(t, err)
+			require.NoError(t, verifier.results.result(RequireSidecarParentSeen))
+		})
+	}
 }
 
-func TestColumnSidecarParentValid(t *testing.T) {
-	_, columns := util.GenerateTestDenebBlockWithColumns(t, [32]byte{}, 0, 1)
-	col := columns[0]
-	t.Run("parent valid", func(t *testing.T) {
-		ini := Initializer{shared: &sharedResources{}}
-		v := ini.NewColumnVerifier(col, GossipColumnSidecarRequirements)
-		require.NoError(t, v.SidecarParentValid(badParentCb(t, col.ParentRoot(), false)))
-		require.Equal(t, true, v.results.executed(RequireSidecarParentValid))
-		require.NoError(t, v.results.result(RequireSidecarParentValid))
-	})
-	t.Run("parent not valid", func(t *testing.T) {
-		ini := Initializer{shared: &sharedResources{}}
-		v := ini.NewColumnVerifier(col, GossipColumnSidecarRequirements)
-		require.ErrorIs(t, v.SidecarParentValid(badParentCb(t, col.ParentRoot(), true)), ErrSidecarParentInvalid)
-		require.Equal(t, true, v.results.executed(RequireSidecarParentValid))
-		require.NotNil(t, v.results.result(RequireSidecarParentValid))
-	})
+func TestDataColumnsSidecarParentValid(t *testing.T) {
+	testCases := []struct {
+		name              string
+		badParentCbReturn bool
+		isError           bool
+	}{
+		{
+			name:              "parent valid",
+			badParentCbReturn: false,
+			isError:           false,
+		},
+		{
+			name:              "parent not valid",
+			badParentCbReturn: true,
+			isError:           true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			const (
+				columnSlot = 0
+				blobCount  = 1
+			)
+
+			parentRoot := [fieldparams.RootLength]byte{}
+
+			_, columns := util.GenerateTestDenebBlockWithColumns(t, parentRoot, columnSlot, blobCount)
+			firstColumn := columns[0]
+
+			initializer := Initializer{shared: &sharedResources{}}
+			verifier := initializer.NewDataColumnsVerifier(columns, GossipColumnSidecarRequirements)
+			err := verifier.SidecarParentValid(badParentCb(t, firstColumn.ParentRoot(), tc.badParentCbReturn))
+			require.Equal(t, true, verifier.results.executed(RequireSidecarParentValid))
+
+			if tc.isError {
+				require.ErrorIs(t, err, ErrSidecarParentInvalid)
+				require.NotNil(t, verifier.results.result(RequireSidecarParentValid))
+				return
+			}
+
+			require.NoError(t, err)
+			require.NoError(t, verifier.results.result(RequireSidecarParentValid))
+		})
+	}
 }
 
 func TestColumnSidecarParentSlotLower(t *testing.T) {
 	_, columns := util.GenerateTestDenebBlockWithColumns(t, [32]byte{}, 1, 1)
-	col := columns[0]
+	firstColumn := columns[0]
+
 	cases := []struct {
-		name   string
-		fcSlot primitives.Slot
-		fcErr  error
-		err    error
+		name                 string
+		forkChoiceSlot       primitives.Slot
+		forkChoiceError, err error
 	}{
 		{
-			name:  "not in fc",
-			fcErr: errors.New("not in forkchoice"),
-			err:   ErrSlotNotAfterParent,
+			name:            "Not in forkchoice",
+			forkChoiceError: errors.New("not in forkchoice"),
+			err:             ErrSlotNotAfterParent,
 		},
 		{
-			name:   "in fc, slot lower",
-			fcSlot: col.Slot() - 1,
+			name:           "In forkchoice, slot lower",
+			forkChoiceSlot: firstColumn.Slot() - 1,
 		},
 		{
-			name:   "in fc, slot equal",
-			fcSlot: col.Slot(),
-			err:    ErrSlotNotAfterParent,
+			name:           "In forkchoice, slot equal",
+			forkChoiceSlot: firstColumn.Slot(),
+			err:            ErrSlotNotAfterParent,
 		},
 		{
-			name:   "in fc, slot higher",
-			fcSlot: col.Slot() + 1,
-			err:    ErrSlotNotAfterParent,
+			name:           "In forkchoice, slot higher",
+			forkChoiceSlot: firstColumn.Slot() + 1,
+			err:            ErrSlotNotAfterParent,
 		},
 	}
+
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			ini := Initializer{shared: &sharedResources{fc: &mockForkchoicer{SlotCB: func(r [32]byte) (primitives.Slot, error) {
-				if col.ParentRoot() != r {
-					t.Error("forkchoice.Slot called with unexpected parent root")
-				}
-				return c.fcSlot, c.fcErr
-			}}}}
-			v := ini.NewColumnVerifier(col, GossipColumnSidecarRequirements)
-			err := v.SidecarParentSlotLower()
-			require.Equal(t, true, v.results.executed(RequireSidecarParentSlotLower))
+			initializer := Initializer{
+				shared: &sharedResources{fc: &mockForkchoicer{
+					SlotCB: func(r [32]byte) (primitives.Slot, error) {
+						if firstColumn.ParentRoot() != r {
+							t.Error("forkchoice.Slot called with unexpected parent root")
+						}
+
+						return c.forkChoiceSlot, c.forkChoiceError
+					},
+				}},
+			}
+
+			verifier := initializer.NewDataColumnsVerifier(columns, GossipColumnSidecarRequirements)
+			err := verifier.SidecarParentSlotLower()
+			require.Equal(t, true, verifier.results.executed(RequireSidecarParentSlotLower))
+
 			if c.err == nil {
 				require.NoError(t, err)
-				require.NoError(t, v.results.result(RequireSidecarParentSlotLower))
-			} else {
-				require.ErrorIs(t, err, c.err)
-				require.NotNil(t, v.results.result(RequireSidecarParentSlotLower))
+				require.NoError(t, verifier.results.result(RequireSidecarParentSlotLower))
+				return
 			}
+
+			require.ErrorIs(t, err, c.err)
+			require.NotNil(t, verifier.results.result(RequireSidecarParentSlotLower))
 		})
 	}
 }
 
-func TestColumnSidecarDescendsFromFinalized(t *testing.T) {
-	_, columns := util.GenerateTestDenebBlockWithColumns(t, [32]byte{}, 0, 1)
-	col := columns[0]
-	t.Run("not canonical", func(t *testing.T) {
-		ini := Initializer{shared: &sharedResources{fc: &mockForkchoicer{HasNodeCB: func(r [32]byte) bool {
-			if col.ParentRoot() != r {
-				t.Error("forkchoice.Slot called with unexpected parent root")
-			}
-			return false
-		}}}}
-		v := ini.NewColumnVerifier(col, GossipColumnSidecarRequirements)
-		require.ErrorIs(t, v.SidecarDescendsFromFinalized(), ErrSidecarNotFinalizedDescendent)
-		require.Equal(t, true, v.results.executed(RequireSidecarDescendsFromFinalized))
-		require.NotNil(t, v.results.result(RequireSidecarDescendsFromFinalized))
-	})
-	t.Run("canonical", func(t *testing.T) {
-		ini := Initializer{shared: &sharedResources{fc: &mockForkchoicer{HasNodeCB: func(r [32]byte) bool {
-			if col.ParentRoot() != r {
-				t.Error("forkchoice.Slot called with unexpected parent root")
-			}
-			return true
-		}}}}
-		v := ini.NewColumnVerifier(col, GossipColumnSidecarRequirements)
-		require.NoError(t, v.SidecarDescendsFromFinalized())
-		require.Equal(t, true, v.results.executed(RequireSidecarDescendsFromFinalized))
-		require.NoError(t, v.results.result(RequireSidecarDescendsFromFinalized))
-	})
-}
-
-func TestColumnSidecarInclusionProven(t *testing.T) {
-	_, columns := util.GenerateTestDenebBlockWithColumns(t, [32]byte{}, 0, 1)
-	col := columns[0]
-
-	ini := Initializer{}
-	v := ini.NewColumnVerifier(col, GossipColumnSidecarRequirements)
-	require.NoError(t, v.SidecarInclusionProven())
-	require.Equal(t, true, v.results.executed(RequireSidecarInclusionProven))
-	require.NoError(t, v.results.result(RequireSidecarInclusionProven))
-
-	// Invert bits of the first byte of the body root to mess up the proof
-	byte0 := col.SignedBlockHeader.Header.BodyRoot[0]
-	col.SignedBlockHeader.Header.BodyRoot[0] = byte0 ^ 255
-	v = ini.NewColumnVerifier(col, GossipColumnSidecarRequirements)
-	require.ErrorIs(t, v.SidecarInclusionProven(), ErrSidecarInclusionProofInvalid)
-	require.Equal(t, true, v.results.executed(RequireSidecarInclusionProven))
-	require.NotNil(t, v.results.result(RequireSidecarInclusionProven))
-}
-
-func TestColumnSidecarInclusionProvenElectra(t *testing.T) {
-	_, columns := util.GenerateTestDenebBlockWithColumns(t, [32]byte{}, 0, 1)
-	col := columns[0]
-
-	ini := Initializer{}
-	v := ini.NewColumnVerifier(col, GossipColumnSidecarRequirements)
-	require.NoError(t, v.SidecarInclusionProven())
-	require.Equal(t, true, v.results.executed(RequireSidecarInclusionProven))
-	require.NoError(t, v.results.result(RequireSidecarInclusionProven))
-
-	// Invert bits of the first byte of the body root to mess up the proof
-	byte0 := col.SignedBlockHeader.Header.BodyRoot[0]
-	col.SignedBlockHeader.Header.BodyRoot[0] = byte0 ^ 255
-	v = ini.NewColumnVerifier(col, GossipColumnSidecarRequirements)
-	require.ErrorIs(t, v.SidecarInclusionProven(), ErrSidecarInclusionProofInvalid)
-	require.Equal(t, true, v.results.executed(RequireSidecarInclusionProven))
-	require.NotNil(t, v.results.result(RequireSidecarInclusionProven))
-}
-
-func TestColumnSidecarKzgProofVerified(t *testing.T) {
-	_, columns := util.GenerateTestDenebBlockWithColumns(t, [32]byte{}, 0, 1)
-	col := columns[0]
-	passes := func(vb blocks.RODataColumn) (bool, error) {
-		require.Equal(t, true, reflect.DeepEqual(col.KzgCommitments, vb.KzgCommitments))
-		return true, nil
+func TestDataColumnsSidecarDescendsFromFinalized(t *testing.T) {
+	testCases := []struct {
+		name            string
+		hasNodeCBReturn bool
+		isError         bool
+	}{
+		{
+			name:            "Not canonical",
+			hasNodeCBReturn: false,
+			isError:         true,
+		},
+		{
+			name:            "Canonical",
+			hasNodeCBReturn: true,
+			isError:         false,
+		},
 	}
-	v := &RODataColumnVerifier{verifyDataColumnCommitment: passes, results: newResults(), dataColumn: col}
-	require.NoError(t, v.SidecarKzgProofVerified())
-	require.Equal(t, true, v.results.executed(RequireSidecarKzgProofVerified))
-	require.NoError(t, v.results.result(RequireSidecarKzgProofVerified))
 
-	fails := func(vb blocks.RODataColumn) (bool, error) {
-		require.Equal(t, true, reflect.DeepEqual(col.KzgCommitments, vb.KzgCommitments))
-		return false, errors.New("bad blob")
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			const (
+				columnSlot = 0
+				blobCount  = 1
+			)
+
+			parentRoot := [fieldparams.RootLength]byte{}
+
+			_, columns := util.GenerateTestDenebBlockWithColumns(t, parentRoot, columnSlot, blobCount)
+			firstColumn := columns[0]
+
+			initializer := Initializer{
+				shared: &sharedResources{
+					fc: &mockForkchoicer{
+						HasNodeCB: func(r [fieldparams.RootLength]byte) bool {
+							if firstColumn.ParentRoot() != r {
+								t.Error("forkchoice.Slot called with unexpected parent root")
+							}
+
+							return tc.hasNodeCBReturn
+						},
+					},
+				},
+			}
+
+			verifier := initializer.NewDataColumnsVerifier(columns, GossipColumnSidecarRequirements)
+			err := verifier.SidecarDescendsFromFinalized()
+			require.Equal(t, true, verifier.results.executed(RequireSidecarDescendsFromFinalized))
+
+			if tc.isError {
+				require.ErrorIs(t, err, ErrSidecarNotFinalizedDescendent)
+				require.NotNil(t, verifier.results.result(RequireSidecarDescendsFromFinalized))
+				return
+			}
+
+			require.NoError(t, err)
+			require.NoError(t, verifier.results.result(RequireSidecarDescendsFromFinalized))
+		})
 	}
-	v = &RODataColumnVerifier{results: newResults(), dataColumn: col, verifyDataColumnCommitment: fails}
-	require.ErrorIs(t, v.SidecarKzgProofVerified(), ErrSidecarKzgProofInvalid)
-	require.Equal(t, true, v.results.executed(RequireSidecarKzgProofVerified))
-	require.NotNil(t, v.results.result(RequireSidecarKzgProofVerified))
 }
 
-func TestColumnSidecarProposerExpected(t *testing.T) {
-	ctx := context.Background()
-	_, columns := util.GenerateTestDenebBlockWithColumns(t, [32]byte{}, 1, 1)
-	col := columns[0]
-	t.Run("cached, matches", func(t *testing.T) {
-		ini := Initializer{shared: &sharedResources{pc: &mockProposerCache{ProposerCB: pcReturnsIdx(col.ProposerIndex())}, fc: &mockForkchoicer{TargetRootForEpochCB: fcReturnsTargetRoot([32]byte{})}}}
-		v := ini.NewColumnVerifier(col, GossipColumnSidecarRequirements)
-		require.NoError(t, v.SidecarProposerExpected(ctx))
-		require.Equal(t, true, v.results.executed(RequireSidecarProposerExpected))
-		require.NoError(t, v.results.result(RequireSidecarProposerExpected))
-	})
-	t.Run("cached, does not match", func(t *testing.T) {
-		ini := Initializer{shared: &sharedResources{pc: &mockProposerCache{ProposerCB: pcReturnsIdx(col.ProposerIndex() + 1)}, fc: &mockForkchoicer{TargetRootForEpochCB: fcReturnsTargetRoot([32]byte{})}}}
-		v := ini.NewColumnVerifier(col, GossipColumnSidecarRequirements)
-		require.ErrorIs(t, v.SidecarProposerExpected(ctx), ErrSidecarUnexpectedProposer)
-		require.Equal(t, true, v.results.executed(RequireSidecarProposerExpected))
-		require.NotNil(t, v.results.result(RequireSidecarProposerExpected))
-	})
-	t.Run("not cached, state lookup failure", func(t *testing.T) {
-		ini := Initializer{shared: &sharedResources{sr: sbrNotFound(t, col.ParentRoot()), pc: &mockProposerCache{ProposerCB: pcReturnsNotFound()}, fc: &mockForkchoicer{TargetRootForEpochCB: fcReturnsTargetRoot([32]byte{})}}}
-		v := ini.NewColumnVerifier(col, GossipColumnSidecarRequirements)
-		require.ErrorIs(t, v.SidecarProposerExpected(ctx), ErrSidecarUnexpectedProposer)
-		require.Equal(t, true, v.results.executed(RequireSidecarProposerExpected))
-		require.NotNil(t, v.results.result(RequireSidecarProposerExpected))
-	})
+func TestDataColumnsSidecarInclusionProven(t *testing.T) {
+	testCases := []struct {
+		name     string
+		alterate bool
+		isError  bool
+	}{
+		{
+			name:     "Inclusion proven",
+			alterate: false,
+			isError:  false,
+		},
+		{
+			name:     "Inclusion not proven",
+			alterate: true,
+			isError:  true,
+		},
+	}
 
-	t.Run("not cached, proposer matches", func(t *testing.T) {
-		pc := &mockProposerCache{
-			ProposerCB: pcReturnsNotFound(),
-			ComputeProposerCB: func(ctx context.Context, root [32]byte, slot primitives.Slot, pst state.BeaconState) (primitives.ValidatorIndex, error) {
-				require.Equal(t, col.ParentRoot(), root)
-				require.Equal(t, col.Slot(), slot)
-				return col.ProposerIndex(), nil
-			},
-		}
-		ini := Initializer{shared: &sharedResources{sr: sbrForValOverride(col.ProposerIndex(), &ethpb.Validator{}), pc: pc, fc: &mockForkchoicer{TargetRootForEpochCB: fcReturnsTargetRoot([32]byte{})}}}
-		v := ini.NewColumnVerifier(col, GossipColumnSidecarRequirements)
-		require.NoError(t, v.SidecarProposerExpected(ctx))
-		require.Equal(t, true, v.results.executed(RequireSidecarProposerExpected))
-		require.NoError(t, v.results.result(RequireSidecarProposerExpected))
-	})
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			const (
+				columnSlot = 0
+				blobCount  = 1
+			)
 
-	t.Run("not cached, proposer matches for next epoch", func(t *testing.T) {
-		_, newCols := util.GenerateTestDenebBlockWithColumns(t, [32]byte{}, 2*params.BeaconConfig().SlotsPerEpoch, 1)
+			parentRoot := [fieldparams.RootLength]byte{}
+			_, columns := util.GenerateTestDenebBlockWithColumns(t, parentRoot, columnSlot, blobCount)
+			if tc.alterate {
+				firstColumn := columns[0]
+				byte0 := firstColumn.SignedBlockHeader.Header.BodyRoot[0]
+				firstColumn.SignedBlockHeader.Header.BodyRoot[0] = byte0 ^ 255
+			}
 
-		newCol := newCols[0]
-		pc := &mockProposerCache{
-			ProposerCB: pcReturnsNotFound(),
-			ComputeProposerCB: func(ctx context.Context, root [32]byte, slot primitives.Slot, pst state.BeaconState) (primitives.ValidatorIndex, error) {
-				require.Equal(t, newCol.ParentRoot(), root)
-				require.Equal(t, newCol.Slot(), slot)
-				return col.ProposerIndex(), nil
+			initializer := Initializer{}
+			verifier := initializer.NewDataColumnsVerifier(columns, GossipColumnSidecarRequirements)
+			err := verifier.SidecarInclusionProven()
+			require.Equal(t, true, verifier.results.executed(RequireSidecarInclusionProven))
+
+			if tc.isError {
+				require.ErrorIs(t, err, ErrSidecarInclusionProofInvalid)
+				require.NotNil(t, verifier.results.result(RequireSidecarInclusionProven))
+				return
+			}
+
+			require.NoError(t, err)
+			require.NoError(t, verifier.results.result(RequireSidecarInclusionProven))
+		})
+	}
+}
+
+func TestDataColumnsSidecarKzgProofVerified(t *testing.T) {
+	testCases := []struct {
+		isError                           bool
+		verifyDataColumnsCommitmentReturn bool
+		verifyDataColumnsCommitmentError  error
+		name                              string
+	}{
+		{
+			name:                              "KZG proof verified",
+			verifyDataColumnsCommitmentReturn: true,
+			verifyDataColumnsCommitmentError:  nil,
+			isError:                           false,
+		},
+		{
+			name:                              "KZG proof error",
+			verifyDataColumnsCommitmentReturn: false,
+			verifyDataColumnsCommitmentError:  errors.New("KZG proof error"),
+			isError:                           true,
+		},
+		{
+			name:                              "KZG proof not verified",
+			verifyDataColumnsCommitmentReturn: false,
+			verifyDataColumnsCommitmentError:  nil,
+			isError:                           true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			const (
+				columnSlot = 0
+				blobCount  = 1
+			)
+
+			parentRoot := [fieldparams.RootLength]byte{}
+			_, columns := util.GenerateTestDenebBlockWithColumns(t, parentRoot, columnSlot, blobCount)
+			firstColumn := columns[0]
+
+			verifyDataColumnsCommitment := func(roDataColumns []blocks.RODataColumn) (bool, error) {
+				for _, roDataColumn := range roDataColumns {
+					require.Equal(t, true, reflect.DeepEqual(firstColumn.KzgCommitments, roDataColumn.KzgCommitments))
+				}
+
+				return tc.verifyDataColumnsCommitmentReturn, tc.verifyDataColumnsCommitmentError
+			}
+
+			verifier := &RODataColumnsVerifier{
+				results:                     newResults(),
+				dataColumns:                 columns,
+				verifyDataColumnsCommitment: verifyDataColumnsCommitment,
+			}
+
+			err := verifier.SidecarKzgProofVerified()
+			require.Equal(t, true, verifier.results.executed(RequireSidecarKzgProofVerified))
+
+			if tc.isError {
+				require.ErrorIs(t, err, ErrSidecarKzgProofInvalid)
+				require.NotNil(t, verifier.results.result(RequireSidecarKzgProofVerified))
+				return
+			}
+
+			require.NoError(t, err)
+			require.NoError(t, verifier.results.result(RequireSidecarKzgProofVerified))
+		})
+	}
+}
+
+func TestDataColumnsSidecarProposerExpected(t *testing.T) {
+	const (
+		columnSlot = 1
+		blobCount  = 1
+	)
+
+	parentRoot := [fieldparams.RootLength]byte{}
+	_, columns := util.GenerateTestDenebBlockWithColumns(t, parentRoot, columnSlot, blobCount)
+	firstColumn := columns[0]
+
+	_, newColumns := util.GenerateTestDenebBlockWithColumns(t, parentRoot, 2*params.BeaconConfig().SlotsPerEpoch, blobCount)
+	firstNewColumn := newColumns[0]
+
+	validator := &ethpb.Validator{}
+
+	commonComputeProposerCB := func(_ context.Context, root [fieldparams.RootLength]byte, slot primitives.Slot, _ state.BeaconState) (primitives.ValidatorIndex, error) {
+		require.Equal(t, firstColumn.ParentRoot(), root)
+		require.Equal(t, firstColumn.Slot(), slot)
+		return firstColumn.ProposerIndex(), nil
+	}
+
+	testCases := []struct {
+		name          string
+		stateByRooter StateByRooter
+		proposerCache ProposerCache
+		columns       []blocks.RODataColumn
+		isError       bool
+	}{
+		{
+			name:          "Cached, matches",
+			stateByRooter: nil,
+			proposerCache: &mockProposerCache{
+				ProposerCB: pcReturnsIdx(firstColumn.ProposerIndex()),
 			},
-		}
-		ini := Initializer{shared: &sharedResources{sr: sbrForValOverride(newCol.ProposerIndex(), &ethpb.Validator{}), pc: pc, fc: &mockForkchoicer{TargetRootForEpochCB: fcReturnsTargetRoot([32]byte{})}}}
-		v := ini.NewColumnVerifier(newCol, GossipColumnSidecarRequirements)
-		require.NoError(t, v.SidecarProposerExpected(ctx))
-		require.Equal(t, true, v.results.executed(RequireSidecarProposerExpected))
-		require.NoError(t, v.results.result(RequireSidecarProposerExpected))
-	})
-	t.Run("not cached, proposer does not match", func(t *testing.T) {
-		pc := &mockProposerCache{
-			ProposerCB: pcReturnsNotFound(),
-			ComputeProposerCB: func(ctx context.Context, root [32]byte, slot primitives.Slot, pst state.BeaconState) (primitives.ValidatorIndex, error) {
-				require.Equal(t, col.ParentRoot(), root)
-				require.Equal(t, col.Slot(), slot)
-				return col.ProposerIndex() + 1, nil
+			columns: columns,
+			isError: false,
+		},
+		{
+			name:          "Cached, does not match",
+			stateByRooter: nil,
+			proposerCache: &mockProposerCache{
+				ProposerCB: pcReturnsIdx(firstColumn.ProposerIndex() + 1),
 			},
-		}
-		ini := Initializer{shared: &sharedResources{sr: sbrForValOverride(col.ProposerIndex(), &ethpb.Validator{}), pc: pc, fc: &mockForkchoicer{TargetRootForEpochCB: fcReturnsTargetRoot([32]byte{})}}}
-		v := ini.NewColumnVerifier(col, GossipColumnSidecarRequirements)
-		require.ErrorIs(t, v.SidecarProposerExpected(ctx), ErrSidecarUnexpectedProposer)
-		require.Equal(t, true, v.results.executed(RequireSidecarProposerExpected))
-		require.NotNil(t, v.results.result(RequireSidecarProposerExpected))
-	})
-	t.Run("not cached, ComputeProposer fails", func(t *testing.T) {
-		pc := &mockProposerCache{
-			ProposerCB: pcReturnsNotFound(),
-			ComputeProposerCB: func(ctx context.Context, root [32]byte, slot primitives.Slot, pst state.BeaconState) (primitives.ValidatorIndex, error) {
-				require.Equal(t, col.ParentRoot(), root)
-				require.Equal(t, col.Slot(), slot)
-				return 0, errors.New("ComputeProposer failed")
+			columns: columns,
+			isError: true,
+		},
+		{
+			name:          "Not cached, state lookup failure",
+			stateByRooter: sbrNotFound(t, firstColumn.ParentRoot()),
+			proposerCache: &mockProposerCache{
+				ProposerCB: pcReturnsNotFound(),
 			},
-		}
-		ini := Initializer{shared: &sharedResources{sr: sbrForValOverride(col.ProposerIndex(), &ethpb.Validator{}), pc: pc, fc: &mockForkchoicer{TargetRootForEpochCB: fcReturnsTargetRoot([32]byte{})}}}
-		v := ini.NewColumnVerifier(col, GossipColumnSidecarRequirements)
-		require.ErrorIs(t, v.SidecarProposerExpected(ctx), ErrSidecarUnexpectedProposer)
-		require.Equal(t, true, v.results.executed(RequireSidecarProposerExpected))
-		require.NotNil(t, v.results.result(RequireSidecarProposerExpected))
-	})
+			columns: columns,
+			isError: true,
+		},
+		{
+			name:          "Not cached, proposer matches",
+			stateByRooter: sbrForValOverride(firstColumn.ProposerIndex(), validator),
+			proposerCache: &mockProposerCache{
+				ProposerCB:        pcReturnsNotFound(),
+				ComputeProposerCB: commonComputeProposerCB,
+			},
+			columns: columns,
+			isError: false,
+		},
+		{
+			name:          "Not cached, proposer matches",
+			stateByRooter: sbrForValOverride(firstColumn.ProposerIndex(), validator),
+			proposerCache: &mockProposerCache{
+				ProposerCB:        pcReturnsNotFound(),
+				ComputeProposerCB: commonComputeProposerCB,
+			},
+			columns: columns,
+			isError: false,
+		},
+		{
+			name:          "Not cached, proposer matches for next epoch",
+			stateByRooter: sbrForValOverride(firstNewColumn.ProposerIndex(), validator),
+			proposerCache: &mockProposerCache{
+				ProposerCB: pcReturnsNotFound(),
+				ComputeProposerCB: func(_ context.Context, root [32]byte, slot primitives.Slot, _ state.BeaconState) (primitives.ValidatorIndex, error) {
+					require.Equal(t, firstNewColumn.ParentRoot(), root)
+					require.Equal(t, firstNewColumn.Slot(), slot)
+					return firstColumn.ProposerIndex(), nil
+				},
+			},
+			columns: newColumns,
+			isError: false,
+		},
+		{
+			name:          "Not cached, proposer does not match",
+			stateByRooter: sbrForValOverride(firstColumn.ProposerIndex(), validator),
+			proposerCache: &mockProposerCache{
+				ProposerCB: pcReturnsNotFound(),
+				ComputeProposerCB: func(_ context.Context, root [32]byte, slot primitives.Slot, _ state.BeaconState) (primitives.ValidatorIndex, error) {
+					require.Equal(t, firstColumn.ParentRoot(), root)
+					require.Equal(t, firstColumn.Slot(), slot)
+					return firstColumn.ProposerIndex() + 1, nil
+				},
+			},
+			columns: columns,
+			isError: true,
+		},
+		{
+			name:          "Not cached, ComputeProposer fails",
+			stateByRooter: sbrForValOverride(firstColumn.ProposerIndex(), validator),
+			proposerCache: &mockProposerCache{
+				ProposerCB: pcReturnsNotFound(),
+				ComputeProposerCB: func(_ context.Context, root [32]byte, slot primitives.Slot, _ state.BeaconState) (primitives.ValidatorIndex, error) {
+					require.Equal(t, firstColumn.ParentRoot(), root)
+					require.Equal(t, firstColumn.Slot(), slot)
+					return 0, errors.New("ComputeProposer failed")
+				},
+			},
+			columns: columns,
+			isError: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			initializer := Initializer{
+				shared: &sharedResources{
+					sr: tc.stateByRooter,
+					pc: tc.proposerCache,
+					fc: &mockForkchoicer{
+						TargetRootForEpochCB: fcReturnsTargetRoot([fieldparams.RootLength]byte{}),
+					},
+				},
+			}
+
+			verifier := initializer.NewDataColumnsVerifier(tc.columns, GossipColumnSidecarRequirements)
+			err := verifier.SidecarProposerExpected(context.Background())
+
+			require.Equal(t, true, verifier.results.executed(RequireSidecarProposerExpected))
+
+			if tc.isError {
+				require.ErrorIs(t, err, ErrSidecarUnexpectedProposer)
+				require.NotNil(t, verifier.results.result(RequireSidecarProposerExpected))
+				return
+			}
+
+			require.NoError(t, err)
+			require.NoError(t, verifier.results.result(RequireSidecarProposerExpected))
+		})
+	}
 }
 
 func TestColumnRequirementSatisfaction(t *testing.T) {
-	_, columns := util.GenerateTestDenebBlockWithColumns(t, [32]byte{}, 1, 1)
-	col := columns[0]
-	ini := Initializer{}
-	v := ini.NewColumnVerifier(col, GossipColumnSidecarRequirements)
+	const (
+		columnSlot = 1
+		blobCount  = 1
+	)
 
-	_, err := v.VerifiedRODataColumn()
+	parentRoot := [fieldparams.RootLength]byte{}
+
+	_, columns := util.GenerateTestDenebBlockWithColumns(t, parentRoot, columnSlot, blobCount)
+	initializer := Initializer{}
+	verifier := initializer.NewDataColumnsVerifier(columns, GossipColumnSidecarRequirements)
+
+	_, err := verifier.VerifiedRODataColumns()
 	require.ErrorIs(t, err, ErrColumnInvalid)
+
 	var me VerificationMultiError
 	ok := errors.As(err, &me)
 	require.Equal(t, true, ok)
 	fails := me.Failures()
-	// we haven't performed any verification, so all the results should be this type
+
+	// We haven't performed any verification, so all the results should be this type.
 	for _, v := range fails {
 		require.ErrorIs(t, v, ErrMissingVerification)
 	}
 
-	// satisfy everything through the backdoor and ensure we get the verified ro blob at the end
+	// Satisfy everything through the backdoor and ensure we get the verified ro blob at the end.
 	for _, r := range GossipColumnSidecarRequirements {
-		v.results.record(r, nil)
+		verifier.results.record(r, nil)
 	}
-	require.Equal(t, true, v.results.allSatisfied())
-	_, err = v.VerifiedRODataColumn()
-	require.NoError(t, err)
-}
 
-func TestStateCaching(t *testing.T) {
-	_, columns := util.GenerateTestDenebBlockWithColumns(t, [32]byte{}, 1, 1)
-	col := columns[0]
-	ini := Initializer{shared: &sharedResources{sr: sbrForValOverride(col.ProposerIndex(), &ethpb.Validator{})}}
-	v := ini.NewColumnVerifier(col, GossipColumnSidecarRequirements)
-	_, err := v.parentState(context.Background())
-	require.NoError(t, err)
+	require.Equal(t, true, verifier.results.allSatisfied())
+	_, err = verifier.VerifiedRODataColumns()
 
-	// Utilize the cached state.
-	v.sr = nil
-	_, err = v.parentState(context.Background())
 	require.NoError(t, err)
 }
 
 func TestColumnSatisfyRequirement(t *testing.T) {
-	_, columns := util.GenerateTestDenebBlockWithColumns(t, [32]byte{}, 1, 1)
-	col := columns[0]
-	ini := Initializer{}
-	v := ini.NewColumnVerifier(col, GossipColumnSidecarRequirements)
-	require.Equal(t, false, v.results.executed(RequireDataColumnIndexInBounds))
+	const (
+		columnSlot = 1
+		blobCount  = 1
+	)
 
+	parentRoot := [fieldparams.RootLength]byte{}
+
+	_, columns := util.GenerateTestDenebBlockWithColumns(t, parentRoot, columnSlot, blobCount)
+	intializer := Initializer{}
+
+	v := intializer.NewDataColumnsVerifier(columns, GossipColumnSidecarRequirements)
+	require.Equal(t, false, v.results.executed(RequireDataColumnIndexInBounds))
 	v.SatisfyRequirement(RequireDataColumnIndexInBounds)
 	require.Equal(t, true, v.results.executed(RequireDataColumnIndexInBounds))
 }

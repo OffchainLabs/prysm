@@ -30,11 +30,11 @@ type BlobVerifier interface {
 // able to mock Initializer.NewBlobVerifier without complex setup.
 type NewBlobVerifier func(b blocks.ROBlob, reqs []Requirement) BlobVerifier
 
-// DataColumnVerifier defines the methods implemented by the RODataColumnVerifier.
+// DataColumnsVerifier defines the methods implemented by the RODataColumnVerifier.
 // It serves a very similar purpose as the blob verifier interface for data columns.
-type DataColumnVerifier interface {
-	VerifiedRODataColumn() (blocks.VerifiedRODataColumn, error)
-	DataColumnIndexInBounds() (err error)
+type DataColumnsVerifier interface {
+	VerifiedRODataColumns() ([]blocks.VerifiedRODataColumn, error)
+	DataColumnsIndexInBounds() (err error)
 	NotFromFutureSlot() (err error)
 	SlotAboveFinalized() (err error)
 	ValidProposerSignature(ctx context.Context) (err error)
@@ -48,6 +48,6 @@ type DataColumnVerifier interface {
 	SatisfyRequirement(Requirement)
 }
 
-// NewColumnVerifier is a function signature that can be used to mock a setup where a
+// NewDataColumnsVerifier is a function signature that can be used to mock a setup where a
 // column verifier can be easily initialized.
-type NewColumnVerifier func(dc blocks.RODataColumn, reqs []Requirement) DataColumnVerifier
+type NewDataColumnsVerifier func(dataColumns []blocks.RODataColumn, reqs []Requirement) DataColumnsVerifier

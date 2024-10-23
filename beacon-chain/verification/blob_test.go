@@ -475,7 +475,7 @@ func TestSidecarProposerExpected(t *testing.T) {
 	t.Run("not cached, proposer matches", func(t *testing.T) {
 		pc := &mockProposerCache{
 			ProposerCB: pcReturnsNotFound(),
-			ComputeProposerCB: func(ctx context.Context, root [32]byte, slot primitives.Slot, pst state.BeaconState) (primitives.ValidatorIndex, error) {
+			ComputeProposerCB: func(_ context.Context, root [32]byte, slot primitives.Slot, _ state.BeaconState) (primitives.ValidatorIndex, error) {
 				require.Equal(t, b.ParentRoot(), root)
 				require.Equal(t, b.Slot(), slot)
 				return b.ProposerIndex(), nil
@@ -490,7 +490,7 @@ func TestSidecarProposerExpected(t *testing.T) {
 	t.Run("not cached, proposer does not match", func(t *testing.T) {
 		pc := &mockProposerCache{
 			ProposerCB: pcReturnsNotFound(),
-			ComputeProposerCB: func(ctx context.Context, root [32]byte, slot primitives.Slot, pst state.BeaconState) (primitives.ValidatorIndex, error) {
+			ComputeProposerCB: func(_ context.Context, root [32]byte, slot primitives.Slot, _ state.BeaconState) (primitives.ValidatorIndex, error) {
 				require.Equal(t, b.ParentRoot(), root)
 				require.Equal(t, b.Slot(), slot)
 				return b.ProposerIndex() + 1, nil
@@ -505,7 +505,7 @@ func TestSidecarProposerExpected(t *testing.T) {
 	t.Run("not cached, ComputeProposer fails", func(t *testing.T) {
 		pc := &mockProposerCache{
 			ProposerCB: pcReturnsNotFound(),
-			ComputeProposerCB: func(ctx context.Context, root [32]byte, slot primitives.Slot, pst state.BeaconState) (primitives.ValidatorIndex, error) {
+			ComputeProposerCB: func(_ context.Context, root [32]byte, slot primitives.Slot, _ state.BeaconState) (primitives.ValidatorIndex, error) {
 				require.Equal(t, b.ParentRoot(), root)
 				require.Equal(t, b.Slot(), slot)
 				return 0, errors.New("ComputeProposer failed")

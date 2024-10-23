@@ -7,6 +7,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 )
@@ -52,39 +53,66 @@ func BlobAlignsWithBlock(blob blocks.ROBlob, block blocks.ROBlock) error {
 	return nil
 }
 
-func ColumnAlignsWithBlock(col blocks.RODataColumn, block blocks.ROBlock, colVerifier verification.NewColumnVerifier) error {
-	// Exit early if the block is not at least a Deneb block.
-	if block.Version() < version.Deneb {
-		return nil
+type WrappedBlockDataColumn struct {
+	ROBlock      interfaces.ReadOnlyBeaconBlock
+	RODataColumn blocks.RODataColumn
+}
+
+func DataColumnsAlignWithBlock(
+	wrappedBlockDataColumns []WrappedBlockDataColumn,
+	dataColumnsVerifier verification.NewDataColumnsVerifier,
+) error {
+	for _, wrappedBlockDataColumn := range wrappedBlockDataColumns {
+		dataColumn := wrappedBlockDataColumn.RODataColumn
+		block := wrappedBlockDataColumn.ROBlock
+
+		// Extract the block root from the data column.
+		blockRoot := dataColumn.BlockRoot()
+
+		// Retrieve the KZG commitments from the block.
+		blockKZGCommitments, err := block.Body().BlobKzgCommitments()
+		if err != nil {
+			return errors.Wrap(err, "blob KZG commitments")
+		}
+
+		// Retrieve the KZG commitments from the data column.
+		dataColumnKZGCommitments := dataColumn.KzgCommitments
+
+		// Verify the commitments in the block match the commitments in the data column.
+		if !reflect.DeepEqual(blockKZGCommitments, dataColumnKZGCommitments) {
+			// Retrieve the data columns slot.
+			dataColumSlot := dataColumn.Slot()
+
+			return errors.Wrapf(
+				ErrMismatchedColumnCommitments,
+				"data column commitments `%#v` != block commitments `%#v` for block root %#x at slot %d",
+				dataColumnKZGCommitments,
+				blockKZGCommitments,
+				blockRoot,
+				dataColumSlot,
+			)
+		}
 	}
 
-	// Check if the block root in the column sidecar matches the block root.
-	if col.BlockRoot() != block.Root() {
-		return ErrColumnBlockMisaligned
+	dataColumns := make([]blocks.RODataColumn, 0, len(wrappedBlockDataColumns))
+	for _, wrappedBlowrappedBlockDataColumn := range wrappedBlockDataColumns {
+		dataColumn := wrappedBlowrappedBlockDataColumn.RODataColumn
+		dataColumns = append(dataColumns, dataColumn)
 	}
 
-	// Verify commitment byte values match
-	commitments, err := block.Block().Body().BlobKzgCommitments()
-	if err != nil {
-		return errors.Wrap(err, "blob KZG commitments")
+	// Verify if data columns index are in bounds.
+	verifier := dataColumnsVerifier(dataColumns, verification.InitsyncColumnSidecarRequirements)
+	if err := verifier.DataColumnsIndexInBounds(); err != nil {
+		return errors.Wrap(err, "data column index in bounds")
 	}
 
-	if !reflect.DeepEqual(commitments, col.KzgCommitments) {
-		return errors.Wrapf(ErrMismatchedColumnCommitments, "commitment %#v != block commitment %#v for block root %#x at slot %d ", col.KzgCommitments, commitments, block.Root(), col.Slot())
-	}
-
-	vf := colVerifier(col, verification.InitsyncColumnSidecarRequirements)
-	if err := vf.DataColumnIndexInBounds(); err != nil {
-		return errors.Wrap(err, "data column index out of bounds")
-	}
-
-	// Filter out columns which did not pass the KZG inclusion proof verification.
-	if err := vf.SidecarInclusionProven(); err != nil {
+	// Verify the KZG inclusion proof verification.
+	if err := verifier.SidecarInclusionProven(); err != nil {
 		return errors.Wrap(err, "inclusion proof verification")
 	}
 
-	// Filter out columns which did not pass the KZG proof verification.
-	if err := vf.SidecarKzgProofVerified(); err != nil {
+	// Verify the KZG proof verification.
+	if err := verifier.SidecarKzgProofVerified(); err != nil {
 		return errors.Wrap(err, "KZG proof verification")
 	}
 

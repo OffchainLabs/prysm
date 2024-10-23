@@ -10,6 +10,7 @@ import (
 
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/verify"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
 	"github.com/sirupsen/logrus"
 
@@ -60,7 +61,7 @@ type dataColumnSampler1D struct {
 	// peerFromColumn maps a column to the peer responsible for custody.
 	peerFromColumn map[uint64]map[peer.ID]bool
 	// columnVerifier verifies a column according to the specified requirements.
-	columnVerifier verification.NewColumnVerifier
+	columnVerifier verification.NewDataColumnsVerifier
 }
 
 // newDataColumnSampler1D creates a new 1D data column sampler.
@@ -69,7 +70,7 @@ func newDataColumnSampler1D(
 	clock *startup.Clock,
 	ctxMap ContextByteVersions,
 	stateNotifier statefeed.Notifier,
-	colVerifier verification.NewColumnVerifier,
+	colVerifier verification.NewDataColumnsVerifier,
 ) *dataColumnSampler1D {
 	numColumns := params.BeaconConfig().NumberOfColumns
 	peerFromColumn := make(map[uint64]map[peer.ID]bool, numColumns)
@@ -265,7 +266,7 @@ func (d *dataColumnSampler1D) handleStateNotification(ctx context.Context, event
 	samplesCount := min(params.BeaconConfig().SamplesPerSlot, uint64(len(d.nonCustodyColumns))-params.BeaconConfig().NumberOfColumns/2)
 
 	// TODO: Use the first output of `incrementalDAS` as input of the fork choice rule.
-	_, _, err = d.incrementalDAS(ctx, data.BlockRoot, randomizedColumns, samplesCount)
+	_, _, err = d.incrementalDAS(ctx, data, randomizedColumns, samplesCount)
 	if err != nil {
 		log.WithError(err).Error("Failed to run incremental DAS")
 	}
@@ -276,13 +277,14 @@ func (d *dataColumnSampler1D) handleStateNotification(ctx context.Context, event
 // According to https://github.com/ethereum/consensus-specs/issues/3825, we're going to select query samples exclusively from the non custody columns.
 func (d *dataColumnSampler1D) incrementalDAS(
 	ctx context.Context,
-	root [fieldparams.RootLength]byte,
+	blockProcessedData *statefeed.BlockProcessedData,
 	columns []uint64,
 	sampleCount uint64,
 ) (bool, []roundSummary, error) {
 	allowedFailures := uint64(0)
 	firstColumnToSample, extendedSampleCount := uint64(0), peerdas.ExtendedSampleCount(sampleCount, allowedFailures)
 	roundSummaries := make([]roundSummary, 0, 1) // We optimistically allocate only one round summary.
+	blockRoot := blockProcessedData.BlockRoot
 
 	start := time.Now()
 
@@ -290,7 +292,7 @@ func (d *dataColumnSampler1D) incrementalDAS(
 		if extendedSampleCount > uint64(len(columns)) {
 			// We already tried to sample all possible columns, this is the unhappy path.
 			log.WithFields(logrus.Fields{
-				"root":  fmt.Sprintf("%#x", root),
+				"root":  fmt.Sprintf("%#x", blockRoot),
 				"round": round - 1,
 			}).Warning("Some columns are still missing after trying to sample all possible columns")
 			return false, roundSummaries, nil
@@ -301,13 +303,13 @@ func (d *dataColumnSampler1D) incrementalDAS(
 		columnsToSampleCount := extendedSampleCount - firstColumnToSample
 
 		log.WithFields(logrus.Fields{
-			"root":    fmt.Sprintf("%#x", root),
+			"root":    fmt.Sprintf("%#x", blockRoot),
 			"columns": columnsToSample,
 			"round":   round,
 		}).Debug("Start data columns sampling")
 
 		// Sample data columns from peers in parallel.
-		retrievedSamples := d.sampleDataColumns(ctx, root, columnsToSample)
+		retrievedSamples := d.sampleDataColumns(ctx, blockProcessedData, columnsToSample)
 
 		missingSamples := make(map[uint64]bool)
 		for _, column := range columnsToSample {
@@ -325,7 +327,7 @@ func (d *dataColumnSampler1D) incrementalDAS(
 		if retrievedSampleCount == columnsToSampleCount {
 			// All columns were correctly sampled, this is the happy path.
 			log.WithFields(logrus.Fields{
-				"root":         fmt.Sprintf("%#x", root),
+				"root":         fmt.Sprintf("%#x", blockRoot),
 				"neededRounds": round,
 				"duration":     time.Since(start),
 			}).Debug("All columns were successfully sampled")
@@ -344,7 +346,7 @@ func (d *dataColumnSampler1D) incrementalDAS(
 		extendedSampleCount = peerdas.ExtendedSampleCount(sampleCount, allowedFailures)
 
 		log.WithFields(logrus.Fields{
-			"root":                fmt.Sprintf("%#x", root),
+			"root":                fmt.Sprintf("%#x", blockRoot),
 			"round":               round,
 			"missingColumnsCount": allowedFailures,
 			"currentSampleIndex":  oldExtendedSampleCount,
@@ -355,7 +357,7 @@ func (d *dataColumnSampler1D) incrementalDAS(
 
 func (d *dataColumnSampler1D) sampleDataColumns(
 	ctx context.Context,
-	root [fieldparams.RootLength]byte,
+	blockProcessedData *statefeed.BlockProcessedData,
 	columns []uint64,
 ) map[uint64]bool {
 	// distribute samples to peer
@@ -365,10 +367,12 @@ func (d *dataColumnSampler1D) sampleDataColumns(
 		mu sync.Mutex
 		wg sync.WaitGroup
 	)
+
 	res := make(map[uint64]bool)
+
 	sampleFromPeer := func(pid peer.ID, cols map[uint64]bool) {
 		defer wg.Done()
-		retrieved := d.sampleDataColumnsFromPeer(ctx, pid, root, cols)
+		retrieved := d.sampleDataColumnsFromPeer(ctx, pid, blockProcessedData, cols)
 
 		mu.Lock()
 		for col := range retrieved {
@@ -414,7 +418,7 @@ func (d *dataColumnSampler1D) distributeSamplesToPeer(
 func (d *dataColumnSampler1D) sampleDataColumnsFromPeer(
 	ctx context.Context,
 	pid peer.ID,
-	root [fieldparams.RootLength]byte,
+	blockProcessedData *statefeed.BlockProcessedData,
 	requestedColumns map[uint64]bool,
 ) map[uint64]bool {
 	retrievedColumns := make(map[uint64]bool)
@@ -422,7 +426,7 @@ func (d *dataColumnSampler1D) sampleDataColumnsFromPeer(
 	req := make(types.DataColumnSidecarsByRootReq, 0)
 	for col := range requestedColumns {
 		req = append(req, &eth.DataColumnIdentifier{
-			BlockRoot:   root[:],
+			BlockRoot:   blockProcessedData.BlockRoot[:],
 			ColumnIndex: col,
 		})
 	}
@@ -434,8 +438,9 @@ func (d *dataColumnSampler1D) sampleDataColumnsFromPeer(
 		return nil
 	}
 
+	// TODO: Once peer sampling is used, we should verify all sampled data columns in a single batch instead of looping over columns.
 	for _, roDataColumn := range roDataColumns {
-		if verifyColumn(roDataColumn, root, pid, requestedColumns, d.columnVerifier) {
+		if verifyColumn(roDataColumn, blockProcessedData, pid, requestedColumns, d.columnVerifier) {
 			retrievedColumns[roDataColumn.ColumnIndex] = true
 		}
 	}
@@ -443,13 +448,13 @@ func (d *dataColumnSampler1D) sampleDataColumnsFromPeer(
 	if len(retrievedColumns) == len(requestedColumns) {
 		log.WithFields(logrus.Fields{
 			"peerID":           pid,
-			"root":             fmt.Sprintf("%#x", root),
+			"root":             fmt.Sprintf("%#x", blockProcessedData.BlockRoot),
 			"requestedColumns": sortedSliceFromMap(requestedColumns),
 		}).Debug("Sampled columns from peer successfully")
 	} else {
 		log.WithFields(logrus.Fields{
 			"peerID":           pid,
-			"root":             fmt.Sprintf("%#x", root),
+			"root":             fmt.Sprintf("%#x", blockProcessedData.BlockRoot),
 			"requestedColumns": sortedSliceFromMap(requestedColumns),
 			"retrievedColumns": sortedSliceFromMap(retrievedColumns),
 		}).Debug("Sampled columns from peer with some errors")
@@ -506,20 +511,22 @@ func selectRandomPeer(peers map[peer.ID]bool) peer.ID {
 // the KZG inclusion and the KZG proof.
 func verifyColumn(
 	roDataColumn blocks.RODataColumn,
-	root [32]byte,
+	blockProcessedData *statefeed.BlockProcessedData,
 	pid peer.ID,
 	requestedColumns map[uint64]bool,
-	columnVerifier verification.NewColumnVerifier,
+	dataColumnsVerifier verification.NewDataColumnsVerifier,
 ) bool {
 	retrievedColumn := roDataColumn.ColumnIndex
 
 	// Filter out columns with incorrect root.
-	actualRoot := roDataColumn.BlockRoot()
-	if actualRoot != root {
+	columnRoot := roDataColumn.BlockRoot()
+	blockRoot := blockProcessedData.BlockRoot
+
+	if columnRoot != blockRoot {
 		log.WithFields(logrus.Fields{
 			"peerID":        pid,
-			"requestedRoot": fmt.Sprintf("%#x", root),
-			"actualRoot":    fmt.Sprintf("%#x", actualRoot),
+			"requestedRoot": fmt.Sprintf("%#x", blockRoot),
+			"columnRoot":    fmt.Sprintf("%#x", columnRoot),
 		}).Debug("Retrieved root does not match requested root")
 
 		return false
@@ -538,25 +545,18 @@ func verifyColumn(
 		return false
 	}
 
-	vf := columnVerifier(roDataColumn, verification.SamplingColumnSidecarRequirements)
-	// Filter out columns which did not pass the KZG inclusion proof verification.
-	if err := vf.SidecarInclusionProven(); err != nil {
-		log.WithFields(logrus.Fields{
-			"peerID": pid,
-			"root":   fmt.Sprintf("%#x", root),
-			"index":  retrievedColumn,
-		}).WithError(err).Debug("Failed to verify KZG inclusion proof for retrieved column")
+	roBlock := blockProcessedData.SignedBlock.Block()
+
+	wrappedBlockDataColumns := []verify.WrappedBlockDataColumn{
+		{
+			ROBlock:      roBlock,
+			RODataColumn: roDataColumn,
+		},
+	}
+
+	if err := verify.DataColumnsAlignWithBlock(wrappedBlockDataColumns, dataColumnsVerifier); err != nil {
 		return false
 	}
 
-	// Filter out columns which did not pass the KZG proof verification.
-	if err := vf.SidecarKzgProofVerified(); err != nil {
-		log.WithFields(logrus.Fields{
-			"peerID": pid,
-			"root":   fmt.Sprintf("%#x", root),
-			"index":  retrievedColumn,
-		}).WithError(err).Debug("Failed to verify KZG proof for retrieved column")
-		return false
-	}
 	return true
 }

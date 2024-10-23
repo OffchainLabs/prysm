@@ -405,34 +405,53 @@ func DataColumnSidecarsForReconstruct(
 	return sidecars, nil
 }
 
-// VerifyDataColumnSidecarKZGProofs verifies the provided KZG Proofs for the particular
-// data column.
-func VerifyDataColumnSidecarKZGProofs(sc blocks.RODataColumn) (bool, error) {
+// VerifyDataColumnsSidecarKZGProofs verifies the provided KZG Proofs of data columns.
+func VerifyDataColumnsSidecarKZGProofs(sidecars []blocks.RODataColumn) (bool, error) {
+	// Retrieve the number of columns.
 	numberOfColumns := params.BeaconConfig().NumberOfColumns
 
-	if sc.ColumnIndex >= numberOfColumns {
-		return false, errIndexTooLarge
+	// Compute the total count.
+	count := 0
+	for _, sidecar := range sidecars {
+		count += len(sidecar.DataColumn)
 	}
-
-	if len(sc.DataColumn) != len(sc.KzgCommitments) || len(sc.KzgCommitments) != len(sc.KzgProof) {
-		return false, errMismatchLength
-	}
-
-	count := len(sc.DataColumn)
 
 	commitments := make([]kzg.Bytes48, 0, count)
 	indices := make([]uint64, 0, count)
 	cells := make([]kzg.Cell, 0, count)
 	proofs := make([]kzg.Bytes48, 0, count)
 
-	for i := range sc.DataColumn {
-		commitments = append(commitments, kzg.Bytes48(sc.KzgCommitments[i]))
-		indices = append(indices, sc.ColumnIndex)
-		cells = append(cells, kzg.Cell(sc.DataColumn[i]))
-		proofs = append(proofs, kzg.Bytes48(sc.KzgProof[i]))
+	for _, sidecar := range sidecars {
+		// Check if the columns index is not too large
+		if sidecar.ColumnIndex >= numberOfColumns {
+			return false, errIndexTooLarge
+		}
+
+		// Check if the KZG commitments size and data column size match.
+		if len(sidecar.DataColumn) != len(sidecar.KzgCommitments) {
+			return false, errMismatchLength
+		}
+
+		// Check if the KZG proofs size and data column size match.
+		if len(sidecar.DataColumn) != len(sidecar.KzgProof) {
+			return false, errMismatchLength
+		}
+
+		for i := range sidecar.DataColumn {
+			commitments = append(commitments, kzg.Bytes48(sidecar.KzgCommitments[i]))
+			indices = append(indices, sidecar.ColumnIndex)
+			cells = append(cells, kzg.Cell(sidecar.DataColumn[i]))
+			proofs = append(proofs, kzg.Bytes48(sidecar.KzgProof[i]))
+		}
 	}
 
-	return kzg.VerifyCellKZGProofBatch(commitments, indices, cells, proofs)
+	// Verify all the batch at once.
+	verified, err := kzg.VerifyCellKZGProofBatch(commitments, indices, cells, proofs)
+	if err != nil {
+		return false, errors.Wrap(err, "verify cell KZG proof batch")
+	}
+
+	return verified, nil
 }
 
 // CustodySubnetCount returns the number of subnets the node should participate in for custody.

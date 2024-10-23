@@ -16,6 +16,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	kzg "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/kzg"
 	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
+	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers"
@@ -127,7 +128,7 @@ type dataSamplerTest struct {
 	peers              []*p2ptest.TestP2P
 	ctxMap             map[[4]byte]int
 	chainSvc           *mock.ChainService
-	blockRoot          [32]byte
+	blockProcessedData *statefeed.BlockProcessedData
 	blobs              []kzg.Blob
 	kzgCommitments     [][]byte
 	kzgProofs          [][]byte
@@ -141,12 +142,16 @@ func setupDefaultDataColumnSamplerTest(t *testing.T) (*dataSamplerTest, *dataCol
 	)
 
 	test, sampler := setupDataColumnSamplerTest(t, blobCount)
+
 	// Custody columns: [6, 38, 70, 102]
 	p1 := createAndConnectPeer(t, test.p2pSvc, test.chainSvc, test.dataColumnSidecars, custodyRequirement, map[uint64]bool{}, 1)
+
 	// Custody columns: [3, 35, 67, 99]
 	p2 := createAndConnectPeer(t, test.p2pSvc, test.chainSvc, test.dataColumnSidecars, custodyRequirement, map[uint64]bool{}, 2)
+
 	// Custody columns: [12, 44, 76, 108]
 	p3 := createAndConnectPeer(t, test.p2pSvc, test.chainSvc, test.dataColumnSidecars, custodyRequirement, map[uint64]bool{}, 3)
+
 	test.peers = []*p2ptest.TestP2P{p1, p2, p3}
 
 	return test, sampler
@@ -182,6 +187,11 @@ func setupDataColumnSamplerTest(t *testing.T, blobCount uint64) (*dataSamplerTes
 	blockRoot, err := dataColumnSidecars[0].GetSignedBlockHeader().Header.HashTreeRoot()
 	require.NoError(t, err)
 
+	blockProcessedData := &statefeed.BlockProcessedData{
+		BlockRoot:   blockRoot,
+		SignedBlock: sBlock,
+	}
+
 	p2pSvc := p2ptest.NewTestP2P(t)
 	chainSvc, clock := defaultMockChain(t)
 
@@ -191,7 +201,7 @@ func setupDataColumnSamplerTest(t *testing.T, blobCount uint64) (*dataSamplerTes
 		peers:              []*p2ptest.TestP2P{},
 		ctxMap:             map[[4]byte]int{{245, 165, 253, 66}: version.Deneb},
 		chainSvc:           chainSvc,
-		blockRoot:          blockRoot,
+		blockProcessedData: blockProcessedData,
 		blobs:              blobs,
 		kzgCommitments:     kzgCommitments,
 		kzgProofs:          kzgProofs,
@@ -202,7 +212,7 @@ func setupDataColumnSamplerTest(t *testing.T, blobCount uint64) (*dataSamplerTes
 	iniWaiter := verification.NewInitializerWaiter(clockSync, nil, nil)
 	ini, err := iniWaiter.WaitForInitializer(context.Background())
 	require.NoError(t, err)
-	sampler := newDataColumnSampler1D(p2pSvc, clock, test.ctxMap, nil, newColumnVerifierFromInitializer(ini))
+	sampler := newDataColumnSampler1D(p2pSvc, clock, test.ctxMap, nil, newDataColumnsVerifierFromInitializer(ini))
 
 	return test, sampler
 }
@@ -396,7 +406,7 @@ func TestDataColumnSampler1D_SampleDataColumns(t *testing.T) {
 
 	// Sample all columns.
 	sampleColumns := []uint64{6, 3, 12, 38, 35, 44, 70, 67, 76, 102, 99, 108}
-	retrieved := sampler.sampleDataColumns(test.ctx, test.blockRoot, sampleColumns)
+	retrieved := sampler.sampleDataColumns(test.ctx, test.blockProcessedData, sampleColumns)
 	require.Equal(t, 12, len(retrieved))
 	for _, column := range sampleColumns {
 		require.Equal(t, true, retrieved[column])
@@ -404,7 +414,7 @@ func TestDataColumnSampler1D_SampleDataColumns(t *testing.T) {
 
 	// Sample a subset of columns.
 	sampleColumns = []uint64{6, 3, 12, 38, 35, 44}
-	retrieved = sampler.sampleDataColumns(test.ctx, test.blockRoot, sampleColumns)
+	retrieved = sampler.sampleDataColumns(test.ctx, test.blockProcessedData, sampleColumns)
 	require.Equal(t, 6, len(retrieved))
 	for _, column := range sampleColumns {
 		require.Equal(t, true, retrieved[column])
@@ -412,7 +422,7 @@ func TestDataColumnSampler1D_SampleDataColumns(t *testing.T) {
 
 	// Sample a subset of columns with missing columns.
 	sampleColumns = []uint64{6, 3, 12, 127}
-	retrieved = sampler.sampleDataColumns(test.ctx, test.blockRoot, sampleColumns)
+	retrieved = sampler.sampleDataColumns(test.ctx, test.blockProcessedData, sampleColumns)
 	require.Equal(t, 3, len(retrieved))
 	require.DeepEqual(t, map[uint64]bool{6: true, 3: true, 12: true}, retrieved)
 }
@@ -489,7 +499,7 @@ func TestDataColumnSampler1D_IncrementalDAS(t *testing.T) {
 
 		sampler.refreshPeerInfo()
 
-		success, summaries, err := sampler.incrementalDAS(test.ctx, test.blockRoot, tc.possibleColumnsToRequest, tc.samplesCount)
+		success, summaries, err := sampler.incrementalDAS(test.ctx, test.blockProcessedData, tc.possibleColumnsToRequest, tc.samplesCount)
 		require.NoError(t, err)
 		require.Equal(t, tc.expectedSuccess, success)
 		require.DeepEqual(t, tc.expectedRoundSummaries, summaries)

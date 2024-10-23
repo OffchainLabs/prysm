@@ -56,33 +56,35 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 		return pubsub.ValidationReject, errWrongMessage
 	}
 
-	ds, err := blocks.NewRODataColumn(dspb)
+	roDataColumn, err := blocks.NewRODataColumn(dspb)
 	if err != nil {
 		return pubsub.ValidationReject, errors.Wrap(err, "roDataColumn conversion failure")
 	}
 
 	// Voluntary ignore messages (for debugging purposes).
 	dataColumnsIgnoreSlotMultiple := features.Get().DataColumnsIgnoreSlotMultiple
-	blockSlot := uint64(ds.SignedBlockHeader.Header.Slot)
+	blockSlot := uint64(roDataColumn.SignedBlockHeader.Header.Slot)
 
 	if dataColumnsIgnoreSlotMultiple != 0 && blockSlot%dataColumnsIgnoreSlotMultiple == 0 {
 		log.WithFields(logrus.Fields{
 			"slot":        blockSlot,
-			"columnIndex": ds.ColumnIndex,
-			"blockRoot":   fmt.Sprintf("%#x", ds.BlockRoot()),
+			"columnIndex": roDataColumn.ColumnIndex,
+			"blockRoot":   fmt.Sprintf("%#x", roDataColumn.BlockRoot()),
 		}).Warning("Voluntary ignore data column sidecar gossip")
 
 		return pubsub.ValidationIgnore, err
 	}
 
-	verifier := s.newColumnVerifier(ds, verification.GossipColumnSidecarRequirements)
+	roDataColumns := []blocks.RODataColumn{roDataColumn}
 
-	if err := verifier.DataColumnIndexInBounds(); err != nil {
+	verifier := s.newColumnsVerifier(roDataColumns, verification.GossipColumnSidecarRequirements)
+
+	if err := verifier.DataColumnsIndexInBounds(); err != nil {
 		return pubsub.ValidationReject, err
 	}
 
 	// [REJECT] The sidecar is for the correct subnet -- i.e. compute_subnet_for_data_column_sidecar(sidecar.index) == subnet_id.
-	want := fmt.Sprintf("data_column_sidecar_%d", computeSubnetForColumnSidecar(ds.ColumnIndex))
+	want := fmt.Sprintf("data_column_sidecar_%d", computeSubnetForColumnSidecar(roDataColumn.ColumnIndex))
 	if !strings.Contains(*msg.Topic, want) {
 		log.Debug("Column Sidecar index does not match topic")
 		return pubsub.ValidationReject, fmt.Errorf("wrong topic name: %s", *msg.Topic)
@@ -93,7 +95,7 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 	}
 
 	// [IGNORE] The sidecar is the first sidecar for the tuple (block_header.slot, block_header.proposer_index, sidecar.index) with valid header signature, sidecar inclusion proof, and kzg proof.
-	if s.hasSeenDataColumnIndex(ds.Slot(), ds.ProposerIndex(), ds.DataColumnSidecar.ColumnIndex) {
+	if s.hasSeenDataColumnIndex(roDataColumn.Slot(), roDataColumn.ProposerIndex(), roDataColumn.DataColumnSidecar.ColumnIndex) {
 		return pubsub.ValidationIgnore, nil
 	}
 
@@ -104,11 +106,11 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 		// If we haven't seen the parent, request it asynchronously.
 		go func() {
 			customCtx := context.Background()
-			parentRoot := ds.ParentRoot()
+			parentRoot := roDataColumn.ParentRoot()
 			roots := [][fieldparams.RootLength]byte{parentRoot}
 			randGenerator := rand.NewGenerator()
 			if err := s.sendBatchRootRequest(customCtx, roots, randGenerator); err != nil {
-				log.WithError(err).WithFields(logging.DataColumnFields(ds)).Debug("Failed to send batch root request")
+				log.WithError(err).WithFields(logging.DataColumnFields(roDataColumn)).Debug("Failed to send batch root request")
 			}
 		}()
 
@@ -141,17 +143,25 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 	}
 
 	// Get the time at slot start.
-	startTime, err := slots.ToTime(uint64(s.cfg.chain.GenesisTime().Unix()), ds.SignedBlockHeader.Header.Slot)
+	startTime, err := slots.ToTime(uint64(s.cfg.chain.GenesisTime().Unix()), roDataColumn.SignedBlockHeader.Header.Slot)
 	if err != nil {
 		return pubsub.ValidationIgnore, err
 	}
 
-	verifiedRODataColumn, err := verifier.VerifiedRODataColumn()
+	verifiedRODataColumns, err := verifier.VerifiedRODataColumns()
 	if err != nil {
 		return pubsub.ValidationReject, err
 	}
 
-	msg.ValidatorData = verifiedRODataColumn
+	verifiedRODataColumnsCount := len(verifiedRODataColumns)
+
+	if verifiedRODataColumnsCount != 1 {
+		// This should never happen.
+		log.WithField("verifiedRODataColumnsCount", verifiedRODataColumnsCount).Error("Verified data columns count is not 1")
+		return pubsub.ValidationIgnore, errors.New("Wrong number of verified data columns")
+	}
+
+	msg.ValidatorData = verifiedRODataColumns[0]
 
 	sinceSlotStartTime := receivedTime.Sub(startTime)
 	validationTime := s.cfg.clock.Now().Sub(receivedTime)
@@ -161,7 +171,7 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 	pidString := pid.String()
 
 	log.
-		WithFields(logging.DataColumnFields(ds)).
+		WithFields(logging.DataColumnFields(roDataColumn)).
 		WithFields(logrus.Fields{
 			"sinceSlotStartTime": sinceSlotStartTime,
 			"validationTime":     validationTime,

@@ -163,7 +163,7 @@ type Service struct {
 	initialSyncComplete              chan struct{}
 	verifierWaiter                   *verification.InitializerWaiter
 	newBlobVerifier                  verification.NewBlobVerifier
-	newColumnVerifier                verification.NewColumnVerifier
+	newColumnsVerifier               verification.NewDataColumnsVerifier
 	availableBlocker                 coverage.AvailableBlocker
 	dataColumsnReconstructionLock    sync.Mutex
 	receivedDataColumnsFromRoot      *gcache.Cache
@@ -234,9 +234,9 @@ func newBlobVerifierFromInitializer(ini *verification.Initializer) verification.
 	}
 }
 
-func newColumnVerifierFromInitializer(ini *verification.Initializer) verification.NewColumnVerifier {
-	return func(d blocks.RODataColumn, reqs []verification.Requirement) verification.DataColumnVerifier {
-		return ini.NewColumnVerifier(d, reqs)
+func newDataColumnsVerifierFromInitializer(ini *verification.Initializer) verification.NewDataColumnsVerifier {
+	return func(roDataColumns []blocks.RODataColumn, reqs []verification.Requirement) verification.DataColumnsVerifier {
+		return ini.NewDataColumnsVerifier(roDataColumns, reqs)
 	}
 }
 
@@ -248,7 +248,7 @@ func (s *Service) Start() {
 		return
 	}
 	s.newBlobVerifier = newBlobVerifierFromInitializer(v)
-	s.newColumnVerifier = newColumnVerifierFromInitializer(v)
+	s.newColumnsVerifier = newDataColumnsVerifierFromInitializer(v)
 
 	go s.verifierRoutine()
 	go s.startTasksPostInitialSync()

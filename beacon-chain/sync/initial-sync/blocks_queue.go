@@ -73,7 +73,7 @@ type blocksQueueConfig struct {
 	mode                syncMode
 	bs                  filesystem.BlobStorageSummarizer
 	bv                  verification.NewBlobVerifier
-	cv                  verification.NewColumnVerifier
+	cv                  verification.NewDataColumnsVerifier
 }
 
 // blocksQueue is a priority queue that serves as a intermediary between block fetchers (producers)

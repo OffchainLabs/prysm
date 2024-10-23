@@ -93,7 +93,7 @@ func TestVerifyDataColumnSidecarKZGProofs(t *testing.T) {
 	for i, sidecar := range sCars {
 		roCol, err := blocks.NewRODataColumn(sidecar)
 		require.NoError(t, err)
-		verified, err := peerdas.VerifyDataColumnSidecarKZGProofs(roCol)
+		verified, err := peerdas.VerifyDataColumnsSidecarKZGProofs([]blocks.RODataColumn{roCol})
 		require.NoError(t, err)
 		require.Equal(t, true, verified, fmt.Sprintf("sidecar %d failed", i))
 	}

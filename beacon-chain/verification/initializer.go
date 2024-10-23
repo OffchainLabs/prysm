@@ -58,13 +58,13 @@ func (ini *Initializer) NewBlobVerifier(b blocks.ROBlob, reqs []Requirement) *RO
 	}
 }
 
-// NewColumnVerifier creates a DataColumnVerifier for a single data column, with the given set of requirements.
-func (ini *Initializer) NewColumnVerifier(d blocks.RODataColumn, reqs []Requirement) *RODataColumnVerifier {
-	return &RODataColumnVerifier{
-		sharedResources:            ini.shared,
-		dataColumn:                 d,
-		results:                    newResults(reqs...),
-		verifyDataColumnCommitment: peerdas.VerifyDataColumnSidecarKZGProofs,
+// NewDataColumnsVerifier creates a DataColumnVerifier for a single data column, with the given set of requirements.
+func (ini *Initializer) NewDataColumnsVerifier(roDataColumns []blocks.RODataColumn, reqs []Requirement) *RODataColumnsVerifier {
+	return &RODataColumnsVerifier{
+		sharedResources:             ini.shared,
+		dataColumns:                 roDataColumns,
+		results:                     newResults(reqs...),
+		verifyDataColumnsCommitment: peerdas.VerifyDataColumnsSidecarKZGProofs,
 	}
 }
 
