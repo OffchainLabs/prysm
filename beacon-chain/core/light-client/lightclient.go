@@ -169,7 +169,9 @@ func NewLightClientUpdateFromBeaconState(
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get attested light client header")
 	}
-	result.SetAttestedHeader(attestedLightClientHeader)
+	if err = result.SetAttestedHeader(attestedLightClientHeader); err != nil {
+		return nil, errors.Wrap(err, "could not set attested header")
+	}
 
 	// if update_attested_period == update_signature_period
 	if updateAttestedPeriod == updateSignaturePeriod {
@@ -208,7 +210,9 @@ func NewLightClientUpdateFromBeaconState(
 			if err != nil {
 				return nil, errors.Wrap(err, "could not get finalized light client header")
 			}
-			result.SetFinalizedHeader(finalizedLightClientHeader)
+			if err = result.SetFinalizedHeader(finalizedLightClientHeader); err != nil {
+				return nil, errors.Wrap(err, "could not set finalized header")
+			}
 		} else {
 			// assert attested_state.finalized_checkpoint.root == Bytes32()
 			if !bytes.Equal(attestedState.FinalizedCheckpoint().Root, make([]byte, 32)) {

@@ -36,7 +36,7 @@ type LightClientUpdate interface {
 	Proto() proto.Message
 	Version() int
 	AttestedHeader() LightClientHeader
-	SetAttestedHeader(header LightClientHeader)
+	SetAttestedHeader(header LightClientHeader) error
 	NextSyncCommittee() *pb.SyncCommittee
 	SetNextSyncCommittee(sc *pb.SyncCommittee)
 	NextSyncCommitteeBranch() (LightClientSyncCommitteeBranch, error)
@@ -44,7 +44,7 @@ type LightClientUpdate interface {
 	NextSyncCommitteeBranchElectra() (LightClientSyncCommitteeBranchElectra, error)
 	SetNextSyncCommitteeBranchElectra(branch [][]byte) error
 	FinalizedHeader() LightClientHeader
-	SetFinalizedHeader(header LightClientHeader)
+	SetFinalizedHeader(header LightClientHeader) error
 	FinalityBranch() LightClientFinalityBranch
 	SetFinalityBranch(branch [][]byte) error
 	SyncAggregate() *pb.SyncAggregate

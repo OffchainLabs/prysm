@@ -30,6 +30,9 @@ func NewWrappedUpdate(m proto.Message) (interfaces.LightClientUpdate, error) {
 	}
 }
 
+// In addition to the proto object being wrapped, we store some fields that have to be
+// constructed from the proto, so that we don't have to reconstruct them every time
+// in getters.
 type updateAltair struct {
 	p                       *pb.LightClientUpdateAltair
 	attestedHeader          interfaces.LightClientHeader
@@ -107,8 +110,19 @@ func (u *updateAltair) AttestedHeader() interfaces.LightClientHeader {
 	return u.attestedHeader
 }
 
-func (u *updateAltair) SetAttestedHeader(header interfaces.LightClientHeader) {
+func (u *updateAltair) SetAttestedHeader(header interfaces.LightClientHeader) error {
+	if header.Version() != version.Altair {
+		return fmt.Errorf("header version %s is not %s", version.String(header.Version()), version.String(version.Altair))
+	}
 	u.attestedHeader = header
+
+	proto, ok := header.Proto().(*pb.LightClientHeaderAltair)
+	if !ok {
+		return fmt.Errorf("header type %T is not %T", proto, &pb.LightClientHeaderAltair{})
+	}
+	u.p.AttestedHeader = proto
+
+	return nil
 }
 
 func (u *updateAltair) NextSyncCommittee() *pb.SyncCommittee {
@@ -129,6 +143,9 @@ func (u *updateAltair) SetNextSyncCommitteeBranch(branch [][]byte) error {
 		return err
 	}
 	u.nextSyncCommitteeBranch = b
+
+	u.p.NextSyncCommitteeBranch = branch
+
 	return nil
 }
 
@@ -144,8 +161,19 @@ func (u *updateAltair) FinalizedHeader() interfaces.LightClientHeader {
 	return u.finalizedHeader
 }
 
-func (u *updateAltair) SetFinalizedHeader(header interfaces.LightClientHeader) {
+func (u *updateAltair) SetFinalizedHeader(header interfaces.LightClientHeader) error {
+	if header.Version() != version.Altair {
+		return fmt.Errorf("header version %s is not %s", version.String(header.Version()), version.String(version.Altair))
+	}
 	u.finalizedHeader = header
+
+	proto, ok := header.Proto().(*pb.LightClientHeaderAltair)
+	if !ok {
+		return fmt.Errorf("header type %T is not %T", proto, &pb.LightClientHeaderAltair{})
+	}
+	u.p.FinalizedHeader = proto
+
+	return nil
 }
 
 func (u *updateAltair) FinalityBranch() interfaces.LightClientFinalityBranch {
@@ -158,6 +186,9 @@ func (u *updateAltair) SetFinalityBranch(branch [][]byte) error {
 		return err
 	}
 	u.finalityBranch = b
+
+	u.p.FinalityBranch = branch
+
 	return nil
 }
 
@@ -177,6 +208,9 @@ func (u *updateAltair) SetSignatureSlot(slot primitives.Slot) {
 	u.p.SignatureSlot = slot
 }
 
+// In addition to the proto object being wrapped, we store some fields that have to be
+// constructed from the proto, so that we don't have to reconstruct them every time
+// in getters.
 type updateCapella struct {
 	p                       *pb.LightClientUpdateCapella
 	attestedHeader          interfaces.LightClientHeader
@@ -254,8 +288,19 @@ func (u *updateCapella) AttestedHeader() interfaces.LightClientHeader {
 	return u.attestedHeader
 }
 
-func (u *updateCapella) SetAttestedHeader(header interfaces.LightClientHeader) {
+func (u *updateCapella) SetAttestedHeader(header interfaces.LightClientHeader) error {
+	if header.Version() != version.Capella {
+		return fmt.Errorf("header version %s is not %s", version.String(header.Version()), version.String(version.Capella))
+	}
 	u.attestedHeader = header
+
+	proto, ok := header.Proto().(*pb.LightClientHeaderCapella)
+	if !ok {
+		return fmt.Errorf("header type %T is not %T", proto, &pb.LightClientHeaderCapella{})
+	}
+	u.p.AttestedHeader = proto
+
+	return nil
 }
 
 func (u *updateCapella) NextSyncCommittee() *pb.SyncCommittee {
@@ -276,6 +321,9 @@ func (u *updateCapella) SetNextSyncCommitteeBranch(branch [][]byte) error {
 		return err
 	}
 	u.nextSyncCommitteeBranch = b
+
+	u.p.NextSyncCommitteeBranch = branch
+
 	return nil
 }
 
@@ -291,8 +339,19 @@ func (u *updateCapella) FinalizedHeader() interfaces.LightClientHeader {
 	return u.finalizedHeader
 }
 
-func (u *updateCapella) SetFinalizedHeader(header interfaces.LightClientHeader) {
+func (u *updateCapella) SetFinalizedHeader(header interfaces.LightClientHeader) error {
+	if header.Version() != version.Capella {
+		return fmt.Errorf("header version %s is not %s", version.String(header.Version()), version.String(version.Capella))
+	}
 	u.finalizedHeader = header
+
+	proto, ok := header.Proto().(*pb.LightClientHeaderCapella)
+	if !ok {
+		return fmt.Errorf("header type %T is not %T", proto, &pb.LightClientHeaderCapella{})
+	}
+	u.p.FinalizedHeader = proto
+
+	return nil
 }
 
 func (u *updateCapella) FinalityBranch() interfaces.LightClientFinalityBranch {
@@ -305,6 +364,9 @@ func (u *updateCapella) SetFinalityBranch(branch [][]byte) error {
 		return err
 	}
 	u.finalityBranch = b
+
+	u.p.FinalityBranch = branch
+
 	return nil
 }
 
@@ -324,6 +386,9 @@ func (u *updateCapella) SetSignatureSlot(slot primitives.Slot) {
 	u.p.SignatureSlot = slot
 }
 
+// In addition to the proto object being wrapped, we store some fields that have to be
+// constructed from the proto, so that we don't have to reconstruct them every time
+// in getters.
 type updateDeneb struct {
 	p                       *pb.LightClientUpdateDeneb
 	attestedHeader          interfaces.LightClientHeader
@@ -401,8 +466,19 @@ func (u *updateDeneb) AttestedHeader() interfaces.LightClientHeader {
 	return u.attestedHeader
 }
 
-func (u *updateDeneb) SetAttestedHeader(header interfaces.LightClientHeader) {
+func (u *updateDeneb) SetAttestedHeader(header interfaces.LightClientHeader) error {
+	if header.Version() != version.Deneb {
+		return fmt.Errorf("header version %s is not %s", version.String(header.Version()), version.String(version.Deneb))
+	}
 	u.attestedHeader = header
+
+	proto, ok := header.Proto().(*pb.LightClientHeaderDeneb)
+	if !ok {
+		return fmt.Errorf("header type %T is not %T", proto, &pb.LightClientHeaderDeneb{})
+	}
+	u.p.AttestedHeader = proto
+
+	return nil
 }
 
 func (u *updateDeneb) NextSyncCommittee() *pb.SyncCommittee {
@@ -423,6 +499,9 @@ func (u *updateDeneb) SetNextSyncCommitteeBranch(branch [][]byte) error {
 		return err
 	}
 	u.nextSyncCommitteeBranch = b
+
+	u.p.NextSyncCommitteeBranch = branch
+
 	return nil
 }
 
@@ -438,8 +517,19 @@ func (u *updateDeneb) FinalizedHeader() interfaces.LightClientHeader {
 	return u.finalizedHeader
 }
 
-func (u *updateDeneb) SetFinalizedHeader(header interfaces.LightClientHeader) {
+func (u *updateDeneb) SetFinalizedHeader(header interfaces.LightClientHeader) error {
+	if header.Version() != version.Deneb {
+		return fmt.Errorf("header version %s is not %s", version.String(header.Version()), version.String(version.Deneb))
+	}
 	u.finalizedHeader = header
+
+	proto, ok := header.Proto().(*pb.LightClientHeaderDeneb)
+	if !ok {
+		return fmt.Errorf("header type %T is not %T", proto, &pb.LightClientHeaderDeneb{})
+	}
+	u.p.FinalizedHeader = proto
+
+	return nil
 }
 
 func (u *updateDeneb) FinalityBranch() interfaces.LightClientFinalityBranch {
@@ -452,6 +542,9 @@ func (u *updateDeneb) SetFinalityBranch(branch [][]byte) error {
 		return err
 	}
 	u.finalityBranch = b
+
+	u.p.FinalityBranch = branch
+
 	return nil
 }
 
@@ -471,6 +564,9 @@ func (u *updateDeneb) SetSignatureSlot(slot primitives.Slot) {
 	u.p.SignatureSlot = slot
 }
 
+// In addition to the proto object being wrapped, we store some fields that have to be
+// constructed from the proto, so that we don't have to reconstruct them every time
+// in getters.
 type updateElectra struct {
 	p                       *pb.LightClientUpdateElectra
 	attestedHeader          interfaces.LightClientHeader
@@ -548,8 +644,19 @@ func (u *updateElectra) AttestedHeader() interfaces.LightClientHeader {
 	return u.attestedHeader
 }
 
-func (u *updateElectra) SetAttestedHeader(header interfaces.LightClientHeader) {
+func (u *updateElectra) SetAttestedHeader(header interfaces.LightClientHeader) error {
+	if header.Version() != version.Electra {
+		return fmt.Errorf("header version %s is not %s", version.String(header.Version()), version.String(version.Electra))
+	}
 	u.attestedHeader = header
+
+	proto, ok := header.Proto().(*pb.LightClientHeaderDeneb)
+	if !ok {
+		return fmt.Errorf("header type %T is not %T", proto, &pb.LightClientHeaderDeneb{})
+	}
+	u.p.AttestedHeader = proto
+
+	return nil
 }
 
 func (u *updateElectra) NextSyncCommittee() *pb.SyncCommittee {
@@ -578,6 +685,9 @@ func (u *updateElectra) SetNextSyncCommitteeBranchElectra(branch [][]byte) error
 		return err
 	}
 	u.nextSyncCommitteeBranch = b
+
+	u.p.NextSyncCommitteeBranch = branch
+
 	return nil
 }
 
@@ -585,8 +695,19 @@ func (u *updateElectra) FinalizedHeader() interfaces.LightClientHeader {
 	return u.finalizedHeader
 }
 
-func (u *updateElectra) SetFinalizedHeader(header interfaces.LightClientHeader) {
+func (u *updateElectra) SetFinalizedHeader(header interfaces.LightClientHeader) error {
+	if header.Version() != version.Electra {
+		return fmt.Errorf("header version %s is not %s", version.String(header.Version()), version.String(version.Electra))
+	}
 	u.finalizedHeader = header
+
+	proto, ok := header.Proto().(*pb.LightClientHeaderDeneb)
+	if !ok {
+		return fmt.Errorf("header type %T is not %T", proto, &pb.LightClientHeaderDeneb{})
+	}
+	u.p.FinalizedHeader = proto
+
+	return nil
 }
 
 func (u *updateElectra) FinalityBranch() interfaces.LightClientFinalityBranch {
@@ -599,6 +720,9 @@ func (u *updateElectra) SetFinalityBranch(branch [][]byte) error {
 		return err
 	}
 	u.finalityBranch = b
+
+	u.p.FinalityBranch = branch
+
 	return nil
 }
 
