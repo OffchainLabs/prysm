@@ -57,45 +57,30 @@ func (s *Server) ListAttestations(w http.ResponseWriter, r *http.Request) {
 	attestations = append(attestations, unaggAtts...)
 
 	isEmptyReq := rawSlot == "" && rawCommitteeIndex == ""
-	bothDefined := rawSlot != "" && rawCommitteeIndex != ""
-	var attsData json.RawMessage
+	filteredAtts := make([]*structs.Attestation, 0, len(attestations))
 
-	if isEmptyReq {
-		allAtts := make([]*structs.Attestation, len(attestations))
-		for i, att := range attestations {
-			a, ok := att.(*eth.Attestation)
-			if !ok {
-				httputil.HandleError(w, fmt.Sprintf("Unable to convert attestations of type %T", att), http.StatusInternalServerError)
-				return
-			}
-			allAtts[i] = structs.AttFromConsensus(a)
-		}
-		attsData, err = json.Marshal(allAtts)
-		if err != nil {
-			httputil.HandleError(w, "Could not marshal attestations: "+err.Error(), http.StatusInternalServerError)
+	for _, att := range attestations {
+		var includeAttestation bool
+		attOld, ok := att.(*eth.Attestation)
+		if !ok {
+			httputil.HandleError(w, fmt.Sprintf("Unable to convert attestation of type %T", att), http.StatusInternalServerError)
 			return
 		}
-	} else {
-		filteredAtts := make([]*structs.Attestation, 0, len(attestations))
-		for _, att := range attestations {
-			committeeIndexMatch := rawCommitteeIndex != "" && att.GetData().CommitteeIndex == primitives.CommitteeIndex(committeeIndex)
-			slotMatch := rawSlot != "" && att.GetData().Slot == primitives.Slot(slot)
-			shouldAppend := (bothDefined && committeeIndexMatch && slotMatch) || (!bothDefined && (committeeIndexMatch || slotMatch))
-			if shouldAppend {
-				a, ok := att.(*eth.Attestation)
-				if !ok {
-					httputil.HandleError(w, fmt.Sprintf("Unable to convert attestations of type %T", att), http.StatusInternalServerError)
-					return
-				}
-				filteredAtts = append(filteredAtts, structs.AttFromConsensus(a))
-			}
-		}
-		attsData, err = json.Marshal(filteredAtts)
-		if err != nil {
-			httputil.HandleError(w, "Could not marshal attestations: "+err.Error(), http.StatusInternalServerError)
-			return
+		data := attOld.GetData()
+		attStruct := structs.AttFromConsensus(attOld)
+
+		includeAttestation = shouldIncludeAttestation(data, rawSlot, slot, rawCommitteeIndex, committeeIndex, isEmptyReq)
+		if includeAttestation {
+			filteredAtts = append(filteredAtts, attStruct)
 		}
 	}
+
+	attsData, err := json.Marshal(filteredAtts)
+	if err != nil {
+		httputil.HandleError(w, "Could not marshal attestations: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	httputil.WriteJson(w, &structs.ListAttestationsResponse{
 		Data: attsData,
 	})
@@ -138,7 +123,7 @@ func (s *Server) ListAttestationsV2(w http.ResponseWriter, r *http.Request) {
 		if headState.Version() >= version.Electra {
 			attElectra, ok := att.(*eth.AttestationElectra)
 			if !ok {
-				httputil.HandleError(w, fmt.Sprintf("Expected AttestationElectra but got %T", att), http.StatusInternalServerError)
+				httputil.HandleError(w, fmt.Sprintf("Unable to convert attestation of type %T", att), http.StatusInternalServerError)
 				return
 			}
 			data := attElectra.GetData()
@@ -151,7 +136,7 @@ func (s *Server) ListAttestationsV2(w http.ResponseWriter, r *http.Request) {
 		} else {
 			attOld, ok := att.(*eth.Attestation)
 			if !ok {
-				httputil.HandleError(w, fmt.Sprintf("Expected Attestation but got %T", att), http.StatusInternalServerError)
+				httputil.HandleError(w, fmt.Sprintf("Unable to convert attestation of type %T", att), http.StatusInternalServerError)
 				return
 			}
 			data := attOld.GetData()
