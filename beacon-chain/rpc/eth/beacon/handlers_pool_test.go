@@ -202,7 +202,10 @@ func TestListAttestations(t *testing.T) {
 	})
 	t.Run("V2", func(t *testing.T) {
 		t.Run("Pre-Electra", func(t *testing.T) {
+			bs, err := util.NewBeaconState()
+			require.NoError(t, err)
 			s := &Server{
+				ChainInfoFetcher: &blockchainmock.ChainService{State: bs},
 				AttestationsPool: attestations.NewPool(),
 			}
 			require.NoError(t, s.AttestationsPool.SaveAggregatedAttestations([]ethpbv1alpha1.Att{att1, att2}))
@@ -365,8 +368,11 @@ func TestListAttestations(t *testing.T) {
 				CommitteeBits: cb,
 				Signature:     bytesutil.PadTo([]byte("signature4"), 96),
 			}
+			bs, err := util.NewBeaconStateElectra()
+			require.NoError(t, err)
 			s := &Server{
 				AttestationsPool: attestations.NewPool(),
+				ChainInfoFetcher: &blockchainmock.ChainService{State: bs},
 			}
 			require.NoError(t, s.AttestationsPool.SaveAggregatedAttestations([]ethpbv1alpha1.Att{attElectra1, attElectra2}))
 			require.NoError(t, s.AttestationsPool.SaveUnaggregatedAttestations([]ethpbv1alpha1.Att{attElectra3, attElectra4}))
