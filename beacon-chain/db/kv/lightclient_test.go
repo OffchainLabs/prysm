@@ -173,7 +173,7 @@ func TestStore_LightClientUpdate_CanSaveRetrieveDeneb(t *testing.T) {
 func TestStore_LightClientUpdates_canRetrieveRange(t *testing.T) {
 	db := setupDB(t)
 	ctx := context.Background()
-	updates := make([]interfaces.LightClientUpdate, 0)
+	updates := make([]interfaces.LightClientUpdate, 0, 3)
 	for i := 1; i <= 3; i++ {
 		update, err := createUpdate(t, version.Altair)
 		require.NoError(t, err)
@@ -198,7 +198,7 @@ func TestStore_LightClientUpdates_canRetrieveRange(t *testing.T) {
 func TestStore_LightClientUpdate_EndPeriodSmallerThanStartPeriod(t *testing.T) {
 	db := setupDB(t)
 	ctx := context.Background()
-	updates := make([]interfaces.LightClientUpdate, 0)
+	updates := make([]interfaces.LightClientUpdate, 0, 3)
 	for i := 1; i <= 3; i++ {
 		update, err := createUpdate(t, version.Altair)
 		require.NoError(t, err)
@@ -221,7 +221,7 @@ func TestStore_LightClientUpdate_EndPeriodSmallerThanStartPeriod(t *testing.T) {
 func TestStore_LightClientUpdate_EndPeriodEqualToStartPeriod(t *testing.T) {
 	db := setupDB(t)
 	ctx := context.Background()
-	updates := make([]interfaces.LightClientUpdate, 0)
+	updates := make([]interfaces.LightClientUpdate, 0, 3)
 	for i := 1; i <= 3; i++ {
 		update, err := createUpdate(t, version.Altair)
 		require.NoError(t, err)
@@ -243,7 +243,7 @@ func TestStore_LightClientUpdate_EndPeriodEqualToStartPeriod(t *testing.T) {
 func TestStore_LightClientUpdate_StartPeriodBeforeFirstUpdate(t *testing.T) {
 	db := setupDB(t)
 	ctx := context.Background()
-	updates := make([]interfaces.LightClientUpdate, 0)
+	updates := make([]interfaces.LightClientUpdate, 0, 3)
 	for i := 1; i <= 3; i++ {
 		update, err := createUpdate(t, version.Altair)
 		require.NoError(t, err)
@@ -267,7 +267,7 @@ func TestStore_LightClientUpdate_StartPeriodBeforeFirstUpdate(t *testing.T) {
 func TestStore_LightClientUpdate_EndPeriodAfterLastUpdate(t *testing.T) {
 	db := setupDB(t)
 	ctx := context.Background()
-	updates := make([]interfaces.LightClientUpdate, 0)
+	updates := make([]interfaces.LightClientUpdate, 0, 3)
 	for i := 1; i <= 3; i++ {
 		update, err := createUpdate(t, version.Altair)
 		require.NoError(t, err)
@@ -291,7 +291,7 @@ func TestStore_LightClientUpdate_EndPeriodAfterLastUpdate(t *testing.T) {
 func TestStore_LightClientUpdate_PartialUpdates(t *testing.T) {
 	db := setupDB(t)
 	ctx := context.Background()
-	updates := make([]interfaces.LightClientUpdate, 0)
+	updates := make([]interfaces.LightClientUpdate, 0, 3)
 	for i := 1; i <= 3; i++ {
 		update, err := createUpdate(t, version.Altair)
 		require.NoError(t, err)
@@ -315,7 +315,7 @@ func TestStore_LightClientUpdate_PartialUpdates(t *testing.T) {
 func TestStore_LightClientUpdate_MissingPeriods_SimpleData(t *testing.T) {
 	db := setupDB(t)
 	ctx := context.Background()
-	updates := make([]interfaces.LightClientUpdate, 0)
+	updates := make([]interfaces.LightClientUpdate, 0, 4)
 	for i := 1; i <= 4; i++ {
 		update, err := createUpdate(t, version.Altair)
 		require.NoError(t, err)
@@ -370,7 +370,7 @@ func TestStore_LightClientUpdate_EmptyDB(t *testing.T) {
 func TestStore_LightClientUpdate_RetrieveMissingPeriodDistributed(t *testing.T) {
 	db := setupDB(t)
 	ctx := context.Background()
-	updates := make([]interfaces.LightClientUpdate, 0)
+	updates := make([]interfaces.LightClientUpdate, 0, 5)
 	for i := 1; i <= 5; i++ {
 		update, err := createUpdate(t, version.Altair)
 		require.NoError(t, err)
