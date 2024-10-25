@@ -488,7 +488,7 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 	case interfaces.LightClientFinalityUpdate:
 		cv, err := structs.LightClientFinalityUpdateFromConsensus(v)
 		if err != nil {
-			return nil, errors.Wrap(err, "LightClientFinalityUpdateWithVersion event conversion failure")
+			return nil, errors.Wrap(err, "LightClientFinalityUpdate conversion failure")
 		}
 		ev := &structs.LightClientFinalityUpdateEvent{
 			Version: version.String(int(v.Version())),
