@@ -28,6 +28,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Return false from HasBlock if the block is being synced. 
 - Cleanup forkchoice on failed insertions.
 - Use read only validator for core processing to avoid unnecessary copying.
+- Added missing Eth-Consensus-Version headers to GetBlockAttestationsV2 and GetAttesterSlashingsV2 endpoints.
 
 ### Deprecated
 
