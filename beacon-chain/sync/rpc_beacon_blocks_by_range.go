@@ -160,7 +160,7 @@ func (s *Service) writeBlockBatchToStream(ctx context.Context, batch blockBatch,
 		return nil
 	}
 
-	reconstructed, err := s.cfg.executionPayloadReconstructor.ReconstructFullBellatrixBlockBatch(ctx, blinded)
+	reconstructed, err := s.cfg.executionReconstructor.ReconstructFullBellatrixBlockBatch(ctx, blinded)
 	if err != nil {
 		log.WithError(err).Error("Could not reconstruct full bellatrix block batch from blinded bodies")
 		return err

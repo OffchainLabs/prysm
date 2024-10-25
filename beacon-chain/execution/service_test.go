@@ -19,8 +19,11 @@ import (
 	dbutil "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
 	mockExecution "github.com/prysmaticlabs/prysm/v5/beacon-chain/execution/testing"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/execution/types"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice"
 	doublylinkedtree "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/doubly-linked-tree"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stategen"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/container/trie"
 	contracts "github.com/prysmaticlabs/prysm/v5/contracts/deposit"
@@ -92,10 +95,16 @@ func TestStart_OK(t *testing.T) {
 	t.Cleanup(func() {
 		server.Stop()
 	})
+	c := startup.NewClockSynchronizer()
+	require.NoError(t, c.SetClock(startup.NewClock(time.Unix(0, 0), [32]byte{})))
+	waiter := verification.NewInitializerWaiter(
+		c, forkchoice.NewROForkChoice(nil), nil)
+
 	web3Service, err := NewService(context.Background(),
 		WithHttpEndpoint(endpoint),
 		WithDepositContractAddress(testAcc.ContractAddr),
 		WithDatabase(beaconDB),
+		WithVerifierWaiter(waiter),
 	)
 	require.NoError(t, err, "unable to setup execution service")
 	web3Service = setDefaultMocks(web3Service)

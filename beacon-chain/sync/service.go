@@ -77,25 +77,25 @@ type validationFn func(ctx context.Context) (pubsub.ValidationResult, error)
 
 // config to hold dependencies for the sync service.
 type config struct {
-	attestationNotifier           operation.Notifier
-	p2p                           p2p.P2P
-	beaconDB                      db.NoHeadAccessDatabase
-	attPool                       attestations.Pool
-	exitPool                      voluntaryexits.PoolManager
-	slashingPool                  slashings.PoolManager
-	syncCommsPool                 synccommittee.Pool
-	blsToExecPool                 blstoexec.PoolManager
-	chain                         blockchainService
-	initialSync                   Checker
-	blockNotifier                 blockfeed.Notifier
-	operationNotifier             operation.Notifier
-	executionPayloadReconstructor execution.PayloadReconstructor
-	stateGen                      *stategen.State
-	slasherAttestationsFeed       *event.Feed
-	slasherBlockHeadersFeed       *event.Feed
-	clock                         *startup.Clock
-	stateNotifier                 statefeed.Notifier
-	blobStorage                   *filesystem.BlobStorage
+	attestationNotifier     operation.Notifier
+	p2p                     p2p.P2P
+	beaconDB                db.NoHeadAccessDatabase
+	attPool                 attestations.Pool
+	exitPool                voluntaryexits.PoolManager
+	slashingPool            slashings.PoolManager
+	syncCommsPool           synccommittee.Pool
+	blsToExecPool           blstoexec.PoolManager
+	chain                   blockchainService
+	initialSync             Checker
+	blockNotifier           blockfeed.Notifier
+	operationNotifier       operation.Notifier
+	executionReconstructor  execution.Reconstructor
+	stateGen                *stategen.State
+	slasherAttestationsFeed *event.Feed
+	slasherBlockHeadersFeed *event.Feed
+	clock                   *startup.Clock
+	stateNotifier           statefeed.Notifier
+	blobStorage             *filesystem.BlobStorage
 }
 
 // This defines the interface for interacting with block chain service

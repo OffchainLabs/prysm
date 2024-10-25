@@ -838,6 +838,11 @@ func (b BlobBundleJSON) ToProto() *BlobsBundle {
 	}
 }
 
+type BlobAndProofJson struct {
+	Blob     hexutil.Bytes `json:"blob"`
+	KzgProof hexutil.Bytes `json:"proof"`
+}
+
 // MarshalJSON --
 func (e *ExecutionPayloadDeneb) MarshalJSON() ([]byte, error) {
 	transactions := make([]hexutil.Bytes, len(e.Transactions))
@@ -1258,4 +1263,22 @@ func RecastHexutilByteSlice(h []hexutil.Bytes) [][]byte {
 		r[i] = h[i]
 	}
 	return r
+}
+
+// UnmarshalJSON implements the json unmarshaler interface for BlobAndProof.
+func (b *BlobAndProof) UnmarshalJSON(enc []byte) error {
+	var dec *BlobAndProofJson
+	if err := json.Unmarshal(enc, &dec); err != nil {
+		return err
+	}
+
+	blob := make([]byte, fieldparams.BlobLength)
+	copy(blob, dec.Blob)
+	b.Blob = blob
+
+	proof := make([]byte, fieldparams.BLSPubkeyLength)
+	copy(proof, dec.KzgProof)
+	b.KzgProof = proof
+
+	return nil
 }

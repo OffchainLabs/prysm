@@ -21,6 +21,7 @@ go_library(
         "electra_state.go",
         "helpers.go",
         "lightclient.go",
+        "logging.go",
         "merge.go",
         "state.go",
         "sync_aggregate.go",
@@ -69,6 +70,7 @@ go_library(
         "@com_github_pkg_errors//:go_default_library",
         "@com_github_prysmaticlabs_go_bitfield//:go_default_library",
         "@com_github_sirupsen_logrus//:go_default_library",
+        "@com_github_sirupsen_logrus//hooks/test:go_default_library",
         "@io_bazel_rules_go//go/tools/bazel:go_default_library",
     ],
 )
@@ -83,6 +85,7 @@ go_test(
         "deneb_test.go",
         "deposits_test.go",
         "helpers_test.go",
+        "logging_test.go",
         "state_test.go",
     ],
     embed = [":go_default_library"],
@@ -106,6 +109,8 @@ go_test(
         "//testing/assert:go_default_library",
         "//testing/require:go_default_library",
         "//time/slots:go_default_library",
+        "@com_github_pkg_errors//:go_default_library",
+        "@com_github_sirupsen_logrus//:go_default_library",
         "@org_golang_google_protobuf//proto:go_default_library",
     ],
 )

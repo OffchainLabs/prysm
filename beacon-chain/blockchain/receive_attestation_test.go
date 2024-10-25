@@ -10,6 +10,7 @@ import (
 	forkchoicetypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/types"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	consensus_blocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
@@ -46,7 +47,7 @@ func TestVerifyLMDFFGConsistent(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, r32))
 
-	state, r33, err := prepareForkchoiceState(ctx, 33, [32]byte{'b'}, r32, params.BeaconConfig().ZeroHash, fc, fc)
+	state, r33, err := prepareForkchoiceState(ctx, 33, [32]byte{'b'}, r32.Root(), params.BeaconConfig().ZeroHash, fc, fc)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, r33))
 
@@ -54,10 +55,12 @@ func TestVerifyLMDFFGConsistent(t *testing.T) {
 	a := util.NewAttestation()
 	a.Data.Target.Epoch = 1
 	a.Data.Target.Root = []byte{'c'}
-	a.Data.BeaconBlockRoot = r33[:]
+	r33Root := r33.Root()
+	a.Data.BeaconBlockRoot = r33Root[:]
 	require.ErrorContains(t, wanted, service.VerifyLmdFfgConsistency(context.Background(), a))
 
-	a.Data.Target.Root = r32[:]
+	r32Root := r32.Root()
+	a.Data.Target.Root = r32Root[:]
 	err = service.VerifyLmdFfgConsistency(context.Background(), a)
 	require.NoError(t, err, "Could not verify LMD and FFG votes to be consistent")
 }
@@ -116,7 +119,9 @@ func TestService_ProcessAttestationsAndUpdateHead(t *testing.T) {
 	postState, err := service.validateStateTransition(ctx, preState, wsb)
 	require.NoError(t, err)
 	require.NoError(t, service.savePostStateInfo(ctx, tRoot, wsb, postState))
-	require.NoError(t, service.postBlockProcess(&postBlockProcessConfig{ctx, wsb, tRoot, [32]byte{}, postState, false}))
+	roblock, err := consensus_blocks.NewROBlockWithRoot(wsb, tRoot)
+	require.NoError(t, err)
+	require.NoError(t, service.postBlockProcess(&postBlockProcessConfig{ctx, roblock, [32]byte{}, postState, false}))
 	copied, err = service.cfg.StateGen.StateByRoot(ctx, tRoot)
 	require.NoError(t, err)
 	require.Equal(t, 2, fcs.NodeCount())
@@ -176,7 +181,9 @@ func TestService_UpdateHead_NoAtts(t *testing.T) {
 	postState, err := service.validateStateTransition(ctx, preState, wsb)
 	require.NoError(t, err)
 	require.NoError(t, service.savePostStateInfo(ctx, tRoot, wsb, postState))
-	require.NoError(t, service.postBlockProcess(&postBlockProcessConfig{ctx, wsb, tRoot, [32]byte{}, postState, false}))
+	roblock, err := consensus_blocks.NewROBlockWithRoot(wsb, tRoot)
+	require.NoError(t, err)
+	require.NoError(t, service.postBlockProcess(&postBlockProcessConfig{ctx, roblock, [32]byte{}, postState, false}))
 	require.Equal(t, 2, fcs.NodeCount())
 	require.NoError(t, service.cfg.BeaconDB.SaveBlock(ctx, wsb))
 	require.Equal(t, tRoot, service.head.root)

@@ -13,6 +13,7 @@ import (
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	consensus_blocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
@@ -38,7 +39,7 @@ func prepareForkchoiceState(
 	payloadHash [32]byte,
 	justified *ethpb.Checkpoint,
 	finalized *ethpb.Checkpoint,
-) (state.BeaconState, [32]byte, error) {
+) (state.BeaconState, consensus_blocks.ROBlock, error) {
 	blockHeader := &ethpb.BeaconBlockHeader{
 		ParentRoot: parentRoot[:],
 	}
@@ -59,7 +60,26 @@ func prepareForkchoiceState(
 
 	base.BlockRoots[0] = append(base.BlockRoots[0], blockRoot[:]...)
 	st, err := state_native.InitializeFromProtoBellatrix(base)
-	return st, blockRoot, err
+	if err != nil {
+		return nil, consensus_blocks.ROBlock{}, err
+	}
+	blk := &ethpb.SignedBeaconBlockBellatrix{
+		Block: &ethpb.BeaconBlockBellatrix{
+			Slot:       slot,
+			ParentRoot: parentRoot[:],
+			Body: &ethpb.BeaconBlockBodyBellatrix{
+				ExecutionPayload: &enginev1.ExecutionPayload{
+					BlockHash: payloadHash[:],
+				},
+			},
+		},
+	}
+	signed, err := blocks.NewSignedBeaconBlock(blk)
+	if err != nil {
+		return nil, consensus_blocks.ROBlock{}, err
+	}
+	roblock, err := consensus_blocks.NewROBlockWithRoot(signed, blockRoot)
+	return st, roblock, err
 }
 
 func TestHeadRoot_Nil(t *testing.T) {
@@ -122,9 +142,9 @@ func TestUnrealizedJustifiedBlockHash(t *testing.T) {
 	service := &Service{cfg: &config{ForkChoiceStore: doublylinkedtree.New()}}
 	ojc := &ethpb.Checkpoint{Root: []byte{'j'}}
 	ofc := &ethpb.Checkpoint{Root: []byte{'f'}}
-	st, blkRoot, err := prepareForkchoiceState(ctx, 0, [32]byte{}, [32]byte{}, params.BeaconConfig().ZeroHash, ojc, ofc)
+	st, roblock, err := prepareForkchoiceState(ctx, 0, [32]byte{}, [32]byte{}, params.BeaconConfig().ZeroHash, ojc, ofc)
 	require.NoError(t, err)
-	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, blkRoot))
+	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, roblock))
 	service.cfg.ForkChoiceStore.SetBalancesByRooter(func(_ context.Context, _ [32]byte) ([]uint64, error) { return []uint64{}, nil })
 	require.NoError(t, service.cfg.ForkChoiceStore.UpdateJustifiedCheckpoint(ctx, &forkchoicetypes.Checkpoint{Epoch: 6, Root: [32]byte{'j'}}))
 
@@ -316,24 +336,24 @@ func TestService_ChainHeads(t *testing.T) {
 	c := &Service{cfg: &config{ForkChoiceStore: doublylinkedtree.New()}}
 	ojc := &ethpb.Checkpoint{Root: params.BeaconConfig().ZeroHash[:]}
 	ofc := &ethpb.Checkpoint{Root: params.BeaconConfig().ZeroHash[:]}
-	st, blkRoot, err := prepareForkchoiceState(ctx, 0, [32]byte{}, [32]byte{}, params.BeaconConfig().ZeroHash, ojc, ofc)
+	st, roblock, err := prepareForkchoiceState(ctx, 0, [32]byte{}, [32]byte{}, params.BeaconConfig().ZeroHash, ojc, ofc)
 	require.NoError(t, err)
-	require.NoError(t, c.cfg.ForkChoiceStore.InsertNode(ctx, st, blkRoot))
-	st, blkRoot, err = prepareForkchoiceState(ctx, 100, [32]byte{'a'}, [32]byte{}, params.BeaconConfig().ZeroHash, ojc, ofc)
+	require.NoError(t, c.cfg.ForkChoiceStore.InsertNode(ctx, st, roblock))
+	st, roblock, err = prepareForkchoiceState(ctx, 100, [32]byte{'a'}, [32]byte{}, params.BeaconConfig().ZeroHash, ojc, ofc)
 	require.NoError(t, err)
-	require.NoError(t, c.cfg.ForkChoiceStore.InsertNode(ctx, st, blkRoot))
-	st, blkRoot, err = prepareForkchoiceState(ctx, 101, [32]byte{'b'}, [32]byte{'a'}, params.BeaconConfig().ZeroHash, ojc, ofc)
+	require.NoError(t, c.cfg.ForkChoiceStore.InsertNode(ctx, st, roblock))
+	st, roblock, err = prepareForkchoiceState(ctx, 101, [32]byte{'b'}, [32]byte{'a'}, params.BeaconConfig().ZeroHash, ojc, ofc)
 	require.NoError(t, err)
-	require.NoError(t, c.cfg.ForkChoiceStore.InsertNode(ctx, st, blkRoot))
-	st, blkRoot, err = prepareForkchoiceState(ctx, 102, [32]byte{'c'}, [32]byte{'b'}, params.BeaconConfig().ZeroHash, ojc, ofc)
+	require.NoError(t, c.cfg.ForkChoiceStore.InsertNode(ctx, st, roblock))
+	st, roblock, err = prepareForkchoiceState(ctx, 102, [32]byte{'c'}, [32]byte{'b'}, params.BeaconConfig().ZeroHash, ojc, ofc)
 	require.NoError(t, err)
-	require.NoError(t, c.cfg.ForkChoiceStore.InsertNode(ctx, st, blkRoot))
-	st, blkRoot, err = prepareForkchoiceState(ctx, 103, [32]byte{'d'}, [32]byte{'a'}, params.BeaconConfig().ZeroHash, ojc, ofc)
+	require.NoError(t, c.cfg.ForkChoiceStore.InsertNode(ctx, st, roblock))
+	st, roblock, err = prepareForkchoiceState(ctx, 103, [32]byte{'d'}, [32]byte{'a'}, params.BeaconConfig().ZeroHash, ojc, ofc)
 	require.NoError(t, err)
-	require.NoError(t, c.cfg.ForkChoiceStore.InsertNode(ctx, st, blkRoot))
-	st, blkRoot, err = prepareForkchoiceState(ctx, 104, [32]byte{'e'}, [32]byte{'b'}, params.BeaconConfig().ZeroHash, ojc, ofc)
+	require.NoError(t, c.cfg.ForkChoiceStore.InsertNode(ctx, st, roblock))
+	st, roblock, err = prepareForkchoiceState(ctx, 104, [32]byte{'e'}, [32]byte{'b'}, params.BeaconConfig().ZeroHash, ojc, ofc)
 	require.NoError(t, err)
-	require.NoError(t, c.cfg.ForkChoiceStore.InsertNode(ctx, st, blkRoot))
+	require.NoError(t, c.cfg.ForkChoiceStore.InsertNode(ctx, st, roblock))
 
 	roots, slots := c.ChainHeads()
 	require.Equal(t, 3, len(roots))
@@ -413,12 +433,12 @@ func TestService_IsOptimistic(t *testing.T) {
 	ojc := &ethpb.Checkpoint{Root: params.BeaconConfig().ZeroHash[:]}
 	ofc := &ethpb.Checkpoint{Root: params.BeaconConfig().ZeroHash[:]}
 	c := &Service{cfg: &config{ForkChoiceStore: doublylinkedtree.New()}, head: &head{root: [32]byte{'b'}}}
-	st, blkRoot, err := prepareForkchoiceState(ctx, 100, [32]byte{'a'}, [32]byte{}, params.BeaconConfig().ZeroHash, ojc, ofc)
+	st, roblock, err := prepareForkchoiceState(ctx, 100, [32]byte{'a'}, [32]byte{}, params.BeaconConfig().ZeroHash, ojc, ofc)
 	require.NoError(t, err)
-	require.NoError(t, c.cfg.ForkChoiceStore.InsertNode(ctx, st, blkRoot))
-	st, blkRoot, err = prepareForkchoiceState(ctx, 101, [32]byte{'b'}, [32]byte{'a'}, params.BeaconConfig().ZeroHash, ojc, ofc)
+	require.NoError(t, c.cfg.ForkChoiceStore.InsertNode(ctx, st, roblock))
+	st, roblock, err = prepareForkchoiceState(ctx, 101, [32]byte{'b'}, [32]byte{'a'}, params.BeaconConfig().ZeroHash, ojc, ofc)
 	require.NoError(t, err)
-	require.NoError(t, c.cfg.ForkChoiceStore.InsertNode(ctx, st, blkRoot))
+	require.NoError(t, c.cfg.ForkChoiceStore.InsertNode(ctx, st, roblock))
 
 	opt, err := c.IsOptimistic(ctx)
 	require.NoError(t, err)
@@ -449,12 +469,12 @@ func TestService_IsOptimisticForRoot(t *testing.T) {
 	c := &Service{cfg: &config{ForkChoiceStore: doublylinkedtree.New()}, head: &head{root: [32]byte{'b'}}}
 	ojc := &ethpb.Checkpoint{Root: params.BeaconConfig().ZeroHash[:]}
 	ofc := &ethpb.Checkpoint{Root: params.BeaconConfig().ZeroHash[:]}
-	st, blkRoot, err := prepareForkchoiceState(ctx, 100, [32]byte{'a'}, [32]byte{}, params.BeaconConfig().ZeroHash, ojc, ofc)
+	st, roblock, err := prepareForkchoiceState(ctx, 100, [32]byte{'a'}, [32]byte{}, params.BeaconConfig().ZeroHash, ojc, ofc)
 	require.NoError(t, err)
-	require.NoError(t, c.cfg.ForkChoiceStore.InsertNode(ctx, st, blkRoot))
-	st, blkRoot, err = prepareForkchoiceState(ctx, 101, [32]byte{'b'}, [32]byte{'a'}, params.BeaconConfig().ZeroHash, ojc, ofc)
+	require.NoError(t, c.cfg.ForkChoiceStore.InsertNode(ctx, st, roblock))
+	st, roblock, err = prepareForkchoiceState(ctx, 101, [32]byte{'b'}, [32]byte{'a'}, params.BeaconConfig().ZeroHash, ojc, ofc)
 	require.NoError(t, err)
-	require.NoError(t, c.cfg.ForkChoiceStore.InsertNode(ctx, st, blkRoot))
+	require.NoError(t, c.cfg.ForkChoiceStore.InsertNode(ctx, st, roblock))
 
 	opt, err := c.IsOptimisticForRoot(ctx, [32]byte{'a'})
 	require.NoError(t, err)

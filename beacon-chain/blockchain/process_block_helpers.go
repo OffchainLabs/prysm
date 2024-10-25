@@ -18,6 +18,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/config/features"
 	field_params "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
+	consensus_blocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
@@ -42,7 +43,7 @@ func (s *Service) getFCUArgs(cfg *postBlockProcessConfig, fcuArgs *fcuConfig) er
 	if !s.inRegularSync() {
 		return nil
 	}
-	slot := cfg.signed.Block().Slot()
+	slot := cfg.roblock.Block().Slot()
 	if slots.WithinVotingWindow(uint64(s.genesisTime.Unix()), slot) {
 		return nil
 	}
@@ -50,9 +51,9 @@ func (s *Service) getFCUArgs(cfg *postBlockProcessConfig, fcuArgs *fcuConfig) er
 }
 
 func (s *Service) getFCUArgsEarlyBlock(cfg *postBlockProcessConfig, fcuArgs *fcuConfig) error {
-	if cfg.blockRoot == cfg.headRoot {
+	if cfg.roblock.Root() == cfg.headRoot {
 		fcuArgs.headState = cfg.postState
-		fcuArgs.headBlock = cfg.signed
+		fcuArgs.headBlock = cfg.roblock
 		fcuArgs.headRoot = cfg.headRoot
 		fcuArgs.proposingSlot = s.CurrentSlot() + 1
 		return nil
@@ -96,7 +97,7 @@ func (s *Service) fcuArgsNonCanonicalBlock(cfg *postBlockProcessConfig, fcuArgs 
 
 // sendStateFeedOnBlock sends an event that a new block has been synced
 func (s *Service) sendStateFeedOnBlock(cfg *postBlockProcessConfig) {
-	optimistic, err := s.cfg.ForkChoiceStore.IsOptimistic(cfg.blockRoot)
+	optimistic, err := s.cfg.ForkChoiceStore.IsOptimistic(cfg.roblock.Root())
 	if err != nil {
 		log.WithError(err).Debug("Could not check if block is optimistic")
 		optimistic = true
@@ -105,9 +106,9 @@ func (s *Service) sendStateFeedOnBlock(cfg *postBlockProcessConfig) {
 	s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
 		Type: statefeed.BlockProcessed,
 		Data: &statefeed.BlockProcessedData{
-			Slot:        cfg.signed.Block().Slot(),
-			BlockRoot:   cfg.blockRoot,
-			SignedBlock: cfg.signed,
+			Slot:        cfg.roblock.Block().Slot(),
+			BlockRoot:   cfg.roblock.Root(),
+			SignedBlock: cfg.roblock,
 			Verified:    true,
 			Optimistic:  optimistic,
 		},
@@ -117,7 +118,7 @@ func (s *Service) sendStateFeedOnBlock(cfg *postBlockProcessConfig) {
 // sendLightClientFeeds sends the light client feeds when feature flag is enabled.
 func (s *Service) sendLightClientFeeds(cfg *postBlockProcessConfig) {
 	if features.Get().EnableLightClient {
-		if _, err := s.sendLightClientOptimisticUpdate(cfg.ctx, cfg.signed, cfg.postState); err != nil {
+		if _, err := s.sendLightClientOptimisticUpdate(cfg.ctx, cfg.roblock, cfg.postState); err != nil {
 			log.WithError(err).Error("Failed to send light client optimistic update")
 		}
 
@@ -125,7 +126,7 @@ func (s *Service) sendLightClientFeeds(cfg *postBlockProcessConfig) {
 		finalized := s.ForkChoicer().FinalizedCheckpoint()
 
 		// LightClientFinalityUpdate needs super majority
-		s.tryPublishLightClientFinalityUpdate(cfg.ctx, cfg.signed, finalized, cfg.postState)
+		s.tryPublishLightClientFinalityUpdate(cfg.ctx, cfg.roblock, finalized, cfg.postState)
 	}
 }
 
@@ -252,20 +253,21 @@ func (s *Service) sendLightClientOptimisticUpdate(ctx context.Context, signed in
 // before sending FCU to the engine.
 func (s *Service) updateCachesPostBlockProcessing(cfg *postBlockProcessConfig) error {
 	slot := cfg.postState.Slot()
-	if err := transition.UpdateNextSlotCache(cfg.ctx, cfg.blockRoot[:], cfg.postState); err != nil {
+	root := cfg.roblock.Root()
+	if err := transition.UpdateNextSlotCache(cfg.ctx, root[:], cfg.postState); err != nil {
 		return errors.Wrap(err, "could not update next slot state cache")
 	}
 	if !slots.IsEpochEnd(slot) {
 		return nil
 	}
-	return s.handleEpochBoundary(cfg.ctx, slot, cfg.postState, cfg.blockRoot[:])
+	return s.handleEpochBoundary(cfg.ctx, slot, cfg.postState, root[:])
 }
 
 // handleSecondFCUCall handles a second call to FCU when syncing a new block.
 // This is useful when proposing in the next block and we want to defer the
 // computation of the next slot shuffling.
 func (s *Service) handleSecondFCUCall(cfg *postBlockProcessConfig, fcuArgs *fcuConfig) {
-	if (fcuArgs.attributes == nil || fcuArgs.attributes.IsEmpty()) && cfg.headRoot == cfg.blockRoot {
+	if (fcuArgs.attributes == nil || fcuArgs.attributes.IsEmpty()) && cfg.headRoot == cfg.roblock.Root() {
 		go s.sendFCUWithAttributes(cfg, fcuArgs)
 	}
 }
@@ -281,7 +283,7 @@ func reportProcessingTime(startTime time.Time) {
 // called on blocks that arrive after the attestation voting window, or in a
 // background routine after syncing early blocks.
 func (s *Service) computePayloadAttributes(cfg *postBlockProcessConfig, fcuArgs *fcuConfig) error {
-	if cfg.blockRoot == cfg.headRoot {
+	if cfg.roblock.Root() == cfg.headRoot {
 		if err := s.updateCachesPostBlockProcessing(cfg); err != nil {
 			return err
 		}
@@ -438,7 +440,7 @@ func (s *Service) ancestorByDB(ctx context.Context, r [32]byte, slot primitives.
 
 // This retrieves missing blocks from DB (ie. the blocks that couldn't be received over sync) and inserts them to fork choice store.
 // This is useful for block tree visualizer and additional vote accounting.
-func (s *Service) fillInForkChoiceMissingBlocks(ctx context.Context, blk interfaces.ReadOnlyBeaconBlock,
+func (s *Service) fillInForkChoiceMissingBlocks(ctx context.Context, signed interfaces.ReadOnlySignedBeaconBlock,
 	fCheckpoint, jCheckpoint *ethpb.Checkpoint) error {
 	pendingNodes := make([]*forkchoicetypes.BlockAndCheckpoints, 0)
 
@@ -448,10 +450,15 @@ func (s *Service) fillInForkChoiceMissingBlocks(ctx context.Context, blk interfa
 	if err != nil {
 		return err
 	}
-	pendingNodes = append(pendingNodes, &forkchoicetypes.BlockAndCheckpoints{Block: blk,
+	// The first block can have a bogus root since the block is not inserted in forkchoice
+	roblock, err := consensus_blocks.NewROBlockWithRoot(signed, [32]byte{})
+	if err != nil {
+		return err
+	}
+	pendingNodes = append(pendingNodes, &forkchoicetypes.BlockAndCheckpoints{Block: roblock,
 		JustifiedCheckpoint: jCheckpoint, FinalizedCheckpoint: fCheckpoint})
 	// As long as parent node is not in fork choice store, and parent node is in DB.
-	root := blk.ParentRoot()
+	root := roblock.Block().ParentRoot()
 	for !s.cfg.ForkChoiceStore.HasNode(root) && s.cfg.BeaconDB.HasBlock(ctx, root) {
 		b, err := s.getBlock(ctx, root)
 		if err != nil {
@@ -460,8 +467,12 @@ func (s *Service) fillInForkChoiceMissingBlocks(ctx context.Context, blk interfa
 		if b.Block().Slot() <= fSlot {
 			break
 		}
+		roblock, err := consensus_blocks.NewROBlockWithRoot(b, root)
+		if err != nil {
+			return err
+		}
 		root = b.Block().ParentRoot()
-		args := &forkchoicetypes.BlockAndCheckpoints{Block: b.Block(),
+		args := &forkchoicetypes.BlockAndCheckpoints{Block: roblock,
 			JustifiedCheckpoint: jCheckpoint,
 			FinalizedCheckpoint: fCheckpoint}
 		pendingNodes = append(pendingNodes, args)
