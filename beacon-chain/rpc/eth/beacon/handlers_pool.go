@@ -170,9 +170,8 @@ func shouldIncludeAttestation(
 	committeeIndex uint64,
 	isEmptyReq bool,
 ) bool {
-	includeAttestation := false
 	if isEmptyReq {
-		includeAttestation = true
+		return true
 	} else {
 		committeeIndexMatch := true
 		slotMatch := true
@@ -182,9 +181,8 @@ func shouldIncludeAttestation(
 		if rawSlot != "" && data.Slot != primitives.Slot(slot) {
 			slotMatch = false
 		}
-		includeAttestation = committeeIndexMatch && slotMatch
+		return committeeIndexMatch && slotMatch
 	}
-	return includeAttestation
 }
 
 // SubmitAttestations submits an attestation object to node. If the attestation passes all validation
