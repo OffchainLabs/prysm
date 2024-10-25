@@ -125,7 +125,8 @@ func TestIsBetterUpdate(t *testing.T) {
 			},
 		})
 		assert.NoError(t, err)
-		oldUpdate.SetAttestedHeader(oldAttestedHeader)
+		err = oldUpdate.SetAttestedHeader(oldAttestedHeader)
+		assert.NoError(t, err)
 		oldUpdate.SetSignatureSlot(9999)
 
 		newUpdate.SetSyncAggregate(&pb.SyncAggregate{
@@ -137,7 +138,8 @@ func TestIsBetterUpdate(t *testing.T) {
 			},
 		})
 		assert.NoError(t, err)
-		newUpdate.SetAttestedHeader(newAttestedHeader)
+		err = newUpdate.SetAttestedHeader(newAttestedHeader)
+		assert.NoError(t, err)
 		err = newUpdate.SetNextSyncCommitteeBranch(createNonEmptySyncCommitteeBranch())
 		assert.NoError(t, err)
 		newUpdate.SetSignatureSlot(1000000)
@@ -162,7 +164,8 @@ func TestIsBetterUpdate(t *testing.T) {
 			},
 		})
 		assert.NoError(t, err)
-		oldUpdate.SetAttestedHeader(oldAttestedHeader)
+		err = oldUpdate.SetAttestedHeader(oldAttestedHeader)
+		assert.NoError(t, err)
 		err = oldUpdate.SetNextSyncCommitteeBranch(createNonEmptySyncCommitteeBranch())
 		assert.NoError(t, err)
 		oldUpdate.SetSignatureSlot(1000000)
@@ -176,7 +179,8 @@ func TestIsBetterUpdate(t *testing.T) {
 			},
 		})
 		assert.NoError(t, err)
-		newUpdate.SetAttestedHeader(newAttestedHeader)
+		err = newUpdate.SetAttestedHeader(newAttestedHeader)
+		assert.NoError(t, err)
 		newUpdate.SetSignatureSlot(9999)
 
 		result, err := IsBetterUpdate(newUpdate, oldUpdate)
@@ -199,7 +203,8 @@ func TestIsBetterUpdate(t *testing.T) {
 			},
 		})
 		assert.NoError(t, err)
-		oldUpdate.SetAttestedHeader(oldAttestedHeader)
+		err = oldUpdate.SetAttestedHeader(oldAttestedHeader)
+		assert.NoError(t, err)
 		err = oldUpdate.SetNextSyncCommitteeBranch(createNonEmptySyncCommitteeBranch())
 		assert.NoError(t, err)
 		oldUpdate.SetSignatureSlot(9999)
@@ -213,7 +218,8 @@ func TestIsBetterUpdate(t *testing.T) {
 			},
 		})
 		assert.NoError(t, err)
-		newUpdate.SetAttestedHeader(newAttestedHeader)
+		err = newUpdate.SetAttestedHeader(newAttestedHeader)
+		assert.NoError(t, err)
 		err = newUpdate.SetNextSyncCommitteeBranch(createNonEmptySyncCommitteeBranch())
 		assert.NoError(t, err)
 		newUpdate.SetSignatureSlot(9999)
@@ -240,7 +246,8 @@ func TestIsBetterUpdate(t *testing.T) {
 			},
 		})
 		assert.NoError(t, err)
-		oldUpdate.SetAttestedHeader(oldAttestedHeader)
+		err = oldUpdate.SetAttestedHeader(oldAttestedHeader)
+		assert.NoError(t, err)
 		err = oldUpdate.SetNextSyncCommitteeBranch(createNonEmptySyncCommitteeBranch())
 		assert.NoError(t, err)
 		oldUpdate.SetSignatureSlot(9999)
@@ -256,7 +263,8 @@ func TestIsBetterUpdate(t *testing.T) {
 			},
 		})
 		assert.NoError(t, err)
-		newUpdate.SetAttestedHeader(newAttestedHeader)
+		err = newUpdate.SetAttestedHeader(newAttestedHeader)
+		assert.NoError(t, err)
 		err = newUpdate.SetNextSyncCommitteeBranch(createNonEmptySyncCommitteeBranch())
 		assert.NoError(t, err)
 		newUpdate.SetSignatureSlot(9999)
@@ -281,7 +289,8 @@ func TestIsBetterUpdate(t *testing.T) {
 			},
 		})
 		assert.NoError(t, err)
-		oldUpdate.SetAttestedHeader(oldAttestedHeader)
+		err = oldUpdate.SetAttestedHeader(oldAttestedHeader)
+		assert.NoError(t, err)
 		err = oldUpdate.SetNextSyncCommitteeBranch(createNonEmptySyncCommitteeBranch())
 		assert.NoError(t, err)
 		err = oldUpdate.SetFinalityBranch(createNonEmptyFinalityBranch())
@@ -293,7 +302,8 @@ func TestIsBetterUpdate(t *testing.T) {
 			},
 		})
 		assert.NoError(t, err)
-		oldUpdate.SetFinalizedHeader(oldFinalizedHeader)
+		err = oldUpdate.SetFinalizedHeader(oldFinalizedHeader)
+		assert.NoError(t, err)
 
 		newUpdate.SetSyncAggregate(&pb.SyncAggregate{
 			SyncCommitteeBits: []byte{0b01111100, 0b1}, // [0,0,1,1,1,1,1,0]
@@ -304,7 +314,8 @@ func TestIsBetterUpdate(t *testing.T) {
 			},
 		})
 		assert.NoError(t, err)
-		newUpdate.SetAttestedHeader(newAttestedHeader)
+		err = newUpdate.SetAttestedHeader(newAttestedHeader)
+		assert.NoError(t, err)
 		err = newUpdate.SetNextSyncCommitteeBranch(createNonEmptySyncCommitteeBranch())
 		assert.NoError(t, err)
 		newUpdate.SetSignatureSlot(999999)
@@ -316,7 +327,8 @@ func TestIsBetterUpdate(t *testing.T) {
 			},
 		})
 		assert.NoError(t, err)
-		newUpdate.SetFinalizedHeader(newFinalizedHeader)
+		err = newUpdate.SetFinalizedHeader(newFinalizedHeader)
+		assert.NoError(t, err)
 
 		result, err := IsBetterUpdate(newUpdate, oldUpdate)
 		assert.NoError(t, err)
@@ -338,7 +350,8 @@ func TestIsBetterUpdate(t *testing.T) {
 			},
 		})
 		assert.NoError(t, err)
-		oldUpdate.SetAttestedHeader(oldAttestedHeader)
+		err = oldUpdate.SetAttestedHeader(oldAttestedHeader)
+		assert.NoError(t, err)
 		err = oldUpdate.SetNextSyncCommitteeBranch(createNonEmptySyncCommitteeBranch())
 		assert.NoError(t, err)
 		err = oldUpdate.SetFinalityBranch(createNonEmptyFinalityBranch())
@@ -350,7 +363,8 @@ func TestIsBetterUpdate(t *testing.T) {
 			},
 		})
 		assert.NoError(t, err)
-		oldUpdate.SetFinalizedHeader(oldFinalizedHeader)
+		err = oldUpdate.SetFinalizedHeader(oldFinalizedHeader)
+		assert.NoError(t, err)
 
 		newUpdate.SetSyncAggregate(&pb.SyncAggregate{
 			SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
@@ -361,7 +375,8 @@ func TestIsBetterUpdate(t *testing.T) {
 			},
 		})
 		assert.NoError(t, err)
-		newUpdate.SetAttestedHeader(newAttestedHeader)
+		err = newUpdate.SetAttestedHeader(newAttestedHeader)
+		assert.NoError(t, err)
 		err = newUpdate.SetNextSyncCommitteeBranch(createNonEmptySyncCommitteeBranch())
 		assert.NoError(t, err)
 		newUpdate.SetSignatureSlot(9999)
@@ -373,7 +388,8 @@ func TestIsBetterUpdate(t *testing.T) {
 			},
 		})
 		assert.NoError(t, err)
-		newUpdate.SetFinalizedHeader(newFinalizedHeader)
+		err = newUpdate.SetFinalizedHeader(newFinalizedHeader)
+		assert.NoError(t, err)
 
 		result, err := IsBetterUpdate(newUpdate, oldUpdate)
 		assert.NoError(t, err)
@@ -431,7 +447,8 @@ func TestIsBetterUpdate(t *testing.T) {
 			},
 		})
 		assert.NoError(t, err)
-		oldUpdate.SetAttestedHeader(oldAttestedHeader)
+		err = oldUpdate.SetAttestedHeader(oldAttestedHeader)
+		assert.NoError(t, err)
 		err = oldUpdate.SetNextSyncCommitteeBranch(createNonEmptySyncCommitteeBranch())
 		assert.NoError(t, err)
 		err = oldUpdate.SetFinalityBranch(createNonEmptyFinalityBranch())
@@ -443,7 +460,8 @@ func TestIsBetterUpdate(t *testing.T) {
 			},
 		})
 		assert.NoError(t, err)
-		oldUpdate.SetFinalizedHeader(oldFinalizedHeader)
+		err = oldUpdate.SetFinalizedHeader(oldFinalizedHeader)
+		assert.NoError(t, err)
 
 		newUpdate.SetSyncAggregate(&pb.SyncAggregate{
 			SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
@@ -454,7 +472,8 @@ func TestIsBetterUpdate(t *testing.T) {
 			},
 		})
 		assert.NoError(t, err)
-		newUpdate.SetAttestedHeader(newAttestedHeader)
+		err = newUpdate.SetAttestedHeader(newAttestedHeader)
+		assert.NoError(t, err)
 		err = newUpdate.SetNextSyncCommitteeBranch(createNonEmptySyncCommitteeBranch())
 		assert.NoError(t, err)
 		newUpdate.SetSignatureSlot(9999)
@@ -466,7 +485,8 @@ func TestIsBetterUpdate(t *testing.T) {
 			},
 		})
 		assert.NoError(t, err)
-		newUpdate.SetFinalizedHeader(newFinalizedHeader)
+		err = newUpdate.SetFinalizedHeader(newFinalizedHeader)
+		assert.NoError(t, err)
 
 		result, err := IsBetterUpdate(newUpdate, oldUpdate)
 		assert.NoError(t, err)
@@ -488,7 +508,8 @@ func TestIsBetterUpdate(t *testing.T) {
 			},
 		})
 		assert.NoError(t, err)
-		oldUpdate.SetAttestedHeader(oldAttestedHeader)
+		err = oldUpdate.SetAttestedHeader(oldAttestedHeader)
+		assert.NoError(t, err)
 		err = oldUpdate.SetNextSyncCommitteeBranch(createNonEmptySyncCommitteeBranch())
 		assert.NoError(t, err)
 		err = oldUpdate.SetFinalityBranch(createNonEmptyFinalityBranch())
@@ -500,7 +521,8 @@ func TestIsBetterUpdate(t *testing.T) {
 			},
 		})
 		assert.NoError(t, err)
-		oldUpdate.SetFinalizedHeader(oldFinalizedHeader)
+		err = oldUpdate.SetFinalizedHeader(oldFinalizedHeader)
+		assert.NoError(t, err)
 
 		newUpdate.SetSyncAggregate(&pb.SyncAggregate{
 			SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
@@ -511,7 +533,8 @@ func TestIsBetterUpdate(t *testing.T) {
 			},
 		})
 		assert.NoError(t, err)
-		newUpdate.SetAttestedHeader(newAttestedHeader)
+		err = newUpdate.SetAttestedHeader(newAttestedHeader)
+		assert.NoError(t, err)
 		err = newUpdate.SetNextSyncCommitteeBranch(createNonEmptySyncCommitteeBranch())
 		assert.NoError(t, err)
 		newUpdate.SetSignatureSlot(9999)
@@ -523,7 +546,8 @@ func TestIsBetterUpdate(t *testing.T) {
 			},
 		})
 		assert.NoError(t, err)
-		newUpdate.SetFinalizedHeader(newFinalizedHeader)
+		err = newUpdate.SetFinalizedHeader(newFinalizedHeader)
+		assert.NoError(t, err)
 
 		result, err := IsBetterUpdate(newUpdate, oldUpdate)
 		assert.NoError(t, err)
@@ -545,7 +569,8 @@ func TestIsBetterUpdate(t *testing.T) {
 			},
 		})
 		assert.NoError(t, err)
-		oldUpdate.SetAttestedHeader(oldAttestedHeader)
+		err = oldUpdate.SetAttestedHeader(oldAttestedHeader)
+		assert.NoError(t, err)
 		err = oldUpdate.SetNextSyncCommitteeBranch(createNonEmptySyncCommitteeBranch())
 		assert.NoError(t, err)
 		err = oldUpdate.SetFinalityBranch(createNonEmptyFinalityBranch())
@@ -557,7 +582,8 @@ func TestIsBetterUpdate(t *testing.T) {
 			},
 		})
 		assert.NoError(t, err)
-		oldUpdate.SetFinalizedHeader(oldFinalizedHeader)
+		err = oldUpdate.SetFinalizedHeader(oldFinalizedHeader)
+		assert.NoError(t, err)
 
 		newUpdate.SetSyncAggregate(&pb.SyncAggregate{
 			SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
@@ -568,7 +594,8 @@ func TestIsBetterUpdate(t *testing.T) {
 			},
 		})
 		assert.NoError(t, err)
-		newUpdate.SetAttestedHeader(newAttestedHeader)
+		err = newUpdate.SetAttestedHeader(newAttestedHeader)
+		assert.NoError(t, err)
 		err = newUpdate.SetNextSyncCommitteeBranch(createNonEmptySyncCommitteeBranch())
 		assert.NoError(t, err)
 		newUpdate.SetSignatureSlot(9998)
@@ -580,7 +607,8 @@ func TestIsBetterUpdate(t *testing.T) {
 			},
 		})
 		assert.NoError(t, err)
-		newUpdate.SetFinalizedHeader(newFinalizedHeader)
+		err = newUpdate.SetFinalizedHeader(newFinalizedHeader)
+		assert.NoError(t, err)
 
 		result, err := IsBetterUpdate(newUpdate, oldUpdate)
 		assert.NoError(t, err)
@@ -602,7 +630,8 @@ func TestIsBetterUpdate(t *testing.T) {
 			},
 		})
 		assert.NoError(t, err)
-		oldUpdate.SetAttestedHeader(oldAttestedHeader)
+		err = oldUpdate.SetAttestedHeader(oldAttestedHeader)
+		assert.NoError(t, err)
 		err = oldUpdate.SetNextSyncCommitteeBranch(createNonEmptySyncCommitteeBranch())
 		assert.NoError(t, err)
 		err = oldUpdate.SetFinalityBranch(createNonEmptyFinalityBranch())
@@ -614,7 +643,8 @@ func TestIsBetterUpdate(t *testing.T) {
 			},
 		})
 		assert.NoError(t, err)
-		oldUpdate.SetFinalizedHeader(oldFinalizedHeader)
+		err = oldUpdate.SetFinalizedHeader(oldFinalizedHeader)
+		assert.NoError(t, err)
 
 		newUpdate.SetSyncAggregate(&pb.SyncAggregate{
 			SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
@@ -625,7 +655,8 @@ func TestIsBetterUpdate(t *testing.T) {
 			},
 		})
 		assert.NoError(t, err)
-		newUpdate.SetAttestedHeader(newAttestedHeader)
+		err = newUpdate.SetAttestedHeader(newAttestedHeader)
+		assert.NoError(t, err)
 		err = newUpdate.SetNextSyncCommitteeBranch(createNonEmptySyncCommitteeBranch())
 		assert.NoError(t, err)
 		newUpdate.SetSignatureSlot(9999)
@@ -637,7 +668,8 @@ func TestIsBetterUpdate(t *testing.T) {
 			},
 		})
 		assert.NoError(t, err)
-		newUpdate.SetFinalizedHeader(newFinalizedHeader)
+		err = newUpdate.SetFinalizedHeader(newFinalizedHeader)
+		assert.NoError(t, err)
 
 		result, err := IsBetterUpdate(newUpdate, oldUpdate)
 		assert.NoError(t, err)
