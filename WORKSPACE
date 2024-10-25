@@ -159,13 +159,10 @@ git_repository(
 load("@rules_oci//oci:pull.bzl", "oci_pull")
 
 # A multi-arch base image
-# Note: Downloading this image from gcr.io requires docker credentials to be configured from a valid
-# gcloud account. If you are seeing a 401 Unauthorized error, consider running the following: 
-#   `gcloud auth configure-docker`
 oci_pull(
     name = "linux_debian11_multiarch_base",  # Debian bullseye
     digest = "sha256:b82f113425c5b5c714151aaacd8039bc141821cdcd3c65202d42bdf9c43ae60b",  # 2023-12-12
-    image = "gcr.io/distroless/cc-debian11",
+    image = "gcr.io/prysmaticlabs/distroless/cc-debian11",
     platforms = [
         "linux/amd64",
         "linux/arm64/v8",
