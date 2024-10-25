@@ -20,6 +20,7 @@ import (
 	chaintime "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	"github.com/prysmaticlabs/prysm/v5/network/httputil"
@@ -484,18 +485,26 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 		return func() io.Reader {
 			return jsonMarshalReader(eventName, structs.FinalizedCheckpointEventFromV1(v))
 		}, nil
-	case *structs.LightClientFinalityUpdateResponse:
+	case interfaces.LightClientFinalityUpdate:
+		cv, err := structs.LightClientFinalityUpdateFromConsensus(v)
+		if err != nil {
+			return nil, errors.Wrap(err, "LightClientFinalityUpdateWithVersion event conversion failure")
+		}
 		ev := &structs.LightClientFinalityUpdateEvent{
-			Version: v.Version,
-			Data:    v.Data,
+			Version: version.String(int(v.Version())),
+			Data:    cv,
 		}
 		return func() io.Reader {
 			return jsonMarshalReader(eventName, ev)
 		}, nil
-	case *structs.LightClientOptimisticUpdateResponse:
+	case interfaces.LightClientOptimisticUpdate:
+		cv, err := structs.LightClientOptimisticUpdateFromConsensus(v)
+		if err != nil {
+			return nil, errors.Wrap(err, "LightClientOptimisticUpdateWithVersion event conversion failure")
+		}
 		ev := &structs.LightClientOptimisticUpdateEvent{
-			Version: v.Version,
-			Data:    v.Data,
+			Version: version.String(int(v.Version())),
+			Data:    cv,
 		}
 		return func() io.Reader {
 			return jsonMarshalReader(eventName, ev)

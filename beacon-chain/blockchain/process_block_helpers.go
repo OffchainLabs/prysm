@@ -5,11 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	lightclient "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/light-client"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
 	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
@@ -200,21 +198,11 @@ func (s *Service) sendLightClientFinalityUpdate(ctx context.Context, signed inte
 	if err != nil {
 		return 0, errors.Wrap(err, "could not create light client update")
 	}
-	finalityUpdate, err := structs.LightClientFinalityUpdateFromConsensus(update)
-	if err != nil {
-		return 0, errors.Wrap(err, "could not convert light client update")
-	}
-
-	// Return the result
-	result := &structs.LightClientFinalityUpdateResponse{
-		Version: hexutil.EncodeUint64(uint64(signed.Version())),
-		Data:    finalityUpdate,
-	}
 
 	// Send event
 	return s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
 		Type: statefeed.LightClientFinalityUpdate,
-		Data: result,
+		Data: update,
 	}), nil
 }
 
@@ -243,20 +231,10 @@ func (s *Service) sendLightClientOptimisticUpdate(ctx context.Context, signed in
 	if err != nil {
 		return 0, errors.Wrap(err, "could not create light client update")
 	}
-	optimisticUpdate, err := structs.LightClientOptimisticUpdateFromConsensus(update)
-	if err != nil {
-		return 0, errors.Wrap(err, "could not convert light client update")
-	}
-
-	// Return the result
-	result := &structs.LightClientOptimisticUpdateResponse{
-		Version: hexutil.EncodeUint64(uint64(signed.Version())),
-		Data:    optimisticUpdate,
-	}
 
 	return s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
 		Type: statefeed.LightClientOptimisticUpdate,
-		Data: result,
+		Data: update,
 	}), nil
 }
 
