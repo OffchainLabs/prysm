@@ -24,7 +24,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	mathutil "github.com/prysmaticlabs/prysm/v5/math"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	ethpbv2 "github.com/prysmaticlabs/prysm/v5/proto/eth/v2"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/sirupsen/logrus"
@@ -188,7 +187,7 @@ func (s *Service) sendLightClientFinalityUpdate(ctx context.Context, signed inte
 		}
 	}
 
-	_, err = lightclient.NewLightClientFinalityUpdateFromBeaconState(
+	update, err := lightclient.NewLightClientFinalityUpdateFromBeaconState(
 		ctx,
 		postState.Slot(),
 		postState,
@@ -201,17 +200,10 @@ func (s *Service) sendLightClientFinalityUpdate(ctx context.Context, signed inte
 		return 0, errors.Wrap(err, "could not create light client update")
 	}
 
-	// Return the result
-	result := &ethpbv2.LightClientFinalityUpdateWithVersion{
-		Version: ethpbv2.Version(signed.Version()),
-		// TODO: Get back to this when revisiting events
-		//Data:    update,
-	}
-
 	// Send event
 	return s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
 		Type: statefeed.LightClientFinalityUpdate,
-		Data: result,
+		Data: update,
 	}), nil
 }
 
@@ -229,7 +221,7 @@ func (s *Service) sendLightClientOptimisticUpdate(ctx context.Context, signed in
 		return 0, errors.Wrap(err, "could not get attested state")
 	}
 
-	_, err = lightclient.NewLightClientOptimisticUpdateFromBeaconState(
+	update, err := lightclient.NewLightClientOptimisticUpdateFromBeaconState(
 		ctx,
 		postState.Slot(),
 		postState,
@@ -241,16 +233,9 @@ func (s *Service) sendLightClientOptimisticUpdate(ctx context.Context, signed in
 		return 0, errors.Wrap(err, "could not create light client update")
 	}
 
-	// Return the result
-	result := &ethpbv2.LightClientOptimisticUpdateWithVersion{
-		Version: ethpbv2.Version(signed.Version()),
-		// TODO: Get back to this when revisiting events
-		//Data:    update,
-	}
-
 	return s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
 		Type: statefeed.LightClientOptimisticUpdate,
-		Data: result,
+		Data: update,
 	}), nil
 }
 
