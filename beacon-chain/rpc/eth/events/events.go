@@ -491,7 +491,7 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 			return nil, errors.Wrap(err, "LightClientFinalityUpdate conversion failure")
 		}
 		ev := &structs.LightClientFinalityUpdateEvent{
-			Version: version.String(int(v.Version())),
+			Version: version.String(v.Version()),
 			Data:    cv,
 		}
 		return func() io.Reader {
@@ -503,7 +503,7 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 			return nil, errors.Wrap(err, "LightClientOptimisticUpdate conversion failure")
 		}
 		ev := &structs.LightClientOptimisticUpdateEvent{
-			Version: version.String(int(v.Version())),
+			Version: version.String(v.Version()),
 			Data:    cv,
 		}
 		return func() io.Reader {
