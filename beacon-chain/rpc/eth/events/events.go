@@ -500,7 +500,7 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 	case interfaces.LightClientOptimisticUpdate:
 		cv, err := structs.LightClientOptimisticUpdateFromConsensus(v)
 		if err != nil {
-			return nil, errors.Wrap(err, "LightClientOptimisticUpdateWithVersion event conversion failure")
+			return nil, errors.Wrap(err, "LightClientOptimisticUpdate conversion failure")
 		}
 		ev := &structs.LightClientOptimisticUpdateEvent{
 			Version: version.String(int(v.Version())),
