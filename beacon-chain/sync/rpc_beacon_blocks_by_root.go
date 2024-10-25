@@ -112,7 +112,7 @@ func (s *Service) beaconBlocksRootRPCHandler(ctx context.Context, msg interface{
 		}
 
 		if blk.Block().IsBlinded() {
-			blk, err = s.cfg.executionPayloadReconstructor.ReconstructFullBlock(ctx, blk)
+			blk, err = s.cfg.executionReconstructor.ReconstructFullBlock(ctx, blk)
 			if err != nil {
 				if errors.Is(err, execution.ErrEmptyBlockHash) {
 					log.WithError(err).Warn("Could not reconstruct block from header with syncing execution client. Waiting to complete syncing")

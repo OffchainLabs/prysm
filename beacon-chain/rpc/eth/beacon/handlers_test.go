@@ -2939,13 +2939,15 @@ func TestValidateEquivocation(t *testing.T) {
 		st, err := util.NewBeaconState()
 		require.NoError(t, err)
 		require.NoError(t, st.SetSlot(10))
+		blk, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlock())
+		require.NoError(t, err)
+		roblock, err := blocks.NewROBlockWithRoot(blk, bytesutil.ToBytes32([]byte("root")))
+		require.NoError(t, err)
 		fc := doublylinkedtree.New()
-		require.NoError(t, fc.InsertNode(context.Background(), st, bytesutil.ToBytes32([]byte("root"))))
+		require.NoError(t, fc.InsertNode(context.Background(), st, roblock))
 		server := &Server{
 			ForkchoiceFetcher: &chainMock.ChainService{ForkChoiceStore: fc},
 		}
-		blk, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlock())
-		require.NoError(t, err)
 		blk.SetSlot(st.Slot() + 1)
 
 		require.NoError(t, server.validateEquivocation(blk.Block()))
@@ -2954,15 +2956,17 @@ func TestValidateEquivocation(t *testing.T) {
 		st, err := util.NewBeaconState()
 		require.NoError(t, err)
 		require.NoError(t, st.SetSlot(10))
-		fc := doublylinkedtree.New()
-		require.NoError(t, fc.InsertNode(context.Background(), st, bytesutil.ToBytes32([]byte("root"))))
-		server := &Server{
-			ForkchoiceFetcher: &chainMock.ChainService{ForkChoiceStore: fc},
-		}
 		blk, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlock())
 		require.NoError(t, err)
 		blk.SetSlot(st.Slot())
+		roblock, err := blocks.NewROBlockWithRoot(blk, bytesutil.ToBytes32([]byte("root")))
+		require.NoError(t, err)
 
+		fc := doublylinkedtree.New()
+		require.NoError(t, fc.InsertNode(context.Background(), st, roblock))
+		server := &Server{
+			ForkchoiceFetcher: &chainMock.ChainService{ForkChoiceStore: fc},
+		}
 		err = server.validateEquivocation(blk.Block())
 		assert.ErrorContains(t, "already exists", err)
 		require.ErrorIs(t, err, errEquivocatedBlock)
