@@ -46,6 +46,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - wait for the async StreamEvent writer to exit before leaving the http handler, avoiding race condition panics [pr](https://github.com/prysmaticlabs/prysm/pull/14557)
 - Certain deb files were returning a 404 which made building new docker images without an existing
   cache impossible. This has been fixed with updates to rules_oci and bazel-lib.
+- Fixed an issue where the length check between block body KZG commitments and the existing cache from the database was incompatible.
 
 ### Security
 

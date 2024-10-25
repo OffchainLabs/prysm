@@ -560,8 +560,8 @@ func (s *Service) ReconstructBlobSidecars(ctx context.Context, block interfaces.
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get blob KZG commitments")
 	}
-	if len(kzgCommitments) != len(exists) {
-		return nil, fmt.Errorf("mismatched lengths: KZG commitments %d, exists %d", len(kzgCommitments), len(exists))
+	if len(kzgCommitments) > len(exists) {
+		return nil, fmt.Errorf("length of KZG commitments (%d) is greater than length of exists (%d)", len(kzgCommitments), len(exists))
 	}
 
 	// Collect KZG hashes for non-existing blobs

@@ -2446,6 +2446,18 @@ func TestReconstructBlobSidecars(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 3, len(verifiedBlobs))
 	})
+
+	t.Run("kzg is longer than exist", func(t *testing.T) {
+		srv := createBlobServer(t, 3)
+		defer srv.Close()
+
+		rpcClient, client := setupRpcClient(t, srv.URL, client)
+		defer rpcClient.Close()
+
+		exists := []bool{true, false, true, false, true}
+		_, err := client.ReconstructBlobSidecars(ctx, sb, r, exists)
+		require.ErrorContains(t, "length of KZG commitments (6) is greater than length of exists (5)", err)
+	})
 }
 
 func createRandomKzgCommitments(t *testing.T, num int) [][]byte {
