@@ -84,7 +84,6 @@ go_library(
         "//monitoring/tracing/trace:go_default_library",
         "//proto/engine/v1:go_default_library",
         "//proto/eth/v1:go_default_library",
-        "//proto/eth/v2:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "//proto/prysm/v1alpha1/attestation:go_default_library",
         "//runtime/version:go_default_library",
