@@ -32,18 +32,18 @@ func TestStore_OnAttestation_ErrorConditions(t *testing.T) {
 	util.SaveBlock(t, ctx, beaconDB, blkWithoutState)
 
 	cp := &ethpb.Checkpoint{}
-	st, blkRoot, err := prepareForkchoiceState(ctx, 0, [32]byte{}, [32]byte{}, params.BeaconConfig().ZeroHash, cp, cp)
+	st, roblock, err := prepareForkchoiceState(ctx, 0, [32]byte{}, [32]byte{}, params.BeaconConfig().ZeroHash, cp, cp)
 	require.NoError(t, err)
-	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, blkRoot))
+	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, roblock))
 
 	blkWithStateBadAtt := util.NewBeaconBlock()
 	blkWithStateBadAtt.Block.Slot = 1
 	r, err := blkWithStateBadAtt.Block.HashTreeRoot()
 	require.NoError(t, err)
 	cp = &ethpb.Checkpoint{Root: r[:]}
-	st, blkRoot, err = prepareForkchoiceState(ctx, blkWithStateBadAtt.Block.Slot, r, [32]byte{}, params.BeaconConfig().ZeroHash, cp, cp)
+	st, roblock, err = prepareForkchoiceState(ctx, blkWithStateBadAtt.Block.Slot, r, [32]byte{}, params.BeaconConfig().ZeroHash, cp, cp)
 	require.NoError(t, err)
-	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, blkRoot))
+	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, roblock))
 	util.SaveBlock(t, ctx, beaconDB, blkWithStateBadAtt)
 	BlkWithStateBadAttRoot, err := blkWithStateBadAtt.Block.HashTreeRoot()
 	require.NoError(t, err)
@@ -139,9 +139,9 @@ func TestStore_OnAttestation_Ok_DoublyLinkedTree(t *testing.T) {
 		require.NoError(t, service.cfg.BeaconDB.SaveState(ctx, copied, tRoot))
 		ojc := &ethpb.Checkpoint{Epoch: 0, Root: tRoot[:]}
 		ofc := &ethpb.Checkpoint{Epoch: 0, Root: tRoot[:]}
-		state, blkRoot, err := prepareForkchoiceState(ctx, 0, tRoot, tRoot, params.BeaconConfig().ZeroHash, ojc, ofc)
+		state, roblock, err := prepareForkchoiceState(ctx, 0, tRoot, tRoot, params.BeaconConfig().ZeroHash, ojc, ofc)
 		require.NoError(t, err)
-		require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, state, blkRoot))
+		require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, state, roblock))
 		require.NoError(t, service.OnAttestation(ctx, att[0], 0))
 	}
 
@@ -318,10 +318,9 @@ func TestStore_UpdateCheckpointState(t *testing.T) {
 	require.NoError(t, err)
 	checkpoint := &ethpb.Checkpoint{Epoch: epoch, Root: r1[:]}
 	require.NoError(t, service.cfg.BeaconDB.SaveState(ctx, baseState, bytesutil.ToBytes32(checkpoint.Root)))
-	st, blkRoot, err := prepareForkchoiceState(ctx, blk.Block.Slot, r1, [32]byte{}, params.BeaconConfig().ZeroHash, checkpoint, checkpoint)
+	st, roblock, err := prepareForkchoiceState(ctx, blk.Block.Slot, r1, [32]byte{}, params.BeaconConfig().ZeroHash, checkpoint, checkpoint)
 	require.NoError(t, err)
-	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, blkRoot))
-	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, r1))
+	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, roblock))
 	returned, err := service.getAttPreState(ctx, checkpoint)
 	require.NoError(t, err)
 	assert.Equal(t, params.BeaconConfig().SlotsPerEpoch.Mul(uint64(checkpoint.Epoch)), returned.Slot(), "Incorrectly returned base state")
@@ -337,10 +336,9 @@ func TestStore_UpdateCheckpointState(t *testing.T) {
 	require.NoError(t, err)
 	newCheckpoint := &ethpb.Checkpoint{Epoch: epoch, Root: r2[:]}
 	require.NoError(t, service.cfg.BeaconDB.SaveState(ctx, baseState, bytesutil.ToBytes32(newCheckpoint.Root)))
-	st, blkRoot, err = prepareForkchoiceState(ctx, blk.Block.Slot, r2, r1, params.BeaconConfig().ZeroHash, newCheckpoint, newCheckpoint)
+	st, roblock, err = prepareForkchoiceState(ctx, blk.Block.Slot, r2, r1, params.BeaconConfig().ZeroHash, newCheckpoint, newCheckpoint)
 	require.NoError(t, err)
-	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, blkRoot))
-	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, r2))
+	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, roblock))
 	returned, err = service.getAttPreState(ctx, newCheckpoint)
 	require.NoError(t, err)
 	s, err := slots.EpochStart(newCheckpoint.Epoch)

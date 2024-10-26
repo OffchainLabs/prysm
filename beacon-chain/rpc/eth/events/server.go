@@ -22,4 +22,5 @@ type Server struct {
 	TrackedValidatorsCache *cache.TrackedValidatorsCache
 	KeepAliveInterval      time.Duration
 	EventFeedDepth         int
+	EventWriteTimeout      time.Duration
 }

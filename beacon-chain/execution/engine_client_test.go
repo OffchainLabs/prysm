@@ -2,6 +2,7 @@ package execution
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -20,6 +21,7 @@ import (
 	"github.com/holiman/uint256"
 	"github.com/pkg/errors"
 	mocks "github.com/prysmaticlabs/prysm/v5/beacon-chain/execution/testing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
@@ -37,9 +39,9 @@ import (
 )
 
 var (
-	_ = PayloadReconstructor(&Service{})
+	_ = Reconstructor(&Service{})
 	_ = EngineCaller(&Service{})
-	_ = PayloadReconstructor(&Service{})
+	_ = Reconstructor(&Service{})
 	_ = EngineCaller(&mocks.EngineClient{})
 )
 
@@ -2389,4 +2391,123 @@ func Test_ExchangeCapabilities(t *testing.T) {
 			require.NotNil(t, item)
 		}
 	})
+}
+
+func TestReconstructBlobSidecars(t *testing.T) {
+	client := &Service{capabilityCache: &capabilityCache{}}
+	b := util.NewBeaconBlockDeneb()
+	kzgCommitments := createRandomKzgCommitments(t, 6)
+
+	b.Block.Body.BlobKzgCommitments = kzgCommitments
+	r, err := b.Block.HashTreeRoot()
+	require.NoError(t, err)
+	sb, err := blocks.NewSignedBeaconBlock(b)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	t.Run("all seen", func(t *testing.T) {
+		exists := []bool{true, true, true, true, true, true}
+		verifiedBlobs, err := client.ReconstructBlobSidecars(ctx, sb, r, exists)
+		require.NoError(t, err)
+		require.Equal(t, 0, len(verifiedBlobs))
+	})
+
+	t.Run("get-blobs end point is not supported", func(t *testing.T) {
+		exists := []bool{true, true, true, true, true, false}
+		verifiedBlobs, err := client.ReconstructBlobSidecars(ctx, sb, r, exists)
+		require.NoError(t, err)
+		require.Equal(t, 0, len(verifiedBlobs))
+	})
+
+	client.capabilityCache = &capabilityCache{capabilities: map[string]interface{}{GetBlobsV1: nil}}
+
+	t.Run("recovered 6 missing blobs", func(t *testing.T) {
+		srv := createBlobServer(t, 6)
+		defer srv.Close()
+
+		rpcClient, client := setupRpcClient(t, srv.URL, client)
+		defer rpcClient.Close()
+
+		exists := [6]bool{}
+		verifiedBlobs, err := client.ReconstructBlobSidecars(ctx, sb, r, exists[:])
+		require.NoError(t, err)
+		require.Equal(t, 6, len(verifiedBlobs))
+	})
+
+	t.Run("recovered 3 missing blobs", func(t *testing.T) {
+		srv := createBlobServer(t, 3)
+		defer srv.Close()
+
+		rpcClient, client := setupRpcClient(t, srv.URL, client)
+		defer rpcClient.Close()
+
+		exists := []bool{true, false, true, false, true, false}
+		verifiedBlobs, err := client.ReconstructBlobSidecars(ctx, sb, r, exists)
+		require.NoError(t, err)
+		require.Equal(t, 3, len(verifiedBlobs))
+	})
+
+	t.Run("kzg is longer than exist", func(t *testing.T) {
+		srv := createBlobServer(t, 3)
+		defer srv.Close()
+
+		rpcClient, client := setupRpcClient(t, srv.URL, client)
+		defer rpcClient.Close()
+
+		exists := []bool{true, false, true, false, true}
+		_, err := client.ReconstructBlobSidecars(ctx, sb, r, exists)
+		require.ErrorContains(t, "length of KZG commitments (6) is greater than length of exists (5)", err)
+	})
+}
+
+func createRandomKzgCommitments(t *testing.T, num int) [][]byte {
+	kzgCommitments := make([][]byte, num)
+	for i := range kzgCommitments {
+		kzgCommitments[i] = make([]byte, 48)
+		_, err := rand.Read(kzgCommitments[i])
+		require.NoError(t, err)
+	}
+	return kzgCommitments
+}
+
+func createBlobServer(t *testing.T, numBlobs int) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		defer func() {
+			require.NoError(t, r.Body.Close())
+		}()
+
+		blobs := make([]pb.BlobAndProofJson, numBlobs)
+		for i := range blobs {
+			blobs[i] = pb.BlobAndProofJson{Blob: []byte(fmt.Sprintf("blob%d", i+1)), KzgProof: []byte(fmt.Sprintf("proof%d", i+1))}
+		}
+
+		respJSON := map[string]interface{}{
+			"jsonrpc": "2.0",
+			"id":      1,
+			"result":  blobs,
+		}
+		require.NoError(t, json.NewEncoder(w).Encode(respJSON))
+	}))
+}
+
+func setupRpcClient(t *testing.T, url string, client *Service) (*rpc.Client, *Service) {
+	rpcClient, err := rpc.DialHTTP(url)
+	require.NoError(t, err)
+
+	client.rpcClient = rpcClient
+	client.capabilityCache = &capabilityCache{capabilities: map[string]interface{}{GetBlobsV1: nil}}
+	client.blobVerifier = testNewBlobVerifier()
+
+	return rpcClient, client
+}
+
+func testNewBlobVerifier() verification.NewBlobVerifier {
+	return func(b blocks.ROBlob, reqs []verification.Requirement) verification.BlobVerifier {
+		return &verification.MockBlobVerifier{
+			CbVerifiedROBlob: func() (blocks.VerifiedROBlob, error) {
+				return blocks.VerifiedROBlob{}, nil
+			},
+		}
+	}
 }

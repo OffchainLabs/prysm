@@ -17,6 +17,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	consensus_blocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
@@ -100,10 +101,13 @@ func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySig
 	if err := s.savePostStateInfo(ctx, blockRoot, blockCopy, postState); err != nil {
 		return errors.Wrap(err, "could not save post state info")
 	}
+	roblock, err := consensus_blocks.NewROBlockWithRoot(blockCopy, blockRoot)
+	if err != nil {
+		return err
+	}
 	args := &postBlockProcessConfig{
 		ctx:            ctx,
-		signed:         blockCopy,
-		blockRoot:      blockRoot,
+		roblock:        roblock,
 		postState:      postState,
 		isValidPayload: isValidPayload,
 	}

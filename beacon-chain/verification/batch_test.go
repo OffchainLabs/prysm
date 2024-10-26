@@ -41,7 +41,7 @@ func TestBatchVerifier(t *testing.T) {
 			},
 			nv: func() NewBlobVerifier {
 				return func(bl blocks.ROBlob, reqs []Requirement) BlobVerifier {
-					return &MockBlobVerifier{cbVerifiedROBlob: vbcb(bl, nil)}
+					return &MockBlobVerifier{CbVerifiedROBlob: vbcb(bl, nil)}
 				}
 			},
 			nblobs: 0,
@@ -50,7 +50,7 @@ func TestBatchVerifier(t *testing.T) {
 			name: "happy path",
 			nv: func() NewBlobVerifier {
 				return func(bl blocks.ROBlob, reqs []Requirement) BlobVerifier {
-					return &MockBlobVerifier{cbVerifiedROBlob: vbcb(bl, nil)}
+					return &MockBlobVerifier{CbVerifiedROBlob: vbcb(bl, nil)}
 				}
 			},
 			bandb: func(t *testing.T, nb int) (blocks.ROBlock, []blocks.ROBlob) {
@@ -62,7 +62,7 @@ func TestBatchVerifier(t *testing.T) {
 			name: "partial batch",
 			nv: func() NewBlobVerifier {
 				return func(bl blocks.ROBlob, reqs []Requirement) BlobVerifier {
-					return &MockBlobVerifier{cbVerifiedROBlob: vbcb(bl, nil)}
+					return &MockBlobVerifier{CbVerifiedROBlob: vbcb(bl, nil)}
 				}
 			},
 			bandb: func(t *testing.T, nb int) (blocks.ROBlock, []blocks.ROBlob) {
@@ -76,7 +76,7 @@ func TestBatchVerifier(t *testing.T) {
 			name: "invalid commitment",
 			nv: func() NewBlobVerifier {
 				return func(bl blocks.ROBlob, reqs []Requirement) BlobVerifier {
-					return &MockBlobVerifier{cbVerifiedROBlob: func() (blocks.VerifiedROBlob, error) {
+					return &MockBlobVerifier{CbVerifiedROBlob: func() (blocks.VerifiedROBlob, error) {
 						t.Fatal("Batch verifier should stop before this point")
 						return blocks.VerifiedROBlob{}, nil
 					}}
@@ -93,7 +93,7 @@ func TestBatchVerifier(t *testing.T) {
 			name: "signature mismatch",
 			nv: func() NewBlobVerifier {
 				return func(bl blocks.ROBlob, reqs []Requirement) BlobVerifier {
-					return &MockBlobVerifier{cbVerifiedROBlob: func() (blocks.VerifiedROBlob, error) {
+					return &MockBlobVerifier{CbVerifiedROBlob: func() (blocks.VerifiedROBlob, error) {
 						t.Fatal("Batch verifier should stop before this point")
 						return blocks.VerifiedROBlob{}, nil
 					}}
@@ -111,7 +111,7 @@ func TestBatchVerifier(t *testing.T) {
 			name: "root mismatch",
 			nv: func() NewBlobVerifier {
 				return func(bl blocks.ROBlob, reqs []Requirement) BlobVerifier {
-					return &MockBlobVerifier{cbVerifiedROBlob: func() (blocks.VerifiedROBlob, error) {
+					return &MockBlobVerifier{CbVerifiedROBlob: func() (blocks.VerifiedROBlob, error) {
 						t.Fatal("Batch verifier should stop before this point")
 						return blocks.VerifiedROBlob{}, nil
 					}}
@@ -133,7 +133,7 @@ func TestBatchVerifier(t *testing.T) {
 				return func(bl blocks.ROBlob, reqs []Requirement) BlobVerifier {
 					return &MockBlobVerifier{
 						ErrBlobIndexInBounds: ErrBlobIndexInvalid,
-						cbVerifiedROBlob: func() (blocks.VerifiedROBlob, error) {
+						CbVerifiedROBlob: func() (blocks.VerifiedROBlob, error) {
 							t.Fatal("Batch verifier should stop before this point")
 							return blocks.VerifiedROBlob{}, nil
 						}}
@@ -151,7 +151,7 @@ func TestBatchVerifier(t *testing.T) {
 				return func(bl blocks.ROBlob, reqs []Requirement) BlobVerifier {
 					return &MockBlobVerifier{
 						ErrSidecarInclusionProven: ErrSidecarInclusionProofInvalid,
-						cbVerifiedROBlob: func() (blocks.VerifiedROBlob, error) {
+						CbVerifiedROBlob: func() (blocks.VerifiedROBlob, error) {
 							t.Fatal("Batch verifier should stop before this point")
 							return blocks.VerifiedROBlob{}, nil
 						}}

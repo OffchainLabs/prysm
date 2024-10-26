@@ -496,36 +496,41 @@ func (s *Server) GetAttesterSlashingsV2(w http.ResponseWriter, r *http.Request) 
 		httputil.HandleError(w, "Could not get head state: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+
 	var attStructs []interface{}
 	sourceSlashings := s.SlashingsPool.PendingAttesterSlashings(ctx, headState, true /* return unlimited slashings */)
+
 	for _, slashing := range sourceSlashings {
-		if slashing.Version() >= version.Electra {
+		var attStruct interface{}
+		if headState.Version() >= version.Electra {
 			a, ok := slashing.(*eth.AttesterSlashingElectra)
 			if !ok {
-				httputil.HandleError(w, fmt.Sprintf("Unable to convert electra slashing of type %T to an Electra slashing", slashing), http.StatusInternalServerError)
+				httputil.HandleError(w, fmt.Sprintf("Unable to convert slashing of type %T to an Electra slashing", slashing), http.StatusInternalServerError)
 				return
 			}
-			attStruct := structs.AttesterSlashingElectraFromConsensus(a)
-			attStructs = append(attStructs, attStruct)
+			attStruct = structs.AttesterSlashingElectraFromConsensus(a)
 		} else {
 			a, ok := slashing.(*eth.AttesterSlashing)
 			if !ok {
 				httputil.HandleError(w, fmt.Sprintf("Unable to convert slashing of type %T to a Phase0 slashing", slashing), http.StatusInternalServerError)
 				return
 			}
-			attStruct := structs.AttesterSlashingFromConsensus(a)
-			attStructs = append(attStructs, attStruct)
+			attStruct = structs.AttesterSlashingFromConsensus(a)
 		}
+		attStructs = append(attStructs, attStruct)
 	}
+
 	attBytes, err := json.Marshal(attStructs)
 	if err != nil {
 		httputil.HandleError(w, fmt.Sprintf("Failed to marshal slashing: %v", err), http.StatusInternalServerError)
 		return
 	}
+
 	resp := &structs.GetAttesterSlashingsResponse{
-		Version: version.String(sourceSlashings[0].Version()),
+		Version: version.String(headState.Version()),
 		Data:    attBytes,
 	}
+	w.Header().Set(api.VersionHeader, version.String(headState.Version()))
 	httputil.WriteJson(w, resp)
 }
 

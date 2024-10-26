@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	consensus_blocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/forkchoice"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 )
@@ -44,10 +45,10 @@ func (s *Service) ReceivedBlocksLastEpoch() (uint64, error) {
 }
 
 // InsertNode is a wrapper for node insertion which is self locked
-func (s *Service) InsertNode(ctx context.Context, st state.BeaconState, root [32]byte) error {
+func (s *Service) InsertNode(ctx context.Context, st state.BeaconState, block consensus_blocks.ROBlock) error {
 	s.cfg.ForkChoiceStore.Lock()
 	defer s.cfg.ForkChoiceStore.Unlock()
-	return s.cfg.ForkChoiceStore.InsertNode(ctx, st, root)
+	return s.cfg.ForkChoiceStore.InsertNode(ctx, st, block)
 }
 
 // ForkChoiceDump returns the corresponding value from forkchoice

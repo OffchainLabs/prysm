@@ -46,8 +46,7 @@ var initialSyncBlockCacheSize = uint64(2 * params.BeaconConfig().SlotsPerEpoch)
 // process the beacon block after validating the state transition function
 type postBlockProcessConfig struct {
 	ctx            context.Context
-	signed         interfaces.ReadOnlySignedBeaconBlock
-	blockRoot      [32]byte
+	roblock        consensusblocks.ROBlock
 	headRoot       [32]byte
 	postState      state.BeaconState
 	isValidPayload bool
@@ -61,7 +60,7 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 	ctx, span := trace.StartSpan(cfg.ctx, "blockChain.onBlock")
 	defer span.End()
 	cfg.ctx = ctx
-	if err := consensusblocks.BeaconBlockIsNil(cfg.signed); err != nil {
+	if err := consensusblocks.BeaconBlockIsNil(cfg.roblock); err != nil {
 		return invalidBlock{error: err}
 	}
 	startTime := time.Now()
@@ -73,19 +72,19 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 	defer s.sendLightClientFeeds(cfg)
 	defer s.sendStateFeedOnBlock(cfg)
 	defer reportProcessingTime(startTime)
-	defer reportAttestationInclusion(cfg.signed.Block())
+	defer reportAttestationInclusion(cfg.roblock.Block())
 
-	err := s.cfg.ForkChoiceStore.InsertNode(ctx, cfg.postState, cfg.blockRoot)
+	err := s.cfg.ForkChoiceStore.InsertNode(ctx, cfg.postState, cfg.roblock)
 	if err != nil {
-		return errors.Wrapf(err, "could not insert block %d to fork choice store", cfg.signed.Block().Slot())
+		return errors.Wrapf(err, "could not insert block %d to fork choice store", cfg.roblock.Block().Slot())
 	}
-	if err := s.handleBlockAttestations(ctx, cfg.signed.Block(), cfg.postState); err != nil {
+	if err := s.handleBlockAttestations(ctx, cfg.roblock.Block(), cfg.postState); err != nil {
 		return errors.Wrap(err, "could not handle block's attestations")
 	}
 
-	s.InsertSlashingsToForkChoiceStore(ctx, cfg.signed.Block().Body().AttesterSlashings())
+	s.InsertSlashingsToForkChoiceStore(ctx, cfg.roblock.Block().Body().AttesterSlashings())
 	if cfg.isValidPayload {
-		if err := s.cfg.ForkChoiceStore.SetOptimisticToValid(ctx, cfg.blockRoot); err != nil {
+		if err := s.cfg.ForkChoiceStore.SetOptimisticToValid(ctx, cfg.roblock.Root()); err != nil {
 			return errors.Wrap(err, "could not set optimistic block to valid")
 		}
 	}
@@ -95,8 +94,8 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 		log.WithError(err).Warn("Could not update head")
 	}
 	newBlockHeadElapsedTime.Observe(float64(time.Since(start).Milliseconds()))
-	if cfg.headRoot != cfg.blockRoot {
-		s.logNonCanonicalBlockReceived(cfg.blockRoot, cfg.headRoot)
+	if cfg.headRoot != cfg.roblock.Root() {
+		s.logNonCanonicalBlockReceived(cfg.roblock.Root(), cfg.headRoot)
 		return nil
 	}
 	if err := s.getFCUArgs(cfg, fcuArgs); err != nil {
@@ -154,7 +153,7 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 	}
 
 	// Fill in missing blocks
-	if err := s.fillInForkChoiceMissingBlocks(ctx, blks[0].Block(), preState.CurrentJustifiedCheckpoint(), preState.FinalizedCheckpoint()); err != nil {
+	if err := s.fillInForkChoiceMissingBlocks(ctx, blks[0], preState.CurrentJustifiedCheckpoint(), preState.FinalizedCheckpoint()); err != nil {
 		return errors.Wrap(err, "could not fill in missing blocks to forkchoice")
 	}
 
@@ -234,7 +233,7 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 		if err := avs.IsDataAvailable(ctx, s.CurrentSlot(), b); err != nil {
 			return errors.Wrapf(err, "could not validate blob data availability at slot %d", b.Block().Slot())
 		}
-		args := &forkchoicetypes.BlockAndCheckpoints{Block: b.Block(),
+		args := &forkchoicetypes.BlockAndCheckpoints{Block: b,
 			JustifiedCheckpoint: jCheckpoints[i],
 			FinalizedCheckpoint: fCheckpoints[i]}
 		pendingNodes[len(blks)-i-1] = args
@@ -279,7 +278,7 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 		return errors.Wrap(err, "could not insert batch to forkchoice")
 	}
 	// Insert the last block to forkchoice
-	if err := s.cfg.ForkChoiceStore.InsertNode(ctx, preState, lastBR); err != nil {
+	if err := s.cfg.ForkChoiceStore.InsertNode(ctx, preState, lastB); err != nil {
 		return errors.Wrap(err, "could not insert last block in batch to forkchoice")
 	}
 	// Set their optimistic status

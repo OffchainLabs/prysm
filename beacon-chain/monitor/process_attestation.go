@@ -185,42 +185,42 @@ func (s *Service) processUnaggregatedAttestation(ctx context.Context, att ethpb.
 }
 
 // processUnaggregatedAttestation logs when the beacon node observes an aggregated attestation from tracked validator.
-func (s *Service) processAggregatedAttestation(ctx context.Context, att *ethpb.AggregateAttestationAndProof) {
+func (s *Service) processAggregatedAttestation(ctx context.Context, att ethpb.AggregateAttAndProof) {
 	s.Lock()
 	defer s.Unlock()
-	if s.trackedIndex(att.AggregatorIndex) {
+	if s.trackedIndex(att.GetAggregatorIndex()) {
 		log.WithFields(logrus.Fields{
-			"aggregatorIndex": att.AggregatorIndex,
-			"slot":            att.Aggregate.Data.Slot,
+			"aggregatorIndex": att.GetAggregatorIndex(),
+			"slot":            att.AggregateVal().GetData().Slot,
 			"beaconBlockRoot": fmt.Sprintf("%#x", bytesutil.Trunc(
-				att.Aggregate.Data.BeaconBlockRoot)),
+				att.AggregateVal().GetData().BeaconBlockRoot)),
 			"sourceRoot": fmt.Sprintf("%#x", bytesutil.Trunc(
-				att.Aggregate.Data.Source.Root)),
+				att.AggregateVal().GetData().Source.Root)),
 			"targetRoot": fmt.Sprintf("%#x", bytesutil.Trunc(
-				att.Aggregate.Data.Target.Root)),
+				att.AggregateVal().GetData().Target.Root)),
 		}).Info("Processed attestation aggregation")
-		aggregatedPerf := s.aggregatedPerformance[att.AggregatorIndex]
+		aggregatedPerf := s.aggregatedPerformance[att.GetAggregatorIndex()]
 		aggregatedPerf.totalAggregations++
-		s.aggregatedPerformance[att.AggregatorIndex] = aggregatedPerf
-		aggregationCounter.WithLabelValues(fmt.Sprintf("%d", att.AggregatorIndex)).Inc()
+		s.aggregatedPerformance[att.GetAggregatorIndex()] = aggregatedPerf
+		aggregationCounter.WithLabelValues(fmt.Sprintf("%d", att.GetAggregatorIndex())).Inc()
 	}
 
 	var root [32]byte
-	copy(root[:], att.Aggregate.Data.BeaconBlockRoot)
+	copy(root[:], att.AggregateVal().GetData().BeaconBlockRoot)
 	st := s.config.StateGen.StateByRootIfCachedNoCopy(root)
 	if st == nil {
 		log.WithField("beaconBlockRoot", fmt.Sprintf("%#x", bytesutil.Trunc(root[:]))).Debug(
 			"Skipping aggregated attestation due to state not found in cache")
 		return
 	}
-	attestingIndices, err := attestingIndices(ctx, st, att.Aggregate)
+	attestingIndices, err := attestingIndices(ctx, st, att.AggregateVal())
 	if err != nil {
 		log.WithError(err).Error("Could not get attesting indices")
 		return
 	}
 	for _, idx := range attestingIndices {
-		if s.canUpdateAttestedValidator(primitives.ValidatorIndex(idx), att.Aggregate.Data.Slot) {
-			logFields := logMessageTimelyFlagsForIndex(primitives.ValidatorIndex(idx), att.Aggregate.Data)
+		if s.canUpdateAttestedValidator(primitives.ValidatorIndex(idx), att.AggregateVal().GetData().Slot) {
+			logFields := logMessageTimelyFlagsForIndex(primitives.ValidatorIndex(idx), att.AggregateVal().GetData())
 			log.WithFields(logFields).Info("Processed aggregated attestation")
 		}
 	}

@@ -1131,93 +1131,147 @@ func TestGetAttesterSlashings(t *testing.T) {
 	}
 
 	t.Run("V1", func(t *testing.T) {
-		bs, err := util.NewBeaconState()
-		require.NoError(t, err)
+		t.Run("ok", func(t *testing.T) {
+			bs, err := util.NewBeaconState()
+			require.NoError(t, err)
 
-		s := &Server{
-			ChainInfoFetcher: &blockchainmock.ChainService{State: bs},
-			SlashingsPool:    &slashingsmock.PoolMock{PendingAttSlashings: []ethpbv1alpha1.AttSlashing{slashing1PreElectra, slashing2PreElectra}},
-		}
+			s := &Server{
+				ChainInfoFetcher: &blockchainmock.ChainService{State: bs},
+				SlashingsPool:    &slashingsmock.PoolMock{PendingAttSlashings: []ethpbv1alpha1.AttSlashing{slashing1PreElectra, slashing2PreElectra}},
+			}
 
-		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/pool/attester_slashings", nil)
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
+			request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/pool/attester_slashings", nil)
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
 
-		s.GetAttesterSlashings(writer, request)
-		require.Equal(t, http.StatusOK, writer.Code)
-		resp := &structs.GetAttesterSlashingsResponse{}
-		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
-		require.NotNil(t, resp)
-		require.NotNil(t, resp.Data)
+			s.GetAttesterSlashings(writer, request)
+			require.Equal(t, http.StatusOK, writer.Code)
+			resp := &structs.GetAttesterSlashingsResponse{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+			require.NotNil(t, resp)
+			require.NotNil(t, resp.Data)
 
-		var slashings []*structs.AttesterSlashing
-		require.NoError(t, json.Unmarshal(resp.Data, &slashings))
+			var slashings []*structs.AttesterSlashing
+			require.NoError(t, json.Unmarshal(resp.Data, &slashings))
 
-		ss, err := structs.AttesterSlashingsToConsensus(slashings)
-		require.NoError(t, err)
+			ss, err := structs.AttesterSlashingsToConsensus(slashings)
+			require.NoError(t, err)
 
-		require.DeepEqual(t, slashing1PreElectra, ss[0])
-		require.DeepEqual(t, slashing2PreElectra, ss[1])
+			require.DeepEqual(t, slashing1PreElectra, ss[0])
+			require.DeepEqual(t, slashing2PreElectra, ss[1])
+		})
+		t.Run("no slashings", func(t *testing.T) {
+			bs, err := util.NewBeaconState()
+			require.NoError(t, err)
+
+			s := &Server{
+				ChainInfoFetcher: &blockchainmock.ChainService{State: bs},
+				SlashingsPool:    &slashingsmock.PoolMock{PendingAttSlashings: []ethpbv1alpha1.AttSlashing{}},
+			}
+
+			request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/pool/attester_slashings", nil)
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.GetAttesterSlashings(writer, request)
+			require.Equal(t, http.StatusOK, writer.Code)
+			resp := &structs.GetAttesterSlashingsResponse{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+			require.NotNil(t, resp)
+			require.NotNil(t, resp.Data)
+
+			var slashings []*structs.AttesterSlashing
+			require.NoError(t, json.Unmarshal(resp.Data, &slashings))
+			require.Equal(t, 0, len(slashings))
+		})
 	})
-	t.Run("V2-post-electra", func(t *testing.T) {
-		bs, err := util.NewBeaconStateElectra()
-		require.NoError(t, err)
+	t.Run("V2", func(t *testing.T) {
+		t.Run("post-electra-ok", func(t *testing.T) {
+			bs, err := util.NewBeaconStateElectra()
+			require.NoError(t, err)
 
-		s := &Server{
-			ChainInfoFetcher: &blockchainmock.ChainService{State: bs},
-			SlashingsPool:    &slashingsmock.PoolMock{PendingAttSlashings: []ethpbv1alpha1.AttSlashing{slashing1PostElectra, slashing2PostElectra}},
-		}
+			s := &Server{
+				ChainInfoFetcher: &blockchainmock.ChainService{State: bs},
+				SlashingsPool:    &slashingsmock.PoolMock{PendingAttSlashings: []ethpbv1alpha1.AttSlashing{slashing1PostElectra, slashing2PostElectra}},
+			}
 
-		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v2/beacon/pool/attester_slashings", nil)
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
+			request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v2/beacon/pool/attester_slashings", nil)
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
 
-		s.GetAttesterSlashingsV2(writer, request)
-		require.Equal(t, http.StatusOK, writer.Code)
-		resp := &structs.GetAttesterSlashingsResponse{}
-		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
-		require.NotNil(t, resp)
-		require.NotNil(t, resp.Data)
-		assert.Equal(t, "electra", resp.Version)
+			s.GetAttesterSlashingsV2(writer, request)
+			require.Equal(t, http.StatusOK, writer.Code)
+			resp := &structs.GetAttesterSlashingsResponse{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+			require.NotNil(t, resp)
+			require.NotNil(t, resp.Data)
+			assert.Equal(t, "electra", resp.Version)
 
-		// Unmarshal resp.Data into a slice of slashings
-		var slashings []*structs.AttesterSlashingElectra
-		require.NoError(t, json.Unmarshal(resp.Data, &slashings))
+			// Unmarshal resp.Data into a slice of slashings
+			var slashings []*structs.AttesterSlashingElectra
+			require.NoError(t, json.Unmarshal(resp.Data, &slashings))
 
-		ss, err := structs.AttesterSlashingsElectraToConsensus(slashings)
-		require.NoError(t, err)
+			ss, err := structs.AttesterSlashingsElectraToConsensus(slashings)
+			require.NoError(t, err)
 
-		require.DeepEqual(t, slashing1PostElectra, ss[0])
-		require.DeepEqual(t, slashing2PostElectra, ss[1])
-	})
-	t.Run("V2-pre-electra", func(t *testing.T) {
-		bs, err := util.NewBeaconState()
-		require.NoError(t, err)
+			require.DeepEqual(t, slashing1PostElectra, ss[0])
+			require.DeepEqual(t, slashing2PostElectra, ss[1])
+		})
+		t.Run("pre-electra-ok", func(t *testing.T) {
+			bs, err := util.NewBeaconState()
+			require.NoError(t, err)
 
-		s := &Server{
-			ChainInfoFetcher: &blockchainmock.ChainService{State: bs},
-			SlashingsPool:    &slashingsmock.PoolMock{PendingAttSlashings: []ethpbv1alpha1.AttSlashing{slashing1PreElectra, slashing2PreElectra}},
-		}
+			s := &Server{
+				ChainInfoFetcher: &blockchainmock.ChainService{State: bs},
+				SlashingsPool:    &slashingsmock.PoolMock{PendingAttSlashings: []ethpbv1alpha1.AttSlashing{slashing1PreElectra, slashing2PreElectra}},
+			}
 
-		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/pool/attester_slashings", nil)
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
+			request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/pool/attester_slashings", nil)
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
 
-		s.GetAttesterSlashingsV2(writer, request)
-		require.Equal(t, http.StatusOK, writer.Code)
-		resp := &structs.GetAttesterSlashingsResponse{}
-		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
-		require.NotNil(t, resp)
-		require.NotNil(t, resp.Data)
+			s.GetAttesterSlashingsV2(writer, request)
+			require.Equal(t, http.StatusOK, writer.Code)
+			resp := &structs.GetAttesterSlashingsResponse{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+			require.NotNil(t, resp)
+			require.NotNil(t, resp.Data)
 
-		var slashings []*structs.AttesterSlashing
-		require.NoError(t, json.Unmarshal(resp.Data, &slashings))
+			var slashings []*structs.AttesterSlashing
+			require.NoError(t, json.Unmarshal(resp.Data, &slashings))
 
-		ss, err := structs.AttesterSlashingsToConsensus(slashings)
-		require.NoError(t, err)
+			ss, err := structs.AttesterSlashingsToConsensus(slashings)
+			require.NoError(t, err)
 
-		require.DeepEqual(t, slashing1PreElectra, ss[0])
-		require.DeepEqual(t, slashing2PreElectra, ss[1])
+			require.DeepEqual(t, slashing1PreElectra, ss[0])
+			require.DeepEqual(t, slashing2PreElectra, ss[1])
+		})
+		t.Run("no-slashings", func(t *testing.T) {
+			bs, err := util.NewBeaconStateElectra()
+			require.NoError(t, err)
+
+			s := &Server{
+				ChainInfoFetcher: &blockchainmock.ChainService{State: bs},
+				SlashingsPool:    &slashingsmock.PoolMock{PendingAttSlashings: []ethpbv1alpha1.AttSlashing{}},
+			}
+
+			request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v2/beacon/pool/attester_slashings", nil)
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.GetAttesterSlashingsV2(writer, request)
+			require.Equal(t, http.StatusOK, writer.Code)
+			resp := &structs.GetAttesterSlashingsResponse{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+			require.NotNil(t, resp)
+			require.NotNil(t, resp.Data)
+			assert.Equal(t, "electra", resp.Version)
+
+			// Unmarshal resp.Data into a slice of slashings
+			var slashings []*structs.AttesterSlashingElectra
+			require.NoError(t, json.Unmarshal(resp.Data, &slashings))
+			require.Equal(t, 0, len(slashings))
+		})
 	})
 }
 
