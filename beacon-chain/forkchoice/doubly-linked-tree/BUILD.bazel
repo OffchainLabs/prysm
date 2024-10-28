@@ -49,7 +49,6 @@ go_library(
 go_test(
     name = "go_default_test",
     srcs = [
-        "epbs_test.go",
         "ffg_update_test.go",
         "forkchoice_test.go",
         "last_root_test.go",

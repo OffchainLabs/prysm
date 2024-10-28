@@ -75,7 +75,18 @@ func (s *Store) insert(ctx context.Context,
 	slot := block.Slot()
 	parentRoot := block.ParentRoot()
 	var parentHash, payloadHash [32]byte
-	if block.Version() >= version.Bellatrix {
+	if block.Version() >= version.EPBS {
+		execution, err := block.Body().SignedExecutionPayloadHeader()
+		if err != nil {
+			return nil, err
+		}
+		header, err := execution.Header()
+		if err != nil {
+			return nil, err
+		}
+		payloadHash = header.BlockHash()
+		parentHash = header.ParentBlockHash()
+	} else if block.Version() >= version.Bellatrix {
 		execution, err := block.Body().Execution()
 		if err != nil {
 			return nil, err
@@ -83,7 +94,6 @@ func (s *Store) insert(ctx context.Context,
 		copy(payloadHash[:], execution.BlockHash())
 		copy(parentHash[:], execution.ParentHash())
 	}
-
 	// Return if the block has been inserted into Store before.
 	n, rootPresent := s.nodeByRoot[root]
 	m, hashPresent := s.nodeByPayload[payloadHash]
