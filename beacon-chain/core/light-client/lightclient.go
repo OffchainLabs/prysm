@@ -159,7 +159,7 @@ func NewLightClientUpdateFromBeaconState(
 	updateAttestedPeriod := slots.SyncCommitteePeriod(slots.ToEpoch(attestedBlock.Block().Slot()))
 
 	// update = LightClientUpdate()
-	result, err := CreateDefaultLightClientUpdate(currentSlot)
+	result, err := CreateDefaultLightClientUpdate(state)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not create default light client update")
 	}
@@ -243,8 +243,7 @@ func NewLightClientUpdateFromBeaconState(
 	return result, nil
 }
 
-func CreateDefaultLightClientUpdate(currentSlot primitives.Slot) (interfaces.LightClientUpdate, error) {
-	currentEpoch := slots.ToEpoch(currentSlot)
+func CreateDefaultLightClientUpdate(state state.BeaconState) (interfaces.LightClientUpdate, error) {
 
 	syncCommitteeSize := params.BeaconConfig().SyncCommitteeSize
 	pubKeys := make([][]byte, syncCommitteeSize)
@@ -257,7 +256,7 @@ func CreateDefaultLightClientUpdate(currentSlot primitives.Slot) (interfaces.Lig
 	}
 
 	var nextSyncCommitteeBranch [][]byte
-	if currentEpoch >= params.BeaconConfig().ElectraForkEpoch {
+	if state.Version() >= version.Electra {
 		nextSyncCommitteeBranch = make([][]byte, fieldparams.SyncCommitteeBranchDepthElectra)
 	} else {
 		nextSyncCommitteeBranch = make([][]byte, fieldparams.SyncCommitteeBranchDepth)
@@ -276,7 +275,7 @@ func CreateDefaultLightClientUpdate(currentSlot primitives.Slot) (interfaces.Lig
 	}
 
 	var m proto.Message
-	if currentEpoch < params.BeaconConfig().CapellaForkEpoch {
+	if state.Version() < version.Capella {
 		m = &pb.LightClientUpdateAltair{
 			AttestedHeader: &pb.LightClientHeaderAltair{
 				Beacon: &pb.BeaconBlockHeader{},
@@ -285,7 +284,7 @@ func CreateDefaultLightClientUpdate(currentSlot primitives.Slot) (interfaces.Lig
 			NextSyncCommitteeBranch: nextSyncCommitteeBranch,
 			FinalityBranch:          finalityBranch,
 		}
-	} else if currentEpoch < params.BeaconConfig().DenebForkEpoch {
+	} else if state.Version() < version.Deneb {
 		m = &pb.LightClientUpdateCapella{
 			AttestedHeader: &pb.LightClientHeaderCapella{
 				Beacon:          &pb.BeaconBlockHeader{},
@@ -296,7 +295,7 @@ func CreateDefaultLightClientUpdate(currentSlot primitives.Slot) (interfaces.Lig
 			NextSyncCommitteeBranch: nextSyncCommitteeBranch,
 			FinalityBranch:          finalityBranch,
 		}
-	} else if currentEpoch < params.BeaconConfig().ElectraForkEpoch {
+	} else if state.Version() < version.Electra {
 		m = &pb.LightClientUpdateDeneb{
 			AttestedHeader: &pb.LightClientHeaderDeneb{
 				Beacon:          &pb.BeaconBlockHeader{},

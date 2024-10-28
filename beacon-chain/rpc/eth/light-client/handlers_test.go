@@ -1881,6 +1881,7 @@ func createUpdate(t *testing.T, v int) (interfaces.LightClientUpdate, error) {
 	config := params.BeaconConfig()
 	var slot primitives.Slot
 	var header interfaces.LightClientHeader
+	var state state.BeaconState
 	var err error
 
 	sampleRoot := make([]byte, 32)
@@ -1899,6 +1900,8 @@ func createUpdate(t *testing.T, v int) (interfaces.LightClientUpdate, error) {
 	switch v {
 	case version.Altair:
 		slot = primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
+		state, err = util.NewBeaconStateAltair()
+		require.NoError(t, err)
 		header, err = light_client.NewWrappedHeader(&pb.LightClientHeaderAltair{
 			Beacon: &pb.BeaconBlockHeader{
 				Slot:          1,
@@ -1911,6 +1914,8 @@ func createUpdate(t *testing.T, v int) (interfaces.LightClientUpdate, error) {
 		require.NoError(t, err)
 	case version.Capella:
 		slot = primitives.Slot(config.CapellaForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
+		state, err = util.NewBeaconStateCapella()
+		require.NoError(t, err)
 		header, err = light_client.NewWrappedHeader(&pb.LightClientHeaderCapella{
 			Beacon: &pb.BeaconBlockHeader{
 				Slot:          1,
@@ -1937,6 +1942,8 @@ func createUpdate(t *testing.T, v int) (interfaces.LightClientUpdate, error) {
 		require.NoError(t, err)
 	case version.Deneb:
 		slot = primitives.Slot(config.DenebForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
+		state, err = util.NewBeaconStateDeneb()
+		require.NoError(t, err)
 		header, err = light_client.NewWrappedHeader(&pb.LightClientHeaderDeneb{
 			Beacon: &pb.BeaconBlockHeader{
 				Slot:          1,
@@ -1963,6 +1970,8 @@ func createUpdate(t *testing.T, v int) (interfaces.LightClientUpdate, error) {
 		require.NoError(t, err)
 	case version.Electra:
 		slot = primitives.Slot(config.ElectraForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
+		state, err = util.NewBeaconStateElectra()
+		require.NoError(t, err)
 		header, err = light_client.NewWrappedHeader(&pb.LightClientHeaderDeneb{
 			Beacon: &pb.BeaconBlockHeader{
 				Slot:          1,
@@ -1991,7 +2000,7 @@ func createUpdate(t *testing.T, v int) (interfaces.LightClientUpdate, error) {
 		return nil, fmt.Errorf("unsupported version %s", version.String(v))
 	}
 
-	update, err := lightclient.CreateDefaultLightClientUpdate(slot)
+	update, err := lightclient.CreateDefaultLightClientUpdate(state)
 	require.NoError(t, err)
 	update.SetSignatureSlot(slot - 1)
 	syncCommitteeBits := make([]byte, 64)
