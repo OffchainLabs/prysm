@@ -244,7 +244,6 @@ func NewLightClientUpdateFromBeaconState(
 }
 
 func CreateDefaultLightClientUpdate(state state.BeaconState) (interfaces.LightClientUpdate, error) {
-
 	syncCommitteeSize := params.BeaconConfig().SyncCommitteeSize
 	pubKeys := make([][]byte, syncCommitteeSize)
 	for i := uint64(0); i < syncCommitteeSize; i++ {
