@@ -21,9 +21,9 @@ var (
 )
 
 const (
-	depositRequestType       = 0
-	withdrawalRequestType    = 1
-	consolidationRequestType = 2
+	DepositRequestType       = 0
+	WithdrawalRequestType    = 1
+	ConsolidationRequestType = 2
 )
 
 func (ebe *ExecutionBundleElectra) GetDecodedExecutionRequests() (*ExecutionRequests, error) {
@@ -39,7 +39,7 @@ func (ebe *ExecutionBundleElectra) GetDecodedExecutionRequests() (*ExecutionRequ
 		}
 		prevTypeNum = requestType
 		switch requestType {
-		case depositRequestType:
+		case DepositRequestType:
 			if len(requestListInSSZBytes) < drSize {
 				return nil, errors.New("invalid deposit requests length, requests should be at least the size of 1 request")
 			}
@@ -51,7 +51,7 @@ func (ebe *ExecutionBundleElectra) GetDecodedExecutionRequests() (*ExecutionRequ
 				return nil, err
 			}
 			requests.Deposits = drs
-		case withdrawalRequestType:
+		case WithdrawalRequestType:
 			if len(requestListInSSZBytes) < wrSize {
 				return nil, errors.New("invalid withdrawal request length, requests should be at least the size of 1 request")
 			}
@@ -63,7 +63,7 @@ func (ebe *ExecutionBundleElectra) GetDecodedExecutionRequests() (*ExecutionRequ
 				return nil, err
 			}
 			requests.Withdrawals = wrs
-		case consolidationRequestType:
+		case ConsolidationRequestType:
 			if len(requestListInSSZBytes) < crSize {
 				return nil, errors.New("invalid consolidations request length, requests should be at least the size of 1 request")
 			}
