@@ -17,6 +17,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Added SubmitAggregateAndProofsRequestV2 endpoint.
 - Updated the `beacon-chain/monitor` package to Electra. [PR](https://github.com/prysmaticlabs/prysm/pull/14562)
 - Added ListAttestationsV2 endpoint.
+- Add ability to rollback node's internal state during processing.
 
 ### Changed
 

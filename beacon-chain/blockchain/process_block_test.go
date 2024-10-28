@@ -2293,6 +2293,59 @@ func Test_getFCUArgs(t *testing.T) {
 	require.Equal(t, cfg.roblock.Root(), fcuArgs.headRoot)
 }
 
+func TestRollbackBlock(t *testing.T) {
+	service, tr := minimalTestService(t)
+	ctx := tr.ctx
+
+	st, keys := util.DeterministicGenesisState(t, 64)
+	stateRoot, err := st.HashTreeRoot(ctx)
+	require.NoError(t, err, "Could not hash genesis state")
+
+	require.NoError(t, service.saveGenesisData(ctx, st))
+
+	genesis := blocks.NewGenesisBlock(stateRoot[:])
+	wsb, err := consensusblocks.NewSignedBeaconBlock(genesis)
+	require.NoError(t, err)
+	require.NoError(t, service.cfg.BeaconDB.SaveBlock(ctx, wsb), "Could not save genesis block")
+	parentRoot, err := genesis.Block.HashTreeRoot()
+	require.NoError(t, err, "Could not get signing root")
+	require.NoError(t, service.cfg.BeaconDB.SaveState(ctx, st, parentRoot), "Could not save genesis state")
+	require.NoError(t, service.cfg.BeaconDB.SaveHeadBlockRoot(ctx, parentRoot), "Could not save genesis state")
+
+	st, err = service.HeadState(ctx)
+	require.NoError(t, err)
+	b, err := util.GenerateFullBlock(st, keys, util.DefaultBlockGenConfig(), 1)
+	require.NoError(t, err)
+	wsb, err = consensusblocks.NewSignedBeaconBlock(b)
+	require.NoError(t, err)
+	root, err := b.Block.HashTreeRoot()
+	require.NoError(t, err)
+	preState, err := service.getBlockPreState(ctx, wsb.Block())
+	require.NoError(t, err)
+	postState, err := service.validateStateTransition(ctx, preState, wsb)
+	require.NoError(t, err)
+	require.NoError(t, service.savePostStateInfo(ctx, root, wsb, postState))
+
+	require.Equal(t, true, service.cfg.BeaconDB.HasBlock(ctx, root))
+	hasState, err := service.cfg.StateGen.HasState(ctx, root)
+	require.NoError(t, err)
+	require.Equal(t, true, hasState)
+
+	// Set invalid parent root to trigger forkchoice error.
+	wsb.SetParentRoot([]byte("bad"))
+	roblock, err := consensusblocks.NewROBlockWithRoot(wsb, root)
+	require.NoError(t, err)
+
+	// Rollback block insertion into db and caches.
+	require.ErrorContains(t, fmt.Sprintf("could not insert block %d to fork choice store", roblock.Block().Slot()), service.postBlockProcess(&postBlockProcessConfig{ctx, roblock, [32]byte{}, postState, false}))
+
+	// The block should no longer exist.
+	require.Equal(t, false, service.cfg.BeaconDB.HasBlock(ctx, root))
+	hasState, err = service.cfg.StateGen.HasState(ctx, root)
+	require.NoError(t, err)
+	require.Equal(t, false, hasState)
+}
+
 func fakeCommitments(n int) [][]byte {
 	f := make([][]byte, n)
 	for i := range f {
