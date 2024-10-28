@@ -2,6 +2,7 @@ package sync
 
 import (
 	"github.com/prysmaticlabs/prysm/v5/async/event"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
 	blockfeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/block"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/operation"
 	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
@@ -127,7 +128,14 @@ func WithSlasherBlockHeadersFeed(slasherBlockHeadersFeed *event.Feed) Option {
 	}
 }
 
-func WithReconstructor(r execution.Reconstructor) Option {
+func WithPayloadAttestationCache(r *cache.PayloadAttestationCache) Option {
+	return func(s *Service) error {
+		s.payloadAttestationCache = r
+		return nil
+	}
+}
+
+func WithPayloadReconstructor(r execution.PayloadReconstructor) Option {
 	return func(s *Service) error {
 		s.cfg.executionReconstructor = r
 		return nil

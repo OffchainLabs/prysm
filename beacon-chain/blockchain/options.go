@@ -69,6 +69,14 @@ func WithDepositCache(c cache.DepositCache) Option {
 	}
 }
 
+// WithPayloadAttestationCache for payload attestation cache.
+func WithPayloadAttestationCache(c *cache.PayloadAttestationCache) Option {
+	return func(s *Service) error {
+		s.cfg.PayloadAttestationCache = c
+		return nil
+	}
+}
+
 // WithPayloadIDCache for payload ID cache.
 func WithPayloadIDCache(c *cache.PayloadIDCache) Option {
 	return func(s *Service) error {

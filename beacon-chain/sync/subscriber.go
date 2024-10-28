@@ -145,6 +145,16 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 			params.BeaconConfig().BlobsidecarSubnetCount,
 		)
 	}
+
+	// New Gossip Topic for ePBS
+	if epoch >= params.BeaconConfig().EPBSForkEpoch {
+		s.subscribe(
+			p2p.PayloadAttestationMessageTopicFormat,
+			s.validatePayloadAttestation,
+			s.payloadAttestationSubscriber,
+			digest,
+		)
+	}
 }
 
 // subscribe to a given topic with a given validator and subscription handler.

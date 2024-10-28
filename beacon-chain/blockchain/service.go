@@ -77,6 +77,7 @@ type config struct {
 	ChainStartFetcher       execution.ChainStartFetcher
 	BeaconDB                db.HeadAccessDatabase
 	DepositCache            cache.DepositCache
+	PayloadAttestationCache *cache.PayloadAttestationCache
 	PayloadIDCache          *cache.PayloadIDCache
 	TrackedValidatorsCache  *cache.TrackedValidatorsCache
 	AttPool                 attestations.Pool

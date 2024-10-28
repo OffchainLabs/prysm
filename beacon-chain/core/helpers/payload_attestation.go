@@ -68,6 +68,21 @@ func ValidateNilPayloadAttestation(att *eth.PayloadAttestation) error {
 	return ValidateNilPayloadAttestationData(att.Data)
 }
 
+// InPayloadTimelinessCommittee returns whether the given index belongs to the
+// PTC computed from the passed state.
+func InPayloadTimelinessCommittee(ctx context.Context, state state.ReadOnlyBeaconState, slot primitives.Slot, idx primitives.ValidatorIndex) (bool, error) {
+	ptc, err := GetPayloadTimelinessCommittee(ctx, state, slot)
+	if err != nil {
+		return false, err
+	}
+	for _, i := range ptc {
+		if i == idx {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // GetPayloadTimelinessCommittee returns the PTC for the given slot, computed from the passed state as in the
 // spec function `get_ptc`.
 func GetPayloadTimelinessCommittee(ctx context.Context, state state.ReadOnlyBeaconState, slot primitives.Slot) (indices []primitives.ValidatorIndex, err error) {
@@ -245,4 +260,37 @@ func IsValidIndexedPayloadAttestation(state state.ReadOnlyBeaconState, att *epbs
 	}
 
 	return signature.FastAggregateVerify(publicKeys, signingRoot), nil
+}
+
+// ValidatePayloadAttestationMessageSignature verifies the signature of a
+// payload attestation message.
+func ValidatePayloadAttestationMessageSignature(ctx context.Context, st state.ReadOnlyBeaconState, msg *eth.PayloadAttestationMessage) error {
+	if err := ValidateNilPayloadAttestationMessage(msg); err != nil {
+		return err
+	}
+	val, err := st.ValidatorAtIndex(msg.ValidatorIndex)
+	if err != nil {
+		return err
+	}
+	pub, err := bls.PublicKeyFromBytes(val.PublicKey)
+	if err != nil {
+		return err
+	}
+	sig, err := bls.SignatureFromBytes(msg.Signature)
+	if err != nil {
+		return err
+	}
+	currentEpoch := slots.ToEpoch(st.Slot())
+	domain, err := signing.Domain(st.Fork(), currentEpoch, params.BeaconConfig().DomainPTCAttester, st.GenesisValidatorsRoot())
+	if err != nil {
+		return err
+	}
+	root, err := signing.ComputeSigningRoot(msg.Data, domain)
+	if err != nil {
+		return err
+	}
+	if !sig.Verify(pub, root[:]) {
+		return signing.ErrSigFailedToVerify
+	}
+	return nil
 }

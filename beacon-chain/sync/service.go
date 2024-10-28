@@ -19,6 +19,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/async/abool"
 	"github.com/prysmaticlabs/prysm/v5/async/event"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
 	blockfeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/block"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/operation"
 	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
@@ -124,6 +125,7 @@ type Service struct {
 	seenPendingBlocks                map[[32]byte]bool
 	blkRootToPendingAtts             map[[32]byte][]ethpb.SignedAggregateAttAndProof
 	subHandler                       *subTopicHandler
+	payloadAttestationCache          *cache.PayloadAttestationCache
 	pendingAttsLock                  sync.RWMutex
 	pendingQueueLock                 sync.RWMutex
 	chainStarted                     *abool.AtomicBool
@@ -156,6 +158,7 @@ type Service struct {
 	initialSyncComplete              chan struct{}
 	verifierWaiter                   *verification.InitializerWaiter
 	newBlobVerifier                  verification.NewBlobVerifier
+	newPayloadAttestationVerifier    verification.NewPayloadAttestationMsgVerifier
 	availableBlocker                 coverage.AvailableBlocker
 	ctxMap                           ContextByteVersions
 }

@@ -44,3 +44,7 @@ type PayloadAttestationMsgVerifier interface {
 // NewBlobVerifier is a function signature that can be used by code that needs to be
 // able to mock Initializer.NewBlobVerifier without complex setup.
 type NewBlobVerifier func(b blocks.ROBlob, reqs []Requirement) BlobVerifier
+
+// NewPayloadAttestationMsgVerifier is a function signature that can be used by code that needs to be
+// able to mock Initializer.NewPayloadAttestationMsgVerifier without complex setup.
+type NewPayloadAttestationMsgVerifier func(pa payloadattestation.ROMessage, reqs []Requirement) PayloadAttestationMsgVerifier
