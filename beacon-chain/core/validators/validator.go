@@ -279,7 +279,15 @@ func ExitedValidatorIndices(epoch primitives.Epoch, validators []*ethpb.Validato
 	return exited, nil
 }
 
-// EjectedValidatorIndices determines the indices ejected during the given epoch.
+// EjectedValidatorIndices returns the indices of validators who were ejected during the specified epoch.
+//
+// A validator is considered ejected during an epoch if:
+// - Their ExitEpoch equals the epoch.
+// - Their EffectiveBalance is less than or equal to the EjectionBalance threshold.
+//
+// This function simplifies the ejection determination by directly checking the validator's ExitEpoch
+// and EffectiveBalance, avoiding the complexities and potential inaccuracies of calculating
+// withdrawable epochs.
 func EjectedValidatorIndices(epoch primitives.Epoch, validators []*ethpb.Validator) ([]primitives.ValidatorIndex, error) {
 	ejected := make([]primitives.ValidatorIndex, 0)
 	for i, val := range validators {
