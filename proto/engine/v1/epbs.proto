@@ -25,25 +25,6 @@ option java_outer_classname = "ExecutionEngineProto";
 option java_package = "org.ethereum.engine.v1";
 option php_namespace = "Ethereum\\Engine\\v1";
 
-
-message PayloadAttestationData {
-	bytes beacon_block_root = 1 [(ethereum.eth.ext.ssz_size) = "32"];
-	uint64 slot 		= 2 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"];
-	uint64 payload_status 	= 3 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.PTCStatus"];
-}
-
-message PayloadAttestation {
-  	bytes aggregation_bits          = 1 [(ethereum.eth.ext.ssz_size) = "ptc.size", (ethereum.eth.ext.cast_type) = "ptc.type"];
-	PayloadAttestationData data 	= 2;
-    	bytes signature 		= 3 [(ethereum.eth.ext.ssz_size) = "96"];
-}
-
-message PayloadAttestationMessage {
-	uint64 validator_index 		= 1 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.ValidatorIndex"];
-	PayloadAttestationData data 	= 2;
-    	bytes signature 		= 3 [(ethereum.eth.ext.ssz_size) = "96"];
-}
-
 message InclusionListSummary {
 	uint64 proposer_index  = 1 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.ValidatorIndex"];
 	uint64 slot 	       = 2 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"];
