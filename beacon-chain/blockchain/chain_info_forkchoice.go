@@ -6,6 +6,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	consensus_blocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/forkchoice"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 )
 
@@ -118,4 +119,12 @@ func (s *Service) GetPTCVote(root [32]byte) primitives.PTCStatus {
 		return f
 	}
 	return primitives.PAYLOAD_ABSENT
+}
+
+// insertPayloadEnvelope wraps a locked call to the corresponding method in
+// forkchoice
+func (s *Service) insertPayloadEnvelope(envelope interfaces.ROExecutionPayloadEnvelope) error {
+	s.cfg.ForkChoiceStore.Lock()
+	defer s.cfg.ForkChoiceStore.Unlock()
+	return s.cfg.ForkChoiceStore.InsertPayloadEnvelope(envelope)
 }

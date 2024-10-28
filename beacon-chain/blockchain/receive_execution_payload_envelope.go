@@ -62,6 +62,9 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, envelope 
 	daWaitedTime := time.Since(daStartTime)
 	dataAvailWaitedTime.Observe(float64(daWaitedTime.Milliseconds()))
 	// TODO: Add Head update, cache handling, postProcessing
+	if err := s.insertPayloadEnvelope(envelope); err != nil {
+		return errors.Wrap(err, "could not insert payload to forkchoice")
+	}
 	timeWithoutDaWait := time.Since(receivedTime) - daWaitedTime
 	executionEngineProcessingTime.Observe(float64(timeWithoutDaWait.Milliseconds()))
 	return nil
