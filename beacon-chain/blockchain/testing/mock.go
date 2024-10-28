@@ -37,46 +37,47 @@ var ErrNilState = errors.New("nil state")
 
 // ChainService defines the mock interface for testing
 type ChainService struct {
-	NotFinalized                bool
-	Optimistic                  bool
-	ValidAttestation            bool
-	ValidatorsRoot              [32]byte
-	PublicKey                   [fieldparams.BLSPubkeyLength]byte
-	FinalizedCheckPoint         *ethpb.Checkpoint
-	CurrentJustifiedCheckPoint  *ethpb.Checkpoint
-	PreviousJustifiedCheckPoint *ethpb.Checkpoint
-	Slot                        *primitives.Slot // Pointer because 0 is a useful value, so checking against it can be incorrect.
-	Balance                     *precompute.Balance
-	CanonicalRoots              map[[32]byte]bool
-	Fork                        *ethpb.Fork
-	ETH1Data                    *ethpb.Eth1Data
-	InitSyncBlockRoots          map[[32]byte]bool
-	DB                          db.Database
-	State                       state.BeaconState
-	Block                       interfaces.ReadOnlySignedBeaconBlock
-	ExecutionPayloadEnvelope    interfaces.ROExecutionPayloadEnvelope
-	VerifyBlkDescendantErr      error
-	stateNotifier               statefeed.Notifier
-	BlocksReceived              []interfaces.ReadOnlySignedBeaconBlock
-	SyncCommitteeIndices        []primitives.CommitteeIndex
-	blockNotifier               blockfeed.Notifier
-	opNotifier                  opfeed.Notifier
-	Root                        []byte
-	SyncCommitteeDomain         []byte
-	SyncSelectionProofDomain    []byte
-	SyncContributionProofDomain []byte
-	SyncCommitteePubkeys        [][]byte
-	Genesis                     time.Time
-	ForkChoiceStore             forkchoice.ForkChoicer
-	ReceiveBlockMockErr         error
-	ReceiveEnvelopeMockErr      error
-	OptimisticCheckRootReceived [32]byte
-	FinalizedRoots              map[[32]byte]bool
-	OptimisticRoots             map[[32]byte]bool
-	BlockSlot                   primitives.Slot
-	SyncingRoot                 [32]byte
-	Blobs                       []blocks.VerifiedROBlob
-	TargetRoot                  [32]byte
+	NotFinalized                        bool
+	Optimistic                          bool
+	ValidAttestation                    bool
+	ValidatorsRoot                      [32]byte
+	PublicKey                           [fieldparams.BLSPubkeyLength]byte
+	FinalizedCheckPoint                 *ethpb.Checkpoint
+	CurrentJustifiedCheckPoint          *ethpb.Checkpoint
+	PreviousJustifiedCheckPoint         *ethpb.Checkpoint
+	Slot                                *primitives.Slot // Pointer because 0 is a useful value, so checking against it can be incorrect.
+	Balance                             *precompute.Balance
+	CanonicalRoots                      map[[32]byte]bool
+	Fork                                *ethpb.Fork
+	ETH1Data                            *ethpb.Eth1Data
+	InitSyncBlockRoots                  map[[32]byte]bool
+	DB                                  db.Database
+	State                               state.BeaconState
+	Block                               interfaces.ReadOnlySignedBeaconBlock
+	ExecutionPayloadEnvelope            interfaces.ROExecutionPayloadEnvelope
+	VerifyBlkDescendantErr              error
+	stateNotifier                       statefeed.Notifier
+	BlocksReceived                      []interfaces.ReadOnlySignedBeaconBlock
+	SyncCommitteeIndices                []primitives.CommitteeIndex
+	blockNotifier                       blockfeed.Notifier
+	opNotifier                          opfeed.Notifier
+	Root                                []byte
+	SyncCommitteeDomain                 []byte
+	SyncSelectionProofDomain            []byte
+	SyncContributionProofDomain         []byte
+	SyncCommitteePubkeys                [][]byte
+	Genesis                             time.Time
+	ForkChoiceStore                     forkchoice.ForkChoicer
+	ReceiveBlockMockErr                 error
+	ReceiveEnvelopeMockErr              error
+	OptimisticCheckRootReceived         [32]byte
+	FinalizedRoots                      map[[32]byte]bool
+	OptimisticRoots                     map[[32]byte]bool
+	BlockSlot                           primitives.Slot
+	SyncingRoot                         [32]byte
+	Blobs                               []blocks.VerifiedROBlob
+	TargetRoot                          [32]byte
+	ReceivePayloadAttestationMessageErr error
 }
 
 func (s *ChainService) Ancestor(ctx context.Context, root []byte, slot primitives.Slot) ([]byte, error) {
@@ -716,5 +717,5 @@ func (c *ChainService) HashInForkchoice([32]byte) bool {
 
 // ReceivePayloadAttestationMessage mocks the same method in the chain service
 func (c *ChainService) ReceivePayloadAttestationMessage(_ context.Context, _ *ethpb.PayloadAttestationMessage) error {
-	return nil
+	return c.ReceivePayloadAttestationMessageErr
 }
