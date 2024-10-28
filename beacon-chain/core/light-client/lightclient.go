@@ -278,7 +278,9 @@ func CreateDefaultLightClientUpdate(currentSlot primitives.Slot) (interfaces.Lig
 	var m proto.Message
 	if currentEpoch < params.BeaconConfig().CapellaForkEpoch {
 		m = &pb.LightClientUpdateAltair{
-			AttestedHeader:          &pb.LightClientHeaderAltair{},
+			AttestedHeader: &pb.LightClientHeaderAltair{
+				Beacon: &pb.BeaconBlockHeader{},
+			},
 			NextSyncCommittee:       nextSyncCommittee,
 			NextSyncCommitteeBranch: nextSyncCommitteeBranch,
 			FinalityBranch:          finalityBranch,

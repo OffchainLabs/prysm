@@ -20,7 +20,6 @@ import (
 )
 
 func createUpdate(t *testing.T, v int) (interfaces.LightClientUpdate, error) {
-	params.SetupTestConfigCleanup(t)
 	config := params.BeaconConfig()
 	var slot primitives.Slot
 	var header interfaces.LightClientHeader
@@ -31,7 +30,7 @@ func createUpdate(t *testing.T, v int) (interfaces.LightClientUpdate, error) {
 		sampleRoot[i] = byte(i)
 	}
 
-	sampleExecutionBranch := make([][]byte, 4)
+	sampleExecutionBranch := make([][]byte, fieldparams.ExecutionBranchDepth)
 	for i := 0; i < 4; i++ {
 		sampleExecutionBranch[i] = make([]byte, 32)
 		for j := 0; j < 32; j++ {
@@ -104,8 +103,34 @@ func createUpdate(t *testing.T, v int) (interfaces.LightClientUpdate, error) {
 			ExecutionBranch: sampleExecutionBranch,
 		})
 		require.NoError(t, err)
+	case version.Electra:
+		slot = primitives.Slot(config.ElectraForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
+		header, err = light_client.NewWrappedHeader(&pb.LightClientHeaderDeneb{
+			Beacon: &pb.BeaconBlockHeader{
+				Slot:          1,
+				ProposerIndex: primitives.ValidatorIndex(rand.Int()),
+				ParentRoot:    sampleRoot,
+				StateRoot:     sampleRoot,
+				BodyRoot:      sampleRoot,
+			},
+			Execution: &enginev1.ExecutionPayloadHeaderElectra{
+				ParentHash:       make([]byte, fieldparams.RootLength),
+				FeeRecipient:     make([]byte, fieldparams.FeeRecipientLength),
+				StateRoot:        make([]byte, fieldparams.RootLength),
+				ReceiptsRoot:     make([]byte, fieldparams.RootLength),
+				LogsBloom:        make([]byte, fieldparams.LogsBloomLength),
+				PrevRandao:       make([]byte, fieldparams.RootLength),
+				ExtraData:        make([]byte, 0),
+				BaseFeePerGas:    make([]byte, fieldparams.RootLength),
+				BlockHash:        make([]byte, fieldparams.RootLength),
+				TransactionsRoot: make([]byte, fieldparams.RootLength),
+				WithdrawalsRoot:  make([]byte, fieldparams.RootLength),
+			},
+			ExecutionBranch: sampleExecutionBranch,
+		})
+		require.NoError(t, err)
 	default:
-		return nil, fmt.Errorf("unsupported version %v", v)
+		return nil, fmt.Errorf("unsupported version %s", version.String(v))
 	}
 
 	update, err := createDefaultLightClientUpdate(slot)
@@ -118,11 +143,8 @@ func createUpdate(t *testing.T, v int) (interfaces.LightClientUpdate, error) {
 		SyncCommitteeSignature: syncCommitteeSignature,
 	})
 
-	require.NoError(t, err)
-	err = update.SetAttestedHeader(header)
-	require.NoError(t, err)
-	err = update.SetFinalizedHeader(header)
-	require.NoError(t, err)
+	require.NoError(t, update.SetAttestedHeader(header))
+	require.NoError(t, update.SetFinalizedHeader(header))
 
 	return update, nil
 }
@@ -160,6 +182,20 @@ func TestStore_LightClientUpdate_CanSaveRetrieveDeneb(t *testing.T) {
 	db := setupDB(t)
 	ctx := context.Background()
 	update, err := createUpdate(t, version.Deneb)
+	require.NoError(t, err)
+	period := uint64(1)
+	err = db.SaveLightClientUpdate(ctx, period, update)
+	require.NoError(t, err)
+
+	retrievedUpdate, err := db.LightClientUpdate(ctx, period)
+	require.NoError(t, err)
+	require.DeepEqual(t, update, retrievedUpdate, "retrieved update does not match saved update")
+}
+
+func TestStore_LightClientUpdate_CanSaveRetrieveElectra(t *testing.T) {
+	db := setupDB(t)
+	ctx := context.Background()
+	update, err := createUpdate(t, version.Electra)
 	require.NoError(t, err)
 	period := uint64(1)
 	err = db.SaveLightClientUpdate(ctx, period, update)
