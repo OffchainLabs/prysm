@@ -17,6 +17,7 @@ package ethereum.eth.v1alpha1;
 
 import "proto/eth/ext/options.proto";
 import "proto/prysm/v1alpha1/attestation.proto";
+import "proto/prysm/v1alpha1/payload_attestation.proto";
 import "proto/prysm/v1alpha1/withdrawals.proto";
 import "proto/engine/v1/execution_engine.proto";
 import "proto/engine/v1/electra.proto";
@@ -1017,7 +1018,7 @@ message BeaconBlockBodyePBS {
     ethereum.engine.v1.SignedExecutionPayloadHeader signed_execution_payload_header = 11; 
 
     // Payload attestations. New in ePBS
-    repeated ethereum.engine.v1.PayloadAttestation payload_attestations = 12 [(ethereum.eth.ext.ssz_max) = "payload_attestation.size"];
+    repeated PayloadAttestation payload_attestations = 12 [(ethereum.eth.ext.ssz_max) = "payload_attestation.size"];
 }
 
 message SignedBeaconBlockePBS {

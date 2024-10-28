@@ -3,6 +3,7 @@ package ethereum.validator.accounts.v2;
 
 import "proto/eth/ext/options.proto";
 import "proto/prysm/v1alpha1/attestation.proto";
+import "proto/prysm/v1alpha1/payload_attestation.proto";
 import "proto/prysm/v1alpha1/beacon_block.proto";
 import "proto/prysm/v1alpha1/beacon_state.proto";
 import "proto/prysm/v1alpha1/sync_committee.proto";
@@ -65,6 +66,9 @@ message SignRequest {
         ethereum.eth.v1alpha1.BeaconBlockElectra block_electra = 118;
         ethereum.eth.v1alpha1.BlindedBeaconBlockElectra blinded_block_electra = 119;
         ethereum.eth.v1alpha1.AggregateAttestationAndProofElectra aggregate_attestation_and_proof_electra = 120;
+
+        // ePBS objects.
+        ethereum.eth.v1alpha1.PayloadAttestationData payload_attestation_data = 121;
     }
     reserved 4, 5; // Reserving old, deleted fields.
     uint64 signing_slot = 6 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"];
