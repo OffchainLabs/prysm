@@ -285,7 +285,7 @@ func TestVotes_CanFindHead(t *testing.T) {
 	//        9  10
 	f.store.finalizedCheckpoint.Root = indexToHash(5)
 	require.NoError(t, f.store.prune(context.Background()))
-	assert.Equal(t, 5, len(f.store.nodeByRoot), "Incorrect nodes length after prune")
+	assert.Equal(t, 5, len(f.store.emptyNodeByRoot), "Incorrect nodes length after prune")
 	// we pruned artificially the justified root.
 	f.store.justifiedCheckpoint.Root = indexToHash(5)
 

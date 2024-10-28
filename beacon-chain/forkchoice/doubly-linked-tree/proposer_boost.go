@@ -13,7 +13,7 @@ func (f *ForkChoice) applyProposerBoostScore() error {
 	s := f.store
 	proposerScore := uint64(0)
 	if s.previousProposerBoostRoot != params.BeaconConfig().ZeroHash {
-		previousNode, ok := s.nodeByRoot[s.previousProposerBoostRoot]
+		previousNode, ok := s.emptyNodeByRoot[s.previousProposerBoostRoot]
 		if !ok || previousNode == nil {
 			log.WithError(errInvalidProposerBoostRoot).Errorf(fmt.Sprintf("invalid prev root %#x", s.previousProposerBoostRoot))
 		} else {
@@ -22,7 +22,7 @@ func (f *ForkChoice) applyProposerBoostScore() error {
 	}
 
 	if s.proposerBoostRoot != params.BeaconConfig().ZeroHash {
-		currentNode, ok := s.nodeByRoot[s.proposerBoostRoot]
+		currentNode, ok := s.emptyNodeByRoot[s.proposerBoostRoot]
 		if !ok || currentNode == nil {
 			log.WithError(errInvalidProposerBoostRoot).Errorf(fmt.Sprintf("invalid current root %#x", s.proposerBoostRoot))
 		} else {

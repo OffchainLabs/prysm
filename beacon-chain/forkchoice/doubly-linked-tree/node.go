@@ -29,7 +29,7 @@ func (n *Node) applyWeightChanges(ctx context.Context) error {
 		}
 		childrenWeight += child.weight
 	}
-	if n.root == params.BeaconConfig().ZeroHash {
+	if n.block.root == params.BeaconConfig().ZeroHash {
 		return nil
 	}
 	n.weight = n.balance + childrenWeight
@@ -68,7 +68,7 @@ func (n *Node) updateBestDescendant(ctx context.Context, justifiedEpoch, finaliz
 			// If both are viable, compare their weights.
 			if child.weight == bestWeight {
 				// Tie-breaker of equal weights by root.
-				if bytes.Compare(child.root[:], bestChild.root[:]) > 0 {
+				if bytes.Compare(child.block.root[:], bestChild.block.root[:]) > 0 {
 					bestChild = child
 				}
 			} else if child.weight > bestWeight {
@@ -99,7 +99,7 @@ func (n *Node) viableForHead(justifiedEpoch, currentEpoch primitives.Epoch) bool
 	// We use n.justifiedEpoch as the voting source because:
 	//   1. if this node is from current epoch, n.justifiedEpoch is the realized justification epoch.
 	//   2. if this node is from a previous epoch, n.justifiedEpoch has already been updated to the unrealized justification epoch.
-	return n.justifiedEpoch == justifiedEpoch || n.justifiedEpoch+2 >= currentEpoch
+	return n.block.justifiedEpoch == justifiedEpoch || n.block.justifiedEpoch+2 >= currentEpoch
 }
 
 func (n *Node) leadsToViableHead(justifiedEpoch, currentEpoch primitives.Epoch) bool {
@@ -120,10 +120,10 @@ func (n *Node) setNodeAndParentValidated(ctx context.Context) error {
 	}
 	n.optimistic = false
 
-	if n.parent == nil {
+	if n.block.parent == nil {
 		return nil
 	}
-	return n.parent.setNodeAndParentValidated(ctx)
+	return n.block.parent.setNodeAndParentValidated(ctx)
 }
 
 // arrivedEarly returns whether this node was inserted before the first
@@ -131,7 +131,7 @@ func (n *Node) setNodeAndParentValidated(ctx context.Context) error {
 // Note that genesisTime has seconds granularity, therefore we use a strict
 // inequality < here. For example a block that arrives 3.9999 seconds into the
 // slot will have secs = 3 below.
-func (n *Node) arrivedEarly(genesisTime uint64) (bool, error) {
+func (n *BlockNode) arrivedEarly(genesisTime uint64) (bool, error) {
 	secs, err := slots.SecondsSinceSlotStart(n.slot, genesisTime, n.timestamp)
 	votingWindow := params.BeaconConfig().SecondsPerSlot / params.BeaconConfig().IntervalsPerSlot
 	return secs < votingWindow, err
@@ -142,7 +142,7 @@ func (n *Node) arrivedEarly(genesisTime uint64) (bool, error) {
 // Note that genesisTime has seconds granularity, therefore we use an
 // inequality >= here. For example a block that arrives 10.00001 seconds into the
 // slot will have secs = 10 below.
-func (n *Node) arrivedAfterOrphanCheck(genesisTime uint64) (bool, error) {
+func (n *BlockNode) arrivedAfterOrphanCheck(genesisTime uint64) (bool, error) {
 	secs, err := slots.SecondsSinceSlotStart(n.slot, genesisTime, n.timestamp)
 	return secs >= ProcessAttestationsThreshold, err
 }
@@ -153,22 +153,22 @@ func (n *Node) nodeTreeDump(ctx context.Context, nodes []*forkchoice2.Node) ([]*
 		return nil, ctx.Err()
 	}
 	var parentRoot [32]byte
-	if n.parent != nil {
-		parentRoot = n.parent.root
+	if n.block.parent != nil {
+		parentRoot = n.block.parent.block.root
 	}
 	thisNode := &forkchoice2.Node{
-		Slot:                     n.slot,
-		BlockRoot:                n.root[:],
+		Slot:                     n.block.slot,
+		BlockRoot:                n.block.root[:],
 		ParentRoot:               parentRoot[:],
-		JustifiedEpoch:           n.justifiedEpoch,
-		FinalizedEpoch:           n.finalizedEpoch,
-		UnrealizedJustifiedEpoch: n.unrealizedJustifiedEpoch,
-		UnrealizedFinalizedEpoch: n.unrealizedFinalizedEpoch,
+		JustifiedEpoch:           n.block.justifiedEpoch,
+		FinalizedEpoch:           n.block.finalizedEpoch,
+		UnrealizedJustifiedEpoch: n.block.unrealizedJustifiedEpoch,
+		UnrealizedFinalizedEpoch: n.block.unrealizedFinalizedEpoch,
 		Balance:                  n.balance,
 		Weight:                   n.weight,
 		ExecutionOptimistic:      n.optimistic,
-		ExecutionBlockHash:       n.payloadHash[:],
-		Timestamp:                n.timestamp,
+		ExecutionBlockHash:       n.block.payloadHash[:],
+		Timestamp:                n.block.timestamp,
 	}
 	if n.optimistic {
 		thisNode.Validity = forkchoice2.Optimistic

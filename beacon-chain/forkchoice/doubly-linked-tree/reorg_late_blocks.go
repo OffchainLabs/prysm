@@ -42,16 +42,16 @@ func (f *ForkChoice) ShouldOverrideFCU() (override bool) {
 		return
 	}
 
-	if head.slot != slots.CurrentSlot(f.store.genesisTime) {
+	if head.block.slot != slots.CurrentSlot(f.store.genesisTime) {
 		return
 	}
 
 	// Do not reorg on epoch boundaries
-	if (head.slot+1)%params.BeaconConfig().SlotsPerEpoch == 0 {
+	if (head.block.slot+1)%params.BeaconConfig().SlotsPerEpoch == 0 {
 		return
 	}
 	// Only reorg blocks that arrive late
-	early, err := head.arrivedEarly(f.store.genesisTime)
+	early, err := head.block.arrivedEarly(f.store.genesisTime)
 	if err != nil {
 		log.WithError(err).Error("could not check if block arrived early")
 		return
@@ -61,15 +61,15 @@ func (f *ForkChoice) ShouldOverrideFCU() (override bool) {
 	}
 	// Only reorg if we have been finalizing
 	finalizedEpoch := f.store.finalizedCheckpoint.Epoch
-	if slots.ToEpoch(head.slot+1) > finalizedEpoch+params.BeaconConfig().ReorgMaxEpochsSinceFinalization {
+	if slots.ToEpoch(head.block.slot+1) > finalizedEpoch+params.BeaconConfig().ReorgMaxEpochsSinceFinalization {
 		return
 	}
 	// Only orphan a single block
-	parent := head.parent
+	parent := head.block.parent
 	if parent == nil {
 		return
 	}
-	if head.slot > parent.slot+1 {
+	if head.block.slot > parent.block.slot+1 {
 		return
 	}
 	// Do not orphan a block that has higher justification than the parent
@@ -83,7 +83,7 @@ func (f *ForkChoice) ShouldOverrideFCU() (override bool) {
 	}
 
 	// Return early if we are checking before 10 seconds into the slot
-	secs, err := slots.SecondsSinceSlotStart(head.slot, f.store.genesisTime, uint64(time.Now().Unix()))
+	secs, err := slots.SecondsSinceSlotStart(head.block.slot, f.store.genesisTime, uint64(time.Now().Unix()))
 	if err != nil {
 		log.WithError(err).Error("could not check current slot")
 		return true
@@ -112,54 +112,54 @@ func (f *ForkChoice) GetProposerHead() [32]byte {
 	}
 
 	// Only reorg blocks from the previous slot.
-	if head.slot+1 != slots.CurrentSlot(f.store.genesisTime) {
-		return head.root
+	if head.block.slot+1 != slots.CurrentSlot(f.store.genesisTime) {
+		return head.block.root
 	}
 	// Do not reorg on epoch boundaries
-	if (head.slot+1)%params.BeaconConfig().SlotsPerEpoch == 0 {
-		return head.root
+	if (head.block.slot+1)%params.BeaconConfig().SlotsPerEpoch == 0 {
+		return head.block.root
 	}
 	// Only reorg blocks that arrive late
-	early, err := head.arrivedEarly(f.store.genesisTime)
+	early, err := head.block.arrivedEarly(f.store.genesisTime)
 	if err != nil {
 		log.WithError(err).Error("could not check if block arrived early")
-		return head.root
+		return head.block.root
 	}
 	if early {
-		return head.root
+		return head.block.root
 	}
 	// Only reorg if we have been finalizing
 	finalizedEpoch := f.store.finalizedCheckpoint.Epoch
-	if slots.ToEpoch(head.slot+1) > finalizedEpoch+params.BeaconConfig().ReorgMaxEpochsSinceFinalization {
-		return head.root
+	if slots.ToEpoch(head.block.slot+1) > finalizedEpoch+params.BeaconConfig().ReorgMaxEpochsSinceFinalization {
+		return head.block.root
 	}
 	// Only orphan a single block
-	parent := head.parent
+	parent := head.block.parent
 	if parent == nil {
-		return head.root
+		return head.block.root
 	}
-	if head.slot > parent.slot+1 {
-		return head.root
+	if head.block.slot > parent.block.slot+1 {
+		return head.block.root
 	}
 
 	// Only orphan a block if the head LMD vote is weak
 	if head.weight*100 > f.store.committeeWeight*params.BeaconConfig().ReorgWeightThreshold {
-		return head.root
+		return head.block.root
 	}
 
 	// Only orphan a block if the parent LMD vote is strong
 	if parent.weight*100 < f.store.committeeWeight*params.BeaconConfig().ReorgParentWeightThreshold {
-		return head.root
+		return head.block.root
 	}
 
 	// Only reorg if we are proposing early
-	secs, err := slots.SecondsSinceSlotStart(head.slot+1, f.store.genesisTime, uint64(time.Now().Unix()))
+	secs, err := slots.SecondsSinceSlotStart(head.block.slot+1, f.store.genesisTime, uint64(time.Now().Unix()))
 	if err != nil {
 		log.WithError(err).Error("could not check if proposing early")
-		return head.root
+		return head.block.root
 	}
 	if secs >= orphanLateBlockProposingEarly {
-		return head.root
+		return head.block.root
 	}
-	return parent.root
+	return parent.block.root
 }

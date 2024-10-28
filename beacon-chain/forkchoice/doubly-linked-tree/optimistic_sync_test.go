@@ -275,7 +275,7 @@ func TestSetOptimisticToInvalid_CorrectChildren(t *testing.T) {
 
 	_, err = f.store.setOptimisticToInvalid(ctx, [32]byte{'d'}, [32]byte{'a'}, [32]byte{'A'})
 	require.NoError(t, err)
-	require.Equal(t, 2, len(f.store.nodeByRoot[[32]byte{'a'}].children))
+	require.Equal(t, 2, len(f.store.emptyNodeByRoot[[32]byte{'a'}].children))
 
 }
 
