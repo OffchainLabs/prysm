@@ -168,6 +168,7 @@ type BeaconChainConfig struct {
 	DenebForkVersion     []byte           `yaml:"DENEB_FORK_VERSION" spec:"true"`     // DenebForkVersion is used to represent the fork version for deneb.
 	DenebForkEpoch       primitives.Epoch `yaml:"DENEB_FORK_EPOCH" spec:"true"`       // DenebForkEpoch is used to represent the assigned fork epoch for deneb.
 	ElectraForkVersion   []byte           `yaml:"ELECTRA_FORK_VERSION" spec:"true"`   // ElectraForkVersion is used to represent the fork version for electra.
+	ElectraForkEpoch     primitives.Epoch `yaml:"ELECTRA_FORK_EPOCH" spec:"true"`     // ElectraForkEpoch is used to represent the assigned fork epoch for electra.
 	EPBSForkVersion      []byte           // EPBSForkVersion is used to represent the fork version for ePBS.
 	EPBSForkEpoch        primitives.Epoch // EPBSForkEpoch is used to represent the assigned fork epoch for ePBS.
 

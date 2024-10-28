@@ -43,7 +43,9 @@ func Test_EpbsBlock_SetPayloadAttestations(t *testing.T) {
 	}
 
 	require.NoError(t, b.SetPayloadAttestations(payloadAttestation))
-	require.DeepEqual(t, b.block.body.PayloadAttestations(), payloadAttestation)
+	expectedPA, err := b.block.body.PayloadAttestations()
+	require.NoError(t, err)
+	require.DeepEqual(t, expectedPA, payloadAttestation)
 }
 
 func Test_EpbsBlock_SetSignedExecutionPayloadHeader(t *testing.T) {
@@ -67,5 +69,7 @@ func Test_EpbsBlock_SetSignedExecutionPayloadHeader(t *testing.T) {
 		Signature: []byte("signature"),
 	}
 	require.NoError(t, b.SetSignedExecutionPayloadHeader(signedExecutionPayloadHeader))
-	require.DeepEqual(t, b.block.body.SignedExecutionPayloadHeader(), signedExecutionPayloadHeader)
+	expectedHeader, err := b.block.body.SignedExecutionPayloadHeader()
+	require.NoError(t, err)
+	require.DeepEqual(t, expectedHeader, signedExecutionPayloadHeader)
 }

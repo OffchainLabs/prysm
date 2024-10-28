@@ -23,7 +23,8 @@ import (
 )
 
 // prepareForkchoiceState prepares a beacon State with the given data to mock
-// insert into forkchoice
+// insert into forkchoice. This method prepares full states and blocks for
+// bellatrix, it cannot be used for ePBS tests.
 func prepareForkchoiceState(
 	_ context.Context,
 	slot primitives.Slot,

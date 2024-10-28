@@ -239,12 +239,45 @@ func verifyBlobCommitmentCount(body interfaces.ReadOnlyBeaconBlockBody) error {
 // GetBlockPayloadHash returns the hash of the execution payload of the block
 func GetBlockPayloadHash(blk interfaces.ReadOnlyBeaconBlock) ([32]byte, error) {
 	var payloadHash [32]byte
-	if IsPreBellatrixVersion(blk.Version()) {
-		return payloadHash, nil
+	if blk.Version() >= version.EPBS {
+		header, err := blk.Body().SignedExecutionPayloadHeader()
+		if err != nil {
+			return payloadHash, err
+		}
+		if header.Message == nil {
+			return payloadHash, errors.New("nil execution header")
+		}
+		return [32]byte(header.Message.BlockHash), nil
 	}
-	payload, err := blk.Body().Execution()
-	if err != nil {
-		return payloadHash, err
+	if blk.Version() >= version.Bellatrix {
+		payload, err := blk.Body().Execution()
+		if err != nil {
+			return payloadHash, err
+		}
+		return bytesutil.ToBytes32(payload.BlockHash()), nil
 	}
-	return bytesutil.ToBytes32(payload.BlockHash()), nil
+	return payloadHash, nil
+}
+
+// GetBlockParentHash returns the hash of the parent execution payload
+func GetBlockParentHash(blk interfaces.ReadOnlyBeaconBlock) ([32]byte, error) {
+	var parentHash [32]byte
+	if blk.Version() >= version.EPBS {
+		header, err := blk.Body().SignedExecutionPayloadHeader()
+		if err != nil {
+			return parentHash, err
+		}
+		if header.Message == nil {
+			return parentHash, errors.New("nil execution header")
+		}
+		return [32]byte(header.Message.ParentBlockHash), nil
+	}
+	if blk.Version() >= version.Bellatrix {
+		payload, err := blk.Body().Execution()
+		if err != nil {
+			return parentHash, err
+		}
+		return bytesutil.ToBytes32(payload.ParentHash()), nil
+	}
+	return parentHash, nil
 }

@@ -63,11 +63,14 @@ func Test_EpbsBlock_Copy(t *testing.T) {
 	require.NoError(t, err)
 	copiedEpbsBlock, err := epbsBlock.Copy()
 	require.NoError(t, err)
-	copiedBody, ok := copiedEpbsBlock.Body().(interfaces.ROBlockBodyEpbs)
+	copiedBody, ok := copiedEpbsBlock.Body().(interfaces.ReadOnlyBeaconBlockBody)
 	require.Equal(t, true, ok)
-	require.DeepEqual(t, copiedBody.SignedExecutionPayloadHeader(), signedHeader)
+	copiedHeader, err := copiedBody.SignedExecutionPayloadHeader()
+	require.NoError(t, err)
+	require.DeepEqual(t, copiedHeader, signedHeader)
 
-	copiedPayloadAtts := copiedBody.PayloadAttestations()
+	copiedPayloadAtts, err := copiedBody.PayloadAttestations()
+	require.NoError(t, err)
 	require.DeepEqual(t, copiedPayloadAtts, payloadAttestations)
 }
 
@@ -92,4 +95,12 @@ func Test_EpbsBlock_IsBlinded(t *testing.T) {
 	require.Equal(t, false, bb.IsBlinded())
 	bd := &BeaconBlockBody{version: version.EPBS}
 	require.Equal(t, false, bd.IsBlinded())
+}
+
+func Test_PreEPBS_Versions(t *testing.T) {
+	bb := &BeaconBlockBody{version: version.Electra}
+	_, err := bb.PayloadAttestations()
+	require.ErrorContains(t, "PayloadAttestations", err)
+	_, err = bb.SignedExecutionPayloadHeader()
+	require.ErrorContains(t, "SignedExecutionPayloadHeader", err)
 }
