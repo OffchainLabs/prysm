@@ -49,6 +49,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Certain deb files were returning a 404 which made building new docker images without an existing
   cache impossible. This has been fixed with updates to rules_oci and bazel-lib.
 - Fixed an issue where the length check between block body KZG commitments and the existing cache from the database was incompatible.
+- Fix `--backfill-oldest-slot` handling - this flag was totally broken, the code would always backfill to the default slot [pr](https://github.com/prysmaticlabs/prysm/pull/14584)
 
 ### Security
 
