@@ -21,9 +21,9 @@ var (
 )
 
 const (
-	DepositRequestType       = 0
-	WithdrawalRequestType    = 1
-	ConsolidationRequestType = 2
+	DepositRequestType = iota
+	WithdrawalRequestType
+	ConsolidationRequestType
 )
 
 func (ebe *ExecutionBundleElectra) GetDecodedExecutionRequests() (*ExecutionRequests, error) {
