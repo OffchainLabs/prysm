@@ -174,8 +174,8 @@ type BeaconChainConfig struct {
 	DenebForkEpoch       primitives.Epoch `yaml:"DENEB_FORK_EPOCH" spec:"true"`       // DenebForkEpoch is used to represent the assigned fork epoch for deneb.
 	ElectraForkVersion   []byte           `yaml:"ELECTRA_FORK_VERSION" spec:"true"`   // ElectraForkVersion is used to represent the fork version for electra.
 	ElectraForkEpoch     primitives.Epoch `yaml:"ELECTRA_FORK_EPOCH" spec:"true"`     // ElectraForkEpoch is used to represent the assigned fork epoch for electra.
-	EPBSForkVersion      []byte           // EPBSForkVersion is used to represent the fork version for ePBS.
-	EPBSForkEpoch        primitives.Epoch // EPBSForkEpoch is used to represent the assigned fork epoch for ePBS.
+	EPBSForkVersion      []byte           `yaml:"EPBS_FORK_VERSION" spec:"true"`      // EPBSForkVersion is used to represent the fork version for ePBS.
+	EPBSForkEpoch        primitives.Epoch `yaml:"EPBS_FORK_EPOCH" spec:"true"`        // EPBSForkEpoch is used to represent the assigned fork epoch for ePBS.
 
 	ForkVersionSchedule map[[fieldparams.VersionLength]byte]primitives.Epoch // Schedule of fork epochs by version.
 	ForkVersionNames    map[[fieldparams.VersionLength]byte]string           // Human-readable names of fork versions.
@@ -306,6 +306,7 @@ func configForkSchedule(b *BeaconChainConfig) map[[fieldparams.VersionLength]byt
 	fvs[bytesutil.ToBytes4(b.CapellaForkVersion)] = b.CapellaForkEpoch
 	fvs[bytesutil.ToBytes4(b.DenebForkVersion)] = b.DenebForkEpoch
 	fvs[bytesutil.ToBytes4(b.ElectraForkVersion)] = b.ElectraForkEpoch
+	fvs[bytesutil.ToBytes4(b.EPBSForkVersion)] = b.EPBSForkEpoch
 	return fvs
 }
 

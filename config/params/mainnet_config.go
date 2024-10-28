@@ -30,7 +30,7 @@ const (
 	// Electra Fork Epoch for mainnet config
 	mainnetElectraForkEpoch = math.MaxUint64 // Far future / to be defined
 	// ePBS Fork Epoch for mainnet config.
-	mainnetEPBSForkEpoch = math.MaxUint64
+	mainnetEPBSForkEpoch = math.MaxUint64 // Far future / to be defined
 )
 
 var mainnetNetworkConfig = &NetworkConfig{

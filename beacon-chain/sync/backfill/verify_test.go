@@ -30,8 +30,8 @@ func TestDomainCache(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, len(fsched), len(dc.forkDomains))
 	for i := range fsched {
-		e := fsched[i].Epoch
-		ad, err := dc.forEpoch(e)
+		n := fsched[i].Name
+		ad, err := dc.forName(n)
 		require.NoError(t, err)
 		ed, err := signing.ComputeDomain(dType, fsched[i].Version[:], vRoot)
 		require.NoError(t, err)

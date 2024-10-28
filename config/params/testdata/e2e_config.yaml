@@ -47,7 +47,9 @@ DENEB_FORK_EPOCH: 12
 # Electra
 ELECTRA_FORK_VERSION: 0x050000fd
 ELECTRA_FORK_EPOCH: 18446744073709551615
-
+# EPBS
+EPBS_FORK_VERSION: 0x060000fd
+EPBS_FORK_EPOCH: 18446744073709551615
 
 # Time parameters
 # ---------------------------------------------------------------
