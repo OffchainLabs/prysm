@@ -20,6 +20,11 @@ import (
 )
 
 func TestValidator_SubmitPayloadAttestationMessage(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.EPBSForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
 	// Setup the test environment.
 	validator, m, validatorKey, finish := setup(t, true)
 	defer finish()

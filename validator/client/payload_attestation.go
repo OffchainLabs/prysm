@@ -19,6 +19,11 @@ import (
 
 // SubmitPayloadAttestationMessage submits a payload attestation message to the beacon node.
 func (v *validator) SubmitPayloadAttestationMessage(ctx context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte) {
+	if params.BeaconConfig().EPBSForkEpoch > slots.ToEpoch(slot) {
+		return
+	}
+	v.waitUntilPtcDuty(ctx, slot)
+
 	data, err := v.validatorClient.GetPayloadAttestationData(ctx, &ethpb.GetPayloadAttestationDataRequest{Slot: slot})
 	if err != nil {
 		log.WithError(err).Error("could not get payload attestation data")

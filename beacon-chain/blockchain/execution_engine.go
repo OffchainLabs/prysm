@@ -2,6 +2,7 @@ package blockchain
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -26,6 +27,8 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/sirupsen/logrus"
 )
+
+const blobCommitmentVersionKZG uint8 = 0x01
 
 var defaultLatestValidHash = bytesutil.PadTo([]byte{0xff}, 32)
 
@@ -407,7 +410,13 @@ func kzgCommitmentsToVersionedHashes(body interfaces.ReadOnlyBeaconBlockBody) ([
 
 	versionedHashes := make([]common.Hash, len(commitments))
 	for i, commitment := range commitments {
-		versionedHashes[i] = primitives.ConvertKzgCommitmentToVersionedHash(commitment)
+		versionedHashes[i] = ConvertKzgCommitmentToVersionedHash(commitment)
 	}
 	return versionedHashes, nil
+}
+
+func ConvertKzgCommitmentToVersionedHash(commitment []byte) common.Hash {
+	versionedHash := sha256.Sum256(commitment)
+	versionedHash[0] = blobCommitmentVersionKZG
+	return versionedHash
 }
