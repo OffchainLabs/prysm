@@ -24,7 +24,6 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Fix `engine_exchangeCapabilities` implementation.
 - Updated the default `scrape-interval` in `Client-stats` to 2 minutes to accommodate Beaconcha.in API rate limits.
 - Switch to compounding when consolidating with source==target.
-- Changed `GetLightClientUpdatesByRange` API to read from the DB instead of computing.
 - Revert block db save when saving state fails.
 - Return false from HasBlock if the block is being synced.
 - Cleanup forkchoice on failed insertions.
@@ -44,9 +43,6 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 - Fixed mesh size by appending `gParams.Dhi = gossipSubDhi`
 - Fix skipping partial withdrawals count.
-- recover from panics when writing the event stream [pr](https://github.com/prysmaticlabs/prysm/pull/14545)
-- Return the correct light client payload proof. [PR](https://github.com/prysmaticlabs/prysm/pull/14565)
-- Set fields of wrapped proto object in light client setters. [PR](https://github.com/prysmaticlabs/prysm/pull/14573)
 - wait for the async StreamEvent writer to exit before leaving the http handler, avoiding race condition panics [pr](https://github.com/prysmaticlabs/prysm/pull/14557)
 - Certain deb files were returning a 404 which made building new docker images without an existing
   cache impossible. This has been fixed with updates to rules_oci and bazel-lib.
