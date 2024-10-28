@@ -29,27 +29,37 @@ func (ebe *ExecutionBundleElectra) GetDecodedExecutionRequests() (*ExecutionRequ
 	requests := &ExecutionRequests{}
 	var prevTypeNum uint8
 	for i := range ebe.ExecutionRequests {
-		requestType := ebe.ExecutionRequests[i][0]
-		// Requests must be sorted in ascending order by request type.
+		requestType, requestListInSSZBytes, err := decodeExecutionRequest(ebe.ExecutionRequests[i])
+		if err != nil {
+			return nil, err
+		}
 		if prevTypeNum > requestType {
 			return nil, errors.New("invalid execution request type order, requests should be in sorted order")
 		}
 		prevTypeNum = requestType
-		requestListInSSZBytes := ebe.ExecutionRequests[i][1:]
 		switch requestType {
 		case depositRequestType:
+			if len(requestListInSSZBytes) < drSize {
+				return nil, errors.New("invalid deposit request length, requests should be at least the size of 1 request")
+			}
 			drs, err := unmarshalItems(requestListInSSZBytes, drSize, func() *DepositRequest { return &DepositRequest{} })
 			if err != nil {
 				return nil, err
 			}
 			requests.Deposits = drs
 		case withdrawalRequestType:
+			if len(requestListInSSZBytes) < wrSize {
+				return nil, errors.New("invalid withdrawal request length, requests should be at least the size of 1 request")
+			}
 			wrs, err := unmarshalItems(requestListInSSZBytes, wrSize, func() *WithdrawalRequest { return &WithdrawalRequest{} })
 			if err != nil {
 				return nil, err
 			}
 			requests.Withdrawals = wrs
 		case consolidationRequestType:
+			if len(requestListInSSZBytes) < crSize {
+				return nil, errors.New("invalid consolidations request length, requests should be at least the size of 1 request")
+			}
 			crs, err := unmarshalItems(requestListInSSZBytes, crSize, func() *ConsolidationRequest { return &ConsolidationRequest{} })
 			if err != nil {
 				return nil, err
@@ -59,8 +69,14 @@ func (ebe *ExecutionBundleElectra) GetDecodedExecutionRequests() (*ExecutionRequ
 			return nil, errors.Errorf("unsupported request type %d", requestType)
 		}
 	}
-
 	return requests, nil
+}
+
+func decodeExecutionRequest(req []byte) (typ uint8, data []byte, err error) {
+	if len(req) < 1 {
+		return 0, nil, errors.New("invalid execution request, length less than 1")
+	}
+	return req[0], req[1:], nil
 }
 
 func EncodeExecutionRequests(requests *ExecutionRequests) ([]hexutil.Bytes, error) {
