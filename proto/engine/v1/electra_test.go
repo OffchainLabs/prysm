@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
@@ -12,7 +13,31 @@ import (
 var depositRequestsSSZHex = "0x706b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000077630000000000000000000000000000000000000000000000000000000000007b00000000000000736967000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000c801000000000000706b00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000776300000000000000000000000000000000000000000000000000000000000090010000000000007369670000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002000000000000000"
 
 func TestGetDecodedExecutionRequests(t *testing.T) {
-	t.Run("Excluded requests still decode successfully", func(t *testing.T) {
+	t.Run("All requests decode successfully", func(t *testing.T) {
+		depositRequestBytes, err := hexutil.Decode("0x610000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000" +
+			"620000000000000000000000000000000000000000000000000000000000000000" +
+			"4059730700000063000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000" +
+			"00000000000000000000000000000000000000000000000000000000000000000000000000000000")
+		require.NoError(t, err)
+		withdrawalRequestBytes, err := hexutil.Decode("0x6400000000000000000000000000000000000000" +
+			"6500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000040597307000000")
+		require.NoError(t, err)
+		consolidationRequestBytes, err := hexutil.Decode("0x6600000000000000000000000000000000000000" +
+			"670000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000" +
+			"680000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000")
+		require.NoError(t, err)
+		ebe := &enginev1.ExecutionBundleElectra{
+			ExecutionRequests: [][]byte{append([]byte{uint8(enginev1.DepositRequestType)}, depositRequestBytes...),
+				append([]byte{uint8(enginev1.WithdrawalRequestType)}, withdrawalRequestBytes...),
+				append([]byte{uint8(enginev1.ConsolidationRequestType)}, consolidationRequestBytes...)},
+		}
+		requests, err := ebe.GetDecodedExecutionRequests()
+		require.NoError(t, err)
+		require.Equal(t, len(requests.Deposits), 1)
+		require.Equal(t, len(requests.Withdrawals), 1)
+		require.Equal(t, len(requests.Consolidations), 1)
+	})
+	t.Run("Excluded requests still decode successfully when one request is missing", func(t *testing.T) {
 		depositRequestBytes, err := hexutil.Decode("0x610000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000" +
 			"620000000000000000000000000000000000000000000000000000000000000000" +
 			"4059730700000063000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000" +
@@ -68,6 +93,65 @@ func TestGetDecodedExecutionRequests(t *testing.T) {
 		}
 		_, err = ebe.GetDecodedExecutionRequests()
 		require.ErrorContains(t, "invalid deposit requests length", err)
+	})
+	t.Run("If deposit requests are over the max allowed per payload then we should error", func(t *testing.T) {
+		requests := make([]*enginev1.DepositRequest, params.BeaconConfig().MaxDepositRequestsPerPayload+1)
+		for i := range requests {
+			requests[i] = &enginev1.DepositRequest{
+				Pubkey:                bytesutil.PadTo([]byte("pk"), 48),
+				WithdrawalCredentials: bytesutil.PadTo([]byte("wc"), 32),
+				Amount:                123,
+				Signature:             bytesutil.PadTo([]byte("sig"), 96),
+				Index:                 456,
+			}
+		}
+		by, err := enginev1.MarshalItems(requests)
+		require.NoError(t, err)
+		ebe := &enginev1.ExecutionBundleElectra{
+			ExecutionRequests: [][]byte{
+				append([]byte{uint8(enginev1.DepositRequestType)}, by...),
+			},
+		}
+		_, err = ebe.GetDecodedExecutionRequests()
+		require.ErrorContains(t, "invalid deposit requests length, requests should not be more than the max per payload", err)
+	})
+	t.Run("If withdrawal requests are over the max allowed per payload then we should error", func(t *testing.T) {
+		requests := make([]*enginev1.WithdrawalRequest, params.BeaconConfig().MaxWithdrawalRequestsPerPayload+1)
+		for i := range requests {
+			requests[i] = &enginev1.WithdrawalRequest{
+				SourceAddress:   bytesutil.PadTo([]byte("sa"), 20),
+				ValidatorPubkey: bytesutil.PadTo([]byte("pk"), 48),
+				Amount:          55555,
+			}
+		}
+		by, err := enginev1.MarshalItems(requests)
+		require.NoError(t, err)
+		ebe := &enginev1.ExecutionBundleElectra{
+			ExecutionRequests: [][]byte{
+				append([]byte{uint8(enginev1.WithdrawalRequestType)}, by...),
+			},
+		}
+		_, err = ebe.GetDecodedExecutionRequests()
+		require.ErrorContains(t, "invalid withdrawal requests length, requests should not be more than the max per payload", err)
+	})
+	t.Run("If consolidation requests are over the max allowed per payload then we should error", func(t *testing.T) {
+		requests := make([]*enginev1.ConsolidationRequest, params.BeaconConfig().MaxConsolidationsRequestsPerPayload+1)
+		for i := range requests {
+			requests[i] = &enginev1.ConsolidationRequest{
+				SourceAddress: bytesutil.PadTo([]byte("sa"), 20),
+				SourcePubkey:  bytesutil.PadTo([]byte("pk"), 48),
+				TargetPubkey:  bytesutil.PadTo([]byte("pk"), 48),
+			}
+		}
+		by, err := enginev1.MarshalItems(requests)
+		require.NoError(t, err)
+		ebe := &enginev1.ExecutionBundleElectra{
+			ExecutionRequests: [][]byte{
+				append([]byte{uint8(enginev1.ConsolidationRequestType)}, by...),
+			},
+		}
+		_, err = ebe.GetDecodedExecutionRequests()
+		require.ErrorContains(t, "invalid consolidation requests length, requests should not be more than the max per payload", err)
 	})
 }
 
