@@ -632,6 +632,15 @@ func (s *Service) beaconEndpoints(
 			methods: []string{http.MethodGet},
 		},
 		{
+			template: "/eth/v2/beacon/pool/attestations",
+			name:     namespace + ".ListAttestationsV2",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+			},
+			handler: server.ListAttestationsV2,
+			methods: []string{http.MethodGet},
+		},
+		{
 			template: "/eth/v1/beacon/pool/attestations",
 			name:     namespace + ".SubmitAttestations",
 			middleware: []middleware.Middleware{
