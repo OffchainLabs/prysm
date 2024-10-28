@@ -19,6 +19,8 @@ go_library(
         "electra.go",
         "electra_block.go",
         "electra_state.go",
+        "epbs_block.go",
+        "epbs_state.go",
         "helpers.go",
         "lightclient.go",
         "logging.go",

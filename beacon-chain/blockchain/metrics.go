@@ -182,6 +182,10 @@ var (
 		Name: "chain_service_processing_milliseconds",
 		Help: "Total time to call a chain service in ReceiveBlock()",
 	})
+	executionEngineProcessingTime = promauto.NewSummary(prometheus.SummaryOpts{
+		Name: "execution_engine_processing_milliseconds",
+		Help: "Total time to process an execution payload envelope in ReceiveExecutionPayloadEnvelope()",
+	})
 	dataAvailWaitedTime = promauto.NewSummary(prometheus.SummaryOpts{
 		Name: "da_waited_time_milliseconds",
 		Help: "Total time spent waiting for a data availability check in ReceiveBlock()",

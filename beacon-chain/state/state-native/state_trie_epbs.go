@@ -69,11 +69,12 @@ func InitializeFromProtoUnsafeEpbs(st *ethpb.BeaconStateEPBS) (*BeaconState, err
 		latestExecutionPayloadHeaderEPBS: st.LatestExecutionPayloadHeader,
 		lastWithdrawalsRoot:              bytesutil.ToBytes32(st.LastWithdrawalsRoot),
 
-		dirtyFields:      make(map[types.FieldIndex]bool, fieldCount),
-		dirtyIndices:     make(map[types.FieldIndex][]uint64, fieldCount),
-		stateFieldLeaves: make(map[types.FieldIndex]*fieldtrie.FieldTrie, fieldCount),
-		rebuildTrie:      make(map[types.FieldIndex]bool, fieldCount),
-		valMapHandler:    stateutil.NewValMapHandler(st.Validators),
+		dirtyFields:         make(map[types.FieldIndex]bool, fieldCount),
+		dirtyIndices:        make(map[types.FieldIndex][]uint64, fieldCount),
+		stateFieldLeaves:    make(map[types.FieldIndex]*fieldtrie.FieldTrie, fieldCount),
+		rebuildTrie:         make(map[types.FieldIndex]bool, fieldCount),
+		valMapHandler:       stateutil.NewValMapHandler(st.Validators),
+		validatorIndexCache: newFinalizedValidatorIndexCache(), // only used in post-electra and only populates when finalizing, otherwise it falls back to processing the full validator set
 	}
 
 	if features.Get().EnableExperimentalState {

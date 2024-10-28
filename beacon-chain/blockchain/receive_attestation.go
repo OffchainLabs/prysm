@@ -177,7 +177,7 @@ func (s *Service) processAttestations(ctx context.Context, disparity time.Durati
 		}
 
 		hasState := s.cfg.BeaconDB.HasStateSummary(ctx, bytesutil.ToBytes32(a.GetData().BeaconBlockRoot))
-		hasBlock := s.hasBlock(ctx, bytesutil.ToBytes32(a.GetData().BeaconBlockRoot))
+		hasBlock := s.chainHasBlock(ctx, bytesutil.ToBytes32(a.GetData().BeaconBlockRoot))
 		if !(hasState && hasBlock) {
 			continue
 		}

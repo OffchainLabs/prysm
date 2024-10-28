@@ -2,18 +2,36 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
-    srcs = ["attestation.go"],
+    srcs = [
+        "attestation.go",
+        "execution_payload_envelope.go",
+    ],
     importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/epbs",
     visibility = ["//visibility:public"],
+    deps = [
+        "//beacon-chain/core/electra:go_default_library",
+        "//beacon-chain/state:go_default_library",
+        "//consensus-types/interfaces:go_default_library",
+        "//proto/engine/v1:go_default_library",
+        "@com_github_pkg_errors//:go_default_library",
+    ],
 )
 
 go_test(
     name = "go_default_test",
-    srcs = ["attestation_test.go"],
+    srcs = [
+        "attestation_test.go",
+        "execution_payload_envelope_test.go",
+    ],
+    embed = [":go_default_library"],
     deps = [
-        ":go_default_library",
         "//beacon-chain/core/altair:go_default_library",
+        "//beacon-chain/state/state-native:go_default_library",
         "//config/params:go_default_library",
+        "//consensus-types/epbs:go_default_library",
+        "//proto/engine/v1:go_default_library",
+        "//proto/prysm/v1alpha1:go_default_library",
         "//testing/require:go_default_library",
+        "//testing/util:go_default_library",
     ],
 )

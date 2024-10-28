@@ -42,7 +42,7 @@ message SignedExecutionPayloadHeader{
 }
 
 message ExecutionPayloadEnvelope {
-	ExecutionPayloadElectra payload 		= 1;
+	ExecutionPayloadDeneb payload 		= 1;
 	uint64 builder_index 	     		= 2 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.ValidatorIndex"];
     	bytes beacon_block_root 		= 3 [(ethereum.eth.ext.ssz_size) = "32"];
     	repeated bytes blob_kzg_commitments 	= 4 [(ethereum.eth.ext.ssz_size) = "?,48", (ethereum.eth.ext.ssz_max)  = "max_blob_commitments.size"];

@@ -581,7 +581,8 @@ func testBroadcast(t *testing.T, topicFormat string, msg interface{}) {
 		incomingMessage, err := subscription.Next(ctx)
 		require.NoError(t, err)
 
-		result := msg.(ssz.Unmarshaler)
+		result, ok := msg.(ssz.Unmarshaler)
+		require.Equal(t, true, ok)
 		require.NoError(t, s1.Encoding().DecodeGossip(incomingMessage.Data, result))
 		require.DeepEqual(t, result, msg)
 	}()

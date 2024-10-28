@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/gohashtree"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
@@ -114,6 +115,31 @@ func TransactionsRoot(txs [][]byte) ([32]byte, error) {
 	bytesRootBufRoot := make([]byte, 32)
 	copy(bytesRootBufRoot, bytesRootBuf.Bytes())
 	return MixInLength(bytesRoot, bytesRootBufRoot), nil
+}
+
+// KzgCommitmentsRoot computes the HTR for a list of KZG commitments
+func KzgCommitmentsRoot(commitments [][]byte) ([32]byte, error) {
+	hash := [32]byte{}
+	leaves := make([][32]byte, 2*len(commitments))
+	for i, kzg := range commitments {
+		copy(leaves[2*i][:], kzg[:32])
+		copy(leaves[2*i+1][:], kzg[32:])
+	}
+	if err := gohashtree.Hash(leaves, leaves); err != nil {
+		return hash, err
+	}
+
+	bytesRoot, err := BitwiseMerkleize(leaves[:len(commitments)], uint64(len(commitments)), fieldparams.MaxBlobCommitmentsPerBlock)
+	if err != nil {
+		return [32]byte{}, errors.Wrap(err, "could not compute merkleization")
+	}
+	chunks := make([][32]byte, 2)
+	chunks[0] = bytesRoot
+	binary.LittleEndian.PutUint64(chunks[1][24:], uint64(len(commitments)))
+	if err := gohashtree.Hash(chunks, chunks); err != nil {
+		return hash, err
+	}
+	return chunks[0], nil
 }
 
 // WithdrawalSliceRoot computes the HTR of a slice of withdrawals.

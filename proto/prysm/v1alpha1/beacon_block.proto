@@ -997,10 +997,10 @@ message BeaconBlockBodyEpbs {
     repeated ProposerSlashing proposer_slashings = 4 [(ethereum.eth.ext.ssz_max) = "16"];
 
     // At most MAX_ATTESTER_SLASHINGS.
-    repeated AttesterSlashing attester_slashings = 5 [(ethereum.eth.ext.ssz_max) = "2"];
+    repeated AttesterSlashingElectra attester_slashings = 5 [(ethereum.eth.ext.ssz_max) = "2"];
 
     // At most MAX_ATTESTATIONS.
-    repeated Attestation attestations = 6 [(ethereum.eth.ext.ssz_max) = "128"];
+    repeated AttestationElectra attestations = 6 [(ethereum.eth.ext.ssz_max) = "128"];
 
     // At most MAX_DEPOSITS.
     repeated Deposit deposits = 7 [(ethereum.eth.ext.ssz_max) = "16"];

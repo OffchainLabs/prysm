@@ -1,12 +1,33 @@
-load("@prysm//tools/go:def.bzl", "go_library")
+load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
-    srcs = ["indexed_payload_attestation.go"],
+    srcs = [
+        "execution_payload_envelope.go",
+        "indexed_payload_attestation.go",
+    ],
     importpath = "github.com/prysmaticlabs/prysm/v5/consensus-types/epbs",
     visibility = ["//visibility:public"],
     deps = [
+        "//config/fieldparams:go_default_library",
+        "//consensus-types:go_default_library",
+        "//consensus-types/blocks:go_default_library",
+        "//consensus-types/interfaces:go_default_library",
+        "//consensus-types/primitives:go_default_library",
+        "//encoding/ssz:go_default_library",
+        "//proto/engine/v1:go_default_library",
+        "//proto/prysm/v1alpha1:go_default_library",
+        "@com_github_ethereum_go_ethereum//common:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["indexed_payload_attestation_test.go"],
+    embed = [":go_default_library"],
+    deps = [
         "//consensus-types/primitives:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
+        "//testing/require:go_default_library",
     ],
 )

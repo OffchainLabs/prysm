@@ -1056,8 +1056,8 @@ func TestService_removeInvalidBlockAndState(t *testing.T) {
 
 	require.NoError(t, service.removeInvalidBlockAndState(ctx, [][32]byte{r1, r2}))
 
-	require.Equal(t, false, service.hasBlock(ctx, r1))
-	require.Equal(t, false, service.hasBlock(ctx, r2))
+	require.Equal(t, false, service.chainHasBlock(ctx, r1))
+	require.Equal(t, false, service.chainHasBlock(ctx, r2))
 	require.Equal(t, false, service.cfg.BeaconDB.HasStateSummary(ctx, r1))
 	require.Equal(t, false, service.cfg.BeaconDB.HasStateSummary(ctx, r2))
 	has, err := service.cfg.StateGen.HasState(ctx, r1)

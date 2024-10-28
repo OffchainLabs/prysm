@@ -261,11 +261,7 @@ const (
 	LatestExecutionPayloadHeader
 	LatestExecutionPayloadHeaderCapella
 	LatestExecutionPayloadHeaderDeneb
-<<<<<<< HEAD
-=======
-	LatestExecutionPayloadHeaderElectra
 	ExecutionPayloadHeader
->>>>>>> 666b5c4cdb (Remove inclusion list from epbs (#14188))
 	NextWithdrawalIndex
 	NextWithdrawalValidatorIndex
 	HistoricalSummaries

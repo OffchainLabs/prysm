@@ -12,6 +12,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/encoding/ssz"
 	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
@@ -218,6 +219,42 @@ func NewGenesisBlockForState(ctx context.Context, st state.BeaconState) (interfa
 						Deposits:       make([]*enginev1.DepositRequest, 0),
 						Consolidations: make([]*enginev1.ConsolidationRequest, 0),
 					},
+				},
+			},
+			Signature: params.BeaconConfig().EmptySignature[:],
+		})
+	case *ethpb.BeaconStateEPBS:
+		kzgs := make([][]byte, 0)
+		kzgRoot, err := ssz.KzgCommitmentsRoot(kzgs)
+		if err != nil {
+			return nil, err
+		}
+		return blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockEpbs{
+			Block: &ethpb.BeaconBlockEpbs{
+				ParentRoot: params.BeaconConfig().ZeroHash[:],
+				StateRoot:  root[:],
+				Body: &ethpb.BeaconBlockBodyEpbs{
+					RandaoReveal: make([]byte, 96),
+					Eth1Data: &ethpb.Eth1Data{
+						DepositRoot: make([]byte, 32),
+						BlockHash:   make([]byte, 32),
+					},
+					Graffiti: make([]byte, 32),
+					SyncAggregate: &ethpb.SyncAggregate{
+						SyncCommitteeBits:      make([]byte, fieldparams.SyncCommitteeLength/8),
+						SyncCommitteeSignature: make([]byte, fieldparams.BLSSignatureLength),
+					},
+					SignedExecutionPayloadHeader: &enginev1.SignedExecutionPayloadHeader{
+						Message: &enginev1.ExecutionPayloadHeaderEPBS{
+							ParentBlockHash:        make([]byte, 32),
+							ParentBlockRoot:        make([]byte, 32),
+							BlockHash:              make([]byte, 32),
+							BlobKzgCommitmentsRoot: kzgRoot[:],
+						},
+						Signature: make([]byte, 96),
+					},
+					BlsToExecutionChanges: make([]*ethpb.SignedBLSToExecutionChange, 0),
+					PayloadAttestations:   make([]*ethpb.PayloadAttestation, 0),
 				},
 			},
 			Signature: params.BeaconConfig().EmptySignature[:],

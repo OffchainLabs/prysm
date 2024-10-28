@@ -47,13 +47,13 @@ func BeaconBlockBody(t *testing.T) *ethpb.BeaconBlockBodyEpbs {
 			{Header_1: SignedBeaconBlockHeader(t),
 				Header_2: SignedBeaconBlockHeader(t)},
 		},
-		AttesterSlashings: []*ethpb.AttesterSlashing{
+		AttesterSlashings: []*ethpb.AttesterSlashingElectra{
 			{
 				Attestation_1: IndexedAttestation(t),
 				Attestation_2: IndexedAttestation(t),
 			},
 		},
-		Attestations:   []*ethpb.Attestation{Attestation(t), Attestation(t), Attestation(t)},
+		Attestations:   []*ethpb.AttestationElectra{Attestation(t), Attestation(t), Attestation(t)},
 		Deposits:       []*ethpb.Deposit{Deposit(t), Deposit(t), Deposit(t)},
 		VoluntaryExits: []*ethpb.SignedVoluntaryExit{SignedVoluntaryExit(t), SignedVoluntaryExit(t)},
 		SyncAggregate: &ethpb.SyncAggregate{
@@ -83,8 +83,8 @@ func SignedBeaconBlockHeader(t *testing.T) *ethpb.SignedBeaconBlockHeader {
 }
 
 // IndexedAttestation creates a random IndexedAttestation for testing purposes.
-func IndexedAttestation(t *testing.T) *ethpb.IndexedAttestation {
-	return &ethpb.IndexedAttestation{
+func IndexedAttestation(t *testing.T) *ethpb.IndexedAttestationElectra {
+	return &ethpb.IndexedAttestationElectra{
 		AttestingIndices: []uint64{randomUint64(t), randomUint64(t), randomUint64(t)},
 		Data:             AttestationData(t),
 		Signature:        randomBytes(96, t),
@@ -92,11 +92,12 @@ func IndexedAttestation(t *testing.T) *ethpb.IndexedAttestation {
 }
 
 // Attestation creates a random Attestation for testing purposes.
-func Attestation(t *testing.T) *ethpb.Attestation {
-	return &ethpb.Attestation{
+func Attestation(t *testing.T) *ethpb.AttestationElectra {
+	return &ethpb.AttestationElectra{
 		AggregationBits: bitfield.NewBitlist(123),
 		Data:            AttestationData(t),
 		Signature:       randomBytes(96, t),
+		CommitteeBits:   primitives.NewAttestationCommitteeBits(),
 	}
 }
 

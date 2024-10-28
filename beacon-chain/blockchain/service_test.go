@@ -386,8 +386,8 @@ func TestHasBlock_ForkChoiceAndDB_DoublyLinkedTree(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, s.cfg.ForkChoiceStore.InsertNode(ctx, beaconState, roblock))
 
-	assert.Equal(t, false, s.hasBlock(ctx, [32]byte{}), "Should not have block")
-	assert.Equal(t, true, s.hasBlock(ctx, r), "Should have block")
+	assert.Equal(t, false, s.chainHasBlock(ctx, [32]byte{}), "Should not have block")
+	assert.Equal(t, true, s.chainHasBlock(ctx, r), "Should have block")
 }
 
 func TestServiceStop_SaveCachedBlocks(t *testing.T) {

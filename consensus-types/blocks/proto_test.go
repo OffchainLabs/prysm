@@ -19,8 +19,10 @@ type fields struct {
 	sig                      [96]byte
 	deposits                 []*eth.Deposit
 	atts                     []*eth.Attestation
+	attsElectra              []*eth.AttestationElectra
 	proposerSlashings        []*eth.ProposerSlashing
 	attesterSlashings        []*eth.AttesterSlashing
+	attesterSlashingsElectra []*eth.AttesterSlashingElectra
 	voluntaryExits           []*eth.SignedVoluntaryExit
 	syncAggregate            *eth.SyncAggregate
 	execPayload              *enginev1.ExecutionPayload
@@ -1552,6 +1554,26 @@ func getFields() fields {
 			},
 		}
 	}
+	attsElectra := make([]*eth.AttestationElectra, 8)
+	for i := range attsElectra {
+		attsElectra[i] = &eth.AttestationElectra{}
+		attsElectra[i].Signature = sig[:]
+		attsElectra[i].AggregationBits = bitfield.NewBitlist(1)
+		attsElectra[i].CommitteeBits = primitives.NewAttestationCommitteeBits()
+		attsElectra[i].Data = &eth.AttestationData{
+			Slot:            128,
+			CommitteeIndex:  128,
+			BeaconBlockRoot: root[:],
+			Source: &eth.Checkpoint{
+				Epoch: 128,
+				Root:  root[:],
+			},
+			Target: &eth.Checkpoint{
+				Epoch: 128,
+				Root:  root[:],
+			},
+		}
+	}
 	proposerSlashing := &eth.ProposerSlashing{
 		Header_1: &eth.SignedBeaconBlockHeader{
 			Header: &eth.BeaconBlockHeader{
@@ -1593,6 +1615,42 @@ func getFields() fields {
 			Signature: sig[:],
 		},
 		Attestation_2: &eth.IndexedAttestation{
+			AttestingIndices: []uint64{1, 2, 8},
+			Data: &eth.AttestationData{
+				Slot:            128,
+				CommitteeIndex:  128,
+				BeaconBlockRoot: root[:],
+				Source: &eth.Checkpoint{
+					Epoch: 128,
+					Root:  root[:],
+				},
+				Target: &eth.Checkpoint{
+					Epoch: 128,
+					Root:  root[:],
+				},
+			},
+			Signature: sig[:],
+		},
+	}
+	attesterSlashingElectra := &eth.AttesterSlashingElectra{
+		Attestation_1: &eth.IndexedAttestationElectra{
+			AttestingIndices: []uint64{1, 2, 8},
+			Data: &eth.AttestationData{
+				Slot:            128,
+				CommitteeIndex:  128,
+				BeaconBlockRoot: root[:],
+				Source: &eth.Checkpoint{
+					Epoch: 128,
+					Root:  root[:],
+				},
+				Target: &eth.Checkpoint{
+					Epoch: 128,
+					Root:  root[:],
+				},
+			},
+			Signature: sig[:],
+		},
+		Attestation_2: &eth.IndexedAttestationElectra{
 			AttestingIndices: []uint64{1, 2, 8},
 			Data: &eth.AttestationData{
 				Slot:            128,
@@ -1800,8 +1858,10 @@ func getFields() fields {
 		sig:                      sig,
 		deposits:                 deposits,
 		atts:                     atts,
+		attsElectra:              attsElectra,
 		proposerSlashings:        []*eth.ProposerSlashing{proposerSlashing},
 		attesterSlashings:        []*eth.AttesterSlashing{attesterSlashing},
+		attesterSlashingsElectra: []*eth.AttesterSlashingElectra{attesterSlashingElectra},
 		voluntaryExits:           []*eth.SignedVoluntaryExit{voluntaryExit},
 		syncAggregate:            syncAggregate,
 		execPayload:              execPayload,
