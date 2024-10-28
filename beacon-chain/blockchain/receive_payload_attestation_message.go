@@ -14,7 +14,7 @@ func (s *Service) ReceivePayloadAttestationMessage(ctx context.Context, a *eth.P
 		return err
 	}
 	root := [32]byte(a.Data.BeaconBlockRoot)
-	st, err := s.HeadState(ctx)
+	st, err := s.HeadStateReadOnly(ctx)
 	if err != nil {
 		return err
 	}

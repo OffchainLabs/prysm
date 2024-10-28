@@ -201,6 +201,7 @@ go_test(
         "proposer_exits_test.go",
         "proposer_slashings_test.go",
         "proposer_sync_aggregate_test.go",
+        "ptc_attester_test.go",
         "proposer_test.go",
         "server_mainnet_test.go",
         "server_test.go",
