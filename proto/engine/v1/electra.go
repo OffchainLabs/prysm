@@ -102,7 +102,7 @@ func EncodeExecutionRequests(requests *ExecutionRequests) ([]hexutil.Bytes, erro
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to marshal deposit requests")
 		}
-		requestData := []byte{depositRequestType}
+		requestData := []byte{DepositRequestType}
 		requestData = append(requestData, drBytes...)
 		requestsData = append(requestsData, requestData)
 	}
@@ -111,7 +111,7 @@ func EncodeExecutionRequests(requests *ExecutionRequests) ([]hexutil.Bytes, erro
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to marshal withdrawal requests")
 		}
-		requestData := []byte{withdrawalRequestType}
+		requestData := []byte{WithdrawalRequestType}
 		requestData = append(requestData, wrBytes...)
 		requestsData = append(requestsData, requestData)
 	}
@@ -120,7 +120,7 @@ func EncodeExecutionRequests(requests *ExecutionRequests) ([]hexutil.Bytes, erro
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to marshal consolidation requests")
 		}
-		requestData := []byte{consolidationRequestType}
+		requestData := []byte{ConsolidationRequestType}
 		requestData = append(requestData, crBytes...)
 		requestsData = append(requestsData, requestData)
 	}
