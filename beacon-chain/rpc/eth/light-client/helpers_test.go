@@ -35,7 +35,6 @@ func createNonEmptyFinalityBranch() [][]byte {
 
 func TestIsBetterUpdate(t *testing.T) {
 
-	params.SetupTestConfigCleanup(t)
 	config := params.BeaconConfig()
 
 	t.Run("new has supermajority but old doesn't", func(t *testing.T) {
