@@ -50,6 +50,8 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
   cache impossible. This has been fixed with updates to rules_oci and bazel-lib.
 - Fixed an issue where the length check between block body KZG commitments and the existing cache from the database was incompatible.
 - Fix `--backfill-oldest-slot` handling - this flag was totally broken, the code would always backfill to the default slot [pr](https://github.com/prysmaticlabs/prysm/pull/14584)
+- Fix keymanager API should return corrected error format for malformed tokens
+- Fix keymanager API should return empty instead of error on get keys API when using the unsupported keystore instead of failing with 500 error
 
 ### Security
 
