@@ -96,6 +96,7 @@ func encodeLightClientUpdate(update interfaces.LightClientUpdate) ([]byte, error
 		return nil, errors.Wrap(err, "could not marshal light client update")
 	}
 	fullEnc := make([]byte, len(key)+len(enc))
+	copy(fullEnc, key)
 	copy(fullEnc[len(key):], enc)
 	return snappy.Encode(nil, fullEnc), nil
 }

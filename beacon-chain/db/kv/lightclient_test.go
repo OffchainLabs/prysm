@@ -2,221 +2,218 @@ package kv
 
 import (
 	"context"
+	"fmt"
+	"math/rand"
 	"testing"
 
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
+	light_client "github.com/prysmaticlabs/prysm/v5/consensus-types/light-client"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	ethpbv1 "github.com/prysmaticlabs/prysm/v5/proto/eth/v1"
-	ethpbv2 "github.com/prysmaticlabs/prysm/v5/proto/eth/v2"
+	pb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/time/slots"
+	"google.golang.org/protobuf/proto"
 )
+
+func createUpdate(t *testing.T, v int) (interfaces.LightClientUpdate, error) {
+	config := params.BeaconConfig()
+	var slot primitives.Slot
+	var header interfaces.LightClientHeader
+	var err error
+
+	sampleRoot := make([]byte, 32)
+	for i := 0; i < 32; i++ {
+		sampleRoot[i] = byte(i)
+	}
+
+	sampleExecutionBranch := make([][]byte, fieldparams.ExecutionBranchDepth)
+	for i := 0; i < 4; i++ {
+		sampleExecutionBranch[i] = make([]byte, 32)
+		for j := 0; j < 32; j++ {
+			sampleExecutionBranch[i][j] = byte(i + j)
+		}
+	}
+
+	switch v {
+	case version.Altair:
+		slot = primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
+		header, err = light_client.NewWrappedHeader(&pb.LightClientHeaderAltair{
+			Beacon: &pb.BeaconBlockHeader{
+				Slot:          1,
+				ProposerIndex: primitives.ValidatorIndex(rand.Int()),
+				ParentRoot:    sampleRoot,
+				StateRoot:     sampleRoot,
+				BodyRoot:      sampleRoot,
+			},
+		})
+		require.NoError(t, err)
+	case version.Capella:
+		slot = primitives.Slot(config.CapellaForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
+		header, err = light_client.NewWrappedHeader(&pb.LightClientHeaderCapella{
+			Beacon: &pb.BeaconBlockHeader{
+				Slot:          1,
+				ProposerIndex: primitives.ValidatorIndex(rand.Int()),
+				ParentRoot:    sampleRoot,
+				StateRoot:     sampleRoot,
+				BodyRoot:      sampleRoot,
+			},
+			Execution: &enginev1.ExecutionPayloadHeaderCapella{
+				ParentHash:       make([]byte, fieldparams.RootLength),
+				FeeRecipient:     make([]byte, fieldparams.FeeRecipientLength),
+				StateRoot:        make([]byte, fieldparams.RootLength),
+				ReceiptsRoot:     make([]byte, fieldparams.RootLength),
+				LogsBloom:        make([]byte, fieldparams.LogsBloomLength),
+				PrevRandao:       make([]byte, fieldparams.RootLength),
+				ExtraData:        make([]byte, 0),
+				BaseFeePerGas:    make([]byte, fieldparams.RootLength),
+				BlockHash:        make([]byte, fieldparams.RootLength),
+				TransactionsRoot: make([]byte, fieldparams.RootLength),
+				WithdrawalsRoot:  make([]byte, fieldparams.RootLength),
+			},
+			ExecutionBranch: sampleExecutionBranch,
+		})
+		require.NoError(t, err)
+	case version.Deneb:
+		slot = primitives.Slot(config.DenebForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
+		header, err = light_client.NewWrappedHeader(&pb.LightClientHeaderDeneb{
+			Beacon: &pb.BeaconBlockHeader{
+				Slot:          1,
+				ProposerIndex: primitives.ValidatorIndex(rand.Int()),
+				ParentRoot:    sampleRoot,
+				StateRoot:     sampleRoot,
+				BodyRoot:      sampleRoot,
+			},
+			Execution: &enginev1.ExecutionPayloadHeaderDeneb{
+				ParentHash:       make([]byte, fieldparams.RootLength),
+				FeeRecipient:     make([]byte, fieldparams.FeeRecipientLength),
+				StateRoot:        make([]byte, fieldparams.RootLength),
+				ReceiptsRoot:     make([]byte, fieldparams.RootLength),
+				LogsBloom:        make([]byte, fieldparams.LogsBloomLength),
+				PrevRandao:       make([]byte, fieldparams.RootLength),
+				ExtraData:        make([]byte, 0),
+				BaseFeePerGas:    make([]byte, fieldparams.RootLength),
+				BlockHash:        make([]byte, fieldparams.RootLength),
+				TransactionsRoot: make([]byte, fieldparams.RootLength),
+				WithdrawalsRoot:  make([]byte, fieldparams.RootLength),
+			},
+			ExecutionBranch: sampleExecutionBranch,
+		})
+		require.NoError(t, err)
+	case version.Electra:
+		slot = primitives.Slot(config.ElectraForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
+		header, err = light_client.NewWrappedHeader(&pb.LightClientHeaderDeneb{
+			Beacon: &pb.BeaconBlockHeader{
+				Slot:          1,
+				ProposerIndex: primitives.ValidatorIndex(rand.Int()),
+				ParentRoot:    sampleRoot,
+				StateRoot:     sampleRoot,
+				BodyRoot:      sampleRoot,
+			},
+			Execution: &enginev1.ExecutionPayloadHeaderElectra{
+				ParentHash:       make([]byte, fieldparams.RootLength),
+				FeeRecipient:     make([]byte, fieldparams.FeeRecipientLength),
+				StateRoot:        make([]byte, fieldparams.RootLength),
+				ReceiptsRoot:     make([]byte, fieldparams.RootLength),
+				LogsBloom:        make([]byte, fieldparams.LogsBloomLength),
+				PrevRandao:       make([]byte, fieldparams.RootLength),
+				ExtraData:        make([]byte, 0),
+				BaseFeePerGas:    make([]byte, fieldparams.RootLength),
+				BlockHash:        make([]byte, fieldparams.RootLength),
+				TransactionsRoot: make([]byte, fieldparams.RootLength),
+				WithdrawalsRoot:  make([]byte, fieldparams.RootLength),
+			},
+			ExecutionBranch: sampleExecutionBranch,
+		})
+		require.NoError(t, err)
+	default:
+		return nil, fmt.Errorf("unsupported version %s", version.String(v))
+	}
+
+	update, err := createDefaultLightClientUpdate(slot)
+	require.NoError(t, err)
+	update.SetSignatureSlot(slot - 1)
+	syncCommitteeBits := make([]byte, 64)
+	syncCommitteeSignature := make([]byte, 96)
+	update.SetSyncAggregate(&pb.SyncAggregate{
+		SyncCommitteeBits:      syncCommitteeBits,
+		SyncCommitteeSignature: syncCommitteeSignature,
+	})
+
+	require.NoError(t, update.SetAttestedHeader(header))
+	require.NoError(t, update.SetFinalizedHeader(header))
+
+	return update, nil
+}
 
 func TestStore_LightClientUpdate_CanSaveRetrieveAltair(t *testing.T) {
 	db := setupDB(t)
 	ctx := context.Background()
-	update := &ethpbv2.LightClientUpdate{
-		AttestedHeader: &ethpbv2.LightClientHeaderContainer{
-			Header: &ethpbv2.LightClientHeaderContainer_HeaderAltair{
-				HeaderAltair: &ethpbv2.LightClientHeader{
-					Beacon: &ethpbv1.BeaconBlockHeader{
-						Slot:          1,
-						ProposerIndex: 1,
-						ParentRoot:    []byte{1, 1, 1},
-						StateRoot:     []byte{1, 1, 1},
-						BodyRoot:      []byte{1, 1, 1},
-					},
-				},
-			},
-		},
-		NextSyncCommittee: &ethpbv2.SyncCommittee{
-			Pubkeys:         nil,
-			AggregatePubkey: nil,
-		},
-		NextSyncCommitteeBranch: nil,
-		FinalizedHeader: &ethpbv2.LightClientHeaderContainer{
-			Header: &ethpbv2.LightClientHeaderContainer_HeaderAltair{
-				HeaderAltair: &ethpbv2.LightClientHeader{
-					Beacon: &ethpbv1.BeaconBlockHeader{
-						Slot:          1,
-						ProposerIndex: 1,
-						ParentRoot:    []byte{1, 1, 1},
-						StateRoot:     []byte{1, 1, 1},
-						BodyRoot:      []byte{1, 1, 1},
-					},
-				},
-			},
-		},
-		FinalityBranch: nil,
-		SyncAggregate:  nil,
-		SignatureSlot:  7,
-	}
+	update, err := createUpdate(t, version.Altair)
+	require.NoError(t, err)
 	period := uint64(1)
-	err := db.SaveLightClientUpdate(ctx, period, &ethpbv2.LightClientUpdateWithVersion{
-		Version: version.Altair,
-		Data:    update,
-	})
+
+	err = db.SaveLightClientUpdate(ctx, period, update)
 	require.NoError(t, err)
 
 	retrievedUpdate, err := db.LightClientUpdate(ctx, period)
 	require.NoError(t, err)
-	require.DeepEqual(t, update, retrievedUpdate.Data, "retrieved update does not match saved update")
+	require.DeepEqual(t, update, retrievedUpdate, "retrieved update does not match saved update")
 }
 
 func TestStore_LightClientUpdate_CanSaveRetrieveCapella(t *testing.T) {
 	db := setupDB(t)
 	ctx := context.Background()
-	update := &ethpbv2.LightClientUpdate{
-		AttestedHeader: &ethpbv2.LightClientHeaderContainer{
-			Header: &ethpbv2.LightClientHeaderContainer_HeaderCapella{
-				HeaderCapella: &ethpbv2.LightClientHeaderCapella{
-					Beacon: &ethpbv1.BeaconBlockHeader{
-						Slot:          1,
-						ProposerIndex: 1,
-						ParentRoot:    []byte{1, 1, 1},
-						StateRoot:     []byte{1, 1, 1},
-						BodyRoot:      []byte{1, 1, 1},
-					},
-					Execution: &enginev1.ExecutionPayloadHeaderCapella{
-						FeeRecipient: []byte{1, 2, 3},
-					},
-					ExecutionBranch: [][]byte{{1, 2, 3}, {4, 5, 6}},
-				},
-			},
-		},
-		NextSyncCommittee: &ethpbv2.SyncCommittee{
-			Pubkeys:         nil,
-			AggregatePubkey: nil,
-		},
-		NextSyncCommitteeBranch: nil,
-		FinalizedHeader: &ethpbv2.LightClientHeaderContainer{
-			Header: &ethpbv2.LightClientHeaderContainer_HeaderCapella{
-				HeaderCapella: &ethpbv2.LightClientHeaderCapella{
-					Beacon: &ethpbv1.BeaconBlockHeader{
-						Slot:          1,
-						ProposerIndex: 1,
-						ParentRoot:    []byte{1, 1, 1},
-						StateRoot:     []byte{1, 1, 1},
-						BodyRoot:      []byte{1, 1, 1},
-					},
-					Execution:       nil,
-					ExecutionBranch: nil,
-				},
-			},
-		},
-		FinalityBranch: nil,
-		SyncAggregate:  nil,
-		SignatureSlot:  7,
-	}
+	update, err := createUpdate(t, version.Capella)
+	require.NoError(t, err)
 	period := uint64(1)
-	err := db.SaveLightClientUpdate(ctx, period, &ethpbv2.LightClientUpdateWithVersion{
-		Version: version.Capella,
-		Data:    update,
-	})
+	err = db.SaveLightClientUpdate(ctx, period, update)
 	require.NoError(t, err)
 
 	retrievedUpdate, err := db.LightClientUpdate(ctx, period)
 	require.NoError(t, err)
-	require.DeepEqual(t, update, retrievedUpdate.Data, "retrieved update does not match saved update")
+	require.DeepEqual(t, update, retrievedUpdate, "retrieved update does not match saved update")
 }
 
 func TestStore_LightClientUpdate_CanSaveRetrieveDeneb(t *testing.T) {
 	db := setupDB(t)
 	ctx := context.Background()
-	update := &ethpbv2.LightClientUpdate{
-		AttestedHeader: &ethpbv2.LightClientHeaderContainer{
-			Header: &ethpbv2.LightClientHeaderContainer_HeaderDeneb{
-				HeaderDeneb: &ethpbv2.LightClientHeaderDeneb{
-					Beacon: &ethpbv1.BeaconBlockHeader{
-						Slot:          1,
-						ProposerIndex: 1,
-						ParentRoot:    []byte{1, 1, 1},
-						StateRoot:     []byte{1, 1, 1},
-						BodyRoot:      []byte{1, 1, 1},
-					},
-					Execution: &enginev1.ExecutionPayloadHeaderDeneb{
-						FeeRecipient: []byte{1, 2, 3},
-					},
-					ExecutionBranch: [][]byte{{1, 2, 3}, {4, 5, 6}},
-				},
-			},
-		},
-		NextSyncCommittee: &ethpbv2.SyncCommittee{
-			Pubkeys:         nil,
-			AggregatePubkey: nil,
-		},
-		NextSyncCommitteeBranch: nil,
-		FinalizedHeader: &ethpbv2.LightClientHeaderContainer{
-			Header: &ethpbv2.LightClientHeaderContainer_HeaderDeneb{
-				HeaderDeneb: &ethpbv2.LightClientHeaderDeneb{
-					Beacon: &ethpbv1.BeaconBlockHeader{
-						Slot:          1,
-						ProposerIndex: 1,
-						ParentRoot:    []byte{1, 1, 1},
-						StateRoot:     []byte{1, 1, 1},
-						BodyRoot:      []byte{1, 1, 1},
-					},
-					Execution:       nil,
-					ExecutionBranch: nil,
-				},
-			},
-		},
-		FinalityBranch: nil,
-		SyncAggregate:  nil,
-		SignatureSlot:  7,
-	}
+	update, err := createUpdate(t, version.Deneb)
+	require.NoError(t, err)
 	period := uint64(1)
-	err := db.SaveLightClientUpdate(ctx, period, &ethpbv2.LightClientUpdateWithVersion{
-		Version: version.Deneb,
-		Data:    update,
-	})
+	err = db.SaveLightClientUpdate(ctx, period, update)
 	require.NoError(t, err)
 
 	retrievedUpdate, err := db.LightClientUpdate(ctx, period)
 	require.NoError(t, err)
-	require.DeepEqual(t, update, retrievedUpdate.Data, "retrieved update does not match saved update")
+	require.DeepEqual(t, update, retrievedUpdate, "retrieved update does not match saved update")
+}
+
+func TestStore_LightClientUpdate_CanSaveRetrieveElectra(t *testing.T) {
+	db := setupDB(t)
+	ctx := context.Background()
+	update, err := createUpdate(t, version.Electra)
+	require.NoError(t, err)
+	period := uint64(1)
+	err = db.SaveLightClientUpdate(ctx, period, update)
+	require.NoError(t, err)
+
+	retrievedUpdate, err := db.LightClientUpdate(ctx, period)
+	require.NoError(t, err)
+	require.DeepEqual(t, update, retrievedUpdate, "retrieved update does not match saved update")
 }
 
 func TestStore_LightClientUpdates_canRetrieveRange(t *testing.T) {
 	db := setupDB(t)
 	ctx := context.Background()
-	updates := []*ethpbv2.LightClientUpdateWithVersion{
-		{
-			Version: 1,
-			Data: &ethpbv2.LightClientUpdate{
-				AttestedHeader:          nil,
-				NextSyncCommittee:       nil,
-				NextSyncCommitteeBranch: nil,
-				FinalizedHeader:         nil,
-				FinalityBranch:          nil,
-				SyncAggregate:           nil,
-				SignatureSlot:           7,
-			},
-		},
-		{
-			Version: 1,
-			Data: &ethpbv2.LightClientUpdate{
-				AttestedHeader:          nil,
-				NextSyncCommittee:       nil,
-				NextSyncCommitteeBranch: nil,
-				FinalizedHeader:         nil,
-				FinalityBranch:          nil,
-				SyncAggregate:           nil,
-				SignatureSlot:           8,
-			},
-		},
-		{
-			Version: 1,
-			Data: &ethpbv2.LightClientUpdate{
-				AttestedHeader:          nil,
-				NextSyncCommittee:       nil,
-				NextSyncCommitteeBranch: nil,
-				FinalizedHeader:         nil,
-				FinalityBranch:          nil,
-				SyncAggregate:           nil,
-				SignatureSlot:           9,
-			},
-		},
+	updates := make([]interfaces.LightClientUpdate, 0, 3)
+	for i := 1; i <= 3; i++ {
+		update, err := createUpdate(t, version.Altair)
+		require.NoError(t, err)
+		updates = append(updates, update)
 	}
 
 	for i, update := range updates {
@@ -229,7 +226,7 @@ func TestStore_LightClientUpdates_canRetrieveRange(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, len(updates), len(retrievedUpdatesMap), "retrieved updates do not match saved updates")
 	for i, update := range updates {
-		require.Equal(t, update.Data.SignatureSlot, retrievedUpdatesMap[uint64(i+1)].Data.SignatureSlot, "retrieved update does not match saved update")
+		require.DeepEqual(t, update, retrievedUpdatesMap[uint64(i+1)], "retrieved update does not match saved update")
 	}
 
 }
@@ -237,43 +234,11 @@ func TestStore_LightClientUpdates_canRetrieveRange(t *testing.T) {
 func TestStore_LightClientUpdate_EndPeriodSmallerThanStartPeriod(t *testing.T) {
 	db := setupDB(t)
 	ctx := context.Background()
-	updates := []*ethpbv2.LightClientUpdateWithVersion{
-		{
-			Version: 1,
-			Data: &ethpbv2.LightClientUpdate{
-				AttestedHeader:          nil,
-				NextSyncCommittee:       nil,
-				NextSyncCommitteeBranch: nil,
-				FinalizedHeader:         nil,
-				FinalityBranch:          nil,
-				SyncAggregate:           nil,
-				SignatureSlot:           7,
-			},
-		},
-		{
-			Version: 1,
-			Data: &ethpbv2.LightClientUpdate{
-				AttestedHeader:          nil,
-				NextSyncCommittee:       nil,
-				NextSyncCommitteeBranch: nil,
-				FinalizedHeader:         nil,
-				FinalityBranch:          nil,
-				SyncAggregate:           nil,
-				SignatureSlot:           8,
-			},
-		},
-		{
-			Version: 1,
-			Data: &ethpbv2.LightClientUpdate{
-				AttestedHeader:          nil,
-				NextSyncCommittee:       nil,
-				NextSyncCommitteeBranch: nil,
-				FinalizedHeader:         nil,
-				FinalityBranch:          nil,
-				SyncAggregate:           nil,
-				SignatureSlot:           9,
-			},
-		},
+	updates := make([]interfaces.LightClientUpdate, 0, 3)
+	for i := 1; i <= 3; i++ {
+		update, err := createUpdate(t, version.Altair)
+		require.NoError(t, err)
+		updates = append(updates, update)
 	}
 
 	for i, update := range updates {
@@ -292,43 +257,11 @@ func TestStore_LightClientUpdate_EndPeriodSmallerThanStartPeriod(t *testing.T) {
 func TestStore_LightClientUpdate_EndPeriodEqualToStartPeriod(t *testing.T) {
 	db := setupDB(t)
 	ctx := context.Background()
-	updates := []*ethpbv2.LightClientUpdateWithVersion{
-		{
-			Version: 1,
-			Data: &ethpbv2.LightClientUpdate{
-				AttestedHeader:          nil,
-				NextSyncCommittee:       nil,
-				NextSyncCommitteeBranch: nil,
-				FinalizedHeader:         nil,
-				FinalityBranch:          nil,
-				SyncAggregate:           nil,
-				SignatureSlot:           7,
-			},
-		},
-		{
-			Version: 1,
-			Data: &ethpbv2.LightClientUpdate{
-				AttestedHeader:          nil,
-				NextSyncCommittee:       nil,
-				NextSyncCommitteeBranch: nil,
-				FinalizedHeader:         nil,
-				FinalityBranch:          nil,
-				SyncAggregate:           nil,
-				SignatureSlot:           8,
-			},
-		},
-		{
-			Version: 1,
-			Data: &ethpbv2.LightClientUpdate{
-				AttestedHeader:          nil,
-				NextSyncCommittee:       nil,
-				NextSyncCommitteeBranch: nil,
-				FinalizedHeader:         nil,
-				FinalityBranch:          nil,
-				SyncAggregate:           nil,
-				SignatureSlot:           9,
-			},
-		},
+	updates := make([]interfaces.LightClientUpdate, 0, 3)
+	for i := 1; i <= 3; i++ {
+		update, err := createUpdate(t, version.Altair)
+		require.NoError(t, err)
+		updates = append(updates, update)
 	}
 
 	for i, update := range updates {
@@ -340,53 +273,21 @@ func TestStore_LightClientUpdate_EndPeriodEqualToStartPeriod(t *testing.T) {
 	retrievedUpdates, err := db.LightClientUpdates(ctx, 2, 2)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(retrievedUpdates))
-	require.Equal(t, updates[1].Data.SignatureSlot, retrievedUpdates[2].Data.SignatureSlot, "retrieved update does not match saved update")
+	require.DeepEqual(t, updates[1], retrievedUpdates[2], "retrieved update does not match saved update")
 }
 
 func TestStore_LightClientUpdate_StartPeriodBeforeFirstUpdate(t *testing.T) {
 	db := setupDB(t)
 	ctx := context.Background()
-	updates := []*ethpbv2.LightClientUpdateWithVersion{
-		{
-			Version: 1,
-			Data: &ethpbv2.LightClientUpdate{
-				AttestedHeader:          nil,
-				NextSyncCommittee:       nil,
-				NextSyncCommitteeBranch: nil,
-				FinalizedHeader:         nil,
-				FinalityBranch:          nil,
-				SyncAggregate:           nil,
-				SignatureSlot:           7,
-			},
-		},
-		{
-			Version: 1,
-			Data: &ethpbv2.LightClientUpdate{
-				AttestedHeader:          nil,
-				NextSyncCommittee:       nil,
-				NextSyncCommitteeBranch: nil,
-				FinalizedHeader:         nil,
-				FinalityBranch:          nil,
-				SyncAggregate:           nil,
-				SignatureSlot:           8,
-			},
-		},
-		{
-			Version: 1,
-			Data: &ethpbv2.LightClientUpdate{
-				AttestedHeader:          nil,
-				NextSyncCommittee:       nil,
-				NextSyncCommitteeBranch: nil,
-				FinalizedHeader:         nil,
-				FinalityBranch:          nil,
-				SyncAggregate:           nil,
-				SignatureSlot:           9,
-			},
-		},
+	updates := make([]interfaces.LightClientUpdate, 0, 3)
+	for i := 1; i <= 3; i++ {
+		update, err := createUpdate(t, version.Altair)
+		require.NoError(t, err)
+		updates = append(updates, update)
 	}
 
 	for i, update := range updates {
-		err := db.SaveLightClientUpdate(ctx, uint64(i+2), update)
+		err := db.SaveLightClientUpdate(ctx, uint64(i+1), update)
 		require.NoError(t, err)
 	}
 
@@ -395,50 +296,18 @@ func TestStore_LightClientUpdate_StartPeriodBeforeFirstUpdate(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 3, len(retrievedUpdates))
 	for i, update := range updates {
-		require.Equal(t, update.Data.SignatureSlot, retrievedUpdates[uint64(i+2)].Data.SignatureSlot, "retrieved update does not match saved update")
+		require.DeepEqual(t, update, retrievedUpdates[uint64(i+1)], "retrieved update does not match saved update")
 	}
 }
 
 func TestStore_LightClientUpdate_EndPeriodAfterLastUpdate(t *testing.T) {
 	db := setupDB(t)
 	ctx := context.Background()
-	updates := []*ethpbv2.LightClientUpdateWithVersion{
-		{
-			Version: 1,
-			Data: &ethpbv2.LightClientUpdate{
-				AttestedHeader:          nil,
-				NextSyncCommittee:       nil,
-				NextSyncCommitteeBranch: nil,
-				FinalizedHeader:         nil,
-				FinalityBranch:          nil,
-				SyncAggregate:           nil,
-				SignatureSlot:           7,
-			},
-		},
-		{
-			Version: 1,
-			Data: &ethpbv2.LightClientUpdate{
-				AttestedHeader:          nil,
-				NextSyncCommittee:       nil,
-				NextSyncCommitteeBranch: nil,
-				FinalizedHeader:         nil,
-				FinalityBranch:          nil,
-				SyncAggregate:           nil,
-				SignatureSlot:           8,
-			},
-		},
-		{
-			Version: 1,
-			Data: &ethpbv2.LightClientUpdate{
-				AttestedHeader:          nil,
-				NextSyncCommittee:       nil,
-				NextSyncCommitteeBranch: nil,
-				FinalizedHeader:         nil,
-				FinalityBranch:          nil,
-				SyncAggregate:           nil,
-				SignatureSlot:           9,
-			},
-		},
+	updates := make([]interfaces.LightClientUpdate, 0, 3)
+	for i := 1; i <= 3; i++ {
+		update, err := createUpdate(t, version.Altair)
+		require.NoError(t, err)
+		updates = append(updates, update)
 	}
 
 	for i, update := range updates {
@@ -451,50 +320,18 @@ func TestStore_LightClientUpdate_EndPeriodAfterLastUpdate(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 3, len(retrievedUpdates))
 	for i, update := range updates {
-		require.Equal(t, update.Data.SignatureSlot, retrievedUpdates[uint64(i+1)].Data.SignatureSlot, "retrieved update does not match saved update")
+		require.DeepEqual(t, update, retrievedUpdates[uint64(i+1)], "retrieved update does not match saved update")
 	}
 }
 
 func TestStore_LightClientUpdate_PartialUpdates(t *testing.T) {
 	db := setupDB(t)
 	ctx := context.Background()
-	updates := []*ethpbv2.LightClientUpdateWithVersion{
-		{
-			Version: 1,
-			Data: &ethpbv2.LightClientUpdate{
-				AttestedHeader:          nil,
-				NextSyncCommittee:       nil,
-				NextSyncCommitteeBranch: nil,
-				FinalizedHeader:         nil,
-				FinalityBranch:          nil,
-				SyncAggregate:           nil,
-				SignatureSlot:           7,
-			},
-		},
-		{
-			Version: 1,
-			Data: &ethpbv2.LightClientUpdate{
-				AttestedHeader:          nil,
-				NextSyncCommittee:       nil,
-				NextSyncCommitteeBranch: nil,
-				FinalizedHeader:         nil,
-				FinalityBranch:          nil,
-				SyncAggregate:           nil,
-				SignatureSlot:           8,
-			},
-		},
-		{
-			Version: 1,
-			Data: &ethpbv2.LightClientUpdate{
-				AttestedHeader:          nil,
-				NextSyncCommittee:       nil,
-				NextSyncCommitteeBranch: nil,
-				FinalizedHeader:         nil,
-				FinalityBranch:          nil,
-				SyncAggregate:           nil,
-				SignatureSlot:           9,
-			},
-		},
+	updates := make([]interfaces.LightClientUpdate, 0, 3)
+	for i := 1; i <= 3; i++ {
+		update, err := createUpdate(t, version.Altair)
+		require.NoError(t, err)
+		updates = append(updates, update)
 	}
 
 	for i, update := range updates {
@@ -507,100 +344,53 @@ func TestStore_LightClientUpdate_PartialUpdates(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 2, len(retrievedUpdates))
 	for i, update := range updates[:2] {
-		require.Equal(t, update.Data.SignatureSlot, retrievedUpdates[uint64(i+1)].Data.SignatureSlot, "retrieved update does not match saved update")
+		require.DeepEqual(t, update, retrievedUpdates[uint64(i+1)], "retrieved update does not match saved update")
 	}
 }
 
 func TestStore_LightClientUpdate_MissingPeriods_SimpleData(t *testing.T) {
 	db := setupDB(t)
 	ctx := context.Background()
-	updates := []*ethpbv2.LightClientUpdateWithVersion{
-		{
-			Version: 1,
-			Data: &ethpbv2.LightClientUpdate{
-				AttestedHeader:          nil,
-				NextSyncCommittee:       nil,
-				NextSyncCommitteeBranch: nil,
-				FinalizedHeader:         nil,
-				FinalityBranch:          nil,
-				SyncAggregate:           nil,
-				SignatureSlot:           7,
-			},
-		},
-		{
-			Version: 1,
-			Data: &ethpbv2.LightClientUpdate{
-				AttestedHeader:          nil,
-				NextSyncCommittee:       nil,
-				NextSyncCommitteeBranch: nil,
-				FinalizedHeader:         nil,
-				FinalityBranch:          nil,
-				SyncAggregate:           nil,
-				SignatureSlot:           8,
-			},
-		},
-		{
-			Version: 1,
-			Data: &ethpbv2.LightClientUpdate{
-				AttestedHeader:          nil,
-				NextSyncCommittee:       nil,
-				NextSyncCommitteeBranch: nil,
-				FinalizedHeader:         nil,
-				FinalityBranch:          nil,
-				SyncAggregate:           nil,
-				SignatureSlot:           11,
-			},
-		},
-		{
-			Version: 1,
-			Data: &ethpbv2.LightClientUpdate{
-				AttestedHeader:          nil,
-				NextSyncCommittee:       nil,
-				NextSyncCommitteeBranch: nil,
-				FinalizedHeader:         nil,
-				FinalityBranch:          nil,
-				SyncAggregate:           nil,
-				SignatureSlot:           12,
-			},
-		},
+	updates := make([]interfaces.LightClientUpdate, 0, 4)
+	for i := 1; i <= 4; i++ {
+		update, err := createUpdate(t, version.Altair)
+		require.NoError(t, err)
+		updates = append(updates, update)
 	}
 
-	for _, update := range updates {
-		err := db.SaveLightClientUpdate(ctx, uint64(update.Data.SignatureSlot), update)
+	for i, update := range updates {
+		if i == 1 || i == 2 {
+			continue
+		}
+		err := db.SaveLightClientUpdate(ctx, uint64(i+1), update)
 		require.NoError(t, err)
 	}
 
 	// Retrieve the updates
-	retrievedUpdates, err := db.LightClientUpdates(ctx, 7, 12)
-	require.NoError(t, err)
-	require.Equal(t, 4, len(retrievedUpdates))
-	for _, update := range updates {
-		require.Equal(t, update.Data.SignatureSlot, retrievedUpdates[uint64(update.Data.SignatureSlot)].Data.SignatureSlot, "retrieved update does not match saved update")
-	}
-
-	// Retrieve the updates from the middle
-	retrievedUpdates, err = db.LightClientUpdates(ctx, 8, 12)
-	require.NoError(t, err)
-	require.Equal(t, 3, len(retrievedUpdates))
-	require.Equal(t, updates[1].Data.SignatureSlot, retrievedUpdates[8].Data.SignatureSlot, "retrieved update does not match saved update")
-	require.Equal(t, updates[2].Data.SignatureSlot, retrievedUpdates[11].Data.SignatureSlot, "retrieved update does not match saved update")
-	require.Equal(t, updates[3].Data.SignatureSlot, retrievedUpdates[12].Data.SignatureSlot, "retrieved update does not match saved update")
-
-	// Retrieve the updates from after the missing period
-	retrievedUpdates, err = db.LightClientUpdates(ctx, 11, 12)
+	retrievedUpdates, err := db.LightClientUpdates(ctx, 1, 4)
 	require.NoError(t, err)
 	require.Equal(t, 2, len(retrievedUpdates))
-	require.Equal(t, updates[2].Data.SignatureSlot, retrievedUpdates[11].Data.SignatureSlot, "retrieved update does not match saved update")
-	require.Equal(t, updates[3].Data.SignatureSlot, retrievedUpdates[12].Data.SignatureSlot, "retrieved update does not match saved update")
+	require.DeepEqual(t, updates[0], retrievedUpdates[uint64(1)], "retrieved update does not match saved update")
+	require.DeepEqual(t, updates[3], retrievedUpdates[uint64(4)], "retrieved update does not match saved update")
+
+	// Retrieve the updates from the middle
+	retrievedUpdates, err = db.LightClientUpdates(ctx, 2, 4)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(retrievedUpdates))
+	require.DeepEqual(t, updates[3], retrievedUpdates[4], "retrieved update does not match saved update")
+
+	// Retrieve the updates from after the missing period
+	retrievedUpdates, err = db.LightClientUpdates(ctx, 4, 4)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(retrievedUpdates))
+	require.DeepEqual(t, updates[3], retrievedUpdates[4], "retrieved update does not match saved update")
 
 	//retrieve the updates from before the missing period to after the missing period
-	retrievedUpdates, err = db.LightClientUpdates(ctx, 3, 15)
+	retrievedUpdates, err = db.LightClientUpdates(ctx, 0, 6)
 	require.NoError(t, err)
-	require.Equal(t, 4, len(retrievedUpdates))
-	require.Equal(t, updates[0].Data.SignatureSlot, retrievedUpdates[7].Data.SignatureSlot, "retrieved update does not match saved update")
-	require.Equal(t, updates[1].Data.SignatureSlot, retrievedUpdates[8].Data.SignatureSlot, "retrieved update does not match saved update")
-	require.Equal(t, updates[2].Data.SignatureSlot, retrievedUpdates[11].Data.SignatureSlot, "retrieved update does not match saved update")
-	require.Equal(t, updates[3].Data.SignatureSlot, retrievedUpdates[12].Data.SignatureSlot, "retrieved update does not match saved update")
+	require.Equal(t, 2, len(retrievedUpdates))
+	require.DeepEqual(t, updates[0], retrievedUpdates[uint64(1)], "retrieved update does not match saved update")
+	require.DeepEqual(t, updates[3], retrievedUpdates[uint64(4)], "retrieved update does not match saved update")
 }
 
 func TestStore_LightClientUpdate_EmptyDB(t *testing.T) {
@@ -613,177 +403,107 @@ func TestStore_LightClientUpdate_EmptyDB(t *testing.T) {
 	require.Equal(t, 0, len(retrievedUpdates))
 }
 
-func TestStore_LightClientUpdate_MissingPeriodsAtTheEnd_SimpleData(t *testing.T) {
+func TestStore_LightClientUpdate_RetrieveMissingPeriodDistributed(t *testing.T) {
 	db := setupDB(t)
 	ctx := context.Background()
-
-	for i := 1; i < 4; i++ {
-		update := &ethpbv2.LightClientUpdateWithVersion{
-			Version: 1,
-			Data: &ethpbv2.LightClientUpdate{
-				AttestedHeader:          nil,
-				NextSyncCommittee:       nil,
-				NextSyncCommitteeBranch: nil,
-				FinalizedHeader:         nil,
-				FinalityBranch:          nil,
-				SyncAggregate:           nil,
-				SignatureSlot:           primitives.Slot(uint64(i)),
-			},
-		}
-		err := db.SaveLightClientUpdate(ctx, uint64(i), update)
+	updates := make([]interfaces.LightClientUpdate, 0, 5)
+	for i := 1; i <= 5; i++ {
+		update, err := createUpdate(t, version.Altair)
 		require.NoError(t, err)
+		updates = append(updates, update)
 	}
-	for i := 7; i < 10; i++ {
-		update := &ethpbv2.LightClientUpdateWithVersion{
-			Version: 1,
-			Data: &ethpbv2.LightClientUpdate{
-				AttestedHeader:          nil,
-				NextSyncCommittee:       nil,
-				NextSyncCommitteeBranch: nil,
-				FinalizedHeader:         nil,
-				FinalityBranch:          nil,
-				SyncAggregate:           nil,
-				SignatureSlot:           primitives.Slot(uint64(i)),
-			},
+
+	for i, update := range updates {
+		if i == 1 || i == 3 {
+			continue
 		}
-		err := db.SaveLightClientUpdate(ctx, uint64(i), update)
+		err := db.SaveLightClientUpdate(ctx, uint64(i+1), update)
 		require.NoError(t, err)
 	}
 
-	// Retrieve the updates from 1 to 5
-	retrievedUpdates, err := db.LightClientUpdates(ctx, 1, 5)
+	// Retrieve the updates
+	retrievedUpdates, err := db.LightClientUpdates(ctx, 0, 7)
 	require.NoError(t, err)
 	require.Equal(t, 3, len(retrievedUpdates))
-	require.Equal(t, primitives.Slot(1), retrievedUpdates[1].Data.SignatureSlot, "retrieved update does not match saved update")
-	require.Equal(t, primitives.Slot(2), retrievedUpdates[2].Data.SignatureSlot, "retrieved update does not match saved update")
-	require.Equal(t, primitives.Slot(3), retrievedUpdates[3].Data.SignatureSlot, "retrieved update does not match saved update")
-
+	require.DeepEqual(t, updates[0], retrievedUpdates[uint64(1)], "retrieved update does not match saved update")
+	require.DeepEqual(t, updates[2], retrievedUpdates[uint64(3)], "retrieved update does not match saved update")
+	require.DeepEqual(t, updates[4], retrievedUpdates[uint64(5)], "retrieved update does not match saved update")
 }
 
-func setupLightClientTestDB(t *testing.T) (*Store, context.Context) {
-	db := setupDB(t)
-	ctx := context.Background()
+func createDefaultLightClientUpdate(currentSlot primitives.Slot) (interfaces.LightClientUpdate, error) {
+	currentEpoch := slots.ToEpoch(currentSlot)
 
-	for i := 10; i < 101; i++ { // 10 to 100
-		update := &ethpbv2.LightClientUpdateWithVersion{
-			Version: 1,
-			Data: &ethpbv2.LightClientUpdate{
-				AttestedHeader:          nil,
-				NextSyncCommittee:       nil,
-				NextSyncCommitteeBranch: nil,
-				FinalizedHeader:         nil,
-				FinalityBranch:          nil,
-				SyncAggregate:           nil,
-				SignatureSlot:           primitives.Slot(uint64(i)),
-			},
+	syncCommitteeSize := params.BeaconConfig().SyncCommitteeSize
+	pubKeys := make([][]byte, syncCommitteeSize)
+	for i := uint64(0); i < syncCommitteeSize; i++ {
+		pubKeys[i] = make([]byte, fieldparams.BLSPubkeyLength)
+	}
+	nextSyncCommittee := &pb.SyncCommittee{
+		Pubkeys:         pubKeys,
+		AggregatePubkey: make([]byte, fieldparams.BLSPubkeyLength),
+	}
+
+	var nextSyncCommitteeBranch [][]byte
+	if currentEpoch >= params.BeaconConfig().ElectraForkEpoch {
+		nextSyncCommitteeBranch = make([][]byte, fieldparams.SyncCommitteeBranchDepthElectra)
+	} else {
+		nextSyncCommitteeBranch = make([][]byte, fieldparams.SyncCommitteeBranchDepth)
+	}
+	for i := 0; i < len(nextSyncCommitteeBranch); i++ {
+		nextSyncCommitteeBranch[i] = make([]byte, fieldparams.RootLength)
+	}
+
+	executionBranch := make([][]byte, fieldparams.ExecutionBranchDepth)
+	for i := 0; i < fieldparams.ExecutionBranchDepth; i++ {
+		executionBranch[i] = make([]byte, 32)
+	}
+	finalityBranch := make([][]byte, fieldparams.FinalityBranchDepth)
+	for i := 0; i < fieldparams.FinalityBranchDepth; i++ {
+		finalityBranch[i] = make([]byte, 32)
+	}
+
+	var m proto.Message
+	if currentEpoch < params.BeaconConfig().CapellaForkEpoch {
+		m = &pb.LightClientUpdateAltair{
+			AttestedHeader:          &pb.LightClientHeaderAltair{},
+			NextSyncCommittee:       nextSyncCommittee,
+			NextSyncCommitteeBranch: nextSyncCommitteeBranch,
+			FinalityBranch:          finalityBranch,
 		}
-		err := db.SaveLightClientUpdate(ctx, uint64(i), update)
-		require.NoError(t, err)
-	}
-
-	for i := 110; i < 201; i++ { // 110 to 200
-		update := &ethpbv2.LightClientUpdateWithVersion{
-			Version: 1,
-			Data: &ethpbv2.LightClientUpdate{
-				AttestedHeader:          nil,
-				NextSyncCommittee:       nil,
-				NextSyncCommitteeBranch: nil,
-				FinalizedHeader:         nil,
-				FinalityBranch:          nil,
-				SyncAggregate:           nil,
-				SignatureSlot:           primitives.Slot(uint64(i)),
+	} else if currentEpoch < params.BeaconConfig().DenebForkEpoch {
+		m = &pb.LightClientUpdateCapella{
+			AttestedHeader: &pb.LightClientHeaderCapella{
+				Beacon:          &pb.BeaconBlockHeader{},
+				Execution:       &enginev1.ExecutionPayloadHeaderCapella{},
+				ExecutionBranch: executionBranch,
 			},
+			NextSyncCommittee:       nextSyncCommittee,
+			NextSyncCommitteeBranch: nextSyncCommitteeBranch,
+			FinalityBranch:          finalityBranch,
 		}
-		err := db.SaveLightClientUpdate(ctx, uint64(i), update)
-		require.NoError(t, err)
+	} else if currentEpoch < params.BeaconConfig().ElectraForkEpoch {
+		m = &pb.LightClientUpdateDeneb{
+			AttestedHeader: &pb.LightClientHeaderDeneb{
+				Beacon:          &pb.BeaconBlockHeader{},
+				Execution:       &enginev1.ExecutionPayloadHeaderDeneb{},
+				ExecutionBranch: executionBranch,
+			},
+			NextSyncCommittee:       nextSyncCommittee,
+			NextSyncCommitteeBranch: nextSyncCommitteeBranch,
+			FinalityBranch:          finalityBranch,
+		}
+	} else {
+		m = &pb.LightClientUpdateElectra{
+			AttestedHeader: &pb.LightClientHeaderDeneb{
+				Beacon:          &pb.BeaconBlockHeader{},
+				Execution:       &enginev1.ExecutionPayloadHeaderDeneb{},
+				ExecutionBranch: executionBranch,
+			},
+			NextSyncCommittee:       nextSyncCommittee,
+			NextSyncCommitteeBranch: nextSyncCommitteeBranch,
+			FinalityBranch:          finalityBranch,
+		}
 	}
 
-	return db, ctx
-}
-
-func TestStore_LightClientUpdate_MissingPeriodsInTheMiddleDistributed(t *testing.T) {
-	db, ctx := setupLightClientTestDB(t)
-
-	// Retrieve the updates - should fail because of missing periods in the middle
-	retrievedUpdates, err := db.LightClientUpdates(ctx, 1, 300)
-	require.NoError(t, err)
-	require.Equal(t, 91*2, len(retrievedUpdates))
-	for i := 10; i < 101; i++ {
-		require.Equal(t, primitives.Slot(uint64(i)), retrievedUpdates[uint64(i)].Data.SignatureSlot, "retrieved update does not match saved update")
-	}
-	for i := 110; i < 201; i++ {
-		require.Equal(t, primitives.Slot(uint64(i)), retrievedUpdates[uint64(i)].Data.SignatureSlot, "retrieved update does not match saved update")
-	}
-
-}
-
-func TestStore_LightClientUpdate_RetrieveValidRangeFromStart(t *testing.T) {
-	db, ctx := setupLightClientTestDB(t)
-
-	// retrieve 1 to 100 - should work because all periods are present after the firstPeriodInDB > startPeriod
-	retrievedUpdates, err := db.LightClientUpdates(ctx, 1, 100)
-	require.NoError(t, err)
-	require.Equal(t, 91, len(retrievedUpdates))
-	for i := 10; i < 101; i++ {
-		require.Equal(t, primitives.Slot(uint64(i)), retrievedUpdates[uint64(i)].Data.SignatureSlot, "retrieved update does not match saved update")
-	}
-}
-
-func TestStore_LightClientUpdate_RetrieveValidRangeInTheMiddle(t *testing.T) {
-	db, ctx := setupLightClientTestDB(t)
-
-	// retrieve 110 to 200 - should work because all periods are present
-	retrievedUpdates, err := db.LightClientUpdates(ctx, 110, 200)
-	require.NoError(t, err)
-	require.Equal(t, 91, len(retrievedUpdates))
-	for i := 110; i < 201; i++ {
-		require.Equal(t, primitives.Slot(uint64(i)), retrievedUpdates[uint64(i)].Data.SignatureSlot, "retrieved update does not match saved update")
-	}
-}
-
-func TestStore_LightClientUpdate_MissingPeriodInTheMiddleConcentrated(t *testing.T) {
-	db, ctx := setupLightClientTestDB(t)
-
-	// retrieve 100 to 200
-	retrievedUpdates, err := db.LightClientUpdates(ctx, 100, 200)
-	require.NoError(t, err)
-	require.Equal(t, 92, len(retrievedUpdates))
-	require.Equal(t, primitives.Slot(100), retrievedUpdates[100].Data.SignatureSlot, "retrieved update does not match saved update")
-	for i := 110; i < 201; i++ {
-		require.Equal(t, primitives.Slot(uint64(i)), retrievedUpdates[uint64(i)].Data.SignatureSlot, "retrieved update does not match saved update")
-	}
-}
-
-func TestStore_LightClientUpdate_MissingPeriodsAtTheEnd(t *testing.T) {
-	db, ctx := setupLightClientTestDB(t)
-
-	// retrieve 10 to 109
-	retrievedUpdates, err := db.LightClientUpdates(ctx, 10, 109)
-	require.NoError(t, err)
-	require.Equal(t, 91, len(retrievedUpdates))
-	for i := 10; i < 101; i++ {
-		require.Equal(t, primitives.Slot(uint64(i)), retrievedUpdates[uint64(i)].Data.SignatureSlot, "retrieved update does not match saved update")
-	}
-}
-
-func TestStore_LightClientUpdate_MissingPeriodsAtTheBeginning(t *testing.T) {
-	db, ctx := setupLightClientTestDB(t)
-
-	// retrieve 105 to 200
-	retrievedUpdates, err := db.LightClientUpdates(ctx, 105, 200)
-	require.NoError(t, err)
-	require.Equal(t, 91, len(retrievedUpdates))
-	for i := 110; i < 201; i++ {
-		require.Equal(t, primitives.Slot(uint64(i)), retrievedUpdates[uint64(i)].Data.SignatureSlot, "retrieved update does not match saved update")
-	}
-}
-
-func TestStore_LightClientUpdate_StartPeriodGreaterThanLastPeriod(t *testing.T) {
-	db, ctx := setupLightClientTestDB(t)
-
-	// retrieve 300 to 400
-	retrievedUpdates, err := db.LightClientUpdates(ctx, 300, 400)
-	require.NoError(t, err)
-	require.Equal(t, 0, len(retrievedUpdates))
-
+	return light_client.NewWrappedUpdate(m)
 }

@@ -1,616 +1,677 @@
 package lightclient
 
 import (
+	"strings"
 	"testing"
 
 	lightclient "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/light-client"
-
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	ethpbv1 "github.com/prysmaticlabs/prysm/v5/proto/eth/v1"
-	ethpbv2 "github.com/prysmaticlabs/prysm/v5/proto/eth/v2"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	light_client "github.com/prysmaticlabs/prysm/v5/consensus-types/light-client"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	pb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 )
 
 // When the update has relevant sync committee
 func createNonEmptySyncCommitteeBranch() [][]byte {
 	res := make([][]byte, fieldparams.SyncCommitteeBranchDepth)
-	res[0] = []byte("xyz")
+	res[0] = []byte(strings.Repeat("x", 32))
+	for i := 1; i < len(res); i++ {
+		res[i] = make([]byte, fieldparams.RootLength)
+	}
 	return res
 }
 
 // When the update has finality
 func createNonEmptyFinalityBranch() [][]byte {
-	res := make([][]byte, lightclient.FinalityBranchNumOfLeaves)
-	res[0] = []byte("xyz")
+	res := make([][]byte, fieldparams.FinalityBranchDepth)
+	res[0] = []byte(strings.Repeat("x", 32))
+	for i := 1; i < fieldparams.FinalityBranchDepth; i++ {
+		res[i] = make([]byte, 32)
+	}
 	return res
 }
 
 func TestIsBetterUpdate(t *testing.T) {
-	testCases := []struct {
-		name           string
-		oldUpdate      *ethpbv2.LightClientUpdate
-		newUpdate      *ethpbv2.LightClientUpdate
-		expectedResult bool
-	}{
-		{
-			name: "new has supermajority but old doesn't",
-			oldUpdate: &ethpbv2.LightClientUpdate{
-				SyncAggregate: &ethpbv1.SyncAggregate{
-					SyncCommitteeBits: []byte{0b01111100, 0b1}, // [0,0,1,1,1,1,1,0]
-				},
-			},
-			newUpdate: &ethpbv2.LightClientUpdate{
-				SyncAggregate: &ethpbv1.SyncAggregate{
-					SyncCommitteeBits: []byte{0b11111100, 0b1}, // [0,0,1,1,1,1,1,1]
-				},
-			},
-			expectedResult: true,
-		},
-		{
-			name: "old has supermajority but new doesn't",
-			oldUpdate: &ethpbv2.LightClientUpdate{
-				SyncAggregate: &ethpbv1.SyncAggregate{
-					SyncCommitteeBits: []byte{0b11111100, 0b1}, // [0,0,1,1,1,1,1,1]
-				},
-			},
-			newUpdate: &ethpbv2.LightClientUpdate{
-				SyncAggregate: &ethpbv1.SyncAggregate{
-					SyncCommitteeBits: []byte{0b01111100, 0b1}, // [0,0,1,1,1,1,1,0]
-				},
-			},
-			expectedResult: false,
-		},
-		{
-			name: "new doesn't have supermajority and newNumActiveParticipants is greater than oldNumActiveParticipants",
-			oldUpdate: &ethpbv2.LightClientUpdate{
-				SyncAggregate: &ethpbv1.SyncAggregate{
-					SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
-				},
-			},
-			newUpdate: &ethpbv2.LightClientUpdate{
-				SyncAggregate: &ethpbv1.SyncAggregate{
-					SyncCommitteeBits: []byte{0b01111100, 0b1}, // [0,0,1,1,1,1,1,0]
-				},
-			},
-			expectedResult: true,
-		},
-		{
-			name: "new doesn't have supermajority and newNumActiveParticipants is lesser than oldNumActiveParticipants",
-			oldUpdate: &ethpbv2.LightClientUpdate{
-				SyncAggregate: &ethpbv1.SyncAggregate{
-					SyncCommitteeBits: []byte{0b01111100, 0b1}, // [0,0,1,1,1,1,1,0]
-				},
-			},
-			newUpdate: &ethpbv2.LightClientUpdate{
-				SyncAggregate: &ethpbv1.SyncAggregate{
-					SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
-				},
-			},
-			expectedResult: false,
-		},
-		{
-			name: "new has relevant sync committee but old doesn't",
-			oldUpdate: &ethpbv2.LightClientUpdate{
-				SyncAggregate: &ethpbv1.SyncAggregate{
-					SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
-				},
-				AttestedHeader: &ethpbv2.LightClientHeaderContainer{
-					Header: &ethpbv2.LightClientHeaderContainer_HeaderAltair{
-						HeaderAltair: &ethpbv2.LightClientHeader{Beacon: &ethpbv1.BeaconBlockHeader{
-							Slot: 1000000,
-						}},
-					},
-				},
-				NextSyncCommitteeBranch: make([][]byte, fieldparams.SyncCommitteeBranchDepth),
-				SignatureSlot:           9999,
-			},
-			newUpdate: &ethpbv2.LightClientUpdate{
-				SyncAggregate: &ethpbv1.SyncAggregate{
-					SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
-				},
-				AttestedHeader: &ethpbv2.LightClientHeaderContainer{
-					Header: &ethpbv2.LightClientHeaderContainer_HeaderAltair{
-						HeaderAltair: &ethpbv2.LightClientHeader{Beacon: &ethpbv1.BeaconBlockHeader{
-							Slot: 1000001,
-						}},
-					},
-				},
-				NextSyncCommitteeBranch: createNonEmptySyncCommitteeBranch(),
-				SignatureSlot:           1000000,
-			},
-			expectedResult: true,
-		},
-		{
-			name: "old has relevant sync committee but new doesn't",
-			oldUpdate: &ethpbv2.LightClientUpdate{
-				SyncAggregate: &ethpbv1.SyncAggregate{
-					SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
-				},
-				AttestedHeader: &ethpbv2.LightClientHeaderContainer{
-					Header: &ethpbv2.LightClientHeaderContainer_HeaderAltair{
-						HeaderAltair: &ethpbv2.LightClientHeader{Beacon: &ethpbv1.BeaconBlockHeader{
-							Slot: 1000001,
-						}},
-					},
-				},
-				NextSyncCommitteeBranch: createNonEmptySyncCommitteeBranch(),
-				SignatureSlot:           1000000,
-			},
-			newUpdate: &ethpbv2.LightClientUpdate{
-				SyncAggregate: &ethpbv1.SyncAggregate{
-					SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
-				},
-				AttestedHeader: &ethpbv2.LightClientHeaderContainer{
-					Header: &ethpbv2.LightClientHeaderContainer_HeaderAltair{
-						HeaderAltair: &ethpbv2.LightClientHeader{Beacon: &ethpbv1.BeaconBlockHeader{
-							Slot: 1000000,
-						}},
-					},
-				},
-				NextSyncCommitteeBranch: make([][]byte, fieldparams.SyncCommitteeBranchDepth),
-				SignatureSlot:           9999,
-			},
-			expectedResult: false,
-		},
-		{
-			name: "new has finality but old doesn't",
-			oldUpdate: &ethpbv2.LightClientUpdate{
-				SyncAggregate: &ethpbv1.SyncAggregate{
-					SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
-				},
-				AttestedHeader: &ethpbv2.LightClientHeaderContainer{
-					Header: &ethpbv2.LightClientHeaderContainer_HeaderAltair{
-						HeaderAltair: &ethpbv2.LightClientHeader{Beacon: &ethpbv1.BeaconBlockHeader{
-							Slot: 1000000,
-						}},
-					},
-				},
-				NextSyncCommitteeBranch: createNonEmptySyncCommitteeBranch(),
-				SignatureSlot:           9999,
-				FinalityBranch:          make([][]byte, lightclient.FinalityBranchNumOfLeaves),
-			},
-			newUpdate: &ethpbv2.LightClientUpdate{
-				SyncAggregate: &ethpbv1.SyncAggregate{
-					SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
-				},
-				AttestedHeader: &ethpbv2.LightClientHeaderContainer{
-					Header: &ethpbv2.LightClientHeaderContainer_HeaderAltair{
-						HeaderAltair: &ethpbv2.LightClientHeader{Beacon: &ethpbv1.BeaconBlockHeader{
-							Slot: 1000000,
-						}},
-					},
-				},
-				NextSyncCommitteeBranch: createNonEmptySyncCommitteeBranch(),
-				SignatureSlot:           9999,
-				FinalityBranch:          createNonEmptyFinalityBranch(),
-			},
-			expectedResult: true,
-		},
-		{
-			name: "old has finality but new doesn't",
-			oldUpdate: &ethpbv2.LightClientUpdate{
-				SyncAggregate: &ethpbv1.SyncAggregate{
-					SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
-				},
-				AttestedHeader: &ethpbv2.LightClientHeaderContainer{
-					Header: &ethpbv2.LightClientHeaderContainer_HeaderAltair{
-						HeaderAltair: &ethpbv2.LightClientHeader{Beacon: &ethpbv1.BeaconBlockHeader{
-							Slot: 1000000,
-						}},
-					},
-				},
-				NextSyncCommitteeBranch: createNonEmptySyncCommitteeBranch(),
-				SignatureSlot:           9999,
-				FinalityBranch:          createNonEmptyFinalityBranch(),
-			},
-			newUpdate: &ethpbv2.LightClientUpdate{
-				SyncAggregate: &ethpbv1.SyncAggregate{
-					SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
-				},
-				AttestedHeader: &ethpbv2.LightClientHeaderContainer{
-					Header: &ethpbv2.LightClientHeaderContainer_HeaderAltair{
-						HeaderAltair: &ethpbv2.LightClientHeader{Beacon: &ethpbv1.BeaconBlockHeader{
-							Slot: 1000000,
-						}},
-					},
-				},
-				NextSyncCommitteeBranch: createNonEmptySyncCommitteeBranch(),
-				SignatureSlot:           9999,
-				FinalityBranch:          make([][]byte, lightclient.FinalityBranchNumOfLeaves),
-			},
-			expectedResult: false,
-		},
-		{
-			name: "new has finality and sync committee finality both but old doesn't have sync committee finality",
-			oldUpdate: &ethpbv2.LightClientUpdate{
-				SyncAggregate: &ethpbv1.SyncAggregate{
-					SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
-				},
-				AttestedHeader: &ethpbv2.LightClientHeaderContainer{
-					Header: &ethpbv2.LightClientHeaderContainer_HeaderAltair{
-						HeaderAltair: &ethpbv2.LightClientHeader{Beacon: &ethpbv1.BeaconBlockHeader{
-							Slot: 1000000,
-						}},
-					},
-				},
-				NextSyncCommitteeBranch: createNonEmptySyncCommitteeBranch(),
-				SignatureSlot:           9999,
-				FinalityBranch:          createNonEmptyFinalityBranch(),
-				FinalizedHeader: &ethpbv2.LightClientHeaderContainer{
-					Header: &ethpbv2.LightClientHeaderContainer_HeaderAltair{
-						HeaderAltair: &ethpbv2.LightClientHeader{Beacon: &ethpbv1.BeaconBlockHeader{
-							Slot: 9999,
-						}},
-					},
-				},
-			},
-			newUpdate: &ethpbv2.LightClientUpdate{
-				SyncAggregate: &ethpbv1.SyncAggregate{
-					SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
-				},
-				AttestedHeader: &ethpbv2.LightClientHeaderContainer{
-					Header: &ethpbv2.LightClientHeaderContainer_HeaderAltair{
-						HeaderAltair: &ethpbv2.LightClientHeader{Beacon: &ethpbv1.BeaconBlockHeader{
-							Slot: 1000000,
-						}},
-					},
-				},
-				NextSyncCommitteeBranch: createNonEmptySyncCommitteeBranch(),
-				SignatureSlot:           999999,
-				FinalityBranch:          createNonEmptyFinalityBranch(),
-				FinalizedHeader: &ethpbv2.LightClientHeaderContainer{
-					Header: &ethpbv2.LightClientHeaderContainer_HeaderAltair{
-						HeaderAltair: &ethpbv2.LightClientHeader{Beacon: &ethpbv1.BeaconBlockHeader{
-							Slot: 999999,
-						}},
-					},
-				},
-			},
-			expectedResult: true,
-		},
-		{
-			name: "new has finality but doesn't have sync committee finality and old has sync committee finality",
-			oldUpdate: &ethpbv2.LightClientUpdate{
-				SyncAggregate: &ethpbv1.SyncAggregate{
-					SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
-				},
-				AttestedHeader: &ethpbv2.LightClientHeaderContainer{
-					Header: &ethpbv2.LightClientHeaderContainer_HeaderAltair{
-						HeaderAltair: &ethpbv2.LightClientHeader{Beacon: &ethpbv1.BeaconBlockHeader{
-							Slot: 1000000,
-						}},
-					},
-				},
-				NextSyncCommitteeBranch: createNonEmptySyncCommitteeBranch(),
-				SignatureSlot:           999999,
-				FinalityBranch:          createNonEmptyFinalityBranch(),
-				FinalizedHeader: &ethpbv2.LightClientHeaderContainer{
-					Header: &ethpbv2.LightClientHeaderContainer_HeaderAltair{
-						HeaderAltair: &ethpbv2.LightClientHeader{Beacon: &ethpbv1.BeaconBlockHeader{
-							Slot: 999999,
-						}},
-					},
-				},
-			},
-			newUpdate: &ethpbv2.LightClientUpdate{
-				SyncAggregate: &ethpbv1.SyncAggregate{
-					SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
-				},
-				AttestedHeader: &ethpbv2.LightClientHeaderContainer{
-					Header: &ethpbv2.LightClientHeaderContainer_HeaderAltair{
-						HeaderAltair: &ethpbv2.LightClientHeader{Beacon: &ethpbv1.BeaconBlockHeader{
-							Slot: 1000000,
-						}},
-					},
-				},
-				NextSyncCommitteeBranch: createNonEmptySyncCommitteeBranch(),
-				SignatureSlot:           9999,
-				FinalityBranch:          createNonEmptyFinalityBranch(),
-				FinalizedHeader: &ethpbv2.LightClientHeaderContainer{
-					Header: &ethpbv2.LightClientHeaderContainer_HeaderAltair{
-						HeaderAltair: &ethpbv2.LightClientHeader{Beacon: &ethpbv1.BeaconBlockHeader{
-							Slot: 9999,
-						}},
-					},
-				},
-			},
-			expectedResult: false,
-		},
-		{
-			name: "new has more active participants than old",
-			oldUpdate: &ethpbv2.LightClientUpdate{
-				SyncAggregate: &ethpbv1.SyncAggregate{
-					SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
-				},
-				AttestedHeader: &ethpbv2.LightClientHeaderContainer{
-					Header: &ethpbv2.LightClientHeaderContainer_HeaderAltair{
-						HeaderAltair: &ethpbv2.LightClientHeader{Beacon: &ethpbv1.BeaconBlockHeader{
-							Slot: 1000000,
-						}},
-					},
-				},
-				NextSyncCommitteeBranch: createNonEmptySyncCommitteeBranch(),
-				SignatureSlot:           9999,
-				FinalityBranch:          createNonEmptyFinalityBranch(),
-				FinalizedHeader: &ethpbv2.LightClientHeaderContainer{
-					Header: &ethpbv2.LightClientHeaderContainer_HeaderAltair{
-						HeaderAltair: &ethpbv2.LightClientHeader{Beacon: &ethpbv1.BeaconBlockHeader{
-							Slot: 9999,
-						}},
-					},
-				},
-			},
-			newUpdate: &ethpbv2.LightClientUpdate{
-				SyncAggregate: &ethpbv1.SyncAggregate{
-					SyncCommitteeBits: []byte{0b01111100, 0b1}, // [0,1,1,1,1,1,0,0]
-				},
-				AttestedHeader: &ethpbv2.LightClientHeaderContainer{
-					Header: &ethpbv2.LightClientHeaderContainer_HeaderAltair{
-						HeaderAltair: &ethpbv2.LightClientHeader{Beacon: &ethpbv1.BeaconBlockHeader{
-							Slot: 1000000,
-						}},
-					},
-				},
-				NextSyncCommitteeBranch: createNonEmptySyncCommitteeBranch(),
-				SignatureSlot:           9999,
-				FinalityBranch:          createNonEmptyFinalityBranch(),
-				FinalizedHeader: &ethpbv2.LightClientHeaderContainer{
-					Header: &ethpbv2.LightClientHeaderContainer_HeaderAltair{
-						HeaderAltair: &ethpbv2.LightClientHeader{Beacon: &ethpbv1.BeaconBlockHeader{
-							Slot: 9999,
-						}},
-					},
-				},
-			},
-			expectedResult: true,
-		},
-		{
-			name: "new has less active participants than old",
-			oldUpdate: &ethpbv2.LightClientUpdate{
-				SyncAggregate: &ethpbv1.SyncAggregate{
-					SyncCommitteeBits: []byte{0b01111100, 0b1}, // [0,1,1,1,1,1,0,0]
-				},
-				AttestedHeader: &ethpbv2.LightClientHeaderContainer{
-					Header: &ethpbv2.LightClientHeaderContainer_HeaderAltair{
-						HeaderAltair: &ethpbv2.LightClientHeader{Beacon: &ethpbv1.BeaconBlockHeader{
-							Slot: 1000000,
-						}},
-					},
-				},
-				NextSyncCommitteeBranch: createNonEmptySyncCommitteeBranch(),
-				SignatureSlot:           9999,
-				FinalityBranch:          createNonEmptyFinalityBranch(),
-				FinalizedHeader: &ethpbv2.LightClientHeaderContainer{
-					Header: &ethpbv2.LightClientHeaderContainer_HeaderAltair{
-						HeaderAltair: &ethpbv2.LightClientHeader{Beacon: &ethpbv1.BeaconBlockHeader{
-							Slot: 9999,
-						}},
-					},
-				},
-			},
-			newUpdate: &ethpbv2.LightClientUpdate{
-				SyncAggregate: &ethpbv1.SyncAggregate{
-					SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
-				},
-				AttestedHeader: &ethpbv2.LightClientHeaderContainer{
-					Header: &ethpbv2.LightClientHeaderContainer_HeaderAltair{
-						HeaderAltair: &ethpbv2.LightClientHeader{Beacon: &ethpbv1.BeaconBlockHeader{
-							Slot: 1000000,
-						}},
-					},
-				},
-				NextSyncCommitteeBranch: createNonEmptySyncCommitteeBranch(),
-				SignatureSlot:           9999,
-				FinalityBranch:          createNonEmptyFinalityBranch(),
-				FinalizedHeader: &ethpbv2.LightClientHeaderContainer{
-					Header: &ethpbv2.LightClientHeaderContainer_HeaderAltair{
-						HeaderAltair: &ethpbv2.LightClientHeader{Beacon: &ethpbv1.BeaconBlockHeader{
-							Slot: 9999,
-						}},
-					},
-				},
-			},
-			expectedResult: false,
-		},
-		{
-			name: "new's attested header's slot is lesser than old's attested header's slot",
-			oldUpdate: &ethpbv2.LightClientUpdate{
-				SyncAggregate: &ethpbv1.SyncAggregate{
-					SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
-				},
-				AttestedHeader: &ethpbv2.LightClientHeaderContainer{
-					Header: &ethpbv2.LightClientHeaderContainer_HeaderAltair{
-						HeaderAltair: &ethpbv2.LightClientHeader{Beacon: &ethpbv1.BeaconBlockHeader{
-							Slot: 1000000,
-						}},
-					},
-				},
-				NextSyncCommitteeBranch: createNonEmptySyncCommitteeBranch(),
-				SignatureSlot:           9999,
-				FinalityBranch:          createNonEmptyFinalityBranch(),
-				FinalizedHeader: &ethpbv2.LightClientHeaderContainer{
-					Header: &ethpbv2.LightClientHeaderContainer_HeaderAltair{
-						HeaderAltair: &ethpbv2.LightClientHeader{Beacon: &ethpbv1.BeaconBlockHeader{
-							Slot: 9999,
-						}},
-					},
-				},
-			},
-			newUpdate: &ethpbv2.LightClientUpdate{
-				SyncAggregate: &ethpbv1.SyncAggregate{
-					SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
-				},
-				AttestedHeader: &ethpbv2.LightClientHeaderContainer{
-					Header: &ethpbv2.LightClientHeaderContainer_HeaderAltair{
-						HeaderAltair: &ethpbv2.LightClientHeader{Beacon: &ethpbv1.BeaconBlockHeader{
-							Slot: 999999,
-						}},
-					},
-				},
-				NextSyncCommitteeBranch: createNonEmptySyncCommitteeBranch(),
-				SignatureSlot:           9999,
-				FinalityBranch:          createNonEmptyFinalityBranch(),
-				FinalizedHeader: &ethpbv2.LightClientHeaderContainer{
-					Header: &ethpbv2.LightClientHeaderContainer_HeaderAltair{
-						HeaderAltair: &ethpbv2.LightClientHeader{Beacon: &ethpbv1.BeaconBlockHeader{
-							Slot: 9999,
-						}},
-					},
-				},
-			},
-			expectedResult: true,
-		},
-		{
-			name: "new's attested header's slot is greater than old's attested header's slot",
-			oldUpdate: &ethpbv2.LightClientUpdate{
-				SyncAggregate: &ethpbv1.SyncAggregate{
-					SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
-				},
-				AttestedHeader: &ethpbv2.LightClientHeaderContainer{
-					Header: &ethpbv2.LightClientHeaderContainer_HeaderAltair{
-						HeaderAltair: &ethpbv2.LightClientHeader{Beacon: &ethpbv1.BeaconBlockHeader{
-							Slot: 999999,
-						}},
-					},
-				},
-				NextSyncCommitteeBranch: createNonEmptySyncCommitteeBranch(),
-				SignatureSlot:           9999,
-				FinalityBranch:          createNonEmptyFinalityBranch(),
-				FinalizedHeader: &ethpbv2.LightClientHeaderContainer{
-					Header: &ethpbv2.LightClientHeaderContainer_HeaderAltair{
-						HeaderAltair: &ethpbv2.LightClientHeader{Beacon: &ethpbv1.BeaconBlockHeader{
-							Slot: 9999,
-						}},
-					},
-				},
-			},
-			newUpdate: &ethpbv2.LightClientUpdate{
-				SyncAggregate: &ethpbv1.SyncAggregate{
-					SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
-				},
-				AttestedHeader: &ethpbv2.LightClientHeaderContainer{
-					Header: &ethpbv2.LightClientHeaderContainer_HeaderAltair{
-						HeaderAltair: &ethpbv2.LightClientHeader{Beacon: &ethpbv1.BeaconBlockHeader{
-							Slot: 1000000,
-						}},
-					},
-				},
-				NextSyncCommitteeBranch: createNonEmptySyncCommitteeBranch(),
-				SignatureSlot:           9999,
-				FinalityBranch:          createNonEmptyFinalityBranch(),
-				FinalizedHeader: &ethpbv2.LightClientHeaderContainer{
-					Header: &ethpbv2.LightClientHeaderContainer_HeaderAltair{
-						HeaderAltair: &ethpbv2.LightClientHeader{Beacon: &ethpbv1.BeaconBlockHeader{
-							Slot: 9999,
-						}},
-					},
-				},
-			},
-			expectedResult: false,
-		},
-		{
-			name: "none of the above conditions are met and new signature's slot is less than old signature's slot",
-			oldUpdate: &ethpbv2.LightClientUpdate{
-				SyncAggregate: &ethpbv1.SyncAggregate{
-					SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
-				},
-				AttestedHeader: &ethpbv2.LightClientHeaderContainer{
-					Header: &ethpbv2.LightClientHeaderContainer_HeaderAltair{
-						HeaderAltair: &ethpbv2.LightClientHeader{Beacon: &ethpbv1.BeaconBlockHeader{
-							Slot: 1000000,
-						}},
-					},
-				},
-				NextSyncCommitteeBranch: createNonEmptySyncCommitteeBranch(),
-				SignatureSlot:           9999,
-				FinalityBranch:          createNonEmptyFinalityBranch(),
-				FinalizedHeader: &ethpbv2.LightClientHeaderContainer{
-					Header: &ethpbv2.LightClientHeaderContainer_HeaderAltair{
-						HeaderAltair: &ethpbv2.LightClientHeader{Beacon: &ethpbv1.BeaconBlockHeader{
-							Slot: 9999,
-						}},
-					},
-				},
-			},
-			newUpdate: &ethpbv2.LightClientUpdate{
-				SyncAggregate: &ethpbv1.SyncAggregate{
-					SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
-				},
-				AttestedHeader: &ethpbv2.LightClientHeaderContainer{
-					Header: &ethpbv2.LightClientHeaderContainer_HeaderAltair{
-						HeaderAltair: &ethpbv2.LightClientHeader{Beacon: &ethpbv1.BeaconBlockHeader{
-							Slot: 1000000,
-						}},
-					},
-				},
-				NextSyncCommitteeBranch: createNonEmptySyncCommitteeBranch(),
-				SignatureSlot:           9998,
-				FinalityBranch:          createNonEmptyFinalityBranch(),
-				FinalizedHeader: &ethpbv2.LightClientHeaderContainer{
-					Header: &ethpbv2.LightClientHeaderContainer_HeaderAltair{
-						HeaderAltair: &ethpbv2.LightClientHeader{Beacon: &ethpbv1.BeaconBlockHeader{
-							Slot: 9999,
-						}},
-					},
-				},
-			},
-			expectedResult: true,
-		},
-		{
-			name: "none of the above conditions are met and new signature's slot is greater than old signature's slot",
-			oldUpdate: &ethpbv2.LightClientUpdate{
-				SyncAggregate: &ethpbv1.SyncAggregate{
-					SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
-				},
-				AttestedHeader: &ethpbv2.LightClientHeaderContainer{
-					Header: &ethpbv2.LightClientHeaderContainer_HeaderAltair{
-						HeaderAltair: &ethpbv2.LightClientHeader{Beacon: &ethpbv1.BeaconBlockHeader{
-							Slot: 1000000,
-						}},
-					},
-				},
-				NextSyncCommitteeBranch: createNonEmptySyncCommitteeBranch(),
-				SignatureSlot:           9998,
-				FinalityBranch:          createNonEmptyFinalityBranch(),
-				FinalizedHeader: &ethpbv2.LightClientHeaderContainer{
-					Header: &ethpbv2.LightClientHeaderContainer_HeaderAltair{
-						HeaderAltair: &ethpbv2.LightClientHeader{Beacon: &ethpbv1.BeaconBlockHeader{
-							Slot: 9999,
-						}},
-					},
-				},
-			},
-			newUpdate: &ethpbv2.LightClientUpdate{
-				SyncAggregate: &ethpbv1.SyncAggregate{
-					SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
-				},
-				AttestedHeader: &ethpbv2.LightClientHeaderContainer{
-					Header: &ethpbv2.LightClientHeaderContainer_HeaderAltair{
-						HeaderAltair: &ethpbv2.LightClientHeader{Beacon: &ethpbv1.BeaconBlockHeader{
-							Slot: 1000000,
-						}},
-					},
-				},
-				NextSyncCommitteeBranch: createNonEmptySyncCommitteeBranch(),
-				SignatureSlot:           9999,
-				FinalityBranch:          createNonEmptyFinalityBranch(),
-				FinalizedHeader: &ethpbv2.LightClientHeaderContainer{
-					Header: &ethpbv2.LightClientHeaderContainer_HeaderAltair{
-						HeaderAltair: &ethpbv2.LightClientHeader{Beacon: &ethpbv1.BeaconBlockHeader{
-							Slot: 9999,
-						}},
-					},
-				},
-			},
-			expectedResult: false,
-		},
-	}
 
-	for _, testCase := range testCases {
-		t.Run(testCase.name, func(t *testing.T) {
-			result, err := IsBetterUpdate(testCase.newUpdate, testCase.oldUpdate)
-			assert.NoError(t, err)
-			assert.Equal(t, testCase.expectedResult, result)
+	config := params.BeaconConfig()
+
+	t.Run("new has supermajority but old doesn't", func(t *testing.T) {
+		oldUpdate, err := lightclient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1))
+		assert.NoError(t, err)
+		newUpdate, err := lightclient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(2))
+		assert.NoError(t, err)
+
+		oldUpdate.SetSyncAggregate(&pb.SyncAggregate{
+			SyncCommitteeBits: []byte{0b01111100, 0b1}, // [0,0,1,1,1,1,1,0]
 		})
-	}
+		newUpdate.SetSyncAggregate(&pb.SyncAggregate{
+			SyncCommitteeBits: []byte{0b11111100, 0b1}, // [0,0,1,1,1,1,1,1]
+		})
+
+		result, err := IsBetterUpdate(newUpdate, oldUpdate)
+		assert.NoError(t, err)
+		assert.Equal(t, true, result)
+	})
+
+	t.Run("old has supermajority but new doesn't", func(t *testing.T) {
+		oldUpdate, err := lightclient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1))
+		assert.NoError(t, err)
+		newUpdate, err := lightclient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(2))
+		assert.NoError(t, err)
+
+		oldUpdate.SetSyncAggregate(&pb.SyncAggregate{
+			SyncCommitteeBits: []byte{0b11111100, 0b1}, // [0,0,1,1,1,1,1,1]
+		})
+		newUpdate.SetSyncAggregate(&pb.SyncAggregate{
+			SyncCommitteeBits: []byte{0b01111100, 0b1}, // [0,0,1,1,1,1,1,0]
+		})
+
+		result, err := IsBetterUpdate(newUpdate, oldUpdate)
+		assert.NoError(t, err)
+		assert.Equal(t, false, result)
+	})
+
+	t.Run("new doesn't have supermajority and newNumActiveParticipants is greater than oldNumActiveParticipants", func(t *testing.T) {
+		oldUpdate, err := lightclient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1))
+		assert.NoError(t, err)
+		newUpdate, err := lightclient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(2))
+		assert.NoError(t, err)
+
+		oldUpdate.SetSyncAggregate(&pb.SyncAggregate{
+			SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
+		})
+		newUpdate.SetSyncAggregate(&pb.SyncAggregate{
+			SyncCommitteeBits: []byte{0b01111100, 0b1}, // [0,0,1,1,1,1,1,0]
+		})
+
+		result, err := IsBetterUpdate(newUpdate, oldUpdate)
+		assert.NoError(t, err)
+		assert.Equal(t, true, result)
+	})
+
+	t.Run("new doesn't have supermajority and newNumActiveParticipants is lesser than oldNumActiveParticipants", func(t *testing.T) {
+		oldUpdate, err := lightclient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1))
+		assert.NoError(t, err)
+		newUpdate, err := lightclient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(2))
+		assert.NoError(t, err)
+
+		oldUpdate.SetSyncAggregate(&pb.SyncAggregate{
+			SyncCommitteeBits: []byte{0b01111100, 0b1}, // [0,0,1,1,1,1,1,0]
+		})
+		newUpdate.SetSyncAggregate(&pb.SyncAggregate{
+			SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
+		})
+
+		result, err := IsBetterUpdate(newUpdate, oldUpdate)
+		assert.NoError(t, err)
+		assert.Equal(t, false, result)
+	})
+
+	t.Run("new has relevant sync committee but old doesn't", func(t *testing.T) {
+		oldUpdate, err := lightclient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1))
+		assert.NoError(t, err)
+		newUpdate, err := lightclient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(2))
+		assert.NoError(t, err)
+
+		oldUpdate.SetSyncAggregate(&pb.SyncAggregate{
+			SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
+		})
+		oldAttestedHeader, err := light_client.NewWrappedHeader(&pb.LightClientHeaderAltair{
+			Beacon: &pb.BeaconBlockHeader{
+				Slot: 1000000,
+			},
+		})
+		assert.NoError(t, err)
+		err = oldUpdate.SetAttestedHeader(oldAttestedHeader)
+		assert.NoError(t, err)
+		oldUpdate.SetSignatureSlot(9999)
+
+		newUpdate.SetSyncAggregate(&pb.SyncAggregate{
+			SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
+		})
+		newAttestedHeader, err := light_client.NewWrappedHeader(&pb.LightClientHeaderAltair{
+			Beacon: &pb.BeaconBlockHeader{
+				Slot: 1000001,
+			},
+		})
+		assert.NoError(t, err)
+		err = newUpdate.SetAttestedHeader(newAttestedHeader)
+		assert.NoError(t, err)
+		err = newUpdate.SetNextSyncCommitteeBranch(createNonEmptySyncCommitteeBranch())
+		assert.NoError(t, err)
+		newUpdate.SetSignatureSlot(1000000)
+
+		result, err := IsBetterUpdate(newUpdate, oldUpdate)
+		assert.NoError(t, err)
+		assert.Equal(t, true, result)
+	})
+
+	t.Run("old has relevant sync committee but new doesn't", func(t *testing.T) {
+		oldUpdate, err := lightclient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1))
+		assert.NoError(t, err)
+		newUpdate, err := lightclient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(2))
+		assert.NoError(t, err)
+
+		oldUpdate.SetSyncAggregate(&pb.SyncAggregate{
+			SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
+		})
+		oldAttestedHeader, err := light_client.NewWrappedHeader(&pb.LightClientHeaderAltair{
+			Beacon: &pb.BeaconBlockHeader{
+				Slot: 1000001,
+			},
+		})
+		assert.NoError(t, err)
+		err = oldUpdate.SetAttestedHeader(oldAttestedHeader)
+		assert.NoError(t, err)
+		err = oldUpdate.SetNextSyncCommitteeBranch(createNonEmptySyncCommitteeBranch())
+		assert.NoError(t, err)
+		oldUpdate.SetSignatureSlot(1000000)
+
+		newUpdate.SetSyncAggregate(&pb.SyncAggregate{
+			SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
+		})
+		newAttestedHeader, err := light_client.NewWrappedHeader(&pb.LightClientHeaderAltair{
+			Beacon: &pb.BeaconBlockHeader{
+				Slot: 1000000,
+			},
+		})
+		assert.NoError(t, err)
+		err = newUpdate.SetAttestedHeader(newAttestedHeader)
+		assert.NoError(t, err)
+		newUpdate.SetSignatureSlot(9999)
+
+		result, err := IsBetterUpdate(newUpdate, oldUpdate)
+		assert.NoError(t, err)
+		assert.Equal(t, false, result)
+	})
+
+	t.Run("new has finality but old doesn't", func(t *testing.T) {
+		oldUpdate, err := lightclient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1))
+		assert.NoError(t, err)
+		newUpdate, err := lightclient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(2))
+		assert.NoError(t, err)
+
+		oldUpdate.SetSyncAggregate(&pb.SyncAggregate{
+			SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
+		})
+		oldAttestedHeader, err := light_client.NewWrappedHeader(&pb.LightClientHeaderAltair{
+			Beacon: &pb.BeaconBlockHeader{
+				Slot: 1000000,
+			},
+		})
+		assert.NoError(t, err)
+		err = oldUpdate.SetAttestedHeader(oldAttestedHeader)
+		assert.NoError(t, err)
+		err = oldUpdate.SetNextSyncCommitteeBranch(createNonEmptySyncCommitteeBranch())
+		assert.NoError(t, err)
+		oldUpdate.SetSignatureSlot(9999)
+
+		newUpdate.SetSyncAggregate(&pb.SyncAggregate{
+			SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
+		})
+		newAttestedHeader, err := light_client.NewWrappedHeader(&pb.LightClientHeaderAltair{
+			Beacon: &pb.BeaconBlockHeader{
+				Slot: 1000000,
+			},
+		})
+		assert.NoError(t, err)
+		err = newUpdate.SetAttestedHeader(newAttestedHeader)
+		assert.NoError(t, err)
+		err = newUpdate.SetNextSyncCommitteeBranch(createNonEmptySyncCommitteeBranch())
+		assert.NoError(t, err)
+		newUpdate.SetSignatureSlot(9999)
+		err = newUpdate.SetFinalityBranch(createNonEmptyFinalityBranch())
+		assert.NoError(t, err)
+
+		result, err := IsBetterUpdate(newUpdate, oldUpdate)
+		assert.NoError(t, err)
+		assert.Equal(t, true, result)
+	})
+
+	t.Run("old has finality but new doesn't", func(t *testing.T) {
+		oldUpdate, err := lightclient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1))
+		assert.NoError(t, err)
+		newUpdate, err := lightclient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(2))
+		assert.NoError(t, err)
+
+		oldUpdate.SetSyncAggregate(&pb.SyncAggregate{
+			SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
+		})
+		oldAttestedHeader, err := light_client.NewWrappedHeader(&pb.LightClientHeaderAltair{
+			Beacon: &pb.BeaconBlockHeader{
+				Slot: 1000000,
+			},
+		})
+		assert.NoError(t, err)
+		err = oldUpdate.SetAttestedHeader(oldAttestedHeader)
+		assert.NoError(t, err)
+		err = oldUpdate.SetNextSyncCommitteeBranch(createNonEmptySyncCommitteeBranch())
+		assert.NoError(t, err)
+		oldUpdate.SetSignatureSlot(9999)
+		err = oldUpdate.SetFinalityBranch(createNonEmptyFinalityBranch())
+		assert.NoError(t, err)
+
+		newUpdate.SetSyncAggregate(&pb.SyncAggregate{
+			SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
+		})
+		newAttestedHeader, err := light_client.NewWrappedHeader(&pb.LightClientHeaderAltair{
+			Beacon: &pb.BeaconBlockHeader{
+				Slot: 1000000,
+			},
+		})
+		assert.NoError(t, err)
+		err = newUpdate.SetAttestedHeader(newAttestedHeader)
+		assert.NoError(t, err)
+		err = newUpdate.SetNextSyncCommitteeBranch(createNonEmptySyncCommitteeBranch())
+		assert.NoError(t, err)
+		newUpdate.SetSignatureSlot(9999)
+
+		result, err := IsBetterUpdate(newUpdate, oldUpdate)
+		assert.NoError(t, err)
+		assert.Equal(t, false, result)
+	})
+
+	t.Run("new has finality and sync committee finality both but old doesn't have sync committee finality", func(t *testing.T) {
+		oldUpdate, err := lightclient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1))
+		assert.NoError(t, err)
+		newUpdate, err := lightclient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(2))
+		assert.NoError(t, err)
+
+		oldUpdate.SetSyncAggregate(&pb.SyncAggregate{
+			SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
+		})
+		oldAttestedHeader, err := light_client.NewWrappedHeader(&pb.LightClientHeaderAltair{
+			Beacon: &pb.BeaconBlockHeader{
+				Slot: 1000000,
+			},
+		})
+		assert.NoError(t, err)
+		err = oldUpdate.SetAttestedHeader(oldAttestedHeader)
+		assert.NoError(t, err)
+		err = oldUpdate.SetNextSyncCommitteeBranch(createNonEmptySyncCommitteeBranch())
+		assert.NoError(t, err)
+		err = oldUpdate.SetFinalityBranch(createNonEmptyFinalityBranch())
+		assert.NoError(t, err)
+		oldUpdate.SetSignatureSlot(9999)
+		oldFinalizedHeader, err := light_client.NewWrappedHeader(&pb.LightClientHeaderAltair{
+			Beacon: &pb.BeaconBlockHeader{
+				Slot: 9999,
+			},
+		})
+		assert.NoError(t, err)
+		err = oldUpdate.SetFinalizedHeader(oldFinalizedHeader)
+		assert.NoError(t, err)
+
+		newUpdate.SetSyncAggregate(&pb.SyncAggregate{
+			SyncCommitteeBits: []byte{0b01111100, 0b1}, // [0,0,1,1,1,1,1,0]
+		})
+		newAttestedHeader, err := light_client.NewWrappedHeader(&pb.LightClientHeaderAltair{
+			Beacon: &pb.BeaconBlockHeader{
+				Slot: 1000000,
+			},
+		})
+		assert.NoError(t, err)
+		err = newUpdate.SetAttestedHeader(newAttestedHeader)
+		assert.NoError(t, err)
+		err = newUpdate.SetNextSyncCommitteeBranch(createNonEmptySyncCommitteeBranch())
+		assert.NoError(t, err)
+		newUpdate.SetSignatureSlot(999999)
+		err = newUpdate.SetFinalityBranch(createNonEmptyFinalityBranch())
+		assert.NoError(t, err)
+		newFinalizedHeader, err := light_client.NewWrappedHeader(&pb.LightClientHeaderAltair{
+			Beacon: &pb.BeaconBlockHeader{
+				Slot: 999999,
+			},
+		})
+		assert.NoError(t, err)
+		err = newUpdate.SetFinalizedHeader(newFinalizedHeader)
+		assert.NoError(t, err)
+
+		result, err := IsBetterUpdate(newUpdate, oldUpdate)
+		assert.NoError(t, err)
+		assert.Equal(t, true, result)
+	})
+
+	t.Run("new has finality but doesn't have sync committee finality and old has sync committee finality", func(t *testing.T) {
+		oldUpdate, err := lightclient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1))
+		assert.NoError(t, err)
+		newUpdate, err := lightclient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(2))
+		assert.NoError(t, err)
+
+		oldUpdate.SetSyncAggregate(&pb.SyncAggregate{
+			SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
+		})
+		oldAttestedHeader, err := light_client.NewWrappedHeader(&pb.LightClientHeaderAltair{
+			Beacon: &pb.BeaconBlockHeader{
+				Slot: 1000000,
+			},
+		})
+		assert.NoError(t, err)
+		err = oldUpdate.SetAttestedHeader(oldAttestedHeader)
+		assert.NoError(t, err)
+		err = oldUpdate.SetNextSyncCommitteeBranch(createNonEmptySyncCommitteeBranch())
+		assert.NoError(t, err)
+		err = oldUpdate.SetFinalityBranch(createNonEmptyFinalityBranch())
+		assert.NoError(t, err)
+		oldUpdate.SetSignatureSlot(999999)
+		oldFinalizedHeader, err := light_client.NewWrappedHeader(&pb.LightClientHeaderAltair{
+			Beacon: &pb.BeaconBlockHeader{
+				Slot: 999999,
+			},
+		})
+		assert.NoError(t, err)
+		err = oldUpdate.SetFinalizedHeader(oldFinalizedHeader)
+		assert.NoError(t, err)
+
+		newUpdate.SetSyncAggregate(&pb.SyncAggregate{
+			SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
+		})
+		newAttestedHeader, err := light_client.NewWrappedHeader(&pb.LightClientHeaderAltair{
+			Beacon: &pb.BeaconBlockHeader{
+				Slot: 1000000,
+			},
+		})
+		assert.NoError(t, err)
+		err = newUpdate.SetAttestedHeader(newAttestedHeader)
+		assert.NoError(t, err)
+		err = newUpdate.SetNextSyncCommitteeBranch(createNonEmptySyncCommitteeBranch())
+		assert.NoError(t, err)
+		newUpdate.SetSignatureSlot(9999)
+		err = newUpdate.SetFinalityBranch(createNonEmptyFinalityBranch())
+		assert.NoError(t, err)
+		newFinalizedHeader, err := light_client.NewWrappedHeader(&pb.LightClientHeaderAltair{
+			Beacon: &pb.BeaconBlockHeader{
+				Slot: 9999,
+			},
+		})
+		assert.NoError(t, err)
+		err = newUpdate.SetFinalizedHeader(newFinalizedHeader)
+		assert.NoError(t, err)
+
+		result, err := IsBetterUpdate(newUpdate, oldUpdate)
+		assert.NoError(t, err)
+		assert.Equal(t, false, result)
+	})
+
+	t.Run("new has more active participants than old", func(t *testing.T) {
+		oldUpdate, err := lightclient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1))
+		assert.NoError(t, err)
+		newUpdate, err := lightclient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(2))
+		assert.NoError(t, err)
+
+		oldUpdate.SetSyncAggregate(&pb.SyncAggregate{
+			SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
+		})
+		newUpdate.SetSyncAggregate(&pb.SyncAggregate{
+			SyncCommitteeBits: []byte{0b01111100, 0b1}, // [0,1,1,1,1,1,0,0]
+		})
+
+		result, err := IsBetterUpdate(newUpdate, oldUpdate)
+		assert.NoError(t, err)
+		assert.Equal(t, true, result)
+	})
+
+	t.Run("new has less active participants than old", func(t *testing.T) {
+		oldUpdate, err := lightclient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1))
+		assert.NoError(t, err)
+		newUpdate, err := lightclient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(2))
+		assert.NoError(t, err)
+
+		oldUpdate.SetSyncAggregate(&pb.SyncAggregate{
+			SyncCommitteeBits: []byte{0b01111100, 0b1}, // [0,1,1,1,1,1,0,0]
+		})
+		newUpdate.SetSyncAggregate(&pb.SyncAggregate{
+			SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
+		})
+
+		result, err := IsBetterUpdate(newUpdate, oldUpdate)
+		assert.NoError(t, err)
+		assert.Equal(t, false, result)
+	})
+
+	t.Run("new's attested header's slot is lesser than old's attested header's slot", func(t *testing.T) {
+		oldUpdate, err := lightclient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1))
+		assert.NoError(t, err)
+		newUpdate, err := lightclient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(2))
+		assert.NoError(t, err)
+
+		oldUpdate.SetSyncAggregate(&pb.SyncAggregate{
+			SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
+		})
+		oldAttestedHeader, err := light_client.NewWrappedHeader(&pb.LightClientHeaderAltair{
+			Beacon: &pb.BeaconBlockHeader{
+				Slot: 1000000,
+			},
+		})
+		assert.NoError(t, err)
+		err = oldUpdate.SetAttestedHeader(oldAttestedHeader)
+		assert.NoError(t, err)
+		err = oldUpdate.SetNextSyncCommitteeBranch(createNonEmptySyncCommitteeBranch())
+		assert.NoError(t, err)
+		err = oldUpdate.SetFinalityBranch(createNonEmptyFinalityBranch())
+		assert.NoError(t, err)
+		oldUpdate.SetSignatureSlot(9999)
+		oldFinalizedHeader, err := light_client.NewWrappedHeader(&pb.LightClientHeaderAltair{
+			Beacon: &pb.BeaconBlockHeader{
+				Slot: 9999,
+			},
+		})
+		assert.NoError(t, err)
+		err = oldUpdate.SetFinalizedHeader(oldFinalizedHeader)
+		assert.NoError(t, err)
+
+		newUpdate.SetSyncAggregate(&pb.SyncAggregate{
+			SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
+		})
+		newAttestedHeader, err := light_client.NewWrappedHeader(&pb.LightClientHeaderAltair{
+			Beacon: &pb.BeaconBlockHeader{
+				Slot: 999999,
+			},
+		})
+		assert.NoError(t, err)
+		err = newUpdate.SetAttestedHeader(newAttestedHeader)
+		assert.NoError(t, err)
+		err = newUpdate.SetNextSyncCommitteeBranch(createNonEmptySyncCommitteeBranch())
+		assert.NoError(t, err)
+		newUpdate.SetSignatureSlot(9999)
+		err = newUpdate.SetFinalityBranch(createNonEmptyFinalityBranch())
+		assert.NoError(t, err)
+		newFinalizedHeader, err := light_client.NewWrappedHeader(&pb.LightClientHeaderAltair{
+			Beacon: &pb.BeaconBlockHeader{
+				Slot: 9999,
+			},
+		})
+		assert.NoError(t, err)
+		err = newUpdate.SetFinalizedHeader(newFinalizedHeader)
+		assert.NoError(t, err)
+
+		result, err := IsBetterUpdate(newUpdate, oldUpdate)
+		assert.NoError(t, err)
+		assert.Equal(t, true, result)
+	})
+
+	t.Run("new's attested header's slot is greater than old's attested header's slot", func(t *testing.T) {
+		oldUpdate, err := lightclient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1))
+		assert.NoError(t, err)
+		newUpdate, err := lightclient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(2))
+		assert.NoError(t, err)
+
+		oldUpdate.SetSyncAggregate(&pb.SyncAggregate{
+			SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
+		})
+		oldAttestedHeader, err := light_client.NewWrappedHeader(&pb.LightClientHeaderAltair{
+			Beacon: &pb.BeaconBlockHeader{
+				Slot: 999999,
+			},
+		})
+		assert.NoError(t, err)
+		err = oldUpdate.SetAttestedHeader(oldAttestedHeader)
+		assert.NoError(t, err)
+		err = oldUpdate.SetNextSyncCommitteeBranch(createNonEmptySyncCommitteeBranch())
+		assert.NoError(t, err)
+		err = oldUpdate.SetFinalityBranch(createNonEmptyFinalityBranch())
+		assert.NoError(t, err)
+		oldUpdate.SetSignatureSlot(9999)
+		oldFinalizedHeader, err := light_client.NewWrappedHeader(&pb.LightClientHeaderAltair{
+			Beacon: &pb.BeaconBlockHeader{
+				Slot: 9999,
+			},
+		})
+		assert.NoError(t, err)
+		err = oldUpdate.SetFinalizedHeader(oldFinalizedHeader)
+		assert.NoError(t, err)
+
+		newUpdate.SetSyncAggregate(&pb.SyncAggregate{
+			SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
+		})
+		newAttestedHeader, err := light_client.NewWrappedHeader(&pb.LightClientHeaderAltair{
+			Beacon: &pb.BeaconBlockHeader{
+				Slot: 1000000,
+			},
+		})
+		assert.NoError(t, err)
+		err = newUpdate.SetAttestedHeader(newAttestedHeader)
+		assert.NoError(t, err)
+		err = newUpdate.SetNextSyncCommitteeBranch(createNonEmptySyncCommitteeBranch())
+		assert.NoError(t, err)
+		newUpdate.SetSignatureSlot(9999)
+		err = newUpdate.SetFinalityBranch(createNonEmptyFinalityBranch())
+		assert.NoError(t, err)
+		newFinalizedHeader, err := light_client.NewWrappedHeader(&pb.LightClientHeaderAltair{
+			Beacon: &pb.BeaconBlockHeader{
+				Slot: 9999,
+			},
+		})
+		assert.NoError(t, err)
+		err = newUpdate.SetFinalizedHeader(newFinalizedHeader)
+		assert.NoError(t, err)
+
+		result, err := IsBetterUpdate(newUpdate, oldUpdate)
+		assert.NoError(t, err)
+		assert.Equal(t, false, result)
+	})
+
+	t.Run("none of the above conditions are met and new signature's slot is less than old signature's slot", func(t *testing.T) {
+		oldUpdate, err := lightclient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1))
+		assert.NoError(t, err)
+		newUpdate, err := lightclient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(2))
+		assert.NoError(t, err)
+
+		oldUpdate.SetSyncAggregate(&pb.SyncAggregate{
+			SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
+		})
+		oldAttestedHeader, err := light_client.NewWrappedHeader(&pb.LightClientHeaderAltair{
+			Beacon: &pb.BeaconBlockHeader{
+				Slot: 1000000,
+			},
+		})
+		assert.NoError(t, err)
+		err = oldUpdate.SetAttestedHeader(oldAttestedHeader)
+		assert.NoError(t, err)
+		err = oldUpdate.SetNextSyncCommitteeBranch(createNonEmptySyncCommitteeBranch())
+		assert.NoError(t, err)
+		err = oldUpdate.SetFinalityBranch(createNonEmptyFinalityBranch())
+		assert.NoError(t, err)
+		oldUpdate.SetSignatureSlot(9999)
+		oldFinalizedHeader, err := light_client.NewWrappedHeader(&pb.LightClientHeaderAltair{
+			Beacon: &pb.BeaconBlockHeader{
+				Slot: 9999,
+			},
+		})
+		assert.NoError(t, err)
+		err = oldUpdate.SetFinalizedHeader(oldFinalizedHeader)
+		assert.NoError(t, err)
+
+		newUpdate.SetSyncAggregate(&pb.SyncAggregate{
+			SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
+		})
+		newAttestedHeader, err := light_client.NewWrappedHeader(&pb.LightClientHeaderAltair{
+			Beacon: &pb.BeaconBlockHeader{
+				Slot: 1000000,
+			},
+		})
+		assert.NoError(t, err)
+		err = newUpdate.SetAttestedHeader(newAttestedHeader)
+		assert.NoError(t, err)
+		err = newUpdate.SetNextSyncCommitteeBranch(createNonEmptySyncCommitteeBranch())
+		assert.NoError(t, err)
+		newUpdate.SetSignatureSlot(9998)
+		err = newUpdate.SetFinalityBranch(createNonEmptyFinalityBranch())
+		assert.NoError(t, err)
+		newFinalizedHeader, err := light_client.NewWrappedHeader(&pb.LightClientHeaderAltair{
+			Beacon: &pb.BeaconBlockHeader{
+				Slot: 9999,
+			},
+		})
+		assert.NoError(t, err)
+		err = newUpdate.SetFinalizedHeader(newFinalizedHeader)
+		assert.NoError(t, err)
+
+		result, err := IsBetterUpdate(newUpdate, oldUpdate)
+		assert.NoError(t, err)
+		assert.Equal(t, true, result)
+	})
+
+	t.Run("none of the above conditions are met and new signature's slot is greater than old signature's slot", func(t *testing.T) {
+		oldUpdate, err := lightclient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1))
+		assert.NoError(t, err)
+		newUpdate, err := lightclient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(2))
+		assert.NoError(t, err)
+
+		oldUpdate.SetSyncAggregate(&pb.SyncAggregate{
+			SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
+		})
+		oldAttestedHeader, err := light_client.NewWrappedHeader(&pb.LightClientHeaderAltair{
+			Beacon: &pb.BeaconBlockHeader{
+				Slot: 1000000,
+			},
+		})
+		assert.NoError(t, err)
+		err = oldUpdate.SetAttestedHeader(oldAttestedHeader)
+		assert.NoError(t, err)
+		err = oldUpdate.SetNextSyncCommitteeBranch(createNonEmptySyncCommitteeBranch())
+		assert.NoError(t, err)
+		err = oldUpdate.SetFinalityBranch(createNonEmptyFinalityBranch())
+		assert.NoError(t, err)
+		oldUpdate.SetSignatureSlot(9998)
+		oldFinalizedHeader, err := light_client.NewWrappedHeader(&pb.LightClientHeaderAltair{
+			Beacon: &pb.BeaconBlockHeader{
+				Slot: 9999,
+			},
+		})
+		assert.NoError(t, err)
+		err = oldUpdate.SetFinalizedHeader(oldFinalizedHeader)
+		assert.NoError(t, err)
+
+		newUpdate.SetSyncAggregate(&pb.SyncAggregate{
+			SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
+		})
+		newAttestedHeader, err := light_client.NewWrappedHeader(&pb.LightClientHeaderAltair{
+			Beacon: &pb.BeaconBlockHeader{
+				Slot: 1000000,
+			},
+		})
+		assert.NoError(t, err)
+		err = newUpdate.SetAttestedHeader(newAttestedHeader)
+		assert.NoError(t, err)
+		err = newUpdate.SetNextSyncCommitteeBranch(createNonEmptySyncCommitteeBranch())
+		assert.NoError(t, err)
+		newUpdate.SetSignatureSlot(9999)
+		err = newUpdate.SetFinalityBranch(createNonEmptyFinalityBranch())
+		assert.NoError(t, err)
+		newFinalizedHeader, err := light_client.NewWrappedHeader(&pb.LightClientHeaderAltair{
+			Beacon: &pb.BeaconBlockHeader{
+				Slot: 9999,
+			},
+		})
+		assert.NoError(t, err)
+		err = newUpdate.SetFinalizedHeader(newFinalizedHeader)
+		assert.NoError(t, err)
+
+		result, err := IsBetterUpdate(newUpdate, oldUpdate)
+		assert.NoError(t, err)
+		assert.Equal(t, false, result)
+	})
 }

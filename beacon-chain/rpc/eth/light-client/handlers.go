@@ -11,10 +11,8 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/api"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/shared"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	types "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	"github.com/prysmaticlabs/prysm/v5/network/httputil"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
@@ -117,109 +115,34 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 		endPeriod = maxSlot / slotsPerPeriod
 	}
 
-	// Populate updates
-	var updates []*structs.LightClientUpdateResponse
-	for period := startPeriod; period <= endPeriod; period++ {
-		// Get the last known state of the period,
-		//    1. We wish the block has a parent in the same period if possible
-		//	  2. We wish the block has a state in the same period
-		lastSlotInPeriod := period*slotsPerPeriod + slotsPerPeriod - 1
-		if lastSlotInPeriod > maxSlot {
-			lastSlotInPeriod = maxSlot
-		}
-		firstSlotInPeriod := period * slotsPerPeriod
+	// get updates
+	updatesMap, err := s.BeaconDB.LightClientUpdates(ctx, startPeriod, endPeriod)
+	if err != nil {
+		httputil.HandleError(w, "Could not get light client updates from DB: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
 
-		// Let's not use the first slot in the period, otherwise the attested header will be in previous period
-		firstSlotInPeriod++
+	updates := make([]*structs.LightClientUpdateResponse, 0, len(updatesMap))
 
-		var state state.BeaconState
-		var block interfaces.ReadOnlySignedBeaconBlock
-		for slot := lastSlotInPeriod; slot >= firstSlotInPeriod; slot-- {
-			state, err = s.Stater.StateBySlot(ctx, types.Slot(slot))
-			if err != nil {
-				continue
-			}
-
-			// Get the block
-			latestBlockHeader := state.LatestBlockHeader()
-			latestStateRoot, err := state.HashTreeRoot(ctx)
-			if err != nil {
-				continue
-			}
-			latestBlockHeader.StateRoot = latestStateRoot[:]
-			blockRoot, err := latestBlockHeader.HashTreeRoot()
-			if err != nil {
-				continue
-			}
-
-			block, err = s.Blocker.Block(ctx, blockRoot[:])
-			if err != nil || block == nil {
-				continue
-			}
-
-			syncAggregate, err := block.Block().Body().SyncAggregate()
-			if err != nil || syncAggregate == nil {
-				continue
-			}
-
-			if syncAggregate.SyncCommitteeBits.Count()*3 < config.SyncCommitteeSize*2 {
-				// Not enough votes
-				continue
-			}
-
+	for i := startPeriod; i <= endPeriod; i++ {
+		update, ok := updatesMap[i]
+		if !ok {
+			// Only return the first contiguous range of updates
 			break
 		}
 
-		if block == nil {
-			// No valid block found for the period
-			continue
-		}
-
-		// Get attested state
-		attestedRoot := block.Block().ParentRoot()
-		attestedBlock, err := s.Blocker.Block(ctx, attestedRoot[:])
-		if err != nil || attestedBlock == nil {
-			continue
-		}
-
-		attestedSlot := attestedBlock.Block().Slot()
-		attestedState, err := s.Stater.StateBySlot(ctx, attestedSlot)
+		updateJson, err := structs.LightClientUpdateFromConsensus(update)
 		if err != nil {
-			continue
+			httputil.HandleError(w, "Could not convert light client update: "+err.Error(), http.StatusInternalServerError)
+			return
 		}
 
-		// Get finalized block
-		var finalizedBlock interfaces.ReadOnlySignedBeaconBlock
-		finalizedCheckPoint := attestedState.FinalizedCheckpoint()
-		if finalizedCheckPoint != nil {
-			finalizedRoot := bytesutil.ToBytes32(finalizedCheckPoint.Root)
-			finalizedBlock, err = s.Blocker.Block(ctx, finalizedRoot[:])
-			if err != nil {
-				finalizedBlock = nil
-			}
+		updateResponse := &structs.LightClientUpdateResponse{
+			Version: version.String(update.Version()),
+			Data:    updateJson,
 		}
 
-		update, err := newLightClientUpdateFromBeaconState(
-			ctx,
-			s.ChainInfoFetcher.CurrentSlot(),
-			state,
-			block,
-			attestedState,
-			attestedBlock,
-			finalizedBlock,
-		)
-
-		if err == nil {
-			updates = append(updates, &structs.LightClientUpdateResponse{
-				Version: version.String(attestedState.Version()),
-				Data:    update,
-			})
-		}
-	}
-
-	if len(updates) == 0 {
-		httputil.HandleError(w, "no updates found", http.StatusNotFound)
-		return
+		updates = append(updates, updateResponse)
 	}
 
 	httputil.WriteJson(w, updates)

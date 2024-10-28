@@ -14,9 +14,8 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/encoding/ssz"
 	v11 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	ethpbv1 "github.com/prysmaticlabs/prysm/v5/proto/eth/v1"
-	ethpbv2 "github.com/prysmaticlabs/prysm/v5/proto/eth/v2"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	pb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
@@ -47,14 +46,14 @@ func (l *TestLightClient) SetupTestCapella(blinded bool) *TestLightClient {
 
 	finalizedBlock, err := blocks.NewSignedBeaconBlock(NewBeaconBlockCapella())
 	require.NoError(l.T, err)
-	finalizedBlock.SetSlot(1)
+	finalizedBlock.SetSlot(primitives.Slot(params.BeaconConfig().CapellaForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)))
 	finalizedHeader, err := finalizedBlock.Header()
 	require.NoError(l.T, err)
 	finalizedRoot, err := finalizedHeader.Header.HashTreeRoot()
 	require.NoError(l.T, err)
 
 	require.NoError(l.T, attestedState.SetFinalizedCheckpoint(&ethpb.Checkpoint{
-		Epoch: params.BeaconConfig().CapellaForkEpoch - 10,
+		Epoch: params.BeaconConfig().CapellaForkEpoch,
 		Root:  finalizedRoot[:],
 	}))
 
@@ -441,14 +440,14 @@ func (l *TestLightClient) SetupTestDeneb(blinded bool) *TestLightClient {
 
 	finalizedBlock, err := blocks.NewSignedBeaconBlock(NewBeaconBlockDeneb())
 	require.NoError(l.T, err)
-	finalizedBlock.SetSlot(1)
+	finalizedBlock.SetSlot(primitives.Slot(params.BeaconConfig().DenebForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)))
 	finalizedHeader, err := finalizedBlock.Header()
 	require.NoError(l.T, err)
 	finalizedRoot, err := finalizedHeader.Header.HashTreeRoot()
 	require.NoError(l.T, err)
 
 	require.NoError(l.T, attestedState.SetFinalizedCheckpoint(&ethpb.Checkpoint{
-		Epoch: params.BeaconConfig().DenebForkEpoch - 10,
+		Epoch: params.BeaconConfig().DenebForkEpoch,
 		Root:  finalizedRoot[:],
 	}))
 
@@ -665,14 +664,14 @@ func (l *TestLightClient) SetupTestDenebFinalizedBlockCapella(blinded bool) *Tes
 
 	finalizedBlock, err := blocks.NewSignedBeaconBlock(NewBeaconBlockCapella())
 	require.NoError(l.T, err)
-	finalizedBlock.SetSlot(1)
+	finalizedBlock.SetSlot(primitives.Slot(params.BeaconConfig().DenebForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Sub(15))
 	finalizedHeader, err := finalizedBlock.Header()
 	require.NoError(l.T, err)
 	finalizedRoot, err := finalizedHeader.Header.HashTreeRoot()
 	require.NoError(l.T, err)
 
 	require.NoError(l.T, attestedState.SetFinalizedCheckpoint(&ethpb.Checkpoint{
-		Epoch: params.BeaconConfig().CapellaForkEpoch - 10,
+		Epoch: params.BeaconConfig().DenebForkEpoch - 1,
 		Root:  finalizedRoot[:],
 	}))
 
@@ -765,9 +764,8 @@ func (l *TestLightClient) SetupTestDenebFinalizedBlockCapella(blinded bool) *Tes
 	return l
 }
 
-func (l *TestLightClient) CheckAttestedHeader(container *ethpbv2.LightClientHeaderContainer) {
-	updateAttestedHeaderBeacon, err := container.GetBeacon()
-	require.NoError(l.T, err)
+func (l *TestLightClient) CheckAttestedHeader(header interfaces.LightClientHeader) {
+	updateAttestedHeaderBeacon := header.Beacon()
 	testAttestedHeader, err := l.AttestedBlock.Header()
 	require.NoError(l.T, err)
 	require.Equal(l.T, l.AttestedBlock.Block().Slot(), updateAttestedHeaderBeacon.Slot, "Attested block slot is not equal")
@@ -820,16 +818,16 @@ func (l *TestLightClient) CheckAttestedHeader(container *ethpbv2.LightClientHead
 			WithdrawalsRoot:  withdrawalsRoot,
 		}
 
-		updateAttestedHeaderExecution, err := container.GetExecutionHeaderCapella()
+		updateAttestedHeaderExecution, err := header.Execution()
 		require.NoError(l.T, err)
-		require.DeepSSZEqual(l.T, execution, updateAttestedHeaderExecution, "Attested Block Execution is not equal")
+		require.DeepSSZEqual(l.T, execution, updateAttestedHeaderExecution.Proto(), "Attested Block Execution is not equal")
 
 		executionPayloadProof, err := blocks.PayloadProof(l.Ctx, l.AttestedBlock.Block())
 		require.NoError(l.T, err)
-		updateAttestedHeaderExecutionBranch, err := container.GetExecutionBranch()
+		updateAttestedHeaderExecutionBranch, err := header.ExecutionBranch()
 		require.NoError(l.T, err)
 		for i, leaf := range updateAttestedHeaderExecutionBranch {
-			require.DeepSSZEqual(l.T, executionPayloadProof[i], leaf, "Leaf is not equal")
+			require.DeepSSZEqual(l.T, executionPayloadProof[i], leaf[:], "Leaf is not equal")
 		}
 	}
 
@@ -874,21 +872,21 @@ func (l *TestLightClient) CheckAttestedHeader(container *ethpbv2.LightClientHead
 			WithdrawalsRoot:  withdrawalsRoot,
 		}
 
-		updateAttestedHeaderExecution, err := container.GetExecutionHeaderDeneb()
+		updateAttestedHeaderExecution, err := header.Execution()
 		require.NoError(l.T, err)
-		require.DeepSSZEqual(l.T, execution, updateAttestedHeaderExecution, "Attested Block Execution is not equal")
+		require.DeepSSZEqual(l.T, execution, updateAttestedHeaderExecution.Proto(), "Attested Block Execution is not equal")
 
 		executionPayloadProof, err := blocks.PayloadProof(l.Ctx, l.AttestedBlock.Block())
 		require.NoError(l.T, err)
-		updateAttestedHeaderExecutionBranch, err := container.GetExecutionBranch()
+		updateAttestedHeaderExecutionBranch, err := header.ExecutionBranch()
 		require.NoError(l.T, err)
 		for i, leaf := range updateAttestedHeaderExecutionBranch {
-			require.DeepSSZEqual(l.T, executionPayloadProof[i], leaf, "Leaf is not equal")
+			require.DeepSSZEqual(l.T, executionPayloadProof[i], leaf[:], "Leaf is not equal")
 		}
 	}
 }
 
-func (l *TestLightClient) CheckSyncAggregate(sa *ethpbv1.SyncAggregate) {
+func (l *TestLightClient) CheckSyncAggregate(sa *pb.SyncAggregate) {
 	syncAggregate, err := l.Block.Block().Body().SyncAggregate()
 	require.NoError(l.T, err)
 	require.DeepSSZEqual(l.T, syncAggregate.SyncCommitteeBits, sa.SyncCommitteeBits, "SyncAggregate bits is not equal")
