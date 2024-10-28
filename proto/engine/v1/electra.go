@@ -5,6 +5,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
 )
 
 type ExecutionPayloadElectra = ExecutionPayloadDeneb
@@ -40,7 +41,10 @@ func (ebe *ExecutionBundleElectra) GetDecodedExecutionRequests() (*ExecutionRequ
 		switch requestType {
 		case depositRequestType:
 			if len(requestListInSSZBytes) < drSize {
-				return nil, errors.New("invalid deposit request length, requests should be at least the size of 1 request")
+				return nil, errors.New("invalid deposit requests length, requests should be at least the size of 1 request")
+			}
+			if uint64(len(requestListInSSZBytes)) > uint64(drSize)*params.BeaconConfig().MaxDepositRequestsPerPayload {
+				return nil, fmt.Errorf("invalid deposit requests length, requests should not be more than the max per payload, got %d max %d", len(requestListInSSZBytes), drSize)
 			}
 			drs, err := unmarshalItems(requestListInSSZBytes, drSize, func() *DepositRequest { return &DepositRequest{} })
 			if err != nil {
@@ -51,6 +55,9 @@ func (ebe *ExecutionBundleElectra) GetDecodedExecutionRequests() (*ExecutionRequ
 			if len(requestListInSSZBytes) < wrSize {
 				return nil, errors.New("invalid withdrawal request length, requests should be at least the size of 1 request")
 			}
+			if uint64(len(requestListInSSZBytes)) > uint64(wrSize)*params.BeaconConfig().MaxWithdrawalRequestsPerPayload {
+				return nil, fmt.Errorf("invalid withdrawal requests length, requests should not be more than the max per payload, got %d max %d", len(requestListInSSZBytes), wrSize)
+			}
 			wrs, err := unmarshalItems(requestListInSSZBytes, wrSize, func() *WithdrawalRequest { return &WithdrawalRequest{} })
 			if err != nil {
 				return nil, err
@@ -59,6 +66,9 @@ func (ebe *ExecutionBundleElectra) GetDecodedExecutionRequests() (*ExecutionRequ
 		case consolidationRequestType:
 			if len(requestListInSSZBytes) < crSize {
 				return nil, errors.New("invalid consolidations request length, requests should be at least the size of 1 request")
+			}
+			if uint64(len(requestListInSSZBytes)) > uint64(crSize)*params.BeaconConfig().MaxConsolidationsRequestsPerPayload {
+				return nil, fmt.Errorf("invalid consolidation requests length, requests should not be more than the max per payload, got %d max %d", len(requestListInSSZBytes), crSize)
 			}
 			crs, err := unmarshalItems(requestListInSSZBytes, crSize, func() *ConsolidationRequest { return &ConsolidationRequest{} })
 			if err != nil {

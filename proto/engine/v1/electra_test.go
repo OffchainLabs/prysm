@@ -23,7 +23,7 @@ func TestGetDecodedExecutionRequests(t *testing.T) {
 			"680000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000")
 		require.NoError(t, err)
 		ebe := &enginev1.ExecutionBundleElectra{
-			ExecutionRequests: [][]byte{append([]byte{depositRequestType}, depositRequestBytes...), append([]byte{consolidationRequestType}, consolidationRequestBytes...)},
+			ExecutionRequests: [][]byte{append([]byte{uint8(enginev1.DepositRequestType)}, depositRequestBytes...), append([]byte{uint8(enginev1.ConsolidationRequestType)}, consolidationRequestBytes...)},
 		}
 		requests, err := ebe.GetDecodedExecutionRequests()
 		require.NoError(t, err)
@@ -42,23 +42,18 @@ func TestGetDecodedExecutionRequests(t *testing.T) {
 			"680000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000")
 		require.NoError(t, err)
 		ebe := &enginev1.ExecutionBundleElectra{
-			ExecutionRequests: [][]byte{append([]byte{consolidationRequestType}, consolidationRequestBytes...), append([]byte{depositRequestType}, depositRequestBytes...)},
+			ExecutionRequests: [][]byte{append([]byte{uint8(enginev1.ConsolidationRequestType)}, consolidationRequestBytes...), append([]byte{uint8(enginev1.DepositRequestType)}, depositRequestBytes...)},
 		}
 		_, err = ebe.GetDecodedExecutionRequests()
 		require.ErrorContains(t, "invalid execution request type order", err)
 	})
-	t.Run("Requests should error if it's shorter than 1 byte", func(t *testing.T) {
-		depositRequestBytes, err := hexutil.Decode("0x610000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000" +
-			"620000000000000000000000000000000000000000000000000000000000000000" +
-			"4059730700000063000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000" +
-			"00000000000000000000000000000000000000000000000000000000000000000000000000000000")
-		require.NoError(t, err)
+	t.Run("Requests should error if the request type is shorter than 1 byte", func(t *testing.T) {
 		consolidationRequestBytes, err := hexutil.Decode("0x6600000000000000000000000000000000000000" +
 			"670000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000" +
 			"680000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000")
 		require.NoError(t, err)
 		ebe := &enginev1.ExecutionBundleElectra{
-			ExecutionRequests: [][]byte{append([]byte{}, depositRequestBytes...), append([]byte{2}, consolidationRequestBytes...)},
+			ExecutionRequests: [][]byte{append([]byte{}, []byte{}...), append([]byte{uint8(enginev1.ConsolidationRequestType)}, consolidationRequestBytes...)},
 		}
 		_, err = ebe.GetDecodedExecutionRequests()
 		require.ErrorContains(t, "invalid execution request, length less than 1", err)
@@ -69,10 +64,10 @@ func TestGetDecodedExecutionRequests(t *testing.T) {
 			"680000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000")
 		require.NoError(t, err)
 		ebe := &enginev1.ExecutionBundleElectra{
-			ExecutionRequests: [][]byte{append([]byte{0}, []byte{}...), append([]byte{2}, consolidationRequestBytes...)},
+			ExecutionRequests: [][]byte{append([]byte{uint8(enginev1.DepositRequestType)}, []byte{}...), append([]byte{uint8(enginev1.ConsolidationRequestType)}, consolidationRequestBytes...)},
 		}
 		_, err = ebe.GetDecodedExecutionRequests()
-		require.ErrorContains(t, "invalid deposit request length", err)
+		require.ErrorContains(t, "invalid deposit requests length", err)
 	})
 }
 

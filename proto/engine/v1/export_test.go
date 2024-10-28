@@ -9,3 +9,9 @@ func MarshalItems[T sszMarshaler](items []T) ([]byte, error) {
 func UnmarshalItems[T sszUnmarshaler](data []byte, itemSize int, newItem func() T) ([]T, error) {
 	return unmarshalItems(data, itemSize, newItem)
 }
+
+var (
+	DepositRequestType       = depositRequestType
+	WithdrawalRequestType    = withdrawalRequestType
+	ConsolidationRequestType = consolidationRequestType
+)
