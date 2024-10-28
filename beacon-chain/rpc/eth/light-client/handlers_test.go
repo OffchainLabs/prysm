@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -14,13 +15,17 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
+	lightclient "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/light-client"
 	dbtesting "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/testutil"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
+	light_client "github.com/prysmaticlabs/prysm/v5/consensus-types/light-client"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
 	pb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
@@ -259,7 +264,7 @@ func TestLightClientHandler_GetLightClientUpdatesByRangeAltair(t *testing.T) {
 
 	updatePeriod := uint64(slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch)))
 
-	update, err := util.CreateTestingUpdate(t, version.Altair)
+	update, err := createUpdate(t, version.Altair)
 	require.NoError(t, err)
 	err = db.SaveLightClientUpdate(ctx, updatePeriod, update)
 	require.NoError(t, err)
@@ -307,7 +312,7 @@ func TestLightClientHandler_GetLightClientUpdatesByRangeCapella(t *testing.T) {
 
 	updatePeriod := uint64(slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch)))
 
-	update, err := util.CreateTestingUpdate(t, version.Capella)
+	update, err := createUpdate(t, version.Capella)
 	require.NoError(t, err)
 
 	err = db.SaveLightClientUpdate(ctx, updatePeriod, update)
@@ -357,7 +362,7 @@ func TestLightClientHandler_GetLightClientUpdatesByRangeDeneb(t *testing.T) {
 
 	updatePeriod := uint64(slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch)))
 
-	update, err := util.CreateTestingUpdate(t, version.Deneb)
+	update, err := createUpdate(t, version.Deneb)
 	require.NoError(t, err)
 	err = db.SaveLightClientUpdate(ctx, updatePeriod, update)
 	require.NoError(t, err)
@@ -408,7 +413,7 @@ func TestLightClientHandler_GetLightClientUpdatesByRangeMultipleAltair(t *testin
 
 	updates := make([]interfaces.LightClientUpdate, 0)
 	for i := 1; i <= 2; i++ {
-		update, err := util.CreateTestingUpdate(t, version.Altair)
+		update, err := createUpdate(t, version.Altair)
 		require.NoError(t, err)
 		updates = append(updates, update)
 	}
@@ -468,7 +473,7 @@ func TestLightClientHandler_GetLightClientUpdatesByRangeMultipleCapella(t *testi
 
 	updates := make([]interfaces.LightClientUpdate, 0)
 	for i := 0; i < 2; i++ {
-		update, err := util.CreateTestingUpdate(t, version.Capella)
+		update, err := createUpdate(t, version.Capella)
 		require.NoError(t, err)
 		updates = append(updates, update)
 	}
@@ -529,7 +534,7 @@ func TestLightClientHandler_GetLightClientUpdatesByRangeMultipleDeneb(t *testing
 
 	updates := make([]interfaces.LightClientUpdate, 0)
 	for i := 0; i < 2; i++ {
-		update, err := util.CreateTestingUpdate(t, version.Deneb)
+		update, err := createUpdate(t, version.Deneb)
 		require.NoError(t, err)
 		updates = append(updates, update)
 	}
@@ -589,7 +594,7 @@ func TestLightClientHandler_GetLightClientUpdatesByRangeMultipleForksAltairCapel
 
 	updatePeriod := slotAltair.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
 
-	updates[0], err = util.CreateTestingUpdate(t, version.Altair)
+	updates[0], err = createUpdate(t, version.Altair)
 	require.NoError(t, err)
 
 	err = db.SaveLightClientUpdate(ctx, uint64(updatePeriod), updates[0])
@@ -597,7 +602,7 @@ func TestLightClientHandler_GetLightClientUpdatesByRangeMultipleForksAltairCapel
 
 	updatePeriod = slotCapella.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
 
-	updates[1], err = util.CreateTestingUpdate(t, version.Capella)
+	updates[1], err = createUpdate(t, version.Capella)
 	require.NoError(t, err)
 
 	err = db.SaveLightClientUpdate(ctx, uint64(updatePeriod), updates[1])
@@ -658,7 +663,7 @@ func TestLightClientHandler_GetLightClientUpdatesByRangeMultipleForksCapellaDene
 
 	updatePeriod := slotCapella.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
 
-	updates[0], err = util.CreateTestingUpdate(t, version.Capella)
+	updates[0], err = createUpdate(t, version.Capella)
 	require.NoError(t, err)
 
 	err = db.SaveLightClientUpdate(ctx, uint64(updatePeriod), updates[0])
@@ -666,7 +671,7 @@ func TestLightClientHandler_GetLightClientUpdatesByRangeMultipleForksCapellaDene
 
 	updatePeriod = slotDeneb.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
 
-	updates[1], err = util.CreateTestingUpdate(t, version.Deneb)
+	updates[1], err = createUpdate(t, version.Deneb)
 	require.NoError(t, err)
 
 	err = db.SaveLightClientUpdate(ctx, uint64(updatePeriod), updates[1])
@@ -727,7 +732,7 @@ func TestLightClientHandler_GetLightClientUpdatesByRangeCountBiggerThanLimit(t *
 
 	for i := 0; i < 3; i++ {
 
-		updates[i], err = util.CreateTestingUpdate(t, version.Altair)
+		updates[i], err = createUpdate(t, version.Altair)
 		require.NoError(t, err)
 
 		err = db.SaveLightClientUpdate(ctx, uint64(updatePeriod), updates[i])
@@ -788,7 +793,7 @@ func TestLightClientHandler_GetLightClientUpdatesByRangeCountBiggerThanMax(t *te
 	updatePeriod := slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
 
 	for i := 0; i < 3; i++ {
-		updates[i], err = util.CreateTestingUpdate(t, version.Altair)
+		updates[i], err = createUpdate(t, version.Altair)
 		require.NoError(t, err)
 
 		err = db.SaveLightClientUpdate(ctx, uint64(updatePeriod), updates[i])
@@ -845,7 +850,7 @@ func TestLightClientHandler_GetLightClientUpdatesByRangeStartPeriodBeforeAltair(
 
 	updatePeriod := slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
 
-	update, err := util.CreateTestingUpdate(t, version.Altair)
+	update, err := createUpdate(t, version.Altair)
 	require.NoError(t, err)
 
 	err = db.SaveLightClientUpdate(ctx, uint64(updatePeriod), update)
@@ -906,7 +911,7 @@ func TestLightClientHandler_GetLightClientUpdatesByRangeMissingUpdates(t *testin
 				continue
 			}
 
-			updates[i], err = util.CreateTestingUpdate(t, version.Altair)
+			updates[i], err = createUpdate(t, version.Altair)
 			require.NoError(t, err)
 
 			err = db.SaveLightClientUpdate(ctx, uint64(updatePeriod), updates[i])
@@ -952,7 +957,7 @@ func TestLightClientHandler_GetLightClientUpdatesByRangeMissingUpdates(t *testin
 				continue
 			}
 
-			updates[i], err = util.CreateTestingUpdate(t, version.Altair)
+			updates[i], err = createUpdate(t, version.Altair)
 			require.NoError(t, err)
 
 			err = db.SaveLightClientUpdate(ctx, uint64(updatePeriod), updates[i])
@@ -1870,4 +1875,134 @@ func TestLightClientHandler_GetLightClientEventBlock_NeedFetchParent(t *testing.
 	require.NoError(t, err)
 	require.Equal(t, true, syncAggregate.SyncCommitteeBits.Count() >= minSignaturesRequired)
 	require.Equal(t, slot-1, eventBlock.Block().Slot())
+}
+
+func createUpdate(t *testing.T, v int) (interfaces.LightClientUpdate, error) {
+	config := params.BeaconConfig()
+	var slot primitives.Slot
+	var header interfaces.LightClientHeader
+	var err error
+
+	sampleRoot := make([]byte, 32)
+	for i := 0; i < 32; i++ {
+		sampleRoot[i] = byte(i)
+	}
+
+	sampleExecutionBranch := make([][]byte, fieldparams.ExecutionBranchDepth)
+	for i := 0; i < 4; i++ {
+		sampleExecutionBranch[i] = make([]byte, 32)
+		for j := 0; j < 32; j++ {
+			sampleExecutionBranch[i][j] = byte(i + j)
+		}
+	}
+
+	switch v {
+	case version.Altair:
+		slot = primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
+		header, err = light_client.NewWrappedHeader(&pb.LightClientHeaderAltair{
+			Beacon: &pb.BeaconBlockHeader{
+				Slot:          1,
+				ProposerIndex: primitives.ValidatorIndex(rand.Int()),
+				ParentRoot:    sampleRoot,
+				StateRoot:     sampleRoot,
+				BodyRoot:      sampleRoot,
+			},
+		})
+		require.NoError(t, err)
+	case version.Capella:
+		slot = primitives.Slot(config.CapellaForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
+		header, err = light_client.NewWrappedHeader(&pb.LightClientHeaderCapella{
+			Beacon: &pb.BeaconBlockHeader{
+				Slot:          1,
+				ProposerIndex: primitives.ValidatorIndex(rand.Int()),
+				ParentRoot:    sampleRoot,
+				StateRoot:     sampleRoot,
+				BodyRoot:      sampleRoot,
+			},
+			Execution: &enginev1.ExecutionPayloadHeaderCapella{
+				ParentHash:       make([]byte, fieldparams.RootLength),
+				FeeRecipient:     make([]byte, fieldparams.FeeRecipientLength),
+				StateRoot:        make([]byte, fieldparams.RootLength),
+				ReceiptsRoot:     make([]byte, fieldparams.RootLength),
+				LogsBloom:        make([]byte, fieldparams.LogsBloomLength),
+				PrevRandao:       make([]byte, fieldparams.RootLength),
+				ExtraData:        make([]byte, 0),
+				BaseFeePerGas:    make([]byte, fieldparams.RootLength),
+				BlockHash:        make([]byte, fieldparams.RootLength),
+				TransactionsRoot: make([]byte, fieldparams.RootLength),
+				WithdrawalsRoot:  make([]byte, fieldparams.RootLength),
+			},
+			ExecutionBranch: sampleExecutionBranch,
+		})
+		require.NoError(t, err)
+	case version.Deneb:
+		slot = primitives.Slot(config.DenebForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
+		header, err = light_client.NewWrappedHeader(&pb.LightClientHeaderDeneb{
+			Beacon: &pb.BeaconBlockHeader{
+				Slot:          1,
+				ProposerIndex: primitives.ValidatorIndex(rand.Int()),
+				ParentRoot:    sampleRoot,
+				StateRoot:     sampleRoot,
+				BodyRoot:      sampleRoot,
+			},
+			Execution: &enginev1.ExecutionPayloadHeaderDeneb{
+				ParentHash:       make([]byte, fieldparams.RootLength),
+				FeeRecipient:     make([]byte, fieldparams.FeeRecipientLength),
+				StateRoot:        make([]byte, fieldparams.RootLength),
+				ReceiptsRoot:     make([]byte, fieldparams.RootLength),
+				LogsBloom:        make([]byte, fieldparams.LogsBloomLength),
+				PrevRandao:       make([]byte, fieldparams.RootLength),
+				ExtraData:        make([]byte, 0),
+				BaseFeePerGas:    make([]byte, fieldparams.RootLength),
+				BlockHash:        make([]byte, fieldparams.RootLength),
+				TransactionsRoot: make([]byte, fieldparams.RootLength),
+				WithdrawalsRoot:  make([]byte, fieldparams.RootLength),
+			},
+			ExecutionBranch: sampleExecutionBranch,
+		})
+		require.NoError(t, err)
+	case version.Electra:
+		slot = primitives.Slot(config.ElectraForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
+		header, err = light_client.NewWrappedHeader(&pb.LightClientHeaderDeneb{
+			Beacon: &pb.BeaconBlockHeader{
+				Slot:          1,
+				ProposerIndex: primitives.ValidatorIndex(rand.Int()),
+				ParentRoot:    sampleRoot,
+				StateRoot:     sampleRoot,
+				BodyRoot:      sampleRoot,
+			},
+			Execution: &enginev1.ExecutionPayloadHeaderElectra{
+				ParentHash:       make([]byte, fieldparams.RootLength),
+				FeeRecipient:     make([]byte, fieldparams.FeeRecipientLength),
+				StateRoot:        make([]byte, fieldparams.RootLength),
+				ReceiptsRoot:     make([]byte, fieldparams.RootLength),
+				LogsBloom:        make([]byte, fieldparams.LogsBloomLength),
+				PrevRandao:       make([]byte, fieldparams.RootLength),
+				ExtraData:        make([]byte, 0),
+				BaseFeePerGas:    make([]byte, fieldparams.RootLength),
+				BlockHash:        make([]byte, fieldparams.RootLength),
+				TransactionsRoot: make([]byte, fieldparams.RootLength),
+				WithdrawalsRoot:  make([]byte, fieldparams.RootLength),
+			},
+			ExecutionBranch: sampleExecutionBranch,
+		})
+		require.NoError(t, err)
+	default:
+		return nil, fmt.Errorf("unsupported version %s", version.String(v))
+	}
+
+	update, err := lightclient.CreateDefaultLightClientUpdate(slot)
+	require.NoError(t, err)
+	update.SetSignatureSlot(slot - 1)
+	syncCommitteeBits := make([]byte, 64)
+	syncCommitteeSignature := make([]byte, 96)
+	update.SetSyncAggregate(&pb.SyncAggregate{
+		SyncCommitteeBits:      syncCommitteeBits,
+		SyncCommitteeSignature: syncCommitteeSignature,
+	})
+
+	require.NoError(t, update.SetAttestedHeader(header))
+	require.NoError(t, update.SetFinalizedHeader(header))
+
+	return update, nil
 }
