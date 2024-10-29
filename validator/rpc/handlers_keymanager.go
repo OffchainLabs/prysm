@@ -50,7 +50,7 @@ func (s *Server) ListKeystores(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.wallet.KeymanagerKind() != keymanager.Derived && s.wallet.KeymanagerKind() != keymanager.Local {
-		log.Debugf("List keystores keymanager api was but got wallet type %s and wanted %s", s.wallet.KeymanagerKind().String(), keymanager.Local.String())
+		log.Debugf("List keystores keymanager api expected wallet type %s but got %s", s.wallet.KeymanagerKind().String(), keymanager.Local.String())
 		response := &ListKeystoresResponse{
 			Data: make([]*Keystore, 0),
 		}
