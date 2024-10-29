@@ -54,6 +54,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Fix `--backfill-oldest-slot` handling - this flag was totally broken, the code would always backfill to the default slot [pr](https://github.com/prysmaticlabs/prysm/pull/14584)
 - Fix keymanager API should return corrected error format for malformed tokens
 - Fix keymanager API so that get keys returns an empty response instead of a 500 error when using an unsupported keystore.
+- Small log imporvement, removing some redundant or duplicate logs
 
 ### Security
 
