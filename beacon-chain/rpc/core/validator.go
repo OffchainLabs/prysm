@@ -878,7 +878,7 @@ func (s *Service) ValidatorActiveSetChanges(
 	}
 	vs := requestedState.Validators()
 	activatedIndices := validators.ActivatedValidatorIndices(coreTime.CurrentEpoch(requestedState), vs)
-	exitedIndices, err := validators.ExitedValidatorIndices(coreTime.CurrentEpoch(requestedState), vs, activeValidatorCount)
+	exitedIndices, err := validators.ExitedValidatorIndices(coreTime.CurrentEpoch(requestedState), vs)
 	if err != nil {
 		return nil, &RpcError{
 			Err:    errors.Wrap(err, "could not determine exited validator indices"),
