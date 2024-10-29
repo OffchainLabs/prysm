@@ -76,7 +76,7 @@ func TestServer_AuthTokenHandler(t *testing.T) {
 		require.Equal(t, http.StatusUnauthorized, rr.Code)
 		errJson := &httputil.DefaultJsonError{}
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), errJson))
-		require.StringContains(t, "unauthorized", errJson.Message)
+		require.StringContains(t, "Unauthorized", errJson.Message)
 	})
 	t.Run("wrong auth token was sent", func(t *testing.T) {
 		rr := httptest.NewRecorder()
