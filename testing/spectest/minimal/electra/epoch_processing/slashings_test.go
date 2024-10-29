@@ -7,6 +7,5 @@ import (
 )
 
 func TestMinimal_Electra_EpochProcessing_Slashings(t *testing.T) {
-	t.Skip("slashing processing missing")
 	epoch_processing.RunSlashingsTests(t, "minimal")
 }

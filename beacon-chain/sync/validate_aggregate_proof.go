@@ -305,11 +305,12 @@ func validateSelectionIndex(
 	domain := params.BeaconConfig().DomainSelectionProof
 	epoch := slots.ToEpoch(slot)
 
-	v, err := bs.ValidatorAtIndex(validatorIndex)
+	v, err := bs.ValidatorAtIndexReadOnly(validatorIndex)
 	if err != nil {
 		return nil, err
 	}
-	publicKey, err := bls.PublicKeyFromBytes(v.PublicKey)
+	pk := v.PublicKey()
+	publicKey, err := bls.PublicKeyFromBytes(pk[:])
 	if err != nil {
 		return nil, err
 	}
@@ -335,11 +336,12 @@ func validateSelectionIndex(
 func aggSigSet(s state.ReadOnlyBeaconState, a ethpb.SignedAggregateAttAndProof) (*bls.SignatureBatch, error) {
 	aggregateAndProof := a.AggregateAttestationAndProof()
 
-	v, err := s.ValidatorAtIndex(aggregateAndProof.GetAggregatorIndex())
+	v, err := s.ValidatorAtIndexReadOnly(aggregateAndProof.GetAggregatorIndex())
 	if err != nil {
 		return nil, err
 	}
-	publicKey, err := bls.PublicKeyFromBytes(v.PublicKey)
+	pk := v.PublicKey()
+	publicKey, err := bls.PublicKeyFromBytes(pk[:])
 	if err != nil {
 		return nil, err
 	}

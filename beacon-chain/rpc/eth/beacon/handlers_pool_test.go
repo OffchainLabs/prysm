@@ -114,77 +114,352 @@ func TestListAttestations(t *testing.T) {
 		},
 		Signature: bytesutil.PadTo([]byte("signature4"), 96),
 	}
-	s := &Server{
-		AttestationsPool: attestations.NewPool(),
-	}
-	require.NoError(t, s.AttestationsPool.SaveAggregatedAttestations([]ethpbv1alpha1.Att{att1, att2}))
-	require.NoError(t, s.AttestationsPool.SaveUnaggregatedAttestations([]ethpbv1alpha1.Att{att3, att4}))
-
-	t.Run("empty request", func(t *testing.T) {
-		url := "http://example.com"
-		request := httptest.NewRequest(http.MethodGet, url, nil)
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-
-		s.ListAttestations(writer, request)
-		assert.Equal(t, http.StatusOK, writer.Code)
-		resp := &structs.ListAttestationsResponse{}
-		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
-		require.NotNil(t, resp)
-		require.NotNil(t, resp.Data)
-		assert.Equal(t, 4, len(resp.Data))
-	})
-	t.Run("slot request", func(t *testing.T) {
-		url := "http://example.com?slot=2"
-		request := httptest.NewRequest(http.MethodGet, url, nil)
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-
-		s.ListAttestations(writer, request)
-		assert.Equal(t, http.StatusOK, writer.Code)
-		resp := &structs.ListAttestationsResponse{}
-		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
-		require.NotNil(t, resp)
-		require.NotNil(t, resp.Data)
-		assert.Equal(t, 2, len(resp.Data))
-		for _, a := range resp.Data {
-			assert.Equal(t, "2", a.Data.Slot)
+	t.Run("V1", func(t *testing.T) {
+		s := &Server{
+			AttestationsPool: attestations.NewPool(),
 		}
-	})
-	t.Run("index request", func(t *testing.T) {
-		url := "http://example.com?committee_index=4"
-		request := httptest.NewRequest(http.MethodGet, url, nil)
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
+		require.NoError(t, s.AttestationsPool.SaveAggregatedAttestations([]ethpbv1alpha1.Att{att1, att2}))
+		require.NoError(t, s.AttestationsPool.SaveUnaggregatedAttestations([]ethpbv1alpha1.Att{att3, att4}))
 
-		s.ListAttestations(writer, request)
-		assert.Equal(t, http.StatusOK, writer.Code)
-		resp := &structs.ListAttestationsResponse{}
-		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
-		require.NotNil(t, resp)
-		require.NotNil(t, resp.Data)
-		assert.Equal(t, 2, len(resp.Data))
-		for _, a := range resp.Data {
-			assert.Equal(t, "4", a.Data.CommitteeIndex)
-		}
-	})
-	t.Run("both slot + index request", func(t *testing.T) {
-		url := "http://example.com?slot=2&committee_index=4"
-		request := httptest.NewRequest(http.MethodGet, url, nil)
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
+		t.Run("empty request", func(t *testing.T) {
+			url := "http://example.com"
+			request := httptest.NewRequest(http.MethodGet, url, nil)
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
 
-		s.ListAttestations(writer, request)
-		assert.Equal(t, http.StatusOK, writer.Code)
-		resp := &structs.ListAttestationsResponse{}
-		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
-		require.NotNil(t, resp)
-		require.NotNil(t, resp.Data)
-		assert.Equal(t, 1, len(resp.Data))
-		for _, a := range resp.Data {
-			assert.Equal(t, "2", a.Data.Slot)
-			assert.Equal(t, "4", a.Data.CommitteeIndex)
-		}
+			s.ListAttestations(writer, request)
+			assert.Equal(t, http.StatusOK, writer.Code)
+			resp := &structs.ListAttestationsResponse{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
+			require.NotNil(t, resp)
+			require.NotNil(t, resp.Data)
+
+			var atts []*structs.Attestation
+			require.NoError(t, json.Unmarshal(resp.Data, &atts))
+			assert.Equal(t, 4, len(atts))
+		})
+		t.Run("slot request", func(t *testing.T) {
+			url := "http://example.com?slot=2"
+			request := httptest.NewRequest(http.MethodGet, url, nil)
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.ListAttestations(writer, request)
+			assert.Equal(t, http.StatusOK, writer.Code)
+			resp := &structs.ListAttestationsResponse{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
+			require.NotNil(t, resp)
+			require.NotNil(t, resp.Data)
+
+			var atts []*structs.Attestation
+			require.NoError(t, json.Unmarshal(resp.Data, &atts))
+			assert.Equal(t, 2, len(atts))
+			for _, a := range atts {
+				assert.Equal(t, "2", a.Data.Slot)
+			}
+		})
+		t.Run("index request", func(t *testing.T) {
+			url := "http://example.com?committee_index=4"
+			request := httptest.NewRequest(http.MethodGet, url, nil)
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.ListAttestations(writer, request)
+			assert.Equal(t, http.StatusOK, writer.Code)
+			resp := &structs.ListAttestationsResponse{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
+			require.NotNil(t, resp)
+			require.NotNil(t, resp.Data)
+
+			var atts []*structs.Attestation
+			require.NoError(t, json.Unmarshal(resp.Data, &atts))
+			assert.Equal(t, 2, len(atts))
+			for _, a := range atts {
+				assert.Equal(t, "4", a.Data.CommitteeIndex)
+			}
+		})
+		t.Run("both slot + index request", func(t *testing.T) {
+			url := "http://example.com?slot=2&committee_index=4"
+			request := httptest.NewRequest(http.MethodGet, url, nil)
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.ListAttestations(writer, request)
+			assert.Equal(t, http.StatusOK, writer.Code)
+			resp := &structs.ListAttestationsResponse{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
+			require.NotNil(t, resp)
+			require.NotNil(t, resp.Data)
+
+			var atts []*structs.Attestation
+			require.NoError(t, json.Unmarshal(resp.Data, &atts))
+			assert.Equal(t, 1, len(atts))
+			for _, a := range atts {
+				assert.Equal(t, "2", a.Data.Slot)
+				assert.Equal(t, "4", a.Data.CommitteeIndex)
+			}
+		})
+	})
+	t.Run("V2", func(t *testing.T) {
+		t.Run("Pre-Electra", func(t *testing.T) {
+			bs, err := util.NewBeaconState()
+			require.NoError(t, err)
+			s := &Server{
+				ChainInfoFetcher: &blockchainmock.ChainService{State: bs},
+				AttestationsPool: attestations.NewPool(),
+			}
+			require.NoError(t, s.AttestationsPool.SaveAggregatedAttestations([]ethpbv1alpha1.Att{att1, att2}))
+			require.NoError(t, s.AttestationsPool.SaveUnaggregatedAttestations([]ethpbv1alpha1.Att{att3, att4}))
+			t.Run("empty request", func(t *testing.T) {
+				url := "http://example.com"
+				request := httptest.NewRequest(http.MethodGet, url, nil)
+				writer := httptest.NewRecorder()
+				writer.Body = &bytes.Buffer{}
+
+				s.ListAttestationsV2(writer, request)
+				assert.Equal(t, http.StatusOK, writer.Code)
+				resp := &structs.ListAttestationsResponse{}
+				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+				require.NotNil(t, resp)
+				require.NotNil(t, resp.Data)
+
+				var atts []*structs.Attestation
+				require.NoError(t, json.Unmarshal(resp.Data, &atts))
+				assert.Equal(t, 4, len(atts))
+				assert.Equal(t, "phase0", resp.Version)
+			})
+			t.Run("slot request", func(t *testing.T) {
+				url := "http://example.com?slot=2"
+				request := httptest.NewRequest(http.MethodGet, url, nil)
+				writer := httptest.NewRecorder()
+				writer.Body = &bytes.Buffer{}
+
+				s.ListAttestationsV2(writer, request)
+				assert.Equal(t, http.StatusOK, writer.Code)
+				resp := &structs.ListAttestationsResponse{}
+				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+				require.NotNil(t, resp)
+				require.NotNil(t, resp.Data)
+
+				var atts []*structs.Attestation
+				require.NoError(t, json.Unmarshal(resp.Data, &atts))
+				assert.Equal(t, 2, len(atts))
+				assert.Equal(t, "phase0", resp.Version)
+				for _, a := range atts {
+					assert.Equal(t, "2", a.Data.Slot)
+				}
+			})
+			t.Run("index request", func(t *testing.T) {
+				url := "http://example.com?committee_index=4"
+				request := httptest.NewRequest(http.MethodGet, url, nil)
+				writer := httptest.NewRecorder()
+				writer.Body = &bytes.Buffer{}
+
+				s.ListAttestationsV2(writer, request)
+				assert.Equal(t, http.StatusOK, writer.Code)
+				resp := &structs.ListAttestationsResponse{}
+				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+				require.NotNil(t, resp)
+				require.NotNil(t, resp.Data)
+
+				var atts []*structs.Attestation
+				require.NoError(t, json.Unmarshal(resp.Data, &atts))
+				assert.Equal(t, 2, len(atts))
+				assert.Equal(t, "phase0", resp.Version)
+				for _, a := range atts {
+					assert.Equal(t, "4", a.Data.CommitteeIndex)
+				}
+			})
+			t.Run("both slot + index request", func(t *testing.T) {
+				url := "http://example.com?slot=2&committee_index=4"
+				request := httptest.NewRequest(http.MethodGet, url, nil)
+				writer := httptest.NewRecorder()
+				writer.Body = &bytes.Buffer{}
+
+				s.ListAttestationsV2(writer, request)
+				assert.Equal(t, http.StatusOK, writer.Code)
+				resp := &structs.ListAttestationsResponse{}
+				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+				require.NotNil(t, resp)
+				require.NotNil(t, resp.Data)
+
+				var atts []*structs.Attestation
+				require.NoError(t, json.Unmarshal(resp.Data, &atts))
+				assert.Equal(t, 1, len(atts))
+				assert.Equal(t, "phase0", resp.Version)
+				for _, a := range atts {
+					assert.Equal(t, "2", a.Data.Slot)
+					assert.Equal(t, "4", a.Data.CommitteeIndex)
+				}
+			})
+		})
+		t.Run("Post-Electra", func(t *testing.T) {
+			cb := primitives.NewAttestationCommitteeBits()
+			cb.SetBitAt(1, true)
+			attElectra1 := &ethpbv1alpha1.AttestationElectra{
+				AggregationBits: []byte{1, 10},
+				Data: &ethpbv1alpha1.AttestationData{
+					Slot:            1,
+					CommitteeIndex:  1,
+					BeaconBlockRoot: bytesutil.PadTo([]byte("blockroot1"), 32),
+					Source: &ethpbv1alpha1.Checkpoint{
+						Epoch: 1,
+						Root:  bytesutil.PadTo([]byte("sourceroot1"), 32),
+					},
+					Target: &ethpbv1alpha1.Checkpoint{
+						Epoch: 10,
+						Root:  bytesutil.PadTo([]byte("targetroot1"), 32),
+					},
+				},
+				CommitteeBits: cb,
+				Signature:     bytesutil.PadTo([]byte("signature1"), 96),
+			}
+			attElectra2 := &ethpbv1alpha1.AttestationElectra{
+				AggregationBits: []byte{1, 10},
+				Data: &ethpbv1alpha1.AttestationData{
+					Slot:            1,
+					CommitteeIndex:  4,
+					BeaconBlockRoot: bytesutil.PadTo([]byte("blockroot2"), 32),
+					Source: &ethpbv1alpha1.Checkpoint{
+						Epoch: 1,
+						Root:  bytesutil.PadTo([]byte("sourceroot2"), 32),
+					},
+					Target: &ethpbv1alpha1.Checkpoint{
+						Epoch: 10,
+						Root:  bytesutil.PadTo([]byte("targetroot2"), 32),
+					},
+				},
+				CommitteeBits: cb,
+				Signature:     bytesutil.PadTo([]byte("signature2"), 96),
+			}
+			attElectra3 := &ethpbv1alpha1.AttestationElectra{
+				AggregationBits: bitfield.NewBitlist(8),
+				Data: &ethpbv1alpha1.AttestationData{
+					Slot:            2,
+					CommitteeIndex:  2,
+					BeaconBlockRoot: bytesutil.PadTo([]byte("blockroot3"), 32),
+					Source: &ethpbv1alpha1.Checkpoint{
+						Epoch: 1,
+						Root:  bytesutil.PadTo([]byte("sourceroot3"), 32),
+					},
+					Target: &ethpbv1alpha1.Checkpoint{
+						Epoch: 10,
+						Root:  bytesutil.PadTo([]byte("targetroot3"), 32),
+					},
+				},
+				CommitteeBits: cb,
+				Signature:     bytesutil.PadTo([]byte("signature3"), 96),
+			}
+			attElectra4 := &ethpbv1alpha1.AttestationElectra{
+				AggregationBits: bitfield.NewBitlist(8),
+				Data: &ethpbv1alpha1.AttestationData{
+					Slot:            2,
+					CommitteeIndex:  4,
+					BeaconBlockRoot: bytesutil.PadTo([]byte("blockroot4"), 32),
+					Source: &ethpbv1alpha1.Checkpoint{
+						Epoch: 1,
+						Root:  bytesutil.PadTo([]byte("sourceroot4"), 32),
+					},
+					Target: &ethpbv1alpha1.Checkpoint{
+						Epoch: 10,
+						Root:  bytesutil.PadTo([]byte("targetroot4"), 32),
+					},
+				},
+				CommitteeBits: cb,
+				Signature:     bytesutil.PadTo([]byte("signature4"), 96),
+			}
+			bs, err := util.NewBeaconStateElectra()
+			require.NoError(t, err)
+			s := &Server{
+				AttestationsPool: attestations.NewPool(),
+				ChainInfoFetcher: &blockchainmock.ChainService{State: bs},
+			}
+			require.NoError(t, s.AttestationsPool.SaveAggregatedAttestations([]ethpbv1alpha1.Att{attElectra1, attElectra2}))
+			require.NoError(t, s.AttestationsPool.SaveUnaggregatedAttestations([]ethpbv1alpha1.Att{attElectra3, attElectra4}))
+
+			t.Run("empty request", func(t *testing.T) {
+				url := "http://example.com"
+				request := httptest.NewRequest(http.MethodGet, url, nil)
+				writer := httptest.NewRecorder()
+				writer.Body = &bytes.Buffer{}
+
+				s.ListAttestationsV2(writer, request)
+				assert.Equal(t, http.StatusOK, writer.Code)
+				resp := &structs.ListAttestationsResponse{}
+				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+				require.NotNil(t, resp)
+				require.NotNil(t, resp.Data)
+
+				var atts []*structs.AttestationElectra
+				require.NoError(t, json.Unmarshal(resp.Data, &atts))
+				assert.Equal(t, 4, len(atts))
+				assert.Equal(t, "electra", resp.Version)
+			})
+			t.Run("slot request", func(t *testing.T) {
+				url := "http://example.com?slot=2"
+				request := httptest.NewRequest(http.MethodGet, url, nil)
+				writer := httptest.NewRecorder()
+				writer.Body = &bytes.Buffer{}
+
+				s.ListAttestationsV2(writer, request)
+				assert.Equal(t, http.StatusOK, writer.Code)
+				resp := &structs.ListAttestationsResponse{}
+				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+				require.NotNil(t, resp)
+				require.NotNil(t, resp.Data)
+
+				var atts []*structs.AttestationElectra
+				require.NoError(t, json.Unmarshal(resp.Data, &atts))
+				assert.Equal(t, 2, len(atts))
+				assert.Equal(t, "electra", resp.Version)
+				for _, a := range atts {
+					assert.Equal(t, "2", a.Data.Slot)
+				}
+			})
+			t.Run("index request", func(t *testing.T) {
+				url := "http://example.com?committee_index=4"
+				request := httptest.NewRequest(http.MethodGet, url, nil)
+				writer := httptest.NewRecorder()
+				writer.Body = &bytes.Buffer{}
+
+				s.ListAttestationsV2(writer, request)
+				assert.Equal(t, http.StatusOK, writer.Code)
+				resp := &structs.ListAttestationsResponse{}
+				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+				require.NotNil(t, resp)
+				require.NotNil(t, resp.Data)
+
+				var atts []*structs.AttestationElectra
+				require.NoError(t, json.Unmarshal(resp.Data, &atts))
+				assert.Equal(t, 2, len(atts))
+				assert.Equal(t, "electra", resp.Version)
+				for _, a := range atts {
+					assert.Equal(t, "4", a.Data.CommitteeIndex)
+				}
+			})
+			t.Run("both slot + index request", func(t *testing.T) {
+				url := "http://example.com?slot=2&committee_index=4"
+				request := httptest.NewRequest(http.MethodGet, url, nil)
+				writer := httptest.NewRecorder()
+				writer.Body = &bytes.Buffer{}
+
+				s.ListAttestationsV2(writer, request)
+				assert.Equal(t, http.StatusOK, writer.Code)
+				resp := &structs.ListAttestationsResponse{}
+				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+				require.NotNil(t, resp)
+				require.NotNil(t, resp.Data)
+
+				var atts []*structs.AttestationElectra
+				require.NoError(t, json.Unmarshal(resp.Data, &atts))
+				assert.Equal(t, 1, len(atts))
+				assert.Equal(t, "electra", resp.Version)
+				for _, a := range atts {
+					assert.Equal(t, "2", a.Data.Slot)
+					assert.Equal(t, "4", a.Data.CommitteeIndex)
+				}
+			})
+		})
 	})
 }
 
@@ -985,9 +1260,7 @@ func TestSubmitSignedBLSToExecutionChanges_Failures(t *testing.T) {
 }
 
 func TestGetAttesterSlashings(t *testing.T) {
-	bs, err := util.NewBeaconState()
-	require.NoError(t, err)
-	slashing1 := &ethpbv1alpha1.AttesterSlashing{
+	slashing1PreElectra := &ethpbv1alpha1.AttesterSlashing{
 		Attestation_1: &ethpbv1alpha1.IndexedAttestation{
 			AttestingIndices: []uint64{1, 10},
 			Data: &ethpbv1alpha1.AttestationData{
@@ -1023,7 +1296,7 @@ func TestGetAttesterSlashings(t *testing.T) {
 			Signature: bytesutil.PadTo([]byte("signature2"), 96),
 		},
 	}
-	slashing2 := &ethpbv1alpha1.AttesterSlashing{
+	slashing2PreElectra := &ethpbv1alpha1.AttesterSlashing{
 		Attestation_1: &ethpbv1alpha1.IndexedAttestation{
 			AttestingIndices: []uint64{3, 30},
 			Data: &ethpbv1alpha1.AttestationData{
@@ -1059,23 +1332,222 @@ func TestGetAttesterSlashings(t *testing.T) {
 			Signature: bytesutil.PadTo([]byte("signature4"), 96),
 		},
 	}
-
-	s := &Server{
-		ChainInfoFetcher: &blockchainmock.ChainService{State: bs},
-		SlashingsPool:    &slashingsmock.PoolMock{PendingAttSlashings: []ethpbv1alpha1.AttSlashing{slashing1, slashing2}},
+	slashing1PostElectra := &ethpbv1alpha1.AttesterSlashingElectra{
+		Attestation_1: &ethpbv1alpha1.IndexedAttestationElectra{
+			AttestingIndices: []uint64{1, 10},
+			Data: &ethpbv1alpha1.AttestationData{
+				Slot:            1,
+				CommitteeIndex:  1,
+				BeaconBlockRoot: bytesutil.PadTo([]byte("blockroot1"), 32),
+				Source: &ethpbv1alpha1.Checkpoint{
+					Epoch: 1,
+					Root:  bytesutil.PadTo([]byte("sourceroot1"), 32),
+				},
+				Target: &ethpbv1alpha1.Checkpoint{
+					Epoch: 10,
+					Root:  bytesutil.PadTo([]byte("targetroot1"), 32),
+				},
+			},
+			Signature: bytesutil.PadTo([]byte("signature1"), 96),
+		},
+		Attestation_2: &ethpbv1alpha1.IndexedAttestationElectra{
+			AttestingIndices: []uint64{2, 20},
+			Data: &ethpbv1alpha1.AttestationData{
+				Slot:            2,
+				CommitteeIndex:  2,
+				BeaconBlockRoot: bytesutil.PadTo([]byte("blockroot2"), 32),
+				Source: &ethpbv1alpha1.Checkpoint{
+					Epoch: 2,
+					Root:  bytesutil.PadTo([]byte("sourceroot2"), 32),
+				},
+				Target: &ethpbv1alpha1.Checkpoint{
+					Epoch: 20,
+					Root:  bytesutil.PadTo([]byte("targetroot2"), 32),
+				},
+			},
+			Signature: bytesutil.PadTo([]byte("signature2"), 96),
+		},
+	}
+	slashing2PostElectra := &ethpbv1alpha1.AttesterSlashingElectra{
+		Attestation_1: &ethpbv1alpha1.IndexedAttestationElectra{
+			AttestingIndices: []uint64{3, 30},
+			Data: &ethpbv1alpha1.AttestationData{
+				Slot:            3,
+				CommitteeIndex:  3,
+				BeaconBlockRoot: bytesutil.PadTo([]byte("blockroot3"), 32),
+				Source: &ethpbv1alpha1.Checkpoint{
+					Epoch: 3,
+					Root:  bytesutil.PadTo([]byte("sourceroot3"), 32),
+				},
+				Target: &ethpbv1alpha1.Checkpoint{
+					Epoch: 30,
+					Root:  bytesutil.PadTo([]byte("targetroot3"), 32),
+				},
+			},
+			Signature: bytesutil.PadTo([]byte("signature3"), 96),
+		},
+		Attestation_2: &ethpbv1alpha1.IndexedAttestationElectra{
+			AttestingIndices: []uint64{4, 40},
+			Data: &ethpbv1alpha1.AttestationData{
+				Slot:            4,
+				CommitteeIndex:  4,
+				BeaconBlockRoot: bytesutil.PadTo([]byte("blockroot4"), 32),
+				Source: &ethpbv1alpha1.Checkpoint{
+					Epoch: 4,
+					Root:  bytesutil.PadTo([]byte("sourceroot4"), 32),
+				},
+				Target: &ethpbv1alpha1.Checkpoint{
+					Epoch: 40,
+					Root:  bytesutil.PadTo([]byte("targetroot4"), 32),
+				},
+			},
+			Signature: bytesutil.PadTo([]byte("signature4"), 96),
+		},
 	}
 
-	request := httptest.NewRequest(http.MethodGet, "http://example.com/beacon/pool/attester_slashings", nil)
-	writer := httptest.NewRecorder()
-	writer.Body = &bytes.Buffer{}
+	t.Run("V1", func(t *testing.T) {
+		t.Run("ok", func(t *testing.T) {
+			bs, err := util.NewBeaconState()
+			require.NoError(t, err)
 
-	s.GetAttesterSlashings(writer, request)
-	require.Equal(t, http.StatusOK, writer.Code)
-	resp := &structs.GetAttesterSlashingsResponse{}
-	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
-	require.NotNil(t, resp)
-	require.NotNil(t, resp.Data)
-	assert.Equal(t, 2, len(resp.Data))
+			s := &Server{
+				ChainInfoFetcher: &blockchainmock.ChainService{State: bs},
+				SlashingsPool:    &slashingsmock.PoolMock{PendingAttSlashings: []ethpbv1alpha1.AttSlashing{slashing1PreElectra, slashing2PreElectra}},
+			}
+
+			request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/pool/attester_slashings", nil)
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.GetAttesterSlashings(writer, request)
+			require.Equal(t, http.StatusOK, writer.Code)
+			resp := &structs.GetAttesterSlashingsResponse{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+			require.NotNil(t, resp)
+			require.NotNil(t, resp.Data)
+
+			var slashings []*structs.AttesterSlashing
+			require.NoError(t, json.Unmarshal(resp.Data, &slashings))
+
+			ss, err := structs.AttesterSlashingsToConsensus(slashings)
+			require.NoError(t, err)
+
+			require.DeepEqual(t, slashing1PreElectra, ss[0])
+			require.DeepEqual(t, slashing2PreElectra, ss[1])
+		})
+		t.Run("no slashings", func(t *testing.T) {
+			bs, err := util.NewBeaconState()
+			require.NoError(t, err)
+
+			s := &Server{
+				ChainInfoFetcher: &blockchainmock.ChainService{State: bs},
+				SlashingsPool:    &slashingsmock.PoolMock{PendingAttSlashings: []ethpbv1alpha1.AttSlashing{}},
+			}
+
+			request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/pool/attester_slashings", nil)
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.GetAttesterSlashings(writer, request)
+			require.Equal(t, http.StatusOK, writer.Code)
+			resp := &structs.GetAttesterSlashingsResponse{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+			require.NotNil(t, resp)
+			require.NotNil(t, resp.Data)
+
+			var slashings []*structs.AttesterSlashing
+			require.NoError(t, json.Unmarshal(resp.Data, &slashings))
+			require.Equal(t, 0, len(slashings))
+		})
+	})
+	t.Run("V2", func(t *testing.T) {
+		t.Run("post-electra-ok", func(t *testing.T) {
+			bs, err := util.NewBeaconStateElectra()
+			require.NoError(t, err)
+
+			s := &Server{
+				ChainInfoFetcher: &blockchainmock.ChainService{State: bs},
+				SlashingsPool:    &slashingsmock.PoolMock{PendingAttSlashings: []ethpbv1alpha1.AttSlashing{slashing1PostElectra, slashing2PostElectra}},
+			}
+
+			request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v2/beacon/pool/attester_slashings", nil)
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.GetAttesterSlashingsV2(writer, request)
+			require.Equal(t, http.StatusOK, writer.Code)
+			resp := &structs.GetAttesterSlashingsResponse{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+			require.NotNil(t, resp)
+			require.NotNil(t, resp.Data)
+			assert.Equal(t, "electra", resp.Version)
+
+			// Unmarshal resp.Data into a slice of slashings
+			var slashings []*structs.AttesterSlashingElectra
+			require.NoError(t, json.Unmarshal(resp.Data, &slashings))
+
+			ss, err := structs.AttesterSlashingsElectraToConsensus(slashings)
+			require.NoError(t, err)
+
+			require.DeepEqual(t, slashing1PostElectra, ss[0])
+			require.DeepEqual(t, slashing2PostElectra, ss[1])
+		})
+		t.Run("pre-electra-ok", func(t *testing.T) {
+			bs, err := util.NewBeaconState()
+			require.NoError(t, err)
+
+			s := &Server{
+				ChainInfoFetcher: &blockchainmock.ChainService{State: bs},
+				SlashingsPool:    &slashingsmock.PoolMock{PendingAttSlashings: []ethpbv1alpha1.AttSlashing{slashing1PreElectra, slashing2PreElectra}},
+			}
+
+			request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/pool/attester_slashings", nil)
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.GetAttesterSlashingsV2(writer, request)
+			require.Equal(t, http.StatusOK, writer.Code)
+			resp := &structs.GetAttesterSlashingsResponse{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+			require.NotNil(t, resp)
+			require.NotNil(t, resp.Data)
+
+			var slashings []*structs.AttesterSlashing
+			require.NoError(t, json.Unmarshal(resp.Data, &slashings))
+
+			ss, err := structs.AttesterSlashingsToConsensus(slashings)
+			require.NoError(t, err)
+
+			require.DeepEqual(t, slashing1PreElectra, ss[0])
+			require.DeepEqual(t, slashing2PreElectra, ss[1])
+		})
+		t.Run("no-slashings", func(t *testing.T) {
+			bs, err := util.NewBeaconStateElectra()
+			require.NoError(t, err)
+
+			s := &Server{
+				ChainInfoFetcher: &blockchainmock.ChainService{State: bs},
+				SlashingsPool:    &slashingsmock.PoolMock{PendingAttSlashings: []ethpbv1alpha1.AttSlashing{}},
+			}
+
+			request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v2/beacon/pool/attester_slashings", nil)
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.GetAttesterSlashingsV2(writer, request)
+			require.Equal(t, http.StatusOK, writer.Code)
+			resp := &structs.GetAttesterSlashingsResponse{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+			require.NotNil(t, resp)
+			require.NotNil(t, resp.Data)
+			assert.Equal(t, "electra", resp.Version)
+
+			// Unmarshal resp.Data into a slice of slashings
+			var slashings []*structs.AttesterSlashingElectra
+			require.NoError(t, json.Unmarshal(resp.Data, &slashings))
+			require.Equal(t, 0, len(slashings))
+		})
+	})
 }
 
 func TestGetProposerSlashings(t *testing.T) {

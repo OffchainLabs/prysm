@@ -77,6 +77,7 @@ func setExecutionData(ctx context.Context, blk interfaces.SignedBeaconBlock, loc
 		log.WithError(err).Warn("Proposer: failed to retrieve header from BuilderBid")
 		return local.Bid, local.BlobsBundle, setLocalExecution(blk, local)
 	}
+	//TODO: add builder execution requests here.
 	if bid.Version() >= version.Deneb {
 		builderKzgCommitments, err = bid.BlobKzgCommitments()
 		if err != nil {
@@ -353,12 +354,19 @@ func setLocalExecution(blk interfaces.SignedBeaconBlock, local *blocks.GetPayloa
 	if local.BlobsBundle != nil {
 		kzgCommitments = local.BlobsBundle.KzgCommitments
 	}
+	if local.ExecutionRequests != nil {
+		if err := blk.SetExecutionRequests(local.ExecutionRequests); err != nil {
+			return errors.Wrap(err, "could not set execution requests")
+		}
+	}
+
 	return setExecution(blk, local.ExecutionData, false, kzgCommitments)
 }
 
 // setBuilderExecution sets the execution context for a builder's beacon block.
 // It delegates to setExecution for the actual work.
 func setBuilderExecution(blk interfaces.SignedBeaconBlock, execution interfaces.ExecutionData, builderKzgCommitments [][]byte) error {
+	// TODO #14344: add execution requests for electra
 	return setExecution(blk, execution, true, builderKzgCommitments)
 }
 

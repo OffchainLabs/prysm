@@ -147,11 +147,17 @@ func ProcessRegistryUpdates(ctx context.Context, st state.BeaconState) (state.Be
 //	  epoch = get_current_epoch(state)
 //	  total_balance = get_total_active_balance(state)
 //	  adjusted_total_slashing_balance = min(sum(state.slashings) * PROPORTIONAL_SLASHING_MULTIPLIER, total_balance)
+//	  if state.version == electra:
+//		 increment = EFFECTIVE_BALANCE_INCREMENT  # Factored out from total balance to avoid uint64 overflow
+//	  penalty_per_effective_balance_increment = adjusted_total_slashing_balance // (total_balance // increment)
 //	  for index, validator in enumerate(state.validators):
 //	      if validator.slashed and epoch + EPOCHS_PER_SLASHINGS_VECTOR // 2 == validator.withdrawable_epoch:
 //	          increment = EFFECTIVE_BALANCE_INCREMENT  # Factored out from penalty numerator to avoid uint64 overflow
 //	          penalty_numerator = validator.effective_balance // increment * adjusted_total_slashing_balance
 //	          penalty = penalty_numerator // total_balance * increment
+//	          if state.version == electra:
+//	            effective_balance_increments = validator.effective_balance // increment
+//	            penalty = penalty_per_effective_balance_increment * effective_balance_increments
 //	          decrease_balance(state, ValidatorIndex(index), penalty)
 func ProcessSlashings(st state.BeaconState, slashingMultiplier uint64) (state.BeaconState, error) {
 	currentEpoch := time.CurrentEpoch(st)
@@ -177,13 +183,26 @@ func ProcessSlashings(st state.BeaconState, slashingMultiplier uint64) (state.Be
 	// below equally.
 	increment := params.BeaconConfig().EffectiveBalanceIncrement
 	minSlashing := math.Min(totalSlashing*slashingMultiplier, totalBalance)
+
+	// Modified in Electra:EIP7251
+	var penaltyPerEffectiveBalanceIncrement uint64
+	if st.Version() >= version.Electra {
+		penaltyPerEffectiveBalanceIncrement = minSlashing / (totalBalance / increment)
+	}
+
 	bals := st.Balances()
 	changed := false
 	err = st.ReadFromEveryValidator(func(idx int, val state.ReadOnlyValidator) error {
 		correctEpoch := (currentEpoch + exitLength/2) == val.WithdrawableEpoch()
 		if val.Slashed() && correctEpoch {
-			penaltyNumerator := val.EffectiveBalance() / increment * minSlashing
-			penalty := penaltyNumerator / totalBalance * increment
+			var penalty uint64
+			if st.Version() >= version.Electra {
+				effectiveBalanceIncrements := val.EffectiveBalance() / increment
+				penalty = penaltyPerEffectiveBalanceIncrement * effectiveBalanceIncrements
+			} else {
+				penaltyNumerator := val.EffectiveBalance() / increment * minSlashing
+				penalty = penaltyNumerator / totalBalance * increment
+			}
 			bals[idx] = helpers.DecreaseBalanceWithVal(bals[idx], penalty)
 			changed = true
 		}

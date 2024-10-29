@@ -61,15 +61,15 @@ func ProcessPendingConsolidations(ctx context.Context, st state.BeaconState) err
 	}
 	var nextPendingConsolidation uint64
 	for _, pc := range pendingConsolidations {
-		sourceValidator, err := st.ValidatorAtIndex(pc.SourceIndex)
+		sourceValidator, err := st.ValidatorAtIndexReadOnly(pc.SourceIndex)
 		if err != nil {
 			return err
 		}
-		if sourceValidator.Slashed {
+		if sourceValidator.Slashed() {
 			nextPendingConsolidation++
 			continue
 		}
-		if sourceValidator.WithdrawableEpoch > nextEpoch {
+		if sourceValidator.WithdrawableEpoch() > nextEpoch {
 			break
 		}
 

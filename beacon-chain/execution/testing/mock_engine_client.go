@@ -36,10 +36,12 @@ type EngineClient struct {
 	OverrideValidHash           [32]byte
 	GetPayloadResponse          *blocks.GetPayloadResponse
 	ErrGetPayload               error
+	BlobSidecars                []blocks.VerifiedROBlob
+	ErrorBlobSidecars           error
 }
 
 // NewPayload --
-func (e *EngineClient) NewPayload(_ context.Context, _ interfaces.ExecutionData, _ []common.Hash, _ *common.Hash) ([]byte, error) {
+func (e *EngineClient) NewPayload(_ context.Context, _ interfaces.ExecutionData, _ []common.Hash, _ *common.Hash, _ *pb.ExecutionRequests) ([]byte, error) {
 	return e.NewPayloadResp, e.ErrNewPayload
 }
 
@@ -54,7 +56,7 @@ func (e *EngineClient) ForkchoiceUpdated(
 }
 
 // GetPayload --
-func (e *EngineClient) GetPayload(_ context.Context, _ [8]byte, s primitives.Slot) (*blocks.GetPayloadResponse, error) {
+func (e *EngineClient) GetPayload(_ context.Context, _ [8]byte, _ primitives.Slot) (*blocks.GetPayloadResponse, error) {
 	return e.GetPayloadResponse, e.ErrGetPayload
 }
 
@@ -104,6 +106,11 @@ func (e *EngineClient) ReconstructFullBellatrixBlockBatch(
 		fullBlocks = append(fullBlocks, newBlock)
 	}
 	return fullBlocks, nil
+}
+
+// ReconstructBlobSidecars is a mock implementation of the ReconstructBlobSidecars method.
+func (e *EngineClient) ReconstructBlobSidecars(context.Context, interfaces.ReadOnlySignedBeaconBlock, [32]byte, []bool) ([]blocks.VerifiedROBlob, error) {
+	return e.BlobSidecars, e.ErrorBlobSidecars
 }
 
 // GetTerminalBlockHash --

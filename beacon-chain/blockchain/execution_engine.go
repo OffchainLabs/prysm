@@ -216,17 +216,25 @@ func (s *Service) notifyNewPayload(ctx context.Context, preStateVersion int,
 	}
 
 	var lastValidHash []byte
+	var parentRoot *common.Hash
+	var versionedHashes []common.Hash
+	var requests *enginev1.ExecutionRequests
 	if blk.Version() >= version.Deneb {
-		var versionedHashes []common.Hash
 		versionedHashes, err = kzgCommitmentsToVersionedHashes(blk.Block().Body())
 		if err != nil {
 			return false, errors.Wrap(err, "could not get versioned hashes to feed the engine")
 		}
-		pr := common.Hash(blk.Block().ParentRoot())
-		lastValidHash, err = s.cfg.ExecutionEngineCaller.NewPayload(ctx, payload, versionedHashes, &pr)
-	} else {
-		lastValidHash, err = s.cfg.ExecutionEngineCaller.NewPayload(ctx, payload, []common.Hash{}, &common.Hash{} /*empty version hashes and root before Deneb*/)
+		prh := common.Hash(blk.Block().ParentRoot())
+		parentRoot = &prh
 	}
+	if blk.Version() >= version.Electra {
+		requests, err = blk.Block().Body().ExecutionRequests()
+		if err != nil {
+			return false, errors.Wrap(err, "could not get execution requests")
+		}
+	}
+	lastValidHash, err = s.cfg.ExecutionEngineCaller.NewPayload(ctx, payload, versionedHashes, parentRoot, requests)
+
 	switch {
 	case err == nil:
 		newPayloadValidNodeCount.Inc()

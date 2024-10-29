@@ -91,6 +91,7 @@ type SignedBeaconBlock interface {
 	SetProposerIndex(idx primitives.ValidatorIndex)
 	SetSlot(slot primitives.Slot)
 	SetSignature(sig []byte)
+	SetExecutionRequests(er *enginev1.ExecutionRequests) error
 	Unblind(e ExecutionData) error
 }
 

@@ -64,13 +64,14 @@ func QueueExcessActiveBalance(s state.BeaconState, idx primitives.ValidatorIndex
 			return err
 		}
 		excessBalance := bal - params.BeaconConfig().MinActivationBalance
-		val, err := s.ValidatorAtIndex(idx)
+		val, err := s.ValidatorAtIndexReadOnly(idx)
 		if err != nil {
 			return err
 		}
+		pk := val.PublicKey()
 		return s.AppendPendingDeposit(&ethpb.PendingDeposit{
-			PublicKey:             val.PublicKey,
-			WithdrawalCredentials: val.WithdrawalCredentials,
+			PublicKey:             pk[:],
+			WithdrawalCredentials: val.GetWithdrawalCredentials(),
 			Amount:                excessBalance,
 			Signature:             common.InfiniteSignature[:],
 			Slot:                  params.BeaconConfig().GenesisSlot,

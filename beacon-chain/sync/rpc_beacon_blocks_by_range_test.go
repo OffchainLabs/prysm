@@ -239,11 +239,11 @@ func TestRPCBeaconBlocksByRange_ReconstructsPayloads(t *testing.T) {
 	// Start service with 160 as allowed blocks capacity (and almost zero capacity recovery).
 	r := &Service{
 		cfg: &config{
-			p2p:                           p1,
-			beaconDB:                      d,
-			chain:                         &chainMock.ChainService{},
-			clock:                         clock,
-			executionPayloadReconstructor: mockEngine,
+			p2p:                    p1,
+			beaconDB:               d,
+			chain:                  &chainMock.ChainService{},
+			clock:                  clock,
+			executionReconstructor: mockEngine,
 		},
 		rateLimiter:      newRateLimiter(p1),
 		availableBlocker: mockBlocker{avail: true},

@@ -3,7 +3,6 @@ package execution
 import (
 	"context"
 	"encoding/json"
-	"math"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -132,19 +131,8 @@ func TestParseRequest(t *testing.T) {
 			},
 		},
 		{
-			method: GetPayloadBodiesByHashV2,
-			byteArgs: []hexutil.Bytes{
-				strToHexBytes(t, "0x656d707479000000000000000000000000000000000000000000000000000000"),
-				strToHexBytes(t, "0x66756c6c00000000000000000000000000000000000000000000000000000000"),
-			},
-		},
-		{
 			method:  GetPayloadBodiesByRangeV1,
 			hexArgs: []string{hexutil.EncodeUint64(0), hexutil.EncodeUint64(1)},
-		},
-		{
-			method:  GetPayloadBodiesByRangeV2,
-			hexArgs: []string{hexutil.EncodeUint64(math.MaxUint64), hexutil.EncodeUint64(1)},
 		},
 	}
 	for _, c := range cases {
@@ -191,9 +179,7 @@ func TestParseRequest(t *testing.T) {
 func TestCallCount(t *testing.T) {
 	methods := []string{
 		GetPayloadBodiesByHashV1,
-		GetPayloadBodiesByHashV2,
 		GetPayloadBodiesByRangeV1,
-		GetPayloadBodiesByRangeV2,
 	}
 	cases := []struct {
 		method string
@@ -201,10 +187,8 @@ func TestCallCount(t *testing.T) {
 	}{
 		{method: GetPayloadBodiesByHashV1, count: 1},
 		{method: GetPayloadBodiesByHashV1, count: 2},
-		{method: GetPayloadBodiesByHashV2, count: 1},
 		{method: GetPayloadBodiesByRangeV1, count: 1},
 		{method: GetPayloadBodiesByRangeV1, count: 2},
-		{method: GetPayloadBodiesByRangeV2, count: 1},
 	}
 	for _, c := range cases {
 		t.Run(c.method, func(t *testing.T) {

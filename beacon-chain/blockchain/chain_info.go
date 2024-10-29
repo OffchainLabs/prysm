@@ -12,6 +12,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
+	consensus_blocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/forkchoice"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
@@ -44,7 +45,7 @@ type ForkchoiceFetcher interface {
 	UpdateHead(context.Context, primitives.Slot)
 	HighestReceivedBlockSlot() primitives.Slot
 	ReceivedBlocksLastEpoch() (uint64, error)
-	InsertNode(context.Context, state.BeaconState, [32]byte) error
+	InsertNode(context.Context, state.BeaconState, consensus_blocks.ROBlock) error
 	ForkChoiceDump(context.Context) (*forkchoice.Dump, error)
 	NewSlot(context.Context, primitives.Slot) error
 	ProposerBoost() [32]byte

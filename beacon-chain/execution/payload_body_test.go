@@ -25,33 +25,6 @@ func (v versioner) Version() int {
 	return v.version
 }
 
-func TestPayloadBodyMethodForBlock(t *testing.T) {
-	cases := []struct {
-		versions []int
-		want     string
-	}{
-		{
-			versions: []int{version.Phase0, version.Altair, version.Bellatrix, version.Capella, version.Deneb},
-			want:     GetPayloadBodiesByHashV1,
-		},
-		{
-			versions: []int{version.Electra},
-			want:     GetPayloadBodiesByHashV2,
-		},
-	}
-	for _, c := range cases {
-		for _, v := range c.versions {
-			t.Run(version.String(v), func(t *testing.T) {
-				v := versioner{version: v}
-				require.Equal(t, c.want, payloadBodyMethodForBlock(v))
-			})
-		}
-	}
-	t.Run("post-electra", func(t *testing.T) {
-		require.Equal(t, GetPayloadBodiesByHashV2, payloadBodyMethodForBlock(versioner{version: version.Electra + 1}))
-	})
-}
-
 func payloadToBody(t *testing.T, ed interfaces.ExecutionData) *pb.ExecutionPayloadBody {
 	body := &pb.ExecutionPayloadBody{}
 	txs, err := ed.Transactions()
@@ -347,22 +320,6 @@ func TestReconstructBlindedBlockBatchFallbackToRange(t *testing.T) {
 			}
 			mockWriteResult(t, w, msg, executionPayloadBodies)
 		})
-		// separate methods for the electra block
-		srv.register(GetPayloadBodiesByHashV2, func(msg *jsonrpcMessage, w http.ResponseWriter, r *http.Request) {
-			executionPayloadBodies := []*pb.ExecutionPayloadBody{nil}
-			mockWriteResult(t, w, msg, executionPayloadBodies)
-		})
-		srv.register(GetPayloadBodiesByRangeV2, func(msg *jsonrpcMessage, w http.ResponseWriter, r *http.Request) {
-			p := mockParseUintList(t, msg.Params)
-			require.Equal(t, 2, len(p))
-			start, count := p[0], p[1]
-			require.Equal(t, fx.electra.blinded.header.BlockNumber(), start)
-			require.Equal(t, uint64(1), count)
-			executionPayloadBodies := []*pb.ExecutionPayloadBody{
-				payloadToBody(t, fx.electra.blinded.header),
-			}
-			mockWriteResult(t, w, msg, executionPayloadBodies)
-		})
 		blind := []interfaces.ReadOnlySignedBeaconBlock{
 			fx.denebBlock.blinded.block,
 			fx.emptyDenebBlock.blinded.block,
@@ -381,13 +338,8 @@ func TestReconstructBlindedBlockBatchDenebAndElectra(t *testing.T) {
 	t.Run("deneb and electra", func(t *testing.T) {
 		cli, srv := newMockEngine(t)
 		fx := testBlindedBlockFixtures(t)
-		// The reconstructed should make separate calls for the deneb (v1) and electra (v2) blocks.
 		srv.register(GetPayloadBodiesByHashV1, func(msg *jsonrpcMessage, w http.ResponseWriter, r *http.Request) {
-			executionPayloadBodies := []*pb.ExecutionPayloadBody{payloadToBody(t, fx.denebBlock.blinded.header)}
-			mockWriteResult(t, w, msg, executionPayloadBodies)
-		})
-		srv.register(GetPayloadBodiesByHashV2, func(msg *jsonrpcMessage, w http.ResponseWriter, r *http.Request) {
-			executionPayloadBodies := []*pb.ExecutionPayloadBody{payloadToBody(t, fx.electra.blinded.header)}
+			executionPayloadBodies := []*pb.ExecutionPayloadBody{payloadToBody(t, fx.denebBlock.blinded.header), payloadToBody(t, fx.electra.blinded.header)}
 			mockWriteResult(t, w, msg, executionPayloadBodies)
 		})
 		blinded := []interfaces.ReadOnlySignedBeaconBlock{

@@ -8,8 +8,10 @@ import (
 	"github.com/pkg/errors"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
+	consensus_blocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
@@ -63,11 +65,23 @@ func (s *Store) head(ctx context.Context) ([32]byte, error) {
 // insert registers a new block node to the fork choice store's node list.
 // It then updates the new node's parent with the best child and descendant node.
 func (s *Store) insert(ctx context.Context,
-	slot primitives.Slot,
-	root, parentRoot, payloadHash [fieldparams.RootLength]byte,
+	roblock consensus_blocks.ROBlock,
 	justifiedEpoch, finalizedEpoch primitives.Epoch) (*Node, error) {
 	ctx, span := trace.StartSpan(ctx, "doublyLinkedForkchoice.insert")
 	defer span.End()
+
+	root := roblock.Root()
+	block := roblock.Block()
+	slot := block.Slot()
+	parentRoot := block.ParentRoot()
+	var payloadHash [32]byte
+	if block.Version() >= version.Bellatrix {
+		execution, err := block.Body().Execution()
+		if err != nil {
+			return nil, err
+		}
+		copy(payloadHash[:], execution.BlockHash())
+	}
 
 	// Return if the block has been inserted into Store before.
 	if n, ok := s.nodeByRoot[root]; ok {
@@ -107,7 +121,9 @@ func (s *Store) insert(ctx context.Context,
 			s.headNode = n
 			s.highestReceivedNode = n
 		} else {
-			return n, errInvalidParentRoot
+			delete(s.nodeByRoot, root)
+			delete(s.nodeByPayload, payloadHash)
+			return nil, errInvalidParentRoot
 		}
 	} else {
 		parent.children = append(parent.children, n)
@@ -128,7 +144,11 @@ func (s *Store) insert(ctx context.Context,
 		jEpoch := s.justifiedCheckpoint.Epoch
 		fEpoch := s.finalizedCheckpoint.Epoch
 		if err := s.treeRootNode.updateBestDescendant(ctx, jEpoch, fEpoch, slots.ToEpoch(currentSlot)); err != nil {
-			return n, err
+			_, remErr := s.removeNode(ctx, n)
+			if remErr != nil {
+				log.WithError(remErr).Error("could not remove node")
+			}
+			return nil, errors.Wrap(err, "could not update best descendants")
 		}
 	}
 	// Update metrics.

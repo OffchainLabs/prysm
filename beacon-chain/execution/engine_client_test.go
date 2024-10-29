@@ -2,6 +2,7 @@ package execution
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -20,6 +21,7 @@ import (
 	"github.com/holiman/uint256"
 	"github.com/pkg/errors"
 	mocks "github.com/prysmaticlabs/prysm/v5/beacon-chain/execution/testing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
@@ -37,9 +39,9 @@ import (
 )
 
 var (
-	_ = PayloadReconstructor(&Service{})
+	_ = Reconstructor(&Service{})
 	_ = EngineCaller(&Service{})
-	_ = PayloadReconstructor(&Service{})
+	_ = Reconstructor(&Service{})
 	_ = EngineCaller(&mocks.EngineClient{})
 )
 
@@ -123,7 +125,7 @@ func TestClient_IPC(t *testing.T) {
 		require.Equal(t, true, ok)
 		wrappedPayload, err := blocks.WrappedExecutionPayload(req)
 		require.NoError(t, err)
-		latestValidHash, err := srv.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{})
+		latestValidHash, err := srv.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{}, nil)
 		require.NoError(t, err)
 		require.DeepEqual(t, bytesutil.ToBytes32(want.LatestValidHash), bytesutil.ToBytes32(latestValidHash))
 	})
@@ -134,7 +136,7 @@ func TestClient_IPC(t *testing.T) {
 		require.Equal(t, true, ok)
 		wrappedPayload, err := blocks.WrappedExecutionPayloadCapella(req)
 		require.NoError(t, err)
-		latestValidHash, err := srv.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{})
+		latestValidHash, err := srv.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{}, nil)
 		require.NoError(t, err)
 		require.DeepEqual(t, bytesutil.ToBytes32(want.LatestValidHash), bytesutil.ToBytes32(latestValidHash))
 	})
@@ -163,7 +165,7 @@ func TestClient_HTTP(t *testing.T) {
 	cfg := params.BeaconConfig().Copy()
 	cfg.CapellaForkEpoch = 1
 	cfg.DenebForkEpoch = 2
-	cfg.ElectraForkEpoch = 2
+	cfg.ElectraForkEpoch = 3
 	params.OverrideBeaconConfig(cfg)
 
 	t.Run(GetPayloadMethod, func(t *testing.T) {
@@ -320,6 +322,89 @@ func TestClient_HTTP(t *testing.T) {
 		blobs := [][]byte{bytesutil.PadTo([]byte("a"), fieldparams.BlobLength), bytesutil.PadTo([]byte("b"), fieldparams.BlobLength)}
 		require.DeepEqual(t, blobs, resp.BlobsBundle.Blobs)
 	})
+	t.Run(GetPayloadMethodV4, func(t *testing.T) {
+		payloadId := [8]byte{1}
+		want, ok := fix["ExecutionBundleElectra"].(*pb.GetPayloadV4ResponseJson)
+		require.Equal(t, true, ok)
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			defer func() {
+				require.NoError(t, r.Body.Close())
+			}()
+			enc, err := io.ReadAll(r.Body)
+			require.NoError(t, err)
+			jsonRequestString := string(enc)
+
+			reqArg, err := json.Marshal(pb.PayloadIDBytes(payloadId))
+			require.NoError(t, err)
+
+			// We expect the JSON string RPC request contains the right arguments.
+			require.Equal(t, true, strings.Contains(
+				jsonRequestString, string(reqArg),
+			))
+			resp := map[string]interface{}{
+				"jsonrpc": "2.0",
+				"id":      1,
+				"result":  want,
+			}
+			err = json.NewEncoder(w).Encode(resp)
+			require.NoError(t, err)
+		}))
+		defer srv.Close()
+
+		rpcClient, err := rpc.DialHTTP(srv.URL)
+		require.NoError(t, err)
+		defer rpcClient.Close()
+
+		client := &Service{}
+		client.rpcClient = rpcClient
+
+		// We call the RPC method via HTTP and expect a proper result.
+		resp, err := client.GetPayload(ctx, payloadId, 3*params.BeaconConfig().SlotsPerEpoch)
+		require.NoError(t, err)
+		require.Equal(t, true, resp.OverrideBuilder)
+		g, err := resp.ExecutionData.ExcessBlobGas()
+		require.NoError(t, err)
+		require.DeepEqual(t, uint64(3), g)
+		g, err = resp.ExecutionData.BlobGasUsed()
+		require.NoError(t, err)
+		require.DeepEqual(t, uint64(2), g)
+
+		commitments := [][]byte{bytesutil.PadTo([]byte("commitment1"), fieldparams.BLSPubkeyLength), bytesutil.PadTo([]byte("commitment2"), fieldparams.BLSPubkeyLength)}
+		require.DeepEqual(t, commitments, resp.BlobsBundle.KzgCommitments)
+		proofs := [][]byte{bytesutil.PadTo([]byte("proof1"), fieldparams.BLSPubkeyLength), bytesutil.PadTo([]byte("proof2"), fieldparams.BLSPubkeyLength)}
+		require.DeepEqual(t, proofs, resp.BlobsBundle.Proofs)
+		blobs := [][]byte{bytesutil.PadTo([]byte("a"), fieldparams.BlobLength), bytesutil.PadTo([]byte("b"), fieldparams.BlobLength)}
+		require.DeepEqual(t, blobs, resp.BlobsBundle.Blobs)
+		requests := &pb.ExecutionRequests{
+			Deposits: []*pb.DepositRequest{
+				{
+					Pubkey:                bytesutil.PadTo([]byte{byte('a')}, fieldparams.BLSPubkeyLength),
+					WithdrawalCredentials: bytesutil.PadTo([]byte{byte('b')}, fieldparams.RootLength),
+					Amount:                params.BeaconConfig().MinActivationBalance,
+					Signature:             bytesutil.PadTo([]byte{byte('c')}, fieldparams.BLSSignatureLength),
+					Index:                 0,
+				},
+			},
+			Withdrawals: []*pb.WithdrawalRequest{
+				{
+					SourceAddress:   bytesutil.PadTo([]byte{byte('d')}, common.AddressLength),
+					ValidatorPubkey: bytesutil.PadTo([]byte{byte('e')}, fieldparams.BLSPubkeyLength),
+					Amount:          params.BeaconConfig().MinActivationBalance,
+				},
+			},
+			Consolidations: []*pb.ConsolidationRequest{
+				{
+					SourceAddress: bytesutil.PadTo([]byte{byte('f')}, common.AddressLength),
+					SourcePubkey:  bytesutil.PadTo([]byte{byte('g')}, fieldparams.BLSPubkeyLength),
+					TargetPubkey:  bytesutil.PadTo([]byte{byte('h')}, fieldparams.BLSPubkeyLength),
+				},
+			},
+		}
+
+		require.DeepEqual(t, requests, resp.ExecutionRequests)
+	})
+
 	t.Run(ForkchoiceUpdatedMethod+" VALID status", func(t *testing.T) {
 		forkChoiceState := &pb.ForkchoiceState{
 			HeadBlockHash:      []byte("head"),
@@ -470,7 +555,7 @@ func TestClient_HTTP(t *testing.T) {
 		// We call the RPC method via HTTP and expect a proper result.
 		wrappedPayload, err := blocks.WrappedExecutionPayload(execPayload)
 		require.NoError(t, err)
-		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{})
+		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{}, nil)
 		require.NoError(t, err)
 		require.DeepEqual(t, want.LatestValidHash, resp)
 	})
@@ -484,7 +569,7 @@ func TestClient_HTTP(t *testing.T) {
 		// We call the RPC method via HTTP and expect a proper result.
 		wrappedPayload, err := blocks.WrappedExecutionPayloadCapella(execPayload)
 		require.NoError(t, err)
-		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{})
+		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{}, nil)
 		require.NoError(t, err)
 		require.DeepEqual(t, want.LatestValidHash, resp)
 	})
@@ -498,7 +583,46 @@ func TestClient_HTTP(t *testing.T) {
 		// We call the RPC method via HTTP and expect a proper result.
 		wrappedPayload, err := blocks.WrappedExecutionPayloadDeneb(execPayload)
 		require.NoError(t, err)
-		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{'a'})
+		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{'a'}, nil)
+		require.NoError(t, err)
+		require.DeepEqual(t, want.LatestValidHash, resp)
+	})
+	t.Run(NewPayloadMethodV4+" VALID status", func(t *testing.T) {
+		execPayload, ok := fix["ExecutionPayloadDeneb"].(*pb.ExecutionPayloadDeneb)
+		require.Equal(t, true, ok)
+		want, ok := fix["ValidPayloadStatus"].(*pb.PayloadStatus)
+		require.Equal(t, true, ok)
+
+		// We call the RPC method via HTTP and expect a proper result.
+		wrappedPayload, err := blocks.WrappedExecutionPayloadDeneb(execPayload)
+		require.NoError(t, err)
+		requests := &pb.ExecutionRequests{
+			Deposits: []*pb.DepositRequest{
+				{
+					Pubkey:                bytesutil.PadTo([]byte{byte('a')}, fieldparams.BLSPubkeyLength),
+					WithdrawalCredentials: bytesutil.PadTo([]byte{byte('b')}, fieldparams.RootLength),
+					Amount:                params.BeaconConfig().MinActivationBalance,
+					Signature:             bytesutil.PadTo([]byte{byte('c')}, fieldparams.BLSSignatureLength),
+					Index:                 0,
+				},
+			},
+			Withdrawals: []*pb.WithdrawalRequest{
+				{
+					SourceAddress:   bytesutil.PadTo([]byte{byte('d')}, common.AddressLength),
+					ValidatorPubkey: bytesutil.PadTo([]byte{byte('e')}, fieldparams.BLSPubkeyLength),
+					Amount:          params.BeaconConfig().MinActivationBalance,
+				},
+			},
+			Consolidations: []*pb.ConsolidationRequest{
+				{
+					SourceAddress: bytesutil.PadTo([]byte{byte('f')}, common.AddressLength),
+					SourcePubkey:  bytesutil.PadTo([]byte{byte('g')}, fieldparams.BLSPubkeyLength),
+					TargetPubkey:  bytesutil.PadTo([]byte{byte('h')}, fieldparams.BLSPubkeyLength),
+				},
+			},
+		}
+		client := newPayloadV4Setup(t, want, execPayload, requests)
+		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{'a'}, requests)
 		require.NoError(t, err)
 		require.DeepEqual(t, want.LatestValidHash, resp)
 	})
@@ -512,7 +636,7 @@ func TestClient_HTTP(t *testing.T) {
 		// We call the RPC method via HTTP and expect a proper result.
 		wrappedPayload, err := blocks.WrappedExecutionPayload(execPayload)
 		require.NoError(t, err)
-		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{})
+		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{}, nil)
 		require.ErrorIs(t, ErrAcceptedSyncingPayloadStatus, err)
 		require.DeepEqual(t, []uint8(nil), resp)
 	})
@@ -526,7 +650,7 @@ func TestClient_HTTP(t *testing.T) {
 		// We call the RPC method via HTTP and expect a proper result.
 		wrappedPayload, err := blocks.WrappedExecutionPayloadCapella(execPayload)
 		require.NoError(t, err)
-		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{})
+		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{}, nil)
 		require.ErrorIs(t, ErrAcceptedSyncingPayloadStatus, err)
 		require.DeepEqual(t, []uint8(nil), resp)
 	})
@@ -540,7 +664,46 @@ func TestClient_HTTP(t *testing.T) {
 		// We call the RPC method via HTTP and expect a proper result.
 		wrappedPayload, err := blocks.WrappedExecutionPayloadDeneb(execPayload)
 		require.NoError(t, err)
-		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{'a'})
+		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{'a'}, nil)
+		require.ErrorIs(t, ErrAcceptedSyncingPayloadStatus, err)
+		require.DeepEqual(t, []uint8(nil), resp)
+	})
+	t.Run(NewPayloadMethodV4+" SYNCING status", func(t *testing.T) {
+		execPayload, ok := fix["ExecutionPayloadDeneb"].(*pb.ExecutionPayloadDeneb)
+		require.Equal(t, true, ok)
+		want, ok := fix["SyncingStatus"].(*pb.PayloadStatus)
+		require.Equal(t, true, ok)
+
+		// We call the RPC method via HTTP and expect a proper result.
+		wrappedPayload, err := blocks.WrappedExecutionPayloadDeneb(execPayload)
+		require.NoError(t, err)
+		requests := &pb.ExecutionRequests{
+			Deposits: []*pb.DepositRequest{
+				{
+					Pubkey:                bytesutil.PadTo([]byte{byte('a')}, fieldparams.BLSPubkeyLength),
+					WithdrawalCredentials: bytesutil.PadTo([]byte{byte('b')}, fieldparams.RootLength),
+					Amount:                params.BeaconConfig().MinActivationBalance,
+					Signature:             bytesutil.PadTo([]byte{byte('c')}, fieldparams.BLSSignatureLength),
+					Index:                 0,
+				},
+			},
+			Withdrawals: []*pb.WithdrawalRequest{
+				{
+					SourceAddress:   bytesutil.PadTo([]byte{byte('d')}, common.AddressLength),
+					ValidatorPubkey: bytesutil.PadTo([]byte{byte('e')}, fieldparams.BLSPubkeyLength),
+					Amount:          params.BeaconConfig().MinActivationBalance,
+				},
+			},
+			Consolidations: []*pb.ConsolidationRequest{
+				{
+					SourceAddress: bytesutil.PadTo([]byte{byte('f')}, common.AddressLength),
+					SourcePubkey:  bytesutil.PadTo([]byte{byte('g')}, fieldparams.BLSPubkeyLength),
+					TargetPubkey:  bytesutil.PadTo([]byte{byte('h')}, fieldparams.BLSPubkeyLength),
+				},
+			},
+		}
+		client := newPayloadV4Setup(t, want, execPayload, requests)
+		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{'a'}, requests)
 		require.ErrorIs(t, ErrAcceptedSyncingPayloadStatus, err)
 		require.DeepEqual(t, []uint8(nil), resp)
 	})
@@ -554,7 +717,7 @@ func TestClient_HTTP(t *testing.T) {
 		// We call the RPC method via HTTP and expect a proper result.
 		wrappedPayload, err := blocks.WrappedExecutionPayload(execPayload)
 		require.NoError(t, err)
-		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{})
+		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{}, nil)
 		require.ErrorIs(t, ErrInvalidBlockHashPayloadStatus, err)
 		require.DeepEqual(t, []uint8(nil), resp)
 	})
@@ -568,7 +731,7 @@ func TestClient_HTTP(t *testing.T) {
 		// We call the RPC method via HTTP and expect a proper result.
 		wrappedPayload, err := blocks.WrappedExecutionPayloadCapella(execPayload)
 		require.NoError(t, err)
-		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{})
+		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{}, nil)
 		require.ErrorIs(t, ErrInvalidBlockHashPayloadStatus, err)
 		require.DeepEqual(t, []uint8(nil), resp)
 	})
@@ -582,7 +745,45 @@ func TestClient_HTTP(t *testing.T) {
 		// We call the RPC method via HTTP and expect a proper result.
 		wrappedPayload, err := blocks.WrappedExecutionPayloadDeneb(execPayload)
 		require.NoError(t, err)
-		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{'a'})
+		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{'a'}, nil)
+		require.ErrorIs(t, ErrInvalidBlockHashPayloadStatus, err)
+		require.DeepEqual(t, []uint8(nil), resp)
+	})
+	t.Run(NewPayloadMethodV4+" INVALID_BLOCK_HASH status", func(t *testing.T) {
+		execPayload, ok := fix["ExecutionPayloadDeneb"].(*pb.ExecutionPayloadDeneb)
+		require.Equal(t, true, ok)
+		want, ok := fix["InvalidBlockHashStatus"].(*pb.PayloadStatus)
+		require.Equal(t, true, ok)
+		// We call the RPC method via HTTP and expect a proper result.
+		wrappedPayload, err := blocks.WrappedExecutionPayloadDeneb(execPayload)
+		require.NoError(t, err)
+		requests := &pb.ExecutionRequests{
+			Deposits: []*pb.DepositRequest{
+				{
+					Pubkey:                bytesutil.PadTo([]byte{byte('a')}, fieldparams.BLSPubkeyLength),
+					WithdrawalCredentials: bytesutil.PadTo([]byte{byte('b')}, fieldparams.RootLength),
+					Amount:                params.BeaconConfig().MinActivationBalance,
+					Signature:             bytesutil.PadTo([]byte{byte('c')}, fieldparams.BLSSignatureLength),
+					Index:                 0,
+				},
+			},
+			Withdrawals: []*pb.WithdrawalRequest{
+				{
+					SourceAddress:   bytesutil.PadTo([]byte{byte('d')}, common.AddressLength),
+					ValidatorPubkey: bytesutil.PadTo([]byte{byte('e')}, fieldparams.BLSPubkeyLength),
+					Amount:          params.BeaconConfig().MinActivationBalance,
+				},
+			},
+			Consolidations: []*pb.ConsolidationRequest{
+				{
+					SourceAddress: bytesutil.PadTo([]byte{byte('f')}, common.AddressLength),
+					SourcePubkey:  bytesutil.PadTo([]byte{byte('g')}, fieldparams.BLSPubkeyLength),
+					TargetPubkey:  bytesutil.PadTo([]byte{byte('h')}, fieldparams.BLSPubkeyLength),
+				},
+			},
+		}
+		client := newPayloadV4Setup(t, want, execPayload, requests)
+		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{'a'}, requests)
 		require.ErrorIs(t, ErrInvalidBlockHashPayloadStatus, err)
 		require.DeepEqual(t, []uint8(nil), resp)
 	})
@@ -596,7 +797,7 @@ func TestClient_HTTP(t *testing.T) {
 		// We call the RPC method via HTTP and expect a proper result.
 		wrappedPayload, err := blocks.WrappedExecutionPayload(execPayload)
 		require.NoError(t, err)
-		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{})
+		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{}, nil)
 		require.ErrorIs(t, ErrInvalidPayloadStatus, err)
 		require.DeepEqual(t, want.LatestValidHash, resp)
 	})
@@ -610,7 +811,7 @@ func TestClient_HTTP(t *testing.T) {
 		// We call the RPC method via HTTP and expect a proper result.
 		wrappedPayload, err := blocks.WrappedExecutionPayloadCapella(execPayload)
 		require.NoError(t, err)
-		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{})
+		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{}, nil)
 		require.ErrorIs(t, ErrInvalidPayloadStatus, err)
 		require.DeepEqual(t, want.LatestValidHash, resp)
 	})
@@ -624,7 +825,46 @@ func TestClient_HTTP(t *testing.T) {
 		// We call the RPC method via HTTP and expect a proper result.
 		wrappedPayload, err := blocks.WrappedExecutionPayloadDeneb(execPayload)
 		require.NoError(t, err)
-		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{'a'})
+		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{'a'}, nil)
+		require.ErrorIs(t, ErrInvalidPayloadStatus, err)
+		require.DeepEqual(t, want.LatestValidHash, resp)
+	})
+	t.Run(NewPayloadMethodV4+" INVALID status", func(t *testing.T) {
+		execPayload, ok := fix["ExecutionPayloadDeneb"].(*pb.ExecutionPayloadDeneb)
+		require.Equal(t, true, ok)
+		want, ok := fix["InvalidStatus"].(*pb.PayloadStatus)
+		require.Equal(t, true, ok)
+
+		// We call the RPC method via HTTP and expect a proper result.
+		wrappedPayload, err := blocks.WrappedExecutionPayloadDeneb(execPayload)
+		require.NoError(t, err)
+		requests := &pb.ExecutionRequests{
+			Deposits: []*pb.DepositRequest{
+				{
+					Pubkey:                bytesutil.PadTo([]byte{byte('a')}, fieldparams.BLSPubkeyLength),
+					WithdrawalCredentials: bytesutil.PadTo([]byte{byte('b')}, fieldparams.RootLength),
+					Amount:                params.BeaconConfig().MinActivationBalance,
+					Signature:             bytesutil.PadTo([]byte{byte('c')}, fieldparams.BLSSignatureLength),
+					Index:                 0,
+				},
+			},
+			Withdrawals: []*pb.WithdrawalRequest{
+				{
+					SourceAddress:   bytesutil.PadTo([]byte{byte('d')}, common.AddressLength),
+					ValidatorPubkey: bytesutil.PadTo([]byte{byte('e')}, fieldparams.BLSPubkeyLength),
+					Amount:          params.BeaconConfig().MinActivationBalance,
+				},
+			},
+			Consolidations: []*pb.ConsolidationRequest{
+				{
+					SourceAddress: bytesutil.PadTo([]byte{byte('f')}, common.AddressLength),
+					SourcePubkey:  bytesutil.PadTo([]byte{byte('g')}, fieldparams.BLSPubkeyLength),
+					TargetPubkey:  bytesutil.PadTo([]byte{byte('h')}, fieldparams.BLSPubkeyLength),
+				},
+			},
+		}
+		client := newPayloadV4Setup(t, want, execPayload, requests)
+		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{'a'}, requests)
 		require.ErrorIs(t, ErrInvalidPayloadStatus, err)
 		require.DeepEqual(t, want.LatestValidHash, resp)
 	})
@@ -638,7 +878,7 @@ func TestClient_HTTP(t *testing.T) {
 		// We call the RPC method via HTTP and expect a proper result.
 		wrappedPayload, err := blocks.WrappedExecutionPayload(execPayload)
 		require.NoError(t, err)
-		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{})
+		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{}, nil)
 		require.ErrorIs(t, ErrUnknownPayloadStatus, err)
 		require.DeepEqual(t, []uint8(nil), resp)
 	})
@@ -1297,6 +1537,7 @@ func fixtures() map[string]interface{} {
 		"ExecutionPayloadDeneb":             s.ExecutionPayloadDeneb,
 		"ExecutionPayloadCapellaWithValue":  s.ExecutionPayloadWithValueCapella,
 		"ExecutionPayloadDenebWithValue":    s.ExecutionPayloadWithValueDeneb,
+		"ExecutionBundleElectra":            s.ExecutionBundleElectra,
 		"ValidPayloadStatus":                s.ValidPayloadStatus,
 		"InvalidBlockHashStatus":            s.InvalidBlockHashStatus,
 		"AcceptedStatus":                    s.AcceptedStatus,
@@ -1483,6 +1724,53 @@ func fixturesStruct() *payloadFixtures {
 			Blobs:       []hexutil.Bytes{{'a'}, {'b'}},
 		},
 	}
+
+	depositRequestBytes, err := hexutil.Decode("0x610000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000" +
+		"620000000000000000000000000000000000000000000000000000000000000000" +
+		"4059730700000063000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000" +
+		"00000000000000000000000000000000000000000000000000000000000000000000000000000000")
+	if err != nil {
+		panic("failed to decode deposit request")
+	}
+	withdrawalRequestBytes, err := hexutil.Decode("0x6400000000000000000000000000000000000000" +
+		"6500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000040597307000000")
+	if err != nil {
+		panic("failed to decode withdrawal request")
+	}
+	consolidationRequestBytes, err := hexutil.Decode("0x6600000000000000000000000000000000000000" +
+		"670000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000" +
+		"680000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000")
+	if err != nil {
+		panic("failed to decode consolidation request")
+	}
+	executionBundleFixtureElectra := &pb.GetPayloadV4ResponseJson{
+		ShouldOverrideBuilder: true,
+		ExecutionPayload: &pb.ExecutionPayloadDenebJSON{
+			ParentHash:    &common.Hash{'a'},
+			FeeRecipient:  &common.Address{'b'},
+			StateRoot:     &common.Hash{'c'},
+			ReceiptsRoot:  &common.Hash{'d'},
+			LogsBloom:     &hexutil.Bytes{'e'},
+			PrevRandao:    &common.Hash{'f'},
+			BaseFeePerGas: "0x123",
+			BlockHash:     &common.Hash{'g'},
+			Transactions:  []hexutil.Bytes{{'h'}},
+			Withdrawals:   []*pb.Withdrawal{},
+			BlockNumber:   &hexUint,
+			GasLimit:      &hexUint,
+			GasUsed:       &hexUint,
+			Timestamp:     &hexUint,
+			BlobGasUsed:   &bgu,
+			ExcessBlobGas: &ebg,
+		},
+		BlockValue: "0x11fffffffff",
+		BlobsBundle: &pb.BlobBundleJSON{
+			Commitments: []hexutil.Bytes{[]byte("commitment1"), []byte("commitment2")},
+			Proofs:      []hexutil.Bytes{[]byte("proof1"), []byte("proof2")},
+			Blobs:       []hexutil.Bytes{{'a'}, {'b'}},
+		},
+		ExecutionRequests: []hexutil.Bytes{depositRequestBytes, withdrawalRequestBytes, consolidationRequestBytes},
+	}
 	parent := bytesutil.PadTo([]byte("parentHash"), fieldparams.RootLength)
 	sha3Uncles := bytesutil.PadTo([]byte("sha3Uncles"), fieldparams.RootLength)
 	miner := bytesutil.PadTo([]byte("miner"), fieldparams.FeeRecipientLength)
@@ -1576,6 +1864,7 @@ func fixturesStruct() *payloadFixtures {
 		EmptyExecutionPayloadDeneb:        emptyExecutionPayloadDeneb,
 		ExecutionPayloadWithValueCapella:  executionPayloadWithValueFixtureCapella,
 		ExecutionPayloadWithValueDeneb:    executionPayloadWithValueFixtureDeneb,
+		ExecutionBundleElectra:            executionBundleFixtureElectra,
 		ValidPayloadStatus:                validStatus,
 		InvalidBlockHashStatus:            inValidBlockHashStatus,
 		AcceptedStatus:                    acceptedStatus,
@@ -1599,6 +1888,7 @@ type payloadFixtures struct {
 	ExecutionPayloadDeneb             *pb.ExecutionPayloadDeneb
 	ExecutionPayloadWithValueCapella  *pb.GetPayloadV2ResponseJson
 	ExecutionPayloadWithValueDeneb    *pb.GetPayloadV3ResponseJson
+	ExecutionBundleElectra            *pb.GetPayloadV4ResponseJson
 	ValidPayloadStatus                *pb.PayloadStatus
 	InvalidBlockHashStatus            *pb.PayloadStatus
 	AcceptedStatus                    *pb.PayloadStatus
@@ -1957,6 +2247,54 @@ func newPayloadV3Setup(t *testing.T, status *pb.PayloadStatus, payload *pb.Execu
 	return service
 }
 
+func newPayloadV4Setup(t *testing.T, status *pb.PayloadStatus, payload *pb.ExecutionPayloadDeneb, requests *pb.ExecutionRequests) *Service {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		defer func() {
+			require.NoError(t, r.Body.Close())
+		}()
+		enc, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+		jsonRequestString := string(enc)
+		require.Equal(t, true, strings.Contains(
+			jsonRequestString, string("engine_newPayloadV4"),
+		))
+
+		reqPayload, err := json.Marshal(payload)
+		require.NoError(t, err)
+
+		// We expect the JSON string RPC request contains the right arguments.
+		require.Equal(t, true, strings.Contains(
+			jsonRequestString, string(reqPayload),
+		))
+
+		reqRequests, err := pb.EncodeExecutionRequests(requests)
+		require.NoError(t, err)
+
+		jsonRequests, err := json.Marshal(reqRequests)
+		require.NoError(t, err)
+
+		require.Equal(t, true, strings.Contains(
+			jsonRequestString, string(jsonRequests),
+		))
+
+		resp := map[string]interface{}{
+			"jsonrpc": "2.0",
+			"id":      1,
+			"result":  status,
+		}
+		err = json.NewEncoder(w).Encode(resp)
+		require.NoError(t, err)
+	}))
+
+	rpcClient, err := rpc.DialHTTP(srv.URL)
+	require.NoError(t, err)
+
+	service := &Service{}
+	service.rpcClient = rpcClient
+	return service
+}
+
 func TestReconstructBlindedBlockBatch(t *testing.T) {
 	t.Run("empty response works", func(t *testing.T) {
 		ctx := context.Background()
@@ -2053,4 +2391,123 @@ func Test_ExchangeCapabilities(t *testing.T) {
 			require.NotNil(t, item)
 		}
 	})
+}
+
+func TestReconstructBlobSidecars(t *testing.T) {
+	client := &Service{capabilityCache: &capabilityCache{}}
+	b := util.NewBeaconBlockDeneb()
+	kzgCommitments := createRandomKzgCommitments(t, 6)
+
+	b.Block.Body.BlobKzgCommitments = kzgCommitments
+	r, err := b.Block.HashTreeRoot()
+	require.NoError(t, err)
+	sb, err := blocks.NewSignedBeaconBlock(b)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	t.Run("all seen", func(t *testing.T) {
+		exists := []bool{true, true, true, true, true, true}
+		verifiedBlobs, err := client.ReconstructBlobSidecars(ctx, sb, r, exists)
+		require.NoError(t, err)
+		require.Equal(t, 0, len(verifiedBlobs))
+	})
+
+	t.Run("get-blobs end point is not supported", func(t *testing.T) {
+		exists := []bool{true, true, true, true, true, false}
+		verifiedBlobs, err := client.ReconstructBlobSidecars(ctx, sb, r, exists)
+		require.NoError(t, err)
+		require.Equal(t, 0, len(verifiedBlobs))
+	})
+
+	client.capabilityCache = &capabilityCache{capabilities: map[string]interface{}{GetBlobsV1: nil}}
+
+	t.Run("recovered 6 missing blobs", func(t *testing.T) {
+		srv := createBlobServer(t, 6)
+		defer srv.Close()
+
+		rpcClient, client := setupRpcClient(t, srv.URL, client)
+		defer rpcClient.Close()
+
+		exists := [6]bool{}
+		verifiedBlobs, err := client.ReconstructBlobSidecars(ctx, sb, r, exists[:])
+		require.NoError(t, err)
+		require.Equal(t, 6, len(verifiedBlobs))
+	})
+
+	t.Run("recovered 3 missing blobs", func(t *testing.T) {
+		srv := createBlobServer(t, 3)
+		defer srv.Close()
+
+		rpcClient, client := setupRpcClient(t, srv.URL, client)
+		defer rpcClient.Close()
+
+		exists := []bool{true, false, true, false, true, false}
+		verifiedBlobs, err := client.ReconstructBlobSidecars(ctx, sb, r, exists)
+		require.NoError(t, err)
+		require.Equal(t, 3, len(verifiedBlobs))
+	})
+
+	t.Run("kzg is longer than exist", func(t *testing.T) {
+		srv := createBlobServer(t, 3)
+		defer srv.Close()
+
+		rpcClient, client := setupRpcClient(t, srv.URL, client)
+		defer rpcClient.Close()
+
+		exists := []bool{true, false, true, false, true}
+		_, err := client.ReconstructBlobSidecars(ctx, sb, r, exists)
+		require.ErrorContains(t, "length of KZG commitments (6) is greater than length of exists (5)", err)
+	})
+}
+
+func createRandomKzgCommitments(t *testing.T, num int) [][]byte {
+	kzgCommitments := make([][]byte, num)
+	for i := range kzgCommitments {
+		kzgCommitments[i] = make([]byte, 48)
+		_, err := rand.Read(kzgCommitments[i])
+		require.NoError(t, err)
+	}
+	return kzgCommitments
+}
+
+func createBlobServer(t *testing.T, numBlobs int) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		defer func() {
+			require.NoError(t, r.Body.Close())
+		}()
+
+		blobs := make([]pb.BlobAndProofJson, numBlobs)
+		for i := range blobs {
+			blobs[i] = pb.BlobAndProofJson{Blob: []byte(fmt.Sprintf("blob%d", i+1)), KzgProof: []byte(fmt.Sprintf("proof%d", i+1))}
+		}
+
+		respJSON := map[string]interface{}{
+			"jsonrpc": "2.0",
+			"id":      1,
+			"result":  blobs,
+		}
+		require.NoError(t, json.NewEncoder(w).Encode(respJSON))
+	}))
+}
+
+func setupRpcClient(t *testing.T, url string, client *Service) (*rpc.Client, *Service) {
+	rpcClient, err := rpc.DialHTTP(url)
+	require.NoError(t, err)
+
+	client.rpcClient = rpcClient
+	client.capabilityCache = &capabilityCache{capabilities: map[string]interface{}{GetBlobsV1: nil}}
+	client.blobVerifier = testNewBlobVerifier()
+
+	return rpcClient, client
+}
+
+func testNewBlobVerifier() verification.NewBlobVerifier {
+	return func(b blocks.ROBlob, reqs []verification.Requirement) verification.BlobVerifier {
+		return &verification.MockBlobVerifier{
+			CbVerifiedROBlob: func() (blocks.VerifiedROBlob, error) {
+				return blocks.VerifiedROBlob{}, nil
+			},
+		}
+	}
 }

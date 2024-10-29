@@ -16,6 +16,7 @@ syntax = "proto3";
 package ethereum.engine.v1;
 
 import "proto/eth/ext/options.proto";
+import "proto/engine/v1/execution_engine.proto";
 
 option csharp_namespace = "Ethereum.Engine.V1";
 option go_package = "github.com/prysmaticlabs/prysm/v5/proto/engine/v1;enginev1";
@@ -60,7 +61,16 @@ message ConsolidationRequest {
 
 // ExecutionRequests is a container that contains all the requests from the execution layer to be included in a block
 message ExecutionRequests {
-        repeated DepositRequest deposits = 1 [(ethereum.eth.ext.ssz_max) = "max_deposit_requests_per_payload.size"];
+	repeated DepositRequest deposits = 1 [(ethereum.eth.ext.ssz_max) = "max_deposit_requests_per_payload.size"];
 	repeated WithdrawalRequest	withdrawals = 2 [(ethereum.eth.ext.ssz_max) = "max_withdrawal_requests_per_payload.size"];
-        repeated ConsolidationRequest consolidations = 3 [(ethereum.eth.ext.ssz_max) = "max_consolidation_requests_per_payload.size"];
+	repeated ConsolidationRequest consolidations = 3 [(ethereum.eth.ext.ssz_max) = "max_consolidation_requests_per_payload.size"];
+}
+
+// ExecutionBundleElectra is a container that builds on Payload V4 and includes execution requests sidecar needed post Electra
+message ExecutionBundleElectra {
+	ExecutionPayloadDeneb payload = 1;
+	bytes value = 2;
+	BlobsBundle blobs_bundle = 3;
+	bool should_override_builder = 4;
+	repeated bytes execution_requests = 5;
 }

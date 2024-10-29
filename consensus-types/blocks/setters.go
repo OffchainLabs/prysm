@@ -6,6 +6,7 @@ import (
 	consensus_types "github.com/prysmaticlabs/prysm/v5/consensus-types"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
 	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 )
@@ -170,5 +171,14 @@ func (b *SignedBeaconBlock) SetBlobKzgCommitments(c [][]byte) error {
 		return consensus_types.ErrNotSupported("SetBlobKzgCommitments", b.version)
 	}
 	b.block.body.blobKzgCommitments = c
+	return nil
+}
+
+// SetExecutionRequests sets the execution requests in the block.
+func (b *SignedBeaconBlock) SetExecutionRequests(req *enginev1.ExecutionRequests) error {
+	if b.version < version.Electra {
+		return consensus_types.ErrNotSupported("SetExecutionRequests", b.version)
+	}
+	b.block.body.executionRequests = req
 	return nil
 }

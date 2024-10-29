@@ -13,6 +13,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/api"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/builder"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
@@ -31,6 +32,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	"github.com/prysmaticlabs/prysm/v5/network/httputil"
 	ethpbalpha "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
@@ -118,30 +120,34 @@ func (s *Server) SubmitContributionAndProofs(w http.ResponseWriter, r *http.Requ
 	ctx, span := trace.StartSpan(r.Context(), "validator.SubmitContributionAndProofs")
 	defer span.End()
 
-	var req structs.SubmitContributionAndProofsRequest
-	err := json.NewDecoder(r.Body).Decode(&req.Data)
-	switch {
-	case errors.Is(err, io.EOF):
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
-		return
-	case err != nil:
-		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+	var reqData []json.RawMessage
+	if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
+		if errors.Is(err, io.EOF) {
+			httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		} else {
+			httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+		}
 		return
 	}
-	if len(req.Data) == 0 {
+	if len(reqData) == 0 {
 		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	}
 
-	for _, item := range req.Data {
-		consensusItem, err := item.ToConsensus()
-		if err != nil {
-			httputil.HandleError(w, "Could not convert request contribution to consensus contribution: "+err.Error(), http.StatusBadRequest)
+	for _, item := range reqData {
+		var contribution structs.SignedContributionAndProof
+		if err := json.Unmarshal(item, &contribution); err != nil {
+			httputil.HandleError(w, "Could not decode item: "+err.Error(), http.StatusBadRequest)
 			return
 		}
-		rpcError := s.CoreService.SubmitSignedContributionAndProof(ctx, consensusItem)
-		if rpcError != nil {
+		consensusItem, err := contribution.ToConsensus()
+		if err != nil {
+			httputil.HandleError(w, "Could not convert contribution to consensus format: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		if rpcError := s.CoreService.SubmitSignedContributionAndProof(ctx, consensusItem); rpcError != nil {
 			httputil.HandleError(w, rpcError.Err.Error(), core.ErrorReasonToHTTP(rpcError.Reason))
+			return
 		}
 	}
 }
@@ -168,7 +174,13 @@ func (s *Server) SubmitAggregateAndProofs(w http.ResponseWriter, r *http.Request
 
 	broadcastFailed := false
 	for _, item := range req.Data {
-		consensusItem, err := item.ToConsensus()
+		var signedAggregate structs.SignedAggregateAttestationAndProof
+		err := json.Unmarshal(item, &signedAggregate)
+		if err != nil {
+			httputil.HandleError(w, "Could not decode item: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		consensusItem, err := signedAggregate.ToConsensus()
 		if err != nil {
 			httputil.HandleError(w, "Could not convert request aggregate to consensus aggregate: "+err.Error(), http.StatusBadRequest)
 			return
@@ -186,6 +198,81 @@ func (s *Server) SubmitAggregateAndProofs(w http.ResponseWriter, r *http.Request
 		}
 	}
 
+	if broadcastFailed {
+		httputil.HandleError(w, "Could not broadcast one or more signed aggregated attestations", http.StatusInternalServerError)
+	}
+}
+
+// SubmitAggregateAndProofsV2 verifies given aggregate and proofs and publishes them on appropriate gossipsub topic.
+func (s *Server) SubmitAggregateAndProofsV2(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "validator.SubmitAggregateAndProofsV2")
+	defer span.End()
+
+	var reqData []json.RawMessage
+	if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
+		if errors.Is(err, io.EOF) {
+			httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		} else {
+			httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+		}
+		return
+	}
+	if len(reqData) == 0 {
+		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		return
+	}
+
+	versionHeader := r.Header.Get(api.VersionHeader)
+	if versionHeader == "" {
+		httputil.HandleError(w, api.VersionHeader+" header is required", http.StatusBadRequest)
+	}
+	v, err := version.FromString(versionHeader)
+	if err != nil {
+		httputil.HandleError(w, "Invalid version: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	broadcastFailed := false
+	var rpcError *core.RpcError
+	for _, raw := range reqData {
+		if v >= version.Electra {
+			var signedAggregate structs.SignedAggregateAttestationAndProofElectra
+			err = json.Unmarshal(raw, &signedAggregate)
+			if err != nil {
+				httputil.HandleError(w, "Failed to parse aggregate attestation and proof: "+err.Error(), http.StatusBadRequest)
+				return
+			}
+			consensusItem, err := signedAggregate.ToConsensus()
+			if err != nil {
+				httputil.HandleError(w, "Could not convert request aggregate to consensus aggregate: "+err.Error(), http.StatusBadRequest)
+				return
+			}
+			rpcError = s.CoreService.SubmitSignedAggregateSelectionProof(ctx, consensusItem)
+		} else {
+			var signedAggregate structs.SignedAggregateAttestationAndProof
+			err = json.Unmarshal(raw, &signedAggregate)
+			if err != nil {
+				httputil.HandleError(w, "Failed to parse aggregate attestation and proof: "+err.Error(), http.StatusBadRequest)
+				return
+			}
+			consensusItem, err := signedAggregate.ToConsensus()
+			if err != nil {
+				httputil.HandleError(w, "Could not convert request aggregate to consensus aggregate: "+err.Error(), http.StatusBadRequest)
+				return
+			}
+			rpcError = s.CoreService.SubmitSignedAggregateSelectionProof(ctx, consensusItem)
+		}
+
+		if rpcError != nil {
+			var aggregateBroadcastFailedError *core.AggregateBroadcastFailedError
+			if errors.As(rpcError.Err, &aggregateBroadcastFailedError) {
+				broadcastFailed = true
+			} else {
+				httputil.HandleError(w, rpcError.Err.Error(), core.ErrorReasonToHTTP(rpcError.Reason))
+				return
+			}
+		}
+	}
 	if broadcastFailed {
 		httputil.HandleError(w, "Could not broadcast one or more signed aggregated attestations", http.StatusInternalServerError)
 	}

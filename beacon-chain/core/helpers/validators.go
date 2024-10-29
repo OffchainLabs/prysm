@@ -584,23 +584,23 @@ func IsSameWithdrawalCredentials(a, b *ethpb.Validator) bool {
 //	        and validator.withdrawable_epoch <= epoch
 //	        and balance > 0
 //	    )
-func IsFullyWithdrawableValidator(val *ethpb.Validator, balance uint64, epoch primitives.Epoch, fork int) bool {
+func IsFullyWithdrawableValidator(val state.ReadOnlyValidator, balance uint64, epoch primitives.Epoch, fork int) bool {
 	if val == nil || balance <= 0 {
 		return false
 	}
 
 	// Electra / EIP-7251 logic
 	if fork >= version.Electra {
-		return HasExecutionWithdrawalCredentials(val) && val.WithdrawableEpoch <= epoch
+		return HasExecutionWithdrawalCredentials(val) && val.WithdrawableEpoch() <= epoch
 	}
 
-	return HasETH1WithdrawalCredential(val) && val.WithdrawableEpoch <= epoch
+	return HasETH1WithdrawalCredential(val) && val.WithdrawableEpoch() <= epoch
 }
 
 // IsPartiallyWithdrawableValidator returns whether the validator is able to perform a
 // partial withdrawal. This function assumes that the caller has a lock on the state.
 // This method conditionally calls the fork appropriate implementation based on the epoch argument.
-func IsPartiallyWithdrawableValidator(val *ethpb.Validator, balance uint64, epoch primitives.Epoch, fork int) bool {
+func IsPartiallyWithdrawableValidator(val state.ReadOnlyValidator, balance uint64, epoch primitives.Epoch, fork int) bool {
 	if val == nil {
 		return false
 	}
@@ -630,9 +630,9 @@ func IsPartiallyWithdrawableValidator(val *ethpb.Validator, balance uint64, epoc
 //	    and has_max_effective_balance
 //	    and has_excess_balance
 //	)
-func isPartiallyWithdrawableValidatorElectra(val *ethpb.Validator, balance uint64, epoch primitives.Epoch) bool {
+func isPartiallyWithdrawableValidatorElectra(val state.ReadOnlyValidator, balance uint64, epoch primitives.Epoch) bool {
 	maxEB := ValidatorMaxEffectiveBalance(val)
-	hasMaxBalance := val.EffectiveBalance == maxEB
+	hasMaxBalance := val.EffectiveBalance() == maxEB
 	hasExcessBalance := balance > maxEB
 
 	return HasExecutionWithdrawalCredentials(val) &&
@@ -652,8 +652,8 @@ func isPartiallyWithdrawableValidatorElectra(val *ethpb.Validator, balance uint6
 //	    has_max_effective_balance = validator.effective_balance == MAX_EFFECTIVE_BALANCE
 //	    has_excess_balance = balance > MAX_EFFECTIVE_BALANCE
 //	    return has_eth1_withdrawal_credential(validator) and has_max_effective_balance and has_excess_balance
-func isPartiallyWithdrawableValidatorCapella(val *ethpb.Validator, balance uint64, epoch primitives.Epoch) bool {
-	hasMaxBalance := val.EffectiveBalance == params.BeaconConfig().MaxEffectiveBalance
+func isPartiallyWithdrawableValidatorCapella(val state.ReadOnlyValidator, balance uint64, epoch primitives.Epoch) bool {
+	hasMaxBalance := val.EffectiveBalance() == params.BeaconConfig().MaxEffectiveBalance
 	hasExcessBalance := balance > params.BeaconConfig().MaxEffectiveBalance
 	return HasETH1WithdrawalCredential(val) && hasExcessBalance && hasMaxBalance
 }
@@ -670,7 +670,7 @@ func isPartiallyWithdrawableValidatorCapella(val *ethpb.Validator, balance uint6
 //	        return MAX_EFFECTIVE_BALANCE_ELECTRA
 //	    else:
 //	        return MIN_ACTIVATION_BALANCE
-func ValidatorMaxEffectiveBalance(val *ethpb.Validator) uint64 {
+func ValidatorMaxEffectiveBalance(val state.ReadOnlyValidator) uint64 {
 	if HasCompoundingWithdrawalCredential(val) {
 		return params.BeaconConfig().MaxEffectiveBalanceElectra
 	}

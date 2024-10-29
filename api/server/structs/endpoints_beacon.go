@@ -21,7 +21,8 @@ type GetCommitteesResponse struct {
 }
 
 type ListAttestationsResponse struct {
-	Data []*Attestation `json:"data"`
+	Version string          `json:"version,omitempty"`
+	Data    json.RawMessage `json:"data"`
 }
 
 type SubmitAttestationsRequest struct {
@@ -176,7 +177,8 @@ type BLSToExecutionChangesPoolResponse struct {
 }
 
 type GetAttesterSlashingsResponse struct {
-	Data []*AttesterSlashing `json:"data"`
+	Version string          `json:"version,omitempty"`
+	Data    json.RawMessage `json:"data"` // Accepts both `[]*AttesterSlashing` and `[]*AttesterSlashingElectra` types
 }
 
 type GetProposerSlashingsResponse struct {

@@ -14,7 +14,8 @@ type GetPayloadResponse struct {
 	BlobsBundle     *pb.BlobsBundle
 	OverrideBuilder bool
 	// todo: should we convert this to Gwei up front?
-	Bid primitives.Wei
+	Bid               primitives.Wei
+	ExecutionRequests *pb.ExecutionRequests
 }
 
 // bundleGetter is an interface satisfied by get payload responses that have a blobs bundle.
@@ -31,6 +32,10 @@ type shouldOverrideBuilderGetter interface {
 	GetShouldOverrideBuilder() bool
 }
 
+type executionRequestsGetter interface {
+	GetDecodedExecutionRequests() (*pb.ExecutionRequests, error)
+}
+
 func NewGetPayloadResponse(msg proto.Message) (*GetPayloadResponse, error) {
 	r := &GetPayloadResponse{}
 	bundleGetter, hasBundle := msg.(bundleGetter)
@@ -38,6 +43,7 @@ func NewGetPayloadResponse(msg proto.Message) (*GetPayloadResponse, error) {
 		r.BlobsBundle = bundleGetter.GetBlobsBundle()
 	}
 	bidValueGetter, hasBid := msg.(bidValueGetter)
+	executionRequestsGetter, hasExecutionRequests := msg.(executionRequestsGetter)
 	wei := primitives.ZeroWei()
 	if hasBid {
 		// The protobuf types that engine api responses unmarshal into store their values in little endian form.
@@ -56,5 +62,12 @@ func NewGetPayloadResponse(msg proto.Message) (*GetPayloadResponse, error) {
 		return nil, err
 	}
 	r.ExecutionData = ed
+	if hasExecutionRequests {
+		requests, err := executionRequestsGetter.GetDecodedExecutionRequests()
+		if err != nil {
+			return nil, err
+		}
+		r.ExecutionRequests = requests
+	}
 	return r, nil
 }

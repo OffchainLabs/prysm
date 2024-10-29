@@ -278,6 +278,8 @@ func TestService_HasBlock(t *testing.T) {
 	r, err = b.Block.HashTreeRoot()
 	require.NoError(t, err)
 	require.Equal(t, true, s.HasBlock(context.Background(), r))
+	s.blockBeingSynced.set(r)
+	require.Equal(t, false, s.HasBlock(context.Background(), r))
 }
 
 func TestCheckSaveHotStateDB_Enabling(t *testing.T) {
