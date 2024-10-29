@@ -42,7 +42,7 @@ func (s *Server) AuthTokenHandler(next http.Handler) http.Handler {
 			// ignore some routes
 			reqToken := r.Header.Get("Authorization")
 			if reqToken == "" {
-				httputil.HandleError(w, "unauthorized: no Authorization header passed. Please use an Authorization header with the jwt created in the prysm wallet", http.StatusUnauthorized)
+				httputil.HandleError(w, "Unauthorized: no Authorization header passed. Please use an Authorization header with the jwt created in the prysm wallet", http.StatusUnauthorized)
 				return
 			}
 			tokenParts := strings.Split(reqToken, "Bearer ")
