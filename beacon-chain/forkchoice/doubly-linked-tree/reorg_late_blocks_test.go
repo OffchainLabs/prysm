@@ -19,7 +19,7 @@ func TestForkChoice_ShouldOverrideFCU(t *testing.T) {
 	f.store.committeeWeight /= uint64(params.BeaconConfig().SlotsPerEpoch)
 	ctx := context.Background()
 	driftGenesisTime(f, 1, 0)
-	st, blk, err := prepareForkchoiceState(ctx, 1, [32]byte{'a'}, [32]byte{}, [32]byte{'A'}, 0, 0)
+	st, blk, err := prepareForkchoiceState(ctx, f, 1, [32]byte{'a'}, [32]byte{}, [32]byte{'A'}, 0, 0)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, st, blk))
 	attesters := make([]uint64, f.numActiveValidators-64)
@@ -30,7 +30,7 @@ func TestForkChoice_ShouldOverrideFCU(t *testing.T) {
 
 	orphanLateBlockFirstThreshold := params.BeaconConfig().SecondsPerSlot / params.BeaconConfig().IntervalsPerSlot
 	driftGenesisTime(f, 2, orphanLateBlockFirstThreshold+1)
-	st, blk, err = prepareForkchoiceState(ctx, 2, [32]byte{'b'}, [32]byte{'a'}, [32]byte{'B'}, 0, 0)
+	st, blk, err = prepareForkchoiceState(ctx, f, 2, [32]byte{'b'}, [32]byte{'a'}, [32]byte{'B'}, 0, 0)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, st, blk))
 	headRoot, err := f.Head(ctx)
@@ -117,7 +117,7 @@ func TestForkChoice_GetProposerHead(t *testing.T) {
 	ctx := context.Background()
 	driftGenesisTime(f, 1, 0)
 	parentRoot := [32]byte{'a'}
-	st, blk, err := prepareForkchoiceState(ctx, 1, parentRoot, [32]byte{}, [32]byte{'A'}, 0, 0)
+	st, blk, err := prepareForkchoiceState(ctx, f, 1, parentRoot, [32]byte{}, [32]byte{'A'}, 0, 0)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, st, blk))
 	attesters := make([]uint64, f.numActiveValidators-64)
@@ -128,7 +128,7 @@ func TestForkChoice_GetProposerHead(t *testing.T) {
 
 	driftGenesisTime(f, 3, 1)
 	childRoot := [32]byte{'b'}
-	st, blk, err = prepareForkchoiceState(ctx, 2, childRoot, [32]byte{'a'}, [32]byte{'B'}, 0, 0)
+	st, blk, err = prepareForkchoiceState(ctx, f, 2, childRoot, [32]byte{'a'}, [32]byte{'B'}, 0, 0)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, st, blk))
 	headRoot, err := f.Head(ctx)

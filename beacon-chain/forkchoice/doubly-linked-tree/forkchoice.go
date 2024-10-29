@@ -136,12 +136,14 @@ func (f *ForkChoice) InsertNode(ctx context.Context, state state.BeaconState, ro
 	if roblock.Version() >= version.EPBS {
 		return nil
 	}
-	if roblock.Version() > version.Bellatrix {
+	if roblock.Version() >= version.Bellatrix {
 		e, err := roblock.Block().Body().Execution()
 		if err != nil {
 			return errors.Wrap(err, "could not get execution data")
 		}
-		return f.insertExecutionPayload(node, e)
+		if err := f.insertExecutionPayload(node, e); err != nil {
+			return errors.Wrap(err, "could not insert execution payload to forkchoice")
+		}
 	}
 	return nil
 }
@@ -180,10 +182,15 @@ func (f *ForkChoice) HasHash(hash [32]byte) bool {
 }
 
 // IsCanonical returns true if the given root is part of the canonical chain.
+// TODO: change the API to pass also full/empty
 func (f *ForkChoice) IsCanonical(root [32]byte) bool {
 	node, ok := f.store.emptyNodeByRoot[root]
 	if !ok || node == nil {
 		return false
+	}
+	fullNode, ok := f.store.fullNodeByPayload[node.block.payloadHash]
+	if ok {
+		node = fullNode
 	}
 
 	if node.bestDescendant == nil {
@@ -258,17 +265,25 @@ func (f *ForkChoice) IsViableForCheckpoint(cp *forkchoicetypes.Checkpoint) (bool
 		return false, nil
 	}
 
+	fullNode := f.store.fullNodeByPayload[node.block.payloadHash]
+
 	if len(node.children) == 0 {
-		return true, nil
+		if fullNode != nil && len(fullNode.children) == 0 {
+			return true, nil
+		}
 	}
 	if node.block.slot == epochStart {
 		return true, nil
 	}
-	nodeEpoch := slots.ToEpoch(node.block.slot)
-	if nodeEpoch >= cp.Epoch {
+	for _, child := range node.children {
+		if child.block.slot > epochStart {
+			return true, nil
+		}
+	}
+	if fullNode == nil {
 		return false, nil
 	}
-	for _, child := range node.children {
+	for _, child := range fullNode.children {
 		if child.block.slot > epochStart {
 			return true, nil
 		}
@@ -315,7 +330,8 @@ func (f *ForkChoice) updateBalances() error {
 				if nextNode == nil {
 					return errors.Wrap(ErrNilNode, "could not update balances")
 				}
-				nextNode.balance += newBalance
+				// New votes count both for full and empty nodes
+				nextNode.block.balance += newBalance
 			}
 
 			currentNode, ok := f.store.emptyNodeByRoot[vote.currentRoot]
@@ -324,19 +340,19 @@ func (f *ForkChoice) updateBalances() error {
 				if currentNode == nil {
 					return errors.Wrap(ErrNilNode, "could not update balances")
 				}
-				if currentNode.balance < oldBalance {
+				if currentNode.block.balance < oldBalance {
 					log.WithFields(logrus.Fields{
 						"nodeRoot":                   fmt.Sprintf("%#x", bytesutil.Trunc(vote.currentRoot[:])),
 						"oldBalance":                 oldBalance,
-						"nodeBalance":                currentNode.balance,
-						"nodeWeight":                 currentNode.weight,
+						"nodeBalance":                currentNode.block.balance,
+						"emptyNodeWeight":            currentNode.weight,
 						"proposerBoostRoot":          fmt.Sprintf("%#x", bytesutil.Trunc(f.store.proposerBoostRoot[:])),
 						"previousProposerBoostRoot":  fmt.Sprintf("%#x", bytesutil.Trunc(f.store.previousProposerBoostRoot[:])),
 						"previousProposerBoostScore": f.store.previousProposerBoostScore,
 					}).Warning("node with invalid balance, setting it to zero")
-					currentNode.balance = 0
+					currentNode.block.balance = 0
 				} else {
-					currentNode.balance -= oldBalance
+					currentNode.block.balance -= oldBalance
 				}
 			}
 		}
@@ -413,10 +429,10 @@ func (f *ForkChoice) InsertSlashedIndex(_ context.Context, index primitives.Vali
 		return
 	}
 
-	if node.balance < f.balances[index] {
-		node.balance = 0
+	if node.block.balance < f.balances[index] {
+		node.block.balance = 0
 	} else {
-		node.balance -= f.balances[index]
+		node.block.balance -= f.balances[index]
 	}
 }
 
@@ -443,6 +459,7 @@ func (f *ForkChoice) UpdateFinalizedCheckpoint(fc *forkchoicetypes.Checkpoint) e
 }
 
 // CommonAncestor returns the common ancestor root and slot between the two block roots r1 and r2.
+// TODO: change the API to pass full/empty not just roots.
 func (f *ForkChoice) CommonAncestor(ctx context.Context, r1 [32]byte, r2 [32]byte) ([32]byte, primitives.Slot, error) {
 	ctx, span := trace.StartSpan(ctx, "doublyLinkedForkchoice.CommonAncestorRoot")
 	defer span.End()
@@ -474,15 +491,20 @@ func (f *ForkChoice) CommonAncestor(ctx context.Context, r1 [32]byte, r2 [32]byt
 			if n1 == nil {
 				return [32]byte{}, 0, forkchoice.ErrUnknownCommonAncestor
 			}
-		} else {
+		} else if n1.block.slot < n2.block.slot {
 			n2 = n2.block.parent
 			// Reaches the end of the tree and unable to find common ancestor.
 			if n2 == nil {
 				return [32]byte{}, 0, forkchoice.ErrUnknownCommonAncestor
 			}
-		}
-		if n1 == n2 {
-			return n1.block.root, n1.block.slot, nil
+		} else {
+			if n1.block.root == n2.block.root {
+				return n1.block.root, n1.block.slot, nil
+			}
+			n1 = n1.block.parent
+			if n1 == nil {
+				return [32]byte{}, 0, forkchoice.ErrUnknownCommonAncestor
+			}
 		}
 	}
 }

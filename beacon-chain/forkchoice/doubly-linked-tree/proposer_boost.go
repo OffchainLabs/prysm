@@ -17,7 +17,7 @@ func (f *ForkChoice) applyProposerBoostScore() error {
 		if !ok || previousNode == nil {
 			log.WithError(errInvalidProposerBoostRoot).Errorf(fmt.Sprintf("invalid prev root %#x", s.previousProposerBoostRoot))
 		} else {
-			previousNode.balance -= s.previousProposerBoostScore
+			previousNode.block.balance -= s.previousProposerBoostScore
 		}
 	}
 
@@ -27,7 +27,7 @@ func (f *ForkChoice) applyProposerBoostScore() error {
 			log.WithError(errInvalidProposerBoostRoot).Errorf(fmt.Sprintf("invalid current root %#x", s.proposerBoostRoot))
 		} else {
 			proposerScore = (s.committeeWeight * params.BeaconConfig().ProposerScoreBoost) / 100
-			currentNode.balance += proposerScore
+			currentNode.block.balance += proposerScore
 		}
 	}
 	s.previousProposerBoostRoot = s.proposerBoostRoot

@@ -35,11 +35,19 @@ func (f *ForkChoice) insertExecutionPayload(b *BlockNode, e interfaces.Execution
 	}
 	if n.block.parent != nil {
 		n.block.parent.children = append(n.block.parent.children, n)
+	} else {
+		// make this the tree node
+		f.store.treeRootNode = n
 	}
 	s.fullNodeByPayload[hash] = n
+	s.updateWithPayload(n)
 	processedPayloadCount.Inc()
 	payloadCount.Set(float64(len(s.fullNodeByPayload)))
 
+	// make this node head if the empty node was
+	if s.headNode.block == n.block {
+		s.headNode = n
+	}
 	if b.slot == s.highestReceivedNode.block.slot {
 		s.highestReceivedNode = n
 	}
@@ -59,4 +67,17 @@ func (f *ForkChoice) InsertPayloadEnvelope(envelope interfaces.ROExecutionPayloa
 		return err
 	}
 	return f.insertExecutionPayload(b.block, e)
+}
+
+func (s *Store) updateWithPayload(n *Node) {
+	for _, node := range s.emptyNodeByRoot {
+		if node.bestDescendant != nil && node.bestDescendant.block == n.block {
+			node.bestDescendant = n
+		}
+	}
+	for _, node := range s.fullNodeByPayload {
+		if node.bestDescendant != nil && node.bestDescendant.block == n.block {
+			node.bestDescendant = n
+		}
+	}
 }

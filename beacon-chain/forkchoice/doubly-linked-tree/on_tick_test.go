@@ -59,19 +59,19 @@ func TestStore_NewSlot(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			f := setup(test.args.justified.Epoch, test.args.finalized.Epoch)
-			state, blkRoot, err := prepareForkchoiceState(ctx, 0, [32]byte{}, [32]byte{}, [32]byte{}, 0, 0)
+			state, blkRoot, err := prepareForkchoiceState(ctx, f, 0, [32]byte{}, [32]byte{}, [32]byte{}, 0, 0)
 			require.NoError(t, err)
 			require.NoError(t, f.InsertNode(ctx, state, blkRoot)) // genesis
-			state, blkRoot, err = prepareForkchoiceState(ctx, 32, [32]byte{'a'}, [32]byte{}, [32]byte{}, 0, 0)
+			state, blkRoot, err = prepareForkchoiceState(ctx, f, 32, [32]byte{'a'}, [32]byte{}, [32]byte{}, 0, 0)
 			require.NoError(t, err)
 			require.NoError(t, f.InsertNode(ctx, state, blkRoot)) // finalized
-			state, blkRoot, err = prepareForkchoiceState(ctx, 64, [32]byte{'b'}, [32]byte{'a'}, [32]byte{}, 0, 0)
+			state, blkRoot, err = prepareForkchoiceState(ctx, f, 64, [32]byte{'b'}, [32]byte{'a'}, [32]byte{}, 0, 0)
 			require.NoError(t, err)
 			require.NoError(t, f.InsertNode(ctx, state, blkRoot)) // justified
-			state, blkRoot, err = prepareForkchoiceState(ctx, 96, bj, [32]byte{'a'}, [32]byte{}, 0, 0)
+			state, blkRoot, err = prepareForkchoiceState(ctx, f, 96, bj, [32]byte{'a'}, [32]byte{}, 0, 0)
 			require.NoError(t, err)
 			require.NoError(t, f.InsertNode(ctx, state, blkRoot)) // best justified
-			state, blkRoot, err = prepareForkchoiceState(ctx, 97, [32]byte{'d'}, [32]byte{}, [32]byte{}, 0, 0)
+			state, blkRoot, err = prepareForkchoiceState(ctx, f, 97, [32]byte{'d'}, [32]byte{}, [32]byte{}, 0, 0)
 			require.NoError(t, err)
 			require.NoError(t, f.InsertNode(ctx, state, blkRoot)) // bad
 

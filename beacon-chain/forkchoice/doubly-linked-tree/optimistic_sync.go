@@ -20,7 +20,20 @@ func (s *Store) removeNodeIfSynced(ctx context.Context, node *Node) ([][32]byte,
 }
 
 func (s *Store) setOptimisticToInvalid(ctx context.Context, root, parentRoot, lastValidHash [32]byte) ([][32]byte, error) {
-	node := s.emptyNodeByRoot[root]
+	invalidRoots := make([][32]byte, 0)
+	node, ok := s.emptyNodeByRoot[root]
+	// Check if we have a full node for this root
+	if ok {
+		fullNode, ok := s.fullNodeByPayload[node.block.payloadHash]
+		if ok {
+			node = fullNode
+		}
+		// check consistency of the input
+		parent := node.block.parent
+		if parent.block.root != parentRoot {
+			return invalidRoots, errInvalidParentRoot
+		}
+	}
 	// if the last valid hash is not known or null, prune only the incoming
 	// block.
 	lastValid, ok := s.fullNodeByPayload[lastValidHash]
@@ -29,7 +42,6 @@ func (s *Store) setOptimisticToInvalid(ctx context.Context, root, parentRoot, la
 	}
 	// We have a valid hash, find if it's in the same fork as the last valid
 	// root.
-	invalidRoots := make([][32]byte, 0)
 	ancestor, err := s.ancestorRoot(ctx, parentRoot, lastValid.block.slot)
 	if err != nil {
 		return invalidRoots, errors.Wrap(err, "could not set block as invalid")
@@ -117,12 +129,6 @@ func (s *Store) removeNodeAndChildren(ctx context.Context, node *Node, invalidRo
 	if node.block.root == s.previousProposerBoostRoot {
 		s.previousProposerBoostRoot = params.BeaconConfig().ZeroHash
 		s.previousProposerBoostScore = 0
-	}
-	if node.block.root == s.payloadWithholdBoostRoot {
-		s.payloadWithholdBoostRoot = [32]byte{}
-	}
-	if node.block.root == s.payloadRevealBoostRoot {
-		s.payloadRevealBoostRoot = [32]byte{}
 	}
 	delete(s.emptyNodeByRoot, node.block.root)
 	delete(s.fullNodeByPayload, node.block.payloadHash)

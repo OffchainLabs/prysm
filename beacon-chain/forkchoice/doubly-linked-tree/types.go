@@ -41,9 +41,6 @@ type Store struct {
 	highestReceivedNode           *Node                                      // The highest slot node.
 	receivedBlocksLastEpoch       [fieldparams.SlotsPerEpoch]primitives.Slot // Using `highestReceivedSlot`. The slot of blocks received in the last epoch.
 	allTipsAreInvalid             bool                                       // tracks if all tips are not viable for head
-	payloadWithholdBoostRoot      [fieldparams.RootLength]byte               // the root of the block that receives the withhold boost
-	payloadWithholdBoostFull      bool                                       // Indicator of whether the block receiving the withhold boost is full or empty
-	payloadRevealBoostRoot        [fieldparams.RootLength]byte               // the root of the block that receives the reveal boost
 }
 
 // BlockNode defines the individual block which includes its block parent, ancestor and how much weight accounted for it.
@@ -54,6 +51,7 @@ type BlockNode struct {
 	payloadHash              [fieldparams.RootLength]byte // payloadHash of the block committed to the node.
 	parent                   *Node                        // parent node of this block
 	fullParent               *Node                        // full parent of this block
+	balance                  uint64                       // the balance that voted for this node directly
 	target                   *BlockNode                   // target checkpoint for
 	justifiedEpoch           primitives.Epoch             // justifiedEpoch of this node.
 	unrealizedJustifiedEpoch primitives.Epoch             // the epoch that would be justified if the block would be advanced to the next epoch.
@@ -68,7 +66,6 @@ type BlockNode struct {
 type Node struct {
 	block          *BlockNode
 	children       []*Node // the list of direct children of this Node
-	balance        uint64  // the balance that voted for this node directly
 	weight         uint64  // weight of this node: the total balance including children
 	bestDescendant *Node   // bestDescendant node of this node.
 	full           bool    // wether the node represents full or empty forkchoice node

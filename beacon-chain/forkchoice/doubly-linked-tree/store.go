@@ -37,6 +37,11 @@ func (s *Store) head(ctx context.Context) ([32]byte, error) {
 			return [32]byte{}, errors.WithMessage(errUnknownJustifiedRoot, fmt.Sprintf("%#x", s.justifiedCheckpoint.Root))
 		}
 	}
+	// We need to consider descendants of the full justified checkpoint too
+	fullJustifiedNode, ok := s.fullNodeByPayload[justifiedNode.block.payloadHash]
+	if ok && fullJustifiedNode.weight >= justifiedNode.weight {
+		justifiedNode = fullJustifiedNode
+	}
 
 	// If the justified node doesn't have a best descendant,
 	// the best node is itself.
@@ -44,6 +49,7 @@ func (s *Store) head(ctx context.Context) ([32]byte, error) {
 	if bestDescendant == nil {
 		bestDescendant = justifiedNode
 	}
+
 	currentEpoch := slots.EpochsSinceGenesis(time.Unix(int64(s.genesisTime), 0))
 	if !bestDescendant.viableForHead(s.justifiedCheckpoint.Epoch, currentEpoch) {
 		s.allTipsAreInvalid = true
@@ -60,6 +66,48 @@ func (s *Store) head(ctx context.Context) ([32]byte, error) {
 	}
 
 	return bestDescendant.block.root, nil
+}
+
+// checkProposerBoost checks if the incoming block should receive proposer boost and applies it.
+func (s *Store) checkProposerBoost(block *BlockNode) {
+	timeNow := uint64(time.Now().Unix())
+	if timeNow < s.genesisTime {
+		return
+	}
+	secondsIntoSlot := (timeNow - s.genesisTime) % params.BeaconConfig().SecondsPerSlot
+	currentSlot := slots.CurrentSlot(s.genesisTime)
+	boostThreshold := params.BeaconConfig().SecondsPerSlot / params.BeaconConfig().IntervalsPerSlot
+	isFirstBlock := s.proposerBoostRoot == [32]byte{}
+	if currentSlot == block.slot && secondsIntoSlot < boostThreshold && isFirstBlock {
+		s.proposerBoostRoot = block.root
+	}
+}
+
+// insertChild perform the insertion tasks when the parent node was already in
+// forkchoice, this is
+// - add a child to the parent
+// - apply proposer boost
+// - update best descendants.
+func (s *Store) insertChild(ctx context.Context, parent *Node, child *Node) error {
+	if parent == nil {
+		return nil
+	}
+	parent.children = append(parent.children, child)
+	if !child.full {
+		s.checkProposerBoost(child.block)
+	}
+	// Update best descendants
+	jEpoch := s.justifiedCheckpoint.Epoch
+	fEpoch := s.finalizedCheckpoint.Epoch
+	currentSlot := slots.CurrentSlot(s.genesisTime)
+	if err := s.treeRootNode.updateBestDescendant(ctx, jEpoch, fEpoch, slots.ToEpoch(currentSlot)); err != nil {
+		_, remErr := s.removeNode(ctx, child)
+		if remErr != nil {
+			log.WithError(remErr).Error("could not remove node")
+		}
+		return errors.Wrap(err, "could not update best descendants")
+	}
+	return nil
 }
 
 // insert registers a new block node to the fork choice store's node list.
@@ -144,32 +192,10 @@ func (s *Store) insert(ctx context.Context,
 		}
 	}
 	s.emptyNodeByRoot[root] = emptyNode
-	if parent != nil {
-		parent.children = append(parent.children, emptyNode)
-		// Apply proposer boost
-		timeNow := uint64(time.Now().Unix())
-		if timeNow < s.genesisTime {
-			return innerBlock, nil
-		}
-		secondsIntoSlot := (timeNow - s.genesisTime) % params.BeaconConfig().SecondsPerSlot
-		currentSlot := slots.CurrentSlot(s.genesisTime)
-		boostThreshold := params.BeaconConfig().SecondsPerSlot / params.BeaconConfig().IntervalsPerSlot
-		isFirstBlock := s.proposerBoostRoot == [32]byte{}
-		if currentSlot == slot && secondsIntoSlot < boostThreshold && isFirstBlock {
-			s.proposerBoostRoot = root
-		}
-
-		// Update best descendants
-		jEpoch := s.justifiedCheckpoint.Epoch
-		fEpoch := s.finalizedCheckpoint.Epoch
-		if err := s.treeRootNode.updateBestDescendant(ctx, jEpoch, fEpoch, slots.ToEpoch(currentSlot)); err != nil {
-			_, remErr := s.removeNode(ctx, n)
-			if remErr != nil {
-				log.WithError(remErr).Error("could not remove node")
-			}
-			return nil, errors.Wrap(err, "could not update best descendants")
-		}
+	if err := s.insertChild(ctx, parent, emptyNode); err != nil {
+		return nil, err
 	}
+
 	// Update metrics.
 	processedBlockCount.Inc()
 	nodeCount.Set(float64(len(s.emptyNodeByRoot)))
@@ -192,7 +218,7 @@ func (s *Store) pruneFinalizedNodeByRootMap(ctx context.Context, node, finalized
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-	if node == finalizedNode {
+	if node.block == finalizedNode.block {
 		if node.block.target != node.block {
 			node.block.target = nil
 		}
@@ -227,10 +253,6 @@ func (s *Store) prune(ctx context.Context) error {
 	// return early if we haven't changed the finalized checkpoint
 	if finalizedNode.block.parent == nil {
 		return nil
-	}
-	fullFinalizedNode := s.fullNodeByPayload[finalizedNode.block.payloadHash]
-	if fullFinalizedNode != nil {
-		finalizedNode = fullFinalizedNode
 	}
 	// Prune nodeByRoot starting from root
 	if err := s.pruneFinalizedNodeByRootMap(ctx, s.treeRootNode, finalizedNode); err != nil {

@@ -53,6 +53,7 @@ func TestForkChoice_BoostProposerRoot_PreventsExAnteAttack(t *testing.T) {
 		f.store.proposerBoostRoot = [32]byte{}
 		state, blkRoot, err := prepareForkchoiceState(
 			ctx,
+			f,
 			slot,
 			newRoot,
 			headRoot,
@@ -81,6 +82,7 @@ func TestForkChoice_BoostProposerRoot_PreventsExAnteAttack(t *testing.T) {
 		f.store.proposerBoostRoot = [32]byte{}
 		state, blkRoot, err = prepareForkchoiceState(
 			ctx,
+			f,
 			slot,
 			newRoot,
 			headRoot,
@@ -111,6 +113,7 @@ func TestForkChoice_BoostProposerRoot_PreventsExAnteAttack(t *testing.T) {
 		f.store.proposerBoostRoot = [32]byte{}
 		state, blkRoot, err = prepareForkchoiceState(
 			ctx,
+			f,
 			slot,
 			newRoot,
 			headRoot,
@@ -142,6 +145,7 @@ func TestForkChoice_BoostProposerRoot_PreventsExAnteAttack(t *testing.T) {
 		f.store.proposerBoostRoot = [32]byte{}
 		state, blkRoot, err = prepareForkchoiceState(
 			ctx,
+			f,
 			slot,
 			newRoot,
 			indexToHash(2),
@@ -212,6 +216,7 @@ func TestForkChoice_BoostProposerRoot_PreventsExAnteAttack(t *testing.T) {
 		honestBlock := indexToHash(2)
 		state, blkRoot, err := prepareForkchoiceState(
 			ctx,
+			f,
 			honestBlockSlot,
 			honestBlock,
 			zeroHash,
@@ -229,6 +234,7 @@ func TestForkChoice_BoostProposerRoot_PreventsExAnteAttack(t *testing.T) {
 		maliciouslyWithheldBlock := indexToHash(1)
 		state, blkRoot, err = prepareForkchoiceState(
 			ctx,
+			f,
 			maliciouslyWithheldBlockSlot,
 			maliciouslyWithheldBlock,
 			zeroHash,
@@ -282,6 +288,7 @@ func TestForkChoice_BoostProposerRoot_PreventsExAnteAttack(t *testing.T) {
 		honestBlock := indexToHash(2)
 		state, blkRoot, err := prepareForkchoiceState(
 			ctx,
+			f,
 			honestBlockSlot,
 			honestBlock,
 			zeroHash,
@@ -301,6 +308,7 @@ func TestForkChoice_BoostProposerRoot_PreventsExAnteAttack(t *testing.T) {
 		maliciouslyWithheldBlock := indexToHash(1)
 		state, blkRoot, err = prepareForkchoiceState(
 			ctx,
+			f,
 			maliciouslyWithheldBlockSlot,
 			maliciouslyWithheldBlock,
 			zeroHash,
@@ -359,6 +367,7 @@ func TestForkChoice_BoostProposerRoot_PreventsExAnteAttack(t *testing.T) {
 		f.store.proposerBoostRoot = [32]byte{}
 		state, blkRoot, err := prepareForkchoiceState(
 			ctx,
+			f,
 			cSlot,
 			c,
 			a, // parent
@@ -379,6 +388,7 @@ func TestForkChoice_BoostProposerRoot_PreventsExAnteAttack(t *testing.T) {
 		f.store.proposerBoostRoot = [32]byte{}
 		state, blkRoot, err = prepareForkchoiceState(
 			ctx,
+			f,
 			bSlot,
 			b,
 			a, // parent
@@ -406,6 +416,7 @@ func TestForkChoice_BoostProposerRoot_PreventsExAnteAttack(t *testing.T) {
 		f.store.proposerBoostRoot = [32]byte{}
 		state, blkRoot, err = prepareForkchoiceState(
 			ctx,
+			f,
 			dSlot,
 			d,
 			b, // parent
@@ -427,6 +438,7 @@ func TestForkChoice_BoostProposerRoot_PreventsExAnteAttack(t *testing.T) {
 		f.store.proposerBoostRoot = [32]byte{}
 		state, blkRoot, err = prepareForkchoiceState(
 			ctx,
+			f,
 			dSlot,
 			d2,
 			b, // parent
@@ -458,7 +470,7 @@ func TestForkChoice_BoostProposerRoot(t *testing.T) {
 		slot := primitives.Slot(0)
 		currentSlot := primitives.Slot(1)
 		driftGenesisTime(f, currentSlot, 0)
-		state, blkRoot, err := prepareForkchoiceState(ctx, slot, root, zeroHash, zeroHash, 0, 0)
+		state, blkRoot, err := prepareForkchoiceState(ctx, f, slot, root, zeroHash, zeroHash, 0, 0)
 		require.NoError(t, err)
 		require.NoError(t, f.InsertNode(ctx, state, blkRoot))
 		require.Equal(t, [32]byte{}, f.store.proposerBoostRoot)
@@ -468,7 +480,7 @@ func TestForkChoice_BoostProposerRoot(t *testing.T) {
 		slot := primitives.Slot(1)
 		currentSlot := primitives.Slot(1)
 		driftGenesisTime(f, currentSlot, params.BeaconConfig().SecondsPerSlot-1)
-		state, blkRoot, err := prepareForkchoiceState(ctx, slot, root, zeroHash, zeroHash, 0, 0)
+		state, blkRoot, err := prepareForkchoiceState(ctx, f, slot, root, zeroHash, zeroHash, 0, 0)
 		require.NoError(t, err)
 		require.NoError(t, f.InsertNode(ctx, state, blkRoot))
 		require.Equal(t, [32]byte{}, f.store.proposerBoostRoot)
@@ -478,7 +490,7 @@ func TestForkChoice_BoostProposerRoot(t *testing.T) {
 		slot := primitives.Slot(1)
 		currentSlot := primitives.Slot(1)
 		driftGenesisTime(f, currentSlot, 0)
-		state, blkRoot, err := prepareForkchoiceState(ctx, slot, root, zeroHash, zeroHash, 0, 0)
+		state, blkRoot, err := prepareForkchoiceState(ctx, f, slot, root, zeroHash, zeroHash, 0, 0)
 		require.NoError(t, err)
 		require.NoError(t, f.InsertNode(ctx, state, blkRoot))
 		require.Equal(t, root, f.store.proposerBoostRoot)
@@ -488,7 +500,7 @@ func TestForkChoice_BoostProposerRoot(t *testing.T) {
 		slot := primitives.Slot(1)
 		currentSlot := primitives.Slot(1)
 		driftGenesisTime(f, currentSlot, 1)
-		state, blkRoot, err := prepareForkchoiceState(ctx, slot, root, zeroHash, zeroHash, 0, 0)
+		state, blkRoot, err := prepareForkchoiceState(ctx, f, slot, root, zeroHash, zeroHash, 0, 0)
 		require.NoError(t, err)
 		require.NoError(t, f.InsertNode(ctx, state, blkRoot))
 		require.Equal(t, root, f.store.proposerBoostRoot)
@@ -505,7 +517,7 @@ func TestForkChoice_missingProposerBoostRoots(t *testing.T) {
 	}
 	f.justifiedBalances = balances
 	driftGenesisTime(f, 1, 0)
-	st, blk, err := prepareForkchoiceState(ctx, 1, [32]byte{'r'}, [32]byte{}, [32]byte{}, 1, 1)
+	st, blk, err := prepareForkchoiceState(ctx, f, 1, [32]byte{'r'}, [32]byte{}, [32]byte{}, 1, 1)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, st, blk))
 
@@ -517,7 +529,7 @@ func TestForkChoice_missingProposerBoostRoots(t *testing.T) {
 
 	f.store.proposerBoostRoot = [32]byte{'p'}
 	driftGenesisTime(f, 3, 0)
-	st, blk, err = prepareForkchoiceState(ctx, 2, [32]byte{'a'}, [32]byte{'r'}, [32]byte{}, 1, 1)
+	st, blk, err = prepareForkchoiceState(ctx, f, 2, [32]byte{'a'}, [32]byte{'r'}, [32]byte{}, 1, 1)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, st, blk))
 	headRoot, err = f.Head(ctx)

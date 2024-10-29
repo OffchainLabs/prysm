@@ -32,8 +32,28 @@ func (n *Node) applyWeightChanges(ctx context.Context) error {
 	if n.block.root == params.BeaconConfig().ZeroHash {
 		return nil
 	}
-	n.weight = n.balance + childrenWeight
+	n.weight = n.block.balance + childrenWeight
 	return nil
+}
+
+func compareChildren(child, bestChild *Node) *Node {
+	// If both are viable, compare their weights.
+	if child.weight == bestChild.weight {
+		// tie breaker of equal weights for full blocks
+		if child.full != bestChild.full {
+			if child.full {
+				return child
+			}
+		} else {
+			// Tie-breaker of equal weights by root.
+			if bytes.Compare(child.block.root[:], bestChild.block.root[:]) > 0 {
+				return child
+			}
+		}
+	} else if child.weight > bestChild.weight {
+		return child
+	}
+	return bestChild
 }
 
 // updateBestDescendant updates the best descendant of this node and its
@@ -48,7 +68,6 @@ func (n *Node) updateBestDescendant(ctx context.Context, justifiedEpoch, finaliz
 	}
 
 	var bestChild *Node
-	bestWeight := uint64(0)
 	hasViableDescendant := false
 	for _, child := range n.children {
 		if child == nil {
@@ -61,20 +80,10 @@ func (n *Node) updateBestDescendant(ctx context.Context, justifiedEpoch, finaliz
 		if childLeadsToViableHead && !hasViableDescendant {
 			// The child leads to a viable head, but the current
 			// parent's best child doesn't.
-			bestWeight = child.weight
 			bestChild = child
 			hasViableDescendant = true
 		} else if childLeadsToViableHead {
-			// If both are viable, compare their weights.
-			if child.weight == bestWeight {
-				// Tie-breaker of equal weights by root.
-				if bytes.Compare(child.block.root[:], bestChild.block.root[:]) > 0 {
-					bestChild = child
-				}
-			} else if child.weight > bestWeight {
-				bestChild = child
-				bestWeight = child.weight
-			}
+			bestChild = compareChildren(child, bestChild)
 		}
 	}
 	if hasViableDescendant {
@@ -164,7 +173,7 @@ func (n *Node) nodeTreeDump(ctx context.Context, nodes []*forkchoice2.Node) ([]*
 		FinalizedEpoch:           n.block.finalizedEpoch,
 		UnrealizedJustifiedEpoch: n.block.unrealizedJustifiedEpoch,
 		UnrealizedFinalizedEpoch: n.block.unrealizedFinalizedEpoch,
-		Balance:                  n.balance,
+		Balance:                  n.block.balance,
 		Weight:                   n.weight,
 		ExecutionOptimistic:      n.optimistic,
 		ExecutionBlockHash:       n.block.payloadHash[:],
