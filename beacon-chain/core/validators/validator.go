@@ -243,13 +243,14 @@ func SlashedValidatorIndices(epoch primitives.Epoch, validators []*ethpb.Validat
 
 // ExitedValidatorIndices returns the indices of validators who exited during the specified epoch.
 //
-// A validator is considered to have exited during an epoch if their ExitEpoch equals the epoch.
+// A validator is considered to have exited during an epoch if their ExitEpoch equals the epoch and
+// excludes validators that have been ejected.
 // This function simplifies the exit determination by directly checking the validator's ExitEpoch,
 // avoiding the complexities and potential inaccuracies of calculating withdrawable epochs.
 func ExitedValidatorIndices(epoch primitives.Epoch, validators []*ethpb.Validator) ([]primitives.ValidatorIndex, error) {
 	exited := make([]primitives.ValidatorIndex, 0)
 	for i, val := range validators {
-		if val.ExitEpoch == epoch {
+		if val.ExitEpoch == epoch && val.EffectiveBalance > params.BeaconConfig().EjectionBalance {
 			exited = append(exited, primitives.ValidatorIndex(i))
 		}
 	}
