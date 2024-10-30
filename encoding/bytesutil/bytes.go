@@ -151,5 +151,5 @@ func ReverseByteOrder(input []byte) []byte {
 // assumption is that any byte slice provided as an argument will no longer be modified
 // further.
 func UnsafeCastToString(byteSlice []byte) string {
-	return *(*string)(unsafe.Pointer(&byteSlice))
+	return *(*string)(unsafe.Pointer(&byteSlice)) // #nosec G103
 }
