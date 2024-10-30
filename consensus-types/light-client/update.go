@@ -3,14 +3,12 @@ package light_client
 import (
 	"fmt"
 
-	"github.com/pkg/errors"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	consensustypes "github.com/prysmaticlabs/prysm/v5/consensus-types"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	pb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -41,7 +39,6 @@ type updateAltair struct {
 	nextSyncCommitteeBranch interfaces.LightClientSyncCommitteeBranch
 	finalizedHeader         interfaces.LightClientHeader
 	finalityBranch          interfaces.LightClientFinalityBranch
-	stateSlot               primitives.Slot
 }
 
 var _ interfaces.LightClientUpdate = &updateAltair{}
@@ -80,19 +77,12 @@ func NewWrappedUpdateAltair(p *pb.LightClientUpdateAltair) (interfaces.LightClie
 		return nil, err
 	}
 
-	state, err := util.NewBeaconStateAltair()
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to create beacon state")
-	}
-	stateSlot := state.Slot()
-
 	return &updateAltair{
 		p:                       p,
 		attestedHeader:          attestedHeader,
 		nextSyncCommitteeBranch: scBranch,
 		finalizedHeader:         finalizedHeader,
 		finalityBranch:          finalityBranch,
-		stateSlot:               stateSlot,
 	}, nil
 }
 
@@ -227,7 +217,6 @@ type updateCapella struct {
 	nextSyncCommitteeBranch interfaces.LightClientSyncCommitteeBranch
 	finalizedHeader         interfaces.LightClientHeader
 	finalityBranch          interfaces.LightClientFinalityBranch
-	stateSlot               primitives.Slot
 }
 
 var _ interfaces.LightClientUpdate = &updateCapella{}
@@ -266,19 +255,12 @@ func NewWrappedUpdateCapella(p *pb.LightClientUpdateCapella) (interfaces.LightCl
 		return nil, err
 	}
 
-	state, err := util.NewBeaconStateCapella()
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to create beacon state")
-	}
-	stateSlot := state.Slot()
-
 	return &updateCapella{
 		p:                       p,
 		attestedHeader:          attestedHeader,
 		nextSyncCommitteeBranch: scBranch,
 		finalizedHeader:         finalizedHeader,
 		finalityBranch:          finalityBranch,
-		stateSlot:               stateSlot,
 	}, nil
 }
 
@@ -413,7 +395,6 @@ type updateDeneb struct {
 	nextSyncCommitteeBranch interfaces.LightClientSyncCommitteeBranch
 	finalizedHeader         interfaces.LightClientHeader
 	finalityBranch          interfaces.LightClientFinalityBranch
-	stateSlot               primitives.Slot
 }
 
 var _ interfaces.LightClientUpdate = &updateDeneb{}
@@ -452,19 +433,12 @@ func NewWrappedUpdateDeneb(p *pb.LightClientUpdateDeneb) (interfaces.LightClient
 		return nil, err
 	}
 
-	state, err := util.NewBeaconStateDeneb()
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to create beacon state")
-	}
-	stateSlot := state.Slot()
-
 	return &updateDeneb{
 		p:                       p,
 		attestedHeader:          attestedHeader,
 		nextSyncCommitteeBranch: scBranch,
 		finalizedHeader:         finalizedHeader,
 		finalityBranch:          finalityBranch,
-		stateSlot:               stateSlot,
 	}, nil
 }
 
