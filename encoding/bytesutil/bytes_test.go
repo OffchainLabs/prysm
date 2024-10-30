@@ -217,6 +217,19 @@ func TestToBytes20(t *testing.T) {
 	}
 }
 
+func TestCastToString(t *testing.T) {
+	bSlice := []byte{'a', 'b', 'c'}
+	bString := bytesutil.UnsafeCastToString(bSlice)
+
+	originalString := "abc"
+
+	// Mutate original slice to make sure that a copy was not performed.
+	bSlice[0] = 'd'
+	assert.NotEqual(t, originalString, bString)
+	assert.Equal(t, "abc", originalString)
+	assert.Equal(t, "dbc", bString)
+}
+
 func BenchmarkToBytes32(b *testing.B) {
 	x := []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31}
 	for i := 0; i < b.N; i++ {

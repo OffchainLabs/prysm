@@ -3,6 +3,7 @@ package bytesutil
 
 import (
 	"fmt"
+	"unsafe"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
@@ -144,4 +145,11 @@ func ReverseByteOrder(input []byte) []byte {
 		b[i], b[len(b)-i-1] = b[len(b)-i-1], b[i]
 	}
 	return b
+}
+
+// UnsafeCastToString casts a byte slice to a string object without performing a copy. The
+// assumption is that any byte slice provided as an argument will no longer be modified
+// further.
+func UnsafeCastToString(byteSlice []byte) string {
+	return unsafe.String(&byteSlice[0], len(byteSlice))
 }
