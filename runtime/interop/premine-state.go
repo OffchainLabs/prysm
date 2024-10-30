@@ -65,7 +65,7 @@ func NewPreminedGenesis(ctx context.Context, t, nvals, pCreds uint64, version in
 
 func (s *PremineGenesisConfig) prepare(ctx context.Context) (state.BeaconState, error) {
 	switch s.Version {
-	case version.Phase0, version.Altair, version.Bellatrix, version.Capella, version.Deneb, version.Electra, version.Fulu:
+	case version.Phase0, version.Altair, version.Bellatrix, version.Capella, version.Deneb, version.Electra, version.Fulu, version.EPBS:
 	default:
 		return nil, errors.Wrapf(errUnsupportedVersion, "version=%s", version.String(s.Version))
 	}
@@ -161,6 +161,11 @@ func (s *PremineGenesisConfig) empty() (state.BeaconState, error) {
 		}
 	case version.Fulu:
 		e, err = state_native.InitializeFromProtoFulu(&ethpb.BeaconStateFulu{})
+		if err != nil {
+			return nil, err
+		}
+	case version.EPBS:
+		e, err = state_native.InitializeFromProtoEpbs(&ethpb.BeaconStateEPBS{})
 		if err != nil {
 			return nil, err
 		}
@@ -349,6 +354,8 @@ func (s *PremineGenesisConfig) setFork(g state.BeaconState) error {
 		pv, cv = params.BeaconConfig().DenebForkVersion, params.BeaconConfig().ElectraForkVersion
 	case version.Fulu:
 		pv, cv = params.BeaconConfig().ElectraForkVersion, params.BeaconConfig().FuluForkVersion
+	case version.EPBS:
+		pv, cv = params.BeaconConfig().ElectraForkVersion, params.BeaconConfig().EPBSForkVersion
 	default:
 		return errUnsupportedVersion
 	}
@@ -603,6 +610,31 @@ func (s *PremineGenesisConfig) setLatestBlockHeader(g state.BeaconState) error {
 				Consolidations: make([]*enginev1.ConsolidationRequest, 0),
 			},
 		}
+	case version.EPBS:
+		body = &ethpb.BeaconBlockBodyEpbs{
+			RandaoReveal: make([]byte, 96),
+			Eth1Data: &ethpb.Eth1Data{
+				DepositRoot: make([]byte, 32),
+				BlockHash:   make([]byte, 32),
+			},
+			Graffiti: make([]byte, 32),
+			SyncAggregate: &ethpb.SyncAggregate{
+				SyncCommitteeBits:      make([]byte, fieldparams.SyncCommitteeLength/8),
+				SyncCommitteeSignature: make([]byte, fieldparams.BLSSignatureLength),
+			},
+			SignedExecutionPayloadHeader: &enginev1.SignedExecutionPayloadHeader{
+				Message: &enginev1.ExecutionPayloadHeaderEPBS{
+					ParentBlockHash:        make([]byte, fieldparams.RootLength),
+					ParentBlockRoot:        make([]byte, fieldparams.RootLength),
+					BlockHash:              make([]byte, fieldparams.RootLength),
+					BlobKzgCommitmentsRoot: make([]byte, fieldparams.RootLength),
+				},
+				Signature: make([]byte, fieldparams.BLSSignatureLength),
+			},
+			BlsToExecutionChanges: make([]*ethpb.SignedBLSToExecutionChange, 0),
+			PayloadAttestations:   make([]*ethpb.PayloadAttestation, 0),
+		}
+
 	default:
 		return errUnsupportedVersion
 	}
@@ -697,8 +729,17 @@ func (s *PremineGenesisConfig) setExecutionPayload(g state.BeaconState) error {
 		if err != nil {
 			return err
 		}
-
 		return g.SetLatestExecutionPayloadHeader(ed)
+	}
+	case version.EPBS:
+		return g.SetLatestExecutionPayloadHeaderEPBS(&enginev1.ExecutionPayloadHeaderEPBS{
+			ParentBlockHash:        make([]byte, 32),
+			ParentBlockRoot:        make([]byte, 32),
+			BlockHash:              make([]byte, 32),
+			BlobKzgCommitmentsRoot: make([]byte, 32),
+		})
+	default:
+		return errUnsupportedVersion
 	}
 
 	if s.Version >= version.Bellatrix {
