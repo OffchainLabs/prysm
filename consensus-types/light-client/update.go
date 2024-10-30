@@ -711,6 +711,10 @@ func (u *updateElectra) NextSyncCommitteeBranchElectra() (interfaces.LightClient
 }
 
 func (u *updateElectra) SetNextSyncCommitteeBranchElectra(branch [][]byte) error {
+	if slots.ToEpoch(u.attestedHeader.Beacon().Slot) < params.BeaconConfig().ElectraForkEpoch {
+		return consensustypes.ErrNotSupported("SetNextSyncCommitteeBranchElectra", version.Electra)
+	}
+
 	b, err := createBranch[interfaces.LightClientSyncCommitteeBranchElectra]("sync committee", branch, fieldparams.SyncCommitteeBranchDepthElectra)
 	if err != nil {
 		return err
