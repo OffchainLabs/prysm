@@ -235,7 +235,7 @@ func BenchmarkUnsafeCastToString(b *testing.B) {
 	empty := []byte{}
 	var nilData []byte
 
-	b.Run("string(str)", func(b *testing.B) {
+	b.Run("string(b)", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			_ = string(data)
 			_ = string(empty)
@@ -243,7 +243,7 @@ func BenchmarkUnsafeCastToString(b *testing.B) {
 		}
 	})
 
-	b.Run("bytesutil.UnsafeCastToString", func(b *testing.B) {
+	b.Run("bytesutil.UnsafeCastToString(b)", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			_ = bytesutil.UnsafeCastToString(data)
 			_ = bytesutil.UnsafeCastToString(empty)
