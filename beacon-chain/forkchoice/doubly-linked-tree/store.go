@@ -141,6 +141,12 @@ func (s *Store) insert(ctx context.Context,
 		}
 		copy(payloadHash[:], execution.BlockHash())
 		copy(parentHash[:], execution.ParentHash())
+		// Before ePBS, if the parent is known and the parent hash is not, then
+		// set the parent hash to zero
+		_, ok := s.fullNodeByPayload[parentHash]
+		if !ok {
+			parentHash = [32]byte{}
+		}
 	}
 	// Return if the block has been inserted into Store before.
 	n, rootPresent := s.emptyNodeByRoot[root]

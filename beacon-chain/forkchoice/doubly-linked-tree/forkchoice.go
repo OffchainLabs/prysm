@@ -137,6 +137,11 @@ func (f *ForkChoice) InsertNode(ctx context.Context, state state.BeaconState, ro
 		return nil
 	}
 	if roblock.Version() >= version.Bellatrix {
+		// Update Head computation here is an inefficient computation
+		_, err := f.Head(ctx)
+		if err != nil {
+			return err
+		}
 		e, err := roblock.Block().Body().Execution()
 		if err != nil {
 			return errors.Wrap(err, "could not get execution data")
