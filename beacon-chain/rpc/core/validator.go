@@ -886,7 +886,7 @@ func (s *Service) ValidatorActiveSetChanges(
 		}
 	}
 	slashedIndices := validators.SlashedValidatorIndices(coreTime.CurrentEpoch(requestedState), vs)
-	ejectedIndices, err := validators.EjectedValidatorIndices(coreTime.CurrentEpoch(requestedState), vs, activeValidatorCount)
+	ejectedIndices, err := validators.EjectedValidatorIndices(coreTime.CurrentEpoch(requestedState), vs)
 	if err != nil {
 		return nil, &RpcError{
 			Err:    errors.Wrap(err, "could not determine ejected validator indices"),
