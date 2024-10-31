@@ -122,6 +122,12 @@ func (s *Store) removeNodeAndChildren(ctx context.Context, node *Node, invalidRo
 			return invalidRoots, err
 		}
 	}
+	// Only remove the current node's root when removing the empty node as well
+	if node.full {
+		delete(s.fullNodeByPayload, node.block.payloadHash)
+		return invalidRoots, nil
+	}
+
 	invalidRoots = append(invalidRoots, node.block.root)
 	if node.block.root == s.proposerBoostRoot {
 		s.proposerBoostRoot = [32]byte{}
@@ -131,6 +137,5 @@ func (s *Store) removeNodeAndChildren(ctx context.Context, node *Node, invalidRo
 		s.previousProposerBoostScore = 0
 	}
 	delete(s.emptyNodeByRoot, node.block.root)
-	delete(s.fullNodeByPayload, node.block.payloadHash)
 	return invalidRoots, nil
 }

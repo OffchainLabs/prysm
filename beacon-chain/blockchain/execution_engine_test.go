@@ -316,10 +316,8 @@ func Test_NotifyForkchoiceUpdate_NIlLVH(t *testing.T) {
 		headRoot:  brd,
 	}
 	_, err = service.notifyForkchoiceUpdate(ctx, a)
-	require.Equal(t, true, IsInvalidBlock(err))
-	require.Equal(t, brd, InvalidBlockRoot(err))
-	require.Equal(t, brd, InvalidAncestorRoots(err)[0])
-	require.Equal(t, 1, len(InvalidAncestorRoots(err)))
+	// The incoming block is not invalid because the empty node is still valid on ePBS.
+	require.Equal(t, false, IsInvalidBlock(err))
 }
 
 //
