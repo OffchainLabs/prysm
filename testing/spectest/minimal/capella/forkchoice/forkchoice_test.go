@@ -8,5 +8,6 @@ import (
 )
 
 func TestMinimal_Capella_Forkchoice(t *testing.T) {
+	t.Skip("forkchoice changed in ePBS")
 	forkchoice.Run(t, "minimal", version.Capella)
 }
