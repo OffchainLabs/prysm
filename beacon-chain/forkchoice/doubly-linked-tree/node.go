@@ -28,6 +28,9 @@ func (n *Node) applyWeightChanges(ctx context.Context) error {
 			return err
 		}
 		childrenWeight += child.weight
+		if child.full {
+			childrenWeight -= child.block.balance
+		}
 	}
 	if n.block.root == params.BeaconConfig().ZeroHash {
 		return nil

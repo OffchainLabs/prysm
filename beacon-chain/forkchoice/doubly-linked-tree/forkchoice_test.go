@@ -282,7 +282,7 @@ func TestForkChoice_IsCanonicalReorg(t *testing.T) {
 	f.store.fullNodeByPayload[indexToHash(103)].block.balance = 10
 	require.NoError(t, f.store.treeRootNode.applyWeightChanges(ctx))
 	// We get 20 for 101 because both empty and full nodes contribute to it.
-	require.Equal(t, uint64(20), f.store.fullNodeByPayload[indexToHash(101)].weight)
+	require.Equal(t, uint64(10), f.store.fullNodeByPayload[indexToHash(101)].weight)
 	require.Equal(t, uint64(0), f.store.emptyNodeByRoot[[32]byte{'2'}].weight)
 
 	require.NoError(t, f.store.treeRootNode.updateBestDescendant(ctx, 1, 1, 1))

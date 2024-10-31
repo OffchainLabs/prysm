@@ -267,7 +267,7 @@ func TestSetOptimisticToInvalid_ProposerBoost(t *testing.T) {
 
 	_, err = f.SetOptimisticToInvalid(ctx, [32]byte{'c'}, [32]byte{'b'}, [32]byte{'A'})
 	require.NoError(t, err)
-	require.Equal(t, uint64(0), f.store.previousProposerBoostScore)
+	require.Equal(t, uint64(10), f.store.previousProposerBoostScore)
 	require.DeepEqual(t, [32]byte{}, f.store.proposerBoostRoot)
 	require.DeepEqual(t, params.BeaconConfig().ZeroHash, f.store.previousProposerBoostRoot)
 }
