@@ -869,13 +869,6 @@ func (s *Service) ValidatorActiveSetChanges(
 		}
 	}
 
-	activeValidatorCount, err := helpers.ActiveValidatorCount(ctx, requestedState, coreTime.CurrentEpoch(requestedState))
-	if err != nil {
-		return nil, &RpcError{
-			Err:    errors.Wrap(err, "could not get active validator count"),
-			Reason: Internal,
-		}
-	}
 	vs := requestedState.Validators()
 	activatedIndices := validators.ActivatedValidatorIndices(coreTime.CurrentEpoch(requestedState), vs)
 	exitedIndices, err := validators.ExitedValidatorIndices(coreTime.CurrentEpoch(requestedState), vs)
