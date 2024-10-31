@@ -119,6 +119,16 @@ func TestServer_ListKeystores(t *testing.T) {
 			)
 		}
 	})
+	t.Run("calling list remote while using a local wallet returns empty", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/eth/v1/remotekeys"), nil)
+		wr := httptest.NewRecorder()
+		wr.Body = &bytes.Buffer{}
+		s.ListRemoteKeys(wr, req)
+		require.Equal(t, http.StatusOK, wr.Code)
+		resp := &ListRemoteKeysResponse{}
+		require.NoError(t, json.Unmarshal(wr.Body.Bytes(), resp))
+		require.Equal(t, 0, len(resp.Data))
+	})
 }
 
 func TestServer_ImportKeystores(t *testing.T) {
@@ -1365,6 +1375,16 @@ func TestServer_ListRemoteKeys(t *testing.T) {
 		for i := 0; i < len(resp.Data); i++ {
 			require.DeepEqual(t, hexutil.Encode(expectedKeys[i][:]), resp.Data[i].Pubkey)
 		}
+	})
+	t.Run("calling list keystores while using a remote wallet returns empty", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/eth/v1/keystores"), nil)
+		wr := httptest.NewRecorder()
+		wr.Body = &bytes.Buffer{}
+		s.ListKeystores(wr, req)
+		require.Equal(t, http.StatusOK, wr.Code)
+		resp := &ListKeystoresResponse{}
+		require.NoError(t, json.Unmarshal(wr.Body.Bytes(), resp))
+		require.Equal(t, 0, len(resp.Data))
 	})
 }
 

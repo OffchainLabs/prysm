@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/prysmaticlabs/prysm/v5/api"
+	"github.com/prysmaticlabs/prysm/v5/network/httputil"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -41,18 +42,18 @@ func (s *Server) AuthTokenHandler(next http.Handler) http.Handler {
 			// ignore some routes
 			reqToken := r.Header.Get("Authorization")
 			if reqToken == "" {
-				http.Error(w, "unauthorized: no Authorization header passed. Please use an Authorization header with the jwt created in the prysm wallet", http.StatusUnauthorized)
+				httputil.HandleError(w, "Unauthorized: no Authorization header passed. Please use an Authorization header with the jwt created in the prysm wallet", http.StatusUnauthorized)
 				return
 			}
 			tokenParts := strings.Split(reqToken, "Bearer ")
 			if len(tokenParts) != 2 {
-				http.Error(w, "Invalid token format", http.StatusBadRequest)
+				httputil.HandleError(w, "Invalid token format", http.StatusBadRequest)
 				return
 			}
 
 			token := tokenParts[1]
 			if strings.TrimSpace(token) != s.authToken || strings.TrimSpace(s.authToken) == "" {
-				http.Error(w, "Forbidden: token value is invalid", http.StatusForbidden)
+				httputil.HandleError(w, "Forbidden: token value is invalid", http.StatusForbidden)
 				return
 			}
 		}

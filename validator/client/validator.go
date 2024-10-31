@@ -1327,6 +1327,11 @@ func (v *validator) buildSignedRegReqs(
 	if v.genesisTime > uint64(time.Now().UTC().Unix()) {
 		return signedValRegRequests
 	}
+
+	if v.ProposerSettings().DefaultConfig != nil && v.ProposerSettings().DefaultConfig.FeeRecipientConfig == nil && v.ProposerSettings().DefaultConfig.BuilderConfig != nil {
+		log.Warn("Builder is `enabled` in default config but will be ignored because no fee recipient was provided!")
+	}
+
 	for i, k := range activePubkeys {
 		// map is populated before this function in buildPrepProposerReq
 		_, ok := v.pubkeyToStatus[k]
@@ -1337,10 +1342,6 @@ func (v *validator) buildSignedRegReqs(
 		feeRecipient := common.HexToAddress(params.BeaconConfig().EthBurnAddressHex)
 		gasLimit := params.BeaconConfig().DefaultBuilderGasLimit
 		enabled := false
-
-		if v.ProposerSettings().DefaultConfig != nil && v.ProposerSettings().DefaultConfig.FeeRecipientConfig == nil && v.ProposerSettings().DefaultConfig.BuilderConfig != nil {
-			log.Warn("Builder is `enabled` in default config but will be ignored because no fee recipient was provided!")
-		}
 
 		if v.ProposerSettings().DefaultConfig != nil && v.ProposerSettings().DefaultConfig.FeeRecipientConfig != nil {
 			defaultConfig := v.ProposerSettings().DefaultConfig
