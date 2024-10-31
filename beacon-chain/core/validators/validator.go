@@ -279,38 +279,19 @@ func ExitedValidatorIndices(epoch primitives.Epoch, validators []*ethpb.Validato
 	return exited, nil
 }
 
-// EjectedValidatorIndices determines the indices ejected during the given epoch.
-func EjectedValidatorIndices(epoch primitives.Epoch, validators []*ethpb.Validator, activeValidatorCount uint64) ([]primitives.ValidatorIndex, error) {
+// EjectedValidatorIndices returns the indices of validators who were ejected during the specified epoch.
+//
+// A validator is considered ejected during an epoch if:
+// - Their ExitEpoch equals the epoch.
+// - Their EffectiveBalance is less than or equal to the EjectionBalance threshold.
+//
+// This function simplifies the ejection determination by directly checking the validator's ExitEpoch
+// and EffectiveBalance, avoiding the complexities and potential inaccuracies of calculating
+// withdrawable epochs.
+func EjectedValidatorIndices(epoch primitives.Epoch, validators []*ethpb.Validator) ([]primitives.ValidatorIndex, error) {
 	ejected := make([]primitives.ValidatorIndex, 0)
-	exitEpochs := make([]primitives.Epoch, 0)
-	for i := 0; i < len(validators); i++ {
-		val := validators[i]
-		if val.ExitEpoch != params.BeaconConfig().FarFutureEpoch {
-			exitEpochs = append(exitEpochs, val.ExitEpoch)
-		}
-	}
-	exitQueueEpoch := primitives.Epoch(0)
-	for _, i := range exitEpochs {
-		if exitQueueEpoch < i {
-			exitQueueEpoch = i
-		}
-	}
-
-	// We use the exit queue churn to determine if we have passed a churn limit.
-	exitQueueChurn := uint64(0)
-	for _, val := range validators {
-		if val.ExitEpoch == exitQueueEpoch {
-			exitQueueChurn++
-		}
-	}
-	churn := helpers.ValidatorExitChurnLimit(activeValidatorCount)
-	if churn < exitQueueChurn {
-		exitQueueEpoch++
-	}
-	withdrawableEpoch := exitQueueEpoch + params.BeaconConfig().MinValidatorWithdrawabilityDelay
 	for i, val := range validators {
-		if val.ExitEpoch == epoch && val.WithdrawableEpoch == withdrawableEpoch &&
-			val.EffectiveBalance <= params.BeaconConfig().EjectionBalance {
+		if val.ExitEpoch == epoch && val.EffectiveBalance <= params.BeaconConfig().EjectionBalance {
 			ejected = append(ejected, primitives.ValidatorIndex(i))
 		}
 	}
