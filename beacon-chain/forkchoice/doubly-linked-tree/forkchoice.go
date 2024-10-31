@@ -137,14 +137,13 @@ func (f *ForkChoice) InsertNode(ctx context.Context, state state.BeaconState, ro
 		return nil
 	}
 	if roblock.Version() >= version.Bellatrix {
-		// Update Head computation here is an inefficient computation
-		_, err := f.Head(ctx)
-		if err != nil {
-			return err
-		}
 		e, err := roblock.Block().Body().Execution()
 		if err != nil {
 			return errors.Wrap(err, "could not get execution data")
+		}
+		currentEpoch := slots.EpochsSinceGenesis(time.Unix(int64(f.store.genesisTime), 0))
+		if err := f.store.treeRootNode.updateBestDescendant(ctx, jc.Epoch, fc.Epoch, currentEpoch); err != nil {
+			return err
 		}
 		if err := f.insertExecutionPayload(node, e); err != nil {
 			return errors.Wrap(err, "could not insert execution payload to forkchoice")

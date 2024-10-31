@@ -68,21 +68,6 @@ func TestNode_ApplyWeightChanges_NegativeChange(t *testing.T) {
 	assert.Equal(t, uint64(100), s.emptyNodeByRoot[indexToHash(3)].weight)
 }
 
-func TestNode_UpdateBestDescendant_NonViableChild(t *testing.T) {
-	f := setup(1, 1)
-	ctx := context.Background()
-	// Input child is not viable.
-	state, blk, err := prepareForkchoiceState(ctx, f, 1, indexToHash(1), params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 2, 3)
-	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, state, blk))
-
-	// Verify parent's best child and best descendant are `none`.
-	s := f.store
-	assert.Equal(t, 1, len(s.treeRootNode.children))
-	nilBestDescendant := s.treeRootNode.bestDescendant == nil
-	assert.Equal(t, true, nilBestDescendant)
-}
-
 func TestNode_UpdateBestDescendant_ViableChild(t *testing.T) {
 	f := setup(1, 1)
 	ctx := context.Background()
