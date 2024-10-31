@@ -241,38 +241,16 @@ func SlashedValidatorIndices(epoch primitives.Epoch, validators []*ethpb.Validat
 	return slashed
 }
 
-// ExitedValidatorIndices determines the indices exited during the current epoch.
-func ExitedValidatorIndices(epoch primitives.Epoch, validators []*ethpb.Validator, activeValidatorCount uint64) ([]primitives.ValidatorIndex, error) {
+// ExitedValidatorIndices returns the indices of validators who exited during the specified epoch.
+//
+// A validator is considered to have exited during an epoch if their ExitEpoch equals the epoch and
+// excludes validators that have been ejected.
+// This function simplifies the exit determination by directly checking the validator's ExitEpoch,
+// avoiding the complexities and potential inaccuracies of calculating withdrawable epochs.
+func ExitedValidatorIndices(epoch primitives.Epoch, validators []*ethpb.Validator) ([]primitives.ValidatorIndex, error) {
 	exited := make([]primitives.ValidatorIndex, 0)
-	exitEpochs := make([]primitives.Epoch, 0)
-	for i := 0; i < len(validators); i++ {
-		val := validators[i]
-		if val.ExitEpoch != params.BeaconConfig().FarFutureEpoch {
-			exitEpochs = append(exitEpochs, val.ExitEpoch)
-		}
-	}
-	exitQueueEpoch := primitives.Epoch(0)
-	for _, i := range exitEpochs {
-		if exitQueueEpoch < i {
-			exitQueueEpoch = i
-		}
-	}
-
-	// We use the exit queue churn to determine if we have passed a churn limit.
-	exitQueueChurn := uint64(0)
-	for _, val := range validators {
-		if val.ExitEpoch == exitQueueEpoch {
-			exitQueueChurn++
-		}
-	}
-	churn := helpers.ValidatorExitChurnLimit(activeValidatorCount)
-	if churn < exitQueueChurn {
-		exitQueueEpoch++
-	}
-	withdrawableEpoch := exitQueueEpoch + params.BeaconConfig().MinValidatorWithdrawabilityDelay
 	for i, val := range validators {
-		if val.ExitEpoch == epoch && val.WithdrawableEpoch == withdrawableEpoch &&
-			val.EffectiveBalance > params.BeaconConfig().EjectionBalance {
+		if val.ExitEpoch == epoch && val.EffectiveBalance > params.BeaconConfig().EjectionBalance {
 			exited = append(exited, primitives.ValidatorIndex(i))
 		}
 	}

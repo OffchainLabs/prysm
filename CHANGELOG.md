@@ -18,7 +18,6 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Updated the `beacon-chain/monitor` package to Electra. [PR](https://github.com/prysmaticlabs/prysm/pull/14562)
 - Added ListAttestationsV2 endpoint.
 - Add ability to rollback node's internal state during processing.
-- Simplified `EjectedValidatorIndices`.
 
 ### Changed
 
@@ -36,6 +35,8 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Updated pgo profile for beacon chain with holesky data. This improves the profile guided
   optimizations in the go compiler.
 - Use read only state when computing the active validator list.
+- Simplified `ExitedValidatorIndices`.
+- Simplified `EjectedValidatorIndices`.
 
 ### Deprecated
 
