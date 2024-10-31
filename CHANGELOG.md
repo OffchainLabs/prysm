@@ -46,6 +46,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 ### Removed
 
 - Removed finalized validator index cache, no longer needed.
+- Removed some reconnection to EL calls on POW service initiation
 
 ### Fixed
 
