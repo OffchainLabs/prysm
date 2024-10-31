@@ -43,11 +43,11 @@ func TestVerifyLMDFFGConsistent(t *testing.T) {
 
 	f := service.cfg.ForkChoiceStore
 	fc := &ethpb.Checkpoint{Root: params.BeaconConfig().ZeroHash[:]}
-	state, r32, err := prepareForkchoiceState(ctx, 32, [32]byte{'a'}, params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, fc, fc)
+	state, r32, err := prepareForkchoiceState(ctx, 32, [32]byte{'a'}, params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, [32]byte{}, fc, fc)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, r32))
 
-	state, r33, err := prepareForkchoiceState(ctx, 33, [32]byte{'b'}, r32.Root(), params.BeaconConfig().ZeroHash, fc, fc)
+	state, r33, err := prepareForkchoiceState(ctx, 33, [32]byte{'b'}, r32.Root(), params.BeaconConfig().ZeroHash, [32]byte{}, fc, fc)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, r33))
 
@@ -83,7 +83,7 @@ func TestProcessAttestations_Ok(t *testing.T) {
 	require.NoError(t, service.cfg.BeaconDB.SaveState(ctx, copied, tRoot))
 	ofc := &ethpb.Checkpoint{Root: params.BeaconConfig().ZeroHash[:]}
 	ojc := &ethpb.Checkpoint{Root: params.BeaconConfig().ZeroHash[:]}
-	state, blkRoot, err := prepareForkchoiceState(ctx, 0, tRoot, tRoot, params.BeaconConfig().ZeroHash, ojc, ofc)
+	state, blkRoot, err := prepareForkchoiceState(ctx, 0, tRoot, tRoot, params.BeaconConfig().ZeroHash, [32]byte{}, ojc, ofc)
 	require.NoError(t, err)
 	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, state, blkRoot))
 	attsToSave := make([]ethpb.Att, len(atts))
@@ -147,7 +147,7 @@ func TestService_ProcessAttestationsAndUpdateHead(t *testing.T) {
 	r, err := b.Block.HashTreeRoot()
 	require.NoError(t, err)
 	util.SaveBlock(t, ctx, service.cfg.BeaconDB, b)
-	state, blkRoot, err := prepareForkchoiceState(ctx, 2, r, service.originBlockRoot, [32]byte{'b'}, ojc, ojc)
+	state, blkRoot, err := prepareForkchoiceState(ctx, 2, r, service.originBlockRoot, [32]byte{'b'}, [32]byte{}, ojc, ojc)
 	require.NoError(t, err)
 	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, state, blkRoot))
 	require.Equal(t, 3, fcs.NodeCount())
@@ -196,7 +196,7 @@ func TestService_UpdateHead_NoAtts(t *testing.T) {
 	r, err := b.Block.HashTreeRoot()
 	require.NoError(t, err)
 	util.SaveBlock(t, ctx, service.cfg.BeaconDB, b)
-	state, blkRoot, err := prepareForkchoiceState(ctx, 2, r, service.originBlockRoot, [32]byte{'b'}, ojc, ojc)
+	state, blkRoot, err := prepareForkchoiceState(ctx, 2, r, service.originBlockRoot, [32]byte{'b'}, [32]byte{}, ojc, ojc)
 	require.NoError(t, err)
 	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, state, blkRoot))
 	require.Equal(t, 3, fcs.NodeCount())
