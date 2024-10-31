@@ -17,6 +17,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"github.com/prysmaticlabs/prysm/v5/testing/util"
+	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -143,7 +144,7 @@ func createUpdate(t *testing.T, v int) (interfaces.LightClientUpdate, error) {
 		return nil, fmt.Errorf("unsupported version %s", version.String(v))
 	}
 
-	update, err := createDefaultLightClientUpdate(state)
+	update, err := createDefaultLightClientUpdate(state, slot)
 	require.NoError(t, err)
 	update.SetSignatureSlot(slot - 1)
 	syncCommitteeBits := make([]byte, 64)
@@ -440,7 +441,9 @@ func TestStore_LightClientUpdate_RetrieveMissingPeriodDistributed(t *testing.T) 
 	require.DeepEqual(t, updates[4], retrievedUpdates[uint64(5)], "retrieved update does not match saved update")
 }
 
-func createDefaultLightClientUpdate(state state.BeaconState) (interfaces.LightClientUpdate, error) {
+func createDefaultLightClientUpdate(attestedState state.BeaconState, currentSlot primitives.Slot) (interfaces.LightClientUpdate, error) {
+	currentEpoch := slots.ToEpoch(currentSlot)
+
 	syncCommitteeSize := params.BeaconConfig().SyncCommitteeSize
 	pubKeys := make([][]byte, syncCommitteeSize)
 	for i := uint64(0); i < syncCommitteeSize; i++ {
@@ -452,7 +455,7 @@ func createDefaultLightClientUpdate(state state.BeaconState) (interfaces.LightCl
 	}
 
 	var nextSyncCommitteeBranch [][]byte
-	if state.Version() >= version.Electra {
+	if attestedState.Version() >= version.Electra {
 		nextSyncCommitteeBranch = make([][]byte, fieldparams.SyncCommitteeBranchDepthElectra)
 	} else {
 		nextSyncCommitteeBranch = make([][]byte, fieldparams.SyncCommitteeBranchDepth)
@@ -471,14 +474,14 @@ func createDefaultLightClientUpdate(state state.BeaconState) (interfaces.LightCl
 	}
 
 	var m proto.Message
-	if state.Version() < version.Capella {
+	if currentEpoch < params.BeaconConfig().CapellaForkEpoch {
 		m = &pb.LightClientUpdateAltair{
 			AttestedHeader:          &pb.LightClientHeaderAltair{},
 			NextSyncCommittee:       nextSyncCommittee,
 			NextSyncCommitteeBranch: nextSyncCommitteeBranch,
 			FinalityBranch:          finalityBranch,
 		}
-	} else if state.Version() < version.Deneb {
+	} else if currentEpoch < params.BeaconConfig().DenebForkEpoch {
 		m = &pb.LightClientUpdateCapella{
 			AttestedHeader: &pb.LightClientHeaderCapella{
 				Beacon:          &pb.BeaconBlockHeader{},
@@ -489,7 +492,7 @@ func createDefaultLightClientUpdate(state state.BeaconState) (interfaces.LightCl
 			NextSyncCommitteeBranch: nextSyncCommitteeBranch,
 			FinalityBranch:          finalityBranch,
 		}
-	} else if state.Version() < version.Electra {
+	} else if currentEpoch < params.BeaconConfig().ElectraForkEpoch {
 		m = &pb.LightClientUpdateDeneb{
 			AttestedHeader: &pb.LightClientHeaderDeneb{
 				Beacon:          &pb.BeaconBlockHeader{},
