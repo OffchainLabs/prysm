@@ -49,6 +49,7 @@ go_library(
 go_test(
     name = "go_default_test",
     srcs = [
+        "epbs_test.go",
         "ffg_update_test.go",
         "forkchoice_test.go",
         "last_root_test.go",
@@ -68,13 +69,11 @@ go_test(
         "//beacon-chain/forkchoice/types:go_default_library",
         "//beacon-chain/state:go_default_library",
         "//beacon-chain/state/state-native:go_default_library",
-        "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/blocks:go_default_library",
         "//consensus-types/forkchoice:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//crypto/hash:go_default_library",
-        "//encoding/bytesutil:go_default_library",
         "//proto/engine/v1:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "//testing/assert:go_default_library",

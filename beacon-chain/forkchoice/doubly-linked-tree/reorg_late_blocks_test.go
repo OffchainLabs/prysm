@@ -19,7 +19,7 @@ func TestForkChoice_ShouldOverrideFCU(t *testing.T) {
 	f.store.committeeWeight /= uint64(params.BeaconConfig().SlotsPerEpoch)
 	ctx := context.Background()
 	driftGenesisTime(f, 1, 0)
-	st, blk, err := prepareForkchoiceState(ctx, 1, [32]byte{'a'}, [32]byte{}, [32]byte{'A'}, 0, 0)
+	st, blk, err := prepareForkchoiceState(ctx, f, 1, [32]byte{'a'}, [32]byte{}, [32]byte{'A'}, 0, 0)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, st, blk))
 	attesters := make([]uint64, f.numActiveValidators-64)
@@ -30,7 +30,7 @@ func TestForkChoice_ShouldOverrideFCU(t *testing.T) {
 
 	orphanLateBlockFirstThreshold := params.BeaconConfig().SecondsPerSlot / params.BeaconConfig().IntervalsPerSlot
 	driftGenesisTime(f, 2, orphanLateBlockFirstThreshold+1)
-	st, blk, err = prepareForkchoiceState(ctx, 2, [32]byte{'b'}, [32]byte{'a'}, [32]byte{'B'}, 0, 0)
+	st, blk, err = prepareForkchoiceState(ctx, f, 2, [32]byte{'b'}, [32]byte{'a'}, [32]byte{'B'}, 0, 0)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, st, blk))
 	headRoot, err := f.Head(ctx)
@@ -52,51 +52,51 @@ func TestForkChoice_ShouldOverrideFCU(t *testing.T) {
 		driftGenesisTime(f, 2, orphanLateBlockFirstThreshold+1)
 	})
 	t.Run("head is from epoch boundary", func(t *testing.T) {
-		saved := f.store.headNode.slot
+		saved := f.store.headNode.block.slot
 		driftGenesisTime(f, params.BeaconConfig().SlotsPerEpoch-1, 0)
-		f.store.headNode.slot = params.BeaconConfig().SlotsPerEpoch - 1
+		f.store.headNode.block.slot = params.BeaconConfig().SlotsPerEpoch - 1
 		require.Equal(t, false, f.ShouldOverrideFCU())
 		driftGenesisTime(f, 2, orphanLateBlockFirstThreshold+1)
-		f.store.headNode.slot = saved
+		f.store.headNode.block.slot = saved
 	})
 	t.Run("head is early", func(t *testing.T) {
-		saved := f.store.headNode.timestamp
-		f.store.headNode.timestamp = saved - 2
+		saved := f.store.headNode.block.timestamp
+		f.store.headNode.block.timestamp = saved - 2
 		require.Equal(t, false, f.ShouldOverrideFCU())
-		f.store.headNode.timestamp = saved
+		f.store.headNode.block.timestamp = saved
 	})
 	t.Run("chain not finalizing", func(t *testing.T) {
-		saved := f.store.headNode.slot
-		f.store.headNode.slot = 97
+		saved := f.store.headNode.block.slot
+		f.store.headNode.block.slot = 97
 		driftGenesisTime(f, 97, orphanLateBlockFirstThreshold+1)
 		require.Equal(t, false, f.ShouldOverrideFCU())
-		f.store.headNode.slot = saved
+		f.store.headNode.block.slot = saved
 		driftGenesisTime(f, 2, orphanLateBlockFirstThreshold+1)
 	})
 	t.Run("Not single block reorg", func(t *testing.T) {
-		saved := f.store.headNode.parent.slot
-		f.store.headNode.parent.slot = 0
+		saved := f.store.headNode.block.parent.block.slot
+		f.store.headNode.block.parent.block.slot = 0
 		require.Equal(t, false, f.ShouldOverrideFCU())
-		f.store.headNode.parent.slot = saved
+		f.store.headNode.block.parent.block.slot = saved
 	})
 	t.Run("parent is nil", func(t *testing.T) {
-		saved := f.store.headNode.parent
-		f.store.headNode.parent = nil
+		saved := f.store.headNode.block.parent
+		f.store.headNode.block.parent = nil
 		require.Equal(t, false, f.ShouldOverrideFCU())
-		f.store.headNode.parent = saved
+		f.store.headNode.block.parent = saved
 	})
 	t.Run("parent is weak early call", func(t *testing.T) {
-		saved := f.store.headNode.parent.weight
-		f.store.headNode.parent.weight = 0
+		saved := f.store.headNode.block.parent.weight
+		f.store.headNode.block.parent.weight = 0
 		require.Equal(t, true, f.ShouldOverrideFCU())
-		f.store.headNode.parent.weight = saved
+		f.store.headNode.block.parent.weight = saved
 	})
 	t.Run("parent is weak late call", func(t *testing.T) {
-		saved := f.store.headNode.parent.weight
+		saved := f.store.headNode.block.parent.weight
 		driftGenesisTime(f, 2, 11)
-		f.store.headNode.parent.weight = 0
+		f.store.headNode.block.parent.weight = 0
 		require.Equal(t, false, f.ShouldOverrideFCU())
-		f.store.headNode.parent.weight = saved
+		f.store.headNode.block.parent.weight = saved
 		driftGenesisTime(f, 2, orphanLateBlockFirstThreshold+1)
 	})
 	t.Run("Head is strong", func(t *testing.T) {
@@ -117,7 +117,7 @@ func TestForkChoice_GetProposerHead(t *testing.T) {
 	ctx := context.Background()
 	driftGenesisTime(f, 1, 0)
 	parentRoot := [32]byte{'a'}
-	st, blk, err := prepareForkchoiceState(ctx, 1, parentRoot, [32]byte{}, [32]byte{'A'}, 0, 0)
+	st, blk, err := prepareForkchoiceState(ctx, f, 1, parentRoot, [32]byte{}, [32]byte{'A'}, 0, 0)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, st, blk))
 	attesters := make([]uint64, f.numActiveValidators-64)
@@ -128,14 +128,14 @@ func TestForkChoice_GetProposerHead(t *testing.T) {
 
 	driftGenesisTime(f, 3, 1)
 	childRoot := [32]byte{'b'}
-	st, blk, err = prepareForkchoiceState(ctx, 2, childRoot, [32]byte{'a'}, [32]byte{'B'}, 0, 0)
+	st, blk, err = prepareForkchoiceState(ctx, f, 2, childRoot, [32]byte{'a'}, [32]byte{'B'}, 0, 0)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, st, blk))
 	headRoot, err := f.Head(ctx)
 	require.NoError(t, err)
 	require.Equal(t, blk.Root(), headRoot)
 	orphanLateBlockFirstThreshold := params.BeaconConfig().SecondsPerSlot / params.BeaconConfig().IntervalsPerSlot
-	f.store.headNode.timestamp -= params.BeaconConfig().SecondsPerSlot - orphanLateBlockFirstThreshold
+	f.store.headNode.block.timestamp -= params.BeaconConfig().SecondsPerSlot - orphanLateBlockFirstThreshold
 	t.Run("head is weak", func(t *testing.T) {
 		require.Equal(t, parentRoot, f.GetProposerHead())
 
@@ -152,44 +152,44 @@ func TestForkChoice_GetProposerHead(t *testing.T) {
 		driftGenesisTime(f, 3, 1)
 	})
 	t.Run("head is from epoch boundary", func(t *testing.T) {
-		saved := f.store.headNode.slot
+		saved := f.store.headNode.block.slot
 		driftGenesisTime(f, params.BeaconConfig().SlotsPerEpoch, 0)
-		f.store.headNode.slot = params.BeaconConfig().SlotsPerEpoch - 1
+		f.store.headNode.block.slot = params.BeaconConfig().SlotsPerEpoch - 1
 		require.Equal(t, childRoot, f.GetProposerHead())
 		driftGenesisTime(f, 3, 1)
-		f.store.headNode.slot = saved
+		f.store.headNode.block.slot = saved
 	})
 	t.Run("head is early", func(t *testing.T) {
-		saved := f.store.headNode.timestamp
-		f.store.headNode.timestamp = saved - 2
+		saved := f.store.headNode.block.timestamp
+		f.store.headNode.block.timestamp = saved - 2
 		require.Equal(t, childRoot, f.GetProposerHead())
-		f.store.headNode.timestamp = saved
+		f.store.headNode.block.timestamp = saved
 	})
 	t.Run("chain not finalizing", func(t *testing.T) {
-		saved := f.store.headNode.slot
-		f.store.headNode.slot = 97
+		saved := f.store.headNode.block.slot
+		f.store.headNode.block.slot = 97
 		driftGenesisTime(f, 98, 0)
 		require.Equal(t, childRoot, f.GetProposerHead())
-		f.store.headNode.slot = saved
+		f.store.headNode.block.slot = saved
 		driftGenesisTime(f, 3, 1)
 	})
 	t.Run("Not single block reorg", func(t *testing.T) {
-		saved := f.store.headNode.parent.slot
-		f.store.headNode.parent.slot = 0
+		saved := f.store.headNode.block.parent.block.slot
+		f.store.headNode.block.parent.block.slot = 0
 		require.Equal(t, childRoot, f.GetProposerHead())
-		f.store.headNode.parent.slot = saved
+		f.store.headNode.block.parent.block.slot = saved
 	})
 	t.Run("parent is nil", func(t *testing.T) {
-		saved := f.store.headNode.parent
-		f.store.headNode.parent = nil
+		saved := f.store.headNode.block.parent
+		f.store.headNode.block.parent = nil
 		require.Equal(t, childRoot, f.GetProposerHead())
-		f.store.headNode.parent = saved
+		f.store.headNode.block.parent = saved
 	})
 	t.Run("parent is weak", func(t *testing.T) {
-		saved := f.store.headNode.parent.weight
-		f.store.headNode.parent.weight = 0
+		saved := f.store.headNode.block.parent.weight
+		f.store.headNode.block.parent.weight = 0
 		require.Equal(t, false, f.ShouldOverrideFCU())
-		f.store.headNode.parent.weight = saved
+		f.store.headNode.block.parent.weight = saved
 	})
 	t.Run("Head is strong", func(t *testing.T) {
 		f.store.headNode.weight = f.store.committeeWeight

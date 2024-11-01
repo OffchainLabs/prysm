@@ -26,7 +26,7 @@ func (s *Store) head(ctx context.Context) ([32]byte, error) {
 	}
 
 	// JustifiedRoot has to be known
-	justifiedNode, ok := s.nodeByRoot[s.justifiedCheckpoint.Root]
+	justifiedNode, ok := s.emptyNodeByRoot[s.justifiedCheckpoint.Root]
 	if !ok || justifiedNode == nil {
 		// If the justifiedCheckpoint is from genesis, then the root is
 		// zeroHash. In this case it should be the root of forkchoice
@@ -37,6 +37,11 @@ func (s *Store) head(ctx context.Context) ([32]byte, error) {
 			return [32]byte{}, errors.WithMessage(errUnknownJustifiedRoot, fmt.Sprintf("%#x", s.justifiedCheckpoint.Root))
 		}
 	}
+	// We need to consider descendants of the full justified checkpoint too
+	fullJustifiedNode, ok := s.fullNodeByPayload[justifiedNode.block.payloadHash]
+	if ok && fullJustifiedNode.weight >= justifiedNode.weight {
+		justifiedNode = fullJustifiedNode
+	}
 
 	// If the justified node doesn't have a best descendant,
 	// the best node is itself.
@@ -44,29 +49,72 @@ func (s *Store) head(ctx context.Context) ([32]byte, error) {
 	if bestDescendant == nil {
 		bestDescendant = justifiedNode
 	}
+
 	currentEpoch := slots.EpochsSinceGenesis(time.Unix(int64(s.genesisTime), 0))
 	if !bestDescendant.viableForHead(s.justifiedCheckpoint.Epoch, currentEpoch) {
 		s.allTipsAreInvalid = true
 		return [32]byte{}, fmt.Errorf("head at slot %d with weight %d is not eligible, finalizedEpoch, justified Epoch %d, %d != %d, %d",
-			bestDescendant.slot, bestDescendant.weight/10e9, bestDescendant.finalizedEpoch, bestDescendant.justifiedEpoch, s.finalizedCheckpoint.Epoch, s.justifiedCheckpoint.Epoch)
+			bestDescendant.block.slot, bestDescendant.weight/10e9, bestDescendant.block.finalizedEpoch, bestDescendant.block.justifiedEpoch, s.finalizedCheckpoint.Epoch, s.justifiedCheckpoint.Epoch)
 	}
 	s.allTipsAreInvalid = false
 
 	// Update metrics.
 	if bestDescendant != s.headNode {
 		headChangesCount.Inc()
-		headSlotNumber.Set(float64(bestDescendant.slot))
+		headSlotNumber.Set(float64(bestDescendant.block.slot))
 		s.headNode = bestDescendant
 	}
 
-	return bestDescendant.root, nil
+	return bestDescendant.block.root, nil
+}
+
+// checkProposerBoost checks if the incoming block should receive proposer boost and applies it.
+func (s *Store) checkProposerBoost(block *BlockNode) {
+	timeNow := uint64(time.Now().Unix())
+	if timeNow < s.genesisTime {
+		return
+	}
+	secondsIntoSlot := (timeNow - s.genesisTime) % params.BeaconConfig().SecondsPerSlot
+	currentSlot := slots.CurrentSlot(s.genesisTime)
+	boostThreshold := params.BeaconConfig().SecondsPerSlot / params.BeaconConfig().IntervalsPerSlot
+	isFirstBlock := s.proposerBoostRoot == [32]byte{}
+	if currentSlot == block.slot && secondsIntoSlot < boostThreshold && isFirstBlock {
+		s.proposerBoostRoot = block.root
+	}
+}
+
+// insertChild perform the insertion tasks when the parent node was already in
+// forkchoice, this is
+// - add a child to the parent
+// - apply proposer boost
+// - update best descendants.
+func (s *Store) insertChild(ctx context.Context, parent *Node, child *Node) error {
+	if parent == nil {
+		return nil
+	}
+	parent.children = append(parent.children, child)
+	if !child.full {
+		s.checkProposerBoost(child.block)
+	}
+	// Update best descendants
+	jEpoch := s.justifiedCheckpoint.Epoch
+	fEpoch := s.finalizedCheckpoint.Epoch
+	currentSlot := slots.CurrentSlot(s.genesisTime)
+	if err := s.treeRootNode.updateBestDescendant(ctx, jEpoch, fEpoch, slots.ToEpoch(currentSlot)); err != nil {
+		_, remErr := s.removeNode(ctx, child)
+		if remErr != nil {
+			log.WithError(remErr).Error("could not remove node")
+		}
+		return errors.Wrap(err, "could not update best descendants")
+	}
+	return nil
 }
 
 // insert registers a new block node to the fork choice store's node list.
 // It then updates the new node's parent with the best child and descendant node.
 func (s *Store) insert(ctx context.Context,
 	roblock consensus_blocks.ROBlock,
-	justifiedEpoch, finalizedEpoch primitives.Epoch) (*Node, error) {
+	justifiedEpoch, finalizedEpoch primitives.Epoch) (*BlockNode, error) {
 	ctx, span := trace.StartSpan(ctx, "doublyLinkedForkchoice.insert")
 	defer span.End()
 
@@ -93,104 +141,80 @@ func (s *Store) insert(ctx context.Context,
 		}
 		copy(payloadHash[:], execution.BlockHash())
 		copy(parentHash[:], execution.ParentHash())
+		// Before ePBS, if the parent is known and the parent hash is not, then
+		// set the parent hash to zero
+		_, ok := s.fullNodeByPayload[parentHash]
+		if !ok {
+			parentHash = [32]byte{}
+		}
 	}
 	// Return if the block has been inserted into Store before.
-	n, rootPresent := s.nodeByRoot[root]
-	m, hashPresent := s.nodeByPayload[payloadHash]
+	n, rootPresent := s.emptyNodeByRoot[root]
 	if rootPresent {
-		if payloadHash == [32]byte{} {
-			return n, nil
-		}
-		if hashPresent {
-			return m, nil
-		}
+		return n.block, nil
 	}
-	parent := s.nodeByRoot[parentRoot]
-	fullParent := s.nodeByPayload[parentHash]
-	if fullParent != nil && parent != nil && fullParent.root == parent.root {
+	parent := s.emptyNodeByRoot[parentRoot]
+	fullParent := s.fullNodeByPayload[parentHash]
+	if fullParent != nil && parent != nil && fullParent.block == parent.block {
 		parent = fullParent
 	}
-	n = &Node{
+	innerBlock := &BlockNode{
 		slot:                     slot,
 		root:                     root,
+		payloadHash:              payloadHash,
 		parent:                   parent,
+		fullParent:               fullParent,
 		justifiedEpoch:           justifiedEpoch,
 		unrealizedJustifiedEpoch: justifiedEpoch,
 		finalizedEpoch:           finalizedEpoch,
 		unrealizedFinalizedEpoch: finalizedEpoch,
-		optimistic:               true,
-		payloadHash:              payloadHash,
 		timestamp:                uint64(time.Now().Unix()),
 	}
-
+	emptyNode := &Node{
+		block:      innerBlock,
+		optimistic: true,
+		children:   make([]*Node, 0),
+		full:       false,
+	}
 	// Set the node's target checkpoint
 	if slot%params.BeaconConfig().SlotsPerEpoch == 0 {
-		n.target = n
+		innerBlock.target = innerBlock
 	} else if parent != nil {
-		if slots.ToEpoch(slot) == slots.ToEpoch(parent.slot) {
-			n.target = parent.target
+		if slots.ToEpoch(slot) == slots.ToEpoch(parent.block.slot) {
+			innerBlock.target = parent.block.target
 		} else {
-			n.target = parent
+			innerBlock.target = parent.block
 		}
 	}
 
 	if parent == nil {
 		if s.treeRootNode == nil {
-			s.treeRootNode = n
-			s.headNode = n
-			s.highestReceivedNode = n
-		} else if s.treeRootNode.root != n.root {
-			delete(s.nodeByRoot, root)
-			delete(s.nodeByPayload, payloadHash)
-			return nil, errInvalidParentRoot
+			s.treeRootNode = emptyNode
+			s.headNode = emptyNode
+			s.highestReceivedNode = emptyNode
+		} else {
+			delete(s.emptyNodeByRoot, root)
+			return innerBlock, errInvalidParentRoot
 		}
 	}
-	if !rootPresent {
-		s.nodeByRoot[root] = n
+	s.emptyNodeByRoot[root] = emptyNode
+	if err := s.insertChild(ctx, parent, emptyNode); err != nil {
+		return nil, err
 	}
-	if !hashPresent {
-		s.nodeByPayload[payloadHash] = n
-	}
-	if parent != nil {
-		parent.children = append(parent.children, n)
-		// Apply proposer boost
-		timeNow := uint64(time.Now().Unix())
-		if timeNow < s.genesisTime {
-			return n, nil
-		}
-		secondsIntoSlot := (timeNow - s.genesisTime) % params.BeaconConfig().SecondsPerSlot
-		currentSlot := slots.CurrentSlot(s.genesisTime)
-		boostThreshold := params.BeaconConfig().SecondsPerSlot / params.BeaconConfig().IntervalsPerSlot
-		isFirstBlock := s.proposerBoostRoot == [32]byte{}
-		if currentSlot == slot && secondsIntoSlot < boostThreshold && isFirstBlock {
-			s.proposerBoostRoot = root
-		}
 
-		// Update best descendants
-		jEpoch := s.justifiedCheckpoint.Epoch
-		fEpoch := s.finalizedCheckpoint.Epoch
-		if err := s.treeRootNode.updateBestDescendant(ctx, jEpoch, fEpoch, slots.ToEpoch(currentSlot)); err != nil {
-			_, remErr := s.removeNode(ctx, n)
-			if remErr != nil {
-				log.WithError(remErr).Error("could not remove node")
-			}
-			return nil, errors.Wrap(err, "could not update best descendants")
-		}
-	}
 	// Update metrics.
 	processedBlockCount.Inc()
-	nodeCount.Set(float64(len(s.nodeByRoot)))
+	nodeCount.Set(float64(len(s.emptyNodeByRoot)))
 
 	// Only update received block slot if it's within epoch from current time.
 	if slot+params.BeaconConfig().SlotsPerEpoch > slots.CurrentSlot(s.genesisTime) {
 		s.receivedBlocksLastEpoch[slot%params.BeaconConfig().SlotsPerEpoch] = slot
 	}
 	// Update highest slot tracking.
-	if slot > s.highestReceivedNode.slot {
-		s.highestReceivedNode = n
+	if s.highestReceivedNode == nil || slot > s.highestReceivedNode.block.slot {
+		s.highestReceivedNode = emptyNode
 	}
-
-	return n, nil
+	return innerBlock, nil
 }
 
 // pruneFinalizedNodeByRootMap prunes the `nodeByRoot` map
@@ -200,10 +224,12 @@ func (s *Store) pruneFinalizedNodeByRootMap(ctx context.Context, node, finalized
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-	if node == finalizedNode {
-		if node.target != node {
-			node.target = nil
+	if node.block == finalizedNode.block {
+		if node.block.target != node.block {
+			node.block.target = nil
 		}
+		node.block.parent = nil
+		node.block.fullParent = nil
 		return nil
 	}
 	for _, child := range node.children {
@@ -213,8 +239,8 @@ func (s *Store) pruneFinalizedNodeByRootMap(ctx context.Context, node, finalized
 	}
 
 	node.children = nil
-	delete(s.nodeByRoot, node.root)
-	delete(s.nodeByPayload, node.payloadHash)
+	delete(s.emptyNodeByRoot, node.block.root)
+	delete(s.fullNodeByPayload, node.block.payloadHash)
 	return nil
 }
 
@@ -226,35 +252,32 @@ func (s *Store) prune(ctx context.Context) error {
 
 	finalizedRoot := s.finalizedCheckpoint.Root
 	finalizedEpoch := s.finalizedCheckpoint.Epoch
-	finalizedNode, ok := s.nodeByRoot[finalizedRoot]
+	finalizedNode, ok := s.emptyNodeByRoot[finalizedRoot]
 	if !ok || finalizedNode == nil {
 		return errors.WithMessage(errUnknownFinalizedRoot, fmt.Sprintf("%#x", finalizedRoot))
 	}
 	// return early if we haven't changed the finalized checkpoint
-	if finalizedNode.parent == nil {
+	if finalizedNode.block.parent == nil {
 		return nil
 	}
-
 	// Prune nodeByRoot starting from root
 	if err := s.pruneFinalizedNodeByRootMap(ctx, s.treeRootNode, finalizedNode); err != nil {
 		return err
 	}
 
-	finalizedNode.parent = nil
 	s.treeRootNode = finalizedNode
-
 	prunedCount.Inc()
 	// Prune all children of the finalized checkpoint block that are incompatible with it
 	checkpointMaxSlot, err := slots.EpochStart(finalizedEpoch)
 	if err != nil {
 		return errors.Wrap(err, "could not compute epoch start")
 	}
-	if finalizedNode.slot == checkpointMaxSlot {
+	if finalizedNode.block.slot == checkpointMaxSlot {
 		return nil
 	}
 
 	for _, child := range finalizedNode.children {
-		if child != nil && child.slot <= checkpointMaxSlot {
+		if child != nil && child.block.slot <= checkpointMaxSlot {
 			if err := s.pruneFinalizedNodeByRootMap(ctx, child, finalizedNode); err != nil {
 				return errors.Wrap(err, "could not prune incompatible finalized child")
 			}
@@ -269,10 +292,10 @@ func (s *Store) tips() ([][32]byte, []primitives.Slot) {
 	var roots [][32]byte
 	var slots []primitives.Slot
 
-	for root, node := range s.nodeByRoot {
+	for _, node := range s.fullNodeByPayload {
 		if len(node.children) == 0 {
-			roots = append(roots, root)
-			slots = append(slots, node.slot)
+			roots = append(roots, node.block.root)
+			slots = append(slots, node.block.slot)
 		}
 	}
 	return roots, slots
@@ -283,7 +306,7 @@ func (f *ForkChoice) HighestReceivedBlockSlotRoot() (primitives.Slot, [32]byte) 
 	if f.store.highestReceivedNode == nil {
 		return 0, [32]byte{}
 	}
-	return f.store.highestReceivedNode.slot, f.store.highestReceivedNode.root
+	return f.store.highestReceivedNode.block.slot, f.store.highestReceivedNode.block.root
 }
 
 // HighestReceivedBlockSlotDelay returns the number of slots that the highest
@@ -293,7 +316,7 @@ func (f *ForkChoice) HighestReceivedBlockDelay() primitives.Slot {
 	if n == nil {
 		return 0
 	}
-	secs, err := slots.SecondsSinceSlotStart(n.slot, f.store.genesisTime, n.timestamp)
+	secs, err := slots.SecondsSinceSlotStart(n.block.slot, f.store.genesisTime, n.block.timestamp)
 	if err != nil {
 		return 0
 	}

@@ -7,42 +7,79 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 )
 
+func (s *Store) removeNodeIfSynced(ctx context.Context, node *Node) ([][32]byte, error) {
+	invalidRoots := make([][32]byte, 0)
+	if node == nil {
+		return invalidRoots, nil
+	}
+	fullNode := s.fullNodeByPayload[node.block.payloadHash]
+	if fullNode == nil {
+		return invalidRoots, nil
+	}
+	return s.removeNode(ctx, fullNode)
+}
+
 func (s *Store) setOptimisticToInvalid(ctx context.Context, root, parentRoot, lastValidHash [32]byte) ([][32]byte, error) {
 	invalidRoots := make([][32]byte, 0)
-	node, ok := s.nodeByRoot[root]
-	if !ok {
-		node, ok = s.nodeByRoot[parentRoot]
-		if !ok || node == nil {
-			return invalidRoots, errors.Wrap(ErrNilNode, "could not set node to invalid")
+	node, ok := s.emptyNodeByRoot[root]
+	// Check if we have a full node for this root
+	if ok {
+		fullNode, ok := s.fullNodeByPayload[node.block.payloadHash]
+		if ok {
+			node = fullNode
 		}
-		// return early if the parent is LVH
-		if node.payloadHash == lastValidHash {
-			return invalidRoots, nil
-		}
-	} else {
-		if node == nil {
-			return invalidRoots, errors.Wrap(ErrNilNode, "could not set node to invalid")
-		}
-		if node.parent.root != parentRoot {
+		// check consistency of the input
+		parent := node.block.parent
+		if parent.block.root != parentRoot {
 			return invalidRoots, errInvalidParentRoot
 		}
 	}
-	firstInvalid := node
-	for ; firstInvalid.parent != nil && firstInvalid.parent.payloadHash != lastValidHash; firstInvalid = firstInvalid.parent {
-		if ctx.Err() != nil {
-			return invalidRoots, ctx.Err()
+	// if the last valid hash is not known or null, prune only the incoming
+	// block.
+	lastValid, ok := s.fullNodeByPayload[lastValidHash]
+	if !ok || lastValidHash == [32]byte{} {
+		return s.removeNodeIfSynced(ctx, node)
+	}
+	// We have a valid hash, find if it's in the same fork as the last valid
+	// root.
+	ancestor, err := s.ancestorRoot(ctx, parentRoot, lastValid.block.slot)
+	if err != nil {
+		return invalidRoots, errors.Wrap(err, "could not set block as invalid")
+	}
+	if ancestor != lastValid.block.root {
+		return s.removeNodeIfSynced(ctx, node)
+	}
+	// we go up we find a child of the last valid that is full. We find
+	// first the starting node for the loop
+	if node == nil {
+		node = s.emptyNodeByRoot[parentRoot]
+		fullParent, ok := s.fullNodeByPayload[node.block.payloadHash]
+		if ok {
+			// return early if the parent is the LVH
+			if fullParent.block.payloadHash == lastValidHash {
+				return invalidRoots, nil
+			}
+			node = fullParent
+		}
+	} else {
+		fullNode, ok := s.fullNodeByPayload[node.block.payloadHash]
+		if ok {
+			node = fullNode
 		}
 	}
-	// Deal with the case that the last valid payload is in a different fork
-	// This means we are dealing with an EE that does not follow the spec
-	if firstInvalid.parent == nil {
-		// return early if the invalid node was not imported
-		if node.root == parentRoot {
-			return invalidRoots, nil
+	var lastFullNode *Node
+	for ; node.block.fullParent != nil; node = node.block.fullParent {
+		if node.full {
+			lastFullNode = node
 		}
-		firstInvalid = node
+		if node.block.fullParent.block.payloadHash == lastValidHash {
+			break
+		}
 	}
-	return s.removeNode(ctx, firstInvalid)
+	if lastFullNode == nil {
+		return invalidRoots, nil
+	}
+	return s.removeNode(ctx, lastFullNode)
 }
 
 // removeNode removes the node with the given root and all of its children
@@ -53,20 +90,20 @@ func (s *Store) removeNode(ctx context.Context, node *Node) ([][32]byte, error) 
 	if node == nil {
 		return invalidRoots, errors.Wrap(ErrNilNode, "could not remove node")
 	}
-	if !node.optimistic || node.parent == nil {
+	if !node.optimistic || node.block.parent == nil {
 		return invalidRoots, errInvalidOptimisticStatus
 	}
 
-	children := node.parent.children
+	children := node.block.parent.children
 	if len(children) == 1 {
-		node.parent.children = []*Node{}
+		node.block.parent.children = []*Node{}
 	} else {
 		for i, n := range children {
 			if n == node {
 				if i != len(children)-1 {
 					children[i] = children[len(children)-1]
 				}
-				node.parent.children = children[:len(children)-1]
+				node.block.parent.children = children[:len(children)-1]
 				break
 			}
 		}
@@ -85,15 +122,20 @@ func (s *Store) removeNodeAndChildren(ctx context.Context, node *Node, invalidRo
 			return invalidRoots, err
 		}
 	}
-	invalidRoots = append(invalidRoots, node.root)
-	if node.root == s.proposerBoostRoot {
+	// Only remove the current node's root when removing the empty node as well
+	if node.full {
+		delete(s.fullNodeByPayload, node.block.payloadHash)
+		return invalidRoots, nil
+	}
+
+	invalidRoots = append(invalidRoots, node.block.root)
+	if node.block.root == s.proposerBoostRoot {
 		s.proposerBoostRoot = [32]byte{}
 	}
-	if node.root == s.previousProposerBoostRoot {
+	if node.block.root == s.previousProposerBoostRoot {
 		s.previousProposerBoostRoot = params.BeaconConfig().ZeroHash
 		s.previousProposerBoostScore = 0
 	}
-	delete(s.nodeByRoot, node.root)
-	delete(s.nodeByPayload, node.payloadHash)
+	delete(s.emptyNodeByRoot, node.block.root)
 	return invalidRoots, nil
 }

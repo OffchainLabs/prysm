@@ -1,8 +1,6 @@
 package doublylinkedtree
 
 import (
-	"time"
-
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
@@ -13,23 +11,54 @@ func (f *ForkChoice) GetPTCVote() primitives.PTCStatus {
 	if highestNode == nil {
 		return primitives.PAYLOAD_ABSENT
 	}
-	if slots.CurrentSlot(f.store.genesisTime) > highestNode.slot {
+	if slots.CurrentSlot(f.store.genesisTime) > highestNode.block.slot {
 		return primitives.PAYLOAD_ABSENT
 	}
-	if highestNode.payloadHash == [32]byte{} {
-		return primitives.PAYLOAD_ABSENT
+	if highestNode.full {
+		return primitives.PAYLOAD_PRESENT
 	}
-	if highestNode.withheld {
-		return primitives.PAYLOAD_WITHHELD
+	return primitives.PAYLOAD_ABSENT
+}
+
+func (f *ForkChoice) insertExecutionPayload(b *BlockNode, e interfaces.ExecutionData) error {
+	s := f.store
+	hash := [32]byte(e.BlockHash())
+	if _, ok := s.fullNodeByPayload[hash]; ok {
+		// We ignore nodes with the give payload hash already included
+		return nil
 	}
-	return primitives.PAYLOAD_PRESENT
+	n := &Node{
+		block:      b,
+		children:   make([]*Node, 0),
+		full:       true,
+		optimistic: true,
+	}
+	if n.block.parent != nil {
+		n.block.parent.children = append(n.block.parent.children, n)
+	} else {
+		// make this the tree node
+		f.store.treeRootNode = n
+	}
+	s.fullNodeByPayload[hash] = n
+	s.updateWithPayload(n)
+	processedPayloadCount.Inc()
+	payloadCount.Set(float64(len(s.fullNodeByPayload)))
+
+	// make this node head if the empty node was
+	if s.headNode.block == n.block {
+		s.headNode = n
+	}
+	if b.slot == s.highestReceivedNode.block.slot {
+		s.highestReceivedNode = n
+	}
+	return nil
 }
 
 // InsertPayloadEnvelope adds a full node to forkchoice from the given payload
 // envelope.
 func (f *ForkChoice) InsertPayloadEnvelope(envelope interfaces.ROExecutionPayloadEnvelope) error {
 	s := f.store
-	b, ok := s.nodeByRoot[envelope.BeaconBlockRoot()]
+	b, ok := s.emptyNodeByRoot[envelope.BeaconBlockRoot()]
 	if !ok {
 		return ErrNilNode
 	}
@@ -37,36 +66,18 @@ func (f *ForkChoice) InsertPayloadEnvelope(envelope interfaces.ROExecutionPayloa
 	if err != nil {
 		return err
 	}
-	hash := [32]byte(e.BlockHash())
-	if _, ok = s.nodeByPayload[hash]; ok {
-		// We ignore nodes with the give payload hash already included
-		return nil
-	}
-	n := &Node{
-		slot:                     b.slot,
-		root:                     b.root,
-		payloadHash:              hash,
-		parent:                   b.parent,
-		target:                   b.target,
-		children:                 make([]*Node, 0),
-		justifiedEpoch:           b.justifiedEpoch,
-		unrealizedJustifiedEpoch: b.unrealizedJustifiedEpoch,
-		finalizedEpoch:           b.finalizedEpoch,
-		unrealizedFinalizedEpoch: b.unrealizedFinalizedEpoch,
-		timestamp:                uint64(time.Now().Unix()),
-		ptcVote:                  make([]primitives.PTCStatus, 0),
-		withheld:                 envelope.PayloadWithheld(),
-		optimistic:               true,
-	}
-	if n.parent != nil {
-		n.parent.children = append(n.parent.children, n)
-	}
-	s.nodeByPayload[hash] = n
-	processedPayloadCount.Inc()
-	payloadCount.Set(float64(len(s.nodeByPayload)))
+	return f.insertExecutionPayload(b.block, e)
+}
 
-	if b.slot == s.highestReceivedNode.slot {
-		s.highestReceivedNode = n
+func (s *Store) updateWithPayload(n *Node) {
+	for _, node := range s.emptyNodeByRoot {
+		if node.bestDescendant != nil && node.bestDescendant.block == n.block {
+			node.bestDescendant = n
+		}
 	}
-	return nil
+	for _, node := range s.fullNodeByPayload {
+		if node.bestDescendant != nil && node.bestDescendant.block == n.block {
+			node.bestDescendant = n
+		}
+	}
 }

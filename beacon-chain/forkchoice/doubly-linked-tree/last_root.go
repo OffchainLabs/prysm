@@ -8,19 +8,19 @@ import (
 // LastRoot returns the last canonical block root in the given epoch
 func (f *ForkChoice) LastRoot(epoch primitives.Epoch) [32]byte {
 	head := f.store.headNode
-	headEpoch := slots.ToEpoch(head.slot)
+	headEpoch := slots.ToEpoch(head.block.slot)
 	epochEnd, err := slots.EpochEnd(epoch)
 	if err != nil {
 		return [32]byte{}
 	}
 	if headEpoch <= epoch {
-		return head.root
+		return head.block.root
 	}
-	for head != nil && head.slot > epochEnd {
-		head = head.parent
+	for head != nil && head.block.slot > epochEnd {
+		head = head.block.parent
 	}
 	if head == nil {
 		return [32]byte{}
 	}
-	return head.root
+	return head.block.root
 }

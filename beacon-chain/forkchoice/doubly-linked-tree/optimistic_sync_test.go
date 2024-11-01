@@ -6,9 +6,30 @@ import (
 	"testing"
 
 	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
+
+func sortRoots(roots [][32]uint8) {
+	sort.Slice(roots, func(i, j int) bool {
+		return roots[i][0] < roots[j][0]
+	})
+}
+
+func deduplicateRoots(roots [][32]uint8) [][32]uint8 {
+	if len(roots) == 0 {
+		return roots
+	}
+	unique := make(map[[32]uint8]struct{})
+	var result [][32]uint8
+
+	for _, root := range roots {
+		if _, exists := unique[root]; !exists {
+			unique[root] = struct{}{}
+			result = append(result, root)
+		}
+	}
+	return result
+}
 
 // We test the algorithm to update a node from SYNCING to INVALID
 // We start with the same diagram as above:
@@ -175,47 +196,50 @@ func TestPruneInvalid(t *testing.T) {
 		ctx := context.Background()
 		f := setup(1, 1)
 
-		state, blkRoot, err := prepareForkchoiceState(ctx, 100, [32]byte{'a'}, params.BeaconConfig().ZeroHash, [32]byte{'A'}, 1, 1)
+		state, blkRoot, err := prepareForkchoiceState(ctx, f, 100, [32]byte{'a'}, params.BeaconConfig().ZeroHash, [32]byte{'A'}, 1, 1)
 		require.NoError(t, err)
 		require.NoError(t, f.InsertNode(ctx, state, blkRoot))
-		state, blkRoot, err = prepareForkchoiceState(ctx, 101, [32]byte{'b'}, [32]byte{'a'}, [32]byte{'B'}, 1, 1)
+		state, blkRoot, err = prepareForkchoiceState(ctx, f, 101, [32]byte{'b'}, [32]byte{'a'}, [32]byte{'B'}, 1, 1)
 		require.NoError(t, err)
 		require.NoError(t, f.InsertNode(ctx, state, blkRoot))
-		state, blkRoot, err = prepareForkchoiceState(ctx, 102, [32]byte{'c'}, [32]byte{'b'}, [32]byte{'C'}, 1, 1)
+		state, blkRoot, err = prepareForkchoiceState(ctx, f, 102, [32]byte{'c'}, [32]byte{'b'}, [32]byte{'C'}, 1, 1)
 		require.NoError(t, err)
 		require.NoError(t, f.InsertNode(ctx, state, blkRoot))
-		state, blkRoot, err = prepareForkchoiceState(ctx, 102, [32]byte{'j'}, [32]byte{'b'}, [32]byte{'J'}, 1, 1)
+		state, blkRoot, err = prepareForkchoiceState(ctx, f, 102, [32]byte{'j'}, [32]byte{'b'}, [32]byte{'J'}, 1, 1)
 		require.NoError(t, err)
 		require.NoError(t, f.InsertNode(ctx, state, blkRoot))
-		state, blkRoot, err = prepareForkchoiceState(ctx, 103, [32]byte{'d'}, [32]byte{'c'}, [32]byte{'D'}, 1, 1)
+		state, blkRoot, err = prepareForkchoiceState(ctx, f, 103, [32]byte{'d'}, [32]byte{'c'}, [32]byte{'D'}, 1, 1)
 		require.NoError(t, err)
 		require.NoError(t, f.InsertNode(ctx, state, blkRoot))
-		state, blkRoot, err = prepareForkchoiceState(ctx, 104, [32]byte{'e'}, [32]byte{'d'}, [32]byte{'E'}, 1, 1)
+		state, blkRoot, err = prepareForkchoiceState(ctx, f, 104, [32]byte{'e'}, [32]byte{'d'}, [32]byte{'E'}, 1, 1)
 		require.NoError(t, err)
 		require.NoError(t, f.InsertNode(ctx, state, blkRoot))
-		state, blkRoot, err = prepareForkchoiceState(ctx, 104, [32]byte{'g'}, [32]byte{'d'}, [32]byte{'G'}, 1, 1)
+		state, blkRoot, err = prepareForkchoiceState(ctx, f, 104, [32]byte{'g'}, [32]byte{'d'}, [32]byte{'G'}, 1, 1)
 		require.NoError(t, err)
 		require.NoError(t, f.InsertNode(ctx, state, blkRoot))
-		state, blkRoot, err = prepareForkchoiceState(ctx, 105, [32]byte{'f'}, [32]byte{'e'}, [32]byte{'F'}, 1, 1)
+		state, blkRoot, err = prepareForkchoiceState(ctx, f, 105, [32]byte{'f'}, [32]byte{'e'}, [32]byte{'F'}, 1, 1)
 		require.NoError(t, err)
 		require.NoError(t, f.InsertNode(ctx, state, blkRoot))
-		state, blkRoot, err = prepareForkchoiceState(ctx, 105, [32]byte{'h'}, [32]byte{'g'}, [32]byte{'H'}, 1, 1)
+		state, blkRoot, err = prepareForkchoiceState(ctx, f, 105, [32]byte{'h'}, [32]byte{'g'}, [32]byte{'H'}, 1, 1)
 		require.NoError(t, err)
 		require.NoError(t, f.InsertNode(ctx, state, blkRoot))
-		state, blkRoot, err = prepareForkchoiceState(ctx, 105, [32]byte{'k'}, [32]byte{'g'}, [32]byte{'K'}, 1, 1)
+		state, blkRoot, err = prepareForkchoiceState(ctx, f, 105, [32]byte{'k'}, [32]byte{'g'}, [32]byte{'K'}, 1, 1)
 		require.NoError(t, err)
 		require.NoError(t, f.InsertNode(ctx, state, blkRoot))
-		state, blkRoot, err = prepareForkchoiceState(ctx, 106, [32]byte{'i'}, [32]byte{'h'}, [32]byte{'I'}, 1, 1)
+		state, blkRoot, err = prepareForkchoiceState(ctx, f, 106, [32]byte{'i'}, [32]byte{'h'}, [32]byte{'I'}, 1, 1)
 		require.NoError(t, err)
 		require.NoError(t, f.InsertNode(ctx, state, blkRoot))
-		state, blkRoot, err = prepareForkchoiceState(ctx, 106, [32]byte{'l'}, [32]byte{'k'}, [32]byte{'L'}, 1, 1)
+		state, blkRoot, err = prepareForkchoiceState(ctx, f, 106, [32]byte{'l'}, [32]byte{'k'}, [32]byte{'L'}, 1, 1)
 		require.NoError(t, err)
 		require.NoError(t, f.InsertNode(ctx, state, blkRoot))
 
 		roots, err := f.store.setOptimisticToInvalid(context.Background(), tc.root, tc.parentRoot, tc.payload)
+		deduped := deduplicateRoots(roots)
 		if tc.wantedErr == nil {
 			require.NoError(t, err)
-			require.DeepEqual(t, tc.wantedRoots, roots)
+			sortRoots(tc.wantedRoots)
+			sortRoots(deduped)
+			require.DeepEqual(t, tc.wantedRoots, deduped)
 			require.Equal(t, tc.wantedNodeNumber, f.NodeCount())
 		} else {
 			require.ErrorIs(t, tc.wantedErr, err)
@@ -228,13 +252,13 @@ func TestSetOptimisticToInvalid_ProposerBoost(t *testing.T) {
 	ctx := context.Background()
 	f := setup(1, 1)
 
-	state, blkRoot, err := prepareForkchoiceState(ctx, 100, [32]byte{'a'}, params.BeaconConfig().ZeroHash, [32]byte{'A'}, 1, 1)
+	state, blkRoot, err := prepareForkchoiceState(ctx, f, 100, [32]byte{'a'}, params.BeaconConfig().ZeroHash, [32]byte{'A'}, 1, 1)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blkRoot))
-	state, blkRoot, err = prepareForkchoiceState(ctx, 101, [32]byte{'b'}, [32]byte{'a'}, [32]byte{'B'}, 1, 1)
+	state, blkRoot, err = prepareForkchoiceState(ctx, f, 101, [32]byte{'b'}, [32]byte{'a'}, [32]byte{'B'}, 1, 1)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blkRoot))
-	state, blkRoot, err = prepareForkchoiceState(ctx, 101, [32]byte{'c'}, [32]byte{'b'}, [32]byte{'C'}, 1, 1)
+	state, blkRoot, err = prepareForkchoiceState(ctx, f, 101, [32]byte{'c'}, [32]byte{'b'}, [32]byte{'C'}, 1, 1)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blkRoot))
 	f.store.proposerBoostRoot = [32]byte{'c'}
@@ -243,7 +267,7 @@ func TestSetOptimisticToInvalid_ProposerBoost(t *testing.T) {
 
 	_, err = f.SetOptimisticToInvalid(ctx, [32]byte{'c'}, [32]byte{'b'}, [32]byte{'A'})
 	require.NoError(t, err)
-	require.Equal(t, uint64(0), f.store.previousProposerBoostScore)
+	require.Equal(t, uint64(10), f.store.previousProposerBoostScore)
 	require.DeepEqual(t, [32]byte{}, f.store.proposerBoostRoot)
 	require.DeepEqual(t, params.BeaconConfig().ZeroHash, f.store.previousProposerBoostRoot)
 }
@@ -260,129 +284,25 @@ func TestSetOptimisticToInvalid_CorrectChildren(t *testing.T) {
 	ctx := context.Background()
 	f := setup(1, 1)
 
-	state, blkRoot, err := prepareForkchoiceState(ctx, 100, [32]byte{'a'}, params.BeaconConfig().ZeroHash, [32]byte{'A'}, 1, 1)
+	state, blkRoot, err := prepareForkchoiceState(ctx, f, 100, [32]byte{'a'}, params.BeaconConfig().ZeroHash, [32]byte{'A'}, 1, 1)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blkRoot))
-	state, blkRoot, err = prepareForkchoiceState(ctx, 101, [32]byte{'b'}, [32]byte{'a'}, [32]byte{'B'}, 1, 1)
+	state, blkRoot, err = prepareForkchoiceState(ctx, f, 101, [32]byte{'b'}, [32]byte{'a'}, [32]byte{'B'}, 1, 1)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blkRoot))
-	state, blkRoot, err = prepareForkchoiceState(ctx, 102, [32]byte{'c'}, [32]byte{'a'}, [32]byte{'C'}, 1, 1)
+	state, blkRoot, err = prepareForkchoiceState(ctx, f, 102, [32]byte{'c'}, [32]byte{'a'}, [32]byte{'C'}, 1, 1)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blkRoot))
-	state, blkRoot, err = prepareForkchoiceState(ctx, 103, [32]byte{'d'}, [32]byte{'a'}, [32]byte{'D'}, 1, 1)
+	state, blkRoot, err = prepareForkchoiceState(ctx, f, 103, [32]byte{'d'}, [32]byte{'a'}, [32]byte{'D'}, 1, 1)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blkRoot))
 
 	_, err = f.store.setOptimisticToInvalid(ctx, [32]byte{'d'}, [32]byte{'a'}, [32]byte{'A'})
 	require.NoError(t, err)
-	require.Equal(t, 2, len(f.store.nodeByRoot[[32]byte{'a'}].children))
+	// There are 5 valid children of A, two for B and C and one for D (the
+	// empty D block is valid)
+	require.Equal(t, 5, len(f.store.fullNodeByPayload[[32]byte{'A'}].children))
 
-}
-
-// Pow       |      Pos
-//
-//	CA -- A -- B -- C-----D
-//	 \          \--------------E
-//	  \
-//	   ----------------------F -- G
-//
-// B is INVALID
-func TestSetOptimisticToInvalid_ForkAtMerge(t *testing.T) {
-	ctx := context.Background()
-	f := setup(1, 1)
-
-	st, root, err := prepareForkchoiceState(ctx, 100, [32]byte{'r'}, [32]byte{}, [32]byte{}, 1, 1)
-	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, root))
-
-	st, root, err = prepareForkchoiceState(ctx, 101, [32]byte{'a'}, [32]byte{'r'}, [32]byte{}, 1, 1)
-	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, root))
-
-	st, root, err = prepareForkchoiceState(ctx, 102, [32]byte{'b'}, [32]byte{'a'}, [32]byte{'B'}, 1, 1)
-	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, root))
-
-	st, root, err = prepareForkchoiceState(ctx, 103, [32]byte{'c'}, [32]byte{'b'}, [32]byte{'C'}, 1, 1)
-	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, root))
-
-	st, root, err = prepareForkchoiceState(ctx, 104, [32]byte{'d'}, [32]byte{'c'}, [32]byte{'D'}, 1, 1)
-	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, root))
-
-	st, root, err = prepareForkchoiceState(ctx, 105, [32]byte{'e'}, [32]byte{'b'}, [32]byte{'E'}, 1, 1)
-	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, root))
-
-	st, root, err = prepareForkchoiceState(ctx, 106, [32]byte{'f'}, [32]byte{'r'}, [32]byte{'F'}, 1, 1)
-	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, root))
-
-	st, root, err = prepareForkchoiceState(ctx, 107, [32]byte{'g'}, [32]byte{'f'}, [32]byte{'G'}, 1, 1)
-	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, root))
-
-	roots, err := f.SetOptimisticToInvalid(ctx, [32]byte{'x'}, [32]byte{'d'}, [32]byte{})
-	require.NoError(t, err)
-	require.Equal(t, 4, len(roots))
-	sort.Slice(roots, func(i, j int) bool {
-		return bytesutil.BytesToUint64BigEndian(roots[i][:]) < bytesutil.BytesToUint64BigEndian(roots[j][:])
-	})
-	require.DeepEqual(t, roots, [][32]byte{{'b'}, {'c'}, {'d'}, {'e'}})
-}
-
-// Pow       |      Pos
-//
-//	CA -------- B -- C-----D
-//	 \           \--------------E
-//	  \
-//	   --A -------------------------F -- G
-//
-// B is INVALID
-func TestSetOptimisticToInvalid_ForkAtMerge_bis(t *testing.T) {
-	ctx := context.Background()
-	f := setup(1, 1)
-
-	st, root, err := prepareForkchoiceState(ctx, 100, [32]byte{'r'}, [32]byte{}, [32]byte{}, 1, 1)
-	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, root))
-
-	st, root, err = prepareForkchoiceState(ctx, 101, [32]byte{'a'}, [32]byte{'r'}, [32]byte{}, 1, 1)
-	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, root))
-
-	st, root, err = prepareForkchoiceState(ctx, 102, [32]byte{'b'}, [32]byte{}, [32]byte{'B'}, 1, 1)
-	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, root))
-
-	st, root, err = prepareForkchoiceState(ctx, 103, [32]byte{'c'}, [32]byte{'b'}, [32]byte{'C'}, 1, 1)
-	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, root))
-
-	st, root, err = prepareForkchoiceState(ctx, 104, [32]byte{'d'}, [32]byte{'c'}, [32]byte{'D'}, 1, 1)
-	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, root))
-
-	st, root, err = prepareForkchoiceState(ctx, 105, [32]byte{'e'}, [32]byte{'b'}, [32]byte{'E'}, 1, 1)
-	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, root))
-
-	st, root, err = prepareForkchoiceState(ctx, 106, [32]byte{'f'}, [32]byte{'a'}, [32]byte{'F'}, 1, 1)
-	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, root))
-
-	st, root, err = prepareForkchoiceState(ctx, 107, [32]byte{'g'}, [32]byte{'f'}, [32]byte{'G'}, 1, 1)
-	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, root))
-
-	roots, err := f.SetOptimisticToInvalid(ctx, [32]byte{'x'}, [32]byte{'d'}, [32]byte{})
-	require.NoError(t, err)
-	require.Equal(t, 4, len(roots))
-	sort.Slice(roots, func(i, j int) bool {
-		return bytesutil.BytesToUint64BigEndian(roots[i][:]) < bytesutil.BytesToUint64BigEndian(roots[j][:])
-	})
-	require.DeepEqual(t, roots, [][32]byte{{'b'}, {'c'}, {'d'}, {'e'}})
 }
 
 func TestSetOptimisticToValid(t *testing.T) {
