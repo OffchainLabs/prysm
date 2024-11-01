@@ -588,8 +588,8 @@ func processDepositRequest(beaconState state.BeaconState, request *enginev1.Depo
 	}
 	if err := beaconState.AppendPendingDeposit(&ethpb.PendingDeposit{
 		PublicKey:             bytesutil.SafeCopyBytes(request.Pubkey),
-		Amount:                request.Amount,
 		WithdrawalCredentials: bytesutil.SafeCopyBytes(request.WithdrawalCredentials),
+		Amount:                request.Amount,
 		Signature:             bytesutil.SafeCopyBytes(request.Signature),
 		Slot:                  beaconState.Slot(),
 	}); err != nil {
