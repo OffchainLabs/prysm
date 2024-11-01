@@ -46,6 +46,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 ### Removed
 
 - Removed finalized validator index cache, no longer needed.
+- Removed validator queue position log on key reload and wait for activation.
 
 ### Fixed
 
