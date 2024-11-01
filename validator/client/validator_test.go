@@ -889,7 +889,7 @@ func TestCheckAndLogValidatorStatus_OK(t *testing.T) {
 				pubkeyToStatus: make(map[[48]byte]*validatorStatus),
 			}
 			v.pubkeyToStatus[bytesutil.ToBytes48(test.status.publicKey)] = test.status
-			active := v.checkAndLogValidatorStatus(100)
+			active := v.checkAndLogValidatorStatus()
 			require.Equal(t, test.active, active)
 			if test.log != "" {
 				require.LogsContain(t, hook, test.log)

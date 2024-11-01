@@ -61,14 +61,8 @@ func (v *validator) internalWaitForActivation(ctx context.Context, accountsChang
 		return v.retryWaitForActivation(ctx, span, err, "Connection broken while waiting for activation. Reconnecting...", accountsChangedChan)
 	}
 
-	// Step 4: Fetch validator count.
-	valCount, err := v.getValidatorCount(ctx)
-	if err != nil {
-		return err
-	}
-
-	// Step 5: Check and log validator statuses.
-	someAreActive := v.checkAndLogValidatorStatus(valCount)
+	// Step 4: Check and log validator statuses.
+	someAreActive := v.checkAndLogValidatorStatus()
 	if !someAreActive {
 		// Step 6: If no active validators, wait for accounts change, context cancellation, or next epoch.
 		select {
