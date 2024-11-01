@@ -194,3 +194,12 @@ func TestReconstructAndBroadcastBlobs(t *testing.T) {
 		})
 	}
 }
+
+func TestReconstructAndBroadcastBlobs_Capella(t *testing.T) {
+	b := util.NewBeaconBlockCapella()
+	sb, err := blocks.NewSignedBeaconBlock(b)
+	require.NoError(t, err)
+
+	s := Service{}
+	s.reconstructAndBroadcastBlobs(context.Background(), sb)
+}
