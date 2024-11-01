@@ -15,6 +15,9 @@ func (b *BeaconState) AppendPendingDeposit(pd *ethpb.PendingDeposit) error {
 	if b.version < version.Electra {
 		return errNotSupported("AppendPendingDeposit", b.version)
 	}
+	if pd == nil {
+		return errors.New("cannot append nil pending deposit")
+	}
 	b.lock.Lock()
 	defer b.lock.Unlock()
 

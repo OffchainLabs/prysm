@@ -15,6 +15,9 @@ func (b *BeaconState) AppendPendingConsolidation(val *ethpb.PendingConsolidation
 	if b.version < version.Electra {
 		return errNotSupported("AppendPendingConsolidation", b.version)
 	}
+	if val == nil {
+		return errors.New("cannot append nil pending consolidation")
+	}
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
