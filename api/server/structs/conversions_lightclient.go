@@ -35,11 +35,11 @@ func LightClientUpdateFromConsensus(update interfaces.LightClientUpdate) (*Light
 		}
 		finalityBranch = fb[:]
 	} else {
-		b, err := update.NextSyncCommitteeBranch()
+		scb, err := update.NextSyncCommitteeBranch()
 		if err != nil {
 			return nil, err
 		}
-		scBranch = b[:]
+		scBranch = scb[:]
 		fb, err := update.FinalityBranch()
 		if err != nil {
 			return nil, err

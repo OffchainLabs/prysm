@@ -155,7 +155,7 @@ func NewLightClientUpdateFromBeaconState(
 	updateAttestedPeriod := slots.SyncCommitteePeriod(slots.ToEpoch(attestedBlock.Block().Slot()))
 
 	// update = LightClientUpdate()
-	result, err := CreateDefaultLightClientUpdate(currentSlot, attestedBlock)
+	result, err := CreateDefaultLightClientUpdate(currentSlot, attestedState)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not create default light client update")
 	}
@@ -239,7 +239,7 @@ func NewLightClientUpdateFromBeaconState(
 	return result, nil
 }
 
-func CreateDefaultLightClientUpdate(currentSlot primitives.Slot, attestedBlock interfaces.ReadOnlySignedBeaconBlock) (interfaces.LightClientUpdate, error) {
+func CreateDefaultLightClientUpdate(currentSlot primitives.Slot, attestedState state.BeaconState) (interfaces.LightClientUpdate, error) {
 	currentEpoch := slots.ToEpoch(currentSlot)
 
 	syncCommitteeSize := params.BeaconConfig().SyncCommitteeSize
@@ -268,7 +268,7 @@ func CreateDefaultLightClientUpdate(currentSlot primitives.Slot, attestedBlock i
 	}
 
 	var finalityBranch [][]byte
-	if attestedBlock.Version() >= version.Electra {
+	if attestedState.Version() >= version.Electra {
 		finalityBranch = make([][]byte, fieldparams.FinalityBranchDepthElectra)
 	} else {
 		finalityBranch = make([][]byte, fieldparams.FinalityBranchDepth)
@@ -310,7 +310,7 @@ func CreateDefaultLightClientUpdate(currentSlot primitives.Slot, attestedBlock i
 			FinalityBranch:          finalityBranch,
 		}
 	} else {
-		if attestedBlock.Version() >= version.Electra {
+		if attestedState.Version() >= version.Electra {
 			m = &pb.LightClientUpdateElectra{
 				AttestedHeader: &pb.LightClientHeaderDeneb{
 					Beacon:          &pb.BeaconBlockHeader{},
