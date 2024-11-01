@@ -368,7 +368,7 @@ func (v *validator) checkAndLogValidatorStatus() bool {
 		case ethpb.ValidatorStatus_UNKNOWN_STATUS:
 			log.Info("Waiting for deposit to be observed by beacon node")
 		case ethpb.ValidatorStatus_DEPOSITED:
-			log.Info("Validator Deposited, entering activation queue after finalization")
+			log.Info("Validator deposited, entering activation queue after finalization")
 		case ethpb.ValidatorStatus_PENDING:
 			log.Info("Waiting for activation... Check validator queue status in a block explorer")
 		case ethpb.ValidatorStatus_ACTIVE, ethpb.ValidatorStatus_EXITING:

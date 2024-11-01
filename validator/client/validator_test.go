@@ -806,7 +806,7 @@ func TestCheckAndLogValidatorStatus_OK(t *testing.T) {
 					PositionInActivationQueue: 30,
 				},
 			},
-			log:    "Validator Deposited, entering activation queue after finalization\" prefix=client pubkey=0x000000000000 status=DEPOSITED validatorIndex=30",
+			log:    "Validator deposited, entering activation queue after finalization\" prefix=client pubkey=0x000000000000 status=DEPOSITED validatorIndex=30",
 			active: false,
 		},
 		{
