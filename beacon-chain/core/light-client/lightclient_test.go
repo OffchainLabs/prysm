@@ -82,12 +82,12 @@ func TestLightClient_NewLightClientFinalityUpdateFromBeaconState(t *testing.T) {
 			require.DeepSSZEqual(t, finalizedBlockHeader.Header.ParentRoot, updateFinalizedHeaderBeacon.ParentRoot, "Finalized header parent root is not equal")
 			require.DeepSSZEqual(t, finalizedBlockHeader.Header.StateRoot, updateFinalizedHeaderBeacon.StateRoot, "Finalized header state root is not equal")
 			require.DeepSSZEqual(t, finalizedBlockHeader.Header.BodyRoot, updateFinalizedHeaderBeacon.BodyRoot, "Finalized header body root is not equal")
-			require.Equal(t, lightClient.FinalityBranchNumOfLeaves, len(update.FinalityBranch()), "Invalid finality branch leaves")
-
-			finalityBranch, err := l.AttestedState.FinalizedRootProof(l.Ctx)
+			fb, err := update.FinalityBranch()
 			require.NoError(t, err)
-			for i, leaf := range update.FinalityBranch() {
-				require.DeepSSZEqual(t, finalityBranch[i], leaf[:], "Leaf is not equal")
+			proof, err := l.AttestedState.FinalizedRootProof(l.Ctx)
+			require.NoError(t, err)
+			for i, leaf := range fb {
+				require.DeepSSZEqual(t, proof[i], leaf[:], "Leaf is not equal")
 			}
 		})
 	})
@@ -115,11 +115,12 @@ func TestLightClient_NewLightClientFinalityUpdateFromBeaconState(t *testing.T) {
 			require.DeepSSZEqual(t, finalizedBlockHeader.Header.ParentRoot, updateFinalizedHeaderBeacon.ParentRoot, "Finalized header parent root is not equal")
 			require.DeepSSZEqual(t, finalizedBlockHeader.Header.StateRoot, updateFinalizedHeaderBeacon.StateRoot, "Finalized header state root is not equal")
 			require.DeepSSZEqual(t, finalizedBlockHeader.Header.BodyRoot, updateFinalizedHeaderBeacon.BodyRoot, "Finalized header body root is not equal")
-			require.Equal(t, lightClient.FinalityBranchNumOfLeaves, len(update.FinalityBranch()), "Invalid finality branch leaves")
-			finalityBranch, err := l.AttestedState.FinalizedRootProof(l.Ctx)
+			fb, err := update.FinalityBranch()
 			require.NoError(t, err)
-			for i, leaf := range update.FinalityBranch() {
-				require.DeepSSZEqual(t, finalityBranch[i], leaf[:], "Leaf is not equal")
+			proof, err := l.AttestedState.FinalizedRootProof(l.Ctx)
+			require.NoError(t, err)
+			for i, leaf := range fb {
+				require.DeepSSZEqual(t, proof[i], leaf[:], "Leaf is not equal")
 			}
 
 			// Check Execution BlockHash
@@ -188,11 +189,12 @@ func TestLightClient_NewLightClientFinalityUpdateFromBeaconState(t *testing.T) {
 			require.DeepSSZEqual(t, finalizedBlockHeader.Header.ParentRoot, updateFinalizedHeaderBeacon.ParentRoot, "Finalized header parent root is not equal")
 			require.DeepSSZEqual(t, finalizedBlockHeader.Header.StateRoot, updateFinalizedHeaderBeacon.StateRoot, "Finalized header state root is not equal")
 			require.DeepSSZEqual(t, finalizedBlockHeader.Header.BodyRoot, updateFinalizedHeaderBeacon.BodyRoot, "Finalized header body root is not equal")
-			require.Equal(t, lightClient.FinalityBranchNumOfLeaves, len(update.FinalityBranch()), "Invalid finality branch leaves")
-			finalityBranch, err := l.AttestedState.FinalizedRootProof(l.Ctx)
+			fb, err := update.FinalityBranch()
 			require.NoError(t, err)
-			for i, leaf := range update.FinalityBranch() {
-				require.DeepSSZEqual(t, finalityBranch[i], leaf[:], "Leaf is not equal")
+			proof, err := l.AttestedState.FinalizedRootProof(l.Ctx)
+			require.NoError(t, err)
+			for i, leaf := range fb {
+				require.DeepSSZEqual(t, proof[i], leaf[:], "Leaf is not equal")
 			}
 		})
 	})
@@ -221,11 +223,12 @@ func TestLightClient_NewLightClientFinalityUpdateFromBeaconState(t *testing.T) {
 			require.DeepSSZEqual(t, finalizedBlockHeader.Header.ParentRoot, updateFinalizedHeaderBeacon.ParentRoot, "Finalized header parent root is not equal")
 			require.DeepSSZEqual(t, finalizedBlockHeader.Header.StateRoot, updateFinalizedHeaderBeacon.StateRoot, "Finalized header state root is not equal")
 			require.DeepSSZEqual(t, finalizedBlockHeader.Header.BodyRoot, updateFinalizedHeaderBeacon.BodyRoot, "Finalized header body root is not equal")
-			require.Equal(t, lightClient.FinalityBranchNumOfLeaves, len(update.FinalityBranch()), "Invalid finality branch leaves")
-			finalityBranch, err := l.AttestedState.FinalizedRootProof(l.Ctx)
+			fb, err := update.FinalityBranch()
 			require.NoError(t, err)
-			for i, leaf := range update.FinalityBranch() {
-				require.DeepSSZEqual(t, finalityBranch[i], leaf[:], "Leaf is not equal")
+			proof, err := l.AttestedState.FinalizedRootProof(l.Ctx)
+			require.NoError(t, err)
+			for i, leaf := range fb {
+				require.DeepSSZEqual(t, proof[i], leaf[:], "Leaf is not equal")
 			}
 
 			// Check Execution BlockHash
@@ -295,11 +298,12 @@ func TestLightClient_NewLightClientFinalityUpdateFromBeaconState(t *testing.T) {
 			require.DeepSSZEqual(t, finalizedBlockHeader.Header.ParentRoot, updateFinalizedHeaderBeacon.ParentRoot, "Finalized header parent root is not equal")
 			require.DeepSSZEqual(t, finalizedBlockHeader.Header.StateRoot, updateFinalizedHeaderBeacon.StateRoot, "Finalized header state root is not equal")
 			require.DeepSSZEqual(t, finalizedBlockHeader.Header.BodyRoot, updateFinalizedHeaderBeacon.BodyRoot, "Finalized header body root is not equal")
-			require.Equal(t, lightClient.FinalityBranchNumOfLeaves, len(update.FinalityBranch()), "Invalid finality branch leaves")
-			finalityBranch, err := l.AttestedState.FinalizedRootProof(l.Ctx)
+			fb, err := update.FinalityBranch()
 			require.NoError(t, err)
-			for i, leaf := range update.FinalityBranch() {
-				require.DeepSSZEqual(t, finalityBranch[i], leaf[:], "Leaf is not equal")
+			proof, err := l.AttestedState.FinalizedRootProof(l.Ctx)
+			require.NoError(t, err)
+			for i, leaf := range fb {
+				require.DeepSSZEqual(t, proof[i], leaf[:], "Leaf is not equal")
 			}
 
 			// Check Execution BlockHash

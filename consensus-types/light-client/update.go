@@ -50,14 +50,15 @@ func NewWrappedUpdateAltair(p *pb.LightClientUpdateAltair) (interfaces.LightClie
 	if p == nil {
 		return nil, consensustypes.ErrNilObjectWrapped
 	}
-	attestedHeader, err := NewWrappedHeaderAltair(p.AttestedHeader)
+
+	attestedHeader, err := NewWrappedHeader(p.AttestedHeader)
 	if err != nil {
 		return nil, err
 	}
 
 	var finalizedHeader interfaces.LightClientHeader
 	if p.FinalizedHeader != nil {
-		finalizedHeader, err = NewWrappedHeaderAltair(p.FinalizedHeader)
+		finalizedHeader, err = NewWrappedHeader(p.FinalizedHeader)
 		if err != nil {
 			return nil, err
 		}
@@ -114,17 +115,12 @@ func (u *updateAltair) AttestedHeader() interfaces.LightClientHeader {
 }
 
 func (u *updateAltair) SetAttestedHeader(header interfaces.LightClientHeader) error {
-	if header.Version() != version.Altair {
-		return fmt.Errorf("header version %s is not %s", version.String(header.Version()), version.String(version.Altair))
-	}
-	u.attestedHeader = header
-
 	proto, ok := header.Proto().(*pb.LightClientHeaderAltair)
 	if !ok {
 		return fmt.Errorf("header type %T is not %T", proto, &pb.LightClientHeaderAltair{})
 	}
 	u.p.AttestedHeader = proto
-
+	u.attestedHeader = header
 	return nil
 }
 
@@ -165,22 +161,17 @@ func (u *updateAltair) FinalizedHeader() interfaces.LightClientHeader {
 }
 
 func (u *updateAltair) SetFinalizedHeader(header interfaces.LightClientHeader) error {
-	if header.Version() != version.Altair {
-		return fmt.Errorf("header version %s is not %s", version.String(header.Version()), version.String(version.Altair))
-	}
-	u.finalizedHeader = header
-
 	proto, ok := header.Proto().(*pb.LightClientHeaderAltair)
 	if !ok {
 		return fmt.Errorf("header type %T is not %T", proto, &pb.LightClientHeaderAltair{})
 	}
 	u.p.FinalizedHeader = proto
-
+	u.finalizedHeader = header
 	return nil
 }
 
-func (u *updateAltair) FinalityBranch() interfaces.LightClientFinalityBranch {
-	return u.finalityBranch
+func (u *updateAltair) FinalityBranch() (interfaces.LightClientFinalityBranch, error) {
+	return u.finalityBranch, nil
 }
 
 func (u *updateAltair) SetFinalityBranch(branch [][]byte) error {
@@ -189,10 +180,12 @@ func (u *updateAltair) SetFinalityBranch(branch [][]byte) error {
 		return err
 	}
 	u.finalityBranch = b
-
 	u.p.FinalityBranch = branch
-
 	return nil
+}
+
+func (u *updateAltair) FinalityBranchElectra() (interfaces.LightClientFinalityBranchElectra, error) {
+	return interfaces.LightClientFinalityBranchElectra{}, consensustypes.ErrNotSupported("FinalityBranchElectra", version.Altair)
 }
 
 func (u *updateAltair) SyncAggregate() *pb.SyncAggregate {
@@ -228,14 +221,15 @@ func NewWrappedUpdateCapella(p *pb.LightClientUpdateCapella) (interfaces.LightCl
 	if p == nil {
 		return nil, consensustypes.ErrNilObjectWrapped
 	}
-	attestedHeader, err := NewWrappedHeaderCapella(p.AttestedHeader)
+
+	attestedHeader, err := NewWrappedHeader(p.AttestedHeader)
 	if err != nil {
 		return nil, err
 	}
 
 	var finalizedHeader interfaces.LightClientHeader
 	if p.FinalizedHeader != nil {
-		finalizedHeader, err = NewWrappedHeaderCapella(p.FinalizedHeader)
+		finalizedHeader, err = NewWrappedHeader(p.FinalizedHeader)
 		if err != nil {
 			return nil, err
 		}
@@ -292,17 +286,12 @@ func (u *updateCapella) AttestedHeader() interfaces.LightClientHeader {
 }
 
 func (u *updateCapella) SetAttestedHeader(header interfaces.LightClientHeader) error {
-	if header.Version() != version.Capella {
-		return fmt.Errorf("header version %s is not %s", version.String(header.Version()), version.String(version.Capella))
-	}
-	u.attestedHeader = header
-
 	proto, ok := header.Proto().(*pb.LightClientHeaderCapella)
 	if !ok {
 		return fmt.Errorf("header type %T is not %T", proto, &pb.LightClientHeaderCapella{})
 	}
 	u.p.AttestedHeader = proto
-
+	u.attestedHeader = header
 	return nil
 }
 
@@ -343,22 +332,17 @@ func (u *updateCapella) FinalizedHeader() interfaces.LightClientHeader {
 }
 
 func (u *updateCapella) SetFinalizedHeader(header interfaces.LightClientHeader) error {
-	if header.Version() != version.Capella {
-		return fmt.Errorf("header version %s is not %s", version.String(header.Version()), version.String(version.Capella))
-	}
-	u.finalizedHeader = header
-
 	proto, ok := header.Proto().(*pb.LightClientHeaderCapella)
 	if !ok {
 		return fmt.Errorf("header type %T is not %T", proto, &pb.LightClientHeaderCapella{})
 	}
 	u.p.FinalizedHeader = proto
-
+	u.finalizedHeader = header
 	return nil
 }
 
-func (u *updateCapella) FinalityBranch() interfaces.LightClientFinalityBranch {
-	return u.finalityBranch
+func (u *updateCapella) FinalityBranch() (interfaces.LightClientFinalityBranch, error) {
+	return u.finalityBranch, nil
 }
 
 func (u *updateCapella) SetFinalityBranch(branch [][]byte) error {
@@ -367,10 +351,12 @@ func (u *updateCapella) SetFinalityBranch(branch [][]byte) error {
 		return err
 	}
 	u.finalityBranch = b
-
 	u.p.FinalityBranch = branch
-
 	return nil
+}
+
+func (u *updateCapella) FinalityBranchElectra() (interfaces.LightClientFinalityBranchElectra, error) {
+	return interfaces.LightClientFinalityBranchElectra{}, consensustypes.ErrNotSupported("FinalityBranchElectra", u.Version())
 }
 
 func (u *updateCapella) SyncAggregate() *pb.SyncAggregate {
@@ -406,14 +392,15 @@ func NewWrappedUpdateDeneb(p *pb.LightClientUpdateDeneb) (interfaces.LightClient
 	if p == nil {
 		return nil, consensustypes.ErrNilObjectWrapped
 	}
-	attestedHeader, err := NewWrappedHeaderDeneb(p.AttestedHeader)
+
+	attestedHeader, err := NewWrappedHeader(p.AttestedHeader)
 	if err != nil {
 		return nil, err
 	}
 
 	var finalizedHeader interfaces.LightClientHeader
 	if p.FinalizedHeader != nil {
-		finalizedHeader, err = NewWrappedHeaderDeneb(p.FinalizedHeader)
+		finalizedHeader, err = NewWrappedHeader(p.FinalizedHeader)
 		if err != nil {
 			return nil, err
 		}
@@ -470,17 +457,12 @@ func (u *updateDeneb) AttestedHeader() interfaces.LightClientHeader {
 }
 
 func (u *updateDeneb) SetAttestedHeader(header interfaces.LightClientHeader) error {
-	if header.Version() != version.Deneb {
-		return fmt.Errorf("header version %s is not %s", version.String(header.Version()), version.String(version.Deneb))
-	}
-	u.attestedHeader = header
-
 	proto, ok := header.Proto().(*pb.LightClientHeaderDeneb)
 	if !ok {
 		return fmt.Errorf("header type %T is not %T", proto, &pb.LightClientHeaderDeneb{})
 	}
 	u.p.AttestedHeader = proto
-
+	u.attestedHeader = header
 	return nil
 }
 
@@ -521,22 +503,17 @@ func (u *updateDeneb) FinalizedHeader() interfaces.LightClientHeader {
 }
 
 func (u *updateDeneb) SetFinalizedHeader(header interfaces.LightClientHeader) error {
-	if header.Version() != version.Deneb {
-		return fmt.Errorf("header version %s is not %s", version.String(header.Version()), version.String(version.Deneb))
-	}
-	u.finalizedHeader = header
-
 	proto, ok := header.Proto().(*pb.LightClientHeaderDeneb)
 	if !ok {
 		return fmt.Errorf("header type %T is not %T", proto, &pb.LightClientHeaderDeneb{})
 	}
 	u.p.FinalizedHeader = proto
-
+	u.finalizedHeader = header
 	return nil
 }
 
-func (u *updateDeneb) FinalityBranch() interfaces.LightClientFinalityBranch {
-	return u.finalityBranch
+func (u *updateDeneb) FinalityBranch() (interfaces.LightClientFinalityBranch, error) {
+	return u.finalityBranch, nil
 }
 
 func (u *updateDeneb) SetFinalityBranch(branch [][]byte) error {
@@ -545,10 +522,12 @@ func (u *updateDeneb) SetFinalityBranch(branch [][]byte) error {
 		return err
 	}
 	u.finalityBranch = b
-
 	u.p.FinalityBranch = branch
-
 	return nil
+}
+
+func (u *updateDeneb) FinalityBranchElectra() (interfaces.LightClientFinalityBranchElectra, error) {
+	return interfaces.LightClientFinalityBranchElectra{}, consensustypes.ErrNotSupported("FinalityBranchElectra", u.Version())
 }
 
 func (u *updateDeneb) SyncAggregate() *pb.SyncAggregate {
@@ -571,12 +550,11 @@ func (u *updateDeneb) SetSignatureSlot(slot primitives.Slot) {
 // constructed from the proto, so that we don't have to reconstruct them every time
 // in getters.
 type updateElectra struct {
-	p                              *pb.LightClientUpdateElectra
-	attestedHeader                 interfaces.LightClientHeader
-	nextSyncCommitteeBranch        interfaces.LightClientSyncCommitteeBranch
-	nextSyncCommitteeBranchElectra interfaces.LightClientSyncCommitteeBranchElectra
-	finalizedHeader                interfaces.LightClientHeader
-	finalityBranch                 interfaces.LightClientFinalityBranch
+	p                       *pb.LightClientUpdateElectra
+	attestedHeader          interfaces.LightClientHeader
+	nextSyncCommitteeBranch interfaces.LightClientSyncCommitteeBranchElectra
+	finalizedHeader         interfaces.LightClientHeader
+	finalityBranch          interfaces.LightClientFinalityBranchElectra
 }
 
 var _ interfaces.LightClientUpdate = &updateElectra{}
@@ -585,44 +563,33 @@ func NewWrappedUpdateElectra(p *pb.LightClientUpdateElectra) (interfaces.LightCl
 	if p == nil {
 		return nil, consensustypes.ErrNilObjectWrapped
 	}
-	attestedHeader, err := NewWrappedHeaderDeneb(p.AttestedHeader)
+
+	attestedHeader, err := NewWrappedHeader(p.AttestedHeader)
 	if err != nil {
 		return nil, err
 	}
 
 	var finalizedHeader interfaces.LightClientHeader
 	if p.FinalizedHeader != nil {
-		finalizedHeader, err = NewWrappedHeaderDeneb(p.FinalizedHeader)
+		finalizedHeader, err = NewWrappedHeader(p.FinalizedHeader)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	var scBranchElectra interfaces.LightClientSyncCommitteeBranchElectra
-	var scBranch interfaces.LightClientSyncCommitteeBranch
-	if slots.ToEpoch(attestedHeader.Beacon().Slot) >= params.BeaconConfig().ElectraForkEpoch {
-		scBranchElectra, err = createBranch[interfaces.LightClientSyncCommitteeBranchElectra](
-			"sync committee",
-			p.NextSyncCommitteeBranch,
-			fieldparams.SyncCommitteeBranchDepthElectra,
-		)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		scBranch, err = createBranch[interfaces.LightClientSyncCommitteeBranch](
-			"sync committee",
-			p.NextSyncCommitteeBranch,
-			fieldparams.SyncCommitteeBranchDepth,
-		)
-		if err != nil {
-			return nil, err
-		}
+	scBranch, err := createBranch[interfaces.LightClientSyncCommitteeBranchElectra](
+		"sync committee",
+		p.NextSyncCommitteeBranch,
+		fieldparams.SyncCommitteeBranchDepthElectra,
+	)
+	if err != nil {
+		return nil, err
 	}
-	finalityBranch, err := createBranch[interfaces.LightClientFinalityBranch](
+
+	finalityBranch, err := createBranch[interfaces.LightClientFinalityBranchElectra](
 		"finality",
 		p.FinalityBranch,
-		fieldparams.FinalityBranchDepth,
+		fieldparams.FinalityBranchDepthElectra,
 	)
 	if err != nil {
 		return nil, err
@@ -663,17 +630,12 @@ func (u *updateElectra) AttestedHeader() interfaces.LightClientHeader {
 }
 
 func (u *updateElectra) SetAttestedHeader(header interfaces.LightClientHeader) error {
-	if header.Version() != version.Electra {
-		return fmt.Errorf("header version %s is not %s", version.String(header.Version()), version.String(version.Electra))
-	}
-	u.attestedHeader = header
-
 	proto, ok := header.Proto().(*pb.LightClientHeaderDeneb)
 	if !ok {
 		return fmt.Errorf("header type %T is not %T", proto, &pb.LightClientHeaderDeneb{})
 	}
 	u.p.AttestedHeader = proto
-
+	u.attestedHeader = header
 	return nil
 }
 
@@ -732,34 +694,31 @@ func (u *updateElectra) FinalizedHeader() interfaces.LightClientHeader {
 }
 
 func (u *updateElectra) SetFinalizedHeader(header interfaces.LightClientHeader) error {
-	if header.Version() != version.Electra {
-		return fmt.Errorf("header version %s is not %s", version.String(header.Version()), version.String(version.Electra))
-	}
-	u.finalizedHeader = header
-
 	proto, ok := header.Proto().(*pb.LightClientHeaderDeneb)
 	if !ok {
 		return fmt.Errorf("header type %T is not %T", proto, &pb.LightClientHeaderDeneb{})
 	}
 	u.p.FinalizedHeader = proto
-
+	u.finalizedHeader = header
 	return nil
 }
 
-func (u *updateElectra) FinalityBranch() interfaces.LightClientFinalityBranch {
-	return u.finalityBranch
+func (u *updateElectra) FinalityBranch() (interfaces.LightClientFinalityBranch, error) {
+	return interfaces.LightClientFinalityBranch{}, consensustypes.ErrNotSupported("FinalityBranch", u.Version())
 }
 
 func (u *updateElectra) SetFinalityBranch(branch [][]byte) error {
-	b, err := createBranch[interfaces.LightClientFinalityBranch]("finality", branch, fieldparams.FinalityBranchDepth)
+	b, err := createBranch[interfaces.LightClientFinalityBranchElectra]("finality", branch, fieldparams.FinalityBranchDepthElectra)
 	if err != nil {
 		return err
 	}
 	u.finalityBranch = b
-
 	u.p.FinalityBranch = branch
-
 	return nil
+}
+
+func (u *updateElectra) FinalityBranchElectra() (interfaces.LightClientFinalityBranchElectra, error) {
+	return u.finalityBranch, nil
 }
 
 func (u *updateElectra) SyncAggregate() *pb.SyncAggregate {

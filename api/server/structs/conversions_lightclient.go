@@ -20,21 +20,31 @@ func LightClientUpdateFromConsensus(update interfaces.LightClientUpdate) (*Light
 	if err != nil {
 		return nil, errors.Wrap(err, "could not marshal finalized light client header")
 	}
-	finalityBranch := update.FinalityBranch()
 
 	var scBranch [][32]byte
+	var finalityBranch [][32]byte
 	if update.Version() >= version.Electra {
-		b, err := update.NextSyncCommitteeBranchElectra()
+		scb, err := update.NextSyncCommitteeBranchElectra()
 		if err != nil {
 			return nil, err
 		}
-		scBranch = b[:]
+		scBranch = scb[:]
+		fb, err := update.FinalityBranchElectra()
+		if err != nil {
+			return nil, err
+		}
+		finalityBranch = fb[:]
 	} else {
-		b, err := update.NextSyncCommitteeBranch()
+		scb, err := update.NextSyncCommitteeBranch()
 		if err != nil {
 			return nil, err
 		}
-		scBranch = b[:]
+		scBranch = scb[:]
+		fb, err := update.FinalityBranch()
+		if err != nil {
+			return nil, err
+		}
+		finalityBranch = fb[:]
 	}
 
 	return &LightClientUpdate{
@@ -42,7 +52,7 @@ func LightClientUpdateFromConsensus(update interfaces.LightClientUpdate) (*Light
 		NextSyncCommittee:       SyncCommitteeFromConsensus(update.NextSyncCommittee()),
 		NextSyncCommitteeBranch: branchToJSON(scBranch),
 		FinalizedHeader:         finalizedHeader,
-		FinalityBranch:          branchToJSON(finalityBranch[:]),
+		FinalityBranch:          branchToJSON(finalityBranch),
 		SyncAggregate:           SyncAggregateFromConsensus(update.SyncAggregate()),
 		SignatureSlot:           fmt.Sprintf("%d", update.SignatureSlot()),
 	}, nil
@@ -57,12 +67,26 @@ func LightClientFinalityUpdateFromConsensus(update interfaces.LightClientFinalit
 	if err != nil {
 		return nil, errors.Wrap(err, "could not marshal finalized light client header")
 	}
-	finalityBranch := update.FinalityBranch()
+
+	var finalityBranch [][32]byte
+	if update.Version() >= version.Electra {
+		b, err := update.FinalityBranchElectra()
+		if err != nil {
+			return nil, err
+		}
+		finalityBranch = b[:]
+	} else {
+		b, err := update.FinalityBranch()
+		if err != nil {
+			return nil, err
+		}
+		finalityBranch = b[:]
+	}
 
 	return &LightClientFinalityUpdate{
 		AttestedHeader:  attestedHeader,
 		FinalizedHeader: finalizedHeader,
-		FinalityBranch:  branchToJSON(finalityBranch[:]),
+		FinalityBranch:  branchToJSON(finalityBranch),
 		SyncAggregate:   SyncAggregateFromConsensus(update.SyncAggregate()),
 		SignatureSlot:   fmt.Sprintf("%d", update.SignatureSlot()),
 	}, nil
