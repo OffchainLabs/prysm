@@ -32,6 +32,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Use read only validator for core processing to avoid unnecessary copying.
 - Use ROBlock across block processing pipeline.
 - Added missing Eth-Consensus-Version headers to GetBlockAttestationsV2 and GetAttesterSlashingsV2 endpoints.
+- When instantiating new validators, explicit set `Slashed` to false and move `EffectiveBalance` to match struct definition.
 - Updated pgo profile for beacon chain with holesky data. This improves the profile guided
   optimizations in the go compiler.
 - Use read only state when computing the active validator list.
