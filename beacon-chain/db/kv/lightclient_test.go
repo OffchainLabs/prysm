@@ -44,8 +44,6 @@ func createUpdate(t *testing.T, v int) (interfaces.LightClientUpdate, error) {
 	switch v {
 	case version.Altair:
 		slot = primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
-		state, err = util.NewBeaconStateAltair()
-		require.NoError(t, err)
 		header, err = light_client.NewWrappedHeader(&pb.LightClientHeaderAltair{
 			Beacon: &pb.BeaconBlockHeader{
 				Slot:          1,
@@ -60,8 +58,6 @@ func createUpdate(t *testing.T, v int) (interfaces.LightClientUpdate, error) {
 		require.NoError(t, err)
 	case version.Capella:
 		slot = primitives.Slot(config.CapellaForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
-		state, err = util.NewBeaconStateCapella()
-		require.NoError(t, err)
 		header, err = light_client.NewWrappedHeader(&pb.LightClientHeaderCapella{
 			Beacon: &pb.BeaconBlockHeader{
 				Slot:          1,
@@ -90,8 +86,6 @@ func createUpdate(t *testing.T, v int) (interfaces.LightClientUpdate, error) {
 		require.NoError(t, err)
 	case version.Deneb:
 		slot = primitives.Slot(config.DenebForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
-		state, err = util.NewBeaconStateDeneb()
-		require.NoError(t, err)
 		header, err = light_client.NewWrappedHeader(&pb.LightClientHeaderDeneb{
 			Beacon: &pb.BeaconBlockHeader{
 				Slot:          1,
@@ -120,8 +114,6 @@ func createUpdate(t *testing.T, v int) (interfaces.LightClientUpdate, error) {
 		require.NoError(t, err)
 	case version.Electra:
 		slot = primitives.Slot(config.ElectraForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
-		state, err = util.NewBeaconStateElectra()
-		require.NoError(t, err)
 		header, err = light_client.NewWrappedHeader(&pb.LightClientHeaderDeneb{
 			Beacon: &pb.BeaconBlockHeader{
 				Slot:          1,
