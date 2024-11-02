@@ -160,61 +160,63 @@ func createUpdate(t *testing.T, v int) (interfaces.LightClientUpdate, error) {
 	return update, nil
 }
 
-func TestStore_LightClientUpdate_CanSaveRetrieveAltair(t *testing.T) {
+func TestStore_LightClientUpdate_CanSaveRetrieve(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.AltairForkEpoch = 0
+	cfg.CapellaForkEpoch = 1
+	cfg.DenebForkEpoch = 2
+	cfg.ElectraForkEpoch = 3
+	params.OverrideBeaconConfig(cfg)
+
 	db := setupDB(t)
 	ctx := context.Background()
-	update, err := createUpdate(t, version.Altair)
-	require.NoError(t, err)
-	period := uint64(1)
 
-	err = db.SaveLightClientUpdate(ctx, period, update)
-	require.NoError(t, err)
+	t.Run("Altair", func(t *testing.T) {
+		update, err := createUpdate(t, version.Altair)
+		require.NoError(t, err)
+		period := uint64(1)
 
-	retrievedUpdate, err := db.LightClientUpdate(ctx, period)
-	require.NoError(t, err)
-	require.DeepEqual(t, update, retrievedUpdate, "retrieved update does not match saved update")
-}
+		err = db.SaveLightClientUpdate(ctx, period, update)
+		require.NoError(t, err)
 
-func TestStore_LightClientUpdate_CanSaveRetrieveCapella(t *testing.T) {
-	db := setupDB(t)
-	ctx := context.Background()
-	update, err := createUpdate(t, version.Capella)
-	require.NoError(t, err)
-	period := uint64(1)
-	err = db.SaveLightClientUpdate(ctx, period, update)
-	require.NoError(t, err)
+		retrievedUpdate, err := db.LightClientUpdate(ctx, period)
+		require.NoError(t, err)
+		require.DeepEqual(t, update, retrievedUpdate, "retrieved update does not match saved update")
+	})
+	t.Run("Capella", func(t *testing.T) {
+		update, err := createUpdate(t, version.Capella)
+		require.NoError(t, err)
+		period := uint64(1)
+		err = db.SaveLightClientUpdate(ctx, period, update)
+		require.NoError(t, err)
 
-	retrievedUpdate, err := db.LightClientUpdate(ctx, period)
-	require.NoError(t, err)
-	require.DeepEqual(t, update, retrievedUpdate, "retrieved update does not match saved update")
-}
+		retrievedUpdate, err := db.LightClientUpdate(ctx, period)
+		require.NoError(t, err)
+		require.DeepEqual(t, update, retrievedUpdate, "retrieved update does not match saved update")
+	})
+	t.Run("Deneb", func(t *testing.T) {
+		update, err := createUpdate(t, version.Deneb)
+		require.NoError(t, err)
+		period := uint64(1)
+		err = db.SaveLightClientUpdate(ctx, period, update)
+		require.NoError(t, err)
 
-func TestStore_LightClientUpdate_CanSaveRetrieveDeneb(t *testing.T) {
-	db := setupDB(t)
-	ctx := context.Background()
-	update, err := createUpdate(t, version.Deneb)
-	require.NoError(t, err)
-	period := uint64(1)
-	err = db.SaveLightClientUpdate(ctx, period, update)
-	require.NoError(t, err)
+		retrievedUpdate, err := db.LightClientUpdate(ctx, period)
+		require.NoError(t, err)
+		require.DeepEqual(t, update, retrievedUpdate, "retrieved update does not match saved update")
+	})
+	t.Run("Electra", func(t *testing.T) {
+		update, err := createUpdate(t, version.Electra)
+		require.NoError(t, err)
+		period := uint64(1)
+		err = db.SaveLightClientUpdate(ctx, period, update)
+		require.NoError(t, err)
 
-	retrievedUpdate, err := db.LightClientUpdate(ctx, period)
-	require.NoError(t, err)
-	require.DeepEqual(t, update, retrievedUpdate, "retrieved update does not match saved update")
-}
-
-func TestStore_LightClientUpdate_CanSaveRetrieveElectra(t *testing.T) {
-	db := setupDB(t)
-	ctx := context.Background()
-	update, err := createUpdate(t, version.Electra)
-	require.NoError(t, err)
-	period := uint64(1)
-	err = db.SaveLightClientUpdate(ctx, period, update)
-	require.NoError(t, err)
-
-	retrievedUpdate, err := db.LightClientUpdate(ctx, period)
-	require.NoError(t, err)
-	require.DeepEqual(t, update, retrievedUpdate, "retrieved update does not match saved update")
+		retrievedUpdate, err := db.LightClientUpdate(ctx, period)
+		require.NoError(t, err)
+		require.DeepEqual(t, update, retrievedUpdate, "retrieved update does not match saved update")
+	})
 }
 
 func TestStore_LightClientUpdates_canRetrieveRange(t *testing.T) {
