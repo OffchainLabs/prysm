@@ -23,10 +23,6 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-const (
-	FinalityBranchNumOfLeaves = 6
-)
-
 func NewLightClientFinalityUpdateFromBeaconState(
 	ctx context.Context,
 	currentSlot primitives.Slot,
@@ -159,7 +155,7 @@ func NewLightClientUpdateFromBeaconState(
 	updateAttestedPeriod := slots.SyncCommitteePeriod(slots.ToEpoch(attestedBlock.Block().Slot()))
 
 	// update = LightClientUpdate()
-	result, err := CreateDefaultLightClientUpdate(currentSlot)
+	result, err := CreateDefaultLightClientUpdate(currentSlot, attestedState)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not create default light client update")
 	}
@@ -243,7 +239,7 @@ func NewLightClientUpdateFromBeaconState(
 	return result, nil
 }
 
-func CreateDefaultLightClientUpdate(currentSlot primitives.Slot) (interfaces.LightClientUpdate, error) {
+func CreateDefaultLightClientUpdate(currentSlot primitives.Slot, attestedState state.BeaconState) (interfaces.LightClientUpdate, error) {
 	currentEpoch := slots.ToEpoch(currentSlot)
 
 	syncCommitteeSize := params.BeaconConfig().SyncCommitteeSize
@@ -270,8 +266,14 @@ func CreateDefaultLightClientUpdate(currentSlot primitives.Slot) (interfaces.Lig
 	for i := 0; i < fieldparams.ExecutionBranchDepth; i++ {
 		executionBranch[i] = make([]byte, 32)
 	}
-	finalityBranch := make([][]byte, fieldparams.FinalityBranchDepth)
-	for i := 0; i < fieldparams.FinalityBranchDepth; i++ {
+
+	var finalityBranch [][]byte
+	if attestedState.Version() >= version.Electra {
+		finalityBranch = make([][]byte, fieldparams.FinalityBranchDepthElectra)
+	} else {
+		finalityBranch = make([][]byte, fieldparams.FinalityBranchDepth)
+	}
+	for i := 0; i < len(finalityBranch); i++ {
 		finalityBranch[i] = make([]byte, 32)
 	}
 
@@ -308,15 +310,28 @@ func CreateDefaultLightClientUpdate(currentSlot primitives.Slot) (interfaces.Lig
 			FinalityBranch:          finalityBranch,
 		}
 	} else {
-		m = &pb.LightClientUpdateElectra{
-			AttestedHeader: &pb.LightClientHeaderDeneb{
-				Beacon:          &pb.BeaconBlockHeader{},
-				Execution:       &enginev1.ExecutionPayloadHeaderDeneb{},
-				ExecutionBranch: executionBranch,
-			},
-			NextSyncCommittee:       nextSyncCommittee,
-			NextSyncCommitteeBranch: nextSyncCommitteeBranch,
-			FinalityBranch:          finalityBranch,
+		if attestedState.Version() >= version.Electra {
+			m = &pb.LightClientUpdateElectra{
+				AttestedHeader: &pb.LightClientHeaderDeneb{
+					Beacon:          &pb.BeaconBlockHeader{},
+					Execution:       &enginev1.ExecutionPayloadHeaderDeneb{},
+					ExecutionBranch: executionBranch,
+				},
+				NextSyncCommittee:       nextSyncCommittee,
+				NextSyncCommitteeBranch: nextSyncCommitteeBranch,
+				FinalityBranch:          finalityBranch,
+			}
+		} else {
+			m = &pb.LightClientUpdateDeneb{
+				AttestedHeader: &pb.LightClientHeaderDeneb{
+					Beacon:          &pb.BeaconBlockHeader{},
+					Execution:       &enginev1.ExecutionPayloadHeaderDeneb{},
+					ExecutionBranch: executionBranch,
+				},
+				NextSyncCommittee:       nextSyncCommittee,
+				NextSyncCommitteeBranch: nextSyncCommitteeBranch,
+				FinalityBranch:          finalityBranch,
+			}
 		}
 	}
 

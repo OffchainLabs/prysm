@@ -12,6 +12,7 @@ type LightClientExecutionBranch = [fieldparams.ExecutionBranchDepth][fieldparams
 type LightClientSyncCommitteeBranch = [fieldparams.SyncCommitteeBranchDepth][fieldparams.RootLength]byte
 type LightClientSyncCommitteeBranchElectra = [fieldparams.SyncCommitteeBranchDepthElectra][fieldparams.RootLength]byte
 type LightClientFinalityBranch = [fieldparams.FinalityBranchDepth][fieldparams.RootLength]byte
+type LightClientFinalityBranchElectra = [fieldparams.FinalityBranchDepthElectra][fieldparams.RootLength]byte
 
 type LightClientHeader interface {
 	ssz.Marshaler
@@ -45,7 +46,8 @@ type LightClientUpdate interface {
 	SetNextSyncCommitteeBranchElectra(branch [][]byte) error
 	FinalizedHeader() LightClientHeader
 	SetFinalizedHeader(header LightClientHeader) error
-	FinalityBranch() LightClientFinalityBranch
+	FinalityBranch() (LightClientFinalityBranch, error)
+	FinalityBranchElectra() (LightClientFinalityBranchElectra, error)
 	SetFinalityBranch(branch [][]byte) error
 	SyncAggregate() *pb.SyncAggregate
 	SetSyncAggregate(sa *pb.SyncAggregate)
@@ -59,7 +61,8 @@ type LightClientFinalityUpdate interface {
 	Version() int
 	AttestedHeader() LightClientHeader
 	FinalizedHeader() LightClientHeader
-	FinalityBranch() LightClientFinalityBranch
+	FinalityBranch() (LightClientFinalityBranch, error)
+	FinalityBranchElectra() (LightClientFinalityBranchElectra, error)
 	SyncAggregate() *pb.SyncAggregate
 	SignatureSlot() primitives.Slot
 }

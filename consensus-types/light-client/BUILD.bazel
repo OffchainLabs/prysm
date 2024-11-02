@@ -14,6 +14,7 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//config/fieldparams:go_default_library",
+        "//config/params:go_default_library",
         "//consensus-types:go_default_library",
         "//consensus-types/blocks:go_default_library",
         "//consensus-types/interfaces:go_default_library",
@@ -21,6 +22,7 @@ go_library(
         "//encoding/bytesutil:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "//runtime/version:go_default_library",
+        "//time/slots:go_default_library",
         "@org_golang_google_protobuf//proto:go_default_library",
     ],
 )
