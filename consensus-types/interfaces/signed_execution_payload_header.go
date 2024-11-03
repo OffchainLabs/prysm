@@ -3,6 +3,7 @@ package interfaces
 import (
 	field_params "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"google.golang.org/protobuf/proto"
 )
 
 type ROSignedExecutionPayloadHeader interface {
@@ -22,4 +23,5 @@ type ROExecutionPayloadHeaderEPBS interface {
 	Value() primitives.Gwei
 	BlobKzgCommitmentsRoot() [32]byte
 	IsNil() bool
+	Proto() proto.Message
 }

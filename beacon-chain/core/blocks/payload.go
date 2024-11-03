@@ -202,24 +202,24 @@ func ValidatePayload(st state.BeaconState, payload interfaces.ExecutionData) err
 //	    block_hash=payload.block_hash,
 //	    transactions_root=hash_tree_root(payload.transactions),
 //	)
-func ProcessPayload(st state.BeaconState, body interfaces.ReadOnlyBeaconBlockBody) (state.BeaconState, error) {
+func ProcessPayload(st state.BeaconState, body interfaces.ReadOnlyBeaconBlockBody) error {
 	payload, err := body.Execution()
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if err := verifyBlobCommitmentCount(body); err != nil {
-		return nil, err
+		return err
 	}
 	if err := ValidatePayloadWhenMergeCompletes(st, payload); err != nil {
-		return nil, err
+		return err
 	}
 	if err := ValidatePayload(st, payload); err != nil {
-		return nil, err
+		return err
 	}
 	if err := st.SetLatestExecutionPayloadHeader(payload); err != nil {
-		return nil, err
+		return err
 	}
-	return st, nil
+	return nil
 }
 
 func verifyBlobCommitmentCount(body interfaces.ReadOnlyBeaconBlockBody) error {

@@ -67,7 +67,9 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 	fcuArgs := &fcuConfig{}
 
 	if s.inRegularSync() {
-		defer s.handleSecondFCUCall(cfg, fcuArgs)
+		if cfg.roblock.Version() < version.EPBS {
+			defer s.handleSecondFCUCall(cfg, fcuArgs)
+		}
 	}
 	defer s.sendLightClientFeeds(cfg)
 	defer s.sendStateFeedOnBlock(cfg)
@@ -97,6 +99,9 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 	newBlockHeadElapsedTime.Observe(float64(time.Since(start).Milliseconds()))
 	if cfg.headRoot != cfg.roblock.Root() {
 		s.logNonCanonicalBlockReceived(cfg.roblock.Root(), cfg.headRoot)
+		return nil
+	}
+	if cfg.roblock.Version() >= version.EPBS {
 		return nil
 	}
 	if err := s.getFCUArgs(cfg, fcuArgs); err != nil {

@@ -6,6 +6,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
+	"google.golang.org/protobuf/proto"
 )
 
 type signedExecutionPayloadHeader struct {
@@ -118,4 +119,9 @@ func (p executionPayloadHeaderEPBS) Value() primitives.Gwei {
 // BlobKzgCommitmentsRoot returns the wrapped value
 func (p executionPayloadHeaderEPBS) BlobKzgCommitmentsRoot() [32]byte {
 	return [32]byte(p.p.BlobKzgCommitmentsRoot)
+}
+
+// Proto() returns the message type
+func (p executionPayloadHeaderEPBS) Proto() proto.Message {
+	return p.p
 }
