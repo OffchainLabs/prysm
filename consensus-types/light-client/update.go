@@ -3,7 +3,6 @@ package light_client
 import (
 	"fmt"
 
-	"github.com/pkg/errors"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	consensustypes "github.com/prysmaticlabs/prysm/v5/consensus-types"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
@@ -147,11 +146,11 @@ func (u *updateAltair) SetNextSyncCommitteeBranch(branch [][]byte) error {
 }
 
 func (u *updateAltair) NextSyncCommitteeBranchElectra() (interfaces.LightClientSyncCommitteeBranchElectra, error) {
-	return [6][32]byte{}, errors.Wrap(consensustypes.ErrNotSupported("NextSyncCommitteeBranchElectra", version.Altair), "Attested header's version is Altair")
+	return [6][32]byte{}, consensustypes.ErrNotSupported("NextSyncCommitteeBranchElectra", version.Altair)
 }
 
 func (u *updateAltair) SetNextSyncCommitteeBranchElectra([][]byte) error {
-	return errors.Wrap(consensustypes.ErrNotSupported("SetNextSyncCommitteeBranchElectra", version.Altair), "Attested header's version is Altair")
+	return consensustypes.ErrNotSupported("SetNextSyncCommitteeBranchElectra", version.Altair)
 }
 
 func (u *updateAltair) FinalizedHeader() interfaces.LightClientHeader {
@@ -318,11 +317,11 @@ func (u *updateCapella) SetNextSyncCommitteeBranch(branch [][]byte) error {
 }
 
 func (u *updateCapella) NextSyncCommitteeBranchElectra() (interfaces.LightClientSyncCommitteeBranchElectra, error) {
-	return [6][32]byte{}, errors.Wrap(consensustypes.ErrNotSupported("NextSyncCommitteeBranchElectra", version.Capella), "Attested header's version is Capella")
+	return [6][32]byte{}, consensustypes.ErrNotSupported("NextSyncCommitteeBranchElectra", version.Capella)
 }
 
 func (u *updateCapella) SetNextSyncCommitteeBranchElectra([][]byte) error {
-	return errors.Wrap(consensustypes.ErrNotSupported("SetNextSyncCommitteeBranchElectra", version.Capella), "Attested header's version is Capella")
+	return consensustypes.ErrNotSupported("SetNextSyncCommitteeBranchElectra", version.Capella)
 }
 
 func (u *updateCapella) FinalizedHeader() interfaces.LightClientHeader {
@@ -489,11 +488,11 @@ func (u *updateDeneb) SetNextSyncCommitteeBranch(branch [][]byte) error {
 }
 
 func (u *updateDeneb) NextSyncCommitteeBranchElectra() (interfaces.LightClientSyncCommitteeBranchElectra, error) {
-	return [6][32]byte{}, errors.Wrap(consensustypes.ErrNotSupported("NextSyncCommitteeBranchElectra", version.Deneb), "Attested header's version is Deneb")
+	return [6][32]byte{}, consensustypes.ErrNotSupported("NextSyncCommitteeBranchElectra", version.Deneb)
 }
 
 func (u *updateDeneb) SetNextSyncCommitteeBranchElectra([][]byte) error {
-	return errors.Wrap(consensustypes.ErrNotSupported("SetNextSyncCommitteeBranchElectra", version.Deneb), "Attested header's version is Deneb")
+	return consensustypes.ErrNotSupported("SetNextSyncCommitteeBranchElectra", version.Deneb)
 }
 
 func (u *updateDeneb) FinalizedHeader() interfaces.LightClientHeader {
