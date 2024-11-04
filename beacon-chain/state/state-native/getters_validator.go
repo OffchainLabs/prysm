@@ -30,6 +30,24 @@ func (b *BeaconState) ValidatorsReadOnly() []state.ReadOnlyValidator {
 	return b.validatorsReadOnlyVal()
 }
 
+// This returns the validator registry without copying it. The caller
+// must ensure it is not modified and only read from.
+func (b *BeaconState) unsafeValidatorsVal() []*ethpb.Validator {
+	var v []*ethpb.Validator
+	if features.Get().EnableExperimentalState {
+		if b.validatorsMultiValue == nil {
+			return nil
+		}
+		v = b.validatorsMultiValue.Value(b)
+	} else {
+		if b.validators == nil {
+			return nil
+		}
+		v = b.validators
+	}
+	return v
+}
+
 func (b *BeaconState) validatorsVal() []*ethpb.Validator {
 	var v []*ethpb.Validator
 	if features.Get().EnableExperimentalState {

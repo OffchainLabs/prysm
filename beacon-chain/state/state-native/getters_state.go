@@ -23,7 +23,7 @@ func (b *BeaconState) ToProtoUnsafe() interface{} {
 	var vals []*ethpb.Validator
 	var bals []uint64
 	if features.Get().EnableExperimentalState {
-		vals = b.validatorsVal()
+		vals = b.unsafeValidatorsVal()
 		bals = b.balancesVal()
 	} else {
 		vals = b.validators
