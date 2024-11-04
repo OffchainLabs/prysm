@@ -99,14 +99,30 @@ func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySig
 	if err != nil {
 		return err
 	}
-
-	postState, isValidPayload, err := s.validateExecutionAndConsensus(ctx, preState, roblock)
-	if err != nil {
-		return err
-	}
-	daWaitedTime, err := s.handleDA(ctx, blockCopy, blockRoot, avs)
-	if err != nil {
-		return err
+	var postState state.BeaconState
+	var isValidPayload bool
+	var daWaitedTime time.Duration
+	if blockCopy.Version() >= version.EPBS {
+		postState, err = s.validateStateTransition(ctx, preState, roblock)
+		if err != nil {
+			return errors.Wrap(err, "could not validate state transition")
+		}
+		optimistic, err := s.IsOptimisticForRoot(ctx, roblock.Block().ParentRoot())
+		if err != nil {
+			return errors.Wrap(err, "could not check if parent is optimistic")
+		}
+		// if the parent is not optimistic then we can set the block as
+		// not optimistic.
+		isValidPayload = !optimistic
+	} else {
+		postState, isValidPayload, err = s.validateExecutionAndConsensus(ctx, preState, roblock)
+		if err != nil {
+			return err
+		}
+		daWaitedTime, err = s.handleDA(ctx, blockCopy, blockRoot, avs)
+		if err != nil {
+			return err
+		}
 	}
 	// Defragment the state before continuing block processing.
 	s.defragmentState(postState)

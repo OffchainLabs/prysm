@@ -27,6 +27,7 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//beacon-chain/blockchain/kzg:go_default_library",
+        "//beacon-chain/core/epbs:go_default_library",
         "//beacon-chain/core/helpers:go_default_library",
         "//beacon-chain/core/signing:go_default_library",
         "//beacon-chain/core/transition:go_default_library",

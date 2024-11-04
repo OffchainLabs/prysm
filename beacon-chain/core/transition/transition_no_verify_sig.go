@@ -8,7 +8,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/altair"
 	b "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/electra"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/epbs"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition/interop"
 	v "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/validators"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
@@ -272,7 +272,7 @@ func ProcessOperationsNoVerifyAttsSigs(
 			return nil, err
 		}
 	} else {
-		state, err = electra.ProcessOperations(ctx, state, beaconBlock)
+		state, err = epbs.ProcessOperations(ctx, state, beaconBlock)
 		if err != nil {
 			return nil, err
 		}
@@ -318,26 +318,9 @@ func ProcessBlockForStateRoot(
 		return nil, errors.Wrap(err, "could not process block header")
 	}
 
-	enabled, err := b.IsExecutionEnabled(state, blk.Body())
-	if err != nil {
-		return nil, errors.Wrap(err, "could not check if execution is enabled")
+	if err := processExecution(state, blk.Body()); err != nil {
+		return nil, errors.Wrap(err, "could not process execution")
 	}
-	if enabled {
-		executionData, err := blk.Body().Execution()
-		if err != nil {
-			return nil, err
-		}
-		if state.Version() >= version.Capella {
-			state, err = b.ProcessWithdrawals(state, executionData)
-			if err != nil {
-				return nil, errors.Wrap(err, "could not process withdrawals")
-			}
-		}
-		if err = b.ProcessPayload(state, blk.Body()); err != nil {
-			return nil, errors.Wrap(err, "could not process execution data")
-		}
-	}
-
 	randaoReveal := signed.Block().Body().RandaoReveal()
 	state, err = b.ProcessRandaoNoVerify(state, randaoReveal[:])
 	if err != nil {

@@ -4,13 +4,12 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/epbs"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v5/network/forks"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	log "github.com/sirupsen/logrus"
 )
@@ -143,7 +142,7 @@ func (v *HeaderVerifier) VerifyParentBlockRootSeen(seen func([32]byte) bool) (er
 func (v *HeaderVerifier) VerifySignature() (err error) {
 	defer v.record(RequireSignatureValid, &err)
 
-	err = validatePayloadHeaderSignature(v.st, v.h)
+	err = epbs.ValidatePayloadHeaderSignature(v.st, v.h)
 	if err != nil {
 		h, envErr := v.h.Header()
 		if envErr != nil {
@@ -200,44 +199,4 @@ func headerLogFields(h interfaces.ROExecutionPayloadHeaderEPBS) log.Fields {
 		"slot":            h.Slot(),
 		"value":           h.Value(),
 	}
-}
-
-// validatePayloadHeaderSignature validates the signature of the execution payload header.
-func validatePayloadHeaderSignature(st state.ReadOnlyBeaconState, sh interfaces.ROSignedExecutionPayloadHeader) error {
-	h, err := sh.Header()
-	if err != nil {
-		return err
-	}
-
-	pubkey := st.PubkeyAtIndex(h.BuilderIndex())
-	pub, err := bls.PublicKeyFromBytes(pubkey[:])
-	if err != nil {
-		return err
-	}
-
-	s := sh.Signature()
-	sig, err := bls.SignatureFromBytes(s[:])
-	if err != nil {
-		return err
-	}
-
-	currentEpoch := slots.ToEpoch(h.Slot())
-	f, err := forks.Fork(currentEpoch)
-	if err != nil {
-		return err
-	}
-
-	domain, err := signing.Domain(f, currentEpoch, params.BeaconConfig().DomainBeaconBuilder, st.GenesisValidatorsRoot())
-	if err != nil {
-		return err
-	}
-	root, err := sh.SigningRoot(domain)
-	if err != nil {
-		return err
-	}
-	if !sig.Verify(pub, root[:]) {
-		return signing.ErrSigFailedToVerify
-	}
-
-	return nil
 }
