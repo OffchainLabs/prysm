@@ -25,9 +25,15 @@ func (b *BeaconState) ToProtoUnsafe() interface{} {
 	var inactivityScores []uint64
 
 	if features.Get().EnableExperimentalState {
-		bals = b.balancesMultiValue.Value(b)
-		inactivityScores = b.inactivityScoresMultiValue.Value(b)
-		vals = b.validatorsMultiValue.Value(b)
+		if b.balancesMultiValue != nil {
+			bals = b.balancesMultiValue.Value(b)
+		}
+		if b.inactivityScoresMultiValue != nil {
+			inactivityScores = b.inactivityScoresMultiValue.Value(b)
+		}
+		if b.validatorsMultiValue != nil {
+			vals = b.validatorsMultiValue.Value(b)
+		}
 	} else {
 		bals = b.balances
 		inactivityScores = b.inactivityScores
