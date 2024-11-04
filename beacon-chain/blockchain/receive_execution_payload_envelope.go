@@ -109,6 +109,15 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 			}).Info("Forkchoice updated with payload attributes for proposal")
 			s.cfg.PayloadIDCache.Set(envelope.Slot()+1, root, pid)
 		}
+		headBlk, err := s.HeadBlock(ctx)
+		if err != nil {
+			log.WithError(err).Error("could not get head block")
+			return nil
+		}
+		if err := s.saveHead(ctx, root, headBlk, preState); err != nil {
+			log.WithError(err).Error("could not save new head")
+			return nil
+		}
 	}
 	timeWithoutDaWait := time.Since(receivedTime) - daWaitedTime
 	executionEngineProcessingTime.Observe(float64(timeWithoutDaWait.Milliseconds()))
