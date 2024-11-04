@@ -83,6 +83,36 @@ func TestGetDecodedExecutionRequests(t *testing.T) {
 		_, err = ebe.GetDecodedExecutionRequests()
 		require.ErrorContains(t, "invalid execution request, length less than 1", err)
 	})
+	t.Run("a duplicate request should fail", func(t *testing.T) {
+		withdrawalRequestBytes, err := hexutil.Decode("0x6400000000000000000000000000000000000000" +
+			"6500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000040597307000000")
+		require.NoError(t, err)
+		withdrawalRequestBytes2, err := hexutil.Decode("0x6400000000000000000000000000000000000000" +
+			"6500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000040597307000000")
+		require.NoError(t, err)
+		ebe := &enginev1.ExecutionBundleElectra{
+			ExecutionRequests: [][]byte{append([]byte{uint8(enginev1.WithdrawalRequestType)}, withdrawalRequestBytes...), append([]byte{uint8(enginev1.WithdrawalRequestType)}, withdrawalRequestBytes2...)},
+		}
+		_, err = ebe.GetDecodedExecutionRequests()
+		require.ErrorContains(t, "requests should be in sorted order and unique", err)
+	})
+	t.Run("a duplicate withdrawals ( non 0 request type )request should fail", func(t *testing.T) {
+		depositRequestBytes, err := hexutil.Decode("0x610000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000" +
+			"620000000000000000000000000000000000000000000000000000000000000000" +
+			"4059730700000063000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000" +
+			"00000000000000000000000000000000000000000000000000000000000000000000000000000000")
+		require.NoError(t, err)
+		depositRequestBytes2, err := hexutil.Decode("0x610000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000" +
+			"620000000000000000000000000000000000000000000000000000000000000000" +
+			"4059730700000063000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000" +
+			"00000000000000000000000000000000000000000000000000000000000000000000000000000000")
+		require.NoError(t, err)
+		ebe := &enginev1.ExecutionBundleElectra{
+			ExecutionRequests: [][]byte{append([]byte{uint8(enginev1.DepositRequestType)}, depositRequestBytes...), append([]byte{uint8(enginev1.DepositRequestType)}, depositRequestBytes2...)},
+		}
+		_, err = ebe.GetDecodedExecutionRequests()
+		require.ErrorContains(t, "requests should be in sorted order and unique", err)
+	})
 	t.Run("If a request type is provided, but the request list is shorter than the ssz of 1 request we error", func(t *testing.T) {
 		consolidationRequestBytes, err := hexutil.Decode("0x6600000000000000000000000000000000000000" +
 			"670000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000" +
