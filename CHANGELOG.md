@@ -18,6 +18,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Updated the `beacon-chain/monitor` package to Electra. [PR](https://github.com/prysmaticlabs/prysm/pull/14562)
 - Added ListAttestationsV2 endpoint.
 - Add ability to rollback node's internal state during processing.
+- Change how unsafe protobuf state is created to prevent unnecessary copies.
 - Added benchmarks for process slots for Capella, Deneb, Electra
 
 ### Changed
@@ -181,6 +182,7 @@ Updating to this release is recommended at your convenience.
 - Light client support: fix light client attested header execution fields' wrong version bug.
 - Testing: added custom matcher for better push settings testing.
 - Registered `GetDepositSnapshot` Beacon API endpoint.
+- Fix rolling back of a block due to a context deadline.
 
 ### Security
 
