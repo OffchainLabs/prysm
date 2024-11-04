@@ -1520,7 +1520,9 @@ func TestStore_NoViableHead_NewPayload(t *testing.T) {
 	require.NoError(t, err)
 	preStateVersion, preStateHeader, err := getStateVersionAndPayload(preState)
 	require.NoError(t, err)
-	_, err = service.validateExecutionOnBlock(ctx, preStateVersion, preStateHeader, wsb, root)
+	rowsb, err := consensusblocks.NewROBlockWithRoot(wsb, root)
+	require.NoError(t, err)
+	_, err = service.validateExecutionOnBlock(ctx, preStateVersion, preStateHeader, rowsb)
 	require.ErrorContains(t, "received an INVALID payload from execution engine", err)
 	// Check that forkchoice's head and store's headroot are the previous head (since the invalid block did
 	// not finish importing and it was never imported to forkchoice). Check
@@ -1714,7 +1716,9 @@ func TestStore_NoViableHead_Liveness(t *testing.T) {
 	require.NoError(t, err)
 	preStateVersion, preStateHeader, err := getStateVersionAndPayload(preState)
 	require.NoError(t, err)
-	_, err = service.validateExecutionOnBlock(ctx, preStateVersion, preStateHeader, wsb, root)
+	rowsb, err := consensusblocks.NewROBlockWithRoot(wsb, root)
+	require.NoError(t, err)
+	_, err = service.validateExecutionOnBlock(ctx, preStateVersion, preStateHeader, rowsb)
 	require.ErrorContains(t, "received an INVALID payload from execution engine", err)
 
 	// Check that forkchoice's head and store's headroot are the previous head (since the invalid block did
@@ -1964,7 +1968,9 @@ func TestNoViableHead_Reboot(t *testing.T) {
 	require.NoError(t, err)
 	preStateVersion, preStateHeader, err := getStateVersionAndPayload(preState)
 	require.NoError(t, err)
-	_, err = service.validateExecutionOnBlock(ctx, preStateVersion, preStateHeader, wsb, root)
+	rowsb, err := consensusblocks.NewROBlockWithRoot(wsb, root)
+	require.NoError(t, err)
+	_, err = service.validateExecutionOnBlock(ctx, preStateVersion, preStateHeader, rowsb)
 	require.ErrorContains(t, "received an INVALID payload from execution engine", err)
 
 	// Check that the headroot/state are not in DB and restart the node
