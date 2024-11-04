@@ -182,6 +182,7 @@ Updating to this release is recommended at your convenience.
 - Light client support: fix light client attested header execution fields' wrong version bug.
 - Testing: added custom matcher for better push settings testing.
 - Registered `GetDepositSnapshot` Beacon API endpoint.
+- Fix rolling back of a block due to a context deadline.
 
 ### Security
 
