@@ -42,9 +42,14 @@ func New(i interface{}) (Attributer, error) {
 }
 
 // EmptyWithVersion returns an empty payload attribute with the given version.
-func EmptyWithVersion(version int) Attributer {
+func EmptyWithVersion(ver int) Attributer {
+	if ver == version.EPBS {
+		return &data{
+			version: version.Electra,
+		}
+	}
 	return &data{
-		version: version,
+		version: ver,
 	}
 }
 

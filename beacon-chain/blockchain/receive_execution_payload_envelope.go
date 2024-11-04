@@ -1,6 +1,7 @@
 package blockchain
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"time"
@@ -39,7 +40,6 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 	}
 
 	eg, _ := errgroup.WithContext(ctx)
-	var postState state.BeaconState
 	eg.Go(func() error {
 		if err := epbs.ValidatePayloadStateTransition(ctx, preState, envelope); err != nil {
 			return errors.Wrap(err, "failed to validate consensus state transition function")
@@ -59,8 +59,6 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 	if err := eg.Wait(); err != nil {
 		return err
 	}
-	_ = isValidPayload
-	_ = postState
 	daStartTime := time.Now()
 	// TODO: Add DA check
 	daWaitedTime := time.Since(daStartTime)
@@ -70,6 +68,47 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 	}
 	if err := s.insertPayloadEnvelope(envelope); err != nil {
 		return errors.Wrap(err, "could not insert payload to forkchoice")
+	}
+	if isValidPayload {
+		s.ForkChoicer().Lock()
+		if err := s.ForkChoicer().SetOptimisticToValid(ctx, root); err != nil {
+			s.ForkChoicer().Unlock()
+			return errors.Wrap(err, "could not set optimistic payload to valid")
+		}
+		s.ForkChoicer().Unlock()
+	}
+
+	headRoot, err := s.HeadRoot(ctx)
+	if err != nil {
+		log.WithError(err).Error("could not get headroot to compute attributes")
+		return nil
+	}
+	if bytes.Equal(headRoot, root[:]) {
+		attr := s.getPayloadAttribute(ctx, preState, envelope.Slot()+1, headRoot)
+		execution, err := envelope.Execution()
+		if err != nil {
+			log.WithError(err).Error("could not get execution data")
+			return nil
+		}
+		blockHash := [32]byte(execution.BlockHash())
+		payloadID, err := s.notifyForkchoiceUpdateEPBS(ctx, blockHash, attr)
+		if err != nil {
+			if IsInvalidBlock(err) {
+				// TODO handle the lvh here
+				return err
+			}
+			return nil
+		}
+		if attr != nil && !attr.IsEmpty() && payloadID != nil {
+			var pid [8]byte
+			copy(pid[:], payloadID[:])
+			log.WithFields(logrus.Fields{
+				"blockRoot": fmt.Sprintf("%#x", bytesutil.Trunc(headRoot)),
+				"headSlot":  envelope.Slot(),
+				"payloadID": fmt.Sprintf("%#x", bytesutil.Trunc(payloadID[:])),
+			}).Info("Forkchoice updated with payload attributes for proposal")
+			s.cfg.PayloadIDCache.Set(envelope.Slot()+1, root, pid)
+		}
 	}
 	timeWithoutDaWait := time.Since(receivedTime) - daWaitedTime
 	executionEngineProcessingTime.Observe(float64(timeWithoutDaWait.Milliseconds()))
