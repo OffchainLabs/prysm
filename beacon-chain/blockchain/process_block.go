@@ -70,6 +70,7 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 		defer s.handleSecondFCUCall(cfg, fcuArgs)
 	}
 	defer s.sendLightClientFeeds(cfg)
+	defer s.saveLightClientUpdate(cfg)
 	defer s.sendStateFeedOnBlock(cfg)
 	defer reportProcessingTime(startTime)
 	defer reportAttestationInclusion(cfg.roblock.Block())

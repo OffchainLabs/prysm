@@ -129,6 +129,65 @@ func (s *Service) sendLightClientFeeds(cfg *postBlockProcessConfig) {
 	}
 }
 
+// saveLightClientUpdate saves the light client update for this block
+// if it's better than the already saved one, when feature flag is enabled.
+func (s *Service) saveLightClientUpdate(cfg *postBlockProcessConfig) {
+	if !features.Get().EnableLightClient {
+		return
+	}
+
+	attestedRoot := cfg.roblock.Block().ParentRoot()
+	attestedBlock, err := s.getBlock(cfg.ctx, attestedRoot)
+	if err != nil {
+		log.WithError(err).Error("Could not get attested block")
+		return
+	}
+	if attestedBlock == nil {
+		log.Error("Attested block is nil")
+		return
+	}
+	attestedState, err := s.cfg.StateGen.StateByRoot(cfg.ctx, attestedRoot)
+
+	finalizedRoot := cfg.postState.FinalizedCheckpoint().Root
+	finalizedBlock, err := s.getBlock(cfg.ctx, [32]byte(finalizedRoot))
+
+	update, err := lightclient.NewLightClientUpdateFromBeaconState(
+		cfg.ctx,
+		s.CurrentSlot(),
+		cfg.postState,
+		cfg.roblock,
+		attestedState,
+		attestedBlock,
+		finalizedBlock,
+	)
+
+	period := uint64(attestedState.Slot()) / (uint64(params.BeaconConfig().SlotsPerEpoch) * uint64(params.BeaconConfig().EpochsPerSyncCommitteePeriod))
+
+	oldUpdate, err := s.cfg.BeaconDB.LightClientUpdate(cfg.ctx, period)
+	if err != nil {
+		log.WithError(err).Error("Could not get current light client update")
+		return
+	}
+	if oldUpdate == nil {
+		if err := s.cfg.BeaconDB.SaveLightClientUpdate(cfg.ctx, period, update); err != nil {
+			log.WithError(err).Error("Could not save light client update")
+		}
+	} else {
+		isNewUpdateBetter, err := lightclient.IsBetterUpdate(update, oldUpdate)
+		if err != nil {
+			log.WithError(err).Error("Could not compare light client updates")
+			return
+		}
+		if isNewUpdateBetter {
+			if err := s.cfg.BeaconDB.SaveLightClientUpdate(cfg.ctx, period, update); err != nil {
+				log.WithError(err).Error("Could not save light client update")
+			}
+		}
+
+	}
+
+}
+
 func (s *Service) tryPublishLightClientFinalityUpdate(
 	ctx context.Context,
 	signed interfaces.ReadOnlySignedBeaconBlock,

@@ -2361,3 +2361,17 @@ func fakeResult(missing []uint64) map[uint64]struct{} {
 	}
 	return r
 }
+
+//func TestSaveLightClientUpdate(t *testing.T) {
+//	service, tr := minimalTestService(t)
+//	ctx := tr.ctx
+//
+//	block, err := consensusblocks.NewBeaconBlock()
+//	if err != nil {
+//		return
+//	}
+//
+//	service.saveLightClientUpdate(&postBlockProcessConfig{
+//		ctx: ctx,
+//	})
+//}

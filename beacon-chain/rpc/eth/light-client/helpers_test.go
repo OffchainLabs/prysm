@@ -50,7 +50,7 @@ func TestIsBetterUpdate(t *testing.T) {
 			SyncCommitteeBits: []byte{0b11111100, 0b1}, // [0,0,1,1,1,1,1,1]
 		})
 
-		result, err := IsBetterUpdate(newUpdate, oldUpdate)
+		result, err := lightclient.IsBetterUpdate(newUpdate, oldUpdate)
 		assert.NoError(t, err)
 		assert.Equal(t, true, result)
 	})
@@ -68,7 +68,7 @@ func TestIsBetterUpdate(t *testing.T) {
 			SyncCommitteeBits: []byte{0b01111100, 0b1}, // [0,0,1,1,1,1,1,0]
 		})
 
-		result, err := IsBetterUpdate(newUpdate, oldUpdate)
+		result, err := lightclient.IsBetterUpdate(newUpdate, oldUpdate)
 		assert.NoError(t, err)
 		assert.Equal(t, false, result)
 	})
@@ -86,7 +86,7 @@ func TestIsBetterUpdate(t *testing.T) {
 			SyncCommitteeBits: []byte{0b01111100, 0b1}, // [0,0,1,1,1,1,1,0]
 		})
 
-		result, err := IsBetterUpdate(newUpdate, oldUpdate)
+		result, err := lightclient.IsBetterUpdate(newUpdate, oldUpdate)
 		assert.NoError(t, err)
 		assert.Equal(t, true, result)
 	})
@@ -104,7 +104,7 @@ func TestIsBetterUpdate(t *testing.T) {
 			SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
 		})
 
-		result, err := IsBetterUpdate(newUpdate, oldUpdate)
+		result, err := lightclient.IsBetterUpdate(newUpdate, oldUpdate)
 		assert.NoError(t, err)
 		assert.Equal(t, false, result)
 	})
@@ -143,7 +143,7 @@ func TestIsBetterUpdate(t *testing.T) {
 		assert.NoError(t, err)
 		newUpdate.SetSignatureSlot(1000000)
 
-		result, err := IsBetterUpdate(newUpdate, oldUpdate)
+		result, err := lightclient.IsBetterUpdate(newUpdate, oldUpdate)
 		assert.NoError(t, err)
 		assert.Equal(t, true, result)
 	})
@@ -182,7 +182,7 @@ func TestIsBetterUpdate(t *testing.T) {
 		assert.NoError(t, err)
 		newUpdate.SetSignatureSlot(9999)
 
-		result, err := IsBetterUpdate(newUpdate, oldUpdate)
+		result, err := lightclient.IsBetterUpdate(newUpdate, oldUpdate)
 		assert.NoError(t, err)
 		assert.Equal(t, false, result)
 	})
@@ -225,7 +225,7 @@ func TestIsBetterUpdate(t *testing.T) {
 		err = newUpdate.SetFinalityBranch(createNonEmptyFinalityBranch())
 		assert.NoError(t, err)
 
-		result, err := IsBetterUpdate(newUpdate, oldUpdate)
+		result, err := lightclient.IsBetterUpdate(newUpdate, oldUpdate)
 		assert.NoError(t, err)
 		assert.Equal(t, true, result)
 	})
@@ -268,7 +268,7 @@ func TestIsBetterUpdate(t *testing.T) {
 		assert.NoError(t, err)
 		newUpdate.SetSignatureSlot(9999)
 
-		result, err := IsBetterUpdate(newUpdate, oldUpdate)
+		result, err := lightclient.IsBetterUpdate(newUpdate, oldUpdate)
 		assert.NoError(t, err)
 		assert.Equal(t, false, result)
 	})
@@ -329,7 +329,7 @@ func TestIsBetterUpdate(t *testing.T) {
 		err = newUpdate.SetFinalizedHeader(newFinalizedHeader)
 		assert.NoError(t, err)
 
-		result, err := IsBetterUpdate(newUpdate, oldUpdate)
+		result, err := lightclient.IsBetterUpdate(newUpdate, oldUpdate)
 		assert.NoError(t, err)
 		assert.Equal(t, true, result)
 	})
@@ -390,7 +390,7 @@ func TestIsBetterUpdate(t *testing.T) {
 		err = newUpdate.SetFinalizedHeader(newFinalizedHeader)
 		assert.NoError(t, err)
 
-		result, err := IsBetterUpdate(newUpdate, oldUpdate)
+		result, err := lightclient.IsBetterUpdate(newUpdate, oldUpdate)
 		assert.NoError(t, err)
 		assert.Equal(t, false, result)
 	})
@@ -408,7 +408,7 @@ func TestIsBetterUpdate(t *testing.T) {
 			SyncCommitteeBits: []byte{0b01111100, 0b1}, // [0,1,1,1,1,1,0,0]
 		})
 
-		result, err := IsBetterUpdate(newUpdate, oldUpdate)
+		result, err := lightclient.IsBetterUpdate(newUpdate, oldUpdate)
 		assert.NoError(t, err)
 		assert.Equal(t, true, result)
 	})
@@ -426,7 +426,7 @@ func TestIsBetterUpdate(t *testing.T) {
 			SyncCommitteeBits: []byte{0b00111100, 0b1}, // [0,0,1,1,1,1,0,0]
 		})
 
-		result, err := IsBetterUpdate(newUpdate, oldUpdate)
+		result, err := lightclient.IsBetterUpdate(newUpdate, oldUpdate)
 		assert.NoError(t, err)
 		assert.Equal(t, false, result)
 	})
@@ -487,7 +487,7 @@ func TestIsBetterUpdate(t *testing.T) {
 		err = newUpdate.SetFinalizedHeader(newFinalizedHeader)
 		assert.NoError(t, err)
 
-		result, err := IsBetterUpdate(newUpdate, oldUpdate)
+		result, err := lightclient.IsBetterUpdate(newUpdate, oldUpdate)
 		assert.NoError(t, err)
 		assert.Equal(t, true, result)
 	})
@@ -548,7 +548,7 @@ func TestIsBetterUpdate(t *testing.T) {
 		err = newUpdate.SetFinalizedHeader(newFinalizedHeader)
 		assert.NoError(t, err)
 
-		result, err := IsBetterUpdate(newUpdate, oldUpdate)
+		result, err := lightclient.IsBetterUpdate(newUpdate, oldUpdate)
 		assert.NoError(t, err)
 		assert.Equal(t, false, result)
 	})
@@ -609,7 +609,7 @@ func TestIsBetterUpdate(t *testing.T) {
 		err = newUpdate.SetFinalizedHeader(newFinalizedHeader)
 		assert.NoError(t, err)
 
-		result, err := IsBetterUpdate(newUpdate, oldUpdate)
+		result, err := lightclient.IsBetterUpdate(newUpdate, oldUpdate)
 		assert.NoError(t, err)
 		assert.Equal(t, true, result)
 	})
@@ -670,7 +670,7 @@ func TestIsBetterUpdate(t *testing.T) {
 		err = newUpdate.SetFinalizedHeader(newFinalizedHeader)
 		assert.NoError(t, err)
 
-		result, err := IsBetterUpdate(newUpdate, oldUpdate)
+		result, err := lightclient.IsBetterUpdate(newUpdate, oldUpdate)
 		assert.NoError(t, err)
 		assert.Equal(t, false, result)
 	})
