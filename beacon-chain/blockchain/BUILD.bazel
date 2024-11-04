@@ -10,6 +10,7 @@ go_library(
         "defragment.go",
         "error.go",
         "execution_engine.go",
+        "execution_engine_epbs.go",
         "forkchoice_update_execution.go",
         "head.go",
         "head_sync_committee_info.go",
