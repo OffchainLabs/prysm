@@ -10,6 +10,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
+	payloadattribute "github.com/prysmaticlabs/prysm/v5/consensus-types/payload-attribute"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
@@ -147,14 +148,34 @@ func (s *Service) UpdateHead(ctx context.Context, proposingSlot primitives.Slot)
 		return
 	}
 	newAttHeadElapsedTime.Observe(float64(time.Since(start).Milliseconds()))
+	var attributes payloadattribute.Attributer
+	if s.inRegularSync() {
+		attributes = s.getPayloadAttribute(ctx, headState, proposingSlot, newHeadRoot[:])
+	}
+	if headState.Version() >= version.EPBS {
+		bh, err := headState.LatestBlockHash()
+		if err != nil {
+			log.WithError(err).Error("could not get latest block hash")
+			return
+		}
+		_, err = s.notifyForkchoiceUpdateEPBS(ctx, [32]byte(bh), attributes)
+		if err != nil {
+			log.WithError(err).Error("could not notify forkchoice update")
+		}
+		if err := s.saveHead(ctx, newHeadRoot, headBlock, headState); err != nil {
+			log.WithError(err).Error("could not save head")
+			return
+		}
+		if err := s.pruneAttsFromPool(headBlock); err != nil {
+			log.WithError(err).Error("could not prune attestations from pool")
+		}
+		return
+	}
 	fcuArgs := &fcuConfig{
 		headState:     headState,
 		headRoot:      newHeadRoot,
 		headBlock:     headBlock,
 		proposingSlot: proposingSlot,
-	}
-	if s.inRegularSync() {
-		fcuArgs.attributes = s.getPayloadAttribute(ctx, headState, proposingSlot, newHeadRoot[:])
 	}
 	if fcuArgs.attributes != nil && s.shouldOverrideFCU(newHeadRoot, proposingSlot) {
 		return
