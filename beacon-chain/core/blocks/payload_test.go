@@ -253,7 +253,8 @@ func Test_IsExecutionBlockCapella(t *testing.T) {
 	require.NoError(t, err)
 	got, err := blocks.IsExecutionBlock(wrappedBlock.Body())
 	require.NoError(t, err)
-	require.Equal(t, false, got)
+	// #14614
+	require.Equal(t, true, got)
 }
 
 func Test_IsExecutionEnabled(t *testing.T) {
@@ -587,8 +588,7 @@ func Test_ProcessPayload(t *testing.T) {
 				ExecutionPayload: tt.payload,
 			})
 			require.NoError(t, err)
-			st, err := blocks.ProcessPayload(st, body)
-			if err != nil {
+			if err := blocks.ProcessPayload(st, body); err != nil {
 				require.Equal(t, tt.err.Error(), err.Error())
 			} else {
 				require.Equal(t, tt.err, err)
@@ -619,8 +619,7 @@ func Test_ProcessPayloadCapella(t *testing.T) {
 		ExecutionPayload: payload,
 	})
 	require.NoError(t, err)
-	_, err = blocks.ProcessPayload(st, body)
-	require.NoError(t, err)
+	require.NoError(t, blocks.ProcessPayload(st, body))
 }
 
 func Test_ProcessPayload_Blinded(t *testing.T) {
@@ -677,8 +676,7 @@ func Test_ProcessPayload_Blinded(t *testing.T) {
 				ExecutionPayloadHeader: p,
 			})
 			require.NoError(t, err)
-			st, err := blocks.ProcessPayload(st, body)
-			if err != nil {
+			if err := blocks.ProcessPayload(st, body); err != nil {
 				require.Equal(t, tt.err.Error(), err.Error())
 			} else {
 				require.Equal(t, tt.err, err)
