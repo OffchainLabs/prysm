@@ -40,8 +40,9 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Simplified `EjectedValidatorIndices`.
 - `engine_newPayloadV4`,`engine_getPayloadV4` are changes due to new execution request serialization decisions, [PR](https://github.com/prysmaticlabs/prysm/pull/14580)
 - Use ROBlock earlier in block syncing pipeline. 
-- Changed the signature of `ProcessPayload` 
-- Only Build the Protobuf state once during serialization
+- Changed the signature of `ProcessPayload`.
+- Only Build the Protobuf state once during serialization.
+- Capella blocks are execution.
 
 ### Deprecated
 
