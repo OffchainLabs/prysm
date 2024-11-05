@@ -137,7 +137,7 @@ func (s *Server) aggregatedAttestation(w http.ResponseWriter, slot primitives.Sl
 		// If there are multiple matching aggregated attestations,
 		// then we return the one with the most aggregation bits.
 		slices.SortFunc(match, func(a, b ethpbalpha.Att) int {
-			return cmp.Compare(a.GetAggregationBits().Count(), b.GetAggregationBits().Count())
+			return cmp.Compare(b.GetAggregationBits().Count(), a.GetAggregationBits().Count())
 		})
 		return match[0]
 	}
