@@ -25,8 +25,12 @@ type ListAttestationsResponse struct {
 	Data    json.RawMessage `json:"data"`
 }
 
+//type SubmitAttestationsRequest struct {
+//	Data []*Attestation `json:"data"`
+//}
+
 type SubmitAttestationsRequest struct {
-	Data []*Attestation `json:"data"`
+	Data json.RawMessage `json:"data"`
 }
 
 type ListVoluntaryExitsResponse struct {

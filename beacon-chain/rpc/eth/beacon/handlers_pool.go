@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -194,9 +195,26 @@ func (s *Server) SubmitAttestations(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Attempt to unmarshal Data into a slice of attestations
+	var sourceAttestations []*structs.Attestation
+	if err := json.Unmarshal(req.Data, &sourceAttestations); err != nil {
+		// If that fails, try unmarshaling into a single attestation
+		var singleAttestation *structs.Attestation
+		if err := json.Unmarshal(req.Data, &singleAttestation); err != nil {
+			httputil.HandleError(w, "Could not parse data into attestations: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		sourceAttestations = append(sourceAttestations, singleAttestation)
+	}
+
+	if len(sourceAttestations) == 0 {
+		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		return
+	}
+
 	var validAttestations []*eth.Attestation
 	var attFailures []*server.IndexedVerificationFailure
-	for i, sourceAtt := range req.Data {
+	for i, sourceAtt := range sourceAttestations {
 		att, err := sourceAtt.ToConsensus()
 		if err != nil {
 			attFailures = append(attFailures, &server.IndexedVerificationFailure{
@@ -241,6 +259,8 @@ func (s *Server) SubmitAttestations(w http.ResponseWriter, r *http.Request) {
 
 		if err = s.Broadcaster.BroadcastAttestation(ctx, subnet, att); err != nil {
 			log.WithError(err).Errorf("could not broadcast attestation at index %d", i)
+			failedBroadcasts = append(failedBroadcasts, strconv.Itoa(i))
+			continue
 		}
 
 		if corehelpers.IsAggregated(att) {
@@ -253,6 +273,201 @@ func (s *Server) SubmitAttestations(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	if len(failedBroadcasts) > 0 {
+		httputil.HandleError(
+			w,
+			fmt.Sprintf("Attestations at index %s could not be broadcasted", strings.Join(failedBroadcasts, ", ")),
+			http.StatusInternalServerError,
+		)
+		return
+	}
+
+	if len(attFailures) > 0 {
+		failuresErr := &server.IndexedVerificationFailureError{
+			Code:     http.StatusBadRequest,
+			Message:  "One or more attestations failed validation",
+			Failures: attFailures,
+		}
+		httputil.WriteError(w, failuresErr)
+	}
+}
+
+// SubmitAttestationsV2 submits an attestation object to node. If the attestation passes all validation
+// constraints, node MUST publish the attestation on an appropriate subnet.
+func (s *Server) SubmitAttestationsV2(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "beacon.SubmitAttestationsV2")
+	defer span.End()
+
+	var req structs.SubmitAttestationsRequest
+	err := json.NewDecoder(r.Body).Decode(&req.Data)
+	switch {
+	case errors.Is(err, io.EOF):
+		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		return
+	case err != nil:
+		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if len(req.Data) == 0 {
+		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		return
+	}
+
+	versionHeader := r.Header.Get(api.VersionHeader)
+	if versionHeader == "" {
+		httputil.HandleError(w, api.VersionHeader+" header is required", http.StatusBadRequest)
+	}
+	v, err := version.FromString(versionHeader)
+	if err != nil {
+		httputil.HandleError(w, "Invalid version: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	var attFailures []*server.IndexedVerificationFailure
+	failedBroadcasts := make([]string, 0)
+
+	if v >= version.Electra {
+		var sourceAttestations []*structs.AttestationElectra
+		if err = json.Unmarshal(req.Data, &sourceAttestations); err != nil {
+			// If that fails, try unmarshaling into a single attestation
+			var singleAttestation *structs.AttestationElectra
+			if err := json.Unmarshal(req.Data, &singleAttestation); err != nil {
+				httputil.HandleError(w, "Could not parse data into attestations: "+err.Error(), http.StatusBadRequest)
+				return
+			}
+			sourceAttestations = append(sourceAttestations, singleAttestation)
+		}
+		if len(sourceAttestations) == 0 {
+			httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+			return
+		}
+
+		var validAttestations []*eth.AttestationElectra
+		for i, sourceAtt := range sourceAttestations {
+			att, err := sourceAtt.ToConsensus()
+			if err != nil {
+				attFailures = append(attFailures, &server.IndexedVerificationFailure{
+					Index:   i,
+					Message: "Could not convert request attestation to consensus attestation: " + err.Error(),
+				})
+				continue
+			}
+			if _, err = bls.SignatureFromBytes(att.Signature); err != nil {
+				attFailures = append(attFailures, &server.IndexedVerificationFailure{
+					Index:   i,
+					Message: "Incorrect attestation signature: " + err.Error(),
+				})
+				continue
+			}
+			validAttestations = append(validAttestations, att)
+		}
+
+		for i, att := range validAttestations {
+			if !corehelpers.IsAggregated(att) {
+				s.OperationNotifier.OperationFeed().Send(&feed.Event{
+					Type: operation.UnaggregatedAttReceived,
+					Data: &operation.UnAggregatedAttReceivedData{
+						Attestation: att,
+					},
+				})
+			}
+
+			wantedEpoch := slots.ToEpoch(att.Data.Slot)
+			vals, err := s.HeadFetcher.HeadValidatorsIndices(ctx, wantedEpoch)
+			if err != nil {
+				httputil.HandleError(w, "Could not get head validator indices: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			subnet := corehelpers.ComputeSubnetFromCommitteeAndSlot(uint64(len(vals)), att.Data.CommitteeIndex, att.Data.Slot)
+
+			if err = s.Broadcaster.BroadcastAttestation(ctx, subnet, att); err != nil {
+				log.WithError(err).Errorf("could not broadcast attestation at index %d", i)
+				failedBroadcasts = append(failedBroadcasts, strconv.Itoa(i))
+				continue
+			}
+
+			if corehelpers.IsAggregated(att) {
+				if err = s.AttestationsPool.SaveAggregatedAttestation(att); err != nil {
+					log.WithError(err).Error("could not save aggregated attestation")
+				}
+			} else {
+				if err = s.AttestationsPool.SaveUnaggregatedAttestation(att); err != nil {
+					log.WithError(err).Error("could not save unaggregated attestation")
+				}
+			}
+		}
+	} else {
+		var sourceAttestations []*structs.Attestation
+		if err = json.Unmarshal(req.Data, &sourceAttestations); err != nil {
+			// If that fails, try unmarshaling into a single attestation
+			var singleAttestation *structs.Attestation
+			if err := json.Unmarshal(req.Data, &singleAttestation); err != nil {
+				httputil.HandleError(w, "Could not parse data into attestations: "+err.Error(), http.StatusBadRequest)
+				return
+			}
+			sourceAttestations = append(sourceAttestations, singleAttestation)
+		}
+		if len(sourceAttestations) == 0 {
+			httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+			return
+		}
+
+		var validAttestations []*eth.Attestation
+		for i, sourceAtt := range sourceAttestations {
+			att, err := sourceAtt.ToConsensus()
+			if err != nil {
+				attFailures = append(attFailures, &server.IndexedVerificationFailure{
+					Index:   i,
+					Message: "Could not convert request attestation to consensus attestation: " + err.Error(),
+				})
+				continue
+			}
+			if _, err = bls.SignatureFromBytes(att.Signature); err != nil {
+				attFailures = append(attFailures, &server.IndexedVerificationFailure{
+					Index:   i,
+					Message: "Incorrect attestation signature: " + err.Error(),
+				})
+				continue
+			}
+			validAttestations = append(validAttestations, att)
+		}
+
+		for i, att := range validAttestations {
+			if !corehelpers.IsAggregated(att) {
+				s.OperationNotifier.OperationFeed().Send(&feed.Event{
+					Type: operation.UnaggregatedAttReceived,
+					Data: &operation.UnAggregatedAttReceivedData{
+						Attestation: att,
+					},
+				})
+			}
+
+			wantedEpoch := slots.ToEpoch(att.Data.Slot)
+			vals, err := s.HeadFetcher.HeadValidatorsIndices(ctx, wantedEpoch)
+			if err != nil {
+				httputil.HandleError(w, "Could not get head validator indices: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			subnet := corehelpers.ComputeSubnetFromCommitteeAndSlot(uint64(len(vals)), att.Data.CommitteeIndex, att.Data.Slot)
+
+			if err = s.Broadcaster.BroadcastAttestation(ctx, subnet, att); err != nil {
+				log.WithError(err).Errorf("could not broadcast attestation at index %d", i)
+				failedBroadcasts = append(failedBroadcasts, strconv.Itoa(i))
+				continue
+			}
+
+			if corehelpers.IsAggregated(att) {
+				if err = s.AttestationsPool.SaveAggregatedAttestation(att); err != nil {
+					log.WithError(err).Error("could not save aggregated attestation")
+				}
+			} else {
+				if err = s.AttestationsPool.SaveUnaggregatedAttestation(att); err != nil {
+					log.WithError(err).Error("could not save unaggregated attestation")
+				}
+			}
+		}
+	}
+
 	if len(failedBroadcasts) > 0 {
 		httputil.HandleError(
 			w,

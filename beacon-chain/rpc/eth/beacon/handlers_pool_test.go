@@ -514,6 +514,7 @@ func TestSubmitAttestations(t *testing.T) {
 		writer.Body = &bytes.Buffer{}
 
 		s.SubmitAttestations(writer, request)
+
 		assert.Equal(t, http.StatusOK, writer.Code)
 		assert.Equal(t, true, broadcaster.BroadcastCalled.Load())
 		assert.Equal(t, 1, broadcaster.NumAttestations())
