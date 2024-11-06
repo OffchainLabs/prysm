@@ -15,7 +15,6 @@ import (
 )
 
 func TestProposeBeaconBlock_BlindedDeneb(t *testing.T) {
-	t.Skip("TODO: Fix this in the beacon-API PR")
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
@@ -32,7 +31,7 @@ func TestProposeBeaconBlock_BlindedDeneb(t *testing.T) {
 	headers := map[string]string{"Eth-Consensus-Version": "deneb"}
 	jsonRestHandler.EXPECT().Post(
 		gomock.Any(),
-		"/eth/v1/beacon/blinded_blocks",
+		"/eth/v2/beacon/blinded_blocks",
 		headers,
 		bytes.NewBuffer(denebBytes),
 		nil,

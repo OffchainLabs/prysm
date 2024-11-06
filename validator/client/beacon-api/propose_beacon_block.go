@@ -120,6 +120,35 @@ func (c *beaconApiValidatorClient) proposeBeaconBlock(ctx context.Context, in *e
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to marshal blinded deneb beacon block contents")
 		}
+	case *ethpb.GenericSignedBeaconBlock_Electra:
+		consensusVersion = "electra"
+		beaconBlockRoot, err = blockType.Electra.Block.HashTreeRoot()
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to compute block root for electra beacon block")
+		}
+		signedBlock, err := structs.SignedBeaconBlockContentsElectraFromConsensus(blockType.Electra)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to convert electra beacon block contents")
+		}
+		marshalledSignedBeaconBlockJson, err = json.Marshal(signedBlock)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to marshal electra beacon block contents")
+		}
+	case *ethpb.GenericSignedBeaconBlock_BlindedElectra:
+		blinded = true
+		consensusVersion = "electra"
+		beaconBlockRoot, err = blockType.BlindedElectra.HashTreeRoot()
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to compute block root for blinded electra beacon block")
+		}
+		signedBlock, err := structs.SignedBlindedBeaconBlockElectraFromConsensus(blockType.BlindedElectra)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to convert blinded electra beacon block contents")
+		}
+		marshalledSignedBeaconBlockJson, err = json.Marshal(signedBlock)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to marshal blinded electra beacon block contents")
+		}
 	default:
 		return nil, errors.Errorf("unsupported block type %T", in.Block)
 	}
@@ -127,9 +156,9 @@ func (c *beaconApiValidatorClient) proposeBeaconBlock(ctx context.Context, in *e
 	var endpoint string
 
 	if blinded {
-		endpoint = "/eth/v1/beacon/blinded_blocks"
+		endpoint = "/eth/v2/beacon/blinded_blocks"
 	} else {
-		endpoint = "/eth/v1/beacon/blocks"
+		endpoint = "/eth/v2/beacon/blocks"
 	}
 
 	headers := map[string]string{"Eth-Consensus-Version": consensusVersion}

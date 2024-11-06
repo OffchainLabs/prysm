@@ -158,6 +158,28 @@ func (c *beaconApiValidatorClient) beaconBlock(ctx context.Context, slot primiti
 			}
 			response = genericBlock
 		}
+	case version.String(version.Electra):
+		if blinded {
+			jsonElectraBlock := structs.BlindedBeaconBlockElectra{}
+			if err := decoder.Decode(&jsonElectraBlock); err != nil {
+				return nil, errors.Wrap(err, "failed to decode blinded electra block response json")
+			}
+			genericBlock, err := jsonElectraBlock.ToGeneric()
+			if err != nil {
+				return nil, errors.Wrap(err, "failed to get blinded electra block")
+			}
+			response = genericBlock
+		} else {
+			jsonElectraBlockContents := structs.BeaconBlockContentsElectra{}
+			if err := decoder.Decode(&jsonElectraBlockContents); err != nil {
+				return nil, errors.Wrap(err, "failed to decode electra block response json")
+			}
+			genericBlock, err := jsonElectraBlockContents.ToGeneric()
+			if err != nil {
+				return nil, errors.Wrap(err, "failed to get electra block")
+			}
+			response = genericBlock
+		}
 	default:
 		return nil, errors.Errorf("unsupported consensus version `%s`", ver)
 	}

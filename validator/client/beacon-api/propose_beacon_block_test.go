@@ -51,7 +51,7 @@ func TestProposeBeaconBlock_Error(t *testing.T) {
 		{
 			name:             "phase0",
 			consensusVersion: "phase0",
-			endpoint:         "/eth/v1/beacon/blocks",
+			endpoint:         "/eth/v2/beacon/blocks",
 			block: &ethpb.GenericSignedBeaconBlock{
 				Block: generateSignedPhase0Block(),
 			},
@@ -59,7 +59,7 @@ func TestProposeBeaconBlock_Error(t *testing.T) {
 		{
 			name:             "altair",
 			consensusVersion: "altair",
-			endpoint:         "/eth/v1/beacon/blocks",
+			endpoint:         "/eth/v2/beacon/blocks",
 			block: &ethpb.GenericSignedBeaconBlock{
 				Block: generateSignedAltairBlock(),
 			},
@@ -67,7 +67,7 @@ func TestProposeBeaconBlock_Error(t *testing.T) {
 		{
 			name:             "bellatrix",
 			consensusVersion: "bellatrix",
-			endpoint:         "/eth/v1/beacon/blocks",
+			endpoint:         "/eth/v2/beacon/blocks",
 			block: &ethpb.GenericSignedBeaconBlock{
 				Block: generateSignedBellatrixBlock(),
 			},
@@ -75,15 +75,23 @@ func TestProposeBeaconBlock_Error(t *testing.T) {
 		{
 			name:             "blinded bellatrix",
 			consensusVersion: "bellatrix",
-			endpoint:         "/eth/v1/beacon/blinded_blocks",
+			endpoint:         "/eth/v2/beacon/blinded_blocks",
 			block: &ethpb.GenericSignedBeaconBlock{
 				Block: generateSignedBlindedBellatrixBlock(),
 			},
 		},
 		{
+			name:             "capella",
+			consensusVersion: "capella",
+			endpoint:         "/eth/v2/beacon/blocks",
+			block: &ethpb.GenericSignedBeaconBlock{
+				Block: generateSignedCapellaBlock(),
+			},
+		},
+		{
 			name:             "blinded capella",
 			consensusVersion: "capella",
-			endpoint:         "/eth/v1/beacon/blinded_blocks",
+			endpoint:         "/eth/v2/beacon/blinded_blocks",
 			block: &ethpb.GenericSignedBeaconBlock{
 				Block: generateSignedBlindedCapellaBlock(),
 			},
