@@ -195,20 +195,9 @@ func (s *Server) SubmitAttestations(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Attempt to unmarshal Data into a slice of attestations
 	var sourceAttestations []*structs.Attestation
 	if err := json.Unmarshal(req.Data, &sourceAttestations); err != nil {
-		// If that fails, try unmarshaling into a single attestation
-		var singleAttestation *structs.Attestation
-		if err := json.Unmarshal(req.Data, &singleAttestation); err != nil {
-			httputil.HandleError(w, "Could not parse data into attestations: "+err.Error(), http.StatusBadRequest)
-			return
-		}
-		sourceAttestations = append(sourceAttestations, singleAttestation)
-	}
-
-	if len(sourceAttestations) == 0 {
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		httputil.HandleError(w, fmt.Sprintf("Failed to unmarshal request: %v", err), http.StatusInternalServerError)
 		return
 	}
 
@@ -329,16 +318,7 @@ func (s *Server) SubmitAttestationsV2(w http.ResponseWriter, r *http.Request) {
 	if v >= version.Electra {
 		var sourceAttestations []*structs.AttestationElectra
 		if err = json.Unmarshal(req.Data, &sourceAttestations); err != nil {
-			// If that fails, try unmarshaling into a single attestation
-			var singleAttestation *structs.AttestationElectra
-			if err := json.Unmarshal(req.Data, &singleAttestation); err != nil {
-				httputil.HandleError(w, "Could not parse data into attestations: "+err.Error(), http.StatusBadRequest)
-				return
-			}
-			sourceAttestations = append(sourceAttestations, singleAttestation)
-		}
-		if len(sourceAttestations) == 0 {
-			httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+			httputil.HandleError(w, fmt.Sprintf("Failed to unmarshal request: %v", err), http.StatusInternalServerError)
 			return
 		}
 
@@ -399,16 +379,7 @@ func (s *Server) SubmitAttestationsV2(w http.ResponseWriter, r *http.Request) {
 	} else {
 		var sourceAttestations []*structs.Attestation
 		if err = json.Unmarshal(req.Data, &sourceAttestations); err != nil {
-			// If that fails, try unmarshaling into a single attestation
-			var singleAttestation *structs.Attestation
-			if err := json.Unmarshal(req.Data, &singleAttestation); err != nil {
-				httputil.HandleError(w, "Could not parse data into attestations: "+err.Error(), http.StatusBadRequest)
-				return
-			}
-			sourceAttestations = append(sourceAttestations, singleAttestation)
-		}
-		if len(sourceAttestations) == 0 {
-			httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+			httputil.HandleError(w, fmt.Sprintf("Failed to unmarshal request: %v", err), http.StatusInternalServerError)
 			return
 		}
 
