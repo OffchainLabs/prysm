@@ -6,12 +6,10 @@ import (
 
 	"github.com/pkg/errors"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	validator2 "github.com/prysmaticlabs/prysm/v5/consensus-types/validator"
 	"github.com/prysmaticlabs/prysm/v5/math"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
 	octrace "go.opentelemetry.io/otel/trace"
 )
 
@@ -61,14 +59,8 @@ func (v *validator) internalWaitForActivation(ctx context.Context, accountsChang
 		return v.retryWaitForActivation(ctx, span, err, "Connection broken while waiting for activation. Reconnecting...", accountsChangedChan)
 	}
 
-	// Step 4: Fetch validator count.
-	valCount, err := v.getValidatorCount(ctx)
-	if err != nil {
-		return err
-	}
-
-	// Step 5: Check and log validator statuses.
-	someAreActive := v.checkAndLogValidatorStatus(valCount)
+	// Step 4: Check and log validator statuses.
+	someAreActive := v.checkAndLogValidatorStatus()
 	if !someAreActive {
 		// Step 6: If no active validators, wait for accounts change, context cancellation, or next epoch.
 		select {
@@ -86,22 +78,6 @@ func (v *validator) internalWaitForActivation(ctx context.Context, accountsChang
 		}
 	}
 	return nil
-}
-
-// getValidatorCount is an api call to get the current validator count.
-// "-1" indicates that validator count endpoint is not supported by the beacon node.
-func (v *validator) getValidatorCount(ctx context.Context) (int64, error) {
-	// TODO: revisit https://github.com/prysmaticlabs/prysm/pull/12471#issuecomment-1568320970 to review if ValidatorCount api can be removed.
-
-	var valCount int64 = -1
-	valCounts, err := v.prysmChainClient.ValidatorCount(ctx, "head", []validator2.Status{validator2.Active})
-	if err != nil && !errors.Is(err, iface.ErrNotSupported) {
-		return -1, errors.Wrap(err, "could not get active validator count")
-	}
-	if len(valCounts) > 0 {
-		valCount = int64(valCounts[0].Count)
-	}
-	return valCount, nil
 }
 
 func (v *validator) retryWaitForActivation(ctx context.Context, span octrace.Span, err error, message string, accountsChangedChan <-chan [][fieldparams.BLSPubkeyLength]byte) error {

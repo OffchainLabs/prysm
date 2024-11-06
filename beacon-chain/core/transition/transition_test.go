@@ -698,3 +698,45 @@ func TestProcessSlotsConditionally(t *testing.T) {
 		assert.Equal(t, primitives.Slot(6), s.Slot())
 	})
 }
+
+func BenchmarkProcessSlots_Capella(b *testing.B) {
+	st, _ := util.DeterministicGenesisStateCapella(b, params.BeaconConfig().MaxValidatorsPerCommittee)
+
+	var err error
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		st, err = transition.ProcessSlots(context.Background(), st, st.Slot()+1)
+		if err != nil {
+			b.Fatalf("Failed to process slot %v", err)
+		}
+	}
+}
+
+func BenchmarkProcessSlots_Deneb(b *testing.B) {
+	st, _ := util.DeterministicGenesisStateDeneb(b, params.BeaconConfig().MaxValidatorsPerCommittee)
+
+	var err error
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		st, err = transition.ProcessSlots(context.Background(), st, st.Slot()+1)
+		if err != nil {
+			b.Fatalf("Failed to process slot %v", err)
+		}
+	}
+}
+
+func BenchmarkProcessSlots_Electra(b *testing.B) {
+	st, _ := util.DeterministicGenesisStateElectra(b, params.BeaconConfig().MaxValidatorsPerCommittee)
+
+	var err error
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		st, err = transition.ProcessSlots(context.Background(), st, st.Slot()+1)
+		if err != nil {
+			b.Fatalf("Failed to process slot %v", err)
+		}
+	}
+}

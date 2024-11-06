@@ -243,7 +243,7 @@ func (s *Service) HeadValidatorsIndices(ctx context.Context, epoch primitives.Ep
 	if !s.hasHeadState() {
 		return []primitives.ValidatorIndex{}, nil
 	}
-	return helpers.ActiveValidatorIndices(ctx, s.headState(ctx), epoch)
+	return helpers.ActiveValidatorIndices(ctx, s.headStateReadOnly(ctx), epoch)
 }
 
 // HeadGenesisValidatorsRoot returns genesis validators root of the head state.
