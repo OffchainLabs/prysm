@@ -264,24 +264,32 @@ func (s *Store) prune(ctx context.Context) error {
 	if err := s.pruneFinalizedNodeByRootMap(ctx, s.treeRootNode, finalizedNode); err != nil {
 		return err
 	}
-
-	s.treeRootNode = finalizedNode
-	prunedCount.Inc()
-	// Prune all children of the finalized checkpoint block that are incompatible with it
 	checkpointMaxSlot, err := slots.EpochStart(finalizedEpoch)
 	if err != nil {
 		return errors.Wrap(err, "could not compute epoch start")
 	}
-	if finalizedNode.block.slot == checkpointMaxSlot {
-		return nil
+	if finalizedNode.bestDescendant != s.headNode {
+		fullFinalized, ok := s.fullNodeByPayload[finalizedNode.block.payloadHash]
+		if !ok {
+			return errors.New("can't find full finalized node")
+		}
+		if fullFinalized.bestDescendant != s.headNode {
+			return errors.New("head does not descend from finalized node")
+		}
+		s.treeRootNode = fullFinalized
+		finalizedNode = fullFinalized
 	}
-
+	prunedCount.Inc()
+	// Prune all children of the finalized checkpoint block that are incompatible with it
 	for _, child := range finalizedNode.children {
 		if child != nil && child.block.slot <= checkpointMaxSlot {
 			if err := s.pruneFinalizedNodeByRootMap(ctx, child, finalizedNode); err != nil {
 				return errors.Wrap(err, "could not prune incompatible finalized child")
 			}
 		}
+	}
+	if finalizedNode.block.slot == checkpointMaxSlot {
+		return nil
 	}
 	return nil
 }
