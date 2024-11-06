@@ -68,7 +68,7 @@ func TestDequeuePendingWithdrawals(t *testing.T) {
 	num, err := s.NumPendingPartialWithdrawals()
 	require.NoError(t, err)
 	require.Equal(t, uint64(3), num)
-	require.NoError(t, s.DequeuePartialWithdrawals(2))
+	require.NoError(t, s.DequeuePendingPartialWithdrawals(2))
 	num, err = s.NumPendingPartialWithdrawals()
 	require.NoError(t, err)
 	require.Equal(t, uint64(1), num)
@@ -77,13 +77,13 @@ func TestDequeuePendingWithdrawals(t *testing.T) {
 	num, err = s.NumPendingPartialWithdrawals()
 	require.NoError(t, err)
 	require.Equal(t, uint64(1), num)
-	require.ErrorContains(t, "cannot dequeue more withdrawals than are in the queue", s.DequeuePartialWithdrawals(2))
+	require.ErrorContains(t, "cannot dequeue more withdrawals than are in the queue", s.DequeuePendingPartialWithdrawals(2))
 
 	// Removing all pending partial withdrawals should be OK.
 	num, err = s.NumPendingPartialWithdrawals()
 	require.NoError(t, err)
 	require.Equal(t, uint64(1), num)
-	require.NoError(t, s.DequeuePartialWithdrawals(1))
+	require.NoError(t, s.DequeuePendingPartialWithdrawals(1))
 	num, err = s.Copy().NumPendingPartialWithdrawals()
 	require.NoError(t, err)
 	require.Equal(t, uint64(0), num)
@@ -91,7 +91,7 @@ func TestDequeuePendingWithdrawals(t *testing.T) {
 	s, err = InitializeFromProtoDeneb(&eth.BeaconStateDeneb{})
 	require.NoError(t, err)
 
-	require.ErrorContains(t, "is not supported", s.DequeuePartialWithdrawals(0))
+	require.ErrorContains(t, "is not supported", s.DequeuePendingPartialWithdrawals(0))
 }
 
 func TestAppendPendingWithdrawals(t *testing.T) {

@@ -18,6 +18,8 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Updated the `beacon-chain/monitor` package to Electra. [PR](https://github.com/prysmaticlabs/prysm/pull/14562)
 - Added ListAttestationsV2 endpoint.
 - Add ability to rollback node's internal state during processing.
+- Change how unsafe protobuf state is created to prevent unnecessary copies.
+- Added benchmarks for process slots for Capella, Deneb, Electra
 
 ### Changed
 
@@ -32,12 +34,19 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Use read only validator for core processing to avoid unnecessary copying.
 - Use ROBlock across block processing pipeline.
 - Added missing Eth-Consensus-Version headers to GetBlockAttestationsV2 and GetAttesterSlashingsV2 endpoints.
+- When instantiating new validators, explicit set `Slashed` to false and move `EffectiveBalance` to match struct definition.
 - Updated pgo profile for beacon chain with holesky data. This improves the profile guided
   optimizations in the go compiler.
 - Use read only state when computing the active validator list.
 - Simplified `ExitedValidatorIndices`.
 - Simplified `EjectedValidatorIndices`.
 - `engine_newPayloadV4`,`engine_getPayloadV4` are changes due to new execution request serialization decisions, [PR](https://github.com/prysmaticlabs/prysm/pull/14580)
+- Fixed various small things in state-native code.
+- Use ROBlock earlier in block syncing pipeline. 
+- Changed the signature of `ProcessPayload`.
+- Only Build the Protobuf state once during serialization.
+- Capella blocks are execution.
+- Fixed panic when http request to subscribe to event stream fails.
 - Return early for blob reconstructor during capella fork
 
 ### Deprecated
@@ -176,6 +185,7 @@ Updating to this release is recommended at your convenience.
 - Light client support: fix light client attested header execution fields' wrong version bug.
 - Testing: added custom matcher for better push settings testing.
 - Registered `GetDepositSnapshot` Beacon API endpoint.
+- Fix rolling back of a block due to a context deadline.
 
 ### Security
 

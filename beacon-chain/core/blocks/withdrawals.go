@@ -193,7 +193,7 @@ func ProcessWithdrawals(st state.BeaconState, executionData interfaces.Execution
 	}
 
 	if st.Version() >= version.Electra {
-		if err := st.DequeuePartialWithdrawals(processedPartialWithdrawalsCount); err != nil {
+		if err := st.DequeuePendingPartialWithdrawals(processedPartialWithdrawalsCount); err != nil {
 			return nil, fmt.Errorf("unable to dequeue partial withdrawals from state: %w", err)
 		}
 	}

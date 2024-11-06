@@ -1520,7 +1520,9 @@ func TestStore_NoViableHead_NewPayload(t *testing.T) {
 	require.NoError(t, err)
 	preStateVersion, preStateHeader, err := getStateVersionAndPayload(preState)
 	require.NoError(t, err)
-	_, err = service.validateExecutionOnBlock(ctx, preStateVersion, preStateHeader, wsb, root)
+	rowsb, err := consensusblocks.NewROBlockWithRoot(wsb, root)
+	require.NoError(t, err)
+	_, err = service.validateExecutionOnBlock(ctx, preStateVersion, preStateHeader, rowsb)
 	require.ErrorContains(t, "received an INVALID payload from execution engine", err)
 	// Check that forkchoice's head and store's headroot are the previous head (since the invalid block did
 	// not finish importing and it was never imported to forkchoice). Check
@@ -1714,7 +1716,9 @@ func TestStore_NoViableHead_Liveness(t *testing.T) {
 	require.NoError(t, err)
 	preStateVersion, preStateHeader, err := getStateVersionAndPayload(preState)
 	require.NoError(t, err)
-	_, err = service.validateExecutionOnBlock(ctx, preStateVersion, preStateHeader, wsb, root)
+	rowsb, err := consensusblocks.NewROBlockWithRoot(wsb, root)
+	require.NoError(t, err)
+	_, err = service.validateExecutionOnBlock(ctx, preStateVersion, preStateHeader, rowsb)
 	require.ErrorContains(t, "received an INVALID payload from execution engine", err)
 
 	// Check that forkchoice's head and store's headroot are the previous head (since the invalid block did
@@ -1964,7 +1968,9 @@ func TestNoViableHead_Reboot(t *testing.T) {
 	require.NoError(t, err)
 	preStateVersion, preStateHeader, err := getStateVersionAndPayload(preState)
 	require.NoError(t, err)
-	_, err = service.validateExecutionOnBlock(ctx, preStateVersion, preStateHeader, wsb, root)
+	rowsb, err := consensusblocks.NewROBlockWithRoot(wsb, root)
+	require.NoError(t, err)
+	_, err = service.validateExecutionOnBlock(ctx, preStateVersion, preStateHeader, rowsb)
 	require.ErrorContains(t, "received an INVALID payload from execution engine", err)
 
 	// Check that the headroot/state are not in DB and restart the node
@@ -2338,6 +2344,85 @@ func TestRollbackBlock(t *testing.T) {
 
 	// Rollback block insertion into db and caches.
 	require.ErrorContains(t, fmt.Sprintf("could not insert block %d to fork choice store", roblock.Block().Slot()), service.postBlockProcess(&postBlockProcessConfig{ctx, roblock, [32]byte{}, postState, false}))
+
+	// The block should no longer exist.
+	require.Equal(t, false, service.cfg.BeaconDB.HasBlock(ctx, root))
+	hasState, err = service.cfg.StateGen.HasState(ctx, root)
+	require.NoError(t, err)
+	require.Equal(t, false, hasState)
+}
+
+func TestRollbackBlock_ContextDeadline(t *testing.T) {
+	service, tr := minimalTestService(t)
+	ctx := tr.ctx
+
+	st, keys := util.DeterministicGenesisState(t, 64)
+	stateRoot, err := st.HashTreeRoot(ctx)
+	require.NoError(t, err, "Could not hash genesis state")
+
+	require.NoError(t, service.saveGenesisData(ctx, st))
+
+	genesis := blocks.NewGenesisBlock(stateRoot[:])
+	wsb, err := consensusblocks.NewSignedBeaconBlock(genesis)
+	require.NoError(t, err)
+	require.NoError(t, service.cfg.BeaconDB.SaveBlock(ctx, wsb), "Could not save genesis block")
+	parentRoot, err := genesis.Block.HashTreeRoot()
+	require.NoError(t, err, "Could not get signing root")
+	require.NoError(t, service.cfg.BeaconDB.SaveState(ctx, st, parentRoot), "Could not save genesis state")
+	require.NoError(t, service.cfg.BeaconDB.SaveHeadBlockRoot(ctx, parentRoot), "Could not save genesis state")
+	require.NoError(t, service.cfg.BeaconDB.SaveJustifiedCheckpoint(ctx, &ethpb.Checkpoint{Root: parentRoot[:]}))
+	require.NoError(t, service.cfg.BeaconDB.SaveFinalizedCheckpoint(ctx, &ethpb.Checkpoint{Root: parentRoot[:]}))
+
+	st, err = service.HeadState(ctx)
+	require.NoError(t, err)
+	b, err := util.GenerateFullBlock(st, keys, util.DefaultBlockGenConfig(), 33)
+	require.NoError(t, err)
+	wsb, err = consensusblocks.NewSignedBeaconBlock(b)
+	require.NoError(t, err)
+	root, err := b.Block.HashTreeRoot()
+	require.NoError(t, err)
+	preState, err := service.getBlockPreState(ctx, wsb.Block())
+	require.NoError(t, err)
+	postState, err := service.validateStateTransition(ctx, preState, wsb)
+	require.NoError(t, err)
+	require.NoError(t, service.savePostStateInfo(ctx, root, wsb, postState))
+	roblock, err := consensusblocks.NewROBlockWithRoot(wsb, root)
+	require.NoError(t, err)
+	require.NoError(t, service.postBlockProcess(&postBlockProcessConfig{ctx, roblock, [32]byte{}, postState, false}))
+
+	b, err = util.GenerateFullBlock(postState, keys, util.DefaultBlockGenConfig(), 34)
+	require.NoError(t, err)
+	wsb, err = consensusblocks.NewSignedBeaconBlock(b)
+	require.NoError(t, err)
+	root, err = b.Block.HashTreeRoot()
+	require.NoError(t, err)
+	preState, err = service.getBlockPreState(ctx, wsb.Block())
+	require.NoError(t, err)
+	postState, err = service.validateStateTransition(ctx, preState, wsb)
+	require.NoError(t, err)
+	require.NoError(t, service.savePostStateInfo(ctx, root, wsb, postState))
+
+	require.Equal(t, true, service.cfg.BeaconDB.HasBlock(ctx, root))
+	hasState, err := service.cfg.StateGen.HasState(ctx, root)
+	require.NoError(t, err)
+	require.Equal(t, true, hasState)
+
+	// Set deadlined context when processing the block
+	cancCtx, canc := context.WithCancel(context.Background())
+	canc()
+	roblock, err = consensusblocks.NewROBlockWithRoot(wsb, root)
+	require.NoError(t, err)
+
+	parentRoot = roblock.Block().ParentRoot()
+
+	cj := &ethpb.Checkpoint{}
+	cj.Epoch = 1
+	cj.Root = parentRoot[:]
+	require.NoError(t, postState.SetCurrentJustifiedCheckpoint(cj))
+	require.NoError(t, postState.SetFinalizedCheckpoint(cj))
+
+	// Rollback block insertion into db and caches.
+	require.ErrorContains(t, "context canceled", service.postBlockProcess(&postBlockProcessConfig{cancCtx, roblock, [32]byte{}, postState, false}))
 
 	// The block should no longer exist.
 	require.Equal(t, false, service.cfg.BeaconDB.HasBlock(ctx, root))

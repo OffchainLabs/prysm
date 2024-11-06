@@ -18,6 +18,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/time"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	bolt "go.etcd.io/bbolt"
@@ -603,14 +604,14 @@ func (s *Store) unmarshalState(_ context.Context, enc []byte, validatorEntries [
 
 // marshal versioned state from struct type down to bytes.
 func marshalState(ctx context.Context, st state.ReadOnlyBeaconState) ([]byte, error) {
-	switch st.ToProtoUnsafe().(type) {
-	case *ethpb.BeaconState:
+	switch st.Version() {
+	case version.Phase0:
 		rState, ok := st.ToProtoUnsafe().(*ethpb.BeaconState)
 		if !ok {
 			return nil, errors.New("non valid inner state")
 		}
 		return encode(ctx, rState)
-	case *ethpb.BeaconStateAltair:
+	case version.Altair:
 		rState, ok := st.ToProtoUnsafe().(*ethpb.BeaconStateAltair)
 		if !ok {
 			return nil, errors.New("non valid inner state")
@@ -623,7 +624,7 @@ func marshalState(ctx context.Context, st state.ReadOnlyBeaconState) ([]byte, er
 			return nil, err
 		}
 		return snappy.Encode(nil, append(altairKey, rawObj...)), nil
-	case *ethpb.BeaconStateBellatrix:
+	case version.Bellatrix:
 		rState, ok := st.ToProtoUnsafe().(*ethpb.BeaconStateBellatrix)
 		if !ok {
 			return nil, errors.New("non valid inner state")
@@ -636,7 +637,7 @@ func marshalState(ctx context.Context, st state.ReadOnlyBeaconState) ([]byte, er
 			return nil, err
 		}
 		return snappy.Encode(nil, append(bellatrixKey, rawObj...)), nil
-	case *ethpb.BeaconStateCapella:
+	case version.Capella:
 		rState, ok := st.ToProtoUnsafe().(*ethpb.BeaconStateCapella)
 		if !ok {
 			return nil, errors.New("non valid inner state")
@@ -649,7 +650,7 @@ func marshalState(ctx context.Context, st state.ReadOnlyBeaconState) ([]byte, er
 			return nil, err
 		}
 		return snappy.Encode(nil, append(capellaKey, rawObj...)), nil
-	case *ethpb.BeaconStateDeneb:
+	case version.Deneb:
 		rState, ok := st.ToProtoUnsafe().(*ethpb.BeaconStateDeneb)
 		if !ok {
 			return nil, errors.New("non valid inner state")
@@ -662,7 +663,7 @@ func marshalState(ctx context.Context, st state.ReadOnlyBeaconState) ([]byte, er
 			return nil, err
 		}
 		return snappy.Encode(nil, append(denebKey, rawObj...)), nil
-	case *ethpb.BeaconStateElectra:
+	case version.Electra:
 		rState, ok := st.ToProtoUnsafe().(*ethpb.BeaconStateElectra)
 		if !ok {
 			return nil, errors.New("non valid inner state")

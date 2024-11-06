@@ -50,10 +50,10 @@ func RunBlockOperationTest(
 	}
 
 	helpers.ClearCache()
-	beaconState, err := operationFn(context.Background(), preState, wsb)
+	_, err = operationFn(context.Background(), preState, wsb)
 	if postSSZExists {
 		require.NoError(t, err)
-		comparePostState(t, postSSZFilepath, sszToState, preState, beaconState)
+		comparePostState(t, postSSZFilepath, sszToState, preState)
 	} else {
 		// Note: This doesn't test anything worthwhile. It essentially tests
 		// that *any* error has occurred, not any specific error.
@@ -65,7 +65,7 @@ func RunBlockOperationTest(
 	}
 }
 
-func comparePostState(t *testing.T, postSSZFilepath string, sszToState SSZToState, want state.BeaconState, got state.BeaconState) {
+func comparePostState(t *testing.T, postSSZFilepath string, sszToState SSZToState, want state.BeaconState) {
 	postBeaconStateFile, err := os.ReadFile(postSSZFilepath) // #nosec G304
 	require.NoError(t, err)
 	postBeaconStateSSZ, err := snappy.Decode(nil /* dst */, postBeaconStateFile)
