@@ -2,11 +2,13 @@ package rpc
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/prysmaticlabs/prysm/v5/api"
+	"github.com/prysmaticlabs/prysm/v5/network/httputil"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
@@ -72,6 +74,9 @@ func TestServer_AuthTokenHandler(t *testing.T) {
 		require.NoError(t, err)
 		testHandler.ServeHTTP(rr, req)
 		require.Equal(t, http.StatusUnauthorized, rr.Code)
+		errJson := &httputil.DefaultJsonError{}
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), errJson))
+		require.StringContains(t, "Unauthorized", errJson.Message)
 	})
 	t.Run("wrong auth token was sent", func(t *testing.T) {
 		rr := httptest.NewRecorder()
@@ -80,6 +85,9 @@ func TestServer_AuthTokenHandler(t *testing.T) {
 		req.Header.Set("Authorization", "Bearer YOUR_JWT_TOKEN") // Replace with a valid JWT token
 		testHandler.ServeHTTP(rr, req)
 		require.Equal(t, http.StatusForbidden, rr.Code)
+		errJson := &httputil.DefaultJsonError{}
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), errJson))
+		require.StringContains(t, "token value is invalid", errJson.Message)
 	})
 	t.Run("good auth token was sent", func(t *testing.T) {
 		rr := httptest.NewRecorder()
@@ -95,6 +103,9 @@ func TestServer_AuthTokenHandler(t *testing.T) {
 		require.NoError(t, err)
 		testHandler.ServeHTTP(rr, req)
 		require.Equal(t, http.StatusUnauthorized, rr.Code)
+		errJson := &httputil.DefaultJsonError{}
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), errJson))
+		require.StringContains(t, "Unauthorized", errJson.Message)
 	})
 	t.Run("initialize does not need auth", func(t *testing.T) {
 		rr := httptest.NewRecorder()

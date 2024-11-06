@@ -16,7 +16,7 @@ type SubmitContributionAndProofsRequest struct {
 }
 
 type SubmitAggregateAndProofsRequest struct {
-	Data []*SignedAggregateAttestationAndProof `json:"data"`
+	Data []json.RawMessage `json:"data"`
 }
 
 type SubmitSyncCommitteeSubscriptionsRequest struct {

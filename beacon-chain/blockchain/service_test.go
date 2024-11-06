@@ -376,11 +376,15 @@ func TestHasBlock_ForkChoiceAndDB_DoublyLinkedTree(t *testing.T) {
 		cfg: &config{ForkChoiceStore: doublylinkedtree.New(), BeaconDB: beaconDB},
 	}
 	b := util.NewBeaconBlock()
+	wsb, err := consensusblocks.NewSignedBeaconBlock(b)
+	require.NoError(t, err)
 	r, err := b.Block.HashTreeRoot()
+	require.NoError(t, err)
+	roblock, err := consensusblocks.NewROBlockWithRoot(wsb, r)
 	require.NoError(t, err)
 	beaconState, err := util.NewBeaconState()
 	require.NoError(t, err)
-	require.NoError(t, s.cfg.ForkChoiceStore.InsertNode(ctx, beaconState, r))
+	require.NoError(t, s.cfg.ForkChoiceStore.InsertNode(ctx, beaconState, roblock))
 
 	assert.Equal(t, false, s.hasBlock(ctx, [32]byte{}), "Should not have block")
 	assert.Equal(t, true, s.hasBlock(ctx, r), "Should have block")
@@ -453,7 +457,11 @@ func BenchmarkHasBlockForkChoiceStore_DoublyLinkedTree(b *testing.B) {
 	require.NoError(b, err)
 	beaconState, err := util.NewBeaconState()
 	require.NoError(b, err)
-	require.NoError(b, s.cfg.ForkChoiceStore.InsertNode(ctx, beaconState, r))
+	wsb, err := consensusblocks.NewSignedBeaconBlock(blk)
+	require.NoError(b, err)
+	roblock, err := consensusblocks.NewROBlockWithRoot(wsb, r)
+	require.NoError(b, err)
+	require.NoError(b, s.cfg.ForkChoiceStore.InsertNode(ctx, beaconState, roblock))
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

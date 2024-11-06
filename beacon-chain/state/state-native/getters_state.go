@@ -22,12 +22,22 @@ func (b *BeaconState) ToProtoUnsafe() interface{} {
 	rm := b.randaoMixesVal().Slice()
 	var vals []*ethpb.Validator
 	var bals []uint64
+	var inactivityScores []uint64
+
 	if features.Get().EnableExperimentalState {
-		vals = b.validatorsVal()
-		bals = b.balancesVal()
+		if b.balancesMultiValue != nil {
+			bals = b.balancesMultiValue.Value(b)
+		}
+		if b.inactivityScoresMultiValue != nil {
+			inactivityScores = b.inactivityScoresMultiValue.Value(b)
+		}
+		if b.validatorsMultiValue != nil {
+			vals = b.validatorsMultiValue.Value(b)
+		}
 	} else {
-		vals = b.validators
 		bals = b.balances
+		inactivityScores = b.inactivityScores
+		vals = b.validators
 	}
 
 	switch b.version {
@@ -78,7 +88,7 @@ func (b *BeaconState) ToProtoUnsafe() interface{} {
 			PreviousJustifiedCheckpoint: b.previousJustifiedCheckpoint,
 			CurrentJustifiedCheckpoint:  b.currentJustifiedCheckpoint,
 			FinalizedCheckpoint:         b.finalizedCheckpoint,
-			InactivityScores:            b.inactivityScoresVal(),
+			InactivityScores:            inactivityScores,
 			CurrentSyncCommittee:        b.currentSyncCommittee,
 			NextSyncCommittee:           b.nextSyncCommittee,
 		}
@@ -105,7 +115,7 @@ func (b *BeaconState) ToProtoUnsafe() interface{} {
 			PreviousJustifiedCheckpoint:  b.previousJustifiedCheckpoint,
 			CurrentJustifiedCheckpoint:   b.currentJustifiedCheckpoint,
 			FinalizedCheckpoint:          b.finalizedCheckpoint,
-			InactivityScores:             b.inactivityScoresVal(),
+			InactivityScores:             inactivityScores,
 			CurrentSyncCommittee:         b.currentSyncCommittee,
 			NextSyncCommittee:            b.nextSyncCommittee,
 			LatestExecutionPayloadHeader: b.latestExecutionPayloadHeader,
@@ -133,7 +143,7 @@ func (b *BeaconState) ToProtoUnsafe() interface{} {
 			PreviousJustifiedCheckpoint:  b.previousJustifiedCheckpoint,
 			CurrentJustifiedCheckpoint:   b.currentJustifiedCheckpoint,
 			FinalizedCheckpoint:          b.finalizedCheckpoint,
-			InactivityScores:             b.inactivityScoresVal(),
+			InactivityScores:             inactivityScores,
 			CurrentSyncCommittee:         b.currentSyncCommittee,
 			NextSyncCommittee:            b.nextSyncCommittee,
 			LatestExecutionPayloadHeader: b.latestExecutionPayloadHeaderCapella,
@@ -164,7 +174,7 @@ func (b *BeaconState) ToProtoUnsafe() interface{} {
 			PreviousJustifiedCheckpoint:  b.previousJustifiedCheckpoint,
 			CurrentJustifiedCheckpoint:   b.currentJustifiedCheckpoint,
 			FinalizedCheckpoint:          b.finalizedCheckpoint,
-			InactivityScores:             b.inactivityScoresVal(),
+			InactivityScores:             inactivityScores,
 			CurrentSyncCommittee:         b.currentSyncCommittee,
 			NextSyncCommittee:            b.nextSyncCommittee,
 			LatestExecutionPayloadHeader: b.latestExecutionPayloadHeaderDeneb,
@@ -195,7 +205,7 @@ func (b *BeaconState) ToProtoUnsafe() interface{} {
 			PreviousJustifiedCheckpoint:   b.previousJustifiedCheckpoint,
 			CurrentJustifiedCheckpoint:    b.currentJustifiedCheckpoint,
 			FinalizedCheckpoint:           b.finalizedCheckpoint,
-			InactivityScores:              b.inactivityScoresVal(),
+			InactivityScores:              inactivityScores,
 			CurrentSyncCommittee:          b.currentSyncCommittee,
 			NextSyncCommittee:             b.nextSyncCommittee,
 			LatestExecutionPayloadHeader:  b.latestExecutionPayloadHeaderDeneb,

@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
-## [Unreleased](https://github.com/prysmaticlabs/prysm/compare/v5.1.1...HEAD)
+## [Unreleased](https://github.com/prysmaticlabs/prysm/compare/v5.1.2...HEAD)
 
 ### Added
 
@@ -14,6 +14,12 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Added GetBlockAttestationsV2 endpoint.
 - Light client support: Consensus types for Electra
 - Added SubmitPoolAttesterSlashingV2 endpoint.
+- Added SubmitAggregateAndProofsRequestV2 endpoint.
+- Updated the `beacon-chain/monitor` package to Electra. [PR](https://github.com/prysmaticlabs/prysm/pull/14562)
+- Added ListAttestationsV2 endpoint.
+- Add ability to rollback node's internal state during processing.
+- Change how unsafe protobuf state is created to prevent unnecessary copies.
+- Added benchmarks for process slots for Capella, Deneb, Electra
 - Added GetAggregatedAttestationV2 endpoint.
 
 ### Changed
@@ -23,6 +29,25 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Fix `engine_exchangeCapabilities` implementation.
 - Updated the default `scrape-interval` in `Client-stats` to 2 minutes to accommodate Beaconcha.in API rate limits.
 - Switch to compounding when consolidating with source==target.
+- Revert block db save when saving state fails.
+- Return false from HasBlock if the block is being synced. 
+- Cleanup forkchoice on failed insertions.
+- Use read only validator for core processing to avoid unnecessary copying.
+- Use ROBlock across block processing pipeline.
+- Added missing Eth-Consensus-Version headers to GetBlockAttestationsV2 and GetAttesterSlashingsV2 endpoints.
+- When instantiating new validators, explicit set `Slashed` to false and move `EffectiveBalance` to match struct definition.
+- Updated pgo profile for beacon chain with holesky data. This improves the profile guided
+  optimizations in the go compiler.
+- Use read only state when computing the active validator list.
+- Simplified `ExitedValidatorIndices`.
+- Simplified `EjectedValidatorIndices`.
+- `engine_newPayloadV4`,`engine_getPayloadV4` are changes due to new execution request serialization decisions, [PR](https://github.com/prysmaticlabs/prysm/pull/14580)
+- Fixed various small things in state-native code.
+- Use ROBlock earlier in block syncing pipeline. 
+- Changed the signature of `ProcessPayload`.
+- Only Build the Protobuf state once during serialization.
+- Capella blocks are execution.
+- Fixed panic when http request to subscribe to event stream fails.
 
 ### Deprecated
 
@@ -31,15 +56,42 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 ### Removed
 
 - Removed finalized validator index cache, no longer needed.
+- Removed validator queue position log on key reload and wait for activation.
 
 ### Fixed
 
 - Fixed mesh size by appending `gParams.Dhi = gossipSubDhi`
 - Fix skipping partial withdrawals count.
-- recover from panics when writing the event stream [pr](https://github.com/prysmaticlabs/prysm/pull/14545)
+- wait for the async StreamEvent writer to exit before leaving the http handler, avoiding race condition panics [pr](https://github.com/prysmaticlabs/prysm/pull/14557)
+- Certain deb files were returning a 404 which made building new docker images without an existing
+  cache impossible. This has been fixed with updates to rules_oci and bazel-lib.
+- Fixed an issue where the length check between block body KZG commitments and the existing cache from the database was incompatible.
+- Fix `--backfill-oldest-slot` handling - this flag was totally broken, the code would always backfill to the default slot [pr](https://github.com/prysmaticlabs/prysm/pull/14584)
+- Fix keymanager API should return corrected error format for malformed tokens
+- Fix keymanager API so that get keys returns an empty response instead of a 500 error when using an unsupported keystore.
+- Small log imporvement, removing some redundant or duplicate logs
+- EIP7521 - Fixes withdrawal bug by accounting for pending partial withdrawals and deducting already withdrawn amounts from the sweep balance. [PR](https://github.com/prysmaticlabs/prysm/pull/14578)
+
 
 ### Security
 
+## [v5.1.2](https://github.com/prysmaticlabs/prysm/compare/v5.1.1...v5.1.2) - 2024-10-16 
+
+This is a hotfix release with one change. 
+
+Prysm v5.1.1 contains an updated implementation of the beacon api streaming events endpoint. This
+new implementation contains a bug that can cause a panic in certain conditions. The issue is
+difficult to reproduce reliably and we are still trying to determine the root cause, but in the
+meantime we are issuing a patch that recovers from the panic to prevent the node from crashing.
+
+This only impacts the v5.1.1 release beacon api event stream endpoints. This endpoint is used by the
+prysm REST mode validator (a feature which requires the validator to be configured to use the beacon
+api intead of prysm's stock grpc endpoints) or accessory software that connects to the events api,
+like https://github.com/ethpandaops/ethereum-metrics-exporter
+
+### Fixed 
+
+- Recover from panics when writing the event stream [#14545](https://github.com/prysmaticlabs/prysm/pull/14545)
 
 ## [v5.1.1](https://github.com/prysmaticlabs/prysm/compare/v5.1.0...v5.1.1) - 2024-10-15
 
@@ -73,6 +125,7 @@ Updating to this release is recommended at your convenience.
 - fastssz version bump (better error messages).
 - SSE implementation that sheds stuck clients. [pr](https://github.com/prysmaticlabs/prysm/pull/14413)
 - Added GetPoolAttesterSlashingsV2 endpoint.
+- Use engine API get-blobs for block subscriber to reduce block import latency and potentially reduce bandwidth.
 
 ### Changed
 
@@ -132,6 +185,7 @@ Updating to this release is recommended at your convenience.
 - Light client support: fix light client attested header execution fields' wrong version bug.
 - Testing: added custom matcher for better push settings testing.
 - Registered `GetDepositSnapshot` Beacon API endpoint.
+- Fix rolling back of a block due to a context deadline.
 
 ### Security
 

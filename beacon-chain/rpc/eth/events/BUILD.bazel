@@ -4,6 +4,7 @@ go_library(
     name = "go_default_library",
     srcs = [
         "events.go",
+        "log.go",
         "server.go",
     ],
     importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/events",
@@ -58,5 +59,6 @@ go_test(
         "//testing/util:go_default_library",
         "@com_github_ethereum_go_ethereum//common:go_default_library",
         "@com_github_r3labs_sse_v2//:go_default_library",
+        "@com_github_sirupsen_logrus//:go_default_library",
     ],
 )

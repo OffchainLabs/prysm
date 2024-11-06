@@ -2,7 +2,7 @@ package types
 
 import (
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
+	consensus_blocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
@@ -17,7 +17,7 @@ type Checkpoint struct {
 
 // BlockAndCheckpoints to call the InsertOptimisticChain function
 type BlockAndCheckpoints struct {
-	Block               interfaces.ReadOnlyBeaconBlock
+	Block               consensus_blocks.ROBlock
 	JustifiedCheckpoint *ethpb.Checkpoint
 	FinalizedCheckpoint *ethpb.Checkpoint
 }

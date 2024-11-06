@@ -16,6 +16,10 @@ func (s *Service) blobSubscriber(ctx context.Context, msg proto.Message) error {
 		return fmt.Errorf("message was not type blocks.ROBlob, type=%T", msg)
 	}
 
+	return s.subscribeBlob(ctx, b)
+}
+
+func (s *Service) subscribeBlob(ctx context.Context, b blocks.VerifiedROBlob) error {
 	s.setSeenBlobIndex(b.Slot(), b.ProposerIndex(), b.Index)
 
 	if err := s.cfg.chain.ReceiveBlob(ctx, b); err != nil {

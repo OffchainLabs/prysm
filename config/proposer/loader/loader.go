@@ -142,10 +142,6 @@ func (psl *settingsLoader) Load(cliCtx *cli.Context) (*proposer.Settings, error)
 	for _, method := range psl.loadMethods {
 		switch method {
 		case defaultFlag:
-			if psl.existsInDB && len(psl.loadMethods) == 1 {
-				// only log the below if default flag is the only load method
-				log.Warn("Previously saved proposer settings were loaded from the DB, only default settings will be updated. Please provide new proposer settings or clear DB to reset proposer settings.")
-			}
 			suggestedFeeRecipient := cliCtx.String(flags.SuggestedFeeRecipientFlag.Name)
 			if !common.IsHexAddress(suggestedFeeRecipient) {
 				return nil, errors.Errorf("--%s is not a valid Ethereum address", flags.SuggestedFeeRecipientFlag.Name)
@@ -158,6 +154,10 @@ func (psl *settingsLoader) Load(cliCtx *cli.Context) (*proposer.Settings, error)
 			}
 			if psl.options.builderConfig != nil {
 				defaultConfig.Builder = psl.options.builderConfig.ToConsensus()
+			}
+			if psl.existsInDB && len(psl.loadMethods) == 1 {
+				// only log the below if default flag is the only load method
+				log.Debug("Overriding previously saved proposer default settings.")
 			}
 			loadConfig.DefaultConfig = defaultConfig
 		case fileFlag:

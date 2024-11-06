@@ -140,7 +140,6 @@ type ReadOnlyBalances interface {
 	Balances() []uint64
 	BalanceAtIndex(idx primitives.ValidatorIndex) (uint64, error)
 	BalancesLength() int
-	ActiveBalanceAtIndex(idx primitives.ValidatorIndex) (uint64, error)
 }
 
 // ReadOnlyCheckpoint defines a struct which only has read access to checkpoint methods.
@@ -317,7 +316,7 @@ type WriteOnlySyncCommittee interface {
 
 type WriteOnlyWithdrawals interface {
 	AppendPendingPartialWithdrawal(ppw *ethpb.PendingPartialWithdrawal) error
-	DequeuePartialWithdrawals(num uint64) error
+	DequeuePendingPartialWithdrawals(num uint64) error
 	SetNextWithdrawalIndex(i uint64) error
 	SetNextWithdrawalValidatorIndex(i primitives.ValidatorIndex) error
 }

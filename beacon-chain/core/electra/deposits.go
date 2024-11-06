@@ -8,6 +8,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/contracts/deposit"
@@ -474,7 +475,10 @@ func ApplyPendingDeposit(ctx context.Context, st state.BeaconState, deposit *eth
 //	set_or_append_list(state.current_epoch_participation, index, ParticipationFlags(0b0000_0000))
 //	set_or_append_list(state.inactivity_scores, index, uint64(0))
 func AddValidatorToRegistry(beaconState state.BeaconState, pubKey []byte, withdrawalCredentials []byte, amount uint64) error {
-	val := GetValidatorFromDeposit(pubKey, withdrawalCredentials, amount)
+	val, err := GetValidatorFromDeposit(pubKey, withdrawalCredentials, amount)
+	if err != nil {
+		return errors.Wrap(err, "could not get validator from deposit")
+	}
 	if err := beaconState.AppendValidator(val); err != nil {
 		return err
 	}
@@ -504,11 +508,12 @@ func AddValidatorToRegistry(beaconState state.BeaconState, pubKey []byte, withdr
 //	validator = Validator(
 //	    pubkey=pubkey,
 //	    withdrawal_credentials=withdrawal_credentials,
+//	    effective_balance=Gwei(0),
+//	    slashed=False,
 //	    activation_eligibility_epoch=FAR_FUTURE_EPOCH,
 //	    activation_epoch=FAR_FUTURE_EPOCH,
 //	    exit_epoch=FAR_FUTURE_EPOCH,
 //	    withdrawable_epoch=FAR_FUTURE_EPOCH,
-//	    effective_balance=Gwei(0),
 //	)
 //
 //	# [Modified in Electra:EIP7251]
@@ -516,19 +521,24 @@ func AddValidatorToRegistry(beaconState state.BeaconState, pubKey []byte, withdr
 //	validator.effective_balance = min(amount - amount % EFFECTIVE_BALANCE_INCREMENT, max_effective_balance)
 //
 //	return validator
-func GetValidatorFromDeposit(pubKey []byte, withdrawalCredentials []byte, amount uint64) *ethpb.Validator {
+func GetValidatorFromDeposit(pubKey []byte, withdrawalCredentials []byte, amount uint64) (*ethpb.Validator, error) {
 	validator := &ethpb.Validator{
 		PublicKey:                  pubKey,
 		WithdrawalCredentials:      withdrawalCredentials,
+		EffectiveBalance:           0,
+		Slashed:                    false,
 		ActivationEligibilityEpoch: params.BeaconConfig().FarFutureEpoch,
 		ActivationEpoch:            params.BeaconConfig().FarFutureEpoch,
 		ExitEpoch:                  params.BeaconConfig().FarFutureEpoch,
 		WithdrawableEpoch:          params.BeaconConfig().FarFutureEpoch,
-		EffectiveBalance:           0,
 	}
-	maxEffectiveBalance := helpers.ValidatorMaxEffectiveBalance(validator)
+	v, err := state_native.NewValidator(validator)
+	if err != nil {
+		return nil, err
+	}
+	maxEffectiveBalance := helpers.ValidatorMaxEffectiveBalance(v)
 	validator.EffectiveBalance = min(amount-(amount%params.BeaconConfig().EffectiveBalanceIncrement), maxEffectiveBalance)
-	return validator
+	return validator, nil
 }
 
 // ProcessDepositRequests is a function as part of electra to process execution layer deposits
@@ -580,8 +590,8 @@ func processDepositRequest(beaconState state.BeaconState, request *enginev1.Depo
 	}
 	if err := beaconState.AppendPendingDeposit(&ethpb.PendingDeposit{
 		PublicKey:             bytesutil.SafeCopyBytes(request.Pubkey),
-		Amount:                request.Amount,
 		WithdrawalCredentials: bytesutil.SafeCopyBytes(request.WithdrawalCredentials),
+		Amount:                request.Amount,
 		Signature:             bytesutil.SafeCopyBytes(request.Signature),
 		Slot:                  beaconState.Slot(),
 	}); err != nil {

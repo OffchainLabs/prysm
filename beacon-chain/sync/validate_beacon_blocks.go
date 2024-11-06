@@ -369,7 +369,7 @@ func (s *Service) verifyPendingBlockSignature(ctx context.Context, blk interface
 		return pubsub.ValidationIgnore, err
 	}
 	// Ignore block in the event of non-existent proposer.
-	_, err = roState.ValidatorAtIndex(blk.Block().ProposerIndex())
+	_, err = roState.ValidatorAtIndexReadOnly(blk.Block().ProposerIndex())
 	if err != nil {
 		return pubsub.ValidationIgnore, err
 	}

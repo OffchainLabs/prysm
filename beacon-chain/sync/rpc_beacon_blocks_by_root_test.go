@@ -151,11 +151,11 @@ func TestRecentBeaconBlocksRPCHandler_ReturnsBlocks_ReconstructsPayload(t *testi
 		},
 	}
 	r := &Service{cfg: &config{
-		p2p:                           p1,
-		beaconDB:                      d,
-		executionPayloadReconstructor: mockEngine,
-		chain:                         &mock.ChainService{ValidatorsRoot: [32]byte{}},
-		clock:                         startup.NewClock(time.Unix(0, 0), [32]byte{}),
+		p2p:                    p1,
+		beaconDB:               d,
+		executionReconstructor: mockEngine,
+		chain:                  &mock.ChainService{ValidatorsRoot: [32]byte{}},
+		clock:                  startup.NewClock(time.Unix(0, 0), [32]byte{}),
 	}, rateLimiter: newRateLimiter(p1)}
 	pcl := protocol.ID(p2p.RPCBlocksByRootTopicV1)
 	topic := string(pcl)

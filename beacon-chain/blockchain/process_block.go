@@ -46,8 +46,7 @@ var initialSyncBlockCacheSize = uint64(2 * params.BeaconConfig().SlotsPerEpoch)
 // process the beacon block after validating the state transition function
 type postBlockProcessConfig struct {
 	ctx            context.Context
-	signed         interfaces.ReadOnlySignedBeaconBlock
-	blockRoot      [32]byte
+	roblock        consensusblocks.ROBlock
 	headRoot       [32]byte
 	postState      state.BeaconState
 	isValidPayload bool
@@ -61,7 +60,7 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 	ctx, span := trace.StartSpan(cfg.ctx, "blockChain.onBlock")
 	defer span.End()
 	cfg.ctx = ctx
-	if err := consensusblocks.BeaconBlockIsNil(cfg.signed); err != nil {
+	if err := consensusblocks.BeaconBlockIsNil(cfg.roblock); err != nil {
 		return invalidBlock{error: err}
 	}
 	startTime := time.Now()
@@ -73,19 +72,22 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 	defer s.sendLightClientFeeds(cfg)
 	defer s.sendStateFeedOnBlock(cfg)
 	defer reportProcessingTime(startTime)
-	defer reportAttestationInclusion(cfg.signed.Block())
+	defer reportAttestationInclusion(cfg.roblock.Block())
 
-	err := s.cfg.ForkChoiceStore.InsertNode(ctx, cfg.postState, cfg.blockRoot)
+	err := s.cfg.ForkChoiceStore.InsertNode(ctx, cfg.postState, cfg.roblock)
 	if err != nil {
-		return errors.Wrapf(err, "could not insert block %d to fork choice store", cfg.signed.Block().Slot())
+		// Do not use parent context in the event it deadlined
+		ctx = trace.NewContext(context.Background(), span)
+		s.rollbackBlock(ctx, cfg.roblock.Root())
+		return errors.Wrapf(err, "could not insert block %d to fork choice store", cfg.roblock.Block().Slot())
 	}
-	if err := s.handleBlockAttestations(ctx, cfg.signed.Block(), cfg.postState); err != nil {
+	if err := s.handleBlockAttestations(ctx, cfg.roblock.Block(), cfg.postState); err != nil {
 		return errors.Wrap(err, "could not handle block's attestations")
 	}
 
-	s.InsertSlashingsToForkChoiceStore(ctx, cfg.signed.Block().Body().AttesterSlashings())
+	s.InsertSlashingsToForkChoiceStore(ctx, cfg.roblock.Block().Body().AttesterSlashings())
 	if cfg.isValidPayload {
-		if err := s.cfg.ForkChoiceStore.SetOptimisticToValid(ctx, cfg.blockRoot); err != nil {
+		if err := s.cfg.ForkChoiceStore.SetOptimisticToValid(ctx, cfg.roblock.Root()); err != nil {
 			return errors.Wrap(err, "could not set optimistic block to valid")
 		}
 	}
@@ -95,8 +97,8 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 		log.WithError(err).Warn("Could not update head")
 	}
 	newBlockHeadElapsedTime.Observe(float64(time.Since(start).Milliseconds()))
-	if cfg.headRoot != cfg.blockRoot {
-		s.logNonCanonicalBlockReceived(cfg.blockRoot, cfg.headRoot)
+	if cfg.headRoot != cfg.roblock.Root() {
+		s.logNonCanonicalBlockReceived(cfg.roblock.Root(), cfg.headRoot)
 		return nil
 	}
 	if err := s.getFCUArgs(cfg, fcuArgs); err != nil {
@@ -154,7 +156,7 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 	}
 
 	// Fill in missing blocks
-	if err := s.fillInForkChoiceMissingBlocks(ctx, blks[0].Block(), preState.CurrentJustifiedCheckpoint(), preState.FinalizedCheckpoint()); err != nil {
+	if err := s.fillInForkChoiceMissingBlocks(ctx, blks[0], preState.CurrentJustifiedCheckpoint(), preState.FinalizedCheckpoint()); err != nil {
 		return errors.Wrap(err, "could not fill in missing blocks to forkchoice")
 	}
 
@@ -234,7 +236,7 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 		if err := avs.IsDataAvailable(ctx, s.CurrentSlot(), b); err != nil {
 			return errors.Wrapf(err, "could not validate blob data availability at slot %d", b.Block().Slot())
 		}
-		args := &forkchoicetypes.BlockAndCheckpoints{Block: b.Block(),
+		args := &forkchoicetypes.BlockAndCheckpoints{Block: b,
 			JustifiedCheckpoint: jCheckpoints[i],
 			FinalizedCheckpoint: fCheckpoints[i]}
 		pendingNodes[len(blks)-i-1] = args
@@ -279,7 +281,7 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 		return errors.Wrap(err, "could not insert batch to forkchoice")
 	}
 	// Insert the last block to forkchoice
-	if err := s.cfg.ForkChoiceStore.InsertNode(ctx, preState, lastBR); err != nil {
+	if err := s.cfg.ForkChoiceStore.InsertNode(ctx, preState, lastB); err != nil {
 		return errors.Wrap(err, "could not insert last block in batch to forkchoice")
 	}
 	// Set their optimistic status
@@ -404,6 +406,10 @@ func (s *Service) savePostStateInfo(ctx context.Context, r [32]byte, b interface
 		return errors.Wrapf(err, "could not save block from slot %d", b.Block().Slot())
 	}
 	if err := s.cfg.StateGen.SaveState(ctx, r, st); err != nil {
+		log.Warnf("Rolling back insertion of block with root %#x", r)
+		if err := s.cfg.BeaconDB.DeleteBlock(ctx, r); err != nil {
+			log.WithError(err).Errorf("Could not delete block with block root %#x", r)
+		}
 		return errors.Wrap(err, "could not save state")
 	}
 	return nil
@@ -683,4 +689,16 @@ func (s *Service) handleInvalidExecutionError(ctx context.Context, err error, bl
 		return s.pruneInvalidBlock(ctx, blockRoot, parentRoot, InvalidBlockLVH(err))
 	}
 	return err
+}
+
+// In the event of an issue processing a block we rollback changes done to the db and our caches
+// to always ensure that the node's internal state is consistent.
+func (s *Service) rollbackBlock(ctx context.Context, blockRoot [32]byte) {
+	log.Warnf("Rolling back insertion of block with root %#x due to processing error", blockRoot)
+	if err := s.cfg.StateGen.DeleteStateFromCaches(ctx, blockRoot); err != nil {
+		log.WithError(err).Errorf("Could not delete state from caches with block root %#x", blockRoot)
+	}
+	if err := s.cfg.BeaconDB.DeleteBlock(ctx, blockRoot); err != nil {
+		log.WithError(err).Errorf("Could not delete block with block root %#x", blockRoot)
+	}
 }
