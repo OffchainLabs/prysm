@@ -48,6 +48,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Only Build the Protobuf state once during serialization.
 - Capella blocks are execution.
 - Fixed panic when http request to subscribe to event stream fails.
+- Return early for blob reconstructor during capella fork
 - Updated block endpoint from V1 to V2
 
 ### Deprecated
