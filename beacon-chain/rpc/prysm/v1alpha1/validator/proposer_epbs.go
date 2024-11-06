@@ -21,7 +21,7 @@ func (vs *Server) SubmitSignedExecutionPayloadEnvelope(ctx context.Context, env 
 		return nil, status.Errorf(codes.Internal, "failed to broadcast signed execution payload envelope: %v", err)
 	}
 
-	m, err := blocks.WrappedROExecutionPayloadEnvelope(env.Message)
+	m, err := blocks.WrappedROSignedExecutionPayloadEnvelope(env)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "failed to wrap execution payload envelope: %v", err)
 	}

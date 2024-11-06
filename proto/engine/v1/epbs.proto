@@ -56,3 +56,18 @@ message SignedExecutionPayloadEnvelope {
 	ExecutionPayloadEnvelope message = 1;
     	bytes signature 		 = 2 [(ethereum.eth.ext.ssz_size) = "96"];
 }
+
+message SignedBlindPayloadEnvelope {
+    BlindPayloadEnvelope message = 1;
+    bytes signature 		 = 2 [(ethereum.eth.ext.ssz_size) = "96"];
+}
+
+message BlindPayloadEnvelope {
+        bytes payload_root 		        = 1 [(ethereum.eth.ext.ssz_size) = "32"];
+        ExecutionRequests execution_requests    = 2;
+	uint64 builder_index 	     		= 3 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.ValidatorIndex"];
+    	bytes beacon_block_root 		= 4 [(ethereum.eth.ext.ssz_size) = "32"];
+    	repeated bytes blob_kzg_commitments 	= 5 [(ethereum.eth.ext.ssz_size) = "?,48", (ethereum.eth.ext.ssz_max)  = "max_blob_commitments.size"];
+	bool payload_withheld 			= 6;
+    	bytes state_root 			= 7 [(ethereum.eth.ext.ssz_size) = "32"];
+}

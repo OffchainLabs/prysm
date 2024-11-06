@@ -57,6 +57,8 @@ go_library(
         "//monitoring/tracing:go_default_library",
         "//monitoring/tracing/trace:go_default_library",
         "//proto/dbval:go_default_library",
+        "//proto/engine/v1:go_default_library",
+        "//proto/eth/v2:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "//runtime/version:go_default_library",
         "//time:go_default_library",

@@ -5,6 +5,7 @@ import (
 	field_params "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
+	"google.golang.org/protobuf/proto"
 )
 
 type ROSignedExecutionPayloadEnvelope interface {
@@ -12,6 +13,7 @@ type ROSignedExecutionPayloadEnvelope interface {
 	Signature() [field_params.BLSSignatureLength]byte
 	SigningRoot([]byte) ([32]byte, error)
 	IsNil() bool
+	Proto() proto.Message
 }
 
 type ROExecutionPayloadEnvelope interface {

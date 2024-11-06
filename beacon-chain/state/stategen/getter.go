@@ -177,7 +177,24 @@ func (s *State) recoverStateSummary(ctx context.Context, blockRoot [32]byte) (*e
 		}
 		return summary, nil
 	}
-	return nil, errors.New("could not find block in DB")
+	// check if we have a payload hash in db
+	if !s.beaconDB.HasBlindPayloadEnvelope(ctx, blockRoot) {
+		return nil, errors.New("could not find block nor payload in DB")
+	}
+	e, err := s.beaconDB.SignedBlindPayloadEnvelope(ctx, blockRoot[:])
+	if err != nil {
+		return nil, err
+	}
+	// get the state summary from the beacon block
+	blockSummary, err := s.stateSummary(ctx, [32]byte(e.Message.BeaconBlockRoot))
+	if err != nil {
+		return nil, err
+	}
+	summary := &ethpb.StateSummary{Slot: blockSummary.Slot, Root: blockRoot[:]}
+	if err := s.beaconDB.SaveStateSummary(ctx, summary); err != nil {
+		return nil, err
+	}
+	return summary, nil
 }
 
 // DeleteStateFromCaches deletes the state from the caches.
@@ -215,6 +232,7 @@ func (s *State) loadStateByRoot(ctx context.Context, blockRoot [32]byte) (state.
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get state summary")
 	}
+	//TODO: Fix the replayer to use the payload envelopes
 	targetSlot := summary.Slot
 
 	// Since the requested state is not in caches or DB, start replaying using the last

@@ -8,6 +8,7 @@ import (
 	"github.com/golang/snappy"
 	fastssz "github.com/prysmaticlabs/fastssz"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
+	engine "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"google.golang.org/protobuf/proto"
 )
@@ -78,7 +79,7 @@ func isSSZStorageFormat(obj interface{}) bool {
 		return true
 	case *ethpb.VoluntaryExit:
 		return true
-	case *ethpb.SignedBlindPayloadEnvelope:
+	case *engine.SignedBlindPayloadEnvelope:
 		return true
 	case *ethpb.ValidatorRegistrationV1:
 		return true

@@ -190,3 +190,9 @@ func (ro *ROForkChoice) GetPTCVote() primitives.PTCStatus {
 	defer ro.l.RUnlock()
 	return ro.getter.GetPTCVote()
 }
+
+func (ro *ROForkChoice) HashForBlockRoot(root [32]byte) [32]byte {
+	ro.l.RLock()
+	defer ro.l.RUnlock()
+	return ro.getter.HashForBlockRoot(root)
+}

@@ -9,6 +9,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/encoding/ssz"
 	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
+	"google.golang.org/protobuf/proto"
 )
 
 type signedExecutionPayloadEnvelope struct {
@@ -65,6 +66,11 @@ func (s signedExecutionPayloadEnvelope) IsNil() bool {
 // SigningRoot returns the signing root for the given domain
 func (s signedExecutionPayloadEnvelope) SigningRoot(domain []byte) (root [32]byte, err error) {
 	return signing.ComputeSigningRoot(s.s.Message, domain)
+}
+
+// Proto returns the underlying message
+func (s signedExecutionPayloadEnvelope) Proto() proto.Message {
+	return s.s
 }
 
 // IsNil returns whether the wrapped value is nil

@@ -23,8 +23,12 @@ import (
 //  1. Validate the payload, apply state transition.
 //  2. Apply fork choice to the processed payload
 //  3. Save latest head info
-func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, envelope interfaces.ROExecutionPayloadEnvelope, _ das.AvailabilityStore) error {
+func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed interfaces.ROSignedExecutionPayloadEnvelope, _ das.AvailabilityStore) error {
 	receivedTime := time.Now()
+	envelope, err := signed.Envelope()
+	if err != nil {
+		return err
+	}
 	root := envelope.BeaconBlockRoot()
 	s.payloadBeingSynced.set(envelope)
 	defer s.payloadBeingSynced.unset(root)
@@ -61,7 +65,9 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, envelope 
 	// TODO: Add DA check
 	daWaitedTime := time.Since(daStartTime)
 	dataAvailWaitedTime.Observe(float64(daWaitedTime.Milliseconds()))
-	// TODO: Add Head update, cache handling, postProcessing
+	if err := s.savePostPayload(ctx, signed, preState); err != nil {
+		return err
+	}
 	if err := s.insertPayloadEnvelope(envelope); err != nil {
 		return errors.Wrap(err, "could not insert payload to forkchoice")
 	}
@@ -150,4 +156,27 @@ func (s *Service) getPayloadEnvelopePrestate(ctx context.Context, e interfaces.R
 		return nil, errors.Wrap(err, "nil pre state")
 	}
 	return preState, nil
+}
+
+func (s *Service) savePostPayload(ctx context.Context, signed interfaces.ROSignedExecutionPayloadEnvelope, st state.BeaconState) error {
+	if err := s.cfg.BeaconDB.SaveBlindPayloadEnvelope(ctx, signed); err != nil {
+		return err
+	}
+	envelope, err := signed.Envelope()
+	if err != nil {
+		return err
+	}
+	execution, err := envelope.Execution()
+	if err != nil {
+		return err
+	}
+	r := envelope.BeaconBlockRoot()
+	if err := s.cfg.StateGen.SaveState(ctx, [32]byte(execution.BlockHash()), st); err != nil {
+		log.Warnf("Rolling back insertion of block with root %#x", r)
+		if err := s.cfg.BeaconDB.DeleteBlock(ctx, r); err != nil {
+			log.WithError(err).Errorf("Could not delete block with block root %#x", r)
+		}
+		return errors.Wrap(err, "could not save state")
+	}
+	return nil
 }

@@ -47,8 +47,10 @@ ssz_gen_marshal(
 	"PayloadAttestationMessage",
 	"ExecutionPayloadHeaderEPBS",
 	"ExecutionPayloadEnvelope",
+	"BlindPayloadEnvelope",
 	"SignedExecutionPayloadHeader",
         "SignedExecutionPayloadEnvelope",
+	"SignedBlindPayloadEnvelope",
         "BlindedBlobsBundle",
         "BlobsBundle",
         "Withdrawal",
@@ -84,6 +86,7 @@ go_library(
     srcs = [
         "electra.go",
         "execution_engine.go",
+	"epbs.go",
         "json_marshal_unmarshal.go",
         ":ssz_generated_files",  # keep
     ],

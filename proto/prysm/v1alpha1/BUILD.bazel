@@ -199,8 +199,6 @@ ssz_epbs_objs = [
 	"PayloadAttestationData",
 	"PayloadAttestation",
 	"PayloadAttestationMessage",
-	"SignedBlindPayloadEnvelope",
-	"BlindPayloadEnvelope",
 ]
 
 ssz_gen_marshal(
@@ -415,7 +413,6 @@ ssz_proto_files(
         "data_columns.proto",
         "light_client.proto",
         "payload_attestation.proto",
-        "blind_payload_envelope.proto",
         "sync_committee.proto",
         "withdrawals.proto",
     ],

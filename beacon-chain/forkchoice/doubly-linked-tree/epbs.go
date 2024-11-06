@@ -81,3 +81,11 @@ func (s *Store) updateWithPayload(n *Node) {
 		}
 	}
 }
+
+func (f *ForkChoice) HashForBlockRoot(root [32]byte) [32]byte {
+	node, ok := f.store.emptyNodeByRoot[root]
+	if !ok {
+		return [32]byte{}
+	}
+	return node.block.payloadHash
+}

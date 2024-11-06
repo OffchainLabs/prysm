@@ -94,7 +94,7 @@ func (s *Service) executionPayloadEnvelopeSubscriber(ctx context.Context, msg pr
 	if !ok {
 		return errWrongMessage
 	}
-	env, err := blocks.WrappedROExecutionPayloadEnvelope(e.Message)
+	env, err := blocks.WrappedROSignedExecutionPayloadEnvelope(e)
 	if err != nil {
 		return err
 	}
