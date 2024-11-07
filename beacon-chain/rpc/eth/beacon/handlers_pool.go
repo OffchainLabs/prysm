@@ -280,11 +280,7 @@ func (s *Server) handleAttestationsElectra(ctx context.Context, data json.RawMes
 	var sourceAttestations []*structs.AttestationElectra
 
 	if err = json.Unmarshal(data, &sourceAttestations); err != nil {
-		var singleAttestation *structs.AttestationElectra
-		if err = json.Unmarshal(data, &singleAttestation); err != nil {
-			return nil, nil, errors.New("Failed to unmarshal attestation")
-		}
-		sourceAttestations = append(sourceAttestations, singleAttestation)
+		return nil, nil, errors.New("Failed to unmarshal attestation")
 	}
 
 	if len(sourceAttestations) == 0 {
@@ -330,8 +326,11 @@ func (s *Server) handleAttestationsElectra(ctx context.Context, data json.RawMes
 			failedBroadcasts = append(failedBroadcasts, strconv.Itoa(i))
 			continue
 		}
-
-		subnet := corehelpers.ComputeSubnetFromCommitteeAndSlot(uint64(len(vals)), att.Data.CommitteeIndex, att.Data.Slot)
+		committeeIndex, err := att.GetCommitteeIndex()
+		if err != nil {
+			return nil, nil, errors.New("Failed to retrieve attestation committee index")
+		}
+		subnet := corehelpers.ComputeSubnetFromCommitteeAndSlot(uint64(len(vals)), committeeIndex, att.Data.Slot)
 		if err = s.Broadcaster.BroadcastAttestation(ctx, subnet, att); err != nil {
 			log.WithError(err).Errorf("could not broadcast attestation at index %d", i)
 			failedBroadcasts = append(failedBroadcasts, strconv.Itoa(i))
@@ -356,11 +355,7 @@ func (s *Server) handleAttestations(ctx context.Context, data json.RawMessage) (
 	var sourceAttestations []*structs.Attestation
 
 	if err = json.Unmarshal(data, &sourceAttestations); err != nil {
-		var singleAttestation *structs.Attestation
-		if err = json.Unmarshal(data, &singleAttestation); err != nil {
-			return nil, nil, errors.New("Failed to unmarshal attestation")
-		}
-		sourceAttestations = append(sourceAttestations, singleAttestation)
+		return nil, nil, errors.New("Failed to unmarshal attestation")
 	}
 
 	if len(sourceAttestations) == 0 {
