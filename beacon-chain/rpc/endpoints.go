@@ -200,6 +200,15 @@ func (s *Service) validatorEndpoints(
 			methods: []string{http.MethodGet},
 		},
 		{
+			template: "/eth/v2/validator/aggregate_attestation",
+			name:     namespace + ".GetAggregateAttestationV2",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+			},
+			handler: server.GetAggregateAttestationV2,
+			methods: []string{http.MethodGet},
+		},
+		{
 			template: "/eth/v1/validator/contribution_and_proofs",
 			name:     namespace + ".SubmitContributionAndProofs",
 			middleware: []middleware.Middleware{

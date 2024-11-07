@@ -2,6 +2,7 @@ package beacon_api
 
 import (
 	"context"
+	"encoding/json"
 	"net/url"
 	"strconv"
 
@@ -52,7 +53,12 @@ func (c *beaconApiValidatorClient) submitAggregateSelectionProof(
 		return nil, err
 	}
 
-	aggregatedAttestation, err := convertAttestationToProto(aggregateAttestationResponse.Data)
+	var attData *structs.Attestation
+	if err := json.Unmarshal(aggregateAttestationResponse.Data, &attData); err != nil {
+		return nil, errors.Wrap(err, "failed to unmarshal aggregate attestation data")
+	}
+
+	aggregatedAttestation, err := convertAttestationToProto(attData)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to convert aggregate attestation json to proto")
 	}
