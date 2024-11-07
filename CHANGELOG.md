@@ -20,6 +20,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Add ability to rollback node's internal state during processing.
 - Change how unsafe protobuf state is created to prevent unnecessary copies.
 - Added benchmarks for process slots for Capella, Deneb, Electra
+- Add helper to cast bytes to string without allocating memory.
 - Added SubmitAttestationsV2 endpoint.
 
 ### Changed
@@ -48,6 +49,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Only Build the Protobuf state once during serialization.
 - Capella blocks are execution.
 - Fixed panic when http request to subscribe to event stream fails.
+- Return early for blob reconstructor during capella fork
 
 ### Deprecated
 
