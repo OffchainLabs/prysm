@@ -12,6 +12,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v5/io/file"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"google.golang.org/protobuf/proto"
 )
@@ -62,6 +63,10 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 // This function reconstructs the blob sidecars from the EL using the block's KZG commitments,
 // broadcasts the reconstructed blobs over P2P, and saves them into the blob storage.
 func (s *Service) reconstructAndBroadcastBlobs(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) {
+	if block.Version() < version.Deneb {
+		return
+	}
+
 	startTime, err := slots.ToTime(uint64(s.cfg.chain.GenesisTime().Unix()), block.Block().Slot())
 	if err != nil {
 		log.WithError(err).Error("Failed to convert slot to time")
