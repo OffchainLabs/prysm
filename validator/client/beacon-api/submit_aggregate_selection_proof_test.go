@@ -2,6 +2,7 @@ package beacon_api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"testing"
@@ -124,6 +125,9 @@ func TestSubmitAggregateSelectionProof(t *testing.T) {
 				test.attestationDataErr,
 			).Times(test.attestationDataCalled)
 
+			attestationJSON, err := json.Marshal(jsonifyAttestation(aggregateAttestation))
+			require.NoError(t, err)
+
 			// Call attestation data to get attestation data root to query aggregate attestation.
 			jsonRestHandler.EXPECT().Get(
 				gomock.Any(),
@@ -132,7 +136,7 @@ func TestSubmitAggregateSelectionProof(t *testing.T) {
 			).SetArg(
 				2,
 				structs.AggregateAttestationResponse{
-					Data: jsonifyAttestation(aggregateAttestation),
+					Data: attestationJSON,
 				},
 			).Return(
 				test.aggregateAttestationErr,
