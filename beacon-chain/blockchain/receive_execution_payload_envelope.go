@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/epbs"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/das"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/execution"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
@@ -112,12 +113,15 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 		headBlk, err := s.HeadBlock(ctx)
 		if err != nil {
 			log.WithError(err).Error("could not get head block")
-			return nil
 		}
 		if err := s.saveHead(ctx, root, headBlk, preState); err != nil {
 			log.WithError(err).Error("could not save new head")
-			return nil
 		}
+		// update the NSC with the hash for the full block
+		if err := transition.UpdateNextSlotCache(ctx, blockHash[:], preState); err != nil {
+			log.WithError(err).Error("could not update next slot cache with payload")
+		}
+
 	}
 	timeWithoutDaWait := time.Since(receivedTime) - daWaitedTime
 	executionEngineProcessingTime.Observe(float64(timeWithoutDaWait.Milliseconds()))

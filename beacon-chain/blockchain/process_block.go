@@ -102,7 +102,9 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 		return nil
 	}
 	if cfg.roblock.Version() >= version.EPBS {
-		return nil
+		// update the NSC and handle epoch boundaries here since we do
+		// not send FCU at all
+		return s.updateCachesPostBlockProcessing(cfg)
 	}
 	if err := s.getFCUArgs(cfg, fcuArgs); err != nil {
 		log.WithError(err).Error("Could not get forkchoice update argument")
