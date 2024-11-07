@@ -491,7 +491,6 @@ func (s *Service) runLateBlockTasks() {
 				ticker.Done()
 				attThreshold := params.BeaconConfig().SecondsPerSlot / 4
 				ticker = slots.NewSlotTickerWithOffset(s.genesisTime, time.Duration(attThreshold)*time.Second, params.BeaconConfig().SecondsPerSlot)
-				time.Sleep(1 * time.Second)
 			}
 			s.lateBlockTasks(s.ctx)
 		case <-s.ctx.Done():
