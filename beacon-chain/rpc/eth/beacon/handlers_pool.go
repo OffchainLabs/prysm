@@ -3,7 +3,6 @@ package beacon
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/api"
 	"github.com/prysmaticlabs/prysm/v5/api/server"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
@@ -253,7 +253,7 @@ func (s *Server) SubmitAttestationsV2(w http.ResponseWriter, r *http.Request) {
 		attFailures, failedBroadcasts, err = s.handleAttestations(ctx, req.Data)
 	}
 	if err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
+		httputil.HandleError(w, fmt.Sprintf("Failed to handle attestations: %v", err), http.StatusBadRequest)
 		return
 	}
 
@@ -280,11 +280,11 @@ func (s *Server) handleAttestationsElectra(ctx context.Context, data json.RawMes
 	var sourceAttestations []*structs.AttestationElectra
 
 	if err = json.Unmarshal(data, &sourceAttestations); err != nil {
-		return nil, nil, errors.New("Failed to unmarshal attestation")
+		return nil, nil, errors.Wrap(err, "failed to unmarshal attestation")
 	}
 
 	if len(sourceAttestations) == 0 {
-		return nil, nil, errors.New("No data submitted")
+		return nil, nil, errors.New("no data submitted")
 	}
 
 	var validAttestations []*eth.AttestationElectra
@@ -328,7 +328,7 @@ func (s *Server) handleAttestationsElectra(ctx context.Context, data json.RawMes
 		}
 		committeeIndex, err := att.GetCommitteeIndex()
 		if err != nil {
-			return nil, nil, errors.New("Failed to retrieve attestation committee index")
+			return nil, nil, errors.Wrap(err, "failed to retrieve attestation committee index")
 		}
 		subnet := corehelpers.ComputeSubnetFromCommitteeAndSlot(uint64(len(vals)), committeeIndex, att.Data.Slot)
 		if err = s.Broadcaster.BroadcastAttestation(ctx, subnet, att); err != nil {
@@ -355,11 +355,11 @@ func (s *Server) handleAttestations(ctx context.Context, data json.RawMessage) (
 	var sourceAttestations []*structs.Attestation
 
 	if err = json.Unmarshal(data, &sourceAttestations); err != nil {
-		return nil, nil, errors.New("Failed to unmarshal attestation")
+		return nil, nil, errors.Wrap(err, "failed to unmarshal attestation")
 	}
 
 	if len(sourceAttestations) == 0 {
-		return nil, nil, errors.New("No data submitted")
+		return nil, nil, errors.New("no data submitted")
 	}
 
 	var validAttestations []*eth.Attestation
