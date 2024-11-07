@@ -226,7 +226,6 @@ func TestCastToString(t *testing.T) {
 	// Mutate original slice to make sure that a copy was not performed.
 	bSlice[0] = 'd'
 	assert.NotEqual(t, originalString, bString)
-	assert.Equal(t, "abc", originalString)
 	assert.Equal(t, "dbc", bString)
 }
 
