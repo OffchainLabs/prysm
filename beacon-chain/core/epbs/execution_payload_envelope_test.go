@@ -52,19 +52,19 @@ func Test_validateAgainstHeader(t *testing.T) {
 	st, err := state_native.InitializeFromProtoUnsafeEpbs(stpb)
 	require.NoError(t, err)
 	ctx := context.Background()
-	require.ErrorContains(t, "invalid nil latest block header", validateAgainstHeader(ctx, st, e))
+	require.ErrorContains(t, "invalid nil latest block header", UpdateHeaderAndVerify(ctx, st, e))
 
 	prest, _ := util.DeterministicGenesisStateEpbs(t, 64)
 	br := [32]byte{'r'}
 	p.BeaconBlockRoot = br[:]
-	require.ErrorContains(t, "beacon block root does not match previous header", validateAgainstHeader(ctx, prest, e))
+	require.ErrorContains(t, "beacon block root does not match previous header", UpdateHeaderAndVerify(ctx, prest, e))
 
 	header := prest.LatestBlockHeader()
 	require.NoError(t, err)
 	headerRoot, err := header.HashTreeRoot()
 	require.NoError(t, err)
 	p.BeaconBlockRoot = headerRoot[:]
-	require.NoError(t, validateAgainstHeader(ctx, prest, e))
+	require.NoError(t, UpdateHeaderAndVerify(ctx, prest, e))
 }
 
 func Test_validateAgainstCommittedBid(t *testing.T) {

@@ -18,7 +18,7 @@ func ValidatePayloadStateTransition(
 	preState state.BeaconState,
 	envelope interfaces.ROExecutionPayloadEnvelope,
 ) error {
-	if err := validateAgainstHeader(ctx, preState, envelope); err != nil {
+	if err := UpdateHeaderAndVerify(ctx, preState, envelope); err != nil {
 		return err
 	}
 	committedHeader, err := preState.LatestExecutionPayloadHeaderEPBS()
@@ -61,7 +61,7 @@ func ProcessPayloadStateTransition(
 	return preState.SetLatestFullSlot(preState.Slot())
 }
 
-func validateAgainstHeader(
+func UpdateHeaderAndVerify(
 	ctx context.Context,
 	preState state.BeaconState,
 	envelope interfaces.ROExecutionPayloadEnvelope,
