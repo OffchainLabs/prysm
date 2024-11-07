@@ -29,7 +29,6 @@ type BeaconState struct {
 	stateRoots                          customtypes.StateRoots
 	stateRootsMultiValue                *MultiValueStateRoots
 	historicalRoots                     customtypes.HistoricalRoots
-	historicalSummaries                 []*ethpb.HistoricalSummary
 	eth1Data                            *ethpb.Eth1Data
 	eth1DataVotes                       []*ethpb.Eth1Data
 	eth1DepositIndex                    uint64
@@ -55,8 +54,11 @@ type BeaconState struct {
 	latestExecutionPayloadHeader        *enginev1.ExecutionPayloadHeader
 	latestExecutionPayloadHeaderCapella *enginev1.ExecutionPayloadHeaderCapella
 	latestExecutionPayloadHeaderDeneb   *enginev1.ExecutionPayloadHeaderDeneb
-	nextWithdrawalIndex                 uint64
-	nextWithdrawalValidatorIndex        primitives.ValidatorIndex
+
+	// Capella fields
+	nextWithdrawalIndex          uint64
+	nextWithdrawalValidatorIndex primitives.ValidatorIndex
+	historicalSummaries          []*ethpb.HistoricalSummary
 
 	// Electra fields
 	depositRequestsStartIndex     uint64
@@ -90,7 +92,6 @@ type beaconStateMarshalable struct {
 	BlockRoots                          customtypes.BlockRoots                  `json:"block_roots" yaml:"block_roots"`
 	StateRoots                          customtypes.StateRoots                  `json:"state_roots" yaml:"state_roots"`
 	HistoricalRoots                     customtypes.HistoricalRoots             `json:"historical_roots" yaml:"historical_roots"`
-	HistoricalSummaries                 []*ethpb.HistoricalSummary              `json:"historical_summaries" yaml:"historical_summaries"`
 	Eth1Data                            *ethpb.Eth1Data                         `json:"eth_1_data" yaml:"eth_1_data"`
 	Eth1DataVotes                       []*ethpb.Eth1Data                       `json:"eth_1_data_votes" yaml:"eth_1_data_votes"`
 	Eth1DepositIndex                    uint64                                  `json:"eth_1_deposit_index" yaml:"eth_1_deposit_index"`
@@ -114,6 +115,7 @@ type beaconStateMarshalable struct {
 	LatestExecutionPayloadHeaderDeneb   *enginev1.ExecutionPayloadHeaderDeneb   `json:"latest_execution_payload_header_deneb" yaml:"latest_execution_payload_header_deneb"`
 	NextWithdrawalIndex                 uint64                                  `json:"next_withdrawal_index" yaml:"next_withdrawal_index"`
 	NextWithdrawalValidatorIndex        primitives.ValidatorIndex               `json:"next_withdrawal_validator_index" yaml:"next_withdrawal_validator_index"`
+	HistoricalSummaries                 []*ethpb.HistoricalSummary              `json:"historical_summaries" yaml:"historical_summaries"`
 	DepositRequestsStartIndex           uint64                                  `json:"deposit_requests_start_index" yaml:"deposit_requests_start_index"`
 	DepositBalanceToConsume             primitives.Gwei                         `json:"deposit_balance_to_consume" yaml:"deposit_balance_to_consume"`
 	ExitBalanceToConsume                primitives.Gwei                         `json:"exit_balance_to_consume" yaml:"exit_balance_to_consume"`
@@ -159,7 +161,6 @@ func (b *BeaconState) MarshalJSON() ([]byte, error) {
 		BlockRoots:                          bRoots,
 		StateRoots:                          sRoots,
 		HistoricalRoots:                     b.historicalRoots,
-		HistoricalSummaries:                 b.historicalSummaries,
 		Eth1Data:                            b.eth1Data,
 		Eth1DataVotes:                       b.eth1DataVotes,
 		Eth1DepositIndex:                    b.eth1DepositIndex,
@@ -183,6 +184,7 @@ func (b *BeaconState) MarshalJSON() ([]byte, error) {
 		LatestExecutionPayloadHeaderDeneb:   b.latestExecutionPayloadHeaderDeneb,
 		NextWithdrawalIndex:                 b.nextWithdrawalIndex,
 		NextWithdrawalValidatorIndex:        b.nextWithdrawalValidatorIndex,
+		HistoricalSummaries:                 b.historicalSummaries,
 		DepositRequestsStartIndex:           b.depositRequestsStartIndex,
 		DepositBalanceToConsume:             b.depositBalanceToConsume,
 		ExitBalanceToConsume:                b.exitBalanceToConsume,

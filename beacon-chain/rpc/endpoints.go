@@ -601,7 +601,7 @@ func (s *Service) beaconEndpoints(
 			middleware: []middleware.Middleware{
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
 			},
-			handler: server.GetBlockAttestations,
+			handler: server.GetBlockAttestationsV2,
 			methods: []string{http.MethodGet},
 		},
 		{

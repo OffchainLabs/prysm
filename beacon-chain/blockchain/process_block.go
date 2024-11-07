@@ -76,6 +76,8 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 
 	err := s.cfg.ForkChoiceStore.InsertNode(ctx, cfg.postState, cfg.roblock)
 	if err != nil {
+		// Do not use parent context in the event it deadlined
+		ctx = trace.NewContext(context.Background(), span)
 		s.rollbackBlock(ctx, cfg.roblock.Root())
 		return errors.Wrapf(err, "could not insert block %d to fork choice store", cfg.roblock.Block().Slot())
 	}

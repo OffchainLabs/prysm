@@ -16,10 +16,5 @@ func (v *validator) HandleKeyReload(ctx context.Context, currentKeys [][fieldpar
 		return false, err
 	}
 
-	valCount, err := v.getValidatorCount(ctx)
-	if err != nil {
-		return false, err
-	}
-
-	return v.checkAndLogValidatorStatus(valCount), nil
+	return v.checkAndLogValidatorStatus(), nil
 }

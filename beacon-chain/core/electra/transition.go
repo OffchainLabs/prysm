@@ -29,7 +29,6 @@ var (
 	ProcessParticipationFlagUpdates      = altair.ProcessParticipationFlagUpdates
 	ProcessSyncCommitteeUpdates          = altair.ProcessSyncCommitteeUpdates
 	AttestationsDelta                    = altair.AttestationsDelta
-	ProcessSyncAggregate                 = altair.ProcessSyncAggregate
 )
 
 // ProcessEpoch describes the per epoch operations that are performed on the beacon state.
