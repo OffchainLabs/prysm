@@ -68,6 +68,9 @@ func (vs *Server) computePostPayloadStateRoot(ctx context.Context, envelope inte
 		return nil, errors.Wrap(err, "could not retrieve beacon state")
 	}
 	beaconState = beaconState.Copy()
+	if err := epbs.UpdateHeaderAndVerify(ctx, beaconState, envelope); err != nil {
+		return nil, err
+	}
 	err = epbs.ProcessPayloadStateTransition(
 		ctx,
 		beaconState,
