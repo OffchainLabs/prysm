@@ -234,10 +234,10 @@ func TestGetAggregateAttestation(t *testing.T) {
 			expectedAggregationBits string,
 			expectedRoot []byte,
 			expectedSig []byte,
-			expectedBits string,
+			expectedCommitteeBits string,
 		) {
 			assert.Equal(t, expectedAggregationBits, attestation.AggregationBits, "Unexpected aggregation bits in attestation")
-			assert.Equal(t, expectedBits, attestation.CommitteeBits)
+			assert.Equal(t, expectedCommitteeBits, attestation.CommitteeBits)
 			assert.Equal(t, hexutil.Encode(expectedSig), attestation.Signature, "Signature mismatch")
 			assert.Equal(t, expectedSlot, attestation.Data.Slot, "Slot mismatch in attestation data")
 			assert.Equal(t, "0", attestation.Data.CommitteeIndex, "Committee index mismatch")
@@ -294,7 +294,7 @@ func TestGetAggregateAttestation(t *testing.T) {
 			var attestation structs.AttestationElectra
 			require.NoError(t, json.Unmarshal(resp.Data, &attestation), "Failed to unmarshal attestation data")
 
-			compareResult(t, attestation, "2", hexutil.Encode(aggSlot2.AggregationBits), root1, sig.Marshal(), "0x0200000000000000")
+			compareResult(t, attestation, "2", hexutil.Encode(aggSlot2.AggregationBits), root1, sig.Marshal(), hexutil.Encode(aggSlot2.CommitteeBits))
 		})
 		t.Run("multiple matching aggregated attestations - return the one with most bits", func(t *testing.T) {
 			reqRoot, err := aggSlot1_Root1_1.Data.HashTreeRoot()
@@ -314,7 +314,7 @@ func TestGetAggregateAttestation(t *testing.T) {
 			var attestation structs.AttestationElectra
 			require.NoError(t, json.Unmarshal(resp.Data, &attestation), "Failed to unmarshal attestation data")
 
-			compareResult(t, attestation, "1", hexutil.Encode(aggSlot1_Root1_2.AggregationBits), root1, sig.Marshal(), "0x0200000000000000")
+			compareResult(t, attestation, "1", hexutil.Encode(aggSlot1_Root1_2.AggregationBits), root1, sig.Marshal(), hexutil.Encode(aggSlot1_Root1_1.CommitteeBits))
 		})
 		t.Run("1 matching unaggregated attestation", func(t *testing.T) {
 			reqRoot, err := unaggSlot4.Data.HashTreeRoot()
@@ -333,7 +333,7 @@ func TestGetAggregateAttestation(t *testing.T) {
 
 			var attestation structs.AttestationElectra
 			require.NoError(t, json.Unmarshal(resp.Data, &attestation), "Failed to unmarshal attestation data")
-			compareResult(t, attestation, "4", hexutil.Encode(unaggSlot4.AggregationBits), root1, sig.Marshal(), "0x0200000000000000")
+			compareResult(t, attestation, "4", hexutil.Encode(unaggSlot4.AggregationBits), root1, sig.Marshal(), hexutil.Encode(unaggSlot4.CommitteeBits))
 		})
 		t.Run("multiple matching unaggregated attestations - their aggregate is returned", func(t *testing.T) {
 			reqRoot, err := unaggSlot3_Root1_1.Data.HashTreeRoot()
@@ -357,7 +357,7 @@ func TestGetAggregateAttestation(t *testing.T) {
 			sig2, err := bls.SignatureFromBytes(unaggSlot3_Root1_2.Signature)
 			require.NoError(t, err)
 			expectedSig := bls.AggregateSignatures([]common.Signature{sig1, sig2})
-			compareResult(t, attestation, "3", hexutil.Encode(bitfield.Bitlist{0b11100}), root1, expectedSig.Marshal(), "0x0200000000000000")
+			compareResult(t, attestation, "3", hexutil.Encode(bitfield.Bitlist{0b11100}), root1, expectedSig.Marshal(), hexutil.Encode(unaggSlot3_Root1_1.CommitteeBits))
 		})
 	})
 }
