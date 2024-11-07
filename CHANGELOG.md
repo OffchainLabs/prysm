@@ -50,6 +50,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Capella blocks are execution.
 - Fixed panic when http request to subscribe to event stream fails.
 - Return early for blob reconstructor during capella fork
+- Rename instances of "deposit receipts" to "deposit requests".
 
 ### Deprecated
 
