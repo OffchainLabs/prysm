@@ -660,6 +660,16 @@ func (s *Service) beaconEndpoints(
 			methods: []string{http.MethodPost},
 		},
 		{
+			template: "/eth/v2/beacon/pool/attestations",
+			name:     namespace + ".SubmitAttestationsV2",
+			middleware: []middleware.Middleware{
+				middleware.ContentTypeHandler([]string{api.JsonMediaType}),
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+			},
+			handler: server.SubmitAttestationsV2,
+			methods: []string{http.MethodPost},
+		},
+		{
 			template: "/eth/v1/beacon/pool/voluntary_exits",
 			name:     namespace + ".ListVoluntaryExits",
 			middleware: []middleware.Middleware{

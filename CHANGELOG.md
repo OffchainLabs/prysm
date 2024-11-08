@@ -22,6 +22,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Added benchmarks for process slots for Capella, Deneb, Electra
 - Add helper to cast bytes to string without allocating memory.
 - Added GetAggregatedAttestationV2 endpoint.
+- Added SubmitAttestationsV2 endpoint.
 - Validator REST mode Electra block support
 
 ### Changed
