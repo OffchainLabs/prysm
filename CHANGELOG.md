@@ -73,6 +73,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Fix keymanager API so that get keys returns an empty response instead of a 500 error when using an unsupported keystore.
 - Small log imporvement, removing some redundant or duplicate logs
 - EIP7521 - Fixes withdrawal bug by accounting for pending partial withdrawals and deducting already withdrawn amounts from the sweep balance. [PR](https://github.com/prysmaticlabs/prysm/pull/14578)
+- unskip electra merkle spec test
 
 
 ### Security
