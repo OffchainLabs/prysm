@@ -14,26 +14,26 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
-func TestProposeBeaconBlock_Deneb(t *testing.T) {
+func TestProposeBeaconBlock_BlindedElectra(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 
-	var blockContents structs.SignedBeaconBlockContentsDeneb
-	err := json.Unmarshal([]byte(rpctesting.DenebBlockContents), &blockContents)
+	var block structs.SignedBlindedBeaconBlockElectra
+	err := json.Unmarshal([]byte(rpctesting.BlindedElectraBlock), &block)
 	require.NoError(t, err)
-	genericSignedBlock, err := blockContents.ToGeneric()
+	genericSignedBlock, err := block.ToGeneric()
 	require.NoError(t, err)
 
-	denebBytes, err := json.Marshal(blockContents)
+	electraBytes, err := json.Marshal(block)
 	require.NoError(t, err)
 	// Make sure that what we send in the POST body is the marshalled version of the protobuf block
-	headers := map[string]string{"Eth-Consensus-Version": "deneb"}
+	headers := map[string]string{"Eth-Consensus-Version": "electra"}
 	jsonRestHandler.EXPECT().Post(
 		gomock.Any(),
-		"/eth/v2/beacon/blocks",
+		"/eth/v2/beacon/blinded_blocks",
 		headers,
-		bytes.NewBuffer(denebBytes),
+		bytes.NewBuffer(electraBytes),
 		nil,
 	)
 
@@ -42,7 +42,7 @@ func TestProposeBeaconBlock_Deneb(t *testing.T) {
 	assert.NoError(t, err)
 	require.NotNil(t, proposeResponse)
 
-	expectedBlockRoot, err := genericSignedBlock.GetDeneb().Block.HashTreeRoot()
+	expectedBlockRoot, err := genericSignedBlock.GetBlindedElectra().HashTreeRoot()
 	require.NoError(t, err)
 
 	// Make sure that the block root is set

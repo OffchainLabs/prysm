@@ -19,9 +19,11 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Added ListAttestationsV2 endpoint.
 - Add ability to rollback node's internal state during processing.
 - Change how unsafe protobuf state is created to prevent unnecessary copies.
-- Added benchmarks for process slots for Capella, Deneb, Electra.
+- Added benchmarks for process slots for Capella, Deneb, Electra
 - Add helper to cast bytes to string without allocating memory.
 - Added GetAggregatedAttestationV2 endpoint.
+- Added SubmitAttestationsV2 endpoint.
+- Validator REST mode Electra block support
 
 ### Changed
 
@@ -50,6 +52,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Capella blocks are execution.
 - Fixed panic when http request to subscribe to event stream fails.
 - Return early for blob reconstructor during capella fork
+- Updated block endpoint from V1 to V2
 
 ### Deprecated
 
