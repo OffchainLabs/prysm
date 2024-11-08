@@ -500,95 +500,292 @@ func TestSubmitAttestations(t *testing.T) {
 		ChainInfoFetcher:  chainService,
 		OperationNotifier: &blockchainmock.MockOperationNotifier{},
 	}
+	t.Run("V1", func(t *testing.T) {
+		t.Run("single", func(t *testing.T) {
+			broadcaster := &p2pMock.MockBroadcaster{}
+			s.Broadcaster = broadcaster
+			s.AttestationsPool = attestations.NewPool()
 
-	t.Run("single", func(t *testing.T) {
-		broadcaster := &p2pMock.MockBroadcaster{}
-		s.Broadcaster = broadcaster
-		s.AttestationsPool = attestations.NewPool()
+			var body bytes.Buffer
+			_, err := body.WriteString(singleAtt)
+			require.NoError(t, err)
+			request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
 
-		var body bytes.Buffer
-		_, err := body.WriteString(singleAtt)
-		require.NoError(t, err)
-		request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
+			s.SubmitAttestations(writer, request)
 
-		s.SubmitAttestations(writer, request)
-		assert.Equal(t, http.StatusOK, writer.Code)
-		assert.Equal(t, true, broadcaster.BroadcastCalled.Load())
-		assert.Equal(t, 1, broadcaster.NumAttestations())
-		assert.Equal(t, "0x03", hexutil.Encode(broadcaster.BroadcastAttestations[0].GetAggregationBits()))
-		assert.Equal(t, "0x8146f4397bfd8fd057ebbcd6a67327bdc7ed5fb650533edcb6377b650dea0b6da64c14ecd60846d5c0a0cd43893d6972092500f82c9d8a955e2b58c5ed3cbe885d84008ace6bd86ba9e23652f58e2ec207cec494c916063257abf285b9b15b15", hexutil.Encode(broadcaster.BroadcastAttestations[0].GetSignature()))
-		assert.Equal(t, primitives.Slot(0), broadcaster.BroadcastAttestations[0].GetData().Slot)
-		assert.Equal(t, primitives.CommitteeIndex(0), broadcaster.BroadcastAttestations[0].GetData().CommitteeIndex)
-		assert.Equal(t, "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2", hexutil.Encode(broadcaster.BroadcastAttestations[0].GetData().BeaconBlockRoot))
-		assert.Equal(t, "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2", hexutil.Encode(broadcaster.BroadcastAttestations[0].GetData().Source.Root))
-		assert.Equal(t, primitives.Epoch(0), broadcaster.BroadcastAttestations[0].GetData().Source.Epoch)
-		assert.Equal(t, "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2", hexutil.Encode(broadcaster.BroadcastAttestations[0].GetData().Target.Root))
-		assert.Equal(t, primitives.Epoch(0), broadcaster.BroadcastAttestations[0].GetData().Target.Epoch)
-		assert.Equal(t, 1, s.AttestationsPool.UnaggregatedAttestationCount())
+			assert.Equal(t, http.StatusOK, writer.Code)
+			assert.Equal(t, true, broadcaster.BroadcastCalled.Load())
+			assert.Equal(t, 1, broadcaster.NumAttestations())
+			assert.Equal(t, "0x03", hexutil.Encode(broadcaster.BroadcastAttestations[0].GetAggregationBits()))
+			assert.Equal(t, "0x8146f4397bfd8fd057ebbcd6a67327bdc7ed5fb650533edcb6377b650dea0b6da64c14ecd60846d5c0a0cd43893d6972092500f82c9d8a955e2b58c5ed3cbe885d84008ace6bd86ba9e23652f58e2ec207cec494c916063257abf285b9b15b15", hexutil.Encode(broadcaster.BroadcastAttestations[0].GetSignature()))
+			assert.Equal(t, primitives.Slot(0), broadcaster.BroadcastAttestations[0].GetData().Slot)
+			assert.Equal(t, primitives.CommitteeIndex(0), broadcaster.BroadcastAttestations[0].GetData().CommitteeIndex)
+			assert.Equal(t, "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2", hexutil.Encode(broadcaster.BroadcastAttestations[0].GetData().BeaconBlockRoot))
+			assert.Equal(t, "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2", hexutil.Encode(broadcaster.BroadcastAttestations[0].GetData().Source.Root))
+			assert.Equal(t, primitives.Epoch(0), broadcaster.BroadcastAttestations[0].GetData().Source.Epoch)
+			assert.Equal(t, "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2", hexutil.Encode(broadcaster.BroadcastAttestations[0].GetData().Target.Root))
+			assert.Equal(t, primitives.Epoch(0), broadcaster.BroadcastAttestations[0].GetData().Target.Epoch)
+			assert.Equal(t, 1, s.AttestationsPool.UnaggregatedAttestationCount())
+		})
+		t.Run("multiple", func(t *testing.T) {
+			broadcaster := &p2pMock.MockBroadcaster{}
+			s.Broadcaster = broadcaster
+			s.AttestationsPool = attestations.NewPool()
+
+			var body bytes.Buffer
+			_, err := body.WriteString(multipleAtts)
+			require.NoError(t, err)
+			request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.SubmitAttestations(writer, request)
+			assert.Equal(t, http.StatusOK, writer.Code)
+			assert.Equal(t, true, broadcaster.BroadcastCalled.Load())
+			assert.Equal(t, 2, broadcaster.NumAttestations())
+			assert.Equal(t, 2, s.AttestationsPool.UnaggregatedAttestationCount())
+		})
+		t.Run("no body", func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodPost, "http://example.com", nil)
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.SubmitAttestations(writer, request)
+			assert.Equal(t, http.StatusBadRequest, writer.Code)
+			e := &httputil.DefaultJsonError{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+			assert.Equal(t, http.StatusBadRequest, e.Code)
+			assert.Equal(t, true, strings.Contains(e.Message, "No data submitted"))
+		})
+		t.Run("empty", func(t *testing.T) {
+			var body bytes.Buffer
+			_, err := body.WriteString("[]")
+			require.NoError(t, err)
+			request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.SubmitAttestations(writer, request)
+			assert.Equal(t, http.StatusBadRequest, writer.Code)
+			e := &httputil.DefaultJsonError{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+			assert.Equal(t, http.StatusBadRequest, e.Code)
+			assert.Equal(t, true, strings.Contains(e.Message, "no data submitted"))
+		})
+		t.Run("invalid", func(t *testing.T) {
+			var body bytes.Buffer
+			_, err := body.WriteString(invalidAtt)
+			require.NoError(t, err)
+			request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.SubmitAttestations(writer, request)
+			assert.Equal(t, http.StatusBadRequest, writer.Code)
+			e := &server.IndexedVerificationFailureError{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+			assert.Equal(t, http.StatusBadRequest, e.Code)
+			require.Equal(t, 1, len(e.Failures))
+			assert.Equal(t, true, strings.Contains(e.Failures[0].Message, "Incorrect attestation signature"))
+		})
 	})
-	t.Run("multiple", func(t *testing.T) {
-		broadcaster := &p2pMock.MockBroadcaster{}
-		s.Broadcaster = broadcaster
-		s.AttestationsPool = attestations.NewPool()
+	t.Run("V2", func(t *testing.T) {
+		t.Run("pre-electra", func(t *testing.T) {
+			t.Run("single", func(t *testing.T) {
+				broadcaster := &p2pMock.MockBroadcaster{}
+				s.Broadcaster = broadcaster
+				s.AttestationsPool = attestations.NewPool()
 
-		var body bytes.Buffer
-		_, err := body.WriteString(multipleAtts)
-		require.NoError(t, err)
-		request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
+				var body bytes.Buffer
+				_, err := body.WriteString(singleAtt)
+				require.NoError(t, err)
+				request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
+				request.Header.Set(api.VersionHeader, version.String(version.Phase0))
+				writer := httptest.NewRecorder()
+				writer.Body = &bytes.Buffer{}
 
-		s.SubmitAttestations(writer, request)
-		assert.Equal(t, http.StatusOK, writer.Code)
-		assert.Equal(t, true, broadcaster.BroadcastCalled.Load())
-		assert.Equal(t, 2, broadcaster.NumAttestations())
-		assert.Equal(t, 2, s.AttestationsPool.UnaggregatedAttestationCount())
+				s.SubmitAttestationsV2(writer, request)
+
+				assert.Equal(t, http.StatusOK, writer.Code)
+				assert.Equal(t, true, broadcaster.BroadcastCalled.Load())
+				assert.Equal(t, 1, broadcaster.NumAttestations())
+				assert.Equal(t, "0x03", hexutil.Encode(broadcaster.BroadcastAttestations[0].GetAggregationBits()))
+				assert.Equal(t, "0x8146f4397bfd8fd057ebbcd6a67327bdc7ed5fb650533edcb6377b650dea0b6da64c14ecd60846d5c0a0cd43893d6972092500f82c9d8a955e2b58c5ed3cbe885d84008ace6bd86ba9e23652f58e2ec207cec494c916063257abf285b9b15b15", hexutil.Encode(broadcaster.BroadcastAttestations[0].GetSignature()))
+				assert.Equal(t, primitives.Slot(0), broadcaster.BroadcastAttestations[0].GetData().Slot)
+				assert.Equal(t, primitives.CommitteeIndex(0), broadcaster.BroadcastAttestations[0].GetData().CommitteeIndex)
+				assert.Equal(t, "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2", hexutil.Encode(broadcaster.BroadcastAttestations[0].GetData().BeaconBlockRoot))
+				assert.Equal(t, "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2", hexutil.Encode(broadcaster.BroadcastAttestations[0].GetData().Source.Root))
+				assert.Equal(t, primitives.Epoch(0), broadcaster.BroadcastAttestations[0].GetData().Source.Epoch)
+				assert.Equal(t, "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2", hexutil.Encode(broadcaster.BroadcastAttestations[0].GetData().Target.Root))
+				assert.Equal(t, primitives.Epoch(0), broadcaster.BroadcastAttestations[0].GetData().Target.Epoch)
+				assert.Equal(t, 1, s.AttestationsPool.UnaggregatedAttestationCount())
+			})
+			t.Run("multiple", func(t *testing.T) {
+				broadcaster := &p2pMock.MockBroadcaster{}
+				s.Broadcaster = broadcaster
+				s.AttestationsPool = attestations.NewPool()
+
+				var body bytes.Buffer
+				_, err := body.WriteString(multipleAtts)
+				require.NoError(t, err)
+				request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
+				request.Header.Set(api.VersionHeader, version.String(version.Phase0))
+				writer := httptest.NewRecorder()
+				writer.Body = &bytes.Buffer{}
+
+				s.SubmitAttestationsV2(writer, request)
+				assert.Equal(t, http.StatusOK, writer.Code)
+				assert.Equal(t, true, broadcaster.BroadcastCalled.Load())
+				assert.Equal(t, 2, broadcaster.NumAttestations())
+				assert.Equal(t, 2, s.AttestationsPool.UnaggregatedAttestationCount())
+			})
+			t.Run("no body", func(t *testing.T) {
+				request := httptest.NewRequest(http.MethodPost, "http://example.com", nil)
+				request.Header.Set(api.VersionHeader, version.String(version.Phase0))
+				writer := httptest.NewRecorder()
+				writer.Body = &bytes.Buffer{}
+
+				s.SubmitAttestationsV2(writer, request)
+				assert.Equal(t, http.StatusBadRequest, writer.Code)
+				e := &httputil.DefaultJsonError{}
+				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+				assert.Equal(t, http.StatusBadRequest, e.Code)
+				assert.Equal(t, true, strings.Contains(e.Message, "No data submitted"))
+			})
+			t.Run("empty", func(t *testing.T) {
+				var body bytes.Buffer
+				_, err := body.WriteString("[]")
+				require.NoError(t, err)
+				request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
+				request.Header.Set(api.VersionHeader, version.String(version.Phase0))
+				writer := httptest.NewRecorder()
+				writer.Body = &bytes.Buffer{}
+
+				s.SubmitAttestationsV2(writer, request)
+				assert.Equal(t, http.StatusBadRequest, writer.Code)
+				e := &httputil.DefaultJsonError{}
+				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+				assert.Equal(t, http.StatusBadRequest, e.Code)
+				assert.Equal(t, true, strings.Contains(e.Message, "no data submitted"))
+			})
+			t.Run("invalid", func(t *testing.T) {
+				var body bytes.Buffer
+				_, err := body.WriteString(invalidAtt)
+				require.NoError(t, err)
+				request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
+				request.Header.Set(api.VersionHeader, version.String(version.Phase0))
+				writer := httptest.NewRecorder()
+				writer.Body = &bytes.Buffer{}
+
+				s.SubmitAttestationsV2(writer, request)
+				assert.Equal(t, http.StatusBadRequest, writer.Code)
+				e := &server.IndexedVerificationFailureError{}
+				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+				assert.Equal(t, http.StatusBadRequest, e.Code)
+				require.Equal(t, 1, len(e.Failures))
+				assert.Equal(t, true, strings.Contains(e.Failures[0].Message, "Incorrect attestation signature"))
+			})
+		})
+		t.Run("post-electra", func(t *testing.T) {
+			t.Run("single", func(t *testing.T) {
+				broadcaster := &p2pMock.MockBroadcaster{}
+				s.Broadcaster = broadcaster
+				s.AttestationsPool = attestations.NewPool()
+
+				var body bytes.Buffer
+				_, err := body.WriteString(singleAttElectra)
+				require.NoError(t, err)
+				request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
+				request.Header.Set(api.VersionHeader, version.String(version.Electra))
+				writer := httptest.NewRecorder()
+				writer.Body = &bytes.Buffer{}
+
+				s.SubmitAttestationsV2(writer, request)
+
+				assert.Equal(t, http.StatusOK, writer.Code)
+				assert.Equal(t, true, broadcaster.BroadcastCalled.Load())
+				assert.Equal(t, 1, broadcaster.NumAttestations())
+				assert.Equal(t, "0x03", hexutil.Encode(broadcaster.BroadcastAttestations[0].GetAggregationBits()))
+				assert.Equal(t, "0x8146f4397bfd8fd057ebbcd6a67327bdc7ed5fb650533edcb6377b650dea0b6da64c14ecd60846d5c0a0cd43893d6972092500f82c9d8a955e2b58c5ed3cbe885d84008ace6bd86ba9e23652f58e2ec207cec494c916063257abf285b9b15b15", hexutil.Encode(broadcaster.BroadcastAttestations[0].GetSignature()))
+				assert.Equal(t, primitives.Slot(0), broadcaster.BroadcastAttestations[0].GetData().Slot)
+				assert.Equal(t, primitives.CommitteeIndex(0), broadcaster.BroadcastAttestations[0].GetData().CommitteeIndex)
+				assert.Equal(t, "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2", hexutil.Encode(broadcaster.BroadcastAttestations[0].GetData().BeaconBlockRoot))
+				assert.Equal(t, "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2", hexutil.Encode(broadcaster.BroadcastAttestations[0].GetData().Source.Root))
+				assert.Equal(t, primitives.Epoch(0), broadcaster.BroadcastAttestations[0].GetData().Source.Epoch)
+				assert.Equal(t, "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2", hexutil.Encode(broadcaster.BroadcastAttestations[0].GetData().Target.Root))
+				assert.Equal(t, primitives.Epoch(0), broadcaster.BroadcastAttestations[0].GetData().Target.Epoch)
+				assert.Equal(t, 1, s.AttestationsPool.UnaggregatedAttestationCount())
+			})
+			t.Run("multiple", func(t *testing.T) {
+				broadcaster := &p2pMock.MockBroadcaster{}
+				s.Broadcaster = broadcaster
+				s.AttestationsPool = attestations.NewPool()
+
+				var body bytes.Buffer
+				_, err := body.WriteString(multipleAttsElectra)
+				require.NoError(t, err)
+				request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
+				request.Header.Set(api.VersionHeader, version.String(version.Electra))
+				writer := httptest.NewRecorder()
+				writer.Body = &bytes.Buffer{}
+
+				s.SubmitAttestationsV2(writer, request)
+				assert.Equal(t, http.StatusOK, writer.Code)
+				assert.Equal(t, true, broadcaster.BroadcastCalled.Load())
+				assert.Equal(t, 2, broadcaster.NumAttestations())
+				assert.Equal(t, 2, s.AttestationsPool.UnaggregatedAttestationCount())
+			})
+			t.Run("no body", func(t *testing.T) {
+				request := httptest.NewRequest(http.MethodPost, "http://example.com", nil)
+				request.Header.Set(api.VersionHeader, version.String(version.Electra))
+				writer := httptest.NewRecorder()
+				writer.Body = &bytes.Buffer{}
+
+				s.SubmitAttestationsV2(writer, request)
+				assert.Equal(t, http.StatusBadRequest, writer.Code)
+				e := &httputil.DefaultJsonError{}
+				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+				assert.Equal(t, http.StatusBadRequest, e.Code)
+				assert.Equal(t, true, strings.Contains(e.Message, "No data submitted"))
+			})
+			t.Run("empty", func(t *testing.T) {
+				var body bytes.Buffer
+				_, err := body.WriteString("[]")
+				require.NoError(t, err)
+				request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
+				request.Header.Set(api.VersionHeader, version.String(version.Electra))
+				writer := httptest.NewRecorder()
+				writer.Body = &bytes.Buffer{}
+
+				s.SubmitAttestationsV2(writer, request)
+				assert.Equal(t, http.StatusBadRequest, writer.Code)
+				e := &httputil.DefaultJsonError{}
+				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+				assert.Equal(t, http.StatusBadRequest, e.Code)
+				assert.Equal(t, true, strings.Contains(e.Message, "no data submitted"))
+			})
+			t.Run("invalid", func(t *testing.T) {
+				var body bytes.Buffer
+				_, err := body.WriteString(invalidAttElectra)
+				require.NoError(t, err)
+				request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
+				request.Header.Set(api.VersionHeader, version.String(version.Electra))
+				writer := httptest.NewRecorder()
+				writer.Body = &bytes.Buffer{}
+
+				s.SubmitAttestationsV2(writer, request)
+				assert.Equal(t, http.StatusBadRequest, writer.Code)
+				e := &server.IndexedVerificationFailureError{}
+				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+				assert.Equal(t, http.StatusBadRequest, e.Code)
+				require.Equal(t, 1, len(e.Failures))
+				assert.Equal(t, true, strings.Contains(e.Failures[0].Message, "Incorrect attestation signature"))
+			})
+		})
 	})
-	t.Run("no body", func(t *testing.T) {
-		request := httptest.NewRequest(http.MethodPost, "http://example.com", nil)
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
 
-		s.SubmitAttestations(writer, request)
-		assert.Equal(t, http.StatusBadRequest, writer.Code)
-		e := &httputil.DefaultJsonError{}
-		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
-		assert.Equal(t, http.StatusBadRequest, e.Code)
-		assert.Equal(t, true, strings.Contains(e.Message, "No data submitted"))
-	})
-	t.Run("empty", func(t *testing.T) {
-		var body bytes.Buffer
-		_, err := body.WriteString("[]")
-		require.NoError(t, err)
-		request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-
-		s.SubmitAttestations(writer, request)
-		assert.Equal(t, http.StatusBadRequest, writer.Code)
-		e := &httputil.DefaultJsonError{}
-		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
-		assert.Equal(t, http.StatusBadRequest, e.Code)
-		assert.Equal(t, true, strings.Contains(e.Message, "No data submitted"))
-	})
-	t.Run("invalid", func(t *testing.T) {
-		var body bytes.Buffer
-		_, err := body.WriteString(invalidAtt)
-		require.NoError(t, err)
-		request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-
-		s.SubmitAttestations(writer, request)
-		assert.Equal(t, http.StatusBadRequest, writer.Code)
-		e := &server.IndexedVerificationFailureError{}
-		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
-		assert.Equal(t, http.StatusBadRequest, e.Code)
-		require.Equal(t, 1, len(e.Failures))
-		assert.Equal(t, true, strings.Contains(e.Failures[0].Message, "Incorrect attestation signature"))
-	})
 }
 
 func TestListVoluntaryExits(t *testing.T) {
@@ -2049,6 +2246,85 @@ var (
   {
     "aggregation_bits": "0x03",
     "signature": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "data": {
+      "slot": "0",
+      "index": "0",
+      "beacon_block_root": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
+      "source": {
+        "epoch": "0",
+        "root": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2"
+      },
+      "target": {
+        "epoch": "0",
+        "root": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2"
+      }
+    }
+  }
+]`
+	singleAttElectra = `[
+  {
+    "aggregation_bits": "0x03",
+	"committee_bits": "0x0100000000000000",
+    "signature": "0x8146f4397bfd8fd057ebbcd6a67327bdc7ed5fb650533edcb6377b650dea0b6da64c14ecd60846d5c0a0cd43893d6972092500f82c9d8a955e2b58c5ed3cbe885d84008ace6bd86ba9e23652f58e2ec207cec494c916063257abf285b9b15b15",
+    "data": {
+      "slot": "0",
+      "index": "0",
+      "beacon_block_root": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
+      "source": {
+        "epoch": "0",
+        "root": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2"
+      },
+      "target": {
+        "epoch": "0",
+        "root": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2"
+      }
+    }
+  }
+]`
+	multipleAttsElectra = `[
+  {
+    "aggregation_bits": "0x03",
+	"committee_bits": "0x0100000000000000",
+    "signature": "0x8146f4397bfd8fd057ebbcd6a67327bdc7ed5fb650533edcb6377b650dea0b6da64c14ecd60846d5c0a0cd43893d6972092500f82c9d8a955e2b58c5ed3cbe885d84008ace6bd86ba9e23652f58e2ec207cec494c916063257abf285b9b15b15",
+    "data": {
+      "slot": "0",
+      "index": "0",
+      "beacon_block_root": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
+      "source": {
+        "epoch": "0",
+        "root": "0x736f75726365726f6f7431000000000000000000000000000000000000000000"
+      },
+      "target": {
+        "epoch": "0",
+        "root": "0x746172676574726f6f7431000000000000000000000000000000000000000000"
+      }
+    }
+  },
+  {
+    "aggregation_bits": "0x03",
+	"committee_bits": "0x0100000000000000",
+    "signature": "0x8146f4397bfd8fd057ebbcd6a67327bdc7ed5fb650533edcb6377b650dea0b6da64c14ecd60846d5c0a0cd43893d6972092500f82c9d8a955e2b58c5ed3cbe885d84008ace6bd86ba9e23652f58e2ec207cec494c916063257abf285b9b15b15",
+    "data": {
+      "slot": "0",
+      "index": "0",
+      "beacon_block_root": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
+      "source": {
+        "epoch": "0",
+        "root": "0x736f75726365726f6f7431000000000000000000000000000000000000000000"
+      },
+      "target": {
+        "epoch": "0",
+        "root": "0x746172676574726f6f7432000000000000000000000000000000000000000000"
+      }
+    }
+  }
+]`
+	// signature is invalid
+	invalidAttElectra = `[
+  {
+    "aggregation_bits": "0x03",
+	"committee_bits": "0x0100000000000000",
+	"signature": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
     "data": {
       "slot": "0",
       "index": "0",
