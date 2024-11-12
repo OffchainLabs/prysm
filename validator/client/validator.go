@@ -1224,6 +1224,10 @@ func (v *validator) filterAndCacheActiveKeys(ctx context.Context, pubkeys [][fie
 
 // updateValidatorStatusCache updates the validator statuses cache, a map of keys currently used by the validator client
 func (v *validator) updateValidatorStatusCache(ctx context.Context, pubkeys [][fieldparams.BLSPubkeyLength]byte) error {
+	if len(pubkeys) == 0 {
+		v.pubkeyToStatus = make(map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus, 0)
+		return nil
+	}
 	statusRequestKeys := make([][]byte, 0)
 	for _, k := range pubkeys {
 		statusRequestKeys = append(statusRequestKeys, k[:])
