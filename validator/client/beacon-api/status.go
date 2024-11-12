@@ -52,7 +52,7 @@ func (c *beaconApiValidatorClient) validatorsStatusResponse(ctx context.Context,
 ) {
 	// if no parameters are provided we should just return an empty response
 	if len(inPubKeys) == 0 && len(inIndexes) == 0 {
-		return make([][]byte, 0), make([]primitives.ValidatorIndex, 0), make([]*ethpb.ValidatorStatusResponse, 0), nil
+		return [][]byte{}, []primitives.ValidatorIndex{}, []*ethpb.ValidatorStatusResponse{}, nil
 	}
 	// Represents the target set of keys
 	stringTargetPubKeysToPubKeys := make(map[string][]byte, len(inPubKeys))
