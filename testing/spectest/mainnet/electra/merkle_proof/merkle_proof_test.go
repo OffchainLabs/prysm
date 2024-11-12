@@ -7,6 +7,5 @@ import (
 )
 
 func TestMainnet_Electra_MerkleProof(t *testing.T) {
-	t.Skip("TODO: Electra") // These spectests are missing?
 	merkle_proof.RunMerkleProofTests(t, "mainnet")
 }
