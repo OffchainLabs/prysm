@@ -16,7 +16,7 @@ import (
 )
 
 var (
-	// ValidatorStatusesGaugeVec used to track validator statuses by public key.
+	// ValidatorStatusesGaugeVec used to track validator statuses by public key and validator index.
 	ValidatorStatusesGaugeVec = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "validator",
@@ -24,7 +24,7 @@ var (
 			Help:      "validator statuses: 0 UNKNOWN, 1 DEPOSITED, 2 PENDING, 3 ACTIVE, 4 EXITING, 5 SLASHING, 6 EXITED",
 		},
 		[]string{
-			"pubkey",
+			"pubkey", "index",
 		},
 	)
 	// ValidatorAggSuccessVec used to count successful aggregations.

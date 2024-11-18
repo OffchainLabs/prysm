@@ -57,11 +57,10 @@ func (s *Service) validateAggregateAndProof(ctx context.Context, pid peer.ID, ms
 	}
 
 	aggregate := m.AggregateAttestationAndProof().AggregateVal()
-	data := aggregate.GetData()
-
 	if err := helpers.ValidateNilAttestation(aggregate); err != nil {
 		return pubsub.ValidationReject, err
 	}
+	data := aggregate.GetData()
 	// Do not process slot 0 aggregates.
 	if data.Slot == 0 {
 		return pubsub.ValidationIgnore, nil
