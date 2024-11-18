@@ -243,54 +243,54 @@ func (a *AttestationElectra) GetCommitteeIndex() (primitives.CommitteeIndex, err
 }
 
 // Version --
-func (indexedAtt *IndexedAttestation) Version() int {
+func (a *IndexedAttestation) Version() int {
 	return version.Phase0
 }
 
 // IsNil --
-func (indexedAtt *IndexedAttestation) IsNil() bool {
-	return indexedAtt == nil || indexedAtt.Data == nil
+func (a *IndexedAttestation) IsNil() bool {
+	return a == nil || a.Data == nil
 }
 
 // Version --
-func (indexedAtt *IndexedAttestationElectra) Version() int {
+func (a *IndexedAttestationElectra) Version() int {
 	return version.Electra
 }
 
 // IsNil --
-func (indexedAtt *IndexedAttestationElectra) IsNil() bool {
-	return indexedAtt == nil || indexedAtt.Data == nil
+func (a *IndexedAttestationElectra) IsNil() bool {
+	return a == nil || a.Data == nil
 }
 
 // Copy --
-func (indexedAtt *IndexedAttestation) Copy() *IndexedAttestation {
+func (a *IndexedAttestation) Copy() *IndexedAttestation {
 	var indices []uint64
-	if indexedAtt == nil {
+	if a == nil {
 		return nil
-	} else if indexedAtt.AttestingIndices != nil {
-		indices = make([]uint64, len(indexedAtt.AttestingIndices))
-		copy(indices, indexedAtt.AttestingIndices)
+	} else if a.AttestingIndices != nil {
+		indices = make([]uint64, len(a.AttestingIndices))
+		copy(indices, a.AttestingIndices)
 	}
 	return &IndexedAttestation{
 		AttestingIndices: indices,
-		Data:             indexedAtt.Data.Copy(),
-		Signature:        bytesutil.SafeCopyBytes(indexedAtt.Signature),
+		Data:             a.Data.Copy(),
+		Signature:        bytesutil.SafeCopyBytes(a.Signature),
 	}
 }
 
 // Copy --
-func (indexedAtt *IndexedAttestationElectra) Copy() *IndexedAttestationElectra {
+func (a *IndexedAttestationElectra) Copy() *IndexedAttestationElectra {
 	var indices []uint64
-	if indexedAtt == nil {
+	if a == nil {
 		return nil
-	} else if indexedAtt.AttestingIndices != nil {
-		indices = make([]uint64, len(indexedAtt.AttestingIndices))
-		copy(indices, indexedAtt.AttestingIndices)
+	} else if a.AttestingIndices != nil {
+		indices = make([]uint64, len(a.AttestingIndices))
+		copy(indices, a.AttestingIndices)
 	}
 	return &IndexedAttestationElectra{
 		AttestingIndices: indices,
-		Data:             indexedAtt.Data.Copy(),
-		Signature:        bytesutil.SafeCopyBytes(indexedAtt.Signature),
+		Data:             a.Data.Copy(),
+		Signature:        bytesutil.SafeCopyBytes(a.Signature),
 	}
 }
 
