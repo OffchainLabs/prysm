@@ -10,6 +10,7 @@ import (
 
 	"github.com/prysmaticlabs/prysm/v5/network/httputil"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api/mock"
@@ -127,10 +128,11 @@ func TestProposeAttestation(t *testing.T) {
 
 			ctx := context.Background()
 
+			headers := map[string]string{"Eth-Consensus-Version": version.String(test.attestation.Version())}
 			jsonRestHandler.EXPECT().Post(
 				gomock.Any(),
-				"/eth/v1/beacon/pool/attestations",
-				nil,
+				"/eth/v2/beacon/pool/attestations",
+				headers,
 				bytes.NewBuffer(marshalledAttestations),
 				nil,
 			).Return(
@@ -186,10 +188,11 @@ func TestProposeAttestationFallBack(t *testing.T) {
 	}
 
 	ctx := context.Background()
+	headers := map[string]string{"Eth-Consensus-Version": version.String(attestation.Version())}
 	jsonRestHandler.EXPECT().Post(
 		gomock.Any(),
 		"/eth/v2/beacon/pool/attestations",
-		nil,
+		headers,
 		bytes.NewBuffer(marshalledAttestations),
 		nil,
 	).Return(
@@ -357,11 +360,11 @@ func TestProposeAttestationElectra(t *testing.T) {
 			}
 
 			ctx := context.Background()
-
+			headers := map[string]string{"Eth-Consensus-Version": version.String(test.attestation.Version())}
 			jsonRestHandler.EXPECT().Post(
 				gomock.Any(),
 				"/eth/v2/beacon/pool/attestations",
-				nil,
+				headers,
 				bytes.NewBuffer(marshalledAttestations),
 				nil,
 			).Return(

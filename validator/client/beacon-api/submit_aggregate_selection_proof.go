@@ -27,7 +27,7 @@ func (c *beaconApiValidatorClient) submitAggregateSelectionProof(
 		return nil, err
 	}
 
-	aggregateAttestationResponse, err := c.aggregateAttestation(ctx, in.Slot, attestationDataRoot)
+	aggregateAttestationResponse, err := c.aggregateAttestation(ctx, in.Slot, attestationDataRoot, in.CommitteeIndex)
 	if err != nil {
 		return nil, err
 	}
@@ -62,7 +62,7 @@ func (c *beaconApiValidatorClient) submitAggregateSelectionProofElectra(
 		return nil, err
 	}
 
-	aggregateAttestationResponse, err := c.aggregateAttestationElectra(ctx, in.Slot, attestationDataRoot)
+	aggregateAttestationResponse, err := c.aggregateAttestationElectra(ctx, in.Slot, attestationDataRoot, in.CommitteeIndex)
 	if err != nil {
 		return nil, err
 	}
@@ -121,10 +121,12 @@ func (c *beaconApiValidatorClient) aggregateAttestation(
 	ctx context.Context,
 	slot primitives.Slot,
 	attestationDataRoot []byte,
+	committeeIndex primitives.CommitteeIndex,
 ) (*structs.AggregateAttestationResponse, error) {
 	params := url.Values{}
 	params.Add("slot", strconv.FormatUint(uint64(slot), 10))
 	params.Add("attestation_data_root", hexutil.Encode(attestationDataRoot))
+	params.Add("committee_index", strconv.FormatUint(uint64(committeeIndex), 10))
 	endpoint := buildURL("/eth/v2/validator/aggregate_attestation", params)
 
 	var aggregateAttestationResponse structs.AggregateAttestationResponse
@@ -139,6 +141,9 @@ func (c *beaconApiValidatorClient) aggregateAttestation(
 			return nil, errJson
 		}
 		log.Debug("Endpoint /eth/v2/validator/aggregate_attestation is not supported, falling back to older endpoints for get aggregated attestation.")
+		params = url.Values{}
+		params.Add("slot", strconv.FormatUint(uint64(slot), 10))
+		params.Add("attestation_data_root", hexutil.Encode(attestationDataRoot))
 		oldEndpoint := buildURL("/eth/v1/validator/aggregate_attestation", params)
 		if err = c.jsonRestHandler.Get(ctx, oldEndpoint, &aggregateAttestationResponse); err != nil {
 			return nil, err
@@ -152,10 +157,12 @@ func (c *beaconApiValidatorClient) aggregateAttestationElectra(
 	ctx context.Context,
 	slot primitives.Slot,
 	attestationDataRoot []byte,
+	committeeIndex primitives.CommitteeIndex,
 ) (*structs.AggregateAttestationResponse, error) {
 	params := url.Values{}
 	params.Add("slot", strconv.FormatUint(uint64(slot), 10))
 	params.Add("attestation_data_root", hexutil.Encode(attestationDataRoot))
+	params.Add("committee_index", strconv.FormatUint(uint64(committeeIndex), 10))
 	endpoint := buildURL("/eth/v2/validator/aggregate_attestation", params)
 
 	var aggregateAttestationResponse structs.AggregateAttestationResponse

@@ -25,7 +25,7 @@ func TestSubmitAggregateSelectionProof(t *testing.T) {
 		pubkeyStr                    = "0x8000091c2ae64ee414a54c1cc1fc67dec663408bc636cb86756e0200e41a75c8f86603f104f02c856983d2783116be13"
 		syncingEndpoint              = "/eth/v1/node/syncing"
 		attestationDataEndpoint      = "/eth/v1/validator/attestation_data"
-		aggregateAttestationEndpoint = "/eth/v1/validator/aggregate_attestation"
+		aggregateAttestationEndpoint = "/eth/v2/validator/aggregate_attestation"
 		validatorIndex               = primitives.ValidatorIndex(55293)
 		slotSignature                = "0x8776a37d6802c4797d113169c5fcfda50e68a32058eb6356a6f00d06d7da64c841a00c7c38b9b94a204751eca53707bd03523ce4797827d9bacff116a6e776a20bbccff4b683bf5201b610797ed0502557a58a65c8395f8a1649b976c3112d15"
 		slot                         = primitives.Slot(123)
@@ -133,7 +133,7 @@ func TestSubmitAggregateSelectionProof(t *testing.T) {
 			// Call attestation data to get attestation data root to query aggregate attestation.
 			jsonRestHandler.EXPECT().Get(
 				gomock.Any(),
-				fmt.Sprintf("%s?attestation_data_root=%s&slot=%d", aggregateAttestationEndpoint, hexutil.Encode(attestationDataRootBytes[:]), slot),
+				fmt.Sprintf("%s?attestation_data_root=%s&committee_index=%d&slot=%d", aggregateAttestationEndpoint, hexutil.Encode(attestationDataRootBytes[:]), committeeIndex, slot),
 				&structs.AggregateAttestationResponse{},
 			).SetArg(
 				2,
@@ -253,7 +253,7 @@ func TestSubmitAggregateSelectionProofFallBack(t *testing.T) {
 	// Call attestation data to get attestation data root to query aggregate attestation.
 	jsonRestHandler.EXPECT().Get(
 		gomock.Any(),
-		fmt.Sprintf("%s?attestation_data_root=%s&slot=%d", aggregateAttestationV2Endpoint, hexutil.Encode(attestationDataRootBytes[:]), slot),
+		fmt.Sprintf("%s?attestation_data_root=%s&committee_index=%d&slot=%d", aggregateAttestationV2Endpoint, hexutil.Encode(attestationDataRootBytes[:]), committeeIndex, slot),
 		&structs.AggregateAttestationResponse{},
 	).Return(
 		&httputil.DefaultJsonError{
@@ -425,7 +425,7 @@ func TestSubmitAggregateSelectionProofElectra(t *testing.T) {
 			// Call attestation data to get attestation data root to query aggregate attestation.
 			jsonRestHandler.EXPECT().Get(
 				gomock.Any(),
-				fmt.Sprintf("%s?attestation_data_root=%s&slot=%d", aggregateAttestationEndpoint, hexutil.Encode(attestationDataRootBytes[:]), slot),
+				fmt.Sprintf("%s?attestation_data_root=%s&committee_index=%d&slot=%d", aggregateAttestationEndpoint, hexutil.Encode(attestationDataRootBytes[:]), committeeIndex, slot),
 				&structs.AggregateAttestationResponse{},
 			).SetArg(
 				2,

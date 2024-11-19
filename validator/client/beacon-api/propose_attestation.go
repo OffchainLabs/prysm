@@ -21,10 +21,11 @@ func (c *beaconApiValidatorClient) proposeAttestation(ctx context.Context, attes
 		return nil, err
 	}
 
+	headers := map[string]string{"Eth-Consensus-Version": version.String(attestation.Version())}
 	err = c.jsonRestHandler.Post(
 		ctx,
 		"/eth/v2/beacon/pool/attestations",
-		nil,
+		headers,
 		bytes.NewBuffer(marshalledAttestation),
 		nil,
 	)
@@ -61,16 +62,15 @@ func (c *beaconApiValidatorClient) proposeAttestationElectra(ctx context.Context
 	if err := validateNilAttestation(attestation); err != nil {
 		return nil, err
 	}
-
 	marshalledAttestation, err := json.Marshal(jsonifyAttestationsElectra([]*ethpb.AttestationElectra{attestation}))
 	if err != nil {
 		return nil, err
 	}
-
+	headers := map[string]string{"Eth-Consensus-Version": version.String(attestation.Version())}
 	if err = c.jsonRestHandler.Post(
 		ctx,
 		"/eth/v2/beacon/pool/attestations",
-		nil,
+		headers,
 		bytes.NewBuffer(marshalledAttestation),
 		nil,
 	); err != nil {
