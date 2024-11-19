@@ -3,6 +3,7 @@ package beacon_api
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"net/url"
 	"strconv"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/network/httputil"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
@@ -20,7 +22,7 @@ func (c *beaconApiValidatorClient) submitAggregateSelectionProof(
 	index primitives.ValidatorIndex,
 	committeeLength uint64,
 ) (*ethpb.AggregateSelectionResponse, error) {
-	attestationDataRoot, err := c.submitAggregateSelectionProofGeneric(ctx, in, committeeLength)
+	attestationDataRoot, err := c.getAttestationDataRootFromRequest(ctx, in, committeeLength)
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +57,7 @@ func (c *beaconApiValidatorClient) submitAggregateSelectionProofElectra(
 	index primitives.ValidatorIndex,
 	committeeLength uint64,
 ) (*ethpb.AggregateSelectionElectraResponse, error) {
-	attestationDataRoot, err := c.submitAggregateSelectionProofGeneric(ctx, in, committeeLength)
+	attestationDataRoot, err := c.getAttestationDataRootFromRequest(ctx, in, committeeLength)
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +86,7 @@ func (c *beaconApiValidatorClient) submitAggregateSelectionProofElectra(
 	}, nil
 }
 
-func (c *beaconApiValidatorClient) submitAggregateSelectionProofGeneric(ctx context.Context, in *ethpb.AggregateSelectionRequest, committeeLength uint64) ([]byte, error) {
+func (c *beaconApiValidatorClient) getAttestationDataRootFromRequest(ctx context.Context, in *ethpb.AggregateSelectionRequest, committeeLength uint64) ([]byte, error) {
 	isOptimistic, err := c.isOptimistic(ctx)
 	if err != nil {
 		return nil, err
@@ -123,11 +125,24 @@ func (c *beaconApiValidatorClient) aggregateAttestation(
 	params := url.Values{}
 	params.Add("slot", strconv.FormatUint(uint64(slot), 10))
 	params.Add("attestation_data_root", hexutil.Encode(attestationDataRoot))
-	endpoint := buildURL("/eth/v1/validator/aggregate_attestation", params)
+	endpoint := buildURL("/eth/v2/validator/aggregate_attestation", params)
 
 	var aggregateAttestationResponse structs.AggregateAttestationResponse
-	if err := c.jsonRestHandler.Get(ctx, endpoint, &aggregateAttestationResponse); err != nil {
-		return nil, err
+	err := c.jsonRestHandler.Get(ctx, endpoint, &aggregateAttestationResponse)
+	errJson := &httputil.DefaultJsonError{}
+	if err != nil {
+		// TODO: remove this when v2 becomes default
+		if !errors.As(err, &errJson) {
+			return nil, err
+		}
+		if errJson.Code != http.StatusNotFound {
+			return nil, errJson
+		}
+		log.Debug("Endpoint /eth/v2/validator/aggregate_attestation is not supported, falling back to older endpoints for get aggregated attestation.")
+		oldEndpoint := buildURL("/eth/v1/validator/aggregate_attestation", params)
+		if err = c.jsonRestHandler.Get(ctx, oldEndpoint, &aggregateAttestationResponse); err != nil {
+			return nil, err
+		}
 	}
 
 	return &aggregateAttestationResponse, nil

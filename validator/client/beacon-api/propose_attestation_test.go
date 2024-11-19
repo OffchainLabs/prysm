@@ -5,8 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
 	"testing"
 
+	"github.com/prysmaticlabs/prysm/v5/network/httputil"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
@@ -154,6 +156,71 @@ func TestProposeAttestation(t *testing.T) {
 	}
 }
 
+func TestProposeAttestationFallBack(t *testing.T) {
+	attestation := &ethpb.Attestation{
+		AggregationBits: testhelpers.FillByteSlice(4, 74),
+		Data: &ethpb.AttestationData{
+			Slot:            75,
+			CommitteeIndex:  76,
+			BeaconBlockRoot: testhelpers.FillByteSlice(32, 38),
+			Source: &ethpb.Checkpoint{
+				Epoch: 78,
+				Root:  testhelpers.FillByteSlice(32, 79),
+			},
+			Target: &ethpb.Checkpoint{
+				Epoch: 80,
+				Root:  testhelpers.FillByteSlice(32, 81),
+			},
+		},
+		Signature: testhelpers.FillByteSlice(96, 82),
+	}
+
+	ctrl := gomock.NewController(t)
+	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+
+	var marshalledAttestations []byte
+	if validateNilAttestation(attestation) == nil {
+		b, err := json.Marshal(jsonifyAttestations([]*ethpb.Attestation{attestation}))
+		require.NoError(t, err)
+		marshalledAttestations = b
+	}
+
+	ctx := context.Background()
+	jsonRestHandler.EXPECT().Post(
+		gomock.Any(),
+		"/eth/v2/beacon/pool/attestations",
+		nil,
+		bytes.NewBuffer(marshalledAttestations),
+		nil,
+	).Return(
+		&httputil.DefaultJsonError{
+			Code: http.StatusNotFound,
+		},
+	).Times(1)
+
+	jsonRestHandler.EXPECT().Post(
+		gomock.Any(),
+		"/eth/v1/beacon/pool/attestations",
+		nil,
+		bytes.NewBuffer(marshalledAttestations),
+		nil,
+	).Return(
+		nil,
+	).Times(1)
+
+	validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+	proposeResponse, err := validatorClient.proposeAttestation(ctx, attestation)
+
+	require.NoError(t, err)
+	require.NotNil(t, proposeResponse)
+
+	expectedAttestationDataRoot, err := attestation.Data.HashTreeRoot()
+	require.NoError(t, err)
+
+	// Make sure that the attestation data root is set
+	assert.DeepEqual(t, expectedAttestationDataRoot[:], proposeResponse.AttestationDataRoot)
+}
+
 func TestProposeAttestationElectra(t *testing.T) {
 	attestation := &ethpb.AttestationElectra{
 		AggregationBits: testhelpers.FillByteSlice(4, 74),
@@ -266,7 +333,7 @@ func TestProposeAttestationElectra(t *testing.T) {
 				},
 				Signature: testhelpers.FillByteSlice(96, 82),
 			},
-			expectedErrorMessage: "attestation committee bits is empty",
+			expectedErrorMessage: "attestation committee bits can't be nil",
 		},
 		{
 			name:                 "bad request",
