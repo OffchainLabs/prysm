@@ -260,12 +260,12 @@ func TestValidateNilAttestation(t *testing.T) {
 		{
 			name:        "nil attestation",
 			attestation: nil,
-			errString:   "attestation can't be nil",
+			errString:   "attestation is nil",
 		},
 		{
 			name:        "nil attestation data",
 			attestation: &ethpb.Attestation{},
-			errString:   "attestation's data can't be nil",
+			errString:   "attestation is nil",
 		},
 		{
 			name: "nil attestation source",

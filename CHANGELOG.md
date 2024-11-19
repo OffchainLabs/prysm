@@ -83,6 +83,8 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - unskip electra merkle spec test
 - Fix panic in validator REST mode when checking status after removing all keys
 - Fix panic on attestation interface since we call data before validation
+- corrects nil check on some interface attestation types
+
 
 ### Security
 

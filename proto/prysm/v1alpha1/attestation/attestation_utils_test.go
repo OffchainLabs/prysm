@@ -106,10 +106,11 @@ func TestIsValidAttestationIndices(t *testing.T) {
 			att: &eth.IndexedAttestation{
 				Data: &eth.AttestationData{
 					Target: &eth.Checkpoint{},
+					Source: &eth.Checkpoint{},
 				},
 				Signature: make([]byte, fieldparams.BLSSignatureLength),
 			},
-			wantedErr: "nil or missing indexed attestation data",
+			wantedErr: "expected non-empty attesting indices",
 		},
 		{
 			name: "Indices should be non-empty",
@@ -117,6 +118,7 @@ func TestIsValidAttestationIndices(t *testing.T) {
 				AttestingIndices: []uint64{},
 				Data: &eth.AttestationData{
 					Target: &eth.Checkpoint{},
+					Source: &eth.Checkpoint{},
 				},
 				Signature: make([]byte, fieldparams.BLSSignatureLength),
 			},
@@ -128,6 +130,7 @@ func TestIsValidAttestationIndices(t *testing.T) {
 				AttestingIndices: make([]uint64, params.BeaconConfig().MaxValidatorsPerCommittee+1),
 				Data: &eth.AttestationData{
 					Target: &eth.Checkpoint{},
+					Source: &eth.Checkpoint{},
 				},
 				Signature: make([]byte, fieldparams.BLSSignatureLength),
 			},
@@ -139,6 +142,7 @@ func TestIsValidAttestationIndices(t *testing.T) {
 				AttestingIndices: []uint64{3, 2, 1},
 				Data: &eth.AttestationData{
 					Target: &eth.Checkpoint{},
+					Source: &eth.Checkpoint{},
 				},
 				Signature: make([]byte, fieldparams.BLSSignatureLength),
 			},
@@ -150,6 +154,7 @@ func TestIsValidAttestationIndices(t *testing.T) {
 				AttestingIndices: []uint64{1, 2, 3},
 				Data: &eth.AttestationData{
 					Target: &eth.Checkpoint{},
+					Source: &eth.Checkpoint{},
 				},
 				Signature: make([]byte, fieldparams.BLSSignatureLength),
 			},
@@ -160,6 +165,7 @@ func TestIsValidAttestationIndices(t *testing.T) {
 				AttestingIndices: []uint64{1, 2},
 				Data: &eth.AttestationData{
 					Target: &eth.Checkpoint{},
+					Source: &eth.Checkpoint{},
 				},
 				Signature: make([]byte, fieldparams.BLSSignatureLength),
 			},
@@ -170,6 +176,7 @@ func TestIsValidAttestationIndices(t *testing.T) {
 				AttestingIndices: []uint64{1},
 				Data: &eth.AttestationData{
 					Target: &eth.Checkpoint{},
+					Source: &eth.Checkpoint{},
 				},
 				Signature: make([]byte, fieldparams.BLSSignatureLength),
 			},
@@ -180,6 +187,7 @@ func TestIsValidAttestationIndices(t *testing.T) {
 				AttestingIndices: make([]uint64, params.BeaconConfig().MaxValidatorsPerCommittee*params.BeaconConfig().MaxCommitteesPerSlot+1),
 				Data: &eth.AttestationData{
 					Target: &eth.Checkpoint{},
+					Source: &eth.Checkpoint{},
 				},
 				Signature: make([]byte, fieldparams.BLSSignatureLength),
 			},
@@ -218,6 +226,7 @@ func BenchmarkIsValidAttestationIndices(b *testing.B) {
 		AttestingIndices: indices,
 		Data: &eth.AttestationData{
 			Target: &eth.Checkpoint{},
+			Source: &eth.Checkpoint{},
 		},
 		Signature: make([]byte, fieldparams.BLSSignatureLength),
 	}

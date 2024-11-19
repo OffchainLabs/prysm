@@ -381,21 +381,12 @@ func (s *Service) SubmitSignedAggregateSelectionProof(
 	ctx, span := trace.StartSpan(ctx, "coreService.SubmitSignedAggregateSelectionProof")
 	defer span.End()
 
-	if agg == nil {
+	if agg == nil || agg.IsNil() {
 		return &RpcError{Err: errors.New("signed aggregate request can't be nil"), Reason: BadRequest}
 	}
 	attAndProof := agg.AggregateAttestationAndProof()
-	if attAndProof == nil {
-		return &RpcError{Err: errors.New("signed aggregate request can't be nil"), Reason: BadRequest}
-	}
 	att := attAndProof.AggregateVal()
-	if att == nil {
-		return &RpcError{Err: errors.New("signed aggregate request can't be nil"), Reason: BadRequest}
-	}
 	data := att.GetData()
-	if data == nil {
-		return &RpcError{Err: errors.New("signed aggregate request can't be nil"), Reason: BadRequest}
-	}
 	emptySig := make([]byte, fieldparams.BLSSignatureLength)
 	if bytes.Equal(agg.GetSignature(), emptySig) || bytes.Equal(attAndProof.GetSelectionProof(), emptySig) {
 		return &RpcError{Err: errors.New("signed signatures can't be zero hashes"), Reason: BadRequest}

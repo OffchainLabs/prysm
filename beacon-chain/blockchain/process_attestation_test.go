@@ -92,12 +92,12 @@ func TestStore_OnAttestation_ErrorConditions(t *testing.T) {
 		{
 			name:      "process nil attestation",
 			a:         nil,
-			wantedErr: "attestation can't be nil",
+			wantedErr: "attestation is nil",
 		},
 		{
 			name:      "process nil field (a.Data) in attestation",
 			a:         &ethpb.Attestation{},
-			wantedErr: "attestation's data can't be nil",
+			wantedErr: "attestation is nil",
 		},
 		{
 			name: "process nil field (a.Target) in attestation",

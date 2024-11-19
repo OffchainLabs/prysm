@@ -38,6 +38,7 @@ type IndexedAtt interface {
 	GetAttestingIndices() []uint64
 	GetData() *AttestationData
 	GetSignature() []byte
+	IsNil() bool
 }
 
 // SignedAggregateAttAndProof defines common functionality for all signed aggregate attestation types.
@@ -49,6 +50,7 @@ type SignedAggregateAttAndProof interface {
 	Version() int
 	AggregateAttestationAndProof() AggregateAttAndProof
 	GetSignature() []byte
+	IsNil() bool
 }
 
 // AggregateAttAndProof defines common functionality for all aggregate attestation types.
@@ -61,6 +63,7 @@ type AggregateAttAndProof interface {
 	GetAggregatorIndex() primitives.ValidatorIndex
 	AggregateVal() Att
 	GetSelectionProof() []byte
+	IsNil() bool
 }
 
 // AttSlashing defines common functionality for all attestation slashing types.
@@ -72,6 +75,7 @@ type AttSlashing interface {
 	Version() int
 	FirstAttestation() IndexedAtt
 	SecondAttestation() IndexedAtt
+	IsNil() bool
 }
 
 // Copy --
@@ -243,9 +247,19 @@ func (a *IndexedAttestation) Version() int {
 	return version.Phase0
 }
 
+// IsNil --
+func (a *IndexedAttestation) IsNil() bool {
+	return a == nil || a.Data == nil
+}
+
 // Version --
 func (a *IndexedAttestationElectra) Version() int {
 	return version.Electra
+}
+
+// IsNil --
+func (a *IndexedAttestationElectra) IsNil() bool {
+	return a == nil || a.Data == nil
 }
 
 // Copy --
@@ -285,6 +299,13 @@ func (a *AttesterSlashing) Version() int {
 	return version.Phase0
 }
 
+// IsNil --
+func (a *AttesterSlashing) IsNil() bool {
+	return a == nil ||
+		a.Attestation_1 == nil || a.Attestation_1.IsNil() ||
+		a.Attestation_2 == nil || a.Attestation_2.IsNil()
+}
+
 // FirstAttestation --
 func (a *AttesterSlashing) FirstAttestation() IndexedAtt {
 	return a.Attestation_1
@@ -298,6 +319,13 @@ func (a *AttesterSlashing) SecondAttestation() IndexedAtt {
 // Version --
 func (a *AttesterSlashingElectra) Version() int {
 	return version.Electra
+}
+
+// IsNil --
+func (a *AttesterSlashingElectra) IsNil() bool {
+	return a == nil ||
+		a.Attestation_1 == nil || a.Attestation_1.IsNil() ||
+		a.Attestation_2 == nil || a.Attestation_2.IsNil()
 }
 
 // FirstAttestation --
@@ -336,6 +364,11 @@ func (a *AggregateAttestationAndProof) Version() int {
 	return version.Phase0
 }
 
+// IsNil --
+func (a *AggregateAttestationAndProof) IsNil() bool {
+	return a == nil || a.Aggregate == nil || a.Aggregate.IsNil()
+}
+
 // AggregateVal --
 func (a *AggregateAttestationAndProof) AggregateVal() Att {
 	return a.Aggregate
@@ -344,6 +377,11 @@ func (a *AggregateAttestationAndProof) AggregateVal() Att {
 // Version --
 func (a *AggregateAttestationAndProofElectra) Version() int {
 	return version.Electra
+}
+
+// IsNil --
+func (a *AggregateAttestationAndProofElectra) IsNil() bool {
+	return a == nil || a.Aggregate == nil || a.Aggregate.IsNil()
 }
 
 // AggregateVal --
@@ -356,6 +394,11 @@ func (a *SignedAggregateAttestationAndProof) Version() int {
 	return version.Phase0
 }
 
+// IsNil --
+func (a *SignedAggregateAttestationAndProof) IsNil() bool {
+	return a == nil || a.Message == nil || a.Message.IsNil()
+}
+
 // AggregateAttestationAndProof --
 func (a *SignedAggregateAttestationAndProof) AggregateAttestationAndProof() AggregateAttAndProof {
 	return a.Message
@@ -364,6 +407,11 @@ func (a *SignedAggregateAttestationAndProof) AggregateAttestationAndProof() Aggr
 // Version --
 func (a *SignedAggregateAttestationAndProofElectra) Version() int {
 	return version.Electra
+}
+
+// IsNil --
+func (a *SignedAggregateAttestationAndProofElectra) IsNil() bool {
+	return a == nil || a.Message == nil || a.Message.IsNil()
 }
 
 // AggregateAttestationAndProof --
