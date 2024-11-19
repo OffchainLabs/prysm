@@ -611,6 +611,39 @@ type asyncPayloadAttrData struct {
 	err     error
 }
 
+func (s *Server) fillEventData(ctx context.Context, ev payloadattribute.EventData) (payloadattribute.EventData, error) {
+	if ev.HeadBlock == nil || ev.HeadBlock.IsNil() {
+		hb, err := s.HeadFetcher.HeadBlock(ctx)
+		if err != nil {
+			return ev, errors.Wrap(err, "Could not look up head block")
+		}
+		root, err := hb.Block().HashTreeRoot()
+		if err != nil {
+			return ev, errors.Wrap(err, "Could not compute head block root")
+		}
+		if ev.HeadRoot != root {
+			return ev, errors.Wrap(err, "head root changed before payload attribute event handler execution")
+		}
+		ev.HeadBlock = hb
+		payload, err := hb.Block().Body().Execution()
+		if err != nil {
+			return ev, errors.Wrap(err, "Could not get execution payload for head block")
+		}
+		ev.ParentBlockHash = payload.BlockHash()
+		ev.ParentBlockNumber = payload.BlockNumber()
+	}
+
+	attr := ev.Attributer
+	if attr == nil || attr.IsEmpty() {
+		attr, err := s.computePayloadAttributes(ctx, ev)
+		if err != nil {
+			return ev, errors.Wrap(err, "Could not compute payload attributes")
+		}
+		ev.Attributer = attr
+	}
+	return ev, nil
+}
+
 // This event stream is intended to be used by builders and relays.
 // Parent fields are based on state at N_{current_slot}, while the rest of fields are based on state of N_{current_slot + 1}
 func (s *Server) payloadAttributesReader(ctx context.Context, ev payloadattribute.EventData) (lazyReader, error) {
@@ -624,14 +657,12 @@ func (s *Server) payloadAttributesReader(ctx context.Context, ev payloadattribut
 		defer func() {
 			edc <- d
 		}()
-		attr := ev.Attributer
-		if attr == nil || attr.IsEmpty() {
-			attr, d.err = s.computePayloadAttributes(ctx, ev)
-			if d.err != nil {
-				return
-			}
+		ev, err := s.fillEventData(ctx, ev)
+		if err != nil {
+			d.err = errors.Wrap(err, "Could not fill event data")
+			return
 		}
-		attributesBytes, err := marshalAttributes(attr)
+		attributesBytes, err := marshalAttributes(ev.Attributer)
 		if err != nil {
 			d.err = errors.Wrap(err, "errors marshaling payload attributes to json")
 			return

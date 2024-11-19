@@ -643,6 +643,17 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 	}
 
 	attribute := s.getPayloadAttribute(ctx, headState, s.CurrentSlot()+1, headRoot[:])
+	// return early if we are not proposing next slot
+	if attribute.IsEmpty() {
+		fcuArgs := &fcuConfig{
+			headState:  headState,
+			headRoot:   headRoot,
+			headBlock:  nil,
+			attributes: attribute,
+		}
+		go firePayloadAttributesEvent(ctx, s.cfg.StateNotifier.StateFeed(), fcuArgs)
+		return
+	}
 
 	s.headLock.RLock()
 	headBlock, err := s.headBlock()
@@ -658,11 +669,6 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 		headRoot:   headRoot,
 		headBlock:  headBlock,
 		attributes: attribute,
-	}
-	// return early if we are not proposing next slot
-	if attribute.IsEmpty() {
-		go firePayloadAttributesEvent(ctx, s.cfg.StateNotifier.StateFeed(), fcuArgs)
-		return
 	}
 	_, err = s.notifyForkchoiceUpdate(ctx, fcuArgs)
 	if err != nil {

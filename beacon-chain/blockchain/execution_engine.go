@@ -179,24 +179,27 @@ func firePayloadAttributesEvent(ctx context.Context, f event.SubscriberSender, c
 			Error("Could not get proposer index for PayloadAttributes event")
 		return
 	}
-	headPayload, err := cfg.headBlock.Block().Body().Execution()
-	if err != nil {
-		log.WithError(err).Error("Could not get execution payload for head block")
-		return
+	evd := payloadattribute.EventData{
+		ProposerIndex:   pidx,
+		ProposalSlot:    cfg.headState.Slot(),
+		ParentBlockRoot: cfg.headRoot[:],
+		Attributer:      cfg.attributes,
+		HeadRoot:        cfg.headRoot,
+		HeadState:       cfg.headState,
+		HeadBlock:       cfg.headBlock,
+	}
+	if cfg.headBlock != nil && !cfg.headBlock.IsNil() {
+		headPayload, err := cfg.headBlock.Block().Body().Execution()
+		if err != nil {
+			log.WithError(err).Error("Could not get execution payload for head block")
+			return
+		}
+		evd.ParentBlockHash = headPayload.BlockHash()
+		evd.ParentBlockNumber = headPayload.BlockNumber()
 	}
 	f.Send(&feed.Event{
 		Type: statefeed.PayloadAttributes,
-		Data: payloadattribute.EventData{
-			ProposerIndex:     pidx,
-			ProposalSlot:      cfg.headState.Slot(),
-			ParentBlockNumber: headPayload.BlockNumber(),
-			ParentBlockRoot:   cfg.headRoot[:],
-			ParentBlockHash:   headPayload.BlockHash(),
-			Attributer:        cfg.attributes,
-			HeadRoot:          cfg.headRoot,
-			HeadState:         cfg.headState,
-			HeadBlock:         cfg.headBlock,
-		},
+		Data: evd,
 	})
 }
 
