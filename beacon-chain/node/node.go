@@ -192,20 +192,13 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 	beacon.verifyInitWaiter = verification.NewInitializerWaiter(
 		beacon.clockWaiter, forkchoice.NewROForkChoice(beacon.forkChoicer), beacon.stateGen)
 
-	pa := peers.NewAssigner(beacon.fetchP2P().Peers(), beacon.forkChoicer)
-
 	beacon.BackfillOpts = append(
 		beacon.BackfillOpts,
 		backfill.WithVerifierWaiter(beacon.verifyInitWaiter),
 		backfill.WithInitSyncWaiter(initSyncWaiter(ctx, beacon.initialSyncComplete)),
 	)
 
-	bf, err := backfill.NewService(ctx, bfs, beacon.BlobStorage, beacon.clockWaiter, beacon.fetchP2P(), pa, beacon.BackfillOpts...)
-	if err != nil {
-		return nil, errors.Wrap(err, "error initializing backfill service")
-	}
-
-	if err := registerServices(cliCtx, beacon, synchronizer, bf, bfs); err != nil {
+	if err := registerServices(cliCtx, beacon, synchronizer, bfs); err != nil {
 		return nil, errors.Wrap(err, "could not register services")
 	}
 
@@ -292,11 +285,6 @@ func startBaseServices(cliCtx *cli.Context, beacon *BeaconNode, depositAddress s
 		return nil, errors.Wrap(err, "could not start slashing DB")
 	}
 
-	log.Debugln("Registering P2P Service")
-	if err := beacon.registerP2P(cliCtx); err != nil {
-		return nil, errors.Wrap(err, "could not register P2P service")
-	}
-
 	bfs, err := backfill.NewUpdater(ctx, beacon.db)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not create backfill updater")
@@ -315,9 +303,15 @@ func startBaseServices(cliCtx *cli.Context, beacon *BeaconNode, depositAddress s
 	return bfs, nil
 }
 
-func registerServices(cliCtx *cli.Context, beacon *BeaconNode, synchronizer *startup.ClockSynchronizer, bf *backfill.Service, bfs *backfill.Store) error {
-	if err := beacon.services.RegisterService(bf); err != nil {
-		return errors.Wrap(err, "could not register backfill service")
+func registerServices(cliCtx *cli.Context, beacon *BeaconNode, synchronizer *startup.ClockSynchronizer, bfs *backfill.Store) error {
+	log.Debugln("Registering P2P Service")
+	if err := beacon.registerP2P(cliCtx); err != nil {
+		return errors.Wrap(err, "could not register P2P service")
+	}
+
+	log.Debugln("Registering Backfill Service")
+	if err := beacon.RegisterBackfillService(cliCtx, bfs); err != nil {
+		return errors.Wrap(err, "could not register Back Fill service")
 	}
 
 	log.Debugln("Registering POW Chain Service")
@@ -1134,6 +1128,16 @@ func (b *BeaconNode) registerBuilderService(cliCtx *cli.Context) error {
 		return err
 	}
 	return b.services.RegisterService(svc)
+}
+
+func (b *BeaconNode) RegisterBackfillService(cliCtx *cli.Context, bfs *backfill.Store) error {
+	pa := peers.NewAssigner(b.fetchP2P().Peers(), b.forkChoicer)
+	bf, err := backfill.NewService(cliCtx.Context, bfs, b.BlobStorage, b.clockWaiter, b.fetchP2P(), pa, b.BackfillOpts...)
+	if err != nil {
+		return errors.Wrap(err, "error initializing backfill service")
+	}
+
+	return b.services.RegisterService(bf)
 }
 
 func hasNetworkFlag(cliCtx *cli.Context) bool {

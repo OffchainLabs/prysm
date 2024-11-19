@@ -56,6 +56,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Return early for blob reconstructor during capella fork
 - Updated block endpoint from V1 to V2
 - Rename instances of "deposit receipts" to "deposit requests".
+- non-blocking payload attribute event handling in beacon api [pr](https://github.com/prysmaticlabs/prysm/pull/14644)
 
 ### Deprecated
 
