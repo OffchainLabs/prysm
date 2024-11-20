@@ -28,12 +28,12 @@ func TestSubmitSignedAggregateSelectionProof_Valid(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-
+	headers := map[string]string{"Eth-Consensus-Version": version.String(signedAggregateAndProof.Message.Version())}
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Post(
 		gomock.Any(),
 		"/eth/v2/validator/aggregate_and_proofs",
-		nil,
+		headers,
 		bytes.NewBuffer(marshalledSignedAggregateSignedAndProof),
 		nil,
 	).Return(
@@ -60,11 +60,12 @@ func TestSubmitSignedAggregateSelectionProof_BadRequest(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
+	headers := map[string]string{"Eth-Consensus-Version": version.String(signedAggregateAndProof.Message.Version())}
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Post(
 		gomock.Any(),
 		"/eth/v2/validator/aggregate_and_proofs",
-		nil,
+		headers,
 		bytes.NewBuffer(marshalledSignedAggregateSignedAndProof),
 		nil,
 	).Return(
@@ -131,12 +132,12 @@ func TestSubmitSignedAggregateSelectionProofElectra_Valid(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-
+	headers := map[string]string{"Eth-Consensus-Version": version.String(signedAggregateAndProofElectra.Message.Version())}
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Post(
 		gomock.Any(),
 		"/eth/v2/validator/aggregate_and_proofs",
-		nil,
+		headers,
 		bytes.NewBuffer(marshalledSignedAggregateSignedAndProofElectra),
 		nil,
 	).Return(
@@ -163,11 +164,12 @@ func TestSubmitSignedAggregateSelectionProofElectra_BadRequest(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
+	headers := map[string]string{"Eth-Consensus-Version": version.String(signedAggregateAndProofElectra.Message.Version())}
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Post(
 		gomock.Any(),
 		"/eth/v2/validator/aggregate_and_proofs",
-		nil,
+		headers,
 		bytes.NewBuffer(marshalledSignedAggregateSignedAndProofElectra),
 		nil,
 	).Return(
