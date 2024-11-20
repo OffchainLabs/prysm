@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"net/http"
 	"testing"
 
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
+	"github.com/prysmaticlabs/prysm/v5/network/httputil"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api/mock"
@@ -29,7 +32,7 @@ func TestSubmitSignedAggregateSelectionProof_Valid(t *testing.T) {
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Post(
 		gomock.Any(),
-		"/eth/v1/validator/aggregate_and_proofs",
+		"/eth/v2/validator/aggregate_and_proofs",
 		nil,
 		bytes.NewBuffer(marshalledSignedAggregateSignedAndProof),
 		nil,
@@ -60,7 +63,7 @@ func TestSubmitSignedAggregateSelectionProof_BadRequest(t *testing.T) {
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Post(
 		gomock.Any(),
-		"/eth/v1/validator/aggregate_and_proofs",
+		"/eth/v2/validator/aggregate_and_proofs",
 		nil,
 		bytes.NewBuffer(marshalledSignedAggregateSignedAndProof),
 		nil,
@@ -73,6 +76,50 @@ func TestSubmitSignedAggregateSelectionProof_BadRequest(t *testing.T) {
 		SignedAggregateAndProof: signedAggregateAndProof,
 	})
 	assert.ErrorContains(t, "bad request", err)
+}
+
+func TestSubmitSignedAggregateSelectionProof_Fallback(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	signedAggregateAndProof := generateSignedAggregateAndProofJson()
+	marshalledSignedAggregateSignedAndProof, err := json.Marshal([]*structs.SignedAggregateAttestationAndProof{jsonifySignedAggregateAndProof(signedAggregateAndProof)})
+	require.NoError(t, err)
+
+	ctx := context.Background()
+
+	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+	headers := map[string]string{"Eth-Consensus-Version": version.String(signedAggregateAndProof.Message.Version())}
+	jsonRestHandler.EXPECT().Post(
+		gomock.Any(),
+		"/eth/v2/validator/aggregate_and_proofs",
+		headers,
+		bytes.NewBuffer(marshalledSignedAggregateSignedAndProof),
+		nil,
+	).Return(
+		&httputil.DefaultJsonError{
+			Code: http.StatusNotFound,
+		},
+	).Times(1)
+	jsonRestHandler.EXPECT().Post(
+		gomock.Any(),
+		"/eth/v1/validator/aggregate_and_proofs",
+		nil,
+		bytes.NewBuffer(marshalledSignedAggregateSignedAndProof),
+		nil,
+	).Return(
+		nil,
+	).Times(1)
+
+	attestationDataRoot, err := signedAggregateAndProof.Message.Aggregate.Data.HashTreeRoot()
+	require.NoError(t, err)
+
+	validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+	resp, err := validatorClient.submitSignedAggregateSelectionProof(ctx, &ethpb.SignedAggregateSubmitRequest{
+		SignedAggregateAndProof: signedAggregateAndProof,
+	})
+	require.NoError(t, err)
+	assert.DeepEqual(t, attestationDataRoot[:], resp.AttestationDataRoot)
 }
 
 func TestSubmitSignedAggregateSelectionProofElectra_Valid(t *testing.T) {
