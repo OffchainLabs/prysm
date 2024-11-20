@@ -2374,30 +2374,38 @@ func TestSaveLightClientUpdate(t *testing.T) {
 	//}
 	s, tr := minimalTestService(t)
 	ctx := tr.ctx
-	st, keys := util.DeterministicGenesisState(t, 64)
-	//st2, err := util.NewBeaconState()
-	b, err := util.GenerateFullBlock(st, keys, util.DefaultBlockGenConfig(), 1)
+
+	params.SetupTestConfigCleanup(t)
+	chainConfig := params.BeaconConfig()
+	chainConfig.AltairForkEpoch = 0
+	params.OverrideBeaconConfig(chainConfig)
+
+	l := util.NewTestLightClient(t).SetupTestAltair()
+
+	err := s.cfg.BeaconDB.SaveBlock(ctx, l.AttestedBlock)
 	require.NoError(t, err)
-	wsb, err := consensusblocks.NewSignedBeaconBlock(b)
+	attestedBlockRoot, err := l.AttestedBlock.Block().HashTreeRoot()
 	require.NoError(t, err)
-	_, err = consensusblocks.NewROBlockWithRoot(wsb, [32]byte{'a'})
+	err = s.cfg.BeaconDB.SaveState(ctx, l.AttestedState, attestedBlockRoot)
 	require.NoError(t, err)
-	b2, err := util.GenerateFullBlock(st, keys, util.DefaultBlockGenConfig(), 2)
+
+	currentBlockRoot, err := l.Block.Block().HashTreeRoot()
 	require.NoError(t, err)
-	var root []byte
-	for _, v := range [32]byte{'a'} {
-		root = append(root, v)
-	}
-	b2.Block.ParentRoot = root
-	wsb2, err := consensusblocks.NewSignedBeaconBlock(b2)
+	roblock, err := consensusblocks.NewROBlockWithRoot(l.Block, currentBlockRoot)
 	require.NoError(t, err)
-	roblock2, err := consensusblocks.NewROBlockWithRoot(wsb2, [32]byte{'b'})
+
+	err = s.cfg.BeaconDB.SaveBlock(ctx, roblock)
+	require.NoError(t, err)
+	err = s.cfg.BeaconDB.SaveState(ctx, l.State, currentBlockRoot)
+	require.NoError(t, err)
+
 	cfg := &postBlockProcessConfig{
 		ctx:            ctx,
-		roblock:        roblock2,
-		postState:      st,
+		roblock:        roblock,
+		postState:      l.State,
 		isValidPayload: true,
 	}
+
 	s.saveLightClientUpdate(cfg)
 
 	// Check that the light client update is saved

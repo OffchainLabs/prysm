@@ -147,6 +147,10 @@ func (s *Service) saveLightClientUpdate(cfg *postBlockProcessConfig) {
 		return
 	}
 	attestedState, err := s.cfg.StateGen.StateByRoot(cfg.ctx, attestedRoot)
+	if err != nil || attestedState == nil {
+		log.WithError(err).Error("Could not get attested state")
+		return
+	}
 
 	finalizedRoot := cfg.postState.FinalizedCheckpoint().Root
 	finalizedBlock, err := s.getBlock(cfg.ctx, [32]byte(finalizedRoot))
@@ -160,6 +164,10 @@ func (s *Service) saveLightClientUpdate(cfg *postBlockProcessConfig) {
 		attestedBlock,
 		finalizedBlock,
 	)
+	if err != nil {
+		log.WithError(err).Error("Could not create light client update")
+		return
+	}
 
 	period := uint64(attestedState.Slot()) / (uint64(params.BeaconConfig().SlotsPerEpoch) * uint64(params.BeaconConfig().EpochsPerSyncCommitteePeriod))
 
@@ -168,6 +176,7 @@ func (s *Service) saveLightClientUpdate(cfg *postBlockProcessConfig) {
 		log.WithError(err).Error("Could not get current light client update")
 		return
 	}
+	fmt.Println("pr", update.AttestedHeader().Beacon().ParentRoot)
 	if oldUpdate == nil {
 		if err := s.cfg.BeaconDB.SaveLightClientUpdate(cfg.ctx, period, update); err != nil {
 			log.WithError(err).Error("Could not save light client update")
