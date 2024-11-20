@@ -38,7 +38,7 @@ func (c *beaconApiValidatorClient) proposeAttestation(ctx context.Context, attes
 		if errJson.Code != http.StatusNotFound {
 			return nil, errJson
 		}
-		log.Debug("Endpoint /eth/v1/beacon/pool/attestations is not supported, falling back to older endpoints for submit attestation.")
+		log.Debug("Endpoint /eth/v2/beacon/pool/attestations is not supported, falling back to older endpoints for submit attestation.")
 		if err = c.jsonRestHandler.Post(
 			ctx,
 			"/eth/v1/beacon/pool/attestations",
