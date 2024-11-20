@@ -103,11 +103,7 @@ func validateNilAttestation(attestation ethpb.Att) error {
 		return errors.New("attestation signature can't be nil")
 	}
 	if v >= version.Electra {
-		attElectra, ok := attestation.(*ethpb.AttestationElectra)
-		if !ok {
-			return errors.New("attestation is not electra")
-		}
-		if len(attElectra.CommitteeBits) == 0 {
+		if len(attestation.CommitteeBitsVal().BitIndices()) == 0 {
 			return errors.New("attestation committee bits can't be nil")
 		}
 	}
