@@ -41,7 +41,7 @@ func NewWrappedBootstrapAltair(p *pb.LightClientBootstrapAltair) (interfaces.Lig
 	if p == nil {
 		return nil, consensustypes.ErrNilObjectWrapped
 	}
-	header, err := NewWrappedHeaderAltair(p.Header)
+	header, err := NewWrappedHeader(p.Header)
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +105,7 @@ func NewWrappedBootstrapCapella(p *pb.LightClientBootstrapCapella) (interfaces.L
 	if p == nil {
 		return nil, consensustypes.ErrNilObjectWrapped
 	}
-	header, err := NewWrappedHeaderCapella(p.Header)
+	header, err := NewWrappedHeader(p.Header)
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +169,7 @@ func NewWrappedBootstrapDeneb(p *pb.LightClientBootstrapDeneb) (interfaces.Light
 	if p == nil {
 		return nil, consensustypes.ErrNilObjectWrapped
 	}
-	header, err := NewWrappedHeaderDeneb(p.Header)
+	header, err := NewWrappedHeader(p.Header)
 	if err != nil {
 		return nil, err
 	}
@@ -233,7 +233,7 @@ func NewWrappedBootstrapElectra(p *pb.LightClientBootstrapElectra) (interfaces.L
 	if p == nil {
 		return nil, consensustypes.ErrNilObjectWrapped
 	}
-	header, err := NewWrappedHeaderDeneb(p.Header)
+	header, err := NewWrappedHeader(p.Header)
 	if err != nil {
 		return nil, err
 	}
