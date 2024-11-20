@@ -58,6 +58,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Rename instances of "deposit receipts" to "deposit requests".
 - non-blocking payload attribute event handling in beacon api [pr](https://github.com/prysmaticlabs/prysm/pull/14644)
 - Updated light client protobufs. [PR](https://github.com/prysmaticlabs/prysm/pull/14650)
+- Updated light client consensus types. [PR](https://github.com/prysmaticlabs/prysm/pull/14652)
 
 ### Deprecated
 
