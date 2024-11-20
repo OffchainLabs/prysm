@@ -123,6 +123,7 @@ func (s *Server) GetAggregateAttestationV2(w http.ResponseWriter, r *http.Reques
 		}
 		resp.Data = data
 	}
+	w.Header().Set(api.VersionHeader, version.String(agg.Version()))
 	httputil.WriteJson(w, resp)
 }
 
