@@ -54,6 +54,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Return early for blob reconstructor during capella fork
 - Updated block endpoint from V1 to V2
 - Rename instances of "deposit receipts" to "deposit requests".
+- Added `Eth-Consensus-Version` header to `ListAttestationsV2` and `GetAggregateAttestationV2` endpoints.
 
 ### Deprecated
 
