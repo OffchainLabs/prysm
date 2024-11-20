@@ -262,7 +262,10 @@ func TestGetAggregateAttestation(t *testing.T) {
 		require.NoError(t, pool.SaveAggregatedAttestations([]ethpbalpha.Att{aggSlot1_Root1_1, aggSlot1_Root1_2, aggSlot1_Root2, aggSlot2}), "Failed to save aggregated attestations")
 		agg := pool.AggregatedAttestations()
 		require.Equal(t, 4, len(agg), "Expected 4 aggregated attestations")
+		bs, err := util.NewBeaconState()
+		require.NoError(t, err)
 		s := &Server{
+			ChainInfoFetcher: &mockChain.ChainService{State: bs},
 			AttestationsPool: pool,
 		}
 		t.Run("non-matching attestation request", func(t *testing.T) {
