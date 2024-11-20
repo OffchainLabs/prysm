@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -18,11 +19,12 @@ import (
 	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	chaintime "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
+	payloadattribute "github.com/prysmaticlabs/prysm/v5/consensus-types/payload-attribute"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	"github.com/prysmaticlabs/prysm/v5/network/httputil"
+	engine "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/eth/v1"
 	ethpbv2 "github.com/prysmaticlabs/prysm/v5/proto/eth/v2"
 	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
@@ -31,6 +33,7 @@ import (
 )
 
 const DefaultEventFeedDepth = 1000
+const payloadAttributeTimeout = 2 * time.Second
 
 const (
 	InvalidTopic = "__invalid__"
@@ -89,12 +92,12 @@ var opsFeedEventTopics = map[feed.EventType]string{
 
 var stateFeedEventTopics = map[feed.EventType]string{
 	statefeed.NewHead:                     HeadTopic,
-	statefeed.MissedSlot:                  PayloadAttributesTopic,
 	statefeed.FinalizedCheckpoint:         FinalizedCheckpointTopic,
 	statefeed.LightClientFinalityUpdate:   LightClientFinalityUpdateTopic,
 	statefeed.LightClientOptimisticUpdate: LightClientOptimisticUpdateTopic,
 	statefeed.Reorg:                       ChainReorgTopic,
 	statefeed.BlockProcessed:              BlockTopic,
+	statefeed.PayloadAttributes:           PayloadAttributesTopic,
 }
 
 var topicsForStateFeed = topicsForFeed(stateFeedEventTopics)
@@ -418,10 +421,9 @@ func topicForEvent(event *feed.Event) string {
 		return ChainReorgTopic
 	case *statefeed.BlockProcessedData:
 		return BlockTopic
+	case payloadattribute.EventData:
+		return PayloadAttributesTopic
 	default:
-		if event.Type == statefeed.MissedSlot {
-			return PayloadAttributesTopic
-		}
 		return InvalidTopic
 	}
 }
@@ -431,31 +433,17 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 	if !topics.requested(eventName) {
 		return nil, errNotRequested
 	}
-	if eventName == PayloadAttributesTopic {
-		return s.currentPayloadAttributes(ctx)
-	}
 	if event == nil || event.Data == nil {
 		return nil, errors.New("event or event data is nil")
 	}
 	switch v := event.Data.(type) {
+	case payloadattribute.EventData:
+		return s.payloadAttributesReader(ctx, v)
 	case *ethpb.EventHead:
 		// The head event is a special case because, if the client requested the payload attributes topic,
 		// we send two event messages in reaction; the head event and the payload attributes.
-		headReader := func() io.Reader {
-			return jsonMarshalReader(eventName, structs.HeadEventFromV1(v))
-		}
-		// Don't do the expensive attr lookup unless the client requested it.
-		if !topics.requested(PayloadAttributesTopic) {
-			return headReader, nil
-		}
-		// Since payload attributes could change before the outbox is written, we need to do a blocking operation to
-		// get the current payload attributes right here.
-		attrReader, err := s.currentPayloadAttributes(ctx)
-		if err != nil {
-			return nil, errors.Wrap(err, "could not get payload attributes for head event")
-		}
 		return func() io.Reader {
-			return io.MultiReader(headReader(), attrReader())
+			return jsonMarshalReader(eventName, structs.HeadEventFromV1(v))
 		}, nil
 	case *operation.AggregatedAttReceivedData:
 		return func() io.Reader {
@@ -556,113 +544,200 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 	}
 }
 
-// This event stream is intended to be used by builders and relays.
-// Parent fields are based on state at N_{current_slot}, while the rest of fields are based on state of N_{current_slot + 1}
-func (s *Server) currentPayloadAttributes(ctx context.Context) (lazyReader, error) {
-	headRoot, err := s.HeadFetcher.HeadRoot(ctx)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get head root")
-	}
-	st, err := s.HeadFetcher.HeadState(ctx)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get head state")
-	}
-	// advance the head state
-	headState, err := transition.ProcessSlotsIfPossible(ctx, st, s.ChainInfoFetcher.CurrentSlot()+1)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not advance head state")
+var errUnsupportedPayloadAttribute = errors.New("cannot compute payload attributes pre-Bellatrix")
+
+func (s *Server) computePayloadAttributes(ctx context.Context, ev payloadattribute.EventData) (payloadattribute.Attributer, error) {
+	v := ev.HeadState.Version()
+	if v < version.Bellatrix {
+		return nil, errors.Wrapf(errUnsupportedPayloadAttribute, "%s is not supported", version.String(v))
 	}
 
-	headBlock, err := s.HeadFetcher.HeadBlock(ctx)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get head block")
-	}
-
-	headPayload, err := headBlock.Block().Body().Execution()
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get execution payload")
-	}
-
-	t, err := slots.ToTime(headState.GenesisTime(), headState.Slot())
+	t, err := slots.ToTime(ev.HeadState.GenesisTime(), ev.HeadState.Slot())
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get head state slot time")
 	}
-
-	prevRando, err := helpers.RandaoMix(headState, chaintime.CurrentEpoch(headState))
+	timestamp := uint64(t.Unix())
+	prevRando, err := helpers.RandaoMix(ev.HeadState, chaintime.CurrentEpoch(ev.HeadState))
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get head state randao mix")
 	}
-
-	proposerIndex, err := helpers.BeaconProposerIndex(ctx, headState)
+	proposerIndex, err := helpers.BeaconProposerIndex(ctx, ev.HeadState)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get head state proposer index")
 	}
-	feeRecipient := params.BeaconConfig().DefaultFeeRecipient.Bytes()
+	feeRecpt := params.BeaconConfig().DefaultFeeRecipient.Bytes()
 	tValidator, exists := s.TrackedValidatorsCache.Validator(proposerIndex)
 	if exists {
-		feeRecipient = tValidator.FeeRecipient[:]
-	}
-	var attributes interface{}
-	switch headState.Version() {
-	case version.Bellatrix:
-		attributes = &structs.PayloadAttributesV1{
-			Timestamp:             fmt.Sprintf("%d", t.Unix()),
-			PrevRandao:            hexutil.Encode(prevRando),
-			SuggestedFeeRecipient: hexutil.Encode(feeRecipient),
-		}
-	case version.Capella:
-		withdrawals, _, err := headState.ExpectedWithdrawals()
-		if err != nil {
-			return nil, errors.Wrap(err, "could not get head state expected withdrawals")
-		}
-		attributes = &structs.PayloadAttributesV2{
-			Timestamp:             fmt.Sprintf("%d", t.Unix()),
-			PrevRandao:            hexutil.Encode(prevRando),
-			SuggestedFeeRecipient: hexutil.Encode(feeRecipient),
-			Withdrawals:           structs.WithdrawalsFromConsensus(withdrawals),
-		}
-	case version.Deneb, version.Electra:
-		withdrawals, _, err := headState.ExpectedWithdrawals()
-		if err != nil {
-			return nil, errors.Wrap(err, "could not get head state expected withdrawals")
-		}
-		parentRoot, err := headBlock.Block().HashTreeRoot()
-		if err != nil {
-			return nil, errors.Wrap(err, "could not get head block root")
-		}
-		attributes = &structs.PayloadAttributesV3{
-			Timestamp:             fmt.Sprintf("%d", t.Unix()),
-			PrevRandao:            hexutil.Encode(prevRando),
-			SuggestedFeeRecipient: hexutil.Encode(feeRecipient),
-			Withdrawals:           structs.WithdrawalsFromConsensus(withdrawals),
-			ParentBeaconBlockRoot: hexutil.Encode(parentRoot[:]),
-		}
-	default:
-		return nil, errors.Wrapf(err, "Payload version %s is not supported", version.String(headState.Version()))
+		feeRecpt = tValidator.FeeRecipient[:]
 	}
 
-	attributesBytes, err := json.Marshal(attributes)
-	if err != nil {
-		return nil, errors.Wrap(err, "errors marshaling payload attributes to json")
-	}
-	eventData := structs.PayloadAttributesEventData{
-		ProposerIndex:     fmt.Sprintf("%d", proposerIndex),
-		ProposalSlot:      fmt.Sprintf("%d", headState.Slot()),
-		ParentBlockNumber: fmt.Sprintf("%d", headPayload.BlockNumber()),
-		ParentBlockRoot:   hexutil.Encode(headRoot),
-		ParentBlockHash:   hexutil.Encode(headPayload.BlockHash()),
-		PayloadAttributes: attributesBytes,
-	}
-	eventDataBytes, err := json.Marshal(eventData)
-	if err != nil {
-		return nil, errors.Wrap(err, "errors marshaling payload attributes event data to json")
-	}
-	return func() io.Reader {
-		return jsonMarshalReader(PayloadAttributesTopic, &structs.PayloadAttributesEvent{
-			Version: version.String(headState.Version()),
-			Data:    eventDataBytes,
+	if v == version.Bellatrix {
+		return payloadattribute.New(&engine.PayloadAttributes{
+			Timestamp:             timestamp,
+			PrevRandao:            prevRando,
+			SuggestedFeeRecipient: feeRecpt,
 		})
+	}
+
+	w, _, err := ev.HeadState.ExpectedWithdrawals()
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get withdrawals from head state")
+	}
+	if v == version.Capella {
+		return payloadattribute.New(&engine.PayloadAttributesV2{
+			Timestamp:             timestamp,
+			PrevRandao:            prevRando,
+			SuggestedFeeRecipient: feeRecpt,
+			Withdrawals:           w,
+		})
+	}
+
+	pr, err := ev.HeadBlock.Block().HashTreeRoot()
+	if err != nil {
+		return nil, errors.Wrap(err, "could not compute head block root")
+	}
+	return payloadattribute.New(&engine.PayloadAttributesV3{
+		Timestamp:             timestamp,
+		PrevRandao:            prevRando,
+		SuggestedFeeRecipient: feeRecpt,
+		Withdrawals:           w,
+		ParentBeaconBlockRoot: pr[:],
+	})
+}
+
+type asyncPayloadAttrData struct {
+	data    json.RawMessage
+	version string
+	err     error
+}
+
+func (s *Server) fillEventData(ctx context.Context, ev payloadattribute.EventData) (payloadattribute.EventData, error) {
+	if ev.HeadBlock == nil || ev.HeadBlock.IsNil() {
+		hb, err := s.HeadFetcher.HeadBlock(ctx)
+		if err != nil {
+			return ev, errors.Wrap(err, "Could not look up head block")
+		}
+		root, err := hb.Block().HashTreeRoot()
+		if err != nil {
+			return ev, errors.Wrap(err, "Could not compute head block root")
+		}
+		if ev.HeadRoot != root {
+			return ev, errors.Wrap(err, "head root changed before payload attribute event handler execution")
+		}
+		ev.HeadBlock = hb
+		payload, err := hb.Block().Body().Execution()
+		if err != nil {
+			return ev, errors.Wrap(err, "Could not get execution payload for head block")
+		}
+		ev.ParentBlockHash = payload.BlockHash()
+		ev.ParentBlockNumber = payload.BlockNumber()
+	}
+
+	attr := ev.Attributer
+	if attr == nil || attr.IsEmpty() {
+		attr, err := s.computePayloadAttributes(ctx, ev)
+		if err != nil {
+			return ev, errors.Wrap(err, "Could not compute payload attributes")
+		}
+		ev.Attributer = attr
+	}
+	return ev, nil
+}
+
+// This event stream is intended to be used by builders and relays.
+// Parent fields are based on state at N_{current_slot}, while the rest of fields are based on state of N_{current_slot + 1}
+func (s *Server) payloadAttributesReader(ctx context.Context, ev payloadattribute.EventData) (lazyReader, error) {
+	ctx, cancel := context.WithTimeout(ctx, payloadAttributeTimeout)
+	edc := make(chan asyncPayloadAttrData)
+	go func() {
+		d := asyncPayloadAttrData{
+			version: version.String(ev.HeadState.Version()),
+		}
+
+		defer func() {
+			edc <- d
+		}()
+		ev, err := s.fillEventData(ctx, ev)
+		if err != nil {
+			d.err = errors.Wrap(err, "Could not fill event data")
+			return
+		}
+		attributesBytes, err := marshalAttributes(ev.Attributer)
+		if err != nil {
+			d.err = errors.Wrap(err, "errors marshaling payload attributes to json")
+			return
+		}
+		d.data, d.err = json.Marshal(structs.PayloadAttributesEventData{
+			ProposerIndex:     strconv.FormatUint(uint64(ev.ProposerIndex), 10),
+			ProposalSlot:      strconv.FormatUint(uint64(ev.ProposalSlot), 10),
+			ParentBlockNumber: strconv.FormatUint(ev.ParentBlockNumber, 10),
+			ParentBlockRoot:   hexutil.Encode(ev.ParentBlockRoot),
+			ParentBlockHash:   hexutil.Encode(ev.ParentBlockHash),
+			PayloadAttributes: attributesBytes,
+		})
+		if d.err != nil {
+			d.err = errors.Wrap(d.err, "errors marshaling payload attributes event data to json")
+		}
+	}()
+	return func() io.Reader {
+		defer cancel()
+		select {
+		case <-ctx.Done():
+			log.WithError(ctx.Err()).Warn("Context canceled while waiting for payload attributes event data")
+			return nil
+		case ed := <-edc:
+			if ed.err != nil {
+				log.WithError(ed.err).Warn("Error while marshaling payload attributes event data")
+				return nil
+			}
+			return jsonMarshalReader(PayloadAttributesTopic, &structs.PayloadAttributesEvent{
+				Version: ed.version,
+				Data:    ed.data,
+			})
+		}
 	}, nil
+}
+
+func marshalAttributes(attr payloadattribute.Attributer) ([]byte, error) {
+	v := attr.Version()
+	if v < version.Bellatrix {
+		return nil, errors.Wrapf(errUnsupportedPayloadAttribute, "Payload version %s is not supported", version.String(v))
+	}
+
+	timestamp := strconv.FormatUint(attr.Timestamp(), 10)
+	prevRandao := hexutil.Encode(attr.PrevRandao())
+	feeRecpt := hexutil.Encode(attr.SuggestedFeeRecipient())
+	if v == version.Bellatrix {
+		return json.Marshal(&structs.PayloadAttributesV1{
+			Timestamp:             timestamp,
+			PrevRandao:            prevRandao,
+			SuggestedFeeRecipient: feeRecpt,
+		})
+	}
+	w, err := attr.Withdrawals()
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get withdrawals from payload attributes event")
+	}
+	withdrawals := structs.WithdrawalsFromConsensus(w)
+	if v == version.Capella {
+		return json.Marshal(&structs.PayloadAttributesV2{
+			Timestamp:             timestamp,
+			PrevRandao:            prevRandao,
+			SuggestedFeeRecipient: feeRecpt,
+			Withdrawals:           withdrawals,
+		})
+	}
+	parentRoot, err := attr.ParentBeaconBlockRoot()
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get parent beacon block root from payload attributes event")
+	}
+	return json.Marshal(&structs.PayloadAttributesV3{
+		Timestamp:             timestamp,
+		PrevRandao:            prevRandao,
+		SuggestedFeeRecipient: feeRecpt,
+		Withdrawals:           withdrawals,
+		ParentBeaconBlockRoot: hexutil.Encode(parentRoot),
+	})
 }
 
 func newStreamingResponseController(rw http.ResponseWriter, timeout time.Duration) *streamingResponseWriterController {

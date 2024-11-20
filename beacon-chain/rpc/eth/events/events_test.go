@@ -21,6 +21,7 @@ import (
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
+	payloadattribute "github.com/prysmaticlabs/prysm/v5/consensus-types/payload-attribute"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/eth/v1"
 	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
@@ -489,7 +490,21 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 				require.NoError(t, err)
 				request := topics.testHttpRequest(testSync.ctx, t)
 				w := NewStreamingResponseWriterRecorder(testSync.ctx)
-				events := []*feed.Event{&feed.Event{Type: statefeed.MissedSlot}}
+				events := []*feed.Event{
+					&feed.Event{
+						Type: statefeed.PayloadAttributes,
+						Data: payloadattribute.EventData{
+							ProposerIndex:     0,
+							ProposalSlot:      0,
+							ParentBlockNumber: 0,
+							ParentBlockRoot:   make([]byte, 32),
+							ParentBlockHash:   make([]byte, 32),
+							HeadState:         st,
+							HeadBlock:         b,
+							HeadRoot:          [fieldparams.RootLength]byte{},
+						},
+					},
+				}
 
 				go func() {
 					s.StreamEvents(w, request)
