@@ -132,9 +132,9 @@ func (s *Service) sendLightClientFeeds(cfg *postBlockProcessConfig) {
 // saveLightClientUpdate saves the light client update for this block
 // if it's better than the already saved one, when feature flag is enabled.
 func (s *Service) saveLightClientUpdate(cfg *postBlockProcessConfig) {
-	if !features.Get().EnableLightClient {
-		return
-	}
+	//if !features.Get().EnableLightClient {
+	//	return
+	//}
 
 	attestedRoot := cfg.roblock.Block().ParentRoot()
 	attestedBlock, err := s.getBlock(cfg.ctx, attestedRoot)

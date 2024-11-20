@@ -2367,3 +2367,41 @@ func fakeResult(missing []uint64) map[uint64]struct{} {
 	}
 	return r
 }
+
+func TestSaveLightClientUpdate(t *testing.T) {
+	//if !features.Get().EnableLightClient {
+	//	return
+	//}
+	s, tr := minimalTestService(t)
+	ctx := tr.ctx
+	st, keys := util.DeterministicGenesisState(t, 64)
+	//st2, err := util.NewBeaconState()
+	b, err := util.GenerateFullBlock(st, keys, util.DefaultBlockGenConfig(), 1)
+	require.NoError(t, err)
+	wsb, err := consensusblocks.NewSignedBeaconBlock(b)
+	require.NoError(t, err)
+	_, err = consensusblocks.NewROBlockWithRoot(wsb, [32]byte{'a'})
+	require.NoError(t, err)
+	b2, err := util.GenerateFullBlock(st, keys, util.DefaultBlockGenConfig(), 2)
+	require.NoError(t, err)
+	var root []byte
+	for _, v := range [32]byte{'a'} {
+		root = append(root, v)
+	}
+	b2.Block.ParentRoot = root
+	wsb2, err := consensusblocks.NewSignedBeaconBlock(b2)
+	require.NoError(t, err)
+	roblock2, err := consensusblocks.NewROBlockWithRoot(wsb2, [32]byte{'b'})
+	cfg := &postBlockProcessConfig{
+		ctx:            ctx,
+		roblock:        roblock2,
+		postState:      st,
+		isValidPayload: true,
+	}
+	s.saveLightClientUpdate(cfg)
+
+	// Check that the light client update is saved
+	u, err := s.cfg.BeaconDB.LightClientUpdate(ctx, 1)
+	require.NoError(t, err)
+	require.NotNil(t, u)
+}
