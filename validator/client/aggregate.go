@@ -88,6 +88,7 @@ func (v *validator) SubmitAggregateAndProof(ctx context.Context, slot primitives
 		PublicKey:      pubKey[:],
 		SlotSignature:  slotSig,
 	}
+	// TODO: look at renaming SubmitAggregateSelectionProof functions as they are GET beacon API
 	var agg ethpb.AggregateAttAndProof
 	if postElectra {
 		res, err := v.validatorClient.SubmitAggregateSelectionProofElectra(ctx, aggSelectionRequest, duty.ValidatorIndex, uint64(len(duty.Committee)))
