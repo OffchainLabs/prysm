@@ -25,7 +25,7 @@ const (
 	SlotsPerEpoch                         = 8             // SlotsPerEpoch defines the number of slots per epoch.
 	SyncCommitteeAggregationBytesLength   = 1             // SyncCommitteeAggregationBytesLength defines the sync committee aggregate bytes.
 	SyncAggregateSyncCommitteeBytesLength = 4             // SyncAggregateSyncCommitteeBytesLength defines the length of sync committee bytes in a sync aggregate.
-	MaxWithdrawalsPerPayload              = 4             // MaxWithdrawalsPerPayloadLength defines the maximum number of withdrawals that can be included in a payload.
+	MaxWithdrawalsPerPayload              = 4             // MaxWithdrawalsPerPayload defines the maximum number of withdrawals that can be included in a payload.
 	MaxBlobsPerBlock                      = 6             // MaxBlobsPerBlock defines the maximum number of blobs with respect to consensus rule can be included in a block.
 	MaxBlobCommitmentsPerBlock            = 16            // MaxBlobCommitmentsPerBlock defines the theoretical limit of blobs can be included in a block.
 	LogMaxBlobCommitments                 = 4             // Log_2 of MaxBlobCommitmentsPerBlock
