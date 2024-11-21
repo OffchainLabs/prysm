@@ -42,11 +42,13 @@ var downloadCmd = &cli.Command{
 	},
 }
 
+const stateSizeLimit int64 = 1 << 29 // 512MB to accommodate future state growth
+
 func cliActionDownload(_ *cli.Context) error {
 	ctx := context.Background()
 	f := downloadFlags
 
-	opts := []client.ClientOpt{client.WithTimeout(f.Timeout)}
+	opts := []client.ClientOpt{client.WithTimeout(f.Timeout), client.WithMaxBodySize(stateSizeLimit)}
 	client, err := beacon.NewClient(downloadFlags.BeaconNodeHost, opts...)
 	if err != nil {
 		return err
