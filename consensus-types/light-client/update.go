@@ -150,10 +150,6 @@ func (u *updateAltair) NextSyncCommitteeBranchElectra() (interfaces.LightClientS
 	return [6][32]byte{}, consensustypes.ErrNotSupported("NextSyncCommitteeBranchElectra", version.Altair)
 }
 
-func (u *updateAltair) SetNextSyncCommitteeBranchElectra([][]byte) error {
-	return consensustypes.ErrNotSupported("SetNextSyncCommitteeBranchElectra", version.Altair)
-}
-
 func (u *updateAltair) FinalizedHeader() interfaces.LightClientHeader {
 	return u.finalizedHeader
 }
@@ -319,10 +315,6 @@ func (u *updateCapella) SetNextSyncCommitteeBranch(branch [][]byte) error {
 
 func (u *updateCapella) NextSyncCommitteeBranchElectra() (interfaces.LightClientSyncCommitteeBranchElectra, error) {
 	return [6][32]byte{}, consensustypes.ErrNotSupported("NextSyncCommitteeBranchElectra", version.Capella)
-}
-
-func (u *updateCapella) SetNextSyncCommitteeBranchElectra([][]byte) error {
-	return consensustypes.ErrNotSupported("SetNextSyncCommitteeBranchElectra", version.Capella)
 }
 
 func (u *updateCapella) FinalizedHeader() interfaces.LightClientHeader {
@@ -492,10 +484,6 @@ func (u *updateDeneb) NextSyncCommitteeBranchElectra() (interfaces.LightClientSy
 	return [6][32]byte{}, consensustypes.ErrNotSupported("NextSyncCommitteeBranchElectra", version.Deneb)
 }
 
-func (u *updateDeneb) SetNextSyncCommitteeBranchElectra([][]byte) error {
-	return consensustypes.ErrNotSupported("SetNextSyncCommitteeBranchElectra", version.Deneb)
-}
-
 func (u *updateDeneb) FinalizedHeader() interfaces.LightClientHeader {
 	return u.finalizedHeader
 }
@@ -649,14 +637,6 @@ func (u *updateElectra) NextSyncCommitteeBranch() (interfaces.LightClientSyncCom
 }
 
 func (u *updateElectra) SetNextSyncCommitteeBranch(branch [][]byte) error {
-	return consensustypes.ErrNotSupported("SetNextSyncCommitteeBranch", version.Electra)
-}
-
-func (u *updateElectra) NextSyncCommitteeBranchElectra() (interfaces.LightClientSyncCommitteeBranchElectra, error) {
-	return u.nextSyncCommitteeBranch, nil
-}
-
-func (u *updateElectra) SetNextSyncCommitteeBranchElectra(branch [][]byte) error {
 	b, err := createBranch[interfaces.LightClientSyncCommitteeBranchElectra]("sync committee", branch, fieldparams.SyncCommitteeBranchDepthElectra)
 	if err != nil {
 		return err
@@ -666,6 +646,10 @@ func (u *updateElectra) SetNextSyncCommitteeBranchElectra(branch [][]byte) error
 	u.p.NextSyncCommitteeBranch = branch
 
 	return nil
+}
+
+func (u *updateElectra) NextSyncCommitteeBranchElectra() (interfaces.LightClientSyncCommitteeBranchElectra, error) {
+	return u.nextSyncCommitteeBranch, nil
 }
 
 func (u *updateElectra) FinalizedHeader() interfaces.LightClientHeader {
