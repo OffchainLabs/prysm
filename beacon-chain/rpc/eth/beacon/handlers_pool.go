@@ -149,6 +149,7 @@ func (s *Server) ListAttestationsV2(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Header().Set(api.VersionHeader, version.String(headState.Version()))
 	httputil.WriteJson(w, &structs.ListAttestationsResponse{
 		Version: version.String(headState.Version()),
 		Data:    attsData,

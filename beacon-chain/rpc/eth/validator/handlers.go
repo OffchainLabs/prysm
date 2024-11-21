@@ -75,7 +75,7 @@ func (s *Server) GetAggregateAttestation(w http.ResponseWriter, r *http.Request)
 
 // GetAggregateAttestationV2 aggregates all attestations matching the given attestation data root and slot, returning the aggregated result.
 func (s *Server) GetAggregateAttestationV2(w http.ResponseWriter, r *http.Request) {
-	_, span := trace.StartSpan(r.Context(), "validator.GetAggregateAttestationV2")
+	ctx, span := trace.StartSpan(r.Context(), "validator.GetAggregateAttestationV2")
 	defer span.End()
 
 	_, attDataRoot, ok := shared.HexFromQuery(w, r, "attestation_data_root", fieldparams.RootLength, true)
@@ -123,6 +123,12 @@ func (s *Server) GetAggregateAttestationV2(w http.ResponseWriter, r *http.Reques
 		}
 		resp.Data = data
 	}
+	headState, err := s.ChainInfoFetcher.HeadStateReadOnly(ctx)
+	if err != nil {
+		httputil.HandleError(w, "Could not get head state: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set(api.VersionHeader, version.String(headState.Version()))
 	httputil.WriteJson(w, resp)
 }
 
