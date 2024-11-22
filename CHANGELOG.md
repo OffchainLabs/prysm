@@ -26,7 +26,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Validator REST mode Electra block support.
 - Added validator index label to `validator_statuses` metric.
 - Added Validator REST mode use of Attestation V2 endpoints and Electra attestations.
-- PeerDAS: Added data column sidecars proto.
+- PeerDAS: Added proto for `DataColumnIdentifier`, `DataColumnSidecar`, `DataColumnSidecarsByRangeRequest` and `MetadataV2`.
 
 ### Changed
 
