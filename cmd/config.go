@@ -48,7 +48,7 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 	}
 	if ctx.IsSet(RPCMaxPageSizeFlag.Name) {
 		cfg.MaxRPCPageSize = ctx.Int(RPCMaxPageSizeFlag.Name)
-		log.Warnf("Starting beacon chain with max RPC page size of %d", cfg.MaxRPCPageSize)
+		log.Warnf("Configured beacon chain with max RPC page size of %d", cfg.MaxRPCPageSize)
 	}
 	Init(cfg)
 	return nil
