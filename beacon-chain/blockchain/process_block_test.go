@@ -2377,7 +2377,6 @@ func TestSaveLightClientUpdate(t *testing.T) {
 
 	params.SetupTestConfigCleanup(t)
 	chainConfig := params.BeaconConfig()
-	//chainConfig.AltairForkEpoch = 0
 	params.OverrideBeaconConfig(chainConfig)
 
 	l := util.NewTestLightClient(t).SetupTestAltair()
@@ -2419,7 +2418,8 @@ func TestSaveLightClientUpdate(t *testing.T) {
 	s.saveLightClientUpdate(cfg)
 
 	// Check that the light client update is saved
-	u, err := s.cfg.BeaconDB.LightClientUpdate(ctx, 1)
+	period := uint64(l.AttestedState.Slot()) / (uint64(params.BeaconConfig().SlotsPerEpoch) * uint64(params.BeaconConfig().EpochsPerSyncCommitteePeriod))
+	u, err := s.cfg.BeaconDB.LightClientUpdate(ctx, period)
 	require.NoError(t, err)
 	require.NotNil(t, u)
 }
