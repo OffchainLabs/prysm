@@ -91,6 +91,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Fix panic on attestation interface since we call data before validation
 - corrects nil check on some interface attestation types
 - temporary solution to handling electra attesation and attester_slashing events. [pr](14655)
+- Diverse log improvements and comment additions.
 
 
 ### Security

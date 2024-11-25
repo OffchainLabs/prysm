@@ -495,8 +495,8 @@ func TestOriginOutsideRetention(t *testing.T) {
 	bdb := dbtest.SetupDB(t)
 	genesis := time.Unix(0, 0)
 	secsPerEpoch := params.BeaconConfig().SecondsPerSlot * uint64(params.BeaconConfig().SlotsPerEpoch)
-	retentionSeconds := time.Second * time.Duration(uint64(params.BeaconConfig().MinEpochsForBlobsSidecarsRequest+1)*secsPerEpoch)
-	outsideRetention := genesis.Add(retentionSeconds)
+	retentionPeriod := time.Second * time.Duration(uint64(params.BeaconConfig().MinEpochsForBlobsSidecarsRequest+1)*secsPerEpoch)
+	outsideRetention := genesis.Add(retentionPeriod)
 	now := func() time.Time {
 		return outsideRetention
 	}
