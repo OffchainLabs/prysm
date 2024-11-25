@@ -21,15 +21,14 @@ import (
 )
 
 type TestLightClient struct {
-	T                   *testing.T
-	Ctx                 context.Context
-	State               state.BeaconState
-	Block               interfaces.ReadOnlySignedBeaconBlock
-	AttestedState       state.BeaconState
-	AttestedBlock       interfaces.ReadOnlySignedBeaconBlock
-	FinalizedBlock      interfaces.ReadOnlySignedBeaconBlock
-	FinalizedCheckpoint *ethpb.Checkpoint
-	FinalizedState      state.BeaconState
+	T              *testing.T
+	Ctx            context.Context
+	State          state.BeaconState
+	Block          interfaces.ReadOnlySignedBeaconBlock
+	AttestedState  state.BeaconState
+	AttestedBlock  interfaces.ReadOnlySignedBeaconBlock
+	FinalizedBlock interfaces.ReadOnlySignedBeaconBlock
+	//FinalizedState      state.BeaconState
 }
 
 func NewTestLightClient(t *testing.T) *TestLightClient {
@@ -349,8 +348,6 @@ func (l *TestLightClient) SetupTestAltair() *TestLightClient {
 	l.Ctx = ctx
 	l.FinalizedBlock = SignedFinalizedBlock
 	l.AttestedBlock = signedParent
-	l.FinalizedCheckpoint = finalizedCheckpoint
-	l.FinalizedState = finalizedState
 
 	return l
 }

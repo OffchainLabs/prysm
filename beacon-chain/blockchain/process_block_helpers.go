@@ -151,7 +151,7 @@ func (s *Service) saveLightClientUpdate(cfg *postBlockProcessConfig) {
 		return
 	}
 
-	finalizedRoot := cfg.postState.FinalizedCheckpoint().Root
+	finalizedRoot := attestedState.FinalizedCheckpoint().Root
 	finalizedBlock, err := s.getBlock(cfg.ctx, [32]byte(finalizedRoot))
 	if err != nil {
 		log.WithError(err).Error("Could not get finalized block")
@@ -179,7 +179,6 @@ func (s *Service) saveLightClientUpdate(cfg *postBlockProcessConfig) {
 		log.WithError(err).Error("Could not get current light client update")
 		return
 	}
-	fmt.Println("pr", update.AttestedHeader().Beacon().ParentRoot)
 	if oldUpdate == nil {
 		if err := s.cfg.BeaconDB.SaveLightClientUpdate(cfg.ctx, period, update); err != nil {
 			log.WithError(err).Error("Could not save light client update")
