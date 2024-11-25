@@ -319,7 +319,7 @@ func TestBatchProcessNewPendingDeposits(t *testing.T) {
 		wc[0] = params.BeaconConfig().ETH1AddressWithdrawalPrefixByte
 		wc[31] = byte(0)
 		validDep := stateTesting.GeneratePendingDeposit(t, sk, params.BeaconConfig().MinActivationBalance, bytesutil.ToBytes32(wc), 0)
-		invalidDep := &eth.PendingDeposit{}
+		invalidDep := &eth.PendingDeposit{PublicKey: make([]byte, 48)}
 		// have a combination of valid and invalid deposits
 		deps := []*eth.PendingDeposit{validDep, invalidDep}
 		require.NoError(t, electra.BatchProcessNewPendingDeposits(context.Background(), st, deps))
