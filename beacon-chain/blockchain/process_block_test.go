@@ -2377,7 +2377,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 
 	params.SetupTestConfigCleanup(t)
 	chainConfig := params.BeaconConfig()
-	chainConfig.AltairForkEpoch = 0
+	//chainConfig.AltairForkEpoch = 0
 	params.OverrideBeaconConfig(chainConfig)
 
 	l := util.NewTestLightClient(t).SetupTestAltair()
@@ -2397,6 +2397,16 @@ func TestSaveLightClientUpdate(t *testing.T) {
 	err = s.cfg.BeaconDB.SaveBlock(ctx, roblock)
 	require.NoError(t, err)
 	err = s.cfg.BeaconDB.SaveState(ctx, l.State, currentBlockRoot)
+	require.NoError(t, err)
+
+	err = s.cfg.BeaconDB.SaveBlock(ctx, l.FinalizedBlock)
+	require.NoError(t, err)
+	finalizedBlockRoot, err := l.FinalizedBlock.Block().HashTreeRoot()
+	require.NoError(t, err)
+	err = s.cfg.BeaconDB.SaveState(ctx, l.FinalizedState, finalizedBlockRoot)
+	require.NoError(t, err)
+
+	err = s.cfg.BeaconDB.SaveFinalizedCheckpoint(ctx, l.FinalizedCheckpoint)
 	require.NoError(t, err)
 
 	cfg := &postBlockProcessConfig{

@@ -5,12 +5,11 @@ import (
 	"fmt"
 	"time"
 
-	lightclient "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/light-client"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
 	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
+	lightclient "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/light-client"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
 	doublylinkedtree "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/doubly-linked-tree"
 	forkchoicetypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/types"
@@ -154,6 +153,10 @@ func (s *Service) saveLightClientUpdate(cfg *postBlockProcessConfig) {
 
 	finalizedRoot := cfg.postState.FinalizedCheckpoint().Root
 	finalizedBlock, err := s.getBlock(cfg.ctx, [32]byte(finalizedRoot))
+	if err != nil {
+		log.WithError(err).Error("Could not get finalized block")
+		return
+	}
 
 	update, err := lightclient.NewLightClientUpdateFromBeaconState(
 		cfg.ctx,
