@@ -34,6 +34,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	ma "github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
+	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/go-bitfield"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers/peerdata"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers/scorers"
@@ -335,19 +336,29 @@ func (p *Status) ChainStateLastUpdated(pid peer.ID) (time.Time, error) {
 
 // IsBad states if the peer is to be considered bad (by *any* of the registered scorers).
 // If the peer is unknown this will return `false`, which makes using this function easier than returning an error.
-func (p *Status) IsBad(pid peer.ID) bool {
+func (p *Status) IsBad(pid peer.ID) error {
 	p.store.RLock()
 	defer p.store.RUnlock()
+
 	return p.isBad(pid)
 }
 
 // isBad is the lock-free version of IsBad.
-func (p *Status) isBad(pid peer.ID) bool {
+func (p *Status) isBad(pid peer.ID) error {
 	// Do not disconnect from trusted peers.
 	if p.store.IsTrustedPeer(pid) {
-		return false
+		return nil
 	}
-	return p.isfromBadIP(pid) || p.scorers.IsBadPeerNoLock(pid)
+
+	if err := p.isfromBadIP(pid); err != nil {
+		return errors.Wrap(err, "peer is from a bad IP")
+	}
+
+	if err := p.scorers.IsBadPeerNoLock(pid); err != nil {
+		return errors.Wrap(err, "is bad peer no lock")
+	}
+
+	return nil
 }
 
 // NextValidTime gets the earliest possible time it is to contact/dial
@@ -592,7 +603,7 @@ func (p *Status) Prune() {
 		return
 	}
 	notBadPeer := func(pid peer.ID) bool {
-		return !p.isBad(pid)
+		return p.isBad(pid) == nil
 	}
 	notTrustedPeer := func(pid peer.ID) bool {
 		return !p.isTrustedPeers(pid)
@@ -982,24 +993,28 @@ func (p *Status) isTrustedPeers(pid peer.ID) bool {
 
 // this method assumes the store lock is acquired before
 // executing the method.
-func (p *Status) isfromBadIP(pid peer.ID) bool {
+func (p *Status) isfromBadIP(pid peer.ID) error {
 	peerData, ok := p.store.PeerData(pid)
 	if !ok {
-		return false
+		return nil
 	}
+
 	if peerData.Address == nil {
-		return false
+		return nil
 	}
+
 	ip, err := manet.ToIP(peerData.Address)
 	if err != nil {
-		return true
+		return errors.Wrap(err, "to ip")
 	}
+
 	if val, ok := p.ipTracker[ip.String()]; ok {
 		if val > CollocationLimit {
-			return true
+			return errors.Errorf("colocation limit exceeded: got %d - limit %d", val, CollocationLimit)
 		}
 	}
-	return false
+
+	return nil
 }
 
 func (p *Status) addIpToTracker(pid peer.ID) {

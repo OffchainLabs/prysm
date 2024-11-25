@@ -34,7 +34,7 @@ func TestScorers_Gossip_Score(t *testing.T) {
 			},
 			check: func(scorer *scorers.GossipScorer) {
 				assert.Equal(t, -101.0, scorer.Score("peer1"), "Unexpected score")
-				assert.Equal(t, true, scorer.IsBadPeer("peer1"), "Unexpected good peer")
+				assert.NotNil(t, scorer.IsBadPeer("peer1"), "Unexpected good peer")
 			},
 		},
 		{
@@ -44,7 +44,7 @@ func TestScorers_Gossip_Score(t *testing.T) {
 			},
 			check: func(scorer *scorers.GossipScorer) {
 				assert.Equal(t, 10.0, scorer.Score("peer1"), "Unexpected score")
-				assert.Equal(t, false, scorer.IsBadPeer("peer1"), "Unexpected bad peer")
+				assert.Equal(t, nil, scorer.IsBadPeer("peer1"), "Unexpected bad peer")
 				_, _, topicMap, err := scorer.GossipData("peer1")
 				assert.NoError(t, err)
 				assert.Equal(t, uint64(100), topicMap["a"].TimeInMesh, "incorrect time in mesh")

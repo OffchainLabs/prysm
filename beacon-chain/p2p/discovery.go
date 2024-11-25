@@ -189,7 +189,7 @@ func (s *Service) RefreshENR() {
 		s.updateSubnetRecordWithMetadataV2(bitV, bitS)
 	}
 	// ping all peers to inform them of new metadata
-	s.pingPeers()
+	s.pingPeersAndLogEnr()
 }
 
 // listen for new nodes watches for new nodes in the network and adds them to the peerstore.
@@ -452,7 +452,7 @@ func (s *Service) filterPeer(node *enode.Node) bool {
 	}
 
 	// Ignore bad nodes.
-	if s.peers.IsBad(peerData.ID) {
+	if s.peers.IsBad(peerData.ID) != nil {
 		return false
 	}
 
