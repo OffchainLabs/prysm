@@ -405,9 +405,16 @@ func batchProcessNewPendingDeposits(ctx context.Context, state state.BeaconState
 
 		// Add validator to the registry if the signature is valid
 		if validSignature {
-			err = AddValidatorToRegistry(state, pendingDeposit.PublicKey, pendingDeposit.WithdrawalCredentials, pendingDeposit.Amount)
-			if err != nil {
-				return errors.Wrap(err, "failed to add validator to registry")
+			index, found := state.ValidatorIndexByPubkey(bytesutil.ToBytes48(pendingDeposit.PublicKey))
+			if found {
+				if err := helpers.IncreaseBalance(state, index, pendingDeposit.Amount); err != nil {
+					return errors.Wrap(err, "could not increase balance")
+				}
+			} else {
+				err = AddValidatorToRegistry(state, pendingDeposit.PublicKey, pendingDeposit.WithdrawalCredentials, pendingDeposit.Amount)
+				if err != nil {
+					return errors.Wrap(err, "failed to add validator to registry")
+				}
 			}
 		}
 	}
