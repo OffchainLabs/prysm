@@ -202,9 +202,9 @@ func (s *Service) saveLightClientUpdate(cfg *postBlockProcessConfig) {
 // saveLightClientBootstrap saves a light client bootstrap for this block
 // when feature flag is enabled.
 func (s *Service) saveLightClientBootstrap(cfg *postBlockProcessConfig) {
-	if !features.Get().EnableLightClient {
-		return
-	}
+	//if !features.Get().EnableLightClient {
+	//	return
+	//}
 
 	blockRoot := cfg.roblock.Root()
 	bootstrap, err := lightclient.CreateLightClientBootstrap(cfg.ctx, s.CurrentSlot(), cfg.postState, cfg.roblock)

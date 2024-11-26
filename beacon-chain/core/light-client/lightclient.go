@@ -773,29 +773,48 @@ func CreateDefaultLightClientBootstrap(currentSlot primitives.Slot) (interfaces.
 		}
 	}
 
+	executionBranch := make([][]byte, fieldparams.ExecutionBranchDepth)
+	for i := 0; i < fieldparams.ExecutionBranchDepth; i++ {
+		executionBranch[i] = make([]byte, 32)
+	}
+
 	var m proto.Message
 	if currentEpoch < params.BeaconConfig().CapellaForkEpoch {
 		m = &pb.LightClientBootstrapAltair{
-			Header:                     &pb.LightClientHeaderAltair{},
+			Header: &pb.LightClientHeaderAltair{
+				Beacon: &pb.BeaconBlockHeader{},
+			},
 			CurrentSyncCommittee:       currentSyncCommittee,
 			CurrentSyncCommitteeBranch: currentSyncCommitteeBranch,
 		}
 	} else if currentEpoch < params.BeaconConfig().DenebForkEpoch {
 		m = &pb.LightClientBootstrapCapella{
-			Header:                     &pb.LightClientHeaderCapella{},
+			Header: &pb.LightClientHeaderCapella{
+				Beacon:          &pb.BeaconBlockHeader{},
+				Execution:       &enginev1.ExecutionPayloadHeaderCapella{},
+				ExecutionBranch: executionBranch,
+			},
 			CurrentSyncCommittee:       currentSyncCommittee,
 			CurrentSyncCommitteeBranch: currentSyncCommitteeBranch,
 		}
 	} else if currentEpoch < params.BeaconConfig().ElectraForkEpoch {
 		m = &pb.LightClientBootstrapDeneb{
-			Header:                     &pb.LightClientHeaderDeneb{},
+			Header: &pb.LightClientHeaderDeneb{
+				Beacon:          &pb.BeaconBlockHeader{},
+				Execution:       &enginev1.ExecutionPayloadHeaderDeneb{},
+				ExecutionBranch: executionBranch,
+			},
 			CurrentSyncCommittee:       currentSyncCommittee,
 			CurrentSyncCommitteeBranch: currentSyncCommitteeBranch,
 		}
 	} else {
 
 		m = &pb.LightClientBootstrapElectra{
-			Header:                     &pb.LightClientHeaderDeneb{},
+			Header: &pb.LightClientHeaderDeneb{
+				Beacon:          &pb.BeaconBlockHeader{},
+				Execution:       &enginev1.ExecutionPayloadHeaderDeneb{},
+				ExecutionBranch: executionBranch,
+			},
 			CurrentSyncCommittee:       currentSyncCommittee,
 			CurrentSyncCommitteeBranch: currentSyncCommitteeBranch,
 		}

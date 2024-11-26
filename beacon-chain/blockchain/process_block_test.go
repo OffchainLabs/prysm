@@ -2369,14 +2369,15 @@ func fakeResult(missing []uint64) map[uint64]struct{} {
 }
 
 func TestSaveLightClientUpdate(t *testing.T) {
+	//if !features.Get().EnableLightClient {
+	//	return
+	//}
+
 	s, tr := minimalTestService(t)
 	ctx := tr.ctx
 	params.SetupTestConfigCleanup(t)
 
 	t.Run("Altair", func(t *testing.T) {
-		//if !features.Get().EnableLightClient {
-		//	return
-		//}
 
 		l := util.NewTestLightClient(t).SetupTestAltair()
 
@@ -2427,10 +2428,6 @@ func TestSaveLightClientUpdate(t *testing.T) {
 	})
 
 	t.Run("Capella", func(t *testing.T) {
-		//if !features.Get().EnableLightClient {
-		//	return
-		//}
-
 		l := util.NewTestLightClient(t).SetupTestCapella(false)
 
 		s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().CapellaForkEpoch+1)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
@@ -2480,10 +2477,6 @@ func TestSaveLightClientUpdate(t *testing.T) {
 	})
 
 	t.Run("Deneb", func(t *testing.T) {
-		//if !features.Get().EnableLightClient {
-		//	return
-		//}
-
 		l := util.NewTestLightClient(t).SetupTestDeneb(false)
 
 		s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().DenebForkEpoch+1)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
@@ -2532,56 +2525,123 @@ func TestSaveLightClientUpdate(t *testing.T) {
 		require.Equal(t, u.Version(), version.Deneb)
 	})
 
-	//t.Run("Electra", func(t *testing.T) {
-	//	//if !features.Get().EnableLightClient {
-	//	//	return
-	//	//}
-	//
-	//	l := util.NewTestLightClient(t).SetupTestElectra(false)
-	//
-	//	s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().ElectraForkEpoch+1)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
-	//
-	//	err := s.cfg.BeaconDB.SaveBlock(ctx, l.AttestedBlock)
-	//	require.NoError(t, err)
-	//	attestedBlockRoot, err := l.AttestedBlock.Block().HashTreeRoot()
-	//	require.NoError(t, err)
-	//	err = s.cfg.BeaconDB.SaveState(ctx, l.AttestedState, attestedBlockRoot)
-	//	require.NoError(t, err)
-	//
-	//	currentBlockRoot, err := l.Block.Block().HashTreeRoot()
-	//	require.NoError(t, err)
-	//	roblock, err := consensusblocks.NewROBlockWithRoot(l.Block, currentBlockRoot)
-	//	require.NoError(t, err)
-	//
-	//	err = s.cfg.BeaconDB.SaveBlock(ctx, roblock)
-	//	require.NoError(t, err)
-	//	err = s.cfg.BeaconDB.SaveState(ctx, l.State, currentBlockRoot)
-	//	require.NoError(t, err)
-	//
-	//	err = s.cfg.BeaconDB.SaveBlock(ctx, l.FinalizedBlock)
-	//	require.NoError(t, err)
-	//	//finalizedBlockRoot, err := l.FinalizedBlock.Block().HashTreeRoot()
-	//	//require.NoError(t, err)
-	//	//err = s.cfg.BeaconDB.SaveState(ctx, l.FinalizedState, finalizedBlockRoot)
-	//	//require.NoError(t, err)
-	//
-	//	cfg := &postBlockProcessConfig{
-	//		ctx:            ctx,
-	//		roblock:        roblock,
-	//		postState:      l.State,
-	//		isValidPayload: true,
-	//	}
-	//
-	//	s.saveLightClientUpdate(cfg)
-	//
-	//	// Check that the light client update is saved
-	//	period := uint64(l.AttestedState.Slot()) / (uint64(params.BeaconConfig().SlotsPerEpoch) * uint64(params.BeaconConfig().EpochsPerSyncCommitteePeriod))
-	//	u, err := s.cfg.BeaconDB.LightClientUpdate(ctx, period)
-	//	require.NoError(t, err)
-	//	require.NotNil(t, u)
-	//	attestedStateRoot, err := l.AttestedState.HashTreeRoot(ctx)
-	//	require.NoError(t, err)
-	//	require.Equal(t, attestedStateRoot, [32]byte(u.AttestedHeader().Beacon().StateRoot))
-	//	require.Equal(t, u.Version(), version.Electra)
-	//})
+}
+
+func TestSaveLightClientBootstrap(t *testing.T) {
+	//if !features.Get().EnableLightClient {
+	//	return
+	//}
+
+	s, tr := minimalTestService(t)
+	ctx := tr.ctx
+	params.SetupTestConfigCleanup(t)
+
+	t.Run("Altair", func(t *testing.T) {
+
+		l := util.NewTestLightClient(t).SetupTestAltair()
+
+		s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().AltairForkEpoch+1)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
+
+		currentBlockRoot, err := l.Block.Block().HashTreeRoot()
+		require.NoError(t, err)
+		roblock, err := consensusblocks.NewROBlockWithRoot(l.Block, currentBlockRoot)
+		require.NoError(t, err)
+
+		err = s.cfg.BeaconDB.SaveBlock(ctx, roblock)
+		require.NoError(t, err)
+		err = s.cfg.BeaconDB.SaveState(ctx, l.State, currentBlockRoot)
+		require.NoError(t, err)
+
+		cfg := &postBlockProcessConfig{
+			ctx:            ctx,
+			roblock:        roblock,
+			postState:      l.State,
+			isValidPayload: true,
+		}
+
+		s.saveLightClientBootstrap(cfg)
+
+		// Check that the light client bootstrap is saved
+		b, err := s.cfg.BeaconDB.LightClientBootstrap(ctx, currentBlockRoot[:])
+		require.NoError(t, err)
+		require.NotNil(t, b)
+
+		stateRoot, err := l.State.HashTreeRoot(ctx)
+		require.NoError(t, err)
+		require.Equal(t, stateRoot, [32]byte(b.Header().Beacon().StateRoot))
+		require.Equal(t, b.Version(), version.Altair)
+	})
+
+	t.Run("Capella", func(t *testing.T) {
+
+		l := util.NewTestLightClient(t).SetupTestCapella(false)
+
+		s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().CapellaForkEpoch+1)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
+
+		currentBlockRoot, err := l.Block.Block().HashTreeRoot()
+		require.NoError(t, err)
+		roblock, err := consensusblocks.NewROBlockWithRoot(l.Block, currentBlockRoot)
+		require.NoError(t, err)
+
+		err = s.cfg.BeaconDB.SaveBlock(ctx, roblock)
+		require.NoError(t, err)
+		err = s.cfg.BeaconDB.SaveState(ctx, l.State, currentBlockRoot)
+		require.NoError(t, err)
+
+		cfg := &postBlockProcessConfig{
+			ctx:            ctx,
+			roblock:        roblock,
+			postState:      l.State,
+			isValidPayload: true,
+		}
+
+		s.saveLightClientBootstrap(cfg)
+
+		// Check that the light client bootstrap is saved
+		b, err := s.cfg.BeaconDB.LightClientBootstrap(ctx, currentBlockRoot[:])
+		require.NoError(t, err)
+		require.NotNil(t, b)
+
+		stateRoot, err := l.State.HashTreeRoot(ctx)
+		require.NoError(t, err)
+		require.Equal(t, stateRoot, [32]byte(b.Header().Beacon().StateRoot))
+		require.Equal(t, b.Version(), version.Capella)
+	})
+
+	t.Run("Deneb", func(t *testing.T) {
+
+		l := util.NewTestLightClient(t).SetupTestDeneb(false)
+
+		s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().DenebForkEpoch+1)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
+
+		currentBlockRoot, err := l.Block.Block().HashTreeRoot()
+		require.NoError(t, err)
+		roblock, err := consensusblocks.NewROBlockWithRoot(l.Block, currentBlockRoot)
+		require.NoError(t, err)
+
+		err = s.cfg.BeaconDB.SaveBlock(ctx, roblock)
+		require.NoError(t, err)
+		err = s.cfg.BeaconDB.SaveState(ctx, l.State, currentBlockRoot)
+		require.NoError(t, err)
+
+		cfg := &postBlockProcessConfig{
+			ctx:            ctx,
+			roblock:        roblock,
+			postState:      l.State,
+			isValidPayload: true,
+		}
+
+		s.saveLightClientBootstrap(cfg)
+
+		// Check that the light client bootstrap is saved
+		b, err := s.cfg.BeaconDB.LightClientBootstrap(ctx, currentBlockRoot[:])
+		require.NoError(t, err)
+		require.NotNil(t, b)
+
+		stateRoot, err := l.State.HashTreeRoot(ctx)
+		require.NoError(t, err)
+		require.Equal(t, stateRoot, [32]byte(b.Header().Beacon().StateRoot))
+		require.Equal(t, b.Version(), version.Deneb)
+	})
+
 }
