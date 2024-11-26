@@ -64,8 +64,8 @@ func (s *Service) disconnectFromPeer(
 	log.
 		WithError(badPeerErr).
 		WithFields(logrus.Fields{
-			"multiaddr":            remotePeerMultiAddr,
-			"direction":            direction,
+			"multiaddr":            peerMultiaddrString(conn),
+			"direction":            conn.Stat().Direction.String(),
 			"remainingActivePeers": activePeerCount,
 		}).
 		Debug("Initiate peer disconnection")
