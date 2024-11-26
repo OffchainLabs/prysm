@@ -274,7 +274,7 @@ func (l *TestLightClient) SetupTestAltair() *TestLightClient {
 	err = finalizedState.SetSlot(1)
 	require.NoError(l.T, err)
 	finalizedStateRoot, err := finalizedState.HashTreeRoot(ctx)
-
+	require.NoError(l.T, err)
 	SignedFinalizedBlock, err := blocks.NewSignedBeaconBlock(NewBeaconBlockAltair())
 	require.NoError(l.T, err)
 	SignedFinalizedBlock.SetSlot(1)

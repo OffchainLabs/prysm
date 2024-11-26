@@ -196,7 +196,6 @@ func (s *Service) saveLightClientUpdate(cfg *postBlockProcessConfig) {
 		}
 
 	}
-
 }
 
 // saveLightClientBootstrap saves a light client bootstrap for this block

@@ -183,7 +183,6 @@ func (u *updateAltair) SetFinalityBranch(branch [][]byte) error {
 
 func (u *updateAltair) FinalityBranchElectra() (interfaces.LightClientFinalityBranchElectra, error) {
 	return interfaces.LightClientFinalityBranchElectra{}, consensustypes.ErrNotSupported("FinalityBranchElectra", version.Altair)
-
 }
 
 func (u *updateAltair) SyncAggregate() *pb.SyncAggregate {

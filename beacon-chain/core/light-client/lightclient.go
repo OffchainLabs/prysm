@@ -807,7 +807,6 @@ func CreateDefaultLightClientBootstrap(currentSlot primitives.Slot) (interfaces.
 			CurrentSyncCommitteeBranch: currentSyncCommitteeBranch,
 		}
 	} else {
-
 		m = &pb.LightClientBootstrapElectra{
 			Header: &pb.LightClientHeaderDeneb{
 				Beacon:          &pb.BeaconBlockHeader{},
@@ -817,8 +816,6 @@ func CreateDefaultLightClientBootstrap(currentSlot primitives.Slot) (interfaces.
 			CurrentSyncCommittee:       currentSyncCommittee,
 			CurrentSyncCommitteeBranch: currentSyncCommitteeBranch,
 		}
-
 	}
-
 	return light_client.NewWrappedBootstrap(m)
 }
