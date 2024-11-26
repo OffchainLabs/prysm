@@ -185,15 +185,12 @@ func (s *Service) AddConnectionHandler(reqFunc, goodByeFunc func(ctx context.Con
 func (s *Service) AddDisconnectionHandler(handler func(ctx context.Context, id peer.ID) error) {
 	s.host.Network().Notify(&network.NotifyBundle{
 		DisconnectedF: func(net network.Network, conn network.Conn) {
-			remotePeerMultiAddr := peerMultiaddrString(conn)
 			peerID := conn.RemotePeer()
-			direction := conn.Stat().Direction.String()
 
-			log := log.WithFields(logrus.Fields{
-				"multiAddr": remotePeerMultiAddr,
-				"direction": direction,
+			log.WithFields(logrus.Fields{
+				"multiAddr": peerMultiaddrString(conn),
+				"direction": conn.Stat().Direction.String(),
 			})
-
 			// Must be handled in a goroutine as this callback cannot be blocking.
 			go func() {
 				// Exit early if we are still connected to the peer.
