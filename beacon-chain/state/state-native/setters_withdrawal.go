@@ -64,10 +64,10 @@ func (b *BeaconState) AppendPendingPartialWithdrawal(ppw *eth.PendingPartialWith
 	return nil
 }
 
-// DequeuePartialWithdrawals removes the partial withdrawals from the beginning of the partial withdrawals list.
-func (b *BeaconState) DequeuePartialWithdrawals(n uint64) error {
+// DequeuePendingPartialWithdrawals removes the partial withdrawals from the beginning of the partial withdrawals list.
+func (b *BeaconState) DequeuePendingPartialWithdrawals(n uint64) error {
 	if b.version < version.Electra {
-		return errNotSupported("DequeuePartialWithdrawals", b.version)
+		return errNotSupported("DequeuePendingPartialWithdrawals", b.version)
 	}
 
 	if n > uint64(len(b.pendingPartialWithdrawals)) {

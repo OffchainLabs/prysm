@@ -57,11 +57,10 @@ func (s *Service) validateAggregateAndProof(ctx context.Context, pid peer.ID, ms
 	}
 
 	aggregate := m.AggregateAttestationAndProof().AggregateVal()
-	data := aggregate.GetData()
-
 	if err := helpers.ValidateNilAttestation(aggregate); err != nil {
 		return pubsub.ValidationReject, err
 	}
+	data := aggregate.GetData()
 	// Do not process slot 0 aggregates.
 	if data.Slot == 0 {
 		return pubsub.ValidationIgnore, nil
@@ -118,6 +117,9 @@ func (s *Service) validateAggregateAndProof(ctx context.Context, pid peer.ID, ms
 	if seen {
 		return pubsub.ValidationIgnore, nil
 	}
+
+	// Verify the block being voted on is in the beacon chain.
+	// If not, store this attestation in the map of pending attestations.
 	if !s.validateBlockInAttestation(ctx, m) {
 		return pubsub.ValidationIgnore, nil
 	}
@@ -223,6 +225,8 @@ func (s *Service) validateAggregatedAtt(ctx context.Context, signed ethpb.Signed
 	return s.validateWithBatchVerifier(ctx, "aggregate", set)
 }
 
+// validateBlocksInAttestation checks if the block being voted on is in the beaconDB.
+// If not, it store this attestation in the map of pending attestations.
 func (s *Service) validateBlockInAttestation(ctx context.Context, satt ethpb.SignedAggregateAttAndProof) bool {
 	// Verify the block being voted and the processed state is in beaconDB. The block should have passed validation if it's in the beaconDB.
 	blockRoot := bytesutil.ToBytes32(satt.AggregateAttestationAndProof().AggregateVal().GetData().BeaconBlockRoot)

@@ -23,10 +23,10 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
-// used to represent errors for inconsistent slot ranges.
+// Used to represent errors for inconsistent slot ranges.
 var errInvalidSlotRange = errors.New("invalid end slot and start slot provided")
 
-// Block retrieval by root.
+// Block retrieval by root. Return nil if block is not found.
 func (s *Store) Block(ctx context.Context, blockRoot [32]byte) (interfaces.ReadOnlySignedBeaconBlock, error) {
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.Block")
 	defer span.End()

@@ -912,7 +912,7 @@ func TestProposer_ProposeBlock_OK(t *testing.T) {
 				return &ethpb.GenericSignedBeaconBlock{Block: blk}
 			},
 			useBuilder: true,
-			err:        "unblind sidecars failed: commitment value doesn't match block",
+			err:        "unblind blobs sidecars: commitment value doesn't match block",
 		},
 		{
 			name: "electra block no blob",

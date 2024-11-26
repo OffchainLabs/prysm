@@ -141,7 +141,7 @@ func WithdrawalSliceRoot(withdrawals []*enginev1.Withdrawal, limit uint64) ([32]
 	return MixInLength(bytesRoot, bytesRootBufRoot), nil
 }
 
-// DepositRequestsSliceRoot computes the HTR of a slice of deposit receipts.
+// DepositRequestsSliceRoot computes the HTR of a slice of deposit requests.
 // The limit parameter is used as input to the bitwise merkleization algorithm.
 func DepositRequestsSliceRoot(depositRequests []*enginev1.DepositRequest, limit uint64) ([32]byte, error) {
 	return SliceRoot(depositRequests, limit)

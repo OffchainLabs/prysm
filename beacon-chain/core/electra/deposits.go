@@ -560,7 +560,7 @@ func ProcessDepositRequests(ctx context.Context, beaconState state.BeaconState, 
 	return beaconState, nil
 }
 
-// processDepositRequest processes the specific deposit receipt
+// processDepositRequest processes the specific deposit request
 // def process_deposit_request(state: BeaconState, deposit_request: DepositRequest) -> None:
 //
 //	# Set deposit request start index
@@ -590,8 +590,8 @@ func processDepositRequest(beaconState state.BeaconState, request *enginev1.Depo
 	}
 	if err := beaconState.AppendPendingDeposit(&ethpb.PendingDeposit{
 		PublicKey:             bytesutil.SafeCopyBytes(request.Pubkey),
-		Amount:                request.Amount,
 		WithdrawalCredentials: bytesutil.SafeCopyBytes(request.WithdrawalCredentials),
+		Amount:                request.Amount,
 		Signature:             bytesutil.SafeCopyBytes(request.Signature),
 		Slot:                  beaconState.Slot(),
 	}); err != nil {

@@ -8,7 +8,7 @@ import (
 
 // SaveForkchoiceAttestation saves an forkchoice attestation in cache.
 func (c *AttCaches) SaveForkchoiceAttestation(att ethpb.Att) error {
-	if att == nil {
+	if att == nil || att.IsNil() {
 		return nil
 	}
 
@@ -50,7 +50,7 @@ func (c *AttCaches) ForkchoiceAttestations() []ethpb.Att {
 
 // DeleteForkchoiceAttestation deletes a forkchoice attestation in cache.
 func (c *AttCaches) DeleteForkchoiceAttestation(att ethpb.Att) error {
-	if att == nil {
+	if att == nil || att.IsNil() {
 		return nil
 	}
 

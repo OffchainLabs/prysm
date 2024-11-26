@@ -15,6 +15,8 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	gcache "github.com/patrickmn/go-cache"
 	"github.com/pkg/errors"
+	"github.com/trailofbits/go-mutexasserts"
+
 	"github.com/prysmaticlabs/prysm/v5/async"
 	"github.com/prysmaticlabs/prysm/v5/async/abool"
 	"github.com/prysmaticlabs/prysm/v5/async/event"
@@ -44,22 +46,24 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/runtime"
 	prysmTime "github.com/prysmaticlabs/prysm/v5/time"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
-	"github.com/trailofbits/go-mutexasserts"
 )
 
 var _ runtime.Service = (*Service)(nil)
 
-const rangeLimit uint64 = 1024
-const seenBlockSize = 1000
-const seenBlobSize = seenBlockSize * 4 // Each block can have max 4 blobs. Worst case 164kB for cache.
-const seenUnaggregatedAttSize = 20000
-const seenAggregatedAttSize = 16384
-const seenSyncMsgSize = 1000         // Maximum of 512 sync committee members, 1000 is a safe amount.
-const seenSyncContributionSize = 512 // Maximum of SYNC_COMMITTEE_SIZE as specified by the spec.
-const seenExitSize = 100
-const seenProposerSlashingSize = 100
-const badBlockSize = 1000
-const syncMetricsInterval = 10 * time.Second
+const (
+	rangeLimit               uint64 = 1024
+	seenBlockSize                   = 1000
+	seenBlobSize                    = seenBlockSize * 6   // Each block can have max 6 blobs.
+	seenDataColumnSize              = seenBlockSize * 128 // Each block can have max 128 data columns.
+	seenUnaggregatedAttSize         = 20000
+	seenAggregatedAttSize           = 16384
+	seenSyncMsgSize                 = 1000 // Maximum of 512 sync committee members, 1000 is a safe amount.
+	seenSyncContributionSize        = 512  // Maximum of SYNC_COMMITTEE_SIZE as specified by the spec.
+	seenExitSize                    = 100
+	seenProposerSlashingSize        = 100
+	badBlockSize                    = 1000
+	syncMetricsInterval             = 10 * time.Second
+)
 
 var (
 	// Seconds in one epoch.
@@ -162,18 +166,18 @@ type Service struct {
 
 // NewService initializes new regular sync service.
 func NewService(ctx context.Context, opts ...Option) *Service {
-	c := gcache.New(pendingBlockExpTime /* exp time */, 0 /* disable janitor */)
 	ctx, cancel := context.WithCancel(ctx)
 	r := &Service{
 		ctx:                  ctx,
 		cancel:               cancel,
 		chainStarted:         abool.New(),
 		cfg:                  &config{clock: startup.NewClock(time.Unix(0, 0), [32]byte{})},
-		slotToPendingBlocks:  c,
+		slotToPendingBlocks:  gcache.New(pendingBlockExpTime /* exp time */, 0 /* disable janitor */),
 		seenPendingBlocks:    make(map[[32]byte]bool),
 		blkRootToPendingAtts: make(map[[32]byte][]ethpb.SignedAggregateAttAndProof),
 		signatureChan:        make(chan *signatureVerifier, verifierLimit),
 	}
+
 	for _, opt := range opts {
 		if err := opt(r); err != nil {
 			return nil
@@ -224,7 +228,7 @@ func (s *Service) Start() {
 	s.newBlobVerifier = newBlobVerifierFromInitializer(v)
 
 	go s.verifierRoutine()
-	go s.registerHandlers()
+	go s.startTasksPostInitialSync()
 
 	s.cfg.p2p.AddConnectionHandler(s.reValidatePeer, s.sendGoodbye)
 	s.cfg.p2p.AddDisconnectionHandler(func(_ context.Context, _ peer.ID) error {
@@ -315,23 +319,31 @@ func (s *Service) waitForChainStart() {
 	s.markForChainStart()
 }
 
-func (s *Service) registerHandlers() {
+func (s *Service) startTasksPostInitialSync() {
+	// Wait for the chain to start.
 	s.waitForChainStart()
+
 	select {
 	case <-s.initialSyncComplete:
-		// Register respective pubsub handlers at state synced event.
-		digest, err := s.currentForkDigest()
+		// Compute the current epoch.
+		currentSlot := slots.CurrentSlot(uint64(s.cfg.clock.GenesisTime().Unix()))
+		currentEpoch := slots.ToEpoch(currentSlot)
+
+		// Compute the current fork forkDigest.
+		forkDigest, err := s.currentForkDigest()
 		if err != nil {
 			log.WithError(err).Error("Could not retrieve current fork digest")
 			return
 		}
-		currentEpoch := slots.ToEpoch(slots.CurrentSlot(uint64(s.cfg.clock.GenesisTime().Unix())))
-		s.registerSubscribers(currentEpoch, digest)
+
+		// Register respective pubsub handlers at state synced event.
+		s.registerSubscribers(currentEpoch, forkDigest)
+
+		// Start the fork watcher.
 		go s.forkWatcher()
-		return
+
 	case <-s.ctx.Done():
 		log.Debug("Context closed, exiting goroutine")
-		return
 	}
 }
 

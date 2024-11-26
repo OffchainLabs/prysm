@@ -31,6 +31,8 @@ const (
 	LightClientFinalityUpdate
 	// LightClientOptimisticUpdate event
 	LightClientOptimisticUpdate
+	// PayloadAttributes events are fired upon a missed slot or new head.
+	PayloadAttributes
 )
 
 // BlockProcessedData is the data sent with BlockProcessed events.

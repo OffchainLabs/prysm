@@ -253,7 +253,8 @@ func Test_IsExecutionBlockCapella(t *testing.T) {
 	require.NoError(t, err)
 	got, err := blocks.IsExecutionBlock(wrappedBlock.Body())
 	require.NoError(t, err)
-	require.Equal(t, false, got)
+	// #14614
+	require.Equal(t, true, got)
 }
 
 func Test_IsExecutionEnabled(t *testing.T) {

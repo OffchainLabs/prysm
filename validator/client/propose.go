@@ -195,7 +195,7 @@ func logProposedBlock(log *logrus.Entry, blk interfaces.SignedBeaconBlock, blkRo
 		log = log.WithFields(logrus.Fields{
 			"payloadHash": fmt.Sprintf("%#x", bytesutil.Trunc(p.BlockHash())),
 			"parentHash":  fmt.Sprintf("%#x", bytesutil.Trunc(p.ParentHash())),
-			"blockNumber": p.BlockNumber,
+			"blockNumber": p.BlockNumber(),
 		})
 		if !blk.IsBlinded() {
 			txs, err := p.Transactions()

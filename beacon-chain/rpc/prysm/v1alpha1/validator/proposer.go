@@ -339,7 +339,7 @@ func (vs *Server) handleBlindedBlock(ctx context.Context, block interfaces.Signe
 
 	sidecars, err := unblindBlobsSidecars(copiedBlock, bundle)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "unblind sidecars failed")
+		return nil, nil, errors.Wrap(err, "unblind blobs sidecars: commitment value doesn't match block")
 	}
 
 	return copiedBlock, sidecars, nil

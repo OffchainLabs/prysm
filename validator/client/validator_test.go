@@ -2899,4 +2899,9 @@ func TestUpdateValidatorStatusCache(t *testing.T) {
 		require.Equal(t, mockResponse.Statuses[i], status.status)
 		require.Equal(t, mockResponse.Indices[i], status.index)
 	}
+
+	err = v.updateValidatorStatusCache(ctx, nil)
+	assert.NoError(t, err)
+	// make sure the value is 0
+	assert.Equal(t, 0, len(v.pubkeyToStatus))
 }

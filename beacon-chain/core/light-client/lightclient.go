@@ -383,7 +383,6 @@ func BlockToLightClientHeader(
 	var m proto.Message
 	currentEpoch := slots.ToEpoch(currentSlot)
 	blockEpoch := slots.ToEpoch(block.Block().Slot())
-
 	parentRoot := block.Block().ParentRoot()
 	stateRoot := block.Block().StateRoot()
 	bodyRoot, err := block.Block().Body().HashTreeRoot()

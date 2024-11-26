@@ -1,6 +1,8 @@
 package state_native
 
 import (
+	"errors"
+
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native/types"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stateutil"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
@@ -14,6 +16,9 @@ import (
 func (b *BeaconState) AppendPendingConsolidation(val *ethpb.PendingConsolidation) error {
 	if b.version < version.Electra {
 		return errNotSupported("AppendPendingConsolidation", b.version)
+	}
+	if val == nil {
+		return errors.New("cannot append nil pending consolidation")
 	}
 	b.lock.Lock()
 	defer b.lock.Unlock()

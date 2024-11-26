@@ -7,8 +7,6 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
-	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	coreTime "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
@@ -77,6 +75,8 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 
 	err := s.cfg.ForkChoiceStore.InsertNode(ctx, cfg.postState, cfg.roblock)
 	if err != nil {
+		// Do not use parent context in the event it deadlined
+		ctx = trace.NewContext(context.Background(), span)
 		s.rollbackBlock(ctx, cfg.roblock.Root())
 		return errors.Wrapf(err, "could not insert block %d to fork choice store", cfg.roblock.Block().Slot())
 	}
@@ -619,9 +619,6 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 	if !s.inRegularSync() {
 		return
 	}
-	s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
-		Type: statefeed.MissedSlot,
-	})
 	s.headLock.RLock()
 	headRoot := s.headRoot()
 	headState := s.headState(ctx)
@@ -649,6 +646,13 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 	attribute := s.getPayloadAttribute(ctx, headState, s.CurrentSlot()+1, headRoot[:])
 	// return early if we are not proposing next slot
 	if attribute.IsEmpty() {
+		fcuArgs := &fcuConfig{
+			headState:  headState,
+			headRoot:   headRoot,
+			headBlock:  nil,
+			attributes: attribute,
+		}
+		go firePayloadAttributesEvent(ctx, s.cfg.StateNotifier.StateFeed(), fcuArgs)
 		return
 	}
 

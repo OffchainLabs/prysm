@@ -12,12 +12,19 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Add Bellatrix tests for light client functions.
 - Add Discovery Rebooter Feature.
 - Added GetBlockAttestationsV2 endpoint.
-- Light client support: Consensus types for Electra
+- Light client support: Consensus types for Electra.
 - Added SubmitPoolAttesterSlashingV2 endpoint.
 - Added SubmitAggregateAndProofsRequestV2 endpoint.
 - Updated the `beacon-chain/monitor` package to Electra. [PR](https://github.com/prysmaticlabs/prysm/pull/14562)
 - Added ListAttestationsV2 endpoint.
 - Add ability to rollback node's internal state during processing.
+- Change how unsafe protobuf state is created to prevent unnecessary copies.
+- Added benchmarks for process slots for Capella, Deneb, Electra
+- Add helper to cast bytes to string without allocating memory.
+- Added GetAggregatedAttestationV2 endpoint.
+- Added SubmitAttestationsV2 endpoint.
+- Validator REST mode Electra block support
+- Added validator index label to `validator_statuses` metric
 
 ### Changed
 
@@ -32,6 +39,23 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Use read only validator for core processing to avoid unnecessary copying.
 - Use ROBlock across block processing pipeline.
 - Added missing Eth-Consensus-Version headers to GetBlockAttestationsV2 and GetAttesterSlashingsV2 endpoints.
+- When instantiating new validators, explicit set `Slashed` to false and move `EffectiveBalance` to match struct definition.
+- Updated pgo profile for beacon chain with holesky data. This improves the profile guided
+  optimizations in the go compiler.
+- Use read only state when computing the active validator list.
+- Simplified `ExitedValidatorIndices`.
+- Simplified `EjectedValidatorIndices`.
+- `engine_newPayloadV4`,`engine_getPayloadV4` are changes due to new execution request serialization decisions, [PR](https://github.com/prysmaticlabs/prysm/pull/14580)
+- Fixed various small things in state-native code.
+- Use ROBlock earlier in block syncing pipeline. 
+- Changed the signature of `ProcessPayload`.
+- Only Build the Protobuf state once during serialization.
+- Capella blocks are execution.
+- Fixed panic when http request to subscribe to event stream fails.
+- Return early for blob reconstructor during capella fork
+- Updated block endpoint from V1 to V2
+- Rename instances of "deposit receipts" to "deposit requests".
+- non-blocking payload attribute event handling in beacon api [pr](https://github.com/prysmaticlabs/prysm/pull/14644)
 
 ### Deprecated
 
@@ -40,6 +64,8 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 ### Removed
 
 - Removed finalized validator index cache, no longer needed.
+- Removed validator queue position log on key reload and wait for activation.
+- Removed outdated spectest exclusions for EIP-6110.
 
 ### Fixed
 
@@ -49,6 +75,16 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Certain deb files were returning a 404 which made building new docker images without an existing
   cache impossible. This has been fixed with updates to rules_oci and bazel-lib.
 - Fixed an issue where the length check between block body KZG commitments and the existing cache from the database was incompatible.
+- Fix `--backfill-oldest-slot` handling - this flag was totally broken, the code would always backfill to the default slot [pr](https://github.com/prysmaticlabs/prysm/pull/14584)
+- Fix keymanager API should return corrected error format for malformed tokens
+- Fix keymanager API so that get keys returns an empty response instead of a 500 error when using an unsupported keystore.
+- Small log imporvement, removing some redundant or duplicate logs
+- EIP7521 - Fixes withdrawal bug by accounting for pending partial withdrawals and deducting already withdrawn amounts from the sweep balance. [PR](https://github.com/prysmaticlabs/prysm/pull/14578)
+- unskip electra merkle spec test
+- Fix panic in validator REST mode when checking status after removing all keys
+- Fix panic on attestation interface since we call data before validation
+- corrects nil check on some interface attestation types
+
 
 ### Security
 
@@ -162,6 +198,7 @@ Updating to this release is recommended at your convenience.
 - Light client support: fix light client attested header execution fields' wrong version bug.
 - Testing: added custom matcher for better push settings testing.
 - Registered `GetDepositSnapshot` Beacon API endpoint.
+- Fix rolling back of a block due to a context deadline.
 
 ### Security
 

@@ -54,7 +54,7 @@ jobs:
       - name: Golangci-lint
         uses: golangci/golangci-lint-action@v5
         with:
-          version: v1.55.2
+          version: v1.56.1
           args: --config=.golangci.yml --out-${NO_FUTURE}format colored-line-number
 
   build:

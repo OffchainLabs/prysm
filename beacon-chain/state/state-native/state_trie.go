@@ -96,10 +96,10 @@ var denebFields = append(
 
 var electraFields = append(
 	altairFields,
+	types.LatestExecutionPayloadHeaderDeneb,
 	types.NextWithdrawalIndex,
 	types.NextWithdrawalValidatorIndex,
 	types.HistoricalSummaries,
-	types.LatestExecutionPayloadHeaderDeneb,
 	types.DepositRequestsStartIndex,
 	types.DepositBalanceToConsume,
 	types.ExitBalanceToConsume,

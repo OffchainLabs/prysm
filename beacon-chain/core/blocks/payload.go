@@ -61,6 +61,9 @@ func IsExecutionBlock(body interfaces.ReadOnlyBeaconBlockBody) (bool, error) {
 	if body == nil {
 		return false, errors.New("nil block body")
 	}
+	if body.Version() >= version.Capella {
+		return true, nil
+	}
 	payload, err := body.Execution()
 	switch {
 	case errors.Is(err, consensus_types.ErrUnsupportedField):

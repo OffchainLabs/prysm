@@ -183,6 +183,7 @@ func (u *updateAltair) SetFinalityBranch(branch [][]byte) error {
 
 func (u *updateAltair) FinalityBranchElectra() (interfaces.LightClientFinalityBranchElectra, error) {
 	return interfaces.LightClientFinalityBranchElectra{}, consensustypes.ErrNotSupported("FinalityBranchElectra", version.Altair)
+
 }
 
 func (u *updateAltair) SyncAggregate() *pb.SyncAggregate {
@@ -647,8 +648,14 @@ func (u *updateElectra) NextSyncCommitteeBranch() (interfaces.LightClientSyncCom
 	return [5][32]byte{}, consensustypes.ErrNotSupported("NextSyncCommitteeBranch", version.Electra)
 }
 
-func (u *updateElectra) SetNextSyncCommitteeBranch([][]byte) error {
-	return consensustypes.ErrNotSupported("SetNextSyncCommitteeBranch", version.Electra)
+func (u *updateElectra) SetNextSyncCommitteeBranch(branch [][]byte) error {
+	b, err := createBranch[interfaces.LightClientSyncCommitteeBranchElectra]("sync committee", branch, fieldparams.SyncCommitteeBranchDepthElectra)
+	if err != nil {
+		return err
+	}
+	u.nextSyncCommitteeBranch = b
+	u.p.NextSyncCommitteeBranch = branch
+	return nil
 }
 
 func (u *updateElectra) NextSyncCommitteeBranchElectra() (interfaces.LightClientSyncCommitteeBranchElectra, error) {

@@ -6,8 +6,11 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/async/event"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
+	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
@@ -69,6 +72,7 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*
 	if arg.attributes == nil {
 		arg.attributes = payloadattribute.EmptyWithVersion(headBlk.Version())
 	}
+	go firePayloadAttributesEvent(ctx, s.cfg.StateNotifier.StateFeed(), arg)
 	payloadID, lastValidHash, err := s.cfg.ExecutionEngineCaller.ForkchoiceUpdated(ctx, fcs, arg.attributes)
 	if err != nil {
 		switch {
@@ -165,6 +169,38 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*
 		}).Error("Received nil payload ID on VALID engine response")
 	}
 	return payloadID, nil
+}
+
+func firePayloadAttributesEvent(ctx context.Context, f event.SubscriberSender, cfg *fcuConfig) {
+	pidx, err := helpers.BeaconProposerIndex(ctx, cfg.headState)
+	if err != nil {
+		log.WithError(err).
+			WithField("head_root", cfg.headRoot[:]).
+			Error("Could not get proposer index for PayloadAttributes event")
+		return
+	}
+	evd := payloadattribute.EventData{
+		ProposerIndex:   pidx,
+		ProposalSlot:    cfg.headState.Slot(),
+		ParentBlockRoot: cfg.headRoot[:],
+		Attributer:      cfg.attributes,
+		HeadRoot:        cfg.headRoot,
+		HeadState:       cfg.headState,
+		HeadBlock:       cfg.headBlock,
+	}
+	if cfg.headBlock != nil && !cfg.headBlock.IsNil() {
+		headPayload, err := cfg.headBlock.Block().Body().Execution()
+		if err != nil {
+			log.WithError(err).Error("Could not get execution payload for head block")
+			return
+		}
+		evd.ParentBlockHash = headPayload.BlockHash()
+		evd.ParentBlockNumber = headPayload.BlockNumber()
+	}
+	f.Send(&feed.Event{
+		Type: statefeed.PayloadAttributes,
+		Data: evd,
+	})
 }
 
 // getPayloadHash returns the payload hash given the block root.
