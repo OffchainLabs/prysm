@@ -74,6 +74,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Removed finalized validator index cache, no longer needed.
 - Removed validator queue position log on key reload and wait for activation.
 - Removed outdated spectest exclusions for EIP-6110.
+- Removed kzg proof check from blob reconstructor.
 
 ### Fixed
 
