@@ -3,22 +3,12 @@ package lightclient
 import (
 	"context"
 
-
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/pkg/errors"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-
-	lightclient "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/light-client"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	lightclient "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/light-client"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
 func createLightClientBootstrap(
