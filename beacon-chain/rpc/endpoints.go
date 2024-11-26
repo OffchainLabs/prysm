@@ -34,18 +34,39 @@ type endpoint struct {
 	methods    []string
 }
 
+// responseWriter is the wrapper to http Response writer to capture status code.
+type responseWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (w *responseWriter) WriteHeader(statusCode int) {
+	w.statusCode = statusCode
+	w.ResponseWriter.WriteHeader(statusCode)
+}
+
 func (e *endpoint) handlerWithMiddleware() http.HandlerFunc {
 	handler := http.Handler(e.handler)
 	for _, m := range e.middleware {
 		handler = m(handler)
 	}
-	return promhttp.InstrumentHandlerDuration(
+
+	handler = promhttp.InstrumentHandlerDuration(
 		httpRequestLatency.MustCurryWith(prometheus.Labels{"endpoint": e.name}),
 		promhttp.InstrumentHandlerCounter(
 			httpRequestCount.MustCurryWith(prometheus.Labels{"endpoint": e.name}),
 			handler,
 		),
 	)
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		rw := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+		handler.ServeHTTP(rw, r)
+
+		if rw.statusCode >= 400 {
+			errorCount.WithLabelValues(r.URL.Path, r.Method, http.StatusText(rw.statusCode)).Inc()
+		}
+	}
 }
 
 func (s *Service) endpoints(
