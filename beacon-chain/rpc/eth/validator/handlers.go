@@ -200,9 +200,8 @@ func matchingAtts(atts []ethpbalpha.Att, slot primitives.Slot, attDataRoot []byt
 				continue
 			}
 		} else {
-			// Append if pre electra and att.Version < version.Electra
-			if att.Version() < version.Electra {
-				result = append(result, att)
+			// If postElectra is false and att.Version >= version.Electra, ignore the attestation.
+			if att.Version() >= version.Electra {
 				continue
 			}
 		}
