@@ -194,7 +194,6 @@ func (s *Service) saveLightClientUpdate(cfg *postBlockProcessConfig) {
 				log.WithError(err).Error("Could not save light client update")
 			}
 		}
-
 	}
 }
 
