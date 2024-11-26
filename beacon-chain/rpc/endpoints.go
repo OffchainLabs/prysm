@@ -34,12 +34,14 @@ type endpoint struct {
 	methods    []string
 }
 
-// responseWriter is the wrapper to http Response writer to capture status code.
+// responseWriter is the wrapper to http Response writer.
 type responseWriter struct {
 	http.ResponseWriter
 	statusCode int
 }
 
+// WriteHeader wraps the WriteHeader method of the underlying http.ResponseWriter to capture the status code.
+// Refer for WriteHeader doc: https://pkg.go.dev/net/http@go1.23.3#ResponseWriter.
 func (w *responseWriter) WriteHeader(statusCode int) {
 	w.statusCode = statusCode
 	w.ResponseWriter.WriteHeader(statusCode)
