@@ -61,6 +61,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Updated light client protobufs. [PR](https://github.com/prysmaticlabs/prysm/pull/14650)
 - Added `Eth-Consensus-Version` header to `ListAttestationsV2` and `GetAggregateAttestationV2` endpoints.
 - Updated light client consensus types. [PR](https://github.com/prysmaticlabs/prysm/pull/14652)
+- Modified `ListAttestationsV2`, `GetAttesterSlashingsV2` and `GetAggregateAttestationV2` endpoints to use slot to determine fork version.
 
 ### Deprecated
 
