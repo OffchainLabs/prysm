@@ -43,12 +43,6 @@ func (s *Service) disconnectFromPeer(
 	// Get the remote peer ID.
 	remotePeerID := conn.RemotePeer()
 
-	// Get the direction of the connection.
-	direction := conn.Stat().Direction.String()
-
-	// Get the remote peer multiaddr.
-	remotePeerMultiAddr := peerMultiaddrString(conn)
-
 	// Set the peer to disconnecting state.
 	s.peers.SetConnectionState(remotePeerID, peers.Disconnecting)
 
@@ -59,14 +53,12 @@ func (s *Service) disconnectFromPeer(
 		}
 	}
 
-	// Get the remaining active peers.
-	activePeerCount := len(s.peers.Active())
 	log.
 		WithError(badPeerErr).
 		WithFields(logrus.Fields{
 			"multiaddr":            peerMultiaddrString(conn),
 			"direction":            conn.Stat().Direction.String(),
-			"remainingActivePeers": activePeerCount,
+			"remainingActivePeers": len(s.peers.Active()),
 		}).
 		Debug("Initiate peer disconnection")
 
