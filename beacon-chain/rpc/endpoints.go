@@ -64,7 +64,7 @@ func (e *endpoint) handlerWithMiddleware() http.HandlerFunc {
 		handler.ServeHTTP(rw, r)
 
 		if rw.statusCode >= 400 {
-			errorCount.WithLabelValues(r.URL.Path, r.Method, http.StatusText(rw.statusCode)).Inc()
+			httpErrorCount.WithLabelValues(r.URL.Path, http.StatusText(rw.statusCode), r.Method).Inc()
 		}
 	}
 }

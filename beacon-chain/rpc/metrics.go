@@ -21,11 +21,11 @@ var (
 		},
 		[]string{"endpoint", "code", "method"},
 	)
-	errorCount = promauto.NewCounterVec(
+	httpErrorCount = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "http_error_count",
-			Help: "The total number of HTTP errors for requests to beacon node",
+			Help: "Total HTTP errors for beacon node requests",
 		},
-		[]string{"endpoint", "method", "status"},
+		[]string{"endpoint", "code", "method"},
 	)
 )
