@@ -35,7 +35,7 @@ func (s *Service) connectToPeer(conn network.Conn) {
 	}).Debug("Initiate peer connection")
 }
 
-func (s *Service) disconnectFromPeer(
+func (s *Service) disconnectFromPeerOnError(
 	conn network.Conn,
 	goodByeFunc func(ctx context.Context, id peer.ID) error,
 	badPeerErr error,
@@ -120,7 +120,7 @@ func (s *Service) AddConnectionHandler(reqFunc, goodByeFunc func(ctx context.Con
 
 				// Defensive check in the event we still get a bad peer.
 				if err := s.peers.IsBad(remotePeer); err != nil {
-					s.disconnectFromPeer(conn, goodByeFunc, err)
+					s.disconnectFromPeerOnError(conn, goodByeFunc, err)
 					return
 				}
 
@@ -141,25 +141,25 @@ func (s *Service) AddConnectionHandler(reqFunc, goodByeFunc func(ctx context.Con
 					// If peer hasn't sent a status request, we disconnect with them
 					if _, err := s.peers.ChainState(remotePeer); errors.Is(err, peerdata.ErrPeerUnknown) || errors.Is(err, peerdata.ErrNoPeerStatus) {
 						statusMessageMissing.Inc()
-						s.disconnectFromPeer(conn, goodByeFunc, errors.Wrap(err, "chain state"))
+						s.disconnectFromPeerOnError(conn, goodByeFunc, errors.Wrap(err, "chain state"))
 						return
 					}
 
 					if peerExists {
 						updated, err := s.peers.ChainStateLastUpdated(remotePeer)
 						if err != nil {
-							s.disconnectFromPeer(conn, goodByeFunc, errors.Wrap(err, "chain state last updated"))
+							s.disconnectFromPeerOnError(conn, goodByeFunc, errors.Wrap(err, "chain state last updated"))
 							return
 						}
 
 						// Exit if we don't receive any current status messages from peer.
 						if updated.IsZero() {
-							s.disconnectFromPeer(conn, goodByeFunc, errors.New("is zero"))
+							s.disconnectFromPeerOnError(conn, goodByeFunc, errors.New("is zero"))
 							return
 						}
 
 						if !updated.After(currentTime) {
-							s.disconnectFromPeer(conn, goodByeFunc, errors.New("did not update"))
+							s.disconnectFromPeerOnError(conn, goodByeFunc, errors.New("did not update"))
 							return
 						}
 					}
@@ -170,7 +170,7 @@ func (s *Service) AddConnectionHandler(reqFunc, goodByeFunc func(ctx context.Con
 
 				s.peers.SetConnectionState(conn.RemotePeer(), peers.Connecting)
 				if err := reqFunc(context.TODO(), conn.RemotePeer()); err != nil && !errors.Is(err, io.EOF) {
-					s.disconnectFromPeer(conn, goodByeFunc, err)
+					s.disconnectFromPeerOnError(conn, goodByeFunc, err)
 					return
 				}
 
