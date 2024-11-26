@@ -262,7 +262,7 @@ func (l *TestLightClient) SetupTestCapellaFinalizedBlockAltair(blinded bool) *Te
 func (l *TestLightClient) SetupTestAltair() *TestLightClient {
 	ctx := context.Background()
 
-	slot := primitives.Slot(params.BeaconConfig().AltairForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
+	slot := primitives.Slot(uint64(params.BeaconConfig().AltairForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch)).Add(1)
 
 	attestedState, err := NewBeaconStateAltair()
 	require.NoError(l.T, err)

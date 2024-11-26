@@ -2377,9 +2377,10 @@ func TestSaveLightClientUpdate(t *testing.T) {
 		//if !features.Get().EnableLightClient {
 		//	return
 		//}
-		fmt.Println(s.genesisTime)
 
 		l := util.NewTestLightClient(t).SetupTestAltair()
+
+		s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().AltairForkEpoch+1)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
 
 		err := s.cfg.BeaconDB.SaveBlock(ctx, l.AttestedBlock)
 		require.NoError(t, err)
@@ -2422,6 +2423,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 		attestedStateRoot, err := l.AttestedState.HashTreeRoot(ctx)
 		require.NoError(t, err)
 		require.Equal(t, attestedStateRoot, [32]byte(u.AttestedHeader().Beacon().StateRoot))
+		require.Equal(t, u.Version(), version.Altair)
 	})
 
 	t.Run("Capella", func(t *testing.T) {
@@ -2431,6 +2433,8 @@ func TestSaveLightClientUpdate(t *testing.T) {
 
 		l := util.NewTestLightClient(t).SetupTestCapella(false)
 
+		s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().CapellaForkEpoch+1)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
+
 		err := s.cfg.BeaconDB.SaveBlock(ctx, l.AttestedBlock)
 		require.NoError(t, err)
 		attestedBlockRoot, err := l.AttestedBlock.Block().HashTreeRoot()
@@ -2472,6 +2476,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 		attestedStateRoot, err := l.AttestedState.HashTreeRoot(ctx)
 		require.NoError(t, err)
 		require.Equal(t, attestedStateRoot, [32]byte(u.AttestedHeader().Beacon().StateRoot))
+		require.Equal(t, u.Version(), version.Capella)
 	})
 
 	t.Run("Deneb", func(t *testing.T) {
@@ -2481,6 +2486,8 @@ func TestSaveLightClientUpdate(t *testing.T) {
 
 		l := util.NewTestLightClient(t).SetupTestDeneb(false)
 
+		s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().DenebForkEpoch+1)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
+
 		err := s.cfg.BeaconDB.SaveBlock(ctx, l.AttestedBlock)
 		require.NoError(t, err)
 		attestedBlockRoot, err := l.AttestedBlock.Block().HashTreeRoot()
@@ -2522,6 +2529,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 		attestedStateRoot, err := l.AttestedState.HashTreeRoot(ctx)
 		require.NoError(t, err)
 		require.Equal(t, attestedStateRoot, [32]byte(u.AttestedHeader().Beacon().StateRoot))
+		require.Equal(t, u.Version(), version.Deneb)
 	})
 
 	//t.Run("Electra", func(t *testing.T) {
@@ -2530,6 +2538,8 @@ func TestSaveLightClientUpdate(t *testing.T) {
 	//	//}
 	//
 	//	l := util.NewTestLightClient(t).SetupTestElectra(false)
+	//
+	//	s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().ElectraForkEpoch+1)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
 	//
 	//	err := s.cfg.BeaconDB.SaveBlock(ctx, l.AttestedBlock)
 	//	require.NoError(t, err)
@@ -2572,5 +2582,6 @@ func TestSaveLightClientUpdate(t *testing.T) {
 	//	attestedStateRoot, err := l.AttestedState.HashTreeRoot(ctx)
 	//	require.NoError(t, err)
 	//	require.Equal(t, attestedStateRoot, [32]byte(u.AttestedHeader().Beacon().StateRoot))
+	//	require.Equal(t, u.Version(), version.Electra)
 	//})
 }
