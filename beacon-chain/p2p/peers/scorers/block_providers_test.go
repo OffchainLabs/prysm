@@ -119,7 +119,7 @@ func TestScorers_BlockProvider_Score(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.name, func(*testing.T) {
 			peerStatuses := peers.NewStatus(ctx, &peers.StatusConfig{
 				PeerLimit: 30,
 				ScorerParams: &scorers.Config{
@@ -224,7 +224,7 @@ func TestScorers_BlockProvider_Sorted(t *testing.T) {
 	}{
 		{
 			name:   "no peers",
-			update: func(s *scorers.BlockProviderScorer) {},
+			update: func(*scorers.BlockProviderScorer) {},
 			have:   []peer.ID{},
 			want:   []peer.ID{},
 		},
@@ -451,7 +451,7 @@ func TestScorers_BlockProvider_FormatScorePretty(t *testing.T) {
 		})
 	}
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.name, func(*testing.T) {
 			peerStatuses := peerStatusGen()
 			scorer := peerStatuses.Scorers().BlockProviderScorer()
 			if tt.update != nil {

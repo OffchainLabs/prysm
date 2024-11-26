@@ -21,7 +21,7 @@ func TestScorers_Gossip_Score(t *testing.T) {
 	}{
 		{
 			name: "nonexistent peer",
-			update: func(scorer *scorers.GossipScorer) {
+			update: func(*scorers.GossipScorer) {
 			},
 			check: func(scorer *scorers.GossipScorer) {
 				assert.Equal(t, 0.0, scorer.Score("peer1"), "Unexpected score")
@@ -53,7 +53,7 @@ func TestScorers_Gossip_Score(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.name, func(*testing.T) {
 			peerStatuses := peers.NewStatus(ctx, &peers.StatusConfig{
 				ScorerParams: &scorers.Config{},
 			})
