@@ -372,7 +372,7 @@ func runBlobStep(t *testing.T,
 			require.NoError(t, err)
 			ini, err := builder.vwait.WaitForInitializer(context.Background())
 			require.NoError(t, err)
-			bv := ini.NewBlobVerifier(ro, verification.SpectestSidecarRequirements)
+			bv := ini.NewBlobVerifier(ro, verification.SpectestBlobSidecarRequirements)
 			ctx := context.Background()
 			if err := bv.BlobIndexInBounds(); err != nil {
 				t.Logf("BlobIndexInBounds error: %s", err.Error())

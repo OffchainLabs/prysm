@@ -75,6 +75,8 @@ go_library(
         "//runtime/version:go_default_library",
         "//time:go_default_library",
         "//time/slots:go_default_library",
+        "@com_github_btcsuite_btcd_btcec_v2//:go_default_library",
+        "@com_github_ethereum_go_ethereum//crypto:go_default_library",
         "@com_github_ethereum_go_ethereum//p2p/discover:go_default_library",
         "@com_github_ethereum_go_ethereum//p2p/enode:go_default_library",
         "@com_github_ethereum_go_ethereum//p2p/enr:go_default_library",

@@ -27,6 +27,8 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Added validator index label to `validator_statuses` metric.
 - Added Validator REST mode use of Attestation V2 endpoints and Electra attestations.
 - PeerDAS: Added proto for `DataColumnIdentifier`, `DataColumnSidecar`, `DataColumnSidecarsByRangeRequest` and `MetadataV2`.
+- Better attestation packing for Electra. [PR](https://github.com/prysmaticlabs/prysm/pull/14534)
+- P2P: Add logs when a peer is (dis)connected. Add the reason of the disconnection when we initiate it.
 
 ### Changed
 
@@ -61,6 +63,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Updated light client protobufs. [PR](https://github.com/prysmaticlabs/prysm/pull/14650)
 - Added `Eth-Consensus-Version` header to `ListAttestationsV2` and `GetAggregateAttestationV2` endpoints.
 - Updated light client consensus types. [PR](https://github.com/prysmaticlabs/prysm/pull/14652)
+- Fixed pending deposits processing on Electra.
 - Modified `ListAttestationsV2`, `GetAttesterSlashingsV2` and `GetAggregateAttestationV2` endpoints to use slot to determine fork version.
 
 ### Deprecated
@@ -91,6 +94,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Fix panic on attestation interface since we call data before validation
 - corrects nil check on some interface attestation types
 - temporary solution to handling electra attesation and attester_slashing events. [pr](14655)
+- Diverse log improvements and comment additions.
 
 
 ### Security

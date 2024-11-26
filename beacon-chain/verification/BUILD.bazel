@@ -10,6 +10,7 @@ go_library(
         "fake.go",
         "initializer.go",
         "interface.go",
+        "log.go",
         "metrics.go",
         "mock.go",
         "result.go",

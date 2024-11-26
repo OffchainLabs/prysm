@@ -340,7 +340,7 @@ func (s *Service) fetchOriginBlobs(pids []peer.ID) error {
 		if len(sidecars) != len(req) {
 			continue
 		}
-		bv := verification.NewBlobBatchVerifier(s.newBlobVerifier, verification.InitsyncSidecarRequirements)
+		bv := verification.NewBlobBatchVerifier(s.newBlobVerifier, verification.InitsyncBlobSidecarRequirements)
 		avs := das.NewLazilyPersistentStore(s.cfg.BlobStorage, bv)
 		current := s.clock.CurrentSlot()
 		if err := avs.Persist(current, sidecars...); err != nil {

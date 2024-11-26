@@ -239,7 +239,7 @@ func (p *TestP2P) LeaveTopic(topic string) error {
 }
 
 // Encoding returns ssz encoding.
-func (_ *TestP2P) Encoding() encoder.NetworkEncoding {
+func (*TestP2P) Encoding() encoder.NetworkEncoding {
 	return &encoder.SszNetworkEncoder{}
 }
 
@@ -266,12 +266,12 @@ func (p *TestP2P) Host() host.Host {
 }
 
 // ENR returns the enr of the local peer.
-func (_ *TestP2P) ENR() *enr.Record {
+func (*TestP2P) ENR() *enr.Record {
 	return new(enr.Record)
 }
 
 // DiscoveryAddresses --
-func (_ *TestP2P) DiscoveryAddresses() ([]multiaddr.Multiaddr, error) {
+func (*TestP2P) DiscoveryAddresses() ([]multiaddr.Multiaddr, error) {
 	return nil, nil
 }
 
@@ -284,16 +284,16 @@ func (p *TestP2P) AddConnectionHandler(f, _ func(ctx context.Context, id peer.ID
 				p.peers.Add(new(enr.Record), conn.RemotePeer(), conn.RemoteMultiaddr(), conn.Stat().Direction)
 				ctx := context.Background()
 
-				p.peers.SetConnectionState(conn.RemotePeer(), peers.PeerConnecting)
+				p.peers.SetConnectionState(conn.RemotePeer(), peers.Connecting)
 				if err := f(ctx, conn.RemotePeer()); err != nil {
 					logrus.WithError(err).Error("Could not send successful hello rpc request")
 					if err := p.Disconnect(conn.RemotePeer()); err != nil {
 						logrus.WithError(err).Errorf("Unable to close peer %s", conn.RemotePeer())
 					}
-					p.peers.SetConnectionState(conn.RemotePeer(), peers.PeerDisconnected)
+					p.peers.SetConnectionState(conn.RemotePeer(), peers.Disconnected)
 					return
 				}
-				p.peers.SetConnectionState(conn.RemotePeer(), peers.PeerConnected)
+				p.peers.SetConnectionState(conn.RemotePeer(), peers.Connected)
 			}()
 		},
 	})
@@ -305,11 +305,11 @@ func (p *TestP2P) AddDisconnectionHandler(f func(ctx context.Context, id peer.ID
 		DisconnectedF: func(net network.Network, conn network.Conn) {
 			// Must be handled in a goroutine as this callback cannot be blocking.
 			go func() {
-				p.peers.SetConnectionState(conn.RemotePeer(), peers.PeerDisconnecting)
+				p.peers.SetConnectionState(conn.RemotePeer(), peers.Disconnecting)
 				if err := f(context.Background(), conn.RemotePeer()); err != nil {
 					logrus.WithError(err).Debug("Unable to invoke callback")
 				}
-				p.peers.SetConnectionState(conn.RemotePeer(), peers.PeerDisconnected)
+				p.peers.SetConnectionState(conn.RemotePeer(), peers.Disconnected)
 			}()
 		},
 	})
@@ -353,7 +353,7 @@ func (p *TestP2P) Send(ctx context.Context, msg interface{}, topic string, pid p
 }
 
 // Started always returns true.
-func (_ *TestP2P) Started() bool {
+func (*TestP2P) Started() bool {
 	return true
 }
 
@@ -363,12 +363,12 @@ func (p *TestP2P) Peers() *peers.Status {
 }
 
 // FindPeersWithSubnet mocks the p2p func.
-func (_ *TestP2P) FindPeersWithSubnet(_ context.Context, _ string, _ uint64, _ int) (bool, error) {
+func (*TestP2P) FindPeersWithSubnet(_ context.Context, _ string, _ uint64, _ int) (bool, error) {
 	return false, nil
 }
 
 // RefreshENR mocks the p2p func.
-func (_ *TestP2P) RefreshENR() {}
+func (*TestP2P) RefreshENR() {}
 
 // ForkDigest mocks the p2p func.
 func (p *TestP2P) ForkDigest() ([4]byte, error) {
@@ -386,31 +386,31 @@ func (p *TestP2P) MetadataSeq() uint64 {
 }
 
 // AddPingMethod mocks the p2p func.
-func (_ *TestP2P) AddPingMethod(_ func(ctx context.Context, id peer.ID) error) {
+func (*TestP2P) AddPingMethod(_ func(ctx context.Context, id peer.ID) error) {
 	// no-op
 }
 
 // InterceptPeerDial .
-func (_ *TestP2P) InterceptPeerDial(peer.ID) (allow bool) {
+func (*TestP2P) InterceptPeerDial(peer.ID) (allow bool) {
 	return true
 }
 
 // InterceptAddrDial .
-func (_ *TestP2P) InterceptAddrDial(peer.ID, multiaddr.Multiaddr) (allow bool) {
+func (*TestP2P) InterceptAddrDial(peer.ID, multiaddr.Multiaddr) (allow bool) {
 	return true
 }
 
 // InterceptAccept .
-func (_ *TestP2P) InterceptAccept(_ network.ConnMultiaddrs) (allow bool) {
+func (*TestP2P) InterceptAccept(_ network.ConnMultiaddrs) (allow bool) {
 	return true
 }
 
 // InterceptSecured .
-func (_ *TestP2P) InterceptSecured(network.Direction, peer.ID, network.ConnMultiaddrs) (allow bool) {
+func (*TestP2P) InterceptSecured(network.Direction, peer.ID, network.ConnMultiaddrs) (allow bool) {
 	return true
 }
 
 // InterceptUpgraded .
-func (_ *TestP2P) InterceptUpgraded(network.Conn) (allow bool, reason control.DisconnectReason) {
+func (*TestP2P) InterceptUpgraded(network.Conn) (allow bool, reason control.DisconnectReason) {
 	return true, 0
 }

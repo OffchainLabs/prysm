@@ -13,6 +13,9 @@ import (
 // computeOnChainAggregate constructs a final aggregate form a list of network aggregates with equal attestation data.
 // It assumes that each network aggregate has exactly one committee bit set.
 //
+// Our implementation allows to pass aggregates for different attestation data, in which case the function will return
+// one final aggregate per attestation data.
+//
 // Spec definition:
 //
 //	def compute_on_chain_aggregate(network_aggregates: Sequence[Attestation]) -> Attestation:
