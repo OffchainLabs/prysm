@@ -94,6 +94,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - corrects nil check on some interface attestation types
 - temporary solution to handling electra attesation and attester_slashing events. [pr](14655)
 - Diverse log improvements and comment additions.
+- P2P: Avoid infinite loop when looking for peers in small networks.
 
 
 ### Security
