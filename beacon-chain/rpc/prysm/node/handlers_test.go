@@ -62,13 +62,13 @@ func TestListTrustedPeer(t *testing.T) {
 
 		switch i {
 		case 0, 1:
-			peerStatus.SetConnectionState(id, peers.PeerConnecting)
+			peerStatus.SetConnectionState(id, peers.Connecting)
 		case 2, 3:
-			peerStatus.SetConnectionState(id, peers.PeerConnected)
+			peerStatus.SetConnectionState(id, peers.Connected)
 		case 4, 5:
-			peerStatus.SetConnectionState(id, peers.PeerDisconnecting)
+			peerStatus.SetConnectionState(id, peers.Disconnecting)
 		case 6, 7:
-			peerStatus.SetConnectionState(id, peers.PeerDisconnected)
+			peerStatus.SetConnectionState(id, peers.Disconnected)
 		default:
 			t.Fatalf("Failed to set connection state for peer")
 		}

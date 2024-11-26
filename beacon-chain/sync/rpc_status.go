@@ -38,11 +38,11 @@ func (s *Service) maintainPeerStatuses() {
 				// If our peer status has not been updated correctly we disconnect over here
 				// and set the connection state over here instead.
 				if s.cfg.p2p.Host().Network().Connectedness(id) != network.Connected {
-					s.cfg.p2p.Peers().SetConnectionState(id, peers.PeerDisconnecting)
+					s.cfg.p2p.Peers().SetConnectionState(id, peers.Disconnecting)
 					if err := s.cfg.p2p.Disconnect(id); err != nil {
 						log.WithError(err).Debug("Error when disconnecting with peer")
 					}
-					s.cfg.p2p.Peers().SetConnectionState(id, peers.PeerDisconnected)
+					s.cfg.p2p.Peers().SetConnectionState(id, peers.Disconnected)
 					log.WithFields(logrus.Fields{
 						"peer":   id,
 						"reason": "maintain peer statuses - peer is not connected",

@@ -378,14 +378,14 @@ func TestInboundPeerLimit(t *testing.T) {
 	}
 
 	for i := 0; i < 30; i++ {
-		_ = addPeer(t, s.peers, peerdata.PeerConnectionState(ethpb.ConnectionState_CONNECTED), false)
+		_ = addPeer(t, s.peers, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED), false)
 	}
 
 	require.Equal(t, true, s.isPeerAtLimit(false), "not at limit for outbound peers")
 	require.Equal(t, false, s.isPeerAtLimit(true), "at limit for inbound peers")
 
 	for i := 0; i < highWatermarkBuffer; i++ {
-		_ = addPeer(t, s.peers, peerdata.PeerConnectionState(ethpb.ConnectionState_CONNECTED), false)
+		_ = addPeer(t, s.peers, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED), false)
 	}
 
 	require.Equal(t, true, s.isPeerAtLimit(true), "not at limit for inbound peers")
@@ -404,13 +404,13 @@ func TestOutboundPeerThreshold(t *testing.T) {
 	}
 
 	for i := 0; i < 2; i++ {
-		_ = addPeer(t, s.peers, peerdata.PeerConnectionState(ethpb.ConnectionState_CONNECTED), true)
+		_ = addPeer(t, s.peers, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED), true)
 	}
 
 	require.Equal(t, true, s.isBelowOutboundPeerThreshold(), "not at outbound peer threshold")
 
 	for i := 0; i < 3; i++ {
-		_ = addPeer(t, s.peers, peerdata.PeerConnectionState(ethpb.ConnectionState_CONNECTED), true)
+		_ = addPeer(t, s.peers, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED), true)
 	}
 
 	require.Equal(t, false, s.isBelowOutboundPeerThreshold(), "still at outbound peer threshold")
@@ -477,7 +477,7 @@ func TestCorrectUDPVersion(t *testing.T) {
 }
 
 // addPeer is a helper to add a peer with a given connection state)
-func addPeer(t *testing.T, p *peers.Status, state peerdata.PeerConnectionState, outbound bool) peer.ID {
+func addPeer(t *testing.T, p *peers.Status, state peerdata.ConnectionState, outbound bool) peer.ID {
 	// Set up some peers with different states
 	mhBytes := []byte{0x11, 0x04}
 	idBytes := make([]byte, 4)

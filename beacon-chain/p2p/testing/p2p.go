@@ -284,16 +284,16 @@ func (p *TestP2P) AddConnectionHandler(f, _ func(ctx context.Context, id peer.ID
 				p.peers.Add(new(enr.Record), conn.RemotePeer(), conn.RemoteMultiaddr(), conn.Stat().Direction)
 				ctx := context.Background()
 
-				p.peers.SetConnectionState(conn.RemotePeer(), peers.PeerConnecting)
+				p.peers.SetConnectionState(conn.RemotePeer(), peers.Connecting)
 				if err := f(ctx, conn.RemotePeer()); err != nil {
 					logrus.WithError(err).Error("Could not send successful hello rpc request")
 					if err := p.Disconnect(conn.RemotePeer()); err != nil {
 						logrus.WithError(err).Errorf("Unable to close peer %s", conn.RemotePeer())
 					}
-					p.peers.SetConnectionState(conn.RemotePeer(), peers.PeerDisconnected)
+					p.peers.SetConnectionState(conn.RemotePeer(), peers.Disconnected)
 					return
 				}
-				p.peers.SetConnectionState(conn.RemotePeer(), peers.PeerConnected)
+				p.peers.SetConnectionState(conn.RemotePeer(), peers.Connected)
 			}()
 		},
 	})
@@ -305,11 +305,11 @@ func (p *TestP2P) AddDisconnectionHandler(f func(ctx context.Context, id peer.ID
 		DisconnectedF: func(net network.Network, conn network.Conn) {
 			// Must be handled in a goroutine as this callback cannot be blocking.
 			go func() {
-				p.peers.SetConnectionState(conn.RemotePeer(), peers.PeerDisconnecting)
+				p.peers.SetConnectionState(conn.RemotePeer(), peers.Disconnecting)
 				if err := f(context.Background(), conn.RemotePeer()); err != nil {
 					logrus.WithError(err).Debug("Unable to invoke callback")
 				}
-				p.peers.SetConnectionState(conn.RemotePeer(), peers.PeerDisconnected)
+				p.peers.SetConnectionState(conn.RemotePeer(), peers.Disconnected)
 			}()
 		},
 	})
