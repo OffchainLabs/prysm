@@ -25,8 +25,8 @@ import (
 
 type testIdentity enode.ID
 
-func (_ testIdentity) Verify(_ *enr.Record, _ []byte) error { return nil }
-func (id testIdentity) NodeAddr(_ *enr.Record) []byte       { return id[:] }
+func (testIdentity) Verify(*enr.Record, []byte) error { return nil }
+func (id testIdentity) NodeAddr(*enr.Record) []byte   { return id[:] }
 
 func TestListTrustedPeer(t *testing.T) {
 	ids := libp2ptest.GeneratePeerIDs(9)
