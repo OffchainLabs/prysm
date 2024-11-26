@@ -35,12 +35,12 @@ func (m *MockPeerManager) Host() host.Host {
 }
 
 // ENR .
-func (m MockPeerManager) ENR() *enr.Record {
+func (m *MockPeerManager) ENR() *enr.Record {
 	return m.Enr
 }
 
 // DiscoveryAddresses .
-func (m MockPeerManager) DiscoveryAddresses() ([]multiaddr.Multiaddr, error) {
+func (m *MockPeerManager) DiscoveryAddresses() ([]multiaddr.Multiaddr, error) {
 	if m.FailDiscoveryAddr {
 		return nil, errors.New("fail")
 	}
@@ -48,12 +48,12 @@ func (m MockPeerManager) DiscoveryAddresses() ([]multiaddr.Multiaddr, error) {
 }
 
 // RefreshENR .
-func (MockPeerManager) RefreshENR() {}
+func (*MockPeerManager) RefreshENR() {}
 
 // FindPeersWithSubnet .
-func (MockPeerManager) FindPeersWithSubnet(_ context.Context, _ string, _ uint64, _ int) (bool, error) {
+func (*MockPeerManager) FindPeersWithSubnet(_ context.Context, _ string, _ uint64, _ int) (bool, error) {
 	return true, nil
 }
 
 // AddPingMethod .
-func (MockPeerManager) AddPingMethod(_ func(ctx context.Context, id peer.ID) error) {}
+func (*MockPeerManager) AddPingMethod(_ func(ctx context.Context, id peer.ID) error) {}
