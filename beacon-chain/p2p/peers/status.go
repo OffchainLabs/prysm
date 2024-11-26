@@ -1010,7 +1010,7 @@ func (p *Status) isfromBadIP(pid peer.ID) error {
 
 	if val, ok := p.ipTracker[ip.String()]; ok {
 		if val > CollocationLimit {
-			return errors.Errorf("colocation limit exceeded: got %d - limit %d", val, CollocationLimit)
+			return errors.Errorf("collocation limit exceeded: got %d - limit %d", val, CollocationLimit)
 		}
 	}
 
