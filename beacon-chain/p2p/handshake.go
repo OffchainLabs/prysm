@@ -158,7 +158,7 @@ func (s *Service) AddConnectionHandler(reqFunc, goodByeFunc func(ctx context.Con
 							return
 						}
 
-						if !updated.After(currentTime) {
+						if updated.Before(currentTime) {
 							s.disconnectFromPeerOnError(conn, goodByeFunc, errors.New("did not update"))
 							return
 						}
