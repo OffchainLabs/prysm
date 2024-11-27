@@ -165,9 +165,11 @@ func (s *Service) builderEndpoints(stater lookup.Stater) []endpoint {
 	}
 }
 
-func (*Service) blobEndpoints(blocker lookup.Blocker) []endpoint {
+func (s *Service) blobEndpoints(blocker lookup.Blocker) []endpoint {
 	server := &blob.Server{
-		Blocker: blocker,
+		Blocker:               blocker,
+		OptimisticModeFetcher: s.cfg.OptimisticModeFetcher,
+		FinalizationFetcher:   s.cfg.FinalizationFetcher,
 	}
 
 	const namespace = "blob"

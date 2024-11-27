@@ -15,6 +15,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	"github.com/prysmaticlabs/prysm/v5/network/httputil"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 )
 
 // Blobs is an HTTP handler for Beacon API getBlobs.
@@ -59,7 +60,29 @@ func (s *Server) Blobs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httputil.WriteJson(w, buildSidecarsJsonResponse(verifiedBlobs))
+	blk, err := s.Blocker.Block(ctx, []byte(blockId))
+	if err != nil {
+		httputil.HandleError(w, "Could not fetch block: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	blkRoot, err := blk.Block().HashTreeRoot()
+	if err != nil {
+		httputil.HandleError(w, "Could not hash block: %s"+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	isOptimistic, err := s.OptimisticModeFetcher.IsOptimisticForRoot(ctx, blkRoot)
+	if err != nil {
+		httputil.HandleError(w, "Could not check if block is optimistic: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	resp := &structs.SidecarsResponse{
+		Version:             version.String(blk.Version()),
+		Data:                make([]*structs.Sidecar, len(verifiedBlobs)),
+		ExecutionOptimistic: isOptimistic,
+		Finalized:           s.FinalizationFetcher.IsFinalized(ctx, blkRoot),
+	}
+	httputil.WriteJson(w, buildSidecarsJsonResponse(resp, verifiedBlobs))
 }
 
 // parseIndices filters out invalid and duplicate blob indices
@@ -92,8 +115,7 @@ loop:
 	return indices, nil
 }
 
-func buildSidecarsJsonResponse(verifiedBlobs []*blocks.VerifiedROBlob) *structs.SidecarsResponse {
-	resp := &structs.SidecarsResponse{Data: make([]*structs.Sidecar, len(verifiedBlobs))}
+func buildSidecarsJsonResponse(resp *structs.SidecarsResponse, verifiedBlobs []*blocks.VerifiedROBlob) *structs.SidecarsResponse {
 	for i, sc := range verifiedBlobs {
 		proofs := make([]string, len(sc.CommitmentInclusionProof))
 		for j := range sc.CommitmentInclusionProof {
