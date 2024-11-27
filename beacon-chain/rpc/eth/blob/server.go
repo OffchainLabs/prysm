@@ -9,4 +9,5 @@ type Server struct {
 	Blocker               lookup.Blocker
 	OptimisticModeFetcher blockchain.OptimisticModeFetcher
 	FinalizationFetcher   blockchain.FinalizationFetcher
+	TimeFetcher           blockchain.TimeFetcher
 }

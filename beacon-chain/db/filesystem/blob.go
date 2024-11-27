@@ -13,7 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
@@ -25,7 +25,7 @@ import (
 )
 
 var (
-	errIndexOutOfBounds    = errors.New("blob index in file name >= MaxBlobsPerBlock")
+	errIndexOutOfBounds    = errors.New("blob index in file name >= DeprecatedMaxBlobsPerBlock")
 	errEmptyBlobWritten    = errors.New("zero bytes written to disk when saving blob sidecar")
 	errSidecarEmptySSZData = errors.New("sidecar marshalled to an empty ssz byte slice")
 	errNoBasePath          = errors.New("BlobStorage base path not specified in init")
@@ -218,6 +218,7 @@ func (bs *BlobStorage) Save(sidecar blocks.VerifiedROBlob) error {
 	partialMoved = true
 	blobsWrittenCounter.Inc()
 	blobSaveLatency.Observe(float64(time.Since(startTime).Milliseconds()))
+
 	return nil
 }
 
@@ -255,8 +256,10 @@ func (bs *BlobStorage) Remove(root [32]byte) error {
 // Indices generates a bitmap representing which BlobSidecar.Index values are present on disk for a given root.
 // This value can be compared to the commitments observed in a block to determine which indices need to be found
 // on the network to confirm data availability.
-func (bs *BlobStorage) Indices(root [32]byte) ([fieldparams.MaxBlobsPerBlock]bool, error) {
-	var mask [fieldparams.MaxBlobsPerBlock]bool
+func (bs *BlobStorage) Indices(root [32]byte, s primitives.Slot) ([]bool, error) {
+	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlock(s)
+	mask := make([]bool, maxBlobsPerBlock)
+
 	rootDir := blobNamer{root: root}.dir()
 	entries, err := afero.ReadDir(bs.fs, rootDir)
 	if err != nil {
@@ -265,6 +268,7 @@ func (bs *BlobStorage) Indices(root [32]byte) ([fieldparams.MaxBlobsPerBlock]boo
 		}
 		return mask, err
 	}
+
 	for i := range entries {
 		if entries[i].IsDir() {
 			continue
@@ -281,7 +285,7 @@ func (bs *BlobStorage) Indices(root [32]byte) ([fieldparams.MaxBlobsPerBlock]boo
 		if err != nil {
 			return mask, errors.Wrapf(err, "unexpected directory entry breaks listing, %s", parts[0])
 		}
-		if u >= fieldparams.MaxBlobsPerBlock {
+		if u >= uint64(maxBlobsPerBlock) {
 			return mask, errIndexOutOfBounds
 		}
 		mask[u] = true

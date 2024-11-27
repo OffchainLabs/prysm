@@ -424,7 +424,7 @@ func TestConstructPendingBlobsRequest(t *testing.T) {
 	// No unknown indices.
 	root := [32]byte{1}
 	count := 3
-	actual, err := s.constructPendingBlobsRequest(root, count)
+	actual, err := s.constructPendingBlobsRequest(root, count, 100)
 	require.NoError(t, err)
 	require.Equal(t, 3, len(actual))
 	for i, id := range actual {
@@ -454,14 +454,14 @@ func TestConstructPendingBlobsRequest(t *testing.T) {
 	expected := []*eth.BlobIdentifier{
 		{Index: 1, BlockRoot: root[:]},
 	}
-	actual, err = s.constructPendingBlobsRequest(root, count)
+	actual, err = s.constructPendingBlobsRequest(root, count, 100)
 	require.NoError(t, err)
 	require.Equal(t, expected[0].Index, actual[0].Index)
 	require.DeepEqual(t, expected[0].BlockRoot, actual[0].BlockRoot)
 }
 
 func TestFilterUnknownIndices(t *testing.T) {
-	haveIndices := [fieldparams.MaxBlobsPerBlock]bool{true, true, true, false, false, false}
+	haveIndices := []bool{true, true, true, false, false, false}
 
 	blockRoot := [32]byte{}
 	count := 5
