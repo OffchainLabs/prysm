@@ -137,8 +137,7 @@ func (l *listenerWrapper) RebootListener() error {
 }
 
 // RefreshPersistentSubnets checks that we are tracking our local persistent subnets for a variety of gossip topics.
-// This routine checks for our attestation, sync committee and updates them if they have
-// been rotated.
+// This routine verifies and updates our attestation and sync committee subnets if they have been rotated.
 func (s *Service) RefreshPersistentSubnets() {
 	// Return early if discv5 service isn't running.
 	if s.dv5Listener == nil || !s.isInitialized() {
