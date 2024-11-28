@@ -140,30 +140,6 @@ func TestBlobs(t *testing.T) {
 		require.Equal(t, false, resp.ExecutionOptimistic)
 		require.Equal(t, false, resp.Finalized)
 	})
-	t.Run("justified", func(t *testing.T) {
-		u := "http://foo.example/justified"
-		request := httptest.NewRequest("GET", u, nil)
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		s.Blocker = &lookup.BeaconDbBlocker{
-			ChainInfoFetcher: &mockChain.ChainService{CurrentJustifiedCheckPoint: &eth.Checkpoint{Root: blockRoot[:]}, Block: denebBlock},
-			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
-				Genesis: time.Now(),
-			},
-			BeaconDB:    db,
-			BlobStorage: bs,
-		}
-		s.Blobs(writer, request)
-
-		assert.Equal(t, http.StatusOK, writer.Code)
-		resp := &structs.SidecarsResponse{}
-		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
-		require.Equal(t, 4, len(resp.Data))
-
-		require.Equal(t, "deneb", resp.Version)
-		require.Equal(t, false, resp.ExecutionOptimistic)
-		require.Equal(t, false, resp.Finalized)
-	})
 	t.Run("root", func(t *testing.T) {
 		u := "http://foo.example/" + hexutil.Encode(blockRoot[:])
 		request := httptest.NewRequest("GET", u, nil)

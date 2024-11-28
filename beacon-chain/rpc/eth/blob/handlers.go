@@ -67,7 +67,7 @@ func (s *Server) Blobs(w http.ResponseWriter, r *http.Request) {
 	}
 	blkRoot, err := blk.Block().HashTreeRoot()
 	if err != nil {
-		httputil.HandleError(w, "Could not hash block: %s"+err.Error(), http.StatusInternalServerError)
+		httputil.HandleError(w, "Could not hash block: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	isOptimistic, err := s.OptimisticModeFetcher.IsOptimisticForRoot(ctx, blkRoot)
@@ -76,13 +76,14 @@ func (s *Server) Blobs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	data := buildSidecarsJsonResponse(verifiedBlobs)
 	resp := &structs.SidecarsResponse{
 		Version:             version.String(blk.Version()),
-		Data:                make([]*structs.Sidecar, len(verifiedBlobs)),
+		Data:                data,
 		ExecutionOptimistic: isOptimistic,
 		Finalized:           s.FinalizationFetcher.IsFinalized(ctx, blkRoot),
 	}
-	httputil.WriteJson(w, buildSidecarsJsonResponse(resp, verifiedBlobs))
+	httputil.WriteJson(w, resp)
 }
 
 // parseIndices filters out invalid and duplicate blob indices
@@ -115,13 +116,14 @@ loop:
 	return indices, nil
 }
 
-func buildSidecarsJsonResponse(resp *structs.SidecarsResponse, verifiedBlobs []*blocks.VerifiedROBlob) *structs.SidecarsResponse {
+func buildSidecarsJsonResponse(verifiedBlobs []*blocks.VerifiedROBlob) []*structs.Sidecar {
+	sidecars := make([]*structs.Sidecar, len(verifiedBlobs))
 	for i, sc := range verifiedBlobs {
 		proofs := make([]string, len(sc.CommitmentInclusionProof))
 		for j := range sc.CommitmentInclusionProof {
 			proofs[j] = hexutil.Encode(sc.CommitmentInclusionProof[j])
 		}
-		resp.Data[i] = &structs.Sidecar{
+		sidecars[i] = &structs.Sidecar{
 			Index:                    strconv.FormatUint(sc.Index, 10),
 			Blob:                     hexutil.Encode(sc.Blob),
 			KzgCommitment:            hexutil.Encode(sc.KzgCommitment),
@@ -130,7 +132,7 @@ func buildSidecarsJsonResponse(resp *structs.SidecarsResponse, verifiedBlobs []*
 			CommitmentInclusionProof: proofs,
 		}
 	}
-	return resp
+	return sidecars
 }
 
 func buildSidecarsSSZResponse(verifiedBlobs []*blocks.VerifiedROBlob) ([]byte, error) {
