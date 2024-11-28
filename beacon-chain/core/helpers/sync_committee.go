@@ -220,3 +220,9 @@ func combineRootAndSlot(root []byte, slot uint64) [32]byte {
 	keyHash := hash.Hash(append(root, slotBytes...))
 	return keyHash
 }
+
+// SyncCommitteePeriodBySlot returns the sync committee period for a given slot.
+func SyncCommitteePeriodBySlot(slot primitives.Slot) uint64 {
+	epoch := slots.ToEpoch(slot)
+	return uint64(epoch / params.BeaconConfig().EpochsPerSyncCommitteePeriod)
+}

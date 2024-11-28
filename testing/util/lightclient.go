@@ -28,7 +28,6 @@ type TestLightClient struct {
 	AttestedState  state.BeaconState
 	AttestedBlock  interfaces.ReadOnlySignedBeaconBlock
 	FinalizedBlock interfaces.ReadOnlySignedBeaconBlock
-	//FinalizedState      state.BeaconState
 }
 
 func NewTestLightClient(t *testing.T) *TestLightClient {
