@@ -14,7 +14,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/das"
@@ -41,6 +40,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"github.com/prysmaticlabs/prysm/v5/testing/util"
 	prysmTime "github.com/prysmaticlabs/prysm/v5/time"
+	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
@@ -2487,7 +2487,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 		s.saveLightClientUpdate(cfg)
 
 		// Check that the light client update is saved
-		period := helpers.SyncCommitteePeriodBySlot(l.AttestedState.Slot())
+		period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedState.Slot()))
 
 		u, err := s.cfg.BeaconDB.LightClientUpdate(ctx, period)
 		require.NoError(t, err)
@@ -2533,7 +2533,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 		s.saveLightClientUpdate(cfg)
 
 		// Check that the light client update is saved
-		period := helpers.SyncCommitteePeriodBySlot(l.AttestedState.Slot())
+		period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedState.Slot()))
 		u, err := s.cfg.BeaconDB.LightClientUpdate(ctx, period)
 		require.NoError(t, err)
 		require.NotNil(t, u)
@@ -2578,7 +2578,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 		s.saveLightClientUpdate(cfg)
 
 		// Check that the light client update is saved
-		period := helpers.SyncCommitteePeriodBySlot(l.AttestedState.Slot())
+		period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedState.Slot()))
 		u, err := s.cfg.BeaconDB.LightClientUpdate(ctx, period)
 		require.NoError(t, err)
 		require.NotNil(t, u)

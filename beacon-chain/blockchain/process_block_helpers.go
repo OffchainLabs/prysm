@@ -9,7 +9,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
 	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	lightclient "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/light-client"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
 	doublylinkedtree "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/doubly-linked-tree"
@@ -177,7 +176,7 @@ func (s *Service) saveLightClientUpdate(cfg *postBlockProcessConfig) {
 		return
 	}
 
-	period := helpers.SyncCommitteePeriodBySlot(attestedState.Slot())
+	period := slots.SyncCommitteePeriod(slots.ToEpoch(attestedState.Slot()))
 
 	oldUpdate, err := s.cfg.BeaconDB.LightClientUpdate(cfg.ctx, period)
 	if err != nil {
@@ -209,7 +208,6 @@ func (s *Service) saveLightClientUpdate(cfg *postBlockProcessConfig) {
 	} else {
 		log.WithField("period", period).Debug("Saving light client update: New update is not better than the current one. Skipping save.")
 	}
-
 }
 
 // saveLightClientBootstrap saves a light client bootstrap for this block

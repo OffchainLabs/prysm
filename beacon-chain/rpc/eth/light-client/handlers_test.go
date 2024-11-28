@@ -201,6 +201,10 @@ func TestLightClientHandler_GetLightClientBootstrap_Deneb(t *testing.T) {
 }
 
 func TestLightClientHandler_GetLightClientBootstrap_Electra(t *testing.T) {
+	config := params.BeaconConfig()
+	config.ElectraForkEpoch = config.DenebForkEpoch + 1
+	params.OverrideBeaconConfig(config)
+
 	l := util.NewTestLightClient(t).SetupTestElectra(false) // result is same for true and false
 
 	slot := l.State.Slot()
