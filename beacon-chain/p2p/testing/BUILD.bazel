@@ -27,6 +27,7 @@ go_library(
         "@com_github_ethereum_go_ethereum//p2p/enode:go_default_library",
         "@com_github_ethereum_go_ethereum//p2p/enr:go_default_library",
         "@com_github_libp2p_go_libp2p//:go_default_library",
+        "@com_github_libp2p_go_libp2p//config:go_default_library",
         "@com_github_libp2p_go_libp2p//core:go_default_library",
         "@com_github_libp2p_go_libp2p//core/connmgr:go_default_library",
         "@com_github_libp2p_go_libp2p//core/control:go_default_library",

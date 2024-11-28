@@ -118,6 +118,15 @@ func NewStatus(ctx context.Context, config *StatusConfig) *Status {
 	}
 }
 
+func (p *Status) UpdateENR(record *enr.Record, pid peer.ID) {
+	p.store.Lock()
+	defer p.store.Unlock()
+
+	if peerData, ok := p.store.PeerData(pid); ok {
+		peerData.Enr = record
+	}
+}
+
 // Scorers exposes peer scoring management service.
 func (p *Status) Scorers() *scorers.Service {
 	return p.scorers

@@ -66,6 +66,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Updated light client consensus types. [PR](https://github.com/prysmaticlabs/prysm/pull/14652)
 - Fixed pending deposits processing on Electra.
 - Modified `ListAttestationsV2`, `GetAttesterSlashingsV2` and `GetAggregateAttestationV2` endpoints to use slot to determine fork version.
+- Improvements to HTTP response handling. [pr](https://github.com/prysmaticlabs/prysm/pull/14673)
 - Updated `Blobs` endpoint to return additional metadata fields.
 
 ### Deprecated
@@ -98,6 +99,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - corrects nil check on some interface attestation types
 - temporary solution to handling electra attesation and attester_slashing events. [pr](14655)
 - Diverse log improvements and comment additions.
+- P2P: Avoid infinite loop when looking for peers in small networks.
 
 
 ### Security

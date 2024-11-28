@@ -14,6 +14,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/api"
+	"github.com/prysmaticlabs/prysm/v5/api/client"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
@@ -176,7 +177,7 @@ func (c *Client) do(ctx context.Context, method string, path string, body io.Rea
 		err = non200Err(r)
 		return
 	}
-	res, err = io.ReadAll(r.Body)
+	res, err = io.ReadAll(io.LimitReader(r.Body, client.MaxBodySize))
 	if err != nil {
 		err = errors.Wrap(err, "error reading http response body from builder server")
 		return
@@ -358,7 +359,7 @@ func (c *Client) Status(ctx context.Context) error {
 }
 
 func non200Err(response *http.Response) error {
-	bodyBytes, err := io.ReadAll(response.Body)
+	bodyBytes, err := io.ReadAll(io.LimitReader(response.Body, client.MaxErrBodySize))
 	var errMessage ErrorMessage
 	var body string
 	if err != nil {
