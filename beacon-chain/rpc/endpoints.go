@@ -62,6 +62,13 @@ func (e *endpoint) handlerWithMiddleware() http.HandlerFunc {
 	)
 
 	return func(w http.ResponseWriter, r *http.Request) {
+		// SSE errors are handled separately to avoid interference with the streaming
+		// mechanism and ensure accurate error tracking.
+		if e.template == "/eth/v1/events" {
+			handler.ServeHTTP(w, r)
+			return
+		}
+
 		rw := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
 		handler.ServeHTTP(rw, r)
 
