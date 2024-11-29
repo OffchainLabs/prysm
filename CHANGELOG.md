@@ -30,6 +30,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Better attestation packing for Electra. [PR](https://github.com/prysmaticlabs/prysm/pull/14534)
 - P2P: Add logs when a peer is (dis)connected. Add the reason of the disconnection when we initiate it.
 - Added a Prometheus error counter metric for HTTP requests to track beacon node requests.
+- Added a Prometheus error counter metric for SSE requests.
 
 ### Changed
 
