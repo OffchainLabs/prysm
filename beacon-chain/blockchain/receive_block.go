@@ -17,8 +17,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	consensus_blocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	consensusblocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
@@ -85,7 +83,7 @@ func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySig
 	}
 
 	currentCheckpoints := s.saveCurrentCheckpoints(preState)
-	roblock, err := consensus_blocks.NewROBlockWithRoot(blockCopy, blockRoot)
+	roblock, err := blocks.NewROBlockWithRoot(blockCopy, blockRoot)
 	if err != nil {
 		return err
 	}
@@ -190,7 +188,7 @@ func (s *Service) updateCheckpoints(
 func (s *Service) validateExecutionAndConsensus(
 	ctx context.Context,
 	preState state.BeaconState,
-	block consensusblocks.ROBlock,
+	block blocks.ROBlock,
 ) (state.BeaconState, bool, error) {
 	preStateVersion, preStateHeader, err := getStateVersionAndPayload(preState)
 	if err != nil {
@@ -560,7 +558,7 @@ func (s *Service) sendBlockAttestationsToSlasher(signed interfaces.ReadOnlySigne
 }
 
 // validateExecutionOnBlock notifies the engine of the incoming block execution payload and returns true if the payload is valid
-func (s *Service) validateExecutionOnBlock(ctx context.Context, ver int, header interfaces.ExecutionData, block consensusblocks.ROBlock) (bool, error) {
+func (s *Service) validateExecutionOnBlock(ctx context.Context, ver int, header interfaces.ExecutionData, block blocks.ROBlock) (bool, error) {
 	isValidPayload, err := s.notifyNewPayload(ctx, ver, header, block)
 	if err != nil {
 		s.cfg.ForkChoiceStore.Lock()

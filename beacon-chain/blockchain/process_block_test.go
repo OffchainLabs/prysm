@@ -40,6 +40,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"github.com/prysmaticlabs/prysm/v5/testing/util"
 	prysmTime "github.com/prysmaticlabs/prysm/v5/time"
+	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
@@ -2445,4 +2446,255 @@ func fakeResult(missing []uint64) map[uint64]struct{} {
 		r[missing[i]] = struct{}{}
 	}
 	return r
+}
+
+func TestSaveLightClientUpdate(t *testing.T) {
+	s, tr := minimalTestService(t)
+	ctx := tr.ctx
+
+	t.Run("Altair", func(t *testing.T) {
+		l := util.NewTestLightClient(t).SetupTestAltair()
+
+		s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().AltairForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
+
+		err := s.cfg.BeaconDB.SaveBlock(ctx, l.AttestedBlock)
+		require.NoError(t, err)
+		attestedBlockRoot, err := l.AttestedBlock.Block().HashTreeRoot()
+		require.NoError(t, err)
+		err = s.cfg.BeaconDB.SaveState(ctx, l.AttestedState, attestedBlockRoot)
+		require.NoError(t, err)
+
+		currentBlockRoot, err := l.Block.Block().HashTreeRoot()
+		require.NoError(t, err)
+		roblock, err := consensusblocks.NewROBlockWithRoot(l.Block, currentBlockRoot)
+		require.NoError(t, err)
+
+		err = s.cfg.BeaconDB.SaveBlock(ctx, roblock)
+		require.NoError(t, err)
+		err = s.cfg.BeaconDB.SaveState(ctx, l.State, currentBlockRoot)
+		require.NoError(t, err)
+
+		err = s.cfg.BeaconDB.SaveBlock(ctx, l.FinalizedBlock)
+		require.NoError(t, err)
+
+		cfg := &postBlockProcessConfig{
+			ctx:            ctx,
+			roblock:        roblock,
+			postState:      l.State,
+			isValidPayload: true,
+		}
+
+		s.saveLightClientUpdate(cfg)
+
+		// Check that the light client update is saved
+		period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedState.Slot()))
+
+		u, err := s.cfg.BeaconDB.LightClientUpdate(ctx, period)
+		require.NoError(t, err)
+		require.NotNil(t, u)
+		attestedStateRoot, err := l.AttestedState.HashTreeRoot(ctx)
+		require.NoError(t, err)
+		require.Equal(t, attestedStateRoot, [32]byte(u.AttestedHeader().Beacon().StateRoot))
+		require.Equal(t, u.Version(), version.Altair)
+	})
+
+	t.Run("Capella", func(t *testing.T) {
+		l := util.NewTestLightClient(t).SetupTestCapella(false)
+
+		s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().CapellaForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
+
+		err := s.cfg.BeaconDB.SaveBlock(ctx, l.AttestedBlock)
+		require.NoError(t, err)
+		attestedBlockRoot, err := l.AttestedBlock.Block().HashTreeRoot()
+		require.NoError(t, err)
+		err = s.cfg.BeaconDB.SaveState(ctx, l.AttestedState, attestedBlockRoot)
+		require.NoError(t, err)
+
+		currentBlockRoot, err := l.Block.Block().HashTreeRoot()
+		require.NoError(t, err)
+		roblock, err := consensusblocks.NewROBlockWithRoot(l.Block, currentBlockRoot)
+		require.NoError(t, err)
+
+		err = s.cfg.BeaconDB.SaveBlock(ctx, roblock)
+		require.NoError(t, err)
+		err = s.cfg.BeaconDB.SaveState(ctx, l.State, currentBlockRoot)
+		require.NoError(t, err)
+
+		err = s.cfg.BeaconDB.SaveBlock(ctx, l.FinalizedBlock)
+		require.NoError(t, err)
+
+		cfg := &postBlockProcessConfig{
+			ctx:            ctx,
+			roblock:        roblock,
+			postState:      l.State,
+			isValidPayload: true,
+		}
+
+		s.saveLightClientUpdate(cfg)
+
+		// Check that the light client update is saved
+		period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedState.Slot()))
+		u, err := s.cfg.BeaconDB.LightClientUpdate(ctx, period)
+		require.NoError(t, err)
+		require.NotNil(t, u)
+		attestedStateRoot, err := l.AttestedState.HashTreeRoot(ctx)
+		require.NoError(t, err)
+		require.Equal(t, attestedStateRoot, [32]byte(u.AttestedHeader().Beacon().StateRoot))
+		require.Equal(t, u.Version(), version.Capella)
+	})
+
+	t.Run("Deneb", func(t *testing.T) {
+		l := util.NewTestLightClient(t).SetupTestDeneb(false)
+
+		s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().DenebForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
+
+		err := s.cfg.BeaconDB.SaveBlock(ctx, l.AttestedBlock)
+		require.NoError(t, err)
+		attestedBlockRoot, err := l.AttestedBlock.Block().HashTreeRoot()
+		require.NoError(t, err)
+		err = s.cfg.BeaconDB.SaveState(ctx, l.AttestedState, attestedBlockRoot)
+		require.NoError(t, err)
+
+		currentBlockRoot, err := l.Block.Block().HashTreeRoot()
+		require.NoError(t, err)
+		roblock, err := consensusblocks.NewROBlockWithRoot(l.Block, currentBlockRoot)
+		require.NoError(t, err)
+
+		err = s.cfg.BeaconDB.SaveBlock(ctx, roblock)
+		require.NoError(t, err)
+		err = s.cfg.BeaconDB.SaveState(ctx, l.State, currentBlockRoot)
+		require.NoError(t, err)
+
+		err = s.cfg.BeaconDB.SaveBlock(ctx, l.FinalizedBlock)
+		require.NoError(t, err)
+
+		cfg := &postBlockProcessConfig{
+			ctx:            ctx,
+			roblock:        roblock,
+			postState:      l.State,
+			isValidPayload: true,
+		}
+
+		s.saveLightClientUpdate(cfg)
+
+		// Check that the light client update is saved
+		period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedState.Slot()))
+		u, err := s.cfg.BeaconDB.LightClientUpdate(ctx, period)
+		require.NoError(t, err)
+		require.NotNil(t, u)
+		attestedStateRoot, err := l.AttestedState.HashTreeRoot(ctx)
+		require.NoError(t, err)
+		require.Equal(t, attestedStateRoot, [32]byte(u.AttestedHeader().Beacon().StateRoot))
+		require.Equal(t, u.Version(), version.Deneb)
+	})
+}
+
+func TestSaveLightClientBootstrap(t *testing.T) {
+	s, tr := minimalTestService(t)
+	ctx := tr.ctx
+
+	t.Run("Altair", func(t *testing.T) {
+		l := util.NewTestLightClient(t).SetupTestAltair()
+
+		s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().AltairForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
+
+		currentBlockRoot, err := l.Block.Block().HashTreeRoot()
+		require.NoError(t, err)
+		roblock, err := consensusblocks.NewROBlockWithRoot(l.Block, currentBlockRoot)
+		require.NoError(t, err)
+
+		err = s.cfg.BeaconDB.SaveBlock(ctx, roblock)
+		require.NoError(t, err)
+		err = s.cfg.BeaconDB.SaveState(ctx, l.State, currentBlockRoot)
+		require.NoError(t, err)
+
+		cfg := &postBlockProcessConfig{
+			ctx:            ctx,
+			roblock:        roblock,
+			postState:      l.State,
+			isValidPayload: true,
+		}
+
+		s.saveLightClientBootstrap(cfg)
+
+		// Check that the light client bootstrap is saved
+		b, err := s.cfg.BeaconDB.LightClientBootstrap(ctx, currentBlockRoot[:])
+		require.NoError(t, err)
+		require.NotNil(t, b)
+
+		stateRoot, err := l.State.HashTreeRoot(ctx)
+		require.NoError(t, err)
+		require.Equal(t, stateRoot, [32]byte(b.Header().Beacon().StateRoot))
+		require.Equal(t, b.Version(), version.Altair)
+	})
+
+	t.Run("Capella", func(t *testing.T) {
+		l := util.NewTestLightClient(t).SetupTestCapella(false)
+
+		s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().CapellaForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
+
+		currentBlockRoot, err := l.Block.Block().HashTreeRoot()
+		require.NoError(t, err)
+		roblock, err := consensusblocks.NewROBlockWithRoot(l.Block, currentBlockRoot)
+		require.NoError(t, err)
+
+		err = s.cfg.BeaconDB.SaveBlock(ctx, roblock)
+		require.NoError(t, err)
+		err = s.cfg.BeaconDB.SaveState(ctx, l.State, currentBlockRoot)
+		require.NoError(t, err)
+
+		cfg := &postBlockProcessConfig{
+			ctx:            ctx,
+			roblock:        roblock,
+			postState:      l.State,
+			isValidPayload: true,
+		}
+
+		s.saveLightClientBootstrap(cfg)
+
+		// Check that the light client bootstrap is saved
+		b, err := s.cfg.BeaconDB.LightClientBootstrap(ctx, currentBlockRoot[:])
+		require.NoError(t, err)
+		require.NotNil(t, b)
+
+		stateRoot, err := l.State.HashTreeRoot(ctx)
+		require.NoError(t, err)
+		require.Equal(t, stateRoot, [32]byte(b.Header().Beacon().StateRoot))
+		require.Equal(t, b.Version(), version.Capella)
+	})
+
+	t.Run("Deneb", func(t *testing.T) {
+		l := util.NewTestLightClient(t).SetupTestDeneb(false)
+
+		s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().DenebForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
+
+		currentBlockRoot, err := l.Block.Block().HashTreeRoot()
+		require.NoError(t, err)
+		roblock, err := consensusblocks.NewROBlockWithRoot(l.Block, currentBlockRoot)
+		require.NoError(t, err)
+
+		err = s.cfg.BeaconDB.SaveBlock(ctx, roblock)
+		require.NoError(t, err)
+		err = s.cfg.BeaconDB.SaveState(ctx, l.State, currentBlockRoot)
+		require.NoError(t, err)
+
+		cfg := &postBlockProcessConfig{
+			ctx:            ctx,
+			roblock:        roblock,
+			postState:      l.State,
+			isValidPayload: true,
+		}
+
+		s.saveLightClientBootstrap(cfg)
+
+		// Check that the light client bootstrap is saved
+		b, err := s.cfg.BeaconDB.LightClientBootstrap(ctx, currentBlockRoot[:])
+		require.NoError(t, err)
+		require.NotNil(t, b)
+
+		stateRoot, err := l.State.HashTreeRoot(ctx)
+		require.NoError(t, err)
+		require.Equal(t, stateRoot, [32]byte(b.Header().Beacon().StateRoot))
+		require.Equal(t, b.Version(), version.Deneb)
+	})
 }
