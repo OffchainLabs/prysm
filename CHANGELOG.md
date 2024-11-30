@@ -126,6 +126,8 @@ Notable features:
 - Check kzg commitments align with blobs and proofs for beacon api end point.
 - Revert "Proposer checks gas limit before accepting builder's bid".
 - Updated quic-go to v0.48.2 .
+- Process light client finality updates only for new finalized epochs instead of doing it for every block.
+- Enforce Compound prefix (0x02) for target when processing pending consolidation request.
 
 ### Deprecated
 

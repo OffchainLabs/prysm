@@ -35,7 +35,7 @@ mainnet = {
     "pending_deposits_limit": "134217728",
     "pending_partial_withdrawals_limit": "134217728",
     "pending_consolidations_limit": "262144",
-    "max_consolidation_requests_per_payload.size": "1",
+    "max_consolidation_requests_per_payload.size": "2",
     "field_elements_per_cell.size": "64",
     "field_elements_per_ext_blob.size": "8192",
     "bytes_per_cell.size": "2048",  # FIELD_ELEMENTS_PER_CELL * BYTES_PER_FIELD_ELEMENT
@@ -72,7 +72,7 @@ minimal = {
     "pending_deposits_limit": "134217728",
     "pending_partial_withdrawals_limit": "64",
     "pending_consolidations_limit": "64",
-    "max_consolidation_requests_per_payload.size": "1",
+    "max_consolidation_requests_per_payload.size": "2",
     "field_elements_per_cell.size": "64",
     "field_elements_per_ext_blob.size": "8192",
     "bytes_per_cell.size": "2048",  # FIELD_ELEMENTS_PER_CELL * BYTES_PER_FIELD_ELEMENT

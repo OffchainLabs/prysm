@@ -218,7 +218,7 @@ func TestProcessConsolidationRequests(t *testing.T) {
 				}
 				// Validator scenario setup. See comments in reqs section.
 				st.Validators[3].WithdrawalCredentials = bytesutil.Bytes32(0)
-				st.Validators[8].WithdrawalCredentials = bytesutil.Bytes32(0)
+				st.Validators[8].WithdrawalCredentials = bytesutil.Bytes32(1)
 				st.Validators[9].ActivationEpoch = params.BeaconConfig().FarFutureEpoch
 				st.Validators[12].ActivationEpoch = params.BeaconConfig().FarFutureEpoch
 				st.Validators[13].ExitEpoch = 10
@@ -246,7 +246,7 @@ func TestProcessConsolidationRequests(t *testing.T) {
 					SourcePubkey:  []byte("val_5"),
 					TargetPubkey:  []byte("val_6"),
 				},
-				// Target does not have their withdrawal credentials set appropriately.
+				// Target does not have their withdrawal credentials set appropriately. (Using eth1 address prefix)
 				{
 					SourceAddress: append(bytesutil.PadTo(nil, 19), byte(7)),
 					SourcePubkey:  []byte("val_7"),
