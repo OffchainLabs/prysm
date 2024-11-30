@@ -205,7 +205,7 @@ func (r *blindedBlockReconstructor) requestBodiesByHash(ctx context.Context, cli
 func (r *blindedBlockReconstructor) payloadForHeader(header interfaces.ExecutionData, v int) (proto.Message, error) {
 	bodyKey := bytesutil.ToBytes32(header.BlockHash())
 	if bodyKey == params.BeaconConfig().ZeroHash {
-		payload, err := buildEmptyExecutionPayload(v)
+		payload, err := EmptyExecutionPayload(v)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to reconstruct payload for body hash %#x", bodyKey)
 		}

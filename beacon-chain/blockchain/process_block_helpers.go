@@ -15,7 +15,6 @@ import (
 	doublylinkedtree "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/doubly-linked-tree"
 	forkchoicetypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/types"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
 	field_params "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	consensus_blocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
@@ -24,7 +23,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	mathutil "github.com/prysmaticlabs/prysm/v5/math"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	ethpbv2 "github.com/prysmaticlabs/prysm/v5/proto/eth/v2"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/sirupsen/logrus"
@@ -55,7 +53,7 @@ func (s *Service) getFCUArgsEarlyBlock(cfg *postBlockProcessConfig, fcuArgs *fcu
 		fcuArgs.headState = cfg.postState
 		fcuArgs.headBlock = cfg.roblock
 		fcuArgs.headRoot = cfg.headRoot
-		fcuArgs.proposingSlot = s.CurrentSlot() + 1
+		fcuArgs.proposingSlot = s.CurrentSlot() * 1
 		return nil
 	}
 	return s.fcuArgsNonCanonicalBlock(cfg, fcuArgs)
@@ -91,7 +89,7 @@ func (s *Service) fcuArgsNonCanonicalBlock(cfg *postBlockProcessConfig, fcuArgs 
 	fcuArgs.headState = headState
 	fcuArgs.headBlock = headBlock
 	fcuArgs.headRoot = cfg.headRoot
-	fcuArgs.proposingSlot = s.CurrentSlot() + 1
+	fcuArgs.proposingSlot = s.CurrentSlot() * 1
 	return nil
 }
 
@@ -115,64 +113,131 @@ func (s *Service) sendStateFeedOnBlock(cfg *postBlockProcessConfig) {
 	})
 }
 
-// sendLightClientFeeds sends the light client feeds when feature flag is enabled.
-func (s *Service) sendLightClientFeeds(cfg *postBlockProcessConfig) {
-	if features.Get().EnableLightClient {
-		if _, err := s.sendLightClientOptimisticUpdate(cfg.ctx, cfg.roblock, cfg.postState); err != nil {
-			log.WithError(err).Error("Failed to send light client optimistic update")
-		}
-
-		// Get the finalized checkpoint
-		finalized := s.ForkChoicer().FinalizedCheckpoint()
-
-		// LightClientFinalityUpdate needs super majority
-		s.tryPublishLightClientFinalityUpdate(cfg.ctx, cfg.roblock, finalized, cfg.postState)
+func (s *Service) processLightClientUpdates(cfg *postBlockProcessConfig) {
+	if err := s.processLightClientOptimisticUpdate(cfg.ctx, cfg.roblock, cfg.postState); err != nil {
+		log.WithError(err).Error("Failed to process light client optimistic update")
+	}
+	if err := s.processLightClientFinalityUpdate(cfg.ctx, cfg.roblock, cfg.postState); err != nil {
+		log.WithError(err).Error("Failed to process light client finality update")
 	}
 }
 
-func (s *Service) tryPublishLightClientFinalityUpdate(ctx context.Context, signed interfaces.ReadOnlySignedBeaconBlock, finalized *forkchoicetypes.Checkpoint, postState state.BeaconState) {
-	if finalized.Epoch <= s.lastPublishedLightClientEpoch {
-		return
-	}
+// saveLightClientUpdate saves the light client update for this block
+// if it's better than the already saved one, when feature flag is enabled.
+func (s *Service) saveLightClientUpdate(cfg *postBlockProcessConfig) {
+	//if !features.Get().EnableLightClient && slots.ToEpoch(s.CurrentSlot()) >= params.BeaconConfig().AltairForkEpoch {
+	//	return
+	//}
 
-	config := params.BeaconConfig()
-	if finalized.Epoch < config.AltairForkEpoch {
-		return
-	}
-
-	syncAggregate, err := signed.Block().Body().SyncAggregate()
-	if err != nil || syncAggregate == nil {
-		return
-	}
-
-	// LightClientFinalityUpdate needs super majority
-	if syncAggregate.SyncCommitteeBits.Count()*3 < config.SyncCommitteeSize*2 {
-		return
-	}
-
-	_, err = s.sendLightClientFinalityUpdate(ctx, signed, postState)
+	attestedRoot := cfg.roblock.Block().ParentRoot()
+	attestedBlock, err := s.getBlock(cfg.ctx, attestedRoot)
 	if err != nil {
-		log.WithError(err).Error("Failed to send light client finality update")
+		log.WithError(err).Error("Saving light client update failed: Could not get attested block")
+		return
+	}
+	if attestedBlock == nil || attestedBlock.IsNil() {
+		log.Error("Saving light client update failed: Attested block is nil")
+		return
+	}
+	attestedState, err := s.cfg.StateGen.StateByRoot(cfg.ctx, attestedRoot)
+	if err != nil {
+		log.WithError(err).Error("Saving light client update failed: Could not get attested state")
+		return
+	}
+	if attestedState == nil || attestedState.IsNil() {
+		log.Error("Saving light client update failed: Attested state is nil")
+		return
+	}
+
+	finalizedRoot := attestedState.FinalizedCheckpoint().Root
+	finalizedBlock, err := s.getBlock(cfg.ctx, [32]byte(finalizedRoot))
+	if err != nil {
+		log.WithError(err).Error("Saving light client update failed: Could not get finalized block")
+		return
+	}
+
+	update, err := lightclient.NewLightClientUpdateFromBeaconState(
+		cfg.ctx,
+		s.CurrentSlot(),
+		cfg.postState,
+		cfg.roblock,
+		attestedState,
+		attestedBlock,
+		finalizedBlock,
+	)
+	if err != nil {
+		log.WithError(err).Error("Saving light client update failed: Could not create light client update")
+		return
+	}
+
+	period := slots.SyncCommitteePeriod(slots.ToEpoch(attestedState.Slot()))
+
+	oldUpdate, err := s.cfg.BeaconDB.LightClientUpdate(cfg.ctx, period)
+	if err != nil {
+		log.WithError(err).Error("Saving light client update failed: Could not get current light client update")
+		return
+	}
+
+	if oldUpdate == nil {
+		if err := s.cfg.BeaconDB.SaveLightClientUpdate(cfg.ctx, period, update); err != nil {
+			log.WithError(err).Error("Saving light client update failed: Could not save light client update")
+		} else {
+			log.WithField("period", period).Debug("Saving light client update: Saved new update")
+		}
+		return
+	}
+
+	isNewUpdateBetter, err := lightclient.IsBetterUpdate(update, oldUpdate)
+	if err != nil {
+		log.WithError(err).Error("Saving light client update failed: Could not compare light client updates")
+		return
+	}
+
+	if isNewUpdateBetter {
+		if err := s.cfg.BeaconDB.SaveLightClientUpdate(cfg.ctx, period, update); err != nil {
+			log.WithError(err).Error("Saving light client update failed: Could not save light client update")
+		} else {
+			log.WithField("period", period).Debug("Saving light client update: Saved new update")
+		}
 	} else {
-		s.lastPublishedLightClientEpoch = finalized.Epoch
+		log.WithField("period", period).Debug("Saving light client update: New update is not better than the current one. Skipping save.")
 	}
 }
 
-// sendLightClientFinalityUpdate sends a light client finality update notification to the state feed.
-func (s *Service) sendLightClientFinalityUpdate(ctx context.Context, signed interfaces.ReadOnlySignedBeaconBlock,
-	postState state.BeaconState) (int, error) {
-	// Get attested state
+// saveLightClientBootstrap saves a light client bootstrap for this block
+// when feature flag is enabled.
+func (s *Service) saveLightClientBootstrap(cfg *postBlockProcessConfig) {
+	//if !features.Get().EnableLightClient && slots.ToEpoch(s.CurrentSlot()) >= params.BeaconConfig().AltairForkEpoch {
+	//	return
+	//}
+
+	blockRoot := cfg.roblock.Root()
+	bootstrap, err := lightclient.NewLightClientBootstrapFromBeaconState(cfg.ctx, s.CurrentSlot(), cfg.postState, cfg.roblock)
+	if err != nil {
+		log.WithError(err).Error("Saving light client bootstrap failed: Could not create light client bootstrap")
+		return
+	}
+	err = s.cfg.BeaconDB.SaveLightClientBootstrap(cfg.ctx, blockRoot[:], bootstrap)
+	if err != nil {
+		log.WithError(err).Error("Saving light client bootstrap failed: Could not save light client bootstrap in DB")
+	}
+}
+
+func (s *Service) processLightClientFinalityUpdate(
+	ctx context.Context,
+	signed interfaces.ReadOnlySignedBeaconBlock,
+	postState state.BeaconState,
+) error {
 	attestedRoot := signed.Block().ParentRoot()
 	attestedBlock, err := s.cfg.BeaconDB.Block(ctx, attestedRoot)
 	if err != nil {
-		return 0, errors.Wrap(err, "could not get attested block")
+		return errors.Wrap(err, "could not get attested block")
 	}
 	attestedState, err := s.cfg.StateGen.StateByRoot(ctx, attestedRoot)
 	if err != nil {
-		return 0, errors.Wrap(err, "could not get attested state")
+		return errors.Wrap(err, "could not get attested state")
 	}
 
-	// Get finalized block
 	var finalizedBlock interfaces.ReadOnlySignedBeaconBlock
 	finalizedCheckPoint := attestedState.FinalizedCheckpoint()
 	if finalizedCheckPoint != nil {
@@ -185,6 +250,7 @@ func (s *Service) sendLightClientFinalityUpdate(ctx context.Context, signed inte
 
 	update, err := lightclient.NewLightClientFinalityUpdateFromBeaconState(
 		ctx,
+		postState.Slot(),
 		postState,
 		signed,
 		attestedState,
@@ -193,38 +259,31 @@ func (s *Service) sendLightClientFinalityUpdate(ctx context.Context, signed inte
 	)
 
 	if err != nil {
-		return 0, errors.Wrap(err, "could not create light client update")
+		return errors.Wrap(err, "could not create light client finality update")
 	}
 
-	// Return the result
-	result := &ethpbv2.LightClientFinalityUpdateWithVersion{
-		Version: ethpbv2.Version(signed.Version()),
-		Data:    update,
-	}
-
-	// Send event
-	return s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
+	s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
 		Type: statefeed.LightClientFinalityUpdate,
-		Data: result,
-	}), nil
+		Data: update,
+	})
+	return nil
 }
 
-// sendLightClientOptimisticUpdate sends a light client optimistic update notification to the state feed.
-func (s *Service) sendLightClientOptimisticUpdate(ctx context.Context, signed interfaces.ReadOnlySignedBeaconBlock,
-	postState state.BeaconState) (int, error) {
-	// Get attested state
+func (s *Service) processLightClientOptimisticUpdate(ctx context.Context, signed interfaces.ReadOnlySignedBeaconBlock,
+	postState state.BeaconState) error {
 	attestedRoot := signed.Block().ParentRoot()
 	attestedBlock, err := s.cfg.BeaconDB.Block(ctx, attestedRoot)
 	if err != nil {
-		return 0, errors.Wrap(err, "could not get attested block")
+		return errors.Wrap(err, "could not get attested block")
 	}
 	attestedState, err := s.cfg.StateGen.StateByRoot(ctx, attestedRoot)
 	if err != nil {
-		return 0, errors.Wrap(err, "could not get attested state")
+		return errors.Wrap(err, "could not get attested state")
 	}
 
 	update, err := lightclient.NewLightClientOptimisticUpdateFromBeaconState(
 		ctx,
+		postState.Slot(),
 		postState,
 		signed,
 		attestedState,
@@ -232,19 +291,15 @@ func (s *Service) sendLightClientOptimisticUpdate(ctx context.Context, signed in
 	)
 
 	if err != nil {
-		return 0, errors.Wrap(err, "could not create light client update")
+		return errors.Wrap(err, "could not create light client optimistic update")
 	}
 
-	// Return the result
-	result := &ethpbv2.LightClientOptimisticUpdateWithVersion{
-		Version: ethpbv2.Version(signed.Version()),
-		Data:    update,
-	}
-
-	return s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
+	s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
 		Type: statefeed.LightClientOptimisticUpdate,
-		Data: result,
-	}), nil
+		Data: update,
+	})
+
+	return nil
 }
 
 // updateCachesPostBlockProcessing updates the next slot cache and handles the epoch

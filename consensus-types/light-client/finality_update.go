@@ -139,6 +139,23 @@ func (u *finalityUpdateAltair) SizeSSZ() int {
 	return u.p.SizeSSZ()
 }
 
+func (u *finalityUpdateAltair) UnmarshalSSZ(buf []byte) error {
+	p := &pb.LightClientFinalityUpdateAltair{}
+	if err := p.UnmarshalSSZ(buf); err != nil {
+		return err
+	}
+	updateInterface, err := NewWrappedFinalityUpdateAltair(p)
+	if err != nil {
+		return err
+	}
+	update, ok := updateInterface.(*finalityUpdateAltair)
+	if !ok {
+		return fmt.Errorf("unexpected update type %T", updateInterface)
+	}
+	*u = *update
+	return nil
+}
+
 func (u *finalityUpdateAltair) Proto() proto.Message {
 	return u.p
 }
@@ -219,6 +236,23 @@ func (u *finalityUpdateCapella) MarshalSSZ() ([]byte, error) {
 
 func (u *finalityUpdateCapella) SizeSSZ() int {
 	return u.p.SizeSSZ()
+}
+
+func (u *finalityUpdateCapella) UnmarshalSSZ(buf []byte) error {
+	p := &pb.LightClientFinalityUpdateCapella{}
+	if err := p.UnmarshalSSZ(buf); err != nil {
+		return err
+	}
+	updateInterface, err := NewWrappedFinalityUpdateCapella(p)
+	if err != nil {
+		return err
+	}
+	update, ok := updateInterface.(*finalityUpdateCapella)
+	if !ok {
+		return fmt.Errorf("unexpected update type %T", updateInterface)
+	}
+	*u = *update
+	return nil
 }
 
 func (u *finalityUpdateCapella) Proto() proto.Message {
@@ -303,6 +337,23 @@ func (u *finalityUpdateDeneb) SizeSSZ() int {
 	return u.p.SizeSSZ()
 }
 
+func (u *finalityUpdateDeneb) UnmarshalSSZ(buf []byte) error {
+	p := &pb.LightClientFinalityUpdateDeneb{}
+	if err := p.UnmarshalSSZ(buf); err != nil {
+		return err
+	}
+	updateInterface, err := NewWrappedFinalityUpdateDeneb(p)
+	if err != nil {
+		return err
+	}
+	update, ok := updateInterface.(*finalityUpdateDeneb)
+	if !ok {
+		return fmt.Errorf("unexpected update type %T", updateInterface)
+	}
+	*u = *update
+	return nil
+}
+
 func (u *finalityUpdateDeneb) Proto() proto.Message {
 	return u.p
 }
@@ -384,6 +435,23 @@ func (u *finalityUpdateElectra) MarshalSSZ() ([]byte, error) {
 
 func (u *finalityUpdateElectra) SizeSSZ() int {
 	return u.p.SizeSSZ()
+}
+
+func (u *finalityUpdateElectra) UnmarshalSSZ(buf []byte) error {
+	p := &pb.LightClientFinalityUpdateElectra{}
+	if err := p.UnmarshalSSZ(buf); err != nil {
+		return err
+	}
+	updateInterface, err := NewWrappedFinalityUpdateElectra(p)
+	if err != nil {
+		return err
+	}
+	update, ok := updateInterface.(*finalityUpdateElectra)
+	if !ok {
+		return fmt.Errorf("unexpected update type %T", updateInterface)
+	}
+	*u = *update
+	return nil
 }
 
 func (u *finalityUpdateElectra) Proto() proto.Message {

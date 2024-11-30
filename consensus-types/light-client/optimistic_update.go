@@ -104,6 +104,23 @@ func (u *optimisticUpdateAltair) SizeSSZ() int {
 	return u.p.SizeSSZ()
 }
 
+func (u *optimisticUpdateAltair) UnmarshalSSZ(buf []byte) error {
+	p := &pb.LightClientOptimisticUpdateAltair{}
+	if err := p.UnmarshalSSZ(buf); err != nil {
+		return err
+	}
+	updateInterface, err := NewWrappedOptimisticUpdateAltair(p)
+	if err != nil {
+		return err
+	}
+	update, ok := updateInterface.(*optimisticUpdateAltair)
+	if !ok {
+		return fmt.Errorf("unexpected update type %T", updateInterface)
+	}
+	*u = *update
+	return nil
+}
+
 func (u *optimisticUpdateAltair) Proto() proto.Message {
 	return u.p
 }
@@ -158,6 +175,23 @@ func (u *optimisticUpdateCapella) SizeSSZ() int {
 	return u.p.SizeSSZ()
 }
 
+func (u *optimisticUpdateCapella) UnmarshalSSZ(buf []byte) error {
+	p := &pb.LightClientOptimisticUpdateCapella{}
+	if err := p.UnmarshalSSZ(buf); err != nil {
+		return err
+	}
+	updateInterface, err := NewWrappedOptimisticUpdateCapella(p)
+	if err != nil {
+		return err
+	}
+	update, ok := updateInterface.(*optimisticUpdateCapella)
+	if !ok {
+		return fmt.Errorf("unexpected update type %T", updateInterface)
+	}
+	*u = *update
+	return nil
+}
+
 func (u *optimisticUpdateCapella) Proto() proto.Message {
 	return u.p
 }
@@ -210,6 +244,23 @@ func (u *optimisticUpdateDeneb) MarshalSSZ() ([]byte, error) {
 
 func (u *optimisticUpdateDeneb) SizeSSZ() int {
 	return u.p.SizeSSZ()
+}
+
+func (u *optimisticUpdateDeneb) UnmarshalSSZ(buf []byte) error {
+	p := &pb.LightClientOptimisticUpdateDeneb{}
+	if err := p.UnmarshalSSZ(buf); err != nil {
+		return err
+	}
+	updateInterface, err := NewWrappedOptimisticUpdateDeneb(p)
+	if err != nil {
+		return err
+	}
+	update, ok := updateInterface.(*optimisticUpdateDeneb)
+	if !ok {
+		return fmt.Errorf("unexpected update type %T", updateInterface)
+	}
+	*u = *update
+	return nil
 }
 
 func (u *optimisticUpdateDeneb) Proto() proto.Message {

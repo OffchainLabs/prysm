@@ -168,6 +168,10 @@ func (u *updateAltair) FinalityBranch() (interfaces.LightClientFinalityBranch, e
 	return u.finalityBranch, nil
 }
 
+func (u *updateAltair) FinalityBranchElectra() (interfaces.LightClientFinalityBranchElectra, error) {
+	return interfaces.LightClientFinalityBranchElectra{}, consensustypes.ErrNotSupported("FinalityBranchElectra", version.Altair)
+}
+
 func (u *updateAltair) SetFinalityBranch(branch [][]byte) error {
 	b, err := createBranch[interfaces.LightClientFinalityBranch]("finality", branch, fieldparams.FinalityBranchDepth)
 	if err != nil {
@@ -176,10 +180,6 @@ func (u *updateAltair) SetFinalityBranch(branch [][]byte) error {
 	u.finalityBranch = b
 	u.p.FinalityBranch = branch
 	return nil
-}
-
-func (u *updateAltair) FinalityBranchElectra() (interfaces.LightClientFinalityBranchElectra, error) {
-	return interfaces.LightClientFinalityBranchElectra{}, consensustypes.ErrNotSupported("FinalityBranchElectra", version.Altair)
 }
 
 func (u *updateAltair) SyncAggregate() *pb.SyncAggregate {
@@ -335,6 +335,10 @@ func (u *updateCapella) FinalityBranch() (interfaces.LightClientFinalityBranch, 
 	return u.finalityBranch, nil
 }
 
+func (u *updateCapella) FinalityBranchElectra() (interfaces.LightClientFinalityBranchElectra, error) {
+	return interfaces.LightClientFinalityBranchElectra{}, consensustypes.ErrNotSupported("FinalityBranchElectra", u.Version())
+}
+
 func (u *updateCapella) SetFinalityBranch(branch [][]byte) error {
 	b, err := createBranch[interfaces.LightClientFinalityBranch]("finality", branch, fieldparams.FinalityBranchDepth)
 	if err != nil {
@@ -343,10 +347,6 @@ func (u *updateCapella) SetFinalityBranch(branch [][]byte) error {
 	u.finalityBranch = b
 	u.p.FinalityBranch = branch
 	return nil
-}
-
-func (u *updateCapella) FinalityBranchElectra() (interfaces.LightClientFinalityBranchElectra, error) {
-	return interfaces.LightClientFinalityBranchElectra{}, consensustypes.ErrNotSupported("FinalityBranchElectra", u.Version())
 }
 
 func (u *updateCapella) SyncAggregate() *pb.SyncAggregate {
@@ -502,6 +502,10 @@ func (u *updateDeneb) FinalityBranch() (interfaces.LightClientFinalityBranch, er
 	return u.finalityBranch, nil
 }
 
+func (u *updateDeneb) FinalityBranchElectra() (interfaces.LightClientFinalityBranchElectra, error) {
+	return interfaces.LightClientFinalityBranchElectra{}, consensustypes.ErrNotSupported("FinalityBranchElectra", u.Version())
+}
+
 func (u *updateDeneb) SetFinalityBranch(branch [][]byte) error {
 	b, err := createBranch[interfaces.LightClientFinalityBranch]("finality", branch, fieldparams.FinalityBranchDepth)
 	if err != nil {
@@ -510,10 +514,6 @@ func (u *updateDeneb) SetFinalityBranch(branch [][]byte) error {
 	u.finalityBranch = b
 	u.p.FinalityBranch = branch
 	return nil
-}
-
-func (u *updateDeneb) FinalityBranchElectra() (interfaces.LightClientFinalityBranchElectra, error) {
-	return interfaces.LightClientFinalityBranchElectra{}, consensustypes.ErrNotSupported("FinalityBranchElectra", u.Version())
 }
 
 func (u *updateDeneb) SyncAggregate() *pb.SyncAggregate {
@@ -670,6 +670,10 @@ func (u *updateElectra) FinalityBranch() (interfaces.LightClientFinalityBranch, 
 	return interfaces.LightClientFinalityBranch{}, consensustypes.ErrNotSupported("FinalityBranch", u.Version())
 }
 
+func (u *updateElectra) FinalityBranchElectra() (interfaces.LightClientFinalityBranchElectra, error) {
+	return u.finalityBranch, nil
+}
+
 func (u *updateElectra) SetFinalityBranch(branch [][]byte) error {
 	b, err := createBranch[interfaces.LightClientFinalityBranchElectra]("finality", branch, fieldparams.FinalityBranchDepthElectra)
 	if err != nil {
@@ -678,10 +682,6 @@ func (u *updateElectra) SetFinalityBranch(branch [][]byte) error {
 	u.finalityBranch = b
 	u.p.FinalityBranch = branch
 	return nil
-}
-
-func (u *updateElectra) FinalityBranchElectra() (interfaces.LightClientFinalityBranchElectra, error) {
-	return u.finalityBranch, nil
 }
 
 func (u *updateElectra) SyncAggregate() *pb.SyncAggregate {
