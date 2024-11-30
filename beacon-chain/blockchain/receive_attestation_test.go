@@ -10,7 +10,6 @@ import (
 	forkchoicetypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/types"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	consensus_blocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
@@ -87,9 +86,7 @@ func TestProcessAttestations_Ok(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, state, blkRoot))
 	attsToSave := make([]ethpb.Att, len(atts))
-	for i, a := range atts {
-		attsToSave[i] = a
-	}
+	copy(attsToSave, atts)
 	require.NoError(t, service.cfg.AttPool.SaveForkchoiceAttestations(attsToSave))
 	service.processAttestations(ctx, 0)
 	require.Equal(t, 0, len(service.cfg.AttPool.ForkchoiceAttestations()))
@@ -119,7 +116,7 @@ func TestService_ProcessAttestationsAndUpdateHead(t *testing.T) {
 	postState, err := service.validateStateTransition(ctx, preState, wsb)
 	require.NoError(t, err)
 	require.NoError(t, service.savePostStateInfo(ctx, tRoot, wsb, postState))
-	roblock, err := consensus_blocks.NewROBlockWithRoot(wsb, tRoot)
+	roblock, err := blocks.NewROBlockWithRoot(wsb, tRoot)
 	require.NoError(t, err)
 	require.NoError(t, service.postBlockProcess(&postBlockProcessConfig{ctx, roblock, [32]byte{}, postState, false}))
 	copied, err = service.cfg.StateGen.StateByRoot(ctx, tRoot)
@@ -131,9 +128,7 @@ func TestService_ProcessAttestationsAndUpdateHead(t *testing.T) {
 	atts, err := util.GenerateAttestations(copied, pks, 1, 1, false)
 	require.NoError(t, err)
 	attsToSave := make([]ethpb.Att, len(atts))
-	for i, a := range atts {
-		attsToSave[i] = a
-	}
+	copy(attsToSave, atts)
 	require.NoError(t, service.cfg.AttPool.SaveForkchoiceAttestations(attsToSave))
 	// Verify the target is in forkchoice
 	require.Equal(t, true, fcs.HasNode(bytesutil.ToBytes32(atts[0].GetData().BeaconBlockRoot)))
@@ -181,7 +176,7 @@ func TestService_UpdateHead_NoAtts(t *testing.T) {
 	postState, err := service.validateStateTransition(ctx, preState, wsb)
 	require.NoError(t, err)
 	require.NoError(t, service.savePostStateInfo(ctx, tRoot, wsb, postState))
-	roblock, err := consensus_blocks.NewROBlockWithRoot(wsb, tRoot)
+	roblock, err := blocks.NewROBlockWithRoot(wsb, tRoot)
 	require.NoError(t, err)
 	require.NoError(t, service.postBlockProcess(&postBlockProcessConfig{ctx, roblock, [32]byte{}, postState, false}))
 	require.Equal(t, 2, fcs.NodeCount())
