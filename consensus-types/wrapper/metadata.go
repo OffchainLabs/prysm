@@ -8,6 +8,9 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// MetadataV0
+// ----------
+
 // MetadataV0 is a convenience wrapper around our metadata protobuf object.
 type MetadataV0 struct {
 	md *pb.MetaDataV0
@@ -26,6 +29,11 @@ func (m MetadataV0) SequenceNumber() uint64 {
 // AttnetsBitfield returns the bitfield stored in the metadata.
 func (m MetadataV0) AttnetsBitfield() bitfield.Bitvector64 {
 	return m.md.Attnets
+}
+
+// SyncnetsBitfield returns the bitfield stored in the metadata.
+func (m MetadataV0) SyncnetsBitfield() bitfield.Bitvector4 {
+	return bitfield.Bitvector4{0}
 }
 
 // InnerObject returns the underlying metadata protobuf structure.
@@ -74,16 +82,19 @@ func (m MetadataV0) MetadataObjV0() *pb.MetaDataV0 {
 
 // MetadataObjV1 returns the inner metadata object in its type
 // specified form. If it doesn't exist then we return nothing.
-func (_ MetadataV0) MetadataObjV1() *pb.MetaDataV1 {
+func (MetadataV0) MetadataObjV1() *pb.MetaDataV1 {
 	return nil
 }
 
 // Version returns the fork version of the underlying object.
-func (_ MetadataV0) Version() int {
+func (MetadataV0) Version() int {
 	return version.Phase0
 }
 
-// MetadataV1 is a convenience wrapper around our metadata v2 protobuf object.
+// MetadataV1
+// ----------
+
+// MetadataV1 is a convenience wrapper around our metadata v1 protobuf object.
 type MetadataV1 struct {
 	md *pb.MetaDataV1
 }
@@ -101,6 +112,11 @@ func (m MetadataV1) SequenceNumber() uint64 {
 // AttnetsBitfield returns the bitfield stored in the metadata.
 func (m MetadataV1) AttnetsBitfield() bitfield.Bitvector64 {
 	return m.md.Attnets
+}
+
+// SyncnetsBitfield returns the bitfield stored in the metadata.
+func (m MetadataV1) SyncnetsBitfield() bitfield.Bitvector4 {
+	return m.md.Syncnets
 }
 
 // InnerObject returns the underlying metadata protobuf structure.
@@ -143,7 +159,7 @@ func (m MetadataV1) UnmarshalSSZ(buf []byte) error {
 
 // MetadataObjV0 returns the inner metadata object in its type
 // specified form. If it doesn't exist then we return nothing.
-func (_ MetadataV1) MetadataObjV0() *pb.MetaDataV0 {
+func (MetadataV1) MetadataObjV0() *pb.MetaDataV0 {
 	return nil
 }
 
@@ -154,6 +170,6 @@ func (m MetadataV1) MetadataObjV1() *pb.MetaDataV1 {
 }
 
 // Version returns the fork version of the underlying object.
-func (_ MetadataV1) Version() int {
+func (MetadataV1) Version() int {
 	return version.Altair
 }

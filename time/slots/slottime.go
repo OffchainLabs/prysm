@@ -9,6 +9,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	mathutil "github.com/prysmaticlabs/prysm/v5/math"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	prysmTime "github.com/prysmaticlabs/prysm/v5/time"
 	"github.com/sirupsen/logrus"
 )
@@ -79,6 +80,25 @@ func AbsoluteValueSlotDifference(x, y primitives.Slot) uint64 {
 //	  return Epoch(slot // SLOTS_PER_EPOCH)
 func ToEpoch(slot primitives.Slot) primitives.Epoch {
 	return primitives.Epoch(slot.DivSlot(params.BeaconConfig().SlotsPerEpoch))
+}
+
+// ToForkVersion translates a slot into it's corresponding version.
+func ToForkVersion(slot primitives.Slot) int {
+	epoch := ToEpoch(slot)
+	switch {
+	case epoch >= params.BeaconConfig().ElectraForkEpoch:
+		return version.Electra
+	case epoch >= params.BeaconConfig().DenebForkEpoch:
+		return version.Deneb
+	case epoch >= params.BeaconConfig().CapellaForkEpoch:
+		return version.Capella
+	case epoch >= params.BeaconConfig().BellatrixForkEpoch:
+		return version.Bellatrix
+	case epoch >= params.BeaconConfig().AltairForkEpoch:
+		return version.Altair
+	default:
+		return version.Phase0
+	}
 }
 
 // EpochStart returns the first slot number of the

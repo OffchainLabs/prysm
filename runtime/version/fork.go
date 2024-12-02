@@ -1,6 +1,8 @@
 package version
 
-import "github.com/pkg/errors"
+import (
+	"github.com/pkg/errors"
+)
 
 const (
 	Phase0 = iota
