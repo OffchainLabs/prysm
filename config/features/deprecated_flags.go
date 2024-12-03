@@ -83,6 +83,12 @@ var (
 		Usage:  deprecatedUsage,
 		Hidden: true,
 	}
+
+	deprecatedEnableQuic = &cli.BoolFlag{
+		Name:   "enable-quic",
+		Usage:  deprecatedUsage,
+		Hidden: true,
+	}
 )
 
 // Deprecated flags for both the beacon node and validator client.
@@ -101,6 +107,7 @@ var deprecatedFlags = []cli.Flag{
 	deprecatedDisableGRPCGateway,
 	deprecatedEnableExperimentalState,
 	deprecatedEnableCommitteeAwarePacking,
+	deprecatedEnableQuic,
 }
 
 // deprecatedBeaconFlags contains flags that are still used by other components

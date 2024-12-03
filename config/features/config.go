@@ -254,9 +254,10 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 		logEnabled(BlobSaveFsync)
 		cfg.BlobSaveFsync = true
 	}
-	if ctx.IsSet(EnableQUIC.Name) {
-		logEnabled(EnableQUIC)
-		cfg.EnableQUIC = true
+	cfg.EnableQUIC = true
+	if ctx.IsSet(DisableQUIC.Name) {
+		logDisabled(DisableQUIC)
+		cfg.EnableQUIC = false
 	}
 	if ctx.IsSet(DisableCommitteeAwarePacking.Name) {
 		logEnabled(DisableCommitteeAwarePacking)
