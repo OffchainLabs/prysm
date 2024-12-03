@@ -144,23 +144,6 @@ func configureNetwork(cliCtx *cli.Context) {
 	}
 }
 
-func configureInteropConfig(cliCtx *cli.Context) error {
-	// an explicit chain config was specified, don't mess with it
-	if cliCtx.IsSet(cmd.ChainConfigFileFlag.Name) {
-		return nil
-	}
-	genTimeIsSet := cliCtx.IsSet(flags.InteropGenesisTimeFlag.Name)
-	numValsIsSet := cliCtx.IsSet(flags.InteropNumValidatorsFlag.Name)
-	votesIsSet := cliCtx.IsSet(flags.InteropMockEth1DataVotesFlag.Name)
-
-	if genTimeIsSet || numValsIsSet || votesIsSet {
-		if err := params.SetActive(params.InteropConfig().Copy()); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func configureExecutionSetting(cliCtx *cli.Context) error {
 	if cliCtx.IsSet(flags.TerminalTotalDifficultyOverride.Name) {
 		c := params.BeaconConfig()
