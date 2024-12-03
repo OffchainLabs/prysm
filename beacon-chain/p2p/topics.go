@@ -34,6 +34,8 @@ const (
 	GossipLightClientFinalityUpdateMessage = "light_client_finality_update"
 	// GossipLightClientOptimisticUpdateMessage is the name for the light client optimistic update message type.
 	GossipLightClientOptimisticUpdateMessage = "light_client_optimistic_update"
+	GossipInclusionList                      = "inclusion_list"
+
 	// Topic Formats
 	//
 	// AttestationSubnetTopicFormat is the topic format for the attestation subnet.
@@ -60,4 +62,6 @@ const (
 	LightClientFinalityUpdateTopicFormat = GossipProtocolAndDigest + GossipLightClientFinalityUpdateMessage
 	// LightClientOptimisticUpdateTopicFormat is the topic format for the light client optimistic update subnet.
 	LightClientOptimisticUpdateTopicFormat = GossipProtocolAndDigest + GossipLightClientOptimisticUpdateMessage
+	BlobSubnetTopicFormat                  = GossipProtocolAndDigest + GossipBlobSidecarMessage + "_%d"
+	InclusionListTopicFormat               = GossipProtocolAndDigest + GossipInclusionList
 )

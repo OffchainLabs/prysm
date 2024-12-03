@@ -194,6 +194,13 @@ func WithAvailableBlocker(avb coverage.AvailableBlocker) Option {
 func WithSlasherEnabled(enabled bool) Option {
 	return func(s *Service) error {
 		s.slasherEnabled = enabled
+	}
+}
+
+// WithInclusionListsCache allows sync pkg to access inclusion lists cache.
+func WithInclusionListsCache(c *cache.InclusionLists) Option {
+	return func(s *Service) error {
+		s.inclusionLists = c
 		return nil
 	}
 }

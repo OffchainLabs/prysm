@@ -225,6 +225,12 @@ func WithSlasherEnabled(enabled bool) Option {
 func WithLightClientStore(lcs *lightclient.Store) Option {
 	return func(s *Service) error {
 		s.lcStore = lcs
+	}
+}
+
+func WithInclusionListCache(c *cache.InclusionLists) Option {
+	return func(s *Service) error {
+		s.inclusionListCache = c
 		return nil
 	}
 }

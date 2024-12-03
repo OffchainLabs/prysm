@@ -5,6 +5,7 @@ go_library(
     srcs = [
         "aggregate.go",
         "attest.go",
+        "inclusion_list.go",
         "key_reload.go",
         "log.go",
         "metrics.go",

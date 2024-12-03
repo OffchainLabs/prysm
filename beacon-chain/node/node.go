@@ -103,6 +103,7 @@ type BeaconNode struct {
 	depositCache            cache.DepositCache
 	trackedValidatorsCache  *cache.TrackedValidatorsCache
 	payloadIDCache          *cache.PayloadIDCache
+	inclusionLists          *cache.InclusionLists
 	stateFeed               *event.Feed
 	blockFeed               *event.Feed
 	opFeed                  *event.Feed
@@ -156,6 +157,7 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 		blsToExecPool:           blstoexec.NewPool(),
 		trackedValidatorsCache:  cache.NewTrackedValidatorsCache(),
 		payloadIDCache:          cache.NewPayloadIDCache(),
+		inclusionLists:          cache.NewInclusionLists(),
 		slasherBlockHeadersFeed: new(event.Feed),
 		slasherAttestationsFeed: new(event.Feed),
 		serviceFlagOpts:         &serviceFlagOpts{},
@@ -780,6 +782,7 @@ func (b *BeaconNode) registerBlockchainService(fc forkchoice.ForkChoicer, gs *st
 		blockchain.WithSyncChecker(b.syncChecker),
 		blockchain.WithSlasherEnabled(b.slasherEnabled),
 		blockchain.WithLightClientStore(b.lcStore),
+		blockchain.WithInclusionListCache(b.inclusionLists),
 	)
 
 	blockchainService, err := blockchain.NewService(b.ctx, opts...)
@@ -866,6 +869,7 @@ func (b *BeaconNode) registerSyncService(initialSyncComplete chan struct{}, bFil
 		regularsync.WithAvailableBlocker(bFillStore),
 		regularsync.WithSlasherEnabled(b.slasherEnabled),
 		regularsync.WithLightClientStore(b.lcStore),
+		regularsync.WithInclusionListsCache(b.inclusionLists),
 	)
 	return b.services.RegisterService(rs)
 }
@@ -1013,6 +1017,7 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		TrackedValidatorsCache:    b.trackedValidatorsCache,
 		PayloadIDCache:            b.payloadIDCache,
 		LCStore:                   b.lcStore,
+		InclusionListsCache:       b.inclusionLists,
 	})
 
 	return b.services.RegisterService(rpcService)

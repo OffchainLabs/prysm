@@ -24,6 +24,7 @@ import "proto/eth/ext/options.proto";
 import "proto/prysm/v1alpha1/beacon_block.proto";
 import "proto/prysm/v1alpha1/sync_committee.proto";
 import "proto/prysm/v1alpha1/attestation.proto";
+import "proto/prysm/v1alpha1/focil.proto";
 
 option csharp_namespace = "Ethereum.Eth.V1";
 option go_package = "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1;eth";
@@ -114,12 +115,13 @@ service BeaconNodeValidator {
   //
   // The status response can be one of the following:
   //	DEPOSITED - validator's deposit has been recognized by Ethereum 1, not
-  //yet recognized by Ethereum. 	PENDING - validator is in Ethereum's activation
-  //queue. 	ACTIVE - validator is active. 	EXITING - validator has initiated an an
-  //exit request, or has dropped below the ejection balance and is being kicked
-  //out. 	EXITED - validator is no longer validating. 	SLASHING - validator has
-  //been kicked out due to meeting a slashing condition. 	UNKNOWN_STATUS -
-  //validator does not have a known status in the network.
+  // yet recognized by Ethereum. 	PENDING - validator is in Ethereum's
+  // activation queue. 	ACTIVE - validator is active. 	EXITING - validator has
+  // initiated an an exit request, or has dropped below the ejection balance and
+  // is being kicked out. 	EXITED - validator is no longer validating.
+  // SLASHING - validator has been kicked out due to meeting a slashing
+  // condition. 	UNKNOWN_STATUS - validator does not have a known status
+  // in the network.
   rpc ValidatorStatus(ValidatorStatusRequest)
       returns (ValidatorStatusResponse) {
     option deprecated = true;
@@ -414,6 +416,18 @@ service BeaconNodeValidator {
       get : "/eth/v1alpha1/validator/blocks/aggregated_sig_and_aggregation_bits"
     };
   }
+
+  rpc GetInclusionList(GetInclusionListRequest) returns (InclusionList) {}
+  rpc SubmitInclusionList(SignedInclusionList) returns (google.protobuf.Empty) {
+
+  }
+}
+
+message GetInclusionListRequest {
+  uint64 slot = 1 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"
+  ];
 }
 
 // SyncMessageBlockRootResponse for beacon chain validator to retrieve and
@@ -738,6 +752,11 @@ message DutiesResponse {
 
     // The number of committees in the duty's slot.
     uint64 committees_at_slot = 9;
+
+    uint64 inclusion_list_committee_slot = 100 [
+      (ethereum.eth.ext.cast_type) =
+          "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"
+    ];
   }
 }
 
@@ -760,8 +779,9 @@ message BlockRequest {
   // that returned block will always be a local block.
   bool skip_mev_boost = 4;
 
-  // Percentage multiplier to apply to the builder's payload value when choosing
-  // between a builder payload header and payload from the paired execution node
+  // Percentage multiplier to apply to the builder's payload value when
+  // choosing between a builder payload header and payload from the paired
+  // execution node
   google.protobuf.UInt64Value builder_boost_factor = 5;
 }
 
@@ -820,8 +840,8 @@ message AggregateSelectionRequest {
     (ethereum.eth.ext.ssz_size) = "48",
     (ethereum.eth.ext.spec_name) = "pubkey"
   ];
-  // 96 byte signature of the validator on the slot. This is used as proof that
-  // the validator is an aggregator for the given slot.
+  // 96 byte signature of the validator on the slot. This is used as proof
+  // that the validator is an aggregator for the given slot.
   bytes slot_signature = 4 [ (ethereum.eth.ext.ssz_size) = "96" ];
 }
 
@@ -868,8 +888,8 @@ message CommitteeSubnetsSubscribeRequest {
     (ethereum.eth.ext.cast_type) =
         "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"
   ];
-  // A list of intended committee ids to subscribe. It is mapped 1-to-1 with the
-  // slots
+  // A list of intended committee ids to subscribe. It is mapped 1-to-1 with
+  // the slots
   repeated uint64 committee_ids = 2
       [ (ethereum.eth.ext.cast_type) =
             "github.com/OffchainLabs/prysm/v6/consensus-types/"
@@ -877,8 +897,8 @@ message CommitteeSubnetsSubscribeRequest {
   // Whether to subscribe as an aggregator or by default attester.
   // It is mapped 1-to-1 with the slots and committee ids.
   // Subscribe as an aggregator means to join the subnet.
-  // Subscribe as an attester means finding persistent peers on the subnet to be
-  // able to publish attestations.
+  // Subscribe as an attester means finding persistent peers on the subnet to
+  // be able to publish attestations.
   repeated bool is_aggregator = 3;
 }
 
@@ -909,8 +929,8 @@ message Validator {
   ];
 
   // Epoch when the validator was activated. This field may be zero if the
-  // validator was present in the Ethereum proof of stake genesis. This field is
-  // FAR_FUTURE_EPOCH if the validator has not been activated.
+  // validator was present in the Ethereum proof of stake genesis. This field
+  // is FAR_FUTURE_EPOCH if the validator has not been activated.
   uint64 activation_epoch = 6 [
     (ethereum.eth.ext.cast_type) =
         "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"
@@ -989,8 +1009,9 @@ message ValidatorIdentity {
   ];
 }
 
-// DoppelGangerRequest represents the request sent by the validator in order to
-// determine if there is any duplicate instance of it running in the network.
+// DoppelGangerRequest represents the request sent by the validator in order
+// to determine if there is any duplicate instance of it running in the
+// network.
 message DoppelGangerRequest {
   option deprecated = true;
 

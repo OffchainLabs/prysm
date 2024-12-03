@@ -165,6 +165,14 @@ func (BeaconBlock) SetParentRoot(_ []byte) {
 	panic("implement me")
 }
 
+func (m BeaconBlock) NotSatisfyingInclusionList() bool {
+	panic("implement me")
+}
+
+func (m BeaconBlock) MarkInclusionListNotSatisfied() {
+	panic("implement me")
+}
+
 type BeaconBlockBody struct{}
 
 func (BeaconBlockBody) RandaoReveal() [field_params.BLSSignatureLength]byte {

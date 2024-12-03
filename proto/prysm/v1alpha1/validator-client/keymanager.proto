@@ -6,6 +6,7 @@ import "proto/prysm/v1alpha1/attestation.proto";
 import "proto/prysm/v1alpha1/beacon_block.proto";
 import "proto/prysm/v1alpha1/beacon_state.proto";
 import "proto/prysm/v1alpha1/sync_committee.proto";
+import "proto/prysm/v1alpha1/focil.proto";
 
 option csharp_namespace = "Ethereum.Validator.Accounts.V2";
 option go_package = "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/validator-client;validatorpb";
@@ -79,6 +80,9 @@ message SignRequest {
     // Fulu objects.
     ethereum.eth.v1alpha1.BeaconBlockElectra block_fulu = 121;
     ethereum.eth.v1alpha1.BlindedBeaconBlockFulu blinded_block_fulu = 122;
+
+    // Focil objects.
+    ethereum.eth.v1alpha1.InclusionList inclusion_list = 200;
   }
 
   reserved 4, 5; // Reserving old, deleted fields.

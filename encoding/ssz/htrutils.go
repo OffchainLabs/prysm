@@ -5,6 +5,8 @@ import (
 	"encoding/binary"
 
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
@@ -173,6 +175,21 @@ func ByteSliceRoot(slice []byte, maxLength uint64) ([32]byte, error) {
 	bytesRootBufRoot := make([]byte, 32)
 	copy(bytesRootBufRoot, bytesRootBuf.Bytes())
 	return MixInLength(bytesRoot, bytesRootBufRoot), nil
+}
+
+// InclusionListRoot computes and returns the hash tree root of a list of inclusion list committee indices.
+func InclusionListRoot(committee []primitives.ValidatorIndex) ([32]byte, error) {
+	b := make([][]byte, params.BeaconConfig().InclusionListCommitteeSize)
+	for i := 0; i < len(committee) && i < len(b); i++ {
+		buf := make([]byte, 8)
+		binary.LittleEndian.PutUint64(buf, uint64(committee[i]))
+		b[i] = buf
+	}
+	chunks, err := PackByChunk(b)
+	if err != nil {
+		return [32]byte{}, err
+	}
+	return BitwiseMerkleize(chunks, uint64(len(chunks)), uint64(len(chunks)))
 }
 
 func withdrawalRoot(w *enginev1.Withdrawal) ([32]byte, error) {

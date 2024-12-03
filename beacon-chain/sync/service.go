@@ -167,6 +167,7 @@ type Service struct {
 	ctxMap                           ContextByteVersions
 	slasherEnabled                   bool
 	lcStore                          *lightClient.Store
+	inclusionLists                   *cache.InclusionLists
 }
 
 // NewService initializes new regular sync service.

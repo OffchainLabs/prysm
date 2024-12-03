@@ -334,3 +334,11 @@ func (c *beaconApiValidatorClient) Host() string {
 func (c *beaconApiValidatorClient) SetHost(host string) {
 	c.jsonRestHandler.SetHost(host)
 }
+
+func (c *beaconApiValidatorClient) GetInclusionList(request *ethpb.GetInclusionListRequest) (*ethpb.InclusionList, error) {
+	panic("implement me")
+}
+
+func (c *beaconApiValidatorClient) SubmitInclusionList(il *ethpb.SignedInclusionList) (*empty.Empty, error) {
+	panic("implement me")
+}

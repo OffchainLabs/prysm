@@ -71,4 +71,18 @@ var (
 		Name: "execution_payload_bodies_count",
 		Help: "The number of requested payload bodies is too large",
 	})
+	getInclusionListLatency = promauto.NewHistogram(
+		prometheus.HistogramOpts{
+			Name:    "get_inclusion_list_v1_latency_milliseconds",
+			Help:    "Captures RPC latency for getInclusionListV1 in milliseconds",
+			Buckets: []float64{25, 50, 100, 200, 500, 1000, 2000, 4000},
+		},
+	)
+	updatePayloadWithInclusionListLatency = promauto.NewHistogram(
+		prometheus.HistogramOpts{
+			Name:    "update_payload_inclusion_list_v1_latency_milliseconds",
+			Help:    "Captures RPC latency for updatePayloadWithInclusionListV1 in milliseconds",
+			Buckets: []float64{25, 50, 100, 200, 500, 1000, 2000, 4000},
+		},
+	)
 )

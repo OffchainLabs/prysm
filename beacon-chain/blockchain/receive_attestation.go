@@ -108,6 +108,14 @@ func (s *Service) spawnProcessAttestationsRoutine() {
 					s.cfg.ForkChoiceStore.Unlock()
 
 					s.UpdateHead(s.ctx, slotInterval.Slot)
+
+					// Prune inclusion list that's more than 1 epoch old.
+					// Mean at the second 0 of slot 100, we prune the inclusion list of slot 98.
+					cachedSlot := primitives.Slot(0)
+					if slotInterval.Slot > 2 {
+						cachedSlot = slotInterval.Slot - 2
+					}
+					s.inclusionListCache.Delete(cachedSlot)
 				}
 			}
 		}
