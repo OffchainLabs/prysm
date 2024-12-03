@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+package ethereum.eth.v1alpha1;
+
+import "proto/eth/ext/options.proto";
+
+option csharp_namespace = "Ethereum.Eth.v1alpha1";
+option go_package = "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1;eth";
+option java_multiple_files = true;
+option java_outer_classname = "FOCILProto";
+option java_package = "org.ethereum.eth.v1alpha1";
+option php_namespace = "Ethereum\\Eth\\v1alpha1";
+
+message InclusionList {
+  uint64 slot = 1 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"
+  ];
+  uint64 validator_index = 2
+      [ (ethereum.eth.ext.cast_type) =
+            "github.com/prysmaticlabs/prysm/v5/consensus-types/"
+            "primitives.ValidatorIndex" ];
+  bytes inclusion_list_committee_root = 3
+      [ (ethereum.eth.ext.ssz_size) = "32" ];
+  repeated bytes transactions = 4 [
+    (ethereum.eth.ext.ssz_size) = "?,?",
+    (ethereum.eth.ext.ssz_max) = "1048576,1073741824"
+  ];
+}
+
+message SignedInclusionList {
+  InclusionList message = 1;
+  bytes signature = 2 [ (ethereum.eth.ext.ssz_size) = "96" ];
+}

@@ -47,6 +47,8 @@ type ReadOnlyBeaconBlock interface {
 	ssz.HashRoot
 	Version() int
 	AsSignRequestObject() (validatorpb.SignRequestObject, error)
+	NotSatisfyingInclusionList() bool
+	MarkInclusionListNotSatisfied()
 }
 
 // ReadOnlyBeaconBlockBody describes the method set employed by an object

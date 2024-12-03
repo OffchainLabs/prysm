@@ -80,6 +80,7 @@ type Server struct {
 	ClockWaiter             startup.ClockWaiter
 	CoreService             *core.Service
 	AttestationStateFetcher blockchain.AttestationStateFetcher
+	InclusionLists          *cache.InclusionLists
 }
 
 // WaitForActivation checks if a validator public key exists in the active validator registry of the current

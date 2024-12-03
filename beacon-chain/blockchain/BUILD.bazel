@@ -12,6 +12,7 @@ go_library(
         "forkchoice_update_execution.go",
         "head.go",
         "head_sync_committee_info.go",
+        "inclusion_list.go",
         "init_sync_process_block.go",
         "log.go",
         "merge_ascii_art.go",

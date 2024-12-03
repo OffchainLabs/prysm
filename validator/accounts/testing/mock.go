@@ -108,6 +108,8 @@ type Validator struct {
 	proposerSettings *proposer.Settings
 }
 
+func (_ *Validator) SubmitInclusionList(ctx context.Context, slot primitives.Slot, pubKey [48]byte) {}
+
 func (_ *Validator) LogSubmittedSyncCommitteeMessages() {}
 
 func (_ *Validator) Done() {

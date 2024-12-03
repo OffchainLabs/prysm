@@ -13,6 +13,7 @@ go_library(
         "error.go",
         "fork_watcher.go",
         "fuzz_exports.go",  # keep
+        "inclusion_list.go",
         "log.go",
         "metrics.go",
         "options.go",
@@ -108,6 +109,7 @@ go_library(
         "//crypto/bls:go_default_library",
         "//crypto/rand:go_default_library",
         "//encoding/bytesutil:go_default_library",
+        "//encoding/ssz:go_default_library",
         "//encoding/ssz/equality:go_default_library",
         "//io/file:go_default_library",
         "//monitoring/tracing:go_default_library",

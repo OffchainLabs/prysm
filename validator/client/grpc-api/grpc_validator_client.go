@@ -262,3 +262,11 @@ func (*grpcValidatorClient) Host() string {
 func (*grpcValidatorClient) SetHost(_ string) {
 	log.Warn(iface.ErrNotSupported)
 }
+
+func (c *grpcValidatorClient) GetInclusionList(request *ethpb.GetInclusionListRequest) (*ethpb.InclusionList, error) {
+	return c.beaconNodeValidatorClient.GetInclusionList(context.Background(), request)
+}
+
+func (c *grpcValidatorClient) SubmitInclusionList(il *ethpb.SignedInclusionList) (*empty.Empty, error) {
+	return c.beaconNodeValidatorClient.SubmitInclusionList(context.Background(), il)
+}

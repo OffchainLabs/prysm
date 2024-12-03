@@ -65,6 +65,7 @@ type Service struct {
 	blobNotifiers        *blobNotifierMap
 	blockBeingSynced     *currentlySyncingBlock
 	blobStorage          *filesystem.BlobStorage
+	inclusionListCache   *cache.InclusionLists
 }
 
 // config options for the service.
@@ -215,6 +216,7 @@ func (s *Service) Start() {
 	}
 	s.spawnProcessAttestationsRoutine()
 	go s.runLateBlockTasks()
+	go s.updateBlockWithInclusionListRoutine()
 }
 
 // Stop the blockchain service's main event loop and associated goroutines.

@@ -203,6 +203,26 @@ func (mr *MockBeaconNodeValidatorClientMockRecorder) GetFeeRecipientByPubKey(arg
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFeeRecipientByPubKey", reflect.TypeOf((*MockBeaconNodeValidatorClient)(nil).GetFeeRecipientByPubKey), varargs...)
 }
 
+// GetInclusionList mocks base method.
+func (m *MockBeaconNodeValidatorClient) GetInclusionList(arg0 context.Context, arg1 *eth.GetInclusionListRequest, arg2 ...grpc.CallOption) (*eth.InclusionList, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetInclusionList", varargs...)
+	ret0, _ := ret[0].(*eth.InclusionList)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetInclusionList indicates an expected call of GetInclusionList.
+func (mr *MockBeaconNodeValidatorClientMockRecorder) GetInclusionList(arg0, arg1 any, arg2 ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInclusionList", reflect.TypeOf((*MockBeaconNodeValidatorClient)(nil).GetInclusionList), varargs...)
+}
+
 // GetSyncCommitteeContribution mocks base method.
 func (m *MockBeaconNodeValidatorClient) GetSyncCommitteeContribution(arg0 context.Context, arg1 *eth.SyncCommitteeContributionRequest, arg2 ...grpc.CallOption) (*eth.SyncCommitteeContribution, error) {
 	m.ctrl.T.Helper()
@@ -461,6 +481,26 @@ func (mr *MockBeaconNodeValidatorClientMockRecorder) SubmitAggregateSelectionPro
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{arg0, arg1}, arg2...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitAggregateSelectionProofElectra", reflect.TypeOf((*MockBeaconNodeValidatorClient)(nil).SubmitAggregateSelectionProofElectra), varargs...)
+}
+
+// SubmitInclusionList mocks base method.
+func (m *MockBeaconNodeValidatorClient) SubmitInclusionList(arg0 context.Context, arg1 *eth.SignedInclusionList, arg2 ...grpc.CallOption) (*emptypb.Empty, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "SubmitInclusionList", varargs...)
+	ret0, _ := ret[0].(*emptypb.Empty)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SubmitInclusionList indicates an expected call of SubmitInclusionList.
+func (mr *MockBeaconNodeValidatorClientMockRecorder) SubmitInclusionList(arg0, arg1 any, arg2 ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitInclusionList", reflect.TypeOf((*MockBeaconNodeValidatorClient)(nil).SubmitInclusionList), varargs...)
 }
 
 // SubmitSignedAggregateSelectionProof mocks base method.

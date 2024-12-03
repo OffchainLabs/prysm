@@ -7,6 +7,7 @@ go_library(
         "beacon_committee.go",
         "block.go",
         "genesis.go",
+        "inclusion_list.go",
         "legacy.go",
         "metrics.go",
         "randao.go",
@@ -21,6 +22,7 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//beacon-chain/cache:go_default_library",
+        "//beacon-chain/core/signing:go_default_library",
         "//beacon-chain/core/time:go_default_library",
         "//beacon-chain/forkchoice/types:go_default_library",
         "//beacon-chain/state:go_default_library",

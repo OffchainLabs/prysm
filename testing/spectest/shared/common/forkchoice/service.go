@@ -103,7 +103,7 @@ func (m *engineMock) ForkchoiceUpdated(context.Context, *pb.ForkchoiceState, pay
 	return nil, m.latestValidHash, m.payloadStatus
 }
 
-func (m *engineMock) NewPayload(context.Context, interfaces.ExecutionData, []common.Hash, *common.Hash, *pb.ExecutionRequests) ([]byte, error) {
+func (m *engineMock) NewPayload(context.Context, interfaces.ExecutionData, []common.Hash, *common.Hash, *pb.ExecutionRequests, [][]byte) ([]byte, error) {
 	return m.latestValidHash, m.payloadStatus
 }
 
@@ -134,4 +134,12 @@ func (m *engineMock) ExecutionBlockByHash(_ context.Context, hash common.Hash, _
 
 func (m *engineMock) GetTerminalBlockHash(context.Context, uint64) ([]byte, bool, error) {
 	return nil, false, nil
+}
+
+func (m *engineMock) GetInclusionList(ctx context.Context, parentHash [32]byte) ([][]byte, error) {
+	return nil, nil
+}
+
+func (m *engineMock) UpdatePayloadWithInclusionList(ctx context.Context, payloadID primitives.PayloadID, txs [][]byte) (*primitives.PayloadID, error) {
+	return nil, nil
 }
