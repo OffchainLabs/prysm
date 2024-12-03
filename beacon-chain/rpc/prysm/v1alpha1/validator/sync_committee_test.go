@@ -26,14 +26,14 @@ import (
 )
 
 func TestGetSyncMessageBlockRoot_OK(t *testing.T) {
-	r := []byte{'a'}
+	r := [32]byte{'a'}
 	server := &Server{
-		HeadFetcher: &mock.ChainService{Root: r},
+		HeadFetcher: &mock.ChainService{Root: r[:]},
 		TimeFetcher: &mock.ChainService{Genesis: time.Now()},
 	}
 	res, err := server.GetSyncMessageBlockRoot(context.Background(), &emptypb.Empty{})
 	require.NoError(t, err)
-	require.DeepEqual(t, r, res.Root)
+	require.DeepEqual(t, r[:], res.Root)
 }
 
 func TestGetSyncMessageBlockRoot_Optimistic(t *testing.T) {

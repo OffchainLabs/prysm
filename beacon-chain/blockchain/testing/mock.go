@@ -348,6 +348,13 @@ func (s *ChainService) HeadRoot(_ context.Context) ([]byte, error) {
 	return make([]byte, 32), nil
 }
 
+func (s *ChainService) FilteredHeadRoot(_ context.Context) ([32]byte, error) {
+	if len(s.Root) > 0 {
+		return bytesutil.ToBytes32(s.Root), nil
+	}
+	return [32]byte{}, nil
+}
+
 // HeadBlock mocks HeadBlock method in chain service.
 func (s *ChainService) HeadBlock(context.Context) (interfaces.ReadOnlySignedBeaconBlock, error) {
 	return s.Block, nil

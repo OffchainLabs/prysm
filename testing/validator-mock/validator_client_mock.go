@@ -178,6 +178,21 @@ func (mr *MockValidatorClientMockRecorder) FeeRecipientByPubKey(arg0, arg1 any) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FeeRecipientByPubKey", reflect.TypeOf((*MockValidatorClient)(nil).FeeRecipientByPubKey), arg0, arg1)
 }
 
+// GetInclusionList mocks base method.
+func (m *MockValidatorClient) GetInclusionList(arg0 *eth.GetInclusionListRequest) (*eth.InclusionList, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetInclusionList", arg0)
+	ret0, _ := ret[0].(*eth.InclusionList)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetInclusionList indicates an expected call of GetInclusionList.
+func (mr *MockValidatorClientMockRecorder) GetInclusionList(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInclusionList", reflect.TypeOf((*MockValidatorClient)(nil).GetInclusionList), arg0)
+}
+
 // Host mocks base method.
 func (m *MockValidatorClient) Host() string {
 	m.ctrl.T.Helper()
@@ -334,6 +349,21 @@ func (m *MockValidatorClient) SubmitAggregateSelectionProofElectra(arg0 context.
 func (mr *MockValidatorClientMockRecorder) SubmitAggregateSelectionProofElectra(arg0, arg1, arg2, arg3 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitAggregateSelectionProofElectra", reflect.TypeOf((*MockValidatorClient)(nil).SubmitAggregateSelectionProofElectra), arg0, arg1, arg2, arg3)
+}
+
+// SubmitInclusionList mocks base method.
+func (m *MockValidatorClient) SubmitInclusionList(arg0 *eth.SignedInclusionList) (*emptypb.Empty, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SubmitInclusionList", arg0)
+	ret0, _ := ret[0].(*emptypb.Empty)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SubmitInclusionList indicates an expected call of SubmitInclusionList.
+func (mr *MockValidatorClientMockRecorder) SubmitInclusionList(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitInclusionList", reflect.TypeOf((*MockValidatorClient)(nil).SubmitInclusionList), arg0)
 }
 
 // SubmitSignedAggregateSelectionProof mocks base method.

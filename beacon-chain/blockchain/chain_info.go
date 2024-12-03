@@ -69,6 +69,7 @@ type GenesisFetcher interface {
 type HeadFetcher interface {
 	HeadSlot() primitives.Slot
 	HeadRoot(ctx context.Context) ([]byte, error)
+	FilteredHeadRoot(ctx context.Context) ([32]byte, error)
 	HeadBlock(ctx context.Context) (interfaces.ReadOnlySignedBeaconBlock, error)
 	HeadState(ctx context.Context) (state.BeaconState, error)
 	HeadStateReadOnly(ctx context.Context) (state.ReadOnlyBeaconState, error)
@@ -178,6 +179,39 @@ func (s *Service) HeadRoot(ctx context.Context) ([]byte, error) {
 	}
 
 	return r[:], nil
+}
+
+// FilteredHeadRoot returns the filtered head root of the chain.
+// If the head root does not satisfy the inclusion list constraint,
+// its parent root is returned.
+func (s *Service) FilteredHeadRoot(ctx context.Context) ([32]byte, error) {
+	s.headLock.RLock()
+	defer s.headLock.RUnlock()
+
+	if s.head != nil && s.head.root != params.BeaconConfig().ZeroHash {
+		if s.head.root == s.badInclusionListBlock {
+			return s.head.block.Block().ParentRoot(), nil
+		}
+		return s.head.root, nil
+	}
+
+	headBlock, err := s.cfg.BeaconDB.HeadBlock(ctx)
+	if err != nil {
+		return [32]byte{}, err
+	}
+	if headBlock == nil || headBlock.IsNil() {
+		return params.BeaconConfig().ZeroHash, nil
+	}
+
+	root, err := headBlock.Block().HashTreeRoot()
+	if err != nil {
+		return [32]byte{}, err
+	}
+	if root == s.badInclusionListBlock {
+		return headBlock.Block().ParentRoot(), nil
+	}
+
+	return root, nil
 }
 
 // HeadBlock returns the head block of the chain.

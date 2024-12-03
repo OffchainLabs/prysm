@@ -172,6 +172,15 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 			func(currentSlot primitives.Slot) []uint64 { return []uint64{} },
 		)
 	}
+
+	if params.BeaconConfig().FuluForkEpoch <= epoch {
+		s.subscribe(
+			p2p.InclusionListTopicFormat,
+			s.validateInclusionList,
+			s.subscriberInclusionList,
+			digest,
+		)
+	}
 }
 
 // subscribe to a given topic with a given validator and subscription handler.

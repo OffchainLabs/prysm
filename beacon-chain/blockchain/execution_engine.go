@@ -272,11 +272,28 @@ func (s *Service) notifyNewPayload(ctx context.Context, preStateVersion int,
 			return false, errors.New("nil execution requests")
 		}
 	}
-	lastValidHash, err = s.cfg.ExecutionEngineCaller.NewPayload(ctx, payload, versionedHashes, parentRoot, requests)
+
+	var txs [][]byte
+	// Post-FOCIL, only consider the inclusion list constraint if it matches the current slot.
+	if slots.ToEpoch(s.CurrentSlot()) >= params.BeaconConfig().Eip7805ForkEpoch && s.CurrentSlot() == blk.Block().Slot() {
+		txs = s.inclusionListCache.Get(blk.Block().Slot() - 1)
+	}
+	lastValidHash, err = s.cfg.ExecutionEngineCaller.NewPayload(ctx, payload, versionedHashes, parentRoot, requests, txs)
 
 	switch {
 	case err == nil:
 		newPayloadValidNodeCount.Inc()
+		return true, nil
+	case errors.Is(err, execution.ErrBadInclusionListPayloadStatus):
+		log.WithFields(logrus.Fields{
+			"slot":       blk.Block().Slot(),
+			"parentRoot": fmt.Sprintf("%#x", parentRoot),
+		}).Info("Called new payload but inclusion list didn't satisfy")
+		r, err := blk.Block().HashTreeRoot()
+		if err != nil {
+			return false, errors.Wrap(err, "could not get block hash tree root")
+		}
+		s.badInclusionListBlock = r // Cache the block root that fails to satisfy the inclusion list constraint.
 		return true, nil
 	case errors.Is(err, execution.ErrAcceptedSyncingPayloadStatus):
 		newPayloadOptimisticNodeCount.Inc()

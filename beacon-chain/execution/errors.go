@@ -34,5 +34,6 @@ var (
 	// ErrRequestTooLarge when the request is too large
 	ErrRequestTooLarge = errors.New("request too large")
 	// ErrUnsupportedVersion represents a case where a payload is requested for a block type that doesn't have a known mapping.
-	ErrUnsupportedVersion = errors.New("unknown ExecutionPayload schema for block version")
+	ErrUnsupportedVersion            = errors.New("unknown ExecutionPayload schema for block version")
+	ErrBadInclusionListPayloadStatus = errors.New("payload did not satisfy inclusion list")
 )

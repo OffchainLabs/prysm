@@ -22,13 +22,13 @@ func (vs *Server) GetSyncMessageBlockRoot(
 		return nil, err
 	}
 
-	r, err := vs.HeadFetcher.HeadRoot(ctx)
+	r, err := vs.HeadFetcher.FilteredHeadRoot(ctx) // Sync committee vote based on IL constrained head root.
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not retrieve head root: %v", err)
 	}
 
 	return &ethpb.SyncMessageBlockRootResponse{
-		Root: r,
+		Root: r[:],
 	}, nil
 }
 
@@ -72,7 +72,7 @@ func (vs *Server) GetSyncCommitteeContribution(
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not get sync subcommittee messages: %v", err)
 	}
-	headRoot, err := vs.HeadFetcher.HeadRoot(ctx)
+	headRoot, err := vs.HeadFetcher.FilteredHeadRoot(ctx)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not get head root: %v", err)
 	}
@@ -82,14 +82,14 @@ func (vs *Server) GetSyncCommitteeContribution(
 			Msgs:      msgs,
 			Slot:      req.Slot,
 			SubnetId:  req.SubnetId,
-			BlockRoot: headRoot,
+			BlockRoot: headRoot[:],
 		})
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not get contribution data: %v", err)
 	}
 	contribution := &ethpb.SyncCommitteeContribution{
 		Slot:              req.Slot,
-		BlockRoot:         headRoot,
+		BlockRoot:         headRoot[:],
 		SubcommitteeIndex: req.SubnetId,
 		AggregationBits:   aggregatedBits,
 		Signature:         sig,

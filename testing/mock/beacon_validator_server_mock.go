@@ -162,6 +162,21 @@ func (mr *MockBeaconNodeValidatorServerMockRecorder) GetFeeRecipientByPubKey(arg
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFeeRecipientByPubKey", reflect.TypeOf((*MockBeaconNodeValidatorServer)(nil).GetFeeRecipientByPubKey), arg0, arg1)
 }
 
+// GetInclusionList mocks base method.
+func (m *MockBeaconNodeValidatorServer) GetInclusionList(arg0 context.Context, arg1 *eth.GetInclusionListRequest) (*eth.InclusionList, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetInclusionList", arg0, arg1)
+	ret0, _ := ret[0].(*eth.InclusionList)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetInclusionList indicates an expected call of GetInclusionList.
+func (mr *MockBeaconNodeValidatorServerMockRecorder) GetInclusionList(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInclusionList", reflect.TypeOf((*MockBeaconNodeValidatorServer)(nil).GetInclusionList), arg0, arg1)
+}
+
 // GetSyncCommitteeContribution mocks base method.
 func (m *MockBeaconNodeValidatorServer) GetSyncCommitteeContribution(arg0 context.Context, arg1 *eth.SyncCommitteeContributionRequest) (*eth.SyncCommitteeContribution, error) {
 	m.ctrl.T.Helper()
@@ -353,6 +368,21 @@ func (m *MockBeaconNodeValidatorServer) SubmitAggregateSelectionProofElectra(arg
 func (mr *MockBeaconNodeValidatorServerMockRecorder) SubmitAggregateSelectionProofElectra(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitAggregateSelectionProofElectra", reflect.TypeOf((*MockBeaconNodeValidatorServer)(nil).SubmitAggregateSelectionProofElectra), arg0, arg1)
+}
+
+// SubmitInclusionList mocks base method.
+func (m *MockBeaconNodeValidatorServer) SubmitInclusionList(arg0 context.Context, arg1 *eth.SignedInclusionList) (*emptypb.Empty, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SubmitInclusionList", arg0, arg1)
+	ret0, _ := ret[0].(*emptypb.Empty)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SubmitInclusionList indicates an expected call of SubmitInclusionList.
+func (mr *MockBeaconNodeValidatorServerMockRecorder) SubmitInclusionList(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitInclusionList", reflect.TypeOf((*MockBeaconNodeValidatorServer)(nil).SubmitInclusionList), arg0, arg1)
 }
 
 // SubmitSignedAggregateSelectionProof mocks base method.

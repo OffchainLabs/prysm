@@ -221,6 +221,8 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	ElectraForkEpoch:     mainnetElectraForkEpoch,
 	FuluForkVersion:      []byte{6, 0, 0, 0},
 	FuluForkEpoch:        mainnetFuluForkEpoch,
+	Eip7805ForkEpoch:     math.MaxUint64,
+	Eip7805ForkVersion:   []byte{7, 0, 0, 0},
 
 	// New values introduced in Altair hard fork 1.
 	// Participation flag indices.
@@ -329,6 +331,8 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	DeprecatedMaxBlobsPerBlockElectra:    9,
 	DeprecatedTargetBlobsPerBlockElectra: 6,
 	MaxRequestBlobSidecarsElectra:        1152,
+
+	InclusionListCommitteeSize: 16,
 }
 
 // MainnetTestConfig provides a version of the mainnet config that has a different name

@@ -188,3 +188,11 @@ func WithAvailableBlocker(avb coverage.AvailableBlocker) Option {
 		return nil
 	}
 }
+
+// WithInclusionListsCache allows sync pkg to access inclusion lists cache.
+func WithInclusionListsCache(c *cache.InclusionLists) Option {
+	return func(s *Service) error {
+		s.inclusionLists = c
+		return nil
+	}
+}

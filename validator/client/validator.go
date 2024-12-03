@@ -743,6 +743,10 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 			syncCommitteeValidators[duty.ValidatorIndex] = bytesutil.ToBytes48(duty.PublicKey)
 		}
 
+		if duty.InclusionListCommitteeSlot == slot {
+			roles = append(roles, iface.RoleInclusionListCommittee)
+		}
+
 		if len(roles) == 0 {
 			roles = append(roles, iface.RoleUnknown)
 		}
@@ -961,6 +965,7 @@ func (v *validator) logDuties(slot primitives.Slot, currentEpochDuties []*ethpb.
 		attesterKeys[i] = make([]string, 0)
 	}
 	proposerKeys := make([]string, params.BeaconConfig().SlotsPerEpoch)
+	inclusionListCommitteeKeys := make(map[primitives.Slot][]string)
 	epochStartSlot, err := slots.EpochStart(slots.ToEpoch(slot))
 	if err != nil {
 		log.WithError(err).Error("Could not calculate epoch start. Ignoring logging duties.")
@@ -995,6 +1000,10 @@ func (v *validator) logDuties(slot primitives.Slot, currentEpochDuties []*ethpb.
 		} else if v.emitAccountMetrics && !duty.IsSyncCommittee {
 			// clear the metric out if the validator is not in the current sync committee anymore otherwise it will be left at 1
 			ValidatorInSyncCommitteeGaugeVec.WithLabelValues(pubkey).Set(float64(0))
+		}
+
+		if duty.InclusionListCommitteeSlot != 0 {
+			inclusionListCommitteeKeys[duty.InclusionListCommitteeSlot] = append(inclusionListCommitteeKeys[duty.InclusionListCommitteeSlot], truncatedPubkey)
 		}
 
 		for _, proposerSlot := range duty.ProposerSlots {
@@ -1042,12 +1051,19 @@ func (v *validator) logDuties(slot primitives.Slot, currentEpochDuties []*ethpb.
 			slotLog = slotLog.WithField("proposerPubkey", proposerKeys[i])
 		}
 		isAttester := len(attesterKeys[i]) > 0
+		slot := epochStartSlot + i
 		if isAttester {
 			slotLog = slotLog.WithFields(logrus.Fields{
-				"slot":            epochStartSlot + i,
-				"slotInEpoch":     (epochStartSlot + i) % params.BeaconConfig().SlotsPerEpoch,
+				"slot":            slot,
+				"slotInEpoch":     (slot) % params.BeaconConfig().SlotsPerEpoch,
 				"attesterCount":   len(attesterKeys[i]),
 				"attesterPubkeys": attesterKeys[i],
+			})
+		}
+		k, ok := inclusionListCommitteeKeys[slot]
+		if ok {
+			slotLog = slotLog.WithFields(logrus.Fields{
+				"inclusionListCommitteePubkey": k,
 			})
 		}
 		if durationTillDuty > 0 {

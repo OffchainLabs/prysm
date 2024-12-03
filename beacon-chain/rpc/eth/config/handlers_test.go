@@ -191,7 +191,7 @@ func TestGetSpec(t *testing.T) {
 	data, ok := resp.Data.(map[string]interface{})
 	require.Equal(t, true, ok)
 
-	assert.Equal(t, 161, len(data))
+	assert.Equal(t, 162, len(data))
 	for k, v := range data {
 		t.Run(k, func(t *testing.T) {
 			switch k {
@@ -538,6 +538,8 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "9", v)
 			case "MAX_REQUEST_BLOB_SIDECARS_ELECTRA":
 				assert.Equal(t, "1152", v)
+			case "DOMAIN_INCLUSION_LIST_COMMITTEE":
+				assert.Equal(t, "0x00000000", v)
 			default:
 				t.Errorf("Incorrect key: %s", k)
 			}

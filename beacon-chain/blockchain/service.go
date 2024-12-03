@@ -47,24 +47,26 @@ import (
 // Service represents a service that handles the internal
 // logic of managing the full PoS beacon chain.
 type Service struct {
-	cfg                  *config
-	ctx                  context.Context
-	cancel               context.CancelFunc
-	genesisTime          time.Time
-	head                 *head
-	headLock             sync.RWMutex
-	originBlockRoot      [32]byte // genesis root, or weak subjectivity checkpoint root, depending on how the node is initialized
-	boundaryRoots        [][32]byte
-	checkpointStateCache *cache.CheckpointStateCache
-	initSyncBlocks       map[[32]byte]interfaces.ReadOnlySignedBeaconBlock
-	initSyncBlocksLock   sync.RWMutex
-	wsVerifier           *WeakSubjectivityVerifier
-	clockSetter          startup.ClockSetter
-	clockWaiter          startup.ClockWaiter
-	syncComplete         chan struct{}
-	blobNotifiers        *blobNotifierMap
-	blockBeingSynced     *currentlySyncingBlock
-	blobStorage          *filesystem.BlobStorage
+	cfg                   *config
+	ctx                   context.Context
+	cancel                context.CancelFunc
+	genesisTime           time.Time
+	head                  *head
+	headLock              sync.RWMutex
+	originBlockRoot       [32]byte // genesis root, or weak subjectivity checkpoint root, depending on how the node is initialized
+	boundaryRoots         [][32]byte
+	checkpointStateCache  *cache.CheckpointStateCache
+	initSyncBlocks        map[[32]byte]interfaces.ReadOnlySignedBeaconBlock
+	initSyncBlocksLock    sync.RWMutex
+	wsVerifier            *WeakSubjectivityVerifier
+	clockSetter           startup.ClockSetter
+	clockWaiter           startup.ClockWaiter
+	syncComplete          chan struct{}
+	blobNotifiers         *blobNotifierMap
+	blockBeingSynced      *currentlySyncingBlock
+	blobStorage           *filesystem.BlobStorage
+	inclusionListCache    *cache.InclusionLists
+	badInclusionListBlock [32]byte
 }
 
 // config options for the service.
@@ -215,6 +217,7 @@ func (s *Service) Start() {
 	}
 	s.spawnProcessAttestationsRoutine()
 	go s.runLateBlockTasks()
+	go s.updateBlockWithInclusionListRoutine()
 }
 
 // Stop the blockchain service's main event loop and associated goroutines.

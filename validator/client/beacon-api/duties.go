@@ -209,6 +209,8 @@ func (c *beaconApiValidatorClient) dutiesForEpoch(
 		return nil, err
 	}
 
+	// TODO: add EIP7805 duty
+
 	duties := make([]*ethpb.DutiesResponse_Duty, len(vals))
 	for i, v := range vals {
 		var (

@@ -3727,3 +3727,284 @@ func (d *DataColumnIdentifier) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	hh.Merkleize(indx)
 	return
 }
+
+// MarshalSSZ ssz marshals the InclusionList object
+func (i *InclusionList) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(i)
+}
+
+// MarshalSSZTo ssz marshals the InclusionList object to a target array
+func (i *InclusionList) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(52)
+
+	// Field (0) 'Slot'
+	dst = ssz.MarshalUint64(dst, uint64(i.Slot))
+
+	// Field (1) 'ValidatorIndex'
+	dst = ssz.MarshalUint64(dst, uint64(i.ValidatorIndex))
+
+	// Field (2) 'InclusionListCommitteeRoot'
+	if size := len(i.InclusionListCommitteeRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.InclusionListCommitteeRoot", size, 32)
+		return
+	}
+	dst = append(dst, i.InclusionListCommitteeRoot...)
+
+	// Offset (3) 'Transactions'
+	dst = ssz.WriteOffset(dst, offset)
+	for ii := 0; ii < len(i.Transactions); ii++ {
+		offset += 4
+		offset += len(i.Transactions[ii])
+	}
+
+	// Field (3) 'Transactions'
+	if size := len(i.Transactions); size > 1048576 {
+		err = ssz.ErrListTooBigFn("--.Transactions", size, 1048576)
+		return
+	}
+	{
+		offset = 4 * len(i.Transactions)
+		for ii := 0; ii < len(i.Transactions); ii++ {
+			dst = ssz.WriteOffset(dst, offset)
+			offset += len(i.Transactions[ii])
+		}
+	}
+	for ii := 0; ii < len(i.Transactions); ii++ {
+		if size := len(i.Transactions[ii]); size > 1073741824 {
+			err = ssz.ErrBytesLengthFn("--.Transactions[ii]", size, 1073741824)
+			return
+		}
+		dst = append(dst, i.Transactions[ii]...)
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the InclusionList object
+func (i *InclusionList) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 52 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o3 uint64
+
+	// Field (0) 'Slot'
+	i.Slot = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
+
+	// Field (1) 'ValidatorIndex'
+	i.ValidatorIndex = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[8:16]))
+
+	// Field (2) 'InclusionListCommitteeRoot'
+	if cap(i.InclusionListCommitteeRoot) == 0 {
+		i.InclusionListCommitteeRoot = make([]byte, 0, len(buf[16:48]))
+	}
+	i.InclusionListCommitteeRoot = append(i.InclusionListCommitteeRoot, buf[16:48]...)
+
+	// Offset (3) 'Transactions'
+	if o3 = ssz.ReadOffset(buf[48:52]); o3 > size {
+		return ssz.ErrOffset
+	}
+
+	if o3 != 52 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Field (3) 'Transactions'
+	{
+		buf = tail[o3:]
+		num, err := ssz.DecodeDynamicLength(buf, 1048576)
+		if err != nil {
+			return err
+		}
+		i.Transactions = make([][]byte, num)
+		err = ssz.UnmarshalDynamic(buf, num, func(indx int, buf []byte) (err error) {
+			if len(buf) > 1073741824 {
+				return ssz.ErrBytesLength
+			}
+			if cap(i.Transactions[indx]) == 0 {
+				i.Transactions[indx] = make([]byte, 0, len(buf))
+			}
+			i.Transactions[indx] = append(i.Transactions[indx], buf...)
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the InclusionList object
+func (i *InclusionList) SizeSSZ() (size int) {
+	size = 52
+
+	// Field (3) 'Transactions'
+	for ii := 0; ii < len(i.Transactions); ii++ {
+		size += 4
+		size += len(i.Transactions[ii])
+	}
+
+	return
+}
+
+// HashTreeRoot ssz hashes the InclusionList object
+func (i *InclusionList) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(i)
+}
+
+// HashTreeRootWith ssz hashes the InclusionList object with a hasher
+func (i *InclusionList) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'Slot'
+	hh.PutUint64(uint64(i.Slot))
+
+	// Field (1) 'ValidatorIndex'
+	hh.PutUint64(uint64(i.ValidatorIndex))
+
+	// Field (2) 'InclusionListCommitteeRoot'
+	if size := len(i.InclusionListCommitteeRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.InclusionListCommitteeRoot", size, 32)
+		return
+	}
+	hh.PutBytes(i.InclusionListCommitteeRoot)
+
+	// Field (3) 'Transactions'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(i.Transactions))
+		if num > 1048576 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range i.Transactions {
+			{
+				elemIndx := hh.Index()
+				byteLen := uint64(len(elem))
+				if byteLen > 1073741824 {
+					err = ssz.ErrIncorrectListSize
+					return
+				}
+				hh.AppendBytes32(elem)
+				hh.MerkleizeWithMixin(elemIndx, byteLen, (1073741824+31)/32)
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 1048576)
+	}
+
+	hh.Merkleize(indx)
+	return
+}
+
+// MarshalSSZ ssz marshals the SignedInclusionList object
+func (s *SignedInclusionList) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(s)
+}
+
+// MarshalSSZTo ssz marshals the SignedInclusionList object to a target array
+func (s *SignedInclusionList) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(100)
+
+	// Offset (0) 'Message'
+	dst = ssz.WriteOffset(dst, offset)
+	if s.Message == nil {
+		s.Message = new(InclusionList)
+	}
+	offset += s.Message.SizeSSZ()
+
+	// Field (1) 'Signature'
+	if size := len(s.Signature); size != 96 {
+		err = ssz.ErrBytesLengthFn("--.Signature", size, 96)
+		return
+	}
+	dst = append(dst, s.Signature...)
+
+	// Field (0) 'Message'
+	if dst, err = s.Message.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the SignedInclusionList object
+func (s *SignedInclusionList) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 100 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o0 uint64
+
+	// Offset (0) 'Message'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
+	}
+
+	if o0 != 100 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Field (1) 'Signature'
+	if cap(s.Signature) == 0 {
+		s.Signature = make([]byte, 0, len(buf[4:100]))
+	}
+	s.Signature = append(s.Signature, buf[4:100]...)
+
+	// Field (0) 'Message'
+	{
+		buf = tail[o0:]
+		if s.Message == nil {
+			s.Message = new(InclusionList)
+		}
+		if err = s.Message.UnmarshalSSZ(buf); err != nil {
+			return err
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the SignedInclusionList object
+func (s *SignedInclusionList) SizeSSZ() (size int) {
+	size = 100
+
+	// Field (0) 'Message'
+	if s.Message == nil {
+		s.Message = new(InclusionList)
+	}
+	size += s.Message.SizeSSZ()
+
+	return
+}
+
+// HashTreeRoot ssz hashes the SignedInclusionList object
+func (s *SignedInclusionList) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(s)
+}
+
+// HashTreeRootWith ssz hashes the SignedInclusionList object with a hasher
+func (s *SignedInclusionList) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'Message'
+	if err = s.Message.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (1) 'Signature'
+	if size := len(s.Signature); size != 96 {
+		err = ssz.ErrBytesLengthFn("--.Signature", size, 96)
+		return
+	}
+	hh.PutBytes(s.Signature)
+
+	hh.Merkleize(indx)
+	return
+}
