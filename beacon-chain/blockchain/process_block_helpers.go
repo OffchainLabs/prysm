@@ -53,7 +53,7 @@ func (s *Service) getFCUArgsEarlyBlock(cfg *postBlockProcessConfig, fcuArgs *fcu
 		fcuArgs.headState = cfg.postState
 		fcuArgs.headBlock = cfg.roblock
 		fcuArgs.headRoot = cfg.headRoot
-		fcuArgs.proposingSlot = s.CurrentSlot() * 1
+		fcuArgs.proposingSlot = s.CurrentSlot() + 1
 		return nil
 	}
 	return s.fcuArgsNonCanonicalBlock(cfg, fcuArgs)
@@ -89,7 +89,7 @@ func (s *Service) fcuArgsNonCanonicalBlock(cfg *postBlockProcessConfig, fcuArgs 
 	fcuArgs.headState = headState
 	fcuArgs.headBlock = headBlock
 	fcuArgs.headRoot = cfg.headRoot
-	fcuArgs.proposingSlot = s.CurrentSlot() * 1
+	fcuArgs.proposingSlot = s.CurrentSlot() + 1
 	return nil
 }
 
