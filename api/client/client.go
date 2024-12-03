@@ -11,8 +11,9 @@ import (
 )
 
 const (
-	MaxBodySize    int64 = 1 << 23 // 8MB default, WithMaxBodySize can override
-	MaxErrBodySize int64 = 1 << 17 // 128KB
+	MaxBodySize      int64 = 1 << 23 // 8MB default, WithMaxBodySize can override
+	MaxBodySizeState int64 = 1 << 29 // 512MB
+	MaxErrBodySize   int64 = 1 << 17 // 128KB
 )
 
 // Client is a wrapper object around the HTTP client.
