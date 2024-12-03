@@ -90,6 +90,9 @@ var (
 	}
 	deprecatedInteropNumValidatorsFlag = &cli.Uint64Flag{
 		Name:   "interop-num-validators",
+		Usage:  deprecatedUsage,
+		Hidden: true,
+	}
 	deprecatedEnableQuic = &cli.BoolFlag{
 		Name:   "enable-quic",
 		Usage:  deprecatedUsage,
