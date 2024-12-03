@@ -11,7 +11,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -190,8 +190,8 @@ func (v *HeaderVerifier) record(req Requirement, err *error) {
 }
 
 // headerLogFields returns log fields for a ROExecutionPayloadHeader instance.
-func headerLogFields(h interfaces.ROExecutionPayloadHeaderEPBS) log.Fields {
-	return log.Fields{
+func headerLogFields(h interfaces.ROExecutionPayloadHeaderEPBS) logrus.Fields {
+	return logrus.Fields{
 		"builderIndex":    h.BuilderIndex(),
 		"blockHash":       fmt.Sprintf("%#x", h.BlockHash()),
 		"parentBlockHash": fmt.Sprintf("%#x", h.ParentBlockHash()),

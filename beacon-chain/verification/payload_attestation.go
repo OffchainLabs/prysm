@@ -14,7 +14,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 )
 
 // RequirementList defines a list of requirements.
@@ -214,8 +214,8 @@ func (v *PayloadAttMsgVerifier) record(req Requirement, err *error) {
 }
 
 // logFields returns log fields for a ROMessage instance.
-func logFields(payload payloadattestation.ROMessage) log.Fields {
-	return log.Fields{
+func logFields(payload payloadattestation.ROMessage) logrus.Fields {
+	return logrus.Fields{
 		"slot":            payload.Slot(),
 		"validatorIndex":  payload.ValidatorIndex(),
 		"signature":       fmt.Sprintf("%#x", payload.Signature()),

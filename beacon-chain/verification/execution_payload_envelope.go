@@ -11,7 +11,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -149,8 +149,8 @@ func (v *EnvelopeVerifier) SatisfyRequirement(req Requirement) {
 }
 
 // envelopeLogFields returns log fields for a ROExecutionPayloadEnvelope instance.
-func envelopeLogFields(e interfaces.ROExecutionPayloadEnvelope) log.Fields {
-	return log.Fields{
+func envelopeLogFields(e interfaces.ROExecutionPayloadEnvelope) logrus.Fields {
+	return logrus.Fields{
 		"builderIndex":    e.BuilderIndex(),
 		"beaconBlockRoot": fmt.Sprintf("%#x", e.BeaconBlockRoot()),
 		"PayloadWithheld": e.PayloadWithheld(),
