@@ -165,14 +165,14 @@ func (s *Service) pubsubOptions() []pubsub.Option {
 func parsePeersEnr(peers []string) ([]peer.AddrInfo, error) {
 	addrs, err := PeersFromStringAddrs(peers)
 	if err != nil {
-		return nil, fmt.Errorf("Cannot convert peers raw ENRs into multiaddresses: %w", err)
+		return nil, fmt.Errorf("cannot convert peers raw ENRs into multiaddresses: %w", err)
 	}
 	if len(addrs) == 0 {
-		return nil, fmt.Errorf("Converting peers raw ENRs into multiaddresses resulted in an empty list")
+		return nil, fmt.Errorf("converting peers raw ENRs into multiaddresses resulted in an empty list")
 	}
 	directAddrInfos, err := peer.AddrInfosFromP2pAddrs(addrs...)
 	if err != nil {
-		return nil, fmt.Errorf("Cannot convert peers multiaddresses into AddrInfos: %w", err)
+		return nil, fmt.Errorf("cannot convert peers multiaddresses into AddrInfos: %w", err)
 	}
 	return directAddrInfos, nil
 }

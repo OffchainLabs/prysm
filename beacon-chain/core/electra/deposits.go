@@ -386,8 +386,14 @@ func batchProcessNewPendingDeposits(ctx context.Context, state state.BeaconState
 		return errors.Wrap(err, "batch signature verification failed")
 	}
 
+	pubKeyMap := make(map[[48]byte]struct{}, len(pendingDeposits))
+
 	// Process each deposit individually
 	for _, pendingDeposit := range pendingDeposits {
+		_, found := pubKeyMap[bytesutil.ToBytes48(pendingDeposit.PublicKey)]
+		if !found {
+			pubKeyMap[bytesutil.ToBytes48(pendingDeposit.PublicKey)] = struct{}{}
+		}
 		validSignature := allSignaturesVerified
 
 		// If batch verification failed, check the individual deposit signature
@@ -405,9 +411,16 @@ func batchProcessNewPendingDeposits(ctx context.Context, state state.BeaconState
 
 		// Add validator to the registry if the signature is valid
 		if validSignature {
-			err = AddValidatorToRegistry(state, pendingDeposit.PublicKey, pendingDeposit.WithdrawalCredentials, pendingDeposit.Amount)
-			if err != nil {
-				return errors.Wrap(err, "failed to add validator to registry")
+			if found {
+				index, _ := state.ValidatorIndexByPubkey(bytesutil.ToBytes48(pendingDeposit.PublicKey))
+				if err := helpers.IncreaseBalance(state, index, pendingDeposit.Amount); err != nil {
+					return errors.Wrap(err, "could not increase balance")
+				}
+			} else {
+				err = AddValidatorToRegistry(state, pendingDeposit.PublicKey, pendingDeposit.WithdrawalCredentials, pendingDeposit.Amount)
+				if err != nil {
+					return errors.Wrap(err, "failed to add validator to registry")
+				}
 			}
 		}
 	}

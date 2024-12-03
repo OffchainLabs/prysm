@@ -91,14 +91,7 @@ func (vs *Server) packAttestations(ctx context.Context, latestState state.Beacon
 
 	var attsForInclusion proposerAtts
 	if postElectra {
-		// TODO: hack for Electra devnet-1, take only one aggregate per ID
-		// (which essentially means one aggregate for an attestation_data+committee combination
-		topAggregates := make([]ethpb.Att, 0)
-		for _, v := range attsById {
-			topAggregates = append(topAggregates, v[0])
-		}
-
-		attsForInclusion, err = computeOnChainAggregate(topAggregates)
+		attsForInclusion, err = onChainAggregates(attsById)
 		if err != nil {
 			return nil, err
 		}
@@ -113,12 +106,66 @@ func (vs *Server) packAttestations(ctx context.Context, latestState state.Beacon
 	if err != nil {
 		return nil, err
 	}
-	sorted, err := deduped.sort()
-	if err != nil {
-		return nil, err
+
+	var sorted proposerAtts
+	if postElectra {
+		sorted, err = deduped.sortOnChainAggregates()
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		sorted, err = deduped.sort()
+		if err != nil {
+			return nil, err
+		}
 	}
+
 	atts = sorted.limitToMaxAttestations()
 	return vs.filterAttestationBySignature(ctx, atts, latestState)
+}
+
+func onChainAggregates(attsById map[attestation.Id][]ethpb.Att) (proposerAtts, error) {
+	var result proposerAtts
+	var err error
+
+	// When constructing on-chain aggregates, we want to combine the most profitable
+	// aggregate for each ID, then the second most profitable, and so on and so forth.
+	// Because of this we sort attestations at the beginning.
+	for id, as := range attsById {
+		attsById[id], err = proposerAtts(as).sort()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// We construct the first on-chain aggregate by taking the first aggregate for each ID.
+	// We construct the second on-chain aggregate by taking the second aggregate for each ID.
+	// We continue doing this until we run out of aggregates.
+	idx := 0
+	for {
+		topAggregates := make([]ethpb.Att, 0, len(attsById))
+		for _, as := range attsById {
+			// In case there are no more aggregates for an ID, we skip that ID.
+			if len(as) > idx {
+				topAggregates = append(topAggregates, as[idx])
+			}
+		}
+
+		// Once there are no more aggregates for any ID, we are done.
+		if len(topAggregates) == 0 {
+			break
+		}
+
+		onChainAggs, err := computeOnChainAggregate(topAggregates)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, onChainAggs...)
+
+		idx++
+	}
+
+	return result, nil
 }
 
 // filter separates attestation list into two groups: valid and invalid attestations.
@@ -223,6 +270,14 @@ func (a proposerAtts) sort() (proposerAtts, error) {
 	return a.sortBySlotAndCommittee()
 }
 
+func (a proposerAtts) sortOnChainAggregates() (proposerAtts, error) {
+	if len(a) < 2 {
+		return a, nil
+	}
+
+	return a.sortByProfitabilityUsingMaxCover()
+}
+
 // Separate attestations by slot, as slot number takes higher precedence when sorting.
 // Also separate by committee index because maxcover will prefer attestations for the same
 // committee with disjoint bits over attestations for different committees with overlapping
@@ -231,7 +286,6 @@ func (a proposerAtts) sortBySlotAndCommittee() (proposerAtts, error) {
 	type slotAtts struct {
 		candidates map[primitives.CommitteeIndex]proposerAtts
 		selected   map[primitives.CommitteeIndex]proposerAtts
-		leftover   map[primitives.CommitteeIndex]proposerAtts
 	}
 
 	var slots []primitives.Slot
@@ -250,7 +304,6 @@ func (a proposerAtts) sortBySlotAndCommittee() (proposerAtts, error) {
 	var err error
 	for _, sa := range attsBySlot {
 		sa.selected = make(map[primitives.CommitteeIndex]proposerAtts)
-		sa.leftover = make(map[primitives.CommitteeIndex]proposerAtts)
 		for ci, committeeAtts := range sa.candidates {
 			sa.selected[ci], err = committeeAtts.sortByProfitabilityUsingMaxCover_committeeAwarePacking()
 			if err != nil {
@@ -265,9 +318,6 @@ func (a proposerAtts) sortBySlotAndCommittee() (proposerAtts, error) {
 	})
 	for _, slot := range slots {
 		sortedAtts = append(sortedAtts, sortSlotAttestations(attsBySlot[slot].selected)...)
-	}
-	for _, slot := range slots {
-		sortedAtts = append(sortedAtts, sortSlotAttestations(attsBySlot[slot].leftover)...)
 	}
 
 	return sortedAtts, nil
@@ -287,15 +337,11 @@ func (a proposerAtts) sortByProfitabilityUsingMaxCover_committeeAwarePacking() (
 			return nil, err
 		}
 	}
-	// Add selected candidates on top, those that are not selected - append at bottom.
 	selectedKeys, _, err := aggregation.MaxCover(candidates, len(candidates), true /* allowOverlaps */)
 	if err != nil {
 		log.WithError(err).Debug("MaxCover aggregation failed")
 		return a, nil
 	}
-
-	// Pick selected attestations first, leftover attestations will be appended at the end.
-	// Both lists will be sorted by number of bits set.
 	selected := make(proposerAtts, selectedKeys.Count())
 	for i, key := range selectedKeys.BitIndices() {
 		selected[i] = a[key]

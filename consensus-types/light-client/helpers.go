@@ -4,12 +4,11 @@ import (
 	"fmt"
 
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 )
 
 type branchConstraint interface {
-	~interfaces.LightClientExecutionBranch | ~interfaces.LightClientSyncCommitteeBranch | ~interfaces.LightClientFinalityBranch
+	[4][fieldparams.RootLength]byte | [5][fieldparams.RootLength]byte | [6][fieldparams.RootLength]byte | [7][fieldparams.RootLength]byte
 }
 
 func createBranch[T branchConstraint](name string, input [][]byte, depth int) (T, error) {

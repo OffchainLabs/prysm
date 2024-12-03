@@ -34,18 +34,48 @@ type endpoint struct {
 	methods    []string
 }
 
+// responseWriter is the wrapper to http Response writer.
+type responseWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+// WriteHeader wraps the WriteHeader method of the underlying http.ResponseWriter to capture the status code.
+// Refer for WriteHeader doc: https://pkg.go.dev/net/http@go1.23.3#ResponseWriter.
+func (w *responseWriter) WriteHeader(statusCode int) {
+	w.statusCode = statusCode
+	w.ResponseWriter.WriteHeader(statusCode)
+}
+
 func (e *endpoint) handlerWithMiddleware() http.HandlerFunc {
 	handler := http.Handler(e.handler)
 	for _, m := range e.middleware {
 		handler = m(handler)
 	}
-	return promhttp.InstrumentHandlerDuration(
+
+	handler = promhttp.InstrumentHandlerDuration(
 		httpRequestLatency.MustCurryWith(prometheus.Labels{"endpoint": e.name}),
 		promhttp.InstrumentHandlerCounter(
 			httpRequestCount.MustCurryWith(prometheus.Labels{"endpoint": e.name}),
 			handler,
 		),
 	)
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		// SSE errors are handled separately to avoid interference with the streaming
+		// mechanism and ensure accurate error tracking.
+		if e.template == "/eth/v1/events" {
+			handler.ServeHTTP(w, r)
+			return
+		}
+
+		rw := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+		handler.ServeHTTP(rw, r)
+
+		if rw.statusCode >= 400 {
+			httpErrorCount.WithLabelValues(r.URL.Path, http.StatusText(rw.statusCode), r.Method).Inc()
+		}
+	}
 }
 
 func (s *Service) endpoints(
@@ -142,9 +172,11 @@ func (s *Service) builderEndpoints(stater lookup.Stater) []endpoint {
 	}
 }
 
-func (*Service) blobEndpoints(blocker lookup.Blocker) []endpoint {
+func (s *Service) blobEndpoints(blocker lookup.Blocker) []endpoint {
 	server := &blob.Server{
-		Blocker: blocker,
+		Blocker:               blocker,
+		OptimisticModeFetcher: s.cfg.OptimisticModeFetcher,
+		FinalizationFetcher:   s.cfg.FinalizationFetcher,
 	}
 
 	const namespace = "blob"

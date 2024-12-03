@@ -15,6 +15,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	"github.com/prysmaticlabs/prysm/v5/network/httputil"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 )
 
 // Blobs is an HTTP handler for Beacon API getBlobs.
@@ -59,7 +60,30 @@ func (s *Server) Blobs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httputil.WriteJson(w, buildSidecarsJsonResponse(verifiedBlobs))
+	blk, err := s.Blocker.Block(ctx, []byte(blockId))
+	if err != nil {
+		httputil.HandleError(w, "Could not fetch block: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	blkRoot, err := blk.Block().HashTreeRoot()
+	if err != nil {
+		httputil.HandleError(w, "Could not hash block: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	isOptimistic, err := s.OptimisticModeFetcher.IsOptimisticForRoot(ctx, blkRoot)
+	if err != nil {
+		httputil.HandleError(w, "Could not check if block is optimistic: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	data := buildSidecarsJsonResponse(verifiedBlobs)
+	resp := &structs.SidecarsResponse{
+		Version:             version.String(blk.Version()),
+		Data:                data,
+		ExecutionOptimistic: isOptimistic,
+		Finalized:           s.FinalizationFetcher.IsFinalized(ctx, blkRoot),
+	}
+	httputil.WriteJson(w, resp)
 }
 
 // parseIndices filters out invalid and duplicate blob indices
@@ -92,14 +116,14 @@ loop:
 	return indices, nil
 }
 
-func buildSidecarsJsonResponse(verifiedBlobs []*blocks.VerifiedROBlob) *structs.SidecarsResponse {
-	resp := &structs.SidecarsResponse{Data: make([]*structs.Sidecar, len(verifiedBlobs))}
+func buildSidecarsJsonResponse(verifiedBlobs []*blocks.VerifiedROBlob) []*structs.Sidecar {
+	sidecars := make([]*structs.Sidecar, len(verifiedBlobs))
 	for i, sc := range verifiedBlobs {
 		proofs := make([]string, len(sc.CommitmentInclusionProof))
 		for j := range sc.CommitmentInclusionProof {
 			proofs[j] = hexutil.Encode(sc.CommitmentInclusionProof[j])
 		}
-		resp.Data[i] = &structs.Sidecar{
+		sidecars[i] = &structs.Sidecar{
 			Index:                    strconv.FormatUint(sc.Index, 10),
 			Blob:                     hexutil.Encode(sc.Blob),
 			KzgCommitment:            hexutil.Encode(sc.KzgCommitment),
@@ -108,7 +132,7 @@ func buildSidecarsJsonResponse(verifiedBlobs []*blocks.VerifiedROBlob) *structs.
 			CommitmentInclusionProof: proofs,
 		}
 	}
-	return resp
+	return sidecars
 }
 
 func buildSidecarsSSZResponse(verifiedBlobs []*blocks.VerifiedROBlob) ([]byte, error) {

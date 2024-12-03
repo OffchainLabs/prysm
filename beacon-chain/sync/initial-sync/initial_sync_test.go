@@ -227,7 +227,7 @@ func connectPeer(t *testing.T, host *p2pt.TestP2P, datum *peerData, peerStatus *
 	p.Connect(host)
 
 	peerStatus.Add(new(enr.Record), p.PeerID(), nil, network.DirOutbound)
-	peerStatus.SetConnectionState(p.PeerID(), peers.PeerConnected)
+	peerStatus.SetConnectionState(p.PeerID(), peers.Connected)
 	peerStatus.SetChainState(p.PeerID(), &ethpb.Status{
 		ForkDigest:     params.BeaconConfig().GenesisForkVersion,
 		FinalizedRoot:  []byte(fmt.Sprintf("finalized_root %d", datum.finalizedEpoch)),
@@ -326,7 +326,7 @@ func connectPeerHavingBlocks(
 	require.NoError(t, err)
 
 	peerStatus.Add(new(enr.Record), p.PeerID(), nil, network.DirOutbound)
-	peerStatus.SetConnectionState(p.PeerID(), peers.PeerConnected)
+	peerStatus.SetConnectionState(p.PeerID(), peers.Connected)
 	peerStatus.SetChainState(p.PeerID(), &ethpb.Status{
 		ForkDigest:     params.BeaconConfig().GenesisForkVersion,
 		FinalizedRoot:  []byte(fmt.Sprintf("finalized_root %d", finalizedEpoch)),

@@ -17,7 +17,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/network/forks"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -50,8 +50,8 @@ type SignatureData struct {
 	Slot      primitives.Slot
 }
 
-func (d SignatureData) logFields() log.Fields {
-	return log.Fields{
+func (d SignatureData) logFields() logrus.Fields {
+	return logrus.Fields{
 		"root":       fmt.Sprintf("%#x", d.Root),
 		"parentRoot": fmt.Sprintf("%#x", d.Parent),
 		"signature":  fmt.Sprintf("%#x", d.Signature),

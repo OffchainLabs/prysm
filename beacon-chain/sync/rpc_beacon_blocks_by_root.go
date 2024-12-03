@@ -20,9 +20,9 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
-// sendRecentBeaconBlocksRequest sends a recent beacon blocks request to a peer to get
+// sendBeaconBlocksRequest sends a recent beacon blocks request to a peer to get
 // those corresponding blocks from that peer.
-func (s *Service) sendRecentBeaconBlocksRequest(ctx context.Context, requests *types.BeaconBlockByRootsReq, id peer.ID) error {
+func (s *Service) sendBeaconBlocksRequest(ctx context.Context, requests *types.BeaconBlockByRootsReq, id peer.ID) error {
 	ctx, cancel := context.WithTimeout(ctx, respTimeout)
 	defer cancel()
 
@@ -151,7 +151,7 @@ func (s *Service) sendAndSaveBlobSidecars(ctx context.Context, request types.Blo
 	if len(sidecars) != len(request) {
 		return fmt.Errorf("received %d blob sidecars, expected %d for RPC", len(sidecars), len(request))
 	}
-	bv := verification.NewBlobBatchVerifier(s.newBlobVerifier, verification.PendingQueueSidecarRequirements)
+	bv := verification.NewBlobBatchVerifier(s.newBlobVerifier, verification.PendingQueueBlobSidecarRequirements)
 	for _, sidecar := range sidecars {
 		if err := verify.BlobAlignsWithBlock(sidecar, RoBlock); err != nil {
 			return err

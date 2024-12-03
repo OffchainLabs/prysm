@@ -14,8 +14,6 @@ import (
 	grpcopentracing "github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing"
 	grpcprometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/pkg/errors"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/builder"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
@@ -56,24 +54,6 @@ import (
 )
 
 const attestationBufferSize = 100
-
-var (
-	httpRequestLatency = promauto.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Name:    "http_request_latency_seconds",
-			Help:    "Latency of HTTP requests in seconds",
-			Buckets: []float64{0.001, 0.01, 0.025, 0.1, 0.25, 1, 2.5, 10},
-		},
-		[]string{"endpoint", "code", "method"},
-	)
-	httpRequestCount = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "http_request_count",
-			Help: "Number of HTTP requests",
-		},
-		[]string{"endpoint", "code", "method"},
-	)
-)
 
 // Service defining an RPC server for a beacon node.
 type Service struct {

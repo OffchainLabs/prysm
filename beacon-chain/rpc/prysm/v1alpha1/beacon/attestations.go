@@ -303,7 +303,7 @@ func (bs *Server) ListIndexedAttestationsElectra(
 // that it was included in a block. The attestation may have expired.
 // Refer to the ethereum consensus specification for more details on how
 // attestations are processed and when they are no longer valid.
-// https://github.com/ethereum/consensus-specs/blob/dev/specs/core/0_beacon-chain.md#attestations
+// https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#attestations
 func (bs *Server) AttestationPool(_ context.Context, req *ethpb.AttestationPoolRequest) (*ethpb.AttestationPoolResponse, error) {
 	atts, err := attestationsFromPool[*ethpb.Attestation](req.PageSize, bs.AttestationsPool)
 	if err != nil {

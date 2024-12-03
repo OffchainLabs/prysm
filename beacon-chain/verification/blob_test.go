@@ -27,13 +27,13 @@ func TestBlobIndexInBounds(t *testing.T) {
 	_, blobs := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 0, 1)
 	b := blobs[0]
 	// set Index to a value that is out of bounds
-	v := ini.NewBlobVerifier(b, GossipSidecarRequirements)
+	v := ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
 	require.NoError(t, v.BlobIndexInBounds())
 	require.Equal(t, true, v.results.executed(RequireBlobIndexInBounds))
 	require.NoError(t, v.results.result(RequireBlobIndexInBounds))
 
 	b.Index = fieldparams.MaxBlobsPerBlock
-	v = ini.NewBlobVerifier(b, GossipSidecarRequirements)
+	v = ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
 	require.ErrorIs(t, v.BlobIndexInBounds(), ErrBlobIndexInvalid)
 	require.Equal(t, true, v.results.executed(RequireBlobIndexInBounds))
 	require.NotNil(t, v.results.result(RequireBlobIndexInBounds))
@@ -52,7 +52,7 @@ func TestSlotNotTooEarly(t *testing.T) {
 	// This clock will give a current slot of 1 on the nose
 	happyClock := startup.NewClock(genesis, [32]byte{}, startup.WithNower(func() time.Time { return now }))
 	ini := Initializer{shared: &sharedResources{clock: happyClock}}
-	v := ini.NewBlobVerifier(b, GossipSidecarRequirements)
+	v := ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
 	require.NoError(t, v.NotFromFutureSlot())
 	require.Equal(t, true, v.results.executed(RequireNotFromFutureSlot))
 	require.NoError(t, v.results.result(RequireNotFromFutureSlot))
@@ -61,7 +61,7 @@ func TestSlotNotTooEarly(t *testing.T) {
 	// but still in the previous slot.
 	closeClock := startup.NewClock(genesis, [32]byte{}, startup.WithNower(func() time.Time { return now.Add(-1 * params.BeaconConfig().MaximumGossipClockDisparityDuration() / 2) }))
 	ini = Initializer{shared: &sharedResources{clock: closeClock}}
-	v = ini.NewBlobVerifier(b, GossipSidecarRequirements)
+	v = ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
 	require.NoError(t, v.NotFromFutureSlot())
 
 	// This clock will give a current slot of 0, with now coming more than max clock disparity before slot 1
@@ -69,7 +69,7 @@ func TestSlotNotTooEarly(t *testing.T) {
 	dispClock := startup.NewClock(genesis, [32]byte{}, startup.WithNower(func() time.Time { return disparate }))
 	// Set up initializer to use the clock that will set now to a little to far before slot 1
 	ini = Initializer{shared: &sharedResources{clock: dispClock}}
-	v = ini.NewBlobVerifier(b, GossipSidecarRequirements)
+	v = ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
 	require.ErrorIs(t, v.NotFromFutureSlot(), ErrFromFutureSlot)
 	require.Equal(t, true, v.results.executed(RequireNotFromFutureSlot))
 	require.NotNil(t, v.results.result(RequireNotFromFutureSlot))
@@ -114,7 +114,7 @@ func TestSlotAboveFinalized(t *testing.T) {
 			_, blobs := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 0, 1)
 			b := blobs[0]
 			b.SignedBlockHeader.Header.Slot = c.slot
-			v := ini.NewBlobVerifier(b, GossipSidecarRequirements)
+			v := ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
 			err := v.SlotAboveFinalized()
 			require.Equal(t, true, v.results.executed(RequireSlotAboveFinalized))
 			if c.err == nil {
@@ -146,7 +146,7 @@ func TestValidProposerSignature_Cached(t *testing.T) {
 		},
 	}
 	ini := Initializer{shared: &sharedResources{sc: sc, sr: &mockStateByRooter{sbr: sbrErrorIfCalled(t)}}}
-	v := ini.NewBlobVerifier(b, GossipSidecarRequirements)
+	v := ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
 	require.NoError(t, v.ValidProposerSignature(ctx))
 	require.Equal(t, true, v.results.executed(RequireValidProposerSignature))
 	require.NoError(t, v.results.result(RequireValidProposerSignature))
@@ -159,7 +159,7 @@ func TestValidProposerSignature_Cached(t *testing.T) {
 		return true, errors.New("derp")
 	}
 	ini = Initializer{shared: &sharedResources{sc: sc, sr: &mockStateByRooter{sbr: sbrErrorIfCalled(t)}}}
-	v = ini.NewBlobVerifier(b, GossipSidecarRequirements)
+	v = ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
 	require.ErrorIs(t, v.ValidProposerSignature(ctx), ErrInvalidProposerSignature)
 	require.Equal(t, true, v.results.executed(RequireValidProposerSignature))
 	require.NotNil(t, v.results.result(RequireValidProposerSignature))
@@ -182,14 +182,14 @@ func TestValidProposerSignature_CacheMiss(t *testing.T) {
 		},
 	}
 	ini := Initializer{shared: &sharedResources{sc: sc, sr: sbrForValOverride(b.ProposerIndex(), &ethpb.Validator{})}}
-	v := ini.NewBlobVerifier(b, GossipSidecarRequirements)
+	v := ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
 	require.NoError(t, v.ValidProposerSignature(ctx))
 	require.Equal(t, true, v.results.executed(RequireValidProposerSignature))
 	require.NoError(t, v.results.result(RequireValidProposerSignature))
 
 	// simulate state not found
 	ini = Initializer{shared: &sharedResources{sc: sc, sr: sbrNotFound(t, expectedSd.Parent)}}
-	v = ini.NewBlobVerifier(b, GossipSidecarRequirements)
+	v = ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
 	require.ErrorIs(t, v.ValidProposerSignature(ctx), ErrInvalidProposerSignature)
 	require.Equal(t, true, v.results.executed(RequireValidProposerSignature))
 	require.NotNil(t, v.results.result(RequireValidProposerSignature))
@@ -206,7 +206,7 @@ func TestValidProposerSignature_CacheMiss(t *testing.T) {
 		},
 	}
 	ini = Initializer{shared: &sharedResources{sc: sc, sr: sbr}}
-	v = ini.NewBlobVerifier(b, GossipSidecarRequirements)
+	v = ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
 
 	// make sure all the histories are clean before calling the method
 	// so we don't get polluted by previous usages
@@ -255,14 +255,14 @@ func TestSidecarParentSeen(t *testing.T) {
 
 	t.Run("happy path", func(t *testing.T) {
 		ini := Initializer{shared: &sharedResources{fc: fcHas}}
-		v := ini.NewBlobVerifier(b, GossipSidecarRequirements)
+		v := ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
 		require.NoError(t, v.SidecarParentSeen(nil))
 		require.Equal(t, true, v.results.executed(RequireSidecarParentSeen))
 		require.NoError(t, v.results.result(RequireSidecarParentSeen))
 	})
 	t.Run("HasNode false, no badParent cb, expected error", func(t *testing.T) {
 		ini := Initializer{shared: &sharedResources{fc: fcLacks}}
-		v := ini.NewBlobVerifier(b, GossipSidecarRequirements)
+		v := ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
 		require.ErrorIs(t, v.SidecarParentSeen(nil), ErrSidecarParentNotSeen)
 		require.Equal(t, true, v.results.executed(RequireSidecarParentSeen))
 		require.NotNil(t, v.results.result(RequireSidecarParentSeen))
@@ -270,14 +270,14 @@ func TestSidecarParentSeen(t *testing.T) {
 
 	t.Run("HasNode false, badParent true", func(t *testing.T) {
 		ini := Initializer{shared: &sharedResources{fc: fcLacks}}
-		v := ini.NewBlobVerifier(b, GossipSidecarRequirements)
+		v := ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
 		require.NoError(t, v.SidecarParentSeen(badParentCb(t, b.ParentRoot(), true)))
 		require.Equal(t, true, v.results.executed(RequireSidecarParentSeen))
 		require.NoError(t, v.results.result(RequireSidecarParentSeen))
 	})
 	t.Run("HasNode false, badParent false", func(t *testing.T) {
 		ini := Initializer{shared: &sharedResources{fc: fcLacks}}
-		v := ini.NewBlobVerifier(b, GossipSidecarRequirements)
+		v := ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
 		require.ErrorIs(t, v.SidecarParentSeen(badParentCb(t, b.ParentRoot(), false)), ErrSidecarParentNotSeen)
 		require.Equal(t, true, v.results.executed(RequireSidecarParentSeen))
 		require.NotNil(t, v.results.result(RequireSidecarParentSeen))
@@ -289,14 +289,14 @@ func TestSidecarParentValid(t *testing.T) {
 	b := blobs[0]
 	t.Run("parent valid", func(t *testing.T) {
 		ini := Initializer{shared: &sharedResources{}}
-		v := ini.NewBlobVerifier(b, GossipSidecarRequirements)
+		v := ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
 		require.NoError(t, v.SidecarParentValid(badParentCb(t, b.ParentRoot(), false)))
 		require.Equal(t, true, v.results.executed(RequireSidecarParentValid))
 		require.NoError(t, v.results.result(RequireSidecarParentValid))
 	})
 	t.Run("parent not valid", func(t *testing.T) {
 		ini := Initializer{shared: &sharedResources{}}
-		v := ini.NewBlobVerifier(b, GossipSidecarRequirements)
+		v := ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
 		require.ErrorIs(t, v.SidecarParentValid(badParentCb(t, b.ParentRoot(), true)), ErrSidecarParentInvalid)
 		require.Equal(t, true, v.results.executed(RequireSidecarParentValid))
 		require.NotNil(t, v.results.result(RequireSidecarParentValid))
@@ -340,7 +340,7 @@ func TestSidecarParentSlotLower(t *testing.T) {
 				}
 				return c.fcSlot, c.fcErr
 			}}}}
-			v := ini.NewBlobVerifier(b, GossipSidecarRequirements)
+			v := ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
 			err := v.SidecarParentSlotLower()
 			require.Equal(t, true, v.results.executed(RequireSidecarParentSlotLower))
 			if c.err == nil {
@@ -364,7 +364,7 @@ func TestSidecarDescendsFromFinalized(t *testing.T) {
 			}
 			return false
 		}}}}
-		v := ini.NewBlobVerifier(b, GossipSidecarRequirements)
+		v := ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
 		require.ErrorIs(t, v.SidecarDescendsFromFinalized(), ErrSidecarNotFinalizedDescendent)
 		require.Equal(t, true, v.results.executed(RequireSidecarDescendsFromFinalized))
 		require.NotNil(t, v.results.result(RequireSidecarDescendsFromFinalized))
@@ -376,7 +376,7 @@ func TestSidecarDescendsFromFinalized(t *testing.T) {
 			}
 			return true
 		}}}}
-		v := ini.NewBlobVerifier(b, GossipSidecarRequirements)
+		v := ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
 		require.NoError(t, v.SidecarDescendsFromFinalized())
 		require.Equal(t, true, v.results.executed(RequireSidecarDescendsFromFinalized))
 		require.NoError(t, v.results.result(RequireSidecarDescendsFromFinalized))
@@ -389,7 +389,7 @@ func TestSidecarInclusionProven(t *testing.T) {
 	b := blobs[0]
 
 	ini := Initializer{}
-	v := ini.NewBlobVerifier(b, GossipSidecarRequirements)
+	v := ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
 	require.NoError(t, v.SidecarInclusionProven())
 	require.Equal(t, true, v.results.executed(RequireSidecarInclusionProven))
 	require.NoError(t, v.results.result(RequireSidecarInclusionProven))
@@ -397,7 +397,7 @@ func TestSidecarInclusionProven(t *testing.T) {
 	// Invert bits of the first byte of the body root to mess up the proof
 	byte0 := b.SignedBlockHeader.Header.BodyRoot[0]
 	b.SignedBlockHeader.Header.BodyRoot[0] = byte0 ^ 255
-	v = ini.NewBlobVerifier(b, GossipSidecarRequirements)
+	v = ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
 	require.ErrorIs(t, v.SidecarInclusionProven(), ErrSidecarInclusionProofInvalid)
 	require.Equal(t, true, v.results.executed(RequireSidecarInclusionProven))
 	require.NotNil(t, v.results.result(RequireSidecarInclusionProven))
@@ -409,7 +409,7 @@ func TestSidecarInclusionProvenElectra(t *testing.T) {
 	b := blobs[0]
 
 	ini := Initializer{}
-	v := ini.NewBlobVerifier(b, GossipSidecarRequirements)
+	v := ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
 	require.NoError(t, v.SidecarInclusionProven())
 	require.Equal(t, true, v.results.executed(RequireSidecarInclusionProven))
 	require.NoError(t, v.results.result(RequireSidecarInclusionProven))
@@ -417,7 +417,7 @@ func TestSidecarInclusionProvenElectra(t *testing.T) {
 	// Invert bits of the first byte of the body root to mess up the proof
 	byte0 := b.SignedBlockHeader.Header.BodyRoot[0]
 	b.SignedBlockHeader.Header.BodyRoot[0] = byte0 ^ 255
-	v = ini.NewBlobVerifier(b, GossipSidecarRequirements)
+	v = ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
 	require.ErrorIs(t, v.SidecarInclusionProven(), ErrSidecarInclusionProofInvalid)
 	require.Equal(t, true, v.results.executed(RequireSidecarInclusionProven))
 	require.NotNil(t, v.results.result(RequireSidecarInclusionProven))
@@ -452,21 +452,21 @@ func TestSidecarProposerExpected(t *testing.T) {
 	b := blobs[0]
 	t.Run("cached, matches", func(t *testing.T) {
 		ini := Initializer{shared: &sharedResources{pc: &mockProposerCache{ProposerCB: pcReturnsIdx(b.ProposerIndex())}, fc: &mockForkchoicer{TargetRootForEpochCB: fcReturnsTargetRoot([32]byte{})}}}
-		v := ini.NewBlobVerifier(b, GossipSidecarRequirements)
+		v := ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
 		require.NoError(t, v.SidecarProposerExpected(ctx))
 		require.Equal(t, true, v.results.executed(RequireSidecarProposerExpected))
 		require.NoError(t, v.results.result(RequireSidecarProposerExpected))
 	})
 	t.Run("cached, does not match", func(t *testing.T) {
 		ini := Initializer{shared: &sharedResources{pc: &mockProposerCache{ProposerCB: pcReturnsIdx(b.ProposerIndex() + 1)}, fc: &mockForkchoicer{TargetRootForEpochCB: fcReturnsTargetRoot([32]byte{})}}}
-		v := ini.NewBlobVerifier(b, GossipSidecarRequirements)
+		v := ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
 		require.ErrorIs(t, v.SidecarProposerExpected(ctx), ErrSidecarUnexpectedProposer)
 		require.Equal(t, true, v.results.executed(RequireSidecarProposerExpected))
 		require.NotNil(t, v.results.result(RequireSidecarProposerExpected))
 	})
 	t.Run("not cached, state lookup failure", func(t *testing.T) {
 		ini := Initializer{shared: &sharedResources{sr: sbrNotFound(t, b.ParentRoot()), pc: &mockProposerCache{ProposerCB: pcReturnsNotFound()}, fc: &mockForkchoicer{TargetRootForEpochCB: fcReturnsTargetRoot([32]byte{})}}}
-		v := ini.NewBlobVerifier(b, GossipSidecarRequirements)
+		v := ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
 		require.ErrorIs(t, v.SidecarProposerExpected(ctx), ErrSidecarUnexpectedProposer)
 		require.Equal(t, true, v.results.executed(RequireSidecarProposerExpected))
 		require.NotNil(t, v.results.result(RequireSidecarProposerExpected))
@@ -475,14 +475,14 @@ func TestSidecarProposerExpected(t *testing.T) {
 	t.Run("not cached, proposer matches", func(t *testing.T) {
 		pc := &mockProposerCache{
 			ProposerCB: pcReturnsNotFound(),
-			ComputeProposerCB: func(ctx context.Context, root [32]byte, slot primitives.Slot, pst state.BeaconState) (primitives.ValidatorIndex, error) {
+			ComputeProposerCB: func(_ context.Context, root [32]byte, slot primitives.Slot, _ state.BeaconState) (primitives.ValidatorIndex, error) {
 				require.Equal(t, b.ParentRoot(), root)
 				require.Equal(t, b.Slot(), slot)
 				return b.ProposerIndex(), nil
 			},
 		}
 		ini := Initializer{shared: &sharedResources{sr: sbrForValOverride(b.ProposerIndex(), &ethpb.Validator{}), pc: pc, fc: &mockForkchoicer{TargetRootForEpochCB: fcReturnsTargetRoot([32]byte{})}}}
-		v := ini.NewBlobVerifier(b, GossipSidecarRequirements)
+		v := ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
 		require.NoError(t, v.SidecarProposerExpected(ctx))
 		require.Equal(t, true, v.results.executed(RequireSidecarProposerExpected))
 		require.NoError(t, v.results.result(RequireSidecarProposerExpected))
@@ -490,14 +490,14 @@ func TestSidecarProposerExpected(t *testing.T) {
 	t.Run("not cached, proposer does not match", func(t *testing.T) {
 		pc := &mockProposerCache{
 			ProposerCB: pcReturnsNotFound(),
-			ComputeProposerCB: func(ctx context.Context, root [32]byte, slot primitives.Slot, pst state.BeaconState) (primitives.ValidatorIndex, error) {
+			ComputeProposerCB: func(_ context.Context, root [32]byte, slot primitives.Slot, _ state.BeaconState) (primitives.ValidatorIndex, error) {
 				require.Equal(t, b.ParentRoot(), root)
 				require.Equal(t, b.Slot(), slot)
 				return b.ProposerIndex() + 1, nil
 			},
 		}
 		ini := Initializer{shared: &sharedResources{sr: sbrForValOverride(b.ProposerIndex(), &ethpb.Validator{}), pc: pc, fc: &mockForkchoicer{TargetRootForEpochCB: fcReturnsTargetRoot([32]byte{})}}}
-		v := ini.NewBlobVerifier(b, GossipSidecarRequirements)
+		v := ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
 		require.ErrorIs(t, v.SidecarProposerExpected(ctx), ErrSidecarUnexpectedProposer)
 		require.Equal(t, true, v.results.executed(RequireSidecarProposerExpected))
 		require.NotNil(t, v.results.result(RequireSidecarProposerExpected))
@@ -505,14 +505,14 @@ func TestSidecarProposerExpected(t *testing.T) {
 	t.Run("not cached, ComputeProposer fails", func(t *testing.T) {
 		pc := &mockProposerCache{
 			ProposerCB: pcReturnsNotFound(),
-			ComputeProposerCB: func(ctx context.Context, root [32]byte, slot primitives.Slot, pst state.BeaconState) (primitives.ValidatorIndex, error) {
+			ComputeProposerCB: func(_ context.Context, root [32]byte, slot primitives.Slot, _ state.BeaconState) (primitives.ValidatorIndex, error) {
 				require.Equal(t, b.ParentRoot(), root)
 				require.Equal(t, b.Slot(), slot)
 				return 0, errors.New("ComputeProposer failed")
 			},
 		}
 		ini := Initializer{shared: &sharedResources{sr: sbrForValOverride(b.ProposerIndex(), &ethpb.Validator{}), pc: pc, fc: &mockForkchoicer{TargetRootForEpochCB: fcReturnsTargetRoot([32]byte{})}}}
-		v := ini.NewBlobVerifier(b, GossipSidecarRequirements)
+		v := ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
 		require.ErrorIs(t, v.SidecarProposerExpected(ctx), ErrSidecarUnexpectedProposer)
 		require.Equal(t, true, v.results.executed(RequireSidecarProposerExpected))
 		require.NotNil(t, v.results.result(RequireSidecarProposerExpected))
@@ -523,7 +523,7 @@ func TestRequirementSatisfaction(t *testing.T) {
 	_, blobs := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 1, 1)
 	b := blobs[0]
 	ini := Initializer{}
-	v := ini.NewBlobVerifier(b, GossipSidecarRequirements)
+	v := ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
 
 	_, err := v.VerifiedROBlob()
 	require.ErrorIs(t, err, ErrBlobInvalid)
@@ -537,7 +537,7 @@ func TestRequirementSatisfaction(t *testing.T) {
 	}
 
 	// satisfy everything through the backdoor and ensure we get the verified ro blob at the end
-	for _, r := range GossipSidecarRequirements {
+	for _, r := range GossipBlobSidecarRequirements {
 		v.results.record(r, nil)
 	}
 	require.Equal(t, true, v.results.allSatisfied())

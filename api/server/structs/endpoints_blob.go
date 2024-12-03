@@ -1,7 +1,10 @@
 package structs
 
 type SidecarsResponse struct {
-	Data []*Sidecar `json:"data"`
+	Version             string     `json:"version"`
+	Data                []*Sidecar `json:"data"`
+	ExecutionOptimistic bool       `json:"execution_optimistic"`
+	Finalized           bool       `json:"finalized"`
 }
 
 type Sidecar struct {

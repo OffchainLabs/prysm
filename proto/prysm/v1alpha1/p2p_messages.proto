@@ -51,12 +51,30 @@ message MetaDataV0 {
  (
  seq_number: uint64
  attnets: Bitvector[ATTESTATION_SUBNET_COUNT]
+ syncnets: Bitvector[SYNC_COMMITTEE_SUBNET_COUNT]
  )
 */
 message MetaDataV1 {
   uint64 seq_number = 1;
   bytes attnets = 2 [(ethereum.eth.ext.ssz_size) = "8", (ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/go-bitfield.Bitvector64"];
   bytes syncnets = 3 [(ethereum.eth.ext.ssz_size) = "1", (ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/go-bitfield.Bitvector4"];
+}
+
+/*
+ Spec Definition:
+ MetaData
+ (
+ seq_number: uint64
+ attnets: Bitvector[ATTESTATION_SUBNET_COUNT]
+ syncnets: Bitvector[SYNC_COMMITTEE_SUBNET_COUNT]
+ custody_subnet_count: uint64
+ )
+*/
+message MetaDataV2 {
+  uint64 seq_number = 1;
+  bytes attnets = 2 [(ethereum.eth.ext.ssz_size) = "8", (ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/go-bitfield.Bitvector64"];
+  bytes syncnets = 3 [(ethereum.eth.ext.ssz_size) = "1", (ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/go-bitfield.Bitvector4"];
+  uint64 custody_subnet_count = 4;
 }
 
 /*
@@ -69,4 +87,18 @@ message MetaDataV1 {
 message BlobSidecarsByRangeRequest {
   uint64 start_slot = 1 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"];
   uint64 count = 2;
+}
+
+/*
+Spec Definition:
+(
+  start_slot: Slot
+  count: uint64
+  columns: List[ColumnIndex]
+)
+ */
+message DataColumnSidecarsByRangeRequest {
+  uint64 start_slot = 1 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"];
+  uint64 count = 2;
+  repeated uint64 columns = 3 [(ethereum.eth.ext.ssz_max) = "128"];
 }

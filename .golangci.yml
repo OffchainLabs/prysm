@@ -73,6 +73,7 @@ linters:
     - promlinter
     - protogetter
     - revive
+    - spancheck
     - staticcheck
     - stylecheck
     - tagalign

@@ -2352,6 +2352,62 @@ func TestRollbackBlock(t *testing.T) {
 	require.Equal(t, false, hasState)
 }
 
+func TestRollbackBlock_SavePostStateInfo_ContextDeadline(t *testing.T) {
+	service, tr := minimalTestService(t)
+	ctx := tr.ctx
+
+	st, keys := util.DeterministicGenesisState(t, 64)
+	stateRoot, err := st.HashTreeRoot(ctx)
+	require.NoError(t, err, "Could not hash genesis state")
+
+	require.NoError(t, service.saveGenesisData(ctx, st))
+
+	genesis := blocks.NewGenesisBlock(stateRoot[:])
+	wsb, err := consensusblocks.NewSignedBeaconBlock(genesis)
+	require.NoError(t, err)
+	require.NoError(t, service.cfg.BeaconDB.SaveBlock(ctx, wsb), "Could not save genesis block")
+	parentRoot, err := genesis.Block.HashTreeRoot()
+	require.NoError(t, err, "Could not get signing root")
+	require.NoError(t, service.cfg.BeaconDB.SaveState(ctx, st, parentRoot), "Could not save genesis state")
+	require.NoError(t, service.cfg.BeaconDB.SaveHeadBlockRoot(ctx, parentRoot), "Could not save genesis state")
+	require.NoError(t, service.cfg.BeaconDB.SaveJustifiedCheckpoint(ctx, &ethpb.Checkpoint{Root: parentRoot[:]}))
+	require.NoError(t, service.cfg.BeaconDB.SaveFinalizedCheckpoint(ctx, &ethpb.Checkpoint{Root: parentRoot[:]}))
+
+	st, err = service.HeadState(ctx)
+	require.NoError(t, err)
+	b, err := util.GenerateFullBlock(st, keys, util.DefaultBlockGenConfig(), 128)
+	require.NoError(t, err)
+	wsb, err = consensusblocks.NewSignedBeaconBlock(b)
+	require.NoError(t, err)
+	root, err := b.Block.HashTreeRoot()
+	require.NoError(t, err)
+	preState, err := service.getBlockPreState(ctx, wsb.Block())
+	require.NoError(t, err)
+	postState, err := service.validateStateTransition(ctx, preState, wsb)
+	require.NoError(t, err)
+
+	// Save state summaries so that the cache is flushed and saved to disk
+	// later.
+	for i := 1; i <= 127; i++ {
+		require.NoError(t, service.cfg.BeaconDB.SaveStateSummary(ctx, &ethpb.StateSummary{
+			Slot: primitives.Slot(i),
+			Root: bytesutil.Bytes32(uint64(i)),
+		}))
+	}
+
+	// Set deadlined context when saving block and state
+	cancCtx, canc := context.WithCancel(ctx)
+	canc()
+
+	require.ErrorContains(t, context.Canceled.Error(), service.savePostStateInfo(cancCtx, root, wsb, postState))
+
+	// The block should no longer exist.
+	require.Equal(t, false, service.cfg.BeaconDB.HasBlock(ctx, root))
+	hasState, err := service.cfg.StateGen.HasState(ctx, root)
+	require.NoError(t, err)
+	require.Equal(t, false, hasState)
+}
+
 func TestRollbackBlock_ContextDeadline(t *testing.T) {
 	service, tr := minimalTestService(t)
 	ctx := tr.ctx

@@ -115,9 +115,16 @@ func TestListAttestations(t *testing.T) {
 		Signature: bytesutil.PadTo([]byte("signature4"), 96),
 	}
 	t.Run("V1", func(t *testing.T) {
+		bs, err := util.NewBeaconState()
+		require.NoError(t, err)
+
+		chainService := &blockchainmock.ChainService{State: bs}
 		s := &Server{
+			ChainInfoFetcher: chainService,
+			TimeFetcher:      chainService,
 			AttestationsPool: attestations.NewPool(),
 		}
+
 		require.NoError(t, s.AttestationsPool.SaveAggregatedAttestations([]ethpbv1alpha1.Att{att1, att2}))
 		require.NoError(t, s.AttestationsPool.SaveUnaggregatedAttestations([]ethpbv1alpha1.Att{att3, att4}))
 
@@ -204,10 +211,19 @@ func TestListAttestations(t *testing.T) {
 		t.Run("Pre-Electra", func(t *testing.T) {
 			bs, err := util.NewBeaconState()
 			require.NoError(t, err)
+
+			chainService := &blockchainmock.ChainService{State: bs}
 			s := &Server{
-				ChainInfoFetcher: &blockchainmock.ChainService{State: bs},
+				ChainInfoFetcher: chainService,
+				TimeFetcher:      chainService,
 				AttestationsPool: attestations.NewPool(),
 			}
+
+			params.SetupTestConfigCleanup(t)
+			config := params.BeaconConfig()
+			config.DenebForkEpoch = 0
+			params.OverrideBeaconConfig(config)
+
 			require.NoError(t, s.AttestationsPool.SaveAggregatedAttestations([]ethpbv1alpha1.Att{att1, att2}))
 			require.NoError(t, s.AttestationsPool.SaveUnaggregatedAttestations([]ethpbv1alpha1.Att{att3, att4}))
 			t.Run("empty request", func(t *testing.T) {
@@ -226,7 +242,7 @@ func TestListAttestations(t *testing.T) {
 				var atts []*structs.Attestation
 				require.NoError(t, json.Unmarshal(resp.Data, &atts))
 				assert.Equal(t, 4, len(atts))
-				assert.Equal(t, "phase0", resp.Version)
+				assert.Equal(t, "deneb", resp.Version)
 			})
 			t.Run("slot request", func(t *testing.T) {
 				url := "http://example.com?slot=2"
@@ -244,7 +260,7 @@ func TestListAttestations(t *testing.T) {
 				var atts []*structs.Attestation
 				require.NoError(t, json.Unmarshal(resp.Data, &atts))
 				assert.Equal(t, 2, len(atts))
-				assert.Equal(t, "phase0", resp.Version)
+				assert.Equal(t, "deneb", resp.Version)
 				for _, a := range atts {
 					assert.Equal(t, "2", a.Data.Slot)
 				}
@@ -265,7 +281,7 @@ func TestListAttestations(t *testing.T) {
 				var atts []*structs.Attestation
 				require.NoError(t, json.Unmarshal(resp.Data, &atts))
 				assert.Equal(t, 2, len(atts))
-				assert.Equal(t, "phase0", resp.Version)
+				assert.Equal(t, "deneb", resp.Version)
 				for _, a := range atts {
 					assert.Equal(t, "4", a.Data.CommitteeIndex)
 				}
@@ -286,7 +302,7 @@ func TestListAttestations(t *testing.T) {
 				var atts []*structs.Attestation
 				require.NoError(t, json.Unmarshal(resp.Data, &atts))
 				assert.Equal(t, 1, len(atts))
-				assert.Equal(t, "phase0", resp.Version)
+				assert.Equal(t, "deneb", resp.Version)
 				for _, a := range atts {
 					assert.Equal(t, "2", a.Data.Slot)
 					assert.Equal(t, "4", a.Data.CommitteeIndex)
@@ -370,12 +386,21 @@ func TestListAttestations(t *testing.T) {
 			}
 			bs, err := util.NewBeaconStateElectra()
 			require.NoError(t, err)
+
+			params.SetupTestConfigCleanup(t)
+			config := params.BeaconConfig()
+			config.ElectraForkEpoch = 0
+			params.OverrideBeaconConfig(config)
+
+			chainService := &blockchainmock.ChainService{State: bs}
 			s := &Server{
 				AttestationsPool: attestations.NewPool(),
-				ChainInfoFetcher: &blockchainmock.ChainService{State: bs},
+				ChainInfoFetcher: chainService,
+				TimeFetcher:      chainService,
 			}
-			require.NoError(t, s.AttestationsPool.SaveAggregatedAttestations([]ethpbv1alpha1.Att{attElectra1, attElectra2}))
-			require.NoError(t, s.AttestationsPool.SaveUnaggregatedAttestations([]ethpbv1alpha1.Att{attElectra3, attElectra4}))
+			// Added one pre electra attestation to ensure it is ignored.
+			require.NoError(t, s.AttestationsPool.SaveAggregatedAttestations([]ethpbv1alpha1.Att{attElectra1, attElectra2, att1}))
+			require.NoError(t, s.AttestationsPool.SaveUnaggregatedAttestations([]ethpbv1alpha1.Att{attElectra3, attElectra4, att3}))
 
 			t.Run("empty request", func(t *testing.T) {
 				url := "http://example.com"
@@ -1658,12 +1683,59 @@ func TestGetAttesterSlashings(t *testing.T) {
 		})
 	})
 	t.Run("V2", func(t *testing.T) {
+		t.Run("post-electra-ok-1-pre-slashing", func(t *testing.T) {
+			bs, err := util.NewBeaconStateElectra()
+			require.NoError(t, err)
+
+			params.SetupTestConfigCleanup(t)
+			config := params.BeaconConfig()
+			config.ElectraForkEpoch = 100
+			params.OverrideBeaconConfig(config)
+
+			chainService := &blockchainmock.ChainService{State: bs}
+
+			s := &Server{
+				ChainInfoFetcher: chainService,
+				TimeFetcher:      chainService,
+				SlashingsPool:    &slashingsmock.PoolMock{PendingAttSlashings: []ethpbv1alpha1.AttSlashing{slashing1PostElectra, slashing2PostElectra, slashing1PreElectra}},
+			}
+
+			request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v2/beacon/pool/attester_slashings", nil)
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.GetAttesterSlashingsV2(writer, request)
+			require.Equal(t, http.StatusOK, writer.Code)
+			resp := &structs.GetAttesterSlashingsResponse{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+			require.NotNil(t, resp)
+			require.NotNil(t, resp.Data)
+			assert.Equal(t, "electra", resp.Version)
+
+			// Unmarshal resp.Data into a slice of slashings
+			var slashings []*structs.AttesterSlashingElectra
+			require.NoError(t, json.Unmarshal(resp.Data, &slashings))
+
+			ss, err := structs.AttesterSlashingsElectraToConsensus(slashings)
+			require.NoError(t, err)
+
+			require.DeepEqual(t, slashing1PostElectra, ss[0])
+			require.DeepEqual(t, slashing2PostElectra, ss[1])
+		})
 		t.Run("post-electra-ok", func(t *testing.T) {
 			bs, err := util.NewBeaconStateElectra()
 			require.NoError(t, err)
 
+			params.SetupTestConfigCleanup(t)
+			config := params.BeaconConfig()
+			config.ElectraForkEpoch = 100
+			params.OverrideBeaconConfig(config)
+
+			chainService := &blockchainmock.ChainService{State: bs}
+
 			s := &Server{
-				ChainInfoFetcher: &blockchainmock.ChainService{State: bs},
+				ChainInfoFetcher: chainService,
+				TimeFetcher:      chainService,
 				SlashingsPool:    &slashingsmock.PoolMock{PendingAttSlashings: []ethpbv1alpha1.AttSlashing{slashing1PostElectra, slashing2PostElectra}},
 			}
 
@@ -1692,9 +1764,11 @@ func TestGetAttesterSlashings(t *testing.T) {
 		t.Run("pre-electra-ok", func(t *testing.T) {
 			bs, err := util.NewBeaconState()
 			require.NoError(t, err)
+			chainService := &blockchainmock.ChainService{State: bs}
 
 			s := &Server{
-				ChainInfoFetcher: &blockchainmock.ChainService{State: bs},
+				ChainInfoFetcher: chainService,
+				TimeFetcher:      chainService,
 				SlashingsPool:    &slashingsmock.PoolMock{PendingAttSlashings: []ethpbv1alpha1.AttSlashing{slashing1PreElectra, slashing2PreElectra}},
 			}
 
@@ -1722,8 +1796,15 @@ func TestGetAttesterSlashings(t *testing.T) {
 			bs, err := util.NewBeaconStateElectra()
 			require.NoError(t, err)
 
+			params.SetupTestConfigCleanup(t)
+			config := params.BeaconConfig()
+			config.ElectraForkEpoch = 100
+			params.OverrideBeaconConfig(config)
+
+			chainService := &blockchainmock.ChainService{State: bs}
 			s := &Server{
-				ChainInfoFetcher: &blockchainmock.ChainService{State: bs},
+				ChainInfoFetcher: chainService,
+				TimeFetcher:      chainService,
 				SlashingsPool:    &slashingsmock.PoolMock{PendingAttSlashings: []ethpbv1alpha1.AttSlashing{}},
 			}
 
