@@ -90,16 +90,17 @@ func (s *Store) insert(ctx context.Context,
 
 	parent := s.nodeByRoot[parentRoot]
 	n := &Node{
-		slot:                     slot,
-		root:                     root,
-		parent:                   parent,
-		justifiedEpoch:           justifiedEpoch,
-		unrealizedJustifiedEpoch: justifiedEpoch,
-		finalizedEpoch:           finalizedEpoch,
-		unrealizedFinalizedEpoch: finalizedEpoch,
-		optimistic:               true,
-		payloadHash:              payloadHash,
-		timestamp:                time.Now(),
+		slot:                       slot,
+		root:                       root,
+		parent:                     parent,
+		justifiedEpoch:             justifiedEpoch,
+		unrealizedJustifiedEpoch:   justifiedEpoch,
+		finalizedEpoch:             finalizedEpoch,
+		unrealizedFinalizedEpoch:   finalizedEpoch,
+		optimistic:                 true,
+		payloadHash:                payloadHash,
+		timestamp:                  time.Now(),
+		notSatisfyingInclusionList: roblock.Block().NotSatisfyingInclusionList(),
 	}
 
 	// Set the node's target checkpoint

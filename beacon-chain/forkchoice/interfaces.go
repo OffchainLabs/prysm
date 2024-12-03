@@ -38,6 +38,7 @@ type RLocker interface {
 type HeadRetriever interface {
 	Head(context.Context) ([32]byte, error)
 	GetProposerHead() [32]byte
+	GetAttesterHead() [32]byte
 	CachedHeadRoot() [32]byte
 }
 

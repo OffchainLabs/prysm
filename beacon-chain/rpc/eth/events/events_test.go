@@ -118,6 +118,7 @@ func operationEventsFixtures(t *testing.T) (*topicRequest, []*feed.Event) {
 		SyncCommitteeContributionTopic,
 		BLSToExecutionChangeTopic,
 		BlobSidecarTopic,
+		InclusionListTopic,
 		AttesterSlashingTopic,
 		ProposerSlashingTopic,
 		BlockGossipTopic,
@@ -205,6 +206,20 @@ func operationEventsFixtures(t *testing.T) (*topicRequest, []*feed.Event) {
 			Type: operation.BlobSidecarReceived,
 			Data: &operation.BlobSidecarReceivedData{
 				Blob: &vblob,
+			},
+		},
+		{
+			Type: operation.InclusionListReceived,
+			Data: &operation.InclusionListReceivedData{
+				SignedInclusionList: &eth.SignedInclusionList{
+					Message: &eth.InclusionList{
+						Slot:                       0,
+						ValidatorIndex:             0,
+						InclusionListCommitteeRoot: make([]byte, fieldparams.RootLength),
+						Transactions:               [][]byte{},
+					},
+					Signature: make([]byte, fieldparams.BLSSignatureLength),
+				},
 			},
 		},
 		{

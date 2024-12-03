@@ -25,6 +25,7 @@ var gossipTopicMappings = map[string]func() proto.Message{
 	LightClientOptimisticUpdateTopicFormat:    func() proto.Message { return &ethpb.LightClientOptimisticUpdateAltair{} },
 	LightClientFinalityUpdateTopicFormat:      func() proto.Message { return &ethpb.LightClientFinalityUpdateAltair{} },
 	DataColumnSubnetTopicFormat:               func() proto.Message { return &ethpb.DataColumnSidecar{} },
+	InclusionListTopicFormat:                  func() proto.Message { return &ethpb.SignedInclusionList{} },
 }
 
 // GossipTopicMappings is a function to return the assigned data type
@@ -144,4 +145,7 @@ func init() {
 
 	// Specially handle Fulu objects.
 	GossipTypeMapping[reflect.TypeOf(&ethpb.SignedBeaconBlockFulu{})] = BlockSubnetTopicFormat
+
+	// Specially handle InclusionList objects.
+	GossipTypeMapping[reflect.TypeOf(&ethpb.SignedInclusionList{})] = InclusionListTopicFormat
 }

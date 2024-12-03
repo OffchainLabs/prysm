@@ -125,6 +125,10 @@ func (s *Service) rpcHandlerByTopicFromEpoch(epoch primitives.Epoch) (map[string
 	// Get the beacon config.
 	beaconConfig := params.BeaconConfig()
 
+	if epoch >= beaconConfig.Eip7805ForkEpoch {
+		return s.rpcHandlerByTopicFromFork(version.Focil)
+	}
+
 	if epoch >= beaconConfig.FuluForkEpoch {
 		return s.rpcHandlerByTopicFromFork(version.Fulu)
 	}

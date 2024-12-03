@@ -272,9 +272,10 @@ func BeaconCommittee(
 
 // CommitteeAssignment represents committee list, committee index, and to be attested slot for a given epoch.
 type CommitteeAssignment struct {
-	Committee      []primitives.ValidatorIndex
-	AttesterSlot   primitives.Slot
-	CommitteeIndex primitives.CommitteeIndex
+	Committee                  []primitives.ValidatorIndex
+	AttesterSlot               primitives.Slot
+	CommitteeIndex             primitives.CommitteeIndex
+	InclusionListCommitteeSlot primitives.Slot
 }
 
 // VerifyAssignmentEpoch verifies if the given epoch is valid for assignment based on the provided state.
@@ -443,6 +444,22 @@ func CommitteeAssignments(ctx context.Context, state state.BeaconState, epoch pr
 				assignments[vIndex].Committee = committee
 				assignments[vIndex].AttesterSlot = slot
 				assignments[vIndex].CommitteeIndex = primitives.CommitteeIndex(j)
+			}
+		}
+		if slots.ToEpoch(slot) >= params.BeaconConfig().Eip7805ForkEpoch {
+			// Retrieve inclusion list committee assignments for the slot and update the assignments map.
+			indices, err := GetInclusionListCommittee(ctx, state, slot)
+			if err != nil {
+				return nil, errors.Wrap(err, "could not get inclusion list committee")
+			}
+			for _, vIndex := range indices {
+				if _, exists := vals[vIndex]; !exists {
+					continue
+				}
+				if _, exists := assignments[vIndex]; !exists {
+					assignments[vIndex] = &CommitteeAssignment{}
+				}
+				assignments[vIndex].InclusionListCommitteeSlot = slot
 			}
 		}
 	}

@@ -1365,6 +1365,7 @@ func TestGetAttestationData(t *testing.T) {
 				FinalizedFetcher:      chain,
 				AttestationCache:      cache.NewAttestationDataCache(),
 				OptimisticModeFetcher: chain,
+				ChainInfoFetcher:      chain,
 			},
 		}
 
@@ -1524,6 +1525,7 @@ func TestGetAttestationData(t *testing.T) {
 				HeadFetcher:           chain,
 				FinalizedFetcher:      chain,
 				OptimisticModeFetcher: chain,
+				ChainInfoFetcher:      chain,
 			},
 		}
 
@@ -1683,6 +1685,7 @@ func TestGetAttestationData(t *testing.T) {
 				HeadFetcher:           chain,
 				GenesisTimeFetcher:    chain,
 				FinalizedFetcher:      chain,
+				ChainInfoFetcher:      chain,
 			},
 		}
 
@@ -1853,6 +1856,7 @@ func TestGetAttestationData(t *testing.T) {
 				HeadFetcher:           chain,
 				GenesisTimeFetcher:    chain,
 				FinalizedFetcher:      chain,
+				ChainInfoFetcher:      chain,
 			},
 		}
 

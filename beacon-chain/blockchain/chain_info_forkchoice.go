@@ -27,6 +27,13 @@ func (s *Service) GetProposerHead() [32]byte {
 	return s.cfg.ForkChoiceStore.GetProposerHead()
 }
 
+// GetAttesterHead returns the corresponding value from forkchoice
+func (s *Service) GetAttesterHead() [32]byte {
+	s.cfg.ForkChoiceStore.RLock()
+	defer s.cfg.ForkChoiceStore.RUnlock()
+	return s.cfg.ForkChoiceStore.GetAttesterHead()
+}
+
 // SetForkChoiceGenesisTime sets the genesis time in Forkchoice
 func (s *Service) SetForkChoiceGenesisTime(timestamp time.Time) {
 	s.cfg.ForkChoiceStore.Lock()

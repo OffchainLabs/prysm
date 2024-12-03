@@ -46,6 +46,9 @@ const (
 
 	// DataColumnReceived is sent after a data column has been seen after gossip validation rules.
 	DataColumnReceived = 12
+
+	// InclusionListReceived is sent after an inclusion list is received from gossip or rpc
+	InclusionListReceived = 13
 )
 
 // UnAggregatedAttReceivedData is the data sent with UnaggregatedAttReceived events.
@@ -80,6 +83,11 @@ type BLSToExecutionChangeReceivedData struct {
 // BlobSidecarReceivedData is the data sent with BlobSidecarReceived events.
 type BlobSidecarReceivedData struct {
 	Blob *blocks.VerifiedROBlob
+}
+
+// InclusionListReceivedData is the data sent with InclusionListReceived events.
+type InclusionListReceivedData struct {
+	SignedInclusionList *ethpb.SignedInclusionList
 }
 
 // ProposerSlashingReceivedData is the data sent with ProposerSlashingReceived events.

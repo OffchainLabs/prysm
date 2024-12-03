@@ -11,6 +11,7 @@ go_library(
         "duties_v2.go",
         "exit.go",
         "log.go",
+        "inclusion_list.go",
         "proposer.go",
         "proposer_altair.go",
         "proposer_attestations.go",

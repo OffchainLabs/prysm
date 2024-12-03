@@ -215,6 +215,14 @@ func WithSlasherEnabled(enabled bool) Option {
 	}
 }
 
+// WithInclusionListsCache allows sync pkg to access inclusion lists cache.
+func WithInclusionListsCache(c *cache.InclusionLists) Option {
+	return func(s *Service) error {
+		s.inclusionLists = c
+		return nil
+	}
+}
+
 // WithLightClientStore allows the sync package to access light client data.
 func WithLightClientStore(lcs *lightClient.Store) Option {
 	return func(s *Service) error {

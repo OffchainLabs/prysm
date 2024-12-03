@@ -185,6 +185,7 @@ func TestGetAttestationData_OK(t *testing.T) {
 			FinalizedFetcher:      &mock.ChainService{CurrentJustifiedCheckPoint: justifiedCheckpoint},
 			AttestationCache:      cache.NewAttestationDataCache(),
 			OptimisticModeFetcher: &mock.ChainService{Optimistic: false},
+			ChainInfoFetcher:      &mock.ChainService{TargetRoot: targetRoot, Root: blockRoot[:], State: beaconState},
 		},
 	}
 
@@ -314,6 +315,7 @@ func TestGetAttestationData_Optimistic(t *testing.T) {
 			HeadFetcher:           &mock.ChainService{Optimistic: false, State: beaconState},
 			FinalizedFetcher:      &mock.ChainService{CurrentJustifiedCheckPoint: &ethpb.Checkpoint{}},
 			OptimisticModeFetcher: &mock.ChainService{Optimistic: false},
+			ChainInfoFetcher:      &mock.ChainService{Optimistic: false, State: beaconState},
 		},
 	}
 	_, err = as.GetAttestationData(t.Context(), &ethpb.AttestationDataRequest{})
@@ -426,6 +428,9 @@ func TestGetAttestationData_SucceedsInFirstEpoch(t *testing.T) {
 			GenesisTimeFetcher:    &mock.ChainService{Genesis: prysmTime.Now().Add(time.Duration(-1*offset) * time.Second)},
 			FinalizedFetcher:      &mock.ChainService{CurrentJustifiedCheckPoint: justifiedCheckpoint},
 			OptimisticModeFetcher: &mock.ChainService{Optimistic: false},
+			ChainInfoFetcher: &mock.ChainService{
+				TargetRoot: targetRoot, Root: blockRoot[:], State: beaconState,
+			},
 		},
 	}
 
@@ -495,6 +500,7 @@ func TestGetAttestationData_CommitteeIndexIsZeroPostElectra(t *testing.T) {
 			FinalizedFetcher:      &mock.ChainService{CurrentJustifiedCheckPoint: justifiedCheckpoint},
 			AttestationCache:      cache.NewAttestationDataCache(),
 			OptimisticModeFetcher: &mock.ChainService{Optimistic: false},
+			ChainInfoFetcher:      &mock.ChainService{TargetRoot: targetRoot, Root: blockRoot[:], State: beaconState},
 		},
 	}
 

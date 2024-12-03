@@ -43,8 +43,7 @@ type EngineClient struct {
 	ErrorDataColumnSidecars     error
 }
 
-// NewPayload --
-func (e *EngineClient) NewPayload(_ context.Context, _ interfaces.ExecutionData, _ []common.Hash, _ *common.Hash, _ *pb.ExecutionRequests) ([]byte, error) {
+func (e *EngineClient) NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests *pb.ExecutionRequests, ilTxs [][]byte) ([]byte, error) {
 	return e.NewPayloadResp, e.ErrNewPayload
 }
 
@@ -170,4 +169,12 @@ func (e *EngineClient) GetTerminalBlockHash(ctx context.Context, transitionTime 
 		}
 		blk = parentBlk
 	}
+}
+
+func (e *EngineClient) GetInclusionList(ctx context.Context, parentHash [32]byte) ([][]byte, error) {
+	return nil, nil
+}
+
+func (e *EngineClient) UpdatePayloadWithInclusionList(ctx context.Context, payloadID primitives.PayloadID, txs [][]byte) (*primitives.PayloadID, error) {
+	return nil, nil
 }

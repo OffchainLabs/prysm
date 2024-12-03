@@ -225,6 +225,21 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 				return mapFromCount(params.BeaconConfig().BlobsidecarSubnetCountElectra)
 			},
 		})
+		s.subscribe( // Hack for kurtosis starting from genesis
+			p2p.InclusionListTopicFormat,
+			s.validateInclusionList,
+			s.subscriberInclusionList,
+			digest,
+		)
+	}
+
+	if params.BeaconConfig().Eip7805ForkEpoch <= epoch {
+		s.subscribe(
+			p2p.InclusionListTopicFormat,
+			s.validateInclusionList,
+			s.subscriberInclusionList,
+			digest,
+		)
 	}
 
 	// New gossip topic in Fulu.

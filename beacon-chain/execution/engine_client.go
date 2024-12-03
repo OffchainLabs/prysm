@@ -129,19 +129,27 @@ type Reconstructor interface {
 // EngineCaller defines a client that can interact with an Ethereum
 // execution node's engine service via JSON-RPC.
 type EngineCaller interface {
-	NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests *pb.ExecutionRequests) ([]byte, error)
+	NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests *pb.ExecutionRequests, ilTxs [][]byte) ([]byte, error)
 	ForkchoiceUpdated(
 		ctx context.Context, state *pb.ForkchoiceState, attrs payloadattribute.Attributer,
 	) (*pb.PayloadIDBytes, []byte, error)
 	GetPayload(ctx context.Context, payloadId [8]byte, slot primitives.Slot) (*blocks.GetPayloadResponse, error)
 	ExecutionBlockByHash(ctx context.Context, hash common.Hash, withTxs bool) (*pb.ExecutionBlock, error)
 	GetTerminalBlockHash(ctx context.Context, transitionTime uint64) ([]byte, bool, error)
+	GetInclusionList(ctx context.Context, parentHash [32]byte) ([][]byte, error)
+	UpdatePayloadWithInclusionList(ctx context.Context, payloadID primitives.PayloadID, txs [][]byte) (*primitives.PayloadID, error)
 }
 
 var ErrEmptyBlockHash = errors.New("Block hash is empty 0x0000...")
 
 // NewPayload request calls the engine_newPayloadVX method via JSON-RPC.
-func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests *pb.ExecutionRequests) ([]byte, error) {
+func (s *Service) NewPayload(
+	ctx context.Context,
+	payload interfaces.ExecutionData,
+	versionedHashes []common.Hash,
+	parentBlockRoot *common.Hash,
+	executionRequests *pb.ExecutionRequests,
+	ilTxs [][]byte) ([]byte, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.NewPayload")
 	defer span.End()
 	start := time.Now()
@@ -171,12 +179,25 @@ func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionDa
 			if err != nil {
 				return nil, handleRPCError(err)
 			}
-		} else {
+		} else if ilTxs == nil {
 			flattenedRequests, err := pb.EncodeExecutionRequests(executionRequests)
 			if err != nil {
 				return nil, errors.Wrap(err, "failed to encode execution requests")
 			}
 			err = s.rpcClient.CallContext(ctx, result, NewPayloadMethodV4, payloadPb, versionedHashes, parentBlockRoot, flattenedRequests)
+			if err != nil {
+				return nil, handleRPCError(err)
+			}
+		} else {
+			flattenedRequests, err := pb.EncodeExecutionRequests(executionRequests)
+			if err != nil {
+				return nil, errors.Wrap(err, "failed to encode execution requests")
+			}
+			hexIlTxs := make([]hexutil.Bytes, len(ilTxs))
+			for i, tx := range ilTxs {
+				hexIlTxs[i] = tx
+			}
+			err = s.rpcClient.CallContext(ctx, result, NewPayloadMethodV5, payloadPb, versionedHashes, parentBlockRoot, flattenedRequests, hexIlTxs)
 			if err != nil {
 				return nil, handleRPCError(err)
 			}
@@ -196,6 +217,8 @@ func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionDa
 		return result.LatestValidHash, ErrInvalidPayloadStatus
 	case pb.PayloadStatus_VALID:
 		return result.LatestValidHash, nil
+	case pb.PayloadStatus_INCLUSION_LIST_NOT_SATISFIED:
+		return result.LatestValidHash, ErrBadInclusionListPayloadStatus
 	default:
 		return nil, ErrUnknownPayloadStatus
 	}

@@ -153,4 +153,6 @@ type ValidatorClient interface {
 	AggregatedSyncSelections(ctx context.Context, selections []SyncCommitteeSelection) ([]SyncCommitteeSelection, error)
 	Host() string
 	SetHost(host string)
+	GetInclusionList(request *ethpb.GetInclusionListRequest) (*ethpb.InclusionList, error)
+	SubmitInclusionList(il *ethpb.SignedInclusionList) (*empty.Empty, error)
 }
