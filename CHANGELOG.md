@@ -69,6 +69,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Modified `ListAttestationsV2`, `GetAttesterSlashingsV2` and `GetAggregateAttestationV2` endpoints to use slot to determine fork version.
 - Improvements to HTTP response handling. [pr](https://github.com/prysmaticlabs/prysm/pull/14673)
 - Updated `Blobs` endpoint to return additional metadata fields.
+- Made QUIC the default method to connect with peers.
 
 ### Deprecated
 
