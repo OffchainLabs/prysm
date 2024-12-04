@@ -67,9 +67,11 @@ var InitsyncBlobSidecarRequirements = requirementList(GossipBlobSidecarRequireme
 	RequireSidecarProposerExpected,
 )
 
-// ELMemPoolRequirements is a list of verification requirements to be used when importing blobs and proof from
-// execution layer mempool. Only the KZG proof verification is required.
-var ELMemPoolRequirements = []Requirement{RequireSidecarKzgProofVerified}
+// ELMemPoolRequirements defines the verification requirements for importing blobs and proofs
+// from the execution layer's mempool. Currently, no requirements are enforced because it is
+// assumed that blobs and proofs from the execution layer are correctly formatted,
+// given the trusted relationship between the consensus layer and execution layer.
+var ELMemPoolRequirements []Requirement
 
 // BackfillBlobSidecarRequirements is the same as InitsyncBlobSidecarRequirements.
 var BackfillBlobSidecarRequirements = requirementList(InitsyncBlobSidecarRequirements).excluding()

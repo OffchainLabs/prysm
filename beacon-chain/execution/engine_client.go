@@ -623,13 +623,7 @@ func (s *Service) ReconstructBlobSidecars(ctx context.Context, block interfaces.
 			continue
 		}
 
-		// Verify the sidecar KZG proof
 		v := s.blobVerifier(roBlob, verification.ELMemPoolRequirements)
-		if err := v.SidecarKzgProofVerified(); err != nil {
-			log.WithError(err).WithField("index", i).Error("failed to verify KZG proof for sidecar")
-			continue
-		}
-
 		verifiedBlob, err := v.VerifiedROBlob()
 		if err != nil {
 			log.WithError(err).WithField("index", i).Error("failed to verify RO blob")

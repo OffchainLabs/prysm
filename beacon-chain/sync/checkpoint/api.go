@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/api/client"
 	"github.com/prysmaticlabs/prysm/v5/api/client/beacon"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
@@ -18,7 +19,7 @@ type APIInitializer struct {
 // NewAPIInitializer creates an APIInitializer, handling the set up of a beacon node api client
 // using the provided host string.
 func NewAPIInitializer(beaconNodeHost string) (*APIInitializer, error) {
-	c, err := beacon.NewClient(beaconNodeHost)
+	c, err := beacon.NewClient(beaconNodeHost, client.WithMaxBodySize(client.MaxBodySizeState))
 	if err != nil {
 		return nil, errors.Wrapf(err, "unable to parse beacon node url or hostname - %s", beaconNodeHost)
 	}
@@ -32,10 +33,9 @@ func (dl *APIInitializer) Initialize(ctx context.Context, d db.Database) error {
 	if err == nil && origin != params.BeaconConfig().ZeroHash {
 		log.Warnf("Origin checkpoint root %#x found in db, ignoring checkpoint sync flags", origin)
 		return nil
-	} else {
-		if !errors.Is(err, db.ErrNotFound) {
-			return errors.Wrap(err, "error while checking database for origin root")
-		}
+	}
+	if err != nil && !errors.Is(err, db.ErrNotFound) {
+		return errors.Wrap(err, "error while checking database for origin root")
 	}
 	od, err := beacon.DownloadFinalizedData(ctx, dl.c)
 	if err != nil {

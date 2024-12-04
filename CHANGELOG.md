@@ -28,6 +28,9 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Added Validator REST mode use of Attestation V2 endpoints and Electra attestations.
 - PeerDAS: Added proto for `DataColumnIdentifier`, `DataColumnSidecar`, `DataColumnSidecarsByRangeRequest` and `MetadataV2`.
 - Better attestation packing for Electra. [PR](https://github.com/prysmaticlabs/prysm/pull/14534)
+- P2P: Add logs when a peer is (dis)connected. Add the reason of the disconnection when we initiate it.
+- Added a Prometheus error counter metric for HTTP requests to track beacon node requests.
+- Added a Prometheus error counter metric for SSE requests.
 
 ### Changed
 
@@ -65,16 +68,23 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Update earliest exit epoch for upgrade to electra
 - Add missed exit checks to consolidation processing
 - Fixed pending deposits processing on Electra.
+- Modified `ListAttestationsV2`, `GetAttesterSlashingsV2` and `GetAggregateAttestationV2` endpoints to use slot to determine fork version.
+- Improvements to HTTP response handling. [pr](https://github.com/prysmaticlabs/prysm/pull/14673)
+- Updated `Blobs` endpoint to return additional metadata fields.
+- Made QUIC the default method to connect with peers.
 
 ### Deprecated
 
 - `/eth/v1alpha1/validator/activation/stream` grpc wait for activation stream is deprecated. [pr](https://github.com/prysmaticlabs/prysm/pull/14514)
+- `--interop-genesis-time` and `--interop-num-validators` have been deprecated in the beacon node as the functionality has been removed. These flags have no effect.
 
 ### Removed
 
 - Removed finalized validator index cache, no longer needed.
 - Removed validator queue position log on key reload and wait for activation.
 - Removed outdated spectest exclusions for EIP-6110.
+- Removed support for starting a beacon node with a deterministic interop genesis state via interop flags. Alteratively, create a genesis state with prysmctl and use `--genesis-state`. This removes about 9Mb (~11%) of unnecessary code and dependencies from the final production binary.
+- Removed kzg proof check from blob reconstructor.
 
 ### Fixed
 
@@ -96,6 +106,9 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - temporary solution to handling electra attesation and attester_slashing events. [pr](14655)
 - Diverse log improvements and comment additions.
 - Validate that each committee bitfield in an aggregate contains at least one non-zero bit
+- P2P: Avoid infinite loop when looking for peers in small networks.
+- Fixed another rollback bug due to a context deadline.
+- Fix checkpoint sync bug on holesky. [pr](https://github.com/prysmaticlabs/prysm/pull/14689)
 
 
 ### Security

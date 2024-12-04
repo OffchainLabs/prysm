@@ -30,7 +30,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/kv"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/slasherkv"
-	interopcoldstart "github.com/prysmaticlabs/prysm/v5/beacon-chain/deterministic-genesis"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/execution"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice"
 	doublylinkedtree "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/doubly-linked-tree"
@@ -261,10 +260,6 @@ func configureBeacon(cliCtx *cli.Context) error {
 
 	configureNetwork(cliCtx)
 
-	if err := configureInteropConfig(cliCtx); err != nil {
-		return errors.Wrap(err, "could not configure interop config")
-	}
-
 	if err := configureExecutionSetting(cliCtx); err != nil {
 		return errors.Wrap(err, "could not configure execution setting")
 	}
@@ -322,11 +317,6 @@ func registerServices(cliCtx *cli.Context, beacon *BeaconNode, synchronizer *sta
 	log.Debugln("Registering Attestation Pool Service")
 	if err := beacon.registerAttestationPool(); err != nil {
 		return errors.Wrap(err, "could not register attestation pool service")
-	}
-
-	log.Debugln("Registering Deterministic Genesis Service")
-	if err := beacon.registerDeterministicGenesisService(); err != nil {
-		return errors.Wrap(err, "could not register deterministic genesis service")
 	}
 
 	log.Debugln("Registering Blockchain Service")
@@ -921,20 +911,8 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		}
 	}
 
-	genesisValidators := b.cliCtx.Uint64(flags.InteropNumValidatorsFlag.Name)
-	var depositFetcher cache.DepositFetcher
-	var chainStartFetcher execution.ChainStartFetcher
-	if genesisValidators > 0 {
-		var interopService *interopcoldstart.Service
-		if err := b.services.FetchService(&interopService); err != nil {
-			return err
-		}
-		depositFetcher = interopService
-		chainStartFetcher = interopService
-	} else {
-		depositFetcher = b.depositCache
-		chainStartFetcher = web3Service
-	}
+	depositFetcher := b.depositCache
+	chainStartFetcher := web3Service
 
 	host := b.cliCtx.String(flags.RPCHost.Name)
 	port := b.cliCtx.String(flags.RPCPort.Name)
@@ -1054,32 +1032,6 @@ func (b *BeaconNode) registerHTTPService(router *http.ServeMux) error {
 		return err
 	}
 	return b.services.RegisterService(g)
-}
-
-func (b *BeaconNode) registerDeterministicGenesisService() error {
-	genesisTime := b.cliCtx.Uint64(flags.InteropGenesisTimeFlag.Name)
-	genesisValidators := b.cliCtx.Uint64(flags.InteropNumValidatorsFlag.Name)
-
-	if genesisValidators > 0 {
-		svc := interopcoldstart.NewService(b.ctx, &interopcoldstart.Config{
-			GenesisTime:   genesisTime,
-			NumValidators: genesisValidators,
-			BeaconDB:      b.db,
-			DepositCache:  b.depositCache,
-		})
-		svc.Start()
-
-		// Register genesis state as start-up state when interop mode.
-		// The start-up state gets reused across services.
-		st, err := b.db.GenesisState(b.ctx)
-		if err != nil {
-			return err
-		}
-		b.finalizedStateAtStartUp = st
-
-		return b.services.RegisterService(svc)
-	}
-	return nil
 }
 
 func (b *BeaconNode) registerValidatorMonitorService(initialSyncComplete chan struct{}) error {

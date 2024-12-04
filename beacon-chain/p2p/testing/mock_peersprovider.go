@@ -64,7 +64,7 @@ func (m *MockPeersProvider) Peers() *peers.Status {
 			log.WithError(err).Debug("Cannot decode")
 		}
 		m.peers.Add(createENR(), id0, ma0, network.DirInbound)
-		m.peers.SetConnectionState(id0, peers.PeerConnected)
+		m.peers.SetConnectionState(id0, peers.Connected)
 		m.peers.SetChainState(id0, &pb.Status{FinalizedEpoch: 10})
 		id1, err := peer.Decode(MockRawPeerId1)
 		if err != nil {
@@ -75,7 +75,7 @@ func (m *MockPeersProvider) Peers() *peers.Status {
 			log.WithError(err).Debug("Cannot decode")
 		}
 		m.peers.Add(createENR(), id1, ma1, network.DirOutbound)
-		m.peers.SetConnectionState(id1, peers.PeerConnected)
+		m.peers.SetConnectionState(id1, peers.Connected)
 		m.peers.SetChainState(id1, &pb.Status{FinalizedEpoch: 11})
 	}
 	return m.peers

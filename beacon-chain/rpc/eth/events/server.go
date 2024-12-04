@@ -12,7 +12,7 @@ import (
 	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
 )
 
-// Server defines a server implementation of the gRPC events service,
+// Server defines a server implementation of the http events service,
 // providing RPC endpoints to subscribe to events from the beacon node.
 type Server struct {
 	StateNotifier          statefeed.Notifier
