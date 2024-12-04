@@ -126,7 +126,7 @@ func (s *Service) processLightClientUpdates(cfg *postBlockProcessConfig) {
 // saveLightClientUpdate saves the light client update for this block
 // if it's better than the already saved one, when feature flag is enabled.
 func (s *Service) saveLightClientUpdate(cfg *postBlockProcessConfig) {
-	if !features.Get().EnableLightClient && slots.ToEpoch(s.CurrentSlot()) < params.BeaconConfig().AltairForkEpoch {
+	if !features.Get().EnableLightClient || slots.ToEpoch(s.CurrentSlot()) < params.BeaconConfig().AltairForkEpoch {
 		return
 	}
 
@@ -208,7 +208,7 @@ func (s *Service) saveLightClientUpdate(cfg *postBlockProcessConfig) {
 // saveLightClientBootstrap saves a light client bootstrap for this block
 // when feature flag is enabled.
 func (s *Service) saveLightClientBootstrap(cfg *postBlockProcessConfig) {
-	if !features.Get().EnableLightClient && slots.ToEpoch(s.CurrentSlot()) < params.BeaconConfig().AltairForkEpoch {
+	if !features.Get().EnableLightClient || slots.ToEpoch(s.CurrentSlot()) < params.BeaconConfig().AltairForkEpoch {
 		return
 	}
 
