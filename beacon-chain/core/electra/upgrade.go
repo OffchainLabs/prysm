@@ -17,6 +17,7 @@ import (
 
 // UpgradeToElectra updates inputs a generic state to return the version Electra state.
 //
+// nolint:dupword
 // Spec code:
 // def upgrade_to_electra(pre: deneb.BeaconState) -> BeaconState:
 //
