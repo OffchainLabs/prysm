@@ -2,6 +2,7 @@ package kv
 
 import (
 	"context"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	"testing"
 	"time"
 
@@ -353,6 +354,58 @@ func TestStore_DeleteFinalizedBlock(t *testing.T) {
 	require.NoError(t, db.SaveFinalizedCheckpoint(ctx, cp))
 	require.ErrorIs(t, db.DeleteBlock(ctx, root), ErrDeleteJustifiedAndFinalized)
 }
+
+func TestStore_DeleteBeforeSlot(t *testing.T) {
+	slotsPerEpoch := uint64(params.BeaconConfig().SlotsPerEpoch)
+	db := setupDB(t)
+	ctx := context.Background()
+
+	require.NoError(t, db.SaveGenesisBlockRoot(ctx, genesisBlockRoot))
+
+	// We have blocks for 4 epochs.
+	blks := makeBlocks(t, 0, slotsPerEpoch*4, genesisBlockRoot)
+	require.NoError(t, db.SaveBlocks(ctx, blks))
+	ss := make([]*ethpb.StateSummary, len(blks))
+	sts := make([]*state.BeaconState, len(blks))
+	for i, blk := range blks {
+		r, err := blk.Block().HashTreeRoot()
+		require.NoError(t, err)
+		ss[i] = &ethpb.StateSummary{
+			Slot: blk.Block().Slot(),
+			Root: r[:],
+		}
+
+		st, err := util.NewBeaconState()
+		require.NoError(t, err)
+		require.NoError(t, db.SaveState(ctx, st, r))
+		sts[i] = &st
+	}
+	require.NoError(t, db.SaveStateSummaries(ctx, ss))
+
+	// Delete blocks of first epoch.
+	require.NoError(t, db.DeleteBeforeSlot(ctx, primitives.Slot(slotsPerEpoch)))
+
+	// Check if we deleted the blocks successfully.
+	for i := 0; i < int(slotsPerEpoch); i++ {
+		root, err := blks[i].Block().HashTreeRoot()
+		require.NoError(t, err)
+
+		require.Equal(t, false, db.HasBlock(ctx, root))
+		require.Equal(t, false, db.HasState(ctx, root))
+		require.Equal(t, false, db.HasStateSummary(ctx, root))
+	}
+
+	// Check if we have rest of the blocks.
+	for i := slotsPerEpoch; i < slotsPerEpoch*4; i++ {
+		root, err := blks[slotsPerEpoch].Block().HashTreeRoot()
+		require.NoError(t, err)
+
+		require.Equal(t, true, db.HasBlock(ctx, root))
+		require.Equal(t, true, db.HasState(ctx, root))
+		require.Equal(t, true, db.HasStateSummary(ctx, root))
+	}
+}
+
 func TestStore_GenesisBlock(t *testing.T) {
 	db := setupDB(t)
 	ctx := context.Background()

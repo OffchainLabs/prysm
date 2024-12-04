@@ -238,6 +238,45 @@ func (s *Store) DeleteBlock(ctx context.Context, root [32]byte) error {
 	})
 }
 
+// DeleteBeforeSlot performs deletes all blocks and states before the given slot.
+func (s *Store) DeleteBeforeSlot(ctx context.Context, cutoffSlot primitives.Slot) error {
+	ctx, span := trace.StartSpan(ctx, "BeaconDB.DeleteBeforeEpoch")
+	defer span.End()
+
+	// Perform all deletions in a single transaction for atomicity
+	return s.db.Update(func(tx *bolt.Tx) error {
+		filter := filters.NewFilter().SetStartSlot(0).SetEndSlot(cutoffSlot)
+		rootsToDelete, err := blockRootsByFilter(ctx, tx, filter)
+		if err != nil {
+			return errors.Wrap(err, "could not retrieve block roots by filter")
+		}
+
+		for _, root := range rootsToDelete {
+			// Delete Block
+			if err = tx.Bucket(blocksBucket).Delete(root[:]); err != nil {
+				return errors.Wrap(err, "could not delete block")
+			}
+
+			// Delete State
+			if err = tx.Bucket(stateBucket).Delete(root[:]); err != nil {
+				return errors.Wrap(err, "could not delete state")
+			}
+
+			// Delete state summary
+			if err = tx.Bucket(stateSummaryBucket).Delete(root[:]); err != nil {
+				return errors.Wrap(err, "could not delete state summary")
+			}
+
+			// Delete block from cache
+			s.blockCache.Del(string(root[:]))
+			// Delete state summary from cache
+			s.stateSummaryCache.delete([32]byte(root))
+		}
+
+		return nil
+	})
+}
+
 // SaveBlock to the db.
 func (s *Store) SaveBlock(ctx context.Context, signed interfaces.ReadOnlySignedBeaconBlock) error {
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.SaveBlock")
