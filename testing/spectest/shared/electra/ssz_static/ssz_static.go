@@ -103,6 +103,8 @@ func UnmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (i
 		obj = &ethpb.ContributionAndProof{}
 	case "SignedContributionAndProof":
 		obj = &ethpb.SignedContributionAndProof{}
+	case "SingleAttestation":
+		obj = &ethpb.SingleAttestation{}
 	case "SyncAggregate":
 		obj = &ethpb.SyncAggregate{}
 	case "SyncAggregatorSelectionData":

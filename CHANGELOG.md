@@ -66,6 +66,8 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Updated light client protobufs. [PR](https://github.com/prysmaticlabs/prysm/pull/14650)
 - Added `Eth-Consensus-Version` header to `ListAttestationsV2` and `GetAggregateAttestationV2` endpoints.
 - Updated light client consensus types. [PR](https://github.com/prysmaticlabs/prysm/pull/14652)
+- Update earliest exit epoch for upgrade to electra
+- Add missed exit checks to consolidation processing
 - Fixed pending deposits processing on Electra.
 - Modified `ListAttestationsV2`, `GetAttesterSlashingsV2` and `GetAggregateAttestationV2` endpoints to use slot to determine fork version.
 - Improvements to HTTP response handling. [pr](https://github.com/prysmaticlabs/prysm/pull/14673)
@@ -104,6 +106,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - corrects nil check on some interface attestation types
 - temporary solution to handling electra attesation and attester_slashing events. [pr](14655)
 - Diverse log improvements and comment additions.
+- Validate that each committee bitfield in an aggregate contains at least one non-zero bit
 - P2P: Avoid infinite loop when looking for peers in small networks.
 - Fixed another rollback bug due to a context deadline.
 - Fix checkpoint sync bug on holesky. [pr](https://github.com/prysmaticlabs/prysm/pull/14689)

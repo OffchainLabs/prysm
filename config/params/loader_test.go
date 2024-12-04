@@ -24,6 +24,7 @@ import (
 // These are variables that we don't use in Prysm. (i.e. future hardfork, light client... etc)
 // IMPORTANT: Use one field per line and sort these alphabetically to reduce conflicts.
 var placeholderFields = []string{
+	"BLOB_SIDECAR_SUBNET_COUNT_EIP7594",
 	"BYTES_PER_LOGS_BLOOM", // Compile time constant on ExecutionPayload.logs_bloom.
 	"EIP6110_FORK_EPOCH",
 	"EIP6110_FORK_VERSION",
@@ -35,11 +36,13 @@ var placeholderFields = []string{
 	"FIELD_ELEMENTS_PER_BLOB",              // Compile time constant.
 	"KZG_COMMITMENT_INCLUSION_PROOF_DEPTH", // Compile time constant on BlobSidecar.commitment_inclusion_proof.
 	"MAX_BLOBS_PER_BLOCK",
+	"MAX_BLOBS_PER_BLOCK_EIP7594",
 	"MAX_BLOB_COMMITMENTS_PER_BLOCK", // Compile time constant on BeaconBlockBodyDeneb.blob_kzg_commitments.
 	"MAX_BYTES_PER_TRANSACTION",      // Used for ssz of EL transactions. Unused in Prysm.
 	"MAX_EXTRA_DATA_BYTES",           // Compile time constant on ExecutionPayload.extra_data.
-	"MAX_REQUEST_PAYLOADS",           // Compile time constant on BeaconBlockBody.ExecutionRequests
-	"MAX_TRANSACTIONS_PER_PAYLOAD",   // Compile time constant on ExecutionPayload.transactions.
+	"MAX_REQUEST_BLOB_SIDECARS_EIP7594",
+	"MAX_REQUEST_PAYLOADS",         // Compile time constant on BeaconBlockBody.ExecutionRequests
+	"MAX_TRANSACTIONS_PER_PAYLOAD", // Compile time constant on ExecutionPayload.transactions.
 	"REORG_HEAD_WEIGHT_THRESHOLD",
 	"TARGET_NUMBER_OF_PEERS",
 	"UPDATE_TIMEOUT",

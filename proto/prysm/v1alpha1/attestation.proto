@@ -49,6 +49,13 @@ message AttestationElectra {
     bytes committee_bits = 4 [(ethereum.eth.ext.ssz_size) = "committee_bits.size", (ethereum.eth.ext.cast_type) = "committee_bits.type"];
 }
 
+message SingleAttestation {
+    uint64 committee_id = 1  [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.CommitteeIndex"];
+    uint64 attester_index = 2  [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.ValidatorIndex"];
+    AttestationData data = 3;
+    bytes signature = 4 [(ethereum.eth.ext.ssz_size) = "96"];
+}
+
 message AggregateAttestationAndProof {
     // The aggregator index that submitted this aggregated attestation and proof.
     uint64 aggregator_index = 1  [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.ValidatorIndex"];

@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
@@ -156,6 +157,13 @@ func ProcessPendingConsolidations(ctx context.Context, st state.BeaconState) err
 //	    if target_validator.exit_epoch != FAR_FUTURE_EPOCH:
 //	        return
 //
+//	    # Verify the source has been active long enough
+//	    if current_epoch < source_validator.activation_epoch + SHARD_COMMITTEE_PERIOD:
+//	        return
+//
+//	    # Verify the source has no pending withdrawals in the queue
+//	    if get_pending_balance_to_withdraw(state, source_index) > 0:
+//	        return
 //	    # Initiate source validator exit and append pending consolidation
 //	    source_validator.exit_epoch = compute_consolidation_epoch_and_update_churn(
 //	        state, source_validator.effective_balance
@@ -255,6 +263,23 @@ func ProcessConsolidationRequests(ctx context.Context, st state.BeaconState, req
 		}
 		// Neither validator are exiting.
 		if srcV.ExitEpoch != ffe || tgtV.ExitEpoch() != ffe {
+			continue
+		}
+
+		e, overflow := math.SafeAdd(uint64(srcV.ActivationEpoch), uint64(params.BeaconConfig().ShardCommitteePeriod))
+		if overflow {
+			log.Error("Overflow when adding activation epoch and shard committee period")
+			continue
+		}
+		if uint64(curEpoch) < e {
+			continue
+		}
+		bal, err := st.PendingBalanceToWithdraw(srcIdx)
+		if err != nil {
+			log.WithError(err).Error("failed to fetch pending balance to withdraw")
+			continue
+		}
+		if bal > 0 {
 			continue
 		}
 

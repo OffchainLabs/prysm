@@ -213,6 +213,7 @@ func TestProcessConsolidationRequests(t *testing.T) {
 			name: "one valid request",
 			state: func() state.BeaconState {
 				st := &eth.BeaconStateElectra{
+					Slot:       params.BeaconConfig().SlotsPerEpoch.Mul(uint64(params.BeaconConfig().ShardCommitteePeriod)),
 					Validators: createValidatorsWithTotalActiveBalance(32000000000000000), // 32M ETH
 				}
 				// Validator scenario setup. See comments in reqs section.
@@ -222,6 +223,12 @@ func TestProcessConsolidationRequests(t *testing.T) {
 				st.Validators[12].ActivationEpoch = params.BeaconConfig().FarFutureEpoch
 				st.Validators[13].ExitEpoch = 10
 				st.Validators[16].ExitEpoch = 10
+				st.PendingPartialWithdrawals = []*eth.PendingPartialWithdrawal{
+					{
+						Index:  17,
+						Amount: 100,
+					},
+				}
 				s, err := state_native.InitializeFromProtoElectra(st)
 				require.NoError(t, err)
 				return s
@@ -287,6 +294,12 @@ func TestProcessConsolidationRequests(t *testing.T) {
 					SourcePubkey:  []byte("val_0"),
 					TargetPubkey:  []byte("val_0"),
 				},
+				// Has pending partial withdrawal
+				{
+					SourceAddress: append(bytesutil.PadTo(nil, 19), byte(0)),
+					SourcePubkey:  []byte("val_17"),
+					TargetPubkey:  []byte("val_1"),
+				},
 				// Valid consolidation request. This should be last to ensure invalid requests do
 				// not end the processing early.
 				{
@@ -347,6 +360,7 @@ func TestProcessConsolidationRequests(t *testing.T) {
 			name: "pending consolidations limit reached during processing",
 			state: func() state.BeaconState {
 				st := &eth.BeaconStateElectra{
+					Slot:                  params.BeaconConfig().SlotsPerEpoch.Mul(uint64(params.BeaconConfig().ShardCommitteePeriod)),
 					Validators:            createValidatorsWithTotalActiveBalance(32000000000000000), // 32M ETH
 					PendingConsolidations: make([]*eth.PendingConsolidation, params.BeaconConfig().PendingConsolidationsLimit-1),
 				}

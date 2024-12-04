@@ -113,6 +113,9 @@ func AttestingIndices(att ethpb.Att, committees ...[]primitives.ValidatorIndex) 
 				committeeAttesters = append(committeeAttesters, uint64(vi))
 			}
 		}
+		if len(committeeAttesters) == 0 {
+			return nil, fmt.Errorf("no attesting indices found in committee %v", c)
+		}
 		attesters = append(attesters, committeeAttesters...)
 		committeeOffset += len(c)
 	}
