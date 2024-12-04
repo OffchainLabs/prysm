@@ -2509,6 +2509,10 @@ func TestSaveLightClientUpdate(t *testing.T) {
 	ctx := tr.ctx
 
 	t.Run("Altair", func(t *testing.T) {
+		featCfg := &features.Flags{}
+		featCfg.EnableLightClient = true
+		reset := features.InitWithReset(featCfg)
+
 		l := util.NewTestLightClient(t).SetupTestAltair()
 
 		s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().AltairForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
@@ -2552,9 +2556,15 @@ func TestSaveLightClientUpdate(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, attestedStateRoot, [32]byte(u.AttestedHeader().Beacon().StateRoot))
 		require.Equal(t, u.Version(), version.Altair)
+
+		reset()
 	})
 
 	t.Run("Capella", func(t *testing.T) {
+		featCfg := &features.Flags{}
+		featCfg.EnableLightClient = true
+		reset := features.InitWithReset(featCfg)
+
 		l := util.NewTestLightClient(t).SetupTestCapella(false)
 
 		s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().CapellaForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
@@ -2597,9 +2607,15 @@ func TestSaveLightClientUpdate(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, attestedStateRoot, [32]byte(u.AttestedHeader().Beacon().StateRoot))
 		require.Equal(t, u.Version(), version.Capella)
+
+		reset()
 	})
 
 	t.Run("Deneb", func(t *testing.T) {
+		featCfg := &features.Flags{}
+		featCfg.EnableLightClient = true
+		reset := features.InitWithReset(featCfg)
+
 		l := util.NewTestLightClient(t).SetupTestDeneb(false)
 
 		s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().DenebForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
@@ -2642,6 +2658,8 @@ func TestSaveLightClientUpdate(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, attestedStateRoot, [32]byte(u.AttestedHeader().Beacon().StateRoot))
 		require.Equal(t, u.Version(), version.Deneb)
+
+		reset()
 	})
 }
 
@@ -2650,6 +2668,10 @@ func TestSaveLightClientBootstrap(t *testing.T) {
 	ctx := tr.ctx
 
 	t.Run("Altair", func(t *testing.T) {
+		featCfg := &features.Flags{}
+		featCfg.EnableLightClient = true
+		reset := features.InitWithReset(featCfg)
+
 		l := util.NewTestLightClient(t).SetupTestAltair()
 
 		s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().AltairForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
@@ -2682,9 +2704,15 @@ func TestSaveLightClientBootstrap(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, stateRoot, [32]byte(b.Header().Beacon().StateRoot))
 		require.Equal(t, b.Version(), version.Altair)
+
+		reset()
 	})
 
 	t.Run("Capella", func(t *testing.T) {
+		featCfg := &features.Flags{}
+		featCfg.EnableLightClient = true
+		reset := features.InitWithReset(featCfg)
+
 		l := util.NewTestLightClient(t).SetupTestCapella(false)
 
 		s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().CapellaForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
@@ -2717,9 +2745,15 @@ func TestSaveLightClientBootstrap(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, stateRoot, [32]byte(b.Header().Beacon().StateRoot))
 		require.Equal(t, b.Version(), version.Capella)
+
+		reset()
 	})
 
 	t.Run("Deneb", func(t *testing.T) {
+		featCfg := &features.Flags{}
+		featCfg.EnableLightClient = true
+		reset := features.InitWithReset(featCfg)
+
 		l := util.NewTestLightClient(t).SetupTestDeneb(false)
 
 		s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().DenebForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
@@ -2752,5 +2786,7 @@ func TestSaveLightClientBootstrap(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, stateRoot, [32]byte(b.Header().Beacon().StateRoot))
 		require.Equal(t, b.Version(), version.Deneb)
+
+		reset()
 	})
 }
