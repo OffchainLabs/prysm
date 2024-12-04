@@ -294,7 +294,7 @@ func TestProcessConsolidationRequests(t *testing.T) {
 					SourcePubkey:  []byte("val_0"),
 					TargetPubkey:  []byte("val_0"),
 				},
-				// Has pening partial withdrawal
+				// Has pending partial withdrawal
 				{
 					SourceAddress: append(bytesutil.PadTo(nil, 19), byte(0)),
 					SourcePubkey:  []byte("val_17"),
