@@ -15,6 +15,7 @@ import (
 	doublylinkedtree "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/doubly-linked-tree"
 	forkchoicetypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/types"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v5/config/features"
 	field_params "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	consensus_blocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
@@ -125,9 +126,9 @@ func (s *Service) processLightClientUpdates(cfg *postBlockProcessConfig) {
 // saveLightClientUpdate saves the light client update for this block
 // if it's better than the already saved one, when feature flag is enabled.
 func (s *Service) saveLightClientUpdate(cfg *postBlockProcessConfig) {
-	//if !features.Get().EnableLightClient && slots.ToEpoch(s.CurrentSlot()) >= params.BeaconConfig().AltairForkEpoch {
-	//	return
-	//}
+	if !features.Get().EnableLightClient && slots.ToEpoch(s.CurrentSlot()) >= params.BeaconConfig().AltairForkEpoch {
+		return
+	}
 
 	attestedRoot := cfg.roblock.Block().ParentRoot()
 	attestedBlock, err := s.getBlock(cfg.ctx, attestedRoot)
@@ -207,9 +208,9 @@ func (s *Service) saveLightClientUpdate(cfg *postBlockProcessConfig) {
 // saveLightClientBootstrap saves a light client bootstrap for this block
 // when feature flag is enabled.
 func (s *Service) saveLightClientBootstrap(cfg *postBlockProcessConfig) {
-	//if !features.Get().EnableLightClient && slots.ToEpoch(s.CurrentSlot()) >= params.BeaconConfig().AltairForkEpoch {
-	//	return
-	//}
+	if !features.Get().EnableLightClient && slots.ToEpoch(s.CurrentSlot()) >= params.BeaconConfig().AltairForkEpoch {
+		return
+	}
 
 	blockRoot := cfg.roblock.Root()
 	bootstrap, err := lightclient.NewLightClientBootstrapFromBeaconState(cfg.ctx, s.CurrentSlot(), cfg.postState, cfg.roblock)
