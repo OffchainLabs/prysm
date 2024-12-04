@@ -431,6 +431,7 @@ block profit. If you want to preserve the existing behavior, set --local-block-v
 - Set default LocalBlockValueBoost to 10
 - Add bid value metrics
 - REST VC metrics
+- `startDB`: Add log when checkpoint sync.
 
 ### Changed
 
