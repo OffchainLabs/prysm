@@ -332,10 +332,10 @@ func TestStaticSubnets(t *testing.T) {
 	defaultTopic := "/eth2/%x/beacon_attestation_%d"
 	d, err := r.currentForkDigest()
 	assert.NoError(t, err)
-	r.subscribeStaticWithSubnets(defaultTopic, r.noopValidator, func(_ context.Context, msg proto.Message) error {
+	r.subscribeStaticWithSubnets("Attestation", defaultTopic, r.noopValidator, func(_ context.Context, msg proto.Message) error {
 		// no-op
 		return nil
-	}, d, params.BeaconConfig().AttestationSubnetCount)
+	}, d, sliceFromCount(params.BeaconConfig().AttestationSubnetCount))
 	topics := r.cfg.p2p.PubSub().GetTopics()
 	if uint64(len(topics)) != params.BeaconConfig().AttestationSubnetCount {
 		t.Errorf("Wanted the number of subnet topics registered to be %d but got %d", params.BeaconConfig().AttestationSubnetCount, len(topics))
@@ -565,7 +565,7 @@ func TestSubscribeWithSyncSubnets_StaticOK(t *testing.T) {
 	defer cache.SyncSubnetIDs.EmptyAllCaches()
 	digest, err := r.currentForkDigest()
 	assert.NoError(t, err)
-	r.subscribeStaticWithSyncSubnets(p2p.SyncCommitteeSubnetTopicFormat, nil, nil, digest)
+	r.subscribeStaticWithSubnets("Sync committee", p2p.SyncCommitteeSubnetTopicFormat, nil, nil, digest, sliceFromCount(params.BeaconConfig().SyncCommitteeSubnetCount))
 	assert.Equal(t, int(params.BeaconConfig().SyncCommitteeSubnetCount), len(r.cfg.p2p.PubSub().GetTopics()))
 	cancel()
 }
@@ -600,7 +600,7 @@ func TestSubscribeWithSyncSubnets_DynamicOK(t *testing.T) {
 	cache.SyncSubnetIDs.AddSyncCommitteeSubnets([]byte("pubkey"), currEpoch, []uint64{0, 1}, 10*time.Second)
 	digest, err := r.currentForkDigest()
 	assert.NoError(t, err)
-	r.subscribeDynamicWithSyncSubnets(p2p.SyncCommitteeSubnetTopicFormat, nil, nil, digest)
+	r.subscribeDynamicWithSubnets("Sync committee", p2p.GossipTypeMapping[reflect.TypeOf(&pb.SyncCommitteeMessage{})], p2p.SyncCommitteeSubnetTopicFormat, nil, nil, digest, r.activeSyncSubnetIndices, func(currentSlot primitives.Slot) []uint64 { return []uint64{} })
 	time.Sleep(2 * time.Second)
 	assert.Equal(t, 2, len(r.cfg.p2p.PubSub().GetTopics()))
 	topicMap := map[string]bool{}
@@ -645,7 +645,7 @@ func TestSubscribeWithSyncSubnets_StaticSwitchFork(t *testing.T) {
 	genRoot := r.cfg.clock.GenesisValidatorsRoot()
 	digest, err := signing.ComputeForkDigest(params.BeaconConfig().GenesisForkVersion, genRoot[:])
 	assert.NoError(t, err)
-	r.subscribeStaticWithSyncSubnets(p2p.SyncCommitteeSubnetTopicFormat, nil, nil, digest)
+	r.subscribeStaticWithSubnets("Sync committee", p2p.SyncCommitteeSubnetTopicFormat, nil, nil, digest, sliceFromCount(params.BeaconConfig().SyncCommitteeSubnetCount))
 	assert.Equal(t, int(params.BeaconConfig().SyncCommitteeSubnetCount), len(r.cfg.p2p.PubSub().GetTopics()))
 
 	// Expect that all old topics will be unsubscribed.
@@ -689,7 +689,7 @@ func TestSubscribeWithSyncSubnets_DynamicSwitchFork(t *testing.T) {
 	digest, err := signing.ComputeForkDigest(params.BeaconConfig().GenesisForkVersion, genRoot[:])
 	assert.NoError(t, err)
 
-	r.subscribeDynamicWithSyncSubnets(p2p.SyncCommitteeSubnetTopicFormat, nil, nil, digest)
+	r.subscribeDynamicWithSubnets("Sync committee", p2p.GossipTypeMapping[reflect.TypeOf(&pb.SyncCommitteeMessage{})], p2p.SyncCommitteeSubnetTopicFormat, nil, nil, digest, r.activeSyncSubnetIndices, func(currentSlot primitives.Slot) []uint64 { return []uint64{} })
 	time.Sleep(2 * time.Second)
 	assert.Equal(t, 2, len(r.cfg.p2p.PubSub().GetTopics()))
 	topicMap := map[string]bool{}

@@ -16,6 +16,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 ### Changed
 
 - Process light client finality updates only for new finalized epochs instead of doing it for every block.
+- Refactor subnets subscriptions.
 
 ### Deprecated
 
