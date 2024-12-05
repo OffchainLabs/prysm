@@ -56,6 +56,7 @@ func (p *WeakSubjectivityPruner) run(ctx context.Context) {
 		case <-p.done:
 			return
 		case slot := <-ticker.C():
+			// Prune at the start of every epoch.
 			if !slots.IsEpochStart(slot) {
 				continue
 			}
