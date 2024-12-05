@@ -253,22 +253,22 @@ func (s *Store) DeleteBeforeSlot(ctx context.Context, cutoffSlot primitives.Slot
 
 		for _, root := range rootsToDelete {
 			// Delete Block
-			if err = tx.Bucket(blocksBucket).Delete(root[:]); err != nil {
+			if err = tx.Bucket(blocksBucket).Delete(root); err != nil {
 				return errors.Wrap(err, "could not delete block")
 			}
 
 			// Delete State
-			if err = tx.Bucket(stateBucket).Delete(root[:]); err != nil {
+			if err = tx.Bucket(stateBucket).Delete(root); err != nil {
 				return errors.Wrap(err, "could not delete state")
 			}
 
 			// Delete state summary
-			if err = tx.Bucket(stateSummaryBucket).Delete(root[:]); err != nil {
+			if err = tx.Bucket(stateSummaryBucket).Delete(root); err != nil {
 				return errors.Wrap(err, "could not delete state summary")
 			}
 
 			// Delete block from cache
-			s.blockCache.Del(string(root[:]))
+			s.blockCache.Del(string(root))
 			// Delete state summary from cache
 			s.stateSummaryCache.delete([32]byte(root))
 		}

@@ -8,7 +8,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filters"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/iface"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
@@ -107,30 +106,15 @@ func (p *WeakSubjectivityPruner) prune(ctx context.Context) error {
 		"wsPeriod":       wsPeriod,
 	}).Info("Pruning chain data before weak subjectivity period")
 
-	startSlot := params.BeaconConfig().GenesisSlot
-	endSlot, err := slots.EpochStart(pruneEpoch)
+	// Prune everything before this slot.
+	pruneSlot, err := slots.EpochStart(pruneEpoch)
 	if err != nil {
 		return errors.Wrap(err, "could not get epoch start slot")
 	}
 
-	filter := filters.NewFilter()
-	filter.SetStartSlot(startSlot)
-	filter.SetEndSlot(endSlot)
-
-	roots, err := p.db.BlockRoots(ctx, filter)
-	if err != nil {
-		return errors.Wrap(err, "could not get block roots")
+	if err = p.db.DeleteBeforeSlot(ctx, pruneSlot); err != nil {
+		return errors.Wrap(err, "could not delete before slot")
 	}
-
-	for _, root := range roots {
-		if err = p.db.DeleteBlock(ctx, root); err != nil {
-			return errors.Wrap(err, "could not delete block")
-		}
-		if err = p.db.DeleteState(ctx, root); err != nil {
-			return errors.Wrap(err, "could not delete state")
-		}
-	}
-
 	// Update pruning checkpoint.
 	p.pruningEpoch = pruneEpoch
 

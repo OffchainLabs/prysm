@@ -101,6 +101,7 @@ type NoHeadAccessDatabase interface {
 	SaveLightClientBootstrap(ctx context.Context, blockRoot []byte, bootstrap interfaces.LightClientBootstrap) error
 
 	CleanUpDirtyStates(ctx context.Context, slotsPerArchivedPoint primitives.Slot) error
+	DeleteBeforeSlot(ctx context.Context, slot primitives.Slot) error
 }
 
 // HeadAccessDatabase defines a struct with access to reading chain head data.
