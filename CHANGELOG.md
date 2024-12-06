@@ -73,6 +73,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Improvements to HTTP response handling. [pr](https://github.com/prysmaticlabs/prysm/pull/14673)
 - Updated `Blobs` endpoint to return additional metadata fields.
 - Made QUIC the default method to connect with peers.
+- Increase Max Payload Size in Gossip.
 
 ### Deprecated
 
