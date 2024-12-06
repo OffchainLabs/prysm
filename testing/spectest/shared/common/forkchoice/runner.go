@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"slices"
 	"strings"
 	"testing"
 
@@ -16,6 +17,7 @@ import (
 	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
@@ -24,6 +26,13 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/testing/spectest/utils"
 	"github.com/prysmaticlabs/prysm/v5/testing/util"
 )
+
+// These are proposer boost spec tests that assume the clock starts 3 seconds into the slot.
+// Example: Tick is 51, which corresponds to 3 seconds into slot 4.
+var proposerBoostTests3s = []string{
+	"proposer_boost_is_first_block",
+	"proposer_boost",
+}
 
 func init() {
 	transition.SkipSlotCache.Disable()
@@ -97,7 +106,18 @@ func runTest(t *testing.T, config string, fork int, basePath string) { // nolint
 
 				for _, step := range steps {
 					if step.Tick != nil {
-						builder.Tick(t, int64(*step.Tick))
+						tick := int64(*step.Tick)
+						// If the test is for proposer boost starting 3 seconds into the slot and the tick aligns with this,
+						// we provide an additional second buffer. Instead of starting 3 seconds into the slot, we start 2 seconds in to avoid missing the proposer boost.
+						// A 1-second buffer has proven insufficient during parallel spec test runs, as the likelihood of missing the proposer boost increases significantly,
+						// often extending to 4 seconds. Starting 2 seconds into the slot ensures close to a 100% pass rate.
+						if slices.Contains(proposerBoostTests3s, folder.Name()) {
+							deadline := params.BeaconConfig().SecondsPerSlot / params.BeaconConfig().IntervalsPerSlot
+							if uint64(tick)%params.BeaconConfig().SecondsPerSlot == deadline-1 {
+								tick--
+							}
+						}
+						builder.Tick(t, tick)
 					}
 					var beaconBlock interfaces.ReadOnlySignedBeaconBlock
 					if step.Block != nil {
