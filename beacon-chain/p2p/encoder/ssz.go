@@ -16,9 +16,9 @@ import (
 var _ NetworkEncoding = (*SszNetworkEncoder)(nil)
 
 // MaxGossipSize allowed for gossip messages.
-var MaxGossipSize = params.BeaconConfig().GossipMaxSize                  // 10 Mib.
-var MaxChunkSize = params.BeaconConfig().MaxChunkSize                    // 10 Mib.
-var MaxUncompressedPayloadSize = 2 * params.BeaconConfig().GossipMaxSize // 20 Mib.
+var MaxGossipSize = params.BeaconConfig().GossipMaxSize // 10 Mib.
+var MaxChunkSize = params.BeaconConfig().MaxChunkSize   // 10 Mib.
+var MaxUncompressedPayloadSize = 2 * MaxGossipSize      // 20 Mib.
 
 // This pool defines the sync pool for our buffered snappy writers, so that they
 // can be constantly reused.
@@ -91,6 +91,7 @@ func (_ SszNetworkEncoder) DecodeGossip(b []byte, to fastssz.Unmarshaler) error 
 
 // DecodeSnappy decodes a snappy compressed message.
 func DecodeSnappy(msg []byte, maxSize uint64) ([]byte, error) {
+	snappy.MaxEncodedLen()
 	size, err := snappy.DecodedLen(msg)
 	if err != nil {
 		return nil, err
