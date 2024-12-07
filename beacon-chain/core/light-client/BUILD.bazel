@@ -31,8 +31,11 @@ go_test(
     deps = [
         ":go_default_library",
         "//config/fieldparams:go_default_library",
+        "//config/params:go_default_library",
         "//consensus-types:go_default_library",
         "//consensus-types/blocks:go_default_library",
+        "//consensus-types/light-client:go_default_library",
+        "//consensus-types/primitives:go_default_library",
         "//encoding/ssz:go_default_library",
         "//proto/engine/v1:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
