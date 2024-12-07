@@ -91,7 +91,6 @@ func (_ SszNetworkEncoder) DecodeGossip(b []byte, to fastssz.Unmarshaler) error 
 
 // DecodeSnappy decodes a snappy compressed message.
 func DecodeSnappy(msg []byte, maxSize uint64) ([]byte, error) {
-	snappy.MaxEncodedLen()
 	size, err := snappy.DecodedLen(msg)
 	if err != nil {
 		return nil, err
