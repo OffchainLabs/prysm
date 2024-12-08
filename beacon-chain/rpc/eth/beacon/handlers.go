@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
 	"github.com/prysmaticlabs/prysm/v5/api"
@@ -1032,20 +1033,16 @@ func unmarshalStrict(data []byte, v interface{}) error {
 func (s *Server) validateBroadcast(ctx context.Context, r *http.Request, blk *eth.GenericSignedBeaconBlock) error {
 	switch r.URL.Query().Get(broadcastValidationQueryParam) {
 	case broadcastValidationConsensus:
-		b, err := blocks.NewSignedBeaconBlock(blk.Block)
-		if err != nil {
-			return errors.Wrapf(err, "could not create signed beacon block")
-		}
-		if err = s.validateConsensus(ctx, b); err != nil {
+		if err := s.validateConsensus(ctx, blk); err != nil {
 			return errors.Wrap(err, "consensus validation failed")
 		}
 	case broadcastValidationConsensusAndEquivocation:
+		if err := s.validateConsensus(r.Context(), blk); err != nil {
+			return errors.Wrap(err, "consensus validation failed")
+		}
 		b, err := blocks.NewSignedBeaconBlock(blk.Block)
 		if err != nil {
 			return errors.Wrapf(err, "could not create signed beacon block")
-		}
-		if err = s.validateConsensus(r.Context(), b); err != nil {
-			return errors.Wrap(err, "consensus validation failed")
 		}
 		if err = s.validateEquivocation(b.Block()); err != nil {
 			return errors.Wrap(err, "equivocation validation failed")
@@ -1056,7 +1053,12 @@ func (s *Server) validateBroadcast(ctx context.Context, r *http.Request, blk *et
 	return nil
 }
 
-func (s *Server) validateConsensus(ctx context.Context, blk interfaces.ReadOnlySignedBeaconBlock) error {
+func (s *Server) validateConsensus(ctx context.Context, b *eth.GenericSignedBeaconBlock) error {
+	blk, err := blocks.NewSignedBeaconBlock(b.Block)
+	if err != nil {
+		return errors.Wrapf(err, "could not create signed beacon block")
+	}
+
 	parentBlockRoot := blk.Block().ParentRoot()
 	parentBlock, err := s.Blocker.Block(ctx, parentBlockRoot[:])
 	if err != nil {
@@ -1076,12 +1078,49 @@ func (s *Server) validateConsensus(ctx context.Context, blk interfaces.ReadOnlyS
 	if err != nil {
 		return errors.Wrap(err, "could not execute state transition")
 	}
+
+	var blobs [][]byte
+	var proofs [][]byte
+	switch {
+	case blk.Version() == version.Electra:
+		blobs = b.GetElectra().Blobs
+		proofs = b.GetElectra().KzgProofs
+	case blk.Version() == version.Deneb:
+		blobs = b.GetDeneb().Blobs
+		proofs = b.GetDeneb().KzgProofs
+	default:
+		return nil
+	}
+
+	if err := s.validateBlobSidecars(blk, blobs, proofs); err != nil {
+		return err
+	}
+
 	return nil
 }
 
 func (s *Server) validateEquivocation(blk interfaces.ReadOnlyBeaconBlock) error {
 	if s.ForkchoiceFetcher.HighestReceivedBlockSlot() == blk.Slot() {
 		return errors.Wrapf(errEquivocatedBlock, "block for slot %d already exists in fork choice", blk.Slot())
+	}
+	return nil
+}
+
+func (s *Server) validateBlobSidecars(blk interfaces.SignedBeaconBlock, blobs [][]byte, proofs [][]byte) error {
+	if blk.Version() < version.Deneb {
+		return nil
+	}
+	kzgs, err := blk.Block().Body().BlobKzgCommitments()
+	if err != nil {
+		return errors.Wrap(err, "could not get blob kzg commitments")
+	}
+	if len(blobs) != len(proofs) || len(blobs) != len(kzgs) {
+		return errors.New("number of blobs, proofs, and commitments do not match")
+	}
+	for i, blob := range blobs {
+		if err := kzg4844.VerifyBlobProof(kzg4844.Blob(blob), kzg4844.Commitment(kzgs[i]), kzg4844.Proof(proofs[i])); err != nil {
+			return errors.Wrap(err, "could not verify blob proof")
+		}
 	}
 	return nil
 }
