@@ -69,6 +69,7 @@ func e2eMinimal(t *testing.T, cfg *params.BeaconChainConfig, cfgo ...types.E2ECo
 			fmt.Sprintf("--tracing-endpoint=http://%s", tracingEndpoint),
 			"--enable-tracing",
 			"--trace-sample-fraction=1.0",
+			"--enable-lightclient",
 		},
 		ValidatorFlags:      []string{},
 		EpochsToRun:         uint64(epochsToRun),
