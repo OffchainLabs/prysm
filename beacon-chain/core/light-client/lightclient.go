@@ -471,7 +471,7 @@ func BlockToLightClientHeader(
 		var payloadHeader *enginev1.ExecutionPayloadHeaderDeneb
 		var payloadProof [][]byte
 
-		if blockEpoch < params.BeaconConfig().DenebForkEpoch {
+		if blockEpoch < params.BeaconConfig().CapellaForkEpoch {
 			payloadHeader = &enginev1.ExecutionPayloadHeaderDeneb{
 				ParentHash:       make([]byte, fieldparams.RootLength),
 				FeeRecipient:     make([]byte, fieldparams.FeeRecipientLength),
@@ -484,8 +484,6 @@ func BlockToLightClientHeader(
 				BlockHash:        make([]byte, fieldparams.RootLength),
 				TransactionsRoot: make([]byte, fieldparams.RootLength),
 				WithdrawalsRoot:  make([]byte, fieldparams.RootLength),
-				BlobGasUsed:      0,
-				ExcessBlobGas:    0,
 			}
 			payloadProof = emptyPayloadProof()
 		} else {
@@ -505,13 +503,15 @@ func BlockToLightClientHeader(
 			var blobGasUsed uint64
 			var excessBlobGas uint64
 
-			blobGasUsed, err = payload.BlobGasUsed()
-			if err != nil {
-				return nil, errors.Wrap(err, "could not get blob gas used")
-			}
-			excessBlobGas, err = payload.ExcessBlobGas()
-			if err != nil {
-				return nil, errors.Wrap(err, "could not get excess blob gas")
+			if blockEpoch >= params.BeaconConfig().DenebForkEpoch {
+				blobGasUsed, err = payload.BlobGasUsed()
+				if err != nil {
+					return nil, errors.Wrap(err, "could not get blob gas used")
+				}
+				excessBlobGas, err = payload.ExcessBlobGas()
+				if err != nil {
+					return nil, errors.Wrap(err, "could not get excess blob gas")
+				}
 			}
 
 			payloadHeader = &enginev1.ExecutionPayloadHeaderDeneb{
