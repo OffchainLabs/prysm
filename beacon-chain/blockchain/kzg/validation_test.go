@@ -1,50 +1,13 @@
 package kzg
 
 import (
-	"bytes"
-	"crypto/sha256"
-	"encoding/binary"
 	"testing"
 
-	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
 	GoKZG "github.com/crate-crypto/go-kzg-4844"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/sirupsen/logrus"
+	"github.com/prysmaticlabs/prysm/v5/testing/util"
 )
-
-func deterministicRandomness(seed int64) [32]byte {
-	// Converts an int64 to a byte slice
-	buf := new(bytes.Buffer)
-	err := binary.Write(buf, binary.BigEndian, seed)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to write int64 to bytes buffer")
-		return [32]byte{}
-	}
-	bytes := buf.Bytes()
-
-	return sha256.Sum256(bytes)
-}
-
-// Returns a serialized random field element in big-endian
-func GetRandFieldElement(seed int64) [32]byte {
-	bytes := deterministicRandomness(seed)
-	var r fr.Element
-	r.SetBytes(bytes[:])
-
-	return GoKZG.SerializeScalar(r)
-}
-
-// Returns a random blob using the passed seed as entropy
-func GetRandBlob(seed int64) GoKZG.Blob {
-	var blob GoKZG.Blob
-	bytesPerBlob := GoKZG.ScalarsPerBlob * GoKZG.SerializedScalarSize
-	for i := 0; i < bytesPerBlob; i += GoKZG.SerializedScalarSize {
-		fieldElementBytes := GetRandFieldElement(seed + int64(i))
-		copy(blob[i:i+GoKZG.SerializedScalarSize], fieldElementBytes[:])
-	}
-	return blob
-}
 
 func GenerateCommitmentAndProof(blob GoKZG.Blob) (GoKZG.KZGCommitment, GoKZG.KZGProof, error) {
 	commitment, err := kzgContext.BlobToKZGCommitment(blob, 0)
@@ -74,7 +37,7 @@ func TestBytesToAny(t *testing.T) {
 }
 
 func TestGenerateCommitmentAndProof(t *testing.T) {
-	blob := GetRandBlob(123)
+	blob := util.GetRandBlob(123)
 	commitment, proof, err := GenerateCommitmentAndProof(blob)
 	require.NoError(t, err)
 	expectedCommitment := GoKZG.KZGCommitment{180, 218, 156, 194, 59, 20, 10, 189, 186, 254, 132, 93, 7, 127, 104, 172, 238, 240, 237, 70, 83, 89, 1, 152, 99, 0, 165, 65, 143, 62, 20, 215, 230, 14, 205, 95, 28, 245, 54, 25, 160, 16, 178, 31, 232, 207, 38, 85}

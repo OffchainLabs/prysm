@@ -73,6 +73,8 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Improvements to HTTP response handling. [pr](https://github.com/prysmaticlabs/prysm/pull/14673)
 - Updated `Blobs` endpoint to return additional metadata fields.
 - Made QUIC the default method to connect with peers.
+- Check kzg commitments align with blobs and proofs for beacon api end point.
+- Increase Max Payload Size in Gossip.
 
 ### Deprecated
 
@@ -435,6 +437,7 @@ block profit. If you want to preserve the existing behavior, set --local-block-v
 - Set default LocalBlockValueBoost to 10
 - Add bid value metrics
 - REST VC metrics
+- `startDB`: Add log when checkpoint sync.
 
 ### Changed
 
