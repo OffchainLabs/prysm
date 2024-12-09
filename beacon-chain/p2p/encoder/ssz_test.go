@@ -555,7 +555,7 @@ func TestSszNetworkEncoder_FailsSnappyLength(t *testing.T) {
 	e := &encoder.SszNetworkEncoder{}
 	att := &ethpb.Fork{}
 	data := make([]byte, 32)
-	binary.PutUvarint(data, encoder.MaxGossipSize+32)
+	binary.PutUvarint(data, encoder.MaxUncompressedPayloadSize+32)
 	err := e.DecodeGossip(data, att)
 	require.ErrorContains(t, "snappy message exceeds max size", err)
 }
