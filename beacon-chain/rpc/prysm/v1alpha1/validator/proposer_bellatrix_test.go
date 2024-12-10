@@ -1113,6 +1113,14 @@ func Test_expectedGasLimit(t *testing.T) {
 			},
 			want: 19980470, // maxGasLimitDiff = (20000000 / 1024) - 1
 		},
+		{
+			name: "Parent gas limit under flows",
+			args: args{
+				parentGasLimit: 1023,
+				targetGasLimit: 30000000,
+			},
+			want: 1023,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

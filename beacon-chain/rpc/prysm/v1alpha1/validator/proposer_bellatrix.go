@@ -420,17 +420,21 @@ func setExecution(blk interfaces.SignedBeaconBlock, execution interfaces.Executi
 //	 else:
 //	     gas_diff = parent_gas_limit - target_gas_limit
 //	     return parent_gas_limit - min(gas_diff, max_gas_limit_difference)
-func expectedGasLimit(parentGasLimit, targetGasLimit uint64) uint64 {
-	maxGasLimitDiff := parentGasLimit/gasLimitAdjustmentFactor - 1
-	if targetGasLimit > parentGasLimit {
-		if targetGasLimit-parentGasLimit > maxGasLimitDiff {
+func expectedGasLimit(parentGasLimit, proposerGasLimit uint64) uint64 {
+	maxGasLimitDiff := uint64(0)
+	if parentGasLimit > gasLimitAdjustmentFactor {
+		maxGasLimitDiff = parentGasLimit/gasLimitAdjustmentFactor - 1
+	}
+	if proposerGasLimit > parentGasLimit {
+		if proposerGasLimit-parentGasLimit > maxGasLimitDiff {
 			return parentGasLimit + maxGasLimitDiff
 		}
-		return targetGasLimit
-	} else {
-		if parentGasLimit-targetGasLimit > maxGasLimitDiff {
-			return parentGasLimit - maxGasLimitDiff
-		}
-		return targetGasLimit
+		return proposerGasLimit
 	}
+
+	if parentGasLimit-proposerGasLimit > maxGasLimitDiff {
+		return parentGasLimit - maxGasLimitDiff
+	}
+	return proposerGasLimit
+
 }
