@@ -44,8 +44,8 @@ var _ runtime.Service = (*Service)(nil)
 var pollingPeriod = 6 * time.Second
 
 // When looking for new nodes, if not enough nodes are found,
-// we stop after this amount of iterations.
-var batchSize = 2_000
+// we stop after this spent time.
+var batchPeriod = 2 * time.Second
 
 // Refresh rate of ENR set at twice per slot.
 var refreshRate = slots.DivideSlotBy(2)
