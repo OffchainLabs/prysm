@@ -90,7 +90,7 @@ func (h *bootstrapAltair) Header() interfaces.LightClientHeader {
 func (h *bootstrapAltair) SetHeader(header interfaces.LightClientHeader) error {
 	p, ok := (header.Proto()).(*pb.LightClientHeaderAltair)
 	if !ok {
-		return fmt.Errorf("header type %T is not %T", p, &pb.LightClientHeaderAltair{})
+		return fmt.Errorf("header type %T is not %T", header.Proto(), &pb.LightClientHeaderAltair{})
 	}
 	h.p.Header = p
 	h.header = header
@@ -188,7 +188,7 @@ func (h *bootstrapCapella) Header() interfaces.LightClientHeader {
 func (h *bootstrapCapella) SetHeader(header interfaces.LightClientHeader) error {
 	p, ok := (header.Proto()).(*pb.LightClientHeaderCapella)
 	if !ok {
-		return fmt.Errorf("header type %T is not %T", p, &pb.LightClientHeaderCapella{})
+		return fmt.Errorf("header type %T is not %T", header.Proto(), &pb.LightClientHeaderCapella{})
 	}
 	h.p.Header = p
 	h.header = header
@@ -286,7 +286,7 @@ func (h *bootstrapDeneb) Header() interfaces.LightClientHeader {
 func (h *bootstrapDeneb) SetHeader(header interfaces.LightClientHeader) error {
 	p, ok := (header.Proto()).(*pb.LightClientHeaderDeneb)
 	if !ok {
-		return fmt.Errorf("header type %T is not %T", p, &pb.LightClientHeaderDeneb{})
+		return fmt.Errorf("header type %T is not %T", header.Proto(), &pb.LightClientHeaderDeneb{})
 	}
 	h.p.Header = p
 	h.header = header
@@ -384,7 +384,7 @@ func (h *bootstrapElectra) Header() interfaces.LightClientHeader {
 func (h *bootstrapElectra) SetHeader(header interfaces.LightClientHeader) error {
 	p, ok := (header.Proto()).(*pb.LightClientHeaderDeneb)
 	if !ok {
-		return fmt.Errorf("header type %T is not %T", p, &pb.LightClientHeaderDeneb{})
+		return fmt.Errorf("header type %T is not %T", header.Proto(), &pb.LightClientHeaderDeneb{})
 	}
 	h.p.Header = p
 	h.header = header
