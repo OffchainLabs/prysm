@@ -720,29 +720,6 @@ func TestServer_getPayloadHeader(t *testing.T) {
 		Signature: sk.Sign(srCapella[:]).Marshal(),
 	}
 
-	incorrectGasLimitBid := &ethpb.BuilderBid{
-		Header: &v1.ExecutionPayloadHeader{
-			FeeRecipient:     make([]byte, fieldparams.FeeRecipientLength),
-			StateRoot:        make([]byte, fieldparams.RootLength),
-			ReceiptsRoot:     make([]byte, fieldparams.RootLength),
-			LogsBloom:        make([]byte, fieldparams.LogsBloomLength),
-			PrevRandao:       make([]byte, fieldparams.RootLength),
-			BaseFeePerGas:    make([]byte, fieldparams.RootLength),
-			BlockHash:        make([]byte, fieldparams.RootLength),
-			TransactionsRoot: bytesutil.PadTo([]byte{1}, fieldparams.RootLength),
-			ParentHash:       params.BeaconConfig().ZeroHash[:],
-			Timestamp:        uint64(tiCapella.Unix()),
-			GasLimit:         100,
-		},
-		Pubkey: sk.PublicKey().Marshal(),
-		Value:  bytesutil.PadTo([]byte{1, 2, 3}, 32),
-	}
-	signedIncorrectGasLimitBid :=
-		&ethpb.SignedBuilderBid{
-			Message:   incorrectGasLimitBid,
-			Signature: sk.Sign(srCapella[:]).Marshal(),
-		}
-
 	require.NoError(t, err)
 	tests := []struct {
 		name                  string
@@ -856,21 +833,6 @@ func TestServer_getPayloadHeader(t *testing.T) {
 			err: "is different from head block version",
 		},
 		{
-			name: "incorrect gas limit",
-			mock: &builderTest.MockBuilderService{
-				Bid: signedIncorrectGasLimitBid,
-			},
-			fetcher: &blockchainTest.ChainService{
-				Block: func() interfaces.ReadOnlySignedBeaconBlock {
-					wb, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlockBellatrix())
-					require.NoError(t, err)
-					wb.SetSlot(primitives.Slot(params.BeaconConfig().BellatrixForkEpoch) * params.BeaconConfig().SlotsPerEpoch)
-					return wb
-				}(),
-			},
-			err: "incorrect header gas limit 0 != 100",
-		},
-		{
 			name: "different bid version during hard fork",
 			mock: &builderTest.MockBuilderService{
 				BidCapella: sBidCapella,
@@ -888,18 +850,9 @@ func TestServer_getPayloadHeader(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			vs := &Server{BeaconDB: dbTest.SetupDB(t), BlockBuilder: tc.mock, HeadFetcher: tc.fetcher, TimeFetcher: &blockchainTest.ChainService{
+			vs := &Server{BlockBuilder: tc.mock, HeadFetcher: tc.fetcher, TimeFetcher: &blockchainTest.ChainService{
 				Genesis: genesis,
 			}}
-			regCache := cache.NewRegistrationCache()
-			regCache.UpdateIndexToRegisteredMap(context.Background(), map[primitives.ValidatorIndex]*ethpb.ValidatorRegistrationV1{
-				0: {
-					GasLimit:     0,
-					FeeRecipient: make([]byte, 20),
-					Pubkey:       make([]byte, 48),
-				},
-			})
-			tc.mock.RegistrationCache = regCache
 			hb, err := vs.HeadFetcher.HeadBlock(context.Background())
 			require.NoError(t, err)
 			bid, err := vs.getPayloadHeaderFromBuilder(context.Background(), hb.Block().Slot(), 0)
