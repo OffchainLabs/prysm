@@ -7,7 +7,6 @@ import (
 	"reflect"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/execution"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
@@ -473,15 +472,18 @@ func BlockToLightClientHeader(
 		var payloadProof [][]byte
 
 		if blockEpoch < params.BeaconConfig().CapellaForkEpoch {
-			var ok bool
-
-			p, err := execution.EmptyExecutionPayload(version.Deneb)
-			if err != nil {
-				return nil, errors.Wrap(err, "could not get payload header")
-			}
-			payloadHeader, ok = p.(*enginev1.ExecutionPayloadHeaderDeneb)
-			if !ok {
-				return nil, errors.Wrapf(err, "payload header type %T is not %T", payloadHeader, &enginev1.ExecutionPayloadHeaderDeneb{})
+			payloadHeader = &enginev1.ExecutionPayloadHeaderDeneb{
+				ParentHash:       make([]byte, fieldparams.RootLength),
+				FeeRecipient:     make([]byte, fieldparams.FeeRecipientLength),
+				StateRoot:        make([]byte, fieldparams.RootLength),
+				ReceiptsRoot:     make([]byte, fieldparams.RootLength),
+				LogsBloom:        make([]byte, fieldparams.LogsBloomLength),
+				PrevRandao:       make([]byte, fieldparams.RootLength),
+				ExtraData:        make([]byte, 0),
+				BaseFeePerGas:    make([]byte, fieldparams.RootLength),
+				BlockHash:        make([]byte, fieldparams.RootLength),
+				TransactionsRoot: make([]byte, fieldparams.RootLength),
+				WithdrawalsRoot:  make([]byte, fieldparams.RootLength),
 			}
 			payloadProof = emptyPayloadProof()
 		} else {

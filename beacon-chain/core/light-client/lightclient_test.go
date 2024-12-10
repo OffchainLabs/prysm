@@ -7,8 +7,10 @@ import (
 	"github.com/pkg/errors"
 	lightClient "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/light-client"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
 	consensustypes "github.com/prysmaticlabs/prysm/v5/consensus-types"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/encoding/ssz"
 	v11 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
 	pb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
@@ -357,7 +359,11 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 	t.Run("Altair", func(t *testing.T) {
 		l := util.NewTestLightClient(t).SetupTestAltair()
 
-		header, err := lightClient.BlockToLightClientHeader(l.Ctx, l.State.Slot(), l.Block)
+		header, err := lightClient.BlockToLightClientHeader(
+			l.Ctx,
+			primitives.Slot(params.BeaconConfig().AltairForkEpoch)*params.BeaconConfig().SlotsPerEpoch,
+			l.Block,
+		)
 		require.NoError(t, err)
 		require.NotNil(t, header, "header is nil")
 
@@ -376,7 +382,11 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 	t.Run("Bellatrix", func(t *testing.T) {
 		l := util.NewTestLightClient(t).SetupTestBellatrix()
 
-		header, err := lightClient.BlockToLightClientHeader(l.Ctx, l.State.Slot(), l.Block)
+		header, err := lightClient.BlockToLightClientHeader(
+			l.Ctx,
+			primitives.Slot(params.BeaconConfig().BellatrixForkEpoch)*params.BeaconConfig().SlotsPerEpoch,
+			l.Block,
+		)
 		require.NoError(t, err)
 		require.NotNil(t, header, "header is nil")
 
@@ -396,7 +406,11 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 		t.Run("Non-Blinded Beacon Block", func(t *testing.T) {
 			l := util.NewTestLightClient(t).SetupTestCapella(false)
 
-			header, err := lightClient.BlockToLightClientHeader(l.Ctx, l.State.Slot(), l.Block)
+			header, err := lightClient.BlockToLightClientHeader(
+				l.Ctx,
+				primitives.Slot(params.BeaconConfig().CapellaForkEpoch)*params.BeaconConfig().SlotsPerEpoch,
+				l.Block,
+			)
 			require.NoError(t, err)
 			require.NotNil(t, header, "header is nil")
 
@@ -453,7 +467,11 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 		t.Run("Blinded Beacon Block", func(t *testing.T) {
 			l := util.NewTestLightClient(t).SetupTestCapella(true)
 
-			header, err := lightClient.BlockToLightClientHeader(l.Ctx, l.State.Slot(), l.Block)
+			header, err := lightClient.BlockToLightClientHeader(
+				l.Ctx,
+				primitives.Slot(params.BeaconConfig().CapellaForkEpoch)*params.BeaconConfig().SlotsPerEpoch,
+				l.Block,
+			)
 			require.NoError(t, err)
 			require.NotNil(t, header, "header is nil")
 
@@ -512,7 +530,11 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 		t.Run("Non-Blinded Beacon Block", func(t *testing.T) {
 			l := util.NewTestLightClient(t).SetupTestDeneb(false)
 
-			header, err := lightClient.BlockToLightClientHeader(l.Ctx, l.State.Slot(), l.Block)
+			header, err := lightClient.BlockToLightClientHeader(
+				l.Ctx,
+				primitives.Slot(params.BeaconConfig().DenebForkEpoch)*params.BeaconConfig().SlotsPerEpoch,
+				l.Block,
+			)
 			require.NoError(t, err)
 			require.NotNil(t, header, "header is nil")
 
@@ -577,7 +599,11 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 		t.Run("Blinded Beacon Block", func(t *testing.T) {
 			l := util.NewTestLightClient(t).SetupTestDeneb(true)
 
-			header, err := lightClient.BlockToLightClientHeader(l.Ctx, l.State.Slot(), l.Block)
+			header, err := lightClient.BlockToLightClientHeader(
+				l.Ctx,
+				primitives.Slot(params.BeaconConfig().DenebForkEpoch)*params.BeaconConfig().SlotsPerEpoch,
+				l.Block,
+			)
 			require.NoError(t, err)
 			require.NotNil(t, header, "header is nil")
 
@@ -751,6 +777,172 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 				WithdrawalsRoot:  withdrawalsRoot,
 				BlobGasUsed:      blobGasUsed,
 				ExcessBlobGas:    excessBlobGas,
+			}
+
+			executionPayloadProof, err := blocks.PayloadProof(l.Ctx, l.Block.Block())
+			require.NoError(t, err)
+
+			require.Equal(t, l.Block.Block().Slot(), header.Beacon().Slot, "Slot is not equal")
+			require.Equal(t, l.Block.Block().ProposerIndex(), header.Beacon().ProposerIndex, "Proposer index is not equal")
+			require.DeepSSZEqual(t, parentRoot[:], header.Beacon().ParentRoot, "Parent root is not equal")
+			require.DeepSSZEqual(t, stateRoot[:], header.Beacon().StateRoot, "State root is not equal")
+			require.DeepSSZEqual(t, bodyRoot[:], header.Beacon().BodyRoot, "Body root is not equal")
+
+			headerExecution, err := header.Execution()
+			require.NoError(t, err)
+			require.DeepSSZEqual(t, executionHeader, headerExecution.Proto(), "Execution headers are not equal")
+
+			headerExecutionBranch, err := header.ExecutionBranch()
+			require.NoError(t, err)
+			require.DeepSSZEqual(t, executionPayloadProof, convertArrayToSlice(headerExecutionBranch), "Execution payload proofs are not equal")
+		})
+	})
+
+	t.Run("Capella fork with Altair block", func(t *testing.T) {
+		l := util.NewTestLightClient(t).SetupTestAltair()
+
+		header, err := lightClient.BlockToLightClientHeader(
+			l.Ctx,
+			primitives.Slot(params.BeaconConfig().CapellaForkEpoch)*params.BeaconConfig().SlotsPerEpoch,
+			l.Block)
+		require.NoError(t, err)
+		require.NotNil(t, header, "header is nil")
+
+		parentRoot := l.Block.Block().ParentRoot()
+		stateRoot := l.Block.Block().StateRoot()
+		bodyRoot, err := l.Block.Block().Body().HashTreeRoot()
+		require.NoError(t, err)
+
+		require.Equal(t, l.Block.Block().Slot(), header.Beacon().Slot, "Slot is not equal")
+		require.Equal(t, l.Block.Block().ProposerIndex(), header.Beacon().ProposerIndex, "Proposer index is not equal")
+		require.DeepSSZEqual(t, parentRoot[:], header.Beacon().ParentRoot, "Parent root is not equal")
+		require.DeepSSZEqual(t, stateRoot[:], header.Beacon().StateRoot, "State root is not equal")
+		require.DeepSSZEqual(t, bodyRoot[:], header.Beacon().BodyRoot, "Body root is not equal")
+	})
+
+	t.Run("Deneb fork with Altair block", func(t *testing.T) {
+		l := util.NewTestLightClient(t).SetupTestAltair()
+
+		header, err := lightClient.BlockToLightClientHeader(
+			l.Ctx,
+			primitives.Slot(params.BeaconConfig().DenebForkEpoch)*params.BeaconConfig().SlotsPerEpoch,
+			l.Block)
+		require.NoError(t, err)
+		require.NotNil(t, header, "header is nil")
+
+		parentRoot := l.Block.Block().ParentRoot()
+		stateRoot := l.Block.Block().StateRoot()
+		bodyRoot, err := l.Block.Block().Body().HashTreeRoot()
+		require.NoError(t, err)
+
+		require.Equal(t, l.Block.Block().Slot(), header.Beacon().Slot, "Slot is not equal")
+		require.Equal(t, l.Block.Block().ProposerIndex(), header.Beacon().ProposerIndex, "Proposer index is not equal")
+		require.DeepSSZEqual(t, parentRoot[:], header.Beacon().ParentRoot, "Parent root is not equal")
+		require.DeepSSZEqual(t, stateRoot[:], header.Beacon().StateRoot, "State root is not equal")
+		require.DeepSSZEqual(t, bodyRoot[:], header.Beacon().BodyRoot, "Body root is not equal")
+	})
+
+	t.Run("Deneb fork with Capella block", func(t *testing.T) {
+		t.Run("Non-Blinded Beacon Block", func(t *testing.T) {
+			l := util.NewTestLightClient(t).SetupTestCapella(false)
+
+			header, err := lightClient.BlockToLightClientHeader(
+				l.Ctx,
+				primitives.Slot(params.BeaconConfig().DenebForkEpoch)*params.BeaconConfig().SlotsPerEpoch,
+				l.Block)
+			require.NoError(t, err)
+			require.NotNil(t, header, "header is nil")
+
+			parentRoot := l.Block.Block().ParentRoot()
+			stateRoot := l.Block.Block().StateRoot()
+			bodyRoot, err := l.Block.Block().Body().HashTreeRoot()
+			require.NoError(t, err)
+
+			payload, err := l.Block.Block().Body().Execution()
+			require.NoError(t, err)
+
+			transactionsRoot, err := lightClient.ComputeTransactionsRoot(payload)
+			require.NoError(t, err)
+
+			withdrawalsRoot, err := lightClient.ComputeWithdrawalsRoot(payload)
+			require.NoError(t, err)
+
+			executionHeader := &v11.ExecutionPayloadHeaderDeneb{
+				ParentHash:       payload.ParentHash(),
+				FeeRecipient:     payload.FeeRecipient(),
+				StateRoot:        payload.StateRoot(),
+				ReceiptsRoot:     payload.ReceiptsRoot(),
+				LogsBloom:        payload.LogsBloom(),
+				PrevRandao:       payload.PrevRandao(),
+				BlockNumber:      payload.BlockNumber(),
+				GasLimit:         payload.GasLimit(),
+				GasUsed:          payload.GasUsed(),
+				Timestamp:        payload.Timestamp(),
+				ExtraData:        payload.ExtraData(),
+				BaseFeePerGas:    payload.BaseFeePerGas(),
+				BlockHash:        payload.BlockHash(),
+				TransactionsRoot: transactionsRoot,
+				WithdrawalsRoot:  withdrawalsRoot,
+			}
+
+			executionPayloadProof, err := blocks.PayloadProof(l.Ctx, l.Block.Block())
+			require.NoError(t, err)
+
+			require.Equal(t, l.Block.Block().Slot(), header.Beacon().Slot, "Slot is not equal")
+			require.Equal(t, l.Block.Block().ProposerIndex(), header.Beacon().ProposerIndex, "Proposer index is not equal")
+			require.DeepSSZEqual(t, parentRoot[:], header.Beacon().ParentRoot, "Parent root is not equal")
+			require.DeepSSZEqual(t, stateRoot[:], header.Beacon().StateRoot, "State root is not equal")
+			require.DeepSSZEqual(t, bodyRoot[:], header.Beacon().BodyRoot, "Body root is not equal")
+
+			headerExecution, err := header.Execution()
+			require.NoError(t, err)
+			require.DeepSSZEqual(t, executionHeader, headerExecution.Proto(), "Execution headers are not equal")
+
+			headerExecutionBranch, err := header.ExecutionBranch()
+			require.NoError(t, err)
+			require.DeepSSZEqual(t, executionPayloadProof, convertArrayToSlice(headerExecutionBranch), "Execution payload proofs are not equal")
+		})
+
+		t.Run("Blinded Beacon Block", func(t *testing.T) {
+			l := util.NewTestLightClient(t).SetupTestCapella(true)
+
+			header, err := lightClient.BlockToLightClientHeader(
+				l.Ctx,
+				primitives.Slot(params.BeaconConfig().DenebForkEpoch)*params.BeaconConfig().SlotsPerEpoch,
+				l.Block)
+			require.NoError(t, err)
+			require.NotNil(t, header, "header is nil")
+
+			parentRoot := l.Block.Block().ParentRoot()
+			stateRoot := l.Block.Block().StateRoot()
+			bodyRoot, err := l.Block.Block().Body().HashTreeRoot()
+			require.NoError(t, err)
+
+			payload, err := l.Block.Block().Body().Execution()
+			require.NoError(t, err)
+
+			transactionsRoot, err := payload.TransactionsRoot()
+			require.NoError(t, err)
+
+			withdrawalsRoot, err := payload.WithdrawalsRoot()
+			require.NoError(t, err)
+
+			executionHeader := &v11.ExecutionPayloadHeaderDeneb{
+				ParentHash:       payload.ParentHash(),
+				FeeRecipient:     payload.FeeRecipient(),
+				StateRoot:        payload.StateRoot(),
+				ReceiptsRoot:     payload.ReceiptsRoot(),
+				LogsBloom:        payload.LogsBloom(),
+				PrevRandao:       payload.PrevRandao(),
+				BlockNumber:      payload.BlockNumber(),
+				GasLimit:         payload.GasLimit(),
+				GasUsed:          payload.GasUsed(),
+				Timestamp:        payload.Timestamp(),
+				ExtraData:        payload.ExtraData(),
+				BaseFeePerGas:    payload.BaseFeePerGas(),
+				BlockHash:        payload.BlockHash(),
+				TransactionsRoot: transactionsRoot,
+				WithdrawalsRoot:  withdrawalsRoot,
 			}
 
 			executionPayloadProof, err := blocks.PayloadProof(l.Ctx, l.Block.Block())
