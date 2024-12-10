@@ -436,5 +436,4 @@ func expectedGasLimit(parentGasLimit, proposerGasLimit uint64) uint64 {
 		return parentGasLimit - maxGasLimitDiff
 	}
 	return proposerGasLimit
-
 }
