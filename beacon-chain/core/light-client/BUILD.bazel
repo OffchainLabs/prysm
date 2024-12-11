@@ -6,6 +6,7 @@ go_library(
     importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/light-client",
     visibility = ["//visibility:public"],
     deps = [
+        "//beacon-chain/execution:go_default_library",
         "//beacon-chain/state:go_default_library",
         "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
