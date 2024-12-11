@@ -413,7 +413,7 @@ func BlockToLightClientHeader(
 			}
 			payloadHeader, ok = p.(*enginev1.ExecutionPayloadHeaderCapella)
 			if !ok {
-				return nil, errors.Wrapf(err, "payload header type %T is not %T", payloadHeader, &enginev1.ExecutionPayloadHeaderDeneb{})
+				return nil, errors.Wrapf(err, "payload header type %T is not %T", p, &enginev1.ExecutionPayloadHeaderDeneb{})
 			}
 			payloadProof = emptyPayloadProof()
 		} else {
@@ -478,7 +478,7 @@ func BlockToLightClientHeader(
 			}
 			payloadHeader, ok = p.(*enginev1.ExecutionPayloadHeaderDeneb)
 			if !ok {
-				return nil, errors.Wrapf(err, "payload header type %T is not %T", payloadHeader, &enginev1.ExecutionPayloadHeaderDeneb{})
+				return nil, errors.Wrapf(err, "payload header type %T is not %T", p, &enginev1.ExecutionPayloadHeaderDeneb{})
 			}
 			payloadProof = emptyPayloadProof()
 		} else {
