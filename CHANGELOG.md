@@ -78,6 +78,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Check kzg commitments align with blobs and proofs for beacon api end point.
 - Increase Max Payload Size in Gossip.
 - Revert "Proposer checks gas limit before accepting builder's bid".
+- Updated quic-go to v0.48.2 .
 - Process light client finality updates only for new finalized epochs instead of doing it for every block.
 
 ### Deprecated
@@ -116,9 +117,9 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - P2P: Avoid infinite loop when looking for peers in small networks.
 - Fixed another rollback bug due to a context deadline.
 - Fix checkpoint sync bug on holesky. [pr](https://github.com/prysmaticlabs/prysm/pull/14689)
+- Fix proposer boost spec tests being flakey by adjusting start time from 3 to 2s into slot.
 - Fix segmentation fault in E2E when light-client feature flag is enabled. [PR](https://github.com/prysmaticlabs/prysm/pull/14699)
 - Fix `searchForPeers` infinite loop in small networks.
-
 
 ### Security
 
