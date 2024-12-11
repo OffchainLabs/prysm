@@ -33,6 +33,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Added a Prometheus error counter metric for SSE requests.
 - Save light client updates and bootstraps in DB.
 - Added more comprehensive tests for `BlockToLightClientHeader`. [PR](https://github.com/prysmaticlabs/prysm/pull/14699)
+- Implemented a new `EmptyExecutionPayloadHeader` function to use in `BlockToLightClientHeader`.
 
 ### Changed
 
@@ -77,6 +78,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Check kzg commitments align with blobs and proofs for beacon api end point.
 - Increase Max Payload Size in Gossip.
 - Revert "Proposer checks gas limit before accepting builder's bid".
+- Process light client finality updates only for new finalized epochs instead of doing it for every block.
 
 ### Deprecated
 
