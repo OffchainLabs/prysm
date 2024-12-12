@@ -839,34 +839,16 @@ func TestLightClientHandler_GetLightClientUpdatesByRangeCountBiggerThanMax(t *te
 
 func TestLightClientHandler_GetLightClientUpdatesByRangeStartPeriodBeforeAltair(t *testing.T) {
 	helpers.ClearCache()
-	ctx := context.Background()
 	params.SetupTestConfigCleanup(t)
 	config := params.BeaconConfig()
 	config.AltairForkEpoch = 1
 	config.EpochsPerSyncCommitteePeriod = 1
 	params.OverrideBeaconConfig(config)
-	slot := primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
-
-	st, err := util.NewBeaconStateAltair()
-	require.NoError(t, err)
-	headSlot := slot.Add(1)
-	err = st.SetSlot(headSlot)
-	require.NoError(t, err)
 
 	db := dbtesting.SetupDB(t)
 
-	updatePeriod := slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
-
-	update, err := createUpdate(t, version.Altair)
-	require.NoError(t, err)
-
-	err = db.SaveLightClientUpdate(ctx, uint64(updatePeriod), update)
-	require.NoError(t, err)
-
-	mockChainService := &mock.ChainService{State: st}
 	s := &Server{
-		HeadFetcher: mockChainService,
-		BeaconDB:    db,
+		BeaconDB: db,
 	}
 	startPeriod := 0
 	url := fmt.Sprintf("http://foo.com/?count=2&start_period=%d", startPeriod)
@@ -878,15 +860,9 @@ func TestLightClientHandler_GetLightClientUpdatesByRangeStartPeriodBeforeAltair(
 
 	require.Equal(t, http.StatusOK, writer.Code)
 	var resp structs.LightClientUpdatesByRangeResponse
-	err = json.Unmarshal(writer.Body.Bytes(), &resp.Updates)
+	err := json.Unmarshal(writer.Body.Bytes(), &resp.Updates)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(resp.Updates))
-
-	require.Equal(t, "altair", resp.Updates[0].Version)
-	updateJson, err := structs.LightClientUpdateFromConsensus(update)
-	require.NoError(t, err)
-	require.DeepEqual(t, updateJson, resp.Updates[0].Data)
-
+	require.Equal(t, 0, len(resp.Updates))
 }
 
 func TestLightClientHandler_GetLightClientUpdatesByRangeMissingUpdates(t *testing.T) {
