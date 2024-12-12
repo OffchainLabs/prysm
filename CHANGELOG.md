@@ -77,6 +77,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Check kzg commitments align with blobs and proofs for beacon api end point.
 - Revert "Proposer checks gas limit before accepting builder's bid".
 - Updated quic-go to v0.48.2 .
+- Updated `GetLightClientBootstrap` RPC handler to read the bootstraps from the DB.
 
 ### Deprecated
 
