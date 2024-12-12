@@ -46,27 +46,28 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 		l := util.NewTestLightClient(t).SetupTestAltair()
 
 		slot := primitives.Slot(params.BeaconConfig().AltairForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
-		stateRoot, err := l.State.HashTreeRoot(l.Ctx)
+		blockRoot, err := l.Block.Block().HashTreeRoot()
 		require.NoError(t, err)
 
-		mockBlocker := &testutil.MockBlocker{BlockToReturn: l.Block}
-		mockChainService := &mock.ChainService{Optimistic: true, Slot: &slot}
-		mockChainInfoFetcher := &mock.ChainService{Slot: &slot}
+		bootstrap, err := lightclient.NewLightClientBootstrapFromBeaconState(l.Ctx, slot, l.State, l.Block)
+		require.NoError(t, err)
+
+		db := dbtesting.SetupDB(t)
+
+		err = db.SaveLightClientBootstrap(l.Ctx, blockRoot[:], bootstrap)
+		require.NoError(t, err)
+
 		s := &Server{
-			Stater: &testutil.MockStater{StatesBySlot: map[primitives.Slot]state.BeaconState{
-				slot: l.State,
-			}},
-			Blocker:          mockBlocker,
-			HeadFetcher:      mockChainService,
-			ChainInfoFetcher: mockChainInfoFetcher,
+			BeaconDB: db,
 		}
 		request := httptest.NewRequest("GET", "http://foo.com/", nil)
-		request.SetPathValue("block_root", hexutil.Encode(stateRoot[:]))
+		request.SetPathValue("block_root", hexutil.Encode(blockRoot[:]))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
 		s.GetLightClientBootstrap(writer, request)
 		require.Equal(t, http.StatusOK, writer.Code)
+
 		var resp structs.LightClientBootstrapResponse
 		err = json.Unmarshal(writer.Body.Bytes(), &resp)
 		require.NoError(t, err)
@@ -83,6 +84,32 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 		require.NotNil(t, resp.Data.CurrentSyncCommittee)
 		require.NotNil(t, resp.Data.CurrentSyncCommitteeBranch)
 	})
+	t.Run("altair - no bootstrap found", func(t *testing.T) {
+		l := util.NewTestLightClient(t).SetupTestAltair()
+
+		slot := primitives.Slot(params.BeaconConfig().AltairForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
+		blockRoot, err := l.Block.Block().HashTreeRoot()
+		require.NoError(t, err)
+
+		bootstrap, err := lightclient.NewLightClientBootstrapFromBeaconState(l.Ctx, slot, l.State, l.Block)
+		require.NoError(t, err)
+
+		db := dbtesting.SetupDB(t)
+
+		err = db.SaveLightClientBootstrap(l.Ctx, blockRoot[1:], bootstrap)
+		require.NoError(t, err)
+
+		s := &Server{
+			BeaconDB: db,
+		}
+		request := httptest.NewRequest("GET", "http://foo.com/", nil)
+		request.SetPathValue("block_root", hexutil.Encode(blockRoot[:]))
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetLightClientBootstrap(writer, request)
+		require.Equal(t, http.StatusNotFound, writer.Code)
+	})
 	t.Run("bellatrix", func(t *testing.T) {
 		l := util.NewTestLightClient(t).SetupTestBellatrix()
 
@@ -90,16 +117,16 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 		blockRoot, err := l.Block.Block().HashTreeRoot()
 		require.NoError(t, err)
 
-		mockBlocker := &testutil.MockBlocker{BlockToReturn: l.Block}
-		mockChainService := &mock.ChainService{Optimistic: true, Slot: &slot}
-		mockChainInfoFetcher := &mock.ChainService{Slot: &slot}
+		bootstrap, err := lightclient.NewLightClientBootstrapFromBeaconState(l.Ctx, slot, l.State, l.Block)
+		require.NoError(t, err)
+
+		db := dbtesting.SetupDB(t)
+
+		err = db.SaveLightClientBootstrap(l.Ctx, blockRoot[:], bootstrap)
+		require.NoError(t, err)
+
 		s := &Server{
-			Stater: &testutil.MockStater{StatesBySlot: map[primitives.Slot]state.BeaconState{
-				slot: l.State,
-			}},
-			Blocker:          mockBlocker,
-			HeadFetcher:      mockChainService,
-			ChainInfoFetcher: mockChainInfoFetcher,
+			BeaconDB: db,
 		}
 		request := httptest.NewRequest("GET", "http://foo.com/", nil)
 		request.SetPathValue("block_root", hexutil.Encode(blockRoot[:]))
@@ -131,16 +158,16 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 		blockRoot, err := l.Block.Block().HashTreeRoot()
 		require.NoError(t, err)
 
-		mockBlocker := &testutil.MockBlocker{BlockToReturn: l.Block}
-		mockChainService := &mock.ChainService{Optimistic: true, Slot: &slot}
-		mockChainInfoFetcher := &mock.ChainService{Slot: &slot}
+		bootstrap, err := lightclient.NewLightClientBootstrapFromBeaconState(l.Ctx, slot, l.State, l.Block)
+		require.NoError(t, err)
+
+		db := dbtesting.SetupDB(t)
+
+		err = db.SaveLightClientBootstrap(l.Ctx, blockRoot[:], bootstrap)
+		require.NoError(t, err)
+
 		s := &Server{
-			Stater: &testutil.MockStater{StatesBySlot: map[primitives.Slot]state.BeaconState{
-				slot: l.State,
-			}},
-			Blocker:          mockBlocker,
-			HeadFetcher:      mockChainService,
-			ChainInfoFetcher: mockChainInfoFetcher,
+			BeaconDB: db,
 		}
 		request := httptest.NewRequest("GET", "http://foo.com/", nil)
 		request.SetPathValue("block_root", hexutil.Encode(blockRoot[:]))
@@ -172,16 +199,16 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 		blockRoot, err := l.Block.Block().HashTreeRoot()
 		require.NoError(t, err)
 
-		mockBlocker := &testutil.MockBlocker{BlockToReturn: l.Block}
-		mockChainService := &mock.ChainService{Optimistic: true, Slot: &slot}
-		mockChainInfoFetcher := &mock.ChainService{Slot: &slot}
+		bootstrap, err := lightclient.NewLightClientBootstrapFromBeaconState(l.Ctx, slot, l.State, l.Block)
+		require.NoError(t, err)
+
+		db := dbtesting.SetupDB(t)
+
+		err = db.SaveLightClientBootstrap(l.Ctx, blockRoot[:], bootstrap)
+		require.NoError(t, err)
+
 		s := &Server{
-			Stater: &testutil.MockStater{StatesBySlot: map[primitives.Slot]state.BeaconState{
-				slot: l.State,
-			}},
-			Blocker:          mockBlocker,
-			HeadFetcher:      mockChainService,
-			ChainInfoFetcher: mockChainInfoFetcher,
+			BeaconDB: db,
 		}
 		request := httptest.NewRequest("GET", "http://foo.com/", nil)
 		request.SetPathValue("block_root", hexutil.Encode(blockRoot[:]))
@@ -213,16 +240,16 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 		blockRoot, err := l.Block.Block().HashTreeRoot()
 		require.NoError(t, err)
 
-		mockBlocker := &testutil.MockBlocker{BlockToReturn: l.Block}
-		mockChainService := &mock.ChainService{Optimistic: true, Slot: &slot}
-		mockChainInfoFetcher := &mock.ChainService{Slot: &slot}
+		bootstrap, err := lightclient.NewLightClientBootstrapFromBeaconState(l.Ctx, slot, l.State, l.Block)
+		require.NoError(t, err)
+
+		db := dbtesting.SetupDB(t)
+
+		err = db.SaveLightClientBootstrap(l.Ctx, blockRoot[:], bootstrap)
+		require.NoError(t, err)
+
 		s := &Server{
-			Stater: &testutil.MockStater{StatesBySlot: map[primitives.Slot]state.BeaconState{
-				slot: l.State,
-			}},
-			Blocker:          mockBlocker,
-			HeadFetcher:      mockChainService,
-			ChainInfoFetcher: mockChainInfoFetcher,
+			BeaconDB: db,
 		}
 		request := httptest.NewRequest("GET", "http://foo.com/", nil)
 		request.SetPathValue("block_root", hexutil.Encode(blockRoot[:]))
