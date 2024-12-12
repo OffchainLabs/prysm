@@ -75,7 +75,6 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Updated `Blobs` endpoint to return additional metadata fields.
 - Made QUIC the default method to connect with peers.
 - Check kzg commitments align with blobs and proofs for beacon api end point.
-- Increase Max Payload Size in Gossip.
 - Revert "Proposer checks gas limit before accepting builder's bid".
 - Updated quic-go to v0.48.2 .
 
