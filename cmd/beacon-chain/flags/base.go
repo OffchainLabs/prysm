@@ -296,4 +296,10 @@ var (
 		Usage: "Directory for the slasher database",
 		Value: cmd.DefaultDataDir(),
 	}
+	// BeaconDBPruning enables the pruning of beacon db beyond weak subjectivity duration.
+	BeaconDBPruning = &cli.BoolFlag{
+		Name: "beacon-db-pruning",
+		Usage: "Enables pruning of beacon db beyond weak subjectivity duration. This is an opt-in feature," +
+			" and should only be enabled if operators don't require historical data.",
+	}
 )
