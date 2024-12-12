@@ -32,6 +32,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Added a Prometheus error counter metric for HTTP requests to track beacon node requests.
 - Added a Prometheus error counter metric for SSE requests.
 - Save light client updates and bootstraps in DB.
+- Added more comprehensive tests for `BlockToLightClientHeader`. [PR](https://github.com/prysmaticlabs/prysm/pull/14699)
 
 ### Changed
 
@@ -73,6 +74,10 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Improvements to HTTP response handling. [pr](https://github.com/prysmaticlabs/prysm/pull/14673)
 - Updated `Blobs` endpoint to return additional metadata fields.
 - Made QUIC the default method to connect with peers.
+- Check kzg commitments align with blobs and proofs for beacon api end point.
+- Increase Max Payload Size in Gossip.
+- Revert "Proposer checks gas limit before accepting builder's bid".
+- Updated quic-go to v0.48.2 .
 
 ### Deprecated
 
@@ -110,7 +115,10 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - P2P: Avoid infinite loop when looking for peers in small networks.
 - Fixed another rollback bug due to a context deadline.
 - Fix checkpoint sync bug on holesky. [pr](https://github.com/prysmaticlabs/prysm/pull/14689)
-
+- Fix proposer boost spec tests being flakey by adjusting start time from 3 to 2s into slot.
+- Fix segmentation fault in E2E when light-client feature flag is enabled. [PR](https://github.com/prysmaticlabs/prysm/pull/14699)
+- Fix `searchForPeers` infinite loop in small networks.
+- Fix slashing pool behavior to enforce MaxAttesterSlashings limit in Electra version.
 
 ### Security
 
@@ -435,6 +443,7 @@ block profit. If you want to preserve the existing behavior, set --local-block-v
 - Set default LocalBlockValueBoost to 10
 - Add bid value metrics
 - REST VC metrics
+- `startDB`: Add log when checkpoint sync.
 
 ### Changed
 

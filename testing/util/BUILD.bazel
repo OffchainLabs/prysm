@@ -64,6 +64,8 @@ go_library(
         "//testing/assertions:go_default_library",
         "//testing/require:go_default_library",
         "//time/slots:go_default_library",
+        "@com_github_consensys_gnark_crypto//ecc/bls12-381/fr:go_default_library",
+        "@com_github_crate_crypto_go_kzg_4844//:go_default_library",
         "@com_github_ethereum_go_ethereum//common:go_default_library",
         "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",
         "@com_github_ethereum_go_ethereum//core/types:go_default_library",

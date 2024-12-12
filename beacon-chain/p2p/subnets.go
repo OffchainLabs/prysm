@@ -66,12 +66,14 @@ func (s *Service) nodeFilter(topic string, index uint64) (func(node *enode.Node)
 // - Iterator is exhausted.
 func searchForPeers(
 	iterator enode.Iterator,
-	batchSize int,
+	batchPeriod time.Duration,
 	peersToFindCount uint,
 	filter func(node *enode.Node) bool,
 ) []*enode.Node {
-	nodeFromNodeID := make(map[enode.ID]*enode.Node, batchSize)
-	for i := 0; i < batchSize && uint(len(nodeFromNodeID)) <= peersToFindCount && iterator.Next(); i++ {
+	nodeFromNodeID := make(map[enode.ID]*enode.Node)
+	start := time.Now()
+
+	for time.Since(start) < batchPeriod && uint(len(nodeFromNodeID)) < peersToFindCount && iterator.Next() {
 		node := iterator.Node()
 
 		// Filter out nodes that do not meet the criteria.
@@ -191,7 +193,7 @@ func (s *Service) FindPeersWithSubnet(
 		}
 
 		// Search for new peers in the network.
-		nodes := searchForPeers(iterator, batchSize, uint(missingPeerCountForTopic), filter)
+		nodes := searchForPeers(iterator, batchPeriod, uint(missingPeerCountForTopic), filter)
 
 		// Restrict dials if limit is applied.
 		maxConcurrentDials := math.MaxInt
