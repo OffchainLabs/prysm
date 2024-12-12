@@ -243,8 +243,10 @@ func (s *Service) processLightClientFinalityUpdate(
 
 	// Check if the finalized checkpoint has changed
 	if finalizedCheckPoint == nil || bytes.Equal(finalizedCheckPoint.GetRoot(), postState.FinalizedCheckpoint().Root) {
+		log.Println("Finalized checkpoint has NOT changed, Finality Update not processed")
 		return nil
 	}
+	log.Println("Finalized checkpoint has changed")
 
 	update, err := lightclient.NewLightClientFinalityUpdateFromBeaconState(
 		ctx,
