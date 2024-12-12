@@ -103,6 +103,7 @@ func (vs *Server) GetBeaconBlock(ctx context.Context, req *ethpb.BlockRequest) (
 		"slot":               req.Slot,
 		"sinceSlotStartTime": time.Since(t),
 		"validator":          sBlk.Block().ProposerIndex(),
+		"err":                err,
 	}).Info("Finished building block")
 	if err != nil {
 		return nil, errors.Wrap(err, "could not build block in parallel")
