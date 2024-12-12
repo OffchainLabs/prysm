@@ -140,6 +140,7 @@ go_test(
         "//beacon-chain/core/blocks:go_default_library",
         "//beacon-chain/core/feed/state:go_default_library",
         "//beacon-chain/core/helpers:go_default_library",
+        "//beacon-chain/core/light-client:go_default_library",
         "//beacon-chain/core/signing:go_default_library",
         "//beacon-chain/core/transition:go_default_library",
         "//beacon-chain/das:go_default_library",
