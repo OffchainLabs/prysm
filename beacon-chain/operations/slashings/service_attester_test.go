@@ -516,6 +516,70 @@ func TestPool_PendingAttesterSlashings(t *testing.T) {
 	}
 }
 
+func TestPool_PendingAttesterSlashings_AfterElectra(t *testing.T) {
+	type fields struct {
+		pending []*PendingAttesterSlashing
+		all     bool
+	}
+	params.SetupTestConfigCleanup(t)
+	beaconState, privKeys := util.DeterministicGenesisStateElectra(t, 64)
+
+	pendingSlashings := make([]*PendingAttesterSlashing, 20)
+	slashings := make([]ethpb.AttSlashing, 20)
+	for i := 0; i < len(pendingSlashings); i++ {
+		sl, err := util.GenerateAttesterSlashingForValidator(beaconState, privKeys[i], primitives.ValidatorIndex(i))
+		require.NoError(t, err)
+		pendingSlashings[i] = &PendingAttesterSlashing{
+			attesterSlashing: sl,
+			validatorToSlash: primitives.ValidatorIndex(i),
+		}
+		slashings[i] = sl
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		want   []ethpb.AttSlashing
+	}{
+		{
+			name: "Empty list",
+			fields: fields{
+				pending: []*PendingAttesterSlashing{},
+			},
+			want: []ethpb.AttSlashing{},
+		},
+		{
+			name: "All pending",
+			fields: fields{
+				pending: pendingSlashings,
+				all:     true,
+			},
+			want: slashings,
+		},
+		{
+			name: "All eligible",
+			fields: fields{
+				pending: pendingSlashings,
+			},
+			want: slashings[0:1],
+		},
+		{
+			name: "Multiple indices",
+			fields: fields{
+				pending: pendingSlashings[3:6],
+			},
+			want: slashings[3:4],
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := &Pool{
+				pendingAttesterSlashing: tt.fields.pending,
+			}
+			assert.DeepEqual(t, tt.want, p.PendingAttesterSlashings(context.Background(), beaconState, tt.fields.all))
+		})
+	}
+}
+
 func TestPool_PendingAttesterSlashings_Slashed(t *testing.T) {
 	type fields struct {
 		pending []*PendingAttesterSlashing

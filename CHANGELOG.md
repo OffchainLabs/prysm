@@ -120,6 +120,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Fix proposer boost spec tests being flakey by adjusting start time from 3 to 2s into slot.
 - Fix segmentation fault in E2E when light-client feature flag is enabled. [PR](https://github.com/prysmaticlabs/prysm/pull/14699)
 - Fix `searchForPeers` infinite loop in small networks.
+- Fix slashing pool behavior to enforce MaxAttesterSlashings limit in Electra version.
 
 ### Security
 
