@@ -101,8 +101,7 @@ func TestMetadataRPCHandler_SendMetadataRequest(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	beaconChainConfig := params.BeaconConfig().Copy()
 	beaconChainConfig.AltairForkEpoch = 5
-	beaconChainConfig.DenebForkEpoch = 10
-	beaconChainConfig.Eip7594ForkEpoch = 10
+	beaconChainConfig.ElectraForkEpoch = 15
 	params.OverrideBeaconConfig(beaconChainConfig)
 	params.BeaconConfig().InitializeForkSchedule()
 
@@ -145,10 +144,10 @@ func TestMetadataRPCHandler_SendMetadataRequest(t *testing.T) {
 			}),
 		},
 		{
-			name:                    "Phase0-PeerDAS",
+			name:                    "Phase0-Electra",
 			topic:                   p2p.RPCMetaDataTopicV1,
 			epochsSinceGenesisPeer1: 0,
-			epochsSinceGenesisPeer2: 10,
+			epochsSinceGenesisPeer2: 15,
 			metadataPeer2: wrapper.WrappedMetadataV2(&pb.MetaDataV2{
 				SeqNumber:          seqNumber,
 				Attnets:            attnets,
@@ -192,10 +191,10 @@ func TestMetadataRPCHandler_SendMetadataRequest(t *testing.T) {
 			}),
 		},
 		{
-			name:                    "Altair-PeerDAS",
+			name:                    "Altair-Electra",
 			topic:                   p2p.RPCMetaDataTopicV2,
 			epochsSinceGenesisPeer1: 5,
-			epochsSinceGenesisPeer2: 10,
+			epochsSinceGenesisPeer2: 15,
 			metadataPeer2: wrapper.WrappedMetadataV2(&pb.MetaDataV2{
 				SeqNumber:          seqNumber,
 				Attnets:            attnets,
@@ -209,9 +208,9 @@ func TestMetadataRPCHandler_SendMetadataRequest(t *testing.T) {
 			}),
 		},
 		{
-			name:                    "PeerDAS-Phase0",
+			name:                    "Electra-Phase0",
 			topic:                   p2p.RPCMetaDataTopicV3,
-			epochsSinceGenesisPeer1: 10,
+			epochsSinceGenesisPeer1: 15,
 			epochsSinceGenesisPeer2: 0,
 			metadataPeer2: wrapper.WrappedMetadataV0(&pb.MetaDataV0{
 				SeqNumber: seqNumber,
@@ -225,9 +224,9 @@ func TestMetadataRPCHandler_SendMetadataRequest(t *testing.T) {
 			}),
 		},
 		{
-			name:                    "PeerDAS-Altail",
+			name:                    "Electra-Altair",
 			topic:                   p2p.RPCMetaDataTopicV3,
-			epochsSinceGenesisPeer1: 10,
+			epochsSinceGenesisPeer1: 15,
 			epochsSinceGenesisPeer2: 5,
 			metadataPeer2: wrapper.WrappedMetadataV1(&pb.MetaDataV1{
 				SeqNumber: seqNumber,
@@ -242,10 +241,10 @@ func TestMetadataRPCHandler_SendMetadataRequest(t *testing.T) {
 			}),
 		},
 		{
-			name:                    "PeerDAS-PeerDAS",
+			name:                    "Electra-Electra",
 			topic:                   p2p.RPCMetaDataTopicV3,
-			epochsSinceGenesisPeer1: 10,
-			epochsSinceGenesisPeer2: 10,
+			epochsSinceGenesisPeer1: 15,
+			epochsSinceGenesisPeer2: 15,
 			metadataPeer2: wrapper.WrappedMetadataV2(&pb.MetaDataV2{
 				SeqNumber:          seqNumber,
 				Attnets:            attnets,
@@ -262,53 +261,55 @@ func TestMetadataRPCHandler_SendMetadataRequest(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		var wg sync.WaitGroup
+		t.Run(tc.name, func(t *testing.T) {
+			var wg sync.WaitGroup
 
-		ctx := context.Background()
+			ctx := context.Background()
 
-		// Setup and connect peers.
-		peer1, peer2 := p2ptest.NewTestP2P(t), p2ptest.NewTestP2P(t)
-		peer1.Connect(peer2)
+			// Setup and connect peers.
+			peer1, peer2 := p2ptest.NewTestP2P(t), p2ptest.NewTestP2P(t)
+			peer1.Connect(peer2)
 
-		// Ensure the peers are connected.
-		peersCount := len(peer1.BHost.Network().Peers())
-		assert.Equal(t, 1, peersCount, "Expected peers to be connected")
+			// Ensure the peers are connected.
+			peersCount := len(peer1.BHost.Network().Peers())
+			require.Equal(t, 1, peersCount, "Expected peers to be connected")
 
-		// Setup sync services.
-		genesisPeer1 := time.Now().Add(-time.Duration(tc.epochsSinceGenesisPeer1) * secondsPerEpoch)
-		genesisPeer2 := time.Now().Add(-time.Duration(tc.epochsSinceGenesisPeer2) * secondsPerEpoch)
+			// Setup sync services.
+			genesisPeer1 := time.Now().Add(-time.Duration(tc.epochsSinceGenesisPeer1) * secondsPerEpoch)
+			genesisPeer2 := time.Now().Add(-time.Duration(tc.epochsSinceGenesisPeer2) * secondsPerEpoch)
 
-		chainPeer1 := &mock.ChainService{Genesis: genesisPeer1, ValidatorsRoot: [32]byte{}}
-		chainPeer2 := &mock.ChainService{Genesis: genesisPeer2, ValidatorsRoot: [32]byte{}}
+			chainPeer1 := &mock.ChainService{Genesis: genesisPeer1, ValidatorsRoot: [32]byte{}}
+			chainPeer2 := &mock.ChainService{Genesis: genesisPeer2, ValidatorsRoot: [32]byte{}}
 
-		servicePeer1 := createService(peer1, chainPeer1)
-		servicePeer2 := createService(peer2, chainPeer2)
+			servicePeer1 := createService(peer1, chainPeer1)
+			servicePeer2 := createService(peer2, chainPeer2)
 
-		// Define the behavior of peer2 when receiving a METADATA request.
-		protocolSuffix := servicePeer2.cfg.p2p.Encoding().ProtocolSuffix()
-		protocolID := protocol.ID(tc.topic + protocolSuffix)
-		peer2.LocalMetadata = tc.metadataPeer2
+			// Define the behavior of peer2 when receiving a METADATA request.
+			protocolSuffix := servicePeer2.cfg.p2p.Encoding().ProtocolSuffix()
+			protocolID := protocol.ID(tc.topic + protocolSuffix)
+			peer2.LocalMetadata = tc.metadataPeer2
 
-		wg.Add(1)
-		peer2.BHost.SetStreamHandler(protocolID, func(stream network.Stream) {
-			defer wg.Done()
-			err := servicePeer2.metaDataHandler(ctx, new(interface{}), stream)
-			assert.NoError(t, err)
+			wg.Add(1)
+			peer2.BHost.SetStreamHandler(protocolID, func(stream network.Stream) {
+				defer wg.Done()
+				err := servicePeer2.metaDataHandler(ctx, new(interface{}), stream)
+				require.NoError(t, err)
+			})
+
+			// Send a METADATA request from peer1 to peer2.
+			actual, err := servicePeer1.sendMetaDataRequest(ctx, peer2.BHost.ID())
+			require.NoError(t, err)
+
+			// Wait until the METADATA request is received by peer2 or timeout.
+			timeOutReached := util.WaitTimeout(&wg, requestTimeout)
+			require.Equal(t, false, timeOutReached, "Did not receive METADATA request within timeout")
+
+			// Compare the received METADATA object with the expected METADATA object.
+			require.DeepSSZEqual(t, tc.expected.InnerObject(), actual.InnerObject(), "Metadata unequal")
+
+			// Ensure the peers are still connected.
+			peersCount = len(peer1.BHost.Network().Peers())
+			assert.Equal(t, 1, peersCount, "Expected peers to be connected")
 		})
-
-		// Send a METADATA request from peer1 to peer2.
-		actual, err := servicePeer1.sendMetaDataRequest(ctx, peer2.BHost.ID())
-		assert.NoError(t, err)
-
-		// Wait until the METADATA request is received by peer2 or timeout.
-		timeOutReached := util.WaitTimeout(&wg, requestTimeout)
-		require.Equal(t, false, timeOutReached, "Did not receive METADATA request within timeout")
-
-		// Compare the received METADATA object with the expected METADATA object.
-		require.DeepSSZEqual(t, tc.expected.InnerObject(), actual.InnerObject(), "Metadata unequal")
-
-		// Ensure the peers are still connected.
-		peersCount = len(peer1.BHost.Network().Peers())
-		assert.Equal(t, 1, peersCount, "Expected peers to be connected")
 	}
 }

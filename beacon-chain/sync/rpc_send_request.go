@@ -438,15 +438,18 @@ func readChunkedDataColumnSideCar(
 	}
 
 	// Check if the fork digest is recognized.
-	v, ok := ctxMap[bytesutil.ToBytes4(ctxBytes)]
+	msgVersion, ok := ctxMap[bytesutil.ToBytes4(ctxBytes)]
 	if !ok {
 		return nil, errors.Errorf("unrecognized fork digest %#x", ctxBytes)
 	}
 
 	// Check if we are on debeb.
 	// Only deneb is supported at this time, because we lack a fork-spanning interface/union type for blobs.
-	if v != version.Deneb {
-		return nil, errors.Errorf("unexpected context bytes for deneb DataColumnSidecar, ctx=%#x, v=%v", ctxBytes, v)
+	if msgVersion < version.Electra {
+		return nil, errors.Errorf(
+			"unexpected context bytes for DataColumnSidecar, ctx=%#x, msgVersion=%v, minimalSupportedVersion=%v",
+			ctxBytes, version.String(msgVersion), version.String(version.Electra),
+		)
 	}
 
 	// Decode the data column sidecar from the stream.

@@ -113,7 +113,7 @@ func (s *LazilyPersistentStoreColumn) IsDataAvailable(
 	// ignore their response and decrease their peer score.
 	roDataColumns, err := entry.filterColumns(blockRoot, blockCommitments)
 	if err != nil {
-		return errors.Wrap(err, "incomplete BlobSidecar batch")
+		return errors.Wrap(err, "incomplete DataColumnSidecar batch")
 	}
 
 	// Create verified RO data columns from RO data columns.

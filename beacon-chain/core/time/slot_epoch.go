@@ -55,7 +55,7 @@ func HigherEqualThanAltairVersionAndEpoch(s state.BeaconState, e primitives.Epoc
 
 // PeerDASIsActive checks whether peerDAS is active at the provided slot.
 func PeerDASIsActive(slot primitives.Slot) bool {
-	return params.PeerDASEnabled() && slots.ToEpoch(slot) >= params.BeaconConfig().Eip7594ForkEpoch
+	return params.PeerDASEnabled() && slots.ToEpoch(slot) >= params.BeaconConfig().ElectraForkEpoch
 }
 
 // CanUpgradeToAltair returns true if the input `slot` can upgrade to Altair.

@@ -64,19 +64,31 @@ func (s *Service) rpcHandlerByTopicFromFork(forkIndex int) (map[string]rpcHandle
 		}, nil
 
 	// Deneb: https://github.com/ethereum/consensus-specs/blob/dev/specs/deneb/p2p-interface.md#messages
-	// Electra: https://github.com/ethereum/consensus-specs/blob/dev/specs/electra/p2p-interface.md#messages
-	case version.Deneb, version.Electra:
+	case version.Deneb:
+		return map[string]rpcHandler{
+			p2p.RPCStatusTopicV1:              s.statusRPCHandler,
+			p2p.RPCGoodByeTopicV1:             s.goodbyeRPCHandler,
+			p2p.RPCBlocksByRangeTopicV2:       s.beaconBlocksByRangeRPCHandler,
+			p2p.RPCBlocksByRootTopicV2:        s.beaconBlocksRootRPCHandler,
+			p2p.RPCPingTopicV1:                s.pingHandler,
+			p2p.RPCMetaDataTopicV2:            s.metaDataHandler,
+			p2p.RPCBlobSidecarsByRootTopicV1:  s.blobSidecarByRootRPCHandler,   // Added in Deneb
+			p2p.RPCBlobSidecarsByRangeTopicV1: s.blobSidecarsByRangeRPCHandler, // Added in Deneb
+		}, nil
+
+	// Electra: https://github.com/ethereum/consensus-specs/blob/dev/specs/_features/eip7594/p2p-interface.md#messages
+	case version.Electra:
 		return map[string]rpcHandler{
 			p2p.RPCStatusTopicV1:                    s.statusRPCHandler,
 			p2p.RPCGoodByeTopicV1:                   s.goodbyeRPCHandler,
 			p2p.RPCBlocksByRangeTopicV2:             s.beaconBlocksByRangeRPCHandler,
 			p2p.RPCBlocksByRootTopicV2:              s.beaconBlocksRootRPCHandler,
 			p2p.RPCPingTopicV1:                      s.pingHandler,
-			p2p.RPCMetaDataTopicV2:                  s.metaDataHandler,
-			p2p.RPCBlobSidecarsByRootTopicV1:        s.blobSidecarByRootRPCHandler,         // Added in Deneb
-			p2p.RPCBlobSidecarsByRangeTopicV1:       s.blobSidecarsByRangeRPCHandler,       // Added in Deneb
-			p2p.RPCDataColumnSidecarsByRangeTopicV1: s.dataColumnSidecarsByRangeRPCHandler, // Added in Deneb
-			p2p.RPCDataColumnSidecarsByRootTopicV1:  s.dataColumnSidecarByRootRPCHandler,   // Added in Deneb
+			p2p.RPCMetaDataTopicV3:                  s.metaDataHandler, // Modified in Electra
+			p2p.RPCBlobSidecarsByRootTopicV1:        s.blobSidecarByRootRPCHandler,
+			p2p.RPCBlobSidecarsByRangeTopicV1:       s.blobSidecarsByRangeRPCHandler,
+			p2p.RPCDataColumnSidecarsByRootTopicV1:  s.dataColumnSidecarByRootRPCHandler,   // Added in Electra
+			p2p.RPCDataColumnSidecarsByRangeTopicV1: s.dataColumnSidecarsByRangeRPCHandler, // Added in Electra
 		}, nil
 
 	default:

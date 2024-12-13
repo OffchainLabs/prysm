@@ -228,10 +228,10 @@ func (s *Service) RefreshPersistentSubnets() {
 
 	isBitSUpToDate := bytes.Equal(bitS, inRecordBitS) && bytes.Equal(bitS, currentBitSInMetadata)
 
-	// Compare current epoch with EIP-7594 fork epoch.
-	eip7594ForkEpoch := params.BeaconConfig().Eip7594ForkEpoch
+	// Compare current epoch with the Electra fork epoch.
+	electraForkEpoch := params.BeaconConfig().ElectraForkEpoch
 
-	if currentEpoch < eip7594ForkEpoch {
+	if currentEpoch < electraForkEpoch {
 		// Altair behaviour.
 		if metadataVersion == version.Altair && isBitVUpToDate && isBitSUpToDate {
 			// Nothing to do, return early.

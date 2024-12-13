@@ -133,9 +133,10 @@ func (s *Service) dataColumnSidecarsByRangeRPCHandler(ctx context.Context, msg i
 		"count":            r.Count,
 	}).Debug("Serving data columns by range request")
 
-	if err := s.rateLimiter.validateRequest(stream, 1); err != nil {
-		return err
-	}
+	// TODO: Uncomment out of devnet.
+	// if err := s.rateLimiter.validateRequest(stream, 1); err != nil {
+	// 	return err
+	// }
 
 	rp, err := validateDataColumnsByRange(r, s.cfg.chain.CurrentSlot())
 	if err != nil {

@@ -471,12 +471,12 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, indices map[uint
 	blockSlot := b.Block().Slot()
 
 	// Get the first peerDAS epoch.
-	eip7594ForkEpoch := params.BeaconConfig().Eip7594ForkEpoch
+	electraForkEpoch := params.BeaconConfig().ElectraForkEpoch
 
 	// Compute the first peerDAS slot.
 	peerDASStartSlot := primitives.Slot(math.MaxUint64)
-	if eip7594ForkEpoch != primitives.Epoch(math.MaxUint64) {
-		peerDASStartSlot, err = slots.EpochStart(eip7594ForkEpoch)
+	if electraForkEpoch != primitives.Epoch(math.MaxUint64) {
+		peerDASStartSlot, err = slots.EpochStart(electraForkEpoch)
 		if err != nil {
 			return nil, &core.RpcError{Err: errors.Wrap(err, "could not calculate peerDAS start slot"), Reason: core.Internal}
 		}

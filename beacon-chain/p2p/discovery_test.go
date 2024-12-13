@@ -135,7 +135,7 @@ func TestStartDiscV5_DiscoverAllPeers(t *testing.T) {
 func TestCreateLocalNode(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig()
-	cfg.Eip7594ForkEpoch = 1
+	cfg.ElectraForkEpoch = 1
 	params.OverrideBeaconConfig(cfg)
 	testCases := []struct {
 		name          string
@@ -626,7 +626,7 @@ func TestRefreshPersistentSubnets(t *testing.T) {
 
 	const (
 		altairForkEpoch  = 5
-		eip7594ForkEpoch = 10
+		electraForkEpoch = 10
 	)
 
 	custodySubnetCount := params.BeaconConfig().CustodyRequirement
@@ -635,7 +635,7 @@ func TestRefreshPersistentSubnets(t *testing.T) {
 	defaultCfg := params.BeaconConfig()
 	cfg := defaultCfg.Copy()
 	cfg.AltairForkEpoch = altairForkEpoch
-	cfg.Eip7594ForkEpoch = eip7594ForkEpoch
+	cfg.ElectraForkEpoch = electraForkEpoch
 	params.OverrideBeaconConfig(cfg)
 
 	// Compute the number of seconds per epoch.
@@ -706,7 +706,7 @@ func TestRefreshPersistentSubnets(t *testing.T) {
 		},
 		{
 			name:              "PeerDAS",
-			epochSinceGenesis: eip7594ForkEpoch,
+			epochSinceGenesis: electraForkEpoch,
 			checks: []check{
 				{
 					pingCount:              0,

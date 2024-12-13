@@ -209,7 +209,7 @@ func DataColumnsRPCMinValidSlot(current primitives.Slot) (primitives.Slot, error
 	}
 	minReqEpochs := params.BeaconConfig().MinEpochsForDataColumnSidecarsRequest
 	currEpoch := slots.ToEpoch(current)
-	minStart := params.BeaconConfig().Eip7594ForkEpoch
+	minStart := params.BeaconConfig().ElectraForkEpoch
 	if currEpoch > minReqEpochs && currEpoch-minReqEpochs > minStart {
 		minStart = currEpoch - minReqEpochs
 	}

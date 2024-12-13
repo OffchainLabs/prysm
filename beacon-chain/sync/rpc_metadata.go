@@ -70,7 +70,7 @@ func (s *Service) metaDataHandler(_ context.Context, _ interface{}, stream libp2
 	switch streamVersion {
 	case p2p.SchemaVersionV1:
 		switch metadataVersion {
-		case version.Altair, version.Deneb:
+		case version.Altair, version.Electra:
 			metadata = wrapper.WrappedMetadataV0(
 				&pb.MetaDataV0{
 					Attnets:   metadata.AttnetsBitfield(),
@@ -87,7 +87,7 @@ func (s *Service) metaDataHandler(_ context.Context, _ interface{}, stream libp2
 					SeqNumber: metadata.SequenceNumber(),
 					Syncnets:  bitfield.Bitvector4{byte(0x00)},
 				})
-		case version.Deneb:
+		case version.Electra:
 			metadata = wrapper.WrappedMetadataV1(
 				&pb.MetaDataV1{
 					Attnets:   metadata.AttnetsBitfield(),
@@ -190,7 +190,7 @@ func (s *Service) sendMetaDataRequest(ctx context.Context, peerID peer.ID) (meta
 		topicVersion = p2p.SchemaVersionV1
 	case version.Altair:
 		topicVersion = p2p.SchemaVersionV2
-	case version.Deneb:
+	case version.Electra:
 		topicVersion = p2p.SchemaVersionV3
 	}
 

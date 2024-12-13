@@ -287,5 +287,5 @@ func (m MetadataV2) MetadataObjV2() *pb.MetaDataV2 {
 
 // Version returns the fork version of the underlying object.
 func (MetadataV2) Version() int {
-	return version.Deneb
+	return version.Electra
 }

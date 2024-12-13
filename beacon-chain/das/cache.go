@@ -143,8 +143,8 @@ func (e *cacheEntry) filterColumns(root [32]byte, commitmentsArray *safeCommitme
 	commitmentsCount := commitmentsArray.count()
 	sidecars := make([]blocks.RODataColumn, 0, commitmentsCount)
 
-	for i := uint64(0); i < fieldparams.NumberOfColumns; i++ {
-		// Skip if we arleady store this data column.
+	for i := range uint64(fieldparams.NumberOfColumns) {
+		// Skip if we already store this data column.
 		if e.diskSummary.HasIndex(i) {
 			continue
 		}

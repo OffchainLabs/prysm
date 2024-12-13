@@ -16,7 +16,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/altair"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	coreTime "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers"
 	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
@@ -146,28 +145,27 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 		)
 	}
 
-	// New Gossip Topic in Deneb
-	if params.BeaconConfig().DenebForkEpoch <= epoch {
-		if coreTime.PeerDASIsActive(slots.UnsafeEpochStart(epoch)) {
-			s.subscribeWithParameters(
-				p2p.DataColumnSubnetTopicFormat,
-				s.validateDataColumn,
-				s.dataColumnSubscriber,
-				digest,
-				s.dataColumnSubnetIndices,
-				// TODO: Should we find peers always? When validators are managed? When validators are managed AND when we are going to propose a block?
-				func(currentSlot primitives.Slot) []uint64 { return []uint64{} },
-			)
-
-			return
-		}
-
+	// New Gossip Topic in Deneb, removed in Electra
+	if params.BeaconConfig().DenebForkEpoch <= epoch && epoch < params.BeaconConfig().ElectraForkEpoch {
 		s.subscribeWithParameters(
 			p2p.BlobSubnetTopicFormat,
 			s.validateBlob,
 			s.blobSubscriber,
 			digest,
 			func(primitives.Slot) []uint64 { return sliceFromCount(params.BeaconConfig().BlobsidecarSubnetCount) },
+			func(currentSlot primitives.Slot) []uint64 { return []uint64{} },
+		)
+	}
+
+	// New Gossip Topic in Electra
+	if params.BeaconConfig().ElectraForkEpoch <= epoch {
+		s.subscribeWithParameters(
+			p2p.DataColumnSubnetTopicFormat,
+			s.validateDataColumn,
+			s.dataColumnSubscriber,
+			digest,
+			s.dataColumnSubnetIndices,
+			// TODO: Should we find peers always? When validators are managed? When validators are managed AND when we are going to propose a block?
 			func(currentSlot primitives.Slot) []uint64 { return []uint64{} },
 		)
 	}

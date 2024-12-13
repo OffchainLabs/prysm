@@ -306,7 +306,7 @@ func TopicFromMessage(msg string, epoch primitives.Epoch) (string, error) {
 	}
 
 	// Check if the message is to be updated in peerDAS.
-	isPeerDAS := epoch >= params.BeaconConfig().Eip7594ForkEpoch
+	isPeerDAS := epoch >= params.BeaconConfig().ElectraForkEpoch
 	if isPeerDAS && peerDASMapping[msg] {
 		version = SchemaVersionV3
 	}

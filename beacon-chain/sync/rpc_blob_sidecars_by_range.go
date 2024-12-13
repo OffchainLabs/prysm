@@ -76,9 +76,10 @@ func (s *Service) blobSidecarsByRangeRPCHandler(ctx context.Context, msg interfa
 	if !ok {
 		return errors.New("message is not type *pb.BlobsSidecarsByRangeRequest")
 	}
-	if err := s.rateLimiter.validateRequest(stream, 1); err != nil {
-		return err
-	}
+	// TODO: Uncomment out of devnet.
+	// if err := s.rateLimiter.validateRequest(stream, 1); err != nil {
+	// 	return err
+	// }
 	rp, err := validateBlobsByRange(r, s.cfg.chain.CurrentSlot())
 	if err != nil {
 		s.writeErrorResponseToStream(responseCodeInvalidRequest, err.Error(), stream)

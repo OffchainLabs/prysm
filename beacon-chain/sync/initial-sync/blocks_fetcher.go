@@ -3,6 +3,7 @@ package initialsync
 import (
 	"context"
 	"fmt"
+	"math"
 	"slices"
 	"sort"
 	"strings"
@@ -12,7 +13,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
-	coreTime "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
@@ -337,19 +337,33 @@ func (f *blocksFetcher) handleRequest(ctx context.Context, start primitives.Slot
 		return response
 	}
 
-	if coreTime.PeerDASIsActive(start) {
-		response.err = f.fetchDataColumnsFromPeers(ctx, response.bwb, nil, delay, batchSize)
+	// Compute the first electra slot.
+	firstElectraSlot, err := slots.EpochStart(params.BeaconConfig().ElectraForkEpoch)
+	if err != nil {
+		firstElectraSlot = math.MaxUint64
+	}
+
+	// Find the first block with a slot greater than or equal to the first electra slot.
+	// (Blocks are sorted by slot)
+	firstElectraIndex := sort.Search(len(response.bwb), func(i int) bool {
+		return response.bwb[i].Block.Block().Slot() >= firstElectraSlot
+	})
+
+	preElectraBwbs := response.bwb[:firstElectraIndex]
+	postElectraBwbs := response.bwb[firstElectraIndex:]
+
+	// Fetch blobs.
+	if err := f.fetchBlobsFromPeer(ctx, preElectraBwbs, response.pid, peers); err != nil {
+		response.err = err
 		return response
 	}
 
-	if err := f.fetchBlobsFromPeer(ctx, response.bwb, response.pid, peers); err != nil {
-		response.err = err
-	}
-
+	// Fetch data columns.
+	response.err = f.fetchDataColumnsFromPeers(ctx, postElectraBwbs, nil, delay, batchSize)
 	return response
 }
 
-// fetchBlocksFromPeer fetches blocks from a single randomly selected peer.
+// fetchBlocksFromPeer fetches blocks from a single randomly selected peer, sorted by slot.
 func (f *blocksFetcher) fetchBlocksFromPeer(
 	ctx context.Context,
 	start primitives.Slot, count uint64,
@@ -369,20 +383,19 @@ func (f *blocksFetcher) fetchBlocksFromPeer(
 	// peers are dialed first.
 	peers = append(bestPeers, peers...)
 	peers = dedupPeers(peers)
-	for i := 0; i < len(peers); i++ {
-		p := peers[i]
-		blocks, err := f.requestBlocks(ctx, req, p)
+	for _, peer := range peers {
+		blocks, err := f.requestBlocks(ctx, req, peer)
 		if err != nil {
-			log.WithField("peer", p).WithError(err).Debug("Could not request blocks by range from peer")
+			log.WithField("peer", peer).WithError(err).Debug("Could not request blocks by range from peer")
 			continue
 		}
-		f.p2p.Peers().Scorers().BlockProviderScorer().Touch(p)
+		f.p2p.Peers().Scorers().BlockProviderScorer().Touch(peer)
 		robs, err := sortedBlockWithVerifiedBlobSlice(blocks)
 		if err != nil {
-			log.WithField("peer", p).WithError(err).Debug("invalid BeaconBlocksByRange response")
+			log.WithField("peer", peer).WithError(err).Debug("invalid BeaconBlocksByRange response")
 			continue
 		}
-		return robs, p, err
+		return robs, peer, err
 	}
 	return nil, "", errNoPeersAvailable
 }
@@ -565,6 +578,10 @@ func missingCommitError(root [32]byte, slot primitives.Slot, missing [][]byte) e
 // fetchBlobsFromPeer fetches blocks from a single randomly selected peer.
 // This function mutates the input `bwb` argument.
 func (f *blocksFetcher) fetchBlobsFromPeer(ctx context.Context, bwb []blocks.BlockWithROBlobs, pid peer.ID, peers []peer.ID) error {
+	if len(bwb) == 0 {
+		return nil
+	}
+
 	ctx, span := trace.StartSpan(ctx, "initialsync.fetchBlobsFromPeer")
 	defer span.End()
 	if slots.ToEpoch(f.clock.CurrentSlot()) < params.BeaconConfig().DenebForkEpoch {
@@ -936,7 +953,7 @@ type bwbsMissingColumns struct {
 // fetchDataColumnsFromPeers looks at the blocks in `bwb` and retrieves all
 // data columns for with the block has blob commitments, and for which our store is missing data columns
 // we should custody.
-// This function mutates `bwb` by adding the retrieved data columns.
+// This function mutates `bwbs` by adding the retrieved data columns.
 // Prerequisite: bwb is sorted by slot.
 func (f *blocksFetcher) fetchDataColumnsFromPeers(
 	ctx context.Context,
@@ -950,6 +967,10 @@ func (f *blocksFetcher) fetchDataColumnsFromPeers(
 		maxIdentifier   = 1_000 // Max identifier for the request.
 		maxAllowedStall = 5     // Number of trials before giving up.
 	)
+
+	if len(bwbs) == 0 {
+		return nil
+	}
 
 	// Generate random identifier.
 	identifier := f.rand.Intn(maxIdentifier)
