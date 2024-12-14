@@ -553,6 +553,12 @@ func TestStore_LightClientBootstrap_CanSaveRetrieve(t *testing.T) {
 	db := setupDB(t)
 	ctx := context.Background()
 
+	t.Run("Nil", func(t *testing.T) {
+		retrievedBootstrap, err := db.LightClientBootstrap(ctx, []byte("NilBlockRoot"))
+		require.NoError(t, err)
+		require.IsNil(t, retrievedBootstrap)
+	})
+
 	t.Run("Altair", func(t *testing.T) {
 		bootstrap, err := createDefaultLightClientBootstrap(primitives.Slot(uint64(params.BeaconConfig().AltairForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch)))
 		require.NoError(t, err)
