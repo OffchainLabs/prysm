@@ -1,6 +1,7 @@
 package blockchain
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"time"
@@ -238,6 +239,11 @@ func (s *Service) processLightClientFinalityUpdate(
 		if err != nil {
 			finalizedBlock = nil
 		}
+	}
+
+	// Check if the finalized checkpoint has changed
+	if finalizedCheckPoint == nil || bytes.Equal(finalizedCheckPoint.GetRoot(), postState.FinalizedCheckpoint().Root) {
+		return nil
 	}
 
 	update, err := lightclient.NewLightClientFinalityUpdateFromBeaconState(
