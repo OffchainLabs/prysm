@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/pruner"
 	"net"
 	"net/http"
 	"os"
@@ -16,6 +17,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
@@ -215,6 +217,13 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 	// Do not store the finalized state as it has been provided to the respective services during
 	// their initialization.
 	beacon.finalizedStateAtStartUp = nil
+
+	prunerFlag := cliCtx.Bool(flags.BeaconDBPruning.Name)
+	if prunerFlag {
+		if err = beacon.registerPrunerService(cliCtx); err != nil {
+			return nil, err
+		}
+	}
 
 	return beacon, nil
 }
@@ -1087,6 +1096,18 @@ func (b *BeaconNode) registerBuilderService(cliCtx *cli.Context) error {
 		return err
 	}
 	return b.services.RegisterService(svc)
+}
+
+func (b *BeaconNode) registerPrunerService(cliCtx *cli.Context) error {
+	var chainService *blockchain.Service
+	if err := b.services.FetchService(&chainService); err != nil {
+		return err
+	}
+
+	genesisTimeUnix := params.BeaconConfig().MinGenesisTime + params.BeaconConfig().GenesisDelay
+
+	p := pruner.New(cliCtx.Context, b.db, chainService, time.Unix(int64(genesisTimeUnix), 0))
+	return b.services.RegisterService(p)
 }
 
 func (b *BeaconNode) RegisterBackfillService(cliCtx *cli.Context, bfs *backfill.Store) error {

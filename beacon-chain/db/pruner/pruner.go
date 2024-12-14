@@ -17,8 +17,9 @@ import (
 
 var log = logrus.WithField("prefix", "db-pruner")
 
-// WeakSubjectivityPruner defines a service that prunes beacon chain DB based on weak subjectivity period.
-type WeakSubjectivityPruner struct {
+// Pruner defines a service that prunes beacon chain DB based on weak subjectivity period.
+type Pruner struct {
+	ctx          context.Context
 	db           db.Database
 	headFetcher  blockchain.HeadFetcher
 	genesisTime  time.Time
@@ -26,8 +27,9 @@ type WeakSubjectivityPruner struct {
 	done         chan struct{}
 }
 
-func New(db iface.Database, headFetcher blockchain.HeadFetcher, genesisTime time.Time) *WeakSubjectivityPruner {
-	return &WeakSubjectivityPruner{
+func New(ctx context.Context, db iface.Database, headFetcher blockchain.HeadFetcher, genesisTime time.Time) *Pruner {
+	return &Pruner{
+		ctx:         ctx,
 		db:          db,
 		headFetcher: headFetcher,
 		genesisTime: genesisTime,
@@ -35,33 +37,39 @@ func New(db iface.Database, headFetcher blockchain.HeadFetcher, genesisTime time
 	}
 }
 
-func (p *WeakSubjectivityPruner) Start(ctx context.Context) {
+func (p *Pruner) Start() {
 	log.Info("Starting Beacon DB pruner service")
-	go p.run(ctx)
+	go p.run()
 }
 
-func (p *WeakSubjectivityPruner) Stop() {
+func (p *Pruner) Stop() error {
 	log.Info("Stopping Beacon DB pruner service")
 	close(p.done)
+	return nil
 }
 
-func (p *WeakSubjectivityPruner) run(ctx context.Context) {
+func (p *Pruner) Status() error {
+	return nil
+}
+
+func (p *Pruner) run() {
 	ticker := slots.NewSlotTicker(p.genesisTime, params.BeaconConfig().SecondsPerSlot)
 	defer ticker.Done()
 
 	for {
 		select {
-		case <-ctx.Done():
+		case <-p.ctx.Done():
 			return
 		case <-p.done:
 			return
 		case slot := <-ticker.C():
 			// Prune at the start of every epoch.
+			// TODO: prune at the middle of epoch.
 			if !slots.IsEpochStart(slot) {
 				continue
 			}
 
-			if err := p.prune(ctx); err != nil {
+			if err := p.prune(); err != nil {
 				log.WithError(err).Error("Failed to prune database")
 			}
 		}
@@ -69,22 +77,22 @@ func (p *WeakSubjectivityPruner) run(ctx context.Context) {
 }
 
 // prune deletes historical chain data beyond the weak subjectivity period.
-func (p *WeakSubjectivityPruner) prune(ctx context.Context) error {
+func (p *Pruner) prune() error {
 	// Get current finalized epoch.
-	finalized, err := p.db.FinalizedCheckpoint(ctx)
+	finalized, err := p.db.FinalizedCheckpoint(p.ctx)
 	if err != nil {
 		return errors.Wrap(err, "could not get finalized checkpoint")
 	}
 	finalizedEpoch := finalized.Epoch
 
 	// Get head state to compute weak subjectivity period.
-	headState, err := p.headFetcher.HeadState(ctx)
+	headState, err := p.headFetcher.HeadState(p.ctx)
 	if err != nil {
 		return errors.Wrap(err, "could not get head state")
 	}
 
 	// Calculate weak subjectivity period.
-	wsPeriod, err := helpers.ComputeWeakSubjectivityPeriod(ctx, headState, params.BeaconConfig())
+	wsPeriod, err := helpers.ComputeWeakSubjectivityPeriod(p.ctx, headState, params.BeaconConfig())
 	if err != nil {
 		return errors.Wrap(err, "could not compute weak subjectivity period")
 	}
@@ -113,7 +121,7 @@ func (p *WeakSubjectivityPruner) prune(ctx context.Context) error {
 		return errors.Wrap(err, "could not get epoch start slot")
 	}
 
-	if err = p.db.DeleteBeforeSlot(ctx, pruneSlot); err != nil {
+	if err = p.db.DeleteBeforeSlot(p.ctx, pruneSlot); err != nil {
 		return errors.Wrap(err, "could not delete before slot")
 	}
 	// Update pruning checkpoint.
