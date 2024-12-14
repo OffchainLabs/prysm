@@ -849,6 +849,53 @@ func EmptyExecutionPayload(v int) (proto.Message, error) {
 	}
 }
 
+func EmptyExecutionPayloadHeader(v int) (proto.Message, error) {
+	switch v {
+	case version.Bellatrix:
+		return &pb.ExecutionPayloadHeader{
+			ParentHash:    make([]byte, fieldparams.RootLength),
+			FeeRecipient:  make([]byte, fieldparams.FeeRecipientLength),
+			StateRoot:     make([]byte, fieldparams.RootLength),
+			ReceiptsRoot:  make([]byte, fieldparams.RootLength),
+			LogsBloom:     make([]byte, fieldparams.LogsBloomLength),
+			PrevRandao:    make([]byte, fieldparams.RootLength),
+			ExtraData:     make([]byte, 0),
+			BaseFeePerGas: make([]byte, fieldparams.RootLength),
+			BlockHash:     make([]byte, fieldparams.RootLength),
+		}, nil
+	case version.Capella:
+		return &pb.ExecutionPayloadHeaderCapella{
+			ParentHash:       make([]byte, fieldparams.RootLength),
+			FeeRecipient:     make([]byte, fieldparams.FeeRecipientLength),
+			StateRoot:        make([]byte, fieldparams.RootLength),
+			ReceiptsRoot:     make([]byte, fieldparams.RootLength),
+			LogsBloom:        make([]byte, fieldparams.LogsBloomLength),
+			PrevRandao:       make([]byte, fieldparams.RootLength),
+			ExtraData:        make([]byte, 0),
+			BaseFeePerGas:    make([]byte, fieldparams.RootLength),
+			BlockHash:        make([]byte, fieldparams.RootLength),
+			TransactionsRoot: make([]byte, fieldparams.RootLength),
+			WithdrawalsRoot:  make([]byte, fieldparams.RootLength),
+		}, nil
+	case version.Deneb, version.Electra:
+		return &pb.ExecutionPayloadHeaderDeneb{
+			ParentHash:       make([]byte, fieldparams.RootLength),
+			FeeRecipient:     make([]byte, fieldparams.FeeRecipientLength),
+			StateRoot:        make([]byte, fieldparams.RootLength),
+			ReceiptsRoot:     make([]byte, fieldparams.RootLength),
+			LogsBloom:        make([]byte, fieldparams.LogsBloomLength),
+			PrevRandao:       make([]byte, fieldparams.RootLength),
+			ExtraData:        make([]byte, 0),
+			BaseFeePerGas:    make([]byte, fieldparams.RootLength),
+			BlockHash:        make([]byte, fieldparams.RootLength),
+			TransactionsRoot: make([]byte, fieldparams.RootLength),
+			WithdrawalsRoot:  make([]byte, fieldparams.RootLength),
+		}, nil
+	default:
+		return nil, errors.Wrapf(ErrUnsupportedVersion, "version=%s", version.String(v))
+	}
+}
+
 func toBlockNumArg(number *big.Int) string {
 	if number == nil {
 		return "latest"

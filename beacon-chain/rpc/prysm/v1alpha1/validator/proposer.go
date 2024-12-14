@@ -237,7 +237,12 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 		// There's no reason to try to get a builder bid if local override is true.
 		var builderBid builderapi.Bid
 		if !(local.OverrideBuilder || skipMevBoost) {
-			builderBid, err = vs.getBuilderPayloadAndBlobs(ctx, sBlk.Block().Slot(), sBlk.Block().ProposerIndex())
+			latestHeader, err := head.LatestExecutionPayloadHeader()
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "Could not get latest execution payload header: %v", err)
+			}
+			parentGasLimit := latestHeader.GasLimit()
+			builderBid, err = vs.getBuilderPayloadAndBlobs(ctx, sBlk.Block().Slot(), sBlk.Block().ProposerIndex(), parentGasLimit)
 			if err != nil {
 				builderGetPayloadMissCount.Inc()
 				log.WithError(err).Error("Could not get builder payload")
