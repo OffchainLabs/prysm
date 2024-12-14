@@ -4,7 +4,7 @@ import (
 	"sync"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/attestations/forkchoice"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/attestations/attmap"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
@@ -38,14 +38,14 @@ type attGroup struct {
 type AttestationCache struct {
 	atts map[attestation.Id]*attGroup
 	sync.RWMutex
-	forkchoiceAtts *forkchoice.Attestations
+	forkchoiceAtts *attmap.Attestations
 }
 
 // NewAttestationCache --
 func NewAttestationCache() *AttestationCache {
 	return &AttestationCache{
 		atts:           make(map[attestation.Id]*attGroup),
-		forkchoiceAtts: forkchoice.New(),
+		forkchoiceAtts: attmap.New(),
 	}
 }
 
@@ -220,17 +220,17 @@ func (c *AttestationCache) AggregateIsRedundant(att ethpb.Att) (bool, error) {
 
 // SaveForkchoiceAttestations saves forkchoice attestations.
 func (c *AttestationCache) SaveForkchoiceAttestations(att []ethpb.Att) error {
-	return c.forkchoiceAtts.SaveForkchoiceAttestations(att)
+	return c.forkchoiceAtts.SaveMany(att)
 }
 
 // ForkchoiceAttestations returns all forkchoice attestations.
 func (c *AttestationCache) ForkchoiceAttestations() []ethpb.Att {
-	return c.forkchoiceAtts.ForkchoiceAttestations()
+	return c.forkchoiceAtts.GetAll()
 }
 
 // DeleteForkchoiceAttestation deletes a forkchoice attestation.
 func (c *AttestationCache) DeleteForkchoiceAttestation(att ethpb.Att) error {
-	return c.forkchoiceAtts.DeleteForkchoiceAttestation(att)
+	return c.forkchoiceAtts.Delete(att)
 }
 
 // GetBySlotAndCommitteeIndex --

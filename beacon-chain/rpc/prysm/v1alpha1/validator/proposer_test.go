@@ -2580,7 +2580,6 @@ func TestProposer_FilterAttestation(t *testing.T) {
 
 	tests := []struct {
 		name         string
-		wantedErr    string
 		inputAtts    func() []ethpb.Att
 		expectedAtts func(inputAtts []ethpb.Att) []ethpb.Att
 	}{
@@ -2657,13 +2656,7 @@ func TestProposer_FilterAttestation(t *testing.T) {
 			}
 			atts := tt.inputAtts()
 			received := proposerServer.validateAndDeleteAttsInPool(context.Background(), st, atts)
-			if tt.wantedErr != "" {
-				assert.ErrorContains(t, tt.wantedErr, err)
-				assert.Equal(t, nil, received)
-			} else {
-				assert.NoError(t, err)
-				assert.DeepEqual(t, tt.expectedAtts(atts), received)
-			}
+			assert.DeepEqual(t, tt.expectedAtts(atts), received)
 		})
 	}
 }

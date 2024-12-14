@@ -1,4 +1,4 @@
-package forkchoice
+package attmap
 
 import (
 	"sync"
@@ -19,8 +19,8 @@ func New() *Attestations {
 	return &Attestations{atts: make(map[attestation.Id]ethpb.Att)}
 }
 
-// SaveForkchoiceAttestation saves a forkchoice attestation.
-func (a *Attestations) SaveForkchoiceAttestation(att ethpb.Att) error {
+// Save --
+func (a *Attestations) Save(att ethpb.Att) error {
 	if att == nil || att.IsNil() {
 		return nil
 	}
@@ -37,10 +37,10 @@ func (a *Attestations) SaveForkchoiceAttestation(att ethpb.Att) error {
 	return nil
 }
 
-// SaveForkchoiceAttestations saves a list of forkchoice attestations.
-func (a *Attestations) SaveForkchoiceAttestations(atts []ethpb.Att) error {
+// SaveMany --
+func (a *Attestations) SaveMany(atts []ethpb.Att) error {
 	for _, att := range atts {
-		if err := a.SaveForkchoiceAttestation(att); err != nil {
+		if err := a.Save(att); err != nil {
 			return err
 		}
 	}
@@ -48,8 +48,8 @@ func (a *Attestations) SaveForkchoiceAttestations(atts []ethpb.Att) error {
 	return nil
 }
 
-// ForkchoiceAttestations returns all forkchoice attestations.
-func (a *Attestations) ForkchoiceAttestations() []ethpb.Att {
+// GetAll --
+func (a *Attestations) GetAll() []ethpb.Att {
 	a.RLock()
 	defer a.RUnlock()
 
@@ -63,8 +63,8 @@ func (a *Attestations) ForkchoiceAttestations() []ethpb.Att {
 	return atts
 }
 
-// DeleteForkchoiceAttestation deletes a forkchoice attestation.
-func (a *Attestations) DeleteForkchoiceAttestation(att ethpb.Att) error {
+// Delete --
+func (a *Attestations) Delete(att ethpb.Att) error {
 	if att == nil || att.IsNil() {
 		return nil
 	}
@@ -81,8 +81,8 @@ func (a *Attestations) DeleteForkchoiceAttestation(att ethpb.Att) error {
 	return nil
 }
 
-// ForkchoiceAttestationCount returns the number of forkchoice attestation keys.
-func (a *Attestations) ForkchoiceAttestationCount() int {
+// Count --
+func (a *Attestations) Count() int {
 	a.RLock()
 	defer a.RUnlock()
 	return len(a.atts)

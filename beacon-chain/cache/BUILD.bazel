@@ -37,7 +37,7 @@ go_library(
     ],
     deps = [
         "//beacon-chain/forkchoice/types:go_default_library",
-        "//beacon-chain/operations/attestations/forkchoice:go_default_library",
+        "//beacon-chain/operations/attestations/attmap:go_default_library",
         "//beacon-chain/state:go_default_library",
         "//cache/lru:go_default_library",
         "//config/fieldparams:go_default_library",
