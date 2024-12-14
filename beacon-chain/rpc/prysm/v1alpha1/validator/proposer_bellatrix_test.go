@@ -94,14 +94,14 @@ func TestServer_setExecutionData(t *testing.T) {
 		ForkchoiceFetcher:      &blockchainTest.ChainService{},
 		TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
 	}
-
+	gasLimit := uint64(30000000)
 	t.Run("No builder configured. Use local block", func(t *testing.T) {
 		blk, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlockCapella())
 		require.NoError(t, err)
 		b := blk.Block()
 		res, err := vs.getLocalPayload(ctx, b, capellaTransitionState)
 		require.NoError(t, err)
-		builderBid, err := vs.getBuilderPayloadAndBlobs(ctx, b.Slot(), b.ProposerIndex())
+		builderBid, err := vs.getBuilderPayloadAndBlobs(ctx, b.Slot(), b.ProposerIndex(), gasLimit)
 		require.NoError(t, err)
 		require.IsNil(t, builderBid)
 		_, bundle, err := setExecutionData(context.Background(), blk, res, builderBid, defaultBuilderBoostFactor)
@@ -115,7 +115,11 @@ func TestServer_setExecutionData(t *testing.T) {
 		blk, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlockCapella())
 		require.NoError(t, err)
 		require.NoError(t, vs.BeaconDB.SaveRegistrationsByValidatorIDs(ctx, []primitives.ValidatorIndex{blk.Block().ProposerIndex()},
-			[]*ethpb.ValidatorRegistrationV1{{FeeRecipient: make([]byte, fieldparams.FeeRecipientLength), Timestamp: uint64(time.Now().Unix()), Pubkey: make([]byte, fieldparams.BLSPubkeyLength)}}))
+			[]*ethpb.ValidatorRegistrationV1{{
+				FeeRecipient: make([]byte, fieldparams.FeeRecipientLength),
+				Timestamp:    uint64(time.Now().Unix()),
+				GasLimit:     gasLimit,
+				Pubkey:       make([]byte, fieldparams.BLSPubkeyLength)}}))
 		ti, err := slots.ToTime(uint64(time.Now().Unix()), 0)
 		require.NoError(t, err)
 		sk, err := bls.RandKey()
@@ -135,6 +139,7 @@ func TestServer_setExecutionData(t *testing.T) {
 				BlockHash:        make([]byte, fieldparams.RootLength),
 				TransactionsRoot: bytesutil.PadTo([]byte{1}, fieldparams.RootLength),
 				WithdrawalsRoot:  make([]byte, fieldparams.RootLength),
+				GasLimit:         gasLimit,
 			},
 			Pubkey: sk.PublicKey().Marshal(),
 			Value:  bytesutil.PadTo([]byte{1}, 32),
@@ -164,7 +169,7 @@ func TestServer_setExecutionData(t *testing.T) {
 
 		res, err := vs.getLocalPayload(ctx, b, capellaTransitionState)
 		require.NoError(t, err)
-		builderBid, err := vs.getBuilderPayloadAndBlobs(ctx, b.Slot(), b.ProposerIndex())
+		builderBid, err := vs.getBuilderPayloadAndBlobs(ctx, b.Slot(), b.ProposerIndex(), gasLimit)
 		require.NoError(t, err)
 		_, err = builderBid.Header()
 		require.NoError(t, err)
@@ -184,7 +189,11 @@ func TestServer_setExecutionData(t *testing.T) {
 		blk, err := blocks.NewSignedBeaconBlock(util.NewBlindedBeaconBlockCapella())
 		require.NoError(t, err)
 		require.NoError(t, vs.BeaconDB.SaveRegistrationsByValidatorIDs(ctx, []primitives.ValidatorIndex{blk.Block().ProposerIndex()},
-			[]*ethpb.ValidatorRegistrationV1{{FeeRecipient: make([]byte, fieldparams.FeeRecipientLength), Timestamp: uint64(time.Now().Unix()), Pubkey: make([]byte, fieldparams.BLSPubkeyLength)}}))
+			[]*ethpb.ValidatorRegistrationV1{{
+				FeeRecipient: make([]byte, fieldparams.FeeRecipientLength),
+				Timestamp:    uint64(time.Now().Unix()),
+				GasLimit:     gasLimit,
+				Pubkey:       make([]byte, fieldparams.BLSPubkeyLength)}}))
 		ti, err := slots.ToTime(uint64(time.Now().Unix()), 0)
 		require.NoError(t, err)
 		sk, err := bls.RandKey()
@@ -207,6 +216,7 @@ func TestServer_setExecutionData(t *testing.T) {
 				BlockHash:        make([]byte, fieldparams.RootLength),
 				TransactionsRoot: bytesutil.PadTo([]byte{1}, fieldparams.RootLength),
 				WithdrawalsRoot:  wr[:],
+				GasLimit:         gasLimit,
 			},
 			Pubkey: sk.PublicKey().Marshal(),
 			Value:  bytesutil.PadTo(builderValue, 32),
@@ -236,7 +246,7 @@ func TestServer_setExecutionData(t *testing.T) {
 		b := blk.Block()
 		res, err := vs.getLocalPayload(ctx, b, capellaTransitionState)
 		require.NoError(t, err)
-		builderBid, err := vs.getBuilderPayloadAndBlobs(ctx, b.Slot(), b.ProposerIndex())
+		builderBid, err := vs.getBuilderPayloadAndBlobs(ctx, b.Slot(), b.ProposerIndex(), gasLimit)
 		require.NoError(t, err)
 		_, err = builderBid.Header()
 		require.NoError(t, err)
@@ -256,7 +266,11 @@ func TestServer_setExecutionData(t *testing.T) {
 		blk, err := blocks.NewSignedBeaconBlock(util.NewBlindedBeaconBlockCapella())
 		require.NoError(t, err)
 		require.NoError(t, vs.BeaconDB.SaveRegistrationsByValidatorIDs(ctx, []primitives.ValidatorIndex{blk.Block().ProposerIndex()},
-			[]*ethpb.ValidatorRegistrationV1{{FeeRecipient: make([]byte, fieldparams.FeeRecipientLength), Timestamp: uint64(time.Now().Unix()), Pubkey: make([]byte, fieldparams.BLSPubkeyLength)}}))
+			[]*ethpb.ValidatorRegistrationV1{{
+				FeeRecipient: make([]byte, fieldparams.FeeRecipientLength),
+				Timestamp:    uint64(time.Now().Unix()),
+				GasLimit:     gasLimit,
+				Pubkey:       make([]byte, fieldparams.BLSPubkeyLength)}}))
 		ti, err := slots.ToTime(uint64(time.Now().Unix()), 0)
 		require.NoError(t, err)
 		sk, err := bls.RandKey()
@@ -278,6 +292,7 @@ func TestServer_setExecutionData(t *testing.T) {
 				Timestamp:        uint64(ti.Unix()),
 				BlockNumber:      2,
 				WithdrawalsRoot:  wr[:],
+				GasLimit:         gasLimit,
 			},
 			Pubkey: sk.PublicKey().Marshal(),
 			Value:  bytesutil.PadTo(builderValue, 32),
@@ -307,7 +322,7 @@ func TestServer_setExecutionData(t *testing.T) {
 		b := blk.Block()
 		res, err := vs.getLocalPayload(ctx, b, capellaTransitionState)
 		require.NoError(t, err)
-		builderBid, err := vs.getBuilderPayloadAndBlobs(ctx, b.Slot(), b.ProposerIndex())
+		builderBid, err := vs.getBuilderPayloadAndBlobs(ctx, b.Slot(), b.ProposerIndex(), gasLimit)
 		require.NoError(t, err)
 		_, err = builderBid.Header()
 		require.NoError(t, err)
@@ -327,7 +342,11 @@ func TestServer_setExecutionData(t *testing.T) {
 		blk, err := blocks.NewSignedBeaconBlock(util.NewBlindedBeaconBlockCapella())
 		require.NoError(t, err)
 		require.NoError(t, vs.BeaconDB.SaveRegistrationsByValidatorIDs(ctx, []primitives.ValidatorIndex{blk.Block().ProposerIndex()},
-			[]*ethpb.ValidatorRegistrationV1{{FeeRecipient: make([]byte, fieldparams.FeeRecipientLength), Timestamp: uint64(time.Now().Unix()), Pubkey: make([]byte, fieldparams.BLSPubkeyLength)}}))
+			[]*ethpb.ValidatorRegistrationV1{{
+				FeeRecipient: make([]byte, fieldparams.FeeRecipientLength),
+				Timestamp:    uint64(time.Now().Unix()),
+				GasLimit:     gasLimit,
+				Pubkey:       make([]byte, fieldparams.BLSPubkeyLength)}}))
 		ti, err := slots.ToTime(uint64(time.Now().Unix()), 0)
 		require.NoError(t, err)
 		sk, err := bls.RandKey()
@@ -349,6 +368,7 @@ func TestServer_setExecutionData(t *testing.T) {
 				Timestamp:        uint64(ti.Unix()),
 				BlockNumber:      2,
 				WithdrawalsRoot:  wr[:],
+				GasLimit:         gasLimit,
 			},
 			Pubkey: sk.PublicKey().Marshal(),
 			Value:  bytesutil.PadTo(builderValue, 32),
@@ -378,7 +398,7 @@ func TestServer_setExecutionData(t *testing.T) {
 		b := blk.Block()
 		res, err := vs.getLocalPayload(ctx, b, capellaTransitionState)
 		require.NoError(t, err)
-		builderBid, err := vs.getBuilderPayloadAndBlobs(ctx, b.Slot(), b.ProposerIndex())
+		builderBid, err := vs.getBuilderPayloadAndBlobs(ctx, b.Slot(), b.ProposerIndex(), gasLimit)
 		require.NoError(t, err)
 		_, err = builderBid.Header()
 		require.NoError(t, err)
@@ -404,7 +424,7 @@ func TestServer_setExecutionData(t *testing.T) {
 		b := blk.Block()
 		res, err := vs.getLocalPayload(ctx, b, capellaTransitionState)
 		require.NoError(t, err)
-		builderBid, err := vs.getBuilderPayloadAndBlobs(ctx, b.Slot(), b.ProposerIndex())
+		builderBid, err := vs.getBuilderPayloadAndBlobs(ctx, b.Slot(), b.ProposerIndex(), gasLimit)
 		require.NoError(t, err)
 		_, err = builderBid.Header()
 		require.NoError(t, err)
@@ -436,7 +456,7 @@ func TestServer_setExecutionData(t *testing.T) {
 		b := blk.Block()
 		res, err := vs.getLocalPayload(ctx, b, capellaTransitionState)
 		require.NoError(t, err)
-		builderBid, err := vs.getBuilderPayloadAndBlobs(ctx, b.Slot(), b.ProposerIndex())
+		builderBid, err := vs.getBuilderPayloadAndBlobs(ctx, b.Slot(), b.ProposerIndex(), gasLimit)
 		require.NoError(t, err)
 		_, err = builderBid.Header()
 		require.NoError(t, err)
@@ -471,7 +491,7 @@ func TestServer_setExecutionData(t *testing.T) {
 		b := blk.Block()
 		res, err := vs.getLocalPayload(ctx, b, capellaTransitionState)
 		require.NoError(t, err)
-		builderBid, err := vs.getBuilderPayloadAndBlobs(ctx, b.Slot(), b.ProposerIndex())
+		builderBid, err := vs.getBuilderPayloadAndBlobs(ctx, b.Slot(), b.ProposerIndex(), gasLimit)
 		require.NoError(t, err)
 		builderKzgCommitments, err := builderBid.BlobKzgCommitments()
 		if builderBid.Version() >= version.Deneb {
@@ -503,7 +523,7 @@ func TestServer_setExecutionData(t *testing.T) {
 		b := blk.Block()
 		res, err := vs.getLocalPayload(ctx, b, capellaTransitionState)
 		require.NoError(t, err)
-		builderBid, err := vs.getBuilderPayloadAndBlobs(ctx, b.Slot(), b.ProposerIndex())
+		builderBid, err := vs.getBuilderPayloadAndBlobs(ctx, b.Slot(), b.ProposerIndex(), gasLimit)
 		require.ErrorIs(t, consensus_types.ErrNilObjectWrapped, err) // Builder returns fault. Use local block
 		require.IsNil(t, builderBid)
 		_, bundle, err := setExecutionData(context.Background(), blk, res, nil, defaultBuilderBoostFactor)
@@ -578,6 +598,7 @@ func TestServer_setExecutionData(t *testing.T) {
 				WithdrawalsRoot:  wr[:],
 				BlobGasUsed:      123,
 				ExcessBlobGas:    456,
+				GasLimit:         gasLimit,
 			},
 			Pubkey:             sk.PublicKey().Marshal(),
 			Value:              bytesutil.PadTo(builderValue, 32),
@@ -599,7 +620,11 @@ func TestServer_setExecutionData(t *testing.T) {
 			Cfg:           &builderTest.Config{BeaconDB: beaconDB},
 		}
 		require.NoError(t, beaconDB.SaveRegistrationsByValidatorIDs(ctx, []primitives.ValidatorIndex{blk.Block().ProposerIndex()},
-			[]*ethpb.ValidatorRegistrationV1{{FeeRecipient: make([]byte, fieldparams.FeeRecipientLength), Timestamp: uint64(time.Now().Unix()), Pubkey: make([]byte, fieldparams.BLSPubkeyLength)}}))
+			[]*ethpb.ValidatorRegistrationV1{{
+				FeeRecipient: make([]byte, fieldparams.FeeRecipientLength),
+				Timestamp:    uint64(time.Now().Unix()),
+				GasLimit:     gasLimit,
+				Pubkey:       make([]byte, fieldparams.BLSPubkeyLength)}}))
 
 		wb, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlockDeneb())
 		require.NoError(t, err)
@@ -619,7 +644,7 @@ func TestServer_setExecutionData(t *testing.T) {
 		require.NoError(t, err)
 		blk.SetSlot(primitives.Slot(params.BeaconConfig().DenebForkEpoch) * params.BeaconConfig().SlotsPerEpoch)
 		require.NoError(t, err)
-		builderBid, err := vs.getBuilderPayloadAndBlobs(ctx, blk.Block().Slot(), blk.Block().ProposerIndex())
+		builderBid, err := vs.getBuilderPayloadAndBlobs(ctx, blk.Block().Slot(), blk.Block().ProposerIndex(), gasLimit)
 		require.NoError(t, err)
 		builderPayload, err := builderBid.Header()
 		require.NoError(t, err)
@@ -660,6 +685,8 @@ func TestServer_getPayloadHeader(t *testing.T) {
 
 	sk, err := bls.RandKey()
 	require.NoError(t, err)
+
+	gasLimit := uint64(30000000)
 	bid := &ethpb.BuilderBid{
 		Header: &v1.ExecutionPayloadHeader{
 			FeeRecipient:     make([]byte, fieldparams.FeeRecipientLength),
@@ -672,6 +699,7 @@ func TestServer_getPayloadHeader(t *testing.T) {
 			TransactionsRoot: bytesutil.PadTo([]byte{1}, fieldparams.RootLength),
 			ParentHash:       params.BeaconConfig().ZeroHash[:],
 			Timestamp:        uint64(ti.Unix()),
+			GasLimit:         gasLimit,
 		},
 		Pubkey: sk.PublicKey().Marshal(),
 		Value:  bytesutil.PadTo([]byte{1, 2, 3}, 32),
@@ -709,6 +737,7 @@ func TestServer_getPayloadHeader(t *testing.T) {
 			ParentHash:       params.BeaconConfig().ZeroHash[:],
 			Timestamp:        uint64(tiCapella.Unix()),
 			WithdrawalsRoot:  wr[:],
+			GasLimit:         gasLimit,
 		},
 		Pubkey: sk.PublicKey().Marshal(),
 		Value:  bytesutil.PadTo([]byte{1, 2, 3}, 32),
@@ -720,7 +749,29 @@ func TestServer_getPayloadHeader(t *testing.T) {
 		Signature: sk.Sign(srCapella[:]).Marshal(),
 	}
 
-	require.NoError(t, err)
+	incorrectGasLimitBid := &ethpb.BuilderBid{
+		Header: &v1.ExecutionPayloadHeader{
+			FeeRecipient:     make([]byte, fieldparams.FeeRecipientLength),
+			StateRoot:        make([]byte, fieldparams.RootLength),
+			ReceiptsRoot:     make([]byte, fieldparams.RootLength),
+			LogsBloom:        make([]byte, fieldparams.LogsBloomLength),
+			PrevRandao:       make([]byte, fieldparams.RootLength),
+			BaseFeePerGas:    make([]byte, fieldparams.RootLength),
+			BlockHash:        make([]byte, fieldparams.RootLength),
+			TransactionsRoot: bytesutil.PadTo([]byte{1}, fieldparams.RootLength),
+			ParentHash:       params.BeaconConfig().ZeroHash[:],
+			Timestamp:        uint64(tiCapella.Unix()),
+			GasLimit:         31000000,
+		},
+		Pubkey: sk.PublicKey().Marshal(),
+		Value:  bytesutil.PadTo([]byte{1, 2, 3}, 32),
+	}
+	signedIncorrectGasLimitBid :=
+		&ethpb.SignedBuilderBid{
+			Message:   incorrectGasLimitBid,
+			Signature: sk.Sign(srCapella[:]).Marshal(),
+		}
+
 	tests := []struct {
 		name                  string
 		head                  interfaces.ReadOnlySignedBeaconBlock
@@ -847,15 +898,39 @@ func TestServer_getPayloadHeader(t *testing.T) {
 			},
 			returnedHeaderCapella: bidCapella.Header,
 		},
+		{
+			name: "incorrect gas limit",
+			mock: &builderTest.MockBuilderService{
+				Bid: signedIncorrectGasLimitBid,
+			},
+			fetcher: &blockchainTest.ChainService{
+				Block: func() interfaces.ReadOnlySignedBeaconBlock {
+					wb, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlockBellatrix())
+					require.NoError(t, err)
+					wb.SetSlot(primitives.Slot(params.BeaconConfig().BellatrixForkEpoch) * params.BeaconConfig().SlotsPerEpoch)
+					return wb
+				}(),
+			},
+			err: "incorrect header gas limit 30000000 != 31000000",
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			vs := &Server{BlockBuilder: tc.mock, HeadFetcher: tc.fetcher, TimeFetcher: &blockchainTest.ChainService{
+			vs := &Server{BeaconDB: dbTest.SetupDB(t), BlockBuilder: tc.mock, HeadFetcher: tc.fetcher, TimeFetcher: &blockchainTest.ChainService{
 				Genesis: genesis,
 			}}
+			regCache := cache.NewRegistrationCache()
+			regCache.UpdateIndexToRegisteredMap(context.Background(), map[primitives.ValidatorIndex]*ethpb.ValidatorRegistrationV1{
+				0: {
+					GasLimit:     gasLimit,
+					FeeRecipient: make([]byte, 20),
+					Pubkey:       make([]byte, 48),
+				},
+			})
+			tc.mock.RegistrationCache = regCache
 			hb, err := vs.HeadFetcher.HeadBlock(context.Background())
 			require.NoError(t, err)
-			bid, err := vs.getPayloadHeaderFromBuilder(context.Background(), hb.Block().Slot(), 0)
+			bid, err := vs.getPayloadHeaderFromBuilder(context.Background(), hb.Block().Slot(), 0, 30000000)
 			if tc.err != "" {
 				require.ErrorContains(t, tc.err, err)
 			} else {
@@ -970,4 +1045,88 @@ func TestEmptyTransactionsRoot(t *testing.T) {
 	r, err := ssz.TransactionsRoot([][]byte{})
 	require.NoError(t, err)
 	require.DeepEqual(t, r, emptyTransactionsRoot)
+}
+
+func Test_expectedGasLimit(t *testing.T) {
+	type args struct {
+		parentGasLimit uint64
+		targetGasLimit uint64
+	}
+	tests := []struct {
+		name string
+		args args
+		want uint64
+	}{
+		{
+			name: "Increase within limit",
+			args: args{
+				parentGasLimit: 15000000,
+				targetGasLimit: 15000100,
+			},
+			want: 15000100,
+		},
+		{
+			name: "Increase exceeding limit",
+			args: args{
+				parentGasLimit: 15000000,
+				targetGasLimit: 16000000,
+			},
+			want: 15014647, // maxGasLimitDiff = (15000000 / 1024) - 1 = 1464
+		},
+		{
+			name: "Decrease within limit",
+			args: args{
+				parentGasLimit: 15000000,
+				targetGasLimit: 14999990,
+			},
+			want: 14999990,
+		},
+		{
+			name: "Decrease exceeding limit",
+			args: args{
+				parentGasLimit: 15000000,
+				targetGasLimit: 14000000,
+			},
+			want: 14985353, // maxGasLimitDiff = (15000000 / 1024) - 1 = 1464
+		},
+		{
+			name: "Target equals parent",
+			args: args{
+				parentGasLimit: 15000000,
+				targetGasLimit: 15000000,
+			},
+			want: 15000000, // No change
+		},
+		{
+			name: "Very small parent gas limit",
+			args: args{
+				parentGasLimit: 1025,
+				targetGasLimit: 2000,
+			},
+			want: 1025 + ((1025 / 1024) - 1),
+		},
+		{
+			name: "Target far below parent but limited",
+			args: args{
+				parentGasLimit: 20000000,
+				targetGasLimit: 10000000,
+			},
+			want: 19980470, // maxGasLimitDiff = (20000000 / 1024) - 1
+		},
+		{
+			name: "Parent gas limit under flows",
+			args: args{
+				parentGasLimit: 1023,
+				targetGasLimit: 30000000,
+			},
+			want: 1023,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := expectedGasLimit(tt.args.parentGasLimit, tt.args.targetGasLimit); got != tt.want {
+				t.Errorf("expectedGasLimit() = %v, want %v", got, tt.want)
+			}
+		})
+	}
 }
