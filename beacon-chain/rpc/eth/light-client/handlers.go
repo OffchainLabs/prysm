@@ -83,10 +83,9 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 
 	_, count, gotCount := shared.UintFromQuery(w, req, "count", true)
 	if !gotCount {
-		httputil.HandleError(w, "Missing 'count' query variable", http.StatusBadRequest)
 		return
 	} else if count == 0 {
-		httputil.HandleError(w, fmt.Sprintf("got invalid 'count' query variable '%d': count must be greater than 0", count), http.StatusBadRequest)
+		httputil.HandleError(w, fmt.Sprintf("Got invalid 'count' query variable '%d': count must be greater than 0", count), http.StatusBadRequest)
 		return
 	}
 
@@ -96,7 +95,6 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 
 	_, startPeriod, gotStartPeriod := shared.UintFromQuery(w, req, "start_period", true)
 	if !gotStartPeriod {
-		httputil.HandleError(w, "Missing 'start_period' query variable", http.StatusBadRequest)
 		return
 	}
 
