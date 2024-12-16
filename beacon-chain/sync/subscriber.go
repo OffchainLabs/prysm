@@ -527,7 +527,7 @@ func (s *Service) subscribeSubnets(
 }
 
 func (s *Service) unSubscribeFromTopic(topic string) {
-	log.WithField("topic", topic).Debug("Unsubscribing from topic")
+	log.WithField("topic", topic).Info("Unsubscribed from")
 	if err := s.cfg.p2p.PubSub().UnregisterTopicValidator(topic); err != nil {
 		log.WithError(err).Error("Could not unregister topic validator")
 	}
