@@ -329,7 +329,7 @@ func (s *Service) listenForNewNodes() {
 			}
 
 			// Search for new peers.
-			wantedNodes := searchForPeers(iterator, batchSize, missingPeerCount, s.filterPeer)
+			wantedNodes := searchForPeers(iterator, batchPeriod, missingPeerCount, s.filterPeer)
 
 			wg := new(sync.WaitGroup)
 			for i := 0; i < len(wantedNodes); i++ {
