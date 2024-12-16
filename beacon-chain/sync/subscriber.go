@@ -156,6 +156,19 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 			func(currentSlot primitives.Slot) []uint64 { return []uint64{} },
 		)
 	}
+
+	if params.BeaconConfig().ElectraForkEpoch <= epoch {
+		s.subscribeWithParameters(
+			p2p.BlobSubnetTopicFormat,
+			s.validateBlob,
+			s.blobSubscriber,
+			digest,
+			func(primitives.Slot) []uint64 {
+				return sliceFromCount(params.BeaconConfig().BlobsidecarSubnetCountElectra)
+			},
+			func(currentSlot primitives.Slot) []uint64 { return []uint64{} },
+		)
+	}
 }
 
 // subscribe to a given topic with a given validator and subscription handler.

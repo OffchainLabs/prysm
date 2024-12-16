@@ -65,7 +65,7 @@ func (s *Service) rpcHandlerByTopicFromFork(forkIndex int) (map[string]rpcHandle
 
 	// Deneb: https://github.com/ethereum/consensus-specs/blob/dev/specs/deneb/p2p-interface.md#messages
 	// Electra: https://github.com/ethereum/consensus-specs/blob/dev/specs/electra/p2p-interface.md#messages
-	case version.Deneb, version.Electra:
+	case version.Deneb:
 		return map[string]rpcHandler{
 			p2p.RPCStatusTopicV1:              s.statusRPCHandler,
 			p2p.RPCGoodByeTopicV1:             s.goodbyeRPCHandler,
@@ -73,10 +73,14 @@ func (s *Service) rpcHandlerByTopicFromFork(forkIndex int) (map[string]rpcHandle
 			p2p.RPCBlocksByRootTopicV2:        s.beaconBlocksRootRPCHandler,
 			p2p.RPCPingTopicV1:                s.pingHandler,
 			p2p.RPCMetaDataTopicV2:            s.metaDataHandler,
-			p2p.RPCBlobSidecarsByRootTopicV1:  s.blobSidecarByRootRPCHandler,   // Added in Deneb
-			p2p.RPCBlobSidecarsByRangeTopicV1: s.blobSidecarsByRangeRPCHandler, // Added in Deneb
+			p2p.RPCBlobSidecarsByRootTopicV1:  s.blobSidecarByRootRPCHandler,
+			p2p.RPCBlobSidecarsByRangeTopicV1: s.blobSidecarsByRangeRPCHandler,
 		}, nil
-
+	case version.Electra:
+		return map[string]rpcHandler{
+			p2p.RPCBlobSidecarsByRootTopicV2:  s.blobSidecarByRootRPCHandler,
+			p2p.RPCBlobSidecarsByRangeTopicV2: s.blobSidecarsByRangeRPCHandler,
+		}, nil
 	default:
 		return nil, errors.Errorf("RPC handler not found for fork index %d", forkIndex)
 	}

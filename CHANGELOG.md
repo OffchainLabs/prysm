@@ -16,6 +16,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Log before blob filesystem cache warm-up.
 - New design for the attestation pool. [PR](https://github.com/prysmaticlabs/prysm/pull/14324)
 - Add field param placeholder for Electra blob target and max to pass spec tests.
+- Add EIP-7691: Blob throughput increase.
 
 ### Changed
 
