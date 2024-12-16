@@ -151,7 +151,7 @@ func NextSyncCommitteeIndices(ctx context.Context, s state.BeaconState) ([]primi
 		}
 
 		effectiveBal := v.EffectiveBalance()
-		if effectiveBal*fieldparams.MaxRandomValue >= maxEB*bytesutil.BytesToUint64BigEndian(randomByteSlice) {
+		if effectiveBal*fieldparams.MaxRandomValue >= maxEB*bytesutil.BytesToUint64LittleEndian(randomByteSlice) {
 			cIndices = append(cIndices, cIndex)
 		}
 	}
