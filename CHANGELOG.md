@@ -4,7 +4,43 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
-## [Unreleased](https://github.com/prysmaticlabs/prysm/compare/v5.1.2...HEAD)
+## [Unreleased](https://github.com/prysmaticlabs/prysm/compare/v5.2.0...HEAD)
+
+### Added
+
+
+### Changed
+
+
+### Deprecated
+
+
+### Removed
+
+
+### Fixed
+
+
+### Security
+
+
+## [v5.2.0](https://github.com/prysmaticlabs/prysm/compare/v5.1.2...v5.2.0)
+
+Updating to this release is highly recommended, especially for users running v5.1.1 or v5.1.2.
+This release is **mandatory** for all validator clients using mev-boost with a gas limit increase.
+Without upgrading to this release, validator clients will default to using local execution blocks
+when the gas limit starts to increase.
+
+This release has several fixes and new features. In this release, we have enabled QUIC protocol by
+default, which uses port 13000 for `--p2p-quic-port`. This may be a [breaking change](https://github.com/prysmaticlabs/prysm/pull/14688#issuecomment-2516713826)
+if you're using port 13000 already. This release has some improvements for raising the gas limit,
+but there are [known issues](https://hackmd.io/@ttsao/prysm-gas-limit) with the proposer settings
+file provided gas limit not being respected for mev-boost outsourced blocks. Signalling an increase
+for the gas limit works perfectly for local block production as of this release. See [pumpthegas.org](https://pumpthegas.org) for more info on raising the gas limit on L1.
+
+Notable features:
+- Prysm can reuse blobs from the EL via engine_getBlobsV1, [potentially saving bandwidth](https://hackmd.io/@ttsao/get-blobs-early-results).
+- QUIC is enabled by default. This is a UDP based networking protocol with default port 13000.
 
 ### Added
 
