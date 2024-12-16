@@ -22,8 +22,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
-const maxRandomByte = uint64(1<<8 - 1)
-
 var (
 	ErrTooLate = errors.New("sync message is too late")
 )
@@ -91,19 +89,22 @@ func NextSyncCommittee(ctx context.Context, s state.BeaconState) (*ethpb.SyncCom
 //	"""
 //	epoch = Epoch(get_current_epoch(state) + 1)
 //
-//	MAX_RANDOM_BYTE = 2**8 - 1
+//	MAX_RANDOM_VALUE = 2**16 - 1  # [Modified in Electra]
 //	active_validator_indices = get_active_validator_indices(state, epoch)
 //	active_validator_count = uint64(len(active_validator_indices))
 //	seed = get_seed(state, epoch, DOMAIN_SYNC_COMMITTEE)
-//	i = 0
+//	i = uint64(0)
 //	sync_committee_indices: List[ValidatorIndex] = []
 //	while len(sync_committee_indices) < SYNC_COMMITTEE_SIZE:
 //	    shuffled_index = compute_shuffled_index(uint64(i % active_validator_count), active_validator_count, seed)
 //	    candidate_index = active_validator_indices[shuffled_index]
-//	    random_byte = hash(seed + uint_to_bytes(uint64(i // 32)))[i % 32]
+//	    # [Modified in Electra]
+//	    random_bytes = hash(seed + uint_to_bytes(i // 16))
+//	    offset = i % 16 * 2
+//	    random_value = bytes_to_uint64(random_bytes[offset:offset + 2])
 //	    effective_balance = state.validators[candidate_index].effective_balance
 //	    # [Modified in Electra:EIP7251]
-//	    if effective_balance * MAX_RANDOM_BYTE >= MAX_EFFECTIVE_BALANCE_ELECTRA * random_byte:
+//	    if effective_balance * MAX_RANDOM_VALUE >= MAX_EFFECTIVE_BALANCE_ELECTRA * random_value:
 //	        sync_committee_indices.append(candidate_index)
 //	    i += 1
 //	return sync_committee_indices
@@ -147,7 +148,7 @@ func NextSyncCommitteeIndices(ctx context.Context, s state.BeaconState) ([]primi
 		}
 
 		effectiveBal := v.EffectiveBalance()
-		if effectiveBal*maxRandomByte >= maxEB*uint64(randomByte) {
+		if effectiveBal*fieldparams.MaxRandomValue >= maxEB*uint64(randomByte) {
 			cIndices = append(cIndices, cIndex)
 		}
 	}

@@ -841,7 +841,6 @@ func computeProposerIndexWithValidators(validators []*ethpb.Validator, activeInd
 	if length == 0 {
 		return 0, errors.New("empty active indices list")
 	}
-	maxRandomByte := uint64(1<<8 - 1)
 	hashFunc := hash.CustomSHA256Hasher()
 
 	for i := uint64(0); ; i++ {
@@ -860,7 +859,7 @@ func computeProposerIndexWithValidators(validators []*ethpb.Validator, activeInd
 		if v != nil {
 			effectiveBal = v.EffectiveBalance
 		}
-		if effectiveBal*maxRandomByte >= params.BeaconConfig().MaxEffectiveBalance*uint64(randomByte) {
+		if effectiveBal*fieldparams.MaxRandomValue >= params.BeaconConfig().MaxEffectiveBalance*uint64(randomByte) {
 			return candidateIndex, nil
 		}
 	}
