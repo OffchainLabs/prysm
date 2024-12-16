@@ -19,13 +19,13 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ### Deprecated
 
-- Added check to prevent nil pointer deference or out of bounds array access when validating the BLSToExecutionChange on an impossibly nil validator.
 
 ### Removed
 
 
 ### Fixed
 
+- Added check to prevent nil pointer deference or out of bounds array access when validating the BLSToExecutionChange on an impossibly nil validator.
 
 ### Security
 

@@ -113,7 +113,42 @@ func TestProcessBLSToExecutionChange(t *testing.T) {
 		require.NoError(t, err)
 		require.DeepEqual(t, digest[:], val.WithdrawalCredentials)
 	})
+	t.Run("nil validator does not panic", func(t *testing.T) {
+		priv, err := bls.RandKey()
+		require.NoError(t, err)
+		pubkey := priv.PublicKey().Marshal()
 
+		message := &ethpb.BLSToExecutionChange{
+			ToExecutionAddress: []byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13},
+			ValidatorIndex:     0,
+			FromBlsPubkey:      pubkey,
+		}
+
+		registry := []*ethpb.Validator{
+			nil,
+		}
+		st, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+			Validators: registry,
+			Fork: &ethpb.Fork{
+				CurrentVersion:  params.BeaconConfig().GenesisForkVersion,
+				PreviousVersion: params.BeaconConfig().GenesisForkVersion,
+			},
+			Slot: params.BeaconConfig().SlotsPerEpoch * 5,
+		})
+		require.NoError(t, err)
+
+		signature, err := signing.ComputeDomainAndSign(st, time.CurrentEpoch(st), message, params.BeaconConfig().DomainBLSToExecutionChange, priv)
+		require.NoError(t, err)
+
+		signed := &ethpb.SignedBLSToExecutionChange{
+			Message:   message,
+			Signature: signature,
+		}
+		_, err = blocks.ValidateBLSToExecutionChange(st, signed)
+		// The state should return an empty validator, even when the validator object in the registry is
+		// nil. This error should return when the withdrawal credentials are invalid or too short.
+		require.ErrorIs(t, err, blocks.ErrInvalidBLSPrefix)
+	})
 	t.Run("non-existent validator", func(t *testing.T) {
 		priv, err := bls.RandKey()
 		require.NoError(t, err)
