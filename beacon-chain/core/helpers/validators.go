@@ -11,6 +11,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
 	forkchoicetypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/types"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
@@ -347,26 +348,29 @@ func BeaconProposerIndexAtSlot(ctx context.Context, state state.ReadOnlyBeaconSt
 // Spec pseudocode definition:
 //
 //	def compute_proposer_index(state: BeaconState, indices: Sequence[ValidatorIndex], seed: Bytes32) -> ValidatorIndex:
-//	  """
-//	  Return from ``indices`` a random index sampled by effective balance.
-//	  """
-//	  assert len(indices) > 0
-//	  MAX_RANDOM_BYTE = 2**8 - 1
-//	  i = uint64(0)
-//	  total = uint64(len(indices))
-//	  while True:
-//	      candidate_index = indices[compute_shuffled_index(i % total, total, seed)]
-//	      random_byte = hash(seed + uint_to_bytes(uint64(i // 32)))[i % 32]
-//	      effective_balance = state.validators[candidate_index].effective_balance
-//	      if effective_balance * MAX_RANDOM_BYTE >= MAX_EFFECTIVE_BALANCE_ELECTRA * random_byte: #[Modified in Electra:EIP7251]
-//	          return candidate_index
-//	      i += 1
+//	   """
+//	   Return from ``indices`` a random index sampled by effective balance.
+//	   """
+//	   assert len(indices) > 0
+//	   MAX_RANDOM_VALUE = 2**16 - 1  # [Modified in Electra]
+//	   i = uint64(0)
+//	   total = uint64(len(indices))
+//	   while True:
+//	       candidate_index = indices[compute_shuffled_index(i % total, total, seed)]
+//	       # [Modified in Electra]
+//	       random_bytes = hash(seed + uint_to_bytes(i // 16))
+//	       offset = i % 16 * 2
+//	       random_value = bytes_to_uint64(random_bytes[offset:offset + 2])
+//	       effective_balance = state.validators[candidate_index].effective_balance
+//	       # [Modified in Electra:EIP7251]
+//	       if effective_balance * MAX_RANDOM_VALUE >= MAX_EFFECTIVE_BALANCE_ELECTRA * random_value:
+//	           return candidate_index
+//	       i += 1
 func ComputeProposerIndex(bState state.ReadOnlyBeaconState, activeIndices []primitives.ValidatorIndex, seed [32]byte) (primitives.ValidatorIndex, error) {
 	length := uint64(len(activeIndices))
 	if length == 0 {
 		return 0, errors.New("empty active indices list")
 	}
-	maxRandomByte := uint64(1<<8 - 1)
 	hashFunc := hash.CustomSHA256Hasher()
 
 	for i := uint64(0); ; i++ {
@@ -378,8 +382,11 @@ func ComputeProposerIndex(bState state.ReadOnlyBeaconState, activeIndices []prim
 		if uint64(candidateIndex) >= uint64(bState.NumValidators()) {
 			return 0, errors.New("active index out of range")
 		}
-		b := append(seed[:], bytesutil.Bytes8(i/32)...)
-		randomByte := hashFunc(b)[i%32]
+		b := append(seed[:], bytesutil.Bytes8(i/16)...)
+		randomByte := hashFunc(b)
+		randomByteSlice := randomByte[:]
+		offset := (i % 16) * 2
+		randomByteSlice = randomByteSlice[offset : offset+2]
 		v, err := bState.ValidatorAtIndexReadOnly(candidateIndex)
 		if err != nil {
 			return 0, err
@@ -391,7 +398,7 @@ func ComputeProposerIndex(bState state.ReadOnlyBeaconState, activeIndices []prim
 			maxEB = params.BeaconConfig().MaxEffectiveBalanceElectra
 		}
 
-		if effectiveBal*maxRandomByte >= maxEB*uint64(randomByte) {
+		if effectiveBal*fieldparams.MaxRandomValue >= maxEB*bytesutil.BytesToUint64BigEndian(randomByteSlice) {
 			return candidateIndex, nil
 		}
 	}
