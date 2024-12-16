@@ -312,37 +312,6 @@ func TestRevalidateSubscription_CorrectlyFormatsTopic(t *testing.T) {
 	require.LogsDoNotContain(t, hook, "Could not unregister topic validator")
 }
 
-func TestStaticSubnets(t *testing.T) {
-	p := p2ptest.NewTestP2P(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	chain := &mockChain.ChainService{
-		Genesis:        time.Now(),
-		ValidatorsRoot: [32]byte{'A'},
-	}
-	r := Service{
-		ctx: ctx,
-		cfg: &config{
-			chain: chain,
-			clock: startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
-			p2p:   p,
-		},
-		chainStarted: abool.New(),
-		subHandler:   newSubTopicHandler(),
-	}
-	defaultTopic := "/eth2/%x/beacon_attestation_%d"
-	d, err := r.currentForkDigest()
-	assert.NoError(t, err)
-	r.subscribeStaticWithSubnets("Attestation", defaultTopic, r.noopValidator, func(_ context.Context, msg proto.Message) error {
-		// no-op
-		return nil
-	}, d, sliceFromCount(params.BeaconConfig().AttestationSubnetCount))
-	topics := r.cfg.p2p.PubSub().GetTopics()
-	if uint64(len(topics)) != params.BeaconConfig().AttestationSubnetCount {
-		t.Errorf("Wanted the number of subnet topics registered to be %d but got %d", params.BeaconConfig().AttestationSubnetCount, len(topics))
-	}
-	cancel()
-}
-
 func Test_wrapAndReportValidation(t *testing.T) {
 	mChain := &mockChain.ChainService{
 		Genesis:        time.Now(),
@@ -539,37 +508,6 @@ func TestFilterSubnetPeers(t *testing.T) {
 	assert.Equal(t, 1, len(recPeers), "expected at least 1 suitable peer to prune")
 }
 
-func TestSubscribeWithSyncSubnets_StaticOK(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	cfg := params.MainnetTestConfig().Copy()
-	cfg.SecondsPerSlot = 1
-	params.OverrideBeaconConfig(cfg)
-
-	p := p2ptest.NewTestP2P(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	chain := &mockChain.ChainService{
-		Genesis:        time.Now(),
-		ValidatorsRoot: [32]byte{'A'},
-	}
-	r := Service{
-		ctx: ctx,
-		cfg: &config{
-			chain: chain,
-			clock: startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
-			p2p:   p,
-		},
-		chainStarted: abool.New(),
-		subHandler:   newSubTopicHandler(),
-	}
-	// Empty cache at the end of the test.
-	defer cache.SyncSubnetIDs.EmptyAllCaches()
-	digest, err := r.currentForkDigest()
-	assert.NoError(t, err)
-	r.subscribeStaticWithSubnets("Sync committee", p2p.SyncCommitteeSubnetTopicFormat, nil, nil, digest, sliceFromCount(params.BeaconConfig().SyncCommitteeSubnetCount))
-	assert.Equal(t, int(params.BeaconConfig().SyncCommitteeSubnetCount), len(r.cfg.p2p.PubSub().GetTopics()))
-	cancel()
-}
-
 func TestSubscribeWithSyncSubnets_DynamicOK(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.MainnetConfig().Copy()
@@ -600,7 +538,7 @@ func TestSubscribeWithSyncSubnets_DynamicOK(t *testing.T) {
 	cache.SyncSubnetIDs.AddSyncCommitteeSubnets([]byte("pubkey"), currEpoch, []uint64{0, 1}, 10*time.Second)
 	digest, err := r.currentForkDigest()
 	assert.NoError(t, err)
-	r.subscribeDynamicWithSubnets("Sync committee", p2p.GossipTypeMapping[reflect.TypeOf(&pb.SyncCommitteeMessage{})], p2p.SyncCommitteeSubnetTopicFormat, nil, nil, digest, r.activeSyncSubnetIndices, func(currentSlot primitives.Slot) []uint64 { return []uint64{} })
+	r.subscribeSubnets(p2p.SyncCommitteeSubnetTopicFormat, nil, nil, digest, r.activeSyncSubnetIndices, func(currentSlot primitives.Slot) []uint64 { return []uint64{} })
 	time.Sleep(2 * time.Second)
 	assert.Equal(t, 2, len(r.cfg.p2p.PubSub().GetTopics()))
 	topicMap := map[string]bool{}
@@ -612,46 +550,6 @@ func TestSubscribeWithSyncSubnets_DynamicOK(t *testing.T) {
 
 	secondSub := fmt.Sprintf(p2p.SyncCommitteeSubnetTopicFormat, digest, 1) + r.cfg.p2p.Encoding().ProtocolSuffix()
 	assert.Equal(t, true, topicMap[secondSub])
-	cancel()
-}
-
-func TestSubscribeWithSyncSubnets_StaticSwitchFork(t *testing.T) {
-	p := p2ptest.NewTestP2P(t)
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig()
-	cfg.AltairForkEpoch = 1
-	cfg.SecondsPerSlot = 1
-	params.OverrideBeaconConfig(cfg)
-	params.BeaconConfig().InitializeForkSchedule()
-	ctx, cancel := context.WithCancel(context.Background())
-	currSlot := primitives.Slot(100)
-	chain := &mockChain.ChainService{
-		Genesis:        time.Now().Add(-time.Duration(uint64(params.BeaconConfig().SlotsPerEpoch)*params.BeaconConfig().SecondsPerSlot) * time.Second),
-		ValidatorsRoot: [32]byte{'A'},
-		Slot:           &currSlot,
-	}
-	r := Service{
-		ctx: ctx,
-		cfg: &config{
-			chain: chain,
-			clock: startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
-			p2p:   p,
-		},
-		chainStarted: abool.New(),
-		subHandler:   newSubTopicHandler(),
-	}
-	// Empty cache at the end of the test.
-	defer cache.SyncSubnetIDs.EmptyAllCaches()
-	genRoot := r.cfg.clock.GenesisValidatorsRoot()
-	digest, err := signing.ComputeForkDigest(params.BeaconConfig().GenesisForkVersion, genRoot[:])
-	assert.NoError(t, err)
-	r.subscribeStaticWithSubnets("Sync committee", p2p.SyncCommitteeSubnetTopicFormat, nil, nil, digest, sliceFromCount(params.BeaconConfig().SyncCommitteeSubnetCount))
-	assert.Equal(t, int(params.BeaconConfig().SyncCommitteeSubnetCount), len(r.cfg.p2p.PubSub().GetTopics()))
-
-	// Expect that all old topics will be unsubscribed.
-	time.Sleep(2 * time.Second)
-	assert.Equal(t, 0, len(r.cfg.p2p.PubSub().GetTopics()))
-
 	cancel()
 }
 
@@ -689,7 +587,7 @@ func TestSubscribeWithSyncSubnets_DynamicSwitchFork(t *testing.T) {
 	digest, err := signing.ComputeForkDigest(params.BeaconConfig().GenesisForkVersion, genRoot[:])
 	assert.NoError(t, err)
 
-	r.subscribeDynamicWithSubnets("Sync committee", p2p.GossipTypeMapping[reflect.TypeOf(&pb.SyncCommitteeMessage{})], p2p.SyncCommitteeSubnetTopicFormat, nil, nil, digest, r.activeSyncSubnetIndices, func(currentSlot primitives.Slot) []uint64 { return []uint64{} })
+	r.subscribeSubnets(p2p.SyncCommitteeSubnetTopicFormat, nil, nil, digest, r.activeSyncSubnetIndices, func(currentSlot primitives.Slot) []uint64 { return []uint64{} })
 	time.Sleep(2 * time.Second)
 	assert.Equal(t, 2, len(r.cfg.p2p.PubSub().GetTopics()))
 	topicMap := map[string]bool{}
