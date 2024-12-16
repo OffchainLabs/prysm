@@ -398,7 +398,7 @@ func ComputeProposerIndex(bState state.ReadOnlyBeaconState, activeIndices []prim
 			maxEB = params.BeaconConfig().MaxEffectiveBalanceElectra
 		}
 
-		if effectiveBal*fieldparams.MaxRandomValue >= maxEB*bytesutil.BytesToUint64BigEndian(randomByteSlice) {
+		if effectiveBal*fieldparams.MaxRandomValue >= maxEB*bytesutil.BytesToUint64LittleEndian(randomByteSlice) {
 			return candidateIndex, nil
 		}
 	}

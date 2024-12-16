@@ -143,6 +143,13 @@ func BytesToUint64BigEndian(b []byte) uint64 {
 	return binary.BigEndian.Uint64(b)
 }
 
+func BytesToUint64LittleEndian(b []byte) uint64 {
+	if len(b) < 8 { // This will panic otherwise.
+		return 0
+	}
+	return binary.LittleEndian.Uint64(b)
+}
+
 // LittleEndianBytesToBigInt takes bytes of a number stored as little-endian and returns a big integer
 func LittleEndianBytesToBigInt(bytes []byte) *big.Int {
 	// Integers are stored as little-endian, but big.Int expects big-endian. So we need to reverse the byte order before decoding.
