@@ -139,8 +139,11 @@ func NextSyncCommitteeIndices(ctx context.Context, s state.BeaconState) ([]primi
 			return nil, err
 		}
 
-		b := append(seed[:], bytesutil.Bytes8(uint64(i.Div(32)))...)
-		randomByte := hashFunc(b)[i%32]
+		b := append(seed[:], bytesutil.Bytes8(uint64(i/16))...)
+		randomByte := hashFunc(b)
+		randomByteSlice := randomByte[:]
+		offset := (i % 16) * 2
+		randomByteSlice = randomByteSlice[offset : offset+2]
 		cIndex := indices[sIndex]
 		v, err := s.ValidatorAtIndexReadOnly(cIndex)
 		if err != nil {
@@ -148,7 +151,7 @@ func NextSyncCommitteeIndices(ctx context.Context, s state.BeaconState) ([]primi
 		}
 
 		effectiveBal := v.EffectiveBalance()
-		if effectiveBal*fieldparams.MaxRandomValue >= maxEB*uint64(randomByte) {
+		if effectiveBal*fieldparams.MaxRandomValue >= maxEB*bytesutil.BytesToUint64BigEndian(randomByteSlice) {
 			cIndices = append(cIndices, cIndex)
 		}
 	}
