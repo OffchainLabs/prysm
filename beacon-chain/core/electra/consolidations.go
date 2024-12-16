@@ -37,8 +37,7 @@ import (
 //	        break
 //
 //	    # Calculate the consolidated balance
-//	    max_effective_balance = get_max_effective_balance(source_validator)
-//	    source_effective_balance = min(state.balances[pending_consolidation.source_index], max_effective_balance)
+//	    source_effective_balance = min(state.balances[pending_consolidation.source_index], source_validator.effective_balance)
 //
 //	    # Move active balance to target. Excess balance is withdrawable.
 //	    decrease_balance(state, pending_consolidation.source_index, source_effective_balance)
@@ -78,7 +77,7 @@ func ProcessPendingConsolidations(ctx context.Context, st state.BeaconState) err
 		if err != nil {
 			return err
 		}
-		b := min(validatorBalance, helpers.ValidatorMaxEffectiveBalance(sourceValidator))
+		b := min(validatorBalance, sourceValidator.EffectiveBalance())
 
 		if err := helpers.DecreaseBalance(st, pc.SourceIndex, b); err != nil {
 			return err
