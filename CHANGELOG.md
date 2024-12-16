@@ -8,12 +8,18 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ### Added
 
+- Added proper gas limit check for header from the builder.
+- Added an error field to log `Finished building block`.
+- Implemented a new `EmptyExecutionPayloadHeader` function.
+- `Finished building block`: Display error only if not nil.
 
 ### Changed
 
+- Process light client finality updates only for new finalized epochs instead of doing it for every block.
 
 ### Deprecated
 
+- Added check to prevent nil pointer deference or out of bounds array access when validating the BLSToExecutionChange on an impossibly nil validator.
 
 ### Removed
 
