@@ -12,12 +12,11 @@ import (
 )
 
 const (
-	bodyLength       = 13 // The number of elements in the BeaconBlockBody Container for Electra
-	logBodyLength    = 4  // The log 2 of bodyLength
-	kzgPosition      = 11 // The index of the KZG commitment list in the Body
-	kzgRootIndex     = 54 // The Merkle index of the KZG commitment list's root in the Body's Merkle tree
-	KZGOffset        = kzgRootIndex * field_params.MaxBlobCommitmentsPerBlock
-	KZGOffsetElectra = kzgRootIndex * field_params.MaxBlobCommitmentsPerBlockElectra
+	bodyLength    = 13 // The number of elements in the BeaconBlockBody Container for Electra
+	logBodyLength = 4  // The log 2 of bodyLength
+	kzgPosition   = 11 // The index of the KZG commitment list in the Body
+	kzgRootIndex  = 54 // The Merkle index of the KZG commitment list's root in the Body's Merkle tree
+	KZGOffset     = kzgRootIndex * field_params.MaxBlobCommitmentsPerBlock
 )
 
 var (
@@ -28,7 +27,7 @@ var (
 
 // VerifyKZGInclusionProof verifies the Merkle proof in a Blob sidecar against
 // the beacon block body root.
-func VerifyKZGInclusionProof(blob ROBlob, kzgOffset int) error {
+func VerifyKZGInclusionProof(blob ROBlob) error {
 	if blob.SignedBlockHeader == nil {
 		return errNilBlockHeader
 	}
@@ -41,7 +40,7 @@ func VerifyKZGInclusionProof(blob ROBlob, kzgOffset int) error {
 	}
 	chunks := makeChunk(blob.KzgCommitment)
 	gohashtree.HashChunks(chunks, chunks)
-	verified := trie.VerifyMerkleProof(root, chunks[0][:], blob.Index+uint64(kzgOffset), blob.CommitmentInclusionProof)
+	verified := trie.VerifyMerkleProof(root, chunks[0][:], blob.Index+KZGOffset, blob.CommitmentInclusionProof)
 	if !verified {
 		return errInvalidInclusionProof
 	}
@@ -59,11 +58,7 @@ func MerkleProofKZGCommitment(body interfaces.ReadOnlyBeaconBlockBody, index int
 	if err != nil {
 		return nil, err
 	}
-	logMaxBlobCommitments := field_params.LogMaxBlobCommitments
-	if body.Version() >= version.Electra {
-		logMaxBlobCommitments = field_params.LogMaxBlobCommitmentsElectra
-	}
-	proof, err := bodyProof(commitments, index, uint64(logMaxBlobCommitments))
+	proof, err := bodyProof(commitments, index)
 	if err != nil {
 		return nil, err
 	}
@@ -106,12 +101,12 @@ func makeChunk(commitment []byte) [][32]byte {
 
 // bodyProof returns the Merkle proof of the subtree up to the root of the KZG
 // commitment list.
-func bodyProof(commitments [][]byte, index int, logMaxBlobCommitments uint64) ([][]byte, error) {
+func bodyProof(commitments [][]byte, index int) ([][]byte, error) {
 	if index < 0 || index >= len(commitments) {
 		return nil, errInvalidIndex
 	}
 	leaves := leavesFromCommitments(commitments)
-	sparse, err := trie.GenerateTrieFromItems(leaves, logMaxBlobCommitments)
+	sparse, err := trie.GenerateTrieFromItems(leaves, field_params.LogMaxBlobCommitments)
 	if err != nil {
 		return nil, err
 	}

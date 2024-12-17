@@ -57,7 +57,7 @@ func (m *MockBlobVerifier) SidecarDescendsFromFinalized() (err error) {
 	return m.ErrSidecarDescendsFromFinalized
 }
 
-func (m *MockBlobVerifier) SidecarInclusionProven(v int) (err error) {
+func (m *MockBlobVerifier) SidecarInclusionProven() (err error) {
 	return m.ErrSidecarInclusionProven
 }
 
