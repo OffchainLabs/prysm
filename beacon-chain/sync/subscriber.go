@@ -109,10 +109,10 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 		s.attesterSlashingSubscriber,
 		digest,
 	)
-	s.subscribeSubnets(
+	s.subscribeWithParameters(
 		p2p.AttestationSubnetTopicFormat,
-		s.validateCommitteeIndexBeaconAttestation,   /* validator */
-		s.committeeIndexBeaconAttestationSubscriber, /* message handler */
+		s.validateCommitteeIndexBeaconAttestation,
+		s.committeeIndexBeaconAttestationSubscriber,
 		digest,
 		s.persistentAndAggregatorSubnetIndices,
 		s.attesterSubnetIndices,
@@ -125,10 +125,10 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 			s.syncContributionAndProofSubscriber,
 			digest,
 		)
-		s.subscribeSubnets(
+		s.subscribeWithParameters(
 			p2p.SyncCommitteeSubnetTopicFormat,
-			s.validateSyncCommitteeMessage,   /* validator */
-			s.syncCommitteeMessageSubscriber, /* message handler */
+			s.validateSyncCommitteeMessage,
+			s.syncCommitteeMessageSubscriber,
 			digest,
 			s.activeSyncSubnetIndices,
 			func(currentSlot primitives.Slot) []uint64 { return []uint64{} },
@@ -147,10 +147,10 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 
 	// New Gossip Topic in Deneb
 	if epoch >= params.BeaconConfig().DenebForkEpoch {
-		s.subscribeSubnets(
+		s.subscribeWithParameters(
 			p2p.BlobSubnetTopicFormat,
-			s.validateBlob,   /* validator */
-			s.blobSubscriber, /* message handler */
+			s.validateBlob,
+			s.blobSubscriber,
 			digest,
 			func(primitives.Slot) []uint64 { return sliceFromCount(params.BeaconConfig().BlobsidecarSubnetCount) },
 			func(currentSlot primitives.Slot) []uint64 { return []uint64{} },
@@ -456,8 +456,8 @@ func (s *Service) subscribeToSubnets(
 	return true
 }
 
-// subscribeSubnets subscribes to a list of subnets.
-func (s *Service) subscribeSubnets(
+// subscribeWithParameters subscribes to a list of subnets.
+func (s *Service) subscribeWithParameters(
 	topicFormat string,
 	validate wrappedVal,
 	handle subHandler,
