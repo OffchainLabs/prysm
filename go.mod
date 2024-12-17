@@ -1,6 +1,6 @@
 module github.com/prysmaticlabs/prysm/v5
 
-go 1.22
+go 1.22.0
 
 toolchain go1.22.10
 
