@@ -303,14 +303,21 @@ func (s *Service) waitForChainStart() {
 
 	ctxMap, err := ContextByteVersionsForValRoot(clock.GenesisValidatorsRoot())
 	if err != nil {
-		log.WithError(err).WithField("genesisValidatorRoot", clock.GenesisValidatorsRoot()).
+		log.
+			WithError(err).
+			WithField("genesisValidatorRoot", clock.GenesisValidatorsRoot()).
 			Error("sync service failed to initialize context version map")
 		return
 	}
 	s.ctxMap = ctxMap
 
 	// Register respective rpc handlers at state initialized event.
-	s.registerRPCHandlers()
+	err = s.registerRPCHandlers()
+	if err != nil {
+		log.WithError(err).Error("Could not register rpc handlers")
+		return
+	}
+
 	// Wait for chainstart in separate routine.
 	if startTime.After(prysmTime.Now()) {
 		time.Sleep(prysmTime.Until(startTime))

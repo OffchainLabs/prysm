@@ -93,7 +93,7 @@ func (e *cacheEntry) filter(root [32]byte, kc safeCommitmentArray) ([]blocks.ROB
 		return nil, nil
 	}
 	scs := make([]blocks.ROBlob, 0, kc.count())
-	for i := uint64(0); i < fieldparams.MaxBlobsPerBlock; i++ {
+	for i := range uint64(fieldparams.MaxBlobsPerBlock) {
 		// We already have this blob, we don't need to write it or validate it.
 		if e.diskSummary.HasIndex(i) {
 			continue
