@@ -243,7 +243,7 @@ filegroup(
     visibility = ["//visibility:public"],
 )
     """,
-    #integrity = "sha256-gHbvlnErUeJGWzW8/8JiVlk28JwmXSMhOzkynEIz+8g=",
+    integrity = "sha256-NtWIhbO/mVMb1edq5jqABL0o8R1tNFiuG8PCMAsUHcs=",
     url = "https://github.com/ethereum/consensus-spec-tests/releases/download/%s/general.tar.gz" % consensus_spec_version,
 )
 
@@ -290,7 +290,7 @@ filegroup(
     visibility = ["//visibility:public"],
 )
     """,
-    #integrity = "sha256-GQulBKLc2khpql2K/MxV+NG/d2kAhLXl+gLnKIg7rt4=",
+    integrity = "sha256-ClOLKkmAcEi8/uKi6LDeqthask5+E3sgxVoA0bqmQ0c=",
     strip_prefix = "consensus-specs-" + consensus_spec_version[1:],
     url = "https://github.com/ethereum/consensus-specs/archive/refs/tags/%s.tar.gz" % consensus_spec_version,
 )

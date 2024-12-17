@@ -2,6 +2,7 @@ package altair
 
 import (
 	"context"
+	"encoding/binary"
 	goErrors "errors"
 	"fmt"
 	"time"
@@ -124,11 +125,6 @@ func NextSyncCommitteeIndices(ctx context.Context, s state.BeaconState) ([]primi
 	cIndices := make([]primitives.ValidatorIndex, 0, syncCommitteeSize)
 	hashFunc := hash.CustomSHA256Hasher()
 
-	maxEB := cfg.MaxEffectiveBalanceElectra
-	if s.Version() < version.Electra {
-		maxEB = cfg.MaxEffectiveBalance
-	}
-
 	for i := primitives.ValidatorIndex(0); uint64(len(cIndices)) < params.BeaconConfig().SyncCommitteeSize; i++ {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
@@ -138,21 +134,27 @@ func NextSyncCommitteeIndices(ctx context.Context, s state.BeaconState) ([]primi
 		if err != nil {
 			return nil, err
 		}
-
-		b := append(seed[:], bytesutil.Bytes8(uint64(i/16))...)
-		randomByte := hashFunc(b)
-		randomByteSlice := randomByte[:]
-		offset := (i % 16) * 2
-		randomByteSlice = randomByteSlice[offset : offset+2]
 		cIndex := indices[sIndex]
 		v, err := s.ValidatorAtIndexReadOnly(cIndex)
 		if err != nil {
 			return nil, err
 		}
-
 		effectiveBal := v.EffectiveBalance()
-		if effectiveBal*fieldparams.MaxRandomValue >= maxEB*bytesutil.BytesToUint64LittleEndian(randomByteSlice) {
-			cIndices = append(cIndices, cIndex)
+
+		if s.Version() < version.Electra {
+			b := append(seed[:], bytesutil.Bytes8(uint64(i.Div(32)))...)
+			randomByte := hashFunc(b)[i%32]
+			if effectiveBal*fieldparams.MaxRandomValue >= cfg.MaxEffectiveBalance*uint64(randomByte) {
+				cIndices = append(cIndices, cIndex)
+			}
+		} else {
+			b := append(seed[:], bytesutil.Bytes8(uint64(i/16))...)
+			randomByte := hashFunc(b)
+			offset := (i % 16) * 2
+			randomByteSlice := bytesutil.PadTo(randomByte[offset:offset+2], 8)
+			if effectiveBal*fieldparams.MaxRandomValue >= cfg.MaxEffectiveBalanceElectra*binary.LittleEndian.Uint64(randomByteSlice) {
+				cIndices = append(cIndices, cIndex)
+			}
 		}
 	}
 

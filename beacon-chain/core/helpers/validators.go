@@ -3,6 +3,7 @@ package helpers
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
@@ -382,24 +383,26 @@ func ComputeProposerIndex(bState state.ReadOnlyBeaconState, activeIndices []prim
 		if uint64(candidateIndex) >= uint64(bState.NumValidators()) {
 			return 0, errors.New("active index out of range")
 		}
-		b := append(seed[:], bytesutil.Bytes8(i/16)...)
-		randomByte := hashFunc(b)
-		randomByteSlice := randomByte[:]
-		offset := (i % 16) * 2
-		randomByteSlice = randomByteSlice[offset : offset+2]
+
 		v, err := bState.ValidatorAtIndexReadOnly(candidateIndex)
 		if err != nil {
 			return 0, err
 		}
 		effectiveBal := v.EffectiveBalance()
-
-		maxEB := params.BeaconConfig().MaxEffectiveBalance
 		if bState.Version() >= version.Electra {
-			maxEB = params.BeaconConfig().MaxEffectiveBalanceElectra
-		}
-
-		if effectiveBal*fieldparams.MaxRandomValue >= maxEB*bytesutil.BytesToUint64LittleEndian(randomByteSlice) {
-			return candidateIndex, nil
+			b := append(seed[:], bytesutil.Bytes8(i/16)...)
+			randomByte := hashFunc(b)
+			offset := (i % 16) * 2
+			randomByteSlice := bytesutil.PadTo(randomByte[offset:offset+2], 8)
+			if effectiveBal*fieldparams.MaxRandomValueElectra >= params.BeaconConfig().MaxEffectiveBalanceElectra*binary.LittleEndian.Uint64(randomByteSlice) {
+				return candidateIndex, nil
+			}
+		} else {
+			b := append(seed[:], bytesutil.Bytes8(i/32)...)
+			randomByte := hashFunc(b)[i%32]
+			if effectiveBal*fieldparams.MaxRandomValue >= params.BeaconConfig().MaxEffectiveBalance*uint64(randomByte) {
+				return candidateIndex, nil
+			}
 		}
 	}
 }
