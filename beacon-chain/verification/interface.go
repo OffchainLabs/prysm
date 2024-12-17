@@ -20,7 +20,7 @@ type BlobVerifier interface {
 	SidecarParentValid(badParent func([32]byte) bool) (err error)
 	SidecarParentSlotLower() (err error)
 	SidecarDescendsFromFinalized() (err error)
-	SidecarInclusionProven() (err error)
+	SidecarInclusionProven(v int) (err error)
 	SidecarKzgProofVerified() (err error)
 	SidecarProposerExpected(ctx context.Context) (err error)
 	SatisfyRequirement(Requirement)

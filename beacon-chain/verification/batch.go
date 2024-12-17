@@ -7,6 +7,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/kzg"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 )
 
 var (
@@ -86,7 +87,7 @@ func (batch *BlobBatchVerifier) verifyOneBlob(sc blocks.ROBlob) (blocks.Verified
 	if err := bv.BlobIndexInBounds(); err != nil {
 		return vb, err
 	}
-	if err := bv.SidecarInclusionProven(); err != nil {
+	if err := bv.SidecarInclusionProven(version.Deneb); err != nil {
 		return vb, err
 	}
 

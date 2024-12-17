@@ -403,7 +403,11 @@ func runBlobStep(t *testing.T,
 			if err := bv.SlotAboveFinalized(); err != nil {
 				t.Logf("SlotAboveFinalized error: %s", err.Error())
 			}
-			if err := bv.SidecarInclusionProven(); err != nil {
+			kzgOffset := blocks.KZGOffset
+			if block.Version() >= version.Electra {
+				kzgOffset = blocks.KZGOffsetElectra
+			}
+			if err := bv.SidecarInclusionProven(kzgOffset); err != nil {
 				t.Logf("SidecarInclusionProven error: %s", err.Error())
 			}
 			if err := bv.SidecarKzgProofVerified(); err != nil {
