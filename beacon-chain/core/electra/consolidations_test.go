@@ -46,6 +46,7 @@ func TestProcessPendingConsolidations(t *testing.T) {
 					Validators: []*eth.Validator{
 						{
 							WithdrawalCredentials: []byte{0x01, 0xFF},
+							EffectiveBalance:      params.BeaconConfig().MinActivationBalance,
 						},
 						{
 							WithdrawalCredentials: []byte{0x01, 0xAB},

@@ -141,18 +141,18 @@ func NextSyncCommitteeIndices(ctx context.Context, s state.BeaconState) ([]primi
 		}
 		effectiveBal := v.EffectiveBalance()
 
-		if s.Version() < version.Electra {
-			b := append(seed[:], bytesutil.Bytes8(uint64(i.Div(32)))...)
-			randomByte := hashFunc(b)[i%32]
-			if effectiveBal*fieldparams.MaxRandomValue >= cfg.MaxEffectiveBalance*uint64(randomByte) {
-				cIndices = append(cIndices, cIndex)
-			}
-		} else {
+		if s.Version() >= version.Electra {
 			b := append(seed[:], bytesutil.Bytes8(uint64(i/16))...)
 			randomByte := hashFunc(b)
 			offset := (i % 16) * 2
 			randomByteSlice := bytesutil.PadTo(randomByte[offset:offset+2], 8)
-			if effectiveBal*fieldparams.MaxRandomValue >= cfg.MaxEffectiveBalanceElectra*binary.LittleEndian.Uint64(randomByteSlice) {
+			if effectiveBal*fieldparams.MaxRandomValueElectra >= cfg.MaxEffectiveBalanceElectra*binary.LittleEndian.Uint64(randomByteSlice) {
+				cIndices = append(cIndices, cIndex)
+			}
+		} else {
+			b := append(seed[:], bytesutil.Bytes8(uint64(i.Div(32)))...)
+			randomByte := hashFunc(b)[i%32]
+			if effectiveBal*fieldparams.MaxRandomValue >= cfg.MaxEffectiveBalance*uint64(randomByte) {
 				cIndices = append(cIndices, cIndex)
 			}
 		}

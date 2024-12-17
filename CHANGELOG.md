@@ -82,6 +82,7 @@ Notable features:
 - Save light client updates and bootstraps in DB.
 - Added more comprehensive tests for `BlockToLightClientHeader`. [PR](https://github.com/prysmaticlabs/prysm/pull/14699)
 - Added light client feature flag check to RPC handlers. [PR](https://github.com/prysmaticlabs/prysm/pull/14736)
+- Add field param placeholder for Electra blob target and max to pass spec tests.
 
 ### Changed
 
@@ -126,8 +127,9 @@ Notable features:
 - Check kzg commitments align with blobs and proofs for beacon api end point.
 - Revert "Proposer checks gas limit before accepting builder's bid".
 - Updated quic-go to v0.48.2 .
-- Process light client finality updates only for new finalized epochs instead of doing it for every block.
 - Enforce Compound prefix (0x02) for target when processing pending consolidation request.
+- Limit consolidating by validator's effective balance.
+- Use 16-bit random value for proposer and sync committee selection filter.
 
 ### Deprecated
 

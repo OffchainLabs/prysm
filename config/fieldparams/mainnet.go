@@ -27,9 +27,7 @@ const (
 	SyncAggregateSyncCommitteeBytesLength = 64                // SyncAggregateSyncCommitteeBytesLength defines the length of sync committee bytes in a sync aggregate.
 	MaxWithdrawalsPerPayload              = 16                // MaxWithdrawalsPerPayloadLength defines the maximum number of withdrawals that can be included in a payload.
 	MaxBlobCommitmentsPerBlock            = 4096              // MaxBlobCommitmentsPerBlock defines the theoretical limit of blobs can be included in a block.
-	MaxBlobCommitmentsPerBlockElectra     = 4096              // MaxBlobCommitmentsPerBlockElectra defines the theoretical limit of blobs can be included in a block. (This only applies to minimal config post Electra)
 	LogMaxBlobCommitments                 = 12                // Log_2 of MaxBlobCommitmentsPerBlock
-	LogMaxBlobCommitmentsElectra          = 12                // Log_2 of MaxBlobCommitmentsPerBlockElectra. (This only applies to minimal config post Electra)
 	BlobLength                            = 131072            // BlobLength defines the byte length of a blob.
 	BlobSize                              = 131072            // defined to match blob.size in bazel ssz codegen
 	BlobSidecarSize                       = 131928            // defined to match blob sidecar size in bazel ssz codegen
