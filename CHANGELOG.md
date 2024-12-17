@@ -36,6 +36,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Added proper gas limit check for header from the builder.
 - Added an error field to log `Finished building block`.
 - Implemented a new `EmptyExecutionPayloadHeader` function.
+- `Finished building block`: Display error only if not nil.
 
 ### Changed
 
@@ -118,6 +119,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - P2P: Avoid infinite loop when looking for peers in small networks.
 - Fixed another rollback bug due to a context deadline.
 - Fix checkpoint sync bug on holesky. [pr](https://github.com/prysmaticlabs/prysm/pull/14689)
+- Added check to prevent nil pointer deference or out of bounds array access when validating the BLSToExecutionChange on an impossibly nil validator.
 - Fix proposer boost spec tests being flakey by adjusting start time from 3 to 2s into slot.
 - Fix segmentation fault in E2E when light-client feature flag is enabled. [PR](https://github.com/prysmaticlabs/prysm/pull/14699)
 - Fix `searchForPeers` infinite loop in small networks.
