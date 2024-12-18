@@ -9,6 +9,7 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/go-bitfield"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
@@ -104,17 +105,6 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(ctx context.Context, p
 		}
 	}
 
-	if !s.cfg.chain.InForkchoice(bytesutil.ToBytes32(data.BeaconBlockRoot)) {
-		tracing.AnnotateError(span, blockchain.ErrNotDescendantOfFinalized)
-		return pubsub.ValidationIgnore, blockchain.ErrNotDescendantOfFinalized
-	}
-
-	if err = s.cfg.chain.VerifyLmdFfgConsistency(ctx, att); err != nil {
-		tracing.AnnotateError(span, err)
-		attBadLmdConsistencyCount.Inc()
-		return pubsub.ValidationReject, err
-	}
-
 	preState, err := s.cfg.chain.AttestationTargetState(ctx, data.Target)
 	if err != nil {
 		tracing.AnnotateError(span, err)
@@ -166,6 +156,17 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(ctx context.Context, p
 			s.savePendingAtt(&eth.SignedAggregateAttestationAndProof{Message: &eth.AggregateAttestationAndProof{Aggregate: a}})
 		}
 		return pubsub.ValidationIgnore, nil
+	}
+
+	if !s.cfg.chain.InForkchoice(bytesutil.ToBytes32(data.BeaconBlockRoot)) {
+		tracing.AnnotateError(span, blockchain.ErrNotDescendantOfFinalized)
+		return pubsub.ValidationIgnore, blockchain.ErrNotDescendantOfFinalized
+	}
+
+	if err = s.cfg.chain.VerifyLmdFfgConsistency(ctx, att); err != nil {
+		tracing.AnnotateError(span, err)
+		attBadLmdConsistencyCount.Inc()
+		return pubsub.ValidationReject, err
 	}
 
 	validationRes, err = s.validateUnaggregatedAttTopic(ctx, att, preState, *msg.Topic)
@@ -281,14 +282,10 @@ func (s *Service) validateUnaggregatedAttWithState(ctx context.Context, a eth.At
 	if err != nil {
 		return pubsub.ValidationIgnore, err
 	}
-	committee, err := helpers.BeaconCommitteeFromState(ctx, bs, a.GetData().Slot, committeeIndex)
-	if err != nil {
-		return pubsub.ValidationIgnore, err
-	}
 
-	// Verify number of aggregation bits matches the committee size.
-	if err = helpers.VerifyBitfieldLength(a.GetAggregationBits(), uint64(len(committee))); err != nil {
-		return pubsub.ValidationReject, err
+	committee, result, err := s.validateBitLength(ctx, bs, a.GetData().Slot, committeeIndex, a.GetAggregationBits())
+	if result != pubsub.ValidationAccept {
+		return result, err
 	}
 	// Attestation must be unaggregated and the bit index must exist in the range of committee indices.
 	// Note: The Ethereum Beacon chain spec suggests (len(get_attesting_indices(state, attestation.data, attestation.aggregation_bits)) == 1)
@@ -304,6 +301,26 @@ func (s *Service) validateUnaggregatedAttWithState(ctx context.Context, a eth.At
 		return pubsub.ValidationReject, err
 	}
 	return s.validateWithBatchVerifier(ctx, "attestation", set)
+}
+
+func (s *Service) validateBitLength(
+	ctx context.Context,
+	bs state.ReadOnlyBeaconState,
+	slot primitives.Slot,
+	committeeIndex primitives.CommitteeIndex,
+	aggregationBits bitfield.Bitlist,
+) ([]primitives.ValidatorIndex, pubsub.ValidationResult, error) {
+	committee, err := helpers.BeaconCommitteeFromState(ctx, bs, slot, committeeIndex)
+	if err != nil {
+		return nil, pubsub.ValidationIgnore, err
+	}
+
+	// Verify number of aggregation bits matches the committee size.
+	if err := helpers.VerifyBitfieldLength(aggregationBits, uint64(len(committee))); err != nil {
+		return nil, pubsub.ValidationReject, err
+	}
+
+	return committee, pubsub.ValidationAccept, nil
 }
 
 func validateAttestingIndex(ctx context.Context, a *eth.SingleAttestation, committee []primitives.ValidatorIndex) (pubsub.ValidationResult, error) {
