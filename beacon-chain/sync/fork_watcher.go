@@ -136,12 +136,12 @@ func (s *Service) deregisterFromPastFork(currentEpoch primitives.Epoch) error {
 	// Compute the RPC handlers that are no longer needed.
 	beforeForkHandlerByTopic, err := s.rpcHandlerByTopicFromEpoch(beforeForkEpoch)
 	if err != nil {
-		return errors.Wrap(err, "RPC handler by topic from epoch from before fork epoch")
+		return errors.Wrap(err, "RPC handler by topic from before fork epoch")
 	}
 
 	forkHandlerByTopic, err := s.rpcHandlerByTopicFromEpoch(currentFork.Epoch)
 	if err != nil {
-		return errors.Wrap(err, "RPC handler by topic from epoch from fork epoch")
+		return errors.Wrap(err, "RPC handler by topic from fork epoch")
 	}
 
 	topicsToRemove := removedRPCTopics(beforeForkHandlerByTopic, forkHandlerByTopic)
