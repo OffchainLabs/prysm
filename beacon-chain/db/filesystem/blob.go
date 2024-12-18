@@ -109,10 +109,11 @@ func (bs *BlobStorage) WarmCache() {
 	}
 	go func() {
 		start := time.Now()
+		log.Info("Blob filesystem cache warm-up started. This may take a few minutes.")
 		if err := bs.pruner.warmCache(); err != nil {
 			log.WithError(err).Error("Error encountered while warming up blob pruner cache")
 		}
-		log.WithField("elapsed", time.Since(start)).Info("Blob filesystem cache warm-up complete.")
+		log.WithField("elapsed", time.Since(start)).Info("Blob filesystem cache warm-up complete")
 	}()
 }
 
