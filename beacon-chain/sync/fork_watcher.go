@@ -85,7 +85,7 @@ func (s *Service) registerForUpcomingFork(currentEpoch primitives.Epoch) error {
 		return errors.Wrap(err, "RPC handler by topic from fork epoch")
 	}
 
-	// Compute newsly added topics.
+	// Compute newly added topics.
 	newRPCHandlerByTopic := addedRPCHandlerByTopic(beforeForkHandlerByTopic, forkHandlerByTopic)
 
 	// Register the new RPC handlers.
