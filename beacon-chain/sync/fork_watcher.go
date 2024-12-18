@@ -77,7 +77,7 @@ func (s *Service) registerForUpcomingFork(currentEpoch primitives.Epoch) error {
 	// Get the handlers for the current and next fork.
 	beforeForkHandlerByTopic, err := s.rpcHandlerByTopicFromEpoch(beforeForkEpoch)
 	if err != nil {
-		return errors.Wrap(err, "RPC handler by topicw from before fork epoch")
+		return errors.Wrap(err, "RPC handler by topic from before fork epoch")
 	}
 
 	forkHandlerByTopic, err := s.rpcHandlerByTopicFromEpoch(forkEpoch)
