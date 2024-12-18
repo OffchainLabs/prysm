@@ -125,7 +125,11 @@ func NextSyncCommitteeIndices(ctx context.Context, s state.BeaconState) ([]primi
 	cIndices := make([]primitives.ValidatorIndex, 0, syncCommitteeSize)
 	hashFunc := hash.CustomSHA256Hasher()
 
-	for i := primitives.ValidatorIndex(0); uint64(len(cIndices)) < params.BeaconConfig().SyncCommitteeSize; i++ {
+	// Preallocate buffers to avoid repeated allocations
+	seedBuffer := make([]byte, len(seed)+8)
+	copy(seedBuffer, seed[:])
+
+	for i := primitives.ValidatorIndex(0); uint64(len(cIndices)) < syncCommitteeSize; i++ {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
@@ -142,16 +146,20 @@ func NextSyncCommitteeIndices(ctx context.Context, s state.BeaconState) ([]primi
 		effectiveBal := v.EffectiveBalance()
 
 		if s.Version() >= version.Electra {
-			b := append(seed[:], bytesutil.Bytes8(uint64(i/16))...)
-			randomByte := hashFunc(b)
+			// Use the preallocated seed buffer
+			binary.LittleEndian.PutUint64(seedBuffer[len(seed):], uint64(i/16))
+			randomByte := hashFunc(seedBuffer)
 			offset := (i % 16) * 2
 			randomByteSlice := bytesutil.PadTo(randomByte[offset:offset+2], 8)
-			if effectiveBal*fieldparams.MaxRandomValueElectra >= cfg.MaxEffectiveBalanceElectra*binary.LittleEndian.Uint64(randomByteSlice) {
+			randomValue := binary.LittleEndian.Uint64(randomByteSlice)
+
+			if effectiveBal*fieldparams.MaxRandomValueElectra >= cfg.MaxEffectiveBalanceElectra*randomValue {
 				cIndices = append(cIndices, cIndex)
 			}
 		} else {
-			b := append(seed[:], bytesutil.Bytes8(uint64(i.Div(32)))...)
-			randomByte := hashFunc(b)[i%32]
+			// Use the preallocated seed buffer
+			binary.LittleEndian.PutUint64(seedBuffer[len(seed):], uint64(i/32))
+			randomByte := hashFunc(seedBuffer)[i%32]
 			if effectiveBal*fieldparams.MaxRandomValue >= cfg.MaxEffectiveBalance*uint64(randomByte) {
 				cIndices = append(cIndices, cIndex)
 			}
