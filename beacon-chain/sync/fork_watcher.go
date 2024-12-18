@@ -115,7 +115,7 @@ func (s *Service) deregisterFromPastFork(currentEpoch primitives.Epoch) error {
 	// Get the epoch after the fork epoch.
 	afterForkEpoch := currentFork.Epoch + 1
 
-	// Start de-registring if the current epoch is the epoch after the fork epoch.
+	// Start de-registering if the current epoch is after the fork epoch.
 	if currentEpoch != afterForkEpoch {
 		return nil
 	}
