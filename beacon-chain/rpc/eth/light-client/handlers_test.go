@@ -19,6 +19,7 @@ import (
 	dbtesting "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/testutil"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v5/config/features"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
@@ -33,6 +34,11 @@ import (
 )
 
 func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
+	resetFn := features.InitWithReset(&features.Flags{
+		EnableLightClient: true,
+	})
+	defer resetFn()
+
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig()
 	cfg.AltairForkEpoch = 0
@@ -252,6 +258,11 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 // GetLightClientByRange tests
 
 func TestLightClientHandler_GetLightClientUpdatesByRangeAltair(t *testing.T) {
+	resetFn := features.InitWithReset(&features.Flags{
+		EnableLightClient: true,
+	})
+	defer resetFn()
+
 	helpers.ClearCache()
 	ctx := context.Background()
 
@@ -301,6 +312,11 @@ func TestLightClientHandler_GetLightClientUpdatesByRangeAltair(t *testing.T) {
 }
 
 func TestLightClientHandler_GetLightClientUpdatesByRangeCapella(t *testing.T) {
+	resetFn := features.InitWithReset(&features.Flags{
+		EnableLightClient: true,
+	})
+	defer resetFn()
+
 	helpers.ClearCache()
 	ctx := context.Background()
 	params.SetupTestConfigCleanup(t)
@@ -350,6 +366,11 @@ func TestLightClientHandler_GetLightClientUpdatesByRangeCapella(t *testing.T) {
 }
 
 func TestLightClientHandler_GetLightClientUpdatesByRangeDeneb(t *testing.T) {
+	resetFn := features.InitWithReset(&features.Flags{
+		EnableLightClient: true,
+	})
+	defer resetFn()
+
 	helpers.ClearCache()
 	ctx := context.Background()
 	params.SetupTestConfigCleanup(t)
@@ -399,6 +420,11 @@ func TestLightClientHandler_GetLightClientUpdatesByRangeDeneb(t *testing.T) {
 }
 
 func TestLightClientHandler_GetLightClientUpdatesByRangeMultipleAltair(t *testing.T) {
+	resetFn := features.InitWithReset(&features.Flags{
+		EnableLightClient: true,
+	})
+	defer resetFn()
+
 	helpers.ClearCache()
 	ctx := context.Background()
 	params.SetupTestConfigCleanup(t)
@@ -458,6 +484,11 @@ func TestLightClientHandler_GetLightClientUpdatesByRangeMultipleAltair(t *testin
 }
 
 func TestLightClientHandler_GetLightClientUpdatesByRangeMultipleCapella(t *testing.T) {
+	resetFn := features.InitWithReset(&features.Flags{
+		EnableLightClient: true,
+	})
+	defer resetFn()
+
 	helpers.ClearCache()
 	ctx := context.Background()
 	params.SetupTestConfigCleanup(t)
@@ -518,6 +549,11 @@ func TestLightClientHandler_GetLightClientUpdatesByRangeMultipleCapella(t *testi
 }
 
 func TestLightClientHandler_GetLightClientUpdatesByRangeMultipleDeneb(t *testing.T) {
+	resetFn := features.InitWithReset(&features.Flags{
+		EnableLightClient: true,
+	})
+	defer resetFn()
+
 	helpers.ClearCache()
 	ctx := context.Background()
 	params.SetupTestConfigCleanup(t)
@@ -578,6 +614,11 @@ func TestLightClientHandler_GetLightClientUpdatesByRangeMultipleDeneb(t *testing
 }
 
 func TestLightClientHandler_GetLightClientUpdatesByRangeMultipleForksAltairCapella(t *testing.T) {
+	resetFn := features.InitWithReset(&features.Flags{
+		EnableLightClient: true,
+	})
+	defer resetFn()
+
 	helpers.ClearCache()
 	ctx := context.Background()
 	params.SetupTestConfigCleanup(t)
@@ -646,6 +687,11 @@ func TestLightClientHandler_GetLightClientUpdatesByRangeMultipleForksAltairCapel
 }
 
 func TestLightClientHandler_GetLightClientUpdatesByRangeMultipleForksCapellaDeneb(t *testing.T) {
+	resetFn := features.InitWithReset(&features.Flags{
+		EnableLightClient: true,
+	})
+	defer resetFn()
+
 	helpers.ClearCache()
 	ctx := context.Background()
 	params.SetupTestConfigCleanup(t)
@@ -715,6 +761,11 @@ func TestLightClientHandler_GetLightClientUpdatesByRangeMultipleForksCapellaDene
 }
 
 func TestLightClientHandler_GetLightClientUpdatesByRangeCountBiggerThanLimit(t *testing.T) {
+	resetFn := features.InitWithReset(&features.Flags{
+		EnableLightClient: true,
+	})
+	defer resetFn()
+
 	helpers.ClearCache()
 	ctx := context.Background()
 	params.SetupTestConfigCleanup(t)
@@ -777,6 +828,11 @@ func TestLightClientHandler_GetLightClientUpdatesByRangeCountBiggerThanLimit(t *
 }
 
 func TestLightClientHandler_GetLightClientUpdatesByRangeCountBiggerThanMax(t *testing.T) {
+	resetFn := features.InitWithReset(&features.Flags{
+		EnableLightClient: true,
+	})
+	defer resetFn()
+
 	helpers.ClearCache()
 	ctx := context.Background()
 	params.SetupTestConfigCleanup(t)
@@ -838,6 +894,11 @@ func TestLightClientHandler_GetLightClientUpdatesByRangeCountBiggerThanMax(t *te
 }
 
 func TestLightClientHandler_GetLightClientUpdatesByRangeStartPeriodBeforeAltair(t *testing.T) {
+	resetFn := features.InitWithReset(&features.Flags{
+		EnableLightClient: true,
+	})
+	defer resetFn()
+
 	helpers.ClearCache()
 	params.SetupTestConfigCleanup(t)
 	config := params.BeaconConfig()
@@ -866,6 +927,11 @@ func TestLightClientHandler_GetLightClientUpdatesByRangeStartPeriodBeforeAltair(
 }
 
 func TestLightClientHandler_GetLightClientUpdatesByRangeMissingUpdates(t *testing.T) {
+	resetFn := features.InitWithReset(&features.Flags{
+		EnableLightClient: true,
+	})
+	defer resetFn()
+
 	helpers.ClearCache()
 	ctx := context.Background()
 	params.SetupTestConfigCleanup(t)
@@ -972,6 +1038,11 @@ func TestLightClientHandler_GetLightClientUpdatesByRangeMissingUpdates(t *testin
 }
 
 func TestLightClientHandler_GetLightClientFinalityUpdate(t *testing.T) {
+	resetFn := features.InitWithReset(&features.Flags{
+		EnableLightClient: true,
+	})
+	defer resetFn()
+
 	helpers.ClearCache()
 	ctx := context.Background()
 	config := params.BeaconConfig()
@@ -1084,6 +1155,11 @@ func TestLightClientHandler_GetLightClientFinalityUpdate(t *testing.T) {
 }
 
 func TestLightClientHandler_GetLightClientOptimisticUpdateAltair(t *testing.T) {
+	resetFn := features.InitWithReset(&features.Flags{
+		EnableLightClient: true,
+	})
+	defer resetFn()
+
 	helpers.ClearCache()
 	ctx := context.Background()
 	config := params.BeaconConfig()
@@ -1196,6 +1272,11 @@ func TestLightClientHandler_GetLightClientOptimisticUpdateAltair(t *testing.T) {
 }
 
 func TestLightClientHandler_GetLightClientOptimisticUpdateCapella(t *testing.T) {
+	resetFn := features.InitWithReset(&features.Flags{
+		EnableLightClient: true,
+	})
+	defer resetFn()
+
 	helpers.ClearCache()
 	ctx := context.Background()
 	config := params.BeaconConfig()
@@ -1308,6 +1389,11 @@ func TestLightClientHandler_GetLightClientOptimisticUpdateCapella(t *testing.T) 
 }
 
 func TestLightClientHandler_GetLightClientOptimisticUpdateDeneb(t *testing.T) {
+	resetFn := features.InitWithReset(&features.Flags{
+		EnableLightClient: true,
+	})
+	defer resetFn()
+
 	helpers.ClearCache()
 	ctx := context.Background()
 	config := params.BeaconConfig()
