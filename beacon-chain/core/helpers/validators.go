@@ -373,6 +373,9 @@ func ComputeProposerIndex(bState state.ReadOnlyBeaconState, activeIndices []prim
 		return 0, errors.New("empty active indices list")
 	}
 	hashFunc := hash.CustomSHA256Hasher()
+	beaconConfig := params.BeaconConfig()
+	seedBuffer := make([]byte, len(seed)+8)
+	copy(seedBuffer, seed[:])
 
 	for i := uint64(0); ; i++ {
 		candidateIndex, err := ComputeShuffledIndex(primitives.ValidatorIndex(i%length), length, seed, true /* shuffle */)
@@ -390,17 +393,21 @@ func ComputeProposerIndex(bState state.ReadOnlyBeaconState, activeIndices []prim
 		}
 		effectiveBal := v.EffectiveBalance()
 		if bState.Version() >= version.Electra {
-			b := append(seed[:], bytesutil.Bytes8(i/16)...)
-			randomByte := hashFunc(b)
+			binary.LittleEndian.PutUint64(seedBuffer[len(seed):], i/16)
+			randomByte := hashFunc(seedBuffer)
 			offset := (i % 16) * 2
+
 			randomByteSlice := bytesutil.PadTo(randomByte[offset:offset+2], 8)
-			if effectiveBal*fieldparams.MaxRandomValueElectra >= params.BeaconConfig().MaxEffectiveBalanceElectra*binary.LittleEndian.Uint64(randomByteSlice) {
+			randomValue := binary.LittleEndian.Uint64(randomByteSlice)
+
+			if effectiveBal*fieldparams.MaxRandomValueElectra >= beaconConfig.MaxEffectiveBalanceElectra*randomValue {
 				return candidateIndex, nil
 			}
 		} else {
-			b := append(seed[:], bytesutil.Bytes8(i/32)...)
-			randomByte := hashFunc(b)[i%32]
-			if effectiveBal*fieldparams.MaxRandomValue >= params.BeaconConfig().MaxEffectiveBalance*uint64(randomByte) {
+			binary.LittleEndian.PutUint64(seedBuffer[len(seed):], i/32)
+			randomByte := hashFunc(seedBuffer)[i%32]
+
+			if effectiveBal*fieldparams.MaxRandomValue >= beaconConfig.MaxEffectiveBalance*uint64(randomByte) {
 				return candidateIndex, nil
 			}
 		}
