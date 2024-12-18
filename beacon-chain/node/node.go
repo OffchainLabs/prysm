@@ -7,8 +7,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/pruner"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"net"
 	"net/http"
 	"os"
@@ -18,6 +16,9 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/pruner"
+	"github.com/prysmaticlabs/prysm/v5/time/slots"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"

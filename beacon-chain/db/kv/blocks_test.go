@@ -2,9 +2,10 @@ package kv
 
 import (
 	"context"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	"testing"
 	"time"
+
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"

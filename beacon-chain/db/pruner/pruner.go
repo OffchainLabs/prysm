@@ -2,6 +2,8 @@ package pruner
 
 import (
 	"context"
+	"time"
+
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
@@ -10,7 +12,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/sirupsen/logrus"
-	"time"
 )
 
 var log = logrus.WithField("prefix", "db-pruner")
