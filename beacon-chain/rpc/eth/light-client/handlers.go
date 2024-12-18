@@ -76,26 +76,16 @@ func (s *Server) GetLightClientBootstrap(w http.ResponseWriter, req *http.Reques
 
 // GetLightClientUpdatesByRange - implements https://github.com/ethereum/beacon-APIs/blob/263f4ed6c263c967f13279c7a9f5629b51c5fc55/apis/beacon/light_client/updates.yaml
 func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.Request) {
-	// Prepare
 	ctx, span := trace.StartSpan(req.Context(), "beacon.GetLightClientUpdatesByRange")
 	defer span.End()
 
-	// Determine slots per period
 	config := params.BeaconConfig()
-	slotsPerPeriod := uint64(config.EpochsPerSyncCommitteePeriod) * uint64(config.SlotsPerEpoch)
 
-	// Adjust count based on configuration
 	_, count, gotCount := shared.UintFromQuery(w, req, "count", true)
 	if !gotCount {
 		return
 	} else if count == 0 {
-		httputil.HandleError(w, fmt.Sprintf("got invalid 'count' query variable '%d': count must be greater than 0", count), http.StatusInternalServerError)
-		return
-	}
-
-	// Determine the start and end periods
-	_, startPeriod, gotStartPeriod := shared.UintFromQuery(w, req, "start_period", true)
-	if !gotStartPeriod {
+		httputil.HandleError(w, fmt.Sprintf("Got invalid 'count' query variable '%d': count must be greater than 0", count), http.StatusBadRequest)
 		return
 	}
 
@@ -103,32 +93,12 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 		count = config.MaxRequestLightClientUpdates
 	}
 
-	// max possible slot is current head
-	headState, err := s.HeadFetcher.HeadState(ctx)
-	if err != nil {
-		httputil.HandleError(w, "could not get head state: "+err.Error(), http.StatusInternalServerError)
+	_, startPeriod, gotStartPeriod := shared.UintFromQuery(w, req, "start_period", true)
+	if !gotStartPeriod {
 		return
 	}
 
-	maxSlot := uint64(headState.Slot())
-
-	// min possible slot is Altair fork period
-	minSlot := uint64(config.AltairForkEpoch) * uint64(config.SlotsPerEpoch)
-
-	// Adjust startPeriod, the end of start period must be later than Altair fork epoch, otherwise, can not get the sync committee votes
-	startPeriodEndSlot := (startPeriod+1)*slotsPerPeriod - 1
-	if startPeriodEndSlot < minSlot {
-		startPeriod = minSlot / slotsPerPeriod
-	}
-
-	// Get the initial endPeriod, then we will adjust
 	endPeriod := startPeriod + count - 1
-
-	// Adjust endPeriod, the end of end period must be earlier than current head slot
-	endPeriodEndSlot := (endPeriod+1)*slotsPerPeriod - 1
-	if endPeriodEndSlot > maxSlot {
-		endPeriod = maxSlot / slotsPerPeriod
-	}
 
 	// get updates
 	updatesMap, err := s.BeaconDB.LightClientUpdates(ctx, startPeriod, endPeriod)

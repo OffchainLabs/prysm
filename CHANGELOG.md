@@ -4,7 +4,50 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
-## [Unreleased](https://github.com/prysmaticlabs/prysm/compare/v5.1.2...HEAD)
+## [Unreleased](https://github.com/prysmaticlabs/prysm/compare/v5.2.0...HEAD)
+
+### Added
+
+- Added proper gas limit check for header from the builder.
+- Added an error field to log `Finished building block`.
+- Implemented a new `EmptyExecutionPayloadHeader` function.
+- `Finished building block`: Display error only if not nil.
+
+### Changed
+
+- Process light client finality updates only for new finalized epochs instead of doing it for every block.
+- Refactor subnets subscriptions.
+
+### Deprecated
+
+
+### Removed
+
+
+### Fixed
+
+- Added check to prevent nil pointer deference or out of bounds array access when validating the BLSToExecutionChange on an impossibly nil validator.
+
+### Security
+
+
+## [v5.2.0](https://github.com/prysmaticlabs/prysm/compare/v5.1.2...v5.2.0)
+
+Updating to this release is highly recommended, especially for users running v5.1.1 or v5.1.2.
+This release is **mandatory** for all validator clients using mev-boost with a gas limit increase.
+Without upgrading to this release, validator clients will default to using local execution blocks
+when the gas limit starts to increase.
+
+This release has several fixes and new features. In this release, we have enabled QUIC protocol by
+default, which uses port 13000 for `--p2p-quic-port`. This may be a [breaking change](https://github.com/prysmaticlabs/prysm/pull/14688#issuecomment-2516713826)
+if you're using port 13000 already. This release has some improvements for raising the gas limit,
+but there are [known issues](https://hackmd.io/@ttsao/prysm-gas-limit) with the proposer settings
+file provided gas limit not being respected for mev-boost outsourced blocks. Signalling an increase
+for the gas limit works perfectly for local block production as of this release. See [pumpthegas.org](https://pumpthegas.org) for more info on raising the gas limit on L1.
+
+Notable features:
+- Prysm can reuse blobs from the EL via engine_getBlobsV1, [potentially saving bandwidth](https://hackmd.io/@ttsao/get-blobs-early-results).
+- QUIC is enabled by default. This is a UDP based networking protocol with default port 13000.
 
 ### Added
 
@@ -33,10 +76,6 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Added a Prometheus error counter metric for SSE requests.
 - Save light client updates and bootstraps in DB.
 - Added more comprehensive tests for `BlockToLightClientHeader`. [PR](https://github.com/prysmaticlabs/prysm/pull/14699)
-- Added proper gas limit check for header from the builder.
-- Added an error field to log `Finished building block`.
-- Implemented a new `EmptyExecutionPayloadHeader` function.
-- `Finished building block`: Display error only if not nil.
 
 ### Changed
 
@@ -81,7 +120,6 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Check kzg commitments align with blobs and proofs for beacon api end point.
 - Revert "Proposer checks gas limit before accepting builder's bid".
 - Updated quic-go to v0.48.2 .
-- Process light client finality updates only for new finalized epochs instead of doing it for every block.
 
 ### Deprecated
 
@@ -119,7 +157,6 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - P2P: Avoid infinite loop when looking for peers in small networks.
 - Fixed another rollback bug due to a context deadline.
 - Fix checkpoint sync bug on holesky. [pr](https://github.com/prysmaticlabs/prysm/pull/14689)
-- Added check to prevent nil pointer deference or out of bounds array access when validating the BLSToExecutionChange on an impossibly nil validator.
 - Fix proposer boost spec tests being flakey by adjusting start time from 3 to 2s into slot.
 - Fix segmentation fault in E2E when light-client feature flag is enabled. [PR](https://github.com/prysmaticlabs/prysm/pull/14699)
 - Fix `searchForPeers` infinite loop in small networks.
