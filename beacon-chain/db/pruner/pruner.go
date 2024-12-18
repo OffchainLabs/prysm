@@ -2,10 +2,7 @@ package pruner
 
 import (
 	"context"
-	"time"
-
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/iface"
@@ -13,46 +10,75 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/sirupsen/logrus"
+	"time"
 )
 
 var log = logrus.WithField("prefix", "db-pruner")
 
-// Pruner defines a service that prunes beacon chain DB based on weak subjectivity period.
-type Pruner struct {
-	ctx          context.Context
-	db           db.Database
-	headFetcher  blockchain.HeadFetcher
-	genesisTime  time.Time
-	pruningEpoch primitives.Epoch
-	done         chan struct{}
-}
+type ServiceOption func(*Service) error
 
-func New(ctx context.Context, db iface.Database, headFetcher blockchain.HeadFetcher, genesisTime time.Time) *Pruner {
-	return &Pruner{
-		ctx:         ctx,
-		db:          db,
-		headFetcher: headFetcher,
-		genesisTime: genesisTime,
-		done:        make(chan struct{}),
+// WithMinimumSlot allows the user to specify a different prune minimum slot than the spec default of current - MIN_EPOCHS_FOR_BLOCK_REQUESTS - 1.
+// If this value is greater than current - MIN_EPOCHS_FOR_BLOCK_REQUESTS - 1, it will be ignored with a warning log.
+func WithMinimumSlot(s primitives.Slot) ServiceOption {
+	ms := func(current primitives.Slot) primitives.Slot {
+		specMin := minimumSlotToKeep(current)
+		if s < specMin {
+			return s
+		}
+		log.WithField("userSlot", s).WithField("specMinSlot", specMin).
+			Warn("Ignoring user-specified slot > MIN_EPOCHS_FOR_BLOCK_REQUESTS.")
+		return specMin
+	}
+	return func(s *Service) error {
+		s.ms = ms
+		return nil
 	}
 }
 
-func (p *Pruner) Start() {
+// Service defines a service that prunes beacon chain DB based on MIN_EPOCHS_FOR_BLOCK_REQUESTS.
+type Service struct {
+	ctx         context.Context
+	db          db.Database
+	genesisTime time.Time
+	ms          func(current primitives.Slot) primitives.Slot
+	prunedSlot  primitives.Slot
+	done        chan struct{}
+}
+
+func New(ctx context.Context, db iface.Database, genesisTime time.Time, opts ...ServiceOption) (*Service, error) {
+	p := &Service{
+		ctx:         ctx,
+		db:          db,
+		genesisTime: genesisTime,
+		ms:          minimumSlotToKeep,
+		done:        make(chan struct{}),
+	}
+
+	for _, o := range opts {
+		if err := o(p); err != nil {
+			return nil, err
+		}
+	}
+
+	return p, nil
+}
+
+func (p *Service) Start() {
 	log.Info("Starting Beacon DB pruner service")
 	go p.run()
 }
 
-func (p *Pruner) Stop() error {
+func (p *Service) Stop() error {
 	log.Info("Stopping Beacon DB pruner service")
 	close(p.done)
 	return nil
 }
 
-func (p *Pruner) Status() error {
+func (p *Service) Status() error {
 	return nil
 }
 
-func (p *Pruner) run() {
+func (p *Service) run() {
 	ticker := slots.NewSlotTicker(p.genesisTime, params.BeaconConfig().SecondsPerSlot)
 	defer ticker.Done()
 
@@ -63,69 +89,51 @@ func (p *Pruner) run() {
 		case <-p.done:
 			return
 		case slot := <-ticker.C():
-			// Prune at the start of every epoch.
-			// TODO: prune at the middle of epoch.
-			if !slots.IsEpochStart(slot) {
+			// Prune at the middle of every epoch.
+			if slots.SinceEpochStarts(slot) != (params.BeaconConfig().SlotsPerEpoch / 2) {
 				continue
 			}
 
-			if err := p.prune(); err != nil {
+			if err := p.prune(slot); err != nil {
 				log.WithError(err).Error("Failed to prune database")
 			}
 		}
 	}
 }
 
-// prune deletes historical chain data beyond the weak subjectivity period.
-func (p *Pruner) prune() error {
-	// Get current finalized epoch.
-	finalized, err := p.db.FinalizedCheckpoint(p.ctx)
-	if err != nil {
-		return errors.Wrap(err, "could not get finalized checkpoint")
-	}
-	finalizedEpoch := finalized.Epoch
+// prune deletes historical chain data beyond the pruneSlot.
+func (p *Service) prune(slot primitives.Slot) error {
+	// Prune everything before this slot.
+	pruneSlot := minimumSlotToKeep(slot)
 
-	// Get head state to compute weak subjectivity period.
-	headState, err := p.headFetcher.HeadState(p.ctx)
-	if err != nil {
-		return errors.Wrap(err, "could not get head state")
-	}
-
-	// Calculate weak subjectivity period.
-	wsPeriod, err := helpers.ComputeWeakSubjectivityPeriod(p.ctx, headState, params.BeaconConfig())
-	if err != nil {
-		return errors.Wrap(err, "could not compute weak subjectivity period")
-	}
-
-	// Calculate pruning point
-	if finalizedEpoch <= wsPeriod {
-		// Too early to prune
-		return nil
-	}
-	pruneEpoch := finalizedEpoch - wsPeriod
-
-	// Skip if already pruned up to this epoch.
-	if pruneEpoch <= p.pruningEpoch {
+	// Skip if already pruned up to this slot.
+	if pruneSlot <= p.prunedSlot {
 		return nil
 	}
 
 	log.WithFields(logrus.Fields{
-		"finalizedEpoch": finalizedEpoch,
-		"pruneEpoch":     pruneEpoch,
-		"wsPeriod":       wsPeriod,
-	}).Info("Pruning chain data before weak subjectivity period")
+		"pruneSlot": pruneSlot,
+	}).Info("Pruning chain data before")
 
-	// Prune everything before this slot.
-	pruneSlot, err := slots.EpochStart(pruneEpoch)
-	if err != nil {
-		return errors.Wrap(err, "could not get epoch start slot")
-	}
-
-	if err = p.db.DeleteBeforeSlot(p.ctx, pruneSlot); err != nil {
+	if err := p.db.DeleteBeforeSlot(p.ctx, pruneSlot); err != nil {
 		return errors.Wrap(err, "could not delete before slot")
 	}
 	// Update pruning checkpoint.
-	p.pruningEpoch = pruneEpoch
+	p.prunedSlot = pruneSlot
 
 	return nil
+}
+
+// minimumSlotToSave determines the lowest slot that pruner needs to keep.
+// MIN_EPOCHS_FOR_BLOCK_REQUESTS from the current slot.
+func minimumSlotToKeep(current primitives.Slot) primitives.Slot {
+	oe := helpers.MinEpochsForBlockRequests()
+	if oe > slots.MaxSafeEpoch() {
+		oe = slots.MaxSafeEpoch()
+	}
+	offset := slots.UnsafeEpochStart(oe)
+	if offset >= current {
+		return 0
+	}
+	return current - offset - params.BeaconConfig().SlotsPerEpoch // Stay one epoch behind.
 }

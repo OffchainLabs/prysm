@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/pruner"
+	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"net"
 	"net/http"
 	"os"
@@ -17,7 +18,6 @@ import (
 	"strings"
 	"sync"
 	"syscall"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
@@ -58,6 +58,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
 	"github.com/prysmaticlabs/prysm/v5/cmd"
 	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
+	backFillFlags "github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/sync/backfill/flags"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
@@ -1099,14 +1100,24 @@ func (b *BeaconNode) registerBuilderService(cliCtx *cli.Context) error {
 }
 
 func (b *BeaconNode) registerPrunerService(cliCtx *cli.Context) error {
-	var chainService *blockchain.Service
-	if err := b.services.FetchService(&chainService); err != nil {
+	genesisTimeUnix := params.BeaconConfig().MinGenesisTime + params.BeaconConfig().GenesisDelay
+	genesisTime := slots.StartTime(genesisTimeUnix, 0)
+
+	if cliCtx.IsSet(backFillFlags.BackfillOldestSlot.Name) {
+		uv := cliCtx.Uint64(backFillFlags.BackfillOldestSlot.Name)
+		p, err := pruner.New(cliCtx.Context, b.db, genesisTime, pruner.WithMinimumSlot(primitives.Slot(uv)))
+		if err != nil {
+			return err
+		}
+
+		return b.services.RegisterService(p)
+	}
+
+	p, err := pruner.New(cliCtx.Context, b.db, genesisTime)
+	if err != nil {
 		return err
 	}
 
-	genesisTimeUnix := params.BeaconConfig().MinGenesisTime + params.BeaconConfig().GenesisDelay
-
-	p := pruner.New(cliCtx.Context, b.db, chainService, time.Unix(int64(genesisTimeUnix), 0))
 	return b.services.RegisterService(p)
 }
 
