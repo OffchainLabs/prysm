@@ -75,14 +75,14 @@ func (s *Service) registerForUpcomingFork(currentEpoch primitives.Epoch) error {
 	s.registerSubscribers(forkEpoch, afterForkDigest)
 
 	// Get the handlers for the current and next fork.
-	beforeForkHandlerByTopic, err := s.rpcHandlerByTopicFromEpoch(currentEpoch)
+	beforeForkHandlerByTopic, err := s.rpcHandlerByTopicFromEpoch(beforeForkEpoch)
 	if err != nil {
-		return errors.Wrap(err, "RPC handler by topic")
+		return errors.Wrap(err, "RPC handler by topicw from before fork epoch")
 	}
 
 	forkHandlerByTopic, err := s.rpcHandlerByTopicFromEpoch(forkEpoch)
 	if err != nil {
-		return errors.Wrap(err, "RPC handler by topic")
+		return errors.Wrap(err, "RPC handler by topic from fork epoch")
 	}
 
 	// Compute newsly added topics.
@@ -136,12 +136,12 @@ func (s *Service) deregisterFromPastFork(currentEpoch primitives.Epoch) error {
 	// Compute the RPC handlers that are no longer needed.
 	beforeForkHandlerByTopic, err := s.rpcHandlerByTopicFromEpoch(beforeForkEpoch)
 	if err != nil {
-		return errors.Wrap(err, "RPC handler by topic from epoch")
+		return errors.Wrap(err, "RPC handler by topic from epoch from before fork epoch")
 	}
 
 	forkHandlerByTopic, err := s.rpcHandlerByTopicFromEpoch(currentFork.Epoch)
 	if err != nil {
-		return errors.Wrap(err, "RPC handler by topic from epoch")
+		return errors.Wrap(err, "RPC handler by topic from epoch from fork epoch")
 	}
 
 	topicsToRemove := removedRPCTopics(beforeForkHandlerByTopic, forkHandlerByTopic)
