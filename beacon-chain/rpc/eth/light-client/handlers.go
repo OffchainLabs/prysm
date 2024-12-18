@@ -12,6 +12,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	lightclient "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/light-client"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/shared"
+	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
@@ -22,6 +23,11 @@ import (
 
 // GetLightClientBootstrap - implements https://github.com/ethereum/beacon-APIs/blob/263f4ed6c263c967f13279c7a9f5629b51c5fc55/apis/beacon/light_client/bootstrap.yaml
 func (s *Server) GetLightClientBootstrap(w http.ResponseWriter, req *http.Request) {
+	if !features.Get().EnableLightClient {
+		httputil.HandleError(w, "Light client feature flag is not enabled", http.StatusNotFound)
+		return
+	}
+
 	// Prepare
 	ctx, span := trace.StartSpan(req.Context(), "beacon.GetLightClientBootstrap")
 	defer span.End()
@@ -76,6 +82,11 @@ func (s *Server) GetLightClientBootstrap(w http.ResponseWriter, req *http.Reques
 
 // GetLightClientUpdatesByRange - implements https://github.com/ethereum/beacon-APIs/blob/263f4ed6c263c967f13279c7a9f5629b51c5fc55/apis/beacon/light_client/updates.yaml
 func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.Request) {
+	if !features.Get().EnableLightClient {
+		httputil.HandleError(w, "Light client feature flag is not enabled", http.StatusNotFound)
+		return
+	}
+
 	ctx, span := trace.StartSpan(req.Context(), "beacon.GetLightClientUpdatesByRange")
 	defer span.End()
 
@@ -132,6 +143,11 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 
 // GetLightClientFinalityUpdate - implements https://github.com/ethereum/beacon-APIs/blob/263f4ed6c263c967f13279c7a9f5629b51c5fc55/apis/beacon/light_client/finality_update.yaml
 func (s *Server) GetLightClientFinalityUpdate(w http.ResponseWriter, req *http.Request) {
+	if !features.Get().EnableLightClient {
+		httputil.HandleError(w, "Light client feature flag is not enabled", http.StatusNotFound)
+		return
+	}
+
 	ctx, span := trace.StartSpan(req.Context(), "beacon.GetLightClientFinalityUpdate")
 	defer span.End()
 
@@ -190,6 +206,11 @@ func (s *Server) GetLightClientFinalityUpdate(w http.ResponseWriter, req *http.R
 
 // GetLightClientOptimisticUpdate - implements https://github.com/ethereum/beacon-APIs/blob/263f4ed6c263c967f13279c7a9f5629b51c5fc55/apis/beacon/light_client/optimistic_update.yaml
 func (s *Server) GetLightClientOptimisticUpdate(w http.ResponseWriter, req *http.Request) {
+	if !features.Get().EnableLightClient {
+		httputil.HandleError(w, "Light client feature flag is not enabled", http.StatusNotFound)
+		return
+	}
+
 	ctx, span := trace.StartSpan(req.Context(), "beacon.GetLightClientOptimisticUpdate")
 	defer span.End()
 
