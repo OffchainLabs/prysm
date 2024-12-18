@@ -239,7 +239,7 @@ func (s *Store) DeleteBlock(ctx context.Context, root [32]byte) error {
 }
 
 // DeleteBeforeSlot performs deletes all blocks and states before the given slot.
-func (s *Store) DeleteBeforeSlot(ctx context.Context, cutoffSlot primitives.Slot) error {
+func (s *Store) DeleteBlocksAndStatesBeforeSlot(ctx context.Context, cutoffSlot primitives.Slot) error {
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.DeleteBeforeEpoch")
 	defer span.End()
 

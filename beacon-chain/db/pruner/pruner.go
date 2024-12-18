@@ -115,7 +115,7 @@ func (p *Service) prune(slot primitives.Slot) error {
 		"pruneSlot": pruneSlot,
 	}).Info("Pruning chain data before")
 
-	if err := p.db.DeleteBeforeSlot(p.ctx, pruneSlot); err != nil {
+	if err := p.db.DeleteBlocksAndStatesBeforeSlot(p.ctx, pruneSlot); err != nil {
 		return errors.Wrap(err, "could not delete before slot")
 	}
 	// Update pruning checkpoint.

@@ -383,7 +383,7 @@ func TestStore_DeleteBeforeSlot(t *testing.T) {
 	require.NoError(t, db.SaveStateSummaries(ctx, ss))
 
 	// Delete blocks of first epoch.
-	require.NoError(t, db.DeleteBeforeSlot(ctx, primitives.Slot(slotsPerEpoch)))
+	require.NoError(t, db.DeleteBlocksAndStatesBeforeSlot(ctx, primitives.Slot(slotsPerEpoch)))
 
 	// Check if we deleted the blocks successfully.
 	for i := 0; i < int(slotsPerEpoch); i++ {
