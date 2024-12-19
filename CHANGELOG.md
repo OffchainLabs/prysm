@@ -12,6 +12,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Added an error field to log `Finished building block`.
 - Implemented a new `EmptyExecutionPayloadHeader` function.
 - `Finished building block`: Display error only if not nil.
+- Added support to update target and max blob count to different values per hard fork config.
 
 ### Changed
 
@@ -78,7 +79,6 @@ Notable features:
 - Save light client updates and bootstraps in DB.
 - Added more comprehensive tests for `BlockToLightClientHeader`. [PR](https://github.com/prysmaticlabs/prysm/pull/14699)
 - Added light client feature flag check to RPC handlers. [PR](https://github.com/prysmaticlabs/prysm/pull/14736)
-- Added support to update target and max blob count to different values per hard fork config.
 
 ### Changed
 
