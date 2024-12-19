@@ -859,7 +859,7 @@ func computeProposerIndexWithValidators(validators []*ethpb.Validator, activeInd
 		if v != nil {
 			effectiveBal = v.EffectiveBalance
 		}
-		if effectiveBal*fieldparams.MaxRandomValue >= params.BeaconConfig().MaxEffectiveBalance*uint64(randomByte) {
+		if effectiveBal*fieldparams.MaxRandomByte >= params.BeaconConfig().MaxEffectiveBalance*uint64(randomByte) {
 			return candidateIndex, nil
 		}
 	}
