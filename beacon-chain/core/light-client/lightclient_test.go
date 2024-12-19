@@ -356,6 +356,165 @@ func TestLightClient_NewLightClientFinalityUpdateFromBeaconState(t *testing.T) {
 			require.DeepSSZEqual(t, execution, updateExecution.Proto(), "Finalized Block Execution is not equal")
 		})
 	})
+
+	t.Run("Electra", func(t *testing.T) {
+
+		t.Run("FinalizedBlock Not Nil", func(t *testing.T) {
+
+			l := util.NewTestLightClient(t).SetupTestElectra(false)
+
+			blockVersion := l.Block.Version()
+			t.Logf("Block Version: %d", blockVersion)
+
+			stateVersion := l.AttestedState.Version()
+			t.Logf("State Version: %d", stateVersion)
+
+			update, err := lightClient.NewLightClientFinalityUpdateFromBeaconState(l.Ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
+			require.NoError(t, err)
+			require.NotNil(t, update, "update is nil")
+
+			require.Equal(t, l.Block.Block().Slot(), update.SignatureSlot(), "Signature slot is not equal")
+
+			l.CheckSyncAggregate(update.SyncAggregate())
+			l.CheckAttestedHeader(update.AttestedHeader())
+
+			//zeroHash := params.BeaconConfig().ZeroHash[:]
+			finalizedBlockHeader, err := l.FinalizedBlock.Header()
+			require.NoError(t, err)
+			require.NotNil(t, update.FinalizedHeader(), "Finalized header is nil")
+			updateFinalizedHeaderBeacon := update.FinalizedHeader().Beacon()
+			require.Equal(t, finalizedBlockHeader.Header.Slot, updateFinalizedHeaderBeacon.Slot, "Finalized header slot is not equal")
+			require.Equal(t, finalizedBlockHeader.Header.ProposerIndex, updateFinalizedHeaderBeacon.ProposerIndex, "Finalized header proposer index is not equal")
+			require.DeepSSZEqual(t, finalizedBlockHeader.Header.ParentRoot, updateFinalizedHeaderBeacon.ParentRoot, "Finalized header parent root is not equal")
+			require.DeepSSZEqual(t, finalizedBlockHeader.Header.StateRoot, updateFinalizedHeaderBeacon.StateRoot, "Finalized header state root is not equal")
+			require.DeepSSZEqual(t, finalizedBlockHeader.Header.BodyRoot, updateFinalizedHeaderBeacon.BodyRoot, "Finalized header body root is not equal")
+			fb, err := update.FinalityBranch()
+			require.NoError(t, err)
+			proof, err := l.AttestedState.FinalizedRootProof(l.Ctx)
+			require.NoError(t, err)
+			for i, leaf := range fb {
+				require.DeepSSZEqual(t, proof[i], leaf[:], "Leaf is not equal")
+			}
+
+			// Check Execution BlockHash
+			payloadInterface, err := l.FinalizedBlock.Block().Body().Execution()
+			require.NoError(t, err)
+			transactionsRoot, err := payloadInterface.TransactionsRoot()
+			if errors.Is(err, consensustypes.ErrUnsupportedField) {
+				transactions, err := payloadInterface.Transactions()
+				require.NoError(t, err)
+				transactionsRootArray, err := ssz.TransactionsRoot(transactions)
+				require.NoError(t, err)
+				transactionsRoot = transactionsRootArray[:]
+			} else {
+				require.NoError(t, err)
+			}
+			withdrawalsRoot, err := payloadInterface.WithdrawalsRoot()
+			if errors.Is(err, consensustypes.ErrUnsupportedField) {
+				withdrawals, err := payloadInterface.Withdrawals()
+				require.NoError(t, err)
+				withdrawalsRootArray, err := ssz.WithdrawalSliceRoot(withdrawals, fieldparams.MaxWithdrawalsPerPayload)
+				require.NoError(t, err)
+				withdrawalsRoot = withdrawalsRootArray[:]
+			} else {
+				require.NoError(t, err)
+			}
+			execution := &v11.ExecutionPayloadHeaderElectra{
+				ParentHash:       payloadInterface.ParentHash(),
+				FeeRecipient:     payloadInterface.FeeRecipient(),
+				StateRoot:        payloadInterface.StateRoot(),
+				ReceiptsRoot:     payloadInterface.ReceiptsRoot(),
+				LogsBloom:        payloadInterface.LogsBloom(),
+				PrevRandao:       payloadInterface.PrevRandao(),
+				BlockNumber:      payloadInterface.BlockNumber(),
+				GasLimit:         payloadInterface.GasLimit(),
+				GasUsed:          payloadInterface.GasUsed(),
+				Timestamp:        payloadInterface.Timestamp(),
+				ExtraData:        payloadInterface.ExtraData(),
+				BaseFeePerGas:    payloadInterface.BaseFeePerGas(),
+				BlockHash:        payloadInterface.BlockHash(),
+				TransactionsRoot: transactionsRoot,
+				WithdrawalsRoot:  withdrawalsRoot,
+			}
+			updateExecution, err := update.FinalizedHeader().Execution()
+			require.NoError(t, err)
+			require.DeepSSZEqual(t, execution, updateExecution.Proto(), "Finalized Block Execution is not equal")
+		})
+
+		t.Run("FinalizedBlock In Previous Fork", func(t *testing.T) {
+			l := util.NewTestLightClient(t).SetupTestElectraFinalizedBlockDeneb(false)
+
+			update, err := lightClient.NewLightClientFinalityUpdateFromBeaconState(l.Ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
+			require.NoError(t, err)
+			require.NotNil(t, update, "update is nil")
+
+			require.Equal(t, l.Block.Block().Slot(), update.SignatureSlot(), "Signature slot is not equal")
+
+			l.CheckSyncAggregate(update.SyncAggregate())
+			l.CheckAttestedHeader(update.AttestedHeader())
+
+			finalizedBlockHeader, err := l.FinalizedBlock.Header()
+			require.NoError(t, err)
+			require.NotNil(t, update.FinalizedHeader(), "Finalized header is nil")
+			updateFinalizedHeaderBeacon := update.FinalizedHeader().Beacon()
+			require.Equal(t, finalizedBlockHeader.Header.Slot, updateFinalizedHeaderBeacon.Slot, "Finalized header slot is not equal")
+			require.Equal(t, finalizedBlockHeader.Header.ProposerIndex, updateFinalizedHeaderBeacon.ProposerIndex, "Finalized header proposer index is not equal")
+			require.DeepSSZEqual(t, finalizedBlockHeader.Header.ParentRoot, updateFinalizedHeaderBeacon.ParentRoot, "Finalized header parent root is not equal")
+			require.DeepSSZEqual(t, finalizedBlockHeader.Header.StateRoot, updateFinalizedHeaderBeacon.StateRoot, "Finalized header state root is not equal")
+			require.DeepSSZEqual(t, finalizedBlockHeader.Header.BodyRoot, updateFinalizedHeaderBeacon.BodyRoot, "Finalized header body root is not equal")
+			fb, err := update.FinalityBranch()
+			require.NoError(t, err)
+			proof, err := l.AttestedState.FinalizedRootProof(l.Ctx)
+			require.NoError(t, err)
+			for i, leaf := range fb {
+				require.DeepSSZEqual(t, proof[i], leaf[:], "Leaf is not equal")
+			}
+
+			// Check Execution BlockHash
+			payloadInterface, err := l.FinalizedBlock.Block().Body().Execution()
+			require.NoError(t, err)
+			transactionsRoot, err := payloadInterface.TransactionsRoot()
+			if errors.Is(err, consensustypes.ErrUnsupportedField) {
+				transactions, err := payloadInterface.Transactions()
+				require.NoError(t, err)
+				transactionsRootArray, err := ssz.TransactionsRoot(transactions)
+				require.NoError(t, err)
+				transactionsRoot = transactionsRootArray[:]
+			} else {
+				require.NoError(t, err)
+			}
+			withdrawalsRoot, err := payloadInterface.WithdrawalsRoot()
+			if errors.Is(err, consensustypes.ErrUnsupportedField) {
+				withdrawals, err := payloadInterface.Withdrawals()
+				require.NoError(t, err)
+				withdrawalsRootArray, err := ssz.WithdrawalSliceRoot(withdrawals, fieldparams.MaxWithdrawalsPerPayload)
+				require.NoError(t, err)
+				withdrawalsRoot = withdrawalsRootArray[:]
+			} else {
+				require.NoError(t, err)
+			}
+			execution := &v11.ExecutionPayloadHeaderElectra{
+				ParentHash:       payloadInterface.ParentHash(),
+				FeeRecipient:     payloadInterface.FeeRecipient(),
+				StateRoot:        payloadInterface.StateRoot(),
+				ReceiptsRoot:     payloadInterface.ReceiptsRoot(),
+				LogsBloom:        payloadInterface.LogsBloom(),
+				PrevRandao:       payloadInterface.PrevRandao(),
+				BlockNumber:      payloadInterface.BlockNumber(),
+				GasLimit:         payloadInterface.GasLimit(),
+				GasUsed:          payloadInterface.GasUsed(),
+				Timestamp:        payloadInterface.Timestamp(),
+				ExtraData:        payloadInterface.ExtraData(),
+				BaseFeePerGas:    payloadInterface.BaseFeePerGas(),
+				BlockHash:        payloadInterface.BlockHash(),
+				TransactionsRoot: transactionsRoot,
+				WithdrawalsRoot:  withdrawalsRoot,
+			}
+			updateExecution, err := update.FinalizedHeader().Execution()
+			require.NoError(t, err)
+			require.DeepSSZEqual(t, execution, updateExecution.Proto(), "Finalized Block Execution is not equal")
+		})
+	})
 }
 
 func TestLightClient_BlockToLightClientHeader(t *testing.T) {
