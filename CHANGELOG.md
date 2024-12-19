@@ -77,6 +77,7 @@ Notable features:
 - Added a Prometheus error counter metric for SSE requests.
 - Save light client updates and bootstraps in DB.
 - Added more comprehensive tests for `BlockToLightClientHeader`. [PR](https://github.com/prysmaticlabs/prysm/pull/14699)
+- Added light client feature flag check to RPC handlers. [PR](https://github.com/prysmaticlabs/prysm/pull/14736)
 
 ### Changed
 
