@@ -26,10 +26,8 @@ const (
 	SyncCommitteeAggregationBytesLength   = 1                 // SyncCommitteeAggregationBytesLength defines the sync committee aggregate bytes.
 	SyncAggregateSyncCommitteeBytesLength = 4                 // SyncAggregateSyncCommitteeBytesLength defines the length of sync committee bytes in a sync aggregate.
 	MaxWithdrawalsPerPayload              = 4                 // MaxWithdrawalsPerPayloadLength defines the maximum number of withdrawals that can be included in a payload.
-	MaxBlobCommitmentsPerBlock            = 16                // MaxBlobCommitmentsPerBlock defines the theoretical limit of blobs can be included in a block.
-	MaxBlobCommitmentsPerBlockElectra     = 32                // MaxBlobCommitmentsPerBlockElectra defines the theoretical limit of blobs can be included in a block. (This only applies to minimal config post Electra)
-	LogMaxBlobCommitments                 = 4                 // Log_2 of MaxBlobCommitmentsPerBlock
-	LogMaxBlobCommitmentsElectra          = 5                 // Log_2 of MaxBlobCommitmentsPerBlockElectra. (This only applies to minimal config post Electra)
+	MaxBlobCommitmentsPerBlock            = 32                // MaxBlobCommitmentsPerBlock defines the theoretical limit of blobs can be included in a block.
+	LogMaxBlobCommitments                 = 5                 // Log_2 of MaxBlobCommitmentsPerBlock
 	BlobLength                            = 131072            // BlobLength defines the byte length of a blob.
 	BlobSize                              = 131072            // defined to match blob.size in bazel ssz codegen
 	BlobSidecarSize                       = 131928            // defined to match blob sidecar size in bazel ssz codegen
@@ -53,6 +51,6 @@ const (
 	MaxDeposits                           = 16                // Maximum number of deposits in a block.
 	MaxVoluntaryExits                     = 16                // Maximum number of voluntary exits in a block.
 	MaxBlsToExecutionChanges              = 16                // Maximum number of bls to execution changes in a block.
-	MaxRandomValue                        = uint64(1<<8 - 1)  // Maximum value for a random value using for proposer and sync committee sampling.
+	MaxRandomByte                         = uint64(1<<8 - 1)  // Maximum value for a random value using for proposer and sync committee sampling.
 	MaxRandomValueElectra                 = uint64(1<<16 - 1) // Maximum value for a random value using for proposer and sync committee sampling.
 )

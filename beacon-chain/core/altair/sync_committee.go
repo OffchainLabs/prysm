@@ -150,8 +150,7 @@ func NextSyncCommitteeIndices(ctx context.Context, s state.BeaconState) ([]primi
 			binary.LittleEndian.PutUint64(seedBuffer[len(seed):], uint64(i/16))
 			randomByte := hashFunc(seedBuffer)
 			offset := (i % 16) * 2
-			randomByteSlice := bytesutil.PadTo(randomByte[offset:offset+2], 8)
-			randomValue := binary.LittleEndian.Uint64(randomByteSlice)
+			randomValue := uint64(randomByte[offset]) | uint64(randomByte[offset+1])<<8
 
 			if effectiveBal*fieldparams.MaxRandomValueElectra >= cfg.MaxEffectiveBalanceElectra*randomValue {
 				cIndices = append(cIndices, cIndex)
@@ -160,7 +159,7 @@ func NextSyncCommitteeIndices(ctx context.Context, s state.BeaconState) ([]primi
 			// Use the preallocated seed buffer
 			binary.LittleEndian.PutUint64(seedBuffer[len(seed):], uint64(i/32))
 			randomByte := hashFunc(seedBuffer)[i%32]
-			if effectiveBal*fieldparams.MaxRandomValue >= cfg.MaxEffectiveBalance*uint64(randomByte) {
+			if effectiveBal*fieldparams.MaxRandomByte >= cfg.MaxEffectiveBalance*uint64(randomByte) {
 				cIndices = append(cIndices, cIndex)
 			}
 		}
