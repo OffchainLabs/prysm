@@ -359,6 +359,13 @@ func TestLightClient_NewLightClientFinalityUpdateFromBeaconState(t *testing.T) {
 
 	t.Run("Electra", func(t *testing.T) {
 
+		cfg := params.BeaconConfig()
+		cfg.AltairForkEpoch = 1
+		cfg.CapellaForkEpoch = 2
+		cfg.DenebForkEpoch = 3
+		cfg.ElectraForkEpoch = 4
+		params.OverrideBeaconConfig(cfg)
+
 		t.Run("FinalizedBlock Not Nil", func(t *testing.T) {
 
 			l := util.NewTestLightClient(t).SetupTestElectra(false)
@@ -388,7 +395,7 @@ func TestLightClient_NewLightClientFinalityUpdateFromBeaconState(t *testing.T) {
 			require.DeepSSZEqual(t, finalizedBlockHeader.Header.ParentRoot, updateFinalizedHeaderBeacon.ParentRoot, "Finalized header parent root is not equal")
 			require.DeepSSZEqual(t, finalizedBlockHeader.Header.StateRoot, updateFinalizedHeaderBeacon.StateRoot, "Finalized header state root is not equal")
 			require.DeepSSZEqual(t, finalizedBlockHeader.Header.BodyRoot, updateFinalizedHeaderBeacon.BodyRoot, "Finalized header body root is not equal")
-			fb, err := update.FinalityBranch()
+			fb, err := update.FinalityBranchElectra()
 			require.NoError(t, err)
 			proof, err := l.AttestedState.FinalizedRootProof(l.Ctx)
 			require.NoError(t, err)
@@ -462,7 +469,7 @@ func TestLightClient_NewLightClientFinalityUpdateFromBeaconState(t *testing.T) {
 			require.DeepSSZEqual(t, finalizedBlockHeader.Header.ParentRoot, updateFinalizedHeaderBeacon.ParentRoot, "Finalized header parent root is not equal")
 			require.DeepSSZEqual(t, finalizedBlockHeader.Header.StateRoot, updateFinalizedHeaderBeacon.StateRoot, "Finalized header state root is not equal")
 			require.DeepSSZEqual(t, finalizedBlockHeader.Header.BodyRoot, updateFinalizedHeaderBeacon.BodyRoot, "Finalized header body root is not equal")
-			fb, err := update.FinalityBranch()
+			fb, err := update.FinalityBranchElectra()
 			require.NoError(t, err)
 			proof, err := l.AttestedState.FinalizedRootProof(l.Ctx)
 			require.NoError(t, err)
