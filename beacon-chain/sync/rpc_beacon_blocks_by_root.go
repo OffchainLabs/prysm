@@ -11,10 +11,10 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/verify"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
@@ -139,7 +139,7 @@ func (s *Service) sendAndSaveBlobSidecars(ctx context.Context, request types.Blo
 		return nil
 	}
 
-	sidecars, err := SendBlobSidecarByRoot(ctx, s.cfg.clock, s.cfg.p2p, peerID, s.ctxMap, &request)
+	sidecars, err := SendBlobSidecarByRoot(ctx, s.cfg.clock, s.cfg.p2p, peerID, s.ctxMap, &request, block.Block().Slot())
 	if err != nil {
 		return err
 	}
@@ -181,15 +181,15 @@ func (s *Service) pendingBlobsRequestForBlock(root [32]byte, b interfaces.ReadOn
 	if len(cc) == 0 {
 		return nil, nil
 	}
-	return s.constructPendingBlobsRequest(root, len(cc))
+	return s.constructPendingBlobsRequest(root, len(cc), b.Block().Slot())
 }
 
 // constructPendingBlobsRequest creates a request for BlobSidecars by root, considering blobs already in DB.
-func (s *Service) constructPendingBlobsRequest(root [32]byte, commitments int) (types.BlobSidecarsByRootReq, error) {
+func (s *Service) constructPendingBlobsRequest(root [32]byte, commitments int, slot primitives.Slot) (types.BlobSidecarsByRootReq, error) {
 	if commitments == 0 {
 		return nil, nil
 	}
-	stored, err := s.cfg.blobStorage.Indices(root)
+	stored, err := s.cfg.blobStorage.Indices(root, slot)
 	if err != nil {
 		return nil, err
 	}
@@ -200,7 +200,7 @@ func (s *Service) constructPendingBlobsRequest(root [32]byte, commitments int) (
 // requestsForMissingIndices constructs a slice of BlobIdentifiers that are missing from
 // local storage, based on a mapping that represents which indices are locally stored,
 // and the highest expected index.
-func requestsForMissingIndices(storedIndices [fieldparams.MaxBlobsPerBlock]bool, commitments int, root [32]byte) []*eth.BlobIdentifier {
+func requestsForMissingIndices(storedIndices []bool, commitments int, root [32]byte) []*eth.BlobIdentifier {
 	var ids []*eth.BlobIdentifier
 	for i := uint64(0); i < uint64(commitments); i++ {
 		if !storedIndices[i] {

@@ -177,6 +177,7 @@ func (s *Service) blobEndpoints(blocker lookup.Blocker) []endpoint {
 		Blocker:               blocker,
 		OptimisticModeFetcher: s.cfg.OptimisticModeFetcher,
 		FinalizationFetcher:   s.cfg.FinalizationFetcher,
+		TimeFetcher:           s.cfg.GenesisTimeFetcher,
 	}
 
 	const namespace = "blob"

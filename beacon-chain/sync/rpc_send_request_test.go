@@ -619,7 +619,7 @@ func TestSeqBlobValid(t *testing.T) {
 	wrongRoot, err := blocks.NewROBlobWithRoot(oops[2].BlobSidecar, bytesutil.ToBytes32([]byte("parentderp")))
 	require.NoError(t, err)
 	oob := oops[3]
-	oob.Index = fieldparams.MaxBlobsPerBlock
+	oob.Index = uint64(params.BeaconConfig().MaxBlobsPerBlock(0))
 
 	cases := []struct {
 		name  string

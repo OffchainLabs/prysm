@@ -89,6 +89,9 @@ func NewFinalityUpdateFromUpdate(update interfaces.LightClientUpdate) (interface
 	}
 }
 
+// In addition to the proto object being wrapped, we store some fields that have to be
+// constructed from the proto, so that we don't have to reconstruct them every time
+// in getters.
 type finalityUpdateAltair struct {
 	p               *pb.LightClientFinalityUpdateAltair
 	attestedHeader  interfaces.LightClientHeader
@@ -188,6 +191,9 @@ func (u *finalityUpdateAltair) SignatureSlot() primitives.Slot {
 	return u.p.SignatureSlot
 }
 
+// In addition to the proto object being wrapped, we store some fields that have to be
+// constructed from the proto, so that we don't have to reconstruct them every time
+// in getters.
 type finalityUpdateCapella struct {
 	p               *pb.LightClientFinalityUpdateCapella
 	attestedHeader  interfaces.LightClientHeader
@@ -287,6 +293,9 @@ func (u *finalityUpdateCapella) SignatureSlot() primitives.Slot {
 	return u.p.SignatureSlot
 }
 
+// In addition to the proto object being wrapped, we store some fields that have to be
+// constructed from the proto, so that we don't have to reconstruct them every time
+// in getters.
 type finalityUpdateDeneb struct {
 	p               *pb.LightClientFinalityUpdateDeneb
 	attestedHeader  interfaces.LightClientHeader
@@ -386,6 +395,9 @@ func (u *finalityUpdateDeneb) SignatureSlot() primitives.Slot {
 	return u.p.SignatureSlot
 }
 
+// In addition to the proto object being wrapped, we store some fields that have to be
+// constructed from the proto, so that we don't have to reconstruct them every time
+// in getters.
 type finalityUpdateElectra struct {
 	p               *pb.LightClientFinalityUpdateElectra
 	attestedHeader  interfaces.LightClientHeader

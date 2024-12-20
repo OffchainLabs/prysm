@@ -81,7 +81,7 @@ func (s *Service) reconstructAndBroadcastBlobs(ctx context.Context, block interf
 	if s.cfg.blobStorage == nil {
 		return
 	}
-	indices, err := s.cfg.blobStorage.Indices(blockRoot)
+	indices, err := s.cfg.blobStorage.Indices(blockRoot, block.Block().Slot())
 	if err != nil {
 		log.WithError(err).Error("Failed to retrieve indices for block")
 		return
@@ -93,7 +93,7 @@ func (s *Service) reconstructAndBroadcastBlobs(ctx context.Context, block interf
 	}
 
 	// Reconstruct blob sidecars from the EL
-	blobSidecars, err := s.cfg.executionReconstructor.ReconstructBlobSidecars(ctx, block, blockRoot, indices[:])
+	blobSidecars, err := s.cfg.executionReconstructor.ReconstructBlobSidecars(ctx, block, blockRoot, indices)
 	if err != nil {
 		log.WithError(err).Error("Failed to reconstruct blob sidecars")
 		return
@@ -103,7 +103,7 @@ func (s *Service) reconstructAndBroadcastBlobs(ctx context.Context, block interf
 	}
 
 	// Refresh indices as new blobs may have been added to the db
-	indices, err = s.cfg.blobStorage.Indices(blockRoot)
+	indices, err = s.cfg.blobStorage.Indices(blockRoot, block.Block().Slot())
 	if err != nil {
 		log.WithError(err).Error("Failed to retrieve indices for block")
 		return
