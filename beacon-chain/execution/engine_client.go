@@ -849,50 +849,47 @@ func EmptyExecutionPayload(v int) (proto.Message, error) {
 	}
 }
 
-func EmptyExecutionPayloadHeader(v int) (proto.Message, error) {
-	switch v {
-	case version.Bellatrix:
-		return &pb.ExecutionPayloadHeader{
-			ParentHash:    make([]byte, fieldparams.RootLength),
-			FeeRecipient:  make([]byte, fieldparams.FeeRecipientLength),
-			StateRoot:     make([]byte, fieldparams.RootLength),
-			ReceiptsRoot:  make([]byte, fieldparams.RootLength),
-			LogsBloom:     make([]byte, fieldparams.LogsBloomLength),
-			PrevRandao:    make([]byte, fieldparams.RootLength),
-			ExtraData:     make([]byte, 0),
-			BaseFeePerGas: make([]byte, fieldparams.RootLength),
-			BlockHash:     make([]byte, fieldparams.RootLength),
-		}, nil
-	case version.Capella:
-		return &pb.ExecutionPayloadHeaderCapella{
-			ParentHash:       make([]byte, fieldparams.RootLength),
-			FeeRecipient:     make([]byte, fieldparams.FeeRecipientLength),
-			StateRoot:        make([]byte, fieldparams.RootLength),
-			ReceiptsRoot:     make([]byte, fieldparams.RootLength),
-			LogsBloom:        make([]byte, fieldparams.LogsBloomLength),
-			PrevRandao:       make([]byte, fieldparams.RootLength),
-			ExtraData:        make([]byte, 0),
-			BaseFeePerGas:    make([]byte, fieldparams.RootLength),
-			BlockHash:        make([]byte, fieldparams.RootLength),
-			TransactionsRoot: make([]byte, fieldparams.RootLength),
-			WithdrawalsRoot:  make([]byte, fieldparams.RootLength),
-		}, nil
-	case version.Deneb, version.Electra:
-		return &pb.ExecutionPayloadHeaderDeneb{
-			ParentHash:       make([]byte, fieldparams.RootLength),
-			FeeRecipient:     make([]byte, fieldparams.FeeRecipientLength),
-			StateRoot:        make([]byte, fieldparams.RootLength),
-			ReceiptsRoot:     make([]byte, fieldparams.RootLength),
-			LogsBloom:        make([]byte, fieldparams.LogsBloomLength),
-			PrevRandao:       make([]byte, fieldparams.RootLength),
-			ExtraData:        make([]byte, 0),
-			BaseFeePerGas:    make([]byte, fieldparams.RootLength),
-			BlockHash:        make([]byte, fieldparams.RootLength),
-			TransactionsRoot: make([]byte, fieldparams.RootLength),
-			WithdrawalsRoot:  make([]byte, fieldparams.RootLength),
-		}, nil
+func EmptyExecutionPayloadHeader[T proto.Message](header T) error {
+	switch t := any(header).(type) {
+	case *pb.ExecutionPayloadHeader:
+		t.ParentHash = make([]byte, fieldparams.RootLength)
+		t.FeeRecipient = make([]byte, fieldparams.FeeRecipientLength)
+		t.StateRoot = make([]byte, fieldparams.RootLength)
+		t.ReceiptsRoot = make([]byte, fieldparams.RootLength)
+		t.LogsBloom = make([]byte, fieldparams.LogsBloomLength)
+		t.PrevRandao = make([]byte, fieldparams.RootLength)
+		t.ExtraData = make([]byte, 0)
+		t.BaseFeePerGas = make([]byte, fieldparams.RootLength)
+		t.BlockHash = make([]byte, fieldparams.RootLength)
+		return nil
+	case *pb.ExecutionPayloadHeaderCapella:
+		t.ParentHash = make([]byte, fieldparams.RootLength)
+		t.FeeRecipient = make([]byte, fieldparams.FeeRecipientLength)
+		t.StateRoot = make([]byte, fieldparams.RootLength)
+		t.ReceiptsRoot = make([]byte, fieldparams.RootLength)
+		t.LogsBloom = make([]byte, fieldparams.LogsBloomLength)
+		t.PrevRandao = make([]byte, fieldparams.RootLength)
+		t.ExtraData = make([]byte, 0)
+		t.BaseFeePerGas = make([]byte, fieldparams.RootLength)
+		t.BlockHash = make([]byte, fieldparams.RootLength)
+		t.TransactionsRoot = make([]byte, fieldparams.RootLength)
+		t.WithdrawalsRoot = make([]byte, fieldparams.RootLength)
+		return nil
+	case *pb.ExecutionPayloadHeaderDeneb:
+		t.ParentHash = make([]byte, fieldparams.RootLength)
+		t.FeeRecipient = make([]byte, fieldparams.FeeRecipientLength)
+		t.StateRoot = make([]byte, fieldparams.RootLength)
+		t.ReceiptsRoot = make([]byte, fieldparams.RootLength)
+		t.LogsBloom = make([]byte, fieldparams.LogsBloomLength)
+		t.PrevRandao = make([]byte, fieldparams.RootLength)
+		t.ExtraData = make([]byte, 0)
+		t.BaseFeePerGas = make([]byte, fieldparams.RootLength)
+		t.BlockHash = make([]byte, fieldparams.RootLength)
+		t.TransactionsRoot = make([]byte, fieldparams.RootLength)
+		t.WithdrawalsRoot = make([]byte, fieldparams.RootLength)
+		return nil
 	default:
-		return nil, errors.Wrapf(ErrUnsupportedVersion, "version=%s", version.String(v))
+		return fmt.Errorf("unsupported header type %T", header)
 	}
 }
 
