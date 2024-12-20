@@ -9,7 +9,7 @@ import (
 )
 
 // blobIndexMask is a bitmask representing the set of blob indices that are currently set.
-type blobIndexMask [fieldparams.MaxBlobsPerBlock]bool
+type blobIndexMask []bool
 
 // BlobStorageSummary represents cached information about the BlobSidecars on disk for each root the cache knows about.
 type BlobStorageSummary struct {
@@ -20,7 +20,11 @@ type BlobStorageSummary struct {
 // HasIndex returns true if the BlobSidecar at the given index is available in the filesystem.
 func (s BlobStorageSummary) HasIndex(idx uint64) bool {
 	// Protect from panic, but assume callers are sophisticated enough to not need an error telling them they have an invalid idx.
-	if idx >= fieldparams.MaxBlobsPerBlock {
+	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlock(s.slot)
+	if idx >= uint64(maxBlobsPerBlock) {
+		return false
+	}
+	if idx >= uint64(len(s.mask)) {
 		return false
 	}
 	return s.mask[idx]
@@ -28,7 +32,11 @@ func (s BlobStorageSummary) HasIndex(idx uint64) bool {
 
 // AllAvailable returns true if we have all blobs for all indices from 0 to count-1.
 func (s BlobStorageSummary) AllAvailable(count int) bool {
-	if count > fieldparams.MaxBlobsPerBlock {
+	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlock(s.slot)
+	if count > maxBlobsPerBlock {
+		return false
+	}
+	if count > len(s.mask) {
 		return false
 	}
 	for i := 0; i < count; i++ {
@@ -68,13 +76,17 @@ func (s *blobStorageCache) Summary(root [32]byte) BlobStorageSummary {
 }
 
 func (s *blobStorageCache) ensure(key [32]byte, slot primitives.Slot, idx uint64) error {
-	if idx >= fieldparams.MaxBlobsPerBlock {
+	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlock(slot)
+	if idx >= uint64(maxBlobsPerBlock) {
 		return errIndexOutOfBounds
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	v := s.cache[key]
 	v.slot = slot
+	if v.mask == nil {
+		v.mask = make(blobIndexMask, maxBlobsPerBlock)
+	}
 	if !v.mask[idx] {
 		s.updateMetrics(1)
 	}

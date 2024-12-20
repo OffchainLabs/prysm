@@ -2,6 +2,7 @@ package params_test
 
 import (
 	"bytes"
+	"math"
 	"sync"
 	"testing"
 
@@ -104,4 +105,20 @@ func TestConfigGenesisValidatorRoot(t *testing.T) {
 	if !bytes.Equal(gvr, params.BeaconConfig().GenesisValidatorsRoot[:]) {
 		t.Fatal("mainnet params genesis validator root does not match the mainnet genesis state value")
 	}
+}
+
+func Test_MaxBlobCount(t *testing.T) {
+	cfg := params.MainnetConfig()
+	cfg.ElectraForkEpoch = 10
+	require.Equal(t, cfg.MaxBlobsPerBlock(primitives.Slot(cfg.ElectraForkEpoch)*cfg.SlotsPerEpoch-1), 6)
+	require.Equal(t, cfg.MaxBlobsPerBlock(primitives.Slot(cfg.ElectraForkEpoch)*cfg.SlotsPerEpoch), 9)
+	cfg.ElectraForkEpoch = math.MaxUint64
+}
+
+func Test_TargetBlobCount(t *testing.T) {
+	cfg := params.MainnetConfig()
+	cfg.ElectraForkEpoch = 10
+	require.Equal(t, cfg.TargetBlobsPerBlock(primitives.Slot(cfg.ElectraForkEpoch)*cfg.SlotsPerEpoch-1), 3)
+	require.Equal(t, cfg.TargetBlobsPerBlock(primitives.Slot(cfg.ElectraForkEpoch)*cfg.SlotsPerEpoch), 6)
+	cfg.ElectraForkEpoch = math.MaxUint64
 }

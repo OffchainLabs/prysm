@@ -70,6 +70,9 @@ func NewOptimisticUpdateFromUpdate(update interfaces.LightClientUpdate) (interfa
 	}
 }
 
+// In addition to the proto object being wrapped, we store some fields that have to be
+// constructed from the proto, so that we don't have to reconstruct them every time
+// in getters.
 type optimisticUpdateAltair struct {
 	p              *pb.LightClientOptimisticUpdateAltair
 	attestedHeader interfaces.LightClientHeader
@@ -141,6 +144,9 @@ func (u *optimisticUpdateAltair) SignatureSlot() primitives.Slot {
 	return u.p.SignatureSlot
 }
 
+// In addition to the proto object being wrapped, we store some fields that have to be
+// constructed from the proto, so that we don't have to reconstruct them every time
+// in getters.
 type optimisticUpdateCapella struct {
 	p              *pb.LightClientOptimisticUpdateCapella
 	attestedHeader interfaces.LightClientHeader
@@ -212,6 +218,9 @@ func (u *optimisticUpdateCapella) SignatureSlot() primitives.Slot {
 	return u.p.SignatureSlot
 }
 
+// In addition to the proto object being wrapped, we store some fields that have to be
+// constructed from the proto, so that we don't have to reconstruct them every time
+// in getters.
 type optimisticUpdateDeneb struct {
 	p              *pb.LightClientOptimisticUpdateDeneb
 	attestedHeader interfaces.LightClientHeader

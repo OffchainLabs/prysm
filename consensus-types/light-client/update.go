@@ -113,11 +113,11 @@ func (u *updateAltair) AttestedHeader() interfaces.LightClientHeader {
 }
 
 func (u *updateAltair) SetAttestedHeader(header interfaces.LightClientHeader) error {
-	proto, ok := header.Proto().(*pb.LightClientHeaderAltair)
+	p, ok := header.Proto().(*pb.LightClientHeaderAltair)
 	if !ok {
 		return fmt.Errorf("header type %T is not %T", header.Proto(), &pb.LightClientHeaderAltair{})
 	}
-	u.p.AttestedHeader = proto
+	u.p.AttestedHeader = p
 	u.attestedHeader = header
 	return nil
 }
@@ -155,11 +155,11 @@ func (u *updateAltair) FinalizedHeader() interfaces.LightClientHeader {
 }
 
 func (u *updateAltair) SetFinalizedHeader(header interfaces.LightClientHeader) error {
-	proto, ok := header.Proto().(*pb.LightClientHeaderAltair)
+	p, ok := header.Proto().(*pb.LightClientHeaderAltair)
 	if !ok {
 		return fmt.Errorf("header type %T is not %T", header.Proto(), &pb.LightClientHeaderAltair{})
 	}
-	u.p.FinalizedHeader = proto
+	u.p.FinalizedHeader = p
 	u.finalizedHeader = header
 	return nil
 }
@@ -280,11 +280,11 @@ func (u *updateCapella) AttestedHeader() interfaces.LightClientHeader {
 }
 
 func (u *updateCapella) SetAttestedHeader(header interfaces.LightClientHeader) error {
-	proto, ok := header.Proto().(*pb.LightClientHeaderCapella)
+	p, ok := header.Proto().(*pb.LightClientHeaderCapella)
 	if !ok {
 		return fmt.Errorf("header type %T is not %T", header.Proto(), &pb.LightClientHeaderCapella{})
 	}
-	u.p.AttestedHeader = proto
+	u.p.AttestedHeader = p
 	u.attestedHeader = header
 	return nil
 }
@@ -322,11 +322,11 @@ func (u *updateCapella) FinalizedHeader() interfaces.LightClientHeader {
 }
 
 func (u *updateCapella) SetFinalizedHeader(header interfaces.LightClientHeader) error {
-	proto, ok := header.Proto().(*pb.LightClientHeaderCapella)
+	p, ok := header.Proto().(*pb.LightClientHeaderCapella)
 	if !ok {
 		return fmt.Errorf("header type %T is not %T", header.Proto(), &pb.LightClientHeaderCapella{})
 	}
-	u.p.FinalizedHeader = proto
+	u.p.FinalizedHeader = p
 	u.finalizedHeader = header
 	return nil
 }
@@ -447,11 +447,11 @@ func (u *updateDeneb) AttestedHeader() interfaces.LightClientHeader {
 }
 
 func (u *updateDeneb) SetAttestedHeader(header interfaces.LightClientHeader) error {
-	proto, ok := header.Proto().(*pb.LightClientHeaderDeneb)
+	p, ok := header.Proto().(*pb.LightClientHeaderDeneb)
 	if !ok {
 		return fmt.Errorf("header type %T is not %T", header.Proto(), &pb.LightClientHeaderDeneb{})
 	}
-	u.p.AttestedHeader = proto
+	u.p.AttestedHeader = p
 	u.attestedHeader = header
 	return nil
 }
@@ -489,11 +489,11 @@ func (u *updateDeneb) FinalizedHeader() interfaces.LightClientHeader {
 }
 
 func (u *updateDeneb) SetFinalizedHeader(header interfaces.LightClientHeader) error {
-	proto, ok := header.Proto().(*pb.LightClientHeaderDeneb)
+	p, ok := header.Proto().(*pb.LightClientHeaderDeneb)
 	if !ok {
 		return fmt.Errorf("header type %T is not %T", header.Proto(), &pb.LightClientHeaderDeneb{})
 	}
-	u.p.FinalizedHeader = proto
+	u.p.FinalizedHeader = p
 	u.finalizedHeader = header
 	return nil
 }
@@ -615,11 +615,11 @@ func (u *updateElectra) AttestedHeader() interfaces.LightClientHeader {
 }
 
 func (u *updateElectra) SetAttestedHeader(header interfaces.LightClientHeader) error {
-	proto, ok := header.Proto().(*pb.LightClientHeaderDeneb)
+	p, ok := header.Proto().(*pb.LightClientHeaderDeneb)
 	if !ok {
 		return fmt.Errorf("header type %T is not %T", header.Proto(), &pb.LightClientHeaderDeneb{})
 	}
-	u.p.AttestedHeader = proto
+	u.p.AttestedHeader = p
 	u.attestedHeader = header
 	return nil
 }
@@ -657,11 +657,11 @@ func (u *updateElectra) FinalizedHeader() interfaces.LightClientHeader {
 }
 
 func (u *updateElectra) SetFinalizedHeader(header interfaces.LightClientHeader) error {
-	proto, ok := header.Proto().(*pb.LightClientHeaderDeneb)
+	p, ok := header.Proto().(*pb.LightClientHeaderDeneb)
 	if !ok {
 		return fmt.Errorf("header type %T is not %T", header.Proto(), &pb.LightClientHeaderDeneb{})
 	}
-	u.p.FinalizedHeader = proto
+	u.p.FinalizedHeader = p
 	u.finalizedHeader = header
 	return nil
 }
