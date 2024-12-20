@@ -14,12 +14,12 @@ type Attestations struct {
 	sync.RWMutex
 }
 
-// New --
+// New creates a new instance of the map.
 func New() *Attestations {
 	return &Attestations{atts: make(map[attestation.Id]ethpb.Att)}
 }
 
-// Save --
+// Save stores an attestation in the map.
 func (a *Attestations) Save(att ethpb.Att) error {
 	if att == nil || att.IsNil() {
 		return nil
@@ -37,7 +37,7 @@ func (a *Attestations) Save(att ethpb.Att) error {
 	return nil
 }
 
-// SaveMany --
+// SaveMany stores multiple attestation in the map.
 func (a *Attestations) SaveMany(atts []ethpb.Att) error {
 	for _, att := range atts {
 		if err := a.Save(att); err != nil {
@@ -48,7 +48,7 @@ func (a *Attestations) SaveMany(atts []ethpb.Att) error {
 	return nil
 }
 
-// GetAll --
+// GetAll retrieves all attestations that are in the map.
 func (a *Attestations) GetAll() []ethpb.Att {
 	a.RLock()
 	defer a.RUnlock()
@@ -63,7 +63,7 @@ func (a *Attestations) GetAll() []ethpb.Att {
 	return atts
 }
 
-// Delete --
+// Delete removes an attestation from the map.
 func (a *Attestations) Delete(att ethpb.Att) error {
 	if att == nil || att.IsNil() {
 		return nil
@@ -81,7 +81,7 @@ func (a *Attestations) Delete(att ethpb.Att) error {
 	return nil
 }
 
-// Count --
+// Count returns the number of attestations in the map.
 func (a *Attestations) Count() int {
 	a.RLock()
 	defer a.RUnlock()

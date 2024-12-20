@@ -41,7 +41,7 @@ type AttestationCache struct {
 	forkchoiceAtts *attmap.Attestations
 }
 
-// NewAttestationCache --
+// NewAttestationCache creates a new cache instance.
 func NewAttestationCache() *AttestationCache {
 	return &AttestationCache{
 		atts:           make(map[attestation.Id]*attGroup),
@@ -233,7 +233,8 @@ func (c *AttestationCache) DeleteForkchoiceAttestation(att ethpb.Att) error {
 	return c.forkchoiceAtts.Delete(att)
 }
 
-// GetBySlotAndCommitteeIndex --
+// GetBySlotAndCommitteeIndex returns all attestations in the cache that match the provided slot
+// and committee index. Forkchoice attestations are not returned.
 //
 // NOTE: This function cannot be declared as a method on the AttestationCache because it is a generic function.
 func GetBySlotAndCommitteeIndex[T ethpb.Att](c *AttestationCache, slot primitives.Slot, committeeIndex primitives.CommitteeIndex) []T {
