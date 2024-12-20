@@ -32,6 +32,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 ### Fixed
 
 - Added check to prevent nil pointer deference or out of bounds array access when validating the BLSToExecutionChange on an impossibly nil validator.
+- Light Client: Fix errors when saving updates [PR](https://github.com/prysmaticlabs/prysm/pull/14744)
 
 ### Security
 
