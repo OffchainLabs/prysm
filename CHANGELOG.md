@@ -13,12 +13,15 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Implemented a new `EmptyExecutionPayloadHeader` function.
 - `Finished building block`: Display error only if not nil.
 - Added support to update target and max blob count to different values per hard fork config.
-
+- Log before blob filesystem cache warm-up.
+- 
 ### Changed
 
 - Process light client finality updates only for new finalized epochs instead of doing it for every block.
 - Refactor subnets subscriptions.
 - Refactor RPC handlers subscriptions.
+- Go deps upgrade, from `ioutil` to `io`
+- Move successfully registered validator(s) on builder log to debug.
 
 ### Deprecated
 
