@@ -113,7 +113,7 @@ func (s *Service) dialPeer(ctx context.Context, wg *sync.WaitGroup, node *enode.
 	wg.Add(1)
 	go func() {
 		if err := s.connectWithPeer(ctx, *info); err != nil {
-			log.WithError(err).Tracef("Could not connect with peer %s", info.String())
+			log.WithError(err).WithField("peerID", info.ID).Debug("Could not connect with peer")
 		}
 
 		wg.Done()

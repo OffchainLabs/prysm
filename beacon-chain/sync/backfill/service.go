@@ -208,8 +208,8 @@ func (s *Service) importBatches(ctx context.Context) {
 		}
 		_, err := s.batchImporter(ctx, current, ib, s.store)
 		if err != nil {
-			log.WithError(err).WithFields(ib.logFields()).Debug("Backfill batch failed to import")
-			s.downscore(ib)
+			score := s.p2p.Peers().Scorers().BadResponsesScorer().Increment(ib.blockPid)
+			log.WithError(err).WithFields(ib.logFields()).WithField("newBlockPidBadResponsesScore", score).Debug("Backfill batch failed to import")
 			s.batchSeq.update(ib.withState(batchErrRetryable))
 			// If a batch fails, the subsequent batches are no longer considered importable.
 			break
@@ -328,10 +328,6 @@ func (s *Service) initBatches() error {
 		s.pool.todo(b)
 	}
 	return nil
-}
-
-func (s *Service) downscore(b batch) {
-	s.p2p.Peers().Scorers().BadResponsesScorer().Increment(b.blockPid)
 }
 
 func (*Service) Stop() error {

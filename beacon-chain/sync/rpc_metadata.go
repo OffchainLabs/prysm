@@ -139,13 +139,13 @@ func (s *Service) sendMetaDataRequest(ctx context.Context, peerID peer.ID) (meta
 	// Read the METADATA response from the peer.
 	code, errMsg, err := ReadStatusCode(stream, s.cfg.p2p.Encoding())
 	if err != nil {
-		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
-		return nil, errors.Wrap(err, "read status code")
+		score := s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
+		return nil, errors.Wrapf(err, "read status code for metadata request, new bad responses score: %d", score)
 	}
 
 	if code != 0 {
-		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
-		return nil, errors.New(errMsg)
+		score := s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
+		return nil, errors.Errorf("%s, new bad responses score: %d", errMsg, score)
 	}
 
 	// Get the genesis validators root.
@@ -179,8 +179,8 @@ func (s *Service) sendMetaDataRequest(ctx context.Context, peerID peer.ID) (meta
 
 	// Decode the metadata from the peer.
 	if err := s.cfg.p2p.Encoding().DecodeWithMaxLength(stream, msg); err != nil {
-		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(stream.Conn().RemotePeer())
-		return nil, err
+		score := s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(stream.Conn().RemotePeer())
+		return nil, errors.Wrapf(err, "decode metadata, new bad responses score: %d", score)
 	}
 
 	return msg, nil

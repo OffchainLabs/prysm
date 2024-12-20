@@ -112,9 +112,8 @@ func (l *limiter) validateRequest(stream network.Stream, amt uint64) error {
 		amt = 1
 	}
 	if amt > uint64(remaining) {
-		l.p2p.Peers().Scorers().BadResponsesScorer().Increment(remotePeer)
-		writeErrorResponseToStream(responseCodeInvalidRequest, p2ptypes.ErrRateLimited.Error(), stream, l.p2p)
-		return p2ptypes.ErrRateLimited
+		score := l.p2p.Peers().Scorers().BadResponsesScorer().Increment(remotePeer)
+		return errors.Wrapf(p2ptypes.ErrRateLimited, "new bad responses score: %d", score)
 	}
 	return nil
 }
@@ -135,9 +134,9 @@ func (l *limiter) validateRawRpcRequest(stream network.Stream) error {
 	// Treat each request as a minimum of 1.
 	amt := int64(1)
 	if amt > remaining {
-		l.p2p.Peers().Scorers().BadResponsesScorer().Increment(stream.Conn().RemotePeer())
+		score := l.p2p.Peers().Scorers().BadResponsesScorer().Increment(stream.Conn().RemotePeer())
 		writeErrorResponseToStream(responseCodeInvalidRequest, p2ptypes.ErrRateLimited.Error(), stream, l.p2p)
-		return p2ptypes.ErrRateLimited
+		return errors.Wrapf(p2ptypes.ErrRateLimited, "new bad responses score: %d", score)
 	}
 	return nil
 }

@@ -62,8 +62,12 @@ func (s *Service) maintainPeerStatuses() {
 				}
 				if prysmTime.Now().After(lastUpdated.Add(interval)) {
 					if err := s.reValidatePeer(s.ctx, id); err != nil {
-						log.WithField("peer", id).WithError(err).Debug("Could not revalidate peer")
-						s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(id)
+						score := s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(id)
+						log.
+							WithFields(logrus.Fields{
+								"peer":                 id,
+								"newBadResponsesScore": score,
+							}).WithError(err).Debug("Could not revalidate peer")
 					}
 				}
 			}(pid)
@@ -161,18 +165,18 @@ func (s *Service) sendRPCStatusRequest(ctx context.Context, id peer.ID) error {
 
 	code, errMsg, err := ReadStatusCode(stream, s.cfg.p2p.Encoding())
 	if err != nil {
-		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(stream.Conn().RemotePeer())
-		return err
+		score := s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(stream.Conn().RemotePeer())
+		return errors.Wrapf(err, "read status code for status request, new bad responses score: %d", score)
 	}
 
 	if code != 0 {
-		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(id)
-		return errors.New(errMsg)
+		score := s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(id)
+		return errors.Errorf(errMsg+" new bad responses score: %d", score)
 	}
 	msg := &pb.Status{}
 	if err := s.cfg.p2p.Encoding().DecodeWithMaxLength(stream, msg); err != nil {
-		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(stream.Conn().RemotePeer())
-		return err
+		score := s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(stream.Conn().RemotePeer())
+		return errors.Wrapf(err, "decode with max length, new bad responses score: %d", score)
 	}
 
 	// If validation fails, validation error is logged, and peer status scorer will mark peer as bad.
@@ -187,7 +191,7 @@ func (s *Service) sendRPCStatusRequest(ctx context.Context, id peer.ID) error {
 func (s *Service) reValidatePeer(ctx context.Context, id peer.ID) error {
 	s.cfg.p2p.Peers().Scorers().PeerStatusScorer().SetHeadSlot(s.cfg.chain.HeadSlot())
 	if err := s.sendRPCStatusRequest(ctx, id); err != nil {
-		return err
+		return errors.Wrap(err, "revalidate peer")
 	}
 	// Do not return an error for ping requests.
 	if err := s.sendPingRequest(ctx, id); err != nil && !isUnwantedError(err) {
@@ -237,7 +241,11 @@ func (s *Service) statusRPCHandler(ctx context.Context, msg interface{}, stream 
 			return nil
 		default:
 			respCode = responseCodeInvalidRequest
-			s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(remotePeer)
+			score := s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(remotePeer)
+			log.WithError(err).WithFields(logrus.Fields{
+				"peer":                 remotePeer,
+				"newBadResponsesscore": score,
+			}).Debug("Could not validate status message")
 		}
 
 		originalErr := err

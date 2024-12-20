@@ -62,7 +62,7 @@ func (s *Service) validateWithBatchVerifier(ctx context.Context, message string,
 	// If verification fails we fallback to individual verification
 	// of each signature set.
 	if resErr != nil {
-		log.WithError(resErr).Tracef("Could not perform batch verification of %s", message)
+		log.WithError(resErr).Debugf("Could not perform batch verification of %s", message)
 		verified, err := set.Verify()
 		if err != nil {
 			verErr := errors.Wrapf(err, "Could not verify %s", message)

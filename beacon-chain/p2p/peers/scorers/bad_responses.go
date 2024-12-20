@@ -101,18 +101,22 @@ func (s *BadResponsesScorer) countNoLock(pid peer.ID) (int, error) {
 
 // Increment increments the number of bad responses we have received from the given remote peer.
 // If peer doesn't exist this method is no-op.
-func (s *BadResponsesScorer) Increment(pid peer.ID) {
+func (s *BadResponsesScorer) Increment(pid peer.ID) int {
+	const defaultBadResponses = 1
+
 	s.store.Lock()
 	defer s.store.Unlock()
 
 	peerData, ok := s.store.PeerData(pid)
 	if !ok {
 		s.store.SetPeerData(pid, &peerdata.PeerData{
-			BadResponses: 1,
+			BadResponses: defaultBadResponses,
 		})
-		return
+		return defaultBadResponses
 	}
 	peerData.BadResponses++
+
+	return peerData.BadResponses
 }
 
 // IsBadPeer states if the peer is to be considered bad.

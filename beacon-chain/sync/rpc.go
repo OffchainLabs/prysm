@@ -9,6 +9,7 @@ import (
 
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
@@ -19,6 +20,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -252,9 +254,9 @@ func (s *Service) registerRPC(baseTopic string, handle rpcHandler) {
 				return
 			}
 			if err := s.cfg.p2p.Encoding().DecodeWithMaxLength(stream, msg); err != nil {
-				logStreamErrors(err, topic)
 				tracing.AnnotateError(span, err)
-				s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(stream.Conn().RemotePeer())
+				score := s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(remotePeer)
+				logStreamErrors(err, topic, remotePeer, score)
 				return
 			}
 			if err := handle(ctx, msg, stream); err != nil {
@@ -272,9 +274,9 @@ func (s *Service) registerRPC(baseTopic string, handle rpcHandler) {
 				return
 			}
 			if err := s.cfg.p2p.Encoding().DecodeWithMaxLength(stream, msg); err != nil {
-				logStreamErrors(err, topic)
+				score := s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(remotePeer)
+				logStreamErrors(err, topic, remotePeer, score)
 				tracing.AnnotateError(span, err)
-				s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(stream.Conn().RemotePeer())
 				return
 			}
 			if err := handle(ctx, nTyp.Elem().Interface(), stream); err != nil {
@@ -288,13 +290,20 @@ func (s *Service) registerRPC(baseTopic string, handle rpcHandler) {
 	})
 }
 
-func logStreamErrors(err error, topic string) {
+func logStreamErrors(err error, topic string, remotePeer peer.ID, badResponsesScore int) {
+	log := log.WithFields(logrus.Fields{
+		"topic":                topic,
+		"peer":                 remotePeer.String(),
+		"newBadResponsesScore": badResponsesScore,
+	})
 	if isUnwantedError(err) {
+		log.WithError(err).Debug("Unwanted error")
 		return
 	}
+
 	if strings.Contains(topic, p2p.RPCGoodByeTopicV1) {
-		log.WithError(err).WithField("topic", topic).Trace("Could not decode goodbye stream message")
+		log.WithError(err).Debug("Could not decode goodbye stream message")
 		return
 	}
-	log.WithError(err).WithField("topic", topic).Debug("Could not decode stream message")
+	log.WithError(err).Debug("Could not decode stream message")
 }

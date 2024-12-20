@@ -443,7 +443,7 @@ func (s *Service) connectWithAllTrustedPeers(multiAddrs []multiaddr.Multiaddr) {
 		// make each dial non-blocking
 		go func(info peer.AddrInfo) {
 			if err := s.connectWithPeer(s.ctx, info); err != nil {
-				log.WithError(err).Tracef("Could not connect with peer %s", info.String())
+				log.WithError(err).WithField("peerID", info.ID).Debug("Could not connect with trusted peer")
 			}
 		}(info)
 	}
@@ -459,7 +459,7 @@ func (s *Service) connectWithAllPeers(multiAddrs []multiaddr.Multiaddr) {
 		// make each dial non-blocking
 		go func(info peer.AddrInfo) {
 			if err := s.connectWithPeer(s.ctx, info); err != nil {
-				log.WithError(err).Tracef("Could not connect with peer %s", info.String())
+				log.WithError(err).WithField("peerID", info.ID).Debug("Could not connect with peer")
 			}
 		}(info)
 	}
@@ -478,8 +478,8 @@ func (s *Service) connectWithPeer(ctx context.Context, info peer.AddrInfo) error
 	ctx, cancel := context.WithTimeout(ctx, maxDialTimeout)
 	defer cancel()
 	if err := s.host.Connect(ctx, info); err != nil {
-		s.Peers().Scorers().BadResponsesScorer().Increment(info.ID)
-		return err
+		score := s.Peers().Scorers().BadResponsesScorer().Increment(info.ID)
+		return errors.Wrapf(err, "connect to peer %s - new bad responses score: %d", info.ID, score)
 	}
 	return nil
 }

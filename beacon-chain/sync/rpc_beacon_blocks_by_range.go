@@ -43,13 +43,13 @@ func (s *Service) beaconBlocksByRangeRPCHandler(ctx context.Context, msg interfa
 	rp, err := validateRangeRequest(m, s.cfg.clock.CurrentSlot())
 	if err != nil {
 		s.writeErrorResponseToStream(responseCodeInvalidRequest, err.Error(), stream)
-		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(remotePeer)
+		score := s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(remotePeer)
 		tracing.AnnotateError(span, err)
-		return err
+		return errors.Wrapf(err, "new bad responses score: %d", score)
 	}
 	available := s.validateRangeAvailability(rp)
 	if !available {
-		log.Debug("error in validating range availability")
+		log.Debug("Error in validating range availability")
 		s.writeErrorResponseToStream(responseCodeResourceUnavailable, p2ptypes.ErrResourceUnavailable.Error(), stream)
 		tracing.AnnotateError(span, err)
 		return nil

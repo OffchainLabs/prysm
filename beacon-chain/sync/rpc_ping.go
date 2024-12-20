@@ -43,7 +43,8 @@ func (s *Service) pingHandler(_ context.Context, msg interface{}, stream libp2pc
 	if err != nil {
 		// Descore peer for giving us a bad sequence number.
 		if errors.Is(err, p2ptypes.ErrInvalidSequenceNum) {
-			s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
+			score := s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
+			err = errors.Wrapf(err, "new bad responses score: %d", score)
 			s.writeErrorResponseToStream(responseCodeInvalidRequest, p2ptypes.ErrInvalidSequenceNum.Error(), stream)
 		}
 
@@ -141,8 +142,8 @@ func (s *Service) sendPingRequest(ctx context.Context, peerID peer.ID) error {
 
 	// If the peer responded with an error, increment the bad responses scorer.
 	if code != 0 {
-		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
-		return errors.Errorf("code: %d - %s", code, errMsg)
+		score := s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
+		return errors.Errorf("code: %d, new bad responses score: %d - %s", code, score, errMsg)
 	}
 
 	// Decode the sequence number from the peer.
@@ -156,7 +157,8 @@ func (s *Service) sendPingRequest(ctx context.Context, peerID peer.ID) error {
 	if err != nil {
 		// Descore peer for giving us a bad sequence number.
 		if errors.Is(err, p2ptypes.ErrInvalidSequenceNum) {
-			s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
+			score := s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
+			err = errors.Wrapf(err, "new bad responses score: %d", score)
 		}
 
 		return errors.Wrap(err, "validate sequence number")

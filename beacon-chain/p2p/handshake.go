@@ -214,7 +214,11 @@ func (s *Service) AddDisconnectionHandler(handler func(ctx context.Context, id p
 				// Only log disconnections if we were fully connected.
 				if priorState == peers.Connected {
 					activePeersCount := len(s.peers.Active())
-					log.WithField("remainingActivePeers", activePeersCount).Debug("Peer disconnected")
+					log.WithFields(logrus.Fields{
+						"remainingActivePeers": activePeersCount,
+						"direction":            conn.Stat().Direction.String(),
+						"peerID":               peerID,
+					}).Debug("Peer disconnected")
 				}
 			}()
 		},
