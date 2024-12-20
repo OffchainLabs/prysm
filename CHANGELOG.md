@@ -14,7 +14,8 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - `Finished building block`: Display error only if not nil.
 - Added support to update target and max blob count to different values per hard fork config.
 - Log before blob filesystem cache warm-up.
-- 
+- Add field param placeholder for Electra blob target and max to pass spec tests.
+
 ### Changed
 
 - Process light client finality updates only for new finalized epochs instead of doing it for every block.
@@ -22,6 +23,9 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Refactor RPC handlers subscriptions.
 - Go deps upgrade, from `ioutil` to `io`
 - Move successfully registered validator(s) on builder log to debug.
+- Enforce Compound prefix (0x02) for target when processing pending consolidation request.
+- Limit consolidating by validator's effective balance.
+- Use 16-bit random value for proposer and sync committee selection filter.
 
 ### Deprecated
 
@@ -82,7 +86,6 @@ Notable features:
 - Save light client updates and bootstraps in DB.
 - Added more comprehensive tests for `BlockToLightClientHeader`. [PR](https://github.com/prysmaticlabs/prysm/pull/14699)
 - Added light client feature flag check to RPC handlers. [PR](https://github.com/prysmaticlabs/prysm/pull/14736)
-- Add field param placeholder for Electra blob target and max to pass spec tests.
 
 ### Changed
 
@@ -127,9 +130,6 @@ Notable features:
 - Check kzg commitments align with blobs and proofs for beacon api end point.
 - Revert "Proposer checks gas limit before accepting builder's bid".
 - Updated quic-go to v0.48.2 .
-- Enforce Compound prefix (0x02) for target when processing pending consolidation request.
-- Limit consolidating by validator's effective balance.
-- Use 16-bit random value for proposer and sync committee selection filter.
 
 ### Deprecated
 
