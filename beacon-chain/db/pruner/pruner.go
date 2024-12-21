@@ -22,7 +22,7 @@ type ServiceOption func(*Service) error
 // If this value is greater than current - MIN_EPOCHS_FOR_BLOCK_REQUESTS - 1, it will be ignored with a warning log.
 func WithMinimumSlot(s primitives.Slot) ServiceOption {
 	ms := func(current primitives.Slot) primitives.Slot {
-		specMin := minimumSlotToKeep(current)
+		specMin := pruneStartSlot(current)
 		if s < specMin {
 			return s
 		}
@@ -31,7 +31,7 @@ func WithMinimumSlot(s primitives.Slot) ServiceOption {
 		return specMin
 	}
 	return func(s *Service) error {
-		s.ms = ms
+		s.ps = ms
 		return nil
 	}
 }
@@ -41,7 +41,7 @@ type Service struct {
 	ctx         context.Context
 	db          db.Database
 	genesisTime time.Time
-	ms          func(current primitives.Slot) primitives.Slot
+	ps          func(current primitives.Slot) primitives.Slot
 	prunedSlot  primitives.Slot
 	done        chan struct{}
 }
@@ -51,7 +51,7 @@ func New(ctx context.Context, db iface.Database, genesisTime time.Time, opts ...
 		ctx:         ctx,
 		db:          db,
 		genesisTime: genesisTime,
-		ms:          minimumSlotToKeep,
+		ps:          pruneStartSlot,
 		done:        make(chan struct{}),
 	}
 
@@ -104,8 +104,13 @@ func (p *Service) run() {
 
 // prune deletes historical chain data beyond the pruneSlot.
 func (p *Service) prune(slot primitives.Slot) error {
-	// Prune everything before this slot.
-	pruneSlot := minimumSlotToKeep(slot)
+	// Prune everything from this slot.
+	pruneSlot := p.ps(slot)
+
+	// Can't prune beyond genesis.
+	if pruneSlot == 0 {
+		return nil
+	}
 
 	// Skip if already pruned up to this slot.
 	if pruneSlot <= p.prunedSlot {
@@ -114,20 +119,28 @@ func (p *Service) prune(slot primitives.Slot) error {
 
 	log.WithFields(logrus.Fields{
 		"pruneSlot": pruneSlot,
-	}).Info("Pruning chain data before")
+	}).Debug("Pruning chain data")
 
+	tt := time.Now()
 	if err := p.db.DeleteBlocksAndStatesBeforeSlot(p.ctx, pruneSlot); err != nil {
 		return errors.Wrap(err, "could not delete before slot")
 	}
+
+	log.WithFields(logrus.Fields{
+		"pruneSlot":   pruneSlot,
+		"duration":    time.Since(tt),
+		"currentSlot": slot,
+	}).Debug("Successfully pruned chain data")
+
 	// Update pruning checkpoint.
 	p.prunedSlot = pruneSlot
 
 	return nil
 }
 
-// minimumSlotToSave determines the lowest slot that pruner needs to keep.
-// MIN_EPOCHS_FOR_BLOCK_REQUESTS from the current slot.
-func minimumSlotToKeep(current primitives.Slot) primitives.Slot {
+// pruneStartSlot determines the start slot to start pruning.
+// MIN_EPOCHS_FOR_BLOCK_REQUESTS - 1 from the current slot.
+func pruneStartSlot(current primitives.Slot) primitives.Slot {
 	oe := helpers.MinEpochsForBlockRequests()
 	if oe > slots.MaxSafeEpoch() {
 		oe = slots.MaxSafeEpoch()

@@ -356,7 +356,7 @@ func TestStore_DeleteFinalizedBlock(t *testing.T) {
 	require.ErrorIs(t, db.DeleteBlock(ctx, root), ErrDeleteJustifiedAndFinalized)
 }
 
-func TestStore_DeleteBeforeSlot(t *testing.T) {
+func TestStore_DeleteBlocksAndStatesBeforeSlot(t *testing.T) {
 	slotsPerEpoch := uint64(params.BeaconConfig().SlotsPerEpoch)
 	db := setupDB(t)
 	ctx := context.Background()
@@ -390,6 +390,10 @@ func TestStore_DeleteBeforeSlot(t *testing.T) {
 	for i := 0; i < int(slotsPerEpoch); i++ {
 		root, err := blks[i].Block().HashTreeRoot()
 		require.NoError(t, err)
+
+		res, err := db.BlocksBySlot(ctx, blks[i].Block().Slot())
+		require.NoError(t, err)
+		require.Equal(t, 0, len(res))
 
 		require.Equal(t, false, db.HasBlock(ctx, root))
 		require.Equal(t, false, db.HasState(ctx, root))
