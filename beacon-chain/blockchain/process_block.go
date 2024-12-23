@@ -378,7 +378,11 @@ func (s *Service) handleBlockAttestations(ctx context.Context, blk interfaces.Re
 		r := bytesutil.ToBytes32(a.GetData().BeaconBlockRoot)
 		if s.cfg.ForkChoiceStore.HasNode(r) {
 			s.cfg.ForkChoiceStore.ProcessAttestation(ctx, indices, r, a.GetData().Target.Epoch)
-		} else if err := s.cfg.AttPool.SaveBlockAttestation(a); err != nil {
+		} else if features.Get().EnableExperimentalAttestationPool {
+			if err = s.cfg.AttestationCache.Add(a); err != nil {
+				return err
+			}
+		} else if err = s.cfg.AttPool.SaveBlockAttestation(a); err != nil {
 			return err
 		}
 	}
@@ -418,7 +422,11 @@ func (s *Service) savePostStateInfo(ctx context.Context, r [32]byte, b interface
 func (s *Service) pruneAttsFromPool(headBlock interfaces.ReadOnlySignedBeaconBlock) error {
 	atts := headBlock.Block().Body().Attestations()
 	for _, att := range atts {
-		if helpers.IsAggregated(att) {
+		if features.Get().EnableExperimentalAttestationPool {
+			if err := s.cfg.AttestationCache.DeleteCovered(att); err != nil {
+				return errors.Wrap(err, "could not delete attestation")
+			}
+		} else if att.IsAggregated() {
 			if err := s.cfg.AttPool.DeleteAggregatedAttestation(att); err != nil {
 				return err
 			}

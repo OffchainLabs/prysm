@@ -2580,7 +2580,6 @@ func TestProposer_FilterAttestation(t *testing.T) {
 
 	tests := []struct {
 		name         string
-		wantedErr    string
 		inputAtts    func() []ethpb.Att
 		expectedAtts func(inputAtts []ethpb.Att) []ethpb.Att
 	}{
@@ -2656,14 +2655,8 @@ func TestProposer_FilterAttestation(t *testing.T) {
 				HeadFetcher: &mock.ChainService{State: st, Root: genesisRoot[:]},
 			}
 			atts := tt.inputAtts()
-			received, err := proposerServer.validateAndDeleteAttsInPool(context.Background(), st, atts)
-			if tt.wantedErr != "" {
-				assert.ErrorContains(t, tt.wantedErr, err)
-				assert.Equal(t, nil, received)
-			} else {
-				assert.NoError(t, err)
-				assert.DeepEqual(t, tt.expectedAtts(atts), received)
-			}
+			received := proposerServer.validateAndDeleteAttsInPool(context.Background(), st, atts)
+			assert.DeepEqual(t, tt.expectedAtts(atts), received)
 		})
 	}
 }
