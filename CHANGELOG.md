@@ -15,6 +15,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Added support to update target and max blob count to different values per hard fork config.
 - Log before blob filesystem cache warm-up.
 - New design for the attestation pool. [PR](https://github.com/prysmaticlabs/prysm/pull/14324)
+- Add field param placeholder for Electra blob target and max to pass spec tests.
 
 ### Changed
 
@@ -24,6 +25,9 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Go deps upgrade, from `ioutil` to `io`
 - Move successfully registered validator(s) on builder log to debug.
 - Update some test files to use `crypto/rand` instead of `math/rand`
+- Enforce Compound prefix (0x02) for target when processing pending consolidation request.
+- Limit consolidating by validator's effective balance.
+- Use 16-bit random value for proposer and sync committee selection filter.
 
 ### Deprecated
 

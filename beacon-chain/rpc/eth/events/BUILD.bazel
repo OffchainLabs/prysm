@@ -53,6 +53,7 @@ go_test(
         "//beacon-chain/core/feed/state:go_default_library",
         "//beacon-chain/state:go_default_library",
         "//config/fieldparams:go_default_library",
+        "//config/params:go_default_library",
         "//consensus-types/blocks:go_default_library",
         "//consensus-types/interfaces:go_default_library",
         "//consensus-types/payload-attribute:go_default_library",
