@@ -5,6 +5,7 @@ import (
 
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/async/abool"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
@@ -39,6 +40,7 @@ type Service struct {
 	batchImporter   batchImporter
 	blobStore       *filesystem.BlobStorage
 	initSyncWaiter  func() error
+	isComplete      *abool.AtomicBool
 }
 
 var _ runtime.Service = (*Service)(nil)
@@ -132,6 +134,30 @@ func WithMinimumSlot(s primitives.Slot) ServiceOption {
 	}
 	return func(s *Service) error {
 		s.ms = ms
+		return nil
+	}
+}
+
+// BackfillChecker allows other services to check the current status of
+// backfill and use that internally in their service.
+type BackfillChecker struct {
+	Svc *Service
+}
+
+// IsComplete returns the status of the service.
+func (s *BackfillChecker) IsComplete() bool {
+	if s.Svc == nil {
+		log.Warn("Calling backfill checker with a nil service initialized")
+		return false
+	}
+	return s.Svc.IsComplete()
+}
+
+// WithBackfillChecker registers the backfill service
+// in the checker.
+func WithBackfillChecker(checker *BackfillChecker) ServiceOption {
+	return func(s *Service) error {
+		checker.Svc = s
 		return nil
 	}
 }
@@ -250,6 +276,7 @@ func (s *Service) scheduleTodos() {
 func (s *Service) Start() {
 	if !s.enabled {
 		log.Info("Backfill service not enabled")
+		s.markComplete()
 		return
 	}
 	ctx, cancel := context.WithCancel(s.ctx)
@@ -273,6 +300,7 @@ func (s *Service) Start() {
 
 	if s.store.isGenesisSync() {
 		log.Info("Backfill short-circuit; node synced from genesis")
+		s.markComplete()
 		return
 	}
 	status := s.store.status()
@@ -281,6 +309,7 @@ func (s *Service) Start() {
 		log.WithField("minimumRequiredSlot", s.ms(s.clock.CurrentSlot())).
 			WithField("backfillLowestSlot", status.LowSlot).
 			Info("Exiting backfill service; minimum block retention slot > lowest backfilled block")
+		s.markComplete()
 		return
 	}
 	s.verifier, s.ctxMap, err = s.initVerifier(ctx)
@@ -308,6 +337,7 @@ func (s *Service) Start() {
 			return
 		}
 		if s.updateComplete() {
+			s.markComplete()
 			return
 		}
 		s.importBatches(ctx)
@@ -362,4 +392,14 @@ func newBlobVerifierFromInitializer(ini *verification.Initializer) verification.
 	return func(b blocks.ROBlob, reqs []verification.Requirement) verification.BlobVerifier {
 		return ini.NewBlobVerifier(b, reqs)
 	}
+}
+
+// IsComplete returns whether backfill has completed
+func (s *Service) IsComplete() bool {
+	return s.isComplete.IsSet()
+}
+
+func (s *Service) markComplete() {
+	s.isComplete.Set()
+	log.Info("Backfill service marked as complete")
 }

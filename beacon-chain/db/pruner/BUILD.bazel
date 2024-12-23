@@ -11,6 +11,8 @@ go_library(
         "//beacon-chain/core/helpers:go_default_library",
         "//beacon-chain/db:go_default_library",
         "//beacon-chain/db/iface:go_default_library",
+        "//beacon-chain/sync/backfill:go_default_library",
+        "//beacon-chain/sync/initial-sync:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//time/slots:go_default_library",

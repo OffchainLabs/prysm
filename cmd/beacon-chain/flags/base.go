@@ -296,10 +296,16 @@ var (
 		Usage: "Directory for the slasher database",
 		Value: cmd.DefaultDataDir(),
 	}
-	// BeaconDBPruning enables the pruning of beacon db beyond weak subjectivity duration.
+	// BeaconDBPruning enables the pruning of beacon db.
 	BeaconDBPruning = &cli.BoolFlag{
 		Name: "beacon-db-pruning",
-		Usage: "Enables pruning of beacon db beyond weak subjectivity duration. This is an opt-in feature," +
+		Usage: "Enables pruning of beacon db beyond MIN_EPOCHS_FOR_BLOCK_REQUESTS duration. This is an opt-in feature," +
 			" and should only be enabled if operators don't require historical data.",
+	}
+	// PrunerRetentionEpochs defines the retention period for the pruner service in terms of epochs.
+	PrunerRetentionEpochs = &cli.Uint64Flag{
+		Name: "pruner-retention-epochs",
+		Usage: "Specifies the retention period for the pruner service in terms of epochs. " +
+			"If this value is less than MIN_EPOCHS_FOR_BLOCK_REQUESTS, it will be ignored.",
 	}
 )

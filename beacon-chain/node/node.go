@@ -59,7 +59,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
 	"github.com/prysmaticlabs/prysm/v5/cmd"
 	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
-	backFillFlags "github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/sync/backfill/flags"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
@@ -125,6 +124,7 @@ type BeaconNode struct {
 	BlobStorageOptions      []filesystem.BlobStorageOption
 	verifyInitWaiter        *verification.InitializerWaiter
 	syncChecker             *initialsync.SyncChecker
+	backfillChecker         *backfill.BackfillChecker
 }
 
 // New creates a new node instance, sets up configuration options, and registers
@@ -1104,17 +1104,29 @@ func (b *BeaconNode) registerPrunerService(cliCtx *cli.Context) error {
 	genesisTimeUnix := params.BeaconConfig().MinGenesisTime + params.BeaconConfig().GenesisDelay
 	genesisTime := slots.StartTime(genesisTimeUnix, 0)
 
-	if cliCtx.IsSet(backFillFlags.BackfillOldestSlot.Name) {
-		uv := cliCtx.Uint64(backFillFlags.BackfillOldestSlot.Name)
-		p, err := pruner.New(cliCtx.Context, b.db, genesisTime, pruner.WithMinimumSlot(primitives.Slot(uv)))
+	if cliCtx.IsSet(flags.PrunerRetentionEpochs.Name) {
+		uv := cliCtx.Uint64(flags.PrunerRetentionEpochs.Name)
+		p, err := pruner.New(
+			cliCtx.Context,
+			b.db,
+			genesisTime,
+			b.syncChecker,
+			b.backfillChecker,
+			pruner.WithRetentionPeriod(primitives.Epoch(uv)),
+		)
 		if err != nil {
 			return err
 		}
-
 		return b.services.RegisterService(p)
 	}
 
-	p, err := pruner.New(cliCtx.Context, b.db, genesisTime)
+	p, err := pruner.New(
+		cliCtx.Context,
+		b.db,
+		genesisTime,
+		b.syncChecker,
+		b.backfillChecker,
+	)
 	if err != nil {
 		return err
 	}
@@ -1124,6 +1136,7 @@ func (b *BeaconNode) registerPrunerService(cliCtx *cli.Context) error {
 
 func (b *BeaconNode) RegisterBackfillService(cliCtx *cli.Context, bfs *backfill.Store) error {
 	pa := peers.NewAssigner(b.fetchP2P().Peers(), b.forkChoicer)
+	b.BackfillOpts = append(b.BackfillOpts, backfill.WithBackfillChecker(b.backfillChecker))
 	bf, err := backfill.NewService(cliCtx.Context, bfs, b.BlobStorage, b.clockWaiter, b.fetchP2P(), pa, b.BackfillOpts...)
 	if err != nil {
 		return errors.Wrap(err, "error initializing backfill service")
