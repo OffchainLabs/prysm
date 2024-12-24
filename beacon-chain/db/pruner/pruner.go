@@ -8,8 +8,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/iface"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/backfill"
-	initialsync "github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/initial-sync"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
@@ -18,59 +16,62 @@ import (
 
 var log = logrus.WithField("prefix", "db-pruner")
 
-type ServiceOption func(*Service) error
+type ServiceOption func(*Service)
 
 // WithRetentionPeriod allows the user to specify a different data retention period than the spec default.
 // The retention period is specified in epochs, and must be >= MIN_EPOCHS_FOR_BLOCK_REQUESTS.
 func WithRetentionPeriod(retentionEpochs primitives.Epoch) ServiceOption {
-	return func(s *Service) error {
+	return func(s *Service) {
 		defaultRetentionEpochs := helpers.MinEpochsForBlockRequests() - 1
 		if retentionEpochs < defaultRetentionEpochs {
 			log.WithField("userEpochs", retentionEpochs).
 				WithField("minRequired", defaultRetentionEpochs).
 				Warn("Retention period too low, using minimum required value")
-
-			return nil // Keep default retention period
 		}
 
-		s.ps = func(current primitives.Slot) primitives.Slot {
-			offset := slots.UnsafeEpochStart(retentionEpochs - 1)
-			if offset >= current {
-				return 0
-			}
-			return current - offset
-		}
-		return nil
+		s.ps = pruneStartSlotFunc(retentionEpochs)
 	}
+}
+
+func WithSlotTicker(slotTicker slots.Ticker) ServiceOption {
+	return func(s *Service) {
+		s.slotTicker = slotTicker
+	}
+}
+
+type SyncChecker interface {
+	Synced() bool
+}
+
+type BackfillChecker interface {
+	IsComplete() bool
 }
 
 // Service defines a service that prunes beacon chain DB based on MIN_EPOCHS_FOR_BLOCK_REQUESTS.
 type Service struct {
 	ctx             context.Context
 	db              db.Database
-	genesisTime     time.Time
 	ps              func(current primitives.Slot) primitives.Slot
 	prunedSlot      primitives.Slot
 	done            chan struct{}
-	syncChecker     *initialsync.SyncChecker
-	backfillChecker *backfill.BackfillChecker
+	slotTicker      slots.Ticker
+	syncChecker     SyncChecker
+	backfillChecker BackfillChecker
 }
 
-func New(ctx context.Context, db iface.Database, genesisTime time.Time, syncChecker *initialsync.SyncChecker, backfillChecker *backfill.BackfillChecker, opts ...ServiceOption) (*Service, error) {
+func New(ctx context.Context, db iface.Database, genesisTime time.Time, syncChecker SyncChecker, backfillChecker BackfillChecker, opts ...ServiceOption) (*Service, error) {
 	p := &Service{
 		ctx:             ctx,
 		db:              db,
-		genesisTime:     genesisTime,
-		ps:              pruneStartSlot,
+		ps:              pruneStartSlotFunc(helpers.MinEpochsForBlockRequests() - 1), // Default retention epochs is MIN_EPOCHS_FOR_BLOCK_REQUESTS - 1 from the current slot.
 		done:            make(chan struct{}),
+		slotTicker:      slots.NewSlotTicker(genesisTime, params.BeaconConfig().SecondsPerSlot),
 		syncChecker:     syncChecker,
 		backfillChecker: backfillChecker,
 	}
 
 	for _, o := range opts {
-		if err := o(p); err != nil {
-			return nil, err
-		}
+		o(p)
 	}
 
 	return p, nil
@@ -92,8 +93,7 @@ func (p *Service) Status() error {
 }
 
 func (p *Service) run() {
-	ticker := slots.NewSlotTicker(p.genesisTime, params.BeaconConfig().SecondsPerSlot)
-	defer ticker.Done()
+	defer p.slotTicker.Done()
 
 	for {
 		select {
@@ -101,20 +101,21 @@ func (p *Service) run() {
 			return
 		case <-p.done:
 			return
-		case slot := <-ticker.C():
-			// Prune at the middle of every epoch.
+		case slot := <-p.slotTicker.C():
+			// Prune at the middle of every epoch since we do a lot of things around epoch boundaries.
 			if slots.SinceEpochStarts(slot) != (params.BeaconConfig().SlotsPerEpoch / 2) {
 				continue
 			}
 
 			// Skip pruning if syncing is in progress.
 			if !p.syncChecker.Synced() {
+				log.Debug("Skipping pruning as initial sync is in progress")
 				continue
 			}
 
 			// Skip pruning if backfill is in progress.
 			if !p.backfillChecker.IsComplete() {
-				log.Debug("Skipping pruning as backfill is not complete")
+				log.Debug("Skipping pruning as backfill is in progress")
 				continue
 			}
 
@@ -161,16 +162,16 @@ func (p *Service) prune(slot primitives.Slot) error {
 	return nil
 }
 
-// pruneStartSlot determines the start slot to start pruning.
-// MIN_EPOCHS_FOR_BLOCK_REQUESTS - 1 from the current slot.
-func pruneStartSlot(current primitives.Slot) primitives.Slot {
-	oe := helpers.MinEpochsForBlockRequests() - 1
-	if oe > slots.MaxSafeEpoch() {
-		oe = slots.MaxSafeEpoch()
+// pruneStartSlotFunc returns the function to determine the start slot to start pruning.
+func pruneStartSlotFunc(retentionEpochs primitives.Epoch) func(primitives.Slot) primitives.Slot {
+	return func(current primitives.Slot) primitives.Slot {
+		if retentionEpochs > slots.MaxSafeEpoch() {
+			retentionEpochs = slots.MaxSafeEpoch()
+		}
+		offset := slots.UnsafeEpochStart(retentionEpochs)
+		if offset >= current {
+			return 0
+		}
+		return current - offset
 	}
-	offset := slots.UnsafeEpochStart(oe)
-	if offset >= current {
-		return 0
-	}
-	return current - offset
 }
