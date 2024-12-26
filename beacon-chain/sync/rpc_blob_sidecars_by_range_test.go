@@ -147,6 +147,24 @@ func TestBlobByRangeOK(t *testing.T) {
 			},
 			total: func() *int { x := int(params.BeaconConfig().MaxRequestBlobSidecars); return &x }(),
 		},
+		{
+			name: "missing blob sidecars for block with KZG commitments",
+			nblocks: 1,
+			requestFromSidecars: func(scs []blocks.ROBlob) interface{} {
+				return &ethpb.BlobSidecarsByRangeRequest{
+					StartSlot: scs[0].Slot(),
+					Count:     1,
+				}
+			},
+			defineExpected: func(t *testing.T, scs []blocks.ROBlob, req interface{}) []*expectedBlobChunk {
+				return []*expectedBlobChunk{
+					{
+						code:    responseCodeServerError,
+						message: errMissingBlobsForBlockCommitments.Error(),
+					},
+				}
+			},
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
