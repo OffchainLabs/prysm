@@ -21,6 +21,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/async/abool"
 	"github.com/prysmaticlabs/prysm/v5/async/event"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
 	blockfeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/block"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/operation"
 	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
@@ -84,6 +85,7 @@ type config struct {
 	attestationNotifier     operation.Notifier
 	p2p                     p2p.P2P
 	beaconDB                db.NoHeadAccessDatabase
+	attestationCache        *cache.AttestationCache
 	attPool                 attestations.Pool
 	exitPool                voluntaryexits.PoolManager
 	slashingPool            slashings.PoolManager
@@ -303,14 +305,21 @@ func (s *Service) waitForChainStart() {
 
 	ctxMap, err := ContextByteVersionsForValRoot(clock.GenesisValidatorsRoot())
 	if err != nil {
-		log.WithError(err).WithField("genesisValidatorRoot", clock.GenesisValidatorsRoot()).
+		log.
+			WithError(err).
+			WithField("genesisValidatorRoot", clock.GenesisValidatorsRoot()).
 			Error("sync service failed to initialize context version map")
 		return
 	}
 	s.ctxMap = ctxMap
 
 	// Register respective rpc handlers at state initialized event.
-	s.registerRPCHandlers()
+	err = s.registerRPCHandlers()
+	if err != nil {
+		log.WithError(err).Error("Could not register rpc handlers")
+		return
+	}
+
 	// Wait for chainstart in separate routine.
 	if startTime.After(prysmTime.Now()) {
 		time.Sleep(prysmTime.Until(startTime))

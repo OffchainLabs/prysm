@@ -287,7 +287,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	PendingPartialWithdrawalsLimit:        134_217_728,
 	PendingConsolidationsLimit:            262_144,
 	MinActivationBalance:                  32_000_000_000,
-	MaxConsolidationsRequestsPerPayload:   1,
+	MaxConsolidationsRequestsPerPayload:   2,
 	MaxPendingPartialsPerWithdrawalsSweep: 8,
 	MaxPendingDepositsPerEpoch:            16,
 	FullExitRequestAmount:                 0,
@@ -319,6 +319,10 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	AttestationSubnetPrefixBits:     6,
 	SubnetsPerNode:                  2,
 	NodeIdBits:                      256,
+
+	DeprecatedMaxBlobsPerBlock:           6,
+	DeprecatedMaxBlobsPerBlockElectra:    9,
+	DeprecatedTargetBlobsPerBlockElectra: 6,
 }
 
 // MainnetTestConfig provides a version of the mainnet config that has a different name

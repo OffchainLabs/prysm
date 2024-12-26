@@ -9,6 +9,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
@@ -166,7 +167,13 @@ func (s *Service) UpdateHead(ctx context.Context, proposingSlot primitives.Slot)
 
 // This processes fork choice attestations from the pool to account for validator votes and fork choice.
 func (s *Service) processAttestations(ctx context.Context, disparity time.Duration) {
-	atts := s.cfg.AttPool.ForkchoiceAttestations()
+	var atts []ethpb.Att
+	if features.Get().EnableExperimentalAttestationPool {
+		atts = s.cfg.AttestationCache.ForkchoiceAttestations()
+	} else {
+		atts = s.cfg.AttPool.ForkchoiceAttestations()
+	}
+
 	for _, a := range atts {
 		// Based on the spec, don't process the attestation until the subsequent slot.
 		// This delays consideration in the fork choice until their slot is in the past.
@@ -182,7 +189,11 @@ func (s *Service) processAttestations(ctx context.Context, disparity time.Durati
 			continue
 		}
 
-		if err := s.cfg.AttPool.DeleteForkchoiceAttestation(a); err != nil {
+		if features.Get().EnableExperimentalAttestationPool {
+			if err := s.cfg.AttestationCache.DeleteForkchoiceAttestation(a); err != nil {
+				log.WithError(err).Error("Could not delete fork choice attestation in pool")
+			}
+		} else if err := s.cfg.AttPool.DeleteForkchoiceAttestation(a); err != nil {
 			log.WithError(err).Error("Could not delete fork choice attestation in pool")
 		}
 

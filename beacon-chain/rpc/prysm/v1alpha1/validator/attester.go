@@ -8,6 +8,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/operation"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/core"
+	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
@@ -50,13 +51,19 @@ func (vs *Server) ProposeAttestation(ctx context.Context, att *ethpb.Attestation
 		return nil, err
 	}
 
-	go func() {
-		attCopy := att.Copy()
-		if err := vs.AttPool.SaveUnaggregatedAttestation(attCopy); err != nil {
-			log.WithError(err).Error("Could not save unaggregated attestation")
-			return
+	if features.Get().EnableExperimentalAttestationPool {
+		if err = vs.AttestationCache.Add(att); err != nil {
+			log.WithError(err).Error("Could not save attestation")
 		}
-	}()
+	} else {
+		go func() {
+			attCopy := att.Copy()
+			if err := vs.AttPool.SaveUnaggregatedAttestation(attCopy); err != nil {
+				log.WithError(err).Error("Could not save unaggregated attestation")
+				return
+			}
+		}()
+	}
 
 	return resp, nil
 }
@@ -82,13 +89,20 @@ func (vs *Server) ProposeAttestationElectra(ctx context.Context, att *ethpb.Sing
 		return nil, err
 	}
 
-	go func() {
-		ctx = trace.NewContext(context.Background(), trace.FromContext(ctx))
-		if err := vs.AttPool.SaveUnaggregatedAttestation(att.ToAttestationElectra(committee)); err != nil {
-			log.WithError(err).Error("Could not save unaggregated attestation")
-			return
+	if features.Get().EnableExperimentalAttestationPool {
+		if err = vs.AttestationCache.Add(att.ToAttestationElectra(committee)); err != nil {
+			log.WithError(err).Error("Could not save attestation")
 		}
-	}()
+	} else {
+		go func() {
+			ctx = trace.NewContext(context.Background(), trace.FromContext(ctx))
+			attCopy := att.Copy()
+			if err := vs.AttPool.SaveUnaggregatedAttestation(attCopy.ToAttestationElectra(committee)); err != nil {
+				log.WithError(err).Error("Could not save unaggregated attestation")
+				return
+			}
+		}()
+	}
 
 	return resp, nil
 }

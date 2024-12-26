@@ -2,6 +2,7 @@ package sync
 
 import (
 	"github.com/prysmaticlabs/prysm/v5/async/event"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
 	blockfeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/block"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/operation"
 	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
@@ -39,6 +40,13 @@ func WithP2P(p2p p2p.P2P) Option {
 func WithDatabase(db db.NoHeadAccessDatabase) Option {
 	return func(s *Service) error {
 		s.cfg.beaconDB = db
+		return nil
+	}
+}
+
+func WithAttestationCache(c *cache.AttestationCache) Option {
+	return func(s *Service) error {
+		s.cfg.attestationCache = c
 		return nil
 	}
 }

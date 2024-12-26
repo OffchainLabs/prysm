@@ -3,8 +3,9 @@ package p2p
 import (
 	"context"
 	"crypto/ecdsa"
+	"crypto/rand"
 	"fmt"
-	"math/rand"
+	mathRand "math/rand"
 	"net"
 	"os"
 	"path"
@@ -48,7 +49,7 @@ func createAddrAndPrivKey(t *testing.T) (net.IP, *ecdsa.PrivateKey) {
 	require.NoError(t, err, "Could not get ip")
 	ipAddr := net.ParseIP(ip)
 	temp := t.TempDir()
-	randNum := rand.Int()
+	randNum := mathRand.Int()
 	tempPath := path.Join(temp, strconv.Itoa(randNum))
 	require.NoError(t, os.Mkdir(tempPath, 0700))
 	pkey, err := privKey(&Config{DataDir: tempPath})

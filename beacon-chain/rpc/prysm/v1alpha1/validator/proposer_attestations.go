@@ -9,7 +9,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/go-bitfield"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
@@ -30,21 +29,22 @@ func (vs *Server) packAttestations(ctx context.Context, latestState state.Beacon
 	ctx, span := trace.StartSpan(ctx, "ProposerServer.packAttestations")
 	defer span.End()
 
-	atts := vs.AttPool.AggregatedAttestations()
-	atts, err := vs.validateAndDeleteAttsInPool(ctx, latestState, atts)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not filter attestations")
-	}
+	var atts []ethpb.Att
 
-	uAtts, err := vs.AttPool.UnaggregatedAttestations()
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get unaggregated attestations")
+	if features.Get().EnableExperimentalAttestationPool {
+		atts = vs.AttestationCache.GetAll()
+		atts = vs.validateAndDeleteAttsInPool(ctx, latestState, atts)
+	} else {
+		atts = vs.AttPool.AggregatedAttestations()
+		atts = vs.validateAndDeleteAttsInPool(ctx, latestState, atts)
+
+		uAtts, err := vs.AttPool.UnaggregatedAttestations()
+		if err != nil {
+			return nil, errors.Wrap(err, "could not get unaggregated attestations")
+		}
+		uAtts = vs.validateAndDeleteAttsInPool(ctx, latestState, uAtts)
+		atts = append(atts, uAtts...)
 	}
-	uAtts, err = vs.validateAndDeleteAttsInPool(ctx, latestState, uAtts)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not filter attestations")
-	}
-	atts = append(atts, uAtts...)
 
 	// Checking the state's version here will give the wrong result if the last slot of Deneb is missed.
 	// The head state will still be in Deneb while we are trying to build an Electra block.
@@ -64,6 +64,8 @@ func (vs *Server) packAttestations(ctx context.Context, latestState state.Beacon
 			}
 		}
 	}
+
+	var err error
 
 	// Remove duplicates from both aggregated/unaggregated attestations. This
 	// prevents inefficient aggregates being created.
@@ -455,15 +457,15 @@ func (a proposerAtts) dedup() (proposerAtts, error) {
 }
 
 // This filters the input attestations to return a list of valid attestations to be packaged inside a beacon block.
-func (vs *Server) validateAndDeleteAttsInPool(ctx context.Context, st state.BeaconState, atts []ethpb.Att) ([]ethpb.Att, error) {
+func (vs *Server) validateAndDeleteAttsInPool(ctx context.Context, st state.BeaconState, atts []ethpb.Att) []ethpb.Att {
 	ctx, span := trace.StartSpan(ctx, "ProposerServer.validateAndDeleteAttsInPool")
 	defer span.End()
 
 	validAtts, invalidAtts := proposerAtts(atts).filter(ctx, st)
 	if err := vs.deleteAttsInPool(ctx, invalidAtts); err != nil {
-		return nil, err
+		log.WithError(err).Error("Could not delete invalid attestations")
 	}
-	return validAtts, nil
+	return validAtts
 }
 
 // The input attestations are processed and seen by the node, this deletes them from pool
@@ -476,13 +478,19 @@ func (vs *Server) deleteAttsInPool(ctx context.Context, atts []ethpb.Att) error 
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		if helpers.IsAggregated(att) {
-			if err := vs.AttPool.DeleteAggregatedAttestation(att); err != nil {
-				return err
+		if features.Get().EnableExperimentalAttestationPool {
+			if err := vs.AttestationCache.DeleteCovered(att); err != nil {
+				return errors.Wrap(err, "could not delete attestation")
 			}
 		} else {
-			if err := vs.AttPool.DeleteUnaggregatedAttestation(att); err != nil {
-				return err
+			if att.IsAggregated() {
+				if err := vs.AttPool.DeleteAggregatedAttestation(att); err != nil {
+					return err
+				}
+			} else {
+				if err := vs.AttPool.DeleteUnaggregatedAttestation(att); err != nil {
+					return err
+				}
 			}
 		}
 	}

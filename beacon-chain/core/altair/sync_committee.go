@@ -2,6 +2,7 @@ package altair
 
 import (
 	"context"
+	"encoding/binary"
 	goErrors "errors"
 	"fmt"
 	"time"
@@ -21,8 +22,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
-
-const maxRandomByte = uint64(1<<8 - 1)
 
 var (
 	ErrTooLate = errors.New("sync message is too late")
@@ -91,19 +90,22 @@ func NextSyncCommittee(ctx context.Context, s state.BeaconState) (*ethpb.SyncCom
 //	"""
 //	epoch = Epoch(get_current_epoch(state) + 1)
 //
-//	MAX_RANDOM_BYTE = 2**8 - 1
+//	MAX_RANDOM_VALUE = 2**16 - 1  # [Modified in Electra]
 //	active_validator_indices = get_active_validator_indices(state, epoch)
 //	active_validator_count = uint64(len(active_validator_indices))
 //	seed = get_seed(state, epoch, DOMAIN_SYNC_COMMITTEE)
-//	i = 0
+//	i = uint64(0)
 //	sync_committee_indices: List[ValidatorIndex] = []
 //	while len(sync_committee_indices) < SYNC_COMMITTEE_SIZE:
 //	    shuffled_index = compute_shuffled_index(uint64(i % active_validator_count), active_validator_count, seed)
 //	    candidate_index = active_validator_indices[shuffled_index]
-//	    random_byte = hash(seed + uint_to_bytes(uint64(i // 32)))[i % 32]
+//	    # [Modified in Electra]
+//	    random_bytes = hash(seed + uint_to_bytes(i // 16))
+//	    offset = i % 16 * 2
+//	    random_value = bytes_to_uint64(random_bytes[offset:offset + 2])
 //	    effective_balance = state.validators[candidate_index].effective_balance
 //	    # [Modified in Electra:EIP7251]
-//	    if effective_balance * MAX_RANDOM_BYTE >= MAX_EFFECTIVE_BALANCE_ELECTRA * random_byte:
+//	    if effective_balance * MAX_RANDOM_VALUE >= MAX_EFFECTIVE_BALANCE_ELECTRA * random_value:
 //	        sync_committee_indices.append(candidate_index)
 //	    i += 1
 //	return sync_committee_indices
@@ -123,12 +125,11 @@ func NextSyncCommitteeIndices(ctx context.Context, s state.BeaconState) ([]primi
 	cIndices := make([]primitives.ValidatorIndex, 0, syncCommitteeSize)
 	hashFunc := hash.CustomSHA256Hasher()
 
-	maxEB := cfg.MaxEffectiveBalanceElectra
-	if s.Version() < version.Electra {
-		maxEB = cfg.MaxEffectiveBalance
-	}
+	// Preallocate buffers to avoid repeated allocations
+	seedBuffer := make([]byte, len(seed)+8)
+	copy(seedBuffer, seed[:])
 
-	for i := primitives.ValidatorIndex(0); uint64(len(cIndices)) < params.BeaconConfig().SyncCommitteeSize; i++ {
+	for i := primitives.ValidatorIndex(0); uint64(len(cIndices)) < syncCommitteeSize; i++ {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
@@ -137,18 +138,30 @@ func NextSyncCommitteeIndices(ctx context.Context, s state.BeaconState) ([]primi
 		if err != nil {
 			return nil, err
 		}
-
-		b := append(seed[:], bytesutil.Bytes8(uint64(i.Div(32)))...)
-		randomByte := hashFunc(b)[i%32]
 		cIndex := indices[sIndex]
 		v, err := s.ValidatorAtIndexReadOnly(cIndex)
 		if err != nil {
 			return nil, err
 		}
-
 		effectiveBal := v.EffectiveBalance()
-		if effectiveBal*maxRandomByte >= maxEB*uint64(randomByte) {
-			cIndices = append(cIndices, cIndex)
+
+		if s.Version() >= version.Electra {
+			// Use the preallocated seed buffer
+			binary.LittleEndian.PutUint64(seedBuffer[len(seed):], uint64(i/16))
+			randomByte := hashFunc(seedBuffer)
+			offset := (i % 16) * 2
+			randomValue := uint64(randomByte[offset]) | uint64(randomByte[offset+1])<<8
+
+			if effectiveBal*fieldparams.MaxRandomValueElectra >= cfg.MaxEffectiveBalanceElectra*randomValue {
+				cIndices = append(cIndices, cIndex)
+			}
+		} else {
+			// Use the preallocated seed buffer
+			binary.LittleEndian.PutUint64(seedBuffer[len(seed):], uint64(i/32))
+			randomByte := hashFunc(seedBuffer)[i%32]
+			if effectiveBal*fieldparams.MaxRandomByte >= cfg.MaxEffectiveBalance*uint64(randomByte) {
+				cIndices = append(cIndices, cIndex)
+			}
 		}
 	}
 

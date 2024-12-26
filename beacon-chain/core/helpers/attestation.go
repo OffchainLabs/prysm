@@ -67,12 +67,6 @@ func IsAggregator(committeeCount uint64, slotSig []byte) (bool, error) {
 	return binary.LittleEndian.Uint64(b[:8])%modulo == 0, nil
 }
 
-// IsAggregated returns true if the attestation is an aggregated attestation,
-// false otherwise.
-func IsAggregated(attestation ethpb.Att) bool {
-	return attestation.GetAggregationBits().Count() > 1
-}
-
 // ComputeSubnetForAttestation returns the subnet for which the provided attestation will be broadcasted to.
 // This differs from the spec definition by instead passing in the active validators indices in the attestation's
 // given epoch.

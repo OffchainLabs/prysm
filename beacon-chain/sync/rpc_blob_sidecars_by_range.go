@@ -10,7 +10,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
 	p2ptypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
 	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
@@ -28,7 +27,7 @@ func (s *Service) streamBlobBatch(ctx context.Context, batch blockBatch, wQuota 
 	defer span.End()
 	for _, b := range batch.canonical() {
 		root := b.Root()
-		idxs, err := s.cfg.blobStorage.Indices(b.Root())
+		idxs, err := s.cfg.blobStorage.Indices(b.Root(), b.Block().Slot())
 		if err != nil {
 			s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
 			return wQuota, errors.Wrapf(err, "could not retrieve sidecars for block root %#x", root)
@@ -146,8 +145,9 @@ func BlobRPCMinValidSlot(current primitives.Slot) (primitives.Slot, error) {
 	return slots.EpochStart(minStart)
 }
 
-func blobBatchLimit() uint64 {
-	return uint64(flags.Get().BlockBatchLimit / fieldparams.MaxBlobsPerBlock)
+func blobBatchLimit(slot primitives.Slot) uint64 {
+	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlock(slot)
+	return uint64(flags.Get().BlockBatchLimit / maxBlobsPerBlock)
 }
 
 func validateBlobsByRange(r *pb.BlobSidecarsByRangeRequest, current primitives.Slot) (rangeParams, error) {
@@ -200,7 +200,7 @@ func validateBlobsByRange(r *pb.BlobSidecarsByRangeRequest, current primitives.S
 		rp.end = rp.start
 	}
 
-	limit := blobBatchLimit()
+	limit := blobBatchLimit(current)
 	if limit > maxRequest {
 		limit = maxRequest
 	}

@@ -49,6 +49,7 @@ type Flags struct {
 	EnableHistoricalSpaceRepresentation bool // EnableHistoricalSpaceRepresentation enables the saving of registry validators in separate buckets to save space
 	EnableBeaconRESTApi                 bool // EnableBeaconRESTApi enables experimental usage of the beacon REST API by the validator when querying a beacon node
 	DisableCommitteeAwarePacking        bool // DisableCommitteeAwarePacking changes the attestation packing algorithm to one that is not aware of attesting committees.
+	EnableExperimentalAttestationPool   bool // EnableExperimentalAttestationPool enables an experimental attestation pool design.
 	// Logging related toggles.
 	DisableGRPCConnectionLogs bool // Disables logging when a new grpc client has connected.
 	EnableFullSSZDataLogging  bool // Enables logging for full ssz data on rejected gossip messages
@@ -266,6 +267,10 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 	if ctx.IsSet(EnableDiscoveryReboot.Name) {
 		logEnabled(EnableDiscoveryReboot)
 		cfg.EnableDiscoveryReboot = true
+	}
+	if ctx.IsSet(enableExperimentalAttestationPool.Name) {
+		logEnabled(enableExperimentalAttestationPool)
+		cfg.EnableExperimentalAttestationPool = true
 	}
 
 	cfg.AggregateIntervals = [3]time.Duration{aggregateFirstInterval.Value, aggregateSecondInterval.Value, aggregateThirdInterval.Value}
