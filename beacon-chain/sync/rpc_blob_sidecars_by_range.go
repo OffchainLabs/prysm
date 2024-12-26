@@ -32,6 +32,26 @@ func (s *Service) streamBlobBatch(ctx context.Context, batch blockBatch, wQuota 
 			s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
 			return wQuota, errors.Wrapf(err, "could not retrieve sidecars for block root %#x", root)
 		}
+
+		// Get the number of KZG commitments in the block
+		kzgCommitments := len(b.Block().Body().BlobKzgCommitments())
+		
+		// Count available blob sidecars
+		availableSidecars := 0
+		for _, hasIndex := range idxs {
+			if hasIndex {
+				availableSidecars++
+			}
+		}
+
+		// Check if we have all required blob sidecars
+		if kzgCommitments > 0 && availableSidecars < kzgCommitments {
+			s.writeErrorResponseToStream(responseCodeServerError, errMissingBlobsForBlockCommitments.Error(), stream)
+			return wQuota, errors.Wrapf(errMissingBlobsForBlockCommitments, 
+				"block root %#x has %d KZG commitments but only %d available sidecars", 
+				root, kzgCommitments, availableSidecars)
+		}
+
 		for i, l := uint64(0), uint64(len(idxs)); i < l; i++ {
 			// index not available, skip
 			if !idxs[i] {
