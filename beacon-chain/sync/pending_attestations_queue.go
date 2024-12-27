@@ -140,12 +140,20 @@ func (s *Service) processAttestations(ctx context.Context, attestations []ethpb.
 				log.WithError(err).Debug("Could not retrieve attestation prestate")
 				continue
 			}
-
-			valid, err := s.validateUnaggregatedAttWithState(ctx, aggregate, preState)
+			committee, valid, err := s.validateUnaggregatedAttWithState(ctx, aggregate, preState)
 			if err != nil {
 				log.WithError(err).Debug("Pending unaggregated attestation failed validation")
 				continue
 			}
+			if aggregate.Version() >= version.Electra {
+				singleAtt, ok := aggregate.(*ethpb.SingleAttestation)
+				if !ok {
+					log.Debugf("Attestation has wrong type (expected %T, got %T)", &ethpb.SingleAttestation{}, aggregate)
+					continue
+				}
+				aggregate = singleAtt.ToAttestationElectra(committee)
+			}
+
 			if valid == pubsub.ValidationAccept {
 				if features.Get().EnableExperimentalAttestationPool {
 					if err = s.cfg.attestationCache.Add(aggregate); err != nil {

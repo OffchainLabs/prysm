@@ -205,11 +205,7 @@ func matchingAtts(atts []ethpbalpha.Att, slot primitives.Slot, attDataRoot []byt
 		// compare the committee index separately.
 		if postElectra {
 			if att.Version() >= version.Electra {
-				ci, err := att.GetCommitteeIndex()
-				if err != nil {
-					return nil, err
-				}
-				if ci != index {
+				if att.GetCommitteeIndex() != index {
 					continue
 				}
 			} else {

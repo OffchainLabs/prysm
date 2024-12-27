@@ -32,7 +32,7 @@ func ValidateNilAttestation(attestation ethpb.Att) error {
 	if attestation.GetData().Target == nil {
 		return errors.New("attestation's target can't be nil")
 	}
-	if attestation.GetAggregationBits() == nil {
+	if !attestation.IsSingle() && attestation.GetAggregationBits() == nil {
 		return errors.New("attestation's bitfield can't be nil")
 	}
 	return nil

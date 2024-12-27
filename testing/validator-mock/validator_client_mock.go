@@ -181,7 +181,7 @@ func (mr *MockValidatorClientMockRecorder) FeeRecipientByPubKey(arg0, arg1 any) 
 // Host mocks base method.
 func (m *MockValidatorClient) Host() string {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "HTTPHost")
+	ret := m.ctrl.Call(m, "Host")
 	ret0, _ := ret[0].(string)
 	return ret0
 }
@@ -189,7 +189,7 @@ func (m *MockValidatorClient) Host() string {
 // Host indicates an expected call of Host.
 func (mr *MockValidatorClientMockRecorder) Host() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HTTPHost", reflect.TypeOf((*MockValidatorClient)(nil).Host))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Host", reflect.TypeOf((*MockValidatorClient)(nil).Host))
 }
 
 // MultipleValidatorStatus mocks base method.
@@ -238,7 +238,7 @@ func (mr *MockValidatorClientMockRecorder) ProposeAttestation(arg0, arg1 any) *g
 }
 
 // ProposeAttestationElectra mocks base method.
-func (m *MockValidatorClient) ProposeAttestationElectra(arg0 context.Context, arg1 *eth.AttestationElectra) (*eth.AttestResponse, error) {
+func (m *MockValidatorClient) ProposeAttestationElectra(arg0 context.Context, arg1 *eth.SingleAttestation) (*eth.AttestResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ProposeAttestationElectra", arg0, arg1)
 	ret0, _ := ret[0].(*eth.AttestResponse)
@@ -499,21 +499,6 @@ func (m *MockValidatorClient) ValidatorStatus(arg0 context.Context, arg1 *eth.Va
 func (mr *MockValidatorClientMockRecorder) ValidatorStatus(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidatorStatus", reflect.TypeOf((*MockValidatorClient)(nil).ValidatorStatus), arg0, arg1)
-}
-
-// WaitForActivation mocks base method.
-func (m *MockValidatorClient) WaitForActivation(arg0 context.Context, arg1 *eth.ValidatorActivationRequest) (eth.BeaconNodeValidator_WaitForActivationClient, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WaitForActivation", arg0, arg1)
-	ret0, _ := ret[0].(eth.BeaconNodeValidator_WaitForActivationClient)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// WaitForActivation indicates an expected call of WaitForActivation.
-func (mr *MockValidatorClientMockRecorder) WaitForActivation(arg0, arg1 any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitForActivation", reflect.TypeOf((*MockValidatorClient)(nil).WaitForActivation), arg0, arg1)
 }
 
 // WaitForChainStart mocks base method.
