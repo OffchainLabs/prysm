@@ -28,6 +28,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Enforce Compound prefix (0x02) for target when processing pending consolidation request.
 - Limit consolidating by validator's effective balance.
 - Use 16-bit random value for proposer and sync committee selection filter.
+- Re-organize the content of the `*.proto` files (No functional change).
 
 ### Deprecated
 

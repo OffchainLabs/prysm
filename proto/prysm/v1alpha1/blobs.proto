@@ -28,6 +28,11 @@ message BlindedBlobSidecars {
   repeated BlindedBlobSidecar sidecars = 1 [(ethereum.eth.ext.ssz_max) = "max_blobs_per_block.size"];
 }
 
+message SignedBlindedBlobSidecar {
+  BlindedBlobSidecar message = 1;
+  bytes signature = 2 [(ethereum.eth.ext.ssz_size) = "96"];
+}
+
 message BlindedBlobSidecar {
   bytes block_root = 1 [(ethereum.eth.ext.ssz_size) = "32"];
   uint64 index = 2;
@@ -37,11 +42,6 @@ message BlindedBlobSidecar {
   bytes blob_root = 6 [(ethereum.eth.ext.ssz_size) = "32"];
   bytes kzg_commitment = 7 [(ethereum.eth.ext.ssz_size) = "48"];
   bytes kzg_proof = 8 [(ethereum.eth.ext.ssz_size) = "48"];
-}
-
-message SignedBlindedBlobSidecar {
-  BlindedBlobSidecar message = 1;
-  bytes signature = 2 [(ethereum.eth.ext.ssz_size) = "96"];
 }
 
 message BlobIdentifier {
