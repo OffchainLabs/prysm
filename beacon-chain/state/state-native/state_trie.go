@@ -25,7 +25,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-var phase0Fields = []types.FieldIndex{
+var (
+phase0Fields = []types.FieldIndex{
 	types.GenesisTime,
 	types.GenesisValidatorsRoot,
 	types.Slot,
@@ -49,7 +50,7 @@ var phase0Fields = []types.FieldIndex{
 	types.FinalizedCheckpoint,
 }
 
-var altairFields = []types.FieldIndex{
+altairFields = []types.FieldIndex{
 	types.GenesisTime,
 	types.GenesisValidatorsRoot,
 	types.Slot,
@@ -76,9 +77,9 @@ var altairFields = []types.FieldIndex{
 	types.NextSyncCommittee,
 }
 
-var bellatrixFields = append(altairFields, types.LatestExecutionPayloadHeader)
+bellatrixFields = append(altairFields, types.LatestExecutionPayloadHeader)
 
-var capellaFields = append(
+capellaFields = append(
 	altairFields,
 	types.LatestExecutionPayloadHeaderCapella,
 	types.NextWithdrawalIndex,
@@ -86,7 +87,7 @@ var capellaFields = append(
 	types.HistoricalSummaries,
 )
 
-var denebFields = append(
+denebFields = append(
 	altairFields,
 	types.LatestExecutionPayloadHeaderDeneb,
 	types.NextWithdrawalIndex,
@@ -94,7 +95,7 @@ var denebFields = append(
 	types.HistoricalSummaries,
 )
 
-var electraFields = append(
+electraFields = append(
 	denebFields,
 	types.DepositRequestsStartIndex,
 	types.DepositBalanceToConsume,
@@ -105,6 +106,7 @@ var electraFields = append(
 	types.PendingDeposits,
 	types.PendingPartialWithdrawals,
 	types.PendingConsolidations,
+)
 )
 
 const (
