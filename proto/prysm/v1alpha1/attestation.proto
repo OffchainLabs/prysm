@@ -58,13 +58,6 @@ message Attestation {
     bytes signature = 3 [(ethereum.eth.ext.ssz_size) = "96"];
 }
 
-message SingleAttestation {
-    uint64 committee_id = 1  [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.CommitteeIndex"];
-    uint64 attester_index = 2  [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.ValidatorIndex"];
-    AttestationData data = 3;
-    bytes signature = 4 [(ethereum.eth.ext.ssz_size) = "96"];
-}
-
 message AttestationData {
     // Attestation data includes information on Casper the Friendly Finality Gadget's votes
     // See: https://arxiv.org/pdf/1710.09437.pdf
@@ -131,4 +124,11 @@ message AttestationElectra {
 
     // Represents the committee which aggregated attestation belong.
     bytes committee_bits = 4 [(ethereum.eth.ext.ssz_size) = "committee_bits.size", (ethereum.eth.ext.cast_type) = "committee_bits.type"];
+}
+
+message SingleAttestation {
+    uint64 committee_id = 1  [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.CommitteeIndex"];
+    uint64 attester_index = 2  [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.ValidatorIndex"];
+    AttestationData data = 3;
+    bytes signature = 4 [(ethereum.eth.ext.ssz_size) = "96"];
 }
