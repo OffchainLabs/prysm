@@ -24,6 +24,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+const ErrNotEnoughSyncCommitteeBits = "sync committee bits count is less than required"
+
 func NewLightClientFinalityUpdateFromBeaconState(
 	ctx context.Context,
 	currentSlot primitives.Slot,
@@ -84,7 +86,12 @@ func NewLightClientUpdateFromBeaconState(
 		return nil, errors.Wrap(err, "could not get sync aggregate")
 	}
 	if syncAggregate.SyncCommitteeBits.Count() < params.BeaconConfig().MinSyncCommitteeParticipants {
-		return nil, fmt.Errorf("invalid sync committee bits count %d", syncAggregate.SyncCommitteeBits.Count())
+		return nil, fmt.Errorf(
+			"%s (got %d, need %d)",
+			ErrNotEnoughSyncCommitteeBits,
+			syncAggregate.SyncCommitteeBits.Count(),
+			params.BeaconConfig().MinSyncCommitteeParticipants,
+		)
 	}
 
 	// assert state.slot == state.latest_block_header.slot

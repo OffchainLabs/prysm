@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	lightclient "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/light-client"
@@ -129,7 +130,7 @@ func (s *Service) saveLightClientUpdate(cfg *postBlockProcessConfig) {
 	attestedRoot := cfg.roblock.Block().ParentRoot()
 	attestedBlock, err := s.getBlock(cfg.ctx, attestedRoot)
 	if err != nil {
-		log.WithError(err).Error("Saving light client update failed: Could not get attested block")
+		log.WithError(err).Errorf("Saving light client update failed: Could not get attested block for root %#x", attestedRoot)
 		return
 	}
 	if attestedBlock == nil || attestedBlock.IsNil() {
@@ -138,7 +139,7 @@ func (s *Service) saveLightClientUpdate(cfg *postBlockProcessConfig) {
 	}
 	attestedState, err := s.cfg.StateGen.StateByRoot(cfg.ctx, attestedRoot)
 	if err != nil {
-		log.WithError(err).Error("Saving light client update failed: Could not get attested state")
+		log.WithError(err).Errorf("Saving light client update failed: Could not get attested state for root %#x", attestedRoot)
 		return
 	}
 	if attestedState == nil || attestedState.IsNil() {
@@ -149,7 +150,11 @@ func (s *Service) saveLightClientUpdate(cfg *postBlockProcessConfig) {
 	finalizedRoot := attestedState.FinalizedCheckpoint().Root
 	finalizedBlock, err := s.getBlock(cfg.ctx, [32]byte(finalizedRoot))
 	if err != nil {
-		log.WithError(err).Error("Saving light client update failed: Could not get finalized block")
+		if errors.Is(err, errBlockNotFoundInCacheOrDB) {
+			log.Debugf("Skipping saving light client update: Finalized block is nil for root %#x", finalizedRoot)
+		} else {
+			log.WithError(err).Errorf("Saving light client update failed: Could not get finalized block for root %#x", finalizedRoot)
+		}
 		return
 	}
 
@@ -224,26 +229,28 @@ func (s *Service) processLightClientFinalityUpdate(
 	attestedRoot := signed.Block().ParentRoot()
 	attestedBlock, err := s.cfg.BeaconDB.Block(ctx, attestedRoot)
 	if err != nil {
-		return errors.Wrap(err, "could not get attested block")
+		return errors.Wrapf(err, "could not get attested block for root %#x", attestedRoot)
 	}
 	attestedState, err := s.cfg.StateGen.StateByRoot(ctx, attestedRoot)
 	if err != nil {
-		return errors.Wrap(err, "could not get attested state")
+		return errors.Wrapf(err, "could not get attested state for root %#x", attestedRoot)
 	}
 
-	var finalizedBlock interfaces.ReadOnlySignedBeaconBlock
-	finalizedCheckPoint := attestedState.FinalizedCheckpoint()
-	if finalizedCheckPoint != nil {
-		finalizedRoot := bytesutil.ToBytes32(finalizedCheckPoint.Root)
-		finalizedBlock, err = s.cfg.BeaconDB.Block(ctx, finalizedRoot)
-		if err != nil {
-			finalizedBlock = nil
-		}
-	}
+	finalizedCheckpoint := attestedState.FinalizedCheckpoint()
 
 	// Check if the finalized checkpoint has changed
-	if finalizedCheckPoint == nil || bytes.Equal(finalizedCheckPoint.GetRoot(), postState.FinalizedCheckpoint().Root) {
+	if finalizedCheckpoint == nil || bytes.Equal(finalizedCheckpoint.GetRoot(), postState.FinalizedCheckpoint().Root) {
 		return nil
+	}
+
+	finalizedRoot := bytesutil.ToBytes32(finalizedCheckpoint.Root)
+	finalizedBlock, err := s.cfg.BeaconDB.Block(ctx, finalizedRoot)
+	if err != nil {
+		if errors.Is(err, errBlockNotFoundInCacheOrDB) {
+			log.Debugf("Skipping processing light client finality update: Finalized block is nil for root %#x", finalizedRoot)
+			return nil
+		}
+		return errors.Wrapf(err, "could not get finalized block for root %#x", finalizedRoot)
 	}
 
 	update, err := lightclient.NewLightClientFinalityUpdateFromBeaconState(
@@ -272,11 +279,11 @@ func (s *Service) processLightClientOptimisticUpdate(ctx context.Context, signed
 	attestedRoot := signed.Block().ParentRoot()
 	attestedBlock, err := s.cfg.BeaconDB.Block(ctx, attestedRoot)
 	if err != nil {
-		return errors.Wrap(err, "could not get attested block")
+		return errors.Wrapf(err, "could not get attested block for root %#x", attestedRoot)
 	}
 	attestedState, err := s.cfg.StateGen.StateByRoot(ctx, attestedRoot)
 	if err != nil {
-		return errors.Wrap(err, "could not get attested state")
+		return errors.Wrapf(err, "could not get attested state for root %#x", attestedRoot)
 	}
 
 	update, err := lightclient.NewLightClientOptimisticUpdateFromBeaconState(
@@ -289,6 +296,10 @@ func (s *Service) processLightClientOptimisticUpdate(ctx context.Context, signed
 	)
 
 	if err != nil {
+		if strings.Contains(err.Error(), lightclient.ErrNotEnoughSyncCommitteeBits) {
+			log.WithError(err).Debug("Skipping processing light client optimistic update")
+			return nil
+		}
 		return errors.Wrap(err, "could not create light client optimistic update")
 	}
 
