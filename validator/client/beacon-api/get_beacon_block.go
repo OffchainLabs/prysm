@@ -69,8 +69,14 @@ func (c *beaconApiValidatorClient) beaconBlock(ctx context.Context, slot primiti
 		blinded = produceBlockV3ResponseJson.ExecutionPayloadBlinded
 		decoder = json.NewDecoder(bytes.NewReader(produceBlockV3ResponseJson.Data))
 	}
+	return processBlockResponse(ver, blinded, decoder)
+}
 
+func processBlockResponse(ver string, isBlinded bool, decoder *json.Decoder) (*ethpb.GenericBeaconBlock, error) {
 	var response *ethpb.GenericBeaconBlock
+	if decoder == nil {
+		return nil, errors.New("no produce block json decoder found")
+	}
 	switch ver {
 	case version.String(version.Phase0):
 		jsonPhase0Block := structs.BeaconBlock{}
@@ -93,7 +99,7 @@ func (c *beaconApiValidatorClient) beaconBlock(ctx context.Context, slot primiti
 		}
 		response = genericBlock
 	case version.String(version.Bellatrix):
-		if blinded {
+		if isBlinded {
 			jsonBellatrixBlock := structs.BlindedBeaconBlockBellatrix{}
 			if err := decoder.Decode(&jsonBellatrixBlock); err != nil {
 				return nil, errors.Wrap(err, "failed to decode blinded bellatrix block response json")
@@ -115,7 +121,7 @@ func (c *beaconApiValidatorClient) beaconBlock(ctx context.Context, slot primiti
 			response = genericBlock
 		}
 	case version.String(version.Capella):
-		if blinded {
+		if isBlinded {
 			jsonCapellaBlock := structs.BlindedBeaconBlockCapella{}
 			if err := decoder.Decode(&jsonCapellaBlock); err != nil {
 				return nil, errors.Wrap(err, "failed to decode blinded capella block response json")
@@ -137,7 +143,7 @@ func (c *beaconApiValidatorClient) beaconBlock(ctx context.Context, slot primiti
 			response = genericBlock
 		}
 	case version.String(version.Deneb):
-		if blinded {
+		if isBlinded {
 			jsonDenebBlock := structs.BlindedBeaconBlockDeneb{}
 			if err := decoder.Decode(&jsonDenebBlock); err != nil {
 				return nil, errors.Wrap(err, "failed to decode blinded deneb block response json")
@@ -155,6 +161,28 @@ func (c *beaconApiValidatorClient) beaconBlock(ctx context.Context, slot primiti
 			genericBlock, err := jsonDenebBlockContents.ToGeneric()
 			if err != nil {
 				return nil, errors.Wrap(err, "failed to get deneb block")
+			}
+			response = genericBlock
+		}
+	case version.String(version.Electra):
+		if isBlinded {
+			jsonElectraBlock := structs.BlindedBeaconBlockElectra{}
+			if err := decoder.Decode(&jsonElectraBlock); err != nil {
+				return nil, errors.Wrap(err, "failed to decode blinded electra block response json")
+			}
+			genericBlock, err := jsonElectraBlock.ToGeneric()
+			if err != nil {
+				return nil, errors.Wrap(err, "failed to get blinded electra block")
+			}
+			response = genericBlock
+		} else {
+			jsonElectraBlockContents := structs.BeaconBlockContentsElectra{}
+			if err := decoder.Decode(&jsonElectraBlockContents); err != nil {
+				return nil, errors.Wrap(err, "failed to decode electra block response json")
+			}
+			genericBlock, err := jsonElectraBlockContents.ToGeneric()
+			if err != nil {
+				return nil, errors.Wrap(err, "failed to get electra block")
 			}
 			response = genericBlock
 		}

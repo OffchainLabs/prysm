@@ -342,7 +342,7 @@ func (s *PremineGenesisConfig) setFork(g state.BeaconState) error {
 	case version.Deneb:
 		pv, cv = params.BeaconConfig().CapellaForkVersion, params.BeaconConfig().DenebForkVersion
 	case version.Electra:
-		pv, cv = params.BeaconConfig().ElectraForkVersion, params.BeaconConfig().ElectraForkVersion
+		pv, cv = params.BeaconConfig().DenebForkVersion, params.BeaconConfig().ElectraForkVersion
 	default:
 		return errUnsupportedVersion
 	}
@@ -665,8 +665,8 @@ func (s *PremineGenesisConfig) setExecutionPayload(g state.BeaconState) error {
 			BlockHash:     gb.Hash().Bytes(),
 			Transactions:  make([][]byte, 0),
 			Withdrawals:   make([]*enginev1.Withdrawal, 0),
-			ExcessBlobGas: *gb.ExcessBlobGas(),
-			BlobGasUsed:   *gb.BlobGasUsed(),
+			ExcessBlobGas: unwrapUint64Ptr(gb.ExcessBlobGas()),
+			BlobGasUsed:   unwrapUint64Ptr(gb.BlobGasUsed()),
 		}
 		wep, err := blocks.WrappedExecutionPayloadDeneb(payload)
 		if err != nil {
@@ -716,6 +716,13 @@ func (s *PremineGenesisConfig) setExecutionPayload(g state.BeaconState) error {
 		return errUnsupportedVersion
 	}
 	return g.SetLatestExecutionPayloadHeader(ed)
+}
+
+func unwrapUint64Ptr(u *uint64) uint64 {
+	if u == nil {
+		return 0
+	}
+	return *u
 }
 
 func nZeroRoots(n uint64) [][]byte {

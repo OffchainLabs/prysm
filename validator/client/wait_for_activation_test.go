@@ -14,7 +14,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	validatormock "github.com/prysmaticlabs/prysm/v5/testing/validator-mock"
 	walletMock "github.com/prysmaticlabs/prysm/v5/validator/accounts/testing"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
 	"github.com/prysmaticlabs/prysm/v5/validator/client/testutil"
 	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/derived"
 	constant "github.com/prysmaticlabs/prysm/v5/validator/testing"
@@ -46,16 +45,6 @@ func TestWaitActivation_Exiting_OK(t *testing.T) {
 			PublicKeys: [][]byte{kp.pub[:]},
 		},
 	).Return(resp, nil)
-	prysmChainClient.EXPECT().ValidatorCount(
-		gomock.Any(),
-		"head",
-		gomock.Any(),
-	).Return([]iface.ValidatorCount{
-		{
-			Status: "EXITING",
-			Count:  1,
-		},
-	}, nil).AnyTimes()
 
 	require.NoError(t, v.WaitForActivation(ctx, nil))
 	require.Equal(t, 1, len(v.pubkeyToStatus))
@@ -93,16 +82,6 @@ func TestWaitForActivation_RefetchKeys(t *testing.T) {
 			PublicKeys: [][]byte{kp.pub[:]},
 		},
 	).Return(resp, nil)
-	prysmChainClient.EXPECT().ValidatorCount(
-		gomock.Any(),
-		"head",
-		gomock.Any(),
-	).Return([]iface.ValidatorCount{
-		{
-			Status: "ACTIVE",
-			Count:  1,
-		},
-	}, nil)
 
 	accountChan := make(chan [][fieldparams.BLSPubkeyLength]byte)
 	sub := km.SubscribeAccountChanges(accountChan)
@@ -163,11 +142,6 @@ func TestWaitForActivation_AccountsChanged(t *testing.T) {
 				},
 			).Return(activeResp, nil))
 
-		prysmChainClient.EXPECT().ValidatorCount(
-			gomock.Any(),
-			"head",
-			gomock.Any(),
-		).Return([]iface.ValidatorCount{}, nil).AnyTimes()
 		chainClient.EXPECT().ChainHead(
 			gomock.Any(),
 			gomock.Any(),
@@ -246,11 +220,6 @@ func TestWaitForActivation_AccountsChanged(t *testing.T) {
 				},
 			).Return(activeResp, nil))
 
-		prysmChainClient.EXPECT().ValidatorCount(
-			gomock.Any(),
-			"head",
-			gomock.Any(),
-		).Return([]iface.ValidatorCount{}, nil).AnyTimes()
 		chainClient.EXPECT().ChainHead(
 			gomock.Any(),
 			gomock.Any(),
@@ -295,11 +264,6 @@ func TestWaitForActivation_AttemptsReconnectionOnFailure(t *testing.T) {
 			gomock.Any(),
 			gomock.Any(),
 		).Return(activeResp, nil))
-	prysmChainClient.EXPECT().ValidatorCount(
-		gomock.Any(),
-		"head",
-		gomock.Any(),
-	).Return([]iface.ValidatorCount{}, nil).AnyTimes()
 	chainClient.EXPECT().ChainHead(
 		gomock.Any(),
 		gomock.Any(),

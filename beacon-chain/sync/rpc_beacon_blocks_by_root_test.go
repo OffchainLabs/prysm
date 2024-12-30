@@ -151,11 +151,11 @@ func TestRecentBeaconBlocksRPCHandler_ReturnsBlocks_ReconstructsPayload(t *testi
 		},
 	}
 	r := &Service{cfg: &config{
-		p2p:                           p1,
-		beaconDB:                      d,
-		executionPayloadReconstructor: mockEngine,
-		chain:                         &mock.ChainService{ValidatorsRoot: [32]byte{}},
-		clock:                         startup.NewClock(time.Unix(0, 0), [32]byte{}),
+		p2p:                    p1,
+		beaconDB:               d,
+		executionReconstructor: mockEngine,
+		chain:                  &mock.ChainService{ValidatorsRoot: [32]byte{}},
+		clock:                  startup.NewClock(time.Unix(0, 0), [32]byte{}),
 	}, rateLimiter: newRateLimiter(p1)}
 	pcl := protocol.ID(p2p.RPCBlocksByRootTopicV1)
 	topic := string(pcl)
@@ -253,7 +253,7 @@ func TestRecentBeaconBlocks_RPCRequestSent(t *testing.T) {
 	})
 
 	p1.Connect(p2)
-	require.NoError(t, r.sendRecentBeaconBlocksRequest(context.Background(), &expectedRoots, p2.PeerID()))
+	require.NoError(t, r.sendBeaconBlocksRequest(context.Background(), &expectedRoots, p2.PeerID()))
 
 	if util.WaitTimeout(&wg, 1*time.Second) {
 		t.Fatal("Did not receive stream within 1 sec")
@@ -328,7 +328,7 @@ func TestRecentBeaconBlocks_RPCRequestSent_IncorrectRoot(t *testing.T) {
 	})
 
 	p1.Connect(p2)
-	require.ErrorContains(t, "received unexpected block with root", r.sendRecentBeaconBlocksRequest(context.Background(), &expectedRoots, p2.PeerID()))
+	require.ErrorContains(t, "received unexpected block with root", r.sendBeaconBlocksRequest(context.Background(), &expectedRoots, p2.PeerID()))
 }
 
 func TestRecentBeaconBlocksRPCHandler_HandleZeroBlocks(t *testing.T) {
@@ -395,7 +395,7 @@ func TestRequestPendingBlobs(t *testing.T) {
 			Genesis:        time.Now(),
 		}
 		p1.Peers().Add(new(enr.Record), p2.PeerID(), nil, network.DirOutbound)
-		p1.Peers().SetConnectionState(p2.PeerID(), peers.PeerConnected)
+		p1.Peers().SetConnectionState(p2.PeerID(), peers.Connected)
 		p1.Peers().SetChainState(p2.PeerID(), &ethpb.Status{FinalizedEpoch: 1})
 		s := &Service{
 			cfg: &config{
@@ -424,7 +424,7 @@ func TestConstructPendingBlobsRequest(t *testing.T) {
 	// No unknown indices.
 	root := [32]byte{1}
 	count := 3
-	actual, err := s.constructPendingBlobsRequest(root, count)
+	actual, err := s.constructPendingBlobsRequest(root, count, 100)
 	require.NoError(t, err)
 	require.Equal(t, 3, len(actual))
 	for i, id := range actual {
@@ -454,14 +454,14 @@ func TestConstructPendingBlobsRequest(t *testing.T) {
 	expected := []*eth.BlobIdentifier{
 		{Index: 1, BlockRoot: root[:]},
 	}
-	actual, err = s.constructPendingBlobsRequest(root, count)
+	actual, err = s.constructPendingBlobsRequest(root, count, 100)
 	require.NoError(t, err)
 	require.Equal(t, expected[0].Index, actual[0].Index)
 	require.DeepEqual(t, expected[0].BlockRoot, actual[0].BlockRoot)
 }
 
 func TestFilterUnknownIndices(t *testing.T) {
-	haveIndices := [fieldparams.MaxBlobsPerBlock]bool{true, true, true, false, false, false}
+	haveIndices := []bool{true, true, true, false, false, false}
 
 	blockRoot := [32]byte{}
 	count := 5

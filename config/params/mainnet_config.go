@@ -216,6 +216,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	DenebForkEpoch:       mainnetDenebForkEpoch,
 	ElectraForkVersion:   []byte{5, 0, 0, 0},
 	ElectraForkEpoch:     mainnetElectraForkEpoch,
+	Eip7594ForkEpoch:     math.MaxUint64,
 
 	// New values introduced in Altair hard fork 1.
 	// Participation flag indices.
@@ -286,7 +287,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	PendingPartialWithdrawalsLimit:        134_217_728,
 	PendingConsolidationsLimit:            262_144,
 	MinActivationBalance:                  32_000_000_000,
-	MaxConsolidationsRequestsPerPayload:   1,
+	MaxConsolidationsRequestsPerPayload:   2,
 	MaxPendingPartialsPerWithdrawalsSweep: 8,
 	MaxPendingDepositsPerEpoch:            16,
 	FullExitRequestAmount:                 0,
@@ -295,8 +296,11 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	UnsetDepositRequestsStartIndex:        math.MaxUint64,
 
 	// PeerDAS
-	NumberOfColumns:          128,
-	MaxCellsInExtendedMatrix: 768,
+	NumberOfColumns:                       128,
+	MaxCellsInExtendedMatrix:              768,
+	SamplesPerSlot:                        8,
+	CustodyRequirement:                    4,
+	MinEpochsForDataColumnSidecarsRequest: 4096,
 
 	// Values related to networking parameters.
 	GossipMaxSize:                   10 * 1 << 20, // 10 MiB
@@ -315,6 +319,10 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	AttestationSubnetPrefixBits:     6,
 	SubnetsPerNode:                  2,
 	NodeIdBits:                      256,
+
+	DeprecatedMaxBlobsPerBlock:           6,
+	DeprecatedMaxBlobsPerBlockElectra:    9,
+	DeprecatedTargetBlobsPerBlockElectra: 6,
 }
 
 // MainnetTestConfig provides a version of the mainnet config that has a different name

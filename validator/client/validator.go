@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math"
 	"strconv"
 	"strings"
 	"sync"
@@ -349,9 +348,9 @@ func (v *validator) WaitForSync(ctx context.Context) error {
 	}
 }
 
-func (v *validator) checkAndLogValidatorStatus(activeValCount int64) bool {
+func (v *validator) checkAndLogValidatorStatus() bool {
 	nonexistentIndex := primitives.ValidatorIndex(^uint64(0))
-	var validatorActivated bool
+	var someAreActive bool
 	for _, s := range v.pubkeyToStatus {
 		fields := logrus.Fields{
 			"pubkey": fmt.Sprintf("%#x", bytesutil.Trunc(s.publicKey)),
@@ -362,36 +361,18 @@ func (v *validator) checkAndLogValidatorStatus(activeValCount int64) bool {
 		}
 		log := log.WithFields(fields)
 		if v.emitAccountMetrics {
-			fmtKey := fmt.Sprintf("%#x", s.publicKey)
-			ValidatorStatusesGaugeVec.WithLabelValues(fmtKey).Set(float64(s.status.Status))
+			fmtKey, fmtIndex := fmt.Sprintf("%#x", s.publicKey), fmt.Sprintf("%#x", s.index)
+			ValidatorStatusesGaugeVec.WithLabelValues(fmtKey, fmtIndex).Set(float64(s.status.Status))
 		}
 		switch s.status.Status {
 		case ethpb.ValidatorStatus_UNKNOWN_STATUS:
 			log.Info("Waiting for deposit to be observed by beacon node")
 		case ethpb.ValidatorStatus_DEPOSITED:
-			if s.status.PositionInActivationQueue != 0 {
-				log.WithField(
-					"positionInActivationQueue", s.status.PositionInActivationQueue,
-				).Info("Deposit processed, entering activation queue after finalization")
-			}
+			log.Info("Validator deposited, entering activation queue after finalization")
 		case ethpb.ValidatorStatus_PENDING:
-			if activeValCount >= 0 && s.status.ActivationEpoch == params.BeaconConfig().FarFutureEpoch {
-				activationsPerEpoch :=
-					uint64(math.Max(float64(params.BeaconConfig().MinPerEpochChurnLimit), float64(uint64(activeValCount)/params.BeaconConfig().ChurnLimitQuotient)))
-				secondsPerEpoch := uint64(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot))
-				expectedWaitingTime :=
-					time.Duration((s.status.PositionInActivationQueue+activationsPerEpoch)/activationsPerEpoch*secondsPerEpoch) * time.Second
-				log.WithFields(logrus.Fields{
-					"positionInActivationQueue": s.status.PositionInActivationQueue,
-					"expectedWaitingTime":       expectedWaitingTime.String(),
-				}).Info("Waiting to be assigned activation epoch")
-			} else if s.status.ActivationEpoch != params.BeaconConfig().FarFutureEpoch {
-				log.WithFields(logrus.Fields{
-					"activationEpoch": s.status.ActivationEpoch,
-				}).Info("Waiting for activation")
-			}
+			log.Info("Waiting for activation... Check validator queue status in a block explorer")
 		case ethpb.ValidatorStatus_ACTIVE, ethpb.ValidatorStatus_EXITING:
-			validatorActivated = true
+			someAreActive = true
 			log.WithFields(logrus.Fields{
 				"index": s.index,
 			}).Info("Validator activated")
@@ -401,11 +382,11 @@ func (v *validator) checkAndLogValidatorStatus(activeValCount int64) bool {
 			log.Warn("Invalid Eth1 deposit")
 		default:
 			log.WithFields(logrus.Fields{
-				"activationEpoch": s.status.ActivationEpoch,
+				"status": s.status.Status.String(),
 			}).Info("Validator status")
 		}
 	}
-	return validatorActivated
+	return someAreActive
 }
 
 // CanonicalHeadSlot returns the slot of canonical block currently found in the
@@ -989,7 +970,7 @@ func (v *validator) logDuties(slot primitives.Slot, currentEpochDuties []*ethpb.
 	for _, duty := range currentEpochDuties {
 		pubkey := fmt.Sprintf("%#x", duty.PublicKey)
 		if v.emitAccountMetrics {
-			ValidatorStatusesGaugeVec.WithLabelValues(pubkey).Set(float64(duty.Status))
+			ValidatorStatusesGaugeVec.WithLabelValues(pubkey, fmt.Sprintf("%#x", duty.ValidatorIndex)).Set(float64(duty.Status))
 		}
 
 		// Only interested in validators who are attesting/proposing.
@@ -1243,6 +1224,10 @@ func (v *validator) filterAndCacheActiveKeys(ctx context.Context, pubkeys [][fie
 
 // updateValidatorStatusCache updates the validator statuses cache, a map of keys currently used by the validator client
 func (v *validator) updateValidatorStatusCache(ctx context.Context, pubkeys [][fieldparams.BLSPubkeyLength]byte) error {
+	if len(pubkeys) == 0 {
+		v.pubkeyToStatus = make(map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus, 0)
+		return nil
+	}
 	statusRequestKeys := make([][]byte, 0)
 	for _, k := range pubkeys {
 		statusRequestKeys = append(statusRequestKeys, k[:])
@@ -1327,6 +1312,11 @@ func (v *validator) buildSignedRegReqs(
 	if v.genesisTime > uint64(time.Now().UTC().Unix()) {
 		return signedValRegRequests
 	}
+
+	if v.ProposerSettings().DefaultConfig != nil && v.ProposerSettings().DefaultConfig.FeeRecipientConfig == nil && v.ProposerSettings().DefaultConfig.BuilderConfig != nil {
+		log.Warn("Builder is `enabled` in default config but will be ignored because no fee recipient was provided!")
+	}
+
 	for i, k := range activePubkeys {
 		// map is populated before this function in buildPrepProposerReq
 		_, ok := v.pubkeyToStatus[k]
@@ -1337,10 +1327,6 @@ func (v *validator) buildSignedRegReqs(
 		feeRecipient := common.HexToAddress(params.BeaconConfig().EthBurnAddressHex)
 		gasLimit := params.BeaconConfig().DefaultBuilderGasLimit
 		enabled := false
-
-		if v.ProposerSettings().DefaultConfig != nil && v.ProposerSettings().DefaultConfig.FeeRecipientConfig == nil && v.ProposerSettings().DefaultConfig.BuilderConfig != nil {
-			log.Warn("Builder is `enabled` in default config but will be ignored because no fee recipient was provided!")
-		}
 
 		if v.ProposerSettings().DefaultConfig != nil && v.ProposerSettings().DefaultConfig.FeeRecipientConfig != nil {
 			defaultConfig := v.ProposerSettings().DefaultConfig

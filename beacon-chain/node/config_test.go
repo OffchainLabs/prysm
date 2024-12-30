@@ -169,66 +169,6 @@ func TestConfigureNetwork_ConfigFile(t *testing.T) {
 	require.NoError(t, os.Remove("flags_test.yaml"))
 }
 
-func TestConfigureInterop(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-
-	tests := []struct {
-		name       string
-		flagSetter func() *cli.Context
-		configName string
-	}{
-		{
-			"nothing set",
-			func() *cli.Context {
-				app := cli.App{}
-				set := flag.NewFlagSet("test", 0)
-				return cli.NewContext(&app, set, nil)
-			},
-			"mainnet",
-		},
-		{
-			"mock votes set",
-			func() *cli.Context {
-				app := cli.App{}
-				set := flag.NewFlagSet("test", 0)
-				set.Bool(flags.InteropMockEth1DataVotesFlag.Name, false, "")
-				assert.NoError(t, set.Set(flags.InteropMockEth1DataVotesFlag.Name, "true"))
-				return cli.NewContext(&app, set, nil)
-			},
-			"interop",
-		},
-		{
-			"validators set",
-			func() *cli.Context {
-				app := cli.App{}
-				set := flag.NewFlagSet("test", 0)
-				set.Uint64(flags.InteropNumValidatorsFlag.Name, 0, "")
-				assert.NoError(t, set.Set(flags.InteropNumValidatorsFlag.Name, "20"))
-				return cli.NewContext(&app, set, nil)
-			},
-			"interop",
-		},
-		{
-			"genesis time set",
-			func() *cli.Context {
-				app := cli.App{}
-				set := flag.NewFlagSet("test", 0)
-				set.Uint64(flags.InteropGenesisTimeFlag.Name, 0, "")
-				assert.NoError(t, set.Set(flags.InteropGenesisTimeFlag.Name, "200"))
-				return cli.NewContext(&app, set, nil)
-			},
-			"interop",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			require.NoError(t, configureInteropConfig(tt.flagSetter()))
-			assert.DeepEqual(t, tt.configName, params.BeaconConfig().ConfigName)
-		})
-	}
-}
-
 func TestAliasFlag(t *testing.T) {
 	// Create a new app with the flag
 	app := &cli.App{

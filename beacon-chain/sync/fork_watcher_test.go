@@ -14,6 +14,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/network/forks"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 )
 
@@ -230,7 +231,8 @@ func TestService_CheckForPreviousEpochFork(t *testing.T) {
 					chainStarted: abool.New(),
 					subHandler:   newSubTopicHandler(),
 				}
-				r.registerRPCHandlers()
+				err := r.registerRPCHandlers()
+				assert.NoError(t, err)
 				return r
 			},
 			currEpoch: 10,
@@ -278,10 +280,21 @@ func TestService_CheckForPreviousEpochFork(t *testing.T) {
 				prevGenesis := chainService.Genesis
 				// To allow registration of v1 handlers
 				chainService.Genesis = time.Now().Add(-1 * oneEpoch())
-				r.registerRPCHandlers()
+				err := r.registerRPCHandlers()
+				assert.NoError(t, err)
 
 				chainService.Genesis = prevGenesis
-				r.registerRPCHandlersAltair()
+				previous, err := r.rpcHandlerByTopicFromFork(version.Phase0)
+				assert.NoError(t, err)
+
+				next, err := r.rpcHandlerByTopicFromFork(version.Altair)
+				assert.NoError(t, err)
+
+				handlerByTopic := addedRPCHandlerByTopic(previous, next)
+
+				for topic, handler := range handlerByTopic {
+					r.registerRPC(topic, handler)
+				}
 
 				genRoot := r.cfg.clock.GenesisValidatorsRoot()
 				digest, err := forks.ForkDigestFromEpoch(0, genRoot[:])
@@ -388,6 +401,7 @@ func TestService_CheckForPreviousEpochFork(t *testing.T) {
 	}
 }
 
+// oneEpoch returns the duration of one epoch.
 func oneEpoch() time.Duration {
 	return time.Duration(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot)) * time.Second
 }

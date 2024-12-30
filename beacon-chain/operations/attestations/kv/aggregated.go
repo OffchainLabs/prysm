@@ -88,7 +88,7 @@ func (c *AttCaches) aggregateParallel(atts map[attestation.Id][]ethpb.Att, leftO
 					log.Error("nil aggregated attestation")
 					continue
 				}
-				if helpers.IsAggregated(aggregated) {
+				if aggregated.IsAggregated() {
 					if err := c.SaveAggregatedAttestations([]ethpb.Att{aggregated}); err != nil {
 						log.WithError(err).Error("could not save aggregated attestation")
 						continue
@@ -122,7 +122,7 @@ func (c *AttCaches) SaveAggregatedAttestation(att ethpb.Att) error {
 	if err := helpers.ValidateNilAttestation(att); err != nil {
 		return err
 	}
-	if !helpers.IsAggregated(att) {
+	if !att.IsAggregated() {
 		return errors.New("attestation is not aggregated")
 	}
 	has, err := c.HasAggregatedAttestation(att)
@@ -255,7 +255,7 @@ func (c *AttCaches) DeleteAggregatedAttestation(att ethpb.Att) error {
 	if err := helpers.ValidateNilAttestation(att); err != nil {
 		return err
 	}
-	if !helpers.IsAggregated(att) {
+	if !att.IsAggregated() {
 		return errors.New("attestation is not aggregated")
 	}
 

@@ -5,7 +5,6 @@ go_library(
     srcs = [
         "aggregated.go",
         "block.go",
-        "forkchoice.go",
         "kv.go",
         "seen_bits.go",
         "unaggregated.go",
@@ -14,6 +13,7 @@ go_library(
     visibility = ["//beacon-chain:__subpackages__"],
     deps = [
         "//beacon-chain/core/helpers:go_default_library",
+        "//beacon-chain/operations/attestations/attmap:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//monitoring/tracing/trace:go_default_library",

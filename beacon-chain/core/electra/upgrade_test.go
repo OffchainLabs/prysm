@@ -159,7 +159,7 @@ func TestUpgradeToElectra(t *testing.T) {
 
 	eee, err := mSt.EarliestExitEpoch()
 	require.NoError(t, err)
-	require.Equal(t, primitives.Epoch(1), eee)
+	require.Equal(t, helpers.ActivationExitEpoch(primitives.Epoch(1)), eee)
 
 	cbtc, err := mSt.ConsolidationBalanceToConsume()
 	require.NoError(t, err)

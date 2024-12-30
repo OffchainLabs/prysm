@@ -7,8 +7,6 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
-	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	coreTime "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
@@ -17,7 +15,6 @@ import (
 	forkchoicetypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/types"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	consensusblocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
@@ -69,13 +66,19 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 	if s.inRegularSync() {
 		defer s.handleSecondFCUCall(cfg, fcuArgs)
 	}
-	defer s.sendLightClientFeeds(cfg)
+	if features.Get().EnableLightClient && slots.ToEpoch(s.CurrentSlot()) >= params.BeaconConfig().AltairForkEpoch {
+		defer s.processLightClientUpdates(cfg)
+		defer s.saveLightClientUpdate(cfg)
+	}
 	defer s.sendStateFeedOnBlock(cfg)
 	defer reportProcessingTime(startTime)
 	defer reportAttestationInclusion(cfg.roblock.Block())
 
 	err := s.cfg.ForkChoiceStore.InsertNode(ctx, cfg.postState, cfg.roblock)
 	if err != nil {
+		// Do not use parent context in the event it deadlined
+		ctx = trace.NewContext(context.Background(), span)
+		s.rollbackBlock(ctx, cfg.roblock.Root())
 		return errors.Wrapf(err, "could not insert block %d to fork choice store", cfg.roblock.Block().Slot())
 	}
 	if err := s.handleBlockAttestations(ctx, cfg.roblock.Block(), cfg.postState); err != nil {
@@ -375,7 +378,11 @@ func (s *Service) handleBlockAttestations(ctx context.Context, blk interfaces.Re
 		r := bytesutil.ToBytes32(a.GetData().BeaconBlockRoot)
 		if s.cfg.ForkChoiceStore.HasNode(r) {
 			s.cfg.ForkChoiceStore.ProcessAttestation(ctx, indices, r, a.GetData().Target.Epoch)
-		} else if err := s.cfg.AttPool.SaveBlockAttestation(a); err != nil {
+		} else if features.Get().EnableExperimentalAttestationPool {
+			if err = s.cfg.AttestationCache.Add(a); err != nil {
+				return err
+			}
+		} else if err = s.cfg.AttPool.SaveBlockAttestation(a); err != nil {
 			return err
 		}
 	}
@@ -403,10 +410,9 @@ func (s *Service) savePostStateInfo(ctx context.Context, r [32]byte, b interface
 		return errors.Wrapf(err, "could not save block from slot %d", b.Block().Slot())
 	}
 	if err := s.cfg.StateGen.SaveState(ctx, r, st); err != nil {
-		log.Warnf("Rolling back insertion of block with root %#x", r)
-		if err := s.cfg.BeaconDB.DeleteBlock(ctx, r); err != nil {
-			log.WithError(err).Errorf("Could not delete block with block root %#x", r)
-		}
+		// Do not use parent context in the event it deadlined
+		ctx = trace.NewContext(context.Background(), span)
+		s.rollbackBlock(ctx, r)
 		return errors.Wrap(err, "could not save state")
 	}
 	return nil
@@ -416,7 +422,11 @@ func (s *Service) savePostStateInfo(ctx context.Context, r [32]byte, b interface
 func (s *Service) pruneAttsFromPool(headBlock interfaces.ReadOnlySignedBeaconBlock) error {
 	atts := headBlock.Block().Body().Attestations()
 	for _, att := range atts {
-		if helpers.IsAggregated(att) {
+		if features.Get().EnableExperimentalAttestationPool {
+			if err := s.cfg.AttestationCache.DeleteCovered(att); err != nil {
+				return errors.Wrap(err, "could not delete attestation")
+			}
+		} else if att.IsAggregated() {
 			if err := s.cfg.AttPool.DeleteAggregatedAttestation(att); err != nil {
 				return err
 			}
@@ -493,14 +503,15 @@ func (s *Service) runLateBlockTasks() {
 // It returns a map where each key represents a missing BlobSidecar index.
 // An empty map means we have all indices; a non-empty map can be used to compare incoming
 // BlobSidecars against the set of known missing sidecars.
-func missingIndices(bs *filesystem.BlobStorage, root [32]byte, expected [][]byte) (map[uint64]struct{}, error) {
+func missingIndices(bs *filesystem.BlobStorage, root [32]byte, expected [][]byte, slot primitives.Slot) (map[uint64]struct{}, error) {
+	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlock(slot)
 	if len(expected) == 0 {
 		return nil, nil
 	}
-	if len(expected) > fieldparams.MaxBlobsPerBlock {
+	if len(expected) > maxBlobsPerBlock {
 		return nil, errMaxBlobsExceeded
 	}
-	indices, err := bs.Indices(root)
+	indices, err := bs.Indices(root, slot)
 	if err != nil {
 		return nil, err
 	}
@@ -549,7 +560,7 @@ func (s *Service) isDataAvailable(ctx context.Context, root [32]byte, signed int
 		return nil
 	}
 	// get a map of BlobSidecar indices that are not currently available.
-	missing, err := missingIndices(s.blobStorage, root, kzgCommitments)
+	missing, err := missingIndices(s.blobStorage, root, kzgCommitments, block.Slot())
 	if err != nil {
 		return err
 	}
@@ -560,7 +571,7 @@ func (s *Service) isDataAvailable(ctx context.Context, root [32]byte, signed int
 
 	// The gossip handler for blobs writes the index of each verified blob referencing the given
 	// root to the channel returned by blobNotifiers.forRoot.
-	nc := s.blobNotifiers.forRoot(root)
+	nc := s.blobNotifiers.forRoot(root, block.Slot())
 
 	// Log for DA checks that cross over into the next slot; helpful for debugging.
 	nextSlot := slots.BeginsAt(signed.Block().Slot()+1, s.genesisTime)
@@ -617,9 +628,6 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 	if !s.inRegularSync() {
 		return
 	}
-	s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
-		Type: statefeed.MissedSlot,
-	})
 	s.headLock.RLock()
 	headRoot := s.headRoot()
 	headState := s.headState(ctx)
@@ -647,6 +655,13 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 	attribute := s.getPayloadAttribute(ctx, headState, s.CurrentSlot()+1, headRoot[:])
 	// return early if we are not proposing next slot
 	if attribute.IsEmpty() {
+		fcuArgs := &fcuConfig{
+			headState:  headState,
+			headRoot:   headRoot,
+			headBlock:  nil,
+			attributes: attribute,
+		}
+		go firePayloadAttributesEvent(ctx, s.cfg.StateNotifier.StateFeed(), fcuArgs)
 		return
 	}
 
@@ -686,4 +701,16 @@ func (s *Service) handleInvalidExecutionError(ctx context.Context, err error, bl
 		return s.pruneInvalidBlock(ctx, blockRoot, parentRoot, InvalidBlockLVH(err))
 	}
 	return err
+}
+
+// In the event of an issue processing a block we rollback changes done to the db and our caches
+// to always ensure that the node's internal state is consistent.
+func (s *Service) rollbackBlock(ctx context.Context, blockRoot [32]byte) {
+	log.Warnf("Rolling back insertion of block with root %#x due to processing error", blockRoot)
+	if err := s.cfg.StateGen.DeleteStateFromCaches(ctx, blockRoot); err != nil {
+		log.WithError(err).Errorf("Could not delete state from caches with block root %#x", blockRoot)
+	}
+	if err := s.cfg.BeaconDB.DeleteBlock(ctx, blockRoot); err != nil {
+		log.WithError(err).Errorf("Could not delete block with block root %#x", blockRoot)
+	}
 }

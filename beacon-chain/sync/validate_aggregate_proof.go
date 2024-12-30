@@ -14,6 +14,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
@@ -57,11 +58,10 @@ func (s *Service) validateAggregateAndProof(ctx context.Context, pid peer.ID, ms
 	}
 
 	aggregate := m.AggregateAttestationAndProof().AggregateVal()
-	data := aggregate.GetData()
-
 	if err := helpers.ValidateNilAttestation(aggregate); err != nil {
 		return pubsub.ValidationReject, err
 	}
+	data := aggregate.GetData()
 	// Do not process slot 0 aggregates.
 	if data.Slot == 0 {
 		return pubsub.ValidationIgnore, nil
@@ -109,15 +109,31 @@ func (s *Service) validateAggregateAndProof(ctx context.Context, pid peer.ID, ms
 		return pubsub.ValidationReject, errors.New("bad block referenced in attestation data")
 	}
 
-	// Verify aggregate attestation has not already been seen via aggregate gossip, within a block, or through the creation locally.
-	seen, err := s.cfg.attPool.HasAggregatedAttestation(aggregate)
-	if err != nil {
-		tracing.AnnotateError(span, err)
-		return pubsub.ValidationIgnore, err
+	if features.Get().EnableExperimentalAttestationPool {
+		// It is possible that some aggregate in the pool already covers all bits
+		// of this aggregate, in which case we can ignore it.
+		isRedundant, err := s.cfg.attestationCache.AggregateIsRedundant(aggregate)
+		if err != nil {
+			tracing.AnnotateError(span, err)
+			return pubsub.ValidationIgnore, err
+		}
+		if isRedundant {
+			return pubsub.ValidationIgnore, nil
+		}
+	} else {
+		// Verify aggregate attestation has not already been seen via aggregate gossip, within a block, or through the creation locally.
+		seen, err := s.cfg.attPool.HasAggregatedAttestation(aggregate)
+		if err != nil {
+			tracing.AnnotateError(span, err)
+			return pubsub.ValidationIgnore, err
+		}
+		if seen {
+			return pubsub.ValidationIgnore, nil
+		}
 	}
-	if seen {
-		return pubsub.ValidationIgnore, nil
-	}
+
+	// Verify the block being voted on is in the beacon chain.
+	// If not, store this attestation in the map of pending attestations.
 	if !s.validateBlockInAttestation(ctx, m) {
 		return pubsub.ValidationIgnore, nil
 	}
@@ -223,6 +239,8 @@ func (s *Service) validateAggregatedAtt(ctx context.Context, signed ethpb.Signed
 	return s.validateWithBatchVerifier(ctx, "aggregate", set)
 }
 
+// validateBlocksInAttestation checks if the block being voted on is in the beaconDB.
+// If not, it store this attestation in the map of pending attestations.
 func (s *Service) validateBlockInAttestation(ctx context.Context, satt ethpb.SignedAggregateAttAndProof) bool {
 	// Verify the block being voted and the processed state is in beaconDB. The block should have passed validation if it's in the beaconDB.
 	blockRoot := bytesutil.ToBytes32(satt.AggregateAttestationAndProof().AggregateVal().GetData().BeaconBlockRoot)

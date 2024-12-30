@@ -224,3 +224,7 @@ message Blob {
 	bytes data = 1 [(ethereum.eth.ext.ssz_size) = "blob.size"];
 }
 
+message BlobAndProof {
+	bytes blob = 1 [(ethereum.eth.ext.ssz_size) = "blob.size"];
+	bytes kzg_proof = 2 [(ethereum.eth.ext.ssz_size) = "48"];
+}

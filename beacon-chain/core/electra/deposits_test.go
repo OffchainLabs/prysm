@@ -22,6 +22,40 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/testing/util"
 )
 
+func TestProcessPendingDepositsMultiplesSameDeposits(t *testing.T) {
+	st := stateWithActiveBalanceETH(t, 1000)
+	deps := make([]*eth.PendingDeposit, 2) // Make same deposit twice
+	validators := st.Validators()
+	sk, err := bls.RandKey()
+	require.NoError(t, err)
+	for i := 0; i < len(deps); i += 1 {
+		wc := make([]byte, 32)
+		wc[0] = params.BeaconConfig().ETH1AddressWithdrawalPrefixByte
+		wc[31] = byte(i)
+		validators[i].PublicKey = sk.PublicKey().Marshal()
+		validators[i].WithdrawalCredentials = wc
+		deps[i] = stateTesting.GeneratePendingDeposit(t, sk, 32, bytesutil.ToBytes32(wc), 0)
+	}
+	require.NoError(t, st.SetPendingDeposits(deps))
+
+	err = electra.ProcessPendingDeposits(context.TODO(), st, 10000)
+	require.NoError(t, err)
+
+	val := st.Validators()
+	seenPubkeys := make(map[string]struct{})
+	for i := 0; i < len(val); i += 1 {
+		if len(val[i].PublicKey) == 0 {
+			continue
+		}
+		_, ok := seenPubkeys[string(val[i].PublicKey)]
+		if ok {
+			t.Fatalf("duplicated pubkeys")
+		} else {
+			seenPubkeys[string(val[i].PublicKey)] = struct{}{}
+		}
+	}
+}
+
 func TestProcessPendingDeposits(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -285,7 +319,7 @@ func TestBatchProcessNewPendingDeposits(t *testing.T) {
 		wc[0] = params.BeaconConfig().ETH1AddressWithdrawalPrefixByte
 		wc[31] = byte(0)
 		validDep := stateTesting.GeneratePendingDeposit(t, sk, params.BeaconConfig().MinActivationBalance, bytesutil.ToBytes32(wc), 0)
-		invalidDep := &eth.PendingDeposit{}
+		invalidDep := &eth.PendingDeposit{PublicKey: make([]byte, 48)}
 		// have a combination of valid and invalid deposits
 		deps := []*eth.PendingDeposit{validDep, invalidDep}
 		require.NoError(t, electra.BatchProcessNewPendingDeposits(context.Background(), st, deps))

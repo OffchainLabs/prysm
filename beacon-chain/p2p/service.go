@@ -43,6 +43,10 @@ var _ runtime.Service = (*Service)(nil)
 // defined below.
 var pollingPeriod = 6 * time.Second
 
+// When looking for new nodes, if not enough nodes are found,
+// we stop after this spent time.
+var batchPeriod = 2 * time.Second
+
 // Refresh rate of ENR set at twice per slot.
 var refreshRate = slots.DivideSlotBy(2)
 
@@ -202,12 +206,13 @@ func (s *Service) Start() {
 			s.startupErr = err
 			return
 		}
-		err = s.connectToBootnodes()
-		if err != nil {
-			log.WithError(err).Error("Could not add bootnode to the exclusion list")
+
+		if err := s.connectToBootnodes(); err != nil {
+			log.WithError(err).Error("Could not connect to boot nodes")
 			s.startupErr = err
 			return
 		}
+
 		s.dv5Listener = listener
 		go s.listenForNewNodes()
 	}
@@ -226,7 +231,7 @@ func (s *Service) Start() {
 	}
 	// Initialize metadata according to the
 	// current epoch.
-	s.RefreshENR()
+	s.RefreshPersistentSubnets()
 
 	// Periodic functions.
 	async.RunEvery(s.ctx, params.BeaconConfig().TtfbTimeoutDuration(), func() {
@@ -234,7 +239,7 @@ func (s *Service) Start() {
 	})
 	async.RunEvery(s.ctx, 30*time.Minute, s.Peers().Prune)
 	async.RunEvery(s.ctx, time.Duration(params.BeaconConfig().RespTimeout)*time.Second, s.updateMetrics)
-	async.RunEvery(s.ctx, refreshRate, s.RefreshENR)
+	async.RunEvery(s.ctx, refreshRate, s.RefreshPersistentSubnets)
 	async.RunEvery(s.ctx, 1*time.Minute, func() {
 		inboundQUICCount := len(s.peers.InboundConnectedWithProtocol(peers.QUIC))
 		inboundTCPCount := len(s.peers.InboundConnectedWithProtocol(peers.TCP))
@@ -384,12 +389,17 @@ func (s *Service) AddPingMethod(reqFunc func(ctx context.Context, id peer.ID) er
 	s.pingMethodLock.Unlock()
 }
 
-func (s *Service) pingPeers() {
+func (s *Service) pingPeersAndLogEnr() {
 	s.pingMethodLock.RLock()
 	defer s.pingMethodLock.RUnlock()
+
+	localENR := s.dv5Listener.Self()
+	log.WithField("ENR", localENR).Info("New node record")
+
 	if s.pingMethod == nil {
 		return
 	}
+
 	for _, pid := range s.peers.Connected() {
 		go func(id peer.ID) {
 			if err := s.pingMethod(s.ctx, id); err != nil {
@@ -462,8 +472,8 @@ func (s *Service) connectWithPeer(ctx context.Context, info peer.AddrInfo) error
 	if info.ID == s.host.ID() {
 		return nil
 	}
-	if s.Peers().IsBad(info.ID) {
-		return errors.New("refused to connect to bad peer")
+	if err := s.Peers().IsBad(info.ID); err != nil {
+		return errors.Wrap(err, "refused to connect to bad peer")
 	}
 	ctx, cancel := context.WithTimeout(ctx, maxDialTimeout)
 	defer cancel()

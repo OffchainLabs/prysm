@@ -20,7 +20,7 @@ func TestKV_Forkchoice_CanSaveRetrieve(t *testing.T) {
 	atts := []ethpb.Att{att1, att2, att3}
 
 	for _, att := range atts {
-		require.NoError(t, cache.SaveForkchoiceAttestation(att))
+		require.NoError(t, cache.saveForkchoiceAttestation(att))
 	}
 
 	returned := cache.ForkchoiceAttestations()
@@ -41,7 +41,7 @@ func TestKV_Forkchoice_CanDelete(t *testing.T) {
 	atts := []ethpb.Att{att1, att2, att3}
 
 	for _, att := range atts {
-		require.NoError(t, cache.SaveForkchoiceAttestation(att))
+		require.NoError(t, cache.saveForkchoiceAttestation(att))
 	}
 
 	require.NoError(t, cache.DeleteForkchoiceAttestation(att1))
@@ -61,7 +61,7 @@ func TestKV_Forkchoice_CanCount(t *testing.T) {
 	atts := []*ethpb.Attestation{att1, att2, att3}
 
 	for _, att := range atts {
-		require.NoError(t, cache.SaveForkchoiceAttestation(att))
+		require.NoError(t, cache.saveForkchoiceAttestation(att))
 	}
 
 	require.Equal(t, 3, cache.ForkchoiceAttestationCount())

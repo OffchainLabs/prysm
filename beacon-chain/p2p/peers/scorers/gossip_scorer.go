@@ -2,6 +2,7 @@ package scorers
 
 import (
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers/peerdata"
 	pbrpc "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
@@ -51,19 +52,24 @@ func (s *GossipScorer) scoreNoLock(pid peer.ID) float64 {
 }
 
 // IsBadPeer states if the peer is to be considered bad.
-func (s *GossipScorer) IsBadPeer(pid peer.ID) bool {
+func (s *GossipScorer) IsBadPeer(pid peer.ID) error {
 	s.store.RLock()
 	defer s.store.RUnlock()
 	return s.isBadPeerNoLock(pid)
 }
 
 // isBadPeerNoLock is lock-free version of IsBadPeer.
-func (s *GossipScorer) isBadPeerNoLock(pid peer.ID) bool {
+func (s *GossipScorer) isBadPeerNoLock(pid peer.ID) error {
 	peerData, ok := s.store.PeerData(pid)
 	if !ok {
-		return false
+		return nil
 	}
-	return peerData.GossipScore < gossipThreshold
+
+	if peerData.GossipScore < gossipThreshold {
+		return errors.Errorf("gossip score below threshold: got %f - threshold %f", peerData.GossipScore, gossipThreshold)
+	}
+
+	return nil
 }
 
 // BadPeers returns the peers that are considered bad.
@@ -73,7 +79,7 @@ func (s *GossipScorer) BadPeers() []peer.ID {
 
 	badPeers := make([]peer.ID, 0)
 	for pid := range s.store.Peers() {
-		if s.isBadPeerNoLock(pid) {
+		if s.isBadPeerNoLock(pid) != nil {
 			badPeers = append(badPeers, pid)
 		}
 	}

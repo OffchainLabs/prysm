@@ -386,8 +386,14 @@ func batchProcessNewPendingDeposits(ctx context.Context, state state.BeaconState
 		return errors.Wrap(err, "batch signature verification failed")
 	}
 
+	pubKeyMap := make(map[[48]byte]struct{}, len(pendingDeposits))
+
 	// Process each deposit individually
 	for _, pendingDeposit := range pendingDeposits {
+		_, found := pubKeyMap[bytesutil.ToBytes48(pendingDeposit.PublicKey)]
+		if !found {
+			pubKeyMap[bytesutil.ToBytes48(pendingDeposit.PublicKey)] = struct{}{}
+		}
 		validSignature := allSignaturesVerified
 
 		// If batch verification failed, check the individual deposit signature
@@ -405,9 +411,16 @@ func batchProcessNewPendingDeposits(ctx context.Context, state state.BeaconState
 
 		// Add validator to the registry if the signature is valid
 		if validSignature {
-			err = AddValidatorToRegistry(state, pendingDeposit.PublicKey, pendingDeposit.WithdrawalCredentials, pendingDeposit.Amount)
-			if err != nil {
-				return errors.Wrap(err, "failed to add validator to registry")
+			if found {
+				index, _ := state.ValidatorIndexByPubkey(bytesutil.ToBytes48(pendingDeposit.PublicKey))
+				if err := helpers.IncreaseBalance(state, index, pendingDeposit.Amount); err != nil {
+					return errors.Wrap(err, "could not increase balance")
+				}
+			} else {
+				err = AddValidatorToRegistry(state, pendingDeposit.PublicKey, pendingDeposit.WithdrawalCredentials, pendingDeposit.Amount)
+				if err != nil {
+					return errors.Wrap(err, "failed to add validator to registry")
+				}
 			}
 		}
 	}
@@ -508,11 +521,12 @@ func AddValidatorToRegistry(beaconState state.BeaconState, pubKey []byte, withdr
 //	validator = Validator(
 //	    pubkey=pubkey,
 //	    withdrawal_credentials=withdrawal_credentials,
+//	    effective_balance=Gwei(0),
+//	    slashed=False,
 //	    activation_eligibility_epoch=FAR_FUTURE_EPOCH,
 //	    activation_epoch=FAR_FUTURE_EPOCH,
 //	    exit_epoch=FAR_FUTURE_EPOCH,
 //	    withdrawable_epoch=FAR_FUTURE_EPOCH,
-//	    effective_balance=Gwei(0),
 //	)
 //
 //	# [Modified in Electra:EIP7251]
@@ -524,11 +538,12 @@ func GetValidatorFromDeposit(pubKey []byte, withdrawalCredentials []byte, amount
 	validator := &ethpb.Validator{
 		PublicKey:                  pubKey,
 		WithdrawalCredentials:      withdrawalCredentials,
+		EffectiveBalance:           0,
+		Slashed:                    false,
 		ActivationEligibilityEpoch: params.BeaconConfig().FarFutureEpoch,
 		ActivationEpoch:            params.BeaconConfig().FarFutureEpoch,
 		ExitEpoch:                  params.BeaconConfig().FarFutureEpoch,
 		WithdrawableEpoch:          params.BeaconConfig().FarFutureEpoch,
-		EffectiveBalance:           0,
 	}
 	v, err := state_native.NewValidator(validator)
 	if err != nil {
@@ -558,7 +573,7 @@ func ProcessDepositRequests(ctx context.Context, beaconState state.BeaconState, 
 	return beaconState, nil
 }
 
-// processDepositRequest processes the specific deposit receipt
+// processDepositRequest processes the specific deposit request
 // def process_deposit_request(state: BeaconState, deposit_request: DepositRequest) -> None:
 //
 //	# Set deposit request start index
@@ -588,8 +603,8 @@ func processDepositRequest(beaconState state.BeaconState, request *enginev1.Depo
 	}
 	if err := beaconState.AppendPendingDeposit(&ethpb.PendingDeposit{
 		PublicKey:             bytesutil.SafeCopyBytes(request.Pubkey),
-		Amount:                request.Amount,
 		WithdrawalCredentials: bytesutil.SafeCopyBytes(request.WithdrawalCredentials),
+		Amount:                request.Amount,
 		Signature:             bytesutil.SafeCopyBytes(request.Signature),
 		Slot:                  beaconState.Slot(),
 	}); err != nil {

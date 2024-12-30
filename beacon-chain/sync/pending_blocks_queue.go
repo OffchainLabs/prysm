@@ -315,7 +315,7 @@ func (s *Service) sendBatchRootRequest(ctx context.Context, roots [][32]byte, ra
 		if uint64(len(roots)) > maxReqBlock {
 			req = roots[:maxReqBlock]
 		}
-		if err := s.sendRecentBeaconBlocksRequest(ctx, &req, pid); err != nil {
+		if err := s.sendBeaconBlocksRequest(ctx, &req, pid); err != nil {
 			tracing.AnnotateError(span, err)
 			log.WithError(err).Debug("Could not send recent block request")
 		}

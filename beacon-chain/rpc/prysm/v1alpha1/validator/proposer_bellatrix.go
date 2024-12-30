@@ -51,6 +51,7 @@ var emptyTransactionsRoot = [32]byte{127, 254, 36, 30, 166, 1, 135, 253, 176, 24
 // blockBuilderTimeout is the maximum amount of time allowed for a block builder to respond to a
 // block request. This value is known as `BUILDER_PROPOSAL_DELAY_TOLERANCE` in builder spec.
 const blockBuilderTimeout = 1 * time.Second
+const gasLimitAdjustmentFactor = 1024
 
 // Sets the execution data for the block. Execution data can come from local EL client or remote builder depends on validator registration and circuit breaker conditions.
 func setExecutionData(ctx context.Context, blk interfaces.SignedBeaconBlock, local *blocks.GetPayloadResponse, bid builder.Bid, builderBoostFactor primitives.Gwei) (primitives.Wei, *enginev1.BlobsBundle, error) {
@@ -170,7 +171,11 @@ func setExecutionData(ctx context.Context, blk interfaces.SignedBeaconBlock, loc
 
 // This function retrieves the payload header and kzg commitments given the slot number and the validator index.
 // It's a no-op if the latest head block is not versioned bellatrix.
-func (vs *Server) getPayloadHeaderFromBuilder(ctx context.Context, slot primitives.Slot, idx primitives.ValidatorIndex) (builder.Bid, error) {
+func (vs *Server) getPayloadHeaderFromBuilder(
+	ctx context.Context,
+	slot primitives.Slot,
+	idx primitives.ValidatorIndex,
+	parentGasLimit uint64) (builder.Bid, error) {
 	ctx, span := trace.StartSpan(ctx, "ProposerServer.getPayloadHeaderFromBuilder")
 	defer span.End()
 
@@ -247,8 +252,9 @@ func (vs *Server) getPayloadHeaderFromBuilder(ctx context.Context, slot primitiv
 	if err != nil {
 		log.WithError(err).Warn("Proposer: failed to get registration by validator ID, could not check gas limit")
 	} else {
-		if reg.GasLimit != header.GasLimit() {
-			return nil, fmt.Errorf("incorrect header gas limit %d != %d", reg.GasLimit, header.GasLimit())
+		gasLimit := expectedGasLimit(parentGasLimit, reg.GasLimit)
+		if gasLimit != header.GasLimit() {
+			return nil, fmt.Errorf("incorrect header gas limit %d != %d", gasLimit, header.GasLimit())
 		}
 	}
 
@@ -264,13 +270,14 @@ func (vs *Server) getPayloadHeaderFromBuilder(ctx context.Context, slot primitiv
 		return nil, errors.Wrap(err, "could not validate builder signature")
 	}
 
+	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlock(slot)
 	var kzgCommitments [][]byte
 	if bid.Version() >= version.Deneb {
 		kzgCommitments, err = bid.BlobKzgCommitments()
 		if err != nil {
 			return nil, errors.Wrap(err, "could not get blob kzg commitments")
 		}
-		if len(kzgCommitments) > fieldparams.MaxBlobsPerBlock {
+		if len(kzgCommitments) > maxBlobsPerBlock {
 			return nil, fmt.Errorf("builder returned too many kzg commitments: %d", len(kzgCommitments))
 		}
 		for _, c := range kzgCommitments {
@@ -401,4 +408,33 @@ func setExecution(blk interfaces.SignedBeaconBlock, execution interfaces.Executi
 	}
 
 	return nil
+}
+
+// Calculates expected gas limit based on parent gas limit and target gas limit.
+// Spec code:
+//
+//	def expected_gas_limit(parent_gas_limit, target_gas_limit, adjustment_factor):
+//	 max_gas_limit_difference = (parent_gas_limit // adjustment_factor) - 1
+//	 if target_gas_limit > parent_gas_limit:
+//	     gas_diff = target_gas_limit - parent_gas_limit
+//	     return parent_gas_limit + min(gas_diff, max_gas_limit_difference)
+//	 else:
+//	     gas_diff = parent_gas_limit - target_gas_limit
+//	     return parent_gas_limit - min(gas_diff, max_gas_limit_difference)
+func expectedGasLimit(parentGasLimit, proposerGasLimit uint64) uint64 {
+	maxGasLimitDiff := uint64(0)
+	if parentGasLimit > gasLimitAdjustmentFactor {
+		maxGasLimitDiff = parentGasLimit/gasLimitAdjustmentFactor - 1
+	}
+	if proposerGasLimit > parentGasLimit {
+		if proposerGasLimit-parentGasLimit > maxGasLimitDiff {
+			return parentGasLimit + maxGasLimitDiff
+		}
+		return proposerGasLimit
+	}
+
+	if parentGasLimit-proposerGasLimit > maxGasLimitDiff {
+		return parentGasLimit - maxGasLimitDiff
+	}
+	return proposerGasLimit
 }

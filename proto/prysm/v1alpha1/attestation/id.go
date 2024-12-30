@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/crypto/hash"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
@@ -22,12 +21,12 @@ const (
 )
 
 // Id represents an attestation ID. Its uniqueness depends on the IdSource provided when constructing the Id.
-type Id [33]byte
+type Id [32]byte
 
 // NewId --
 func NewId(att ethpb.Att, source IdSource) (Id, error) {
-	if err := helpers.ValidateNilAttestation(att); err != nil {
-		return Id{}, err
+	if att.IsNil() {
+		return Id{}, errors.New("nil attestation")
 	}
 	if att.Version() < 0 || att.Version() > 255 {
 		return Id{}, errors.New("attestation version must be between 0 and 255")
@@ -42,7 +41,7 @@ func NewId(att ethpb.Att, source IdSource) (Id, error) {
 		if err != nil {
 			return Id{}, err
 		}
-		copy(id[1:], h[:])
+		copy(id[1:], h[1:])
 		return id, nil
 	case Data:
 		dataHash, err := att.GetData().HashTreeRoot()
@@ -61,7 +60,7 @@ func NewId(att ethpb.Att, source IdSource) (Id, error) {
 			}
 			h = hash.Hash(append(dataHash[:], []byte(strings.Join(stringCommitteeIndices, ","))...))
 		}
-		copy(id[1:], h[:])
+		copy(id[1:], h[1:])
 		return id, nil
 	default:
 		return Id{}, errors.New("invalid source requested")

@@ -765,6 +765,8 @@ func TestServer_ListIndexedAttestationsElectra(t *testing.T) {
 		cb := primitives.NewAttestationCommitteeBits()
 		cb.SetBitAt(0, true)
 		blockExample := util.NewBeaconBlockElectra()
+		ab := bitfield.NewBitlist(128 / uint64(params.BeaconConfig().SlotsPerEpoch))
+		ab.SetBitAt(0, true)
 		blockExample.Block.Body.Attestations = []*ethpb.AttestationElectra{
 			{
 				Signature: make([]byte, fieldparams.BLSSignatureLength),
@@ -778,7 +780,7 @@ func TestServer_ListIndexedAttestationsElectra(t *testing.T) {
 					},
 					Slot: i,
 				},
-				AggregationBits: bitfield.NewBitlist(128 / uint64(params.BeaconConfig().SlotsPerEpoch)),
+				AggregationBits: ab,
 				CommitteeBits:   cb,
 			},
 		}

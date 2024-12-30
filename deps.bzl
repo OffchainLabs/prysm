@@ -1931,8 +1931,8 @@ def prysm_deps():
         ],
         build_file_proto_mode = "disable_global",
         importpath = "github.com/libp2p/go-libp2p",
-        sum = "h1:BbqRkDaGC3/5xfaJakLV/BrpjlAuYqSB0lRvtzL3B/U=",
-        version = "v0.36.2",
+        sum = "h1:DoABsaHO0VXwH6pwCs2F6XKAXWYjFMO4HFBoVxTnF9g=",
+        version = "v0.36.5",
     )
     go_repository(
         name = "com_github_libp2p_go_libp2p_asn_util",
@@ -2286,8 +2286,8 @@ def prysm_deps():
     go_repository(
         name = "com_github_multiformats_go_multiaddr_dns",
         importpath = "github.com/multiformats/go-multiaddr-dns",
-        sum = "h1:QgQgR+LQVt3NPTjbrLLpsaT2ufAA2y0Mkk+QRVJbW3A=",
-        version = "v0.3.1",
+        sum = "h1:P76EJ3qzBXpUXZ3twdCDx/kvagMsNo0LMFXpyms/zgU=",
+        version = "v0.4.0",
     )
     go_repository(
         name = "com_github_multiformats_go_multiaddr_fmt",
@@ -2814,8 +2814,8 @@ def prysm_deps():
             "gazelle:exclude tools.go",
         ],
         importpath = "github.com/quic-go/qpack",
-        sum = "h1:Cr9BXA1sQS2SmDUWjSofMPNKmvF6IiIfDRmgU0w1ZCo=",
-        version = "v0.4.0",
+        sum = "h1:giqksBPnT/HDtZ6VhtFKgoLOWmlyo9Ei6u9PqzIMbhI=",
+        version = "v0.5.1",
     )
     go_repository(
         name = "com_github_quic_go_quic_go",
@@ -2824,14 +2824,14 @@ def prysm_deps():
             "gazelle:exclude tools.go",
         ],
         importpath = "github.com/quic-go/quic-go",
-        sum = "h1:uuwLClEEyk1DNvchH8uCByQVjo3yKL9opKulExNDs7Y=",
-        version = "v0.46.0",
+        sum = "h1:wsKXZPeGWpMpCGSWqOcqpW2wZYic/8T3aqiOID0/KWE=",
+        version = "v0.48.2",
     )
     go_repository(
         name = "com_github_quic_go_webtransport_go",
         importpath = "github.com/quic-go/webtransport-go",
-        sum = "h1:HxSrwun11U+LlmwpgM1kEqIqH90IT4N8auv/cD7QFJg=",
-        version = "v0.8.0",
+        sum = "h1:4WFk6u3sOT6pLa1kQ50ZVdm8BQFgJNA117cepZxtLIg=",
+        version = "v0.8.1-0.20241018022711-4ac2c9250e66",
     )
     go_repository(
         name = "com_github_r3labs_sse_v2",

@@ -46,6 +46,7 @@ func TestProcessPendingConsolidations(t *testing.T) {
 					Validators: []*eth.Validator{
 						{
 							WithdrawalCredentials: []byte{0x01, 0xFF},
+							EffectiveBalance:      params.BeaconConfig().MinActivationBalance,
 						},
 						{
 							WithdrawalCredentials: []byte{0x01, 0xAB},
@@ -213,15 +214,22 @@ func TestProcessConsolidationRequests(t *testing.T) {
 			name: "one valid request",
 			state: func() state.BeaconState {
 				st := &eth.BeaconStateElectra{
+					Slot:       params.BeaconConfig().SlotsPerEpoch.Mul(uint64(params.BeaconConfig().ShardCommitteePeriod)),
 					Validators: createValidatorsWithTotalActiveBalance(32000000000000000), // 32M ETH
 				}
 				// Validator scenario setup. See comments in reqs section.
 				st.Validators[3].WithdrawalCredentials = bytesutil.Bytes32(0)
-				st.Validators[8].WithdrawalCredentials = bytesutil.Bytes32(0)
+				st.Validators[8].WithdrawalCredentials = bytesutil.Bytes32(1)
 				st.Validators[9].ActivationEpoch = params.BeaconConfig().FarFutureEpoch
 				st.Validators[12].ActivationEpoch = params.BeaconConfig().FarFutureEpoch
 				st.Validators[13].ExitEpoch = 10
 				st.Validators[16].ExitEpoch = 10
+				st.PendingPartialWithdrawals = []*eth.PendingPartialWithdrawal{
+					{
+						Index:  17,
+						Amount: 100,
+					},
+				}
 				s, err := state_native.InitializeFromProtoElectra(st)
 				require.NoError(t, err)
 				return s
@@ -239,7 +247,7 @@ func TestProcessConsolidationRequests(t *testing.T) {
 					SourcePubkey:  []byte("val_5"),
 					TargetPubkey:  []byte("val_6"),
 				},
-				// Target does not have their withdrawal credentials set appropriately.
+				// Target does not have their withdrawal credentials set appropriately. (Using eth1 address prefix)
 				{
 					SourceAddress: append(bytesutil.PadTo(nil, 19), byte(7)),
 					SourcePubkey:  []byte("val_7"),
@@ -286,6 +294,12 @@ func TestProcessConsolidationRequests(t *testing.T) {
 					SourceAddress: append(bytesutil.PadTo(nil, 19), byte(0)),
 					SourcePubkey:  []byte("val_0"),
 					TargetPubkey:  []byte("val_0"),
+				},
+				// Has pending partial withdrawal
+				{
+					SourceAddress: append(bytesutil.PadTo(nil, 19), byte(0)),
+					SourcePubkey:  []byte("val_17"),
+					TargetPubkey:  []byte("val_1"),
 				},
 				// Valid consolidation request. This should be last to ensure invalid requests do
 				// not end the processing early.
@@ -347,6 +361,7 @@ func TestProcessConsolidationRequests(t *testing.T) {
 			name: "pending consolidations limit reached during processing",
 			state: func() state.BeaconState {
 				st := &eth.BeaconStateElectra{
+					Slot:                  params.BeaconConfig().SlotsPerEpoch.Mul(uint64(params.BeaconConfig().ShardCommitteePeriod)),
 					Validators:            createValidatorsWithTotalActiveBalance(32000000000000000), // 32M ETH
 					PendingConsolidations: make([]*eth.PendingConsolidation, params.BeaconConfig().PendingConsolidationsLimit-1),
 				}

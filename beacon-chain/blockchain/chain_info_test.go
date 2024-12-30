@@ -13,7 +13,6 @@ import (
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	consensus_blocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
@@ -39,7 +38,7 @@ func prepareForkchoiceState(
 	payloadHash [32]byte,
 	justified *ethpb.Checkpoint,
 	finalized *ethpb.Checkpoint,
-) (state.BeaconState, consensus_blocks.ROBlock, error) {
+) (state.BeaconState, blocks.ROBlock, error) {
 	blockHeader := &ethpb.BeaconBlockHeader{
 		ParentRoot: parentRoot[:],
 	}
@@ -61,7 +60,7 @@ func prepareForkchoiceState(
 	base.BlockRoots[0] = append(base.BlockRoots[0], blockRoot[:]...)
 	st, err := state_native.InitializeFromProtoBellatrix(base)
 	if err != nil {
-		return nil, consensus_blocks.ROBlock{}, err
+		return nil, blocks.ROBlock{}, err
 	}
 	blk := &ethpb.SignedBeaconBlockBellatrix{
 		Block: &ethpb.BeaconBlockBellatrix{
@@ -76,9 +75,9 @@ func prepareForkchoiceState(
 	}
 	signed, err := blocks.NewSignedBeaconBlock(blk)
 	if err != nil {
-		return nil, consensus_blocks.ROBlock{}, err
+		return nil, blocks.ROBlock{}, err
 	}
-	roblock, err := consensus_blocks.NewROBlockWithRoot(signed, blockRoot)
+	roblock, err := blocks.NewROBlockWithRoot(signed, blockRoot)
 	return st, roblock, err
 }
 

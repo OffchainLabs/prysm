@@ -4,19 +4,93 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
-## [Unreleased](https://github.com/prysmaticlabs/prysm/compare/v5.1.2...HEAD)
+## [Unreleased](https://github.com/prysmaticlabs/prysm/compare/v5.2.0...HEAD)
 
 ### Added
 
-- Electra EIP6110: Queue deposit [pr](https://github.com/prysmaticlabs/prysm/pull/14430)
+- Added proper gas limit check for header from the builder.
+- Added an error field to log `Finished building block`.
+- Implemented a new `EmptyExecutionPayloadHeader` function.
+- `Finished building block`: Display error only if not nil.
+- Added support to update target and max blob count to different values per hard fork config.
+- Log before blob filesystem cache warm-up.
+- New design for the attestation pool. [PR](https://github.com/prysmaticlabs/prysm/pull/14324)
+- Add field param placeholder for Electra blob target and max to pass spec tests.
+- Remote signer electra fork support.
+
+### Changed
+
+- Process light client finality updates only for new finalized epochs instead of doing it for every block.
+- Refactor subnets subscriptions.
+- Refactor RPC handlers subscriptions.
+- Go deps upgrade, from `ioutil` to `io`
+- Move successfully registered validator(s) on builder log to debug.
+- Update some test files to use `crypto/rand` instead of `math/rand`
+- Enforce Compound prefix (0x02) for target when processing pending consolidation request.
+- Limit consolidating by validator's effective balance.
+- Use 16-bit random value for proposer and sync committee selection filter.
+- Re-organize the content of the `*.proto` files (No functional change).
+
+### Deprecated
+
+
+### Removed
+
+
+### Fixed
+
+- Added check to prevent nil pointer deference or out of bounds array access when validating the BLSToExecutionChange on an impossibly nil validator.
+
+### Security
+
+
+## [v5.2.0](https://github.com/prysmaticlabs/prysm/compare/v5.1.2...v5.2.0)
+
+Updating to this release is highly recommended, especially for users running v5.1.1 or v5.1.2.
+This release is **mandatory** for all validator clients using mev-boost with a gas limit increase.
+Without upgrading to this release, validator clients will default to using local execution blocks
+when the gas limit starts to increase.
+
+This release has several fixes and new features. In this release, we have enabled QUIC protocol by
+default, which uses port 13000 for `--p2p-quic-port`. This may be a [breaking change](https://github.com/prysmaticlabs/prysm/pull/14688#issuecomment-2516713826)
+if you're using port 13000 already. This release has some improvements for raising the gas limit,
+but there are [known issues](https://hackmd.io/@ttsao/prysm-gas-limit) with the proposer settings
+file provided gas limit not being respected for mev-boost outsourced blocks. Signalling an increase
+for the gas limit works perfectly for local block production as of this release. See [pumpthegas.org](https://pumpthegas.org) for more info on raising the gas limit on L1.
+
+Notable features:
+- Prysm can reuse blobs from the EL via engine_getBlobsV1, [potentially saving bandwidth](https://hackmd.io/@ttsao/get-blobs-early-results).
+- QUIC is enabled by default. This is a UDP based networking protocol with default port 13000.
+
+### Added
+
+- Electra EIP6110: Queue deposit [pr](https://github.com/prysmaticlabs/prysm/pull/14430).
 - Add Bellatrix tests for light client functions.
 - Add Discovery Rebooter Feature.
 - Added GetBlockAttestationsV2 endpoint.
-- Light client support: Consensus types for Electra
+- Light client support: Consensus types for Electra.
 - Added SubmitPoolAttesterSlashingV2 endpoint.
 - Added SubmitAggregateAndProofsRequestV2 endpoint.
 - Updated the `beacon-chain/monitor` package to Electra. [PR](https://github.com/prysmaticlabs/prysm/pull/14562)
-- Remote signer electra fork support.
+- Added ListAttestationsV2 endpoint.
+- Add ability to rollback node's internal state during processing.
+- Change how unsafe protobuf state is created to prevent unnecessary copies.
+- Added benchmarks for process slots for Capella, Deneb, Electra.
+- Add helper to cast bytes to string without allocating memory.
+- Added GetAggregatedAttestationV2 endpoint.
+- Added SubmitAttestationsV2 endpoint.
+- Validator REST mode Electra block support.
+- Added validator index label to `validator_statuses` metric.
+- Added Validator REST mode use of Attestation V2 endpoints and Electra attestations.
+- PeerDAS: Added proto for `DataColumnIdentifier`, `DataColumnSidecar`, `DataColumnSidecarsByRangeRequest` and `MetadataV2`.
+- Better attestation packing for Electra. [PR](https://github.com/prysmaticlabs/prysm/pull/14534)
+- P2P: Add logs when a peer is (dis)connected. Add the reason of the disconnection when we initiate it.
+- Added a Prometheus error counter metric for HTTP requests to track beacon node requests.
+- Added a Prometheus error counter metric for SSE requests.
+- Save light client updates and bootstraps in DB.
+- Added more comprehensive tests for `BlockToLightClientHeader`. [PR](https://github.com/prysmaticlabs/prysm/pull/14699)
+- Added light client feature flag check to RPC handlers. [PR](https://github.com/prysmaticlabs/prysm/pull/14736)
+- Light client: Add better error handling. [PR](https://github.com/prysmaticlabs/prysm/pull/14749)
 
 ### Changed
 
@@ -29,21 +103,79 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Return false from HasBlock if the block is being synced. 
 - Cleanup forkchoice on failed insertions.
 - Use read only validator for core processing to avoid unnecessary copying.
-- Use ROBlock across block processing pipeline
+- Use ROBlock across block processing pipeline.
+- Added missing Eth-Consensus-Version headers to GetBlockAttestationsV2 and GetAttesterSlashingsV2 endpoints.
+- When instantiating new validators, explicit set `Slashed` to false and move `EffectiveBalance` to match struct definition.
+- Updated pgo profile for beacon chain with holesky data. This improves the profile guided
+  optimizations in the go compiler.
+- Use read only state when computing the active validator list.
+- Simplified `ExitedValidatorIndices`.
+- Simplified `EjectedValidatorIndices`.
+- `engine_newPayloadV4`,`engine_getPayloadV4` are changes due to new execution request serialization decisions, [PR](https://github.com/prysmaticlabs/prysm/pull/14580)
+- Fixed various small things in state-native code.
+- Use ROBlock earlier in block syncing pipeline. 
+- Changed the signature of `ProcessPayload`.
+- Only Build the Protobuf state once during serialization.
+- Capella blocks are execution.
+- Fixed panic when http request to subscribe to event stream fails.
+- Return early for blob reconstructor during capella fork.
+- Updated block endpoint from V1 to V2.
+- Rename instances of "deposit receipts" to "deposit requests".
+- Non-blocking payload attribute event handling in beacon api [pr](https://github.com/prysmaticlabs/prysm/pull/14644).
+- Updated light client protobufs. [PR](https://github.com/prysmaticlabs/prysm/pull/14650)
+- Added `Eth-Consensus-Version` header to `ListAttestationsV2` and `GetAggregateAttestationV2` endpoints.
+- Updated light client consensus types. [PR](https://github.com/prysmaticlabs/prysm/pull/14652)
+- Update earliest exit epoch for upgrade to electra
+- Add missed exit checks to consolidation processing
+- Fixed pending deposits processing on Electra.
+- Modified `ListAttestationsV2`, `GetAttesterSlashingsV2` and `GetAggregateAttestationV2` endpoints to use slot to determine fork version.
+- Improvements to HTTP response handling. [pr](https://github.com/prysmaticlabs/prysm/pull/14673)
+- Updated `Blobs` endpoint to return additional metadata fields.
+- Made QUIC the default method to connect with peers.
+- Check kzg commitments align with blobs and proofs for beacon api end point.
+- Revert "Proposer checks gas limit before accepting builder's bid".
+- Updated quic-go to v0.48.2 .
 
 ### Deprecated
 
 - `/eth/v1alpha1/validator/activation/stream` grpc wait for activation stream is deprecated. [pr](https://github.com/prysmaticlabs/prysm/pull/14514)
+- `--interop-genesis-time` and `--interop-num-validators` have been deprecated in the beacon node as the functionality has been removed. These flags have no effect.
 
 ### Removed
 
 - Removed finalized validator index cache, no longer needed.
+- Removed validator queue position log on key reload and wait for activation.
+- Removed outdated spectest exclusions for EIP-6110.
+- Removed support for starting a beacon node with a deterministic interop genesis state via interop flags. Alteratively, create a genesis state with prysmctl and use `--genesis-state`. This removes about 9Mb (~11%) of unnecessary code and dependencies from the final production binary.
+- Removed kzg proof check from blob reconstructor.
 
 ### Fixed
 
 - Fixed mesh size by appending `gParams.Dhi = gossipSubDhi`
 - Fix skipping partial withdrawals count.
 - wait for the async StreamEvent writer to exit before leaving the http handler, avoiding race condition panics [pr](https://github.com/prysmaticlabs/prysm/pull/14557)
+- Certain deb files were returning a 404 which made building new docker images without an existing
+  cache impossible. This has been fixed with updates to rules_oci and bazel-lib.
+- Fixed an issue where the length check between block body KZG commitments and the existing cache from the database was incompatible.
+- Fix `--backfill-oldest-slot` handling - this flag was totally broken, the code would always backfill to the default slot [pr](https://github.com/prysmaticlabs/prysm/pull/14584)
+- Fix keymanager API should return corrected error format for malformed tokens
+- Fix keymanager API so that get keys returns an empty response instead of a 500 error when using an unsupported keystore.
+- Small log imporvement, removing some redundant or duplicate logs
+- EIP7521 - Fixes withdrawal bug by accounting for pending partial withdrawals and deducting already withdrawn amounts from the sweep balance. [PR](https://github.com/prysmaticlabs/prysm/pull/14578)
+- unskip electra merkle spec test
+- Fix panic in validator REST mode when checking status after removing all keys
+- Fix panic on attestation interface since we call data before validation
+- corrects nil check on some interface attestation types
+- temporary solution to handling electra attesation and attester_slashing events. [pr](14655)
+- Diverse log improvements and comment additions.
+- Validate that each committee bitfield in an aggregate contains at least one non-zero bit
+- P2P: Avoid infinite loop when looking for peers in small networks.
+- Fixed another rollback bug due to a context deadline.
+- Fix checkpoint sync bug on holesky. [pr](https://github.com/prysmaticlabs/prysm/pull/14689)
+- Fix proposer boost spec tests being flakey by adjusting start time from 3 to 2s into slot.
+- Fix segmentation fault in E2E when light-client feature flag is enabled. [PR](https://github.com/prysmaticlabs/prysm/pull/14699)
+- Fix `searchForPeers` infinite loop in small networks.
+- Fix slashing pool behavior to enforce MaxAttesterSlashings limit in Electra version.
 
 ### Security
 
@@ -97,6 +229,7 @@ Updating to this release is recommended at your convenience.
 - fastssz version bump (better error messages).
 - SSE implementation that sheds stuck clients. [pr](https://github.com/prysmaticlabs/prysm/pull/14413)
 - Added GetPoolAttesterSlashingsV2 endpoint.
+- Use engine API get-blobs for block subscriber to reduce block import latency and potentially reduce bandwidth.
 
 ### Changed
 
@@ -156,6 +289,7 @@ Updating to this release is recommended at your convenience.
 - Light client support: fix light client attested header execution fields' wrong version bug.
 - Testing: added custom matcher for better push settings testing.
 - Registered `GetDepositSnapshot` Beacon API endpoint.
+- Fix rolling back of a block due to a context deadline.
 
 ### Security
 
@@ -366,6 +500,7 @@ block profit. If you want to preserve the existing behavior, set --local-block-v
 - Set default LocalBlockValueBoost to 10
 - Add bid value metrics
 - REST VC metrics
+- `startDB`: Add log when checkpoint sync.
 
 ### Changed
 

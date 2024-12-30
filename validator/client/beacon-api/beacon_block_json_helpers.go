@@ -51,6 +51,14 @@ func jsonifyAttestations(attestations []*ethpb.Attestation) []*structs.Attestati
 	return jsonAttestations
 }
 
+func jsonifyAttestationsElectra(attestations []*ethpb.AttestationElectra) []*structs.AttestationElectra {
+	jsonAttestations := make([]*structs.AttestationElectra, len(attestations))
+	for index, attestation := range attestations {
+		jsonAttestations[index] = jsonifyAttestationElectra(attestation)
+	}
+	return jsonAttestations
+}
+
 func jsonifyAttesterSlashings(attesterSlashings []*ethpb.AttesterSlashing) []*structs.AttesterSlashing {
 	jsonAttesterSlashings := make([]*structs.AttesterSlashing, len(attesterSlashings))
 	for index, attesterSlashing := range attesterSlashings {
@@ -164,11 +172,31 @@ func jsonifyAttestation(attestation *ethpb.Attestation) *structs.Attestation {
 	}
 }
 
+func jsonifyAttestationElectra(attestation *ethpb.AttestationElectra) *structs.AttestationElectra {
+	return &structs.AttestationElectra{
+		AggregationBits: hexutil.Encode(attestation.AggregationBits),
+		Data:            jsonifyAttestationData(attestation.Data),
+		Signature:       hexutil.Encode(attestation.Signature),
+		CommitteeBits:   hexutil.Encode(attestation.CommitteeBits),
+	}
+}
+
 func jsonifySignedAggregateAndProof(signedAggregateAndProof *ethpb.SignedAggregateAttestationAndProof) *structs.SignedAggregateAttestationAndProof {
 	return &structs.SignedAggregateAttestationAndProof{
 		Message: &structs.AggregateAttestationAndProof{
 			AggregatorIndex: uint64ToString(signedAggregateAndProof.Message.AggregatorIndex),
 			Aggregate:       jsonifyAttestation(signedAggregateAndProof.Message.Aggregate),
+			SelectionProof:  hexutil.Encode(signedAggregateAndProof.Message.SelectionProof),
+		},
+		Signature: hexutil.Encode(signedAggregateAndProof.Signature),
+	}
+}
+
+func jsonifySignedAggregateAndProofElectra(signedAggregateAndProof *ethpb.SignedAggregateAttestationAndProofElectra) *structs.SignedAggregateAttestationAndProofElectra {
+	return &structs.SignedAggregateAttestationAndProofElectra{
+		Message: &structs.AggregateAttestationAndProofElectra{
+			AggregatorIndex: uint64ToString(signedAggregateAndProof.Message.AggregatorIndex),
+			Aggregate:       jsonifyAttestationElectra(signedAggregateAndProof.Message.Aggregate),
 			SelectionProof:  hexutil.Encode(signedAggregateAndProof.Message.SelectionProof),
 		},
 		Signature: hexutil.Encode(signedAggregateAndProof.Signature),

@@ -10,9 +10,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/libp2p/go-libp2p"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/libp2p/go-libp2p/config"
 	core "github.com/libp2p/go-libp2p/core"
 	"github.com/libp2p/go-libp2p/core/control"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -34,13 +36,17 @@ import (
 
 // We have to declare this again here to prevent a circular dependency
 // with the main p2p package.
-const metatadataV1Topic = "/eth2/beacon_chain/req/metadata/1"
-const metatadataV2Topic = "/eth2/beacon_chain/req/metadata/2"
+const (
+	metadataV1Topic = "/eth2/beacon_chain/req/metadata/1"
+	metadataV2Topic = "/eth2/beacon_chain/req/metadata/2"
+	metadataV3Topic = "/eth2/beacon_chain/req/metadata/3"
+)
 
 // TestP2P represents a p2p implementation that can be used for testing.
 type TestP2P struct {
 	t               *testing.T
 	BHost           host.Host
+	EnodeID         enode.ID
 	pubsub          *pubsub.PubSub
 	joinedTopics    map[string]*pubsub.Topic
 	BroadcastCalled atomic.Bool
@@ -51,9 +57,17 @@ type TestP2P struct {
 }
 
 // NewTestP2P initializes a new p2p test service.
-func NewTestP2P(t *testing.T) *TestP2P {
+func NewTestP2P(t *testing.T, userOptions ...config.Option) *TestP2P {
 	ctx := context.Background()
-	h, err := libp2p.New(libp2p.ResourceManager(&network.NullResourceManager{}), libp2p.Transport(tcp.NewTCPTransport), libp2p.DefaultListenAddrs)
+	options := []config.Option{
+		libp2p.ResourceManager(&network.NullResourceManager{}),
+		libp2p.Transport(tcp.NewTCPTransport),
+		libp2p.DefaultListenAddrs,
+	}
+
+	options = append(options, userOptions...)
+
+	h, err := libp2p.New(options...)
 	require.NoError(t, err)
 	ps, err := pubsub.NewFloodSub(ctx, h,
 		pubsub.WithMessageSigning(false),
@@ -239,7 +253,7 @@ func (p *TestP2P) LeaveTopic(topic string) error {
 }
 
 // Encoding returns ssz encoding.
-func (_ *TestP2P) Encoding() encoder.NetworkEncoding {
+func (*TestP2P) Encoding() encoder.NetworkEncoding {
 	return &encoder.SszNetworkEncoder{}
 }
 
@@ -266,34 +280,39 @@ func (p *TestP2P) Host() host.Host {
 }
 
 // ENR returns the enr of the local peer.
-func (_ *TestP2P) ENR() *enr.Record {
+func (*TestP2P) ENR() *enr.Record {
 	return new(enr.Record)
 }
 
+// NodeID returns the node id of the local peer.
+func (p *TestP2P) NodeID() enode.ID {
+	return p.EnodeID
+}
+
 // DiscoveryAddresses --
-func (_ *TestP2P) DiscoveryAddresses() ([]multiaddr.Multiaddr, error) {
+func (*TestP2P) DiscoveryAddresses() ([]multiaddr.Multiaddr, error) {
 	return nil, nil
 }
 
 // AddConnectionHandler handles the connection with a newly connected peer.
 func (p *TestP2P) AddConnectionHandler(f, _ func(ctx context.Context, id peer.ID) error) {
 	p.BHost.Network().Notify(&network.NotifyBundle{
-		ConnectedF: func(net network.Network, conn network.Conn) {
+		ConnectedF: func(_ network.Network, conn network.Conn) {
 			// Must be handled in a goroutine as this callback cannot be blocking.
 			go func() {
 				p.peers.Add(new(enr.Record), conn.RemotePeer(), conn.RemoteMultiaddr(), conn.Stat().Direction)
 				ctx := context.Background()
 
-				p.peers.SetConnectionState(conn.RemotePeer(), peers.PeerConnecting)
+				p.peers.SetConnectionState(conn.RemotePeer(), peers.Connecting)
 				if err := f(ctx, conn.RemotePeer()); err != nil {
 					logrus.WithError(err).Error("Could not send successful hello rpc request")
 					if err := p.Disconnect(conn.RemotePeer()); err != nil {
 						logrus.WithError(err).Errorf("Unable to close peer %s", conn.RemotePeer())
 					}
-					p.peers.SetConnectionState(conn.RemotePeer(), peers.PeerDisconnected)
+					p.peers.SetConnectionState(conn.RemotePeer(), peers.Disconnected)
 					return
 				}
-				p.peers.SetConnectionState(conn.RemotePeer(), peers.PeerConnected)
+				p.peers.SetConnectionState(conn.RemotePeer(), peers.Connected)
 			}()
 		},
 	})
@@ -302,14 +321,14 @@ func (p *TestP2P) AddConnectionHandler(f, _ func(ctx context.Context, id peer.ID
 // AddDisconnectionHandler --
 func (p *TestP2P) AddDisconnectionHandler(f func(ctx context.Context, id peer.ID) error) {
 	p.BHost.Network().Notify(&network.NotifyBundle{
-		DisconnectedF: func(net network.Network, conn network.Conn) {
+		DisconnectedF: func(_ network.Network, conn network.Conn) {
 			// Must be handled in a goroutine as this callback cannot be blocking.
 			go func() {
-				p.peers.SetConnectionState(conn.RemotePeer(), peers.PeerDisconnecting)
+				p.peers.SetConnectionState(conn.RemotePeer(), peers.Disconnecting)
 				if err := f(context.Background(), conn.RemotePeer()); err != nil {
 					logrus.WithError(err).Debug("Unable to invoke callback")
 				}
-				p.peers.SetConnectionState(conn.RemotePeer(), peers.PeerDisconnected)
+				p.peers.SetConnectionState(conn.RemotePeer(), peers.Disconnected)
 			}()
 		},
 	})
@@ -317,6 +336,8 @@ func (p *TestP2P) AddDisconnectionHandler(f func(ctx context.Context, id peer.ID
 
 // Send a message to a specific peer.
 func (p *TestP2P) Send(ctx context.Context, msg interface{}, topic string, pid peer.ID) (network.Stream, error) {
+	metadataTopics := map[string]bool{metadataV1Topic: true, metadataV2Topic: true, metadataV3Topic: true}
+
 	t := topic
 	if t == "" {
 		return nil, fmt.Errorf("protocol doesn't exist for proto message: %v", msg)
@@ -326,7 +347,7 @@ func (p *TestP2P) Send(ctx context.Context, msg interface{}, topic string, pid p
 		return nil, err
 	}
 
-	if topic != metatadataV1Topic && topic != metatadataV2Topic {
+	if !metadataTopics[topic] {
 		castedMsg, ok := msg.(ssz.Marshaler)
 		if !ok {
 			p.t.Fatalf("%T doesn't support ssz marshaler", msg)
@@ -353,7 +374,7 @@ func (p *TestP2P) Send(ctx context.Context, msg interface{}, topic string, pid p
 }
 
 // Started always returns true.
-func (_ *TestP2P) Started() bool {
+func (*TestP2P) Started() bool {
 	return true
 }
 
@@ -363,12 +384,12 @@ func (p *TestP2P) Peers() *peers.Status {
 }
 
 // FindPeersWithSubnet mocks the p2p func.
-func (_ *TestP2P) FindPeersWithSubnet(_ context.Context, _ string, _ uint64, _ int) (bool, error) {
+func (*TestP2P) FindPeersWithSubnet(_ context.Context, _ string, _ uint64, _ int) (bool, error) {
 	return false, nil
 }
 
-// RefreshENR mocks the p2p func.
-func (_ *TestP2P) RefreshENR() {}
+// RefreshPersistentSubnets mocks the p2p func.
+func (*TestP2P) RefreshPersistentSubnets() {}
 
 // ForkDigest mocks the p2p func.
 func (p *TestP2P) ForkDigest() ([4]byte, error) {
@@ -386,31 +407,31 @@ func (p *TestP2P) MetadataSeq() uint64 {
 }
 
 // AddPingMethod mocks the p2p func.
-func (_ *TestP2P) AddPingMethod(_ func(ctx context.Context, id peer.ID) error) {
+func (*TestP2P) AddPingMethod(_ func(ctx context.Context, id peer.ID) error) {
 	// no-op
 }
 
 // InterceptPeerDial .
-func (_ *TestP2P) InterceptPeerDial(peer.ID) (allow bool) {
+func (*TestP2P) InterceptPeerDial(peer.ID) (allow bool) {
 	return true
 }
 
 // InterceptAddrDial .
-func (_ *TestP2P) InterceptAddrDial(peer.ID, multiaddr.Multiaddr) (allow bool) {
+func (*TestP2P) InterceptAddrDial(peer.ID, multiaddr.Multiaddr) (allow bool) {
 	return true
 }
 
 // InterceptAccept .
-func (_ *TestP2P) InterceptAccept(_ network.ConnMultiaddrs) (allow bool) {
+func (*TestP2P) InterceptAccept(_ network.ConnMultiaddrs) (allow bool) {
 	return true
 }
 
 // InterceptSecured .
-func (_ *TestP2P) InterceptSecured(network.Direction, peer.ID, network.ConnMultiaddrs) (allow bool) {
+func (*TestP2P) InterceptSecured(network.Direction, peer.ID, network.ConnMultiaddrs) (allow bool) {
 	return true
 }
 
 // InterceptUpgraded .
-func (_ *TestP2P) InterceptUpgraded(network.Conn) (allow bool, reason control.DisconnectReason) {
+func (*TestP2P) InterceptUpgraded(network.Conn) (allow bool, reason control.DisconnectReason) {
 	return true, 0
 }

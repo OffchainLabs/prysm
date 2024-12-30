@@ -2,8 +2,10 @@ package kv
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/binary"
-	"math/rand"
+	mathRand "math/rand"
+
 	"strconv"
 	"testing"
 	"time"
@@ -878,16 +880,16 @@ func validators(limit int) []*ethpb.Validator {
 	var vals []*ethpb.Validator
 	for i := 0; i < limit; i++ {
 		pubKey := make([]byte, params.BeaconConfig().BLSPubkeyLength)
-		binary.LittleEndian.PutUint64(pubKey, rand.Uint64())
+		binary.LittleEndian.PutUint64(pubKey, mathRand.Uint64())
 		val := &ethpb.Validator{
 			PublicKey:                  pubKey,
-			WithdrawalCredentials:      bytesutil.ToBytes(rand.Uint64(), 32),
-			EffectiveBalance:           rand.Uint64(),
+			WithdrawalCredentials:      bytesutil.ToBytes(mathRand.Uint64(), 32),
+			EffectiveBalance:           mathRand.Uint64(),
 			Slashed:                    i%2 != 0,
-			ActivationEligibilityEpoch: primitives.Epoch(rand.Uint64()),
-			ActivationEpoch:            primitives.Epoch(rand.Uint64()),
-			ExitEpoch:                  primitives.Epoch(rand.Uint64()),
-			WithdrawableEpoch:          primitives.Epoch(rand.Uint64()),
+			ActivationEligibilityEpoch: primitives.Epoch(mathRand.Uint64()),
+			ActivationEpoch:            primitives.Epoch(mathRand.Uint64()),
+			ExitEpoch:                  primitives.Epoch(mathRand.Uint64()),
+			WithdrawableEpoch:          primitives.Epoch(mathRand.Uint64()),
 		}
 		vals = append(vals, val)
 	}
@@ -913,8 +915,8 @@ func checkStateSaveTime(b *testing.B, saveCount int) {
 		allValidators := append(initialSetOfValidators, validatosToAddInTest...)
 
 		// shuffle validators.
-		rand.Seed(time.Now().UnixNano())
-		rand.Shuffle(len(allValidators), func(i, j int) { allValidators[i], allValidators[j] = allValidators[j], allValidators[i] })
+		mathRand.New(mathRand.NewSource(time.Now().UnixNano()))
+		mathRand.Shuffle(len(allValidators), func(i, j int) { allValidators[i], allValidators[j] = allValidators[j], allValidators[i] })
 
 		require.NoError(b, st.SetValidators(allValidators))
 		require.NoError(b, db.SaveState(context.Background(), st, bytesutil.ToBytes32(key)))
@@ -959,8 +961,8 @@ func checkStateReadTime(b *testing.B, saveCount int) {
 		allValidators := append(initialSetOfValidators, validatosToAddInTest...)
 
 		// shuffle validators.
-		rand.Seed(time.Now().UnixNano())
-		rand.Shuffle(len(allValidators), func(i, j int) { allValidators[i], allValidators[j] = allValidators[j], allValidators[i] })
+		mathRand.New(mathRand.NewSource(time.Now().UnixNano()))
+		mathRand.Shuffle(len(allValidators), func(i, j int) { allValidators[i], allValidators[j] = allValidators[j], allValidators[i] })
 
 		require.NoError(b, st.SetValidators(allValidators))
 		require.NoError(b, db.SaveState(context.Background(), st, bytesutil.ToBytes32(key)))

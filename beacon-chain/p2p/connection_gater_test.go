@@ -50,7 +50,7 @@ func TestPeer_AtMaxLimit(t *testing.T) {
 	}()
 
 	for i := 0; i < highWatermarkBuffer; i++ {
-		addPeer(t, s.peers, peers.PeerConnected, false)
+		addPeer(t, s.peers, peers.Connected, false)
 	}
 
 	// create alternate host
@@ -159,7 +159,7 @@ func TestService_RejectInboundPeersBeyondLimit(t *testing.T) {
 	inboundLimit += 1
 	// Add in up to inbound peer limit.
 	for i := 0; i < int(inboundLimit); i++ {
-		addPeer(t, s.peers, peerdata.PeerConnectionState(ethpb.ConnectionState_CONNECTED), false)
+		addPeer(t, s.peers, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED), false)
 	}
 	valid = s.InterceptAccept(&maEndpoints{raddr: multiAddress})
 	if valid {

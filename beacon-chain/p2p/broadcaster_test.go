@@ -225,13 +225,6 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 	require.NoError(t, err)
 	defer bootListener.Close()
 
-	// Use shorter period for testing.
-	currentPeriod := pollingPeriod
-	pollingPeriod = 1 * time.Second
-	defer func() {
-		pollingPeriod = currentPeriod
-	}()
-
 	bootNode := bootListener.Self()
 	subnet := uint64(5)
 
@@ -240,7 +233,7 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 	// setup other nodes.
 	cfg = &Config{
 		Discv5BootStrapAddrs: []string{bootNode.String()},
-		MaxPeers:             30,
+		MaxPeers:             2,
 	}
 	// Setup 2 different hosts
 	for i := 1; i <= 2; i++ {

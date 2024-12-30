@@ -275,7 +275,6 @@ func (node *BeaconNode) Start(ctx context.Context) error {
 		"--" + cmdshared.ValidatorMonitorIndicesFlag.Name + "=2",
 		"--" + cmdshared.ForceClearDB.Name,
 		"--" + cmdshared.AcceptTosFlag.Name,
-		"--" + features.EnableQUIC.Name,
 	}
 	if config.UsePprof {
 		args = append(args, "--pprof", fmt.Sprintf("--pprofport=%d", e2e.TestParams.Ports.PrysmBeaconNodePprofPort+index))
