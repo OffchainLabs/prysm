@@ -17,9 +17,6 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/pruner"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/api/server/httprest"
@@ -32,6 +29,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/kv"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/pruner"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/slasherkv"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/execution"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice"
@@ -69,6 +67,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/runtime/debug"
 	"github.com/prysmaticlabs/prysm/v5/runtime/prereqs"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
+	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
