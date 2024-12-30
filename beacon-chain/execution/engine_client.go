@@ -233,7 +233,7 @@ func (s *Service) ForkchoiceUpdated(
 		if err != nil {
 			return nil, nil, handleRPCError(err)
 		}
-	case version.Deneb, version.Electra:
+	case version.Deneb, version.Electra, version.Fulu:
 		a, err := attrs.PbV3()
 		if err != nil {
 			return nil, nil, err
@@ -653,22 +653,22 @@ func fullPayloadFromPayloadBody(
 			return nil, errors.Wrap(err, "unable to extract BlobGasUsed attribute from execution payload header")
 		}
 		return blocks.WrappedExecutionPayloadDeneb(
-&pb.ExecutionPayloadDeneb{
-			ParentHash:    header.ParentHash(),
-			FeeRecipient:  header.FeeRecipient(),
-			StateRoot:     header.StateRoot(),
-			ReceiptsRoot:  header.ReceiptsRoot(),
-			LogsBloom:     header.LogsBloom(),
-			PrevRandao:    header.PrevRandao(),
-			BlockNumber:   header.BlockNumber(),
-			GasLimit:      header.GasLimit(),
-			GasUsed:       header.GasUsed(),
-			Timestamp:     header.Timestamp(),
-			ExtraData:     header.ExtraData(),
-			BaseFeePerGas: header.BaseFeePerGas(),
-			BlockHash:     header.BlockHash(),
-			Transactions:  pb.RecastHexutilByteSlice(body.Transactions),
-		Withdrawals:   body.Withdrawals,
+			&pb.ExecutionPayloadDeneb{
+				ParentHash:    header.ParentHash(),
+				FeeRecipient:  header.FeeRecipient(),
+				StateRoot:     header.StateRoot(),
+				ReceiptsRoot:  header.ReceiptsRoot(),
+				LogsBloom:     header.LogsBloom(),
+				PrevRandao:    header.PrevRandao(),
+				BlockNumber:   header.BlockNumber(),
+				GasLimit:      header.GasLimit(),
+				GasUsed:       header.GasUsed(),
+				Timestamp:     header.Timestamp(),
+				ExtraData:     header.ExtraData(),
+				BaseFeePerGas: header.BaseFeePerGas(),
+				BlockHash:     header.BlockHash(),
+				Transactions:  pb.RecastHexutilByteSlice(body.Transactions),
+				Withdrawals:   body.Withdrawals,
 				ExcessBlobGas: ebg,
 				BlobGasUsed:   bgu,
 			}) // We can't get the block value and don't care about the block value for this instance
@@ -696,25 +696,25 @@ func fullPayloadFromPayloadBody(
 
 	if bVersion >= version.Bellatrix {
 		return blocks.WrappedExecutionPayload(&pb.ExecutionPayload{
-				ParentHash:    header.ParentHash(),
-				FeeRecipient:  header.FeeRecipient(),
-				StateRoot:     header.StateRoot(),
-				ReceiptsRoot:  header.ReceiptsRoot(),
-				LogsBloom:     header.LogsBloom(),
-				PrevRandao:    header.PrevRandao(),
-				BlockNumber:   header.BlockNumber(),
-				GasLimit:      header.GasLimit(),
-				GasUsed:       header.GasUsed(),
-				Timestamp:     header.Timestamp(),
-				ExtraData:     header.ExtraData(),
-				BaseFeePerGas: header.BaseFeePerGas(),
-				BlockHash:     header.BlockHash(),
-				Transactions:  pb.RecastHexutilByteSlice(body.Transactions),
-				})
+			ParentHash:    header.ParentHash(),
+			FeeRecipient:  header.FeeRecipient(),
+			StateRoot:     header.StateRoot(),
+			ReceiptsRoot:  header.ReceiptsRoot(),
+			LogsBloom:     header.LogsBloom(),
+			PrevRandao:    header.PrevRandao(),
+			BlockNumber:   header.BlockNumber(),
+			GasLimit:      header.GasLimit(),
+			GasUsed:       header.GasUsed(),
+			Timestamp:     header.Timestamp(),
+			ExtraData:     header.ExtraData(),
+			BaseFeePerGas: header.BaseFeePerGas(),
+			BlockHash:     header.BlockHash(),
+			Transactions:  pb.RecastHexutilByteSlice(body.Transactions),
+		})
 	}
 
-		return nil, fmt.Errorf("unknown execution block version for payload %d", bVersion)
-	}
+	return nil, fmt.Errorf("unknown execution block version for payload %d", bVersion)
+}
 
 // Handles errors received from the RPC server according to the specification.
 func handleRPCError(err error) error {
@@ -817,7 +817,7 @@ func EmptyExecutionPayload(v int) (proto.Message, error) {
 			BaseFeePerGas: make([]byte, fieldparams.RootLength),
 			BlockHash:     make([]byte, fieldparams.RootLength),
 			Transactions:  make([][]byte, 0),
-Withdrawals:   make([]*pb.Withdrawal, 0),
+			Withdrawals:   make([]*pb.Withdrawal, 0),
 		}, nil
 	}
 
@@ -849,11 +849,11 @@ Withdrawals:   make([]*pb.Withdrawal, 0),
 			BaseFeePerGas: make([]byte, fieldparams.RootLength),
 			BlockHash:     make([]byte, fieldparams.RootLength),
 			Transactions:  make([][]byte, 0),
-					}, nil
+		}, nil
 	}
 
-		return nil, errors.Wrapf(ErrUnsupportedVersion, "version=%s", version.String(v))
-	}
+	return nil, errors.Wrapf(ErrUnsupportedVersion, "version=%s", version.String(v))
+}
 
 func EmptyExecutionPayloadHeader(v int) (proto.Message, error) {
 	if v >= version.Deneb {
@@ -903,7 +903,7 @@ func EmptyExecutionPayloadHeader(v int) (proto.Message, error) {
 	}
 
 	return nil, errors.Wrapf(ErrUnsupportedVersion, "version=%s", version.String(v))
-	}
+}
 
 func toBlockNumArg(number *big.Int) string {
 	if number == nil {

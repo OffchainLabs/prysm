@@ -88,6 +88,8 @@ func FromForkVersion(cv [fieldparams.VersionLength]byte) (*VersionedUnmarshaler,
 		fork = version.Deneb
 	case bytesutil.ToBytes4(cfg.ElectraForkVersion):
 		fork = version.Electra
+	case bytesutil.ToBytes4(cfg.FuluForkVersion):
+		fork = version.Fulu
 	default:
 		return nil, errors.Wrapf(ErrForkNotFound, "version=%#x", cv)
 	}

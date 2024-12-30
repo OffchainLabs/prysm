@@ -1839,6 +1839,34 @@ func createUpdate(t *testing.T, v int) (interfaces.LightClientUpdate, error) {
 		require.NoError(t, err)
 		st, err = util.NewBeaconStateElectra()
 		require.NoError(t, err)
+	case version.Fulu:
+		slot = primitives.Slot(config.FuluForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
+		header, err = light_client.NewWrappedHeader(&pb.LightClientHeaderDeneb{
+			Beacon: &pb.BeaconBlockHeader{
+				Slot:          1,
+				ProposerIndex: primitives.ValidatorIndex(rand.Int()),
+				ParentRoot:    sampleRoot,
+				StateRoot:     sampleRoot,
+				BodyRoot:      sampleRoot,
+			},
+			Execution: &enginev1.ExecutionPayloadHeaderFulu{
+				ParentHash:       make([]byte, fieldparams.RootLength),
+				FeeRecipient:     make([]byte, fieldparams.FeeRecipientLength),
+				StateRoot:        make([]byte, fieldparams.RootLength),
+				ReceiptsRoot:     make([]byte, fieldparams.RootLength),
+				LogsBloom:        make([]byte, fieldparams.LogsBloomLength),
+				PrevRandao:       make([]byte, fieldparams.RootLength),
+				ExtraData:        make([]byte, 0),
+				BaseFeePerGas:    make([]byte, fieldparams.RootLength),
+				BlockHash:        make([]byte, fieldparams.RootLength),
+				TransactionsRoot: make([]byte, fieldparams.RootLength),
+				WithdrawalsRoot:  make([]byte, fieldparams.RootLength),
+			},
+			ExecutionBranch: sampleExecutionBranch,
+		})
+		require.NoError(t, err)
+		st, err = util.NewBeaconStateFulu()
+		require.NoError(t, err)
 	default:
 		return nil, fmt.Errorf("unsupported version %s", version.String(v))
 	}

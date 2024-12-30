@@ -63,6 +63,12 @@ message GenericSignedBeaconBlock {
 
         // Representing a signed, post-Electra fork blinded beacon block.
         SignedBlindedBeaconBlockElectra blinded_electra = 10;
+
+        // Representing a signed, post-Fulu fork beacon block content.
+        SignedBeaconBlockContentsFulu fulu = 11;
+
+        // Representing a signed, post-Fulu fork blinded beacon block.
+        SignedBlindedBeaconBlockFulu blinded_fulu = 12;
     }
     bool is_blinded = 100;
     reserved 101; // Deprecated fields
@@ -99,6 +105,12 @@ message GenericBeaconBlock {
 
         // Representing a post-Electra fork blinded beacon block.
         BlindedBeaconBlockElectra blinded_electra = 10;
+
+        // Representing a post-Fulu fork beacon block content.
+        BeaconBlockContentsFulu fulu = 11;
+
+        // Representing a post-Fulu fork blinded beacon block.
+        BlindedBeaconBlockFulu blinded_fulu = 12;
     }
     bool is_blinded = 100;
     string payload_value = 101;
