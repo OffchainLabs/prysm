@@ -40,6 +40,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 ### Fixed
 
 - Added check to prevent nil pointer deference or out of bounds array access when validating the BLSToExecutionChange on an impossibly nil validator.
+- EIP-7691: Ensure new blobs subnets are subscribed on epoch in advance.
 
 ### Security
 
