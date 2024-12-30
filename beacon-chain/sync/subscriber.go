@@ -152,31 +152,21 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 			s.validateBlob,
 			s.blobSubscriber,
 			digest,
-			blobSubnetSlice(epoch),
-			func(currentSlot primitives.Slot) []uint64 { return []uint64{} },
-		)
-	}
-
-	if params.BeaconConfig().ElectraForkEpoch <= epoch {
-		s.subscribeWithParameters(
-			p2p.BlobSubnetTopicFormat,
-			s.validateBlob,
-			s.blobSubscriber,
-			digest,
-			blobSubnetSlice(epoch),
+			blobSubnetSlice,
 			func(currentSlot primitives.Slot) []uint64 { return []uint64{} },
 		)
 	}
 }
 
-// blobSubnetSlice returns the blob subnet slice for the given epoch.
-func blobSubnetSlice(e primitives.Epoch) func(primitives.Slot) []uint64 {
-	if e >= params.BeaconConfig().ElectraForkEpoch {
-		return func(primitives.Slot) []uint64 {
-			return sliceFromCount(params.BeaconConfig().BlobsidecarSubnetCountElectra)
-		}
+// blobSubnetSlice returns the blob subnet slice for the given slot.
+func blobSubnetSlice(currentSlot primitives.Slot) []uint64 {
+	currentEpoch := slots.ToEpoch(currentSlot)
+
+	if currentEpoch >= params.BeaconConfig().ElectraForkEpoch {
+		return sliceFromCount(params.BeaconConfig().BlobsidecarSubnetCountElectra)
 	}
-	return func(primitives.Slot) []uint64 { return sliceFromCount(params.BeaconConfig().BlobsidecarSubnetCount) }
+
+	return sliceFromCount(params.BeaconConfig().BlobsidecarSubnetCount)
 }
 
 // subscribe to a given topic with a given validator and subscription handler.
