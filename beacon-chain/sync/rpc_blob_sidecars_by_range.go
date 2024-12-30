@@ -100,6 +100,9 @@ func (s *Service) blobSidecarsByRangeRPCHandler(ctx context.Context, msg interfa
 	var batch blockBatch
 
 	wQuota := params.BeaconConfig().MaxRequestBlobSidecars
+	if slots.ToEpoch(s.cfg.chain.CurrentSlot()) >= params.BeaconConfig().ElectraForkEpoch {
+		wQuota = params.BeaconConfig().MaxRequestBlobSidecarsElectra
+	}
 	for batch, ok = batcher.next(ctx, stream); ok; batch, ok = batcher.next(ctx, stream) {
 		batchStart := time.Now()
 		wQuota, err = s.streamBlobBatch(ctx, batch, wQuota, stream)

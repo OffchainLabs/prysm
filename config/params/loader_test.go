@@ -25,7 +25,6 @@ import (
 // IMPORTANT: Use one field per line and sort these alphabetically to reduce conflicts.
 var placeholderFields = []string{
 	"BLOB_SIDECAR_SUBNET_COUNT_EIP7594",
-	"BLOB_SIDECAR_SUBNET_COUNT_ELECTRA",
 	"BYTES_PER_LOGS_BLOOM", // Compile time constant on ExecutionPayload.logs_bloom.
 	"EIP6110_FORK_EPOCH",
 	"EIP6110_FORK_VERSION",
@@ -44,7 +43,6 @@ var placeholderFields = []string{
 	"MAX_BYTES_PER_TRANSACTION",      // Used for ssz of EL transactions. Unused in Prysm.
 	"MAX_EXTRA_DATA_BYTES",           // Compile time constant on ExecutionPayload.extra_data.
 	"MAX_REQUEST_BLOB_SIDECARS_EIP7594",
-	"MAX_REQUEST_BLOB_SIDECARS_ELECTRA",
 	"MAX_REQUEST_BLOB_SIDECARS_FULU",
 	"MAX_REQUEST_PAYLOADS",         // Compile time constant on BeaconBlockBody.ExecutionRequests
 	"MAX_TRANSACTIONS_PER_PAYLOAD", // Compile time constant on ExecutionPayload.transactions.
