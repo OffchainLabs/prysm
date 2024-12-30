@@ -25,7 +25,7 @@ option java_package = "org.ethereum.eth.v1alpha1";
 option php_namespace = "Ethereum\\Eth\\v1alpha1";
 
 // ----------------------------------------------------------------------------
-// Phase0, Bellatrix, Capella & Deneb
+// Phase0, Altair, Bellatrix, Capella & Deneb
 // ----------------------------------------------------------------------------
 
 message SignedAggregateAttestationAndProof {
