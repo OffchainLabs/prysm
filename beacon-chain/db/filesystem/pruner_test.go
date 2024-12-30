@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
@@ -25,7 +25,7 @@ func TestTryPruneDir_CachedNotExpired(t *testing.T) {
 	pr, err := newBlobPruner(fs, 0)
 	require.NoError(t, err)
 	slot := pr.windowSize
-	_, sidecars := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, slot, fieldparams.MaxBlobsPerBlock)
+	_, sidecars := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, slot, params.BeaconConfig().MaxBlobsPerBlock(slot))
 	sc, err := verification.BlobSidecarNoop(sidecars[0])
 	require.NoError(t, err)
 	rootStr := rootString(sc.BlockRoot())

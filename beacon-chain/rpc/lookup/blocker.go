@@ -235,7 +235,7 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, indices []uint64
 		return make([]*blocks.VerifiedROBlob, 0), nil
 	}
 	if len(indices) == 0 {
-		m, err := p.BlobStorage.Indices(bytesutil.ToBytes32(root))
+		m, err := p.BlobStorage.Indices(bytesutil.ToBytes32(root), b.Block().Slot())
 		if err != nil {
 			log.WithFields(log.Fields{
 				"blockRoot": hexutil.Encode(root),
@@ -244,6 +244,9 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, indices []uint64
 		}
 		for k, v := range m {
 			if v {
+				if k >= len(commitments) {
+					return nil, &core.RpcError{Err: fmt.Errorf("blob index %d is more than blob kzg commitments :%dd", k, len(commitments)), Reason: core.BadRequest}
+				}
 				indices = append(indices, uint64(k))
 			}
 		}

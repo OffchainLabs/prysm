@@ -292,7 +292,7 @@ func missingBlobRequest(blk blocks.ROBlock, store *filesystem.BlobStorage) (p2pt
 	if len(cmts) == 0 {
 		return nil, nil
 	}
-	onDisk, err := store.Indices(r)
+	onDisk, err := store.Indices(r, blk.Block().Slot())
 	if err != nil {
 		return nil, errors.Wrapf(err, "error checking existing blobs for checkpoint sync block root %#x", r)
 	}
@@ -333,7 +333,7 @@ func (s *Service) fetchOriginBlobs(pids []peer.ID) error {
 	}
 	shufflePeers(pids)
 	for i := range pids {
-		sidecars, err := sync.SendBlobSidecarByRoot(s.ctx, s.clock, s.cfg.P2P, pids[i], s.ctxMap, &req)
+		sidecars, err := sync.SendBlobSidecarByRoot(s.ctx, s.clock, s.cfg.P2P, pids[i], s.ctxMap, &req, rob.Block().Slot())
 		if err != nil {
 			continue
 		}

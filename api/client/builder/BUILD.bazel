@@ -15,6 +15,7 @@ go_library(
         "//api/client:go_default_library",
         "//api/server/structs:go_default_library",
         "//config/fieldparams:go_default_library",
+        "//config/params:go_default_library",
         "//consensus-types:go_default_library",
         "//consensus-types/blocks:go_default_library",
         "//consensus-types/interfaces:go_default_library",

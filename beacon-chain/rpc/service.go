@@ -95,6 +95,7 @@ type Config struct {
 	GenesisFetcher            blockchain.GenesisFetcher
 	MockEth1Votes             bool
 	EnableDebugRPCEndpoints   bool
+	AttestationCache          *cache.AttestationCache
 	AttestationsPool          attestations.Pool
 	ExitPool                  voluntaryexits.PoolManager
 	SlashingsPool             slashings.PoolManager
@@ -203,7 +204,7 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		Broadcaster:           s.cfg.Broadcaster,
 		SyncCommitteePool:     s.cfg.SyncCommitteeObjectPool,
 		OperationNotifier:     s.cfg.OperationNotifier,
-		AttestationCache:      cache.NewAttestationCache(),
+		AttestationCache:      cache.NewAttestationDataCache(),
 		StateGen:              s.cfg.StateGen,
 		P2P:                   s.cfg.Broadcaster,
 		FinalizedFetcher:      s.cfg.FinalizationFetcher,
@@ -212,6 +213,7 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 	}
 	validatorServer := &validatorv1alpha1.Server{
 		Ctx:                    s.ctx,
+		AttestationCache:       s.cfg.AttestationCache,
 		AttPool:                s.cfg.AttestationsPool,
 		ExitPool:               s.cfg.ExitPool,
 		HeadFetcher:            s.cfg.HeadFetcher,
@@ -266,6 +268,7 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 	beaconChainServer := &beaconv1alpha1.Server{
 		Ctx:                         s.ctx,
 		BeaconDB:                    s.cfg.BeaconDB,
+		AttestationCache:            s.cfg.AttestationCache,
 		AttestationsPool:            s.cfg.AttestationsPool,
 		SlashingsPool:               s.cfg.SlashingsPool,
 		OptimisticModeFetcher:       s.cfg.OptimisticModeFetcher,

@@ -25,6 +25,7 @@ import (
 	rpchelpers "github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/shared"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v5/config/features"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	consensus_types "github.com/prysmaticlabs/prysm/v5/consensus-types"
@@ -129,13 +130,23 @@ func (s *Server) GetAggregateAttestationV2(w http.ResponseWriter, r *http.Reques
 }
 
 func (s *Server) aggregatedAttestation(w http.ResponseWriter, slot primitives.Slot, attDataRoot []byte, index primitives.CommitteeIndex) ethpbalpha.Att {
+	var match []ethpbalpha.Att
 	var err error
 
-	match, err := matchingAtts(s.AttestationsPool.AggregatedAttestations(), slot, attDataRoot, index)
-	if err != nil {
-		httputil.HandleError(w, "Could not get matching attestations: "+err.Error(), http.StatusInternalServerError)
-		return nil
+	if features.Get().EnableExperimentalAttestationPool {
+		match, err = matchingAtts(s.AttestationCache.GetAll(), slot, attDataRoot, index)
+		if err != nil {
+			httputil.HandleError(w, "Could not get matching attestations: "+err.Error(), http.StatusInternalServerError)
+			return nil
+		}
+	} else {
+		match, err = matchingAtts(s.AttestationsPool.AggregatedAttestations(), slot, attDataRoot, index)
+		if err != nil {
+			httputil.HandleError(w, "Could not get matching attestations: "+err.Error(), http.StatusInternalServerError)
+			return nil
+		}
 	}
+
 	if len(match) > 0 {
 		// If there are multiple matching aggregated attestations,
 		// then we return the one with the most aggregation bits.
@@ -143,6 +154,11 @@ func (s *Server) aggregatedAttestation(w http.ResponseWriter, slot primitives.Sl
 			return cmp.Compare(b.GetAggregationBits().Count(), a.GetAggregationBits().Count())
 		})
 		return match[0]
+	}
+
+	// No match was found and the new pool doesn't store aggregated and unaggregated attestations separately.
+	if features.Get().EnableExperimentalAttestationPool {
+		return nil
 	}
 
 	atts, err := s.AttestationsPool.UnaggregatedAttestations()

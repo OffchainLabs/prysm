@@ -282,7 +282,7 @@ func (c *Client) RegisterValidator(ctx context.Context, svr []*ethpb.SignedValid
 	if err != nil {
 		return err
 	}
-	log.WithField("num_registrations", len(svr)).Info("successfully registered validator(s) on builder")
+	log.WithField("registrationCount", len(svr)).Debug("Successfully registered validator(s) on builder")
 	return nil
 }
 

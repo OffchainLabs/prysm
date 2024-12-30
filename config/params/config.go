@@ -280,6 +280,19 @@ type BeaconChainConfig struct {
 	AttestationSubnetPrefixBits     uint64          `yaml:"ATTESTATION_SUBNET_PREFIX_BITS" spec:"true"`     // AttestationSubnetPrefixBits is defined as (ceillog2(ATTESTATION_SUBNET_COUNT) + ATTESTATION_SUBNET_EXTRA_BITS).
 	SubnetsPerNode                  uint64          `yaml:"SUBNETS_PER_NODE" spec:"true"`                   // SubnetsPerNode is the number of long-lived subnets a beacon node should be subscribed to.
 	NodeIdBits                      uint64          `yaml:"NODE_ID_BITS" spec:"true"`                       // NodeIdBits defines the bit length of a node id.
+
+	// Blobs Values
+
+	// Deprecated_MaxBlobsPerBlock defines the max blobs that could exist in a block.
+	// Deprecated: This field is no longer supported. Avoid using it.
+	DeprecatedMaxBlobsPerBlock int `yaml:"MAX_BLOBS_PER_BLOCK" spec:"true"`
+	// DeprecatedMaxBlobsPerBlockElectra defines the max blobs that could exist in a block post Electra hard fork.
+	// Deprecated: This field is no longer supported. Avoid using it.
+	DeprecatedMaxBlobsPerBlockElectra int `yaml:"MAX_BLOBS_PER_BLOCK_ELECTRA" spec:"true"`
+
+	// DeprecatedTargetBlobsPerBlockElectra defines the target number of blobs per block post Electra hard fork.
+	// Deprecated: This field is no longer supported. Avoid using it.
+	DeprecatedTargetBlobsPerBlockElectra int `yaml:"TARGET_BLOBS_PER_BLOCK_ELECTRA" spec:"true"`
 }
 
 // InitializeForkSchedule initializes the schedules forks baked into the config.
@@ -355,6 +368,24 @@ func (b *BeaconChainConfig) RespTimeoutDuration() time.Duration {
 // MaximumGossipClockDisparityDuration returns the time duration of the clock disparity.
 func (b *BeaconChainConfig) MaximumGossipClockDisparityDuration() time.Duration {
 	return time.Duration(b.MaximumGossipClockDisparity) * time.Millisecond
+}
+
+// TargetBlobsPerBlock returns the target number of blobs per block for the given slot,
+// accounting for changes introduced by the Electra fork.
+func (b *BeaconChainConfig) TargetBlobsPerBlock(slot primitives.Slot) int {
+	if primitives.Epoch(slot.DivSlot(32)) >= b.ElectraForkEpoch {
+		return b.DeprecatedTargetBlobsPerBlockElectra
+	}
+	return b.DeprecatedMaxBlobsPerBlock / 2
+}
+
+// MaxBlobsPerBlock returns the maximum number of blobs per block for the given slot,
+// adjusting for the Electra fork.
+func (b *BeaconChainConfig) MaxBlobsPerBlock(slot primitives.Slot) int {
+	if primitives.Epoch(slot.DivSlot(32)) >= b.ElectraForkEpoch {
+		return b.DeprecatedMaxBlobsPerBlockElectra
+	}
+	return b.DeprecatedMaxBlobsPerBlock
 }
 
 // DenebEnabled centralizes the check to determine if code paths

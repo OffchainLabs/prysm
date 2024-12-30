@@ -9,6 +9,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
 	consensusblocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
@@ -923,10 +924,10 @@ func TestVerifyBlobCommitmentCount(t *testing.T) {
 	b := &ethpb.BeaconBlockDeneb{Body: &ethpb.BeaconBlockBodyDeneb{}}
 	rb, err := consensusblocks.NewBeaconBlock(b)
 	require.NoError(t, err)
-	require.NoError(t, blocks.VerifyBlobCommitmentCount(rb.Body()))
+	require.NoError(t, blocks.VerifyBlobCommitmentCount(rb.Slot(), rb.Body()))
 
-	b = &ethpb.BeaconBlockDeneb{Body: &ethpb.BeaconBlockBodyDeneb{BlobKzgCommitments: make([][]byte, fieldparams.MaxBlobsPerBlock+1)}}
+	b = &ethpb.BeaconBlockDeneb{Body: &ethpb.BeaconBlockBodyDeneb{BlobKzgCommitments: make([][]byte, params.BeaconConfig().MaxBlobsPerBlock(rb.Slot())+1)}}
 	rb, err = consensusblocks.NewBeaconBlock(b)
 	require.NoError(t, err)
-	require.ErrorContains(t, fmt.Sprintf("too many kzg commitments in block: %d", fieldparams.MaxBlobsPerBlock+1), blocks.VerifyBlobCommitmentCount(rb.Body()))
+	require.ErrorContains(t, fmt.Sprintf("too many kzg commitments in block: %d", params.BeaconConfig().MaxBlobsPerBlock(rb.Slot())+1), blocks.VerifyBlobCommitmentCount(rb.Slot(), rb.Body()))
 }

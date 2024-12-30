@@ -16,7 +16,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	consensusblocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
@@ -303,8 +302,10 @@ func validateDenebBeaconBlock(blk interfaces.ReadOnlyBeaconBlock) error {
 	}
 	// [REJECT] The length of KZG commitments is less than or equal to the limitation defined in Consensus Layer
 	// -- i.e. validate that len(body.signed_beacon_block.message.blob_kzg_commitments) <= MAX_BLOBS_PER_BLOCK
-	if len(commits) > fieldparams.MaxBlobsPerBlock {
-		return errors.Wrapf(errRejectCommitmentLen, "%d > %d", len(commits), fieldparams.MaxBlobsPerBlock)
+
+	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlock(blk.Slot())
+	if len(commits) > maxBlobsPerBlock {
+		return errors.Wrapf(errRejectCommitmentLen, "%d > %d", len(commits), maxBlobsPerBlock)
 	}
 	return nil
 }

@@ -26,7 +26,6 @@ const (
 	SyncCommitteeAggregationBytesLength   = 16            // SyncCommitteeAggregationBytesLength defines the length of sync committee aggregate bytes.
 	SyncAggregateSyncCommitteeBytesLength = 64            // SyncAggregateSyncCommitteeBytesLength defines the length of sync committee bytes in a sync aggregate.
 	MaxWithdrawalsPerPayload              = 16            // MaxWithdrawalsPerPayloadLength defines the maximum number of withdrawals that can be included in a payload.
-	MaxBlobsPerBlock                      = 6             // MaxBlobsPerBlock defines the maximum number of blobs with respect to consensus rule can be included in a block.
 	MaxBlobCommitmentsPerBlock            = 4096          // MaxBlobCommitmentsPerBlock defines the theoretical limit of blobs can be included in a block.
 	LogMaxBlobCommitments                 = 12            // Log_2 of MaxBlobCommitmentsPerBlock
 	BlobLength                            = 131072        // BlobLength defines the byte length of a blob.
