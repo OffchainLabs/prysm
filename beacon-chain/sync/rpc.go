@@ -73,13 +73,19 @@ func (s *Service) rpcHandlerByTopicFromFork(forkIndex int) (map[string]rpcHandle
 			p2p.RPCBlocksByRootTopicV2:        s.beaconBlocksRootRPCHandler,
 			p2p.RPCPingTopicV1:                s.pingHandler,
 			p2p.RPCMetaDataTopicV2:            s.metaDataHandler,
-			p2p.RPCBlobSidecarsByRootTopicV1:  s.blobSidecarByRootRPCHandler,
-			p2p.RPCBlobSidecarsByRangeTopicV1: s.blobSidecarsByRangeRPCHandler,
+			p2p.RPCBlobSidecarsByRootTopicV1:  s.blobSidecarByRootRPCHandler,   // Added in Deneb
+			p2p.RPCBlobSidecarsByRangeTopicV1: s.blobSidecarsByRangeRPCHandler, // Added in Deneb
 		}, nil
 	case version.Electra:
 		return map[string]rpcHandler{
-			p2p.RPCBlobSidecarsByRootTopicV2:  s.blobSidecarByRootRPCHandler,
-			p2p.RPCBlobSidecarsByRangeTopicV2: s.blobSidecarsByRangeRPCHandler,
+			p2p.RPCStatusTopicV1:              s.statusRPCHandler,
+			p2p.RPCGoodByeTopicV1:             s.goodbyeRPCHandler,
+			p2p.RPCBlocksByRangeTopicV2:       s.beaconBlocksByRangeRPCHandler,
+			p2p.RPCBlocksByRootTopicV2:        s.beaconBlocksRootRPCHandler,
+			p2p.RPCPingTopicV1:                s.pingHandler,
+			p2p.RPCMetaDataTopicV2:            s.metaDataHandler,
+			p2p.RPCBlobSidecarsByRootTopicV2:  s.blobSidecarByRootRPCHandler,   // Added in Electra
+			p2p.RPCBlobSidecarsByRangeTopicV2: s.blobSidecarsByRangeRPCHandler, // Added in Electra
 		}, nil
 	default:
 		return nil, errors.Errorf("RPC handler not found for fork index %d", forkIndex)

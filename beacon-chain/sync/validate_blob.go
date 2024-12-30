@@ -170,7 +170,11 @@ func blobFields(b blocks.ROBlob) logrus.Fields {
 }
 
 func computeSubnetForBlobSidecar(index uint64, slot primitives.Slot) uint64 {
-	return index % uint64(params.BeaconConfig().MaxBlobsPerBlock(slot))
+	subnetCount := params.BeaconConfig().BlobsidecarSubnetCount
+	if slots.ToEpoch(slot) >= params.BeaconConfig().ElectraForkEpoch {
+		subnetCount = params.BeaconConfig().BlobsidecarSubnetCountElectra
+	}
+	return index % subnetCount
 }
 
 // saveInvalidBlobToTemp as a block ssz. Writes to temp directory.
