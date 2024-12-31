@@ -697,7 +697,7 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 			excessBlobGas, err := payload.ExcessBlobGas()
 			require.NoError(t, err)
 
-			executionHeader := &v11.ExecutionPayloadHeaderElectra{
+			executionHeader := &v11.ExecutionPayloadHeaderDeneb{
 				ParentHash:       payload.ParentHash(),
 				FeeRecipient:     payload.FeeRecipient(),
 				StateRoot:        payload.StateRoot(),
@@ -762,7 +762,7 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 			excessBlobGas, err := payload.ExcessBlobGas()
 			require.NoError(t, err)
 
-			executionHeader := &v11.ExecutionPayloadHeaderElectra{
+			executionHeader := &v11.ExecutionPayloadHeaderDeneb{
 				ParentHash:       payload.ParentHash(),
 				FeeRecipient:     payload.FeeRecipient(),
 				StateRoot:        payload.StateRoot(),

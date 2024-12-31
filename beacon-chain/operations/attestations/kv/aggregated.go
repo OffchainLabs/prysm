@@ -236,7 +236,7 @@ func (c *AttCaches) AggregatedAttestationsBySlotIndexElectra(
 	c.aggregatedAttLock.RLock()
 	defer c.aggregatedAttLock.RUnlock()
 	for _, as := range c.aggregatedAtt {
-		if as[0].Version() == version.Electra && slot == as[0].GetData().Slot && as[0].CommitteeBitsVal().BitAt(uint64(committeeIndex)) {
+		if as[0].Version() >= version.Electra && slot == as[0].GetData().Slot && as[0].CommitteeBitsVal().BitAt(uint64(committeeIndex)) {
 			for _, a := range as {
 				att, ok := a.(*ethpb.AttestationElectra)
 				// This will never fail in practice because we asserted the version

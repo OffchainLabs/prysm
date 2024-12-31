@@ -864,8 +864,6 @@ func WrappedExecutionPayloadHeaderDeneb(p *enginev1.ExecutionPayloadHeaderDeneb)
 	return w, nil
 }
 
-var WrappedExecutionPayloadHeaderElectra = WrappedExecutionPayloadHeaderDeneb
-
 // IsNil checks if the underlying data is nil.
 func (e executionPayloadHeaderDeneb) IsNil() bool {
 	return e.p == nil
@@ -1023,8 +1021,6 @@ func WrappedExecutionPayloadDeneb(p *enginev1.ExecutionPayloadDeneb) (interfaces
 	}
 	return w, nil
 }
-
-var WrappedExecutionPayloadElectra = WrappedExecutionPayloadDeneb
 
 // IsNil checks if the underlying data is nil.
 func (e executionPayloadDeneb) IsNil() bool {

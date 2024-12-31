@@ -38,34 +38,22 @@ type rpcHandler func(context.Context, interface{}, libp2pcore.Stream) error
 
 // rpcHandlerByTopicFromFork returns the RPC handlers for a given fork index.
 func (s *Service) rpcHandlerByTopicFromFork(forkIndex int) (map[string]rpcHandler, error) {
-	switch forkIndex {
-	// PhaseO: https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/p2p-interface.md#messages
-	case version.Phase0:
+	// Electra: https://github.com/ethereum/consensus-specs/blob/dev/specs/electra/p2p-interface.md#messages
+	if forkIndex >= version.Electra {
 		return map[string]rpcHandler{
-			p2p.RPCStatusTopicV1:        s.statusRPCHandler,
-			p2p.RPCGoodByeTopicV1:       s.goodbyeRPCHandler,
-			p2p.RPCBlocksByRangeTopicV1: s.beaconBlocksByRangeRPCHandler,
-			p2p.RPCBlocksByRootTopicV1:  s.beaconBlocksRootRPCHandler,
-			p2p.RPCPingTopicV1:          s.pingHandler,
-			p2p.RPCMetaDataTopicV1:      s.metaDataHandler,
+			p2p.RPCStatusTopicV1:              s.statusRPCHandler,
+			p2p.RPCGoodByeTopicV1:             s.goodbyeRPCHandler,
+			p2p.RPCBlocksByRangeTopicV2:       s.beaconBlocksByRangeRPCHandler,
+			p2p.RPCBlocksByRootTopicV2:        s.beaconBlocksRootRPCHandler,
+			p2p.RPCPingTopicV1:                s.pingHandler,
+			p2p.RPCMetaDataTopicV2:            s.metaDataHandler,
+			p2p.RPCBlobSidecarsByRootTopicV2:  s.blobSidecarByRootRPCHandler,   // Modified in Electra
+			p2p.RPCBlobSidecarsByRangeTopicV2: s.blobSidecarsByRangeRPCHandler, // Modified in Electra
 		}, nil
-
-	// Altair: https://github.com/ethereum/consensus-specs/tree/dev/specs/altair#messages
-	// Bellatrix: https://github.com/ethereum/consensus-specs/tree/dev/specs/bellatrix#messages
-	// Capella: https://github.com/ethereum/consensus-specs/tree/dev/specs/capella#messages
-	case version.Altair, version.Bellatrix, version.Capella:
-		return map[string]rpcHandler{
-			p2p.RPCStatusTopicV1:        s.statusRPCHandler,
-			p2p.RPCGoodByeTopicV1:       s.goodbyeRPCHandler,
-			p2p.RPCBlocksByRangeTopicV2: s.beaconBlocksByRangeRPCHandler, // Modified in Altair
-			p2p.RPCBlocksByRootTopicV2:  s.beaconBlocksRootRPCHandler,    // Modified in Altair
-			p2p.RPCPingTopicV1:          s.pingHandler,
-			p2p.RPCMetaDataTopicV2:      s.metaDataHandler, // Modified in Altair
-		}, nil
+	}
 
 	// Deneb: https://github.com/ethereum/consensus-specs/blob/dev/specs/deneb/p2p-interface.md#messages
-	// Electra: https://github.com/ethereum/consensus-specs/blob/dev/specs/electra/p2p-interface.md#messages
-	case version.Deneb:
+	if forkIndex >= version.Deneb {
 		return map[string]rpcHandler{
 			p2p.RPCStatusTopicV1:              s.statusRPCHandler,
 			p2p.RPCGoodByeTopicV1:             s.goodbyeRPCHandler,
@@ -76,20 +64,35 @@ func (s *Service) rpcHandlerByTopicFromFork(forkIndex int) (map[string]rpcHandle
 			p2p.RPCBlobSidecarsByRootTopicV1:  s.blobSidecarByRootRPCHandler,   // Added in Deneb
 			p2p.RPCBlobSidecarsByRangeTopicV1: s.blobSidecarsByRangeRPCHandler, // Added in Deneb
 		}, nil
-	case version.Electra:
-		return map[string]rpcHandler{
-			p2p.RPCStatusTopicV1:              s.statusRPCHandler,
-			p2p.RPCGoodByeTopicV1:             s.goodbyeRPCHandler,
-			p2p.RPCBlocksByRangeTopicV2:       s.beaconBlocksByRangeRPCHandler,
-			p2p.RPCBlocksByRootTopicV2:        s.beaconBlocksRootRPCHandler,
-			p2p.RPCPingTopicV1:                s.pingHandler,
-			p2p.RPCMetaDataTopicV2:            s.metaDataHandler,
-			p2p.RPCBlobSidecarsByRootTopicV2:  s.blobSidecarByRootRPCHandler,   // Added in Electra
-			p2p.RPCBlobSidecarsByRangeTopicV2: s.blobSidecarsByRangeRPCHandler, // Added in Electra
-		}, nil
-	default:
-		return nil, errors.Errorf("RPC handler not found for fork index %d", forkIndex)
 	}
+
+	// Capella: https://github.com/ethereum/consensus-specs/blob/dev/specs/capella/p2p-interface.md#messages
+	// Bellatrix: https://github.com/ethereum/consensus-specs/blob/dev/specs/bellatrix/p2p-interface.md#messages
+	// Altair: https://github.com/ethereum/consensus-specs/blob/dev/specs/altair/p2p-interface.md#messages
+	if forkIndex >= version.Altair {
+		return map[string]rpcHandler{
+			p2p.RPCStatusTopicV1:        s.statusRPCHandler,
+			p2p.RPCGoodByeTopicV1:       s.goodbyeRPCHandler,
+			p2p.RPCBlocksByRangeTopicV2: s.beaconBlocksByRangeRPCHandler, // Modified in Altair
+			p2p.RPCBlocksByRootTopicV2:  s.beaconBlocksRootRPCHandler,    // Modified in Altair
+			p2p.RPCPingTopicV1:          s.pingHandler,
+			p2p.RPCMetaDataTopicV2:      s.metaDataHandler, // Modified in Altair
+		}, nil
+	}
+
+	// PhaseO: https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/p2p-interface.md#messages
+	if forkIndex >= version.Phase0 {
+		return map[string]rpcHandler{
+			p2p.RPCStatusTopicV1:        s.statusRPCHandler,
+			p2p.RPCGoodByeTopicV1:       s.goodbyeRPCHandler,
+			p2p.RPCBlocksByRangeTopicV1: s.beaconBlocksByRangeRPCHandler,
+			p2p.RPCBlocksByRootTopicV1:  s.beaconBlocksRootRPCHandler,
+			p2p.RPCPingTopicV1:          s.pingHandler,
+			p2p.RPCMetaDataTopicV1:      s.metaDataHandler,
+		}, nil
+	}
+
+	return nil, errors.Errorf("RPC handler not found for fork index %d", forkIndex)
 }
 
 // rpcHandlerByTopic returns the RPC handlers for a given epoch.
