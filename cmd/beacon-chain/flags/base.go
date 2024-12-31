@@ -300,7 +300,7 @@ var (
 	BeaconDBPruning = &cli.BoolFlag{
 		Name: "beacon-db-pruning",
 		Usage: "Enables pruning of beacon db beyond MIN_EPOCHS_FOR_BLOCK_REQUESTS duration. This is an opt-in feature," +
-			" and should only be enabled if operators don't require historical data.",
+			" and should only be enabled if operators doesn't require historical data.",
 	}
 	// PrunerRetentionEpochs defines the retention period for the pruner service in terms of epochs.
 	PrunerRetentionEpochs = &cli.Uint64Flag{
