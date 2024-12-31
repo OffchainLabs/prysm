@@ -145,7 +145,14 @@ func (s *Service) processAttestations(ctx context.Context, attestations []ethpb.
 				log.WithError(err).Debug("Could not retrieve committee from state")
 				continue
 			}
-			attesterIndex := primitives.ValidatorIndex(0)
+			valid, err := validateAttesterData(ctx, aggregate, committee)
+			if err != nil {
+				log.WithError(err).Debug("Could not validate attester data")
+				continue
+			} else if valid != pubsub.ValidationAccept {
+				log.Debug("Attestation failed attester data validation")
+				continue
+			}
 			if aggregate.Version() >= version.Electra {
 				var ok bool
 				singleAtt, ok := aggregate.(*ethpb.SingleAttestation)
@@ -153,10 +160,9 @@ func (s *Service) processAttestations(ctx context.Context, attestations []ethpb.
 					log.Debugf("Attestation has wrong type (expected %T, got %T)", &ethpb.SingleAttestation{}, aggregate)
 					continue
 				}
-				attesterIndex = singleAtt.GetAttesterIndex()
 				aggregate = singleAtt.ToAttestationElectra(committee)
 			}
-			valid, err := s.validateUnaggregatedAttWithState(ctx, aggregate, attesterIndex, preState, committee)
+			valid, err = s.validateUnaggregatedAttWithState(ctx, aggregate, preState)
 			if err != nil {
 				log.WithError(err).Debug("Pending unaggregated attestation failed validation")
 				continue

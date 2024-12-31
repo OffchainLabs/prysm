@@ -150,17 +150,20 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(ctx context.Context, p
 		return pubsub.ValidationIgnore, err
 	}
 
-	attesterIndex := primitives.ValidatorIndex(0)
+	validationRes, err = validateAttesterData(ctx, att, committee)
+	if validationRes != pubsub.ValidationAccept {
+		return validationRes, err
+	}
+
 	if att.Version() >= version.Electra {
 		singleAtt, ok := att.(*eth.SingleAttestation)
 		if !ok {
 			return pubsub.ValidationIgnore, fmt.Errorf("attestation has wrong type (expected %T, got %T)", &eth.SingleAttestation{}, att)
 		}
-		attesterIndex = singleAtt.AttesterIndex
 		att = singleAtt.ToAttestationElectra(committee)
 	}
 
-	validationRes, err = s.validateUnaggregatedAttWithState(ctx, att, attesterIndex, preState, committee)
+	validationRes, err = s.validateUnaggregatedAttWithState(ctx, att, preState)
 	if validationRes != pubsub.ValidationAccept {
 		return validationRes, err
 	}
@@ -238,6 +241,9 @@ func (s *Service) validateCommitteeIndex(
 	a eth.Att,
 	bs state.ReadOnlyBeaconState,
 ) (primitives.CommitteeIndex, uint64, pubsub.ValidationResult, error) {
+	if a.Version() >= version.Electra && a.GetData().CommitteeIndex != 0 {
+		return 0, 0, pubsub.ValidationReject, errors.New("attestation data's committee index must be 0")
+	}
 	valCount, err := helpers.ActiveValidatorCount(ctx, bs, slots.ToEpoch(a.GetData().Slot))
 	if err != nil {
 		return 0, 0, pubsub.ValidationIgnore, err
@@ -250,26 +256,19 @@ func (s *Service) validateCommitteeIndex(
 	return ci, valCount, pubsub.ValidationAccept, nil
 }
 
-// This validates beacon unaggregated attestation using the given state, the validation consists of bitfield length and count consistency
-// and signature verification.
-func (s *Service) validateUnaggregatedAttWithState(
+func validateAttesterData(
 	ctx context.Context,
 	a eth.Att,
-	attestingIndex primitives.ValidatorIndex,
-	bs state.ReadOnlyBeaconState,
 	committee []primitives.ValidatorIndex,
 ) (pubsub.ValidationResult, error) {
-	ctx, span := trace.StartSpan(ctx, "sync.validateUnaggregatedAttWithState")
-	defer span.End()
-
 	// TODO: add test
 	// - [REJECT] attestation.data.index == 0
 	if a.Version() >= version.Electra {
-		if a.GetData().GetCommitteeIndex() != 0 {
-			log.Info("a.GetData().GetCommitteeIndex() != 0")
-			return pubsub.ValidationReject, errors.New("attestation data's committee index must be 0")
+		singleAtt, ok := a.(*eth.SingleAttestation)
+		if !ok {
+			return pubsub.ValidationIgnore, fmt.Errorf("attestation has wrong type (expected %T, got %T)", &eth.SingleAttestation{}, a)
 		}
-		result, err := validateAttestingIndex(ctx, attestingIndex, committee)
+		result, err := validateAttestingIndex(ctx, singleAtt.AttesterIndex, committee)
 		if result != pubsub.ValidationAccept {
 			log.Info("validateAttestingIndex")
 			return result, err
@@ -286,6 +285,13 @@ func (s *Service) validateUnaggregatedAttWithState(
 			return pubsub.ValidationReject, errors.New("attestation bitfield is invalid")
 		}
 	}
+	return pubsub.ValidationAccept, nil
+}
+
+// This validates beacon unaggregated attestation using the given state, the validation consists of signature verification.
+func (s *Service) validateUnaggregatedAttWithState(ctx context.Context, a eth.Att, bs state.ReadOnlyBeaconState) (pubsub.ValidationResult, error) {
+	ctx, span := trace.StartSpan(ctx, "sync.validateUnaggregatedAttWithState")
+	defer span.End()
 
 	set, err := blocks.AttestationSignatureBatch(ctx, bs, []eth.Att{a})
 	if err != nil {
