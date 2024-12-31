@@ -161,6 +161,7 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 		serviceFlagOpts:         &serviceFlagOpts{},
 		initialSyncComplete:     make(chan struct{}),
 		syncChecker:             &initialsync.SyncChecker{},
+		backfillChecker:         &backfill.BackfillChecker{},
 	}
 
 	for _, opt := range opts {
