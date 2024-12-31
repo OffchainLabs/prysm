@@ -92,18 +92,9 @@ func TestProcessPendingAtts_HasBlockSaveUnAggregatedAtt(t *testing.T) {
 		att.Signature = privKeys[i].Sign(hashTreeRoot[:]).Marshal()
 	}
 
-	// Arbitrary aggregator index for testing purposes.
-	aggregatorIndex := committee[0]
-	sszUint := primitives.SSZUint64(att.Data.Slot)
-	sig, err := signing.ComputeDomainAndSign(beaconState, 0, &sszUint, params.BeaconConfig().DomainSelectionProof, privKeys[aggregatorIndex])
-	require.NoError(t, err)
 	aggregateAndProof := &ethpb.AggregateAttestationAndProof{
-		SelectionProof:  sig,
-		Aggregate:       att,
-		AggregatorIndex: aggregatorIndex,
+		Aggregate: att,
 	}
-	aggreSig, err := signing.ComputeDomainAndSign(beaconState, 0, aggregateAndProof, params.BeaconConfig().DomainAggregateAndProof, privKeys[aggregatorIndex])
-	require.NoError(t, err)
 
 	require.NoError(t, beaconState.SetGenesisTime(uint64(time.Now().Unix())))
 
@@ -134,13 +125,87 @@ func TestProcessPendingAtts_HasBlockSaveUnAggregatedAtt(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, r.cfg.beaconDB.SaveState(context.Background(), s, root))
 
-	r.blkRootToPendingAtts[root] = []ethpb.SignedAggregateAttAndProof{&ethpb.SignedAggregateAttestationAndProof{Message: aggregateAndProof, Signature: aggreSig}}
+	r.blkRootToPendingAtts[root] = []ethpb.SignedAggregateAttAndProof{&ethpb.SignedAggregateAttestationAndProof{Message: aggregateAndProof}}
 	require.NoError(t, r.processPendingAtts(context.Background()))
 
 	atts, err := r.cfg.attPool.UnaggregatedAttestations()
 	require.NoError(t, err)
 	assert.Equal(t, 1, len(atts), "Did not save unaggregated att")
 	assert.DeepEqual(t, att, atts[0], "Incorrect saved att")
+	assert.Equal(t, 0, len(r.cfg.attPool.AggregatedAttestations()), "Did save aggregated att")
+	require.LogsContain(t, hook, "Verified and saved pending attestations to pool")
+	cancel()
+}
+
+func TestProcessPendingAtts_HasBlockSaveUnAggregatedAttElectra(t *testing.T) {
+	hook := logTest.NewGlobal()
+	db := dbtest.SetupDB(t)
+	p1 := p2ptest.NewTestP2P(t)
+	validators := uint64(256)
+
+	beaconState, privKeys := util.DeterministicGenesisStateElectra(t, validators)
+
+	sb := util.NewBeaconBlockElectra()
+	util.SaveBlock(t, context.Background(), db, sb)
+	root, err := sb.Block.HashTreeRoot()
+	require.NoError(t, err)
+
+	att := &ethpb.SingleAttestation{
+		Data: &ethpb.AttestationData{
+			BeaconBlockRoot: root[:],
+			Source:          &ethpb.Checkpoint{Epoch: 0, Root: bytesutil.PadTo([]byte("hello-world"), 32)},
+			Target:          &ethpb.Checkpoint{Epoch: 0, Root: root[:]},
+		},
+	}
+	aggregateAndProof := &ethpb.AggregateAttestationAndProofSingle{
+		Aggregate: att,
+	}
+
+	committee, err := helpers.BeaconCommitteeFromState(context.Background(), beaconState, att.Data.Slot, att.Data.CommitteeIndex)
+	assert.NoError(t, err)
+	att.AttesterIndex = committee[0]
+	attesterDomain, err := signing.Domain(beaconState.Fork(), 0, params.BeaconConfig().DomainBeaconAttester, beaconState.GenesisValidatorsRoot())
+	require.NoError(t, err)
+	hashTreeRoot, err := signing.ComputeSigningRoot(att.Data, attesterDomain)
+	assert.NoError(t, err)
+	att.Signature = privKeys[committee[0]].Sign(hashTreeRoot[:]).Marshal()
+
+	require.NoError(t, beaconState.SetGenesisTime(uint64(time.Now().Unix())))
+
+	chain := &mock.ChainService{Genesis: time.Now(),
+		State: beaconState,
+		FinalizedCheckPoint: &ethpb.Checkpoint{
+			Root:  aggregateAndProof.Aggregate.Data.BeaconBlockRoot,
+			Epoch: 0,
+		},
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	r := &Service{
+		ctx: ctx,
+		cfg: &config{
+			p2p:      p1,
+			beaconDB: db,
+			chain:    chain,
+			clock:    startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
+			attPool:  attestations.NewPool(),
+		},
+		blkRootToPendingAtts:             make(map[[32]byte][]ethpb.SignedAggregateAttAndProof),
+		seenUnAggregatedAttestationCache: lruwrpr.New(10),
+		signatureChan:                    make(chan *signatureVerifier, verifierLimit),
+	}
+	go r.verifierRoutine()
+
+	s, err := util.NewBeaconStateElectra()
+	require.NoError(t, err)
+	require.NoError(t, r.cfg.beaconDB.SaveState(context.Background(), s, root))
+
+	r.blkRootToPendingAtts[root] = []ethpb.SignedAggregateAttAndProof{&ethpb.SignedAggregateAttestationAndProofSingle{Message: aggregateAndProof}}
+	require.NoError(t, r.processPendingAtts(context.Background()))
+
+	atts, err := r.cfg.attPool.UnaggregatedAttestations()
+	require.NoError(t, err)
+	require.Equal(t, 1, len(atts), "Did not save unaggregated att")
+	assert.DeepEqual(t, att.ToAttestationElectra(committee), atts[0], "Incorrect saved att")
 	assert.Equal(t, 0, len(r.cfg.attPool.AggregatedAttestations()), "Did save aggregated att")
 	require.LogsContain(t, hook, "Verified and saved pending attestations to pool")
 	cancel()

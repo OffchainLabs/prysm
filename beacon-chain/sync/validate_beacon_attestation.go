@@ -241,6 +241,7 @@ func (s *Service) validateCommitteeIndex(
 	a eth.Att,
 	bs state.ReadOnlyBeaconState,
 ) (primitives.CommitteeIndex, uint64, pubsub.ValidationResult, error) {
+	// - [REJECT] attestation.data.index == 0
 	if a.Version() >= version.Electra && a.GetData().CommitteeIndex != 0 {
 		return 0, 0, pubsub.ValidationReject, errors.New("attestation data's committee index must be 0")
 	}
@@ -261,8 +262,6 @@ func validateAttesterData(
 	a eth.Att,
 	committee []primitives.ValidatorIndex,
 ) (pubsub.ValidationResult, error) {
-	// TODO: add test
-	// - [REJECT] attestation.data.index == 0
 	if a.Version() >= version.Electra {
 		singleAtt, ok := a.(*eth.SingleAttestation)
 		if !ok {
@@ -270,7 +269,6 @@ func validateAttesterData(
 		}
 		result, err := validateAttestingIndex(ctx, singleAtt.AttesterIndex, committee)
 		if result != pubsub.ValidationAccept {
-			log.Info("validateAttestingIndex")
 			return result, err
 		}
 	} else {
