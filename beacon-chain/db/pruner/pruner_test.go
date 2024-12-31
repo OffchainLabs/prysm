@@ -24,21 +24,18 @@ func TestPruner_PruningConditions(t *testing.T) {
 		name              string
 		synced            bool
 		backfillCompleted bool
-		shouldPrune       bool
 		expectedLog       string
 	}{
 		{
 			name:              "Not synced",
 			synced:            false,
 			backfillCompleted: true,
-			shouldPrune:       false,
 			expectedLog:       "Skipping pruning as initial sync is in progress",
 		},
 		{
 			name:              "Backfill incomplete",
 			synced:            true,
 			backfillCompleted: false,
-			shouldPrune:       false,
 			expectedLog:       "Skipping pruning as backfill is in progress",
 		},
 	}
@@ -109,7 +106,6 @@ func TestPruner_PruneSuccess(t *testing.T) {
 	// Send the same slot again to ensure the pruning operation completes
 	slotTicker.Channel <- currentSlot
 
-	// Remove sleep and check blocks immediately
 	for slot := primitives.Slot(1); slot <= 32; slot++ {
 		root, err := blks[slot-1].Block.HashTreeRoot()
 		require.NoError(t, err)
