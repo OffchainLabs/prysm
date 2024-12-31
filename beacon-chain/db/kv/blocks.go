@@ -238,7 +238,7 @@ func (s *Store) DeleteBlock(ctx context.Context, root [32]byte) error {
 	})
 }
 
-// DeleteBlocksAndStatesBeforeSlot performs deletes all blocks and states before the given slot.
+// DeleteBlocksAndStatesBeforeSlot deletes all blocks and states before the given slot.
 func (s *Store) DeleteBlocksAndStatesBeforeSlot(ctx context.Context, cutoffSlot primitives.Slot) error {
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.DeleteBlocksAndStatesBeforeSlot")
 	defer span.End()
