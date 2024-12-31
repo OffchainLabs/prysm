@@ -147,7 +147,7 @@ func (p *Service) prune(slot primitives.Slot) error {
 
 	tt := time.Now()
 	if err := p.db.DeleteBlocksAndStatesBeforeSlot(p.ctx, pruneSlot); err != nil {
-		return errors.Wrap(err, "could not delete before slot")
+		return errors.Wrapf(err, "could not delete before slot %d", pruneSlot)
 	}
 
 	log.WithFields(logrus.Fields{
