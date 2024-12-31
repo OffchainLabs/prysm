@@ -174,6 +174,7 @@ func NewService(ctx context.Context, su *Store, bStore *filesystem.BlobStorage, 
 		p2p:           p,
 		pa:            pa,
 		batchImporter: defaultBatchImporter,
+		isComplete:    abool.New(),
 	}
 	for _, o := range opts {
 		if err := o(s); err != nil {
