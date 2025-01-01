@@ -59,6 +59,26 @@ func TestLightClient_NewLightClientOptimisticUpdateFromBeaconState(t *testing.T)
 		l.CheckSyncAggregate(update.SyncAggregate())
 		l.CheckAttestedHeader(update.AttestedHeader())
 	})
+
+	t.Run("Electra", func(t *testing.T) {
+		cfg := params.BeaconConfig()
+		cfg.AltairForkEpoch = 1
+		cfg.CapellaForkEpoch = 2
+		cfg.DenebForkEpoch = 3
+		cfg.ElectraForkEpoch = 4
+		params.OverrideBeaconConfig(cfg)
+
+		l := util.NewTestLightClient(t).SetupTestElectra(false)
+
+		update, err := lightClient.NewLightClientOptimisticUpdateFromBeaconState(l.Ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock)
+		require.NoError(t, err)
+		require.NotNil(t, update, "update is nil")
+
+		require.Equal(t, l.Block.Block().Slot(), update.SignatureSlot(), "Signature slot is not equal")
+
+		l.CheckSyncAggregate(update.SyncAggregate())
+		l.CheckAttestedHeader(update.AttestedHeader())
+	})
 }
 
 func TestLightClient_NewLightClientFinalityUpdateFromBeaconState(t *testing.T) {
@@ -358,7 +378,6 @@ func TestLightClient_NewLightClientFinalityUpdateFromBeaconState(t *testing.T) {
 	})
 
 	t.Run("Electra", func(t *testing.T) {
-
 		cfg := params.BeaconConfig()
 		cfg.AltairForkEpoch = 1
 		cfg.CapellaForkEpoch = 2
@@ -367,14 +386,7 @@ func TestLightClient_NewLightClientFinalityUpdateFromBeaconState(t *testing.T) {
 		params.OverrideBeaconConfig(cfg)
 
 		t.Run("FinalizedBlock Not Nil", func(t *testing.T) {
-
 			l := util.NewTestLightClient(t).SetupTestElectra(false)
-
-			blockVersion := l.Block.Version()
-			t.Logf("Block Version: %d", blockVersion)
-
-			stateVersion := l.AttestedState.Version()
-			t.Logf("State Version: %d", stateVersion)
 
 			update, err := lightClient.NewLightClientFinalityUpdateFromBeaconState(l.Ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
 			require.NoError(t, err)
