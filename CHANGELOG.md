@@ -38,6 +38,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 ### Removed
 
 - Cleanup ProcessSlashings method to remove unnecessary argument.
+- Remove `/proto/eth/v2` directory. [PR](https://github.com/prysmaticlabs/prysm/pull/14765)
 
 ### Fixed
 
