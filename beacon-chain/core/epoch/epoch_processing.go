@@ -202,15 +202,15 @@ func ProcessRegistryUpdates(ctx context.Context, st state.BeaconState) (state.Be
 //	            penalty_numerator = validator.effective_balance // increment * adjusted_total_slashing_balance
 //	            penalty = penalty_numerator // total_balance * increment
 //	            decrease_balance(state, ValidatorIndex(index), penalty)
-func ProcessSlashings(st state.BeaconState) (state.BeaconState, error) {
+func ProcessSlashings(st state.BeaconState) error {
 	slashingMultiplier, err := st.ProportionalSlashingMultiplier()
 	if err != nil {
-		return nil, errors.Wrap(err, "could not get proportional slashing multiplier")
+		return errors.Wrap(err, "could not get proportional slashing multiplier")
 	}
 	currentEpoch := time.CurrentEpoch(st)
 	totalBalance, err := helpers.TotalActiveBalance(st)
 	if err != nil {
-		return nil, errors.Wrap(err, "could not get total active balance")
+		return errors.Wrap(err, "could not get total active balance")
 	}
 
 	// Compute slashed balances in the current epoch
@@ -222,7 +222,7 @@ func ProcessSlashings(st state.BeaconState) (state.BeaconState, error) {
 	for _, slashing := range slashings {
 		totalSlashing, err = math.Add64(totalSlashing, slashing)
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
 
@@ -256,14 +256,14 @@ func ProcessSlashings(st state.BeaconState) (state.BeaconState, error) {
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if changed {
 		if err := st.SetBalances(bals); err != nil {
-			return nil, err
+			return err
 		}
 	}
-	return st, nil
+	return nil
 }
 
 // ProcessEth1DataReset processes updates to ETH1 data votes during epoch processing.
