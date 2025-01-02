@@ -20,5 +20,7 @@ for ((i = 0; i < arraylength; i++)); do
     destination=${file_list[i]#*$searchstring}
     color "34" "$destination"
     chmod 644 "$destination"
-    cp -R -L "${file_list[i]}" "$destination"
+
+    # Copy to destination while removing the `// Hash: ...` line from the file header.
+    sed '/\/\/ Hash: /d' "${file_list[i]}" > "$destination"
 done

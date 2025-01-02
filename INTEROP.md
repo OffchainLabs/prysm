@@ -4,7 +4,7 @@ This README details how to setup Prysm for interop testing for usage with other 
 
 > [!IMPORTANT]  
 > This guide is likely to be outdated. The Prysm team does not have capacity to troubleshoot
-> outdated interop guides or instructions. If you experience issues with this guide, please file and
+> outdated interop guides or instructions. If you experience issues with this guide, please file an
 > issue for visibility and propose fixes, if possible.
 
 ## Installation & Setup
@@ -74,19 +74,19 @@ bazel run //cmd/beacon-chain --config=minimal -- \
 This will start the system with 256 validators. The flags used can be explained as such:
 
 - `bazel run //cmd/beacon-chain --config=minimal` builds and runs the beacon node in minimal build configuration.
-- `--` is a flag divider to distingish between bazel flags and flags that should be passed to the application. All flags and arguments after this divider are passed to the beacon chain.
+- `--` is a flag divider to distinguish between bazel flags and flags that should be passed to the application. All flags and arguments after this divider are passed to the beacon chain.
 - `--minimal-config` tells the beacon node to use minimal network configuration. This is different from the compile time state configuration flag `--config=minimal` and both are required.
 - `--bootstrap-node=` disables the default bootstrap nodes. This prevents the client from attempting to peer with mainnet nodes.
 - `--datadir=/tmp/beacon-chain-minimal-devnet` sets the data directory in a temporary location. Change this to your preferred destination.
 - `--force-clear-db` will delete the beaconchain.db file without confirming with the user. This is helpful for iteratively running local devnets without changing the datadir, but less helpful for one off runs where there was no database in the data directory.
-- `--min-sync-peers=0` allows the beacon node to skip initial sync without peers. This is essential because Prysm expects at least a few peers to start start the blockchain.
+- `--min-sync-peers=0` allows the beacon node to skip initial sync without peers. This is essential because Prysm expects at least a few peers to start the blockchain.
 - `--genesis-state=/tmp/genesis.ssz` defines the path to the generated genesis ssz file. The beacon node will use this as the initial genesis state.
 - `--chain-config-file=/tmp/minimal.yaml` defines the path to the yaml file with the chain configuration.
 
 As soon as the beacon node has started, start the validator in the other terminal window. 
 
 ```
-bazel run //cmd/validator --config=minimal -- --datadir=/tmp/validator --interopt-num-validators=256 --minimal-config --suggested-fee-recipient=0x8A04d14125D0FDCDc742F4A05C051De07232EDa4
+bazel run //cmd/validator --config=minimal -- --datadir=/tmp/validator --interop-num-validators=256 --minimal-config --suggested-fee-recipient=0x8A04d14125D0FDCDc742F4A05C051De07232EDa4
 ```
 
 This will launch and kickstart the system with your 256 validators performing their duties accordingly.

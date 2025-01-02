@@ -29,10 +29,10 @@ func TestCacheEnsureDelete(t *testing.T) {
 	require.Equal(t, nilEntry, c.entries[k])
 }
 
-type filterTestCaseSetupFunc func(t *testing.T) (*cacheEntry, safeCommitmentArray, []blocks.ROBlob)
+type filterTestCaseSetupFunc func(t *testing.T) (*cacheEntry, [][]byte, []blocks.ROBlob)
 
 func filterTestCaseSetup(slot primitives.Slot, nBlobs int, onDisk []int, numExpected int) filterTestCaseSetupFunc {
-	return func(t *testing.T) (*cacheEntry, safeCommitmentArray, []blocks.ROBlob) {
+	return func(t *testing.T) (*cacheEntry, [][]byte, []blocks.ROBlob) {
 		blk, blobs := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, slot, nBlobs)
 		commits, err := commitmentsToCheck(blk, blk.Block().Slot())
 		require.NoError(t, err)
@@ -44,7 +44,7 @@ func filterTestCaseSetup(slot primitives.Slot, nBlobs int, onDisk []int, numExpe
 			entry.setDiskSummary(sum)
 		}
 		expected := make([]blocks.ROBlob, 0, nBlobs)
-		for i := 0; i < commits.count(); i++ {
+		for i := 0; i < len(commits); i++ {
 			if entry.diskSummary.HasIndex(uint64(i)) {
 				continue
 			}
@@ -113,7 +113,7 @@ func TestFilterDiskSummary(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			entry, commits, expected := c.setup(t)
 			// first (root) argument doesn't matter, it is just for logs
-			got, err := entry.filter([32]byte{}, commits)
+			got, err := entry.filter([32]byte{}, commits, 100)
 			require.NoError(t, err)
 			require.Equal(t, len(expected), len(got))
 		})
@@ -125,12 +125,12 @@ func TestFilter(t *testing.T) {
 	require.NoError(t, err)
 	cases := []struct {
 		name  string
-		setup func(t *testing.T) (*cacheEntry, safeCommitmentArray, []blocks.ROBlob)
+		setup func(t *testing.T) (*cacheEntry, [][]byte, []blocks.ROBlob)
 		err   error
 	}{
 		{
 			name: "commitments mismatch - extra sidecar",
-			setup: func(t *testing.T) (*cacheEntry, safeCommitmentArray, []blocks.ROBlob) {
+			setup: func(t *testing.T) (*cacheEntry, [][]byte, []blocks.ROBlob) {
 				entry, commits, expected := filterTestCaseSetup(denebSlot, 6, []int{0, 1}, 4)(t)
 				commits[5] = nil
 				return entry, commits, expected
@@ -139,7 +139,7 @@ func TestFilter(t *testing.T) {
 		},
 		{
 			name: "sidecar missing",
-			setup: func(t *testing.T) (*cacheEntry, safeCommitmentArray, []blocks.ROBlob) {
+			setup: func(t *testing.T) (*cacheEntry, [][]byte, []blocks.ROBlob) {
 				entry, commits, expected := filterTestCaseSetup(denebSlot, 6, []int{0, 1}, 4)(t)
 				entry.scs[5] = nil
 				return entry, commits, expected
@@ -148,7 +148,7 @@ func TestFilter(t *testing.T) {
 		},
 		{
 			name: "commitments mismatch - different bytes",
-			setup: func(t *testing.T) (*cacheEntry, safeCommitmentArray, []blocks.ROBlob) {
+			setup: func(t *testing.T) (*cacheEntry, [][]byte, []blocks.ROBlob) {
 				entry, commits, expected := filterTestCaseSetup(denebSlot, 6, []int{0, 1}, 4)(t)
 				entry.scs[5].KzgCommitment = []byte("nope")
 				return entry, commits, expected
@@ -160,7 +160,7 @@ func TestFilter(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			entry, commits, expected := c.setup(t)
 			// first (root) argument doesn't matter, it is just for logs
-			got, err := entry.filter([32]byte{}, commits)
+			got, err := entry.filter([32]byte{}, commits, 100)
 			if c.err != nil {
 				require.ErrorIs(t, err, c.err)
 				return

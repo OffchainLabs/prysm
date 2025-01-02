@@ -12,21 +12,38 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Added an error field to log `Finished building block`.
 - Implemented a new `EmptyExecutionPayloadHeader` function.
 - `Finished building block`: Display error only if not nil.
+- Added support to update target and max blob count to different values per hard fork config.
+- Log before blob filesystem cache warm-up.
+- New design for the attestation pool. [PR](https://github.com/prysmaticlabs/prysm/pull/14324)
+- Add field param placeholder for Electra blob target and max to pass spec tests.
+- Add EIP-7691: Blob throughput increase.
+- SSZ files generation: Remove the `// Hash: ...` header.
 
 ### Changed
 
 - Process light client finality updates only for new finalized epochs instead of doing it for every block.
 - Refactor subnets subscriptions.
+- Refactor RPC handlers subscriptions.
+- Go deps upgrade, from `ioutil` to `io`
+- Move successfully registered validator(s) on builder log to debug.
+- Update some test files to use `crypto/rand` instead of `math/rand`
+- Enforce Compound prefix (0x02) for target when processing pending consolidation request.
+- Limit consolidating by validator's effective balance.
+- Use 16-bit random value for proposer and sync committee selection filter.
+- Re-organize the content of the `*.proto` files (No functional change).
 
 ### Deprecated
 
 
 ### Removed
 
+- Cleanup ProcessSlashings method to remove unnecessary argument.
+- Remove `/proto/eth/v2` directory. [PR](https://github.com/prysmaticlabs/prysm/pull/14765)
 
 ### Fixed
 
 - Added check to prevent nil pointer deference or out of bounds array access when validating the BLSToExecutionChange on an impossibly nil validator.
+- EIP-7691: Ensure new blobs subnets are subscribed on epoch in advance.
 
 ### Security
 
@@ -77,6 +94,8 @@ Notable features:
 - Added a Prometheus error counter metric for SSE requests.
 - Save light client updates and bootstraps in DB.
 - Added more comprehensive tests for `BlockToLightClientHeader`. [PR](https://github.com/prysmaticlabs/prysm/pull/14699)
+- Added light client feature flag check to RPC handlers. [PR](https://github.com/prysmaticlabs/prysm/pull/14736)
+- Light client: Add better error handling. [PR](https://github.com/prysmaticlabs/prysm/pull/14749)
 
 ### Changed
 

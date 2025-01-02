@@ -24,36 +24,16 @@ option java_outer_classname = "AttestationProto";
 option java_package = "org.ethereum.eth.v1alpha1";
 option php_namespace = "Ethereum\\Eth\\v1alpha1";
 
-message Attestation {
-    // A bitfield representation of validator indices that have voted exactly
-    // the same vote and have been aggregated into this attestation.
-    bytes aggregation_bits = 1 [(ethereum.eth.ext.ssz_max) = "2048", (ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/go-bitfield.Bitlist"];
+// ----------------------------------------------------------------------------
+// Phase0, Altair, Bellatrix, Capella & Deneb
+// ----------------------------------------------------------------------------
 
-    AttestationData data = 2;
+message SignedAggregateAttestationAndProof {
+    // The aggregated attestation and selection proof itself.
+    AggregateAttestationAndProof message = 1;
 
-    // 96 byte BLS aggregate signature.
-    bytes signature = 3 [(ethereum.eth.ext.ssz_size) = "96"];
-}
-
-message AttestationElectra {
-    // A bitfield representation of validator indices that have voted exactly
-    // the same vote and have been aggregated into this attestation.
-    bytes aggregation_bits = 1 [(ethereum.eth.ext.ssz_max) = "max_attesting_indices.size", (ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/go-bitfield.Bitlist"];
-
-    AttestationData data = 2;
-
-    // 96 byte BLS aggregate signature.
-    bytes signature = 3 [(ethereum.eth.ext.ssz_size) = "96"];
-
-    // Represents the committee which aggregated attestation belong.
-    bytes committee_bits = 4 [(ethereum.eth.ext.ssz_size) = "committee_bits.size", (ethereum.eth.ext.cast_type) = "committee_bits.type"];
-}
-
-message SingleAttestation {
-    uint64 committee_id = 1  [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.CommitteeIndex"];
-    uint64 attester_index = 2  [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.ValidatorIndex"];
-    AttestationData data = 3;
-    bytes signature = 4 [(ethereum.eth.ext.ssz_size) = "96"];
+    // 96 byte BLS aggregate signature signed by the aggregator over the message.
+    bytes signature = 2 [(ethereum.eth.ext.ssz_size) = "96"];
 }
 
 message AggregateAttestationAndProof {
@@ -67,31 +47,15 @@ message AggregateAttestationAndProof {
     bytes selection_proof = 2 [(ethereum.eth.ext.ssz_size) = "96"];
 }
 
-message AggregateAttestationAndProofElectra {
-    // The aggregator index that submitted this aggregated attestation and proof.
-    uint64 aggregator_index = 1  [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.ValidatorIndex"];
+message Attestation {
+    // A bitfield representation of validator indices that have voted exactly
+    // the same vote and have been aggregated into this attestation.
+    bytes aggregation_bits = 1 [(ethereum.eth.ext.ssz_max) = "2048", (ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/go-bitfield.Bitlist"];
 
-    // The aggregated attestation that was submitted.
-    AttestationElectra aggregate = 3;
+    AttestationData data = 2;
 
-    // 96 byte selection proof signed by the aggregator, which is the signature of the slot to aggregate.
-    bytes selection_proof = 2 [(ethereum.eth.ext.ssz_size) = "96"];
-}
-
-message SignedAggregateAttestationAndProof {
-    // The aggregated attestation and selection proof itself.
-    AggregateAttestationAndProof message = 1;
-
-    // 96 byte BLS aggregate signature signed by the aggregator over the message.
-    bytes signature = 2 [(ethereum.eth.ext.ssz_size) = "96"];
-}
-
-message SignedAggregateAttestationAndProofElectra {
-    // The aggregated attestation and selection proof itself.
-    AggregateAttestationAndProofElectra message = 1;
-
-    // 96 byte BLS aggregate signature signed by the aggregator over the message.
-    bytes signature = 2 [(ethereum.eth.ext.ssz_size) = "96"];
+    // 96 byte BLS aggregate signature.
+    bytes signature = 3 [(ethereum.eth.ext.ssz_size) = "96"];
 }
 
 message AttestationData {
@@ -123,4 +87,48 @@ message Checkpoint {
 
     // Block root of the checkpoint references.
     bytes root = 2 [(ethereum.eth.ext.ssz_size) = "32"];
+}
+
+// ----------------------------------------------------------------------------
+// Electra
+// ----------------------------------------------------------------------------
+
+message SignedAggregateAttestationAndProofElectra {
+    // The aggregated attestation and selection proof itself.
+    AggregateAttestationAndProofElectra message = 1;
+
+    // 96 byte BLS aggregate signature signed by the aggregator over the message.
+    bytes signature = 2 [(ethereum.eth.ext.ssz_size) = "96"];
+}
+
+message AggregateAttestationAndProofElectra {
+    // The aggregator index that submitted this aggregated attestation and proof.
+    uint64 aggregator_index = 1  [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.ValidatorIndex"];
+
+    // The aggregated attestation that was submitted.
+    AttestationElectra aggregate = 3;
+
+    // 96 byte selection proof signed by the aggregator, which is the signature of the slot to aggregate.
+    bytes selection_proof = 2 [(ethereum.eth.ext.ssz_size) = "96"];
+}
+
+message AttestationElectra {
+    // A bitfield representation of validator indices that have voted exactly
+    // the same vote and have been aggregated into this attestation.
+    bytes aggregation_bits = 1 [(ethereum.eth.ext.ssz_max) = "max_attesting_indices.size", (ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/go-bitfield.Bitlist"];
+
+    AttestationData data = 2;
+
+    // 96 byte BLS aggregate signature.
+    bytes signature = 3 [(ethereum.eth.ext.ssz_size) = "96"];
+
+    // Represents the committee which aggregated attestation belong.
+    bytes committee_bits = 4 [(ethereum.eth.ext.ssz_size) = "committee_bits.size", (ethereum.eth.ext.cast_type) = "committee_bits.type"];
+}
+
+message SingleAttestation {
+    uint64 committee_id = 1  [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.CommitteeIndex"];
+    uint64 attester_index = 2  [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.ValidatorIndex"];
+    AttestationData data = 3;
+    bytes signature = 4 [(ethereum.eth.ext.ssz_size) = "96"];
 }

@@ -7,7 +7,7 @@ go_library(
     importpath = "github.com/prysmaticlabs/prysm/v5/testing/spectest/shared/common/merkle_proof",
     visibility = ["//visibility:public"],
     deps = [
-        "//config/fieldparams:go_default_library",
+        "//config/params:go_default_library",
         "//consensus-types/blocks:go_default_library",
         "//container/trie:go_default_library",
         "//testing/require:go_default_library",

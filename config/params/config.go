@@ -229,12 +229,14 @@ type BeaconChainConfig struct {
 	ExecutionEngineTimeoutValue uint64 // ExecutionEngineTimeoutValue defines the seconds to wait before timing out engine endpoints with execution payload execution semantics (newPayload, forkchoiceUpdated).
 
 	// Subnet value
-	BlobsidecarSubnetCount uint64 `yaml:"BLOB_SIDECAR_SUBNET_COUNT"` // BlobsidecarSubnetCount is the number of blobsidecar subnets used in the gossipsub protocol.
+	BlobsidecarSubnetCount        uint64 `yaml:"BLOB_SIDECAR_SUBNET_COUNT"`         // BlobsidecarSubnetCount is the number of blobsidecar subnets used in the gossipsub protocol.
+	BlobsidecarSubnetCountElectra uint64 `yaml:"BLOB_SIDECAR_SUBNET_COUNT_ELECTRA"` // BlobsidecarSubnetCountElectra is the number of blobsidecar subnets used in the gossipsub protocol post Electra hard fork.
 
 	// Values introduced in Deneb hard fork
 	MaxPerEpochActivationChurnLimit  uint64           `yaml:"MAX_PER_EPOCH_ACTIVATION_CHURN_LIMIT" spec:"true"`  // MaxPerEpochActivationChurnLimit is the maximum amount of churn allotted for validator activation.
 	MinEpochsForBlobsSidecarsRequest primitives.Epoch `yaml:"MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUESTS" spec:"true"` // MinEpochsForBlobsSidecarsRequest is the minimum number of epochs the node will keep the blobs for.
 	MaxRequestBlobSidecars           uint64           `yaml:"MAX_REQUEST_BLOB_SIDECARS" spec:"true"`             // MaxRequestBlobSidecars is the maximum number of blobs to request in a single request.
+	MaxRequestBlobSidecarsElectra    uint64           `yaml:"MAX_REQUEST_BLOB_SIDECARS_ELECTRA" spec:"true"`     // MaxRequestBlobSidecarsElectra is the maximum number of blobs to request in a single request.
 	MaxRequestBlocksDeneb            uint64           `yaml:"MAX_REQUEST_BLOCKS_DENEB" spec:"true"`              // MaxRequestBlocksDeneb is the maximum number of blocks in a single request after the deneb epoch.
 
 	// Values introduce in Electra upgrade
@@ -280,6 +282,19 @@ type BeaconChainConfig struct {
 	AttestationSubnetPrefixBits     uint64          `yaml:"ATTESTATION_SUBNET_PREFIX_BITS" spec:"true"`     // AttestationSubnetPrefixBits is defined as (ceillog2(ATTESTATION_SUBNET_COUNT) + ATTESTATION_SUBNET_EXTRA_BITS).
 	SubnetsPerNode                  uint64          `yaml:"SUBNETS_PER_NODE" spec:"true"`                   // SubnetsPerNode is the number of long-lived subnets a beacon node should be subscribed to.
 	NodeIdBits                      uint64          `yaml:"NODE_ID_BITS" spec:"true"`                       // NodeIdBits defines the bit length of a node id.
+
+	// Blobs Values
+
+	// Deprecated_MaxBlobsPerBlock defines the max blobs that could exist in a block.
+	// Deprecated: This field is no longer supported. Avoid using it.
+	DeprecatedMaxBlobsPerBlock int `yaml:"MAX_BLOBS_PER_BLOCK" spec:"true"`
+	// DeprecatedMaxBlobsPerBlockElectra defines the max blobs that could exist in a block post Electra hard fork.
+	// Deprecated: This field is no longer supported. Avoid using it.
+	DeprecatedMaxBlobsPerBlockElectra int `yaml:"MAX_BLOBS_PER_BLOCK_ELECTRA" spec:"true"`
+
+	// DeprecatedTargetBlobsPerBlockElectra defines the target number of blobs per block post Electra hard fork.
+	// Deprecated: This field is no longer supported. Avoid using it.
+	DeprecatedTargetBlobsPerBlockElectra int `yaml:"TARGET_BLOBS_PER_BLOCK_ELECTRA" spec:"true"`
 }
 
 // InitializeForkSchedule initializes the schedules forks baked into the config.
@@ -355,6 +370,24 @@ func (b *BeaconChainConfig) RespTimeoutDuration() time.Duration {
 // MaximumGossipClockDisparityDuration returns the time duration of the clock disparity.
 func (b *BeaconChainConfig) MaximumGossipClockDisparityDuration() time.Duration {
 	return time.Duration(b.MaximumGossipClockDisparity) * time.Millisecond
+}
+
+// TargetBlobsPerBlock returns the target number of blobs per block for the given slot,
+// accounting for changes introduced by the Electra fork.
+func (b *BeaconChainConfig) TargetBlobsPerBlock(slot primitives.Slot) int {
+	if primitives.Epoch(slot.DivSlot(32)) >= b.ElectraForkEpoch {
+		return b.DeprecatedTargetBlobsPerBlockElectra
+	}
+	return b.DeprecatedMaxBlobsPerBlock / 2
+}
+
+// MaxBlobsPerBlock returns the maximum number of blobs per block for the given slot,
+// adjusting for the Electra fork.
+func (b *BeaconChainConfig) MaxBlobsPerBlock(slot primitives.Slot) int {
+	if primitives.Epoch(slot.DivSlot(32)) >= b.ElectraForkEpoch {
+		return b.DeprecatedMaxBlobsPerBlockElectra
+	}
+	return b.DeprecatedMaxBlobsPerBlock
 }
 
 // DenebEnabled centralizes the check to determine if code paths
