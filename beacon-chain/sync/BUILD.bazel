@@ -240,7 +240,6 @@ go_test(
         "//encoding/ssz/equality:go_default_library",
         "//network/forks:go_default_library",
         "//proto/engine/v1:go_default_library",
-        "//proto/eth/v2:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "//proto/prysm/v1alpha1/attestation:go_default_library",
         "//proto/prysm/v1alpha1/metadata:go_default_library",
