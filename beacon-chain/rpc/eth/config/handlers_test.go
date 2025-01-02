@@ -190,7 +190,7 @@ func TestGetSpec(t *testing.T) {
 	data, ok := resp.Data.(map[string]interface{})
 	require.Equal(t, true, ok)
 
-	assert.Equal(t, 159, len(data))
+	assert.Equal(t, 160, len(data))
 	for k, v := range data {
 		t.Run(k, func(t *testing.T) {
 			switch k {
@@ -533,6 +533,8 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "6", v)
 			case "MAX_BLOBS_PER_BLOCK_ELECTRA":
 				assert.Equal(t, "9", v)
+			case "MAX_REQUEST_BLOB_SIDECARS_ELECTRA":
+				assert.Equal(t, "1152", v)
 			default:
 				t.Errorf("Incorrect key: %s", k)
 			}

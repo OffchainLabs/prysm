@@ -69,11 +69,7 @@ func ProcessEpoch(ctx context.Context, state state.BeaconState) error {
 	}
 
 	// Modified in Altair and Bellatrix.
-	proportionalSlashingMultiplier, err := state.ProportionalSlashingMultiplier()
-	if err != nil {
-		return err
-	}
-	state, err = e.ProcessSlashings(state, proportionalSlashingMultiplier)
+	state, err = e.ProcessSlashings(state)
 	if err != nil {
 		return err
 	}

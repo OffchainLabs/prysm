@@ -16,6 +16,8 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Log before blob filesystem cache warm-up.
 - New design for the attestation pool. [PR](https://github.com/prysmaticlabs/prysm/pull/14324)
 - Add field param placeholder for Electra blob target and max to pass spec tests.
+- Add EIP-7691: Blob throughput increase.
+- SSZ files generation: Remove the `// Hash: ...` header.
 
 ### Changed
 
@@ -35,10 +37,12 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ### Removed
 
+- Cleanup ProcessSlashings method to remove unnecessary argument.
 
 ### Fixed
 
 - Added check to prevent nil pointer deference or out of bounds array access when validating the BLSToExecutionChange on an impossibly nil validator.
+- EIP-7691: Ensure new blobs subnets are subscribed on epoch in advance.
 
 ### Security
 
