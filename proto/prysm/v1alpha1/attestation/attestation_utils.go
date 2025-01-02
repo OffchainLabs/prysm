@@ -65,7 +65,7 @@ func ConvertToIndexed(_ context.Context, attestation ethpb.Att, committees ...[]
 
 // AttestingIndices returns the attesting participants indices from the attestation data.
 // Committees are provided as an argument rather than an imported implementation from the spec definition.
-// Having committees as an argument allows for re-use of beacon committees when possible.
+// Having committees as an argument allows for reuse of beacon committees when possible.
 //
 // Spec pseudocode definition (Electra version):
 //
@@ -254,7 +254,7 @@ func CheckPointIsEqual(checkPt1, checkPt2 *ethpb.Checkpoint) bool {
 
 // attestingIndicesPhase0 returns the attesting participants indices from the attestation data.
 // Committees are provided as an argument rather than an imported implementation from the spec definition.
-// Having committees as an argument allows for re-use of beacon committees when possible.
+// Having committees as an argument allows for reuse of beacon committees when possible.
 //
 // Spec pseudocode definition (Phase0 version):
 //
