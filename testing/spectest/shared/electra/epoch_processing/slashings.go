@@ -7,7 +7,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/electra"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"github.com/prysmaticlabs/prysm/v5/testing/spectest/utils"
 )
@@ -27,7 +26,7 @@ func RunSlashingsTests(t *testing.T, config string) {
 }
 
 func processSlashingsWrapper(t *testing.T, st state.BeaconState) (state.BeaconState, error) {
-	st, err := electra.ProcessSlashings(st, params.BeaconConfig().ProportionalSlashingMultiplierBellatrix)
+	st, err := electra.ProcessSlashings(st)
 	require.NoError(t, err, "Could not process slashings")
 	return st, nil
 }

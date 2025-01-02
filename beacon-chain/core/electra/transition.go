@@ -75,16 +75,10 @@ func ProcessEpoch(ctx context.Context, state state.BeaconState) error {
 	if err != nil {
 		return errors.Wrap(err, "could not process rewards and penalties")
 	}
-
 	if err := ProcessRegistryUpdates(ctx, state); err != nil {
 		return errors.Wrap(err, "could not process registry updates")
 	}
-
-	proportionalSlashingMultiplier, err := state.ProportionalSlashingMultiplier()
-	if err != nil {
-		return err
-	}
-	state, err = ProcessSlashings(state, proportionalSlashingMultiplier)
+	state, err = ProcessSlashings(state)
 	if err != nil {
 		return err
 	}
@@ -92,7 +86,6 @@ func ProcessEpoch(ctx context.Context, state state.BeaconState) error {
 	if err != nil {
 		return err
 	}
-
 	if err = ProcessPendingDeposits(ctx, state, primitives.Gwei(bp.ActiveCurrentEpoch)); err != nil {
 		return err
 	}
@@ -102,7 +95,6 @@ func ProcessEpoch(ctx context.Context, state state.BeaconState) error {
 	if err = ProcessEffectiveBalanceUpdates(state); err != nil {
 		return err
 	}
-
 	state, err = ProcessSlashingsReset(state)
 	if err != nil {
 		return err
@@ -115,17 +107,14 @@ func ProcessEpoch(ctx context.Context, state state.BeaconState) error {
 	if err != nil {
 		return err
 	}
-
 	state, err = ProcessParticipationFlagUpdates(state)
 	if err != nil {
 		return err
 	}
-
 	_, err = ProcessSyncCommitteeUpdates(ctx, state)
 	if err != nil {
 		return err
 	}
-
 	return nil
 }
 
