@@ -14,6 +14,10 @@ type SignedMessageJsoner interface {
 	SigString() string
 }
 
+// ----------------------------------------------------------------------------
+// Phase 0
+// ----------------------------------------------------------------------------
+
 type SignedBeaconBlock struct {
 	Message   *BeaconBlock `json:"message"`
 	Signature string       `json:"signature"`
@@ -47,6 +51,29 @@ type BeaconBlockBody struct {
 	Deposits          []*Deposit             `json:"deposits"`
 	VoluntaryExits    []*SignedVoluntaryExit `json:"voluntary_exits"`
 }
+
+type SignedBeaconBlockHeaderContainer struct {
+	Header    *SignedBeaconBlockHeader `json:"header"`
+	Root      string                   `json:"root"`
+	Canonical bool                     `json:"canonical"`
+}
+
+type SignedBeaconBlockHeader struct {
+	Message   *BeaconBlockHeader `json:"message"`
+	Signature string             `json:"signature"`
+}
+
+type BeaconBlockHeader struct {
+	Slot          string `json:"slot"`
+	ProposerIndex string `json:"proposer_index"`
+	ParentRoot    string `json:"parent_root"`
+	StateRoot     string `json:"state_root"`
+	BodyRoot      string `json:"body_root"`
+}
+
+// ----------------------------------------------------------------------------
+// Altair
+// ----------------------------------------------------------------------------
 
 type SignedBeaconBlockAltair struct {
 	Message   *BeaconBlockAltair `json:"message"`
@@ -82,6 +109,10 @@ type BeaconBlockBodyAltair struct {
 	VoluntaryExits    []*SignedVoluntaryExit `json:"voluntary_exits"`
 	SyncAggregate     *SyncAggregate         `json:"sync_aggregate"`
 }
+
+// ----------------------------------------------------------------------------
+// Bellatrix
+// ----------------------------------------------------------------------------
 
 type SignedBeaconBlockBellatrix struct {
 	Message   *BeaconBlockBellatrix `json:"message"`
@@ -154,6 +185,44 @@ type BlindedBeaconBlockBodyBellatrix struct {
 	SyncAggregate          *SyncAggregate          `json:"sync_aggregate"`
 	ExecutionPayloadHeader *ExecutionPayloadHeader `json:"execution_payload_header"`
 }
+
+type ExecutionPayload struct {
+	ParentHash    string   `json:"parent_hash"`
+	FeeRecipient  string   `json:"fee_recipient"`
+	StateRoot     string   `json:"state_root"`
+	ReceiptsRoot  string   `json:"receipts_root"`
+	LogsBloom     string   `json:"logs_bloom"`
+	PrevRandao    string   `json:"prev_randao"`
+	BlockNumber   string   `json:"block_number"`
+	GasLimit      string   `json:"gas_limit"`
+	GasUsed       string   `json:"gas_used"`
+	Timestamp     string   `json:"timestamp"`
+	ExtraData     string   `json:"extra_data"`
+	BaseFeePerGas string   `json:"base_fee_per_gas"`
+	BlockHash     string   `json:"block_hash"`
+	Transactions  []string `json:"transactions"`
+}
+
+type ExecutionPayloadHeader struct {
+	ParentHash       string `json:"parent_hash"`
+	FeeRecipient     string `json:"fee_recipient"`
+	StateRoot        string `json:"state_root"`
+	ReceiptsRoot     string `json:"receipts_root"`
+	LogsBloom        string `json:"logs_bloom"`
+	PrevRandao       string `json:"prev_randao"`
+	BlockNumber      string `json:"block_number"`
+	GasLimit         string `json:"gas_limit"`
+	GasUsed          string `json:"gas_used"`
+	Timestamp        string `json:"timestamp"`
+	ExtraData        string `json:"extra_data"`
+	BaseFeePerGas    string `json:"base_fee_per_gas"`
+	BlockHash        string `json:"block_hash"`
+	TransactionsRoot string `json:"transactions_root"`
+}
+
+// ----------------------------------------------------------------------------
+// Capella
+// ----------------------------------------------------------------------------
 
 type SignedBeaconBlockCapella struct {
 	Message   *BeaconBlockCapella `json:"message"`
@@ -228,6 +297,46 @@ type BlindedBeaconBlockBodyCapella struct {
 	ExecutionPayloadHeader *ExecutionPayloadHeaderCapella `json:"execution_payload_header"`
 	BLSToExecutionChanges  []*SignedBLSToExecutionChange  `json:"bls_to_execution_changes"`
 }
+
+type ExecutionPayloadCapella struct {
+	ParentHash    string        `json:"parent_hash"`
+	FeeRecipient  string        `json:"fee_recipient"`
+	StateRoot     string        `json:"state_root"`
+	ReceiptsRoot  string        `json:"receipts_root"`
+	LogsBloom     string        `json:"logs_bloom"`
+	PrevRandao    string        `json:"prev_randao"`
+	BlockNumber   string        `json:"block_number"`
+	GasLimit      string        `json:"gas_limit"`
+	GasUsed       string        `json:"gas_used"`
+	Timestamp     string        `json:"timestamp"`
+	ExtraData     string        `json:"extra_data"`
+	BaseFeePerGas string        `json:"base_fee_per_gas"`
+	BlockHash     string        `json:"block_hash"`
+	Transactions  []string      `json:"transactions"`
+	Withdrawals   []*Withdrawal `json:"withdrawals"`
+}
+
+type ExecutionPayloadHeaderCapella struct {
+	ParentHash       string `json:"parent_hash"`
+	FeeRecipient     string `json:"fee_recipient"`
+	StateRoot        string `json:"state_root"`
+	ReceiptsRoot     string `json:"receipts_root"`
+	LogsBloom        string `json:"logs_bloom"`
+	PrevRandao       string `json:"prev_randao"`
+	BlockNumber      string `json:"block_number"`
+	GasLimit         string `json:"gas_limit"`
+	GasUsed          string `json:"gas_used"`
+	Timestamp        string `json:"timestamp"`
+	ExtraData        string `json:"extra_data"`
+	BaseFeePerGas    string `json:"base_fee_per_gas"`
+	BlockHash        string `json:"block_hash"`
+	TransactionsRoot string `json:"transactions_root"`
+	WithdrawalsRoot  string `json:"withdrawals_root"`
+}
+
+// ----------------------------------------------------------------------------
+// Deneb
+// ----------------------------------------------------------------------------
 
 type SignedBeaconBlockContentsDeneb struct {
 	SignedBlock *SignedBeaconBlockDeneb `json:"signed_block"`
@@ -316,6 +425,50 @@ type BlindedBeaconBlockBodyDeneb struct {
 	BLSToExecutionChanges  []*SignedBLSToExecutionChange `json:"bls_to_execution_changes"`
 	BlobKzgCommitments     []string                      `json:"blob_kzg_commitments"`
 }
+
+type ExecutionPayloadDeneb struct {
+	ParentHash    string        `json:"parent_hash"`
+	FeeRecipient  string        `json:"fee_recipient"`
+	StateRoot     string        `json:"state_root"`
+	ReceiptsRoot  string        `json:"receipts_root"`
+	LogsBloom     string        `json:"logs_bloom"`
+	PrevRandao    string        `json:"prev_randao"`
+	BlockNumber   string        `json:"block_number"`
+	GasLimit      string        `json:"gas_limit"`
+	GasUsed       string        `json:"gas_used"`
+	Timestamp     string        `json:"timestamp"`
+	ExtraData     string        `json:"extra_data"`
+	BaseFeePerGas string        `json:"base_fee_per_gas"`
+	BlockHash     string        `json:"block_hash"`
+	Transactions  []string      `json:"transactions"`
+	Withdrawals   []*Withdrawal `json:"withdrawals"`
+	BlobGasUsed   string        `json:"blob_gas_used"`
+	ExcessBlobGas string        `json:"excess_blob_gas"`
+}
+
+type ExecutionPayloadHeaderDeneb struct {
+	ParentHash       string `json:"parent_hash"`
+	FeeRecipient     string `json:"fee_recipient"`
+	StateRoot        string `json:"state_root"`
+	ReceiptsRoot     string `json:"receipts_root"`
+	LogsBloom        string `json:"logs_bloom"`
+	PrevRandao       string `json:"prev_randao"`
+	BlockNumber      string `json:"block_number"`
+	GasLimit         string `json:"gas_limit"`
+	GasUsed          string `json:"gas_used"`
+	Timestamp        string `json:"timestamp"`
+	ExtraData        string `json:"extra_data"`
+	BaseFeePerGas    string `json:"base_fee_per_gas"`
+	BlockHash        string `json:"block_hash"`
+	TransactionsRoot string `json:"transactions_root"`
+	WithdrawalsRoot  string `json:"withdrawals_root"`
+	BlobGasUsed      string `json:"blob_gas_used"`
+	ExcessBlobGas    string `json:"excess_blob_gas"`
+}
+
+// ----------------------------------------------------------------------------
+// Electra
+// ----------------------------------------------------------------------------
 
 type SignedBeaconBlockContentsElectra struct {
 	SignedBlock *SignedBeaconBlockElectra `json:"signed_block"`
@@ -407,141 +560,13 @@ type BlindedBeaconBlockBodyElectra struct {
 	ExecutionRequests      *ExecutionRequests             `json:"execution_requests"`
 }
 
-type SignedBeaconBlockHeaderContainer struct {
-	Header    *SignedBeaconBlockHeader `json:"header"`
-	Root      string                   `json:"root"`
-	Canonical bool                     `json:"canonical"`
-}
+type (
+	ExecutionRequests struct {
+		Deposits       []*DepositRequest       `json:"deposits"`
+		Withdrawals    []*WithdrawalRequest    `json:"withdrawals"`
+		Consolidations []*ConsolidationRequest `json:"consolidations"`
+	}
 
-type SignedBeaconBlockHeader struct {
-	Message   *BeaconBlockHeader `json:"message"`
-	Signature string             `json:"signature"`
-}
-
-type BeaconBlockHeader struct {
-	Slot          string `json:"slot"`
-	ProposerIndex string `json:"proposer_index"`
-	ParentRoot    string `json:"parent_root"`
-	StateRoot     string `json:"state_root"`
-	BodyRoot      string `json:"body_root"`
-}
-
-type ExecutionPayload struct {
-	ParentHash    string   `json:"parent_hash"`
-	FeeRecipient  string   `json:"fee_recipient"`
-	StateRoot     string   `json:"state_root"`
-	ReceiptsRoot  string   `json:"receipts_root"`
-	LogsBloom     string   `json:"logs_bloom"`
-	PrevRandao    string   `json:"prev_randao"`
-	BlockNumber   string   `json:"block_number"`
-	GasLimit      string   `json:"gas_limit"`
-	GasUsed       string   `json:"gas_used"`
-	Timestamp     string   `json:"timestamp"`
-	ExtraData     string   `json:"extra_data"`
-	BaseFeePerGas string   `json:"base_fee_per_gas"`
-	BlockHash     string   `json:"block_hash"`
-	Transactions  []string `json:"transactions"`
-}
-
-type ExecutionPayloadHeader struct {
-	ParentHash       string `json:"parent_hash"`
-	FeeRecipient     string `json:"fee_recipient"`
-	StateRoot        string `json:"state_root"`
-	ReceiptsRoot     string `json:"receipts_root"`
-	LogsBloom        string `json:"logs_bloom"`
-	PrevRandao       string `json:"prev_randao"`
-	BlockNumber      string `json:"block_number"`
-	GasLimit         string `json:"gas_limit"`
-	GasUsed          string `json:"gas_used"`
-	Timestamp        string `json:"timestamp"`
-	ExtraData        string `json:"extra_data"`
-	BaseFeePerGas    string `json:"base_fee_per_gas"`
-	BlockHash        string `json:"block_hash"`
-	TransactionsRoot string `json:"transactions_root"`
-}
-
-type ExecutionPayloadCapella struct {
-	ParentHash    string        `json:"parent_hash"`
-	FeeRecipient  string        `json:"fee_recipient"`
-	StateRoot     string        `json:"state_root"`
-	ReceiptsRoot  string        `json:"receipts_root"`
-	LogsBloom     string        `json:"logs_bloom"`
-	PrevRandao    string        `json:"prev_randao"`
-	BlockNumber   string        `json:"block_number"`
-	GasLimit      string        `json:"gas_limit"`
-	GasUsed       string        `json:"gas_used"`
-	Timestamp     string        `json:"timestamp"`
-	ExtraData     string        `json:"extra_data"`
-	BaseFeePerGas string        `json:"base_fee_per_gas"`
-	BlockHash     string        `json:"block_hash"`
-	Transactions  []string      `json:"transactions"`
-	Withdrawals   []*Withdrawal `json:"withdrawals"`
-}
-
-type ExecutionPayloadHeaderCapella struct {
-	ParentHash       string `json:"parent_hash"`
-	FeeRecipient     string `json:"fee_recipient"`
-	StateRoot        string `json:"state_root"`
-	ReceiptsRoot     string `json:"receipts_root"`
-	LogsBloom        string `json:"logs_bloom"`
-	PrevRandao       string `json:"prev_randao"`
-	BlockNumber      string `json:"block_number"`
-	GasLimit         string `json:"gas_limit"`
-	GasUsed          string `json:"gas_used"`
-	Timestamp        string `json:"timestamp"`
-	ExtraData        string `json:"extra_data"`
-	BaseFeePerGas    string `json:"base_fee_per_gas"`
-	BlockHash        string `json:"block_hash"`
-	TransactionsRoot string `json:"transactions_root"`
-	WithdrawalsRoot  string `json:"withdrawals_root"`
-}
-
-type ExecutionPayloadDeneb struct {
-	ParentHash    string        `json:"parent_hash"`
-	FeeRecipient  string        `json:"fee_recipient"`
-	StateRoot     string        `json:"state_root"`
-	ReceiptsRoot  string        `json:"receipts_root"`
-	LogsBloom     string        `json:"logs_bloom"`
-	PrevRandao    string        `json:"prev_randao"`
-	BlockNumber   string        `json:"block_number"`
-	GasLimit      string        `json:"gas_limit"`
-	GasUsed       string        `json:"gas_used"`
-	Timestamp     string        `json:"timestamp"`
-	ExtraData     string        `json:"extra_data"`
-	BaseFeePerGas string        `json:"base_fee_per_gas"`
-	BlockHash     string        `json:"block_hash"`
-	Transactions  []string      `json:"transactions"`
-	Withdrawals   []*Withdrawal `json:"withdrawals"`
-	BlobGasUsed   string        `json:"blob_gas_used"`
-	ExcessBlobGas string        `json:"excess_blob_gas"`
-}
-
-type ExecutionPayloadElectra = ExecutionPayloadDeneb
-
-type ExecutionPayloadHeaderDeneb struct {
-	ParentHash       string `json:"parent_hash"`
-	FeeRecipient     string `json:"fee_recipient"`
-	StateRoot        string `json:"state_root"`
-	ReceiptsRoot     string `json:"receipts_root"`
-	LogsBloom        string `json:"logs_bloom"`
-	PrevRandao       string `json:"prev_randao"`
-	BlockNumber      string `json:"block_number"`
-	GasLimit         string `json:"gas_limit"`
-	GasUsed          string `json:"gas_used"`
-	Timestamp        string `json:"timestamp"`
-	ExtraData        string `json:"extra_data"`
-	BaseFeePerGas    string `json:"base_fee_per_gas"`
-	BlockHash        string `json:"block_hash"`
-	TransactionsRoot string `json:"transactions_root"`
-	WithdrawalsRoot  string `json:"withdrawals_root"`
-	BlobGasUsed      string `json:"blob_gas_used"`
-	ExcessBlobGas    string `json:"excess_blob_gas"`
-}
-
-type ExecutionPayloadHeaderElectra = ExecutionPayloadHeaderDeneb
-
-type ExecutionRequests struct {
-	Deposits       []*DepositRequest       `json:"deposits"`
-	Withdrawals    []*WithdrawalRequest    `json:"withdrawals"`
-	Consolidations []*ConsolidationRequest `json:"consolidations"`
-}
+	ExecutionPayloadElectra       = ExecutionPayloadDeneb
+	ExecutionPayloadHeaderElectra = ExecutionPayloadHeaderDeneb
+)

@@ -617,7 +617,7 @@ func TestServer_GetBeaconBlock_Electra(t *testing.T) {
 				Graffiti:      genesis.Block.Body.Graffiti,
 				Eth1Data:      genesis.Block.Body.Eth1Data,
 				SyncAggregate: &ethpb.SyncAggregate{SyncCommitteeBits: scBits[:], SyncCommitteeSignature: make([]byte, 96)},
-				ExecutionPayload: &enginev1.ExecutionPayloadElectra{
+				ExecutionPayload: &enginev1.ExecutionPayloadDeneb{
 					ParentHash:    make([]byte, fieldparams.RootLength),
 					FeeRecipient:  make([]byte, fieldparams.FeeRecipientLength),
 					StateRoot:     make([]byte, fieldparams.RootLength),
@@ -646,7 +646,7 @@ func TestServer_GetBeaconBlock_Electra(t *testing.T) {
 	require.NoError(t, err)
 	timeStamp, err := slots.ToTime(beaconState.GenesisTime(), electraSlot+1)
 	require.NoError(t, err)
-	payload := &enginev1.ExecutionPayloadElectra{
+	payload := &enginev1.ExecutionPayloadDeneb{
 		Timestamp:     uint64(timeStamp.Unix()),
 		ParentHash:    make([]byte, fieldparams.RootLength),
 		FeeRecipient:  make([]byte, fieldparams.FeeRecipientLength),

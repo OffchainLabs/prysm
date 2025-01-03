@@ -13,14 +13,14 @@ import (
 // SetupDB instantiates and returns a DB instance for the validator client.
 // The `minimal` flag indicates whether the DB should be instantiated with minimal, filesystem
 // slashing protection database.
-func SetupDB(t testing.TB, pubkeys [][fieldparams.BLSPubkeyLength]byte, mimimal bool) iface.ValidatorDB {
+func SetupDB(t testing.TB, pubkeys [][fieldparams.BLSPubkeyLength]byte, minimal bool) iface.ValidatorDB {
 	var (
 		db  iface.ValidatorDB
 		err error
 	)
 
 	// Create a new DB instance.
-	if mimimal {
+	if minimal {
 		config := &filesystem.Config{PubKeys: pubkeys}
 		db, err = filesystem.NewStore(t.TempDir(), config)
 	} else {

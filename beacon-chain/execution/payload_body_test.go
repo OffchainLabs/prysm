@@ -17,14 +17,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
-type versioner struct {
-	version int
-}
-
-func (v versioner) Version() int {
-	return v.version
-}
-
 func payloadToBody(t *testing.T, ed interfaces.ExecutionData) *pb.ExecutionPayloadBody {
 	body := &pb.ExecutionPayloadBody{}
 	txs, err := ed.Transactions()

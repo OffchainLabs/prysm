@@ -96,7 +96,7 @@ func emptyGenesisStateElectra() (state.BeaconState, error) {
 		Eth1DataVotes:    []*ethpb.Eth1Data{},
 		Eth1DepositIndex: 0,
 
-		LatestExecutionPayloadHeader: &enginev1.ExecutionPayloadHeaderElectra{},
+		LatestExecutionPayloadHeader: &enginev1.ExecutionPayloadHeaderDeneb{},
 
 		DepositBalanceToConsume:       primitives.Gwei(0),
 		ExitBalanceToConsume:          primitives.Gwei(0),
@@ -226,7 +226,7 @@ func buildGenesisBeaconStateElectra(genesisTime uint64, preState state.BeaconSta
 			SyncCommitteeBits:      scBits[:],
 			SyncCommitteeSignature: make([]byte, 96),
 		},
-		ExecutionPayload: &enginev1.ExecutionPayloadElectra{
+		ExecutionPayload: &enginev1.ExecutionPayloadDeneb{
 			ParentHash:    make([]byte, 32),
 			FeeRecipient:  make([]byte, 20),
 			StateRoot:     make([]byte, 32),
@@ -273,7 +273,7 @@ func buildGenesisBeaconStateElectra(genesisTime uint64, preState state.BeaconSta
 		AggregatePubkey: aggregated.Marshal(),
 	}
 
-	st.LatestExecutionPayloadHeader = &enginev1.ExecutionPayloadHeaderElectra{
+	st.LatestExecutionPayloadHeader = &enginev1.ExecutionPayloadHeaderDeneb{
 		ParentHash:       make([]byte, 32),
 		FeeRecipient:     make([]byte, 20),
 		StateRoot:        make([]byte, 32),

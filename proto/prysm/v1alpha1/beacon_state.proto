@@ -381,6 +381,10 @@ message BeaconStateDeneb {
   repeated HistoricalSummary historical_summaries = 11003 [(ethereum.eth.ext.ssz_max) = "16777216"];
 }
 
+// ----------------------------------------------------------------------------
+// Electra
+// ----------------------------------------------------------------------------
+
 message BeaconStateElectra {
   // Versioning [1001-2000]
   uint64 genesis_time = 1001;

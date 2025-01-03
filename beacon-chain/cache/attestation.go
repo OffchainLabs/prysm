@@ -53,7 +53,7 @@ func NewAttestationCache() *AttestationCache {
 //
 //   - For unaggregated attestations, it adds the attestation bit to attestation bits of the running aggregate,
 //     which is the first aggregate for the slot.
-//   - For aggregated attestations, it appends the attestation to the existng list of attestations for the slot.
+//   - For aggregated attestations, it appends the attestation to the existing list of attestations for the slot.
 func (c *AttestationCache) Add(att ethpb.Att) error {
 	if att.IsNil() {
 		log.Debug("Attempted to add a nil attestation to the attestation cache")
