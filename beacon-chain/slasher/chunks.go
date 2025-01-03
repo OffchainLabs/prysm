@@ -233,8 +233,16 @@ func (m *MinSpanChunksSlice) CheckSlashable(
 
 	surroundingVotesTotal.Inc()
 
-	// Both attestations should have the same type
-	if existingAttWrapper.IndexedAttestation.Version() >= version.Electra && incomingAttWrapper.IndexedAttestation.Version() < version.Electra {
+	// Both attestations should have the same type. If not, we convert both to Electra attestations.
+	if existingAttWrapper.IndexedAttestation.Version() != incomingAttWrapper.IndexedAttestation.Version() {
+		existingAttWrapper = &slashertypes.IndexedAttestationWrapper{
+			IndexedAttestation: &ethpb.IndexedAttestationElectra{
+				AttestingIndices: existingAttWrapper.IndexedAttestation.GetAttestingIndices(),
+				Data:             existingAttWrapper.IndexedAttestation.GetData(),
+				Signature:        existingAttWrapper.IndexedAttestation.GetSignature(),
+			},
+			DataRoot: existingAttWrapper.DataRoot,
+		}
 		incomingAttWrapper = &slashertypes.IndexedAttestationWrapper{
 			IndexedAttestation: &ethpb.IndexedAttestationElectra{
 				AttestingIndices: incomingAttWrapper.IndexedAttestation.GetAttestingIndices(),
@@ -244,26 +252,24 @@ func (m *MinSpanChunksSlice) CheckSlashable(
 			DataRoot: incomingAttWrapper.DataRoot,
 		}
 	}
-	if incomingAttWrapper.IndexedAttestation.Version() >= version.Electra && existingAttWrapper.IndexedAttestation.Version() < version.Electra {
-		existingAttWrapper = &slashertypes.IndexedAttestationWrapper{
-			IndexedAttestation: &ethpb.IndexedAttestationElectra{
-				AttestingIndices: existingAttWrapper.IndexedAttestation.GetAttestingIndices(),
-				Data:             existingAttWrapper.IndexedAttestation.GetData(),
-				Signature:        existingAttWrapper.IndexedAttestation.GetSignature(),
-			},
-			DataRoot: existingAttWrapper.DataRoot,
-		}
-	}
 
-	postElectra := incomingAttWrapper.IndexedAttestation.Version() >= version.Electra
+	postElectra := existingAttWrapper.IndexedAttestation.Version() >= version.Electra
 	if postElectra {
 		existing, ok := existingAttWrapper.IndexedAttestation.(*ethpb.IndexedAttestationElectra)
 		if !ok {
-			return nil, fmt.Errorf("wrong existing attestation type (expected %T, got %T)", &ethpb.IndexedAttestationElectra{}, existing)
+			return nil, fmt.Errorf(
+				"existing attestation has wrong type (expected %T, got %T)",
+				&ethpb.IndexedAttestationElectra{},
+				existingAttWrapper.IndexedAttestation,
+			)
 		}
 		incoming, ok := incomingAttWrapper.IndexedAttestation.(*ethpb.IndexedAttestationElectra)
 		if !ok {
-			return nil, fmt.Errorf("wrong incoming attestation type (expected %T, got %T)", &ethpb.IndexedAttestationElectra{}, incoming)
+			return nil, fmt.Errorf(
+				"incoming attestation has wrong type (expected %T, got %T)",
+				&ethpb.IndexedAttestationElectra{},
+				incomingAttWrapper.IndexedAttestation,
+			)
 		}
 		slashing := &ethpb.AttesterSlashingElectra{
 			Attestation_1: existing,
@@ -377,8 +383,16 @@ func (m *MaxSpanChunksSlice) CheckSlashable(
 
 	surroundedVotesTotal.Inc()
 
-	// Both attestations should have the same type
-	if existingAttWrapper.IndexedAttestation.Version() >= version.Electra && incomingAttWrapper.IndexedAttestation.Version() < version.Electra {
+	// Both attestations should have the same type. If not, we convert both to Electra attestations.
+	if existingAttWrapper.IndexedAttestation.Version() != incomingAttWrapper.IndexedAttestation.Version() {
+		existingAttWrapper = &slashertypes.IndexedAttestationWrapper{
+			IndexedAttestation: &ethpb.IndexedAttestationElectra{
+				AttestingIndices: existingAttWrapper.IndexedAttestation.GetAttestingIndices(),
+				Data:             existingAttWrapper.IndexedAttestation.GetData(),
+				Signature:        existingAttWrapper.IndexedAttestation.GetSignature(),
+			},
+			DataRoot: existingAttWrapper.DataRoot,
+		}
 		incomingAttWrapper = &slashertypes.IndexedAttestationWrapper{
 			IndexedAttestation: &ethpb.IndexedAttestationElectra{
 				AttestingIndices: incomingAttWrapper.IndexedAttestation.GetAttestingIndices(),
@@ -388,26 +402,24 @@ func (m *MaxSpanChunksSlice) CheckSlashable(
 			DataRoot: incomingAttWrapper.DataRoot,
 		}
 	}
-	if incomingAttWrapper.IndexedAttestation.Version() >= version.Electra && existingAttWrapper.IndexedAttestation.Version() < version.Electra {
-		existingAttWrapper = &slashertypes.IndexedAttestationWrapper{
-			IndexedAttestation: &ethpb.IndexedAttestationElectra{
-				AttestingIndices: existingAttWrapper.IndexedAttestation.GetAttestingIndices(),
-				Data:             existingAttWrapper.IndexedAttestation.GetData(),
-				Signature:        existingAttWrapper.IndexedAttestation.GetSignature(),
-			},
-			DataRoot: existingAttWrapper.DataRoot,
-		}
-	}
 
-	postElectra := incomingAttWrapper.IndexedAttestation.Version() >= version.Electra
+	postElectra := existingAttWrapper.IndexedAttestation.Version() >= version.Electra
 	if postElectra {
 		existing, ok := existingAttWrapper.IndexedAttestation.(*ethpb.IndexedAttestationElectra)
 		if !ok {
-			return nil, fmt.Errorf("wrong existing attestation type (expected %T, got %T)", &ethpb.IndexedAttestationElectra{}, existing)
+			return nil, fmt.Errorf(
+				"existing attestation has wrong type (expected %T, got %T)",
+				&ethpb.IndexedAttestationElectra{},
+				existingAttWrapper.IndexedAttestation,
+			)
 		}
 		incoming, ok := incomingAttWrapper.IndexedAttestation.(*ethpb.IndexedAttestationElectra)
 		if !ok {
-			return nil, fmt.Errorf("wrong incoming attestation type (expected %T, got %T)", &ethpb.IndexedAttestationElectra{}, incoming)
+			return nil, fmt.Errorf(
+				"incoming attestation has wrong type (expected %T, got %T)",
+				&ethpb.IndexedAttestationElectra{},
+				incomingAttWrapper.IndexedAttestation,
+			)
 		}
 		slashing := &ethpb.AttesterSlashingElectra{
 			Attestation_1: existing,

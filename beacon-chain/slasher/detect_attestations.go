@@ -196,8 +196,16 @@ func (s *Service) checkDoubleVotes(
 
 			var slashing ethpb.AttSlashing
 
-			// Both attestations should have the same type
-			if existingAttWrapper.IndexedAttestation.Version() >= version.Electra && incomingAttWrapper.IndexedAttestation.Version() < version.Electra {
+			// Both attestations should have the same type. If not, we convert both to Electra attestations.
+			if existingAttWrapper.IndexedAttestation.Version() != incomingAttWrapper.IndexedAttestation.Version() {
+				existingAttWrapper = &slashertypes.IndexedAttestationWrapper{
+					IndexedAttestation: &ethpb.IndexedAttestationElectra{
+						AttestingIndices: existingAttWrapper.IndexedAttestation.GetAttestingIndices(),
+						Data:             existingAttWrapper.IndexedAttestation.GetData(),
+						Signature:        existingAttWrapper.IndexedAttestation.GetSignature(),
+					},
+					DataRoot: existingAttWrapper.DataRoot,
+				}
 				incomingAttWrapper = &slashertypes.IndexedAttestationWrapper{
 					IndexedAttestation: &ethpb.IndexedAttestationElectra{
 						AttestingIndices: incomingAttWrapper.IndexedAttestation.GetAttestingIndices(),
@@ -207,26 +215,24 @@ func (s *Service) checkDoubleVotes(
 					DataRoot: incomingAttWrapper.DataRoot,
 				}
 			}
-			if incomingAttWrapper.IndexedAttestation.Version() >= version.Electra && existingAttWrapper.IndexedAttestation.Version() < version.Electra {
-				existingAttWrapper = &slashertypes.IndexedAttestationWrapper{
-					IndexedAttestation: &ethpb.IndexedAttestationElectra{
-						AttestingIndices: existingAttWrapper.IndexedAttestation.GetAttestingIndices(),
-						Data:             existingAttWrapper.IndexedAttestation.GetData(),
-						Signature:        existingAttWrapper.IndexedAttestation.GetSignature(),
-					},
-					DataRoot: existingAttWrapper.DataRoot,
-				}
-			}
 
-			postElectra := incomingAttWrapper.IndexedAttestation.Version() >= version.Electra
+			postElectra := existingAttWrapper.IndexedAttestation.Version() >= version.Electra
 			if postElectra {
 				existing, ok := existingAttWrapper.IndexedAttestation.(*ethpb.IndexedAttestationElectra)
 				if !ok {
-					return nil, fmt.Errorf("wrong existing attestation type (expected %T, got %T)", &ethpb.IndexedAttestationElectra{}, existing)
+					return nil, fmt.Errorf(
+						"existing attestation has wrong type (expected %T, got %T)",
+						&ethpb.IndexedAttestationElectra{},
+						existingAttWrapper.IndexedAttestation,
+					)
 				}
 				incoming, ok := incomingAttWrapper.IndexedAttestation.(*ethpb.IndexedAttestationElectra)
 				if !ok {
-					return nil, fmt.Errorf("wrong incoming attestation type (expected %T, got %T)", &ethpb.IndexedAttestationElectra{}, incoming)
+					return nil, fmt.Errorf(
+						"incoming attestation has wrong type (expected %T, got %T)",
+						&ethpb.IndexedAttestationElectra{},
+						incomingAttWrapper.IndexedAttestation,
+					)
 				}
 				slashing = &ethpb.AttesterSlashingElectra{
 					Attestation_1: existing,
@@ -295,8 +301,16 @@ func (s *Service) checkDoubleVotes(
 
 		var slashing ethpb.AttSlashing
 
-		// Both attestations should have the same type
-		if wrapper_1.IndexedAttestation.Version() >= version.Electra && wrapper_2.IndexedAttestation.Version() < version.Electra {
+		// Both attestations should have the same type. If not, we convert both to Electra attestations.
+		if wrapper_1.IndexedAttestation.Version() != wrapper_2.IndexedAttestation.Version() {
+			wrapper_1 = &slashertypes.IndexedAttestationWrapper{
+				IndexedAttestation: &ethpb.IndexedAttestationElectra{
+					AttestingIndices: wrapper_1.IndexedAttestation.GetAttestingIndices(),
+					Data:             wrapper_1.IndexedAttestation.GetData(),
+					Signature:        wrapper_1.IndexedAttestation.GetSignature(),
+				},
+				DataRoot: wrapper_1.DataRoot,
+			}
 			wrapper_2 = &slashertypes.IndexedAttestationWrapper{
 				IndexedAttestation: &ethpb.IndexedAttestationElectra{
 					AttestingIndices: wrapper_2.IndexedAttestation.GetAttestingIndices(),
@@ -306,37 +320,35 @@ func (s *Service) checkDoubleVotes(
 				DataRoot: wrapper_2.DataRoot,
 			}
 		}
-		if wrapper_2.IndexedAttestation.Version() >= version.Electra && wrapper_1.IndexedAttestation.Version() < version.Electra {
-			wrapper_1 = &slashertypes.IndexedAttestationWrapper{
-				IndexedAttestation: &ethpb.IndexedAttestationElectra{
-					AttestingIndices: wrapper_1.IndexedAttestation.GetAttestingIndices(),
-					Data:             wrapper_1.IndexedAttestation.GetData(),
-					Signature:        wrapper_1.IndexedAttestation.GetSignature(),
-				},
-				DataRoot: wrapper_1.DataRoot,
-			}
-		}
 
-		postElectra := wrapper_2.IndexedAttestation.Version() >= version.Electra
+		postElectra := wrapper_1.IndexedAttestation.Version() >= version.Electra
 		if postElectra {
-			existing, ok := wrapper_1.IndexedAttestation.(*ethpb.IndexedAttestationElectra)
+			att_1, ok := wrapper_1.IndexedAttestation.(*ethpb.IndexedAttestationElectra)
 			if !ok {
-				return nil, fmt.Errorf("wrong existing attestation type (expected %T, got %T)", &ethpb.IndexedAttestationElectra{}, existing)
+				return nil, fmt.Errorf(
+					"first attestation has wrong type (expected %T, got %T)",
+					&ethpb.IndexedAttestationElectra{},
+					wrapper_1.IndexedAttestation,
+				)
 			}
-			incoming, ok := wrapper_2.IndexedAttestation.(*ethpb.IndexedAttestationElectra)
+			att_2, ok := wrapper_2.IndexedAttestation.(*ethpb.IndexedAttestationElectra)
 			if !ok {
-				return nil, fmt.Errorf("wrong incoming attestation type (expected %T, got %T)", &ethpb.IndexedAttestationElectra{}, incoming)
+				return nil, fmt.Errorf(
+					"second attestation has wrong type (expected %T, got %T)",
+					&ethpb.IndexedAttestationElectra{},
+					wrapper_2.IndexedAttestation,
+				)
 			}
 			slashing = &ethpb.AttesterSlashingElectra{
-				Attestation_1: existing,
-				Attestation_2: incoming,
+				Attestation_1: att_1,
+				Attestation_2: att_2,
 			}
 
 			// Ensure the attestation with the lower data root is the first attestation.
 			if bytes.Compare(wrapper_1.DataRoot[:], wrapper_2.DataRoot[:]) > 0 {
 				slashing = &ethpb.AttesterSlashingElectra{
-					Attestation_1: incoming,
-					Attestation_2: existing,
+					Attestation_1: att_2,
+					Attestation_2: att_1,
 				}
 			}
 		} else {
