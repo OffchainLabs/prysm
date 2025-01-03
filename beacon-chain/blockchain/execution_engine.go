@@ -413,7 +413,6 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 			PrevRandao:            prevRando,
 			SuggestedFeeRecipient: val.FeeRecipient[:],
 		})
-
 		if err != nil {
 			log.WithError(err).Error("Could not get payload attribute")
 			return emptyAttri
