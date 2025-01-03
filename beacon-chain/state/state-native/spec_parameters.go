@@ -26,7 +26,7 @@ func (b *BeaconState) InactivityPenaltyQuotient() (uint64, error) {
 		return params.BeaconConfig().InactivityPenaltyQuotientBellatrix, nil
 	}
 
-	if b.version == version.Altair {
+	if b.version >= version.Altair {
 		return params.BeaconConfig().InactivityPenaltyQuotientAltair, nil
 	}
 
