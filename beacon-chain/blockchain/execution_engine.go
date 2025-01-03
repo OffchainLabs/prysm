@@ -421,7 +421,7 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 		return attr
 	}
 
-	log.WithField("version", st.Version()).Error("Could not get payload attribute due to unknown state version")
+	log.WithField("version", version.String(st.Version())).Error("Could not get payload attribute due to unknown state version")
 	return emptyAttri
 }
 

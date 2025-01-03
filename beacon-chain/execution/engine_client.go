@@ -701,7 +701,7 @@ func fullPayloadFromPayloadBody(
 		})
 	}
 
-	return nil, fmt.Errorf("unknown execution block version for payload %d", bVersion)
+	return nil, fmt.Errorf("unknown execution block version for payload %s", version.String(bVersion))
 }
 
 // Handles errors received from the RPC server according to the specification.

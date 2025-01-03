@@ -38,6 +38,6 @@ func SlashingParamsPerVersion(v int) (slashingQuotient, proposerRewardQuotient, 
 		return
 	}
 
-	err = errors.New("unknown state version")
+	err = errors.Errorf("unknown state version %s", version.String(v))
 	return
 }
