@@ -18,7 +18,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	v1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	logTest "github.com/sirupsen/logrus/hooks/test"
@@ -159,7 +158,7 @@ func createState(
 		BlockRoots:                 make([][]byte, 1),
 		CurrentJustifiedCheckpoint: justified,
 		FinalizedCheckpoint:        finalized,
-		LatestExecutionPayloadHeader: &v1.ExecutionPayloadHeader{
+		LatestExecutionPayloadHeader: &enginev1.ExecutionPayloadHeader{
 			BlockHash: payloadHash[:],
 		},
 		LatestBlockHeader: &ethpb.BeaconBlockHeader{

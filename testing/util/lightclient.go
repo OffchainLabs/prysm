@@ -15,7 +15,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/encoding/ssz"
 	v11 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	pb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
@@ -894,7 +893,7 @@ func (l *TestLightClient) CheckAttestedHeader(header interfaces.LightClientHeade
 	}
 }
 
-func (l *TestLightClient) CheckSyncAggregate(sa *pb.SyncAggregate) {
+func (l *TestLightClient) CheckSyncAggregate(sa *ethpb.SyncAggregate) {
 	syncAggregate, err := l.Block.Block().Body().SyncAggregate()
 	require.NoError(l.T, err)
 	require.DeepSSZEqual(l.T, syncAggregate.SyncCommitteeBits, sa.SyncCommitteeBits, "SyncAggregate bits is not equal")
