@@ -378,7 +378,6 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 			Withdrawals:           withdrawals,
 			ParentBeaconBlockRoot: headRoot,
 		})
-
 		if err != nil {
 			log.WithError(err).Error("Could not get payload attribute")
 			return emptyAttri
