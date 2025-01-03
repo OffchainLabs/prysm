@@ -10,7 +10,7 @@ func (b *BeaconState) ProportionalSlashingMultiplier() (uint64, error) {
 		return params.BeaconConfig().ProportionalSlashingMultiplierBellatrix, nil
 	}
 
-	if b.version == version.Altair {
+	if b.version >= version.Altair {
 		return params.BeaconConfig().ProportionalSlashingMultiplierAltair, nil
 	}
 
