@@ -1141,7 +1141,7 @@ func HydrateBeaconBlockBodyElectra(b *ethpb.BeaconBlockBodyElectra) *ethpb.Beaco
 	return b
 }
 
-// HydrateExecutionRequests fills the exectution requests with the correct field
+// HydrateExecutionRequests fills the execution requests with the correct field
 // lengths
 func HydrateExecutionRequests(e *enginev1.ExecutionRequests) *enginev1.ExecutionRequests {
 	if e == nil {
