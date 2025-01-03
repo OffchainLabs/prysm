@@ -14,7 +14,7 @@ func (b *BeaconState) ProportionalSlashingMultiplier() (uint64, error) {
 		return params.BeaconConfig().ProportionalSlashingMultiplierAltair, nil
 	}
 
-	if b.version == version.Phase0 {
+	if b.version >= version.Phase0 {
 		return params.BeaconConfig().ProportionalSlashingMultiplier, nil
 	}
 
