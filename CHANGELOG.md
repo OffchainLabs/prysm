@@ -34,7 +34,6 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Updated Electra spec definition for `process_epoch`.
 - Update our `go-libp2p-pubsub` dependency.
 
-
 ### Deprecated
 
 
