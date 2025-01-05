@@ -852,30 +852,30 @@ func encodeBlock(blk interfaces.ReadOnlySignedBeaconBlock) ([]byte, error) {
 
 func keyForBlock(blk interfaces.ReadOnlySignedBeaconBlock) ([]byte, error) {
 	switch blk.Version() {
-	case version.Electra:
-		if blk.IsBlinded() {
-			return electraBlindKey, nil
-		}
-		return electraKey, nil
-	case version.Deneb:
-		if blk.IsBlinded() {
-			return denebBlindKey, nil
-		}
-		return denebKey, nil
-	case version.Capella:
-		if blk.IsBlinded() {
-			return capellaBlindKey, nil
-		}
-		return capellaKey, nil
+	case version.Phase0:
+		return nil, nil
+	case version.Altair:
+		return altairKey, nil
 	case version.Bellatrix:
 		if blk.IsBlinded() {
 			return bellatrixBlindKey, nil
 		}
 		return bellatrixKey, nil
-	case version.Altair:
-		return altairKey, nil
-	case version.Phase0:
-		return nil, nil
+	case version.Capella:
+		if blk.IsBlinded() {
+			return capellaBlindKey, nil
+		}
+		return capellaKey, nil
+	case version.Deneb:
+		if blk.IsBlinded() {
+			return denebBlindKey, nil
+		}
+		return denebKey, nil
+	case version.Electra:
+		if blk.IsBlinded() {
+			return electraBlindKey, nil
+		}
+		return electraKey, nil
 	default:
 		return nil, fmt.Errorf("unsupported block version: %v", blk.Version())
 	}

@@ -1081,13 +1081,13 @@ func (s *Server) validateConsensus(ctx context.Context, b *eth.GenericSignedBeac
 
 	var blobs [][]byte
 	var proofs [][]byte
-	switch {
-	case blk.Version() == version.Electra:
-		blobs = b.GetElectra().Blobs
-		proofs = b.GetElectra().KzgProofs
-	case blk.Version() == version.Deneb:
+	switch blk.Version() {
+	case version.Deneb:
 		blobs = b.GetDeneb().Blobs
 		proofs = b.GetDeneb().KzgProofs
+	case version.Electra:
+		blobs = b.GetElectra().Blobs
+		proofs = b.GetElectra().KzgProofs
 	default:
 		return nil
 	}
