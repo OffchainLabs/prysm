@@ -303,35 +303,3 @@ func keyForLightClientUpdate(v int) ([]byte, error) {
 		return nil, fmt.Errorf("unsupported light client update version %s", version.String(v))
 	}
 }
-
-func (s *Store) saveLightClientSyncCommittee(ctx context.Context, hash []byte, syncCommittee *ethpb.SyncCommittee) error {
-	_, span := trace.StartSpan(ctx, "BeaconDB.saveLightClientSyncCommittee")
-	defer span.End()
-
-	return s.db.Update(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(lightClientSyncCommitteeBucket)
-		enc, err := syncCommittee.MarshalSSZ()
-		if err != nil {
-			return err
-		}
-		return bkt.Put(hash, enc)
-	})
-}
-
-func (s *Store) getLightClientSyncCommittee(ctx context.Context, hash []byte) (*ethpb.SyncCommittee, error) {
-	_, span := trace.StartSpan(ctx, "BeaconDB.getLightClientSyncCommittee")
-	defer span.End()
-
-	var syncCommittee *ethpb.SyncCommittee
-	err := s.db.View(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(lightClientSyncCommitteeBucket)
-		enc := bkt.Get(hash)
-		if enc == nil {
-			return nil
-		}
-		var err error
-		err = syncCommittee.UnmarshalSSZ(enc)
-		return err
-	})
-	return syncCommittee, err
-}
