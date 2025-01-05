@@ -335,16 +335,3 @@ func (s *Store) getLightClientSyncCommittee(ctx context.Context, hash []byte) (*
 	})
 	return syncCommittee, err
 }
-
-func (s *Store) syncCommitteeExists(ctx context.Context, hash []byte) (bool, error) {
-	_, span := trace.StartSpan(ctx, "BeaconDB.syncCommitteeExists")
-	defer span.End()
-
-	var exists bool
-	err := s.db.View(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(lightClientSyncCommitteeBucket)
-		exists = bkt.Get(hash) != nil
-		return nil
-	})
-	return exists, err
-}
