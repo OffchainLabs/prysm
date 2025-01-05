@@ -18,6 +18,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Add field param placeholder for Electra blob target and max to pass spec tests.
 - Add EIP-7691: Blob throughput increase.
 - SSZ files generation: Remove the `// Hash: ...` header.
+- DB optimization for saving light client bootstraps (save unique sync committees only).
 
 ### Changed
 
@@ -38,7 +39,6 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ### Deprecated
 
-
 ### Removed
 
 - Cleanup ProcessSlashings method to remove unnecessary argument.
@@ -46,7 +46,8 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ### Fixed
 
-- Added check to prevent nil pointer deference or out of bounds array access when validating the BLSToExecutionChange on an impossibly nil validator.
+- Added check to prevent nil pointer deference or out of bounds array access when validating the BLSToExecutionChange on
+  an impossibly nil validator.
 - EIP-7691: Ensure new blobs subnets are subscribed on epoch in advance.
 
 ### Security
@@ -61,14 +62,18 @@ Without upgrading to this release, validator clients will default to using local
 when the gas limit starts to increase.
 
 This release has several fixes and new features. In this release, we have enabled QUIC protocol by
-default, which uses port 13000 for `--p2p-quic-port`. This may be a [breaking change](https://github.com/prysmaticlabs/prysm/pull/14688#issuecomment-2516713826)
+default, which uses port 13000 for `--p2p-quic-port`. This may be
+a [breaking change](https://github.com/prysmaticlabs/prysm/pull/14688#issuecomment-2516713826)
 if you're using port 13000 already. This release has some improvements for raising the gas limit,
 but there are [known issues](https://hackmd.io/@ttsao/prysm-gas-limit) with the proposer settings
 file provided gas limit not being respected for mev-boost outsourced blocks. Signalling an increase
-for the gas limit works perfectly for local block production as of this release. See [pumpthegas.org](https://pumpthegas.org) for more info on raising the gas limit on L1.
+for the gas limit works perfectly for local block production as of this release.
+See [pumpthegas.org](https://pumpthegas.org) for more info on raising the gas limit on L1.
 
 Notable features:
-- Prysm can reuse blobs from the EL via engine_getBlobsV1, [potentially saving bandwidth](https://hackmd.io/@ttsao/get-blobs-early-results).
+
+- Prysm can reuse blobs from the EL via
+  engine_getBlobsV1, [potentially saving bandwidth](https://hackmd.io/@ttsao/get-blobs-early-results).
 - QUIC is enabled by default. This is a UDP based networking protocol with default port 13000.
 
 ### Added
@@ -91,7 +96,8 @@ Notable features:
 - Validator REST mode Electra block support.
 - Added validator index label to `validator_statuses` metric.
 - Added Validator REST mode use of Attestation V2 endpoints and Electra attestations.
-- PeerDAS: Added proto for `DataColumnIdentifier`, `DataColumnSidecar`, `DataColumnSidecarsByRangeRequest` and `MetadataV2`.
+- PeerDAS: Added proto for `DataColumnIdentifier`, `DataColumnSidecar`, `DataColumnSidecarsByRangeRequest`
+  and `MetadataV2`.
 - Better attestation packing for Electra. [PR](https://github.com/prysmaticlabs/prysm/pull/14534)
 - P2P: Add logs when a peer is (dis)connected. Add the reason of the disconnection when we initiate it.
 - Added a Prometheus error counter metric for HTTP requests to track beacon node requests.
@@ -104,25 +110,28 @@ Notable features:
 ### Changed
 
 - Electra EIP6110: Queue deposit requests changes from consensus spec pr #3818
-- reversed the boolean return on `BatchVerifyDepositsSignatures`, from need verification, to all keys successfully verified
+- reversed the boolean return on `BatchVerifyDepositsSignatures`, from need verification, to all keys successfully
+  verified
 - Fix `engine_exchangeCapabilities` implementation.
 - Updated the default `scrape-interval` in `Client-stats` to 2 minutes to accommodate Beaconcha.in API rate limits.
 - Switch to compounding when consolidating with source==target.
 - Revert block db save when saving state fails.
-- Return false from HasBlock if the block is being synced. 
+- Return false from HasBlock if the block is being synced.
 - Cleanup forkchoice on failed insertions.
 - Use read only validator for core processing to avoid unnecessary copying.
 - Use ROBlock across block processing pipeline.
 - Added missing Eth-Consensus-Version headers to GetBlockAttestationsV2 and GetAttesterSlashingsV2 endpoints.
-- When instantiating new validators, explicit set `Slashed` to false and move `EffectiveBalance` to match struct definition.
+- When instantiating new validators, explicit set `Slashed` to false and move `EffectiveBalance` to match struct
+  definition.
 - Updated pgo profile for beacon chain with holesky data. This improves the profile guided
   optimizations in the go compiler.
 - Use read only state when computing the active validator list.
 - Simplified `ExitedValidatorIndices`.
 - Simplified `EjectedValidatorIndices`.
-- `engine_newPayloadV4`,`engine_getPayloadV4` are changes due to new execution request serialization decisions, [PR](https://github.com/prysmaticlabs/prysm/pull/14580)
+- `engine_newPayloadV4`,`engine_getPayloadV4` are changes due to new execution request serialization
+  decisions, [PR](https://github.com/prysmaticlabs/prysm/pull/14580)
 - Fixed various small things in state-native code.
-- Use ROBlock earlier in block syncing pipeline. 
+- Use ROBlock earlier in block syncing pipeline.
 - Changed the signature of `ProcessPayload`.
 - Only Build the Protobuf state once during serialization.
 - Capella blocks are execution.
@@ -137,7 +146,8 @@ Notable features:
 - Update earliest exit epoch for upgrade to electra
 - Add missed exit checks to consolidation processing
 - Fixed pending deposits processing on Electra.
-- Modified `ListAttestationsV2`, `GetAttesterSlashingsV2` and `GetAggregateAttestationV2` endpoints to use slot to determine fork version.
+- Modified `ListAttestationsV2`, `GetAttesterSlashingsV2` and `GetAggregateAttestationV2` endpoints to use slot to
+  determine fork version.
 - Improvements to HTTP response handling. [pr](https://github.com/prysmaticlabs/prysm/pull/14673)
 - Updated `Blobs` endpoint to return additional metadata fields.
 - Made QUIC the default method to connect with peers.
@@ -147,30 +157,39 @@ Notable features:
 
 ### Deprecated
 
-- `/eth/v1alpha1/validator/activation/stream` grpc wait for activation stream is deprecated. [pr](https://github.com/prysmaticlabs/prysm/pull/14514)
-- `--interop-genesis-time` and `--interop-num-validators` have been deprecated in the beacon node as the functionality has been removed. These flags have no effect.
+- `/eth/v1alpha1/validator/activation/stream` grpc wait for activation stream is
+  deprecated. [pr](https://github.com/prysmaticlabs/prysm/pull/14514)
+- `--interop-genesis-time` and `--interop-num-validators` have been deprecated in the beacon node as the functionality
+  has been removed. These flags have no effect.
 
 ### Removed
 
 - Removed finalized validator index cache, no longer needed.
 - Removed validator queue position log on key reload and wait for activation.
 - Removed outdated spectest exclusions for EIP-6110.
-- Removed support for starting a beacon node with a deterministic interop genesis state via interop flags. Alternatively, create a genesis state with prysmctl and use `--genesis-state`. This removes about 9Mb (~11%) of unnecessary code and dependencies from the final production binary.
+- Removed support for starting a beacon node with a deterministic interop genesis state via interop flags.
+  Alternatively, create a genesis state with prysmctl and use `--genesis-state`. This removes about 9Mb (~11%) of
+  unnecessary code and dependencies from the final production binary.
 - Removed kzg proof check from blob reconstructor.
 
 ### Fixed
 
 - Fixed mesh size by appending `gParams.Dhi = gossipSubDhi`
 - Fix skipping partial withdrawals count.
-- wait for the async StreamEvent writer to exit before leaving the http handler, avoiding race condition panics [pr](https://github.com/prysmaticlabs/prysm/pull/14557)
+- wait for the async StreamEvent writer to exit before leaving the http handler, avoiding race condition
+  panics [pr](https://github.com/prysmaticlabs/prysm/pull/14557)
 - Certain deb files were returning a 404 which made building new docker images without an existing
   cache impossible. This has been fixed with updates to rules_oci and bazel-lib.
-- Fixed an issue where the length check between block body KZG commitments and the existing cache from the database was incompatible.
-- Fix `--backfill-oldest-slot` handling - this flag was totally broken, the code would always backfill to the default slot [pr](https://github.com/prysmaticlabs/prysm/pull/14584)
+- Fixed an issue where the length check between block body KZG commitments and the existing cache from the database was
+  incompatible.
+- Fix `--backfill-oldest-slot` handling - this flag was totally broken, the code would always backfill to the default
+  slot [pr](https://github.com/prysmaticlabs/prysm/pull/14584)
 - Fix keymanager API should return corrected error format for malformed tokens
-- Fix keymanager API so that get keys returns an empty response instead of a 500 error when using an unsupported keystore.
+- Fix keymanager API so that get keys returns an empty response instead of a 500 error when using an unsupported
+  keystore.
 - Small log improvement, removing some redundant or duplicate logs
-- EIP7521 - Fixes withdrawal bug by accounting for pending partial withdrawals and deducting already withdrawn amounts from the sweep balance. [PR](https://github.com/prysmaticlabs/prysm/pull/14578)
+- EIP7521 - Fixes withdrawal bug by accounting for pending partial withdrawals and deducting already withdrawn amounts
+  from the sweep balance. [PR](https://github.com/prysmaticlabs/prysm/pull/14578)
 - unskip electra merkle spec test
 - Fix panic in validator REST mode when checking status after removing all keys
 - Fix panic on attestation interface since we call data before validation
@@ -182,15 +201,16 @@ Notable features:
 - Fixed another rollback bug due to a context deadline.
 - Fix checkpoint sync bug on holesky. [pr](https://github.com/prysmaticlabs/prysm/pull/14689)
 - Fix proposer boost spec tests being flakey by adjusting start time from 3 to 2s into slot.
-- Fix segmentation fault in E2E when light-client feature flag is enabled. [PR](https://github.com/prysmaticlabs/prysm/pull/14699)
+- Fix segmentation fault in E2E when light-client feature flag is
+  enabled. [PR](https://github.com/prysmaticlabs/prysm/pull/14699)
 - Fix `searchForPeers` infinite loop in small networks.
 - Fix slashing pool behavior to enforce MaxAttesterSlashings limit in Electra version.
 
 ### Security
 
-## [v5.1.2](https://github.com/prysmaticlabs/prysm/compare/v5.1.1...v5.1.2) - 2024-10-16 
+## [v5.1.2](https://github.com/prysmaticlabs/prysm/compare/v5.1.1...v5.1.2) - 2024-10-16
 
-This is a hotfix release with one change. 
+This is a hotfix release with one change.
 
 Prysm v5.1.1 contains an updated implementation of the beacon api streaming events endpoint. This
 new implementation contains a bug that can cause a panic in certain conditions. The issue is
@@ -202,20 +222,20 @@ prysm REST mode validator (a feature which requires the validator to be configur
 api instead of prysm's stock grpc endpoints) or accessory software that connects to the events api,
 like https://github.com/ethpandaops/ethereum-metrics-exporter
 
-### Fixed 
+### Fixed
 
 - Recover from panics when writing the event stream [#14545](https://github.com/prysmaticlabs/prysm/pull/14545)
 
 ## [v5.1.1](https://github.com/prysmaticlabs/prysm/compare/v5.1.0...v5.1.1) - 2024-10-15
 
-This release has a number of features and improvements. Most notably, the feature flag 
-`--enable-experimental-state` has been flipped to "opt out" via `--disable-experimental-state`. 
+This release has a number of features and improvements. Most notably, the feature flag
+`--enable-experimental-state` has been flipped to "opt out" via `--disable-experimental-state`.
 The experimental state management design has shown significant improvements in memory usage at
 runtime. Updates to libp2p's gossipsub have some bandwidith stability improvements with support for
-IDONTWANT control messages. 
+IDONTWANT control messages.
 
 The gRPC gateway has been deprecated from Prysm in this release. If you need JSON data, consider the
-standardized beacon-APIs. 
+standardized beacon-APIs.
 
 Updating to this release is recommended at your convenience.
 
@@ -231,7 +251,8 @@ Updating to this release is recommended at your convenience.
 - GetBeaconStateV2: add Electra case.
 - Implement [consensus-specs/3875](https://github.com/ethereum/consensus-specs/pull/3875).
 - Tests to ensure sepolia config matches the official upstream yaml.
-- `engine_newPayloadV4`,`engine_getPayloadV4` used for electra payload communication with execution client.  [pr](https://github.com/prysmaticlabs/prysm/pull/14492)
+- `engine_newPayloadV4`,`engine_getPayloadV4` used for electra payload communication with execution
+  client.  [pr](https://github.com/prysmaticlabs/prysm/pull/14492)
 - HTTP endpoint for PublishBlobs.
 - GetBlockV2, GetBlindedBlock, ProduceBlockV2, ProduceBlockV3: add Electra case.
 - Add Electra support and tests for light client functions.
@@ -257,7 +278,8 @@ Updating to this release is recommended at your convenience.
 - `grpc-gateway-corsdomain` is renamed to http-cors-domain. The old name can still be used as an alias.
 - `api-timeout` is changed from int flag to duration flag, default value updated.
 - Light client support: abstracted out the light client headers with different versions.
-- `ApplyToEveryValidator` has been changed to prevent misuse bugs, it takes a closure that takes a `ReadOnlyValidator` and returns a raw pointer to a `Validator`. 
+- `ApplyToEveryValidator` has been changed to prevent misuse bugs, it takes a closure that takes a `ReadOnlyValidator`
+  and returns a raw pointer to a `Validator`.
 - Removed gorilla mux library and replaced it with net/http updates in go 1.22.
 - Clean up `ProposeBlock` for validator client to reduce cognitive scoring and enable further changes.
 - Updated k8s-io/client-go to v0.30.4 and k8s-io/apimachinery to v0.30.4
@@ -268,17 +290,20 @@ Updating to this release is recommended at your convenience.
 - Updated Sepolia bootnodes.
 - Make committee aware packing the default by deprecating `--enable-committee-aware-packing`.
 - Moved `ConvertKzgCommitmentToVersionedHash` to the `primitives` package.
-- Updated correlation penalty for EIP-7251. 
+- Updated correlation penalty for EIP-7251.
 
 ### Deprecated
+
 - `--disable-grpc-gateway` flag is deprecated due to grpc gateway removal.
-- `--enable-experimental-state` flag is deprecated. This feature is now on by default. Opt-out with `--disable-experimental-state`.
+- `--enable-experimental-state` flag is deprecated. This feature is now on by default. Opt-out
+  with `--disable-experimental-state`.
 
 ### Removed
 
 - Removed gRPC Gateway.
 - Removed unused blobs bundle cache.
-- Removed consolidation signing domain from params. The Electra design changed such that EL handles consolidation signature verification.
+- Removed consolidation signing domain from params. The Electra design changed such that EL handles consolidation
+  signature verification.
 - Remove engine_getPayloadBodiesBy{Hash|Range}V2
 
 ### Fixed
@@ -2914,7 +2939,7 @@ on your validators.
 **Beacon chain node**
 
 | Metric                                           | Description                                                                                           | References |
-| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------- | ---------- |
+|--------------------------------------------------|-------------------------------------------------------------------------------------------------------|------------|
 | `p2p_message_ignored_validation_total`           | Count of messages that were ignored in validation                                                     |            |
 | `beacon_current_active_validators`               | Current total active validators                                                                       |            |
 | `beacon_processed_deposits_total`                | Total number of deposits processed                                                                    |            |
@@ -2965,9 +2990,9 @@ on your validators.
 #### Changed Metrics
 
 **Beacon chain node**
-| Metric                | Old Name             | Description                                          | References |
+| Metric | Old Name | Description | References |
 | --------------------- | -------------------- | ---------------------------------------------------- | ---------- |
-| `beacon_reorgs_total` | `beacon_reorg_total` | Count the number of times a beacon chain has a reorg |            |
+| `beacon_reorgs_total` | `beacon_reorg_total` | Count the number of times a beacon chain has a reorg | |
 
 ### Deprecated
 

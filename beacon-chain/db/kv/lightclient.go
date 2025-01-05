@@ -88,6 +88,9 @@ func (s *Store) LightClientBootstrap(ctx context.Context, blockRoot []byte) (int
 		}
 		var err error
 		bootstrap, syncCommitteeHash, err = decodeLightClientBootstrap(enc)
+		if err != nil {
+			return errors.Wrap(err, "could not decode light client bootstrap")
+		}
 		var syncCommitteeBytes = syncCommitteeBucket.Get(syncCommitteeHash)
 		if syncCommitteeBytes == nil {
 			return errors.New("sync committee not found")
