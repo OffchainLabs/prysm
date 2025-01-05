@@ -19,13 +19,15 @@ type Att interface {
 	ssz.Unmarshaler
 	ssz.HashRoot
 	Version() int
+	IsNil() bool
+	IsAggregated() bool
 	Clone() Att
 	GetAggregationBits() bitfield.Bitlist
 	GetData() *AttestationData
 	CommitteeBitsVal() bitfield.Bitfield
 	GetSignature() []byte
+	SetSignature(sig []byte)
 	GetCommitteeIndex() (primitives.CommitteeIndex, error)
-	IsNil() bool
 }
 
 // IndexedAtt defines common functionality for all indexed attestation types.
@@ -113,6 +115,11 @@ func (a *Attestation) IsNil() bool {
 	return a == nil || a.Data == nil
 }
 
+// IsAggregated --
+func (a *Attestation) IsAggregated() bool {
+	return a.AggregationBits.Count() > 1
+}
+
 // Clone --
 func (a *Attestation) Clone() Att {
 	return a.Copy()
@@ -137,6 +144,11 @@ func (a *Attestation) CommitteeBitsVal() bitfield.Bitfield {
 	return cb
 }
 
+// SetSignature --
+func (a *Attestation) SetSignature(sig []byte) {
+	a.Signature = sig
+}
+
 // GetCommitteeIndex --
 func (a *Attestation) GetCommitteeIndex() (primitives.CommitteeIndex, error) {
 	if a == nil || a.Data == nil {
@@ -153,6 +165,11 @@ func (a *PendingAttestation) Version() int {
 // IsNil --
 func (a *PendingAttestation) IsNil() bool {
 	return a == nil || a.Data == nil
+}
+
+// IsAggregated --
+func (a *PendingAttestation) IsAggregated() bool {
+	return a.AggregationBits.Count() > 1
 }
 
 // Clone --
@@ -183,6 +200,9 @@ func (a *PendingAttestation) GetSignature() []byte {
 	return nil
 }
 
+// SetSignature --
+func (a *PendingAttestation) SetSignature(_ []byte) {}
+
 // GetCommitteeIndex --
 func (a *PendingAttestation) GetCommitteeIndex() (primitives.CommitteeIndex, error) {
 	if a == nil || a.Data == nil {
@@ -199,6 +219,11 @@ func (a *AttestationElectra) Version() int {
 // IsNil --
 func (a *AttestationElectra) IsNil() bool {
 	return a == nil || a.Data == nil
+}
+
+// IsAggregated --
+func (a *AttestationElectra) IsAggregated() bool {
+	return a.AggregationBits.Count() > 1
 }
 
 // Clone --
@@ -222,6 +247,11 @@ func (a *AttestationElectra) Copy() *AttestationElectra {
 // CommitteeBitsVal --
 func (a *AttestationElectra) CommitteeBitsVal() bitfield.Bitfield {
 	return a.CommitteeBits
+}
+
+// SetSignature --
+func (a *AttestationElectra) SetSignature(sig []byte) {
+	a.Signature = sig
 }
 
 // GetCommitteeIndex --

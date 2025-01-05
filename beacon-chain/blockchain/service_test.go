@@ -587,7 +587,7 @@ func (s *MockClockSetter) SetClock(g *startup.Clock) error {
 func TestNotifyIndex(t *testing.T) {
 	// Initialize a blobNotifierMap
 	bn := &blobNotifierMap{
-		seenIndex: make(map[[32]byte][fieldparams.MaxBlobsPerBlock]bool),
+		seenIndex: make(map[[32]byte][]bool),
 		notifiers: make(map[[32]byte]chan uint64),
 	}
 
@@ -596,7 +596,7 @@ func TestNotifyIndex(t *testing.T) {
 	copy(root[:], "exampleRoot")
 
 	// Test notifying a new index
-	bn.notifyIndex(root, 1)
+	bn.notifyIndex(root, 1, 1)
 	if !bn.seenIndex[root][1] {
 		t.Errorf("Index was not marked as seen")
 	}
@@ -607,13 +607,13 @@ func TestNotifyIndex(t *testing.T) {
 	}
 
 	// Test notifying an already seen index
-	bn.notifyIndex(root, 1)
+	bn.notifyIndex(root, 1, 1)
 	if len(bn.notifiers[root]) > 1 {
 		t.Errorf("Notifier channel should not receive multiple messages for the same index")
 	}
 
 	// Test notifying a new index again
-	bn.notifyIndex(root, 2)
+	bn.notifyIndex(root, 2, 1)
 	if !bn.seenIndex[root][2] {
 		t.Errorf("Index was not marked as seen")
 	}

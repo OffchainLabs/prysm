@@ -40,14 +40,17 @@ var (
 //	    process_justification_and_finalization(state)
 //	    process_inactivity_updates(state)
 //	    process_rewards_and_penalties(state)
-//	    process_registry_updates(state)
-//	    process_slashings(state)
+//	    process_registry_updates(state)  # [Modified in Electra:EIP7251]
+//	    process_slashings(state)  # [Modified in Electra:EIP7251]
 //	    process_eth1_data_reset(state)
-//	    process_pending_deposits(state)  # New in EIP7251
-//	    process_pending_consolidations(state)  # New in EIP7251
-//	    process_effective_balance_updates(state)
+//	    process_pending_deposits(state)  # [New in Electra:EIP7251]
+//	    process_pending_consolidations(state)  # [New in Electra:EIP7251]
+//	    process_effective_balance_updates(state)  # [Modified in Electra:EIP7251]
 //	    process_slashings_reset(state)
 //	    process_randao_mixes_reset(state)
+//	    process_historical_summaries_update(state)
+//	    process_participation_flag_updates(state)
+//	    process_sync_committee_updates(state)
 func ProcessEpoch(ctx context.Context, state state.BeaconState) error {
 	_, span := trace.StartSpan(ctx, "electra.ProcessEpoch")
 	defer span.End()
@@ -75,16 +78,10 @@ func ProcessEpoch(ctx context.Context, state state.BeaconState) error {
 	if err != nil {
 		return errors.Wrap(err, "could not process rewards and penalties")
 	}
-
 	if err := ProcessRegistryUpdates(ctx, state); err != nil {
 		return errors.Wrap(err, "could not process registry updates")
 	}
-
-	proportionalSlashingMultiplier, err := state.ProportionalSlashingMultiplier()
-	if err != nil {
-		return err
-	}
-	state, err = ProcessSlashings(state, proportionalSlashingMultiplier)
+	state, err = ProcessSlashings(state)
 	if err != nil {
 		return err
 	}
@@ -92,7 +89,6 @@ func ProcessEpoch(ctx context.Context, state state.BeaconState) error {
 	if err != nil {
 		return err
 	}
-
 	if err = ProcessPendingDeposits(ctx, state, primitives.Gwei(bp.ActiveCurrentEpoch)); err != nil {
 		return err
 	}
@@ -102,7 +98,6 @@ func ProcessEpoch(ctx context.Context, state state.BeaconState) error {
 	if err = ProcessEffectiveBalanceUpdates(state); err != nil {
 		return err
 	}
-
 	state, err = ProcessSlashingsReset(state)
 	if err != nil {
 		return err
@@ -115,17 +110,14 @@ func ProcessEpoch(ctx context.Context, state state.BeaconState) error {
 	if err != nil {
 		return err
 	}
-
 	state, err = ProcessParticipationFlagUpdates(state)
 	if err != nil {
 		return err
 	}
-
 	_, err = ProcessSyncCommitteeUpdates(ctx, state)
 	if err != nil {
 		return err
 	}
-
 	return nil
 }
 

@@ -17,7 +17,7 @@ func TestHashToG2(t *testing.T) {
 }
 
 func testHashToG2(t *testing.T) {
-	t.Skip("Hash To G2 needs co-ordinates exposed")
+	t.Skip("Hash To G2 needs coordinates exposed")
 	fNames, fContent := utils.RetrieveFiles("hash_to_G2", t)
 
 	for i, file := range fNames {

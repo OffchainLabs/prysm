@@ -13,7 +13,6 @@ import (
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v5/container/trie"
 	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
@@ -543,7 +542,7 @@ func (s *PremineGenesisConfig) setLatestBlockHeader(g state.BeaconState) error {
 				SyncCommitteeBits:      make([]byte, fieldparams.SyncCommitteeLength/8),
 				SyncCommitteeSignature: make([]byte, fieldparams.BLSSignatureLength),
 			},
-			ExecutionPayload: &enginev1.ExecutionPayloadElectra{
+			ExecutionPayload: &enginev1.ExecutionPayloadDeneb{
 				ParentHash:    make([]byte, 32),
 				FeeRecipient:  make([]byte, 20),
 				StateRoot:     make([]byte, 32),
@@ -581,74 +580,9 @@ func (s *PremineGenesisConfig) setLatestBlockHeader(g state.BeaconState) error {
 }
 
 func (s *PremineGenesisConfig) setExecutionPayload(g state.BeaconState) error {
-	if s.Version < version.Bellatrix {
-		return nil
-	}
-
 	gb := s.GB
 
-	var ed interfaces.ExecutionData
-	switch s.Version {
-	case version.Bellatrix:
-		payload := &enginev1.ExecutionPayload{
-			ParentHash:    gb.ParentHash().Bytes(),
-			FeeRecipient:  gb.Coinbase().Bytes(),
-			StateRoot:     gb.Root().Bytes(),
-			ReceiptsRoot:  gb.ReceiptHash().Bytes(),
-			LogsBloom:     gb.Bloom().Bytes(),
-			PrevRandao:    params.BeaconConfig().ZeroHash[:],
-			BlockNumber:   gb.NumberU64(),
-			GasLimit:      gb.GasLimit(),
-			GasUsed:       gb.GasUsed(),
-			Timestamp:     gb.Time(),
-			ExtraData:     gb.Extra()[:32],
-			BaseFeePerGas: bytesutil.PadTo(bytesutil.ReverseByteOrder(gb.BaseFee().Bytes()), fieldparams.RootLength),
-			BlockHash:     gb.Hash().Bytes(),
-			Transactions:  make([][]byte, 0),
-		}
-		wep, err := blocks.WrappedExecutionPayload(payload)
-		if err != nil {
-			return err
-		}
-		eph, err := blocks.PayloadToHeader(wep)
-		if err != nil {
-			return err
-		}
-		ed, err = blocks.WrappedExecutionPayloadHeader(eph)
-		if err != nil {
-			return err
-		}
-	case version.Capella:
-		payload := &enginev1.ExecutionPayloadCapella{
-			ParentHash:    gb.ParentHash().Bytes(),
-			FeeRecipient:  gb.Coinbase().Bytes(),
-			StateRoot:     gb.Root().Bytes(),
-			ReceiptsRoot:  gb.ReceiptHash().Bytes(),
-			LogsBloom:     gb.Bloom().Bytes(),
-			PrevRandao:    params.BeaconConfig().ZeroHash[:],
-			BlockNumber:   gb.NumberU64(),
-			GasLimit:      gb.GasLimit(),
-			GasUsed:       gb.GasUsed(),
-			Timestamp:     gb.Time(),
-			ExtraData:     gb.Extra()[:32],
-			BaseFeePerGas: bytesutil.PadTo(bytesutil.ReverseByteOrder(gb.BaseFee().Bytes()), fieldparams.RootLength),
-			BlockHash:     gb.Hash().Bytes(),
-			Transactions:  make([][]byte, 0),
-			Withdrawals:   make([]*enginev1.Withdrawal, 0),
-		}
-		wep, err := blocks.WrappedExecutionPayloadCapella(payload)
-		if err != nil {
-			return err
-		}
-		eph, err := blocks.PayloadToHeaderCapella(wep)
-		if err != nil {
-			return err
-		}
-		ed, err = blocks.WrappedExecutionPayloadHeaderCapella(eph)
-		if err != nil {
-			return err
-		}
-	case version.Deneb:
+	if s.Version >= version.Deneb {
 		payload := &enginev1.ExecutionPayloadDeneb{
 			ParentHash:    gb.ParentHash().Bytes(),
 			FeeRecipient:  gb.Coinbase().Bytes(),
@@ -668,20 +602,27 @@ func (s *PremineGenesisConfig) setExecutionPayload(g state.BeaconState) error {
 			ExcessBlobGas: unwrapUint64Ptr(gb.ExcessBlobGas()),
 			BlobGasUsed:   unwrapUint64Ptr(gb.BlobGasUsed()),
 		}
+
 		wep, err := blocks.WrappedExecutionPayloadDeneb(payload)
 		if err != nil {
 			return err
 		}
+
 		eph, err := blocks.PayloadToHeaderDeneb(wep)
 		if err != nil {
 			return err
 		}
-		ed, err = blocks.WrappedExecutionPayloadHeaderDeneb(eph)
+
+		ed, err := blocks.WrappedExecutionPayloadHeaderDeneb(eph)
 		if err != nil {
 			return err
 		}
-	case version.Electra:
-		payload := &enginev1.ExecutionPayloadElectra{
+
+		return g.SetLatestExecutionPayloadHeader(ed)
+	}
+
+	if s.Version >= version.Capella {
+		payload := &enginev1.ExecutionPayloadCapella{
 			ParentHash:    gb.ParentHash().Bytes(),
 			FeeRecipient:  gb.Coinbase().Bytes(),
 			StateRoot:     gb.Root().Bytes(),
@@ -697,25 +638,67 @@ func (s *PremineGenesisConfig) setExecutionPayload(g state.BeaconState) error {
 			BlockHash:     gb.Hash().Bytes(),
 			Transactions:  make([][]byte, 0),
 			Withdrawals:   make([]*enginev1.Withdrawal, 0),
-			ExcessBlobGas: *gb.ExcessBlobGas(),
-			BlobGasUsed:   *gb.BlobGasUsed(),
 		}
-		wep, err := blocks.WrappedExecutionPayloadElectra(payload)
+
+		wep, err := blocks.WrappedExecutionPayloadCapella(payload)
 		if err != nil {
 			return err
 		}
-		eph, err := blocks.PayloadToHeaderElectra(wep)
+
+		eph, err := blocks.PayloadToHeaderCapella(wep)
 		if err != nil {
 			return err
 		}
-		ed, err = blocks.WrappedExecutionPayloadHeaderElectra(eph)
+
+		ed, err := blocks.WrappedExecutionPayloadHeaderCapella(eph)
 		if err != nil {
 			return err
 		}
-	default:
-		return errUnsupportedVersion
+
+		return g.SetLatestExecutionPayloadHeader(ed)
 	}
-	return g.SetLatestExecutionPayloadHeader(ed)
+
+	if s.Version >= version.Bellatrix {
+		payload := &enginev1.ExecutionPayload{
+			ParentHash:    gb.ParentHash().Bytes(),
+			FeeRecipient:  gb.Coinbase().Bytes(),
+			StateRoot:     gb.Root().Bytes(),
+			ReceiptsRoot:  gb.ReceiptHash().Bytes(),
+			LogsBloom:     gb.Bloom().Bytes(),
+			PrevRandao:    params.BeaconConfig().ZeroHash[:],
+			BlockNumber:   gb.NumberU64(),
+			GasLimit:      gb.GasLimit(),
+			GasUsed:       gb.GasUsed(),
+			Timestamp:     gb.Time(),
+			ExtraData:     gb.Extra()[:32],
+			BaseFeePerGas: bytesutil.PadTo(bytesutil.ReverseByteOrder(gb.BaseFee().Bytes()), fieldparams.RootLength),
+			BlockHash:     gb.Hash().Bytes(),
+			Transactions:  make([][]byte, 0),
+		}
+
+		wep, err := blocks.WrappedExecutionPayload(payload)
+		if err != nil {
+			return err
+		}
+
+		eph, err := blocks.PayloadToHeader(wep)
+		if err != nil {
+			return err
+		}
+
+		ed, err := blocks.WrappedExecutionPayloadHeader(eph)
+		if err != nil {
+			return err
+		}
+
+		return g.SetLatestExecutionPayloadHeader(ed)
+	}
+
+	if s.Version >= version.Phase0 {
+		return nil
+	}
+
+	return errUnsupportedVersion
 }
 
 func unwrapUint64Ptr(u *uint64) uint64 {

@@ -2,7 +2,7 @@ module github.com/prysmaticlabs/prysm/v5
 
 go 1.22.0
 
-toolchain go1.22.4
+toolchain go1.22.10
 
 require (
 	github.com/MariusVanDerWijden/FuzzyVM v0.0.0-20240209103030-ec53fa766bf8
@@ -44,7 +44,7 @@ require (
 	github.com/kr/pretty v0.3.1
 	github.com/libp2p/go-libp2p v0.36.5
 	github.com/libp2p/go-libp2p-mplex v0.9.0
-	github.com/libp2p/go-libp2p-pubsub v0.12.0
+	github.com/libp2p/go-libp2p-pubsub v0.12.1-0.20241230202526-bf5b58384331
 	github.com/libp2p/go-mplex v0.7.0
 	github.com/logrusorgru/aurora v2.0.3+incompatible
 	github.com/manifoldco/promptui v0.7.0

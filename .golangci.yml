@@ -6,7 +6,7 @@ run:
     - proto
     - tools/analyzers
   timeout: 10m
-  go: '1.22.6'
+  go: '1.22.10'
 
 linters:
   enable-all: true

@@ -268,7 +268,8 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	ExecutionEngineTimeoutValue: 8, // 8 seconds default based on: https://github.com/ethereum/execution-apis/blob/main/src/engine/specification.md#core
 
 	// Subnet value
-	BlobsidecarSubnetCount: 6,
+	BlobsidecarSubnetCount:        6,
+	BlobsidecarSubnetCountElectra: 9,
 
 	MaxPerEpochActivationChurnLimit:  8,
 	MinEpochsForBlobsSidecarsRequest: 4096,
@@ -287,7 +288,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	PendingPartialWithdrawalsLimit:        134_217_728,
 	PendingConsolidationsLimit:            262_144,
 	MinActivationBalance:                  32_000_000_000,
-	MaxConsolidationsRequestsPerPayload:   1,
+	MaxConsolidationsRequestsPerPayload:   2,
 	MaxPendingPartialsPerWithdrawalsSweep: 8,
 	MaxPendingDepositsPerEpoch:            16,
 	FullExitRequestAmount:                 0,
@@ -319,6 +320,11 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	AttestationSubnetPrefixBits:     6,
 	SubnetsPerNode:                  2,
 	NodeIdBits:                      256,
+
+	DeprecatedMaxBlobsPerBlock:           6,
+	DeprecatedMaxBlobsPerBlockElectra:    9,
+	DeprecatedTargetBlobsPerBlockElectra: 6,
+	MaxRequestBlobSidecarsElectra:        1152,
 }
 
 // MainnetTestConfig provides a version of the mainnet config that has a different name

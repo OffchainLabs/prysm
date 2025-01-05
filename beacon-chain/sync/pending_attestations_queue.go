@@ -10,6 +10,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/async"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
+	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/crypto/rand"
@@ -94,7 +95,7 @@ func (s *Service) processAttestations(ctx context.Context, attestations []ethpb.
 		data := aggregate.GetData()
 		// The pending attestations can arrive in both aggregated and unaggregated forms,
 		// each from has distinct validation steps.
-		if helpers.IsAggregated(aggregate) {
+		if aggregate.IsAggregated() {
 			// Save the pending aggregated attestation to the pool if it passes the aggregated
 			// validation steps.
 			valRes, err := s.validateAggregatedAtt(ctx, signedAtt)
@@ -103,10 +104,18 @@ func (s *Service) processAttestations(ctx context.Context, attestations []ethpb.
 			}
 			aggValid := pubsub.ValidationAccept == valRes
 			if s.validateBlockInAttestation(ctx, signedAtt) && aggValid {
-				if err := s.cfg.attPool.SaveAggregatedAttestation(aggregate); err != nil {
-					log.WithError(err).Debug("Could not save aggregate attestation")
-					continue
+				if features.Get().EnableExperimentalAttestationPool {
+					if err = s.cfg.attestationCache.Add(aggregate); err != nil {
+						log.WithError(err).Debug("Could not save aggregate attestation")
+						continue
+					}
+				} else {
+					if err := s.cfg.attPool.SaveAggregatedAttestation(aggregate); err != nil {
+						log.WithError(err).Debug("Could not save aggregate attestation")
+						continue
+					}
 				}
+
 				s.setAggregatorIndexEpochSeen(data.Target.Epoch, signedAtt.AggregateAttestationAndProof().GetAggregatorIndex())
 
 				// Broadcasting the signed attestation again once a node is able to process it.
@@ -138,9 +147,16 @@ func (s *Service) processAttestations(ctx context.Context, attestations []ethpb.
 				continue
 			}
 			if valid == pubsub.ValidationAccept {
-				if err := s.cfg.attPool.SaveUnaggregatedAttestation(aggregate); err != nil {
-					log.WithError(err).Debug("Could not save unaggregated attestation")
-					continue
+				if features.Get().EnableExperimentalAttestationPool {
+					if err = s.cfg.attestationCache.Add(aggregate); err != nil {
+						log.WithError(err).Debug("Could not save unaggregated attestation")
+						continue
+					}
+				} else {
+					if err := s.cfg.attPool.SaveUnaggregatedAttestation(aggregate); err != nil {
+						log.WithError(err).Debug("Could not save unaggregated attestation")
+						continue
+					}
 				}
 				s.setSeenCommitteeIndicesSlot(data.Slot, data.CommitteeIndex, aggregate.GetAggregationBits())
 

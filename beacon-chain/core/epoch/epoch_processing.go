@@ -144,22 +144,13 @@ func ProcessRegistryUpdates(ctx context.Context, st state.BeaconState) (state.Be
 // ProcessSlashings processes the slashed validators during epoch processing,
 //
 //	def process_slashings(state: BeaconState) -> None:
-//	  epoch = get_current_epoch(state)
-//	  total_balance = get_total_active_balance(state)
-//	  adjusted_total_slashing_balance = min(sum(state.slashings) * PROPORTIONAL_SLASHING_MULTIPLIER, total_balance)
-//	  if state.version == electra:
-//		 increment = EFFECTIVE_BALANCE_INCREMENT  # Factored out from total balance to avoid uint64 overflow
-//	  penalty_per_effective_balance_increment = adjusted_total_slashing_balance // (total_balance // increment)
-//	  for index, validator in enumerate(state.validators):
-//	      if validator.slashed and epoch + EPOCHS_PER_SLASHINGS_VECTOR // 2 == validator.withdrawable_epoch:
-//	          increment = EFFECTIVE_BALANCE_INCREMENT  # Factored out from penalty numerator to avoid uint64 overflow
-//	          penalty_numerator = validator.effective_balance // increment * adjusted_total_slashing_balance
-//	          penalty = penalty_numerator // total_balance * increment
-//	          if state.version == electra:
 //	            effective_balance_increments = validator.effective_balance // increment
 //	            penalty = penalty_per_effective_balance_increment * effective_balance_increments
-//	          decrease_balance(state, ValidatorIndex(index), penalty)
-func ProcessSlashings(st state.BeaconState, slashingMultiplier uint64) (state.BeaconState, error) {
+func ProcessSlashings(st state.BeaconState) (state.BeaconState, error) {
+	slashingMultiplier, err := st.ProportionalSlashingMultiplier()
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get proportional slashing multiplier")
+	}
 	currentEpoch := time.CurrentEpoch(st)
 	totalBalance, err := helpers.TotalActiveBalance(st)
 	if err != nil {

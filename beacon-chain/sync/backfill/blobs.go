@@ -9,6 +9,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
@@ -44,7 +45,7 @@ func newBlobSync(current primitives.Slot, vbs verifiedROBlocks, cfg *blobSyncCon
 	return &blobSync{current: current, expected: expected, bbv: bbv, store: as}, nil
 }
 
-type blobVerifierMap map[[32]byte][fieldparams.MaxBlobsPerBlock]verification.BlobVerifier
+type blobVerifierMap map[[32]byte][]verification.BlobVerifier
 
 type blobSync struct {
 	store    das.AvailabilityStore
@@ -106,7 +107,10 @@ type blobBatchVerifier struct {
 }
 
 func (bbv *blobBatchVerifier) newVerifier(rb blocks.ROBlob) verification.BlobVerifier {
-	m := bbv.verifiers[rb.BlockRoot()]
+	m, ok := bbv.verifiers[rb.BlockRoot()]
+	if !ok {
+		m = make([]verification.BlobVerifier, params.BeaconConfig().MaxBlobsPerBlock(rb.Slot()))
+	}
 	m[rb.Index] = bbv.newBlobVerifier(rb, verification.BackfillBlobSidecarRequirements)
 	bbv.verifiers[rb.BlockRoot()] = m
 	return m[rb.Index]

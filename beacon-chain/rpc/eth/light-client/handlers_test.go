@@ -19,6 +19,7 @@ import (
 	dbtesting "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/testutil"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v5/config/features"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
@@ -33,6 +34,11 @@ import (
 )
 
 func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
+	resetFn := features.InitWithReset(&features.Flags{
+		EnableLightClient: true,
+	})
+	defer resetFn()
+
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig()
 	cfg.AltairForkEpoch = 0
@@ -279,6 +285,11 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 // GetLightClientByRange tests
 
 func TestLightClientHandler_GetLightClientUpdatesByRangeAltair(t *testing.T) {
+	resetFn := features.InitWithReset(&features.Flags{
+		EnableLightClient: true,
+	})
+	defer resetFn()
+
 	helpers.ClearCache()
 	ctx := context.Background()
 
@@ -328,6 +339,11 @@ func TestLightClientHandler_GetLightClientUpdatesByRangeAltair(t *testing.T) {
 }
 
 func TestLightClientHandler_GetLightClientUpdatesByRangeCapella(t *testing.T) {
+	resetFn := features.InitWithReset(&features.Flags{
+		EnableLightClient: true,
+	})
+	defer resetFn()
+
 	helpers.ClearCache()
 	ctx := context.Background()
 	params.SetupTestConfigCleanup(t)
@@ -377,6 +393,11 @@ func TestLightClientHandler_GetLightClientUpdatesByRangeCapella(t *testing.T) {
 }
 
 func TestLightClientHandler_GetLightClientUpdatesByRangeDeneb(t *testing.T) {
+	resetFn := features.InitWithReset(&features.Flags{
+		EnableLightClient: true,
+	})
+	defer resetFn()
+
 	helpers.ClearCache()
 	ctx := context.Background()
 	params.SetupTestConfigCleanup(t)
@@ -426,6 +447,11 @@ func TestLightClientHandler_GetLightClientUpdatesByRangeDeneb(t *testing.T) {
 }
 
 func TestLightClientHandler_GetLightClientUpdatesByRangeMultipleAltair(t *testing.T) {
+	resetFn := features.InitWithReset(&features.Flags{
+		EnableLightClient: true,
+	})
+	defer resetFn()
+
 	helpers.ClearCache()
 	ctx := context.Background()
 	params.SetupTestConfigCleanup(t)
@@ -485,6 +511,11 @@ func TestLightClientHandler_GetLightClientUpdatesByRangeMultipleAltair(t *testin
 }
 
 func TestLightClientHandler_GetLightClientUpdatesByRangeMultipleCapella(t *testing.T) {
+	resetFn := features.InitWithReset(&features.Flags{
+		EnableLightClient: true,
+	})
+	defer resetFn()
+
 	helpers.ClearCache()
 	ctx := context.Background()
 	params.SetupTestConfigCleanup(t)
@@ -545,6 +576,11 @@ func TestLightClientHandler_GetLightClientUpdatesByRangeMultipleCapella(t *testi
 }
 
 func TestLightClientHandler_GetLightClientUpdatesByRangeMultipleDeneb(t *testing.T) {
+	resetFn := features.InitWithReset(&features.Flags{
+		EnableLightClient: true,
+	})
+	defer resetFn()
+
 	helpers.ClearCache()
 	ctx := context.Background()
 	params.SetupTestConfigCleanup(t)
@@ -605,6 +641,11 @@ func TestLightClientHandler_GetLightClientUpdatesByRangeMultipleDeneb(t *testing
 }
 
 func TestLightClientHandler_GetLightClientUpdatesByRangeMultipleForksAltairCapella(t *testing.T) {
+	resetFn := features.InitWithReset(&features.Flags{
+		EnableLightClient: true,
+	})
+	defer resetFn()
+
 	helpers.ClearCache()
 	ctx := context.Background()
 	params.SetupTestConfigCleanup(t)
@@ -673,6 +714,11 @@ func TestLightClientHandler_GetLightClientUpdatesByRangeMultipleForksAltairCapel
 }
 
 func TestLightClientHandler_GetLightClientUpdatesByRangeMultipleForksCapellaDeneb(t *testing.T) {
+	resetFn := features.InitWithReset(&features.Flags{
+		EnableLightClient: true,
+	})
+	defer resetFn()
+
 	helpers.ClearCache()
 	ctx := context.Background()
 	params.SetupTestConfigCleanup(t)
@@ -742,6 +788,11 @@ func TestLightClientHandler_GetLightClientUpdatesByRangeMultipleForksCapellaDene
 }
 
 func TestLightClientHandler_GetLightClientUpdatesByRangeCountBiggerThanLimit(t *testing.T) {
+	resetFn := features.InitWithReset(&features.Flags{
+		EnableLightClient: true,
+	})
+	defer resetFn()
+
 	helpers.ClearCache()
 	ctx := context.Background()
 	params.SetupTestConfigCleanup(t)
@@ -804,6 +855,11 @@ func TestLightClientHandler_GetLightClientUpdatesByRangeCountBiggerThanLimit(t *
 }
 
 func TestLightClientHandler_GetLightClientUpdatesByRangeCountBiggerThanMax(t *testing.T) {
+	resetFn := features.InitWithReset(&features.Flags{
+		EnableLightClient: true,
+	})
+	defer resetFn()
+
 	helpers.ClearCache()
 	ctx := context.Background()
 	params.SetupTestConfigCleanup(t)
@@ -865,35 +921,22 @@ func TestLightClientHandler_GetLightClientUpdatesByRangeCountBiggerThanMax(t *te
 }
 
 func TestLightClientHandler_GetLightClientUpdatesByRangeStartPeriodBeforeAltair(t *testing.T) {
+	resetFn := features.InitWithReset(&features.Flags{
+		EnableLightClient: true,
+	})
+	defer resetFn()
+
 	helpers.ClearCache()
-	ctx := context.Background()
 	params.SetupTestConfigCleanup(t)
 	config := params.BeaconConfig()
 	config.AltairForkEpoch = 1
 	config.EpochsPerSyncCommitteePeriod = 1
 	params.OverrideBeaconConfig(config)
-	slot := primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
-
-	st, err := util.NewBeaconStateAltair()
-	require.NoError(t, err)
-	headSlot := slot.Add(1)
-	err = st.SetSlot(headSlot)
-	require.NoError(t, err)
 
 	db := dbtesting.SetupDB(t)
 
-	updatePeriod := slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
-
-	update, err := createUpdate(t, version.Altair)
-	require.NoError(t, err)
-
-	err = db.SaveLightClientUpdate(ctx, uint64(updatePeriod), update)
-	require.NoError(t, err)
-
-	mockChainService := &mock.ChainService{State: st}
 	s := &Server{
-		HeadFetcher: mockChainService,
-		BeaconDB:    db,
+		BeaconDB: db,
 	}
 	startPeriod := 0
 	url := fmt.Sprintf("http://foo.com/?count=2&start_period=%d", startPeriod)
@@ -905,18 +948,17 @@ func TestLightClientHandler_GetLightClientUpdatesByRangeStartPeriodBeforeAltair(
 
 	require.Equal(t, http.StatusOK, writer.Code)
 	var resp structs.LightClientUpdatesByRangeResponse
-	err = json.Unmarshal(writer.Body.Bytes(), &resp.Updates)
+	err := json.Unmarshal(writer.Body.Bytes(), &resp.Updates)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(resp.Updates))
-
-	require.Equal(t, "altair", resp.Updates[0].Version)
-	updateJson, err := structs.LightClientUpdateFromConsensus(update)
-	require.NoError(t, err)
-	require.DeepEqual(t, updateJson, resp.Updates[0].Data)
-
+	require.Equal(t, 0, len(resp.Updates))
 }
 
 func TestLightClientHandler_GetLightClientUpdatesByRangeMissingUpdates(t *testing.T) {
+	resetFn := features.InitWithReset(&features.Flags{
+		EnableLightClient: true,
+	})
+	defer resetFn()
+
 	helpers.ClearCache()
 	ctx := context.Background()
 	params.SetupTestConfigCleanup(t)
@@ -1023,6 +1065,11 @@ func TestLightClientHandler_GetLightClientUpdatesByRangeMissingUpdates(t *testin
 }
 
 func TestLightClientHandler_GetLightClientFinalityUpdate(t *testing.T) {
+	resetFn := features.InitWithReset(&features.Flags{
+		EnableLightClient: true,
+	})
+	defer resetFn()
+
 	helpers.ClearCache()
 	ctx := context.Background()
 	config := params.BeaconConfig()
@@ -1135,6 +1182,11 @@ func TestLightClientHandler_GetLightClientFinalityUpdate(t *testing.T) {
 }
 
 func TestLightClientHandler_GetLightClientOptimisticUpdateAltair(t *testing.T) {
+	resetFn := features.InitWithReset(&features.Flags{
+		EnableLightClient: true,
+	})
+	defer resetFn()
+
 	helpers.ClearCache()
 	ctx := context.Background()
 	config := params.BeaconConfig()
@@ -1247,6 +1299,11 @@ func TestLightClientHandler_GetLightClientOptimisticUpdateAltair(t *testing.T) {
 }
 
 func TestLightClientHandler_GetLightClientOptimisticUpdateCapella(t *testing.T) {
+	resetFn := features.InitWithReset(&features.Flags{
+		EnableLightClient: true,
+	})
+	defer resetFn()
+
 	helpers.ClearCache()
 	ctx := context.Background()
 	config := params.BeaconConfig()
@@ -1359,6 +1416,11 @@ func TestLightClientHandler_GetLightClientOptimisticUpdateCapella(t *testing.T) 
 }
 
 func TestLightClientHandler_GetLightClientOptimisticUpdateDeneb(t *testing.T) {
+	resetFn := features.InitWithReset(&features.Flags{
+		EnableLightClient: true,
+	})
+	defer resetFn()
+
 	helpers.ClearCache()
 	ctx := context.Background()
 	config := params.BeaconConfig()
@@ -1786,7 +1848,7 @@ func createUpdate(t *testing.T, v int) (interfaces.LightClientUpdate, error) {
 				StateRoot:     sampleRoot,
 				BodyRoot:      sampleRoot,
 			},
-			Execution: &enginev1.ExecutionPayloadHeaderElectra{
+			Execution: &enginev1.ExecutionPayloadHeaderDeneb{
 				ParentHash:       make([]byte, fieldparams.RootLength),
 				FeeRecipient:     make([]byte, fieldparams.FeeRecipientLength),
 				StateRoot:        make([]byte, fieldparams.RootLength),

@@ -473,7 +473,7 @@ func syncBitvector(record *enr.Record) (bitfield.Bitvector4, error) {
 }
 
 // The subnet locker is a map which keeps track of all
-// mutexes stored per subnet. This locker is re-used
+// mutexes stored per subnet. This locker is reused
 // between both the attestation, sync and blob subnets.
 // Sync subnets are stored by (subnet+syncLockerVal).
 // Blob subnets are stored by (subnet+blobSubnetLockerVal).

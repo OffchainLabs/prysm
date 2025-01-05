@@ -198,7 +198,7 @@ func NewGenesisBlockForState(ctx context.Context, st state.BeaconState) (interfa
 						SyncCommitteeBits:      make([]byte, fieldparams.SyncCommitteeLength/8),
 						SyncCommitteeSignature: make([]byte, fieldparams.BLSSignatureLength),
 					},
-					ExecutionPayload: &enginev1.ExecutionPayloadElectra{
+					ExecutionPayload: &enginev1.ExecutionPayloadDeneb{
 						ParentHash:    make([]byte, 32),
 						FeeRecipient:  make([]byte, 20),
 						StateRoot:     make([]byte, 32),

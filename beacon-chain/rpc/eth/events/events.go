@@ -380,7 +380,7 @@ func (es *eventStreamer) writeOutbox(ctx context.Context, w *streamingResponseWr
 		case <-ctx.Done():
 			return ctx.Err()
 		case rf := <-es.outbox:
-			// We don't want to call Flush until we've exhausted all the writes - it's always preferrable to
+			// We don't want to call Flush until we've exhausted all the writes - it's always preferable to
 			// just keep draining the outbox and rely on the underlying Write code to flush+block when it
 			// needs to based on buffering. Whenever we fill the buffer with a string of writes, the underlying
 			// code will flush on its own, so it's better to explicitly flush only once, after we've totally

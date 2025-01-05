@@ -60,6 +60,7 @@ type Server struct {
 	StateNotifier          statefeed.Notifier
 	BlockNotifier          blockfeed.Notifier
 	P2P                    p2p.Broadcaster
+	AttestationCache       *cache.AttestationCache
 	AttPool                attestations.Pool
 	SlashingsPool          slashings.PoolManager
 	ExitPool               voluntaryexits.PoolManager

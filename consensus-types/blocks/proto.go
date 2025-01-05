@@ -510,10 +510,10 @@ func (b *BeaconBlockBody) Proto() (proto.Message, error) {
 		}, nil
 	case version.Electra:
 		if b.IsBlinded() {
-			var ph *enginev1.ExecutionPayloadHeaderElectra
+			var ph *enginev1.ExecutionPayloadHeaderDeneb
 			var ok bool
 			if b.executionPayloadHeader != nil {
-				ph, ok = b.executionPayloadHeader.Proto().(*enginev1.ExecutionPayloadHeaderElectra)
+				ph, ok = b.executionPayloadHeader.Proto().(*enginev1.ExecutionPayloadHeaderDeneb)
 				if !ok {
 					return nil, errPayloadHeaderWrongType
 				}
@@ -534,10 +534,10 @@ func (b *BeaconBlockBody) Proto() (proto.Message, error) {
 				ExecutionRequests:      b.executionRequests,
 			}, nil
 		}
-		var p *enginev1.ExecutionPayloadElectra
+		var p *enginev1.ExecutionPayloadDeneb
 		var ok bool
 		if b.executionPayload != nil {
-			p, ok = b.executionPayload.Proto().(*enginev1.ExecutionPayloadElectra)
+			p, ok = b.executionPayload.Proto().(*enginev1.ExecutionPayloadDeneb)
 			if !ok {
 				return nil, errPayloadWrongType
 			}
@@ -563,6 +563,10 @@ func (b *BeaconBlockBody) Proto() (proto.Message, error) {
 	}
 }
 
+// ----------------------------------------------------------------------------
+// Phase 0
+// ----------------------------------------------------------------------------
+
 func initSignedBlockFromProtoPhase0(pb *eth.SignedBeaconBlock) (*SignedBeaconBlock, error) {
 	if pb == nil {
 		return nil, errNilBlock
@@ -574,159 +578,6 @@ func initSignedBlockFromProtoPhase0(pb *eth.SignedBeaconBlock) (*SignedBeaconBlo
 	}
 	b := &SignedBeaconBlock{
 		version:   version.Phase0,
-		block:     block,
-		signature: bytesutil.ToBytes96(pb.Signature),
-	}
-	return b, nil
-}
-
-func initSignedBlockFromProtoAltair(pb *eth.SignedBeaconBlockAltair) (*SignedBeaconBlock, error) {
-	if pb == nil {
-		return nil, errNilBlock
-	}
-
-	block, err := initBlockFromProtoAltair(pb.Block)
-	if err != nil {
-		return nil, err
-	}
-	b := &SignedBeaconBlock{
-		version:   version.Altair,
-		block:     block,
-		signature: bytesutil.ToBytes96(pb.Signature),
-	}
-	return b, nil
-}
-
-func initSignedBlockFromProtoBellatrix(pb *eth.SignedBeaconBlockBellatrix) (*SignedBeaconBlock, error) {
-	if pb == nil {
-		return nil, errNilBlock
-	}
-
-	block, err := initBlockFromProtoBellatrix(pb.Block)
-	if err != nil {
-		return nil, err
-	}
-	b := &SignedBeaconBlock{
-		version:   version.Bellatrix,
-		block:     block,
-		signature: bytesutil.ToBytes96(pb.Signature),
-	}
-	return b, nil
-}
-
-func initSignedBlockFromProtoCapella(pb *eth.SignedBeaconBlockCapella) (*SignedBeaconBlock, error) {
-	if pb == nil {
-		return nil, errNilBlock
-	}
-
-	block, err := initBlockFromProtoCapella(pb.Block)
-	if err != nil {
-		return nil, err
-	}
-	b := &SignedBeaconBlock{
-		version:   version.Capella,
-		block:     block,
-		signature: bytesutil.ToBytes96(pb.Signature),
-	}
-	return b, nil
-}
-
-func initSignedBlockFromProtoDeneb(pb *eth.SignedBeaconBlockDeneb) (*SignedBeaconBlock, error) {
-	if pb == nil {
-		return nil, errNilBlock
-	}
-
-	block, err := initBlockFromProtoDeneb(pb.Block)
-	if err != nil {
-		return nil, err
-	}
-	b := &SignedBeaconBlock{
-		version:   version.Deneb,
-		block:     block,
-		signature: bytesutil.ToBytes96(pb.Signature),
-	}
-	return b, nil
-}
-
-func initSignedBlockFromProtoElectra(pb *eth.SignedBeaconBlockElectra) (*SignedBeaconBlock, error) {
-	if pb == nil {
-		return nil, errNilBlock
-	}
-
-	block, err := initBlockFromProtoElectra(pb.Block)
-	if err != nil {
-		return nil, err
-	}
-	b := &SignedBeaconBlock{
-		version:   version.Electra,
-		block:     block,
-		signature: bytesutil.ToBytes96(pb.Signature),
-	}
-	return b, nil
-}
-
-func initBlindedSignedBlockFromProtoBellatrix(pb *eth.SignedBlindedBeaconBlockBellatrix) (*SignedBeaconBlock, error) {
-	if pb == nil {
-		return nil, errNilBlock
-	}
-
-	block, err := initBlindedBlockFromProtoBellatrix(pb.Block)
-	if err != nil {
-		return nil, err
-	}
-	b := &SignedBeaconBlock{
-		version:   version.Bellatrix,
-		block:     block,
-		signature: bytesutil.ToBytes96(pb.Signature),
-	}
-	return b, nil
-}
-
-func initBlindedSignedBlockFromProtoCapella(pb *eth.SignedBlindedBeaconBlockCapella) (*SignedBeaconBlock, error) {
-	if pb == nil {
-		return nil, errNilBlock
-	}
-
-	block, err := initBlindedBlockFromProtoCapella(pb.Block)
-	if err != nil {
-		return nil, err
-	}
-	b := &SignedBeaconBlock{
-		version:   version.Capella,
-		block:     block,
-		signature: bytesutil.ToBytes96(pb.Signature),
-	}
-	return b, nil
-}
-
-func initBlindedSignedBlockFromProtoDeneb(pb *eth.SignedBlindedBeaconBlockDeneb) (*SignedBeaconBlock, error) {
-	if pb == nil {
-		return nil, errNilBlock
-	}
-
-	block, err := initBlindedBlockFromProtoDeneb(pb.Message)
-	if err != nil {
-		return nil, err
-	}
-	b := &SignedBeaconBlock{
-		version:   version.Deneb,
-		block:     block,
-		signature: bytesutil.ToBytes96(pb.Signature),
-	}
-	return b, nil
-}
-
-func initBlindedSignedBlockFromProtoElectra(pb *eth.SignedBlindedBeaconBlockElectra) (*SignedBeaconBlock, error) {
-	if pb == nil {
-		return nil, errNilBlock
-	}
-
-	block, err := initBlindedBlockFromProtoElectra(pb.Message)
-	if err != nil {
-		return nil, err
-	}
-	b := &SignedBeaconBlock{
-		version:   version.Electra,
 		block:     block,
 		signature: bytesutil.ToBytes96(pb.Signature),
 	}
@@ -753,6 +604,46 @@ func initBlockFromProtoPhase0(pb *eth.BeaconBlock) (*BeaconBlock, error) {
 	return b, nil
 }
 
+func initBlockBodyFromProtoPhase0(pb *eth.BeaconBlockBody) (*BeaconBlockBody, error) {
+	if pb == nil {
+		return nil, errNilBlockBody
+	}
+
+	b := &BeaconBlockBody{
+		version:           version.Phase0,
+		randaoReveal:      bytesutil.ToBytes96(pb.RandaoReveal),
+		eth1Data:          pb.Eth1Data,
+		graffiti:          bytesutil.ToBytes32(pb.Graffiti),
+		proposerSlashings: pb.ProposerSlashings,
+		attesterSlashings: pb.AttesterSlashings,
+		attestations:      pb.Attestations,
+		deposits:          pb.Deposits,
+		voluntaryExits:    pb.VoluntaryExits,
+	}
+	return b, nil
+}
+
+// ----------------------------------------------------------------------------
+// Altair
+// ----------------------------------------------------------------------------
+
+func initSignedBlockFromProtoAltair(pb *eth.SignedBeaconBlockAltair) (*SignedBeaconBlock, error) {
+	if pb == nil {
+		return nil, errNilBlock
+	}
+
+	block, err := initBlockFromProtoAltair(pb.Block)
+	if err != nil {
+		return nil, err
+	}
+	b := &SignedBeaconBlock{
+		version:   version.Altair,
+		block:     block,
+		signature: bytesutil.ToBytes96(pb.Signature),
+	}
+	return b, nil
+}
+
 func initBlockFromProtoAltair(pb *eth.BeaconBlockAltair) (*BeaconBlock, error) {
 	if pb == nil {
 		return nil, errNilBlock
@@ -769,6 +660,64 @@ func initBlockFromProtoAltair(pb *eth.BeaconBlockAltair) (*BeaconBlock, error) {
 		parentRoot:    bytesutil.ToBytes32(pb.ParentRoot),
 		stateRoot:     bytesutil.ToBytes32(pb.StateRoot),
 		body:          body,
+	}
+	return b, nil
+}
+
+func initBlockBodyFromProtoAltair(pb *eth.BeaconBlockBodyAltair) (*BeaconBlockBody, error) {
+	if pb == nil {
+		return nil, errNilBlockBody
+	}
+
+	b := &BeaconBlockBody{
+		version:           version.Altair,
+		randaoReveal:      bytesutil.ToBytes96(pb.RandaoReveal),
+		eth1Data:          pb.Eth1Data,
+		graffiti:          bytesutil.ToBytes32(pb.Graffiti),
+		proposerSlashings: pb.ProposerSlashings,
+		attesterSlashings: pb.AttesterSlashings,
+		attestations:      pb.Attestations,
+		deposits:          pb.Deposits,
+		voluntaryExits:    pb.VoluntaryExits,
+		syncAggregate:     pb.SyncAggregate,
+	}
+	return b, nil
+}
+
+// ----------------------------------------------------------------------------
+// Bellatrix
+// ----------------------------------------------------------------------------
+
+func initSignedBlockFromProtoBellatrix(pb *eth.SignedBeaconBlockBellatrix) (*SignedBeaconBlock, error) {
+	if pb == nil {
+		return nil, errNilBlock
+	}
+
+	block, err := initBlockFromProtoBellatrix(pb.Block)
+	if err != nil {
+		return nil, err
+	}
+	b := &SignedBeaconBlock{
+		version:   version.Bellatrix,
+		block:     block,
+		signature: bytesutil.ToBytes96(pb.Signature),
+	}
+	return b, nil
+}
+
+func initBlindedSignedBlockFromProtoBellatrix(pb *eth.SignedBlindedBeaconBlockBellatrix) (*SignedBeaconBlock, error) {
+	if pb == nil {
+		return nil, errNilBlock
+	}
+
+	block, err := initBlindedBlockFromProtoBellatrix(pb.Block)
+	if err != nil {
+		return nil, err
+	}
+	b := &SignedBeaconBlock{
+		version:   version.Bellatrix,
+		block:     block,
+		signature: bytesutil.ToBytes96(pb.Signature),
 	}
 	return b, nil
 }
@@ -809,165 +758,6 @@ func initBlindedBlockFromProtoBellatrix(pb *eth.BlindedBeaconBlockBellatrix) (*B
 		parentRoot:    bytesutil.ToBytes32(pb.ParentRoot),
 		stateRoot:     bytesutil.ToBytes32(pb.StateRoot),
 		body:          body,
-	}
-	return b, nil
-}
-
-func initBlockFromProtoCapella(pb *eth.BeaconBlockCapella) (*BeaconBlock, error) {
-	if pb == nil {
-		return nil, errNilBlock
-	}
-
-	body, err := initBlockBodyFromProtoCapella(pb.Body)
-	if err != nil {
-		return nil, err
-	}
-	b := &BeaconBlock{
-		version:       version.Capella,
-		slot:          pb.Slot,
-		proposerIndex: pb.ProposerIndex,
-		parentRoot:    bytesutil.ToBytes32(pb.ParentRoot),
-		stateRoot:     bytesutil.ToBytes32(pb.StateRoot),
-		body:          body,
-	}
-	return b, nil
-}
-
-func initBlockFromProtoDeneb(pb *eth.BeaconBlockDeneb) (*BeaconBlock, error) {
-	if pb == nil {
-		return nil, errNilBlock
-	}
-
-	body, err := initBlockBodyFromProtoDeneb(pb.Body)
-	if err != nil {
-		return nil, err
-	}
-	b := &BeaconBlock{
-		version:       version.Deneb,
-		slot:          pb.Slot,
-		proposerIndex: pb.ProposerIndex,
-		parentRoot:    bytesutil.ToBytes32(pb.ParentRoot),
-		stateRoot:     bytesutil.ToBytes32(pb.StateRoot),
-		body:          body,
-	}
-	return b, nil
-}
-
-func initBlockFromProtoElectra(pb *eth.BeaconBlockElectra) (*BeaconBlock, error) {
-	if pb == nil {
-		return nil, errNilBlock
-	}
-
-	body, err := initBlockBodyFromProtoElectra(pb.Body)
-	if err != nil {
-		return nil, err
-	}
-	b := &BeaconBlock{
-		version:       version.Electra,
-		slot:          pb.Slot,
-		proposerIndex: pb.ProposerIndex,
-		parentRoot:    bytesutil.ToBytes32(pb.ParentRoot),
-		stateRoot:     bytesutil.ToBytes32(pb.StateRoot),
-		body:          body,
-	}
-	return b, nil
-}
-
-func initBlindedBlockFromProtoCapella(pb *eth.BlindedBeaconBlockCapella) (*BeaconBlock, error) {
-	if pb == nil {
-		return nil, errNilBlock
-	}
-
-	body, err := initBlindedBlockBodyFromProtoCapella(pb.Body)
-	if err != nil {
-		return nil, err
-	}
-	b := &BeaconBlock{
-		version:       version.Capella,
-		slot:          pb.Slot,
-		proposerIndex: pb.ProposerIndex,
-		parentRoot:    bytesutil.ToBytes32(pb.ParentRoot),
-		stateRoot:     bytesutil.ToBytes32(pb.StateRoot),
-		body:          body,
-	}
-	return b, nil
-}
-
-func initBlindedBlockFromProtoDeneb(pb *eth.BlindedBeaconBlockDeneb) (*BeaconBlock, error) {
-	if pb == nil {
-		return nil, errNilBlock
-	}
-
-	body, err := initBlindedBlockBodyFromProtoDeneb(pb.Body)
-	if err != nil {
-		return nil, err
-	}
-	b := &BeaconBlock{
-		version:       version.Deneb,
-		slot:          pb.Slot,
-		proposerIndex: pb.ProposerIndex,
-		parentRoot:    bytesutil.ToBytes32(pb.ParentRoot),
-		stateRoot:     bytesutil.ToBytes32(pb.StateRoot),
-		body:          body,
-	}
-	return b, nil
-}
-
-func initBlindedBlockFromProtoElectra(pb *eth.BlindedBeaconBlockElectra) (*BeaconBlock, error) {
-	if pb == nil {
-		return nil, errNilBlock
-	}
-
-	body, err := initBlindedBlockBodyFromProtoElectra(pb.Body)
-	if err != nil {
-		return nil, err
-	}
-	b := &BeaconBlock{
-		version:       version.Electra,
-		slot:          pb.Slot,
-		proposerIndex: pb.ProposerIndex,
-		parentRoot:    bytesutil.ToBytes32(pb.ParentRoot),
-		stateRoot:     bytesutil.ToBytes32(pb.StateRoot),
-		body:          body,
-	}
-	return b, nil
-}
-
-func initBlockBodyFromProtoPhase0(pb *eth.BeaconBlockBody) (*BeaconBlockBody, error) {
-	if pb == nil {
-		return nil, errNilBlockBody
-	}
-
-	b := &BeaconBlockBody{
-		version:           version.Phase0,
-		randaoReveal:      bytesutil.ToBytes96(pb.RandaoReveal),
-		eth1Data:          pb.Eth1Data,
-		graffiti:          bytesutil.ToBytes32(pb.Graffiti),
-		proposerSlashings: pb.ProposerSlashings,
-		attesterSlashings: pb.AttesterSlashings,
-		attestations:      pb.Attestations,
-		deposits:          pb.Deposits,
-		voluntaryExits:    pb.VoluntaryExits,
-	}
-	return b, nil
-}
-
-func initBlockBodyFromProtoAltair(pb *eth.BeaconBlockBodyAltair) (*BeaconBlockBody, error) {
-	if pb == nil {
-		return nil, errNilBlockBody
-	}
-
-	b := &BeaconBlockBody{
-		version:           version.Altair,
-		randaoReveal:      bytesutil.ToBytes96(pb.RandaoReveal),
-		eth1Data:          pb.Eth1Data,
-		graffiti:          bytesutil.ToBytes32(pb.Graffiti),
-		proposerSlashings: pb.ProposerSlashings,
-		attesterSlashings: pb.AttesterSlashings,
-		attestations:      pb.Attestations,
-		deposits:          pb.Deposits,
-		voluntaryExits:    pb.VoluntaryExits,
-		syncAggregate:     pb.SyncAggregate,
 	}
 	return b, nil
 }
@@ -1024,6 +814,84 @@ func initBlindedBlockBodyFromProtoBellatrix(pb *eth.BlindedBeaconBlockBodyBellat
 	return b, nil
 }
 
+// ----------------------------------------------------------------------------
+// Capella
+// ----------------------------------------------------------------------------
+
+func initSignedBlockFromProtoCapella(pb *eth.SignedBeaconBlockCapella) (*SignedBeaconBlock, error) {
+	if pb == nil {
+		return nil, errNilBlock
+	}
+
+	block, err := initBlockFromProtoCapella(pb.Block)
+	if err != nil {
+		return nil, err
+	}
+	b := &SignedBeaconBlock{
+		version:   version.Capella,
+		block:     block,
+		signature: bytesutil.ToBytes96(pb.Signature),
+	}
+	return b, nil
+}
+
+func initBlindedSignedBlockFromProtoCapella(pb *eth.SignedBlindedBeaconBlockCapella) (*SignedBeaconBlock, error) {
+	if pb == nil {
+		return nil, errNilBlock
+	}
+
+	block, err := initBlindedBlockFromProtoCapella(pb.Block)
+	if err != nil {
+		return nil, err
+	}
+	b := &SignedBeaconBlock{
+		version:   version.Capella,
+		block:     block,
+		signature: bytesutil.ToBytes96(pb.Signature),
+	}
+	return b, nil
+}
+
+func initBlockFromProtoCapella(pb *eth.BeaconBlockCapella) (*BeaconBlock, error) {
+	if pb == nil {
+		return nil, errNilBlock
+	}
+
+	body, err := initBlockBodyFromProtoCapella(pb.Body)
+	if err != nil {
+		return nil, err
+	}
+	b := &BeaconBlock{
+		version:       version.Capella,
+		slot:          pb.Slot,
+		proposerIndex: pb.ProposerIndex,
+		parentRoot:    bytesutil.ToBytes32(pb.ParentRoot),
+		stateRoot:     bytesutil.ToBytes32(pb.StateRoot),
+		body:          body,
+	}
+	return b, nil
+}
+
+func initBlindedBlockFromProtoCapella(pb *eth.BlindedBeaconBlockCapella) (*BeaconBlock, error) {
+	if pb == nil {
+		return nil, errNilBlock
+	}
+
+	body, err := initBlindedBlockBodyFromProtoCapella(pb.Body)
+	if err != nil {
+		return nil, err
+	}
+	b := &BeaconBlock{
+		version:       version.Capella,
+		slot:          pb.Slot,
+		proposerIndex: pb.ProposerIndex,
+		parentRoot:    bytesutil.ToBytes32(pb.ParentRoot),
+		stateRoot:     bytesutil.ToBytes32(pb.StateRoot),
+		body:          body,
+	}
+	return b, nil
+}
+
 func initBlockBodyFromProtoCapella(pb *eth.BeaconBlockBodyCapella) (*BeaconBlockBody, error) {
 	if pb == nil {
 		return nil, errNilBlockBody
@@ -1074,6 +942,84 @@ func initBlindedBlockBodyFromProtoCapella(pb *eth.BlindedBeaconBlockBodyCapella)
 		syncAggregate:          pb.SyncAggregate,
 		executionPayloadHeader: ph,
 		blsToExecutionChanges:  pb.BlsToExecutionChanges,
+	}
+	return b, nil
+}
+
+// ----------------------------------------------------------------------------
+// Deneb
+// ----------------------------------------------------------------------------
+
+func initSignedBlockFromProtoDeneb(pb *eth.SignedBeaconBlockDeneb) (*SignedBeaconBlock, error) {
+	if pb == nil {
+		return nil, errNilBlock
+	}
+
+	block, err := initBlockFromProtoDeneb(pb.Block)
+	if err != nil {
+		return nil, err
+	}
+	b := &SignedBeaconBlock{
+		version:   version.Deneb,
+		block:     block,
+		signature: bytesutil.ToBytes96(pb.Signature),
+	}
+	return b, nil
+}
+
+func initBlindedSignedBlockFromProtoDeneb(pb *eth.SignedBlindedBeaconBlockDeneb) (*SignedBeaconBlock, error) {
+	if pb == nil {
+		return nil, errNilBlock
+	}
+
+	block, err := initBlindedBlockFromProtoDeneb(pb.Message)
+	if err != nil {
+		return nil, err
+	}
+	b := &SignedBeaconBlock{
+		version:   version.Deneb,
+		block:     block,
+		signature: bytesutil.ToBytes96(pb.Signature),
+	}
+	return b, nil
+}
+
+func initBlockFromProtoDeneb(pb *eth.BeaconBlockDeneb) (*BeaconBlock, error) {
+	if pb == nil {
+		return nil, errNilBlock
+	}
+
+	body, err := initBlockBodyFromProtoDeneb(pb.Body)
+	if err != nil {
+		return nil, err
+	}
+	b := &BeaconBlock{
+		version:       version.Deneb,
+		slot:          pb.Slot,
+		proposerIndex: pb.ProposerIndex,
+		parentRoot:    bytesutil.ToBytes32(pb.ParentRoot),
+		stateRoot:     bytesutil.ToBytes32(pb.StateRoot),
+		body:          body,
+	}
+	return b, nil
+}
+
+func initBlindedBlockFromProtoDeneb(pb *eth.BlindedBeaconBlockDeneb) (*BeaconBlock, error) {
+	if pb == nil {
+		return nil, errNilBlock
+	}
+
+	body, err := initBlindedBlockBodyFromProtoDeneb(pb.Body)
+	if err != nil {
+		return nil, err
+	}
+	b := &BeaconBlock{
+		version:       version.Deneb,
+		slot:          pb.Slot,
+		proposerIndex: pb.ProposerIndex,
+		parentRoot:    bytesutil.ToBytes32(pb.ParentRoot),
+		stateRoot:     bytesutil.ToBytes32(pb.StateRoot),
+		body:          body,
 	}
 	return b, nil
 }
@@ -1134,12 +1080,90 @@ func initBlindedBlockBodyFromProtoDeneb(pb *eth.BlindedBeaconBlockBodyDeneb) (*B
 	return b, nil
 }
 
+// ----------------------------------------------------------------------------
+// Electra
+// ----------------------------------------------------------------------------
+
+func initSignedBlockFromProtoElectra(pb *eth.SignedBeaconBlockElectra) (*SignedBeaconBlock, error) {
+	if pb == nil {
+		return nil, errNilBlock
+	}
+
+	block, err := initBlockFromProtoElectra(pb.Block)
+	if err != nil {
+		return nil, err
+	}
+	b := &SignedBeaconBlock{
+		version:   version.Electra,
+		block:     block,
+		signature: bytesutil.ToBytes96(pb.Signature),
+	}
+	return b, nil
+}
+
+func initBlindedSignedBlockFromProtoElectra(pb *eth.SignedBlindedBeaconBlockElectra) (*SignedBeaconBlock, error) {
+	if pb == nil {
+		return nil, errNilBlock
+	}
+
+	block, err := initBlindedBlockFromProtoElectra(pb.Message)
+	if err != nil {
+		return nil, err
+	}
+	b := &SignedBeaconBlock{
+		version:   version.Electra,
+		block:     block,
+		signature: bytesutil.ToBytes96(pb.Signature),
+	}
+	return b, nil
+}
+
+func initBlockFromProtoElectra(pb *eth.BeaconBlockElectra) (*BeaconBlock, error) {
+	if pb == nil {
+		return nil, errNilBlock
+	}
+
+	body, err := initBlockBodyFromProtoElectra(pb.Body)
+	if err != nil {
+		return nil, err
+	}
+	b := &BeaconBlock{
+		version:       version.Electra,
+		slot:          pb.Slot,
+		proposerIndex: pb.ProposerIndex,
+		parentRoot:    bytesutil.ToBytes32(pb.ParentRoot),
+		stateRoot:     bytesutil.ToBytes32(pb.StateRoot),
+		body:          body,
+	}
+	return b, nil
+}
+
+func initBlindedBlockFromProtoElectra(pb *eth.BlindedBeaconBlockElectra) (*BeaconBlock, error) {
+	if pb == nil {
+		return nil, errNilBlock
+	}
+
+	body, err := initBlindedBlockBodyFromProtoElectra(pb.Body)
+	if err != nil {
+		return nil, err
+	}
+	b := &BeaconBlock{
+		version:       version.Electra,
+		slot:          pb.Slot,
+		proposerIndex: pb.ProposerIndex,
+		parentRoot:    bytesutil.ToBytes32(pb.ParentRoot),
+		stateRoot:     bytesutil.ToBytes32(pb.StateRoot),
+		body:          body,
+	}
+	return b, nil
+}
+
 func initBlockBodyFromProtoElectra(pb *eth.BeaconBlockBodyElectra) (*BeaconBlockBody, error) {
 	if pb == nil {
 		return nil, errNilBlockBody
 	}
 
-	p, err := WrappedExecutionPayloadElectra(pb.ExecutionPayload)
+	p, err := WrappedExecutionPayloadDeneb(pb.ExecutionPayload)
 	// We allow the payload to be nil
 	if err != nil && !errors.Is(err, consensus_types.ErrNilObjectWrapped) {
 		return nil, err
@@ -1172,7 +1196,7 @@ func initBlindedBlockBodyFromProtoElectra(pb *eth.BlindedBeaconBlockBodyElectra)
 		return nil, errNilBlockBody
 	}
 
-	ph, err := WrappedExecutionPayloadHeaderElectra(pb.ExecutionPayloadHeader)
+	ph, err := WrappedExecutionPayloadHeaderDeneb(pb.ExecutionPayloadHeader)
 	// We allow the payload to be nil
 	if err != nil && !errors.Is(err, consensus_types.ErrNilObjectWrapped) {
 		return nil, err

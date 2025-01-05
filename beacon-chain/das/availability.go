@@ -83,10 +83,10 @@ func (s *LazilyPersistentStore) Persist(current primitives.Slot, sc ...blocks.RO
 func (s *LazilyPersistentStore) IsDataAvailable(ctx context.Context, current primitives.Slot, b blocks.ROBlock) error {
 	blockCommitments, err := commitmentsToCheck(b, current)
 	if err != nil {
-		return errors.Wrapf(err, "could check data availability for block %#x", b.Root())
+		return errors.Wrapf(err, "could not check data availability for block %#x", b.Root())
 	}
 	// Return early for blocks that are pre-deneb or which do not have any commitments.
-	if blockCommitments.count() == 0 {
+	if len(blockCommitments) == 0 {
 		return nil
 	}
 
@@ -106,7 +106,7 @@ func (s *LazilyPersistentStore) IsDataAvailable(ctx context.Context, current pri
 	// Verify we have all the expected sidecars, and fail fast if any are missing or inconsistent.
 	// We don't try to salvage problematic batches because this indicates a misbehaving peer and we'd rather
 	// ignore their response and decrease their peer score.
-	sidecars, err := entry.filter(root, blockCommitments)
+	sidecars, err := entry.filter(root, blockCommitments, b.Block().Slot())
 	if err != nil {
 		return errors.Wrap(err, "incomplete BlobSidecar batch")
 	}
@@ -137,22 +137,28 @@ func (s *LazilyPersistentStore) IsDataAvailable(ctx context.Context, current pri
 	return nil
 }
 
-func commitmentsToCheck(b blocks.ROBlock, current primitives.Slot) (safeCommitmentArray, error) {
-	var ar safeCommitmentArray
+func commitmentsToCheck(b blocks.ROBlock, current primitives.Slot) ([][]byte, error) {
 	if b.Version() < version.Deneb {
-		return ar, nil
+		return nil, nil
 	}
-	// We are only required to check within MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUESTS
+
+	// We are only required to check within MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUEST
 	if !params.WithinDAPeriod(slots.ToEpoch(b.Block().Slot()), slots.ToEpoch(current)) {
-		return ar, nil
+		return nil, nil
 	}
-	kc, err := b.Block().Body().BlobKzgCommitments()
+
+	kzgCommitments, err := b.Block().Body().BlobKzgCommitments()
 	if err != nil {
-		return ar, err
+		return nil, err
 	}
-	if len(kc) > len(ar) {
-		return ar, errIndexOutOfBounds
+
+	maxBlobCount := params.BeaconConfig().MaxBlobsPerBlock(b.Block().Slot())
+	if len(kzgCommitments) > maxBlobCount {
+		return nil, errIndexOutOfBounds
 	}
-	copy(ar[:], kc)
-	return ar, nil
+
+	result := make([][]byte, len(kzgCommitments))
+	copy(result, kzgCommitments)
+
+	return result, nil
 }

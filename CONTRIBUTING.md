@@ -129,7 +129,7 @@ If your change is user facing, you must include a CHANGELOG.md entry. See the [M
 
 **17. Create a pull request.**
 
-Navigate your browser to https://github.com/prysmaticlabs/prysm and click on the new pull request button. In the “base” box on the left, leave the default selection “base master”, the branch that you want your changes to be applied to. In the “compare” box on the right, select feature-in-progress-branch, the branch containing the changes you want to apply. You will then be asked to answer a few questions about your pull request. After you complete the questionnaire, the pull request will appear in the list of pull requests at https://github.com/prysmaticlabs/prysm/pulls. Ensure that you have added an entry to CHANGELOG.md if your PR is a user-facing change. See the [Maintaining CHANGELOG.md](#maintaining-changelogmd) section for more information.
+Navigate your browser to https://github.com/prysmaticlabs/prysm and click on the new pull request button. In the “base” box on the left, leave the default selection “base develop”, the branch that you want your changes to be applied to. In the “compare” box on the right, select feature-in-progress-branch, the branch containing the changes you want to apply. You will then be asked to answer a few questions about your pull request. After you complete the questionnaire, the pull request will appear in the list of pull requests at https://github.com/prysmaticlabs/prysm/pulls. Ensure that you have added an entry to CHANGELOG.md if your PR is a user-facing change. See the [Maintaining CHANGELOG.md](#maintaining-changelogmd) section for more information.
 
 **18. Respond to comments by Core Contributors.**
 
