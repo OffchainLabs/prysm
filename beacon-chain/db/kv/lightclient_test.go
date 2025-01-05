@@ -756,7 +756,7 @@ func TestStore_LightClientBootstrap_MultipleBootstrapsWithDifferentSyncCommittee
 	require.NoError(t, err)
 	require.DeepEqual(t, savedBranch2, retrievedBranch2, "retrieved bootstrap1 sync committee branch does not match saved bootstrap1 sync committee branch")
 
-	// Ensure that the sync committee is only stored once
+	// Ensure that the sync committee is stored twice
 	err = db.db.View(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(lightClientSyncCommitteeBucket)
 		require.NotNil(t, bucket)
