@@ -1,6 +1,7 @@
 package backfill
 
 import (
+	"math"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -19,14 +20,21 @@ import (
 )
 
 func TestDomainCache(t *testing.T) {
-	cfg := params.MainnetConfig()
+	cfg := params.MainnetConfig().Copy()
+	// This hack is needed not to have both Electra and Fulu fork epoch both set to the future max epoch.
+	// It can be removed once the Electra fork version has been set to a real value.
+	for version := range cfg.ForkVersionSchedule {
+		if cfg.ForkVersionNames[version] == "electra" {
+			cfg.ForkVersionSchedule[version] = math.MaxUint64 - 1
+		}
+	}
+
 	vRoot, err := hexutil.Decode("0x0011223344556677889900112233445566778899001122334455667788990011")
 	dType := cfg.DomainBeaconProposer
 	require.NoError(t, err)
 	require.Equal(t, 32, len(vRoot))
 	fsched := forks.NewOrderedSchedule(cfg)
-	dc, err := newDomainCache(vRoot,
-		dType, fsched)
+	dc, err := newDomainCache(vRoot, dType, fsched)
 	require.NoError(t, err)
 	require.Equal(t, len(fsched), len(dc.forkDomains))
 	for i := range fsched {

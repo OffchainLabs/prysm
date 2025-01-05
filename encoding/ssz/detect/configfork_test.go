@@ -46,8 +46,8 @@ func TestSlotFromBlock(t *testing.T) {
 }
 
 func TestByState(t *testing.T) {
-	undo := util.HackElectraMaxuint(t)
-	defer undo()
+	defer util.HackForksMaxuint(t, []int{version.Electra, version.Fulu})()
+
 	bc := params.BeaconConfig()
 	altairSlot, err := slots.EpochStart(bc.AltairForkEpoch)
 	require.NoError(t, err)
@@ -58,6 +58,8 @@ func TestByState(t *testing.T) {
 	denebSlot, err := slots.EpochStart(bc.DenebForkEpoch)
 	require.NoError(t, err)
 	electraSlot, err := slots.EpochStart(bc.ElectraForkEpoch)
+	require.NoError(t, err)
+	fuluSlot, err := slots.EpochStart(bc.FuluForkEpoch)
 	require.NoError(t, err)
 	cases := []struct {
 		name        string
@@ -100,6 +102,12 @@ func TestByState(t *testing.T) {
 			version:     version.Electra,
 			slot:        electraSlot,
 			forkversion: bytesutil.ToBytes4(bc.ElectraForkVersion),
+		},
+		{
+			name:        "fulu",
+			version:     version.Fulu,
+			slot:        fuluSlot,
+			forkversion: bytesutil.ToBytes4(bc.FuluForkVersion),
 		},
 	}
 	for _, c := range cases {
@@ -135,6 +143,8 @@ func stateForVersion(v int) (state.BeaconState, error) {
 		return util.NewBeaconStateDeneb()
 	case version.Electra:
 		return util.NewBeaconStateElectra()
+	case version.Fulu:
+		return util.NewBeaconStateFulu()
 	default:
 		return nil, fmt.Errorf("unrecognized version %d", v)
 	}
@@ -142,8 +152,8 @@ func stateForVersion(v int) (state.BeaconState, error) {
 
 func TestUnmarshalState(t *testing.T) {
 	ctx := context.Background()
-	undo := util.HackElectraMaxuint(t)
-	defer undo()
+	defer util.HackForksMaxuint(t, []int{version.Electra, version.Fulu})()
+
 	bc := params.BeaconConfig()
 	altairSlot, err := slots.EpochStart(bc.AltairForkEpoch)
 	require.NoError(t, err)
@@ -154,6 +164,8 @@ func TestUnmarshalState(t *testing.T) {
 	denebSlot, err := slots.EpochStart(bc.DenebForkEpoch)
 	require.NoError(t, err)
 	electraSlot, err := slots.EpochStart(bc.ElectraForkEpoch)
+	require.NoError(t, err)
+	fuluSlot, err := slots.EpochStart(bc.FuluForkEpoch)
 	require.NoError(t, err)
 	cases := []struct {
 		name        string
@@ -197,6 +209,12 @@ func TestUnmarshalState(t *testing.T) {
 			slot:        electraSlot,
 			forkversion: bytesutil.ToBytes4(bc.ElectraForkVersion),
 		},
+		{
+			name:        "fulu",
+			version:     version.Fulu,
+			slot:        fuluSlot,
+			forkversion: bytesutil.ToBytes4(bc.FuluForkVersion),
+		},
 	}
 	for _, c := range cases {
 		st, err := stateForVersion(c.version)
@@ -222,8 +240,8 @@ func TestUnmarshalState(t *testing.T) {
 }
 
 func TestDetectAndUnmarshalBlock(t *testing.T) {
-	undo := util.HackElectraMaxuint(t)
-	defer undo()
+	defer util.HackForksMaxuint(t, []int{version.Electra, version.Fulu})()
+
 	altairS, err := slots.EpochStart(params.BeaconConfig().AltairForkEpoch)
 	require.NoError(t, err)
 	bellaS, err := slots.EpochStart(params.BeaconConfig().BellatrixForkEpoch)
@@ -233,6 +251,8 @@ func TestDetectAndUnmarshalBlock(t *testing.T) {
 	denebS, err := slots.EpochStart(params.BeaconConfig().DenebForkEpoch)
 	require.NoError(t, err)
 	electraS, err := slots.EpochStart(params.BeaconConfig().ElectraForkEpoch)
+	require.NoError(t, err)
+	fuluS, err := slots.EpochStart(params.BeaconConfig().FuluForkEpoch)
 	require.NoError(t, err)
 	cases := []struct {
 		b         func(*testing.T, primitives.Slot) interfaces.ReadOnlySignedBeaconBlock
@@ -285,6 +305,11 @@ func TestDetectAndUnmarshalBlock(t *testing.T) {
 			slot: electraS,
 		},
 		{
+			name: "first slot of fulu",
+			b:    signedTestBlockFulu,
+			slot: fuluS,
+		},
+		{
 			name:      "bellatrix block in altair slot",
 			b:         signedTestBlockBellatrix,
 			slot:      bellaS - 1,
@@ -320,14 +345,15 @@ func TestDetectAndUnmarshalBlock(t *testing.T) {
 }
 
 func TestUnmarshalBlock(t *testing.T) {
-	undo := util.HackElectraMaxuint(t)
-	defer undo()
+	defer util.HackForksMaxuint(t, []int{version.Electra, version.Fulu})()
+
 	genv := bytesutil.ToBytes4(params.BeaconConfig().GenesisForkVersion)
 	altairv := bytesutil.ToBytes4(params.BeaconConfig().AltairForkVersion)
 	bellav := bytesutil.ToBytes4(params.BeaconConfig().BellatrixForkVersion)
 	capellaV := bytesutil.ToBytes4(params.BeaconConfig().CapellaForkVersion)
 	denebV := bytesutil.ToBytes4(params.BeaconConfig().DenebForkVersion)
 	electraV := bytesutil.ToBytes4(params.BeaconConfig().ElectraForkVersion)
+	fuluV := bytesutil.ToBytes4(params.BeaconConfig().FuluForkVersion)
 	altairS, err := slots.EpochStart(params.BeaconConfig().AltairForkEpoch)
 	require.NoError(t, err)
 	bellaS, err := slots.EpochStart(params.BeaconConfig().BellatrixForkEpoch)
@@ -337,6 +363,8 @@ func TestUnmarshalBlock(t *testing.T) {
 	denebS, err := slots.EpochStart(params.BeaconConfig().DenebForkEpoch)
 	require.NoError(t, err)
 	electraS, err := slots.EpochStart(params.BeaconConfig().ElectraForkEpoch)
+	require.NoError(t, err)
+	fuluS, err := slots.EpochStart(params.BeaconConfig().FuluForkEpoch)
 	require.NoError(t, err)
 	cases := []struct {
 		b       func(*testing.T, primitives.Slot) interfaces.ReadOnlySignedBeaconBlock
@@ -399,6 +427,12 @@ func TestUnmarshalBlock(t *testing.T) {
 			slot:    electraS,
 		},
 		{
+			name:    "first slot of fulu",
+			b:       signedTestBlockFulu,
+			version: fuluV,
+			slot:    fuluS,
+		},
+		{
 			name:    "bellatrix block in altair slot",
 			b:       signedTestBlockBellatrix,
 			version: bellav,
@@ -442,14 +476,15 @@ func TestUnmarshalBlock(t *testing.T) {
 }
 
 func TestUnmarshalBlindedBlock(t *testing.T) {
-	undo := util.HackElectraMaxuint(t)
-	defer undo()
+	defer util.HackForksMaxuint(t, []int{version.Electra, version.Fulu})()
+
 	genv := bytesutil.ToBytes4(params.BeaconConfig().GenesisForkVersion)
 	altairv := bytesutil.ToBytes4(params.BeaconConfig().AltairForkVersion)
 	bellav := bytesutil.ToBytes4(params.BeaconConfig().BellatrixForkVersion)
 	capellaV := bytesutil.ToBytes4(params.BeaconConfig().CapellaForkVersion)
 	denebV := bytesutil.ToBytes4(params.BeaconConfig().DenebForkVersion)
 	electraV := bytesutil.ToBytes4(params.BeaconConfig().ElectraForkVersion)
+	fuluV := bytesutil.ToBytes4(params.BeaconConfig().FuluForkVersion)
 	altairS, err := slots.EpochStart(params.BeaconConfig().AltairForkEpoch)
 	require.NoError(t, err)
 	bellaS, err := slots.EpochStart(params.BeaconConfig().BellatrixForkEpoch)
@@ -459,6 +494,8 @@ func TestUnmarshalBlindedBlock(t *testing.T) {
 	denebS, err := slots.EpochStart(params.BeaconConfig().DenebForkEpoch)
 	require.NoError(t, err)
 	electraS, err := slots.EpochStart(params.BeaconConfig().ElectraForkEpoch)
+	require.NoError(t, err)
+	fuluS, err := slots.EpochStart(params.BeaconConfig().FuluForkEpoch)
 	require.NoError(t, err)
 	cases := []struct {
 		b       func(*testing.T, primitives.Slot) interfaces.ReadOnlySignedBeaconBlock
@@ -526,6 +563,12 @@ func TestUnmarshalBlindedBlock(t *testing.T) {
 			b:       signedTestBlindedBlockElectra,
 			version: electraV,
 			slot:    electraS,
+		},
+		{
+			name:    "first slot of fulu",
+			b:       signedTestBlindedBlockFulu,
+			version: fuluV,
+			slot:    fuluS,
 		},
 		{
 			name:    "genesis block in altair slot",
@@ -661,6 +704,26 @@ func signedTestBlockElectra(t *testing.T, slot primitives.Slot) interfaces.ReadO
 
 func signedTestBlindedBlockElectra(t *testing.T, slot primitives.Slot) interfaces.ReadOnlySignedBeaconBlock {
 	b := util.NewBlindedBeaconBlockElectra()
+	b.Message.Slot = slot
+	s, err := blocks.NewSignedBeaconBlock(b)
+	require.NoError(t, err)
+	return s
+}
+
+// ----------------------------------------------------------------------------
+// Fulu
+// ----------------------------------------------------------------------------
+
+func signedTestBlockFulu(t *testing.T, slot primitives.Slot) interfaces.ReadOnlySignedBeaconBlock {
+	b := util.NewBeaconBlockFulu()
+	b.Block.Slot = slot
+	s, err := blocks.NewSignedBeaconBlock(b)
+	require.NoError(t, err)
+	return s
+}
+
+func signedTestBlindedBlockFulu(t *testing.T, slot primitives.Slot) interfaces.ReadOnlySignedBeaconBlock {
+	b := util.NewBlindedBeaconBlockFulu()
 	b.Message.Slot = slot
 	s, err := blocks.NewSignedBeaconBlock(b)
 	require.NoError(t, err)

@@ -19,6 +19,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Add EIP-7691: Blob throughput increase.
 - SSZ files generation: Remove the `// Hash: ...` header.
 - Trace IDONTWANT Messages in Pubsub.
+- Add Fulu fork boilerplate.
 
 ### Changed
 

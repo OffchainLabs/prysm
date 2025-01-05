@@ -823,6 +823,16 @@ func unmarshalBlock(_ context.Context, enc []byte) (interfaces.ReadOnlySignedBea
 		if err := rawBlock.UnmarshalSSZ(enc[len(electraBlindKey):]); err != nil {
 			return nil, errors.Wrap(err, "could not unmarshal blinded Electra block")
 		}
+	case hasFuluKey(enc):
+		rawBlock = &ethpb.SignedBeaconBlockFulu{}
+		if err := rawBlock.UnmarshalSSZ(enc[len(fuluKey):]); err != nil {
+			return nil, errors.Wrap(err, "could not unmarshal Fulu block")
+		}
+	case hasFuluBlindKey(enc):
+		rawBlock = &ethpb.SignedBlindedBeaconBlockFulu{}
+		if err := rawBlock.UnmarshalSSZ(enc[len(fuluBlindKey):]); err != nil {
+			return nil, errors.Wrap(err, "could not unmarshal blinded Fulu block")
+		}
 	default:
 		// Marshal block bytes to phase 0 beacon block.
 		rawBlock = &ethpb.SignedBeaconBlock{}
@@ -876,6 +886,11 @@ func keyForBlock(blk interfaces.ReadOnlySignedBeaconBlock) ([]byte, error) {
 			return electraBlindKey, nil
 		}
 		return electraKey, nil
+	case version.Fulu:
+		if blk.IsBlinded() {
+			return fuluBlindKey, nil
+		}
+		return fuluKey, nil
 	default:
 		return nil, fmt.Errorf("unsupported block version: %v", blk.Version())
 	}

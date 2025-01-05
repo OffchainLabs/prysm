@@ -570,3 +570,102 @@ type (
 	ExecutionPayloadElectra       = ExecutionPayloadDeneb
 	ExecutionPayloadHeaderElectra = ExecutionPayloadHeaderDeneb
 )
+
+// ----------------------------------------------------------------------------
+// Fulu
+// ----------------------------------------------------------------------------
+
+type SignedBeaconBlockContentsFulu struct {
+	SignedBlock *SignedBeaconBlockFulu `json:"signed_block"`
+	KzgProofs   []string               `json:"kzg_proofs"`
+	Blobs       []string               `json:"blobs"`
+}
+
+type BeaconBlockContentsFulu struct {
+	Block     *BeaconBlockFulu `json:"block"`
+	KzgProofs []string         `json:"kzg_proofs"`
+	Blobs     []string         `json:"blobs"`
+}
+
+type SignedBeaconBlockFulu struct {
+	Message   *BeaconBlockFulu `json:"message"`
+	Signature string           `json:"signature"`
+}
+
+var _ SignedMessageJsoner = &SignedBeaconBlockFulu{}
+
+func (s *SignedBeaconBlockFulu) MessageRawJson() ([]byte, error) {
+	return json.Marshal(s.Message)
+}
+
+func (s *SignedBeaconBlockFulu) SigString() string {
+	return s.Signature
+}
+
+type BeaconBlockFulu struct {
+	Slot          string               `json:"slot"`
+	ProposerIndex string               `json:"proposer_index"`
+	ParentRoot    string               `json:"parent_root"`
+	StateRoot     string               `json:"state_root"`
+	Body          *BeaconBlockBodyFulu `json:"body"`
+}
+
+type BeaconBlockBodyFulu struct {
+	RandaoReveal          string                        `json:"randao_reveal"`
+	Eth1Data              *Eth1Data                     `json:"eth1_data"`
+	Graffiti              string                        `json:"graffiti"`
+	ProposerSlashings     []*ProposerSlashing           `json:"proposer_slashings"`
+	AttesterSlashings     []*AttesterSlashingElectra    `json:"attester_slashings"`
+	Attestations          []*AttestationElectra         `json:"attestations"`
+	Deposits              []*Deposit                    `json:"deposits"`
+	VoluntaryExits        []*SignedVoluntaryExit        `json:"voluntary_exits"`
+	SyncAggregate         *SyncAggregate                `json:"sync_aggregate"`
+	ExecutionPayload      *ExecutionPayloadElectra      `json:"execution_payload"`
+	BLSToExecutionChanges []*SignedBLSToExecutionChange `json:"bls_to_execution_changes"`
+	BlobKzgCommitments    []string                      `json:"blob_kzg_commitments"`
+	ExecutionRequests     *ExecutionRequests            `json:"execution_requests"`
+}
+
+type BlindedBeaconBlockFulu struct {
+	Slot          string                      `json:"slot"`
+	ProposerIndex string                      `json:"proposer_index"`
+	ParentRoot    string                      `json:"parent_root"`
+	StateRoot     string                      `json:"state_root"`
+	Body          *BlindedBeaconBlockBodyFulu `json:"body"`
+}
+
+type SignedBlindedBeaconBlockFulu struct {
+	Message   *BlindedBeaconBlockFulu `json:"message"`
+	Signature string                  `json:"signature"`
+}
+
+var _ SignedMessageJsoner = &SignedBlindedBeaconBlockFulu{}
+
+func (s *SignedBlindedBeaconBlockFulu) MessageRawJson() ([]byte, error) {
+	return json.Marshal(s.Message)
+}
+
+func (s *SignedBlindedBeaconBlockFulu) SigString() string {
+	return s.Signature
+}
+
+type BlindedBeaconBlockBodyFulu struct {
+	RandaoReveal           string                         `json:"randao_reveal"`
+	Eth1Data               *Eth1Data                      `json:"eth1_data"`
+	Graffiti               string                         `json:"graffiti"`
+	ProposerSlashings      []*ProposerSlashing            `json:"proposer_slashings"`
+	AttesterSlashings      []*AttesterSlashingElectra     `json:"attester_slashings"`
+	Attestations           []*AttestationElectra          `json:"attestations"`
+	Deposits               []*Deposit                     `json:"deposits"`
+	VoluntaryExits         []*SignedVoluntaryExit         `json:"voluntary_exits"`
+	SyncAggregate          *SyncAggregate                 `json:"sync_aggregate"`
+	ExecutionPayloadHeader *ExecutionPayloadHeaderElectra `json:"execution_payload_header"`
+	BLSToExecutionChanges  []*SignedBLSToExecutionChange  `json:"bls_to_execution_changes"`
+	BlobKzgCommitments     []string                       `json:"blob_kzg_commitments"`
+	ExecutionRequests      *ExecutionRequests             `json:"execution_requests"`
+}
+
+type (
+	ExecutionPayloadFulu       = ExecutionPayloadDeneb
+	ExecutionPayloadHeaderFulu = ExecutionPayloadHeaderDeneb
+)

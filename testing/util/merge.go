@@ -69,3 +69,22 @@ func NewBeaconBlockContentsElectra() *ethpb.SignedBeaconBlockContentsElectra {
 func NewBlindedBeaconBlockElectra() *ethpb.SignedBlindedBeaconBlockElectra {
 	return HydrateSignedBlindedBeaconBlockElectra(&ethpb.SignedBlindedBeaconBlockElectra{})
 }
+
+// ----------------------------------------------------------------------------
+// Fulu
+// ----------------------------------------------------------------------------
+
+// NewBeaconBlockFulu creates a beacon block with minimum marshalable fields.
+func NewBeaconBlockFulu() *ethpb.SignedBeaconBlockFulu {
+	return HydrateSignedBeaconBlockFulu(&ethpb.SignedBeaconBlockFulu{})
+}
+
+// NewBeaconBlockContentsFulu creates a beacon block with minimum marshalable fields.
+func NewBeaconBlockContentsFulu() *ethpb.SignedBeaconBlockContentsFulu {
+	return HydrateSignedBeaconBlockContentsFulu(&ethpb.SignedBeaconBlockContentsFulu{})
+}
+
+// NewBlindedBeaconBlockFulu creates a blinded beacon block with minimum marshalable fields.
+func NewBlindedBeaconBlockFulu() *ethpb.SignedBlindedBeaconBlockFulu {
+	return HydrateSignedBlindedBeaconBlockFulu(&ethpb.SignedBlindedBeaconBlockFulu{})
+}

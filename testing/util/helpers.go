@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"math"
 	"testing"
 
 	"github.com/pkg/errors"
@@ -19,6 +20,8 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
 	"github.com/prysmaticlabs/prysm/v5/crypto/rand"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 // RandaoReveal returns a signature of the requested epoch using the beacon proposer private key.
@@ -148,4 +151,29 @@ func Random32Bytes(t *testing.T) []byte {
 		t.Fatal(err)
 	}
 	return b
+}
+
+// HackForksMaxuint is helpful for tests that need to set up cases for some future forks.
+// We have unit tests that assert our config matches the upstream config, where some forks epoch are always
+// set to MaxUint64 until they aer formally set. This creates an issue for tests that want to
+// work with slots that are defined to be after these forks because converting the max epoch to a slot leads
+// to multiplication overflow.
+// Monkey patching tests with this function is the simplest workaround in these cases.
+func HackForksMaxuint(t *testing.T, forksVersion []int) func() {
+	bc := params.MainnetConfig().Copy()
+	for _, forkVersion := range forksVersion {
+		switch forkVersion {
+		case version.Electra:
+			bc.ElectraForkEpoch = math.MaxUint32 - 1
+		case version.Fulu:
+			bc.FuluForkEpoch = math.MaxUint32
+		default:
+			t.Fatalf("unsupported fork version %d", forkVersion)
+		}
+	}
+	undo, err := params.SetActiveWithUndo(bc)
+	require.NoError(t, err)
+	return func() {
+		require.NoError(t, undo())
+	}
 }

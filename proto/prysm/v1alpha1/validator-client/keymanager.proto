@@ -65,7 +65,12 @@ message SignRequest {
         ethereum.eth.v1alpha1.BeaconBlockElectra block_electra = 118;
         ethereum.eth.v1alpha1.BlindedBeaconBlockElectra blinded_block_electra = 119;
         ethereum.eth.v1alpha1.AggregateAttestationAndProofElectra aggregate_attestation_and_proof_electra = 120;
+
+        // Fulu objects.
+        ethereum.eth.v1alpha1.BeaconBlockFulu block_fulu = 121;
+        ethereum.eth.v1alpha1.BlindedBeaconBlockFulu blinded_block_fulu = 122;
     }
+
     reserved 4, 5; // Reserving old, deleted fields.
     uint64 signing_slot = 6 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"];
 }
