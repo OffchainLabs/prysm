@@ -113,7 +113,6 @@ func createEmptySyncCommittee() *ethpb.SyncCommittee {
 	for i := 0; uint64(i) < params.BeaconConfig().SyncCommitteeSize; i++ {
 		syncCom[i] = make([]byte, fieldparams.BLSPubkeyLength)
 	}
-	syncCom[123][4] = 1
 
 	return &ethpb.SyncCommittee{
 		Pubkeys:         syncCom,
