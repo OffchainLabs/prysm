@@ -18,6 +18,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"github.com/prysmaticlabs/prysm/v5/testing/util"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
+	bolt "go.etcd.io/bbolt"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -578,6 +579,104 @@ func TestStore_LightClientBootstrap_CanSaveRetrieve(t *testing.T) {
 		retrievedBranch, err := retrievedBootstrap.CurrentSyncCommitteeBranch()
 		require.NoError(t, err)
 		require.DeepEqual(t, savedBranch, retrievedBranch, "retrieved bootstrap sync committee branch does not match saved bootstrap sync committee branch")
+	})
+
+	t.Run("Multiple bootstraps with same sync committee", func(t *testing.T) {
+		bootstrap1, err := createDefaultLightClientBootstrap(primitives.Slot(uint64(params.BeaconConfig().AltairForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch)))
+		require.NoError(t, err)
+		bootstrap2, err := createDefaultLightClientBootstrap(primitives.Slot(uint64(params.BeaconConfig().AltairForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch)))
+		require.NoError(t, err)
+
+		randomSyncCommittee := createRandomSyncCommittee()
+
+		err = bootstrap1.SetCurrentSyncCommittee(randomSyncCommittee)
+		require.NoError(t, err)
+		err = bootstrap2.SetCurrentSyncCommittee(randomSyncCommittee)
+		require.NoError(t, err)
+
+		err = db.SaveLightClientBootstrap(ctx, []byte("blockRootAltair1"), bootstrap1)
+		require.NoError(t, err)
+		err = db.SaveLightClientBootstrap(ctx, []byte("blockRootAltair2"), bootstrap2)
+		require.NoError(t, err)
+
+		retrievedBootstrap1, err := db.LightClientBootstrap(ctx, []byte("blockRootAltair1"))
+		require.NoError(t, err)
+		retrievedBootstrap2, err := db.LightClientBootstrap(ctx, []byte("blockRootAltair2"))
+		require.NoError(t, err)
+
+		require.DeepEqual(t, bootstrap1.Header(), retrievedBootstrap1.Header(), "retrieved bootstrap1 header does not match saved bootstrap1 header")
+		require.DeepEqual(t, randomSyncCommittee, retrievedBootstrap1.CurrentSyncCommittee(), "retrieved bootstrap1 sync committee does not match saved bootstrap1 sync committee")
+		savedBranch, err := bootstrap1.CurrentSyncCommitteeBranch()
+		require.NoError(t, err)
+		retrievedBranch, err := retrievedBootstrap1.CurrentSyncCommitteeBranch()
+		require.NoError(t, err)
+		require.DeepEqual(t, savedBranch, retrievedBranch, "retrieved bootstrap1 sync committee branch does not match saved bootstrap1 sync committee branch")
+
+		require.DeepEqual(t, bootstrap2.Header(), retrievedBootstrap2.Header(), "retrieved bootstrap1 header does not match saved bootstrap1 header")
+		require.DeepEqual(t, randomSyncCommittee, retrievedBootstrap2.CurrentSyncCommittee(), "retrieved bootstrap1 sync committee does not match saved bootstrap1 sync committee")
+		savedBranch2, err := bootstrap2.CurrentSyncCommitteeBranch()
+		require.NoError(t, err)
+		retrievedBranch2, err := retrievedBootstrap2.CurrentSyncCommitteeBranch()
+		require.NoError(t, err)
+		require.DeepEqual(t, savedBranch2, retrievedBranch2, "retrieved bootstrap1 sync committee branch does not match saved bootstrap1 sync committee branch")
+
+		// Ensure that the sync committee is only stored once
+		err = db.db.View(func(tx *bolt.Tx) error {
+			bucket := tx.Bucket(lightClientSyncCommitteeBucket)
+			require.NotNil(t, bucket)
+			count := bucket.Stats().KeyN
+			require.Equal(t, 1, count)
+			return nil
+		})
+		require.NoError(t, err)
+	})
+
+	t.Run("Multiple bootstraps with different sync committees", func(t *testing.T) {
+		bootstrap1, err := createDefaultLightClientBootstrap(primitives.Slot(uint64(params.BeaconConfig().AltairForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch)))
+		require.NoError(t, err)
+		bootstrap2, err := createDefaultLightClientBootstrap(primitives.Slot(uint64(params.BeaconConfig().AltairForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch)))
+		require.NoError(t, err)
+
+		err = bootstrap1.SetCurrentSyncCommittee(createRandomSyncCommittee())
+		require.NoError(t, err)
+		err = bootstrap2.SetCurrentSyncCommittee(createRandomSyncCommittee())
+		require.NoError(t, err)
+
+		err = db.SaveLightClientBootstrap(ctx, []byte("blockRootAltair1"), bootstrap1)
+		require.NoError(t, err)
+		err = db.SaveLightClientBootstrap(ctx, []byte("blockRootAltair2"), bootstrap2)
+		require.NoError(t, err)
+
+		retrievedBootstrap1, err := db.LightClientBootstrap(ctx, []byte("blockRootAltair1"))
+		require.NoError(t, err)
+		retrievedBootstrap2, err := db.LightClientBootstrap(ctx, []byte("blockRootAltair2"))
+		require.NoError(t, err)
+
+		require.DeepEqual(t, bootstrap1.Header(), retrievedBootstrap1.Header(), "retrieved bootstrap1 header does not match saved bootstrap1 header")
+		require.DeepEqual(t, bootstrap1.CurrentSyncCommittee(), retrievedBootstrap1.CurrentSyncCommittee(), "retrieved bootstrap1 sync committee does not match saved bootstrap1 sync committee")
+		savedBranch, err := bootstrap1.CurrentSyncCommitteeBranch()
+		require.NoError(t, err)
+		retrievedBranch, err := retrievedBootstrap1.CurrentSyncCommitteeBranch()
+		require.NoError(t, err)
+		require.DeepEqual(t, savedBranch, retrievedBranch, "retrieved bootstrap1 sync committee branch does not match saved bootstrap1 sync committee branch")
+
+		require.DeepEqual(t, bootstrap2.Header(), retrievedBootstrap2.Header(), "retrieved bootstrap1 header does not match saved bootstrap1 header")
+		require.DeepEqual(t, bootstrap2.CurrentSyncCommittee(), retrievedBootstrap2.CurrentSyncCommittee(), "retrieved bootstrap1 sync committee does not match saved bootstrap1 sync committee")
+		savedBranch2, err := bootstrap2.CurrentSyncCommitteeBranch()
+		require.NoError(t, err)
+		retrievedBranch2, err := retrievedBootstrap2.CurrentSyncCommitteeBranch()
+		require.NoError(t, err)
+		require.DeepEqual(t, savedBranch2, retrievedBranch2, "retrieved bootstrap1 sync committee branch does not match saved bootstrap1 sync committee branch")
+
+		// Ensure that the sync committee is only stored once
+		err = db.db.View(func(tx *bolt.Tx) error {
+			bucket := tx.Bucket(lightClientSyncCommitteeBucket)
+			require.NotNil(t, bucket)
+			count := bucket.Stats().KeyN
+			require.Equal(t, 2, count)
+			return nil
+		})
+		require.NoError(t, err)
 	})
 
 	t.Run("Capella", func(t *testing.T) {

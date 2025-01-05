@@ -132,7 +132,6 @@ func encodeLightClientBootstrap(bootstrap interfaces.LightClientBootstrap, syncC
 	copy(fullEnc[len(key):len(key)+32], syncCommitteeHash[:])
 	copy(fullEnc[len(key)+32:], enc)
 	compressedEnc := snappy.Encode(nil, fullEnc)
-	fmt.Println("compressed enc size: ", len(compressedEnc))
 	return compressedEnc, nil
 }
 
