@@ -382,7 +382,7 @@ func UpgradeState(ctx context.Context, state state.BeaconState) (state.BeaconSta
 	}
 
 	if upgraded {
-		log.WithField("version", version.String(state.Version())).Debug("Upgraded state to")
+		log.WithField("version", version.String(state.Version())).Info("Upgraded state to")
 	}
 
 	return state, nil
