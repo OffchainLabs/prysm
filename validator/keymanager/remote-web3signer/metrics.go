@@ -27,7 +27,7 @@ var (
 		Name: "remote_web3signer_attestation_sign_requests_total",
 		Help: "Total number of attestation sign requests",
 	})
-	//TODO: deprecate these fork specific counters...
+	//TODO: deprecate these fork specific counters in prysm v6...
 	blockSignRequestsTotal = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "remote_web3signer_block_sign_requests_total",
 		Help: "Total number of block sign requests",
@@ -61,10 +61,12 @@ var (
 		Help: "Total number of blinded block deneb sign requests",
 	})
 	/////
+
 	remoteBlockSignRequestsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "remote_block_sign_requests_total",
 		Help: "Total number of block sign requests with fork and blinded block check",
 	}, []string{"fork", "isBlinded"})
+
 	randaoRevealSignRequestsTotal = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "remote_web3signer_randao_reveal_sign_requests_total",
 		Help: "Total number of randao reveal sign requests",
