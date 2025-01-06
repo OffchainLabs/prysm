@@ -70,6 +70,10 @@ func (fv *FakeValidator) Done() {
 	fv.DoneCalled = true
 }
 
+func (fv *FakeValidator) Init(ctx context.Context) error {
+	return nil
+}
+
 // WaitForKeymanagerInitialization for mocking.
 func (fv *FakeValidator) WaitForKeymanagerInitialization(_ context.Context) error {
 	fv.WaitForWalletInitializationCalled = true
@@ -80,12 +84,12 @@ func (fv *FakeValidator) WaitForKeymanagerInitialization(_ context.Context) erro
 func (fv *FakeValidator) LogSubmittedSyncCommitteeMessages() {}
 
 // WaitForChainStart for mocking.
-func (fv *FakeValidator) WaitForChainStart(_ context.Context) error {
+func (fv *FakeValidator) WaitForChainStart(_ context.Context) (primitives.Slot, error) {
 	fv.WaitForChainStartCalled++
 	if fv.RetryTillSuccess >= fv.WaitForChainStartCalled {
-		return api.ErrConnectionIssue
+		return 0, api.ErrConnectionIssue
 	}
-	return nil
+	return 0, nil
 }
 
 // WaitForActivation for mocking.

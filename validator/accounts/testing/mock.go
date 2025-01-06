@@ -108,13 +108,17 @@ type Validator struct {
 	proposerSettings *proposer.Settings
 }
 
+func (_ *Validator) Init(ctx context.Context) error {
+	panic("implement me")
+}
+
 func (_ *Validator) LogSubmittedSyncCommitteeMessages() {}
 
 func (_ *Validator) Done() {
 	panic("implement me")
 }
 
-func (_ *Validator) WaitForChainStart(_ context.Context) error {
+func (_ *Validator) WaitForChainStart(_ context.Context) (primitives.Slot, error) {
 	panic("implement me")
 }
 

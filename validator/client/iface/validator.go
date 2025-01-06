@@ -36,7 +36,8 @@ const (
 // Validator interface defines the primary methods of a validator client.
 type Validator interface {
 	Done()
-	WaitForChainStart(ctx context.Context) error
+	Init(ctx context.Context) error
+	WaitForChainStart(ctx context.Context) (primitives.Slot, error)
 	WaitForSync(ctx context.Context) error
 	WaitForActivation(ctx context.Context, accountsChangedChan chan [][fieldparams.BLSPubkeyLength]byte) error
 	CanonicalHeadSlot(ctx context.Context) (primitives.Slot, error)

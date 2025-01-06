@@ -130,6 +130,88 @@ func (v *validator) Done() {
 	v.ticker.Done()
 }
 
+func (v *validator) Init(ctx context.Context) error {
+	ctx, span := trace.StartSpan(ctx, "validator.Init")
+	defer span.End()
+
+	ticker := time.NewTicker(backOffPeriod)
+	defer ticker.Stop()
+
+	firstTime := true
+	var (
+		currentSlot primitives.Slot
+		err         error
+	)
+	for {
+		if !firstTime {
+			if ctx.Err() != nil {
+				log.Info("Context canceled, stopping validator")
+				return errors.New("context canceled")
+			}
+			<-ticker.C
+		}
+
+		firstTime = false
+		currentSlot, err = v.WaitForChainStart(ctx)
+		if err != nil {
+			if isConnectionError(err) {
+				log.WithError(err).Warn("Could not determine if beacon chain started")
+				continue
+			}
+
+			log.WithError(err).Fatal("Could not determine if beacon chain started")
+		}
+
+		if err := v.WaitForKeymanagerInitialization(ctx); err != nil {
+			// log.Fatal will prevent defer from being called
+			v.Done()
+			log.WithError(err).Fatal("Wallet is not ready")
+		}
+
+		if err := v.WaitForSync(ctx); err != nil {
+			if isConnectionError(err) {
+				log.WithError(err).Warn("Could not determine if beacon chain started")
+				continue
+			}
+
+			log.WithError(err).Fatal("Could not determine if beacon node synced")
+		}
+
+		if err := v.WaitForActivation(ctx, nil /* accountsChangedChan */); err != nil {
+			log.WithError(err).Fatal("Could not wait for validator activation")
+		}
+
+		if err := v.CheckDoppelGanger(ctx); err != nil {
+			if isConnectionError(err) {
+				log.WithError(err).Warn("Could not wait for checking doppelganger")
+				continue
+			}
+
+			log.WithError(err).Fatal("Could not succeed with doppelganger check")
+		}
+		break
+	}
+	// should there be a check if it's too later into current slot?
+	if err := v.UpdateDuties(ctx, currentSlot); err != nil {
+		handleAssignmentError(err, currentSlot)
+	}
+
+	km, err := v.Keymanager()
+	if err != nil {
+		log.WithError(err).Fatal("Could not get keymanager")
+	}
+	// check if proposer settings is still nil
+	// Set properties on the beacon node like the fee recipient for validators that are being used & active.
+	if v.ProposerSettings() == nil {
+		log.Warn("Validator client started without proposer settings such as fee recipient" +
+			" and will continue to use settings provided in the beacon node.")
+	}
+	if err := v.PushProposerSettings(ctx, km, currentSlot, true); err != nil {
+		log.WithError(err).Fatal("Failed to update proposer settings")
+	}
+	return nil
+}
+
 // WaitForKeymanagerInitialization checks if the validator needs to wait for keymanager initialization.
 func (v *validator) WaitForKeymanagerInitialization(ctx context.Context) error {
 	ctx, span := trace.StartSpan(ctx, "validator.WaitForKeymanagerInitialization")
@@ -253,43 +335,44 @@ func recheckValidatingKeysBucket(ctx context.Context, valDB db.Database, km keym
 // it calls to the beacon node which then verifies the ETH1.0 deposit contract logs to check
 // for the ChainStart log to have been emitted. If so, it starts a ticker based on the ChainStart
 // unix timestamp which will be used to keep track of time within the validator client.
-func (v *validator) WaitForChainStart(ctx context.Context) error {
+func (v *validator) WaitForChainStart(ctx context.Context) (primitives.Slot, error) {
 	ctx, span := trace.StartSpan(ctx, "validator.WaitForChainStart")
 	defer span.End()
-
+	var currentSlot primitives.Slot
 	// First, check if the beacon chain has started.
 	log.Info("Syncing with beacon node to align on chain genesis info")
 
 	chainStartRes, err := v.validatorClient.WaitForChainStart(ctx, &emptypb.Empty{})
 	if errors.Is(err, io.EOF) {
-		return client.ErrConnectionIssue
+		return currentSlot, client.ErrConnectionIssue
 	}
 
 	if errors.Is(ctx.Err(), context.Canceled) {
-		return errors.Wrap(ctx.Err(), "context has been canceled so shutting down the loop")
+		return currentSlot, errors.Wrap(ctx.Err(), "context has been canceled so shutting down the loop")
 	}
 
 	if err != nil {
-		return errors.Wrap(
+		return currentSlot, errors.Wrap(
 			client.ErrConnectionIssue,
 			errors.Wrap(err, "could not receive ChainStart from stream").Error(),
 		)
 	}
 
 	v.genesisTime = chainStartRes.GenesisTime
+	currentSlot = slots.CurrentSlot(chainStartRes.GenesisTime)
 
 	curGenValRoot, err := v.db.GenesisValidatorsRoot(ctx)
 	if err != nil {
-		return errors.Wrap(err, "could not get current genesis validators root")
+		return currentSlot, errors.Wrap(err, "could not get current genesis validators root")
 	}
 
 	if len(curGenValRoot) == 0 {
 		if err := v.db.SaveGenesisValidatorsRoot(ctx, chainStartRes.GenesisValidatorsRoot); err != nil {
-			return errors.Wrap(err, "could not save genesis validators root")
+			return currentSlot, errors.Wrap(err, "could not save genesis validators root")
 		}
 
 		v.setTicker()
-		return nil
+		return currentSlot, nil
 	}
 
 	if !bytes.Equal(curGenValRoot, chainStartRes.GenesisValidatorsRoot) {
@@ -299,7 +382,7 @@ func (v *validator) WaitForChainStart(ctx context.Context) error {
 			clear the database. If not, please file an issue at https://github.com/prysmaticlabs/prysm/issues`,
 			cmd.ClearDB.Name,
 		)
-		return fmt.Errorf(
+		return currentSlot, fmt.Errorf(
 			"genesis validators root from beacon node (%#x) does not match root saved in validator db (%#x)",
 			chainStartRes.GenesisValidatorsRoot,
 			curGenValRoot,
@@ -307,7 +390,7 @@ func (v *validator) WaitForChainStart(ctx context.Context) error {
 	}
 
 	v.setTicker()
-	return nil
+	return currentSlot, nil
 }
 
 func (v *validator) setTicker() {

@@ -29,7 +29,7 @@ var backOffPeriod = 10 * time.Second
 // canceled.
 //
 // Order of operations:
-// 1 - Initialize validator data
+// 1 - Init validator data
 // 2 - Wait for validator activation
 // 3 - Wait for the next slot start
 // 4 - Update assignments
@@ -39,13 +39,10 @@ func run(ctx context.Context, v iface.Validator) {
 	cleanup := v.Done
 	defer cleanup()
 
-	headSlot, err := initializeValidatorAndGetHeadSlot(ctx, v)
-	if err != nil {
+	if err := v.Init(ctx); err != nil {
 		return // Exit if context is canceled.
 	}
-	if err := v.UpdateDuties(ctx, headSlot); err != nil {
-		handleAssignmentError(err, headSlot)
-	}
+
 	eventsChan := make(chan *event.Event, 1)
 	healthTracker := v.HealthTracker()
 	runHealthCheckRoutine(ctx, v, eventsChan)
@@ -56,15 +53,7 @@ func run(ctx context.Context, v iface.Validator) {
 		log.WithError(err).Fatal("Could not get keymanager")
 	}
 	sub := km.SubscribeAccountChanges(accountsChangedChan)
-	// check if proposer settings is still nil
-	// Set properties on the beacon node like the fee recipient for validators that are being used & active.
-	if v.ProposerSettings() == nil {
-		log.Warn("Validator client started without proposer settings such as fee recipient" +
-			" and will continue to use settings provided in the beacon node.")
-	}
-	if err := v.PushProposerSettings(ctx, km, headSlot, true); err != nil {
-		log.WithError(err).Fatal("Failed to update proposer settings")
-	}
+
 	for {
 		ctx, span := prysmTrace.StartSpan(ctx, "validator.processSlot")
 		select {
@@ -118,13 +107,8 @@ func run(ctx context.Context, v iface.Validator) {
 			performRoles(slotCtx, allRoles, v, slot, &wg, span)
 		case isHealthyAgain := <-healthTracker.HealthUpdates():
 			if isHealthyAgain {
-				headSlot, err = initializeValidatorAndGetHeadSlot(ctx, v)
-				if err != nil {
-					log.WithError(err).Error("Failed to re initialize validator and get head slot")
-					continue
-				}
-				if err := v.UpdateDuties(ctx, headSlot); err != nil {
-					handleAssignmentError(err, headSlot)
+				if err = v.Init(ctx); err != nil {
+					log.WithError(err).Error("Failed to re initialize validator")
 					continue
 				}
 			}
@@ -148,82 +132,6 @@ func onAccountsChanged(ctx context.Context, v iface.Validator, current [][48]byt
 			log.WithError(err).Warn("Could not wait for validator activation")
 		}
 	}
-}
-
-func initializeValidatorAndGetHeadSlot(ctx context.Context, v iface.Validator) (primitives.Slot, error) {
-	ctx, span := prysmTrace.StartSpan(ctx, "validator.initializeValidatorAndGetHeadSlot")
-	defer span.End()
-
-	ticker := time.NewTicker(backOffPeriod)
-	defer ticker.Stop()
-
-	firstTime := true
-
-	var (
-		headSlot primitives.Slot
-		err      error
-	)
-
-	for {
-		if !firstTime {
-			if ctx.Err() != nil {
-				log.Info("Context canceled, stopping validator")
-				return headSlot, errors.New("context canceled")
-			}
-			<-ticker.C
-		}
-
-		firstTime = false
-
-		if err := v.WaitForChainStart(ctx); err != nil {
-			if isConnectionError(err) {
-				log.WithError(err).Warn("Could not determine if beacon chain started")
-				continue
-			}
-
-			log.WithError(err).Fatal("Could not determine if beacon chain started")
-		}
-
-		if err := v.WaitForKeymanagerInitialization(ctx); err != nil {
-			// log.Fatal will prevent defer from being called
-			v.Done()
-			log.WithError(err).Fatal("Wallet is not ready")
-		}
-
-		if err := v.WaitForSync(ctx); err != nil {
-			if isConnectionError(err) {
-				log.WithError(err).Warn("Could not determine if beacon chain started")
-				continue
-			}
-
-			log.WithError(err).Fatal("Could not determine if beacon node synced")
-		}
-
-		if err := v.WaitForActivation(ctx, nil /* accountsChangedChan */); err != nil {
-			log.WithError(err).Fatal("Could not wait for validator activation")
-		}
-
-		headSlot, err = v.CanonicalHeadSlot(ctx)
-		if isConnectionError(err) {
-			log.WithError(err).Warn("Could not get current canonical head slot")
-			continue
-		}
-
-		if err != nil {
-			log.WithError(err).Fatal("Could not get current canonical head slot")
-		}
-
-		if err := v.CheckDoppelGanger(ctx); err != nil {
-			if isConnectionError(err) {
-				log.WithError(err).Warn("Could not wait for checking doppelganger")
-				continue
-			}
-
-			log.WithError(err).Fatal("Could not succeed with doppelganger check")
-		}
-		break
-	}
-	return headSlot, nil
 }
 
 func performRoles(slotCtx context.Context, allRoles map[[48]byte][]iface.ValidatorRole, v iface.Validator, slot primitives.Slot, wg *sync.WaitGroup, span trace.Span) {
@@ -304,20 +212,6 @@ func runHealthCheckRoutine(ctx context.Context, v iface.Validator, eventsChan ch
 				v.ChangeHost()
 				if !tracker.CheckHealth(ctx) {
 					continue // Skip to the next ticker
-				}
-
-				km, err := v.Keymanager()
-				if err != nil {
-					log.WithError(err).Error("Could not get keymanager")
-					return
-				}
-				slot, err := v.CanonicalHeadSlot(ctx)
-				if err != nil {
-					log.WithError(err).Error("Could not get canonical head slot")
-					return
-				}
-				if err := v.PushProposerSettings(ctx, km, slot, true); err != nil {
-					log.WithError(err).Warn("Failed to update proposer settings")
 				}
 			}
 
