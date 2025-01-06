@@ -35,6 +35,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Updated Electra spec definition for `process_epoch`.
 - Update our `go-libp2p-pubsub` dependency.
 - Re-organize the content of files to ease the creation of a new fork boilerplate.
+- Fixed Metadata errors for peers connected via QUIC.
 
 ### Deprecated
 
