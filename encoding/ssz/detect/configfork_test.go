@@ -563,6 +563,10 @@ func TestUnmarshalBlindedBlock(t *testing.T) {
 	}
 }
 
+// ----------------------------------------------------------------------------
+// Phase 0
+// ----------------------------------------------------------------------------
+
 func signedTestBlockGenesis(t *testing.T, slot primitives.Slot) interfaces.ReadOnlySignedBeaconBlock {
 	b := util.NewBeaconBlock()
 	b.Block.Slot = slot
@@ -571,6 +575,10 @@ func signedTestBlockGenesis(t *testing.T, slot primitives.Slot) interfaces.ReadO
 	return s
 }
 
+// ----------------------------------------------------------------------------
+// Altair
+// ----------------------------------------------------------------------------
+
 func signedTestBlockAltair(t *testing.T, slot primitives.Slot) interfaces.ReadOnlySignedBeaconBlock {
 	b := util.NewBeaconBlockAltair()
 	b.Block.Slot = slot
@@ -578,6 +586,10 @@ func signedTestBlockAltair(t *testing.T, slot primitives.Slot) interfaces.ReadOn
 	require.NoError(t, err)
 	return s
 }
+
+// ----------------------------------------------------------------------------
+// Bellatrix
+// ----------------------------------------------------------------------------
 
 func signedTestBlockBellatrix(t *testing.T, slot primitives.Slot) interfaces.ReadOnlySignedBeaconBlock {
 	b := util.NewBeaconBlockBellatrix()
@@ -595,6 +607,10 @@ func signedTestBlindedBlockBellatrix(t *testing.T, slot primitives.Slot) interfa
 	return s
 }
 
+// ----------------------------------------------------------------------------
+// Capella
+// ----------------------------------------------------------------------------
+
 func signedTestBlockCapella(t *testing.T, slot primitives.Slot) interfaces.ReadOnlySignedBeaconBlock {
 	b := util.NewBeaconBlockCapella()
 	b.Block.Slot = slot
@@ -611,16 +627,12 @@ func signedTestBlindedBlockCapella(t *testing.T, slot primitives.Slot) interface
 	return s
 }
 
+// ----------------------------------------------------------------------------
+// Deneb
+// ----------------------------------------------------------------------------
+
 func signedTestBlockDeneb(t *testing.T, slot primitives.Slot) interfaces.ReadOnlySignedBeaconBlock {
 	b := util.NewBeaconBlockDeneb()
-	b.Block.Slot = slot
-	s, err := blocks.NewSignedBeaconBlock(b)
-	require.NoError(t, err)
-	return s
-}
-
-func signedTestBlockElectra(t *testing.T, slot primitives.Slot) interfaces.ReadOnlySignedBeaconBlock {
-	b := util.NewBeaconBlockElectra()
 	b.Block.Slot = slot
 	s, err := blocks.NewSignedBeaconBlock(b)
 	require.NoError(t, err)
@@ -630,6 +642,18 @@ func signedTestBlockElectra(t *testing.T, slot primitives.Slot) interfaces.ReadO
 func signedTestBlindedBlockDeneb(t *testing.T, slot primitives.Slot) interfaces.ReadOnlySignedBeaconBlock {
 	b := util.NewBlindedBeaconBlockDeneb()
 	b.Message.Slot = slot
+	s, err := blocks.NewSignedBeaconBlock(b)
+	require.NoError(t, err)
+	return s
+}
+
+// ----------------------------------------------------------------------------
+// Electra
+// ----------------------------------------------------------------------------
+
+func signedTestBlockElectra(t *testing.T, slot primitives.Slot) interfaces.ReadOnlySignedBeaconBlock {
+	b := util.NewBeaconBlockElectra()
+	b.Block.Slot = slot
 	s, err := blocks.NewSignedBeaconBlock(b)
 	require.NoError(t, err)
 	return s

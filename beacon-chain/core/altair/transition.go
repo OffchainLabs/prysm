@@ -69,8 +69,7 @@ func ProcessEpoch(ctx context.Context, state state.BeaconState) error {
 	}
 
 	// Modified in Altair and Bellatrix.
-	state, err = e.ProcessSlashings(state)
-	if err != nil {
+	if err := e.ProcessSlashings(state); err != nil {
 		return err
 	}
 	state, err = e.ProcessEth1DataReset(state)

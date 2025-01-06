@@ -15,7 +15,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
@@ -273,7 +272,7 @@ func ProcessPendingDeposits(ctx context.Context, st state.BeaconState, activeBal
 	isChurnLimitReached := false
 
 	var pendingDepositsToBatchVerify []*ethpb.PendingDeposit
-	var pendingDepositsToPostpone []*eth.PendingDeposit
+	var pendingDepositsToPostpone []*ethpb.PendingDeposit
 
 	depBalToConsume, err := st.DepositBalanceToConsume()
 	if err != nil {
