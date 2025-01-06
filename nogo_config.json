@@ -208,5 +208,11 @@
       "external/.*": "Third party code",
       "rules_go_work-.*": "Third party code"
     }
+  },
+  "loopclosure": {
+    "exclude_files": {
+      "external/com_github_ethereum_go_ethereum/.*": "Unsafe third party code",
+      "rules_go_work-.*": "Third party code"
+    }
   }
 }

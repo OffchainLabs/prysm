@@ -760,8 +760,8 @@ def prysm_deps():
         patches = [
             "//third_party:com_github_ethereum_go_ethereum_secp256k1.patch",
         ],
-        sum = "h1:8nFDCUUE67rPc6AKxFj7JKaOa2W/W1Rse3oS6LvvxEY=",
-        version = "v1.14.11",
+        sum = "h1:8hl57x77HSUo+cXExrURjU/w1VhL+ShCTJrTwcCQSe4=",
+        version = "v1.14.12",
     )
     go_repository(
         name = "com_github_ethereum_go_verkle",
@@ -892,14 +892,14 @@ def prysm_deps():
     go_repository(
         name = "com_github_gdamore_encoding",
         importpath = "github.com/gdamore/encoding",
-        sum = "h1:+7OoQ1Bc6eTm5niUzBa0Ctsh6JbMW6Ra+YNuAtDBdko=",
-        version = "v1.0.0",
+        sum = "h1:YzKZckdBL6jVt2Gc+5p82qhrGiqMdG/eNs6Wy0u3Uhw=",
+        version = "v1.0.1",
     )
     go_repository(
         name = "com_github_gdamore_tcell_v2",
         importpath = "github.com/gdamore/tcell/v2",
-        sum = "h1:I5LiGTQuwrysAt1KS9wg1yFfOI3arI3ucFrxtd/xqaA=",
-        version = "v2.7.0",
+        sum = "h1:sg6/UnTM9jGpZU+oFYAsDahfchWAFW8Xx2yFinNSAYU=",
+        version = "v2.7.4",
     )
     go_repository(
         name = "com_github_getkin_kin_openapi",
@@ -1518,8 +1518,8 @@ def prysm_deps():
     go_repository(
         name = "com_github_holiman_goevmlab",
         importpath = "github.com/holiman/goevmlab",
-        sum = "h1:MnqrjbCnYO6ImEJiqza1vTcSFJno9cErjWG9ONXJgoc=",
-        version = "v0.0.0-20240515165425-8414a52dc9d4",
+        sum = "h1:JHZ8k9n9G9KXIo1qrvK5Cxah6ax5BR0qVTA9bFYl1oM=",
+        version = "v0.0.0-20241121133100-cfa6b078c8c4",
     )
     go_repository(
         name = "com_github_holiman_uint256",
@@ -2873,8 +2873,8 @@ def prysm_deps():
     go_repository(
         name = "com_github_rivo_tview",
         importpath = "github.com/rivo/tview",
-        sum = "h1:QLKAX9JLJ9RJVjnywcVg/U8nKNZvdftCtJRv1qzALYI=",
-        version = "v0.0.0-20240118093911-742cf086196e",
+        sum = "h1:HxvWMyQ3vKQBlYZq9wfFtjbUeA6UUYZoLJmmwWee43s=",
+        version = "v0.0.0-20240519200218-0ac5f73025a8",
     )
     go_repository(
         name = "com_github_rivo_uniseg",
