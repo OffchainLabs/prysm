@@ -122,7 +122,7 @@ func createUpdate(t *testing.T, v int) (interfaces.LightClientUpdate, error) {
 				StateRoot:     sampleRoot,
 				BodyRoot:      sampleRoot,
 			},
-			Execution: &enginev1.ExecutionPayloadHeaderElectra{
+			Execution: &enginev1.ExecutionPayloadHeaderDeneb{
 				ParentHash:       make([]byte, fieldparams.RootLength),
 				FeeRecipient:     make([]byte, fieldparams.FeeRecipientLength),
 				StateRoot:        make([]byte, fieldparams.RootLength),

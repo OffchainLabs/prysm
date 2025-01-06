@@ -1991,7 +1991,7 @@ func TestSubmitAttesterSlashings(t *testing.T) {
 			_, ok := broadcaster.BroadcastMessages[0].(*ethpbv1alpha1.AttesterSlashing)
 			assert.Equal(t, true, ok)
 		})
-		t.Run("accross-fork", func(t *testing.T) {
+		t.Run("across-fork", func(t *testing.T) {
 			attestationData1.Slot = params.BeaconConfig().SlotsPerEpoch
 			attestationData2.Slot = params.BeaconConfig().SlotsPerEpoch
 			slashing := &ethpbv1alpha1.AttesterSlashing{
@@ -2147,7 +2147,7 @@ func TestSubmitAttesterSlashings(t *testing.T) {
 			_, ok := broadcaster.BroadcastMessages[0].(*ethpbv1alpha1.AttesterSlashingElectra)
 			assert.Equal(t, true, ok)
 		})
-		t.Run("accross-fork", func(t *testing.T) {
+		t.Run("across-fork", func(t *testing.T) {
 			attestationData1.Slot = params.BeaconConfig().SlotsPerEpoch
 			attestationData2.Slot = params.BeaconConfig().SlotsPerEpoch
 			slashing := &ethpbv1alpha1.AttesterSlashingElectra{

@@ -17,14 +17,17 @@ func (b *BeaconState) LatestExecutionPayloadHeader() (interfaces.ExecutionData, 
 	b.lock.RLock()
 	defer b.lock.RUnlock()
 
-	switch b.version {
-	case version.Bellatrix:
-		return blocks.WrappedExecutionPayloadHeader(b.latestExecutionPayloadHeader.Copy())
-	case version.Capella:
-		return blocks.WrappedExecutionPayloadHeaderCapella(b.latestExecutionPayloadHeaderCapella.Copy())
-	case version.Deneb, version.Electra:
+	if b.version >= version.Deneb {
 		return blocks.WrappedExecutionPayloadHeaderDeneb(b.latestExecutionPayloadHeaderDeneb.Copy())
-	default:
-		return nil, fmt.Errorf("unsupported version (%s) for latest execution payload header", version.String(b.version))
 	}
+
+	if b.version >= version.Capella {
+		return blocks.WrappedExecutionPayloadHeaderCapella(b.latestExecutionPayloadHeaderCapella.Copy())
+	}
+
+	if b.version >= version.Bellatrix {
+		return blocks.WrappedExecutionPayloadHeader(b.latestExecutionPayloadHeader.Copy())
+	}
+
+	return nil, fmt.Errorf("unsupported version (%s) for latest execution payload header", version.String(b.version))
 }

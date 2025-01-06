@@ -1152,7 +1152,7 @@ func TestProcessWithdrawals(t *testing.T) {
 						}
 						st, err = state_native.InitializeFromProtoUnsafeElectra(spb)
 						require.NoError(t, err)
-						p, err = consensusblocks.WrappedExecutionPayloadElectra(&enginev1.ExecutionPayloadElectra{Withdrawals: test.Args.Withdrawals})
+						p, err = consensusblocks.WrappedExecutionPayloadDeneb(&enginev1.ExecutionPayloadDeneb{Withdrawals: test.Args.Withdrawals})
 						require.NoError(t, err)
 					default:
 						t.Fatalf("Add a beacon state setup for version %s", version.String(fork))

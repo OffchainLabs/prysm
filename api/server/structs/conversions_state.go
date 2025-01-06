@@ -11,6 +11,10 @@ import (
 
 var errPayloadHeaderNotFound = errors.New("expected payload header not found")
 
+// ----------------------------------------------------------------------------
+// Phase 0
+// ----------------------------------------------------------------------------
+
 func BeaconStateFromConsensus(st beaconState.BeaconState) (*BeaconState, error) {
 	srcBr := st.BlockRoots()
 	br := make([]string, len(srcBr))
@@ -96,6 +100,10 @@ func BeaconStateFromConsensus(st beaconState.BeaconState) (*BeaconState, error) 
 		FinalizedCheckpoint:         CheckpointFromConsensus(st.FinalizedCheckpoint()),
 	}, nil
 }
+
+// ----------------------------------------------------------------------------
+// Altair
+// ----------------------------------------------------------------------------
 
 func BeaconStateAltairFromConsensus(st beaconState.BeaconState) (*BeaconStateAltair, error) {
 	srcBr := st.BlockRoots()
@@ -201,6 +209,10 @@ func BeaconStateAltairFromConsensus(st beaconState.BeaconState) (*BeaconStateAlt
 		NextSyncCommittee:           SyncCommitteeFromConsensus(nextSc),
 	}, nil
 }
+
+// ----------------------------------------------------------------------------
+// Bellatrix
+// ----------------------------------------------------------------------------
 
 func BeaconStateBellatrixFromConsensus(st beaconState.BeaconState) (*BeaconStateBellatrix, error) {
 	srcBr := st.BlockRoots()
@@ -319,6 +331,10 @@ func BeaconStateBellatrixFromConsensus(st beaconState.BeaconState) (*BeaconState
 		LatestExecutionPayloadHeader: payload,
 	}, nil
 }
+
+// ----------------------------------------------------------------------------
+// Capella
+// ----------------------------------------------------------------------------
 
 func BeaconStateCapellaFromConsensus(st beaconState.BeaconState) (*BeaconStateCapella, error) {
 	srcBr := st.BlockRoots()
@@ -457,6 +473,10 @@ func BeaconStateCapellaFromConsensus(st beaconState.BeaconState) (*BeaconStateCa
 	}, nil
 }
 
+// ----------------------------------------------------------------------------
+// Deneb
+// ----------------------------------------------------------------------------
+
 func BeaconStateDenebFromConsensus(st beaconState.BeaconState) (*BeaconStateDeneb, error) {
 	srcBr := st.BlockRoots()
 	br := make([]string, len(srcBr))
@@ -593,6 +613,10 @@ func BeaconStateDenebFromConsensus(st beaconState.BeaconState) (*BeaconStateDene
 		HistoricalSummaries:          hs,
 	}, nil
 }
+
+// ----------------------------------------------------------------------------
+// Electra
+// ----------------------------------------------------------------------------
 
 func BeaconStateElectraFromConsensus(st beaconState.BeaconState) (*BeaconStateElectra, error) {
 	srcBr := st.BlockRoots()
