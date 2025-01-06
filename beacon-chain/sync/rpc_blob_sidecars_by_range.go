@@ -45,7 +45,7 @@ func (s *Service) streamBlobBatch(ctx context.Context, batch blockBatch, wQuota 
 		}
 
 		// Check if we have all required blob sidecars
-		if kzgCommitments > 0 && availableSidecars < kzgCommitments {
+		if availableSidecars != kzgCommitments {
 			s.writeErrorResponseToStream(responseCodeServerError, errMissingBlobsForBlockCommitments.Error(), stream)
 			return wQuota, errors.Wrapf(errMissingBlobsForBlockCommitments, 
 				"block root %#x has %d KZG commitments but only %d available sidecars", 
