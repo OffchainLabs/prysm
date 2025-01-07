@@ -840,7 +840,7 @@ func InitializeFromProtoUnsafeElectra(st *ethpb.BeaconStateElectra) (state.Beaco
 	return b, nil
 }
 
-// InitializeFromProtoUnsafeElectra directly uses the beacon state protobuf fields
+// InitializeFromProtoUnsafeFulu directly uses the beacon state protobuf fields
 // and sets them as fields of the BeaconState type.
 func InitializeFromProtoUnsafeFulu(st *ethpb.BeaconStateFulu) (state.BeaconState, error) {
 	if st == nil {
