@@ -44,12 +44,14 @@ func (s *Service) streamBlobBatch(ctx context.Context, batch blockBatch, wQuota 
 			}
 		}
 
-		// Check if we have all required blob sidecars
-		if availableSidecars != kzgCommitments {
-			s.writeErrorResponseToStream(responseCodeServerError, errMissingBlobsForBlockCommitments.Error(), stream)
-			return wQuota, errors.Wrapf(errMissingBlobsForBlockCommitments, 
-				"block root %#x has %d KZG commitments but only %d available sidecars", 
-				root, kzgCommitments, availableSidecars)
+		// Check if we have all required blob sidecars only if there are KZG commitments
+		if kzgCommitments > 0 {
+			if availableSidecars != kzgCommitments {
+				s.writeErrorResponseToStream(responseCodeServerError, errMissingBlobsForBlockCommitments.Error(), stream)
+				return wQuota, errors.Wrapf(errMissingBlobsForBlockCommitments, 
+					"block root %#x has %d KZG commitments but only %d available sidecars", 
+					root, kzgCommitments, availableSidecars)
+			}
 		}
 
 		for i, l := uint64(0), uint64(len(idxs)); i < l; i++ {
