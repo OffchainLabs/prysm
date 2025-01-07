@@ -263,7 +263,7 @@ func (s *Store) DeleteHistoricalDataBeforeSlot(ctx context.Context, cutoffSlot p
 				}
 
 				// Delete finalized block roots index
-				if err = tx.Bucket(finalizedBlockRootsIndexBucket).Delete(root[:]); err != nil {
+				if err = tx.Bucket(finalizedBlockRootsIndexBucket).Delete(root); err != nil {
 					return errors.Wrap(err, "could not delete finalized block root index")
 				}
 
