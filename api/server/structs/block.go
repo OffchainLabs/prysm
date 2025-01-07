@@ -515,7 +515,7 @@ type BeaconBlockBodyElectra struct {
 	Deposits              []*Deposit                    `json:"deposits"`
 	VoluntaryExits        []*SignedVoluntaryExit        `json:"voluntary_exits"`
 	SyncAggregate         *SyncAggregate                `json:"sync_aggregate"`
-	ExecutionPayload      *ExecutionPayloadElectra      `json:"execution_payload"`
+	ExecutionPayload      *ExecutionPayloadDeneb        `json:"execution_payload"`
 	BLSToExecutionChanges []*SignedBLSToExecutionChange `json:"bls_to_execution_changes"`
 	BlobKzgCommitments    []string                      `json:"blob_kzg_commitments"`
 	ExecutionRequests     *ExecutionRequests            `json:"execution_requests"`
@@ -545,19 +545,19 @@ func (s *SignedBlindedBeaconBlockElectra) SigString() string {
 }
 
 type BlindedBeaconBlockBodyElectra struct {
-	RandaoReveal           string                         `json:"randao_reveal"`
-	Eth1Data               *Eth1Data                      `json:"eth1_data"`
-	Graffiti               string                         `json:"graffiti"`
-	ProposerSlashings      []*ProposerSlashing            `json:"proposer_slashings"`
-	AttesterSlashings      []*AttesterSlashingElectra     `json:"attester_slashings"`
-	Attestations           []*AttestationElectra          `json:"attestations"`
-	Deposits               []*Deposit                     `json:"deposits"`
-	VoluntaryExits         []*SignedVoluntaryExit         `json:"voluntary_exits"`
-	SyncAggregate          *SyncAggregate                 `json:"sync_aggregate"`
-	ExecutionPayloadHeader *ExecutionPayloadHeaderElectra `json:"execution_payload_header"`
-	BLSToExecutionChanges  []*SignedBLSToExecutionChange  `json:"bls_to_execution_changes"`
-	BlobKzgCommitments     []string                       `json:"blob_kzg_commitments"`
-	ExecutionRequests      *ExecutionRequests             `json:"execution_requests"`
+	RandaoReveal           string                        `json:"randao_reveal"`
+	Eth1Data               *Eth1Data                     `json:"eth1_data"`
+	Graffiti               string                        `json:"graffiti"`
+	ProposerSlashings      []*ProposerSlashing           `json:"proposer_slashings"`
+	AttesterSlashings      []*AttesterSlashingElectra    `json:"attester_slashings"`
+	Attestations           []*AttestationElectra         `json:"attestations"`
+	Deposits               []*Deposit                    `json:"deposits"`
+	VoluntaryExits         []*SignedVoluntaryExit        `json:"voluntary_exits"`
+	SyncAggregate          *SyncAggregate                `json:"sync_aggregate"`
+	ExecutionPayloadHeader *ExecutionPayloadHeaderDeneb  `json:"execution_payload_header"`
+	BLSToExecutionChanges  []*SignedBLSToExecutionChange `json:"bls_to_execution_changes"`
+	BlobKzgCommitments     []string                      `json:"blob_kzg_commitments"`
+	ExecutionRequests      *ExecutionRequests            `json:"execution_requests"`
 }
 
 type (
@@ -566,9 +566,6 @@ type (
 		Withdrawals    []*WithdrawalRequest    `json:"withdrawals"`
 		Consolidations []*ConsolidationRequest `json:"consolidations"`
 	}
-
-	ExecutionPayloadElectra       = ExecutionPayloadDeneb
-	ExecutionPayloadHeaderElectra = ExecutionPayloadHeaderDeneb
 )
 
 // ----------------------------------------------------------------------------
@@ -620,7 +617,7 @@ type BeaconBlockBodyFulu struct {
 	Deposits              []*Deposit                    `json:"deposits"`
 	VoluntaryExits        []*SignedVoluntaryExit        `json:"voluntary_exits"`
 	SyncAggregate         *SyncAggregate                `json:"sync_aggregate"`
-	ExecutionPayload      *ExecutionPayloadElectra      `json:"execution_payload"`
+	ExecutionPayload      *ExecutionPayloadDeneb        `json:"execution_payload"`
 	BLSToExecutionChanges []*SignedBLSToExecutionChange `json:"bls_to_execution_changes"`
 	BlobKzgCommitments    []string                      `json:"blob_kzg_commitments"`
 	ExecutionRequests     *ExecutionRequests            `json:"execution_requests"`
@@ -650,22 +647,17 @@ func (s *SignedBlindedBeaconBlockFulu) SigString() string {
 }
 
 type BlindedBeaconBlockBodyFulu struct {
-	RandaoReveal           string                         `json:"randao_reveal"`
-	Eth1Data               *Eth1Data                      `json:"eth1_data"`
-	Graffiti               string                         `json:"graffiti"`
-	ProposerSlashings      []*ProposerSlashing            `json:"proposer_slashings"`
-	AttesterSlashings      []*AttesterSlashingElectra     `json:"attester_slashings"`
-	Attestations           []*AttestationElectra          `json:"attestations"`
-	Deposits               []*Deposit                     `json:"deposits"`
-	VoluntaryExits         []*SignedVoluntaryExit         `json:"voluntary_exits"`
-	SyncAggregate          *SyncAggregate                 `json:"sync_aggregate"`
-	ExecutionPayloadHeader *ExecutionPayloadHeaderElectra `json:"execution_payload_header"`
-	BLSToExecutionChanges  []*SignedBLSToExecutionChange  `json:"bls_to_execution_changes"`
-	BlobKzgCommitments     []string                       `json:"blob_kzg_commitments"`
-	ExecutionRequests      *ExecutionRequests             `json:"execution_requests"`
+	RandaoReveal           string                        `json:"randao_reveal"`
+	Eth1Data               *Eth1Data                     `json:"eth1_data"`
+	Graffiti               string                        `json:"graffiti"`
+	ProposerSlashings      []*ProposerSlashing           `json:"proposer_slashings"`
+	AttesterSlashings      []*AttesterSlashingElectra    `json:"attester_slashings"`
+	Attestations           []*AttestationElectra         `json:"attestations"`
+	Deposits               []*Deposit                    `json:"deposits"`
+	VoluntaryExits         []*SignedVoluntaryExit        `json:"voluntary_exits"`
+	SyncAggregate          *SyncAggregate                `json:"sync_aggregate"`
+	ExecutionPayloadHeader *ExecutionPayloadHeaderDeneb  `json:"execution_payload_header"`
+	BLSToExecutionChanges  []*SignedBLSToExecutionChange `json:"bls_to_execution_changes"`
+	BlobKzgCommitments     []string                      `json:"blob_kzg_commitments"`
+	ExecutionRequests      *ExecutionRequests            `json:"execution_requests"`
 }
-
-type (
-	ExecutionPayloadFulu       = ExecutionPayloadDeneb
-	ExecutionPayloadHeaderFulu = ExecutionPayloadHeaderDeneb
-)
