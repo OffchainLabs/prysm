@@ -56,6 +56,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 - go version upgrade to 1.22.10 for CVE CVE-2024-34156
 - Update golang.org/x/crypto to v0.31.0 to address CVE-2024-45337
+- Update golang.org/x/net to v0.33.0 to address CVE-2024-45338
 
 ## [v5.2.0](https://github.com/prysmaticlabs/prysm/compare/v5.1.2...v5.2.0)
 
