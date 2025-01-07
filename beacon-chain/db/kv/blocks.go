@@ -807,8 +807,6 @@ func blockRootsBySlotRange(
 	if endSlot < startSlot {
 		return nil, errInvalidSlotRange
 	}
-	rootsRange := endSlot.SubSlot(startSlot).Div(step)
-	roots := make([][]byte, 0, rootsRange)
 	rootsBySlot := make(map[primitives.Slot][][]byte)
 	c := bkt.Cursor()
 	for k, v := c.Seek(min); conditional(k, max); k, v = c.Next() {
@@ -823,7 +821,6 @@ func blockRootsBySlotRange(
 		for i := 0; i < len(v); i += 32 {
 			splitRoots = append(splitRoots, v[i:i+32])
 		}
-		roots = append(roots, splitRoots...)
 		rootsBySlot[bytesutil.BytesToSlotBigEndian(k)] = splitRoots
 	}
 	return rootsBySlot, nil
@@ -1026,7 +1023,7 @@ func (s *Store) deleteBlock(tx *bolt.Tx, root []byte) error {
 		return errors.Wrap(err, "could not delete block")
 	}
 
-	if err := tx.Bucket(blockParentRootIndicesBucket).Delete(root[:]); err != nil {
+	if err := tx.Bucket(blockParentRootIndicesBucket).Delete(root); err != nil {
 		return errors.Wrap(err, "could not delete block parent indices")
 	}
 
