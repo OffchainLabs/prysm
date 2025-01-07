@@ -218,7 +218,7 @@ func (s *Service) validateUnaggregatedAttTopic(ctx context.Context, a eth.Att, b
 	ctx, span := trace.StartSpan(ctx, "sync.validateUnaggregatedAttTopic")
 	defer span.End()
 
-	_, valCount, result, err := s.validateCommitteeIndex(ctx, a, bs)
+	_, valCount, result, err := s.validateCommitteeIndexAndCount(ctx, a, bs)
 	if result != pubsub.ValidationAccept {
 		return result, err
 	}
@@ -236,7 +236,7 @@ func (s *Service) validateUnaggregatedAttTopic(ctx context.Context, a eth.Att, b
 	return pubsub.ValidationAccept, nil
 }
 
-func (s *Service) validateCommitteeIndex(
+func (s *Service) validateCommitteeIndexAndCount(
 	ctx context.Context,
 	a eth.Att,
 	bs state.ReadOnlyBeaconState,

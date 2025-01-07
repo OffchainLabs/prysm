@@ -95,7 +95,7 @@ func TestVerifyIndexInCommittee_ExistsInBeaconCommittee(t *testing.T) {
 	assert.Equal(t, pubsub.ValidationReject, result)
 
 	att.Data.CommitteeIndex = 10000
-	_, _, result, err = service.validateCommitteeIndex(ctx, att, s)
+	_, _, result, err = service.validateCommitteeIndexAndCount(ctx, att, s)
 	require.ErrorContains(t, "committee index 10000 > 2", err)
 	assert.Equal(t, pubsub.ValidationReject, result)
 }

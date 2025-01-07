@@ -183,7 +183,7 @@ func (s *Service) validateAggregatedAtt(ctx context.Context, signed ethpb.Signed
 		return pubsub.ValidationIgnore, err
 	}
 
-	committeeIndex, _, result, err := s.validateCommitteeIndex(ctx, aggregate, bs)
+	committeeIndex, _, result, err := s.validateCommitteeIndexAndCount(ctx, aggregate, bs)
 	if result != pubsub.ValidationAccept {
 		wrappedErr := errors.Wrapf(err, "could not validate committee index")
 		tracing.AnnotateError(span, wrappedErr)
