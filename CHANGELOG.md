@@ -14,7 +14,9 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - `Finished building block`: Display error only if not nil.
 - Added support to update target and max blob count to different values per hard fork config.
 - Log before blob filesystem cache warm-up.
-- 
+- New design for the attestation pool. [PR](https://github.com/prysmaticlabs/prysm/pull/14324)
+- Add field param placeholder for Electra blob target and max to pass spec tests.
+
 ### Changed
 
 - Process light client finality updates only for new finalized epochs instead of doing it for every block.
@@ -22,6 +24,10 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Refactor RPC handlers subscriptions.
 - Go deps upgrade, from `ioutil` to `io`
 - Move successfully registered validator(s) on builder log to debug.
+- Update some test files to use `crypto/rand` instead of `math/rand`
+- Enforce Compound prefix (0x02) for target when processing pending consolidation request.
+- Limit consolidating by validator's effective balance.
+- Use 16-bit random value for proposer and sync committee selection filter.
 
 ### Deprecated
 
@@ -32,7 +38,8 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 ### Fixed
 
 - Added check to prevent nil pointer deference or out of bounds array access when validating the BLSToExecutionChange on an impossibly nil validator.
-* [Beacon Chain] Fixed blob sidecar validation to ensure the number of available sidecars matches KZG commitment count
+- Fix blob sidecar validation to ensure KZG commitment count matches.
+- Fixed blob sidecar validation to ensure exact match between available sidecars and KZG commitments.
 
 ### Security
 
@@ -368,7 +375,8 @@ details.
 
 ### Security
 
-- Go version updated to 1.22
+This release contains some important fixes that improve the resiliency of Ethereum Consensus Layer.
+See https://github.com/prysmaticlabs/prysm/pull/12387 and https://github.com/prysmaticlabs/prysm/pull/12398.
 
 ## [v5.0.4](https://github.com/prysmaticlabs/prysm/compare/v5.0.3...v5.0.4) - 2024-07-21
 
@@ -1583,29 +1591,11 @@ non-portable version by default.
 
 ### Fixed
 
-- Late block task wait for initial sync
-- Log the right block number
-- Fix for keystore field name to align with EIP2335
-- Fix epoch participation parsing for API
-- Spec checker, ensure file does not exit or error
-- Uint256 parsing for builder API
-- Fuzz target for execution payload
-- Contribution doc typo
-- Unit test TestFieldTrie_NativeState_fieldConvertersNative
-- Typo on beacon-chain/node/node.go
-- Remove single bit aggregation for aggregator
-- Deflake cloners_test.go
-- Use diff context to update proposer cache background
-- Update protobuf and protobuf deps
-- Run ineffassign for all code
-- Increase validator client startup proposer settings deadline
-- Correct log level for 'Could not send a chunked response'
-- Rrune invalid blocks during initial sync
-- Handle Epoch Boundary Misses
-- Bump google.golang.org/grpc from 1.40.0 to 1.53.0
-- Fix bls signature batch unit test
-- Fix Context Cancellation for insertFinalizedDeposits
-- Lock before saving the poststate to db
+- Sandwich attack on honest reorgs
+- Missing config yamls for specific domains
+- Release lock before panic for feed
+- Return 500 in `/eth/v1/node/peers` interface
+- Checkpoint sync uses correct slot
 
 ### Security
 
