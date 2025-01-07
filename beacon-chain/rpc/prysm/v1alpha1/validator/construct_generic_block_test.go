@@ -84,7 +84,6 @@ func TestConstructGenericBeaconBlock(t *testing.T) {
 		require.Equal(t, result.IsBlinded, false)
 	})
 
-	// Test for blind Deneb version
 	t.Run("blind deneb block", func(t *testing.T) {
 		b, err := blocks.NewSignedBeaconBlock(util.NewBlindedBeaconBlockDeneb())
 		require.NoError(t, err)
@@ -114,7 +113,6 @@ func TestConstructGenericBeaconBlock(t *testing.T) {
 		require.Equal(t, result.IsBlinded, false)
 	})
 
-	// Test for blind Capella version
 	t.Run("blind capella block", func(t *testing.T) {
 		b, err := blocks.NewSignedBeaconBlock(util.NewBlindedBeaconBlockCapella())
 		require.NoError(t, err)
