@@ -946,7 +946,7 @@ func InitializeFromProtoUnsafeFulu(st *ethpb.BeaconStateFulu) (state.BeaconState
 	b.sharedFieldReferences[types.PreviousEpochParticipationBits] = stateutil.NewRef(1)
 	b.sharedFieldReferences[types.CurrentEpochParticipationBits] = stateutil.NewRef(1)
 	b.sharedFieldReferences[types.LatestExecutionPayloadHeaderDeneb] = stateutil.NewRef(1)
-	b.sharedFieldReferences[types.HistoricalSummaries] = stateutil.NewRef(1) // New in Capella.
+	b.sharedFieldReferences[types.HistoricalSummaries] = stateutil.NewRef(1)
 	b.sharedFieldReferences[types.PendingDeposits] = stateutil.NewRef(1)
 	b.sharedFieldReferences[types.PendingPartialWithdrawals] = stateutil.NewRef(1)
 	b.sharedFieldReferences[types.PendingConsolidations] = stateutil.NewRef(1)
