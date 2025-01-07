@@ -925,7 +925,7 @@ func InitializeFromProtoUnsafeFulu(st *ethpb.BeaconStateFulu) (state.BeaconState
 		b.validators = st.Validators
 		b.inactivityScores = st.InactivityScores
 
-		b.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, electraSharedFieldRefCount)
+		b.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, fuluSharedFieldRefCount)
 	}
 
 	for _, f := range fuluFields {
