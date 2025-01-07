@@ -98,8 +98,10 @@ func (p *Service) run() {
 	for {
 		select {
 		case <-p.ctx.Done():
+			log.Debug("Stopping Beacon DB pruner service", "prunedSlot", p.prunedSlot)
 			return
 		case <-p.done:
+			log.Debug("Stopping Beacon DB pruner service", "prunedSlot", p.prunedSlot)
 			return
 		case slot := <-p.slotTicker.C():
 			// Prune at the middle of every epoch since we do a lot of things around epoch boundaries.
@@ -146,7 +148,7 @@ func (p *Service) prune(slot primitives.Slot) error {
 	}).Debug("Pruning chain data")
 
 	tt := time.Now()
-	if err := p.db.DeleteBlocksAndStatesBeforeSlot(p.ctx, pruneSlot); err != nil {
+	if err := p.db.DeleteHistoricalDataBeforeSlot(p.ctx, pruneSlot); err != nil {
 		return errors.Wrapf(err, "could not delete before slot %d", pruneSlot)
 	}
 

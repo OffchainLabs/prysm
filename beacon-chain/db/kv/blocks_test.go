@@ -356,7 +356,7 @@ func TestStore_DeleteFinalizedBlock(t *testing.T) {
 	require.ErrorIs(t, db.DeleteBlock(ctx, root), ErrDeleteJustifiedAndFinalized)
 }
 
-func TestStore_DeleteBlocksAndStatesBeforeSlot(t *testing.T) {
+func TestStore_HistoricalDataBeforeSlot(t *testing.T) {
 	slotsPerEpoch := uint64(params.BeaconConfig().SlotsPerEpoch)
 	db := setupDB(t)
 	ctx := context.Background()
@@ -384,7 +384,7 @@ func TestStore_DeleteBlocksAndStatesBeforeSlot(t *testing.T) {
 	require.NoError(t, db.SaveStateSummaries(ctx, ss))
 
 	// Delete blocks of first epoch.
-	require.NoError(t, db.DeleteBlocksAndStatesBeforeSlot(ctx, primitives.Slot(slotsPerEpoch)))
+	require.NoError(t, db.DeleteHistoricalDataBeforeSlot(ctx, primitives.Slot(slotsPerEpoch)))
 
 	// Check if we deleted the blocks successfully.
 	for i := 0; i < int(slotsPerEpoch); i++ {
