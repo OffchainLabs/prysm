@@ -51,30 +51,6 @@ func NewComponentHandler(cfg *e2etypes.E2EConfig, t *testing.T) *componentHandle
 	}
 }
 
-func pollCondition(ctx context.Context, eval func() error, interval, limit uint) error {
-	current := uint(0)
-	var err error
-	// attempt first time
-	if err = eval(); err == nil {
-		return nil
-	}
-
-	for {
-		if current >= limit {
-			return errors.Wrap(err, "timed out waiting for condition")
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(time.Duration(interval) * time.Second):
-			current += interval
-			if err = eval(); err == nil {
-				return nil
-			}
-		}
-	}
-}
-
 func (c *componentHandler) setup() {
 	t, config := c.t, c.cfg
 	ctx, g := c.ctx, c.group
@@ -162,7 +138,6 @@ func (c *componentHandler) setup() {
 	if config.TestCheckpointSync {
 		appendDebugEndpoints(config)
 	}
-	c.eth1Nodes.Started()
 
 	var builders *components.BuilderSet
 	var proxies *eth1.ProxySet
