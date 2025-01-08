@@ -236,6 +236,15 @@ func (s *Store) DeleteBlock(ctx context.Context, root [32]byte) error {
 }
 
 // DeleteHistoricalDataBeforeSlot deletes all blocks and states before the given slot.
+// This function deletes data from the following buckets:
+// - blocksBucket
+// - blockParentRootIndicesBucket
+// - finalizedBlockRootsIndexBucket
+// - stateBucket
+// - stateSummaryBucket
+// - blockRootValidatorHashesBucket
+// - blockSlotIndicesBucket
+// - stateSlotIndicesBucket
 func (s *Store) DeleteHistoricalDataBeforeSlot(ctx context.Context, cutoffSlot primitives.Slot) error {
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.DeleteHistoricalDataBeforeSlot")
 	defer span.End()

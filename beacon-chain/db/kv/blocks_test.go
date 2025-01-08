@@ -454,6 +454,13 @@ func TestStore_HistoricalDataBeforeSlot(t *testing.T) {
 		// Verify block does not exist
 		assert.Equal(t, false, db.HasBlock(ctx, root))
 
+		// Verify block parent root does not exist
+		err = db.db.View(func(tx *bolt.Tx) error {
+			require.Equal(t, 0, len(tx.Bucket(blockParentRootIndicesBucket).Get(root[:])))
+			return nil
+		})
+		require.NoError(t, err)
+
 		// Verify state is deleted
 		hasState := db.HasState(ctx, root)
 		assert.Equal(t, false, hasState)
@@ -491,6 +498,15 @@ func TestStore_HistoricalDataBeforeSlot(t *testing.T) {
 		// Verify block exists
 		assert.Equal(t, true, db.HasBlock(ctx, root))
 
+		// Verify remaining block parent root exists, except last slot since we store parent roots of each block.
+		if i < slotsPerEpoch*4-1 {
+			err = db.db.View(func(tx *bolt.Tx) error {
+				require.NotNil(t, tx.Bucket(blockParentRootIndicesBucket).Get(root[:]), fmt.Sprintf("Expected block parent index to be deleted, slot: %d", i))
+				return nil
+			})
+			require.NoError(t, err)
+		}
+
 		// Verify state exists
 		hasState := db.HasState(ctx, root)
 		assert.Equal(t, true, hasState)
@@ -515,6 +531,12 @@ func TestStore_HistoricalDataBeforeSlot(t *testing.T) {
 		valsActual, err := db.validatorEntries(ctx, root)
 		require.NoError(t, err)
 		assert.NotNil(t, valsActual)
+
+		// Verify remaining validator hashes for block roots exists
+		err = db.db.View(func(tx *bolt.Tx) error {
+			assert.NotNil(t, tx.Bucket(blockRootValidatorHashesBucket).Get(root[:]))
+			return nil
+		})
 	}
 }
 
