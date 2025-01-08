@@ -166,15 +166,18 @@ func (s *Service) processUnaggregated(ctx context.Context, att ethpb.Att) {
 		log.Debug("Attestation failed attester data validation")
 		return
 	}
+
+	var singleAtt *ethpb.SingleAttestation
 	if att.Version() >= version.Electra {
 		var ok bool
-		singleAtt, ok := att.(*ethpb.SingleAttestation)
+		singleAtt, ok = att.(*ethpb.SingleAttestation)
 		if !ok {
 			log.Debugf("Attestation has wrong type (expected %T, got %T)", &ethpb.SingleAttestation{}, att)
 			return
 		}
 		att = singleAtt.ToAttestationElectra(committee)
 	}
+
 	valid, err = s.validateUnaggregatedAttWithState(ctx, att, preState)
 	if err != nil {
 		log.WithError(err).Debug("Pending unaggregated attestation failed validation")
@@ -200,7 +203,13 @@ func (s *Service) processUnaggregated(ctx context.Context, att ethpb.Att) {
 			return
 		}
 		// Broadcasting the signed attestation again once a node is able to process it.
-		if err := s.cfg.p2p.BroadcastAttestation(ctx, helpers.ComputeSubnetForAttestation(valCount, att), att); err != nil {
+		var attToBroadcast ethpb.Att
+		if singleAtt != nil {
+			attToBroadcast = singleAtt
+		} else {
+			attToBroadcast = att
+		}
+		if err := s.cfg.p2p.BroadcastAttestation(ctx, helpers.ComputeSubnetForAttestation(valCount, attToBroadcast), attToBroadcast); err != nil {
 			log.WithError(err).Debug("Could not broadcast")
 		}
 	}
@@ -243,6 +252,10 @@ func (s *Service) savePendingAtt(att ethpb.SignedAggregateAttAndProof) {
 }
 
 func attsAreEqual(a, b ethpb.SignedAggregateAttAndProof) bool {
+	if a.Version() != b.Version() {
+		return false
+	}
+
 	if a.GetSignature() != nil {
 		return b.GetSignature() != nil && a.AggregateAttestationAndProof().GetAggregatorIndex() == b.AggregateAttestationAndProof().GetAggregatorIndex()
 	}
@@ -260,6 +273,12 @@ func attsAreEqual(a, b ethpb.SignedAggregateAttAndProof) bool {
 	}
 
 	if a.Version() >= version.Electra {
+		if aAggregate.IsSingle() != bAggregate.IsSingle() {
+			return false
+		}
+		if aAggregate.IsSingle() && aAggregate.GetAttestingIndex() != bAggregate.GetAttestingIndex() {
+			return false
+		}
 		if !bytes.Equal(aAggregate.CommitteeBitsVal().Bytes(), bAggregate.CommitteeBitsVal().Bytes()) {
 			return false
 		}

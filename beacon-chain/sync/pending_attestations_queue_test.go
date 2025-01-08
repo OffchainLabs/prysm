@@ -530,12 +530,12 @@ func Test_attsAreEqual_Committee(t *testing.T) {
 			Message: &ethpb.AggregateAttestationAndProof{
 				Aggregate: &ethpb.Attestation{
 					Data: &ethpb.AttestationData{
-						CommitteeIndex: 123}}}}
+						CommitteeIndex: 0}}}}
 		att2 := &ethpb.SignedAggregateAttestationAndProof{
 			Message: &ethpb.AggregateAttestationAndProof{
 				Aggregate: &ethpb.Attestation{
 					Data: &ethpb.AttestationData{
-						CommitteeIndex: 123}}}}
+						CommitteeIndex: 0}}}}
 		assert.Equal(t, true, attsAreEqual(att1, att2))
 	})
 	t.Run("Phase 0 not equal", func(t *testing.T) {
@@ -543,12 +543,12 @@ func Test_attsAreEqual_Committee(t *testing.T) {
 			Message: &ethpb.AggregateAttestationAndProof{
 				Aggregate: &ethpb.Attestation{
 					Data: &ethpb.AttestationData{
-						CommitteeIndex: 123}}}}
+						CommitteeIndex: 0}}}}
 		att2 := &ethpb.SignedAggregateAttestationAndProof{
 			Message: &ethpb.AggregateAttestationAndProof{
 				Aggregate: &ethpb.Attestation{
 					Data: &ethpb.AttestationData{
-						CommitteeIndex: 456}}}}
+						CommitteeIndex: 1}}}}
 		assert.Equal(t, false, attsAreEqual(att1, att2))
 	})
 	t.Run("Electra equal", func(t *testing.T) {
@@ -587,6 +587,74 @@ func Test_attsAreEqual_Committee(t *testing.T) {
 					Data:          &ethpb.AttestationData{},
 					CommitteeBits: cb2,
 				}}}
+		assert.Equal(t, false, attsAreEqual(att1, att2))
+	})
+	t.Run("Single and Electra not equal", func(t *testing.T) {
+		cb := primitives.NewAttestationCommitteeBits()
+		cb.SetBitAt(0, true)
+		att1 := &ethpb.SignedAggregateAttestationAndProofElectra{
+			Message: &ethpb.AggregateAttestationAndProofElectra{
+				Aggregate: &ethpb.AttestationElectra{
+					Data:          &ethpb.AttestationData{},
+					CommitteeBits: cb,
+				}}}
+		att2 := &ethpb.SignedAggregateAttestationAndProofSingle{
+			Message: &ethpb.AggregateAttestationAndProofSingle{
+				Aggregate: &ethpb.SingleAttestation{
+					CommitteeId:   0,
+					AttesterIndex: 0,
+					Data:          &ethpb.AttestationData{},
+				},
+			},
+		}
+		assert.Equal(t, false, attsAreEqual(att1, att2))
+	})
+	t.Run("Single equal", func(t *testing.T) {
+		att1 := &ethpb.SignedAggregateAttestationAndProofSingle{
+			Message: &ethpb.AggregateAttestationAndProofSingle{
+				Aggregate: &ethpb.SingleAttestation{
+					CommitteeId:   0,
+					AttesterIndex: 0,
+					Data:          &ethpb.AttestationData{},
+				},
+			},
+		}
+		att2 := &ethpb.SignedAggregateAttestationAndProofSingle{
+			Message: &ethpb.AggregateAttestationAndProofSingle{
+				Aggregate: &ethpb.SingleAttestation{
+					CommitteeId:   0,
+					AttesterIndex: 0,
+					Data:          &ethpb.AttestationData{},
+				},
+			},
+		}
+		assert.Equal(t, true, attsAreEqual(att1, att2))
+	})
+	t.Run("Single not equal", func(t *testing.T) {
+		// Same AttesterIndex but different CommitteeId
+		att1 := &ethpb.SignedAggregateAttestationAndProofSingle{
+			Message: &ethpb.AggregateAttestationAndProofSingle{
+				Aggregate: &ethpb.SingleAttestation{
+					CommitteeId:   0,
+					AttesterIndex: 0,
+					Data:          &ethpb.AttestationData{},
+				},
+			},
+		}
+		att2 := &ethpb.SignedAggregateAttestationAndProofSingle{
+			Message: &ethpb.AggregateAttestationAndProofSingle{
+				Aggregate: &ethpb.SingleAttestation{
+					CommitteeId:   1,
+					AttesterIndex: 0,
+					Data:          &ethpb.AttestationData{},
+				},
+			},
+		}
+		assert.Equal(t, false, attsAreEqual(att1, att2))
+
+		// Same CommitteeId but different AttesterIndex
+		att2.Message.Aggregate.CommitteeId = 0
+		att2.Message.Aggregate.AttesterIndex = 1
 		assert.Equal(t, false, attsAreEqual(att1, att2))
 	})
 }
