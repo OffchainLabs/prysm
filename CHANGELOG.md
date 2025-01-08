@@ -18,6 +18,8 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Add field param placeholder for Electra blob target and max to pass spec tests.
 - Add EIP-7691: Blob throughput increase.
 - SSZ files generation: Remove the `// Hash: ...` header.
+- Trace IDONTWANT Messages in Pubsub.
+- Add Fulu fork boilerplate.
 - Separate type for unaggregated network attestations. [PR](https://github.com/prysmaticlabs/prysm/pull/14659)
 
 ### Changed
@@ -32,8 +34,12 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Limit consolidating by validator's effective balance.
 - Use 16-bit random value for proposer and sync committee selection filter.
 - Re-organize the content of the `*.proto` files (No functional change).
+- Updated spec definitions for `process_slashings` in godocs. Simplified `ProcessSlashings` API.
+- Updated spec definition electra `process_registry_updates`.
 - Updated Electra spec definition for `process_epoch`.
 - Update our `go-libp2p-pubsub` dependency.
+- Re-organize the content of files to ease the creation of a new fork boilerplate.
+- Fixed Metadata errors for peers connected via QUIC.
 
 ### Deprecated
 
@@ -51,6 +57,8 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 ### Security
 
 - go version upgrade to 1.22.10 for CVE CVE-2024-34156
+- Update golang.org/x/crypto to v0.31.0 to address CVE-2024-45337
+- Update golang.org/x/net to v0.33.0 to address CVE-2024-45338
 
 ## [v5.2.0](https://github.com/prysmaticlabs/prysm/compare/v5.1.2...v5.2.0)
 
@@ -2575,7 +2583,7 @@ There are two known issues with this release:
 - Bellatrix support. See [kiln testnet instructions](https://hackmd.io/OqIoTiQvS9KOIataIFksBQ?view)
 - Weak subjectivity sync / checkpoint sync. This is an experimental feature and may have unintended side effects for
   certain operators serving historical data. See
-  the [documentation](https://docs.prylabs.network/docs/next/prysm-usage/checkpoint-sync) for more details.
+  the [documentation](https://docs.prylabs.network/docs/prysm-usage/checkpoint-sync) for more details.
 - A faster build of blst for beacon chain on linux amd64. Use the environment variable `USE_PRYSM_MODERN=true` with
   prysm.sh, use the "modern" binary, or bazel build with `--define=blst_modern=true`.
 - Vectorized sha256. This may have performance improvements with use of the new flag `--enable-vectorized-htr`.

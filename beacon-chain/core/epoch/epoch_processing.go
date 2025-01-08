@@ -141,20 +141,76 @@ func ProcessRegistryUpdates(ctx context.Context, st state.BeaconState) (state.Be
 	return st, nil
 }
 
-// ProcessSlashings processes the slashed validators during epoch processing,
+// ProcessSlashings processes the slashed validators during epoch processing. This is a state mutating method.
+//
+// Electra spec definition:
 //
 //	def process_slashings(state: BeaconState) -> None:
+//	    epoch = get_current_epoch(state)
+//	    total_balance = get_total_active_balance(state)
+//	    adjusted_total_slashing_balance = min(
+//	        sum(state.slashings) * PROPORTIONAL_SLASHING_MULTIPLIER_BELLATRIX,
+//	        total_balance
+//	    )
+//	    increment = EFFECTIVE_BALANCE_INCREMENT  # Factored out from total balance to avoid uint64 overflow
+//	    penalty_per_effective_balance_increment = adjusted_total_slashing_balance // (total_balance // increment)
+//	    for index, validator in enumerate(state.validators):
+//	        if validator.slashed and epoch + EPOCHS_PER_SLASHINGS_VECTOR // 2 == validator.withdrawable_epoch:
 //	            effective_balance_increments = validator.effective_balance // increment
+//	            # [Modified in Electra:EIP7251]
 //	            penalty = penalty_per_effective_balance_increment * effective_balance_increments
-func ProcessSlashings(st state.BeaconState) (state.BeaconState, error) {
+//	            decrease_balance(state, ValidatorIndex(index), penalty)
+//
+// Bellatrix spec definition:
+//
+//	def process_slashings(state: BeaconState) -> None:
+//	    epoch = get_current_epoch(state)
+//	    total_balance = get_total_active_balance(state)
+//	    adjusted_total_slashing_balance = min(
+//	        sum(state.slashings) * PROPORTIONAL_SLASHING_MULTIPLIER_BELLATRIX,  # [Modified in Bellatrix]
+//	        total_balance
+//	    )
+//	    for index, validator in enumerate(state.validators):
+//	        if validator.slashed and epoch + EPOCHS_PER_SLASHINGS_VECTOR // 2 == validator.withdrawable_epoch:
+//	            increment = EFFECTIVE_BALANCE_INCREMENT  # Factored out from penalty numerator to avoid uint64 overflow
+//	            penalty_numerator = validator.effective_balance // increment * adjusted_total_slashing_balance
+//	            penalty = penalty_numerator // total_balance * increment
+//	            decrease_balance(state, ValidatorIndex(index), penalty)
+//
+// Altair spec definition:
+//
+//	def process_slashings(state: BeaconState) -> None:
+//	    epoch = get_current_epoch(state)
+//	    total_balance = get_total_active_balance(state)
+//	    adjusted_total_slashing_balance = min(sum(state.slashings) * PROPORTIONAL_SLASHING_MULTIPLIER_ALTAIR, total_balance)
+//	    for index, validator in enumerate(state.validators):
+//	        if validator.slashed and epoch + EPOCHS_PER_SLASHINGS_VECTOR // 2 == validator.withdrawable_epoch:
+//	            increment = EFFECTIVE_BALANCE_INCREMENT  # Factored out from penalty numerator to avoid uint64 overflow
+//	            penalty_numerator = validator.effective_balance // increment * adjusted_total_slashing_balance
+//	            penalty = penalty_numerator // total_balance * increment
+//	            decrease_balance(state, ValidatorIndex(index), penalty)
+//
+// Phase0 spec definition:
+//
+//	def process_slashings(state: BeaconState) -> None:
+//	    epoch = get_current_epoch(state)
+//	    total_balance = get_total_active_balance(state)
+//	    adjusted_total_slashing_balance = min(sum(state.slashings) * PROPORTIONAL_SLASHING_MULTIPLIER, total_balance)
+//	    for index, validator in enumerate(state.validators):
+//	        if validator.slashed and epoch + EPOCHS_PER_SLASHINGS_VECTOR // 2 == validator.withdrawable_epoch:
+//	            increment = EFFECTIVE_BALANCE_INCREMENT  # Factored out from penalty numerator to avoid uint64 overflow
+//	            penalty_numerator = validator.effective_balance // increment * adjusted_total_slashing_balance
+//	            penalty = penalty_numerator // total_balance * increment
+//	            decrease_balance(state, ValidatorIndex(index), penalty)
+func ProcessSlashings(st state.BeaconState) error {
 	slashingMultiplier, err := st.ProportionalSlashingMultiplier()
 	if err != nil {
-		return nil, errors.Wrap(err, "could not get proportional slashing multiplier")
+		return errors.Wrap(err, "could not get proportional slashing multiplier")
 	}
 	currentEpoch := time.CurrentEpoch(st)
 	totalBalance, err := helpers.TotalActiveBalance(st)
 	if err != nil {
-		return nil, errors.Wrap(err, "could not get total active balance")
+		return errors.Wrap(err, "could not get total active balance")
 	}
 
 	// Compute slashed balances in the current epoch
@@ -166,7 +222,7 @@ func ProcessSlashings(st state.BeaconState) (state.BeaconState, error) {
 	for _, slashing := range slashings {
 		totalSlashing, err = math.Add64(totalSlashing, slashing)
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
 
@@ -200,14 +256,14 @@ func ProcessSlashings(st state.BeaconState) (state.BeaconState, error) {
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if changed {
 		if err := st.SetBalances(bals); err != nil {
-			return nil, err
+			return err
 		}
 	}
-	return st, nil
+	return nil
 }
 
 // ProcessEth1DataReset processes updates to ETH1 data votes during epoch processing.

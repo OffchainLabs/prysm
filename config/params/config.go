@@ -146,6 +146,7 @@ type BeaconChainConfig struct {
 	BeaconStateCapellaFieldCount   int             // BeaconStateCapellaFieldCount defines how many fields are in beacon state post upgrade to Capella.
 	BeaconStateDenebFieldCount     int             // BeaconStateDenebFieldCount defines how many fields are in beacon state post upgrade to Deneb.
 	BeaconStateElectraFieldCount   int             // BeaconStateElectraFieldCount defines how many fields are in beacon state post upgrade to Electra.
+	BeaconStateFuluFieldCount      int             // BeaconStateFuluFieldCount defines how many fields are in beacon state post upgrade to Fulu.
 
 	// Slasher constants.
 	WeakSubjectivityPeriod    primitives.Epoch // WeakSubjectivityPeriod defines the time period expressed in number of epochs were proof of stake network should validate block headers and attestations for slashable events.
@@ -166,7 +167,8 @@ type BeaconChainConfig struct {
 	DenebForkEpoch       primitives.Epoch `yaml:"DENEB_FORK_EPOCH" spec:"true"`       // DenebForkEpoch is used to represent the assigned fork epoch for deneb.
 	ElectraForkVersion   []byte           `yaml:"ELECTRA_FORK_VERSION" spec:"true"`   // ElectraForkVersion is used to represent the fork version for electra.
 	ElectraForkEpoch     primitives.Epoch `yaml:"ELECTRA_FORK_EPOCH" spec:"true"`     // ElectraForkEpoch is used to represent the assigned fork epoch for electra.
-	Eip7594ForkEpoch     primitives.Epoch `yaml:"EIP7594_FORK_EPOCH" spec:"true"`     // EIP7594ForkEpoch is used to represent the assigned fork epoch for peer das.
+	FuluForkVersion      []byte           `yaml:"FULU_FORK_VERSION" spec:"true"`      // FuluForkVersion is used to represent the fork version for fulu.
+	FuluForkEpoch        primitives.Epoch `yaml:"FULU_FORK_EPOCH" spec:"true"`        // FuluForkEpoch is used to represent the assigned fork epoch for fulu.
 
 	ForkVersionSchedule map[[fieldparams.VersionLength]byte]primitives.Epoch // Schedule of fork epochs by version.
 	ForkVersionNames    map[[fieldparams.VersionLength]byte]string           // Human-readable names of fork versions.
@@ -288,6 +290,7 @@ type BeaconChainConfig struct {
 	// Deprecated_MaxBlobsPerBlock defines the max blobs that could exist in a block.
 	// Deprecated: This field is no longer supported. Avoid using it.
 	DeprecatedMaxBlobsPerBlock int `yaml:"MAX_BLOBS_PER_BLOCK" spec:"true"`
+
 	// DeprecatedMaxBlobsPerBlockElectra defines the max blobs that could exist in a block post Electra hard fork.
 	// Deprecated: This field is no longer supported. Avoid using it.
 	DeprecatedMaxBlobsPerBlockElectra int `yaml:"MAX_BLOBS_PER_BLOCK_ELECTRA" spec:"true"`
@@ -312,6 +315,7 @@ func configForkSchedule(b *BeaconChainConfig) map[[fieldparams.VersionLength]byt
 	fvs[bytesutil.ToBytes4(b.CapellaForkVersion)] = b.CapellaForkEpoch
 	fvs[bytesutil.ToBytes4(b.DenebForkVersion)] = b.DenebForkEpoch
 	fvs[bytesutil.ToBytes4(b.ElectraForkVersion)] = b.ElectraForkEpoch
+	fvs[bytesutil.ToBytes4(b.FuluForkVersion)] = b.FuluForkEpoch
 	return fvs
 }
 
@@ -334,6 +338,7 @@ func ConfigForkVersions(b *BeaconChainConfig) map[[fieldparams.VersionLength]byt
 		bytesutil.ToBytes4(b.CapellaForkVersion):   version.Capella,
 		bytesutil.ToBytes4(b.DenebForkVersion):     version.Deneb,
 		bytesutil.ToBytes4(b.ElectraForkVersion):   version.Electra,
+		bytesutil.ToBytes4(b.FuluForkVersion):      version.Fulu,
 	}
 }
 
@@ -400,7 +405,7 @@ func DenebEnabled() bool {
 // PeerDASEnabled centralizes the check to determine if code paths
 // that are specific to peerdas should be allowed to execute.
 func PeerDASEnabled() bool {
-	return BeaconConfig().Eip7594ForkEpoch < math.MaxUint64
+	return BeaconConfig().FuluForkEpoch < math.MaxUint64
 }
 
 // WithinDAPeriod checks if the block epoch is within MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUESTS of the given current epoch.

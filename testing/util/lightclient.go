@@ -15,7 +15,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/encoding/ssz"
 	v11 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	pb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
@@ -660,6 +659,118 @@ func (l *TestLightClient) SetupTestElectra(blinded bool) *TestLightClient {
 	return l
 }
 
+func (l *TestLightClient) SetupTestFulu(blinded bool) *TestLightClient {
+	ctx := context.Background()
+
+	slot := primitives.Slot(params.BeaconConfig().FuluForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
+
+	attestedState, err := NewBeaconStateFulu()
+	require.NoError(l.T, err)
+	err = attestedState.SetSlot(slot)
+	require.NoError(l.T, err)
+
+	finalizedBlock, err := blocks.NewSignedBeaconBlock(NewBeaconBlockFulu())
+	require.NoError(l.T, err)
+	finalizedBlock.SetSlot(1)
+	finalizedHeader, err := finalizedBlock.Header()
+	require.NoError(l.T, err)
+	finalizedRoot, err := finalizedHeader.Header.HashTreeRoot()
+	require.NoError(l.T, err)
+
+	require.NoError(l.T, attestedState.SetFinalizedCheckpoint(&ethpb.Checkpoint{
+		Epoch: params.BeaconConfig().FuluForkEpoch - 10,
+		Root:  finalizedRoot[:],
+	}))
+
+	parent := NewBeaconBlockFulu()
+	parent.Block.Slot = slot
+
+	signedParent, err := blocks.NewSignedBeaconBlock(parent)
+	require.NoError(l.T, err)
+
+	parentHeader, err := signedParent.Header()
+	require.NoError(l.T, err)
+	attestedHeader := parentHeader.Header
+
+	err = attestedState.SetLatestBlockHeader(attestedHeader)
+	require.NoError(l.T, err)
+	attestedStateRoot, err := attestedState.HashTreeRoot(ctx)
+	require.NoError(l.T, err)
+
+	// get a new signed block so the root is updated with the new state root
+	parent.Block.StateRoot = attestedStateRoot[:]
+	signedParent, err = blocks.NewSignedBeaconBlock(parent)
+	require.NoError(l.T, err)
+
+	state, err := NewBeaconStateFulu()
+	require.NoError(l.T, err)
+	err = state.SetSlot(slot)
+	require.NoError(l.T, err)
+
+	parentRoot, err := signedParent.Block().HashTreeRoot()
+	require.NoError(l.T, err)
+
+	var signedBlock interfaces.SignedBeaconBlock
+	if blinded {
+		block := NewBlindedBeaconBlockFulu()
+		block.Message.Slot = slot
+		block.Message.ParentRoot = parentRoot[:]
+
+		for i := uint64(0); i < params.BeaconConfig().MinSyncCommitteeParticipants; i++ {
+			block.Message.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, true)
+		}
+
+		signedBlock, err = blocks.NewSignedBeaconBlock(block)
+		require.NoError(l.T, err)
+
+		h, err := signedBlock.Header()
+		require.NoError(l.T, err)
+
+		err = state.SetLatestBlockHeader(h.Header)
+		require.NoError(l.T, err)
+		stateRoot, err := state.HashTreeRoot(ctx)
+		require.NoError(l.T, err)
+
+		// get a new signed block so the root is updated with the new state root
+		block.Message.StateRoot = stateRoot[:]
+		signedBlock, err = blocks.NewSignedBeaconBlock(block)
+		require.NoError(l.T, err)
+	} else {
+		block := NewBeaconBlockFulu()
+		block.Block.Slot = slot
+		block.Block.ParentRoot = parentRoot[:]
+
+		for i := uint64(0); i < params.BeaconConfig().MinSyncCommitteeParticipants; i++ {
+			block.Block.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, true)
+		}
+
+		signedBlock, err = blocks.NewSignedBeaconBlock(block)
+		require.NoError(l.T, err)
+
+		h, err := signedBlock.Header()
+		require.NoError(l.T, err)
+
+		err = state.SetLatestBlockHeader(h.Header)
+		require.NoError(l.T, err)
+		stateRoot, err := state.HashTreeRoot(ctx)
+		require.NoError(l.T, err)
+
+		// get a new signed block so the root is updated with the new state root
+		block.Block.StateRoot = stateRoot[:]
+		signedBlock, err = blocks.NewSignedBeaconBlock(block)
+		require.NoError(l.T, err)
+	}
+
+	l.State = state
+	l.AttestedState = attestedState
+	l.AttestedBlock = signedParent
+	l.Block = signedBlock
+	l.Ctx = ctx
+	l.FinalizedBlock = finalizedBlock
+
+	return l
+}
+
 func (l *TestLightClient) SetupTestDenebFinalizedBlockCapella(blinded bool) *TestLightClient {
 	ctx := context.Background()
 
@@ -894,7 +1005,7 @@ func (l *TestLightClient) CheckAttestedHeader(header interfaces.LightClientHeade
 	}
 }
 
-func (l *TestLightClient) CheckSyncAggregate(sa *pb.SyncAggregate) {
+func (l *TestLightClient) CheckSyncAggregate(sa *ethpb.SyncAggregate) {
 	syncAggregate, err := l.Block.Block().Body().SyncAggregate()
 	require.NoError(l.T, err)
 	require.DeepSSZEqual(l.T, syncAggregate.SyncCommitteeBits, sa.SyncCommitteeBits, "SyncAggregate bits is not equal")

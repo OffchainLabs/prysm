@@ -1,6 +1,7 @@
 package time_test
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
@@ -264,107 +265,69 @@ func TestAltairCompatible(t *testing.T) {
 	}
 }
 
-func TestCanUpgradeToCapella(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	bc := params.BeaconConfig()
-	bc.CapellaForkEpoch = 5
-	params.OverrideBeaconConfig(bc)
-	tests := []struct {
-		name string
-		slot primitives.Slot
-		want bool
-	}{
-		{
-			name: "not epoch start",
-			slot: 1,
-			want: false,
-		},
-		{
-			name: "not capella epoch",
-			slot: params.BeaconConfig().SlotsPerEpoch,
-			want: false,
-		},
-		{
-			name: "capella epoch",
-			slot: primitives.Slot(params.BeaconConfig().CapellaForkEpoch) * params.BeaconConfig().SlotsPerEpoch,
-			want: true,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := time.CanUpgradeToCapella(tt.slot); got != tt.want {
-				t.Errorf("CanUpgradeToCapella() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
+func TestCanUpgradeTo(t *testing.T) {
+	beaconConfig := params.BeaconConfig()
 
-func TestCanUpgradeToDeneb(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	bc := params.BeaconConfig()
-	bc.DenebForkEpoch = 5
-	params.OverrideBeaconConfig(bc)
-	tests := []struct {
-		name string
-		slot primitives.Slot
-		want bool
+	outerTestCases := []struct {
+		name        string
+		forkEpoch   *primitives.Epoch
+		upgradeFunc func(primitives.Slot) bool
 	}{
 		{
-			name: "not epoch start",
-			slot: 1,
-			want: false,
+			name:        "Capella",
+			forkEpoch:   &beaconConfig.CapellaForkEpoch,
+			upgradeFunc: time.CanUpgradeToCapella,
 		},
 		{
-			name: "not deneb epoch",
-			slot: params.BeaconConfig().SlotsPerEpoch,
-			want: false,
+			name:        "Deneb",
+			forkEpoch:   &beaconConfig.DenebForkEpoch,
+			upgradeFunc: time.CanUpgradeToDeneb,
 		},
 		{
-			name: "deneb epoch",
-			slot: primitives.Slot(params.BeaconConfig().DenebForkEpoch) * params.BeaconConfig().SlotsPerEpoch,
-			want: true,
+			name:        "Electra",
+			forkEpoch:   &beaconConfig.ElectraForkEpoch,
+			upgradeFunc: time.CanUpgradeToElectra,
+		},
+		{
+			name:        "Fulu",
+			forkEpoch:   &beaconConfig.FuluForkEpoch,
+			upgradeFunc: time.CanUpgradeToFulu,
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := time.CanUpgradeToDeneb(tt.slot); got != tt.want {
-				t.Errorf("CanUpgradeToDeneb() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
 
-func TestCanUpgradeToElectra(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	bc := params.BeaconConfig()
-	bc.ElectraForkEpoch = 5
-	params.OverrideBeaconConfig(bc)
-	tests := []struct {
-		name string
-		slot primitives.Slot
-		want bool
-	}{
-		{
-			name: "not epoch start",
-			slot: 1,
-			want: false,
-		},
-		{
-			name: "not electra epoch",
-			slot: params.BeaconConfig().SlotsPerEpoch,
-			want: false,
-		},
-		{
-			name: "electra epoch",
-			slot: primitives.Slot(params.BeaconConfig().ElectraForkEpoch) * params.BeaconConfig().SlotsPerEpoch,
-			want: true,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := time.CanUpgradeToElectra(tt.slot); got != tt.want {
-				t.Errorf("CanUpgradeToElectra() = %v, want %v", got, tt.want)
-			}
-		})
+	for _, otc := range outerTestCases {
+		params.SetupTestConfigCleanup(t)
+		*otc.forkEpoch = 5
+		params.OverrideBeaconConfig(beaconConfig)
+
+		innerTestCases := []struct {
+			name string
+			slot primitives.Slot
+			want bool
+		}{
+			{
+				name: "not epoch start",
+				slot: 1,
+				want: false,
+			},
+			{
+				name: fmt.Sprintf("not %s epoch", otc.name),
+				slot: params.BeaconConfig().SlotsPerEpoch,
+				want: false,
+			},
+			{
+				name: fmt.Sprintf("%s epoch", otc.name),
+				slot: primitives.Slot(*otc.forkEpoch) * params.BeaconConfig().SlotsPerEpoch,
+				want: true,
+			},
+		}
+
+		for _, itc := range innerTestCases {
+			t.Run(fmt.Sprintf("%s-%s", otc.name, itc.name), func(t *testing.T) {
+				if got := otc.upgradeFunc(itc.slot); got != itc.want {
+					t.Errorf("CanUpgradeTo%s() = %v, want %v", otc.name, got, itc.want)
+				}
+			})
+		}
 	}
 }

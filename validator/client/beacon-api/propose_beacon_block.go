@@ -14,6 +14,7 @@ import (
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
+// nolint:gocognit
 func (c *beaconApiValidatorClient) proposeBeaconBlock(ctx context.Context, in *ethpb.GenericSignedBeaconBlock) (*ethpb.ProposeResponse, error) {
 	var consensusVersion string
 	var beaconBlockRoot [32]byte
@@ -149,16 +150,43 @@ func (c *beaconApiValidatorClient) proposeBeaconBlock(ctx context.Context, in *e
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to marshal blinded electra beacon block contents")
 		}
+	case *ethpb.GenericSignedBeaconBlock_Fulu:
+		consensusVersion = "fulu"
+		beaconBlockRoot, err = blockType.Fulu.Block.HashTreeRoot()
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to compute block root for fulu beacon block")
+		}
+		signedBlock, err := structs.SignedBeaconBlockContentsFuluFromConsensus(blockType.Fulu)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to convert fulu beacon block contents")
+		}
+		marshalledSignedBeaconBlockJson, err = json.Marshal(signedBlock)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to marshal fulu beacon block contents")
+		}
+	case *ethpb.GenericSignedBeaconBlock_BlindedFulu:
+		blinded = true
+		consensusVersion = "fulu"
+		beaconBlockRoot, err = blockType.BlindedFulu.HashTreeRoot()
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to compute block root for blinded fulu beacon block")
+		}
+		signedBlock, err := structs.SignedBlindedBeaconBlockFuluFromConsensus(blockType.BlindedFulu)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to convert blinded fulu beacon block contents")
+		}
+		marshalledSignedBeaconBlockJson, err = json.Marshal(signedBlock)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to marshal blinded fulu beacon block contents")
+		}
 	default:
 		return nil, errors.Errorf("unsupported block type %T", in.Block)
 	}
 
-	var endpoint string
+	endpoint := "/eth/v2/beacon/blocks"
 
 	if blinded {
 		endpoint = "/eth/v2/beacon/blinded_blocks"
-	} else {
-		endpoint = "/eth/v2/beacon/blocks"
 	}
 
 	headers := map[string]string{"Eth-Consensus-Version": consensusVersion}

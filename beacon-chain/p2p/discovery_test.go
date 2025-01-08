@@ -134,9 +134,6 @@ func TestStartDiscV5_DiscoverAllPeers(t *testing.T) {
 
 func TestCreateLocalNode(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig()
-	cfg.Eip7594ForkEpoch = 1
-	params.OverrideBeaconConfig(cfg)
 	testCases := []struct {
 		name          string
 		cfg           *Config
@@ -607,16 +604,12 @@ func TestRefreshPersistentSubnets(t *testing.T) {
 	defer cache.SubnetIDs.EmptyAllCaches()
 	defer cache.SyncSubnetIDs.EmptyAllCaches()
 
-	const (
-		altairForkEpoch  = 5
-		eip7594ForkEpoch = 10
-	)
+	const altairForkEpoch = 5
 
 	// Set up epochs.
 	defaultCfg := params.BeaconConfig()
 	cfg := defaultCfg.Copy()
 	cfg.AltairForkEpoch = altairForkEpoch
-	cfg.Eip7594ForkEpoch = eip7594ForkEpoch
 	params.OverrideBeaconConfig(cfg)
 
 	// Compute the number of seconds per epoch.

@@ -519,6 +519,9 @@ func blobsAndProofs(req *ethpb.GenericSignedBeaconBlock) ([][]byte, [][]byte, er
 	case req.GetElectra() != nil:
 		dbBlockContents := req.GetElectra()
 		return dbBlockContents.Blobs, dbBlockContents.KzgProofs, nil
+	case req.GetFulu() != nil:
+		dbBlockContents := req.GetFulu()
+		return dbBlockContents.Blobs, dbBlockContents.KzgProofs, nil
 	default:
 		return nil, nil, errors.Errorf("unknown request type provided: %T", req)
 	}
