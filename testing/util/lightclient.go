@@ -551,22 +551,23 @@ func (l *TestLightClient) SetupTestElectra(blinded bool) *TestLightClient {
 	ctx := context.Background()
 
 	slot := primitives.Slot(params.BeaconConfig().ElectraForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
+	finalizedBlockSlot := primitives.Slot(params.BeaconConfig().ElectraForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch))
 
 	attestedState, err := NewBeaconStateElectra()
 	require.NoError(l.T, err)
 	err = attestedState.SetSlot(slot)
 	require.NoError(l.T, err)
 
-	finalizedBlock, err := blocks.NewSignedBeaconBlock(NewBeaconBlockElectra())
+	finalizedBlock, err := blocks.NewSignedBeaconBlock(NewBeaconBlockDeneb())
 	require.NoError(l.T, err)
-	finalizedBlock.SetSlot(1)
+	finalizedBlock.SetSlot(finalizedBlockSlot)
 	finalizedHeader, err := finalizedBlock.Header()
 	require.NoError(l.T, err)
 	finalizedRoot, err := finalizedHeader.Header.HashTreeRoot()
 	require.NoError(l.T, err)
 
 	require.NoError(l.T, attestedState.SetFinalizedCheckpoint(&ethpb.Checkpoint{
-		Epoch: params.BeaconConfig().ElectraForkEpoch - 10,
+		Epoch: params.BeaconConfig().ElectraForkEpoch,
 		Root:  finalizedRoot[:],
 	}))
 
@@ -887,6 +888,7 @@ func (l *TestLightClient) SetupTestElectraFinalizedBlockDeneb(blinded bool) *Tes
 	ctx := context.Background()
 
 	slot := primitives.Slot(params.BeaconConfig().ElectraForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
+	finalizedBlockSlot := primitives.Slot(params.BeaconConfig().DenebForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch))
 
 	attestedState, err := NewBeaconStateElectra()
 	require.NoError(l.T, err)
@@ -895,14 +897,14 @@ func (l *TestLightClient) SetupTestElectraFinalizedBlockDeneb(blinded bool) *Tes
 
 	finalizedBlock, err := blocks.NewSignedBeaconBlock(NewBeaconBlockDeneb())
 	require.NoError(l.T, err)
-	finalizedBlock.SetSlot(1)
+	finalizedBlock.SetSlot(finalizedBlockSlot)
 	finalizedHeader, err := finalizedBlock.Header()
 	require.NoError(l.T, err)
 	finalizedRoot, err := finalizedHeader.Header.HashTreeRoot()
 	require.NoError(l.T, err)
 
 	require.NoError(l.T, attestedState.SetFinalizedCheckpoint(&ethpb.Checkpoint{
-		Epoch: params.BeaconConfig().ElectraForkEpoch - 10,
+		Epoch: params.BeaconConfig().DenebForkEpoch,
 		Root:  finalizedRoot[:],
 	}))
 

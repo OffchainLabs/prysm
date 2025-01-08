@@ -438,7 +438,7 @@ func TestLightClient_NewLightClientFinalityUpdateFromBeaconState(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 			}
-			execution := &v11.ExecutionPayloadHeaderElectra{
+			execution := &v11.ExecutionPayloadHeaderDeneb{
 				ParentHash:       payloadInterface.ParentHash(),
 				FeeRecipient:     payloadInterface.FeeRecipient(),
 				StateRoot:        payloadInterface.StateRoot(),
@@ -512,7 +512,7 @@ func TestLightClient_NewLightClientFinalityUpdateFromBeaconState(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 			}
-			execution := &v11.ExecutionPayloadHeaderElectra{
+			execution := &v11.ExecutionPayloadHeaderDeneb{
 				ParentHash:       payloadInterface.ParentHash(),
 				FeeRecipient:     payloadInterface.FeeRecipient(),
 				StateRoot:        payloadInterface.StateRoot(),
