@@ -823,6 +823,16 @@ func unmarshalBlock(_ context.Context, enc []byte) (interfaces.ReadOnlySignedBea
 		if err := rawBlock.UnmarshalSSZ(enc[len(electraBlindKey):]); err != nil {
 			return nil, errors.Wrap(err, "could not unmarshal blinded Electra block")
 		}
+	case hasFuluKey(enc):
+		rawBlock = &ethpb.SignedBeaconBlockFulu{}
+		if err := rawBlock.UnmarshalSSZ(enc[len(fuluKey):]); err != nil {
+			return nil, errors.Wrap(err, "could not unmarshal Fulu block")
+		}
+	case hasFuluBlindKey(enc):
+		rawBlock = &ethpb.SignedBlindedBeaconBlockFulu{}
+		if err := rawBlock.UnmarshalSSZ(enc[len(fuluBlindKey):]); err != nil {
+			return nil, errors.Wrap(err, "could not unmarshal blinded Fulu block")
+		}
 	default:
 		// Marshal block bytes to phase 0 beacon block.
 		rawBlock = &ethpb.SignedBeaconBlock{}
@@ -851,32 +861,50 @@ func encodeBlock(blk interfaces.ReadOnlySignedBeaconBlock) ([]byte, error) {
 }
 
 func keyForBlock(blk interfaces.ReadOnlySignedBeaconBlock) ([]byte, error) {
-	switch blk.Version() {
-	case version.Electra:
+	v := blk.Version()
+
+	if v >= version.Fulu {
+		if blk.IsBlinded() {
+			return fuluBlindKey, nil
+		}
+		return fuluKey, nil
+	}
+
+	if v >= version.Electra {
 		if blk.IsBlinded() {
 			return electraBlindKey, nil
 		}
 		return electraKey, nil
-	case version.Deneb:
+	}
+
+	if v >= version.Deneb {
 		if blk.IsBlinded() {
 			return denebBlindKey, nil
 		}
 		return denebKey, nil
-	case version.Capella:
+	}
+
+	if v >= version.Capella {
 		if blk.IsBlinded() {
 			return capellaBlindKey, nil
 		}
 		return capellaKey, nil
-	case version.Bellatrix:
+	}
+
+	if v >= version.Bellatrix {
 		if blk.IsBlinded() {
 			return bellatrixBlindKey, nil
 		}
 		return bellatrixKey, nil
-	case version.Altair:
-		return altairKey, nil
-	case version.Phase0:
-		return nil, nil
-	default:
-		return nil, fmt.Errorf("unsupported block version: %v", blk.Version())
 	}
+
+	if v >= version.Altair {
+		return altairKey, nil
+	}
+
+	if v >= version.Phase0 {
+		return nil, nil
+	}
+
+	return nil, fmt.Errorf("unsupported block version: %v", blk.Version())
 }

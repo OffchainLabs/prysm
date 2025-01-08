@@ -217,6 +217,8 @@ func ConfigToYaml(cfg *BeaconChainConfig) []byte {
 		fmt.Sprintf("DENEB_FORK_VERSION: %#x", cfg.DenebForkVersion),
 		fmt.Sprintf("ELECTRA_FORK_EPOCH: %d", cfg.ElectraForkEpoch),
 		fmt.Sprintf("ELECTRA_FORK_VERSION: %#x", cfg.ElectraForkVersion),
+		fmt.Sprintf("FULU_FORK_EPOCH: %d", cfg.FuluForkEpoch),
+		fmt.Sprintf("FULU_FORK_VERSION: %#x", cfg.FuluForkVersion),
 		fmt.Sprintf("EPOCHS_PER_SUBNET_SUBSCRIPTION: %d", cfg.EpochsPerSubnetSubscription),
 		fmt.Sprintf("ATTESTATION_SUBNET_EXTRA_BITS: %d", cfg.AttestationSubnetExtraBits),
 		fmt.Sprintf("ATTESTATION_SUBNET_PREFIX_BITS: %d", cfg.AttestationSubnetPrefixBits),

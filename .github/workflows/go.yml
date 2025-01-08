@@ -31,7 +31,7 @@ jobs:
       - name: Set up Go 1.22
         uses: actions/setup-go@v4
         with:
-          go-version: '1.22.6'
+          go-version: '1.22.10'
       - name: Run Gosec Security Scanner
         run: | # https://github.com/securego/gosec/issues/469
           export PATH=$PATH:$(go env GOPATH)/bin
@@ -48,7 +48,7 @@ jobs:
       - name: Set up Go 1.22
         uses: actions/setup-go@v4
         with:
-          go-version: '1.22.6'
+          go-version: '1.22.10'
           id: go
 
       - name: Golangci-lint
@@ -64,7 +64,7 @@ jobs:
       - name: Set up Go 1.x
         uses: actions/setup-go@v4
         with:
-          go-version: '1.22.6'
+          go-version: '1.22.10'
         id: go
 
       - name: Check out code into the Go module directory

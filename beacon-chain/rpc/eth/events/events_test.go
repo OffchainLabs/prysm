@@ -19,6 +19,7 @@ import (
 	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	payloadattribute "github.com/prysmaticlabs/prysm/v5/consensus-types/payload-attribute"
@@ -460,7 +461,7 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 				defer testSync.cleanup()
 
 				st := tc.getState()
-				v := &eth.Validator{ExitEpoch: math.MaxUint64}
+				v := &eth.Validator{ExitEpoch: math.MaxUint64, EffectiveBalance: params.BeaconConfig().MinActivationBalance}
 				require.NoError(t, st.SetValidators([]*eth.Validator{v}))
 				currentSlot := primitives.Slot(0)
 				// to avoid slot processing

@@ -98,6 +98,9 @@ func runTest(t *testing.T, config string, fork int, basePath string) { // nolint
 				case version.Electra:
 					beaconState = unmarshalElectraState(t, preBeaconStateSSZ)
 					beaconBlock = unmarshalElectraBlock(t, blockSSZ)
+				case version.Fulu:
+					beaconState = unmarshalFuluState(t, preBeaconStateSSZ)
+					beaconBlock = unmarshalFuluBlock(t, blockSSZ)
 				default:
 					t.Fatalf("unknown fork version: %v", fork)
 				}
@@ -138,6 +141,8 @@ func runTest(t *testing.T, config string, fork int, basePath string) { // nolint
 							beaconBlock = unmarshalSignedDenebBlock(t, blockSSZ)
 						case version.Electra:
 							beaconBlock = unmarshalSignedElectraBlock(t, blockSSZ)
+						case version.Fulu:
+							beaconBlock = unmarshalSignedFuluBlock(t, blockSSZ)
 						default:
 							t.Fatalf("unknown fork version: %v", fork)
 						}
@@ -190,150 +195,6 @@ func runTest(t *testing.T, config string, fork int, basePath string) { // nolint
 			})
 		}
 	}
-}
-
-func unmarshalPhase0State(t *testing.T, raw []byte) state.BeaconState {
-	base := &ethpb.BeaconState{}
-	require.NoError(t, base.UnmarshalSSZ(raw))
-	st, err := state_native.InitializeFromProtoPhase0(base)
-	require.NoError(t, err)
-	return st
-}
-
-func unmarshalPhase0Block(t *testing.T, raw []byte) interfaces.ReadOnlySignedBeaconBlock {
-	base := &ethpb.BeaconBlock{}
-	require.NoError(t, base.UnmarshalSSZ(raw))
-	blk, err := blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlock{Block: base, Signature: make([]byte, fieldparams.BLSSignatureLength)})
-	require.NoError(t, err)
-	return blk
-}
-
-func unmarshalSignedPhase0Block(t *testing.T, raw []byte) interfaces.ReadOnlySignedBeaconBlock {
-	base := &ethpb.SignedBeaconBlock{}
-	require.NoError(t, base.UnmarshalSSZ(raw))
-	blk, err := blocks.NewSignedBeaconBlock(base)
-	require.NoError(t, err)
-	return blk
-}
-
-func unmarshalAltairState(t *testing.T, raw []byte) state.BeaconState {
-	base := &ethpb.BeaconStateAltair{}
-	require.NoError(t, base.UnmarshalSSZ(raw))
-	st, err := state_native.InitializeFromProtoAltair(base)
-	require.NoError(t, err)
-	return st
-}
-
-func unmarshalAltairBlock(t *testing.T, raw []byte) interfaces.ReadOnlySignedBeaconBlock {
-	base := &ethpb.BeaconBlockAltair{}
-	require.NoError(t, base.UnmarshalSSZ(raw))
-	blk, err := blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockAltair{Block: base, Signature: make([]byte, fieldparams.BLSSignatureLength)})
-	require.NoError(t, err)
-	return blk
-}
-
-func unmarshalSignedAltairBlock(t *testing.T, raw []byte) interfaces.ReadOnlySignedBeaconBlock {
-	base := &ethpb.SignedBeaconBlockAltair{}
-	require.NoError(t, base.UnmarshalSSZ(raw))
-	blk, err := blocks.NewSignedBeaconBlock(base)
-	require.NoError(t, err)
-	return blk
-}
-
-func unmarshalBellatrixState(t *testing.T, raw []byte) state.BeaconState {
-	base := &ethpb.BeaconStateBellatrix{}
-	require.NoError(t, base.UnmarshalSSZ(raw))
-	st, err := state_native.InitializeFromProtoBellatrix(base)
-	require.NoError(t, err)
-	return st
-}
-
-func unmarshalBellatrixBlock(t *testing.T, raw []byte) interfaces.ReadOnlySignedBeaconBlock {
-	base := &ethpb.BeaconBlockBellatrix{}
-	require.NoError(t, base.UnmarshalSSZ(raw))
-	blk, err := blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockBellatrix{Block: base, Signature: make([]byte, fieldparams.BLSSignatureLength)})
-	require.NoError(t, err)
-	return blk
-}
-
-func unmarshalSignedBellatrixBlock(t *testing.T, raw []byte) interfaces.ReadOnlySignedBeaconBlock {
-	base := &ethpb.SignedBeaconBlockBellatrix{}
-	require.NoError(t, base.UnmarshalSSZ(raw))
-	blk, err := blocks.NewSignedBeaconBlock(base)
-	require.NoError(t, err)
-	return blk
-}
-
-func unmarshalCapellaState(t *testing.T, raw []byte) state.BeaconState {
-	base := &ethpb.BeaconStateCapella{}
-	require.NoError(t, base.UnmarshalSSZ(raw))
-	st, err := state_native.InitializeFromProtoCapella(base)
-	require.NoError(t, err)
-	return st
-}
-
-func unmarshalCapellaBlock(t *testing.T, raw []byte) interfaces.ReadOnlySignedBeaconBlock {
-	base := &ethpb.BeaconBlockCapella{}
-	require.NoError(t, base.UnmarshalSSZ(raw))
-	blk, err := blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockCapella{Block: base, Signature: make([]byte, fieldparams.BLSSignatureLength)})
-	require.NoError(t, err)
-	return blk
-}
-
-func unmarshalSignedCapellaBlock(t *testing.T, raw []byte) interfaces.ReadOnlySignedBeaconBlock {
-	base := &ethpb.SignedBeaconBlockCapella{}
-	require.NoError(t, base.UnmarshalSSZ(raw))
-	blk, err := blocks.NewSignedBeaconBlock(base)
-	require.NoError(t, err)
-	return blk
-}
-
-func unmarshalDenebState(t *testing.T, raw []byte) state.BeaconState {
-	base := &ethpb.BeaconStateDeneb{}
-	require.NoError(t, base.UnmarshalSSZ(raw))
-	st, err := state_native.InitializeFromProtoDeneb(base)
-	require.NoError(t, err)
-	return st
-}
-
-func unmarshalDenebBlock(t *testing.T, raw []byte) interfaces.SignedBeaconBlock {
-	base := &ethpb.BeaconBlockDeneb{}
-	require.NoError(t, base.UnmarshalSSZ(raw))
-	blk, err := blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockDeneb{Block: base, Signature: make([]byte, fieldparams.BLSSignatureLength)})
-	require.NoError(t, err)
-	return blk
-}
-
-func unmarshalSignedDenebBlock(t *testing.T, raw []byte) interfaces.SignedBeaconBlock {
-	base := &ethpb.SignedBeaconBlockDeneb{}
-	require.NoError(t, base.UnmarshalSSZ(raw))
-	blk, err := blocks.NewSignedBeaconBlock(base)
-	require.NoError(t, err)
-	return blk
-}
-
-func unmarshalElectraState(t *testing.T, raw []byte) state.BeaconState {
-	base := &ethpb.BeaconStateElectra{}
-	require.NoError(t, base.UnmarshalSSZ(raw))
-	st, err := state_native.InitializeFromProtoElectra(base)
-	require.NoError(t, err)
-	return st
-}
-
-func unmarshalElectraBlock(t *testing.T, raw []byte) interfaces.SignedBeaconBlock {
-	base := &ethpb.BeaconBlockElectra{}
-	require.NoError(t, base.UnmarshalSSZ(raw))
-	blk, err := blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockElectra{Block: base, Signature: make([]byte, fieldparams.BLSSignatureLength)})
-	require.NoError(t, err)
-	return blk
-}
-
-func unmarshalSignedElectraBlock(t *testing.T, raw []byte) interfaces.SignedBeaconBlock {
-	base := &ethpb.SignedBeaconBlockElectra{}
-	require.NoError(t, base.UnmarshalSSZ(raw))
-	blk, err := blocks.NewSignedBeaconBlock(base)
-	require.NoError(t, err)
-	return blk
 }
 
 func runBlobStep(t *testing.T,
@@ -453,4 +314,200 @@ func errAssertionForStep(step Step, expect error) func(t *testing.T, err error) 
 			t.Fatal(strings.Join(fmsg, ";"))
 		}
 	}
+}
+
+// ----------------------------------------------------------------------------
+// Phase 0
+// ----------------------------------------------------------------------------
+
+func unmarshalPhase0State(t *testing.T, raw []byte) state.BeaconState {
+	base := &ethpb.BeaconState{}
+	require.NoError(t, base.UnmarshalSSZ(raw))
+	st, err := state_native.InitializeFromProtoPhase0(base)
+	require.NoError(t, err)
+	return st
+}
+
+func unmarshalPhase0Block(t *testing.T, raw []byte) interfaces.ReadOnlySignedBeaconBlock {
+	base := &ethpb.BeaconBlock{}
+	require.NoError(t, base.UnmarshalSSZ(raw))
+	blk, err := blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlock{Block: base, Signature: make([]byte, fieldparams.BLSSignatureLength)})
+	require.NoError(t, err)
+	return blk
+}
+
+func unmarshalSignedPhase0Block(t *testing.T, raw []byte) interfaces.ReadOnlySignedBeaconBlock {
+	base := &ethpb.SignedBeaconBlock{}
+	require.NoError(t, base.UnmarshalSSZ(raw))
+	blk, err := blocks.NewSignedBeaconBlock(base)
+	require.NoError(t, err)
+	return blk
+}
+
+// ----------------------------------------------------------------------------
+// Altair
+// ----------------------------------------------------------------------------
+
+func unmarshalAltairState(t *testing.T, raw []byte) state.BeaconState {
+	base := &ethpb.BeaconStateAltair{}
+	require.NoError(t, base.UnmarshalSSZ(raw))
+	st, err := state_native.InitializeFromProtoAltair(base)
+	require.NoError(t, err)
+	return st
+}
+
+func unmarshalAltairBlock(t *testing.T, raw []byte) interfaces.ReadOnlySignedBeaconBlock {
+	base := &ethpb.BeaconBlockAltair{}
+	require.NoError(t, base.UnmarshalSSZ(raw))
+	blk, err := blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockAltair{Block: base, Signature: make([]byte, fieldparams.BLSSignatureLength)})
+	require.NoError(t, err)
+	return blk
+}
+
+func unmarshalSignedAltairBlock(t *testing.T, raw []byte) interfaces.ReadOnlySignedBeaconBlock {
+	base := &ethpb.SignedBeaconBlockAltair{}
+	require.NoError(t, base.UnmarshalSSZ(raw))
+	blk, err := blocks.NewSignedBeaconBlock(base)
+	require.NoError(t, err)
+	return blk
+}
+
+// ----------------------------------------------------------------------------
+// Bellatrix
+// ----------------------------------------------------------------------------
+
+func unmarshalBellatrixState(t *testing.T, raw []byte) state.BeaconState {
+	base := &ethpb.BeaconStateBellatrix{}
+	require.NoError(t, base.UnmarshalSSZ(raw))
+	st, err := state_native.InitializeFromProtoBellatrix(base)
+	require.NoError(t, err)
+	return st
+}
+
+func unmarshalBellatrixBlock(t *testing.T, raw []byte) interfaces.ReadOnlySignedBeaconBlock {
+	base := &ethpb.BeaconBlockBellatrix{}
+	require.NoError(t, base.UnmarshalSSZ(raw))
+	blk, err := blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockBellatrix{Block: base, Signature: make([]byte, fieldparams.BLSSignatureLength)})
+	require.NoError(t, err)
+	return blk
+}
+
+func unmarshalSignedBellatrixBlock(t *testing.T, raw []byte) interfaces.ReadOnlySignedBeaconBlock {
+	base := &ethpb.SignedBeaconBlockBellatrix{}
+	require.NoError(t, base.UnmarshalSSZ(raw))
+	blk, err := blocks.NewSignedBeaconBlock(base)
+	require.NoError(t, err)
+	return blk
+}
+
+// ----------------------------------------------------------------------------
+// Capella
+// ----------------------------------------------------------------------------
+
+func unmarshalCapellaState(t *testing.T, raw []byte) state.BeaconState {
+	base := &ethpb.BeaconStateCapella{}
+	require.NoError(t, base.UnmarshalSSZ(raw))
+	st, err := state_native.InitializeFromProtoCapella(base)
+	require.NoError(t, err)
+	return st
+}
+
+func unmarshalCapellaBlock(t *testing.T, raw []byte) interfaces.ReadOnlySignedBeaconBlock {
+	base := &ethpb.BeaconBlockCapella{}
+	require.NoError(t, base.UnmarshalSSZ(raw))
+	blk, err := blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockCapella{Block: base, Signature: make([]byte, fieldparams.BLSSignatureLength)})
+	require.NoError(t, err)
+	return blk
+}
+
+func unmarshalSignedCapellaBlock(t *testing.T, raw []byte) interfaces.ReadOnlySignedBeaconBlock {
+	base := &ethpb.SignedBeaconBlockCapella{}
+	require.NoError(t, base.UnmarshalSSZ(raw))
+	blk, err := blocks.NewSignedBeaconBlock(base)
+	require.NoError(t, err)
+	return blk
+}
+
+// ----------------------------------------------------------------------------
+// Deneb
+// ----------------------------------------------------------------------------
+
+func unmarshalDenebState(t *testing.T, raw []byte) state.BeaconState {
+	base := &ethpb.BeaconStateDeneb{}
+	require.NoError(t, base.UnmarshalSSZ(raw))
+	st, err := state_native.InitializeFromProtoDeneb(base)
+	require.NoError(t, err)
+	return st
+}
+
+func unmarshalDenebBlock(t *testing.T, raw []byte) interfaces.SignedBeaconBlock {
+	base := &ethpb.BeaconBlockDeneb{}
+	require.NoError(t, base.UnmarshalSSZ(raw))
+	blk, err := blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockDeneb{Block: base, Signature: make([]byte, fieldparams.BLSSignatureLength)})
+	require.NoError(t, err)
+	return blk
+}
+
+func unmarshalSignedDenebBlock(t *testing.T, raw []byte) interfaces.SignedBeaconBlock {
+	base := &ethpb.SignedBeaconBlockDeneb{}
+	require.NoError(t, base.UnmarshalSSZ(raw))
+	blk, err := blocks.NewSignedBeaconBlock(base)
+	require.NoError(t, err)
+	return blk
+}
+
+// ----------------------------------------------------------------------------
+// Electra
+// ----------------------------------------------------------------------------
+
+func unmarshalElectraState(t *testing.T, raw []byte) state.BeaconState {
+	base := &ethpb.BeaconStateElectra{}
+	require.NoError(t, base.UnmarshalSSZ(raw))
+	st, err := state_native.InitializeFromProtoElectra(base)
+	require.NoError(t, err)
+	return st
+}
+
+func unmarshalElectraBlock(t *testing.T, raw []byte) interfaces.SignedBeaconBlock {
+	base := &ethpb.BeaconBlockElectra{}
+	require.NoError(t, base.UnmarshalSSZ(raw))
+	blk, err := blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockElectra{Block: base, Signature: make([]byte, fieldparams.BLSSignatureLength)})
+	require.NoError(t, err)
+	return blk
+}
+
+func unmarshalSignedElectraBlock(t *testing.T, raw []byte) interfaces.SignedBeaconBlock {
+	base := &ethpb.SignedBeaconBlockElectra{}
+	require.NoError(t, base.UnmarshalSSZ(raw))
+	blk, err := blocks.NewSignedBeaconBlock(base)
+	require.NoError(t, err)
+	return blk
+}
+
+// ----------------------------------------------------------------------------
+// Fulu
+// ----------------------------------------------------------------------------
+
+func unmarshalFuluState(t *testing.T, raw []byte) state.BeaconState {
+	base := &ethpb.BeaconStateFulu{}
+	require.NoError(t, base.UnmarshalSSZ(raw))
+	st, err := state_native.InitializeFromProtoFulu(base)
+	require.NoError(t, err)
+	return st
+}
+
+func unmarshalFuluBlock(t *testing.T, raw []byte) interfaces.SignedBeaconBlock {
+	base := &ethpb.BeaconBlockFulu{}
+	require.NoError(t, base.UnmarshalSSZ(raw))
+	blk, err := blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockFulu{Block: base, Signature: make([]byte, fieldparams.BLSSignatureLength)})
+	require.NoError(t, err)
+	return blk
+}
+
+func unmarshalSignedFuluBlock(t *testing.T, raw []byte) interfaces.SignedBeaconBlock {
+	base := &ethpb.SignedBeaconBlockFulu{}
+	require.NoError(t, base.UnmarshalSSZ(raw))
+	blk, err := blocks.NewSignedBeaconBlock(base)
+	require.NoError(t, err)
+	return blk
 }

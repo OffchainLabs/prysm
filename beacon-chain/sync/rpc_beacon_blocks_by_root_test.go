@@ -31,7 +31,6 @@ import (
 	leakybucket "github.com/prysmaticlabs/prysm/v5/container/leaky-bucket"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/eth/v2"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
@@ -451,7 +450,7 @@ func TestConstructPendingBlobsRequest(t *testing.T) {
 		require.NoError(t, bs.Save(vscs[i]))
 	}
 
-	expected := []*eth.BlobIdentifier{
+	expected := []*ethpb.BlobIdentifier{
 		{Index: 1, BlockRoot: root[:]},
 	}
 	actual, err = s.constructPendingBlobsRequest(root, count, 100)
@@ -466,7 +465,7 @@ func TestFilterUnknownIndices(t *testing.T) {
 	blockRoot := [32]byte{}
 	count := 5
 
-	expected := []*eth.BlobIdentifier{
+	expected := []*ethpb.BlobIdentifier{
 		{Index: 3, BlockRoot: blockRoot[:]},
 		{Index: 4, BlockRoot: blockRoot[:]},
 	}

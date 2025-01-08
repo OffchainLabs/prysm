@@ -15,6 +15,11 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Added support to update target and max blob count to different values per hard fork config.
 - Log before blob filesystem cache warm-up.
 - New design for the attestation pool. [PR](https://github.com/prysmaticlabs/prysm/pull/14324)
+- Add field param placeholder for Electra blob target and max to pass spec tests.
+- Add EIP-7691: Blob throughput increase.
+- SSZ files generation: Remove the `// Hash: ...` header.
+- Trace IDONTWANT Messages in Pubsub.
+- Add Fulu fork boilerplate.
 
 ### Changed
 
@@ -24,19 +29,35 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Go deps upgrade, from `ioutil` to `io`
 - Move successfully registered validator(s) on builder log to debug.
 - Update some test files to use `crypto/rand` instead of `math/rand`
+- Enforce Compound prefix (0x02) for target when processing pending consolidation request.
+- Limit consolidating by validator's effective balance.
+- Use 16-bit random value for proposer and sync committee selection filter.
+- Re-organize the content of the `*.proto` files (No functional change).
+- Updated spec definitions for `process_slashings` in godocs. Simplified `ProcessSlashings` API.
+- Updated spec definition electra `process_registry_updates`.
+- Updated Electra spec definition for `process_epoch`.
+- Update our `go-libp2p-pubsub` dependency.
+- Re-organize the content of files to ease the creation of a new fork boilerplate.
+- Fixed Metadata errors for peers connected via QUIC.
 
 ### Deprecated
 
 
 ### Removed
 
+- Cleanup ProcessSlashings method to remove unnecessary argument.
+- Remove `/proto/eth/v2` directory. [PR](https://github.com/prysmaticlabs/prysm/pull/14765)
 
 ### Fixed
 
 - Added check to prevent nil pointer deference or out of bounds array access when validating the BLSToExecutionChange on an impossibly nil validator.
+- EIP-7691: Ensure new blobs subnets are subscribed on epoch in advance.
 
 ### Security
 
+- go version upgrade to 1.22.10 for CVE CVE-2024-34156
+- Update golang.org/x/crypto to v0.31.0 to address CVE-2024-45337
+- Update golang.org/x/net to v0.33.0 to address CVE-2024-45338
 
 ## [v5.2.0](https://github.com/prysmaticlabs/prysm/compare/v5.1.2...v5.2.0)
 
@@ -84,6 +105,7 @@ Notable features:
 - Save light client updates and bootstraps in DB.
 - Added more comprehensive tests for `BlockToLightClientHeader`. [PR](https://github.com/prysmaticlabs/prysm/pull/14699)
 - Added light client feature flag check to RPC handlers. [PR](https://github.com/prysmaticlabs/prysm/pull/14736)
+- Light client: Add better error handling. [PR](https://github.com/prysmaticlabs/prysm/pull/14749)
 
 ### Changed
 
@@ -139,7 +161,7 @@ Notable features:
 - Removed finalized validator index cache, no longer needed.
 - Removed validator queue position log on key reload and wait for activation.
 - Removed outdated spectest exclusions for EIP-6110.
-- Removed support for starting a beacon node with a deterministic interop genesis state via interop flags. Alteratively, create a genesis state with prysmctl and use `--genesis-state`. This removes about 9Mb (~11%) of unnecessary code and dependencies from the final production binary.
+- Removed support for starting a beacon node with a deterministic interop genesis state via interop flags. Alternatively, create a genesis state with prysmctl and use `--genesis-state`. This removes about 9Mb (~11%) of unnecessary code and dependencies from the final production binary.
 - Removed kzg proof check from blob reconstructor.
 
 ### Fixed
@@ -153,7 +175,7 @@ Notable features:
 - Fix `--backfill-oldest-slot` handling - this flag was totally broken, the code would always backfill to the default slot [pr](https://github.com/prysmaticlabs/prysm/pull/14584)
 - Fix keymanager API should return corrected error format for malformed tokens
 - Fix keymanager API so that get keys returns an empty response instead of a 500 error when using an unsupported keystore.
-- Small log imporvement, removing some redundant or duplicate logs
+- Small log improvement, removing some redundant or duplicate logs
 - EIP7521 - Fixes withdrawal bug by accounting for pending partial withdrawals and deducting already withdrawn amounts from the sweep balance. [PR](https://github.com/prysmaticlabs/prysm/pull/14578)
 - unskip electra merkle spec test
 - Fix panic in validator REST mode when checking status after removing all keys
@@ -183,7 +205,7 @@ meantime we are issuing a patch that recovers from the panic to prevent the node
 
 This only impacts the v5.1.1 release beacon api event stream endpoints. This endpoint is used by the
 prysm REST mode validator (a feature which requires the validator to be configured to use the beacon
-api intead of prysm's stock grpc endpoints) or accessory software that connects to the events api,
+api instead of prysm's stock grpc endpoints) or accessory software that connects to the events api,
 like https://github.com/ethpandaops/ethereum-metrics-exporter
 
 ### Fixed 
@@ -426,7 +448,7 @@ Updating to this release is recommended at your earliest convenience, especially
 - use time.NewTimer() to avoid possible memory leaks
 - paranoid underflow protection without error handling
 - Fix CommitteeAssignments to not return every validator
-- Fix dependent root retrival genesis case
+- Fix dependent root retrieval genesis case
 - Restrict Dials From Discovery
 - Always close cache warm chan to prevent blocking
 - Keep only the latest value in the health channel
@@ -578,7 +600,7 @@ block profit. If you want to preserve the existing behavior, set --local-block-v
 - handle special case of batch size=1
 - Always Set Inprogress Boolean In Cache
 - Builder APIs: adding headers to post endpoint
-- Rename mispelled variable
+- Rename misspelled variable
 - allow blob by root within da period
 - Rewrite Pruning Implementation To Handle EIP 7045
 - Set default fee recipient if tracked val fails
@@ -648,7 +670,7 @@ Known Issues
 - Support beacon_committee_selections
 - /eth/v1/beacon/deposit_snapshot
 - Docker images now have coreutils pre-installed
-- da_waited_time_milliseconds tracks total time waiting for data availablity check in ReceiveBlock
+- da_waited_time_milliseconds tracks total time waiting for data availability check in ReceiveBlock
 - blob_written, blob_disk_count, blob_disk_bytes new metrics for tracking blobs on disk
 - Backfill supports blob backfilling
 - Add mainnet deneb fork epoch config
@@ -823,7 +845,7 @@ and Raspberry Pi users.
 - Add Goerli Deneb Fork Epoch
 - Use deneb key for deneb state in saveStatesEfficientInternal
 - Initialize Inactivity Scores Correctly
-- Excluse DA wait time for chain processing time
+- Excludes DA wait time for chain processing time
 - Initialize sig cache for verification.Initializer
 - Verify roblobs
 - KZG Commitment inclusion proof verifier
@@ -856,7 +878,7 @@ and Raspberry Pi users.
 - Exit early if blob by root request is empty
 - Request missing blobs while processing pending queue
 - Check blob exists before requesting from peer
-- Passing block as arugment for sidecar validation
+- Passing block as argument for sidecar validation
 
 #### Blob Management
 
@@ -1153,13 +1175,13 @@ _Most of the PRs here involve shifting our http endpoints to using vanilla http 
 - Remove no-op cancel func
 - Update Terms of Service
 - fix head slot in log
-- DEPRECTATION: Remove exchange transition configuration call
+- DEPRECATION: Remove exchange transition configuration call
 - fix segmentation fork when Capella for epoch is MaxUint64
 - Return Error Gracefully When Removing 4881 Flag
 - Add zero length check on indices during NextSyncCommitteeIndices
 - Replace Empty Slice Literals with Nil Slices
 - Refactor Error String Formatting According to Go Best Practices
-- Fix redundant type converstion
+- Fix redundant type conversion
 - docs: fix typo
 - Add Clarification To Sync Committee Cache
 - Fix typos
@@ -1181,7 +1203,7 @@ small set of users.
 
 ### Security
 
-No security issues in thsi release.
+No security issues in this release.
 
 ## [v4.1.0](https://github.com/prysmaticlabs/prysm/compare/v4.0.8...v4.1.0) - 2023-08-22
 
@@ -1697,7 +1719,7 @@ notes [here](https://hackmd.io/TtyFurRJRKuklG3n8lMO9Q). This release is **strong
 Note: The released docker images are using the portable version of the blst cryptography library. The Prysm team will
 release docker images with the non-portable blst library as the default image. In the meantime, you can compile docker
 images with blst non-portable locally with the `--define=blst_modern=true` bazel flag, use the "-modern-" assets
-attached to releases, or set environment varaible USE_PRYSM_MODERN=true when using prysm.sh.
+attached to releases, or set environment variable USE_PRYSM_MODERN=true when using prysm.sh.
 
 ### Added
 
@@ -2046,7 +2068,7 @@ There are some known issues with this release.
 - Beacon node can bootstrap from non-genesis state (i.e bellatrix state)
 - Refactor bytesutil, add support for go1.20 slice to array conversions
 - Add Span information for attestation record save request
-- Matric addition
+- Metric addition
 - Identify invalid signature within batch verification
 - Support for getting consensus values from beacon config
 - EIP-4881: Spec implementation
@@ -2112,7 +2134,7 @@ See [flashbots/mev-boost#404](https://github.com/flashbots/mev-boost/issues/404)
 - Added more histogram metrics for block arrival latency times block_arrival_latency_milliseconds
 - Priority queue RetrieveByKey now uses read lock instead of write lock
 - Use custom types for certain ethclient requests. Fixes an issue when using prysm on gnosis chain.
-- Updted forkchoice endpoint /eth/v1/debug/forkchoice (was /eth/v1/debug/beacon/forkchoice)
+- Updated forkchoice endpoint /eth/v1/debug/forkchoice (was /eth/v1/debug/beacon/forkchoice)
 - Include empty fields in builder json client.
 - Computing committee assignments for slots older than the oldest historical root in the beacon state is now forbidden
 
@@ -2344,7 +2366,7 @@ There are no security updates in this release.
   removed: `GetBeaconState`, `ProduceBlock`, `ListForkChoiceHeads`, `ListBlocks`, `SubmitValidatorRegistration`, `GetBlock`, `ProposeBlock`
 - API: Forkchoice method `GetForkChoice` has been removed.
 - All previously deprecated feature flags have been
-  removed. `--enable-active-balance-cache`, `--correctly-prune-canonical-atts`, `--correctly-insert-orphaned-atts`, `--enable-next-slot-state-cache`, `--enable-batch-gossip-verification`, `--enable-get-block-optimizations`, `--enable-balance-trie-computation`, `--disable-next-slot-state-cache`, `--attestation-aggregation-strategy`, `--attestation-aggregation-force-opt-maxcover`, `--pyrmont`, `--disable-get-block-optimizations`, `--disable-proposer-atts-selection-using-max-cover`, `--disable-optimized-balance-update`, `--disable-active-balance-cache`, `--disable-balance-trie-computation`, `--disable-batch-gossip-verification`, `--disable-correctly-prune-canonical-atts`, `--disable-correctly-insert-orphaned-atts`, `--enable-native-state`, `--enable-peer-scorer`, `--enable-gossip-batch-aggregation`, `--experimental-disable-boundry-checks`
+  removed. `--enable-active-balance-cache`, `--correctly-prune-canonical-atts`, `--correctly-insert-orphaned-atts`, `--enable-next-slot-state-cache`, `--enable-batch-gossip-verification`, `--enable-get-block-optimizations`, `--enable-balance-trie-computation`, `--disable-next-slot-state-cache`, `--attestation-aggregation-strategy`, `--attestation-aggregation-force-opt-maxcover`, `--pyrmont`, `--disable-get-block-optimizations`, `--disable-proposer-atts-selection-using-max-cover`, `--disable-optimized-balance-update`, `--disable-active-balance-cache`, `--disable-balance-trie-computation`, `--disable-batch-gossip-verification`, `--disable-correctly-prune-canonical-atts`, `--disable-correctly-insert-orphaned-atts`, `--enable-native-state`, `--enable-peer-scorer`, `--enable-gossip-batch-aggregation`, `--experimental-disable-boundary-checks`
 - Validator Web API: Removed unused ImportAccounts and DeleteAccounts rpc options
 
 ### Fixed
@@ -2560,7 +2582,7 @@ There are two known issues with this release:
 - Bellatrix support. See [kiln testnet instructions](https://hackmd.io/OqIoTiQvS9KOIataIFksBQ?view)
 - Weak subjectivity sync / checkpoint sync. This is an experimental feature and may have unintended side effects for
   certain operators serving historical data. See
-  the [documentation](https://docs.prylabs.network/docs/next/prysm-usage/checkpoint-sync) for more details.
+  the [documentation](https://docs.prylabs.network/docs/prysm-usage/checkpoint-sync) for more details.
 - A faster build of blst for beacon chain on linux amd64. Use the environment variable `USE_PRYSM_MODERN=true` with
   prysm.sh, use the "modern" binary, or bazel build with `--define=blst_modern=true`.
 - Vectorized sha256. This may have performance improvements with use of the new flag `--enable-vectorized-htr`.
@@ -2741,7 +2763,7 @@ notes [here](https://github.com/prysmaticlabs/prysm-web-ui/releases/tag/v1.0.0)
 - Added uint64 overflow protection
 - Sync committee pool returns empty slice instead of nil on cache miss
 - Improved description of datadir flag
-- Simplied web password requirements
+- Simplified web password requirements
 - Web JWT tokens no longer expire.
 - Updated keymanager protos
 - Watch and update jwt secret when auth token file updated on disk.
@@ -2752,7 +2774,7 @@ notes [here](https://github.com/prysmaticlabs/prysm-web-ui/releases/tag/v1.0.0)
 - Refactor for weak subjectivity sync implementation
 - Update naming for Atlair previous epoch attester
 - Remove duplicate MerkleizeTrieLeaves method.
-- Add explict error for validator flag checks on out of bound positions
+- Add explicit error for validator flag checks on out of bound positions
 - Simplify method to check if the beacon chain client should update the justified epoch value.
 - Rename web UI performance endpoint to "summary"
 - Refactor powchain service to be more functional
@@ -2778,7 +2800,7 @@ notes [here](https://github.com/prysmaticlabs/prysm-web-ui/releases/tag/v1.0.0)
   Upstream go-ethereum is now used with familiar go.mod tooling.
 - Removed duplicate aggergation validation p2p pipelines.
 - Metrics calculation removed extra condition
-- Removed superflous errors from peer scoring parameters registration
+- Removed superfluous errors from peer scoring parameters registration
 
 ### Fixed
 

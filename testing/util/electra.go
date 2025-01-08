@@ -2,7 +2,6 @@ package util
 
 import (
 	"encoding/binary"
-	"math"
 	"math/big"
 	"testing"
 
@@ -21,22 +20,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
-// HackElectraMaxuint is helpful for tests that need to set up cases where the electra fork has passed.
-// We have unit tests that assert our config matches the upstream config, where the next fork is always
-// set to MaxUint64 until the fork epoch is formally set. This creates an issue for tests that want to
-// work with slots that are defined to be after electra because converting the max epoch to a slot leads
-// to multiplication overflow.
-// Monkey patching tests with this function is the simplest workaround in these cases.
-func HackElectraMaxuint(t *testing.T) func() {
-	bc := params.MainnetConfig().Copy()
-	bc.ElectraForkEpoch = math.MaxUint32
-	undo, err := params.SetActiveWithUndo(bc)
-	require.NoError(t, err)
-	return func() {
-		require.NoError(t, undo())
-	}
-}
-
 type ElectraBlockGeneratorOption func(*electraBlockGenerator)
 
 type electraBlockGenerator struct {
@@ -47,7 +30,7 @@ type electraBlockGenerator struct {
 	sk       bls.SecretKey
 	proposer primitives.ValidatorIndex
 	valRoot  []byte
-	payload  *enginev1.ExecutionPayloadElectra
+	payload  *enginev1.ExecutionPayloadDeneb
 }
 
 func WithElectraProposerSigning(idx primitives.ValidatorIndex, sk bls.SecretKey, valRoot []byte) ElectraBlockGeneratorOption {
@@ -59,7 +42,7 @@ func WithElectraProposerSigning(idx primitives.ValidatorIndex, sk bls.SecretKey,
 	}
 }
 
-func WithElectraPayload(p *enginev1.ExecutionPayloadElectra) ElectraBlockGeneratorOption {
+func WithElectraPayload(p *enginev1.ExecutionPayloadDeneb) ElectraBlockGeneratorOption {
 	return func(g *electraBlockGenerator) {
 		g.payload = p
 	}
@@ -96,7 +79,7 @@ func GenerateTestElectraBlockWithSidecar(t *testing.T, parent [32]byte, slot pri
 		logsBloom := bytesutil.PadTo([]byte("logs"), fieldparams.LogsBloomLength)
 		receiptsRoot := bytesutil.PadTo([]byte("receiptsRoot"), fieldparams.RootLength)
 		parentHash := bytesutil.PadTo([]byte("parentHash"), fieldparams.RootLength)
-		g.payload = &enginev1.ExecutionPayloadElectra{
+		g.payload = &enginev1.ExecutionPayloadDeneb{
 			ParentHash:    parentHash,
 			FeeRecipient:  make([]byte, fieldparams.FeeRecipientLength),
 			StateRoot:     stateRoot,

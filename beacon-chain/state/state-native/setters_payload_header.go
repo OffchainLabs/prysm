@@ -45,7 +45,7 @@ func (b *BeaconState) SetLatestExecutionPayloadHeader(val interfaces.ExecutionDa
 		b.markFieldAsDirty(types.LatestExecutionPayloadHeaderCapella)
 		return nil
 	case *enginev1.ExecutionPayloadDeneb:
-		if b.version != version.Deneb && b.version != version.Electra {
+		if !(b.version >= version.Deneb) {
 			return fmt.Errorf("wrong state version (%s) for deneb execution payload", version.String(b.version))
 		}
 		latest, err := consensusblocks.PayloadToHeaderDeneb(val)
@@ -70,7 +70,7 @@ func (b *BeaconState) SetLatestExecutionPayloadHeader(val interfaces.ExecutionDa
 		b.markFieldAsDirty(types.LatestExecutionPayloadHeaderCapella)
 		return nil
 	case *enginev1.ExecutionPayloadHeaderDeneb:
-		if b.version != version.Deneb && b.version != version.Electra {
+		if !(b.version >= version.Deneb) {
 			return fmt.Errorf("wrong state version (%s) for deneb execution payload header", version.String(b.version))
 		}
 		b.latestExecutionPayloadHeaderDeneb = header

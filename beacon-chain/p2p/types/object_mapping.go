@@ -67,7 +67,12 @@ func InitializeDataMaps() {
 		},
 		bytesutil.ToBytes4(params.BeaconConfig().ElectraForkVersion): func() (interfaces.ReadOnlySignedBeaconBlock, error) {
 			return blocks.NewSignedBeaconBlock(
-				&ethpb.SignedBeaconBlockElectra{Block: &ethpb.BeaconBlockElectra{Body: &ethpb.BeaconBlockBodyElectra{ExecutionPayload: &enginev1.ExecutionPayloadElectra{}}}},
+				&ethpb.SignedBeaconBlockElectra{Block: &ethpb.BeaconBlockElectra{Body: &ethpb.BeaconBlockBodyElectra{ExecutionPayload: &enginev1.ExecutionPayloadDeneb{}}}},
+			)
+		},
+		bytesutil.ToBytes4(params.BeaconConfig().FuluForkVersion): func() (interfaces.ReadOnlySignedBeaconBlock, error) {
+			return blocks.NewSignedBeaconBlock(
+				&ethpb.SignedBeaconBlockFulu{Block: &ethpb.BeaconBlockFulu{Body: &ethpb.BeaconBlockBodyFulu{ExecutionPayload: &enginev1.ExecutionPayloadDeneb{}}}},
 			)
 		},
 	}
@@ -92,6 +97,9 @@ func InitializeDataMaps() {
 		bytesutil.ToBytes4(params.BeaconConfig().ElectraForkVersion): func() (metadata.Metadata, error) {
 			return wrapper.WrappedMetadataV1(&ethpb.MetaDataV1{}), nil
 		},
+		bytesutil.ToBytes4(params.BeaconConfig().FuluForkVersion): func() (metadata.Metadata, error) {
+			return wrapper.WrappedMetadataV1(&ethpb.MetaDataV1{}), nil
+		},
 	}
 
 	// Reset our attestation map.
@@ -114,6 +122,9 @@ func InitializeDataMaps() {
 		bytesutil.ToBytes4(params.BeaconConfig().ElectraForkVersion): func() (ethpb.Att, error) {
 			return &ethpb.AttestationElectra{}, nil
 		},
+		bytesutil.ToBytes4(params.BeaconConfig().FuluForkVersion): func() (ethpb.Att, error) {
+			return &ethpb.AttestationElectra{}, nil
+		},
 	}
 
 	// Reset our aggregate attestation map.
@@ -134,6 +145,9 @@ func InitializeDataMaps() {
 			return &ethpb.SignedAggregateAttestationAndProof{}, nil
 		},
 		bytesutil.ToBytes4(params.BeaconConfig().ElectraForkVersion): func() (ethpb.SignedAggregateAttAndProof, error) {
+			return &ethpb.SignedAggregateAttestationAndProofElectra{}, nil
+		},
+		bytesutil.ToBytes4(params.BeaconConfig().FuluForkVersion): func() (ethpb.SignedAggregateAttAndProof, error) {
 			return &ethpb.SignedAggregateAttestationAndProofElectra{}, nil
 		},
 	}
