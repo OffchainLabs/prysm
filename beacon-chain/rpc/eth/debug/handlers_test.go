@@ -195,6 +195,34 @@ func TestGetBeaconStateV2(t *testing.T) {
 		require.NoError(t, json.Unmarshal(resp.Data, st))
 		assert.Equal(t, "123", st.Slot)
 	})
+	t.Run("Fulu", func(t *testing.T) {
+		fakeState, err := util.NewBeaconStateFulu()
+		require.NoError(t, err)
+		require.NoError(t, fakeState.SetSlot(123))
+		chainService := &blockchainmock.ChainService{}
+		s := &Server{
+			Stater: &testutil.MockStater{
+				BeaconState: fakeState,
+			},
+			HeadFetcher:           chainService,
+			OptimisticModeFetcher: chainService,
+			FinalizationFetcher:   chainService,
+		}
+
+		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v2/debug/beacon/states/{state_id}", nil)
+		request.SetPathValue("state_id", "head")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetBeaconStateV2(writer, request)
+		require.Equal(t, http.StatusOK, writer.Code)
+		resp := &structs.GetBeaconStateV2Response{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+		assert.Equal(t, version.String(version.Fulu), resp.Version)
+		st := &structs.BeaconStateElectra{}
+		require.NoError(t, json.Unmarshal(resp.Data, st))
+		assert.Equal(t, "123", st.Slot)
+	})
 	t.Run("execution optimistic", func(t *testing.T) {
 		parentRoot := [32]byte{'a'}
 		blk := util.NewBeaconBlock()

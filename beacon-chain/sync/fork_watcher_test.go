@@ -232,6 +232,50 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 				assert.Equal(t, true, rpcMap[p2p.RPCBlobSidecarsByRootTopicV2+s.cfg.p2p.Encoding().ProtocolSuffix()], "topic doesn't exist")
 			},
 		},
+		{
+			name: "fulu fork in the next epoch",
+			svcCreator: func(t *testing.T) *Service {
+				peer2peer := p2ptest.NewTestP2P(t)
+				gt := time.Now().Add(-4 * oneEpoch())
+				vr := [32]byte{'A'}
+				chainService := &mockChain.ChainService{
+					Genesis:        gt,
+					ValidatorsRoot: vr,
+				}
+				bCfg := params.BeaconConfig().Copy()
+				bCfg.FuluForkEpoch = 5
+				params.OverrideBeaconConfig(bCfg)
+				params.BeaconConfig().InitializeForkSchedule()
+				ctx, cancel := context.WithCancel(context.Background())
+				r := &Service{
+					ctx:    ctx,
+					cancel: cancel,
+					cfg: &config{
+						p2p:         peer2peer,
+						chain:       chainService,
+						clock:       startup.NewClock(gt, vr),
+						initialSync: &mockSync.Sync{IsSyncing: false},
+					},
+					chainStarted: abool.New(),
+					subHandler:   newSubTopicHandler(),
+				}
+				return r
+			},
+			currEpoch: 4,
+			wantErr:   false,
+			postSvcCheck: func(t *testing.T, s *Service) {
+				genRoot := s.cfg.clock.GenesisValidatorsRoot()
+				digest, err := forks.ForkDigestFromEpoch(5, genRoot[:])
+				assert.NoError(t, err)
+				assert.Equal(t, true, s.subHandler.digestExists(digest))
+				rpcMap := make(map[string]bool)
+				for _, p := range s.cfg.p2p.Host().Mux().Protocols() {
+					rpcMap[string(p)] = true
+				}
+				assert.Equal(t, true, rpcMap[p2p.RPCBlobSidecarsByRangeTopicV2+s.cfg.p2p.Encoding().ProtocolSuffix()], "topic doesn't exist")
+				assert.Equal(t, true, rpcMap[p2p.RPCBlobSidecarsByRootTopicV2+s.cfg.p2p.Encoding().ProtocolSuffix()], "topic doesn't exist")
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

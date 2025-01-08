@@ -46,6 +46,7 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 	cfg.CapellaForkEpoch = 2
 	cfg.DenebForkEpoch = 3
 	cfg.ElectraForkEpoch = 4
+	cfg.FuluForkEpoch = 5
 	params.OverrideBeaconConfig(cfg)
 
 	t.Run("altair", func(t *testing.T) {
@@ -216,6 +217,47 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 		l := util.NewTestLightClient(t).SetupTestElectra(false) // result is same for true and false
 
 		slot := primitives.Slot(params.BeaconConfig().ElectraForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
+		blockRoot, err := l.Block.Block().HashTreeRoot()
+		require.NoError(t, err)
+
+		mockBlocker := &testutil.MockBlocker{BlockToReturn: l.Block}
+		mockChainService := &mock.ChainService{Optimistic: true, Slot: &slot}
+		mockChainInfoFetcher := &mock.ChainService{Slot: &slot}
+		s := &Server{
+			Stater: &testutil.MockStater{StatesBySlot: map[primitives.Slot]state.BeaconState{
+				slot: l.State,
+			}},
+			Blocker:          mockBlocker,
+			HeadFetcher:      mockChainService,
+			ChainInfoFetcher: mockChainInfoFetcher,
+		}
+		request := httptest.NewRequest("GET", "http://foo.com/", nil)
+		request.SetPathValue("block_root", hexutil.Encode(blockRoot[:]))
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetLightClientBootstrap(writer, request)
+		require.Equal(t, http.StatusOK, writer.Code)
+		var resp structs.LightClientBootstrapResponse
+		err = json.Unmarshal(writer.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		var respHeader structs.LightClientHeader
+		err = json.Unmarshal(resp.Data.Header, &respHeader)
+		require.NoError(t, err)
+		require.Equal(t, "electra", resp.Version)
+
+		blockHeader, err := l.Block.Header()
+		require.NoError(t, err)
+		require.Equal(t, hexutil.Encode(blockHeader.Header.BodyRoot), respHeader.Beacon.BodyRoot)
+		require.Equal(t, strconv.FormatUint(uint64(blockHeader.Header.Slot), 10), respHeader.Beacon.Slot)
+
+		require.NotNil(t, resp.Data.CurrentSyncCommittee)
+		require.NotNil(t, resp.Data.CurrentSyncCommitteeBranch)
+	})
+	t.Run("fulu", func(t *testing.T) {
+		l := util.NewTestLightClient(t).SetupTestFulu(false) // result is same for true and false
+
+		slot := primitives.Slot(params.BeaconConfig().FuluForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
 		blockRoot, err := l.Block.Block().HashTreeRoot()
 		require.NoError(t, err)
 
@@ -1838,6 +1880,34 @@ func createUpdate(t *testing.T, v int) (interfaces.LightClientUpdate, error) {
 		})
 		require.NoError(t, err)
 		st, err = util.NewBeaconStateElectra()
+		require.NoError(t, err)
+	case version.Fulu:
+		slot = primitives.Slot(config.FuluForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
+		header, err = light_client.NewWrappedHeader(&pb.LightClientHeaderDeneb{
+			Beacon: &pb.BeaconBlockHeader{
+				Slot:          1,
+				ProposerIndex: primitives.ValidatorIndex(rand.Int()),
+				ParentRoot:    sampleRoot,
+				StateRoot:     sampleRoot,
+				BodyRoot:      sampleRoot,
+			},
+			Execution: &enginev1.ExecutionPayloadHeaderDeneb{
+				ParentHash:       make([]byte, fieldparams.RootLength),
+				FeeRecipient:     make([]byte, fieldparams.FeeRecipientLength),
+				StateRoot:        make([]byte, fieldparams.RootLength),
+				ReceiptsRoot:     make([]byte, fieldparams.RootLength),
+				LogsBloom:        make([]byte, fieldparams.LogsBloomLength),
+				PrevRandao:       make([]byte, fieldparams.RootLength),
+				ExtraData:        make([]byte, 0),
+				BaseFeePerGas:    make([]byte, fieldparams.RootLength),
+				BlockHash:        make([]byte, fieldparams.RootLength),
+				TransactionsRoot: make([]byte, fieldparams.RootLength),
+				WithdrawalsRoot:  make([]byte, fieldparams.RootLength),
+			},
+			ExecutionBranch: sampleExecutionBranch,
+		})
+		require.NoError(t, err)
+		st, err = util.NewBeaconStateFulu()
 		require.NoError(t, err)
 	default:
 		return nil, fmt.Errorf("unsupported version %s", version.String(v))

@@ -23,6 +23,7 @@ go_library(
         "//beacon-chain/core/epoch:go_default_library",
         "//beacon-chain/core/epoch/precompute:go_default_library",
         "//beacon-chain/core/execution:go_default_library",
+        "//beacon-chain/core/fulu:go_default_library",
         "//beacon-chain/core/helpers:go_default_library",
         "//beacon-chain/core/time:go_default_library",
         "//beacon-chain/core/transition/interop:go_default_library",

@@ -72,6 +72,7 @@ func (c *beaconApiValidatorClient) beaconBlock(ctx context.Context, slot primiti
 	return processBlockResponse(ver, blinded, decoder)
 }
 
+// nolint: gocognit
 func processBlockResponse(ver string, isBlinded bool, decoder *json.Decoder) (*ethpb.GenericBeaconBlock, error) {
 	var response *ethpb.GenericBeaconBlock
 	if decoder == nil {
@@ -183,6 +184,28 @@ func processBlockResponse(ver string, isBlinded bool, decoder *json.Decoder) (*e
 			genericBlock, err := jsonElectraBlockContents.ToGeneric()
 			if err != nil {
 				return nil, errors.Wrap(err, "failed to get electra block")
+			}
+			response = genericBlock
+		}
+	case version.String(version.Fulu):
+		if isBlinded {
+			jsonFuluBlock := structs.BlindedBeaconBlockFulu{}
+			if err := decoder.Decode(&jsonFuluBlock); err != nil {
+				return nil, errors.Wrap(err, "failed to decode blinded fulu block response json")
+			}
+			genericBlock, err := jsonFuluBlock.ToGeneric()
+			if err != nil {
+				return nil, errors.Wrap(err, "failed to get blinded fulu block")
+			}
+			response = genericBlock
+		} else {
+			jsonFuluBlockContents := structs.BeaconBlockContentsFulu{}
+			if err := decoder.Decode(&jsonFuluBlockContents); err != nil {
+				return nil, errors.Wrap(err, "failed to decode fulu block response json")
+			}
+			genericBlock, err := jsonFuluBlockContents.ToGeneric()
+			if err != nil {
+				return nil, errors.Wrap(err, "failed to get fulu block")
 			}
 			response = genericBlock
 		}
