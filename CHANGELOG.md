@@ -106,6 +106,7 @@ Notable features:
 - Added more comprehensive tests for `BlockToLightClientHeader`. [PR](https://github.com/prysmaticlabs/prysm/pull/14699)
 - Added light client feature flag check to RPC handlers. [PR](https://github.com/prysmaticlabs/prysm/pull/14736)
 - Light client: Add better error handling. [PR](https://github.com/prysmaticlabs/prysm/pull/14749)
+- Added Electra tests for `TestLightClient_NewLightClientOptimisticUpdateFromBeaconState` and `TestLightClient_NewLightClientFinalityUpdateFromBeaconState`
 
 ### Changed
 
