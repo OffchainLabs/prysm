@@ -70,34 +70,35 @@ func (vs *Server) ProposeAttestation(ctx context.Context, att *ethpb.Attestation
 
 // ProposeAttestationElectra is a function called by an attester to vote
 // on a block via an attestation object as defined in the Ethereum specification.
-func (vs *Server) ProposeAttestationElectra(ctx context.Context, att *ethpb.SingleAttestation) (*ethpb.AttestResponse, error) {
+func (vs *Server) ProposeAttestationElectra(ctx context.Context, singleAtt *ethpb.SingleAttestation) (*ethpb.AttestResponse, error) {
 	ctx, span := trace.StartSpan(ctx, "AttesterServer.ProposeAttestationElectra")
 	defer span.End()
 
-	targetState, err := vs.AttestationStateFetcher.AttestationTargetState(ctx, att.Data.Target)
+	targetState, err := vs.AttestationStateFetcher.AttestationTargetState(ctx, singleAtt.Data.Target)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "Could not get target state")
 	}
-	committeeIndex := att.GetCommitteeIndex()
-	committee, err := helpers.BeaconCommitteeFromState(ctx, targetState, att.Data.Slot, committeeIndex)
+	committeeIndex := singleAtt.GetCommitteeIndex()
+	committee, err := helpers.BeaconCommitteeFromState(ctx, targetState, singleAtt.Data.Slot, committeeIndex)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "Could not get committee")
 	}
 
-	resp, err := vs.proposeAtt(ctx, att, committee, committeeIndex)
+	resp, err := vs.proposeAtt(ctx, singleAtt, committee, committeeIndex)
 	if err != nil {
 		return nil, err
 	}
 
+	singleAttCopy := singleAtt.Copy()
+	att := singleAttCopy.ToAttestationElectra(committee)
 	if features.Get().EnableExperimentalAttestationPool {
-		if err = vs.AttestationCache.Add(att.ToAttestationElectra(committee)); err != nil {
+		if err = vs.AttestationCache.Add(att); err != nil {
 			log.WithError(err).Error("Could not save attestation")
 		}
 	} else {
 		go func() {
 			ctx = trace.NewContext(context.Background(), trace.FromContext(ctx))
-			attCopy := att.Copy()
-			if err := vs.AttPool.SaveUnaggregatedAttestation(attCopy.ToAttestationElectra(committee)); err != nil {
+			if err := vs.AttPool.SaveUnaggregatedAttestation(att); err != nil {
 				log.WithError(err).Error("Could not save unaggregated attestation")
 				return
 			}

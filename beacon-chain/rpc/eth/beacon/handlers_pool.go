@@ -319,27 +319,23 @@ func (s *Server) handleAttestationsElectra(
 		validAttestations = append(validAttestations, att)
 	}
 
-	for i, att := range validAttestations {
-		targetState, err := s.AttestationStateFetcher.AttestationTargetState(ctx, att.Data.Target)
+	for i, singleAtt := range validAttestations {
+		targetState, err := s.AttestationStateFetcher.AttestationTargetState(ctx, singleAtt.Data.Target)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "could not get target state for attestation")
 		}
-		committee, err := corehelpers.BeaconCommitteeFromState(ctx, targetState, att.Data.Slot, att.CommitteeId)
+		committee, err := corehelpers.BeaconCommitteeFromState(ctx, targetState, singleAtt.Data.Slot, singleAtt.CommitteeId)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "could not get committee for attestation")
 		}
+		att := singleAtt.ToAttestationElectra(committee)
 
-		// Broadcast the unaggregated attestation on a feed to notify other services in the beacon node
-		// of a received unaggregated attestation.
-		// Note we can't send for aggregated att because we don't have selection proof.
-		if !att.IsAggregated() {
-			s.OperationNotifier.OperationFeed().Send(&feed.Event{
-				Type: operation.UnaggregatedAttReceived,
-				Data: &operation.UnAggregatedAttReceivedData{
-					Attestation: att.ToAttestationElectra(committee),
-				},
-			})
-		}
+		s.OperationNotifier.OperationFeed().Send(&feed.Event{
+			Type: operation.UnaggregatedAttReceived,
+			Data: &operation.UnAggregatedAttReceivedData{
+				Attestation: att,
+			},
+		})
 
 		wantedEpoch := slots.ToEpoch(att.Data.Slot)
 		vals, err := s.HeadFetcher.HeadValidatorsIndices(ctx, wantedEpoch)
@@ -348,18 +344,18 @@ func (s *Server) handleAttestationsElectra(
 			continue
 		}
 		subnet := corehelpers.ComputeSubnetFromCommitteeAndSlot(uint64(len(vals)), att.GetCommitteeIndex(), att.Data.Slot)
-		if err = s.Broadcaster.BroadcastAttestation(ctx, subnet, att); err != nil {
+		if err = s.Broadcaster.BroadcastAttestation(ctx, subnet, singleAtt); err != nil {
 			log.WithError(err).Errorf("could not broadcast attestation at index %d", i)
 			failedBroadcasts = append(failedBroadcasts, strconv.Itoa(i))
 			continue
 		}
 
 		if features.Get().EnableExperimentalAttestationPool {
-			if err = s.AttestationCache.Add(att.ToAttestationElectra(committee)); err != nil {
+			if err = s.AttestationCache.Add(att); err != nil {
 				log.WithError(err).Error("could not save attestation")
 			}
 		} else {
-			if err = s.AttestationsPool.SaveUnaggregatedAttestation(att.ToAttestationElectra(committee)); err != nil {
+			if err = s.AttestationsPool.SaveUnaggregatedAttestation(att); err != nil {
 				log.WithError(err).Error("could not save attestation")
 			}
 		}
