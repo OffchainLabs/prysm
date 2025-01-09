@@ -40,7 +40,7 @@ func (s *Service) lightClientBootstrapRPCHandler(ctx context.Context, msg interf
 	}
 	blkRoot := *rawMsg
 
-	bootstrap, err := s.cfg.beaconDB.LightClientBootstrap(ctx, blkRoot)
+	bootstrap, err := s.cfg.beaconDB.LightClientBootstrap(ctx, blkRoot[:])
 	if err != nil {
 		s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)
 		tracing.AnnotateError(span, err)

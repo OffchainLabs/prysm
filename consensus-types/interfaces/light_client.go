@@ -31,7 +31,6 @@ type LightClientBootstrap interface {
 	CurrentSyncCommittee() *pb.SyncCommittee
 	SetCurrentSyncCommittee(sc *pb.SyncCommittee) error
 	CurrentSyncCommitteeBranch() (LightClientSyncCommitteeBranch, error)
-	SetCurrentSyncCommitteeBranch(branch [][]byte) error
 	CurrentSyncCommitteeBranchElectra() (LightClientSyncCommitteeBranchElectra, error)
 	SetCurrentSyncCommitteeBranch(branch [][]byte) error
 }

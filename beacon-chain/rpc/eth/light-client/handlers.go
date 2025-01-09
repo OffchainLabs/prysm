@@ -56,7 +56,7 @@ func (s *Server) GetLightClientBootstrap(w http.ResponseWriter, req *http.Reques
 		httputil.HandleError(w, "could not get light client bootstrap: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	
+
 	w.Header().Set(api.VersionHeader, version.String(bootstrap.Version()))
 
 	if httputil.RespondWithSsz(req) {
@@ -148,7 +148,7 @@ func (s *Server) GetLightClientFinalityUpdate(w http.ResponseWriter, req *http.R
 		return
 	}
 
-	ctx, span := trace.StartSpan(req.Context(), "beacon.GetLightClientFinalityUpdate")
+	_, span := trace.StartSpan(req.Context(), "beacon.GetLightClientFinalityUpdate")
 	defer span.End()
 
 	update := s.LCStore.LastLCFinalityUpdate
@@ -187,7 +187,7 @@ func (s *Server) GetLightClientOptimisticUpdate(w http.ResponseWriter, req *http
 		return
 	}
 
-	ctx, span := trace.StartSpan(req.Context(), "beacon.GetLightClientOptimisticUpdate")
+	_, span := trace.StartSpan(req.Context(), "beacon.GetLightClientOptimisticUpdate")
 	defer span.End()
 
 	update := s.LCStore.LastLCOptimisticUpdate

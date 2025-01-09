@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -129,22 +128,32 @@ func (s *Service) saveLightClientUpdate(cfg *postBlockProcessConfig) {
 	attestedRoot := cfg.roblock.Block().ParentRoot()
 	attestedBlock, err := s.getBlock(cfg.ctx, attestedRoot)
 	if err != nil {
-		return errors.Wrap(err, "could not get attested block")
+		log.WithError(err).Errorf("Saving light client update failed: Could not get attested block for root %#x", attestedRoot)
+		return
 	}
 	if attestedBlock == nil || attestedBlock.IsNil() {
-		return errors.New("attested block is nil")
+		log.Error("Saving light client update failed: Attested block is nil")
+		return
 	}
 	attestedState, err := s.cfg.StateGen.StateByRoot(cfg.ctx, attestedRoot)
 	if err != nil {
-		return errors.Wrap(err, "could not get attested state")
+		log.WithError(err).Errorf("Saving light client update failed: Could not get attested state for root %#x", attestedRoot)
+		return
 	}
 	if attestedState == nil || attestedState.IsNil() {
-		return errors.New("attested state is nil")
+		log.Error("Saving light client update failed: Attested state is nil")
+		return
 	}
-	finalizedRoot := cfg.postState.FinalizedCheckpoint().Root
+
+	finalizedRoot := attestedState.FinalizedCheckpoint().Root
 	finalizedBlock, err := s.getBlock(cfg.ctx, [32]byte(finalizedRoot))
 	if err != nil {
-		return errors.Wrap(err, "could not get finalized block")
+		if errors.Is(err, errBlockNotFoundInCacheOrDB) {
+			log.Debugf("Skipping saving light client update: Finalized block is nil for root %#x", finalizedRoot)
+		} else {
+			log.WithError(err).Errorf("Saving light client update failed: Could not get finalized block for root %#x", finalizedRoot)
+		}
+		return
 	}
 
 	update, err := lightclient.NewLightClientUpdateFromBeaconState(
@@ -157,37 +166,37 @@ func (s *Service) saveLightClientUpdate(cfg *postBlockProcessConfig) {
 		finalizedBlock,
 	)
 	if err != nil {
-		return errors.Wrap(err, "could not create light client update")
+		log.WithError(err).Error("Saving light client update failed: Could not create light client update")
+		return
 	}
 
-	period := uint64(attestedState.Slot()) / (uint64(params.BeaconConfig().SlotsPerEpoch) * uint64(params.BeaconConfig().EpochsPerSyncCommitteePeriod))
+	period := slots.SyncCommitteePeriod(slots.ToEpoch(attestedState.Slot()))
 
 	oldUpdate, err := s.cfg.BeaconDB.LightClientUpdate(cfg.ctx, period)
 	if err != nil {
-		return errors.Wrap(err, "could not get current light client update")
+		log.WithError(err).Error("Saving light client update failed: Could not get current light client update")
+		return
 	}
+
 	if oldUpdate == nil {
-		if err = s.cfg.BeaconDB.SaveLightClientUpdate(cfg.ctx, period, update); err != nil {
-			return errors.Wrap(err, "could not save light client update")
-		}
-	} else {
-		isNewUpdateBetter, err := lightclient.IsBetterUpdate(update, oldUpdate)
-		if err != nil {
-			return errors.Wrap(err, "could not compare light client updates")
-		}
-		if isNewUpdateBetter {
-			if err = s.cfg.BeaconDB.SaveLightClientUpdate(cfg.ctx, period, update); err != nil {
-				return errors.Wrap(err, "could not save light client update")
-			}
-			log.Info("LC: saved light client update")
+		if err := s.cfg.BeaconDB.SaveLightClientUpdate(cfg.ctx, period, update); err != nil {
+			log.WithError(err).Error("Saving light client update failed: Could not save light client update")
 		} else {
-			log.Info("LC: skipped saving light client update")
+			log.WithField("period", period).Debug("Saving light client update: Saved new update")
 		}
+		return
 	}
 
-	return nil
-}
+	isNewUpdateBetter, err := lightclient.IsBetterUpdate(update, oldUpdate)
+	if err != nil {
+		log.WithError(err).Error("Saving light client update failed: Could not compare light client updates")
+		return
+	}
 
+	if isNewUpdateBetter {
+		if err := s.cfg.BeaconDB.SaveLightClientUpdate(cfg.ctx, period, update); err != nil {
+			log.WithError(err).Error("Saving light client update failed: Could not save light client update")
+		} else {
 			log.WithField("period", period).Debug("Saving light client update: Saved new update")
 		}
 	} else {

@@ -76,11 +76,11 @@ func (s *Service) rpcHandlerByTopicFromFork(forkIndex int) (map[string]rpcHandle
 			p2p.RPCBlocksByRangeTopicV2:               s.beaconBlocksByRangeRPCHandler, // Modified in Altair
 			p2p.RPCBlocksByRootTopicV2:                s.beaconBlocksRootRPCHandler,    // Modified in Altair
 			p2p.RPCPingTopicV1:                        s.pingHandler,
-			p2p.RPCMetaDataTopicV2:                    s.metaDataHandler, // Modified in Altair
-			p2p.RPCLightClientBootstrapTopicV1:        s.lightClientBootstrapRPCHandler, // Added in Altair
-			p2p.RPCLightClientUpdatesByRangeTopicV1:   s.lightClientUpdatesByRangeRPCHandler // Added in Altair
-			p2p.RPCLightClientFinalityUpdateTopicV1:   s.lightClientFinalityUpdateRPCHandler // Added in Altair
-			p2p.RPCLightClientOptimisticUpdateTopicV1: s.lightClientOptimisticUpdateRPCHandler // Added in Altair
+			p2p.RPCMetaDataTopicV2:                    s.metaDataHandler,                       // Modified in Altair
+			p2p.RPCLightClientBootstrapTopicV1:        s.lightClientBootstrapRPCHandler,        // Added in Altair
+			p2p.RPCLightClientUpdatesByRangeTopicV1:   s.lightClientUpdatesByRangeRPCHandler,   // Added in Altair
+			p2p.RPCLightClientFinalityUpdateTopicV1:   s.lightClientFinalityUpdateRPCHandler,   // Added in Altair
+			p2p.RPCLightClientOptimisticUpdateTopicV1: s.lightClientOptimisticUpdateRPCHandler, // Added in Altair
 		}, nil
 	}
 

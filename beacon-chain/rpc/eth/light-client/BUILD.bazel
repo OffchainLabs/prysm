@@ -15,6 +15,7 @@ go_library(
         "//beacon-chain/blockchain:go_default_library",
         "//beacon-chain/core/light-client:go_default_library",
         "//beacon-chain/db:go_default_library",
+        "//beacon-chain/light-client:go_default_library",
         "//beacon-chain/rpc/eth/shared:go_default_library",
         "//beacon-chain/rpc/lookup:go_default_library",
         "//beacon-chain/state:go_default_library",
