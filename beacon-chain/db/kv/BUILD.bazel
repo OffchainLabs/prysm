@@ -41,6 +41,7 @@ go_library(
         "//beacon-chain/state/genesis:go_default_library",
         "//beacon-chain/state/state-native:go_default_library",
         "//config/features:go_default_library",
+        "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/blocks:go_default_library",
         "//consensus-types/interfaces:go_default_library",

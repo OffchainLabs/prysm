@@ -18,6 +18,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Add field param placeholder for Electra blob target and max to pass spec tests.
 - Add EIP-7691: Blob throughput increase.
 - SSZ files generation: Remove the `// Hash: ...` header.
+- DB optimization for saving light client bootstraps (save unique sync committees only).
 - Trace IDONTWANT Messages in Pubsub.
 - Add Fulu fork boilerplate.
 
