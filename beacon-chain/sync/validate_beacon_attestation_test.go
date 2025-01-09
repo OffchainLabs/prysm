@@ -315,6 +315,7 @@ func TestService_validateCommitteeIndexBeaconAttestationElectra(t *testing.T) {
 	fvs[bytesutil.ToBytes4(cfg.BellatrixForkVersion)] = 3
 	fvs[bytesutil.ToBytes4(cfg.CapellaForkVersion)] = 4
 	fvs[bytesutil.ToBytes4(cfg.DenebForkVersion)] = 5
+	fvs[bytesutil.ToBytes4(cfg.FuluForkVersion)] = 6
 	fvs[bytesutil.ToBytes4(cfg.ElectraForkVersion)] = 0
 	cfg.ForkVersionSchedule = fvs
 	params.OverrideBeaconConfig(cfg)

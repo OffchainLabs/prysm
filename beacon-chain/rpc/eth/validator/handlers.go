@@ -211,7 +211,7 @@ func matchingAtts(atts []ethpbalpha.Att, slot primitives.Slot, attDataRoot []byt
 		// meaning that comparing the data root is sufficient.
 		// Post-Electra the committee index in the data root is always 0, so we need to
 		// compare the committee index separately.
-		if (!postElectra && att.Version() < version.Electra) || (postElectra && att.GetCommitteeIndex() == index) {
+		if (!postElectra && att.Version() < version.Electra) || (postElectra && att.Version() >= version.Electra && att.GetCommitteeIndex() == index) {
 			result = append(result, att)
 		}
 	}
