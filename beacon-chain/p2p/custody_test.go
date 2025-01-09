@@ -41,13 +41,13 @@ func createPeer(t *testing.T, privateKeyOffset int, custodyCount uint64) (*enr.R
 	require.NoError(t, err)
 
 	record := &enr.Record{}
-	record.Set(peerdas.Csc(custodyCount))
+	record.Set(peerdas.Cgc(custodyCount))
 	record.Set(enode.Secp256k1(privateKey.PublicKey))
 
 	return record, peerID, privateKey
 }
 
-func TestDataColumnsAdmissibleCustodyPeers(t *testing.T) {
+func TestAdmissibleCustodyGroupsPeers(t *testing.T) {
 	genesisValidatorRoot := make([]byte, 32)
 
 	for i := 0; i < 32; i++ {
@@ -70,18 +70,18 @@ func TestDataColumnsAdmissibleCustodyPeers(t *testing.T) {
 	custodyRequirement := params.BeaconConfig().CustodyRequirement
 	dataColumnSidecarSubnetCount := params.BeaconConfig().DataColumnSidecarSubnetCount
 
-	// Peer 1 custodies exactly the same columns than us.
+	// Peer 1 custodies exactly the same groups than us.
 	// (We use the same keys pair than ours for simplicity)
 	peer1Record, peer1ID, localPrivateKey := createPeer(t, 1, custodyRequirement)
 
-	// Peer 2 custodies all the columns.
+	// Peer 2 custodies all the groups.
 	peer2Record, peer2ID, _ := createPeer(t, 2, dataColumnSidecarSubnetCount)
 
-	// Peer 3 custodies different columns than us (but the same count).
+	// Peer 3 custodies different groups than us (but the same count).
 	// (We use the same public key than peer 2 for simplicity)
 	peer3Record, peer3ID, _ := createPeer(t, 3, custodyRequirement)
 
-	// Peer 4 custodies less columns than us.
+	// Peer 4 custodies less groups than us.
 	peer4Record, peer4ID, _ := createPeer(t, 4, custodyRequirement-1)
 
 	createListener := func() (*discover.UDPv5, error) {
@@ -98,40 +98,40 @@ func TestDataColumnsAdmissibleCustodyPeers(t *testing.T) {
 	service.peers.Add(peer3Record, peer3ID, nil, network.DirOutbound)
 	service.peers.Add(peer4Record, peer4ID, nil, network.DirOutbound)
 
-	actual, err := service.DataColumnsAdmissibleCustodyPeers([]peer.ID{peer1ID, peer2ID, peer3ID, peer4ID})
+	actual, err := service.AdmissibleCustodyGroupsPeers([]peer.ID{peer1ID, peer2ID, peer3ID, peer4ID})
 	require.NoError(t, err)
 
 	expected := []peer.ID{peer1ID, peer2ID}
 	require.DeepSSZEqual(t, expected, actual)
 }
 
-func TestDataColumnsCustodyCountFromRemotePeer(t *testing.T) {
+func TestCustodyGroupCountFromPeer(t *testing.T) {
 	const (
 		expectedENR      uint64 = 7
 		expectedMetadata uint64 = 8
 		pid                     = "test-id"
 	)
 
-	csc := peerdas.Csc(expectedENR)
+	cgc := peerdas.Cgc(expectedENR)
 
 	// Define a nil record
 	var nilRecord *enr.Record = nil
 
-	// Define an empty record (record with non `csc` entry)
+	// Define an empty record (record with non `cgc` entry)
 	emptyRecord := &enr.Record{}
 
 	// Define a nominal record
 	nominalRecord := &enr.Record{}
-	nominalRecord.Set(csc)
+	nominalRecord.Set(cgc)
 
 	// Define a metadata with zero custody.
 	zeroMetadata := wrapper.WrappedMetadataV2(&pb.MetaDataV2{
-		CustodySubnetCount: 0,
+		CustodyGroupCount: 0,
 	})
 
 	// Define a nominal metadata.
 	nominalMetadata := wrapper.WrappedMetadataV2(&pb.MetaDataV2{
-		CustodySubnetCount: expectedMetadata,
+		CustodyGroupCount: expectedMetadata,
 	})
 
 	testCases := []struct {
@@ -191,7 +191,7 @@ func TestDataColumnsCustodyCountFromRemotePeer(t *testing.T) {
 			}
 
 			// Retrieve the custody count from the remote peer.
-			actual := service.DataColumnsCustodyCountFromRemotePeer(pid)
+			actual := service.CustodyGroupCountFromPeer(pid)
 
 			// Verify the result.
 			require.Equal(t, tc.expected, actual)

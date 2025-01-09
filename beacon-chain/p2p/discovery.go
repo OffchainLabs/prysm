@@ -247,28 +247,28 @@ func (s *Service) RefreshPersistentSubnets() {
 		return
 	}
 
-	// Get the current custody subnet count.
-	custodySubnetCount := peerdas.CustodySubnetCount()
+	// Get the current custody group count.
+	custodyGroupCount := peerdas.CustodyGroupCount()
 
-	// Get the custody subnet count we store in our record.
-	inRecordCustodySubnetCount, err := peerdas.CustodyCountFromRecord(record)
+	// Get the custody group count we store in our record.
+	inRecordCustodyGroupCount, err := peerdas.CustodyGroupCountFromRecord(record)
 	if err != nil {
 		log.WithError(err).Error("Could not retrieve custody subnet count")
 		return
 	}
 
-	// Get the custody subnet count in our metadata.
-	inMetadataCustodySubnetCount := s.Metadata().CustodySubnetCount()
+	// Get the custody group count in our metadata.
+	inMetadataCustodyGroupCount := s.Metadata().CustodyGroupCount()
 
-	isCustodySubnetCountUpToDate := (custodySubnetCount == inRecordCustodySubnetCount && custodySubnetCount == inMetadataCustodySubnetCount)
+	isCustodyGroupCountUpToDate := (custodyGroupCount == inRecordCustodyGroupCount && custodyGroupCount == inMetadataCustodyGroupCount)
 
-	if isBitVUpToDate && isBitSUpToDate && isCustodySubnetCountUpToDate {
+	if isBitVUpToDate && isBitSUpToDate && isCustodyGroupCountUpToDate {
 		// Nothing to do, return early.
 		return
 	}
 
 	// Some data changed. Update the record and the metadata.
-	s.updateSubnetRecordWithMetadataV3(bitV, bitS, custodySubnetCount)
+	s.updateSubnetRecordWithMetadataV3(bitV, bitS, custodyGroupCount)
 
 	// Ping all peers.
 	s.pingPeersAndLogEnr()
@@ -496,8 +496,8 @@ func (s *Service) createLocalNode(
 	}
 
 	if params.FuluEnabled() {
-		custodySubnetCount := peerdas.CustodySubnetCount()
-		localNode.Set(peerdas.Csc(custodySubnetCount))
+		custodyGroupCount := peerdas.CustodyGroupCount()
+		localNode.Set(peerdas.Cgc(custodyGroupCount))
 	}
 
 	localNode.SetFallbackIP(ipAddr)

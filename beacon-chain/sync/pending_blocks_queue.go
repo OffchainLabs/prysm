@@ -195,23 +195,26 @@ func (s *Service) hasPeer() bool {
 var errNoPeersForPending = errors.New("no suitable peers to process pending block queue, delaying")
 
 // processAndBroadcastBlock validates, processes, and broadcasts a block.
-// part of the function is to request missing blobs from peers if the block contains kzg commitments.
+// Part of the function is to request missing blobs or data columns from peers if the block contains kzg commitments.
 func (s *Service) processAndBroadcastBlock(ctx context.Context, b interfaces.ReadOnlySignedBeaconBlock, blkRoot [32]byte) error {
+	blockSlot := b.Block().Slot()
+
 	if err := s.validateBeaconBlock(ctx, b, blkRoot); err != nil {
 		if !errors.Is(ErrOptimisticParent, err) {
-			log.WithError(err).WithField("slot", b.Block().Slot()).Debug("Could not validate block")
+			log.WithError(err).WithField("slot", blockSlot).Debug("Could not validate block")
 			return err
 		}
 	}
 
-	if coreTime.PeerDASIsActive(b.Block().Slot()) {
+	if coreTime.PeerDASIsActive(blockSlot) {
 		request, err := s.buildRequestsForMissingDataColumns(blkRoot, b)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "build requests for missing data columns")
 		}
+
 		if len(request) > 0 {
 			peers := s.getBestPeers()
-			peers, err = s.cfg.p2p.DataColumnsAdmissibleCustodyPeers(peers)
+			peers, err = s.cfg.p2p.AdmissibleCustodyGroupsPeers(peers)
 			if err != nil {
 				return err
 			}
@@ -244,7 +247,7 @@ func (s *Service) processAndBroadcastBlock(ctx context.Context, b interfaces.Rea
 		return err
 	}
 
-	s.setSeenBlockIndexSlot(b.Block().Slot(), b.Block().ProposerIndex())
+	s.setSeenBlockIndexSlot(blockSlot, b.Block().ProposerIndex())
 
 	pb, err := b.Proto()
 	if err != nil {
@@ -346,7 +349,7 @@ func (s *Service) sendBatchRootRequest(ctx context.Context, roots [][32]byte, ra
 
 	if peerDASIsActive {
 		var err error
-		bestPeers, err = s.cfg.p2p.DataColumnsAdmissibleSubnetSamplingPeers(bestPeers)
+		bestPeers, err = s.cfg.p2p.AdmissibleCustodySamplingPeers(bestPeers)
 		if err != nil {
 			return errors.Wrap(err, "data columns admissible subnet sampling peers")
 		}

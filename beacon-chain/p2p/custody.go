@@ -9,43 +9,44 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 )
 
-// DataColumnsAdmissibleCustodyPeers returns a list of peers that custody a super set of the local node's custody columns.
-func (s *Service) DataColumnsAdmissibleCustodyPeers(peers []peer.ID) ([]peer.ID, error) {
-	localCustodySubnetCount := peerdas.CustodySubnetCount()
-	return s.dataColumnsAdmissiblePeers(peers, localCustodySubnetCount)
+// AdmissibleCustodyGroupsPeers returns a list of peers that custody a super set of the local node's custody groups.
+func (s *Service) AdmissibleCustodyGroupsPeers(peers []peer.ID) ([]peer.ID, error) {
+	localCustodyGroupCount := peerdas.CustodyGroupCount()
+	return s.custodyGroupsAdmissiblePeers(peers, localCustodyGroupCount)
 }
 
-// DataColumnsAdmissibleSubnetSamplingPeers returns a list of peers that custody a super set of the local node's sampling columns.
-func (s *Service) DataColumnsAdmissibleSubnetSamplingPeers(peers []peer.ID) ([]peer.ID, error) {
-	localSubnetSamplingSize := peerdas.SubnetSamplingSize()
-	return s.dataColumnsAdmissiblePeers(peers, localSubnetSamplingSize)
+// AdmissibleCustodySamplingPeers returns a list of peers that custody a super set of the local node's sampling columns.
+func (s *Service) AdmissibleCustodySamplingPeers(peers []peer.ID) ([]peer.ID, error) {
+	localSubnetSamplingSize := peerdas.CustodyGroupSamplingSize()
+	return s.custodyGroupsAdmissiblePeers(peers, localSubnetSamplingSize)
 }
 
-// dataColumnsAdmissiblePeers computes the first columns of the local node corresponding to `subnetCount`, then
-// filters out `peers` that do not custody a super set of these columns.
-func (s *Service) dataColumnsAdmissiblePeers(peers []peer.ID, subnetCount uint64) ([]peer.ID, error) {
-	// Get the total number of columns.
-	numberOfColumns := params.BeaconConfig().NumberOfColumns
+// custodyGroupsAdmissiblePeers filters out `peers` that do not custody a super set of our own custody groups.
+func (s *Service) custodyGroupsAdmissiblePeers(peers []peer.ID, custodyGroupCount uint64) ([]peer.ID, error) {
+	// Get the total number of custody groups.
+	numberOfCustodyGroups := params.BeaconConfig().NumberOfCustodyGroups
 
 	// Retrieve the local node ID.
 	localNodeId := s.NodeID()
 
-	// Retrieve the needed columns.
-	neededColumns, err := peerdas.CustodyColumns(localNodeId, subnetCount)
+	// Retrieve the needed custody groups.
+	neededCustodyGroups, err := peerdas.CustodyGroups(localNodeId, custodyGroupCount)
 	if err != nil {
-		return nil, errors.Wrap(err, "custody columns for local node")
+		return nil, errors.Wrap(err, "custody groups")
 	}
-
-	// Get the number of needed columns.
-	localneededColumnsCount := uint64(len(neededColumns))
 
 	// Find the valid peers.
 	validPeers := make([]peer.ID, 0, len(peers))
 
 loop:
 	for _, pid := range peers {
-		// Get the custody subnets count of the remote peer.
-		remoteCustodySubnetCount := s.DataColumnsCustodyCountFromRemotePeer(pid)
+		// Get the custody group count of the remote peer.
+		remoteCustodyGroupCount := s.CustodyGroupCountFromPeer(pid)
+
+		// If the remote peer custodies less groups than we do, skip it.
+		if remoteCustodyGroupCount < custodyGroupCount {
+			continue
+		}
 
 		// Get the remote node ID from the peer ID.
 		remoteNodeID, err := ConvertPeerIDToNodeID(pid)
@@ -53,44 +54,39 @@ loop:
 			return nil, errors.Wrap(err, "convert peer ID to node ID")
 		}
 
-		// Get the custody columns of the remote peer.
-		remoteCustodyColumns, err := peerdas.CustodyColumns(remoteNodeID, remoteCustodySubnetCount)
+		// Get the custody groups of the remote peer.
+		remoteCustodyGroups, err := peerdas.CustodyGroups(remoteNodeID, remoteCustodyGroupCount)
 		if err != nil {
-			return nil, errors.Wrap(err, "custody columns")
+			return nil, errors.Wrap(err, "custody groups")
 		}
 
-		remoteCustodyColumnsCount := uint64(len(remoteCustodyColumns))
-
-		// If the remote peer custodies less columns than the local node needs, skip it.
-		if remoteCustodyColumnsCount < localneededColumnsCount {
-			continue
-		}
+		remoteCustodyGroupsCount := uint64(len(remoteCustodyGroups))
 
 		// If the remote peers custodies all the possible columns, add it to the list.
-		if remoteCustodyColumnsCount == numberOfColumns {
-			copiedId := pid
-			validPeers = append(validPeers, copiedId)
+		if remoteCustodyGroupsCount == numberOfCustodyGroups {
+			validPeers = append(validPeers, pid)
 			continue
 		}
 
 		// Filter out invalid peers.
-		for c := range neededColumns {
-			if !remoteCustodyColumns[c] {
+		for custodyGroup := range neededCustodyGroups {
+			if !remoteCustodyGroups[custodyGroup] {
 				continue loop
 			}
 		}
 
-		copiedId := pid
-
 		// Add valid peer to list
-		validPeers = append(validPeers, copiedId)
+		validPeers = append(validPeers, pid)
 	}
 
 	return validPeers, nil
 }
 
-func (s *Service) custodyCountFromRemotePeerEnr(pid peer.ID) uint64 {
-	// By default, we assume the peer custodies the minimum number of subnets.
+// custodyGroupCountFromPeerENR retrieves the custody count from the peer ENR.
+// If the ENR is not available, it defaults to the minimum number of custody groups
+// an honest node custodies and serves samples from.
+func (s *Service) custodyGroupCountFromPeerENR(pid peer.ID) uint64 {
+	// By default, we assume the peer custodies the minimum number of groups.
 	custodyRequirement := params.BeaconConfig().CustodyRequirement
 
 	// Retrieve the ENR of the peer.
@@ -104,42 +100,47 @@ func (s *Service) custodyCountFromRemotePeerEnr(pid peer.ID) uint64 {
 		return custodyRequirement
 	}
 
-	// Retrieve the custody subnets count from the ENR.
-	custodyCount, err := peerdas.CustodyCountFromRecord(record)
+	// Retrieve the custody group count from the ENR.
+	custodyGroupCount, err := peerdas.CustodyGroupCountFromRecord(record)
 	if err != nil {
 		log.WithError(err).WithFields(logrus.Fields{
 			"peerID":       pid,
 			"defaultValue": custodyRequirement,
-		}).Debug("Failed to retrieve custody count from ENR for peer, defaulting to the default value")
+		}).Debug("Failed to retrieve custody group count from ENR for peer, defaulting to the default value")
 
 		return custodyRequirement
 	}
 
-	return custodyCount
+	return custodyGroupCount
 }
 
-// DataColumnsCustodyCountFromRemotePeer retrieves the custody count from a remote peer.
-func (s *Service) DataColumnsCustodyCountFromRemotePeer(pid peer.ID) uint64 {
-	// Try to get the custody count from the peer's metadata.
+// CustodyGroupCountFromPeer retrieves custody group count from a peer.
+// It first tries to get the custody group count from the peer's metadata,
+// then falls back to the ENR value if the metadata is not available, then
+// falls back to the minimum number of custody groups an honest node should custodiy
+// and serve samples from if ENR is not available.
+func (s *Service) CustodyGroupCountFromPeer(pid peer.ID) uint64 {
+	// Try to get the custody group count from the peer's metadata.
 	metadata, err := s.peers.Metadata(pid)
 	if err != nil {
+		// On error, default to the ENR value.
 		log.WithError(err).WithField("peerID", pid).Debug("Failed to retrieve metadata for peer, defaulting to the ENR value")
-		return s.custodyCountFromRemotePeerEnr(pid)
+		return s.custodyGroupCountFromPeerENR(pid)
 	}
 
 	// If the metadata is nil, default to the ENR value.
 	if metadata == nil {
 		log.WithField("peerID", pid).Debug("Metadata is nil, defaulting to the ENR value")
-		return s.custodyCountFromRemotePeerEnr(pid)
+		return s.custodyGroupCountFromPeerENR(pid)
 	}
 
 	// Get the custody subnets count from the metadata.
-	custodyCount := metadata.CustodySubnetCount()
+	custodyCount := metadata.CustodyGroupCount()
 
 	// If the custody count is null, default to the ENR value.
 	if custodyCount == 0 {
 		log.WithField("peerID", pid).Debug("The custody count extracted from the metadata equals to 0, defaulting to the ENR value")
-		return s.custodyCountFromRemotePeerEnr(pid)
+		return s.custodyGroupCountFromPeerENR(pid)
 	}
 
 	return custodyCount

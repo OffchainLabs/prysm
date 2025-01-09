@@ -652,7 +652,7 @@ func uint64MapToSortedSlice(input map[uint64]bool) []uint64 {
 }
 
 func (s *Service) areDataColumnsAvailable(ctx context.Context, root [32]byte, signed interfaces.ReadOnlySignedBeaconBlock) error {
-	if signed.Version() < version.Deneb {
+	if signed.Version() < version.Fulu {
 		return nil
 	}
 
@@ -660,8 +660,12 @@ func (s *Service) areDataColumnsAvailable(ctx context.Context, root [32]byte, si
 	if block == nil {
 		return errors.New("invalid nil beacon block")
 	}
+
 	// We are only required to check within MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUESTS
-	if !params.WithinDAPeriod(slots.ToEpoch(block.Slot()), slots.ToEpoch(s.CurrentSlot())) {
+	blockSlot, currentSlot := block.Slot(), s.CurrentSlot()
+	blockEpoch, currentEpoch := slots.ToEpoch(blockSlot), slots.ToEpoch(currentSlot)
+
+	if !params.WithinDAPeriod(blockEpoch, currentEpoch) {
 		return nil
 	}
 
@@ -681,18 +685,24 @@ func (s *Service) areDataColumnsAvailable(ctx context.Context, root [32]byte, si
 	}
 
 	// All columns to sample need to be available for the block to be considered available.
-	// https://github.com/ethereum/consensus-specs/blob/dev/specs/_features/eip7594/das-core.md#subnet-sampling
+	// https://github.com/ethereum/consensus-specs/blob/v1.5.0-alpha.10/specs/fulu/das-core.md#custody-sampling
 	nodeID := s.cfg.P2P.NodeID()
-	subnetSamplingSize := peerdas.SubnetSamplingSize()
+	custodyGroupSamplingSize := peerdas.CustodyGroupSamplingSize()
 
-	colMap, err := peerdas.CustodyColumns(nodeID, subnetSamplingSize)
+	custodyGroups, err := peerdas.CustodyGroups(nodeID, custodyGroupSamplingSize)
 	if err != nil {
-		return errors.Wrap(err, "custody columns")
+		return errors.Wrap(err, "custody groups")
 	}
 
-	// colMap represents the data columnns a node is expected to custody.
-	if len(colMap) == 0 {
+	// Exit early if the node is not expected to custody any data columns.
+	if len(custodyGroups) == 0 {
 		return nil
+	}
+
+	// Get the custody columns from the groups.
+	columnsMap, err := peerdas.CustodyColumns(custodyGroups)
+	if err != nil {
+		return errors.Wrap(err, "custody columns")
 	}
 
 	// Subscribe to newsly data columns stored in the database.
@@ -715,7 +725,7 @@ func (s *Service) areDataColumnsAvailable(ctx context.Context, root [32]byte, si
 	}
 
 	// Get a map of data column indices that are not currently available.
-	missingMap, err := missingDataColumns(s.blobStorage, root, colMap)
+	missingMap, err := missingDataColumns(s.blobStorage, root, columnsMap)
 	if err != nil {
 		return err
 	}
@@ -743,10 +753,10 @@ func (s *Service) areDataColumnsAvailable(ctx context.Context, root [32]byte, si
 			)
 
 			numberOfColumns := params.BeaconConfig().NumberOfColumns
-			colMapCount := uint64(len(colMap))
+			colMapCount := uint64(len(columnsMap))
 
 			if colMapCount < numberOfColumns {
-				expected = uint64MapToSortedSlice(colMap)
+				expected = uint64MapToSortedSlice(columnsMap)
 			}
 
 			if missingMapCount < numberOfColumns {

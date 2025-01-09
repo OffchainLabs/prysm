@@ -382,11 +382,11 @@ func (f *blocksFetcher) calculateHeadAndTargetEpochs() (headEpoch, targetEpoch p
 	return headEpoch, targetEpoch, peers
 }
 
-// custodyColumnFromPeer compute all costody columns indexed by peer.
-func (f *blocksFetcher) custodyDataColumnsFromPeer(peers map[peer.ID]bool) (map[peer.ID]map[uint64]bool, error) {
+// custodyGroupsFromPeer compute all the custody groups indexed by peer.
+func (f *blocksFetcher) custodyGroupsFromPeer(peers map[peer.ID]bool) (map[peer.ID]map[uint64]bool, error) {
 	peerCount := len(peers)
 
-	custodyDataColumnsByPeer := make(map[peer.ID]map[uint64]bool, peerCount)
+	custodyGroupsByPeer := make(map[peer.ID]map[uint64]bool, peerCount)
 	for peer := range peers {
 		// Get the node ID from the peer ID.
 		nodeID, err := p2p.ConvertPeerIDToNodeID(peer)
@@ -394,19 +394,19 @@ func (f *blocksFetcher) custodyDataColumnsFromPeer(peers map[peer.ID]bool) (map[
 			return nil, errors.Wrap(err, "convert peer ID to node ID")
 		}
 
-		// Get the custody columns count from the peer.
-		custodyCount := f.p2p.DataColumnsCustodyCountFromRemotePeer(peer)
+		// Get the custody group count of the peer.
+		custodyGroupCount := f.p2p.CustodyGroupCountFromPeer(peer)
 
-		// Get the custody columns from the peer.
-		custodyDataColumns, err := peerdas.CustodyColumns(nodeID, custodyCount)
+		// Get the custody groups of the peer.
+		custodyGroups, err := peerdas.CustodyGroups(nodeID, custodyGroupCount)
 		if err != nil {
-			return nil, errors.Wrap(err, "custody columns")
+			return nil, errors.Wrap(err, "custody groups")
 		}
 
-		custodyDataColumnsByPeer[peer] = custodyDataColumns
+		custodyGroupsByPeer[peer] = custodyGroups
 	}
 
-	return custodyDataColumnsByPeer, nil
+	return custodyGroupsByPeer, nil
 }
 
 // uint64MapToSortedSlice produces a sorted uint64 slice from a map.
@@ -468,19 +468,20 @@ outerLoop:
 	return outputDataColumnsByPeer, descriptions
 }
 
-// admissiblePeersForDataColumn returns a map of peers that:
-// - custody at least one column listed in `neededDataColumns`,
+// admissiblePeersForCustodyGroup returns a map of peers that:
+// - custody at least one custody group listed in `neededCustodyGroups`,
 // - are synced to `targetSlot`, and
 // - have enough bandwidth to serve data columns corresponding to `count` blocks.
+//
 // It returns:
-// - A map, where the key of the map is the peer, the value is the custody columns of the peer.
-// - A map, where the key of the map is the data column, the value is the peer that custody the data column.
+// - A map, where the key of the map is the peer, the value is the custody groups of the peer.
+// - A map, where the key of the map is the custody group, the value is the peer that custodies the group.
 // - A slice of descriptions for non admissible peers.
 // - An error if any.
-func (f *blocksFetcher) admissiblePeersForDataColumn(
+func (f *blocksFetcher) admissiblePeersForCustodyGroup(
 	peers []peer.ID,
 	targetSlot primitives.Slot,
-	neededDataColumns map[uint64]bool,
+	neededCustodyGroups map[uint64]bool,
 	count uint64,
 ) (map[peer.ID]map[uint64]bool, map[uint64][]peer.ID, []string, error) {
 	// If no peer is specified, get all connected peers.
@@ -490,7 +491,7 @@ func (f *blocksFetcher) admissiblePeersForDataColumn(
 	}
 
 	inputPeerCount := len(inputPeers)
-	neededDataColumnsCount := uint64(len(neededDataColumns))
+	neededCustodyGroupCount := uint64(len(neededCustodyGroups))
 
 	// Create description slice for non admissible peers.
 	descriptions := make([]string, 0, inputPeerCount)
@@ -518,7 +519,6 @@ func (f *blocksFetcher) admissiblePeersForDataColumn(
 	peersWithAdmissibleHeadEpoch := make(map[peer.ID]bool, inputPeerCount)
 	for _, peer := range peersWithSufficientBandwidth {
 		peerChainState, err := f.p2p.Peers().ChainState(peer)
-
 		if err != nil {
 			description := fmt.Sprintf("peer %s: error: %s", peer, err)
 			descriptions = append(descriptions, description)
@@ -542,18 +542,18 @@ func (f *blocksFetcher) admissiblePeersForDataColumn(
 		peersWithAdmissibleHeadEpoch[peer] = true
 	}
 
-	// Compute custody columns for each peer.
-	dataColumnsByPeerWithAdmissibleHeadEpoch, err := f.custodyDataColumnsFromPeer(peersWithAdmissibleHeadEpoch)
+	// Compute custody groups for each peer.
+	dataColumnsByPeerWithAdmissibleHeadEpoch, err := f.custodyGroupsFromPeer(peersWithAdmissibleHeadEpoch)
 	if err != nil {
 		return nil, nil, nil, errors.Wrap(err, "custody columns from peer")
 	}
 
 	// Filter peers which custody at least one needed data column.
-	dataColumnsByAdmissiblePeer, localDescriptions := filterPeerWhichCustodyAtLeastOneDataColumn(neededDataColumns, dataColumnsByPeerWithAdmissibleHeadEpoch)
+	dataColumnsByAdmissiblePeer, localDescriptions := filterPeerWhichCustodyAtLeastOneDataColumn(neededCustodyGroups, dataColumnsByPeerWithAdmissibleHeadEpoch)
 	descriptions = append(descriptions, localDescriptions...)
 
 	// Compute a map from needed data columns to their peers.
-	admissiblePeersByDataColumn := make(map[uint64][]peer.ID, neededDataColumnsCount)
+	admissiblePeersByDataColumn := make(map[uint64][]peer.ID, neededCustodyGroupCount)
 	for peer, peerCustodyDataColumns := range dataColumnsByAdmissiblePeer {
 		for dataColumn := range peerCustodyDataColumns {
 			admissiblePeersByDataColumn[dataColumn] = append(admissiblePeersByDataColumn[dataColumn], peer)

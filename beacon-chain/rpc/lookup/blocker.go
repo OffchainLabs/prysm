@@ -291,14 +291,18 @@ func (p *BeaconDbBlocker) blobsFromReconstructedDataColumns(
 // This function expects data columns to be stored (aka. no blobs).
 // If not enough data columns are available to extract blobs from them (either directly or after reconstruction), an error is returned.
 func (p *BeaconDbBlocker) blobsFromStoredDataColumns(indices map[uint64]bool, rootBytes []byte) ([]*blocks.VerifiedROBlob, *core.RpcError) {
-	// Get our count of columns we should custody.
+	beaconConfig := params.BeaconConfig()
+	numberOfColumns := beaconConfig.NumberOfColumns
+	numberOfCustodyGroups := beaconConfig.NumberOfCustodyGroups
+	columnsPerGroup := numberOfColumns / numberOfCustodyGroups
+
 	root := bytesutil.ToBytes32(rootBytes)
 
-	// Get the number of columns we should custody.
-	custodyColumnsCount := peerdas.CustodyColumnCount()
+	// Get the number of groups we should custody.
+	custodyGroupCount := peerdas.CustodyGroupCount()
 
 	// Determine if we are theoretically able to reconstruct the data columns.
-	canTheoreticallyReconstruct := peerdas.CanSelfReconstruct(custodyColumnsCount)
+	canTheoreticallyReconstruct := peerdas.CanSelfReconstruct(custodyGroupCount)
 
 	// Retrieve the data columns indice actually we store.
 	storedDataColumnsIndices, err := p.BlobStorage.ColumnIndices(root)
@@ -307,10 +311,11 @@ func (p *BeaconDbBlocker) blobsFromStoredDataColumns(indices map[uint64]bool, ro
 		return nil, &core.RpcError{Err: errors.Wrap(err, "could not retrieve columns indices stored for block root"), Reason: core.Internal}
 	}
 
-	storedDataColumnsCount := uint64(len(storedDataColumnsIndices))
+	storedDataColumnCount := uint64(len(storedDataColumnsIndices))
+	storedGroupCount := storedDataColumnCount / columnsPerGroup
 
 	// Determine is we acually able to reconstruct the data columns.
-	canActuallyReconstruct := peerdas.CanSelfReconstruct(storedDataColumnsCount)
+	canActuallyReconstruct := peerdas.CanSelfReconstruct(storedGroupCount)
 
 	if !canTheoreticallyReconstruct && !canActuallyReconstruct {
 		// There is no way to reconstruct the data columns.
@@ -325,7 +330,7 @@ func (p *BeaconDbBlocker) blobsFromStoredDataColumns(indices map[uint64]bool, ro
 	if canTheoreticallyReconstruct && !canActuallyReconstruct {
 		// This case may happen if the node started recently with a big enough custody count, but did not (yet) backfill all the columns.
 		return nil, &core.RpcError{
-			Err:    errors.Errorf("not all data columns are available for this blob. Wanted: %d, got: %d. Please retry later.", nonExtendedColumnsCount, storedDataColumnsCount),
+			Err:    errors.Errorf("not all data columns are available for this blob. Wanted: %d, got: %d. Please retry later.", nonExtendedColumnsCount, storedDataColumnCount),
 			Reason: core.NotFound}
 	}
 

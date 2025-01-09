@@ -5,7 +5,8 @@ go_test(
     size = "small",
     srcs = ["custody_columns_test.go"],
     data = glob(["*.yaml"]) + [
-        "@consensus_spec_tests_mainnet//:test_data",
+        "@consensus_spec_tests_minimal//:test_data",
     ],
     tags = ["spectest"],
+    deps = ["//testing/spectest/shared/fulu/networking:go_default_library"],
 )

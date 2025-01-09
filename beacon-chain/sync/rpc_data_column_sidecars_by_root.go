@@ -103,10 +103,19 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 		return errors.Wrapf(err, "unexpected error computing min valid blob request slot, current_slot=%d", cs)
 	}
 
-	// Compute all custody columns.
+	// Retrieve our node ID.
 	nodeID := s.cfg.p2p.NodeID()
-	custodySubnetCount := peerdas.CustodySubnetCount()
-	custodyColumns, err := peerdas.CustodyColumns(nodeID, custodySubnetCount)
+
+	// Retrieve the number of groups we should custody.
+	custodyGroupCount := peerdas.CustodyGroupCount()
+
+	// Compute the groups we should custody.
+	custodyGroups, err := peerdas.CustodyGroups(nodeID, custodyGroupCount)
+	if err != nil {
+		return errors.Wrap(err, "custody groups")
+	}
+
+	custodyColumns, err := peerdas.CustodyColumns(custodyGroups)
 	custodyColumnsCount := uint64(len(custodyColumns))
 
 	if err != nil {

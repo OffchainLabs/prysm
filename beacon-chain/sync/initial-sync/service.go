@@ -321,8 +321,8 @@ func missingBlobRequest(blk blocks.ROBlock, store *filesystem.BlobStorage) (p2pt
 }
 
 func (s *Service) missingColumnRequest(roBlock blocks.ROBlock, store *filesystem.BlobStorage) (p2ptypes.DataColumnSidecarsByRootReq, error) {
-	// No columns for pre-Deneb blocks.
-	if roBlock.Version() < version.Deneb {
+	// No columns for pre-Fulu blocks.
+	if roBlock.Version() < version.Fulu {
 		return nil, nil
 	}
 
@@ -349,15 +349,24 @@ func (s *Service) missingColumnRequest(roBlock blocks.ROBlock, store *filesystem
 	// Get our node ID.
 	nodeID := s.cfg.P2P.NodeID()
 
-	// Get the custodied columns.
-	custodiedColumns, err := peerdas.CustodyColumns(nodeID, peerdas.CustodySubnetCount())
+	// Get the custody group count.
+	custodyGroupsCount := peerdas.CustodyGroupCount()
+
+	// Compute the custody groups.
+	custodyGroups, err := peerdas.CustodyGroups(nodeID, custodyGroupsCount)
+	if err != nil {
+		return nil, errors.Wrap(err, "custody groups")
+	}
+
+	// Compute the custody columns.
+	custodyColumns, err := peerdas.CustodyColumns(custodyGroups)
 	if err != nil {
 		return nil, errors.Wrap(err, "custody columns")
 	}
 
 	// Build blob sidecars by root requests based on missing columns.
 	req := make(p2ptypes.DataColumnSidecarsByRootReq, 0, len(commitments))
-	for columnIndex := range custodiedColumns {
+	for columnIndex := range custodyColumns {
 		isColumnAvailable := storedColumns[columnIndex]
 		if !isColumnAvailable {
 			req = append(req, &eth.DataColumnIdentifier{
@@ -449,7 +458,7 @@ func (s *Service) fetchOriginColumns(pids []peer.ID) error {
 		return nil
 	}
 	shufflePeers(pids)
-	pids, err = s.cfg.P2P.DataColumnsAdmissibleCustodyPeers(pids)
+	pids, err = s.cfg.P2P.AdmissibleCustodyGroupsPeers(pids)
 	if err != nil {
 		return err
 	}

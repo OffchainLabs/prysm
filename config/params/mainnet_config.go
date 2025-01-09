@@ -37,7 +37,7 @@ var mainnetNetworkConfig = &NetworkConfig{
 	ETH2Key:                    "eth2",
 	AttSubnetKey:               "attnets",
 	SyncCommsSubnetKey:         "syncnets",
-	CustodySubnetCountKey:      "csc",
+	CustodyGroupCountKey:       "cgc",
 	MinimumPeersInSubnetSearch: 20,
 	ContractDeploymentBlock:    11184524, // Note: contract was deployed in block 11052984 but no transactions were sent until 11184524.
 	BootstrapNodes: []string{
@@ -301,12 +301,13 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	MaxDepositRequestsPerPayload:          8192, // 2**13 (= 8192)
 	UnsetDepositRequestsStartIndex:        math.MaxUint64,
 
-	// PeerDAS
+	// Values related to fulu
 	NumberOfColumns:                       128,
-	MaxCellsInExtendedMatrix:              768,
 	SamplesPerSlot:                        8,
+	NumberOfCustodyGroups:                 128,
 	CustodyRequirement:                    4,
 	MinEpochsForDataColumnSidecarsRequest: 4096,
+	MaxCellsInExtendedMatrix:              768,
 
 	// Values related to networking parameters.
 	GossipMaxSize:                   10 * 1 << 20, // 10 MiB

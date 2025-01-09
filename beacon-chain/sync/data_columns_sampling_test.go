@@ -36,14 +36,15 @@ import (
 func TestRandomizeColumns(t *testing.T) {
 	const count uint64 = 128
 
-	// Generate columns.
-	columns := make(map[uint64]bool, count)
+	// Generate groups.
+	groups := make(map[uint64]bool, count)
 	for i := uint64(0); i < count; i++ {
-		columns[i] = true
+		groups[i] = true
 	}
 
 	// Randomize columns.
-	randomizedColumns := randomizeColumns(columns)
+	randomizedColumns, err := randomizeColumns(groups)
+	require.NoError(t, err)
 
 	// Convert back to a map.
 	randomizedColumnsMap := make(map[uint64]bool, count)
@@ -52,7 +53,7 @@ func TestRandomizeColumns(t *testing.T) {
 	}
 
 	// Check duplicates and missing columns.
-	require.Equal(t, len(columns), len(randomizedColumnsMap))
+	require.Equal(t, len(groups), len(randomizedColumnsMap))
 
 	// Check the values.
 	for column := range randomizedColumnsMap {
@@ -70,7 +71,7 @@ func createAndConnectPeer(
 	p2pService *p2ptest.TestP2P,
 	chainService *mock.ChainService,
 	dataColumnSidecars []*ethpb.DataColumnSidecar,
-	custodySubnetCount uint64,
+	custodyGroupCount uint64,
 	columnsNotToRespond map[uint64]bool,
 	offset int,
 ) *p2ptest.TestP2P {
@@ -112,7 +113,7 @@ func createAndConnectPeer(
 
 	// Create the record and set the custody count.
 	enr := &enr.Record{}
-	enr.Set(peerdas.Csc(custodySubnetCount))
+	enr.Set(peerdas.Cgc(custodyGroupCount))
 
 	// Add the peer and connect it.
 	p2pService.Peers().Add(enr, peer.PeerID(), nil, network.DirOutbound)
@@ -138,7 +139,7 @@ type dataSamplerTest struct {
 func setupDefaultDataColumnSamplerTest(t *testing.T) (*dataSamplerTest, *dataColumnSampler1D) {
 	const (
 		blobCount          uint64 = 3
-		custodyRequirement uint64 = 1
+		custodyRequirement uint64 = 4
 	)
 
 	test, sampler := setupDataColumnSamplerTest(t, blobCount)
@@ -219,33 +220,33 @@ func setupDataColumnSamplerTest(t *testing.T, blobCount uint64) (*dataSamplerTes
 
 func TestDataColumnSampler1D_PeerManagement(t *testing.T) {
 	testCases := []struct {
+		name               string
 		numPeers           int
 		custodyRequirement uint64
-		subnetCount        uint64
 		expectedColumns    [][]uint64
 		prunePeers         map[int]bool // Peers to prune.
 	}{
 		{
+			name:               "custodyRequirement=4",
 			numPeers:           3,
-			custodyRequirement: 1,
-			subnetCount:        32,
+			custodyRequirement: 4,
 			expectedColumns: [][]uint64{
-				{6, 38, 70, 102},
-				{3, 35, 67, 99},
-				{12, 44, 76, 108},
+				{6, 37, 48, 113},
+				{35, 79, 92, 109},
+				{31, 44, 58, 97},
 			},
 			prunePeers: map[int]bool{
 				0: true,
 			},
 		},
 		{
+			name:               "custodyRequirement=8",
 			numPeers:           3,
-			custodyRequirement: 2,
-			subnetCount:        32,
+			custodyRequirement: 8,
 			expectedColumns: [][]uint64{
-				{6, 16, 38, 48, 70, 80, 102, 112},
-				{3, 13, 35, 45, 67, 77, 99, 109},
-				{12, 31, 44, 63, 76, 95, 108, 127},
+				{1, 6, 37, 48, 51, 87, 112, 113},
+				{24, 25, 35, 52, 79, 92, 109, 126},
+				{31, 44, 58, 64, 91, 97, 116, 127},
 			},
 			prunePeers: map[int]bool{
 				0: true,
@@ -255,116 +256,115 @@ func TestDataColumnSampler1D_PeerManagement(t *testing.T) {
 
 	params.SetupTestConfigCleanup(t)
 	for _, tc := range testCases {
-		cfg := params.BeaconConfig()
-		cfg.CustodyRequirement = tc.custodyRequirement
-		cfg.DataColumnSidecarSubnetCount = tc.subnetCount
-		params.OverrideBeaconConfig(cfg)
-		test, sampler := setupDataColumnSamplerTest(t, uint64(tc.numPeers))
-		for i := 0; i < tc.numPeers; i++ {
-			p := createAndConnectPeer(t, test.p2pSvc, test.chainSvc, test.dataColumnSidecars, tc.custodyRequirement, nil, i+1)
-			test.peers = append(test.peers, p)
-		}
-
-		// confirm everything works
-		sampler.refreshPeerInfo()
-		require.Equal(t, params.BeaconConfig().NumberOfColumns, uint64(len(sampler.peerFromColumn)))
-
-		require.Equal(t, tc.numPeers, len(sampler.columnFromPeer))
-		for i, peer := range test.peers {
-			// confirm peer has the expected columns
-			require.Equal(t, len(tc.expectedColumns[i]), len(sampler.columnFromPeer[peer.PeerID()]))
-			for _, column := range tc.expectedColumns[i] {
-				require.Equal(t, true, sampler.columnFromPeer[peer.PeerID()][column])
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := params.BeaconConfig()
+			cfg.CustodyRequirement = tc.custodyRequirement
+			params.OverrideBeaconConfig(cfg)
+			test, sampler := setupDataColumnSamplerTest(t, uint64(tc.numPeers))
+			for i := 0; i < tc.numPeers; i++ {
+				p := createAndConnectPeer(t, test.p2pSvc, test.chainSvc, test.dataColumnSidecars, tc.custodyRequirement, nil, i+1)
+				test.peers = append(test.peers, p)
 			}
 
-			// confirm column to peer mapping are correct
-			for _, column := range tc.expectedColumns[i] {
-				require.Equal(t, true, sampler.peerFromColumn[column][peer.PeerID()])
-			}
-		}
+			// confirm everything works
+			sampler.refreshPeerInfo()
+			require.Equal(t, params.BeaconConfig().NumberOfColumns, uint64(len(sampler.peersByCustodyGroup)))
 
-		// prune peers
-		for peer := range tc.prunePeers {
-			err := test.p2pSvc.Disconnect(test.peers[peer].PeerID())
-			test.p2pSvc.Peers().SetConnectionState(test.peers[peer].PeerID(), peers.Disconnected)
-			require.NoError(t, err)
-		}
-		sampler.refreshPeerInfo()
-
-		require.Equal(t, tc.numPeers-len(tc.prunePeers), len(sampler.columnFromPeer))
-		for i, peer := range test.peers {
-			for _, column := range tc.expectedColumns[i] {
-				expected := true
-				if tc.prunePeers[i] {
-					expected = false
+			require.Equal(t, tc.numPeers, len(sampler.groupsByPeer))
+			for i, peer := range test.peers {
+				// confirm peer has the expected columns
+				require.Equal(t, len(tc.expectedColumns[i]), len(sampler.groupsByPeer[peer.PeerID()]))
+				for _, column := range tc.expectedColumns[i] {
+					require.Equal(t, true, sampler.groupsByPeer[peer.PeerID()][column])
 				}
-				require.Equal(t, expected, sampler.peerFromColumn[column][peer.PeerID()])
+
+				// confirm column to peer mapping are correct
+				for _, column := range tc.expectedColumns[i] {
+					require.Equal(t, true, sampler.peersByCustodyGroup[column][peer.PeerID()])
+				}
 			}
-		}
+
+			// prune peers
+			for peer := range tc.prunePeers {
+				err := test.p2pSvc.Disconnect(test.peers[peer].PeerID())
+				test.p2pSvc.Peers().SetConnectionState(test.peers[peer].PeerID(), peers.Disconnected)
+				require.NoError(t, err)
+			}
+			sampler.refreshPeerInfo()
+
+			require.Equal(t, tc.numPeers-len(tc.prunePeers), len(sampler.groupsByPeer))
+			for i, peer := range test.peers {
+				for _, column := range tc.expectedColumns[i] {
+					expected := true
+					if tc.prunePeers[i] {
+						expected = false
+					}
+					require.Equal(t, expected, sampler.peersByCustodyGroup[column][peer.PeerID()])
+				}
+			}
+		})
 	}
 }
 
 func TestDataColumnSampler1D_SampleDistribution(t *testing.T) {
+	// TODO: Use `t.Run`.
 	testCases := []struct {
 		numPeers             int
 		custodyRequirement   uint64
-		subnetCount          uint64
 		columnsToDistribute  [][]uint64
 		expectedDistribution []map[int][]uint64
 	}{
 		{
 			numPeers:           3,
-			custodyRequirement: 1,
-			subnetCount:        32,
+			custodyRequirement: 4,
 			// peer custody maps
-			// p0: {6, 38, 70, 102},
-			// p1: {3, 35, 67, 99},
-			// p2: {12, 44, 76, 108},
+			// p0: {6, 37, 48, 113},
+			// p1: {35, 79, 92, 109},
+			// p2: {31, 44, 58, 97},
 			columnsToDistribute: [][]uint64{
-				{3, 6, 12},
-				{6, 3, 12, 38, 35, 44},
-				{6, 38, 70},
+				{6, 35, 31},
+				{6, 48, 79, 109, 31, 97},
+				{6, 37, 113},
 				{11},
 			},
 			expectedDistribution: []map[int][]uint64{
 				{
-					0: {6},  // p1
-					1: {3},  // p2
-					2: {12}, // p3
+					0: {6},  // p0
+					1: {35}, // p1
+					2: {31}, // p2
 				},
 				{
-					0: {6, 38},  // p1
-					1: {3, 35},  // p2
-					2: {12, 44}, // p3
+					0: {6, 48},   // p0
+					1: {79, 109}, // p1
+					2: {31, 97},  // p2
 				},
 				{
-					0: {6, 38, 70}, // p1
+					0: {6, 37, 113}, // p0
 				},
 				{},
 			},
 		},
 		{
 			numPeers:           3,
-			custodyRequirement: 2,
-			subnetCount:        32,
+			custodyRequirement: 8,
 			// peer custody maps
-			// p0: {6, 16, 38, 48, 70, 80, 102, 112},
-			// p1: {3, 13, 35, 45, 67, 77, 99, 109},
-			// p2: {12, 31, 44, 63, 76, 95, 108, 127},
+			// p0: {6, 37, 48, 113, 1, 112, 87, 51},
+			// p1: {35, 79, 92, 109, 52, 126, 25, 24},
+			// p2: {31, 44, 58, 97, 116, 91, 64, 127},
 			columnsToDistribute: [][]uint64{
-				{3, 6, 12, 109, 112, 127}, // all covered by peers
-				{13, 16, 31, 32},          // 32 not in covered by peers
+				{6, 48, 79, 25, 24, 97}, // all covered by peers
+				{6, 35, 31, 32},         // `32` is not in covered by peers
 			},
 			expectedDistribution: []map[int][]uint64{
 				{
-					0: {6, 112},  // p1
-					1: {3, 109},  // p2
-					2: {12, 127}, // p3
+					0: {6, 48},      // p0
+					1: {79, 25, 24}, // p1
+					2: {97},         // p2
 				},
 				{
-					0: {16}, // p1
-					1: {13}, // p2
-					2: {31}, // p3
+					0: {6},  // p0
+					1: {35}, // p1
+					2: {31}, // p2
 				},
 			},
 		},
@@ -373,7 +373,6 @@ func TestDataColumnSampler1D_SampleDistribution(t *testing.T) {
 	for _, tc := range testCases {
 		cfg := params.BeaconConfig()
 		cfg.CustodyRequirement = tc.custodyRequirement
-		cfg.DataColumnSidecarSubnetCount = tc.subnetCount
 		params.OverrideBeaconConfig(cfg)
 		test, sampler := setupDataColumnSamplerTest(t, uint64(tc.numPeers))
 		for i := 0; i < tc.numPeers; i++ {
@@ -383,7 +382,8 @@ func TestDataColumnSampler1D_SampleDistribution(t *testing.T) {
 		sampler.refreshPeerInfo()
 
 		for idx, columns := range tc.columnsToDistribute {
-			result := sampler.distributeSamplesToPeer(columns)
+			result, err := sampler.distributeSamplesToPeer(columns)
+			require.NoError(t, err)
 			require.Equal(t, len(tc.expectedDistribution[idx]), len(result), fmt.Sprintf("%v - %v", tc.expectedDistribution[idx], result))
 
 			for peerIdx, dist := range tc.expectedDistribution[idx] {
@@ -397,34 +397,36 @@ func TestDataColumnSampler1D_SampleDistribution(t *testing.T) {
 }
 
 func TestDataColumnSampler1D_SampleDataColumns(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig()
-	cfg.DataColumnSidecarSubnetCount = 32
-	params.OverrideBeaconConfig(cfg)
 	test, sampler := setupDefaultDataColumnSamplerTest(t)
 	sampler.refreshPeerInfo()
 
-	// Sample all columns.
-	sampleColumns := []uint64{6, 3, 12, 38, 35, 44, 70, 67, 76, 102, 99, 108}
-	retrieved := sampler.sampleDataColumns(test.ctx, test.blockProcessedData, sampleColumns)
-	require.Equal(t, 12, len(retrieved))
-	for _, column := range sampleColumns {
-		require.Equal(t, true, retrieved[column])
-	}
+	t.Run("sample all columns", func(t *testing.T) {
+		sampleColumns := []uint64{6, 35, 31, 37, 79, 44, 48, 92, 58, 113, 109, 97}
+		retrieved, err := sampler.sampleDataColumns(test.ctx, test.blockProcessedData, sampleColumns)
+		require.NoError(t, err)
+		require.Equal(t, 12, len(retrieved))
+		for _, column := range sampleColumns {
+			require.Equal(t, true, retrieved[column])
+		}
+	})
 
-	// Sample a subset of columns.
-	sampleColumns = []uint64{6, 3, 12, 38, 35, 44}
-	retrieved = sampler.sampleDataColumns(test.ctx, test.blockProcessedData, sampleColumns)
-	require.Equal(t, 6, len(retrieved))
-	for _, column := range sampleColumns {
-		require.Equal(t, true, retrieved[column])
-	}
+	t.Run("sample a subset of columns", func(t *testing.T) {
+		sampleColumns := []uint64{35, 31, 79, 48, 113, 97}
+		retrieved, err := sampler.sampleDataColumns(test.ctx, test.blockProcessedData, sampleColumns)
+		require.NoError(t, err)
+		require.Equal(t, 6, len(retrieved))
+		for _, column := range sampleColumns {
+			require.Equal(t, true, retrieved[column])
+		}
+	})
 
-	// Sample a subset of columns with missing columns.
-	sampleColumns = []uint64{6, 3, 12, 127}
-	retrieved = sampler.sampleDataColumns(test.ctx, test.blockProcessedData, sampleColumns)
-	require.Equal(t, 3, len(retrieved))
-	require.DeepEqual(t, map[uint64]bool{6: true, 3: true, 12: true}, retrieved)
+	t.Run("sample a subset of columns with missing columns", func(t *testing.T) {
+		sampleColumns := []uint64{35, 31, 100, 79}
+		retrieved, err := sampler.sampleDataColumns(test.ctx, test.blockProcessedData, sampleColumns)
+		require.NoError(t, err)
+		require.Equal(t, 3, len(retrieved))
+		require.DeepEqual(t, map[uint64]bool{35: true, 31: true, 79: true}, retrieved)
+	})
 }
 
 func TestDataColumnSampler1D_IncrementalDAS(t *testing.T) {
@@ -444,12 +446,12 @@ func TestDataColumnSampler1D_IncrementalDAS(t *testing.T) {
 		{
 			name:                     "All columns are correctly sampled in a single round",
 			samplesCount:             5,
-			possibleColumnsToRequest: []uint64{70, 35, 99, 6, 38, 3, 67, 102, 12, 44, 76, 108},
+			possibleColumnsToRequest: []uint64{6, 35, 31, 37, 79, 44, 48, 92, 58, 113, 109, 97},
 			columnsNotToRespond:      map[uint64]bool{},
 			expectedSuccess:          true,
 			expectedRoundSummaries: []roundSummary{
 				{
-					RequestedColumns: []uint64{70, 35, 99, 6, 38},
+					RequestedColumns: []uint64{6, 35, 31, 37, 79},
 					MissingColumns:   map[uint64]bool{},
 				},
 			},
@@ -457,16 +459,16 @@ func TestDataColumnSampler1D_IncrementalDAS(t *testing.T) {
 		{
 			name:                     "Two missing columns in the first round, ok in the second round",
 			samplesCount:             5,
-			possibleColumnsToRequest: []uint64{70, 35, 99, 6, 38, 3, 67, 102, 12, 44, 76, 108},
-			columnsNotToRespond:      map[uint64]bool{6: true, 70: true},
+			possibleColumnsToRequest: []uint64{6, 35, 31, 37, 79, 44, 48, 92, 58, 113, 109, 97},
+			columnsNotToRespond:      map[uint64]bool{6: true, 31: true},
 			expectedSuccess:          true,
 			expectedRoundSummaries: []roundSummary{
 				{
-					RequestedColumns: []uint64{70, 35, 99, 6, 38},
-					MissingColumns:   map[uint64]bool{70: true, 6: true},
+					RequestedColumns: []uint64{6, 35, 31, 37, 79},
+					MissingColumns:   map[uint64]bool{6: true, 31: true},
 				},
 				{
-					RequestedColumns: []uint64{3, 67, 102, 12, 44, 76},
+					RequestedColumns: []uint64{44, 48, 92, 58, 113, 109},
 					MissingColumns:   map[uint64]bool{},
 				},
 			},
@@ -474,35 +476,37 @@ func TestDataColumnSampler1D_IncrementalDAS(t *testing.T) {
 		{
 			name:                     "Two missing columns in the first round, one missing in the second round. Fail to sample.",
 			samplesCount:             5,
-			possibleColumnsToRequest: []uint64{70, 35, 99, 6, 38, 3, 67, 102, 12, 44, 76, 108},
-			columnsNotToRespond:      map[uint64]bool{6: true, 70: true, 3: true},
+			possibleColumnsToRequest: []uint64{6, 35, 31, 37, 79, 44, 48, 92, 58, 113, 109, 97},
+			columnsNotToRespond:      map[uint64]bool{6: true, 31: true, 48: true},
 			expectedSuccess:          false,
 			expectedRoundSummaries: []roundSummary{
 				{
-					RequestedColumns: []uint64{70, 35, 99, 6, 38},
-					MissingColumns:   map[uint64]bool{70: true, 6: true},
+					RequestedColumns: []uint64{6, 35, 31, 37, 79},
+					MissingColumns:   map[uint64]bool{6: true, 31: true},
 				},
 				{
-					RequestedColumns: []uint64{3, 67, 102, 12, 44, 76},
-					MissingColumns:   map[uint64]bool{3: true},
+					RequestedColumns: []uint64{44, 48, 92, 58, 113, 109},
+					MissingColumns:   map[uint64]bool{48: true},
 				},
 			},
 		},
 	}
 
 	for _, tc := range testCases {
-		test, sampler := setupDataColumnSamplerTest(t, 3)
-		p1 := createAndConnectPeer(t, test.p2pSvc, test.chainSvc, test.dataColumnSidecars, params.BeaconConfig().CustodyRequirement, tc.columnsNotToRespond, 1)
-		p2 := createAndConnectPeer(t, test.p2pSvc, test.chainSvc, test.dataColumnSidecars, params.BeaconConfig().CustodyRequirement, tc.columnsNotToRespond, 2)
-		p3 := createAndConnectPeer(t, test.p2pSvc, test.chainSvc, test.dataColumnSidecars, params.BeaconConfig().CustodyRequirement, tc.columnsNotToRespond, 3)
-		test.peers = []*p2ptest.TestP2P{p1, p2, p3}
+		t.Run(tc.name, func(t *testing.T) {
+			test, sampler := setupDataColumnSamplerTest(t, 3)
+			p1 := createAndConnectPeer(t, test.p2pSvc, test.chainSvc, test.dataColumnSidecars, params.BeaconConfig().CustodyRequirement, tc.columnsNotToRespond, 1)
+			p2 := createAndConnectPeer(t, test.p2pSvc, test.chainSvc, test.dataColumnSidecars, params.BeaconConfig().CustodyRequirement, tc.columnsNotToRespond, 2)
+			p3 := createAndConnectPeer(t, test.p2pSvc, test.chainSvc, test.dataColumnSidecars, params.BeaconConfig().CustodyRequirement, tc.columnsNotToRespond, 3)
+			test.peers = []*p2ptest.TestP2P{p1, p2, p3}
 
-		sampler.refreshPeerInfo()
+			sampler.refreshPeerInfo()
 
-		success, summaries, err := sampler.incrementalDAS(test.ctx, test.blockProcessedData, tc.possibleColumnsToRequest, tc.samplesCount)
-		require.NoError(t, err)
-		require.Equal(t, tc.expectedSuccess, success)
-		require.DeepEqual(t, tc.expectedRoundSummaries, summaries)
+			success, summaries, err := sampler.incrementalDAS(test.ctx, test.blockProcessedData, tc.possibleColumnsToRequest, tc.samplesCount)
+			require.NoError(t, err)
+			require.Equal(t, tc.expectedSuccess, success)
+			require.DeepEqual(t, tc.expectedRoundSummaries, summaries)
+		})
 	}
 }
 

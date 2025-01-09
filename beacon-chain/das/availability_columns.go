@@ -137,8 +137,8 @@ func (s *LazilyPersistentStoreColumn) IsDataAvailable(
 
 // fullCommitmentsToCheck returns the commitments to check for a given block.
 func fullCommitmentsToCheck(nodeID enode.ID, block blocks.ROBlock, currentSlot primitives.Slot) (*safeCommitmentsArray, error) {
-	// Return early for blocks that are pre-deneb.
-	if block.Version() < version.Deneb {
+	// Return early for blocks that are pre-Fulu.
+	if block.Version() < version.Fulu {
 		return &safeCommitmentsArray{}, nil
 	}
 
@@ -165,9 +165,17 @@ func fullCommitmentsToCheck(nodeID enode.ID, block blocks.ROBlock, currentSlot p
 		return &safeCommitmentsArray{}, nil
 	}
 
-	// Retrieve the custody columns.
-	custodySubnetCount := peerdas.CustodySubnetCount()
-	custodyColumns, err := peerdas.CustodyColumns(nodeID, custodySubnetCount)
+	// Retrieve the groups count.
+	custodyGroupCount := peerdas.CustodyGroupCount()
+
+	// Retrieve custody groups.
+	custodyGroups, err := peerdas.CustodyGroups(nodeID, custodyGroupCount)
+	if err != nil {
+		return nil, errors.Wrap(err, "custody groups")
+	}
+
+	// Retrieve custody columns.
+	custodyColumns, err := peerdas.CustodyColumns(custodyGroups)
 	if err != nil {
 		return nil, errors.Wrap(err, "custody columns")
 	}

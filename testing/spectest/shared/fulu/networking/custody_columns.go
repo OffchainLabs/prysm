@@ -13,9 +13,9 @@ import (
 )
 
 type Config struct {
-	NodeId             *big.Int `yaml:"node_id"`
-	CustodySubnetCount uint64   `yaml:"custody_subnet_count"`
-	Expected           []uint64 `yaml:"result"`
+	NodeId            *big.Int `yaml:"node_id"`
+	CustodyGroupCount uint64   `yaml:"custody_group_count"`
+	Expected          []uint64 `yaml:"result"`
 }
 
 // RunCustodyColumnsTest executes custody columns spec tests.
@@ -50,8 +50,12 @@ func RunCustodyColumnsTest(t *testing.T, config string) {
 			copy(nodeIdBytes32[:], nodeIdBytes)
 			nodeId := enode.ID(nodeIdBytes32)
 
-			// Compute the custodied columns.
-			actual, err := peerdas.CustodyColumns(nodeId, config.CustodySubnetCount)
+			// Compute the custody groups.
+			custodyGroups, err := peerdas.CustodyGroups(nodeId, config.CustodyGroupCount)
+			require.NoError(t, err, "failed to compute the custody groups")
+
+			// Compute the custody columns.
+			actual, err := peerdas.CustodyColumns(custodyGroups)
 			require.NoError(t, err, "failed to compute the custody columns")
 
 			// Compare the results.

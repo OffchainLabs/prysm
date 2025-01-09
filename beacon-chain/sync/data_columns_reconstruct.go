@@ -30,8 +30,8 @@ func (s *Service) reconstructDataColumns(ctx context.Context, verifiedRODataColu
 		return errors.Wrap(err, "stored data columns")
 	}
 
-	storedColumnsCount := len(storedDataColumns)
-	numberOfColumns := fieldparams.NumberOfColumns
+	storedColumnsCount := uint64(len(storedDataColumns))
+	numberOfColumns := params.BeaconConfig().NumberOfColumns
 
 	// If less than half of the columns are stored, reconstruction is not possible.
 	// If all columns are stored, no need to reconstruct.
@@ -51,10 +51,20 @@ func (s *Service) reconstructDataColumns(ctx context.Context, verifiedRODataColu
 
 	defer s.dataColumsnReconstructionLock.Unlock()
 
-	// Retrieve the custody columns.
+	// Retrieve the node ID.
 	nodeID := s.cfg.p2p.NodeID()
-	custodySubnetCount := peerdas.CustodySubnetCount()
-	custodyColumns, err := peerdas.CustodyColumns(nodeID, custodySubnetCount)
+
+	// Compute the custody group count.
+	custodyGroupCount := peerdas.CustodyGroupCount()
+
+	// Compute the custody groups.
+	custodyGroups, err := peerdas.CustodyGroups(nodeID, custodyGroupCount)
+	if err != nil {
+		return errors.Wrap(err, "custody groups")
+	}
+
+	// Compute the custody columns.
+	custodyColumns, err := peerdas.CustodyColumns(custodyGroups)
 	if err != nil {
 		return errors.Wrap(err, "custody columns")
 	}
@@ -160,12 +170,24 @@ func (s *Service) scheduleReconstructedDataColumnsBroadcast(
 			return
 		}
 
-		// Get the data columns we should store.
+		// Get the node ID.
 		nodeID := s.cfg.p2p.NodeID()
-		custodySubnetCount := peerdas.CustodySubnetCount()
-		custodyDataColumns, err := peerdas.CustodyColumns(nodeID, custodySubnetCount)
+
+		// Get the custody group count.
+		custodyGroupCount := peerdas.CustodyGroupCount()
+
+		// Compute the custody groups.
+		custodyGroups, err := peerdas.CustodyGroups(nodeID, custodyGroupCount)
+		if err != nil {
+			log.WithError(err).Error("Custody groups")
+			return
+		}
+
+		// Compute the custody columns.
+		custodyDataColumns, err := peerdas.CustodyColumns(custodyGroups)
 		if err != nil {
 			log.WithError(err).Error("Custody columns")
+			return
 		}
 
 		// Get the data columns we actually store.

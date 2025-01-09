@@ -30,41 +30,41 @@ import (
 )
 
 const (
-	CustodySubnetCountEnrKey = "csc"
+	CustodyGroupCountEnrKey = "cgc"
 )
 
-// https://github.com/ethereum/consensus-specs/blob/dev/specs/_features/eip7594/p2p-interface.md#the-discovery-domain-discv5
-type Csc uint64
+// https://github.com/ethereum/consensus-specs/blob/v1.5.0-alpha.10/specs/fulu/p2p-interface.md#the-discovery-domain-discv5
+type Cgc uint64
 
-func (Csc) ENRKey() string { return CustodySubnetCountEnrKey }
+func (Cgc) ENRKey() string { return CustodyGroupCountEnrKey }
 
 var (
 	// Custom errors
-	errCustodySubnetCountTooLarge   = errors.New("custody subnet count larger than data column sidecar subnet count")
-	errIndexTooLarge                = errors.New("column index is larger than the specified columns count")
-	errMismatchLength               = errors.New("mismatch in the length of the commitments and proofs")
-	errRecordNil                    = errors.New("record is nil")
-	errCannotLoadCustodySubnetCount = errors.New("cannot load the custody subnet count from peer")
+	errCustodyGroupCountTooLarge      = errors.New("custody group count too large")
+	errWrongComputedCustodyGroupCount = errors.New("wrong computed custody group count, should never happen")
+	errIndexTooLarge                  = errors.New("column index is larger than the specified columns count")
+	errMismatchLength                 = errors.New("mismatch in the length of the commitments and proofs")
+	errRecordNil                      = errors.New("record is nil")
+	errCannotLoadCustodyGroupCount    = errors.New("cannot load the custody group count from peer")
 
 	// maxUint256 is the maximum value of a uint256.
 	maxUint256 = &uint256.Int{math.MaxUint64, math.MaxUint64, math.MaxUint64, math.MaxUint64}
 )
 
-// CustodyColumnSubnets computes the subnets the node should participate in for custody.
-func CustodyColumnSubnets(nodeId enode.ID, custodySubnetCount uint64) (map[uint64]bool, error) {
-	dataColumnSidecarSubnetCount := params.BeaconConfig().DataColumnSidecarSubnetCount
+// CustodyGroups computes the custody groups the node should participate in for custody.
+// https://github.com/ethereum/consensus-specs/blob/v1.5.0-alpha.10/specs/fulu/das-core.md#get_custody_groups
+func CustodyGroups(nodeId enode.ID, custodyGroupCount uint64) (map[uint64]bool, error) {
+	numberOfCustodyGroup := params.BeaconConfig().NumberOfCustodyGroups
 
-	// Check if the custody subnet count is larger than the data column sidecar subnet count.
-	if custodySubnetCount > dataColumnSidecarSubnetCount {
-		return nil, errCustodySubnetCountTooLarge
+	// Check if the custody group count is larger than the number of custody groups.
+	if custodyGroupCount > numberOfCustodyGroup {
+		return nil, errCustodyGroupCountTooLarge
 	}
 
-	// First, compute the subnet IDs that the node should participate in.
-	subnetIds := make(map[uint64]bool, custodySubnetCount)
-
+	custodyGroups := make(map[uint64]bool, custodyGroupCount)
 	one := uint256.NewInt(1)
 
-	for currentId := new(uint256.Int).SetBytes(nodeId.Bytes()); uint64(len(subnetIds)) < custodySubnetCount; currentId.Add(currentId, one) {
+	for currentId := new(uint256.Int).SetBytes(nodeId.Bytes()); uint64(len(custodyGroups)) < custodyGroupCount; currentId.Add(currentId, one) {
 		// Convert to big endian bytes.
 		currentIdBytesBigEndian := currentId.Bytes32()
 
@@ -74,11 +74,11 @@ func CustodyColumnSubnets(nodeId enode.ID, custodySubnetCount uint64) (map[uint6
 		// Hash the result.
 		hashedCurrentId := hash.Hash(currentIdBytesLittleEndian)
 
-		// Get the subnet ID.
-		subnetId := binary.LittleEndian.Uint64(hashedCurrentId[:8]) % dataColumnSidecarSubnetCount
+		// Get the custody group ID.
+		custodyGroupId := binary.LittleEndian.Uint64(hashedCurrentId[:8]) % numberOfCustodyGroup
 
-		// Add the subnet to the map.
-		subnetIds[subnetId] = true
+		// Add the custody group to the map.
+		custodyGroups[custodyGroupId] = true
 
 		// Overflow prevention.
 		if currentId.Cmp(maxUint256) == 0 {
@@ -86,37 +86,100 @@ func CustodyColumnSubnets(nodeId enode.ID, custodySubnetCount uint64) (map[uint6
 		}
 	}
 
-	return subnetIds, nil
+	// Final check.
+	if uint64(len(custodyGroups)) != custodyGroupCount {
+		return nil, errWrongComputedCustodyGroupCount
+	}
+
+	return custodyGroups, nil
+}
+
+// ComputeColumnsForCustodyGroup computes the columns for a given custody group.
+// https://github.com/ethereum/consensus-specs/blob/v1.5.0-alpha.10/specs/fulu/das-core.md#compute_columns_for_custody_group
+func ComputeColumnsForCustodyGroup(custodyGroup uint64) ([]uint64, error) {
+	beaconConfig := params.BeaconConfig()
+	numberOfCustodyGroup := beaconConfig.NumberOfCustodyGroups
+
+	if custodyGroup > numberOfCustodyGroup {
+		return nil, errCustodyGroupCountTooLarge
+	}
+
+	numberOfColumns := beaconConfig.NumberOfColumns
+
+	columnsPerGroup := numberOfColumns / numberOfCustodyGroup
+
+	columns := make([]uint64, 0, columnsPerGroup)
+	for i := range columnsPerGroup {
+		column := numberOfCustodyGroup*i + custodyGroup
+		columns = append(columns, column)
+	}
+
+	return columns, nil
+}
+
+// ComputeCustodyGroupForColumn computes the custody group for a given column.
+// It is the reciprocal function of ComputeColumnsForCustodyGroup.
+func ComputeCustodyGroupForColumn(columnIndex uint64) (uint64, error) {
+	beaconConfig := params.BeaconConfig()
+	numberOfColumns := beaconConfig.NumberOfColumns
+
+	if columnIndex >= numberOfColumns {
+		return 0, errIndexTooLarge
+	}
+
+	numberOfCustodyGroups := beaconConfig.NumberOfCustodyGroups
+	columnsPerGroup := numberOfColumns / numberOfCustodyGroups
+
+	return columnIndex / columnsPerGroup, nil
+}
+
+// ComputeSubnetForDataColumnSidecar computes the subnet for a data column sidecar.
+// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/p2p-interface.md#compute_subnet_for_data_column_sidecar
+func ComputeSubnetForDataColumnSidecar(columnIndex uint64) uint64 {
+	dataColumnSidecarSubnetCount := params.BeaconConfig().DataColumnSidecarSubnetCount
+	return columnIndex % dataColumnSidecarSubnetCount
 }
 
 // CustodyColumns computes the columns the node should custody.
-// https://github.com/ethereum/consensus-specs/blob/dev/specs/_features/eip7594/das-core.md#helper-functions
-func CustodyColumns(nodeId enode.ID, custodySubnetCount uint64) (map[uint64]bool, error) {
-	dataColumnSidecarSubnetCount := params.BeaconConfig().DataColumnSidecarSubnetCount
+func CustodyColumns(custodyGroups map[uint64]bool) (map[uint64]bool, error) {
+	numberOfCustodyGroups := params.BeaconConfig().NumberOfCustodyGroups
 
-	// Compute the custody subnets.
-	subnetIds, err := CustodyColumnSubnets(nodeId, custodySubnetCount)
-	if err != nil {
-		return nil, errors.Wrap(err, "custody subnets")
-	}
+	custodyGroupCount := len(custodyGroups)
 
-	columnsPerSubnet := fieldparams.NumberOfColumns / dataColumnSidecarSubnetCount
+	// Compute the columns for each custody group.
+	columns := make(map[uint64]bool, custodyGroupCount)
+	for group := range custodyGroups {
+		if group >= numberOfCustodyGroups {
+			return nil, errCustodyGroupCountTooLarge
+		}
 
-	// Knowing the subnet ID and the number of columns per subnet, select all the columns the node should custody.
-	// Columns belonging to the same subnet are contiguous.
-	columnIndices := make(map[uint64]bool, custodySubnetCount*columnsPerSubnet)
-	for i := uint64(0); i < columnsPerSubnet; i++ {
-		for subnetId := range subnetIds {
-			columnIndex := dataColumnSidecarSubnetCount*i + subnetId
-			columnIndices[columnIndex] = true
+		groupColumns, err := ComputeColumnsForCustodyGroup(group)
+		if err != nil {
+			return nil, errors.Wrap(err, "compute columns for custody group")
+		}
+
+		for _, column := range groupColumns {
+			columns[column] = true
 		}
 	}
 
-	return columnIndices, nil
+	return columns, nil
+}
+
+// DataColumnSubnets computes the subnets for the data columns.
+func DataColumnSubnets(dataColumns map[uint64]bool) map[uint64]bool {
+	subnets := make(map[uint64]bool, len(dataColumns))
+
+	for column := range dataColumns {
+		subnet := ComputeSubnetForDataColumnSidecar(column)
+		subnets[subnet] = true
+	}
+
+	return subnets
 }
 
 // DataColumnSidecars computes the data column sidecars from the signed block and blobs.
-// https://github.com/ethereum/consensus-specs/blob/dev/specs/_features/eip7594/das-core.md#recover_matrix
+// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/das-core.md#get_data_column_sidecars
 func DataColumnSidecars(signedBlock interfaces.ReadOnlySignedBeaconBlock, blobs []kzg.Blob) ([]*ethpb.DataColumnSidecar, error) {
 	startTime := time.Now()
 	blobsCount := len(blobs)
@@ -454,39 +517,22 @@ func VerifyDataColumnsSidecarKZGProofs(sidecars []blocks.RODataColumn) (bool, er
 	return verified, nil
 }
 
-// CustodySubnetCount returns the number of subnets the node should participate in for custody.
-func CustodySubnetCount() uint64 {
+// CustodyGroupCount returns the number of groups the node should participate in for custody.
+func CustodyGroupCount() uint64 {
 	if flags.Get().SubscribeToAllSubnets {
-		return params.BeaconConfig().DataColumnSidecarSubnetCount
+		return params.BeaconConfig().NumberOfCustodyGroups
 	}
 
 	return params.BeaconConfig().CustodyRequirement
 }
 
-// SubnetSamplingSize returns the number of subnets the node should sample from.
-// https://github.com/ethereum/consensus-specs/blob/dev/specs/_features/eip7594/das-core.md#subnet-sampling
-func SubnetSamplingSize() uint64 {
+// CustodyGroupSamplingSize returns the number of custody groups the node should sample from.
+// https://github.com/ethereum/consensus-specs/blob/v1.5.0-alpha.10/specs/fulu/das-core.md#custody-sampling
+func CustodyGroupSamplingSize() uint64 {
 	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
-	custodySubnetCount := CustodySubnetCount()
+	custodyGroupCount := CustodyGroupCount()
 
-	return max(samplesPerSlot, custodySubnetCount)
-}
-
-// CustodyColumnCount returns the number of columns the node should custody.
-func CustodyColumnCount() uint64 {
-	// Get the number of subnets.
-	dataColumnSidecarSubnetCount := params.BeaconConfig().DataColumnSidecarSubnetCount
-
-	// Compute the number of columns per subnet.
-	columnsPerSubnet := fieldparams.NumberOfColumns / dataColumnSidecarSubnetCount
-
-	// Get the number of subnets we custody
-	custodySubnetCount := CustodySubnetCount()
-
-	// Finally, compute the number of columns we should custody.
-	custodyColumnCount := custodySubnetCount * columnsPerSubnet
-
-	return custodyColumnCount
+	return max(samplesPerSlot, custodyGroupCount)
 }
 
 // HypergeomCDF computes the hypergeometric cumulative distribution function.
@@ -538,27 +584,27 @@ func ExtendedSampleCount(samplesPerSlot, allowedFailures uint64) uint64 {
 	return sampleCount
 }
 
-func CustodyCountFromRecord(record *enr.Record) (uint64, error) {
-	// By default, we assume the peer custodies the minimum number of subnets.
+// CustodyGroupCountFromRecord extracts the custody group count from an ENR record.
+func CustodyGroupCountFromRecord(record *enr.Record) (uint64, error) {
 	if record == nil {
 		return 0, errRecordNil
 	}
 
-	// Load the `custody_subnet_count`
-	var csc Csc
-	if err := record.Load(&csc); err != nil {
-		return 0, errCannotLoadCustodySubnetCount
+	// Load the `cgc`
+	var cgc Cgc
+	if cgc := record.Load(&cgc); cgc != nil {
+		return 0, errCannotLoadCustodyGroupCount
 	}
 
-	return uint64(csc), nil
+	return uint64(cgc), nil
 }
 
-func CanSelfReconstruct(numCol uint64) bool {
-	total := params.BeaconConfig().NumberOfColumns
-	// if total is odd, then we need total / 2 + 1 columns to reconstruct
-	// if total is even, then we need total / 2 columns to reconstruct
-	columnsNeeded := total/2 + total%2
-	return numCol >= columnsNeeded
+func CanSelfReconstruct(custodyGroupCount uint64) bool {
+	total := params.BeaconConfig().NumberOfCustodyGroups
+	// If total is odd, then we need total / 2 + 1 columns to reconstruct.
+	// If total is even, then we need total / 2 columns to reconstruct.
+	custodyGroupsNeeded := total/2 + total%2
+	return custodyGroupCount >= custodyGroupsNeeded
 }
 
 // RecoverCellsAndProofs recovers the cells and proofs from the data column sidecars.

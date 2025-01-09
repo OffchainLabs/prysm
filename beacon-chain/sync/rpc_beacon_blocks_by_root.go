@@ -285,11 +285,11 @@ func (s *Service) pendingBlobsRequestForBlock(root [32]byte, b interfaces.ReadOn
 	return blobIdentifiers, nil
 }
 
-// buildRequestsForMissingDataColumns looks at the data columns we should custody and have via subnet sampling
+// buildRequestsForMissingDataColumns looks at the data columns we should sample from and have via custody sampling
 // and that we don't actually store for a given block, and construct the corresponding data column sidecars by root requests.
 func (s *Service) buildRequestsForMissingDataColumns(root [32]byte, block interfaces.ReadOnlySignedBeaconBlock) (types.DataColumnSidecarsByRootReq, error) {
-	// Block before deneb has nor blobs neither data columns.
-	if block.Version() < version.Deneb {
+	// Blocks before Fulu have no data columns.
+	if block.Version() < version.Fulu {
 		return nil, nil
 	}
 
@@ -304,26 +304,35 @@ func (s *Service) buildRequestsForMissingDataColumns(root [32]byte, block interf
 		return nil, nil
 	}
 
-	// Retrieve the columns we store for the current root.
+	// Retrieve the columns we store for the root.
 	storedColumns, err := s.cfg.blobStorage.ColumnIndices(root)
 	if err != nil {
 		return nil, errors.Wrap(err, "column indices")
 	}
 
-	// Retrieve the columns we should custody.
+	// Get our node ID.
 	nodeID := s.cfg.p2p.NodeID()
-	custodySubnetCount := peerdas.SubnetSamplingSize()
 
-	custodyColumns, err := peerdas.CustodyColumns(nodeID, custodySubnetCount)
+	// Retrieve the number of groups we should sample from.
+	samplingGroupSize := peerdas.CustodyGroupSamplingSize()
+
+	// Retrieve the groups we should sample from.
+	samplingGroups, err := peerdas.CustodyGroups(nodeID, samplingGroupSize)
+	if err != nil {
+		return nil, errors.Wrap(err, "custody groups")
+	}
+
+	// Retrieve the columns we should sample from.
+	samplingColumns, err := peerdas.CustodyColumns(samplingGroups)
 	if err != nil {
 		return nil, errors.Wrap(err, "custody columns")
 	}
 
-	custodyColumnCount := len(custodyColumns)
+	samplingColumnCount := len(samplingColumns)
 
-	// Build the request for the we should custody and we don't actually store.
-	req := make(types.DataColumnSidecarsByRootReq, 0, custodyColumnCount)
-	for column := range custodyColumns {
+	// Build the request for the columns we should sample from and we don't actually store.
+	req := make(types.DataColumnSidecarsByRootReq, 0, samplingColumnCount)
+	for column := range samplingColumns {
 		isColumnStored := storedColumns[column]
 		if !isColumnStored {
 			req = append(req, &eth.DataColumnIdentifier{

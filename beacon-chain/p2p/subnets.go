@@ -30,9 +30,9 @@ var (
 	attestationSubnetCount = params.BeaconConfig().AttestationSubnetCount
 	syncCommsSubnetCount   = params.BeaconConfig().SyncCommitteeSubnetCount
 
-	attSubnetEnrKey          = params.BeaconNetworkConfig().AttSubnetKey
-	syncCommsSubnetEnrKey    = params.BeaconNetworkConfig().SyncCommsSubnetKey
-	custodySubnetCountEnrKey = params.BeaconNetworkConfig().CustodySubnetCountKey
+	attSubnetEnrKey         = params.BeaconNetworkConfig().AttSubnetKey
+	syncCommsSubnetEnrKey   = params.BeaconNetworkConfig().SyncCommsSubnetKey
+	custodyGroupCountEnrKey = params.BeaconNetworkConfig().CustodyGroupCountKey
 )
 
 // The value used with the subnet, in order
@@ -56,7 +56,7 @@ const blobSubnetLockerVal = 110
 // chosen more than sync, attestation and blob subnet (6) combined.
 const dataColumnSubnetVal = 150
 
-// nodeFilter return a function that filters nodes based on the subnet topic and subnet index.
+// nodeFilter returns a function that filters nodes based on the subnet topic and subnet index.
 func (s *Service) nodeFilter(topic string, index uint64) (func(node *enode.Node) bool, error) {
 	switch {
 	case strings.Contains(topic, GossipAttestationMessage):
@@ -346,24 +346,24 @@ func (s *Service) updateSubnetRecordWithMetadataV2(bitVAtt bitfield.Bitvector64,
 func (s *Service) updateSubnetRecordWithMetadataV3(
 	bitVAtt bitfield.Bitvector64,
 	bitVSync bitfield.Bitvector4,
-	custodySubnetCount uint64,
+	custodyGroupCount uint64,
 ) {
 	attSubnetsEntry := enr.WithEntry(attSubnetEnrKey, &bitVAtt)
 	syncSubnetsEntry := enr.WithEntry(syncCommsSubnetEnrKey, &bitVSync)
-	custodySubnetCountEntry := enr.WithEntry(custodySubnetCountEnrKey, custodySubnetCount)
+	custodyGroupCountEntry := enr.WithEntry(custodyGroupCountEnrKey, custodyGroupCount)
 
 	localNode := s.dv5Listener.LocalNode()
 	localNode.Set(attSubnetsEntry)
 	localNode.Set(syncSubnetsEntry)
-	localNode.Set(custodySubnetCountEntry)
+	localNode.Set(custodyGroupCountEntry)
 
 	newSeqNumber := s.metaData.SequenceNumber() + 1
 
 	s.metaData = wrapper.WrappedMetadataV2(&pb.MetaDataV2{
-		SeqNumber:          newSeqNumber,
-		Attnets:            bitVAtt,
-		Syncnets:           bitVSync,
-		CustodySubnetCount: custodySubnetCount,
+		SeqNumber:         newSeqNumber,
+		Attnets:           bitVAtt,
+		Syncnets:          bitVSync,
+		CustodyGroupCount: custodyGroupCount,
 	})
 }
 
@@ -381,7 +381,7 @@ func initializePersistentSubnets(id enode.ID, epoch primitives.Epoch) error {
 	return nil
 }
 
-// initializePersistentColumnSubnets initialize persisten column subnets
+// initializePersistentColumnSubnets initialize persistent column subnets
 func initializePersistentColumnSubnets(id enode.ID) error {
 	// Check if the column subnets are already cached.
 	_, ok, expTime := cache.ColumnSubnetIDs.GetColumnSubnets()
@@ -389,15 +389,25 @@ func initializePersistentColumnSubnets(id enode.ID) error {
 		return nil
 	}
 
-	// Retrieve the subnets we should be subscribed to.
-	subnetSamplingSize := peerdas.SubnetSamplingSize()
-	subnetsMap, err := peerdas.CustodyColumnSubnets(id, subnetSamplingSize)
+	// Compute the number of custody groups we should sample.
+	custodyGroupSamplingSize := peerdas.CustodyGroupSamplingSize()
+
+	// Compute the custody groups we should sample.
+	custodyGroups, err := peerdas.CustodyGroups(id, custodyGroupSamplingSize)
 	if err != nil {
-		return errors.Wrap(err, "custody column subnets")
+		return errors.Wrap(err, "custody groups")
 	}
 
-	subnets := make([]uint64, 0, len(subnetsMap))
-	for subnet := range subnetsMap {
+	// Compute the column subnets for the custody groups.
+	custodyColumns, err := peerdas.CustodyColumns(custodyGroups)
+	if err != nil {
+		return errors.Wrap(err, "custody columns")
+	}
+
+	// Compute subnets from the custody columns.
+	subnets := make([]uint64, 0, len(custodyColumns))
+	for column := range custodyColumns {
+		subnet := peerdas.ComputeSubnetForDataColumnSidecar(column)
 		subnets = append(subnets, subnet)
 	}
 
@@ -530,23 +540,29 @@ func syncSubnets(record *enr.Record) ([]uint64, error) {
 	return committeeIdxs, nil
 }
 
+// Retrieve the data columns subnets from a node's ENR and node ID.
+// TODO: Add tests
 func dataColumnSubnets(nodeID enode.ID, record *enr.Record) (map[uint64]bool, error) {
-	custodyRequirement := params.BeaconConfig().CustodyRequirement
-
 	// Retrieve the custody count from the ENR.
-	custodyCount, err := peerdas.CustodyCountFromRecord(record)
+	custodyGroupCount, err := peerdas.CustodyGroupCountFromRecord(record)
 	if err != nil {
-		// If we fail to retrieve the custody count, we default to the custody requirement.
-		custodyCount = custodyRequirement
+		return nil, errors.Wrap(err, "custody group count from record")
 	}
 
-	// Retrieve the custody subnets from the remote peer
-	custodyColumnsSubnets, err := peerdas.CustodyColumnSubnets(nodeID, custodyCount)
+	// Retrieve the custody groups from the remote peer.
+	custodyGroups, err := peerdas.CustodyGroups(nodeID, custodyGroupCount)
 	if err != nil {
-		return nil, errors.Wrap(err, "custody column subnets")
+		return nil, errors.Wrap(err, "custody groups")
 	}
 
-	return custodyColumnsSubnets, nil
+	// Retrieve the custody columns from the groups.
+	custodyColumns, err := peerdas.CustodyColumns(custodyGroups)
+	if err != nil {
+		return nil, errors.Wrap(err, "custody columns")
+	}
+
+	// Get custody columns subnets from the columns.
+	return peerdas.DataColumnSubnets(custodyColumns), nil
 }
 
 // Parses the attestation subnets ENR entry in a node and extracts its value

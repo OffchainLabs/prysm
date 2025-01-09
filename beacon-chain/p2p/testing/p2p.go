@@ -448,8 +448,8 @@ func (*TestP2P) InterceptUpgraded(network.Conn) (allow bool, reason control.Disc
 	return true, 0
 }
 
-func (s *TestP2P) DataColumnsCustodyCountFromRemotePeer(pid peer.ID) uint64 {
-	// By default, we assume the peer custodies the minimum number of subnets.
+func (s *TestP2P) CustodyGroupCountFromPeer(pid peer.ID) uint64 {
+	// By default, we assume the peer custodies the minimum number of groups.
 	custodyRequirement := params.BeaconConfig().CustodyRequirement
 
 	// Retrieve the ENR of the peer.
@@ -459,18 +459,18 @@ func (s *TestP2P) DataColumnsCustodyCountFromRemotePeer(pid peer.ID) uint64 {
 	}
 
 	// Retrieve the custody subnets count from the ENR.
-	custodyCount, err := peerdas.CustodyCountFromRecord(record)
+	custodyGroupCount, err := peerdas.CustodyGroupCountFromRecord(record)
 	if err != nil {
 		return custodyRequirement
 	}
 
-	return custodyCount
+	return custodyGroupCount
 }
 
-func (*TestP2P) DataColumnsAdmissibleCustodyPeers(peers []peer.ID) ([]peer.ID, error) {
+func (*TestP2P) AdmissibleCustodyGroupsPeers(peers []peer.ID) ([]peer.ID, error) {
 	return peers, nil
 }
 
-func (*TestP2P) DataColumnsAdmissibleSubnetSamplingPeers(peers []peer.ID) ([]peer.ID, error) {
+func (*TestP2P) AdmissibleCustodySamplingPeers(peers []peer.ID) ([]peer.ID, error) {
 	return peers, nil
 }

@@ -101,18 +101,18 @@ func (s *Service) metaDataHandler(_ context.Context, _ interface{}, stream libp2
 		case version.Phase0:
 			metadata = wrapper.WrappedMetadataV2(
 				&pb.MetaDataV2{
-					Attnets:            metadata.AttnetsBitfield(),
-					SeqNumber:          metadata.SequenceNumber(),
-					Syncnets:           bitfield.Bitvector4{byte(0x00)},
-					CustodySubnetCount: 0,
+					Attnets:           metadata.AttnetsBitfield(),
+					SeqNumber:         metadata.SequenceNumber(),
+					Syncnets:          bitfield.Bitvector4{byte(0x00)},
+					CustodyGroupCount: 0,
 				})
 		case version.Altair:
 			metadata = wrapper.WrappedMetadataV2(
 				&pb.MetaDataV2{
-					Attnets:            metadata.AttnetsBitfield(),
-					SeqNumber:          metadata.SequenceNumber(),
-					Syncnets:           metadata.SyncnetsBitfield(),
-					CustodySubnetCount: 0,
+					Attnets:           metadata.AttnetsBitfield(),
+					SeqNumber:         metadata.SequenceNumber(),
+					Syncnets:          metadata.SyncnetsBitfield(),
+					CustodyGroupCount: 0,
 				})
 		}
 	}

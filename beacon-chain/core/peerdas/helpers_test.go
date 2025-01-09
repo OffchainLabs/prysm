@@ -234,7 +234,7 @@ func TestDataColumnsSidecarsBlobsRoundtrip(t *testing.T) {
 	require.DeepSSZEqual(t, verifiedROBlobs, roundtripBlobs)
 }
 
-func TestCustodySubnetCount(t *testing.T) {
+func TestCustodyGroupCount(t *testing.T) {
 	testCases := []struct {
 		name                  string
 		subscribeToAllSubnets bool
@@ -266,23 +266,10 @@ func TestCustodySubnetCount(t *testing.T) {
 			flags.Init(gFlags)
 
 			// Get the custody subnet count.
-			actual := peerdas.CustodySubnetCount()
+			actual := peerdas.CustodyGroupCount()
 			require.Equal(t, tc.expected, actual)
 		})
 	}
-}
-
-func TestCustodyColumnCount(t *testing.T) {
-	const expected uint64 = 8
-
-	params.SetupTestConfigCleanup(t)
-	config := params.BeaconConfig().Copy()
-	config.DataColumnSidecarSubnetCount = 32
-	config.CustodyRequirement = 2
-	params.OverrideBeaconConfig(config)
-
-	actual := peerdas.CustodyColumnCount()
-	require.Equal(t, expected, actual)
 }
 
 func TestHypergeomCDF(t *testing.T) {
@@ -337,48 +324,48 @@ func TestExtendedSampleCount(t *testing.T) {
 	}
 }
 
-func TestCustodyCountFromRecord(t *testing.T) {
+func TestCustodyGroupCountFromRecord(t *testing.T) {
 	const expected uint64 = 7
 
 	// Create an Ethereum record.
 	record := &enr.Record{}
-	record.Set(peerdas.Csc(expected))
+	record.Set(peerdas.Cgc(expected))
 
-	actual, err := peerdas.CustodyCountFromRecord(record)
+	actual, err := peerdas.CustodyGroupCountFromRecord(record)
 	require.NoError(t, err)
 	require.Equal(t, expected, actual)
 }
 
 func TestCanSelfReconstruct(t *testing.T) {
 	testCases := []struct {
-		name                   string
-		totalNumberOfColumns   uint64
-		custodyNumberOfColumns uint64
-		expected               bool
+		name                       string
+		totalNumberOfCustodyGroups uint64
+		custodyNumberOfGroups      uint64
+		expected                   bool
 	}{
 		{
-			name:                   "totalNumberOfColumns=64, custodyNumberOfColumns=31",
-			totalNumberOfColumns:   64,
-			custodyNumberOfColumns: 31,
-			expected:               false,
+			name:                       "totalNumberOfCustodyGroups=64, custodyNumberOfGroups=31",
+			totalNumberOfCustodyGroups: 64,
+			custodyNumberOfGroups:      31,
+			expected:                   false,
 		},
 		{
-			name:                   "totalNumberOfColumns=64, custodyNumberOfColumns=32",
-			totalNumberOfColumns:   64,
-			custodyNumberOfColumns: 32,
-			expected:               true,
+			name:                       "totalNumberOfCustodyGroups=64, custodyNumberOfGroups=32",
+			totalNumberOfCustodyGroups: 64,
+			custodyNumberOfGroups:      32,
+			expected:                   true,
 		},
 		{
-			name:                   "totalNumberOfColumns=65, custodyNumberOfColumns=32",
-			totalNumberOfColumns:   65,
-			custodyNumberOfColumns: 32,
-			expected:               false,
+			name:                       "totalNumberOfCustodyGroups=65, custodyNumberOfGroups=32",
+			totalNumberOfCustodyGroups: 65,
+			custodyNumberOfGroups:      32,
+			expected:                   false,
 		},
 		{
-			name:                   "totalNumberOfColumns=63, custodyNumberOfColumns=33",
-			totalNumberOfColumns:   65,
-			custodyNumberOfColumns: 33,
-			expected:               true,
+			name:                       "totalNumberOfCustodyGroups=63, custodyNumberOfGroups=33",
+			totalNumberOfCustodyGroups: 65,
+			custodyNumberOfGroups:      33,
+			expected:                   true,
 		},
 	}
 
@@ -387,11 +374,11 @@ func TestCanSelfReconstruct(t *testing.T) {
 			// Set the total number of columns.
 			params.SetupTestConfigCleanup(t)
 			cfg := params.BeaconConfig().Copy()
-			cfg.NumberOfColumns = tc.totalNumberOfColumns
+			cfg.NumberOfCustodyGroups = tc.totalNumberOfCustodyGroups
 			params.OverrideBeaconConfig(cfg)
 
 			// Check if reconstuction is possible.
-			actual := peerdas.CanSelfReconstruct(tc.custodyNumberOfColumns)
+			actual := peerdas.CanSelfReconstruct(tc.custodyNumberOfGroups)
 			require.Equal(t, tc.expected, actual)
 		})
 	}

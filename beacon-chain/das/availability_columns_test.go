@@ -31,9 +31,9 @@ func TestFullCommitmentsToCheck(t *testing.T) {
 		err     error
 	}{
 		{
-			name: "pre deneb",
+			name: "pre fulu",
 			block: func(t *testing.T) blocks.ROBlock {
-				bb := util.NewBeaconBlockBellatrix()
+				bb := util.NewBeaconBlockElectra()
 				sb, err := blocks.NewSignedBeaconBlock(bb)
 				require.NoError(t, err)
 				rb, err := blocks.NewROBlock(sb)
@@ -44,7 +44,7 @@ func TestFullCommitmentsToCheck(t *testing.T) {
 		{
 			name: "commitments within da",
 			block: func(t *testing.T) blocks.ROBlock {
-				d := util.NewBeaconBlockDeneb()
+				d := util.NewBeaconBlockFulu()
 				d.Block.Body.BlobKzgCommitments = commits
 				d.Block.Slot = 100
 				sb, err := blocks.NewSignedBeaconBlock(d)
@@ -59,7 +59,7 @@ func TestFullCommitmentsToCheck(t *testing.T) {
 		{
 			name: "commitments outside da",
 			block: func(t *testing.T) blocks.ROBlock {
-				d := util.NewBeaconBlockDeneb()
+				d := util.NewBeaconBlockElectra()
 				// block is from slot 0, "current slot" is window size +1 (so outside the window)
 				d.Block.Body.BlobKzgCommitments = commits
 				sb, err := blocks.NewSignedBeaconBlock(d)

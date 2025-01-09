@@ -91,14 +91,25 @@ func (s *Service) dataColumnSidecarsByRangeRPCHandler(ctx context.Context, msg i
 		return errors.New("message is not type *pb.DataColumnSidecarsByRangeRequest")
 	}
 
-	// Compute custody columns.
+	// Get our node ID.
 	nodeID := s.cfg.p2p.NodeID()
 	numberOfColumns := params.BeaconConfig().NumberOfColumns
-	custodySubnetCount := peerdas.CustodySubnetCount()
-	custodyColumns, err := peerdas.CustodyColumns(nodeID, custodySubnetCount)
+
+	// Get the number of groups we should custody.
+	custodyGroupCount := peerdas.CustodyGroupCount()
+
+	// Compute the groups we should custody.
+	custodyGroups, err := peerdas.CustodyGroups(nodeID, custodyGroupCount)
 	if err != nil {
 		s.writeErrorResponseToStream(responseCodeServerError, err.Error(), stream)
-		return err
+		return errors.Wrap(err, "custody groups")
+	}
+
+	// Compute the columns we should custody.
+	custodyColumns, err := peerdas.CustodyColumns(custodyGroups)
+	if err != nil {
+		s.writeErrorResponseToStream(responseCodeServerError, err.Error(), stream)
+		return errors.Wrap(err, "custody columns")
 	}
 
 	custodyColumnsCount := uint64(len(custodyColumns))

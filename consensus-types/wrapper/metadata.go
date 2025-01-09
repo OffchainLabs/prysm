@@ -36,8 +36,8 @@ func (m MetadataV0) SyncnetsBitfield() bitfield.Bitvector4 {
 	return bitfield.Bitvector4{0}
 }
 
-// CustodySubnetCount returns custody subnet count from the metadata.
-func (m MetadataV0) CustodySubnetCount() uint64 {
+// CustodyGroupCount returns custody subnet count from the metadata.
+func (m MetadataV0) CustodyGroupCount() uint64 {
 	return 0
 }
 
@@ -130,8 +130,8 @@ func (m MetadataV1) SyncnetsBitfield() bitfield.Bitvector4 {
 	return m.md.Syncnets
 }
 
-// CustodySubnetCount returns custody subnet count from the metadata.
-func (m MetadataV1) CustodySubnetCount() uint64 {
+// CustodyGroupCount returns custody subnet count from the metadata.
+func (m MetadataV1) CustodyGroupCount() uint64 {
 	return 0
 }
 
@@ -224,9 +224,9 @@ func (m MetadataV2) SyncnetsBitfield() bitfield.Bitvector4 {
 	return m.md.Syncnets
 }
 
-// CustodySubnetCount returns custody subnet count from the metadata.
-func (m MetadataV2) CustodySubnetCount() uint64 {
-	return m.md.CustodySubnetCount
+// CustodyGroupCount returns custody subnet count from the metadata.
+func (m MetadataV2) CustodyGroupCount() uint64 {
+	return m.md.CustodyGroupCount
 }
 
 // InnerObject returns the underlying metadata protobuf structure.

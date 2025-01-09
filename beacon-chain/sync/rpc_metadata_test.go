@@ -92,9 +92,9 @@ func createService(peer p2p.P2P, chain *mock.ChainService) *Service {
 
 func TestMetadataRPCHandler_SendMetadataRequest(t *testing.T) {
 	const (
-		requestTimeout     = 1 * time.Second
-		seqNumber          = 2
-		custodySubnetCount = 4
+		requestTimeout    = 1 * time.Second
+		seqNumber         = 2
+		custodyGroupCount = 4
 	)
 
 	attnets := []byte{'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'}
@@ -152,10 +152,10 @@ func TestMetadataRPCHandler_SendMetadataRequest(t *testing.T) {
 			epochsSinceGenesisPeer1: 0,
 			epochsSinceGenesisPeer2: 15,
 			metadataPeer2: wrapper.WrappedMetadataV2(&pb.MetaDataV2{
-				SeqNumber:          seqNumber,
-				Attnets:            attnets,
-				Syncnets:           syncnets,
-				CustodySubnetCount: custodySubnetCount,
+				SeqNumber:         seqNumber,
+				Attnets:           attnets,
+				Syncnets:          syncnets,
+				CustodyGroupCount: custodyGroupCount,
 			}),
 			expected: wrapper.WrappedMetadataV0(&pb.MetaDataV0{
 				SeqNumber: seqNumber,
@@ -199,10 +199,10 @@ func TestMetadataRPCHandler_SendMetadataRequest(t *testing.T) {
 			epochsSinceGenesisPeer1: 5,
 			epochsSinceGenesisPeer2: 15,
 			metadataPeer2: wrapper.WrappedMetadataV2(&pb.MetaDataV2{
-				SeqNumber:          seqNumber,
-				Attnets:            attnets,
-				Syncnets:           syncnets,
-				CustodySubnetCount: custodySubnetCount,
+				SeqNumber:         seqNumber,
+				Attnets:           attnets,
+				Syncnets:          syncnets,
+				CustodyGroupCount: custodyGroupCount,
 			}),
 			expected: wrapper.WrappedMetadataV1(&pb.MetaDataV1{
 				SeqNumber: seqNumber,
@@ -220,10 +220,10 @@ func TestMetadataRPCHandler_SendMetadataRequest(t *testing.T) {
 				Attnets:   attnets,
 			}),
 			expected: wrapper.WrappedMetadataV2(&pb.MetaDataV2{
-				SeqNumber:          seqNumber,
-				Attnets:            attnets,
-				Syncnets:           bitfield.Bitvector4{byte(0x00)},
-				CustodySubnetCount: 0,
+				SeqNumber:         seqNumber,
+				Attnets:           attnets,
+				Syncnets:          bitfield.Bitvector4{byte(0x00)},
+				CustodyGroupCount: 0,
 			}),
 		},
 		{
@@ -237,10 +237,10 @@ func TestMetadataRPCHandler_SendMetadataRequest(t *testing.T) {
 				Syncnets:  syncnets,
 			}),
 			expected: wrapper.WrappedMetadataV2(&pb.MetaDataV2{
-				SeqNumber:          seqNumber,
-				Attnets:            attnets,
-				Syncnets:           syncnets,
-				CustodySubnetCount: 0,
+				SeqNumber:         seqNumber,
+				Attnets:           attnets,
+				Syncnets:          syncnets,
+				CustodyGroupCount: 0,
 			}),
 		},
 		{
@@ -249,16 +249,16 @@ func TestMetadataRPCHandler_SendMetadataRequest(t *testing.T) {
 			epochsSinceGenesisPeer1: 15,
 			epochsSinceGenesisPeer2: 15,
 			metadataPeer2: wrapper.WrappedMetadataV2(&pb.MetaDataV2{
-				SeqNumber:          seqNumber,
-				Attnets:            attnets,
-				Syncnets:           syncnets,
-				CustodySubnetCount: custodySubnetCount,
+				SeqNumber:         seqNumber,
+				Attnets:           attnets,
+				Syncnets:          syncnets,
+				CustodyGroupCount: custodyGroupCount,
 			}),
 			expected: wrapper.WrappedMetadataV2(&pb.MetaDataV2{
-				SeqNumber:          seqNumber,
-				Attnets:            attnets,
-				Syncnets:           syncnets,
-				CustodySubnetCount: custodySubnetCount,
+				SeqNumber:         seqNumber,
+				Attnets:           attnets,
+				Syncnets:          syncnets,
+				CustodyGroupCount: custodyGroupCount,
 			}),
 		},
 	}

@@ -764,11 +764,17 @@ func (f *blocksFetcher) custodyColumns() (map[uint64]bool, error) {
 	// Retrieve our node ID.
 	localNodeID := f.p2p.NodeID()
 
-	// Retrieve the number of colums subnets we should custody.
-	localCustodySubnetCount := peerdas.CustodySubnetCount()
+	// Retrieve the number of groups we should custody.
+	localCustodyGroupCount := peerdas.CustodyGroupCount()
 
-	// Retrieve the columns we should custody.
-	localCustodyColumns, err := peerdas.CustodyColumns(localNodeID, localCustodySubnetCount)
+	// Compute the groups we should custody.
+	localCustodyGroups, err := peerdas.CustodyGroups(localNodeID, localCustodyGroupCount)
+	if err != nil {
+		return nil, errors.Wrap(err, "custody groups")
+	}
+
+	// Compute the columns we should custody.
+	localCustodyColumns, err := peerdas.CustodyColumns(localCustodyGroups)
 	if err != nil {
 		return nil, errors.Wrap(err, "custody columns")
 	}
@@ -1112,7 +1118,7 @@ func (f *blocksFetcher) waitForPeersForDataColumns(
 	}
 
 	// Get the peers that are admissible for the data columns.
-	dataColumnsByAdmissiblePeer, admissiblePeersByDataColumn, descriptions, err := f.admissiblePeersForDataColumn(peers, lastSlot, neededDataColumns, blockCount)
+	dataColumnsByAdmissiblePeer, admissiblePeersByDataColumn, descriptions, err := f.admissiblePeersForCustodyGroup(peers, lastSlot, neededDataColumns, blockCount)
 	if err != nil {
 		return nil, errors.Wrap(err, "peers with slot and data columns")
 	}
@@ -1165,7 +1171,7 @@ func (f *blocksFetcher) waitForPeersForDataColumns(
 
 		time.Sleep(delay)
 
-		dataColumnsByAdmissiblePeer, admissiblePeersByDataColumn, descriptions, err = f.admissiblePeersForDataColumn(peers, lastSlot, neededDataColumns, blockCount)
+		dataColumnsByAdmissiblePeer, admissiblePeersByDataColumn, descriptions, err = f.admissiblePeersForCustodyGroup(peers, lastSlot, neededDataColumns, blockCount)
 		if err != nil {
 			return nil, errors.Wrap(err, "peers with slot and data columns")
 		}

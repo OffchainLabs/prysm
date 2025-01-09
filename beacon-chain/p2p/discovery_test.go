@@ -242,10 +242,10 @@ func TestCreateLocalNode(t *testing.T) {
 			require.NoError(t, localNode.Node().Record().Load(enr.WithEntry(syncCommsSubnetEnrKey, syncSubnets)))
 			require.DeepSSZEqual(t, []byte{0}, *syncSubnets)
 
-			// Check custody_subnet_count config.
-			custodySubnetCount := new(uint64)
-			require.NoError(t, localNode.Node().Record().Load(enr.WithEntry(peerdas.CustodySubnetCountEnrKey, custodySubnetCount)))
-			require.Equal(t, params.BeaconConfig().CustodyRequirement, *custodySubnetCount)
+			// Check cgc config.
+			custodyGroupCount := new(uint64)
+			require.NoError(t, localNode.Node().Record().Load(enr.WithEntry(peerdas.CustodyGroupCountEnrKey, custodyGroupCount)))
+			require.Equal(t, params.BeaconConfig().CustodyRequirement, *custodyGroupCount)
 		})
 	}
 }
@@ -545,7 +545,7 @@ type check struct {
 	metadataSequenceNumber uint64
 	attestationSubnets     []uint64
 	syncSubnets            []uint64
-	custodySubnetCount     *uint64
+	custodyGroupCount      *uint64
 }
 
 func checkPingCountCacheMetadataRecord(
@@ -612,16 +612,16 @@ func checkPingCountCacheMetadataRecord(
 		require.DeepSSZEqual(t, expectedBitS, actualBitSMetadata)
 	}
 
-	if expected.custodySubnetCount != nil {
+	if expected.custodyGroupCount != nil {
 		// Check custody subnet count in ENR.
-		var actualCustodySubnetCount uint64
-		err := service.dv5Listener.LocalNode().Node().Record().Load(enr.WithEntry(peerdas.CustodySubnetCountEnrKey, &actualCustodySubnetCount))
+		var actualCustodyGroupCount uint64
+		err := service.dv5Listener.LocalNode().Node().Record().Load(enr.WithEntry(peerdas.CustodyGroupCountEnrKey, &actualCustodyGroupCount))
 		require.NoError(t, err)
-		require.Equal(t, *expected.custodySubnetCount, actualCustodySubnetCount)
+		require.Equal(t, *expected.custodyGroupCount, actualCustodyGroupCount)
 
 		// Check custody subnet count in metadata.
-		actualCustodySubnetCountMetadata := service.metaData.CustodySubnetCount()
-		require.Equal(t, *expected.custodySubnetCount, actualCustodySubnetCountMetadata)
+		actualGroupCountMetadata := service.metaData.CustodyGroupCount()
+		require.Equal(t, *expected.custodyGroupCount, actualGroupCountMetadata)
 	}
 }
 
@@ -637,7 +637,7 @@ func TestRefreshPersistentSubnets(t *testing.T) {
 		fuluForkEpoch   = 10
 	)
 
-	custodySubnetCount := params.BeaconConfig().CustodyRequirement
+	custodyGroupCount := params.BeaconConfig().CustodyRequirement
 
 	// Set up epochs.
 	defaultCfg := params.BeaconConfig()
@@ -727,21 +727,21 @@ func TestRefreshPersistentSubnets(t *testing.T) {
 					metadataSequenceNumber: 1,
 					attestationSubnets:     []uint64{40, 41},
 					syncSubnets:            nil,
-					custodySubnetCount:     &custodySubnetCount,
+					custodyGroupCount:      &custodyGroupCount,
 				},
 				{
 					pingCount:              2,
 					metadataSequenceNumber: 2,
 					attestationSubnets:     []uint64{40, 41},
 					syncSubnets:            []uint64{1, 2},
-					custodySubnetCount:     &custodySubnetCount,
+					custodyGroupCount:      &custodyGroupCount,
 				},
 				{
 					pingCount:              2,
 					metadataSequenceNumber: 2,
 					attestationSubnets:     []uint64{40, 41},
 					syncSubnets:            []uint64{1, 2},
-					custodySubnetCount:     &custodySubnetCount,
+					custodyGroupCount:      &custodyGroupCount,
 				},
 			},
 		},

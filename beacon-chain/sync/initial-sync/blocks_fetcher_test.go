@@ -1378,7 +1378,7 @@ type (
 
 	peerParams struct {
 		// Custody subnet count
-		csc uint64
+		cgc uint64
 
 		// key: RPCDataColumnSidecarsByRangeTopicV1 stringified
 		// value: The list of all slotxindex to respond by request number
@@ -1462,7 +1462,7 @@ func createAndConnectPeer(
 
 	// Create the record and set the custody count.
 	enr := &enr.Record{}
-	enr.Set(peerdas.Csc(peerParams.csc))
+	enr.Set(peerdas.Cgc(peerParams.cgc))
 
 	// Add the peer and connect it.
 	p2pService.Peers().Add(enr, peer.PeerID(), nil, network.DirOutbound)
@@ -1831,11 +1831,11 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 			},
 			peersParams: []peerParams{
 				{
-					csc:       0,
+					cgc:       0,
 					toRespond: map[string][][]responseParams{},
 				},
 				{
-					csc: 128,
+					cgc: 128,
 					toRespond: map[string][][]responseParams{
 						(&ethpb.DataColumnSidecarsByRangeRequest{
 							StartSlot: 33,
@@ -1864,7 +1864,7 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 					},
 				},
 				{
-					csc: 128,
+					cgc: 128,
 					toRespond: map[string][][]responseParams{
 						(&ethpb.DataColumnSidecarsByRangeRequest{
 							StartSlot: 33,
@@ -1926,7 +1926,7 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 			},
 			peersParams: []peerParams{
 				{
-					csc: 128,
+					cgc: 128,
 					toRespond: map[string][][]responseParams{
 						(&ethpb.DataColumnSidecarsByRangeRequest{
 							StartSlot: 33,
@@ -1971,7 +1971,7 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 			storedDataColumns: []map[int]bool{{38: true, 102: true}},
 			peersParams: []peerParams{
 				{
-					csc: 128,
+					cgc: 128,
 					toRespond: map[string][][]responseParams{
 						(&ethpb.DataColumnSidecarsByRangeRequest{
 							StartSlot: 38,
@@ -2002,7 +2002,7 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 			storedDataColumns: []map[int]bool{{38: true, 102: true}},
 			peersParams: []peerParams{
 				{
-					csc: 128,
+					cgc: 128,
 					toRespond: map[string][][]responseParams{
 						(&ethpb.DataColumnSidecarsByRangeRequest{
 							StartSlot: 38,
@@ -2030,7 +2030,7 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 			storedDataColumns: []map[int]bool{{38: true, 102: true}},
 			peersParams: []peerParams{
 				{
-					csc: 128,
+					cgc: 128,
 					toRespond: map[string][][]responseParams{
 						(&ethpb.DataColumnSidecarsByRangeRequest{
 							StartSlot: 38,
@@ -2059,7 +2059,7 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 			},
 			peersParams: []peerParams{
 				{
-					csc: 128,
+					cgc: 128,
 					toRespond: map[string][][]responseParams{
 						(&ethpb.DataColumnSidecarsByRangeRequest{
 							StartSlot: 32,
