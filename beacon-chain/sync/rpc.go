@@ -47,8 +47,8 @@ func (s *Service) rpcHandlerByTopicFromFork(forkIndex int) (map[string]rpcHandle
 			p2p.RPCBlocksByRootTopicV2:        s.beaconBlocksRootRPCHandler,
 			p2p.RPCPingTopicV1:                s.pingHandler,
 			p2p.RPCMetaDataTopicV2:            s.metaDataHandler,
-			p2p.RPCBlobSidecarsByRootTopicV2:  s.blobSidecarByRootRPCHandler,   // Modified in Electra
-			p2p.RPCBlobSidecarsByRangeTopicV2: s.blobSidecarsByRangeRPCHandler, // Modified in Electra
+			p2p.RPCBlobSidecarsByRootTopicV1:  s.blobSidecarByRootRPCHandler,   // Modified in Electra
+			p2p.RPCBlobSidecarsByRangeTopicV1: s.blobSidecarsByRangeRPCHandler, // Modified in Electra
 		}, nil
 	}
 
