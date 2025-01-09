@@ -108,7 +108,7 @@ func (s *Service) metaDataHandler(_ context.Context, _ interface{}, stream libp2
 		return errors.Wrap(err, "encode metadata")
 	}
 
-	closeStream(stream, log)
+	closeStreamAndWait(stream, log)
 	return nil
 }
 
@@ -134,7 +134,7 @@ func (s *Service) sendMetaDataRequest(ctx context.Context, peerID peer.ID) (meta
 		return nil, errors.Wrap(err, "send metadata request")
 	}
 
-	defer closeStream(stream, log)
+	defer closeStreamAndWait(stream, log)
 
 	// Read the METADATA response from the peer.
 	code, errMsg, err := ReadStatusCode(stream, s.cfg.p2p.Encoding())

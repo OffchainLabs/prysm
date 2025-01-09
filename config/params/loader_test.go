@@ -24,25 +24,20 @@ import (
 // These are variables that we don't use in Prysm. (i.e. future hardfork, light client... etc)
 // IMPORTANT: Use one field per line and sort these alphabetically to reduce conflicts.
 var placeholderFields = []string{
-	"BLOB_SIDECAR_SUBNET_COUNT_EIP7594",
+	"BLOB_SIDECAR_SUBNET_COUNT_FULU",
 	"BYTES_PER_LOGS_BLOOM", // Compile time constant on ExecutionPayload.logs_bloom.
 	"EIP6110_FORK_EPOCH",
 	"EIP6110_FORK_VERSION",
 	"EIP7002_FORK_EPOCH",
 	"EIP7002_FORK_VERSION",
-	"EIP7594_FORK_VERSION",
 	"EIP7732_FORK_EPOCH",
 	"EIP7732_FORK_VERSION",
-	"FIELD_ELEMENTS_PER_BLOB", // Compile time constant.
-	"FULU_FORK_EPOCH",
-	"FULU_FORK_VERSION",
+	"FIELD_ELEMENTS_PER_BLOB",              // Compile time constant.
 	"KZG_COMMITMENT_INCLUSION_PROOF_DEPTH", // Compile time constant on BlobSidecar.commitment_inclusion_proof.
-	"MAX_BLOBS_PER_BLOCK_EIP7594",
 	"MAX_BLOBS_PER_BLOCK_FULU",
 	"MAX_BLOB_COMMITMENTS_PER_BLOCK", // Compile time constant on BeaconBlockBodyDeneb.blob_kzg_commitments.
 	"MAX_BYTES_PER_TRANSACTION",      // Used for ssz of EL transactions. Unused in Prysm.
 	"MAX_EXTRA_DATA_BYTES",           // Compile time constant on ExecutionPayload.extra_data.
-	"MAX_REQUEST_BLOB_SIDECARS_EIP7594",
 	"MAX_REQUEST_BLOB_SIDECARS_FULU",
 	"MAX_REQUEST_PAYLOADS",         // Compile time constant on BeaconBlockBody.ExecutionRequests
 	"MAX_TRANSACTIONS_PER_PAYLOAD", // Compile time constant on ExecutionPayload.transactions.
@@ -157,6 +152,7 @@ func assertEqualConfigs(t *testing.T, name string, fields []string, expected, ac
 	assert.Equal(t, expected.CapellaForkEpoch, actual.CapellaForkEpoch, "%s: CapellaForkEpoch", name)
 	assert.Equal(t, expected.DenebForkEpoch, actual.DenebForkEpoch, "%s: DenebForkEpoch", name)
 	assert.Equal(t, expected.ElectraForkEpoch, actual.ElectraForkEpoch, "%s: ElectraForkEpoch", name)
+	assert.Equal(t, expected.FuluForkEpoch, actual.FuluForkEpoch, "%s: FuluForkEpoch", name)
 	assert.Equal(t, expected.SqrRootSlotsPerEpoch, actual.SqrRootSlotsPerEpoch, "%s: SqrRootSlotsPerEpoch", name)
 	assert.DeepEqual(t, expected.GenesisForkVersion, actual.GenesisForkVersion, "%s: GenesisForkVersion", name)
 	assert.DeepEqual(t, expected.AltairForkVersion, actual.AltairForkVersion, "%s: AltairForkVersion", name)
@@ -164,6 +160,7 @@ func assertEqualConfigs(t *testing.T, name string, fields []string, expected, ac
 	assert.DeepEqual(t, expected.CapellaForkVersion, actual.CapellaForkVersion, "%s: CapellaForkVersion", name)
 	assert.DeepEqual(t, expected.DenebForkVersion, actual.DenebForkVersion, "%s: DenebForkVersion", name)
 	assert.DeepEqual(t, expected.ElectraForkVersion, actual.ElectraForkVersion, "%s: ElectraForkVersion", name)
+	assert.DeepEqual(t, expected.FuluForkVersion, actual.FuluForkVersion, "%s: FuluForkVersion", name)
 
 	assertYamlFieldsMatch(t, name, fields, expected, actual)
 }

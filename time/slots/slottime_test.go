@@ -635,6 +635,19 @@ func TestSecondsUntilNextEpochStart(t *testing.T) {
 }
 
 func TestToForkVersion(t *testing.T) {
+	t.Run("Fulu fork version", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		config := params.BeaconConfig()
+		config.FuluForkEpoch = 100
+		params.OverrideBeaconConfig(config)
+
+		slot, err := EpochStart(params.BeaconConfig().FuluForkEpoch)
+		require.NoError(t, err)
+
+		result := ToForkVersion(slot)
+		require.Equal(t, version.Fulu, result)
+	})
+
 	t.Run("Electra fork version", func(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
 		config := params.BeaconConfig()

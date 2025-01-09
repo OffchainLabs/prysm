@@ -176,8 +176,17 @@ ssz_electra_objs = [
 ]
 
 ssz_fulu_objs = [
+    "BeaconBlockBodyFulu",
+    "BeaconBlockContentsFulu",
+    "BeaconBlockFulu",
+    "BeaconStateFulu",
+    "BlindedBeaconBlockBodyFulu",
+    "BlindedBeaconBlockFulu",
     "DataColumnIdentifier",
     "DataColumnSidecar",
+    "SignedBeaconBlockContentsFulu",
+    "SignedBeaconBlockFulu",
+    "SignedBlindedBeaconBlockFulu"
 ]
 
 ssz_gen_marshal(

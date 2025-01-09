@@ -665,6 +665,20 @@ func TestProcessSlots_ThroughElectraEpoch(t *testing.T) {
 	require.Equal(t, params.BeaconConfig().SlotsPerEpoch*10, st.Slot())
 }
 
+func TestProcessSlots_ThroughFuluEpoch(t *testing.T) {
+	transition.SkipSlotCache.Disable()
+	params.SetupTestConfigCleanup(t)
+	conf := params.BeaconConfig()
+	conf.FuluForkEpoch = 5
+	params.OverrideBeaconConfig(conf)
+
+	st, _ := util.DeterministicGenesisStateElectra(t, params.BeaconConfig().MaxValidatorsPerCommittee)
+	st, err := transition.ProcessSlots(context.Background(), st, params.BeaconConfig().SlotsPerEpoch*10)
+	require.NoError(t, err)
+	require.Equal(t, version.Fulu, st.Version())
+	require.Equal(t, params.BeaconConfig().SlotsPerEpoch*10, st.Slot())
+}
+
 func TestProcessSlotsUsingNextSlotCache(t *testing.T) {
 	s, _ := util.DeterministicGenesisState(t, 1)
 	r := []byte{'a'}

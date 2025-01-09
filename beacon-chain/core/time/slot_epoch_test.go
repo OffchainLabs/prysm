@@ -288,6 +288,11 @@ func TestCanUpgradeTo(t *testing.T) {
 			forkEpoch:   &beaconConfig.ElectraForkEpoch,
 			upgradeFunc: time.CanUpgradeToElectra,
 		},
+		{
+			name:        "Fulu",
+			forkEpoch:   &beaconConfig.FuluForkEpoch,
+			upgradeFunc: time.CanUpgradeToFulu,
+		},
 	}
 
 	for _, otc := range outerTestCases {
