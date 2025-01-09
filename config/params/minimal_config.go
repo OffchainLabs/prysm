@@ -85,7 +85,6 @@ func MinimalSpecConfig() *BeaconChainConfig {
 	minimalConfig.FarFutureEpoch = math.MaxUint64
 	minimalConfig.FarFutureSlot = math.MaxUint64
 
-	// New Altair params
 	minimalConfig.AltairForkVersion = []byte{1, 0, 0, 1} // Highest byte set to 0x01 to avoid collisions with mainnet versioning
 	minimalConfig.AltairForkEpoch = math.MaxUint64
 	minimalConfig.BellatrixForkVersion = []byte{2, 0, 0, 1}
@@ -96,6 +95,8 @@ func MinimalSpecConfig() *BeaconChainConfig {
 	minimalConfig.DenebForkEpoch = math.MaxUint64
 	minimalConfig.ElectraForkVersion = []byte{5, 0, 0, 1}
 	minimalConfig.ElectraForkEpoch = math.MaxUint64
+	minimalConfig.FuluForkVersion = []byte{6, 0, 0, 1}
+	minimalConfig.FuluForkEpoch = math.MaxUint64
 
 	minimalConfig.SyncCommitteeSize = 32
 	minimalConfig.InactivityScoreBias = 4

@@ -81,8 +81,7 @@ func ProcessEpoch(ctx context.Context, state state.BeaconState) error {
 	if err := ProcessRegistryUpdates(ctx, state); err != nil {
 		return errors.Wrap(err, "could not process registry updates")
 	}
-	state, err = ProcessSlashings(state)
-	if err != nil {
+	if err := ProcessSlashings(state); err != nil {
 		return err
 	}
 	state, err = ProcessEth1DataReset(state)
