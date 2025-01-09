@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -227,11 +228,11 @@ func (s *Service) processLightClientFinalityUpdate(
 	attestedRoot := signed.Block().ParentRoot()
 	attestedBlock, err := s.cfg.BeaconDB.Block(ctx, attestedRoot)
 	if err != nil {
-		return errors.Wrap(err, "could not get attested block")
+		return errors.Wrapf(err, "could not get attested block for root %#x", attestedRoot)
 	}
 	attestedState, err := s.cfg.StateGen.StateByRoot(ctx, attestedRoot)
 	if err != nil {
-		return errors.Wrap(err, "could not get attested state")
+		return errors.Wrapf(err, "could not get attested state for root %#x", attestedRoot)
 	}
 
 	finalizedCheckpoint := attestedState.FinalizedCheckpoint()
@@ -325,6 +326,10 @@ func (s *Service) processLightClientOptimisticUpdate(ctx context.Context, signed
 		attestedBlock,
 	)
 	if err != nil {
+		if strings.Contains(err.Error(), lightclient.ErrNotEnoughSyncCommitteeBits) {
+			log.WithError(err).Debug("Skipping processing light client optimistic update")
+			return nil
+		}
 		return errors.Wrap(err, "could not create light client optimistic update")
 	}
 
@@ -334,7 +339,7 @@ func (s *Service) processLightClientOptimisticUpdate(ctx context.Context, signed
 		if update.AttestedHeader().Beacon().Slot <= last.AttestedHeader().Beacon().Slot {
 			return nil
 		}
-		return errors.Wrap(err, "could not create light client optimistic update")
+		log.Debug("Skipping processing light client optimistic update because attested header's slot is not newer")
 	}
 
 	s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
