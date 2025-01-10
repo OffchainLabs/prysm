@@ -22,6 +22,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Trace IDONTWANT Messages in Pubsub.
 - Add Fulu fork boilerplate.
 - Separate type for unaggregated network attestations. [PR](https://github.com/prysmaticlabs/prysm/pull/14659)
+- Update spec tests to v1.5.0-beta.0.
 
 ### Changed
 
