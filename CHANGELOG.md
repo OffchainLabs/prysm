@@ -18,7 +18,10 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Add field param placeholder for Electra blob target and max to pass spec tests.
 - Add EIP-7691: Blob throughput increase.
 - SSZ files generation: Remove the `// Hash: ...` header.
+- DB optimization for saving light client bootstraps (save unique sync committees only).
 - Trace IDONTWANT Messages in Pubsub.
+- Add Fulu fork boilerplate.
+- Separate type for unaggregated network attestations. [PR](https://github.com/prysmaticlabs/prysm/pull/14659)
 - Remote signer electra fork support.
 
 ### Changed
@@ -39,6 +42,8 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Update our `go-libp2p-pubsub` dependency.
 - Re-organize the content of files to ease the creation of a new fork boilerplate.
 - Fixed Metadata errors for peers connected via QUIC.
+- Process light client finality updates only for new finalized epochs instead of doing it for every block.
+- Update blobs by rpc topics from V2 to V1.
 
 ### Deprecated
 
@@ -52,11 +57,13 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 - Added check to prevent nil pointer deference or out of bounds array access when validating the BLSToExecutionChange on an impossibly nil validator.
 - EIP-7691: Ensure new blobs subnets are subscribed on epoch in advance.
+- Fix kzg commitment inclusion proof depth minimal value.
 
 ### Security
 
 - go version upgrade to 1.22.10 for CVE CVE-2024-34156
 - Update golang.org/x/crypto to v0.31.0 to address CVE-2024-45337
+- Update golang.org/x/net to v0.33.0 to address CVE-2024-45338
 
 ## [v5.2.0](https://github.com/prysmaticlabs/prysm/compare/v5.1.2...v5.2.0)
 

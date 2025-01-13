@@ -26,6 +26,7 @@ type LightClientHeader interface {
 type LightClientBootstrap interface {
 	ssz.Marshaler
 	Version() int
+	Proto() proto.Message
 	Header() LightClientHeader
 	SetHeader(header LightClientHeader) error
 	CurrentSyncCommittee() *pb.SyncCommittee

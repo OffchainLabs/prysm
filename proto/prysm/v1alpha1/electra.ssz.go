@@ -383,6 +383,181 @@ func (a *AttestationElectra) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	return
 }
 
+// MarshalSSZ ssz marshals the SignedAggregateAttestationAndProofSingle object
+func (s *SignedAggregateAttestationAndProofSingle) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(s)
+}
+
+// MarshalSSZTo ssz marshals the SignedAggregateAttestationAndProofSingle object to a target array
+func (s *SignedAggregateAttestationAndProofSingle) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+
+	// Field (0) 'Message'
+	if s.Message == nil {
+		s.Message = new(AggregateAttestationAndProofSingle)
+	}
+	if dst, err = s.Message.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (1) 'Signature'
+	if size := len(s.Signature); size != 96 {
+		err = ssz.ErrBytesLengthFn("--.Signature", size, 96)
+		return
+	}
+	dst = append(dst, s.Signature...)
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the SignedAggregateAttestationAndProofSingle object
+func (s *SignedAggregateAttestationAndProofSingle) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size != 440 {
+		return ssz.ErrSize
+	}
+
+	// Field (0) 'Message'
+	if s.Message == nil {
+		s.Message = new(AggregateAttestationAndProofSingle)
+	}
+	if err = s.Message.UnmarshalSSZ(buf[0:344]); err != nil {
+		return err
+	}
+
+	// Field (1) 'Signature'
+	if cap(s.Signature) == 0 {
+		s.Signature = make([]byte, 0, len(buf[344:440]))
+	}
+	s.Signature = append(s.Signature, buf[344:440]...)
+
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the SignedAggregateAttestationAndProofSingle object
+func (s *SignedAggregateAttestationAndProofSingle) SizeSSZ() (size int) {
+	size = 440
+	return
+}
+
+// HashTreeRoot ssz hashes the SignedAggregateAttestationAndProofSingle object
+func (s *SignedAggregateAttestationAndProofSingle) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(s)
+}
+
+// HashTreeRootWith ssz hashes the SignedAggregateAttestationAndProofSingle object with a hasher
+func (s *SignedAggregateAttestationAndProofSingle) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'Message'
+	if err = s.Message.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (1) 'Signature'
+	if size := len(s.Signature); size != 96 {
+		err = ssz.ErrBytesLengthFn("--.Signature", size, 96)
+		return
+	}
+	hh.PutBytes(s.Signature)
+
+	hh.Merkleize(indx)
+	return
+}
+
+// MarshalSSZ ssz marshals the AggregateAttestationAndProofSingle object
+func (a *AggregateAttestationAndProofSingle) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(a)
+}
+
+// MarshalSSZTo ssz marshals the AggregateAttestationAndProofSingle object to a target array
+func (a *AggregateAttestationAndProofSingle) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+
+	// Field (0) 'AggregatorIndex'
+	dst = ssz.MarshalUint64(dst, uint64(a.AggregatorIndex))
+
+	// Field (1) 'Aggregate'
+	if a.Aggregate == nil {
+		a.Aggregate = new(SingleAttestation)
+	}
+	if dst, err = a.Aggregate.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (2) 'SelectionProof'
+	if size := len(a.SelectionProof); size != 96 {
+		err = ssz.ErrBytesLengthFn("--.SelectionProof", size, 96)
+		return
+	}
+	dst = append(dst, a.SelectionProof...)
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the AggregateAttestationAndProofSingle object
+func (a *AggregateAttestationAndProofSingle) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size != 344 {
+		return ssz.ErrSize
+	}
+
+	// Field (0) 'AggregatorIndex'
+	a.AggregatorIndex = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[0:8]))
+
+	// Field (1) 'Aggregate'
+	if a.Aggregate == nil {
+		a.Aggregate = new(SingleAttestation)
+	}
+	if err = a.Aggregate.UnmarshalSSZ(buf[8:248]); err != nil {
+		return err
+	}
+
+	// Field (2) 'SelectionProof'
+	if cap(a.SelectionProof) == 0 {
+		a.SelectionProof = make([]byte, 0, len(buf[248:344]))
+	}
+	a.SelectionProof = append(a.SelectionProof, buf[248:344]...)
+
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the AggregateAttestationAndProofSingle object
+func (a *AggregateAttestationAndProofSingle) SizeSSZ() (size int) {
+	size = 344
+	return
+}
+
+// HashTreeRoot ssz hashes the AggregateAttestationAndProofSingle object
+func (a *AggregateAttestationAndProofSingle) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(a)
+}
+
+// HashTreeRootWith ssz hashes the AggregateAttestationAndProofSingle object with a hasher
+func (a *AggregateAttestationAndProofSingle) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'AggregatorIndex'
+	hh.PutUint64(uint64(a.AggregatorIndex))
+
+	// Field (1) 'Aggregate'
+	if err = a.Aggregate.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (2) 'SelectionProof'
+	if size := len(a.SelectionProof); size != 96 {
+		err = ssz.ErrBytesLengthFn("--.SelectionProof", size, 96)
+		return
+	}
+	hh.PutBytes(a.SelectionProof)
+
+	hh.Merkleize(indx)
+	return
+}
+
 // MarshalSSZ ssz marshals the SingleAttestation object
 func (s *SingleAttestation) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(s)

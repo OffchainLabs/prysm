@@ -65,7 +65,7 @@ func NewPreminedGenesis(ctx context.Context, t, nvals, pCreds uint64, version in
 
 func (s *PremineGenesisConfig) prepare(ctx context.Context) (state.BeaconState, error) {
 	switch s.Version {
-	case version.Phase0, version.Altair, version.Bellatrix, version.Capella, version.Deneb, version.Electra:
+	case version.Phase0, version.Altair, version.Bellatrix, version.Capella, version.Deneb, version.Electra, version.Fulu:
 	default:
 		return nil, errors.Wrapf(errUnsupportedVersion, "version=%s", version.String(s.Version))
 	}
@@ -156,6 +156,11 @@ func (s *PremineGenesisConfig) empty() (state.BeaconState, error) {
 		}
 	case version.Electra:
 		e, err = state_native.InitializeFromProtoElectra(&ethpb.BeaconStateElectra{})
+		if err != nil {
+			return nil, err
+		}
+	case version.Fulu:
+		e, err = state_native.InitializeFromProtoFulu(&ethpb.BeaconStateFulu{})
 		if err != nil {
 			return nil, err
 		}
@@ -342,6 +347,8 @@ func (s *PremineGenesisConfig) setFork(g state.BeaconState) error {
 		pv, cv = params.BeaconConfig().CapellaForkVersion, params.BeaconConfig().DenebForkVersion
 	case version.Electra:
 		pv, cv = params.BeaconConfig().DenebForkVersion, params.BeaconConfig().ElectraForkVersion
+	case version.Fulu:
+		pv, cv = params.BeaconConfig().ElectraForkVersion, params.BeaconConfig().FuluForkVersion
 	default:
 		return errUnsupportedVersion
 	}
@@ -532,6 +539,39 @@ func (s *PremineGenesisConfig) setLatestBlockHeader(g state.BeaconState) error {
 		}
 	case version.Electra:
 		body = &ethpb.BeaconBlockBodyElectra{
+			RandaoReveal: make([]byte, 96),
+			Eth1Data: &ethpb.Eth1Data{
+				DepositRoot: make([]byte, 32),
+				BlockHash:   make([]byte, 32),
+			},
+			Graffiti: make([]byte, 32),
+			SyncAggregate: &ethpb.SyncAggregate{
+				SyncCommitteeBits:      make([]byte, fieldparams.SyncCommitteeLength/8),
+				SyncCommitteeSignature: make([]byte, fieldparams.BLSSignatureLength),
+			},
+			ExecutionPayload: &enginev1.ExecutionPayloadDeneb{
+				ParentHash:    make([]byte, 32),
+				FeeRecipient:  make([]byte, 20),
+				StateRoot:     make([]byte, 32),
+				ReceiptsRoot:  make([]byte, 32),
+				LogsBloom:     make([]byte, 256),
+				PrevRandao:    make([]byte, 32),
+				ExtraData:     make([]byte, 0),
+				BaseFeePerGas: make([]byte, 32),
+				BlockHash:     make([]byte, 32),
+				Transactions:  make([][]byte, 0),
+				Withdrawals:   make([]*enginev1.Withdrawal, 0),
+			},
+			BlsToExecutionChanges: make([]*ethpb.SignedBLSToExecutionChange, 0),
+			BlobKzgCommitments:    make([][]byte, 0),
+			ExecutionRequests: &enginev1.ExecutionRequests{
+				Deposits:       make([]*enginev1.DepositRequest, 0),
+				Withdrawals:    make([]*enginev1.WithdrawalRequest, 0),
+				Consolidations: make([]*enginev1.ConsolidationRequest, 0),
+			},
+		}
+	case version.Fulu:
+		body = &ethpb.BeaconBlockBodyFulu{
 			RandaoReveal: make([]byte, 96),
 			Eth1Data: &ethpb.Eth1Data{
 				DepositRoot: make([]byte, 32),

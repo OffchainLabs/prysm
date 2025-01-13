@@ -285,8 +285,11 @@ func (s *Server) SubmitAttestationsV2(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) handleAttestationsElectra(ctx context.Context, data json.RawMessage) (attFailures []*server.IndexedVerificationFailure, failedBroadcasts []string, err error) {
-	var sourceAttestations []*structs.AttestationElectra
+func (s *Server) handleAttestationsElectra(
+	ctx context.Context,
+	data json.RawMessage,
+) (attFailures []*server.IndexedVerificationFailure, failedBroadcasts []string, err error) {
+	var sourceAttestations []*structs.SingleAttestation
 
 	if err = json.Unmarshal(data, &sourceAttestations); err != nil {
 		return nil, nil, errors.Wrap(err, "failed to unmarshal attestation")
@@ -296,7 +299,7 @@ func (s *Server) handleAttestationsElectra(ctx context.Context, data json.RawMes
 		return nil, nil, errors.New("no data submitted")
 	}
 
-	var validAttestations []*eth.AttestationElectra
+	var validAttestations []*eth.SingleAttestation
 	for i, sourceAtt := range sourceAttestations {
 		att, err := sourceAtt.ToConsensus()
 		if err != nil {
@@ -316,18 +319,23 @@ func (s *Server) handleAttestationsElectra(ctx context.Context, data json.RawMes
 		validAttestations = append(validAttestations, att)
 	}
 
-	for i, att := range validAttestations {
-		// Broadcast the unaggregated attestation on a feed to notify other services in the beacon node
-		// of a received unaggregated attestation.
-		// Note we can't send for aggregated att because we don't have selection proof.
-		if !att.IsAggregated() {
-			s.OperationNotifier.OperationFeed().Send(&feed.Event{
-				Type: operation.UnaggregatedAttReceived,
-				Data: &operation.UnAggregatedAttReceivedData{
-					Attestation: att,
-				},
-			})
+	for i, singleAtt := range validAttestations {
+		targetState, err := s.AttestationStateFetcher.AttestationTargetState(ctx, singleAtt.Data.Target)
+		if err != nil {
+			return nil, nil, errors.Wrap(err, "could not get target state for attestation")
 		}
+		committee, err := corehelpers.BeaconCommitteeFromState(ctx, targetState, singleAtt.Data.Slot, singleAtt.CommitteeId)
+		if err != nil {
+			return nil, nil, errors.Wrap(err, "could not get committee for attestation")
+		}
+		att := singleAtt.ToAttestationElectra(committee)
+
+		s.OperationNotifier.OperationFeed().Send(&feed.Event{
+			Type: operation.UnaggregatedAttReceived,
+			Data: &operation.UnAggregatedAttReceivedData{
+				Attestation: att,
+			},
+		})
 
 		wantedEpoch := slots.ToEpoch(att.Data.Slot)
 		vals, err := s.HeadFetcher.HeadValidatorsIndices(ctx, wantedEpoch)
@@ -335,12 +343,8 @@ func (s *Server) handleAttestationsElectra(ctx context.Context, data json.RawMes
 			failedBroadcasts = append(failedBroadcasts, strconv.Itoa(i))
 			continue
 		}
-		committeeIndex, err := att.GetCommitteeIndex()
-		if err != nil {
-			return nil, nil, errors.Wrap(err, "failed to retrieve attestation committee index")
-		}
-		subnet := corehelpers.ComputeSubnetFromCommitteeAndSlot(uint64(len(vals)), committeeIndex, att.Data.Slot)
-		if err = s.Broadcaster.BroadcastAttestation(ctx, subnet, att); err != nil {
+		subnet := corehelpers.ComputeSubnetFromCommitteeAndSlot(uint64(len(vals)), att.GetCommitteeIndex(), att.Data.Slot)
+		if err = s.Broadcaster.BroadcastAttestation(ctx, subnet, singleAtt); err != nil {
 			log.WithError(err).Errorf("could not broadcast attestation at index %d", i)
 			failedBroadcasts = append(failedBroadcasts, strconv.Itoa(i))
 			continue
@@ -350,13 +354,9 @@ func (s *Server) handleAttestationsElectra(ctx context.Context, data json.RawMes
 			if err = s.AttestationCache.Add(att); err != nil {
 				log.WithError(err).Error("could not save attestation")
 			}
-		} else if att.IsAggregated() {
-			if err = s.AttestationsPool.SaveAggregatedAttestation(att); err != nil {
-				log.WithError(err).Error("could not save aggregated attestation")
-			}
 		} else {
 			if err = s.AttestationsPool.SaveUnaggregatedAttestation(att); err != nil {
-				log.WithError(err).Error("could not save unaggregated attestation")
+				log.WithError(err).Error("could not save attestation")
 			}
 		}
 	}

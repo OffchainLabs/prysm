@@ -198,35 +198,20 @@ func matchingAtts(atts []ethpbalpha.Att, slot primitives.Slot, attDataRoot []byt
 			continue
 		}
 
+		root, err := att.GetData().HashTreeRoot()
+		if err != nil {
+			return nil, errors.Wrap(err, "could not get attestation data root")
+		}
+		if !bytes.Equal(root[:], attDataRoot) {
+			continue
+		}
+
 		// We ignore the committee index from the request before Electra.
 		// This is because before Electra the committee index is part of the attestation data,
 		// meaning that comparing the data root is sufficient.
 		// Post-Electra the committee index in the data root is always 0, so we need to
 		// compare the committee index separately.
-		if postElectra {
-			if att.Version() >= version.Electra {
-				ci, err := att.GetCommitteeIndex()
-				if err != nil {
-					return nil, err
-				}
-				if ci != index {
-					continue
-				}
-			} else {
-				continue
-			}
-		} else {
-			// If postElectra is false and att.Version >= version.Electra, ignore the attestation.
-			if att.Version() >= version.Electra {
-				continue
-			}
-		}
-
-		root, err := att.GetData().HashTreeRoot()
-		if err != nil {
-			return nil, errors.Wrap(err, "could not get attestation data root")
-		}
-		if bytes.Equal(root[:], attDataRoot) {
+		if (!postElectra && att.Version() < version.Electra) || (postElectra && att.Version() >= version.Electra && att.GetCommitteeIndex() == index) {
 			result = append(result, att)
 		}
 	}
