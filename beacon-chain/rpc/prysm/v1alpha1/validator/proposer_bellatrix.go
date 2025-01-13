@@ -300,9 +300,6 @@ func (vs *Server) getPayloadHeaderFromBuilder(
 		"validator":          idx,
 		"sinceSlotStartTime": time.Since(t),
 	})
-	if len(kzgCommitments) > 0 {
-		l = l.WithField("kzgCommitmentCount", len(kzgCommitments))
-	}
 	if executionRequests != nil {
 		l = l.WithField("depositRequestCount", len(executionRequests.Deposits))
 		l = l.WithField("withdrawalRequestCount", len(executionRequests.Withdrawals))
