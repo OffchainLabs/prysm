@@ -73,9 +73,6 @@ const (
 	RPCBlocksByRootTopicV2 = protocolPrefix + BeaconBlocksByRootsMessageName + SchemaVersionV2
 	// RPCMetaDataTopicV2 defines the v2 topic for the metadata rpc method.
 	RPCMetaDataTopicV2 = protocolPrefix + MetadataMessageName + SchemaVersionV2
-
-	RPCBlobSidecarsByRangeTopicV2 = protocolPrefix + BlobSidecarsByRangeName + SchemaVersionV2
-	RPCBlobSidecarsByRootTopicV2  = protocolPrefix + BlobSidecarsByRootName + SchemaVersionV2
 )
 
 // RPC errors for topic parsing.

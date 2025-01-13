@@ -21,6 +21,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - DB optimization for saving light client bootstraps (save unique sync committees only).
 - Trace IDONTWANT Messages in Pubsub.
 - Add Fulu fork boilerplate.
+- Separate type for unaggregated network attestations. [PR](https://github.com/prysmaticlabs/prysm/pull/14659)
 
 ### Changed
 
@@ -41,6 +42,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Re-organize the content of files to ease the creation of a new fork boilerplate.
 - Fixed Metadata errors for peers connected via QUIC.
 - Process light client finality updates only for new finalized epochs instead of doing it for every block.
+- Update blobs by rpc topics from V2 to V1.
 
 ### Deprecated
 
