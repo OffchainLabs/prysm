@@ -35,17 +35,18 @@ func (s *Service) streamBlobBatch(ctx context.Context, batch blockBatch, wQuota 
 
 		// Get the number of KZG commitments in the block
 		kzgCommitments := len(b.Block().Body().BlobKzgCommitments())
-		
-		// Count available blob sidecars
-		availableSidecars := 0
-		for _, hasIndex := range idxs {
-			if hasIndex {
-				availableSidecars++
-			}
-		}
 
 		// Check if we have all required blob sidecars only if there are KZG commitments
 		if kzgCommitments > 0 {
+		// Count available blob sidecars
+			availableSidecars := 0
+			
+			for _, hasIndex := range idxs {
+				if hasIndex {
+					availableSidecars++
+				}
+			}
+		
 			if availableSidecars != kzgCommitments {
 				s.writeErrorResponseToStream(responseCodeServerError, errMissingBlobsForBlockCommitments.Error(), stream)
 				return wQuota, errors.Wrapf(errMissingBlobsForBlockCommitments, 
