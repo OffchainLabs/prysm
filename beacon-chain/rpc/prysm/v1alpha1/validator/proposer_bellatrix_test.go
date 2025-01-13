@@ -762,7 +762,7 @@ func TestServer_setExecutionData(t *testing.T) {
 		require.NoError(t, err)
 		blk.SetSlot(0)
 		require.NoError(t, err)
-		builderBid, err := vs.getBuilderPayloadAndBlobs(ctx, blk.Block().Slot(), blk.Block().ProposerIndex())
+		builderBid, err := vs.getBuilderPayloadAndBlobs(ctx, blk.Block().Slot(), blk.Block().ProposerIndex(), gasLimit)
 		require.NoError(t, err)
 		builderPayload, err := builderBid.Header()
 		require.NoError(t, err)
