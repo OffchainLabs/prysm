@@ -344,7 +344,7 @@ func (b builderBidElectra) HashTreeRootWith(hh *ssz.Hasher) error {
 // Header --
 func (b builderBidElectra) Header() (interfaces.ExecutionData, error) {
 	// We have to convert big endian to little endian because the value is coming from the execution layer.
-	return blocks.WrappedExecutionPayloadHeaderElectra(b.p.Header)
+	return blocks.WrappedExecutionPayloadHeaderDeneb(b.p.Header)
 }
 
 // ExecutionRequests --

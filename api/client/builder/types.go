@@ -1295,7 +1295,7 @@ func (bb *BuilderBidElectra) ToProto() (*eth.BuilderBidElectra, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(bb.BlobKzgCommitments) > fieldparams.MaxBlobsPerBlock {
+	if len(bb.BlobKzgCommitments) > params.BeaconConfig().MaxBlobsPerBlock( {
 		return nil, fmt.Errorf("too many blob commitments: %d", len(bb.BlobKzgCommitments))
 	}
 	kzgCommitments := make([][]byte, len(bb.BlobKzgCommitments))
