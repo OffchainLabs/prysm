@@ -72,17 +72,28 @@ func setExecutionData(ctx context.Context, blk interfaces.SignedBeaconBlock, loc
 		return local.Bid, local.BlobsBundle, setLocalExecution(blk, local)
 	}
 
-	var builderKzgCommitments [][]byte
 	builderPayload, err := bid.Header()
 	if err != nil {
 		log.WithError(err).Warn("Proposer: failed to retrieve header from BuilderBid")
 		return local.Bid, local.BlobsBundle, setLocalExecution(blk, local)
 	}
-	//TODO: add builder execution requests here.
+
+	var builderKzgCommitments [][]byte
 	if bid.Version() >= version.Deneb {
 		builderKzgCommitments, err = bid.BlobKzgCommitments()
 		if err != nil {
 			log.WithError(err).Warn("Proposer: failed to retrieve kzg commitments from BuilderBid")
+		}
+	}
+
+	var executionRequests *enginev1.ExecutionRequests
+	if bid.Version() >= version.Electra {
+		bidElectra, ok := bid.(builder.BidElectra)
+		if ok {
+			executionRequests, err = bidElectra.ExecutionRequests()
+			if err != nil {
+				log.WithError(err).Warn("Proposer: failed to retrieve execution requests from BuilderBid")
+			}
 		}
 	}
 
@@ -136,7 +147,7 @@ func setExecutionData(ctx context.Context, blk interfaces.SignedBeaconBlock, loc
 
 		// If we can't get the builder value, just use local block.
 		if higherValueBuilder && withdrawalsMatched { // Builder value is higher and withdrawals match.
-			if err := setBuilderExecution(blk, builderPayload, builderKzgCommitments); err != nil {
+			if err := setBuilderExecution(blk, builderPayload, builderKzgCommitments, executionRequests); err != nil {
 				log.WithError(err).Warn("Proposer: failed to set builder payload")
 				return local.Bid, local.BlobsBundle, setLocalExecution(blk, local)
 			} else {
@@ -160,7 +171,7 @@ func setExecutionData(ctx context.Context, blk interfaces.SignedBeaconBlock, loc
 		)
 		return local.Bid, local.BlobsBundle, setLocalExecution(blk, local)
 	default: // Bellatrix case.
-		if err := setBuilderExecution(blk, builderPayload, builderKzgCommitments); err != nil {
+		if err := setBuilderExecution(blk, builderPayload, builderKzgCommitments, executionRequests); err != nil {
 			log.WithError(err).Warn("Proposer: failed to set builder payload")
 			return local.Bid, local.BlobsBundle, setLocalExecution(blk, local)
 		} else {
@@ -287,6 +298,20 @@ func (vs *Server) getPayloadHeaderFromBuilder(
 		}
 	}
 
+	var executionRequests *enginev1.ExecutionRequests
+	if bid.Version() >= version.Electra {
+		eBid, ok := bid.(builder.BidElectra)
+		if !ok {
+			return nil, errors.New("builder returned non-electra bid")
+		}
+		executionRequests, err = eBid.ExecutionRequests()
+		if err != nil {
+			return nil, errors.Wrap(err, "could not get execution requests")
+		}
+		if err = validateExecutionRequests(executionRequests); err != nil {
+			return nil, err
+		}
+	}
 	l := log.WithFields(logrus.Fields{
 		"gweiValue":          primitives.WeiToGwei(v),
 		"builderPubKey":      fmt.Sprintf("%#x", bid.Pubkey()),
@@ -298,6 +323,11 @@ func (vs *Server) getPayloadHeaderFromBuilder(
 	if len(kzgCommitments) > 0 {
 		l = l.WithField("kzgCommitmentCount", len(kzgCommitments))
 	}
+	if executionRequests != nil {
+		l = l.WithField("depositRequestCount", len(executionRequests.Deposits))
+		l = l.WithField("withdrawalRequestCount", len(executionRequests.Withdrawals))
+		l = l.WithField("consolidationRequestCount", len(executionRequests.Consolidations))
+	}
 	l.Info("Received header with bid")
 
 	span.SetAttributes(
@@ -307,6 +337,22 @@ func (vs *Server) getPayloadHeaderFromBuilder(
 	)
 
 	return bid, nil
+}
+
+func validateExecutionRequests(requests *enginev1.ExecutionRequests) error {
+	if requests == nil {
+		return errors.New("builder returned nil execution requests")
+	}
+	if uint64(len(requests.Deposits)) > params.BeaconConfig().MaxDepositRequestsPerPayload {
+		return errors.New("builder returned too many deposit requests")
+	}
+	if uint64(len(requests.Withdrawals)) > params.BeaconConfig().MaxWithdrawalRequestsPerPayload {
+		return errors.New("builder returned too many withdrawal requests")
+	}
+	if uint64(len(requests.Consolidations)) > params.BeaconConfig().MaxConsolidationsRequestsPerPayload {
+		return errors.New("builder returned too many consolidation requests")
+	}
+	return nil
 }
 
 // Validates builder signature and returns an error if the signature is invalid.
@@ -367,19 +413,18 @@ func setLocalExecution(blk interfaces.SignedBeaconBlock, local *blocks.GetPayloa
 		}
 	}
 
-	return setExecution(blk, local.ExecutionData, false, kzgCommitments)
+	return setExecution(blk, local.ExecutionData, false, kzgCommitments, local.ExecutionRequests)
 }
 
 // setBuilderExecution sets the execution context for a builder's beacon block.
 // It delegates to setExecution for the actual work.
-func setBuilderExecution(blk interfaces.SignedBeaconBlock, execution interfaces.ExecutionData, builderKzgCommitments [][]byte) error {
-	// TODO #14344: add execution requests for electra
-	return setExecution(blk, execution, true, builderKzgCommitments)
+func setBuilderExecution(blk interfaces.SignedBeaconBlock, execution interfaces.ExecutionData, builderKzgCommitments [][]byte, requests *enginev1.ExecutionRequests) error {
+	return setExecution(blk, execution, true, builderKzgCommitments, requests)
 }
 
 // setExecution sets the execution context for a beacon block. It also sets KZG commitments based on the block version.
 // The function is designed to be flexible and handle both local and builder executions.
-func setExecution(blk interfaces.SignedBeaconBlock, execution interfaces.ExecutionData, isBlinded bool, kzgCommitments [][]byte) error {
+func setExecution(blk interfaces.SignedBeaconBlock, execution interfaces.ExecutionData, isBlinded bool, kzgCommitments [][]byte, requests *enginev1.ExecutionRequests) error {
 	if execution == nil {
 		return errors.New("execution is nil")
 	}
@@ -407,6 +452,14 @@ func setExecution(blk interfaces.SignedBeaconBlock, execution interfaces.Executi
 		return errors.Wrap(err, errMessage)
 	}
 
+	// If the block version is below Electra, no further actions are needed
+	if blk.Version() < version.Electra {
+		return nil
+	}
+
+	if err := blk.SetExecutionRequests(requests); err != nil {
+		return errors.Wrap(err, errMessage)
+	}
 	return nil
 }
 

@@ -721,6 +721,7 @@ func TestServer_setExecutionData(t *testing.T) {
 				WithdrawalsRoot:  wr[:],
 				BlobGasUsed:      123,
 				ExcessBlobGas:    456,
+				GasLimit:         gasLimit,
 			},
 			Pubkey:             sk.PublicKey().Marshal(),
 			Value:              bytesutil.PadTo(builderValue, 32),
@@ -743,7 +744,11 @@ func TestServer_setExecutionData(t *testing.T) {
 			Cfg:           &builderTest.Config{BeaconDB: beaconDB},
 		}
 		require.NoError(t, beaconDB.SaveRegistrationsByValidatorIDs(ctx, []primitives.ValidatorIndex{blk.Block().ProposerIndex()},
-			[]*ethpb.ValidatorRegistrationV1{{FeeRecipient: make([]byte, fieldparams.FeeRecipientLength), Timestamp: uint64(time.Now().Unix()), Pubkey: make([]byte, fieldparams.BLSPubkeyLength)}}))
+			[]*ethpb.ValidatorRegistrationV1{{
+				FeeRecipient: make([]byte, fieldparams.FeeRecipientLength),
+				Timestamp:    uint64(time.Now().Unix()),
+				GasLimit:     gasLimit,
+				Pubkey:       make([]byte, fieldparams.BLSPubkeyLength)}}))
 		wb, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlockElectra())
 		require.NoError(t, err)
 		chain := &blockchainTest.ChainService{ForkChoiceStore: doublylinkedtree.New(), Genesis: time.Now(), Block: wb}
