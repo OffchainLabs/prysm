@@ -37,9 +37,9 @@ func UnmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (i
 	var obj interface{}
 	switch folderName {
 	case "ExecutionPayload":
-		obj = &enginev1.ExecutionPayloadElectra{}
+		obj = &enginev1.ExecutionPayloadDeneb{}
 	case "ExecutionPayloadHeader":
-		obj = &enginev1.ExecutionPayloadHeaderElectra{}
+		obj = &enginev1.ExecutionPayloadHeaderDeneb{}
 	case "Attestation":
 		obj = &ethpb.AttestationElectra{}
 	case "AttestationData":
@@ -103,6 +103,8 @@ func UnmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (i
 		obj = &ethpb.ContributionAndProof{}
 	case "SignedContributionAndProof":
 		obj = &ethpb.SignedContributionAndProof{}
+	case "SingleAttestation":
+		obj = &ethpb.SingleAttestation{}
 	case "SyncAggregate":
 		obj = &ethpb.SyncAggregate{}
 	case "SyncAggregatorSelectionData":

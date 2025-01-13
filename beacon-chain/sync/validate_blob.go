@@ -51,14 +51,14 @@ func (s *Service) validateBlob(ctx context.Context, pid peer.ID, msg *pubsub.Mes
 	if err != nil {
 		return pubsub.ValidationReject, errors.Wrap(err, "roblob conversion failure")
 	}
-	vf := s.newBlobVerifier(blob, verification.GossipSidecarRequirements)
+	vf := s.newBlobVerifier(blob, verification.GossipBlobSidecarRequirements)
 
 	if err := vf.BlobIndexInBounds(); err != nil {
 		return pubsub.ValidationReject, err
 	}
 
 	// [REJECT] The sidecar is for the correct subnet -- i.e. compute_subnet_for_blob_sidecar(sidecar.index) == subnet_id.
-	want := fmt.Sprintf("blob_sidecar_%d", computeSubnetForBlobSidecar(blob.Index))
+	want := fmt.Sprintf("blob_sidecar_%d", computeSubnetForBlobSidecar(blob.Index, blob.Slot()))
 	if !strings.Contains(*msg.Topic, want) {
 		log.WithFields(blobFields(blob)).Debug("Sidecar index does not match topic")
 		return pubsub.ValidationReject, fmt.Errorf("wrong topic name: %s", *msg.Topic)
@@ -169,8 +169,12 @@ func blobFields(b blocks.ROBlob) logrus.Fields {
 	}
 }
 
-func computeSubnetForBlobSidecar(index uint64) uint64 {
-	return index % params.BeaconConfig().BlobsidecarSubnetCount
+func computeSubnetForBlobSidecar(index uint64, slot primitives.Slot) uint64 {
+	subnetCount := params.BeaconConfig().BlobsidecarSubnetCount
+	if slots.ToEpoch(slot) >= params.BeaconConfig().ElectraForkEpoch {
+		subnetCount = params.BeaconConfig().BlobsidecarSubnetCountElectra
+	}
+	return index % subnetCount
 }
 
 // saveInvalidBlobToTemp as a block ssz. Writes to temp directory.

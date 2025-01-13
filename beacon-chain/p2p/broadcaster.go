@@ -163,7 +163,7 @@ func (s *Service) broadcastSyncCommittee(ctx context.Context, subnet uint64, sMs
 
 	// Ensure we have peers with this subnet.
 	// This adds in a special value to the subnet
-	// to ensure that we can re-use the same subnet locker.
+	// to ensure that we can reuse the same subnet locker.
 	wrappedSubIdx := subnet + syncLockerVal
 	s.subnetLocker(wrappedSubIdx).RLock()
 	hasPeer := s.hasPeerWithSubnet(syncCommitteeToTopic(subnet, forkDigest))

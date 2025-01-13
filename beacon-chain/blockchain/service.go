@@ -33,7 +33,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stategen"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
@@ -48,25 +47,24 @@ import (
 // Service represents a service that handles the internal
 // logic of managing the full PoS beacon chain.
 type Service struct {
-	cfg                           *config
-	ctx                           context.Context
-	cancel                        context.CancelFunc
-	genesisTime                   time.Time
-	head                          *head
-	headLock                      sync.RWMutex
-	originBlockRoot               [32]byte // genesis root, or weak subjectivity checkpoint root, depending on how the node is initialized
-	boundaryRoots                 [][32]byte
-	checkpointStateCache          *cache.CheckpointStateCache
-	initSyncBlocks                map[[32]byte]interfaces.ReadOnlySignedBeaconBlock
-	initSyncBlocksLock            sync.RWMutex
-	wsVerifier                    *WeakSubjectivityVerifier
-	clockSetter                   startup.ClockSetter
-	clockWaiter                   startup.ClockWaiter
-	syncComplete                  chan struct{}
-	blobNotifiers                 *blobNotifierMap
-	blockBeingSynced              *currentlySyncingBlock
-	blobStorage                   *filesystem.BlobStorage
-	lastPublishedLightClientEpoch primitives.Epoch
+	cfg                  *config
+	ctx                  context.Context
+	cancel               context.CancelFunc
+	genesisTime          time.Time
+	head                 *head
+	headLock             sync.RWMutex
+	originBlockRoot      [32]byte // genesis root, or weak subjectivity checkpoint root, depending on how the node is initialized
+	boundaryRoots        [][32]byte
+	checkpointStateCache *cache.CheckpointStateCache
+	initSyncBlocks       map[[32]byte]interfaces.ReadOnlySignedBeaconBlock
+	initSyncBlocksLock   sync.RWMutex
+	wsVerifier           *WeakSubjectivityVerifier
+	clockSetter          startup.ClockSetter
+	clockWaiter          startup.ClockWaiter
+	syncComplete         chan struct{}
+	blobNotifiers        *blobNotifierMap
+	blockBeingSynced     *currentlySyncingBlock
+	blobStorage          *filesystem.BlobStorage
 }
 
 // config options for the service.
@@ -77,6 +75,7 @@ type config struct {
 	DepositCache            cache.DepositCache
 	PayloadIDCache          *cache.PayloadIDCache
 	TrackedValidatorsCache  *cache.TrackedValidatorsCache
+	AttestationCache        *cache.AttestationCache
 	AttPool                 attestations.Pool
 	ExitPool                voluntaryexits.PoolManager
 	SlashingPool            slashings.PoolManager
@@ -106,18 +105,22 @@ var ErrMissingClockSetter = errors.New("blockchain Service initialized without a
 type blobNotifierMap struct {
 	sync.RWMutex
 	notifiers map[[32]byte]chan uint64
-	seenIndex map[[32]byte][fieldparams.MaxBlobsPerBlock]bool
+	seenIndex map[[32]byte][]bool
 }
 
 // notifyIndex notifies a blob by its index for a given root.
 // It uses internal maps to keep track of seen indices and notifier channels.
-func (bn *blobNotifierMap) notifyIndex(root [32]byte, idx uint64) {
-	if idx >= fieldparams.MaxBlobsPerBlock {
+func (bn *blobNotifierMap) notifyIndex(root [32]byte, idx uint64, slot primitives.Slot) {
+	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlock(slot)
+	if idx >= uint64(maxBlobsPerBlock) {
 		return
 	}
 
 	bn.Lock()
 	seen := bn.seenIndex[root]
+	if seen == nil {
+		seen = make([]bool, maxBlobsPerBlock)
+	}
 	if seen[idx] {
 		bn.Unlock()
 		return
@@ -128,7 +131,7 @@ func (bn *blobNotifierMap) notifyIndex(root [32]byte, idx uint64) {
 	// Retrieve or create the notifier channel for the given root.
 	c, ok := bn.notifiers[root]
 	if !ok {
-		c = make(chan uint64, fieldparams.MaxBlobsPerBlock)
+		c = make(chan uint64, maxBlobsPerBlock)
 		bn.notifiers[root] = c
 	}
 
@@ -137,12 +140,13 @@ func (bn *blobNotifierMap) notifyIndex(root [32]byte, idx uint64) {
 	c <- idx
 }
 
-func (bn *blobNotifierMap) forRoot(root [32]byte) chan uint64 {
+func (bn *blobNotifierMap) forRoot(root [32]byte, slot primitives.Slot) chan uint64 {
+	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlock(slot)
 	bn.Lock()
 	defer bn.Unlock()
 	c, ok := bn.notifiers[root]
 	if !ok {
-		c = make(chan uint64, fieldparams.MaxBlobsPerBlock)
+		c = make(chan uint64, maxBlobsPerBlock)
 		bn.notifiers[root] = c
 	}
 	return c
@@ -168,7 +172,7 @@ func NewService(ctx context.Context, opts ...Option) (*Service, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	bn := &blobNotifierMap{
 		notifiers: make(map[[32]byte]chan uint64),
-		seenIndex: make(map[[32]byte][fieldparams.MaxBlobsPerBlock]bool),
+		seenIndex: make(map[[32]byte][]bool),
 	}
 	srv := &Service{
 		ctx:                  ctx,
@@ -303,7 +307,15 @@ func (s *Service) StartFromSavedState(saved state.BeaconState) error {
 	if err != nil {
 		return errors.Wrap(err, "could not get finalized checkpoint state")
 	}
-	if err := s.cfg.ForkChoiceStore.InsertNode(s.ctx, st, fRoot); err != nil {
+	finalizedBlock, err := s.cfg.BeaconDB.Block(s.ctx, fRoot)
+	if err != nil {
+		return errors.Wrap(err, "could not get finalized checkpoint block")
+	}
+	roblock, err := blocks.NewROBlockWithRoot(finalizedBlock, fRoot)
+	if err != nil {
+		return err
+	}
+	if err := s.cfg.ForkChoiceStore.InsertNode(s.ctx, st, roblock); err != nil {
 		return errors.Wrap(err, "could not insert finalized block to forkchoice")
 	}
 	if !features.Get().EnableStartOptimistic {
@@ -515,7 +527,11 @@ func (s *Service) saveGenesisData(ctx context.Context, genesisState state.Beacon
 
 	s.cfg.ForkChoiceStore.Lock()
 	defer s.cfg.ForkChoiceStore.Unlock()
-	if err := s.cfg.ForkChoiceStore.InsertNode(ctx, genesisState, genesisBlkRoot); err != nil {
+	gb, err := blocks.NewROBlockWithRoot(genesisBlk, genesisBlkRoot)
+	if err != nil {
+		return err
+	}
+	if err := s.cfg.ForkChoiceStore.InsertNode(ctx, genesisState, gb); err != nil {
 		log.WithError(err).Fatal("Could not process genesis block for fork choice")
 	}
 	s.cfg.ForkChoiceStore.SetOriginRoot(genesisBlkRoot)

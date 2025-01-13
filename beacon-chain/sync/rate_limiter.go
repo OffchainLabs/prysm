@@ -7,12 +7,13 @@ import (
 
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
+	"github.com/trailofbits/go-mutexasserts"
+
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
 	p2ptypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
 	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
 	leakybucket "github.com/prysmaticlabs/prysm/v5/container/leaky-bucket"
-	"github.com/sirupsen/logrus"
-	"github.com/trailofbits/go-mutexasserts"
 )
 
 const defaultBurstLimit = 5
@@ -78,6 +79,8 @@ func newRateLimiter(p2pProvider p2p.P2P) *limiter {
 	topicMap[addEncoding(p2p.RPCBlobSidecarsByRootTopicV1)] = blobCollector
 	// BlobSidecarsByRangeV1
 	topicMap[addEncoding(p2p.RPCBlobSidecarsByRangeTopicV1)] = blobCollector
+	topicMap[addEncoding(p2p.RPCBlobSidecarsByRootTopicV2)] = blobCollector
+	topicMap[addEncoding(p2p.RPCBlobSidecarsByRangeTopicV2)] = blobCollector
 
 	// General topic for all rpc requests.
 	topicMap[rpcLimiterTopic] = leakybucket.NewCollector(5, defaultBurstLimit*2, leakyBucketPeriod, false /* deleteEmptyBuckets */)
@@ -98,19 +101,20 @@ func (l *limiter) validateRequest(stream network.Stream, amt uint64) error {
 	defer l.RUnlock()
 
 	topic := string(stream.Protocol())
+	remotePeer := stream.Conn().RemotePeer()
 
 	collector, err := l.retrieveCollector(topic)
 	if err != nil {
 		return err
 	}
-	key := stream.Conn().RemotePeer().String()
-	remaining := collector.Remaining(key)
+
+	remaining := collector.Remaining(remotePeer.String())
 	// Treat each request as a minimum of 1.
 	if amt == 0 {
 		amt = 1
 	}
 	if amt > uint64(remaining) {
-		l.p2p.Peers().Scorers().BadResponsesScorer().Increment(stream.Conn().RemotePeer())
+		l.p2p.Peers().Scorers().BadResponsesScorer().Increment(remotePeer)
 		writeErrorResponseToStream(responseCodeInvalidRequest, p2ptypes.ErrRateLimited.Error(), stream, l.p2p)
 		return p2ptypes.ErrRateLimited
 	}

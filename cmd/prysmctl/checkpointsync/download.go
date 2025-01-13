@@ -46,7 +46,7 @@ func cliActionDownload(_ *cli.Context) error {
 	ctx := context.Background()
 	f := downloadFlags
 
-	opts := []client.ClientOpt{client.WithTimeout(f.Timeout)}
+	opts := []client.ClientOpt{client.WithTimeout(f.Timeout), client.WithMaxBodySize(client.MaxBodySizeState)}
 	client, err := beacon.NewClient(downloadFlags.BeaconNodeHost, opts...)
 	if err != nil {
 		return err

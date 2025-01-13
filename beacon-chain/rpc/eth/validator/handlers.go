@@ -2,11 +2,13 @@ package validator
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"sort"
 	"strconv"
 	"time"
@@ -23,6 +25,7 @@ import (
 	rpchelpers "github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/shared"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v5/config/features"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	consensus_types "github.com/prysmaticlabs/prysm/v5/consensus-types"
@@ -32,6 +35,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	"github.com/prysmaticlabs/prysm/v5/network/httputil"
 	ethpbalpha "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/attestation/aggregation/attestations"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/sirupsen/logrus"
@@ -48,71 +52,186 @@ func (s *Server) GetAggregateAttestation(w http.ResponseWriter, r *http.Request)
 	if !ok {
 		return
 	}
-
 	_, slot, ok := shared.UintFromQuery(w, r, "slot", true)
 	if !ok {
 		return
 	}
 
-	var match ethpbalpha.Att
-	var err error
-
-	match, err = matchingAtt(s.AttestationsPool.AggregatedAttestations(), primitives.Slot(slot), attDataRoot)
+	agg := s.aggregatedAttestation(w, primitives.Slot(slot), attDataRoot, 0)
+	if agg == nil {
+		return
+	}
+	typedAgg, ok := agg.(*ethpbalpha.Attestation)
+	if !ok {
+		httputil.HandleError(w, fmt.Sprintf("Attestation is not of type %T", &ethpbalpha.Attestation{}), http.StatusInternalServerError)
+		return
+	}
+	data, err := json.Marshal(structs.AttFromConsensus(typedAgg))
 	if err != nil {
-		httputil.HandleError(w, "Could not get matching attestation: "+err.Error(), http.StatusInternalServerError)
+		httputil.HandleError(w, "Could not marshal attestation: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if match == nil {
-		atts, err := s.AttestationsPool.UnaggregatedAttestations()
-		if err != nil {
-			httputil.HandleError(w, "Could not get unaggregated attestations: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		match, err = matchingAtt(atts, primitives.Slot(slot), attDataRoot)
-		if err != nil {
-			httputil.HandleError(w, "Could not get matching attestation: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-	}
-	if match == nil {
-		httputil.HandleError(w, "No matching attestation found", http.StatusNotFound)
-		return
-	}
-
-	response := &structs.AggregateAttestationResponse{
-		Data: &structs.Attestation{
-			AggregationBits: hexutil.Encode(match.GetAggregationBits()),
-			Data: &structs.AttestationData{
-				Slot:            strconv.FormatUint(uint64(match.GetData().Slot), 10),
-				CommitteeIndex:  strconv.FormatUint(uint64(match.GetData().CommitteeIndex), 10),
-				BeaconBlockRoot: hexutil.Encode(match.GetData().BeaconBlockRoot),
-				Source: &structs.Checkpoint{
-					Epoch: strconv.FormatUint(uint64(match.GetData().Source.Epoch), 10),
-					Root:  hexutil.Encode(match.GetData().Source.Root),
-				},
-				Target: &structs.Checkpoint{
-					Epoch: strconv.FormatUint(uint64(match.GetData().Target.Epoch), 10),
-					Root:  hexutil.Encode(match.GetData().Target.Root),
-				},
-			},
-			Signature: hexutil.Encode(match.GetSignature()),
-		}}
-	httputil.WriteJson(w, response)
+	httputil.WriteJson(w, &structs.AggregateAttestationResponse{Data: data})
 }
 
-func matchingAtt(atts []ethpbalpha.Att, slot primitives.Slot, attDataRoot []byte) (ethpbalpha.Att, error) {
-	for _, att := range atts {
-		if att.GetData().Slot == slot {
-			root, err := att.GetData().HashTreeRoot()
-			if err != nil {
-				return nil, errors.Wrap(err, "could not get attestation data root")
-			}
-			if bytes.Equal(root[:], attDataRoot) {
-				return att, nil
-			}
+// GetAggregateAttestationV2 aggregates all attestations matching the given attestation data root and slot, returning the aggregated result.
+func (s *Server) GetAggregateAttestationV2(w http.ResponseWriter, r *http.Request) {
+	_, span := trace.StartSpan(r.Context(), "validator.GetAggregateAttestationV2")
+	defer span.End()
+
+	_, attDataRoot, ok := shared.HexFromQuery(w, r, "attestation_data_root", fieldparams.RootLength, true)
+	if !ok {
+		return
+	}
+	_, slot, ok := shared.UintFromQuery(w, r, "slot", true)
+	if !ok {
+		return
+	}
+	_, index, ok := shared.UintFromQuery(w, r, "committee_index", true)
+	if !ok {
+		return
+	}
+
+	v := slots.ToForkVersion(primitives.Slot(slot))
+	agg := s.aggregatedAttestation(w, primitives.Slot(slot), attDataRoot, primitives.CommitteeIndex(index))
+	if agg == nil {
+		return
+	}
+	resp := &structs.AggregateAttestationResponse{
+		Version: version.String(v),
+	}
+	if v >= version.Electra {
+		typedAgg, ok := agg.(*ethpbalpha.AttestationElectra)
+		if !ok {
+			httputil.HandleError(w, fmt.Sprintf("Attestation is not of type %T", &ethpbalpha.AttestationElectra{}), http.StatusInternalServerError)
+			return
+		}
+		data, err := json.Marshal(structs.AttElectraFromConsensus(typedAgg))
+		if err != nil {
+			httputil.HandleError(w, "Could not marshal attestation: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		resp.Data = data
+	} else {
+		typedAgg, ok := agg.(*ethpbalpha.Attestation)
+		if !ok {
+			httputil.HandleError(w, fmt.Sprintf("Attestation is not of type %T", &ethpbalpha.Attestation{}), http.StatusInternalServerError)
+			return
+		}
+		data, err := json.Marshal(structs.AttFromConsensus(typedAgg))
+		if err != nil {
+			httputil.HandleError(w, "Could not marshal attestation: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		resp.Data = data
+	}
+	w.Header().Set(api.VersionHeader, version.String(v))
+	httputil.WriteJson(w, resp)
+}
+
+func (s *Server) aggregatedAttestation(w http.ResponseWriter, slot primitives.Slot, attDataRoot []byte, index primitives.CommitteeIndex) ethpbalpha.Att {
+	var match []ethpbalpha.Att
+	var err error
+
+	if features.Get().EnableExperimentalAttestationPool {
+		match, err = matchingAtts(s.AttestationCache.GetAll(), slot, attDataRoot, index)
+		if err != nil {
+			httputil.HandleError(w, "Could not get matching attestations: "+err.Error(), http.StatusInternalServerError)
+			return nil
+		}
+	} else {
+		match, err = matchingAtts(s.AttestationsPool.AggregatedAttestations(), slot, attDataRoot, index)
+		if err != nil {
+			httputil.HandleError(w, "Could not get matching attestations: "+err.Error(), http.StatusInternalServerError)
+			return nil
 		}
 	}
-	return nil, nil
+
+	if len(match) > 0 {
+		// If there are multiple matching aggregated attestations,
+		// then we return the one with the most aggregation bits.
+		slices.SortFunc(match, func(a, b ethpbalpha.Att) int {
+			return cmp.Compare(b.GetAggregationBits().Count(), a.GetAggregationBits().Count())
+		})
+		return match[0]
+	}
+
+	// No match was found and the new pool doesn't store aggregated and unaggregated attestations separately.
+	if features.Get().EnableExperimentalAttestationPool {
+		return nil
+	}
+
+	atts, err := s.AttestationsPool.UnaggregatedAttestations()
+	if err != nil {
+		httputil.HandleError(w, "Could not get unaggregated attestations: "+err.Error(), http.StatusInternalServerError)
+		return nil
+	}
+	match, err = matchingAtts(atts, slot, attDataRoot, index)
+	if err != nil {
+		httputil.HandleError(w, "Could not get matching attestations: "+err.Error(), http.StatusInternalServerError)
+		return nil
+	}
+	if len(match) == 0 {
+		httputil.HandleError(w, "No matching attestations found", http.StatusNotFound)
+		return nil
+	}
+	agg, err := attestations.Aggregate(match)
+	if err != nil {
+		httputil.HandleError(w, "Could not aggregate unaggregated attestations: "+err.Error(), http.StatusInternalServerError)
+		return nil
+	}
+
+	// Aggregating unaggregated attestations will in theory always return just one aggregate,
+	// so we can take the first one and be done with it.
+	return agg[0]
+}
+
+func matchingAtts(atts []ethpbalpha.Att, slot primitives.Slot, attDataRoot []byte, index primitives.CommitteeIndex) ([]ethpbalpha.Att, error) {
+	if len(atts) == 0 {
+		return []ethpbalpha.Att{}, nil
+	}
+
+	postElectra := slots.ToForkVersion(slot) >= version.Electra
+	result := make([]ethpbalpha.Att, 0)
+	for _, att := range atts {
+		if att.GetData().Slot != slot {
+			continue
+		}
+
+		// We ignore the committee index from the request before Electra.
+		// This is because before Electra the committee index is part of the attestation data,
+		// meaning that comparing the data root is sufficient.
+		// Post-Electra the committee index in the data root is always 0, so we need to
+		// compare the committee index separately.
+		if postElectra {
+			if att.Version() >= version.Electra {
+				ci, err := att.GetCommitteeIndex()
+				if err != nil {
+					return nil, err
+				}
+				if ci != index {
+					continue
+				}
+			} else {
+				continue
+			}
+		} else {
+			// If postElectra is false and att.Version >= version.Electra, ignore the attestation.
+			if att.Version() >= version.Electra {
+				continue
+			}
+		}
+
+		root, err := att.GetData().HashTreeRoot()
+		if err != nil {
+			return nil, errors.Wrap(err, "could not get attestation data root")
+		}
+		if bytes.Equal(root[:], attDataRoot) {
+			result = append(result, att)
+		}
+	}
+
+	return result, nil
 }
 
 // SubmitContributionAndProofs publishes multiple signed sync committee contribution and proofs.

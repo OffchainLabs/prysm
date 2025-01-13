@@ -146,6 +146,7 @@ type BeaconChainConfig struct {
 	BeaconStateCapellaFieldCount   int             // BeaconStateCapellaFieldCount defines how many fields are in beacon state post upgrade to Capella.
 	BeaconStateDenebFieldCount     int             // BeaconStateDenebFieldCount defines how many fields are in beacon state post upgrade to Deneb.
 	BeaconStateElectraFieldCount   int             // BeaconStateElectraFieldCount defines how many fields are in beacon state post upgrade to Electra.
+	BeaconStateFuluFieldCount      int             // BeaconStateFuluFieldCount defines how many fields are in beacon state post upgrade to Fulu.
 
 	// Slasher constants.
 	WeakSubjectivityPeriod    primitives.Epoch // WeakSubjectivityPeriod defines the time period expressed in number of epochs were proof of stake network should validate block headers and attestations for slashable events.
@@ -164,8 +165,10 @@ type BeaconChainConfig struct {
 	CapellaForkEpoch     primitives.Epoch `yaml:"CAPELLA_FORK_EPOCH" spec:"true"`     // CapellaForkEpoch is used to represent the assigned fork epoch for capella.
 	DenebForkVersion     []byte           `yaml:"DENEB_FORK_VERSION" spec:"true"`     // DenebForkVersion is used to represent the fork version for deneb.
 	DenebForkEpoch       primitives.Epoch `yaml:"DENEB_FORK_EPOCH" spec:"true"`       // DenebForkEpoch is used to represent the assigned fork epoch for deneb.
-	ElectraForkVersion   []byte           `yaml:"ELECTRA_FORK_VERSION" spec:"true"`   // ElectraForkVersion is used to represent the fork version for deneb.
-	ElectraForkEpoch     primitives.Epoch `yaml:"ELECTRA_FORK_EPOCH" spec:"true"`     // ElectraForkEpoch is used to represent the assigned fork epoch for deneb.
+	ElectraForkVersion   []byte           `yaml:"ELECTRA_FORK_VERSION" spec:"true"`   // ElectraForkVersion is used to represent the fork version for electra.
+	ElectraForkEpoch     primitives.Epoch `yaml:"ELECTRA_FORK_EPOCH" spec:"true"`     // ElectraForkEpoch is used to represent the assigned fork epoch for electra.
+	FuluForkVersion      []byte           `yaml:"FULU_FORK_VERSION" spec:"true"`      // FuluForkVersion is used to represent the fork version for fulu.
+	FuluForkEpoch        primitives.Epoch `yaml:"FULU_FORK_EPOCH" spec:"true"`        // FuluForkEpoch is used to represent the assigned fork epoch for fulu.
 
 	ForkVersionSchedule map[[fieldparams.VersionLength]byte]primitives.Epoch // Schedule of fork epochs by version.
 	ForkVersionNames    map[[fieldparams.VersionLength]byte]string           // Human-readable names of fork versions.
@@ -228,12 +231,14 @@ type BeaconChainConfig struct {
 	ExecutionEngineTimeoutValue uint64 // ExecutionEngineTimeoutValue defines the seconds to wait before timing out engine endpoints with execution payload execution semantics (newPayload, forkchoiceUpdated).
 
 	// Subnet value
-	BlobsidecarSubnetCount uint64 `yaml:"BLOB_SIDECAR_SUBNET_COUNT"` // BlobsidecarSubnetCount is the number of blobsidecar subnets used in the gossipsub protocol.
+	BlobsidecarSubnetCount        uint64 `yaml:"BLOB_SIDECAR_SUBNET_COUNT"`         // BlobsidecarSubnetCount is the number of blobsidecar subnets used in the gossipsub protocol.
+	BlobsidecarSubnetCountElectra uint64 `yaml:"BLOB_SIDECAR_SUBNET_COUNT_ELECTRA"` // BlobsidecarSubnetCountElectra is the number of blobsidecar subnets used in the gossipsub protocol post Electra hard fork.
 
 	// Values introduced in Deneb hard fork
 	MaxPerEpochActivationChurnLimit  uint64           `yaml:"MAX_PER_EPOCH_ACTIVATION_CHURN_LIMIT" spec:"true"`  // MaxPerEpochActivationChurnLimit is the maximum amount of churn allotted for validator activation.
 	MinEpochsForBlobsSidecarsRequest primitives.Epoch `yaml:"MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUESTS" spec:"true"` // MinEpochsForBlobsSidecarsRequest is the minimum number of epochs the node will keep the blobs for.
 	MaxRequestBlobSidecars           uint64           `yaml:"MAX_REQUEST_BLOB_SIDECARS" spec:"true"`             // MaxRequestBlobSidecars is the maximum number of blobs to request in a single request.
+	MaxRequestBlobSidecarsElectra    uint64           `yaml:"MAX_REQUEST_BLOB_SIDECARS_ELECTRA" spec:"true"`     // MaxRequestBlobSidecarsElectra is the maximum number of blobs to request in a single request.
 	MaxRequestBlocksDeneb            uint64           `yaml:"MAX_REQUEST_BLOCKS_DENEB" spec:"true"`              // MaxRequestBlocksDeneb is the maximum number of blocks in a single request after the deneb epoch.
 
 	// Values introduce in Electra upgrade
@@ -255,6 +260,13 @@ type BeaconChainConfig struct {
 	MaxDepositRequestsPerPayload          uint64 `yaml:"MAX_DEPOSIT_REQUESTS_PER_PAYLOAD" spec:"true"`           // MaxDepositRequestsPerPayload is the maximum number of execution layer deposits in each payload
 	UnsetDepositRequestsStartIndex        uint64 `yaml:"UNSET_DEPOSIT_REQUESTS_START_INDEX" spec:"true"`         // UnsetDepositRequestsStartIndex is used to check the start index for eip6110
 
+	// PeerDAS Values
+	SamplesPerSlot                        uint64           `yaml:"SAMPLES_PER_SLOT"`                             // SamplesPerSlot refers to the number of random samples a node queries per slot.
+	CustodyRequirement                    uint64           `yaml:"CUSTODY_REQUIREMENT"`                          // CustodyRequirement refers to the minimum amount of subnets a peer must custody and serve samples from.
+	MinEpochsForDataColumnSidecarsRequest primitives.Epoch `yaml:"MIN_EPOCHS_FOR_DATA_COLUMN_SIDECARS_REQUESTS"` // MinEpochsForDataColumnSidecarsRequest is the minimum number of epochs the node will keep the data columns for.
+	MaxCellsInExtendedMatrix              uint64           `yaml:"MAX_CELLS_IN_EXTENDED_MATRIX" spec:"true"`     // MaxCellsInExtendedMatrix is the full data of one-dimensional erasure coding extended blobs (in row major format).
+	NumberOfColumns                       uint64           `yaml:"NUMBER_OF_COLUMNS" spec:"true"`                // NumberOfColumns in the extended data matrix.
+
 	// Networking Specific Parameters
 	GossipMaxSize                   uint64          `yaml:"GOSSIP_MAX_SIZE" spec:"true"`                    // GossipMaxSize is the maximum allowed size of uncompressed gossip messages.
 	MaxChunkSize                    uint64          `yaml:"MAX_CHUNK_SIZE" spec:"true"`                     // MaxChunkSize is the maximum allowed size of uncompressed req/resp chunked responses.
@@ -273,9 +285,19 @@ type BeaconChainConfig struct {
 	SubnetsPerNode                  uint64          `yaml:"SUBNETS_PER_NODE" spec:"true"`                   // SubnetsPerNode is the number of long-lived subnets a beacon node should be subscribed to.
 	NodeIdBits                      uint64          `yaml:"NODE_ID_BITS" spec:"true"`                       // NodeIdBits defines the bit length of a node id.
 
-	// PeerDAS
-	NumberOfColumns          uint64 `yaml:"NUMBER_OF_COLUMNS" spec:"true"`            // NumberOfColumns in the extended data matrix.
-	MaxCellsInExtendedMatrix uint64 `yaml:"MAX_CELLS_IN_EXTENDED_MATRIX" spec:"true"` // MaxCellsInExtendedMatrix is the full data of one-dimensional erasure coding extended blobs (in row major format).
+	// Blobs Values
+
+	// Deprecated_MaxBlobsPerBlock defines the max blobs that could exist in a block.
+	// Deprecated: This field is no longer supported. Avoid using it.
+	DeprecatedMaxBlobsPerBlock int `yaml:"MAX_BLOBS_PER_BLOCK" spec:"true"`
+
+	// DeprecatedMaxBlobsPerBlockElectra defines the max blobs that could exist in a block post Electra hard fork.
+	// Deprecated: This field is no longer supported. Avoid using it.
+	DeprecatedMaxBlobsPerBlockElectra int `yaml:"MAX_BLOBS_PER_BLOCK_ELECTRA" spec:"true"`
+
+	// DeprecatedTargetBlobsPerBlockElectra defines the target number of blobs per block post Electra hard fork.
+	// Deprecated: This field is no longer supported. Avoid using it.
+	DeprecatedTargetBlobsPerBlockElectra int `yaml:"TARGET_BLOBS_PER_BLOCK_ELECTRA" spec:"true"`
 }
 
 // InitializeForkSchedule initializes the schedules forks baked into the config.
@@ -293,6 +315,7 @@ func configForkSchedule(b *BeaconChainConfig) map[[fieldparams.VersionLength]byt
 	fvs[bytesutil.ToBytes4(b.CapellaForkVersion)] = b.CapellaForkEpoch
 	fvs[bytesutil.ToBytes4(b.DenebForkVersion)] = b.DenebForkEpoch
 	fvs[bytesutil.ToBytes4(b.ElectraForkVersion)] = b.ElectraForkEpoch
+	fvs[bytesutil.ToBytes4(b.FuluForkVersion)] = b.FuluForkEpoch
 	return fvs
 }
 
@@ -315,6 +338,7 @@ func ConfigForkVersions(b *BeaconChainConfig) map[[fieldparams.VersionLength]byt
 		bytesutil.ToBytes4(b.CapellaForkVersion):   version.Capella,
 		bytesutil.ToBytes4(b.DenebForkVersion):     version.Deneb,
 		bytesutil.ToBytes4(b.ElectraForkVersion):   version.Electra,
+		bytesutil.ToBytes4(b.FuluForkVersion):      version.Fulu,
 	}
 }
 
@@ -353,11 +377,35 @@ func (b *BeaconChainConfig) MaximumGossipClockDisparityDuration() time.Duration 
 	return time.Duration(b.MaximumGossipClockDisparity) * time.Millisecond
 }
 
+// TargetBlobsPerBlock returns the target number of blobs per block for the given slot,
+// accounting for changes introduced by the Electra fork.
+func (b *BeaconChainConfig) TargetBlobsPerBlock(slot primitives.Slot) int {
+	if primitives.Epoch(slot.DivSlot(32)) >= b.ElectraForkEpoch {
+		return b.DeprecatedTargetBlobsPerBlockElectra
+	}
+	return b.DeprecatedMaxBlobsPerBlock / 2
+}
+
+// MaxBlobsPerBlock returns the maximum number of blobs per block for the given slot,
+// adjusting for the Electra fork.
+func (b *BeaconChainConfig) MaxBlobsPerBlock(slot primitives.Slot) int {
+	if primitives.Epoch(slot.DivSlot(32)) >= b.ElectraForkEpoch {
+		return b.DeprecatedMaxBlobsPerBlockElectra
+	}
+	return b.DeprecatedMaxBlobsPerBlock
+}
+
 // DenebEnabled centralizes the check to determine if code paths
 // that are specific to deneb should be allowed to execute. This will make it easier to find call sites that do this
 // kind of check and remove them post-deneb.
 func DenebEnabled() bool {
 	return BeaconConfig().DenebForkEpoch < math.MaxUint64
+}
+
+// PeerDASEnabled centralizes the check to determine if code paths
+// that are specific to peerdas should be allowed to execute.
+func PeerDASEnabled() bool {
+	return BeaconConfig().FuluForkEpoch < math.MaxUint64
 }
 
 // WithinDAPeriod checks if the block epoch is within MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUESTS of the given current epoch.

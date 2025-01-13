@@ -108,6 +108,7 @@ func (g gossipTracer) setMetricFromRPC(act action, subCtr prometheus.Counter, pu
 		ctrlCtr.WithLabelValues("prune").Add(float64(len(rpc.Control.Prune)))
 		ctrlCtr.WithLabelValues("ihave").Add(float64(len(rpc.Control.Ihave)))
 		ctrlCtr.WithLabelValues("iwant").Add(float64(len(rpc.Control.Iwant)))
+		ctrlCtr.WithLabelValues("idontwant").Add(float64(len(rpc.Control.Idontwant)))
 	}
 	for _, msg := range rpc.Publish {
 		// For incoming messages from pubsub, we do not record metrics for them as these values

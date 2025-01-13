@@ -62,12 +62,11 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(ctx context.Context, p
 	if !ok {
 		return pubsub.ValidationReject, errWrongMessage
 	}
-
-	data := att.GetData()
-
 	if err := helpers.ValidateNilAttestation(att); err != nil {
 		return pubsub.ValidationReject, err
 	}
+	data := att.GetData()
+
 	// Do not process slot 0 attestations.
 	if data.Slot == 0 {
 		return pubsub.ValidationIgnore, nil

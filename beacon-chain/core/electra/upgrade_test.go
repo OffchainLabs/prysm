@@ -102,7 +102,7 @@ func TestUpgradeToElectra(t *testing.T) {
 
 	header, err := mSt.LatestExecutionPayloadHeader()
 	require.NoError(t, err)
-	protoHeader, ok := header.Proto().(*enginev1.ExecutionPayloadHeaderElectra)
+	protoHeader, ok := header.Proto().(*enginev1.ExecutionPayloadHeaderDeneb)
 	require.Equal(t, true, ok)
 	prevHeader, err := preForkState.LatestExecutionPayloadHeader()
 	require.NoError(t, err)
@@ -111,7 +111,7 @@ func TestUpgradeToElectra(t *testing.T) {
 
 	wdRoot, err := prevHeader.WithdrawalsRoot()
 	require.NoError(t, err)
-	wanted := &enginev1.ExecutionPayloadHeaderElectra{
+	wanted := &enginev1.ExecutionPayloadHeaderDeneb{
 		ParentHash:       prevHeader.ParentHash(),
 		FeeRecipient:     prevHeader.FeeRecipient(),
 		StateRoot:        prevHeader.StateRoot(),
@@ -159,7 +159,7 @@ func TestUpgradeToElectra(t *testing.T) {
 
 	eee, err := mSt.EarliestExitEpoch()
 	require.NoError(t, err)
-	require.Equal(t, primitives.Epoch(1), eee)
+	require.Equal(t, helpers.ActivationExitEpoch(primitives.Epoch(1)), eee)
 
 	cbtc, err := mSt.ConsolidationBalanceToConsume()
 	require.NoError(t, err)

@@ -53,7 +53,7 @@ func (f *ForkChoice) ShouldOverrideFCU() (override bool) {
 	// Only reorg blocks that arrive late
 	early, err := head.arrivedEarly(f.store.genesisTime)
 	if err != nil {
-		log.WithError(err).Error("could not check if block arrived early")
+		log.WithError(err).Error("Could not check if block arrived early")
 		return
 	}
 	if early {

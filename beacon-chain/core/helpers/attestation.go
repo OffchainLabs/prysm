@@ -23,11 +23,8 @@ var (
 // Access to these nil fields will result in run time panic,
 // it is recommended to run these checks as first line of defense.
 func ValidateNilAttestation(attestation ethpb.Att) error {
-	if attestation == nil {
-		return errors.New("attestation can't be nil")
-	}
-	if attestation.GetData() == nil {
-		return errors.New("attestation's data can't be nil")
+	if attestation == nil || attestation.IsNil() {
+		return errors.New("attestation is nil")
 	}
 	if attestation.GetData().Source == nil {
 		return errors.New("attestation's source can't be nil")
@@ -68,12 +65,6 @@ func IsAggregator(committeeCount uint64, slotSig []byte) (bool, error) {
 
 	b := hash.Hash(slotSig)
 	return binary.LittleEndian.Uint64(b[:8])%modulo == 0, nil
-}
-
-// IsAggregated returns true if the attestation is an aggregated attestation,
-// false otherwise.
-func IsAggregated(attestation ethpb.Att) bool {
-	return attestation.GetAggregationBits().Count() > 1
 }
 
 // ComputeSubnetForAttestation returns the subnet for which the provided attestation will be broadcasted to.

@@ -49,56 +49,59 @@ func (b *BeaconState) NextWithdrawalValidatorIndex() (primitives.ValidatorIndex,
 // Spec definition:
 //
 //	def get_expected_withdrawals(state: BeaconState) -> Tuple[Sequence[Withdrawal], uint64]:
-//	    epoch = get_current_epoch(state)
-//	    withdrawal_index = state.next_withdrawal_index
-//	    validator_index = state.next_withdrawal_validator_index
-//	    withdrawals: List[Withdrawal] = []
+//		epoch = get_current_epoch(state)
+//		withdrawal_index = state.next_withdrawal_index
+//		validator_index = state.next_withdrawal_validator_index
+//		withdrawals: List[Withdrawal] = []
+//		processed_partial_withdrawals_count = 0
 //
-//	    # [New in Electra:EIP7251] Consume pending partial withdrawals
-//	    for withdrawal in state.pending_partial_withdrawals:
-//	        if withdrawal.withdrawable_epoch > epoch or len(withdrawals) == MAX_PENDING_PARTIALS_PER_WITHDRAWALS_SWEEP:
-//	            break
+//		# [New in Electra:EIP7251] Consume pending partial withdrawals
+//		for withdrawal in state.pending_partial_withdrawals:
+//			if withdrawal.withdrawable_epoch > epoch or len(withdrawals) == MAX_PENDING_PARTIALS_PER_WITHDRAWALS_SWEEP:
+//				break
 //
-//	        validator = state.validators[withdrawal.index]
-//	        has_sufficient_effective_balance = validator.effective_balance >= MIN_ACTIVATION_BALANCE
-//	        has_excess_balance = state.balances[withdrawal.index] > MIN_ACTIVATION_BALANCE
-//	        if validator.exit_epoch == FAR_FUTURE_EPOCH and has_sufficient_effective_balance and has_excess_balance:
-//	            withdrawable_balance = min(state.balances[withdrawal.index] - MIN_ACTIVATION_BALANCE, withdrawal.amount)
-//	            withdrawals.append(Withdrawal(
-//	                index=withdrawal_index,
-//	                validator_index=withdrawal.index,
-//	                address=ExecutionAddress(validator.withdrawal_credentials[12:]),
-//	                amount=withdrawable_balance,
-//	            ))
-//	            withdrawal_index += WithdrawalIndex(1)
+//			validator = state.validators[withdrawal.index]
+//			has_sufficient_effective_balance = validator.effective_balance >= MIN_ACTIVATION_BALANCE
+//			has_excess_balance = state.balances[withdrawal.index] > MIN_ACTIVATION_BALANCE
+//			if validator.exit_epoch == FAR_FUTURE_EPOCH and has_sufficient_effective_balance and has_excess_balance:
+//				withdrawable_balance = min(state.balances[withdrawal.index] - MIN_ACTIVATION_BALANCE, withdrawal.amount)
+//				withdrawals.append(Withdrawal(
+//					index=withdrawal_index,
+//					validator_index=withdrawal.index,
+//					address=ExecutionAddress(validator.withdrawal_credentials[12:]),
+//					amount=withdrawable_balance,
+//				))
+//				withdrawal_index += WithdrawalIndex(1)
 //
-//	    partial_withdrawals_count = len(withdrawals)
+//		processed_partial_withdrawals_count += 1
 //
-//	    # Sweep for remaining.
-//	    bound = min(len(state.validators), MAX_VALIDATORS_PER_WITHDRAWALS_SWEEP)
-//	    for _ in range(bound):
-//	        validator = state.validators[validator_index]
-//	        balance = state.balances[validator_index]
-//	        if is_fully_withdrawable_validator(validator, balance, epoch):
-//	            withdrawals.append(Withdrawal(
-//	                index=withdrawal_index,
-//	                validator_index=validator_index,
-//	                address=ExecutionAddress(validator.withdrawal_credentials[12:]),
-//	                amount=balance,
-//	            ))
-//	            withdrawal_index += WithdrawalIndex(1)
-//	        elif is_partially_withdrawable_validator(validator, balance):
-//	            withdrawals.append(Withdrawal(
-//	                index=withdrawal_index,
-//	                validator_index=validator_index,
-//	                address=ExecutionAddress(validator.withdrawal_credentials[12:]),
-//	                amount=balance - get_validator_max_effective_balance(validator),  # [Modified in Electra:EIP7251]
-//	            ))
-//	            withdrawal_index += WithdrawalIndex(1)
-//	        if len(withdrawals) == MAX_WITHDRAWALS_PER_PAYLOAD:
-//	            break
-//	        validator_index = ValidatorIndex((validator_index + 1) % len(state.validators))
-//	    return withdrawals, partial_withdrawals_count
+//		# Sweep for remaining.
+//		bound = min(len(state.validators), MAX_VALIDATORS_PER_WITHDRAWALS_SWEEP)
+//		for _ in range(bound):
+//			validator = state.validators[validator_index]
+//			# [Modified in Electra:EIP7251]
+//			partially_withdrawn_balance = sum(withdrawal.amount for withdrawal in withdrawals if withdrawal.validator_index == validator_index)
+//			balance = state.balances[validator_index] - partially_withdrawn_balance
+//			if is_fully_withdrawable_validator(validator, balance, epoch):
+//				withdrawals.append(Withdrawal(
+//					index=withdrawal_index,
+//					validator_index=validator_index,
+//					address=ExecutionAddress(validator.withdrawal_credentials[12:]),
+//					amount=balance,
+//				))
+//				withdrawal_index += WithdrawalIndex(1)
+//			elif is_partially_withdrawable_validator(validator, balance):
+//				withdrawals.append(Withdrawal(
+//					index=withdrawal_index,
+//					validator_index=validator_index,
+//					address=ExecutionAddress(validator.withdrawal_credentials[12:]),
+//					amount=balance - get_validator_max_effective_balance(validator),  # [Modified in Electra:EIP7251]
+//				))
+//				withdrawal_index += WithdrawalIndex(1)
+//			if len(withdrawals) == MAX_WITHDRAWALS_PER_PAYLOAD:
+//				break
+//			validator_index = ValidatorIndex((validator_index + 1) % len(state.validators))
+//		return withdrawals, processed_partial_withdrawals_count
 func (b *BeaconState) ExpectedWithdrawals() ([]*enginev1.Withdrawal, uint64, error) {
 	if b.version < version.Capella {
 		return nil, 0, errNotSupported("ExpectedWithdrawals", b.version)
@@ -113,7 +116,7 @@ func (b *BeaconState) ExpectedWithdrawals() ([]*enginev1.Withdrawal, uint64, err
 	epoch := slots.ToEpoch(b.slot)
 
 	// Electra partial withdrawals functionality.
-	var partialWithdrawalsCount uint64
+	var processedPartialWithdrawalsCount uint64
 	if b.version >= version.Electra {
 		for _, w := range b.pendingPartialWithdrawals {
 			if w.WithdrawableEpoch > epoch || len(withdrawals) >= int(params.BeaconConfig().MaxPendingPartialsPerWithdrawalsSweep) {
@@ -140,7 +143,7 @@ func (b *BeaconState) ExpectedWithdrawals() ([]*enginev1.Withdrawal, uint64, err
 				})
 				withdrawalIndex++
 			}
-			partialWithdrawalsCount++
+			processedPartialWithdrawalsCount++
 		}
 	}
 
@@ -154,6 +157,15 @@ func (b *BeaconState) ExpectedWithdrawals() ([]*enginev1.Withdrawal, uint64, err
 		balance, err := b.balanceAtIndex(validatorIndex)
 		if err != nil {
 			return nil, 0, errors.Wrapf(err, "could not retrieve balance at index %d", validatorIndex)
+		}
+		if b.version >= version.Electra {
+			var partiallyWithdrawnBalance uint64
+			for _, w := range withdrawals {
+				if w.ValidatorIndex == validatorIndex {
+					partiallyWithdrawnBalance += w.Amount
+				}
+			}
+			balance = balance - partiallyWithdrawnBalance
 		}
 		if helpers.IsFullyWithdrawableValidator(val, balance, epoch, b.version) {
 			withdrawals = append(withdrawals, &enginev1.Withdrawal{
@@ -181,7 +193,7 @@ func (b *BeaconState) ExpectedWithdrawals() ([]*enginev1.Withdrawal, uint64, err
 		}
 	}
 
-	return withdrawals, partialWithdrawalsCount, nil
+	return withdrawals, processedPartialWithdrawalsCount, nil
 }
 
 func (b *BeaconState) PendingPartialWithdrawals() ([]*ethpb.PendingPartialWithdrawal, error) {

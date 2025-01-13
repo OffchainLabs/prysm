@@ -976,7 +976,7 @@ func (bb *BuilderBidDeneb) ToProto() (*eth.BuilderBidDeneb, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(bb.BlobKzgCommitments) > fieldparams.MaxBlobsPerBlock {
+	if len(bb.BlobKzgCommitments) > params.BeaconConfig().DeprecatedMaxBlobsPerBlock {
 		return nil, fmt.Errorf("too many blob commitments: %d", len(bb.BlobKzgCommitments))
 	}
 	kzgCommitments := make([][]byte, len(bb.BlobKzgCommitments))

@@ -54,7 +54,7 @@ func (vs *Server) eth1DataMajorityVote(ctx context.Context, beaconState state.Be
 	// by ETH1_FOLLOW_DISTANCE. The head state should maintain the same ETH1Data until this condition has passed, so
 	// trust the existing head for the right eth1 vote until we can get a meaningful value from the deposit contract.
 	if latestValidTime < genesisTime+followDistanceSeconds {
-		log.WithField("genesisTime", genesisTime).WithField("latestValidTime", latestValidTime).Warn("voting period before genesis + follow distance, using eth1data from head")
+		log.WithField("genesisTime", genesisTime).WithField("latestValidTime", latestValidTime).Warn("Voting period before genesis + follow distance, using eth1data from head")
 		return vs.HeadFetcher.HeadETH1Data(), nil
 	}
 

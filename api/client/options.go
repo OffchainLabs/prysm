@@ -46,3 +46,10 @@ func WithAuthenticationToken(token string) ClientOpt {
 		c.token = token
 	}
 }
+
+// WithMaxBodySize overrides the default max body size of 8MB.
+func WithMaxBodySize(size int64) ClientOpt {
+	return func(c *Client) {
+		c.maxBodySize = size
+	}
+}

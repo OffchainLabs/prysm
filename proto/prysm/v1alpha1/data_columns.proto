@@ -1,0 +1,41 @@
+// Copyright 2024 Offchain Labs.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+syntax = "proto3";
+
+package ethereum.eth.v1alpha1;
+
+import "proto/eth/ext/options.proto";
+import "proto/prysm/v1alpha1/beacon_block.proto";
+
+option csharp_namespace = "Ethereum.Eth.v1alpha1";
+option go_package = "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1;eth";
+option java_multiple_files = true;
+option java_outer_classname = "DataColumnsProto";
+option java_package = "org.ethereum.eth.v1alpha1";
+option php_namespace = "Ethereum\\Eth\\v1alpha1";
+
+
+message DataColumnSidecar {
+  uint64 column_index = 1;
+  repeated bytes data_column = 2 [(ethereum.eth.ext.ssz_size) = "?,bytes_per_cell.size", (ethereum.eth.ext.ssz_max)  = "max_blob_commitments.size"];
+  repeated bytes kzg_commitments = 3 [(ethereum.eth.ext.ssz_size) = "?,48", (ethereum.eth.ext.ssz_max)  = "max_blob_commitments.size"];
+  repeated bytes kzg_proof = 4 [(ethereum.eth.ext.ssz_size) = "?,48", (ethereum.eth.ext.ssz_max)  = "max_blob_commitments.size"];
+  SignedBeaconBlockHeader signed_block_header = 5;
+  repeated bytes kzg_commitments_inclusion_proof = 6  [(ethereum.eth.ext.ssz_size) = "kzg_commitments_inclusion_proof_depth.size,32"];
+}
+
+message DataColumnIdentifier {
+  bytes block_root = 1 [(ethereum.eth.ext.ssz_size) = "32"];
+  uint64 column_index = 2;
+}

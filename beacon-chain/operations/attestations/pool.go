@@ -37,7 +37,6 @@ type Pool interface {
 	BlockAttestations() []ethpb.Att
 	DeleteBlockAttestation(att ethpb.Att) error
 	// For attestations to be passed to fork choice.
-	SaveForkchoiceAttestation(att ethpb.Att) error
 	SaveForkchoiceAttestations(atts []ethpb.Att) error
 	ForkchoiceAttestations() []ethpb.Att
 	DeleteForkchoiceAttestation(att ethpb.Att) error

@@ -287,6 +287,9 @@ func (vs *Server) validatorStatus(
 		Status:          ethpb.ValidatorStatus_UNKNOWN_STATUS,
 		ActivationEpoch: params.BeaconConfig().FarFutureEpoch,
 	}
+	if len(pubKey) == 0 {
+		return resp, nonExistentIndex
+	}
 	vStatus, idx, err := statusForPubKey(headState, pubKey)
 	if err != nil && !errors.Is(err, errPubkeyDoesNotExist) {
 		tracing.AnnotateError(span, err)

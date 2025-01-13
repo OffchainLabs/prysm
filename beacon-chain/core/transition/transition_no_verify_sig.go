@@ -333,8 +333,7 @@ func ProcessBlockForStateRoot(
 				return nil, errors.Wrap(err, "could not process withdrawals")
 			}
 		}
-		state, err = b.ProcessPayload(state, blk.Body())
-		if err != nil {
+		if err = b.ProcessPayload(state, blk.Body()); err != nil {
 			return nil, errors.Wrap(err, "could not process execution data")
 		}
 	}

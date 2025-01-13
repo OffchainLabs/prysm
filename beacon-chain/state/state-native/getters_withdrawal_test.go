@@ -64,7 +64,7 @@ func TestNextWithdrawalValidatorIndex(t *testing.T) {
 }
 
 func TestExpectedWithdrawals(t *testing.T) {
-	for _, stateVersion := range []int{version.Capella, version.Deneb, version.Electra} {
+	for _, stateVersion := range []int{version.Capella, version.Deneb, version.Electra, version.Fulu} {
 		t.Run(version.String(stateVersion), func(t *testing.T) {
 			t.Run("no withdrawals", func(t *testing.T) {
 				s := state_native.EmptyStateFromVersion(t, stateVersion)
@@ -366,5 +366,53 @@ func TestExpectedWithdrawals(t *testing.T) {
 		_, partialWithdrawalsCount, err := s.ExpectedWithdrawals()
 		require.NoError(t, err)
 		require.Equal(t, uint64(10), partialWithdrawalsCount)
+	})
+	t.Run("electra same validator has one partially and one fully withdrawable", func(t *testing.T) {
+		s, _ := util.DeterministicGenesisStateElectra(t, 1)
+		vals := make([]*ethpb.Validator, 100)
+		balances := make([]uint64, 100)
+		for i := range vals {
+			balances[i] = params.BeaconConfig().MaxEffectiveBalance
+			val := &ethpb.Validator{
+				WithdrawalCredentials: make([]byte, 32),
+				EffectiveBalance:      params.BeaconConfig().MaxEffectiveBalance,
+				WithdrawableEpoch:     primitives.Epoch(1),
+				ExitEpoch:             params.BeaconConfig().FarFutureEpoch,
+			}
+			val.WithdrawalCredentials[0] = params.BeaconConfig().ETH1AddressWithdrawalPrefixByte
+			val.WithdrawalCredentials[31] = byte(i)
+			vals[i] = val
+		}
+		balances[1] += params.BeaconConfig().MinDepositAmount
+		vals[1].WithdrawableEpoch = primitives.Epoch(0)
+		require.NoError(t, s.SetValidators(vals))
+		require.NoError(t, s.SetBalances(balances))
+		// Give validator a pending balance to withdraw.
+		require.NoError(t, s.AppendPendingPartialWithdrawal(&ethpb.PendingPartialWithdrawal{
+			Index:             1,
+			Amount:            balances[1], // will only deduct excess even though balance is more that minimum activation
+			WithdrawableEpoch: primitives.Epoch(0),
+		}))
+		p, err := s.PendingPartialWithdrawals()
+		require.NoError(t, err)
+		require.Equal(t, 1, len(p))
+		expected, _, err := s.ExpectedWithdrawals()
+		require.NoError(t, err)
+		require.Equal(t, 2, len(expected))
+
+		withdrawalFull := &enginev1.Withdrawal{
+			Index:          1,
+			ValidatorIndex: 1,
+			Address:        vals[1].WithdrawalCredentials[12:],
+			Amount:         balances[1] - params.BeaconConfig().MinDepositAmount, // subtract the partial from this
+		}
+		withdrawalPartial := &enginev1.Withdrawal{
+			Index:          0,
+			ValidatorIndex: 1,
+			Address:        vals[1].WithdrawalCredentials[12:],
+			Amount:         params.BeaconConfig().MinDepositAmount,
+		}
+		require.DeepEqual(t, withdrawalPartial, expected[0])
+		require.DeepEqual(t, withdrawalFull, expected[1])
 	})
 }

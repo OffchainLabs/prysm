@@ -212,7 +212,9 @@ go_test(
     embed = [":go_default_library"],
     eth_network = "minimal",
     tags = ["minimal"],
-    deps = common_deps,
+    deps = common_deps + [
+        "//beacon-chain/operations/attestations/mock:go_default_library",
+    ],
 )
 
 go_test(

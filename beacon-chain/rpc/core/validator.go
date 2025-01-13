@@ -381,21 +381,12 @@ func (s *Service) SubmitSignedAggregateSelectionProof(
 	ctx, span := trace.StartSpan(ctx, "coreService.SubmitSignedAggregateSelectionProof")
 	defer span.End()
 
-	if agg == nil {
+	if agg == nil || agg.IsNil() {
 		return &RpcError{Err: errors.New("signed aggregate request can't be nil"), Reason: BadRequest}
 	}
 	attAndProof := agg.AggregateAttestationAndProof()
-	if attAndProof == nil {
-		return &RpcError{Err: errors.New("signed aggregate request can't be nil"), Reason: BadRequest}
-	}
 	att := attAndProof.AggregateVal()
-	if att == nil {
-		return &RpcError{Err: errors.New("signed aggregate request can't be nil"), Reason: BadRequest}
-	}
 	data := att.GetData()
-	if data == nil {
-		return &RpcError{Err: errors.New("signed aggregate request can't be nil"), Reason: BadRequest}
-	}
 	emptySig := make([]byte, fieldparams.BLSSignatureLength)
 	if bytes.Equal(agg.GetSignature(), emptySig) || bytes.Equal(attAndProof.GetSelectionProof(), emptySig) {
 		return &RpcError{Err: errors.New("signed signatures can't be zero hashes"), Reason: BadRequest}
@@ -869,16 +860,9 @@ func (s *Service) ValidatorActiveSetChanges(
 		}
 	}
 
-	activeValidatorCount, err := helpers.ActiveValidatorCount(ctx, requestedState, coreTime.CurrentEpoch(requestedState))
-	if err != nil {
-		return nil, &RpcError{
-			Err:    errors.Wrap(err, "could not get active validator count"),
-			Reason: Internal,
-		}
-	}
 	vs := requestedState.Validators()
 	activatedIndices := validators.ActivatedValidatorIndices(coreTime.CurrentEpoch(requestedState), vs)
-	exitedIndices, err := validators.ExitedValidatorIndices(coreTime.CurrentEpoch(requestedState), vs, activeValidatorCount)
+	exitedIndices, err := validators.ExitedValidatorIndices(coreTime.CurrentEpoch(requestedState), vs)
 	if err != nil {
 		return nil, &RpcError{
 			Err:    errors.Wrap(err, "could not determine exited validator indices"),
@@ -886,7 +870,7 @@ func (s *Service) ValidatorActiveSetChanges(
 		}
 	}
 	slashedIndices := validators.SlashedValidatorIndices(coreTime.CurrentEpoch(requestedState), vs)
-	ejectedIndices, err := validators.EjectedValidatorIndices(coreTime.CurrentEpoch(requestedState), vs, activeValidatorCount)
+	ejectedIndices, err := validators.EjectedValidatorIndices(coreTime.CurrentEpoch(requestedState), vs)
 	if err != nil {
 		return nil, &RpcError{
 			Err:    errors.Wrap(err, "could not determine ejected validator indices"),

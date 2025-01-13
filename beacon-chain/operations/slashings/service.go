@@ -15,6 +15,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/container/slice"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/trailofbits/go-mutexasserts"
 )
 
@@ -43,6 +44,11 @@ func (p *Pool) PendingAttesterSlashings(ctx context.Context, state state.ReadOnl
 
 	// Allocate pending slice with a capacity of maxAttesterSlashings or len(p.pendingAttesterSlashing)) depending on the request.
 	maxSlashings := params.BeaconConfig().MaxAttesterSlashings
+
+	// EIP-7549: Beginning from Electra, the max attester slashings is reduced to 1.
+	if state.Version() >= version.Electra {
+		maxSlashings = params.BeaconConfig().MaxAttesterSlashingsElectra
+	}
 	if noLimit {
 		maxSlashings = uint64(len(p.pendingAttesterSlashing))
 	}

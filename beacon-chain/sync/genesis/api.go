@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/api/client"
 	"github.com/prysmaticlabs/prysm/v5/api/client/beacon"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
 )
@@ -17,7 +18,7 @@ type APIInitializer struct {
 // NewAPIInitializer creates an APIInitializer, handling the set up of a beacon node api client
 // using the provided host string.
 func NewAPIInitializer(beaconNodeHost string) (*APIInitializer, error) {
-	c, err := beacon.NewClient(beaconNodeHost)
+	c, err := beacon.NewClient(beaconNodeHost, client.WithMaxBodySize(client.MaxBodySizeState))
 	if err != nil {
 		return nil, errors.Wrapf(err, "unable to parse beacon node url or hostname - %s", beaconNodeHost)
 	}

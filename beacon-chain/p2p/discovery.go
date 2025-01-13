@@ -22,6 +22,7 @@ import (
 	ecdsaprysm "github.com/prysmaticlabs/prysm/v5/crypto/ecdsa"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
+	"github.com/sirupsen/logrus"
 )
 
 type ListenerRebooter interface {
@@ -47,10 +48,12 @@ const (
 	udp6
 )
 
+const quickProtocolEnrKey = "quic"
+
 type quicProtocol uint16
 
 // quicProtocol is the "quic" key, which holds the QUIC port of the node.
-func (quicProtocol) ENRKey() string { return "quic" }
+func (quicProtocol) ENRKey() string { return quickProtocolEnrKey }
 
 type listenerWrapper struct {
 	mu              sync.RWMutex
@@ -133,68 +136,129 @@ func (l *listenerWrapper) RebootListener() error {
 	return nil
 }
 
-// RefreshENR uses an epoch to refresh the enr entry for our node
-// with the tracked committee ids for the epoch, allowing our node
-// to be dynamically discoverable by others given our tracked committee ids.
-func (s *Service) RefreshENR() {
-	// return early if discv5 isn't running
+// RefreshPersistentSubnets checks that we are tracking our local persistent subnets for a variety of gossip topics.
+// This routine verifies and updates our attestation and sync committee subnets if they have been rotated.
+func (s *Service) RefreshPersistentSubnets() {
+	// Return early if discv5 service isn't running.
 	if s.dv5Listener == nil || !s.isInitialized() {
 		return
 	}
-	currEpoch := slots.ToEpoch(slots.CurrentSlot(uint64(s.genesisTime.Unix())))
-	if err := initializePersistentSubnets(s.dv5Listener.LocalNode().ID(), currEpoch); err != nil {
+
+	// Get the current epoch.
+	currentSlot := slots.CurrentSlot(uint64(s.genesisTime.Unix()))
+	currentEpoch := slots.ToEpoch(currentSlot)
+
+	// Get our node ID.
+	nodeID := s.dv5Listener.LocalNode().ID()
+
+	// Get our node record.
+	record := s.dv5Listener.Self().Record()
+
+	// Get the version of our metadata.
+	metadataVersion := s.Metadata().Version()
+
+	// Initialize persistent subnets.
+	if err := initializePersistentSubnets(nodeID, currentEpoch); err != nil {
 		log.WithError(err).Error("Could not initialize persistent subnets")
 		return
 	}
 
+	// Get the current attestation subnet bitfield.
 	bitV := bitfield.NewBitvector64()
-	committees := cache.SubnetIDs.GetAllSubnets()
-	for _, idx := range committees {
+	attestationCommittees := cache.SubnetIDs.GetAllSubnets()
+	for _, idx := range attestationCommittees {
 		bitV.SetBitAt(idx, true)
 	}
-	currentBitV, err := attBitvector(s.dv5Listener.Self().Record())
+
+	// Get the attestation subnet bitfield we store in our record.
+	inRecordBitV, err := attBitvector(record)
 	if err != nil {
 		log.WithError(err).Error("Could not retrieve att bitfield")
 		return
 	}
 
-	// Compare current epoch with our fork epochs
+	// Get the attestation subnet bitfield in our metadata.
+	inMetadataBitV := s.Metadata().AttnetsBitfield()
+
+	// Is our attestation bitvector record up to date?
+	isBitVUpToDate := bytes.Equal(bitV, inRecordBitV) && bytes.Equal(bitV, inMetadataBitV)
+
+	// Compare current epoch with Altair fork epoch
 	altairForkEpoch := params.BeaconConfig().AltairForkEpoch
-	switch {
-	case currEpoch < altairForkEpoch:
+
+	if currentEpoch < altairForkEpoch {
 		// Phase 0 behaviour.
-		if bytes.Equal(bitV, currentBitV) {
-			// return early if bitfield hasn't changed
+		if isBitVUpToDate {
+			// Return early if bitfield hasn't changed.
 			return
 		}
+
+		// Some data changed. Update the record and the metadata.
 		s.updateSubnetRecordWithMetadata(bitV)
-	default:
-		// Retrieve sync subnets from application level
-		// cache.
-		bitS := bitfield.Bitvector4{byte(0x00)}
-		committees = cache.SyncSubnetIDs.GetAllSubnets(currEpoch)
-		for _, idx := range committees {
-			bitS.SetBitAt(idx, true)
-		}
-		currentBitS, err := syncBitvector(s.dv5Listener.Self().Record())
-		if err != nil {
-			log.WithError(err).Error("Could not retrieve sync bitfield")
-			return
-		}
-		if bytes.Equal(bitV, currentBitV) && bytes.Equal(bitS, currentBitS) &&
-			s.Metadata().Version() == version.Altair {
-			// return early if bitfields haven't changed
-			return
-		}
-		s.updateSubnetRecordWithMetadataV2(bitV, bitS)
+
+		// Ping all peers.
+		s.pingPeersAndLogEnr()
+
+		return
 	}
-	// ping all peers to inform them of new metadata
-	s.pingPeers()
+
+	// Get the current sync subnet bitfield.
+	bitS := bitfield.Bitvector4{byte(0x00)}
+	syncCommittees := cache.SyncSubnetIDs.GetAllSubnets(currentEpoch)
+	for _, idx := range syncCommittees {
+		bitS.SetBitAt(idx, true)
+	}
+
+	// Get the sync subnet bitfield we store in our record.
+	inRecordBitS, err := syncBitvector(record)
+	if err != nil {
+		log.WithError(err).Error("Could not retrieve sync bitfield")
+		return
+	}
+
+	// Get the sync subnet bitfield in our metadata.
+	currentBitSInMetadata := s.Metadata().SyncnetsBitfield()
+
+	// Is our sync bitvector record up to date?
+	isBitSUpToDate := bytes.Equal(bitS, inRecordBitS) && bytes.Equal(bitS, currentBitSInMetadata)
+
+	if metadataVersion == version.Altair && isBitVUpToDate && isBitSUpToDate {
+		// Nothing to do, return early.
+		return
+	}
+
+	// Some data have changed, update our record and metadata.
+	s.updateSubnetRecordWithMetadataV2(bitV, bitS)
+
+	// Ping all peers to inform them of new metadata
+	s.pingPeersAndLogEnr()
 }
 
 // listen for new nodes watches for new nodes in the network and adds them to the peerstore.
 func (s *Service) listenForNewNodes() {
-	iterator := filterNodes(s.ctx, s.dv5Listener.RandomNodes(), s.filterPeer)
+	const (
+		minLogInterval = 1 * time.Minute
+		thresholdLimit = 5
+	)
+
+	peersSummary := func(threshold uint) (uint, uint) {
+		// Retrieve how many active peers we have.
+		activePeers := s.Peers().Active()
+		activePeerCount := uint(len(activePeers))
+
+		// Compute how many peers we are missing to reach the threshold.
+		if activePeerCount >= threshold {
+			return activePeerCount, 0
+		}
+
+		missingPeerCount := threshold - activePeerCount
+
+		return activePeerCount, missingPeerCount
+	}
+
+	var lastLogTime time.Time
+
+	iterator := s.dv5Listener.RandomNodes()
 	defer iterator.Close()
 	connectivityTicker := time.NewTicker(1 * time.Minute)
 	thresholdCount := 0
@@ -203,25 +267,31 @@ func (s *Service) listenForNewNodes() {
 		select {
 		case <-s.ctx.Done():
 			return
+
 		case <-connectivityTicker.C:
 			// Skip the connectivity check if not enabled.
 			if !features.Get().EnableDiscoveryReboot {
 				continue
 			}
+
 			if !s.isBelowOutboundPeerThreshold() {
 				// Reset counter if we are beyond the threshold
 				thresholdCount = 0
 				continue
 			}
+
 			thresholdCount++
+
 			// Reboot listener if connectivity drops
-			if thresholdCount > 5 {
-				log.WithField("outboundConnectionCount", len(s.peers.OutboundConnected())).Warn("Rebooting discovery listener, reached threshold.")
+			if thresholdCount > thresholdLimit {
+				outBoundConnectedCount := len(s.peers.OutboundConnected())
+				log.WithField("outboundConnectionCount", outBoundConnectedCount).Warn("Rebooting discovery listener, reached threshold.")
 				if err := s.dv5Listener.RebootListener(); err != nil {
 					log.WithError(err).Error("Could not reboot listener")
 					continue
 				}
-				iterator = filterNodes(s.ctx, s.dv5Listener.RandomNodes(), s.filterPeer)
+
+				iterator = s.dv5Listener.RandomNodes()
 				thresholdCount = 0
 			}
 		default:
@@ -232,17 +302,35 @@ func (s *Service) listenForNewNodes() {
 				time.Sleep(pollingPeriod)
 				continue
 			}
-			wantedCount := s.wantedPeerDials()
-			if wantedCount == 0 {
+
+			// Compute the number of new peers we want to dial.
+			activePeerCount, missingPeerCount := peersSummary(s.cfg.MaxPeers)
+
+			fields := logrus.Fields{
+				"currentPeerCount": activePeerCount,
+				"targetPeerCount":  s.cfg.MaxPeers,
+			}
+
+			if missingPeerCount == 0 {
 				log.Trace("Not looking for peers, at peer limit")
 				time.Sleep(pollingPeriod)
 				continue
 			}
+
+			if time.Since(lastLogTime) > minLogInterval {
+				lastLogTime = time.Now()
+				log.WithFields(fields).Debug("Searching for new active peers")
+			}
+
 			// Restrict dials if limit is applied.
 			if flags.MaxDialIsActive() {
-				wantedCount = min(wantedCount, flags.Get().MaxConcurrentDials)
+				maxConcurrentDials := uint(flags.Get().MaxConcurrentDials)
+				missingPeerCount = min(missingPeerCount, maxConcurrentDials)
 			}
-			wantedNodes := enode.ReadNodes(iterator, wantedCount)
+
+			// Search for new peers.
+			wantedNodes := searchForPeers(iterator, batchPeriod, missingPeerCount, s.filterPeer)
+
 			wg := new(sync.WaitGroup)
 			for i := 0; i < len(wantedNodes); i++ {
 				node := wantedNodes[i]
@@ -452,12 +540,14 @@ func (s *Service) filterPeer(node *enode.Node) bool {
 	}
 
 	// Ignore bad nodes.
-	if s.peers.IsBad(peerData.ID) {
+	if s.peers.IsBad(peerData.ID) != nil {
 		return false
 	}
 
 	// Ignore nodes that are already active.
 	if s.peers.IsActive(peerData.ID) {
+		// Constantly update enr for known peers
+		s.peers.UpdateENR(node.Record(), peerData.ID)
 		return false
 	}
 
@@ -524,17 +614,6 @@ func (s *Service) isBelowOutboundPeerThreshold() bool {
 	outBoundThreshold := outboundFloor / 2
 	outBoundCount := len(s.Peers().OutboundConnected())
 	return outBoundCount < outBoundThreshold
-}
-
-func (s *Service) wantedPeerDials() int {
-	maxPeers := int(s.cfg.MaxPeers)
-
-	activePeers := len(s.Peers().Active())
-	wantedCount := 0
-	if maxPeers > activePeers {
-		wantedCount = maxPeers - activePeers
-	}
-	return wantedCount
 }
 
 // PeersFromStringAddrs converts peer raw ENRs into multiaddrs for p2p.

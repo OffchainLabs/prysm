@@ -806,7 +806,7 @@ func TestCheckAndLogValidatorStatus_OK(t *testing.T) {
 					PositionInActivationQueue: 30,
 				},
 			},
-			log:    "Deposit processed, entering activation queue after finalization\" positionInActivationQueue=30 prefix=client pubkey=0x000000000000 status=DEPOSITED validatorIndex=30",
+			log:    "Validator deposited, entering activation queue after finalization\" prefix=client pubkey=0x000000000000 status=DEPOSITED validatorIndex=30",
 			active: false,
 		},
 		{
@@ -820,21 +820,7 @@ func TestCheckAndLogValidatorStatus_OK(t *testing.T) {
 					PositionInActivationQueue: 6,
 				},
 			},
-			log:    "Waiting to be assigned activation epoch\" expectedWaitingTime=12m48s positionInActivationQueue=6 prefix=client pubkey=0x000000000000 status=PENDING validatorIndex=50",
-			active: false,
-		},
-		{
-			name: "PENDING",
-			status: &validatorStatus{
-				publicKey: pubKeys[0],
-				index:     89,
-				status: &ethpb.ValidatorStatusResponse{
-					Status:                    ethpb.ValidatorStatus_PENDING,
-					ActivationEpoch:           60,
-					PositionInActivationQueue: 5,
-				},
-			},
-			log:    "Waiting for activation\" activationEpoch=60 prefix=client pubkey=0x000000000000 status=PENDING validatorIndex=89",
+			log:    "Waiting for activation... Check validator queue status in a block explorer\" prefix=client pubkey=0x000000000000 status=PENDING validatorIndex=50",
 			active: false,
 		},
 		{
@@ -889,7 +875,7 @@ func TestCheckAndLogValidatorStatus_OK(t *testing.T) {
 				pubkeyToStatus: make(map[[48]byte]*validatorStatus),
 			}
 			v.pubkeyToStatus[bytesutil.ToBytes48(test.status.publicKey)] = test.status
-			active := v.checkAndLogValidatorStatus(100)
+			active := v.checkAndLogValidatorStatus()
 			require.Equal(t, test.active, active)
 			if test.log != "" {
 				require.LogsContain(t, hook, test.log)
@@ -2888,7 +2874,7 @@ func TestUpdateValidatorStatusCache(t *testing.T) {
 		beaconNodeHosts:  []string{"http://localhost:8080", "http://localhost:8081"},
 		currentHostIndex: 0,
 		pubkeyToStatus: map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus{
-			[fieldparams.BLSPubkeyLength]byte{0x03}: &validatorStatus{ // add non existant key and status to cache, should be fully removed on update
+			[fieldparams.BLSPubkeyLength]byte{0x03}: &validatorStatus{ // add non existent key and status to cache, should be fully removed on update
 				publicKey: []byte{0x03},
 				status: &ethpb.ValidatorStatusResponse{
 					Status: ethpb.ValidatorStatus_ACTIVE,
@@ -2901,7 +2887,7 @@ func TestUpdateValidatorStatusCache(t *testing.T) {
 	err := v.updateValidatorStatusCache(ctx, pubkeys)
 	assert.NoError(t, err)
 
-	// make sure the nonexistant key is fully removed
+	// make sure the nonexistent key is fully removed
 	_, ok := v.pubkeyToStatus[[fieldparams.BLSPubkeyLength]byte{0x03}]
 	require.Equal(t, false, ok)
 	// make sure we only have the added values
@@ -2913,4 +2899,9 @@ func TestUpdateValidatorStatusCache(t *testing.T) {
 		require.Equal(t, mockResponse.Statuses[i], status.status)
 		require.Equal(t, mockResponse.Indices[i], status.index)
 	}
+
+	err = v.updateValidatorStatusCache(ctx, nil)
+	assert.NoError(t, err)
+	// make sure the value is 0
+	assert.Equal(t, 0, len(v.pubkeyToStatus))
 }

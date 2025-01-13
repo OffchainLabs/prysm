@@ -2,7 +2,11 @@ package payloadattribute
 
 import (
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	field_params "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 )
@@ -23,6 +27,7 @@ type data struct {
 var (
 	errNilPayloadAttribute         = errors.New("received nil payload attribute")
 	errUnsupportedPayloadAttribute = errors.New("unsupported payload attribute")
+	errNoParentRoot                = errors.New("parent root is empty")
 )
 
 // New returns a new payload attribute with the given input object.
@@ -88,4 +93,17 @@ func initPayloadAttributeFromV3(a *enginev1.PayloadAttributesV3) (Attributer, er
 		withdrawals:           a.Withdrawals,
 		parentBeaconBlockRoot: a.ParentBeaconBlockRoot,
 	}, nil
+}
+
+// EventData holds the values for a PayloadAttributes event.
+type EventData struct {
+	ProposerIndex     primitives.ValidatorIndex
+	ProposalSlot      primitives.Slot
+	ParentBlockNumber uint64
+	ParentBlockRoot   []byte
+	ParentBlockHash   []byte
+	Attributer        Attributer
+	HeadState         state.BeaconState
+	HeadBlock         interfaces.ReadOnlySignedBeaconBlock
+	HeadRoot          [field_params.RootLength]byte
 }

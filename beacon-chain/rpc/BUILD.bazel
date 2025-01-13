@@ -5,6 +5,7 @@ go_library(
     srcs = [
         "endpoints.go",
         "log.go",
+        "metrics.go",
         "service.go",
     ],
     importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc",

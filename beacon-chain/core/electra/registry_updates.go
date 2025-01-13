@@ -18,23 +18,24 @@ import (
 //
 // Spec pseudocode definition:
 //
-//		def process_registry_updates(state: BeaconState) -> None:
-//		    # Process activation eligibility and ejections
-//		    for index, validator in enumerate(state.validators):
-//		        if is_eligible_for_activation_queue(validator):
-//		            validator.activation_eligibility_epoch = get_current_epoch(state) + 1
+//	def process_registry_updates(state: BeaconState) -> None:
+//	    # Process activation eligibility and ejections
+//	    for index, validator in enumerate(state.validators):
+//	        if is_eligible_for_activation_queue(validator):  # [Modified in Electra:EIP7251]
+//	            validator.activation_eligibility_epoch = get_current_epoch(state) + 1
 //
-//		        if (
-//		            is_active_validator(validator, get_current_epoch(state))
-//		            and validator.effective_balance <= EJECTION_BALANCE
-//		        ):
-//		            initiate_validator_exit(state, ValidatorIndex(index))
+//	        if (
+//	            is_active_validator(validator, get_current_epoch(state))
+//	            and validator.effective_balance <= EJECTION_BALANCE
+//	        ):
+//	            initiate_validator_exit(state, ValidatorIndex(index))  # [Modified in Electra:EIP7251]
 //
-//	         # Activate all eligible validators
-//	         activation_epoch = compute_activation_exit_epoch(get_current_epoch(state))
-//	         for validator in state.validators:
-//	             if is_eligible_for_activation(state, validator):
-//	                 validator.activation_epoch = activation_epoch
+//	    # Activate all eligible validators
+//	    # [Modified in Electra:EIP7251]
+//	    activation_epoch = compute_activation_exit_epoch(get_current_epoch(state))
+//	    for validator in state.validators:
+//	        if is_eligible_for_activation(state, validator):
+//	            validator.activation_epoch = activation_epoch
 func ProcessRegistryUpdates(ctx context.Context, st state.BeaconState) error {
 	currentEpoch := time.CurrentEpoch(st)
 	ejectionBal := params.BeaconConfig().EjectionBalance
@@ -90,8 +91,8 @@ func ProcessRegistryUpdates(ctx context.Context, st state.BeaconState) error {
 		}
 	}
 
+	// Activate all eligible validators.
 	for _, idx := range eligibleForActivation {
-		// Activate all eligible validators.
 		v, err := st.ValidatorAtIndex(idx)
 		if err != nil {
 			return err

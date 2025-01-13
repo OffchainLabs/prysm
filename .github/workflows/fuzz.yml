@@ -16,7 +16,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions/setup-go@v4
         with:
-          go-version: '1.22.3'
+          go-version: '1.22.10'
       - id: list
         uses: shogo82148/actions-go-fuzz/list@v0
         with:
@@ -36,7 +36,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions/setup-go@v4
         with:
-          go-version: '1.22.3'
+          go-version: '1.22.10'
       - uses: shogo82148/actions-go-fuzz/run@v0
         with:
           packages: ${{ matrix.package }}

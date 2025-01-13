@@ -6,6 +6,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
@@ -63,4 +64,20 @@ func TestSerializeENR(t *testing.T) {
 		require.NotNil(t, err)
 		assert.ErrorContains(t, "could not serialize nil record", err)
 	})
+}
+
+func TestConvertPeerIDToNodeID(t *testing.T) {
+	const (
+		peerIDStr         = "16Uiu2HAmRrhnqEfybLYimCiAYer2AtZKDGamQrL1VwRCyeh2YiFc"
+		expectedNodeIDStr = "eed26c5d2425ab95f57246a5dca87317c41cacee4bcafe8bbe57e5965527c290"
+	)
+
+	peerID, err := peer.Decode(peerIDStr)
+	require.NoError(t, err)
+
+	actualNodeID, err := ConvertPeerIDToNodeID(peerID)
+	require.NoError(t, err)
+
+	actualNodeIDStr := actualNodeID.String()
+	require.Equal(t, expectedNodeIDStr, actualNodeIDStr)
 }

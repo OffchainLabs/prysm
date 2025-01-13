@@ -40,7 +40,7 @@ func TestNewEventStream(t *testing.T) {
 
 func TestEventStream(t *testing.T) {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/eth/v1/events", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/eth/v1/events", func(w http.ResponseWriter, _ *http.Request) {
 		flusher, ok := w.(http.Flusher)
 		require.Equal(t, true, ok)
 		for i := 1; i <= 3; i++ {
@@ -78,4 +78,24 @@ func TestEventStream(t *testing.T) {
 			t.Errorf("Expected event data %q, got %q", expectedData[i], string(event.Data))
 		}
 	}
+}
+
+func TestEventStreamRequestError(t *testing.T) {
+	topics := []string{"head"}
+	eventsChannel := make(chan *Event, 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// use valid url that will result in failed request with nil body
+	stream, err := NewEventStream(ctx, http.DefaultClient, "http://badhost:1234", topics)
+	require.NoError(t, err)
+
+	// error will happen when request is made, should be received over events channel
+	go stream.Subscribe(eventsChannel)
+
+	event := <-eventsChannel
+	if event.EventType != EventConnectionError {
+		t.Errorf("Expected event type %q, got %q", EventConnectionError, event.EventType)
+	}
+
 }

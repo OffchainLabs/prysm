@@ -197,6 +197,39 @@ func convertAttestationToProto(jsonAttestation *structs.Attestation) (*ethpb.Att
 	}, nil
 }
 
+func convertAttestationElectraToProto(jsonAttestation *structs.AttestationElectra) (*ethpb.AttestationElectra, error) {
+	if jsonAttestation == nil {
+		return nil, errors.New("json attestation is nil")
+	}
+
+	aggregationBits, err := hexutil.Decode(jsonAttestation.AggregationBits)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to decode aggregation bits `%s`", jsonAttestation.AggregationBits)
+	}
+
+	attestationData, err := convertAttestationDataToProto(jsonAttestation.Data)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get attestation data")
+	}
+
+	signature, err := hexutil.Decode(jsonAttestation.Signature)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to decode attestation signature `%s`", jsonAttestation.Signature)
+	}
+
+	committeeBits, err := hexutil.Decode(jsonAttestation.CommitteeBits)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to decode committee bits `%s`", jsonAttestation.CommitteeBits)
+	}
+
+	return &ethpb.AttestationElectra{
+		AggregationBits: aggregationBits,
+		Data:            attestationData,
+		Signature:       signature,
+		CommitteeBits:   committeeBits,
+	}, nil
+}
+
 func convertAttestationsToProto(jsonAttestations []*structs.Attestation) ([]*ethpb.Attestation, error) {
 	var attestations []*ethpb.Attestation
 	for index, jsonAttestation := range jsonAttestations {

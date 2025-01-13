@@ -12,14 +12,12 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/encoder"
 	p2ptypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	pb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/sirupsen/logrus"
@@ -49,7 +47,7 @@ type BeaconBlockProcessor func(block interfaces.ReadOnlySignedBeaconBlock) error
 // SendBeaconBlocksByRangeRequest sends BeaconBlocksByRange and returns fetched blocks, if any.
 func SendBeaconBlocksByRangeRequest(
 	ctx context.Context, tor blockchain.TemporalOracle, p2pProvider p2p.SenderEncoder, pid peer.ID,
-	req *pb.BeaconBlocksByRangeRequest, blockProcessor BeaconBlockProcessor,
+	req *ethpb.BeaconBlocksByRangeRequest, blockProcessor BeaconBlockProcessor,
 ) ([]interfaces.ReadOnlySignedBeaconBlock, error) {
 	topic, err := p2p.TopicFromMessage(p2p.BeaconBlocksByRangeMessageName, slots.ToEpoch(tor.CurrentSlot()))
 	if err != nil {
@@ -155,7 +153,7 @@ func SendBeaconBlocksByRootRequest(
 	return blocks, nil
 }
 
-func SendBlobsByRangeRequest(ctx context.Context, tor blockchain.TemporalOracle, p2pApi p2p.SenderEncoder, pid peer.ID, ctxMap ContextByteVersions, req *pb.BlobSidecarsByRangeRequest, bvs ...BlobResponseValidation) ([]blocks.ROBlob, error) {
+func SendBlobsByRangeRequest(ctx context.Context, tor blockchain.TemporalOracle, p2pApi p2p.SenderEncoder, pid peer.ID, ctxMap ContextByteVersions, req *ethpb.BlobSidecarsByRangeRequest, bvs ...BlobResponseValidation) ([]blocks.ROBlob, error) {
 	topic, err := p2p.TopicFromMessage(p2p.BlobSidecarsByRangeName, slots.ToEpoch(tor.CurrentSlot()))
 	if err != nil {
 		return nil, err
@@ -171,9 +169,13 @@ func SendBlobsByRangeRequest(ctx context.Context, tor blockchain.TemporalOracle,
 	}
 	defer closeStream(stream, log)
 
+	maxBlobsPerBlock := uint64(params.BeaconConfig().MaxBlobsPerBlock(req.StartSlot))
 	max := params.BeaconConfig().MaxRequestBlobSidecars
-	if max > req.Count*fieldparams.MaxBlobsPerBlock {
-		max = req.Count * fieldparams.MaxBlobsPerBlock
+	if slots.ToEpoch(req.StartSlot) >= params.BeaconConfig().ElectraForkEpoch {
+		max = params.BeaconConfig().MaxRequestBlobSidecarsElectra
+	}
+	if max > req.Count*maxBlobsPerBlock {
+		max = req.Count * maxBlobsPerBlock
 	}
 	vfuncs := []BlobResponseValidation{blobValidatorFromRangeReq(req), newSequentialBlobValidator()}
 	if len(bvs) > 0 {
@@ -184,7 +186,7 @@ func SendBlobsByRangeRequest(ctx context.Context, tor blockchain.TemporalOracle,
 
 func SendBlobSidecarByRoot(
 	ctx context.Context, tor blockchain.TemporalOracle, p2pApi p2p.P2P, pid peer.ID,
-	ctxMap ContextByteVersions, req *p2ptypes.BlobSidecarsByRootReq,
+	ctxMap ContextByteVersions, req *p2ptypes.BlobSidecarsByRootReq, slot primitives.Slot,
 ) ([]blocks.ROBlob, error) {
 	if uint64(len(*req)) > params.BeaconConfig().MaxRequestBlobSidecars {
 		return nil, errors.Wrapf(p2ptypes.ErrMaxBlobReqExceeded, "length=%d", len(*req))
@@ -202,8 +204,12 @@ func SendBlobSidecarByRoot(
 	defer closeStream(stream, log)
 
 	max := params.BeaconConfig().MaxRequestBlobSidecars
-	if max > uint64(len(*req))*fieldparams.MaxBlobsPerBlock {
-		max = uint64(len(*req)) * fieldparams.MaxBlobsPerBlock
+	if slots.ToEpoch(slot) >= params.BeaconConfig().ElectraForkEpoch {
+		max = params.BeaconConfig().MaxRequestBlobSidecarsElectra
+	}
+	maxBlobCount := params.BeaconConfig().MaxBlobsPerBlock(slot)
+	if max > uint64(len(*req)*maxBlobCount) {
+		max = uint64(len(*req) * maxBlobCount)
 	}
 	return readChunkEncodedBlobs(stream, p2pApi.Encoding(), ctxMap, blobValidatorFromRootReq(req), max)
 }
@@ -228,7 +234,8 @@ type seqBlobValid struct {
 }
 
 func (sbv *seqBlobValid) nextValid(blob blocks.ROBlob) error {
-	if blob.Index >= fieldparams.MaxBlobsPerBlock {
+	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlock(blob.Slot())
+	if blob.Index >= uint64(maxBlobsPerBlock) {
 		return errBlobIndexOutOfBounds
 	}
 	if sbv.prev == nil {
@@ -298,7 +305,7 @@ func blobValidatorFromRootReq(req *p2ptypes.BlobSidecarsByRootReq) BlobResponseV
 	}
 }
 
-func blobValidatorFromRangeReq(req *pb.BlobSidecarsByRangeRequest) BlobResponseValidation {
+func blobValidatorFromRangeReq(req *ethpb.BlobSidecarsByRangeRequest) BlobResponseValidation {
 	end := req.StartSlot + primitives.Slot(req.Count)
 	return func(sc blocks.ROBlob) error {
 		if sc.Slot() < req.StartSlot || sc.Slot() >= end {

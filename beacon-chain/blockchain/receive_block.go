@@ -83,7 +83,12 @@ func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySig
 	}
 
 	currentCheckpoints := s.saveCurrentCheckpoints(preState)
-	postState, isValidPayload, err := s.validateExecutionAndConsensus(ctx, preState, blockCopy, blockRoot)
+	roblock, err := blocks.NewROBlockWithRoot(blockCopy, blockRoot)
+	if err != nil {
+		return err
+	}
+
+	postState, isValidPayload, err := s.validateExecutionAndConsensus(ctx, preState, roblock)
 	if err != nil {
 		return err
 	}
@@ -102,8 +107,7 @@ func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySig
 	}
 	args := &postBlockProcessConfig{
 		ctx:            ctx,
-		signed:         blockCopy,
-		blockRoot:      blockRoot,
+		roblock:        roblock,
 		postState:      postState,
 		isValidPayload: isValidPayload,
 	}
@@ -184,8 +188,7 @@ func (s *Service) updateCheckpoints(
 func (s *Service) validateExecutionAndConsensus(
 	ctx context.Context,
 	preState state.BeaconState,
-	block interfaces.SignedBeaconBlock,
-	blockRoot [32]byte,
+	block blocks.ROBlock,
 ) (state.BeaconState, bool, error) {
 	preStateVersion, preStateHeader, err := getStateVersionAndPayload(preState)
 	if err != nil {
@@ -204,7 +207,7 @@ func (s *Service) validateExecutionAndConsensus(
 	var isValidPayload bool
 	eg.Go(func() error {
 		var err error
-		isValidPayload, err = s.validateExecutionOnBlock(ctx, preStateVersion, preStateHeader, block, blockRoot)
+		isValidPayload, err = s.validateExecutionOnBlock(ctx, preStateVersion, preStateHeader, block)
 		if err != nil {
 			return errors.Wrap(err, "could not notify the engine of the new payload")
 		}
@@ -555,16 +558,16 @@ func (s *Service) sendBlockAttestationsToSlasher(signed interfaces.ReadOnlySigne
 }
 
 // validateExecutionOnBlock notifies the engine of the incoming block execution payload and returns true if the payload is valid
-func (s *Service) validateExecutionOnBlock(ctx context.Context, ver int, header interfaces.ExecutionData, signed interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte) (bool, error) {
-	isValidPayload, err := s.notifyNewPayload(ctx, ver, header, signed)
+func (s *Service) validateExecutionOnBlock(ctx context.Context, ver int, header interfaces.ExecutionData, block blocks.ROBlock) (bool, error) {
+	isValidPayload, err := s.notifyNewPayload(ctx, ver, header, block)
 	if err != nil {
 		s.cfg.ForkChoiceStore.Lock()
-		err = s.handleInvalidExecutionError(ctx, err, blockRoot, signed.Block().ParentRoot())
+		err = s.handleInvalidExecutionError(ctx, err, block.Root(), block.Block().ParentRoot())
 		s.cfg.ForkChoiceStore.Unlock()
 		return false, err
 	}
-	if signed.Version() < version.Capella && isValidPayload {
-		if err := s.validateMergeTransitionBlock(ctx, ver, header, signed); err != nil {
+	if block.Block().Version() < version.Capella && isValidPayload {
+		if err := s.validateMergeTransitionBlock(ctx, ver, header, block); err != nil {
 			return isValidPayload, err
 		}
 	}

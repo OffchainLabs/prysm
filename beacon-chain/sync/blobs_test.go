@@ -180,7 +180,7 @@ func (c *blobsTestCase) setup(t *testing.T) (*Service, []blocks.ROBlob, func()) 
 	cleanup := func() {
 		params.OverrideBeaconConfig(cfg)
 	}
-	maxBlobs := fieldparams.MaxBlobsPerBlock
+	maxBlobs := int(params.BeaconConfig().MaxBlobsPerBlock(0))
 	chain, clock := defaultMockChain(t)
 	if c.chain == nil {
 		c.chain = chain
@@ -218,10 +218,14 @@ func (c *blobsTestCase) setup(t *testing.T) (*Service, []blocks.ROBlob, func()) 
 		rateLimiter: newRateLimiter(client),
 	}
 
-	byRootRate := params.BeaconConfig().MaxRequestBlobSidecars * fieldparams.MaxBlobsPerBlock
-	byRangeRate := params.BeaconConfig().MaxRequestBlobSidecars * fieldparams.MaxBlobsPerBlock
+	byRootRate := params.BeaconConfig().MaxRequestBlobSidecars * uint64(params.BeaconConfig().MaxBlobsPerBlock(0))
+	byRangeRate := params.BeaconConfig().MaxRequestBlobSidecars * uint64(params.BeaconConfig().MaxBlobsPerBlock(0))
+	byRootRateElectra := params.BeaconConfig().MaxRequestBlobSidecarsElectra * uint64(params.BeaconConfig().MaxBlobsPerBlock(0))
+	byRangeRateElectra := params.BeaconConfig().MaxRequestBlobSidecarsElectra * uint64(params.BeaconConfig().MaxBlobsPerBlock(0))
 	s.setRateCollector(p2p.RPCBlobSidecarsByRootTopicV1, leakybucket.NewCollector(0.000001, int64(byRootRate), time.Second, false))
 	s.setRateCollector(p2p.RPCBlobSidecarsByRangeTopicV1, leakybucket.NewCollector(0.000001, int64(byRangeRate), time.Second, false))
+	s.setRateCollector(p2p.RPCBlobSidecarsByRootTopicV2, leakybucket.NewCollector(0.000001, int64(byRootRateElectra), time.Second, false))
+	s.setRateCollector(p2p.RPCBlobSidecarsByRangeTopicV2, leakybucket.NewCollector(0.000001, int64(byRangeRateElectra), time.Second, false))
 
 	return s, sidecars, cleanup
 }
@@ -310,7 +314,7 @@ func TestTestcaseSetup_BlocksAndBlobs(t *testing.T) {
 	req := blobRootRequestFromSidecars(sidecars)
 	expect := c.filterExpectedByRoot(t, sidecars, req)
 	defer cleanup()
-	maxed := nblocks * fieldparams.MaxBlobsPerBlock
+	maxed := nblocks * params.BeaconConfig().MaxBlobsPerBlock(0)
 	require.Equal(t, maxed, len(sidecars))
 	require.Equal(t, maxed, len(expect))
 	for _, sc := range sidecars {

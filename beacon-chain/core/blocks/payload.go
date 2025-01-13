@@ -8,10 +8,11 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	field_params "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
 	consensus_types "github.com/prysmaticlabs/prysm/v5/consensus-types"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
@@ -60,6 +61,9 @@ func IsMergeTransitionComplete(st state.BeaconState) (bool, error) {
 func IsExecutionBlock(body interfaces.ReadOnlyBeaconBlockBody) (bool, error) {
 	if body == nil {
 		return false, errors.New("nil block body")
+	}
+	if body.Version() >= version.Capella {
+		return true, nil
 	}
 	payload, err := body.Execution()
 	switch {
@@ -202,27 +206,27 @@ func ValidatePayload(st state.BeaconState, payload interfaces.ExecutionData) err
 //	    block_hash=payload.block_hash,
 //	    transactions_root=hash_tree_root(payload.transactions),
 //	)
-func ProcessPayload(st state.BeaconState, body interfaces.ReadOnlyBeaconBlockBody) (state.BeaconState, error) {
+func ProcessPayload(st state.BeaconState, body interfaces.ReadOnlyBeaconBlockBody) error {
 	payload, err := body.Execution()
 	if err != nil {
-		return nil, err
+		return err
 	}
-	if err := verifyBlobCommitmentCount(body); err != nil {
-		return nil, err
+	if err := verifyBlobCommitmentCount(st.Slot(), body); err != nil {
+		return err
 	}
 	if err := ValidatePayloadWhenMergeCompletes(st, payload); err != nil {
-		return nil, err
+		return err
 	}
 	if err := ValidatePayload(st, payload); err != nil {
-		return nil, err
+		return err
 	}
 	if err := st.SetLatestExecutionPayloadHeader(payload); err != nil {
-		return nil, err
+		return err
 	}
-	return st, nil
+	return nil
 }
 
-func verifyBlobCommitmentCount(body interfaces.ReadOnlyBeaconBlockBody) error {
+func verifyBlobCommitmentCount(slot primitives.Slot, body interfaces.ReadOnlyBeaconBlockBody) error {
 	if body.Version() < version.Deneb {
 		return nil
 	}
@@ -230,7 +234,8 @@ func verifyBlobCommitmentCount(body interfaces.ReadOnlyBeaconBlockBody) error {
 	if err != nil {
 		return err
 	}
-	if len(kzgs) > field_params.MaxBlobsPerBlock {
+	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlock(slot)
+	if len(kzgs) > maxBlobsPerBlock {
 		return fmt.Errorf("too many kzg commitments in block: %d", len(kzgs))
 	}
 	return nil

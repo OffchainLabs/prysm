@@ -34,18 +34,48 @@ type endpoint struct {
 	methods    []string
 }
 
+// responseWriter is the wrapper to http Response writer.
+type responseWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+// WriteHeader wraps the WriteHeader method of the underlying http.ResponseWriter to capture the status code.
+// Refer for WriteHeader doc: https://pkg.go.dev/net/http@go1.23.3#ResponseWriter.
+func (w *responseWriter) WriteHeader(statusCode int) {
+	w.statusCode = statusCode
+	w.ResponseWriter.WriteHeader(statusCode)
+}
+
 func (e *endpoint) handlerWithMiddleware() http.HandlerFunc {
 	handler := http.Handler(e.handler)
 	for _, m := range e.middleware {
 		handler = m(handler)
 	}
-	return promhttp.InstrumentHandlerDuration(
+
+	handler = promhttp.InstrumentHandlerDuration(
 		httpRequestLatency.MustCurryWith(prometheus.Labels{"endpoint": e.name}),
 		promhttp.InstrumentHandlerCounter(
 			httpRequestCount.MustCurryWith(prometheus.Labels{"endpoint": e.name}),
 			handler,
 		),
 	)
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		// SSE errors are handled separately to avoid interference with the streaming
+		// mechanism and ensure accurate error tracking.
+		if e.template == "/eth/v1/events" {
+			handler.ServeHTTP(w, r)
+			return
+		}
+
+		rw := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+		handler.ServeHTTP(rw, r)
+
+		if rw.statusCode >= 400 {
+			httpErrorCount.WithLabelValues(r.URL.Path, http.StatusText(rw.statusCode), r.Method).Inc()
+		}
+	}
 }
 
 func (s *Service) endpoints(
@@ -142,9 +172,12 @@ func (s *Service) builderEndpoints(stater lookup.Stater) []endpoint {
 	}
 }
 
-func (*Service) blobEndpoints(blocker lookup.Blocker) []endpoint {
+func (s *Service) blobEndpoints(blocker lookup.Blocker) []endpoint {
 	server := &blob.Server{
-		Blocker: blocker,
+		Blocker:               blocker,
+		OptimisticModeFetcher: s.cfg.OptimisticModeFetcher,
+		FinalizationFetcher:   s.cfg.FinalizationFetcher,
+		TimeFetcher:           s.cfg.GenesisTimeFetcher,
 	}
 
 	const namespace = "blob"
@@ -172,6 +205,7 @@ func (s *Service) validatorEndpoints(
 		TimeFetcher:            s.cfg.GenesisTimeFetcher,
 		SyncChecker:            s.cfg.SyncService,
 		OptimisticModeFetcher:  s.cfg.OptimisticModeFetcher,
+		AttestationCache:       s.cfg.AttestationCache,
 		AttestationsPool:       s.cfg.AttestationsPool,
 		PeerManager:            s.cfg.PeerManager,
 		Broadcaster:            s.cfg.Broadcaster,
@@ -197,6 +231,15 @@ func (s *Service) validatorEndpoints(
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
 			},
 			handler: server.GetAggregateAttestation,
+			methods: []string{http.MethodGet},
+		},
+		{
+			template: "/eth/v2/validator/aggregate_attestation",
+			name:     namespace + ".GetAggregateAttestationV2",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+			},
+			handler: server.GetAggregateAttestationV2,
 			methods: []string{http.MethodGet},
 		},
 		{
@@ -464,30 +507,31 @@ func (s *Service) beaconEndpoints(
 	coreService *core.Service,
 ) []endpoint {
 	server := &beacon.Server{
-		CanonicalHistory:              ch,
-		BeaconDB:                      s.cfg.BeaconDB,
-		AttestationsPool:              s.cfg.AttestationsPool,
-		SlashingsPool:                 s.cfg.SlashingsPool,
-		ChainInfoFetcher:              s.cfg.ChainInfoFetcher,
-		GenesisTimeFetcher:            s.cfg.GenesisTimeFetcher,
-		BlockNotifier:                 s.cfg.BlockNotifier,
-		OperationNotifier:             s.cfg.OperationNotifier,
-		Broadcaster:                   s.cfg.Broadcaster,
-		BlockReceiver:                 s.cfg.BlockReceiver,
-		StateGenService:               s.cfg.StateGen,
-		Stater:                        stater,
-		Blocker:                       blocker,
-		OptimisticModeFetcher:         s.cfg.OptimisticModeFetcher,
-		HeadFetcher:                   s.cfg.HeadFetcher,
-		TimeFetcher:                   s.cfg.GenesisTimeFetcher,
-		VoluntaryExitsPool:            s.cfg.ExitPool,
-		V1Alpha1ValidatorServer:       validatorServer,
-		SyncChecker:                   s.cfg.SyncService,
-		ExecutionPayloadReconstructor: s.cfg.ExecutionPayloadReconstructor,
-		BLSChangesPool:                s.cfg.BLSChangesPool,
-		FinalizationFetcher:           s.cfg.FinalizationFetcher,
-		ForkchoiceFetcher:             s.cfg.ForkchoiceFetcher,
-		CoreService:                   coreService,
+		CanonicalHistory:        ch,
+		BeaconDB:                s.cfg.BeaconDB,
+		AttestationCache:        s.cfg.AttestationCache,
+		AttestationsPool:        s.cfg.AttestationsPool,
+		SlashingsPool:           s.cfg.SlashingsPool,
+		ChainInfoFetcher:        s.cfg.ChainInfoFetcher,
+		GenesisTimeFetcher:      s.cfg.GenesisTimeFetcher,
+		BlockNotifier:           s.cfg.BlockNotifier,
+		OperationNotifier:       s.cfg.OperationNotifier,
+		Broadcaster:             s.cfg.Broadcaster,
+		BlockReceiver:           s.cfg.BlockReceiver,
+		StateGenService:         s.cfg.StateGen,
+		Stater:                  stater,
+		Blocker:                 blocker,
+		OptimisticModeFetcher:   s.cfg.OptimisticModeFetcher,
+		HeadFetcher:             s.cfg.HeadFetcher,
+		TimeFetcher:             s.cfg.GenesisTimeFetcher,
+		VoluntaryExitsPool:      s.cfg.ExitPool,
+		V1Alpha1ValidatorServer: validatorServer,
+		SyncChecker:             s.cfg.SyncService,
+		ExecutionReconstructor:  s.cfg.ExecutionReconstructor,
+		BLSChangesPool:          s.cfg.BLSChangesPool,
+		FinalizationFetcher:     s.cfg.FinalizationFetcher,
+		ForkchoiceFetcher:       s.cfg.ForkchoiceFetcher,
+		CoreService:             coreService,
 	}
 
 	const namespace = "beacon"
@@ -601,7 +645,7 @@ func (s *Service) beaconEndpoints(
 			middleware: []middleware.Middleware{
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
 			},
-			handler: server.GetBlockAttestations,
+			handler: server.GetBlockAttestationsV2,
 			methods: []string{http.MethodGet},
 		},
 		{
@@ -632,6 +676,15 @@ func (s *Service) beaconEndpoints(
 			methods: []string{http.MethodGet},
 		},
 		{
+			template: "/eth/v2/beacon/pool/attestations",
+			name:     namespace + ".ListAttestationsV2",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+			},
+			handler: server.ListAttestationsV2,
+			methods: []string{http.MethodGet},
+		},
+		{
 			template: "/eth/v1/beacon/pool/attestations",
 			name:     namespace + ".SubmitAttestations",
 			middleware: []middleware.Middleware{
@@ -639,6 +692,16 @@ func (s *Service) beaconEndpoints(
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
 			},
 			handler: server.SubmitAttestations,
+			methods: []string{http.MethodPost},
+		},
+		{
+			template: "/eth/v2/beacon/pool/attestations",
+			name:     namespace + ".SubmitAttestationsV2",
+			middleware: []middleware.Middleware{
+				middleware.ContentTypeHandler([]string{api.JsonMediaType}),
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+			},
+			handler: server.SubmitAttestationsV2,
 			methods: []string{http.MethodPost},
 		},
 		{
@@ -858,10 +921,11 @@ func (*Service) configEndpoints() []endpoint {
 
 func (s *Service) lightClientEndpoints(blocker lookup.Blocker, stater lookup.Stater) []endpoint {
 	server := &lightclient.Server{
-		Blocker:     blocker,
-		Stater:      stater,
-		HeadFetcher: s.cfg.HeadFetcher,
-		BeaconDB:    s.cfg.BeaconDB,
+		Blocker:          blocker,
+		Stater:           stater,
+		HeadFetcher:      s.cfg.HeadFetcher,
+		ChainInfoFetcher: s.cfg.ChainInfoFetcher,
+		BeaconDB:         s.cfg.BeaconDB,
 	}
 
 	const namespace = "lightclient"
