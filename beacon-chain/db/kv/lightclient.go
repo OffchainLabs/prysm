@@ -104,9 +104,9 @@ func decodeLightClientBootstrap(enc []byte) (interfaces.LightClientBootstrap, er
 			return nil, errors.Wrap(err, "could not unmarshal Deneb light client bootstrap")
 		}
 		m = bootstrap
-	case hasElectraKey(enc):
+	case HasElectraKey(enc):
 		bootstrap := &ethpb.LightClientBootstrapElectra{}
-		if err := bootstrap.UnmarshalSSZ(enc[len(electraKey):]); err != nil {
+		if err := bootstrap.UnmarshalSSZ(enc[len(ElectraKey):]); err != nil {
 			return nil, errors.Wrap(err, "could not unmarshal Electra light client bootstrap")
 		}
 		m = bootstrap
@@ -212,9 +212,9 @@ func decodeLightClientUpdate(enc []byte) (interfaces.LightClientUpdate, error) {
 			return nil, errors.Wrap(err, "could not unmarshal Deneb light client update")
 		}
 		m = update
-	case hasElectraKey(enc):
+	case HasElectraKey(enc):
 		update := &ethpb.LightClientUpdateElectra{}
-		if err := update.UnmarshalSSZ(enc[len(electraKey):]); err != nil {
+		if err := update.UnmarshalSSZ(enc[len(ElectraKey):]); err != nil {
 			return nil, errors.Wrap(err, "could not unmarshal Electra light client update")
 		}
 		m = update
@@ -227,7 +227,7 @@ func decodeLightClientUpdate(enc []byte) (interfaces.LightClientUpdate, error) {
 func keyForLightClientUpdate(v int) ([]byte, error) {
 	switch v {
 	case version.Electra:
-		return electraKey, nil
+		return ElectraKey, nil
 	case version.Deneb:
 		return denebKey, nil
 	case version.Capella:

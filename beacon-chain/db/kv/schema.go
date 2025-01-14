@@ -52,7 +52,7 @@ var (
 	saveBlindedBeaconBlocksKey = []byte("save-blinded-beacon-blocks")
 	denebKey                   = []byte("deneb")
 	denebBlindKey              = []byte("blind-deneb")
-	electraKey                 = []byte("electra")
+	ElectraKey                 = []byte("electra")
 	electraBlindKey            = []byte("blind-electra")
 
 	// block root included in the beacon state used by weak subjectivity initial sync
