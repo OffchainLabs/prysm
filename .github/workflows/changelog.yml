@@ -15,12 +15,10 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Download unclog binary
-        uses: actions/download-artifact@v4
+        uses: dsaltares/fetch-gh-release-asset@aa2ab1243d6e0d5b405b973c89fa4d06a2d0fff7 # 1.1.2
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          repository: OffchainLabs/unclog
-          name: unclog
-          run-id: 12679708867
+          repo: OffchainLabs/unclog
+          file: "unclog"
 
       - name: Get new changelog files
         id: new-changelog-files
