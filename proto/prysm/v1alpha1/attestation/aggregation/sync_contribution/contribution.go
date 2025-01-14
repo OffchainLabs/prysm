@@ -29,8 +29,7 @@ func Aggregate(cs []*v2.SyncCommitteeContribution) ([]*v2.SyncCommitteeContribut
 	case "", NaiveAggregation:
 		return naiveSyncContributionAggregation(cs)
 	case MaxCoverAggregation:
-		// TODO: Implement max cover aggregation for sync contributions.
-		return nil, errors.New("no implemented")
+		return maxCoverSyncContributionAggregation(cs)
 	default:
 		return nil, errors.Wrapf(aggregation.ErrInvalidStrategy, "%q", strategy)
 	}
