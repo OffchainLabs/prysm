@@ -366,5 +366,5 @@ func FillTestVersions(c *BeaconChainConfig, b byte) {
 	c.CapellaForkVersion[0] = 3
 	c.DenebForkVersion[0] = 4
 	c.ElectraForkVersion[0] = 5
-	c.FuluForkVersion[0] = 5
+	c.FuluForkVersion[0] = 6
 }
