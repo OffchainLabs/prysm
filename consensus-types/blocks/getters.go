@@ -210,7 +210,7 @@ func (b *SignedBeaconBlock) ToBlinded() (interfaces.ReadOnlySignedBeaconBlock, e
 		}
 		header, err := PayloadToHeaderElectra(payload)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "payload to header electra")
 		}
 		return initBlindedSignedBlockFromProtoElectra(
 			&eth.SignedBlindedBeaconBlockElectra{
@@ -243,7 +243,7 @@ func (b *SignedBeaconBlock) ToBlinded() (interfaces.ReadOnlySignedBeaconBlock, e
 	case *enginev1.ExecutionPayload:
 		header, err := PayloadToHeader(payload)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "payload to header")
 		}
 		return initBlindedSignedBlockFromProtoBellatrix(
 			&eth.SignedBlindedBeaconBlockBellatrix{
@@ -298,7 +298,7 @@ func (b *SignedBeaconBlock) ToBlinded() (interfaces.ReadOnlySignedBeaconBlock, e
 	case *enginev1.ExecutionPayloadDeneb:
 		header, err := PayloadToHeaderDeneb(payload)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "payload to header deneb")
 		}
 		return initBlindedSignedBlockFromProtoDeneb(
 			&eth.SignedBlindedBeaconBlockDeneb{
