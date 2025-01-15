@@ -184,6 +184,25 @@ var (
 			Help: "Count the number of times blobs have been found in the database.",
 		},
 	)
+
+	// Data column sidecar validation, beacon metrics specs
+	dataColumnSidecarVerificationRequestsCounter = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "beacon_data_column_sidecar_processing_requests_total",
+		Help: "Count the number of data column sidecars submitted for verification",
+	})
+
+	dataColumnSidecarVerificationSuccessesCounter = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "beacon_data_column_sidecar_processing_successes_total",
+		Help: "Count the number of data column sidecars verified for gossip",
+	})
+
+	dataColumnSidecarVerificationGossipHistogram = promauto.NewHistogram(
+		prometheus.HistogramOpts{
+			Name:    "beacon_data_column_sidecar_gossip_verification_milliseconds",
+			Help:    "Captures the time taken to verify data column sidecars.",
+			Buckets: []float64{100, 250, 500, 750, 1000, 1500, 2000, 4000, 8000, 12000, 16000},
+		},
+	)
 )
 
 func (s *Service) updateMetrics() {
