@@ -79,6 +79,33 @@ func GetMockSignRequest(t string) *validatorpb.SignRequest {
 			},
 			SigningSlot: 0,
 		}
+	case "AGGREGATE_AND_PROOF_V2":
+		return &validatorpb.SignRequest{
+			PublicKey:       make([]byte, fieldparams.BLSPubkeyLength),
+			SigningRoot:     make([]byte, fieldparams.RootLength),
+			SignatureDomain: make([]byte, 4),
+			Object: &validatorpb.SignRequest_AggregateAttestationAndProofElectra{
+				AggregateAttestationAndProofElectra: &eth.AggregateAttestationAndProofElectra{
+					AggregatorIndex: 0,
+					Aggregate: &eth.AttestationElectra{
+						AggregationBits: bitfield.Bitlist{0b1101},
+						Data: &eth.AttestationData{
+							BeaconBlockRoot: make([]byte, fieldparams.RootLength),
+							Source: &eth.Checkpoint{
+								Root: make([]byte, fieldparams.RootLength),
+							},
+							Target: &eth.Checkpoint{
+								Root: make([]byte, fieldparams.RootLength),
+							},
+						},
+						Signature:     make([]byte, 96),
+						CommitteeBits: bitfield.Bitvector64{0x01},
+					},
+					SelectionProof: make([]byte, fieldparams.BLSSignatureLength),
+				},
+			},
+			SigningSlot: 0,
+		}
 	case "ATTESTATION":
 		return &validatorpb.SignRequest{
 			PublicKey:       make([]byte, fieldparams.BLSPubkeyLength),

@@ -22,18 +22,18 @@ type AggregateAndProofSignRequest struct {
 	AggregateAndProof *AggregateAndProof `json:"aggregate_and_proof" validate:"required"`
 }
 
-// AggregateAndProofV2ElectraSignRequest is a request object for web3signer sign api.
-type AggregateAndProofV2ElectraSignRequest struct {
-	Type              string                      `json:"type" validate:"required"`
-	ForkInfo          *ForkInfo                   `json:"fork_info" validate:"required"`
-	SigningRoot       hexutil.Bytes               `json:"signingRoot"`
-	AggregateAndProof *AggregateAndProofV2Electra `json:"aggregate_and_proof" validate:"required"`
+// AggregateAndProofV2SignRequest is a request object for web3signer sign api.
+type AggregateAndProofV2SignRequest struct {
+	Type              string               `json:"type" validate:"required"`
+	ForkInfo          *ForkInfo            `json:"fork_info" validate:"required"`
+	SigningRoot       hexutil.Bytes        `json:"signingRoot"`
+	AggregateAndProof *AggregateAndProofV2 `json:"aggregate_and_proof" validate:"required"`
 }
 
-// AggregateAndProofV2Electra is a wrapper object for AggregateAndProofV2ElectraSignRequest
-type AggregateAndProofV2Electra struct {
+// AggregateAndProofV2 is a wrapper object for AggregateAndProofV2SignRequest
+type AggregateAndProofV2 struct {
 	Version string                    `json:"version" validate:"required"`
-	Data    *AggregateAndProofElectra `json:"data" validate:"required"`
+	Data    *AggregateAndProofElectra `json:"data" validate:"required"` // specifies Electra for now
 }
 
 // AttestationSignRequest is a request object for web3signer sign api.
