@@ -51,7 +51,7 @@ func GossipTopicMappings(topic string, epoch primitives.Epoch) proto.Message {
 		return gossipMessage(topic)
 	case AttestationSubnetTopicFormat:
 		if epoch >= params.BeaconConfig().ElectraForkEpoch {
-			return &ethpb.SingleAttestation{}
+			return &ethpb.AttestationElectra{}
 		}
 		return gossipMessage(topic)
 	case AttesterSlashingSubnetTopicFormat:
@@ -110,7 +110,7 @@ func init() {
 
 	// Specially handle Electra objects.
 	GossipTypeMapping[reflect.TypeOf(&ethpb.SignedBeaconBlockElectra{})] = BlockSubnetTopicFormat
-	GossipTypeMapping[reflect.TypeOf(&ethpb.SingleAttestation{})] = AttestationSubnetTopicFormat
+	GossipTypeMapping[reflect.TypeOf(&ethpb.AttestationElectra{})] = AttestationSubnetTopicFormat
 	GossipTypeMapping[reflect.TypeOf(&ethpb.AttesterSlashingElectra{})] = AttesterSlashingSubnetTopicFormat
 	GossipTypeMapping[reflect.TypeOf(&ethpb.SignedAggregateAttestationAndProofElectra{})] = AggregateAndProofSubnetTopicFormat
 

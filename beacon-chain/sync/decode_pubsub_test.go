@@ -276,7 +276,7 @@ func TestExtractDataType(t *testing.T) {
 				return wsb
 			}(),
 			wantMd:        wrapper.WrappedMetadataV1(&ethpb.MetaDataV1{}),
-			wantAtt:       &ethpb.SingleAttestation{},
+			wantAtt:       &ethpb.AttestationElectra{},
 			wantAggregate: &ethpb.SignedAggregateAttestationAndProofElectra{},
 			wantErr:       false,
 		},

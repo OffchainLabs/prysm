@@ -429,7 +429,7 @@ func (m *MockBeaconChainClient) SubmitAttesterSlashing(arg0 context.Context, arg
 	for _, a := range arg2 {
 		varargs = append(varargs, a)
 	}
-	ret := m.ctrl.Call(m, "SubmitAttesterSlashing", varargs...)
+	ret := m.ctrl.Call(m, "SubmitAttesterSlashings", varargs...)
 	ret0, _ := ret[0].(*eth.SubmitSlashingResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
@@ -439,7 +439,7 @@ func (m *MockBeaconChainClient) SubmitAttesterSlashing(arg0 context.Context, arg
 func (mr *MockBeaconChainClientMockRecorder) SubmitAttesterSlashing(arg0, arg1 any, arg2 ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{arg0, arg1}, arg2...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitAttesterSlashing", reflect.TypeOf((*MockBeaconChainClient)(nil).SubmitAttesterSlashing), varargs...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitAttesterSlashings", reflect.TypeOf((*MockBeaconChainClient)(nil).SubmitAttesterSlashing), varargs...)
 }
 
 // SubmitAttesterSlashingElectra mocks base method.

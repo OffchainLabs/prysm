@@ -51,10 +51,10 @@ func jsonifyAttestations(attestations []*ethpb.Attestation) []*structs.Attestati
 	return jsonAttestations
 }
 
-func jsonifySingleAttestations(attestations []*ethpb.SingleAttestation) []*structs.SingleAttestation {
-	jsonAttestations := make([]*structs.SingleAttestation, len(attestations))
+func jsonifyAttestationsElectra(attestations []*ethpb.AttestationElectra) []*structs.AttestationElectra {
+	jsonAttestations := make([]*structs.AttestationElectra, len(attestations))
 	for index, attestation := range attestations {
-		jsonAttestations[index] = jsonifySingleAttestation(attestation)
+		jsonAttestations[index] = jsonifyAttestationElectra(attestation)
 	}
 	return jsonAttestations
 }
@@ -178,15 +178,6 @@ func jsonifyAttestationElectra(attestation *ethpb.AttestationElectra) *structs.A
 		Data:            jsonifyAttestationData(attestation.Data),
 		Signature:       hexutil.Encode(attestation.Signature),
 		CommitteeBits:   hexutil.Encode(attestation.CommitteeBits),
-	}
-}
-
-func jsonifySingleAttestation(attestation *ethpb.SingleAttestation) *structs.SingleAttestation {
-	return &structs.SingleAttestation{
-		CommitteeIndex: uint64ToString(attestation.CommitteeId),
-		AttesterIndex:  uint64ToString(attestation.AttesterIndex),
-		Data:           jsonifyAttestationData(attestation.Data),
-		Signature:      hexutil.Encode(attestation.Signature),
 	}
 }
 

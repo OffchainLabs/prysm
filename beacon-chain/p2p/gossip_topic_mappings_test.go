@@ -121,7 +121,7 @@ func TestGossipTopicMappings_CorrectType(t *testing.T) {
 	_, ok = pMessage.(*ethpb.SignedBeaconBlockElectra)
 	assert.Equal(t, true, ok)
 	pMessage = GossipTopicMappings(AttestationSubnetTopicFormat, electraForkEpoch)
-	_, ok = pMessage.(*ethpb.SingleAttestation)
+	_, ok = pMessage.(*ethpb.AttestationElectra)
 	assert.Equal(t, true, ok)
 	pMessage = GossipTopicMappings(AttesterSlashingSubnetTopicFormat, electraForkEpoch)
 	_, ok = pMessage.(*ethpb.AttesterSlashingElectra)

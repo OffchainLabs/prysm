@@ -120,7 +120,7 @@ func InitializeDataMaps() {
 			return &ethpb.Attestation{}, nil
 		},
 		bytesutil.ToBytes4(params.BeaconConfig().ElectraForkVersion): func() (ethpb.Att, error) {
-			return &ethpb.SingleAttestation{}, nil
+			return &ethpb.AttestationElectra{}, nil
 		},
 		bytesutil.ToBytes4(params.BeaconConfig().FuluForkVersion): func() (ethpb.Att, error) {
 			return &ethpb.AttestationElectra{}, nil
