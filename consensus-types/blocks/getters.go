@@ -166,6 +166,43 @@ func (b *SignedBeaconBlock) ToBlinded() (interfaces.ReadOnlySignedBeaconBlock, e
 		return nil, err
 	}
 
+	if b.version >= version.Fulu {
+		p, ok := payload.Proto().(*enginev1.ExecutionPayloadDeneb)
+		if !ok {
+			return nil, fmt.Errorf("%T is not an execution payload header of Deneb version", p)
+		}
+		header, err := PayloadToHeaderFulu(payload)
+		if err != nil {
+			return nil, errors.Wrap(err, "payload to header fulu")
+		}
+
+		return initBlindedSignedBlockFromProtoFulu(
+			&eth.SignedBlindedBeaconBlockFulu{
+				Message: &eth.BlindedBeaconBlockFulu{
+					Slot:          b.block.slot,
+					ProposerIndex: b.block.proposerIndex,
+					ParentRoot:    b.block.parentRoot[:],
+					StateRoot:     b.block.stateRoot[:],
+					Body: &eth.BlindedBeaconBlockBodyFulu{
+						RandaoReveal:           b.block.body.randaoReveal[:],
+						Eth1Data:               b.block.body.eth1Data,
+						Graffiti:               b.block.body.graffiti[:],
+						ProposerSlashings:      b.block.body.proposerSlashings,
+						AttesterSlashings:      b.block.body.attesterSlashingsElectra,
+						Attestations:           b.block.body.attestationsElectra,
+						Deposits:               b.block.body.deposits,
+						VoluntaryExits:         b.block.body.voluntaryExits,
+						SyncAggregate:          b.block.body.syncAggregate,
+						ExecutionPayloadHeader: header,
+						BlsToExecutionChanges:  b.block.body.blsToExecutionChanges,
+						BlobKzgCommitments:     b.block.body.blobKzgCommitments,
+						ExecutionRequests:      b.block.body.executionRequests,
+					},
+				},
+				Signature: b.signature[:],
+			})
+	}
+
 	if b.version >= version.Electra {
 		p, ok := payload.Proto().(*enginev1.ExecutionPayloadDeneb)
 		if !ok {
@@ -173,7 +210,7 @@ func (b *SignedBeaconBlock) ToBlinded() (interfaces.ReadOnlySignedBeaconBlock, e
 		}
 		header, err := PayloadToHeaderElectra(payload)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "payload to header electra")
 		}
 		return initBlindedSignedBlockFromProtoElectra(
 			&eth.SignedBlindedBeaconBlockElectra{
@@ -206,7 +243,7 @@ func (b *SignedBeaconBlock) ToBlinded() (interfaces.ReadOnlySignedBeaconBlock, e
 	case *enginev1.ExecutionPayload:
 		header, err := PayloadToHeader(payload)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "payload to header")
 		}
 		return initBlindedSignedBlockFromProtoBellatrix(
 			&eth.SignedBlindedBeaconBlockBellatrix{
@@ -261,7 +298,7 @@ func (b *SignedBeaconBlock) ToBlinded() (interfaces.ReadOnlySignedBeaconBlock, e
 	case *enginev1.ExecutionPayloadDeneb:
 		header, err := PayloadToHeaderDeneb(payload)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "payload to header deneb")
 		}
 		return initBlindedSignedBlockFromProtoDeneb(
 			&eth.SignedBlindedBeaconBlockDeneb{
