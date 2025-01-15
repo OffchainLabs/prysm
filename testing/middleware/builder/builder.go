@@ -935,7 +935,8 @@ func modifyExecutionPayload(execPayload engine.ExecutableData, fees *big.Int, pr
 	if err != nil {
 		return &engine.ExecutionPayloadEnvelope{}, err
 	}
-	return engine.BlockToExecutableData(modifiedBlock, fees, nil /*blobs*/), nil
+	// TODO: update to include requests for electra
+	return engine.BlockToExecutableData(modifiedBlock, fees, nil /*blobs*/, nil /*requests*/), nil
 }
 
 // This modifies the provided payload to imprint the builder's extra data
@@ -993,14 +994,13 @@ func executableDataToBlock(params engine.ExecutableData, prevBeaconRoot []byte) 
 		pRoot := common.Hash(prevBeaconRoot)
 		header.ParentBeaconRoot = &pRoot
 	}
-	//body := gethTypes.Body{
-	//	Transactions: txs,
-	//	Uncles:       nil,
-	//	Withdrawals:  params.Withdrawals,
-	//	Requests:     requests,
-	//}
-	//block := gethTypes.NewBlockWithHeader(header).WithBody(body)
-	block := gethTypes.NewBlockWithHeader(header)
+	// TODO: update requests with requests for electra
+	body := gethTypes.Body{
+		Transactions: txs,
+		Uncles:       nil,
+		Withdrawals:  params.Withdrawals,
+	}
+	block := gethTypes.NewBlockWithHeader(header).WithBody(body)
 	return block, nil
 }
 

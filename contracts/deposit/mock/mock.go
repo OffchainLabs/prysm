@@ -8,11 +8,10 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethclient/simulated"
 	"github.com/prysmaticlabs/prysm/v5/contracts/deposit"
 )
 
@@ -28,13 +27,13 @@ type TestAccount struct {
 	Addr         common.Address
 	ContractAddr common.Address
 	Contract     *deposit.DepositContract
-	Backend      *backends.SimulatedBackend
+	Backend      *simulated.Backend
 	TxOpts       *bind.TransactOpts
 }
 
 // Setup creates the simulated backend with the deposit contract deployed
 func Setup() (*TestAccount, error) {
-	genesis := make(core.GenesisAlloc)
+	genesis := make(types.GenesisAlloc)
 	privKey, err := crypto.GenerateKey()
 	if err != nil {
 		return nil, err
@@ -55,10 +54,10 @@ func Setup() (*TestAccount, error) {
 		return nil, err
 	}
 	startingBalance, _ := new(big.Int).SetString("100000000000000000000000000000000000000", 10)
-	genesis[addr] = core.GenesisAccount{Balance: startingBalance}
-	backend := backends.NewSimulatedBackend(genesis, 210000000000)
+	genesis[addr] = types.Account{Balance: startingBalance}
+	backend := simulated.NewBackend(genesis, simulated.WithBlockGasLimit(210000000000))
 
-	contractAddr, _, contract, err := DeployDepositContract(txOpts, backend)
+	contractAddr, _, contract, err := DeployDepositContract(txOpts, backend.Client())
 	if err != nil {
 		return nil, err
 	}

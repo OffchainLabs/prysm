@@ -81,9 +81,7 @@ func main() {
 		logrus.SetLevel(logrus.DebugLevel)
 
 		// Geth specific logging.
-		glogger := gethlog.NewGlogHandler(gethlog.StreamHandler(os.Stderr, gethlog.TerminalFormat(false)))
-		glogger.Verbosity(gethlog.LvlTrace)
-		gethlog.Root().SetHandler(glogger)
+		gethlog.SetDefault(gethlog.NewLogger(gethlog.NewTerminalHandlerWithLevel(os.Stderr, gethlog.LvlTrace, true)))
 
 		log.Debug("Debug logging enabled.")
 	}
