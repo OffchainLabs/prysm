@@ -31,10 +31,13 @@ func TestBootnode_OK(t *testing.T) {
 	require.NoError(t, err)
 	privKey := extractPrivateKey()
 	cfg := discover.Config{
-		PrivateKey: privKey,
+		PrivateKey:              privKey,
+		PingInterval:            100 * time.Millisecond,
+		NoFindnodeLivenessCheck: true,
 	}
 	listener := createListener(ipAddr, 4000, cfg)
 	defer listener.Close()
+	time.Sleep(5 * time.Second)
 
 	cfg.PrivateKey = extractPrivateKey()
 	bootNode, err := enode.Parse(enode.ValidSchemes, listener.Self().String())

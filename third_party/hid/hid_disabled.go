@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU Lesser General Public License along
 // with the library. If not, see <http://www.gnu.org/licenses/>.
 
-package usb
+package hid
 
 // HidDevice is a live HID USB connected device handle. On platforms that this file
 // implements, the type lacks the actual HID device and all methods are noop.

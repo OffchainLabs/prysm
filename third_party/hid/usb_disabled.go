@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU Lesser General Public License along
 // with the library. If not, see <http://www.gnu.org/licenses/>.
 
-package usb
+package hid
 
 // Supported returns whether this platform is supported by the USB library or not.
 // The goal of this method is to allow programmatically handling platforms that do

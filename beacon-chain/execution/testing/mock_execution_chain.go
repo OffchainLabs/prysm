@@ -9,10 +9,10 @@ import (
 	"net/http/httptest"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethclient/simulated"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/async/event"
@@ -141,7 +141,7 @@ func (m *Chain) ETH1ConnectionErrors() []error {
 
 // RPCClient defines the mock rpc client.
 type RPCClient struct {
-	Backend     *backends.SimulatedBackend
+	Backend     *simulated.Backend
 	BlockNumMap map[uint64]*types.HeaderInfo
 }
 
@@ -195,7 +195,7 @@ func (r *RPCClient) CallContext(ctx context.Context, obj interface{}, methodName
 				return err
 			}
 		}
-		h, err := r.Backend.HeaderByNumber(ctx, num)
+		h, err := r.Backend.Client().HeaderByNumber(ctx, num)
 		if err != nil {
 			return err
 		}
@@ -213,7 +213,7 @@ func (r *RPCClient) CallContext(ctx context.Context, obj interface{}, methodName
 		if !ok {
 			return errors.Errorf("wrong argument type provided: %T", args[0])
 		}
-		h, err := r.Backend.HeaderByHash(ctx, val)
+		h, err := r.Backend.Client().HeaderByHash(ctx, val)
 		if err != nil {
 			return err
 		}
@@ -241,7 +241,7 @@ func (r *RPCClient) BatchCall(b []rpc.BatchElem) error {
 		if err != nil {
 			return err
 		}
-		h, err := r.Backend.HeaderByNumber(context.Background(), num)
+		h, err := r.Backend.Client().HeaderByNumber(context.Background(), num)
 		if err != nil {
 			return err
 		}
