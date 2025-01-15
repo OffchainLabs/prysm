@@ -354,9 +354,9 @@ func TestStaticPeering_PeersAreAdded(t *testing.T) {
 }
 
 func TestHostIsResolved(t *testing.T) {
-	// As defined in RFC 2606 , example.org is a
-	// reserved example domain name.
-	exampleHost := "example.org"
+	// ip.addr.tools - construct domain names that resolve to any given IP address
+	// ex: 192-0-2-1.ip.addr.tools resolves to 192.0.2.1. 
+	exampleHost := "96-7-129-13.ip.addr.tools"
 	exampleIP := "96.7.129.13"
 
 	s := &Service{
