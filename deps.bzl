@@ -373,8 +373,8 @@ def prysm_deps():
     go_repository(
         name = "com_github_cespare_cp",
         importpath = "github.com/cespare/cp",
-        sum = "h1:nCb6ZLdB7NRaqsm91JtQTAme2SKJzXVsdPIPkyJr1MU=",
-        version = "v1.1.1",
+        sum = "h1:SE+dxFebS7Iik5LK0tsi1k9ZCxEaFX4AjQmoyA+1dJk=",
+        version = "v0.1.0",
     )
     go_repository(
         name = "com_github_cespare_xxhash",
@@ -1394,6 +1394,12 @@ def prysm_deps():
         importpath = "github.com/grpc-ecosystem/grpc-gateway/v2",
         sum = "h1:VNqngBF40hVlDloBruUehVYC3ArSgIyScOAyMRqBxRg=",
         version = "v2.25.1",
+    )
+    go_repository(
+        name = "com_github_gtank_ristretto255",
+        importpath = "github.com/gtank/ristretto255",
+        sum = "h1:JEqUCPA1NvLq5DwYtuzigd7ss8fwbYay9fi4/5uMzcc=",
+        version = "v0.1.2",
     )
     go_repository(
         name = "com_github_guptarohit_asciigraph",
