@@ -328,7 +328,7 @@ func (b builderBidElectra) Pubkey() []byte {
 
 // IsNil --
 func (b builderBidElectra) IsNil() bool {
-	return b.p == nil
+	return b == nil || b.p == nil
 }
 
 // HashTreeRoot --
