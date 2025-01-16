@@ -675,3 +675,12 @@ func RecoverCellsAndProofs(
 
 	return recoveredCellsAndProofs, nil
 }
+
+func CellsCount(cellsAndProofs []kzg.CellsAndProofs) int {
+	cellsCount := 0
+	for _, cp := range cellsAndProofs {
+		cellsCount += len(cp.Cells)
+	}
+
+	return cellsCount
+}
