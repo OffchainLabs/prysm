@@ -42,6 +42,8 @@ var placeholderFields = []string{
 	"MAX_REQUEST_PAYLOADS",         // Compile time constant on BeaconBlockBody.ExecutionRequests
 	"MAX_TRANSACTIONS_PER_PAYLOAD", // Compile time constant on ExecutionPayload.transactions.
 	"NUMBER_OF_CUSTODY_GROUPS",
+	"GOSSIP_MAX_SIZE",
+	"MAX_CHUNK_SIZE",
 	"REORG_HEAD_WEIGHT_THRESHOLD",
 	"TARGET_NUMBER_OF_PEERS",
 	"UPDATE_TIMEOUT",
