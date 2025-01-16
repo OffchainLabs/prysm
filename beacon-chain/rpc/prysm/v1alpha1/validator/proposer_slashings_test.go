@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/slashings"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
@@ -13,10 +14,12 @@ import (
 )
 
 func TestServer_getSlashings(t *testing.T) {
+	ctx := context.Background()
+
 	beaconState, privKeys := util.DeterministicGenesisState(t, 64)
 
 	proposerServer := &Server{
-		SlashingsPool: slashings.NewPool(false),
+		SlashingsPool: slashings.NewPool(ctx, startup.NewClockSynchronizer()),
 	}
 
 	proposerSlashings := make([]*ethpb.ProposerSlashing, params.BeaconConfig().MaxProposerSlashings)

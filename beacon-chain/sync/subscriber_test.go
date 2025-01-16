@@ -141,7 +141,7 @@ func TestSubscribe_ReceivesAttesterSlashing(t *testing.T) {
 		cfg: &config{
 			p2p:          p2pService,
 			initialSync:  &mockSync.Sync{IsSyncing: false},
-			slashingPool: slashings.NewPool(false),
+			slashingPool: slashings.NewPool(ctx, startup.NewClockSynchronizer()),
 			chain:        chainService,
 			clock:        startup.NewClock(gt, vr),
 			beaconDB:     d,
@@ -194,7 +194,7 @@ func TestSubscribe_ReceivesProposerSlashing(t *testing.T) {
 		cfg: &config{
 			p2p:          p2pService,
 			initialSync:  &mockSync.Sync{IsSyncing: false},
-			slashingPool: slashings.NewPool(false),
+			slashingPool: slashings.NewPool(ctx, startup.NewClockSynchronizer()),
 			chain:        chainService,
 			beaconDB:     d,
 			clock:        startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot),
