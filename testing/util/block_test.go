@@ -322,3 +322,30 @@ func TestGenerateVoluntaryExits(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, coreBlock.VerifyExitAndSignature(val, beaconState, exit))
 }
+
+func Test_PostDenebPbGenericBlock_ErrorsForPlainBlock(t *testing.T) {
+	t.Run("Deneb block returns type error", func(t *testing.T) {
+		eb := NewBeaconBlockDeneb()
+		b, err := blocks.NewSignedBeaconBlock(eb)
+		require.NoError(t, err)
+
+		_, err = b.PbGenericBlock()
+		require.ErrorContains(t, "PbGenericBlock() only supports block content type but got", err)
+	})
+	t.Run("Electra block returns type error", func(t *testing.T) {
+		eb := NewBeaconBlockElectra()
+		b, err := blocks.NewSignedBeaconBlock(eb)
+		require.NoError(t, err)
+
+		_, err = b.PbGenericBlock()
+		require.ErrorContains(t, "PbGenericBlock() only supports block content type but got", err)
+	})
+	t.Run("Fulu block returns type error", func(t *testing.T) {
+		eb := NewBeaconBlockFulu()
+		b, err := blocks.NewSignedBeaconBlock(eb)
+		require.NoError(t, err)
+
+		_, err = b.PbGenericBlock()
+		require.ErrorContains(t, "PbGenericBlock() only supports block content type but got", err)
+	})
+}

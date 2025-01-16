@@ -9,9 +9,10 @@ import (
 )
 
 func TestEndToEnd_MultiScenarioRun(t *testing.T) {
-	runner := e2eMinimal(t, types.InitForkCfg(version.Bellatrix, version.Deneb, params.E2ETestConfig()), types.WithEpochs(26))
-
-	runner.config.Evaluators = scenarioEvals()
+	cfg := types.InitForkCfg(version.Bellatrix, version.Deneb, params.E2ETestConfig())
+	runner := e2eMinimal(t, cfg, types.WithEpochs(26))
+	// override for scenario tests
+	runner.config.Evaluators = scenarioEvals(cfg)
 	runner.config.EvalInterceptor = runner.multiScenario
 	runner.scenarioRunner()
 }
@@ -30,9 +31,10 @@ func TestEndToEnd_MinimalConfig_ValidatorRESTApi(t *testing.T) {
 
 func TestEndToEnd_ScenarioRun_EEOffline(t *testing.T) {
 	t.Skip("TODO(#10242) Prysm is current unable to handle an offline e2e")
-	runner := e2eMinimal(t, types.InitForkCfg(version.Bellatrix, version.Deneb, params.E2ETestConfig()))
-
-	runner.config.Evaluators = scenarioEvals()
+	cfg := types.InitForkCfg(version.Bellatrix, version.Deneb, params.E2ETestConfig())
+	runner := e2eMinimal(t, cfg)
+	// override for scenario tests
+	runner.config.Evaluators = scenarioEvals(cfg)
 	runner.config.EvalInterceptor = runner.eeOffline
 	runner.scenarioRunner()
 }
