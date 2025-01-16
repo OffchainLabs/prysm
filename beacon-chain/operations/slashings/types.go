@@ -3,7 +3,9 @@ package slashings
 import (
 	"context"
 	"sync"
+	"time"
 
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
@@ -33,12 +35,20 @@ type PoolManager interface {
 	MarkIncludedProposerSlashing(ps *ethpb.ProposerSlashing)
 }
 
+// Option for pool configuration.
+type Option func(p *Pool) error
+
 // Pool is a concrete implementation of PoolManager.
 type Pool struct {
 	lock                    sync.RWMutex
+	ctx                     context.Context
+	cancel                  context.CancelFunc
+	cw                      startup.ClockWaiter
+	genesisTime             time.Time
 	pendingProposerSlashing []*ethpb.ProposerSlashing
 	pendingAttesterSlashing []*PendingAttesterSlashing
 	included                map[primitives.ValidatorIndex]bool
+	runElectraTimer         bool
 }
 
 // PendingAttesterSlashing represents an attester slashing in the operation pool.

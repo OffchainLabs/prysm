@@ -16,7 +16,7 @@ func TestServer_getSlashings(t *testing.T) {
 	beaconState, privKeys := util.DeterministicGenesisState(t, 64)
 
 	proposerServer := &Server{
-		SlashingsPool: slashings.NewPool(),
+		SlashingsPool: slashings.NewPool(false),
 	}
 
 	proposerSlashings := make([]*ethpb.ProposerSlashing, params.BeaconConfig().MaxProposerSlashings)

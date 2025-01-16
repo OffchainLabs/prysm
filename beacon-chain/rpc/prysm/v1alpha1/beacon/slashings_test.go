@@ -31,7 +31,7 @@ func TestServer_SubmitProposerSlashing(t *testing.T) {
 		HeadFetcher: &mock.ChainService{
 			State: st,
 		},
-		SlashingsPool: slashings.NewPool(),
+		SlashingsPool: slashings.NewPool(false),
 		Broadcaster:   mb,
 	}
 
@@ -61,7 +61,7 @@ func TestServer_SubmitAttesterSlashing(t *testing.T) {
 		HeadFetcher: &mock.ChainService{
 			State: st,
 		},
-		SlashingsPool: slashings.NewPool(),
+		SlashingsPool: slashings.NewPool(false),
 		Broadcaster:   mb,
 	}
 
@@ -92,7 +92,7 @@ func TestServer_SubmitProposerSlashing_DontBroadcast(t *testing.T) {
 		HeadFetcher: &mock.ChainService{
 			State: st,
 		},
-		SlashingsPool: slashings.NewPool(),
+		SlashingsPool: slashings.NewPool(false),
 		Broadcaster:   mb,
 	}
 
@@ -139,7 +139,7 @@ func TestServer_SubmitAttesterSlashing_DontBroadcast(t *testing.T) {
 		HeadFetcher: &mock.ChainService{
 			State: st,
 		},
-		SlashingsPool: slashings.NewPool(),
+		SlashingsPool: slashings.NewPool(false),
 		Broadcaster:   mb,
 	}
 
@@ -180,7 +180,7 @@ func TestServer_SubmitAttesterSlashingElectra(t *testing.T) {
 		HeadFetcher: &mock.ChainService{
 			State: st,
 		},
-		SlashingsPool: slashings.NewPool(),
+		SlashingsPool: slashings.NewPool(false),
 		Broadcaster:   mb,
 	}
 

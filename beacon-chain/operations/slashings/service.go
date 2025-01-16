@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
+	coretime "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
@@ -16,16 +18,37 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
+	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/trailofbits/go-mutexasserts"
 )
 
+// WithElectraTimer includes functional options for the blockchain service related to CLI flags.
+func WithElectraTimer() Option {
+	return func(p *Pool) error {
+		p.runElectraTimer = true
+		return nil
+	}
+}
+
 // NewPool returns an initialized attester slashing and proposer slashing pool.
-func NewPool() *Pool {
-	return &Pool{
+func NewPool(ctx context.Context, cw startup.ClockWaiter, opts ...Option) *Pool {
+	ctx, cancel := context.WithCancel(ctx)
+	p := &Pool{
+		ctx:                     ctx,
+		cancel:                  cancel,
 		pendingProposerSlashing: make([]*ethpb.ProposerSlashing, 0),
 		pendingAttesterSlashing: make([]*PendingAttesterSlashing, 0),
 		included:                make(map[primitives.ValidatorIndex]bool),
+		cw:                      cw,
 	}
+
+	for _, opt := range opts {
+		if err := opt(p); err != nil {
+			return nil
+		}
+	}
+
+	return p
 }
 
 // PendingAttesterSlashings returns attester slashings that are able to be included into a block.
@@ -291,8 +314,90 @@ func (p *Pool) validatorSlashingPreconditionCheck(
 		return false, err
 	}
 	// Checking if the validator is slashable.
-	if !helpers.IsSlashableValidatorUsingTrie(validator, time.CurrentEpoch(state)) {
+	if !helpers.IsSlashableValidatorUsingTrie(validator, coretime.CurrentEpoch(state)) {
 		return false, nil
 	}
 	return true, nil
+}
+
+func (p *Pool) convertToElectra() {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	for _, pas := range p.pendingAttesterSlashing {
+		if pas.attesterSlashing.Version() == version.Phase0 {
+			first := pas.attesterSlashing.FirstAttestation()
+			second := pas.attesterSlashing.SecondAttestation()
+			pas.attesterSlashing = &ethpb.AttesterSlashingElectra{
+				Attestation_1: &ethpb.IndexedAttestationElectra{
+					AttestingIndices: first.GetAttestingIndices(),
+					Data:             first.GetData(),
+					Signature:        first.GetSignature(),
+				},
+				Attestation_2: &ethpb.IndexedAttestationElectra{
+					AttestingIndices: second.GetAttestingIndices(),
+					Data:             second.GetData(),
+					Signature:        second.GetSignature(),
+				},
+			}
+		}
+	}
+}
+
+// Start the slashing pool service.
+func (p *Pool) Start() {
+	go p.run()
+}
+
+func (p *Pool) run() {
+	if !p.runElectraTimer {
+		return
+	}
+
+	p.waitForChainInitialization()
+
+	electraSlot, err := slots.EpochStart(params.BeaconConfig().ElectraForkEpoch)
+	if err != nil {
+		log.WithError(err).Error("Could not get Electra start slot")
+		return
+	}
+	electraTime, err := slots.ToTime(uint64(p.genesisTime.Unix()), electraSlot)
+	if err != nil {
+		log.WithError(err).Error("Could not get Electra start time")
+		return
+	}
+
+	t := time.NewTimer(electraTime.Sub(time.Now()))
+	go func() {
+		defer t.Stop()
+		select {
+		case <-t.C:
+			log.Info("Converting Phase0 slashings to Electra slashings")
+			p.convertToElectra()
+		case <-p.ctx.Done():
+			log.Warn("Context cancelled, Electra timer will not execute")
+			return
+		}
+	}()
+}
+func (p *Pool) waitForChainInitialization() {
+	clock, err := p.cw.WaitForClock(p.ctx)
+	if err != nil {
+		log.WithError(err).Error("Could not receive chain start notification")
+	}
+	p.genesisTime = clock.GenesisTime()
+	log.WithField("genesisTime", p.genesisTime).Info(
+		"Slashing pool received chain initialization event",
+	)
+}
+
+// Stop the slashing pool service.
+func (p *Pool) Stop() error {
+	p.cancel()
+	return nil
+}
+
+// Status of the slashing pool service.
+func (p *Pool) Status() error {
+	return nil
 }
