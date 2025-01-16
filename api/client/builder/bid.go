@@ -393,5 +393,5 @@ func (b signedBuilderBidElectra) Version() int {
 
 // IsNil --
 func (b signedBuilderBidElectra) IsNil() bool {
-	return b.p == nil
+	return b == nil || b.p == nil
 }
