@@ -31,6 +31,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/voluntaryexits"
 	mockp2p "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/testutil"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stategen"
@@ -90,7 +91,7 @@ func TestServer_GetBeaconBlock_Phase0(t *testing.T) {
 	require.NoError(t, db.SaveState(ctx, beaconState, parentRoot), "Could not save genesis state")
 	require.NoError(t, db.SaveHeadBlockRoot(ctx, parentRoot), "Could not save genesis state")
 
-	proposerServer := getProposerServer(db, beaconState, parentRoot[:])
+	proposerServer := getProposerServer(ctx, db, beaconState, parentRoot[:])
 
 	randaoReveal, err := util.RandaoReveal(beaconState, 0, privKeys)
 	require.NoError(t, err)
@@ -162,7 +163,7 @@ func TestServer_GetBeaconBlock_Altair(t *testing.T) {
 	require.NoError(t, db.SaveState(ctx, beaconState, blkRoot), "Could not save genesis state")
 	require.NoError(t, db.SaveHeadBlockRoot(ctx, blkRoot), "Could not save genesis state")
 
-	proposerServer := getProposerServer(db, beaconState, parentRoot[:])
+	proposerServer := getProposerServer(ctx, db, beaconState, parentRoot[:])
 
 	randaoReveal, err := util.RandaoReveal(beaconState, 0, privKeys)
 	require.NoError(t, err)
@@ -275,7 +276,7 @@ func TestServer_GetBeaconBlock_Bellatrix(t *testing.T) {
 		Timestamp:     uint64(timeStamp.Unix()),
 	}
 
-	proposerServer := getProposerServer(db, beaconState, parentRoot[:])
+	proposerServer := getProposerServer(ctx, db, beaconState, parentRoot[:])
 	proposerServer.Eth1BlockFetcher = c
 	ed, err := blocks.NewWrappedExecutionData(payload)
 	require.NoError(t, err)
@@ -401,7 +402,7 @@ func TestServer_GetBeaconBlock_Capella(t *testing.T) {
 		Withdrawals:   make([]*enginev1.Withdrawal, 0),
 	}
 
-	proposerServer := getProposerServer(db, beaconState, parentRoot[:])
+	proposerServer := getProposerServer(ctx, db, beaconState, parentRoot[:])
 	ed, err := blocks.NewWrappedExecutionData(payload)
 	require.NoError(t, err)
 	proposerServer.ExecutionEngineCaller = &mockExecution.EngineClient{
@@ -524,7 +525,7 @@ func TestServer_GetBeaconBlock_Deneb(t *testing.T) {
 	proofs := [][]byte{[]byte("proof"), []byte("proof1"), []byte("proof2")}
 	blobs := [][]byte{[]byte("blob"), []byte("blob1"), []byte("blob2")}
 	bundle := &enginev1.BlobsBundle{KzgCommitments: kc, Proofs: proofs, Blobs: blobs}
-	proposerServer := getProposerServer(db, beaconState, parentRoot[:])
+	proposerServer := getProposerServer(ctx, db, beaconState, parentRoot[:])
 	proposerServer.ExecutionEngineCaller = &mockExecution.EngineClient{
 		PayloadIDBytes: &enginev1.PayloadIDBytes{1},
 		GetPayloadResponse: &blocks.GetPayloadResponse{
@@ -657,7 +658,7 @@ func TestServer_GetBeaconBlock_Electra(t *testing.T) {
 		BaseFeePerGas: make([]byte, fieldparams.RootLength),
 		BlockHash:     make([]byte, fieldparams.RootLength),
 	}
-	proposerServer := getProposerServer(db, beaconState, parentRoot[:])
+	proposerServer := getProposerServer(ctx, db, beaconState, parentRoot[:])
 	ed, err := blocks.NewWrappedExecutionData(payload)
 	require.NoError(t, err)
 	proposerServer.ExecutionEngineCaller = &mockExecution.EngineClient{
@@ -782,7 +783,7 @@ func TestServer_GetBeaconBlock_Fulu(t *testing.T) {
 		BaseFeePerGas: make([]byte, fieldparams.RootLength),
 		BlockHash:     make([]byte, fieldparams.RootLength),
 	}
-	proposerServer := getProposerServer(db, beaconState, parentRoot[:])
+	proposerServer := getProposerServer(ctx, db, beaconState, parentRoot[:])
 	ed, err := blocks.NewWrappedExecutionData(payload)
 	require.NoError(t, err)
 	proposerServer.ExecutionEngineCaller = &mockExecution.EngineClient{
@@ -832,7 +833,7 @@ func TestServer_GetBeaconBlock_Optimistic(t *testing.T) {
 	require.ErrorContains(t, errOptimisticMode.Error(), err)
 }
 
-func getProposerServer(db db.HeadAccessDatabase, headState state.BeaconState, headRoot []byte) *Server {
+func getProposerServer(ctx context.Context, db db.HeadAccessDatabase, headState state.BeaconState, headRoot []byte) *Server {
 	mockChainService := &mock.ChainService{State: headState, Root: headRoot, ForkChoiceStore: doublylinkedtree.New()}
 	return &Server{
 		HeadFetcher:           mockChainService,
@@ -846,7 +847,7 @@ func getProposerServer(db db.HeadAccessDatabase, headState state.BeaconState, he
 		ForkchoiceFetcher:     mockChainService,
 		MockEth1Votes:         true,
 		AttPool:               attestations.NewPool(),
-		SlashingsPool:         slashings.NewPool(false),
+		SlashingsPool:         slashings.NewPool(ctx, startup.NewClockSynchronizer()),
 		ExitPool:              voluntaryexits.NewPool(),
 		StateGen:              stategen.New(db, doublylinkedtree.New()),
 		SyncCommitteePool:     synccommittee.NewStore(),

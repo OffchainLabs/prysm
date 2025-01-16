@@ -71,6 +71,9 @@ func setupBeaconChain(t *testing.T, beaconDB db.Database) *Service {
 		DepositContainers: []*ethpb.DepositContainer{},
 	})
 	require.NoError(t, err)
+
+	clockSync := startup.NewClockSynchronizer()
+
 	web3Service, err = execution.NewService(
 		ctx,
 		execution.WithDatabase(beaconDB),
@@ -95,7 +98,7 @@ func setupBeaconChain(t *testing.T, beaconDB db.Database) *Service {
 		WithDepositCache(depositCache),
 		WithChainStartFetcher(web3Service),
 		WithAttestationPool(attestations.NewPool()),
-		WithSlashingPool(slashings.NewPool(false)),
+		WithSlashingPool(slashings.NewPool(ctx, clockSync)),
 		WithExitPool(voluntaryexits.NewPool()),
 		WithP2PBroadcaster(&mockBroadcaster{}),
 		WithStateNotifier(&mockBeaconNode{}),
@@ -103,7 +106,7 @@ func setupBeaconChain(t *testing.T, beaconDB db.Database) *Service {
 		WithAttestationService(attService),
 		WithStateGen(stateGen),
 		WithPayloadIDCache(cache.NewPayloadIDCache()),
-		WithClockSynchronizer(startup.NewClockSynchronizer()),
+		WithClockSynchronizer(clockSync),
 	}
 
 	chainService, err := NewService(ctx, opts...)
