@@ -1,3 +1,3 @@
 ### Added
 
-- Builder API endpooint to support Electra
+- Builder API endpoint to support Electra
