@@ -1277,7 +1277,7 @@ type ExecHeaderResponseElectra struct {
 	} `json:"data"`
 }
 
-// ToProto creates a SignedBuilderBidDeneb Proto from ExecHeaderResponseDeneb.
+// ToProto creates a SignedBuilderBidElectra Proto from ExecHeaderResponseDeneb.
 func (ehr *ExecHeaderResponseElectra) ToProto() (*eth.SignedBuilderBidElectra, error) {
 	bb, err := ehr.Data.Message.ToProto()
 	if err != nil {
