@@ -9,25 +9,35 @@ import (
 // SlashingParamsPerVersion returns the slashing parameters for the given state version.
 func SlashingParamsPerVersion(v int) (slashingQuotient, proposerRewardQuotient, whistleblowerRewardQuotient uint64, err error) {
 	cfg := params.BeaconConfig()
-	switch v {
-	case version.Phase0:
-		slashingQuotient = cfg.MinSlashingPenaltyQuotient
-		proposerRewardQuotient = cfg.ProposerRewardQuotient
-		whistleblowerRewardQuotient = cfg.WhistleBlowerRewardQuotient
-	case version.Altair:
-		slashingQuotient = cfg.MinSlashingPenaltyQuotientAltair
-		proposerRewardQuotient = cfg.ProposerRewardQuotient
-		whistleblowerRewardQuotient = cfg.WhistleBlowerRewardQuotient
-	case version.Bellatrix, version.Capella, version.Deneb:
-		slashingQuotient = cfg.MinSlashingPenaltyQuotientBellatrix
-		proposerRewardQuotient = cfg.ProposerRewardQuotient
-		whistleblowerRewardQuotient = cfg.WhistleBlowerRewardQuotient
-	case version.Electra:
+
+	if v >= version.Electra {
 		slashingQuotient = cfg.MinSlashingPenaltyQuotientElectra
 		proposerRewardQuotient = cfg.ProposerRewardQuotient
 		whistleblowerRewardQuotient = cfg.WhistleBlowerRewardQuotientElectra
-	default:
-		err = errors.New("unknown state version")
+		return
 	}
+
+	if v >= version.Bellatrix {
+		slashingQuotient = cfg.MinSlashingPenaltyQuotientBellatrix
+		proposerRewardQuotient = cfg.ProposerRewardQuotient
+		whistleblowerRewardQuotient = cfg.WhistleBlowerRewardQuotient
+		return
+	}
+
+	if v >= version.Altair {
+		slashingQuotient = cfg.MinSlashingPenaltyQuotientAltair
+		proposerRewardQuotient = cfg.ProposerRewardQuotient
+		whistleblowerRewardQuotient = cfg.WhistleBlowerRewardQuotient
+		return
+	}
+
+	if v >= version.Phase0 {
+		slashingQuotient = cfg.MinSlashingPenaltyQuotient
+		proposerRewardQuotient = cfg.ProposerRewardQuotient
+		whistleblowerRewardQuotient = cfg.WhistleBlowerRewardQuotient
+		return
+	}
+
+	err = errors.Errorf("unknown state version %s", version.String(v))
 	return
 }

@@ -77,7 +77,7 @@ func TestProcessEffectiveBalnceUpdates(t *testing.T) {
 					Validators: []*eth.Validator{
 						{
 							EffectiveBalance:      params.BeaconConfig().MinActivationBalance / 2,
-							WithdrawalCredentials: nil,
+							WithdrawalCredentials: make([]byte, 32),
 						},
 					},
 					Balances: []uint64{

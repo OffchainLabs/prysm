@@ -91,85 +91,126 @@ func (s *Service) processPendingAtts(ctx context.Context) error {
 
 func (s *Service) processAttestations(ctx context.Context, attestations []ethpb.SignedAggregateAttAndProof) {
 	for _, signedAtt := range attestations {
-		aggregate := signedAtt.AggregateAttestationAndProof().AggregateVal()
-		data := aggregate.GetData()
+		att := signedAtt.AggregateAttestationAndProof().AggregateVal()
 		// The pending attestations can arrive in both aggregated and unaggregated forms,
 		// each from has distinct validation steps.
-		if aggregate.IsAggregated() {
-			// Save the pending aggregated attestation to the pool if it passes the aggregated
-			// validation steps.
-			valRes, err := s.validateAggregatedAtt(ctx, signedAtt)
-			if err != nil {
-				log.WithError(err).Debug("Pending aggregated attestation failed validation")
-			}
-			aggValid := pubsub.ValidationAccept == valRes
-			if s.validateBlockInAttestation(ctx, signedAtt) && aggValid {
-				if features.Get().EnableExperimentalAttestationPool {
-					if err = s.cfg.attestationCache.Add(aggregate); err != nil {
-						log.WithError(err).Debug("Could not save aggregate attestation")
-						continue
-					}
-				} else {
-					if err := s.cfg.attPool.SaveAggregatedAttestation(aggregate); err != nil {
-						log.WithError(err).Debug("Could not save aggregate attestation")
-						continue
-					}
-				}
+		if att.IsAggregated() {
+			s.processAggregated(ctx, signedAtt)
+		} else {
+			s.processUnaggregated(ctx, att)
+		}
+	}
+}
 
-				s.setAggregatorIndexEpochSeen(data.Target.Epoch, signedAtt.AggregateAttestationAndProof().GetAggregatorIndex())
+func (s *Service) processAggregated(ctx context.Context, att ethpb.SignedAggregateAttAndProof) {
+	aggregate := att.AggregateAttestationAndProof().AggregateVal()
 
-				// Broadcasting the signed attestation again once a node is able to process it.
-				if err := s.cfg.p2p.Broadcast(ctx, signedAtt); err != nil {
-					log.WithError(err).Debug("Could not broadcast")
-				}
+	// Save the pending aggregated attestation to the pool if it passes the aggregated
+	// validation steps.
+	valRes, err := s.validateAggregatedAtt(ctx, att)
+	if err != nil {
+		log.WithError(err).Debug("Pending aggregated attestation failed validation")
+	}
+	aggValid := pubsub.ValidationAccept == valRes
+	if s.validateBlockInAttestation(ctx, att) && aggValid {
+		if features.Get().EnableExperimentalAttestationPool {
+			if err = s.cfg.attestationCache.Add(aggregate); err != nil {
+				log.WithError(err).Debug("Could not save aggregate attestation")
+				return
 			}
 		} else {
-			// This is an important validation before retrieving attestation pre state to defend against
-			// attestation's target intentionally reference checkpoint that's long ago.
-			// Verify current finalized checkpoint is an ancestor of the block defined by the attestation's beacon block root.
-			if !s.cfg.chain.InForkchoice(bytesutil.ToBytes32(data.BeaconBlockRoot)) {
-				log.WithError(blockchain.ErrNotDescendantOfFinalized).Debug("Could not verify finalized consistency")
-				continue
+			if err := s.cfg.attPool.SaveAggregatedAttestation(aggregate); err != nil {
+				log.WithError(err).Debug("Could not save aggregate attestation")
+				return
 			}
-			if err := s.cfg.chain.VerifyLmdFfgConsistency(ctx, aggregate); err != nil {
-				log.WithError(err).Debug("Could not verify FFG consistency")
-				continue
-			}
-			preState, err := s.cfg.chain.AttestationTargetState(ctx, data.Target)
-			if err != nil {
-				log.WithError(err).Debug("Could not retrieve attestation prestate")
-				continue
-			}
+		}
 
-			valid, err := s.validateUnaggregatedAttWithState(ctx, aggregate, preState)
-			if err != nil {
-				log.WithError(err).Debug("Pending unaggregated attestation failed validation")
-				continue
-			}
-			if valid == pubsub.ValidationAccept {
-				if features.Get().EnableExperimentalAttestationPool {
-					if err = s.cfg.attestationCache.Add(aggregate); err != nil {
-						log.WithError(err).Debug("Could not save unaggregated attestation")
-						continue
-					}
-				} else {
-					if err := s.cfg.attPool.SaveUnaggregatedAttestation(aggregate); err != nil {
-						log.WithError(err).Debug("Could not save unaggregated attestation")
-						continue
-					}
-				}
-				s.setSeenCommitteeIndicesSlot(data.Slot, data.CommitteeIndex, aggregate.GetAggregationBits())
+		s.setAggregatorIndexEpochSeen(aggregate.GetData().Target.Epoch, att.AggregateAttestationAndProof().GetAggregatorIndex())
 
-				valCount, err := helpers.ActiveValidatorCount(ctx, preState, slots.ToEpoch(data.Slot))
-				if err != nil {
-					log.WithError(err).Debug("Could not retrieve active validator count")
-					continue
-				}
-				// Broadcasting the signed attestation again once a node is able to process it.
-				if err := s.cfg.p2p.BroadcastAttestation(ctx, helpers.ComputeSubnetForAttestation(valCount, aggregate), aggregate); err != nil {
-					log.WithError(err).Debug("Could not broadcast")
-				}
+		// Broadcasting the signed attestation again once a node is able to process it.
+		if err := s.cfg.p2p.Broadcast(ctx, att); err != nil {
+			log.WithError(err).Debug("Could not broadcast")
+		}
+	}
+}
+
+func (s *Service) processUnaggregated(ctx context.Context, att ethpb.Att) {
+	data := att.GetData()
+
+	// This is an important validation before retrieving attestation pre state to defend against
+	// attestation's target intentionally reference checkpoint that's long ago.
+	// Verify current finalized checkpoint is an ancestor of the block defined by the attestation's beacon block root.
+	if !s.cfg.chain.InForkchoice(bytesutil.ToBytes32(data.BeaconBlockRoot)) {
+		log.WithError(blockchain.ErrNotDescendantOfFinalized).Debug("Could not verify finalized consistency")
+		return
+	}
+	if err := s.cfg.chain.VerifyLmdFfgConsistency(ctx, att); err != nil {
+		log.WithError(err).Debug("Could not verify FFG consistency")
+		return
+	}
+	preState, err := s.cfg.chain.AttestationTargetState(ctx, data.Target)
+	if err != nil {
+		log.WithError(err).Debug("Could not retrieve attestation prestate")
+		return
+	}
+	committee, err := helpers.BeaconCommitteeFromState(ctx, preState, data.Slot, att.GetCommitteeIndex())
+	if err != nil {
+		log.WithError(err).Debug("Could not retrieve committee from state")
+		return
+	}
+	valid, err := validateAttesterData(ctx, att, committee)
+	if err != nil {
+		log.WithError(err).Debug("Could not validate attester data")
+		return
+	} else if valid != pubsub.ValidationAccept {
+		log.Debug("Attestation failed attester data validation")
+		return
+	}
+
+	var singleAtt *ethpb.SingleAttestation
+	if att.Version() >= version.Electra {
+		var ok bool
+		singleAtt, ok = att.(*ethpb.SingleAttestation)
+		if !ok {
+			log.Debugf("Attestation has wrong type (expected %T, got %T)", &ethpb.SingleAttestation{}, att)
+			return
+		}
+		att = singleAtt.ToAttestationElectra(committee)
+	}
+
+	valid, err = s.validateUnaggregatedAttWithState(ctx, att, preState)
+	if err != nil {
+		log.WithError(err).Debug("Pending unaggregated attestation failed validation")
+		return
+	}
+	if valid == pubsub.ValidationAccept {
+		if features.Get().EnableExperimentalAttestationPool {
+			if err = s.cfg.attestationCache.Add(att); err != nil {
+				log.WithError(err).Debug("Could not save unaggregated attestation")
+				return
 			}
+		} else {
+			if err := s.cfg.attPool.SaveUnaggregatedAttestation(att); err != nil {
+				log.WithError(err).Debug("Could not save unaggregated attestation")
+				return
+			}
+		}
+		s.setSeenCommitteeIndicesSlot(data.Slot, data.CommitteeIndex, att.GetAggregationBits())
+
+		valCount, err := helpers.ActiveValidatorCount(ctx, preState, slots.ToEpoch(data.Slot))
+		if err != nil {
+			log.WithError(err).Debug("Could not retrieve active validator count")
+			return
+		}
+		// Broadcasting the signed attestation again once a node is able to process it.
+		var attToBroadcast ethpb.Att
+		if singleAtt != nil {
+			attToBroadcast = singleAtt
+		} else {
+			attToBroadcast = att
+		}
+		if err := s.cfg.p2p.BroadcastAttestation(ctx, helpers.ComputeSubnetForAttestation(valCount, attToBroadcast), attToBroadcast); err != nil {
+			log.WithError(err).Debug("Could not broadcast")
 		}
 	}
 }
@@ -211,6 +252,10 @@ func (s *Service) savePendingAtt(att ethpb.SignedAggregateAttAndProof) {
 }
 
 func attsAreEqual(a, b ethpb.SignedAggregateAttAndProof) bool {
+	if a.Version() != b.Version() {
+		return false
+	}
+
 	if a.GetSignature() != nil {
 		return b.GetSignature() != nil && a.AggregateAttestationAndProof().GetAggregatorIndex() == b.AggregateAttestationAndProof().GetAggregatorIndex()
 	}
@@ -228,6 +273,12 @@ func attsAreEqual(a, b ethpb.SignedAggregateAttAndProof) bool {
 	}
 
 	if a.Version() >= version.Electra {
+		if aAggregate.IsSingle() != bAggregate.IsSingle() {
+			return false
+		}
+		if aAggregate.IsSingle() && aAggregate.GetAttestingIndex() != bAggregate.GetAttestingIndex() {
+			return false
+		}
 		if !bytes.Equal(aAggregate.CommitteeBitsVal().Bytes(), bAggregate.CommitteeBitsVal().Bytes()) {
 			return false
 		}

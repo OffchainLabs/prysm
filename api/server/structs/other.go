@@ -36,6 +36,13 @@ type AttestationElectra struct {
 	CommitteeBits   string           `json:"committee_bits"`
 }
 
+type SingleAttestation struct {
+	CommitteeIndex string           `json:"committee_index"`
+	AttesterIndex  string           `json:"attester_index"`
+	Data           *AttestationData `json:"data"`
+	Signature      string           `json:"signature"`
+}
+
 type AttestationData struct {
 	Slot            string      `json:"slot"`
 	CommitteeIndex  string      `json:"index"`

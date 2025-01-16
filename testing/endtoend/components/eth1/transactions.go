@@ -12,11 +12,13 @@ import (
 
 	"github.com/MariusVanDerWijden/FuzzyVM/filler"
 	txfuzz "github.com/MariusVanDerWijden/tx-fuzz"
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/ethclient/gethclient"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/holiman/uint256"
 	"github.com/pkg/errors"
@@ -257,27 +259,47 @@ func RandomBlobTx(rpc *rpc.Client, f *filler.Filler, sender common.Address, nonc
 		// 4844 transaction without AL
 		tip, feecap, err := getCaps(rpc, gasPrice)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "getCaps")
 		}
 		data, err := randomBlobData()
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "randomBlobData")
 		}
 		return New4844Tx(nonce, &to, gas, chainID, tip, feecap, value, code, big.NewInt(1000000), data, make(types.AccessList, 0)), nil
 	case 1:
-		// 4844 transaction with AL
-		tx := types.NewTransaction(nonce, to, value, gas, gasPrice, code)
-		al, err := txfuzz.CreateAccessList(rpc, tx, sender)
+		// 4844 transaction with AL nonce, to, value, gas, gasPrice, code
+		tx := types.NewTx(&types.LegacyTx{
+			Nonce:    nonce,
+			To:       &to,
+			Value:    value,
+			Gas:      gas,
+			GasPrice: gasPrice,
+			Data:     code,
+		})
+
+		// TODO: replace call with al, err := txfuzz.CreateAccessList(rpc, tx, sender) when txfuzz is fixed in new release
+		// an error occurs mentioning error="CreateAccessList: both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified"
+		msg := ethereum.CallMsg{
+			From:       sender,
+			To:         tx.To(),
+			Gas:        tx.Gas(),
+			GasPrice:   tx.GasPrice(),
+			Value:      tx.Value(),
+			Data:       tx.Data(),
+			AccessList: nil,
+		}
+		geth := gethclient.New(rpc)
+		al, _, _, err := geth.CreateAccessList(context.Background(), msg)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "CreateAccessList")
 		}
 		tip, feecap, err := getCaps(rpc, gasPrice)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "getCaps")
 		}
 		data, err := randomBlobData()
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "randomBlobData")
 		}
 		return New4844Tx(nonce, &to, gas, chainID, tip, feecap, value, code, big.NewInt(1000000), data, *al), nil
 	}
@@ -342,17 +364,18 @@ func EncodeBlobs(data []byte) ([]kzg4844.Blob, []kzg4844.Commitment, []kzg4844.P
 		versionedHashes []common.Hash
 	)
 	for _, blob := range blobs {
-		commit, err := kzg4844.BlobToCommitment(blob)
+		b := blob
+		commit, err := kzg4844.BlobToCommitment(&b)
 		if err != nil {
 			return nil, nil, nil, nil, err
 		}
 		commits = append(commits, commit)
 
-		proof, err := kzg4844.ComputeBlobProof(blob, commit)
+		proof, err := kzg4844.ComputeBlobProof(&b, commit)
 		if err != nil {
 			return nil, nil, nil, nil, err
 		}
-		if err := kzg4844.VerifyBlobProof(blob, commit, proof); err != nil {
+		if err := kzg4844.VerifyBlobProof(&b, commit, proof); err != nil {
 			return nil, nil, nil, nil, err
 		}
 		proofs = append(proofs, proof)

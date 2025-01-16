@@ -6,6 +6,7 @@ import (
 	"errors"
 	"go/ast"
 	"go/token"
+	"slices"
 
 	"golang.org/x/tools/go/analysis"
 	"golang.org/x/tools/go/analysis/passes/inspect"
@@ -100,10 +101,5 @@ func inspectFunctionParams(pass *analysis.Pass, paramList []*ast.Field) {
 }
 
 func shadows(name string) bool {
-	for _, identifier := range predeclared {
-		if identifier == name {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(predeclared, name)
 }

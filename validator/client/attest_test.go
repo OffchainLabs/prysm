@@ -222,11 +222,11 @@ func TestAttestToBlockHead_AttestsCorrectly(t *testing.T) {
 				gomock.Any(), // epoch
 			).Times(2).Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil /*err*/)
 
-			var generatedAttestation *ethpb.AttestationElectra
+			var generatedAttestation *ethpb.SingleAttestation
 			m.validatorClient.EXPECT().ProposeAttestationElectra(
 				gomock.Any(), // ctx
-				gomock.AssignableToTypeOf(&ethpb.AttestationElectra{}),
-			).Do(func(_ context.Context, att *ethpb.AttestationElectra) {
+				gomock.AssignableToTypeOf(&ethpb.SingleAttestation{}),
+			).Do(func(_ context.Context, att *ethpb.SingleAttestation) {
 				generatedAttestation = att
 			}).Return(&ethpb.AttestResponse{}, nil /* error */)
 
@@ -236,15 +236,15 @@ func TestAttestToBlockHead_AttestsCorrectly(t *testing.T) {
 			aggregationBitfield.SetBitAt(4, true)
 			committeeBits := primitives.NewAttestationCommitteeBits()
 			committeeBits.SetBitAt(5, true)
-			expectedAttestation := &ethpb.AttestationElectra{
+			expectedAttestation := &ethpb.SingleAttestation{
 				Data: &ethpb.AttestationData{
 					BeaconBlockRoot: beaconBlockRoot[:],
 					Target:          &ethpb.Checkpoint{Root: targetRoot[:]},
 					Source:          &ethpb.Checkpoint{Root: sourceRoot[:], Epoch: 3},
 				},
-				AggregationBits: aggregationBitfield,
-				CommitteeBits:   committeeBits,
-				Signature:       make([]byte, 96),
+				AttesterIndex: validatorIndex,
+				CommitteeId:   5,
+				Signature:     make([]byte, 96),
 			}
 
 			root, err := signing.ComputeSigningRoot(expectedAttestation.Data, make([]byte, 32))

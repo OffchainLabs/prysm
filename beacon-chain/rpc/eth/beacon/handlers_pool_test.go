@@ -498,11 +498,15 @@ func TestSubmitAttestations(t *testing.T) {
 	c.SlotsPerEpoch = 1
 	params.OverrideBeaconConfig(c)
 
-	_, keys, err := util.DeterministicDepositsAndKeys(1)
+	_, keys, err := util.DeterministicDepositsAndKeys(2)
 	require.NoError(t, err)
 	validators := []*ethpbv1alpha1.Validator{
 		{
 			PublicKey: keys[0].PublicKey().Marshal(),
+			ExitEpoch: params.BeaconConfig().FarFutureEpoch,
+		},
+		{
+			PublicKey: keys[1].PublicKey().Marshal(),
 			ExitEpoch: params.BeaconConfig().FarFutureEpoch,
 		},
 	}
@@ -521,9 +525,10 @@ func TestSubmitAttestations(t *testing.T) {
 
 	chainService := &blockchainmock.ChainService{State: bs}
 	s := &Server{
-		HeadFetcher:       chainService,
-		ChainInfoFetcher:  chainService,
-		OperationNotifier: &blockchainmock.MockOperationNotifier{},
+		HeadFetcher:             chainService,
+		ChainInfoFetcher:        chainService,
+		OperationNotifier:       &blockchainmock.MockOperationNotifier{},
+		AttestationStateFetcher: chainService,
 	}
 	t.Run("V1", func(t *testing.T) {
 		t.Run("single", func(t *testing.T) {
@@ -732,7 +737,7 @@ func TestSubmitAttestations(t *testing.T) {
 				assert.Equal(t, http.StatusOK, writer.Code)
 				assert.Equal(t, true, broadcaster.BroadcastCalled.Load())
 				assert.Equal(t, 1, broadcaster.NumAttestations())
-				assert.Equal(t, "0x03", hexutil.Encode(broadcaster.BroadcastAttestations[0].GetAggregationBits()))
+				assert.Equal(t, primitives.ValidatorIndex(1), broadcaster.BroadcastAttestations[0].GetAttestingIndex())
 				assert.Equal(t, "0x8146f4397bfd8fd057ebbcd6a67327bdc7ed5fb650533edcb6377b650dea0b6da64c14ecd60846d5c0a0cd43893d6972092500f82c9d8a955e2b58c5ed3cbe885d84008ace6bd86ba9e23652f58e2ec207cec494c916063257abf285b9b15b15", hexutil.Encode(broadcaster.BroadcastAttestations[0].GetSignature()))
 				assert.Equal(t, primitives.Slot(0), broadcaster.BroadcastAttestations[0].GetData().Slot)
 				assert.Equal(t, primitives.CommitteeIndex(0), broadcaster.BroadcastAttestations[0].GetData().CommitteeIndex)
@@ -2344,8 +2349,8 @@ var (
 ]`
 	singleAttElectra = `[
   {
-    "aggregation_bits": "0x03",
-	"committee_bits": "0x0100000000000000",
+    "committee_index": "0",
+	"attester_index": "1",
     "signature": "0x8146f4397bfd8fd057ebbcd6a67327bdc7ed5fb650533edcb6377b650dea0b6da64c14ecd60846d5c0a0cd43893d6972092500f82c9d8a955e2b58c5ed3cbe885d84008ace6bd86ba9e23652f58e2ec207cec494c916063257abf285b9b15b15",
     "data": {
       "slot": "0",
@@ -2364,8 +2369,8 @@ var (
 ]`
 	multipleAttsElectra = `[
   {
-    "aggregation_bits": "0x03",
-	"committee_bits": "0x0100000000000000",
+    "committee_index": "0",
+	"attester_index": "0",
     "signature": "0x8146f4397bfd8fd057ebbcd6a67327bdc7ed5fb650533edcb6377b650dea0b6da64c14ecd60846d5c0a0cd43893d6972092500f82c9d8a955e2b58c5ed3cbe885d84008ace6bd86ba9e23652f58e2ec207cec494c916063257abf285b9b15b15",
     "data": {
       "slot": "0",
@@ -2382,8 +2387,8 @@ var (
     }
   },
   {
-    "aggregation_bits": "0x03",
-	"committee_bits": "0x0100000000000000",
+    "committee_index": "0",
+	"attester_index": "1",
     "signature": "0x8146f4397bfd8fd057ebbcd6a67327bdc7ed5fb650533edcb6377b650dea0b6da64c14ecd60846d5c0a0cd43893d6972092500f82c9d8a955e2b58c5ed3cbe885d84008ace6bd86ba9e23652f58e2ec207cec494c916063257abf285b9b15b15",
     "data": {
       "slot": "0",
@@ -2403,8 +2408,8 @@ var (
 	// signature is invalid
 	invalidAttElectra = `[
   {
-    "aggregation_bits": "0x03",
-	"committee_bits": "0x0100000000000000",
+    "committee_index": "0",
+	"attester_index": "0",
 	"signature": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
     "data": {
       "slot": "0",

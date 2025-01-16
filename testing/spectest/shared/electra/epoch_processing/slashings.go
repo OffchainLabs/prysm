@@ -26,7 +26,6 @@ func RunSlashingsTests(t *testing.T, config string) {
 }
 
 func processSlashingsWrapper(t *testing.T, st state.BeaconState) (state.BeaconState, error) {
-	st, err := electra.ProcessSlashings(st)
-	require.NoError(t, err, "Could not process slashings")
+	require.NoError(t, electra.ProcessSlashings(st), "Could not process slashings")
 	return st, nil
 }

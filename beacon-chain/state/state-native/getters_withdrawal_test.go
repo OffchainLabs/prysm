@@ -64,7 +64,7 @@ func TestNextWithdrawalValidatorIndex(t *testing.T) {
 }
 
 func TestExpectedWithdrawals(t *testing.T) {
-	for _, stateVersion := range []int{version.Capella, version.Deneb, version.Electra} {
+	for _, stateVersion := range []int{version.Capella, version.Deneb, version.Electra, version.Fulu} {
 		t.Run(version.String(stateVersion), func(t *testing.T) {
 			t.Run("no withdrawals", func(t *testing.T) {
 				s := state_native.EmptyStateFromVersion(t, stateVersion)

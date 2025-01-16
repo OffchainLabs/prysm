@@ -324,7 +324,7 @@ func (mr *MockBeaconNodeValidatorClientMockRecorder) ProposeAttestation(arg0, ar
 }
 
 // ProposeAttestationElectra mocks base method.
-func (m *MockBeaconNodeValidatorClient) ProposeAttestationElectra(arg0 context.Context, arg1 *eth.AttestationElectra, arg2 ...grpc.CallOption) (*eth.AttestResponse, error) {
+func (m *MockBeaconNodeValidatorClient) ProposeAttestationElectra(arg0 context.Context, arg1 *eth.SingleAttestation, arg2 ...grpc.CallOption) (*eth.AttestResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{arg0, arg1}
 	for _, a := range arg2 {
@@ -784,6 +784,129 @@ func (m *MockBeaconNodeValidator_WaitForChainStartClient) Trailer() metadata.MD 
 func (mr *MockBeaconNodeValidator_WaitForChainStartClientMockRecorder) Trailer() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Trailer", reflect.TypeOf((*MockBeaconNodeValidator_WaitForChainStartClient)(nil).Trailer))
+}
+
+// MockBeaconNodeValidator_WaitForActivationClient is a mock of BeaconNodeValidator_WaitForActivationClient interface.
+type MockBeaconNodeValidator_WaitForActivationClient struct {
+	ctrl     *gomock.Controller
+	recorder *MockBeaconNodeValidator_WaitForActivationClientMockRecorder
+}
+
+// MockBeaconNodeValidator_WaitForActivationClientMockRecorder is the mock recorder for MockBeaconNodeValidator_WaitForActivationClient.
+type MockBeaconNodeValidator_WaitForActivationClientMockRecorder struct {
+	mock *MockBeaconNodeValidator_WaitForActivationClient
+}
+
+// NewMockBeaconNodeValidator_WaitForActivationClient creates a new mock instance.
+func NewMockBeaconNodeValidator_WaitForActivationClient(ctrl *gomock.Controller) *MockBeaconNodeValidator_WaitForActivationClient {
+	mock := &MockBeaconNodeValidator_WaitForActivationClient{ctrl: ctrl}
+	mock.recorder = &MockBeaconNodeValidator_WaitForActivationClientMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockBeaconNodeValidator_WaitForActivationClient) EXPECT() *MockBeaconNodeValidator_WaitForActivationClientMockRecorder {
+	return m.recorder
+}
+
+// CloseSend mocks base method.
+func (m *MockBeaconNodeValidator_WaitForActivationClient) CloseSend() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CloseSend")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CloseSend indicates an expected call of CloseSend.
+func (mr *MockBeaconNodeValidator_WaitForActivationClientMockRecorder) CloseSend() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CloseSend", reflect.TypeOf((*MockBeaconNodeValidator_WaitForActivationClient)(nil).CloseSend))
+}
+
+// Context mocks base method.
+func (m *MockBeaconNodeValidator_WaitForActivationClient) Context() context.Context {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Context")
+	ret0, _ := ret[0].(context.Context)
+	return ret0
+}
+
+// Context indicates an expected call of Context.
+func (mr *MockBeaconNodeValidator_WaitForActivationClientMockRecorder) Context() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Context", reflect.TypeOf((*MockBeaconNodeValidator_WaitForActivationClient)(nil).Context))
+}
+
+// Header mocks base method.
+func (m *MockBeaconNodeValidator_WaitForActivationClient) Header() (metadata.MD, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Header")
+	ret0, _ := ret[0].(metadata.MD)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Header indicates an expected call of Header.
+func (mr *MockBeaconNodeValidator_WaitForActivationClientMockRecorder) Header() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Header", reflect.TypeOf((*MockBeaconNodeValidator_WaitForActivationClient)(nil).Header))
+}
+
+// Recv mocks base method.
+func (m *MockBeaconNodeValidator_WaitForActivationClient) Recv() (*eth.ValidatorActivationResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Recv")
+	ret0, _ := ret[0].(*eth.ValidatorActivationResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Recv indicates an expected call of Recv.
+func (mr *MockBeaconNodeValidator_WaitForActivationClientMockRecorder) Recv() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Recv", reflect.TypeOf((*MockBeaconNodeValidator_WaitForActivationClient)(nil).Recv))
+}
+
+// RecvMsg mocks base method.
+func (m *MockBeaconNodeValidator_WaitForActivationClient) RecvMsg(arg0 any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RecvMsg", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RecvMsg indicates an expected call of RecvMsg.
+func (mr *MockBeaconNodeValidator_WaitForActivationClientMockRecorder) RecvMsg(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RecvMsg", reflect.TypeOf((*MockBeaconNodeValidator_WaitForActivationClient)(nil).RecvMsg), arg0)
+}
+
+// SendMsg mocks base method.
+func (m *MockBeaconNodeValidator_WaitForActivationClient) SendMsg(arg0 any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SendMsg", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SendMsg indicates an expected call of SendMsg.
+func (mr *MockBeaconNodeValidator_WaitForActivationClientMockRecorder) SendMsg(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendMsg", reflect.TypeOf((*MockBeaconNodeValidator_WaitForActivationClient)(nil).SendMsg), arg0)
+}
+
+// Trailer mocks base method.
+func (m *MockBeaconNodeValidator_WaitForActivationClient) Trailer() metadata.MD {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Trailer")
+	ret0, _ := ret[0].(metadata.MD)
+	return ret0
+}
+
+// Trailer indicates an expected call of Trailer.
+func (mr *MockBeaconNodeValidator_WaitForActivationClientMockRecorder) Trailer() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Trailer", reflect.TypeOf((*MockBeaconNodeValidator_WaitForActivationClient)(nil).Trailer))
 }
 
 // MockBeaconNodeValidator_StreamSlotsClient is a mock of BeaconNodeValidator_StreamSlotsClient interface.

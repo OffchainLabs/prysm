@@ -145,6 +145,16 @@ func GenerateAttestations(bState state.BeaconState, privs []bls.SecretKey, numTo
 				return nil, err
 			}
 			headState = genState
+		case version.Fulu:
+			pbState, err := state_native.ProtobufBeaconStateFulu(bState.ToProto())
+			if err != nil {
+				return nil, err
+			}
+			genState, err := state_native.InitializeFromProtoUnsafeFulu(pbState)
+			if err != nil {
+				return nil, err
+			}
+			headState = genState
 		default:
 			return nil, fmt.Errorf("state version %s isn't supported", version.String(bState.Version()))
 		}

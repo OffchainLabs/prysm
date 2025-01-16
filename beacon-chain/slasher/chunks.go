@@ -234,24 +234,7 @@ func (m *MinSpanChunksSlice) CheckSlashable(
 	surroundingVotesTotal.Inc()
 
 	// Both attestations should have the same type. If not, we convert both to Electra attestations.
-	if existingAttWrapper.IndexedAttestation.Version() != incomingAttWrapper.IndexedAttestation.Version() {
-		existingAttWrapper = &slashertypes.IndexedAttestationWrapper{
-			IndexedAttestation: &ethpb.IndexedAttestationElectra{
-				AttestingIndices: existingAttWrapper.IndexedAttestation.GetAttestingIndices(),
-				Data:             existingAttWrapper.IndexedAttestation.GetData(),
-				Signature:        existingAttWrapper.IndexedAttestation.GetSignature(),
-			},
-			DataRoot: existingAttWrapper.DataRoot,
-		}
-		incomingAttWrapper = &slashertypes.IndexedAttestationWrapper{
-			IndexedAttestation: &ethpb.IndexedAttestationElectra{
-				AttestingIndices: incomingAttWrapper.IndexedAttestation.GetAttestingIndices(),
-				Data:             incomingAttWrapper.IndexedAttestation.GetData(),
-				Signature:        incomingAttWrapper.IndexedAttestation.GetSignature(),
-			},
-			DataRoot: incomingAttWrapper.DataRoot,
-		}
-	}
+	unifyAttWrapperVersion(existingAttWrapper, incomingAttWrapper)
 
 	postElectra := existingAttWrapper.IndexedAttestation.Version() >= version.Electra
 	if postElectra {
@@ -383,25 +366,8 @@ func (m *MaxSpanChunksSlice) CheckSlashable(
 
 	surroundedVotesTotal.Inc()
 
-	// Both attestations should have the same type. If not, we convert both to Electra attestations.
-	if existingAttWrapper.IndexedAttestation.Version() != incomingAttWrapper.IndexedAttestation.Version() {
-		existingAttWrapper = &slashertypes.IndexedAttestationWrapper{
-			IndexedAttestation: &ethpb.IndexedAttestationElectra{
-				AttestingIndices: existingAttWrapper.IndexedAttestation.GetAttestingIndices(),
-				Data:             existingAttWrapper.IndexedAttestation.GetData(),
-				Signature:        existingAttWrapper.IndexedAttestation.GetSignature(),
-			},
-			DataRoot: existingAttWrapper.DataRoot,
-		}
-		incomingAttWrapper = &slashertypes.IndexedAttestationWrapper{
-			IndexedAttestation: &ethpb.IndexedAttestationElectra{
-				AttestingIndices: incomingAttWrapper.IndexedAttestation.GetAttestingIndices(),
-				Data:             incomingAttWrapper.IndexedAttestation.GetData(),
-				Signature:        incomingAttWrapper.IndexedAttestation.GetSignature(),
-			},
-			DataRoot: incomingAttWrapper.DataRoot,
-		}
-	}
+	// Both attestations should have the same type. If not, we convert the non-Electra attestation into an Electra attestation.
+	unifyAttWrapperVersion(existingAttWrapper, incomingAttWrapper)
 
 	postElectra := existingAttWrapper.IndexedAttestation.Version() >= version.Electra
 	if postElectra {

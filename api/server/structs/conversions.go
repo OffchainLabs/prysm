@@ -432,6 +432,32 @@ func (a *AttestationElectra) ToConsensus() (*eth.AttestationElectra, error) {
 	}, nil
 }
 
+func (a *SingleAttestation) ToConsensus() (*eth.SingleAttestation, error) {
+	ci, err := strconv.ParseUint(a.CommitteeIndex, 10, 64)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "CommitteeIndex")
+	}
+	ai, err := strconv.ParseUint(a.AttesterIndex, 10, 64)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "AttesterIndex")
+	}
+	data, err := a.Data.ToConsensus()
+	if err != nil {
+		return nil, server.NewDecodeError(err, "Data")
+	}
+	sig, err := bytesutil.DecodeHexWithLength(a.Signature, fieldparams.BLSSignatureLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "Signature")
+	}
+
+	return &eth.SingleAttestation{
+		CommitteeId:   primitives.CommitteeIndex(ci),
+		AttesterIndex: primitives.ValidatorIndex(ai),
+		Data:          data,
+		Signature:     sig,
+	}, nil
+}
+
 func AttElectraFromConsensus(a *eth.AttestationElectra) *AttestationElectra {
 	return &AttestationElectra{
 		AggregationBits: hexutil.Encode(a.AggregationBits),

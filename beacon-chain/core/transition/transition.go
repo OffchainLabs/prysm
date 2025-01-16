@@ -17,6 +17,7 @@ import (
 	e "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/epoch"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/epoch/precompute"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/execution"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/fulu"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
@@ -298,7 +299,7 @@ func ProcessSlotsCore(ctx context.Context, span trace.Span, state state.BeaconSt
 func ProcessEpoch(ctx context.Context, state state.BeaconState) (state.BeaconState, error) {
 	var err error
 	if time.CanProcessEpoch(state) {
-		if state.Version() == version.Electra {
+		if state.Version() >= version.Electra {
 			if err = electra.ProcessEpoch(ctx, state); err != nil {
 				return nil, errors.Wrap(err, fmt.Sprintf("could not process %s epoch", version.String(state.Version())))
 			}
@@ -322,9 +323,11 @@ func UpgradeState(ctx context.Context, state state.BeaconState) (state.BeaconSta
 	defer span.End()
 
 	var err error
+
+	slot := state.Slot()
 	upgraded := false
 
-	if time.CanUpgradeToAltair(state.Slot()) {
+	if time.CanUpgradeToAltair(slot) {
 		state, err = altair.UpgradeToAltair(ctx, state)
 		if err != nil {
 			tracing.AnnotateError(span, err)
@@ -333,7 +336,7 @@ func UpgradeState(ctx context.Context, state state.BeaconState) (state.BeaconSta
 		upgraded = true
 	}
 
-	if time.CanUpgradeToBellatrix(state.Slot()) {
+	if time.CanUpgradeToBellatrix(slot) {
 		state, err = execution.UpgradeToBellatrix(state)
 		if err != nil {
 			tracing.AnnotateError(span, err)
@@ -342,7 +345,7 @@ func UpgradeState(ctx context.Context, state state.BeaconState) (state.BeaconSta
 		upgraded = true
 	}
 
-	if time.CanUpgradeToCapella(state.Slot()) {
+	if time.CanUpgradeToCapella(slot) {
 		state, err = capella.UpgradeToCapella(state)
 		if err != nil {
 			tracing.AnnotateError(span, err)
@@ -351,7 +354,7 @@ func UpgradeState(ctx context.Context, state state.BeaconState) (state.BeaconSta
 		upgraded = true
 	}
 
-	if time.CanUpgradeToDeneb(state.Slot()) {
+	if time.CanUpgradeToDeneb(slot) {
 		state, err = deneb.UpgradeToDeneb(state)
 		if err != nil {
 			tracing.AnnotateError(span, err)
@@ -360,7 +363,7 @@ func UpgradeState(ctx context.Context, state state.BeaconState) (state.BeaconSta
 		upgraded = true
 	}
 
-	if time.CanUpgradeToElectra(state.Slot()) {
+	if time.CanUpgradeToElectra(slot) {
 		state, err = electra.UpgradeToElectra(state)
 		if err != nil {
 			tracing.AnnotateError(span, err)
@@ -369,8 +372,17 @@ func UpgradeState(ctx context.Context, state state.BeaconState) (state.BeaconSta
 		upgraded = true
 	}
 
+	if time.CanUpgradeToFulu(slot) {
+		state, err = fulu.UpgradeToFulu(state)
+		if err != nil {
+			tracing.AnnotateError(span, err)
+			return nil, err
+		}
+		upgraded = true
+	}
+
 	if upgraded {
-		log.Debugf("upgraded state to %s", version.String(state.Version()))
+		log.WithField("version", version.String(state.Version())).Info("Upgraded state to")
 	}
 
 	return state, nil

@@ -33,7 +33,8 @@ message Peer {
   // The address of the peer, as a full multiaddr, for example:
   // /ip4/37.221.192.134/tcp/13000/p2p/16Uiu2HAm8maLMjag1TAUM52zPfmLbVMGFdwUAWgoHu1HDQLR6e17
   string last_seen_p2p_address = 3;
-  // The connection state of the peer at the moment of the request. (e.g. Connecting)
+  // The connection state of the peer at the moment of the request. (e.g.
+  // Connecting)
   ConnectionState state = 4;
   // The direction of the connection (inbound/outbound).
   PeerDirection direction = 5;

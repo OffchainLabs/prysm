@@ -87,13 +87,17 @@ func TestStartDiscV5_DiscoverAllPeers(t *testing.T) {
 	genesisTime := time.Now()
 	genesisValidatorsRoot := make([]byte, 32)
 	s := &Service{
-		cfg:                   &Config{UDPPort: uint(port)},
+		cfg:                   &Config{UDPPort: uint(port), PingInterval: testPingInterval, DisableLivenessCheck: true},
 		genesisTime:           genesisTime,
 		genesisValidatorsRoot: genesisValidatorsRoot,
 	}
 	bootListener, err := s.createListener(ipAddr, pkey)
 	require.NoError(t, err)
 	defer bootListener.Close()
+
+	// Allow bootnode's table to have its initial refresh. This allows
+	// inbound nodes to be added in.
+	time.Sleep(5 * time.Second)
 
 	bootNode := bootListener.Self()
 
@@ -103,6 +107,8 @@ func TestStartDiscV5_DiscoverAllPeers(t *testing.T) {
 		cfg := &Config{
 			Discv5BootStrapAddrs: []string{bootNode.String()},
 			UDPPort:              uint(port),
+			PingInterval:         testPingInterval,
+			DisableLivenessCheck: true,
 		}
 		ipAddr, pkey := createAddrAndPrivKey(t)
 		s = &Service{
@@ -134,9 +140,6 @@ func TestStartDiscV5_DiscoverAllPeers(t *testing.T) {
 
 func TestCreateLocalNode(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig()
-	cfg.Eip7594ForkEpoch = 1
-	params.OverrideBeaconConfig(cfg)
 	testCases := []struct {
 		name          string
 		cfg           *Config
@@ -351,10 +354,10 @@ func TestStaticPeering_PeersAreAdded(t *testing.T) {
 }
 
 func TestHostIsResolved(t *testing.T) {
-	// As defined in RFC 2606 , example.org is a
-	// reserved example domain name.
-	exampleHost := "example.org"
-	exampleIP := "93.184.215.14"
+	// ip.addr.tools - construct domain names that resolve to any given IP address
+	// ex: 192-0-2-1.ip.addr.tools resolves to 192.0.2.1.
+	exampleHost := "96-7-129-13.ip.addr.tools"
+	exampleIP := "96.7.129.13"
 
 	s := &Service{
 		cfg: &Config{
@@ -607,16 +610,12 @@ func TestRefreshPersistentSubnets(t *testing.T) {
 	defer cache.SubnetIDs.EmptyAllCaches()
 	defer cache.SyncSubnetIDs.EmptyAllCaches()
 
-	const (
-		altairForkEpoch  = 5
-		eip7594ForkEpoch = 10
-	)
+	const altairForkEpoch = 5
 
 	// Set up epochs.
 	defaultCfg := params.BeaconConfig()
 	cfg := defaultCfg.Copy()
 	cfg.AltairForkEpoch = altairForkEpoch
-	cfg.Eip7594ForkEpoch = eip7594ForkEpoch
 	params.OverrideBeaconConfig(cfg)
 
 	// Compute the number of seconds per epoch.

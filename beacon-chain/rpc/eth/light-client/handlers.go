@@ -10,7 +10,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/api"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	lightclient "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/light-client"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/shared"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
@@ -35,41 +34,34 @@ func (s *Server) GetLightClientBootstrap(w http.ResponseWriter, req *http.Reques
 	// Get the block
 	blockRootParam, err := hexutil.Decode(req.PathValue("block_root"))
 	if err != nil {
-		httputil.HandleError(w, "invalid block root: "+err.Error(), http.StatusBadRequest)
+		httputil.HandleError(w, "Invalid block root: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	blockRoot := bytesutil.ToBytes32(blockRootParam)
-	blk, err := s.Blocker.Block(ctx, blockRoot[:])
-	if !shared.WriteBlockFetchError(w, blk, err) {
+	bootstrap, err := s.BeaconDB.LightClientBootstrap(ctx, blockRoot[:])
+	if err != nil {
+		httputil.HandleError(w, "Could not get light client bootstrap: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if bootstrap == nil {
+		httputil.HandleError(w, "Light client bootstrap not found", http.StatusNotFound)
 		return
 	}
 
-	// Get the state
-	state, err := s.Stater.StateBySlot(ctx, blk.Block().Slot())
-	if err != nil {
-		httputil.HandleError(w, "could not get state: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	bootstrap, err := lightclient.NewLightClientBootstrapFromBeaconState(ctx, s.ChainInfoFetcher.CurrentSlot(), state, blk)
-	if err != nil {
-		httputil.HandleError(w, "could not get light client bootstrap: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
 	w.Header().Set(api.VersionHeader, version.String(bootstrap.Version()))
 
 	if httputil.RespondWithSsz(req) {
 		ssz, err := bootstrap.MarshalSSZ()
 		if err != nil {
-			httputil.HandleError(w, "could not marshal bootstrap to SSZ: "+err.Error(), http.StatusInternalServerError)
+			httputil.HandleError(w, "Could not marshal bootstrap to SSZ: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		httputil.WriteSsz(w, ssz, "light_client_bootstrap.ssz")
 	} else {
 		data, err := structs.LightClientBootstrapFromConsensus(bootstrap)
 		if err != nil {
-			httputil.HandleError(w, "could not marshal bootstrap to JSON: "+err.Error(), http.StatusInternalServerError)
+			httputil.HandleError(w, "Could not marshal bootstrap to JSON: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		response := &structs.LightClientBootstrapResponse{

@@ -1,12 +1,12 @@
 package rpc
 
 import (
+	"maps"
 	"net/http"
 	"slices"
 	"testing"
 
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"golang.org/x/exp/maps"
 )
 
 func Test_endpoints(t *testing.T) {
