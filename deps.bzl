@@ -506,8 +506,8 @@ def prysm_deps():
     go_repository(
         name = "com_github_consensys_gnark_crypto",
         importpath = "github.com/consensys/gnark-crypto",
-        sum = "h1:DDBdl4HaBtdQsq/wfMwJvZNE80sHidrK3Nfrefatm0E=",
-        version = "v0.14.0",
+        sum = "h1:lHH39WuuFgVHONRl3J0LRBtuYdQTumFSDtJF7HpyG8M=",
+        version = "v0.12.1",
     )
     go_repository(
         name = "com_github_containerd_cgroups",
@@ -549,14 +549,14 @@ def prysm_deps():
     go_repository(
         name = "com_github_crate_crypto_go_ipa",
         importpath = "github.com/crate-crypto/go-ipa",
-        sum = "h1:W8mUrRp6NOVl3J+MYp5kPMoUZPp7aOYHtaua31lwRHg=",
-        version = "v0.0.0-20240724233137-53bbb0ceb27a",
+        sum = "h1:uQYC5Z1mdLRPrZhHjHxufI8+2UG/i25QG92j0Er9p6I=",
+        version = "v0.0.0-20240223125850-b1e8a79f509c",
     )
     go_repository(
         name = "com_github_crate_crypto_go_kzg_4844",
         importpath = "github.com/crate-crypto/go-kzg-4844",
-        sum = "h1:EN/u9k2TF6OWSHrCCDBBU6GLNMq88OspHHlMnHfoyU4=",
-        version = "v1.1.0",
+        sum = "h1:TsSgHwrkTKecKJ4kadtHi4b3xHW5dCFUDFnUp1TsawI=",
+        version = "v1.0.0",
     )
     go_repository(
         name = "com_github_creack_pty",
@@ -743,11 +743,11 @@ def prysm_deps():
         build_directives = [
             "gazelle:resolve go github.com/supranational/blst/bindings/go @com_github_supranational_blst//:go_default_library",
         ],
-        importpath = "github.com/ethereum/c-kzg-4844/v2",
+        importpath = "github.com/ethereum/c-kzg-4844",
         patch_args = ["-p1"],
         patches = ["//third_party:com_github_ethereum_c_kzg_4844.patch"],
-        sum = "h1:NuErvd0Ha5gLvvZ1m9Id9UZ11kcqMBUUXsbm7yXcAYI=",
-        version = "v2.0.1",
+        sum = "h1:0X1LBXxaEtYD9xsyj9B9ctQEZIpnvVDeoBx8aHEwTNA=",
+        version = "v1.0.0",
     )
     go_repository(
         name = "com_github_ethereum_go_ethereum",
@@ -1578,8 +1578,8 @@ def prysm_deps():
     go_repository(
         name = "com_github_inconshreveable_mousetrap",
         importpath = "github.com/inconshreveable/mousetrap",
-        sum = "h1:wN+x4NVGpMsO7ErUn/mUI3vEoE6Jt13X2s0bqwp9tc8=",
-        version = "v1.1.0",
+        sum = "h1:Z8tu5sraLXCXIcARxBp/8cbvlwVa7Z1NHg9XEKhtSvM=",
+        version = "v1.0.0",
     )
     go_repository(
         name = "com_github_influxdata_influxdb1_client",
@@ -1910,8 +1910,8 @@ def prysm_deps():
     go_repository(
         name = "com_github_leanovate_gopter",
         importpath = "github.com/leanovate/gopter",
-        sum = "h1:vRjThO1EKPb/1NsDXuDrzldR28RLkBflWYcU9CvzWu4=",
-        version = "v0.2.11",
+        sum = "h1:fQjYxZaynp97ozCzfOyOuAGOU4aU/z37zf/tOujFk7c=",
+        version = "v0.2.9",
     )
     go_repository(
         name = "com_github_leodido_go_urn",
@@ -3183,8 +3183,8 @@ def prysm_deps():
     go_repository(
         name = "com_github_spf13_cobra",
         importpath = "github.com/spf13/cobra",
-        sum = "h1:e5/vxKd/rZsfSJMUX1agtjeTDf+qv1/JdBF8gg5k9ZM=",
-        version = "v1.8.1",
+        sum = "h1:X+jTBEBqF0bHN+9cSMgmfuvv2VHJ9ezmFNf9Y/XstYU=",
+        version = "v1.5.0",
     )
     go_repository(
         name = "com_github_spf13_jwalterweatherman",

@@ -401,7 +401,14 @@ load("@com_github_atlassian_bazel_tools//gometalinter:deps.bzl", "gometalinter_d
 
 gometalinter_dependencies()
 
-load("@bazel_gazelle//:deps.bzl", "gazelle_dependencies")
+load("@bazel_gazelle//:deps.bzl", "gazelle_dependencies", "go_repository")
+
+go_repository(
+    name = "com_github_crate_crypto_go_eth_kzg",
+    importpath = "github.com/crate-crypto/go-eth-kzg",
+    sum = "h1:ywfe8ydSxtrPyJfQL+kdC0SxJX0C7C8eVdcLTrdkIiA=",
+    version = "v1.1.0",
+)
 
 gazelle_dependencies()
 

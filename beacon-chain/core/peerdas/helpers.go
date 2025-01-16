@@ -603,7 +603,6 @@ func RecoverCellsAndProofs(
 	dataColumnSideCars []*ethpb.DataColumnSidecar,
 	blockRoot [fieldparams.RootLength]byte,
 ) ([]kzg.CellsAndProofs, error) {
-
 	dataColumnSideCarsCount := len(dataColumnSideCars)
 
 	if dataColumnSideCarsCount == 0 {
