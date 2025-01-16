@@ -32,18 +32,18 @@ var placeholderFields = []string{
 	"EIP7002_FORK_VERSION",
 	"EIP7732_FORK_EPOCH",
 	"EIP7732_FORK_VERSION",
-	"FIELD_ELEMENTS_PER_BLOB",              // Compile time constant.
+	"FIELD_ELEMENTS_PER_BLOB", // Compile time constant.
+	"GOSSIP_MAX_SIZE",
 	"KZG_COMMITMENT_INCLUSION_PROOF_DEPTH", // Compile time constant on BlobSidecar.commitment_inclusion_proof.
 	"MAX_BLOBS_PER_BLOCK_FULU",
 	"MAX_BLOB_COMMITMENTS_PER_BLOCK", // Compile time constant on BeaconBlockBodyDeneb.blob_kzg_commitments.
 	"MAX_BYTES_PER_TRANSACTION",      // Used for ssz of EL transactions. Unused in Prysm.
-	"MAX_EXTRA_DATA_BYTES",           // Compile time constant on ExecutionPayload.extra_data.
+	"MAX_CHUNK_SIZE",
+	"MAX_EXTRA_DATA_BYTES", // Compile time constant on ExecutionPayload.extra_data.
 	"MAX_REQUEST_BLOB_SIDECARS_FULU",
 	"MAX_REQUEST_PAYLOADS",         // Compile time constant on BeaconBlockBody.ExecutionRequests
 	"MAX_TRANSACTIONS_PER_PAYLOAD", // Compile time constant on ExecutionPayload.transactions.
 	"NUMBER_OF_CUSTODY_GROUPS",
-	"GOSSIP_MAX_SIZE",
-	"MAX_CHUNK_SIZE",
 	"REORG_HEAD_WEIGHT_THRESHOLD",
 	"TARGET_NUMBER_OF_PEERS",
 	"UPDATE_TIMEOUT",
