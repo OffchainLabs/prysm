@@ -9,8 +9,10 @@ import (
 )
 
 func TestEndToEnd_MultiScenarioRun_Multiclient(t *testing.T) {
-	runner := e2eMainnet(t, false, true, types.InitForkCfg(version.Bellatrix, version.Deneb, params.E2EMainnetTestConfig()), types.WithEpochs(24))
-	runner.config.Evaluators = scenarioEvalsMulti()
+	cfg := types.InitForkCfg(version.Bellatrix, version.Deneb, params.E2EMainnetTestConfig())
+	runner := e2eMainnet(t, false, true, cfg, types.WithEpochs(24))
+	// override for scenario tests
+	runner.config.Evaluators = scenarioEvalsMulti(cfg)
 	runner.config.EvalInterceptor = runner.multiScenarioMulticlient
 	runner.scenarioRunner()
 }

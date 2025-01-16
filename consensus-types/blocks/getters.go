@@ -124,8 +124,12 @@ func (b *SignedBeaconBlock) PbGenericBlock() (*eth.GenericSignedBeaconBlock, err
 				Block: &eth.GenericSignedBeaconBlock_BlindedDeneb{BlindedDeneb: pb.(*eth.SignedBlindedBeaconBlockDeneb)},
 			}, nil
 		}
+		bc, ok := pb.(*eth.SignedBeaconBlockContentsDeneb)
+		if !ok {
+			return nil, fmt.Errorf("PbGenericBlock() only supports block content type but got %T", pb)
+		}
 		return &eth.GenericSignedBeaconBlock{
-			Block: &eth.GenericSignedBeaconBlock_Deneb{Deneb: pb.(*eth.SignedBeaconBlockContentsDeneb)},
+			Block: &eth.GenericSignedBeaconBlock_Deneb{Deneb: bc},
 		}, nil
 	case version.Electra:
 		if b.IsBlinded() {
@@ -133,8 +137,12 @@ func (b *SignedBeaconBlock) PbGenericBlock() (*eth.GenericSignedBeaconBlock, err
 				Block: &eth.GenericSignedBeaconBlock_BlindedElectra{BlindedElectra: pb.(*eth.SignedBlindedBeaconBlockElectra)},
 			}, nil
 		}
+		bc, ok := pb.(*eth.SignedBeaconBlockContentsElectra)
+		if !ok {
+			return nil, fmt.Errorf("PbGenericBlock() only supports block content type but got %T", pb)
+		}
 		return &eth.GenericSignedBeaconBlock{
-			Block: &eth.GenericSignedBeaconBlock_Electra{Electra: pb.(*eth.SignedBeaconBlockContentsElectra)},
+			Block: &eth.GenericSignedBeaconBlock_Electra{Electra: bc},
 		}, nil
 	case version.Fulu:
 		if b.IsBlinded() {
@@ -142,8 +150,12 @@ func (b *SignedBeaconBlock) PbGenericBlock() (*eth.GenericSignedBeaconBlock, err
 				Block: &eth.GenericSignedBeaconBlock_BlindedFulu{BlindedFulu: pb.(*eth.SignedBlindedBeaconBlockFulu)},
 			}, nil
 		}
+		bc, ok := pb.(*eth.SignedBeaconBlockContentsFulu)
+		if !ok {
+			return nil, fmt.Errorf("PbGenericBlock() only supports block content type but got %T", pb)
+		}
 		return &eth.GenericSignedBeaconBlock{
-			Block: &eth.GenericSignedBeaconBlock_Fulu{Fulu: pb.(*eth.SignedBeaconBlockContentsFulu)},
+			Block: &eth.GenericSignedBeaconBlock_Fulu{Fulu: bc},
 		}, nil
 	default:
 		return nil, errIncorrectBlockVersion
