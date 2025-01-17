@@ -9,6 +9,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
@@ -233,13 +234,18 @@ func ProcessConsolidationRequests(ctx context.Context, st state.BeaconState, req
 			return fmt.Errorf("failed to fetch source validator: %w", err) // This should never happen.
 		}
 
+		roSrcV, err := state_native.NewValidator(srcV)
+		if err != nil {
+			return err
+		}
+
 		tgtV, err := st.ValidatorAtIndexReadOnly(tgtIdx)
 		if err != nil {
 			return fmt.Errorf("failed to fetch target validator: %w", err) // This should never happen.
 		}
 
 		// Verify source withdrawal credentials
-		if !helpers.HasExecutionWithdrawalCredentials(srcV) {
+		if !roSrcV.HasExecutionWithdrawalCredentials() {
 			continue
 		}
 		// Confirm source_validator.withdrawal_credentials[12:] == consolidation_request.source_address
@@ -248,7 +254,7 @@ func ProcessConsolidationRequests(ctx context.Context, st state.BeaconState, req
 		}
 
 		// Target validator must have their withdrawal credentials set appropriately.
-		if !helpers.HasCompoundingWithdrawalCredential(tgtV) {
+		if !tgtV.HasCompoundingWithdrawalCredentials() {
 			continue
 		}
 
@@ -364,7 +370,7 @@ func IsValidSwitchToCompoundingRequest(st state.BeaconState, req *enginev1.Conso
 		return false
 	}
 
-	if !helpers.HasETH1WithdrawalCredential(srcV) {
+	if !srcV.HasETH1WithdrawalCredentials() {
 		return false
 	}
 
