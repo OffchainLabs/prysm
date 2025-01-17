@@ -47,6 +47,7 @@ go_test(
     embed = [":go_default_library"],
     deps = [
         "//beacon-chain/operations/slashings/mock:go_default_library",
+        "//beacon-chain/startup:go_default_library",
         "//beacon-chain/state:go_default_library",
         "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",

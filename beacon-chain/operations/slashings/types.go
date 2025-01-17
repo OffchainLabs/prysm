@@ -3,7 +3,6 @@ package slashings
 import (
 	"context"
 	"sync"
-	"time"
 
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
@@ -43,8 +42,9 @@ type Pool struct {
 	lock                    sync.RWMutex
 	ctx                     context.Context
 	cancel                  context.CancelFunc
+	currentSlotFn           func() primitives.Slot
 	cw                      startup.ClockWaiter
-	genesisTime             time.Time
+	clock                   *startup.Clock
 	pendingProposerSlashing []*ethpb.ProposerSlashing
 	pendingAttesterSlashing []*PendingAttesterSlashing
 	included                map[primitives.ValidatorIndex]bool
