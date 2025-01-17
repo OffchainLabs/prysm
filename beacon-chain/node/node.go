@@ -319,11 +319,6 @@ func registerServices(cliCtx *cli.Context, beacon *BeaconNode, synchronizer *sta
 		return errors.Wrap(err, "could not register attestation pool service")
 	}
 
-	log.Debugln("Registering Slashing Pool Service")
-	if err := beacon.registerSlashingPool(); err != nil {
-		return errors.Wrap(err, "could not register slashing pool service")
-	}
-
 	log.Debugln("Registering Blockchain Service")
 	if err := beacon.registerBlockchainService(beacon.forkChoicer, synchronizer, beacon.initialSyncComplete); err != nil {
 		return errors.Wrap(err, "could not register blockchain service")
@@ -337,6 +332,11 @@ func registerServices(cliCtx *cli.Context, beacon *BeaconNode, synchronizer *sta
 	log.Debugln("Registering Sync Service")
 	if err := beacon.registerSyncService(beacon.initialSyncComplete, bfs); err != nil {
 		return errors.Wrap(err, "could not register sync service")
+	}
+
+	log.Debugln("Registering Slashing Pool Service")
+	if err := beacon.registerSlashingPool(); err != nil {
+		return errors.Wrap(err, "could not register slashing pool service")
 	}
 
 	log.Debugln("Registering Slasher Service")
@@ -720,7 +720,12 @@ func (b *BeaconNode) registerAttestationPool() error {
 }
 
 func (b *BeaconNode) registerSlashingPool() error {
-	s := slashings.NewPool(b.ctx, b.clockWaiter, slashings.WithElectraTimer())
+	var chainService *blockchain.Service
+	if err := b.services.FetchService(&chainService); err != nil {
+		return err
+	}
+
+	s := slashings.NewPool(b.ctx, slashings.WithElectraTimer(b.clockWaiter, chainService.CurrentSlot))
 	return b.services.RegisterService(s)
 }
 

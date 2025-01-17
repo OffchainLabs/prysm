@@ -23,15 +23,17 @@ import (
 )
 
 // WithElectraTimer includes functional options for the blockchain service related to CLI flags.
-func WithElectraTimer() Option {
+func WithElectraTimer(cw startup.ClockWaiter, currentSlotFn func() primitives.Slot) Option {
 	return func(p *Pool) error {
 		p.runElectraTimer = true
+		p.cw = cw
+		p.currentSlotFn = currentSlotFn
 		return nil
 	}
 }
 
 // NewPool returns an initialized attester slashing and proposer slashing pool.
-func NewPool(ctx context.Context, cw startup.ClockWaiter, opts ...Option) *Pool {
+func NewPool(ctx context.Context, opts ...Option) *Pool {
 	ctx, cancel := context.WithCancel(ctx)
 	p := &Pool{
 		ctx:                     ctx,
@@ -39,7 +41,6 @@ func NewPool(ctx context.Context, cw startup.ClockWaiter, opts ...Option) *Pool 
 		pendingProposerSlashing: make([]*ethpb.ProposerSlashing, 0),
 		pendingAttesterSlashing: make([]*PendingAttesterSlashing, 0),
 		included:                make(map[primitives.ValidatorIndex]bool),
-		cw:                      cw,
 	}
 
 	for _, opt := range opts {
@@ -354,39 +355,44 @@ func (p *Pool) run() {
 		return
 	}
 
-	p.waitForChainInitialization()
-
 	electraSlot, err := slots.EpochStart(params.BeaconConfig().ElectraForkEpoch)
 	if err != nil {
 		log.WithError(err).Error("Could not get Electra start slot")
 		return
 	}
-	electraTime, err := slots.ToTime(uint64(p.genesisTime.Unix()), electraSlot)
+	if p.currentSlotFn() >= electraSlot {
+		return
+	}
+
+	p.waitForChainInitialization()
+
+	electraTime, err := slots.ToTime(uint64(p.clock.GenesisTime().Unix()), electraSlot)
 	if err != nil {
 		log.WithError(err).Error("Could not get Electra start time")
 		return
 	}
 
-	t := time.NewTimer(electraTime.Sub(time.Now()))
-	go func() {
-		defer t.Stop()
-		select {
-		case <-t.C:
-			log.Info("Converting Phase0 slashings to Electra slashings")
-			p.convertToElectra()
-		case <-p.ctx.Done():
-			log.Warn("Context cancelled, Electra timer will not execute")
-			return
-		}
-	}()
+	t := time.NewTimer(electraTime.Sub(p.clock.Now()))
+	defer t.Stop()
+
+	select {
+	case <-t.C:
+		log.Info("Converting Phase0 slashings to Electra slashings")
+		p.convertToElectra()
+		return
+	case <-p.ctx.Done():
+		log.Warn("Context cancelled, Electra timer will not execute")
+		return
+	}
 }
+
 func (p *Pool) waitForChainInitialization() {
 	clock, err := p.cw.WaitForClock(p.ctx)
 	if err != nil {
 		log.WithError(err).Error("Could not receive chain start notification")
 	}
-	p.genesisTime = clock.GenesisTime()
-	log.WithField("genesisTime", p.genesisTime).Info(
+	p.clock = clock
+	log.WithField("genesisTime", clock.GenesisTime()).Info(
 		"Slashing pool received chain initialization event",
 	)
 }
