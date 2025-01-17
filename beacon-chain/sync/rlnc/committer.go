@@ -16,14 +16,11 @@ type committer struct {
 // TODO: read the generators from the config file.
 func newCommitter(n uint) *committer {
 	generators := make([]*ristretto.Element, n)
-	randomBytes := make([]byte, 64)
 	for i := range generators {
-		_, err := rand.NewGenerator().Read(randomBytes)
-		if err != nil {
+		generators[i] = randomElement()
+		if generators[i] == nil {
 			return nil
 		}
-		generators[i] = &ristretto.Element{}
-		generators[i].FromUniformBytes(randomBytes)
 	}
 	return &committer{generators}
 }
@@ -33,5 +30,20 @@ func (c *committer) commit(scalars []*ristretto.Scalar) (*ristretto.Element, err
 		return nil, errors.New("too many scalars")
 	}
 	result := &ristretto.Element{}
-	return result.VarTimeMultiScalarMult(scalars, c.generators), nil
+	return result.VarTimeMultiScalarMult(scalars, c.generators[:len(scalars)]), nil
+}
+
+func (c *committer) num() int {
+	return len(c.generators)
+}
+
+func randomElement() (ret *ristretto.Element) {
+	buf := make([]byte, 64)
+	_, err := rand.NewGenerator().Read(buf)
+	if err != nil {
+		return nil
+	}
+	ret = &ristretto.Element{}
+	ret.FromUniformBytes(buf)
+	return
 }

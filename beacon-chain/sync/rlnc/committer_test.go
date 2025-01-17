@@ -14,7 +14,7 @@ func TestCommit(t *testing.T) {
 	require.NotNil(t, c)
 	require.Equal(t, n, len(c.generators))
 
-	scalars := make([]*ristretto.Scalar, n)
+	scalars := make([]*ristretto.Scalar, n+1)
 	randomBytes := make([]byte, 64)
 	for i := range scalars {
 		_, err := rand.Read(randomBytes)
@@ -22,19 +22,14 @@ func TestCommit(t *testing.T) {
 		scalars[i] = &ristretto.Scalar{}
 		scalars[i].FromUniformBytes(randomBytes)
 	}
-
 	msm := &ristretto.Element{}
-	msm.VarTimeMultiScalarMult(scalars, c.generators)
+	msm.VarTimeMultiScalarMult(scalars[:n], c.generators)
 
-	expected := ristretto.NewElement()
-	summand := &ristretto.Element{}
-	for i, scalar := range scalars {
-		summand.ScalarMult(scalar, c.generators[i])
-		expected.Add(expected, summand)
-	}
-	require.Equal(t, 1, expected.Equal(msm))
-
-	committment, err := c.commit(scalars)
+	_, err := c.commit(scalars[:n-1])
+	require.NoError(t, err)
+	_, err = c.commit(scalars)
+	require.NotNil(t, err)
+	committment, err := c.commit(scalars[:n])
 	require.NoError(t, err)
 	require.Equal(t, 1, committment.Equal(msm))
 }
