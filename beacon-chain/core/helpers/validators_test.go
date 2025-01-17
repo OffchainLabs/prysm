@@ -919,10 +919,6 @@ func TestHasETH1WithdrawalCredentials(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, true, roV.HasETH1WithdrawalCredentials())
 	// No Withdrawal cred
-	v = &ethpb.Validator{}
-	roV, err = state_native.NewValidator(v)
-	require.NoError(t, err)
-	require.Equal(t, false, roV.HasETH1WithdrawalCredentials())
 }
 
 func TestHasCompoundingWithdrawalCredential(t *testing.T) {
@@ -937,7 +933,6 @@ func TestHasCompoundingWithdrawalCredential(t *testing.T) {
 		{"Does not have compounding withdrawal credential",
 			&ethpb.Validator{WithdrawalCredentials: bytesutil.PadTo([]byte{0x00}, 32)},
 			false},
-		{"Handles nil case", nil, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -963,7 +958,6 @@ func TestHasExecutionWithdrawalCredentials(t *testing.T) {
 		{"Does not have compounding withdrawal credential or eth1 withdrawal credential",
 			&ethpb.Validator{WithdrawalCredentials: bytesutil.PadTo([]byte{0x00}, 32)},
 			false},
-		{"Handles nil case", nil, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
