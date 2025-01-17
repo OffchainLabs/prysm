@@ -2,7 +2,11 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
-    srcs = ["committer.go"],
+    srcs = [
+        "committer.go",
+        "matrix.go",
+        "message.go",
+    ],
     importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/rlnc",
     visibility = ["//visibility:public"],
     deps = ["@com_github_gtank_ristretto255//:go_default_library"],
@@ -10,7 +14,11 @@ go_library(
 
 go_test(
     name = "go_default_test",
-    srcs = ["committer_test.go"],
+    srcs = [
+        "committer_test.go",
+        "matrix_test.go",
+        "message_test.go",
+    ],
     embed = [":go_default_library"],
     deps = [
         "//testing/require:go_default_library",
