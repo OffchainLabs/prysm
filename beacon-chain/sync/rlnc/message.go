@@ -34,6 +34,14 @@ func (m *message) Verify(c *committer) bool {
 	return msm.Equal(com) == 1
 }
 
+var scalarOneBytes = [32]byte{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+
+func scalarOne() (ret *ristretto.Scalar) {
+	ret = &ristretto.Scalar{}
+	ret.Decode(scalarOneBytes[:])
+	return
+}
+
 func randomScalar() (ret *ristretto.Scalar) {
 	buf := make([]byte, 64)
 	_, err := rand.NewGenerator().Read(buf)

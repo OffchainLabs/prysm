@@ -49,3 +49,46 @@ func TestMatrixMul(t *testing.T) {
 		ristretto.NewScalar().Multiply(coeff1, s13),
 		ristretto.NewScalar().Multiply(coeff2, s23)).Equal(lc[2]))
 }
+
+func Test_isZeroVector(t *testing.T) {
+	zero := ristretto.NewScalar()
+	nonZero := randomScalar()
+	require.Equal(t, true, isZeroVector([]*ristretto.Scalar{zero, zero, zero}))
+	require.Equal(t, false, isZeroVector([]*ristretto.Scalar{zero, zero, nonZero}))
+}
+
+func Test_scalarOne(t *testing.T) {
+	scalar := scalarOne()
+	other := randomScalar()
+	third := ristretto.NewScalar()
+	third.Multiply(scalar, other)
+	require.Equal(t, 1, third.Equal(other))
+}
+
+func TestAddRow(t *testing.T) {
+	e := newEchelon(3)
+	row := []*ristretto.Scalar{randomScalar(), randomScalar()}
+	require.Equal(t, false, e.addRow(row))
+	require.Equal(t, 0, len(e.coefficients))
+
+	row = append(row, randomScalar())
+	require.Equal(t, true, e.addRow(row))
+	require.Equal(t, 1, len(e.coefficients))
+
+	require.Equal(t, false, e.addRow(row))
+	require.Equal(t, 1, len(e.coefficients))
+
+	row = []*ristretto.Scalar{randomScalar(), randomScalar(), randomScalar()}
+	require.Equal(t, true, e.addRow(row))
+	require.Equal(t, 2, len(e.coefficients))
+	require.Equal(t, 1, e.triangular[1][0].Equal(ristretto.NewScalar()))
+
+	row = []*ristretto.Scalar{randomScalar(), randomScalar(), randomScalar()}
+	require.Equal(t, true, e.addRow(row))
+	require.Equal(t, 3, len(e.coefficients))
+	require.Equal(t, 1, e.triangular[2][0].Equal(ristretto.NewScalar()))
+	require.Equal(t, 1, e.triangular[2][1].Equal(ristretto.NewScalar()))
+
+	row = []*ristretto.Scalar{randomScalar(), randomScalar(), randomScalar()}
+	require.Equal(t, false, e.addRow(row))
+}
