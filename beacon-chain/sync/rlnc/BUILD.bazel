@@ -4,8 +4,10 @@ go_library(
     name = "go_default_library",
     srcs = [
         "committer.go",
+        "errors.go",
         "matrix.go",
         "message.go",
+        "node.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/sync/rlnc",
     visibility = ["//visibility:public"],
@@ -21,6 +23,7 @@ go_test(
         "committer_test.go",
         "matrix_test.go",
         "message_test.go",
+        "node_test.go",
     ],
     embed = [":go_default_library"],
     deps = [

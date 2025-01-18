@@ -35,7 +35,7 @@ type echelon struct {
 }
 
 // newEchelon returns a new echelon struct.
-func newEchelon(size int) *echelon {
+func newEchelon(size uint) *echelon {
 	transform := make([][]*ristretto.Scalar, size)
 	for i := range transform {
 		transform[i] = make([]*ristretto.Scalar, size)
@@ -54,7 +54,7 @@ func newEchelon(size int) *echelon {
 	}
 }
 
-func identityMatrix(size int) [][]*ristretto.Scalar {
+func identityMatrix(size uint) [][]*ristretto.Scalar {
 	coefficients := make([][]*ristretto.Scalar, size)
 	for i := range coefficients {
 		coefficients[i] = make([]*ristretto.Scalar, size)
@@ -70,7 +70,7 @@ func identityMatrix(size int) [][]*ristretto.Scalar {
 }
 
 // newIdentityEchelon returns a new echelon struct with the identity coefficients.
-func newIdentityEchelon(size int) *echelon {
+func newIdentityEchelon(size uint) *echelon {
 	return &echelon{
 		coefficients: identityMatrix(size),
 		triangular:   identityMatrix(size),
