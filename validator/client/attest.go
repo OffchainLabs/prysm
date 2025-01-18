@@ -134,6 +134,21 @@ func (v *validator) SubmitAttestation(ctx context.Context, slot primitives.Slot,
 			tracing.AnnotateError(span, err)
 			return
 		}
+	} else if electraAtt, ok := indexedAtt.(*ethpb.IndexedAttestationElectra); ok {
+		// Convert Electra attestation to phase0 format for slashing protection check
+		phase0Format := &ethpb.IndexedAttestation{
+			AttestingIndices: electraAtt.AttestingIndices,
+			Data:            electraAtt.Data,
+			Signature:       electraAtt.Signature,
+		}
+		if err := v.db.SlashableAttestationCheck(ctx, phase0Format, pubKey, signingRoot, v.emitAccountMetrics, ValidatorAttestFailVec); err != nil {
+			log.WithError(err).Error("Failed attestation slashing protection check")
+			log.WithFields(
+				attestationLogFields(pubKey, indexedAtt),
+			).Debug("Attempted slashable attestation details")
+			tracing.AnnotateError(span, err)
+			return
+		}
 	}
 
 	var aggregationBitfield bitfield.Bitlist
