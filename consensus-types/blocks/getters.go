@@ -1107,50 +1107,6 @@ func (b *BeaconBlock) AsSignRequestObject() (validatorpb.SignRequestObject, erro
 	}
 }
 
-func (b *BeaconBlock) Copy() (interfaces.ReadOnlyBeaconBlock, error) {
-	if b == nil {
-		return nil, nil
-	}
-
-	pb, err := b.Proto()
-	if err != nil {
-		return nil, err
-	}
-	switch b.version {
-	case version.Phase0:
-		return initBlockFromProtoPhase0(pb.(*eth.BeaconBlock).Copy())
-	case version.Altair:
-		return initBlockFromProtoAltair(pb.(*eth.BeaconBlockAltair).Copy())
-	case version.Bellatrix:
-		if b.IsBlinded() {
-			return initBlindedBlockFromProtoBellatrix(pb.(*eth.BlindedBeaconBlockBellatrix).Copy())
-		}
-		return initBlockFromProtoBellatrix(pb.(*eth.BeaconBlockBellatrix).Copy())
-	case version.Capella:
-		if b.IsBlinded() {
-			return initBlindedBlockFromProtoCapella(pb.(*eth.BlindedBeaconBlockCapella).Copy())
-		}
-		return initBlockFromProtoCapella(pb.(*eth.BeaconBlockCapella).Copy())
-	case version.Deneb:
-		if b.IsBlinded() {
-			return initBlindedBlockFromProtoDeneb(pb.(*eth.BlindedBeaconBlockDeneb).Copy())
-		}
-		return initBlockFromProtoDeneb(pb.(*eth.BeaconBlockDeneb).Copy())
-	case version.Electra:
-		if b.IsBlinded() {
-			return initBlindedBlockFromProtoElectra(pb.(*eth.BlindedBeaconBlockElectra).Copy())
-		}
-		return initBlockFromProtoElectra(pb.(*eth.BeaconBlockElectra).Copy())
-	case version.Fulu:
-		if b.IsBlinded() {
-			return initBlindedBlockFromProtoFulu(pb.(*eth.BlindedBeaconBlockFulu).Copy())
-		}
-		return initBlockFromProtoFulu(pb.(*eth.BeaconBlockFulu).Copy())
-	default:
-		return nil, errIncorrectBlockVersion
-	}
-}
-
 // IsNil checks if the block body is nil.
 func (b *BeaconBlockBody) IsNil() bool {
 	return b == nil
