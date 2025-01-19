@@ -3,8 +3,8 @@ package rlnc
 import (
 	"testing"
 
-	ristretto "github.com/gtank/ristretto255"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
+	ristretto "github.com/gtank/ristretto255"
 )
 
 func TestVerify(t *testing.T) {

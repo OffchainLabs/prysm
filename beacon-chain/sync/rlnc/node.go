@@ -86,7 +86,9 @@ func bytesToVector(data []byte) []*ristretto.Scalar {
 	ret := make([]*ristretto.Scalar, len(data)/31)
 	for i := 0; i < len(data); i += 31 {
 		ret[i/31] = ristretto.NewScalar()
-		ret[i/31].Decode(append(data[i:i+31], byte(0)))
+		if err := ret[i/31].Decode(append(data[i:i+31], byte(0))); err != nil {
+			panic(err) // lint:nopanic -- TODO: Handle this error!
+		}
 	}
 	return ret
 }

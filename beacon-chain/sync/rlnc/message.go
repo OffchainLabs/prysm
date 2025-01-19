@@ -38,7 +38,9 @@ var scalarOneBytes = [32]byte{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 
 func scalarOne() (ret *ristretto.Scalar) {
 	ret = &ristretto.Scalar{}
-	ret.Decode(scalarOneBytes[:])
+	if err := ret.Decode(scalarOneBytes[:]); err != nil {
+		panic(err) // lint:nopanic -- TODO: Handle this error!
+	}
 	return
 }
 

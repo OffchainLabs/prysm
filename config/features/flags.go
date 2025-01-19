@@ -176,6 +176,11 @@ var (
 		Name:  "enable-experimental-attestation-pool",
 		Usage: "Enables an experimental attestation pool design.",
 	}
+	useRLNC = &cli.BoolFlag{
+		Name:   "use-rlnc",
+		Usage:  "Experimental: enables the use of random linear network coding for gossiping.",
+		Hidden: true,
+	}
 	// forceHeadFlag is a flag to force the head of the beacon chain to a specific block.
 	forceHeadFlag = &cli.StringFlag{
 		Name: "sync-from",
@@ -208,6 +213,7 @@ var ValidatorFlags = append(deprecatedFlags, []cli.Flag{
 	EnableMinimalSlashingProtection,
 	enableDoppelGangerProtection,
 	EnableBeaconRESTApi,
+	useRLNC,
 }...)
 
 // E2EValidatorFlags contains a list of the validator feature flags to be tested in E2E.
@@ -245,6 +251,7 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	DisableQUIC,
 	EnableDiscoveryReboot,
 	enableExperimentalAttestationPool,
+	useRLNC,
 	forceHeadFlag,
 	blacklistRoots,
 }, deprecatedBeaconFlags, deprecatedFlags, upcomingDeprecation)
