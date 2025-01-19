@@ -182,3 +182,23 @@ func (n *Node) receive(message *message) error {
 	}
 	return nil
 }
+
+func (n *Node) decode() ([]byte, error) {
+	inverse, err := n.echelon.inverse()
+	if err != nil {
+		return nil, err
+	}
+	ret := make([]byte, 0, len(n.chunks)*len(n.chunks[0])*31+1)
+	prod := &ristretto.Scalar{}
+	for i := 0; i < len(inverse); i++ {
+		for k := 0; k < len(n.chunks[0]); k++ {
+			entry := ristretto.NewScalar()
+			for j := 0; j < len(inverse); j++ {
+				prod = prod.Multiply(inverse[i][j], n.chunks[j][k])
+				entry = entry.Add(entry, prod)
+			}
+			ret = entry.Encode(ret)[:len(ret)+31] // len(ret) is computed before the append.
+		}
+	}
+	return ret, nil
+}

@@ -27,7 +27,8 @@ func scalarLC(coeffs []*ristretto.Scalar, data [][]*ristretto.Scalar) (ret []*ri
 }
 
 // echelon is a struct that holds the echelon form of a matrix of coefficients and the
-// corresponding transformation matrix to get it to that form.
+// corresponding transformation matrix to get it to that form. That is we are guaranteed to have
+// tranform * coefficients = triangular
 type echelon struct {
 	coefficients [][]*ristretto.Scalar
 	triangular   [][]*ristretto.Scalar
@@ -90,7 +91,7 @@ func copyVector(v []*ristretto.Scalar) []*ristretto.Scalar {
 	ret := make([]*ristretto.Scalar, len(v))
 	for i, s := range v {
 		ret[i] = ristretto.NewScalar()
-		ret[i].Decode(s.Encode(nil))
+		*ret[i] = *s
 	}
 	return ret
 }
@@ -167,4 +168,35 @@ func (e *echelon) addRow(row []*ristretto.Scalar) bool {
 	}
 	e.transform[i] = tr
 	return true
+}
+
+func (e *echelon) inverse() (ret [][]*ristretto.Scalar, err error) {
+	if !e.isFull() {
+		return nil, ErrNoData
+	}
+	ret = make([][]*ristretto.Scalar, len(e.transform))
+	for i := range e.transform {
+		ret[i] = make([]*ristretto.Scalar, len(e.transform))
+		for j := range e.transform {
+			ret[i][j] = &ristretto.Scalar{}
+			*ret[i][j] = *e.transform[i][j]
+		}
+	}
+	pivot := &ristretto.Scalar{}
+	diff := &ristretto.Scalar{}
+	normalizedDiff := &ristretto.Scalar{}
+	for i := len(e.triangular) - 1; i >= 0; i-- {
+		pivot = pivot.Invert(e.triangular[i][i])
+		for j := 0; j < len(ret); j++ {
+			ret[i][j] = ret[i][j].Multiply(ret[i][j], pivot)
+		}
+		for j := i + 1; j < len(e.triangular); j++ {
+			diff = diff.Multiply(e.triangular[i][j], pivot)
+			for k := 0; k < len(ret); k++ {
+				normalizedDiff = normalizedDiff.Multiply(ret[j][k], diff)
+				ret[i][k] = ret[i][k].Subtract(ret[i][k], normalizedDiff)
+			}
+		}
+	}
+	return
 }

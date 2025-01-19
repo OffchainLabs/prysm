@@ -91,4 +91,51 @@ func TestAddRow(t *testing.T) {
 
 	row = []*ristretto.Scalar{randomScalar(), randomScalar(), randomScalar()}
 	require.Equal(t, false, e.addRow(row))
+
+	// Check that the transform * coefficients = triangular
+	for i := 0; i < 3; i++ {
+		for j := 0; j < 3; j++ {
+			prod := ristretto.NewScalar()
+			for k := 0; k < 3; k++ {
+				prod = prod.Add(prod, ristretto.NewScalar().Multiply(e.transform[i][k], e.coefficients[k][j]))
+			}
+			require.Equal(t, 1, prod.Equal(e.triangular[i][j]))
+		}
+	}
+
+}
+
+func TestInverse(t *testing.T) {
+	e := newEchelon(3)
+	_, err := e.inverse()
+	require.ErrorIs(t, ErrNoData, err)
+
+	row := []*ristretto.Scalar{randomScalar(), randomScalar(), randomScalar()}
+	require.Equal(t, true, e.addRow(row))
+	row = []*ristretto.Scalar{randomScalar(), randomScalar(), randomScalar()}
+	require.Equal(t, true, e.addRow(row))
+	row = []*ristretto.Scalar{randomScalar(), randomScalar(), randomScalar()}
+	require.Equal(t, true, e.addRow(row))
+
+	inv, err := e.inverse()
+	require.NoError(t, err)
+	require.Equal(t, 3, len(inv))
+	require.Equal(t, 3, len(inv[0]))
+	require.Equal(t, 3, len(inv[1]))
+	require.Equal(t, 3, len(inv[2]))
+
+	// Check that the inverse * coefficients = identity
+	for i := 0; i < 3; i++ {
+		for j := 0; j < 3; j++ {
+			prod := ristretto.NewScalar()
+			for k := 0; k < 3; k++ {
+				prod = prod.Add(prod, ristretto.NewScalar().Multiply(inv[i][k], e.coefficients[k][j]))
+			}
+			if j != i {
+				require.Equal(t, 1, prod.Equal(ristretto.NewScalar()))
+			} else {
+				require.Equal(t, 1, prod.Equal(scalarOne()))
+			}
+		}
+	}
 }

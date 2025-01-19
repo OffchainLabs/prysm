@@ -57,3 +57,26 @@ func TestReceive(t *testing.T) {
 	require.ErrorIs(t, ErrLinearlyDependentMessage, receiver.receive(message))
 	require.Equal(t, 2, len(receiver.chunks))
 }
+
+func TestDecode(t *testing.T) {
+	numChunks := uint(3)
+	chunkSize := uint(10)
+	committer := newCommitter(chunkSize)
+	block := make([]byte, numChunks*chunkSize*31)
+	_, err := rand.Read(block)
+	require.NoError(t, err)
+	node, err := NewSource(committer, numChunks, block)
+	require.NoError(t, err)
+	emptyNode := NewNode(committer, numChunks)
+
+	for i := 0; i < int(numChunks); i++ {
+		_, err = emptyNode.decode()
+		require.ErrorIs(t, ErrNoData, err)
+		message, err := node.prepareMessage()
+		require.NoError(t, err)
+		require.NoError(t, emptyNode.receive(message))
+	}
+	decoded, err := emptyNode.decode()
+	require.NoError(t, err)
+	require.DeepEqual(t, block, decoded)
+}
