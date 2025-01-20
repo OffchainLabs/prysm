@@ -20,6 +20,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/crypto/bls/common"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"github.com/prysmaticlabs/prysm/v5/testing/util"
@@ -30,6 +31,7 @@ import (
 func Test_processAttestations(t *testing.T) {
 	type (
 		attestationInfo struct {
+			ver             int
 			source          primitives.Epoch
 			target          primitives.Epoch
 			indices         []uint64
@@ -37,6 +39,7 @@ func Test_processAttestations(t *testing.T) {
 		}
 
 		slashingInfo struct {
+			ver               int
 			attestationInfo_1 *attestationInfo
 			attestationInfo_2 *attestationInfo
 		}
@@ -58,13 +61,14 @@ func Test_processAttestations(t *testing.T) {
 				{
 					currentEpoch: 4,
 					attestationsInfo: []*attestationInfo{
-						{source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: []byte{1}},
-						{source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: []byte{2}},
+						{ver: version.Phase0, source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: []byte{1}},
+						{ver: version.Phase0, source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: []byte{2}},
 					},
 					expectedSlashingsInfo: []*slashingInfo{
 						{
-							attestationInfo_1: &attestationInfo{source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: []byte{1}},
-							attestationInfo_2: &attestationInfo{source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: []byte{2}},
+							ver:               version.Phase0,
+							attestationInfo_1: &attestationInfo{ver: version.Phase0, source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: []byte{1}},
+							attestationInfo_2: &attestationInfo{ver: version.Phase0, source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: []byte{2}},
 						},
 					},
 				},
@@ -76,19 +80,20 @@ func Test_processAttestations(t *testing.T) {
 				{
 					currentEpoch: 4,
 					attestationsInfo: []*attestationInfo{
-						{source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: []byte{1}},
+						{ver: version.Phase0, source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: []byte{1}},
 					},
 					expectedSlashingsInfo: nil,
 				},
 				{
 					currentEpoch: 4,
 					attestationsInfo: []*attestationInfo{
-						{source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: []byte{2}},
+						{ver: version.Phase0, source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: []byte{2}},
 					},
 					expectedSlashingsInfo: []*slashingInfo{
 						{
-							attestationInfo_1: &attestationInfo{source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: []byte{1}},
-							attestationInfo_2: &attestationInfo{source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: []byte{2}},
+							ver:               version.Phase0,
+							attestationInfo_1: &attestationInfo{ver: version.Phase0, source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: []byte{1}},
+							attestationInfo_2: &attestationInfo{ver: version.Phase0, source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: []byte{2}},
 						},
 					},
 				},
@@ -100,8 +105,8 @@ func Test_processAttestations(t *testing.T) {
 				{
 					currentEpoch: 4,
 					attestationsInfo: []*attestationInfo{
-						{source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: []byte{1}},
-						{source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: []byte{1}},
+						{ver: version.Phase0, source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: []byte{1}},
+						{ver: version.Phase0, source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: []byte{1}},
 					},
 					expectedSlashingsInfo: nil,
 				},
@@ -113,14 +118,14 @@ func Test_processAttestations(t *testing.T) {
 				{
 					currentEpoch: 4,
 					attestationsInfo: []*attestationInfo{
-						{source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: []byte{1}},
+						{ver: version.Phase0, source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: []byte{1}},
 					},
 					expectedSlashingsInfo: nil,
 				},
 				{
 					currentEpoch: 4,
 					attestationsInfo: []*attestationInfo{
-						{source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: []byte{1}},
+						{ver: version.Phase0, source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: []byte{1}},
 					},
 					expectedSlashingsInfo: nil,
 				},
@@ -132,13 +137,14 @@ func Test_processAttestations(t *testing.T) {
 				{
 					currentEpoch: 4,
 					attestationsInfo: []*attestationInfo{
-						{source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: nil},
-						{source: 0, target: 3, indices: []uint64{0, 1}, beaconBlockRoot: nil},
+						{ver: version.Phase0, source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: nil},
+						{ver: version.Phase0, source: 0, target: 3, indices: []uint64{0, 1}, beaconBlockRoot: nil},
 					},
 					expectedSlashingsInfo: []*slashingInfo{
 						{
-							attestationInfo_1: &attestationInfo{source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: nil},
-							attestationInfo_2: &attestationInfo{source: 0, target: 3, indices: []uint64{0, 1}, beaconBlockRoot: nil},
+							ver:               version.Phase0,
+							attestationInfo_1: &attestationInfo{ver: version.Phase0, source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: nil},
+							attestationInfo_2: &attestationInfo{ver: version.Phase0, source: 0, target: 3, indices: []uint64{0, 1}, beaconBlockRoot: nil},
 						},
 					},
 				},
@@ -150,19 +156,20 @@ func Test_processAttestations(t *testing.T) {
 				{
 					currentEpoch: 4,
 					attestationsInfo: []*attestationInfo{
-						{source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: nil},
+						{ver: version.Phase0, source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: nil},
 					},
 					expectedSlashingsInfo: nil,
 				},
 				{
 					currentEpoch: 4,
 					attestationsInfo: []*attestationInfo{
-						{source: 0, target: 3, indices: []uint64{0, 1}, beaconBlockRoot: nil},
+						{ver: version.Phase0, source: 0, target: 3, indices: []uint64{0, 1}, beaconBlockRoot: nil},
 					},
 					expectedSlashingsInfo: []*slashingInfo{
 						{
-							attestationInfo_1: &attestationInfo{source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: nil},
-							attestationInfo_2: &attestationInfo{source: 0, target: 3, indices: []uint64{0, 1}, beaconBlockRoot: nil},
+							ver:               version.Phase0,
+							attestationInfo_1: &attestationInfo{ver: version.Phase0, source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: nil},
+							attestationInfo_2: &attestationInfo{ver: version.Phase0, source: 0, target: 3, indices: []uint64{0, 1}, beaconBlockRoot: nil},
 						},
 					},
 				},
@@ -174,13 +181,14 @@ func Test_processAttestations(t *testing.T) {
 				{
 					currentEpoch: 1000,
 					attestationsInfo: []*attestationInfo{
-						{source: 50, target: 51, indices: []uint64{0}, beaconBlockRoot: nil},
-						{source: 0, target: 1000, indices: []uint64{0}, beaconBlockRoot: nil},
+						{ver: version.Phase0, source: 50, target: 51, indices: []uint64{0}, beaconBlockRoot: nil},
+						{ver: version.Phase0, source: 0, target: 1000, indices: []uint64{0}, beaconBlockRoot: nil},
 					},
 					expectedSlashingsInfo: []*slashingInfo{
 						{
-							attestationInfo_1: &attestationInfo{source: 0, target: 1000, indices: []uint64{0}, beaconBlockRoot: nil},
-							attestationInfo_2: &attestationInfo{source: 50, target: 51, indices: []uint64{0}, beaconBlockRoot: nil},
+							ver:               version.Phase0,
+							attestationInfo_1: &attestationInfo{ver: version.Phase0, source: 0, target: 1000, indices: []uint64{0}, beaconBlockRoot: nil},
+							attestationInfo_2: &attestationInfo{ver: version.Phase0, source: 50, target: 51, indices: []uint64{0}, beaconBlockRoot: nil},
 						},
 					},
 				},
@@ -192,19 +200,20 @@ func Test_processAttestations(t *testing.T) {
 				{
 					currentEpoch: 1000,
 					attestationsInfo: []*attestationInfo{
-						{source: 50, target: 51, indices: []uint64{0}, beaconBlockRoot: nil},
+						{ver: version.Phase0, source: 50, target: 51, indices: []uint64{0}, beaconBlockRoot: nil},
 					},
 					expectedSlashingsInfo: nil,
 				},
 				{
 					currentEpoch: 1000,
 					attestationsInfo: []*attestationInfo{
-						{source: 0, target: 1000, indices: []uint64{0}, beaconBlockRoot: nil},
+						{ver: version.Phase0, source: 0, target: 1000, indices: []uint64{0}, beaconBlockRoot: nil},
 					},
 					expectedSlashingsInfo: []*slashingInfo{
 						{
-							attestationInfo_1: &attestationInfo{source: 0, target: 1000, indices: []uint64{0}, beaconBlockRoot: nil},
-							attestationInfo_2: &attestationInfo{source: 50, target: 51, indices: []uint64{0}, beaconBlockRoot: nil},
+							ver:               version.Phase0,
+							attestationInfo_1: &attestationInfo{ver: version.Phase0, source: 0, target: 1000, indices: []uint64{0}, beaconBlockRoot: nil},
+							attestationInfo_2: &attestationInfo{ver: version.Phase0, source: 50, target: 51, indices: []uint64{0}, beaconBlockRoot: nil},
 						},
 					},
 				},
@@ -216,13 +225,14 @@ func Test_processAttestations(t *testing.T) {
 				{
 					currentEpoch: 4,
 					attestationsInfo: []*attestationInfo{
-						{source: 0, target: 3, indices: []uint64{0, 1}, beaconBlockRoot: nil},
-						{source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: nil},
+						{ver: version.Phase0, source: 0, target: 3, indices: []uint64{0, 1}, beaconBlockRoot: nil},
+						{ver: version.Phase0, source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: nil},
 					},
 					expectedSlashingsInfo: []*slashingInfo{
 						{
-							attestationInfo_1: &attestationInfo{source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: nil},
-							attestationInfo_2: &attestationInfo{source: 0, target: 3, indices: []uint64{0, 1}, beaconBlockRoot: nil},
+							ver:               version.Phase0,
+							attestationInfo_1: &attestationInfo{ver: version.Phase0, source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: nil},
+							attestationInfo_2: &attestationInfo{ver: version.Phase0, source: 0, target: 3, indices: []uint64{0, 1}, beaconBlockRoot: nil},
 						},
 					},
 				},
@@ -234,19 +244,20 @@ func Test_processAttestations(t *testing.T) {
 				{
 					currentEpoch: 4,
 					attestationsInfo: []*attestationInfo{
-						{source: 0, target: 3, indices: []uint64{0, 1}, beaconBlockRoot: nil},
+						{ver: version.Phase0, source: 0, target: 3, indices: []uint64{0, 1}, beaconBlockRoot: nil},
 					},
 					expectedSlashingsInfo: nil,
 				},
 				{
 					currentEpoch: 4,
 					attestationsInfo: []*attestationInfo{
-						{source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: nil},
+						{ver: version.Phase0, source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: nil},
 					},
 					expectedSlashingsInfo: []*slashingInfo{
 						{
-							attestationInfo_1: &attestationInfo{source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: nil},
-							attestationInfo_2: &attestationInfo{source: 0, target: 3, indices: []uint64{0, 1}, beaconBlockRoot: nil},
+							ver:               version.Phase0,
+							attestationInfo_1: &attestationInfo{ver: version.Phase0, source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: nil},
+							attestationInfo_2: &attestationInfo{ver: version.Phase0, source: 0, target: 3, indices: []uint64{0, 1}, beaconBlockRoot: nil},
 						},
 					},
 				},
@@ -258,13 +269,14 @@ func Test_processAttestations(t *testing.T) {
 				{
 					currentEpoch: 4,
 					attestationsInfo: []*attestationInfo{
-						{source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: nil},
-						{source: 0, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: nil},
+						{ver: version.Phase0, source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: nil},
+						{ver: version.Phase0, source: 0, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: nil},
 					},
 					expectedSlashingsInfo: []*slashingInfo{
 						{
-							attestationInfo_1: &attestationInfo{source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: nil},
-							attestationInfo_2: &attestationInfo{source: 0, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: nil},
+							ver:               version.Phase0,
+							attestationInfo_1: &attestationInfo{ver: version.Phase0, source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: nil},
+							attestationInfo_2: &attestationInfo{ver: version.Phase0, source: 0, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: nil},
 						},
 					},
 				},
@@ -276,19 +288,20 @@ func Test_processAttestations(t *testing.T) {
 				{
 					currentEpoch: 4,
 					attestationsInfo: []*attestationInfo{
-						{source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: nil},
+						{ver: version.Phase0, source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: nil},
 					},
 					expectedSlashingsInfo: nil,
 				},
 				{
 					currentEpoch: 4,
 					attestationsInfo: []*attestationInfo{
-						{source: 0, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: nil},
+						{ver: version.Phase0, source: 0, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: nil},
 					},
 					expectedSlashingsInfo: []*slashingInfo{
 						{
-							attestationInfo_1: &attestationInfo{source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: nil},
-							attestationInfo_2: &attestationInfo{source: 0, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: nil},
+							ver:               version.Phase0,
+							attestationInfo_1: &attestationInfo{ver: version.Phase0, source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: nil},
+							attestationInfo_2: &attestationInfo{ver: version.Phase0, source: 0, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: nil},
 						},
 					},
 				},
@@ -300,8 +313,8 @@ func Test_processAttestations(t *testing.T) {
 				{
 					currentEpoch: 4,
 					attestationsInfo: []*attestationInfo{
-						{source: 1, target: 2, indices: []uint64{0}, beaconBlockRoot: nil},
-						{source: 0, target: 3, indices: []uint64{1}, beaconBlockRoot: nil},
+						{ver: version.Phase0, source: 1, target: 2, indices: []uint64{0}, beaconBlockRoot: nil},
+						{ver: version.Phase0, source: 0, target: 3, indices: []uint64{1}, beaconBlockRoot: nil},
 					},
 					expectedSlashingsInfo: nil,
 				},
@@ -313,14 +326,14 @@ func Test_processAttestations(t *testing.T) {
 				{
 					currentEpoch: 4,
 					attestationsInfo: []*attestationInfo{
-						{source: 1, target: 2, indices: []uint64{0}, beaconBlockRoot: nil},
+						{ver: version.Phase0, source: 1, target: 2, indices: []uint64{0}, beaconBlockRoot: nil},
 					},
 					expectedSlashingsInfo: nil,
 				},
 				{
 					currentEpoch: 4,
 					attestationsInfo: []*attestationInfo{
-						{source: 0, target: 3, indices: []uint64{1}, beaconBlockRoot: nil},
+						{ver: version.Phase0, source: 0, target: 3, indices: []uint64{1}, beaconBlockRoot: nil},
 					},
 					expectedSlashingsInfo: nil,
 				},
@@ -332,8 +345,8 @@ func Test_processAttestations(t *testing.T) {
 				{
 					currentEpoch: 4,
 					attestationsInfo: []*attestationInfo{
-						{source: 0, target: 3, indices: []uint64{0, 1}, beaconBlockRoot: nil},
-						{source: 1, target: 2, indices: []uint64{2, 3}, beaconBlockRoot: nil},
+						{ver: version.Phase0, source: 0, target: 3, indices: []uint64{0, 1}, beaconBlockRoot: nil},
+						{ver: version.Phase0, source: 1, target: 2, indices: []uint64{2, 3}, beaconBlockRoot: nil},
 					},
 					expectedSlashingsInfo: nil,
 				},
@@ -345,14 +358,14 @@ func Test_processAttestations(t *testing.T) {
 				{
 					currentEpoch: 4,
 					attestationsInfo: []*attestationInfo{
-						{source: 0, target: 3, indices: []uint64{0, 1}, beaconBlockRoot: nil},
+						{ver: version.Phase0, source: 0, target: 3, indices: []uint64{0, 1}, beaconBlockRoot: nil},
 					},
 					expectedSlashingsInfo: nil,
 				},
 				{
 					currentEpoch: 4,
 					attestationsInfo: []*attestationInfo{
-						{source: 1, target: 2, indices: []uint64{2, 3}, beaconBlockRoot: nil},
+						{ver: version.Phase0, source: 1, target: 2, indices: []uint64{2, 3}, beaconBlockRoot: nil},
 					},
 					expectedSlashingsInfo: nil,
 				},
@@ -364,8 +377,8 @@ func Test_processAttestations(t *testing.T) {
 				{
 					currentEpoch: 4,
 					attestationsInfo: []*attestationInfo{
-						{source: 0, target: 3, indices: []uint64{0}, beaconBlockRoot: nil},
-						{source: 1, target: 2, indices: []uint64{params.BeaconConfig().MinGenesisActiveValidatorCount - 1}, beaconBlockRoot: nil},
+						{ver: version.Phase0, source: 0, target: 3, indices: []uint64{0}, beaconBlockRoot: nil},
+						{ver: version.Phase0, source: 1, target: 2, indices: []uint64{params.BeaconConfig().MinGenesisActiveValidatorCount - 1}, beaconBlockRoot: nil},
 					},
 					expectedSlashingsInfo: nil,
 				},
@@ -377,14 +390,14 @@ func Test_processAttestations(t *testing.T) {
 				{
 					currentEpoch: 4,
 					attestationsInfo: []*attestationInfo{
-						{source: 0, target: 3, indices: []uint64{0}, beaconBlockRoot: nil},
+						{ver: version.Phase0, source: 0, target: 3, indices: []uint64{0}, beaconBlockRoot: nil},
 					},
 					expectedSlashingsInfo: nil,
 				},
 				{
 					currentEpoch: 4,
 					attestationsInfo: []*attestationInfo{
-						{source: 1, target: 2, indices: []uint64{params.BeaconConfig().MinGenesisActiveValidatorCount - 1}, beaconBlockRoot: nil},
+						{ver: version.Phase0, source: 1, target: 2, indices: []uint64{params.BeaconConfig().MinGenesisActiveValidatorCount - 1}, beaconBlockRoot: nil},
 					},
 					expectedSlashingsInfo: nil,
 				},
@@ -396,8 +409,8 @@ func Test_processAttestations(t *testing.T) {
 				{
 					currentEpoch: 4,
 					attestationsInfo: []*attestationInfo{
-						{source: 0, target: 3, indices: []uint64{0}, beaconBlockRoot: nil},
-						{source: 1, target: 2, indices: []uint64{params.BeaconConfig().MinGenesisActiveValidatorCount - 1}, beaconBlockRoot: nil},
+						{ver: version.Phase0, source: 0, target: 3, indices: []uint64{0}, beaconBlockRoot: nil},
+						{ver: version.Phase0, source: 1, target: 2, indices: []uint64{params.BeaconConfig().MinGenesisActiveValidatorCount - 1}, beaconBlockRoot: nil},
 					},
 					expectedSlashingsInfo: nil,
 				},
@@ -409,14 +422,14 @@ func Test_processAttestations(t *testing.T) {
 				{
 					currentEpoch: 4,
 					attestationsInfo: []*attestationInfo{
-						{source: 0, target: 3, indices: []uint64{0}, beaconBlockRoot: nil},
+						{ver: version.Phase0, source: 0, target: 3, indices: []uint64{0}, beaconBlockRoot: nil},
 					},
 					expectedSlashingsInfo: nil,
 				},
 				{
 					currentEpoch: 4,
 					attestationsInfo: []*attestationInfo{
-						{source: 1, target: 2, indices: []uint64{params.BeaconConfig().MinGenesisActiveValidatorCount - 1}, beaconBlockRoot: nil},
+						{ver: version.Phase0, source: 1, target: 2, indices: []uint64{params.BeaconConfig().MinGenesisActiveValidatorCount - 1}, beaconBlockRoot: nil},
 					},
 					expectedSlashingsInfo: nil,
 				},
@@ -428,8 +441,8 @@ func Test_processAttestations(t *testing.T) {
 				{
 					currentEpoch: 4,
 					attestationsInfo: []*attestationInfo{
-						{source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: nil},
-						{source: 2, target: 3, indices: []uint64{0, 1}, beaconBlockRoot: nil},
+						{ver: version.Phase0, source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: nil},
+						{ver: version.Phase0, source: 2, target: 3, indices: []uint64{0, 1}, beaconBlockRoot: nil},
 					},
 					expectedSlashingsInfo: nil,
 				},
@@ -441,14 +454,14 @@ func Test_processAttestations(t *testing.T) {
 				{
 					currentEpoch: 4,
 					attestationsInfo: []*attestationInfo{
-						{source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: nil},
+						{ver: version.Phase0, source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: nil},
 					},
 					expectedSlashingsInfo: nil,
 				},
 				{
 					currentEpoch: 4,
 					attestationsInfo: []*attestationInfo{
-						{source: 2, target: 3, indices: []uint64{0, 1}, beaconBlockRoot: nil},
+						{ver: version.Phase0, source: 2, target: 3, indices: []uint64{0, 1}, beaconBlockRoot: nil},
 					},
 					expectedSlashingsInfo: nil,
 				},
@@ -460,8 +473,8 @@ func Test_processAttestations(t *testing.T) {
 				{
 					currentEpoch: 4,
 					attestationsInfo: []*attestationInfo{
-						{source: 0, target: 3, indices: []uint64{0, 1}, beaconBlockRoot: nil},
-						{source: 2, target: 4, indices: []uint64{0, 1}, beaconBlockRoot: nil},
+						{ver: version.Phase0, source: 0, target: 3, indices: []uint64{0, 1}, beaconBlockRoot: nil},
+						{ver: version.Phase0, source: 2, target: 4, indices: []uint64{0, 1}, beaconBlockRoot: nil},
 					},
 					expectedSlashingsInfo: nil,
 				},
@@ -473,14 +486,14 @@ func Test_processAttestations(t *testing.T) {
 				{
 					currentEpoch: 4,
 					attestationsInfo: []*attestationInfo{
-						{source: 0, target: 3, indices: []uint64{0, 1}, beaconBlockRoot: nil},
+						{ver: version.Phase0, source: 0, target: 3, indices: []uint64{0, 1}, beaconBlockRoot: nil},
 					},
 					expectedSlashingsInfo: nil,
 				},
 				{
 					currentEpoch: 4,
 					attestationsInfo: []*attestationInfo{
-						{source: 2, target: 4, indices: []uint64{0, 1}, beaconBlockRoot: nil},
+						{ver: version.Phase0, source: 2, target: 4, indices: []uint64{0, 1}, beaconBlockRoot: nil},
 					},
 					expectedSlashingsInfo: nil,
 				},
@@ -492,8 +505,8 @@ func Test_processAttestations(t *testing.T) {
 				{
 					currentEpoch: 4,
 					attestationsInfo: []*attestationInfo{
-						{source: 0, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: nil},
-						{source: 0, target: 3, indices: []uint64{0, 1}, beaconBlockRoot: nil},
+						{ver: version.Phase0, source: 0, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: nil},
+						{ver: version.Phase0, source: 0, target: 3, indices: []uint64{0, 1}, beaconBlockRoot: nil},
 					},
 					expectedSlashingsInfo: nil,
 				},
@@ -505,14 +518,14 @@ func Test_processAttestations(t *testing.T) {
 				{
 					currentEpoch: 4,
 					attestationsInfo: []*attestationInfo{
-						{source: 0, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: nil},
+						{ver: version.Phase0, source: 0, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: nil},
 					},
 					expectedSlashingsInfo: nil,
 				},
 				{
 					currentEpoch: 4,
 					attestationsInfo: []*attestationInfo{
-						{source: 0, target: 3, indices: []uint64{0, 1}, beaconBlockRoot: nil},
+						{ver: version.Phase0, source: 0, target: 3, indices: []uint64{0, 1}, beaconBlockRoot: nil},
 					},
 					expectedSlashingsInfo: nil,
 				},
@@ -524,8 +537,8 @@ func Test_processAttestations(t *testing.T) {
 				{
 					currentEpoch: 4,
 					attestationsInfo: []*attestationInfo{
-						{source: 0, target: 3, indices: []uint64{0, 1}, beaconBlockRoot: nil},
-						{source: 0, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: nil},
+						{ver: version.Phase0, source: 0, target: 3, indices: []uint64{0, 1}, beaconBlockRoot: nil},
+						{ver: version.Phase0, source: 0, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: nil},
 					},
 					expectedSlashingsInfo: nil,
 				},
@@ -537,16 +550,54 @@ func Test_processAttestations(t *testing.T) {
 				{
 					currentEpoch: 4,
 					attestationsInfo: []*attestationInfo{
-						{source: 0, target: 3, indices: []uint64{0, 1}, beaconBlockRoot: nil},
+						{ver: version.Phase0, source: 0, target: 3, indices: []uint64{0, 1}, beaconBlockRoot: nil},
 					},
 					expectedSlashingsInfo: nil,
 				},
 				{
 					currentEpoch: 4,
 					attestationsInfo: []*attestationInfo{
-						{source: 0, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: nil},
+						{ver: version.Phase0, source: 0, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: nil},
 					},
 					expectedSlashingsInfo: nil,
+				},
+			},
+		},
+		{
+			name: "Electra: Same target with different signing roots - single step",
+			steps: []*step{
+				{
+					currentEpoch: 4,
+					attestationsInfo: []*attestationInfo{
+						{ver: version.Electra, source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: []byte{1}},
+						{ver: version.Electra, source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: []byte{2}},
+					},
+					expectedSlashingsInfo: []*slashingInfo{
+						{
+							ver:               version.Electra,
+							attestationInfo_1: &attestationInfo{ver: version.Electra, source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: []byte{1}},
+							attestationInfo_2: &attestationInfo{ver: version.Electra, source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: []byte{2}},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Phase0 & Electra: Same target with different signing roots - single step",
+			steps: []*step{
+				{
+					currentEpoch: 4,
+					attestationsInfo: []*attestationInfo{
+						{ver: version.Phase0, source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: []byte{1}},
+						{ver: version.Electra, source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: []byte{2}},
+					},
+					expectedSlashingsInfo: []*slashingInfo{
+						{
+							ver:               version.Electra,
+							attestationInfo_1: &attestationInfo{ver: version.Electra, source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: []byte{1}},
+							attestationInfo_2: &attestationInfo{ver: version.Electra, source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: []byte{2}},
+						},
+					},
 				},
 			},
 		},
@@ -629,6 +680,7 @@ func Test_processAttestations(t *testing.T) {
 					// Create a wrapped attestation.
 					attestationWrapper := createAttestationWrapper(
 						t,
+						attestationInfo.ver,
 						domain,
 						privateKeys,
 						attestationInfo.source,
@@ -642,12 +694,13 @@ func Test_processAttestations(t *testing.T) {
 				}
 
 				// Build expected attester slashings.
-				expectedSlashings := make(map[[fieldparams.RootLength]byte]*ethpb.AttesterSlashing, len(step.expectedSlashingsInfo))
+				expectedSlashings := make(map[[fieldparams.RootLength]byte]ethpb.AttSlashing, len(step.expectedSlashingsInfo))
 
 				for _, slashingInfo := range step.expectedSlashingsInfo {
 					// Create attestations.
 					wrapper_1 := createAttestationWrapper(
 						t,
+						slashingInfo.attestationInfo_1.ver,
 						domain,
 						privateKeys,
 						slashingInfo.attestationInfo_1.source,
@@ -658,6 +711,7 @@ func Test_processAttestations(t *testing.T) {
 
 					wrapper_2 := createAttestationWrapper(
 						t,
+						slashingInfo.attestationInfo_2.ver,
 						domain,
 						privateKeys,
 						slashingInfo.attestationInfo_2.source,
@@ -667,9 +721,18 @@ func Test_processAttestations(t *testing.T) {
 					)
 
 					// Create the attester slashing.
-					expectedSlashing := &ethpb.AttesterSlashing{
-						Attestation_1: wrapper_1.IndexedAttestation.(*ethpb.IndexedAttestation),
-						Attestation_2: wrapper_2.IndexedAttestation.(*ethpb.IndexedAttestation),
+					var expectedSlashing ethpb.AttSlashing
+
+					if slashingInfo.ver >= version.Electra {
+						expectedSlashing = &ethpb.AttesterSlashingElectra{
+							Attestation_1: wrapper_1.IndexedAttestation.(*ethpb.IndexedAttestationElectra),
+							Attestation_2: wrapper_2.IndexedAttestation.(*ethpb.IndexedAttestationElectra),
+						}
+					} else {
+						expectedSlashing = &ethpb.AttesterSlashing{
+							Attestation_1: wrapper_1.IndexedAttestation.(*ethpb.IndexedAttestation),
+							Attestation_2: wrapper_2.IndexedAttestation.(*ethpb.IndexedAttestation),
+						}
 					}
 
 					root, err := expectedSlashing.HashTreeRoot()
@@ -757,7 +820,7 @@ func Test_processQueuedAttestations_MultipleChunkIndices(t *testing.T) {
 		}
 		var sr [32]byte
 		copy(sr[:], fmt.Sprintf("%d", i))
-		att := createAttestationWrapperEmptySig(t, source, target, []uint64{0}, sr[:])
+		att := createAttestationWrapperEmptySig(t, version.Phase0, source, target, []uint64{0}, sr[:])
 		s.attsQueue = newAttestationsQueue()
 		s.attsQueue.push(att)
 		slot, err := slots.EpochStart(i)
@@ -814,8 +877,8 @@ func Test_processQueuedAttestations_OverlappingChunkIndices(t *testing.T) {
 	}()
 
 	// We create two attestations fully spanning chunk indices 0 and chunk 1
-	att1 := createAttestationWrapperEmptySig(t, primitives.Epoch(slasherParams.chunkSize-2), primitives.Epoch(slasherParams.chunkSize), []uint64{0, 1}, nil)
-	att2 := createAttestationWrapperEmptySig(t, primitives.Epoch(slasherParams.chunkSize-1), primitives.Epoch(slasherParams.chunkSize+1), []uint64{0, 1}, nil)
+	att1 := createAttestationWrapperEmptySig(t, version.Phase0, primitives.Epoch(slasherParams.chunkSize-2), primitives.Epoch(slasherParams.chunkSize), []uint64{0, 1}, nil)
+	att2 := createAttestationWrapperEmptySig(t, version.Phase0, primitives.Epoch(slasherParams.chunkSize-1), primitives.Epoch(slasherParams.chunkSize+1), []uint64{0, 1}, nil)
 
 	// We attempt to process the batch.
 	s.attsQueue = newAttestationsQueue()
@@ -1152,7 +1215,7 @@ func Test_applyAttestationForValidator_MinSpanChunk(t *testing.T) {
 	// We apply attestation with (source 1, target 2) for our validator.
 	source := primitives.Epoch(1)
 	target := primitives.Epoch(2)
-	att := createAttestationWrapperEmptySig(t, source, target, nil, nil)
+	att := createAttestationWrapperEmptySig(t, version.Phase0, source, target, nil, nil)
 	slashing, err := srv.applyAttestationForValidator(
 		ctx,
 		chunksByChunkIdx,
@@ -1175,7 +1238,7 @@ func Test_applyAttestationForValidator_MinSpanChunk(t *testing.T) {
 	// expect a slashable offense to be returned.
 	source = primitives.Epoch(0)
 	target = primitives.Epoch(3)
-	slashableAtt := createAttestationWrapperEmptySig(t, source, target, nil, nil)
+	slashableAtt := createAttestationWrapperEmptySig(t, version.Phase0, source, target, nil, nil)
 	slashing, err = srv.applyAttestationForValidator(
 		ctx,
 		chunksByChunkIdx,
@@ -1209,7 +1272,7 @@ func Test_applyAttestationForValidator_MaxSpanChunk(t *testing.T) {
 	// We apply attestation with (source 0, target 3) for our validator.
 	source := primitives.Epoch(0)
 	target := primitives.Epoch(3)
-	att := createAttestationWrapperEmptySig(t, source, target, nil, nil)
+	att := createAttestationWrapperEmptySig(t, version.Phase0, source, target, nil, nil)
 	slashing, err := srv.applyAttestationForValidator(
 		ctx,
 		chunksByChunkIdx,
@@ -1232,7 +1295,7 @@ func Test_applyAttestationForValidator_MaxSpanChunk(t *testing.T) {
 	// expect a slashable offense to be returned.
 	source = primitives.Epoch(1)
 	target = primitives.Epoch(2)
-	slashableAtt := createAttestationWrapperEmptySig(t, source, target, nil, nil)
+	slashableAtt := createAttestationWrapperEmptySig(t, version.Phase0, source, target, nil, nil)
 	slashing, err = srv.applyAttestationForValidator(
 		ctx,
 		chunksByChunkIdx,
@@ -1347,7 +1410,7 @@ func TestService_processQueuedAttestations(t *testing.T) {
 	require.NoError(t, err)
 
 	s.attsQueue.extend([]*slashertypes.IndexedAttestationWrapper{
-		createAttestationWrapperEmptySig(t, 0, 1, []uint64{0, 1} /* indices */, nil /* signingRoot */),
+		createAttestationWrapperEmptySig(t, version.Phase0, 0, 1, []uint64{0, 1} /* indices */, nil /* signingRoot */),
 	})
 	ctx, cancel := context.WithCancel(context.Background())
 	tickerChan := make(chan primitives.Slot)
@@ -1482,6 +1545,7 @@ func runAttestationsBenchmark(b *testing.B, s *Service, numAtts, numValidators u
 		copy(signingRoot[:], fmt.Sprintf("%d", i))
 		atts[i] = createAttestationWrapperEmptySig(
 			b,
+			version.Phase0,
 			source,
 			target,         /* target */
 			indices,        /* indices */
@@ -1546,7 +1610,7 @@ func Benchmark_checkSurroundVotes(b *testing.B) {
 
 	// Create the attestation wrapper.
 	// This benchmark assume that all validators produced the exact same head, source and target votes.
-	attWrapper := createAttestationWrapperEmptySig(b, sourceEpoch, targetEpoch, validatorIndexes, nil)
+	attWrapper := createAttestationWrapperEmptySig(b, version.Phase0, sourceEpoch, targetEpoch, validatorIndexes, nil)
 	attWrappers := []*slashertypes.IndexedAttestationWrapper{attWrapper}
 
 	// Run the benchmark.
@@ -1566,6 +1630,7 @@ func Benchmark_checkSurroundVotes(b *testing.B) {
 // The signature of the returned wrapped attestation is empty.
 func createAttestationWrapperEmptySig(
 	t testing.TB,
+	ver int,
 	source, target primitives.Epoch,
 	indices []uint64,
 	beaconBlockRoot []byte,
@@ -1585,6 +1650,17 @@ func createAttestationWrapperEmptySig(
 	dataRoot, err := data.HashTreeRoot()
 	require.NoError(t, err)
 
+	if ver >= version.Electra {
+		return &slashertypes.IndexedAttestationWrapper{
+			IndexedAttestation: &ethpb.IndexedAttestationElectra{
+				AttestingIndices: indices,
+				Data:             data,
+				Signature:        params.BeaconConfig().EmptySignature[:],
+			},
+			DataRoot: dataRoot,
+		}
+	}
+
 	return &slashertypes.IndexedAttestationWrapper{
 		IndexedAttestation: &ethpb.IndexedAttestation{
 			AttestingIndices: indices,
@@ -1601,6 +1677,7 @@ func createAttestationWrapperEmptySig(
 // if validatorIndice = indices[i], then the corresponding private key is privateKeys[validatorIndice].
 func createAttestationWrapper(
 	t testing.TB,
+	ver int,
 	domain []byte,
 	privateKeys []common.SecretKey,
 	source, target primitives.Epoch,
@@ -1648,6 +1725,17 @@ func createAttestationWrapper(
 	signature := bls.AggregateSignatures(signatures).Marshal()
 
 	// Create the attestation wrapper.
+	if ver >= version.Electra {
+		return &slashertypes.IndexedAttestationWrapper{
+			IndexedAttestation: &ethpb.IndexedAttestationElectra{
+				AttestingIndices: indices,
+				Data:             attestationData,
+				Signature:        signature,
+			},
+			DataRoot: attestationDataRoot,
+		}
+	}
+
 	return &slashertypes.IndexedAttestationWrapper{
 		IndexedAttestation: &ethpb.IndexedAttestation{
 			AttestingIndices: indices,
