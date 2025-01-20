@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/slashings/mock"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
@@ -15,20 +14,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
-var (
-	_ = PoolManager(&Pool{})
-	_ = PoolInserter(&Pool{})
-	_ = PoolManager(&mock.PoolMock{})
-	_ = PoolInserter(&mock.PoolMock{})
-)
-
-func TestPool_validatorSlashingPreconditionCheck_requiresLock(t *testing.T) {
-	p := &Pool{}
-	_, err := p.validatorSlashingPreconditionCheck(nil, 0)
-	require.ErrorContains(t, "caller must hold read/write lock", err)
-}
-
-func Test_convertToElectraWithTimer(t *testing.T) {
+func TestConvertToElectraWithTimer(t *testing.T) {
 	ctx := context.Background()
 
 	cfg := params.BeaconConfig().Copy()
@@ -73,10 +59,11 @@ func Test_convertToElectraWithTimer(t *testing.T) {
 	c := startup.NewClock(now, [32]byte{}, startup.WithNower(func() time.Time { return electraTime }))
 	cw := startup.NewClockSynchronizer()
 	require.NoError(t, cw.SetClock(c))
-	p := NewPool(ctx, WithElectraTimer(cw, func() primitives.Slot { return 31 }))
+	p := NewPool()
+	s := NewPoolService(ctx, p, WithElectraTimer(cw, func() primitives.Slot { return 31 }))
 	p.pendingAttesterSlashing = append(p.pendingAttesterSlashing, phase0Slashing)
 
-	p.run()
+	s.run()
 
 	electraSlashing, ok := p.pendingAttesterSlashing[0].attesterSlashing.(*ethpb.AttesterSlashingElectra)
 	require.Equal(t, true, ok, "Slashing was not converted to Electra")

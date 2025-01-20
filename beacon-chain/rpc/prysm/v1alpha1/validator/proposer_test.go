@@ -31,7 +31,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/voluntaryexits"
 	mockp2p "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/testutil"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stategen"
@@ -855,7 +854,7 @@ func getProposerServer(ctx context.Context, db db.HeadAccessDatabase, headState 
 		ForkchoiceFetcher:     mockChainService,
 		MockEth1Votes:         true,
 		AttPool:               attestations.NewPool(),
-		SlashingsPool:         slashings.NewPool(ctx, startup.NewClockSynchronizer()),
+		SlashingsPool:         slashings.NewPool(),
 		ExitPool:              voluntaryexits.NewPool(),
 		StateGen:              stategen.New(db, doublylinkedtree.New()),
 		SyncCommitteePool:     synccommittee.NewStore(),

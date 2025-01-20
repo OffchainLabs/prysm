@@ -6,6 +6,7 @@ go_library(
         "doc.go",
         "log.go",
         "metrics.go",
+        "pool.go",
         "service.go",
         "types.go",
     ],
@@ -40,6 +41,7 @@ go_test(
     name = "go_default_test",
     size = "small",
     srcs = [
+        "pool_test.go",
         "service_attester_test.go",
         "service_proposer_test.go",
         "service_test.go",

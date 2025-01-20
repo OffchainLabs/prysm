@@ -97,6 +97,7 @@ type BeaconNode struct {
 	attestationCache        *cache.AttestationCache
 	attestationPool         attestations.Pool
 	exitPool                voluntaryexits.PoolManager
+	slashingsPool           slashings.PoolManager
 	syncCommitteePool       synccommittee.Pool
 	blsToExecPool           blstoexec.PoolManager
 	depositCache            cache.DepositCache
@@ -148,6 +149,7 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 		attestationCache:        cache.NewAttestationCache(),
 		attestationPool:         attestations.NewPool(),
 		exitPool:                voluntaryexits.NewPool(),
+		slashingsPool:           slashings.NewPool(),
 		syncCommitteePool:       synccommittee.NewPool(),
 		blsToExecPool:           blstoexec.NewPool(),
 		trackedValidatorsCache:  cache.NewTrackedValidatorsCache(),
@@ -336,7 +338,7 @@ func registerServices(cliCtx *cli.Context, beacon *BeaconNode, synchronizer *sta
 	}
 
 	log.Debugln("Registering Slashing Pool Service")
-	if err := beacon.registerSlashingPool(); err != nil {
+	if err := beacon.registerSlashingPoolService(); err != nil {
 		return errors.Wrap(err, "could not register slashing pool service")
 	}
 
@@ -727,13 +729,13 @@ func (b *BeaconNode) registerAttestationPool() error {
 	return b.services.RegisterService(s)
 }
 
-func (b *BeaconNode) registerSlashingPool() error {
+func (b *BeaconNode) registerSlashingPoolService() error {
 	var chainService *blockchain.Service
 	if err := b.services.FetchService(&chainService); err != nil {
 		return err
 	}
 
-	s := slashings.NewPool(b.ctx, slashings.WithElectraTimer(b.clockWaiter, chainService.CurrentSlot))
+	s := slashings.NewPoolService(b.ctx, b.slashingsPool, slashings.WithElectraTimer(b.clockWaiter, chainService.CurrentSlot))
 	return b.services.RegisterService(s)
 }
 
@@ -748,11 +750,6 @@ func (b *BeaconNode) registerBlockchainService(fc forkchoice.ForkChoicer, gs *st
 		return err
 	}
 
-	var slashingPoolService *slashings.Pool
-	if err := b.services.FetchService(&slashingPoolService); err != nil {
-		return err
-	}
-
 	// skipcq: CRT-D0001
 	opts := append(
 		b.serviceFlagOpts.blockchainFlagOpts,
@@ -764,7 +761,7 @@ func (b *BeaconNode) registerBlockchainService(fc forkchoice.ForkChoicer, gs *st
 		blockchain.WithAttestationCache(b.attestationCache),
 		blockchain.WithAttestationPool(b.attestationPool),
 		blockchain.WithExitPool(b.exitPool),
-		blockchain.WithSlashingPool(slashingPoolService),
+		blockchain.WithSlashingPool(b.slashingsPool),
 		blockchain.WithBLSToExecPool(b.blsToExecPool),
 		blockchain.WithP2PBroadcaster(b.fetchP2P()),
 		blockchain.WithStateNotifier(b),
@@ -837,11 +834,6 @@ func (b *BeaconNode) registerSyncService(initialSyncComplete chan struct{}, bFil
 		return err
 	}
 
-	var slashingPoolService *slashings.Pool
-	if err := b.services.FetchService(&slashingPoolService); err != nil {
-		return err
-	}
-
 	rs := regularsync.NewService(
 		b.ctx,
 		regularsync.WithDatabase(b.db),
@@ -854,7 +846,7 @@ func (b *BeaconNode) registerSyncService(initialSyncComplete chan struct{}, bFil
 		regularsync.WithAttestationCache(b.attestationCache),
 		regularsync.WithAttestationPool(b.attestationPool),
 		regularsync.WithExitPool(b.exitPool),
-		regularsync.WithSlashingPool(slashingPoolService),
+		regularsync.WithSlashingPool(b.slashingsPool),
 		regularsync.WithSyncCommsPool(b.syncCommitteePool),
 		regularsync.WithBlsToExecPool(b.blsToExecPool),
 		regularsync.WithStateGen(b.stateGen),
@@ -906,10 +898,6 @@ func (b *BeaconNode) registerSlasherService() error {
 	if err := b.services.FetchService(&syncService); err != nil {
 		return err
 	}
-	var slashingPoolService *slashings.Pool
-	if err := b.services.FetchService(&slashingPoolService); err != nil {
-		return err
-	}
 
 	slasherSrv, err := slasher.New(b.ctx, &slasher.ServiceConfig{
 		IndexedAttestationsFeed: b.slasherAttestationsFeed,
@@ -918,7 +906,7 @@ func (b *BeaconNode) registerSlasherService() error {
 		StateNotifier:           b,
 		AttestationStateFetcher: chainService,
 		StateGen:                b.stateGen,
-		SlashingPoolInserter:    slashingPoolService,
+		SlashingPoolInserter:    b.slashingsPool,
 		SyncChecker:             syncService,
 		HeadStateFetcher:        chainService,
 		ClockWaiter:             b.clockWaiter,
@@ -950,11 +938,6 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		if err := b.services.FetchService(&slasherService); err != nil {
 			return err
 		}
-	}
-
-	var slashingPoolService *slashings.Pool
-	if err := b.services.FetchService(&slashingPoolService); err != nil {
-		return err
 	}
 
 	depositFetcher := b.depositCache
@@ -1000,7 +983,7 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		AttestationCache:          b.attestationCache,
 		AttestationsPool:          b.attestationPool,
 		ExitPool:                  b.exitPool,
-		SlashingsPool:             slashingPoolService,
+		SlashingsPool:             b.slashingsPool,
 		BLSChangesPool:            b.blsToExecPool,
 		SyncCommitteeObjectPool:   b.syncCommitteePool,
 		ExecutionChainService:     web3Service,

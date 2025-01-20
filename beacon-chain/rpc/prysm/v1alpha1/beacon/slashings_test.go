@@ -7,7 +7,6 @@ import (
 	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/slashings"
 	mockp2p "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
@@ -32,7 +31,7 @@ func TestServer_SubmitProposerSlashing(t *testing.T) {
 		HeadFetcher: &mock.ChainService{
 			State: st,
 		},
-		SlashingsPool: slashings.NewPool(ctx, startup.NewClockSynchronizer()),
+		SlashingsPool: slashings.NewPool(),
 		Broadcaster:   mb,
 	}
 
@@ -62,7 +61,7 @@ func TestServer_SubmitAttesterSlashing(t *testing.T) {
 		HeadFetcher: &mock.ChainService{
 			State: st,
 		},
-		SlashingsPool: slashings.NewPool(ctx, startup.NewClockSynchronizer()),
+		SlashingsPool: slashings.NewPool(),
 		Broadcaster:   mb,
 	}
 
@@ -93,7 +92,7 @@ func TestServer_SubmitProposerSlashing_DontBroadcast(t *testing.T) {
 		HeadFetcher: &mock.ChainService{
 			State: st,
 		},
-		SlashingsPool: slashings.NewPool(ctx, startup.NewClockSynchronizer()),
+		SlashingsPool: slashings.NewPool(),
 		Broadcaster:   mb,
 	}
 
@@ -140,7 +139,7 @@ func TestServer_SubmitAttesterSlashing_DontBroadcast(t *testing.T) {
 		HeadFetcher: &mock.ChainService{
 			State: st,
 		},
-		SlashingsPool: slashings.NewPool(ctx, startup.NewClockSynchronizer()),
+		SlashingsPool: slashings.NewPool(),
 		Broadcaster:   mb,
 	}
 
@@ -181,7 +180,7 @@ func TestServer_SubmitAttesterSlashingElectra(t *testing.T) {
 		HeadFetcher: &mock.ChainService{
 			State: st,
 		},
-		SlashingsPool: slashings.NewPool(ctx, startup.NewClockSynchronizer()),
+		SlashingsPool: slashings.NewPool(),
 		Broadcaster:   mb,
 	}
 
