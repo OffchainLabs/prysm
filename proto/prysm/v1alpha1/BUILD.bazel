@@ -51,7 +51,9 @@ ssz_phase0_objs = [
     "AttestationData",
     "AttesterSlashing",
     "BeaconBlock",
+    "BeaconBlockChunk",
     "BeaconBlockHeader",
+    "BeaconBlockChunkHeader",
     "BeaconState",
     "Checkpoint",
     "Deposit",
@@ -390,6 +392,7 @@ ssz_proto_files(
     srcs = [
         "attestation.proto",
         "beacon_block.proto",
+        "beacon_block_chunk.proto",
         "beacon_state.proto",
         "blobs.proto",
         "data_columns.proto",

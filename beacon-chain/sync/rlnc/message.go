@@ -3,6 +3,7 @@ package rlnc
 import (
 	"github.com/OffchainLabs/prysm/v6/crypto/rand"
 	ristretto "github.com/gtank/ristretto255"
+	"github.com/sirupsen/logrus"
 )
 
 type chunk struct {
@@ -39,7 +40,7 @@ var scalarOneBytes = [32]byte{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 func scalarOne() (ret *ristretto.Scalar) {
 	ret = &ristretto.Scalar{}
 	if err := ret.Decode(scalarOneBytes[:]); err != nil {
-		panic(err) // lint:nopanic -- TODO: Handle this error!
+		logrus.WithError(err).Error("failed to decode scalar one")
 	}
 	return
 }
