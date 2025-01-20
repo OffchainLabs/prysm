@@ -15,14 +15,13 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	prysmTime "github.com/prysmaticlabs/prysm/v5/time"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
 const broadCastMissingDataColumnsTimeIntoSlot = 3 * time.Second
 
 func (s *Service) reconstructDataColumns(ctx context.Context, verifiedRODataColumn blocks.VerifiedRODataColumn) error {
-	startTime := prysmTime.Now()
+	startTime := time.Now()
 
 	// Get the block root.
 	blockRoot := verifiedRODataColumn.BlockRoot()
@@ -125,10 +124,9 @@ func (s *Service) reconstructDataColumns(ctx context.Context, verifiedRODataColu
 	}
 
 	// Update reconstruction metrics
+	dataColumnReconstructionHistogram.Observe(float64(time.Since(startTime).Milliseconds()))
 	dataColumnReconstructionCounter.Add(float64(peerdas.CellsCount(recoveredCellsAndProofs)))
-	reconstructionTime := s.cfg.clock.Now().Sub(startTime)
-	dataColumnReconstructionHistogram.Observe(float64(reconstructionTime.Milliseconds()))
-
+	
 	log.WithField("root", fmt.Sprintf("%x", blockRoot)).Debug("Data columns reconstructed and saved successfully")
 
 	// Schedule the broadcast.
