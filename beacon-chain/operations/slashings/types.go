@@ -32,23 +32,29 @@ type PoolManager interface {
 	PendingProposerSlashings(ctx context.Context, state state.ReadOnlyBeaconState, noLimit bool) []*ethpb.ProposerSlashing
 	MarkIncludedAttesterSlashing(as ethpb.AttSlashing)
 	MarkIncludedProposerSlashing(ps *ethpb.ProposerSlashing)
+	ConvertToElectra()
 }
 
-// Option for pool configuration.
-type Option func(p *Pool) error
+// Option for pool service configuration.
+type Option func(p *PoolService) error
+
+// PoolService manages the Pool.
+type PoolService struct {
+	ctx             context.Context
+	cancel          context.CancelFunc
+	poolManager     PoolManager
+	currentSlotFn   func() primitives.Slot
+	cw              startup.ClockWaiter
+	clock           *startup.Clock
+	runElectraTimer bool
+}
 
 // Pool is a concrete implementation of PoolManager.
 type Pool struct {
 	lock                    sync.RWMutex
-	ctx                     context.Context
-	cancel                  context.CancelFunc
-	currentSlotFn           func() primitives.Slot
-	cw                      startup.ClockWaiter
-	clock                   *startup.Clock
 	pendingProposerSlashing []*ethpb.ProposerSlashing
 	pendingAttesterSlashing []*PendingAttesterSlashing
 	included                map[primitives.ValidatorIndex]bool
-	runElectraTimer         bool
 }
 
 // PendingAttesterSlashing represents an attester slashing in the operation pool.
