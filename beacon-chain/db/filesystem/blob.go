@@ -336,7 +336,7 @@ func (bs *BlobStorage) SaveDataColumn(column blocks.VerifiedRODataColumn) error 
 		})
 	}
 
-	// TODO: Use new metrics for data columns
+	custodyColumnWrittenCounter.Inc()
 	blobsWrittenCounter.Inc()
 	blobSaveLatency.Observe(float64(time.Since(startTime).Milliseconds()))
 	return nil
