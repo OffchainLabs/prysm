@@ -214,6 +214,7 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 	r.subHandler = newSubTopicHandler()
 	r.rateLimiter = newRateLimiter(r.cfg.p2p)
 	r.initCaches()
+	async.RunEvery(ctx, 10*time.Minute, r.startChunkPruner)
 
 	return r
 }
