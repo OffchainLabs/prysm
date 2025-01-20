@@ -2244,6 +2244,366 @@ func (d *Deposit_Data) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	return
 }
 
+// MarshalSSZ ssz marshals the BeaconBlockChunk object
+func (b *BeaconBlockChunk) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(b)
+}
+
+// MarshalSSZTo ssz marshals the BeaconBlockChunk object to a target array
+func (b *BeaconBlockChunk) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(108)
+
+	// Offset (0) 'Data'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.Data)
+
+	// Offset (1) 'Coefficients'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.Coefficients) * 32
+
+	// Offset (2) 'Header'
+	dst = ssz.WriteOffset(dst, offset)
+	if b.Header == nil {
+		b.Header = new(BeaconBlockChunkHeader)
+	}
+	offset += b.Header.SizeSSZ()
+
+	// Field (3) 'Signature'
+	if size := len(b.Signature); size != 96 {
+		err = ssz.ErrBytesLengthFn("--.Signature", size, 96)
+		return
+	}
+	dst = append(dst, b.Signature...)
+
+	// Field (0) 'Data'
+	if size := len(b.Data); size > 32768 {
+		err = ssz.ErrBytesLengthFn("--.Data", size, 32768)
+		return
+	}
+	dst = append(dst, b.Data...)
+
+	// Field (1) 'Coefficients'
+	if size := len(b.Coefficients); size > 128 {
+		err = ssz.ErrListTooBigFn("--.Coefficients", size, 128)
+		return
+	}
+	for ii := 0; ii < len(b.Coefficients); ii++ {
+		if size := len(b.Coefficients[ii]); size != 32 {
+			err = ssz.ErrBytesLengthFn("--.Coefficients[ii]", size, 32)
+			return
+		}
+		dst = append(dst, b.Coefficients[ii]...)
+	}
+
+	// Field (2) 'Header'
+	if dst, err = b.Header.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the BeaconBlockChunk object
+func (b *BeaconBlockChunk) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 108 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o0, o1, o2 uint64
+
+	// Offset (0) 'Data'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
+	}
+
+	if o0 != 108 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Offset (1) 'Coefficients'
+	if o1 = ssz.ReadOffset(buf[4:8]); o1 > size || o0 > o1 {
+		return ssz.ErrOffset
+	}
+
+	// Offset (2) 'Header'
+	if o2 = ssz.ReadOffset(buf[8:12]); o2 > size || o1 > o2 {
+		return ssz.ErrOffset
+	}
+
+	// Field (3) 'Signature'
+	if cap(b.Signature) == 0 {
+		b.Signature = make([]byte, 0, len(buf[12:108]))
+	}
+	b.Signature = append(b.Signature, buf[12:108]...)
+
+	// Field (0) 'Data'
+	{
+		buf = tail[o0:o1]
+		if len(buf) > 32768 {
+			return ssz.ErrBytesLength
+		}
+		if cap(b.Data) == 0 {
+			b.Data = make([]byte, 0, len(buf))
+		}
+		b.Data = append(b.Data, buf...)
+	}
+
+	// Field (1) 'Coefficients'
+	{
+		buf = tail[o1:o2]
+		num, err := ssz.DivideInt2(len(buf), 32, 128)
+		if err != nil {
+			return err
+		}
+		b.Coefficients = make([][]byte, num)
+		for ii := 0; ii < num; ii++ {
+			if cap(b.Coefficients[ii]) == 0 {
+				b.Coefficients[ii] = make([]byte, 0, len(buf[ii*32:(ii+1)*32]))
+			}
+			b.Coefficients[ii] = append(b.Coefficients[ii], buf[ii*32:(ii+1)*32]...)
+		}
+	}
+
+	// Field (2) 'Header'
+	{
+		buf = tail[o2:]
+		if b.Header == nil {
+			b.Header = new(BeaconBlockChunkHeader)
+		}
+		if err = b.Header.UnmarshalSSZ(buf); err != nil {
+			return err
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the BeaconBlockChunk object
+func (b *BeaconBlockChunk) SizeSSZ() (size int) {
+	size = 108
+
+	// Field (0) 'Data'
+	size += len(b.Data)
+
+	// Field (1) 'Coefficients'
+	size += len(b.Coefficients) * 32
+
+	// Field (2) 'Header'
+	if b.Header == nil {
+		b.Header = new(BeaconBlockChunkHeader)
+	}
+	size += b.Header.SizeSSZ()
+
+	return
+}
+
+// HashTreeRoot ssz hashes the BeaconBlockChunk object
+func (b *BeaconBlockChunk) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(b)
+}
+
+// HashTreeRootWith ssz hashes the BeaconBlockChunk object with a hasher
+func (b *BeaconBlockChunk) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'Data'
+	{
+		elemIndx := hh.Index()
+		byteLen := uint64(len(b.Data))
+		if byteLen > 32768 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		hh.PutBytes(b.Data)
+		hh.MerkleizeWithMixin(elemIndx, byteLen, (32768+31)/32)
+	}
+
+	// Field (1) 'Coefficients'
+	{
+		if size := len(b.Coefficients); size > 128 {
+			err = ssz.ErrListTooBigFn("--.Coefficients", size, 128)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range b.Coefficients {
+			if len(i) != 32 {
+				err = ssz.ErrBytesLength
+				return
+			}
+			hh.Append(i)
+		}
+
+		numItems := uint64(len(b.Coefficients))
+		hh.MerkleizeWithMixin(subIndx, numItems, 128)
+	}
+
+	// Field (2) 'Header'
+	if err = b.Header.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (3) 'Signature'
+	if size := len(b.Signature); size != 96 {
+		err = ssz.ErrBytesLengthFn("--.Signature", size, 96)
+		return
+	}
+	hh.PutBytes(b.Signature)
+
+	hh.Merkleize(indx)
+	return
+}
+
+// MarshalSSZ ssz marshals the BeaconBlockChunkHeader object
+func (b *BeaconBlockChunkHeader) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(b)
+}
+
+// MarshalSSZTo ssz marshals the BeaconBlockChunkHeader object to a target array
+func (b *BeaconBlockChunkHeader) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(52)
+
+	// Field (0) 'Slot'
+	dst = ssz.MarshalUint64(dst, uint64(b.Slot))
+
+	// Field (1) 'ProposerIndex'
+	dst = ssz.MarshalUint64(dst, uint64(b.ProposerIndex))
+
+	// Field (2) 'ParentRoot'
+	if size := len(b.ParentRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.ParentRoot", size, 32)
+		return
+	}
+	dst = append(dst, b.ParentRoot...)
+
+	// Offset (3) 'Commitments'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.Commitments) * 32
+
+	// Field (3) 'Commitments'
+	if size := len(b.Commitments); size > 128 {
+		err = ssz.ErrListTooBigFn("--.Commitments", size, 128)
+		return
+	}
+	for ii := 0; ii < len(b.Commitments); ii++ {
+		if size := len(b.Commitments[ii]); size != 32 {
+			err = ssz.ErrBytesLengthFn("--.Commitments[ii]", size, 32)
+			return
+		}
+		dst = append(dst, b.Commitments[ii]...)
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the BeaconBlockChunkHeader object
+func (b *BeaconBlockChunkHeader) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 52 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o3 uint64
+
+	// Field (0) 'Slot'
+	b.Slot = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
+
+	// Field (1) 'ProposerIndex'
+	b.ProposerIndex = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[8:16]))
+
+	// Field (2) 'ParentRoot'
+	if cap(b.ParentRoot) == 0 {
+		b.ParentRoot = make([]byte, 0, len(buf[16:48]))
+	}
+	b.ParentRoot = append(b.ParentRoot, buf[16:48]...)
+
+	// Offset (3) 'Commitments'
+	if o3 = ssz.ReadOffset(buf[48:52]); o3 > size {
+		return ssz.ErrOffset
+	}
+
+	if o3 != 52 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Field (3) 'Commitments'
+	{
+		buf = tail[o3:]
+		num, err := ssz.DivideInt2(len(buf), 32, 128)
+		if err != nil {
+			return err
+		}
+		b.Commitments = make([][]byte, num)
+		for ii := 0; ii < num; ii++ {
+			if cap(b.Commitments[ii]) == 0 {
+				b.Commitments[ii] = make([]byte, 0, len(buf[ii*32:(ii+1)*32]))
+			}
+			b.Commitments[ii] = append(b.Commitments[ii], buf[ii*32:(ii+1)*32]...)
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the BeaconBlockChunkHeader object
+func (b *BeaconBlockChunkHeader) SizeSSZ() (size int) {
+	size = 52
+
+	// Field (3) 'Commitments'
+	size += len(b.Commitments) * 32
+
+	return
+}
+
+// HashTreeRoot ssz hashes the BeaconBlockChunkHeader object
+func (b *BeaconBlockChunkHeader) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(b)
+}
+
+// HashTreeRootWith ssz hashes the BeaconBlockChunkHeader object with a hasher
+func (b *BeaconBlockChunkHeader) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'Slot'
+	hh.PutUint64(uint64(b.Slot))
+
+	// Field (1) 'ProposerIndex'
+	hh.PutUint64(uint64(b.ProposerIndex))
+
+	// Field (2) 'ParentRoot'
+	if size := len(b.ParentRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.ParentRoot", size, 32)
+		return
+	}
+	hh.PutBytes(b.ParentRoot)
+
+	// Field (3) 'Commitments'
+	{
+		if size := len(b.Commitments); size > 128 {
+			err = ssz.ErrListTooBigFn("--.Commitments", size, 128)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range b.Commitments {
+			if len(i) != 32 {
+				err = ssz.ErrBytesLength
+				return
+			}
+			hh.Append(i)
+		}
+
+		numItems := uint64(len(b.Commitments))
+		hh.MerkleizeWithMixin(subIndx, numItems, 128)
+	}
+
+	hh.Merkleize(indx)
+	return
+}
+
 // MarshalSSZ ssz marshals the BeaconState object
 func (b *BeaconState) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(b)

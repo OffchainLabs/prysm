@@ -28,7 +28,7 @@ func scalarLC(coeffs []*ristretto.Scalar, data [][]*ristretto.Scalar) (ret []*ri
 
 // echelon is a struct that holds the echelon form of a matrix of coefficients and the
 // corresponding transformation matrix to get it to that form. That is we are guaranteed to have
-// tranform * coefficients = triangular
+// transform * coefficients = triangular
 type echelon struct {
 	coefficients [][]*ristretto.Scalar
 	triangular   [][]*ristretto.Scalar

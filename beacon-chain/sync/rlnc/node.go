@@ -2,6 +2,7 @@ package rlnc
 
 import (
 	ristretto "github.com/gtank/ristretto255"
+	"github.com/sirupsen/logrus"
 )
 
 // Node represents a node in the RLNC network. It keeps the data it holds as a matrix of scalars
@@ -86,7 +87,9 @@ func bytesToVector(data []byte) []*ristretto.Scalar {
 	ret := make([]*ristretto.Scalar, len(data)/31)
 	for i := 0; i < len(data); i += 31 {
 		ret[i/31] = ristretto.NewScalar()
-		ret[i/31].Decode(append(data[i:i+31], byte(0)))
+		if err := ret[i/31].Decode(append(data[i:i+31], byte(0))); err != nil {
+			logrus.Error("failed to decode scalar")
+		}
 	}
 	return ret
 }

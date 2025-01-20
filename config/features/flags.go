@@ -179,8 +179,8 @@ var (
 		Usage: "Enables an experimental attestation pool design.",
 	}
 	useRLNC = &cli.BoolFlag{
-		Name: "use-rlnc",
-		Usage: "Experimental: enables the use of random linear network coding for gossiping."
+		Name:   "use-rlnc",
+		Usage:  "Experimental: enables the use of random linear network coding for gossiping.",
 		Hidden: true,
 	}
 )
