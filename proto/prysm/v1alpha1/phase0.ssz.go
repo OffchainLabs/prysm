@@ -2256,7 +2256,7 @@ func (b *BeaconBlockChunk) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 
 	// Offset (0) 'Data'
 	dst = ssz.WriteOffset(dst, offset)
-	offset += len(b.Data)
+	offset += len(b.Data) * 32
 
 	// Offset (1) 'Coefficients'
 	dst = ssz.WriteOffset(dst, offset)
@@ -2278,10 +2278,16 @@ func (b *BeaconBlockChunk) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 
 	// Field (0) 'Data'
 	if size := len(b.Data); size > 32768 {
-		err = ssz.ErrBytesLengthFn("--.Data", size, 32768)
+		err = ssz.ErrListTooBigFn("--.Data", size, 32768)
 		return
 	}
-	dst = append(dst, b.Data...)
+	for ii := 0; ii < len(b.Data); ii++ {
+		if size := len(b.Data[ii]); size != 32 {
+			err = ssz.ErrBytesLengthFn("--.Data[ii]", size, 32)
+			return
+		}
+		dst = append(dst, b.Data[ii]...)
+	}
 
 	// Field (1) 'Coefficients'
 	if size := len(b.Coefficients); size > 128 {
@@ -2343,13 +2349,17 @@ func (b *BeaconBlockChunk) UnmarshalSSZ(buf []byte) error {
 	// Field (0) 'Data'
 	{
 		buf = tail[o0:o1]
-		if len(buf) > 32768 {
-			return ssz.ErrBytesLength
+		num, err := ssz.DivideInt2(len(buf), 32, 32768)
+		if err != nil {
+			return err
 		}
-		if cap(b.Data) == 0 {
-			b.Data = make([]byte, 0, len(buf))
+		b.Data = make([][]byte, num)
+		for ii := 0; ii < num; ii++ {
+			if cap(b.Data[ii]) == 0 {
+				b.Data[ii] = make([]byte, 0, len(buf[ii*32:(ii+1)*32]))
+			}
+			b.Data[ii] = append(b.Data[ii], buf[ii*32:(ii+1)*32]...)
 		}
-		b.Data = append(b.Data, buf...)
 	}
 
 	// Field (1) 'Coefficients'
@@ -2386,7 +2396,7 @@ func (b *BeaconBlockChunk) SizeSSZ() (size int) {
 	size = 108
 
 	// Field (0) 'Data'
-	size += len(b.Data)
+	size += len(b.Data) * 32
 
 	// Field (1) 'Coefficients'
 	size += len(b.Coefficients) * 32
@@ -2411,14 +2421,21 @@ func (b *BeaconBlockChunk) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 
 	// Field (0) 'Data'
 	{
-		elemIndx := hh.Index()
-		byteLen := uint64(len(b.Data))
-		if byteLen > 32768 {
-			err = ssz.ErrIncorrectListSize
+		if size := len(b.Data); size > 32768 {
+			err = ssz.ErrListTooBigFn("--.Data", size, 32768)
 			return
 		}
-		hh.PutBytes(b.Data)
-		hh.MerkleizeWithMixin(elemIndx, byteLen, (32768+31)/32)
+		subIndx := hh.Index()
+		for _, i := range b.Data {
+			if len(i) != 32 {
+				err = ssz.ErrBytesLength
+				return
+			}
+			hh.Append(i)
+		}
+
+		numItems := uint64(len(b.Data))
+		hh.MerkleizeWithMixin(subIndx, numItems, 32768)
 	}
 
 	// Field (1) 'Coefficients'

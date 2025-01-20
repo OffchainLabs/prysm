@@ -25,7 +25,7 @@ option java_package = "org.ethereum.eth.v1alpha1";
 option php_namespace = "Ethereum\\Eth\\v1alpha1";
 
 message BeaconBlockChunk {
-    bytes data = 1 [(ethereum.eth.ext.ssz_max) = "32768"];
+    repeated bytes data = 1 [(ethereum.eth.ext.ssz_size) = "?,32", (ethereum.eth.ext.ssz_max)  = "32768"];
     repeated bytes coefficients = 2 [(ethereum.eth.ext.ssz_size) = "?,32", (ethereum.eth.ext.ssz_max)  = "128"];
     BeaconBlockChunkHeader header = 3;
     bytes signature = 4 [(ethereum.eth.ext.ssz_size) = "96"];

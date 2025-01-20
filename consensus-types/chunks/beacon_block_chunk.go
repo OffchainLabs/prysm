@@ -53,7 +53,20 @@ func (b *BeaconBlockChunk) IsNil() bool {
 	if b.chunk.Header.Commitments == nil {
 		return true
 	}
+	if b.chunk.Data == nil {
+		return true
+	}
 	return b.chunk.Signature == nil
+}
+
+// Data returns the data of the beacon block chunk.
+func (b *BeaconBlockChunk) Data() [][]byte {
+	return b.chunk.Data
+}
+
+// Coefficients returns the coefficients of the beacon block chunk.
+func (b *BeaconBlockChunk) Coefficients() [][]byte {
+	return b.chunk.Coefficients
 }
 
 // Version returns the version of the beacon block chunk.
@@ -118,7 +131,7 @@ func (b *BeaconBlockChunk) SetCoefficients(coefficients [][]byte) {
 }
 
 // SetData sets the data of the beacon block chunk.
-func (b *BeaconBlockChunk) SetData(data []byte) {
+func (b *BeaconBlockChunk) SetData(data [][]byte) {
 	b.chunk.Data = data
 }
 

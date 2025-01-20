@@ -16,6 +16,8 @@ type ReadOnlyBeaconBlockChunk interface {
 	Commitments() [][]byte
 	Signature() [field_params.BLSSignatureLength]byte
 	HeaderRoot() [field_params.RootLength]byte
+	Data() [][]byte
+	Coefficients() [][]byte
 }
 
 type BeaconBlockChunk interface {
@@ -26,6 +28,6 @@ type BeaconBlockChunk interface {
 	SetSignature(sig [96]byte)
 	SetVersion(version int)
 	SetCommitments(commitments [][]byte)
-	SetData(data []byte)
+	SetData(data [][]byte)
 	SetCoefficients(coefficients [][]byte)
 }

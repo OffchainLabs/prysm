@@ -6,6 +6,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
 	core_chunks "github.com/OffchainLabs/prysm/v6/beacon-chain/core/chunks"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync/rlnc"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/chunks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
@@ -26,7 +27,12 @@ func (s *Service) beaconBlockChunkSubscriber(ctx context.Context, msg proto.Mess
 	if chunk.IsNil() {
 		return chunks.ErrNilObject
 	}
-	// TODO: verify if we have the full block, decode and send it to the blockchain package.
+	_, err = s.blockChunkCache.GetBlockData(chunk.Slot(), chunk.ProposerIndex())
+	if err != nil {
+		//nolint:nilerr // Only error is ErrNoData when the node is not full.
+		return nil
+	}
+	// TODO, implement block reconstruction from the byte slice
 	return nil
 }
 
@@ -93,11 +99,14 @@ func (s *Service) validateBeaconBlockChunkPubSub(ctx context.Context, pid peer.I
 	}
 
 	err = s.validateBeaconBlockChunk(ctx, chunk)
-	if err != nil {
+	if errors.Is(err, rlnc.ErrLinearlyDependentMessage) {
+		log.Debug("ignoring linearly dependent message")
+		return pubsub.ValidationIgnore, nil
+	} else if err != nil {
+		// TODO: cook up a slashing object if the error is ErrIncorrectCommitments
 		log.WithError(err).Debug("Could not validate beacon block chunk")
 		return pubsub.ValidationReject, err
 	}
-
 	logFields := logrus.Fields{
 		"chunkSlot":     chunk.Slot(),
 		"proposerIndex": chunk.ProposerIndex(),
@@ -111,14 +120,21 @@ func (s *Service) validateBeaconBlockChunk(ctx context.Context, chunk interfaces
 	if !s.cfg.chain.InForkchoice(chunk.ParentRoot()) {
 		return blockchain.ErrNotDescendantOfFinalized
 	}
-
-	parentState, err := s.cfg.stateGen.StateByRoot(ctx, chunk.ParentRoot())
-	if err != nil {
-		return err
+	err := s.blockChunkCache.AddChunk(chunk)
+	if err == nil {
+		return nil
 	}
-
-	if err := core_chunks.VerifyChunkSignatureUsingCurrentFork(parentState, chunk); err != nil {
-		return err
+	if errors.Is(err, rlnc.ErrSignatureNotVerified) {
+		parentState, err := s.cfg.stateGen.StateByRoot(ctx, chunk.ParentRoot())
+		if err != nil {
+			s.blockChunkCache.RemoveNode(chunk) // Node is guaranteed to have a single chunk
+			return err
+		}
+		if err := core_chunks.VerifyChunkSignatureUsingCurrentFork(parentState, chunk); err != nil {
+			s.blockChunkCache.RemoveNode(chunk) // Node is guaranteed to have a single chunk
+			return err
+		}
+		return nil
 	}
-	return nil
+	return err
 }
