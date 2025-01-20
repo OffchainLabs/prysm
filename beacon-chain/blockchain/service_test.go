@@ -72,8 +72,6 @@ func setupBeaconChain(t *testing.T, beaconDB db.Database) *Service {
 	})
 	require.NoError(t, err)
 
-	clockSync := startup.NewClockSynchronizer()
-
 	web3Service, err = execution.NewService(
 		ctx,
 		execution.WithDatabase(beaconDB),
@@ -106,7 +104,7 @@ func setupBeaconChain(t *testing.T, beaconDB db.Database) *Service {
 		WithAttestationService(attService),
 		WithStateGen(stateGen),
 		WithPayloadIDCache(cache.NewPayloadIDCache()),
-		WithClockSynchronizer(clockSync),
+		WithClockSynchronizer(startup.NewClockSynchronizer()),
 	}
 
 	chainService, err := NewService(ctx, opts...)
