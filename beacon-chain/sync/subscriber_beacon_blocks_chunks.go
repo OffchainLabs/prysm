@@ -138,3 +138,14 @@ func (s *Service) validateBeaconBlockChunk(ctx context.Context, chunk interfaces
 	}
 	return err
 }
+
+// startChunkPruner starts a goroutine that prunes the block chunk cache every epoch.
+func (s *Service) startChunkPruner() {
+	cp := s.cfg.chain.FinalizedCheckpt()
+	fSlot, err := slots.EpochStart(cp.Epoch)
+	if err != nil {
+		log.WithError(err).Debug("could not prune the chunk cache: could not calculate epoch start slot")
+	} else {
+		s.blockChunkCache.Prune(fSlot)
+	}
+}
