@@ -17,6 +17,7 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
+	fastssz "github.com/prysmaticlabs/fastssz"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 )
@@ -119,6 +120,7 @@ func (s *Service) validateBeaconBlockChunkPubSub(ctx context.Context, pid peer.I
 
 	// If the block can be recovered, send it to the blockchain package
 	go s.reconstructBlockFromChunk(ctx, chunk)
+	go s.broadcastBlockChunk(ctx, chunk)
 	return pubsub.ValidationIgnore, nil
 }
 
@@ -164,12 +166,27 @@ func (s *Service) reconstructBlockFromChunk(ctx context.Context, chunk interface
 
 	msg := p2p.GossipTopicMappings(p2p.BlockSubnetTopicFormat, slots.ToEpoch(chunk.Slot()))
 	e := &encoder.SszNetworkEncoder{}
-
-	if err := e.DecodeGossip(data, msg); err != nil {
+	msgSSZ, ok := msg.(fastssz.Unmarshaler)
+	if !ok {
+		logrus.Error("Could not convert message to fastssz.Unmarshaler")
+		return
+	}
+	if err := e.DecodeGossip(data, msgSSZ); err != nil {
 		logrus.WithError(err).Error("Could not decode block data")
 		return
 	}
 	if err := s.beaconBlockSubscriber(ctx, msg); err != nil {
 		logrus.WithError(err).Error("Could not handle p2p pubsub")
+	}
+}
+
+func (s *Service) broadcastBlockChunk(ctx context.Context, chunk interfaces.ReadOnlyBeaconBlockChunk) {
+	msg, err := s.blockChunkCache.PrepareMessage(chunk)
+	if err != nil {
+		logrus.WithError(err).Error("could not broadcast chunk")
+		return
+	}
+	if err := s.cfg.p2p.Broadcast(ctx, msg); err != nil {
+		logrus.WithError(err).Error("could not broadcast chunk")
 	}
 }

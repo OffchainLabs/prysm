@@ -34,7 +34,12 @@ func (b *BeaconBlockChunk) ParentRoot() [32]byte {
 
 // Commitments returns the commitments of the beacon block chunk.
 func (b *BeaconBlockChunk) Commitments() [][]byte {
-	return b.chunk.Header.Commitments
+	cmts := make([][]byte, len(b.chunk.Header.Commitments))
+	for i, cmt := range b.chunk.Header.Commitments {
+		cmts[i] = make([]byte, len(cmt))
+		copy(cmts[i], cmt)
+	}
+	return cmts
 }
 
 // Signature returns the signature of the beacon block chunk.
@@ -61,12 +66,22 @@ func (b *BeaconBlockChunk) IsNil() bool {
 
 // Data returns the data of the beacon block chunk.
 func (b *BeaconBlockChunk) Data() [][]byte {
-	return b.chunk.Data
+	data := make([][]byte, len(b.chunk.Data))
+	for i, d := range b.chunk.Data {
+		data[i] = make([]byte, len(d))
+		copy(data[i], d)
+	}
+	return data
 }
 
 // Coefficients returns the coefficients of the beacon block chunk.
 func (b *BeaconBlockChunk) Coefficients() [][]byte {
-	return b.chunk.Coefficients
+	coefficients := make([][]byte, len(b.chunk.Coefficients))
+	for i, c := range b.chunk.Coefficients {
+		coefficients[i] = make([]byte, len(c))
+		copy(coefficients[i], c)
+	}
+	return coefficients
 }
 
 // Version returns the version of the beacon block chunk.
@@ -77,6 +92,17 @@ func (b *BeaconBlockChunk) Version() int {
 // HeaderRoot returns the root of the beacon block chunk header
 func (b *BeaconBlockChunk) HeaderRoot() [32]byte {
 	return b.headerRoot
+}
+
+// Header returns a copy of the header of the beacon block chunk.
+func (b *BeaconBlockChunk) Header() *ethpb.BeaconBlockChunkHeader {
+	root := b.ParentRoot()
+	return &ethpb.BeaconBlockChunkHeader{
+		Slot:          b.chunk.Header.Slot,
+		ProposerIndex: b.chunk.Header.ProposerIndex,
+		ParentRoot:    root[:],
+		Commitments:   b.Commitments(),
+	}
 }
 
 func NewBlockChunk(i interface{}) (*BeaconBlockChunk, error) {

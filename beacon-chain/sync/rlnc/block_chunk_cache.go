@@ -3,9 +3,10 @@ package rlnc
 import (
 	"sync"
 
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 )
 
 var numChunks = uint(10)
@@ -81,4 +82,29 @@ func (b *BlockChunkCache) RemoveNode(chunk interfaces.ReadOnlyBeaconBlockChunk) 
 		return
 	}
 	delete(b.nodes[chunk.Slot()], chunk.ProposerIndex())
+}
+
+// PrepareMessage prepares a message to broadcast after receiving the given chunk.
+func (b *BlockChunkCache) PrepareMessage(chunk interfaces.ReadOnlyBeaconBlockChunk) (*ethpb.BeaconBlockChunk, error) {
+	b.Lock()
+	defer b.Unlock()
+
+	if _, ok := b.nodes[chunk.Slot()]; !ok {
+		return nil, ErrNoData
+	}
+	if _, ok := b.nodes[chunk.Slot()][chunk.ProposerIndex()]; !ok {
+		return nil, ErrNoData
+	}
+	node := b.nodes[chunk.Slot()][chunk.ProposerIndex()]
+	msg, err := node.prepareMessage()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to prepare message")
+	}
+	signature := chunk.Signature()
+	return &ethpb.BeaconBlockChunk{
+		Data:         msg.Data(),
+		Coefficients: msg.Coefficients(),
+		Header:       chunk.Header(),
+		Signature:    signature[:],
+	}, nil
 }

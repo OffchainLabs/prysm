@@ -1,9 +1,9 @@
 package rlnc
 
 import (
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/crypto/rand"
 	ristretto "github.com/gtank/ristretto255"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	"github.com/sirupsen/logrus"
 )
 
@@ -109,4 +109,34 @@ func dataToElements(data [][]byte) ([]*ristretto.Element, error) {
 		}
 	}
 	return ret, nil
+}
+
+// Data returns the data of the message as serialized bytes
+func (m *message) Data() [][]byte {
+	data := make([][]byte, len(m.chunk.data))
+	for i, d := range m.chunk.data {
+		data[i] = make([]byte, 32)
+		d.Encode(data[i])
+	}
+	return data
+}
+
+// Coefficients returns the coefficients of the message as serialized bytes
+func (m *message) Coefficients() [][]byte {
+	coefficients := make([][]byte, len(m.chunk.coefficients))
+	for i, c := range m.chunk.coefficients {
+		coefficients[i] = make([]byte, 32)
+		c.Encode(coefficients[i])
+	}
+	return coefficients
+}
+
+// Commitments returns the commitments of the message as serialized bytes
+func (m *message) Commitments() [][]byte {
+	commitments := make([][]byte, len(m.commitments))
+	for i, c := range m.commitments {
+		commitments[i] = make([]byte, 32)
+		c.Encode(commitments[i])
+	}
+	return commitments
 }
