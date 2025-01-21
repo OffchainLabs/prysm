@@ -126,7 +126,7 @@ func (s *Service) reconstructDataColumns(ctx context.Context, verifiedRODataColu
 	// Update reconstruction metrics
 	dataColumnReconstructionHistogram.Observe(float64(time.Since(startTime).Milliseconds()))
 	dataColumnReconstructionCounter.Add(float64(peerdas.CellsCount(recoveredCellsAndProofs)))
-	
+
 	log.WithField("root", fmt.Sprintf("%x", blockRoot)).Debug("Data columns reconstructed and saved successfully")
 
 	// Schedule the broadcast.
