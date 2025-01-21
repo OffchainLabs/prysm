@@ -1,4 +1,4 @@
-package v1
+package types
 
 import (
 	"fmt"
@@ -44,6 +44,22 @@ func MapAggregateAndProof(from *ethpb.AggregateAttestationAndProof) (*AggregateA
 	}, nil
 }
 
+// MapAggregateAndProofElectra maps the eth2.AggregateAndProofElectra proto to the Web3Signer spec.
+func MapAggregateAndProofElectra(from *ethpb.AggregateAttestationAndProofElectra) (*AggregateAndProofElectra, error) {
+	if from == nil {
+		return nil, fmt.Errorf("AggregateAttestationAndProof is nil")
+	}
+	aggregate, err := MapAttestationElectra(from.Aggregate)
+	if err != nil {
+		return nil, err
+	}
+	return &AggregateAndProofElectra{
+		AggregatorIndex: fmt.Sprint(from.AggregatorIndex),
+		Aggregate:       aggregate,
+		SelectionProof:  from.SelectionProof,
+	}, nil
+}
+
 // MapAttestation maps the eth2.Attestation proto to the Web3Signer spec.
 func MapAttestation(attestation *ethpb.Attestation) (*Attestation, error) {
 	if attestation == nil {
@@ -60,6 +76,29 @@ func MapAttestation(attestation *ethpb.Attestation) (*Attestation, error) {
 		AggregationBits: []byte(attestation.AggregationBits),
 		Data:            data,
 		Signature:       attestation.Signature,
+	}, nil
+}
+
+// MapAttestationElectra maps the eth2.Attestation proto to the Web3Signer spec.
+func MapAttestationElectra(attestation *ethpb.AttestationElectra) (*AttestationElectra, error) {
+	if attestation == nil {
+		return nil, fmt.Errorf("attestation is nil")
+	}
+	if attestation.AggregationBits == nil {
+		return nil, fmt.Errorf("aggregation bits in attestation is nil")
+	}
+	if attestation.CommitteeBits == nil {
+		return nil, fmt.Errorf("committee bits in attestation is nil")
+	}
+	data, err := MapAttestationData(attestation.Data)
+	if err != nil {
+		return nil, err
+	}
+	return &AttestationElectra{
+		AggregationBits: []byte(attestation.AggregationBits),
+		Data:            data,
+		Signature:       attestation.Signature,
+		CommitteeBits:   attestation.CommitteeBits.Bytes(),
 	}, nil
 }
 

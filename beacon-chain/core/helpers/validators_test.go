@@ -910,13 +910,15 @@ func TestProposerIndexFromCheckpoint(t *testing.T) {
 func TestHasETH1WithdrawalCredentials(t *testing.T) {
 	creds := []byte{0xFA, 0xCC}
 	v := &ethpb.Validator{WithdrawalCredentials: creds}
-	require.Equal(t, false, helpers.HasETH1WithdrawalCredential(v))
+	roV, err := state_native.NewValidator(v)
+	require.NoError(t, err)
+	require.Equal(t, false, roV.HasETH1WithdrawalCredentials())
 	creds = []byte{params.BeaconConfig().ETH1AddressWithdrawalPrefixByte, 0xCC}
 	v = &ethpb.Validator{WithdrawalCredentials: creds}
-	require.Equal(t, true, helpers.HasETH1WithdrawalCredential(v))
+	roV, err = state_native.NewValidator(v)
+	require.NoError(t, err)
+	require.Equal(t, true, roV.HasETH1WithdrawalCredentials())
 	// No Withdrawal cred
-	v = &ethpb.Validator{}
-	require.Equal(t, false, helpers.HasETH1WithdrawalCredential(v))
 }
 
 func TestHasCompoundingWithdrawalCredential(t *testing.T) {
@@ -931,11 +933,12 @@ func TestHasCompoundingWithdrawalCredential(t *testing.T) {
 		{"Does not have compounding withdrawal credential",
 			&ethpb.Validator{WithdrawalCredentials: bytesutil.PadTo([]byte{0x00}, 32)},
 			false},
-		{"Handles nil case", nil, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, helpers.HasCompoundingWithdrawalCredential(tt.validator))
+			roV, err := state_native.NewValidator(tt.validator)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, roV.HasCompoundingWithdrawalCredentials())
 		})
 	}
 }
@@ -955,11 +958,12 @@ func TestHasExecutionWithdrawalCredentials(t *testing.T) {
 		{"Does not have compounding withdrawal credential or eth1 withdrawal credential",
 			&ethpb.Validator{WithdrawalCredentials: bytesutil.PadTo([]byte{0x00}, 32)},
 			false},
-		{"Handles nil case", nil, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, helpers.HasExecutionWithdrawalCredentials(tt.validator))
+			roV, err := state_native.NewValidator(tt.validator)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, roV.HasExecutionWithdrawalCredentials())
 		})
 	}
 }

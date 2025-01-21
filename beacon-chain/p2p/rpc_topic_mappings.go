@@ -90,18 +90,10 @@ const (
 	RPCBlocksByRootTopicV2 = protocolPrefix + BeaconBlocksByRootsMessageName + SchemaVersionV2
 	// RPCMetaDataTopicV2 defines the v2 topic for the metadata rpc method.
 	RPCMetaDataTopicV2 = protocolPrefix + MetadataMessageName + SchemaVersionV2
-	// RPCBlobSidecarsByRangeTopicV2 defines the v2 topic for the blob sidecars by range rpc method.
-	RPCBlobSidecarsByRangeTopicV2 = protocolPrefix + BlobSidecarsByRangeName + SchemaVersionV2
-	// RPCBlobSidecarsByRootTopicV2 defines the v2 topic for the blob sidecars by root rpc method.
-	RPCBlobSidecarsByRootTopicV2 = protocolPrefix + BlobSidecarsByRootName + SchemaVersionV2
 
 	// V3 RPC Topics
 	// RPCMetaDataTopicV3 defines the v3 topic for the metadata rpc method.
 	RPCMetaDataTopicV3 = protocolPrefix + MetadataMessageName + SchemaVersionV3
-	// RPCBlobSidecarsByRangeTopicV3 defines the v3 topic for the blob sidecars by range rpc method.
-	RPCBlobSidecarsByRangeTopicV3 = protocolPrefix + BlobSidecarsByRangeName + SchemaVersionV3
-	// RPCBlobSidecarsByRootTopicV3 defines the v3 topic for the blob sidecars by root rpc method.
-	RPCBlobSidecarsByRootTopicV3 = protocolPrefix + BlobSidecarsByRootName + SchemaVersionV3
 )
 
 // RPC errors for topic parsing.

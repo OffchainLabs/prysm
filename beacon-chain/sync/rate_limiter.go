@@ -88,8 +88,6 @@ func newRateLimiter(p2pProvider p2p.P2P) *limiter {
 	topicMap[addEncoding(p2p.RPCBlobSidecarsByRootTopicV1)] = blobCollector
 	// BlobSidecarsByRangeV1
 	topicMap[addEncoding(p2p.RPCBlobSidecarsByRangeTopicV1)] = blobCollector
-	topicMap[addEncoding(p2p.RPCBlobSidecarsByRootTopicV2)] = blobCollector
-	topicMap[addEncoding(p2p.RPCBlobSidecarsByRangeTopicV2)] = blobCollector
 
 	// DataColumnSidecarsByRootV1
 	topicMap[addEncoding(p2p.RPCDataColumnSidecarsByRootTopicV1)] = columnCollector

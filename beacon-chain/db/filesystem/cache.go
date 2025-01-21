@@ -36,7 +36,8 @@ func (s BlobStorageSummary) HasIndex(idx uint64) bool {
 // HasDataColumnIndex true if the DataColumnSidecar at the given index is available in the filesystem.
 func (s BlobStorageSummary) HasDataColumnIndex(idx uint64) bool {
 	// Protect from panic, but assume callers are sophisticated enough to not need an error telling them they have an invalid idx.
-	if idx >= fieldparams.NumberOfColumns {
+	numberOfColumns := params.BeaconConfig().NumberOfColumns
+	if idx >= numberOfColumns {
 		return false
 	}
 
@@ -66,7 +67,7 @@ func (s BlobStorageSummary) AllAvailable(count int) bool {
 
 // AllDataColumnsAvailable returns true if we have all datacolumns for corresponding indices.
 func (s BlobStorageSummary) AllDataColumnsAvailable(indices map[uint64]bool) bool {
-	if uint64(len(indices)) > fieldparams.NumberOfColumns {
+	if len(indices) > len(s.mask) {
 		return false
 	}
 
@@ -119,7 +120,8 @@ func (s *blobStorageCache) ensure(key [32]byte, slot primitives.Slot, idx uint64
 	v.slot = slot
 	if v.mask == nil {
 		// TODO: Separate blobs from data columns
-		v.mask = make(blobIndexMask, fieldparams.NumberOfColumns)
+		numberOfColumns := params.BeaconConfig().NumberOfColumns
+		v.mask = make(blobIndexMask, numberOfColumns)
 	}
 	if !v.mask[idx] {
 		s.updateMetrics(1)

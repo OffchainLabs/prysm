@@ -10,11 +10,11 @@ import (
 )
 
 func GenerateCommitmentAndProof(blob GoKZG.Blob) (GoKZG.KZGCommitment, GoKZG.KZGProof, error) {
-	commitment, err := kzgContext.BlobToKZGCommitment(blob, 0)
+	commitment, err := kzgContext.BlobToKZGCommitment(&blob, 0)
 	if err != nil {
 		return GoKZG.KZGCommitment{}, GoKZG.KZGProof{}, err
 	}
-	proof, err := kzgContext.ComputeBlobKZGProof(blob, commitment, 0)
+	proof, err := kzgContext.ComputeBlobKZGProof(&blob, commitment, 0)
 	if err != nil {
 		return GoKZG.KZGCommitment{}, GoKZG.KZGProof{}, err
 	}
@@ -31,7 +31,7 @@ func TestBytesToAny(t *testing.T) {
 	blob := GoKZG.Blob{0x01, 0x02}
 	commitment := GoKZG.KZGCommitment{0x01, 0x02}
 	proof := GoKZG.KZGProof{0x01, 0x02}
-	require.DeepEqual(t, blob, bytesToBlob(bytes))
+	require.DeepEqual(t, blob, *bytesToBlob(bytes))
 	require.DeepEqual(t, commitment, bytesToCommitment(bytes))
 	require.DeepEqual(t, proof, bytesToKZGProof(bytes))
 }

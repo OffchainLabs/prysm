@@ -190,9 +190,16 @@ func (s *Service) validateAggregatedAtt(ctx context.Context, signed ethpb.Signed
 		return result, err
 	}
 
-	committee, result, err := s.validateBitLength(ctx, bs, aggregate.GetData().Slot, committeeIndex, aggregate.GetAggregationBits())
-	if result != pubsub.ValidationAccept {
-		return result, err
+	committee, err := helpers.BeaconCommitteeFromState(ctx, bs, aggregate.GetData().Slot, committeeIndex)
+	if err != nil {
+		tracing.AnnotateError(span, err)
+		return pubsub.ValidationIgnore, err
+	}
+
+	// Verify number of aggregation bits matches the committee size.
+	if err = helpers.VerifyBitfieldLength(aggregate.GetAggregationBits(), uint64(len(committee))); err != nil {
+		tracing.AnnotateError(span, err)
+		return pubsub.ValidationReject, err
 	}
 
 	// Verify validator index is within the beacon committee.

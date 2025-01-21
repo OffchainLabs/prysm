@@ -39,7 +39,8 @@ type CellsAndProofs struct {
 }
 
 func BlobToKZGCommitment(blob *Blob) (Commitment, error) {
-	comm, err := kzg4844.BlobToCommitment(kzg4844.Blob(*blob))
+	kzgBlob := kzg4844.Blob(*blob)
+	comm, err := kzg4844.BlobToCommitment(&kzgBlob)
 	if err != nil {
 		return Commitment{}, err
 	}
@@ -47,7 +48,8 @@ func BlobToKZGCommitment(blob *Blob) (Commitment, error) {
 }
 
 func ComputeBlobKZGProof(blob *Blob, commitment Commitment) (Proof, error) {
-	proof, err := kzg4844.ComputeBlobProof(kzg4844.Blob(*blob), kzg4844.Commitment(commitment))
+	kzgBlob := kzg4844.Blob(*blob)
+	proof, err := kzg4844.ComputeBlobProof(&kzgBlob, kzg4844.Commitment(commitment))
 	if err != nil {
 		return [48]byte{}, err
 	}

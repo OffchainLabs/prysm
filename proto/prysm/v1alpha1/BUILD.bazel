@@ -149,6 +149,7 @@ ssz_deneb_objs = [
 
 ssz_electra_objs = [
     "AggregateAttestationAndProofElectra",
+    "AggregateAttestationAndProofSingle",
     "AttestationElectra",
     "AttesterSlashingElectra",
     "BeaconBlockElectra",
@@ -168,6 +169,7 @@ ssz_electra_objs = [
     "PendingConsolidation",
     "PendingPartialWithdrawal",
     "SignedAggregateAttestationAndProofElectra",
+    "SignedAggregateAttestationAndProofSingle",
     "SignedBeaconBlockContentsElectra",
     "SignedBeaconBlockElectra",
     "SignedBlindedBeaconBlockElectra",
@@ -384,8 +386,8 @@ ssz_proto_files(
         "beacon_block.proto",
         "beacon_state.proto",
         "blobs.proto",
-        "light_client.proto",
         "data_columns.proto",
+        "light_client.proto",
         "sync_committee.proto",
         "withdrawals.proto",
     ],

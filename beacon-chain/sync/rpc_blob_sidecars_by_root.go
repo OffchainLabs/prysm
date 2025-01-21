@@ -111,14 +111,6 @@ func validateBlobByRootRequest(blobIdents types.BlobSidecarsByRootReq, slot prim
 	epoch := slots.ToEpoch(slot)
 	blobIdentCount := uint64(len(blobIdents))
 
-	if epoch >= beaconConfig.FuluForkEpoch {
-		if blobIdentCount > beaconConfig.MaxRequestBlobSidecarsFulu {
-			return types.ErrMaxBlobReqExceeded
-		}
-
-		return nil
-	}
-
 	if epoch >= beaconConfig.ElectraForkEpoch {
 		if blobIdentCount > beaconConfig.MaxRequestBlobSidecarsElectra {
 			return types.ErrMaxBlobReqExceeded

@@ -37,7 +37,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/fjl/memsize/memsizeui"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
@@ -45,8 +44,6 @@ import (
 // Handler is the global debugging handler.
 var Handler = new(HandlerT)
 
-// Memsize is the memsizeui Handler(?).
-var Memsize memsizeui.Handler
 var (
 	// PProfFlag to enable pprof HTTP server.
 	PProfFlag = &cli.BoolFlag{
@@ -351,7 +348,6 @@ func Setup(ctx *cli.Context) error {
 }
 
 func startPProf(address string) {
-	http.Handle("/memsize/", http.StripPrefix("/memsize", &Memsize))
 	log.WithField("addr", fmt.Sprintf("http://%s/debug/pprof", address)).Info("Starting pprof server")
 	go func() {
 		srv := &http.Server{

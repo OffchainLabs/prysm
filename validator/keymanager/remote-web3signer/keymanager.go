@@ -24,10 +24,11 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/io/file"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	validatorpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/validator-client"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/validator/accounts/petnames"
 	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
 	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/remote-web3signer/internal"
-	web3signerv1 "github.com/prysmaticlabs/prysm/v5/validator/keymanager/remote-web3signer/v1"
+	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/remote-web3signer/types"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/exp/maps"
 )
@@ -405,7 +406,10 @@ func getSignRequestJson(ctx context.Context, validator *validator.Validate, requ
 	case *validatorpb.SignRequest_AttestationData:
 		return handleAttestationData(ctx, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_AggregateAttestationAndProof:
+		// TODO: update to V2 sometime after release
 		return handleAggregateAttestationAndProof(ctx, validator, request, genesisValidatorsRoot)
+	case *validatorpb.SignRequest_AggregateAttestationAndProofElectra:
+		return handleAggregateAttestationAndProofV2(ctx, version.Electra, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_Slot:
 		return handleAggregationSlot(ctx, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_BlockAltair:
@@ -422,6 +426,10 @@ func getSignRequestJson(ctx context.Context, validator *validator.Validate, requ
 		return handleBlockDeneb(ctx, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_BlindedBlockDeneb:
 		return handleBlindedBlockDeneb(ctx, validator, request, genesisValidatorsRoot)
+	case *validatorpb.SignRequest_BlockElectra:
+		return handleBlockElectra(ctx, validator, request, genesisValidatorsRoot)
+	case *validatorpb.SignRequest_BlindedBlockElectra:
+		return handleBlindedBlockElectra(ctx, validator, request, genesisValidatorsRoot)
 	// We do not support "DEPOSIT" type.
 	/*
 		case *validatorpb.:
@@ -447,7 +455,7 @@ func getSignRequestJson(ctx context.Context, validator *validator.Validate, requ
 }
 
 func handleBlock(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	bockSignRequest, err := web3signerv1.GetBlockSignRequest(request, genesisValidatorsRoot)
+	bockSignRequest, err := types.GetBlockSignRequest(request, genesisValidatorsRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -459,7 +467,7 @@ func handleBlock(ctx context.Context, validator *validator.Validate, request *va
 }
 
 func handleAttestationData(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	attestationSignRequest, err := web3signerv1.GetAttestationSignRequest(request, genesisValidatorsRoot)
+	attestationSignRequest, err := types.GetAttestationSignRequest(request, genesisValidatorsRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -471,7 +479,7 @@ func handleAttestationData(ctx context.Context, validator *validator.Validate, r
 }
 
 func handleAggregateAttestationAndProof(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	aggregateAndProofSignRequest, err := web3signerv1.GetAggregateAndProofSignRequest(request, genesisValidatorsRoot)
+	aggregateAndProofSignRequest, err := types.GetAggregateAndProofSignRequest(request, genesisValidatorsRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -482,8 +490,20 @@ func handleAggregateAttestationAndProof(ctx context.Context, validator *validato
 	return json.Marshal(aggregateAndProofSignRequest)
 }
 
+func handleAggregateAttestationAndProofV2(ctx context.Context, fork int, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
+	aggregateAndProofSignRequestV2, err := types.GetAggregateAndProofV2SignRequest(fork, request, genesisValidatorsRoot)
+	if err != nil {
+		return nil, err
+	}
+	if err = validator.StructCtx(ctx, aggregateAndProofSignRequestV2); err != nil {
+		return nil, err
+	}
+	aggregateAndProofSignRequestsTotal.Inc()
+	return json.Marshal(aggregateAndProofSignRequestV2)
+}
+
 func handleAggregationSlot(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	aggregationSlotSignRequest, err := web3signerv1.GetAggregationSlotSignRequest(request, genesisValidatorsRoot)
+	aggregationSlotSignRequest, err := types.GetAggregationSlotSignRequest(request, genesisValidatorsRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -495,7 +515,7 @@ func handleAggregationSlot(ctx context.Context, validator *validator.Validate, r
 }
 
 func handleBlockAltair(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	blockv2AltairSignRequest, err := web3signerv1.GetBlockAltairSignRequest(request, genesisValidatorsRoot)
+	blockv2AltairSignRequest, err := types.GetBlockAltairSignRequest(request, genesisValidatorsRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -507,7 +527,7 @@ func handleBlockAltair(ctx context.Context, validator *validator.Validate, reque
 }
 
 func handleBlockBellatrix(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	blockv2BellatrixSignRequest, err := web3signerv1.GetBlockV2BlindedSignRequest(request, genesisValidatorsRoot)
+	blockv2BellatrixSignRequest, err := types.GetBlockV2BlindedSignRequest(request, genesisValidatorsRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -519,7 +539,7 @@ func handleBlockBellatrix(ctx context.Context, validator *validator.Validate, re
 }
 
 func handleBlindedBlockBellatrix(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	blindedBlockv2SignRequest, err := web3signerv1.GetBlockV2BlindedSignRequest(request, genesisValidatorsRoot)
+	blindedBlockv2SignRequest, err := types.GetBlockV2BlindedSignRequest(request, genesisValidatorsRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -531,7 +551,7 @@ func handleBlindedBlockBellatrix(ctx context.Context, validator *validator.Valid
 }
 
 func handleBlockCapella(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	blockv2CapellaSignRequest, err := web3signerv1.GetBlockV2BlindedSignRequest(request, genesisValidatorsRoot)
+	blockv2CapellaSignRequest, err := types.GetBlockV2BlindedSignRequest(request, genesisValidatorsRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -543,7 +563,7 @@ func handleBlockCapella(ctx context.Context, validator *validator.Validate, requ
 }
 
 func handleBlindedBlockCapella(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	blindedBlockv2CapellaSignRequest, err := web3signerv1.GetBlockV2BlindedSignRequest(request, genesisValidatorsRoot)
+	blindedBlockv2CapellaSignRequest, err := types.GetBlockV2BlindedSignRequest(request, genesisValidatorsRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -555,7 +575,7 @@ func handleBlindedBlockCapella(ctx context.Context, validator *validator.Validat
 }
 
 func handleBlockDeneb(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	blockv2DenebSignRequest, err := web3signerv1.GetBlockV2BlindedSignRequest(request, genesisValidatorsRoot)
+	blockv2DenebSignRequest, err := types.GetBlockV2BlindedSignRequest(request, genesisValidatorsRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -567,7 +587,7 @@ func handleBlockDeneb(ctx context.Context, validator *validator.Validate, reques
 }
 
 func handleBlindedBlockDeneb(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	blindedBlockv2DenebSignRequest, err := web3signerv1.GetBlockV2BlindedSignRequest(request, genesisValidatorsRoot)
+	blindedBlockv2DenebSignRequest, err := types.GetBlockV2BlindedSignRequest(request, genesisValidatorsRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -578,8 +598,32 @@ func handleBlindedBlockDeneb(ctx context.Context, validator *validator.Validate,
 	return json.Marshal(blindedBlockv2DenebSignRequest)
 }
 
+func handleBlockElectra(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
+	blockv2ElectraSignRequest, err := types.GetBlockV2BlindedSignRequest(request, genesisValidatorsRoot)
+	if err != nil {
+		return nil, err
+	}
+	if err = validator.StructCtx(ctx, blockv2ElectraSignRequest); err != nil {
+		return nil, err
+	}
+	remoteBlockSignRequestsTotal.WithLabelValues("electra", "false").Inc()
+	return json.Marshal(blockv2ElectraSignRequest)
+}
+
+func handleBlindedBlockElectra(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
+	blindedBlockv2ElectraSignRequest, err := types.GetBlockV2BlindedSignRequest(request, genesisValidatorsRoot)
+	if err != nil {
+		return nil, err
+	}
+	if err = validator.StructCtx(ctx, blindedBlockv2ElectraSignRequest); err != nil {
+		return nil, err
+	}
+	remoteBlockSignRequestsTotal.WithLabelValues("electra", "true").Inc()
+	return json.Marshal(blindedBlockv2ElectraSignRequest)
+}
+
 func handleRandaoReveal(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	randaoRevealSignRequest, err := web3signerv1.GetRandaoRevealSignRequest(request, genesisValidatorsRoot)
+	randaoRevealSignRequest, err := types.GetRandaoRevealSignRequest(request, genesisValidatorsRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -591,7 +635,7 @@ func handleRandaoReveal(ctx context.Context, validator *validator.Validate, requ
 }
 
 func handleVoluntaryExit(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	voluntaryExitRequest, err := web3signerv1.GetVoluntaryExitSignRequest(request, genesisValidatorsRoot)
+	voluntaryExitRequest, err := types.GetVoluntaryExitSignRequest(request, genesisValidatorsRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -603,7 +647,7 @@ func handleVoluntaryExit(ctx context.Context, validator *validator.Validate, req
 }
 
 func handleSyncMessageBlockRoot(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	syncCommitteeMessageRequest, err := web3signerv1.GetSyncCommitteeMessageSignRequest(request, genesisValidatorsRoot)
+	syncCommitteeMessageRequest, err := types.GetSyncCommitteeMessageSignRequest(request, genesisValidatorsRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -615,7 +659,7 @@ func handleSyncMessageBlockRoot(ctx context.Context, validator *validator.Valida
 }
 
 func handleSyncAggregatorSelectionData(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	syncCommitteeSelectionProofRequest, err := web3signerv1.GetSyncCommitteeSelectionProofSignRequest(request, genesisValidatorsRoot)
+	syncCommitteeSelectionProofRequest, err := types.GetSyncCommitteeSelectionProofSignRequest(request, genesisValidatorsRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -627,7 +671,7 @@ func handleSyncAggregatorSelectionData(ctx context.Context, validator *validator
 }
 
 func handleContributionAndProof(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	contributionAndProofRequest, err := web3signerv1.GetSyncCommitteeContributionAndProofSignRequest(request, genesisValidatorsRoot)
+	contributionAndProofRequest, err := types.GetSyncCommitteeContributionAndProofSignRequest(request, genesisValidatorsRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -639,7 +683,7 @@ func handleContributionAndProof(ctx context.Context, validator *validator.Valida
 }
 
 func handleRegistration(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest) ([]byte, error) {
-	validatorRegistrationRequest, err := web3signerv1.GetValidatorRegistrationSignRequest(request)
+	validatorRegistrationRequest, err := types.GetValidatorRegistrationSignRequest(request)
 	if err != nil {
 		return nil, err
 	}

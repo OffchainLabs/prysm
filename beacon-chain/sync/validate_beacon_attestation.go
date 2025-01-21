@@ -9,7 +9,6 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/go-bitfield"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
@@ -71,14 +70,6 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(ctx context.Context, p
 	if data.Slot == 0 {
 		return pubsub.ValidationIgnore, nil
 	}
-	// Broadcast the unaggregated attestation on a feed to notify other services in the beacon node
-	// of a received unaggregated attestation.
-	s.cfg.attestationNotifier.OperationFeed().Send(&feed.Event{
-		Type: operation.UnaggregatedAttReceived,
-		Data: &operation.UnAggregatedAttReceivedData{
-			Attestation: att,
-		},
-	})
 
 	// Attestation's slot is within ATTESTATION_PROPAGATION_SLOT_RANGE and early attestation
 	// processing tolerance.
@@ -91,14 +82,7 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(ctx context.Context, p
 		return pubsub.ValidationReject, err
 	}
 
-	var validationRes pubsub.ValidationResult
-
-	committeeIndex, result, err := s.validateCommitteeIndex(ctx, att)
-	if result != pubsub.ValidationAccept {
-		wrappedErr := errors.Wrapf(err, "could not validate committee index for %s version", version.String(att.Version()))
-		tracing.AnnotateError(span, wrappedErr)
-		return result, wrappedErr
-	}
+	committeeIndex := att.GetCommitteeIndex()
 
 	if !features.Get().EnableSlasher {
 		// Verify this the first attestation received for the participating validator for the slot.
@@ -115,33 +99,19 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(ctx context.Context, p
 		}
 	}
 
+	var validationRes pubsub.ValidationResult
+
 	// Verify the block being voted and the processed state is in beaconDB and the block has passed validation if it's in the beaconDB.
 	blockRoot := bytesutil.ToBytes32(data.BeaconBlockRoot)
 	if !s.hasBlockAndState(ctx, blockRoot) {
-		// A node doesn't have the block, it'll request from peer while saving the pending attestation to a queue.
-		if att.Version() >= version.Electra {
-			a, ok := att.(*eth.AttestationElectra)
-			// This will never fail in practice because we asserted the version
-			if !ok {
-				return pubsub.ValidationIgnore, fmt.Errorf("attestation has wrong type (expected %T, got %T)", &eth.AttestationElectra{}, att)
-			}
-			s.savePendingAtt(&eth.SignedAggregateAttestationAndProofElectra{Message: &eth.AggregateAttestationAndProofElectra{Aggregate: a}})
-		} else {
-			a, ok := att.(*eth.Attestation)
-			// This will never fail in practice because we asserted the version
-			if !ok {
-				return pubsub.ValidationIgnore, fmt.Errorf("attestation has wrong type (expected %T, got %T)", &eth.Attestation{}, att)
-			}
-			s.savePendingAtt(&eth.SignedAggregateAttestationAndProof{Message: &eth.AggregateAttestationAndProof{Aggregate: a}})
-		}
-		return pubsub.ValidationIgnore, nil
+		return s.saveToPendingAttPool(att)
 	}
 
 	if !s.cfg.chain.InForkchoice(bytesutil.ToBytes32(data.BeaconBlockRoot)) {
 		tracing.AnnotateError(span, blockchain.ErrNotDescendantOfFinalized)
 		return pubsub.ValidationIgnore, blockchain.ErrNotDescendantOfFinalized
 	}
-	if err := s.cfg.chain.VerifyLmdFfgConsistency(ctx, att); err != nil {
+	if err = s.cfg.chain.VerifyLmdFfgConsistency(ctx, att); err != nil {
 		tracing.AnnotateError(span, err)
 		attBadLmdConsistencyCount.Inc()
 		return pubsub.ValidationReject, err
@@ -156,6 +126,25 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(ctx context.Context, p
 	validationRes, err = s.validateUnaggregatedAttTopic(ctx, att, preState, *msg.Topic)
 	if validationRes != pubsub.ValidationAccept {
 		return validationRes, err
+	}
+
+	committee, err := helpers.BeaconCommitteeFromState(ctx, preState, att.GetData().Slot, committeeIndex)
+	if err != nil {
+		tracing.AnnotateError(span, err)
+		return pubsub.ValidationIgnore, err
+	}
+
+	validationRes, err = validateAttesterData(ctx, att, committee)
+	if validationRes != pubsub.ValidationAccept {
+		return validationRes, err
+	}
+
+	if att.Version() >= version.Electra {
+		singleAtt, ok := att.(*eth.SingleAttestation)
+		if !ok {
+			return pubsub.ValidationIgnore, fmt.Errorf("attestation has wrong type (expected %T, got %T)", &eth.SingleAttestation{}, att)
+		}
+		att = singleAtt.ToAttestationElectra(committee)
 	}
 
 	validationRes, err = s.validateUnaggregatedAttWithState(ctx, att, preState)
@@ -192,6 +181,15 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(ctx context.Context, p
 		}()
 	}
 
+	// Broadcast the unaggregated attestation on a feed to notify other services in the beacon node
+	// of a received unaggregated attestation.
+	s.cfg.attestationNotifier.OperationFeed().Send(&feed.Event{
+		Type: operation.UnaggregatedAttReceived,
+		Data: &operation.UnAggregatedAttReceivedData{
+			Attestation: att,
+		},
+	})
+
 	s.setSeenCommitteeIndicesSlot(data.Slot, committeeIndex, att.GetAggregationBits())
 
 	msg.ValidatorData = att
@@ -227,44 +225,39 @@ func (s *Service) validateCommitteeIndexAndCount(
 	a eth.Att,
 	bs state.ReadOnlyBeaconState,
 ) (primitives.CommitteeIndex, uint64, pubsub.ValidationResult, error) {
-	ci, result, err := s.validateCommitteeIndex(ctx, a)
-	if result != pubsub.ValidationAccept {
-		return 0, 0, result, err
+	// - [REJECT] attestation.data.index == 0
+	if a.Version() >= version.Electra && a.GetData().CommitteeIndex != 0 {
+		return 0, 0, pubsub.ValidationReject, errors.New("attestation data's committee index must be 0")
 	}
 	valCount, err := helpers.ActiveValidatorCount(ctx, bs, slots.ToEpoch(a.GetData().Slot))
 	if err != nil {
 		return 0, 0, pubsub.ValidationIgnore, err
 	}
 	count := helpers.SlotCommitteeCount(valCount)
+	ci := a.GetCommitteeIndex()
 	if uint64(ci) > count {
-		return 0, 0, pubsub.ValidationReject, fmt.Errorf("committee index %d > %d", a.GetData().CommitteeIndex, count)
+		return 0, 0, pubsub.ValidationReject, fmt.Errorf("committee index %d > %d", ci, count)
 	}
 	return ci, valCount, pubsub.ValidationAccept, nil
 }
 
-func (s *Service) validateCommitteeIndex(ctx context.Context, a eth.Att) (primitives.CommitteeIndex, pubsub.ValidationResult, error) {
+func validateAttesterData(
+	ctx context.Context,
+	a eth.Att,
+	committee []primitives.ValidatorIndex,
+) (pubsub.ValidationResult, error) {
 	if a.Version() >= version.Electra {
-		return validateCommitteeIndexElectra(ctx, a)
-	}
-	return a.GetData().CommitteeIndex, pubsub.ValidationAccept, nil
-}
-
-// This validates beacon unaggregated attestation using the given state, the validation consists of bitfield length and count consistency
-// and signature verification.
-func (s *Service) validateUnaggregatedAttWithState(ctx context.Context, a eth.Att, bs state.ReadOnlyBeaconState) (pubsub.ValidationResult, error) {
-	ctx, span := trace.StartSpan(ctx, "sync.validateUnaggregatedAttWithState")
-	defer span.End()
-
-	committeeIndex, err := a.GetCommitteeIndex()
-	if err != nil {
-		return pubsub.ValidationIgnore, err
+		singleAtt, ok := a.(*eth.SingleAttestation)
+		if !ok {
+			return pubsub.ValidationIgnore, fmt.Errorf("attestation has wrong type (expected %T, got %T)", &eth.SingleAttestation{}, a)
+		}
+		return validateAttestingIndex(ctx, singleAtt.AttesterIndex, committee)
 	}
 
-	committee, result, err := s.validateBitLength(ctx, bs, a.GetData().Slot, committeeIndex, a.GetAggregationBits())
-	if result != pubsub.ValidationAccept {
-		return result, err
+	// Verify number of aggregation bits matches the committee size.
+	if err := helpers.VerifyBitfieldLength(a.GetAggregationBits(), uint64(len(committee))); err != nil {
+		return pubsub.ValidationReject, err
 	}
-
 	// Attestation must be unaggregated and the bit index must exist in the range of committee indices.
 	// Note: The Ethereum Beacon chain spec suggests (len(get_attesting_indices(state, attestation.data, attestation.aggregation_bits)) == 1)
 	// however this validation can be achieved without use of get_attesting_indices which is an O(n) lookup.
@@ -272,33 +265,46 @@ func (s *Service) validateUnaggregatedAttWithState(ctx context.Context, a eth.At
 		return pubsub.ValidationReject, errors.New("attestation bitfield is invalid")
 	}
 
+	return pubsub.ValidationAccept, nil
+}
+
+// This validates beacon unaggregated attestation using the given state, the validation consists of signature verification.
+func (s *Service) validateUnaggregatedAttWithState(ctx context.Context, a eth.Att, bs state.ReadOnlyBeaconState) (pubsub.ValidationResult, error) {
+	ctx, span := trace.StartSpan(ctx, "sync.validateUnaggregatedAttWithState")
+	defer span.End()
+
 	set, err := blocks.AttestationSignatureBatch(ctx, bs, []eth.Att{a})
 	if err != nil {
 		tracing.AnnotateError(span, err)
 		attBadSignatureBatchCount.Inc()
 		return pubsub.ValidationReject, err
 	}
+
 	return s.validateWithBatchVerifier(ctx, "attestation", set)
 }
 
-func (s *Service) validateBitLength(
+func validateAttestingIndex(
 	ctx context.Context,
-	bs state.ReadOnlyBeaconState,
-	slot primitives.Slot,
-	committeeIndex primitives.CommitteeIndex,
-	aggregationBits bitfield.Bitlist,
-) ([]primitives.ValidatorIndex, pubsub.ValidationResult, error) {
-	committee, err := helpers.BeaconCommitteeFromState(ctx, bs, slot, committeeIndex)
-	if err != nil {
-		return nil, pubsub.ValidationIgnore, err
+	attestingIndex primitives.ValidatorIndex,
+	committee []primitives.ValidatorIndex,
+) (pubsub.ValidationResult, error) {
+	_, span := trace.StartSpan(ctx, "sync.validateAttestingIndex")
+	defer span.End()
+
+	// _[REJECT]_ The attester is a member of the committee -- i.e.
+	//  `attestation.attester_index in get_beacon_committee(state, attestation.data.slot, index)`.
+	inCommittee := false
+	for _, ix := range committee {
+		if attestingIndex == ix {
+			inCommittee = true
+			break
+		}
+	}
+	if !inCommittee {
+		return pubsub.ValidationReject, errors.New("attester is not a member of the committee")
 	}
 
-	// Verify number of aggregation bits matches the committee size.
-	if err := helpers.VerifyBitfieldLength(aggregationBits, uint64(len(committee))); err != nil {
-		return nil, pubsub.ValidationReject, err
-	}
-
-	return committee, pubsub.ValidationAccept, nil
+	return pubsub.ValidationAccept, nil
 }
 
 // Returns true if the attestation was already seen for the participating validator for the slot.
@@ -326,4 +332,32 @@ func (s *Service) hasBlockAndState(ctx context.Context, blockRoot [32]byte) bool
 	hasStateSummary := s.cfg.beaconDB.HasStateSummary(ctx, blockRoot)
 	hasState := hasStateSummary || s.cfg.beaconDB.HasState(ctx, blockRoot)
 	return hasState && s.cfg.chain.HasBlock(ctx, blockRoot)
+}
+
+func (s *Service) saveToPendingAttPool(att eth.Att) (pubsub.ValidationResult, error) {
+	// A node doesn't have the block, it'll request from peer while saving the pending attestation to a queue.
+	if att.Version() >= version.Electra {
+		a, ok := att.(*eth.SingleAttestation)
+		// This will never fail in practice because we asserted the version
+		if !ok {
+			return pubsub.ValidationIgnore, fmt.Errorf("attestation has wrong type (expected %T, got %T)", &eth.SingleAttestation{}, att)
+		}
+		// Even though there is no AggregateAndProof type to hold a single attestation, our design of pending atts pool
+		// requires to have an AggregateAndProof object, even for unaggregated attestations.
+		// Because of this we need to have a single attestation version of it to be able to save single attestations into the pool.
+		// It's not possible to convert the single attestation into an electra attestation before saving to the pool
+		// because crucial verification steps can't be performed without the block, and converting prior to these checks
+		// opens up DoS attacks.
+		// The AggregateAndProof object is discarded once we process the pending attestation and code paths dealing
+		// with "real" AggregateAndProof objects (ones that hold actual aggregates) don't use the single attestation version anywhere.
+		s.savePendingAtt(&eth.SignedAggregateAttestationAndProofSingle{Message: &eth.AggregateAttestationAndProofSingle{Aggregate: a}})
+	} else {
+		a, ok := att.(*eth.Attestation)
+		// This will never fail in practice because we asserted the version
+		if !ok {
+			return pubsub.ValidationIgnore, fmt.Errorf("attestation has wrong type (expected %T, got %T)", &eth.Attestation{}, att)
+		}
+		s.savePendingAtt(&eth.SignedAggregateAttestationAndProof{Message: &eth.AggregateAttestationAndProof{Aggregate: a}})
+	}
+	return pubsub.ValidationIgnore, nil
 }

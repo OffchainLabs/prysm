@@ -1,6 +1,6 @@
 load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 
-# gazelle:prefix github.com/karalabe/usb
+# gazelle:prefix github.com/karalabe/hid
 
 go_library(
     name = "go_default_library",
@@ -10,7 +10,7 @@ go_library(
         "usb.go",
         "usb_disabled.go",
     ],
-    importpath = "github.com/karalabe/usb",
+    importpath = "github.com/karalabe/hid",
     visibility = ["@com_github_ethereum_go_ethereum//:__subpackages__"],
 )
 

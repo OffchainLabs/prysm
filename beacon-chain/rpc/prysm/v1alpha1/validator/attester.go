@@ -13,6 +13,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -45,7 +46,7 @@ func (vs *Server) ProposeAttestation(ctx context.Context, att *ethpb.Attestation
 	ctx, span := trace.StartSpan(ctx, "AttesterServer.ProposeAttestation")
 	defer span.End()
 
-	resp, err := vs.proposeAtt(ctx, att, att.GetData().CommitteeIndex)
+	resp, err := vs.proposeAtt(ctx, att, nil, att.GetData().CommitteeIndex)
 	if err != nil {
 		return nil, err
 	}
@@ -69,20 +70,27 @@ func (vs *Server) ProposeAttestation(ctx context.Context, att *ethpb.Attestation
 
 // ProposeAttestationElectra is a function called by an attester to vote
 // on a block via an attestation object as defined in the Ethereum specification.
-func (vs *Server) ProposeAttestationElectra(ctx context.Context, att *ethpb.AttestationElectra) (*ethpb.AttestResponse, error) {
+func (vs *Server) ProposeAttestationElectra(ctx context.Context, singleAtt *ethpb.SingleAttestation) (*ethpb.AttestResponse, error) {
 	ctx, span := trace.StartSpan(ctx, "AttesterServer.ProposeAttestationElectra")
 	defer span.End()
 
-	committeeIndex, err := att.GetCommitteeIndex()
+	targetState, err := vs.AttestationStateFetcher.AttestationTargetState(ctx, singleAtt.Data.Target)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "Could not get target state")
+	}
+	committeeIndex := singleAtt.GetCommitteeIndex()
+	committee, err := helpers.BeaconCommitteeFromState(ctx, targetState, singleAtt.Data.Slot, committeeIndex)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "Could not get committee")
+	}
+
+	resp, err := vs.proposeAtt(ctx, singleAtt, committee, committeeIndex)
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := vs.proposeAtt(ctx, att, committeeIndex)
-	if err != nil {
-		return nil, err
-	}
-
+	singleAttCopy := singleAtt.Copy()
+	att := singleAttCopy.ToAttestationElectra(committee)
 	if features.Get().EnableExperimentalAttestationPool {
 		if err = vs.AttestationCache.Add(att); err != nil {
 			log.WithError(err).Error("Could not save attestation")
@@ -90,8 +98,7 @@ func (vs *Server) ProposeAttestationElectra(ctx context.Context, att *ethpb.Atte
 	} else {
 		go func() {
 			ctx = trace.NewContext(context.Background(), trace.FromContext(ctx))
-			attCopy := att.Copy()
-			if err := vs.AttPool.SaveUnaggregatedAttestation(attCopy); err != nil {
+			if err := vs.AttPool.SaveUnaggregatedAttestation(att); err != nil {
 				log.WithError(err).Error("Could not save unaggregated attestation")
 				return
 			}
@@ -149,14 +156,29 @@ func (vs *Server) SubscribeCommitteeSubnets(ctx context.Context, req *ethpb.Comm
 	return &emptypb.Empty{}, nil
 }
 
-func (vs *Server) proposeAtt(ctx context.Context, att ethpb.Att, committee primitives.CommitteeIndex) (*ethpb.AttestResponse, error) {
+func (vs *Server) proposeAtt(
+	ctx context.Context,
+	att ethpb.Att,
+	committee []primitives.ValidatorIndex, // required post-Electra
+	committeeIndex primitives.CommitteeIndex,
+) (*ethpb.AttestResponse, error) {
 	if _, err := bls.SignatureFromBytes(att.GetSignature()); err != nil {
 		return nil, status.Error(codes.InvalidArgument, "Incorrect attestation signature")
 	}
 
 	root, err := att.GetData().HashTreeRoot()
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not tree hash attestation: %v", err)
+		return nil, status.Errorf(codes.Internal, "Could not get attestation root: %v", err)
+	}
+
+	var singleAtt *ethpb.SingleAttestation
+	if att.Version() >= version.Electra {
+		var ok bool
+		singleAtt, ok = att.(*ethpb.SingleAttestation)
+		if !ok {
+			return nil, status.Errorf(codes.Internal, "Attestation has wrong type (expected %T, got %T)", &ethpb.SingleAttestation{}, att)
+		}
+		att = singleAtt.ToAttestationElectra(committee)
 	}
 
 	// Broadcast the unaggregated attestation on a feed to notify other services in the beacon node
@@ -174,10 +196,16 @@ func (vs *Server) proposeAtt(ctx context.Context, att ethpb.Att, committee primi
 	if err != nil {
 		return nil, err
 	}
-	subnet := helpers.ComputeSubnetFromCommitteeAndSlot(uint64(len(vals)), committee, att.GetData().Slot)
+	subnet := helpers.ComputeSubnetFromCommitteeAndSlot(uint64(len(vals)), committeeIndex, att.GetData().Slot)
 
 	// Broadcast the new attestation to the network.
-	if err := vs.P2P.BroadcastAttestation(ctx, subnet, att); err != nil {
+	var attToBroadcast ethpb.Att
+	if singleAtt != nil {
+		attToBroadcast = singleAtt
+	} else {
+		attToBroadcast = att
+	}
+	if err := vs.P2P.BroadcastAttestation(ctx, subnet, attToBroadcast); err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not broadcast attestation: %v", err)
 	}
 

@@ -97,6 +97,13 @@ func TestVerifyBitfieldLength_OK(t *testing.T) {
 	assert.NoError(t, helpers.VerifyBitfieldLength(bf, committeeSize), "Bitfield is not validated when it was supposed to be")
 }
 
+func TestVerifyBitfieldLength_Incorrect(t *testing.T) {
+	helpers.ClearCache()
+
+	bf := bitfield.NewBitlist(1)
+	require.ErrorContains(t, "wanted participants bitfield length 2, got: 1", helpers.VerifyBitfieldLength(bf, 2))
+}
+
 func TestCommitteeAssignments_CannotRetrieveFutureEpoch(t *testing.T) {
 	helpers.ClearCache()
 

@@ -1153,7 +1153,7 @@ func (f *blocksFetcher) waitForPeersForDataColumns(
 				"identifier":          reqIdentifier,
 				"columnsWithoutPeers": dataColumnsWithoutPeersLog,
 			}).
-			Warning("Fetch data columns from peers - no peers available to retrieve some missing data columns, retrying later")
+			Warning("Fetch data columns from peers - no available peers, retrying later")
 
 		for _, description := range descriptions {
 			log.Debug(description)

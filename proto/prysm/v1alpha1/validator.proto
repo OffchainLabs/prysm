@@ -194,7 +194,7 @@ service BeaconNodeValidator {
     // The validator sends the newly signed attestation to the beacon node for the attestation to
     // be included in the beacon chain. The beacon node is expected to validate and publish attestation on
     // appropriate committee subnet.
-    rpc ProposeAttestationElectra(AttestationElectra) returns (AttestResponse) {
+    rpc ProposeAttestationElectra(SingleAttestation) returns (AttestResponse) {
         option (google.api.http) = {
             post: "/eth/v1alpha1/validator/attestation_electra"
             body: "*"

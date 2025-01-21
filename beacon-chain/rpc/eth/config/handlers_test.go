@@ -191,7 +191,7 @@ func TestGetSpec(t *testing.T) {
 	data, ok := resp.Data.(map[string]interface{})
 	require.Equal(t, true, ok)
 
-	assert.Equal(t, 165, len(data))
+	assert.Equal(t, 164, len(data))
 	for k, v := range data {
 		t.Run(k, func(t *testing.T) {
 			switch k {
@@ -538,8 +538,6 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "9", v)
 			case "MAX_REQUEST_BLOB_SIDECARS_ELECTRA":
 				assert.Equal(t, "1152", v)
-			case "MAX_REQUEST_BLOB_SIDECARS_FULU":
-				assert.Equal(t, "1536", v)
 			case "NUMBER_OF_CUSTODY_GROUPS":
 				assert.Equal(t, "128", v)
 			case "CUSTODY_REQUIREMENT":

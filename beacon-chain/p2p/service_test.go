@@ -26,6 +26,8 @@ import (
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
+const testPingInterval = 100 * time.Millisecond
+
 type mockListener struct {
 	localNode *enode.LocalNode
 }
@@ -184,7 +186,7 @@ func TestListenForNewNodes(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	// Setup bootnode.
 	notifier := &mock.MockStateNotifier{}
-	cfg := &Config{StateNotifier: notifier}
+	cfg := &Config{StateNotifier: notifier, PingInterval: testPingInterval, DisableLivenessCheck: true}
 	port := 2000
 	cfg.UDPPort = uint(port)
 	_, pkey := createAddrAndPrivKey(t)
@@ -200,6 +202,17 @@ func TestListenForNewNodes(t *testing.T) {
 	require.NoError(t, err)
 	defer bootListener.Close()
 
+	// Allow bootnode's table to have its initial refresh. This allows
+	// inbound nodes to be added in.
+	time.Sleep(5 * time.Second)
+
+	// Use shorter period for testing.
+	currentPeriod := pollingPeriod
+	pollingPeriod = 1 * time.Second
+	defer func() {
+		pollingPeriod = currentPeriod
+	}()
+
 	bootNode := bootListener.Self()
 
 	var listeners []*listenerWrapper
@@ -208,6 +221,8 @@ func TestListenForNewNodes(t *testing.T) {
 	cs := startup.NewClockSynchronizer()
 	cfg = &Config{
 		Discv5BootStrapAddrs: []string{bootNode.String()},
+		PingInterval:         testPingInterval,
+		DisableLivenessCheck: true,
 		MaxPeers:             30,
 		ClockWaiter:          cs,
 	}

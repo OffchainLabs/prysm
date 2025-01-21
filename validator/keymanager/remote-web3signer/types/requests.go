@@ -1,12 +1,14 @@
-package v1
+package types
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	validatorpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/validator-client"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 )
 
 // GetBlockSignRequest maps the request for signing type BLOCK.
@@ -85,6 +87,34 @@ func GetAggregateAndProofSignRequest(request *validatorpb.SignRequest, genesisVa
 		ForkInfo:          fork,
 		SigningRoot:       request.SigningRoot,
 		AggregateAndProof: aggregateAndProof,
+	}, nil
+}
+
+// GetAggregateAndProofV2SignRequest maps the request for signing type AGGREGATE_AND_PROOF_V2 on Electra changes.
+func GetAggregateAndProofV2SignRequest(v int, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) (*AggregateAndProofV2SignRequest, error) {
+	aggregateAttestationAndProof, ok := request.Object.(*validatorpb.SignRequest_AggregateAttestationAndProofElectra)
+	if !ok {
+		return nil, errors.New("failed to cast request object to aggregate attestation and proof")
+	}
+	if aggregateAttestationAndProof == nil {
+		return nil, errors.New("invalid sign request: AggregateAndProof is nil")
+	}
+	fork, err := MapForkInfo(request.SigningSlot, genesisValidatorsRoot)
+	if err != nil {
+		return nil, err
+	}
+	aggregateAndProof, err := MapAggregateAndProofElectra(aggregateAttestationAndProof.AggregateAttestationAndProofElectra)
+	if err != nil {
+		return nil, err
+	}
+	return &AggregateAndProofV2SignRequest{
+		Type:        "AGGREGATE_AND_PROOF_V2",
+		ForkInfo:    fork,
+		SigningRoot: request.SigningRoot,
+		AggregateAndProof: &AggregateAndProofV2{
+			Version: strings.ToUpper(version.String(v)),
+			Data:    aggregateAndProof,
+		},
 	}, nil
 }
 
@@ -361,6 +391,34 @@ func GetBlockV2BlindedSignRequest(request *validatorpb.SignRequest, genesisValid
 			return nil, errors.New("invalid sign request: blinded deneb block is nil")
 		}
 		beaconBlock, err := blocks.NewBeaconBlock(blindedBlockDeneb.BlindedBlockDeneb)
+		if err != nil {
+			return nil, err
+		}
+		b = beaconBlock
+	case *validatorpb.SignRequest_BlockElectra:
+		version = "ELECTRA"
+		blockElectra, ok := request.Object.(*validatorpb.SignRequest_BlockElectra)
+		if !ok {
+			return nil, errors.New("failed to cast request object to electra block")
+		}
+		if blockElectra == nil {
+			return nil, errors.New("invalid sign request: electra block is nil")
+		}
+		beaconBlock, err := blocks.NewBeaconBlock(blockElectra.BlockElectra)
+		if err != nil {
+			return nil, err
+		}
+		b = beaconBlock
+	case *validatorpb.SignRequest_BlindedBlockElectra:
+		version = "ELECTRA"
+		blindedBlockElectra, ok := request.Object.(*validatorpb.SignRequest_BlindedBlockElectra)
+		if !ok {
+			return nil, errors.New("failed to cast request object to blinded electra block")
+		}
+		if blindedBlockElectra == nil {
+			return nil, errors.New("invalid sign request: blinded electra block is nil")
+		}
+		beaconBlock, err := blocks.NewBeaconBlock(blindedBlockElectra.BlindedBlockElectra)
 		if err != nil {
 			return nil, err
 		}

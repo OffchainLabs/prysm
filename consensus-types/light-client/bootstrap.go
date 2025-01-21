@@ -86,6 +86,10 @@ func (h *bootstrapAltair) Version() int {
 	return version.Altair
 }
 
+func (h *bootstrapAltair) Proto() proto.Message {
+	return h.p
+}
+
 func (h *bootstrapAltair) Header() interfaces.LightClientHeader {
 	return h.header
 }
@@ -185,6 +189,10 @@ func (h *bootstrapCapella) SizeSSZ() int {
 
 func (h *bootstrapCapella) Version() int {
 	return version.Capella
+}
+
+func (h *bootstrapCapella) Proto() proto.Message {
+	return h.p
 }
 
 func (h *bootstrapCapella) Header() interfaces.LightClientHeader {
@@ -288,6 +296,10 @@ func (h *bootstrapDeneb) Version() int {
 	return version.Deneb
 }
 
+func (h *bootstrapDeneb) Proto() proto.Message {
+	return h.p
+}
+
 func (h *bootstrapDeneb) Header() interfaces.LightClientHeader {
 	return h.header
 }
@@ -387,6 +399,10 @@ func (h *bootstrapElectra) SizeSSZ() int {
 
 func (h *bootstrapElectra) Version() int {
 	return version.Electra
+}
+
+func (h *bootstrapElectra) Proto() proto.Message {
+	return h.p
 }
 
 func (h *bootstrapElectra) Header() interfaces.LightClientHeader {

@@ -182,10 +182,6 @@ func SendBlobsByRangeRequest(ctx context.Context, tor blockchain.TemporalOracle,
 		max = beaconConfig.MaxRequestBlobSidecarsElectra
 	}
 
-	if startEpoch >= beaconConfig.FuluForkEpoch {
-		max = beaconConfig.MaxRequestBlobSidecarsFulu
-	}
-
 	if max > req.Count*maxBlobsPerBlock {
 		max = req.Count * maxBlobsPerBlock
 	}
@@ -222,10 +218,6 @@ func SendBlobSidecarByRoot(
 
 	if epoch >= beaconConfig.ElectraForkEpoch {
 		max = beaconConfig.MaxRequestBlobSidecarsElectra
-	}
-
-	if epoch >= beaconConfig.FuluForkEpoch {
-		max = beaconConfig.MaxRequestBlobSidecarsFulu
 	}
 
 	maxBlobCount := beaconConfig.MaxBlobsPerBlock(slot)

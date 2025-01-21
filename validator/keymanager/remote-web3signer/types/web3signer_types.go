@@ -1,6 +1,6 @@
 // Package v1 defines mappings of types as defined by the web3signer official specification for its v1 version i.e. /api/v1/eth2
 /* Web3Signer Specs are found by searching Consensys' Web3Signer API specification*/
-package v1
+package types
 
 import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -20,6 +20,20 @@ type AggregateAndProofSignRequest struct {
 	ForkInfo          *ForkInfo          `json:"fork_info" validate:"required"`
 	SigningRoot       hexutil.Bytes      `json:"signingRoot"`
 	AggregateAndProof *AggregateAndProof `json:"aggregate_and_proof" validate:"required"`
+}
+
+// AggregateAndProofV2SignRequest is a request object for web3signer sign api.
+type AggregateAndProofV2SignRequest struct {
+	Type              string               `json:"type" validate:"required"`
+	ForkInfo          *ForkInfo            `json:"fork_info" validate:"required"`
+	SigningRoot       hexutil.Bytes        `json:"signingRoot"`
+	AggregateAndProof *AggregateAndProofV2 `json:"aggregate_and_proof" validate:"required"`
+}
+
+// AggregateAndProofV2 is a wrapper object for AggregateAndProofV2SignRequest
+type AggregateAndProofV2 struct {
+	Version string                    `json:"version" validate:"required"`
+	Data    *AggregateAndProofElectra `json:"data" validate:"required"` // specifies Electra for now
 }
 
 // AttestationSignRequest is a request object for web3signer sign api.
@@ -134,11 +148,26 @@ type AggregateAndProof struct {
 	SelectionProof  hexutil.Bytes `json:"selection_proof"` /* 96 bytes */
 }
 
+// AggregateAndProofElectra a sub property of AggregateAndProofV2ElectraSignRequest.
+type AggregateAndProofElectra struct {
+	AggregatorIndex string              `json:"aggregator_index"` /* uint64 */
+	Aggregate       *AttestationElectra `json:"aggregate"`
+	SelectionProof  hexutil.Bytes       `json:"selection_proof"` /* 96 bytes */
+}
+
 // Attestation a sub property of AggregateAndProofSignRequest.
 type Attestation struct {
 	AggregationBits hexutil.Bytes    `json:"aggregation_bits"` /*hex bitlist*/
 	Data            *AttestationData `json:"data"`
 	Signature       hexutil.Bytes    `json:"signature"`
+}
+
+// AttestationElectra a sub property of AggregateAndProofElectra.
+type AttestationElectra struct {
+	AggregationBits hexutil.Bytes    `json:"aggregation_bits"` /*hex bitlist*/
+	Data            *AttestationData `json:"data"`
+	Signature       hexutil.Bytes    `json:"signature"`
+	CommitteeBits   hexutil.Bytes    `json:"committee_bits"` /* SSZ hexadecimal string */
 }
 
 // AttestationData a sub property of Attestation.

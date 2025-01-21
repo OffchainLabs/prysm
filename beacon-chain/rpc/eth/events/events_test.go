@@ -461,7 +461,7 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 				defer testSync.cleanup()
 
 				st := tc.getState()
-				v := &eth.Validator{ExitEpoch: math.MaxUint64, EffectiveBalance: params.BeaconConfig().MinActivationBalance}
+				v := &eth.Validator{ExitEpoch: math.MaxUint64, EffectiveBalance: params.BeaconConfig().MinActivationBalance, WithdrawalCredentials: make([]byte, 32)}
 				require.NoError(t, st.SetValidators([]*eth.Validator{v}))
 				currentSlot := primitives.Slot(0)
 				// to avoid slot processing

@@ -84,76 +84,6 @@ func TestNextEpoch_OK(t *testing.T) {
 	}
 }
 
-func TestCanUpgradeToAltair(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	bc := params.BeaconConfig()
-	bc.AltairForkEpoch = 5
-	params.OverrideBeaconConfig(bc)
-	tests := []struct {
-		name string
-		slot primitives.Slot
-		want bool
-	}{
-		{
-			name: "not epoch start",
-			slot: 1,
-			want: false,
-		},
-		{
-			name: "not altair epoch",
-			slot: params.BeaconConfig().SlotsPerEpoch,
-			want: false,
-		},
-		{
-			name: "altair epoch",
-			slot: primitives.Slot(params.BeaconConfig().AltairForkEpoch) * params.BeaconConfig().SlotsPerEpoch,
-			want: true,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := time.CanUpgradeToAltair(tt.slot); got != tt.want {
-				t.Errorf("canUpgradeToAltair() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestCanUpgradeBellatrix(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	bc := params.BeaconConfig()
-	bc.BellatrixForkEpoch = 5
-	params.OverrideBeaconConfig(bc)
-	tests := []struct {
-		name string
-		slot primitives.Slot
-		want bool
-	}{
-		{
-			name: "not epoch start",
-			slot: 1,
-			want: false,
-		},
-		{
-			name: "not bellatrix epoch",
-			slot: params.BeaconConfig().SlotsPerEpoch,
-			want: false,
-		},
-		{
-			name: "bellatrix epoch",
-			slot: primitives.Slot(params.BeaconConfig().BellatrixForkEpoch) * params.BeaconConfig().SlotsPerEpoch,
-			want: true,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := time.CanUpgradeToBellatrix(tt.slot); got != tt.want {
-				t.Errorf("CanUpgradeToBellatrix() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
 func TestCanProcessEpoch_TrueOnEpochsLastSlot(t *testing.T) {
 	tests := []struct {
 		slot            primitives.Slot
@@ -273,6 +203,16 @@ func TestCanUpgradeTo(t *testing.T) {
 		forkEpoch   *primitives.Epoch
 		upgradeFunc func(primitives.Slot) bool
 	}{
+		{
+			name:        "Altair",
+			forkEpoch:   &beaconConfig.AltairForkEpoch,
+			upgradeFunc: time.CanUpgradeToAltair,
+		},
+		{
+			name:        "Bellatrix",
+			forkEpoch:   &beaconConfig.BellatrixForkEpoch,
+			upgradeFunc: time.CanUpgradeToBellatrix,
+		},
 		{
 			name:        "Capella",
 			forkEpoch:   &beaconConfig.CapellaForkEpoch,
