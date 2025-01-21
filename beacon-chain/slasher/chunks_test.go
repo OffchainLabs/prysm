@@ -311,7 +311,7 @@ func TestMaxSpanChunksSlice_CheckSlashable_DifferentVersions(t *testing.T) {
 	target = primitives.Epoch(2)
 	surroundedVote := createAttestationWrapperEmptySig(t, version.Electra, source, target, nil, nil)
 
-	// We save the old attestation record, then check if the sorrounded vote is indeed slashable.
+	// We save the old attestation record, then check if the surrounded vote is indeed slashable.
 	attData := att.IndexedAttestation.GetData()
 	attRecord := createAttestationWrapperEmptySig(t, version.Phase0, attData.Source.Epoch, attData.Target.Epoch, []uint64{uint64(validatorIdx)}, []byte{1})
 	err = slasherDB.SaveAttestationRecordsForValidators(
