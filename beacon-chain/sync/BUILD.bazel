@@ -97,6 +97,7 @@ go_library(
         "//beacon-chain/state:go_default_library",
         "//beacon-chain/state/stategen:go_default_library",
         "//beacon-chain/sync/backfill/coverage:go_default_library",
+        "//beacon-chain/sync/rlnc:go_default_library",
         "//beacon-chain/sync/verify:go_default_library",
         "//beacon-chain/verification:go_default_library",
         "//cache/lru:go_default_library",

@@ -6,6 +6,8 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
 	core_chunks "github.com/OffchainLabs/prysm/v6/beacon-chain/core/chunks"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync/rlnc"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/chunks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
@@ -98,6 +100,7 @@ func (s *Service) validateBeaconBlockChunkPubSub(ctx context.Context, pid peer.I
 		return pubsub.ValidationIgnore, err
 	}
 
+	// We ignore messages instead of accepting them to avoid rebroadcasting by gossipsub.
 	err = s.validateBeaconBlockChunk(ctx, chunk)
 	if errors.Is(err, rlnc.ErrLinearlyDependentMessage) {
 		log.Debug("ignoring linearly dependent message")
@@ -113,7 +116,10 @@ func (s *Service) validateBeaconBlockChunkPubSub(ctx context.Context, pid peer.I
 		"parentRoot":    chunk.ParentRoot(),
 	}
 	log.WithFields(logFields).Debug("Received block chunk")
-	return pubsub.ValidationAccept, nil
+
+	// If the block can be recovered, send it to the blockchain package
+	go s.reconstructBlockFromChunk(ctx, chunk)
+	return pubsub.ValidationIgnore, nil
 }
 
 func (s *Service) validateBeaconBlockChunk(ctx context.Context, chunk interfaces.ReadOnlyBeaconBlockChunk) error {
@@ -147,5 +153,23 @@ func (s *Service) startChunkPruner() {
 		log.WithError(err).Debug("could not prune the chunk cache: could not calculate epoch start slot")
 	} else {
 		s.blockChunkCache.Prune(fSlot)
+	}
+}
+
+func (s *Service) reconstructBlockFromChunk(ctx context.Context, chunk interfaces.ReadOnlyBeaconBlockChunk) {
+	data, err := s.blockChunkCache.GetBlockData(chunk.Slot(), chunk.ProposerIndex())
+	if err != nil {
+		return
+	}
+
+	msg := p2p.GossipTopicMappings(p2p.BlockSubnetTopicFormat, slots.ToEpoch(chunk.Slot()))
+	e := &encoder.SszNetworkEncoder{}
+
+	if err := e.DecodeGossip(data, msg); err != nil {
+		logrus.WithError(err).Error("Could not decode block data")
+		return
+	}
+	if err := s.beaconBlockSubscriber(ctx, msg); err != nil {
+		logrus.WithError(err).Error("Could not handle p2p pubsub")
 	}
 }
