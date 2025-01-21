@@ -366,7 +366,7 @@ func (m *MaxSpanChunksSlice) CheckSlashable(
 
 	surroundedVotesTotal.Inc()
 
-	// Both attestations should have the same type. If not, we convert both to Electra attestations.
+	// Both attestations should have the same type. If not, we convert the non-Electra attestation into an Electra attestation.
 	unifyAttWrapperVersion(existingAttWrapper, incomingAttWrapper)
 
 	postElectra := existingAttWrapper.IndexedAttestation.Version() >= version.Electra
