@@ -23,8 +23,9 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// https://github.com/ethereum/consensus-specs/blob/dev/specs/_features/eip7594/p2p-interface.md#the-gossip-domain-gossipsub
+// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/p2p-interface.md#the-gossip-domain-gossipsub
 func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubsub.Message) (pubsub.ValidationResult, error) {
+	dataColumnSidecarVerificationRequestsCounter.Inc();
 	receivedTime := prysmTime.Now()
 
 	// Always accept messages our own messages.
@@ -162,9 +163,12 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 	}
 
 	msg.ValidatorData = verifiedRODataColumns[0]
+	dataColumnSidecarVerificationSuccessesCounter.Inc()
 
 	sinceSlotStartTime := receivedTime.Sub(startTime)
 	validationTime := s.cfg.clock.Now().Sub(receivedTime)
+
+	dataColumnSidecarVerificationGossipHistogram.Observe(float64(validationTime.Milliseconds()))
 
 	peerGossipScore := s.cfg.p2p.Peers().Scorers().GossipScorer().Score(pid)
 

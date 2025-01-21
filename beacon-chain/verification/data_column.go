@@ -2,6 +2,7 @@ package verification
 
 import (
 	"context"
+	"time"
 
 	"github.com/pkg/errors"
 	forkchoicetypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/types"
@@ -354,6 +355,8 @@ func (dv *RODataColumnsVerifier) SidecarDescendsFromFinalized() (err error) {
 func (dv *RODataColumnsVerifier) SidecarInclusionProven() (err error) {
 	defer dv.recordResult(RequireSidecarInclusionProven, &err)
 
+	startTime := time.Now()
+
 	for _, dataColumn := range dv.dataColumns {
 		if err = blocks.VerifyKZGInclusionProofColumn(dataColumn); err != nil {
 			fields := logging.DataColumnFields(dataColumn)
@@ -361,7 +364,7 @@ func (dv *RODataColumnsVerifier) SidecarInclusionProven() (err error) {
 			return columnErrBuilder(ErrSidecarInclusionProofInvalid)
 		}
 	}
-
+	dataColumnSidecarInclusionProofVerificationHistogram.Observe(float64(time.Since(startTime).Milliseconds()))
 	return nil
 }
 
@@ -369,6 +372,8 @@ func (dv *RODataColumnsVerifier) SidecarInclusionProven() (err error) {
 // [REJECT] The sidecar's column data is valid as verified by verify_data_column_sidecar_kzg_proofs(sidecar).
 func (dv *RODataColumnsVerifier) SidecarKzgProofVerified() (err error) {
 	defer dv.recordResult(RequireSidecarKzgProofVerified, &err)
+
+	startTime := time.Now()
 
 	ok, err := dv.verifyDataColumnsCommitment(dv.dataColumns)
 	if err != nil {
@@ -380,6 +385,7 @@ func (dv *RODataColumnsVerifier) SidecarKzgProofVerified() (err error) {
 	}
 
 	if ok {
+		dataColumnBatchKZGVerificationHistogram.Observe(float64(time.Since(startTime).Milliseconds()))
 		return nil
 	}
 
