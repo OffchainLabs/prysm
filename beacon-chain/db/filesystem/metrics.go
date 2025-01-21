@@ -33,7 +33,7 @@ var (
 		Name: "blob_disk_bytes",
 		Help: "Approximate number of bytes occupied by blobs in storage",
 	})
-	custodyColumnWrittenCounter = promauto.NewGauge(prometheus.GaugeOpts{
+	custodyColumnWrittenCounter = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "beacon_custody_columns_count_total",
 		Help: "Total count of columns in custody within the data availability boundary",
 	})
