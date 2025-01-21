@@ -19,8 +19,12 @@ type BlockChunkCache struct {
 }
 
 func NewBlockChunkCache() *BlockChunkCache {
+	committer, err := LoadTrustedSetup()
+	if err != nil {
+		panic("cannot load the RLNC trusted setup") // lint:nopanic -- TODO: Do not panic!
+	}
 	return &BlockChunkCache{
-		committer: newCommitter(maxChunkSize),
+		committer: committer,
 		nodes:     make(map[primitives.Slot]map[primitives.ValidatorIndex]*Node),
 	}
 }

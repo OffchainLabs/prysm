@@ -115,8 +115,7 @@ func dataToElements(data [][]byte) ([]*ristretto.Element, error) {
 func (m *message) Data() [][]byte {
 	data := make([][]byte, len(m.chunk.data))
 	for i, d := range m.chunk.data {
-		data[i] = make([]byte, 32)
-		d.Encode(data[i])
+		data[i] = d.Encode(nil)
 	}
 	return data
 }
@@ -125,8 +124,7 @@ func (m *message) Data() [][]byte {
 func (m *message) Coefficients() [][]byte {
 	coefficients := make([][]byte, len(m.chunk.coefficients))
 	for i, c := range m.chunk.coefficients {
-		coefficients[i] = make([]byte, 32)
-		c.Encode(coefficients[i])
+		coefficients[i] = c.Encode(nil)
 	}
 	return coefficients
 }
@@ -135,8 +133,8 @@ func (m *message) Coefficients() [][]byte {
 func (m *message) Commitments() [][]byte {
 	commitments := make([][]byte, len(m.commitments))
 	for i, c := range m.commitments {
-		commitments[i] = make([]byte, 32)
-		c.Encode(commitments[i])
+		commitments[i] = make([]byte, 0)
+		commitments[i] = c.Encode(nil)
 	}
 	return commitments
 }

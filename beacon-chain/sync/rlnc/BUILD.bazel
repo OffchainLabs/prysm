@@ -9,7 +9,9 @@ go_library(
         "matrix.go",
         "message.go",
         "node.go",
+        "trusted_setup.go",
     ],
+    embedsrcs = ["trusted_setup.json"],
     importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/sync/rlnc",
     visibility = ["//visibility:public"],
     deps = [
@@ -26,13 +28,17 @@ go_library(
 go_test(
     name = "go_default_test",
     srcs = [
+        "block_chunk_cache_test.go",
         "committer_test.go",
         "matrix_test.go",
         "message_test.go",
         "node_test.go",
+        "trusted_setup_test.go",
     ],
     embed = [":go_default_library"],
     deps = [
+        "//consensus-types/chunks:go_default_library",
+        "//proto/prysm/v1alpha1:go_default_library",
         "//testing/require:go_default_library",
         "@com_github_gtank_ristretto255//:go_default_library",
     ],
