@@ -582,7 +582,7 @@ func (r *ExecutionPayloadResponse) ParsePayload() (ParsedPayload, error) {
 	if v >= version.Deneb {
 		toProto = &ExecutionPayloadDenebAndBlobsBundle{}
 	}
-	if toProto != nil {
+	if toProto == nil {
 		return nil, consensusblocks.ErrUnsupportedVersion
 	}
 
