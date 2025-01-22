@@ -215,7 +215,9 @@ func TestMinSpanChunksSlice_CheckSlashable_DifferentVersions(t *testing.T) {
 	slashing, err := chunk.CheckSlashable(ctx, slasherDB, validatorIdx, surroundingVote)
 	require.NoError(t, err)
 	// The old record should be converted to Electra and the resulting slashing should be an Electra slashing.
-	require.NotEqual(t, (*ethpb.AttesterSlashingElectra)(nil), slashing)
+	electraSlashing, ok := slashing.(*ethpb.AttesterSlashingElectra)
+	require.Equal(t, true, ok, "slashing has the wrong type")
+	assert.NotNil(t, electraSlashing)
 }
 
 func TestMaxSpanChunksSlice_CheckSlashable(t *testing.T) {
@@ -289,7 +291,7 @@ func TestMaxSpanChunksSlice_CheckSlashable(t *testing.T) {
 			attData := att.IndexedAttestation.GetData()
 			signingRoot := [32]byte{1}
 			attRecord := createAttestationWrapperEmptySig(
-				t, version.Phase0, attData.Source.Epoch, attData.Target.Epoch, []uint64{uint64(validatorIdx)}, signingRoot[:],
+				t, v, attData.Source.Epoch, attData.Target.Epoch, []uint64{uint64(validatorIdx)}, signingRoot[:],
 			)
 			err = slasherDB.SaveAttestationRecordsForValidators(
 				ctx,
@@ -330,11 +332,9 @@ func TestMaxSpanChunksSlice_CheckSlashable_DifferentVersions(t *testing.T) {
 	att := createAttestationWrapperEmptySig(t, version.Phase0, source, target, nil, nil)
 
 	// We initialize an empty chunks slice and mark an attestation with (source 0, target 3) as attested.
-	chunk := EmptyMinSpanChunksSlice(params)
+	chunk := EmptyMaxSpanChunksSlice(params)
 	chunkIndex := uint64(0)
-	startEpoch := target
-	currentEpoch := target
-	_, err := chunk.Update(chunkIndex, currentEpoch, validatorIdx, startEpoch, target)
+	_, err := chunk.Update(chunkIndex, target, validatorIdx, source, target)
 	require.NoError(t, err)
 
 	// We create a surrounded vote with Electra version.
@@ -354,7 +354,9 @@ func TestMaxSpanChunksSlice_CheckSlashable_DifferentVersions(t *testing.T) {
 	slashing, err := chunk.CheckSlashable(ctx, slasherDB, validatorIdx, surroundedVote)
 	require.NoError(t, err)
 	// The old record should be converted to Electra and the resulting slashing should be an Electra slashing.
-	require.NotEqual(t, (*ethpb.AttesterSlashingElectra)(nil), slashing)
+	electraSlashing, ok := slashing.(*ethpb.AttesterSlashingElectra)
+	require.Equal(t, true, ok, "slashing has wrong type")
+	assert.NotNil(t, electraSlashing)
 }
 
 func TestMinSpanChunksSlice_Update_MultipleChunks(t *testing.T) {
