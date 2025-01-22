@@ -383,7 +383,6 @@ func TestStore_HistoricalDataBeforeSlot(t *testing.T) {
 	// Create state summaries and states for each block
 	ss := make([]*ethpb.StateSummary, len(blks))
 	states := make([]state.BeaconState, len(blks))
-	validatorKeys := make([][]byte, 0)
 
 	for i, blk := range blks {
 		slot := blk.Block().Slot()
@@ -403,7 +402,6 @@ func TestStore_HistoricalDataBeforeSlot(t *testing.T) {
 				PublicKey:             bytesutil.PadTo([]byte{byte(i*j + 1)}, 48),
 				WithdrawalCredentials: bytesutil.PadTo([]byte{byte(i*j + 2)}, 32),
 			}
-			validatorKeys = append(validatorKeys, vals[j].PublicKey)
 		}
 
 		st, err := util.NewBeaconState(func(state *ethpb.BeaconState) error {
@@ -474,6 +472,7 @@ func TestStore_HistoricalDataBeforeSlot(t *testing.T) {
 			assert.Equal(t, 0, len(tx.Bucket(blockRootValidatorHashesBucket).Get(root[:])))
 			return nil
 		})
+		require.NoError(t, err)
 	}
 
 	// Verify slot indices are deleted
@@ -537,6 +536,7 @@ func TestStore_HistoricalDataBeforeSlot(t *testing.T) {
 			assert.NotNil(t, tx.Bucket(blockRootValidatorHashesBucket).Get(root[:]))
 			return nil
 		})
+		require.NoError(t, err)
 	}
 }
 
