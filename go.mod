@@ -1,8 +1,8 @@
 module github.com/prysmaticlabs/prysm/v5
 
-go 1.22.0
+go 1.22.1
 
-toolchain go1.22.10
+toolchain go1.23.2
 
 require (
 	github.com/MariusVanDerWijden/FuzzyVM v0.0.0-20240516070431-7828990cad7d
@@ -100,13 +100,13 @@ require (
 	gopkg.in/d4l3k/messagediff.v1 v1.2.1
 	gopkg.in/yaml.v2 v2.4.0
 	gopkg.in/yaml.v3 v3.0.1
-	honnef.co/go/tools v0.5.0-0.dev.0.20231205170804-aef76f4feee2
+	honnef.co/go/tools v0.5.1
 	k8s.io/apimachinery v0.30.4
 	k8s.io/client-go v0.30.4
 )
 
 require (
-	github.com/BurntSushi/toml v1.3.2 // indirect
+	github.com/BurntSushi/toml v1.4.1-0.20240526193622-a339e1f7089c // indirect
 	github.com/DataDog/zstd v1.5.5 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/VictoriaMetrics/fastcache v1.12.2 // indirect

@@ -37,8 +37,8 @@ def prysm_deps():
     go_repository(
         name = "co_honnef_go_tools",
         importpath = "honnef.co/go/tools",
-        sum = "h1:VUeHARd+9362HPYyFWjsRa6jBIAf2xWbDv6QXMRztbQ=",
-        version = "v0.5.0-0.dev.0.20231205170804-aef76f4feee2",
+        sum = "h1:4bH5o3b5ZULQ4UrBmP+63W9r7qIkqJClEA9ko5YKx+I=",
+        version = "v0.5.1",
     )
     go_repository(
         name = "com_github_aclements_go_moremath",
@@ -331,8 +331,8 @@ def prysm_deps():
     go_repository(
         name = "com_github_burntsushi_toml",
         importpath = "github.com/BurntSushi/toml",
-        sum = "h1:o7IhLm0Msx3BaB+n3Ag7L8EVlByGnpq14C4YWiu/gL8=",
-        version = "v1.3.2",
+        sum = "h1:pxW6RcqyfI9/kWtOwnv/G+AzdKuy2ZrqINhenH4HyNs=",
+        version = "v1.4.1-0.20240526193622-a339e1f7089c",
     )
     go_repository(
         name = "com_github_burntsushi_xgb",
