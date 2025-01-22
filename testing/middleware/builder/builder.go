@@ -120,6 +120,7 @@ type Builder struct {
 	execClient     *gethRPC.Client
 	currId         *v1.PayloadIDBytes
 	prevBeaconRoot []byte
+	currVersion    int
 	currPayload    interfaces.ExecutionData
 	blobBundle     *v1.BlobsBundle
 	mux            *http.ServeMux
@@ -345,10 +346,10 @@ func (p *Builder) handleHeaderRequest(w http.ResponseWriter, req *http.Request) 
 	}
 	ax := types.Slot(slot)
 	currEpoch := types.Epoch(ax / params.BeaconConfig().SlotsPerEpoch)
-	//if currEpoch >= params.BeaconConfig().ElectraForkEpoch {
-	//	p.handleHeaderRequestElectra(w)
-	//	return
-	//}
+	if currEpoch >= params.BeaconConfig().ElectraForkEpoch {
+		p.handleHeaderRequestElectra(w)
+		return
+	}
 
 	if currEpoch >= params.BeaconConfig().DenebForkEpoch {
 		p.handleHeaderRequestDeneb(w)
@@ -430,6 +431,7 @@ func (p *Builder) handleHeaderRequest(w http.ResponseWriter, req *http.Request) 
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	p.currVersion = version.Bellatrix
 	p.currPayload = wObj
 	w.WriteHeader(http.StatusOK)
 }
@@ -507,6 +509,7 @@ func (p *Builder) handleHeaderRequestCapella(w http.ResponseWriter) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	p.currVersion = version.Capella
 	p.currPayload = wObj
 	w.WriteHeader(http.StatusOK)
 }
@@ -592,98 +595,148 @@ func (p *Builder) handleHeaderRequestDeneb(w http.ResponseWriter) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	p.currVersion = version.Deneb
 	p.currPayload = wObj
 	p.blobBundle = b.BlobsBundle
 	w.WriteHeader(http.StatusOK)
 }
 
-//func (p *Builder) handleHeaderRequestElectra(w http.ResponseWriter) {
-//	b, err := p.retrievePendingBlockElectra()
-//	if err != nil {
-//		p.cfg.logger.WithError(err).Error("Could not retrieve pending block")
-//		http.Error(w, err.Error(), http.StatusInternalServerError)
-//		return
-//	}
-//
-//	secKey, err := bls.RandKey()
-//	if err != nil {
-//		p.cfg.logger.WithError(err).Error("Could not retrieve secret key")
-//		http.Error(w, err.Error(), http.StatusInternalServerError)
-//		return
-//	}
-//	v := big.NewInt(0).SetBytes(bytesutil.ReverseByteOrder(b.Value))
-//	// we set the payload value as twice its actual one so that it always chooses builder payloads vs local payloads
-//	v = v.Mul(v, big.NewInt(2))
-//	wObj, err := blocks.WrappedExecutionPayloadElectra(b.Payload)
-//	if err != nil {
-//		p.cfg.logger.WithError(err).Error("Could not wrap execution payload")
-//		http.Error(w, err.Error(), http.StatusInternalServerError)
-//		return
-//	}
-//
-//	hdr, err := blocks.PayloadToHeaderElectra(wObj)
-//	if err != nil {
-//		p.cfg.logger.WithError(err).Error("Could not make payload into header")
-//		http.Error(w, err.Error(), http.StatusInternalServerError)
-//		return
-//	}
-//	val := builderAPI.Uint256{Int: v}
-//	var commitments []hexutil.Bytes
-//	for _, c := range b.BlobsBundle.KzgCommitments {
-//		copiedC := c
-//		commitments = append(commitments, copiedC)
-//	}
-//	wrappedHdr := &builderAPI.ExecutionPayloadHeaderElectra{ExecutionPayloadHeaderDeneb: hdr}
-//	bid := &builderAPI.BuilderBidElectra{
-//		Header:             wrappedHdr,
-//		BlobKzgCommitments: commitments,
-//		Value:              val,
-//		Pubkey:             secKey.PublicKey().Marshal(),
-//	}
-//	sszBid := &eth.BuilderBidElectra{
-//		Header:             hdr,
-//		BlobKzgCommitments: b.BlobsBundle.KzgCommitments,
-//		Value:              val.SSZBytes(),
-//		Pubkey:             secKey.PublicKey().Marshal(),
-//	}
-//	d, err := signing.ComputeDomain(params.BeaconConfig().DomainApplicationBuilder,
-//		nil, /* fork version */
-//		nil /* genesis val root */)
-//	if err != nil {
-//		p.cfg.logger.WithError(err).Error("Could not compute the domain")
-//		http.Error(w, err.Error(), http.StatusInternalServerError)
-//		return
-//	}
-//	rt, err := signing.ComputeSigningRoot(sszBid, d)
-//	if err != nil {
-//		p.cfg.logger.WithError(err).Error("Could not compute the signing root")
-//		http.Error(w, err.Error(), http.StatusInternalServerError)
-//		return
-//	}
-//	sig := secKey.Sign(rt[:])
-//	hdrResp := &ExecHeaderResponseElectra{
-//		Version: "electra",
-//		Data: struct {
-//			Signature hexutil.Bytes                 `json:"signature"`
-//			Message   *builderAPI.BuilderBidElectra `json:"message"`
-//		}{
-//			Signature: sig.Marshal(),
-//			Message:   bid,
-//		},
-//	}
-//
-//	err = json.NewEncoder(w).Encode(hdrResp)
-//	if err != nil {
-//		p.cfg.logger.WithError(err).Error("Could not encode response")
-//		http.Error(w, err.Error(), http.StatusInternalServerError)
-//		return
-//	}
-//	p.currPayload = wObj
-//	p.blobBundle = b.BlobsBundle
-//	w.WriteHeader(http.StatusOK)
-//}
+func (p *Builder) handleHeaderRequestElectra(w http.ResponseWriter) {
+	b, err := p.retrievePendingBlockElectra()
+	if err != nil {
+		p.cfg.logger.WithError(err).Error("Could not retrieve pending block")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	secKey, err := bls.RandKey()
+	if err != nil {
+		p.cfg.logger.WithError(err).Error("Could not retrieve secret key")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	v := big.NewInt(0).SetBytes(bytesutil.ReverseByteOrder(b.Value))
+	// we set the payload value as twice its actual one so that it always chooses builder payloads vs local payloads
+	v = v.Mul(v, big.NewInt(2))
+	wObj, err := blocks.WrappedExecutionPayloadDeneb(b.Payload)
+	if err != nil {
+		p.cfg.logger.WithError(err).Error("Could not wrap execution payload")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	hdr, err := blocks.PayloadToHeaderElectra(wObj)
+	if err != nil {
+		p.cfg.logger.WithError(err).Error("Could not make payload into header")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	val := builderAPI.Uint256{Int: v}
+	var commitments []hexutil.Bytes
+	for _, c := range b.BlobsBundle.KzgCommitments {
+		copiedC := c
+		commitments = append(commitments, copiedC)
+	}
+	wrappedHdr := &builderAPI.ExecutionPayloadHeaderElectra{ExecutionPayloadHeaderDeneb: hdr}
+	requests, err := b.GetDecodedExecutionRequests()
+	if err != nil {
+		p.cfg.logger.WithError(err).Error("Could not get decoded execution requests")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	rv1 := &builderAPI.ExecutionRequestsV1{
+		Deposits:       make([]*builderAPI.DepositRequestV1, len(requests.Deposits)),
+		Withdrawals:    make([]*builderAPI.WithdrawalRequestV1, len(requests.Withdrawals)),
+		Consolidations: make([]*builderAPI.ConsolidationRequestV1, len(requests.Consolidations)),
+	}
+
+	for i, d := range requests.Deposits {
+		amount := new(big.Int).SetUint64(d.Amount)
+		index := new(big.Int).SetUint64(d.Index)
+		dr := &builderAPI.DepositRequestV1{
+			PubKey:                d.Pubkey,
+			WithdrawalCredentials: d.WithdrawalCredentials,
+			Amount:                builderAPI.Uint256{Int: amount},
+			Signature:             d.Signature,
+			Index:                 builderAPI.Uint256{Int: index},
+		}
+		rv1.Deposits[i] = dr
+	}
+
+	for i, w := range requests.Withdrawals {
+		bi := new(big.Int).SetUint64(w.Amount)
+		wr := &builderAPI.WithdrawalRequestV1{
+			SourceAddress:   w.SourceAddress,
+			ValidatorPubkey: w.ValidatorPubkey,
+			Amount:          builderAPI.Uint256{Int: bi},
+		}
+		rv1.Withdrawals[i] = wr
+	}
+
+	for i, c := range requests.Consolidations {
+		cr := &builderAPI.ConsolidationRequestV1{
+			SourceAddress: c.SourceAddress,
+			SourcePubkey:  c.SourcePubkey,
+			TargetPubkey:  c.TargetPubkey,
+		}
+		rv1.Consolidations[i] = cr
+	}
+
+	bid := &builderAPI.BuilderBidElectra{
+		Header:             wrappedHdr,
+		BlobKzgCommitments: commitments,
+		Value:              val,
+		Pubkey:             secKey.PublicKey().Marshal(),
+		ExecutionRequests:  rv1,
+	}
+
+	sszBid := &eth.BuilderBidElectra{
+		Header:             hdr,
+		BlobKzgCommitments: b.BlobsBundle.KzgCommitments,
+		Value:              val.SSZBytes(),
+		Pubkey:             secKey.PublicKey().Marshal(),
+		ExecutionRequests:  requests,
+	}
+	d, err := signing.ComputeDomain(params.BeaconConfig().DomainApplicationBuilder,
+		nil, /* fork version */
+		nil /* genesis val root */)
+	if err != nil {
+		p.cfg.logger.WithError(err).Error("Could not compute the domain")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	rt, err := signing.ComputeSigningRoot(sszBid, d)
+	if err != nil {
+		p.cfg.logger.WithError(err).Error("Could not compute the signing root")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	sig := secKey.Sign(rt[:])
+	hdrResp := &ExecHeaderResponseElectra{
+		Version: "electra",
+		Data: struct {
+			Signature hexutil.Bytes                 `json:"signature"`
+			Message   *builderAPI.BuilderBidElectra `json:"message"`
+		}{
+			Signature: sig.Marshal(),
+			Message:   bid,
+		},
+	}
+
+	err = json.NewEncoder(w).Encode(hdrResp)
+	if err != nil {
+		p.cfg.logger.WithError(err).Error("Could not encode response")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	p.currVersion = version.Electra
+	p.currPayload = wObj
+	p.blobBundle = b.BlobsBundle
+	w.WriteHeader(http.StatusOK)
+}
 
 func (p *Builder) handleBlindedBlock(w http.ResponseWriter, req *http.Request) {
+	// TODO update for fork specific
 	sb := &builderAPI.SignedBlindedBeaconBlockBellatrix{
 		SignedBlindedBeaconBlockBellatrix: &eth.SignedBlindedBeaconBlockBellatrix{},
 	}
@@ -698,7 +751,7 @@ func (p *Builder) handleBlindedBlock(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	resp, err := ExecutionPayloadResponseFromData(p.currPayload, p.blobBundle)
+	resp, err := ExecutionPayloadResponseFromData(p.currVersion, p.currPayload, p.blobBundle)
 	if err != nil {
 		p.cfg.logger.WithError(err).Error("Could not convert the payload")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -717,15 +770,13 @@ var errInvalidTypeConversion = errors.New("unable to translate between api and f
 
 // ExecutionPayloadResponseFromData converts an ExecutionData interface value to a payload response.
 // This involves serializing the execution payload value so that the abstract payload envelope can be used.
-func ExecutionPayloadResponseFromData(ed interfaces.ExecutionData, bundle *v1.BlobsBundle) (*builderAPI.ExecutionPayloadResponse, error) {
+func ExecutionPayloadResponseFromData(v int, ed interfaces.ExecutionData, bundle *v1.BlobsBundle) (*builderAPI.ExecutionPayloadResponse, error) {
 	pb := ed.Proto()
 	var data interface{}
 	var err error
-	var ver string
+	ver := version.String(v)
 	switch pbStruct := pb.(type) {
 	case *v1.ExecutionPayloadDeneb:
-		// TODO: add ELECTRA here
-		ver = version.String(version.Deneb)
 		payloadStruct, err := builderAPI.FromProtoDeneb(pbStruct)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to convert a Deneb ExecutionPayload to an API response")
@@ -735,13 +786,11 @@ func ExecutionPayloadResponseFromData(ed interfaces.ExecutionData, bundle *v1.Bl
 			BlobsBundle:      builderAPI.FromBundleProto(bundle),
 		}
 	case *v1.ExecutionPayloadCapella:
-		ver = version.String(version.Capella)
 		data, err = builderAPI.FromProtoCapella(pbStruct)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to convert a Capella ExecutionPayload to an API response")
 		}
 	case *v1.ExecutionPayload:
-		ver = version.String(version.Bellatrix)
 		data, err = builderAPI.FromProto(pbStruct)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to convert a Bellatrix ExecutionPayload to an API response")
@@ -768,7 +817,7 @@ func (p *Builder) retrievePendingBlock() (*v1.ExecutionPayload, error) {
 	if err != nil {
 		return nil, err
 	}
-	payloadEnv, err := modifyExecutionPayload(*result, big.NewInt(0), nil)
+	payloadEnv, err := modifyExecutionPayload(*result, big.NewInt(0), nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -793,7 +842,7 @@ func (p *Builder) retrievePendingBlockCapella() (*v1.ExecutionPayloadCapellaWith
 	if err != nil {
 		return nil, err
 	}
-	payloadEnv, err := modifyExecutionPayload(*result.ExecutionPayload, result.BlockValue, nil)
+	payloadEnv, err := modifyExecutionPayload(*result.ExecutionPayload, result.BlockValue, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -821,7 +870,7 @@ func (p *Builder) retrievePendingBlockDeneb() (*v1.ExecutionPayloadDenebWithValu
 	if p.prevBeaconRoot == nil {
 		p.cfg.logger.Errorf("previous root is nil")
 	}
-	payloadEnv, err := modifyExecutionPayload(*result.ExecutionPayload, result.BlockValue, p.prevBeaconRoot)
+	payloadEnv, err := modifyExecutionPayload(*result.ExecutionPayload, result.BlockValue, p.prevBeaconRoot, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -838,35 +887,35 @@ func (p *Builder) retrievePendingBlockDeneb() (*v1.ExecutionPayloadDenebWithValu
 	return denebPayload, nil
 }
 
-//func (p *Builder) retrievePendingBlockElectra() (*v1.ExecutionPayloadElectraWithValueAndBlobsBundle, error) {
-//	result := &engine.ExecutionPayloadEnvelope{}
-//	if p.currId == nil {
-//		return nil, errors.New("no payload id is cached")
-//	}
-//	err := p.execClient.CallContext(context.Background(), result, GetPayloadMethodV4, *p.currId)
-//	if err != nil {
-//		return nil, err
-//	}
-//	if p.prevBeaconRoot == nil {
-//		p.cfg.logger.Errorf("previous root is nil")
-//	}
-//	// TODO: probably need to modify the function below for electra
-//	payloadEnv, err := modifyExecutionPayload(*result.ExecutionPayload, result.BlockValue, p.prevBeaconRoot)
-//	if err != nil {
-//		return nil, err
-//	}
-//	payloadEnv.BlobsBundle = result.BlobsBundle
-//	marshalledOutput, err := payloadEnv.MarshalJSON()
-//	if err != nil {
-//		return nil, err
-//	}
-//	electraPayload := &v1.ExecutionPayloadElectraWithValueAndBlobsBundle{}
-//	if err = json.Unmarshal(marshalledOutput, electraPayload); err != nil {
-//		return nil, err
-//	}
-//	p.currId = nil
-//	return electraPayload, nil
-//}
+func (p *Builder) retrievePendingBlockElectra() (*v1.ExecutionBundleElectra, error) {
+	result := &engine.ExecutionPayloadEnvelope{}
+	if p.currId == nil {
+		return nil, errors.New("no payload id is cached")
+	}
+	err := p.execClient.CallContext(context.Background(), result, GetPayloadMethodV4, *p.currId)
+	if err != nil {
+		return nil, err
+	}
+	if p.prevBeaconRoot == nil {
+		p.cfg.logger.Errorf("previous root is nil")
+	}
+
+	payloadEnv, err := modifyExecutionPayload(*result.ExecutionPayload, result.BlockValue, p.prevBeaconRoot, result.Requests)
+	if err != nil {
+		return nil, err
+	}
+	payloadEnv.BlobsBundle = result.BlobsBundle
+	marshalledOutput, err := payloadEnv.MarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+	electraPayload := &v1.ExecutionBundleElectra{}
+	if err = json.Unmarshal(marshalledOutput, electraPayload); err != nil {
+		return nil, err
+	}
+	p.currId = nil
+	return electraPayload, nil
+}
 
 func (p *Builder) sendHttpRequest(req *http.Request, requestBytes []byte) (*http.Response, error) {
 	proxyReq, err := http.NewRequest(req.Method, p.cfg.destinationUrl.String(), req.Body)
@@ -930,13 +979,12 @@ func unmarshalRPCObject(b []byte) (*jsonRPCObject, error) {
 	return r, nil
 }
 
-func modifyExecutionPayload(execPayload engine.ExecutableData, fees *big.Int, prevBeaconRoot []byte) (*engine.ExecutionPayloadEnvelope, error) {
+func modifyExecutionPayload(execPayload engine.ExecutableData, fees *big.Int, prevBeaconRoot []byte, requests [][]byte) (*engine.ExecutionPayloadEnvelope, error) {
 	modifiedBlock, err := executableDataToBlock(execPayload, prevBeaconRoot)
 	if err != nil {
 		return &engine.ExecutionPayloadEnvelope{}, err
 	}
-	// TODO: update to include requests for electra
-	return engine.BlockToExecutableData(modifiedBlock, fees, nil /*blobs*/, nil /*requests*/), nil
+	return engine.BlockToExecutableData(modifiedBlock, fees, nil /*blobs*/, requests /*requests*/), nil
 }
 
 // This modifies the provided payload to imprint the builder's extra data
@@ -954,22 +1002,6 @@ func executableDataToBlock(params engine.ExecutableData, prevBeaconRoot []byte) 
 		withdrawalsRoot = &h
 	}
 
-	//requests := make([]*gethTypes.Request, 0)
-	//if params.Deposits != nil {
-	//	for _, req := range params.Deposits {
-	//		requests = append(requests, gethTypes.NewRequest(req))
-	//	}
-	//}
-	//if params.WithdrawalRequests != nil {
-	//	for _, req := range params.WithdrawalRequests {
-	//		requests = append(requests, gethTypes.NewRequest(req))
-	//	}
-	//}
-	//if params.ConsolidationRequests != nil {
-	//	for _, req := range params.ConsolidationRequests {
-	//		requests = append(requests, gethTypes.NewRequest(req))
-	//	}
-	//}
 	header := &gethTypes.Header{
 		ParentHash:      params.ParentHash,
 		UncleHash:       gethTypes.EmptyUncleHash,
@@ -994,7 +1026,7 @@ func executableDataToBlock(params engine.ExecutableData, prevBeaconRoot []byte) 
 		pRoot := common.Hash(prevBeaconRoot)
 		header.ParentBeaconRoot = &pRoot
 	}
-	// TODO: update requests with requests for electra
+
 	body := gethTypes.Body{
 		Transactions: txs,
 		Uncles:       nil,

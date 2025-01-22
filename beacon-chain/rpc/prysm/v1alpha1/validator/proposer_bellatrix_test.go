@@ -28,7 +28,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/encoding/ssz"
 	v1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"github.com/prysmaticlabs/prysm/v5/testing/util"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
@@ -173,11 +172,6 @@ func TestServer_setExecutionData(t *testing.T) {
 		require.NoError(t, err)
 		_, err = builderBid.Header()
 		require.NoError(t, err)
-		builderKzgCommitments, err := builderBid.BlobKzgCommitments()
-		if builderBid.Version() >= version.Deneb {
-			require.NoError(t, err)
-		}
-		require.DeepEqual(t, [][]uint8{}, builderKzgCommitments)
 		_, bundle, err := setExecutionData(context.Background(), blk, res, builderBid, defaultBuilderBoostFactor)
 		require.NoError(t, err)
 		require.IsNil(t, bundle)
@@ -250,11 +244,6 @@ func TestServer_setExecutionData(t *testing.T) {
 		require.NoError(t, err)
 		_, err = builderBid.Header()
 		require.NoError(t, err)
-		builderKzgCommitments, err := builderBid.BlobKzgCommitments()
-		if builderBid.Version() >= version.Deneb {
-			require.NoError(t, err)
-		}
-		require.DeepEqual(t, [][]uint8{}, builderKzgCommitments)
 		_, bundle, err := setExecutionData(context.Background(), blk, res, builderBid, defaultBuilderBoostFactor)
 		require.NoError(t, err)
 		require.IsNil(t, bundle)
@@ -326,11 +315,6 @@ func TestServer_setExecutionData(t *testing.T) {
 		require.NoError(t, err)
 		_, err = builderBid.Header()
 		require.NoError(t, err)
-		builderKzgCommitments, err := builderBid.BlobKzgCommitments()
-		if builderBid.Version() >= version.Deneb {
-			require.NoError(t, err)
-		}
-		require.DeepEqual(t, [][]uint8{}, builderKzgCommitments)
 		_, bundle, err := setExecutionData(context.Background(), blk, res, builderBid, math.MaxUint64)
 		require.NoError(t, err)
 		require.IsNil(t, bundle)
@@ -402,11 +386,6 @@ func TestServer_setExecutionData(t *testing.T) {
 		require.NoError(t, err)
 		_, err = builderBid.Header()
 		require.NoError(t, err)
-		builderKzgCommitments, err := builderBid.BlobKzgCommitments()
-		if builderBid.Version() >= version.Deneb {
-			require.NoError(t, err)
-		}
-		require.DeepEqual(t, [][]uint8{}, builderKzgCommitments)
 		_, bundle, err := setExecutionData(context.Background(), blk, res, builderBid, 0)
 		require.NoError(t, err)
 		require.IsNil(t, bundle)
@@ -428,11 +407,6 @@ func TestServer_setExecutionData(t *testing.T) {
 		require.NoError(t, err)
 		_, err = builderBid.Header()
 		require.NoError(t, err)
-		builderKzgCommitments, err := builderBid.BlobKzgCommitments()
-		if builderBid.Version() >= version.Deneb {
-			require.NoError(t, err)
-		}
-		require.DeepEqual(t, [][]uint8{}, builderKzgCommitments)
 		_, bundle, err := setExecutionData(context.Background(), blk, res, builderBid, defaultBuilderBoostFactor)
 		require.NoError(t, err)
 		require.IsNil(t, bundle)
@@ -460,11 +434,6 @@ func TestServer_setExecutionData(t *testing.T) {
 		require.NoError(t, err)
 		_, err = builderBid.Header()
 		require.NoError(t, err)
-		builderKzgCommitments, err := builderBid.BlobKzgCommitments()
-		if builderBid.Version() >= version.Deneb {
-			require.NoError(t, err)
-		}
-		require.DeepEqual(t, [][]uint8{}, builderKzgCommitments)
 		_, bundle, err := setExecutionData(context.Background(), blk, res, builderBid, defaultBuilderBoostFactor)
 		require.NoError(t, err)
 		require.IsNil(t, bundle)
@@ -493,13 +462,8 @@ func TestServer_setExecutionData(t *testing.T) {
 		require.NoError(t, err)
 		builderBid, err := vs.getBuilderPayloadAndBlobs(ctx, b.Slot(), b.ProposerIndex(), gasLimit)
 		require.NoError(t, err)
-		builderKzgCommitments, err := builderBid.BlobKzgCommitments()
-		if builderBid.Version() >= version.Deneb {
-			require.NoError(t, err)
-		}
 		_, err = builderBid.Header()
 		require.NoError(t, err)
-		require.DeepEqual(t, [][]uint8{}, builderKzgCommitments)
 		_, bundle, err := setExecutionData(context.Background(), blk, res, builderBid, defaultBuilderBoostFactor)
 		require.NoError(t, err)
 		require.IsNil(t, bundle)
@@ -648,8 +612,9 @@ func TestServer_setExecutionData(t *testing.T) {
 		require.NoError(t, err)
 		builderPayload, err := builderBid.Header()
 		require.NoError(t, err)
-		builderKzgCommitments, err := builderBid.BlobKzgCommitments()
-		require.NoError(t, err)
+		dbid, ok := builderBid.(builder.BidDeneb)
+		require.Equal(t, true, ok)
+		builderKzgCommitments := dbid.BlobKzgCommitments()
 		require.DeepEqual(t, bid.BlobKzgCommitments, builderKzgCommitments)
 		require.Equal(t, bid.Header.BlockNumber, builderPayload.BlockNumber()) // header should be the same from block
 
@@ -771,9 +736,10 @@ func TestServer_setExecutionData(t *testing.T) {
 		require.NoError(t, err)
 		builderPayload, err := builderBid.Header()
 		require.NoError(t, err)
-		builderKzgCommitments, err := builderBid.BlobKzgCommitments()
-		require.NoError(t, err)
-		require.DeepEqual(t, bid.BlobKzgCommitments, builderKzgCommitments)
+		eBid, ok := builderBid.(builder.BidElectra)
+		require.Equal(t, true, ok)
+		require.DeepEqual(t, bid.BlobKzgCommitments, eBid.BlobKzgCommitments())
+		require.DeepEqual(t, bid.ExecutionRequests, eBid.ExecutionRequests())
 		require.Equal(t, bid.Header.BlockNumber, builderPayload.BlockNumber()) // header should be the same from block
 
 		res, err := vs.getLocalPayload(ctx, blk.Block(), denebTransitionState)

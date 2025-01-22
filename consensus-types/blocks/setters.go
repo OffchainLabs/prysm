@@ -3,6 +3,7 @@ package blocks
 import (
 	"fmt"
 
+	"github.com/pkg/errors"
 	consensus_types "github.com/prysmaticlabs/prysm/v5/consensus-types"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
@@ -178,6 +179,9 @@ func (b *SignedBeaconBlock) SetBlobKzgCommitments(c [][]byte) error {
 func (b *SignedBeaconBlock) SetExecutionRequests(req *enginev1.ExecutionRequests) error {
 	if b.version < version.Electra {
 		return consensus_types.ErrNotSupported("SetExecutionRequests", b.version)
+	}
+	if req == nil {
+		return errors.New("nil execution request")
 	}
 	b.block.body.executionRequests = req
 	return nil

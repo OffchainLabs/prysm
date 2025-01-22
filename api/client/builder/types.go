@@ -568,15 +568,17 @@ type ParsedExecutionRequests interface {
 
 func (r *ExecutionPayloadResponse) ParsePayload() (ParsedPayload, error) {
 	var toProto ParsedPayload
-	switch r.Version {
-	case version.String(version.Deneb), version.String(version.Electra):
-		toProto = &ExecutionPayloadDenebAndBlobsBundle{}
-	case version.String(version.Capella):
-		toProto = &ExecutionPayloadCapella{}
-	case version.String(version.Bellatrix):
-		toProto = &ExecutionPayload{}
 
-	default:
+	if r.Version >= version.String(version.Bellatrix) {
+		toProto = &ExecutionPayload{}
+	}
+	if r.Version >= version.String(version.Capella) {
+		toProto = &ExecutionPayloadCapella{}
+	}
+	if r.Version >= version.String(version.Deneb) {
+		toProto = &ExecutionPayloadDenebAndBlobsBundle{}
+	}
+	if toProto != nil {
 		return nil, consensusblocks.ErrUnsupportedVersion
 	}
 
@@ -1277,7 +1279,7 @@ type ExecHeaderResponseElectra struct {
 	} `json:"data"`
 }
 
-// ToProto creates a SignedBuilderBidElectra Proto from ExecHeaderResponseDeneb.
+// ToProto creates a SignedBuilderBidElectra Proto from ExecHeaderResponseElectra.
 func (ehr *ExecHeaderResponseElectra) ToProto() (*eth.SignedBuilderBidElectra, error) {
 	bb, err := ehr.Data.Message.ToProto()
 	if err != nil {
@@ -1306,7 +1308,7 @@ func (bb *BuilderBidElectra) ToProto() (*eth.BuilderBidElectra, error) {
 		kzgCommitments[i] = bytesutil.SafeCopyBytes(commit)
 	}
 	if bb.ExecutionRequests == nil {
-		return nil, fmt.Errorf("execution requests is empty")
+		return nil, errors.New("execution requests is empty")
 	}
 	ExecutionRequests, err := bb.ExecutionRequests.ToProto()
 	if err != nil {
@@ -1332,7 +1334,7 @@ type ExecutionRequestsV1 struct {
 
 func (er *ExecutionRequestsV1) ToProto() (*v1.ExecutionRequests, error) {
 	if uint64(len(er.Deposits)) > params.BeaconConfig().MaxDepositRequestsPerPayload {
-		return nil, fmt.Errorf("too many deposit requests: %d", len(er.Deposits))
+		return nil, fmt.Errorf("deposit requests count %d exceeds the maximum %d", len(er.Deposits), params.BeaconConfig().MaxDepositRequestsPerPayload)
 	}
 	deposits := make([]*v1.DepositRequest, len(er.Deposits))
 	for i, dep := range er.Deposits {
@@ -1343,7 +1345,7 @@ func (er *ExecutionRequestsV1) ToProto() (*v1.ExecutionRequests, error) {
 		deposits[i] = d
 	}
 	if uint64(len(er.Withdrawals)) > params.BeaconConfig().MaxWithdrawalRequestsPerPayload {
-		return nil, fmt.Errorf("too many withdrawal requests: %d", len(er.Withdrawals))
+		return nil, fmt.Errorf("withdrawal requests %d exceeds the maximum %d", len(er.Withdrawals), params.BeaconConfig().MaxWithdrawalRequestsPerPayload)
 	}
 	withdrawals := make([]*v1.WithdrawalRequest, len(er.Withdrawals))
 	for i, wr := range er.Withdrawals {
@@ -1354,7 +1356,7 @@ func (er *ExecutionRequestsV1) ToProto() (*v1.ExecutionRequests, error) {
 		withdrawals[i] = w
 	}
 	if uint64(len(er.Consolidations)) > params.BeaconConfig().MaxConsolidationsRequestsPerPayload {
-		return nil, fmt.Errorf("too many consolidation requests: %d", len(er.Consolidations))
+		return nil, fmt.Errorf("consolidation requests %d exceeds the maximum %d", len(er.Consolidations), params.BeaconConfig().MaxConsolidationsRequestsPerPayload)
 	}
 	consolidations := make([]*v1.ConsolidationRequest, len(er.Consolidations))
 	for i, con := range er.Consolidations {
@@ -1373,18 +1375,16 @@ func (er *ExecutionRequestsV1) ToProto() (*v1.ExecutionRequests, error) {
 
 // BuilderBidElectra is a field of ExecHeaderResponseElectra.
 type BuilderBidElectra struct {
-	Header             *ExecutionPayloadHeaderElectra `json:"header"`
-	BlobKzgCommitments []hexutil.Bytes                `json:"blob_kzg_commitments"`
-	ExecutionRequests  *ExecutionRequestsV1           `json:"execution_requests"`
-	Value              Uint256                        `json:"value"`
-	Pubkey             hexutil.Bytes                  `json:"pubkey"`
+	Header             *ExecutionPayloadHeaderDeneb `json:"header"`
+	BlobKzgCommitments []hexutil.Bytes              `json:"blob_kzg_commitments"`
+	ExecutionRequests  *ExecutionRequestsV1         `json:"execution_requests"`
+	Value              Uint256                      `json:"value"`
+	Pubkey             hexutil.Bytes                `json:"pubkey"`
 }
 
 type ExecutionPayloadHeaderElectra = ExecutionPayloadHeaderDeneb
 
-type ExecutionPayloadElectra = ExecutionPayloadDeneb
-
-// WithdrawalRequestV1 is a field of ExecutionPayloadElectra.
+// WithdrawalRequestV1 is a field of ExecutionRequestsV1.
 type WithdrawalRequestV1 struct {
 	SourceAddress   hexutil.Bytes `json:"source_address"`
 	ValidatorPubkey hexutil.Bytes `json:"validator_pubkey"`
@@ -1408,7 +1408,7 @@ func (wr *WithdrawalRequestV1) ToProto() (*v1.WithdrawalRequest, error) {
 	}, nil
 }
 
-// DepositRequestV1 is a field of ExecutionPayloadElectra.
+// DepositRequestV1 is a field of ExecutionRequestsV1.
 type DepositRequestV1 struct {
 	PubKey hexutil.Bytes `json:"pubkey"`
 	// withdrawalCredentials: DATA, 32 Bytes
@@ -1443,7 +1443,7 @@ func (dr *DepositRequestV1) ToProto() (*v1.DepositRequest, error) {
 	}, nil
 }
 
-// ConsolidationRequestV1 is a field of ExecutionPayloadElectra.
+// ConsolidationRequestV1 is a field of ExecutionRequestsV1.
 type ConsolidationRequestV1 struct {
 	// sourceAddress: DATA, 20 Bytes
 	SourceAddress hexutil.Bytes `json:"source_address"`

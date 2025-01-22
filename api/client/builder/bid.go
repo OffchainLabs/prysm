@@ -1,7 +1,6 @@
 package builder
 
 import (
-	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
 	consensus_types "github.com/prysmaticlabs/prysm/v5/consensus-types"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
@@ -23,7 +22,6 @@ type SignedBid interface {
 // Bid is an interface describing the method set of a builder bid.
 type Bid interface {
 	Header() (interfaces.ExecutionData, error)
-	BlobKzgCommitments() ([][]byte, error)
 	Value() primitives.Wei
 	Pubkey() []byte
 	Version() int
@@ -32,10 +30,16 @@ type Bid interface {
 	HashTreeRootWith(hh *ssz.Hasher) error
 }
 
+// BidDeneb is an interface that exposes newly added kzg commitments on top of builder bid
+type BidDeneb interface {
+	Bid
+	BlobKzgCommitments() [][]byte
+}
+
 // BidElectra is an interface that exposes the newly added execution requests on top of the builder bid
 type BidElectra interface {
-	Bid
-	ExecutionRequests() (*v1.ExecutionRequests, error)
+	BidDeneb
+	ExecutionRequests() *v1.ExecutionRequests
 }
 
 type signedBuilderBid struct {
@@ -122,11 +126,6 @@ func (b builderBid) Header() (interfaces.ExecutionData, error) {
 	return blocks.WrappedExecutionPayloadHeader(b.p.Header)
 }
 
-// BlobKzgCommitments --
-func (b builderBid) BlobKzgCommitments() ([][]byte, error) {
-	return [][]byte{}, errors.New("blob kzg commitments not available before Deneb")
-}
-
 // Version --
 func (b builderBid) Version() int {
 	return version.Bellatrix
@@ -174,11 +173,6 @@ func WrappedBuilderBidCapella(p *ethpb.BuilderBidCapella) (Bid, error) {
 func (b builderBidCapella) Header() (interfaces.ExecutionData, error) {
 	// We have to convert big endian to little endian because the value is coming from the execution layer.
 	return blocks.WrappedExecutionPayloadHeaderCapella(b.p.Header)
-}
-
-// BlobKzgCommitments --
-func (b builderBidCapella) BlobKzgCommitments() ([][]byte, error) {
-	return [][]byte{}, errors.New("blob kzg commitments not available before Deneb")
 }
 
 // Version --
@@ -261,8 +255,8 @@ func (b builderBidDeneb) Header() (interfaces.ExecutionData, error) {
 }
 
 // BlobKzgCommitments --
-func (b builderBidDeneb) BlobKzgCommitments() ([][]byte, error) {
-	return b.p.BlobKzgCommitments, nil
+func (b builderBidDeneb) BlobKzgCommitments() [][]byte {
+	return b.p.BlobKzgCommitments
 }
 
 type signedBuilderBidDeneb struct {
@@ -328,7 +322,7 @@ func (b builderBidElectra) Pubkey() []byte {
 
 // IsNil --
 func (b builderBidElectra) IsNil() bool {
-	return b == nil || b.p == nil
+	return b.p == nil
 }
 
 // HashTreeRoot --
@@ -348,19 +342,13 @@ func (b builderBidElectra) Header() (interfaces.ExecutionData, error) {
 }
 
 // ExecutionRequests --
-func (b builderBidElectra) ExecutionRequests() (*v1.ExecutionRequests, error) {
-	if b.p == nil {
-		return nil, consensus_types.ErrNilObjectWrapped
-	}
-	if b.p.ExecutionRequests == nil {
-		return nil, errors.New("ExecutionRequests is nil")
-	}
-	return b.p.ExecutionRequests, nil
+func (b builderBidElectra) ExecutionRequests() *v1.ExecutionRequests {
+	return b.p.ExecutionRequests // does not copy
 }
 
 // BlobKzgCommitments --
-func (b builderBidElectra) BlobKzgCommitments() ([][]byte, error) {
-	return b.p.BlobKzgCommitments, nil
+func (b builderBidElectra) BlobKzgCommitments() [][]byte {
+	return b.p.BlobKzgCommitments
 }
 
 type signedBuilderBidElectra struct {
@@ -393,5 +381,5 @@ func (b signedBuilderBidElectra) Version() int {
 
 // IsNil --
 func (b signedBuilderBidElectra) IsNil() bool {
-	return b == nil || b.p == nil
+	return b.p == nil
 }

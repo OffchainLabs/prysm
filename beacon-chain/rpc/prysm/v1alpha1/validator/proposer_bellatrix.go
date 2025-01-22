@@ -80,20 +80,21 @@ func setExecutionData(ctx context.Context, blk interfaces.SignedBeaconBlock, loc
 
 	var builderKzgCommitments [][]byte
 	if bid.Version() >= version.Deneb {
-		builderKzgCommitments, err = bid.BlobKzgCommitments()
-		if err != nil {
-			log.WithError(err).Warn("Proposer: failed to retrieve kzg commitments from BuilderBid")
+		bidDeneb, ok := bid.(builder.BidDeneb)
+		if !ok {
+			log.Warnf("bid type %T does not implement builder.BidDeneb ", bid)
+		} else {
+			builderKzgCommitments = bidDeneb.BlobKzgCommitments()
 		}
 	}
 
 	var executionRequests *enginev1.ExecutionRequests
 	if bid.Version() >= version.Electra {
 		bidElectra, ok := bid.(builder.BidElectra)
-		if ok {
-			executionRequests, err = bidElectra.ExecutionRequests()
-			if err != nil {
-				log.WithError(err).Warn("Proposer: failed to retrieve execution requests from BuilderBid")
-			}
+		if !ok {
+			log.Warnf("bid type %T does not implement builder.BidElectra ", bid)
+		} else {
+			executionRequests = bidElectra.ExecutionRequests()
 		}
 	}
 
@@ -281,16 +282,21 @@ func (vs *Server) getPayloadHeaderFromBuilder(
 		return nil, errors.Wrap(err, "could not validate builder signature")
 	}
 
+	var kzgCommitments [][]byte
+	if bid.Version() >= version.Deneb {
+		dBid, ok := bid.(builder.BidDeneb)
+		if !ok {
+			return nil, errors.New("builder returned non-deneb or above bid")
+		}
+		kzgCommitments = dBid.BlobKzgCommitments()
+	}
 	var executionRequests *enginev1.ExecutionRequests
 	if bid.Version() >= version.Electra {
 		eBid, ok := bid.(builder.BidElectra)
 		if !ok {
-			return nil, errors.New("builder returned non-electra bid")
+			return nil, errors.New("builder returned non-electra or above bid")
 		}
-		executionRequests, err = eBid.ExecutionRequests()
-		if err != nil {
-			return nil, errors.Wrap(err, "could not get execution requests")
-		}
+		executionRequests = eBid.ExecutionRequests()
 	}
 	l := log.WithFields(logrus.Fields{
 		"gweiValue":          primitives.WeiToGwei(v),
@@ -300,6 +306,9 @@ func (vs *Server) getPayloadHeaderFromBuilder(
 		"validator":          idx,
 		"sinceSlotStartTime": time.Since(t),
 	})
+	if len(kzgCommitments) > 0 {
+		l = l.WithField("kzgCommitmentCount", len(kzgCommitments))
+	}
 	if executionRequests != nil {
 		l = l.WithField("depositRequestCount", len(executionRequests.Deposits))
 		l = l.WithField("withdrawalRequestCount", len(executionRequests.Withdrawals))

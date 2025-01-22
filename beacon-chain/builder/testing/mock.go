@@ -60,13 +60,7 @@ func (s *MockBuilderService) SubmitBlindedBlock(_ context.Context, b interfaces.
 			return nil, nil, errors.Wrap(err, "could not wrap capella payload")
 		}
 		return w, nil, s.ErrSubmitBlindedBlock
-	case version.Deneb:
-		w, err := blocks.WrappedExecutionPayloadDeneb(s.PayloadDeneb)
-		if err != nil {
-			return nil, nil, errors.Wrap(err, "could not wrap deneb payload")
-		}
-		return w, s.BlobBundle, s.ErrSubmitBlindedBlock
-	case version.Electra:
+	case version.Deneb, version.Electra:
 		w, err := blocks.WrappedExecutionPayloadDeneb(s.PayloadDeneb)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "could not wrap deneb payload")
