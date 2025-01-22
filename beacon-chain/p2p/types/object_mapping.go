@@ -123,7 +123,7 @@ func InitializeDataMaps() {
 			return &ethpb.SingleAttestation{}, nil
 		},
 		bytesutil.ToBytes4(params.BeaconConfig().FuluForkVersion): func() (ethpb.Att, error) {
-			return &ethpb.AttestationElectra{}, nil
+			return &ethpb.SingleAttestation{}, nil
 		},
 	}
 

@@ -1,4 +1,4 @@
-package v1_test
+package types_test
 
 import (
 	"reflect"
@@ -8,8 +8,8 @@ import (
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	validatorpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/validator-client"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	v1 "github.com/prysmaticlabs/prysm/v5/validator/keymanager/remote-web3signer/v1"
-	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/remote-web3signer/v1/mock"
+	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/remote-web3signer/types"
+	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/remote-web3signer/types/mock"
 )
 
 func TestGetAggregateAndProofSignRequest(t *testing.T) {
@@ -20,7 +20,7 @@ func TestGetAggregateAndProofSignRequest(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    args
-		want    *v1.AggregateAndProofSignRequest
+		want    *types.AggregateAndProofSignRequest
 		wantErr bool
 	}{
 		{
@@ -35,7 +35,7 @@ func TestGetAggregateAndProofSignRequest(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := v1.GetAggregateAndProofSignRequest(tt.args.request, tt.args.genesisValidatorsRoot)
+			got, err := types.GetAggregateAndProofSignRequest(tt.args.request, tt.args.genesisValidatorsRoot)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetAggregateAndProofSignRequest() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -55,7 +55,7 @@ func TestGetAggregationSlotSignRequest(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    args
-		want    *v1.AggregationSlotSignRequest
+		want    *types.AggregationSlotSignRequest
 		wantErr bool
 	}{
 		{
@@ -70,7 +70,7 @@ func TestGetAggregationSlotSignRequest(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := v1.GetAggregationSlotSignRequest(tt.args.request, tt.args.genesisValidatorsRoot)
+			got, err := types.GetAggregationSlotSignRequest(tt.args.request, tt.args.genesisValidatorsRoot)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetAggregationSlotSignRequest() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -90,7 +90,7 @@ func TestGetAttestationSignRequest(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    args
-		want    *v1.AttestationSignRequest
+		want    *types.AttestationSignRequest
 		wantErr bool
 	}{
 		{
@@ -104,7 +104,7 @@ func TestGetAttestationSignRequest(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := v1.GetAttestationSignRequest(tt.args.request, tt.args.genesisValidatorsRoot)
+			got, err := types.GetAttestationSignRequest(tt.args.request, tt.args.genesisValidatorsRoot)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetAttestationSignRequest() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -124,7 +124,7 @@ func TestGetBlockSignRequest(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    args
-		want    *v1.BlockSignRequest
+		want    *types.BlockSignRequest
 		wantErr bool
 	}{
 		{
@@ -139,7 +139,7 @@ func TestGetBlockSignRequest(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := v1.GetBlockSignRequest(tt.args.request, tt.args.genesisValidatorsRoot)
+			got, err := types.GetBlockSignRequest(tt.args.request, tt.args.genesisValidatorsRoot)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetBlockSignRequest() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -159,7 +159,7 @@ func TestGetBlockV2AltairSignRequest(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    args
-		want    *v1.BlockAltairSignRequest
+		want    *types.BlockAltairSignRequest
 		wantErr bool
 	}{
 		{
@@ -174,7 +174,7 @@ func TestGetBlockV2AltairSignRequest(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := v1.GetBlockAltairSignRequest(tt.args.request, tt.args.genesisValidatorsRoot)
+			got, err := types.GetBlockAltairSignRequest(tt.args.request, tt.args.genesisValidatorsRoot)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetBlockAltairSignRequest() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -194,7 +194,7 @@ func TestGetRandaoRevealSignRequest(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    args
-		want    *v1.RandaoRevealSignRequest
+		want    *types.RandaoRevealSignRequest
 		wantErr bool
 	}{
 		{
@@ -209,7 +209,7 @@ func TestGetRandaoRevealSignRequest(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := v1.GetRandaoRevealSignRequest(tt.args.request, tt.args.genesisValidatorsRoot)
+			got, err := types.GetRandaoRevealSignRequest(tt.args.request, tt.args.genesisValidatorsRoot)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetRandaoRevealSignRequest() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -229,7 +229,7 @@ func TestGetSyncCommitteeContributionAndProofSignRequest(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    args
-		want    *v1.SyncCommitteeContributionAndProofSignRequest
+		want    *types.SyncCommitteeContributionAndProofSignRequest
 		wantErr bool
 	}{
 		{
@@ -244,7 +244,7 @@ func TestGetSyncCommitteeContributionAndProofSignRequest(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := v1.GetSyncCommitteeContributionAndProofSignRequest(tt.args.request, tt.args.genesisValidatorsRoot)
+			got, err := types.GetSyncCommitteeContributionAndProofSignRequest(tt.args.request, tt.args.genesisValidatorsRoot)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetSyncCommitteeContributionAndProofSignRequest() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -264,7 +264,7 @@ func TestGetSyncCommitteeMessageSignRequest(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    args
-		want    *v1.SyncCommitteeMessageSignRequest
+		want    *types.SyncCommitteeMessageSignRequest
 		wantErr bool
 	}{
 		{
@@ -279,7 +279,7 @@ func TestGetSyncCommitteeMessageSignRequest(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := v1.GetSyncCommitteeMessageSignRequest(tt.args.request, tt.args.genesisValidatorsRoot)
+			got, err := types.GetSyncCommitteeMessageSignRequest(tt.args.request, tt.args.genesisValidatorsRoot)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetSyncCommitteeMessageSignRequest() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -299,7 +299,7 @@ func TestGetSyncCommitteeSelectionProofSignRequest(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    args
-		want    *v1.SyncCommitteeSelectionProofSignRequest
+		want    *types.SyncCommitteeSelectionProofSignRequest
 		wantErr bool
 	}{
 		{
@@ -314,7 +314,7 @@ func TestGetSyncCommitteeSelectionProofSignRequest(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := v1.GetSyncCommitteeSelectionProofSignRequest(tt.args.request, tt.args.genesisValidatorsRoot)
+			got, err := types.GetSyncCommitteeSelectionProofSignRequest(tt.args.request, tt.args.genesisValidatorsRoot)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetSyncCommitteeSelectionProofSignRequest() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -334,7 +334,7 @@ func TestGetVoluntaryExitSignRequest(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    args
-		want    *v1.VoluntaryExitSignRequest
+		want    *types.VoluntaryExitSignRequest
 		wantErr bool
 	}{
 		{
@@ -349,7 +349,7 @@ func TestGetVoluntaryExitSignRequest(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := v1.GetVoluntaryExitSignRequest(tt.args.request, tt.args.genesisValidatorsRoot)
+			got, err := types.GetVoluntaryExitSignRequest(tt.args.request, tt.args.genesisValidatorsRoot)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetVoluntaryExitSignRequest() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -369,7 +369,7 @@ func TestGetBlockV2BlindedSignRequest(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    args
-		want    *v1.BlockV2BlindedSignRequest
+		want    *types.BlockV2BlindedSignRequest
 		wantErr bool
 	}{
 		{
@@ -450,10 +450,36 @@ func TestGetBlockV2BlindedSignRequest(t *testing.T) {
 			}(t), "DENEB"),
 			wantErr: false,
 		},
+		{
+			name: "Happy Path Test non blinded Electra",
+			args: args{
+				request:               mock.GetMockSignRequest("BLOCK_V2_ELECTRA"),
+				genesisValidatorsRoot: make([]byte, fieldparams.RootLength),
+			},
+			want: mock.BlockV2BlindedSignRequest(func(t *testing.T) []byte {
+				bytevalue, err := hexutil.Decode("0xca4f98890bc98a59f015d06375a5e00546b8f2ac1e88d31b1774ea28d4b3e7d1")
+				require.NoError(t, err)
+				return bytevalue
+			}(t), "ELECTRA"),
+			wantErr: false,
+		},
+		{
+			name: "Happy Path Test blinded Electra",
+			args: args{
+				request:               mock.GetMockSignRequest("BLOCK_V2_BLINDED_ELECTRA"),
+				genesisValidatorsRoot: make([]byte, fieldparams.RootLength),
+			},
+			want: mock.BlockV2BlindedSignRequest(func(t *testing.T) []byte {
+				bytevalue, err := hexutil.Decode("0x60cd4e8a557e64d00f63777b53f18c10cc122997c55f40a37cb19dc2edd3b0c7")
+				require.NoError(t, err)
+				return bytevalue
+			}(t), "ELECTRA"),
+			wantErr: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := v1.GetBlockV2BlindedSignRequest(tt.args.request, tt.args.genesisValidatorsRoot)
+			got, err := types.GetBlockV2BlindedSignRequest(tt.args.request, tt.args.genesisValidatorsRoot)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetBlockV2BlindedSignRequest() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -472,7 +498,7 @@ func TestGetValidatorRegistrationSignRequest(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    args
-		want    *v1.ValidatorRegistrationSignRequest
+		want    *types.ValidatorRegistrationSignRequest
 		wantErr bool
 	}{
 		{
@@ -486,7 +512,7 @@ func TestGetValidatorRegistrationSignRequest(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := v1.GetValidatorRegistrationSignRequest(tt.args.request)
+			got, err := types.GetValidatorRegistrationSignRequest(tt.args.request)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetValidatorRegistrationSignRequest() error = %v, wantErr %v", err, tt.wantErr)
 				return

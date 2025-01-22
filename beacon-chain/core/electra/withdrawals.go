@@ -116,7 +116,7 @@ func ProcessWithdrawalRequests(ctx context.Context, st state.BeaconState, wrs []
 			return nil, err
 		}
 		// Verify withdrawal credentials
-		hasCorrectCredential := helpers.HasExecutionWithdrawalCredentials(validator)
+		hasCorrectCredential := validator.HasExecutionWithdrawalCredentials()
 		wc := validator.GetWithdrawalCredentials()
 		isCorrectSourceAddress := bytes.Equal(wc[12:], wr.SourceAddress)
 		if !hasCorrectCredential || !isCorrectSourceAddress {
@@ -165,7 +165,7 @@ func ProcessWithdrawalRequests(ctx context.Context, st state.BeaconState, wrs []
 		hasExcessBalance := vBal > params.BeaconConfig().MinActivationBalance+pendingBalanceToWithdraw
 
 		// Only allow partial withdrawals with compounding withdrawal credentials
-		if helpers.HasCompoundingWithdrawalCredential(validator) && hasSufficientEffectiveBalance && hasExcessBalance {
+		if validator.HasCompoundingWithdrawalCredentials() && hasSufficientEffectiveBalance && hasExcessBalance {
 			// Spec definition:
 			//  to_withdraw = min(
 			//	  state.balances[index] - MIN_ACTIVATION_BALANCE - pending_balance_to_withdraw,

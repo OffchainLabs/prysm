@@ -1,4 +1,4 @@
-package v1_test
+package types_test
 
 import (
 	"reflect"
@@ -8,8 +8,8 @@ import (
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	v1 "github.com/prysmaticlabs/prysm/v5/validator/keymanager/remote-web3signer/v1"
-	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/remote-web3signer/v1/mock"
+	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/remote-web3signer/types"
+	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/remote-web3signer/types/mock"
 )
 
 func TestMapAggregateAndProof(t *testing.T) {
@@ -19,7 +19,7 @@ func TestMapAggregateAndProof(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    args
-		want    *v1.AggregateAndProof
+		want    *types.AggregateAndProof
 		wantErr bool
 	}{
 		{
@@ -43,7 +43,7 @@ func TestMapAggregateAndProof(t *testing.T) {
 					SelectionProof: make([]byte, fieldparams.BLSSignatureLength),
 				},
 			},
-			want: &v1.AggregateAndProof{
+			want: &types.AggregateAndProof{
 				AggregatorIndex: "0",
 				Aggregate:       mock.Attestation(),
 				SelectionProof:  make([]byte, fieldparams.BLSSignatureLength),
@@ -53,7 +53,65 @@ func TestMapAggregateAndProof(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := v1.MapAggregateAndProof(tt.args.from)
+			got, err := types.MapAggregateAndProof(tt.args.from)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("MapAggregateAndProof() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got.Aggregate, tt.want.Aggregate) {
+				t.Errorf("MapAggregateAndProof() got = %v, want %v", got.Aggregate, tt.want.Aggregate)
+			}
+		})
+	}
+}
+
+func TestMapAggregateAndProofElectra(t *testing.T) {
+	type args struct {
+		from *ethpb.AggregateAttestationAndProofElectra
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    *types.AggregateAndProofElectra
+		wantErr bool
+	}{
+		{
+			name: "HappyPathTest",
+			args: args{
+				from: &ethpb.AggregateAttestationAndProofElectra{
+					AggregatorIndex: 0,
+					Aggregate: &ethpb.AttestationElectra{
+						AggregationBits: bitfield.Bitlist{0b1101},
+						Data: &ethpb.AttestationData{
+							BeaconBlockRoot: make([]byte, fieldparams.RootLength),
+							Source: &ethpb.Checkpoint{
+								Root: make([]byte, fieldparams.RootLength),
+							},
+							Target: &ethpb.Checkpoint{
+								Root: make([]byte, fieldparams.RootLength),
+							},
+						},
+						Signature: make([]byte, 96),
+						CommitteeBits: func() bitfield.Bitvector64 {
+							committeeBits := bitfield.NewBitvector64()
+							committeeBits.SetBitAt(0, true)
+							return committeeBits
+						}(),
+					},
+					SelectionProof: make([]byte, fieldparams.BLSSignatureLength),
+				},
+			},
+			want: &types.AggregateAndProofElectra{
+				AggregatorIndex: "0",
+				Aggregate:       mock.AttestationElectra(),
+				SelectionProof:  make([]byte, fieldparams.BLSSignatureLength),
+			},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := types.MapAggregateAndProofElectra(tt.args.from)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("MapAggregateAndProof() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -72,7 +130,7 @@ func TestMapAttestation(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    args
-		want    *v1.Attestation
+		want    *types.Attestation
 		wantErr bool
 	}{
 		{
@@ -98,7 +156,57 @@ func TestMapAttestation(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := v1.MapAttestation(tt.args.attestation)
+			got, err := types.MapAttestation(tt.args.attestation)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("MapAttestation() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("MapAttestation() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestMapAttestationElectra(t *testing.T) {
+	type args struct {
+		attestation *ethpb.AttestationElectra
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    *types.AttestationElectra
+		wantErr bool
+	}{
+		{
+			name: "HappyPathTest",
+			args: args{
+				attestation: &ethpb.AttestationElectra{
+					AggregationBits: bitfield.Bitlist{0b1101},
+					Data: &ethpb.AttestationData{
+						BeaconBlockRoot: make([]byte, fieldparams.RootLength),
+						Source: &ethpb.Checkpoint{
+							Root: make([]byte, fieldparams.RootLength),
+						},
+						Target: &ethpb.Checkpoint{
+							Root: make([]byte, fieldparams.RootLength),
+						},
+					},
+					CommitteeBits: func() bitfield.Bitvector64 {
+						committeeBits := bitfield.NewBitvector64()
+						committeeBits.SetBitAt(0, true)
+						return committeeBits
+					}(),
+					Signature: make([]byte, 96),
+				},
+			},
+			want:    mock.AttestationElectra(),
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := types.MapAttestationElectra(tt.args.attestation)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("MapAttestation() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -117,7 +225,7 @@ func TestMapAttestationData(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    args
-		want    *v1.AttestationData
+		want    *types.AttestationData
 		wantErr bool
 	}{
 		{
@@ -139,7 +247,7 @@ func TestMapAttestationData(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := v1.MapAttestationData(tt.args.data)
+			got, err := types.MapAttestationData(tt.args.data)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("MapAttestationData() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -158,7 +266,7 @@ func TestMapAttesterSlashing(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    args
-		want    *v1.AttesterSlashing
+		want    *types.AttesterSlashing
 		wantErr bool
 	}{
 		{
@@ -193,7 +301,7 @@ func TestMapAttesterSlashing(t *testing.T) {
 					},
 				},
 			},
-			want: &v1.AttesterSlashing{
+			want: &types.AttesterSlashing{
 				Attestation1: mock.IndexedAttestation(),
 				Attestation2: mock.IndexedAttestation(),
 			},
@@ -202,7 +310,7 @@ func TestMapAttesterSlashing(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := v1.MapAttesterSlashing(tt.args.slashing)
+			got, err := types.MapAttesterSlashing(tt.args.slashing)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("MapAttesterSlashing() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -221,7 +329,7 @@ func TestMapBeaconBlockAltair(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    args
-		want    *v1.BeaconBlockAltair
+		want    *types.BeaconBlockAltair
 		wantErr bool
 	}{
 		{
@@ -342,7 +450,7 @@ func TestMapBeaconBlockAltair(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := v1.MapBeaconBlockAltair(tt.args.block)
+			got, err := types.MapBeaconBlockAltair(tt.args.block)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("MapBeaconBlockAltair() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -361,7 +469,7 @@ func TestMapBeaconBlockBody(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    args
-		want    *v1.BeaconBlockBody
+		want    *types.BeaconBlockBody
 		wantErr bool
 	}{
 		{
@@ -472,7 +580,7 @@ func TestMapBeaconBlockBody(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := v1.MapBeaconBlockBody(tt.args.body)
+			got, err := types.MapBeaconBlockBody(tt.args.body)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("MapBeaconBlockBody() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -491,7 +599,7 @@ func TestMapContributionAndProof(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    args
-		want    *v1.ContributionAndProof
+		want    *types.ContributionAndProof
 		wantErr bool
 	}{
 		{
@@ -514,7 +622,7 @@ func TestMapContributionAndProof(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := v1.MapContributionAndProof(tt.args.contribution)
+			got, err := types.MapContributionAndProof(tt.args.contribution)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("MapContributionAndProof() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -535,7 +643,7 @@ func TestMapForkInfo(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    args
-		want    *v1.ForkInfo
+		want    *types.ForkInfo
 		wantErr bool
 	}{
 		{
@@ -550,7 +658,7 @@ func TestMapForkInfo(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := v1.MapForkInfo(tt.args.slot, tt.args.genesisValidatorsRoot)
+			got, err := types.MapForkInfo(tt.args.slot, tt.args.genesisValidatorsRoot)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("MapForkInfo() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -569,7 +677,7 @@ func TestMapSyncAggregatorSelectionData(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    args
-		want    *v1.SyncAggregatorSelectionData
+		want    *types.SyncAggregatorSelectionData
 		wantErr bool
 	}{
 		{
@@ -580,7 +688,7 @@ func TestMapSyncAggregatorSelectionData(t *testing.T) {
 					SubcommitteeIndex: 0,
 				},
 			},
-			want: &v1.SyncAggregatorSelectionData{
+			want: &types.SyncAggregatorSelectionData{
 				Slot:              "0",
 				SubcommitteeIndex: "0",
 			},
@@ -589,7 +697,7 @@ func TestMapSyncAggregatorSelectionData(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := v1.MapSyncAggregatorSelectionData(tt.args.data)
+			got, err := types.MapSyncAggregatorSelectionData(tt.args.data)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("MapSyncAggregatorSelectionData() error = %v, wantErr %v", err, tt.wantErr)
 				return

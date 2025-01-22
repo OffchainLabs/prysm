@@ -85,7 +85,7 @@ func UpgradeToFulu(beaconState state.BeaconState) (state.BeaconState, error) {
 		if val.ActivationEpoch() == params.BeaconConfig().FarFutureEpoch {
 			preActivationIndices = append(preActivationIndices, primitives.ValidatorIndex(index))
 		}
-		if helpers.HasCompoundingWithdrawalCredential(val) {
+		if val.HasCompoundingWithdrawalCredentials() {
 			compoundWithdrawalIndices = append(compoundWithdrawalIndices, primitives.ValidatorIndex(index))
 		}
 		return nil
