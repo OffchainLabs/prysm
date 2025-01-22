@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 	"strconv"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -568,14 +569,17 @@ type ParsedExecutionRequests interface {
 
 func (r *ExecutionPayloadResponse) ParsePayload() (ParsedPayload, error) {
 	var toProto ParsedPayload
-
-	if r.Version >= version.String(version.Bellatrix) {
+	v, err := version.FromString(strings.ToLower(r.Version))
+	if err != nil {
+		return nil, errors.Wrap(err, "invalid version parsing payload")
+	}
+	if v >= version.Bellatrix {
 		toProto = &ExecutionPayload{}
 	}
-	if r.Version >= version.String(version.Capella) {
+	if v >= version.Capella {
 		toProto = &ExecutionPayloadCapella{}
 	}
-	if r.Version >= version.String(version.Deneb) {
+	if v >= version.Deneb {
 		toProto = &ExecutionPayloadDenebAndBlobsBundle{}
 	}
 	if toProto != nil {
