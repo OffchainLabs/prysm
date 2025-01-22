@@ -57,7 +57,7 @@ const (
 	GetPayloadMethodV2 = "engine_getPayloadV2"
 	// GetPayloadMethodV3 v3 request string for JSON-RPC.
 	GetPayloadMethodV3 = "engine_getPayloadV3"
-	// GetPayloadMethodV4 v3 request string for JSON-RPC.
+	// GetPayloadMethodV4 v4 request string for JSON-RPC.
 	GetPayloadMethodV4 = "engine_getPayloadV4"
 )
 
