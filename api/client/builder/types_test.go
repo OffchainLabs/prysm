@@ -1982,9 +1982,9 @@ func TestEmptyResponseBody(t *testing.T) {
 		emptyResponse := &ExecutionPayloadResponse{}
 		require.NoError(t, json.Unmarshal(empty, emptyResponse))
 		_, err := emptyResponse.ParsePayload()
-		require.ErrorIs(t, err, consensusblocks.ErrUnsupportedVersion)
+		require.ErrorContains(t, "unsupported version", err)
 	})
-	versions := []int{version.Bellatrix, version.Capella, version.Deneb}
+	versions := []int{version.Bellatrix, version.Capella, version.Deneb, version.Electra}
 	for i := range versions {
 		vstr := version.String(versions[i])
 		t.Run("populated version without payload"+vstr, func(t *testing.T) {

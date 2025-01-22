@@ -571,7 +571,7 @@ func (r *ExecutionPayloadResponse) ParsePayload() (ParsedPayload, error) {
 	var toProto ParsedPayload
 	v, err := version.FromString(strings.ToLower(r.Version))
 	if err != nil {
-		return nil, errors.Wrap(err, "invalid version parsing payload")
+		return nil, errors.Wrap(err, fmt.Sprintf("unsupported version %s", strings.ToLower(r.Version)))
 	}
 	if v >= version.Bellatrix {
 		toProto = &ExecutionPayload{}
@@ -583,7 +583,7 @@ func (r *ExecutionPayloadResponse) ParsePayload() (ParsedPayload, error) {
 		toProto = &ExecutionPayloadDenebAndBlobsBundle{}
 	}
 	if toProto == nil {
-		return nil, consensusblocks.ErrUnsupportedVersion
+		return nil, fmt.Errorf("unsupported version %s", strings.ToLower(r.Version))
 	}
 
 	if err := json.Unmarshal(r.Data, toProto); err != nil {

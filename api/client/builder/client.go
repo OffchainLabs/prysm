@@ -222,7 +222,7 @@ func (c *Client) GetHeader(ctx context.Context, slot primitives.Slot, parentHash
 
 	ver, err := version.FromString(strings.ToLower(v.Version))
 	if err != nil {
-		return nil, errors.Wrap(err, fmt.Sprintf("can't find fork version %s", v.Version))
+		return nil, errors.Wrap(err, fmt.Sprintf("unsupported header version %s", strings.ToLower(v.Version)))
 	}
 	if ver >= version.Electra {
 		hr := &ExecHeaderResponseElectra{}
