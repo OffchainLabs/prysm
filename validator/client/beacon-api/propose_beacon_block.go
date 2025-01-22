@@ -12,6 +12,10 @@ import (
 	"github.com/pkg/errors"
 )
 
+func (c *beaconApiValidatorClient) proposeChunkedBlock(ctx context.Context, in *ethpb.ChunkedBeaconBlock) (*ethpb.ProposeResponse, error) {
+	return nil, nil
+}
+
 type blockProcessingResult struct {
 	consensusVersion string
 	beaconBlockRoot  [32]byte

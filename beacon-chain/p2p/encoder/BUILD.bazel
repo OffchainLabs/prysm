@@ -12,6 +12,7 @@ go_library(
     visibility = [
         "//beacon-chain:__subpackages__",
         "//cmd:__subpackages__",
+        "//validator:__subpackages__",
     ],
     deps = [
         "//config/params:go_default_library",

@@ -14,7 +14,7 @@ var maxChunkSize = uint(6554) // 2MB for 10 chunks.
 
 type BlockChunkCache struct {
 	sync.Mutex
-	committer *committer
+	committer *Committer
 	nodes     map[primitives.Slot]map[primitives.ValidatorIndex]*Node
 }
 

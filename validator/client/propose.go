@@ -8,6 +8,8 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/async"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync/rlnc"
+	"github.com/OffchainLabs/prysm/v6/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/config/proposer"
@@ -102,21 +104,38 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 		return
 	}
 
-	sig, signingRoot, err := v.signBlock(ctx, pubKey, epoch, slot, wb)
-	if err != nil {
-		log.WithError(err).Error("Failed to sign block")
-		if v.emitAccountMetrics {
-			ValidatorProposeFailVec.WithLabelValues(fmtKey).Inc()
+	var sig []byte
+	var signingRoot [32]byte
+	var node *rlnc.Node
+	var blk interfaces.SignedBeaconBlock
+	if features.Get().UseRLNC {
+		blk, err = blocks.BuildSignedBeaconBlock(wb, make([]byte, 96))
+		if err != nil {
+			log.WithError(err).Error("Failed to build signed beacon block")
+			return
 		}
-		return
-	}
 
-	blk, err := blocks.BuildSignedBeaconBlock(wb, sig)
-	if err != nil {
-		log.WithError(err).Error("Failed to build signed beacon block")
-		return
+		sig, signingRoot, node, err = v.createSignedChunks(ctx, pubKey, epoch, slot, wb)
+		if err != nil {
+			log.WithError(err).Error("Failed to sign block")
+			return
+		}
+		blk.SetSignature(sig)
+	} else {
+		sig, signingRoot, err = v.signBlock(ctx, pubKey, epoch, slot, wb)
+		if err != nil {
+			log.WithError(err).Error("Failed to sign block")
+			if v.emitAccountMetrics {
+				ValidatorProposeFailVec.WithLabelValues(fmtKey).Inc()
+			}
+			return
+		}
+		blk, err = blocks.BuildSignedBeaconBlock(wb, sig)
+		if err != nil {
+			log.WithError(err).Error("Failed to build signed beacon block")
+			return
+		}
 	}
-
 	if err := v.db.SlashableProposalCheck(ctx, pubKey, blk, signingRoot, v.emitAccountMetrics, ValidatorProposeFailVec); err != nil {
 		log.WithFields(
 			blockLogFields(pubKey, wb, nil),
@@ -168,13 +187,22 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 		}
 	}
 
-	blkResp, err := v.validatorClient.ProposeBeaconBlock(ctx, genericSignedBlock)
-	if err != nil {
-		log.WithField("slot", slot).WithError(err).Error("Failed to propose block")
-		if v.emitAccountMetrics {
-			ValidatorProposeFailVec.WithLabelValues(fmtKey).Inc()
+	var blkResp *ethpb.ProposeResponse
+	if features.Get().UseRLNC {
+		blkResp, err = v.validatorClient.ProposeChunkedBlock(ctx, node.GetChunkedBlock(genericSignedBlock))
+		if err != nil {
+			log.WithField("slot", slot).WithError(err).Error("Failed to propose block")
+			return
 		}
-		return
+	} else {
+		blkResp, err = v.validatorClient.ProposeBeaconBlock(ctx, genericSignedBlock)
+		if err != nil {
+			log.WithField("slot", slot).WithError(err).Error("Failed to propose block")
+			if v.emitAccountMetrics {
+				ValidatorProposeFailVec.WithLabelValues(fmtKey).Inc()
+			}
+			return
+		}
 	}
 
 	span.SetAttributes(

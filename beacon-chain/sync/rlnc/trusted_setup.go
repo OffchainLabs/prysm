@@ -13,11 +13,11 @@ var (
 	embeddedTrustedSetup []byte // 311KB
 )
 
-func LoadTrustedSetup() (*committer, error) {
+func LoadTrustedSetup() (*Committer, error) {
 	var elements []*ristretto.Element
 	err := json.Unmarshal(embeddedTrustedSetup, &elements)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not parse trusted setup JSON")
 	}
-	return &committer{elements}, nil
+	return &Committer{elements}, nil
 }

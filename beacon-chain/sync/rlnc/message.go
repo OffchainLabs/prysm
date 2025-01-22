@@ -42,7 +42,7 @@ func newMessage(c interfaces.ReadOnlyBeaconBlockChunk) (*message, error) {
 }
 
 // Verify verifies that the message is compatible with the signed committmments
-func (m *message) Verify(c *committer) bool {
+func (m *message) Verify(c *Committer) bool {
 	// We should get the same number of coefficients as commitments.
 	if len(m.chunk.coefficients) != len(m.commitments) {
 		return false
@@ -72,7 +72,8 @@ func scalarOne() (ret *ristretto.Scalar) {
 
 func randomScalar() (ret *ristretto.Scalar) {
 	buf := make([]byte, 64)
-	_, err := rand.NewGenerator().Read(buf)
+	gen := rand.NewGenerator()
+	_, err := gen.Read(buf)
 	if err != nil {
 		return nil
 	}

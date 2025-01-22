@@ -271,6 +271,60 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 	return vs.constructGenericBeaconBlock(sBlk, bundle, winningBid)
 }
 
+// ProposeChunkedBlock handles the proposal of chunked beacon blocks
+func (vs *Server) ProposeChunkedBlock(ctx context.Context, req *ethpb.ChunkedBeaconBlock) (*ethpb.ProposeResponse, error) {
+	ctx, span := trace.StartSpan(ctx, "ProposerServer.ProposeChunkedBlock")
+	defer span.End()
+
+	if req == nil {
+		return nil, status.Errorf(codes.InvalidArgument, "empty request")
+	}
+
+	block, err := blocks.NewSignedBeaconBlock(req.Block.Block)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "%s: %v", "decode block failed", err)
+	}
+
+	var sidecars []*ethpb.BlobSidecar
+	if block.IsBlinded() {
+		block, sidecars, err = vs.handleBlindedBlock(ctx, block)
+	} else if block.Version() >= version.Deneb {
+		sidecars, err = vs.blobSidecarsFromUnblindedBlock(block, req.Block)
+	}
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "%s: %v", "handle block failed", err)
+	}
+
+	root, err := block.Block().HashTreeRoot()
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not hash tree root: %v", err)
+	}
+
+	var wg sync.WaitGroup
+	errChan := make(chan error, 1)
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := vs.broadcastReceiveChunkedBlock(ctx, req, root); err != nil {
+			errChan <- errors.Wrap(err, "broadcast/receive block failed")
+			return
+		}
+		errChan <- nil
+	}()
+
+	if err := vs.broadcastAndReceiveBlobs(ctx, sidecars, root); err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not broadcast/receive blobs: %v", err)
+	}
+
+	wg.Wait()
+	if err := <-errChan; err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not broadcast/receive block: %v", err)
+	}
+
+	return &ethpb.ProposeResponse{BlockRoot: root[:]}, nil
+}
+
 // Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
 //
 // ProposeBeaconBlock handles the proposal of beacon blocks.
@@ -364,6 +418,11 @@ func (vs *Server) blobSidecarsFromUnblindedBlock(block interfaces.SignedBeaconBl
 		return nil, err
 	}
 	return BuildBlobSidecars(block, rawBlobs, proofs)
+}
+
+// broadcastReceiveChunkedBlock broadcasts a chunked block and handles its reception.
+func (vs *Server) broadcastReceiveChunkedBlock(ctx context.Context, req *ethpb.ChunkedBeaconBlock, root [32]byte) error {
+	return nil
 }
 
 // broadcastReceiveBlock broadcasts a block and handles its reception.

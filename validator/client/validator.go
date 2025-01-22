@@ -21,6 +21,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
 	"github.com/OffchainLabs/prysm/v6/async/event"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync/rlnc"
 	"github.com/OffchainLabs/prysm/v6/cmd"
 	"github.com/OffchainLabs/prysm/v6/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
@@ -113,6 +114,7 @@ type validator struct {
 	attSelectionLock                   sync.Mutex
 	dutiesLock                         sync.RWMutex
 	disableDutiesPolling               bool
+	committer                          *rlnc.Committer
 }
 
 type validatorStatus struct {

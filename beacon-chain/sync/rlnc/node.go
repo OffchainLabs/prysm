@@ -1,6 +1,8 @@
 package rlnc
 
 import (
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	ristretto "github.com/gtank/ristretto255"
 	"github.com/sirupsen/logrus"
 )
@@ -9,13 +11,17 @@ import (
 // as well as the commitments to the data. The coefficients and a partial inversion of the corresponding
 // matrix is kept in the echelon object. The committer keeps the trusted setup generators
 type Node struct {
-	chunks      [][]*ristretto.Scalar
-	commitments []*ristretto.Element
-	echelon     *echelon
-	committer   *committer
+	chunks        [][]*ristretto.Scalar
+	commitments   []*ristretto.Element
+	echelon       *echelon
+	committer     *Committer
+	slot          primitives.Slot           // repeated but convenient for the validator client
+	proposerIndex primitives.ValidatorIndex // repeated but convenient for the validator client
+	parentRoot    []byte                    // repeated but convenient for the validator client
+	signature     []byte                    // repeated but convenient for the validator client
 }
 
-func NewNode(committer *committer, size uint) *Node {
+func NewNode(committer *Committer, size uint) *Node {
 	return &Node{
 		chunks:    make([][]*ristretto.Scalar, 0),
 		echelon:   newEchelon(size),
@@ -23,9 +29,31 @@ func NewNode(committer *committer, size uint) *Node {
 	}
 }
 
+func (n *Node) GetChunkedBlock(blk *ethpb.GenericSignedBeaconBlock) *ethpb.ChunkedBeaconBlock {
+	chunks := make([]*ethpb.BeaconBlockChunkData, len(n.chunks))
+	for i, c := range n.Data() {
+		chunks[i] = &ethpb.BeaconBlockChunkData{
+			Data: c,
+		}
+	}
+	header := &ethpb.BeaconBlockChunkHeader{
+		Slot:          n.Slot(),
+		ProposerIndex: n.ProposerIndex(),
+		ParentRoot:    n.ParentRoot(),
+		Commitments:   n.Commitments(),
+	}
+
+	return &ethpb.ChunkedBeaconBlock{
+		Header:    header,
+		Chunks:    chunks,
+		Signature: n.Signature(),
+		Block:     blk,
+	}
+}
+
 // NewSource creates a new node that holds all the data already chunked and committed.
 // It is called by a broadcasting node starting the RLNC process.
-func NewSource(committer *committer, size uint, data []byte) (*Node, error) {
+func NewSource(committer *Committer, size uint, data []byte) (*Node, error) {
 	chunks := blockToChunks(size, data)
 	commitments, err := computeCommitments(committer, chunks)
 	if err != nil {
@@ -39,8 +67,48 @@ func NewSource(committer *committer, size uint, data []byte) (*Node, error) {
 	}, nil
 }
 
+// SetSlot sets the slot of the node.
+func (n *Node) SetSlot(slot primitives.Slot) {
+	n.slot = slot
+}
+
+// SetProposerIndex sets the proposer index of the node.
+func (n *Node) SetProposerIndex(proposerIndex primitives.ValidatorIndex) {
+	n.proposerIndex = proposerIndex
+}
+
+// SetSignature sets the signature of the node.
+func (n *Node) SetSignature(signature []byte) {
+	n.signature = signature
+}
+
+// SetParentRoot sets the parent root of the node.
+func (n *Node) SetParentRoot(parentRoot []byte) {
+	n.parentRoot = parentRoot
+}
+
+// Slot returns the slot of the node.
+func (n *Node) Slot() primitives.Slot {
+	return n.slot
+}
+
+// ProposerIndex returns the proposer index of the node.
+func (n *Node) ProposerIndex() primitives.ValidatorIndex {
+	return n.proposerIndex
+}
+
+// Signature returns the signature of the node.
+func (n *Node) Signature() []byte {
+	return n.signature
+}
+
+// ParentRoot returns the parent root of the node.
+func (n *Node) ParentRoot() []byte {
+	return n.parentRoot
+}
+
 // computeCommitments computes the commitments of the data in the node.
-func computeCommitments(c *committer, data [][]*ristretto.Scalar) (commitments []*ristretto.Element, err error) {
+func computeCommitments(c *Committer, data [][]*ristretto.Scalar) (commitments []*ristretto.Element, err error) {
 	if len(data) == 0 {
 		return nil, nil
 	}
@@ -204,4 +272,25 @@ func (n *Node) decode() ([]byte, error) {
 		}
 	}
 	return ret, nil
+}
+
+// Data returns the data of the chunks in a node as serialized bytes
+func (m *Node) Data() [][][]byte {
+	ret := make([][][]byte, len(m.chunks))
+	for j, c := range m.chunks {
+		ret[j] = make([][]byte, len(c))
+		for i, d := range c {
+			ret[j][i] = d.Encode(nil)
+		}
+	}
+	return ret
+}
+
+// Commitments returns the commitments of the chunks in a node as serialized bytes
+func (m *Node) Commitments() [][]byte {
+	ret := make([][]byte, len(m.commitments))
+	for j, c := range m.commitments {
+		ret[j] = c.Encode(nil)
+	}
+	return ret
 }
