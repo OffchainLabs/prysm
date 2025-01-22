@@ -1,8 +1,8 @@
 module github.com/prysmaticlabs/prysm/v5
 
-go 1.22.0
+go 1.23.0
 
-toolchain go1.22.10
+toolchain go1.23.5
 
 require (
 	github.com/MariusVanDerWijden/FuzzyVM v0.0.0-20240516070431-7828990cad7d

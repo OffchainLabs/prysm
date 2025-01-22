@@ -137,10 +137,10 @@ http_archive(
         # Expose internals of go_test for custom build transitions.
         "//third_party:io_bazel_rules_go_test.patch",
     ],
-    sha256 = "80a98277ad1311dacd837f9b16db62887702e9f1d1c4c9f796d0121a46c8e184",
+    sha256 = "90fe8fb402dee957a375f3eb8511455bd738c7ed562695f4dd117ac7d2d833b1",
     urls = [
-        "https://mirror.bazel.build/github.com/bazelbuild/rules_go/releases/download/v0.46.0/rules_go-v0.46.0.zip",
-        "https://github.com/bazelbuild/rules_go/releases/download/v0.46.0/rules_go-v0.46.0.zip",
+        "https://mirror.bazel.build/github.com/bazelbuild/rules_go/releases/download/v0.52.0/rules_go-v0.52.0.zip",
+        "https://github.com/bazelbuild/rules_go/releases/download/v0.52.0/rules_go-v0.52.0.zip",
     ],
 )
 
@@ -182,7 +182,7 @@ load("@io_bazel_rules_go//go:deps.bzl", "go_register_toolchains", "go_rules_depe
 go_rules_dependencies()
 
 go_register_toolchains(
-    go_version = "1.22.10",
+    go_version = "1.23.5",
     nogo = "@//:nogo",
 )
 
