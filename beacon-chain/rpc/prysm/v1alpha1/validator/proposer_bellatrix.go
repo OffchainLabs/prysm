@@ -329,7 +329,7 @@ func (vs *Server) getPayloadHeaderFromBuilder(
 func validateBuilderSignature(signedBid builder.SignedBid) error {
 	d, err := signing.ComputeDomain(params.BeaconConfig().DomainApplicationBuilder,
 		nil, /* fork version */
-		nil /* genesis val root */)
+		nil  /* genesis val root */)
 	if err != nil {
 		return err
 	}
@@ -414,12 +414,12 @@ func setExecution(blk interfaces.SignedBeaconBlock, execution interfaces.Executi
 	}
 
 	// Set the KZG commitments for the block
-	errMessage = "failed to set local kzg commitments"
+	kzgErr := "failed to set local kzg commitments"
 	if isBlinded {
-		errMessage = "failed to set builder kzg commitments"
+		kzgErr = "failed to set builder kzg commitments"
 	}
 	if err := blk.SetBlobKzgCommitments(kzgCommitments); err != nil {
-		return errors.Wrap(err, errMessage)
+		return errors.Wrap(err, kzgErr)
 	}
 
 	// If the block version is below Electra, no further actions are needed
@@ -427,8 +427,13 @@ func setExecution(blk interfaces.SignedBeaconBlock, execution interfaces.Executi
 		return nil
 	}
 
+	// Set the execution requests
+	requestsErr := "failed to set local execution requests"
+	if isBlinded {
+		requestsErr = "failed to set builder execution requests"
+	}
 	if err := blk.SetExecutionRequests(requests); err != nil {
-		return errors.Wrap(err, errMessage)
+		return errors.Wrap(err, requestsErr)
 	}
 	return nil
 }
