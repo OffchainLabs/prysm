@@ -25,15 +25,29 @@ option java_package = "org.ethereum.eth.v1alpha1";
 option php_namespace = "Ethereum\\Eth\\v1alpha1";
 
 message BeaconBlockChunk {
-    repeated bytes data = 1 [(ethereum.eth.ext.ssz_size) = "?,32", (ethereum.eth.ext.ssz_max)  = "32768"];
-    repeated bytes coefficients = 2 [(ethereum.eth.ext.ssz_size) = "?,32", (ethereum.eth.ext.ssz_max)  = "128"];
-    BeaconBlockChunkHeader header = 3;
-    bytes signature = 4 [(ethereum.eth.ext.ssz_size) = "96"];
+  repeated bytes data = 1 [
+    (ethereum.eth.ext.ssz_size) = "?,32",
+    (ethereum.eth.ext.ssz_max) = "32768"
+  ];
+  repeated bytes coefficients = 2 [
+    (ethereum.eth.ext.ssz_size) = "?,32",
+    (ethereum.eth.ext.ssz_max) = "128"
+  ];
+  BeaconBlockChunkHeader header = 3;
+  bytes signature = 4 [ (ethereum.eth.ext.ssz_size) = "96" ];
 }
 
 message BeaconBlockChunkHeader {
-    uint64 slot = 1 [(ethereum.eth.ext.cast_type) = "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"];
-    uint64 proposer_index = 2 [(ethereum.eth.ext.cast_type) = "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.ValidatorIndex"];
-    bytes parent_root = 3 [(ethereum.eth.ext.ssz_size) = "32"];
-    repeated bytes commitments = 4 [(ethereum.eth.ext.ssz_size) = "?,32", (ethereum.eth.ext.ssz_max)  = "128"];
+  uint64 slot = 1 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"
+  ];
+  uint64 proposer_index = 2 [ (ethereum.eth.ext.cast_type) =
+                                  "github.com/OffchainLabs/prysm/v6/"
+                                  "consensus-types/primitives.ValidatorIndex" ];
+  bytes parent_root = 3 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  repeated bytes commitments = 4 [
+    (ethereum.eth.ext.ssz_size) = "?,32",
+    (ethereum.eth.ext.ssz_max) = "128"
+  ];
 }

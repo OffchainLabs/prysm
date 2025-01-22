@@ -114,12 +114,13 @@ service BeaconNodeValidator {
   //
   // The status response can be one of the following:
   //	DEPOSITED - validator's deposit has been recognized by Ethereum 1, not
-  //yet recognized by Ethereum. 	PENDING - validator is in Ethereum's activation
-  //queue. 	ACTIVE - validator is active. 	EXITING - validator has initiated an an
-  //exit request, or has dropped below the ejection balance and is being kicked
-  //out. 	EXITED - validator is no longer validating. 	SLASHING - validator has
-  //been kicked out due to meeting a slashing condition. 	UNKNOWN_STATUS -
-  //validator does not have a known status in the network.
+  // yet recognized by Ethereum. 	PENDING - validator is in Ethereum's
+  // activation queue. 	ACTIVE - validator is active. 	EXITING - validator has
+  // initiated an an exit request, or has dropped below the ejection balance and
+  // is being kicked out. 	EXITED - validator is no longer validating.
+  // SLASHING - validator has been kicked out due to meeting a slashing
+  // condition. 	UNKNOWN_STATUS - validator does not have a known status
+  // in the network.
   rpc ValidatorStatus(ValidatorStatusRequest)
       returns (ValidatorStatusResponse) {
     option deprecated = true;
@@ -693,7 +694,7 @@ message DutiesResponse {
 
   bytes previous_duty_dependent_root = 4 [ (ethereum.eth.ext.ssz_size) = "32" ];
   bytes current_duty_dependent_root = 5 [ (ethereum.eth.ext.ssz_size) = "32" ];
-  
+
   message Duty {
     // The committee a validator is assigned to.
     repeated uint64 committee = 1
@@ -967,18 +968,16 @@ message ValidatorParticipation {
   uint64 previous_epoch_head_attesting_gwei = 10;
 }
 
-// ValidatorIdentity gives information about the state of a validator at a certain
-// epoch.
+// ValidatorIdentity gives information about the state of a validator at a
+// certain epoch.
 message ValidatorIdentity {
   // The validator's index in the beacon state.
   uint64 index = 1 [ (ethereum.eth.ext.cast_type) =
-  "github.com/OffchainLabs/prysm/v6/consensus-types/"
-      "primitives.ValidatorIndex" ];
+                         "github.com/OffchainLabs/prysm/v6/consensus-types/"
+                         "primitives.ValidatorIndex" ];
 
   // The validator's 48 byte BLS public key.
-  bytes pubkey = 2 [
-    (ethereum.eth.ext.ssz_size) = "48"
-  ];
+  bytes pubkey = 2 [ (ethereum.eth.ext.ssz_size) = "48" ];
 
   // Epoch when the validator was activated. This field may be zero if the
   // validator was present in the Ethereum proof of stake genesis. This field is
