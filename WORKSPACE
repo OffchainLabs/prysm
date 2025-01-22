@@ -16,6 +16,33 @@ load("@rules_pkg//:deps.bzl", "rules_pkg_dependencies")
 
 rules_pkg_dependencies()
 
+load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+http_archive(
+    name = "toolchains_protoc",
+    sha256 = "abb1540f8a9e045422730670ebb2f25b41fa56ca5a7cf795175a110a0a68f4ad",
+    strip_prefix = "toolchains_protoc-0.3.6",
+    url = "https://github.com/aspect-build/toolchains_protoc/releases/download/v0.3.6/toolchains_protoc-v0.3.6.tar.gz",
+)
+
+load("@toolchains_protoc//protoc:repositories.bzl", "rules_protoc_dependencies")
+
+rules_protoc_dependencies()
+
+load("@rules_proto//proto:repositories.bzl", "rules_proto_dependencies")
+
+rules_proto_dependencies()
+
+load("@bazel_features//:deps.bzl", "bazel_features_deps")
+
+bazel_features_deps()
+
+load("@toolchains_protoc//protoc:toolchain.bzl", "protoc_toolchains")
+
+protoc_toolchains(
+    name = "protoc_toolchains",
+    version = "v25.3",
+)
+
 HERMETIC_CC_TOOLCHAIN_VERSION = "v3.0.1"
 
 http_archive(
