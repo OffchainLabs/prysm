@@ -1802,8 +1802,8 @@ def prysm_deps():
     go_repository(
         name = "com_github_kisielk_errcheck",
         importpath = "github.com/kisielk/errcheck",
-        sum = "h1:e8esj/e4R+SAOwFwN+n3zr0nYeCyeweozKfO23MvHzY=",
-        version = "v1.5.0",
+        sum = "h1:ZX/URYa7ilESY19ik/vBmCn6zdGQLxACwjAcWbHlYlg=",
+        version = "v1.8.0",
     )
     go_repository(
         name = "com_github_kisielk_gotool",
