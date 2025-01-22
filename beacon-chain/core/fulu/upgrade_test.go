@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/fulu"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
@@ -12,7 +11,6 @@ import (
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"github.com/prysmaticlabs/prysm/v5/testing/util"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
 func TestUpgradeToFulu(t *testing.T) {
@@ -33,57 +31,6 @@ func TestUpgradeToFulu(t *testing.T) {
 	require.Equal(t, preForkState.GenesisTime(), mSt.GenesisTime())
 	require.DeepSSZEqual(t, preForkState.GenesisValidatorsRoot(), mSt.GenesisValidatorsRoot())
 	require.Equal(t, preForkState.Slot(), mSt.Slot())
-	require.DeepSSZEqual(t, preForkState.LatestBlockHeader(), mSt.LatestBlockHeader())
-	require.DeepSSZEqual(t, preForkState.BlockRoots(), mSt.BlockRoots())
-	require.DeepSSZEqual(t, preForkState.StateRoots(), mSt.StateRoots())
-	require.DeepSSZEqual(t, preForkState.Validators()[2:], mSt.Validators()[2:])
-	require.DeepSSZEqual(t, preForkState.Balances()[2:], mSt.Balances()[2:])
-	require.DeepSSZEqual(t, preForkState.Eth1Data(), mSt.Eth1Data())
-	require.DeepSSZEqual(t, preForkState.Eth1DataVotes(), mSt.Eth1DataVotes())
-	require.DeepSSZEqual(t, preForkState.Eth1DepositIndex(), mSt.Eth1DepositIndex())
-	require.DeepSSZEqual(t, preForkState.RandaoMixes(), mSt.RandaoMixes())
-	require.DeepSSZEqual(t, preForkState.Slashings(), mSt.Slashings())
-	require.DeepSSZEqual(t, preForkState.JustificationBits(), mSt.JustificationBits())
-	require.DeepSSZEqual(t, preForkState.PreviousJustifiedCheckpoint(), mSt.PreviousJustifiedCheckpoint())
-	require.DeepSSZEqual(t, preForkState.CurrentJustifiedCheckpoint(), mSt.CurrentJustifiedCheckpoint())
-	require.DeepSSZEqual(t, preForkState.FinalizedCheckpoint(), mSt.FinalizedCheckpoint())
-
-	require.Equal(t, len(preForkState.Validators()), len(mSt.Validators()))
-
-	preVal, err := preForkState.ValidatorAtIndex(0)
-	require.NoError(t, err)
-	require.Equal(t, params.BeaconConfig().MaxEffectiveBalance, preVal.EffectiveBalance)
-
-	preVal2, err := preForkState.ValidatorAtIndex(1)
-	require.NoError(t, err)
-	require.Equal(t, params.BeaconConfig().MaxEffectiveBalance, preVal2.EffectiveBalance)
-
-	// TODO: Fix this test
-	// mVal, err := mSt.ValidatorAtIndex(0)
-	_, err = mSt.ValidatorAtIndex(0)
-	require.NoError(t, err)
-	// require.Equal(t, uint64(0), mVal.EffectiveBalance)
-
-	mVal2, err := mSt.ValidatorAtIndex(1)
-	require.NoError(t, err)
-	require.Equal(t, params.BeaconConfig().MinActivationBalance, mVal2.EffectiveBalance)
-
-	numValidators := mSt.NumValidators()
-	p, err := mSt.PreviousEpochParticipation()
-	require.NoError(t, err)
-	require.DeepSSZEqual(t, make([]byte, numValidators), p)
-	p, err = mSt.CurrentEpochParticipation()
-	require.NoError(t, err)
-	require.DeepSSZEqual(t, make([]byte, numValidators), p)
-	s, err := mSt.InactivityScores()
-	require.NoError(t, err)
-	require.DeepSSZEqual(t, make([]uint64, numValidators), s)
-
-	hr1, err := preForkState.HistoricalRoots()
-	require.NoError(t, err)
-	hr2, err := mSt.HistoricalRoots()
-	require.NoError(t, err)
-	require.DeepEqual(t, hr1, hr2)
 
 	f := mSt.Fork()
 	require.DeepSSZEqual(t, &ethpb.Fork{
@@ -91,11 +38,50 @@ func TestUpgradeToFulu(t *testing.T) {
 		CurrentVersion:  params.BeaconConfig().FuluForkVersion,
 		Epoch:           time.CurrentEpoch(st),
 	}, f)
+
+	require.DeepSSZEqual(t, preForkState.LatestBlockHeader(), mSt.LatestBlockHeader())
+	require.DeepSSZEqual(t, preForkState.BlockRoots(), mSt.BlockRoots())
+	require.DeepSSZEqual(t, preForkState.StateRoots(), mSt.StateRoots())
+
+	hr1, err := preForkState.HistoricalRoots()
+	require.NoError(t, err)
+	hr2, err := mSt.HistoricalRoots()
+	require.NoError(t, err)
+	require.DeepEqual(t, hr1, hr2)
+
+	require.DeepSSZEqual(t, preForkState.Eth1Data(), mSt.Eth1Data())
+	require.DeepSSZEqual(t, preForkState.Eth1DataVotes(), mSt.Eth1DataVotes())
+	require.DeepSSZEqual(t, preForkState.Eth1DepositIndex(), mSt.Eth1DepositIndex())
+	require.DeepSSZEqual(t, preForkState.Validators(), mSt.Validators())
+	require.DeepSSZEqual(t, preForkState.Balances(), mSt.Balances())
+	require.DeepSSZEqual(t, preForkState.RandaoMixes(), mSt.RandaoMixes())
+	require.DeepSSZEqual(t, preForkState.Slashings(), mSt.Slashings())
+
+	numValidators := mSt.NumValidators()
+
+	p, err := mSt.PreviousEpochParticipation()
+	require.NoError(t, err)
+	require.DeepSSZEqual(t, make([]byte, numValidators), p)
+
+	p, err = mSt.CurrentEpochParticipation()
+	require.NoError(t, err)
+	require.DeepSSZEqual(t, make([]byte, numValidators), p)
+
+	require.DeepSSZEqual(t, preForkState.JustificationBits(), mSt.JustificationBits())
+	require.DeepSSZEqual(t, preForkState.PreviousJustifiedCheckpoint(), mSt.PreviousJustifiedCheckpoint())
+	require.DeepSSZEqual(t, preForkState.CurrentJustifiedCheckpoint(), mSt.CurrentJustifiedCheckpoint())
+	require.DeepSSZEqual(t, preForkState.FinalizedCheckpoint(), mSt.FinalizedCheckpoint())
+
+	s, err := mSt.InactivityScores()
+	require.NoError(t, err)
+	require.DeepSSZEqual(t, make([]uint64, numValidators), s)
+
 	csc, err := mSt.CurrentSyncCommittee()
 	require.NoError(t, err)
 	psc, err := preForkState.CurrentSyncCommittee()
 	require.NoError(t, err)
 	require.DeepSSZEqual(t, psc, csc)
+
 	nsc, err := mSt.NextSyncCommittee()
 	require.NoError(t, err)
 	psc, err = preForkState.NextSyncCommittee()
@@ -110,7 +96,6 @@ func TestUpgradeToFulu(t *testing.T) {
 	require.NoError(t, err)
 	txRoot, err := prevHeader.TransactionsRoot()
 	require.NoError(t, err)
-
 	wdRoot, err := prevHeader.WithdrawalsRoot()
 	require.NoError(t, err)
 	wanted := &enginev1.ExecutionPayloadHeaderDeneb{
@@ -144,45 +129,57 @@ func TestUpgradeToFulu(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 0, len(summaries))
 
-	startIndex, err := mSt.DepositRequestsStartIndex()
+	preDepositRequestsStartIndex, err := preForkState.DepositRequestsStartIndex()
 	require.NoError(t, err)
-	require.Equal(t, params.BeaconConfig().UnsetDepositRequestsStartIndex, startIndex)
+	postDepositRequestsStartIndex, err := mSt.DepositRequestsStartIndex()
+	require.NoError(t, err)
+	require.Equal(t, preDepositRequestsStartIndex, postDepositRequestsStartIndex)
 
-	balance, err := mSt.DepositBalanceToConsume()
+	preDepositBalanceToConsume, err := preForkState.DepositBalanceToConsume()
 	require.NoError(t, err)
-	require.Equal(t, primitives.Gwei(0), balance)
+	postDepositBalanceToConsume, err := mSt.DepositBalanceToConsume()
+	require.NoError(t, err)
+	require.Equal(t, preDepositBalanceToConsume, postDepositBalanceToConsume)
 
-	tab, err := helpers.TotalActiveBalance(mSt)
+	preExitBalanceToConsume, err := preForkState.ExitBalanceToConsume()
 	require.NoError(t, err)
+	postExitBalanceToConsume, err := mSt.ExitBalanceToConsume()
+	require.NoError(t, err)
+	require.Equal(t, preExitBalanceToConsume, postExitBalanceToConsume)
 
-	ebtc, err := mSt.ExitBalanceToConsume()
+	preEarliestExitEpoch, err := preForkState.EarliestExitEpoch()
 	require.NoError(t, err)
-	require.Equal(t, helpers.ActivationExitChurnLimit(primitives.Gwei(tab)), ebtc)
+	postEarliestExitEpoch, err := mSt.EarliestExitEpoch()
+	require.NoError(t, err)
+	require.Equal(t, preEarliestExitEpoch, postEarliestExitEpoch)
 
-	eee, err := mSt.EarliestExitEpoch()
+	preConsolidationBalanceToConsume, err := preForkState.ConsolidationBalanceToConsume()
 	require.NoError(t, err)
-	require.Equal(t, helpers.ActivationExitEpoch(primitives.Epoch(1)), eee)
+	postConsolidationBalanceToConsume, err := mSt.ConsolidationBalanceToConsume()
+	require.NoError(t, err)
+	require.Equal(t, preConsolidationBalanceToConsume, postConsolidationBalanceToConsume)
 
-	cbtc, err := mSt.ConsolidationBalanceToConsume()
+	preEarliesConsolidationEoch, err := preForkState.EarliestConsolidationEpoch()
 	require.NoError(t, err)
-	require.Equal(t, helpers.ConsolidationChurnLimit(primitives.Gwei(tab)), cbtc)
+	postEarliestConsolidationEpoch, err := mSt.EarliestConsolidationEpoch()
+	require.NoError(t, err)
+	require.Equal(t, preEarliesConsolidationEoch, postEarliestConsolidationEpoch)
 
-	earliestConsolidationEpoch, err := mSt.EarliestConsolidationEpoch()
+	prePendingDeposits, err := preForkState.PendingDeposits()
 	require.NoError(t, err)
-	require.Equal(t, helpers.ActivationExitEpoch(slots.ToEpoch(preForkState.Slot())), earliestConsolidationEpoch)
+	postPendingDeposits, err := mSt.PendingDeposits()
+	require.NoError(t, err)
+	require.DeepSSZEqual(t, prePendingDeposits, postPendingDeposits)
 
-	// TODO: Fix this test
-	// pendingDeposits, err := mSt.PendingDeposits()
-	_, err = mSt.PendingDeposits()
+	prePendingPartialWithdrawals, err := preForkState.PendingPartialWithdrawals()
 	require.NoError(t, err)
-	// require.Equal(t, 2, len(pendingDeposits))
-	// require.Equal(t, uint64(1000), pendingDeposits[1].Amount)
+	postPendingPartialWithdrawals, err := mSt.PendingPartialWithdrawals()
+	require.NoError(t, err)
+	require.DeepSSZEqual(t, prePendingPartialWithdrawals, postPendingPartialWithdrawals)
 
-	numPendingPartialWithdrawals, err := mSt.NumPendingPartialWithdrawals()
+	prePendingConsolidations, err := preForkState.PendingConsolidations()
 	require.NoError(t, err)
-	require.Equal(t, uint64(0), numPendingPartialWithdrawals)
-
-	consolidations, err := mSt.PendingConsolidations()
+	postPendingConsolidations, err := mSt.PendingConsolidations()
 	require.NoError(t, err)
-	require.Equal(t, 0, len(consolidations))
+	require.DeepSSZEqual(t, prePendingConsolidations, postPendingConsolidations)
 }
