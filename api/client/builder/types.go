@@ -1363,7 +1363,7 @@ func (er *ExecutionRequestsV1) ToProto() (*v1.ExecutionRequests, error) {
 		withdrawals[i] = w
 	}
 	if uint64(len(er.Consolidations)) > params.BeaconConfig().MaxConsolidationsRequestsPerPayload {
-		return nil, fmt.Errorf("consolidation requests %d exceeds the maximum %d", len(er.Consolidations), params.BeaconConfig().MaxConsolidationsRequestsPerPayload)
+		return nil, fmt.Errorf("consolidation requests count %d exceeds the maximum %d", len(er.Consolidations), params.BeaconConfig().MaxConsolidationsRequestsPerPayload)
 	}
 	consolidations := make([]*v1.ConsolidationRequest, len(er.Consolidations))
 	for i, con := range er.Consolidations {
