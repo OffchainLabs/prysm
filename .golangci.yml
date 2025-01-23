@@ -46,6 +46,7 @@ linters:
     - gosec
     - inamedparam
     - interfacebloat
+    - intrange
     - ireturn
     - lll
     - maintidx
