@@ -1352,7 +1352,7 @@ func (er *ExecutionRequestsV1) ToProto() (*v1.ExecutionRequests, error) {
 		deposits[i] = d
 	}
 	if uint64(len(er.Withdrawals)) > params.BeaconConfig().MaxWithdrawalRequestsPerPayload {
-		return nil, fmt.Errorf("withdrawal requests %d exceeds the maximum %d", len(er.Withdrawals), params.BeaconConfig().MaxWithdrawalRequestsPerPayload)
+		return nil, fmt.Errorf("withdrawal requests count %d exceeds the maximum %d", len(er.Withdrawals), params.BeaconConfig().MaxWithdrawalRequestsPerPayload)
 	}
 	withdrawals := make([]*v1.WithdrawalRequest, len(er.Withdrawals))
 	for i, wr := range er.Withdrawals {
