@@ -357,7 +357,7 @@ func (s *Store) processElectra(ctx context.Context, pbState *ethpb.BeaconStateEl
 	if err != nil {
 		return err
 	}
-	encodedState := snappy.Encode(nil, append(electraKey, rawObj...))
+	encodedState := snappy.Encode(nil, append(ElectraKey, rawObj...))
 	if err := bucket.Put(rootHash, encodedState); err != nil {
 		return err
 	}
@@ -530,9 +530,9 @@ func (s *Store) unmarshalState(_ context.Context, enc []byte, validatorEntries [
 			protoState.Validators = validatorEntries
 		}
 		return statenative.InitializeFromProtoUnsafeFulu(protoState)
-	case hasElectraKey(enc):
+	case HasElectraKey(enc):
 		protoState := &ethpb.BeaconStateElectra{}
-		if err := protoState.UnmarshalSSZ(enc[len(electraKey):]); err != nil {
+		if err := protoState.UnmarshalSSZ(enc[len(ElectraKey):]); err != nil {
 			return nil, errors.Wrap(err, "failed to unmarshal encoding for Electra")
 		}
 		ok, err := s.isStateValidatorMigrationOver()
@@ -688,7 +688,7 @@ func marshalState(ctx context.Context, st state.ReadOnlyBeaconState) ([]byte, er
 		if err != nil {
 			return nil, err
 		}
-		return snappy.Encode(nil, append(electraKey, rawObj...)), nil
+		return snappy.Encode(nil, append(ElectraKey, rawObj...)), nil
 	case version.Fulu:
 		rState, ok := st.ToProtoUnsafe().(*ethpb.BeaconStateFulu)
 		if !ok {

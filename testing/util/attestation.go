@@ -391,3 +391,16 @@ func HydrateIndexedAttestation(a *ethpb.IndexedAttestation) *ethpb.IndexedAttest
 	a.Data = HydrateAttestationData(a.Data)
 	return a
 }
+
+// HydrateIndexedAttestationElectra hydrates an indexed attestation with correct field length sizes
+// to comply with fssz marshalling and unmarshalling rules.
+func HydrateIndexedAttestationElectra(a *ethpb.IndexedAttestationElectra) *ethpb.IndexedAttestationElectra {
+	if a.Signature == nil {
+		a.Signature = make([]byte, 96)
+	}
+	if a.Data == nil {
+		a.Data = &ethpb.AttestationData{}
+	}
+	a.Data = HydrateAttestationData(a.Data)
+	return a
+}

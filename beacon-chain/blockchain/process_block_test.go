@@ -1076,6 +1076,48 @@ func TestService_insertSlashingsToForkChoiceStore(t *testing.T) {
 	service.InsertSlashingsToForkChoiceStore(ctx, wb.Block().Body().AttesterSlashings())
 }
 
+func TestService_insertSlashingsToForkChoiceStoreElectra(t *testing.T) {
+	service, tr := minimalTestService(t)
+	ctx := tr.ctx
+
+	beaconState, privKeys := util.DeterministicGenesisStateElectra(t, 100)
+	att1 := util.HydrateIndexedAttestationElectra(&ethpb.IndexedAttestationElectra{
+		Data: &ethpb.AttestationData{
+			Source: &ethpb.Checkpoint{Epoch: 1},
+		},
+		AttestingIndices: []uint64{0, 1},
+	})
+	domain, err := signing.Domain(beaconState.Fork(), 0, params.BeaconConfig().DomainBeaconAttester, beaconState.GenesisValidatorsRoot())
+	require.NoError(t, err)
+	signingRoot, err := signing.ComputeSigningRoot(att1.Data, domain)
+	assert.NoError(t, err, "Could not get signing root of beacon block header")
+	sig0 := privKeys[0].Sign(signingRoot[:])
+	sig1 := privKeys[1].Sign(signingRoot[:])
+	aggregateSig := bls.AggregateSignatures([]bls.Signature{sig0, sig1})
+	att1.Signature = aggregateSig.Marshal()
+
+	att2 := util.HydrateIndexedAttestationElectra(&ethpb.IndexedAttestationElectra{
+		AttestingIndices: []uint64{0, 1},
+	})
+	signingRoot, err = signing.ComputeSigningRoot(att2.Data, domain)
+	assert.NoError(t, err, "Could not get signing root of beacon block header")
+	sig0 = privKeys[0].Sign(signingRoot[:])
+	sig1 = privKeys[1].Sign(signingRoot[:])
+	aggregateSig = bls.AggregateSignatures([]bls.Signature{sig0, sig1})
+	att2.Signature = aggregateSig.Marshal()
+	slashings := []*ethpb.AttesterSlashingElectra{
+		{
+			Attestation_1: att1,
+			Attestation_2: att2,
+		},
+	}
+	b := util.NewBeaconBlockElectra()
+	b.Block.Body.AttesterSlashings = slashings
+	wb, err := consensusblocks.NewSignedBeaconBlock(b)
+	require.NoError(t, err)
+	service.InsertSlashingsToForkChoiceStore(ctx, wb.Block().Body().AttesterSlashings())
+}
+
 func TestOnBlock_ProcessBlocksParallel(t *testing.T) {
 	service, tr := minimalTestService(t)
 	ctx := tr.ctx

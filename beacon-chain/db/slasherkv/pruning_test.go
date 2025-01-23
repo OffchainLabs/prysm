@@ -8,6 +8,7 @@ import (
 	slashertypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/slasher/types"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	logTest "github.com/sirupsen/logrus/hooks/test"
@@ -177,8 +178,8 @@ func TestStore_PruneAttestations_OK(t *testing.T) {
 				if i > 0 {
 					source = target - 1
 				}
-				att1 := createAttestationWrapper(source, target, []uint64{attester1}, []byte{0})
-				att2 := createAttestationWrapper(source, target, []uint64{attester2}, []byte{1})
+				att1 := createAttestationWrapper(version.Phase0, source, target, []uint64{attester1}, []byte{0})
+				att2 := createAttestationWrapper(version.Phase0, source, target, []uint64{attester2}, []byte{1})
 				attestations = append(attestations, att1, att2)
 			}
 		}
