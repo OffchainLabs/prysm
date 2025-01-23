@@ -132,7 +132,7 @@ func setExecutionData(ctx context.Context, blk interfaces.SignedBeaconBlock, loc
 			if bid.Version() >= version.Deneb {
 				bidDeneb, ok := bid.(builder.BidDeneb)
 				if !ok {
-					log.Warnf("bid type %T does not implement builder.BidDeneb ", bid)
+					log.Warnf("bid type %T does not implement builder.BidDeneb", bid)
 				} else {
 					builderKzgCommitments = bidDeneb.BlobKzgCommitments()
 				}
