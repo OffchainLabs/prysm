@@ -89,31 +89,6 @@ type ExecPayloadResponse struct {
 	Version string               `json:"version"`
 	Data    *v1.ExecutionPayload `json:"data"`
 }
-
-type ExecHeaderResponseCapella struct {
-	Version string `json:"version"`
-	Data    struct {
-		Signature hexutil.Bytes                 `json:"signature"`
-		Message   *builderAPI.BuilderBidCapella `json:"message"`
-	} `json:"data"`
-}
-
-type ExecHeaderResponseDeneb struct {
-	Version string `json:"version"`
-	Data    struct {
-		Signature hexutil.Bytes               `json:"signature"`
-		Message   *builderAPI.BuilderBidDeneb `json:"message"`
-	} `json:"data"`
-}
-
-type ExecHeaderResponseElectra struct {
-	Version string `json:"version"`
-	Data    struct {
-		Signature hexutil.Bytes                 `json:"signature"`
-		Message   *builderAPI.BuilderBidElectra `json:"message"`
-	} `json:"data"`
-}
-
 type Builder struct {
 	cfg            *config
 	address        string
@@ -401,7 +376,7 @@ func (p *Builder) handleHeaderRequest(w http.ResponseWriter, req *http.Request) 
 	}
 	d, err := signing.ComputeDomain(params.BeaconConfig().DomainApplicationBuilder,
 		nil, /* fork version */
-		nil /* genesis val root */)
+		nil  /* genesis val root */)
 	if err != nil {
 		p.cfg.logger.WithError(err).Error("Could not compute the domain")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -479,7 +454,7 @@ func (p *Builder) handleHeaderRequestCapella(w http.ResponseWriter) {
 	}
 	d, err := signing.ComputeDomain(params.BeaconConfig().DomainApplicationBuilder,
 		nil, /* fork version */
-		nil /* genesis val root */)
+		nil  /* genesis val root */)
 	if err != nil {
 		p.cfg.logger.WithError(err).Error("Could not compute the domain")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -492,7 +467,7 @@ func (p *Builder) handleHeaderRequestCapella(w http.ResponseWriter) {
 		return
 	}
 	sig := secKey.Sign(rt[:])
-	hdrResp := &ExecHeaderResponseCapella{
+	hdrResp := &builderAPI.ExecHeaderResponseCapella{
 		Version: "capella",
 		Data: struct {
 			Signature hexutil.Bytes                 `json:"signature"`
@@ -565,7 +540,7 @@ func (p *Builder) handleHeaderRequestDeneb(w http.ResponseWriter) {
 	}
 	d, err := signing.ComputeDomain(params.BeaconConfig().DomainApplicationBuilder,
 		nil, /* fork version */
-		nil /* genesis val root */)
+		nil  /* genesis val root */)
 	if err != nil {
 		p.cfg.logger.WithError(err).Error("Could not compute the domain")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -578,7 +553,7 @@ func (p *Builder) handleHeaderRequestDeneb(w http.ResponseWriter) {
 		return
 	}
 	sig := secKey.Sign(rt[:])
-	hdrResp := &ExecHeaderResponseDeneb{
+	hdrResp := &builderAPI.ExecHeaderResponseDeneb{
 		Version: "deneb",
 		Data: struct {
 			Signature hexutil.Bytes               `json:"signature"`
@@ -699,7 +674,7 @@ func (p *Builder) handleHeaderRequestElectra(w http.ResponseWriter) {
 	}
 	d, err := signing.ComputeDomain(params.BeaconConfig().DomainApplicationBuilder,
 		nil, /* fork version */
-		nil /* genesis val root */)
+		nil  /* genesis val root */)
 	if err != nil {
 		p.cfg.logger.WithError(err).Error("Could not compute the domain")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -712,7 +687,7 @@ func (p *Builder) handleHeaderRequestElectra(w http.ResponseWriter) {
 		return
 	}
 	sig := secKey.Sign(rt[:])
-	hdrResp := &ExecHeaderResponseElectra{
+	hdrResp := &builderAPI.ExecHeaderResponseElectra{
 		Version: "electra",
 		Data: struct {
 			Signature hexutil.Bytes                 `json:"signature"`

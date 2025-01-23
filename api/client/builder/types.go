@@ -418,7 +418,8 @@ func FromProtoDeneb(payload *v1.ExecutionPayloadDeneb) (ExecutionPayloadDeneb, e
 
 // ExecHeaderResponseCapella is the response of builder API /eth/v1/builder/header/{slot}/{parent_hash}/{pubkey} for Capella.
 type ExecHeaderResponseCapella struct {
-	Data struct {
+	Version string `json:"version"`
+	Data    struct {
 		Signature hexutil.Bytes      `json:"signature"`
 		Message   *BuilderBidCapella `json:"message"`
 	} `json:"data"`
@@ -958,7 +959,8 @@ func (ch *BLSToExecutionChange) MarshalJSON() ([]byte, error) {
 
 // ExecHeaderResponseDeneb is the header response for builder API /eth/v1/builder/header/{slot}/{parent_hash}/{pubkey}.
 type ExecHeaderResponseDeneb struct {
-	Data struct {
+	Version string `json:"version"`
+	Data    struct {
 		Signature hexutil.Bytes    `json:"signature"`
 		Message   *BuilderBidDeneb `json:"message"`
 	} `json:"data"`
@@ -1277,7 +1279,8 @@ func (p *ExecutionPayloadDeneb) ToProto() (*v1.ExecutionPayloadDeneb, error) {
 
 // ExecHeaderResponseElectra is the header response for builder API /eth/v1/builder/header/{slot}/{parent_hash}/{pubkey}.
 type ExecHeaderResponseElectra struct {
-	Data struct {
+	Version string `json:"version"`
+	Data    struct {
 		Signature hexutil.Bytes      `json:"signature"`
 		Message   *BuilderBidElectra `json:"message"`
 	} `json:"data"`
@@ -1314,14 +1317,14 @@ func (bb *BuilderBidElectra) ToProto() (*eth.BuilderBidElectra, error) {
 	if bb.ExecutionRequests == nil {
 		return nil, errors.New("execution requests is empty")
 	}
-	ExecutionRequests, err := bb.ExecutionRequests.ToProto()
+	executionRequests, err := bb.ExecutionRequests.ToProto()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to convert ExecutionRequests")
 	}
 	return &eth.BuilderBidElectra{
 		Header:             header,
 		BlobKzgCommitments: kzgCommitments,
-		ExecutionRequests:  ExecutionRequests,
+		ExecutionRequests:  executionRequests,
 		// Note that SSZBytes() reverses byte order for the little-endian representation.
 		// Uint256.Bytes() is big-endian, SSZBytes takes this value and reverses it.
 		Value:  bytesutil.SafeCopyBytes(bb.Value.SSZBytes()),

@@ -78,26 +78,6 @@ func setExecutionData(ctx context.Context, blk interfaces.SignedBeaconBlock, loc
 		return local.Bid, local.BlobsBundle, setLocalExecution(blk, local)
 	}
 
-	var builderKzgCommitments [][]byte
-	if bid.Version() >= version.Deneb {
-		bidDeneb, ok := bid.(builder.BidDeneb)
-		if !ok {
-			log.Warnf("bid type %T does not implement builder.BidDeneb ", bid)
-		} else {
-			builderKzgCommitments = bidDeneb.BlobKzgCommitments()
-		}
-	}
-
-	var executionRequests *enginev1.ExecutionRequests
-	if bid.Version() >= version.Electra {
-		bidElectra, ok := bid.(builder.BidElectra)
-		if !ok {
-			log.Warnf("bid type %T does not implement builder.BidElectra ", bid)
-		} else {
-			executionRequests = bidElectra.ExecutionRequests()
-		}
-	}
-
 	switch {
 	case blk.Version() >= version.Capella:
 		withdrawalsMatched, err := matchingWithdrawalsRoot(local.ExecutionData, builderPayload)
@@ -148,6 +128,25 @@ func setExecutionData(ctx context.Context, blk interfaces.SignedBeaconBlock, loc
 
 		// If we can't get the builder value, just use local block.
 		if higherValueBuilder && withdrawalsMatched { // Builder value is higher and withdrawals match.
+			var builderKzgCommitments [][]byte
+			if bid.Version() >= version.Deneb {
+				bidDeneb, ok := bid.(builder.BidDeneb)
+				if !ok {
+					log.Warnf("bid type %T does not implement builder.BidDeneb ", bid)
+				} else {
+					builderKzgCommitments = bidDeneb.BlobKzgCommitments()
+				}
+			}
+
+			var executionRequests *enginev1.ExecutionRequests
+			if bid.Version() >= version.Electra {
+				bidElectra, ok := bid.(builder.BidElectra)
+				if !ok {
+					log.Warnf("bid type %T does not implement builder.BidElectra ", bid)
+				} else {
+					executionRequests = bidElectra.ExecutionRequests()
+				}
+			}
 			if err := setBuilderExecution(blk, builderPayload, builderKzgCommitments, executionRequests); err != nil {
 				log.WithError(err).Warn("Proposer: failed to set builder payload")
 				return local.Bid, local.BlobsBundle, setLocalExecution(blk, local)
@@ -172,7 +171,7 @@ func setExecutionData(ctx context.Context, blk interfaces.SignedBeaconBlock, loc
 		)
 		return local.Bid, local.BlobsBundle, setLocalExecution(blk, local)
 	default: // Bellatrix case.
-		if err := setBuilderExecution(blk, builderPayload, builderKzgCommitments, executionRequests); err != nil {
+		if err := setBuilderExecution(blk, builderPayload, nil, nil); err != nil {
 			log.WithError(err).Warn("Proposer: failed to set builder payload")
 			return local.Bid, local.BlobsBundle, setLocalExecution(blk, local)
 		} else {
@@ -329,7 +328,7 @@ func (vs *Server) getPayloadHeaderFromBuilder(
 func validateBuilderSignature(signedBid builder.SignedBid) error {
 	d, err := signing.ComputeDomain(params.BeaconConfig().DomainApplicationBuilder,
 		nil, /* fork version */
-		nil /* genesis val root */)
+		nil  /* genesis val root */)
 	if err != nil {
 		return err
 	}
