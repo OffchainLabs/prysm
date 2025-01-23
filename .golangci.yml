@@ -14,7 +14,6 @@ linters:
   enable-all: true
   disable:
     # Deprecated linters:
-    - deadcode
     - govet
 
     # Disabled for now:

@@ -79,10 +79,10 @@ func UnionUint64(s ...[]uint64) []uint64 {
 	for i := 1; i < len(s); i++ {
 		a := s[i-1]
 		b := s[i]
-		for j := range len(a) {
+		for j := range a {
 			m[a[j]] = true
 		}
-		for j := range len(b) {
+		for j := range b {
 			if _, found := m[b[j]]; !found {
 				set = append(set, b[j])
 			}
@@ -128,10 +128,10 @@ func NotUint64(a, b []uint64) []uint64 {
 	set := make([]uint64, 0)
 	m := make(map[uint64]bool)
 
-	for i := range len(a) {
+	for i := range a {
 		m[a[i]] = true
 	}
-	for i := range len(b) {
+	for i := range b {
 		if _, found := m[b[i]]; !found {
 			set = append(set, b[i])
 		}
@@ -189,10 +189,10 @@ func UnionInt64(s ...[]int64) []int64 {
 	for i := 1; i < len(s); i++ {
 		a := s[i-1]
 		b := s[i]
-		for j := 0; j < len(a); j++ {
+		for j := range a {
 			m[a[j]] = true
 		}
-		for j := 0; j < len(b); j++ {
+		for j := range b {
 			if _, found := m[b[j]]; !found {
 				set = append(set, b[j])
 			}
@@ -209,10 +209,10 @@ func NotInt64(a, b []int64) []int64 {
 	set := make([]int64, 0)
 	m := make(map[int64]bool)
 
-	for i := 0; i < len(a); i++ {
+	for i := range a {
 		m[a[i]] = true
 	}
-	for i := 0; i < len(b); i++ {
+	for i := range b {
 		if _, found := m[b[i]]; !found {
 			set = append(set, b[i])
 		}
