@@ -10,6 +10,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/kzg"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
@@ -125,7 +126,7 @@ func (s *Service) reconstructDataColumns(ctx context.Context, verifiedRODataColu
 
 	// Update reconstruction metrics
 	dataColumnReconstructionHistogram.Observe(float64(time.Since(startTime).Milliseconds()))
-	dataColumnReconstructionCounter.Add(float64(peerdas.CellsCount(recoveredCellsAndProofs)))
+	dataColumnReconstructionCounter.Add(float64(cellsCount(recoveredCellsAndProofs)))
 
 	log.WithField("root", fmt.Sprintf("%x", blockRoot)).Debug("Data columns reconstructed and saved successfully")
 
@@ -374,4 +375,14 @@ func columnsArrayToMap(columnsArray [fieldparams.NumberOfColumns]bool) map[uint6
 	}
 
 	return columnsMap
+}
+
+// cellsCount counts the number of cells in the cells and proofs array
+func cellsCount(cellsAndProofs []kzg.CellsAndProofs) int {
+	cellsCount := 0
+	for i := 0; i < len(cellsAndProofs); i++ {
+		cellsCount += len(cellsAndProofs[i].Cells)
+	}
+
+	return cellsCount
 }
