@@ -816,6 +816,19 @@ message BuilderBidDeneb {
     bytes pubkey = 4 [(ethereum.eth.ext.ssz_size) = "48"];
 }
 
+message BuilderBidElectra {
+    ethereum.engine.v1.ExecutionPayloadHeaderDeneb header = 1;
+    repeated bytes blob_kzg_commitments = 2 [(ethereum.eth.ext.ssz_size) = "?,48", (ethereum.eth.ext.ssz_max)  = "max_blob_commitments.size"];
+    ethereum.engine.v1.ExecutionRequests execution_requests = 3;
+    bytes value = 4 [(ethereum.eth.ext.ssz_size) = "32"];
+    bytes pubkey = 5 [(ethereum.eth.ext.ssz_size) = "48"];
+}
+
+message SignedBuilderBidElectra {
+    BuilderBidElectra message = 1 ;
+    bytes signature = 2 [(ethereum.eth.ext.ssz_size) = "96"];
+}
+
 message BlobSidecars {
     repeated BlobSidecar sidecars = 1 [(ethereum.eth.ext.ssz_max) = "max_blobs_per_block.size"];
 }

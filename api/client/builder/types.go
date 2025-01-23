@@ -5,13 +5,15 @@ import (
 	"fmt"
 	"math/big"
 	"strconv"
+	"strings"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/api/server"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	consensusblocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	types "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/v5/math"
@@ -414,54 +416,10 @@ func FromProtoDeneb(payload *v1.ExecutionPayloadDeneb) (ExecutionPayloadDeneb, e
 	}, nil
 }
 
-var errInvalidTypeConversion = errors.New("unable to translate between api and foreign type")
-
-// ExecutionPayloadResponseFromData converts an ExecutionData interface value to a payload response.
-// This involves serializing the execution payload value so that the abstract payload envelope can be used.
-func ExecutionPayloadResponseFromData(ed interfaces.ExecutionData, bundle *v1.BlobsBundle) (*ExecutionPayloadResponse, error) {
-	pb := ed.Proto()
-	var data interface{}
-	var err error
-	var ver string
-	switch pbStruct := pb.(type) {
-	case *v1.ExecutionPayload:
-		ver = version.String(version.Bellatrix)
-		data, err = FromProto(pbStruct)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to convert a Bellatrix ExecutionPayload to an API response")
-		}
-	case *v1.ExecutionPayloadCapella:
-		ver = version.String(version.Capella)
-		data, err = FromProtoCapella(pbStruct)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to convert a Capella ExecutionPayload to an API response")
-		}
-	case *v1.ExecutionPayloadDeneb:
-		ver = version.String(version.Deneb)
-		payloadStruct, err := FromProtoDeneb(pbStruct)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to convert a Deneb ExecutionPayload to an API response")
-		}
-		data = &ExecutionPayloadDenebAndBlobsBundle{
-			ExecutionPayload: &payloadStruct,
-			BlobsBundle:      FromBundleProto(bundle),
-		}
-	default:
-		return nil, errInvalidTypeConversion
-	}
-	encoded, err := json.Marshal(data)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to marshal execution payload version=%s", ver)
-	}
-	return &ExecutionPayloadResponse{
-		Version: ver,
-		Data:    encoded,
-	}, nil
-}
-
 // ExecHeaderResponseCapella is the response of builder API /eth/v1/builder/header/{slot}/{parent_hash}/{pubkey} for Capella.
 type ExecHeaderResponseCapella struct {
-	Data struct {
+	Version string `json:"version"`
+	Data    struct {
 		Signature hexutil.Bytes      `json:"signature"`
 		Message   *BuilderBidCapella `json:"message"`
 	} `json:"data"`
@@ -605,17 +563,25 @@ type BlobBundler interface {
 	BundleProto() (*v1.BlobsBundle, error)
 }
 
+// ParsedExecutionRequests can retrieve the underlying execution requests for the given execution payload response.
+type ParsedExecutionRequests interface {
+	ExecutionRequestsProto() (*v1.ExecutionRequests, error)
+}
+
 func (r *ExecutionPayloadResponse) ParsePayload() (ParsedPayload, error) {
 	var toProto ParsedPayload
-	switch r.Version {
-	case version.String(version.Bellatrix):
-		toProto = &ExecutionPayload{}
-	case version.String(version.Capella):
-		toProto = &ExecutionPayloadCapella{}
-	case version.String(version.Deneb):
+	v, err := version.FromString(strings.ToLower(r.Version))
+	if err != nil {
+		return nil, errors.Wrap(err, fmt.Sprintf("unsupported version %s", strings.ToLower(r.Version)))
+	}
+	if v >= version.Deneb {
 		toProto = &ExecutionPayloadDenebAndBlobsBundle{}
-	default:
-		return nil, consensusblocks.ErrUnsupportedVersion
+	} else if v >= version.Capella {
+		toProto = &ExecutionPayloadCapella{}
+	} else if v >= version.Bellatrix {
+		toProto = &ExecutionPayload{}
+	} else {
+		return nil, fmt.Errorf("unsupported version %s", strings.ToLower(r.Version))
 	}
 
 	if err := json.Unmarshal(r.Data, toProto); err != nil {
@@ -990,7 +956,8 @@ func (ch *BLSToExecutionChange) MarshalJSON() ([]byte, error) {
 
 // ExecHeaderResponseDeneb is the header response for builder API /eth/v1/builder/header/{slot}/{parent_hash}/{pubkey}.
 type ExecHeaderResponseDeneb struct {
-	Data struct {
+	Version string `json:"version"`
+	Data    struct {
 		Signature hexutil.Bytes    `json:"signature"`
 		Message   *BuilderBidDeneb `json:"message"`
 	} `json:"data"`
@@ -1304,6 +1271,208 @@ func (p *ExecutionPayloadDeneb) ToProto() (*v1.ExecutionPayloadDeneb, error) {
 		Withdrawals:   withdrawals,
 		BlobGasUsed:   uint64(p.BlobGasUsed),
 		ExcessBlobGas: uint64(p.ExcessBlobGas),
+	}, nil
+}
+
+// ExecHeaderResponseElectra is the header response for builder API /eth/v1/builder/header/{slot}/{parent_hash}/{pubkey}.
+type ExecHeaderResponseElectra struct {
+	Version string `json:"version"`
+	Data    struct {
+		Signature hexutil.Bytes      `json:"signature"`
+		Message   *BuilderBidElectra `json:"message"`
+	} `json:"data"`
+}
+
+// ToProto creates a SignedBuilderBidElectra Proto from ExecHeaderResponseElectra.
+func (ehr *ExecHeaderResponseElectra) ToProto() (*eth.SignedBuilderBidElectra, error) {
+	bb, err := ehr.Data.Message.ToProto()
+	if err != nil {
+		return nil, err
+	}
+	return &eth.SignedBuilderBidElectra{
+		Message:   bb,
+		Signature: bytesutil.SafeCopyBytes(ehr.Data.Signature),
+	}, nil
+}
+
+// ToProto creates a BuilderBidElectra Proto from BuilderBidElectra.
+func (bb *BuilderBidElectra) ToProto() (*eth.BuilderBidElectra, error) {
+	header, err := bb.Header.ToProto()
+	if err != nil {
+		return nil, err
+	}
+	if len(bb.BlobKzgCommitments) > params.BeaconConfig().MaxBlobsPerBlockByVersion(version.Electra) {
+		return nil, fmt.Errorf("blob commitment count %d exceeds the maximum %d", len(bb.BlobKzgCommitments), params.BeaconConfig().MaxBlobsPerBlockByVersion(version.Electra))
+	}
+	kzgCommitments := make([][]byte, len(bb.BlobKzgCommitments))
+	for i, commit := range bb.BlobKzgCommitments {
+		if len(commit) != fieldparams.BLSPubkeyLength {
+			return nil, fmt.Errorf("commitment length %d is not %d", len(commit), fieldparams.BLSPubkeyLength)
+		}
+		kzgCommitments[i] = bytesutil.SafeCopyBytes(commit)
+	}
+	// post electra execution requests should not be nil, if no requests exist use an empty request
+	if bb.ExecutionRequests == nil {
+		return nil, errors.New("bid contains nil execution requests")
+	}
+	executionRequests, err := bb.ExecutionRequests.ToProto()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to convert ExecutionRequests")
+	}
+	return &eth.BuilderBidElectra{
+		Header:             header,
+		BlobKzgCommitments: kzgCommitments,
+		ExecutionRequests:  executionRequests,
+		// Note that SSZBytes() reverses byte order for the little-endian representation.
+		// Uint256.Bytes() is big-endian, SSZBytes takes this value and reverses it.
+		Value:  bytesutil.SafeCopyBytes(bb.Value.SSZBytes()),
+		Pubkey: bytesutil.SafeCopyBytes(bb.Pubkey),
+	}, nil
+}
+
+// ExecutionRequestsV1 is a wrapper for different execution requests
+type ExecutionRequestsV1 struct {
+	Deposits       []*DepositRequestV1       `json:"deposits"`
+	Withdrawals    []*WithdrawalRequestV1    `json:"withdrawals"`
+	Consolidations []*ConsolidationRequestV1 `json:"consolidations"`
+}
+
+func (er *ExecutionRequestsV1) ToProto() (*v1.ExecutionRequests, error) {
+	if uint64(len(er.Deposits)) > params.BeaconConfig().MaxDepositRequestsPerPayload {
+		return nil, fmt.Errorf("deposit requests count %d exceeds the maximum %d", len(er.Deposits), params.BeaconConfig().MaxDepositRequestsPerPayload)
+	}
+	deposits := make([]*v1.DepositRequest, len(er.Deposits))
+	for i, dep := range er.Deposits {
+		d, err := dep.ToProto()
+		if err != nil {
+			return nil, err
+		}
+		deposits[i] = d
+	}
+	if uint64(len(er.Withdrawals)) > params.BeaconConfig().MaxWithdrawalRequestsPerPayload {
+		return nil, fmt.Errorf("withdrawal requests count %d exceeds the maximum %d", len(er.Withdrawals), params.BeaconConfig().MaxWithdrawalRequestsPerPayload)
+	}
+	withdrawals := make([]*v1.WithdrawalRequest, len(er.Withdrawals))
+	for i, wr := range er.Withdrawals {
+		w, err := wr.ToProto()
+		if err != nil {
+			return nil, err
+		}
+		withdrawals[i] = w
+	}
+	if uint64(len(er.Consolidations)) > params.BeaconConfig().MaxConsolidationsRequestsPerPayload {
+		return nil, fmt.Errorf("consolidation requests count %d exceeds the maximum %d", len(er.Consolidations), params.BeaconConfig().MaxConsolidationsRequestsPerPayload)
+	}
+	consolidations := make([]*v1.ConsolidationRequest, len(er.Consolidations))
+	for i, con := range er.Consolidations {
+		c, err := con.ToProto()
+		if err != nil {
+			return nil, err
+		}
+		consolidations[i] = c
+	}
+	return &v1.ExecutionRequests{
+		Deposits:       deposits,
+		Withdrawals:    withdrawals,
+		Consolidations: consolidations,
+	}, nil
+}
+
+// BuilderBidElectra is a field of ExecHeaderResponseElectra.
+type BuilderBidElectra struct {
+	Header             *ExecutionPayloadHeaderDeneb `json:"header"`
+	BlobKzgCommitments []hexutil.Bytes              `json:"blob_kzg_commitments"`
+	ExecutionRequests  *ExecutionRequestsV1         `json:"execution_requests"`
+	Value              Uint256                      `json:"value"`
+	Pubkey             hexutil.Bytes                `json:"pubkey"`
+}
+
+// WithdrawalRequestV1 is a field of ExecutionRequestsV1.
+type WithdrawalRequestV1 struct {
+	SourceAddress   hexutil.Bytes `json:"source_address"`
+	ValidatorPubkey hexutil.Bytes `json:"validator_pubkey"`
+	Amount          Uint256       `json:"amount"`
+}
+
+func (wr *WithdrawalRequestV1) ToProto() (*v1.WithdrawalRequest, error) {
+	srcAddress, err := bytesutil.DecodeHexWithLength(wr.SourceAddress.String(), common.AddressLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "source_address")
+	}
+	pubkey, err := bytesutil.DecodeHexWithLength(wr.ValidatorPubkey.String(), fieldparams.BLSPubkeyLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "validator_pubkey")
+	}
+
+	return &v1.WithdrawalRequest{
+		SourceAddress:   srcAddress,
+		ValidatorPubkey: pubkey,
+		Amount:          wr.Amount.Uint64(),
+	}, nil
+}
+
+// DepositRequestV1 is a field of ExecutionRequestsV1.
+type DepositRequestV1 struct {
+	PubKey hexutil.Bytes `json:"pubkey"`
+	// withdrawalCredentials: DATA, 32 Bytes
+	WithdrawalCredentials hexutil.Bytes `json:"withdrawal_credentials"`
+	// amount: QUANTITY, 64 Bits
+	Amount Uint256 `json:"amount"`
+	// signature: DATA, 96 Bytes
+	Signature hexutil.Bytes `json:"signature"`
+	// index: QUANTITY, 64 Bits
+	Index Uint256 `json:"index"`
+}
+
+func (dr *DepositRequestV1) ToProto() (*v1.DepositRequest, error) {
+	pubkey, err := bytesutil.DecodeHexWithLength(dr.PubKey.String(), fieldparams.BLSPubkeyLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "pubkey")
+	}
+	wc, err := bytesutil.DecodeHexWithLength(dr.WithdrawalCredentials.String(), fieldparams.RootLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "withdrawal_credentials")
+	}
+	sig, err := bytesutil.DecodeHexWithLength(dr.Signature.String(), fieldparams.BLSSignatureLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "signature")
+	}
+	return &v1.DepositRequest{
+		Pubkey:                pubkey,
+		WithdrawalCredentials: wc,
+		Amount:                dr.Amount.Uint64(),
+		Signature:             sig,
+		Index:                 dr.Index.Uint64(),
+	}, nil
+}
+
+// ConsolidationRequestV1 is a field of ExecutionRequestsV1.
+type ConsolidationRequestV1 struct {
+	// sourceAddress: DATA, 20 Bytes
+	SourceAddress hexutil.Bytes `json:"source_address"`
+	// sourcePubkey: DATA, 48 Bytes
+	SourcePubkey hexutil.Bytes `json:"source_pubkey"`
+	// targetPubkey: DATA, 48 Bytes
+	TargetPubkey hexutil.Bytes `json:"target_pubkey"`
+}
+
+func (cr *ConsolidationRequestV1) ToProto() (*v1.ConsolidationRequest, error) {
+	srcAddress, err := bytesutil.DecodeHexWithLength(cr.SourceAddress.String(), common.AddressLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "source_address")
+	}
+	sourcePubkey, err := bytesutil.DecodeHexWithLength(cr.SourcePubkey.String(), fieldparams.BLSPubkeyLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "source_pubkey")
+	}
+	targetPubkey, err := bytesutil.DecodeHexWithLength(cr.TargetPubkey.String(), fieldparams.BLSPubkeyLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "target_pubkey")
+	}
+	return &v1.ConsolidationRequest{
+		SourceAddress: srcAddress,
+		SourcePubkey:  sourcePubkey,
+		TargetPubkey:  targetPubkey,
 	}, nil
 }
 

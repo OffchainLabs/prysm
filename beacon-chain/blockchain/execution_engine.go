@@ -268,6 +268,9 @@ func (s *Service) notifyNewPayload(ctx context.Context, preStateVersion int,
 		if err != nil {
 			return false, errors.Wrap(err, "could not get execution requests")
 		}
+		if requests == nil {
+			return false, errors.New("nil execution requests")
+		}
 	}
 	lastValidHash, err = s.cfg.ExecutionEngineCaller.NewPayload(ctx, payload, versionedHashes, parentRoot, requests)
 

@@ -158,6 +158,7 @@ ssz_electra_objs = [
     "BeaconStateElectra",
     "BlindedBeaconBlockBodyElectra",
     "BlindedBeaconBlockElectra",
+    "BuilderBidElectra",
     "Consolidation",
     "IndexedAttestationElectra",
     "LightClientHeaderElectra",
@@ -174,7 +175,7 @@ ssz_electra_objs = [
     "SignedBeaconBlockElectra",
     "SignedBlindedBeaconBlockElectra",
     "SignedConsolidation",
-    "SingleAttestation",
+    "SingleAttestation"
 ]
 
 ssz_fulu_objs = [

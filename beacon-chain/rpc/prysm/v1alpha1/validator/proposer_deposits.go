@@ -94,6 +94,14 @@ func (vs *Server) deposits(
 		return nil, err
 	}
 
+	// In the post-electra phase, this function will usually return an empty list,
+	// as the legacy deposit process is deprecated. (EIP-6110)
+	// NOTE: During the transition period, the legacy deposit process
+	// may still be active and managed. This function handles that scenario.
+	if !isLegacyDepositProcessPeriod(beaconState, canonicalEth1Data) {
+		return []*ethpb.Deposit{}, nil
+	}
+
 	_, genesisEth1Block := vs.Eth1InfoFetcher.GenesisExecutionChainInfo()
 	if genesisEth1Block.Cmp(canonicalEth1DataHeight) == 0 {
 		return []*ethpb.Deposit{}, nil
@@ -276,4 +284,22 @@ func shouldRebuildTrie(totalDepCount, unFinalizedDeps uint64) bool {
 	// the deposit trie, the value of log(x) + k is fixed at 32.
 	unFinalizedCompute := unFinalizedDeps * params.BeaconConfig().DepositContractTreeDepth
 	return unFinalizedCompute > totalDepCount
+}
+
+// isLegacyDepositProcessPeriod determines if the current state should use the legacy deposit process.
+func isLegacyDepositProcessPeriod(beaconState state.BeaconState, canonicalEth1Data *ethpb.Eth1Data) bool {
+	// Before the Electra upgrade, always use the legacy deposit process.
+	if beaconState.Version() < version.Electra {
+		return true
+	}
+
+	// Handle the transition period between the legacy and the new deposit process.
+	requestsStartIndex, err := beaconState.DepositRequestsStartIndex()
+	if err != nil {
+		// If we can't get the deposit requests start index,
+		// we should default to the legacy deposit process.
+		return true
+	}
+	eth1DepositIndexLimit := math.Min(canonicalEth1Data.DepositCount, requestsStartIndex)
+	return beaconState.Eth1DepositIndex() < eth1DepositIndexLimit
 }
