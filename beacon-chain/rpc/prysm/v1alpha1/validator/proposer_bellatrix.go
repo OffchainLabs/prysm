@@ -285,7 +285,7 @@ func (vs *Server) getPayloadHeaderFromBuilder(
 	if bid.Version() >= version.Deneb {
 		dBid, ok := bid.(builder.BidDeneb)
 		if !ok {
-			return nil, errors.New("builder returned non-deneb or above bid")
+			return fmt.Errorf("bid type %T does not implement builder.BidDeneb", dBid)
 		}
 		kzgCommitments = dBid.BlobKzgCommitments()
 	}
