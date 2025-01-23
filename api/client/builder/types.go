@@ -1311,9 +1311,8 @@ func (bb *BuilderBidElectra) ToProto() (*eth.BuilderBidElectra, error) {
 		}
 		kzgCommitments[i] = bytesutil.SafeCopyBytes(commit)
 	}
-	// requests should not be nil post electra, if no requests exist use an empty request
 	if bb.ExecutionRequests == nil {
-		return nil, errors.New("execution requests is empty")
+		return nil, errors.New("execution requests should not be nil post electra, if no requests exist use an empty request")
 	}
 	executionRequests, err := bb.ExecutionRequests.ToProto()
 	if err != nil {
