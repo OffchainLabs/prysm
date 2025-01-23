@@ -246,7 +246,7 @@ func (s *Store) DeleteBlock(ctx context.Context, root [32]byte) error {
 // - blockSlotIndicesBucket
 // - stateSlotIndicesBucket
 func (s *Store) DeleteHistoricalDataBeforeSlot(ctx context.Context, cutoffSlot primitives.Slot) error {
-	_, span := trace.StartSpan(ctx, "BeaconDB.DeleteHistoricalDataBeforeSlot")
+	ctx, span := trace.StartSpan(ctx, "BeaconDB.DeleteHistoricalDataBeforeSlot")
 	defer span.End()
 
 	// Collect slot/root pairs to perform deletions in a separate read only transaction.
@@ -256,7 +256,7 @@ func (s *Store) DeleteHistoricalDataBeforeSlot(ctx context.Context, cutoffSlot p
 	)
 	err := s.db.View(func(tx *bolt.Tx) error {
 		var err error
-		roots, slts, err = blockRootsBySlotRange(tx.Bucket(blockSlotIndicesBucket), primitives.Slot(0), cutoffSlot, nil, nil, nil)
+		roots, slts, err = blockRootsBySlotRange(ctx, tx.Bucket(blockSlotIndicesBucket), primitives.Slot(0), cutoffSlot, nil, nil, nil)
 		if err != nil {
 			return errors.Wrap(err, "could not retrieve block roots")
 		}
@@ -690,6 +690,7 @@ func blockRootsByFilter(ctx context.Context, tx *bolt.Tx, f *filters.QueryFilter
 	// We retrieve block roots that match a filter criteria of slot ranges, if specified.
 	filtersMap := f.Filters()
 	rootsBySlotRange, _, err := blockRootsBySlotRange(
+		ctx,
 		tx.Bucket(blockSlotIndicesBucket),
 		filtersMap[filters.StartSlot],
 		filtersMap[filters.EndSlot],
@@ -730,9 +731,13 @@ func blockRootsByFilter(ctx context.Context, tx *bolt.Tx, f *filters.QueryFilter
 // range scan using sorted left-padded byte keys using a start slot and an end slot.
 // However, if step is one, the implemented logic won’t skip half of the slots in the range.
 func blockRootsBySlotRange(
+	ctx context.Context,
 	bkt *bolt.Bucket,
 	startSlotEncoded, endSlotEncoded, startEpochEncoded, endEpochEncoded, slotStepEncoded interface{},
 ) ([][]byte, []primitives.Slot, error) {
+	_, span := trace.StartSpan(ctx, "BeaconDB.blockRootsBySlotRange")
+	defer span.End()
+
 	// Return nothing when all slot parameters are missing
 	if startSlotEncoded == nil && endSlotEncoded == nil && startEpochEncoded == nil && endEpochEncoded == nil {
 		return [][]byte{}, nil, nil
