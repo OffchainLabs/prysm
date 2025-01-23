@@ -142,7 +142,7 @@ func setExecutionData(ctx context.Context, blk interfaces.SignedBeaconBlock, loc
 			if bid.Version() >= version.Electra {
 				bidElectra, ok := bid.(builder.BidElectra)
 				if !ok {
-					log.Warnf("bid type %T does not implement builder.BidElectra ", bid)
+					log.Warnf("bid type %T does not implement builder.BidElectra", bid)
 				} else {
 					executionRequests = bidElectra.ExecutionRequests()
 				}
