@@ -63,6 +63,8 @@ func (s *Service) nodeFilter(topic string, index uint64) (func(node *enode.Node)
 		return s.filterPeerForAttSubnet(index), nil
 	case strings.Contains(topic, GossipSyncCommitteeMessage):
 		return s.filterPeerForSyncSubnet(index), nil
+	case strings.Contains(topic, GossipBlobSidecarMessage):
+		return s.filterPeerForBlobSubnet(), nil
 	case strings.Contains(topic, GossipDataColumnSidecarMessage):
 		return s.filterPeerForDataColumnsSubnet(index), nil
 	default:
@@ -274,6 +276,14 @@ func (s *Service) filterPeerForSyncSubnet(index uint64) func(node *enode.Node) b
 			}
 		}
 		return indExists
+	}
+}
+
+// returns a method with filters peers specifically for a particular blob subnet.
+// All peers are supposed to be subscribed to all blob subnets.
+func (s *Service) filterPeerForBlobSubnet() func(_ *enode.Node) bool {
+	return func(_ *enode.Node) bool {
+		return true
 	}
 }
 

@@ -13,6 +13,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/container/slice"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/sirupsen/logrus"
 )
 
@@ -247,5 +248,26 @@ func GetChunkFromDatabase(
 func closeDB(d *slasherkv.Store) {
 	if err := d.Close(); err != nil {
 		log.WithError(err).Error("could not close database")
+	}
+}
+
+// unifyAttWrapperVersion ensures that the two wrappers wrap indexed attestations of the same version.
+// If versions differ, the wrapped attestation with the lower version will be converted to the higher version.
+func unifyAttWrapperVersion(w1 *slashertypes.IndexedAttestationWrapper, w2 *slashertypes.IndexedAttestationWrapper) {
+	if w1.IndexedAttestation.Version() == w2.IndexedAttestation.Version() {
+		return
+	}
+	if w1.IndexedAttestation.Version() != version.Electra {
+		w1.IndexedAttestation = &ethpb.IndexedAttestationElectra{
+			AttestingIndices: w1.IndexedAttestation.GetAttestingIndices(),
+			Data:             w1.IndexedAttestation.GetData(),
+			Signature:        w1.IndexedAttestation.GetSignature(),
+		}
+		return
+	}
+	w2.IndexedAttestation = &ethpb.IndexedAttestationElectra{
+		AttestingIndices: w2.IndexedAttestation.GetAttestingIndices(),
+		Data:             w2.IndexedAttestation.GetData(),
+		Signature:        w2.IndexedAttestation.GetSignature(),
 	}
 }

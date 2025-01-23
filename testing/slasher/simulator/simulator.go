@@ -19,6 +19,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/sirupsen/logrus"
 )
@@ -62,7 +63,7 @@ type Simulator struct {
 	sentAttSlashingFeed   *event.Feed
 	sentBlockSlashingFeed *event.Feed
 	sentProposerSlashings map[[32]byte]*ethpb.ProposerSlashing
-	sentAttesterSlashings map[[32]byte]*ethpb.AttesterSlashing
+	sentAttesterSlashings map[[32]byte]ethpb.AttSlashing
 	genesisTime           time.Time
 }
 
@@ -111,7 +112,7 @@ func New(ctx context.Context, srvConfig *ServiceConfig) (*Simulator, error) {
 		sentAttSlashingFeed:   sentAttSlashingFeed,
 		sentBlockSlashingFeed: sentBlockSlashingFeed,
 		sentProposerSlashings: make(map[[32]byte]*ethpb.ProposerSlashing),
-		sentAttesterSlashings: make(map[[32]byte]*ethpb.AttesterSlashing),
+		sentAttesterSlashings: make(map[[32]byte]ethpb.AttSlashing),
 	}, nil
 }
 
@@ -206,7 +207,7 @@ func (s *Simulator) simulateBlocksAndAttestations(ctx context.Context) {
 				s.beaconBlocksFeed.Send(bb)
 			}
 
-			atts, attSlashings, err := s.generateAttestationsForSlot(ctx, slot)
+			atts, attSlashings, err := s.generateAttestationsForSlot(ctx, version.Phase0, slot)
 			if err != nil {
 				log.WithError(err).Fatal("Could not generate attestations for slot")
 			}
@@ -271,20 +272,20 @@ func (s *Simulator) verifySlashingsWereDetected(ctx context.Context) {
 	for slashingRoot, slashing := range s.sentAttesterSlashings {
 		if _, ok := detectedAttesterSlashings[slashingRoot]; !ok {
 			log.WithFields(logrus.Fields{
-				"targetEpoch":         slashing.Attestation_1.Data.Target.Epoch,
-				"prevTargetEpoch":     slashing.Attestation_2.Data.Target.Epoch,
-				"sourceEpoch":         slashing.Attestation_1.Data.Source.Epoch,
-				"prevSourceEpoch":     slashing.Attestation_2.Data.Source.Epoch,
-				"prevBeaconBlockRoot": fmt.Sprintf("%#x", slashing.Attestation_1.Data.BeaconBlockRoot),
-				"newBeaconBlockRoot":  fmt.Sprintf("%#x", slashing.Attestation_2.Data.BeaconBlockRoot),
+				"targetEpoch":         slashing.FirstAttestation().GetData().Target.Epoch,
+				"prevTargetEpoch":     slashing.SecondAttestation().GetData().Target.Epoch,
+				"sourceEpoch":         slashing.FirstAttestation().GetData().Source.Epoch,
+				"prevSourceEpoch":     slashing.SecondAttestation().GetData().Source.Epoch,
+				"prevBeaconBlockRoot": fmt.Sprintf("%#x", slashing.FirstAttestation().GetData().BeaconBlockRoot),
+				"newBeaconBlockRoot":  fmt.Sprintf("%#x", slashing.SecondAttestation().GetData().BeaconBlockRoot),
 			}).Errorf("Did not detect simulated attester slashing")
 			continue
 		}
 		log.WithFields(logrus.Fields{
-			"targetEpoch":     slashing.Attestation_1.Data.Target.Epoch,
-			"prevTargetEpoch": slashing.Attestation_2.Data.Target.Epoch,
-			"sourceEpoch":     slashing.Attestation_1.Data.Source.Epoch,
-			"prevSourceEpoch": slashing.Attestation_2.Data.Source.Epoch,
+			"targetEpoch":     slashing.FirstAttestation().GetData().Target.Epoch,
+			"prevTargetEpoch": slashing.SecondAttestation().GetData().Target.Epoch,
+			"sourceEpoch":     slashing.FirstAttestation().GetData().Source.Epoch,
+			"prevSourceEpoch": slashing.SecondAttestation().GetData().Source.Epoch,
 		}).Info("Correctly detected simulated attester slashing")
 	}
 }

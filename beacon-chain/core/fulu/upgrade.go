@@ -1,18 +1,13 @@
 package fulu
 
 import (
-	"sort"
-
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
 // UpgradeToFulu updates inputs a generic state to return the version Fulu state.
@@ -74,32 +69,37 @@ func UpgradeToFulu(beaconState state.BeaconState) (state.BeaconState, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	earliestExitEpoch := helpers.ActivationExitEpoch(time.CurrentEpoch(beaconState))
-	preActivationIndices := make([]primitives.ValidatorIndex, 0)
-	compoundWithdrawalIndices := make([]primitives.ValidatorIndex, 0)
-	if err = beaconState.ReadFromEveryValidator(func(index int, val state.ReadOnlyValidator) error {
-		if val.ExitEpoch() != params.BeaconConfig().FarFutureEpoch && val.ExitEpoch() > earliestExitEpoch {
-			earliestExitEpoch = val.ExitEpoch()
-		}
-		if val.ActivationEpoch() == params.BeaconConfig().FarFutureEpoch {
-			preActivationIndices = append(preActivationIndices, primitives.ValidatorIndex(index))
-		}
-		if val.HasCompoundingWithdrawalCredentials() {
-			compoundWithdrawalIndices = append(compoundWithdrawalIndices, primitives.ValidatorIndex(index))
-		}
-		return nil
-	}); err != nil {
+	depositBalanceToConsume, err := beaconState.DepositBalanceToConsume()
+	if err != nil {
 		return nil, err
 	}
-
-	earliestExitEpoch++ // Increment to find the earliest possible exit epoch
-
-	// note: should be the same in prestate and post beaconState.
-	// we are deviating from the specs a bit as it calls for using the post beaconState
-	tab, err := helpers.TotalActiveBalance(beaconState)
+	exitBalanceToConsume, err := beaconState.ExitBalanceToConsume()
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to get total active balance")
+		return nil, err
+	}
+	earliestExitEpoch, err := beaconState.EarliestExitEpoch()
+	if err != nil {
+		return nil, err
+	}
+	consolidationBalanceToConsume, err := beaconState.ConsolidationBalanceToConsume()
+	if err != nil {
+		return nil, err
+	}
+	earliestConsolidationEpoch, err := beaconState.EarliestConsolidationEpoch()
+	if err != nil {
+		return nil, err
+	}
+	pendingDeposits, err := beaconState.PendingDeposits()
+	if err != nil {
+		return nil, err
+	}
+	pendingPartialWithdrawals, err := beaconState.PendingPartialWithdrawals()
+	if err != nil {
+		return nil, err
+	}
+	pendingConsolidations, err := beaconState.PendingConsolidations()
+	if err != nil {
+		return nil, err
 	}
 
 	s := &ethpb.BeaconStateFulu{
@@ -155,24 +155,15 @@ func UpgradeToFulu(beaconState state.BeaconState) (state.BeaconState, error) {
 		HistoricalSummaries:          summaries,
 
 		DepositRequestsStartIndex:     params.BeaconConfig().UnsetDepositRequestsStartIndex,
-		DepositBalanceToConsume:       0,
-		ExitBalanceToConsume:          helpers.ActivationExitChurnLimit(primitives.Gwei(tab)),
+		DepositBalanceToConsume:       depositBalanceToConsume,
+		ExitBalanceToConsume:          exitBalanceToConsume,
 		EarliestExitEpoch:             earliestExitEpoch,
-		ConsolidationBalanceToConsume: helpers.ConsolidationChurnLimit(primitives.Gwei(tab)),
-		EarliestConsolidationEpoch:    helpers.ActivationExitEpoch(slots.ToEpoch(beaconState.Slot())),
-		PendingDeposits:               make([]*ethpb.PendingDeposit, 0),
-		PendingPartialWithdrawals:     make([]*ethpb.PendingPartialWithdrawal, 0),
-		PendingConsolidations:         make([]*ethpb.PendingConsolidation, 0),
+		ConsolidationBalanceToConsume: consolidationBalanceToConsume,
+		EarliestConsolidationEpoch:    earliestConsolidationEpoch,
+		PendingDeposits:               pendingDeposits,
+		PendingPartialWithdrawals:     pendingPartialWithdrawals,
+		PendingConsolidations:         pendingConsolidations,
 	}
-
-	// Sorting preActivationIndices based on a custom criteria
-	sort.Slice(preActivationIndices, func(i, j int) bool {
-		// Comparing based on ActivationEligibilityEpoch and then by index if the epochs are the same
-		if s.Validators[preActivationIndices[i]].ActivationEligibilityEpoch == s.Validators[preActivationIndices[j]].ActivationEligibilityEpoch {
-			return preActivationIndices[i] < preActivationIndices[j]
-		}
-		return s.Validators[preActivationIndices[i]].ActivationEligibilityEpoch < s.Validators[preActivationIndices[j]].ActivationEligibilityEpoch
-	})
 
 	// Need to cast the beaconState to use in helper functions
 	post, err := state_native.InitializeFromProtoUnsafeFulu(s)
