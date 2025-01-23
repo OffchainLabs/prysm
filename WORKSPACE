@@ -17,6 +17,7 @@ load("@rules_pkg//:deps.bzl", "rules_pkg_dependencies")
 rules_pkg_dependencies()
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
 http_archive(
     name = "toolchains_protoc",
     sha256 = "abb1540f8a9e045422730670ebb2f25b41fa56ca5a7cf795175a110a0a68f4ad",
