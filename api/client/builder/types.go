@@ -574,16 +574,13 @@ func (r *ExecutionPayloadResponse) ParsePayload() (ParsedPayload, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, fmt.Sprintf("unsupported version %s", strings.ToLower(r.Version)))
 	}
-	if v >= version.Bellatrix {
-		toProto = &ExecutionPayload{}
-	}
-	if v >= version.Capella {
-		toProto = &ExecutionPayloadCapella{}
-	}
 	if v >= version.Deneb {
 		toProto = &ExecutionPayloadDenebAndBlobsBundle{}
-	}
-	if toProto == nil {
+	} else if v >= version.Capella {
+		toProto = &ExecutionPayloadCapella{}
+	} else if v >= version.Bellatrix {
+		toProto = &ExecutionPayload{}
+	} else {
 		return nil, fmt.Errorf("unsupported version %s", strings.ToLower(r.Version))
 	}
 
@@ -1314,6 +1311,7 @@ func (bb *BuilderBidElectra) ToProto() (*eth.BuilderBidElectra, error) {
 		}
 		kzgCommitments[i] = bytesutil.SafeCopyBytes(commit)
 	}
+	// requests should not be nil post electra, if no requests exist use an empty request
 	if bb.ExecutionRequests == nil {
 		return nil, errors.New("execution requests is empty")
 	}
@@ -1388,8 +1386,6 @@ type BuilderBidElectra struct {
 	Value              Uint256                      `json:"value"`
 	Pubkey             hexutil.Bytes                `json:"pubkey"`
 }
-
-type ExecutionPayloadHeaderElectra = ExecutionPayloadHeaderDeneb
 
 // WithdrawalRequestV1 is a field of ExecutionRequestsV1.
 type WithdrawalRequestV1 struct {

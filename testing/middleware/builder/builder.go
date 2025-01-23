@@ -612,7 +612,7 @@ func (p *Builder) handleHeaderRequestElectra(w http.ResponseWriter) {
 		copiedC := c
 		commitments = append(commitments, copiedC)
 	}
-	wrappedHdr := &builderAPI.ExecutionPayloadHeaderElectra{ExecutionPayloadHeaderDeneb: hdr}
+	wrappedHdr := &builderAPI.ExecutionPayloadHeaderDeneb{ExecutionPayloadHeaderDeneb: hdr}
 	requests, err := b.GetDecodedExecutionRequests()
 	if err != nil {
 		p.cfg.logger.WithError(err).Error("Could not get decoded execution requests")

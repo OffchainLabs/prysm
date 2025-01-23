@@ -133,6 +133,7 @@ func setExecutionData(ctx context.Context, blk interfaces.SignedBeaconBlock, loc
 				bidDeneb, ok := bid.(builder.BidDeneb)
 				if !ok {
 					log.Warnf("bid type %T does not implement builder.BidDeneb", bid)
+					return local.Bid, local.BlobsBundle, setLocalExecution(blk, local)
 				} else {
 					builderKzgCommitments = bidDeneb.BlobKzgCommitments()
 				}
@@ -143,6 +144,7 @@ func setExecutionData(ctx context.Context, blk interfaces.SignedBeaconBlock, loc
 				bidElectra, ok := bid.(builder.BidElectra)
 				if !ok {
 					log.Warnf("bid type %T does not implement builder.BidElectra", bid)
+					return local.Bid, local.BlobsBundle, setLocalExecution(blk, local)
 				} else {
 					executionRequests = bidElectra.ExecutionRequests()
 				}
@@ -285,7 +287,7 @@ func (vs *Server) getPayloadHeaderFromBuilder(
 	if bid.Version() >= version.Deneb {
 		dBid, ok := bid.(builder.BidDeneb)
 		if !ok {
-			return fmt.Errorf("bid type %T does not implement builder.BidDeneb", dBid)
+			return nil, fmt.Errorf("bid type %T does not implement builder.BidDeneb", dBid)
 		}
 		kzgCommitments = dBid.BlobKzgCommitments()
 	}
@@ -293,7 +295,7 @@ func (vs *Server) getPayloadHeaderFromBuilder(
 	if bid.Version() >= version.Electra {
 		eBid, ok := bid.(builder.BidElectra)
 		if !ok {
-			return fmt.Errorf("bid type %T does not implement builder.BidElectra", eBid)
+			return nil, fmt.Errorf("bid type %T does not implement builder.BidElectra", eBid)
 		}
 		executionRequests = eBid.ExecutionRequests()
 	}
@@ -328,7 +330,7 @@ func (vs *Server) getPayloadHeaderFromBuilder(
 func validateBuilderSignature(signedBid builder.SignedBid) error {
 	d, err := signing.ComputeDomain(params.BeaconConfig().DomainApplicationBuilder,
 		nil, /* fork version */
-		nil /* genesis val root */)
+		nil  /* genesis val root */)
 	if err != nil {
 		return err
 	}
@@ -381,7 +383,6 @@ func setLocalExecution(blk interfaces.SignedBeaconBlock, local *blocks.GetPayloa
 			return errors.Wrap(err, "could not set execution requests")
 		}
 	}
-
 	return setExecution(blk, local.ExecutionData, false, kzgCommitments, local.ExecutionRequests)
 }
 
