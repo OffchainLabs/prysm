@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -30,7 +31,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/remote-web3signer/internal"
 	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/remote-web3signer/types"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/exp/maps"
 )
 
 const (
@@ -146,7 +146,7 @@ func NewKeymanager(ctx context.Context, cfg *SetupConfig) (*Keymanager, error) {
 			}
 		}
 		km.lock.Lock()
-		km.providedPublicKeys = maps.Values(fileKeys)
+		km.providedPublicKeys = slices.Collect(maps.Values(fileKeys))
 		km.lock.Unlock()
 		// create a file watcher
 		go func() {
@@ -157,7 +157,7 @@ func NewKeymanager(ctx context.Context, cfg *SetupConfig) (*Keymanager, error) {
 		}()
 	} else {
 		km.lock.Lock()
-		km.providedPublicKeys = maps.Values(flagLoadedKeys)
+		km.providedPublicKeys = slices.Collect(maps.Values(flagLoadedKeys))
 		km.lock.Unlock()
 	}
 
@@ -173,7 +173,7 @@ func (km *Keymanager) refreshRemoteKeysFromFileChangesWithRetry(ctx context.Cont
 	}
 	err := km.refreshRemoteKeysFromFileChanges(ctx)
 	if err != nil {
-		km.updatePublicKeys(maps.Values(km.flagLoadedKeysMap)) // update the keys to flag provided defaults
+		km.updatePublicKeys(slices.Collect(maps.Values(km.flagLoadedKeysMap))) // update the keys to flag provided defaults
 		km.retriesRemaining--
 		log.WithError(err).Debug("Error occurred on key refresh")
 		log.WithFields(logrus.Fields{"path": km.keyFilePath, "retriesRemaining": km.retriesRemaining, "retryDelay": retryDelay}).Warnf("Could not refresh keys. Retrying...")
