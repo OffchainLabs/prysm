@@ -11,7 +11,7 @@ require (
 	github.com/bazelbuild/rules_go v0.23.2
 	github.com/btcsuite/btcd/btcec/v2 v2.3.4
 	github.com/consensys/gnark-crypto v0.14.0
-	github.com/crate-crypto/go-eth-kzg v1.1.1-0.20250121235631-6bfeee5d5578
+	github.com/crate-crypto/go-eth-kzg v1.1.1-0.20250123135450-8462d4150358
 	github.com/crate-crypto/go-kzg-4844 v1.1.0
 	github.com/d4l3k/messagediff v1.2.1
 	github.com/dgraph-io/ristretto v0.0.4-0.20210318174700-74754f61e018
