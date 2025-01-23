@@ -376,7 +376,7 @@ func (p *Builder) handleHeaderRequest(w http.ResponseWriter, req *http.Request) 
 	}
 	d, err := signing.ComputeDomain(params.BeaconConfig().DomainApplicationBuilder,
 		nil, /* fork version */
-		nil  /* genesis val root */)
+		nil /* genesis val root */)
 	if err != nil {
 		p.cfg.logger.WithError(err).Error("Could not compute the domain")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -454,7 +454,7 @@ func (p *Builder) handleHeaderRequestCapella(w http.ResponseWriter) {
 	}
 	d, err := signing.ComputeDomain(params.BeaconConfig().DomainApplicationBuilder,
 		nil, /* fork version */
-		nil  /* genesis val root */)
+		nil /* genesis val root */)
 	if err != nil {
 		p.cfg.logger.WithError(err).Error("Could not compute the domain")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -540,7 +540,7 @@ func (p *Builder) handleHeaderRequestDeneb(w http.ResponseWriter) {
 	}
 	d, err := signing.ComputeDomain(params.BeaconConfig().DomainApplicationBuilder,
 		nil, /* fork version */
-		nil  /* genesis val root */)
+		nil /* genesis val root */)
 	if err != nil {
 		p.cfg.logger.WithError(err).Error("Could not compute the domain")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -674,7 +674,7 @@ func (p *Builder) handleHeaderRequestElectra(w http.ResponseWriter) {
 	}
 	d, err := signing.ComputeDomain(params.BeaconConfig().DomainApplicationBuilder,
 		nil, /* fork version */
-		nil  /* genesis val root */)
+		nil /* genesis val root */)
 	if err != nil {
 		p.cfg.logger.WithError(err).Error("Could not compute the domain")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
