@@ -236,10 +236,10 @@ func UnionByteSlices(s ...[][]byte) [][]byte {
 	set := s[0]
 	m := make(map[string]bool)
 	for i := 1; i < len(s); i++ {
-		for j := 0; j < len(s[i-1]); j++ {
+		for j := range s[i-1] {
 			m[string(s[i-1][j])] = true
 		}
-		for j := 0; j < len(s[i]); j++ {
+		for j := range s[i] {
 			if _, found := m[string(s[i][j])]; !found {
 				set = append(set, s[i][j])
 			}
@@ -336,7 +336,7 @@ func NotSlot(a, b []primitives.Slot) []primitives.Slot {
 	set := make([]primitives.Slot, 0)
 	m := make(map[primitives.Slot]bool)
 
-	for i := 0; i < len(a); i++ {
+	for i := range a {
 		m[a[i]] = true
 	}
 	for i := 0; i < len(b); i++ {
