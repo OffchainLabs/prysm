@@ -306,7 +306,7 @@ func (km *Keymanager) refreshRemoteKeysFromFileChanges(ctx context.Context) erro
 		if err = km.savePublicKeysToFile(fk); err != nil {
 			return errors.Wrap(err, "could not save public keys to file")
 		}
-		km.updatePublicKeys(maps.Values(fk))
+		km.updatePublicKeys(slices.Collect(maps.Values(fk)))
 	}
 	for {
 		select {
@@ -335,7 +335,7 @@ func (km *Keymanager) refreshRemoteKeysFromFileChanges(ctx context.Context) erro
 				// prioritize file keys over flag keys
 				if len(fileKeys) == 0 {
 					log.Warnln("Remote signer key file no longer has keys, defaulting to flag provided keys")
-					fileKeys = maps.Values(km.flagLoadedKeysMap)
+					fileKeys = slices.Collect(maps.Values(km.flagLoadedKeysMap))
 				}
 				currentKeys, err := km.FetchValidatingPublicKeys(ctx)
 				if err != nil {
@@ -808,7 +808,7 @@ func (km *Keymanager) AddPublicKeys(pubKeys []string) ([]*keymanager.KeyStatus, 
 				return nil, err
 			}
 		} else {
-			km.updatePublicKeys(maps.Values(combinedKeys))
+			km.updatePublicKeys(slices.Collect(maps.Values(combinedKeys)))
 		}
 	}
 
@@ -877,7 +877,7 @@ func (km *Keymanager) DeletePublicKeys(publicKeys []string) ([]*keymanager.KeySt
 				return nil, err
 			}
 		} else {
-			km.updatePublicKeys(maps.Values(combinedKeys))
+			km.updatePublicKeys(slices.Collect(maps.Values(combinedKeys)))
 		}
 	}
 
