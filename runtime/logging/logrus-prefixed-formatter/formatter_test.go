@@ -5,55 +5,76 @@ import (
 	"regexp"
 	"testing"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 	"github.com/pkg/errors"
 	prefixed "github.com/prysmaticlabs/prysm/v5/runtime/logging/logrus-prefixed-formatter"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"github.com/sirupsen/logrus"
 )
 
-var _ = Describe("Formatter", func() {
-	var formatter *prefixed.TextFormatter
-	var log *logrus.Logger
-	var output *LogOutput
+type LogOutput struct {
+	buffer string
+}
 
-	BeforeEach(func() {
-		output = new(LogOutput)
-		formatter = new(prefixed.TextFormatter)
-		log = logrus.New()
-		log.Out = output
-		log.Formatter = formatter
-		log.Level = logrus.DebugLevel
-	})
+func (o *LogOutput) Write(p []byte) (int, error) {
+	o.buffer += string(p)
+	return len(p), nil
+}
 
-	Describe("logfmt output", func() {
-		It("should output simple message", func() {
+func (o *LogOutput) GetValue() string {
+	return o.buffer
+}
+
+func TestFormatter_logfmt_output(t *testing.T) {
+	tests := []struct {
+		name     string
+		callback func(l *logrus.Logger)
+		expected string
+	}{
+		{
+			name: "should output simple message",
+			callback: func(l *logrus.Logger) {
+				l.Debug("test")
+			},
+			expected: "level=debug msg=test\n",
+		},
+		{
+			name: "should output message with additional field",
+			callback: func(l *logrus.Logger) {
+				l.WithFields(logrus.Fields{"animal": "walrus"}).Debug("test")
+			},
+			expected: "level=debug msg=test animal=walrus\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			output := new(LogOutput)
+			formatter := new(prefixed.TextFormatter)
 			formatter.DisableTimestamp = true
-			log.Debug("test")
-			Ω(output.GetValue()).Should(Equal("level=debug msg=test\n"))
+			log := logrus.New()
+			log.Out = output
+			log.Formatter = formatter
+			log.Level = logrus.DebugLevel
+
+			tt.callback(log)
+			require.Equal(t, output.GetValue(), tt.expected)
 		})
+	}
+}
 
-		It("should output message with additional field", func() {
-			formatter.DisableTimestamp = true
-			log.WithFields(logrus.Fields{"animal": "walrus"}).Debug("test")
-			Ω(output.GetValue()).Should(Equal("level=debug msg=test animal=walrus\n"))
-		})
-	})
+func TestFormatter_formatted_output(t *testing.T) {
+	output := new(LogOutput)
+	formatter := new(prefixed.TextFormatter)
+	formatter.DisableTimestamp = true
+	formatter.ForceFormatting = true
+	log := logrus.New()
+	log.Out = output
+	log.Formatter = formatter
+	log.Level = logrus.DebugLevel
 
-	Describe("Formatted output", func() {
-		It("should output formatted message", func() {
-			formatter.DisableTimestamp = true
-			formatter.ForceFormatting = true
-			log.Debug("test")
-			Ω(output.GetValue()).Should(Equal("DEBUG test\n"))
-		})
-	})
-
-	Describe("Theming support", func() {
-
-	})
-})
+	log.Debug("test")
+	require.Equal(t, output.GetValue(), "DEBUG test\n")
+}
 
 func TestFormatter_SuppressErrorStackTraces(t *testing.T) {
 	formatter := new(prefixed.TextFormatter)
