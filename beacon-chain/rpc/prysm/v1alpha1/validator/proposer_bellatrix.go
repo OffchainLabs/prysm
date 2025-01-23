@@ -293,7 +293,7 @@ func (vs *Server) getPayloadHeaderFromBuilder(
 	if bid.Version() >= version.Electra {
 		eBid, ok := bid.(builder.BidElectra)
 		if !ok {
-			return nil, errors.New("builder returned non-electra or above bid")
+			return fmt.Errorf("bid type %T does not implement builder.BidElectra", eBid)
 		}
 		executionRequests = eBid.ExecutionRequests()
 	}
