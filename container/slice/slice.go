@@ -339,7 +339,7 @@ func NotSlot(a, b []primitives.Slot) []primitives.Slot {
 	for i := range a {
 		m[a[i]] = true
 	}
-	for i := 0; i < len(b); i++ {
+	for i := range b {
 		if _, found := m[b[i]]; !found {
 			set = append(set, b[i])
 		}
@@ -360,7 +360,7 @@ func Unique[T comparable](a []T) []T {
 	found := map[T]bool{}
 	result := make([]T, len(a))
 	end := 0
-	for i := 0; i < len(a); i++ {
+	for i := range a {
 		if !found[a[i]] {
 			found[a[i]] = true
 			result[end] = a[i]
