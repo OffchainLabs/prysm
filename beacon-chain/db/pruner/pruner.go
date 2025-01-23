@@ -22,7 +22,7 @@ type ServiceOption func(*Service)
 // The retention period is specified in epochs, and must be >= MIN_EPOCHS_FOR_BLOCK_REQUESTS.
 func WithRetentionPeriod(retentionEpochs primitives.Epoch) ServiceOption {
 	return func(s *Service) {
-		defaultRetentionEpochs := helpers.MinEpochsForBlockRequests() - 1
+		defaultRetentionEpochs := helpers.MinEpochsForBlockRequests() + 1
 		if retentionEpochs < defaultRetentionEpochs {
 			log.WithField("userEpochs", retentionEpochs).
 				WithField("minRequired", defaultRetentionEpochs).
@@ -39,35 +39,27 @@ func WithSlotTicker(slotTicker slots.Ticker) ServiceOption {
 	}
 }
 
-type SyncChecker interface {
-	Synced() bool
-}
-
-type BackfillChecker interface {
-	IsComplete() bool
-}
-
 // Service defines a service that prunes beacon chain DB based on MIN_EPOCHS_FOR_BLOCK_REQUESTS.
 type Service struct {
-	ctx             context.Context
-	db              db.Database
-	ps              func(current primitives.Slot) primitives.Slot
-	prunedSlot      primitives.Slot
-	done            chan struct{}
-	slotTicker      slots.Ticker
-	syncChecker     SyncChecker
-	backfillChecker BackfillChecker
+	ctx            context.Context
+	db             db.Database
+	ps             func(current primitives.Slot) primitives.Slot
+	prunedUpto     primitives.Slot
+	done           chan struct{}
+	slotTicker     slots.Ticker
+	backfillWaiter func() error
+	initSyncWaiter func() error
 }
 
-func New(ctx context.Context, db iface.Database, genesisTime time.Time, syncChecker SyncChecker, backfillChecker BackfillChecker, opts ...ServiceOption) (*Service, error) {
+func New(ctx context.Context, db iface.Database, genesisTime uint64, initSyncWaiter, backfillWaiter func() error, opts ...ServiceOption) (*Service, error) {
 	p := &Service{
-		ctx:             ctx,
-		db:              db,
-		ps:              pruneStartSlotFunc(helpers.MinEpochsForBlockRequests() - 1), // Default retention epochs is MIN_EPOCHS_FOR_BLOCK_REQUESTS - 1 from the current slot.
-		done:            make(chan struct{}),
-		slotTicker:      slots.NewSlotTicker(genesisTime, params.BeaconConfig().SecondsPerSlot),
-		syncChecker:     syncChecker,
-		backfillChecker: backfillChecker,
+		ctx:            ctx,
+		db:             db,
+		ps:             pruneStartSlotFunc(helpers.MinEpochsForBlockRequests() + 1), // Default retention epochs is MIN_EPOCHS_FOR_BLOCK_REQUESTS + 1 from the current slot.
+		done:           make(chan struct{}),
+		slotTicker:     slots.NewSlotTicker(slots.StartTime(genesisTime, 0), params.BeaconConfig().SecondsPerSlot),
+		initSyncWaiter: initSyncWaiter,
+		backfillWaiter: backfillWaiter,
 	}
 
 	for _, o := range opts {
@@ -79,7 +71,7 @@ func New(ctx context.Context, db iface.Database, genesisTime time.Time, syncChec
 
 func (p *Service) Start() {
 	log.Info("Starting Beacon DB pruner service")
-	go p.run()
+	p.run()
 }
 
 func (p *Service) Stop() error {
@@ -93,31 +85,34 @@ func (p *Service) Status() error {
 }
 
 func (p *Service) run() {
+	if p.initSyncWaiter != nil {
+		log.Info("Waiting for initial sync service to complete before starting pruner")
+		if err := p.initSyncWaiter(); err != nil {
+			log.WithError(err).Error("Failed to start database pruner, error waiting for initial sync completion")
+			return
+		}
+	}
+	if p.backfillWaiter != nil {
+		log.Info("Waiting for backfill service to complete before starting pruner")
+		if err := p.backfillWaiter(); err != nil {
+			log.WithError(err).Error("Failed to start database pruner, error waiting for backfill completion")
+			return
+		}
+	}
+
 	defer p.slotTicker.Done()
 
 	for {
 		select {
 		case <-p.ctx.Done():
-			log.Debug("Stopping Beacon DB pruner service", "prunedSlot", p.prunedSlot)
+			log.Debug("Stopping Beacon DB pruner service", "prunedUpto", p.prunedUpto)
 			return
 		case <-p.done:
-			log.Debug("Stopping Beacon DB pruner service", "prunedSlot", p.prunedSlot)
+			log.Debug("Stopping Beacon DB pruner service", "prunedUpto", p.prunedUpto)
 			return
 		case slot := <-p.slotTicker.C():
 			// Prune at the middle of every epoch since we do a lot of things around epoch boundaries.
 			if slots.SinceEpochStarts(slot) != (params.BeaconConfig().SlotsPerEpoch / 2) {
-				continue
-			}
-
-			// Skip pruning if syncing is in progress.
-			if !p.syncChecker.Synced() {
-				log.Debug("Skipping pruning as initial sync is in progress")
-				continue
-			}
-
-			// Skip pruning if backfill is in progress.
-			if !p.backfillChecker.IsComplete() {
-				log.Debug("Skipping pruning as backfill is in progress")
 				continue
 			}
 
@@ -130,36 +125,36 @@ func (p *Service) run() {
 
 // prune deletes historical chain data beyond the pruneSlot.
 func (p *Service) prune(slot primitives.Slot) error {
-	// Prune everything from this slot.
-	pruneSlot := p.ps(slot)
+	// Prune everything up to this slot (inclusive).
+	pruneUpto := p.ps(slot)
 
 	// Can't prune beyond genesis.
-	if pruneSlot == 0 {
+	if pruneUpto == 0 {
 		return nil
 	}
 
 	// Skip if already pruned up to this slot.
-	if pruneSlot <= p.prunedSlot {
+	if pruneUpto <= p.prunedUpto {
 		return nil
 	}
 
 	log.WithFields(logrus.Fields{
-		"pruneSlot": pruneSlot,
+		"pruneUpto": pruneUpto,
 	}).Debug("Pruning chain data")
 
 	tt := time.Now()
-	if err := p.db.DeleteHistoricalDataBeforeSlot(p.ctx, pruneSlot); err != nil {
-		return errors.Wrapf(err, "could not delete before slot %d", pruneSlot)
+	if err := p.db.DeleteHistoricalDataBeforeSlot(p.ctx, pruneUpto); err != nil {
+		return errors.Wrapf(err, "could not delete upto slot %d", pruneUpto)
 	}
 
 	log.WithFields(logrus.Fields{
-		"pruneSlot":   pruneSlot,
+		"prunedUpto":  pruneUpto,
 		"duration":    time.Since(tt),
 		"currentSlot": slot,
 	}).Debug("Successfully pruned chain data")
 
 	// Update pruning checkpoint.
-	p.prunedSlot = pruneSlot
+	p.prunedUpto = pruneUpto
 
 	return nil
 }

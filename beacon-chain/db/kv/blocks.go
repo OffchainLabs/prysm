@@ -246,28 +246,29 @@ func (s *Store) DeleteBlock(ctx context.Context, root [32]byte) error {
 // - blockSlotIndicesBucket
 // - stateSlotIndicesBucket
 func (s *Store) DeleteHistoricalDataBeforeSlot(ctx context.Context, cutoffSlot primitives.Slot) error {
-	ctx, span := trace.StartSpan(ctx, "BeaconDB.DeleteHistoricalDataBeforeSlot")
+	_, span := trace.StartSpan(ctx, "BeaconDB.DeleteHistoricalDataBeforeSlot")
 	defer span.End()
+
+	// Collect slot/root pairs to perform deletions in a separate read only transaction.
+	var (
+		roots [][]byte
+		slts  []primitives.Slot
+	)
+	err := s.db.View(func(tx *bolt.Tx) error {
+		var err error
+		roots, slts, err = blockRootsBySlotRange(tx.Bucket(blockSlotIndicesBucket), primitives.Slot(0), cutoffSlot, nil, nil, nil)
+		if err != nil {
+			return errors.Wrap(err, "could not retrieve block roots")
+		}
+		return nil
+	})
+	if err != nil {
+		return errors.Wrap(err, "could not retrieve block roots and slots")
+	}
 
 	// Perform all deletions in a single transaction for atomicity
 	return s.db.Update(func(tx *bolt.Tx) error {
-		filter := filters.NewFilter().SetStartSlot(0).SetEndSlot(cutoffSlot)
-		keys, err := blockRootsByFilter(ctx, tx, filter)
-		if err != nil {
-			return errors.Wrap(err, "could not retrieve block roots by filter")
-		}
-
-		// Query slots by block roots before pruning.
-		var slts []primitives.Slot
-		for _, root := range keys {
-			slot, err := s.slotByBlockRoot(ctx, tx, root)
-			if err != nil {
-				return errors.Wrapf(err, "could not retrieve slot from block root, slot: %d", slot)
-			}
-			slts = append(slts, slot)
-		}
-
-		for _, root := range keys {
+		for _, root := range roots {
 			// Delete block
 			if err = s.deleteBlock(tx, root); err != nil {
 				return err
@@ -306,7 +307,7 @@ func (s *Store) DeleteHistoricalDataBeforeSlot(ctx context.Context, cutoffSlot p
 
 		// Delete all caches after we have deleted everything from buckets.
 		// This is done after the buckets are deleted to avoid any issues in case of transaction rollback.
-		for _, root := range keys {
+		for _, root := range roots {
 			// Delete block from cache
 			s.blockCache.Del(string(root))
 			// Delete state summary from cache
@@ -670,6 +671,9 @@ func (s *Store) SaveRegistrationsByValidatorIDs(ctx context.Context, ids []primi
 
 // blockRootsByFilter retrieves the block roots given the filter criteria.
 func blockRootsByFilter(ctx context.Context, tx *bolt.Tx, f *filters.QueryFilter) ([][]byte, error) {
+	ctx, span := trace.StartSpan(ctx, "BeaconDB.blockRootsByFilter")
+	defer span.End()
+
 	// If no filter criteria are specified, return an error.
 	if f == nil {
 		return nil, errors.New("must specify a filter criteria for retrieving blocks")
@@ -685,7 +689,7 @@ func blockRootsByFilter(ctx context.Context, tx *bolt.Tx, f *filters.QueryFilter
 
 	// We retrieve block roots that match a filter criteria of slot ranges, if specified.
 	filtersMap := f.Filters()
-	rootsBySlotRange, err := blockRootsBySlotRange(
+	rootsBySlotRange, _, err := blockRootsBySlotRange(
 		tx.Bucket(blockSlotIndicesBucket),
 		filtersMap[filters.StartSlot],
 		filtersMap[filters.EndSlot],
@@ -728,10 +732,10 @@ func blockRootsByFilter(ctx context.Context, tx *bolt.Tx, f *filters.QueryFilter
 func blockRootsBySlotRange(
 	bkt *bolt.Bucket,
 	startSlotEncoded, endSlotEncoded, startEpochEncoded, endEpochEncoded, slotStepEncoded interface{},
-) ([][]byte, error) {
+) ([][]byte, []primitives.Slot, error) {
 	// Return nothing when all slot parameters are missing
 	if startSlotEncoded == nil && endSlotEncoded == nil && startEpochEncoded == nil && endEpochEncoded == nil {
-		return [][]byte{}, nil
+		return [][]byte{}, nil, nil
 	}
 
 	var startSlot, endSlot primitives.Slot
@@ -752,11 +756,11 @@ func blockRootsBySlotRange(
 	if startEpochOk && endEpochOk {
 		startSlot, err = slots.EpochStart(startEpoch)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		endSlot, err = slots.EpochStart(endEpoch)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		endSlot = endSlot + params.BeaconConfig().SlotsPerEpoch - 1
 	}
@@ -767,14 +771,15 @@ func blockRootsBySlotRange(
 		return key != nil && bytes.Compare(key, max) <= 0
 	}
 	if endSlot < startSlot {
-		return nil, errInvalidSlotRange
+		return nil, nil, errInvalidSlotRange
 	}
 	rootsRange := endSlot.SubSlot(startSlot).Div(step)
 	roots := make([][]byte, 0, rootsRange)
+	var slts []primitives.Slot
 	c := bkt.Cursor()
 	for k, v := c.Seek(min); conditional(k, max); k, v = c.Next() {
+		slot := bytesutil.BytesToSlotBigEndian(k)
 		if step > 1 {
-			slot := bytesutil.BytesToSlotBigEndian(k)
 			if slot.SubSlot(startSlot).Mod(step) != 0 {
 				continue
 			}
@@ -785,8 +790,9 @@ func blockRootsBySlotRange(
 			splitRoots = append(splitRoots, v[i:i+32])
 		}
 		roots = append(roots, splitRoots...)
+		slts = append(slts, slot)
 	}
-	return roots, nil
+	return roots, slts, nil
 }
 
 // blockRootsBySlot retrieves the block roots by slot

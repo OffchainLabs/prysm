@@ -67,7 +67,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/runtime/debug"
 	"github.com/prysmaticlabs/prysm/v5/runtime/prereqs"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
@@ -123,7 +122,6 @@ type BeaconNode struct {
 	BlobStorageOptions      []filesystem.BlobStorageOption
 	verifyInitWaiter        *verification.InitializerWaiter
 	syncChecker             *initialsync.SyncChecker
-	backfillChecker         *backfill.BackfillChecker
 }
 
 // New creates a new node instance, sets up configuration options, and registers
@@ -161,7 +159,6 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 		serviceFlagOpts:         &serviceFlagOpts{},
 		initialSyncComplete:     make(chan struct{}),
 		syncChecker:             &initialsync.SyncChecker{},
-		backfillChecker:         &backfill.BackfillChecker{},
 	}
 
 	for _, opt := range opts {
@@ -219,13 +216,6 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 	// Do not store the finalized state as it has been provided to the respective services during
 	// their initialization.
 	beacon.finalizedStateAtStartUp = nil
-
-	prunerFlag := cliCtx.Bool(flags.BeaconDBPruning.Name)
-	if prunerFlag {
-		if err = beacon.registerPrunerService(cliCtx); err != nil {
-			return nil, err
-		}
-	}
 
 	return beacon, nil
 }
@@ -377,6 +367,13 @@ func registerServices(cliCtx *cli.Context, beacon *BeaconNode, synchronizer *sta
 		log.Debugln("Registering Prometheus Service")
 		if err := beacon.registerPrometheusService(cliCtx); err != nil {
 			return errors.Wrap(err, "could not register prometheus service")
+		}
+	}
+
+	if cliCtx.Bool(flags.BeaconDBPruning.Name) {
+		log.Debugln("Registering Pruner Service")
+		if err := beacon.registerPrunerService(cliCtx); err != nil {
+			return errors.Wrap(err, "could not register pruner service")
 		}
 	}
 
@@ -1102,30 +1099,24 @@ func (b *BeaconNode) registerBuilderService(cliCtx *cli.Context) error {
 
 func (b *BeaconNode) registerPrunerService(cliCtx *cli.Context) error {
 	genesisTimeUnix := params.BeaconConfig().MinGenesisTime + params.BeaconConfig().GenesisDelay
-	genesisTime := slots.StartTime(genesisTimeUnix, 0)
+	var backfillService *backfill.Service
+	if err := b.services.FetchService(&backfillService); err != nil {
+		return err
+	}
 
+	var opts []pruner.ServiceOption
 	if cliCtx.IsSet(flags.PrunerRetentionEpochs.Name) {
 		uv := cliCtx.Uint64(flags.PrunerRetentionEpochs.Name)
-		p, err := pruner.New(
-			cliCtx.Context,
-			b.db,
-			genesisTime,
-			b.syncChecker,
-			b.backfillChecker,
-			pruner.WithRetentionPeriod(primitives.Epoch(uv)),
-		)
-		if err != nil {
-			return err
-		}
-		return b.services.RegisterService(p)
+		opts = append(opts, pruner.WithRetentionPeriod(primitives.Epoch(uv)))
 	}
 
 	p, err := pruner.New(
 		cliCtx.Context,
 		b.db,
-		genesisTime,
-		b.syncChecker,
-		b.backfillChecker,
+		genesisTimeUnix,
+		initSyncWaiter(cliCtx.Context, b.initialSyncComplete),
+		backfillService.WaitForCompletion,
+		opts...,
 	)
 	if err != nil {
 		return err
@@ -1136,7 +1127,6 @@ func (b *BeaconNode) registerPrunerService(cliCtx *cli.Context) error {
 
 func (b *BeaconNode) RegisterBackfillService(cliCtx *cli.Context, bfs *backfill.Store) error {
 	pa := peers.NewAssigner(b.fetchP2P().Peers(), b.forkChoicer)
-	b.BackfillOpts = append(b.BackfillOpts, backfill.WithBackfillChecker(b.backfillChecker))
 	bf, err := backfill.NewService(cliCtx.Context, bfs, b.BlobStorage, b.clockWaiter, b.fetchP2P(), pa, b.BackfillOpts...)
 	if err != nil {
 		return errors.Wrap(err, "error initializing backfill service")

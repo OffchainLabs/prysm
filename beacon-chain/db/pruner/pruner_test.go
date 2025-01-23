@@ -30,13 +30,13 @@ func TestPruner_PruningConditions(t *testing.T) {
 			name:              "Not synced",
 			synced:            false,
 			backfillCompleted: true,
-			expectedLog:       "Skipping pruning as initial sync is in progress",
+			expectedLog:       "Waiting for initial sync service to complete before starting pruner",
 		},
 		{
 			name:              "Backfill incomplete",
 			synced:            true,
 			backfillCompleted: false,
-			expectedLog:       "Skipping pruning as backfill is in progress",
+			expectedLog:       "Waiting for backfill service to complete before starting pruner",
 		},
 	}
 
@@ -44,18 +44,30 @@ func TestPruner_PruningConditions(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			logrus.SetLevel(logrus.DebugLevel)
 			hook := logTest.NewGlobal()
-			t.Log(hook.Levels())
-			ctx := context.Background()
+			ctx, cancel := context.WithCancel(context.Background())
 			beaconDB := dbtest.SetupDB(t)
 
 			slotTicker := &slottest.MockTicker{Channel: make(chan primitives.Slot)}
 
-			p, err := New(ctx, beaconDB, time.Now(), &mockSyncChecker{synced: tt.synced}, &mockBackfillChecker{complete: tt.backfillCompleted}, WithSlotTicker(slotTicker))
+			waitChan := make(chan struct{})
+			waiter := func() error {
+				close(waitChan)
+				return nil
+			}
+
+			var initSyncWaiter, backfillWaiter func() error
+			if !tt.synced {
+				initSyncWaiter = waiter
+			}
+			if !tt.backfillCompleted {
+				backfillWaiter = waiter
+			}
+			p, err := New(ctx, beaconDB, uint64(time.Now().Unix()), initSyncWaiter, backfillWaiter, WithSlotTicker(slotTicker))
 			require.NoError(t, err)
 
-			p.Start()
-			slotTicker.Channel <- 16
-			slotTicker.Channel <- 16
+			go p.Start()
+			<-waitChan
+			cancel()
 
 			if tt.expectedLog != "" {
 				require.LogsContain(t, hook, tt.expectedLog)
@@ -88,9 +100,9 @@ func TestPruner_PruneSuccess(t *testing.T) {
 	p, err := New(
 		ctx,
 		beaconDB,
-		time.Now(),
-		&mockSyncChecker{synced: true},
-		&mockBackfillChecker{complete: true},
+		uint64(time.Now().Unix()),
+		nil,
+		nil,
 		WithSlotTicker(slotTicker),
 	)
 	require.NoError(t, err)
@@ -100,7 +112,7 @@ func TestPruner_PruneSuccess(t *testing.T) {
 	}
 
 	// Start pruner and trigger at middle of 3rd epoch (slot 80)
-	p.Start()
+	go p.Start()
 	currentSlot := primitives.Slot(80) // Middle of 3rd epoch
 	slotTicker.Channel <- currentSlot
 	// Send the same slot again to ensure the pruning operation completes
@@ -120,21 +132,4 @@ func TestPruner_PruneSuccess(t *testing.T) {
 	}
 
 	require.NoError(t, p.Stop())
-}
-
-// Mock implementations
-type mockSyncChecker struct {
-	synced bool
-}
-
-func (m *mockSyncChecker) Synced() bool {
-	return m.synced
-}
-
-type mockBackfillChecker struct {
-	complete bool
-}
-
-func (m *mockBackfillChecker) IsComplete() bool {
-	return m.complete
 }
