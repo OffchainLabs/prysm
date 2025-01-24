@@ -8,6 +8,7 @@ import (
 	"net/url"
 
 	"github.com/pkg/errors"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 const (
@@ -32,8 +33,10 @@ func NewClient(host string, opts ...ClientOpt) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	c := &Client{
-		hc:          &http.Client{},
+	var c = &Client{
+		hc: &http.Client{
+			Transport: otelhttp.NewTransport(http.DefaultTransport),
+		},
 		baseURL:     u,
 		maxBodySize: MaxBodySize,
 	}
