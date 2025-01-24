@@ -7,6 +7,7 @@ import (
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/execution"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/verify"
@@ -188,21 +189,18 @@ func (s *Service) constructPendingBlobsRequest(root [32]byte, commitments int) (
 	if commitments == 0 {
 		return nil, nil
 	}
-	stored, err := s.cfg.blobStorage.Indices(root)
-	if err != nil {
-		return nil, err
-	}
+	summary := s.cfg.blobStorage.Summary(root)
 
-	return requestsForMissingIndices(stored, commitments, root), nil
+	return requestsForMissingIndices(summary, commitments, root), nil
 }
 
 // requestsForMissingIndices constructs a slice of BlobIdentifiers that are missing from
 // local storage, based on a mapping that represents which indices are locally stored,
 // and the highest expected index.
-func requestsForMissingIndices(storedIndices []bool, commitments int, root [32]byte) []*eth.BlobIdentifier {
+func requestsForMissingIndices(stored filesystem.BlobStorageSummary, commitments int, root [32]byte) []*eth.BlobIdentifier {
 	var ids []*eth.BlobIdentifier
 	for i := uint64(0); i < uint64(commitments); i++ {
-		if !storedIndices[i] {
+		if !stored.HasIndex(i) {
 			ids = append(ids, &eth.BlobIdentifier{Index: i, BlockRoot: root[:]})
 		}
 	}

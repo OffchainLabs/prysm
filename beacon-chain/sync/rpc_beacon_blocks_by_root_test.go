@@ -459,8 +459,6 @@ func TestConstructPendingBlobsRequest(t *testing.T) {
 }
 
 func TestFilterUnknownIndices(t *testing.T) {
-	haveIndices := []bool{true, true, true, false, false, false}
-
 	blockRoot := [32]byte{}
 	count := 5
 
@@ -469,7 +467,11 @@ func TestFilterUnknownIndices(t *testing.T) {
 		{Index: 4, BlockRoot: blockRoot[:]},
 	}
 
-	actual := requestsForMissingIndices(haveIndices, count, blockRoot)
+	sum, err := filesystem.NewBlobStorageSummary(
+		params.BeaconConfig().DenebForkEpoch,
+		[]bool{true, true, true, false, false, false})
+	require.NoError(t, err)
+	actual := requestsForMissingIndices(sum, count, blockRoot)
 	require.Equal(t, len(expected), len(actual))
 	require.Equal(t, expected[0].Index, actual[0].Index)
 	require.DeepEqual(t, actual[0].BlockRoot, expected[0].BlockRoot)

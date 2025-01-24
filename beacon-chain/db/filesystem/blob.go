@@ -268,13 +268,6 @@ func (bs *BlobStorage) Remove(root [32]byte) error {
 	return err
 }
 
-// Indices generates a bitmap representing which BlobSidecar.Index values are present on disk for a given root.
-// This value can be compared to the commitments observed in a block to determine which indices need to be found
-// on the network to confirm data availability.
-func (bs *BlobStorage) Indices(root [32]byte) ([]bool, error) {
-	return bs.Summary(root).mask, nil
-}
-
 // Summary returns the BlobStorageSummary from the layout.
 // Internally, this is a cached representation of the directory listing for the given root.
 func (bs *BlobStorage) Summary(root [32]byte) BlobStorageSummary {

@@ -57,7 +57,7 @@ func TestBlobStorage_SaveBlobData(t *testing.T) {
 		actualSc, err := bs.Get(sc.BlockRoot(), sc.Index)
 		require.NoError(t, err)
 		expectedIdx := []bool{false, false, true, false, false, false}
-		actualIdx, err := bs.Indices(actualSc.BlockRoot())
+		actualIdx := bs.Summary(actualSc.BlockRoot()).mask
 		require.NoError(t, err)
 		require.DeepEqual(t, expectedIdx, actualIdx)
 	})
@@ -133,8 +133,7 @@ func TestBlobIndicesBounds(t *testing.T) {
 	okIdx := uint64(params.BeaconConfig().MaxBlobsPerBlock(0)) - 1
 	writeFakeSSZ(t, fs, root, 0, okIdx)
 	bs := NewWarmedEphemeralBlobStorageUsingFs(t, fs, WithLayout(LayoutNameByEpoch))
-	indices, err := bs.Indices(root)
-	require.NoError(t, err)
+	indices := bs.Summary(root).mask
 	expected := make([]bool, params.BeaconConfig().MaxBlobsPerBlock(0))
 	expected[okIdx] = true
 	for i := range expected {

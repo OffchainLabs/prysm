@@ -1,6 +1,7 @@
 package filesystem
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
@@ -22,11 +23,6 @@ type BlobStorageSummary struct {
 
 // HasIndex returns true if the BlobSidecar at the given index is available in the filesystem.
 func (s BlobStorageSummary) HasIndex(idx uint64) bool {
-	// Protect from panic, but assume callers are sophisticated enough to not need an error telling them they have an invalid idx.
-	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlockAtEpoch(s.epoch)
-	if idx >= uint64(maxBlobsPerBlock) {
-		return false
-	}
 	if idx >= uint64(len(s.mask)) {
 		return false
 	}
@@ -35,10 +31,6 @@ func (s BlobStorageSummary) HasIndex(idx uint64) bool {
 
 // AllAvailable returns true if we have all blobs for all indices from 0 to count-1.
 func (s BlobStorageSummary) AllAvailable(count int) bool {
-	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlockAtEpoch(s.epoch)
-	if count > maxBlobsPerBlock {
-		return false
-	}
 	if count > len(s.mask) {
 		return false
 	}
@@ -48,6 +40,22 @@ func (s BlobStorageSummary) AllAvailable(count int) bool {
 		}
 	}
 	return true
+}
+
+func (s BlobStorageSummary) MaxBlobsForEpoch() uint64 {
+	return uint64(params.BeaconConfig().MaxBlobsPerBlockAtEpoch(s.epoch))
+}
+
+// NewBlobStorageSummary creates a new BlobStorageSummary for a given epoch and mask.
+func NewBlobStorageSummary(epoch primitives.Epoch, mask []bool) (BlobStorageSummary, error) {
+	c := params.BeaconConfig().MaxBlobsPerBlockAtEpoch(epoch)
+	if len(mask) != c {
+		return BlobStorageSummary{}, fmt.Errorf("mask length %d does not match expected %d for epoch %d", len(mask), c, epoch)
+	}
+	return BlobStorageSummary{
+		epoch: epoch,
+		mask:  mask,
+	}, nil
 }
 
 // BlobStorageSummarizer can be used to receive a summary of metadata about blobs on disk for a given root.
