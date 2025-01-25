@@ -23,6 +23,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	prysmTime "github.com/prysmaticlabs/prysm/v5/time"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
@@ -99,6 +100,10 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 
 	// Verify the block is the first block received for the proposer for the slot.
 	if s.hasSeenBlockIndexSlot(blk.Block().Slot(), blk.Block().ProposerIndex()) {
+		// Attempt to detect and broadcast equivocation before ignoring
+		if err := s.detectAndBroadcastEquivocation(ctx, blk); err != nil {
+			log.WithError(err).Debug("Could not detect/broadcast equivocation")
+		}
 		return pubsub.ValidationIgnore, nil
 	}
 
@@ -455,4 +460,74 @@ func getBlockFields(b interfaces.ReadOnlySignedBeaconBlock) logrus.Fields {
 		"graffiti":      string(graffiti[:]),
 		"version":       b.Block().Version(),
 	}
+}
+
+func (s *Service) detectAndBroadcastEquivocation(ctx context.Context, blk interfaces.ReadOnlySignedBeaconBlock) error {
+	// If we've seen this proposer/slot combo before, it means this is an equivocating block
+	slot := blk.Block().Slot()
+	proposerIndex := blk.Block().ProposerIndex()
+
+	// Get the head state for block verification
+	headState, err := s.cfg.chain.HeadStateReadOnly(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Compare signatures since we haven't computed roots yet
+	sig1 := blk.Signature()
+
+	s.seenBlockLock.RLock()
+	// Create a unique cache key by combining slot and proposer index
+	// Convert slot and proposer index to 32 bytes and combine them into a single byte slice
+	b := append(bytesutil.Bytes32(uint64(slot)), bytesutil.Bytes32(uint64(proposerIndex))...)
+	existingBlock, seen := s.seenBlockCache.Get(string(b))
+	s.seenBlockLock.RUnlock()
+
+	if !seen {
+		return nil
+	}
+
+	// Type assert to get the existing block
+	existingSignedBlock, ok := existingBlock.(interfaces.ReadOnlySignedBeaconBlock)
+	if !ok {
+		return errors.New("invalid type assertion for existing block")
+	}
+
+	sig2 := existingSignedBlock.Signature()
+
+	// Different signatures indicate equivocation
+	if sig1 != sig2 {
+		header1, err := blk.Header()
+		if err != nil {
+			return err
+		}
+		header2, err := existingSignedBlock.Header()
+		if err != nil {
+			return err
+		}
+
+		slashing := &ethpb.ProposerSlashing{
+			Header_1: header1,
+			Header_2: header2,
+		}
+
+		// Verify the proposer slashing is valid
+		if err := blocks.VerifyProposerSlashing(headState, slashing); err != nil {
+			return err
+		}
+
+		// Broadcast if verification passes
+		if !features.Get().DisableBroadcastSlashings {
+			if err := s.cfg.p2p.Broadcast(ctx, slashing); err != nil {
+				return errors.Wrap(err, "could not broadcast slashing object")
+			}
+		}
+
+		// Also insert into slashing pool
+		if err := s.cfg.slashingPool.InsertProposerSlashing(ctx, headState, slashing); err != nil {
+			return errors.Wrap(err, "could not insert proposer slashing into pool")
+		}
+	}
+
+	return nil
 }
