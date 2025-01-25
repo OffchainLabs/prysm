@@ -75,23 +75,6 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 	defer reportProcessingTime(startTime)
 	defer reportAttestationInclusion(cfg.roblock.Block())
 
-	// Check for equivocation before inserting into fork choice
-	slashing, slashingErr := s.detectEquivocatingBlock(cfg.ctx, cfg.roblock)
-	if slashingErr != nil {
-		return errors.Wrap(slashingErr, "could not detect equivocating block")
-	}
-
-	if slashing != nil {
-		if err := s.broadcastProposerSlashing(cfg.ctx, slashing); err != nil {
-			log.WithError(err).Error("Could not broadcast proposer slashing")
-		}
-
-		// Also insert into slashing pool
-		if err := s.cfg.SlashingPool.InsertProposerSlashing(cfg.ctx, cfg.postState, slashing); err != nil {
-			log.WithError(err).Error("Could not insert proposer slashing into pool")
-		}
-	}
-
 	err := s.cfg.ForkChoiceStore.InsertNode(ctx, cfg.postState, cfg.roblock)
 	if err != nil {
 		// Do not use parent context in the event it deadlined
