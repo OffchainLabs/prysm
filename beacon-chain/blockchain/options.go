@@ -85,6 +85,14 @@ func WithTrackedValidatorsCache(c *cache.TrackedValidatorsCache) Option {
 	}
 }
 
+// WithAttestationCache for attestation lifecycle after chain inclusion.
+func WithAttestationCache(c *cache.AttestationCache) Option {
+	return func(s *Service) error {
+		s.cfg.AttestationCache = c
+		return nil
+	}
+}
+
 // WithAttestationPool for attestation lifecycle after chain inclusion.
 func WithAttestationPool(p attestations.Pool) Option {
 	return func(s *Service) error {

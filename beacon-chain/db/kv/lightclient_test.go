@@ -18,6 +18,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"github.com/prysmaticlabs/prysm/v5/testing/util"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
+	bolt "go.etcd.io/bbolt"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -122,7 +123,7 @@ func createUpdate(t *testing.T, v int) (interfaces.LightClientUpdate, error) {
 				StateRoot:     sampleRoot,
 				BodyRoot:      sampleRoot,
 			},
-			Execution: &enginev1.ExecutionPayloadHeaderElectra{
+			Execution: &enginev1.ExecutionPayloadHeaderDeneb{
 				ParentHash:       make([]byte, fieldparams.RootLength),
 				FeeRecipient:     make([]byte, fieldparams.FeeRecipientLength),
 				StateRoot:        make([]byte, fieldparams.RootLength),
@@ -139,6 +140,34 @@ func createUpdate(t *testing.T, v int) (interfaces.LightClientUpdate, error) {
 		})
 		require.NoError(t, err)
 		st, err = util.NewBeaconStateElectra()
+		require.NoError(t, err)
+	case version.Fulu:
+		slot = primitives.Slot(config.FuluForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
+		header, err = light_client.NewWrappedHeader(&pb.LightClientHeaderDeneb{
+			Beacon: &pb.BeaconBlockHeader{
+				Slot:          1,
+				ProposerIndex: primitives.ValidatorIndex(rand.Int()),
+				ParentRoot:    sampleRoot,
+				StateRoot:     sampleRoot,
+				BodyRoot:      sampleRoot,
+			},
+			Execution: &enginev1.ExecutionPayloadHeaderDeneb{
+				ParentHash:       make([]byte, fieldparams.RootLength),
+				FeeRecipient:     make([]byte, fieldparams.FeeRecipientLength),
+				StateRoot:        make([]byte, fieldparams.RootLength),
+				ReceiptsRoot:     make([]byte, fieldparams.RootLength),
+				LogsBloom:        make([]byte, fieldparams.LogsBloomLength),
+				PrevRandao:       make([]byte, fieldparams.RootLength),
+				ExtraData:        make([]byte, 0),
+				BaseFeePerGas:    make([]byte, fieldparams.RootLength),
+				BlockHash:        make([]byte, fieldparams.RootLength),
+				TransactionsRoot: make([]byte, fieldparams.RootLength),
+				WithdrawalsRoot:  make([]byte, fieldparams.RootLength),
+			},
+			ExecutionBranch: sampleExecutionBranch,
+		})
+		require.NoError(t, err)
+		st, err = util.NewBeaconStateFulu()
 		require.NoError(t, err)
 	default:
 		return nil, fmt.Errorf("unsupported version %s", version.String(v))
@@ -167,6 +196,7 @@ func TestStore_LightClientUpdate_CanSaveRetrieve(t *testing.T) {
 	cfg.CapellaForkEpoch = 1
 	cfg.DenebForkEpoch = 2
 	cfg.ElectraForkEpoch = 3
+	cfg.FuluForkEpoch = 3
 	params.OverrideBeaconConfig(cfg)
 
 	db := setupDB(t)
@@ -208,6 +238,17 @@ func TestStore_LightClientUpdate_CanSaveRetrieve(t *testing.T) {
 	})
 	t.Run("Electra", func(t *testing.T) {
 		update, err := createUpdate(t, version.Electra)
+		require.NoError(t, err)
+		period := uint64(1)
+		err = db.SaveLightClientUpdate(ctx, period, update)
+		require.NoError(t, err)
+
+		retrievedUpdate, err := db.LightClientUpdate(ctx, period)
+		require.NoError(t, err)
+		require.DeepEqual(t, update, retrievedUpdate, "retrieved update does not match saved update")
+	})
+	t.Run("Fulu", func(t *testing.T) {
+		update, err := createUpdate(t, version.Fulu)
 		require.NoError(t, err)
 		period := uint64(1)
 		err = db.SaveLightClientUpdate(ctx, period, update)
@@ -538,4 +579,378 @@ func createDefaultLightClientUpdate(currentSlot primitives.Slot, attestedState s
 	}
 
 	return light_client.NewWrappedUpdate(m)
+}
+
+func TestStore_LightClientBootstrap_CanSaveRetrieve(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.AltairForkEpoch = 0
+	cfg.CapellaForkEpoch = 1
+	cfg.DenebForkEpoch = 2
+	cfg.ElectraForkEpoch = 3
+	cfg.EpochsPerSyncCommitteePeriod = 1
+	params.OverrideBeaconConfig(cfg)
+
+	db := setupDB(t)
+	ctx := context.Background()
+
+	t.Run("Nil", func(t *testing.T) {
+		retrievedBootstrap, err := db.LightClientBootstrap(ctx, []byte("NilBlockRoot"))
+		require.NoError(t, err)
+		require.IsNil(t, retrievedBootstrap)
+	})
+
+	t.Run("Altair", func(t *testing.T) {
+		bootstrap, err := createDefaultLightClientBootstrap(primitives.Slot(uint64(params.BeaconConfig().AltairForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch)))
+		require.NoError(t, err)
+
+		err = bootstrap.SetCurrentSyncCommittee(createRandomSyncCommittee())
+		require.NoError(t, err)
+
+		err = db.SaveLightClientBootstrap(ctx, []byte("blockRootAltair"), bootstrap)
+		require.NoError(t, err)
+
+		retrievedBootstrap, err := db.LightClientBootstrap(ctx, []byte("blockRootAltair"))
+		require.NoError(t, err)
+		require.DeepEqual(t, bootstrap.Header(), retrievedBootstrap.Header(), "retrieved bootstrap header does not match saved bootstrap header")
+		require.DeepEqual(t, bootstrap.CurrentSyncCommittee(), retrievedBootstrap.CurrentSyncCommittee(), "retrieved bootstrap sync committee does not match saved bootstrap sync committee")
+		savedBranch, err := bootstrap.CurrentSyncCommitteeBranch()
+		require.NoError(t, err)
+		retrievedBranch, err := retrievedBootstrap.CurrentSyncCommitteeBranch()
+		require.NoError(t, err)
+		require.DeepEqual(t, savedBranch, retrievedBranch, "retrieved bootstrap sync committee branch does not match saved bootstrap sync committee branch")
+	})
+
+	t.Run("Capella", func(t *testing.T) {
+		bootstrap, err := createDefaultLightClientBootstrap(primitives.Slot(uint64(params.BeaconConfig().CapellaForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch)))
+		require.NoError(t, err)
+
+		err = bootstrap.SetCurrentSyncCommittee(createRandomSyncCommittee())
+		require.NoError(t, err)
+
+		err = db.SaveLightClientBootstrap(ctx, []byte("blockRootCapella"), bootstrap)
+		require.NoError(t, err)
+
+		retrievedBootstrap, err := db.LightClientBootstrap(ctx, []byte("blockRootCapella"))
+		require.NoError(t, err)
+		require.DeepEqual(t, bootstrap.Header(), retrievedBootstrap.Header(), "retrieved bootstrap header does not match saved bootstrap header")
+		require.DeepEqual(t, bootstrap.CurrentSyncCommittee(), retrievedBootstrap.CurrentSyncCommittee(), "retrieved bootstrap sync committee does not match saved bootstrap sync committee")
+		savedBranch, err := bootstrap.CurrentSyncCommitteeBranch()
+		require.NoError(t, err)
+		retrievedBranch, err := retrievedBootstrap.CurrentSyncCommitteeBranch()
+		require.NoError(t, err)
+		require.DeepEqual(t, savedBranch, retrievedBranch, "retrieved bootstrap sync committee branch does not match saved bootstrap sync committee branch")
+	})
+
+	t.Run("Deneb", func(t *testing.T) {
+		bootstrap, err := createDefaultLightClientBootstrap(primitives.Slot(uint64(params.BeaconConfig().DenebForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch)))
+		require.NoError(t, err)
+
+		err = bootstrap.SetCurrentSyncCommittee(createRandomSyncCommittee())
+		require.NoError(t, err)
+
+		err = db.SaveLightClientBootstrap(ctx, []byte("blockRootDeneb"), bootstrap)
+		require.NoError(t, err)
+
+		retrievedBootstrap, err := db.LightClientBootstrap(ctx, []byte("blockRootDeneb"))
+		require.NoError(t, err)
+		require.DeepEqual(t, bootstrap.Header(), retrievedBootstrap.Header(), "retrieved bootstrap header does not match saved bootstrap header")
+		require.DeepEqual(t, bootstrap.CurrentSyncCommittee(), retrievedBootstrap.CurrentSyncCommittee(), "retrieved bootstrap sync committee does not match saved bootstrap sync committee")
+		savedBranch, err := bootstrap.CurrentSyncCommitteeBranch()
+		require.NoError(t, err)
+		retrievedBranch, err := retrievedBootstrap.CurrentSyncCommitteeBranch()
+		require.NoError(t, err)
+		require.DeepEqual(t, savedBranch, retrievedBranch, "retrieved bootstrap sync committee branch does not match saved bootstrap sync committee branch")
+	})
+
+	t.Run("Electra", func(t *testing.T) {
+		bootstrap, err := createDefaultLightClientBootstrap(primitives.Slot(uint64(params.BeaconConfig().ElectraForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch)))
+		require.NoError(t, err)
+
+		err = bootstrap.SetCurrentSyncCommittee(createRandomSyncCommittee())
+		require.NoError(t, err)
+
+		err = db.SaveLightClientBootstrap(ctx, []byte("blockRootElectra"), bootstrap)
+		require.NoError(t, err)
+
+		retrievedBootstrap, err := db.LightClientBootstrap(ctx, []byte("blockRootElectra"))
+		require.NoError(t, err)
+		require.DeepEqual(t, bootstrap.Header(), retrievedBootstrap.Header(), "retrieved bootstrap header does not match saved bootstrap header")
+		require.DeepEqual(t, bootstrap.CurrentSyncCommittee(), retrievedBootstrap.CurrentSyncCommittee(), "retrieved bootstrap sync committee does not match saved bootstrap sync committee")
+		savedBranch, err := bootstrap.CurrentSyncCommitteeBranchElectra()
+		require.NoError(t, err)
+		retrievedBranch, err := retrievedBootstrap.CurrentSyncCommitteeBranchElectra()
+		require.NoError(t, err)
+		require.DeepEqual(t, savedBranch, retrievedBranch, "retrieved bootstrap sync committee branch does not match saved bootstrap sync committee branch")
+	})
+}
+
+func TestStore_LightClientBootstrap_MultipleBootstrapsWithSameSyncCommittee(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.AltairForkEpoch = 0
+	cfg.CapellaForkEpoch = 1
+	cfg.DenebForkEpoch = 2
+	cfg.ElectraForkEpoch = 3
+	cfg.EpochsPerSyncCommitteePeriod = 1
+	params.OverrideBeaconConfig(cfg)
+
+	db := setupDB(t)
+	ctx := context.Background()
+
+	bootstrap1, err := createDefaultLightClientBootstrap(primitives.Slot(uint64(params.BeaconConfig().AltairForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch)))
+	require.NoError(t, err)
+	bootstrap2, err := createDefaultLightClientBootstrap(primitives.Slot(uint64(params.BeaconConfig().AltairForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch)))
+	require.NoError(t, err)
+
+	randomSyncCommittee := createRandomSyncCommittee()
+
+	err = bootstrap1.SetCurrentSyncCommittee(randomSyncCommittee)
+	require.NoError(t, err)
+	err = bootstrap2.SetCurrentSyncCommittee(randomSyncCommittee)
+	require.NoError(t, err)
+
+	err = db.SaveLightClientBootstrap(ctx, []byte("blockRootAltair1"), bootstrap1)
+	require.NoError(t, err)
+	err = db.SaveLightClientBootstrap(ctx, []byte("blockRootAltair2"), bootstrap2)
+	require.NoError(t, err)
+
+	retrievedBootstrap1, err := db.LightClientBootstrap(ctx, []byte("blockRootAltair1"))
+	require.NoError(t, err)
+	retrievedBootstrap2, err := db.LightClientBootstrap(ctx, []byte("blockRootAltair2"))
+	require.NoError(t, err)
+
+	require.DeepEqual(t, bootstrap1.Header(), retrievedBootstrap1.Header(), "retrieved bootstrap1 header does not match saved bootstrap1 header")
+	require.DeepEqual(t, randomSyncCommittee, retrievedBootstrap1.CurrentSyncCommittee(), "retrieved bootstrap1 sync committee does not match saved bootstrap1 sync committee")
+	savedBranch, err := bootstrap1.CurrentSyncCommitteeBranch()
+	require.NoError(t, err)
+	retrievedBranch, err := retrievedBootstrap1.CurrentSyncCommitteeBranch()
+	require.NoError(t, err)
+	require.DeepEqual(t, savedBranch, retrievedBranch, "retrieved bootstrap1 sync committee branch does not match saved bootstrap1 sync committee branch")
+
+	require.DeepEqual(t, bootstrap2.Header(), retrievedBootstrap2.Header(), "retrieved bootstrap1 header does not match saved bootstrap1 header")
+	require.DeepEqual(t, randomSyncCommittee, retrievedBootstrap2.CurrentSyncCommittee(), "retrieved bootstrap1 sync committee does not match saved bootstrap1 sync committee")
+	savedBranch2, err := bootstrap2.CurrentSyncCommitteeBranch()
+	require.NoError(t, err)
+	retrievedBranch2, err := retrievedBootstrap2.CurrentSyncCommitteeBranch()
+	require.NoError(t, err)
+	require.DeepEqual(t, savedBranch2, retrievedBranch2, "retrieved bootstrap1 sync committee branch does not match saved bootstrap1 sync committee branch")
+
+	// Ensure that the sync committee is only stored once
+	err = db.db.View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket(lightClientSyncCommitteeBucket)
+		require.NotNil(t, bucket)
+		count := bucket.Stats().KeyN
+		require.Equal(t, 1, count)
+		return nil
+	})
+	require.NoError(t, err)
+}
+
+func TestStore_LightClientBootstrap_MultipleBootstrapsWithDifferentSyncCommittees(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.AltairForkEpoch = 0
+	cfg.CapellaForkEpoch = 1
+	cfg.DenebForkEpoch = 2
+	cfg.ElectraForkEpoch = 3
+	cfg.EpochsPerSyncCommitteePeriod = 1
+	params.OverrideBeaconConfig(cfg)
+
+	db := setupDB(t)
+	ctx := context.Background()
+
+	bootstrap1, err := createDefaultLightClientBootstrap(primitives.Slot(uint64(params.BeaconConfig().AltairForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch)))
+	require.NoError(t, err)
+	bootstrap2, err := createDefaultLightClientBootstrap(primitives.Slot(uint64(params.BeaconConfig().AltairForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch)))
+	require.NoError(t, err)
+
+	err = bootstrap1.SetCurrentSyncCommittee(createRandomSyncCommittee())
+	require.NoError(t, err)
+	err = bootstrap2.SetCurrentSyncCommittee(createRandomSyncCommittee())
+	require.NoError(t, err)
+
+	err = db.SaveLightClientBootstrap(ctx, []byte("blockRootAltair1"), bootstrap1)
+	require.NoError(t, err)
+	err = db.SaveLightClientBootstrap(ctx, []byte("blockRootAltair2"), bootstrap2)
+	require.NoError(t, err)
+
+	retrievedBootstrap1, err := db.LightClientBootstrap(ctx, []byte("blockRootAltair1"))
+	require.NoError(t, err)
+	retrievedBootstrap2, err := db.LightClientBootstrap(ctx, []byte("blockRootAltair2"))
+	require.NoError(t, err)
+
+	require.DeepEqual(t, bootstrap1.Header(), retrievedBootstrap1.Header(), "retrieved bootstrap1 header does not match saved bootstrap1 header")
+	require.DeepEqual(t, bootstrap1.CurrentSyncCommittee(), retrievedBootstrap1.CurrentSyncCommittee(), "retrieved bootstrap1 sync committee does not match saved bootstrap1 sync committee")
+	savedBranch, err := bootstrap1.CurrentSyncCommitteeBranch()
+	require.NoError(t, err)
+	retrievedBranch, err := retrievedBootstrap1.CurrentSyncCommitteeBranch()
+	require.NoError(t, err)
+	require.DeepEqual(t, savedBranch, retrievedBranch, "retrieved bootstrap1 sync committee branch does not match saved bootstrap1 sync committee branch")
+
+	require.DeepEqual(t, bootstrap2.Header(), retrievedBootstrap2.Header(), "retrieved bootstrap1 header does not match saved bootstrap1 header")
+	require.DeepEqual(t, bootstrap2.CurrentSyncCommittee(), retrievedBootstrap2.CurrentSyncCommittee(), "retrieved bootstrap1 sync committee does not match saved bootstrap1 sync committee")
+	savedBranch2, err := bootstrap2.CurrentSyncCommitteeBranch()
+	require.NoError(t, err)
+	retrievedBranch2, err := retrievedBootstrap2.CurrentSyncCommitteeBranch()
+	require.NoError(t, err)
+	require.DeepEqual(t, savedBranch2, retrievedBranch2, "retrieved bootstrap1 sync committee branch does not match saved bootstrap1 sync committee branch")
+
+	// Ensure that the sync committee is stored twice
+	err = db.db.View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket(lightClientSyncCommitteeBucket)
+		require.NotNil(t, bucket)
+		count := bucket.Stats().KeyN
+		require.Equal(t, 2, count)
+		return nil
+	})
+	require.NoError(t, err)
+}
+
+func createDefaultLightClientBootstrap(currentSlot primitives.Slot) (interfaces.LightClientBootstrap, error) {
+	currentEpoch := slots.ToEpoch(currentSlot)
+	syncCommitteeSize := params.BeaconConfig().SyncCommitteeSize
+	pubKeys := make([][]byte, syncCommitteeSize)
+	for i := uint64(0); i < syncCommitteeSize; i++ {
+		pubKeys[i] = make([]byte, fieldparams.BLSPubkeyLength)
+	}
+	currentSyncCommittee := &pb.SyncCommittee{
+		Pubkeys:         pubKeys,
+		AggregatePubkey: make([]byte, fieldparams.BLSPubkeyLength),
+	}
+
+	var currentSyncCommitteeBranch [][]byte
+	if currentEpoch >= params.BeaconConfig().ElectraForkEpoch {
+		currentSyncCommitteeBranch = make([][]byte, fieldparams.SyncCommitteeBranchDepthElectra)
+	} else {
+		currentSyncCommitteeBranch = make([][]byte, fieldparams.SyncCommitteeBranchDepth)
+	}
+	for i := 0; i < len(currentSyncCommitteeBranch); i++ {
+		currentSyncCommitteeBranch[i] = make([]byte, fieldparams.RootLength)
+	}
+
+	executionBranch := make([][]byte, fieldparams.ExecutionBranchDepth)
+	for i := 0; i < fieldparams.ExecutionBranchDepth; i++ {
+		executionBranch[i] = make([]byte, 32)
+	}
+
+	// TODO: can this be based on the current epoch?
+	var m proto.Message
+	if currentEpoch < params.BeaconConfig().CapellaForkEpoch {
+		m = &pb.LightClientBootstrapAltair{
+			Header: &pb.LightClientHeaderAltair{
+				Beacon: &pb.BeaconBlockHeader{
+					ParentRoot: make([]byte, 32),
+					StateRoot:  make([]byte, 32),
+					BodyRoot:   make([]byte, 32),
+				},
+			},
+			CurrentSyncCommittee:       currentSyncCommittee,
+			CurrentSyncCommitteeBranch: currentSyncCommitteeBranch,
+		}
+	} else if currentEpoch < params.BeaconConfig().DenebForkEpoch {
+		m = &pb.LightClientBootstrapCapella{
+			Header: &pb.LightClientHeaderCapella{
+				Beacon: &pb.BeaconBlockHeader{
+					ParentRoot: make([]byte, 32),
+					StateRoot:  make([]byte, 32),
+					BodyRoot:   make([]byte, 32),
+				},
+				Execution: &enginev1.ExecutionPayloadHeaderCapella{
+					ParentHash:       make([]byte, fieldparams.RootLength),
+					FeeRecipient:     make([]byte, fieldparams.FeeRecipientLength),
+					StateRoot:        make([]byte, fieldparams.RootLength),
+					ReceiptsRoot:     make([]byte, fieldparams.RootLength),
+					LogsBloom:        make([]byte, fieldparams.LogsBloomLength),
+					PrevRandao:       make([]byte, fieldparams.RootLength),
+					ExtraData:        make([]byte, 0),
+					BaseFeePerGas:    make([]byte, fieldparams.RootLength),
+					BlockHash:        make([]byte, fieldparams.RootLength),
+					TransactionsRoot: make([]byte, fieldparams.RootLength),
+					WithdrawalsRoot:  make([]byte, fieldparams.RootLength),
+				},
+				ExecutionBranch: executionBranch,
+			},
+			CurrentSyncCommittee:       currentSyncCommittee,
+			CurrentSyncCommitteeBranch: currentSyncCommitteeBranch,
+		}
+	} else if currentEpoch < params.BeaconConfig().ElectraForkEpoch {
+		m = &pb.LightClientBootstrapDeneb{
+			Header: &pb.LightClientHeaderDeneb{
+				Beacon: &pb.BeaconBlockHeader{
+					ParentRoot: make([]byte, 32),
+					StateRoot:  make([]byte, 32),
+					BodyRoot:   make([]byte, 32),
+				},
+				Execution: &enginev1.ExecutionPayloadHeaderDeneb{
+					ParentHash:       make([]byte, fieldparams.RootLength),
+					FeeRecipient:     make([]byte, fieldparams.FeeRecipientLength),
+					StateRoot:        make([]byte, fieldparams.RootLength),
+					ReceiptsRoot:     make([]byte, fieldparams.RootLength),
+					LogsBloom:        make([]byte, fieldparams.LogsBloomLength),
+					PrevRandao:       make([]byte, fieldparams.RootLength),
+					ExtraData:        make([]byte, 0),
+					BaseFeePerGas:    make([]byte, fieldparams.RootLength),
+					BlockHash:        make([]byte, fieldparams.RootLength),
+					TransactionsRoot: make([]byte, fieldparams.RootLength),
+					WithdrawalsRoot:  make([]byte, fieldparams.RootLength),
+					GasLimit:         0,
+					GasUsed:          0,
+				},
+				ExecutionBranch: executionBranch,
+			},
+			CurrentSyncCommittee:       currentSyncCommittee,
+			CurrentSyncCommitteeBranch: currentSyncCommitteeBranch,
+		}
+	} else {
+		m = &pb.LightClientBootstrapElectra{
+			Header: &pb.LightClientHeaderDeneb{
+				Beacon: &pb.BeaconBlockHeader{
+					ParentRoot: make([]byte, 32),
+					StateRoot:  make([]byte, 32),
+					BodyRoot:   make([]byte, 32),
+				},
+				Execution: &enginev1.ExecutionPayloadHeaderDeneb{
+					ParentHash:       make([]byte, fieldparams.RootLength),
+					FeeRecipient:     make([]byte, fieldparams.FeeRecipientLength),
+					StateRoot:        make([]byte, fieldparams.RootLength),
+					ReceiptsRoot:     make([]byte, fieldparams.RootLength),
+					LogsBloom:        make([]byte, fieldparams.LogsBloomLength),
+					PrevRandao:       make([]byte, fieldparams.RootLength),
+					ExtraData:        make([]byte, 0),
+					BaseFeePerGas:    make([]byte, fieldparams.RootLength),
+					BlockHash:        make([]byte, fieldparams.RootLength),
+					TransactionsRoot: make([]byte, fieldparams.RootLength),
+					WithdrawalsRoot:  make([]byte, fieldparams.RootLength),
+					GasLimit:         0,
+					GasUsed:          0,
+				},
+				ExecutionBranch: executionBranch,
+			},
+			CurrentSyncCommittee:       currentSyncCommittee,
+			CurrentSyncCommitteeBranch: currentSyncCommitteeBranch,
+		}
+	}
+
+	return light_client.NewWrappedBootstrap(m)
+}
+
+func createRandomSyncCommittee() *pb.SyncCommittee {
+	// random number between 2 and 128
+	base := rand.Int()%127 + 2
+
+	syncCom := make([][]byte, params.BeaconConfig().SyncCommitteeSize)
+	for i := 0; uint64(i) < params.BeaconConfig().SyncCommitteeSize; i++ {
+		if i%base == 0 {
+			syncCom[i] = make([]byte, fieldparams.BLSPubkeyLength)
+			syncCom[i][0] = 1
+			continue
+		}
+		syncCom[i] = make([]byte, fieldparams.BLSPubkeyLength)
+	}
+
+	return &pb.SyncCommittee{
+		Pubkeys:         syncCom,
+		AggregatePubkey: make([]byte, fieldparams.BLSPubkeyLength),
+	}
 }

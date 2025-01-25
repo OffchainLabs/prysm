@@ -136,7 +136,7 @@ func (vs *Server) getLocalPayloadFromEngine(
 	}
 	var attr payloadattribute.Attributer
 	switch st.Version() {
-	case version.Deneb, version.Electra:
+	case version.Deneb, version.Electra, version.Fulu:
 		withdrawals, _, err := st.ExpectedWithdrawals()
 		if err != nil {
 			return nil, err
@@ -239,7 +239,8 @@ func (vs *Server) getTerminalBlockHashIfExists(ctx context.Context, transitionTi
 
 func (vs *Server) getBuilderPayloadAndBlobs(ctx context.Context,
 	slot primitives.Slot,
-	vIdx primitives.ValidatorIndex) (builder.Bid, error) {
+	vIdx primitives.ValidatorIndex,
+	parentGasLimit uint64) (builder.Bid, error) {
 	ctx, span := trace.StartSpan(ctx, "ProposerServer.getBuilderPayloadAndBlobs")
 	defer span.End()
 
@@ -255,7 +256,7 @@ func (vs *Server) getBuilderPayloadAndBlobs(ctx context.Context,
 		return nil, nil
 	}
 
-	return vs.getPayloadHeaderFromBuilder(ctx, slot, vIdx)
+	return vs.getPayloadHeaderFromBuilder(ctx, slot, vIdx, parentGasLimit)
 }
 
 var errActivationNotReached = errors.New("activation epoch not reached")

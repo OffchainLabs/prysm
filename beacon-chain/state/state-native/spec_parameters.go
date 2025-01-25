@@ -6,25 +6,33 @@ import (
 )
 
 func (b *BeaconState) ProportionalSlashingMultiplier() (uint64, error) {
-	switch b.version {
-	case version.Bellatrix, version.Capella, version.Deneb, version.Electra:
+	if b.version >= version.Bellatrix {
 		return params.BeaconConfig().ProportionalSlashingMultiplierBellatrix, nil
-	case version.Altair:
+	}
+
+	if b.version >= version.Altair {
 		return params.BeaconConfig().ProportionalSlashingMultiplierAltair, nil
-	case version.Phase0:
+	}
+
+	if b.version >= version.Phase0 {
 		return params.BeaconConfig().ProportionalSlashingMultiplier, nil
 	}
+
 	return 0, errNotSupported("ProportionalSlashingMultiplier", b.version)
 }
 
 func (b *BeaconState) InactivityPenaltyQuotient() (uint64, error) {
-	switch b.version {
-	case version.Bellatrix, version.Capella, version.Deneb, version.Electra:
+	if b.version >= version.Bellatrix {
 		return params.BeaconConfig().InactivityPenaltyQuotientBellatrix, nil
-	case version.Altair:
+	}
+
+	if b.version >= version.Altair {
 		return params.BeaconConfig().InactivityPenaltyQuotientAltair, nil
-	case version.Phase0:
+	}
+
+	if b.version >= version.Phase0 {
 		return params.BeaconConfig().InactivityPenaltyQuotient, nil
 	}
+
 	return 0, errNotSupported("InactivityPenaltyQuotient", b.version)
 }

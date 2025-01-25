@@ -74,6 +74,14 @@ func NewSignedBeaconBlock(i interface{}) (interfaces.SignedBeaconBlock, error) {
 		return initBlindedSignedBlockFromProtoElectra(b)
 	case *eth.GenericSignedBeaconBlock_BlindedElectra:
 		return initBlindedSignedBlockFromProtoElectra(b.BlindedElectra)
+	case *eth.GenericSignedBeaconBlock_Fulu:
+		return initSignedBlockFromProtoFulu(b.Fulu.Block)
+	case *eth.SignedBeaconBlockFulu:
+		return initSignedBlockFromProtoFulu(b)
+	case *eth.SignedBlindedBeaconBlockFulu:
+		return initBlindedSignedBlockFromProtoFulu(b)
+	case *eth.GenericSignedBeaconBlock_BlindedFulu:
+		return initBlindedSignedBlockFromProtoFulu(b.BlindedFulu)
 	default:
 		return nil, errors.Wrapf(ErrUnsupportedSignedBeaconBlock, "unable to create block from type %T", i)
 	}
@@ -124,6 +132,14 @@ func NewBeaconBlock(i interface{}) (interfaces.ReadOnlyBeaconBlock, error) {
 		return initBlindedBlockFromProtoElectra(b)
 	case *eth.GenericBeaconBlock_BlindedElectra:
 		return initBlindedBlockFromProtoElectra(b.BlindedElectra)
+	case *eth.GenericBeaconBlock_Fulu:
+		return initBlockFromProtoFulu(b.Fulu.Block)
+	case *eth.BeaconBlockFulu:
+		return initBlockFromProtoFulu(b)
+	case *eth.BlindedBeaconBlockFulu:
+		return initBlindedBlockFromProtoFulu(b)
+	case *eth.GenericBeaconBlock_BlindedFulu:
+		return initBlindedBlockFromProtoFulu(b.BlindedFulu)
 	default:
 		return nil, errors.Wrapf(errUnsupportedBeaconBlock, "unable to create block from type %T", i)
 	}
@@ -154,6 +170,10 @@ func NewBeaconBlockBody(i interface{}) (interfaces.ReadOnlyBeaconBlockBody, erro
 		return initBlockBodyFromProtoElectra(b)
 	case *eth.BlindedBeaconBlockBodyElectra:
 		return initBlindedBlockBodyFromProtoElectra(b)
+	case *eth.BeaconBlockBodyFulu:
+		return initBlockBodyFromProtoFulu(b)
+	case *eth.BlindedBeaconBlockBodyFulu:
+		return initBlindedBlockBodyFromProtoFulu(b)
 	default:
 		return nil, errors.Wrapf(errUnsupportedBeaconBlockBody, "unable to create block body from type %T", i)
 	}
@@ -233,6 +253,19 @@ func BuildSignedBeaconBlock(blk interfaces.ReadOnlyBeaconBlock, signature []byte
 			return nil, errIncorrectBlockVersion
 		}
 		return NewSignedBeaconBlock(&eth.SignedBeaconBlockElectra{Block: pb, Signature: signature})
+	case version.Fulu:
+		if blk.IsBlinded() {
+			pb, ok := pb.(*eth.BlindedBeaconBlockFulu)
+			if !ok {
+				return nil, errIncorrectBlockVersion
+			}
+			return NewSignedBeaconBlock(&eth.SignedBlindedBeaconBlockFulu{Message: pb, Signature: signature})
+		}
+		pb, ok := pb.(*eth.BeaconBlockFulu)
+		if !ok {
+			return nil, errIncorrectBlockVersion
+		}
+		return NewSignedBeaconBlock(&eth.SignedBeaconBlockFulu{Block: pb, Signature: signature})
 	default:
 		return nil, errUnsupportedBeaconBlock
 	}
@@ -280,7 +313,8 @@ func checkPayloadAgainstHeader(wrappedPayload, payloadHeader interfaces.Executio
 
 // BuildSignedBeaconBlockFromExecutionPayload takes a signed, blinded beacon block and converts into
 // a full, signed beacon block by specifying an execution payload.
-func BuildSignedBeaconBlockFromExecutionPayload(blk interfaces.ReadOnlySignedBeaconBlock, payload interface{}) (interfaces.SignedBeaconBlock, error) { // nolint:gocognit
+// nolint:gocognit
+func BuildSignedBeaconBlockFromExecutionPayload(blk interfaces.ReadOnlySignedBeaconBlock, payload interface{}) (interfaces.SignedBeaconBlock, error) {
 	if err := BeaconBlockIsNil(blk); err != nil {
 		return nil, err
 	}
@@ -472,7 +506,7 @@ func BuildSignedBeaconBlockFromExecutionPayload(blk interfaces.ReadOnlySignedBea
 			Signature: sig[:],
 		}
 	case version.Electra:
-		p, ok := payload.(*enginev1.ExecutionPayloadElectra)
+		p, ok := payload.(*enginev1.ExecutionPayloadDeneb)
 		if !ok {
 			return nil, errors.New("payload not of Electra type")
 		}
@@ -519,6 +553,71 @@ func BuildSignedBeaconBlockFromExecutionPayload(blk interfaces.ReadOnlySignedBea
 				ParentRoot:    parentRoot[:],
 				StateRoot:     stateRoot[:],
 				Body: &eth.BeaconBlockBodyElectra{
+					RandaoReveal:          randaoReveal[:],
+					Eth1Data:              b.Body().Eth1Data(),
+					Graffiti:              graffiti[:],
+					ProposerSlashings:     b.Body().ProposerSlashings(),
+					AttesterSlashings:     attSlashings,
+					Attestations:          atts,
+					Deposits:              b.Body().Deposits(),
+					VoluntaryExits:        b.Body().VoluntaryExits(),
+					SyncAggregate:         syncAgg,
+					ExecutionPayload:      p,
+					BlsToExecutionChanges: blsToExecutionChanges,
+					BlobKzgCommitments:    commitments,
+					ExecutionRequests:     er,
+				},
+			},
+			Signature: sig[:],
+		}
+	case version.Fulu:
+		p, ok := payload.(*enginev1.ExecutionPayloadDeneb)
+		if !ok {
+			return nil, errors.New("payload not of Fulu type")
+		}
+		blsToExecutionChanges, err := b.Body().BLSToExecutionChanges()
+		if err != nil {
+			return nil, err
+		}
+		commitments, err := b.Body().BlobKzgCommitments()
+		if err != nil {
+			return nil, err
+		}
+		var atts []*eth.AttestationElectra
+		if b.Body().Attestations() != nil {
+			atts = make([]*eth.AttestationElectra, len(b.Body().Attestations()))
+			for i, att := range b.Body().Attestations() {
+				a, ok := att.(*eth.AttestationElectra)
+				if !ok {
+					return nil, fmt.Errorf("attestation has wrong type (expected %T, got %T)", &eth.Attestation{}, att)
+				}
+				atts[i] = a
+			}
+		}
+		var attSlashings []*eth.AttesterSlashingElectra
+		if b.Body().AttesterSlashings() != nil {
+			attSlashings = make([]*eth.AttesterSlashingElectra, len(b.Body().AttesterSlashings()))
+			for i, slashing := range b.Body().AttesterSlashings() {
+				s, ok := slashing.(*eth.AttesterSlashingElectra)
+				if !ok {
+					return nil, fmt.Errorf("attester slashing has wrong type (expected %T, got %T)", &eth.AttesterSlashing{}, slashing)
+				}
+				attSlashings[i] = s
+			}
+		}
+
+		er, err := b.Body().ExecutionRequests()
+		if err != nil {
+			return nil, err
+		}
+
+		fullBlock = &eth.SignedBeaconBlockFulu{
+			Block: &eth.BeaconBlockFulu{
+				Slot:          b.Slot(),
+				ProposerIndex: b.ProposerIndex(),
+				ParentRoot:    parentRoot[:],
+				StateRoot:     stateRoot[:],
+				Body: &eth.BeaconBlockBodyFulu{
 					RandaoReveal:          randaoReveal[:],
 					Eth1Data:              b.Body().Eth1Data(),
 					Graffiti:              graffiti[:],

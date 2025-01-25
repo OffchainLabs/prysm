@@ -24,6 +24,15 @@ option java_outer_classname = "WithdrawalsProto";
 option java_package = "org.ethereum.eth.v1alpha1";
 option php_namespace = "Ethereum\\Eth\\v1alpha1";
 
+// The signed version of a BLSToExecutionChange
+message SignedBLSToExecutionChange {
+        // The BLSToExecutionChange message itself
+        BLSToExecutionChange message = 1; 
+
+        // The 96 byte BLS signature from the withdrawal address requesting the change
+        bytes signature = 2 [(ethereum.eth.ext.ssz_size) = "96"];
+}
+
 // The message requesting a BLS to execution withdrawal credentials change
 message BLSToExecutionChange {
         // The validator index requesting the change
@@ -34,15 +43,6 @@ message BLSToExecutionChange {
         
         // The new execution address to be the withdrawal credentials
         bytes to_execution_address = 3 [(ethereum.eth.ext.ssz_size) = "20"];
-}
-
-// The signed version of a BLSToExecutionChange
-message SignedBLSToExecutionChange {
-        // The BLSToExecutionChange message itself
-        BLSToExecutionChange message = 1; 
-
-        // The 96 byte BLS signature from the withdrawal address requesting the change
-        bytes signature = 2 [(ethereum.eth.ext.ssz_size) = "96"];
 }
 
         

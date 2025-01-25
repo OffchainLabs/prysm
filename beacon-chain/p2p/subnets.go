@@ -54,6 +54,8 @@ func (s *Service) nodeFilter(topic string, index uint64) (func(node *enode.Node)
 		return s.filterPeerForAttSubnet(index), nil
 	case strings.Contains(topic, GossipSyncCommitteeMessage):
 		return s.filterPeerForSyncSubnet(index), nil
+	case strings.Contains(topic, GossipBlobSidecarMessage):
+		return s.filterPeerForBlobSubnet(), nil
 	default:
 		return nil, errors.Errorf("no subnet exists for provided topic: %s", topic)
 	}
@@ -66,12 +68,14 @@ func (s *Service) nodeFilter(topic string, index uint64) (func(node *enode.Node)
 // - Iterator is exhausted.
 func searchForPeers(
 	iterator enode.Iterator,
-	batchSize int,
+	batchPeriod time.Duration,
 	peersToFindCount uint,
 	filter func(node *enode.Node) bool,
 ) []*enode.Node {
-	nodeFromNodeID := make(map[enode.ID]*enode.Node, batchSize)
-	for i := 0; i < batchSize && uint(len(nodeFromNodeID)) <= peersToFindCount && iterator.Next(); i++ {
+	nodeFromNodeID := make(map[enode.ID]*enode.Node)
+	start := time.Now()
+
+	for time.Since(start) < batchPeriod && uint(len(nodeFromNodeID)) < peersToFindCount && iterator.Next() {
 		node := iterator.Node()
 
 		// Filter out nodes that do not meet the criteria.
@@ -191,7 +195,7 @@ func (s *Service) FindPeersWithSubnet(
 		}
 
 		// Search for new peers in the network.
-		nodes := searchForPeers(iterator, batchSize, uint(missingPeerCountForTopic), filter)
+		nodes := searchForPeers(iterator, batchPeriod, uint(missingPeerCountForTopic), filter)
 
 		// Restrict dials if limit is applied.
 		maxConcurrentDials := math.MaxInt
@@ -261,6 +265,14 @@ func (s *Service) filterPeerForSyncSubnet(index uint64) func(node *enode.Node) b
 			}
 		}
 		return indExists
+	}
+}
+
+// returns a method with filters peers specifically for a particular blob subnet.
+// All peers are supposed to be subscribed to all blob subnets.
+func (s *Service) filterPeerForBlobSubnet() func(_ *enode.Node) bool {
+	return func(_ *enode.Node) bool {
+		return true
 	}
 }
 
@@ -471,7 +483,7 @@ func syncBitvector(record *enr.Record) (bitfield.Bitvector4, error) {
 }
 
 // The subnet locker is a map which keeps track of all
-// mutexes stored per subnet. This locker is re-used
+// mutexes stored per subnet. This locker is reused
 // between both the attestation, sync and blob subnets.
 // Sync subnets are stored by (subnet+syncLockerVal).
 // Blob subnets are stored by (subnet+blobSubnetLockerVal).

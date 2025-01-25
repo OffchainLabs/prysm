@@ -7,7 +7,6 @@ import (
 	"github.com/pkg/errors"
 	forkchoicetypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/types"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
@@ -129,7 +128,8 @@ func (bv *ROBlobVerifier) recordResult(req Requirement, err *error) {
 // [REJECT] The sidecar's index is consistent with MAX_BLOBS_PER_BLOCK -- i.e. blob_sidecar.index < MAX_BLOBS_PER_BLOCK.
 func (bv *ROBlobVerifier) BlobIndexInBounds() (err error) {
 	defer bv.recordResult(RequireBlobIndexInBounds, &err)
-	if bv.blob.Index >= fieldparams.MaxBlobsPerBlock {
+	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlock(bv.blob.Slot())
+	if bv.blob.Index >= uint64(maxBlobsPerBlock) {
 		log.WithFields(logging.BlobFields(bv.blob)).Debug("Sidecar index >= MAX_BLOBS_PER_BLOCK")
 		return blobErrBuilder(ErrBlobIndexInvalid)
 	}

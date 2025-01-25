@@ -65,7 +65,10 @@ func NewTestP2P(t *testing.T, userOptions ...config.Option) *TestP2P {
 		libp2p.DefaultListenAddrs,
 	}
 
-	options = append(options, userOptions...)
+	// Favour user options if provided.
+	if len(userOptions) > 0 {
+		options = append(userOptions, options...)
+	}
 
 	h, err := libp2p.New(options...)
 	require.NoError(t, err)

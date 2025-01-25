@@ -20,7 +20,7 @@ func createValidatorsWithTotalActiveBalance(totalBal primitives.Gwei) []*eth.Val
 	vals := make([]*eth.Validator, num)
 	for i := range vals {
 		wd := make([]byte, 32)
-		wd[0] = params.BeaconConfig().ETH1AddressWithdrawalPrefixByte
+		wd[0] = params.BeaconConfig().CompoundingWithdrawalPrefixByte
 		wd[31] = byte(i)
 
 		vals[i] = &eth.Validator{

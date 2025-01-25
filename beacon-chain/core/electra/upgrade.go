@@ -194,7 +194,7 @@ func UpgradeToElectra(beaconState state.BeaconState) (state.BeaconState, error) 
 		if val.ActivationEpoch() == params.BeaconConfig().FarFutureEpoch {
 			preActivationIndices = append(preActivationIndices, primitives.ValidatorIndex(index))
 		}
-		if helpers.HasCompoundingWithdrawalCredential(val) {
+		if val.HasCompoundingWithdrawalCredentials() {
 			compoundWithdrawalIndices = append(compoundWithdrawalIndices, primitives.ValidatorIndex(index))
 		}
 		return nil
@@ -240,7 +240,7 @@ func UpgradeToElectra(beaconState state.BeaconState) (state.BeaconState, error) 
 		InactivityScores:            inactivityScores,
 		CurrentSyncCommittee:        currentSyncCommittee,
 		NextSyncCommittee:           nextSyncCommittee,
-		LatestExecutionPayloadHeader: &enginev1.ExecutionPayloadHeaderElectra{
+		LatestExecutionPayloadHeader: &enginev1.ExecutionPayloadHeaderDeneb{
 			ParentHash:       payloadHeader.ParentHash(),
 			FeeRecipient:     payloadHeader.FeeRecipient(),
 			StateRoot:        payloadHeader.StateRoot(),

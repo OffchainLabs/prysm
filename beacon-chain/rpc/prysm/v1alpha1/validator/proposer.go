@@ -99,14 +99,18 @@ func (vs *Server) GetBeaconBlock(ctx context.Context, req *ethpb.BlockRequest) (
 	}
 
 	resp, err := vs.BuildBlockParallel(ctx, sBlk, head, req.SkipMevBoost, builderBoostFactor)
-	log.WithFields(logrus.Fields{
+	log := log.WithFields(logrus.Fields{
 		"slot":               req.Slot,
 		"sinceSlotStartTime": time.Since(t),
 		"validator":          sBlk.Block().ProposerIndex(),
-	}).Info("Finished building block")
+	})
+
 	if err != nil {
+		log.WithError(err).Error("Finished building block")
 		return nil, errors.Wrap(err, "could not build block in parallel")
 	}
+
+	log.Info("Finished building block")
 	return resp, nil
 }
 
@@ -236,7 +240,12 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 		// There's no reason to try to get a builder bid if local override is true.
 		var builderBid builderapi.Bid
 		if !(local.OverrideBuilder || skipMevBoost) {
-			builderBid, err = vs.getBuilderPayloadAndBlobs(ctx, sBlk.Block().Slot(), sBlk.Block().ProposerIndex())
+			latestHeader, err := head.LatestExecutionPayloadHeader()
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "Could not get latest execution payload header: %v", err)
+			}
+			parentGasLimit := latestHeader.GasLimit()
+			builderBid, err = vs.getBuilderPayloadAndBlobs(ctx, sBlk.Block().Slot(), sBlk.Block().ProposerIndex(), parentGasLimit)
 			if err != nil {
 				builderGetPayloadMissCount.Inc()
 				log.WithError(err).Error("Could not get builder payload")
@@ -509,6 +518,9 @@ func blobsAndProofs(req *ethpb.GenericSignedBeaconBlock) ([][]byte, [][]byte, er
 		return dbBlockContents.Blobs, dbBlockContents.KzgProofs, nil
 	case req.GetElectra() != nil:
 		dbBlockContents := req.GetElectra()
+		return dbBlockContents.Blobs, dbBlockContents.KzgProofs, nil
+	case req.GetFulu() != nil:
+		dbBlockContents := req.GetFulu()
 		return dbBlockContents.Blobs, dbBlockContents.KzgProofs, nil
 	default:
 		return nil, nil, errors.Errorf("unknown request type provided: %T", req)

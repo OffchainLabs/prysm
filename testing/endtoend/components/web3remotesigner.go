@@ -148,7 +148,7 @@ func (w *Web3RemoteSigner) monitorStart() {
 		}
 		res, err := client.Do(req)
 		_ = err
-		if res != nil && res.StatusCode == 200 {
+		if res != nil && res.StatusCode == http.StatusOK {
 			close(w.started)
 			return
 		}

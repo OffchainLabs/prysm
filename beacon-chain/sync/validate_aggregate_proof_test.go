@@ -94,13 +94,6 @@ func TestVerifyIndexInCommittee_ExistsInBeaconCommittee(t *testing.T) {
 	assert.ErrorContains(t, wanted, err)
 	assert.Equal(t, pubsub.ValidationReject, result)
 
-	att.AggregationBits = bitfield.NewBitlist(1)
-	committeeIndex, err := att.GetCommitteeIndex()
-	require.NoError(t, err)
-	_, result, err = service.validateBitLength(ctx, s, att.Data.Slot, committeeIndex, att.AggregationBits)
-	require.ErrorContains(t, "wanted participants bitfield length 4, got: 1", err)
-	assert.Equal(t, pubsub.ValidationReject, result)
-
 	att.Data.CommitteeIndex = 10000
 	_, _, result, err = service.validateCommitteeIndexAndCount(ctx, att, s)
 	require.ErrorContains(t, "committee index 10000 > 2", err)

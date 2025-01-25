@@ -31,11 +31,13 @@ import (
 )
 
 func TestProposeAttestation(t *testing.T) {
+	chainService := &mock.ChainService{}
 	attesterServer := &Server{
-		HeadFetcher:       &mock.ChainService{},
-		P2P:               &mockp2p.MockBroadcaster{},
-		AttPool:           attestations.NewPool(),
-		OperationNotifier: (&mock.ChainService{}).OperationNotifier(),
+		HeadFetcher:             chainService,
+		P2P:                     &mockp2p.MockBroadcaster{},
+		AttPool:                 attestations.NewPool(),
+		OperationNotifier:       (&mock.ChainService{}).OperationNotifier(),
+		AttestationStateFetcher: chainService,
 	}
 	head := util.NewBeaconBlock()
 	head.Block.Slot = 999
@@ -79,80 +81,18 @@ func TestProposeAttestation(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, state.SetSlot(params.BeaconConfig().SlotsPerEpoch+1))
 		require.NoError(t, state.SetValidators(validators))
+		chainService.State = state
 
-		cb := primitives.NewAttestationCommitteeBits()
-		cb.SetBitAt(0, true)
-		req := &ethpb.AttestationElectra{
+		req := &ethpb.SingleAttestation{
 			Signature: sig.Marshal(),
 			Data: &ethpb.AttestationData{
 				BeaconBlockRoot: root[:],
 				Source:          &ethpb.Checkpoint{Root: make([]byte, 32)},
 				Target:          &ethpb.Checkpoint{Root: make([]byte, 32)},
 			},
-			CommitteeBits: cb,
 		}
 		_, err = attesterServer.ProposeAttestationElectra(context.Background(), req)
 		assert.NoError(t, err)
-	})
-	t.Run("Electra - non-zero committee index", func(t *testing.T) {
-		state, err := util.NewBeaconStateElectra()
-		require.NoError(t, err)
-		require.NoError(t, state.SetSlot(params.BeaconConfig().SlotsPerEpoch+1))
-		require.NoError(t, state.SetValidators(validators))
-
-		cb := primitives.NewAttestationCommitteeBits()
-		cb.SetBitAt(0, true)
-		req := &ethpb.AttestationElectra{
-			Signature: sig.Marshal(),
-			Data: &ethpb.AttestationData{
-				BeaconBlockRoot: root[:],
-				Source:          &ethpb.Checkpoint{Root: make([]byte, 32)},
-				Target:          &ethpb.Checkpoint{Root: make([]byte, 32)},
-				CommitteeIndex:  1,
-			},
-			CommitteeBits: cb,
-		}
-		_, err = attesterServer.ProposeAttestationElectra(context.Background(), req)
-		assert.ErrorContains(t, "attestation data's committee index must be 0 but was 1", err)
-	})
-	t.Run("Electra - no committee bit set", func(t *testing.T) {
-		state, err := util.NewBeaconStateElectra()
-		require.NoError(t, err)
-		require.NoError(t, state.SetSlot(params.BeaconConfig().SlotsPerEpoch+1))
-		require.NoError(t, state.SetValidators(validators))
-
-		req := &ethpb.AttestationElectra{
-			Signature: sig.Marshal(),
-			Data: &ethpb.AttestationData{
-				BeaconBlockRoot: root[:],
-				Source:          &ethpb.Checkpoint{Root: make([]byte, 32)},
-				Target:          &ethpb.Checkpoint{Root: make([]byte, 32)},
-			},
-			CommitteeBits: primitives.NewAttestationCommitteeBits(),
-		}
-		_, err = attesterServer.ProposeAttestationElectra(context.Background(), req)
-		assert.ErrorContains(t, "exactly 1 committee index must be set but 0 were set", err)
-	})
-	t.Run("Electra - multiple committee bits set", func(t *testing.T) {
-		state, err := util.NewBeaconStateElectra()
-		require.NoError(t, err)
-		require.NoError(t, state.SetSlot(params.BeaconConfig().SlotsPerEpoch+1))
-		require.NoError(t, state.SetValidators(validators))
-
-		cb := primitives.NewAttestationCommitteeBits()
-		cb.SetBitAt(0, true)
-		cb.SetBitAt(1, true)
-		req := &ethpb.AttestationElectra{
-			Signature: sig.Marshal(),
-			Data: &ethpb.AttestationData{
-				BeaconBlockRoot: root[:],
-				Source:          &ethpb.Checkpoint{Root: make([]byte, 32)},
-				Target:          &ethpb.Checkpoint{Root: make([]byte, 32)},
-			},
-			CommitteeBits: cb,
-		}
-		_, err = attesterServer.ProposeAttestationElectra(context.Background(), req)
-		assert.ErrorContains(t, "exactly 1 committee index must be set but 2 were set", err)
 	})
 }
 
@@ -204,7 +144,7 @@ func TestGetAttestationData_OK(t *testing.T) {
 				Genesis: time.Now().Add(time.Duration(-1*offset) * time.Second),
 			},
 			FinalizedFetcher:      &mock.ChainService{CurrentJustifiedCheckPoint: justifiedCheckpoint},
-			AttestationCache:      cache.NewAttestationCache(),
+			AttestationCache:      cache.NewAttestationDataCache(),
 			OptimisticModeFetcher: &mock.ChainService{Optimistic: false},
 		},
 	}
@@ -259,7 +199,7 @@ func BenchmarkGetAttestationDataConcurrent(b *testing.B) {
 		OptimisticModeFetcher: &mock.ChainService{Optimistic: false},
 		TimeFetcher:           &mock.ChainService{Genesis: time.Now().Add(time.Duration(-1*offset) * time.Second)},
 		CoreService: &core.Service{
-			AttestationCache: cache.NewAttestationCache(),
+			AttestationCache: cache.NewAttestationDataCache(),
 			HeadFetcher:      &mock.ChainService{TargetRoot: targetRoot, Root: blockRoot[:]},
 			GenesisTimeFetcher: &mock.ChainService{
 				Genesis: time.Now().Add(time.Duration(-1*offset) * time.Second),
@@ -313,7 +253,7 @@ func TestGetAttestationData_Optimistic(t *testing.T) {
 		CoreService: &core.Service{
 			GenesisTimeFetcher:    &mock.ChainService{Genesis: time.Now()},
 			HeadFetcher:           &mock.ChainService{},
-			AttestationCache:      cache.NewAttestationCache(),
+			AttestationCache:      cache.NewAttestationDataCache(),
 			OptimisticModeFetcher: &mock.ChainService{Optimistic: true},
 		},
 	}
@@ -330,7 +270,7 @@ func TestGetAttestationData_Optimistic(t *testing.T) {
 		OptimisticModeFetcher: &mock.ChainService{Optimistic: false},
 		TimeFetcher:           &mock.ChainService{Genesis: time.Now()},
 		CoreService: &core.Service{
-			AttestationCache:      cache.NewAttestationCache(),
+			AttestationCache:      cache.NewAttestationDataCache(),
 			GenesisTimeFetcher:    &mock.ChainService{Genesis: time.Now()},
 			HeadFetcher:           &mock.ChainService{Optimistic: false, State: beaconState},
 			FinalizedFetcher:      &mock.ChainService{CurrentJustifiedCheckPoint: &ethpb.Checkpoint{}},
@@ -440,7 +380,7 @@ func TestGetAttestationData_SucceedsInFirstEpoch(t *testing.T) {
 		OptimisticModeFetcher: &mock.ChainService{Optimistic: false},
 		TimeFetcher:           &mock.ChainService{Genesis: prysmTime.Now().Add(time.Duration(-1*offset) * time.Second)},
 		CoreService: &core.Service{
-			AttestationCache: cache.NewAttestationCache(),
+			AttestationCache: cache.NewAttestationDataCache(),
 			HeadFetcher: &mock.ChainService{
 				TargetRoot: targetRoot, Root: blockRoot[:], State: beaconState,
 			},
@@ -514,7 +454,7 @@ func TestGetAttestationData_CommitteeIndexIsZeroPostElectra(t *testing.T) {
 				Genesis: time.Now().Add(time.Duration(-1*offset) * time.Second),
 			},
 			FinalizedFetcher:      &mock.ChainService{CurrentJustifiedCheckPoint: justifiedCheckpoint},
-			AttestationCache:      cache.NewAttestationCache(),
+			AttestationCache:      cache.NewAttestationDataCache(),
 			OptimisticModeFetcher: &mock.ChainService{Optimistic: false},
 		},
 	}

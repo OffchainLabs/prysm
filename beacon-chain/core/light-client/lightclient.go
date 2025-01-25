@@ -24,6 +24,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+const ErrNotEnoughSyncCommitteeBits = "sync committee bits count is less than required"
+
 func NewLightClientFinalityUpdateFromBeaconState(
 	ctx context.Context,
 	currentSlot primitives.Slot,
@@ -84,7 +86,12 @@ func NewLightClientUpdateFromBeaconState(
 		return nil, errors.Wrap(err, "could not get sync aggregate")
 	}
 	if syncAggregate.SyncCommitteeBits.Count() < params.BeaconConfig().MinSyncCommitteeParticipants {
-		return nil, fmt.Errorf("invalid sync committee bits count %d", syncAggregate.SyncCommitteeBits.Count())
+		return nil, fmt.Errorf(
+			"%s (got %d, need %d)",
+			ErrNotEnoughSyncCommitteeBits,
+			syncAggregate.SyncCommitteeBits.Count(),
+			params.BeaconConfig().MinSyncCommitteeParticipants,
+		)
 	}
 
 	// assert state.slot == state.latest_block_header.slot
@@ -282,56 +289,247 @@ func CreateDefaultLightClientUpdate(currentSlot primitives.Slot, attestedState s
 	if currentEpoch < params.BeaconConfig().CapellaForkEpoch {
 		m = &pb.LightClientUpdateAltair{
 			AttestedHeader: &pb.LightClientHeaderAltair{
-				Beacon: &pb.BeaconBlockHeader{},
+				Beacon: &pb.BeaconBlockHeader{
+					ParentRoot: make([]byte, 32),
+					StateRoot:  make([]byte, 32),
+					BodyRoot:   make([]byte, 32),
+				},
 			},
 			NextSyncCommittee:       nextSyncCommittee,
 			NextSyncCommitteeBranch: nextSyncCommitteeBranch,
 			FinalityBranch:          finalityBranch,
+			FinalizedHeader: &pb.LightClientHeaderAltair{
+				Beacon: &pb.BeaconBlockHeader{
+					ParentRoot: make([]byte, 32),
+					StateRoot:  make([]byte, 32),
+					BodyRoot:   make([]byte, 32),
+				},
+			},
+			SyncAggregate: &pb.SyncAggregate{
+				SyncCommitteeBits:      make([]byte, 64),
+				SyncCommitteeSignature: make([]byte, 96),
+			},
 		}
 	} else if currentEpoch < params.BeaconConfig().DenebForkEpoch {
 		m = &pb.LightClientUpdateCapella{
 			AttestedHeader: &pb.LightClientHeaderCapella{
-				Beacon:          &pb.BeaconBlockHeader{},
-				Execution:       &enginev1.ExecutionPayloadHeaderCapella{},
+				Beacon: &pb.BeaconBlockHeader{
+					ParentRoot: make([]byte, 32),
+					StateRoot:  make([]byte, 32),
+					BodyRoot:   make([]byte, 32),
+				},
+				Execution: &enginev1.ExecutionPayloadHeaderCapella{
+					ParentHash:       make([]byte, fieldparams.RootLength),
+					FeeRecipient:     make([]byte, fieldparams.FeeRecipientLength),
+					StateRoot:        make([]byte, fieldparams.RootLength),
+					ReceiptsRoot:     make([]byte, fieldparams.RootLength),
+					LogsBloom:        make([]byte, fieldparams.LogsBloomLength),
+					PrevRandao:       make([]byte, fieldparams.RootLength),
+					ExtraData:        make([]byte, 0),
+					BaseFeePerGas:    make([]byte, fieldparams.RootLength),
+					BlockHash:        make([]byte, fieldparams.RootLength),
+					TransactionsRoot: make([]byte, fieldparams.RootLength),
+					WithdrawalsRoot:  make([]byte, fieldparams.RootLength),
+				},
 				ExecutionBranch: executionBranch,
 			},
 			NextSyncCommittee:       nextSyncCommittee,
 			NextSyncCommitteeBranch: nextSyncCommitteeBranch,
 			FinalityBranch:          finalityBranch,
+			FinalizedHeader: &pb.LightClientHeaderCapella{
+				Beacon: &pb.BeaconBlockHeader{
+					ParentRoot: make([]byte, 32),
+					StateRoot:  make([]byte, 32),
+					BodyRoot:   make([]byte, 32),
+				},
+				Execution: &enginev1.ExecutionPayloadHeaderCapella{
+					ParentHash:       make([]byte, fieldparams.RootLength),
+					FeeRecipient:     make([]byte, fieldparams.FeeRecipientLength),
+					StateRoot:        make([]byte, fieldparams.RootLength),
+					ReceiptsRoot:     make([]byte, fieldparams.RootLength),
+					LogsBloom:        make([]byte, fieldparams.LogsBloomLength),
+					PrevRandao:       make([]byte, fieldparams.RootLength),
+					ExtraData:        make([]byte, 0),
+					BaseFeePerGas:    make([]byte, fieldparams.RootLength),
+					BlockHash:        make([]byte, fieldparams.RootLength),
+					TransactionsRoot: make([]byte, fieldparams.RootLength),
+					WithdrawalsRoot:  make([]byte, fieldparams.RootLength),
+				},
+				ExecutionBranch: executionBranch,
+			},
+			SyncAggregate: &pb.SyncAggregate{
+				SyncCommitteeBits:      make([]byte, 64),
+				SyncCommitteeSignature: make([]byte, 96),
+			},
 		}
 	} else if currentEpoch < params.BeaconConfig().ElectraForkEpoch {
 		m = &pb.LightClientUpdateDeneb{
 			AttestedHeader: &pb.LightClientHeaderDeneb{
-				Beacon:          &pb.BeaconBlockHeader{},
-				Execution:       &enginev1.ExecutionPayloadHeaderDeneb{},
+				Beacon: &pb.BeaconBlockHeader{
+					ParentRoot: make([]byte, 32),
+					StateRoot:  make([]byte, 32),
+					BodyRoot:   make([]byte, 32),
+				},
+				Execution: &enginev1.ExecutionPayloadHeaderDeneb{
+					ParentHash:       make([]byte, fieldparams.RootLength),
+					FeeRecipient:     make([]byte, fieldparams.FeeRecipientLength),
+					StateRoot:        make([]byte, fieldparams.RootLength),
+					ReceiptsRoot:     make([]byte, fieldparams.RootLength),
+					LogsBloom:        make([]byte, fieldparams.LogsBloomLength),
+					PrevRandao:       make([]byte, fieldparams.RootLength),
+					ExtraData:        make([]byte, 0),
+					BaseFeePerGas:    make([]byte, fieldparams.RootLength),
+					BlockHash:        make([]byte, fieldparams.RootLength),
+					TransactionsRoot: make([]byte, fieldparams.RootLength),
+					WithdrawalsRoot:  make([]byte, fieldparams.RootLength),
+					GasLimit:         0,
+					GasUsed:          0,
+				},
 				ExecutionBranch: executionBranch,
 			},
 			NextSyncCommittee:       nextSyncCommittee,
 			NextSyncCommitteeBranch: nextSyncCommitteeBranch,
 			FinalityBranch:          finalityBranch,
+			FinalizedHeader: &pb.LightClientHeaderDeneb{
+				Beacon: &pb.BeaconBlockHeader{
+					ParentRoot: make([]byte, 32),
+					StateRoot:  make([]byte, 32),
+					BodyRoot:   make([]byte, 32),
+				},
+				Execution: &enginev1.ExecutionPayloadHeaderDeneb{
+					ParentHash:       make([]byte, fieldparams.RootLength),
+					FeeRecipient:     make([]byte, fieldparams.FeeRecipientLength),
+					StateRoot:        make([]byte, fieldparams.RootLength),
+					ReceiptsRoot:     make([]byte, fieldparams.RootLength),
+					LogsBloom:        make([]byte, fieldparams.LogsBloomLength),
+					PrevRandao:       make([]byte, fieldparams.RootLength),
+					ExtraData:        make([]byte, 0),
+					BaseFeePerGas:    make([]byte, fieldparams.RootLength),
+					BlockHash:        make([]byte, fieldparams.RootLength),
+					TransactionsRoot: make([]byte, fieldparams.RootLength),
+					WithdrawalsRoot:  make([]byte, fieldparams.RootLength),
+					GasLimit:         0,
+					GasUsed:          0,
+				},
+				ExecutionBranch: executionBranch,
+			},
+			SyncAggregate: &pb.SyncAggregate{
+				SyncCommitteeBits:      make([]byte, 64),
+				SyncCommitteeSignature: make([]byte, 96),
+			},
 		}
 	} else {
 		if attestedState.Version() >= version.Electra {
 			m = &pb.LightClientUpdateElectra{
 				AttestedHeader: &pb.LightClientHeaderDeneb{
-					Beacon:          &pb.BeaconBlockHeader{},
-					Execution:       &enginev1.ExecutionPayloadHeaderDeneb{},
+					Beacon: &pb.BeaconBlockHeader{
+						ParentRoot: make([]byte, 32),
+						StateRoot:  make([]byte, 32),
+						BodyRoot:   make([]byte, 32),
+					},
+					Execution: &enginev1.ExecutionPayloadHeaderDeneb{
+						ParentHash:       make([]byte, fieldparams.RootLength),
+						FeeRecipient:     make([]byte, fieldparams.FeeRecipientLength),
+						StateRoot:        make([]byte, fieldparams.RootLength),
+						ReceiptsRoot:     make([]byte, fieldparams.RootLength),
+						LogsBloom:        make([]byte, fieldparams.LogsBloomLength),
+						PrevRandao:       make([]byte, fieldparams.RootLength),
+						ExtraData:        make([]byte, 0),
+						BaseFeePerGas:    make([]byte, fieldparams.RootLength),
+						BlockHash:        make([]byte, fieldparams.RootLength),
+						TransactionsRoot: make([]byte, fieldparams.RootLength),
+						WithdrawalsRoot:  make([]byte, fieldparams.RootLength),
+						GasLimit:         0,
+						GasUsed:          0,
+					},
 					ExecutionBranch: executionBranch,
 				},
 				NextSyncCommittee:       nextSyncCommittee,
 				NextSyncCommitteeBranch: nextSyncCommitteeBranch,
 				FinalityBranch:          finalityBranch,
+				FinalizedHeader: &pb.LightClientHeaderDeneb{
+					Beacon: &pb.BeaconBlockHeader{
+						ParentRoot: make([]byte, 32),
+						StateRoot:  make([]byte, 32),
+						BodyRoot:   make([]byte, 32),
+					},
+					Execution: &enginev1.ExecutionPayloadHeaderDeneb{
+						ParentHash:       make([]byte, fieldparams.RootLength),
+						FeeRecipient:     make([]byte, fieldparams.FeeRecipientLength),
+						StateRoot:        make([]byte, fieldparams.RootLength),
+						ReceiptsRoot:     make([]byte, fieldparams.RootLength),
+						LogsBloom:        make([]byte, fieldparams.LogsBloomLength),
+						PrevRandao:       make([]byte, fieldparams.RootLength),
+						ExtraData:        make([]byte, 0),
+						BaseFeePerGas:    make([]byte, fieldparams.RootLength),
+						BlockHash:        make([]byte, fieldparams.RootLength),
+						TransactionsRoot: make([]byte, fieldparams.RootLength),
+						WithdrawalsRoot:  make([]byte, fieldparams.RootLength),
+						GasLimit:         0,
+						GasUsed:          0,
+					},
+					ExecutionBranch: executionBranch,
+				},
+				SyncAggregate: &pb.SyncAggregate{
+					SyncCommitteeBits:      make([]byte, 64),
+					SyncCommitteeSignature: make([]byte, 96),
+				},
 			}
 		} else {
 			m = &pb.LightClientUpdateDeneb{
 				AttestedHeader: &pb.LightClientHeaderDeneb{
-					Beacon:          &pb.BeaconBlockHeader{},
-					Execution:       &enginev1.ExecutionPayloadHeaderDeneb{},
+					Beacon: &pb.BeaconBlockHeader{
+						ParentRoot: make([]byte, 32),
+						StateRoot:  make([]byte, 32),
+						BodyRoot:   make([]byte, 32),
+					},
+					Execution: &enginev1.ExecutionPayloadHeaderDeneb{
+						ParentHash:       make([]byte, fieldparams.RootLength),
+						FeeRecipient:     make([]byte, fieldparams.FeeRecipientLength),
+						StateRoot:        make([]byte, fieldparams.RootLength),
+						ReceiptsRoot:     make([]byte, fieldparams.RootLength),
+						LogsBloom:        make([]byte, fieldparams.LogsBloomLength),
+						PrevRandao:       make([]byte, fieldparams.RootLength),
+						ExtraData:        make([]byte, 0),
+						BaseFeePerGas:    make([]byte, fieldparams.RootLength),
+						BlockHash:        make([]byte, fieldparams.RootLength),
+						TransactionsRoot: make([]byte, fieldparams.RootLength),
+						WithdrawalsRoot:  make([]byte, fieldparams.RootLength),
+						GasLimit:         0,
+						GasUsed:          0,
+					},
 					ExecutionBranch: executionBranch,
 				},
 				NextSyncCommittee:       nextSyncCommittee,
 				NextSyncCommitteeBranch: nextSyncCommitteeBranch,
 				FinalityBranch:          finalityBranch,
+				FinalizedHeader: &pb.LightClientHeaderDeneb{
+					Beacon: &pb.BeaconBlockHeader{
+						ParentRoot: make([]byte, 32),
+						StateRoot:  make([]byte, 32),
+						BodyRoot:   make([]byte, 32),
+					},
+					Execution: &enginev1.ExecutionPayloadHeaderDeneb{
+						ParentHash:       make([]byte, fieldparams.RootLength),
+						FeeRecipient:     make([]byte, fieldparams.FeeRecipientLength),
+						StateRoot:        make([]byte, fieldparams.RootLength),
+						ReceiptsRoot:     make([]byte, fieldparams.RootLength),
+						LogsBloom:        make([]byte, fieldparams.LogsBloomLength),
+						PrevRandao:       make([]byte, fieldparams.RootLength),
+						ExtraData:        make([]byte, 0),
+						BaseFeePerGas:    make([]byte, fieldparams.RootLength),
+						BlockHash:        make([]byte, fieldparams.RootLength),
+						TransactionsRoot: make([]byte, fieldparams.RootLength),
+						WithdrawalsRoot:  make([]byte, fieldparams.RootLength),
+						GasLimit:         0,
+						GasUsed:          0,
+					},
+					ExecutionBranch: executionBranch,
+				},
+				SyncAggregate: &pb.SyncAggregate{
+					SyncCommitteeBits:      make([]byte, 64),
+					SyncCommitteeSignature: make([]byte, 96),
+				},
 			}
 		}
 	}
@@ -405,18 +603,15 @@ func BlockToLightClientHeader(
 		var payloadProof [][]byte
 
 		if blockEpoch < params.BeaconConfig().CapellaForkEpoch {
-			payloadHeader = &enginev1.ExecutionPayloadHeaderCapella{
-				ParentHash:       make([]byte, fieldparams.RootLength),
-				FeeRecipient:     make([]byte, fieldparams.FeeRecipientLength),
-				StateRoot:        make([]byte, fieldparams.RootLength),
-				ReceiptsRoot:     make([]byte, fieldparams.RootLength),
-				LogsBloom:        make([]byte, fieldparams.LogsBloomLength),
-				PrevRandao:       make([]byte, fieldparams.RootLength),
-				ExtraData:        make([]byte, 0),
-				BaseFeePerGas:    make([]byte, fieldparams.RootLength),
-				BlockHash:        make([]byte, fieldparams.RootLength),
-				TransactionsRoot: make([]byte, fieldparams.RootLength),
-				WithdrawalsRoot:  make([]byte, fieldparams.RootLength),
+			var ok bool
+
+			p, err := execution.EmptyExecutionPayloadHeader(version.Capella)
+			if err != nil {
+				return nil, errors.Wrap(err, "could not get payload header")
+			}
+			payloadHeader, ok = p.(*enginev1.ExecutionPayloadHeaderCapella)
+			if !ok {
+				return nil, fmt.Errorf("payload header type %T is not %T", p, &enginev1.ExecutionPayloadHeaderCapella{})
 			}
 			payloadProof = emptyPayloadProof()
 		} else {
@@ -475,13 +670,13 @@ func BlockToLightClientHeader(
 		if blockEpoch < params.BeaconConfig().CapellaForkEpoch {
 			var ok bool
 
-			p, err := execution.EmptyExecutionPayload(version.Deneb)
+			p, err := execution.EmptyExecutionPayloadHeader(version.Deneb)
 			if err != nil {
 				return nil, errors.Wrap(err, "could not get payload header")
 			}
 			payloadHeader, ok = p.(*enginev1.ExecutionPayloadHeaderDeneb)
 			if !ok {
-				return nil, errors.Wrapf(err, "payload header type %T is not %T", payloadHeader, &enginev1.ExecutionPayloadHeaderDeneb{})
+				return nil, fmt.Errorf("payload header type %T is not %T", p, &enginev1.ExecutionPayloadHeaderDeneb{})
 			}
 			payloadProof = emptyPayloadProof()
 		} else {

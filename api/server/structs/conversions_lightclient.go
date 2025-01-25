@@ -176,9 +176,9 @@ func lightClientHeaderToJSON(header interfaces.LightClientHeader) (json.RawMessa
 		if err != nil {
 			return nil, err
 		}
-		ex, ok := exInterface.Proto().(*enginev1.ExecutionPayloadHeaderElectra)
+		ex, ok := exInterface.Proto().(*enginev1.ExecutionPayloadHeaderDeneb)
 		if !ok {
-			return nil, fmt.Errorf("execution data is not %T", &enginev1.ExecutionPayloadHeaderElectra{})
+			return nil, fmt.Errorf("execution data is not %T", &enginev1.ExecutionPayloadHeaderDeneb{})
 		}
 		execution, err := ExecutionPayloadHeaderElectraFromConsensus(ex)
 		if err != nil {

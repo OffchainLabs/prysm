@@ -209,7 +209,7 @@ func TestService_BroadcastAttestation(t *testing.T) {
 
 func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 	// Setup bootnode.
-	cfg := &Config{}
+	cfg := &Config{PingInterval: testPingInterval}
 	port := 2000
 	cfg.UDPPort = uint(port)
 	_, pkey := createAddrAndPrivKey(t)
@@ -225,13 +225,6 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 	require.NoError(t, err)
 	defer bootListener.Close()
 
-	// Use smaller batch size for testing.
-	currentBatchSize := batchSize
-	batchSize = 2
-	defer func() {
-		batchSize = currentBatchSize
-	}()
-
 	bootNode := bootListener.Self()
 	subnet := uint64(5)
 
@@ -240,13 +233,17 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 	// setup other nodes.
 	cfg = &Config{
 		Discv5BootStrapAddrs: []string{bootNode.String()},
-		MaxPeers:             30,
+		MaxPeers:             2,
+		PingInterval:         testPingInterval,
 	}
 	// Setup 2 different hosts
 	for i := 1; i <= 2; i++ {
 		h, pkey, ipAddr := createHost(t, port+i)
 		cfg.UDPPort = uint(port + i)
 		cfg.TCPPort = uint(port + i)
+		if len(listeners) > 0 {
+			cfg.Discv5BootStrapAddrs = append(cfg.Discv5BootStrapAddrs, listeners[len(listeners)-1].Self().String())
+		}
 		s := &Service{
 			cfg:                   cfg,
 			genesisTime:           genesisTime,

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	runtimeDebug "runtime/debug"
+	"time"
 
 	joonix "github.com/joonix/log"
 	"github.com/pkg/errors"
@@ -153,7 +154,7 @@ func main() {
 			switch format {
 			case "text":
 				formatter := new(prefixed.TextFormatter)
-				formatter.TimestampFormat = "2006-01-02 15:04:05"
+				formatter.TimestampFormat = time.DateTime
 				formatter.FullTimestamp = true
 				// If persistent log files are written - we disable the log messages coloring because
 				// the colors are ANSI codes and seen as gibberish in the log files.

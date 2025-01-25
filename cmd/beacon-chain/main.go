@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	runtimeDebug "runtime/debug"
+	"time"
 
 	gethlog "github.com/ethereum/go-ethereum/log"
 	golog "github.com/ipfs/go-log/v2"
@@ -163,7 +164,7 @@ func before(ctx *cli.Context) error {
 	switch format {
 	case "text":
 		formatter := new(prefixed.TextFormatter)
-		formatter.TimestampFormat = "2006-01-02 15:04:05"
+		formatter.TimestampFormat = time.DateTime
 		formatter.FullTimestamp = true
 
 		// If persistent log files are written - we disable the log messages coloring because
@@ -283,9 +284,7 @@ func startNode(ctx *cli.Context, cancel context.CancelFunc) error {
 		// libp2p specific logging.
 		golog.SetAllLoggers(golog.LevelDebug)
 		// Geth specific logging.
-		glogger := gethlog.NewGlogHandler(gethlog.StreamHandler(os.Stderr, gethlog.TerminalFormat(true)))
-		glogger.Verbosity(gethlog.LvlTrace)
-		gethlog.Root().SetHandler(glogger)
+		gethlog.SetDefault(gethlog.NewLogger(gethlog.NewTerminalHandlerWithLevel(os.Stderr, gethlog.LvlTrace, true)))
 	}
 
 	blockchainFlagOpts, err := blockchaincmd.FlagOptions(ctx)

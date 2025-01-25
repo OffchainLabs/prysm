@@ -122,23 +122,6 @@ func (v *validator) SubmitAttestation(ctx context.Context, slot primitives.Slot,
 		return
 	}
 
-	var indexInCommittee uint64
-	var found bool
-	for i, vID := range duty.Committee {
-		if vID == duty.ValidatorIndex {
-			indexInCommittee = uint64(i)
-			found = true
-			break
-		}
-	}
-	if !found {
-		log.Errorf("Validator ID %d not found in committee of %v", duty.ValidatorIndex, duty.Committee)
-		if v.emitAccountMetrics {
-			ValidatorAttestFailVec.WithLabelValues(fmtKey).Inc()
-		}
-		return
-	}
-
 	// TODO: Extend to Electra
 	phase0Att, ok := indexedAtt.(*ethpb.IndexedAttestation)
 	if ok {
@@ -153,21 +136,36 @@ func (v *validator) SubmitAttestation(ctx context.Context, slot primitives.Slot,
 		}
 	}
 
-	aggregationBitfield := bitfield.NewBitlist(uint64(len(duty.Committee)))
-	aggregationBitfield.SetBitAt(indexInCommittee, true)
-	committeeBits := primitives.NewAttestationCommitteeBits()
+	var aggregationBitfield bitfield.Bitlist
 
 	var attResp *ethpb.AttestResponse
 	if postElectra {
-		attestation := &ethpb.AttestationElectra{
-			Data:            data,
-			AggregationBits: aggregationBitfield,
-			CommitteeBits:   committeeBits,
-			Signature:       sig,
+		attestation := &ethpb.SingleAttestation{
+			Data:          data,
+			AttesterIndex: duty.ValidatorIndex,
+			CommitteeId:   duty.CommitteeIndex,
+			Signature:     sig,
 		}
-		attestation.CommitteeBits.SetBitAt(uint64(req.CommitteeIndex), true)
 		attResp, err = v.validatorClient.ProposeAttestationElectra(ctx, attestation)
 	} else {
+		var indexInCommittee uint64
+		var found bool
+		for i, vID := range duty.Committee {
+			if vID == duty.ValidatorIndex {
+				indexInCommittee = uint64(i)
+				found = true
+				break
+			}
+		}
+		if !found {
+			log.Errorf("Validator ID %d not found in committee of %v", duty.ValidatorIndex, duty.Committee)
+			if v.emitAccountMetrics {
+				ValidatorAttestFailVec.WithLabelValues(fmtKey).Inc()
+			}
+			return
+		}
+		aggregationBitfield = bitfield.NewBitlist(uint64(len(duty.Committee)))
+		aggregationBitfield.SetBitAt(indexInCommittee, true)
 		attestation := &ethpb.Attestation{
 			Data:            data,
 			AggregationBits: aggregationBitfield,
@@ -199,11 +197,12 @@ func (v *validator) SubmitAttestation(ctx context.Context, slot primitives.Slot,
 		trace.StringAttribute("blockRoot", fmt.Sprintf("%#x", data.BeaconBlockRoot)),
 		trace.Int64Attribute("justifiedEpoch", int64(data.Source.Epoch)),
 		trace.Int64Attribute("targetEpoch", int64(data.Target.Epoch)),
-		trace.StringAttribute("aggregationBitfield", fmt.Sprintf("%#x", aggregationBitfield)),
 	)
 	if postElectra {
-		span.SetAttributes(trace.StringAttribute("committeeBitfield", fmt.Sprintf("%#x", committeeBits)))
+		span.SetAttributes(trace.Int64Attribute("attesterIndex", int64(duty.ValidatorIndex)))
+		span.SetAttributes(trace.Int64Attribute("committeeIndex", int64(duty.CommitteeIndex)))
 	} else {
+		span.SetAttributes(trace.StringAttribute("aggregationBitfield", fmt.Sprintf("%#x", aggregationBitfield)))
 		span.SetAttributes(trace.Int64Attribute("committeeIndex", int64(data.CommitteeIndex)))
 	}
 

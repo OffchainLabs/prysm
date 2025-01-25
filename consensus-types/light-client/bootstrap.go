@@ -29,6 +29,9 @@ func NewWrappedBootstrap(m proto.Message) (interfaces.LightClientBootstrap, erro
 	}
 }
 
+// In addition to the proto object being wrapped, we store some fields that have to be
+// constructed from the proto, so that we don't have to reconstruct them every time
+// in getters.
 type bootstrapAltair struct {
 	p                          *pb.LightClientBootstrapAltair
 	header                     interfaces.LightClientHeader
@@ -83,14 +86,18 @@ func (h *bootstrapAltair) Version() int {
 	return version.Altair
 }
 
+func (h *bootstrapAltair) Proto() proto.Message {
+	return h.p
+}
+
 func (h *bootstrapAltair) Header() interfaces.LightClientHeader {
 	return h.header
 }
 
 func (h *bootstrapAltair) SetHeader(header interfaces.LightClientHeader) error {
-	p, ok := (header.Proto()).(*pb.LightClientHeaderAltair)
+	p, ok := header.Proto().(*pb.LightClientHeaderAltair)
 	if !ok {
-		return fmt.Errorf("header type %T is not %T", p, &pb.LightClientHeaderAltair{})
+		return fmt.Errorf("header type %T is not %T", header.Proto(), &pb.LightClientHeaderAltair{})
 	}
 	h.p.Header = p
 	h.header = header
@@ -127,6 +134,9 @@ func (h *bootstrapAltair) CurrentSyncCommitteeBranchElectra() (interfaces.LightC
 	return [6][32]byte{}, consensustypes.ErrNotSupported("CurrentSyncCommitteeBranchElectra", version.Altair)
 }
 
+// In addition to the proto object being wrapped, we store some fields that have to be
+// constructed from the proto, so that we don't have to reconstruct them every time
+// in getters.
 type bootstrapCapella struct {
 	p                          *pb.LightClientBootstrapCapella
 	header                     interfaces.LightClientHeader
@@ -181,14 +191,18 @@ func (h *bootstrapCapella) Version() int {
 	return version.Capella
 }
 
+func (h *bootstrapCapella) Proto() proto.Message {
+	return h.p
+}
+
 func (h *bootstrapCapella) Header() interfaces.LightClientHeader {
 	return h.header
 }
 
 func (h *bootstrapCapella) SetHeader(header interfaces.LightClientHeader) error {
-	p, ok := (header.Proto()).(*pb.LightClientHeaderCapella)
+	p, ok := header.Proto().(*pb.LightClientHeaderCapella)
 	if !ok {
-		return fmt.Errorf("header type %T is not %T", p, &pb.LightClientHeaderCapella{})
+		return fmt.Errorf("header type %T is not %T", header.Proto(), &pb.LightClientHeaderCapella{})
 	}
 	h.p.Header = p
 	h.header = header
@@ -225,6 +239,9 @@ func (h *bootstrapCapella) CurrentSyncCommitteeBranchElectra() (interfaces.Light
 	return [6][32]byte{}, consensustypes.ErrNotSupported("CurrentSyncCommitteeBranchElectra", version.Capella)
 }
 
+// In addition to the proto object being wrapped, we store some fields that have to be
+// constructed from the proto, so that we don't have to reconstruct them every time
+// in getters.
 type bootstrapDeneb struct {
 	p                          *pb.LightClientBootstrapDeneb
 	header                     interfaces.LightClientHeader
@@ -279,14 +296,18 @@ func (h *bootstrapDeneb) Version() int {
 	return version.Deneb
 }
 
+func (h *bootstrapDeneb) Proto() proto.Message {
+	return h.p
+}
+
 func (h *bootstrapDeneb) Header() interfaces.LightClientHeader {
 	return h.header
 }
 
 func (h *bootstrapDeneb) SetHeader(header interfaces.LightClientHeader) error {
-	p, ok := (header.Proto()).(*pb.LightClientHeaderDeneb)
+	p, ok := header.Proto().(*pb.LightClientHeaderDeneb)
 	if !ok {
-		return fmt.Errorf("header type %T is not %T", p, &pb.LightClientHeaderDeneb{})
+		return fmt.Errorf("header type %T is not %T", header.Proto(), &pb.LightClientHeaderDeneb{})
 	}
 	h.p.Header = p
 	h.header = header
@@ -323,6 +344,9 @@ func (h *bootstrapDeneb) CurrentSyncCommitteeBranchElectra() (interfaces.LightCl
 	return [6][32]byte{}, consensustypes.ErrNotSupported("CurrentSyncCommitteeBranchElectra", version.Deneb)
 }
 
+// In addition to the proto object being wrapped, we store some fields that have to be
+// constructed from the proto, so that we don't have to reconstruct them every time
+// in getters.
 type bootstrapElectra struct {
 	p                          *pb.LightClientBootstrapElectra
 	header                     interfaces.LightClientHeader
@@ -377,14 +401,18 @@ func (h *bootstrapElectra) Version() int {
 	return version.Electra
 }
 
+func (h *bootstrapElectra) Proto() proto.Message {
+	return h.p
+}
+
 func (h *bootstrapElectra) Header() interfaces.LightClientHeader {
 	return h.header
 }
 
 func (h *bootstrapElectra) SetHeader(header interfaces.LightClientHeader) error {
-	p, ok := (header.Proto()).(*pb.LightClientHeaderDeneb)
+	p, ok := header.Proto().(*pb.LightClientHeaderDeneb)
 	if !ok {
-		return fmt.Errorf("header type %T is not %T", p, &pb.LightClientHeaderDeneb{})
+		return fmt.Errorf("header type %T is not %T", header.Proto(), &pb.LightClientHeaderDeneb{})
 	}
 	h.p.Header = p
 	h.header = header

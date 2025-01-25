@@ -1,0 +1,77 @@
+diff --git a/BUILD.bazel b/BUILD.bazel
+index 9be80a1..0e78457 100755
+--- a/BUILD.bazel
++++ b/BUILD.bazel
+@@ -8,58 +8,7 @@ go_library(
+     srcs = [
+         "hid.go",
+         "hid_disabled.go",
+-        "hid_enabled.go",
+-        "wchar.go",
+     ],
+-    cgo = True,
+-    clinkopts = select({
+-        "@io_bazel_rules_go//go/platform:darwin": [
+-            "-framework CoreFoundation -framework IOKit -lobjc",
+-        ],
+-        "@io_bazel_rules_go//go/platform:freebsd": [
+-            "-lusb",
+-        ],
+-        "@io_bazel_rules_go//go/platform:linux": [
+-            "-lrt",
+-        ],
+-        "@io_bazel_rules_go//go/platform:windows": [
+-            "-lsetupapi",
+-        ],
+-        "//conditions:default": [],
+-    }),
+-    copts = select({
+-        "@io_bazel_rules_go//go/platform:android": [
+-            "-DDEFAULT_VISIBILITY=",
+-            "-DPOLL_NFDS_TYPE=int",
+-            "-Ihidapi/hidapi",
+-            "-Ilibusb/libusb -DOS_LINUX -D_GNU_SOURCE -DHAVE_SYS_TIME_H -DHAVE_CLOCK_GETTIME",
+-        ],
+-        "@io_bazel_rules_go//go/platform:darwin": [
+-            "-DDEFAULT_VISIBILITY=",
+-            "-DOS_DARWIN -DHAVE_SYS_TIME_H",
+-            "-DPOLL_NFDS_TYPE=int",
+-            "-Ihidapi/hidapi",
+-        ],
+-        "@io_bazel_rules_go//go/platform:freebsd": [
+-            "-DDEFAULT_VISIBILITY=",
+-            "-DOS_FREEBSD",
+-            "-DPOLL_NFDS_TYPE=int",
+-            "-Ihidapi/hidapi",
+-        ],
+-        "@io_bazel_rules_go//go/platform:linux": [
+-            "-DDEFAULT_VISIBILITY=",
+-            "-DPOLL_NFDS_TYPE=int",
+-            "-Ihidapi/hidapi",
+-            "-Ilibusb/libusb -DOS_LINUX -D_GNU_SOURCE -DHAVE_SYS_TIME_H -DHAVE_CLOCK_GETTIME",
+-        ],
+-        "@io_bazel_rules_go//go/platform:windows": [
+-            "-DDEFAULT_VISIBILITY=",
+-            "-DOS_WINDOWS",
+-            "-DPOLL_NFDS_TYPE=int",
+-            "-Ihidapi/hidapi",
+-        ],
+-        "//conditions:default": [],
+-    }),
+     importpath = "github.com/karalabe/hid",
+     visibility = ["//visibility:public"],
+ )
+diff --git a/hid_disabled.go b/hid_disabled.go
+index fa2c504..0091853 100644
+--- a/hid_disabled.go
++++ b/hid_disabled.go
+@@ -4,9 +4,6 @@
+ // This file is released under the 3-clause BSD license. Note however that Linux
+ // support depends on libusb, released under GNU LGPL 2.1 or later.
+ 
+-//go:build (!freebsd && !linux && !darwin && !windows) || ios || !cgo
+-// +build !freebsd,!linux,!darwin,!windows ios !cgo
+-
+ package hid
+ 
+ // Supported returns whether this platform is supported by the HID library or not.

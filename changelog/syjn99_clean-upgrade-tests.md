@@ -1,0 +1,3 @@
+### Removed
+
+- Clean `TestCanUpgrade*` tests
