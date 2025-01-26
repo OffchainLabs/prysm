@@ -715,11 +715,3 @@ func (s *Service) rollbackBlock(ctx context.Context, blockRoot [32]byte) {
 		log.WithError(err).Errorf("Could not delete block with block root %#x", blockRoot)
 	}
 }
-
-func (s *Service) broadcastProposerSlashing(ctx context.Context, slashing *ethpb.ProposerSlashing) error {
-	if features.Get().DisableBroadcastSlashings {
-		return nil
-	}
-
-	return s.cfg.P2p.Broadcast(ctx, slashing)
-}
