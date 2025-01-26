@@ -473,17 +473,15 @@ func (s *Service) detectAndBroadcastEquivocation(ctx context.Context, blk interf
 		return err
 	}
 
-	// Compare signatures since we haven't computed roots yet
 	sig1 := blk.Signature()
-
 	s.seenBlockLock.RLock()
 	// Create a unique cache key by combining slot and proposer index
 	// Convert slot and proposer index to 32 bytes and combine them into a single byte slice
 	b := append(bytesutil.Bytes32(uint64(slot)), bytesutil.Bytes32(uint64(proposerIndex))...)
-	existingBlock, seen := s.seenBlockCache.Get(string(b))
+	existingBlock, isSeen := s.seenBlockCache.Get(string(b))
 	s.seenBlockLock.RUnlock()
 
-	if !seen {
+	if !isSeen {
 		return nil
 	}
 

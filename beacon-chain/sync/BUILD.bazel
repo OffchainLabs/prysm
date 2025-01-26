@@ -211,6 +211,7 @@ go_test(
         "//beacon-chain/operations/attestations:go_default_library",
         "//beacon-chain/operations/blstoexec:go_default_library",
         "//beacon-chain/operations/slashings:go_default_library",
+        "//beacon-chain/operations/slashings/mock:go_default_library",
         "//beacon-chain/p2p:go_default_library",
         "//beacon-chain/p2p/encoder:go_default_library",
         "//beacon-chain/p2p/peers:go_default_library",
