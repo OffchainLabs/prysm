@@ -28,6 +28,11 @@ func (m *MockBroadcaster) Broadcast(_ context.Context, msg proto.Message) error 
 	return nil
 }
 
+func (m *MockBroadcaster) BroadcastBlockChunks(_ context.Context, _ *ethpb.ChunkedBeaconBlock) error {
+	m.BroadcastCalled.Store(true)
+	return nil
+}
+
 // BroadcastAttestation records a broadcast occurred.
 func (m *MockBroadcaster) BroadcastAttestation(_ context.Context, _ uint64, a ethpb.Att) error {
 	m.BroadcastCalled.Store(true)

@@ -198,6 +198,7 @@ var (
 // devModeFlags holds list of flags that are set when development mode is on.
 var devModeFlags = []cli.Flag{
 	backfill.EnableExperimentalBackfill,
+	useRLNC,
 }
 
 // ValidatorFlags contains a list of all the feature flags that apply to the validator client.
@@ -219,6 +220,7 @@ var ValidatorFlags = append(deprecatedFlags, []cli.Flag{
 // E2EValidatorFlags contains a list of the validator feature flags to be tested in E2E.
 var E2EValidatorFlags = []string{
 	"--enable-doppelganger",
+	"--use-rlnc",
 }
 
 // BeaconChainFlags contains a list of all the feature flags that apply to the beacon-chain client.

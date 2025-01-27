@@ -283,9 +283,9 @@ func (node *BeaconNode) Start(ctx context.Context) error {
 	// on our features or the beacon index is a multiplier of 2 (idea is to split nodes
 	// equally down the line with one group having feature flags and the other without
 	// feature flags; this is to allow A-B testing on new features)
-	if !config.TestFeature || index != 1 {
-		args = append(args, features.E2EBeaconChainFlags...)
-	}
+	// Temporarily default to e2e flags enabled
+	args = append(args, features.E2EBeaconChainFlags...)
+
 	if config.UseBuilder {
 		args = append(args, fmt.Sprintf("--%s=%s:%d", flags.MevRelayEndpoint.Name, "http://127.0.0.1", e2e.TestParams.Ports.Eth1ProxyPort+index))
 	}

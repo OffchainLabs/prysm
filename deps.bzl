@@ -2005,8 +2005,9 @@ def prysm_deps():
         name = "com_github_libp2p_go_libp2p_pubsub",
         build_file_proto_mode = "disable_global",
         importpath = "github.com/libp2p/go-libp2p-pubsub",
-        sum = "h1:RmFQ2XAy3zQtbt2iNPy7Tt0/3fwTnHpCQSSnmGnt1Ps=",
-        version = "v0.13.0",
+        replace = "github.com/nisdas/go-libp2p-pubsub",
+        sum = "h1:eqQDbjtvXnkZcpC7BayY5FeIzpSGHeDyn53EZ9qVha0=",
+        version = "v0.3.3-0.20250127130457-2becfc6d889e",
     )
     go_repository(
         name = "com_github_libp2p_go_libp2p_testing",

@@ -100,6 +100,26 @@ func (s *Service) PublishToTopic(ctx context.Context, topic string, data []byte,
 	}
 }
 
+func (s *Service) PublishMultipleToTopic(ctx context.Context, topic string, msgs [][]byte, opts ...pubsub.PubOpt) error {
+	topicHandle, err := s.JoinTopic(topic)
+	if err != nil {
+		return err
+	}
+
+	// Wait for at least 1 peer to be available to receive the published message.
+	for {
+		if len(topicHandle.ListPeers()) > 0 || flags.Get().MinimumSyncPeers == 0 {
+			return topicHandle.PublishMultiple(ctx, msgs, opts...)
+		}
+		select {
+		case <-ctx.Done():
+			return errors.Wrapf(ctx.Err(), "unable to find requisite number of peers for topic %s, 0 peers found to publish to", topic)
+		default:
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+}
+
 // SubscribeToTopic joins (if necessary) and subscribes to PubSub topic.
 func (s *Service) SubscribeToTopic(topic string, opts ...pubsub.SubOpt) (*pubsub.Subscription, error) {
 	s.awaitStateInitialized() // Genesis time and genesis validators root are required to subscribe.

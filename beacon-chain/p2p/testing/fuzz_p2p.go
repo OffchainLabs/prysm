@@ -134,6 +134,10 @@ func (*FakeP2P) Broadcast(_ context.Context, _ proto.Message) error {
 	return nil
 }
 
+func (*FakeP2P) BroadcastBlockChunks(_ context.Context, _ *ethpb.ChunkedBeaconBlock) error {
+	return nil
+}
+
 // BroadcastAttestation -- fake.
 func (*FakeP2P) BroadcastAttestation(_ context.Context, _ uint64, _ ethpb.Att) error {
 	return nil

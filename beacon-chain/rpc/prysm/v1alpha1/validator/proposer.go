@@ -422,7 +422,18 @@ func (vs *Server) blobSidecarsFromUnblindedBlock(block interfaces.SignedBeaconBl
 
 // broadcastReceiveChunkedBlock broadcasts a chunked block and handles its reception.
 func (vs *Server) broadcastReceiveChunkedBlock(ctx context.Context, req *ethpb.ChunkedBeaconBlock, root [32]byte) error {
-	return nil
+	block, err := blocks.NewSignedBeaconBlock(req.Block.Block)
+	if err != nil {
+		return errors.Wrap(err, "block construction failed")
+	}
+	if err := vs.P2P.BroadcastBlockChunks(ctx, req); err != nil {
+		return errors.Wrap(err, "broadcast failed")
+	}
+	vs.BlockNotifier.BlockFeed().Send(&feed.Event{
+		Type: blockfeed.ReceivedBlock,
+		Data: &blockfeed.ReceivedBlockData{SignedBlock: block},
+	})
+	return vs.BlockReceiver.ReceiveBlock(ctx, block, root, nil)
 }
 
 // broadcastReceiveBlock broadcasts a block and handles its reception.

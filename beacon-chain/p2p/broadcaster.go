@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"time"
 
+        pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -226,6 +227,52 @@ func (s *Service) BroadcastBlob(ctx context.Context, subnet uint64, blob *ethpb.
 
 	// Non-blocking broadcast, with attempts to discover a subnet peer if none available.
 	go s.internalBroadcastBlob(ctx, subnet, blob, forkDigest)
+
+	return nil
+}
+
+func (s *Service) BroadcastBlockChunks(ctx context.Context, cBlk *ethpb.ChunkedBeaconBlock) error {
+	ctx, span := trace.StartSpan(ctx, "p2p.BroadcastBlob")
+	defer span.End()
+	if cBlk == nil {
+		return errors.New("attempted to broadcast nil blob sidecar")
+	}
+	forkDigest, err := s.currentForkDigest()
+	if err != nil {
+		err := errors.Wrap(err, "could not retrieve fork digest")
+		tracing.AnnotateError(span, err)
+		return err
+	}
+	topic, ok := GossipTypeMapping[reflect.TypeOf(&ethpb.BeaconBlockChunk{})]
+	if !ok {
+		tracing.AnnotateError(span, ErrMessageNotMapped)
+		return ErrMessageNotMapped
+	}
+	topic = fmt.Sprintf(topic, forkDigest)
+	rawChunks := cBlk.Chunks
+	var multipleMessages [][]byte
+	for _, c := range rawChunks {
+		blkChunk := &ethpb.BeaconBlockChunk{
+			Data:         c.Data,
+			Coefficients: nil, // TODO:Use rlnc package here
+			Header:       cBlk.Header,
+			Signature:    cBlk.Signature,
+		}
+
+		buf := new(bytes.Buffer)
+		if _, err := s.Encoding().EncodeGossip(buf, blkChunk); err != nil {
+			err := errors.Wrap(err, "could not encode message")
+			tracing.AnnotateError(span, err)
+			return err
+		}
+		multipleMessages = append(multipleMessages, buf.Bytes())
+	}
+
+	if err := s.PublishMultipleToTopic(ctx, topic+s.Encoding().ProtocolSuffix(), multipleMessages, pubsub.WithRandomPublishing()); err != nil {
+		err := errors.Wrap(err, "could not publish message")
+		tracing.AnnotateError(span, err)
+		return err
+	}
 
 	return nil
 }

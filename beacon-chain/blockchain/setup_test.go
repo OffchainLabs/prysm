@@ -52,6 +52,11 @@ func (mb *mockBroadcaster) Broadcast(_ context.Context, _ proto.Message) error {
 	return nil
 }
 
+func (mb *mockBroadcaster) BroadcastBlockChunks(_ context.Context, _ *ethpb.ChunkedBeaconBlock) error {
+	mb.broadcastCalled = true
+	return nil
+}
+
 func (mb *mockBroadcaster) BroadcastAttestation(_ context.Context, _ uint64, _ ethpb.Att) error {
 	mb.broadcastCalled = true
 	return nil
