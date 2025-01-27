@@ -339,6 +339,10 @@ func ConfigureValidator(ctx *cli.Context) error {
 		logEnabled(EnableBeaconRESTApi)
 		cfg.EnableBeaconRESTApi = true
 	}
+	if ctx.IsSet(useRLNC.Name) {
+		logEnabled(useRLNC)
+		cfg.UseRLNC = true
+	}
 	cfg.KeystoreImportDebounceInterval = ctx.Duration(dynamicKeyReloadDebounceInterval.Name)
 	Init(cfg)
 	return nil
