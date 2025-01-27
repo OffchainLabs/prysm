@@ -282,7 +282,6 @@ func (mr *MockBeaconNodeValidatorServerMockRecorder) ProposeChunkedBlock(arg0, a
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProposeChunkedBlock", reflect.TypeOf((*MockBeaconNodeValidatorServer)(nil).ProposeChunkedBlock), arg0, arg1)
 }
 
-
 // ProposeBeaconBlock mocks base method.
 func (m *MockBeaconNodeValidatorServer) ProposeBeaconBlock(arg0 context.Context, arg1 *eth.GenericSignedBeaconBlock) (*eth.ProposeResponse, error) {
 	m.ctrl.T.Helper()

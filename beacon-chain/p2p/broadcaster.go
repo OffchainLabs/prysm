@@ -228,6 +228,57 @@ func (s *Service) BroadcastBlob(ctx context.Context, subnet uint64, blob *ethpb.
 	return nil
 }
 
+func (s *Service) BroadcastBlockChunks(ctx context.Context, cBlk *ethpb.ChunkedBeaconBlock) error {
+	ctx, span := trace.StartSpan(ctx, "p2p.BroadcastBlob")
+	defer span.End()
+	if cBlk == nil {
+		return errors.New("attempted to broadcast nil blob sidecar")
+	}
+	forkDigest, err := s.currentForkDigest()
+	if err != nil {
+		err := errors.Wrap(err, "could not retrieve fork digest")
+		tracing.AnnotateError(span, err)
+		return err
+	}
+	topic, ok := GossipTypeMapping[reflect.TypeOf(&ethpb.BeaconBlockChunk{})]
+	if !ok {
+		tracing.AnnotateError(span, ErrMessageNotMapped)
+		return ErrMessageNotMapped
+	}
+	topic = fmt.Sprintf(topic, forkDigest)
+	rawChunks := cBlk.Chunks
+	for _, c := range rawChunks {
+		blkChunk := &ethpb.BeaconBlockChunk{
+			Data:         c.Data,
+			Coefficients: nil, // TODO:Use rlnc package here
+			Header:       cBlk.Header,
+			Signature:    cBlk.Signature,
+		}
+
+		buf := new(bytes.Buffer)
+		if _, err := s.Encoding().EncodeGossip(buf, blkChunk); err != nil {
+			err := errors.Wrap(err, "could not encode message")
+			tracing.AnnotateError(span, err)
+			return err
+		}
+
+		if span.IsRecording() {
+			id := hash.FastSum64(buf.Bytes())
+			messageLen := int64(buf.Len())
+			// lint:ignore uintcast -- It's safe to do this for tracing.
+			iid := int64(id)
+			span = trace.AddMessageSendEvent(span, iid, messageLen /*uncompressed*/, messageLen /*compressed*/)
+		}
+		if err := s.PublishToTopicRandomly(ctx, topic+s.Encoding().ProtocolSuffix(), buf.Bytes()); err != nil {
+			err := errors.Wrap(err, "could not publish message")
+			tracing.AnnotateError(span, err)
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (s *Service) internalBroadcastBlob(ctx context.Context, subnet uint64, blobSidecar *ethpb.BlobSidecar, forkDigest [4]byte) {
 	_, span := trace.StartSpan(ctx, "p2p.internalBroadcastBlob")
 	defer span.End()
