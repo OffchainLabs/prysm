@@ -11,7 +11,8 @@ import (
 
 func TestBlockChunkCache(t *testing.T) {
 	// Create a new block chunk cache.
-	cache := NewBlockChunkCache()
+	committer := newCommitter(10)
+	cache := NewBlockChunkCache(committer)
 	require.NotNil(t, cache)
 
 	require.Equal(t, 0, len(cache.nodes))
@@ -20,12 +21,11 @@ func TestBlockChunkCache(t *testing.T) {
 	block := make([]byte, numChunks*chunkSize*31)
 	_, err := rand.Read(block)
 	require.NoError(t, err)
-	committer := cache.committer
 	node, err := NewSource(committer, numChunks, block)
 	require.NoError(t, err)
 
 	// Prepare a message
-	msg, err := node.prepareMessage()
+	msg, err := node.PrepareMessage()
 	require.NoError(t, err)
 	require.NotNil(t, msg)
 	chunkProto := &ethpb.BeaconBlockChunk{
@@ -47,7 +47,7 @@ func TestBlockChunkCache(t *testing.T) {
 	require.Equal(t, 1, len(cache.nodes))
 
 	// Prepare a second message
-	msg, err = node.prepareMessage()
+	msg, err = node.PrepareMessage()
 	require.NoError(t, err)
 	require.NotNil(t, msg)
 	chunkProto = &ethpb.BeaconBlockChunk{

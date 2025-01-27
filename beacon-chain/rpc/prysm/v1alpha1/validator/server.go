@@ -27,6 +27,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync/rlnc"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/network/forks"
@@ -80,6 +81,7 @@ type Server struct {
 	ClockWaiter             startup.ClockWaiter
 	CoreService             *core.Service
 	AttestationStateFetcher blockchain.AttestationStateFetcher
+	ChunkCommitter          *rlnc.Committer
 }
 
 // Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.

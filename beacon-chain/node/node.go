@@ -53,6 +53,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync/checkpoint"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync/genesis"
 	initialsync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync/initial-sync"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync/rlnc"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v6/cmd"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
@@ -124,6 +125,7 @@ type BeaconNode struct {
 	syncChecker             *initialsync.SyncChecker
 	slasherEnabled          bool
 	lcStore                 *lightclient.Store
+	chunkCommitter          *rlnc.Committer
 }
 
 // New creates a new node instance, sets up configuration options, and registers
@@ -138,6 +140,11 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 
 	registry := runtime.NewServiceRegistry()
 	ctx := cliCtx.Context
+
+	committer, err := rlnc.LoadTrustedSetup()
+	if err != nil {
+		return nil, errors.Wrap(err, "could not load the committer trusted setup")
+	}
 
 	beacon := &BeaconNode{
 		cliCtx:                  cliCtx,
@@ -163,6 +170,7 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 		syncChecker:             &initialsync.SyncChecker{},
 		slasherEnabled:          cliCtx.Bool(flags.SlasherFlag.Name),
 		lcStore:                 &lightclient.Store{},
+		chunkCommitter:          committer,
 	}
 
 	for _, opt := range opts {
@@ -777,6 +785,7 @@ func (b *BeaconNode) registerBlockchainService(fc forkchoice.ForkChoicer, gs *st
 		blockchain.WithBlobStorage(b.BlobStorage),
 		blockchain.WithTrackedValidatorsCache(b.trackedValidatorsCache),
 		blockchain.WithPayloadIDCache(b.payloadIDCache),
+		blockchain.WithChunkCommitter(b.chunkCommitter),
 		blockchain.WithSyncChecker(b.syncChecker),
 		blockchain.WithSlasherEnabled(b.slasherEnabled),
 		blockchain.WithLightClientStore(b.lcStore),
@@ -866,6 +875,7 @@ func (b *BeaconNode) registerSyncService(initialSyncComplete chan struct{}, bFil
 		regularsync.WithAvailableBlocker(bFillStore),
 		regularsync.WithSlasherEnabled(b.slasherEnabled),
 		regularsync.WithLightClientStore(b.lcStore),
+		regularsync.WithChunkCommitter(b.chunkCommitter),
 	)
 	return b.services.RegisterService(rs)
 }
@@ -1013,6 +1023,7 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		TrackedValidatorsCache:    b.trackedValidatorsCache,
 		PayloadIDCache:            b.payloadIDCache,
 		LCStore:                   b.lcStore,
+		ChunkCommitter:            b.chunkCommitter,
 	})
 
 	return b.services.RegisterService(rpcService)

@@ -18,6 +18,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/kv"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync/rlnc"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
@@ -43,6 +44,7 @@ var eth1DataNotification bool
 const (
 	eth1dataTimeout           = 2 * time.Second
 	defaultBuilderBoostFactor = primitives.Gwei(100)
+	meshSize                  = 40 // The number of peers to broadcast block chunks
 )
 
 // Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
@@ -426,7 +428,11 @@ func (vs *Server) broadcastReceiveChunkedBlock(ctx context.Context, req *ethpb.C
 	if err != nil {
 		return errors.Wrap(err, "block construction failed")
 	}
-	if err := vs.P2P.BroadcastBlockChunks(ctx, req); err != nil {
+	messages, err := vs.constructChunkMessages(req)
+	if err != nil {
+		return errors.Wrap(err, "could not construct messages")
+	}
+	if err := vs.P2P.BroadcastBlockChunks(ctx, messages); err != nil {
 		return errors.Wrap(err, "broadcast failed")
 	}
 	vs.BlockNotifier.BlockFeed().Send(&feed.Event{
@@ -434,6 +440,27 @@ func (vs *Server) broadcastReceiveChunkedBlock(ctx context.Context, req *ethpb.C
 		Data: &blockfeed.ReceivedBlockData{SignedBlock: block},
 	})
 	return vs.BlockReceiver.ReceiveBlock(ctx, block, root, nil)
+}
+
+func (s *Server) constructChunkMessages(cBlk *ethpb.ChunkedBeaconBlock) (multipleMessages []*ethpb.BeaconBlockChunk, err error) {
+	node, err := rlnc.NewNodeFromChunkedBlock(s.ChunkCommitter, cBlk)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not construct node")
+	}
+	for i := 0; i < meshSize; i++ {
+		msg, err := node.PrepareMessage()
+		if err != nil {
+			return nil, errors.Wrap(err, "could not prepare message")
+		}
+		chunk := &ethpb.BeaconBlockChunk{
+			Data:         msg.Data(),
+			Coefficients: msg.Coefficients(),
+			Header:       cBlk.Header,
+			Signature:    cBlk.Signature,
+		}
+		multipleMessages = append(multipleMessages, chunk)
+	}
+	return
 }
 
 // broadcastReceiveBlock broadcasts a block and handles its reception.

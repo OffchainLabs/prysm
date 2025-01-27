@@ -65,6 +65,7 @@ go_library(
         "//beacon-chain/state/stategen:go_default_library",
         "//beacon-chain/state/state-native:go_default_library",
         "//beacon-chain/sync:go_default_library",
+        "//beacon-chain/sync/rlnc:go_default_library",
         "//config/features:go_default_library",
         "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",

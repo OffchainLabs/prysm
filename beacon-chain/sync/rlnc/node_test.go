@@ -16,13 +16,13 @@ func TestPrepareMessage(t *testing.T) {
 	require.NoError(t, err)
 	node, err := NewSource(committer, numChunks, block)
 	require.NoError(t, err)
-	message, err := node.prepareMessage()
+	message, err := node.PrepareMessage()
 	require.NoError(t, err)
 	require.NotNil(t, message)
 	require.Equal(t, true, message.Verify(committer))
 
 	emptyNode := NewNode(committer, numChunks)
-	_, err = emptyNode.prepareMessage()
+	_, err = emptyNode.PrepareMessage()
 	require.ErrorIs(t, ErrNoData, err)
 }
 
@@ -36,7 +36,7 @@ func TestReceive(t *testing.T) {
 	node, err := NewSource(committer, numChunks, block)
 	require.NoError(t, err)
 	// Send one message
-	message, err := node.prepareMessage()
+	message, err := node.PrepareMessage()
 	require.NoError(t, err)
 	require.NotNil(t, message)
 	receiver := NewNode(committer, numChunks)
@@ -44,14 +44,14 @@ func TestReceive(t *testing.T) {
 	require.Equal(t, 1, len(receiver.chunks))
 
 	// Send another message
-	message, err = node.prepareMessage()
+	message, err = node.PrepareMessage()
 	require.NoError(t, err)
 	require.NotNil(t, message)
 	require.NoError(t, receiver.receive(message))
 	require.Equal(t, 2, len(receiver.chunks))
 
 	// The third one should fail
-	message, err = node.prepareMessage()
+	message, err = node.PrepareMessage()
 	require.NoError(t, err)
 	require.NotNil(t, message)
 	require.ErrorIs(t, ErrLinearlyDependentMessage, receiver.receive(message))
@@ -72,7 +72,7 @@ func TestDecode(t *testing.T) {
 	for i := 0; i < int(numChunks); i++ {
 		_, err = emptyNode.decode()
 		require.ErrorIs(t, ErrNoData, err)
-		message, err := node.prepareMessage()
+		message, err := node.PrepareMessage()
 		require.NoError(t, err)
 		require.NoError(t, emptyNode.receive(message))
 	}

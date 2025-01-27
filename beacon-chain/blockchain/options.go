@@ -17,6 +17,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync/rlnc"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 )
 
@@ -66,6 +67,14 @@ func WithExecutionEngineCaller(c execution.EngineCaller) Option {
 func WithDepositCache(c cache.DepositCache) Option {
 	return func(s *Service) error {
 		s.cfg.DepositCache = c
+		return nil
+	}
+}
+
+// WithChunkCommitter for chunk committer.
+func WithChunkCommitter(c *rlnc.Committer) Option {
+	return func(s *Service) error {
+		s.cfg.ChunkCommitter = c
 		return nil
 	}
 }

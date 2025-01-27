@@ -18,11 +18,7 @@ type BlockChunkCache struct {
 	nodes     map[primitives.Slot]map[primitives.ValidatorIndex]*Node
 }
 
-func NewBlockChunkCache() *BlockChunkCache {
-	committer, err := LoadTrustedSetup()
-	if err != nil {
-		panic("cannot load the RLNC trusted setup") // lint:nopanic -- TODO: Do not panic!
-	}
+func NewBlockChunkCache(committer *Committer) *BlockChunkCache {
 	return &BlockChunkCache{
 		committer: committer,
 		nodes:     make(map[primitives.Slot]map[primitives.ValidatorIndex]*Node),
@@ -100,7 +96,7 @@ func (b *BlockChunkCache) PrepareMessage(chunk interfaces.ReadOnlyBeaconBlockChu
 		return nil, ErrNoData
 	}
 	node := b.nodes[chunk.Slot()][chunk.ProposerIndex()]
-	msg, err := node.prepareMessage()
+	msg, err := node.PrepareMessage()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to prepare message")
 	}

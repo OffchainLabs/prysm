@@ -4,6 +4,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	ristretto "github.com/gtank/ristretto255"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
@@ -30,6 +31,33 @@ func NewNode(committer *Committer, size uint) *Node {
 		echelon:   newEchelon(size),
 		committer: committer,
 	}
+}
+
+func NewNodeFromChunkedBlock(committer *Committer, blk *ethpb.ChunkedBeaconBlock) (*Node, error) {
+	size := uint(len(blk.Chunks))
+	chunks := make([][]*ristretto.Scalar, size)
+	var err error
+	for i, c := range blk.Chunks {
+		chunks[i], err = dataToVector(c.Data)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not convert chunk data to scalar")
+		}
+	}
+	commitments, err := dataToElements(blk.Header.Commitments)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not convert chunk commitments to Ristretto elements")
+	}
+
+	return &Node{
+		chunks:        chunks,
+		commitments:   commitments,
+		echelon:       newIdentityEchelon(size),
+		committer:     committer,
+		slot:          blk.Header.Slot,
+		proposerIndex: blk.Header.ProposerIndex,
+		parentRoot:    blk.Header.ParentRoot,
+		signature:     blk.Signature,
+	}, nil
 }
 
 func (n *Node) GetChunkedBlock(blk *ethpb.GenericSignedBeaconBlock) *ethpb.ChunkedBeaconBlock {
@@ -194,7 +222,7 @@ func (n *Node) chunkLC(scalars []*ristretto.Scalar) (chunk, error) {
 	}, nil
 }
 
-func (n *Node) prepareMessage() (*message, error) {
+func (n *Node) PrepareMessage() (*Message, error) {
 	if len(n.chunks) == 0 {
 		return nil, ErrNoData
 	}
@@ -203,7 +231,7 @@ func (n *Node) prepareMessage() (*message, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &message{
+	return &Message{
 		chunk:       chunk,
 		commitments: n.commitments,
 	}, nil
@@ -233,7 +261,7 @@ func (n *Node) checkExistingChunks(c []*ristretto.Scalar) bool {
 	return len(c) == len(n.chunks[0])
 }
 
-func (n *Node) receive(message *message) error {
+func (n *Node) receive(message *Message) error {
 	if !n.checkExistingCommitments(message.commitments) {
 		return ErrIncorrectCommitments
 	}

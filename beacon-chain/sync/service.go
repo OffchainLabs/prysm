@@ -103,6 +103,7 @@ type config struct {
 	clock                   *startup.Clock
 	stateNotifier           statefeed.Notifier
 	blobStorage             *filesystem.BlobStorage
+	chunkCommitter          *rlnc.Committer
 }
 
 // This defines the interface for interacting with block chain service
@@ -296,7 +297,7 @@ func (s *Service) initCaches() {
 	s.seenAttesterSlashingCache = make(map[uint64]bool)
 	s.seenProposerSlashingCache = lruwrpr.New(seenProposerSlashingSize)
 	s.badBlockCache = lruwrpr.New(badBlockSize)
-	s.blockChunkCache = rlnc.NewBlockChunkCache()
+	s.blockChunkCache = rlnc.NewBlockChunkCache(s.cfg.chunkCommitter)
 }
 
 func (s *Service) waitForChainStart() {

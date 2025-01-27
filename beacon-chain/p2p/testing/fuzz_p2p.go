@@ -134,7 +134,7 @@ func (*FakeP2P) Broadcast(_ context.Context, _ proto.Message) error {
 	return nil
 }
 
-func (*FakeP2P) BroadcastBlockChunks(_ context.Context, _ *ethpb.ChunkedBeaconBlock) error {
+func (*FakeP2P) BroadcastBlockChunks(_ context.Context, _ []*ethpb.BeaconBlockChunk) error {
 	return nil
 }
 

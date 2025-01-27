@@ -231,49 +231,33 @@ func (s *Service) BroadcastBlob(ctx context.Context, subnet uint64, blob *ethpb.
 	return nil
 }
 
-func (s *Service) BroadcastBlockChunks(ctx context.Context, cBlk *ethpb.ChunkedBeaconBlock) error {
+// BroadcastBlockChunks sends the passed messages to the pubsub topic
+func (s *Service) BroadcastBlockChunks(ctx context.Context, chunks []*ethpb.BeaconBlockChunk) error {
 	ctx, span := trace.StartSpan(ctx, "p2p.BroadcastBlob")
 	defer span.End()
-	if cBlk == nil {
-		return errors.New("attempted to broadcast nil blob sidecar")
-	}
 	forkDigest, err := s.currentForkDigest()
 	if err != nil {
 		err := errors.Wrap(err, "could not retrieve fork digest")
 		tracing.AnnotateError(span, err)
 		return err
 	}
-	topic, ok := GossipTypeMapping[reflect.TypeOf(&ethpb.BeaconBlockChunk{})]
-	if !ok {
-		tracing.AnnotateError(span, ErrMessageNotMapped)
-		return ErrMessageNotMapped
-	}
+	topic := RLNCTopicFormat
 	topic = fmt.Sprintf(topic, forkDigest)
-	rawChunks := cBlk.Chunks
-	var multipleMessages [][]byte
-	for _, c := range rawChunks {
-		blkChunk := &ethpb.BeaconBlockChunk{
-			Data:         c.Data,
-			Coefficients: nil, // TODO:Use rlnc package here
-			Header:       cBlk.Header,
-			Signature:    cBlk.Signature,
-		}
-
+	multipleMessages := make([][]byte, len(chunks))
+	for i, c := range chunks {
 		buf := new(bytes.Buffer)
-		if _, err := s.Encoding().EncodeGossip(buf, blkChunk); err != nil {
+		if _, err := s.Encoding().EncodeGossip(buf, c); err != nil {
 			err := errors.Wrap(err, "could not encode message")
 			tracing.AnnotateError(span, err)
 			return err
 		}
-		multipleMessages = append(multipleMessages, buf.Bytes())
+		multipleMessages[i] = buf.Bytes()
 	}
-
 	if err := s.PublishMultipleToTopic(ctx, topic+s.Encoding().ProtocolSuffix(), multipleMessages, pubsub.WithRandomPublishing()); err != nil {
 		err := errors.Wrap(err, "could not publish message")
 		tracing.AnnotateError(span, err)
 		return err
 	}
-
 	return nil
 }
 

@@ -12,13 +12,13 @@ type chunk struct {
 	coefficients []*ristretto.Scalar
 }
 
-type message struct {
+type Message struct {
 	chunk       chunk
 	commitments []*ristretto.Element
 }
 
 // NewMessage creates a new message from a chunk interface.
-func newMessage(c interfaces.ReadOnlyBeaconBlockChunk) (*message, error) {
+func newMessage(c interfaces.ReadOnlyBeaconBlockChunk) (*Message, error) {
 	data, err := dataToVector(c.Data())
 	if err != nil {
 		return nil, err
@@ -35,14 +35,14 @@ func newMessage(c interfaces.ReadOnlyBeaconBlockChunk) (*message, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &message{
+	return &Message{
 		chunk:       chunk,
 		commitments: commitments,
 	}, nil
 }
 
 // Verify verifies that the message is compatible with the signed committmments
-func (m *message) Verify(c *Committer) bool {
+func (m *Message) Verify(c *Committer) bool {
 	// We should get the same number of coefficients as commitments.
 	if len(m.chunk.coefficients) != len(m.commitments) {
 		return false
@@ -113,7 +113,7 @@ func dataToElements(data [][]byte) ([]*ristretto.Element, error) {
 }
 
 // Data returns the data of the message as serialized bytes
-func (m *message) Data() [][]byte {
+func (m *Message) Data() [][]byte {
 	data := make([][]byte, len(m.chunk.data))
 	for i, d := range m.chunk.data {
 		data[i] = d.Encode(nil)
@@ -122,7 +122,7 @@ func (m *message) Data() [][]byte {
 }
 
 // Coefficients returns the coefficients of the message as serialized bytes
-func (m *message) Coefficients() [][]byte {
+func (m *Message) Coefficients() [][]byte {
 	coefficients := make([][]byte, len(m.chunk.coefficients))
 	for i, c := range m.chunk.coefficients {
 		coefficients[i] = c.Encode(nil)
@@ -131,7 +131,7 @@ func (m *message) Coefficients() [][]byte {
 }
 
 // Commitments returns the commitments of the message as serialized bytes
-func (m *message) Commitments() [][]byte {
+func (m *Message) Commitments() [][]byte {
 	commitments := make([][]byte, len(m.commitments))
 	for i, c := range m.commitments {
 		commitments[i] = make([]byte, 0)

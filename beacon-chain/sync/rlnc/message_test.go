@@ -42,12 +42,12 @@ func TestVerify(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		message  *message
+		message  *Message
 		expected bool
 	}{
 		{
 			name: "valid message",
-			message: &message{
+			message: &Message{
 				chunk: chunk{
 					data:         goodData,
 					coefficients: goodCoefficients,
@@ -58,7 +58,7 @@ func TestVerify(t *testing.T) {
 		},
 		{
 			name: "invalid coefficients",
-			message: &message{
+			message: &Message{
 				chunk: chunk{
 					data:         goodData,
 					coefficients: badCoefficients,
@@ -69,7 +69,7 @@ func TestVerify(t *testing.T) {
 		},
 		{
 			name: "invalid data",
-			message: &message{
+			message: &Message{
 				chunk: chunk{
 					data:         badData,
 					coefficients: goodCoefficients,
@@ -80,7 +80,7 @@ func TestVerify(t *testing.T) {
 		},
 		{
 			name: "invalid commitments",
-			message: &message{
+			message: &Message{
 				chunk: chunk{
 					data:         goodData,
 					coefficients: goodCoefficients,

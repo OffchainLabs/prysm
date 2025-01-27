@@ -28,7 +28,7 @@ func (m *MockBroadcaster) Broadcast(_ context.Context, msg proto.Message) error 
 	return nil
 }
 
-func (m *MockBroadcaster) BroadcastBlockChunks(_ context.Context, _ *ethpb.ChunkedBeaconBlock) error {
+func (m *MockBroadcaster) BroadcastBlockChunks(_ context.Context, _ []*ethpb.BeaconBlockChunk) error {
 	m.BroadcastCalled.Store(true)
 	return nil
 }

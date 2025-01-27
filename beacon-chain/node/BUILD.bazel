@@ -51,6 +51,7 @@ go_library(
         "//beacon-chain/sync/checkpoint:go_default_library",
         "//beacon-chain/sync/genesis:go_default_library",
         "//beacon-chain/sync/initial-sync:go_default_library",
+        "//beacon-chain/sync/rlnc:go_default_library",
         "//beacon-chain/verification:go_default_library",
         "//cmd:go_default_library",
         "//cmd/beacon-chain/flags:go_default_library",
