@@ -248,6 +248,7 @@ func (s *Service) BroadcastBlockChunks(ctx context.Context, cBlk *ethpb.ChunkedB
 	}
 	topic = fmt.Sprintf(topic, forkDigest)
 	rawChunks := cBlk.Chunks
+	var multipleMessages [][]byte
 	for _, c := range rawChunks {
 		blkChunk := &ethpb.BeaconBlockChunk{
 			Data:         c.Data,
@@ -262,19 +263,13 @@ func (s *Service) BroadcastBlockChunks(ctx context.Context, cBlk *ethpb.ChunkedB
 			tracing.AnnotateError(span, err)
 			return err
 		}
+		multipleMessages = append(multipleMessages, buf.Bytes())
+	}
 
-		if span.IsRecording() {
-			id := hash.FastSum64(buf.Bytes())
-			messageLen := int64(buf.Len())
-			// lint:ignore uintcast -- It's safe to do this for tracing.
-			iid := int64(id)
-			span = trace.AddMessageSendEvent(span, iid, messageLen /*uncompressed*/, messageLen /*compressed*/)
-		}
-		if err := s.PublishToTopic(ctx, topic+s.Encoding().ProtocolSuffix(), buf.Bytes(), pubsub.WithRandomPublishing()); err != nil {
-			err := errors.Wrap(err, "could not publish message")
-			tracing.AnnotateError(span, err)
-			return err
-		}
+	if err := s.PublishMultipleToTopic(ctx, topic+s.Encoding().ProtocolSuffix(), multipleMessages, pubsub.WithRandomPublishing()); err != nil {
+		err := errors.Wrap(err, "could not publish message")
+		tracing.AnnotateError(span, err)
+		return err
 	}
 
 	return nil
