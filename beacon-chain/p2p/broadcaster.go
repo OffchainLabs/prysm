@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"time"
 
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/altair"
@@ -269,7 +270,7 @@ func (s *Service) BroadcastBlockChunks(ctx context.Context, cBlk *ethpb.ChunkedB
 			iid := int64(id)
 			span = trace.AddMessageSendEvent(span, iid, messageLen /*uncompressed*/, messageLen /*compressed*/)
 		}
-		if err := s.PublishToTopicRandomly(ctx, topic+s.Encoding().ProtocolSuffix(), buf.Bytes()); err != nil {
+		if err := s.PublishToTopic(ctx, topic+s.Encoding().ProtocolSuffix(), buf.Bytes(), pubsub.WithRandomPublishing()); err != nil {
 			err := errors.Wrap(err, "could not publish message")
 			tracing.AnnotateError(span, err)
 			return err
