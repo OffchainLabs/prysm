@@ -176,6 +176,7 @@ func (s *Service) reconstructBlockFromChunk(ctx context.Context, chunk interface
 		logrus.WithError(err).Error("Could not convert block to protomessage")
 		return
 	}
+	logrus.WithFields(logrus.Fields{"slot": chunk.Slot(), "proposerIndex": chunk.ProposerIndex()}).Info("decoded beacon block")
 
 	if err := s.beaconBlockSubscriber(ctx, protoBlock); err != nil {
 		logrus.WithError(err).Error("Could not handle p2p pubsub")
