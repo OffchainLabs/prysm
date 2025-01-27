@@ -442,11 +442,12 @@ func (vs *Server) broadcastReceiveChunkedBlock(ctx context.Context, req *ethpb.C
 	return vs.BlockReceiver.ReceiveBlock(ctx, block, root, nil)
 }
 
-func (s *Server) constructChunkMessages(cBlk *ethpb.ChunkedBeaconBlock) (multipleMessages []*ethpb.BeaconBlockChunk, err error) {
+func (s *Server) constructChunkMessages(cBlk *ethpb.ChunkedBeaconBlock) ([]*ethpb.BeaconBlockChunk, error) {
 	node, err := rlnc.NewNodeFromChunkedBlock(s.ChunkCommitter, cBlk)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not construct node")
 	}
+	multipleMessages := make([]*ethpb.BeaconBlockChunk, 0, meshSize)
 	for i := 0; i < meshSize; i++ {
 		msg, err := node.PrepareMessage()
 		if err != nil {
@@ -460,7 +461,7 @@ func (s *Server) constructChunkMessages(cBlk *ethpb.ChunkedBeaconBlock) (multipl
 		}
 		multipleMessages = append(multipleMessages, chunk)
 	}
-	return
+	return multipleMessages, nil
 }
 
 // broadcastReceiveBlock broadcasts a block and handles its reception.

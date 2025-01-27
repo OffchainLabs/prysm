@@ -13,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -21,6 +22,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 )
+
+const meshSize = 40 // number of peers to send chunks
 
 // beaconBlockChunkSubscriber is a noop since all syncing happens at the validation step
 func (s *Service) beaconBlockChunkSubscriber(_ context.Context, _ proto.Message) error {
@@ -184,12 +187,16 @@ func (s *Service) reconstructBlockFromChunk(ctx context.Context, chunk interface
 }
 
 func (s *Service) broadcastBlockChunk(ctx context.Context, chunk interfaces.ReadOnlyBeaconBlockChunk) {
-	msg, err := s.blockChunkCache.PrepareMessage(chunk)
-	if err != nil {
-		logrus.WithError(err).Error("could not broadcast chunk")
-		return
+	messages := make([]*ethpb.BeaconBlockChunk, 0, meshSize)
+	for i := 0; i < meshSize; i++ {
+		msg, err := s.blockChunkCache.PrepareMessage(chunk)
+		if err != nil {
+			log.WithError(err).Error("could not prepare message")
+			return
+		}
+		messages = append(messages, msg)
 	}
-	if err := s.cfg.p2p.Broadcast(ctx, msg); err != nil {
-		logrus.WithError(err).Error("could not broadcast chunk")
+	if err := s.cfg.p2p.BroadcastBlockChunks(ctx, messages); err != nil {
+		log.WithError(err).Error("chunk broadcast failed")
 	}
 }
