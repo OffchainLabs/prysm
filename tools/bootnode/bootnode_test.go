@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"io"
+	"os"
 	"testing"
 	"time"
 
@@ -23,7 +24,7 @@ func TestMain(m *testing.M) {
 	logrus.SetLevel(logrus.DebugLevel)
 	logrus.SetOutput(io.Discard)
 
-	m.Run()
+	os.Exit(m.Run())
 }
 
 func TestBootnode_OK(t *testing.T) {

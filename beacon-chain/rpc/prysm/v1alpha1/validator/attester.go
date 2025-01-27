@@ -97,7 +97,6 @@ func (vs *Server) ProposeAttestationElectra(ctx context.Context, singleAtt *ethp
 		}
 	} else {
 		go func() {
-			ctx = trace.NewContext(context.Background(), trace.FromContext(ctx))
 			if err := vs.AttPool.SaveUnaggregatedAttestation(att); err != nil {
 				log.WithError(err).Error("Could not save unaggregated attestation")
 				return

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -30,7 +31,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/remote-web3signer/internal"
 	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/remote-web3signer/types"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/exp/maps"
 )
 
 const (
@@ -146,7 +146,7 @@ func NewKeymanager(ctx context.Context, cfg *SetupConfig) (*Keymanager, error) {
 			}
 		}
 		km.lock.Lock()
-		km.providedPublicKeys = maps.Values(fileKeys)
+		km.providedPublicKeys = slices.Collect(maps.Values(fileKeys))
 		km.lock.Unlock()
 		// create a file watcher
 		go func() {
@@ -157,7 +157,7 @@ func NewKeymanager(ctx context.Context, cfg *SetupConfig) (*Keymanager, error) {
 		}()
 	} else {
 		km.lock.Lock()
-		km.providedPublicKeys = maps.Values(flagLoadedKeys)
+		km.providedPublicKeys = slices.Collect(maps.Values(flagLoadedKeys))
 		km.lock.Unlock()
 	}
 
@@ -173,7 +173,7 @@ func (km *Keymanager) refreshRemoteKeysFromFileChangesWithRetry(ctx context.Cont
 	}
 	err := km.refreshRemoteKeysFromFileChanges(ctx)
 	if err != nil {
-		km.updatePublicKeys(maps.Values(km.flagLoadedKeysMap)) // update the keys to flag provided defaults
+		km.updatePublicKeys(slices.Collect(maps.Values(km.flagLoadedKeysMap))) // update the keys to flag provided defaults
 		km.retriesRemaining--
 		log.WithError(err).Debug("Error occurred on key refresh")
 		log.WithFields(logrus.Fields{"path": km.keyFilePath, "retriesRemaining": km.retriesRemaining, "retryDelay": retryDelay}).Warnf("Could not refresh keys. Retrying...")
@@ -306,7 +306,7 @@ func (km *Keymanager) refreshRemoteKeysFromFileChanges(ctx context.Context) erro
 		if err = km.savePublicKeysToFile(fk); err != nil {
 			return errors.Wrap(err, "could not save public keys to file")
 		}
-		km.updatePublicKeys(maps.Values(fk))
+		km.updatePublicKeys(slices.Collect(maps.Values(fk)))
 	}
 	for {
 		select {
@@ -335,7 +335,7 @@ func (km *Keymanager) refreshRemoteKeysFromFileChanges(ctx context.Context) erro
 				// prioritize file keys over flag keys
 				if len(fileKeys) == 0 {
 					log.Warnln("Remote signer key file no longer has keys, defaulting to flag provided keys")
-					fileKeys = maps.Values(km.flagLoadedKeysMap)
+					fileKeys = slices.Collect(maps.Values(km.flagLoadedKeysMap))
 				}
 				currentKeys, err := km.FetchValidatingPublicKeys(ctx)
 				if err != nil {
@@ -808,7 +808,7 @@ func (km *Keymanager) AddPublicKeys(pubKeys []string) ([]*keymanager.KeyStatus, 
 				return nil, err
 			}
 		} else {
-			km.updatePublicKeys(maps.Values(combinedKeys))
+			km.updatePublicKeys(slices.Collect(maps.Values(combinedKeys)))
 		}
 	}
 
@@ -877,7 +877,7 @@ func (km *Keymanager) DeletePublicKeys(publicKeys []string) ([]*keymanager.KeySt
 				return nil, err
 			}
 		} else {
-			km.updatePublicKeys(maps.Values(combinedKeys))
+			km.updatePublicKeys(slices.Collect(maps.Values(combinedKeys)))
 		}
 	}
 

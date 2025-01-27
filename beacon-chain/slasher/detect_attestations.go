@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"maps"
+	"slices"
 
 	"github.com/pkg/errors"
 	slashertypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/slasher/types"
@@ -12,7 +14,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"golang.org/x/exp/maps"
 )
 
 // Takes in a list of indexed attestation wrappers and returns any
@@ -392,7 +393,7 @@ func (s *Service) updatedChunkByChunkIndex(
 	}
 
 	// Transform the map of needed chunk indexes to a slice.
-	neededChunkIndexes := maps.Keys(neededChunkIndexesMap)
+	neededChunkIndexes := slices.Collect(maps.Keys(neededChunkIndexesMap))
 
 	// Retrieve needed chunks from the database.
 	chunkByChunkIndex, err := s.loadChunksFromDisk(ctx, validatorChunkIndex, chunkKind, neededChunkIndexes)
