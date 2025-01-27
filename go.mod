@@ -29,6 +29,7 @@ require (
 	github.com/gostaticanalysis/comment v1.4.2
 	github.com/grpc-ecosystem/go-grpc-middleware v1.2.2
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
+	github.com/gtank/ristretto255 v0.1.2
 	github.com/hashicorp/golang-lru v0.5.5-0.20210104140557-80c98217689d
 	github.com/herumi/bls-eth-go-binary v1.31.0
 	github.com/holiman/uint256 v1.3.2
@@ -281,3 +282,5 @@ require (
 )
 
 replace github.com/json-iterator/go => github.com/prestonvanloon/go v1.1.7-0.20190722034630-4f2e55fcf87b
+
+replace github.com/libp2p/go-libp2p-pubsub => github.com/nisdas/go-libp2p-pubsub v0.3.3-0.20250127130457-2becfc6d889e

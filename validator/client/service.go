@@ -14,7 +14,9 @@ import (
 	"github.com/pkg/errors"
 	grpcutil "github.com/prysmaticlabs/prysm/v5/api/grpc"
 	"github.com/prysmaticlabs/prysm/v5/async/event"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/rlnc"
 	lruwrpr "github.com/prysmaticlabs/prysm/v5/cache/lru"
+	"github.com/prysmaticlabs/prysm/v5/config/features"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/config/proposer"
@@ -178,6 +180,13 @@ func (v *ValidatorService) Start() {
 	)
 
 	validatorClient := validatorclientfactory.NewValidatorClient(v.conn, restHandler)
+	var committer *rlnc.Committer
+	if features.Get().UseRLNC {
+		committer, err = rlnc.LoadTrustedSetup()
+		if err != nil {
+			log.WithError(err).Error("Could not load the RLNC trusted setup")
+		}
+	}
 
 	valStruct := &validator{
 		slotFeed:                       new(event.Feed),
@@ -215,6 +224,7 @@ func (v *ValidatorService) Start() {
 		emitAccountMetrics:             v.emitAccountMetrics,
 		useWeb:                         v.useWeb,
 		distributed:                    v.distributed,
+		committer:                      committer,
 	}
 
 	v.validator = valStruct

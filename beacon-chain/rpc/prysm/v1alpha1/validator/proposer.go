@@ -22,6 +22,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/kv"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/rlnc"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
@@ -43,6 +44,7 @@ var eth1DataNotification bool
 const (
 	eth1dataTimeout           = 2 * time.Second
 	defaultBuilderBoostFactor = primitives.Gwei(100)
+	meshSize                  = 40 // The number of peers to broadcast block chunks
 )
 
 // GetBeaconBlock is called by a proposer during its assigned slot to request a block to sign
@@ -269,6 +271,60 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 	return vs.constructGenericBeaconBlock(sBlk, bundle, winningBid)
 }
 
+// ProposeChunkedBlock handles the proposal of chunked beacon blocks
+func (vs *Server) ProposeChunkedBlock(ctx context.Context, req *ethpb.ChunkedBeaconBlock) (*ethpb.ProposeResponse, error) {
+	ctx, span := trace.StartSpan(ctx, "ProposerServer.ProposeChunkedBlock")
+	defer span.End()
+
+	if req == nil {
+		return nil, status.Errorf(codes.InvalidArgument, "empty request")
+	}
+
+	block, err := blocks.NewSignedBeaconBlock(req.Block.Block)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "%s: %v", "decode block failed", err)
+	}
+
+	var sidecars []*ethpb.BlobSidecar
+	if block.IsBlinded() {
+		block, sidecars, err = vs.handleBlindedBlock(ctx, block)
+	} else if block.Version() >= version.Deneb {
+		sidecars, err = vs.blobSidecarsFromUnblindedBlock(block, req.Block)
+	}
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "%s: %v", "handle block failed", err)
+	}
+
+	root, err := block.Block().HashTreeRoot()
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not hash tree root: %v", err)
+	}
+
+	var wg sync.WaitGroup
+	errChan := make(chan error, 1)
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := vs.broadcastReceiveChunkedBlock(ctx, req, root); err != nil {
+			errChan <- errors.Wrap(err, "broadcast/receive block failed")
+			return
+		}
+		errChan <- nil
+	}()
+
+	if err := vs.broadcastAndReceiveBlobs(ctx, sidecars, root); err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not broadcast/receive blobs: %v", err)
+	}
+
+	wg.Wait()
+	if err := <-errChan; err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not broadcast/receive block: %v", err)
+	}
+
+	return &ethpb.ProposeResponse{BlockRoot: root[:]}, nil
+}
+
 // ProposeBeaconBlock handles the proposal of beacon blocks.
 func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSignedBeaconBlock) (*ethpb.ProposeResponse, error) {
 	ctx, span := trace.StartSpan(ctx, "ProposerServer.ProposeBeaconBlock")
@@ -360,6 +416,48 @@ func (vs *Server) blobSidecarsFromUnblindedBlock(block interfaces.SignedBeaconBl
 		return nil, err
 	}
 	return BuildBlobSidecars(block, rawBlobs, proofs)
+}
+
+// broadcastReceiveChunkedBlock broadcasts a chunked block and handles its reception.
+func (vs *Server) broadcastReceiveChunkedBlock(ctx context.Context, req *ethpb.ChunkedBeaconBlock, root [32]byte) error {
+	block, err := blocks.NewSignedBeaconBlock(req.Block.Block)
+	if err != nil {
+		return errors.Wrap(err, "block construction failed")
+	}
+	messages, err := vs.constructChunkMessages(req)
+	if err != nil {
+		return errors.Wrap(err, "could not construct messages")
+	}
+	if err := vs.P2P.BroadcastBlockChunks(ctx, messages); err != nil {
+		return errors.Wrap(err, "broadcast failed")
+	}
+	vs.BlockNotifier.BlockFeed().Send(&feed.Event{
+		Type: blockfeed.ReceivedBlock,
+		Data: &blockfeed.ReceivedBlockData{SignedBlock: block},
+	})
+	return vs.BlockReceiver.ReceiveBlock(ctx, block, root, nil)
+}
+
+func (s *Server) constructChunkMessages(cBlk *ethpb.ChunkedBeaconBlock) ([]*ethpb.BeaconBlockChunk, error) {
+	node, err := rlnc.NewNodeFromChunkedBlock(s.ChunkCommitter, cBlk)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not construct node")
+	}
+	multipleMessages := make([]*ethpb.BeaconBlockChunk, 0, meshSize)
+	for i := 0; i < meshSize; i++ {
+		msg, err := node.PrepareMessage()
+		if err != nil {
+			return nil, errors.Wrap(err, "could not prepare message")
+		}
+		chunk := &ethpb.BeaconBlockChunk{
+			Data:         msg.Data(),
+			Coefficients: msg.Coefficients(),
+			Header:       cBlk.Header,
+			Signature:    cBlk.Signature,
+		}
+		multipleMessages = append(multipleMessages, chunk)
+	}
+	return multipleMessages, nil
 }
 
 // broadcastReceiveBlock broadcasts a block and handles its reception.

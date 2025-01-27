@@ -26,6 +26,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	"github.com/prysmaticlabs/prysm/v5/async/event"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/altair"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/rlnc"
 	"github.com/prysmaticlabs/prysm/v5/cmd"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
@@ -112,6 +113,7 @@ type validator struct {
 	blacklistedPubkeysLock             sync.RWMutex
 	attSelectionLock                   sync.Mutex
 	dutiesLock                         sync.RWMutex
+	committer                          *rlnc.Committer
 }
 
 type validatorStatus struct {

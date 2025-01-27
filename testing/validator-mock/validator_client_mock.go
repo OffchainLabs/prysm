@@ -252,6 +252,21 @@ func (mr *MockValidatorClientMockRecorder) ProposeAttestationElectra(arg0, arg1 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProposeAttestationElectra", reflect.TypeOf((*MockValidatorClient)(nil).ProposeAttestationElectra), arg0, arg1)
 }
 
+// ProposeChunkedBlock mocks base method.
+func (m *MockValidatorClient) ProposeChunkedBlock(arg0 context.Context, arg1 *eth.ChunkedBeaconBlock) (*eth.ProposeResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ProposeChunkedBlock", arg0, arg1)
+	ret0, _ := ret[0].(*eth.ProposeResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ProposeChunkedBlock indicates an expected call of ProposeChunkedBeaconBlock.
+func (mr *MockValidatorClientMockRecorder) ProposeChunkedBlock(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProposeChunkedBlock", reflect.TypeOf((*MockValidatorClient)(nil).ProposeChunkedBlock), arg0, arg1)
+}
+
 // ProposeBeaconBlock mocks base method.
 func (m *MockValidatorClient) ProposeBeaconBlock(arg0 context.Context, arg1 *eth.GenericSignedBeaconBlock) (*eth.ProposeResponse, error) {
 	m.ctrl.T.Helper()

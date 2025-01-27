@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"time"
 
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/altair"
@@ -225,6 +226,36 @@ func (s *Service) BroadcastBlob(ctx context.Context, subnet uint64, blob *ethpb.
 	// Non-blocking broadcast, with attempts to discover a subnet peer if none available.
 	go s.internalBroadcastBlob(ctx, subnet, blob, forkDigest)
 
+	return nil
+}
+
+// BroadcastBlockChunks sends the passed messages to the pubsub topic
+func (s *Service) BroadcastBlockChunks(ctx context.Context, chunks []*ethpb.BeaconBlockChunk) error {
+	ctx, span := trace.StartSpan(ctx, "p2p.BroadcastBlob")
+	defer span.End()
+	forkDigest, err := s.currentForkDigest()
+	if err != nil {
+		err := errors.Wrap(err, "could not retrieve fork digest")
+		tracing.AnnotateError(span, err)
+		return err
+	}
+	topic := RLNCTopicFormat
+	topic = fmt.Sprintf(topic, forkDigest)
+	multipleMessages := make([][]byte, len(chunks))
+	for i, c := range chunks {
+		buf := new(bytes.Buffer)
+		if _, err := s.Encoding().EncodeGossip(buf, c); err != nil {
+			err := errors.Wrap(err, "could not encode message")
+			tracing.AnnotateError(span, err)
+			return err
+		}
+		multipleMessages[i] = buf.Bytes()
+	}
+	if err := s.PublishMultipleToTopic(ctx, topic+s.Encoding().ProtocolSuffix(), multipleMessages, pubsub.WithRandomPublishing()); err != nil {
+		err := errors.Wrap(err, "could not publish message")
+		tracing.AnnotateError(span, err)
+		return err
+	}
 	return nil
 }
 

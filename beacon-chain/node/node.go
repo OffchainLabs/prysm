@@ -53,6 +53,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/checkpoint"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/genesis"
 	initialsync "github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/initial-sync"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/rlnc"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
 	"github.com/prysmaticlabs/prysm/v5/cmd"
 	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
@@ -121,6 +122,7 @@ type BeaconNode struct {
 	BlobStorageOptions      []filesystem.BlobStorageOption
 	verifyInitWaiter        *verification.InitializerWaiter
 	syncChecker             *initialsync.SyncChecker
+	chunkCommitter          *rlnc.Committer
 }
 
 // New creates a new node instance, sets up configuration options, and registers
@@ -135,6 +137,11 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 
 	registry := runtime.NewServiceRegistry()
 	ctx := cliCtx.Context
+
+	committer, err := rlnc.LoadTrustedSetup()
+	if err != nil {
+		return nil, errors.Wrap(err, "could not load the committer trusted setup")
+	}
 
 	beacon := &BeaconNode{
 		cliCtx:                  cliCtx,
@@ -158,6 +165,7 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 		serviceFlagOpts:         &serviceFlagOpts{},
 		initialSyncComplete:     make(chan struct{}),
 		syncChecker:             &initialsync.SyncChecker{},
+		chunkCommitter:          committer,
 	}
 
 	for _, opt := range opts {
@@ -751,6 +759,7 @@ func (b *BeaconNode) registerBlockchainService(fc forkchoice.ForkChoicer, gs *st
 		blockchain.WithBlobStorage(b.BlobStorage),
 		blockchain.WithTrackedValidatorsCache(b.trackedValidatorsCache),
 		blockchain.WithPayloadIDCache(b.payloadIDCache),
+		blockchain.WithChunkCommitter(b.chunkCommitter),
 		blockchain.WithSyncChecker(b.syncChecker),
 	)
 
@@ -836,6 +845,7 @@ func (b *BeaconNode) registerSyncService(initialSyncComplete chan struct{}, bFil
 		regularsync.WithBlobStorage(b.BlobStorage),
 		regularsync.WithVerifierWaiter(b.verifyInitWaiter),
 		regularsync.WithAvailableBlocker(bFillStore),
+		regularsync.WithChunkCommitter(b.chunkCommitter),
 	)
 	return b.services.RegisterService(rs)
 }
@@ -982,6 +992,7 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		BlobStorage:               b.BlobStorage,
 		TrackedValidatorsCache:    b.trackedValidatorsCache,
 		PayloadIDCache:            b.payloadIDCache,
+		ChunkCommitter:            b.chunkCommitter,
 	})
 
 	return b.services.RegisterService(rpcService)

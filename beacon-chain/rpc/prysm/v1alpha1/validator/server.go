@@ -27,6 +27,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stategen"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/rlnc"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/v5/network/forks"
@@ -80,6 +81,7 @@ type Server struct {
 	ClockWaiter             startup.ClockWaiter
 	CoreService             *core.Service
 	AttestationStateFetcher blockchain.AttestationStateFetcher
+	ChunkCommitter          *rlnc.Committer
 }
 
 // WaitForActivation checks if a validator public key exists in the active validator registry of the current

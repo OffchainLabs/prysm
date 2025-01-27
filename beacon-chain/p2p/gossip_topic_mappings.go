@@ -22,6 +22,7 @@ var gossipTopicMappings = map[string]func() proto.Message{
 	SyncCommitteeSubnetTopicFormat:            func() proto.Message { return &ethpb.SyncCommitteeMessage{} },
 	BlsToExecutionChangeSubnetTopicFormat:     func() proto.Message { return &ethpb.SignedBLSToExecutionChange{} },
 	BlobSubnetTopicFormat:                     func() proto.Message { return &ethpb.BlobSidecar{} },
+	RLNCTopicFormat:                           func() proto.Message { return &ethpb.BeaconBlockChunk{} },
 }
 
 // GossipTopicMappings is a function to return the assigned data type
@@ -112,7 +113,7 @@ func init() {
 	GossipTypeMapping[reflect.TypeOf(&ethpb.SingleAttestation{})] = AttestationSubnetTopicFormat
 	GossipTypeMapping[reflect.TypeOf(&ethpb.AttesterSlashingElectra{})] = AttesterSlashingSubnetTopicFormat
 	GossipTypeMapping[reflect.TypeOf(&ethpb.SignedAggregateAttestationAndProofElectra{})] = AggregateAndProofSubnetTopicFormat
-
+	GossipTypeMapping[reflect.TypeOf(&ethpb.BeaconBlockChunk{})] = RLNCTopicFormat
 	// Specially handle Fulu objects.
 	GossipTypeMapping[reflect.TypeOf(&ethpb.SignedBeaconBlockFulu{})] = BlockSubnetTopicFormat
 }

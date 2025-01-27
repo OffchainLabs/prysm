@@ -18,6 +18,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stategen"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/backfill/coverage"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/rlnc"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
 )
 
@@ -160,6 +161,14 @@ func WithInitialSyncComplete(c chan struct{}) Option {
 func WithStateNotifier(n statefeed.Notifier) Option {
 	return func(s *Service) error {
 		s.cfg.stateNotifier = n
+		return nil
+	}
+}
+
+// WithChunkCommitter gives the sync package direct access to the Ristretto trusted setup.
+func WithChunkCommitter(c *rlnc.Committer) Option {
+	return func(s *Service) error {
+		s.cfg.chunkCommitter = c
 		return nil
 	}
 }

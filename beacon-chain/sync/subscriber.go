@@ -79,12 +79,21 @@ func (s *Service) activeSyncSubnetIndices(currentSlot primitives.Slot) []uint64 
 
 // Register PubSub subscribers
 func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
-	s.subscribe(
-		p2p.BlockSubnetTopicFormat,
-		s.validateBeaconBlockPubSub,
-		s.beaconBlockSubscriber,
-		digest,
-	)
+	if features.Get().UseRLNC {
+		s.subscribe(
+			p2p.RLNCTopicFormat,
+			s.validateBeaconBlockChunkPubSub,
+			s.beaconBlockChunkSubscriber,
+			digest,
+		)
+	} else {
+		s.subscribe(
+			p2p.BlockSubnetTopicFormat,
+			s.validateBeaconBlockPubSub,
+			s.beaconBlockSubscriber,
+			digest,
+		)
+	}
 	s.subscribe(
 		p2p.AggregateAndProofSubnetTopicFormat,
 		s.validateAggregateAndProof,

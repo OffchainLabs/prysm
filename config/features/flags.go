@@ -178,11 +178,17 @@ var (
 		Name:  "enable-experimental-attestation-pool",
 		Usage: "Enables an experimental attestation pool design.",
 	}
+	useRLNC = &cli.BoolFlag{
+		Name:   "use-rlnc",
+		Usage:  "Experimental: enables the use of random linear network coding for gossiping.",
+		Hidden: true,
+	}
 )
 
 // devModeFlags holds list of flags that are set when development mode is on.
 var devModeFlags = []cli.Flag{
 	backfill.EnableExperimentalBackfill,
+	useRLNC,
 }
 
 // ValidatorFlags contains a list of all the feature flags that apply to the validator client.
@@ -197,11 +203,13 @@ var ValidatorFlags = append(deprecatedFlags, []cli.Flag{
 	EnableMinimalSlashingProtection,
 	enableDoppelGangerProtection,
 	EnableBeaconRESTApi,
+	useRLNC,
 }...)
 
 // E2EValidatorFlags contains a list of the validator feature flags to be tested in E2E.
 var E2EValidatorFlags = []string{
 	"--enable-doppelganger",
+	"--use-rlnc",
 }
 
 // BeaconChainFlags contains a list of all the feature flags that apply to the beacon-chain client.
@@ -236,6 +244,7 @@ var BeaconChainFlags = append(deprecatedBeaconFlags, append(deprecatedFlags, []c
 	DisableCommitteeAwarePacking,
 	EnableDiscoveryReboot,
 	enableExperimentalAttestationPool,
+	useRLNC,
 }...)...)
 
 // E2EBeaconChainFlags contains a list of the beacon chain feature flags to be tested in E2E.

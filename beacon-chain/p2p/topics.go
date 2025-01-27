@@ -30,6 +30,8 @@ const (
 	GossipBlsToExecutionChangeMessage = "bls_to_execution_change"
 	// GossipBlobSidecarMessage is the name for the blob sidecar message type.
 	GossipBlobSidecarMessage = "blob_sidecar"
+	// GossipBlockChunkMessage is the name for the block chunk message type.
+	GossipBlockChunkMessage = "beacon_block_chunk"
 	// Topic Formats
 	//
 	// AttestationSubnetTopicFormat is the topic format for the attestation subnet.
@@ -52,4 +54,6 @@ const (
 	BlsToExecutionChangeSubnetTopicFormat = GossipProtocolAndDigest + GossipBlsToExecutionChangeMessage
 	// BlobSubnetTopicFormat is the topic format for the blob subnet.
 	BlobSubnetTopicFormat = GossipProtocolAndDigest + GossipBlobSidecarMessage + "_%d"
+	// RLNCTopicFormat is the topic format for the RLNC subnet.
+	RLNCTopicFormat = GossipProtocolAndDigest + GossipBlockChunkMessage
 )

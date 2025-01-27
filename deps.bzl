@@ -1348,6 +1348,12 @@ def prysm_deps():
         version = "v1.9.5",
     )
     go_repository(
+        name = "com_github_gtank_ristretto255",
+        importpath = "github.com/gtank/ristretto255",
+        sum = "h1:JEqUCPA1NvLq5DwYtuzigd7ss8fwbYay9fi4/5uMzcc=",
+        version = "v0.1.2",
+    )
+    go_repository(
         name = "com_github_guptarohit_asciigraph",
         importpath = "github.com/guptarohit/asciigraph",
         sum = "h1:ccFnUF8xYIOUPPY3tmdvRyHqmn1MYI9iv1pLKX+/ZkQ=",
@@ -1957,8 +1963,9 @@ def prysm_deps():
         name = "com_github_libp2p_go_libp2p_pubsub",
         build_file_proto_mode = "disable_global",
         importpath = "github.com/libp2p/go-libp2p-pubsub",
-        sum = "h1:Z1fzkKuRAd+U1oxbTbWUtTTzAWaX21jqoLxVIStzp+Y=",
-        version = "v0.12.1-0.20241230202526-bf5b58384331",
+        replace = "github.com/nisdas/go-libp2p-pubsub",
+        sum = "h1:eqQDbjtvXnkZcpC7BayY5FeIzpSGHeDyn53EZ9qVha0=",
+        version = "v0.3.3-0.20250127130457-2becfc6d889e",
     )
     go_repository(
         name = "com_github_libp2p_go_libp2p_testing",

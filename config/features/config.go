@@ -50,6 +50,7 @@ type Flags struct {
 	EnableBeaconRESTApi                 bool // EnableBeaconRESTApi enables experimental usage of the beacon REST API by the validator when querying a beacon node
 	DisableCommitteeAwarePacking        bool // DisableCommitteeAwarePacking changes the attestation packing algorithm to one that is not aware of attesting committees.
 	EnableExperimentalAttestationPool   bool // EnableExperimentalAttestationPool enables an experimental attestation pool design.
+	UseRLNC                             bool // UseRLNC enables the use of random linear network coding for gossiping.
 	// Logging related toggles.
 	DisableGRPCConnectionLogs bool // Disables logging when a new grpc client has connected.
 	EnableFullSSZDataLogging  bool // Enables logging for full ssz data on rejected gossip messages
@@ -272,6 +273,10 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 		logEnabled(enableExperimentalAttestationPool)
 		cfg.EnableExperimentalAttestationPool = true
 	}
+	if ctx.IsSet(useRLNC.Name) {
+		logEnabled(useRLNC)
+		cfg.UseRLNC = true
+	}
 
 	cfg.AggregateIntervals = [3]time.Duration{aggregateFirstInterval.Value, aggregateSecondInterval.Value, aggregateThirdInterval.Value}
 	Init(cfg)
@@ -309,6 +314,10 @@ func ConfigureValidator(ctx *cli.Context) error {
 	if ctx.Bool(EnableBeaconRESTApi.Name) {
 		logEnabled(EnableBeaconRESTApi)
 		cfg.EnableBeaconRESTApi = true
+	}
+	if ctx.IsSet(useRLNC.Name) {
+		logEnabled(useRLNC)
+		cfg.UseRLNC = true
 	}
 	cfg.KeystoreImportDebounceInterval = ctx.Duration(dynamicKeyReloadDebounceInterval.Name)
 	Init(cfg)

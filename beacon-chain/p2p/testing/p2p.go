@@ -189,6 +189,11 @@ func (p *TestP2P) Broadcast(_ context.Context, _ proto.Message) error {
 	return nil
 }
 
+func (p *TestP2P) BroadcastBlockChunks(_ context.Context, _ []*ethpb.BeaconBlockChunk) error {
+	p.BroadcastCalled.Store(true)
+	return nil
+}
+
 // BroadcastAttestation broadcasts an attestation.
 func (p *TestP2P) BroadcastAttestation(_ context.Context, _ uint64, _ ethpb.Att) error {
 	p.BroadcastCalled.Store(true)

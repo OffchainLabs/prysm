@@ -40,6 +40,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stategen"
 	chainSync "github.com/prysmaticlabs/prysm/v5/beacon-chain/sync"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/rlnc"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/io/logs"
@@ -121,6 +122,7 @@ type Config struct {
 	BlobStorage               *filesystem.BlobStorage
 	TrackedValidatorsCache    *cache.TrackedValidatorsCache
 	PayloadIDCache            *cache.PayloadIDCache
+	ChunkCommitter            *rlnc.Committer
 }
 
 // NewService instantiates a new RPC service instance that will
@@ -250,6 +252,7 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		TrackedValidatorsCache:  s.cfg.TrackedValidatorsCache,
 		PayloadIDCache:          s.cfg.PayloadIDCache,
 		AttestationStateFetcher: s.cfg.AttestationReceiver,
+		ChunkCommitter:          s.cfg.ChunkCommitter,
 	}
 	s.validatorServer = validatorServer
 	nodeServer := &nodev1alpha1.Server{

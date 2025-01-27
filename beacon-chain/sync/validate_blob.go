@@ -92,8 +92,11 @@ func (s *Service) validateBlob(ctx context.Context, pid peer.ID, msg *pubsub.Mes
 		return pubsub.ValidationIgnore, err
 	}
 
-	if err := vf.ValidProposerSignature(ctx); err != nil {
-		return pubsub.ValidationReject, err
+	// TODO: verify the proposer signature here by fetching it from the chunks cache, or putting the blob in a queue
+	if !features.Get().UseRLNC {
+		if err := vf.ValidProposerSignature(ctx); err != nil {
+			return pubsub.ValidationReject, err
+		}
 	}
 
 	if err := vf.SidecarParentValid(s.hasBadBlock); err != nil {
