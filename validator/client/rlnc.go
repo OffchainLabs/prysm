@@ -20,6 +20,9 @@ import (
 
 var numChunks = uint(10)
 
+// rlncBlockSuffix is a byte that is added to the end of the block to mark it's end.
+var rlncBlockSuffix = byte(0xfe)
+
 func (v *validator) createSignedChunks(
 	ctx context.Context,
 	pubKey [fieldparams.BLSPubkeyLength]byte,
@@ -43,6 +46,7 @@ func (v *validator) createSignedChunks(
 		logrus.WithError(err).Error("Could not encode block data")
 		return nil, [32]byte{}, nil, errors.Wrap(err, domainDataErr)
 	}
+	buf.WriteByte(rlncBlockSuffix)
 
 	node, err := rlnc.NewSource(v.committer, numChunks, buf.Bytes())
 	if err != nil {

@@ -10,7 +10,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync/rlnc"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/chunks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
@@ -23,20 +22,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func (s *Service) beaconBlockChunkSubscriber(ctx context.Context, msg proto.Message) error {
-	chunk, err := chunks.NewBlockChunk(msg)
-	if err != nil {
-		return err
-	}
-	if chunk.IsNil() {
-		return chunks.ErrNilObject
-	}
-	_, err = s.blockChunkCache.GetBlockData(chunk.Slot(), chunk.ProposerIndex())
-	if err != nil {
-		//nolint:nilerr // Only error is ErrNoData when the node is not full.
-		return nil
-	}
-	// TODO, implement block reconstruction from the byte slice
+// beaconBlockChunkSubscriber is a noop since all syncing happens at the validation step
+func (s *Service) beaconBlockChunkSubscriber(_ context.Context, _ proto.Message) error {
 	return nil
 }
 

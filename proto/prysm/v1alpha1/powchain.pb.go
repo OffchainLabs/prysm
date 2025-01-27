@@ -7,12 +7,13 @@
 package eth
 
 import (
+	reflect "reflect"
+	sync "sync"
+
 	_ "github.com/OffchainLabs/prysm/v6/proto/eth/ext"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	_ "google.golang.org/protobuf/types/descriptorpb"
-	reflect "reflect"
-	sync "sync"
 )
 
 const (

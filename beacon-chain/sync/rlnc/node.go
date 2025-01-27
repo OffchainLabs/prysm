@@ -7,6 +7,9 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// rlncBlockSuffix is a byte that is added to the end of the block to mark it's end.
+var rlncBlockSuffix = byte(0xfe)
+
 // Node represents a node in the RLNC network. It keeps the data it holds as a matrix of scalars
 // as well as the commitments to the data. The coefficients and a partial inversion of the corresponding
 // matrix is kept in the echelon object. The committer keeps the trusted setup generators
@@ -122,16 +125,19 @@ func computeCommitments(c *Committer, data [][]*ristretto.Scalar) (commitments [
 	return commitments, nil
 }
 
-// blockToChunks converts a block of data to size chunks of data.
-func blockToChunks(size uint, data []byte) [][]*ristretto.Scalar {
-	chunks := make([][]*ristretto.Scalar, size)
-	chunkSize := ((uint(len(data))+size-1)/size + 30) / 31 * 31
+func blockToChunks(numChunks uint, data []byte) [][]*ristretto.Scalar {
+	chunks := make([][]*ristretto.Scalar, numChunks)
+	chunkSize := ((uint(len(data))+numChunks-1)/numChunks + 30) / 31 * 31
 
-	for i := uint(0); i < size; i++ {
+	for i := uint(0); i < numChunks; i++ {
 		start := i * chunkSize
 		end := start + chunkSize
 		if end > uint(len(data)) {
 			end = uint(len(data))
+		}
+		// The last chunk can actually be fully zeroes.
+		if start > uint(len(data)) {
+			start = end
 		}
 		chunk := data[start:end]
 
@@ -254,6 +260,16 @@ func (n *Node) receive(message *message) error {
 	return nil
 }
 
+// stripSuffix returns the slice before the last appearance of suffix, returns the whole data if suffix is not found
+func stripSuffix(data []byte, suffix byte) []byte {
+	for i := len(data) - 1; i > 0; i-- {
+		if data[i] == suffix {
+			return data[:i]
+		}
+	}
+	return data
+}
+
 func (n *Node) decode() ([]byte, error) {
 	inverse, err := n.echelon.inverse()
 	if err != nil {
@@ -271,7 +287,7 @@ func (n *Node) decode() ([]byte, error) {
 			ret = entry.Encode(ret)[:len(ret)+31] // len(ret) is computed before the append.
 		}
 	}
-	return ret, nil
+	return stripSuffix(ret, rlncBlockSuffix), nil
 }
 
 // Data returns the data of the chunks in a node as serialized bytes
