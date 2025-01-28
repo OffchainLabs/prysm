@@ -63,26 +63,32 @@ func listDir(fs afero.Fs, dir string) ([]string, error) {
 	return dirs, nil
 }
 
-// identPopulator is a function that sets values in the blobIdent for a given level of the filesystem layout.
+// identPopulator is a function that sets values in the blobIdent for a given layer of the filesystem layout.
 type identPopulator func(blobIdent, string) (blobIdent, error)
 
-type layoutLevel struct {
+// layoutLayer represents a layer of the nested directory scheme. Each layer is defined by a filter function that
+// ensures any entries at that layer of the scheme are named in a valid way, and a populateIdent function that
+// parses the directory name into a blobIdent object, used for iterating across the layout in a layout-independent way.
+type layoutLayer struct {
 	populateIdent identPopulator
 	filter        func(string) bool
 }
 
 // identIterator moves through the filesystem in order to yield blobIdents.
-// layoutLevels (in the 'levels' field) allows a filesystem layout to control how the
-// layout is traversed. A layoutLevel can filter out entries from the directory listing
+// layoutLayers (in the 'layers' field) allows a filesystem layout to control how the
+// layout is traversed. A layoutLayer can filter out entries from the directory listing
 // via the filter function, and populate fields in the blobIdent via the populateIdent function.
-// The blobIdent is populated from an empty value at the root, accumulating values for its fields at each level.
-// The fully populated blobIdent is returned when the iterator reaches the leaf level.
+// The blobIdent is populated from an empty value at the root, accumulating values for its fields at each layer.
+// The fully populated blobIdent is returned when the iterator reaches the leaf layer.
 type identIterator struct {
-	fs      afero.Fs
-	path    string
-	child   *identIterator
-	ident   blobIdent
-	levels  []layoutLevel
+	fs    afero.Fs
+	path  string
+	child *identIterator
+	ident blobIdent
+	// layoutLayers are the heart of how the layout defines the nesting of the components of the path.
+	// Each layer of the layout represents a different layer of the directory layout heirarchy,
+	// from the relative root at the zero index to the blob files at the end.
+	layers  []layoutLayer
 	entries []string
 	offset  int
 	eof     bool
@@ -107,8 +113,8 @@ func (iter *identIterator) next() (blobIdent, error) {
 	return iter.advanceChild()
 }
 
-// advanceChild is used to move to the next directory at each level of the tree, either when
-// the nodes are first being initialized at a level, or when a sub-branch has been exhausted.
+// advanceChild is used to move to the next directory at each layer of the tree, either when
+// the nodes are first being initialized at a layer, or when a sub-branch has been exhausted.
 func (iter *identIterator) advanceChild() (blobIdent, error) {
 	defer func() {
 		iter.offset += 1
@@ -116,16 +122,16 @@ func (iter *identIterator) advanceChild() (blobIdent, error) {
 	for i := iter.offset; i < len(iter.entries); i++ {
 		iter.offset = i
 		nextPath := filepath.Join(iter.path, iter.entries[iter.offset])
-		nextLevel := iter.levels[0]
-		if !nextLevel.filter(nextPath) {
+		nextLayer := iter.layers[0]
+		if !nextLayer.filter(nextPath) {
 			continue
 		}
-		ident, err := nextLevel.populateIdent(iter.ident, nextPath)
+		ident, err := nextLayer.populateIdent(iter.ident, nextPath)
 		if err != nil {
 			return ident, newIdentificationError(nextPath, ident, err)
 		}
-		// if we're at the leaf level, we can return the updated ident.
-		if len(iter.levels) == 1 {
+		// if we're at the leaf layer , we can return the updated ident.
+		if len(iter.layers) == 1 {
 			return ident, nil
 		}
 
@@ -140,7 +146,7 @@ func (iter *identIterator) advanceChild() (blobIdent, error) {
 			fs:      iter.fs,
 			path:    nextPath,
 			ident:   ident,
-			levels:  iter.levels[1:],
+			layers:  iter.layers[1:],
 			entries: entries,
 		}
 		return iter.child.next()

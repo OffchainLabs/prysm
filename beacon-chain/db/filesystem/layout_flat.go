@@ -39,7 +39,8 @@ func (l *flatLayout) iterateIdents(before primitives.Epoch) (*identIterator, err
 	slotAndIndex := &flatSlotReader{fs: l.fs, cache: l.cache, before: before}
 	return &identIterator{
 		fs: l.fs,
-		levels: []layoutLevel{
+		// Please see comments on the `layers` field in `identIterator`` if the role of the layers is unclear.
+		layers: []layoutLayer{
 			{populateIdent: populateRoot, filter: isFlatCachedAndBefore(l.cache, before)},
 			{populateIdent: slotAndIndex.populateEpoch, filter: slotAndIndex.isSSZAndBefore}},
 		entries: entries,
@@ -168,7 +169,7 @@ func (l *flatSlotReader) isSSZAndBefore(fname string) bool {
 	if !isSszFile(fname) {
 		return false
 	}
-	// If 'before' != 0, assuming isSSZAndBefore is used as a filter on the same level with populateEpoch, this will typically
+	// If 'before' != 0, assuming isSSZAndBefore is used as a filter on the same layer with populateEpoch, this will typically
 	// call populateEpoch before the iteration code calls it. So we can guarantee that the cache gets populated
 	// in either case, because if it is filtered out here, we either have a malformed path (root can't be determined) in which case
 	// the filter code won't call it anyway, or we have a valid path and the cache will be populated before the epoch can be compared.

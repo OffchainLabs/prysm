@@ -58,7 +58,8 @@ func (l *periodicEpochLayout) iterateIdents(before primitives.Epoch) (*identIter
 	return &identIterator{
 		fs:   l.fs,
 		path: periodicEpochBaseDir,
-		levels: []layoutLevel{
+		// Please see comments on the `layers` field in `identIterator`` if the role of the layers is unclear.
+		layers: []layoutLayer{
 			{populateIdent: populateNoop, filter: isBeforePeriod(before)},
 			{populateIdent: populateEpoch, filter: isBeforeEpoch(before)},
 			{populateIdent: populateRoot, filter: isRootDir},  // extract root from path
