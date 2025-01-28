@@ -2,14 +2,12 @@ package validator
 
 import (
 	"context"
-	"math"
 	"math/big"
 	"testing"
 
 	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache/depositsnapshot"
 	mockExecution "github.com/prysmaticlabs/prysm/v5/beacon-chain/execution/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/container/trie"

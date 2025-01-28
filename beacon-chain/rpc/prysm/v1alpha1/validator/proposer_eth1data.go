@@ -32,12 +32,12 @@ import (
 //   - Determine the vote with the highest count. Prefer the vote with the highest eth1 block height in the event of a tie.
 //   - This vote's block is the eth1 block to use for the block proposal.
 //
-// POST ELECTRA: this should not be used
+// After Electra and eth1 deposit transition period voting will no longer be needed
 func (vs *Server) eth1DataMajorityVote(ctx context.Context, beaconState state.BeaconState) (*ethpb.Eth1Data, error) {
 	ctx, cancel := context.WithTimeout(ctx, eth1dataTimeout)
 	defer cancel()
 
-	// post electra and transition period should not require voting
+	// post eth1 deposits, the Eth 1 data will then be frozen
 	if !helpers.IsLegacyDepositProcessPeriod(beaconState, vs.HeadFetcher.HeadETH1Data()) {
 		return vs.HeadFetcher.HeadETH1Data(), nil
 	}
