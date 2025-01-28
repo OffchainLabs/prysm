@@ -100,7 +100,7 @@ func warmCache(l fsLayout, cache *blobStorageSummaryCache) error {
 	if err != nil {
 		return errors.Wrap(errCacheWarmFailed, err.Error())
 	}
-	for ident, err := iter.next(); err != io.EOF; ident, err = iter.next() {
+	for ident, err := iter.next(); !errors.Is(err, io.EOF); ident, err = iter.next() {
 		if errors.Is(err, errIdentFailure) {
 			idf := &identificationError{}
 			if errors.As(err, &idf) {
@@ -128,7 +128,7 @@ func migrateLayout(fs afero.Fs, from, to fsLayout, cache *blobStorageSummaryCach
 	lastMoved := ""
 	parentDirs := make(map[string]bool) // this map should have < 65k keys by design
 	moved := 0
-	for ident, err := iter.next(); err != io.EOF; ident, err = iter.next() {
+	for ident, err := iter.next(); !errors.Is(err, io.EOF); ident, err = iter.next() {
 		if err != nil {
 			if errors.Is(err, errIdentFailure) {
 				idf := &identificationError{}
@@ -187,7 +187,7 @@ func pruneBefore(before primitives.Epoch, l fsLayout) (map[primitives.Epoch]*pru
 
 	// We will get an ident for each index, but want to prune all indexes for the given root together.
 	var lastIdent blobIdent
-	for ident, err := iter.next(); err != io.EOF; ident, err = iter.next() {
+	for ident, err := iter.next(); !errors.Is(err, io.EOF); ident, err = iter.next() {
 		if err != nil {
 			if errors.Is(err, errIdentFailure) {
 				idf := &identificationError{}

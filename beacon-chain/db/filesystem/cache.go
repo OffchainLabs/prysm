@@ -10,8 +10,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 )
 
-const bytesPerSidecar = 131928
-
 // blobIndexMask is a bitmask representing the set of blob indices that are currently set.
 type blobIndexMask []bool
 

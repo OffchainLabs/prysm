@@ -411,6 +411,7 @@ func (b *BeaconChainConfig) MaxBlobsPerBlockAtEpoch(epoch primitives.Epoch) int 
 	}
 	return b.DeprecatedMaxBlobsPerBlock
 }
+
 // DenebEnabled centralizes the check to determine if code paths
 // that are specific to deneb should be allowed to execute. This will make it easier to find call sites that do this
 // kind of check and remove them post-deneb.

@@ -86,7 +86,7 @@ type identIterator struct {
 	child *identIterator
 	ident blobIdent
 	// layoutLayers are the heart of how the layout defines the nesting of the components of the path.
-	// Each layer of the layout represents a different layer of the directory layout heirarchy,
+	// Each layer of the layout represents a different layer of the directory layout hierarchy,
 	// from the relative root at the zero index to the blob files at the end.
 	layers  []layoutLayer
 	entries []string
@@ -106,7 +106,7 @@ func (iter *identIterator) next() (blobIdent, error) {
 		if err == nil {
 			return next, nil
 		}
-		if err != io.EOF {
+		if !errors.Is(err, io.EOF) {
 			return blobIdent{}, err
 		}
 	}
