@@ -115,7 +115,7 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 			return
 		}
 
-		sig, signingRoot, node, err = v.createSignedChunks(ctx, pubKey, epoch, slot, wb)
+		sig, signingRoot, node, err = v.createSignedChunks(ctx, pubKey, epoch, slot, blk)
 		if err != nil {
 			log.WithError(err).Error("Failed to sign block")
 			return

@@ -28,7 +28,7 @@ func (v *validator) createSignedChunks(
 	pubKey [fieldparams.BLSPubkeyLength]byte,
 	epoch primitives.Epoch,
 	slot primitives.Slot,
-	b interfaces.ReadOnlyBeaconBlock,
+	b interfaces.ReadOnlySignedBeaconBlock,
 ) ([]byte, [32]byte, *rlnc.Node, error) {
 	ctx, span := trace.StartSpan(ctx, "validator.createSignedChunks")
 	defer span.End()
@@ -52,13 +52,13 @@ func (v *validator) createSignedChunks(
 	if err != nil {
 		return nil, [32]byte{}, nil, errors.Wrap(err, "could not create source node")
 	}
-	node.SetProposerIndex(b.ProposerIndex())
+	node.SetProposerIndex(b.Block().ProposerIndex())
 	node.SetSlot(slot)
-	parentRoot := b.ParentRoot()
+	parentRoot := b.Block().ParentRoot()
 	node.SetParentRoot(parentRoot[:])
 	header := &ethpb.BeaconBlockChunkHeader{
 		Slot:          slot,
-		ProposerIndex: b.ProposerIndex(),
+		ProposerIndex: b.Block().ProposerIndex(),
 		ParentRoot:    parentRoot[:],
 		Commitments:   node.Commitments(),
 	}
