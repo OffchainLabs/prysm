@@ -36,6 +36,7 @@ type migrationTestTarget struct {
 	ident      blobIdent
 	slotOffset primitives.Slot
 	migrated   bool
+	path       string
 }
 
 func testAssertFsMigrated(t *testing.T, fs afero.Fs, ident blobIdent, before, after fsLayout) {

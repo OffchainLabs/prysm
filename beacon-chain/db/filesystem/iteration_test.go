@@ -246,29 +246,36 @@ func TestIterationComplete(t *testing.T) {
 	targets := []migrationTestTarget{
 		{
 			ident: ezIdent(t, "0x0125e54c64c925018c9296965a5b622d9f5ab626c10917860dcfb6aa09a0a00b", 1234, 0),
+			path:  "by-epoch/0/1234/0x0125e54c64c925018c9296965a5b622d9f5ab626c10917860dcfb6aa09a0a00b/0.ssz",
 		},
 		{
 			ident:      ezIdent(t, "0x0127dba6fd30fdbb47e73e861d5c6e602b38ac3ddc945bb6a2fc4e10761e9a86", 5330, 0),
 			slotOffset: 31,
+			path:       "by-epoch/1/5330/0x0127dba6fd30fdbb47e73e861d5c6e602b38ac3ddc945bb6a2fc4e10761e9a86/0.ssz",
 		},
 		{
 			ident:      ezIdent(t, "0x0127dba6fd30fdbb47e73e861d5c6e602b38ac3ddc945bb6a2fc4e10761e9a86", 5330, 1),
 			slotOffset: 31,
+			path:       "by-epoch/1/5330/0x0127dba6fd30fdbb47e73e861d5c6e602b38ac3ddc945bb6a2fc4e10761e9a86/1.ssz",
 		},
 		{
 			ident:      ezIdent(t, "0x0232521756a0b965eab2c2245d7ad85feaeaf5f427cd14d1a7531f9d555b415c", 16777216, 0),
 			slotOffset: 16,
+			path:       "by-epoch/4096/16777216/0x0232521756a0b965eab2c2245d7ad85feaeaf5f427cd14d1a7531f9d555b415c/0.ssz",
 		},
 		{
 			ident:      ezIdent(t, "0x0232521756a0b965eab2c2245d7ad85feaeaf5f427cd14d1a7531f9d555b415c", 16777216, 1),
 			slotOffset: 16,
+			path:       "by-epoch/4096/16777216/0x0232521756a0b965eab2c2245d7ad85feaeaf5f427cd14d1a7531f9d555b415c/1.ssz",
 		},
 		{
 			ident:      ezIdent(t, "0x42eabe3d2c125410cd226de6f2825fb7575ab896c3f52e43de1fa29e4c809aba", 16777217, 0),
 			slotOffset: 16,
+			path:       "by-epoch/4096/16777217/0x42eabe3d2c125410cd226de6f2825fb7575ab896c3f52e43de1fa29e4c809aba/0.ssz",
 		},
 		{
 			ident: ezIdent(t, "0x666cea5034e22bd3b849cb33914cad59afd88ee08e4d5bc0e997411c945fbc1d", 11235, 1),
+			path:  "by-epoch/2/11235/0x666cea5034e22bd3b849cb33914cad59afd88ee08e4d5bc0e997411c945fbc1d/1.ssz",
 		},
 	}
 	fs := afero.NewMemMapFs()
@@ -292,5 +299,6 @@ func TestIterationComplete(t *testing.T) {
 		require.Equal(t, true, ok)
 		require.Equal(t, tar.ident.epoch, entry.epoch)
 		require.Equal(t, true, entry.HasIndex(tar.ident.index))
+		require.Equal(t, tar.path, byEpoch.sszPath(tar.ident))
 	}
 }
