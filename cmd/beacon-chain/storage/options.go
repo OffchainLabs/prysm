@@ -26,16 +26,18 @@ var (
 		Aliases: []string{"extend-blob-retention-epoch"},
 	}
 	BlobStorageLayout = &cli.StringFlag{
-		Name:   "blob-storage-layout",
-		Usage:  layoutFlagUsage(),
-		Value:  filesystem.LayoutNameFlat,
-		Action: validateLayoutFlag,
+		Name:  "blob-storage-layout",
+		Usage: layoutFlagUsage(),
+		Value: filesystem.LayoutNameFlat,
 	}
 )
 
+func layoutOptions() string {
+	return "available options are: " + strings.Join(filesystem.LayoutNames, ", ") + "."
+}
+
 func layoutFlagUsage() string {
-	return "Dictates how to organize the blob directory structure on disk. " +
-		"Available options are: " + strings.Join(filesystem.LayoutNames, ", ")
+	return "Dictates how to organize the blob directory structure on disk, " + layoutOptions()
 }
 
 func validateLayoutFlag(_ *cli.Context, v string) error {
@@ -44,7 +46,7 @@ func validateLayoutFlag(_ *cli.Context, v string) error {
 			return nil
 		}
 	}
-	return errors.Errorf("invalid layout flag value %s", v)
+	return errors.Errorf("invalid value '%s' for flag --%s, %s", v, BlobStorageLayout.Name, layoutOptions())
 }
 
 // BeaconNodeOptions sets configuration values on the node.BeaconNode value at node startup.
@@ -91,4 +93,8 @@ func blobRetentionEpoch(cliCtx *cli.Context) (primitives.Epoch, error) {
 	}
 
 	return re, nil
+}
+
+func init() {
+	BlobStorageLayout.Action = validateLayoutFlag
 }
