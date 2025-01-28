@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync/rlnc"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/chunks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
@@ -45,16 +46,16 @@ func (s *Service) validateBeaconBlockChunkPubSub(ctx context.Context, pid peer.I
 		tracing.AnnotateError(span, err)
 		return pubsub.ValidationReject, errors.Wrap(err, "Could not decode message")
 	}
-
+	wrappedChunk, err := chunks.NewBlockChunk(m)
+	if err != nil {
+		tracing.AnnotateError(span, err)
+		return pubsub.ValidationReject, errors.Wrap(err, "Could not create chunk object")
+	}
 	// It's fine to use the same lock for both block and chunk validation
 	s.validateBlockLock.Lock()
 	defer s.validateBlockLock.Unlock()
 
-	chunk, ok := m.(interfaces.ReadOnlyBeaconBlockChunk)
-	if !ok {
-		return pubsub.ValidationReject, errors.New("msg is not ReadOnlyBeaconBlockChunk")
-	}
-
+	chunk := interfaces.ReadOnlyBeaconBlockChunk(wrappedChunk)
 	if chunk.IsNil() {
 		return pubsub.ValidationReject, errors.New("chunk is nil")
 	}
