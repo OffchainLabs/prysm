@@ -13,15 +13,17 @@ import (
 	"github.com/spf13/afero"
 )
 
+const epochsPerDirectory = 4096
+
 type periodicEpochLayout struct {
 	fs     afero.Fs
-	cache  *blobStorageCache
+	cache  *blobStorageSummaryCache
 	pruner *blobPruner
 }
 
 var _ fsLayout = &periodicEpochLayout{}
 
-func newPeriodicEpochLayout(fs afero.Fs, cache *blobStorageCache, pruner *blobPruner) fsLayout {
+func newPeriodicEpochLayout(fs afero.Fs, cache *blobStorageSummaryCache, pruner *blobPruner) fsLayout {
 	l := &periodicEpochLayout{fs: fs, cache: cache, pruner: pruner}
 	return l
 }
@@ -136,7 +138,7 @@ func isBeforePeriod(before primitives.Epoch) func(string) bool {
 		return filterNoop
 	}
 	beforePeriod := periodForEpoch(before)
-	if before%4096 != 0 {
+	if before%epochsPerDirectory != 0 {
 		// Add one because we need to include the period the epoch is in, unless it is the first epoch in the period,
 		// in which case we can just look at any previous period.
 		beforePeriod += 1

@@ -83,7 +83,7 @@ type fsLayout interface {
 	remove(ident blobIdent) (int, error)
 }
 
-func newLayout(name string, fs afero.Fs, cache *blobStorageCache, pruner *blobPruner) (fsLayout, error) {
+func newLayout(name string, fs afero.Fs, cache *blobStorageSummaryCache, pruner *blobPruner) (fsLayout, error) {
 	switch name {
 	case LayoutNameFlat:
 		return newFlatLayout(fs, cache, pruner), nil
@@ -94,7 +94,7 @@ func newLayout(name string, fs afero.Fs, cache *blobStorageCache, pruner *blobPr
 	}
 }
 
-func warmCache(l fsLayout, cache *blobStorageCache) error {
+func warmCache(l fsLayout, cache *blobStorageSummaryCache) error {
 	iter, err := l.iterateIdents(0)
 	if err != nil {
 		return errors.Wrap(errCacheWarmFailed, err.Error())
@@ -117,7 +117,7 @@ func warmCache(l fsLayout, cache *blobStorageCache) error {
 	return nil
 }
 
-func migrateLayout(fs afero.Fs, from, to fsLayout, cache *blobStorageCache) error {
+func migrateLayout(fs afero.Fs, from, to fsLayout, cache *blobStorageSummaryCache) error {
 	start := time.Now()
 	iter, err := from.iterateIdents(0)
 	if err != nil {

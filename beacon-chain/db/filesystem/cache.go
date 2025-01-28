@@ -64,29 +64,29 @@ type BlobStorageSummarizer interface {
 	Summary(root [32]byte) BlobStorageSummary
 }
 
-type blobStorageCache struct {
+type blobStorageSummaryCache struct {
 	mu     sync.RWMutex
 	nBlobs float64
 	cache  map[[32]byte]BlobStorageSummary
 }
 
-var _ BlobStorageSummarizer = &blobStorageCache{}
+var _ BlobStorageSummarizer = &blobStorageSummaryCache{}
 
-func newBlobStorageCache() *blobStorageCache {
-	return &blobStorageCache{
+func newBlobStorageCache() *blobStorageSummaryCache {
+	return &blobStorageSummaryCache{
 		cache: make(map[[32]byte]BlobStorageSummary),
 	}
 }
 
 // Summary returns the BlobStorageSummary for `root`. The BlobStorageSummary can be used to check for the presence of
 // BlobSidecars based on Index.
-func (s *blobStorageCache) Summary(root [32]byte) BlobStorageSummary {
+func (s *blobStorageSummaryCache) Summary(root [32]byte) BlobStorageSummary {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.cache[root]
 }
 
-func (s *blobStorageCache) ensure(ident blobIdent) error {
+func (s *blobStorageSummaryCache) ensure(ident blobIdent) error {
 	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlockAtEpoch(ident.epoch)
 	if ident.index >= uint64(maxBlobsPerBlock) {
 		return errIndexOutOfBounds
@@ -106,14 +106,14 @@ func (s *blobStorageCache) ensure(ident blobIdent) error {
 	return nil
 }
 
-func (s *blobStorageCache) get(key [32]byte) (BlobStorageSummary, bool) {
+func (s *blobStorageSummaryCache) get(key [32]byte) (BlobStorageSummary, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	v, ok := s.cache[key]
 	return v, ok
 }
 
-func (s *blobStorageCache) identForIdx(key [32]byte, idx uint64) (blobIdent, error) {
+func (s *blobStorageSummaryCache) identForIdx(key [32]byte, idx uint64) (blobIdent, error) {
 	v, ok := s.get(key)
 	if !ok || !v.HasIndex(idx) {
 		return blobIdent{}, db.ErrNotFound
@@ -125,7 +125,7 @@ func (s *blobStorageCache) identForIdx(key [32]byte, idx uint64) (blobIdent, err
 	}, nil
 }
 
-func (s *blobStorageCache) identForRoot(key [32]byte) (blobIdent, error) {
+func (s *blobStorageSummaryCache) identForRoot(key [32]byte) (blobIdent, error) {
 	v, ok := s.get(key)
 	if !ok {
 		return blobIdent{}, db.ErrNotFound
@@ -136,7 +136,7 @@ func (s *blobStorageCache) identForRoot(key [32]byte) (blobIdent, error) {
 	}, nil
 }
 
-func (s *blobStorageCache) evict(key [32]byte) int {
+func (s *blobStorageSummaryCache) evict(key [32]byte) int {
 	deleted := 0
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -156,7 +156,7 @@ func (s *blobStorageCache) evict(key [32]byte) int {
 	return deleted
 }
 
-func (s *blobStorageCache) updateMetrics(delta float64) {
+func (s *blobStorageSummaryCache) updateMetrics(delta float64) {
 	s.nBlobs += delta
 	blobDiskCount.Set(s.nBlobs)
 	blobDiskSize.Set(s.nBlobs * fieldparams.BlobSidecarSize)

@@ -14,13 +14,13 @@ import (
 
 type flatLayout struct {
 	fs     afero.Fs
-	cache  *blobStorageCache
+	cache  *blobStorageSummaryCache
 	pruner *blobPruner
 }
 
 var _ fsLayout = &flatLayout{}
 
-func newFlatLayout(fs afero.Fs, cache *blobStorageCache, pruner *blobPruner) fsLayout {
+func newFlatLayout(fs afero.Fs, cache *blobStorageSummaryCache, pruner *blobPruner) fsLayout {
 	l := &flatLayout{fs: fs, cache: cache, pruner: pruner}
 	return l
 }
@@ -134,7 +134,7 @@ func slotFromBlob(at io.ReaderAt) (primitives.Slot, error) {
 type flatSlotReader struct {
 	before primitives.Epoch
 	fs     afero.Fs
-	cache  *blobStorageCache
+	cache  *blobStorageSummaryCache
 }
 
 func (l *flatSlotReader) populateEpoch(ident blobIdent, fname string) (blobIdent, error) {
@@ -184,11 +184,11 @@ func (l *flatSlotReader) isSSZAndBefore(fname string) bool {
 	return ident.epoch < l.before
 }
 
-// isFlatCachedAndBefore tries to filter out any roots that it knows are not before the given epoch
+// isFlatCachedAndBefore returns a filter callback function to exclude roots that are known to be after the given epoch
 // based on the cache. It's an opportunistic filter; if the cache is not populated, it will not attempt to populate it.
 // isSSZAndBefore on the other hand, is a strict filter that will only return true if the file is an SSZ file and
 // the epoch can be determined.
-func isFlatCachedAndBefore(cache *blobStorageCache, before primitives.Epoch) func(string) bool {
+func isFlatCachedAndBefore(cache *blobStorageSummaryCache, before primitives.Epoch) func(string) bool {
 	if before == 0 {
 		return isRootDir
 	}

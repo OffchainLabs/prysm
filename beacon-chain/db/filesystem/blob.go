@@ -64,7 +64,7 @@ func WithFs(fs afero.Fs) BlobStorageOption {
 	}
 }
 
-// WithLayout enables the user to specify a runtimeLayout which dictates how blob files are stored on disk.
+// WithLayout enables the user to specify which layout scheme to use, dictating how blob files are stored on disk.
 func WithLayout(name string) BlobStorageOption {
 	return func(b *BlobStorage) error {
 		b.layoutName = name
@@ -114,7 +114,7 @@ type BlobStorage struct {
 	fsync           bool
 	fs              afero.Fs
 	layout          fsLayout
-	cache           *blobStorageCache
+	cache           *blobStorageSummaryCache
 }
 
 // WarmCache runs the prune routine with an expiration of slot of 0, so nothing will be pruned, but the pruner's cache

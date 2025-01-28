@@ -38,6 +38,10 @@ var (
 
 	// ErrMissingVerification indicates that the given verification function was never performed on the value.
 	ErrMissingVerification = errors.New("verification was not performed for requirement")
+
+	// errVerificationImplementationFault indicates that a code path yielding VerifiedROBlobs has an implementation
+	// error, leading it to call VerifiedROBlobError with a nil error.
+	errVerificationImplementationFault = errors.New("could not verify blob data or create a valid VerifiedROBlob.")
 )
 
 // VerificationMultiError is a custom error that can be used to access individual verification failures.
@@ -76,7 +80,7 @@ func newVerificationMultiError(r *results, err error) VerificationMultiError {
 // create a value of that type in order to generate an error return value.
 func VerifiedROBlobError(err error) (blocks.VerifiedROBlob, error) {
 	if err == nil {
-		panic("VerifiedROBlobError used to create a VerifiedROBlob without a checkable error.")
+		return blocks.VerifiedROBlob{}, errVerificationImplementationFault
 	}
 	return blocks.VerifiedROBlob{}, err
 }

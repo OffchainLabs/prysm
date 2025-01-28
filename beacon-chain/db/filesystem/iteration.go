@@ -15,7 +15,7 @@ import (
 	"github.com/spf13/afero"
 )
 
-var errIdentFailure = errors.New("failed to determine blob metadata, ignoring all sub-path.")
+var errIdentFailure = errors.New("failed to determine blob metadata, ignoring all sub-paths.")
 
 type identificationError struct {
 	err   error
@@ -89,7 +89,7 @@ type identIterator struct {
 }
 
 // next is the only method that a user of the identIterator needs to call.
-// identIterator will blobIdents in a breadth-first fashion,
+// identIterator will yield blobIdents in a breadth-first fashion,
 // returning an empty blobIdent and io.EOF once all branches have been traversed.
 func (iter *identIterator) next() (blobIdent, error) {
 	if iter.eof {
