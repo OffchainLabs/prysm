@@ -187,9 +187,11 @@ func blockToChunks(numChunks uint, data []byte) [][]*ristretto.Scalar {
 // we can avoid copying memory every time here. This is a temporary solution.
 func bytesToVector(data []byte) []*ristretto.Scalar {
 	ret := make([]*ristretto.Scalar, len(data)/31)
+	buf := [32]byte{}
 	for i := 0; i < len(data); i += 31 {
 		ret[i/31] = ristretto.NewScalar()
-		if err := ret[i/31].Decode(append(data[i:i+31], byte(0))); err != nil {
+		copy(buf[:], data[i:i+31])
+		if err := ret[i/31].Decode(buf[:]); err != nil {
 			logrus.WithError(err).Error("failed to decode scalar")
 		}
 	}

@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"testing"
 
+	ristretto "github.com/gtank/ristretto255"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 )
 
@@ -104,4 +105,16 @@ func TestDecodeLarge(t *testing.T) {
 	require.NoError(t, err)
 	// Remove termination byte
 	require.DeepEqual(t, block[:len(block)-1], decoded)
+}
+
+func TestOneScalar(t *testing.T) {
+	scalarHex := "1f5052ea700e7c99d32aabb6c5ba121b04d8d1ec722bb7d9d58306ccfc010000"
+	stringBytes := []byte{0x1f, 0x50, 0x52, 0xea, 0x70, 0xe, 0x7c, 0x99, 0xd3, 0x2a, 0xab, 0xb6, 0xc5, 0xba, 0x12, 0x1b, 0x4, 0xd8, 0xd1, 0xec, 0x72, 0x2b, 0xb7, 0xd9, 0xd5, 0x83, 0x6, 0xcc, 0xfc, 0x1, 0x0, 0x0}
+	scalarBytes, err := hex.DecodeString(scalarHex)
+	require.DeepEqual(t, stringBytes, scalarBytes)
+	require.NoError(t, err)
+	scalar := &ristretto.Scalar{}
+	require.NoError(t, scalar.Decode(scalarBytes))
+	obtained := scalar.Encode(nil)
+	require.DeepEqual(t, scalarBytes, obtained)
 }
