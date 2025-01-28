@@ -121,7 +121,12 @@ type BlobStorage struct {
 // will be populated at node startup, avoiding a costly cold prune (~4s in syscalls) during syncing.
 func (bs *BlobStorage) WarmCache() {
 	start := time.Now()
-	log.Info("Blob filesystem cache warm-up started. This may take a few minutes.")
+	if bs.layoutName == LayoutNameFlat {
+		log.Info("Blob filesystem cache warm-up started. This may take a few minutes.")
+	} else {
+		log.Info("Blob filesystem cache warm-up started.")
+	}
+
 	if err := warmCache(bs.layout, bs.cache); err != nil {
 		log.WithError(err).Error("Error encountered while warming up blob filesystem cache.")
 	}

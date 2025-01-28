@@ -71,6 +71,7 @@ func (n blobIdent) logFields() logrus.Fields {
 }
 
 type fsLayout interface {
+	name() string
 	dir(n blobIdent) string
 	sszPath(n blobIdent) string
 	partPath(n blobIdent, entropy string) string
@@ -118,6 +119,7 @@ func warmCache(l fsLayout, cache *blobStorageSummaryCache) error {
 }
 
 func migrateLayout(fs afero.Fs, from, to fsLayout, cache *blobStorageSummaryCache) error {
+	log.WithField("from_layout", from.name()).WithField("to_layout", to.name()).Info("Migrating blob filesystem layout. This one-time operation can take extra time (up to a few minutes for systems with extended blob storage and a cold disk cache).")
 	start := time.Now()
 	iter, err := from.iterateIdents(0)
 	if err != nil {

@@ -28,6 +28,10 @@ func newPeriodicEpochLayout(fs afero.Fs, cache *blobStorageSummaryCache, pruner 
 	return l
 }
 
+func (l *periodicEpochLayout) name() string {
+	return LayoutNameByEpoch
+}
+
 func (l *periodicEpochLayout) notify(ident blobIdent) error {
 	if err := l.cache.ensure(ident); err != nil {
 		return err

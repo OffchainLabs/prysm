@@ -8,6 +8,10 @@ type mockLayout struct {
 	pruneBeforeFunc func(primitives.Epoch) (*pruneSummary, error)
 }
 
+func (m *mockLayout) name() string {
+	return "mock"
+}
+
 func (*mockLayout) dir(_ blobIdent) string {
 	return ""
 }

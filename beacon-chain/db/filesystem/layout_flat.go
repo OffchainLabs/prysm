@@ -46,6 +46,10 @@ func (l *flatLayout) iterateIdents(before primitives.Epoch) (*identIterator, err
 	}, nil
 }
 
+func (*flatLayout) name() string {
+	return LayoutNameFlat
+}
+
 func (*flatLayout) dir(n blobIdent) string {
 	return rootToString(n.root)
 }
