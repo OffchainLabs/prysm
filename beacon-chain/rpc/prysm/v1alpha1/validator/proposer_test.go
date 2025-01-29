@@ -2711,10 +2711,8 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 		require.NoError(t, err)
 
 		beaconState, err := state_native.InitializeFromProtoElectra(&ethpb.BeaconStateElectra{
-			Slot: slot,
-			Eth1DataVotes: []*ethpb.Eth1Data{
-				{BlockHash: []byte("electra"), DepositCount: 1},
-			},
+			Slot:     slot,
+			Eth1Data: &ethpb.Eth1Data{BlockHash: []byte("legacy"), DepositCount: 1},
 		})
 		require.NoError(t, err)
 
@@ -2724,7 +2722,6 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 			Eth1BlockFetcher:  p,
 			BlockFetcher:      p,
 			DepositFetcher:    depositCache,
-			HeadFetcher:       &mock.ChainService{ETH1Data: &ethpb.Eth1Data{BlockHash: []byte("legacy"), DepositCount: 0}},
 		}
 
 		ctx := context.Background()
