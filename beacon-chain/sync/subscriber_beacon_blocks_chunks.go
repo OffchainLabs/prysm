@@ -6,6 +6,8 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
 	core_chunks "github.com/OffchainLabs/prysm/v6/beacon-chain/core/chunks"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed"
+	blockfeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/block"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync/rlnc"
@@ -181,6 +183,15 @@ func (s *Service) reconstructBlockFromChunk(ctx context.Context, chunk interface
 		return
 	}
 	logrus.WithFields(logrus.Fields{"slot": chunk.Slot(), "proposerIndex": chunk.ProposerIndex()}).Info("decoded beacon block")
+
+	// Broadcast the block on a feed to notify other services in the beacon node
+	// of a received block (even if it does not process correctly through a state transition).
+	s.cfg.blockNotifier.BlockFeed().Send(&feed.Event{
+		Type: blockfeed.ReceivedBlock,
+		Data: &blockfeed.ReceivedBlockData{
+			SignedBlock: blk,
+		},
+	})
 
 	if err := s.beaconBlockSubscriber(ctx, protoBlock); err != nil {
 		logrus.WithError(err).Error("Could not handle p2p pubsub")
