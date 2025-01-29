@@ -8,6 +8,7 @@ go_library(
         "consolidations.go",
         "deposits.go",
         "effective_balance_updates.go",
+        "error.go",
         "registry_updates.go",
         "transition.go",
         "transition_no_verify_sig.go",

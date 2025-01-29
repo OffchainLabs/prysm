@@ -92,9 +92,6 @@ func ProcessWithdrawalRequests(ctx context.Context, st state.BeaconState, wrs []
 	defer span.End()
 	currentEpoch := slots.ToEpoch(st.Slot())
 	for _, wr := range wrs {
-		if wr == nil {
-			return nil, errors.New("nil execution layer withdrawal request")
-		}
 		amount := wr.Amount
 		isFullExitRequest := amount == params.BeaconConfig().FullExitRequestAmount
 		// If partial withdrawal queue is full, only full exits are processed
