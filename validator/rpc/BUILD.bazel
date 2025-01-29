@@ -78,6 +78,7 @@ go_library(
         "@com_github_tyler_smith_go_bip39//:go_default_library",
         "@com_github_tyler_smith_go_bip39//wordlists:go_default_library",
         "@com_github_wealdtech_go_eth2_wallet_encryptor_keystorev4//:go_default_library",
+        "@io_opentelemetry_go_contrib_instrumentation_net_http_otelhttp//:go_default_library",
         "@org_golang_google_grpc//:go_default_library",
         "@org_golang_google_grpc//codes:go_default_library",
         "@org_golang_google_grpc//metadata:go_default_library",
