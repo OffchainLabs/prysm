@@ -219,8 +219,23 @@ func (c *Client) GetHeader(ctx context.Context, slot primitives.Slot, parentHash
 	if err := json.Unmarshal(hb, v); err != nil {
 		return nil, errors.Wrapf(err, "error unmarshaling the builder GetHeader response, using slot=%d, parentHash=%#x, pubkey=%#x", slot, parentHash, pubkey)
 	}
-	switch strings.ToLower(v.Version) {
-	case strings.ToLower(version.String(version.Deneb)):
+
+	ver, err := version.FromString(strings.ToLower(v.Version))
+	if err != nil {
+		return nil, errors.Wrap(err, fmt.Sprintf("unsupported header version %s", strings.ToLower(v.Version)))
+	}
+	if ver >= version.Electra {
+		hr := &ExecHeaderResponseElectra{}
+		if err := json.Unmarshal(hb, hr); err != nil {
+			return nil, errors.Wrapf(err, "error unmarshaling the builder GetHeader response, using slot=%d, parentHash=%#x, pubkey=%#x", slot, parentHash, pubkey)
+		}
+		p, err := hr.ToProto()
+		if err != nil {
+			return nil, errors.Wrapf(err, "could not extract proto message from header")
+		}
+		return WrappedSignedBuilderBidElectra(p)
+	}
+	if ver >= version.Deneb {
 		hr := &ExecHeaderResponseDeneb{}
 		if err := json.Unmarshal(hb, hr); err != nil {
 			return nil, errors.Wrapf(err, "error unmarshaling the builder GetHeader response, using slot=%d, parentHash=%#x, pubkey=%#x", slot, parentHash, pubkey)
@@ -230,7 +245,8 @@ func (c *Client) GetHeader(ctx context.Context, slot primitives.Slot, parentHash
 			return nil, errors.Wrapf(err, "could not extract proto message from header")
 		}
 		return WrappedSignedBuilderBidDeneb(p)
-	case strings.ToLower(version.String(version.Capella)):
+	}
+	if ver >= version.Capella {
 		hr := &ExecHeaderResponseCapella{}
 		if err := json.Unmarshal(hb, hr); err != nil {
 			return nil, errors.Wrapf(err, "error unmarshaling the builder GetHeader response, using slot=%d, parentHash=%#x, pubkey=%#x", slot, parentHash, pubkey)
@@ -240,7 +256,8 @@ func (c *Client) GetHeader(ctx context.Context, slot primitives.Slot, parentHash
 			return nil, errors.Wrapf(err, "could not extract proto message from header")
 		}
 		return WrappedSignedBuilderBidCapella(p)
-	case strings.ToLower(version.String(version.Bellatrix)):
+	}
+	if ver >= version.Bellatrix {
 		hr := &ExecHeaderResponse{}
 		if err := json.Unmarshal(hb, hr); err != nil {
 			return nil, errors.Wrapf(err, "error unmarshaling the builder GetHeader response, using slot=%d, parentHash=%#x, pubkey=%#x", slot, parentHash, pubkey)
@@ -250,9 +267,8 @@ func (c *Client) GetHeader(ctx context.Context, slot primitives.Slot, parentHash
 			return nil, errors.Wrap(err, "could not extract proto message from header")
 		}
 		return WrappedSignedBuilderBid(p)
-	default:
-		return nil, fmt.Errorf("unsupported header version %s", strings.ToLower(v.Version))
 	}
+	return nil, fmt.Errorf("unsupported header version %s", strings.ToLower(v.Version))
 }
 
 // RegisterValidator encodes the SignedValidatorRegistrationV1 message to json (including hex-encoding the byte

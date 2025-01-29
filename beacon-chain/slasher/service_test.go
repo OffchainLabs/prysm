@@ -3,6 +3,7 @@ package slasher
 import (
 	"context"
 	"io"
+	"os"
 	"testing"
 	"time"
 
@@ -23,7 +24,7 @@ func TestMain(m *testing.M) {
 	logrus.SetLevel(logrus.DebugLevel)
 	logrus.SetOutput(io.Discard)
 
-	m.Run()
+	os.Exit(m.Run())
 }
 
 func TestService_StartStop_ChainInitialized(t *testing.T) {

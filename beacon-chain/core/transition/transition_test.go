@@ -437,6 +437,25 @@ func TestProcessBlock_OverMaxAttesterSlashings(t *testing.T) {
 	assert.ErrorContains(t, want, err)
 }
 
+func TestProcessBlock_OverMaxAttesterSlashingsElectra(t *testing.T) {
+	maxSlashings := params.BeaconConfig().MaxAttesterSlashingsElectra
+	b := &ethpb.SignedBeaconBlockElectra{
+		Block: &ethpb.BeaconBlockElectra{
+			Body: &ethpb.BeaconBlockBodyElectra{
+				AttesterSlashings: make([]*ethpb.AttesterSlashingElectra, maxSlashings+1),
+			},
+		},
+	}
+	want := fmt.Sprintf("number of attester slashings (%d) in block body exceeds allowed threshold of %d",
+		len(b.Block.Body.AttesterSlashings), params.BeaconConfig().MaxAttesterSlashingsElectra)
+	s, err := state_native.InitializeFromProtoUnsafeElectra(&ethpb.BeaconStateElectra{})
+	require.NoError(t, err)
+	wsb, err := consensusblocks.NewSignedBeaconBlock(b)
+	require.NoError(t, err)
+	_, err = transition.VerifyOperationLengths(context.Background(), s, wsb.Block())
+	assert.ErrorContains(t, want, err)
+}
+
 func TestProcessBlock_OverMaxAttestations(t *testing.T) {
 	b := &ethpb.SignedBeaconBlock{
 		Block: &ethpb.BeaconBlock{

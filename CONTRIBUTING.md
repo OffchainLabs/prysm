@@ -125,7 +125,7 @@ Navigate to your fork of the repo on GitHub. On the upper left where the current
 
 **16. Add an entry to CHANGELOG.md.**
 
-If your change is user facing, you must include a CHANGELOG.md entry. See the [Maintaining CHANGELOG.md](#maintaining-changelogmd) section for more information.
+All PRs must must include a changelog fragment file in the `changelog` directory. If your change is not user-facing or should not be mentioned in the changelog for some other reason, you may use the `Ignored` changelog section in your fragment's header to satisfy this requirement without altering the final release changelog. See the [Maintaining CHANGELOG.md](#maintaining-changelogmd) section for more information.
 
 **17. Create a pull request.**
 
@@ -177,16 +177,10 @@ $ git push myrepo feature-in-progress-branch -f
 
 ## Maintaining CHANGELOG.md
 
-This project follows the changelog guidelines from [keepachangelog.com](https://keepachangelog.com/en/1.1.0/).
-
-All PRs with user facing changes should have an entry in the CHANGELOG.md file and the change should be categorized in the appropriate category within the "Unreleased" section. The categories are:
-
--  `Added` for new features.
--  `Changed` for changes in existing functionality.
--  `Deprecated` for soon-to-be removed features.
--  `Removed` for now removed features.
--  `Fixed` for any bug fixes.
--  `Security` in case of vulnerabilities. Please see the [Security Policy](SECURITY.md) for responsible disclosure before adding a change with this category.
+This project follows the changelog guidelines from [keepachangelog.com](https://keepachangelog.com/en/1.1.0/). In order to minimize conflicts and workflow headaches, we chose to implement a changelog management
+strategy that uses changelog "fragment" files, managed by our changelog management tool called `unclog`. Each PR must include a new changelog fragment file in the `changelog` directory, as specified by unclog's
+[README.md](https://github.com/OffchainLabs/unclog?tab=readme-ov-file#what-is-a-changelog-fragment). As the `unclog` README suggests in the [Best Practices](https://github.com/OffchainLabs/unclog?tab=readme-ov-file#best-practices) section, 
+the standard naming convention for your PR's fragment file, to avoid conflicting with another fragment file, is `changelog/<github user name>_<PR branch name>.md`.
 
 ### Releasing
 

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	ev "github.com/prysmaticlabs/prysm/v5/testing/endtoend/evaluators"
 	"github.com/prysmaticlabs/prysm/v5/testing/endtoend/evaluators/beaconapi"
 	e2eParams "github.com/prysmaticlabs/prysm/v5/testing/endtoend/params"
@@ -53,16 +54,17 @@ func e2eMinimal(t *testing.T, cfg *params.BeaconChainConfig, cfgo ...types.E2ECo
 		ev.DepositedValidatorsAreActive,
 		ev.ValidatorsVoteWithTheMajority,
 		ev.ColdStateCheckpoint,
-		ev.AltairForkTransition,
-		ev.BellatrixForkTransition,
-		ev.CapellaForkTransition,
-		ev.DenebForkTransition,
 		ev.FinishedSyncing,
 		ev.AllNodesHaveSameHead,
 		ev.ValidatorSyncParticipation,
 		ev.FeeRecipientIsPresent,
 		//ev.TransactionsPresent, TODO: Re-enable Transaction evaluator once it tx pool issues are fixed.
 	}
+	evals = addIfForkSet(evals, cfg.AltairForkEpoch, ev.AltairForkTransition)
+	evals = addIfForkSet(evals, cfg.BellatrixForkEpoch, ev.BellatrixForkTransition)
+	evals = addIfForkSet(evals, cfg.CapellaForkEpoch, ev.CapellaForkTransition)
+	evals = addIfForkSet(evals, cfg.DenebForkEpoch, ev.DenebForkTransition)
+
 	testConfig := &types.E2EConfig{
 		BeaconFlags: []string{
 			fmt.Sprintf("--slots-per-archive-point=%d", params.BeaconConfig().SlotsPerEpoch*16),
@@ -128,15 +130,16 @@ func e2eMainnet(t *testing.T, usePrysmSh, useMultiClient bool, cfg *params.Beaco
 		ev.ValidatorsHaveWithdrawn,
 		ev.DepositedValidatorsAreActive,
 		ev.ColdStateCheckpoint,
-		ev.AltairForkTransition,
-		ev.BellatrixForkTransition,
-		ev.CapellaForkTransition,
-		ev.DenebForkTransition,
 		ev.FinishedSyncing,
 		ev.AllNodesHaveSameHead,
 		ev.FeeRecipientIsPresent,
 		//ev.TransactionsPresent, TODO: Re-enable Transaction evaluator once it tx pool issues are fixed.
 	}
+	evals = addIfForkSet(evals, cfg.AltairForkEpoch, ev.AltairForkTransition)
+	evals = addIfForkSet(evals, cfg.BellatrixForkEpoch, ev.BellatrixForkTransition)
+	evals = addIfForkSet(evals, cfg.CapellaForkEpoch, ev.CapellaForkTransition)
+	evals = addIfForkSet(evals, cfg.DenebForkEpoch, ev.DenebForkTransition)
+
 	testConfig := &types.E2EConfig{
 		BeaconFlags: []string{
 			fmt.Sprintf("--slots-per-archive-point=%d", params.BeaconConfig().SlotsPerEpoch*16),
@@ -172,8 +175,20 @@ func e2eMainnet(t *testing.T, usePrysmSh, useMultiClient bool, cfg *params.Beaco
 	return newTestRunner(t, testConfig)
 }
 
-func scenarioEvals() []types.Evaluator {
-	return []types.Evaluator{
+// addIfForkSet appends the specified transition if epoch is valid.
+func addIfForkSet(
+	evals []types.Evaluator,
+	fork primitives.Epoch,
+	transition types.Evaluator,
+) []types.Evaluator {
+	if fork != 0 && fork != params.BeaconConfig().FarFutureEpoch {
+		evals = append(evals, transition)
+	}
+	return evals
+}
+
+func scenarioEvals(cfg *params.BeaconChainConfig) []types.Evaluator {
+	evals := []types.Evaluator{
 		ev.PeersConnect,
 		ev.HealthzCheck,
 		ev.MetricsCheck,
@@ -183,18 +198,19 @@ func scenarioEvals() []types.Evaluator {
 		ev.ProposeVoluntaryExit,
 		ev.ValidatorsHaveExited,
 		ev.ColdStateCheckpoint,
-		ev.AltairForkTransition,
-		ev.BellatrixForkTransition,
-		ev.CapellaForkTransition,
-		ev.DenebForkTransition,
 		ev.FinishedSyncing,
 		ev.AllNodesHaveSameHead,
 		ev.ValidatorSyncParticipation,
 	}
+	evals = addIfForkSet(evals, cfg.AltairForkEpoch, ev.AltairForkTransition)
+	evals = addIfForkSet(evals, cfg.BellatrixForkEpoch, ev.BellatrixForkTransition)
+	evals = addIfForkSet(evals, cfg.CapellaForkEpoch, ev.CapellaForkTransition)
+	evals = addIfForkSet(evals, cfg.DenebForkEpoch, ev.DenebForkTransition)
+	return evals
 }
 
-func scenarioEvalsMulti() []types.Evaluator {
-	return []types.Evaluator{
+func scenarioEvalsMulti(cfg *params.BeaconChainConfig) []types.Evaluator {
+	evals := []types.Evaluator{
 		ev.PeersConnect,
 		ev.HealthzCheck,
 		ev.MetricsCheck,
@@ -203,11 +219,12 @@ func scenarioEvalsMulti() []types.Evaluator {
 		ev.ProposeVoluntaryExit,
 		ev.ValidatorsHaveExited,
 		ev.ColdStateCheckpoint,
-		ev.AltairForkTransition,
-		ev.BellatrixForkTransition,
-		ev.CapellaForkTransition,
-		ev.DenebForkTransition,
 		ev.FinishedSyncing,
 		ev.AllNodesHaveSameHead,
 	}
+	evals = addIfForkSet(evals, cfg.AltairForkEpoch, ev.AltairForkTransition)
+	evals = addIfForkSet(evals, cfg.BellatrixForkEpoch, ev.BellatrixForkTransition)
+	evals = addIfForkSet(evals, cfg.CapellaForkEpoch, ev.CapellaForkTransition)
+	evals = addIfForkSet(evals, cfg.DenebForkEpoch, ev.DenebForkTransition)
+	return evals
 }

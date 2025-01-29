@@ -47,7 +47,6 @@ type ReadOnlyBeaconBlock interface {
 	ssz.HashRoot
 	Version() int
 	AsSignRequestObject() (validatorpb.SignRequestObject, error)
-	Copy() (ReadOnlyBeaconBlock, error)
 }
 
 // ReadOnlyBeaconBlockBody describes the method set employed by an object

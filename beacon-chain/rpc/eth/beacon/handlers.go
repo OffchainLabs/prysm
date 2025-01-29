@@ -1229,7 +1229,8 @@ func (s *Server) validateBlobSidecars(blk interfaces.SignedBeaconBlock, blobs []
 		return errors.New("number of blobs, proofs, and commitments do not match")
 	}
 	for i, blob := range blobs {
-		if err := kzg4844.VerifyBlobProof(kzg4844.Blob(blob), kzg4844.Commitment(kzgs[i]), kzg4844.Proof(proofs[i])); err != nil {
+		b := kzg4844.Blob(blob)
+		if err := kzg4844.VerifyBlobProof(&b, kzg4844.Commitment(kzgs[i]), kzg4844.Proof(proofs[i])); err != nil {
 			return errors.Wrap(err, "could not verify blob proof")
 		}
 	}

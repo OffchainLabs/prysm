@@ -20,6 +20,7 @@ import (
 	lruwrpr "github.com/prysmaticlabs/prysm/v5/cache/lru"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
@@ -81,7 +82,7 @@ func TestService_validateCommitteeIndexBeaconAttestation(t *testing.T) {
 
 	tests := []struct {
 		name                      string
-		msg                       *ethpb.Attestation
+		msg                       ethpb.Att
 		topic                     string
 		validAttestationSignature bool
 		want                      bool
@@ -262,20 +263,20 @@ func TestService_validateCommitteeIndexBeaconAttestation(t *testing.T) {
 			helpers.ClearCache()
 			chain.ValidAttestation = tt.validAttestationSignature
 			if tt.validAttestationSignature {
-				com, err := helpers.BeaconCommitteeFromState(context.Background(), savedState, tt.msg.Data.Slot, tt.msg.Data.CommitteeIndex)
+				com, err := helpers.BeaconCommitteeFromState(context.Background(), savedState, tt.msg.GetData().Slot, tt.msg.GetData().CommitteeIndex)
 				require.NoError(t, err)
-				domain, err := signing.Domain(savedState.Fork(), tt.msg.Data.Target.Epoch, params.BeaconConfig().DomainBeaconAttester, savedState.GenesisValidatorsRoot())
+				domain, err := signing.Domain(savedState.Fork(), tt.msg.GetData().Target.Epoch, params.BeaconConfig().DomainBeaconAttester, savedState.GenesisValidatorsRoot())
 				require.NoError(t, err)
-				attRoot, err := signing.ComputeSigningRoot(tt.msg.Data, domain)
+				attRoot, err := signing.ComputeSigningRoot(tt.msg.GetData(), domain)
 				require.NoError(t, err)
 				for i := 0; ; i++ {
-					if tt.msg.AggregationBits.BitAt(uint64(i)) {
-						tt.msg.Signature = keys[com[i]].Sign(attRoot[:]).Marshal()
+					if tt.msg.GetAggregationBits().BitAt(uint64(i)) {
+						tt.msg.SetSignature(keys[com[i]].Sign(attRoot[:]).Marshal())
 						break
 					}
 				}
 			} else {
-				tt.msg.Signature = make([]byte, 96)
+				tt.msg.SetSignature(make([]byte, 96))
 			}
 			buf := new(bytes.Buffer)
 			_, err := p.Encoding().EncodeGossip(buf, tt.msg)
@@ -288,6 +289,165 @@ func TestService_validateCommitteeIndexBeaconAttestation(t *testing.T) {
 			}
 			if tt.topic == "" {
 				m.Message.Topic = nil
+			}
+
+			res, err := s.validateCommitteeIndexBeaconAttestation(ctx, "", m)
+			received := res == pubsub.ValidationAccept
+			if received != tt.want {
+				t.Fatalf("Did not received wanted validation. Got %v, wanted %v", !tt.want, tt.want)
+			}
+			if tt.want && err != nil {
+				t.Errorf("Non nil error returned: %v", err)
+			}
+			if tt.want && m.ValidatorData == nil {
+				t.Error("Expected validator data to be set")
+			}
+		})
+	}
+}
+
+func TestService_validateCommitteeIndexBeaconAttestationElectra(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	fvs := map[[fieldparams.VersionLength]byte]primitives.Epoch{}
+	fvs[bytesutil.ToBytes4(cfg.GenesisForkVersion)] = 1
+	fvs[bytesutil.ToBytes4(cfg.AltairForkVersion)] = 2
+	fvs[bytesutil.ToBytes4(cfg.BellatrixForkVersion)] = 3
+	fvs[bytesutil.ToBytes4(cfg.CapellaForkVersion)] = 4
+	fvs[bytesutil.ToBytes4(cfg.DenebForkVersion)] = 5
+	fvs[bytesutil.ToBytes4(cfg.FuluForkVersion)] = 6
+	fvs[bytesutil.ToBytes4(cfg.ElectraForkVersion)] = 0
+	cfg.ForkVersionSchedule = fvs
+	params.OverrideBeaconConfig(cfg)
+
+	p := p2ptest.NewTestP2P(t)
+	db := dbtest.SetupDB(t)
+	chain := &mockChain.ChainService{
+		// 1 slot ago.
+		Genesis:          time.Now().Add(time.Duration(-1*int64(params.BeaconConfig().SecondsPerSlot)) * time.Second),
+		ValidatorsRoot:   [32]byte{'A'},
+		ValidAttestation: true,
+		DB:               db,
+		Optimistic:       true,
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	s := &Service{
+		ctx: ctx,
+		cfg: &config{
+			initialSync:         &mockSync.Sync{IsSyncing: false},
+			p2p:                 p,
+			beaconDB:            db,
+			chain:               chain,
+			clock:               startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
+			attestationNotifier: (&mockChain.ChainService{}).OperationNotifier(),
+		},
+		blkRootToPendingAtts:             make(map[[32]byte][]ethpb.SignedAggregateAttAndProof),
+		seenUnAggregatedAttestationCache: lruwrpr.New(10),
+		signatureChan:                    make(chan *signatureVerifier, verifierLimit),
+	}
+	s.initCaches()
+	go s.verifierRoutine()
+
+	digest, err := s.currentForkDigest()
+	require.NoError(t, err)
+
+	blk := util.NewBeaconBlock()
+	blk.Block.Slot = 1
+	util.SaveBlock(t, ctx, db, blk)
+
+	validBlockRoot, err := blk.Block.HashTreeRoot()
+	require.NoError(t, err)
+	chain.FinalizedCheckPoint = &ethpb.Checkpoint{
+		Root:  validBlockRoot[:],
+		Epoch: 0,
+	}
+
+	validators := uint64(64)
+	savedState, keys := util.DeterministicGenesisState(t, validators)
+	require.NoError(t, savedState.SetSlot(1))
+	require.NoError(t, db.SaveState(context.Background(), savedState, validBlockRoot))
+	chain.State = savedState
+	committee, err := helpers.BeaconCommitteeFromState(ctx, savedState, 1, 0)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name string
+		msg  ethpb.Att
+		want bool
+	}{
+		{
+			name: "valid",
+			msg: &ethpb.SingleAttestation{
+				Data: &ethpb.AttestationData{
+					BeaconBlockRoot: validBlockRoot[:],
+					CommitteeIndex:  0,
+					Slot:            1,
+					Target: &ethpb.Checkpoint{
+						Epoch: 0,
+						Root:  validBlockRoot[:],
+					},
+					Source: &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
+				},
+				AttesterIndex: committee[0],
+			},
+			want: true,
+		},
+		{
+			name: "non-zero committee index in att data",
+			msg: &ethpb.SingleAttestation{
+				Data: &ethpb.AttestationData{
+					BeaconBlockRoot: validBlockRoot[:],
+					CommitteeIndex:  1,
+					Slot:            1,
+					Target: &ethpb.Checkpoint{
+						Epoch: 0,
+						Root:  validBlockRoot[:],
+					},
+					Source: &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
+				},
+				AttesterIndex: committee[0],
+			},
+			want: false,
+		},
+		{
+			name: "attesting index not in committee",
+			msg: &ethpb.SingleAttestation{
+				Data: &ethpb.AttestationData{
+					BeaconBlockRoot: validBlockRoot[:],
+					CommitteeIndex:  1,
+					Slot:            1,
+					Target: &ethpb.Checkpoint{
+						Epoch: 0,
+						Root:  validBlockRoot[:],
+					},
+					Source: &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
+				},
+				AttesterIndex: 999999,
+			},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			helpers.ClearCache()
+			com, err := helpers.BeaconCommitteeFromState(context.Background(), savedState, tt.msg.GetData().Slot, tt.msg.GetData().CommitteeIndex)
+			require.NoError(t, err)
+			domain, err := signing.Domain(savedState.Fork(), tt.msg.GetData().Target.Epoch, params.BeaconConfig().DomainBeaconAttester, savedState.GenesisValidatorsRoot())
+			require.NoError(t, err)
+			attRoot, err := signing.ComputeSigningRoot(tt.msg.GetData(), domain)
+			require.NoError(t, err)
+			tt.msg.SetSignature(keys[com[0]].Sign(attRoot[:]).Marshal())
+			buf := new(bytes.Buffer)
+			_, err = p.Encoding().EncodeGossip(buf, tt.msg)
+			require.NoError(t, err)
+			topic := fmt.Sprintf("/eth2/%x/beacon_attestation_1", digest)
+			m := &pubsub.Message{
+				Message: &pubsubpb.Message{
+					Data:  buf.Bytes(),
+					Topic: &topic,
+				},
 			}
 
 			res, err := s.validateCommitteeIndexBeaconAttestation(ctx, "", m)

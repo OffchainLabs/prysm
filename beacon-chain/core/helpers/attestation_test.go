@@ -308,6 +308,16 @@ func TestValidateNilAttestation(t *testing.T) {
 			},
 			errString: "",
 		},
+		{
+			name: "single attestation",
+			attestation: &ethpb.SingleAttestation{
+				Data: &ethpb.AttestationData{
+					Target: &ethpb.Checkpoint{},
+					Source: &ethpb.Checkpoint{},
+				},
+			},
+			errString: "",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

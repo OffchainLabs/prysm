@@ -66,7 +66,7 @@ func TestStartDiscV5_FindPeersWithSubnet(t *testing.T) {
 	genesisTime := time.Now()
 
 	bootNodeService := &Service{
-		cfg:                   &Config{UDPPort: 2000, TCPPort: 3000, QUICPort: 3000},
+		cfg:                   &Config{UDPPort: 2000, TCPPort: 3000, QUICPort: 3000, DisableLivenessCheck: true, PingInterval: testPingInterval},
 		genesisTime:           genesisTime,
 		genesisValidatorsRoot: genesisValidatorsRoot,
 	}
@@ -77,6 +77,10 @@ func TestStartDiscV5_FindPeersWithSubnet(t *testing.T) {
 	bootListener, err := bootNodeService.createListener(ipAddr, pkey)
 	require.NoError(t, err)
 	defer bootListener.Close()
+
+	// Allow bootnode's table to have its initial refresh. This allows
+	// inbound nodes to be added in.
+	time.Sleep(5 * time.Second)
 
 	bootNodeENR := bootListener.Self().String()
 
@@ -92,6 +96,8 @@ func TestStartDiscV5_FindPeersWithSubnet(t *testing.T) {
 			UDPPort:              uint(2000 + i),
 			TCPPort:              uint(3000 + i),
 			QUICPort:             uint(3000 + i),
+			PingInterval:         testPingInterval,
+			DisableLivenessCheck: true,
 		})
 
 		require.NoError(t, err)
@@ -133,6 +139,8 @@ func TestStartDiscV5_FindPeersWithSubnet(t *testing.T) {
 
 	cfg := &Config{
 		Discv5BootStrapAddrs: []string{bootNodeENR},
+		PingInterval:         testPingInterval,
+		DisableLivenessCheck: true,
 		MaxPeers:             30,
 		UDPPort:              2010,
 		TCPPort:              3010,

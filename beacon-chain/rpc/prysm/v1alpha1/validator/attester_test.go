@@ -31,11 +31,13 @@ import (
 )
 
 func TestProposeAttestation(t *testing.T) {
+	chainService := &mock.ChainService{}
 	attesterServer := &Server{
-		HeadFetcher:       &mock.ChainService{},
-		P2P:               &mockp2p.MockBroadcaster{},
-		AttPool:           attestations.NewPool(),
-		OperationNotifier: (&mock.ChainService{}).OperationNotifier(),
+		HeadFetcher:             chainService,
+		P2P:                     &mockp2p.MockBroadcaster{},
+		AttPool:                 attestations.NewPool(),
+		OperationNotifier:       (&mock.ChainService{}).OperationNotifier(),
+		AttestationStateFetcher: chainService,
 	}
 	head := util.NewBeaconBlock()
 	head.Block.Slot = 999
@@ -79,80 +81,18 @@ func TestProposeAttestation(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, state.SetSlot(params.BeaconConfig().SlotsPerEpoch+1))
 		require.NoError(t, state.SetValidators(validators))
+		chainService.State = state
 
-		cb := primitives.NewAttestationCommitteeBits()
-		cb.SetBitAt(0, true)
-		req := &ethpb.AttestationElectra{
+		req := &ethpb.SingleAttestation{
 			Signature: sig.Marshal(),
 			Data: &ethpb.AttestationData{
 				BeaconBlockRoot: root[:],
 				Source:          &ethpb.Checkpoint{Root: make([]byte, 32)},
 				Target:          &ethpb.Checkpoint{Root: make([]byte, 32)},
 			},
-			CommitteeBits: cb,
 		}
 		_, err = attesterServer.ProposeAttestationElectra(context.Background(), req)
 		assert.NoError(t, err)
-	})
-	t.Run("Electra - non-zero committee index", func(t *testing.T) {
-		state, err := util.NewBeaconStateElectra()
-		require.NoError(t, err)
-		require.NoError(t, state.SetSlot(params.BeaconConfig().SlotsPerEpoch+1))
-		require.NoError(t, state.SetValidators(validators))
-
-		cb := primitives.NewAttestationCommitteeBits()
-		cb.SetBitAt(0, true)
-		req := &ethpb.AttestationElectra{
-			Signature: sig.Marshal(),
-			Data: &ethpb.AttestationData{
-				BeaconBlockRoot: root[:],
-				Source:          &ethpb.Checkpoint{Root: make([]byte, 32)},
-				Target:          &ethpb.Checkpoint{Root: make([]byte, 32)},
-				CommitteeIndex:  1,
-			},
-			CommitteeBits: cb,
-		}
-		_, err = attesterServer.ProposeAttestationElectra(context.Background(), req)
-		assert.ErrorContains(t, "attestation data's committee index must be 0 but was 1", err)
-	})
-	t.Run("Electra - no committee bit set", func(t *testing.T) {
-		state, err := util.NewBeaconStateElectra()
-		require.NoError(t, err)
-		require.NoError(t, state.SetSlot(params.BeaconConfig().SlotsPerEpoch+1))
-		require.NoError(t, state.SetValidators(validators))
-
-		req := &ethpb.AttestationElectra{
-			Signature: sig.Marshal(),
-			Data: &ethpb.AttestationData{
-				BeaconBlockRoot: root[:],
-				Source:          &ethpb.Checkpoint{Root: make([]byte, 32)},
-				Target:          &ethpb.Checkpoint{Root: make([]byte, 32)},
-			},
-			CommitteeBits: primitives.NewAttestationCommitteeBits(),
-		}
-		_, err = attesterServer.ProposeAttestationElectra(context.Background(), req)
-		assert.ErrorContains(t, "exactly 1 committee index must be set but 0 were set", err)
-	})
-	t.Run("Electra - multiple committee bits set", func(t *testing.T) {
-		state, err := util.NewBeaconStateElectra()
-		require.NoError(t, err)
-		require.NoError(t, state.SetSlot(params.BeaconConfig().SlotsPerEpoch+1))
-		require.NoError(t, state.SetValidators(validators))
-
-		cb := primitives.NewAttestationCommitteeBits()
-		cb.SetBitAt(0, true)
-		cb.SetBitAt(1, true)
-		req := &ethpb.AttestationElectra{
-			Signature: sig.Marshal(),
-			Data: &ethpb.AttestationData{
-				BeaconBlockRoot: root[:],
-				Source:          &ethpb.Checkpoint{Root: make([]byte, 32)},
-				Target:          &ethpb.Checkpoint{Root: make([]byte, 32)},
-			},
-			CommitteeBits: cb,
-		}
-		_, err = attesterServer.ProposeAttestationElectra(context.Background(), req)
-		assert.ErrorContains(t, "exactly 1 committee index must be set but 2 were set", err)
 	})
 }
 

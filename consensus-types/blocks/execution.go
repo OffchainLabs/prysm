@@ -784,7 +784,10 @@ func PayloadToHeaderDeneb(payload interfaces.ExecutionData) (*enginev1.Execution
 	}, nil
 }
 
-var PayloadToHeaderElectra = PayloadToHeaderDeneb
+var (
+	PayloadToHeaderElectra = PayloadToHeaderDeneb
+	PayloadToHeaderFulu    = PayloadToHeaderDeneb
+)
 
 // IsEmptyExecutionData checks if an execution data is empty underneath. If a single field has
 // a non-zero value, this function will return false.

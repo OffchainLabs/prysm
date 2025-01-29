@@ -163,10 +163,6 @@ func (BeaconBlock) SetParentRoot(_ []byte) {
 	panic("implement me")
 }
 
-func (BeaconBlock) Copy() (interfaces.ReadOnlyBeaconBlock, error) {
-	panic("implement me")
-}
-
 type BeaconBlockBody struct{}
 
 func (BeaconBlockBody) RandaoReveal() [field_params.BLSSignatureLength]byte {

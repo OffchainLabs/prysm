@@ -119,6 +119,9 @@ type ReadOnlyValidator interface {
 	Copy() *ethpb.Validator
 	Slashed() bool
 	IsNil() bool
+	HasETH1WithdrawalCredentials() bool
+	HasCompoundingWithdrawalCredentials() bool
+	HasExecutionWithdrawalCredentials() bool
 }
 
 // ReadOnlyValidators defines a struct which only has read access to validators methods.

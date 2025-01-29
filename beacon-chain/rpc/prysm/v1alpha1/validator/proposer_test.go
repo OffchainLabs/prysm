@@ -661,8 +661,12 @@ func TestServer_GetBeaconBlock_Electra(t *testing.T) {
 	ed, err := blocks.NewWrappedExecutionData(payload)
 	require.NoError(t, err)
 	proposerServer.ExecutionEngineCaller = &mockExecution.EngineClient{
-		PayloadIDBytes:     &enginev1.PayloadIDBytes{1},
-		GetPayloadResponse: &blocks.GetPayloadResponse{ExecutionData: ed},
+		PayloadIDBytes: &enginev1.PayloadIDBytes{1},
+		GetPayloadResponse: &blocks.GetPayloadResponse{ExecutionData: ed, ExecutionRequests: &enginev1.ExecutionRequests{
+			Withdrawals:    wr,
+			Deposits:       dr,
+			Consolidations: cr,
+		}},
 	}
 
 	randaoReveal, err := util.RandaoReveal(beaconState, 0, privKeys)
@@ -786,8 +790,12 @@ func TestServer_GetBeaconBlock_Fulu(t *testing.T) {
 	ed, err := blocks.NewWrappedExecutionData(payload)
 	require.NoError(t, err)
 	proposerServer.ExecutionEngineCaller = &mockExecution.EngineClient{
-		PayloadIDBytes:     &enginev1.PayloadIDBytes{1},
-		GetPayloadResponse: &blocks.GetPayloadResponse{ExecutionData: ed},
+		PayloadIDBytes: &enginev1.PayloadIDBytes{1},
+		GetPayloadResponse: &blocks.GetPayloadResponse{ExecutionData: ed, ExecutionRequests: &enginev1.ExecutionRequests{
+			Withdrawals:    wr,
+			Deposits:       dr,
+			Consolidations: cr,
+		}},
 	}
 
 	randaoReveal, err := util.RandaoReveal(beaconState, 0, privKeys)

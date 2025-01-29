@@ -7,13 +7,14 @@ import (
 	"net/http"
 
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/network/httputil"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 )
 
 func (c *beaconApiValidatorClient) proposeAttestation(ctx context.Context, attestation *ethpb.Attestation) (*ethpb.AttestResponse, error) {
-	if err := validateNilAttestation(attestation); err != nil {
+	if err := helpers.ValidateNilAttestation(attestation); err != nil {
 		return nil, err
 	}
 	marshalledAttestation, err := json.Marshal(jsonifyAttestations([]*ethpb.Attestation{attestation}))
@@ -58,11 +59,11 @@ func (c *beaconApiValidatorClient) proposeAttestation(ctx context.Context, attes
 	return &ethpb.AttestResponse{AttestationDataRoot: attestationDataRoot[:]}, nil
 }
 
-func (c *beaconApiValidatorClient) proposeAttestationElectra(ctx context.Context, attestation *ethpb.AttestationElectra) (*ethpb.AttestResponse, error) {
-	if err := validateNilAttestation(attestation); err != nil {
+func (c *beaconApiValidatorClient) proposeAttestationElectra(ctx context.Context, attestation *ethpb.SingleAttestation) (*ethpb.AttestResponse, error) {
+	if err := helpers.ValidateNilAttestation(attestation); err != nil {
 		return nil, err
 	}
-	marshalledAttestation, err := json.Marshal(jsonifyAttestationsElectra([]*ethpb.AttestationElectra{attestation}))
+	marshalledAttestation, err := json.Marshal(jsonifySingleAttestations([]*ethpb.SingleAttestation{attestation}))
 	if err != nil {
 		return nil, err
 	}
@@ -83,29 +84,4 @@ func (c *beaconApiValidatorClient) proposeAttestationElectra(ctx context.Context
 	}
 
 	return &ethpb.AttestResponse{AttestationDataRoot: attestationDataRoot[:]}, nil
-}
-
-func validateNilAttestation(attestation ethpb.Att) error {
-	if attestation == nil || attestation.IsNil() {
-		return errors.New("attestation can't be nil")
-	}
-	if attestation.GetData().Source == nil {
-		return errors.New("attestation's source can't be nil")
-	}
-	if attestation.GetData().Target == nil {
-		return errors.New("attestation's target can't be nil")
-	}
-	v := attestation.Version()
-	if len(attestation.GetAggregationBits()) == 0 {
-		return errors.New("attestation's bitfield can't be nil")
-	}
-	if len(attestation.GetSignature()) == 0 {
-		return errors.New("attestation signature can't be nil")
-	}
-	if v >= version.Electra {
-		if len(attestation.CommitteeBitsVal().BitIndices()) == 0 {
-			return errors.New("attestation committee bits can't be nil")
-		}
-	}
-	return nil
 }

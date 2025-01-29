@@ -223,6 +223,39 @@ func operationEventsFixtures(t *testing.T) (*topicRequest, []*feed.Event) {
 			},
 		},
 		&feed.Event{
+			Type: operation.AttesterSlashingReceived,
+			Data: &operation.AttesterSlashingReceivedData{
+				AttesterSlashing: &eth.AttesterSlashingElectra{
+					Attestation_1: &eth.IndexedAttestationElectra{
+						AttestingIndices: []uint64{0, 1},
+						Data: &eth.AttestationData{
+							BeaconBlockRoot: make([]byte, fieldparams.RootLength),
+							Source: &eth.Checkpoint{
+								Root: make([]byte, fieldparams.RootLength),
+							},
+							Target: &eth.Checkpoint{
+								Root: make([]byte, fieldparams.RootLength),
+							},
+						},
+						Signature: make([]byte, fieldparams.BLSSignatureLength),
+					},
+					Attestation_2: &eth.IndexedAttestationElectra{
+						AttestingIndices: []uint64{0, 1},
+						Data: &eth.AttestationData{
+							BeaconBlockRoot: make([]byte, fieldparams.RootLength),
+							Source: &eth.Checkpoint{
+								Root: make([]byte, fieldparams.RootLength),
+							},
+							Target: &eth.Checkpoint{
+								Root: make([]byte, fieldparams.RootLength),
+							},
+						},
+						Signature: make([]byte, fieldparams.BLSSignatureLength),
+					},
+				},
+			},
+		},
+		&feed.Event{
 			Type: operation.ProposerSlashingReceived,
 			Data: &operation.ProposerSlashingReceivedData{
 				ProposerSlashing: &eth.ProposerSlashing{
@@ -461,7 +494,7 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 				defer testSync.cleanup()
 
 				st := tc.getState()
-				v := &eth.Validator{ExitEpoch: math.MaxUint64, EffectiveBalance: params.BeaconConfig().MinActivationBalance}
+				v := &eth.Validator{ExitEpoch: math.MaxUint64, EffectiveBalance: params.BeaconConfig().MinActivationBalance, WithdrawalCredentials: make([]byte, 32)}
 				require.NoError(t, st.SetValidators([]*eth.Validator{v}))
 				currentSlot := primitives.Slot(0)
 				// to avoid slot processing
@@ -544,7 +577,7 @@ func TestStuckReaderScenarios(t *testing.T) {
 
 func wedgedWriterTestCase(t *testing.T, queueDepth func([]*feed.Event) int) {
 	topics, events := operationEventsFixtures(t)
-	require.Equal(t, 8, len(events))
+	require.Equal(t, 9, len(events))
 
 	// set eventFeedDepth to a number lower than the events we intend to send to force the server to drop the reader.
 	stn := mockChain.NewEventFeedWrapper()
