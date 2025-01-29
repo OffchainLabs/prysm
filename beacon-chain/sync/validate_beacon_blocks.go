@@ -293,8 +293,11 @@ func (s *Service) validatePhase0Block(ctx context.Context, blk interfaces.ReadOn
 		return nil, err
 	}
 
-	if err := blocks.VerifyBlockSignatureUsingCurrentFork(parentState, blk, blockRoot); err != nil {
-		return nil, err
+	if !features.Get().UseRLNC {
+		// TODO: verify the signature when using RLNC.
+		if err := blocks.VerifyBlockSignatureUsingCurrentFork(parentState, blk, blockRoot); err != nil {
+			return nil, err
+		}
 	}
 	// In the event the block is more than an epoch ahead from its
 	// parent state, we have to advance the state forward.
