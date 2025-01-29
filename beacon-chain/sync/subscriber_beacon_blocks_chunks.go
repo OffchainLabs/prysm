@@ -3,6 +3,7 @@ package sync
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
 	core_chunks "github.com/OffchainLabs/prysm/v6/beacon-chain/core/chunks"
@@ -11,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync/rlnc"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/chunks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
@@ -193,9 +195,14 @@ func (s *Service) reconstructBlockFromChunk(ctx context.Context, chunk interface
 		},
 	})
 
-	if err := s.beaconBlockSubscriber(ctx, protoBlock); err != nil {
-		logrus.WithError(err).Error("Could not handle p2p pubsub")
-	}
+	// create a new context to process the block
+	go func() {
+		slotCtx, cancel := context.WithTimeout(context.Background(), time.Duration(params.BeaconConfig().SecondsPerSlot)*time.Second)
+		defer cancel()
+		if err := s.beaconBlockSubscriber(slotCtx, protoBlock); err != nil {
+			logrus.WithError(err).Error("Could not handle p2p pubsub")
+		}
+	}()
 }
 
 func (s *Service) broadcastBlockChunk(ctx context.Context, chunk interfaces.ReadOnlyBeaconBlockChunk) {
