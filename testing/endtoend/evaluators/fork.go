@@ -53,7 +53,7 @@ var CapellaForkTransition = types.Evaluator{
 	Evaluation: capellaForkOccurs,
 }
 
-// DenebForkTransition ensures that the Deneb hard fork has occured successfully
+// DenebForkTransition ensures that the Deneb hard fork has occurred successfully
 var DenebForkTransition = types.Evaluator{
 	Name: "deneb_fork_transition_%d",
 	Policy: func(e primitives.Epoch) bool {
@@ -63,7 +63,7 @@ var DenebForkTransition = types.Evaluator{
 	Evaluation: denebForkOccurs,
 }
 
-// ElectraForkTransition ensures that the electra hard fork has occured successfully
+// ElectraForkTransition ensures that the electra hard fork has occurred successfully
 var ElectraForkTransition = types.Evaluator{
 	Name: "electra_fork_transition_%d",
 	Policy: func(e primitives.Epoch) bool {
