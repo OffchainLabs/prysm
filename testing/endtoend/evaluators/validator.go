@@ -172,6 +172,12 @@ func validatorsParticipating(_ *types.EvaluationContext, conns ...*grpc.ClientCo
 				return err
 			}
 			respPrevEpochParticipation = st.PreviousEpochParticipation
+		case version.String(version.Deneb):
+			st := &structs.BeaconStateDeneb{}
+			if err = json.Unmarshal(resp.Data, st); err != nil {
+				return err
+			}
+			respPrevEpochParticipation = st.PreviousEpochParticipation
 		default:
 			return fmt.Errorf("unrecognized version %s", resp.Version)
 		}
