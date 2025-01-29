@@ -25,7 +25,7 @@ import (
 
 // https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/p2p-interface.md#the-gossip-domain-gossipsub
 func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubsub.Message) (pubsub.ValidationResult, error) {
-	dataColumnSidecarVerificationRequestsCounter.Inc();
+	dataColumnSidecarVerificationRequestsCounter.Inc()
 	receivedTime := prysmTime.Now()
 
 	// Always accept messages our own messages.

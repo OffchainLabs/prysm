@@ -1535,7 +1535,8 @@ func TestBuildBwbSlices(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name string
+		name      string
+		batchSize int
 
 		// input
 		missingColumnsWithCommitments []*missingColumnsWithCommitment
@@ -1545,21 +1546,25 @@ func TestBuildBwbSlices(t *testing.T) {
 	}{
 		{
 			name:                          "no item",
+			batchSize:                     32,
 			missingColumnsWithCommitments: []*missingColumnsWithCommitment{},
 			bwbSlices:                     []bwbSlice{},
 		},
 		{
 			name:                          "one item, - no missing columns",
+			batchSize:                     32,
 			missingColumnsWithCommitments: []*missingColumnsWithCommitment{{areCommitments: true, missingColumns: map[uint64]bool{}}},
 			bwbSlices:                     []bwbSlice{{start: 0, end: 0, dataColumns: map[uint64]bool{}}},
 		},
 		{
 			name:                          "one item - some missing columns",
+			batchSize:                     32,
 			missingColumnsWithCommitments: []*missingColumnsWithCommitment{{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}}},
 			bwbSlices:                     []bwbSlice{{start: 0, end: 0, dataColumns: map[uint64]bool{1: true, 3: true, 5: true}}},
 		},
 		{
-			name: "two items - no break",
+			name:      "two items - no break",
+			batchSize: 32,
 			missingColumnsWithCommitments: []*missingColumnsWithCommitment{
 				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
 				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
@@ -1567,7 +1572,8 @@ func TestBuildBwbSlices(t *testing.T) {
 			bwbSlices: []bwbSlice{{start: 0, end: 1, dataColumns: map[uint64]bool{1: true, 3: true, 5: true}}},
 		},
 		{
-			name: "three items - no break",
+			name:      "three items - no break",
+			batchSize: 32,
 			missingColumnsWithCommitments: []*missingColumnsWithCommitment{
 				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
 				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
@@ -1576,7 +1582,8 @@ func TestBuildBwbSlices(t *testing.T) {
 			bwbSlices: []bwbSlice{{start: 0, end: 2, dataColumns: map[uint64]bool{1: true, 3: true, 5: true}}},
 		},
 		{
-			name: "five items - columns break",
+			name:      "five items - columns break",
+			batchSize: 32,
 			missingColumnsWithCommitments: []*missingColumnsWithCommitment{
 				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
 				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
@@ -1591,7 +1598,8 @@ func TestBuildBwbSlices(t *testing.T) {
 			},
 		},
 		{
-			name: "seven items - gap",
+			name:      "seven items - gap",
+			batchSize: 32,
 			missingColumnsWithCommitments: []*missingColumnsWithCommitment{
 				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}}, // 0
 				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}}, // 1
@@ -1606,7 +1614,8 @@ func TestBuildBwbSlices(t *testing.T) {
 			},
 		},
 		{
-			name: "seven items - only breaks",
+			name:      "seven items - only breaks",
+			batchSize: 32,
 			missingColumnsWithCommitments: []*missingColumnsWithCommitment{
 				{areCommitments: true, missingColumns: map[uint64]bool{}},                          // 0
 				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}}, // 1
@@ -1623,7 +1632,8 @@ func TestBuildBwbSlices(t *testing.T) {
 			},
 		},
 		{
-			name: "thirteen items - some blocks without commitments",
+			name:      "thirteen items - some blocks without commitments",
+			batchSize: 32,
 			missingColumnsWithCommitments: []*missingColumnsWithCommitment{
 				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}}, // 0
 				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}}, // 1
@@ -1639,12 +1649,49 @@ func TestBuildBwbSlices(t *testing.T) {
 				{areCommitments: true, missingColumns: map[uint64]bool{1: true}}, // 8
 				{areCommitments: false, missingColumns: nil},                     // 9
 				{areCommitments: false, missingColumns: nil},                     // 10
-
 			},
 			bwbSlices: []bwbSlice{
 				{start: 0, end: 2, dataColumns: map[uint64]bool{1: true, 3: true, 5: true}},
 				{start: 3, end: 6, dataColumns: map[uint64]bool{2: true, 4: true}},
 				{start: 7, end: 10, dataColumns: map[uint64]bool{1: true}},
+			},
+		},
+		{
+			name:      "five items - no break, limiting batch size",
+			batchSize: 3,
+			missingColumnsWithCommitments: []*missingColumnsWithCommitment{
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+			},
+			bwbSlices: []bwbSlice{
+				{start: 0, end: 2, dataColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+				{start: 3, end: 4, dataColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+			},
+		},
+		{
+			name:      "eight items - columns break, limiting batch size",
+			batchSize: 3,
+			missingColumnsWithCommitments: []*missingColumnsWithCommitment{
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{}},
+				{areCommitments: false, missingColumns: nil},
+				{areCommitments: false, missingColumns: nil},
+				{areCommitments: true, missingColumns: map[uint64]bool{}},
+			},
+			bwbSlices: []bwbSlice{
+				{start: 0, end: 1, dataColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+				{start: 2, end: 4, dataColumns: map[uint64]bool{1: true, 3: true}},
+				{start: 5, end: 5, dataColumns: map[uint64]bool{1: true, 3: true}},
+				{start: 6, end: 8, dataColumns: map[uint64]bool{}},
+				{start: 9, end: 9, dataColumns: map[uint64]bool{}},
 			},
 		},
 	}
@@ -1690,7 +1737,7 @@ func TestBuildBwbSlices(t *testing.T) {
 				missingColumnsByRoot: missingColumnsByRoot,
 			}
 
-			bwbSlices, err := buildBwbSlices(wrappedBwbsMissingColumns)
+			bwbSlices, err := buildBwbSlices(wrappedBwbsMissingColumns, tt.batchSize)
 			require.NoError(t, err)
 			require.Equal(t, true, areBwbSlicesEqual(tt.bwbSlices, bwbSlices))
 		})
@@ -1730,7 +1777,7 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 		peersParams []peerParams
 
 		// The max count of data columns that will be requested in each batch.
-		batchSize uint64
+		batchSize int
 
 		// OUTPUTS
 		// -------

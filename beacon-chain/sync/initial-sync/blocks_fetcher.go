@@ -642,7 +642,7 @@ type bwbSlice struct {
 
 // buildBwbSlices builds slices of `bwb` that aims to optimize the count of
 // by range requests needed to fetch missing data columns.
-func buildBwbSlices(wrappedBwbsMissingColumns *bwbsMissingColumns) ([]bwbSlice, error) {
+func buildBwbSlices(wrappedBwbsMissingColumns *bwbsMissingColumns, batchsize int) ([]bwbSlice, error) {
 	wrappedBwbsMissingColumns.mu.Lock()
 	defer wrappedBwbsMissingColumns.mu.Unlock()
 
@@ -674,6 +674,22 @@ func buildBwbSlices(wrappedBwbsMissingColumns *bwbsMissingColumns) ([]bwbSlice, 
 	result := make([]bwbSlice, 0, 1)
 	for currentIndexWithoutOffest, bwb := range bwbs[offset:] {
 		currentIndex := currentIndexWithoutOffest + offset
+
+		// Check if the batch size is reached.
+		if currentIndex-previousStartIndex == batchsize {
+			// Append the slice to the result.
+			slice := bwbSlice{
+				start:       previousStartIndex,
+				end:         currentIndex - 1,
+				dataColumns: previousMissingDataColumns,
+			}
+
+			result = append(result, slice)
+
+			previousStartIndex = currentIndex
+			continue
+		}
+
 		// Extract the ROBlock from the blockWithROBlob.
 		currentROBlock := bwb.Block
 
@@ -873,7 +889,6 @@ func (f *blocksFetcher) fetchBwbSliceFromPeers(
 	identifier int,
 	wrappedBwbsMissingColumns *bwbsMissingColumns,
 	peers []peer.ID,
-	batchSize uint64,
 	bwbSlice bwbSlice) error {
 	// Filter out slices that are already complete.
 	if len(bwbSlice.dataColumns) == 0 {
@@ -911,8 +926,6 @@ func (f *blocksFetcher) fetchBwbSliceFromPeers(
 		return errors.Wrap(err, "select peers to fetch data columns from")
 	}
 
-	var wg sync.WaitGroup
-
 	for peer, dataColumnsToFetch := range dataColumnsToFetchByPeer {
 		// Extract peer custody columns.
 		peerCustodyColumns := dataColumnsByAdmissiblePeer[peer]
@@ -933,18 +946,16 @@ func (f *blocksFetcher) fetchBwbSliceFromPeers(
 		// Sort data columns.
 		slices.Sort[[]uint64](dataColumnsToFetch)
 
-		// Build the requests.
-		requests := buildDataColumnSidecarsByRangeRequests(startSlot, blockCount, dataColumnsToFetch, batchSize)
+		// Build the request.
 
-		for _, request := range requests {
-			// Fetch the missing data columns from the peers.
-			wg.Add(1)
-			go f.fetchDataColumnFromPeer(ctx, &wg, identifier, wrappedBwbsMissingColumns, blocksByRoot, indicesByRoot, peer, peerCustodyColumns, request)
+		request := &p2ppb.DataColumnSidecarsByRangeRequest{
+			StartSlot: startSlot,
+			Count:     blockCount,
+			Columns:   dataColumnsToFetch,
 		}
-	}
 
-	// Wait for all requests to finish.
-	wg.Wait()
+		f.fetchDataColumnFromPeer(ctx, identifier, wrappedBwbsMissingColumns, blocksByRoot, indicesByRoot, peer, peerCustodyColumns, request)
+	}
 
 	return nil
 }
@@ -966,7 +977,7 @@ func (f *blocksFetcher) fetchDataColumnsFromPeers(
 	bwbs []blocks.BlockWithROBlobs,
 	peers []peer.ID,
 	delay time.Duration,
-	batchSize uint64,
+	batchSize int,
 ) error {
 	// Time to wait if no peers are available.
 	const (
@@ -1030,13 +1041,14 @@ func (f *blocksFetcher) fetchDataColumnsFromPeers(
 
 	for len(missingColumnsByRoot) > 0 {
 		// Compute the optimal slices of `bwb` to minimize the number of by range returned columns.
-		bwbSlices, err := buildBwbSlices(wrappedBwbsMissingColumns)
+		bwbSlices, err := buildBwbSlices(wrappedBwbsMissingColumns, batchSize)
 		if err != nil {
 			return errors.Wrap(err, "build bwb slices")
 		}
 
+		// TODO: Parallelize `fetchBwbSliceFromPeers`?
 		for _, bwbSlice := range bwbSlices {
-			if err := f.fetchBwbSliceFromPeers(ctx, identifier, wrappedBwbsMissingColumns, peers, batchSize, bwbSlice); err != nil {
+			if err := f.fetchBwbSliceFromPeers(ctx, identifier, wrappedBwbsMissingColumns, peers, bwbSlice); err != nil {
 				return errors.Wrap(err, "fetch BWB slice from peers")
 			}
 		}
@@ -1090,12 +1102,11 @@ func sortBwbsByColumnIndex(bwbs []blocks.BlockWithROBlobs) {
 	}
 }
 
-// waitForPeersForDataColumns filters `peers` to only include peers that are:
-// - synced up to `lastSlot`,
-// - custody all columns in `dataColumns`, and
+// waitForPeersForDataColumns returns a map, where the key of the map is the peer, the value is the custody columns of the peer.
+// It uses only peers
+// - synced up to `lastSlot`, and
 // - have bandwidth to serve `blockCount` blocks.
-// It waits until at least one peer is available for all needed columns.
-// It returns a map, where the key of the map is the peer, the value is the custody columns of the peer.
+// It waits until at least one peer per data column is available.
 func (f *blocksFetcher) waitForPeersForDataColumns(
 	reqIdentifier int,
 	peers []peer.ID,
@@ -1276,7 +1287,6 @@ func (f *blocksFetcher) processDataColumns(
 // - `missingColumnsByRoot` by removing the fetched data columns.
 func (f *blocksFetcher) fetchDataColumnFromPeer(
 	ctx context.Context,
-	wg *sync.WaitGroup,
 	identifier int,
 	wrappedBwbsMissingColumns *bwbsMissingColumns,
 	blocksByRoot map[[fieldparams.RootLength]byte]blocks.ROBlock,
@@ -1285,8 +1295,6 @@ func (f *blocksFetcher) fetchDataColumnFromPeer(
 	peerCustodyColumns map[uint64]bool,
 	request *p2ppb.DataColumnSidecarsByRangeRequest,
 ) {
-	defer wg.Done()
-
 	// Extract the number of columns.
 	numberOfColumns := params.BeaconConfig().NumberOfColumns
 

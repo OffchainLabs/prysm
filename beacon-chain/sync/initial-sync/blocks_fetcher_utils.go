@@ -566,9 +566,15 @@ func (f *blocksFetcher) admissiblePeersForCustodyGroup(
 // selectPeersToFetchDataColumnsFrom implements greedy algorithm in order to select peers to fetch data columns from.
 // https://en.wikipedia.org/wiki/Set_cover_problem#Greedy_algorithm
 func selectPeersToFetchDataColumnsFrom(
-	neededDataColumns map[uint64]bool,
+	neededDataColumnsOriginal map[uint64]bool,
 	dataColumnsByPeer map[peer.ID]map[uint64]bool,
 ) (map[peer.ID][]uint64, error) {
+	// Make a copy since we will modify it.
+	neededDataColumns := make(map[uint64]bool, len(neededDataColumnsOriginal))
+	for dataColumn, value := range neededDataColumnsOriginal {
+		neededDataColumns[dataColumn] = value
+	}
+
 	dataColumnsFromSelectedPeers := make(map[peer.ID][]uint64)
 
 	// Filter `dataColumnsByPeer` to only contain needed data columns.
@@ -624,30 +630,4 @@ func selectPeersToFetchDataColumnsFrom(
 	}
 
 	return dataColumnsFromSelectedPeers, nil
-}
-
-// buildDataColumnSidecarsByRangeRequests builds a list of data column sidecars by range requests.
-// Each request contains at most `batchSize` items.
-func buildDataColumnSidecarsByRangeRequests(
-	startSlot primitives.Slot,
-	count uint64,
-	columns []uint64,
-	batchSize uint64,
-) []*p2ppb.DataColumnSidecarsByRangeRequest {
-	batches := make([]*p2ppb.DataColumnSidecarsByRangeRequest, 0)
-
-	for i := uint64(0); i < count; i += batchSize {
-		localStartSlot := startSlot + primitives.Slot(i)
-		localCount := min(batchSize, uint64(startSlot)+count-uint64(localStartSlot))
-
-		batch := &p2ppb.DataColumnSidecarsByRangeRequest{
-			StartSlot: localStartSlot,
-			Count:     localCount,
-			Columns:   columns,
-		}
-
-		batches = append(batches, batch)
-	}
-
-	return batches
 }
