@@ -725,7 +725,7 @@ func (s *Store) validatorEntries(ctx context.Context, blockRoot [32]byte) ([]*et
 		idxBkt := tx.Bucket(blockRootValidatorHashesBucket)
 		valKey := idxBkt.Get(blockRoot[:])
 		if len(valKey) == 0 {
-			return errors.Errorf("invalid compressed validator keys length")
+			return errors.Errorf("validator keys not found for given block root: %x", blockRoot)
 		}
 
 		// decompress the keys and check if they are of proper length.
