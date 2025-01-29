@@ -40,6 +40,23 @@ func TestIsLegacyDepositProcessPeriod(t *testing.T) {
 			want: true,
 		},
 		{
+			name: "nil canonicalEth1Data defaults to legacy",
+			state: func() state.BeaconState {
+				st, err := state_native.InitializeFromProtoDeneb(&ethpb.BeaconStateDeneb{
+					Eth1Data: &ethpb.Eth1Data{
+						BlockHash:    []byte("0x0"),
+						DepositRoot:  make([]byte, 32),
+						DepositCount: 5,
+					},
+					Eth1DepositIndex: 1,
+				})
+				require.NoError(t, err)
+				return st
+			}(),
+			canonicalEth1Data: nil,
+			want:              true,
+		},
+		{
 			name: "post-electra, pending deposits from pre-electra",
 			state: func() state.BeaconState {
 				st, err := state_native.InitializeFromProtoElectra(&ethpb.BeaconStateElectra{

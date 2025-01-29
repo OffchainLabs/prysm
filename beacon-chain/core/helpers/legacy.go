@@ -14,6 +14,12 @@ func IsLegacyDepositProcessPeriod(beaconState state.BeaconState, canonicalEth1Da
 		return true
 	}
 
+	// Should not happen, but if the canonicalEth1Data is nil
+	// default to legacy
+	if canonicalEth1Data == nil {
+		return true
+	}
+
 	// Handle the transition period between the legacy and the new deposit process.
 	requestsStartIndex, err := beaconState.DepositRequestsStartIndex()
 	if err != nil {
