@@ -1,0 +1,33 @@
+repos:
+  # First run code formatters
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.1.0
+    hooks:
+      - id: end-of-file-fixer # ensures that a file is either empty, or ends with one newline
+        exclude_types: ["proto"]
+      - id: mixed-line-ending # ensures that a file doesn't contain a mix of LF and CRLF
+      - id: no-commit-to-branch # Protect specific branches (default: main/master) from direct checkins
+
+  - repo: local
+    hooks:
+      - id: gci
+        name: goimports
+        entry: bash -c 'command -v gci >/dev/null 2>&1 || go install github.com/daixiang0/gci@latest; gci write --skip-generated -s standard -s default "$@"' --
+        language: golang
+        files: \.go$
+
+  - repo: https://github.com/dnephin/pre-commit-golang
+    rev: v0.4.0
+    hooks:
+      - id: go-fmt
+        args: [ -w, -s ] # simplify code and write result to (source) file instead of stdout
+      - id: go-mod-tidy
+        files: go.mod
+
+  # Fix bazel build files
+  - repo: local
+    hooks:
+      - id: gazelle
+        name: bazel-fix
+        entry: .pre-commit/fixbazel.sh
+        language: system
