@@ -133,6 +133,8 @@ var appHelpFlagGroups = []flagGroup{
 			flags.MinBuilderBid,
 			flags.MinBuilderDiff,
 			flags.JwtId,
+			flags.BeaconDBPruning,
+			flags.PrunerRetentionEpochs,
 			checkpoint.BlockPath,
 			checkpoint.StatePath,
 			checkpoint.RemoteURL,
