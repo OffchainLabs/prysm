@@ -38,8 +38,8 @@ func (vs *Server) eth1DataMajorityVote(ctx context.Context, beaconState state.Be
 	defer cancel()
 
 	// post eth1 deposits, the Eth 1 data will then be frozen
-	if !helpers.IsLegacyDepositProcessPeriod(beaconState, vs.HeadFetcher.HeadETH1Data()) {
-		return vs.HeadFetcher.HeadETH1Data(), nil
+	if !helpers.IsLegacyDepositProcessPeriod(beaconState, beaconState.Eth1Data()) {
+		return beaconState.Eth1Data(), nil
 	}
 
 	slot := beaconState.Slot()
