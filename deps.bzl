@@ -760,8 +760,9 @@ def prysm_deps():
         patches = [
             "//third_party:com_github_ethereum_go_ethereum_secp256k1.patch",
         ],
-        sum = "h1:8hl57x77HSUo+cXExrURjU/w1VhL+ShCTJrTwcCQSe4=",
-        version = "v1.14.12",
+        replace = "github.com/s1na/go-ethereum",
+        sum = "h1:JhhUqdf0gf73zSdT76iXR5MUj9AcmCTYP0W26R4qRSg=",
+        version = "v1.8.4-0.20241219180720-88dadb7c83c4",
     )
     go_repository(
         name = "com_github_ethereum_go_verkle",
