@@ -29,6 +29,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/kv"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/pruner"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/slasherkv"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/execution"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice"
@@ -366,6 +367,13 @@ func registerServices(cliCtx *cli.Context, beacon *BeaconNode, synchronizer *sta
 		log.Debugln("Registering Prometheus Service")
 		if err := beacon.registerPrometheusService(cliCtx); err != nil {
 			return errors.Wrap(err, "could not register prometheus service")
+		}
+	}
+
+	if cliCtx.Bool(flags.BeaconDBPruning.Name) {
+		log.Debugln("Registering Pruner Service")
+		if err := beacon.registerPrunerService(cliCtx); err != nil {
+			return errors.Wrap(err, "could not register pruner service")
 		}
 	}
 
@@ -1087,6 +1095,34 @@ func (b *BeaconNode) registerBuilderService(cliCtx *cli.Context) error {
 		return err
 	}
 	return b.services.RegisterService(svc)
+}
+
+func (b *BeaconNode) registerPrunerService(cliCtx *cli.Context) error {
+	genesisTimeUnix := params.BeaconConfig().MinGenesisTime + params.BeaconConfig().GenesisDelay
+	var backfillService *backfill.Service
+	if err := b.services.FetchService(&backfillService); err != nil {
+		return err
+	}
+
+	var opts []pruner.ServiceOption
+	if cliCtx.IsSet(flags.PrunerRetentionEpochs.Name) {
+		uv := cliCtx.Uint64(flags.PrunerRetentionEpochs.Name)
+		opts = append(opts, pruner.WithRetentionPeriod(primitives.Epoch(uv)))
+	}
+
+	p, err := pruner.New(
+		cliCtx.Context,
+		b.db,
+		genesisTimeUnix,
+		initSyncWaiter(cliCtx.Context, b.initialSyncComplete),
+		backfillService.WaitForCompletion,
+		opts...,
+	)
+	if err != nil {
+		return err
+	}
+
+	return b.services.RegisterService(p)
 }
 
 func (b *BeaconNode) RegisterBackfillService(cliCtx *cli.Context, bfs *backfill.Store) error {

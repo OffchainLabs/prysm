@@ -1,3 +1,3 @@
 ### Added
 
-- Update slasher service to Electra
+- Update slasher service to Electra.
