@@ -192,6 +192,23 @@ func TestBlobs(t *testing.T) {
 		require.Equal(t, false, resp.ExecutionOptimistic)
 		require.Equal(t, false, resp.Finalized)
 	})
+	t.Run("slot not found", func(t *testing.T) {
+		u := "http://foo.example/122"
+		request := httptest.NewRequest("GET", u, nil)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+		s.Blocker = &lookup.BeaconDbBlocker{
+			ChainInfoFetcher: &mockChain.ChainService{Block: denebBlock},
+			BeaconDB:         db,
+			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
+				Genesis: time.Now(),
+			},
+			BlobStorage: bs,
+		}
+		s.Blobs(writer, request)
+
+		assert.Equal(t, http.StatusNotFound, writer.Code)
+	})
 	t.Run("one blob only", func(t *testing.T) {
 		u := "http://foo.example/123?indices=2"
 		request := httptest.NewRequest("GET", u, nil)

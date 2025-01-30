@@ -58,6 +58,10 @@ func (s *Server) Blobs(w http.ResponseWriter, r *http.Request) {
 		httputil.HandleError(w, "Could not fetch block: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+	if blk == nil {
+		httputil.HandleError(w, "Block not found", http.StatusNotFound)
+		return
+	}
 
 	if httputil.RespondWithSsz(r) {
 		sszResp, err := buildSidecarsSSZResponse(verifiedBlobs)
