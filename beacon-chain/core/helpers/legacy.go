@@ -5,8 +5,8 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 )
 
-// DepositRequestHaveStarted determines if the deposit requests have started
-func DepositRequestHaveStarted(beaconState state.BeaconState) bool {
+// DepositRequestsHaveStarted determines if the deposit requests have started
+func DepositRequestsHaveStarted(beaconState state.BeaconState) bool {
 	if beaconState.Version() >= version.Electra {
 		requestsStartIndex, err := beaconState.DepositRequestsStartIndex()
 		if err == nil {

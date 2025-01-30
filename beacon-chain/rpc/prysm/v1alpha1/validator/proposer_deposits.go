@@ -94,7 +94,7 @@ func (vs *Server) deposits(
 	}
 
 	// skip legacy deposits if eth1 deposit index is already at the index of deposit requests start
-	if helpers.DepositRequestHaveStarted(beaconState) {
+	if helpers.DepositRequestsHaveStarted(beaconState) {
 		return []*ethpb.Deposit{}, nil
 	}
 
