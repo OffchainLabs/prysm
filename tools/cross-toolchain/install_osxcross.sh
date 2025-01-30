@@ -13,4 +13,3 @@ curl -sLo tarballs/${OSX_SDK}.tar.xz "https://prysmaticlabs.com/uploads/${OSX_SD
 
 echo "${OSX_SDK_SUM}"  "tarballs/${OSX_SDK}.tar.xz" | sha256sum -c -
 yes "" | SDK_VERSION=12.3 OSX_VERSION_MIN=11.0 OCDEBUG=1 ./build.sh
-

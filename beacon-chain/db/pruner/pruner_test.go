@@ -5,17 +5,15 @@ import (
 	"testing"
 	"time"
 
+	dbtest "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"github.com/prysmaticlabs/prysm/v5/testing/util"
 	slottest "github.com/prysmaticlabs/prysm/v5/time/slots/testing"
 	"github.com/sirupsen/logrus"
-
-	dbtest "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 

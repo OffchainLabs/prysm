@@ -15,8 +15,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	gcache "github.com/patrickmn/go-cache"
 	"github.com/pkg/errors"
-	"github.com/trailofbits/go-mutexasserts"
-
 	"github.com/prysmaticlabs/prysm/v5/async"
 	"github.com/prysmaticlabs/prysm/v5/async/abool"
 	"github.com/prysmaticlabs/prysm/v5/async/event"
@@ -47,6 +45,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/runtime"
 	prysmTime "github.com/prysmaticlabs/prysm/v5/time"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
+	"github.com/trailofbits/go-mutexasserts"
 )
 
 var _ runtime.Service = (*Service)(nil)

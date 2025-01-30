@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-
 	// We are safe to expose this import as we are using a custom
 	// handler only enabled if the pprof flag is on.
 	_ "net/http/pprof" // #nosec G108
