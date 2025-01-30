@@ -646,6 +646,10 @@ func BuildSignedBeaconBlockFromExecutionPayload(blk interfaces.ReadOnlySignedBea
 // This is particularly useful for using the values from API calls.
 func BeaconBlockContainerToSignedBeaconBlock(obj *eth.BeaconBlockContainer) (interfaces.ReadOnlySignedBeaconBlock, error) {
 	switch obj.Block.(type) {
+	case *eth.BeaconBlockContainer_BlindedElectraBlock:
+		return NewSignedBeaconBlock(obj.GetBlindedElectraBlock())
+	case *eth.BeaconBlockContainer_ElectraBlock:
+		return NewSignedBeaconBlock(obj.GetElectraBlock())
 	case *eth.BeaconBlockContainer_BlindedDenebBlock:
 		return NewSignedBeaconBlock(obj.GetBlindedDenebBlock())
 	case *eth.BeaconBlockContainer_DenebBlock:
