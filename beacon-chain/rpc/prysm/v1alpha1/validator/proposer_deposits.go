@@ -72,6 +72,10 @@ func (vs *Server) packDepositsAndAttestations(
 // this eth1data has enough support to be considered for deposits inclusion. If current vote has
 // enough support, then use that vote for basis of determining deposits, otherwise use current state
 // eth1data.
+// In the post-electra phase, this function will usually return an empty list,
+// as the legacy deposit process is deprecated. (EIP-6110)
+// NOTE: During the transition period, the legacy deposit process
+// may still be active and managed. This function handles that scenario.
 func (vs *Server) deposits(
 	ctx context.Context,
 	beaconState state.BeaconState,
@@ -88,19 +92,17 @@ func (vs *Server) deposits(
 		log.Warn("not connected to eth1 node, skip pending deposit insertion")
 		return []*ethpb.Deposit{}, nil
 	}
+
+	// skip legacy deposits if eth1 deposit index is already at the index of deposit requests start
+	if helpers.DepositRequestHaveStarted(beaconState) {
+		return []*ethpb.Deposit{}, nil
+	}
+
 	// Need to fetch if the deposits up to the state's latest eth1 data matches
 	// the number of all deposits in this RPC call. If not, then we return nil.
 	canonicalEth1Data, canonicalEth1DataHeight, err := vs.canonicalEth1Data(ctx, beaconState, currentVote)
 	if err != nil {
 		return nil, err
-	}
-
-	// In the post-electra phase, this function will usually return an empty list,
-	// as the legacy deposit process is deprecated. (EIP-6110)
-	// NOTE: During the transition period, the legacy deposit process
-	// may still be active and managed. This function handles that scenario.
-	if !helpers.IsLegacyDepositProcessPeriod(beaconState, canonicalEth1Data) {
-		return []*ethpb.Deposit{}, nil
 	}
 
 	_, genesisEth1Block := vs.Eth1InfoFetcher.GenesisExecutionChainInfo()

@@ -7,6 +7,7 @@ import (
 	"github.com/pkg/errors"
 	fastssz "github.com/prysmaticlabs/fastssz"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
@@ -15,23 +16,8 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/crypto/rand"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
-
-func depositRequestHaveStarted(beaconState state.BeaconState) bool {
-	if beaconState.Version() >= version.Electra {
-		requestsStartIndex, err := beaconState.DepositRequestsStartIndex()
-		if err == nil {
-			// deposit_requests_start_index will only be set once
-			// eth1data will be frozen
-			if beaconState.Eth1DepositIndex() == requestsStartIndex {
-				return true
-			}
-		}
-	}
-	return false
-}
 
 // eth1DataMajorityVote determines the appropriate eth1data for a block proposal using
 // an algorithm called Voting with the Majority. The algorithm works as follows:
@@ -52,7 +38,7 @@ func (vs *Server) eth1DataMajorityVote(ctx context.Context, beaconState state.Be
 	defer cancel()
 
 	// post eth1 deposits, the Eth 1 data will then be frozen
-	if depositRequestHaveStarted(beaconState) {
+	if helpers.DepositRequestHaveStarted(beaconState) {
 		return beaconState.Eth1Data(), nil
 	}
 
