@@ -244,7 +244,7 @@ func (c *ContributionAndProof) ToConsensus() (*eth.ContributionAndProof, error) 
 	if err != nil {
 		return nil, server.NewDecodeError(err, "AggregatorIndex")
 	}
-	selectionProof, err := bytesutil.DecodeHexWithLength(c.SelectionProof, 96)
+	selectionProof, err := bytesutil.DecodeHexWithLength(c.SelectionProof, fieldparams.BLSSignatureLength)
 	if err != nil {
 		return nil, server.NewDecodeError(err, "SelectionProof")
 	}
@@ -331,7 +331,7 @@ func (a *AggregateAttestationAndProof) ToConsensus() (*eth.AggregateAttestationA
 	if err != nil {
 		return nil, server.NewDecodeError(err, "Aggregate")
 	}
-	proof, err := bytesutil.DecodeHexWithLength(a.SelectionProof, 96)
+	proof, err := bytesutil.DecodeHexWithLength(a.SelectionProof, fieldparams.BLSSignatureLength)
 	if err != nil {
 		return nil, server.NewDecodeError(err, "SelectionProof")
 	}
@@ -367,7 +367,7 @@ func (a *AggregateAttestationAndProofElectra) ToConsensus() (*eth.AggregateAttes
 	if err != nil {
 		return nil, server.NewDecodeError(err, "Aggregate")
 	}
-	proof, err := bytesutil.DecodeHexWithLength(a.SelectionProof, 96)
+	proof, err := bytesutil.DecodeHexWithLength(a.SelectionProof, fieldparams.BLSSignatureLength)
 	if err != nil {
 		return nil, server.NewDecodeError(err, "SelectionProof")
 	}
