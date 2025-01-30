@@ -362,7 +362,7 @@ func TestExpectedWithdrawals(t *testing.T) {
 		require.NoError(t, err)
 		p, err := s.PendingPartialWithdrawals()
 		require.NoError(t, err)
-		require.NoError(t, s.UpdateBalancesAtIndex(p[0].Index, 0)) // This should still count as partial withdrawal.
+		require.NoError(t, s.UpdateBalancesAtIndex(p[0].ValidatorIndex, 0)) // This should still count as partial withdrawal.
 		_, partialWithdrawalsCount, err := s.ExpectedWithdrawals()
 		require.NoError(t, err)
 		require.Equal(t, uint64(10), partialWithdrawalsCount)
@@ -389,7 +389,7 @@ func TestExpectedWithdrawals(t *testing.T) {
 		require.NoError(t, s.SetBalances(balances))
 		// Give validator a pending balance to withdraw.
 		require.NoError(t, s.AppendPendingPartialWithdrawal(&ethpb.PendingPartialWithdrawal{
-			Index:             1,
+			ValidatorIndex:    1,
 			Amount:            balances[1], // will only deduct excess even though balance is more that minimum activation
 			WithdrawableEpoch: primitives.Epoch(0),
 		}))

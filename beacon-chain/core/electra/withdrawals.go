@@ -184,7 +184,7 @@ func ProcessWithdrawalRequests(ctx context.Context, st state.BeaconState, wrs []
 				return nil, errors.Wrap(err, "failed to add withdrawability delay to exit queue epoch")
 			}
 			if err := st.AppendPendingPartialWithdrawal(&ethpb.PendingPartialWithdrawal{
-				Index:             vIdx,
+				ValidatorIndex:    vIdx,
 				Amount:            toWithdraw,
 				WithdrawableEpoch: withdrawableEpoch,
 			}); err != nil {

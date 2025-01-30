@@ -226,8 +226,8 @@ func TestProcessConsolidationRequests(t *testing.T) {
 				st.Validators[16].ExitEpoch = 10
 				st.PendingPartialWithdrawals = []*eth.PendingPartialWithdrawal{
 					{
-						Index:  17,
-						Amount: 100,
+						ValidatorIndex: 17,
+						Amount:         100,
 					},
 				}
 				s, err := state_native.InitializeFromProtoElectra(st)

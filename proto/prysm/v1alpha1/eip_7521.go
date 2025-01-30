@@ -22,7 +22,7 @@ func (pw *PendingPartialWithdrawal) Copy() *PendingPartialWithdrawal {
 		return nil
 	}
 	return &PendingPartialWithdrawal{
-		Index:             pw.Index,
+		ValidatorIndex:    pw.ValidatorIndex,
 		Amount:            pw.Amount,
 		WithdrawableEpoch: pw.WithdrawableEpoch,
 	}

@@ -123,13 +123,13 @@ func (b *BeaconState) ExpectedWithdrawals() ([]*enginev1.Withdrawal, uint64, err
 				break
 			}
 
-			v, err := b.validatorAtIndexReadOnly(w.Index)
+			v, err := b.validatorAtIndexReadOnly(w.ValidatorIndex)
 			if err != nil {
-				return nil, 0, fmt.Errorf("failed to determine withdrawals at index %d: %w", w.Index, err)
+				return nil, 0, fmt.Errorf("failed to determine withdrawals at index %d: %w", w.ValidatorIndex, err)
 			}
-			vBal, err := b.balanceAtIndex(w.Index)
+			vBal, err := b.balanceAtIndex(w.ValidatorIndex)
 			if err != nil {
-				return nil, 0, fmt.Errorf("could not retrieve balance at index %d: %w", w.Index, err)
+				return nil, 0, fmt.Errorf("could not retrieve balance at index %d: %w", w.ValidatorIndex, err)
 			}
 			hasSufficientEffectiveBalance := v.EffectiveBalance() >= params.BeaconConfig().MinActivationBalance
 			hasExcessBalance := vBal > params.BeaconConfig().MinActivationBalance
@@ -137,7 +137,7 @@ func (b *BeaconState) ExpectedWithdrawals() ([]*enginev1.Withdrawal, uint64, err
 				amount := min(vBal-params.BeaconConfig().MinActivationBalance, w.Amount)
 				withdrawals = append(withdrawals, &enginev1.Withdrawal{
 					Index:          withdrawalIndex,
-					ValidatorIndex: w.Index,
+					ValidatorIndex: w.ValidatorIndex,
 					Address:        v.GetWithdrawalCredentials()[12:],
 					Amount:         amount,
 				})
