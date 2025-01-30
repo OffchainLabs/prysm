@@ -579,7 +579,7 @@ func IsPartiallyWithdrawableValidator(val state.ReadOnlyValidator, balance uint6
 //	"""
 //	Check if ``validator`` is partially withdrawable.
 //	"""
-//	max_effective_balance = get_validator_max_effective_balance(validator)
+//	max_effective_balance = get_max_effective_balance(validator)
 //	has_max_effective_balance = validator.effective_balance == max_effective_balance  # [Modified in Electra:EIP7251]
 //	has_excess_balance = balance > max_effective_balance  # [Modified in Electra:EIP7251]
 //	return (
@@ -619,7 +619,7 @@ func isPartiallyWithdrawableValidatorCapella(val state.ReadOnlyValidator, balanc
 //
 // Spec definition:
 //
-//	def get_validator_max_effective_balance(validator: Validator) -> Gwei:
+//	def get_max_effective_balance(validator: Validator) -> Gwei:
 //	    """
 //	    Get max effective balance for ``validator``.
 //	    """
