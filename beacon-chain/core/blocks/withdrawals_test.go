@@ -898,8 +898,8 @@ func TestProcessWithdrawals(t *testing.T) {
 				},
 				PendingPartialWithdrawals: []*ethpb.PendingPartialWithdrawal{
 					{
-						ValidatorIndex: 11,
-						Amount:         withdrawalAmount(11) - maxEffectiveBalance,
+						Index:  11,
+						Amount: withdrawalAmount(11) - maxEffectiveBalance,
 					},
 				},
 			},

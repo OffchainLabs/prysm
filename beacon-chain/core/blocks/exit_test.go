@@ -318,8 +318,8 @@ func TestVerifyExitAndSignature(t *testing.T) {
 
 				// Give validator a pending balance to withdraw.
 				require.NoError(t, bs.AppendPendingPartialWithdrawal(&ethpb.PendingPartialWithdrawal{
-					ValidatorIndex: 0,
-					Amount:         500,
+					Index:  0,
+					Amount: 500,
 				}))
 
 				return validator, signedExit, bs, nil

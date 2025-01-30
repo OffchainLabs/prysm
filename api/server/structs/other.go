@@ -273,7 +273,7 @@ type PendingDeposit struct {
 }
 
 type PendingPartialWithdrawal struct {
-	ValidatorIndex    string `json:"validator_index"`
+	Index             string `json:"index"`
 	Amount            string `json:"amount"`
 	WithdrawableEpoch string `json:"withdrawable_epoch"`
 }

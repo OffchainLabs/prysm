@@ -1532,7 +1532,7 @@ func PendingPartialWithdrawalsFromConsensus(ws []*eth.PendingPartialWithdrawal) 
 	withdrawals := make([]*PendingPartialWithdrawal, len(ws))
 	for i, w := range ws {
 		withdrawals[i] = &PendingPartialWithdrawal{
-			ValidatorIndex:    fmt.Sprintf("%d", w.ValidatorIndex),
+			Index:             fmt.Sprintf("%d", w.Index),
 			Amount:            fmt.Sprintf("%d", w.Amount),
 			WithdrawableEpoch: fmt.Sprintf("%d", w.WithdrawableEpoch),
 		}

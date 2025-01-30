@@ -46,7 +46,7 @@ message PendingDeposit {
 
 message PendingPartialWithdrawal {
   // Validator index for the withdrawal.
-  uint64 validator_index = 1 [ (ethereum.eth.ext.cast_type) =
+  uint64 index = 1 [ (ethereum.eth.ext.cast_type) =
                          "github.com/prysmaticlabs/prysm/v5/consensus-types/"
                          "primitives.ValidatorIndex" ];
 

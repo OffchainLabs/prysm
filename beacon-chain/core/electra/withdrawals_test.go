@@ -44,7 +44,7 @@ func TestProcessWithdrawRequests(t *testing.T) {
 				st: func() state.BeaconState {
 					preSt := st.Copy()
 					require.NoError(t, preSt.AppendPendingPartialWithdrawal(&eth.PendingPartialWithdrawal{
-						ValidatorIndex:    0,
+						Index:             0,
 						Amount:            params.BeaconConfig().FullExitRequestAmount,
 						WithdrawableEpoch: 0,
 					}))
@@ -75,7 +75,7 @@ func TestProcessWithdrawRequests(t *testing.T) {
 				v.WithdrawableEpoch = 517
 				require.NoError(t, wantPostSt.SetValidators([]*eth.Validator{v}))
 				require.NoError(t, wantPostSt.AppendPendingPartialWithdrawal(&eth.PendingPartialWithdrawal{
-					ValidatorIndex:    0,
+					Index:             0,
 					Amount:            params.BeaconConfig().FullExitRequestAmount,
 					WithdrawableEpoch: 0,
 				}))
@@ -99,7 +99,7 @@ func TestProcessWithdrawRequests(t *testing.T) {
 				st: func() state.BeaconState {
 					preSt := st.Copy()
 					require.NoError(t, preSt.AppendPendingPartialWithdrawal(&eth.PendingPartialWithdrawal{
-						ValidatorIndex:    0,
+						Index:             0,
 						Amount:            params.BeaconConfig().FullExitRequestAmount,
 						WithdrawableEpoch: 0,
 					}))
@@ -111,7 +111,7 @@ func TestProcessWithdrawRequests(t *testing.T) {
 					require.NoError(t, preSt.SetValidators([]*eth.Validator{v}))
 					require.NoError(t, preSt.SetBalances([]uint64{params.BeaconConfig().MinActivationBalance + 200}))
 					require.NoError(t, preSt.AppendPendingPartialWithdrawal(&eth.PendingPartialWithdrawal{
-						ValidatorIndex:    0,
+						Index:             0,
 						Amount:            100,
 						WithdrawableEpoch: 0,
 					}))
@@ -138,17 +138,17 @@ func TestProcessWithdrawRequests(t *testing.T) {
 				bal += 200
 				require.NoError(t, wantPostSt.SetBalances([]uint64{bal}))
 				require.NoError(t, wantPostSt.AppendPendingPartialWithdrawal(&eth.PendingPartialWithdrawal{
-					ValidatorIndex:    0,
+					Index:             0,
 					Amount:            0,
 					WithdrawableEpoch: 0,
 				}))
 				require.NoError(t, wantPostSt.AppendPendingPartialWithdrawal(&eth.PendingPartialWithdrawal{
-					ValidatorIndex:    0,
+					Index:             0,
 					Amount:            100,
 					WithdrawableEpoch: 0,
 				}))
 				require.NoError(t, wantPostSt.AppendPendingPartialWithdrawal(&eth.PendingPartialWithdrawal{
-					ValidatorIndex:    0,
+					Index:             0,
 					Amount:            100,
 					WithdrawableEpoch: 517,
 				}))
@@ -255,7 +255,7 @@ func TestProcessWithdrawRequests(t *testing.T) {
 					logrus.SetLevel(logrus.DebugLevel)
 					preSt := st.Copy()
 					require.NoError(t, preSt.AppendPendingPartialWithdrawal(&eth.PendingPartialWithdrawal{
-						ValidatorIndex:    0,
+						Index:             0,
 						Amount:            params.BeaconConfig().FullExitRequestAmount,
 						WithdrawableEpoch: 0,
 					}))

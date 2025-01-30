@@ -110,16 +110,16 @@ func TestHasPendingBalanceToWithdraw(t *testing.T) {
 	pb := &ethpb.BeaconStateElectra{
 		PendingPartialWithdrawals: []*ethpb.PendingPartialWithdrawal{
 			{
-				Amount:         100,
-				ValidatorIndex: 1,
+				Amount: 100,
+				Index:  1,
 			},
 			{
-				Amount:         200,
-				ValidatorIndex: 2,
+				Amount: 200,
+				Index:  2,
 			},
 			{
-				Amount:         300,
-				ValidatorIndex: 3,
+				Amount: 300,
+				Index:  3,
 			},
 		},
 	}
