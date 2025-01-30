@@ -19,7 +19,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
-	log "github.com/sirupsen/logrus"
 )
 
 // BlockIdParseError represents an error scenario where a block ID could not be parsed.
@@ -194,10 +193,10 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, indices []uint64
 			}
 			ok, roots, err := p.BeaconDB.BlockRootsBySlot(ctx, primitives.Slot(slot))
 			if !ok {
-				return nil, &core.RpcError{Err: fmt.Errorf("block not found: no block roots at slot %d", slot), Reason: core.NotFound}
+				return nil, &core.RpcError{Err: fmt.Errorf("no block roots at slot %d", slot), Reason: core.NotFound}
 			}
 			if err != nil {
-				return nil, &core.RpcError{Err: errors.Wrap(err, "failed to get block roots by slot"), Reason: core.Internal}
+				return nil, &core.RpcError{Err: errors.Wrapf(err, "failed to get block roots for slot %d", slot), Reason: core.Internal}
 			}
 			root = roots[0][:]
 			if len(roots) == 1 {
@@ -206,7 +205,7 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, indices []uint64
 			for _, blockRoot := range roots {
 				canonical, err := p.ChainInfoFetcher.IsCanonical(ctx, blockRoot)
 				if err != nil {
-					return nil, &core.RpcError{Err: errors.Wrap(err, "could not determine if block root is canonical"), Reason: core.Internal}
+					return nil, &core.RpcError{Err: errors.Wrapf(err, "could not determine if block %#x is canonical", blockRoot), Reason: core.Internal}
 				}
 				if canonical {
 					root = blockRoot[:]
@@ -215,45 +214,63 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, indices []uint64
 			}
 		}
 	}
+
 	if !p.BeaconDB.HasBlock(ctx, bytesutil.ToBytes32(root)) {
-		return nil, &core.RpcError{Err: errors.New("block not found"), Reason: core.NotFound}
+		return nil, &core.RpcError{Err: fmt.Errorf("block %#x not found in db", root), Reason: core.NotFound}
 	}
 	b, err := p.BeaconDB.Block(ctx, bytesutil.ToBytes32(root))
 	if err != nil {
-		return nil, &core.RpcError{Err: errors.Wrap(err, "failed to retrieve block from db"), Reason: core.Internal}
+		return nil, &core.RpcError{Err: errors.Wrapf(err, "failed to retrieve block %#x from db", root), Reason: core.Internal}
 	}
-	// if block is not in the retention window  return 200 w/ empty list
+
+	// if block is not in the retention window, return 200 w/ empty list
 	if !p.BlobStorage.WithinRetentionPeriod(slots.ToEpoch(b.Block().Slot()), slots.ToEpoch(p.GenesisTimeFetcher.CurrentSlot())) {
 		return make([]*blocks.VerifiedROBlob, 0), nil
 	}
+
 	commitments, err := b.Block().Body().BlobKzgCommitments()
 	if err != nil {
-		return nil, &core.RpcError{Err: errors.Wrap(err, "failed to retrieve kzg commitments from block"), Reason: core.Internal}
+		return nil, &core.RpcError{Err: errors.Wrapf(err, "failed to retrieve kzg commitments from block %#x", root), Reason: core.Internal}
 	}
 	// if there are no commitments return 200 w/ empty list
 	if len(commitments) == 0 {
 		return make([]*blocks.VerifiedROBlob, 0), nil
 	}
-	if len(indices) == 0 {
-		sum := p.BlobStorage.Summary(bytesutil.ToBytes32(root))
-		for i := range commitments {
-			if sum.HasIndex(uint64(i)) {
-				indices = append(indices, uint64(i))
+
+	m, err := p.BlobStorage.Indices(bytesutil.ToBytes32(root), b.Block().Slot())
+	if err != nil {
+		return nil, &core.RpcError{Err: fmt.Errorf("could not retrieve blob indices for block %#x", root), Reason: core.Internal}
+	}
+
+	indicesRequested := len(indices) > 0
+	for k, v := range m {
+		if v {
+			if k >= len(commitments) {
+				return nil, &core.RpcError{
+					Err:    fmt.Errorf("blob index %d is more than blob kzg commitment count %d for block %#x", k, len(commitments), root),
+					Reason: core.Internal,
+				}
+			}
+			if !indicesRequested {
+				indices = append(indices, uint64(k))
+			}
+		} else if indicesRequested {
+			for _, ix := range indices {
+				if uint64(k) == ix {
+					return nil, &core.RpcError{Err: fmt.Errorf("no blob at index %d found for block %#x", k, root), Reason: core.NotFound}
+				}
 			}
 		}
 	}
-	// returns empty slice if there are no indices
+
 	blobs := make([]*blocks.VerifiedROBlob, len(indices))
 	for i, index := range indices {
 		vblob, err := p.BlobStorage.Get(bytesutil.ToBytes32(root), index)
 		if err != nil {
-			log.WithFields(log.Fields{
-				"blockRoot": hexutil.Encode(root),
-				"blobIndex": index,
-			}).Error(errors.Wrapf(err, "could not retrieve blob for block root %#x at index %d", root, index))
 			return nil, &core.RpcError{Err: fmt.Errorf("could not retrieve blob for block root %#x at index %d", root, index), Reason: core.Internal}
 		}
 		blobs[i] = &vblob
 	}
+
 	return blobs, nil
 }

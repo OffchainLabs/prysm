@@ -286,6 +286,20 @@ func TestGetBlob(t *testing.T) {
 		assert.DeepEqual(t, blobs[2].KzgCommitment, sidecar.KzgCommitment)
 		assert.DeepEqual(t, blobs[2].KzgProof, sidecar.KzgProof)
 	})
+	t.Run("no blob at index", func(t *testing.T) {
+		blocker := &BeaconDbBlocker{
+			ChainInfoFetcher: &mockChain.ChainService{FinalizedCheckPoint: &ethpbalpha.Checkpoint{Root: blockRoot[:]}},
+			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
+				Genesis: time.Now(),
+			},
+			BeaconDB:    db,
+			BlobStorage: bs,
+		}
+		noBlobIndex := uint64(len(blobs)) + 1
+		_, rpcErr := blocker.Blobs(ctx, "123", []uint64{0, noBlobIndex})
+		require.NotNil(t, rpcErr)
+		assert.Equal(t, core.ErrorReason(core.NotFound), rpcErr.Reason)
+	})
 	t.Run("no blobs returns an empty array", func(t *testing.T) {
 		blocker := &BeaconDbBlocker{
 			ChainInfoFetcher: &mockChain.ChainService{FinalizedCheckPoint: &ethpbalpha.Checkpoint{Root: blockRoot[:]}},
