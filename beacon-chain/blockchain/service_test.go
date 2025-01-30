@@ -71,7 +71,6 @@ func setupBeaconChain(t *testing.T, beaconDB db.Database) *Service {
 		DepositContainers: []*ethpb.DepositContainer{},
 	})
 	require.NoError(t, err)
-
 	web3Service, err = execution.NewService(
 		ctx,
 		execution.WithDatabase(beaconDB),
