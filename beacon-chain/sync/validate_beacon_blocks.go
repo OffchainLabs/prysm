@@ -462,6 +462,10 @@ func getBlockFields(b interfaces.ReadOnlySignedBeaconBlock) logrus.Fields {
 	}
 }
 
+// detectAndBroadcastEquivocation checks if the given block is an equivocating block (i.e. a different block
+// with the same slot and proposer index but different signature than one we've already seen). If an equivocation
+// is detected, it creates a proposer slashing object and broadcasts it to the network before adding it to the
+// slashing pool.
 func (s *Service) detectAndBroadcastEquivocation(ctx context.Context, blk interfaces.ReadOnlySignedBeaconBlock) error {
 	// If we've seen this proposer/slot combo before, it means this is an equivocating block
 	slot := blk.Block().Slot()
