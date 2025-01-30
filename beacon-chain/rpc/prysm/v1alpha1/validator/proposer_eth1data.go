@@ -38,7 +38,7 @@ func (vs *Server) eth1DataMajorityVote(ctx context.Context, beaconState state.Be
 	defer cancel()
 
 	// post eth1 deposits, the Eth 1 data will then be frozen
-	if helpers.DepositRequestsHaveStarted(beaconState) {
+	if helpers.DepositRequestsStarted(beaconState) {
 		return beaconState.Eth1Data(), nil
 	}
 
