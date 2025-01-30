@@ -393,9 +393,9 @@ func ComputeProposerIndex(bState state.ReadOnlyBeaconState, activeIndices []prim
 		effectiveBal := v.EffectiveBalance()
 		if bState.Version() >= version.Electra {
 			binary.LittleEndian.PutUint64(seedBuffer[len(seed):], i/16)
-			randomByte := hashFunc(seedBuffer)
+			randomBytes := hashFunc(seedBuffer)
 			offset := (i % 16) * 2
-			randomValue := uint64(randomByte[offset]) | uint64(randomByte[offset+1])<<8
+			randomValue := uint64(randomBytes[offset]) | uint64(randomBytes[offset+1])<<8
 
 			if effectiveBal*fieldparams.MaxRandomValueElectra >= beaconConfig.MaxEffectiveBalanceElectra*randomValue {
 				return candidateIndex, nil
