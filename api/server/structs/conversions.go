@@ -735,6 +735,10 @@ func (s *AttesterSlashingElectra) ToConsensus() (*eth.AttesterSlashingElectra, e
 }
 
 func (a *IndexedAttestation) ToConsensus() (*eth.IndexedAttestation, error) {
+	if err := slice.VerifyMaxLength(a.AttestingIndices, params.BeaconConfig().MaxValidatorsPerCommittee); err != nil {
+		return nil, err
+	}
+
 	indices := make([]uint64, len(a.AttestingIndices))
 	var err error
 	for i, ix := range a.AttestingIndices {
@@ -760,6 +764,13 @@ func (a *IndexedAttestation) ToConsensus() (*eth.IndexedAttestation, error) {
 }
 
 func (a *IndexedAttestationElectra) ToConsensus() (*eth.IndexedAttestationElectra, error) {
+	if err := slice.VerifyMaxLength(
+		a.AttestingIndices,
+		params.BeaconConfig().MaxValidatorsPerCommittee*params.BeaconConfig().MaxCommitteesPerSlot,
+	); err != nil {
+		return nil, err
+	}
+
 	indices := make([]uint64, len(a.AttestingIndices))
 	var err error
 	for i, ix := range a.AttestingIndices {
