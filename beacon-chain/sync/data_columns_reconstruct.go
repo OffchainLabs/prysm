@@ -380,7 +380,7 @@ func columnsArrayToMap(columnsArray [fieldparams.NumberOfColumns]bool) map[uint6
 // cellsCount counts the number of cells in the cells and proofs array
 func cellsCount(cellsAndProofs []kzg.CellsAndProofs) int {
 	cellsCount := 0
-	for i := 0; i < len(cellsAndProofs); i++ {
+	for i := range cellsAndProofs {
 		cellsCount += len(cellsAndProofs[i].Cells)
 	}
 
