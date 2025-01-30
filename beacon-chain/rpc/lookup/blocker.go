@@ -147,13 +147,13 @@ func (p *BeaconDbBlocker) Block(ctx context.Context, id []byte) (interfaces.Read
 //     we are technically not supposed to import a block to forkchoice unless we have the blobs, so the nuance here is if we can't find the file and we are inside the protocol-defined retention period, then it's actually a 500.
 //   - block exists, has commitments, outside retention period (greater of protocol- or user-specified) - ie just like block exists, no commitment
 func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, indices []uint64) ([]*blocks.VerifiedROBlob, *core.RpcError) {
-	var root []byte
+	var rootSlice []byte
 	switch id {
 	case "genesis":
 		return nil, &core.RpcError{Err: errors.New("blobs are not supported for Phase 0 fork"), Reason: core.BadRequest}
 	case "head":
 		var err error
-		root, err = p.ChainInfoFetcher.HeadRoot(ctx)
+		rootSlice, err = p.ChainInfoFetcher.HeadRoot(ctx)
 		if err != nil {
 			return nil, &core.RpcError{Err: errors.Wrapf(err, "could not retrieve head root"), Reason: core.Internal}
 		}
@@ -162,22 +162,22 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, indices []uint64
 		if fcp == nil {
 			return nil, &core.RpcError{Err: errors.New("received nil finalized checkpoint"), Reason: core.Internal}
 		}
-		root = fcp.Root
+		rootSlice = fcp.Root
 	case "justified":
 		jcp := p.ChainInfoFetcher.CurrentJustifiedCheckpt()
 		if jcp == nil {
 			return nil, &core.RpcError{Err: errors.New("received nil justified checkpoint"), Reason: core.Internal}
 		}
-		root = jcp.Root
+		rootSlice = jcp.Root
 	default:
 		if bytesutil.IsHex([]byte(id)) {
 			var err error
-			root, err = hexutil.Decode(id)
-			if len(root) != fieldparams.RootLength {
-				return nil, &core.RpcError{Err: fmt.Errorf("invalid block root of length %d", len(root)), Reason: core.BadRequest}
-			}
+			rootSlice, err = hexutil.Decode(id)
 			if err != nil {
 				return nil, &core.RpcError{Err: NewBlockIdParseError(err), Reason: core.BadRequest}
+			}
+			if len(rootSlice) != fieldparams.RootLength {
+				return nil, &core.RpcError{Err: fmt.Errorf("invalid block root of length %d", len(rootSlice)), Reason: core.BadRequest}
 			}
 		} else {
 			slot, err := strconv.ParseUint(id, 10, 64)
@@ -198,7 +198,7 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, indices []uint64
 			if err != nil {
 				return nil, &core.RpcError{Err: errors.Wrapf(err, "failed to get block roots for slot %d", slot), Reason: core.Internal}
 			}
-			root = roots[0][:]
+			rootSlice = roots[0][:]
 			if len(roots) == 1 {
 				break
 			}
@@ -208,19 +208,21 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, indices []uint64
 					return nil, &core.RpcError{Err: errors.Wrapf(err, "could not determine if block %#x is canonical", blockRoot), Reason: core.Internal}
 				}
 				if canonical {
-					root = blockRoot[:]
+					rootSlice = blockRoot[:]
 					break
 				}
 			}
 		}
 	}
 
-	if !p.BeaconDB.HasBlock(ctx, bytesutil.ToBytes32(root)) {
-		return nil, &core.RpcError{Err: fmt.Errorf("block %#x not found in db", root), Reason: core.NotFound}
+	root := bytesutil.ToBytes32(rootSlice)
+
+	if !p.BeaconDB.HasBlock(ctx, root) {
+		return nil, &core.RpcError{Err: fmt.Errorf("block %#x not found in db", rootSlice), Reason: core.NotFound}
 	}
-	b, err := p.BeaconDB.Block(ctx, bytesutil.ToBytes32(root))
+	b, err := p.BeaconDB.Block(ctx, root)
 	if err != nil {
-		return nil, &core.RpcError{Err: errors.Wrapf(err, "failed to retrieve block %#x from db", root), Reason: core.Internal}
+		return nil, &core.RpcError{Err: errors.Wrapf(err, "failed to retrieve block %#x from db", rootSlice), Reason: core.Internal}
 	}
 
 	// if block is not in the retention window, return 200 w/ empty list
@@ -230,34 +232,33 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, indices []uint64
 
 	commitments, err := b.Block().Body().BlobKzgCommitments()
 	if err != nil {
-		return nil, &core.RpcError{Err: errors.Wrapf(err, "failed to retrieve kzg commitments from block %#x", root), Reason: core.Internal}
+		return nil, &core.RpcError{Err: errors.Wrapf(err, "failed to retrieve kzg commitments from block %#x", rootSlice), Reason: core.Internal}
 	}
 	// if there are no commitments return 200 w/ empty list
 	if len(commitments) == 0 {
 		return make([]*blocks.VerifiedROBlob, 0), nil
 	}
 
-	m, err := p.BlobStorage.Indices(bytesutil.ToBytes32(root), b.Block().Slot())
-	if err != nil {
-		return nil, &core.RpcError{Err: fmt.Errorf("could not retrieve blob indices for block %#x", root), Reason: core.Internal}
-	}
+	sum := p.BlobStorage.Summary(root)
 
-	indicesRequested := len(indices) > 0
-	for k, v := range m {
-		if v {
-			if k >= len(commitments) {
+	if len(indices) == 0 {
+		for i := range commitments {
+			if sum.HasIndex(uint64(i)) {
+				indices = append(indices, uint64(i))
+			}
+		}
+	} else {
+		for _, ix := range indices {
+			if ix >= sum.MaxBlobsForEpoch() {
 				return nil, &core.RpcError{
-					Err:    fmt.Errorf("blob index %d is more than blob kzg commitment count %d for block %#x", k, len(commitments), root),
-					Reason: core.Internal,
+					Err:    fmt.Errorf("requested index %d is bigger than the maximum possible blob count %d", ix, sum.MaxBlobsForEpoch()),
+					Reason: core.BadRequest,
 				}
 			}
-			if !indicesRequested {
-				indices = append(indices, uint64(k))
-			}
-		} else if indicesRequested {
-			for _, ix := range indices {
-				if uint64(k) == ix {
-					return nil, &core.RpcError{Err: fmt.Errorf("no blob at index %d found for block %#x", k, root), Reason: core.NotFound}
+			if !sum.HasIndex(ix) {
+				return nil, &core.RpcError{
+					Err:    fmt.Errorf("requested index %d not found", ix),
+					Reason: core.NotFound,
 				}
 			}
 		}
@@ -265,9 +266,12 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, indices []uint64
 
 	blobs := make([]*blocks.VerifiedROBlob, len(indices))
 	for i, index := range indices {
-		vblob, err := p.BlobStorage.Get(bytesutil.ToBytes32(root), index)
+		vblob, err := p.BlobStorage.Get(root, index)
 		if err != nil {
-			return nil, &core.RpcError{Err: fmt.Errorf("could not retrieve blob for block root %#x at index %d", root, index), Reason: core.Internal}
+			return nil, &core.RpcError{
+				Err:    fmt.Errorf("could not retrieve blob for block root %#x at index %d", rootSlice, index),
+				Reason: core.Internal,
+			}
 		}
 		blobs[i] = &vblob
 	}

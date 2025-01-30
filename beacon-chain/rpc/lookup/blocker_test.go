@@ -3,6 +3,7 @@ package lookup
 import (
 	"context"
 	"fmt"
+	"math"
 	"net/http"
 	"reflect"
 	"testing"
@@ -286,6 +287,19 @@ func TestGetBlob(t *testing.T) {
 		assert.DeepEqual(t, blobs[2].KzgCommitment, sidecar.KzgCommitment)
 		assert.DeepEqual(t, blobs[2].KzgProof, sidecar.KzgProof)
 	})
+	t.Run("no blobs returns an empty array", func(t *testing.T) {
+		blocker := &BeaconDbBlocker{
+			ChainInfoFetcher: &mockChain.ChainService{FinalizedCheckPoint: &ethpbalpha.Checkpoint{Root: blockRoot[:]}},
+			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
+				Genesis: time.Now(),
+			},
+			BeaconDB:    db,
+			BlobStorage: filesystem.NewEphemeralBlobStorage(t),
+		}
+		verifiedBlobs, rpcErr := blocker.Blobs(ctx, "123", nil)
+		assert.Equal(t, rpcErr == nil, true)
+		require.Equal(t, 0, len(verifiedBlobs))
+	})
 	t.Run("no blob at index", func(t *testing.T) {
 		blocker := &BeaconDbBlocker{
 			ChainInfoFetcher: &mockChain.ChainService{FinalizedCheckPoint: &ethpbalpha.Checkpoint{Root: blockRoot[:]}},
@@ -300,17 +314,17 @@ func TestGetBlob(t *testing.T) {
 		require.NotNil(t, rpcErr)
 		assert.Equal(t, core.ErrorReason(core.NotFound), rpcErr.Reason)
 	})
-	t.Run("no blobs returns an empty array", func(t *testing.T) {
+	t.Run("index too big", func(t *testing.T) {
 		blocker := &BeaconDbBlocker{
 			ChainInfoFetcher: &mockChain.ChainService{FinalizedCheckPoint: &ethpbalpha.Checkpoint{Root: blockRoot[:]}},
 			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
 				Genesis: time.Now(),
 			},
 			BeaconDB:    db,
-			BlobStorage: filesystem.NewEphemeralBlobStorage(t),
+			BlobStorage: bs,
 		}
-		verifiedBlobs, rpcErr := blocker.Blobs(ctx, "123", nil)
-		assert.Equal(t, rpcErr == nil, true)
-		require.Equal(t, 0, len(verifiedBlobs))
+		_, rpcErr := blocker.Blobs(ctx, "123", []uint64{0, math.MaxUint})
+		require.NotNil(t, rpcErr)
+		assert.Equal(t, core.ErrorReason(core.BadRequest), rpcErr.Reason)
 	})
 }
