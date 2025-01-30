@@ -135,6 +135,7 @@ func assertEqualConfigs(t *testing.T, name string, fields []string, expected, ac
 	// Max operations per block.
 	assert.Equal(t, expected.MaxProposerSlashings, actual.MaxProposerSlashings, "%s: MaxProposerSlashings", name)
 	assert.Equal(t, expected.MaxAttesterSlashings, actual.MaxAttesterSlashings, "%s: MaxAttesterSlashings", name)
+	assert.Equal(t, expected.MaxAttesterSlashingsElectra, actual.MaxAttesterSlashingsElectra, "%s: MaxAttesterSlashingsElectra", name)
 	assert.Equal(t, expected.MaxAttestations, actual.MaxAttestations, "%s: MaxAttestations", name)
 	assert.Equal(t, expected.MaxDeposits, actual.MaxDeposits, "%s: MaxDeposits", name)
 	assert.Equal(t, expected.MaxVoluntaryExits, actual.MaxVoluntaryExits, "%s: MaxVoluntaryExits", name)

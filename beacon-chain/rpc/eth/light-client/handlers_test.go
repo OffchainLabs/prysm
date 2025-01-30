@@ -91,6 +91,40 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 		require.NotNil(t, resp.Data.CurrentSyncCommittee)
 		require.NotNil(t, resp.Data.CurrentSyncCommitteeBranch)
 	})
+	t.Run("altairSSZ", func(t *testing.T) {
+		l := util.NewTestLightClient(t).SetupTestAltair()
+
+		slot := primitives.Slot(params.BeaconConfig().AltairForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
+		blockRoot, err := l.Block.Block().HashTreeRoot()
+		require.NoError(t, err)
+
+		bootstrap, err := lightclient.NewLightClientBootstrapFromBeaconState(l.Ctx, slot, l.State, l.Block)
+		require.NoError(t, err)
+
+		db := dbtesting.SetupDB(t)
+
+		err = db.SaveLightClientBootstrap(l.Ctx, blockRoot[:], bootstrap)
+		require.NoError(t, err)
+
+		s := &Server{
+			BeaconDB: db,
+		}
+		request := httptest.NewRequest("GET", "http://foo.com/", nil)
+		request.SetPathValue("block_root", hexutil.Encode(blockRoot[:]))
+		request.Header.Add("Accept", "application/octet-stream")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetLightClientBootstrap(writer, request)
+		require.Equal(t, http.StatusOK, writer.Code)
+
+		var resp pb.LightClientBootstrapAltair
+		err = resp.UnmarshalSSZ(writer.Body.Bytes())
+		require.NoError(t, err)
+		require.DeepEqual(t, resp.Header, bootstrap.Header().Proto())
+		require.DeepEqual(t, resp.CurrentSyncCommittee, bootstrap.CurrentSyncCommittee())
+		require.NotNil(t, resp.CurrentSyncCommitteeBranch)
+	})
 	t.Run("altair - no bootstrap found", func(t *testing.T) {
 		l := util.NewTestLightClient(t).SetupTestAltair()
 
@@ -158,6 +192,40 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 		require.NotNil(t, resp.Data.CurrentSyncCommittee)
 		require.NotNil(t, resp.Data.CurrentSyncCommitteeBranch)
 	})
+	t.Run("bellatrixSSZ", func(t *testing.T) {
+		l := util.NewTestLightClient(t).SetupTestBellatrix()
+
+		slot := primitives.Slot(params.BeaconConfig().BellatrixForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
+		blockRoot, err := l.Block.Block().HashTreeRoot()
+		require.NoError(t, err)
+
+		bootstrap, err := lightclient.NewLightClientBootstrapFromBeaconState(l.Ctx, slot, l.State, l.Block)
+		require.NoError(t, err)
+
+		db := dbtesting.SetupDB(t)
+
+		err = db.SaveLightClientBootstrap(l.Ctx, blockRoot[:], bootstrap)
+		require.NoError(t, err)
+
+		s := &Server{
+			BeaconDB: db,
+		}
+		request := httptest.NewRequest("GET", "http://foo.com/", nil)
+		request.SetPathValue("block_root", hexutil.Encode(blockRoot[:]))
+		request.Header.Add("Accept", "application/octet-stream")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetLightClientBootstrap(writer, request)
+		require.Equal(t, http.StatusOK, writer.Code)
+
+		var resp pb.LightClientBootstrapAltair
+		err = resp.UnmarshalSSZ(writer.Body.Bytes())
+		require.NoError(t, err)
+		require.DeepEqual(t, resp.Header, bootstrap.Header().Proto())
+		require.DeepEqual(t, resp.CurrentSyncCommittee, bootstrap.CurrentSyncCommittee())
+		require.NotNil(t, resp.CurrentSyncCommitteeBranch)
+	})
 	t.Run("capella", func(t *testing.T) {
 		l := util.NewTestLightClient(t).SetupTestCapella(false) // result is same for true and false
 
@@ -198,6 +266,40 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 
 		require.NotNil(t, resp.Data.CurrentSyncCommittee)
 		require.NotNil(t, resp.Data.CurrentSyncCommitteeBranch)
+	})
+	t.Run("capellaSSZ", func(t *testing.T) {
+		l := util.NewTestLightClient(t).SetupTestCapella(false) // result is same for true and false
+
+		slot := primitives.Slot(params.BeaconConfig().CapellaForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
+		blockRoot, err := l.Block.Block().HashTreeRoot()
+		require.NoError(t, err)
+
+		bootstrap, err := lightclient.NewLightClientBootstrapFromBeaconState(l.Ctx, slot, l.State, l.Block)
+		require.NoError(t, err)
+
+		db := dbtesting.SetupDB(t)
+
+		err = db.SaveLightClientBootstrap(l.Ctx, blockRoot[:], bootstrap)
+		require.NoError(t, err)
+
+		s := &Server{
+			BeaconDB: db,
+		}
+		request := httptest.NewRequest("GET", "http://foo.com/", nil)
+		request.SetPathValue("block_root", hexutil.Encode(blockRoot[:]))
+		request.Header.Add("Accept", "application/octet-stream")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetLightClientBootstrap(writer, request)
+		require.Equal(t, http.StatusOK, writer.Code)
+
+		var resp pb.LightClientBootstrapCapella
+		err = resp.UnmarshalSSZ(writer.Body.Bytes())
+		require.NoError(t, err)
+		require.DeepEqual(t, resp.Header, bootstrap.Header().Proto())
+		require.DeepEqual(t, resp.CurrentSyncCommittee, bootstrap.CurrentSyncCommittee())
+		require.NotNil(t, resp.CurrentSyncCommitteeBranch)
 	})
 	t.Run("deneb", func(t *testing.T) {
 		l := util.NewTestLightClient(t).SetupTestDeneb(false) // result is same for true and false
@@ -240,6 +342,40 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 		require.NotNil(t, resp.Data.CurrentSyncCommittee)
 		require.NotNil(t, resp.Data.CurrentSyncCommitteeBranch)
 	})
+	t.Run("denebSSZ", func(t *testing.T) {
+		l := util.NewTestLightClient(t).SetupTestDeneb(false) // result is same for true and false
+
+		slot := primitives.Slot(params.BeaconConfig().DenebForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
+		blockRoot, err := l.Block.Block().HashTreeRoot()
+		require.NoError(t, err)
+
+		bootstrap, err := lightclient.NewLightClientBootstrapFromBeaconState(l.Ctx, slot, l.State, l.Block)
+		require.NoError(t, err)
+
+		db := dbtesting.SetupDB(t)
+
+		err = db.SaveLightClientBootstrap(l.Ctx, blockRoot[:], bootstrap)
+		require.NoError(t, err)
+
+		s := &Server{
+			BeaconDB: db,
+		}
+		request := httptest.NewRequest("GET", "http://foo.com/", nil)
+		request.SetPathValue("block_root", hexutil.Encode(blockRoot[:]))
+		request.Header.Add("Accept", "application/octet-stream")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetLightClientBootstrap(writer, request)
+		require.Equal(t, http.StatusOK, writer.Code)
+
+		var resp pb.LightClientBootstrapDeneb
+		err = resp.UnmarshalSSZ(writer.Body.Bytes())
+		require.NoError(t, err)
+		require.DeepEqual(t, resp.Header, bootstrap.Header().Proto())
+		require.DeepEqual(t, resp.CurrentSyncCommittee, bootstrap.CurrentSyncCommittee())
+		require.NotNil(t, resp.CurrentSyncCommitteeBranch)
+	})
 	t.Run("electra", func(t *testing.T) {
 		l := util.NewTestLightClient(t).SetupTestElectra(false) // result is same for true and false
 
@@ -280,6 +416,40 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 
 		require.NotNil(t, resp.Data.CurrentSyncCommittee)
 		require.NotNil(t, resp.Data.CurrentSyncCommitteeBranch)
+	})
+	t.Run("electraSSZ", func(t *testing.T) {
+		l := util.NewTestLightClient(t).SetupTestElectra(false) // result is same for true and false
+
+		slot := primitives.Slot(params.BeaconConfig().ElectraForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
+		blockRoot, err := l.Block.Block().HashTreeRoot()
+		require.NoError(t, err)
+
+		bootstrap, err := lightclient.NewLightClientBootstrapFromBeaconState(l.Ctx, slot, l.State, l.Block)
+		require.NoError(t, err)
+
+		db := dbtesting.SetupDB(t)
+
+		err = db.SaveLightClientBootstrap(l.Ctx, blockRoot[:], bootstrap)
+		require.NoError(t, err)
+
+		s := &Server{
+			BeaconDB: db,
+		}
+		request := httptest.NewRequest("GET", "http://foo.com/", nil)
+		request.SetPathValue("block_root", hexutil.Encode(blockRoot[:]))
+		request.Header.Add("Accept", "application/octet-stream")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetLightClientBootstrap(writer, request)
+		require.Equal(t, http.StatusOK, writer.Code)
+
+		var resp pb.LightClientBootstrapElectra
+		err = resp.UnmarshalSSZ(writer.Body.Bytes())
+		require.NoError(t, err)
+		require.DeepEqual(t, resp.Header, bootstrap.Header().Proto())
+		require.DeepEqual(t, resp.CurrentSyncCommittee, bootstrap.CurrentSyncCommittee())
+		require.NotNil(t, resp.CurrentSyncCommitteeBranch)
 	})
 }
 
