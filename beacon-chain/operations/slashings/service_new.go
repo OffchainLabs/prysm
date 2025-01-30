@@ -53,6 +53,9 @@ func (p *PoolService) run() {
 		log.WithError(err).Error("Could not get Electra start slot")
 		return
 	}
+
+	// If run() is executed after the transition to Electra has already happened,
+	// there is nothing to convert because the slashing pool is empty at startup.
 	if p.currentSlotFn() >= electraSlot {
 		return
 	}
@@ -74,7 +77,7 @@ func (p *PoolService) run() {
 		p.poolManager.ConvertToElectra()
 		return
 	case <-p.ctx.Done():
-		log.Warn("Context cancelled, Electra timer will not execute")
+		log.Warn("Context cancelled, ConvertToElectra timer will not execute")
 		return
 	}
 }

@@ -53,14 +53,19 @@ func TestConvertToElectraWithTimer(t *testing.T) {
 		},
 	}
 
-	// TODO: doc
+	// We need run() to execute the conversion immediately, otherwise we'd need a time.Sleep to wait for the Electra fork.
+	// To do that we need a timer with the current time being at the Electra fork.
 	now := time.Now()
 	electraTime := now.Add(time.Duration(uint64(cfg.ElectraForkEpoch)*uint64(params.BeaconConfig().SlotsPerEpoch)*params.BeaconConfig().SecondsPerSlot) * time.Second)
 	c := startup.NewClock(now, [32]byte{}, startup.WithNower(func() time.Time { return electraTime }))
 	cw := startup.NewClockSynchronizer()
 	require.NoError(t, cw.SetClock(c))
 	p := NewPool()
-	s := NewPoolService(ctx, p, WithElectraTimer(cw, func() primitives.Slot { return 31 }))
+	// The service has to think that the current slot is before Electra
+	// because run() exits early after Electra.
+	s := NewPoolService(ctx, p, WithElectraTimer(cw, func() primitives.Slot {
+		return primitives.Slot(cfg.ElectraForkEpoch)*params.BeaconConfig().SlotsPerEpoch - 1
+	}))
 	p.pendingAttesterSlashing = append(p.pendingAttesterSlashing, phase0Slashing)
 
 	s.run()
