@@ -59,11 +59,13 @@ go_test(
         "error_test.go",
         "export_test.go",
         "registry_updates_test.go",
+        "transition_no_verify_sig_test.go",
         "transition_test.go",
         "upgrade_test.go",
         "validator_test.go",
         "withdrawals_test.go",
     ],
+    data = glob(["testdata/**"]),
     embed = [":go_default_library"],
     deps = [
         "//beacon-chain/core/helpers:go_default_library",
