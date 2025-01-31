@@ -283,4 +283,4 @@ require (
 replace github.com/json-iterator/go => github.com/prestonvanloon/go v1.1.7-0.20190722034630-4f2e55fcf87b
 
 // devnet 5 version
-replace github.com/ethereum/go-ethereum => github.com/s1na/go-ethereum v1.8.4-0.20241219180720-88dadb7c83c4
+replace github.com/ethereum/go-ethereum => github.com/s1na/go-ethereum v1.8.4-0.20241126014253-770079f94e39
