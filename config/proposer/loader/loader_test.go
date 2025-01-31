@@ -259,6 +259,7 @@ func TestProposerSettingsLoader(t *testing.T) {
 					},
 				}
 			},
+			wantLog: fmt.Sprintf("Builder was enabled but no gas limit was specified so the global default of %d is used.", params.BeaconConfig().DefaultBuilderGasLimit),
 		},
 		{
 			name: "Happy Path Config file File, bad checksum",
@@ -477,6 +478,7 @@ func TestProposerSettingsLoader(t *testing.T) {
 			},
 			wantErr:                      "",
 			validatorRegistrationEnabled: true,
+			wantLog:                      "Setting a global gas limit of 50000000 for mev builder",
 		},
 		{
 			name: "File with default gas that overrides",
