@@ -213,9 +213,10 @@ func validateDataColumnsByRootRequest(colIdents types.DataColumnSidecarsByRootRe
 
 func DataColumnsRPCMinValidSlot(current primitives.Slot) (primitives.Slot, error) {
 	// Avoid overflow if we're running on a config where deneb is set to far future epoch.
-	if params.BeaconConfig().DenebForkEpoch == math.MaxUint64 || !coreTime.PeerDASIsActive(current) {
+	if !coreTime.PeerDASIsActive(current) {
 		return primitives.Slot(math.MaxUint64), nil
 	}
+
 	minReqEpochs := params.BeaconConfig().MinEpochsForDataColumnSidecarsRequest
 	currEpoch := slots.ToEpoch(current)
 	minStart := params.BeaconConfig().FuluForkEpoch
