@@ -668,27 +668,14 @@ func buildBwbSlices(wrappedBwbsMissingColumns *bwbsMissingColumns, batchsize int
 
 	previousBlockSlot := firstROBlock.Block().Slot()
 	previousStartIndex := 0
+	previousStartBlockSlot := previousBlockSlot
+	batchSizeSlot := primitives.Slot(batchsize)
 
 	const offset = 1
 
 	result := make([]bwbSlice, 0, 1)
 	for currentIndexWithoutOffest, bwb := range bwbs[offset:] {
 		currentIndex := currentIndexWithoutOffest + offset
-
-		// Check if the batch size is reached.
-		if currentIndex-previousStartIndex == batchsize {
-			// Append the slice to the result.
-			slice := bwbSlice{
-				start:       previousStartIndex,
-				end:         currentIndex - 1,
-				dataColumns: previousMissingDataColumns,
-			}
-
-			result = append(result, slice)
-
-			previousStartIndex = currentIndex
-			continue
-		}
 
 		// Extract the ROBlock from the blockWithROBlob.
 		currentROBlock := bwb.Block
@@ -730,8 +717,10 @@ func buildBwbSlices(wrappedBwbsMissingColumns *bwbsMissingColumns, batchsize int
 		// Compute if the missing data columns differ.
 		missingDataColumnsDiffer := uint64MapDiffer(previousMissingDataColumns, missingDataColumns)
 
-		// Check if there is a gap or if the missing data columns differ.
-		if missingDataColumnsDiffer {
+		// Compute if the batch size is reached.
+		batchSizeReached := currentBlockSlot-previousStartBlockSlot >= batchSizeSlot
+
+		if missingDataColumnsDiffer || batchSizeReached {
 			// Append the slice to the result.
 			slice := bwbSlice{
 				start:       previousStartIndex,
@@ -742,6 +731,7 @@ func buildBwbSlices(wrappedBwbsMissingColumns *bwbsMissingColumns, batchsize int
 			result = append(result, slice)
 
 			previousStartIndex = currentIndex
+			previousStartBlockSlot = currentBlockSlot
 			previousMissingDataColumns = missingDataColumns
 		}
 
