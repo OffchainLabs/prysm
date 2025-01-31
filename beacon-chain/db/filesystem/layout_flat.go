@@ -51,6 +51,10 @@ func (*flatLayout) name() string {
 	return LayoutNameFlat
 }
 
+func (l *flatLayout) blockParentDirs(ident blobIdent) []string {
+	return []string{}
+}
+
 func (*flatLayout) dir(n blobIdent) string {
 	return rootToString(n.root)
 }

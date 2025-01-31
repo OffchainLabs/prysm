@@ -1,12 +1,17 @@
 package filesystem
 
 import (
+	"testing"
+
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 type mockLayout struct {
 	pruneBeforeFunc func(primitives.Epoch) (*pruneSummary, error)
 }
+
+var _ fsLayout = &mockLayout{}
 
 func (m *mockLayout) name() string {
 	return "mock"
@@ -14,6 +19,10 @@ func (m *mockLayout) name() string {
 
 func (*mockLayout) dir(_ blobIdent) string {
 	return ""
+}
+
+func (*mockLayout) blockParentDirs(id blobIdent) []string {
+	return []string{}
 }
 
 func (*mockLayout) sszPath(_ blobIdent) string {
@@ -53,3 +62,14 @@ func (*mockLayout) remove(ident blobIdent) (int, error) {
 }
 
 var _ fsLayout = &mockLayout{}
+
+func TestCleaner(t *testing.T) {
+	l := &periodicEpochLayout{}
+	p := l.periodDir(11235813)
+	e := l.epochDir(11235813)
+	dc := newDirCleaner()
+	dc.add(p)
+	require.Equal(t, 2, dc.maxDepth)
+	dc.add(e)
+	require.Equal(t, 3, dc.maxDepth)
+}

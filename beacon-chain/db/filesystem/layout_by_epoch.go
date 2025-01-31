@@ -32,6 +32,14 @@ func (l *periodicEpochLayout) name() string {
 	return LayoutNameByEpoch
 }
 
+func (l *periodicEpochLayout) blockParentDirs(ident blobIdent) []string {
+	return []string{
+		periodicEpochBaseDir,
+		l.periodDir(ident.epoch),
+		l.epochDir(ident.epoch),
+	}
+}
+
 func (l *periodicEpochLayout) notify(ident blobIdent) error {
 	if err := l.cache.ensure(ident); err != nil {
 		return err
@@ -85,12 +93,12 @@ func (l *periodicEpochLayout) dir(n blobIdent) string {
 	return filepath.Join(l.epochDir(n.epoch), rootToString(n.root))
 }
 
-func (*periodicEpochLayout) epochDir(epoch primitives.Epoch) string {
-	return filepath.Join(periodicEpochBaseDir, fmt.Sprintf("%d", periodForEpoch(epoch)), fmt.Sprintf("%d", epoch))
+func (l *periodicEpochLayout) epochDir(epoch primitives.Epoch) string {
+	return filepath.Join(l.periodDir(epoch), fmt.Sprintf("%d", epoch))
 }
 
-func periodForEpoch(epoch primitives.Epoch) primitives.Epoch {
-	return epoch / params.BeaconConfig().MinEpochsForBlobsSidecarsRequest
+func (l *periodicEpochLayout) periodDir(epoch primitives.Epoch) string {
+	return filepath.Join(periodicEpochBaseDir, fmt.Sprintf("%d", periodForEpoch(epoch)))
 }
 
 func (l *periodicEpochLayout) sszPath(n blobIdent) string {
@@ -134,6 +142,10 @@ func (l *periodicEpochLayout) remove(ident blobIdent) (int, error) {
 		return removed, err
 	}
 	return removed, nil
+}
+
+func periodForEpoch(epoch primitives.Epoch) primitives.Epoch {
+	return epoch / params.BeaconConfig().MinEpochsForBlobsSidecarsRequest
 }
 
 // Funcs below this line are iteration support methods that are specific to the epoch layout.

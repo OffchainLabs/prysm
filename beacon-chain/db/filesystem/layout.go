@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -82,6 +83,7 @@ type fsLayout interface {
 	notify(ident blobIdent) error
 	pruneBefore(before primitives.Epoch) (*pruneSummary, error)
 	remove(ident blobIdent) (int, error)
+	blockParentDirs(ident blobIdent) []string
 }
 
 func newLayout(name string, fs afero.Fs, cache *blobStorageSummaryCache, pruner *blobPruner) (fsLayout, error) {
@@ -128,6 +130,7 @@ func migrateLayout(fs afero.Fs, from, to fsLayout, cache *blobStorageSummaryCach
 	lastMoved := ""
 	parentDirs := make(map[string]bool) // this map should have < 65k keys by design
 	moved := 0
+	dc := newDirCleaner()
 	for ident, err := iter.next(); !errors.Is(err, io.EOF); ident, err = iter.next() {
 		if err != nil {
 			if errors.Is(err, errIdentFailure) {
@@ -154,16 +157,68 @@ func migrateLayout(fs afero.Fs, from, to fsLayout, cache *blobStorageSummaryCach
 			}
 			moved += 1
 			lastMoved = src
+			for _, dir := range from.blockParentDirs(ident) {
+				dc.add(dir)
+			}
 		}
 		if err := cache.ensure(ident); err != nil {
 			return errors.Wrapf(errMigrationFailure, "could not cache path %s, err=%s", to.sszPath(ident), err.Error())
 		}
 	}
+	dc.clean(fs)
 	if moved > 0 {
 		log.WithField("dirsMoved", moved).WithField("elapsed", time.Since(start)).
 			Info("Blob filesystem migration complete.")
 	}
 	return nil
+}
+
+type dirCleaner struct {
+	maxDepth int
+	layers   map[int]map[string]struct{}
+}
+
+func newDirCleaner() *dirCleaner {
+	return &dirCleaner{layers: make(map[int]map[string]struct{})}
+}
+
+func (d *dirCleaner) add(dir string) {
+	nLayers := len(strings.Split(dir, string(filepath.Separator)))
+	_, ok := d.layers[nLayers]
+	if !ok {
+		d.layers[nLayers] = make(map[string]struct{})
+	}
+	d.layers[nLayers][dir] = struct{}{}
+	if nLayers > d.maxDepth {
+		d.maxDepth = nLayers
+	}
+}
+
+func (d *dirCleaner) clean(fs afero.Fs) {
+	for i := d.maxDepth; i >= 0; i-- {
+		d.cleanLayer(fs, i)
+	}
+}
+
+func (d *dirCleaner) cleanLayer(fs afero.Fs, layer int) {
+	dirs, ok := d.layers[layer]
+	if !ok {
+		return
+	}
+	for dir, _ := range dirs {
+		// Use Remove rather than RemoveAll to make sure we're only removing empty directories
+		if err := fs.Remove(dir); err != nil {
+			log.WithField("dir", dir).WithError(err).Error("Failed to remove blob directory, please remove it manually if desired.")
+			contents, err := listDir(fs, dir)
+			if err != nil {
+				log.WithField("dir", dir).WithError(err).Error("Could not list blob directory contents to find reason for removal failure.")
+				continue
+			}
+			for _, c := range contents {
+				log.WithField("file", c).WithField("dir", dir).Debug("Unexpected file blocking migrated blob directory cleanup.")
+			}
+		}
+	}
 }
 
 type pruneSummary struct {
