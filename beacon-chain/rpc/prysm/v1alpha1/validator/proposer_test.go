@@ -2698,6 +2698,41 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 		expectedHash := []byte("eth1data")
 		assert.DeepEqual(t, expectedHash, hash)
 	})
+
+	t.Run("post electra the head eth1data should be returned", func(t *testing.T) {
+		p := mockExecution.New().
+			InsertBlock(50, earliestValidTime, []byte("earliest")).
+			InsertBlock(100, latestValidTime, []byte("latest"))
+		p.Eth1Data = &ethpb.Eth1Data{
+			BlockHash: []byte("eth1data"),
+		}
+
+		depositCache, err := depositsnapshot.New()
+		require.NoError(t, err)
+
+		beaconState, err := state_native.InitializeFromProtoElectra(&ethpb.BeaconStateElectra{
+			Slot:     slot,
+			Eth1Data: &ethpb.Eth1Data{BlockHash: []byte("legacy"), DepositCount: 1},
+		})
+		require.NoError(t, err)
+
+		ps := &Server{
+			ChainStartFetcher: p,
+			Eth1InfoFetcher:   p,
+			Eth1BlockFetcher:  p,
+			BlockFetcher:      p,
+			DepositFetcher:    depositCache,
+		}
+
+		ctx := context.Background()
+		majorityVoteEth1Data, err := ps.eth1DataMajorityVote(ctx, beaconState)
+		require.NoError(t, err)
+
+		hash := majorityVoteEth1Data.BlockHash
+
+		expectedHash := []byte("legacy")
+		assert.DeepEqual(t, expectedHash, hash)
+	})
 }
 
 func TestProposer_FilterAttestation(t *testing.T) {

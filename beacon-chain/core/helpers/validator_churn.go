@@ -22,7 +22,7 @@ import (
 func BalanceChurnLimit(activeBalance primitives.Gwei) primitives.Gwei {
 	churn := max(
 		params.BeaconConfig().MinPerEpochChurnLimitElectra,
-		(uint64(activeBalance) / params.BeaconConfig().ChurnLimitQuotient),
+		uint64(activeBalance)/params.BeaconConfig().ChurnLimitQuotient,
 	)
 	return primitives.Gwei(churn - churn%params.BeaconConfig().EffectiveBalanceIncrement)
 }
