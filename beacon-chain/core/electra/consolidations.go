@@ -185,6 +185,9 @@ func ProcessConsolidationRequests(ctx context.Context, st state.BeaconState, req
 	pcLimit := params.BeaconConfig().PendingConsolidationsLimit
 
 	for _, cr := range reqs {
+		if cr == nil {
+			return errors.New("nil consolidation request")
+		}
 		if ctx.Err() != nil {
 			return fmt.Errorf("cannot process consolidation requests: %w", ctx.Err())
 		}
