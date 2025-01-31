@@ -468,6 +468,9 @@ func (s *Service) validateStateTransition(ctx context.Context, preState state.Be
 	stateTransitionStartTime := time.Now()
 	postState, err := transition.ExecuteStateTransition(ctx, preState, signed)
 	if err != nil {
+		if ctx.Err() != nil {
+			return nil, err
+		}
 		return nil, invalidBlock{error: err}
 	}
 	stateTransitionProcessingTime.Observe(float64(time.Since(stateTransitionStartTime).Milliseconds()))
