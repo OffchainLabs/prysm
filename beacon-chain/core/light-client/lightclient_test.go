@@ -378,11 +378,13 @@ func TestLightClient_NewLightClientFinalityUpdateFromBeaconState(t *testing.T) {
 	})
 
 	t.Run("Electra", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
 		cfg := params.BeaconConfig()
 		cfg.AltairForkEpoch = 1
-		cfg.CapellaForkEpoch = 2
-		cfg.DenebForkEpoch = 3
-		cfg.ElectraForkEpoch = 4
+		cfg.BellatrixForkEpoch = 2
+		cfg.CapellaForkEpoch = 3
+		cfg.DenebForkEpoch = 4
+		cfg.ElectraForkEpoch = 5
 		params.OverrideBeaconConfig(cfg)
 
 		t.Run("FinalizedBlock Not Nil", func(t *testing.T) {
