@@ -205,7 +205,7 @@ func (d *dirCleaner) cleanLayer(fs afero.Fs, layer int) {
 	if !ok {
 		return
 	}
-	for dir, _ := range dirs {
+	for dir := range dirs {
 		// Use Remove rather than RemoveAll to make sure we're only removing empty directories
 		if err := fs.Remove(dir); err != nil {
 			log.WithField("dir", dir).WithError(err).Error("Failed to remove blob directory, please remove it manually if desired.")
