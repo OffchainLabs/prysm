@@ -604,7 +604,7 @@ message BeaconStateElectra {
   repeated HistoricalSummary historical_summaries = 11003
       [ (ethereum.eth.ext.ssz_max) = "16777216" ];
 
-  // Fields introduced in EIP-7251 fork [12001-13000]
+  // Fields introduced in Electra fork [12001-13000]
   uint64 deposit_requests_start_index = 12001;
   uint64 deposit_balance_to_consume = 12002 [
     (ethereum.eth.ext.cast_type) =

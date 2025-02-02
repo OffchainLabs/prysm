@@ -112,7 +112,7 @@ func MinimalSpecConfig() *BeaconChainConfig {
 	minimalConfig.MaxDepositRequestsPerPayload = 4
 	minimalConfig.PendingPartialWithdrawalsLimit = 64
 	minimalConfig.MaxPendingPartialsPerWithdrawalsSweep = 2
-	minimalConfig.PendingDepositLimit = 134217728
+	minimalConfig.PendingDepositsLimit = 134217728
 	minimalConfig.MaxPendingDepositsPerEpoch = 16
 
 	// Ethereum PoW parameters.

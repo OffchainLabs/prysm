@@ -265,7 +265,7 @@ func ProcessConsolidationRequests(ctx context.Context, st state.BeaconState, req
 		if !helpers.IsActiveValidator(srcV, curEpoch) || !helpers.IsActiveValidatorUsingTrie(tgtV, curEpoch) {
 			continue
 		}
-		// Neither validator are exiting.
+		// Neither validator is exiting.
 		if srcV.ExitEpoch != ffe || tgtV.ExitEpoch() != ffe {
 			continue
 		}

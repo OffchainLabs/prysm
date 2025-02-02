@@ -140,7 +140,7 @@ func TestGetSpec(t *testing.T) {
 	config.WhistleBlowerRewardQuotientElectra = 79
 	config.PendingPartialWithdrawalsLimit = 80
 	config.MinActivationBalance = 81
-	config.PendingDepositLimit = 82
+	config.PendingDepositsLimit = 82
 	config.MaxPendingPartialsPerWithdrawalsSweep = 83
 	config.PendingConsolidationsLimit = 84
 	config.MaxPartialWithdrawalsPerPayload = 85
