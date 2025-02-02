@@ -539,19 +539,19 @@ func (s *Store) unmarshalState(_ context.Context, enc []byte, validatorEntries [
 	}
 
 	switch {
-	case hasFuluKey(enc):
-		protoState := &ethpb.BeaconStateFulu{}
-		if err := protoState.UnmarshalSSZ(enc[len(fuluKey):]); err != nil {
-			return nil, errors.Wrap(err, "failed to unmarshal encoding for Electra")
-		}
-		return statenative.InitializeFromProtoUnsafeFulu(protoState)
 	case hasEpbsKey(enc):
 		protoState := &ethpb.BeaconStateEPBS{}
 		if err := protoState.UnmarshalSSZ(enc[len(epbsKey):]); err != nil {
 			return nil, errors.Wrap(err, "failed to unmarshal encoding for EPBS")
 		}
 		return statenative.InitializeFromProtoEpbs(protoState)
-	case hasElectraKey(enc):
+	case hasFuluKey(enc):
+		protoState := &ethpb.BeaconStateFulu{}
+		if err := protoState.UnmarshalSSZ(enc[len(fuluKey):]); err != nil {
+			return nil, errors.Wrap(err, "failed to unmarshal encoding for Electra")
+		}
+		return statenative.InitializeFromProtoUnsafeFulu(protoState)
+	case HasElectraKey(enc):
 		protoState := &ethpb.BeaconStateElectra{}
 		if err := protoState.UnmarshalSSZ(enc[len(ElectraKey):]); err != nil {
 			return nil, errors.Wrap(err, "failed to unmarshal encoding for Electra")

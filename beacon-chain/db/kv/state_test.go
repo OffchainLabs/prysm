@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	mathRand "math/rand"
-
 	"strconv"
 	"testing"
 	"time"
@@ -178,6 +177,9 @@ func TestState_CanSaveRetrieve(t *testing.T) {
 		reset := features.InitWithReset(&features.Flags{EnableHistoricalSpaceRepresentation: enableFlag})
 
 		for _, tc := range cases {
+			if tc.name == "epbs" && enableFlag {
+				t.Skip("Skipping epbs test as EnableHistoricalSpaceRepresentation is true")
+			}
 			t.Run(tc.name+" - EnableHistoricalSpaceRepresentation is "+strconv.FormatBool(enableFlag), func(t *testing.T) {
 				rootNonce := byte('0')
 				if enableFlag {

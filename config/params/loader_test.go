@@ -30,8 +30,6 @@ var placeholderFields = []string{
 	"EIP6110_FORK_VERSION",
 	"EIP7002_FORK_EPOCH",
 	"EIP7002_FORK_VERSION",
-	"EIP7732_FORK_EPOCH",
-	"EIP7732_FORK_VERSION",
 	"FIELD_ELEMENTS_PER_BLOB",              // Compile time constant.
 	"KZG_COMMITMENT_INCLUSION_PROOF_DEPTH", // Compile time constant on BlobSidecar.commitment_inclusion_proof.
 	"MAX_BLOBS_PER_BLOCK_FULU",

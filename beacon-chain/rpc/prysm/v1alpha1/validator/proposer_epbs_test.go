@@ -21,7 +21,7 @@ import (
 func TestServer_SubmitSignedExecutionPayloadEnvelope(t *testing.T) {
 	env := &enginev1.SignedExecutionPayloadEnvelope{
 		Message: &enginev1.ExecutionPayloadEnvelope{
-			Payload:            &enginev1.ExecutionPayloadElectra{},
+			Payload:            &enginev1.ExecutionPayloadDeneb{},
 			BeaconBlockRoot:    make([]byte, 32),
 			BlobKzgCommitments: [][]byte{},
 			StateRoot:          make([]byte, 32),
@@ -88,12 +88,11 @@ func TestProposer_ComputePostPayloadStateRoot(t *testing.T) {
 	}
 
 	bh := [32]byte{'h'}
-	root := [32]byte{'r'}
-	expectedStateRoot := [32]byte{22, 85, 188, 95, 44, 156, 240, 10, 30, 106, 216, 244, 24, 39, 130, 196, 151, 118, 200, 94, 28, 42, 13, 170, 109, 206, 33, 83, 97, 154, 53, 251}
+	expectedStateRoot := [32]byte{0x36, 0xbd, 0xd4, 0xd4, 0x74, 0x94, 0x8e, 0x3b, 0xc2, 0x70, 0xd9, 0xf1, 0x62, 0x1b, 0x63, 0x1, 0x31, 0x29, 0x41, 0xd2, 0xbd, 0x6c, 0x8, 0xa7, 0x8a, 0x57, 0xfe, 0x29, 0xb, 0x75, 0xef, 0xb}
 	p := &enginev1.ExecutionPayloadEnvelope{
-		Payload:            &enginev1.ExecutionPayloadElectra{},
+		BeaconBlockRoot:    make([]byte, 32),
+		Payload:            &enginev1.ExecutionPayloadDeneb{},
 		ExecutionRequests:  &enginev1.ExecutionRequests{},
-		BeaconBlockRoot:    root[:],
 		BlobKzgCommitments: make([][]byte, 0),
 		StateRoot:          expectedStateRoot[:],
 	}
@@ -102,6 +101,14 @@ func TestProposer_ComputePostPayloadStateRoot(t *testing.T) {
 	require.NoError(t, err)
 
 	st, _ := util.DeterministicGenesisStateEpbs(t, 64)
+	blockHeader := st.LatestBlockHeader()
+	sr, err := st.HashTreeRoot(ctx)
+	require.NoError(t, err)
+	blockHeader.StateRoot = sr[:]
+	blockHeaderRoot, err := blockHeader.HashTreeRoot()
+	require.NoError(t, err)
+	p.BeaconBlockRoot = blockHeaderRoot[:]
+
 	require.NoError(t, db.SaveState(ctx, st, e.BeaconBlockRoot()))
 	stateRoot, err := proposerServer.computePostPayloadStateRoot(ctx, e)
 	require.NoError(t, err)

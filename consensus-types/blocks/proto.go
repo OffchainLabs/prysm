@@ -407,7 +407,22 @@ func (b *BeaconBlock) Proto() (proto.Message, error) { // nolint:gocognit
 			StateRoot:     b.stateRoot[:],
 			Body:          body,
 		}, nil
-
+	case version.EPBS:
+		var body *eth.BeaconBlockBodyEpbs
+		if bodyMessage != nil {
+			var ok bool
+			body, ok = bodyMessage.(*eth.BeaconBlockBodyEpbs)
+			if !ok {
+				return nil, errIncorrectBodyVersion
+			}
+		}
+		return &eth.BeaconBlockEpbs{
+			Slot:          b.slot,
+			ProposerIndex: b.proposerIndex,
+			ParentRoot:    b.parentRoot[:],
+			StateRoot:     b.stateRoot[:],
+			Body:          body,
+		}, nil
 	default:
 		return nil, errors.New("unsupported beacon block version")
 	}
@@ -719,22 +734,6 @@ func initSignedBlockFromProtoPhase0(pb *eth.SignedBeaconBlock) (*SignedBeaconBlo
 	return b, nil
 }
 
-func initSignedBlockFromProtoEPBS(pb *eth.SignedBeaconBlockEpbs) (*SignedBeaconBlock, error) {
-	if pb == nil {
-		return nil, errNilBlock
-	}
-	block, err := initBlockFromProtoEpbs(pb.Block)
-	if err != nil {
-		return nil, err
-	}
-	b := &SignedBeaconBlock{
-		version:   version.EPBS,
-		block:     block,
-		signature: bytesutil.ToBytes96(pb.Signature),
-	}
-	return b, nil
-}
-
 func initBlockFromProtoPhase0(pb *eth.BeaconBlock) (*BeaconBlock, error) {
 	if pb == nil {
 		return nil, errNilBlock
@@ -865,25 +864,6 @@ func initBlindedBlockFromProtoBellatrix(pb *eth.BlindedBeaconBlockBellatrix) (*B
 	}
 	b := &BeaconBlock{
 		version:       version.Bellatrix,
-		slot:          pb.Slot,
-		proposerIndex: pb.ProposerIndex,
-		parentRoot:    bytesutil.ToBytes32(pb.ParentRoot),
-		stateRoot:     bytesutil.ToBytes32(pb.StateRoot),
-		body:          body,
-	}
-	return b, nil
-}
-
-func initBlockFromProtoEpbs(pb *eth.BeaconBlockEpbs) (*BeaconBlock, error) {
-	if pb == nil {
-		return nil, errNilBlock
-	}
-	body, err := initBlockBodyFromProtoEpbs(pb.Body)
-	if err != nil {
-		return nil, err
-	}
-	b := &BeaconBlock{
-		version:       version.EPBS,
 		slot:          pb.Slot,
 		proposerIndex: pb.ProposerIndex,
 		parentRoot:    bytesutil.ToBytes32(pb.ParentRoot),
@@ -1222,29 +1202,6 @@ func initBlockBodyFromProtoDeneb(pb *eth.BeaconBlockBodyDeneb) (*BeaconBlockBody
 	return b, nil
 }
 
-func initBlockBodyFromProtoEpbs(pb *eth.BeaconBlockBodyEpbs) (*BeaconBlockBody, error) {
-	if pb == nil {
-		return nil, errNilBlockBody
-	}
-
-	b := &BeaconBlockBody{
-		version:                      version.EPBS,
-		randaoReveal:                 bytesutil.ToBytes96(pb.RandaoReveal),
-		eth1Data:                     pb.Eth1Data,
-		graffiti:                     bytesutil.ToBytes32(pb.Graffiti),
-		proposerSlashings:            pb.ProposerSlashings,
-		attesterSlashingsElectra:     pb.AttesterSlashings,
-		attestationsElectra:          pb.Attestations,
-		deposits:                     pb.Deposits,
-		voluntaryExits:               pb.VoluntaryExits,
-		syncAggregate:                pb.SyncAggregate,
-		blsToExecutionChanges:        pb.BlsToExecutionChanges,
-		signedExecutionPayloadHeader: pb.SignedExecutionPayloadHeader,
-		payloadAttestations:          pb.PayloadAttestations,
-	}
-	return b, nil
-}
-
 func initBlindedBlockBodyFromProtoDeneb(pb *eth.BlindedBeaconBlockBodyDeneb) (*BeaconBlockBody, error) {
 	if pb == nil {
 		return nil, errNilBlockBody
@@ -1557,6 +1514,68 @@ func initBlindedBlockBodyFromProtoFulu(pb *eth.BlindedBeaconBlockBodyFulu) (*Bea
 		blsToExecutionChanges:    pb.BlsToExecutionChanges,
 		blobKzgCommitments:       pb.BlobKzgCommitments,
 		executionRequests:        er,
+	}
+	return b, nil
+}
+
+// ----------------------------------------------------------------------------
+// Epbs
+// ----------------------------------------------------------------------------
+
+func initBlockFromProtoEpbs(pb *eth.BeaconBlockEpbs) (*BeaconBlock, error) {
+	if pb == nil {
+		return nil, errNilBlock
+	}
+	body, err := initBlockBodyFromProtoEpbs(pb.Body)
+	if err != nil {
+		return nil, err
+	}
+	b := &BeaconBlock{
+		version:       version.EPBS,
+		slot:          pb.Slot,
+		proposerIndex: pb.ProposerIndex,
+		parentRoot:    bytesutil.ToBytes32(pb.ParentRoot),
+		stateRoot:     bytesutil.ToBytes32(pb.StateRoot),
+		body:          body,
+	}
+	return b, nil
+}
+
+func initSignedBlockFromProtoEPBS(pb *eth.SignedBeaconBlockEpbs) (*SignedBeaconBlock, error) {
+	if pb == nil {
+		return nil, errNilBlock
+	}
+	block, err := initBlockFromProtoEpbs(pb.Block)
+	if err != nil {
+		return nil, err
+	}
+	b := &SignedBeaconBlock{
+		version:   version.EPBS,
+		block:     block,
+		signature: bytesutil.ToBytes96(pb.Signature),
+	}
+	return b, nil
+}
+
+func initBlockBodyFromProtoEpbs(pb *eth.BeaconBlockBodyEpbs) (*BeaconBlockBody, error) {
+	if pb == nil {
+		return nil, errNilBlockBody
+	}
+
+	b := &BeaconBlockBody{
+		version:                      version.EPBS,
+		randaoReveal:                 bytesutil.ToBytes96(pb.RandaoReveal),
+		eth1Data:                     pb.Eth1Data,
+		graffiti:                     bytesutil.ToBytes32(pb.Graffiti),
+		proposerSlashings:            pb.ProposerSlashings,
+		attesterSlashingsElectra:     pb.AttesterSlashings,
+		attestationsElectra:          pb.Attestations,
+		deposits:                     pb.Deposits,
+		voluntaryExits:               pb.VoluntaryExits,
+		syncAggregate:                pb.SyncAggregate,
+		blsToExecutionChanges:        pb.BlsToExecutionChanges,
+		signedExecutionPayloadHeader: pb.SignedExecutionPayloadHeader,
+		payloadAttestations:          pb.PayloadAttestations,
 	}
 	return b, nil
 }

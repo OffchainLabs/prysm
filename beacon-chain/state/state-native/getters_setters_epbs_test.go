@@ -15,7 +15,7 @@ import (
 func Test_LatestExecutionPayloadHeaderEPBS(t *testing.T) {
 	s := &BeaconState{version: version.EPBS}
 	_, err := s.LatestExecutionPayloadHeader()
-	require.ErrorContains(t, "unsupported version (epbs) for latest execution payload header", err)
+	require.ErrorContains(t, "LatestExecutionPayloadHeader is not supported for epbs", err)
 }
 
 func Test_SetLatestExecutionPayloadHeader(t *testing.T) {

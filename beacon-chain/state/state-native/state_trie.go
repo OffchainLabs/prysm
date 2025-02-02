@@ -1078,7 +1078,7 @@ func (b *BeaconState) Copy() state.BeaconState {
 		latestExecutionPayloadHeader:        b.latestExecutionPayloadHeader.Copy(),
 		latestExecutionPayloadHeaderCapella: b.latestExecutionPayloadHeaderCapella.Copy(),
 		latestExecutionPayloadHeaderDeneb:   b.latestExecutionPayloadHeaderDeneb.Copy(),
-		executionPayloadHeader:              b.executionPayloadHeaderVal(),
+		latestExecutionPayloadHeaderEPBS:    b.executionPayloadHeaderVal(),
 
 		id: types.Enumerator.Inc(),
 
@@ -1486,7 +1486,7 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 	case types.LatestFullSlot:
 		return ssz.Uint64Root(uint64(b.latestFullSlot)), nil
 	case types.ExecutionPayloadHeader:
-		return b.executionPayloadHeader.HashTreeRoot()
+		return b.latestExecutionPayloadHeaderEPBS.HashTreeRoot()
 	case types.LastWithdrawalsRoot:
 		return b.lastWithdrawalsRoot, nil
 	}

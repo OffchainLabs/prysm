@@ -658,6 +658,15 @@ func (s *PremineGenesisConfig) setExecutionPayload(g state.BeaconState) error {
 		extraData = extraData[:32]
 	}
 
+	if s.Version >= version.EPBS {
+		return g.SetLatestExecutionPayloadHeaderEPBS(&enginev1.ExecutionPayloadHeaderEPBS{
+			ParentBlockHash:        make([]byte, 32),
+			ParentBlockRoot:        make([]byte, 32),
+			BlockHash:              make([]byte, 32),
+			BlobKzgCommitmentsRoot: make([]byte, 32),
+		})
+	}
+
 	if s.Version >= version.Deneb {
 		payload := &enginev1.ExecutionPayloadDeneb{
 			ParentHash:    gb.ParentHash().Bytes(),
@@ -730,16 +739,6 @@ func (s *PremineGenesisConfig) setExecutionPayload(g state.BeaconState) error {
 			return err
 		}
 		return g.SetLatestExecutionPayloadHeader(ed)
-	}
-	case version.EPBS:
-		return g.SetLatestExecutionPayloadHeaderEPBS(&enginev1.ExecutionPayloadHeaderEPBS{
-			ParentBlockHash:        make([]byte, 32),
-			ParentBlockRoot:        make([]byte, 32),
-			BlockHash:              make([]byte, 32),
-			BlobKzgCommitmentsRoot: make([]byte, 32),
-		})
-	default:
-		return errUnsupportedVersion
 	}
 
 	if s.Version >= version.Bellatrix {

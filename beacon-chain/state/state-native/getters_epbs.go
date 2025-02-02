@@ -31,7 +31,7 @@ func (b *BeaconState) IsParentBlockFull() (bool, error) {
 	b.lock.RLock()
 	defer b.lock.RUnlock()
 
-	headerBlockHash := bytesutil.ToBytes32(b.executionPayloadHeader.BlockHash)
+	headerBlockHash := bytesutil.ToBytes32(b.latestExecutionPayloadHeaderEPBS.BlockHash)
 	return headerBlockHash == b.latestBlockHash, nil
 }
 

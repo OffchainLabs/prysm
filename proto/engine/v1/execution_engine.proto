@@ -28,7 +28,7 @@ message ExecutionPayload {
   bytes parent_hash = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
   bytes fee_recipient = 2 [ (ethereum.eth.ext.ssz_size) = "20" ];
   bytes state_root = 3 [ (ethereum.eth.ext.ssz_size) = "32" ];
-    bytes receipts_root = 4 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes receipts_root = 4 [ (ethereum.eth.ext.ssz_size) = "32" ];
   bytes logs_bloom = 5 [ (ethereum.eth.ext.ssz_size) = "logs_bloom.size" ];
   bytes prev_randao = 6 [ (ethereum.eth.ext.ssz_size) = "32" ];
   uint64 block_number = 7;

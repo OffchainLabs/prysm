@@ -393,8 +393,8 @@ func ExecutionRequests(t *testing.T) *enginev1.ExecutionRequests {
 }
 
 // ExecutionPayload creates a random ExecutionPayloadEPBS for testing purposes.
-func ExecutionPayload(t *testing.T) *enginev1.ExecutionPayloadElectra {
-	return &enginev1.ExecutionPayloadElectra{
+func ExecutionPayload(t *testing.T) *enginev1.ExecutionPayloadDeneb {
+	return &enginev1.ExecutionPayloadDeneb{
 		ParentHash:    randomBytes(32, t),
 		FeeRecipient:  randomBytes(20, t),
 		StateRoot:     randomBytes(32, t),
@@ -457,17 +457,17 @@ func ConsolidationRequest(t *testing.T) *enginev1.ConsolidationRequest {
 }
 
 // SignedBlindPayloadEnvelope creates a random SignedBlindPayloadEnvelope for testing purposes.
-func SignedBlindPayloadEnvelope(t *testing.T) *ethpb.SignedBlindPayloadEnvelope {
-	return &ethpb.SignedBlindPayloadEnvelope{
+func SignedBlindPayloadEnvelope(t *testing.T) *enginev1.SignedBlindPayloadEnvelope {
+	return &enginev1.SignedBlindPayloadEnvelope{
 		Message:   BlindPayloadEnvelope(t),
 		Signature: randomBytes(96, t),
 	}
 }
 
 // BlindPayloadEnvelope creates a random BlindPayloadEnvelope for testing purposes.
-func BlindPayloadEnvelope(t *testing.T) *ethpb.BlindPayloadEnvelope {
+func BlindPayloadEnvelope(t *testing.T) *enginev1.BlindPayloadEnvelope {
 	withheld := randomUint64(t)%2 == 0
-	return &ethpb.BlindPayloadEnvelope{
+	return &enginev1.BlindPayloadEnvelope{
 		PayloadRoot:        randomBytes(32, t),
 		BuilderIndex:       primitives.ValidatorIndex(randomUint64(t)),
 		BeaconBlockRoot:    randomBytes(32, t),

@@ -68,7 +68,6 @@ type BeaconState struct {
 	latestInclusionListSlot       primitives.Slot
 	latestBlockHash               [32]byte
 	latestFullSlot                primitives.Slot
-	executionPayloadHeader        *enginev1.ExecutionPayloadHeaderEPBS
 	lastWithdrawalsRoot           [32]byte
 
 	// Electra fields

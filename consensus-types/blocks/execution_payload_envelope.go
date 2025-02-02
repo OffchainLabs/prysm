@@ -103,7 +103,7 @@ func (p *executionPayloadEnvelope) Execution() (interfaces.ExecutionData, error)
 	if p.IsBlinded() {
 		return nil, consensus_types.ErrNilObjectWrapped
 	}
-	return WrappedExecutionPayloadElectra(p.p.Payload)
+	return WrappedExecutionPayloadDeneb(p.p.Payload)
 }
 
 // ExecutionRequests returns the execution requests in the payload envelope

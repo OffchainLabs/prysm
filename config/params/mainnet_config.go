@@ -229,7 +229,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	ElectraForkEpoch:     mainnetElectraForkEpoch,
 	FuluForkVersion:      []byte{6, 0, 0, 0},
 	FuluForkEpoch:        mainnetFuluForkEpoch,
-	EPBSForkVersion:      []byte{6, 0, 0, 0},
+	EPBSForkVersion:      []byte{9, 0, 0, 0},
 	EPBSForkEpoch:        mainnetEPBSForkEpoch,
 
 	// New values introduced in Altair hard fork 1.
@@ -379,5 +379,5 @@ func FillTestVersions(c *BeaconChainConfig, b byte) {
 	c.DenebForkVersion[0] = 4
 	c.ElectraForkVersion[0] = 5
 	c.FuluForkVersion[0] = 6
-	c.EPBSForkVersion[0] = 6
+	c.EPBSForkVersion[0] = 7
 }

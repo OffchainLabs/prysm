@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"github.com/prysmaticlabs/prysm/v5/testing/util/random"
 )
@@ -14,10 +15,12 @@ func TestStore_SignedBlindPayloadEnvelope(t *testing.T) {
 	_, err := db.SignedBlindPayloadEnvelope(ctx, []byte("test"))
 	require.ErrorIs(t, err, ErrNotFound)
 
-	env := random.SignedBlindPayloadEnvelope(t)
-	err = db.SaveBlindPayloadEnvelope(ctx, env)
+	env := random.SignedExecutionPayloadEnvelope(t)
+	e, err := blocks.WrappedROSignedExecutionPayloadEnvelope(env)
 	require.NoError(t, err)
-	got, err := db.SignedBlindPayloadEnvelope(ctx, env.Message.BeaconBlockRoot)
+	err = db.SaveBlindPayloadEnvelope(ctx, e)
 	require.NoError(t, err)
-	require.DeepEqual(t, got, env)
+	got, err := db.SignedBlindPayloadEnvelope(ctx, env.Message.Payload.BlockHash)
+	require.NoError(t, err)
+	require.DeepEqual(t, got, env.Blind())
 }

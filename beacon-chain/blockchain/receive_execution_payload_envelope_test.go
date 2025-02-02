@@ -73,7 +73,7 @@ func Test_ReceiveExecutionPayloadEnvelope(t *testing.T) {
 	require.NoError(t, fcs.UpdateFinalizedCheckpoint(&forkchoicetypes.Checkpoint{Root: service.originBlockRoot}))
 	post := gs.Copy()
 	p := &enginev1.ExecutionPayloadEnvelope{
-		Payload: &enginev1.ExecutionPayloadElectra{
+		Payload: &enginev1.ExecutionPayloadDeneb{
 			ParentHash: make([]byte, 32),
 			BlockHash:  make([]byte, 32),
 		},
@@ -82,7 +82,10 @@ func Test_ReceiveExecutionPayloadEnvelope(t *testing.T) {
 		StateRoot:          make([]byte, 32),
 		ExecutionRequests:  &enginev1.ExecutionRequests{},
 	}
-	e, err := blocks.WrappedROExecutionPayloadEnvelope(p)
+	sp := &enginev1.SignedExecutionPayloadEnvelope{
+		Message: p,
+	}
+	e, err := blocks.WrappedROSignedExecutionPayloadEnvelope(sp)
 	require.NoError(t, err)
 	das := &das.MockAvailabilityStore{}
 

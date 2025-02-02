@@ -1152,6 +1152,8 @@ func (b *BeaconBlock) AsSignRequestObject() (validatorpb.SignRequestObject, erro
 			return &validatorpb.SignRequest_BlindedBlockFulu{BlindedBlockFulu: pb.(*eth.BlindedBeaconBlockFulu)}, nil
 		}
 		return &validatorpb.SignRequest_BlockFulu{BlockFulu: pb.(*eth.BeaconBlockFulu)}, nil
+	case version.EPBS:
+		return &validatorpb.SignRequest_BlockEpbs{BlockEpbs: pb.(*eth.BeaconBlockEpbs)}, nil
 	default:
 		return nil, errIncorrectBlockVersion
 	}
@@ -1328,6 +1330,8 @@ func (b *BeaconBlockBody) HashTreeRoot() ([field_params.RootLength]byte, error) 
 			return pb.(*eth.BlindedBeaconBlockBodyFulu).HashTreeRoot()
 		}
 		return pb.(*eth.BeaconBlockBodyFulu).HashTreeRoot()
+	case version.EPBS:
+		return pb.(*eth.BeaconBlockBodyEpbs).HashTreeRoot()
 	default:
 		return [field_params.RootLength]byte{}, errIncorrectBodyVersion
 	}

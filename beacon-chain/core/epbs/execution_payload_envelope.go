@@ -25,13 +25,13 @@ func ValidatePayloadStateTransition(
 	if err != nil {
 		return err
 	}
-	if err := validateAgainstCommittedBid(committedHeader, envelope); err != nil {
+	if err := ValidateAgainstCommittedBid(committedHeader, envelope); err != nil {
 		return err
 	}
 	if err := ProcessPayloadStateTransition(ctx, preState, envelope); err != nil {
 		return err
 	}
-	return checkPostStateRoot(ctx, preState, envelope)
+	return CheckPostStateRoot(ctx, preState, envelope)
 }
 
 func ProcessPayloadStateTransition(
@@ -91,7 +91,7 @@ func UpdateHeaderAndVerify(
 	return nil
 }
 
-func validateAgainstCommittedBid(
+func ValidateAgainstCommittedBid(
 	committedHeader *enginev1.ExecutionPayloadHeaderEPBS,
 	envelope interfaces.ROExecutionPayloadEnvelope,
 ) error {
@@ -109,7 +109,7 @@ func validateAgainstCommittedBid(
 	return nil
 }
 
-func checkPostStateRoot(
+func CheckPostStateRoot(
 	ctx context.Context,
 	preState state.BeaconState,
 	envelope interfaces.ROExecutionPayloadEnvelope,

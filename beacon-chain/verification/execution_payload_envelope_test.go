@@ -20,7 +20,7 @@ func TestExecutionPayloadEnvelope_VerifyBlockRootSeen(t *testing.T) {
 	beaconBlockRoot := [32]byte{1, 2, 3}
 	verifier := newExecutionPayloadEnvelopeVerifier(t, &enginev1.SignedExecutionPayloadEnvelope{
 		Message: &enginev1.ExecutionPayloadEnvelope{
-			Payload:            &enginev1.ExecutionPayloadElectra{},
+			Payload:            &enginev1.ExecutionPayloadDeneb{},
 			BeaconBlockRoot:    beaconBlockRoot[:],
 			BlobKzgCommitments: [][]byte{make([]byte, 48), make([]byte, 48), make([]byte, 48)},
 			StateRoot:          make([]byte, 32),
@@ -51,7 +51,7 @@ func TestExecutionPayloadEnvelope_VerifyBlockRootValid(t *testing.T) {
 	beaconBlockRoot := [32]byte{1, 2, 3}
 	verifier := newExecutionPayloadEnvelopeVerifier(t, &enginev1.SignedExecutionPayloadEnvelope{
 		Message: &enginev1.ExecutionPayloadEnvelope{
-			Payload:            &enginev1.ExecutionPayloadElectra{},
+			Payload:            &enginev1.ExecutionPayloadDeneb{},
 			BeaconBlockRoot:    beaconBlockRoot[:],
 			BlobKzgCommitments: [][]byte{make([]byte, 48), make([]byte, 48), make([]byte, 48)},
 			StateRoot:          make([]byte, 32),
@@ -78,7 +78,7 @@ func TestExecutionPayloadEnvelope_VerifyBuilderValid(t *testing.T) {
 	builderIndexMismatch := primitives.ValidatorIndex(2)
 	verifier := newExecutionPayloadEnvelopeVerifier(t, &enginev1.SignedExecutionPayloadEnvelope{
 		Message: &enginev1.ExecutionPayloadEnvelope{
-			Payload:            &enginev1.ExecutionPayloadElectra{},
+			Payload:            &enginev1.ExecutionPayloadDeneb{},
 			BuilderIndex:       builderIndexWanted,
 			BeaconBlockRoot:    make([]byte, 32),
 			BlobKzgCommitments: [][]byte{make([]byte, 48), make([]byte, 48), make([]byte, 48)},
@@ -122,7 +122,7 @@ func TestExecutionPayloadEnvelope_VerifyPayloadHash(t *testing.T) {
 	blockHashMismatch := [32]byte{4, 5, 6}
 	verifier := newExecutionPayloadEnvelopeVerifier(t, &enginev1.SignedExecutionPayloadEnvelope{
 		Message: &enginev1.ExecutionPayloadEnvelope{
-			Payload: &enginev1.ExecutionPayloadElectra{
+			Payload: &enginev1.ExecutionPayloadDeneb{
 				BlockHash: blockHashWanted[:],
 			},
 			BeaconBlockRoot:    make([]byte, 32),
@@ -179,7 +179,7 @@ func TestExecutionPayloadEnvelope_VerifySignature(t *testing.T) {
 	builderIndexMatch := builderIndexWanted
 	builderIndexMismatch := primitives.ValidatorIndex(1)
 	envelope := &enginev1.ExecutionPayloadEnvelope{
-		Payload: &enginev1.ExecutionPayloadElectra{
+		Payload: &enginev1.ExecutionPayloadDeneb{
 			ParentHash:    make([]byte, 32),
 			FeeRecipient:  make([]byte, 20),
 			StateRoot:     make([]byte, 32),
@@ -243,7 +243,7 @@ func TestExecutionPayloadEnvelope_SatisfyRequirement(t *testing.T) {
 	t.Run("requirements satisfy", func(t *testing.T) {
 		verifier := newExecutionPayloadEnvelopeVerifier(t, &enginev1.SignedExecutionPayloadEnvelope{
 			Message: &enginev1.ExecutionPayloadEnvelope{
-				Payload:            &enginev1.ExecutionPayloadElectra{},
+				Payload:            &enginev1.ExecutionPayloadDeneb{},
 				BeaconBlockRoot:    make([]byte, 32),
 				BlobKzgCommitments: [][]byte{make([]byte, 48), make([]byte, 48), make([]byte, 48)},
 				StateRoot:          make([]byte, 32),
@@ -260,7 +260,7 @@ func TestExecutionPayloadEnvelope_SatisfyRequirement(t *testing.T) {
 	t.Run("requirements dissatisfy", func(t *testing.T) {
 		verifier := newExecutionPayloadEnvelopeVerifier(t, &enginev1.SignedExecutionPayloadEnvelope{
 			Message: &enginev1.ExecutionPayloadEnvelope{
-				Payload:            &enginev1.ExecutionPayloadElectra{},
+				Payload:            &enginev1.ExecutionPayloadDeneb{},
 				BeaconBlockRoot:    make([]byte, 32),
 				BlobKzgCommitments: [][]byte{make([]byte, 48), make([]byte, 48), make([]byte, 48)},
 				StateRoot:          make([]byte, 32),

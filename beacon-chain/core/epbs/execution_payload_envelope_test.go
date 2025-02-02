@@ -1,9 +1,10 @@
-package epbs
+package epbs_test
 
 import (
 	"context"
 	"testing"
 
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/epbs"
 	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
@@ -30,7 +31,7 @@ func TestProcessPayloadStateTransition(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, [32]byte{}, [32]byte(lbh))
 
-	require.NoError(t, ProcessPayloadStateTransition(ctx, st, e))
+	require.NoError(t, epbs.ProcessPayloadStateTransition(ctx, st, e))
 
 	lbh, err = st.LatestBlockHash()
 	require.NoError(t, err)
@@ -43,7 +44,7 @@ func TestProcessPayloadStateTransition(t *testing.T) {
 
 func Test_validateAgainstHeader(t *testing.T) {
 	bh := [32]byte{'h'}
-	payload := &enginev1.ExecutionPayloadElectra{BlockHash: bh[:]}
+	payload := &enginev1.ExecutionPayloadDeneb{BlockHash: bh[:]}
 	p := random.ExecutionPayloadEnvelope(t)
 	p.Payload = payload
 	e, err := blocks.WrappedROExecutionPayloadEnvelope(p)
@@ -52,30 +53,30 @@ func Test_validateAgainstHeader(t *testing.T) {
 	st, err := state_native.InitializeFromProtoUnsafeEpbs(stpb)
 	require.NoError(t, err)
 	ctx := context.Background()
-	require.ErrorContains(t, "invalid nil latest block header", UpdateHeaderAndVerify(ctx, st, e))
+	require.ErrorContains(t, "invalid nil latest block header", epbs.UpdateHeaderAndVerify(ctx, st, e))
 
 	prest, _ := util.DeterministicGenesisStateEpbs(t, 64)
 	br := [32]byte{'r'}
 	p.BeaconBlockRoot = br[:]
-	require.ErrorContains(t, "beacon block root does not match previous header", UpdateHeaderAndVerify(ctx, prest, e))
+	require.ErrorContains(t, "beacon block root does not match previous header", epbs.UpdateHeaderAndVerify(ctx, prest, e))
 
 	header := prest.LatestBlockHeader()
 	require.NoError(t, err)
 	headerRoot, err := header.HashTreeRoot()
 	require.NoError(t, err)
 	p.BeaconBlockRoot = headerRoot[:]
-	require.NoError(t, UpdateHeaderAndVerify(ctx, prest, e))
+	require.NoError(t, epbs.UpdateHeaderAndVerify(ctx, prest, e))
 }
 
 func Test_validateAgainstCommittedBid(t *testing.T) {
-	payload := &enginev1.ExecutionPayloadElectra{}
+	payload := &enginev1.ExecutionPayloadDeneb{}
 	p := random.ExecutionPayloadEnvelope(t)
 	p.Payload = payload
 	p.BuilderIndex = 1
 	e, err := blocks.WrappedROExecutionPayloadEnvelope(p)
 	require.NoError(t, err)
 	h := &enginev1.ExecutionPayloadHeaderEPBS{}
-	require.ErrorContains(t, "builder index does not match committed header", validateAgainstCommittedBid(h, e))
+	require.ErrorContains(t, "builder index does not match committed header", epbs.ValidateAgainstCommittedBid(h, e))
 
 	h.BuilderIndex = 1
 	p.BlobKzgCommitments = make([][]byte, 6)
@@ -83,16 +84,16 @@ func Test_validateAgainstCommittedBid(t *testing.T) {
 		p.BlobKzgCommitments[i] = make([]byte, 48)
 	}
 	h.BlobKzgCommitmentsRoot = make([]byte, 32)
-	require.ErrorContains(t, "blob KZG commitments root does not match committed header", validateAgainstCommittedBid(h, e))
+	require.ErrorContains(t, "blob KZG commitments root does not match committed header", epbs.ValidateAgainstCommittedBid(h, e))
 
 	root, err := e.BlobKzgCommitmentsRoot()
 	require.NoError(t, err)
 	h.BlobKzgCommitmentsRoot = root[:]
-	require.NoError(t, validateAgainstCommittedBid(h, e))
+	require.NoError(t, epbs.ValidateAgainstCommittedBid(h, e))
 }
 
 func TestCheckPostStateRoot(t *testing.T) {
-	payload := &enginev1.ExecutionPayloadElectra{}
+	payload := &enginev1.ExecutionPayloadDeneb{}
 	p := random.ExecutionPayloadEnvelope(t)
 	p.Payload = payload
 	p.BuilderIndex = 1
@@ -101,9 +102,9 @@ func TestCheckPostStateRoot(t *testing.T) {
 	ctx := context.Background()
 	st, _ := util.DeterministicGenesisStateEpbs(t, 64)
 	p.StateRoot = make([]byte, 32)
-	require.ErrorContains(t, "state root mismatch", checkPostStateRoot(ctx, st, e))
+	require.ErrorContains(t, "state root mismatch", epbs.CheckPostStateRoot(ctx, st, e))
 	root, err := st.HashTreeRoot(ctx)
 	require.NoError(t, err)
 	p.StateRoot = root[:]
-	require.NoError(t, checkPostStateRoot(ctx, st, e))
+	require.NoError(t, epbs.CheckPostStateRoot(ctx, st, e))
 }

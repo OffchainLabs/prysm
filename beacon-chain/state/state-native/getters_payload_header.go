@@ -10,7 +10,7 @@ import (
 
 // LatestExecutionPayloadHeader of the beacon state.
 func (b *BeaconState) LatestExecutionPayloadHeader() (interfaces.ExecutionData, error) {
-	if b.version < version.Bellatrix {
+	if b.version < version.Bellatrix || b.version >= version.EPBS {
 		return nil, errNotSupported("LatestExecutionPayloadHeader", b.version)
 	}
 

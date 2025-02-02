@@ -17,7 +17,7 @@ func (b *BeaconState) SetLatestExecutionPayloadHeaderEPBS(h *enginev1.ExecutionP
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
-	b.executionPayloadHeader = h
+	b.latestExecutionPayloadHeaderEPBS = h
 	b.markFieldAsDirty(types.ExecutionPayloadHeader)
 
 	return nil
