@@ -52,5 +52,6 @@ go_test(
     deps = [
         "//proto/prysm/v1alpha1:go_default_library",
         "//testing/require:go_default_library",
+        "@com_github_stretchr_testify//assert:go_default_library",
     ],
 )

@@ -52,6 +52,9 @@ func HistoricalSummaryFromConsensus(s *eth.HistoricalSummary) *HistoricalSummary
 }
 
 func (s *SignedBLSToExecutionChange) ToConsensus() (*eth.SignedBLSToExecutionChange, error) {
+	if s.Message == nil {
+		return nil, errNilValue
+	}
 	change, err := s.Message.ToConsensus()
 	if err != nil {
 		return nil, server.NewDecodeError(err, "Message")
@@ -111,6 +114,9 @@ func SignedBLSChangesToConsensus(src []*SignedBLSToExecutionChange) ([]*eth.Sign
 	}
 	changes := make([]*eth.SignedBLSToExecutionChange, len(src))
 	for i, ch := range src {
+		if ch == nil {
+			return nil, server.NewDecodeError(errNilValue, fmt.Sprintf("[%d]", i))
+		}
 		changes[i], err = ch.ToConsensus()
 		if err != nil {
 			return nil, server.NewDecodeError(err, fmt.Sprintf("[%d]", i))
@@ -156,6 +162,9 @@ func ForkFromConsensus(f *eth.Fork) *Fork {
 }
 
 func (s *SignedValidatorRegistration) ToConsensus() (*eth.SignedValidatorRegistrationV1, error) {
+	if s.Message == nil {
+		return nil, errNilValue
+	}
 	msg, err := s.Message.ToConsensus()
 	if err != nil {
 		return nil, server.NewDecodeError(err, "Message")
@@ -212,6 +221,9 @@ func SignedValidatorRegistrationFromConsensus(vr *eth.SignedValidatorRegistratio
 }
 
 func (s *SignedContributionAndProof) ToConsensus() (*eth.SignedContributionAndProof, error) {
+	if s.Message == nil {
+		return nil, errNilValue
+	}
 	msg, err := s.Message.ToConsensus()
 	if err != nil {
 		return nil, server.NewDecodeError(err, "Message")
@@ -236,6 +248,9 @@ func SignedContributionAndProofFromConsensus(c *eth.SignedContributionAndProof) 
 }
 
 func (c *ContributionAndProof) ToConsensus() (*eth.ContributionAndProof, error) {
+	if c.Contribution == nil {
+		return nil, errNilValue
+	}
 	contribution, err := c.Contribution.ToConsensus()
 	if err != nil {
 		return nil, server.NewDecodeError(err, "Contribution")
@@ -307,6 +322,9 @@ func SyncCommitteeContributionFromConsensus(c *eth.SyncCommitteeContribution) *S
 }
 
 func (s *SignedAggregateAttestationAndProof) ToConsensus() (*eth.SignedAggregateAttestationAndProof, error) {
+	if s.Message == nil {
+		return nil, errNilValue
+	}
 	msg, err := s.Message.ToConsensus()
 	if err != nil {
 		return nil, server.NewDecodeError(err, "Message")
@@ -327,6 +345,9 @@ func (a *AggregateAttestationAndProof) ToConsensus() (*eth.AggregateAttestationA
 	if err != nil {
 		return nil, server.NewDecodeError(err, "AggregatorIndex")
 	}
+	if a.Aggregate == nil {
+		return nil, errNilValue
+	}
 	agg, err := a.Aggregate.ToConsensus()
 	if err != nil {
 		return nil, server.NewDecodeError(err, "Aggregate")
@@ -343,6 +364,9 @@ func (a *AggregateAttestationAndProof) ToConsensus() (*eth.AggregateAttestationA
 }
 
 func (s *SignedAggregateAttestationAndProofElectra) ToConsensus() (*eth.SignedAggregateAttestationAndProofElectra, error) {
+	if s.Message == nil {
+		return nil, errNilValue
+	}
 	msg, err := s.Message.ToConsensus()
 	if err != nil {
 		return nil, server.NewDecodeError(err, "Message")
@@ -363,6 +387,9 @@ func (a *AggregateAttestationAndProofElectra) ToConsensus() (*eth.AggregateAttes
 	if err != nil {
 		return nil, server.NewDecodeError(err, "AggregatorIndex")
 	}
+	if a.Aggregate == nil {
+		return nil, errNilValue
+	}
 	agg, err := a.Aggregate.ToConsensus()
 	if err != nil {
 		return nil, server.NewDecodeError(err, "Aggregate")
@@ -382,6 +409,9 @@ func (a *Attestation) ToConsensus() (*eth.Attestation, error) {
 	aggBits, err := hexutil.Decode(a.AggregationBits)
 	if err != nil {
 		return nil, server.NewDecodeError(err, "AggregationBits")
+	}
+	if a.Data == nil {
+		return nil, errNilValue
 	}
 	data, err := a.Data.ToConsensus()
 	if err != nil {
@@ -411,6 +441,9 @@ func (a *AttestationElectra) ToConsensus() (*eth.AttestationElectra, error) {
 	aggBits, err := hexutil.Decode(a.AggregationBits)
 	if err != nil {
 		return nil, server.NewDecodeError(err, "AggregationBits")
+	}
+	if a.Data == nil {
+		return nil, errNilValue
 	}
 	data, err := a.Data.ToConsensus()
 	if err != nil {
@@ -451,6 +484,9 @@ func (a *SingleAttestation) ToConsensus() (*eth.SingleAttestation, error) {
 	if err != nil {
 		return nil, server.NewDecodeError(err, "AttesterIndex")
 	}
+	if a.Data == nil {
+		return nil, errNilValue
+	}
 	data, err := a.Data.ToConsensus()
 	if err != nil {
 		return nil, server.NewDecodeError(err, "Data")
@@ -490,9 +526,15 @@ func (a *AttestationData) ToConsensus() (*eth.AttestationData, error) {
 	if err != nil {
 		return nil, server.NewDecodeError(err, "BeaconBlockRoot")
 	}
+	if a.Source == nil {
+		return nil, errNilValue
+	}
 	source, err := a.Source.ToConsensus()
 	if err != nil {
 		return nil, server.NewDecodeError(err, "Source")
+	}
+	if a.Target == nil {
+		return nil, errNilValue
 	}
 	target, err := a.Target.ToConsensus()
 	if err != nil {
@@ -593,15 +635,17 @@ func (b *BeaconCommitteeSubscription) ToConsensus() (*validator.BeaconCommitteeS
 }
 
 func (e *SignedVoluntaryExit) ToConsensus() (*eth.SignedVoluntaryExit, error) {
-	sig, err := bytesutil.DecodeHexWithLength(e.Signature, fieldparams.BLSSignatureLength)
-	if err != nil {
-		return nil, server.NewDecodeError(err, "Signature")
+	if e.Message == nil {
+		return nil, errNilValue
 	}
 	exit, err := e.Message.ToConsensus()
 	if err != nil {
 		return nil, server.NewDecodeError(err, "Message")
 	}
-
+	sig, err := bytesutil.DecodeHexWithLength(e.Signature, fieldparams.BLSSignatureLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "Signature")
+	}
 	return &eth.SignedVoluntaryExit{
 		Exit:      exit,
 		Signature: sig,
@@ -704,9 +748,15 @@ func Eth1DataFromConsensus(e1d *eth.Eth1Data) *Eth1Data {
 }
 
 func (s *ProposerSlashing) ToConsensus() (*eth.ProposerSlashing, error) {
+	if s.SignedHeader1 == nil {
+		return nil, errNilValue
+	}
 	h1, err := s.SignedHeader1.ToConsensus()
 	if err != nil {
 		return nil, server.NewDecodeError(err, "SignedHeader1")
+	}
+	if s.SignedHeader2 == nil {
+		return nil, errNilValue
 	}
 	h2, err := s.SignedHeader2.ToConsensus()
 	if err != nil {
@@ -720,9 +770,15 @@ func (s *ProposerSlashing) ToConsensus() (*eth.ProposerSlashing, error) {
 }
 
 func (s *AttesterSlashing) ToConsensus() (*eth.AttesterSlashing, error) {
+	if s.Attestation1 == nil {
+		return nil, errNilValue
+	}
 	att1, err := s.Attestation1.ToConsensus()
 	if err != nil {
 		return nil, server.NewDecodeError(err, "Attestation1")
+	}
+	if s.Attestation2 == nil {
+		return nil, errNilValue
 	}
 	att2, err := s.Attestation2.ToConsensus()
 	if err != nil {
@@ -732,9 +788,15 @@ func (s *AttesterSlashing) ToConsensus() (*eth.AttesterSlashing, error) {
 }
 
 func (s *AttesterSlashingElectra) ToConsensus() (*eth.AttesterSlashingElectra, error) {
+	if s.Attestation1 == nil {
+		return nil, errNilValue
+	}
 	att1, err := s.Attestation1.ToConsensus()
 	if err != nil {
 		return nil, server.NewDecodeError(err, "Attestation1")
+	}
+	if s.Attestation2 == nil {
+		return nil, errNilValue
 	}
 	att2, err := s.Attestation2.ToConsensus()
 	if err != nil {
@@ -755,6 +817,9 @@ func (a *IndexedAttestation) ToConsensus() (*eth.IndexedAttestation, error) {
 		if err != nil {
 			return nil, server.NewDecodeError(err, fmt.Sprintf("AttestingIndices[%d]", i))
 		}
+	}
+	if a.Data == nil {
+		return nil, errNilValue
 	}
 	data, err := a.Data.ToConsensus()
 	if err != nil {
@@ -787,6 +852,9 @@ func (a *IndexedAttestationElectra) ToConsensus() (*eth.IndexedAttestationElectr
 		if err != nil {
 			return nil, server.NewDecodeError(err, fmt.Sprintf("AttestingIndices[%d]", i))
 		}
+	}
+	if a.Data == nil {
+		return nil, errNilValue
 	}
 	data, err := a.Data.ToConsensus()
 	if err != nil {
@@ -1088,10 +1156,10 @@ func AttesterSlashingsToConsensus(src []*AttesterSlashing) ([]*eth.AttesterSlash
 		if s == nil {
 			return nil, server.NewDecodeError(errNilValue, fmt.Sprintf("[%d]", i))
 		}
-		if s.Attestation1 == nil {
+		if s.Attestation1 == nil || s.Attestation1.Data == nil {
 			return nil, server.NewDecodeError(errNilValue, fmt.Sprintf("[%d].Attestation1", i))
 		}
-		if s.Attestation2 == nil {
+		if s.Attestation2 == nil || s.Attestation2.Data == nil {
 			return nil, server.NewDecodeError(errNilValue, fmt.Sprintf("[%d].Attestation2", i))
 		}
 
@@ -1111,6 +1179,7 @@ func AttesterSlashingsToConsensus(src []*AttesterSlashing) ([]*eth.AttesterSlash
 			}
 			a1AttestingIndices[j] = attestingIndex
 		}
+
 		a1Data, err := s.Attestation1.Data.ToConsensus()
 		if err != nil {
 			return nil, server.NewDecodeError(err, fmt.Sprintf("[%d].Attestation1.Data", i))
@@ -1220,10 +1289,10 @@ func AttesterSlashingsElectraToConsensus(src []*AttesterSlashingElectra) ([]*eth
 		if s == nil {
 			return nil, server.NewDecodeError(errNilValue, fmt.Sprintf("[%d]", i))
 		}
-		if s.Attestation1 == nil {
+		if s.Attestation1 == nil || s.Attestation1.Data == nil {
 			return nil, server.NewDecodeError(errNilValue, fmt.Sprintf("[%d].Attestation1", i))
 		}
-		if s.Attestation2 == nil {
+		if s.Attestation2 == nil || s.Attestation2.Data == nil {
 			return nil, server.NewDecodeError(errNilValue, fmt.Sprintf("[%d].Attestation2", i))
 		}
 
@@ -1349,6 +1418,9 @@ func AttsToConsensus(src []*Attestation) ([]*eth.Attestation, error) {
 
 	atts := make([]*eth.Attestation, len(src))
 	for i, a := range src {
+		if a == nil {
+			return nil, server.NewDecodeError(errNilValue, fmt.Sprintf("[%d]", i))
+		}
 		atts[i], err = a.ToConsensus()
 		if err != nil {
 			return nil, server.NewDecodeError(err, fmt.Sprintf("[%d]", i))
@@ -1376,6 +1448,9 @@ func AttsElectraToConsensus(src []*AttestationElectra) ([]*eth.AttestationElectr
 
 	atts := make([]*eth.AttestationElectra, len(src))
 	for i, a := range src {
+		if a == nil {
+			return nil, server.NewDecodeError(errNilValue, fmt.Sprintf("[%d]", i))
+		}
 		atts[i], err = a.ToConsensus()
 		if err != nil {
 			return nil, server.NewDecodeError(err, fmt.Sprintf("[%d]", i))
@@ -1479,6 +1554,9 @@ func SignedExitsToConsensus(src []*SignedVoluntaryExit) ([]*eth.SignedVoluntaryE
 
 	exits := make([]*eth.SignedVoluntaryExit, len(src))
 	for i, e := range src {
+		if e == nil {
+			return nil, server.NewDecodeError(errNilValue, fmt.Sprintf("[%d]", i))
+		}
 		exits[i], err = e.ToConsensus()
 		if err != nil {
 			return nil, server.NewDecodeError(err, fmt.Sprintf("[%d]", i))

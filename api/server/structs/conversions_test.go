@@ -5,6 +5,7 @@ import (
 
 	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestDepositSnapshotFromConsensus(t *testing.T) {
@@ -23,4 +24,97 @@ func TestDepositSnapshotFromConsensus(t *testing.T) {
 	require.Equal(t, "12345", res.DepositCount)
 	require.Equal(t, "0x1234", res.ExecutionBlockHash)
 	require.Equal(t, "67890", res.ExecutionBlockHeight)
+}
+
+func TestSignedBLSToExecutionChange_ToConsensus(t *testing.T) {
+	s := &SignedBLSToExecutionChange{Message: nil, Signature: ""}
+	_, err := s.ToConsensus()
+	assert.Equal(t, errNilValue, err)
+}
+
+func TestSignedValidatorRegistration_ToConsensus(t *testing.T) {
+	s := &SignedValidatorRegistration{Message: nil, Signature: ""}
+	_, err := s.ToConsensus()
+	assert.Equal(t, errNilValue, err)
+}
+
+func TestSignedContributionAndProof_ToConsensus(t *testing.T) {
+	s := &SignedContributionAndProof{Message: nil, Signature: ""}
+	_, err := s.ToConsensus()
+	assert.Equal(t, errNilValue, err)
+}
+
+func TestContributionAndProof_ToConsensus(t *testing.T) {
+	c := &ContributionAndProof{
+		Contribution:    nil,
+		AggregatorIndex: "invalid",
+		SelectionProof:  "",
+	}
+	_, err := c.ToConsensus()
+	assert.Equal(t, errNilValue, err)
+}
+
+func TestSignedAggregateAttestationAndProof_ToConsensus(t *testing.T) {
+	s := &SignedAggregateAttestationAndProof{Message: nil, Signature: ""}
+	_, err := s.ToConsensus()
+	assert.Equal(t, errNilValue, err)
+}
+
+func TestAggregateAttestationAndProof_ToConsensus(t *testing.T) {
+	a := &AggregateAttestationAndProof{
+		AggregatorIndex: "1",
+		Aggregate:       nil,
+		SelectionProof:  "",
+	}
+	_, err := a.ToConsensus()
+	assert.Equal(t, errNilValue, err)
+}
+
+func TestAttestation_ToConsensus(t *testing.T) {
+	a := &Attestation{
+		AggregationBits: "0x10",
+		Data:            nil,
+		Signature:       "",
+	}
+	_, err := a.ToConsensus()
+	assert.Equal(t, errNilValue, err)
+}
+
+func TestSingleAttestation_ToConsensus(t *testing.T) {
+	s := &SingleAttestation{
+		CommitteeIndex: "1",
+		AttesterIndex:  "1",
+		Data:           nil,
+		Signature:      "",
+	}
+	_, err := s.ToConsensus()
+	assert.Equal(t, errNilValue, err)
+}
+
+func TestSignedVoluntaryExit_ToConsensus(t *testing.T) {
+	s := &SignedVoluntaryExit{Message: nil, Signature: ""}
+	_, err := s.ToConsensus()
+	assert.Equal(t, errNilValue, err)
+}
+
+func TestProposerSlashing_ToConsensus(t *testing.T) {
+	p := &ProposerSlashing{SignedHeader1: nil, SignedHeader2: nil}
+	_, err := p.ToConsensus()
+	assert.Equal(t, errNilValue, err)
+}
+
+func TestAttesterSlashing_ToConsensus(t *testing.T) {
+	a := &AttesterSlashing{Attestation1: nil, Attestation2: nil}
+	_, err := a.ToConsensus()
+	assert.Equal(t, errNilValue, err)
+}
+
+func TestIndexedAttestation_ToConsensus(t *testing.T) {
+	a := &IndexedAttestation{
+		AttestingIndices: []string{"1"},
+		Data:             nil,
+		Signature:        "invalid",
+	}
+	_, err := a.ToConsensus()
+	assert.Equal(t, errNilValue, err)
 }
