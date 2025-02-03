@@ -184,19 +184,18 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(ctx context.Context, p
 
 	// Broadcast the unaggregated attestation on a feed to notify other services in the beacon node
 	// of a received unaggregated attestation.
-	var attToBroadcast eth.Att
 	if singleAtt != nil {
 		s.cfg.attestationNotifier.OperationFeed().Send(&feed.Event{
 			Type: operation.SingleAttReceived,
 			Data: &operation.SingleAttReceivedData{
-				Attestation: attToBroadcast,
+				Attestation: singleAtt,
 			},
 		})
 	} else {
 		s.cfg.attestationNotifier.OperationFeed().Send(&feed.Event{
 			Type: operation.UnaggregatedAttReceived,
 			Data: &operation.UnAggregatedAttReceivedData{
-				Attestation: attToBroadcast,
+				Attestation: att,
 			},
 		})
 	}
