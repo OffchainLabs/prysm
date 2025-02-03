@@ -466,7 +466,7 @@ message StreamBlocksResponse {
     // Representing a deneb block.
     SignedBeaconBlockDeneb deneb_block = 5;
 
-    // Representing a electra block.
+    // Representing an electra block.
     SignedBeaconBlockElectra electra_block = 6;
 
     // Representing a fulu block.
