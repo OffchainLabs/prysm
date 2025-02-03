@@ -1694,8 +1694,9 @@ func TestDetectAndBroadcastEquivocation_HeadStateError(t *testing.T) {
 	require.NoError(t, err)
 
 	chainService := &mock.ChainService{
-		State: nil, // This will cause HeadStateReadOnly to return nil state
-		Block: signedBlock,
+		State:        nil,
+		Block:        signedBlock,
+		HeadStateErr: errors.New("could not get head state"),
 	}
 	r := &Service{
 		cfg: &config{
