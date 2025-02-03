@@ -120,6 +120,10 @@ var deprecatedFlags = []cli.Flag{
 	deprecatedEnableQuic,
 }
 
+var upcomingDeprecation = []cli.Flag{
+	enableHistoricalSpaceRepresentation,
+}
+
 // deprecatedBeaconFlags contains flags that are still used by other components
 // and therefore cannot be added to deprecatedFlags
 var deprecatedBeaconFlags = []cli.Flag{
