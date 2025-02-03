@@ -7,6 +7,7 @@ import (
 	"github.com/pkg/errors"
 	fastssz "github.com/prysmaticlabs/fastssz"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
@@ -30,9 +31,16 @@ import (
 //   - Otherwise:
 //   - Determine the vote with the highest count. Prefer the vote with the highest eth1 block height in the event of a tie.
 //   - This vote's block is the eth1 block to use for the block proposal.
+//
+// After Electra and eth1 deposit transition period voting will no longer be needed
 func (vs *Server) eth1DataMajorityVote(ctx context.Context, beaconState state.BeaconState) (*ethpb.Eth1Data, error) {
 	ctx, cancel := context.WithTimeout(ctx, eth1dataTimeout)
 	defer cancel()
+
+	// post eth1 deposits, the Eth 1 data will then be frozen
+	if helpers.DepositRequestsStarted(beaconState) {
+		return beaconState.Eth1Data(), nil
+	}
 
 	slot := beaconState.Slot()
 	votingPeriodStartTime := vs.slotStartTime(slot)

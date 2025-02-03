@@ -9,6 +9,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/api/server"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/validator"
 	"github.com/prysmaticlabs/prysm/v5/container/slice"
@@ -243,7 +244,7 @@ func (c *ContributionAndProof) ToConsensus() (*eth.ContributionAndProof, error) 
 	if err != nil {
 		return nil, server.NewDecodeError(err, "AggregatorIndex")
 	}
-	selectionProof, err := bytesutil.DecodeHexWithLength(c.SelectionProof, 96)
+	selectionProof, err := bytesutil.DecodeHexWithLength(c.SelectionProof, fieldparams.BLSSignatureLength)
 	if err != nil {
 		return nil, server.NewDecodeError(err, "SelectionProof")
 	}
@@ -330,7 +331,7 @@ func (a *AggregateAttestationAndProof) ToConsensus() (*eth.AggregateAttestationA
 	if err != nil {
 		return nil, server.NewDecodeError(err, "Aggregate")
 	}
-	proof, err := bytesutil.DecodeHexWithLength(a.SelectionProof, 96)
+	proof, err := bytesutil.DecodeHexWithLength(a.SelectionProof, fieldparams.BLSSignatureLength)
 	if err != nil {
 		return nil, server.NewDecodeError(err, "SelectionProof")
 	}
@@ -366,7 +367,7 @@ func (a *AggregateAttestationAndProofElectra) ToConsensus() (*eth.AggregateAttes
 	if err != nil {
 		return nil, server.NewDecodeError(err, "Aggregate")
 	}
-	proof, err := bytesutil.DecodeHexWithLength(a.SelectionProof, 96)
+	proof, err := bytesutil.DecodeHexWithLength(a.SelectionProof, fieldparams.BLSSignatureLength)
 	if err != nil {
 		return nil, server.NewDecodeError(err, "SelectionProof")
 	}
@@ -734,6 +735,10 @@ func (s *AttesterSlashingElectra) ToConsensus() (*eth.AttesterSlashingElectra, e
 }
 
 func (a *IndexedAttestation) ToConsensus() (*eth.IndexedAttestation, error) {
+	if err := slice.VerifyMaxLength(a.AttestingIndices, params.BeaconConfig().MaxValidatorsPerCommittee); err != nil {
+		return nil, err
+	}
+
 	indices := make([]uint64, len(a.AttestingIndices))
 	var err error
 	for i, ix := range a.AttestingIndices {
@@ -759,6 +764,13 @@ func (a *IndexedAttestation) ToConsensus() (*eth.IndexedAttestation, error) {
 }
 
 func (a *IndexedAttestationElectra) ToConsensus() (*eth.IndexedAttestationElectra, error) {
+	if err := slice.VerifyMaxLength(
+		a.AttestingIndices,
+		params.BeaconConfig().MaxValidatorsPerCommittee*params.BeaconConfig().MaxCommitteesPerSlot,
+	); err != nil {
+		return nil, err
+	}
+
 	indices := make([]uint64, len(a.AttestingIndices))
 	var err error
 	for i, ix := range a.AttestingIndices {
@@ -1189,7 +1201,7 @@ func AttesterSlashingsElectraToConsensus(src []*AttesterSlashingElectra) ([]*eth
 	if src == nil {
 		return nil, errNilValue
 	}
-	err := slice.VerifyMaxLength(src, 2)
+	err := slice.VerifyMaxLength(src, fieldparams.MaxAttesterSlashingsElectra)
 	if err != nil {
 		return nil, err
 	}
@@ -1210,7 +1222,7 @@ func AttesterSlashingsElectraToConsensus(src []*AttesterSlashingElectra) ([]*eth
 		if err != nil {
 			return nil, server.NewDecodeError(err, fmt.Sprintf("[%d].Attestation1.Signature", i))
 		}
-		err = slice.VerifyMaxLength(s.Attestation1.AttestingIndices, 2048)
+		err = slice.VerifyMaxLength(s.Attestation1.AttestingIndices, params.BeaconConfig().MaxValidatorsPerCommittee*params.BeaconConfig().MaxCommitteesPerSlot)
 		if err != nil {
 			return nil, server.NewDecodeError(err, fmt.Sprintf("[%d].Attestation1.AttestingIndices", i))
 		}
@@ -1230,7 +1242,7 @@ func AttesterSlashingsElectraToConsensus(src []*AttesterSlashingElectra) ([]*eth
 		if err != nil {
 			return nil, server.NewDecodeError(err, fmt.Sprintf("[%d].Attestation2.Signature", i))
 		}
-		err = slice.VerifyMaxLength(s.Attestation2.AttestingIndices, 2048)
+		err = slice.VerifyMaxLength(s.Attestation2.AttestingIndices, params.BeaconConfig().MaxValidatorsPerCommittee*params.BeaconConfig().MaxCommitteesPerSlot)
 		if err != nil {
 			return nil, server.NewDecodeError(err, fmt.Sprintf("[%d].Attestation2.AttestingIndices", i))
 		}
