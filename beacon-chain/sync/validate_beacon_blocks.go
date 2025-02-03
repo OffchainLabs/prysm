@@ -462,73 +462,67 @@ func getBlockFields(b interfaces.ReadOnlySignedBeaconBlock) logrus.Fields {
 	}
 }
 
-// detectAndBroadcastEquivocation checks if the given block is an equivocating block (i.e. a different block
-// with the same slot and proposer index but different signature than one we've already seen). If an equivocation
-// is detected, it creates a proposer slashing object and broadcasts it to the network before adding it to the
-// slashing pool.
+// detectAndBroadcastEquivocation checks if the given block is an equivocating block by comparing it with
+// the head block when a duplicate slot/proposer index is detected. If an equivocation is found, it creates
+// and broadcasts a proposer slashing object and adds it to the slashing pool.
 func (s *Service) detectAndBroadcastEquivocation(ctx context.Context, blk interfaces.ReadOnlySignedBeaconBlock) error {
-	// If we've seen this proposer/slot combo before, it means this is an equivocating block
+	// If this proposer/slot combo is seen before, it means this is a potential equivocating block
 	slot := blk.Block().Slot()
 	proposerIndex := blk.Block().ProposerIndex()
+
+	if !s.hasSeenBlockIndexSlot(slot, proposerIndex) {
+		return nil
+	}
 
 	// Get the head state for block verification
 	headState, err := s.cfg.chain.HeadStateReadOnly(ctx)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "could not get head state")
 	}
 
+	// Compare signatures since they must be different for equivocation
 	sig1 := blk.Signature()
-	s.seenBlockLock.RLock()
-	// Create a unique cache key by combining slot and proposer index
-	// Convert slot and proposer index to 32 bytes and combine them into a single byte slice
-	b := append(bytesutil.Bytes32(uint64(slot)), bytesutil.Bytes32(uint64(proposerIndex))...)
-	existingBlock, isSeen := s.seenBlockCache.Get(string(b))
-	s.seenBlockLock.RUnlock()
+	headBlock, err := s.cfg.chain.HeadBlock(ctx)
+	if err != nil {
+		return errors.Wrap(err, "could not get head block")
+	}
 
-	if !isSeen {
+	sig2 := headBlock.Signature()
+
+	// Different signatures indicate equivocation
+	if sig1 == sig2 {
 		return nil
 	}
 
-	// Type assert to get the existing block
-	existingSignedBlock, ok := existingBlock.(interfaces.ReadOnlySignedBeaconBlock)
-	if !ok {
-		return errors.New("invalid type assertion for existing block")
+	header1, err := blk.Header()
+	if err != nil {
+		return errors.Wrap(err, "could not get header from new block")
+	}
+	header2, err := headBlock.Header()
+	if err != nil {
+		return errors.Wrap(err, "could not get header from head block")
 	}
 
-	sig2 := existingSignedBlock.Signature()
+	slashing := &ethpb.ProposerSlashing{
+		Header_1: header1,
+		Header_2: header2,
+	}
 
-	// Different signatures indicate equivocation
-	if sig1 != sig2 {
-		header1, err := blk.Header()
-		if err != nil {
-			return err
-		}
-		header2, err := existingSignedBlock.Header()
-		if err != nil {
-			return err
-		}
+	// Verify the proposer slashing is valid
+	if err := blocks.VerifyProposerSlashing(headState, slashing); err != nil {
+		return errors.Wrap(err, "could not verify proposer slashing")
+	}
 
-		slashing := &ethpb.ProposerSlashing{
-			Header_1: header1,
-			Header_2: header2,
+	// Broadcast if verification passes
+	if !features.Get().DisableBroadcastSlashings {
+		if err := s.cfg.p2p.Broadcast(ctx, slashing); err != nil {
+			return errors.Wrap(err, "could not broadcast slashing object")
 		}
+	}
 
-		// Verify the proposer slashing is valid
-		if err := blocks.VerifyProposerSlashing(headState, slashing); err != nil {
-			return err
-		}
-
-		// Broadcast if verification passes
-		if !features.Get().DisableBroadcastSlashings {
-			if err := s.cfg.p2p.Broadcast(ctx, slashing); err != nil {
-				return errors.Wrap(err, "could not broadcast slashing object")
-			}
-		}
-
-		// Also insert into slashing pool
-		if err := s.cfg.slashingPool.InsertProposerSlashing(ctx, headState, slashing); err != nil {
-			return errors.Wrap(err, "could not insert proposer slashing into pool")
-		}
+	// Also insert into slashing pool
+	if err := s.cfg.slashingPool.InsertProposerSlashing(ctx, headState, slashing); err != nil {
+		return errors.Wrap(err, "could not insert proposer slashing into pool")
 	}
 
 	return nil
