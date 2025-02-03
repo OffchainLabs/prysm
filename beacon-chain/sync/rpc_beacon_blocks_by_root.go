@@ -11,6 +11,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/verify"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
@@ -46,11 +47,40 @@ func (s *Service) sendBeaconBlocksRequest(ctx context.Context, requests *types.B
 		}
 		return nil
 	})
+
+	log := log.WithField("peer", id)
+
+	blkByRoot := make(map[[fieldparams.RootLength]byte]interfaces.ReadOnlySignedBeaconBlock)
 	for _, blk := range blks {
+		blkRoot, err := blk.Block().HashTreeRoot()
+		if err != nil {
+			return errors.Wrap(err, "block hash tree root")
+		}
+
+		blkByRoot[blkRoot] = blk
+	}
+
+	if err != nil {
+		log = log.WithError(err)
+	}
+
+	for requestedRoot := range requestedRoots {
+		log := log.WithField("root", fmt.Sprintf("%#x", requestedRoot))
+		if _, ok := blkByRoot[requestedRoot]; ok {
+			log.Debug("Requesting block by root: Success")
+			continue
+		}
+
+		log.Debug("Requesting block by root: Not found")
+	}
+
+	// The following part deals with blobs (if any).
+	for _, blk := range blkByRoot {
 		// Skip blocks before deneb because they have no blob.
 		if blk.Version() < version.Deneb {
 			continue
 		}
+
 		blkRoot, err := blk.Block().HashTreeRoot()
 		if err != nil {
 			return err
@@ -66,6 +96,7 @@ func (s *Service) sendBeaconBlocksRequest(ctx context.Context, requests *types.B
 			return err
 		}
 	}
+
 	return err
 }
 

@@ -53,7 +53,7 @@ func TestProcessPendingAtts_NoBlockRequestBlock(t *testing.T) {
 	a := &ethpb.AggregateAttestationAndProof{Aggregate: &ethpb.Attestation{Data: &ethpb.AttestationData{Target: &ethpb.Checkpoint{Root: make([]byte, 32)}}}}
 	r.blkRootToPendingAtts[[32]byte{'A'}] = []ethpb.SignedAggregateAttAndProof{&ethpb.SignedAggregateAttestationAndProof{Message: a}}
 	require.NoError(t, r.processPendingAtts(context.Background()))
-	require.LogsContain(t, hook, "Requesting block by root")
+	require.LogsContain(t, hook, "Requesting block by root: Not found")
 }
 
 func TestProcessPendingAtts_HasBlockSaveUnAggregatedAtt(t *testing.T) {

@@ -292,8 +292,6 @@ func (s *Service) sendBatchRootRequest(ctx context.Context, roots [][32]byte, ra
 		r := roots[i]
 		if s.seenPendingBlocks[r] || s.cfg.chain.BlockBeingSynced(r) {
 			roots = append(roots[:i], roots[i+1:]...)
-		} else {
-			log.WithField("blockRoot", fmt.Sprintf("%#x", r)).Debug("Requesting block by root")
 		}
 	}
 	s.pendingQueueLock.RUnlock()
