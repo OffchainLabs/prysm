@@ -1,3 +1,3 @@
 ### Changed
 
-- Updated go-ethereum to v1.14.13
+- Dependency: Updated go-ethereum to v1.14.13
