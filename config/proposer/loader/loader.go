@@ -112,7 +112,6 @@ func determineLoadMethods(cliCtx *cli.Context, loadedFromDB bool) []settingsType
 	if len(methods) == 0 && loadedFromDB {
 		methods = append(methods, onlyDB)
 	}
-
 	if len(methods) == 0 {
 		methods = append(methods, none)
 	}
