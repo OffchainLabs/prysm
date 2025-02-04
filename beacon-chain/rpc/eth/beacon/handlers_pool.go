@@ -320,6 +320,13 @@ func (s *Server) handleAttestationsElectra(
 	}
 
 	for i, singleAtt := range validAttestations {
+		s.OperationNotifier.OperationFeed().Send(&feed.Event{
+			Type: operation.SingleAttReceived,
+			Data: &operation.SingleAttReceivedData{
+				Attestation: singleAtt,
+			},
+		})
+
 		targetState, err := s.AttestationStateFetcher.AttestationTargetState(ctx, singleAtt.Data.Target)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "could not get target state for attestation")
@@ -329,13 +336,6 @@ func (s *Server) handleAttestationsElectra(
 			return nil, nil, errors.Wrap(err, "could not get committee for attestation")
 		}
 		att := singleAtt.ToAttestationElectra(committee)
-
-		s.OperationNotifier.OperationFeed().Send(&feed.Event{
-			Type: operation.UnaggregatedAttReceived,
-			Data: &operation.UnAggregatedAttReceivedData{
-				Attestation: att,
-			},
-		})
 
 		wantedEpoch := slots.ToEpoch(att.Data.Slot)
 		vals, err := s.HeadFetcher.HeadValidatorsIndices(ctx, wantedEpoch)
