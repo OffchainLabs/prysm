@@ -122,7 +122,7 @@ func determineLoadMethods(cliCtx *cli.Context, loadedFromDB bool) []settingsType
 
 // Load saves the proposer settings to the database
 func (psl *settingsLoader) Load(cliCtx *cli.Context) (*proposer.Settings, error) {
-	loadConfig := &validatorpb.ProposerSettingsPayload{}
+	var loadedSettings, dbSettings *validatorpb.ProposerSettingsPayload
 
 	// override settings based on other options
 	psl.applyOverrides()
@@ -133,9 +133,9 @@ func (psl *settingsLoader) Load(cliCtx *cli.Context) (*proposer.Settings, error)
 		if err != nil {
 			return nil, err
 		}
-		loadConfig = dbps.ToConsensus()
+		dbSettings = dbps.ToConsensus()
 		log.Debugf("DB loaded proposer settings: %s", func() string {
-			b, err := json.Marshal(loadConfig)
+			b, err := json.Marshal(dbSettings)
 			if err != nil {
 				return err.Error()
 			}
@@ -148,22 +148,22 @@ func (psl *settingsLoader) Load(cliCtx *cli.Context) (*proposer.Settings, error)
 		var err error
 		switch method {
 		case defaultFlag:
-			loadConfig, err = psl.loadFromDefault(cliCtx, loadConfig)
+			loadedSettings, err = psl.loadFromDefault(cliCtx, dbSettings)
 			if err != nil {
 				return nil, err
 			}
 		case fileFlag:
-			loadConfig, err = psl.loadFromFile(cliCtx, loadConfig)
+			loadedSettings, err = psl.loadFromFile(cliCtx, dbSettings)
 			if err != nil {
 				return nil, err
 			}
 		case urlFlag:
-			loadConfig, err = psl.loadFromURL(cliCtx, loadConfig)
+			loadedSettings, err = psl.loadFromURL(cliCtx, dbSettings)
 			if err != nil {
 				return nil, err
 			}
 		case onlyDB, none:
-			loadConfig = psl.processProposerSettings(nil, loadConfig)
+			loadedSettings = psl.processProposerSettings(&validatorpb.ProposerSettingsPayload{}, dbSettings)
 			if psl.existsInDB {
 				log.Info("Proposer settings loaded from the DB")
 			}
@@ -173,11 +173,11 @@ func (psl *settingsLoader) Load(cliCtx *cli.Context) (*proposer.Settings, error)
 	}
 
 	// exit early if nothing is provided
-	if loadConfig == nil || (loadConfig.ProposerConfig == nil && loadConfig.DefaultConfig == nil) {
+	if loadedSettings == nil || (loadedSettings.ProposerConfig == nil && loadedSettings.DefaultConfig == nil) {
 		log.Warn("No proposer settings were provided")
 		return nil, nil
 	}
-	ps, err := proposer.SettingFromConsensus(loadConfig)
+	ps, err := proposer.SettingFromConsensus(loadedSettings)
 	if err != nil {
 		return nil, err
 	}
@@ -193,7 +193,7 @@ func (psl *settingsLoader) applyOverrides() {
 	}
 }
 
-func (psl *settingsLoader) loadFromDefault(cliCtx *cli.Context, loadConfig *validatorpb.ProposerSettingsPayload) (*validatorpb.ProposerSettingsPayload, error) {
+func (psl *settingsLoader) loadFromDefault(cliCtx *cli.Context, dbSettings *validatorpb.ProposerSettingsPayload) (*validatorpb.ProposerSettingsPayload, error) {
 	suggestedFeeRecipient := cliCtx.String(flags.SuggestedFeeRecipientFlag.Name)
 	if !common.IsHexAddress(suggestedFeeRecipient) {
 		return nil, errors.Errorf("--%s is not a valid Ethereum address", flags.SuggestedFeeRecipientFlag.Name)
@@ -208,10 +208,10 @@ func (psl *settingsLoader) loadFromDefault(cliCtx *cli.Context, loadConfig *vali
 	}
 	return psl.processProposerSettings(&validatorpb.ProposerSettingsPayload{DefaultConfig: &validatorpb.ProposerOptionPayload{
 		FeeRecipient: suggestedFeeRecipient,
-	}}, loadConfig), nil
+	}}, dbSettings), nil
 }
 
-func (psl *settingsLoader) loadFromFile(cliCtx *cli.Context, loadConfig *validatorpb.ProposerSettingsPayload) (*validatorpb.ProposerSettingsPayload, error) {
+func (psl *settingsLoader) loadFromFile(cliCtx *cli.Context, dbSettings *validatorpb.ProposerSettingsPayload) (*validatorpb.ProposerSettingsPayload, error) {
 	var settingFromFile *validatorpb.ProposerSettingsPayload
 	if err := config.UnmarshalFromFile(cliCtx.String(flags.ProposerSettingsFlag.Name), &settingFromFile); err != nil {
 		return nil, err
@@ -220,10 +220,10 @@ func (psl *settingsLoader) loadFromFile(cliCtx *cli.Context, loadConfig *validat
 		return nil, errors.Errorf("proposer settings is empty after unmarshalling from file specified by %s flag", flags.ProposerSettingsFlag.Name)
 	}
 	log.WithField(flags.ProposerSettingsFlag.Name, cliCtx.String(flags.ProposerSettingsFlag.Name)).Info("Proposer settings loaded from file")
-	return psl.processProposerSettings(settingFromFile, loadConfig), nil
+	return psl.processProposerSettings(settingFromFile, dbSettings), nil
 }
 
-func (psl *settingsLoader) loadFromURL(cliCtx *cli.Context, loadConfig *validatorpb.ProposerSettingsPayload) (*validatorpb.ProposerSettingsPayload, error) {
+func (psl *settingsLoader) loadFromURL(cliCtx *cli.Context, dbSettings *validatorpb.ProposerSettingsPayload) (*validatorpb.ProposerSettingsPayload, error) {
 	var settingFromURL *validatorpb.ProposerSettingsPayload
 	if err := config.UnmarshalFromURL(cliCtx.Context, cliCtx.String(flags.ProposerSettingsURLFlag.Name), &settingFromURL); err != nil {
 		return nil, err
@@ -232,7 +232,7 @@ func (psl *settingsLoader) loadFromURL(cliCtx *cli.Context, loadConfig *validato
 		return nil, errors.New("proposer settings is empty after unmarshalling from url")
 	}
 	log.WithField(flags.ProposerSettingsURLFlag.Name, cliCtx.String(flags.ProposerSettingsURLFlag.Name)).Infof("Proposer settings loaded from URL")
-	return psl.processProposerSettings(settingFromURL, loadConfig), nil
+	return psl.processProposerSettings(settingFromURL, dbSettings), nil
 }
 
 func (psl *settingsLoader) processProposerSettings(loadedSettings, dbSettings *validatorpb.ProposerSettingsPayload) *validatorpb.ProposerSettingsPayload {
