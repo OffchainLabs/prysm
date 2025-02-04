@@ -6,6 +6,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
+	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
 // LatestExecutionPayloadHeaderEPBS retrieves a copy of the execution payload header from epbs state.
@@ -32,7 +33,11 @@ func (b *BeaconState) IsParentBlockFull() (bool, error) {
 	b.lock.RLock()
 	defer b.lock.RUnlock()
 
-	if b.slot == primitives.Slot(params.BeaconConfig().EPBSForkEpoch)*params.BeaconConfig().SlotsPerEpoch {
+	slot, err := slots.EpochStart(params.BeaconConfig().EPBSForkEpoch)
+	if err != nil {
+		return false, err
+	}
+	if b.slot == slot {
 		return true, nil
 	}
 
