@@ -66,11 +66,9 @@ func run(ctx context.Context, v iface.Validator) {
 		log.WithError(err).Fatal("Failed to update proposer settings")
 	}
 	for {
-		ctx, span := prysmTrace.StartSpan(ctx, "validator.processSlot")
 		select {
 		case <-ctx.Done():
 			log.Info("Context canceled, stopping validator")
-			span.End()
 			sub.Unsubscribe()
 			close(accountsChangedChan)
 			return // Exit if context is canceled.
@@ -78,10 +76,12 @@ func run(ctx context.Context, v iface.Validator) {
 			if !healthTracker.IsHealthy() {
 				continue
 			}
-			span.SetAttributes(prysmTrace.Int64Attribute("slot", int64(slot))) // lint:ignore uintcast -- This conversion is OK for tracing.
 
 			deadline := v.SlotDeadline(slot)
 			slotCtx, cancel := context.WithDeadline(ctx, deadline)
+			slotCtx, span := prysmTrace.StartSpan(ctx, "validator.processSlot")
+			span.SetAttributes(prysmTrace.Int64Attribute("slot", int64(slot))) // lint:ignore uintcast -- This conversion is OK for tracing.
+
 			log := log.WithField("slot", slot)
 			log.WithField("deadline", deadline).Debug("Set deadline for proposals and attestations")
 
@@ -137,6 +137,9 @@ func run(ctx context.Context, v iface.Validator) {
 }
 
 func onAccountsChanged(ctx context.Context, v iface.Validator, current [][48]byte, ac chan [][fieldparams.BLSPubkeyLength]byte) {
+	ctx, span := prysmTrace.StartSpan(ctx, "validator.accountsChanged")
+	defer span.End()
+
 	anyActive, err := v.HandleKeyReload(ctx, current)
 	if err != nil {
 		log.WithError(err).Error("Could not properly handle reloaded keys")
