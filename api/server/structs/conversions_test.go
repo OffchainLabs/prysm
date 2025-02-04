@@ -5,7 +5,6 @@ import (
 
 	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestDepositSnapshotFromConsensus(t *testing.T) {
@@ -29,19 +28,19 @@ func TestDepositSnapshotFromConsensus(t *testing.T) {
 func TestSignedBLSToExecutionChange_ToConsensus(t *testing.T) {
 	s := &SignedBLSToExecutionChange{Message: nil, Signature: ""}
 	_, err := s.ToConsensus()
-	assert.Equal(t, errNilValue, err)
+	require.ErrorContains(t, errNilValue.Error(), err)
 }
 
 func TestSignedValidatorRegistration_ToConsensus(t *testing.T) {
 	s := &SignedValidatorRegistration{Message: nil, Signature: ""}
 	_, err := s.ToConsensus()
-	assert.Equal(t, errNilValue, err)
+	require.ErrorContains(t, errNilValue.Error(), err)
 }
 
 func TestSignedContributionAndProof_ToConsensus(t *testing.T) {
 	s := &SignedContributionAndProof{Message: nil, Signature: ""}
 	_, err := s.ToConsensus()
-	assert.Equal(t, errNilValue, err)
+	require.ErrorContains(t, errNilValue.Error(), err)
 }
 
 func TestContributionAndProof_ToConsensus(t *testing.T) {
@@ -51,13 +50,13 @@ func TestContributionAndProof_ToConsensus(t *testing.T) {
 		SelectionProof:  "",
 	}
 	_, err := c.ToConsensus()
-	assert.Equal(t, errNilValue, err)
+	require.ErrorContains(t, errNilValue.Error(), err)
 }
 
 func TestSignedAggregateAttestationAndProof_ToConsensus(t *testing.T) {
 	s := &SignedAggregateAttestationAndProof{Message: nil, Signature: ""}
 	_, err := s.ToConsensus()
-	assert.Equal(t, errNilValue, err)
+	require.ErrorContains(t, errNilValue.Error(), err)
 }
 
 func TestAggregateAttestationAndProof_ToConsensus(t *testing.T) {
@@ -67,7 +66,7 @@ func TestAggregateAttestationAndProof_ToConsensus(t *testing.T) {
 		SelectionProof:  "",
 	}
 	_, err := a.ToConsensus()
-	assert.Equal(t, errNilValue, err)
+	require.ErrorContains(t, errNilValue.Error(), err)
 }
 
 func TestAttestation_ToConsensus(t *testing.T) {
@@ -77,7 +76,7 @@ func TestAttestation_ToConsensus(t *testing.T) {
 		Signature:       "",
 	}
 	_, err := a.ToConsensus()
-	assert.Equal(t, errNilValue, err)
+	require.ErrorContains(t, errNilValue.Error(), err)
 }
 
 func TestSingleAttestation_ToConsensus(t *testing.T) {
@@ -88,25 +87,25 @@ func TestSingleAttestation_ToConsensus(t *testing.T) {
 		Signature:      "",
 	}
 	_, err := s.ToConsensus()
-	assert.Equal(t, errNilValue, err)
+	require.ErrorContains(t, errNilValue.Error(), err)
 }
 
 func TestSignedVoluntaryExit_ToConsensus(t *testing.T) {
 	s := &SignedVoluntaryExit{Message: nil, Signature: ""}
 	_, err := s.ToConsensus()
-	assert.Equal(t, errNilValue, err)
+	require.ErrorContains(t, errNilValue.Error(), err)
 }
 
 func TestProposerSlashing_ToConsensus(t *testing.T) {
 	p := &ProposerSlashing{SignedHeader1: nil, SignedHeader2: nil}
 	_, err := p.ToConsensus()
-	assert.Equal(t, errNilValue, err)
+	require.ErrorContains(t, errNilValue.Error(), err)
 }
 
 func TestAttesterSlashing_ToConsensus(t *testing.T) {
 	a := &AttesterSlashing{Attestation1: nil, Attestation2: nil}
 	_, err := a.ToConsensus()
-	assert.Equal(t, errNilValue, err)
+	require.ErrorContains(t, errNilValue.Error(), err)
 }
 
 func TestIndexedAttestation_ToConsensus(t *testing.T) {
@@ -116,5 +115,5 @@ func TestIndexedAttestation_ToConsensus(t *testing.T) {
 		Signature:        "invalid",
 	}
 	_, err := a.ToConsensus()
-	assert.Equal(t, errNilValue, err)
+	require.ErrorContains(t, errNilValue.Error(), err)
 }
