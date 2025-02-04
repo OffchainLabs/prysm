@@ -28,7 +28,7 @@ const (
 	onlyDB
 )
 
-type settingsLoader struct {
+type SettingsLoader struct {
 	loadMethods []settingsType
 	existsInDB  bool
 	db          iface.ValidatorDB
@@ -41,11 +41,11 @@ type flagOptions struct {
 }
 
 // SettingsLoaderOption sets additional options that affect the proposer settings
-type SettingsLoaderOption func(cliCtx *cli.Context, psl *settingsLoader) error
+type SettingsLoaderOption func(cliCtx *cli.Context, psl *SettingsLoader) error
 
 // WithBuilderConfig applies the --enable-builder flag to proposer settings
 func WithBuilderConfig() SettingsLoaderOption {
-	return func(cliCtx *cli.Context, psl *settingsLoader) error {
+	return func(cliCtx *cli.Context, psl *SettingsLoader) error {
 		if cliCtx.Bool(flags.EnableBuilderFlag.Name) {
 			psl.options.builderConfig = &proposer.BuilderConfig{
 				Enabled:  true,
@@ -58,7 +58,7 @@ func WithBuilderConfig() SettingsLoaderOption {
 
 // WithGasLimit applies the --suggested-gas-limit flag to proposer settings
 func WithGasLimit() SettingsLoaderOption {
-	return func(cliCtx *cli.Context, psl *settingsLoader) error {
+	return func(cliCtx *cli.Context, psl *SettingsLoader) error {
 		sgl := cliCtx.String(flags.BuilderGasLimitFlag.Name)
 		if sgl != "" {
 			gl, err := strconv.ParseUint(sgl, 10, 64)
@@ -76,7 +76,7 @@ func WithGasLimit() SettingsLoaderOption {
 }
 
 // NewProposerSettingsLoader returns a new proposer settings loader that can process the proposer settings based on flag options
-func NewProposerSettingsLoader(cliCtx *cli.Context, db iface.ValidatorDB, opts ...SettingsLoaderOption) (*settingsLoader, error) {
+func NewProposerSettingsLoader(cliCtx *cli.Context, db iface.ValidatorDB, opts ...SettingsLoaderOption) (*SettingsLoader, error) {
 	if cliCtx.IsSet(flags.ProposerSettingsFlag.Name) && cliCtx.IsSet(flags.ProposerSettingsURLFlag.Name) {
 		return nil, fmt.Errorf("cannot specify both --%s and --%s flags; choose one method for specifying proposer settings", flags.ProposerSettingsFlag.Name, flags.ProposerSettingsURLFlag.Name)
 	}
@@ -84,7 +84,7 @@ func NewProposerSettingsLoader(cliCtx *cli.Context, db iface.ValidatorDB, opts .
 	if err != nil {
 		return nil, err
 	}
-	psl := &settingsLoader{db: db, existsInDB: psExists, options: &flagOptions{}}
+	psl := &SettingsLoader{db: db, existsInDB: psExists, options: &flagOptions{}}
 
 	psl.loadMethods = determineLoadMethods(cliCtx, psl.existsInDB)
 
@@ -121,7 +121,7 @@ func determineLoadMethods(cliCtx *cli.Context, loadedFromDB bool) []settingsType
 }
 
 // Load saves the proposer settings to the database
-func (psl *settingsLoader) Load(cliCtx *cli.Context) (*proposer.Settings, error) {
+func (psl *SettingsLoader) Load(cliCtx *cli.Context) (*proposer.Settings, error) {
 	var loadedSettings, dbSettings *validatorpb.ProposerSettingsPayload
 
 	// override settings based on other options
@@ -187,13 +187,13 @@ func (psl *settingsLoader) Load(cliCtx *cli.Context) (*proposer.Settings, error)
 	return ps, nil
 }
 
-func (psl *settingsLoader) applyOverrides() {
+func (psl *SettingsLoader) applyOverrides() {
 	if psl.options.builderConfig != nil && psl.options.gasLimit != nil {
 		psl.options.builderConfig.GasLimit = *psl.options.gasLimit
 	}
 }
 
-func (psl *settingsLoader) loadFromDefault(cliCtx *cli.Context, dbSettings *validatorpb.ProposerSettingsPayload) (*validatorpb.ProposerSettingsPayload, error) {
+func (psl *SettingsLoader) loadFromDefault(cliCtx *cli.Context, dbSettings *validatorpb.ProposerSettingsPayload) (*validatorpb.ProposerSettingsPayload, error) {
 	suggestedFeeRecipient := cliCtx.String(flags.SuggestedFeeRecipientFlag.Name)
 	if !common.IsHexAddress(suggestedFeeRecipient) {
 		return nil, errors.Errorf("--%s is not a valid Ethereum address", flags.SuggestedFeeRecipientFlag.Name)
@@ -211,7 +211,7 @@ func (psl *settingsLoader) loadFromDefault(cliCtx *cli.Context, dbSettings *vali
 	}}, dbSettings), nil
 }
 
-func (psl *settingsLoader) loadFromFile(cliCtx *cli.Context, dbSettings *validatorpb.ProposerSettingsPayload) (*validatorpb.ProposerSettingsPayload, error) {
+func (psl *SettingsLoader) loadFromFile(cliCtx *cli.Context, dbSettings *validatorpb.ProposerSettingsPayload) (*validatorpb.ProposerSettingsPayload, error) {
 	var settingFromFile *validatorpb.ProposerSettingsPayload
 	if err := config.UnmarshalFromFile(cliCtx.String(flags.ProposerSettingsFlag.Name), &settingFromFile); err != nil {
 		return nil, err
@@ -223,7 +223,7 @@ func (psl *settingsLoader) loadFromFile(cliCtx *cli.Context, dbSettings *validat
 	return psl.processProposerSettings(settingFromFile, dbSettings), nil
 }
 
-func (psl *settingsLoader) loadFromURL(cliCtx *cli.Context, dbSettings *validatorpb.ProposerSettingsPayload) (*validatorpb.ProposerSettingsPayload, error) {
+func (psl *SettingsLoader) loadFromURL(cliCtx *cli.Context, dbSettings *validatorpb.ProposerSettingsPayload) (*validatorpb.ProposerSettingsPayload, error) {
 	var settingFromURL *validatorpb.ProposerSettingsPayload
 	if err := config.UnmarshalFromURL(cliCtx.Context, cliCtx.String(flags.ProposerSettingsURLFlag.Name), &settingFromURL); err != nil {
 		return nil, err
@@ -235,7 +235,7 @@ func (psl *settingsLoader) loadFromURL(cliCtx *cli.Context, dbSettings *validato
 	return psl.processProposerSettings(settingFromURL, dbSettings), nil
 }
 
-func (psl *settingsLoader) processProposerSettings(loadedSettings, dbSettings *validatorpb.ProposerSettingsPayload) *validatorpb.ProposerSettingsPayload {
+func (psl *SettingsLoader) processProposerSettings(loadedSettings, dbSettings *validatorpb.ProposerSettingsPayload) *validatorpb.ProposerSettingsPayload {
 	if loadedSettings == nil && dbSettings == nil {
 		return nil
 	}
