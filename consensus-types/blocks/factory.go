@@ -349,7 +349,7 @@ func BuildSignedBeaconBlockFromExecutionPayload(blk interfaces.ReadOnlySignedBea
 	case version.Bellatrix:
 		p, ok := payload.(*enginev1.ExecutionPayload)
 		if !ok {
-			return nil, errors.New("payload not of Bellatrix type")
+			return nil, fmt.Errorf("payload has wrong type (expected %T, got %T)", &enginev1.ExecutionPayload{}, payload)
 		}
 		var atts []*eth.Attestation
 		if b.Body().Attestations() != nil {
@@ -397,7 +397,7 @@ func BuildSignedBeaconBlockFromExecutionPayload(blk interfaces.ReadOnlySignedBea
 	case version.Capella:
 		p, ok := payload.(*enginev1.ExecutionPayloadCapella)
 		if !ok {
-			return nil, errors.New("payload not of Capella type")
+			return nil, fmt.Errorf("payload has wrong type (expected %T, got %T)", &enginev1.ExecutionPayloadCapella{}, payload)
 		}
 		blsToExecutionChanges, err := b.Body().BLSToExecutionChanges()
 		if err != nil {
@@ -450,7 +450,7 @@ func BuildSignedBeaconBlockFromExecutionPayload(blk interfaces.ReadOnlySignedBea
 	case version.Deneb:
 		p, ok := payload.(*enginev1.ExecutionPayloadDeneb)
 		if !ok {
-			return nil, errors.New("payload not of Deneb type")
+			return nil, fmt.Errorf("payload has wrong type (expected %T, got %T)", &enginev1.ExecutionPayloadDeneb{}, payload)
 		}
 		blsToExecutionChanges, err := b.Body().BLSToExecutionChanges()
 		if err != nil {
@@ -508,7 +508,7 @@ func BuildSignedBeaconBlockFromExecutionPayload(blk interfaces.ReadOnlySignedBea
 	case version.Electra:
 		p, ok := payload.(*enginev1.ExecutionPayloadDeneb)
 		if !ok {
-			return nil, errors.New("payload not of Electra type")
+			return nil, fmt.Errorf("payload has wrong type (expected %T, got %T)", &enginev1.ExecutionPayloadDeneb{}, payload)
 		}
 		blsToExecutionChanges, err := b.Body().BLSToExecutionChanges()
 		if err != nil {
@@ -524,7 +524,7 @@ func BuildSignedBeaconBlockFromExecutionPayload(blk interfaces.ReadOnlySignedBea
 			for i, att := range b.Body().Attestations() {
 				a, ok := att.(*eth.AttestationElectra)
 				if !ok {
-					return nil, fmt.Errorf("attestation has wrong type (expected %T, got %T)", &eth.Attestation{}, att)
+					return nil, fmt.Errorf("attestation has wrong type (expected %T, got %T)", &eth.AttestationElectra{}, att)
 				}
 				atts[i] = a
 			}
@@ -535,7 +535,7 @@ func BuildSignedBeaconBlockFromExecutionPayload(blk interfaces.ReadOnlySignedBea
 			for i, slashing := range b.Body().AttesterSlashings() {
 				s, ok := slashing.(*eth.AttesterSlashingElectra)
 				if !ok {
-					return nil, fmt.Errorf("attester slashing has wrong type (expected %T, got %T)", &eth.AttesterSlashing{}, slashing)
+					return nil, fmt.Errorf("attester slashing has wrong type (expected %T, got %T)", &eth.AttesterSlashingElectra{}, slashing)
 				}
 				attSlashings[i] = s
 			}
@@ -573,7 +573,7 @@ func BuildSignedBeaconBlockFromExecutionPayload(blk interfaces.ReadOnlySignedBea
 	case version.Fulu:
 		p, ok := payload.(*enginev1.ExecutionPayloadDeneb)
 		if !ok {
-			return nil, errors.New("payload not of Fulu type")
+			return nil, fmt.Errorf("payload has wrong type (expected %T, got %T)", &enginev1.ExecutionPayloadDeneb{}, payload)
 		}
 		blsToExecutionChanges, err := b.Body().BLSToExecutionChanges()
 		if err != nil {
@@ -646,6 +646,10 @@ func BuildSignedBeaconBlockFromExecutionPayload(blk interfaces.ReadOnlySignedBea
 // This is particularly useful for using the values from API calls.
 func BeaconBlockContainerToSignedBeaconBlock(obj *eth.BeaconBlockContainer) (interfaces.ReadOnlySignedBeaconBlock, error) {
 	switch obj.Block.(type) {
+	case *eth.BeaconBlockContainer_BlindedElectraBlock:
+		return NewSignedBeaconBlock(obj.GetBlindedElectraBlock())
+	case *eth.BeaconBlockContainer_ElectraBlock:
+		return NewSignedBeaconBlock(obj.GetElectraBlock())
 	case *eth.BeaconBlockContainer_BlindedDenebBlock:
 		return NewSignedBeaconBlock(obj.GetBlindedDenebBlock())
 	case *eth.BeaconBlockContainer_DenebBlock:

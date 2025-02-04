@@ -32,6 +32,9 @@ const (
 
 	// AttesterSlashingReceived is sent after an attester slashing is received from gossip or rpc
 	AttesterSlashingReceived = 8
+
+	// SingleAttReceived is sent after a single attestation object is received from gossip or rpc
+	SingleAttReceived = 9
 )
 
 // UnAggregatedAttReceivedData is the data sent with UnaggregatedAttReceived events.
@@ -43,7 +46,7 @@ type UnAggregatedAttReceivedData struct {
 // AggregatedAttReceivedData is the data sent with AggregatedAttReceived events.
 type AggregatedAttReceivedData struct {
 	// Attestation is the aggregated attestation object.
-	Attestation *ethpb.AggregateAttestationAndProof
+	Attestation ethpb.AggregateAttAndProof
 }
 
 // ExitReceivedData is the data sent with ExitReceived events.
@@ -76,4 +79,9 @@ type ProposerSlashingReceivedData struct {
 // AttesterSlashingReceivedData is the data sent with AttesterSlashingReceived events.
 type AttesterSlashingReceivedData struct {
 	AttesterSlashing ethpb.AttSlashing
+}
+
+// SingleAttReceivedData is the data sent with SingleAttReceived events.
+type SingleAttReceivedData struct {
+	Attestation ethpb.Att
 }
