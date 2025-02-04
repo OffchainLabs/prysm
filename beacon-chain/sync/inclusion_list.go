@@ -3,6 +3,7 @@ package sync
 import (
 	"context"
 	"fmt"
+	"time"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -11,7 +12,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/encoding/ssz"
 	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/time"
+	prysmTime "github.com/prysmaticlabs/prysm/v5/time"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"google.golang.org/protobuf/proto"
 )
@@ -67,7 +68,7 @@ func (s *Service) validateInclusionList(ctx context.Context, id peer.ID, msg *pu
 	if il.Message.Slot != currentSlot && il.Message.Slot+1 != currentSlot {
 		return pubsub.ValidationReject, errors.New("slot %d is not equal to the previous %d or current %d slot")
 	}
-	secondsSinceSlotStart, err := slots.SecondsSinceSlotStart(currentSlot, uint64(s.cfg.chain.GenesisTime().Unix()), uint64(time.Now().Unix()))
+	secondsSinceSlotStart, err := slots.SecondsSinceSlotStart(currentSlot, uint64(s.cfg.chain.GenesisTime().Unix()), uint64(prysmTime.Now().Unix()))
 	if err != nil {
 		return pubsub.ValidationIgnore, err
 	}
@@ -141,6 +142,9 @@ func (s *Service) subscriberInclusionList(ctx context.Context, msg proto.Message
 		return errors.New("nil inclusion list")
 	}
 
-	s.inclusionLists.Add(il.Message.Slot, il.Message.ValidatorIndex, il.Message.Transactions)
+	isBeforeFreezeDeadline := s.cfg.clock.CurrentSlot() == il.Message.Slot &&
+		slots.TimeIntoSlot(uint64(s.cfg.clock.GenesisTime().Unix())) < time.Duration(params.BeaconConfig().InclusionListFreezeDeadLine)*time.Second
+
+	s.inclusionLists.Add(il.Message.Slot, il.Message.ValidatorIndex, il.Message.Transactions, isBeforeFreezeDeadline)
 	return nil
 }

@@ -10,8 +10,9 @@ import (
 type InclusionLists struct {
 	mu  sync.RWMutex
 	ils map[primitives.Slot]map[primitives.ValidatorIndex]struct {
-		txs       [][]byte
-		seenTwice bool
+		txs                    [][]byte
+		seenTwice              bool
+		isBeforeFreezeDeadline bool
 	}
 }
 
@@ -19,21 +20,23 @@ type InclusionLists struct {
 func NewInclusionLists() *InclusionLists {
 	return &InclusionLists{
 		ils: make(map[primitives.Slot]map[primitives.ValidatorIndex]struct {
-			txs       [][]byte
-			seenTwice bool
+			txs                    [][]byte
+			seenTwice              bool
+			isBeforeFreezeDeadline bool
 		}),
 	}
 }
 
 // Add adds a set of transactions for a specific slot and validator index.
-func (i *InclusionLists) Add(slot primitives.Slot, validatorIndex primitives.ValidatorIndex, txs [][]byte) {
+func (i *InclusionLists) Add(slot primitives.Slot, validatorIndex primitives.ValidatorIndex, txs [][]byte, isBeforeFreezeDeadline bool) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
 
 	if _, ok := i.ils[slot]; !ok {
 		i.ils[slot] = make(map[primitives.ValidatorIndex]struct {
-			txs       [][]byte
-			seenTwice bool
+			txs                    [][]byte
+			seenTwice              bool
+			isBeforeFreezeDeadline bool
 		})
 	}
 
@@ -44,6 +47,7 @@ func (i *InclusionLists) Add(slot primitives.Slot, validatorIndex primitives.Val
 
 	if entry.txs == nil {
 		entry.txs = txs
+		entry.isBeforeFreezeDeadline = isBeforeFreezeDeadline
 	} else {
 		entry.seenTwice = true
 		entry.txs = nil // Clear transactions to save space if seen twice.
@@ -64,6 +68,9 @@ func (i *InclusionLists) Get(slot primitives.Slot) [][]byte {
 	var uniqueTxs [][]byte
 	seen := make(map[[32]byte]struct{})
 	for _, entry := range ils {
+		if !entry.isBeforeFreezeDeadline {
+			continue
+		}
 		for _, tx := range entry.txs {
 			hash := sha256.Sum256(tx)
 			if _, duplicate := seen[hash]; !duplicate {

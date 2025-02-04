@@ -17,7 +17,7 @@ func TestInclusionLists(t *testing.T) {
 		{
 			name: "Add single validator with unique transactions",
 			actions: func() {
-				il.Add(1, 1, [][]byte{[]byte("tx1"), []byte("tx2")})
+				il.Add(1, 1, [][]byte{[]byte("tx1"), []byte("tx2")}, true)
 			},
 			expectedGet:   [][]byte{[]byte("tx1"), []byte("tx2")},
 			expectedTwice: false,
@@ -25,7 +25,7 @@ func TestInclusionLists(t *testing.T) {
 		{
 			name: "Add duplicate transactions for second validator",
 			actions: func() {
-				il.Add(1, 2, [][]byte{[]byte("tx1"), []byte("tx3")})
+				il.Add(1, 2, [][]byte{[]byte("tx1"), []byte("tx3")}, true)
 			},
 			expectedGet:   [][]byte{[]byte("tx1"), []byte("tx2"), []byte("tx3")},
 			expectedTwice: false,
@@ -33,7 +33,7 @@ func TestInclusionLists(t *testing.T) {
 		{
 			name: "Mark validator as seen twice",
 			actions: func() {
-				il.Add(1, 1, [][]byte{[]byte("tx4")})
+				il.Add(1, 1, [][]byte{[]byte("tx4")}, true)
 			},
 			expectedGet:   [][]byte{[]byte("tx1"), []byte("tx3")},
 			expectedTwice: true,

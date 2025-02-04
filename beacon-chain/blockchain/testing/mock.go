@@ -348,13 +348,6 @@ func (s *ChainService) HeadRoot(_ context.Context) ([]byte, error) {
 	return make([]byte, 32), nil
 }
 
-func (s *ChainService) FilteredHeadRoot(_ context.Context) ([32]byte, error) {
-	if len(s.Root) > 0 {
-		return bytesutil.ToBytes32(s.Root), nil
-	}
-	return [32]byte{}, nil
-}
-
 // HeadBlock mocks HeadBlock method in chain service.
 func (s *ChainService) HeadBlock(context.Context) (interfaces.ReadOnlySignedBeaconBlock, error) {
 	return s.Block, nil
@@ -631,6 +624,16 @@ func (s *ChainService) GetProposerHead() [32]byte {
 		return s.ForkChoiceStore.GetProposerHead()
 	}
 	return [32]byte{}
+}
+
+// GetAttesterHead mocks the same method in the chain service
+func (s *ChainService) GetAttesterHead() [32]byte {
+	if s.ForkChoiceStore != nil {
+		return s.ForkChoiceStore.GetAttesterHead()
+	}
+	var rootArr [32]byte
+	copy(rootArr[:], s.Root)
+	return rootArr
 }
 
 // SetForkChoiceGenesisTime mocks the same method in the chain service

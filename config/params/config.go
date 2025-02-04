@@ -302,7 +302,8 @@ type BeaconChainConfig struct {
 	// Deprecated: This field is no longer supported. Avoid using it.
 	DeprecatedTargetBlobsPerBlockElectra int `yaml:"TARGET_BLOBS_PER_BLOCK_ELECTRA" spec:"true"`
 
-	InclusionListCommitteeSize uint64
+	InclusionListCommitteeSize  uint64
+	InclusionListFreezeDeadLine uint64
 }
 
 // InitializeForkSchedule initializes the schedules forks baked into the config.

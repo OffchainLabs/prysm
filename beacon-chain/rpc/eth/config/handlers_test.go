@@ -191,7 +191,7 @@ func TestGetSpec(t *testing.T) {
 	data, ok := resp.Data.(map[string]interface{})
 	require.Equal(t, true, ok)
 
-	assert.Equal(t, 162, len(data))
+	assert.Equal(t, 164, len(data))
 	for k, v := range data {
 		t.Run(k, func(t *testing.T) {
 			switch k {
@@ -540,6 +540,10 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "1152", v)
 			case "DOMAIN_INCLUSION_LIST_COMMITTEE":
 				assert.Equal(t, "0x00000000", v)
+			case "EIP7805_FORK_VERSION":
+				assert.Equal(t, "0x07000000", v)
+			case "EIP7805_FORK_EPOCH":
+				assert.Equal(t, "18446744073709551615", v)
 			default:
 				t.Errorf("Incorrect key: %s", k)
 			}

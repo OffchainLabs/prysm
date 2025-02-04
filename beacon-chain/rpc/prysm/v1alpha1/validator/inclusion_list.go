@@ -3,11 +3,14 @@ package validator
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/encoding/ssz"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -60,11 +63,17 @@ func (vs *Server) GetInclusionList(ctx context.Context, request *ethpb.GetInclus
 
 // SubmitInclusionList broadcasts a signed inclusion list to the P2P network and caches it locally.
 func (vs *Server) SubmitInclusionList(ctx context.Context, il *ethpb.SignedInclusionList) (*emptypb.Empty, error) {
+	isBeforeFreezeDeadline := vs.TimeFetcher.CurrentSlot() == il.Message.Slot &&
+		slots.TimeIntoSlot(uint64(vs.TimeFetcher.GenesisTime().Unix())) < time.Duration(params.BeaconConfig().InclusionListFreezeDeadLine)*time.Second
+	if !isBeforeFreezeDeadline {
+		return nil, status.Errorf(codes.InvalidArgument, "inclusion list submission is after freeze deadline")
+	}
+
 	if err := vs.P2P.Broadcast(ctx, il); err != nil {
 		return nil, err
 	}
 
-	vs.InclusionLists.Add(il.Message.Slot, il.Message.ValidatorIndex, il.Message.Transactions)
+	vs.InclusionLists.Add(il.Message.Slot, il.Message.ValidatorIndex, il.Message.Transactions, isBeforeFreezeDeadline)
 
 	log.WithFields(logrus.Fields{
 		"slot":          il.Message.Slot,

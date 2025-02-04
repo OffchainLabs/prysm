@@ -541,10 +541,8 @@ func (s *Service) GetAttestationData(
 		return nil, &RpcError{Reason: Unavailable, Err: errOptimisticMode}
 	}
 
-	headRoot, err := s.HeadFetcher.FilteredHeadRoot(ctx) // Attesters vote based on IL constrained head root.
-	if err != nil {
-		return nil, &RpcError{Reason: Internal, Err: errors.Wrap(err, "could not get head root")}
-	}
+	headRoot := s.ChainInfoFetcher.GetAttesterHead() // Attesters vote based on IL constrained head root.
+
 	targetEpoch := slots.ToEpoch(req.Slot)
 	targetRoot, err := s.HeadFetcher.TargetRootForEpoch(headRoot, targetEpoch)
 	if err != nil {

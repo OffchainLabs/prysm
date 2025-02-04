@@ -211,6 +211,7 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		FinalizedFetcher:      s.cfg.FinalizationFetcher,
 		ReplayerBuilder:       ch,
 		OptimisticModeFetcher: s.cfg.OptimisticModeFetcher,
+		ChainInfoFetcher:      s.cfg.ChainInfoFetcher,
 	}
 	validatorServer := &validatorv1alpha1.Server{
 		Ctx:                     s.ctx,

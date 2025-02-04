@@ -289,11 +289,7 @@ func (s *Service) notifyNewPayload(ctx context.Context, preStateVersion int,
 			"slot":       blk.Block().Slot(),
 			"parentRoot": fmt.Sprintf("%#x", parentRoot),
 		}).Info("Called new payload but inclusion list didn't satisfy")
-		r, err := blk.Block().HashTreeRoot()
-		if err != nil {
-			return false, errors.Wrap(err, "could not get block hash tree root")
-		}
-		s.badInclusionListBlock = r // Cache the block root that fails to satisfy the inclusion list constraint.
+		blk.Block().MarkInclusionListNotSatisfied() // Cache the block root that fails to satisfy the inclusion list constraint.
 		return true, nil
 	case errors.Is(err, execution.ErrAcceptedSyncingPayloadStatus):
 		newPayloadOptimisticNodeCount.Inc()
