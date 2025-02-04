@@ -79,7 +79,9 @@ func run(ctx context.Context, v iface.Validator) {
 
 			deadline := v.SlotDeadline(slot)
 			slotCtx, cancel := context.WithDeadline(ctx, deadline)
-			slotCtx, span := prysmTrace.StartSpan(ctx, "validator.processSlot")
+
+			var span trace.Span
+			slotCtx, span = prysmTrace.StartSpan(ctx, "validator.processSlot")
 			span.SetAttributes(prysmTrace.Int64Attribute("slot", int64(slot))) // lint:ignore uintcast -- This conversion is OK for tracing.
 
 			log := log.WithField("slot", slot)
@@ -87,7 +89,7 @@ func run(ctx context.Context, v iface.Validator) {
 
 			// Keep trying to update assignments if they are nil or if we are past an
 			// epoch transition in the beacon node's state.
-			if err := v.UpdateDuties(ctx, slot); err != nil {
+			if err := v.UpdateDuties(slotCtx, slot); err != nil {
 				handleAssignmentError(err, slot)
 				cancel()
 				span.End()
@@ -97,18 +99,18 @@ func run(ctx context.Context, v iface.Validator) {
 			// call push proposer settings often to account for the following edge cases:
 			// proposer is activated at the start of epoch and tries to propose immediately
 			// account has changed in the middle of an epoch
-			if err := v.PushProposerSettings(ctx, km, slot, false); err != nil {
+			if err := v.PushProposerSettings(slotCtx, km, slot, false); err != nil {
 				log.WithError(err).Warn("Failed to update proposer settings")
 			}
 
 			// Start fetching domain data for the next epoch.
 			if slots.IsEpochEnd(slot) {
-				go v.UpdateDomainDataCaches(ctx, slot+1)
+				go v.UpdateDomainDataCaches(slotCtx, slot+1)
 			}
 
 			var wg sync.WaitGroup
 
-			allRoles, err := v.RolesAt(ctx, slot)
+			allRoles, err := v.RolesAt(slotCtx, slot)
 			if err != nil {
 				log.WithError(err).Error("Could not get validator roles")
 				cancel()
