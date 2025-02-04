@@ -28,7 +28,7 @@ func (s *Service) streamBlobBatch(ctx context.Context, batch blockBatch, wQuota 
 	for _, b := range batch.canonical() {
 		root := b.Root()
 		idxs := s.cfg.blobStorage.Summary(root)
-		for i := uint64(0); i < idxs.MaxBlobsForEpoch(); i++ {
+		for i := range idxs.MaxBlobsForEpoch() {
 			// index not available, skip
 			if !idxs.HasIndex(i) {
 				continue

@@ -85,6 +85,7 @@ func (s *Service) reconstructAndBroadcastBlobs(ctx context.Context, block interf
 	cmts, err := block.Block().Body().BlobKzgCommitments()
 	if err != nil {
 		log.WithError(err).Error("Failed to read commitments from block")
+		return
 	}
 	for i := range cmts {
 		if summary.HasIndex(uint64(i)) {

@@ -200,12 +200,6 @@ func idxFromPath(p string) (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-	/*
-		// we can no longer check this here, we need to read the epoch/slot from the blob / cache first
-		if idx >= fieldparams.MaxBlobsPerBlock {
-			return 0, errors.Wrapf(errIndexOutOfBounds, "index=%d", idx)
-		}
-	*/
 	return idx, nil
 }
 
