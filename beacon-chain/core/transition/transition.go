@@ -14,6 +14,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/capella"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/deneb"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/electra"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/epbs"
 	e "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/epoch"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/epoch/precompute"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/execution"
@@ -374,6 +375,15 @@ func UpgradeState(ctx context.Context, state state.BeaconState) (state.BeaconSta
 
 	if time.CanUpgradeToFulu(slot) {
 		state, err = fulu.UpgradeToFulu(state)
+		if err != nil {
+			tracing.AnnotateError(span, err)
+			return nil, err
+		}
+		upgraded = true
+	}
+
+	if time.CanUpgradeToEip7732(slot) {
+		state, err = epbs.UpgradeToEIP7732(state)
 		if err != nil {
 			tracing.AnnotateError(span, err)
 			return nil, err
