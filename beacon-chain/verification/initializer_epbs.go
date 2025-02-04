@@ -26,3 +26,13 @@ func (ini *Initializer) NewHeaderVerifier(eh interfaces.ROSignedExecutionPayload
 		st:              st,
 	}
 }
+
+// NewPayloadEnvelopeVerifier creates a SignedExecutionPayloadEnvelopeVerifier for a single signed execution payload envelope,
+//
+//	with the given set of requirements.
+func (ini *Initializer) NewPayloadEnvelopeVerifier(ee interfaces.ROSignedExecutionPayloadEnvelope, reqs []Requirement) *EnvelopeVerifier {
+	return &EnvelopeVerifier{
+		results: newResults(reqs...),
+		e:       ee,
+	}
+}
