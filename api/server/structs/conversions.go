@@ -53,7 +53,7 @@ func HistoricalSummaryFromConsensus(s *eth.HistoricalSummary) *HistoricalSummary
 
 func (s *SignedBLSToExecutionChange) ToConsensus() (*eth.SignedBLSToExecutionChange, error) {
 	if s.Message == nil {
-		return nil, errNilValue
+		return nil, server.NewDecodeError(errNilValue, "Message")
 	}
 	change, err := s.Message.ToConsensus()
 	if err != nil {
