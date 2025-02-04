@@ -95,6 +95,7 @@ Notable features:
 - Check kzg commitments align with blobs and proofs for beacon api end point.
 - Revert "Proposer checks gas limit before accepting builder's bid".
 - Updated quic-go to v0.48.2 .
+- Updated go-ethereum to v1.14.13
 
 ### Deprecated
 
