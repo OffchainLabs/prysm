@@ -69,6 +69,9 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 		return pubsub.ValidationReject, err
 	}
 	s.payloadEnvelopeCache.Store(root, struct{}{})
+
+	msg.ValidatorData = signedEnvelope
+
 	return pubsub.ValidationAccept, nil
 }
 
