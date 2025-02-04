@@ -8,14 +8,14 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/sirupsen/logrus"
 )
 
 const (
-	RequireBuilderValid Requirement = iota
+	RequireSlotValid Requirement = iota
+	RequireBuilderValid
 	RequirePayloadHashValid
 )
 
@@ -36,6 +36,7 @@ var (
 	ErrEnvelopeBlockRootNotSeen   = errors.New("block root not seen")
 	ErrEnvelopeBlockRootInvalid   = errors.New("block root invalid")
 	ErrIncorrectEnvelopeBuilder   = errors.New("builder index does not match committed header")
+	ErrIncorrectEnvelopeSlot      = errors.New("slot does not match committed header")
 	ErrIncorrectEnvelopeBlockHash = errors.New("block hash does not match committed header")
 )
 
@@ -75,6 +76,20 @@ func (v *EnvelopeVerifier) VerifyBlockRootValid(badBlock func([32]byte) bool) (e
 	return nil
 }
 
+// VerifySlot checks that the slot in the envelope matches the one in the payload header
+func (v *EnvelopeVerifier) VerifySlot(header interfaces.ROExecutionPayloadHeaderEPBS) (err error) {
+	defer v.record(RequireSlotValid, &err)
+	env, err := v.e.Envelope()
+	if err != nil {
+		return err
+	}
+	if header.Slot() != env.Slot() {
+		log.WithFields(envelopeLogFields(env)).Error(ErrIncorrectEnvelopeSlot.Error())
+		return ErrIncorrectEnvelopeSlot
+	}
+	return nil
+}
+
 // VerifyBuilderValid checks that the builder index matches the one in the
 // payload header
 func (v *EnvelopeVerifier) VerifyBuilderValid(header interfaces.ROExecutionPayloadHeaderEPBS) (err error) {
@@ -97,9 +112,6 @@ func (v *EnvelopeVerifier) VerifyPayloadHash(header interfaces.ROExecutionPayloa
 	env, err := v.e.Envelope()
 	if err != nil {
 		return err
-	}
-	if env.PayloadWithheld() {
-		return nil
 	}
 	payload, err := env.Execution()
 	if err != nil {
@@ -132,17 +144,6 @@ func (v *EnvelopeVerifier) VerifySignature(st state.BeaconState) (err error) {
 	return nil
 }
 
-// SetSlot initializes the internal slot member of the execution payload
-// envelope
-func (v *EnvelopeVerifier) SetSlot(slot primitives.Slot) error {
-	env, err := v.e.Envelope()
-	if err != nil {
-		return err
-	}
-	env.SetSlot(slot)
-	return nil
-}
-
 // SatisfyRequirement allows the caller to manually mark a requirement as satisfied.
 func (v *EnvelopeVerifier) SatisfyRequirement(req Requirement) {
 	v.record(req, nil)
@@ -153,7 +154,6 @@ func envelopeLogFields(e interfaces.ROExecutionPayloadEnvelope) logrus.Fields {
 	return logrus.Fields{
 		"builderIndex":    e.BuilderIndex(),
 		"beaconBlockRoot": fmt.Sprintf("%#x", e.BeaconBlockRoot()),
-		"PayloadWithheld": e.PayloadWithheld(),
 		"stateRoot":       fmt.Sprintf("%#x", e.StateRoot()),
 	}
 }

@@ -9,6 +9,7 @@ import (
 type MockExecutionPayloadEnvelope struct {
 	ErrBlockRootNotSeen       error
 	ErrBlockRootInvalid       error
+	ErrSlotInvalid            error
 	ErrBuilderIndexInvalid    error
 	ErrBlockHashInvalid       error
 	ErrSignatureInvalid       error
@@ -23,6 +24,10 @@ func (e *MockExecutionPayloadEnvelope) VerifyBlockRootSeen(_ func([32]byte) bool
 
 func (e *MockExecutionPayloadEnvelope) VerifyBlockRootValid(_ func([32]byte) bool) error {
 	return e.ErrBlockRootInvalid
+}
+
+func (e *MockExecutionPayloadEnvelope) VerifySlot(_ interfaces.ROExecutionPayloadHeaderEPBS) error {
+	return e.ErrSlotInvalid
 }
 
 func (e *MockExecutionPayloadEnvelope) VerifyBuilderValid(_ interfaces.ROExecutionPayloadHeaderEPBS) error {

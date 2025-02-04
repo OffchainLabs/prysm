@@ -24,7 +24,6 @@ import (
 
 // SubmitSignedExecutionPayloadEnvelope submits a signed execution payload envelope to the validator client.
 func (vs *Server) SubmitSignedExecutionPayloadEnvelope(ctx context.Context, env *enginev1.SignedExecutionPayloadEnvelope) (*emptypb.Empty, error) {
-	log.Info("About to broadcast signed execution payload envelope")
 	if err := vs.P2P.Broadcast(ctx, env); err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to broadcast signed execution payload envelope: %v", err)
 	}
@@ -53,6 +52,7 @@ func (vs *Server) GetExecutionPayloadEnvelope(ctx context.Context, req *eth.Payl
 	if req.Slot != vs.TimeFetcher.CurrentSlot() {
 		return nil, status.Errorf(codes.InvalidArgument, "current slot mismatch: expected %d, got %d", vs.TimeFetcher.CurrentSlot(), req.Slot)
 	}
+	vs.payloadEnvelope.Slot = req.Slot
 
 	vs.payloadEnvelope.StateRoot = make([]byte, 32)
 	p, err := blocks.WrappedROExecutionPayloadEnvelope(vs.payloadEnvelope)

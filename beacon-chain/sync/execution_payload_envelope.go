@@ -77,8 +77,8 @@ func verifyAgainstHeader(v verification.ExecutionPayloadEnvelopeVerifier, signed
 	if err != nil {
 		return pubsub.ValidationIgnore, err
 	}
-	if err := v.SetSlot(header.Slot()); err != nil {
-		return pubsub.ValidationIgnore, err
+	if err := v.VerifySlot(header); err != nil {
+		return pubsub.ValidationReject, err
 	}
 	if err := v.VerifyBuilderValid(header); err != nil {
 		return pubsub.ValidationReject, err

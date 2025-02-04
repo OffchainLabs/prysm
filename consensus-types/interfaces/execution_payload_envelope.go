@@ -24,9 +24,7 @@ type ROExecutionPayloadEnvelope interface {
 	BlobKzgCommitments() [][]byte
 	BlobKzgCommitmentsRoot() ([field_params.RootLength]byte, error)
 	VersionedHashes() []common.Hash
-	PayloadWithheld() bool
 	StateRoot() [field_params.RootLength]byte
-	SetSlot(primitives.Slot)
 	Slot() primitives.Slot
 	IsBlinded() bool
 	IsNil() bool

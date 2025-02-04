@@ -18,7 +18,6 @@ func (s *SignedExecutionPayloadEnvelope) Blind() *SignedBlindPayloadEnvelope {
 			BuilderIndex:       s.Message.BuilderIndex,
 			BeaconBlockRoot:    s.Message.BeaconBlockRoot,
 			BlobKzgCommitments: s.Message.BlobKzgCommitments,
-			PayloadWithheld:    s.Message.PayloadWithheld,
 			StateRoot:          s.Message.StateRoot,
 		},
 		Signature: s.Signature,

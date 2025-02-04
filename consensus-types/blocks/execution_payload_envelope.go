@@ -17,8 +17,7 @@ type signedExecutionPayloadEnvelope struct {
 }
 
 type executionPayloadEnvelope struct {
-	p    *enginev1.ExecutionPayloadEnvelope
-	slot primitives.Slot
+	p *enginev1.ExecutionPayloadEnvelope
 }
 
 // WrappedROSignedExecutionPayloadEnvelope is a constructor which wraps a
@@ -131,11 +130,6 @@ func (p *executionPayloadEnvelope) BlobKzgCommitments() [][]byte {
 	return commitments
 }
 
-// PayloadWithheld returns the wrapped value
-func (p *executionPayloadEnvelope) PayloadWithheld() bool {
-	return p.p.PayloadWithheld
-}
-
 // StateRoot returns the wrapped value
 func (p *executionPayloadEnvelope) StateRoot() [field_params.RootLength]byte {
 	return [field_params.RootLength]byte(p.p.StateRoot)
@@ -161,12 +155,7 @@ func (p *executionPayloadEnvelope) BlobKzgCommitmentsRoot() ([field_params.RootL
 	return ssz.KzgCommitmentsRoot(p.p.BlobKzgCommitments)
 }
 
-// SetSlot initializes the internal member variable
-func (p *executionPayloadEnvelope) SetSlot(slot primitives.Slot) {
-	p.slot = slot
-}
-
 // Slot returns the wrapped value
 func (p *executionPayloadEnvelope) Slot() primitives.Slot {
-	return p.slot
+	return p.p.Slot
 }

@@ -29,6 +29,7 @@ const (
 	justifiedPayloadBlockHashCalled
 	unrealizedJustifiedPayloadBlockHashCalled
 	nodeCountCalled
+	hashForBlockRootCalled
 	highestReceivedBlockSlotRootCalled
 	highestReceivedBlockDelayCalled
 	receivedBlocksLastEpochCalled
@@ -308,4 +309,9 @@ func (ro *mockROForkchoice) ParentRoot(_ [32]byte) ([32]byte, error) {
 func (ro *mockROForkchoice) GetPTCVote() primitives.PTCStatus {
 	ro.calls = append(ro.calls, getPTCVoteCalled)
 	return primitives.PAYLOAD_ABSENT
+}
+
+func (ro *mockROForkchoice) HashForBlockRoot(_ [32]byte) [32]byte {
+	ro.calls = append(ro.calls, hashForBlockRootCalled)
+	return [32]byte{}
 }

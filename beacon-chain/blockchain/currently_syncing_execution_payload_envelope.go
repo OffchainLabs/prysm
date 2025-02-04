@@ -15,11 +15,7 @@ type currentlySyncingPayload struct {
 func (b *currentlySyncingPayload) set(envelope interfaces.ROExecutionPayloadEnvelope) {
 	b.Lock()
 	defer b.Unlock()
-	if envelope.PayloadWithheld() {
-		b.roots[envelope.BeaconBlockRoot()] = primitives.PAYLOAD_WITHHELD
-	} else {
-		b.roots[envelope.BeaconBlockRoot()] = primitives.PAYLOAD_PRESENT
-	}
+	b.roots[envelope.BeaconBlockRoot()] = primitives.PAYLOAD_PRESENT
 }
 
 func (b *currentlySyncingPayload) unset(root [32]byte) {

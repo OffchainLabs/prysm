@@ -372,13 +372,11 @@ func SignedExecutionPayloadEnvelope(t *testing.T) *enginev1.SignedExecutionPaylo
 
 // ExecutionPayloadEnvelope creates a random ExecutionPayloadEnvelope for testing purposes.
 func ExecutionPayloadEnvelope(t *testing.T) *enginev1.ExecutionPayloadEnvelope {
-	withheld := randomUint64(t)%2 == 0
 	return &enginev1.ExecutionPayloadEnvelope{
 		Payload:           ExecutionPayload(t),
 		ExecutionRequests: ExecutionRequests(t), BuilderIndex: primitives.ValidatorIndex(randomUint64(t)),
 		BeaconBlockRoot:    randomBytes(32, t),
 		BlobKzgCommitments: [][]byte{randomBytes(48, t), randomBytes(48, t), randomBytes(48, t)},
-		PayloadWithheld:    withheld,
 		StateRoot:          randomBytes(32, t),
 	}
 }
