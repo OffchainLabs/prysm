@@ -13,6 +13,7 @@ go_library(
         "multiple_endpoints_grpc_resolver.go",
         "payload_attestation.go",
         "propose.go",
+        "propose_epbs.go",
         "registration.go",
         "runner.go",
         "service.go",

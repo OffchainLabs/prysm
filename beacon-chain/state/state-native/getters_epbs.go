@@ -1,6 +1,7 @@
 package state_native
 
 import (
+	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
@@ -30,6 +31,10 @@ func (b *BeaconState) IsParentBlockFull() (bool, error) {
 
 	b.lock.RLock()
 	defer b.lock.RUnlock()
+
+	if b.slot == primitives.Slot(params.BeaconConfig().EPBSForkEpoch)*params.BeaconConfig().SlotsPerEpoch {
+		return true, nil
+	}
 
 	headerBlockHash := bytesutil.ToBytes32(b.latestExecutionPayloadHeaderEPBS.BlockHash)
 	return headerBlockHash == b.latestBlockHash, nil

@@ -84,6 +84,9 @@ type Server struct {
 	AttestationStateFetcher      blockchain.AttestationStateFetcher
 	PayloadAttestationReceiver   blockchain.PayloadAttestationReceiver
 	signedExecutionPayloadHeader *enginev1.SignedExecutionPayloadHeader
+	PayloadAttestationCache      cache.PayloadAttestationCache
+	payloadEnvelope              *enginev1.ExecutionPayloadEnvelope
+	blobsBundle                  *enginev1.BlobsBundle
 }
 
 // WaitForActivation checks if a validator public key exists in the active validator registry of the current

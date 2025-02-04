@@ -167,8 +167,20 @@ func (c *grpcValidatorClient) SubmitPayloadAttestation(ctx context.Context, in *
 	return c.beaconNodeValidatorClient.SubmitPayloadAttestation(ctx, in)
 }
 
-func (c *grpcValidatorClient) SubmitSignedExecutionPayloadHeader(ctx context.Context, in *enginev1.SignedExecutionPayloadHeader) (*empty.Empty, error) {
-	return c.beaconNodeValidatorClient.SubmitSignedExecutionPayloadHeader(ctx, in)
+func (c *grpcValidatorClient) GetLocalHeader(ctx context.Context, req *ethpb.HeaderRequest) (*enginev1.ExecutionPayloadHeaderEPBS, error) {
+	return c.beaconNodeValidatorClient.GetLocalHeader(ctx, req)
+}
+
+func (c *grpcValidatorClient) GetExecutionPayloadEnvelope(ctx context.Context, in *ethpb.PayloadEnvelopeRequest) (*enginev1.ExecutionPayloadEnvelope, error) {
+	return c.beaconNodeValidatorClient.GetExecutionPayloadEnvelope(ctx, in)
+}
+
+func (c *grpcValidatorClient) SubmitSignedExecutionPayloadHeader(ctx context.Context, h *enginev1.SignedExecutionPayloadHeader) (*empty.Empty, error) {
+	return c.beaconNodeValidatorClient.SubmitSignedExecutionPayloadHeader(ctx, h)
+}
+
+func (c *grpcValidatorClient) SubmitSignedExecutionPayloadEnvelope(ctx context.Context, env *enginev1.SignedExecutionPayloadEnvelope) (*empty.Empty, error) {
+	return c.beaconNodeValidatorClient.SubmitSignedExecutionPayloadEnvelope(ctx, env)
 }
 
 func NewGrpcValidatorClient(cc grpc.ClientConnInterface) iface.ValidatorClient {

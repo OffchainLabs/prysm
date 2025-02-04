@@ -110,6 +110,14 @@ func (vs *Server) GetBeaconBlock(ctx context.Context, req *ethpb.BlockRequest) (
 		return nil, errors.Wrap(err, "could not build block in parallel")
 	}
 
+	if sBlk.Version() >= version.EPBS {
+		beaconBlockRoot, err := sBlk.Block().HashTreeRoot()
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Could not hash tree root: %v", err)
+		}
+		vs.payloadEnvelope.BeaconBlockRoot = beaconBlockRoot[:]
+	}
+
 	log.Info("Finished building block")
 	return resp, nil
 }
@@ -227,11 +235,24 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 
 		// Set bls to execution change. New in Capella.
 		vs.setBlsToExecData(sBlk, head)
+
+		// Set payload attestations to block. New in ePBS
+		if err := vs.setPayloadAttestations(sBlk, head); err != nil {
+			log.WithError(err).Error("Could not set payload attestations on block")
+		}
 	}()
 
 	winningBid := primitives.ZeroWei()
 	var bundle *enginev1.BlobsBundle
-	if sBlk.Version() >= version.Bellatrix {
+	if sBlk.Version() >= version.EPBS {
+		if vs.signedExecutionPayloadHeader == nil {
+			log.Warn("Failed to retrieve the signed execution payload header, proposing a block without it")
+		} else {
+			if err := sBlk.SetSignedExecutionPayloadHeader(vs.signedExecutionPayloadHeader); err != nil {
+				log.Warn("Failed to set the signed execution payload header, proposing a block without it")
+			}
+		}
+	} else if sBlk.Version() >= version.Bellatrix {
 		local, err := vs.getLocalPayload(ctx, sBlk.Block(), head)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "Could not get local payload: %v", err)
@@ -286,7 +307,7 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 	var sidecars []*ethpb.BlobSidecar
 	if block.IsBlinded() {
 		block, sidecars, err = vs.handleBlindedBlock(ctx, block)
-	} else if block.Version() >= version.Deneb {
+	} else if block.Version() >= version.Deneb && block.Version() < version.EPBS {
 		sidecars, err = vs.blobSidecarsFromUnblindedBlock(block, req)
 	}
 	if err != nil {

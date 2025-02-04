@@ -19,6 +19,7 @@ go_library(
         "//consensus-types/primitives:go_default_library",
         "//consensus-types/validator:go_default_library",
         "//crypto/bls:go_default_library",
+        "//proto/engine/v1:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "//proto/prysm/v1alpha1/validator-client:go_default_library",
         "//validator/keymanager:go_default_library",
