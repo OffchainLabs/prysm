@@ -79,6 +79,8 @@ func (s *Service) validatePayloadAttestation(ctx context.Context, pid peer.ID, m
 		return pubsub.ValidationIgnore, errAlreadySeenPayloadAttestation
 	}
 
+	msg.ValidatorData = att
+
 	return pubsub.ValidationAccept, nil
 }
 
