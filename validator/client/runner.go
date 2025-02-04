@@ -81,7 +81,7 @@ func run(ctx context.Context, v iface.Validator) {
 			slotCtx, cancel := context.WithDeadline(ctx, deadline)
 
 			var span trace.Span
-			slotCtx, span = prysmTrace.StartSpan(ctx, "validator.processSlot")
+			slotCtx, span = prysmTrace.StartSpan(slotCtx, "validator.processSlot")
 			span.SetAttributes(prysmTrace.Int64Attribute("slot", int64(slot))) // lint:ignore uintcast -- This conversion is OK for tracing.
 
 			log := log.WithField("slot", slot)
