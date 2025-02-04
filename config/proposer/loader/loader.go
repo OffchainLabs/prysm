@@ -205,7 +205,7 @@ func (psl *SettingsLoader) loadFromDefault(cliCtx *cli.Context, dbSettings *vali
 		// only log the below if default flag is the only load method
 		log.Debug("Overriding previously saved proposer default settings.")
 	}
-        log.WithField(flags.SuggestedFeeRecipientFlag.Name, cliCtx.String(flags.SuggestedFeeRecipientFlag.Name)).Info("Proposer settings loaded from default")
+	log.WithField(flags.SuggestedFeeRecipientFlag.Name, cliCtx.String(flags.SuggestedFeeRecipientFlag.Name)).Info("Proposer settings loaded from default")
 	return psl.processProposerSettings(&validatorpb.ProposerSettingsPayload{DefaultConfig: &validatorpb.ProposerOptionPayload{
 		FeeRecipient: suggestedFeeRecipient,
 	}}, dbSettings), nil
