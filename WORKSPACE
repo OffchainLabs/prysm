@@ -429,7 +429,203 @@ load("@com_github_atlassian_bazel_tools//gometalinter:deps.bzl", "gometalinter_d
 
 gometalinter_dependencies()
 
-load("@bazel_gazelle//:deps.bzl", "gazelle_dependencies")
+load("@bazel_gazelle//:deps.bzl", "gazelle_dependencies", "go_repository")
+
+go_repository(
+    name = "com_github_aws_aws_sdk_go_v2_config",
+    importpath = "github.com/aws/aws-sdk-go-v2/config",
+    sum = "h1:Aka9bI7n8ysuwPeFdm77nfbyHCAKQ3z9ghB3S/38zes=",
+    version = "v1.18.45",
+)
+
+go_repository(
+    name = "com_github_aws_aws_sdk_go_v2_credentials",
+    importpath = "github.com/aws/aws-sdk-go-v2/credentials",
+    sum = "h1:LU8vo40zBlo3R7bAvBVy/ku4nxGEyZe9N8MqAeFTzF8=",
+    version = "v1.13.43",
+)
+
+go_repository(
+    name = "com_github_aws_aws_sdk_go_v2_feature_ec2_imds",
+    importpath = "github.com/aws/aws-sdk-go-v2/feature/ec2/imds",
+    sum = "h1:PIktER+hwIG286DqXyvVENjgLTAwGgoeriLDD5C+YlQ=",
+    version = "v1.13.13",
+)
+
+go_repository(
+    name = "com_github_aws_aws_sdk_go_v2_internal_configsources",
+    importpath = "github.com/aws/aws-sdk-go-v2/internal/configsources",
+    sum = "h1:nFBQlGtkbPzp/NjZLuFxRqmT91rLJkgvsEQs68h962Y=",
+    version = "v1.1.43",
+)
+
+go_repository(
+    name = "com_github_aws_aws_sdk_go_v2_internal_endpoints_v2",
+    importpath = "github.com/aws/aws-sdk-go-v2/internal/endpoints/v2",
+    sum = "h1:JRVhO25+r3ar2mKGP7E0LDl8K9/G36gjlqca5iQbaqc=",
+    version = "v2.4.37",
+)
+
+go_repository(
+    name = "com_github_aws_aws_sdk_go_v2_internal_ini",
+    importpath = "github.com/aws/aws-sdk-go-v2/internal/ini",
+    sum = "h1:hze8YsjSh8Wl1rYa1CJpRmXP21BvOBuc76YhW0HsuQ4=",
+    version = "v1.3.45",
+)
+
+go_repository(
+    name = "com_github_aws_aws_sdk_go_v2_service_internal_presigned_url",
+    importpath = "github.com/aws/aws-sdk-go-v2/service/internal/presigned-url",
+    sum = "h1:WWZA/I2K4ptBS1kg0kV1JbBtG/umed0vwHRrmcr9z7k=",
+    version = "v1.9.37",
+)
+
+go_repository(
+    name = "com_github_aws_aws_sdk_go_v2_service_route53",
+    importpath = "github.com/aws/aws-sdk-go-v2/service/route53",
+    sum = "h1:/RPQNjh1sDIezpXaFIkZb7MlXnSyAqjVdAwcJuGYTqg=",
+    version = "v1.30.2",
+)
+
+go_repository(
+    name = "com_github_aws_aws_sdk_go_v2_service_sso",
+    importpath = "github.com/aws/aws-sdk-go-v2/service/sso",
+    sum = "h1:JuPGc7IkOP4AaqcZSIcyqLpFSqBWK32rM9+a1g6u73k=",
+    version = "v1.15.2",
+)
+
+go_repository(
+    name = "com_github_aws_aws_sdk_go_v2_service_ssooidc",
+    importpath = "github.com/aws/aws-sdk-go-v2/service/ssooidc",
+    sum = "h1:HFiiRkf1SdaAmV3/BHOFZ9DjFynPHj8G/UIO1lQS+fk=",
+    version = "v1.17.3",
+)
+
+go_repository(
+    name = "com_github_aws_aws_sdk_go_v2_service_sts",
+    importpath = "github.com/aws/aws-sdk-go-v2/service/sts",
+    sum = "h1:0BkLfgeDjfZnZ+MhB3ONb01u9pwFYTCZVhlsSSBvlbU=",
+    version = "v1.23.2",
+)
+
+go_repository(
+    name = "com_github_aws_smithy_go",
+    importpath = "github.com/aws/smithy-go",
+    sum = "h1:PS/durmlzvAFpQHDs4wi4sNNP9ExsqZh6IlfdHXgKK8=",
+    version = "v1.15.0",
+)
+
+go_repository(
+    name = "com_github_azure_azure_sdk_for_go_sdk_azcore",
+    importpath = "github.com/Azure/azure-sdk-for-go/sdk/azcore",
+    sum = "h1:8q4SaHjFsClSvuVne0ID/5Ka8u3fcIHyqkLjcFpNRHQ=",
+    version = "v1.7.0",
+)
+
+go_repository(
+    name = "com_github_azure_azure_sdk_for_go_sdk_internal",
+    importpath = "github.com/Azure/azure-sdk-for-go/sdk/internal",
+    sum = "h1:sXr+ck84g/ZlZUOZiNELInmMgOsuGwdjjVkEIde0OtY=",
+    version = "v1.3.0",
+)
+
+go_repository(
+    name = "com_github_azure_azure_sdk_for_go_sdk_storage_azblob",
+    importpath = "github.com/Azure/azure-sdk-for-go/sdk/storage/azblob",
+    sum = "h1:gggzg0SUMs6SQbEw+3LoSsYf9YMjkupeAnHMX8O9mmY=",
+    version = "v1.2.0",
+)
+
+go_repository(
+    name = "com_github_cloudflare_cloudflare_go",
+    importpath = "github.com/cloudflare/cloudflare-go",
+    sum = "h1:ErwCYDjFCYppDJlDJ/5WhsSmzegAUe2+K9qgFyQDg3M=",
+    version = "v0.79.0",
+)
+
+go_repository(
+    name = "com_github_donovanhide_eventsource",
+    importpath = "github.com/donovanhide/eventsource",
+    sum = "h1:C7t6eeMaEQVy6e8CarIhscYQlNmw5e3G36y7l7Y21Ao=",
+    version = "v0.0.0-20210830082556-c59027999da0",
+)
+
+go_repository(
+    name = "com_github_fjl_gencodec",
+    importpath = "github.com/fjl/gencodec",
+    sum = "h1:bBLctRc7kr01YGvaDfgLbTwjFNW5jdp5y5rj8XXBHfY=",
+    version = "v0.0.0-20230517082657-f9840df7b83e",
+)
+
+go_repository(
+    name = "com_github_garslo_gogen",
+    importpath = "github.com/garslo/gogen",
+    sum = "h1:IZqZOB2fydHte3kUgxrzK5E1fW7RQGeDwE8F/ZZnUYc=",
+    version = "v0.0.0-20170306192744-1d203ffc1f61",
+)
+
+go_repository(
+    name = "com_github_hashicorp_go_retryablehttp",
+    importpath = "github.com/hashicorp/go-retryablehttp",
+    sum = "h1:ZQgVdpTdAL7WpMIwLzCfbalOcSUdkDZnpUv3/+BxzFA=",
+    version = "v0.7.4",
+)
+
+go_repository(
+    name = "com_github_jedisct1_go_minisign",
+    importpath = "github.com/jedisct1/go-minisign",
+    sum = "h1:TMtDYDHKYY15rFihtRfck/bfFqNfvcabqvXAFQfAUpY=",
+    version = "v0.0.0-20230811132847-661be99b8267",
+)
+
+go_repository(
+    name = "com_github_karalabe_hid",
+    importpath = "github.com/karalabe/hid",
+    sum = "h1:msKODTL1m0wigztaqILOtla9HeW1ciscYG4xjLtvk5I=",
+    version = "v1.0.1-0.20240306101548-573246063e52",
+)
+
+go_repository(
+    name = "com_github_kilic_bls12_381",
+    importpath = "github.com/kilic/bls12-381",
+    sum = "h1:encrdjqKMEvabVQ7qYOKu1OvhqpK4s47wDYtNiPtlp4=",
+    version = "v0.1.0",
+)
+
+go_repository(
+    name = "com_github_naoina_go_stringutil",
+    importpath = "github.com/naoina/go-stringutil",
+    sum = "h1:rCUeRUHjBjGTSHl0VC00jUPLz8/F9dDzYI70Hzifhks=",
+    version = "v0.1.0",
+)
+
+go_repository(
+    name = "com_github_naoina_toml",
+    importpath = "github.com/naoina/toml",
+    sum = "h1:shk/vn9oCoOTmwcouEdwIeOtOGA/ELRUw/GwvxwfT+0=",
+    version = "v0.1.2-0.20170918210437-9fafd6967416",
+)
+
+go_repository(
+    name = "com_github_protolambda_bls12_381_util",
+    importpath = "github.com/protolambda/bls12-381-util",
+    sum = "h1:05DU2wJN7DTU7z28+Q+zejXkIsA/MF8JZQGhtBZZiWk=",
+    version = "v0.1.0",
+)
+
+go_repository(
+    name = "com_github_protolambda_zrnt",
+    importpath = "github.com/protolambda/zrnt",
+    sum = "h1:KZ48T+3UhsPXNdtE/5QEvGc9DGjUaRI17nJaoznoIaM=",
+    version = "v0.32.2",
+)
+
+go_repository(
+    name = "com_github_protolambda_ztyp",
+    importpath = "github.com/protolambda/ztyp",
+    sum = "h1:rVcL3vBu9W/aV646zF6caLS/dyn9BN8NYiuJzicLNyY=",
+    version = "v0.2.2",
+)
 
 gazelle_dependencies()
 
