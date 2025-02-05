@@ -45,6 +45,8 @@ const (
 	BlockTopic = "block"
 	// AttestationTopic represents a new submitted attestation event topic.
 	AttestationTopic = "attestation"
+	// SingleAttestationTopic represents a new submitted single attestation event topic.
+	SingleAttestationTopic = "single_attestation"
 	// VoluntaryExitTopic represents a new performed voluntary exit event topic.
 	VoluntaryExitTopic = "voluntary_exit"
 	// FinalizedCheckpointTopic represents a new finalized checkpoint event topic.
@@ -92,6 +94,7 @@ type lazyReader func() io.Reader
 var opsFeedEventTopics = map[feed.EventType]string{
 	operation.AggregatedAttReceived:             AttestationTopic,
 	operation.UnaggregatedAttReceived:           AttestationTopic,
+	operation.SingleAttReceived:                 SingleAttestationTopic,
 	operation.ExitReceived:                      VoluntaryExitTopic,
 	operation.SyncCommitteeContributionReceived: SyncCommitteeContributionTopic,
 	operation.BLSToExecutionChangeReceived:      BLSToExecutionChangeTopic,
@@ -403,7 +406,7 @@ func (es *eventStreamer) writeOutbox(ctx context.Context, w *streamingResponseWr
 func jsonMarshalReader(name string, v any) io.Reader {
 	d, err := json.Marshal(v)
 	if err != nil {
-		log.WithError(err).WithField("type_name", fmt.Sprintf("%T", v)).Error("Could not marshal event data.")
+		log.WithError(err).WithField("type_name", fmt.Sprintf("%T", v)).Error("Could not marshal event data")
 		return nil
 	}
 	return bytes.NewBufferString("event: " + name + "\ndata: " + string(d) + "\n\n")
@@ -415,6 +418,8 @@ func topicForEvent(event *feed.Event) string {
 		return AttestationTopic
 	case *operation.UnAggregatedAttReceivedData:
 		return AttestationTopic
+	case *operation.SingleAttReceivedData:
+		return SingleAttestationTopic
 	case *operation.ExitReceivedData:
 		return VoluntaryExitTopic
 	case *operation.SyncCommitteeContributionReceivedData:
@@ -464,10 +469,20 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 			return jsonMarshalReader(eventName, structs.HeadEventFromV1(v))
 		}, nil
 	case *operation.AggregatedAttReceivedData:
-		return func() io.Reader {
-			att := structs.AttFromConsensus(v.Attestation.Aggregate)
-			return jsonMarshalReader(eventName, att)
-		}, nil
+		switch att := v.Attestation.AggregateVal().(type) {
+		case *eth.Attestation:
+			return func() io.Reader {
+				att := structs.AttFromConsensus(att)
+				return jsonMarshalReader(eventName, att)
+			}, nil
+		case *eth.AttestationElectra:
+			return func() io.Reader {
+				att := structs.AttElectraFromConsensus(att)
+				return jsonMarshalReader(eventName, att)
+			}, nil
+		default:
+			return nil, errors.Wrapf(errUnhandledEventData, "Unexpected type %T for the .Attestation field of AggregatedAttReceivedData", v.Attestation)
+		}
 	case *operation.UnAggregatedAttReceivedData:
 		switch att := v.Attestation.(type) {
 		case *eth.Attestation:
@@ -482,6 +497,16 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 			}, nil
 		default:
 			return nil, errors.Wrapf(errUnhandledEventData, "Unexpected type %T for the .Attestation field of UnAggregatedAttReceivedData", v.Attestation)
+		}
+	case *operation.SingleAttReceivedData:
+		switch att := v.Attestation.(type) {
+		case *eth.SingleAttestation:
+			return func() io.Reader {
+				att := structs.SingleAttFromConsensus(att)
+				return jsonMarshalReader(eventName, att)
+			}, nil
+		default:
+			return nil, errors.Wrapf(errUnhandledEventData, "Unexpected type %T for the .Attestation field of SingleAttReceivedData", v.Attestation)
 		}
 	case *operation.ExitReceivedData:
 		return func() io.Reader {

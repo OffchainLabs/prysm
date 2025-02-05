@@ -433,6 +433,15 @@ func (a *AttestationElectra) ToConsensus() (*eth.AttestationElectra, error) {
 	}, nil
 }
 
+func SingleAttFromConsensus(a *eth.SingleAttestation) *SingleAttestation {
+	return &SingleAttestation{
+		CommitteeIndex: fmt.Sprintf("%d", a.CommitteeId),
+		AttesterIndex:  fmt.Sprintf("%d", a.AttesterIndex),
+		Data:           AttDataFromConsensus(a.Data),
+		Signature:      hexutil.Encode(a.Signature),
+	}
+}
+
 func (a *SingleAttestation) ToConsensus() (*eth.SingleAttestation, error) {
 	ci, err := strconv.ParseUint(a.CommitteeIndex, 10, 64)
 	if err != nil {
