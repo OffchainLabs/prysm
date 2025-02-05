@@ -531,8 +531,8 @@ func (s *Service) ReconstructFullBellatrixBlockBatch(
 // It retrieves the KZG commitments from the block body, fetches the associated blobs and proofs,
 // and constructs the corresponding verified read-only blob sidecars.
 //
-// The 'has' argument is a function that satisfies the hasIndex type def, returning true if the given
-// uint64 blob index already exists on disc. Only the blobs that do not already exist (where hasIndex(i) is false)
+// The 'hasIndex' argument is a function returns true if the given uint64 blob index already exists on disc.
+// Only the blobs that do not already exist (where hasIndex(i) is false)
 // will be fetched from the execution engine using the KZG commitments from block body.
 func (s *Service) ReconstructBlobSidecars(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte, hasIndex func(uint64) bool) ([]blocks.VerifiedROBlob, error) {
 	blockBody := block.Block().Body()

@@ -147,6 +147,9 @@ func (bs *BlobStorage) migrateLayouts() error {
 			return err
 		}
 		if err := migrateLayout(bs.fs, from, bs.layout, bs.cache); err != nil {
+			if errors.Is(err, errLayoutNotDetected) {
+				continue
+			}
 			return errors.Wrapf(err, "failed to migrate layout from %s to %s", name, bs.layoutName)
 		}
 	}

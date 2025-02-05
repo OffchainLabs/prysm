@@ -39,6 +39,7 @@ var (
 	errInvalidRootString      = errors.New("Could not parse hex string as a [32]byte")
 	errInvalidDirectoryLayout = errors.New("Could not parse blob directory path")
 	errInvalidLayoutName      = errors.New("unknown layout name")
+	errLayoutNotDetected      = errors.New("given layout not observed in the blob filesystem tree")
 )
 
 type blobIdent struct {
@@ -121,12 +122,15 @@ func warmCache(l fsLayout, cache *blobStorageSummaryCache) error {
 }
 
 func migrateLayout(fs afero.Fs, from, to fsLayout, cache *blobStorageSummaryCache) error {
-	log.WithField("fromLayout", from.name()).WithField("toLayout", to.name()).Info("Migrating blob filesystem layout. This one-time operation can take extra time (up to a few minutes for systems with extended blob storage and a cold disk cache).")
 	start := time.Now()
 	iter, err := from.iterateIdents(0)
 	if err != nil {
 		return errors.Wrapf(errMigrationFailure, "failed to iterate legacy structure while migrating blobs, err=%s", err.Error())
 	}
+	if iter.atEOF() {
+		return errLayoutNotDetected
+	}
+	log.WithField("fromLayout", from.name()).WithField("toLayout", to.name()).Info("Migrating blob filesystem layout. This one-time operation can take extra time (up to a few minutes for systems with extended blob storage and a cold disk cache).")
 	lastMoved := ""
 	parentDirs := make(map[string]bool) // this map should have < 65k keys by design
 	moved := 0

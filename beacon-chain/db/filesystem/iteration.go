@@ -94,6 +94,12 @@ type identIterator struct {
 	eof     bool
 }
 
+// atEOF can be used to peek at the iterator to see if it's already finished. This is useful for the migration code to check
+// if there are any entries in the directory indicated by the migration.
+func (iter *identIterator) atEOF() bool {
+	return iter.eof
+}
+
 // next is the only method that a user of the identIterator needs to call.
 // identIterator will yield blobIdents in a breadth-first fashion,
 // returning an empty blobIdent and io.EOF once all branches have been traversed.
