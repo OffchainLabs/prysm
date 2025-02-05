@@ -84,19 +84,71 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(ctx context.Context, p
 
 	committeeIndex := att.GetCommitteeIndex()
 
-	if !features.Get().EnableSlasher {
-		// Verify this the first attestation received for the participating validator for the slot.
-		if s.hasSeenCommitteeIndicesSlot(data.Slot, committeeIndex, att.GetAggregationBits()) {
-			return pubsub.ValidationIgnore, nil
-		}
+	var signatureValidated bool
+	if features.Get().EnableSlasher {
+		// Feed the indexed attestation to slasher if enabled. This action
+		// is done in the background to avoid adding more load to this critical code path.
+		defer func() {
+			go func() {
+				// Using a different context to prevent timeouts as this operation can be expensive
+				// and we want to avoid affecting the critical code path.
+				ctx := context.TODO()
+				preState, err := s.cfg.chain.AttestationTargetState(ctx, data.Target)
+				if err != nil {
+					log.WithError(err).Error("Could not retrieve pre state")
+					tracing.AnnotateError(span, err)
+					return
+				}
+				if !signatureValidated {
+					set, err := blocks.AttestationSignatureBatch(ctx, preState, []eth.Att{att})
+					if err != nil {
+						log.WithError(err).Error("Could not prepare attestation signature batch")
+						tracing.AnnotateError(span, err)
+						attBadSignatureBatchCount.Inc()
+						return
+					}
+					validationResult, err := s.validateWithBatchVerifier(ctx, "attestation", set)
+					if err != nil {
+						log.WithError(err).Error("Could not validate attestation batch signature")
+						tracing.AnnotateError(span, err)
+						attBadSignatureBatchCount.Inc()
+						return
+					}
+					if validationResult != pubsub.ValidationAccept {
+						log.WithError(err).Error("Not forwarding attestation to slasher due to invalid signature")
+						tracing.AnnotateError(span, err)
+						attBadSignatureBatchCount.Inc()
+						return
+					}
+				}
+				committee, err := helpers.BeaconCommitteeFromState(ctx, preState, data.Slot, committeeIndex)
+				if err != nil {
+					log.WithError(err).Error("Could not get attestation committee")
+					tracing.AnnotateError(span, err)
+					return
+				}
+				indexedAtt, err := attestation.ConvertToIndexed(ctx, att, committee)
+				if err != nil {
+					log.WithError(err).Error("Could not convert to indexed attestation")
+					tracing.AnnotateError(span, err)
+					return
+				}
+				s.cfg.slasherAttestationsFeed.Send(&types.WrappedIndexedAtt{IndexedAtt: indexedAtt})
+			}()
+		}()
+	}
 
-		// Reject an attestation if it references an invalid block.
-		if s.hasBadBlock(bytesutil.ToBytes32(data.BeaconBlockRoot)) ||
-			s.hasBadBlock(bytesutil.ToBytes32(data.Target.Root)) ||
-			s.hasBadBlock(bytesutil.ToBytes32(data.Source.Root)) {
-			attBadBlockCount.Inc()
-			return pubsub.ValidationReject, errors.New("attestation data references bad block root")
-		}
+	// Verify this the first attestation received for the participating validator for the slot.
+	if s.hasSeenCommitteeIndicesSlot(data.Slot, data.CommitteeIndex, att.GetAggregationBits()) {
+		return pubsub.ValidationIgnore, nil
+	}
+
+	// Reject an attestation if it references an invalid block.
+	if s.hasBadBlock(bytesutil.ToBytes32(data.BeaconBlockRoot)) ||
+		s.hasBadBlock(bytesutil.ToBytes32(data.Target.Root)) ||
+		s.hasBadBlock(bytesutil.ToBytes32(data.Source.Root)) {
+		attBadBlockCount.Inc()
+		return pubsub.ValidationReject, errors.New("attestation data references bad block root")
 	}
 
 	var validationRes pubsub.ValidationResult
@@ -152,35 +204,7 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(ctx context.Context, p
 	if validationRes != pubsub.ValidationAccept {
 		return validationRes, err
 	}
-
-	if features.Get().EnableSlasher {
-		// Feed the indexed attestation to slasher if enabled. This action
-		// is done in the background to avoid adding more load to this critical code path.
-		go func() {
-			// Using a different context to prevent timeouts as this operation can be expensive
-			// and we want to avoid affecting the critical code path.
-			ctx := context.TODO()
-			preState, err := s.cfg.chain.AttestationTargetState(ctx, data.Target)
-			if err != nil {
-				log.WithError(err).Error("Could not retrieve pre state")
-				tracing.AnnotateError(span, err)
-				return
-			}
-			committee, err := helpers.BeaconCommitteeFromState(ctx, preState, data.Slot, committeeIndex)
-			if err != nil {
-				log.WithError(err).Error("Could not get attestation committee")
-				tracing.AnnotateError(span, err)
-				return
-			}
-			indexedAtt, err := attestation.ConvertToIndexed(ctx, att, committee)
-			if err != nil {
-				log.WithError(err).Error("Could not convert to indexed attestation")
-				tracing.AnnotateError(span, err)
-				return
-			}
-			s.cfg.slasherAttestationsFeed.Send(&types.WrappedIndexedAtt{IndexedAtt: indexedAtt})
-		}()
-	}
+	signatureValidated = true
 
 	// Broadcast the unaggregated attestation on a feed to notify other services in the beacon node
 	// of a received unaggregated attestation.

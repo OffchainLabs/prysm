@@ -80,16 +80,35 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 		},
 	})
 
+	var signatureValidated bool
 	if features.Get().EnableSlasher {
 		// Feed the block header to slasher if enabled. This action
 		// is done in the background to avoid adding more load to this critical code path.
-		go func() {
-			blockHeader, err := interfaces.SignedBeaconBlockHeaderFromBlockInterface(blk)
-			if err != nil {
-				log.WithError(err).WithField("blockSlot", blk.Block().Slot()).Warn("Could not extract block header")
-				return
-			}
-			s.cfg.slasherBlockHeadersFeed.Send(blockHeader)
+		defer func() {
+			go func() {
+				if !signatureValidated {
+					blockRoot, err := blk.Block().HashTreeRoot()
+					if err != nil {
+						log.WithError(err).WithFields(getBlockFields(blk)).Debug("Ignored block")
+						return
+					}
+					parentState, err := s.cfg.stateGen.StateByRoot(ctx, blk.Block().ParentRoot())
+					if err != nil {
+						log.WithError(err).WithFields(getBlockFields(blk)).Debug("Could not get state for block by parent root")
+						return
+					}
+					if err := blocks.VerifyBlockSignatureUsingCurrentFork(parentState, blk, blockRoot); err != nil {
+						log.WithError(err).WithFields(getBlockFields(blk)).Debug("Signature failed to verify, not forwarding block to slasher")
+						return
+					}
+				}
+				blockHeader, err := interfaces.SignedBeaconBlockHeaderFromBlockInterface(blk)
+				if err != nil {
+					log.WithError(err).WithField("blockSlot", blk.Block().Slot()).Warn("Could not extract block header")
+					return
+				}
+				s.cfg.slasherBlockHeadersFeed.Send(blockHeader)
+			}()
 		}()
 	}
 
@@ -198,6 +217,7 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 			return pubsub.ValidationReject, err
 		}
 	}
+	signatureValidated = true
 
 	// Record attribute of valid block.
 	span.SetAttributes(trace.Int64Attribute("slotInEpoch", int64(blk.Block().Slot()%params.BeaconConfig().SlotsPerEpoch)))
