@@ -8,7 +8,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
+	coretime "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
@@ -270,6 +270,32 @@ func (p *Pool) MarkIncludedProposerSlashing(ps *ethpb.ProposerSlashing) {
 	numProposerSlashingsIncluded.Inc()
 }
 
+// ConvertToElectra converts all Phase0 attester slashings to Electra attester slashings.
+// This functionality is needed at the time of the Electra fork.
+func (p *Pool) ConvertToElectra() {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	for _, pas := range p.pendingAttesterSlashing {
+		if pas.attesterSlashing.Version() == version.Phase0 {
+			first := pas.attesterSlashing.FirstAttestation()
+			second := pas.attesterSlashing.SecondAttestation()
+			pas.attesterSlashing = &ethpb.AttesterSlashingElectra{
+				Attestation_1: &ethpb.IndexedAttestationElectra{
+					AttestingIndices: first.GetAttestingIndices(),
+					Data:             first.GetData(),
+					Signature:        first.GetSignature(),
+				},
+				Attestation_2: &ethpb.IndexedAttestationElectra{
+					AttestingIndices: second.GetAttestingIndices(),
+					Data:             second.GetData(),
+					Signature:        second.GetSignature(),
+				},
+			}
+		}
+	}
+}
+
 // this function checks a few items about a validator before proceeding with inserting
 // a proposer/attester slashing into the pool. First, it checks if the validator
 // has been recently included in the pool, then it checks if the validator is slashable.
@@ -291,7 +317,7 @@ func (p *Pool) validatorSlashingPreconditionCheck(
 		return false, err
 	}
 	// Checking if the validator is slashable.
-	if !helpers.IsSlashableValidatorUsingTrie(validator, time.CurrentEpoch(state)) {
+	if !helpers.IsSlashableValidatorUsingTrie(validator, coretime.CurrentEpoch(state)) {
 		return false, nil
 	}
 	return true, nil
