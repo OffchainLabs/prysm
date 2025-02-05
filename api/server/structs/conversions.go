@@ -1290,7 +1290,7 @@ func AttesterSlashingsElectraToConsensus(src []*AttesterSlashingElectra) ([]*eth
 	}
 	err := slice.VerifyMaxLength(src, fieldparams.MaxAttesterSlashingsElectra)
 	if err != nil {
-		return nil, server.NewDecodeError(err, "AttesterSlashinElectras")
+		return nil, server.NewDecodeError(err, "AttesterSlashingsElectra")
 	}
 
 	attesterSlashings := make([]*eth.AttesterSlashingElectra, len(src))
