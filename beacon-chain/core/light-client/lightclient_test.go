@@ -22,6 +22,15 @@ import (
 )
 
 func TestLightClient_NewLightClientOptimisticUpdateFromBeaconState(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.AltairForkEpoch = 1
+	cfg.BellatrixForkEpoch = 2
+	cfg.CapellaForkEpoch = 3
+	cfg.DenebForkEpoch = 4
+	cfg.ElectraForkEpoch = 5
+	params.OverrideBeaconConfig(cfg)
+
 	t.Run("Altair", func(t *testing.T) {
 		l := util.NewTestLightClient(t).SetupTestAltair()
 
@@ -61,15 +70,6 @@ func TestLightClient_NewLightClientOptimisticUpdateFromBeaconState(t *testing.T)
 	})
 
 	t.Run("Electra", func(t *testing.T) {
-		params.SetupTestConfigCleanup(t)
-		cfg := params.BeaconConfig()
-		cfg.AltairForkEpoch = 1
-		cfg.BellatrixForkEpoch = 2
-		cfg.CapellaForkEpoch = 3
-		cfg.DenebForkEpoch = 4
-		cfg.ElectraForkEpoch = 5
-		params.OverrideBeaconConfig(cfg)
-
 		l := util.NewTestLightClient(t).SetupTestElectra(false)
 
 		update, err := lightClient.NewLightClientOptimisticUpdateFromBeaconState(l.Ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock)
@@ -84,6 +84,15 @@ func TestLightClient_NewLightClientOptimisticUpdateFromBeaconState(t *testing.T)
 }
 
 func TestLightClient_NewLightClientFinalityUpdateFromBeaconState(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.AltairForkEpoch = 1
+	cfg.BellatrixForkEpoch = 2
+	cfg.CapellaForkEpoch = 3
+	cfg.DenebForkEpoch = 4
+	cfg.ElectraForkEpoch = 5
+	params.OverrideBeaconConfig(cfg)
+
 	t.Run("Altair", func(t *testing.T) {
 		l := util.NewTestLightClient(t).SetupTestAltair()
 
@@ -380,15 +389,6 @@ func TestLightClient_NewLightClientFinalityUpdateFromBeaconState(t *testing.T) {
 	})
 
 	t.Run("Electra", func(t *testing.T) {
-		params.SetupTestConfigCleanup(t)
-		cfg := params.BeaconConfig()
-		cfg.AltairForkEpoch = 1
-		cfg.BellatrixForkEpoch = 2
-		cfg.CapellaForkEpoch = 3
-		cfg.DenebForkEpoch = 4
-		cfg.ElectraForkEpoch = 5
-		params.OverrideBeaconConfig(cfg)
-
 		t.Run("FinalizedBlock Not Nil", func(t *testing.T) {
 			l := util.NewTestLightClient(t).SetupTestElectra(false)
 
