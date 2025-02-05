@@ -1462,7 +1462,7 @@ func AttsElectraToConsensus(src []*AttestationElectra) ([]*eth.AttestationElectr
 	}
 	err := slice.VerifyMaxLength(src, 8)
 	if err != nil {
-		return nil, server.NewDecodeError(err, "AttestationElectras")
+		return nil, server.NewDecodeError(err, "AttestationsElectra")
 	}
 
 	atts := make([]*eth.AttestationElectra, len(src))
