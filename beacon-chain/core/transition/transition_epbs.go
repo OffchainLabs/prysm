@@ -1,6 +1,8 @@
 package transition
 
 import (
+	"fmt"
+
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/epbs"
@@ -93,7 +95,7 @@ func processExecutionPayloadHeader(state state.BeaconState, body interfaces.Read
 		return err
 	}
 	if header.ParentBlockHash() != [32]byte(lbh) {
-		return errors.New("incorrect latest block hash")
+		return fmt.Errorf("incorrect parent block hash, got: %x, wanted: %x", header.ParentBlockHash(), lbh)
 	}
 	if err := state.UpdateBalancesAtIndex(builderIndex, builderBalance-uint64(amount)); err != nil {
 		return err

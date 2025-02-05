@@ -132,7 +132,26 @@ func CalculateStateRoot(
 
 	// Execute per slots transition.
 	var err error
-	parentRoot := signed.Block().ParentRoot()
+	var parentRoot [32]byte
+	if state.Version() >= version.EPBS {
+		signedHeader, err := signed.Block().Body().SignedExecutionPayloadHeader()
+		if err != nil {
+			return [32]byte{}, errors.Wrap(err, "could not retrieve signed execution payload header")
+		}
+		header, err := signedHeader.Header()
+		if err != nil {
+			return [32]byte{}, errors.Wrap(err, "could not retrieve execution payload header")
+		}
+		lbh, err := state.LatestBlockHash()
+		if err != nil {
+			return [32]byte{}, errors.Wrap(err, "could not get state latest block hash")
+		}
+		if header.ParentBlockHash() == [32]byte(lbh) {
+			parentRoot = [32]byte(lbh)
+		} else {
+			parentRoot = signed.Block().ParentRoot()
+		}
+	}
 	state, err = ProcessSlotsUsingNextSlotCache(ctx, state, parentRoot[:], signed.Block().Slot())
 	if err != nil {
 		return [32]byte{}, errors.Wrap(err, "could not process slots")

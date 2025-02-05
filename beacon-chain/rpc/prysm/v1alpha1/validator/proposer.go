@@ -503,8 +503,11 @@ func (vs *Server) GetFeeRecipientByPubKey(ctx context.Context, request *ethpb.Fe
 // returns it to the validator client.
 func (vs *Server) computeStateRoot(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) ([]byte, error) {
 	parentRoot := block.Block().ParentRoot()
-
-	if block.Version() >= version.EPBS {
+	parentSlot, err := vs.ForkchoiceFetcher.RecentBlockSlot(parentRoot)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get parent slot")
+	}
+	if block.Version() >= version.EPBS && slots.ToEpoch(parentSlot) >= params.BeaconConfig().EPBSForkEpoch {
 		parentHash := vs.ForkchoiceFetcher.HashForBlockRoot(parentRoot)
 		signedBid, err := block.Block().Body().SignedExecutionPayloadHeader()
 		if err != nil {
@@ -514,7 +517,7 @@ func (vs *Server) computeStateRoot(ctx context.Context, block interfaces.ReadOnl
 		if err != nil {
 			return nil, errors.Wrap(err, "could not get execution payload header")
 		}
-		if parentHash == bid.BlockHash() {
+		if parentHash == bid.ParentBlockHash() {
 			// It's based on full, use the state by hash
 			parentRoot = parentHash
 		}
