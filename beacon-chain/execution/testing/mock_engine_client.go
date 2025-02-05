@@ -109,7 +109,7 @@ func (e *EngineClient) ReconstructFullBellatrixBlockBatch(
 }
 
 // ReconstructBlobSidecars is a mock implementation of the ReconstructBlobSidecars method.
-func (e *EngineClient) ReconstructBlobSidecars(context.Context, interfaces.ReadOnlySignedBeaconBlock, [32]byte, []bool) ([]blocks.VerifiedROBlob, error) {
+func (e *EngineClient) ReconstructBlobSidecars(context.Context, interfaces.ReadOnlySignedBeaconBlock, [32]byte, func(uint64) bool) ([]blocks.VerifiedROBlob, error) {
 	return e.BlobSidecars, e.ErrorBlobSidecars
 }
 

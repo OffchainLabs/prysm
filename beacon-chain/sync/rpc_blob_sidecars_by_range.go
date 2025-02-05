@@ -27,14 +27,10 @@ func (s *Service) streamBlobBatch(ctx context.Context, batch blockBatch, wQuota 
 	defer span.End()
 	for _, b := range batch.canonical() {
 		root := b.Root()
-		idxs, err := s.cfg.blobStorage.Indices(b.Root(), b.Block().Slot())
-		if err != nil {
-			s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
-			return wQuota, errors.Wrapf(err, "could not retrieve sidecars for block root %#x", root)
-		}
-		for i, l := uint64(0), uint64(len(idxs)); i < l; i++ {
+		idxs := s.cfg.blobStorage.Summary(root)
+		for i := range idxs.MaxBlobsForEpoch() {
 			// index not available, skip
-			if !idxs[i] {
+			if !idxs.HasIndex(i) {
 				continue
 			}
 			// We won't check for file not found since the .Indices method should normally prevent that from happening.
