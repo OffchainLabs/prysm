@@ -1458,7 +1458,7 @@ func AttsFromConsensus(src []*eth.Attestation) []*Attestation {
 
 func AttsElectraToConsensus(src []*AttestationElectra) ([]*eth.AttestationElectra, error) {
 	if src == nil {
-		return nil, server.NewDecodeError(errNilValue, "AttestationElectras")
+		return nil, server.NewDecodeError(errNilValue, "AttestationsElectra")
 	}
 	err := slice.VerifyMaxLength(src, 8)
 	if err != nil {
