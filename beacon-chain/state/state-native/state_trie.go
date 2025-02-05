@@ -1487,8 +1487,7 @@ func (b *BeaconState) recomputeFieldTrie(index types.FieldIndex, elements interf
 	if fTrie.FieldReference().Refs() > 1 {
 		var newTrie *fieldtrie.FieldTrie
 		// We choose to only copy the validator
-		// trie as it is pretty expensive to regenerate
-		// in the event of late blocks.
+		// trie as it is pretty expensive to regenerate.
 		if index == types.Validators {
 			newTrie = fTrie.CopyTrie()
 		} else {
