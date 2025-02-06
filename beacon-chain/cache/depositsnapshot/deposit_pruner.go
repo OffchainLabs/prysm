@@ -3,21 +3,8 @@ package depositsnapshot
 import (
 	"context"
 
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-)
-
-var (
-	prunedProofsCount = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "beacondb_pruned_proofs_eip4881",
-		Help: "The number of pruned proofs",
-	})
-	prunedPendingDepositsCount = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "beacondb_pruned_pending_deposits_eip4881",
-		Help: "The number of pruned pending deposits",
-	})
 )
 
 // PruneProofs removes proofs from all deposits whose index is equal or less than untilDepositIndex.
@@ -37,7 +24,6 @@ func (c *Cache) PruneProofs(ctx context.Context, untilDepositIndex int64) error 
 			break
 		}
 		c.deposits[i].Deposit.Proof = nil
-		prunedProofsCount.Inc()
 	}
 
 	return nil
@@ -59,7 +45,6 @@ func (c *Cache) PruneAllProofs(ctx context.Context) {
 			break
 		}
 		c.deposits[i].Deposit.Proof = nil
-		prunedProofsCount.Inc()
 	}
 }
 
@@ -83,10 +68,6 @@ func (c *Cache) PrunePendingDeposits(ctx context.Context, merkleTreeIndex int64)
 		}
 	}
 
-	// Add pruned count to prom metric
-	prunedCount := len(c.pendingDeposits) - len(cleanDeposits)
-	prunedPendingDepositsCount.Add(float64(prunedCount))
-
 	c.pendingDeposits = cleanDeposits
 	pendingDepositsCount.Set(float64(len(c.pendingDeposits)))
 }
@@ -101,9 +82,6 @@ func (c *Cache) PruneAllPendingDeposits(ctx context.Context) {
 
 	c.depositsLock.Lock()
 	defer c.depositsLock.Unlock()
-
-	prunedCount := len(c.pendingDeposits)
-	prunedPendingDepositsCount.Add(float64(prunedCount))
 
 	c.pendingDeposits = make([]*ethpb.DepositContainer, 0)
 	pendingDepositsCount.Set(float64(0))

@@ -723,7 +723,7 @@ func TestInsertFinalizedDeposits(t *testing.T) {
 			Signature:             zeroSig[:],
 		}, Proof: [][]byte{root}}, 100+i, int64(i), bytesutil.ToBytes32(root)))
 	}
-	service.insertFinalizedDeposits(ctx, [32]byte{'m', 'o', 'c', 'k'})
+	service.insertFinalizedDepositsAndPrune(ctx, [32]byte{'m', 'o', 'c', 'k'})
 	fDeposits, err := depositCache.FinalizedDeposits(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, 7, int(fDeposits.MerkleTrieIndex()), "Finalized deposits not inserted correctly")
@@ -759,7 +759,7 @@ func TestInsertFinalizedDeposits_PrunePendingDeposits(t *testing.T) {
 			Signature:             zeroSig[:],
 		}, Proof: [][]byte{root}}, 100+i, int64(i), bytesutil.ToBytes32(root))
 	}
-	service.insertFinalizedDeposits(ctx, [32]byte{'m', 'o', 'c', 'k'})
+	service.insertFinalizedDepositsAndPrune(ctx, [32]byte{'m', 'o', 'c', 'k'})
 	fDeposits, err := depositCache.FinalizedDeposits(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, 7, int(fDeposits.MerkleTrieIndex()), "Finalized deposits not inserted correctly")
@@ -799,7 +799,7 @@ func TestInsertFinalizedDeposits_MultipleFinalizedRoutines(t *testing.T) {
 	}
 	// Insert 3 deposits before hand.
 	require.NoError(t, depositCache.InsertFinalizedDeposits(ctx, 2, [32]byte{}, 0))
-	service.insertFinalizedDeposits(ctx, [32]byte{'m', 'o', 'c', 'k'})
+	service.insertFinalizedDepositsAndPrune(ctx, [32]byte{'m', 'o', 'c', 'k'})
 	fDeposits, err := depositCache.FinalizedDeposits(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, 5, int(fDeposits.MerkleTrieIndex()), "Finalized deposits not inserted correctly")
@@ -810,7 +810,7 @@ func TestInsertFinalizedDeposits_MultipleFinalizedRoutines(t *testing.T) {
 	}
 
 	// Insert New Finalized State with higher deposit count.
-	service.insertFinalizedDeposits(ctx, [32]byte{'m', 'o', 'c', 'k', '2'})
+	service.insertFinalizedDepositsAndPrune(ctx, [32]byte{'m', 'o', 'c', 'k', '2'})
 	fDeposits, err = depositCache.FinalizedDeposits(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, 12, int(fDeposits.MerkleTrieIndex()), "Finalized deposits not inserted correctly")
