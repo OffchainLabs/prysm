@@ -299,7 +299,7 @@ func mergeProposerSettings(loaded, db *validatorpb.ProposerSettingsPayload, opti
 
 	if merged.DefaultConfig != nil {
 		merged.DefaultConfig.Builder = processBuilderConfig(merged.DefaultConfig.Builder, builderConfig, gasLimitOnly)
-    if merged.DefaultConfig.Builder != nil && merged.DefaultConfig.Builder.Enabled && merged.DefaultConfig.Builder.GasLimit == 0 && gasLimitOnly == nil {
+		if merged.DefaultConfig.Builder != nil && merged.DefaultConfig.Builder.Enabled && merged.DefaultConfig.Builder.GasLimit == 0 && gasLimitOnly == nil {
 			log.Warnf("Builder was enabled but no gas limit was specified so the global default of %d is used. Add a gas_limit field or use the --%s flag to lower the log level.",
 				params.BeaconConfig().DefaultBuilderGasLimit, flags.BuilderGasLimitFlag.Name)
 		}
