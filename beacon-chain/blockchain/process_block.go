@@ -652,12 +652,12 @@ func uint64MapToSortedSlice(input map[uint64]bool) []uint64 {
 	return output
 }
 
-func (s *Service) areDataColumnsAvailable(ctx context.Context, root [32]byte, signed interfaces.ReadOnlySignedBeaconBlock) error {
-	if signed.Version() < version.Fulu {
+func (s *Service) areDataColumnsAvailable(ctx context.Context, root [32]byte, signedBlock interfaces.ReadOnlySignedBeaconBlock) error {
+	if signedBlock.Version() < version.Fulu {
 		return nil
 	}
 
-	block := signed.Block()
+	block := signedBlock.Block()
 	if block == nil {
 		return errors.New("invalid nil beacon block")
 	}
@@ -738,7 +738,7 @@ func (s *Service) areDataColumnsAvailable(ctx context.Context, root [32]byte, si
 	}
 
 	// Log for DA checks that cross over into the next slot; helpful for debugging.
-	nextSlot := slots.BeginsAt(signed.Block().Slot()+1, s.genesisTime)
+	nextSlot := slots.BeginsAt(signedBlock.Block().Slot()+1, s.genesisTime)
 	// Avoid logging if DA check is called after next slot start.
 	if nextSlot.After(time.Now()) {
 		nst := time.AfterFunc(time.Until(nextSlot), func() {
@@ -765,7 +765,7 @@ func (s *Service) areDataColumnsAvailable(ctx context.Context, root [32]byte, si
 			}
 
 			log.WithFields(logrus.Fields{
-				"slot":            signed.Block().Slot(),
+				"slot":            signedBlock.Block().Slot(),
 				"root":            fmt.Sprintf("%#x", root),
 				"columnsExpected": expected,
 				"columnsWaiting":  missing,
