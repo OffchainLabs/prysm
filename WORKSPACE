@@ -553,8 +553,8 @@ go_repository(
 go_repository(
     name = "com_github_fjl_gencodec",
     importpath = "github.com/fjl/gencodec",
-    sum = "h1:bBLctRc7kr01YGvaDfgLbTwjFNW5jdp5y5rj8XXBHfY=",
-    version = "v0.0.0-20230517082657-f9840df7b83e",
+    sum = "h1:B3K0xPfc52cw52BBgUbSPxYo+HlLfAgWMVKRWXUXBcs=",
+    version = "v0.1.0",
 )
 
 go_repository(
@@ -625,6 +625,13 @@ go_repository(
     importpath = "github.com/protolambda/ztyp",
     sum = "h1:rVcL3vBu9W/aV646zF6caLS/dyn9BN8NYiuJzicLNyY=",
     version = "v0.2.2",
+)
+
+go_repository(
+    name = "com_github_pion_stun_v2",
+    importpath = "github.com/pion/stun/v2",
+    sum = "h1:A5+wXKLAypxQri59+tmQKVs7+l6mMM+3d+eER9ifRU0=",
+    version = "v2.0.0",
 )
 
 gazelle_dependencies()

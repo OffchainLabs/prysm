@@ -14,7 +14,7 @@ require (
 	github.com/dgraph-io/ristretto v0.0.4-0.20210318174700-74754f61e018
 	github.com/dustin/go-humanize v1.0.0
 	github.com/emicklei/dot v0.11.0
-	github.com/ethereum/go-ethereum v1.14.12
+	github.com/ethereum/go-ethereum v1.15.0
 	github.com/fsnotify/fsnotify v1.6.0
 	github.com/ghodss/yaml v1.0.0
 	github.com/go-yaml/yaml v2.1.0+incompatible
@@ -221,7 +221,9 @@ require (
 	github.com/pion/sdp/v3 v3.0.9 // indirect
 	github.com/pion/srtp/v2 v2.0.20 // indirect
 	github.com/pion/stun v0.6.1 // indirect
+	github.com/pion/stun/v2 v2.0.0 // indirect
 	github.com/pion/transport/v2 v2.2.10 // indirect
+	github.com/pion/transport/v3 v3.0.7 // indirect
 	github.com/pion/turn/v2 v2.1.6 // indirect
 	github.com/pion/webrtc/v3 v3.3.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
@@ -281,6 +283,3 @@ require (
 )
 
 replace github.com/json-iterator/go => github.com/prestonvanloon/go v1.1.7-0.20190722034630-4f2e55fcf87b
-
-// devnet 5 version
-replace github.com/ethereum/go-ethereum => github.com/s1na/go-ethereum v1.8.4-0.20241126014253-770079f94e39
