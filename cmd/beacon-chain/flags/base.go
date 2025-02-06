@@ -196,13 +196,13 @@ var (
 	BlobBatchLimit = &cli.IntFlag{
 		Name:  "blob-batch-limit",
 		Usage: "The amount of blobs the local peer is bounded to request and respond to in a batch.",
-		Value: 64,
+		Value: 192,
 	}
 	// BlobBatchLimitBurstFactor specifies the factor by which blob batch size may increase.
 	BlobBatchLimitBurstFactor = &cli.IntFlag{
 		Name:  "blob-batch-limit-burst-factor",
 		Usage: "The factor by which blob batch limit may increase on burst.",
-		Value: 2,
+		Value: 3,
 	}
 	// DisableDebugRPCEndpoints disables the debug Beacon API namespace.
 	DisableDebugRPCEndpoints = &cli.BoolFlag{
