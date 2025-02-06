@@ -26,10 +26,7 @@ func (s *Service) committeeIndexBeaconAttestationSubscriber(_ context.Context, m
 	if data == nil {
 		return errors.New("nil attestation")
 	}
-	committeeIndex, err := a.GetCommitteeIndex()
-	if err != nil {
-		return errors.Wrap(err, "committeeIndexBeaconAttestationSubscriber failed to get committee index")
-	}
+	committeeIndex := a.GetCommitteeIndex()
 	s.setSeenCommitteeIndicesSlot(data.Slot, committeeIndex, a.GetAggregationBits())
 
 	if features.Get().EnableExperimentalAttestationPool {

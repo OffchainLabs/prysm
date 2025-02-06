@@ -47,8 +47,8 @@ func (s *Service) rpcHandlerByTopicFromFork(forkIndex int) (map[string]rpcHandle
 			p2p.RPCBlocksByRootTopicV2:        s.beaconBlocksRootRPCHandler,
 			p2p.RPCPingTopicV1:                s.pingHandler,
 			p2p.RPCMetaDataTopicV2:            s.metaDataHandler,
-			p2p.RPCBlobSidecarsByRootTopicV2:  s.blobSidecarByRootRPCHandler,   // Modified in Electra
-			p2p.RPCBlobSidecarsByRangeTopicV2: s.blobSidecarsByRangeRPCHandler, // Modified in Electra
+			p2p.RPCBlobSidecarsByRootTopicV1:  s.blobSidecarByRootRPCHandler,   // Modified in Electra
+			p2p.RPCBlobSidecarsByRangeTopicV1: s.blobSidecarsByRangeRPCHandler, // Modified in Electra
 		}, nil
 	}
 
@@ -57,8 +57,8 @@ func (s *Service) rpcHandlerByTopicFromFork(forkIndex int) (map[string]rpcHandle
 		return map[string]rpcHandler{
 			p2p.RPCStatusTopicV1:              s.statusRPCHandler,
 			p2p.RPCGoodByeTopicV1:             s.goodbyeRPCHandler,
-			p2p.RPCBlocksByRangeTopicV2:       s.beaconBlocksByRangeRPCHandler,
-			p2p.RPCBlocksByRootTopicV2:        s.beaconBlocksRootRPCHandler,
+			p2p.RPCBlocksByRangeTopicV2:       s.beaconBlocksByRangeRPCHandler, // Modified in Deneb
+			p2p.RPCBlocksByRootTopicV2:        s.beaconBlocksRootRPCHandler,    // Modified in Deneb
 			p2p.RPCPingTopicV1:                s.pingHandler,
 			p2p.RPCMetaDataTopicV2:            s.metaDataHandler,
 			p2p.RPCBlobSidecarsByRootTopicV1:  s.blobSidecarByRootRPCHandler,   // Added in Deneb
@@ -73,10 +73,10 @@ func (s *Service) rpcHandlerByTopicFromFork(forkIndex int) (map[string]rpcHandle
 		return map[string]rpcHandler{
 			p2p.RPCStatusTopicV1:        s.statusRPCHandler,
 			p2p.RPCGoodByeTopicV1:       s.goodbyeRPCHandler,
-			p2p.RPCBlocksByRangeTopicV2: s.beaconBlocksByRangeRPCHandler, // Modified in Altair
-			p2p.RPCBlocksByRootTopicV2:  s.beaconBlocksRootRPCHandler,    // Modified in Altair
+			p2p.RPCBlocksByRangeTopicV2: s.beaconBlocksByRangeRPCHandler, // Updated in Altair and modified in Capella
+			p2p.RPCBlocksByRootTopicV2:  s.beaconBlocksRootRPCHandler,    // Updated in Altair and modified in Capella
 			p2p.RPCPingTopicV1:          s.pingHandler,
-			p2p.RPCMetaDataTopicV2:      s.metaDataHandler, // Modified in Altair
+			p2p.RPCMetaDataTopicV2:      s.metaDataHandler, // Updated in Altair
 		}, nil
 	}
 
@@ -99,6 +99,10 @@ func (s *Service) rpcHandlerByTopicFromFork(forkIndex int) (map[string]rpcHandle
 func (s *Service) rpcHandlerByTopicFromEpoch(epoch primitives.Epoch) (map[string]rpcHandler, error) {
 	// Get the beacon config.
 	beaconConfig := params.BeaconConfig()
+
+	if epoch >= beaconConfig.FuluForkEpoch {
+		return s.rpcHandlerByTopicFromFork(version.Fulu)
+	}
 
 	if epoch >= beaconConfig.ElectraForkEpoch {
 		return s.rpcHandlerByTopicFromFork(version.Electra)

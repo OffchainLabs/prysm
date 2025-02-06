@@ -220,12 +220,8 @@ func (c *blobsTestCase) setup(t *testing.T) (*Service, []blocks.ROBlob, func()) 
 
 	byRootRate := params.BeaconConfig().MaxRequestBlobSidecars * uint64(params.BeaconConfig().MaxBlobsPerBlock(0))
 	byRangeRate := params.BeaconConfig().MaxRequestBlobSidecars * uint64(params.BeaconConfig().MaxBlobsPerBlock(0))
-	byRootRateElectra := params.BeaconConfig().MaxRequestBlobSidecarsElectra * uint64(params.BeaconConfig().MaxBlobsPerBlock(0))
-	byRangeRateElectra := params.BeaconConfig().MaxRequestBlobSidecarsElectra * uint64(params.BeaconConfig().MaxBlobsPerBlock(0))
 	s.setRateCollector(p2p.RPCBlobSidecarsByRootTopicV1, leakybucket.NewCollector(0.000001, int64(byRootRate), time.Second, false))
 	s.setRateCollector(p2p.RPCBlobSidecarsByRangeTopicV1, leakybucket.NewCollector(0.000001, int64(byRangeRate), time.Second, false))
-	s.setRateCollector(p2p.RPCBlobSidecarsByRootTopicV2, leakybucket.NewCollector(0.000001, int64(byRootRateElectra), time.Second, false))
-	s.setRateCollector(p2p.RPCBlobSidecarsByRangeTopicV2, leakybucket.NewCollector(0.000001, int64(byRangeRateElectra), time.Second, false))
 
 	return s, sidecars, cleanup
 }
@@ -254,8 +250,7 @@ func (c *blobsTestCase) run(t *testing.T) {
 		}
 	}
 	for _, blobSidecars := range m {
-		v, err := verification.BlobSidecarSliceNoop(blobSidecars)
-		require.NoError(t, err)
+		v := verification.FakeVerifySliceForTest(t, blobSidecars)
 		for i := range v {
 			require.NoError(t, s.cfg.blobStorage.Save(v[i]))
 		}

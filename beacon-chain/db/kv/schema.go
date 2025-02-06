@@ -18,8 +18,9 @@ var (
 	registrationBucket    = []byte("registration")
 
 	// Light Client Updates Bucket
-	lightClientUpdatesBucket   = []byte("light-client-updates")
-	lightClientBootstrapBucket = []byte("light-client-bootstrap")
+	lightClientUpdatesBucket       = []byte("light-client-updates")
+	lightClientBootstrapBucket     = []byte("light-client-bootstrap")
+	lightClientSyncCommitteeBucket = []byte("light-client-sync-committee")
 
 	// Deprecated: This bucket was migrated in PR 6461. Do not use, except for migrations.
 	slotsHasObjectBucket = []byte("slots-has-objects")
@@ -52,8 +53,10 @@ var (
 	saveBlindedBeaconBlocksKey = []byte("save-blinded-beacon-blocks")
 	denebKey                   = []byte("deneb")
 	denebBlindKey              = []byte("blind-deneb")
-	electraKey                 = []byte("electra")
+	ElectraKey                 = []byte("electra")
 	electraBlindKey            = []byte("blind-electra")
+	fuluKey                    = []byte("fulu")
+	fuluBlindKey               = []byte("blind-fulu")
 
 	// block root included in the beacon state used by weak subjectivity initial sync
 	originCheckpointBlockRootKey = []byte("origin-checkpoint-block-root")

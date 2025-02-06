@@ -69,6 +69,7 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 	if features.Get().EnableLightClient && slots.ToEpoch(s.CurrentSlot()) >= params.BeaconConfig().AltairForkEpoch {
 		defer s.processLightClientUpdates(cfg)
 		defer s.saveLightClientUpdate(cfg)
+		defer s.saveLightClientBootstrap(cfg)
 	}
 	defer s.sendStateFeedOnBlock(cfg)
 	defer reportProcessingTime(startTime)
@@ -511,17 +512,11 @@ func missingIndices(bs *filesystem.BlobStorage, root [32]byte, expected [][]byte
 	if len(expected) > maxBlobsPerBlock {
 		return nil, errMaxBlobsExceeded
 	}
-	indices, err := bs.Indices(root, slot)
-	if err != nil {
-		return nil, err
-	}
+	indices := bs.Summary(root)
 	missing := make(map[uint64]struct{}, len(expected))
 	for i := range expected {
-		ui := uint64(i)
-		if len(expected[i]) > 0 {
-			if !indices[i] {
-				missing[ui] = struct{}{}
-			}
+		if len(expected[i]) > 0 && !indices.HasIndex(uint64(i)) {
+			missing[uint64(i)] = struct{}{}
 		}
 	}
 	return missing, nil

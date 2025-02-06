@@ -1,28 +1,20 @@
 run:
-  skip-files:
+  timeout: 10m
+  go: '1.23.5'
+
+issues:
+  exclude-files:
     - validator/web/site_data.go
     - .*_test.go
-  skip-dirs:
+  exclude-dirs:
     - proto
     - tools/analyzers
-  timeout: 10m
-  go: '1.22.10'
 
 linters:
   enable-all: true
   disable:
     # Deprecated linters:
-    - deadcode
-    - exhaustivestruct
-    - golint
     - govet
-    - ifshort
-    - interfacer
-    - maligned
-    - nosnakecase
-    - scopelint
-    - structcheck
-    - varcheck
 
     # Disabled for now:
     - asasalint
@@ -34,6 +26,8 @@ linters:
     - dogsled
     - dupl
     - durationcheck
+    - errname
+    - err113
     - exhaustive
     - exhaustruct
     - forbidigo
@@ -47,17 +41,17 @@ linters:
     - gocyclo
     - godot
     - godox
-    - goerr113
     - gofumpt
-    - gomnd
     - gomoddirectives
     - gosec
     - inamedparam
     - interfacebloat
+    - intrange
     - ireturn
     - lll
     - maintidx
     - makezero
+    - mnd
     - musttag
     - nakedret
     - nestif
@@ -72,6 +66,7 @@ linters:
     - predeclared
     - promlinter
     - protogetter
+    - recvcheck
     - revive
     - spancheck
     - staticcheck

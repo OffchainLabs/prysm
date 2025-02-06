@@ -127,12 +127,16 @@ func (node *Node) Start(ctx context.Context) error {
 		if err = runCmd.Start(); err != nil {
 			return fmt.Errorf("failed to start eth1 chain: %w", err)
 		}
-		if err = helpers.WaitForTextInFile(errLog, "Started P2P networking"); err != nil {
+		// TODO: the log is not very descriptive but it's always the first log where the chain has
+		// - a peer
+		// - http server started
+		// - genesis synced
+		if err = helpers.WaitForTextInFile(errLog, "Node revalidated"); err != nil {
 			kerr := runCmd.Process.Kill()
 			if kerr != nil {
 				log.WithError(kerr).Error("error sending kill to failed node command process")
 			}
-			retryErr = fmt.Errorf("P2P log not found, this means the eth1 chain had issues starting: %w", err)
+			retryErr = fmt.Errorf("the first node revalidated log not found, this means the eth1 chain had issues starting: %w", err)
 			continue
 		}
 		node.cmd = runCmd

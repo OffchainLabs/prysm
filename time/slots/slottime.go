@@ -86,6 +86,8 @@ func ToEpoch(slot primitives.Slot) primitives.Epoch {
 func ToForkVersion(slot primitives.Slot) int {
 	epoch := ToEpoch(slot)
 	switch {
+	case epoch >= params.BeaconConfig().FuluForkEpoch:
+		return version.Fulu
 	case epoch >= params.BeaconConfig().ElectraForkEpoch:
 		return version.Electra
 	case epoch >= params.BeaconConfig().DenebForkEpoch:
@@ -284,8 +286,9 @@ func SyncCommitteePeriodStartEpoch(e primitives.Epoch) (primitives.Epoch, error)
 // SecondsSinceSlotStart returns the number of seconds elapsed since the
 // given slot start time
 func SecondsSinceSlotStart(s primitives.Slot, genesisTime, timeStamp uint64) (uint64, error) {
-	if timeStamp < genesisTime+uint64(s)*params.BeaconConfig().SecondsPerSlot {
-		return 0, errors.New("could not compute seconds since slot start: invalid timestamp")
+	limit := genesisTime + uint64(s)*params.BeaconConfig().SecondsPerSlot
+	if timeStamp < limit {
+		return 0, fmt.Errorf("could not compute seconds since slot %d start: invalid timestamp, got %d < want %d", s, timeStamp, limit)
 	}
 	return timeStamp - genesisTime - uint64(s)*params.BeaconConfig().SecondsPerSlot, nil
 }
