@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"time"
 
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition/interop"
@@ -17,6 +18,8 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"google.golang.org/protobuf/proto"
 )
+
+const slotDeadline = time.Duration(5) * time.Second
 
 func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) error {
 	signed, err := blocks.NewSignedBeaconBlock(msg)
@@ -57,7 +60,7 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 		}
 		return err
 	}
-	go s.processPendingPayloads(ctx, root)
+	go s.processPendingPayloads(root)
 	return nil
 }
 
@@ -156,7 +159,9 @@ func saveInvalidBlockToTemp(block interfaces.ReadOnlySignedBeaconBlock) {
 	}
 }
 
-func (s *Service) processPendingPayloads(ctx context.Context, root [32]byte) {
+func (s *Service) processPendingPayloads(root [32]byte) {
+	ctx, cancel := context.WithTimeout(context.Background(), slotDeadline)
+	defer cancel()
 	payload := s.pendingExecutionPayloads.Get(root)
 	if payload == nil {
 		return

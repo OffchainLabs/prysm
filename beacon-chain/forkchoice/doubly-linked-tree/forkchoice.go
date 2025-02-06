@@ -555,37 +555,33 @@ func (f *ForkChoice) CachedHeadRoot() [32]byte {
 	return f.store.headNode.block.root
 }
 
-// FinalizedPayloadBlockHash returns the hash of the payload at the finalized checkpoint
-func (f *ForkChoice) FinalizedPayloadBlockHash() [32]byte {
-	root := f.FinalizedCheckpoint().Root
+func (f *ForkChoice) presentHashForBlockRoot(root [32]byte) [32]byte {
 	node, ok := f.store.emptyNodeByRoot[root]
 	if !ok || node == nil {
-		// This should not happen
 		return [32]byte{}
 	}
-	return node.block.payloadHash
+	if node.full {
+		return node.block.payloadHash
+	}
+	if node.block.fullParent == nil {
+		return [32]byte{}
+	}
+	return node.block.fullParent.block.payloadHash
+}
+
+// FinalizedPayloadBlockHash returns the hash of the payload at the finalized checkpoint
+func (f *ForkChoice) FinalizedPayloadBlockHash() [32]byte {
+	return f.presentHashForBlockRoot(f.FinalizedCheckpoint().Root)
 }
 
 // JustifiedPayloadBlockHash returns the hash of the payload at the justified checkpoint
 func (f *ForkChoice) JustifiedPayloadBlockHash() [32]byte {
-	root := f.JustifiedCheckpoint().Root
-	node, ok := f.store.emptyNodeByRoot[root]
-	if !ok || node == nil {
-		// This should not happen
-		return [32]byte{}
-	}
-	return node.block.payloadHash
+	return f.presentHashForBlockRoot(f.JustifiedCheckpoint().Root)
 }
 
 // UnrealizedJustifiedPayloadBlockHash returns the hash of the payload at the unrealized justified checkpoint
 func (f *ForkChoice) UnrealizedJustifiedPayloadBlockHash() [32]byte {
-	root := f.store.unrealizedJustifiedCheckpoint.Root
-	node, ok := f.store.emptyNodeByRoot[root]
-	if !ok || node == nil {
-		// This should not happen
-		return [32]byte{}
-	}
-	return node.block.payloadHash
+	return f.presentHashForBlockRoot(f.store.unrealizedJustifiedCheckpoint.Root)
 }
 
 // ForkChoiceDump returns a full dump of forkchoice.
