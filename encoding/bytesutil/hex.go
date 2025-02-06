@@ -34,7 +34,7 @@ func DecodeHexWithLength(s string, length int) ([]byte, error) {
 
 // DecodeHexWithMaxLength takes a string and a length in bytes,
 // and validates whether the string is a hex and has the correct length.
-func DecodeHexWithMaxLength(s string, maxLength int) ([]byte, error) {
+func DecodeHexWithMaxLength(s string, maxLength uint64) ([]byte, error) {
 	bytes, err := hexutil.Decode(s)
 	if err != nil {
 		return nil, errors.Wrap(err, fmt.Sprintf("%s is not a valid hex", s))

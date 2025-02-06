@@ -95,7 +95,7 @@ func (b *BeaconState) NextWithdrawalValidatorIndex() (primitives.ValidatorIndex,
 //					index=withdrawal_index,
 //					validator_index=validator_index,
 //					address=ExecutionAddress(validator.withdrawal_credentials[12:]),
-//					amount=balance - get_validator_max_effective_balance(validator),  # [Modified in Electra:EIP7251]
+//					amount=balance - get_max_effective_balance(validator),  # [Modified in Electra:EIP7251]
 //				))
 //				withdrawal_index += WithdrawalIndex(1)
 //			if len(withdrawals) == MAX_WITHDRAWALS_PER_PAYLOAD:

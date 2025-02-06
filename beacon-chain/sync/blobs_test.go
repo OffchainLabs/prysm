@@ -250,8 +250,7 @@ func (c *blobsTestCase) run(t *testing.T) {
 		}
 	}
 	for _, blobSidecars := range m {
-		v, err := verification.BlobSidecarSliceNoop(blobSidecars)
-		require.NoError(t, err)
+		v := verification.FakeVerifySliceForTest(t, blobSidecars)
 		for i := range v {
 			require.NoError(t, s.cfg.blobStorage.Save(v[i]))
 		}

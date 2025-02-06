@@ -423,7 +423,7 @@ func TestConstructPendingBlobsRequest(t *testing.T) {
 	// No unknown indices.
 	root := [32]byte{1}
 	count := 3
-	actual, err := s.constructPendingBlobsRequest(root, count, 100)
+	actual, err := s.constructPendingBlobsRequest(root, count)
 	require.NoError(t, err)
 	require.Equal(t, 3, len(actual))
 	for i, id := range actual {
@@ -444,8 +444,7 @@ func TestConstructPendingBlobsRequest(t *testing.T) {
 		util.GenerateTestDenebBlobSidecar(t, root, header, 0, bytesutil.PadTo([]byte{}, 48), make([][]byte, 0)),
 		util.GenerateTestDenebBlobSidecar(t, root, header, 2, bytesutil.PadTo([]byte{}, 48), make([][]byte, 0)),
 	}
-	vscs, err := verification.BlobSidecarSliceNoop(blobSidecars)
-	require.NoError(t, err)
+	vscs := verification.FakeVerifySliceForTest(t, blobSidecars)
 	for i := range vscs {
 		require.NoError(t, bs.Save(vscs[i]))
 	}
@@ -453,15 +452,13 @@ func TestConstructPendingBlobsRequest(t *testing.T) {
 	expected := []*ethpb.BlobIdentifier{
 		{Index: 1, BlockRoot: root[:]},
 	}
-	actual, err = s.constructPendingBlobsRequest(root, count, 100)
+	actual, err = s.constructPendingBlobsRequest(root, count)
 	require.NoError(t, err)
 	require.Equal(t, expected[0].Index, actual[0].Index)
 	require.DeepEqual(t, expected[0].BlockRoot, actual[0].BlockRoot)
 }
 
 func TestFilterUnknownIndices(t *testing.T) {
-	haveIndices := []bool{true, true, true, false, false, false}
-
 	blockRoot := [32]byte{}
 	count := 5
 
@@ -470,7 +467,11 @@ func TestFilterUnknownIndices(t *testing.T) {
 		{Index: 4, BlockRoot: blockRoot[:]},
 	}
 
-	actual := requestsForMissingIndices(haveIndices, count, blockRoot)
+	sum, err := filesystem.NewBlobStorageSummary(
+		params.BeaconConfig().DenebForkEpoch,
+		[]bool{true, true, true, false, false, false})
+	require.NoError(t, err)
+	actual := requestsForMissingIndices(sum, count, blockRoot)
 	require.Equal(t, len(expected), len(actual))
 	require.Equal(t, expected[0].Index, actual[0].Index)
 	require.DeepEqual(t, actual[0].BlockRoot, expected[0].BlockRoot)
