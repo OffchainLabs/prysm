@@ -403,6 +403,15 @@ func (b *BeaconChainConfig) MaxBlobsPerBlockByVersion(v int) int {
 	return b.DeprecatedMaxBlobsPerBlock
 }
 
+// MaxBlobsPerBlockByEpoch returns the maximum number of blobs per block for the given epoch,
+// adjusting for the Electra fork.
+func (b *BeaconChainConfig) MaxBlobsPerBlockAtEpoch(epoch primitives.Epoch) int {
+	if epoch >= b.ElectraForkEpoch {
+		return b.DeprecatedMaxBlobsPerBlockElectra
+	}
+	return b.DeprecatedMaxBlobsPerBlock
+}
+
 // DenebEnabled centralizes the check to determine if code paths
 // that are specific to deneb should be allowed to execute. This will make it easier to find call sites that do this
 // kind of check and remove them post-deneb.

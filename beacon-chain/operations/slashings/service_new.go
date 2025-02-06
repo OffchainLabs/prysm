@@ -50,7 +50,6 @@ func (p *PoolService) run() {
 
 	electraSlot, err := slots.EpochStart(params.BeaconConfig().ElectraForkEpoch)
 	if err != nil {
-		log.WithError(err).Error("Could not get Electra start slot")
 		return
 	}
 
@@ -64,7 +63,6 @@ func (p *PoolService) run() {
 
 	electraTime, err := slots.ToTime(uint64(p.clock.GenesisTime().Unix()), electraSlot)
 	if err != nil {
-		log.WithError(err).Error("Could not get Electra start time")
 		return
 	}
 
