@@ -5,11 +5,11 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/validator"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api/mock"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
+	"github.com/prysmaticlabs/prysm/v6/api/server/structs"
+	"github.com/prysmaticlabs/prysm/v6/consensus-types/validator"
+	"github.com/prysmaticlabs/prysm/v6/testing/require"
+	"github.com/prysmaticlabs/prysm/v6/validator/client/beacon-api/mock"
+	"github.com/prysmaticlabs/prysm/v6/validator/client/iface"
 	"go.uber.org/mock/gomock"
 )
 

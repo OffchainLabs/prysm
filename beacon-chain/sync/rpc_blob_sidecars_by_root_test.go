@@ -6,15 +6,15 @@ import (
 	"testing"
 
 	"github.com/libp2p/go-libp2p/core/network"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
-	p2pTypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	types "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/p2p"
+	p2pTypes "github.com/prysmaticlabs/prysm/v6/beacon-chain/p2p/types"
+	"github.com/prysmaticlabs/prysm/v6/config/params"
+	"github.com/prysmaticlabs/prysm/v6/consensus-types/blocks"
+	types "github.com/prysmaticlabs/prysm/v6/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v6/encoding/bytesutil"
+	ethpb "github.com/prysmaticlabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v6/testing/require"
+	"github.com/prysmaticlabs/prysm/v6/time/slots"
 )
 
 func (c *blobsTestCase) defaultOldestSlotByRoot(t *testing.T) types.Slot {

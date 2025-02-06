@@ -4,12 +4,12 @@ import (
 	"context"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/kv"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/cache"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/db/kv"
+	"github.com/prysmaticlabs/prysm/v6/config/params"
+	"github.com/prysmaticlabs/prysm/v6/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v6/monitoring/tracing"
+	"github.com/prysmaticlabs/prysm/v6/monitoring/tracing/trace"
 	"github.com/sirupsen/logrus"
 )
 

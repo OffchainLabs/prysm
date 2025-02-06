@@ -7,12 +7,12 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/progress"
-	"github.com/prysmaticlabs/prysm/v5/validator/db"
-	"github.com/prysmaticlabs/prysm/v5/validator/helpers"
-	"github.com/prysmaticlabs/prysm/v5/validator/slashing-protection-history/format"
+	fieldparams "github.com/prysmaticlabs/prysm/v6/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v6/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v6/monitoring/progress"
+	"github.com/prysmaticlabs/prysm/v6/validator/db"
+	"github.com/prysmaticlabs/prysm/v6/validator/helpers"
+	"github.com/prysmaticlabs/prysm/v6/validator/slashing-protection-history/format"
 )
 
 // ExportStandardProtectionJSON extracts all slashing protection data from a validator database

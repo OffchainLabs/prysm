@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api"
-	"github.com/prysmaticlabs/prysm/v5/api/client"
+	"github.com/prysmaticlabs/prysm/v6/api"
+	"github.com/prysmaticlabs/prysm/v6/api/client"
 	log "github.com/sirupsen/logrus"
 )
 

@@ -4,9 +4,9 @@ import (
 	"strconv"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v6/api/server/structs"
+	enginev1 "github.com/prysmaticlabs/prysm/v6/proto/engine/v1"
+	ethpb "github.com/prysmaticlabs/prysm/v6/proto/prysm/v1alpha1"
 )
 
 func jsonifyTransactions(transactions [][]byte) []string {

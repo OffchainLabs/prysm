@@ -5,15 +5,15 @@ import (
 	"testing"
 
 	"github.com/prysmaticlabs/go-bitfield"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/altair"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/epoch/precompute"
-	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/core/altair"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/core/epoch/precompute"
+	state_native "github.com/prysmaticlabs/prysm/v6/beacon-chain/state/state-native"
+	fieldparams "github.com/prysmaticlabs/prysm/v6/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v6/config/params"
+	"github.com/prysmaticlabs/prysm/v6/consensus-types/primitives"
+	ethpb "github.com/prysmaticlabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v6/testing/assert"
+	"github.com/prysmaticlabs/prysm/v6/testing/require"
 )
 
 func TestProcessJustificationAndFinalizationPreCompute_ConsecutiveEpochs(t *testing.T) {

@@ -11,10 +11,10 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	validatormock "github.com/prysmaticlabs/prysm/v5/testing/validator-mock"
+	ethpb "github.com/prysmaticlabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v6/testing/assert"
+	"github.com/prysmaticlabs/prysm/v6/testing/require"
+	validatormock "github.com/prysmaticlabs/prysm/v6/testing/validator-mock"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )

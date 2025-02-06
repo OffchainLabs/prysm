@@ -7,10 +7,10 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers/peerdata"
-	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	"github.com/prysmaticlabs/prysm/v5/crypto/rand"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/p2p/peers/peerdata"
+	"github.com/prysmaticlabs/prysm/v6/cmd/beacon-chain/flags"
+	"github.com/prysmaticlabs/prysm/v6/config/features"
+	"github.com/prysmaticlabs/prysm/v6/crypto/rand"
 )
 
 var _ Scorer = (*BlockProviderScorer)(nil)

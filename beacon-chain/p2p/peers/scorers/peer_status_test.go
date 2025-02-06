@@ -5,14 +5,14 @@ import (
 	"testing"
 
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers/peerdata"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers/scorers"
-	p2ptypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	pb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/p2p/peers"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/p2p/peers/peerdata"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/p2p/peers/scorers"
+	p2ptypes "github.com/prysmaticlabs/prysm/v6/beacon-chain/p2p/types"
+	"github.com/prysmaticlabs/prysm/v6/consensus-types/primitives"
+	pb "github.com/prysmaticlabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v6/testing/assert"
+	"github.com/prysmaticlabs/prysm/v6/testing/require"
 )
 
 func TestScorers_PeerStatus_Score(t *testing.T) {

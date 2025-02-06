@@ -5,10 +5,10 @@ import (
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/core/blocks"
+	"github.com/prysmaticlabs/prysm/v6/monitoring/tracing"
+	"github.com/prysmaticlabs/prysm/v6/monitoring/tracing/trace"
+	ethpb "github.com/prysmaticlabs/prysm/v6/proto/prysm/v1alpha1"
 )
 
 func (s *Service) validateBlsToExecutionChange(ctx context.Context, pid peer.ID, msg *pubsub.Message) (pubsub.ValidationResult, error) {

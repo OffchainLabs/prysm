@@ -7,14 +7,14 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/go-bitfield"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/wrapper"
-	"github.com/prysmaticlabs/prysm/v5/network/forks"
-	pb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/metadata"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/p2p"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/p2p/types"
+	"github.com/prysmaticlabs/prysm/v6/consensus-types/wrapper"
+	"github.com/prysmaticlabs/prysm/v6/network/forks"
+	pb "github.com/prysmaticlabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v6/proto/prysm/v1alpha1/metadata"
+	"github.com/prysmaticlabs/prysm/v6/runtime/version"
+	"github.com/prysmaticlabs/prysm/v6/time/slots"
 )
 
 // metaDataHandler reads the incoming metadata rpc request from the peer.

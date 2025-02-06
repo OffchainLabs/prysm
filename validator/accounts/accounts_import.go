@@ -13,12 +13,12 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/io/file"
-	"github.com/prysmaticlabs/prysm/v5/io/prompt"
-	"github.com/prysmaticlabs/prysm/v5/validator/accounts/wallet"
-	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
+	"github.com/prysmaticlabs/prysm/v6/crypto/bls"
+	"github.com/prysmaticlabs/prysm/v6/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v6/io/file"
+	"github.com/prysmaticlabs/prysm/v6/io/prompt"
+	"github.com/prysmaticlabs/prysm/v6/validator/accounts/wallet"
+	"github.com/prysmaticlabs/prysm/v6/validator/keymanager"
 	keystorev4 "github.com/wealdtech/go-eth2-wallet-encryptor-keystorev4"
 )
 

@@ -6,7 +6,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	ma "github.com/multiformats/go-multiaddr"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/p2p/peers"
 )
 
 // ensurePeerConnections will attempt to reestablish connection to the peers

@@ -4,16 +4,16 @@ import (
 	"testing"
 
 	ssz "github.com/prysmaticlabs/fastssz"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	pb "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	validatorpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/validator-client"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	fieldparams "github.com/prysmaticlabs/prysm/v6/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v6/consensus-types/interfaces"
+	"github.com/prysmaticlabs/prysm/v6/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v6/encoding/bytesutil"
+	pb "github.com/prysmaticlabs/prysm/v6/proto/engine/v1"
+	eth "github.com/prysmaticlabs/prysm/v6/proto/prysm/v1alpha1"
+	validatorpb "github.com/prysmaticlabs/prysm/v6/proto/prysm/v1alpha1/validator-client"
+	"github.com/prysmaticlabs/prysm/v6/runtime/version"
+	"github.com/prysmaticlabs/prysm/v6/testing/assert"
+	"github.com/prysmaticlabs/prysm/v6/testing/require"
 )
 
 func Test_BeaconBlockIsNil(t *testing.T) {

@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/prysmaticlabs/go-bitfield"
-	aggtesting "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/attestation/aggregation/testing"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	aggtesting "github.com/prysmaticlabs/prysm/v6/proto/prysm/v1alpha1/attestation/aggregation/testing"
+	"github.com/prysmaticlabs/prysm/v6/testing/assert"
 )
 
 func TestMaxCover_MaxCoverCandidates_filter(t *testing.T) {

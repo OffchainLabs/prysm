@@ -5,10 +5,10 @@ import (
 	"encoding/binary"
 
 	"github.com/pkg/errors"
-	params "github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/encoding/ssz"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	params "github.com/prysmaticlabs/prysm/v6/config/params"
+	"github.com/prysmaticlabs/prysm/v6/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v6/encoding/ssz"
+	ethpb "github.com/prysmaticlabs/prysm/v6/proto/prysm/v1alpha1"
 )
 
 // Eth1DataRootWithHasher returns the hash tree root of input `eth1Data`.

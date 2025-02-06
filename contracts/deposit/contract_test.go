@@ -7,11 +7,11 @@ import (
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
-	depositcontract "github.com/prysmaticlabs/prysm/v5/contracts/deposit"
-	"github.com/prysmaticlabs/prysm/v5/contracts/deposit/mock"
-	"github.com/prysmaticlabs/prysm/v5/runtime/interop"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	depositcontract "github.com/prysmaticlabs/prysm/v6/contracts/deposit"
+	"github.com/prysmaticlabs/prysm/v6/contracts/deposit/mock"
+	"github.com/prysmaticlabs/prysm/v6/runtime/interop"
+	"github.com/prysmaticlabs/prysm/v6/testing/assert"
+	"github.com/prysmaticlabs/prysm/v6/testing/require"
 )
 
 func TestSetupRegistrationContract_OK(t *testing.T) {

@@ -6,11 +6,11 @@ import (
 	"testing"
 
 	"github.com/prysmaticlabs/gohashtree"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/container/trie"
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	fieldparams "github.com/prysmaticlabs/prysm/v6/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v6/container/trie"
+	enginev1 "github.com/prysmaticlabs/prysm/v6/proto/engine/v1"
+	ethpb "github.com/prysmaticlabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v6/testing/require"
 )
 
 func Test_MerkleProofKZGCommitment_Altair(t *testing.T) {

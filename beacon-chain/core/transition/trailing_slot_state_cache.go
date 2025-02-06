@@ -8,9 +8,9 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	types "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/state"
+	types "github.com/prysmaticlabs/prysm/v6/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v6/encoding/bytesutil"
 )
 
 type nextSlotCache struct {

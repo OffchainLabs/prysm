@@ -5,14 +5,14 @@ import (
 	"sync"
 
 	"github.com/prysmaticlabs/go-bitfield"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/fieldtrie"
-	customtypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native/custom-types"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native/types"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stateutil"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/state/fieldtrie"
+	customtypes "github.com/prysmaticlabs/prysm/v6/beacon-chain/state/state-native/custom-types"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/state/state-native/types"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/state/stateutil"
+	"github.com/prysmaticlabs/prysm/v6/config/features"
+	"github.com/prysmaticlabs/prysm/v6/consensus-types/primitives"
+	enginev1 "github.com/prysmaticlabs/prysm/v6/proto/engine/v1"
+	ethpb "github.com/prysmaticlabs/prysm/v6/proto/prysm/v1alpha1"
 )
 
 // BeaconState defines a struct containing utilities for the Ethereum Beacon Chain state, defining

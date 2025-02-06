@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	"github.com/prysmaticlabs/prysm/v5/runtime/messagehandler"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v6/runtime/messagehandler"
+	"github.com/prysmaticlabs/prysm/v6/testing/require"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 

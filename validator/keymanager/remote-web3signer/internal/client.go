@@ -15,10 +15,10 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
+	fieldparams "github.com/prysmaticlabs/prysm/v6/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v6/crypto/bls"
+	"github.com/prysmaticlabs/prysm/v6/monitoring/tracing"
+	"github.com/prysmaticlabs/prysm/v6/monitoring/tracing/trace"
 	"github.com/sirupsen/logrus"
 )
 

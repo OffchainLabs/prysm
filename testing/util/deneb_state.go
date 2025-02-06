@@ -5,15 +5,15 @@ import (
 	"testing"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stateutil"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/state"
+	state_native "github.com/prysmaticlabs/prysm/v6/beacon-chain/state/state-native"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/state/stateutil"
+	fieldparams "github.com/prysmaticlabs/prysm/v6/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v6/config/params"
+	"github.com/prysmaticlabs/prysm/v6/crypto/bls"
+	enginev1 "github.com/prysmaticlabs/prysm/v6/proto/engine/v1"
+	ethpb "github.com/prysmaticlabs/prysm/v6/proto/prysm/v1alpha1"
 )
 
 // DeterministicGenesisStateDeneb returns a genesis state in Deneb format made using the deterministic deposits.

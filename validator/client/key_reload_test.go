@@ -5,12 +5,12 @@ import (
 	"testing"
 
 	"github.com/pkg/errors"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	validatormock "github.com/prysmaticlabs/prysm/v5/testing/validator-mock"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/testutil"
+	fieldparams "github.com/prysmaticlabs/prysm/v6/config/fieldparams"
+	ethpb "github.com/prysmaticlabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v6/testing/assert"
+	"github.com/prysmaticlabs/prysm/v6/testing/require"
+	validatormock "github.com/prysmaticlabs/prysm/v6/testing/validator-mock"
+	"github.com/prysmaticlabs/prysm/v6/validator/client/testutil"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"go.uber.org/mock/gomock"
 )

@@ -7,9 +7,9 @@ import (
 
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/protocol"
-	p2ptest "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
+	p2ptest "github.com/prysmaticlabs/prysm/v6/beacon-chain/p2p/testing"
+	"github.com/prysmaticlabs/prysm/v6/testing/require"
+	"github.com/prysmaticlabs/prysm/v6/testing/util"
 )
 
 type rpcHandlerTest struct {

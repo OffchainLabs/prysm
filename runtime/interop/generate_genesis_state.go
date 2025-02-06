@@ -7,17 +7,17 @@ import (
 	"sync"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/async"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
-	coreState "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
-	statenative "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/container/trie"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v5/crypto/hash"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/time"
+	"github.com/prysmaticlabs/prysm/v6/async"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/core/signing"
+	coreState "github.com/prysmaticlabs/prysm/v6/beacon-chain/core/transition"
+	statenative "github.com/prysmaticlabs/prysm/v6/beacon-chain/state/state-native"
+	"github.com/prysmaticlabs/prysm/v6/config/params"
+	"github.com/prysmaticlabs/prysm/v6/container/trie"
+	"github.com/prysmaticlabs/prysm/v6/crypto/bls"
+	"github.com/prysmaticlabs/prysm/v6/crypto/hash"
+	"github.com/prysmaticlabs/prysm/v6/encoding/bytesutil"
+	ethpb "github.com/prysmaticlabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v6/time"
 )
 
 var (

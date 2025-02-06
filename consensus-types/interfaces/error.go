@@ -2,7 +2,7 @@ package interfaces
 
 import (
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
+	"github.com/prysmaticlabs/prysm/v6/runtime/version"
 )
 
 var ErrInvalidCast = errors.New("unable to cast between types")

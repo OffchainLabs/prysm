@@ -8,16 +8,16 @@ import (
 	"testing"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api/client"
-	"github.com/prysmaticlabs/prysm/v5/api/client/beacon"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	blocktest "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks/testing"
-	"github.com/prysmaticlabs/prysm/v5/encoding/ssz/detect"
-	"github.com/prysmaticlabs/prysm/v5/network/forks"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
+	"github.com/prysmaticlabs/prysm/v6/api/client"
+	"github.com/prysmaticlabs/prysm/v6/api/client/beacon"
+	"github.com/prysmaticlabs/prysm/v6/config/params"
+	"github.com/prysmaticlabs/prysm/v6/consensus-types/blocks"
+	blocktest "github.com/prysmaticlabs/prysm/v6/consensus-types/blocks/testing"
+	"github.com/prysmaticlabs/prysm/v6/encoding/ssz/detect"
+	"github.com/prysmaticlabs/prysm/v6/network/forks"
+	"github.com/prysmaticlabs/prysm/v6/testing/require"
+	"github.com/prysmaticlabs/prysm/v6/testing/util"
+	"github.com/prysmaticlabs/prysm/v6/time/slots"
 )
 
 func TestDownloadFinalizedData(t *testing.T) {

@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	beaconState "github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
+	beaconState "github.com/prysmaticlabs/prysm/v6/beacon-chain/state"
+	enginev1 "github.com/prysmaticlabs/prysm/v6/proto/engine/v1"
 )
 
 var errPayloadHeaderNotFound = errors.New("expected payload header not found")

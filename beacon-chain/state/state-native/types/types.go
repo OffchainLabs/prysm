@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
-	consensus_types "github.com/prysmaticlabs/prysm/v5/consensus-types"
+	consensus_types "github.com/prysmaticlabs/prysm/v6/consensus-types"
 )
 
 // DataType signifies the data type of the field.

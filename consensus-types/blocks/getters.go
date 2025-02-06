@@ -5,14 +5,14 @@ import (
 
 	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
-	field_params "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	consensus_types "github.com/prysmaticlabs/prysm/v5/consensus-types"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	validatorpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/validator-client"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
+	field_params "github.com/prysmaticlabs/prysm/v6/config/fieldparams"
+	consensus_types "github.com/prysmaticlabs/prysm/v6/consensus-types"
+	"github.com/prysmaticlabs/prysm/v6/consensus-types/interfaces"
+	"github.com/prysmaticlabs/prysm/v6/consensus-types/primitives"
+	enginev1 "github.com/prysmaticlabs/prysm/v6/proto/engine/v1"
+	eth "github.com/prysmaticlabs/prysm/v6/proto/prysm/v1alpha1"
+	validatorpb "github.com/prysmaticlabs/prysm/v6/proto/prysm/v1alpha1/validator-client"
+	"github.com/prysmaticlabs/prysm/v6/runtime/version"
 )
 
 // BeaconBlockIsNil checks if any composite field of input signed beacon block is nil.

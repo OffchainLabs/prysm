@@ -9,8 +9,8 @@ import (
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
+	"github.com/prysmaticlabs/prysm/v6/monitoring/tracing"
+	"github.com/prysmaticlabs/prysm/v6/monitoring/tracing/trace"
 	"github.com/sirupsen/logrus"
 )
 

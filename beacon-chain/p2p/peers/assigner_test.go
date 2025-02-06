@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v6/testing/require"
 )
 
 func TestPickBest(t *testing.T) {

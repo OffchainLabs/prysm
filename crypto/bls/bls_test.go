@@ -3,8 +3,8 @@ package bls
 import (
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls/common"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v6/crypto/bls/common"
+	"github.com/prysmaticlabs/prysm/v6/testing/require"
 )
 
 func TestDisallowZeroSecretKeys(t *testing.T) {

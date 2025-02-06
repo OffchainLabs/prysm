@@ -4,10 +4,10 @@ import (
 	"sync"
 
 	lru "github.com/hashicorp/golang-lru"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	lruwrpr "github.com/prysmaticlabs/prysm/v5/cache/lru"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/state"
+	lruwrpr "github.com/prysmaticlabs/prysm/v6/cache/lru"
+	"github.com/prysmaticlabs/prysm/v6/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v6/runtime/version"
 )
 
 // SyncCommitteeHeadStateCache for the latest head state requested by a sync committee participant.

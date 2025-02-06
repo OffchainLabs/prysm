@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/config/proposer"
+	"github.com/prysmaticlabs/prysm/v6/config/proposer"
 )
 
 // ErrNoProposerSettingsFound is an error thrown when no settings are found.

@@ -1,7 +1,7 @@
 package flags
 
 import (
-	"github.com/prysmaticlabs/prysm/v5/cmd"
+	"github.com/prysmaticlabs/prysm/v6/cmd"
 	"github.com/urfave/cli/v2"
 )
 

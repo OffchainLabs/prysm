@@ -13,9 +13,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/golang-jwt/jwt/v4"
-	"github.com/prysmaticlabs/prysm/v5/api"
-	"github.com/prysmaticlabs/prysm/v5/io/file"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v6/api"
+	"github.com/prysmaticlabs/prysm/v6/io/file"
+	"github.com/prysmaticlabs/prysm/v6/testing/require"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"

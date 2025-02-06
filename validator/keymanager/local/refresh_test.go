@@ -6,12 +6,12 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/prysmaticlabs/prysm/v5/async/event"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	mock "github.com/prysmaticlabs/prysm/v5/validator/accounts/testing"
+	"github.com/prysmaticlabs/prysm/v6/async/event"
+	"github.com/prysmaticlabs/prysm/v6/crypto/bls"
+	"github.com/prysmaticlabs/prysm/v6/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v6/testing/assert"
+	"github.com/prysmaticlabs/prysm/v6/testing/require"
+	mock "github.com/prysmaticlabs/prysm/v6/validator/accounts/testing"
 	keystorev4 "github.com/wealdtech/go-eth2-wallet-encryptor-keystorev4"
 )
 

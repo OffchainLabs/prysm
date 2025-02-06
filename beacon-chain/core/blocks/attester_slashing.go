@@ -5,14 +5,14 @@ import (
 	"sort"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/container/slice"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/attestation"
-	"github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/slashings"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v6/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v6/container/slice"
+	ethpb "github.com/prysmaticlabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v6/proto/prysm/v1alpha1/attestation"
+	"github.com/prysmaticlabs/prysm/v6/proto/prysm/v1alpha1/slashings"
+	"github.com/prysmaticlabs/prysm/v6/time/slots"
 )
 
 // ProcessAttesterSlashings is one of the operations performed

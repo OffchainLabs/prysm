@@ -8,8 +8,8 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	lruwrpr "github.com/prysmaticlabs/prysm/v5/cache/lru"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/state"
+	lruwrpr "github.com/prysmaticlabs/prysm/v6/cache/lru"
 )
 
 const (

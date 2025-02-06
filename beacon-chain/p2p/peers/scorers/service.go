@@ -7,8 +7,8 @@ import (
 
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers/peerdata"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/p2p/peers/peerdata"
+	"github.com/prysmaticlabs/prysm/v6/config/features"
 )
 
 var _ Scorer = (*Service)(nil)

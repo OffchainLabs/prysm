@@ -10,17 +10,17 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/backfill/coverage"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/db"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/forkchoice"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/sync/backfill/coverage"
+	"github.com/prysmaticlabs/prysm/v6/config/params"
+	"github.com/prysmaticlabs/prysm/v6/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v6/crypto/bls"
+	"github.com/prysmaticlabs/prysm/v6/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v6/monitoring/tracing/trace"
+	"github.com/prysmaticlabs/prysm/v6/time/slots"
 )
 
 var defaultHotStateDBInterval primitives.Slot = 128

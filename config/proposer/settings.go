@@ -6,11 +6,11 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/config"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/validator"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	validatorpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/validator-client"
+	"github.com/prysmaticlabs/prysm/v6/config"
+	fieldparams "github.com/prysmaticlabs/prysm/v6/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v6/consensus-types/validator"
+	"github.com/prysmaticlabs/prysm/v6/encoding/bytesutil"
+	validatorpb "github.com/prysmaticlabs/prysm/v6/proto/prysm/v1alpha1/validator-client"
 )
 
 // SettingFromConsensus converts struct to Settings while verifying the fields

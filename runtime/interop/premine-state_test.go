@@ -6,9 +6,9 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/time"
+	"github.com/prysmaticlabs/prysm/v6/runtime/version"
+	"github.com/prysmaticlabs/prysm/v6/testing/require"
+	"github.com/prysmaticlabs/prysm/v6/time"
 )
 
 func TestPremineGenesis_Electra(t *testing.T) {

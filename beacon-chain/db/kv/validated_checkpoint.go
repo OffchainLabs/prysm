@@ -3,8 +3,8 @@ package kv
 import (
 	"context"
 
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v6/monitoring/tracing/trace"
+	ethpb "github.com/prysmaticlabs/prysm/v6/proto/prysm/v1alpha1"
 	bolt "go.etcd.io/bbolt"
 )
 

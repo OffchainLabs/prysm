@@ -6,12 +6,12 @@ import (
 	"reflect"
 
 	"github.com/pkg/errors"
-	customtypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native/custom-types"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native/types"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stateutil"
-	multi_value_slice "github.com/prysmaticlabs/prysm/v5/container/multi-value-slice"
-	pmath "github.com/prysmaticlabs/prysm/v5/math"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	customtypes "github.com/prysmaticlabs/prysm/v6/beacon-chain/state/state-native/custom-types"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/state/state-native/types"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/state/stateutil"
+	multi_value_slice "github.com/prysmaticlabs/prysm/v6/container/multi-value-slice"
+	pmath "github.com/prysmaticlabs/prysm/v6/math"
+	ethpb "github.com/prysmaticlabs/prysm/v6/proto/prysm/v1alpha1"
 )
 
 func (f *FieldTrie) validateIndices(idxs []uint64) error {

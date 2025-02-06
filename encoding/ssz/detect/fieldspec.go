@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v6/encoding/bytesutil"
 )
 
 type fieldType int

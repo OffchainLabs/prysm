@@ -9,10 +9,10 @@ import (
 	"time"
 
 	lru "github.com/hashicorp/golang-lru"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
-	lruwrpr "github.com/prysmaticlabs/prysm/v5/cache/lru"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/cache"
+	lruwrpr "github.com/prysmaticlabs/prysm/v6/cache/lru"
+	"github.com/prysmaticlabs/prysm/v6/config/features"
+	"github.com/prysmaticlabs/prysm/v6/config/params"
 )
 
 var forkChoiceProcessedAttsSize = 1 << 16

@@ -4,10 +4,10 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	lruwrpr "github.com/prysmaticlabs/prysm/v5/cache/lru"
-	"github.com/prysmaticlabs/prysm/v5/crypto/hash"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/state"
+	lruwrpr "github.com/prysmaticlabs/prysm/v6/cache/lru"
+	"github.com/prysmaticlabs/prysm/v6/crypto/hash"
+	ethpb "github.com/prysmaticlabs/prysm/v6/proto/prysm/v1alpha1"
 )
 
 var (

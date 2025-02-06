@@ -4,10 +4,10 @@ import (
 	"context"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
-	v "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/validators"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/core/blocks"
+	v "github.com/prysmaticlabs/prysm/v6/beacon-chain/core/validators"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v6/consensus-types/interfaces"
 )
 
 var (

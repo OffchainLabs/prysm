@@ -3,7 +3,7 @@ package random
 import (
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/testing/spectest/shared/electra/sanity"
+	"github.com/prysmaticlabs/prysm/v6/testing/spectest/shared/electra/sanity"
 )
 
 func TestMainnet_Electra_Random(t *testing.T) {

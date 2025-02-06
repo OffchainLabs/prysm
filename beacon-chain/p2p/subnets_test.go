@@ -13,12 +13,12 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/prysmaticlabs/go-bitfield"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
-	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	ecdsaprysm "github.com/prysmaticlabs/prysm/v5/crypto/ecdsa"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/cache"
+	"github.com/prysmaticlabs/prysm/v6/cmd/beacon-chain/flags"
+	"github.com/prysmaticlabs/prysm/v6/config/params"
+	ecdsaprysm "github.com/prysmaticlabs/prysm/v6/crypto/ecdsa"
+	"github.com/prysmaticlabs/prysm/v6/testing/assert"
+	"github.com/prysmaticlabs/prysm/v6/testing/require"
 )
 
 func TestStartDiscV5_FindPeersWithSubnet(t *testing.T) {

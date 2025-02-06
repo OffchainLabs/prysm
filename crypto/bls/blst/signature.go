@@ -8,9 +8,9 @@ import (
 	"sync"
 
 	"github.com/pkg/errors"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls/common"
-	"github.com/prysmaticlabs/prysm/v5/crypto/rand"
+	fieldparams "github.com/prysmaticlabs/prysm/v6/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v6/crypto/bls/common"
+	"github.com/prysmaticlabs/prysm/v6/crypto/rand"
 	blst "github.com/supranational/blst/bindings/go"
 )
 

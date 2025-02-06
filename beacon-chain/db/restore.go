@@ -6,10 +6,10 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/kv"
-	"github.com/prysmaticlabs/prysm/v5/cmd"
-	"github.com/prysmaticlabs/prysm/v5/io/file"
-	"github.com/prysmaticlabs/prysm/v5/io/prompt"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/db/kv"
+	"github.com/prysmaticlabs/prysm/v6/cmd"
+	"github.com/prysmaticlabs/prysm/v6/io/file"
+	"github.com/prysmaticlabs/prysm/v6/io/prompt"
 	"github.com/urfave/cli/v2"
 )
 

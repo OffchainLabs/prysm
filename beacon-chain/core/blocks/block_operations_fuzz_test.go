@@ -5,14 +5,14 @@ import (
 	"testing"
 
 	fuzz "github.com/google/gofuzz"
-	v "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/validators"
-	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	v "github.com/prysmaticlabs/prysm/v6/beacon-chain/core/validators"
+	state_native "github.com/prysmaticlabs/prysm/v6/beacon-chain/state/state-native"
+	fieldparams "github.com/prysmaticlabs/prysm/v6/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v6/config/params"
+	"github.com/prysmaticlabs/prysm/v6/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v6/consensus-types/primitives"
+	ethpb "github.com/prysmaticlabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v6/testing/require"
 )
 
 func TestFuzzProcessAttestationNoVerify_10000(t *testing.T) {

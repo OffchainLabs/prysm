@@ -4,8 +4,8 @@ import (
 	"context"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	"github.com/prysmaticlabs/prysm/v5/proto/dbval"
+	"github.com/prysmaticlabs/prysm/v6/monitoring/tracing/trace"
+	"github.com/prysmaticlabs/prysm/v6/proto/dbval"
 	bolt "go.etcd.io/bbolt"
 	"google.golang.org/protobuf/proto"
 )

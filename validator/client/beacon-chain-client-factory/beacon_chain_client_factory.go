@@ -1,12 +1,12 @@
 package beacon_chain_client_factory
 
 import (
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	beaconApi "github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api"
-	grpcApi "github.com/prysmaticlabs/prysm/v5/validator/client/grpc-api"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
-	nodeClientFactory "github.com/prysmaticlabs/prysm/v5/validator/client/node-client-factory"
-	validatorHelpers "github.com/prysmaticlabs/prysm/v5/validator/helpers"
+	"github.com/prysmaticlabs/prysm/v6/config/features"
+	beaconApi "github.com/prysmaticlabs/prysm/v6/validator/client/beacon-api"
+	grpcApi "github.com/prysmaticlabs/prysm/v6/validator/client/grpc-api"
+	"github.com/prysmaticlabs/prysm/v6/validator/client/iface"
+	nodeClientFactory "github.com/prysmaticlabs/prysm/v6/validator/client/node-client-factory"
+	validatorHelpers "github.com/prysmaticlabs/prysm/v6/validator/helpers"
 )
 
 func NewChainClient(validatorConn validatorHelpers.NodeConnection, jsonRestHandler beaconApi.JsonRestHandler) iface.ChainClient {

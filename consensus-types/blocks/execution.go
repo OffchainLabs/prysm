@@ -5,12 +5,12 @@ import (
 	"errors"
 
 	fastssz "github.com/prysmaticlabs/fastssz"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	consensus_types "github.com/prysmaticlabs/prysm/v5/consensus-types"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/encoding/ssz"
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
+	fieldparams "github.com/prysmaticlabs/prysm/v6/config/fieldparams"
+	consensus_types "github.com/prysmaticlabs/prysm/v6/consensus-types"
+	"github.com/prysmaticlabs/prysm/v6/consensus-types/interfaces"
+	"github.com/prysmaticlabs/prysm/v6/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v6/encoding/ssz"
+	enginev1 "github.com/prysmaticlabs/prysm/v6/proto/engine/v1"
 	"google.golang.org/protobuf/proto"
 )
 

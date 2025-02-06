@@ -3,8 +3,8 @@ package cache_test
 import (
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
-	forkchoicetypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/types"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/cache"
+	forkchoicetypes "github.com/prysmaticlabs/prysm/v6/beacon-chain/forkchoice/types"
 	"github.com/stretchr/testify/require"
 )
 

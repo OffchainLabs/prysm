@@ -4,10 +4,10 @@ import (
 	"path"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/epoch"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/spectest/utils"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/core/epoch"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v6/testing/require"
+	"github.com/prysmaticlabs/prysm/v6/testing/spectest/utils"
 )
 
 // RunSlashingsResetTests executes "epoch_processing/slashings_reset" tests.

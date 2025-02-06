@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	fuzz "github.com/google/gofuzz"
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	enginev1 "github.com/prysmaticlabs/prysm/v6/proto/engine/v1"
+	"github.com/prysmaticlabs/prysm/v6/testing/require"
 )
 
 func TestCopyExecutionPayload_Fuzz(t *testing.T) {

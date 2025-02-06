@@ -3,8 +3,8 @@ package doublylinkedtree
 import (
 	"fmt"
 
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
+	fieldparams "github.com/prysmaticlabs/prysm/v6/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v6/config/params"
 )
 
 // applyProposerBoostScore applies the current proposer boost scores to the

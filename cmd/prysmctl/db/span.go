@@ -5,9 +5,9 @@ import (
 
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/slasher"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/slasher/types"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/slasher"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/slasher/types"
+	"github.com/prysmaticlabs/prysm/v6/consensus-types/primitives"
 	"github.com/urfave/cli/v2"
 )
 

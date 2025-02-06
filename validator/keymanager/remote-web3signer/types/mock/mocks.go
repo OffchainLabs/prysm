@@ -5,11 +5,11 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/prysmaticlabs/go-bitfield"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	validatorpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/validator-client"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
-	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/remote-web3signer/types"
+	fieldparams "github.com/prysmaticlabs/prysm/v6/config/fieldparams"
+	eth "github.com/prysmaticlabs/prysm/v6/proto/prysm/v1alpha1"
+	validatorpb "github.com/prysmaticlabs/prysm/v6/proto/prysm/v1alpha1/validator-client"
+	"github.com/prysmaticlabs/prysm/v6/testing/util"
+	"github.com/prysmaticlabs/prysm/v6/validator/keymanager/remote-web3signer/types"
 )
 
 /////////////////////////////////////////////////////////////////////////////////////////////////

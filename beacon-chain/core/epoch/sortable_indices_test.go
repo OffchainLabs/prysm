@@ -5,10 +5,10 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	state_native "github.com/prysmaticlabs/prysm/v6/beacon-chain/state/state-native"
+	"github.com/prysmaticlabs/prysm/v6/consensus-types/primitives"
+	eth "github.com/prysmaticlabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v6/testing/require"
 )
 
 func TestSortableIndices(t *testing.T) {

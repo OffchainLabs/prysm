@@ -2,7 +2,7 @@ package params
 
 import (
 	"github.com/mohae/deepcopy"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v6/consensus-types/primitives"
 )
 
 // NetworkConfig defines the spec based network parameters.

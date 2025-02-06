@@ -6,7 +6,7 @@ import (
 	"errors"
 	"time"
 
-	prysmTrace "github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
+	prysmTrace "github.com/prysmaticlabs/prysm/v6/monitoring/tracing/trace"
 	"github.com/sirupsen/logrus"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"

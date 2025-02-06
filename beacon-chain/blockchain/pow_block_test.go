@@ -7,14 +7,14 @@ import (
 
 	gethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/holiman/uint256"
-	mocks "github.com/prysmaticlabs/prysm/v5/beacon-chain/execution/testing"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
+	mocks "github.com/prysmaticlabs/prysm/v6/beacon-chain/execution/testing"
+	"github.com/prysmaticlabs/prysm/v6/config/params"
+	"github.com/prysmaticlabs/prysm/v6/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v6/encoding/bytesutil"
+	enginev1 "github.com/prysmaticlabs/prysm/v6/proto/engine/v1"
+	ethpb "github.com/prysmaticlabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v6/testing/require"
+	"github.com/prysmaticlabs/prysm/v6/testing/util"
 )
 
 func Test_validTerminalPowBlock(t *testing.T) {

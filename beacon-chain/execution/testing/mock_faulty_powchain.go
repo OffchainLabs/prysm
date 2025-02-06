@@ -6,11 +6,11 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/async/event"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/execution/types"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v6/async/event"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/execution/types"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/state"
+	state_native "github.com/prysmaticlabs/prysm/v6/beacon-chain/state/state-native"
+	ethpb "github.com/prysmaticlabs/prysm/v6/proto/prysm/v1alpha1"
 )
 
 // FaultyExecutionChain defines an incorrectly functioning powchain service.

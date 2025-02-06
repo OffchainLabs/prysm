@@ -10,10 +10,10 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/encoder"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/metadata"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/p2p/encoder"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/p2p/peers"
+	ethpb "github.com/prysmaticlabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v6/proto/prysm/v1alpha1/metadata"
 	"google.golang.org/protobuf/proto"
 )
 

@@ -9,8 +9,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/rpc"
-	pb "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	pb "github.com/prysmaticlabs/prysm/v6/proto/engine/v1"
+	"github.com/prysmaticlabs/prysm/v6/testing/require"
 )
 
 var mockHandlerDefaultName = "__default__"

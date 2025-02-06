@@ -3,8 +3,8 @@ package bytesutil_test
 import (
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v6/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v6/testing/assert"
 )
 
 func TestIsHex(t *testing.T) {

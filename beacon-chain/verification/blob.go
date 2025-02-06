@@ -5,13 +5,13 @@ import (
 	goError "errors"
 
 	"github.com/pkg/errors"
-	forkchoicetypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/types"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/runtime/logging"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
+	forkchoicetypes "github.com/prysmaticlabs/prysm/v6/beacon-chain/forkchoice/types"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v6/config/params"
+	"github.com/prysmaticlabs/prysm/v6/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v6/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v6/runtime/logging"
+	"github.com/prysmaticlabs/prysm/v6/time/slots"
 )
 
 const (

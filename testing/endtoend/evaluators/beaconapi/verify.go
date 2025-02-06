@@ -11,14 +11,14 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	params2 "github.com/prysmaticlabs/prysm/v5/testing/endtoend/params"
-	"github.com/prysmaticlabs/prysm/v5/testing/endtoend/policies"
-	e2etypes "github.com/prysmaticlabs/prysm/v5/testing/endtoend/types"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
+	"github.com/prysmaticlabs/prysm/v6/api/server/structs"
+	"github.com/prysmaticlabs/prysm/v6/config/params"
+	"github.com/prysmaticlabs/prysm/v6/consensus-types/primitives"
+	ethpb "github.com/prysmaticlabs/prysm/v6/proto/prysm/v1alpha1"
+	params2 "github.com/prysmaticlabs/prysm/v6/testing/endtoend/params"
+	"github.com/prysmaticlabs/prysm/v6/testing/endtoend/policies"
+	e2etypes "github.com/prysmaticlabs/prysm/v6/testing/endtoend/types"
+	"github.com/prysmaticlabs/prysm/v6/time/slots"
 	"google.golang.org/grpc"
 )
 

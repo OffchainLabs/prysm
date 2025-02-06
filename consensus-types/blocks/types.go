@@ -2,11 +2,11 @@ package blocks
 
 import (
 	"github.com/pkg/errors"
-	field_params "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	field_params "github.com/prysmaticlabs/prysm/v6/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v6/consensus-types/interfaces"
+	"github.com/prysmaticlabs/prysm/v6/consensus-types/primitives"
+	enginev1 "github.com/prysmaticlabs/prysm/v6/proto/engine/v1"
+	eth "github.com/prysmaticlabs/prysm/v6/proto/prysm/v1alpha1"
 )
 
 var (

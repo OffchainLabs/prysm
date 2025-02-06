@@ -4,10 +4,10 @@ import (
 	"context"
 
 	"github.com/pkg/errors"
-	e "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/epoch"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/epoch/precompute"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
+	e "github.com/prysmaticlabs/prysm/v6/beacon-chain/core/epoch"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/core/epoch/precompute"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v6/monitoring/tracing/trace"
 )
 
 // ProcessEpoch describes the per epoch operations that are performed on the beacon state.

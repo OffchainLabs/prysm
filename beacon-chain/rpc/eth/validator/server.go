@@ -1,19 +1,19 @@
 package validator
 
 import (
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/builder"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/operation"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/attestations"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/synccommittee"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/core"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/rewards"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/lookup"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/blockchain"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/builder"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/cache"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/core/feed/operation"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/db"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/operations/attestations"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/operations/synccommittee"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/p2p"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/rpc/core"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/rpc/eth/rewards"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/rpc/lookup"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/sync"
+	eth "github.com/prysmaticlabs/prysm/v6/proto/prysm/v1alpha1"
 )
 
 // Server defines a server implementation of the gRPC Validator service,

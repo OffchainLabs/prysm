@@ -11,8 +11,8 @@ import (
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
-	p2ptypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/p2p"
+	p2ptypes "github.com/prysmaticlabs/prysm/v6/beacon-chain/p2p/types"
 )
 
 type rpcHandler func(context.Context, interface{}, libp2pcore.Stream) error

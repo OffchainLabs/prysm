@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/cmd"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v6/cmd"
+	"github.com/prysmaticlabs/prysm/v6/config/params"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 	"gopkg.in/yaml.v2"

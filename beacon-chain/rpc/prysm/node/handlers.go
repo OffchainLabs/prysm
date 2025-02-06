@@ -9,13 +9,13 @@ import (
 	corenet "github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers/peerdata"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v6/api/server/structs"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/p2p"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/p2p/peers"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/p2p/peers/peerdata"
+	"github.com/prysmaticlabs/prysm/v6/monitoring/tracing/trace"
+	"github.com/prysmaticlabs/prysm/v6/network/httputil"
+	eth "github.com/prysmaticlabs/prysm/v6/proto/prysm/v1alpha1"
 )
 
 // ListTrustedPeer retrieves data about the node's trusted peers.

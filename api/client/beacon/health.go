@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/iface"
+	"github.com/prysmaticlabs/prysm/v6/api/client/beacon/iface"
 )
 
 type NodeHealthTracker struct {

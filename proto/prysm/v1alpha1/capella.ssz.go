@@ -3,8 +3,8 @@ package eth
 
 import (
 	ssz "github.com/prysmaticlabs/fastssz"
-	github_com_prysmaticlabs_prysm_v5_consensus_types_primitives "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	v1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
+	github_com_prysmaticlabs_prysm_v5_consensus_types_primitives "github.com/prysmaticlabs/prysm/v6/consensus-types/primitives"
+	v1 "github.com/prysmaticlabs/prysm/v6/proto/engine/v1"
 )
 
 // MarshalSSZ ssz marshals the SignedBeaconBlockCapella object

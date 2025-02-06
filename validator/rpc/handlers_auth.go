@@ -4,10 +4,10 @@ import (
 	"net/http"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/io/file"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
-	"github.com/prysmaticlabs/prysm/v5/validator/accounts/wallet"
+	"github.com/prysmaticlabs/prysm/v6/io/file"
+	"github.com/prysmaticlabs/prysm/v6/monitoring/tracing/trace"
+	"github.com/prysmaticlabs/prysm/v6/network/httputil"
+	"github.com/prysmaticlabs/prysm/v6/validator/accounts/wallet"
 )
 
 // Initialize returns metadata regarding whether the caller has authenticated and has a wallet.

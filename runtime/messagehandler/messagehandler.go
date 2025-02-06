@@ -8,7 +8,7 @@ import (
 	"runtime/debug"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
+	"github.com/prysmaticlabs/prysm/v6/monitoring/tracing/trace"
 	"github.com/sirupsen/logrus"
 	"go.opentelemetry.io/otel/codes"
 )

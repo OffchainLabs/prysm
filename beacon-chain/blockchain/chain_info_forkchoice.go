@@ -3,10 +3,10 @@ package blockchain
 import (
 	"context"
 
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	consensus_blocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/forkchoice"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/state"
+	consensus_blocks "github.com/prysmaticlabs/prysm/v6/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v6/consensus-types/forkchoice"
+	"github.com/prysmaticlabs/prysm/v6/consensus-types/primitives"
 )
 
 // CachedHeadRoot returns the corresponding value from Forkchoice

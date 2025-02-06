@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	fssz "github.com/prysmaticlabs/fastssz"
-	"github.com/prysmaticlabs/prysm/v5/math"
+	"github.com/prysmaticlabs/prysm/v6/math"
 )
 
 var _ fssz.HashRoot = (Epoch)(0)

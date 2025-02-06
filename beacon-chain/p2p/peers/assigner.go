@@ -3,9 +3,9 @@ package peers
 import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
-	forkchoicetypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/types"
-	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
+	forkchoicetypes "github.com/prysmaticlabs/prysm/v6/beacon-chain/forkchoice/types"
+	"github.com/prysmaticlabs/prysm/v6/cmd/beacon-chain/flags"
+	"github.com/prysmaticlabs/prysm/v6/config/params"
 	"github.com/sirupsen/logrus"
 )
 

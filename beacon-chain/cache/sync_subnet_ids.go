@@ -5,11 +5,11 @@ import (
 	"time"
 
 	"github.com/patrickmn/go-cache"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/container/slice"
-	"github.com/prysmaticlabs/prysm/v5/crypto/rand"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v6/config/params"
+	"github.com/prysmaticlabs/prysm/v6/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v6/container/slice"
+	"github.com/prysmaticlabs/prysm/v6/crypto/rand"
+	"github.com/prysmaticlabs/prysm/v6/encoding/bytesutil"
 )
 
 type syncSubnetIDs struct {

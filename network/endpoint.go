@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	gethRPC "github.com/ethereum/go-ethereum/rpc"
-	"github.com/prysmaticlabs/prysm/v5/network/authorization"
+	"github.com/prysmaticlabs/prysm/v6/network/authorization"
 	log "github.com/sirupsen/logrus"
 )
 

@@ -2,7 +2,7 @@ package stategen
 
 import (
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/state"
 )
 
 var ErrNotInCache = errors.New("state not found in cache")

@@ -6,10 +6,10 @@ import (
 
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/patrickmn/go-cache"
-	lruwrpr "github.com/prysmaticlabs/prysm/v5/cache/lru"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/container/slice"
+	lruwrpr "github.com/prysmaticlabs/prysm/v6/cache/lru"
+	"github.com/prysmaticlabs/prysm/v6/config/params"
+	"github.com/prysmaticlabs/prysm/v6/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v6/container/slice"
 )
 
 type subnetIDs struct {

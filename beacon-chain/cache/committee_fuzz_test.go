@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	fuzz "github.com/google/gofuzz"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v6/testing/assert"
+	"github.com/prysmaticlabs/prysm/v6/testing/require"
 )
 
 func TestCommitteeKeyFuzz_OK(t *testing.T) {

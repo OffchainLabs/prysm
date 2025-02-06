@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api/server/middleware"
-	"github.com/prysmaticlabs/prysm/v5/runtime"
+	"github.com/prysmaticlabs/prysm/v6/api/server/middleware"
+	"github.com/prysmaticlabs/prysm/v6/runtime"
 )
 
 var _ runtime.Service = (*Server)(nil)

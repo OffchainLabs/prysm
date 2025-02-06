@@ -5,15 +5,15 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/electra"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/core/electra"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/state"
+	state_native "github.com/prysmaticlabs/prysm/v6/beacon-chain/state/state-native"
+	"github.com/prysmaticlabs/prysm/v6/config/params"
+	"github.com/prysmaticlabs/prysm/v6/consensus-types/primitives"
+	eth "github.com/prysmaticlabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v6/testing/require"
+	"github.com/prysmaticlabs/prysm/v6/time/slots"
 )
 
 func createValidatorsWithTotalActiveBalance(totalBal primitives.Gwei) []*eth.Validator {
@@ -177,9 +177,9 @@ func TestComputeConsolidationEpochAndUpdateChurn(t *testing.T) {
 				require.NoError(t, err)
 				return s
 			}(t),
-			consolidationBalance:                  helpers.ConsolidationChurnLimit(32000000000000000)+1,
+			consolidationBalance:                  helpers.ConsolidationChurnLimit(32000000000000000) + 1,
 			expectedEpoch:                         18, // Flows into another epoch.
-			expectedConsolidationBalanceToConsume: helpers.ConsolidationChurnLimit(32000000000000000)-1,
+			expectedConsolidationBalanceToConsume: helpers.ConsolidationChurnLimit(32000000000000000) - 1,
 		},
 	}
 

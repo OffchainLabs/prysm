@@ -6,11 +6,11 @@ import (
 	"testing"
 
 	fssz "github.com/prysmaticlabs/fastssz"
-	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	common "github.com/prysmaticlabs/prysm/v5/testing/spectest/shared/common/ssz_static"
+	state_native "github.com/prysmaticlabs/prysm/v6/beacon-chain/state/state-native"
+	enginev1 "github.com/prysmaticlabs/prysm/v6/proto/engine/v1"
+	ethpb "github.com/prysmaticlabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v6/testing/require"
+	common "github.com/prysmaticlabs/prysm/v6/testing/spectest/shared/common/ssz_static"
 )
 
 // RunSSZStaticTests executes "ssz_static" tests.

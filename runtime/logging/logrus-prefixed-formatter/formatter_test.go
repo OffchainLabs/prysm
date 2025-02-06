@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/pkg/errors"
-	prefixed "github.com/prysmaticlabs/prysm/v5/runtime/logging/logrus-prefixed-formatter"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	prefixed "github.com/prysmaticlabs/prysm/v6/runtime/logging/logrus-prefixed-formatter"
+	"github.com/prysmaticlabs/prysm/v6/testing/require"
 	"github.com/sirupsen/logrus"
 )
 

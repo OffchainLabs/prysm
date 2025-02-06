@@ -4,8 +4,8 @@ import (
 	"context"
 
 	"github.com/golang/protobuf/ptypes/empty"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
+	ethpb "github.com/prysmaticlabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v6/validator/client/iface"
 	"google.golang.org/grpc"
 )
 

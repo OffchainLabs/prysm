@@ -3,7 +3,7 @@ package api
 import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/crypto/rand"
+	"github.com/prysmaticlabs/prysm/v6/crypto/rand"
 )
 
 // GenerateRandomHexString generates a random hex string that follows the standards for jwt token

@@ -3,8 +3,8 @@ package filesystem
 import (
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v6/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v6/testing/require"
 )
 
 type mockLayout struct {

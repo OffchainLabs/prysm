@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/prysmaticlabs/prysm/v5/api"
-	"github.com/prysmaticlabs/prysm/v5/cmd"
-	"github.com/prysmaticlabs/prysm/v5/cmd/validator/flags"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	"github.com/prysmaticlabs/prysm/v5/runtime/tos"
-	"github.com/prysmaticlabs/prysm/v5/validator/rpc"
+	"github.com/prysmaticlabs/prysm/v6/api"
+	"github.com/prysmaticlabs/prysm/v6/cmd"
+	"github.com/prysmaticlabs/prysm/v6/cmd/validator/flags"
+	"github.com/prysmaticlabs/prysm/v6/config/features"
+	"github.com/prysmaticlabs/prysm/v6/runtime/tos"
+	"github.com/prysmaticlabs/prysm/v6/validator/rpc"
 	"github.com/urfave/cli/v2"
 )
 

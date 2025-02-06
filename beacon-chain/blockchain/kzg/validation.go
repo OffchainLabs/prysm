@@ -2,7 +2,7 @@ package kzg
 
 import (
 	GoKZG "github.com/crate-crypto/go-kzg-4844"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v6/consensus-types/blocks"
 )
 
 // Verify performs single or batch verification of commitments depending on the number of given BlobSidecars.

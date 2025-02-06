@@ -16,9 +16,9 @@ import (
 	gomplex "github.com/libp2p/go-mplex"
 	ma "github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	ecdsaprysm "github.com/prysmaticlabs/prysm/v5/crypto/ecdsa"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
+	"github.com/prysmaticlabs/prysm/v6/config/features"
+	ecdsaprysm "github.com/prysmaticlabs/prysm/v6/crypto/ecdsa"
+	"github.com/prysmaticlabs/prysm/v6/runtime/version"
 )
 
 type internetProtocol string

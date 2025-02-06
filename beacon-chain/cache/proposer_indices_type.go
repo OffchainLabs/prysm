@@ -1,7 +1,7 @@
 package cache
 
 import (
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v6/consensus-types/primitives"
 )
 
 // ProposerIndices defines the cached struct for proposer indices.

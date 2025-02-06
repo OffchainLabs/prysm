@@ -9,8 +9,8 @@ import (
 
 	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v6/config/params"
+	eth "github.com/prysmaticlabs/prysm/v6/proto/prysm/v1alpha1"
 )
 
 const rootLength = 32

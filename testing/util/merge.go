@@ -1,7 +1,7 @@
 package util
 
 import (
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	ethpb "github.com/prysmaticlabs/prysm/v6/proto/prysm/v1alpha1"
 )
 
 // ----------------------------------------------------------------------------

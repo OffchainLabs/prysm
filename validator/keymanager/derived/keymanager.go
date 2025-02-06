@@ -6,13 +6,13 @@ import (
 
 	"github.com/logrusorgru/aurora"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/async/event"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	validatorpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/validator-client"
-	"github.com/prysmaticlabs/prysm/v5/validator/accounts/iface"
-	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
-	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/local"
+	"github.com/prysmaticlabs/prysm/v6/async/event"
+	fieldparams "github.com/prysmaticlabs/prysm/v6/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v6/crypto/bls"
+	validatorpb "github.com/prysmaticlabs/prysm/v6/proto/prysm/v1alpha1/validator-client"
+	"github.com/prysmaticlabs/prysm/v6/validator/accounts/iface"
+	"github.com/prysmaticlabs/prysm/v6/validator/keymanager"
+	"github.com/prysmaticlabs/prysm/v6/validator/keymanager/local"
 	util "github.com/wealdtech/go-eth2-util"
 )
 

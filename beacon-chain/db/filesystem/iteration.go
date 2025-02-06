@@ -10,7 +10,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v6/encoding/bytesutil"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/afero"
 )

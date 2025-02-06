@@ -6,9 +6,9 @@ import (
 	"crypto/subtle"
 	"fmt"
 
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls/common"
-	"github.com/prysmaticlabs/prysm/v5/crypto/rand"
+	"github.com/prysmaticlabs/prysm/v6/config/params"
+	"github.com/prysmaticlabs/prysm/v6/crypto/bls/common"
+	"github.com/prysmaticlabs/prysm/v6/crypto/rand"
 	blst "github.com/supranational/blst/bindings/go"
 )
 

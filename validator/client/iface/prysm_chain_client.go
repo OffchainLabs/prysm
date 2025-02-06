@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/validator"
+	"github.com/prysmaticlabs/prysm/v6/consensus-types/validator"
 )
 
 var ErrNotSupported = errors.New("endpoint not supported")

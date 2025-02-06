@@ -10,7 +10,7 @@ import (
 	"github.com/minio/highwayhash"
 	"github.com/minio/sha256-simd"
 	fastssz "github.com/prysmaticlabs/fastssz"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v6/encoding/bytesutil"
 	"golang.org/x/crypto/sha3"
 	"google.golang.org/protobuf/proto"
 )

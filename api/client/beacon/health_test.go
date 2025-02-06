@@ -5,7 +5,7 @@ import (
 	"sync"
 	"testing"
 
-	healthTesting "github.com/prysmaticlabs/prysm/v5/api/client/beacon/testing"
+	healthTesting "github.com/prysmaticlabs/prysm/v6/api/client/beacon/testing"
 	"go.uber.org/mock/gomock"
 )
 

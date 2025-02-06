@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/iface"
+	"github.com/prysmaticlabs/prysm/v6/api/client/beacon/iface"
 	"go.uber.org/mock/gomock"
 )
 

@@ -2,12 +2,12 @@ package state_native
 
 import (
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native/types"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stateutil"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	consensus_types "github.com/prysmaticlabs/prysm/v5/consensus-types"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/state/state-native/types"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/state/stateutil"
+	"github.com/prysmaticlabs/prysm/v6/config/features"
+	fieldparams "github.com/prysmaticlabs/prysm/v6/config/fieldparams"
+	consensus_types "github.com/prysmaticlabs/prysm/v6/consensus-types"
+	ethpb "github.com/prysmaticlabs/prysm/v6/proto/prysm/v1alpha1"
 )
 
 // SetLatestBlockHeader in the beacon state.

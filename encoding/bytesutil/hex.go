@@ -6,7 +6,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/container/slice"
+	"github.com/prysmaticlabs/prysm/v6/container/slice"
 )
 
 var hexRegex = regexp.MustCompile("^0x[0-9a-fA-F]+$")

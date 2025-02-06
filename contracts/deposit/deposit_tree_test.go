@@ -5,12 +5,12 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/container/trie"
-	depositcontract "github.com/prysmaticlabs/prysm/v5/contracts/deposit/mock"
-	"github.com/prysmaticlabs/prysm/v5/runtime/interop"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v6/config/params"
+	"github.com/prysmaticlabs/prysm/v6/container/trie"
+	depositcontract "github.com/prysmaticlabs/prysm/v6/contracts/deposit/mock"
+	"github.com/prysmaticlabs/prysm/v6/runtime/interop"
+	"github.com/prysmaticlabs/prysm/v6/testing/assert"
+	"github.com/prysmaticlabs/prysm/v6/testing/require"
 )
 
 func TestDepositTrieRoot_OK(t *testing.T) {

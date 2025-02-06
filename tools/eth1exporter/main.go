@@ -17,7 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/params"
-	_ "github.com/prysmaticlabs/prysm/v5/runtime/maxprocs"
+	_ "github.com/prysmaticlabs/prysm/v6/runtime/maxprocs"
 	"github.com/sirupsen/logrus"
 )
 

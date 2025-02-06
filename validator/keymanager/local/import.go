@@ -8,8 +8,8 @@ import (
 
 	"github.com/k0kubun/go-ansi"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
+	"github.com/prysmaticlabs/prysm/v6/crypto/bls"
+	"github.com/prysmaticlabs/prysm/v6/validator/keymanager"
 	"github.com/schollz/progressbar/v3"
 	"github.com/sirupsen/logrus"
 	keystorev4 "github.com/wealdtech/go-eth2-wallet-encryptor-keystorev4"

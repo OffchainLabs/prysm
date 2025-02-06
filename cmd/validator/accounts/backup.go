@@ -4,12 +4,12 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/cmd"
-	"github.com/prysmaticlabs/prysm/v5/cmd/validator/flags"
-	"github.com/prysmaticlabs/prysm/v5/io/prompt"
-	"github.com/prysmaticlabs/prysm/v5/validator/accounts"
-	"github.com/prysmaticlabs/prysm/v5/validator/accounts/userprompt"
-	"github.com/prysmaticlabs/prysm/v5/validator/client"
+	"github.com/prysmaticlabs/prysm/v6/cmd"
+	"github.com/prysmaticlabs/prysm/v6/cmd/validator/flags"
+	"github.com/prysmaticlabs/prysm/v6/io/prompt"
+	"github.com/prysmaticlabs/prysm/v6/validator/accounts"
+	"github.com/prysmaticlabs/prysm/v6/validator/accounts/userprompt"
+	"github.com/prysmaticlabs/prysm/v6/validator/client"
 	"github.com/urfave/cli/v2"
 )
 

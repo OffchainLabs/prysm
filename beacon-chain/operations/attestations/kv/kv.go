@@ -8,10 +8,10 @@ import (
 	"time"
 
 	"github.com/patrickmn/go-cache"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/attestations/attmap"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/attestation"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/operations/attestations/attmap"
+	"github.com/prysmaticlabs/prysm/v6/config/params"
+	ethpb "github.com/prysmaticlabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v6/proto/prysm/v1alpha1/attestation"
 )
 
 // AttCaches defines the caches used to satisfy attestation pool interface.

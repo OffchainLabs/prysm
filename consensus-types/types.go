@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 
 	errors2 "github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
+	"github.com/prysmaticlabs/prysm/v6/runtime/version"
 )
 
 var (

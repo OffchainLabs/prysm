@@ -9,13 +9,13 @@ import (
 	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/golang/snappy"
 	fssz "github.com/prysmaticlabs/fastssz"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	consensus_blocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/container/trie"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/spectest/shared/common/ssz_static"
-	"github.com/prysmaticlabs/prysm/v5/testing/spectest/utils"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
+	"github.com/prysmaticlabs/prysm/v6/config/params"
+	consensus_blocks "github.com/prysmaticlabs/prysm/v6/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v6/container/trie"
+	"github.com/prysmaticlabs/prysm/v6/testing/require"
+	"github.com/prysmaticlabs/prysm/v6/testing/spectest/shared/common/ssz_static"
+	"github.com/prysmaticlabs/prysm/v6/testing/spectest/utils"
+	"github.com/prysmaticlabs/prysm/v6/testing/util"
 )
 
 // SingleMerkleProof is the format used to read spectest Merkle Proof test data.

@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
+	"github.com/prysmaticlabs/prysm/v6/validator/client/iface"
 )
 
 type aggregatedSyncSelectionResponse struct {

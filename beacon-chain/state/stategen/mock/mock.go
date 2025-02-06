@@ -3,8 +3,8 @@ package mock
 import (
 	"context"
 
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v6/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v6/consensus-types/primitives"
 )
 
 // StateManager is a fake implementation of StateManager.
