@@ -144,9 +144,14 @@ func BlobRPCMinValidSlot(current primitives.Slot) (primitives.Slot, error) {
 	return slots.EpochStart(minStart)
 }
 
+// This function is used to derive what is the ideal block batch size we can serve
+// blobs to the remote peer for. We compute the current limit which is the maximum
+// blobs to be served to the peer every period. And then using the maximum blobs per
+// block determine the block batch size satisfying this limit.
 func blobBatchLimit(slot primitives.Slot) uint64 {
 	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlock(slot)
-	return uint64(flags.Get().BlockBatchLimit / maxBlobsPerBlock)
+	maxPossibleBlobs := flags.Get().BlobBatchLimit * flags.Get().BlobBatchLimitBurstFactor
+	return uint64(maxPossibleBlobs / maxBlobsPerBlock)
 }
 
 func validateBlobsByRange(r *pb.BlobSidecarsByRangeRequest, current primitives.Slot) (rangeParams, error) {

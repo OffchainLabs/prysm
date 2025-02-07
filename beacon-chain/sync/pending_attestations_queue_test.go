@@ -2,6 +2,7 @@ package sync
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -10,6 +11,8 @@ import (
 	"github.com/prysmaticlabs/go-bitfield"
 	"github.com/prysmaticlabs/prysm/v5/async/abool"
 	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/operation"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
 	dbtest "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
@@ -105,15 +108,22 @@ func TestProcessPendingAtts_HasBlockSaveUnAggregatedAtt(t *testing.T) {
 			Epoch: 0,
 		},
 	}
+
+	done := make(chan *feed.Event, 1)
+	defer close(done)
+	opn := mock.NewEventFeedWrapper()
+	sub := opn.Subscribe(done)
+	defer sub.Unsubscribe()
 	ctx, cancel := context.WithCancel(context.Background())
 	r := &Service{
 		ctx: ctx,
 		cfg: &config{
-			p2p:      p1,
-			beaconDB: db,
-			chain:    chain,
-			clock:    startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
-			attPool:  attestations.NewPool(),
+			p2p:                 p1,
+			beaconDB:            db,
+			chain:               chain,
+			clock:               startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
+			attPool:             attestations.NewPool(),
+			attestationNotifier: &mock.SimpleNotifier{Feed: opn},
 		},
 		blkRootToPendingAtts:             make(map[[32]byte][]ethpb.SignedAggregateAttAndProof),
 		seenUnAggregatedAttestationCache: lruwrpr.New(10),
@@ -128,12 +138,28 @@ func TestProcessPendingAtts_HasBlockSaveUnAggregatedAtt(t *testing.T) {
 	r.blkRootToPendingAtts[root] = []ethpb.SignedAggregateAttAndProof{&ethpb.SignedAggregateAttestationAndProof{Message: aggregateAndProof}}
 	require.NoError(t, r.processPendingAtts(context.Background()))
 
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case received := <-done:
+				// make sure a single att was sent
+				require.Equal(t, operation.UnaggregatedAttReceived, int(received.Type))
+				return
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
 	atts, err := r.cfg.attPool.UnaggregatedAttestations()
 	require.NoError(t, err)
 	assert.Equal(t, 1, len(atts), "Did not save unaggregated att")
 	assert.DeepEqual(t, att, atts[0], "Incorrect saved att")
 	assert.Equal(t, 0, len(r.cfg.attPool.AggregatedAttestations()), "Did save aggregated att")
 	require.LogsContain(t, hook, "Verified and saved pending attestations to pool")
+	wg.Wait()
 	cancel()
 }
 
@@ -179,15 +205,21 @@ func TestProcessPendingAtts_HasBlockSaveUnAggregatedAttElectra(t *testing.T) {
 			Epoch: 0,
 		},
 	}
+	done := make(chan *feed.Event, 1)
+	defer close(done)
+	opn := mock.NewEventFeedWrapper()
+	sub := opn.Subscribe(done)
+	defer sub.Unsubscribe()
 	ctx, cancel := context.WithCancel(context.Background())
 	r := &Service{
 		ctx: ctx,
 		cfg: &config{
-			p2p:      p1,
-			beaconDB: db,
-			chain:    chain,
-			clock:    startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
-			attPool:  attestations.NewPool(),
+			p2p:                 p1,
+			beaconDB:            db,
+			chain:               chain,
+			clock:               startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
+			attPool:             attestations.NewPool(),
+			attestationNotifier: &mock.SimpleNotifier{Feed: opn},
 		},
 		blkRootToPendingAtts:             make(map[[32]byte][]ethpb.SignedAggregateAttAndProof),
 		seenUnAggregatedAttestationCache: lruwrpr.New(10),
@@ -201,13 +233,28 @@ func TestProcessPendingAtts_HasBlockSaveUnAggregatedAttElectra(t *testing.T) {
 
 	r.blkRootToPendingAtts[root] = []ethpb.SignedAggregateAttAndProof{&ethpb.SignedAggregateAttestationAndProofSingle{Message: aggregateAndProof}}
 	require.NoError(t, r.processPendingAtts(context.Background()))
-
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case received := <-done:
+				// make sure a single att was sent
+				require.Equal(t, operation.SingleAttReceived, int(received.Type))
+				return
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
 	atts, err := r.cfg.attPool.UnaggregatedAttestations()
 	require.NoError(t, err)
 	require.Equal(t, 1, len(atts), "Did not save unaggregated att")
 	assert.DeepEqual(t, att.ToAttestationElectra(committee), atts[0], "Incorrect saved att")
 	assert.Equal(t, 0, len(r.cfg.attPool.AggregatedAttestations()), "Did save aggregated att")
 	require.LogsContain(t, hook, "Verified and saved pending attestations to pool")
+	wg.Wait()
 	cancel()
 }
 
@@ -304,11 +351,12 @@ func TestProcessPendingAtts_NoBroadcastWithBadSignature(t *testing.T) {
 	r = &Service{
 		ctx: ctx,
 		cfg: &config{
-			p2p:      p1,
-			beaconDB: db,
-			chain:    chain2,
-			clock:    startup.NewClock(chain2.Genesis, chain2.ValidatorsRoot),
-			attPool:  attestations.NewPool(),
+			p2p:                 p1,
+			beaconDB:            db,
+			chain:               chain2,
+			clock:               startup.NewClock(chain2.Genesis, chain2.ValidatorsRoot),
+			attPool:             attestations.NewPool(),
+			attestationNotifier: &mock.MockOperationNotifier{},
 		},
 		blkRootToPendingAtts:             make(map[[32]byte][]ethpb.SignedAggregateAttAndProof),
 		seenUnAggregatedAttestationCache: lruwrpr.New(10),
