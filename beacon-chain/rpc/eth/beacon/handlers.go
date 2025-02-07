@@ -743,6 +743,7 @@ func (s *Server) versionHeaderFromCurrentSlot() string {
 	}
 }
 
+// nolint:gocognit
 func (s *Server) publishBlockSSZ(ctx context.Context, w http.ResponseWriter, r *http.Request, versionRequired bool) { // nolint:gocognit
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -952,6 +953,7 @@ func (s *Server) publishBlockSSZ(ctx context.Context, w http.ResponseWriter, r *
 	httputil.HandleError(w, "Body does not represent a valid block type", http.StatusBadRequest)
 }
 
+// nolint:gocognit
 func (s *Server) publishBlock(ctx context.Context, w http.ResponseWriter, r *http.Request, versionRequired bool) { // nolint:gocognit
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
