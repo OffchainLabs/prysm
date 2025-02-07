@@ -571,7 +571,7 @@ func (s *Service) insertFinalizedDepositsAndPrune(ctx context.Context, fRoot [32
 	// we can prune all pending deposits in the deposit cache.
 	// See: https://eips.ethereum.org/EIPS/eip-6110#eth1data-poll-deprecation
 	if helpers.DepositRequestsStarted(finalizedState) {
-		s.pruneAllPendingDeposits(ctx)
+		s.pruneAllPendingDepositsAndProofs(ctx)
 		return
 	}
 
@@ -603,8 +603,8 @@ func (s *Service) insertFinalizedDepositsAndPrune(ctx context.Context, fRoot [32
 	log.WithField("duration", time.Since(startTime).String()).Debugf("Finalized deposit insertion completed at index %d", finalizedEth1DepIdx)
 }
 
-// pruneAllPendingDeposits prunes all proofs and pending deposits in the cache.
-func (s *Service) pruneAllPendingDeposits(ctx context.Context) {
+// pruneAllPendingDepositsAndProofs prunes all proofs and pending deposits in the cache.
+func (s *Service) pruneAllPendingDepositsAndProofs(ctx context.Context) {
 	s.cfg.DepositCache.PruneAllPendingDeposits(ctx)
 	s.cfg.DepositCache.PruneAllProofs(ctx)
 }
