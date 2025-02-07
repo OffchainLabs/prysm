@@ -9,6 +9,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
+	"github.com/prysmaticlabs/prysm/v5/crypto/rand"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	v1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
@@ -45,12 +46,18 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 	v := s.newExecutionPayloadEnvelopeVerifier(e, verification.GossipExecutionPayloadEnvelopeRequirements)
 
 	if err := v.VerifyBlockRootSeen(s.seenBlockRoot); err != nil {
+		blockRoot := signedEnvelope.Message.BeaconBlockRoot
 		log.WithFields(logrus.Fields{
-			"blockRoot": fmt.Sprintf("%#x", signedEnvelope.Message.BeaconBlockRoot),
+			"blockRoot": fmt.Sprintf("%#x", blockRoot),
 			"blockHash": fmt.Sprintf("%#x", signedEnvelope.Message.Payload.BlockHash),
 			"slot":      signedEnvelope.Message.Slot,
 		}).Debug("inserting pending execution payload")
 		s.pendingExecutionPayloads.Add(signedEnvelope)
+		go func() {
+			if err := s.sendBatchRootRequest(context.Background(), [][32]byte{[32]byte(blockRoot)}, rand.NewGenerator()); err != nil {
+				log.WithError(err).Error("failed to send batch root request")
+			}
+		}()
 		return pubsub.ValidationIgnore, err
 	}
 	res, err := s.validateAfterBlockRootSeen(ctx, signedEnvelope, v)
