@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/go-bitfield"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	coreTime "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
@@ -420,21 +421,58 @@ func (s *Service) savePostStateInfo(ctx context.Context, r [32]byte, b interface
 }
 
 // This removes the attestations in block `b` from the attestation mem pool.
-func (s *Service) pruneAttsFromPool(headBlock interfaces.ReadOnlySignedBeaconBlock) error {
+func (s *Service) pruneAttsFromPool(ctx context.Context, headState state.BeaconState, headBlock interfaces.ReadOnlySignedBeaconBlock) error {
 	atts := headBlock.Block().Body().Attestations()
 	for _, att := range atts {
-		if features.Get().EnableExperimentalAttestationPool {
-			if err := s.cfg.AttestationCache.DeleteCovered(att); err != nil {
-				return errors.Wrap(err, "could not delete attestation")
-			}
-		} else if att.IsAggregated() {
-			if err := s.cfg.AttPool.DeleteAggregatedAttestation(att); err != nil {
-				return err
-			}
-		} else {
+		if !att.IsAggregated() {
 			if err := s.cfg.AttPool.DeleteUnaggregatedAttestation(att); err != nil {
 				return err
 			}
+			continue
+		}
+
+		if att.Version() == version.Phase0 {
+			if features.Get().EnableExperimentalAttestationPool {
+				if err := s.cfg.AttestationCache.DeleteCovered(att); err != nil {
+					return err
+				}
+			} else if err := s.cfg.AttPool.DeleteAggregatedAttestation(att); err != nil {
+				return err
+			}
+			continue
+		}
+
+		offset := uint64(0)
+
+		committeeIndices := att.CommitteeBitsVal().BitIndices()
+		committees, err := helpers.AttestationCommittees(ctx, headState, att)
+		if err != nil {
+			return err
+		}
+		for i, c := range committees {
+			ab := bitfield.NewBitlist(uint64(len(c)))
+			for j := uint64(0); j < uint64(len(c)); j++ {
+				ab.SetBitAt(j, att.GetAggregationBits().BitAt(j+offset) == true)
+			}
+
+			cb := primitives.NewAttestationCommitteeBits()
+			cb.SetBitAt(uint64(committeeIndices[i]), true)
+
+			a := &ethpb.AttestationElectra{
+				AggregationBits: ab,
+				Data:            att.GetData(),
+				CommitteeBits:   cb,
+			}
+
+			if features.Get().EnableExperimentalAttestationPool {
+				if err := s.cfg.AttestationCache.DeleteCovered(a); err != nil {
+					return err
+				}
+			} else if err := s.cfg.AttPool.DeleteAggregatedAttestation(a); err != nil {
+				return err
+			}
+
+			offset += uint64(len(c))
 		}
 	}
 	return nil
