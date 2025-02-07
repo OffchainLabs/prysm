@@ -1433,11 +1433,10 @@ func TestPublishBlock(t *testing.T) {
 	t.Run("Electra", func(t *testing.T) {
 		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
 		v1alpha1Server.EXPECT().ProposeBeaconBlock(gomock.Any(), mock.MatchedBy(func(req *eth.GenericSignedBeaconBlock) bool {
-			// Convert back Fulu to Electra when there is at least one difference between Electra and Fulu blocks.
-			block, ok := req.Block.(*eth.GenericSignedBeaconBlock_Fulu)
-			converted, err := structs.SignedBeaconBlockContentsFuluFromConsensus(block.Fulu)
+			block, ok := req.Block.(*eth.GenericSignedBeaconBlock_Electra)
+			converted, err := structs.SignedBeaconBlockContentsElectraFromConsensus(block.Electra)
 			require.NoError(t, err)
-			var signedblock *structs.SignedBeaconBlockContentsFulu
+			var signedblock *structs.SignedBeaconBlockContentsElectra
 			err = json.Unmarshal([]byte(rpctesting.FuluBlockContents), &signedblock)
 			require.NoError(t, err)
 			require.DeepEqual(t, converted, signedblock)
@@ -1453,6 +1452,54 @@ func TestPublishBlock(t *testing.T) {
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlock(writer, request)
 		assert.Equal(t, http.StatusOK, writer.Code)
+	})
+	t.Run("Electra block without version header succeeds", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		cfg.ElectraForkEpoch = 6
+		params.OverrideBeaconConfig(cfg)
+		params.SetupTestConfigCleanup(t)
+		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
+		v1alpha1Server.EXPECT().ProposeBeaconBlock(gomock.Any(), mock.MatchedBy(func(req *eth.GenericSignedBeaconBlock) bool {
+			block, ok := req.Block.(*eth.GenericSignedBeaconBlock_Electra)
+			converted, err := structs.SignedBeaconBlockContentsElectraFromConsensus(block.Electra)
+			require.NoError(t, err)
+			var signedblock *structs.SignedBeaconBlockContentsElectra
+			err = json.Unmarshal([]byte(rpctesting.FuluBlockContents), &signedblock)
+			require.NoError(t, err)
+			require.DeepEqual(t, converted, signedblock)
+			return ok
+		}))
+		electraFork := params.BeaconConfig().ElectraForkEpoch
+		timeToFork := time.Duration(params.BeaconConfig().SecondsPerSlot*uint64(params.BeaconConfig().SlotsPerEpoch)*uint64(electraFork)) * time.Second
+		currentTime := time.Now().Add(-1 * timeToFork)
+		server := &Server{
+			V1Alpha1ValidatorServer: v1alpha1Server,
+			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
+				Genesis: currentTime,
+			},
+			SyncChecker: &mockSync.Sync{IsSyncing: false},
+		}
+		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.ElectraBlockContents)))
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+		server.PublishBlock(writer, request)
+		assert.Equal(t, http.StatusOK, writer.Code)
+	})
+	t.Run("Electra block without version header on wrong fork time", func(t *testing.T) {
+		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
+		server := &Server{
+			V1Alpha1ValidatorServer: v1alpha1Server,
+			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
+				Genesis: time.Now(),
+			},
+			SyncChecker: &mockSync.Sync{IsSyncing: false},
+		}
+		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.ElectraBlockContents)))
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+		server.PublishBlock(writer, request)
+		assert.Equal(t, http.StatusBadRequest, writer.Code)
+		assert.StringContains(t, fmt.Sprintf("Could not decode request body into %s consensus block", version.String(version.Phase0)), writer.Body.String())
 	})
 	t.Run("Fulu", func(t *testing.T) {
 		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
@@ -2352,12 +2399,11 @@ func TestPublishBlockV2(t *testing.T) {
 	t.Run("Electra", func(t *testing.T) {
 		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
 		v1alpha1Server.EXPECT().ProposeBeaconBlock(gomock.Any(), mock.MatchedBy(func(req *eth.GenericSignedBeaconBlock) bool {
-			// Convert back Fulu to Electra when there is at least one difference between Electra and Fulu blocks.
-			block, ok := req.Block.(*eth.GenericSignedBeaconBlock_Fulu)
-			converted, err := structs.SignedBeaconBlockContentsFuluFromConsensus(block.Fulu)
+			block, ok := req.Block.(*eth.GenericSignedBeaconBlock_Electra)
+			converted, err := structs.SignedBeaconBlockContentsElectraFromConsensus(block.Electra)
 			require.NoError(t, err)
-			var signedblock *structs.SignedBeaconBlockContentsFulu
-			err = json.Unmarshal([]byte(rpctesting.FuluBlockContents), &signedblock)
+			var signedblock *structs.SignedBeaconBlockContentsElectra
+			err = json.Unmarshal([]byte(rpctesting.ElectraBlockContents), &signedblock)
 			require.NoError(t, err)
 			require.DeepEqual(t, converted, signedblock)
 			return ok
