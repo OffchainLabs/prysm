@@ -926,6 +926,7 @@ func (s *Server) publishBlockSSZ(ctx context.Context, w http.ResponseWriter, r *
 		s.proposeBlock(ctx, w, genericBlock)
 		return
 	}
+
 	if versionHeader == version.String(version.Phase0) {
 		phase0Block := &eth.SignedBeaconBlock{}
 		if err = phase0Block.UnmarshalSSZ(body); err != nil {
@@ -935,7 +936,6 @@ func (s *Server) publishBlockSSZ(ctx context.Context, w http.ResponseWriter, r *
 				http.StatusBadRequest,
 			)
 			return
-
 		}
 		genericBlock := &eth.GenericSignedBeaconBlock{
 			Block: &eth.GenericSignedBeaconBlock_Phase0{
