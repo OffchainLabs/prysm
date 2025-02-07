@@ -16,6 +16,5 @@ func (b *BeaconState) SetDepositRequestsStartIndex(index uint64) error {
 
 	b.depositRequestsStartIndex = index
 	b.markFieldAsDirty(types.DepositRequestsStartIndex)
-	b.rebuildTrie[types.DepositRequestsStartIndex] = true
 	return nil
 }
