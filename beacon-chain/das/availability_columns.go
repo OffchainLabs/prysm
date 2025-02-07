@@ -168,21 +168,14 @@ func fullCommitmentsToCheck(nodeID enode.ID, block blocks.ROBlock, currentSlot p
 	// Retrieve the groups count.
 	custodyGroupCount := peerdas.CustodyGroupCount()
 
-	// Retrieve custody groups.
-	custodyGroups, err := peerdas.CustodyGroups(nodeID, custodyGroupCount)
+	// Retrieve peer info.
+	peerInfo, _, err := peerdas.Info(nodeID, custodyGroupCount)
 	if err != nil {
-		return nil, errors.Wrap(err, "custody groups")
+		return nil, errors.Wrap(err, "peer info")
 	}
-
-	// Retrieve custody columns.
-	custodyColumns, err := peerdas.CustodyColumns(custodyGroups)
-	if err != nil {
-		return nil, errors.Wrap(err, "custody columns")
-	}
-
 	// Create a safe commitments array for the custody columns.
 	commitmentsArray := &safeCommitmentsArray{}
-	for column := range custodyColumns {
+	for column := range peerInfo.CustodyColumns {
 		commitmentsArray[column] = kzgCommitments
 	}
 

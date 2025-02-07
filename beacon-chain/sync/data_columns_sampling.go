@@ -100,9 +100,11 @@ func (d *dataColumnSampler1D) Run(ctx context.Context) {
 
 	// Verify if we need to run sampling or not, if not, return directly.
 	custodyGroupCount := peerdas.CustodyGroupCount()
-	custodyGroups, err := peerdas.CustodyGroups(nodeID, custodyGroupCount)
+
+	// Retrieve our local node info.
+	localNodeInfo, _, err := peerdas.Info(nodeID, custodyGroupCount)
 	if err != nil {
-		log.WithError(err).Error("custody groups")
+		log.WithError(err).Error("peer info")
 		return
 	}
 
@@ -117,7 +119,7 @@ func (d *dataColumnSampler1D) Run(ctx context.Context) {
 	// Initialize non custody groups.
 	d.nonCustodyGroups = make(map[uint64]bool)
 	for i := range numberOfCustodyGroups {
-		if !custodyGroups[i] {
+		if !localNodeInfo.CustodyGroups[i] {
 			d.nonCustodyGroups[i] = true
 		}
 	}
@@ -177,14 +179,14 @@ func (d *dataColumnSampler1D) refreshPeerInfo() {
 			continue
 		}
 
-		retrievedGroups, err := peerdas.CustodyGroups(nodeID, retrievedCustodyGroupCount)
+		// Retrieve the peer info.
+		peerInfo, _, err := peerdas.Info(nodeID, retrievedCustodyGroupCount)
 		if err != nil {
-			log.WithError(err).WithField("peerID", pid).Error("Failed to determine peer custody groups")
-			continue
+			log.WithError(err).WithField("peerID", pid.String()).Error("Failed to determine peer info")
 		}
 
-		d.groupsByPeer[pid] = retrievedGroups
-		for group := range retrievedGroups {
+		d.groupsByPeer[pid] = peerInfo.CustodyGroups
+		for group := range peerInfo.CustodyGroups {
 			d.peersByCustodyGroup[group][pid] = true
 		}
 	}

@@ -397,13 +397,13 @@ func (f *blocksFetcher) custodyGroupsFromPeer(peers map[peer.ID]bool) (map[peer.
 		// Get the custody group count of the peer.
 		custodyGroupCount := f.p2p.CustodyGroupCountFromPeer(peer)
 
-		// Get the custody groups of the peer.
-		custodyGroups, err := peerdas.CustodyGroups(nodeID, custodyGroupCount)
+		// Retrieve the peer info.
+		peerInfo, _, err := peerdas.Info(nodeID, custodyGroupCount)
 		if err != nil {
-			return nil, errors.Wrap(err, "custody groups")
+			return nil, errors.Wrap(err, "peer info")
 		}
 
-		custodyGroupsByPeer[peer] = custodyGroups
+		custodyGroupsByPeer[peer] = peerInfo.CustodyGroups
 	}
 
 	return custodyGroupsByPeer, nil

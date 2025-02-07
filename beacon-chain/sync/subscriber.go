@@ -16,6 +16,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/altair"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers"
 	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
@@ -589,12 +590,17 @@ func (s *Service) enoughPeersAreConnected(subnetTopic string) bool {
 	return peersWithSubnetCount >= threshold
 }
 
-func (s *Service) dataColumnSubnetIndices(currentSlot primitives.Slot) []uint64 {
-	if flags.Get().SubscribeToAllSubnets {
-		return sliceFromCount(params.BeaconConfig().DataColumnSidecarSubnetCount)
+func (s *Service) dataColumnSubnetIndices(_ primitives.Slot) []uint64 {
+	nodeID := s.cfg.p2p.NodeID()
+	custodyGroupCount := peerdas.CustodyGroupSamplingSize()
+
+	nodeInfo, _, err := peerdas.Info(nodeID, custodyGroupCount)
+	if err != nil {
+		log.WithError(err).Error("Could not retrieve peer info")
+		return []uint64{}
 	}
 
-	return s.retrieveActiveColumnSubnets()
+	return uint64MapToSortedSlice(nodeInfo.DataColumnsSubnets)
 }
 
 func (s *Service) persistentAndAggregatorSubnetIndices(currentSlot primitives.Slot) []uint64 {
@@ -607,14 +613,6 @@ func (s *Service) persistentAndAggregatorSubnetIndices(currentSlot primitives.Sl
 
 	// Combine subscriptions to get all requested subscriptions.
 	return slice.SetUint64(append(persistentSubnetIndices, aggregatorSubnetIndices...))
-}
-
-func (*Service) retrieveActiveColumnSubnets() []uint64 {
-	subs, ok, _ := cache.ColumnSubnetIDs.GetColumnSubnets()
-	if !ok {
-		return nil
-	}
-	return subs
 }
 
 // filters out required peers for the node to function, not

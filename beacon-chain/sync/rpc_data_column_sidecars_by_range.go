@@ -98,20 +98,14 @@ func (s *Service) dataColumnSidecarsByRangeRPCHandler(ctx context.Context, msg i
 	// Get the number of groups we should custody.
 	custodyGroupCount := peerdas.CustodyGroupCount()
 
-	// Compute the groups we should custody.
-	custodyGroups, err := peerdas.CustodyGroups(nodeID, custodyGroupCount)
+	// Retrieve the peer info.
+	peerInfo, _, err := peerdas.Info(nodeID, custodyGroupCount)
 	if err != nil {
 		s.writeErrorResponseToStream(responseCodeServerError, err.Error(), stream)
-		return errors.Wrap(err, "custody groups")
+		return errors.Wrap(err, "peer info")
 	}
 
-	// Compute the columns we should custody.
-	custodyColumns, err := peerdas.CustodyColumns(custodyGroups)
-	if err != nil {
-		s.writeErrorResponseToStream(responseCodeServerError, err.Error(), stream)
-		return errors.Wrap(err, "custody columns")
-	}
-
+	custodyColumns := peerInfo.CustodyColumns
 	custodyColumnsCount := uint64(len(custodyColumns))
 
 	// Compute requested columns.

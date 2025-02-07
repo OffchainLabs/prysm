@@ -391,42 +391,6 @@ func initializePersistentSubnets(id enode.ID, epoch primitives.Epoch) error {
 	return nil
 }
 
-// initializePersistentColumnSubnets initialize persistent column subnets
-func initializePersistentColumnSubnets(id enode.ID) error {
-	// Check if the column subnets are already cached.
-	_, ok, expTime := cache.ColumnSubnetIDs.GetColumnSubnets()
-	if ok && expTime.After(time.Now()) {
-		return nil
-	}
-
-	// Compute the number of custody groups we should sample.
-	custodyGroupSamplingSize := peerdas.CustodyGroupSamplingSize()
-
-	// Compute the custody groups we should sample.
-	custodyGroups, err := peerdas.CustodyGroups(id, custodyGroupSamplingSize)
-	if err != nil {
-		return errors.Wrap(err, "custody groups")
-	}
-
-	// Compute the column subnets for the custody groups.
-	custodyColumns, err := peerdas.CustodyColumns(custodyGroups)
-	if err != nil {
-		return errors.Wrap(err, "custody columns")
-	}
-
-	// Compute subnets from the custody columns.
-	subnets := make([]uint64, 0, len(custodyColumns))
-	for column := range custodyColumns {
-		subnet := peerdas.ComputeSubnetForDataColumnSidecar(column)
-		subnets = append(subnets, subnet)
-	}
-
-	// Add the subnets to the cache.
-	cache.ColumnSubnetIDs.AddColumnSubnets(subnets)
-
-	return nil
-}
-
 // Spec pseudocode definition:
 //
 // def compute_subscribed_subnets(node_id: NodeID, epoch: Epoch) -> Sequence[SubnetID]:
@@ -559,20 +523,14 @@ func dataColumnSubnets(nodeID enode.ID, record *enr.Record) (map[uint64]bool, er
 		return nil, errors.Wrap(err, "custody group count from record")
 	}
 
-	// Retrieve the custody groups from the remote peer.
-	custodyGroups, err := peerdas.CustodyGroups(nodeID, custodyGroupCount)
+	// Retrieve the peer info.
+	peerInfo, _, err := peerdas.Info(nodeID, custodyGroupCount)
 	if err != nil {
-		return nil, errors.Wrap(err, "custody groups")
-	}
-
-	// Retrieve the custody columns from the groups.
-	custodyColumns, err := peerdas.CustodyColumns(custodyGroups)
-	if err != nil {
-		return nil, errors.Wrap(err, "custody columns")
+		return nil, errors.Wrap(err, "peer info")
 	}
 
 	// Get custody columns subnets from the columns.
-	return peerdas.DataColumnSubnets(custodyColumns), nil
+	return peerInfo.DataColumnsSubnets, nil
 }
 
 // Parses the attestation subnets ENR entry in a node and extracts its value

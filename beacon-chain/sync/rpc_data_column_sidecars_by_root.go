@@ -109,20 +109,15 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 	// Retrieve the number of groups we should custody.
 	custodyGroupCount := peerdas.CustodyGroupCount()
 
-	// Compute the groups we should custody.
-	custodyGroups, err := peerdas.CustodyGroups(nodeID, custodyGroupCount)
+	// Retrieve the peer info.
+	peerInfo, _, err := peerdas.Info(nodeID, custodyGroupCount)
 	if err != nil {
-		return errors.Wrap(err, "custody groups")
+		s.writeErrorResponseToStream(responseCodeServerError, err.Error(), stream)
+		return errors.Wrap(err, "peer info")
 	}
 
-	custodyColumns, err := peerdas.CustodyColumns(custodyGroups)
+	custodyColumns := peerInfo.CustodyColumns
 	custodyColumnsCount := uint64(len(custodyColumns))
-
-	if err != nil {
-		log.WithError(err).Errorf("unexpected error retrieving the node id")
-		s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)
-		return errors.Wrap(err, "custody columns")
-	}
 
 	var custody interface{} = "all"
 

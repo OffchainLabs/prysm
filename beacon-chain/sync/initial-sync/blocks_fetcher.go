@@ -773,19 +773,13 @@ func (f *blocksFetcher) custodyColumns() (map[uint64]bool, error) {
 	// Retrieve the number of groups we should custody.
 	localCustodyGroupCount := peerdas.CustodyGroupCount()
 
-	// Compute the groups we should custody.
-	localCustodyGroups, err := peerdas.CustodyGroups(localNodeID, localCustodyGroupCount)
+	// Retrieve the local node info.
+	localNodeInfo, _, err := peerdas.Info(localNodeID, localCustodyGroupCount)
 	if err != nil {
-		return nil, errors.Wrap(err, "custody groups")
+		return nil, errors.Wrap(err, "node info")
 	}
 
-	// Compute the columns we should custody.
-	localCustodyColumns, err := peerdas.CustodyColumns(localCustodyGroups)
-	if err != nil {
-		return nil, errors.Wrap(err, "custody columns")
-	}
-
-	return localCustodyColumns, nil
+	return localNodeInfo.CustodyColumns, nil
 }
 
 // missingColumnsFromRoot computes the columns corresponding to blocks in `bwbs` that

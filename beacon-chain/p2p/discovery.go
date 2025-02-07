@@ -164,12 +164,6 @@ func (s *Service) RefreshPersistentSubnets() {
 		return
 	}
 
-	// Initialize persistent column subnets.
-	if err := initializePersistentColumnSubnets(nodeID); err != nil {
-		log.WithError(err).Error("Could not initialize persistent column subnets")
-		return
-	}
-
 	// Get the current attestation subnet bitfield.
 	bitV := bitfield.NewBitvector64()
 	attestationCommittees := cache.SubnetIDs.GetAllSubnets()

@@ -29,11 +29,14 @@ func (s *Service) custodyGroupsAdmissiblePeers(peers []peer.ID, custodyGroupCoun
 	// Retrieve the local node ID.
 	localNodeId := s.NodeID()
 
-	// Retrieve the needed custody groups.
-	neededCustodyGroups, err := peerdas.CustodyGroups(localNodeId, custodyGroupCount)
+	// Retrieve the local node info.
+	localNodeInfo, _, err := peerdas.Info(localNodeId, custodyGroupCount)
 	if err != nil {
-		return nil, errors.Wrap(err, "custody groups")
+		return nil, errors.Wrap(err, "peer info")
 	}
+
+	// Retrieve the needed custody groups.
+	neededCustodyGroups := localNodeInfo.CustodyGroups
 
 	// Find the valid peers.
 	validPeers := make([]peer.ID, 0, len(peers))
@@ -54,12 +57,14 @@ loop:
 			return nil, errors.Wrap(err, "convert peer ID to node ID")
 		}
 
-		// Get the custody groups of the remote peer.
-		remoteCustodyGroups, err := peerdas.CustodyGroups(remoteNodeID, remoteCustodyGroupCount)
+		// Retrieve the remote peer info.
+		remotePeerInfo, _, err := peerdas.Info(remoteNodeID, remoteCustodyGroupCount)
 		if err != nil {
-			return nil, errors.Wrap(err, "custody groups")
+			return nil, errors.Wrap(err, "peer info")
 		}
 
+		// Retrieve the custody groups of the remote peer.
+		remoteCustodyGroups := remotePeerInfo.CustodyGroups
 		remoteCustodyGroupsCount := uint64(len(remoteCustodyGroups))
 
 		// If the remote peers custodies all the possible columns, add it to the list.

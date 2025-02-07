@@ -688,22 +688,17 @@ func (s *Service) areDataColumnsAvailable(ctx context.Context, root [32]byte, si
 	// All columns to sample need to be available for the block to be considered available.
 	// https://github.com/ethereum/consensus-specs/blob/v1.5.0-alpha.10/specs/fulu/das-core.md#custody-sampling
 	nodeID := s.cfg.P2P.NodeID()
-	custodyGroupSamplingSize := peerdas.CustodyGroupSamplingSize()
 
-	custodyGroups, err := peerdas.CustodyGroups(nodeID, custodyGroupSamplingSize)
+	// Get the custody group sampling size for the node.
+	custodyGroupSamplingSize := peerdas.CustodyGroupSamplingSize()
+	peerInfo, _, err := peerdas.Info(nodeID, custodyGroupSamplingSize)
 	if err != nil {
-		return errors.Wrap(err, "custody groups")
+		return errors.Wrap(err, "peer info")
 	}
 
 	// Exit early if the node is not expected to custody any data columns.
-	if len(custodyGroups) == 0 {
+	if len(peerInfo.CustodyColumns) == 0 {
 		return nil
-	}
-
-	// Get the custody columns from the groups.
-	columnsMap, err := peerdas.CustodyColumns(custodyGroups)
-	if err != nil {
-		return errors.Wrap(err, "custody columns")
 	}
 
 	// Subscribe to newsly data columns stored in the database.
@@ -726,7 +721,7 @@ func (s *Service) areDataColumnsAvailable(ctx context.Context, root [32]byte, si
 	}
 
 	// Get a map of data column indices that are not currently available.
-	missingMap, err := missingDataColumns(s.blobStorage, root, columnsMap)
+	missingMap, err := missingDataColumns(s.blobStorage, root, peerInfo.CustodyColumns)
 	if err != nil {
 		return err
 	}
@@ -754,10 +749,10 @@ func (s *Service) areDataColumnsAvailable(ctx context.Context, root [32]byte, si
 			)
 
 			numberOfColumns := params.BeaconConfig().NumberOfColumns
-			colMapCount := uint64(len(columnsMap))
+			colMapCount := uint64(len(peerInfo.CustodyColumns))
 
 			if colMapCount < numberOfColumns {
-				expected = uint64MapToSortedSlice(columnsMap)
+				expected = uint64MapToSortedSlice(peerInfo.CustodyColumns)
 			}
 
 			if missingMapCount < numberOfColumns {

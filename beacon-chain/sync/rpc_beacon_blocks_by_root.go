@@ -316,18 +316,13 @@ func (s *Service) buildRequestsForMissingDataColumns(root [32]byte, block interf
 	// Retrieve the number of groups we should sample from.
 	samplingGroupSize := peerdas.CustodyGroupSamplingSize()
 
-	// Retrieve the groups we should sample from.
-	samplingGroups, err := peerdas.CustodyGroups(nodeID, samplingGroupSize)
+	// Retrieve the peer info.
+	peerInfo, _, err := peerdas.Info(nodeID, samplingGroupSize)
 	if err != nil {
-		return nil, errors.Wrap(err, "custody groups")
+		return nil, errors.Wrap(err, "peer info")
 	}
 
-	// Retrieve the columns we should sample from.
-	samplingColumns, err := peerdas.CustodyColumns(samplingGroups)
-	if err != nil {
-		return nil, errors.Wrap(err, "custody columns")
-	}
-
+	samplingColumns := peerInfo.CustodyColumns
 	samplingColumnCount := len(samplingColumns)
 
 	// Build the request for the columns we should sample from and we don't actually store.

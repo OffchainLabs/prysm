@@ -352,21 +352,15 @@ func (s *Service) missingColumnRequest(roBlock blocks.ROBlock, store *filesystem
 	// Get the custody group count.
 	custodyGroupsCount := peerdas.CustodyGroupCount()
 
-	// Compute the custody groups.
-	custodyGroups, err := peerdas.CustodyGroups(nodeID, custodyGroupsCount)
+	// Retrieve the peer info.
+	peerInfo, _, err := peerdas.Info(nodeID, custodyGroupsCount)
 	if err != nil {
-		return nil, errors.Wrap(err, "custody groups")
-	}
-
-	// Compute the custody columns.
-	custodyColumns, err := peerdas.CustodyColumns(custodyGroups)
-	if err != nil {
-		return nil, errors.Wrap(err, "custody columns")
+		return nil, errors.Wrap(err, "peer info")
 	}
 
 	// Build blob sidecars by root requests based on missing columns.
 	req := make(p2ptypes.DataColumnSidecarsByRootReq, 0, len(commitments))
-	for columnIndex := range custodyColumns {
+	for columnIndex := range peerInfo.CustodyColumns {
 		isColumnAvailable := storedColumns[columnIndex]
 		if !isColumnAvailable {
 			req = append(req, &eth.DataColumnIdentifier{
