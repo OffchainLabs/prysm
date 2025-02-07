@@ -4,11 +4,13 @@ go_library(
     name = "go_default_library",
     srcs = [
         "block.go",
+        "block_epbs.go",
         "conversions.go",
         "conversions_blob.go",
         "conversions_block.go",
         "conversions_lightclient.go",
         "conversions_state.go",
+        "converstions_block_epbs.go",
         "endpoints_beacon.go",
         "endpoints_blob.go",
         "endpoints_builder.go",
