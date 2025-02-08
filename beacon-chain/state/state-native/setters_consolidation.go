@@ -33,7 +33,6 @@ func (b *BeaconState) AppendPendingConsolidation(val *ethpb.PendingConsolidation
 
 	b.pendingConsolidations = append(pendingConsolidations, val)
 	b.markFieldAsDirty(types.PendingConsolidations)
-	b.addDirtyIndices(types.PendingConsolidations, []uint64{uint64(len(b.pendingConsolidations) - 1)})
 
 	return nil
 }

@@ -33,7 +33,7 @@ func (b *BeaconState) AppendPendingDeposit(pd *ethpb.PendingDeposit) error {
 
 	b.pendingDeposits = append(pendingDeposits, pd)
 	b.markFieldAsDirty(types.PendingDeposits)
-	b.addDirtyIndices(types.PendingDeposits, []uint64{uint64(len(b.pendingDeposits) - 1)})
+
 	return nil
 }
 

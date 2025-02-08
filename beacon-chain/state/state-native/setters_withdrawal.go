@@ -64,7 +64,7 @@ func (b *BeaconState) AppendPendingPartialWithdrawal(ppw *eth.PendingPartialWith
 
 	b.pendingPartialWithdrawals = append(pendingPartialWithdrawals, ppw)
 	b.markFieldAsDirty(types.PendingPartialWithdrawals)
-	b.addDirtyIndices(types.PendingPartialWithdrawals, []uint64{uint64(len(b.pendingPartialWithdrawals) - 1)})
+
 	return nil
 }
 
@@ -85,8 +85,13 @@ func (b *BeaconState) DequeuePendingPartialWithdrawals(n uint64) error {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
-	b.sharedFieldReferences[types.PendingPartialWithdrawals].MinusRef()
-	b.sharedFieldReferences[types.PendingPartialWithdrawals] = stateutil.NewRef(1)
+	if b.sharedFieldReferences[types.PendingPartialWithdrawals].Refs() > 1 {
+		pendingPartialWithdrawals := make([]*eth.PendingPartialWithdrawal, len(b.pendingPartialWithdrawals))
+		copy(pendingPartialWithdrawals, b.pendingPartialWithdrawals)
+		b.pendingPartialWithdrawals = pendingPartialWithdrawals
+		b.sharedFieldReferences[types.PendingPartialWithdrawals].MinusRef()
+		b.sharedFieldReferences[types.PendingPartialWithdrawals] = stateutil.NewRef(1)
+	}
 
 	b.pendingPartialWithdrawals = b.pendingPartialWithdrawals[n:]
 
