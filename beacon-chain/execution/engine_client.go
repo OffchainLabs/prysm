@@ -175,7 +175,11 @@ func (s *Service) NewPayload(
 			if err != nil {
 				return nil, errors.Wrap(err, "failed to encode execution requests")
 			}
-			err = s.rpcClient.CallContext(ctx, result, NewPayloadMethodV5, payloadPb, versionedHashes, parentBlockRoot, flattenedRequests, ilTxs)
+			hexIlTxs := make([]hexutil.Bytes, len(ilTxs))
+			for i, tx := range ilTxs {
+				hexIlTxs[i] = tx
+			}
+			err = s.rpcClient.CallContext(ctx, result, NewPayloadMethodV5, payloadPb, versionedHashes, parentBlockRoot, flattenedRequests, hexIlTxs)
 			if err != nil {
 				return nil, handleRPCError(err)
 			}
