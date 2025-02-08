@@ -26,6 +26,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
@@ -319,6 +320,16 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 		block, sidecars, err = vs.handleBlindedBlock(ctx, block)
 	} else if block.Version() >= version.Deneb && block.Version() < version.EPBS {
 		sidecars, err = vs.blobSidecarsFromUnblindedBlock(block, req)
+	} else {
+		// TODO: Replace this with real merkle proof generation for epbs.
+		merkleProofEpbs := func(body interfaces.ReadOnlyBeaconBlockBody, index int) ([][]byte, error) {
+			commitmentInclusionProof := make([][]byte, 17)
+			for i := range commitmentInclusionProof {
+				commitmentInclusionProof[i] = bytesutil.PadTo([]byte{}, 32)
+			}
+			return commitmentInclusionProof, nil
+		}
+		sidecars, err = BuildBlobSidecars(block, vs.blobsBundle.Blobs, vs.blobsBundle.Proofs, vs.blobsBundle.KzgCommitments, merkleProofEpbs)
 	}
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "%s: %v", "handle block failed", err)
@@ -390,7 +401,11 @@ func (vs *Server) blobSidecarsFromUnblindedBlock(block interfaces.SignedBeaconBl
 	if err != nil {
 		return nil, err
 	}
-	return BuildBlobSidecars(block, rawBlobs, proofs)
+	kzgCommitments, err := block.Block().Body().BlobKzgCommitments()
+	if err != nil {
+		return nil, err
+	}
+	return BuildBlobSidecars(block, rawBlobs, proofs, kzgCommitments, blocks.MerkleProofKZGCommitment)
 }
 
 // broadcastReceiveBlock broadcasts a block and handles its reception.

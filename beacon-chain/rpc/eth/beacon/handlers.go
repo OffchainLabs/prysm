@@ -1765,7 +1765,11 @@ func (s *Server) broadcastSeenBlockSidecars(
 	b interfaces.SignedBeaconBlock,
 	blobs [][]byte,
 	kzgProofs [][]byte) error {
-	scs, err := validator.BuildBlobSidecars(b, blobs, kzgProofs)
+	kzgCommitments, err := b.Block().Body().BlobKzgCommitments()
+	if err != nil {
+		return err
+	}
+	scs, err := validator.BuildBlobSidecars(b, blobs, kzgProofs, kzgCommitments, blocks.MerkleProofKZGCommitment)
 	if err != nil {
 		return err
 	}

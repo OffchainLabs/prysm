@@ -261,6 +261,10 @@ func (bv *ROBlobVerifier) SidecarDescendsFromFinalized() (err error) {
 // [REJECT] The sidecar's inclusion proof is valid as verified by verify_blob_sidecar_inclusion_proof(blob_sidecar).
 func (bv *ROBlobVerifier) SidecarInclusionProven() (err error) {
 	defer bv.recordResult(RequireSidecarInclusionProven, &err)
+	if slots.ToEpoch(bv.blob.Slot()) >= params.BeaconConfig().EPBSForkEpoch {
+		// TODO: remove this to verify inclusion proof for blobs for epbs
+		return nil
+	}
 	if err = blocks.VerifyKZGInclusionProof(bv.blob); err != nil {
 		log.WithError(err).WithFields(logging.BlobFields(bv.blob)).Debug("sidecar inclusion proof verification failed")
 		return blobErrBuilder(ErrSidecarInclusionProofInvalid)

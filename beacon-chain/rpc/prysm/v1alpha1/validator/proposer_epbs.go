@@ -29,7 +29,6 @@ func (vs *Server) SubmitSignedExecutionPayloadEnvelope(ctx context.Context, env 
 	}
 	log.Info("Broadcasted signed execution payload envelope")
 
-	env.Message.BlobKzgCommitments = [][]byte{}
 	m, err := blocks.WrappedROSignedExecutionPayloadEnvelope(env)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "failed to wrap execution payload envelope: %v", err)

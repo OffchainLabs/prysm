@@ -141,10 +141,11 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 	})
 
 	log.WithFields(logrus.Fields{
-		"slot":       envelope.Slot(),
-		"blockRoot":  fmt.Sprintf("%#x", bytesutil.Trunc(root[:])),
-		"blockHash":  fmt.Sprintf("%#x", bytesutil.Trunc(ex.BlockHash())),
-		"ParentHash": fmt.Sprintf("%#x", bytesutil.Trunc(ex.ParentHash())),
+		"slot":               envelope.Slot(),
+		"blockRoot":          fmt.Sprintf("%#x", bytesutil.Trunc(root[:])),
+		"blockHash":          fmt.Sprintf("%#x", bytesutil.Trunc(ex.BlockHash())),
+		"ParentHash":         fmt.Sprintf("%#x", bytesutil.Trunc(ex.ParentHash())),
+		"kzgCommitmentCount": len(envelope.BlobKzgCommitments()),
 	}).Info("Processed execution payload envelope")
 	return nil
 }

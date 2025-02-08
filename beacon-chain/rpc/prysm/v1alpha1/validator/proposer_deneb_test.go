@@ -22,7 +22,7 @@ func TestServer_buildBlobSidecars(t *testing.T) {
 		make([]byte, fieldparams.BlobLength), make([]byte, fieldparams.BlobLength),
 	}, [][]byte{
 		proof, proof,
-	})
+	}, kzgCommitments, blocks.MerkleProofKZGCommitment)
 	require.NoError(t, err)
 	require.Equal(t, 2, len(scs))
 
