@@ -393,9 +393,9 @@ func ComputeProposerIndex(bState state.ReadOnlyBeaconState, activeIndices []prim
 		effectiveBal := v.EffectiveBalance()
 		if bState.Version() >= version.Electra {
 			binary.LittleEndian.PutUint64(seedBuffer[len(seed):], i/16)
-			randomByte := hashFunc(seedBuffer)
+			randomBytes := hashFunc(seedBuffer)
 			offset := (i % 16) * 2
-			randomValue := uint64(randomByte[offset]) | uint64(randomByte[offset+1])<<8
+			randomValue := uint64(randomBytes[offset]) | uint64(randomBytes[offset+1])<<8
 
 			if effectiveBal*fieldparams.MaxRandomValueElectra >= beaconConfig.MaxEffectiveBalanceElectra*randomValue {
 				return candidateIndex, nil
@@ -579,7 +579,7 @@ func IsPartiallyWithdrawableValidator(val state.ReadOnlyValidator, balance uint6
 //	"""
 //	Check if ``validator`` is partially withdrawable.
 //	"""
-//	max_effective_balance = get_validator_max_effective_balance(validator)
+//	max_effective_balance = get_max_effective_balance(validator)
 //	has_max_effective_balance = validator.effective_balance == max_effective_balance  # [Modified in Electra:EIP7251]
 //	has_excess_balance = balance > max_effective_balance  # [Modified in Electra:EIP7251]
 //	return (
@@ -619,7 +619,7 @@ func isPartiallyWithdrawableValidatorCapella(val state.ReadOnlyValidator, balanc
 //
 // Spec definition:
 //
-//	def get_validator_max_effective_balance(validator: Validator) -> Gwei:
+//	def get_max_effective_balance(validator: Validator) -> Gwei:
 //	    """
 //	    Get max effective balance for ``validator``.
 //	    """

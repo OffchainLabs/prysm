@@ -127,11 +127,10 @@ message AggregateAttestationAndProofElectra {
             "primitives.ValidatorIndex" ];
 
   // The aggregated attestation that was submitted.
-  AttestationElectra aggregate = 3;
+  AttestationElectra aggregate = 2;
 
-  // 96 byte selection proof signed by the aggregator, which is the signature of
-  // the slot to aggregate.
-  bytes selection_proof = 2 [ (ethereum.eth.ext.ssz_size) = "96" ];
+  // 96 byte selection proof signed by the aggregator, which is the signature of the slot to aggregate.
+  bytes selection_proof = 3 [ (ethereum.eth.ext.ssz_size) = "96" ];
 }
 
 message AttestationElectra {

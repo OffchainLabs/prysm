@@ -12,6 +12,7 @@ import (
 type DepositCache interface {
 	DepositFetcher
 	DepositInserter
+	DepositPruner
 }
 
 // DepositFetcher defines a struct which can retrieve deposit information from a store.
@@ -23,8 +24,6 @@ type DepositFetcher interface {
 	InsertPendingDeposit(ctx context.Context, d *ethpb.Deposit, blockNum uint64, index int64, depositRoot [32]byte)
 	PendingDeposits(ctx context.Context, untilBlk *big.Int) []*ethpb.Deposit
 	PendingContainers(ctx context.Context, untilBlk *big.Int) []*ethpb.DepositContainer
-	PrunePendingDeposits(ctx context.Context, merkleTreeIndex int64)
-	PruneProofs(ctx context.Context, untilDepositIndex int64) error
 	FinalizedFetcher
 }
 
@@ -40,6 +39,14 @@ type DepositInserter interface {
 type FinalizedFetcher interface {
 	FinalizedDeposits(ctx context.Context) (FinalizedDeposits, error)
 	NonFinalizedDeposits(ctx context.Context, lastFinalizedIndex int64, untilBlk *big.Int) []*ethpb.Deposit
+}
+
+// DepositPruner is an interface for pruning deposits and proofs.
+type DepositPruner interface {
+	PrunePendingDeposits(ctx context.Context, merkleTreeIndex int64)
+	PruneAllPendingDeposits(ctx context.Context)
+	PruneProofs(ctx context.Context, untilDepositIndex int64) error
+	PruneAllProofs(ctx context.Context)
 }
 
 // FinalizedDeposits defines a method to access a merkle tree containing deposits and their indexes.

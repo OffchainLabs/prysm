@@ -820,7 +820,7 @@ func InitializeFromProtoUnsafeElectra(st *ethpb.BeaconStateElectra) (state.Beaco
 	b.sharedFieldReferences[types.Slashings] = stateutil.NewRef(1)
 	b.sharedFieldReferences[types.PreviousEpochParticipationBits] = stateutil.NewRef(1)
 	b.sharedFieldReferences[types.CurrentEpochParticipationBits] = stateutil.NewRef(1)
-	b.sharedFieldReferences[types.LatestExecutionPayloadHeaderDeneb] = stateutil.NewRef(1) // New in Electra.
+	b.sharedFieldReferences[types.LatestExecutionPayloadHeaderDeneb] = stateutil.NewRef(1)
 	b.sharedFieldReferences[types.HistoricalSummaries] = stateutil.NewRef(1)
 	b.sharedFieldReferences[types.PendingDeposits] = stateutil.NewRef(1)           // New in Electra.
 	b.sharedFieldReferences[types.PendingPartialWithdrawals] = stateutil.NewRef(1) // New in Electra.
@@ -1487,8 +1487,7 @@ func (b *BeaconState) recomputeFieldTrie(index types.FieldIndex, elements interf
 	if fTrie.FieldReference().Refs() > 1 {
 		var newTrie *fieldtrie.FieldTrie
 		// We choose to only copy the validator
-		// trie as it is pretty expensive to regenerate
-		// in the event of late blocks.
+		// trie as it is pretty expensive to regenerate.
 		if index == types.Validators {
 			newTrie = fTrie.CopyTrie()
 		} else {
