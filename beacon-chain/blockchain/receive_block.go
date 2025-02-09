@@ -279,9 +279,10 @@ func (s *Service) executePostFinalizationTasks(ctx context.Context, finalizedSta
 	go func() {
 		s.sendNewFinalizedEvent(ctx, finalizedState)
 	}()
+
 	depCtx, cancel := context.WithTimeout(context.Background(), depositDeadline)
 	go func() {
-		s.insertFinalizedDeposits(depCtx, finalized.Root)
+		s.insertFinalizedDepositsAndPrune(depCtx, finalized.Root)
 		cancel()
 	}()
 }

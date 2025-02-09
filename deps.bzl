@@ -760,8 +760,8 @@ def prysm_deps():
         patches = [
             "//third_party:com_github_ethereum_go_ethereum_secp256k1.patch",
         ],
-        sum = "h1:8hl57x77HSUo+cXExrURjU/w1VhL+ShCTJrTwcCQSe4=",
-        version = "v1.14.12",
+        sum = "h1:L81Wmv0OUP6cf4CW6wtXsr23RUrDhKs2+Y9Qto+OgHU=",
+        version = "v1.14.13",
     )
     go_repository(
         name = "com_github_ethereum_go_verkle",
@@ -1957,8 +1957,8 @@ def prysm_deps():
         name = "com_github_libp2p_go_libp2p_pubsub",
         build_file_proto_mode = "disable_global",
         importpath = "github.com/libp2p/go-libp2p-pubsub",
-        sum = "h1:Z1fzkKuRAd+U1oxbTbWUtTTzAWaX21jqoLxVIStzp+Y=",
-        version = "v0.12.1-0.20241230202526-bf5b58384331",
+        sum = "h1:RmFQ2XAy3zQtbt2iNPy7Tt0/3fwTnHpCQSSnmGnt1Ps=",
+        version = "v0.13.0",
     )
     go_repository(
         name = "com_github_libp2p_go_libp2p_testing",
