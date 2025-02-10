@@ -463,33 +463,29 @@ func getBlockFields(b interfaces.ReadOnlySignedBeaconBlock) logrus.Fields {
 }
 
 // detectAndBroadcastEquivocation checks if the given block is an equivocating block by comparing it with
-// the head block when a duplicate slot/proposer index is detected. If an equivocation is found, it creates
-// and broadcasts a proposer slashing object and adds it to the slashing pool.
+// the head block. If the blocks are from the same slot and proposer but have different signatures,
+// it verifies the difference constitutes a slashable offense before creating and broadcasting a proposer
+// slashing object.
 func (s *Service) detectAndBroadcastEquivocation(ctx context.Context, blk interfaces.ReadOnlySignedBeaconBlock) error {
-	// If this proposer/slot combo is seen before, it means this is a potential equivocating block
 	slot := blk.Block().Slot()
 	proposerIndex := blk.Block().ProposerIndex()
 
-	if !s.hasSeenBlockIndexSlot(slot, proposerIndex) {
-		return nil
-	}
-
-	// Get the head state for block verification
-	headState, err := s.cfg.chain.HeadStateReadOnly(ctx)
-	if err != nil {
-		return errors.Wrap(err, "could not get head state")
-	}
-
-	// Compare signatures since they must be different for equivocation
-	sig1 := blk.Signature()
+	// Get head block for comparison
 	headBlock, err := s.cfg.chain.HeadBlock(ctx)
 	if err != nil {
 		return errors.Wrap(err, "could not get head block")
 	}
 
+	// Only proceed if this block is from same slot and proposer as head
+	if headBlock.Block().Slot() != slot || headBlock.Block().ProposerIndex() != proposerIndex {
+		return nil
+	}
+
+	// Compare signatures
+	sig1 := blk.Signature()
 	sig2 := headBlock.Signature()
 
-	// Different signatures indicate equivocation
+	// If signatures match, these are the same block
 	if sig1 == sig2 {
 		return nil
 	}
@@ -508,7 +504,18 @@ func (s *Service) detectAndBroadcastEquivocation(ctx context.Context, blk interf
 		Header_2: header2,
 	}
 
-	// Verify the proposer slashing is valid
+	// Verify basic slashing conditions before state check
+	if err := verifySlashableBlock(slashing); err != nil {
+		return errors.Wrap(err, "block headers not slashable")
+	}
+
+	// Get state for final verification
+	headState, err := s.cfg.chain.HeadStateReadOnly(ctx)
+	if err != nil {
+		return errors.Wrap(err, "could not get head state")
+	}
+
+	// Verify the slashing against current state
 	if err := blocks.VerifyProposerSlashing(headState, slashing); err != nil {
 		return errors.Wrap(err, "could not verify proposer slashing")
 	}
@@ -520,9 +527,39 @@ func (s *Service) detectAndBroadcastEquivocation(ctx context.Context, blk interf
 		}
 	}
 
-	// Also insert into slashing pool
+	// Insert into slashing pool
 	if err := s.cfg.slashingPool.InsertProposerSlashing(ctx, headState, slashing); err != nil {
 		return errors.Wrap(err, "could not insert proposer slashing into pool")
+	}
+
+	return nil
+}
+
+func verifySlashableBlock(slashing *ethpb.ProposerSlashing) error {
+	header1 := slashing.Header_1.Header
+	header2 := slashing.Header_2.Header
+
+	// Headers should be from same proposer
+	if header1.ProposerIndex != header2.ProposerIndex {
+		return errors.New("headers are not from same proposer")
+	}
+
+	// Headers should be for same slot
+	if header1.Slot != header2.Slot {
+		return errors.New("headers are not from same slot")
+	}
+
+	// Headers should be different
+	root1, err := header1.HashTreeRoot()
+	if err != nil {
+		return errors.Wrap(err, "could not hash header 1")
+	}
+	root2, err := header2.HashTreeRoot()
+	if err != nil {
+		return errors.Wrap(err, "could not hash header 2")
+	}
+	if root1 == root2 {
+		return errors.New("headers are identical")
 	}
 
 	return nil
