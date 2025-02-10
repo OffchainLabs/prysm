@@ -758,6 +758,7 @@ func (s *Server) publishBlockSSZ(ctx context.Context, w http.ResponseWriter, r *
 	if !versionRequired && versionHeader == "" {
 		versionHeader = s.versionHeaderFromCurrentSlot()
 	}
+
 	if versionHeader == version.String(version.Fulu) {
 		fuluBlock := &eth.SignedBeaconBlockContentsFulu{}
 		if err = fuluBlock.UnmarshalSSZ(body); err != nil {
