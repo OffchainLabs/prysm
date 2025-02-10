@@ -858,6 +858,7 @@ func (s *Server) publishBlockSSZ(ctx context.Context, w http.ResponseWriter, r *
 		s.proposeBlock(ctx, w, genericBlock)
 		return
 	}
+
 	if versionHeader == version.String(version.Capella) {
 		capellaBlock := &eth.SignedBeaconBlockCapella{}
 		if err = capellaBlock.UnmarshalSSZ(body); err != nil {
