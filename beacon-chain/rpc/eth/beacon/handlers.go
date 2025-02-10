@@ -791,6 +791,7 @@ func (s *Server) publishBlockSSZ(ctx context.Context, w http.ResponseWriter, r *
 		s.proposeBlock(ctx, w, genericBlock)
 		return
 	}
+
 	if versionHeader == version.String(version.Electra) {
 		electraBlock := &eth.SignedBeaconBlockContentsElectra{}
 		if err = electraBlock.UnmarshalSSZ(body); err != nil {
