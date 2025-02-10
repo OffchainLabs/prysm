@@ -70,7 +70,7 @@ type BeaconChainConfig struct {
 
 	// Fork choice algorithm constants.
 	ProposerScoreBoost              uint64           `yaml:"PROPOSER_SCORE_BOOST" spec:"true"`                // ProposerScoreBoost defines a value that is a % of the committee weight for fork-choice boosting.
-	ReorgWeightThreshold            uint64           `yaml:"REORG_WEIGHT_THRESHOLD" spec:"true"`              // ReorgWeightThreshold defines a value that is a % of the committee weight to consider a block weak and subject to being orphaned.
+	ReorgHeadWeightThreshold        uint64           `yaml:"REORG_HEAD_WEIGHT_THRESHOLD" spec:"true"`         // ReorgHeadWeightThreshold defines a value that is a % of the committee weight to consider a block weak and subject to being orphaned.
 	ReorgParentWeightThreshold      uint64           `yaml:"REORG_PARENT_WEIGHT_THRESHOLD" spec:"true"`       // ReorgParentWeightThreshold defines a value that is a % of the committee weight to consider a parent block strong and subject its child to being orphaned.
 	ReorgMaxEpochsSinceFinalization primitives.Epoch `yaml:"REORG_MAX_EPOCHS_SINCE_FINALIZATION" spec:"true"` // This defines a limit to consider safe to orphan a block if the network is finalizing
 	IntervalsPerSlot                uint64           `yaml:"INTERVALS_PER_SLOT" spec:"true"`                  // IntervalsPerSlot defines the number of fork choice intervals in a slot defined in the fork choice spec.
@@ -244,7 +244,9 @@ type BeaconChainConfig struct {
 	MaxRequestBlobSidecars           uint64           `yaml:"MAX_REQUEST_BLOB_SIDECARS" spec:"true"`             // MaxRequestBlobSidecars is the maximum number of blobs to request in a single request.
 	MaxRequestBlobSidecarsElectra    uint64           `yaml:"MAX_REQUEST_BLOB_SIDECARS_ELECTRA" spec:"true"`     // MaxRequestBlobSidecarsElectra is the maximum number of blobs to request in a single request.
 	MaxRequestBlocksDeneb            uint64           `yaml:"MAX_REQUEST_BLOCKS_DENEB" spec:"true"`              // MaxRequestBlocksDeneb is the maximum number of blocks in a single request after the deneb epoch.
+	FieldElementsPerBlob             uint64           `yaml:"FIELD_ELEMENTS_PER_BLOB" spec:"true"`               // FieldElementsPerBlob is the number of field elements that constitute a single blob.
 	MaxBlobCommitmentsPerBlock       uint64           `yaml:"MAX_BLOB_COMMITMENTS_PER_BLOCK" spec:"true"`        // MaxBlobCommitmentsPerBlock is the maximum number of KZG commitments that a block can have.
+	KzgCommitmentInclusionProofDepth uint64           `yaml:"KZG_COMMITMENT_INCLUSION_PROOF_DEPTH" spec:"true"`  // KzgCommitmentInclusionProofDepth is the depth of the merkle proof of a KZG commitment.
 
 	// Values introduced in Electra upgrade
 	MaxPerEpochActivationExitChurnLimit   uint64 `yaml:"MAX_PER_EPOCH_ACTIVATION_EXIT_CHURN_LIMIT" spec:"true"`  // MaxPerEpochActivationExitChurnLimit represents the maximum combined activation and exit churn.

@@ -31,14 +31,11 @@ var placeholderFields = []string{
 	"EIP7002_FORK_VERSION",
 	"EIP7732_FORK_EPOCH",
 	"EIP7732_FORK_VERSION",
-	"FIELD_ELEMENTS_PER_BLOB",              // Compile time constant.
-	"KZG_COMMITMENT_INCLUSION_PROOF_DEPTH", // Compile time constant on BlobSidecar.commitment_inclusion_proof.
 	"MAX_BLOBS_PER_BLOCK_FULU",
 	"MAX_PAYLOAD_SIZE",
 	"MAX_REQUEST_BLOB_SIDECARS_FULU",
 	"MAX_REQUEST_PAYLOADS", // Compile time constant on BeaconBlockBody.ExecutionRequests
 	"NUMBER_OF_CUSTODY_GROUPS",
-	"REORG_HEAD_WEIGHT_THRESHOLD",
 	"TARGET_NUMBER_OF_PEERS",
 	"UPDATE_TIMEOUT",
 	"WHISK_EPOCHS_PER_SHUFFLING_PHASE",
