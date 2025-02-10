@@ -53,7 +53,6 @@ func (b *BeaconState) SetPendingConsolidations(val []*ethpb.PendingConsolidation
 	b.pendingConsolidations = val
 
 	b.markFieldAsDirty(types.PendingConsolidations)
-	b.rebuildTrie[types.PendingConsolidations] = true
 	return nil
 }
 
