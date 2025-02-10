@@ -820,7 +820,7 @@ func InitializeFromProtoUnsafeElectra(st *ethpb.BeaconStateElectra) (state.Beaco
 	b.sharedFieldReferences[types.Slashings] = stateutil.NewRef(1)
 	b.sharedFieldReferences[types.PreviousEpochParticipationBits] = stateutil.NewRef(1)
 	b.sharedFieldReferences[types.CurrentEpochParticipationBits] = stateutil.NewRef(1)
-	b.sharedFieldReferences[types.LatestExecutionPayloadHeaderDeneb] = stateutil.NewRef(1) // New in Electra.
+	b.sharedFieldReferences[types.LatestExecutionPayloadHeaderDeneb] = stateutil.NewRef(1)
 	b.sharedFieldReferences[types.HistoricalSummaries] = stateutil.NewRef(1)
 	b.sharedFieldReferences[types.PendingDeposits] = stateutil.NewRef(1)           // New in Electra.
 	b.sharedFieldReferences[types.PendingPartialWithdrawals] = stateutil.NewRef(1) // New in Electra.
