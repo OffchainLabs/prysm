@@ -25,25 +25,17 @@ import (
 // IMPORTANT: Use one field per line and sort these alphabetically to reduce conflicts.
 var placeholderFields = []string{
 	"BLOB_SIDECAR_SUBNET_COUNT_FULU",
-	"BYTES_PER_LOGS_BLOOM", // Compile time constant on ExecutionPayload.logs_bloom.
 	"EIP6110_FORK_EPOCH",
 	"EIP6110_FORK_VERSION",
 	"EIP7002_FORK_EPOCH",
 	"EIP7002_FORK_VERSION",
 	"EIP7732_FORK_EPOCH",
 	"EIP7732_FORK_VERSION",
-	"FIELD_ELEMENTS_PER_BLOB",              // Compile time constant.
-	"KZG_COMMITMENT_INCLUSION_PROOF_DEPTH", // Compile time constant on BlobSidecar.commitment_inclusion_proof.
 	"MAX_BLOBS_PER_BLOCK_FULU",
-	"MAX_BLOB_COMMITMENTS_PER_BLOCK", // Compile time constant on BeaconBlockBodyDeneb.blob_kzg_commitments.
-	"MAX_BYTES_PER_TRANSACTION",      // Used for ssz of EL transactions. Unused in Prysm.
-	"MAX_EXTRA_DATA_BYTES",           // Compile time constant on ExecutionPayload.extra_data.
 	"MAX_PAYLOAD_SIZE",
 	"MAX_REQUEST_BLOB_SIDECARS_FULU",
-	"MAX_REQUEST_PAYLOADS",         // Compile time constant on BeaconBlockBody.ExecutionRequests
-	"MAX_TRANSACTIONS_PER_PAYLOAD", // Compile time constant on ExecutionPayload.transactions.
+	"MAX_REQUEST_PAYLOADS", // Compile time constant on BeaconBlockBody.ExecutionRequests
 	"NUMBER_OF_CUSTODY_GROUPS",
-	"REORG_HEAD_WEIGHT_THRESHOLD",
 	"TARGET_NUMBER_OF_PEERS",
 	"UPDATE_TIMEOUT",
 	"WHISK_EPOCHS_PER_SHUFFLING_PHASE",
