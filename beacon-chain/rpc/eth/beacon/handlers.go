@@ -733,7 +733,7 @@ type slotPeeker struct {
 	} `json:"message"`
 }
 
-func (s *Server) versionHeaderFromBlockSlot(body []byte) (string, error) {
+func versionHeaderFromRequest(body []byte) (string, error) {
 	// check is required for post deneb fork blocks contents
 	p := &signedBlockContentPeeker{}
 	if err := json.Unmarshal(body, p); err != nil {
@@ -778,7 +778,7 @@ func (s *Server) publishBlockSSZ(ctx context.Context, w http.ResponseWriter, r *
 		return
 	}
 	if !versionRequired && versionHeader == "" {
-		versionHeader, err = s.versionHeaderFromBlockSlot(body)
+		versionHeader, err = versionHeaderFromRequest(body)
 		if err != nil {
 			httputil.HandleError(
 				w,
@@ -998,7 +998,7 @@ func (s *Server) publishBlock(ctx context.Context, w http.ResponseWriter, r *htt
 		return
 	}
 	if !versionRequired && versionHeader == "" {
-		versionHeader, err = s.versionHeaderFromBlockSlot(body)
+		versionHeader, err = versionHeaderFromRequest(body)
 		if err != nil {
 			httputil.HandleError(
 				w,

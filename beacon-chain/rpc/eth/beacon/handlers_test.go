@@ -1517,14 +1517,11 @@ func TestPublishBlock(t *testing.T) {
 		server.PublishBlock(writer, request)
 		assert.Equal(t, http.StatusOK, writer.Code)
 	})
-	t.Run("Electra block without version header on wrong fork time", func(t *testing.T) {
+	t.Run("Electra block without version header on wrong fork", func(t *testing.T) {
 		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
 		server := &Server{
 			V1Alpha1ValidatorServer: v1alpha1Server,
-			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
-				Genesis: time.Now(),
-			},
-			SyncChecker: &mockSync.Sync{IsSyncing: false},
+			SyncChecker:             &mockSync.Sync{IsSyncing: false},
 		}
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.ElectraBlockContents)))
 		writer := httptest.NewRecorder()
@@ -1597,6 +1594,107 @@ func TestPublishBlock(t *testing.T) {
 		server.PublishBlock(writer, request)
 		assert.Equal(t, http.StatusServiceUnavailable, writer.Code)
 		assert.StringContains(t, "Beacon node is currently syncing and not serving request on that endpoint", writer.Body.String())
+	})
+}
+
+func TestVersionHeaderFromRequest(t *testing.T) {
+	t.Run("Fulu block contents returns fulu header", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		cfg.FuluForkEpoch = 7
+		params.OverrideBeaconConfig(cfg)
+		params.SetupTestConfigCleanup(t)
+		var signedblock *structs.SignedBeaconBlockContentsFulu
+		require.NoError(t, json.Unmarshal([]byte(rpctesting.FuluBlockContents), &signedblock))
+		signedblock.SignedBlock.Message.Slot = fmt.Sprintf("%d", uint64(params.BeaconConfig().SlotsPerEpoch)*uint64(params.BeaconConfig().FuluForkEpoch))
+		newContents, err := json.Marshal(signedblock)
+		require.NoError(t, err)
+		versionHead, err := versionHeaderFromRequest(newContents)
+		require.NoError(t, err)
+		require.Equal(t, version.String(version.Fulu), versionHead)
+	})
+	t.Run("Electra block contents returns electra header", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		cfg.ElectraForkEpoch = 6
+		params.OverrideBeaconConfig(cfg)
+		params.SetupTestConfigCleanup(t)
+		var signedblock *structs.SignedBeaconBlockContentsElectra
+		require.NoError(t, json.Unmarshal([]byte(rpctesting.ElectraBlockContents), &signedblock))
+		signedblock.SignedBlock.Message.Slot = fmt.Sprintf("%d", uint64(params.BeaconConfig().SlotsPerEpoch)*uint64(params.BeaconConfig().ElectraForkEpoch))
+		newContents, err := json.Marshal(signedblock)
+		require.NoError(t, err)
+		versionHead, err := versionHeaderFromRequest(newContents)
+		require.NoError(t, err)
+		require.Equal(t, version.String(version.Electra), versionHead)
+	})
+	t.Run("Deneb block contents returns deneb header", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		cfg.DenebForkEpoch = 5
+		params.OverrideBeaconConfig(cfg)
+		params.SetupTestConfigCleanup(t)
+		var signedblock *structs.SignedBeaconBlockContentsDeneb
+		require.NoError(t, json.Unmarshal([]byte(rpctesting.DenebBlockContents), &signedblock))
+		signedblock.SignedBlock.Message.Slot = fmt.Sprintf("%d", uint64(params.BeaconConfig().SlotsPerEpoch)*uint64(params.BeaconConfig().DenebForkEpoch))
+		newContents, err := json.Marshal(signedblock)
+		require.NoError(t, err)
+		versionHead, err := versionHeaderFromRequest(newContents)
+		require.NoError(t, err)
+		require.Equal(t, version.String(version.Deneb), versionHead)
+	})
+	t.Run("Capella block returns capella header", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		cfg.CapellaForkEpoch = 4
+		params.OverrideBeaconConfig(cfg)
+		params.SetupTestConfigCleanup(t)
+		var signedblock *structs.SignedBeaconBlockCapella
+		require.NoError(t, json.Unmarshal([]byte(rpctesting.CapellaBlock), &signedblock))
+		signedblock.Message.Slot = fmt.Sprintf("%d", uint64(params.BeaconConfig().SlotsPerEpoch)*uint64(params.BeaconConfig().CapellaForkEpoch))
+		newBlock, err := json.Marshal(signedblock)
+		require.NoError(t, err)
+		versionHead, err := versionHeaderFromRequest(newBlock)
+		require.NoError(t, err)
+		require.Equal(t, version.String(version.Capella), versionHead)
+	})
+	t.Run("Bellatrix block returns capella header", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		cfg.BellatrixForkEpoch = 3
+		params.OverrideBeaconConfig(cfg)
+		params.SetupTestConfigCleanup(t)
+		var signedblock *structs.SignedBeaconBlockBellatrix
+		require.NoError(t, json.Unmarshal([]byte(rpctesting.BellatrixBlock), &signedblock))
+		signedblock.Message.Slot = fmt.Sprintf("%d", uint64(params.BeaconConfig().SlotsPerEpoch)*uint64(params.BeaconConfig().BellatrixForkEpoch))
+		newBlock, err := json.Marshal(signedblock)
+		require.NoError(t, err)
+		versionHead, err := versionHeaderFromRequest(newBlock)
+		require.NoError(t, err)
+		require.Equal(t, version.String(version.Bellatrix), versionHead)
+	})
+	t.Run("Altair block returns capella header", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		cfg.AltairForkEpoch = 2
+		params.OverrideBeaconConfig(cfg)
+		params.SetupTestConfigCleanup(t)
+		var signedblock *structs.SignedBeaconBlockAltair
+		require.NoError(t, json.Unmarshal([]byte(rpctesting.AltairBlock), &signedblock))
+		signedblock.Message.Slot = fmt.Sprintf("%d", uint64(params.BeaconConfig().SlotsPerEpoch)*uint64(params.BeaconConfig().AltairForkEpoch))
+		newBlock, err := json.Marshal(signedblock)
+		require.NoError(t, err)
+		versionHead, err := versionHeaderFromRequest(newBlock)
+		require.NoError(t, err)
+		require.Equal(t, version.String(version.Altair), versionHead)
+	})
+	t.Run("Phase0 block returns capella header", func(t *testing.T) {
+		var signedblock *structs.SignedBeaconBlock
+		require.NoError(t, json.Unmarshal([]byte(rpctesting.Phase0Block), &signedblock))
+		newBlock, err := json.Marshal(signedblock)
+		require.NoError(t, err)
+		versionHead, err := versionHeaderFromRequest(newBlock)
+		require.NoError(t, err)
+		require.Equal(t, version.String(version.Phase0), versionHead)
+	})
+	t.Run("Malformed json returns error unable to peek slot from block contents", func(t *testing.T) {
+		malformedJSON := []byte(`{"age": 30,}`)
+		_, err := versionHeaderFromRequest(malformedJSON)
+		require.ErrorContains(t, "unable to peek slot", err)
 	})
 }
 
