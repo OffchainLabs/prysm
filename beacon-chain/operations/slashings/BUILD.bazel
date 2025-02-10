@@ -6,7 +6,7 @@ go_library(
         "doc.go",
         "log.go",
         "metrics.go",
-        "service.go",
+        "pool.go",
         "service_new.go",
         "types.go",
     ],
