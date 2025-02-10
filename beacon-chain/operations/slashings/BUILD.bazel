@@ -7,7 +7,7 @@ go_library(
         "log.go",
         "metrics.go",
         "pool.go",
-        "service_new.go",
+        "service.go",
         "types.go",
     ],
     importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/slashings",
