@@ -1407,6 +1407,38 @@ func TestPublishBlock(t *testing.T) {
 		server.PublishBlock(writer, request)
 		assert.Equal(t, http.StatusOK, writer.Code)
 	})
+	t.Run("Capella block without version header succeeds", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		cfg.CapellaForkEpoch = 4
+		params.OverrideBeaconConfig(cfg)
+		params.SetupTestConfigCleanup(t)
+		var signedblock *structs.SignedBeaconBlockCapella
+		require.NoError(t, json.Unmarshal([]byte(rpctesting.CapellaBlock), &signedblock))
+		signedblock.Message.Slot = fmt.Sprintf("%d", uint64(params.BeaconConfig().SlotsPerEpoch)*uint64(params.BeaconConfig().CapellaForkEpoch))
+		newBlock, err := json.Marshal(signedblock)
+		require.NoError(t, err)
+		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
+		v1alpha1Server.EXPECT().ProposeBeaconBlock(gomock.Any(), mock.MatchedBy(func(req *eth.GenericSignedBeaconBlock) bool {
+			block, ok := req.Block.(*eth.GenericSignedBeaconBlock_Capella)
+			converted, err := structs.BeaconBlockCapellaFromConsensus(block.Capella.Block)
+			require.NoError(t, err)
+			var signedblock *structs.SignedBeaconBlockCapella
+			err = json.Unmarshal(newBlock, &signedblock)
+			require.NoError(t, err)
+			require.DeepEqual(t, converted, signedblock.Message)
+			return ok
+		}))
+		server := &Server{
+			V1Alpha1ValidatorServer: v1alpha1Server,
+			SyncChecker:             &mockSync.Sync{IsSyncing: false},
+		}
+
+		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(newBlock))
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+		server.PublishBlock(writer, request)
+		assert.Equal(t, http.StatusOK, writer.Code)
+	})
 	t.Run("Deneb", func(t *testing.T) {
 		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
 		v1alpha1Server.EXPECT().ProposeBeaconBlock(gomock.Any(), mock.MatchedBy(func(req *eth.GenericSignedBeaconBlock) bool {
@@ -1458,28 +1490,28 @@ func TestPublishBlock(t *testing.T) {
 		cfg.ElectraForkEpoch = 6
 		params.OverrideBeaconConfig(cfg)
 		params.SetupTestConfigCleanup(t)
+		var signedblock *structs.SignedBeaconBlockContentsElectra
+		require.NoError(t, json.Unmarshal([]byte(rpctesting.ElectraBlockContents), &signedblock))
+		signedblock.SignedBlock.Message.Slot = fmt.Sprintf("%d", uint64(params.BeaconConfig().SlotsPerEpoch)*uint64(params.BeaconConfig().ElectraForkEpoch))
+		newContents, err := json.Marshal(signedblock)
+		require.NoError(t, err)
 		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
 		v1alpha1Server.EXPECT().ProposeBeaconBlock(gomock.Any(), mock.MatchedBy(func(req *eth.GenericSignedBeaconBlock) bool {
 			block, ok := req.Block.(*eth.GenericSignedBeaconBlock_Electra)
 			converted, err := structs.SignedBeaconBlockContentsElectraFromConsensus(block.Electra)
 			require.NoError(t, err)
 			var signedblock *structs.SignedBeaconBlockContentsElectra
-			err = json.Unmarshal([]byte(rpctesting.FuluBlockContents), &signedblock)
+			err = json.Unmarshal(newContents, &signedblock)
 			require.NoError(t, err)
 			require.DeepEqual(t, converted, signedblock)
 			return ok
 		}))
-		electraFork := params.BeaconConfig().ElectraForkEpoch
-		timeToFork := time.Duration(params.BeaconConfig().SecondsPerSlot*uint64(params.BeaconConfig().SlotsPerEpoch)*uint64(electraFork)) * time.Second
-		currentTime := time.Now().Add(-1 * timeToFork)
 		server := &Server{
 			V1Alpha1ValidatorServer: v1alpha1Server,
-			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
-				Genesis: currentTime,
-			},
-			SyncChecker: &mockSync.Sync{IsSyncing: false},
+			SyncChecker:             &mockSync.Sync{IsSyncing: false},
 		}
-		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.ElectraBlockContents)))
+
+		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(newContents))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlock(writer, request)

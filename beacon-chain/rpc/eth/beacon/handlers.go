@@ -723,23 +723,45 @@ func (s *Server) PublishBlockV2(w http.ResponseWriter, r *http.Request) {
 		s.publishBlock(ctx, w, r, true)
 	}
 }
-func (s *Server) versionHeaderFromCurrentSlot() string {
-	// attempt to get the current fork information
-	ce := slots.ToEpoch(s.GenesisTimeFetcher.CurrentSlot())
+
+type signedBlockContentPeeker struct {
+	Block json.RawMessage `json:"signed_block"`
+}
+type slotPeeker struct {
+	Block struct {
+		Slot primitives.Slot `json:"slot,string"`
+	} `json:"message"`
+}
+
+func (s *Server) versionHeaderFromBlockSlot(body []byte) (string, error) {
+	// check is required for post deneb fork blocks contents
+	p := &signedBlockContentPeeker{}
+	if err := json.Unmarshal(body, p); err != nil {
+		return "", errors.Wrap(err, "unable to peek slot from block contents")
+	}
+	data := body
+	if len(p.Block) > 0 {
+		data = p.Block
+	}
+	sp := &slotPeeker{}
+	if err := json.Unmarshal(data, sp); err != nil {
+		return "", errors.Wrap(err, "unable to peek slot from block")
+	}
+	ce := slots.ToEpoch(sp.Block.Slot)
 	if ce >= params.BeaconConfig().FuluForkEpoch {
-		return version.String(version.Fulu)
+		return version.String(version.Fulu), nil
 	} else if ce >= params.BeaconConfig().ElectraForkEpoch {
-		return version.String(version.Electra)
+		return version.String(version.Electra), nil
 	} else if ce >= params.BeaconConfig().DenebForkEpoch {
-		return version.String(version.Deneb)
+		return version.String(version.Deneb), nil
 	} else if ce >= params.BeaconConfig().CapellaForkEpoch {
-		return version.String(version.Capella)
+		return version.String(version.Capella), nil
 	} else if ce >= params.BeaconConfig().BellatrixForkEpoch {
-		return version.String(version.Bellatrix)
+		return version.String(version.Bellatrix), nil
 	} else if ce >= params.BeaconConfig().AltairForkEpoch {
-		return version.String(version.Altair)
+		return version.String(version.Altair), nil
 	} else {
-		return version.String(version.Phase0)
+		return version.String(version.Phase0), nil
 	}
 }
 
@@ -756,7 +778,14 @@ func (s *Server) publishBlockSSZ(ctx context.Context, w http.ResponseWriter, r *
 		return
 	}
 	if !versionRequired && versionHeader == "" {
-		versionHeader = s.versionHeaderFromCurrentSlot()
+		versionHeader, err = s.versionHeaderFromBlockSlot(body)
+		if err != nil {
+			httputil.HandleError(
+				w,
+				fmt.Sprintf("Could not decode request body for version header: %s", err.Error()),
+				http.StatusBadRequest,
+			)
+		}
 	}
 
 	if versionHeader == version.String(version.Fulu) {
@@ -969,7 +998,14 @@ func (s *Server) publishBlock(ctx context.Context, w http.ResponseWriter, r *htt
 		return
 	}
 	if !versionRequired && versionHeader == "" {
-		versionHeader = s.versionHeaderFromCurrentSlot()
+		versionHeader, err = s.versionHeaderFromBlockSlot(body)
+		if err != nil {
+			httputil.HandleError(
+				w,
+				fmt.Sprintf("Could not decode request body for version header: %s", err.Error()),
+				http.StatusBadRequest,
+			)
+		}
 	}
 
 	var consensusBlock *eth.GenericSignedBeaconBlock
