@@ -204,11 +204,11 @@ func (f FieldIndex) RealPosition() int {
 	case PendingConsolidations:
 		return 36
 	case LatestBlockHash: // ePBS fields start here
-		return 41
+		return 37
 	case LatestFullSlot:
-		return 42
+		return 38
 	case LastWithdrawalsRoot:
-		return 43
+		return 39
 	default:
 		return -1
 	}
