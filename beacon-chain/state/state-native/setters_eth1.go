@@ -57,7 +57,6 @@ func (b *BeaconState) AppendEth1DataVotes(val *ethpb.Eth1Data) error {
 	}
 
 	b.eth1DataVotes = append(votes, val)
-	b.rebuildTrie
 	b.markFieldAsDirty(types.Eth1DataVotes)
 	b.addDirtyIndices(types.Eth1DataVotes, []uint64{uint64(len(b.eth1DataVotes) - 1)})
 	return nil
