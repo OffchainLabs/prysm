@@ -34,6 +34,27 @@ var (
 	errRejectCommitmentLen = errors.New("[REJECT] The length of KZG commitments is less than or equal to the limitation defined in Consensus Layer")
 )
 
+// unknownConsensusOrExecutionParent returns true if the block has an unknown parent for both execution and consensus part of the block.
+func (s *Service) unknownConsensusOrExecutionParent(ctx context.Context, blk interfaces.ReadOnlySignedBeaconBlock) bool {
+	if s.cfg.chain.HasBlock(ctx, blk.Block().ParentRoot()) {
+		return false
+	}
+	if blk.Version() < version.EPBS {
+		return true
+	}
+	sg, err := blk.Block().Body().SignedExecutionPayloadHeader()
+	if err != nil {
+		log.WithError(err).Error("Could not extract signed execution payload header")
+		return true
+	}
+	header, err := sg.Header()
+	if err != nil {
+		log.WithError(err).Error("Could not extract execution payload header")
+		return true
+	}
+	return !s.cfg.chain.HashInForkchoice(header.ParentBlockHash())
+}
+
 // validateBeaconBlockPubSub checks that the incoming block has a valid BLS signature.
 // Blocks that have already been seen are ignored. If the BLS signature is any valid signature,
 // this method rebroadcasts the message.
@@ -171,8 +192,8 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 		return pubsub.ValidationIgnore, err
 	}
 
-	// Handle block when the parent is unknown.
-	if !s.cfg.chain.HasBlock(ctx, blk.Block().ParentRoot()) {
+	// Handle block when the consensus parent is unknown or the execution parent is unknown
+	if s.unknownConsensusOrExecutionParent(ctx, blk) {
 		if res, err := s.verifyPendingBlockSignature(ctx, blk, blockRoot); err != nil {
 			log.WithError(err).WithFields(getBlockFields(blk)).Debug("Could not verify block signature")
 			return res, err
