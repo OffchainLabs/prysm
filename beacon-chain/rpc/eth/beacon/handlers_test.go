@@ -1612,6 +1612,20 @@ func TestVersionHeaderFromRequest(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, version.String(version.Fulu), versionHead)
 	})
+	t.Run("Blinded Fulu block returns fulu header", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		cfg.FuluForkEpoch = 7
+		params.OverrideBeaconConfig(cfg)
+		params.SetupTestConfigCleanup(t)
+		var signedblock *structs.SignedBlindedBeaconBlockFulu
+		require.NoError(t, json.Unmarshal([]byte(rpctesting.BlindedFuluBlock), &signedblock))
+		signedblock.Message.Slot = fmt.Sprintf("%d", uint64(params.BeaconConfig().SlotsPerEpoch)*uint64(params.BeaconConfig().FuluForkEpoch))
+		newBlock, err := json.Marshal(signedblock)
+		require.NoError(t, err)
+		versionHead, err := versionHeaderFromRequest(newBlock)
+		require.NoError(t, err)
+		require.Equal(t, version.String(version.Fulu), versionHead)
+	})
 	t.Run("Electra block contents returns electra header", func(t *testing.T) {
 		cfg := params.BeaconConfig().Copy()
 		cfg.ElectraForkEpoch = 6
@@ -1623,6 +1637,20 @@ func TestVersionHeaderFromRequest(t *testing.T) {
 		newContents, err := json.Marshal(signedblock)
 		require.NoError(t, err)
 		versionHead, err := versionHeaderFromRequest(newContents)
+		require.NoError(t, err)
+		require.Equal(t, version.String(version.Electra), versionHead)
+	})
+	t.Run("Blinded Electra block returns electra header", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		cfg.ElectraForkEpoch = 6
+		params.OverrideBeaconConfig(cfg)
+		params.SetupTestConfigCleanup(t)
+		var signedblock *structs.SignedBlindedBeaconBlockElectra
+		require.NoError(t, json.Unmarshal([]byte(rpctesting.BlindedElectraBlock), &signedblock))
+		signedblock.Message.Slot = fmt.Sprintf("%d", uint64(params.BeaconConfig().SlotsPerEpoch)*uint64(params.BeaconConfig().ElectraForkEpoch))
+		newBlock, err := json.Marshal(signedblock)
+		require.NoError(t, err)
+		versionHead, err := versionHeaderFromRequest(newBlock)
 		require.NoError(t, err)
 		require.Equal(t, version.String(version.Electra), versionHead)
 	})
@@ -1640,13 +1668,41 @@ func TestVersionHeaderFromRequest(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, version.String(version.Deneb), versionHead)
 	})
-	t.Run("Capella block returns capella header", func(t *testing.T) {
+	t.Run("Blinded Deneb block returns Deneb header", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		cfg.DenebForkEpoch = 5
+		params.OverrideBeaconConfig(cfg)
+		params.SetupTestConfigCleanup(t)
+		var signedblock *structs.SignedBlindedBeaconBlockDeneb
+		require.NoError(t, json.Unmarshal([]byte(rpctesting.BlindedDenebBlock), &signedblock))
+		signedblock.Message.Slot = fmt.Sprintf("%d", uint64(params.BeaconConfig().SlotsPerEpoch)*uint64(params.BeaconConfig().DenebForkEpoch))
+		newBlock, err := json.Marshal(signedblock)
+		require.NoError(t, err)
+		versionHead, err := versionHeaderFromRequest(newBlock)
+		require.NoError(t, err)
+		require.Equal(t, version.String(version.Deneb), versionHead)
+	})
+	t.Run("Capella block returns Capella header", func(t *testing.T) {
 		cfg := params.BeaconConfig().Copy()
 		cfg.CapellaForkEpoch = 4
 		params.OverrideBeaconConfig(cfg)
 		params.SetupTestConfigCleanup(t)
 		var signedblock *structs.SignedBeaconBlockCapella
 		require.NoError(t, json.Unmarshal([]byte(rpctesting.CapellaBlock), &signedblock))
+		signedblock.Message.Slot = fmt.Sprintf("%d", uint64(params.BeaconConfig().SlotsPerEpoch)*uint64(params.BeaconConfig().CapellaForkEpoch))
+		newBlock, err := json.Marshal(signedblock)
+		require.NoError(t, err)
+		versionHead, err := versionHeaderFromRequest(newBlock)
+		require.NoError(t, err)
+		require.Equal(t, version.String(version.Capella), versionHead)
+	})
+	t.Run("Blinded Capella block returns Capella header", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		cfg.CapellaForkEpoch = 4
+		params.OverrideBeaconConfig(cfg)
+		params.SetupTestConfigCleanup(t)
+		var signedblock *structs.SignedBlindedBeaconBlockCapella
+		require.NoError(t, json.Unmarshal([]byte(rpctesting.BlindedCapellaBlock), &signedblock))
 		signedblock.Message.Slot = fmt.Sprintf("%d", uint64(params.BeaconConfig().SlotsPerEpoch)*uint64(params.BeaconConfig().CapellaForkEpoch))
 		newBlock, err := json.Marshal(signedblock)
 		require.NoError(t, err)
@@ -1661,6 +1717,20 @@ func TestVersionHeaderFromRequest(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
 		var signedblock *structs.SignedBeaconBlockBellatrix
 		require.NoError(t, json.Unmarshal([]byte(rpctesting.BellatrixBlock), &signedblock))
+		signedblock.Message.Slot = fmt.Sprintf("%d", uint64(params.BeaconConfig().SlotsPerEpoch)*uint64(params.BeaconConfig().BellatrixForkEpoch))
+		newBlock, err := json.Marshal(signedblock)
+		require.NoError(t, err)
+		versionHead, err := versionHeaderFromRequest(newBlock)
+		require.NoError(t, err)
+		require.Equal(t, version.String(version.Bellatrix), versionHead)
+	})
+	t.Run("Blinded Capella block returns Capella header", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		cfg.BellatrixForkEpoch = 3
+		params.OverrideBeaconConfig(cfg)
+		params.SetupTestConfigCleanup(t)
+		var signedblock *structs.SignedBlindedBeaconBlockBellatrix
+		require.NoError(t, json.Unmarshal([]byte(rpctesting.BlindedBellatrixBlock), &signedblock))
 		signedblock.Message.Slot = fmt.Sprintf("%d", uint64(params.BeaconConfig().SlotsPerEpoch)*uint64(params.BeaconConfig().BellatrixForkEpoch))
 		newBlock, err := json.Marshal(signedblock)
 		require.NoError(t, err)
