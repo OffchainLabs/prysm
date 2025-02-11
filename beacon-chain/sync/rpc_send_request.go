@@ -169,9 +169,9 @@ func SendBlobsByRangeRequest(ctx context.Context, tor blockchain.TemporalOracle,
 	}
 	defer closeStream(stream, log)
 
-	maxBlobsPerBlock := uint64(params.BeaconConfig().MaxBlobsPerBlock(req.StartSlot))
+	maxBlobsPerBlock := uint64(params.BeaconConfig().MaxBlobsPerBlock(req.StartSlot + primitives.Slot(req.Count)))
 	max := params.BeaconConfig().MaxRequestBlobSidecars
-	if slots.ToEpoch(req.StartSlot) >= params.BeaconConfig().ElectraForkEpoch {
+	if slots.ToEpoch(req.StartSlot+primitives.Slot(req.Count)) >= params.BeaconConfig().ElectraForkEpoch {
 		max = params.BeaconConfig().MaxRequestBlobSidecarsElectra
 	}
 	if max > req.Count*maxBlobsPerBlock {
@@ -204,10 +204,10 @@ func SendBlobSidecarByRoot(
 	defer closeStream(stream, log)
 
 	max := params.BeaconConfig().MaxRequestBlobSidecars
-	if slots.ToEpoch(slot) >= params.BeaconConfig().ElectraForkEpoch {
+	if slots.ToEpoch(slot+primitives.Slot(len(*req))) >= params.BeaconConfig().ElectraForkEpoch {
 		max = params.BeaconConfig().MaxRequestBlobSidecarsElectra
 	}
-	maxBlobCount := params.BeaconConfig().MaxBlobsPerBlock(slot)
+	maxBlobCount := params.BeaconConfig().MaxBlobsPerBlock(slot + primitives.Slot(len(*req)))
 	if max > uint64(len(*req)*maxBlobCount) {
 		max = uint64(len(*req) * maxBlobCount)
 	}
@@ -331,7 +331,7 @@ func readChunkEncodedBlobs(stream network.Stream, encoding encoder.NetworkEncodi
 			// We have read an extra sidecar beyond what the spec allows. Since this is a spec violation, we return
 			// an error that wraps ErrInvalidFetchedData. The part of the state machine that handles rpc peer scoring
 			// will downscore the peer if the request ends in an error that wraps that one.
-			return nil, errMaxRequestBlobSidecarsExceeded
+			return nil, errors.Wrap(errMaxRequestBlobSidecarsExceeded, fmt.Sprintf("max=%d", max))
 		}
 		sidecars = append(sidecars, sc)
 	}
