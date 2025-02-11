@@ -387,7 +387,7 @@ func (b *BeaconChainConfig) MaximumGossipClockDisparityDuration() time.Duration 
 // TargetBlobsPerBlock returns the target number of blobs per block for the given slot,
 // accounting for changes introduced by the Electra fork.
 func (b *BeaconChainConfig) TargetBlobsPerBlock(slot primitives.Slot) int {
-	if primitives.Epoch(slot.DivSlot(32)) >= b.ElectraForkEpoch {
+	if primitives.Epoch(slot.DivSlot(b.SlotsPerEpoch)) >= b.ElectraForkEpoch {
 		return b.DeprecatedTargetBlobsPerBlockElectra
 	}
 	return b.DeprecatedMaxBlobsPerBlock / 2
@@ -396,7 +396,7 @@ func (b *BeaconChainConfig) TargetBlobsPerBlock(slot primitives.Slot) int {
 // MaxBlobsPerBlock returns the maximum number of blobs per block for the given slot,
 // adjusting for the Electra fork.
 func (b *BeaconChainConfig) MaxBlobsPerBlock(slot primitives.Slot) int {
-	if primitives.Epoch(slot.DivSlot(32)) >= b.ElectraForkEpoch {
+	if primitives.Epoch(slot.DivSlot(b.SlotsPerEpoch)) >= b.ElectraForkEpoch {
 		return b.DeprecatedMaxBlobsPerBlockElectra
 	}
 	return b.DeprecatedMaxBlobsPerBlock
