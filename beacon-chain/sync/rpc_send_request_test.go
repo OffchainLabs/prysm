@@ -776,15 +776,24 @@ func TestSendBlobsByRangeRequest(t *testing.T) {
 			// Create a sequential set of blobs with the appropriate header information.
 			var prevRoot [32]byte
 			for i := req.StartSlot; i < req.StartSlot+primitives.Slot(req.Count); i++ {
-				b := util.HydrateBlobSidecar(&ethpb.BlobSidecar{})
+				maxBlobsForSlot := cfg.MaxBlobsPerBlock(i)
 				parentRoot := prevRoot
-				b.SignedBlockHeader.Header.Slot = i
-				b.SignedBlockHeader.Header.ParentRoot = parentRoot[:]
-				ro, err := blocks.NewROBlob(b)
+				header := util.HydrateSignedBeaconHeader(&ethpb.SignedBeaconBlockHeader{})
+				header.Header.Slot = i
+				header.Header.ParentRoot = parentRoot[:]
+				bRoot, err := header.Header.HashTreeRoot()
 				require.NoError(t, err)
-				vro := blocks.NewVerifiedROBlob(ro)
-				prevRoot = vro.BlockRoot()
-				assert.NoError(t, WriteBlobSidecarChunk(stream, clock, p2.Encoding(), vro))
+				prevRoot = bRoot
+				// Send the maximum possible blobs per slot.
+				for j := 0; j < maxBlobsForSlot; j++ {
+					b := util.HydrateBlobSidecar(&ethpb.BlobSidecar{})
+					b.SignedBlockHeader = header
+					b.Index = uint64(j)
+					ro, err := blocks.NewROBlob(b)
+					require.NoError(t, err)
+					vro := blocks.NewVerifiedROBlob(ro)
+					assert.NoError(t, WriteBlobSidecarChunk(stream, clock, p2.Encoding(), vro))
+				}
 			}
 		})
 		req := &ethpb.BlobSidecarsByRangeRequest{
