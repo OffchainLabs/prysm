@@ -249,7 +249,7 @@ func TestWithdrawalRoot(t *testing.T) {
 	}
 }
 
-func TestWithrawalSliceRoot(t *testing.T) {
+func TestWithdrawalSliceRoot(t *testing.T) {
 	tests := []struct {
 		name  string
 		input []*enginev1.Withdrawal
