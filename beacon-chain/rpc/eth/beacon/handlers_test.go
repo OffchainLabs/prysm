@@ -2206,6 +2206,7 @@ func TestPublishBlindedBlock(t *testing.T) {
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlindedBlock(writer, request)
 		assert.Equal(t, http.StatusBadRequest, writer.Code)
+		// block is sent with slot == 1 which means it's in the phase0 fork
 		assert.StringContains(t, fmt.Sprintf("could not decode request body into %s consensus block", version.String(version.Phase0)), writer.Body.String())
 	})
 	t.Run("Blinded Fulu", func(t *testing.T) {
