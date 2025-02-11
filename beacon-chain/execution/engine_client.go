@@ -543,9 +543,11 @@ func (s *Service) ReconstructBlobSidecars(ctx context.Context, block interfaces.
 
 	// Collect KZG hashes for non-existing blobs
 	var kzgHashes []common.Hash
+	kzgIndexes := make(map[int]bool)
 	for i, commitment := range kzgCommitments {
 		if !hasIndex(uint64(i)) {
 			kzgHashes = append(kzgHashes, primitives.ConvertKzgCommitmentToVersionedHash(commitment))
+			kzgIndexes[i] = true
 		}
 	}
 	if len(kzgHashes) == 0 {
@@ -569,7 +571,7 @@ func (s *Service) ReconstructBlobSidecars(ctx context.Context, block interfaces.
 	// Reconstruct verified blob sidecars
 	var verifiedBlobs []blocks.VerifiedROBlob
 	for i, blobIndex := 0, 0; i < len(kzgCommitments); i++ {
-		if hasIndex(uint64(i)) {
+		if !kzgIndexes[i] {
 			continue
 		}
 
