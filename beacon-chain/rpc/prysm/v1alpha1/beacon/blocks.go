@@ -39,7 +39,6 @@ func (bs *Server) ListBeaconBlocks(
 	if err != nil {
 		return nil, err
 	}
-	// TODO: figure out a better way to do this or change this API.
 	altCtrs, err := convertFromV1Containers(ctrs)
 	if err != nil {
 		return nil, err
