@@ -129,7 +129,8 @@ func validatorsParticipating(_ *types.EvaluationContext, conns ...*grpc.ClientCo
 	if participation.Epoch == params.BeaconConfig().ElectraForkEpoch {
 		// The first slot of Electra will be missed due to the switching of attestation types
 		// 5/6 slots =~0.83
-		expected = 0.83
+		// validator REST always is slightly reduced at ~0.82
+		expected = 0.82
 	}
 	if participation.Epoch > 0 && participation.Epoch.Sub(1) == params.BeaconConfig().BellatrixForkEpoch {
 		// Reduce Participation requirement to 95% to account for longer EE calls for
