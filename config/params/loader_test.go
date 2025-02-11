@@ -24,6 +24,7 @@ import (
 // These are variables that we don't use in Prysm. (i.e. future hardfork, light client... etc)
 // IMPORTANT: Use one field per line and sort these alphabetically to reduce conflicts.
 var placeholderFields = []string{
+	"BALANCE_PER_ADDITIONAL_CUSTODY_GROUP",
 	"BLOB_SIDECAR_SUBNET_COUNT_FULU",
 	"EIP6110_FORK_EPOCH",
 	"EIP6110_FORK_VERSION",
@@ -38,6 +39,7 @@ var placeholderFields = []string{
 	"NUMBER_OF_CUSTODY_GROUPS",
 	"TARGET_NUMBER_OF_PEERS",
 	"UPDATE_TIMEOUT",
+	"VALIDATOR_CUSTODY_REQUIREMENT",
 	"WHISK_EPOCHS_PER_SHUFFLING_PHASE",
 	"WHISK_FORK_EPOCH",
 	"WHISK_FORK_VERSION",
