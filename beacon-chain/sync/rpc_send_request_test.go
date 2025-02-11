@@ -760,8 +760,8 @@ func TestSendBlobsByRangeRequest(t *testing.T) {
 		p1 := p2ptest.NewTestP2P(t)
 		p2 := p2ptest.NewTestP2P(t)
 		p1.Connect(p2)
-		// Set current slot to a deneb slot.
-		slot := slots.UnsafeEpochStart(params.BeaconConfig().DenebForkEpoch + 1)
+		// Set current slot to the first slot of the last deneb epoch.
+		slot := slots.UnsafeEpochStart(params.BeaconConfig().DenebForkEpoch)
 		// Create a simple handler that will return a valid response.
 		p2.SetStreamHandler(topic, func(stream network.Stream) {
 			defer func() {
