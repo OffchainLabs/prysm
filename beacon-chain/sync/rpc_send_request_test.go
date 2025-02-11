@@ -777,8 +777,9 @@ func TestSendBlobsByRangeRequest(t *testing.T) {
 			var prevRoot [32]byte
 			for i := req.StartSlot; i < req.StartSlot+primitives.Slot(req.Count); i++ {
 				b := util.HydrateBlobSidecar(&ethpb.BlobSidecar{})
+				parentRoot := prevRoot
 				b.SignedBlockHeader.Header.Slot = i
-				b.SignedBlockHeader.Header.ParentRoot = prevRoot[:]
+				b.SignedBlockHeader.Header.ParentRoot = parentRoot[:]
 				ro, err := blocks.NewROBlob(b)
 				require.NoError(t, err)
 				vro := blocks.NewVerifiedROBlob(ro)
