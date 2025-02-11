@@ -146,8 +146,15 @@ func logFailedReorgAttempt(slot primitives.Slot, oldHeadRoot, headRoot [32]byte)
 }
 
 func (vs *Server) getHeadNoReorg(ctx context.Context, slot primitives.Slot, parentRoot [32]byte) (state.BeaconState, error) {
-	// Try to get the state from the NSC
-	head := transition.NextSlotState(parentRoot[:], slot)
+	// get the head block
+	hash := vs.ForkchoiceFetcher.HashForBlockRoot(parentRoot)
+	// try first to build on top of full (TODO, get this info from forkchoice instead)
+	head := transition.NextSlotState(hash[:], slot)
+	if head != nil {
+		return head, nil
+	}
+	// Try to get the state for empty then
+	head = transition.NextSlotState(parentRoot[:], slot)
 	if head != nil {
 		return head, nil
 	}
