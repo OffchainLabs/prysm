@@ -331,7 +331,7 @@ func readChunkEncodedBlobs(stream network.Stream, encoding encoder.NetworkEncodi
 			// We have read an extra sidecar beyond what the spec allows. Since this is a spec violation, we return
 			// an error that wraps ErrInvalidFetchedData. The part of the state machine that handles rpc peer scoring
 			// will downscore the peer if the request ends in an error that wraps that one.
-			return nil, errors.Wrap(errMaxRequestBlobSidecarsExceeded, fmt.Sprintf("max=%d", max))
+			return nil, errMaxRequestBlobSidecarsExceeded
 		}
 		sidecars = append(sidecars, sc)
 	}
