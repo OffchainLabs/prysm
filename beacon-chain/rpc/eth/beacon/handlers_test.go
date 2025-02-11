@@ -1528,7 +1528,7 @@ func TestPublishBlock(t *testing.T) {
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlock(writer, request)
 		assert.Equal(t, http.StatusBadRequest, writer.Code)
-		assert.StringContains(t, fmt.Sprintf("Could not decode request body into %s consensus block", version.String(version.Phase0)), writer.Body.String())
+		assert.StringContains(t, fmt.Sprintf("could not decode request body into %s consensus block", version.String(version.Phase0)), writer.Body.String())
 	})
 	t.Run("Fulu", func(t *testing.T) {
 		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
@@ -1564,7 +1564,7 @@ func TestPublishBlock(t *testing.T) {
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlock(writer, request)
 		assert.Equal(t, http.StatusBadRequest, writer.Code)
-		assert.StringContains(t, fmt.Sprintf("Could not decode request body into %s consensus block", version.String(version.Bellatrix)), writer.Body.String())
+		assert.StringContains(t, fmt.Sprintf("could not decode request body into %s consensus block", version.String(version.Bellatrix)), writer.Body.String())
 	})
 	t.Run("wrong version header", func(t *testing.T) {
 		server := &Server{
@@ -1577,7 +1577,7 @@ func TestPublishBlock(t *testing.T) {
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlock(writer, request)
 		assert.Equal(t, http.StatusBadRequest, writer.Code)
-		assert.StringContains(t, fmt.Sprintf("Could not decode request body into %s consensus block", version.String(version.Capella)), writer.Body.String())
+		assert.StringContains(t, fmt.Sprintf("could not decode request body into %s consensus block", version.String(version.Capella)), writer.Body.String())
 	})
 	t.Run("syncing", func(t *testing.T) {
 		chainService := &chainMock.ChainService{}
@@ -1909,7 +1909,7 @@ func TestPublishBlockSSZ(t *testing.T) {
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlock(writer, request)
 		assert.Equal(t, http.StatusBadRequest, writer.Code)
-		assert.StringContains(t, fmt.Sprintf("Could not decode request body into %s consensus block", version.String(version.Bellatrix)), writer.Body.String())
+		assert.StringContains(t, fmt.Sprintf("could not decode request body into %s consensus block", version.String(version.Bellatrix)), writer.Body.String())
 	})
 	t.Run("wrong version header", func(t *testing.T) {
 		server := &Server{
@@ -1930,7 +1930,7 @@ func TestPublishBlockSSZ(t *testing.T) {
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlock(writer, request)
 		assert.Equal(t, http.StatusBadRequest, writer.Code)
-		assert.StringContains(t, fmt.Sprintf("Could not decode request body into %s consensus block", version.String(version.Capella)), writer.Body.String())
+		assert.StringContains(t, fmt.Sprintf("could not decode request body into %s consensus block", version.String(version.Capella)), writer.Body.String())
 	})
 	t.Run("syncing", func(t *testing.T) {
 		chainService := &chainMock.ChainService{}
@@ -2072,12 +2072,11 @@ func TestPublishBlindedBlock(t *testing.T) {
 	t.Run("Blinded Electra", func(t *testing.T) {
 		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
 		v1alpha1Server.EXPECT().ProposeBeaconBlock(gomock.Any(), mock.MatchedBy(func(req *eth.GenericSignedBeaconBlock) bool {
-			// Convert back Fulu to Electra when there is at least one difference between Electra and Fulu blocks.
-			block, ok := req.Block.(*eth.GenericSignedBeaconBlock_BlindedFulu)
-			converted, err := structs.BlindedBeaconBlockFuluFromConsensus(block.BlindedFulu.Message)
+			block, ok := req.Block.(*eth.GenericSignedBeaconBlock_BlindedElectra)
+			converted, err := structs.BlindedBeaconBlockElectraFromConsensus(block.BlindedElectra.Message)
 			require.NoError(t, err)
-			var signedblock *structs.SignedBlindedBeaconBlockFulu
-			err = json.Unmarshal([]byte(rpctesting.BlindedFuluBlock), &signedblock)
+			var signedblock *structs.SignedBlindedBeaconBlockElectra
+			err = json.Unmarshal([]byte(rpctesting.BlindedElectraBlock), &signedblock)
 			require.NoError(t, err)
 			require.DeepEqual(t, converted, signedblock.Message)
 			return ok
@@ -2093,6 +2092,51 @@ func TestPublishBlindedBlock(t *testing.T) {
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlindedBlock(writer, request)
 		assert.Equal(t, http.StatusOK, writer.Code)
+	})
+	t.Run("Blinded Electra block without version header succeeds", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		cfg.ElectraForkEpoch = 6
+		params.OverrideBeaconConfig(cfg)
+		params.SetupTestConfigCleanup(t)
+		var signedblock *structs.SignedBlindedBeaconBlockElectra
+		require.NoError(t, json.Unmarshal([]byte(rpctesting.BlindedElectraBlock), &signedblock))
+		signedblock.Message.Slot = fmt.Sprintf("%d", uint64(params.BeaconConfig().SlotsPerEpoch)*uint64(params.BeaconConfig().ElectraForkEpoch))
+		newBlock, err := json.Marshal(signedblock)
+		require.NoError(t, err)
+		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
+		v1alpha1Server.EXPECT().ProposeBeaconBlock(gomock.Any(), mock.MatchedBy(func(req *eth.GenericSignedBeaconBlock) bool {
+			block, ok := req.Block.(*eth.GenericSignedBeaconBlock_BlindedElectra)
+			converted, err := structs.BlindedBeaconBlockElectraFromConsensus(block.BlindedElectra.Message)
+			require.NoError(t, err)
+			var signedblock *structs.SignedBlindedBeaconBlockElectra
+			err = json.Unmarshal(newBlock, &signedblock)
+			require.NoError(t, err)
+			require.DeepEqual(t, converted, signedblock.Message)
+			return ok
+		}))
+		server := &Server{
+			V1Alpha1ValidatorServer: v1alpha1Server,
+			SyncChecker:             &mockSync.Sync{IsSyncing: false},
+		}
+
+		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(newBlock))
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+		server.PublishBlindedBlock(writer, request)
+		assert.Equal(t, http.StatusOK, writer.Code)
+	})
+	t.Run("Blinded Electra block without version header on wrong fork", func(t *testing.T) {
+		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
+		server := &Server{
+			V1Alpha1ValidatorServer: v1alpha1Server,
+			SyncChecker:             &mockSync.Sync{IsSyncing: false},
+		}
+		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.BlindedElectraBlock)))
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+		server.PublishBlindedBlock(writer, request)
+		assert.Equal(t, http.StatusBadRequest, writer.Code)
+		assert.StringContains(t, fmt.Sprintf("could not decode request body into %s consensus block", version.String(version.Phase0)), writer.Body.String())
 	})
 	t.Run("Blinded Fulu", func(t *testing.T) {
 		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
@@ -2129,7 +2173,7 @@ func TestPublishBlindedBlock(t *testing.T) {
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlindedBlock(writer, request)
 		assert.Equal(t, http.StatusBadRequest, writer.Code)
-		assert.StringContains(t, fmt.Sprintf("Could not decode request body into %s consensus block", version.String(version.Bellatrix)), writer.Body.String())
+		assert.StringContains(t, fmt.Sprintf("could not decode request body into %s consensus block", version.String(version.Bellatrix)), writer.Body.String())
 	})
 	t.Run("wrong version header", func(t *testing.T) {
 		server := &Server{
@@ -2142,7 +2186,7 @@ func TestPublishBlindedBlock(t *testing.T) {
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlindedBlock(writer, request)
 		assert.Equal(t, http.StatusBadRequest, writer.Code)
-		assert.StringContains(t, fmt.Sprintf("Could not decode request body into %s consensus block", version.String(version.Capella)), writer.Body.String())
+		assert.StringContains(t, fmt.Sprintf("could not decode request body into %s consensus block", version.String(version.Capella)), writer.Body.String())
 	})
 	t.Run("syncing", func(t *testing.T) {
 		chainService := &chainMock.ChainService{}
@@ -2366,7 +2410,7 @@ func TestPublishBlindedBlockSSZ(t *testing.T) {
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlindedBlock(writer, request)
 		assert.Equal(t, http.StatusBadRequest, writer.Code)
-		assert.StringContains(t, fmt.Sprintf("Could not decode request body into %s consensus block", version.String(version.Bellatrix)), writer.Body.String())
+		assert.StringContains(t, fmt.Sprintf("could not decode request body into %s consensus block", version.String(version.Bellatrix)), writer.Body.String())
 	})
 	t.Run("wrong version header", func(t *testing.T) {
 		server := &Server{
@@ -2387,7 +2431,7 @@ func TestPublishBlindedBlockSSZ(t *testing.T) {
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlindedBlock(writer, request)
 		assert.Equal(t, http.StatusBadRequest, writer.Code)
-		assert.StringContains(t, fmt.Sprintf("Could not decode request body into %s consensus block", version.String(version.Capella)), writer.Body.String())
+		assert.StringContains(t, fmt.Sprintf("could not decode request body into %s consensus block", version.String(version.Capella)), writer.Body.String())
 	})
 	t.Run("syncing", func(t *testing.T) {
 		chainService := &chainMock.ChainService{}
@@ -2585,7 +2629,7 @@ func TestPublishBlockV2(t *testing.T) {
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlockV2(writer, request)
 		assert.Equal(t, http.StatusBadRequest, writer.Code)
-		assert.StringContains(t, fmt.Sprintf("Could not decode request body into %s consensus block:", version.String(version.Bellatrix)), writer.Body.String())
+		assert.StringContains(t, fmt.Sprintf("could not decode request body into %s consensus block:", version.String(version.Bellatrix)), writer.Body.String())
 	})
 	t.Run("wrong version header", func(t *testing.T) {
 		server := &Server{
@@ -2598,7 +2642,7 @@ func TestPublishBlockV2(t *testing.T) {
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlockV2(writer, request)
 		assert.Equal(t, http.StatusBadRequest, writer.Code)
-		assert.StringContains(t, fmt.Sprintf("Could not decode request body into %s consensus block:", version.String(version.Capella)), writer.Body.String())
+		assert.StringContains(t, fmt.Sprintf("could not decode request body into %s consensus block:", version.String(version.Capella)), writer.Body.String())
 	})
 	t.Run("missing version header", func(t *testing.T) {
 		server := &Server{
@@ -2842,7 +2886,7 @@ func TestPublishBlockV2SSZ(t *testing.T) {
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlockV2(writer, request)
 		assert.Equal(t, http.StatusBadRequest, writer.Code)
-		assert.StringContains(t, fmt.Sprintf("Could not decode request body into %s consensus block", version.String(version.Bellatrix)), writer.Body.String())
+		assert.StringContains(t, fmt.Sprintf("could not decode request body into %s consensus block", version.String(version.Bellatrix)), writer.Body.String())
 	})
 	t.Run("wrong version header", func(t *testing.T) {
 		server := &Server{
@@ -2863,7 +2907,7 @@ func TestPublishBlockV2SSZ(t *testing.T) {
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlockV2(writer, request)
 		assert.Equal(t, http.StatusBadRequest, writer.Code)
-		assert.StringContains(t, fmt.Sprintf("Could not decode request body into %s consensus block", version.String(version.Capella)), writer.Body.String())
+		assert.StringContains(t, fmt.Sprintf("could not decode request body into %s consensus block", version.String(version.Capella)), writer.Body.String())
 	})
 	t.Run("missing version header", func(t *testing.T) {
 		server := &Server{
@@ -3018,12 +3062,11 @@ func TestPublishBlindedBlockV2(t *testing.T) {
 	t.Run("Blinded Electra", func(t *testing.T) {
 		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
 		v1alpha1Server.EXPECT().ProposeBeaconBlock(gomock.Any(), mock.MatchedBy(func(req *eth.GenericSignedBeaconBlock) bool {
-			// Convert back Fulu to Electra when there is at least one difference between Electra and Fulu blocks.
-			block, ok := req.Block.(*eth.GenericSignedBeaconBlock_BlindedFulu)
-			converted, err := structs.BlindedBeaconBlockFuluFromConsensus(block.BlindedFulu.Message)
+			block, ok := req.Block.(*eth.GenericSignedBeaconBlock_BlindedElectra)
+			converted, err := structs.BlindedBeaconBlockElectraFromConsensus(block.BlindedElectra.Message)
 			require.NoError(t, err)
-			var signedblock *structs.SignedBlindedBeaconBlockFulu
-			err = json.Unmarshal([]byte(rpctesting.BlindedFuluBlock), &signedblock)
+			var signedblock *structs.SignedBlindedBeaconBlockElectra
+			err = json.Unmarshal([]byte(rpctesting.BlindedElectraBlock), &signedblock)
 			require.NoError(t, err)
 			require.DeepEqual(t, converted, signedblock.Message)
 			return ok
@@ -3075,7 +3118,7 @@ func TestPublishBlindedBlockV2(t *testing.T) {
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlindedBlockV2(writer, request)
 		assert.Equal(t, http.StatusBadRequest, writer.Code)
-		assert.StringContains(t, fmt.Sprintf("Could not decode request body into %s consensus block:", version.String(version.Bellatrix)), writer.Body.String())
+		assert.StringContains(t, fmt.Sprintf("could not decode request body into %s consensus block:", version.String(version.Bellatrix)), writer.Body.String())
 	})
 	t.Run("wrong version header", func(t *testing.T) {
 		server := &Server{
@@ -3088,7 +3131,7 @@ func TestPublishBlindedBlockV2(t *testing.T) {
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlindedBlockV2(writer, request)
 		assert.Equal(t, http.StatusBadRequest, writer.Code)
-		assert.StringContains(t, fmt.Sprintf("Could not decode request body into %s consensus block", version.String(version.Capella)), writer.Body.String())
+		assert.StringContains(t, fmt.Sprintf("could not decode request body into %s consensus block", version.String(version.Capella)), writer.Body.String())
 	})
 	t.Run("missing version header", func(t *testing.T) {
 		server := &Server{
@@ -3324,7 +3367,7 @@ func TestPublishBlindedBlockV2SSZ(t *testing.T) {
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlindedBlockV2(writer, request)
 		assert.Equal(t, http.StatusBadRequest, writer.Code)
-		assert.StringContains(t, fmt.Sprintf("Could not decode request body into %s consensus block", version.String(version.Bellatrix)), writer.Body.String())
+		assert.StringContains(t, fmt.Sprintf("could not decode request body into %s consensus block", version.String(version.Bellatrix)), writer.Body.String())
 	})
 	t.Run("wrong version header", func(t *testing.T) {
 		server := &Server{
@@ -3345,7 +3388,7 @@ func TestPublishBlindedBlockV2SSZ(t *testing.T) {
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlindedBlockV2(writer, request)
 		assert.Equal(t, http.StatusBadRequest, writer.Code)
-		assert.StringContains(t, fmt.Sprintf("Could not decode request body into %s consensus block", version.String(version.Capella)), writer.Body.String())
+		assert.StringContains(t, fmt.Sprintf("could not decode request body into %s consensus block", version.String(version.Capella)), writer.Body.String())
 	})
 	t.Run("missing version header", func(t *testing.T) {
 		server := &Server{
