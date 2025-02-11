@@ -52,11 +52,7 @@ var (
 type blockDecoder func([]byte) (*eth.GenericSignedBeaconBlock, error)
 
 func decodingError(v string, err error) error {
-	return fmt.Errorf(
-		"could not decode request body into %s consensus block: %v",
-		v,
-		err,
-	)
+	return fmt.Errorf("could not decode request body into %s consensus block: %w", v, err)
 }
 
 type signedBlockContentPeeker struct {
@@ -113,7 +109,7 @@ func validateVersionHeader(r *http.Request, body []byte, versionRequired bool) (
 		var err error
 		versionHeader, err = versionHeaderFromRequest(body)
 		if err != nil {
-			return "", fmt.Errorf("could not decode request body for version header: %v", err)
+			return "", errors.Wrap(err, "could not decode request body for version header")
 		}
 	}
 
