@@ -26,10 +26,10 @@ func (m mockMinimumSlotter) minimumSlot(_ primitives.Slot) primitives.Slot {
 	return m.min
 }
 
-type mockInitalizerWaiter struct {
+type mockInitializerWaiter struct {
 }
 
-func (*mockInitalizerWaiter) WaitForInitializer(_ context.Context) (*verification.Initializer, error) {
+func (*mockInitializerWaiter) WaitForInitializer(_ context.Context) (*verification.Initializer, error) {
 	return &verification.Initializer{}, nil
 }
 
@@ -58,7 +58,7 @@ func TestServiceInit(t *testing.T) {
 	p2pt := p2ptest.NewTestP2P(t)
 	bfs := filesystem.NewEphemeralBlobStorage(t)
 	srv, err := NewService(ctx, su, bfs, cw, p2pt, &mockAssigner{},
-		WithBatchSize(batchSize), WithWorkerCount(nWorkers), WithEnableBackfill(true), WithVerifierWaiter(&mockInitalizerWaiter{}))
+		WithBatchSize(batchSize), WithWorkerCount(nWorkers), WithEnableBackfill(true), WithVerifierWaiter(&mockInitializerWaiter{}))
 	require.NoError(t, err)
 	srv.ms = mockMinimumSlotter{min: primitives.Slot(high - batchSize*uint64(nBatches))}.minimumSlot
 	srv.pool = pool
