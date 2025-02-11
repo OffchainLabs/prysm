@@ -800,10 +800,14 @@ func TestSendBlobsByRangeRequest(t *testing.T) {
 			StartSlot: slot,
 			Count:     uint64(params.BeaconConfig().SlotsPerEpoch) * 3,
 		}
+		maxDenebBlobs := cfg.MaxBlobsPerBlockAtEpoch(cfg.DenebForkEpoch)
+		maxElectraBlobs := cfg.MaxBlobsPerBlockAtEpoch(cfg.ElectraForkEpoch)
+		totalDenebBlobs := primitives.Slot(maxDenebBlobs) * params.BeaconConfig().SlotsPerEpoch
+		totalElectraBlobs := primitives.Slot(maxElectraBlobs) * 2 * params.BeaconConfig().SlotsPerEpoch
+		totalExpectedBlobs := totalDenebBlobs + totalElectraBlobs
 
 		blobs, err := SendBlobsByRangeRequest(ctx, clock, p1, p2.PeerID(), ctxByte, req)
 		assert.NoError(t, err)
-		assert.Equal(t, params.BeaconConfig().MaxRequestBlobSidecarsElectra, len(blobs)) // TODO: Not sure if this is correct.
-		_ = blobs
+		assert.Equal(t, int(totalExpectedBlobs), len(blobs))
 	})
 }
