@@ -129,7 +129,7 @@ func (s *Service) topicScoreParams(topic string) (*pubsub.TopicScoreParams, erro
 	case strings.Contains(topic, GossipSignedExecutionPayloadEnvelope):
 		return defaultBlockTopicParams(), nil
 	case strings.Contains(topic, GossipPayloadAttestationMessage):
-		return defaultBlockTopicParams(), nil
+		return defaultSyncContributionTopicParams(), nil
 	default:
 		return nil, errors.Errorf("unrecognized topic provided for parameter registration: %s", topic)
 	}
