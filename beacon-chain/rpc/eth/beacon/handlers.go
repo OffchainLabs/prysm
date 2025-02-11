@@ -488,11 +488,10 @@ var blindedSSZDecoders = map[string]blockDecoder{
 	version.String(version.Phase0):    decodePhase0SSZ,
 }
 
-// Example SSZ decoders for each fork:
 func decodeBlindedFuluSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
 	fuluBlock := &eth.SignedBlindedBeaconBlockFulu{}
 	if err := fuluBlock.UnmarshalSSZ(body); err != nil {
-		return nil, fmt.Errorf("could not decode request body into %s consensus block: %v", version.String(version.Fulu), err)
+		return nil, decodingError(version.String(version.Fulu), err)
 	}
 	return &eth.GenericSignedBeaconBlock{
 		Block: &eth.GenericSignedBeaconBlock_BlindedFulu{
@@ -504,7 +503,7 @@ func decodeBlindedFuluSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
 func decodeBlindedElectraSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
 	electraBlock := &eth.SignedBlindedBeaconBlockElectra{}
 	if err := electraBlock.UnmarshalSSZ(body); err != nil {
-		return nil, fmt.Errorf("could not decode request body into %s consensus block: %v", version.String(version.Electra), err)
+		return nil, decodingError(version.String(version.Electra), err)
 	}
 	return &eth.GenericSignedBeaconBlock{
 		Block: &eth.GenericSignedBeaconBlock_BlindedElectra{
@@ -516,7 +515,7 @@ func decodeBlindedElectraSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error)
 func decodeBlindedDenebSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
 	denebBlock := &eth.SignedBlindedBeaconBlockDeneb{}
 	if err := denebBlock.UnmarshalSSZ(body); err != nil {
-		return nil, fmt.Errorf("could not decode request body into %s consensus block: %v", version.String(version.Deneb), err)
+		return nil, decodingError(version.String(version.Deneb), err)
 	}
 	return &eth.GenericSignedBeaconBlock{
 		Block: &eth.GenericSignedBeaconBlock_BlindedDeneb{
@@ -528,7 +527,7 @@ func decodeBlindedDenebSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
 func decodeBlindedCapellaSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
 	capellaBlock := &eth.SignedBlindedBeaconBlockCapella{}
 	if err := capellaBlock.UnmarshalSSZ(body); err != nil {
-		return nil, fmt.Errorf("could not decode request body into %s consensus block: %v", version.String(version.Capella), err)
+		return nil, decodingError(version.String(version.Capella), err)
 	}
 	return &eth.GenericSignedBeaconBlock{
 		Block: &eth.GenericSignedBeaconBlock_BlindedCapella{
@@ -540,7 +539,7 @@ func decodeBlindedCapellaSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error)
 func decodeBlindedBellatrixSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
 	bellatrixBlock := &eth.SignedBlindedBeaconBlockBellatrix{}
 	if err := bellatrixBlock.UnmarshalSSZ(body); err != nil {
-		return nil, fmt.Errorf("could not decode request body into %s consensus block: %v", version.String(version.Bellatrix), err)
+		return nil, decodingError(version.String(version.Bellatrix), err)
 	}
 	return &eth.GenericSignedBeaconBlock{
 		Block: &eth.GenericSignedBeaconBlock_BlindedBellatrix{
@@ -712,9 +711,7 @@ func (s *Server) publishBlockSSZ(ctx context.Context, w http.ResponseWriter, r *
 	s.proposeBlock(ctx, w, genericBlock)
 }
 
-type sszBlockDecoder func([]byte) (*eth.GenericSignedBeaconBlock, error)
-
-var sszDecoders = map[string]sszBlockDecoder{
+var sszDecoders = map[string]blockDecoder{
 	version.String(version.Fulu):      decodeFuluSSZ,
 	version.String(version.Electra):   decodeElectraSSZ,
 	version.String(version.Deneb):     decodeDenebSSZ,
@@ -735,8 +732,7 @@ func decodeSSZToGenericBlock(versionHeader string, body []byte) (*eth.GenericSig
 func decodeFuluSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
 	fuluBlock := &eth.SignedBeaconBlockContentsFulu{}
 	if err := fuluBlock.UnmarshalSSZ(body); err != nil {
-		return nil, fmt.Errorf(
-			"could not decode request body into %s consensus block: %v",
+		return nil, decodingError(
 			version.String(version.Fulu), err,
 		)
 	}
@@ -748,8 +744,7 @@ func decodeFuluSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
 func decodeElectraSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
 	electraBlock := &eth.SignedBeaconBlockContentsElectra{}
 	if err := electraBlock.UnmarshalSSZ(body); err != nil {
-		return nil, fmt.Errorf(
-			"could not decode request body into %s consensus block: %v",
+		return nil, decodingError(
 			version.String(version.Electra), err,
 		)
 	}
@@ -761,8 +756,7 @@ func decodeElectraSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
 func decodeDenebSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
 	denebBlock := &eth.SignedBeaconBlockContentsDeneb{}
 	if err := denebBlock.UnmarshalSSZ(body); err != nil {
-		return nil, fmt.Errorf(
-			"could not decode request body into %s consensus block: %v",
+		return nil, decodingError(
 			version.String(version.Deneb),
 			err,
 		)
@@ -777,8 +771,7 @@ func decodeDenebSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
 func decodeCapellaSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
 	capellaBlock := &eth.SignedBeaconBlockCapella{}
 	if err := capellaBlock.UnmarshalSSZ(body); err != nil {
-		return nil, fmt.Errorf(
-			"could not decode request body into %s consensus block: %v",
+		return nil, decodingError(
 			version.String(version.Capella),
 			err,
 		)
@@ -793,8 +786,7 @@ func decodeCapellaSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
 func decodeBellatrixSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
 	bellatrixBlock := &eth.SignedBeaconBlockBellatrix{}
 	if err := bellatrixBlock.UnmarshalSSZ(body); err != nil {
-		return nil, fmt.Errorf(
-			"could not decode request body into %s consensus block: %v",
+		return nil, decodingError(
 			version.String(version.Bellatrix),
 			err,
 		)
@@ -809,8 +801,7 @@ func decodeBellatrixSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
 func decodeAltairSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
 	altairBlock := &eth.SignedBeaconBlockAltair{}
 	if err := altairBlock.UnmarshalSSZ(body); err != nil {
-		return nil, fmt.Errorf(
-			"could not decode request body into %s consensus block: %v",
+		return nil, decodingError(
 			version.String(version.Altair),
 			err,
 		)
@@ -825,8 +816,7 @@ func decodeAltairSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
 func decodePhase0SSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
 	phase0Block := &eth.SignedBeaconBlock{}
 	if err := phase0Block.UnmarshalSSZ(body); err != nil {
-		return nil, fmt.Errorf(
-			"could not decode request body into %s consensus block: %v",
+		return nil, decodingError(
 			version.String(version.Phase0), err,
 		)
 	}
