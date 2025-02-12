@@ -49,6 +49,102 @@ var (
 	errMarshalSSZ       = errors.New("could not marshal block into SSZ")
 )
 
+type blockDecoder func([]byte) (*eth.GenericSignedBeaconBlock, error)
+
+func decodingError(v string, err error) error {
+	return fmt.Errorf("could not decode request body into %s consensus block: %w", v, err)
+}
+
+type signedBlockContentPeeker struct {
+	Block json.RawMessage `json:"signed_block"`
+}
+type slotPeeker struct {
+	Block struct {
+		Slot primitives.Slot `json:"slot,string"`
+	} `json:"message"`
+}
+
+func versionHeaderFromRequest(body []byte) (string, error) {
+	// check is required for post deneb fork blocks contents
+	p := &signedBlockContentPeeker{}
+	if err := json.Unmarshal(body, p); err != nil {
+		return "", errors.Wrap(err, "unable to peek slot from block contents")
+	}
+	data := body
+	if len(p.Block) > 0 {
+		data = p.Block
+	}
+	sp := &slotPeeker{}
+	if err := json.Unmarshal(data, sp); err != nil {
+		return "", errors.Wrap(err, "unable to peek slot from block")
+	}
+	ce := slots.ToEpoch(sp.Block.Slot)
+	if ce >= params.BeaconConfig().FuluForkEpoch {
+		return version.String(version.Fulu), nil
+	} else if ce >= params.BeaconConfig().ElectraForkEpoch {
+		return version.String(version.Electra), nil
+	} else if ce >= params.BeaconConfig().DenebForkEpoch {
+		return version.String(version.Deneb), nil
+	} else if ce >= params.BeaconConfig().CapellaForkEpoch {
+		return version.String(version.Capella), nil
+	} else if ce >= params.BeaconConfig().BellatrixForkEpoch {
+		return version.String(version.Bellatrix), nil
+	} else if ce >= params.BeaconConfig().AltairForkEpoch {
+		return version.String(version.Altair), nil
+	} else {
+		return version.String(version.Phase0), nil
+	}
+}
+
+// validateVersionHeader checks if the version header is required and retrieves it
+// from the request. If the version header is not provided and not required, it attempts
+// to derive it from the request body.
+func validateVersionHeader(r *http.Request, body []byte, versionRequired bool) (string, error) {
+	versionHeader := r.Header.Get(api.VersionHeader)
+	if versionRequired && versionHeader == "" {
+		return "", fmt.Errorf("%s header is required", api.VersionHeader)
+	}
+
+	if !versionRequired && versionHeader == "" {
+		var err error
+		versionHeader, err = versionHeaderFromRequest(body)
+		if err != nil {
+			return "", errors.Wrap(err, "could not decode request body for version header")
+		}
+	}
+
+	return versionHeader, nil
+}
+
+func readRequestBody(r *http.Request) ([]byte, error) {
+	return io.ReadAll(r.Body)
+}
+
+// GenericConverter is an example interface that your block structs could implement.
+type GenericConverter interface {
+	ToGeneric() (*eth.GenericSignedBeaconBlock, error)
+}
+
+// decodeGenericJSON uses generics to unmarshal JSON into a type T that also
+// provides a ToGeneric() method to produce a *eth.GenericSignedBeaconBlock.
+func decodeGenericJSON[T GenericConverter](body []byte, forkVersion string) (*eth.GenericSignedBeaconBlock, error) {
+	// Create a pointer to the zero value of T.
+	blockPtr := new(T)
+
+	// Unmarshal JSON into blockPtr.
+	if err := unmarshalStrict(body, blockPtr); err != nil {
+		return nil, decodingError(forkVersion, err)
+	}
+
+	// Call the ToGeneric method on the underlying value.
+	consensusBlock, err := (*blockPtr).ToGeneric()
+	if err != nil {
+		return nil, decodingError(forkVersion, err)
+	}
+
+	return consensusBlock, nil
+}
+
 // GetBlockV2 retrieves block details for given block ID.
 func (s *Server) GetBlockV2(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "beacon.GetBlockV2")
@@ -343,342 +439,189 @@ func (s *Server) PublishBlindedBlockV2(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) publishBlindedBlockSSZ(ctx context.Context, w http.ResponseWriter, r *http.Request, versionRequired bool) { // nolint:gocognit
-	body, err := io.ReadAll(r.Body)
+// publishBlindedBlockSSZ reads SSZ-encoded data and publishes a blinded block.
+func (s *Server) publishBlindedBlockSSZ(ctx context.Context, w http.ResponseWriter, r *http.Request, versionRequired bool) {
+	body, err := readRequestBody(r)
 	if err != nil {
 		httputil.HandleError(w, "Could not read request body: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	versionHeader := r.Header.Get(api.VersionHeader)
-	if versionRequired && versionHeader == "" {
-		httputil.HandleError(w, api.VersionHeader+" header is required", http.StatusBadRequest)
-	}
 
-	fuluBlock := &eth.SignedBlindedBeaconBlockFulu{}
-	if err = fuluBlock.UnmarshalSSZ(body); err == nil {
-		genericBlock := &eth.GenericSignedBeaconBlock{
-			Block: &eth.GenericSignedBeaconBlock_BlindedFulu{
-				BlindedFulu: fuluBlock,
-			},
-		}
-		if err = s.validateBroadcast(ctx, r, genericBlock); err != nil {
-			httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		s.proposeBlock(ctx, w, genericBlock)
-		return
-	}
-	if versionHeader == version.String(version.Fulu) {
-		httputil.HandleError(
-			w,
-			fmt.Sprintf("Could not decode request body into %s consensus block: %v", version.String(version.Fulu), err.Error()),
-			http.StatusBadRequest,
-		)
+	versionHeader, err := validateVersionHeader(r, body, versionRequired)
+	if err != nil {
+		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	electraBlock := &eth.SignedBlindedBeaconBlockElectra{}
-	if err = electraBlock.UnmarshalSSZ(body); err == nil {
-		genericBlock := &eth.GenericSignedBeaconBlock{
-			Block: &eth.GenericSignedBeaconBlock_BlindedElectra{
-				BlindedElectra: electraBlock,
-			},
-		}
-		if err = s.validateBroadcast(ctx, r, genericBlock); err != nil {
-			httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		s.proposeBlock(ctx, w, genericBlock)
-		return
-	}
-	if versionHeader == version.String(version.Electra) {
-		httputil.HandleError(
-			w,
-			fmt.Sprintf("Could not decode request body into %s consensus block: %v", version.String(version.Electra), err.Error()),
-			http.StatusBadRequest,
-		)
+	genericBlock, err := decodeBlindedBlockSSZ(versionHeader, body)
+	if err != nil {
+		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	denebBlock := &eth.SignedBlindedBeaconBlockDeneb{}
-	if err = denebBlock.UnmarshalSSZ(body); err == nil {
-		genericBlock := &eth.GenericSignedBeaconBlock{
-			Block: &eth.GenericSignedBeaconBlock_BlindedDeneb{
-				BlindedDeneb: denebBlock,
-			},
-		}
-		if err = s.validateBroadcast(ctx, r, genericBlock); err != nil {
-			httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		s.proposeBlock(ctx, w, genericBlock)
+	if err := s.validateBroadcast(ctx, r, genericBlock); err != nil {
+		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if versionHeader == version.String(version.Deneb) {
-		httputil.HandleError(
-			w,
-			fmt.Sprintf("Could not decode request body into %s consensus block: %v", version.String(version.Deneb), err.Error()),
-			http.StatusBadRequest,
-		)
-		return
-	}
-
-	capellaBlock := &eth.SignedBlindedBeaconBlockCapella{}
-	if err = capellaBlock.UnmarshalSSZ(body); err == nil {
-		genericBlock := &eth.GenericSignedBeaconBlock{
-			Block: &eth.GenericSignedBeaconBlock_BlindedCapella{
-				BlindedCapella: capellaBlock,
-			},
-		}
-		if err = s.validateBroadcast(ctx, r, genericBlock); err != nil {
-			httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		s.proposeBlock(ctx, w, genericBlock)
-		return
-	}
-	if versionHeader == version.String(version.Capella) {
-		httputil.HandleError(
-			w,
-			fmt.Sprintf("Could not decode request body into %s consensus block: %v", version.String(version.Capella), err.Error()),
-			http.StatusBadRequest,
-		)
-		return
-	}
-
-	bellatrixBlock := &eth.SignedBlindedBeaconBlockBellatrix{}
-	if err = bellatrixBlock.UnmarshalSSZ(body); err == nil {
-		genericBlock := &eth.GenericSignedBeaconBlock{
-			Block: &eth.GenericSignedBeaconBlock_BlindedBellatrix{
-				BlindedBellatrix: bellatrixBlock,
-			},
-		}
-		if err = s.validateBroadcast(ctx, r, genericBlock); err != nil {
-			httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		s.proposeBlock(ctx, w, genericBlock)
-		return
-	}
-	if versionHeader == version.String(version.Bellatrix) {
-		httputil.HandleError(
-			w,
-			fmt.Sprintf("Could not decode request body into %s consensus block: %v", version.String(version.Bellatrix), err.Error()),
-			http.StatusBadRequest,
-		)
-		return
-	}
-
-	altairBlock := &eth.SignedBeaconBlockAltair{}
-	if err = altairBlock.UnmarshalSSZ(body); err == nil {
-		genericBlock := &eth.GenericSignedBeaconBlock{
-			Block: &eth.GenericSignedBeaconBlock_Altair{
-				Altair: altairBlock,
-			},
-		}
-		if err = s.validateBroadcast(ctx, r, genericBlock); err != nil {
-			httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		s.proposeBlock(ctx, w, genericBlock)
-		return
-	}
-	if versionHeader == version.String(version.Altair) {
-		httputil.HandleError(
-			w,
-			fmt.Sprintf("Could not decode request body into %s consensus block: %v", version.String(version.Altair), err.Error()),
-			http.StatusBadRequest,
-		)
-		return
-	}
-
-	phase0Block := &eth.SignedBeaconBlock{}
-	if err = phase0Block.UnmarshalSSZ(body); err == nil {
-		genericBlock := &eth.GenericSignedBeaconBlock{
-			Block: &eth.GenericSignedBeaconBlock_Phase0{
-				Phase0: phase0Block,
-			},
-		}
-		if err = s.validateBroadcast(ctx, r, genericBlock); err != nil {
-			httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		s.proposeBlock(ctx, w, genericBlock)
-		return
-	}
-	if versionHeader == version.String(version.Phase0) {
-		httputil.HandleError(
-			w,
-			fmt.Sprintf("Could not decode request body into %s consensus block: %v", version.String(version.Phase0), err.Error()),
-			http.StatusBadRequest,
-		)
-		return
-	}
-
-	httputil.HandleError(w, "Body does not represent a valid block type", http.StatusBadRequest)
+	s.proposeBlock(ctx, w, genericBlock)
 }
 
-func (s *Server) publishBlindedBlock(ctx context.Context, w http.ResponseWriter, r *http.Request, versionRequired bool) { // nolint:gocognit
-	body, err := io.ReadAll(r.Body)
+// decodeBlindedBlockSSZ dispatches to the correct SSZ decoder based on versionHeader.
+func decodeBlindedBlockSSZ(versionHeader string, body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	if decoder, exists := blindedSSZDecoders[versionHeader]; exists {
+		return decoder(body)
+	}
+	return nil, fmt.Errorf("body does not represent a valid blinded block type")
+}
+
+var blindedSSZDecoders = map[string]blockDecoder{
+	version.String(version.Fulu):      decodeBlindedFuluSSZ,
+	version.String(version.Electra):   decodeBlindedElectraSSZ,
+	version.String(version.Deneb):     decodeBlindedDenebSSZ,
+	version.String(version.Capella):   decodeBlindedCapellaSSZ,
+	version.String(version.Bellatrix): decodeBlindedBellatrixSSZ,
+	version.String(version.Altair):    decodeAltairSSZ,
+	version.String(version.Phase0):    decodePhase0SSZ,
+}
+
+func decodeBlindedFuluSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	fuluBlock := &eth.SignedBlindedBeaconBlockFulu{}
+	if err := fuluBlock.UnmarshalSSZ(body); err != nil {
+		return nil, decodingError(version.String(version.Fulu), err)
+	}
+	return &eth.GenericSignedBeaconBlock{
+		Block: &eth.GenericSignedBeaconBlock_BlindedFulu{
+			BlindedFulu: fuluBlock,
+		},
+	}, nil
+}
+
+func decodeBlindedElectraSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	electraBlock := &eth.SignedBlindedBeaconBlockElectra{}
+	if err := electraBlock.UnmarshalSSZ(body); err != nil {
+		return nil, decodingError(version.String(version.Electra), err)
+	}
+	return &eth.GenericSignedBeaconBlock{
+		Block: &eth.GenericSignedBeaconBlock_BlindedElectra{
+			BlindedElectra: electraBlock,
+		},
+	}, nil
+}
+
+func decodeBlindedDenebSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	denebBlock := &eth.SignedBlindedBeaconBlockDeneb{}
+	if err := denebBlock.UnmarshalSSZ(body); err != nil {
+		return nil, decodingError(version.String(version.Deneb), err)
+	}
+	return &eth.GenericSignedBeaconBlock{
+		Block: &eth.GenericSignedBeaconBlock_BlindedDeneb{
+			BlindedDeneb: denebBlock,
+		},
+	}, nil
+}
+
+func decodeBlindedCapellaSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	capellaBlock := &eth.SignedBlindedBeaconBlockCapella{}
+	if err := capellaBlock.UnmarshalSSZ(body); err != nil {
+		return nil, decodingError(version.String(version.Capella), err)
+	}
+	return &eth.GenericSignedBeaconBlock{
+		Block: &eth.GenericSignedBeaconBlock_BlindedCapella{
+			BlindedCapella: capellaBlock,
+		},
+	}, nil
+}
+
+func decodeBlindedBellatrixSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	bellatrixBlock := &eth.SignedBlindedBeaconBlockBellatrix{}
+	if err := bellatrixBlock.UnmarshalSSZ(body); err != nil {
+		return nil, decodingError(version.String(version.Bellatrix), err)
+	}
+	return &eth.GenericSignedBeaconBlock{
+		Block: &eth.GenericSignedBeaconBlock_BlindedBellatrix{
+			BlindedBellatrix: bellatrixBlock,
+		},
+	}, nil
+}
+
+// publishBlindedBlock reads JSON-encoded data and publishes a blinded block.
+func (s *Server) publishBlindedBlock(ctx context.Context, w http.ResponseWriter, r *http.Request, versionRequired bool) {
+	body, err := readRequestBody(r)
 	if err != nil {
 		httputil.HandleError(w, "Could not read request body", http.StatusInternalServerError)
 		return
 	}
-	versionHeader := r.Header.Get(api.VersionHeader)
-	if versionRequired && versionHeader == "" {
-		httputil.HandleError(w, api.VersionHeader+" header is required", http.StatusBadRequest)
-	}
 
-	var consensusBlock *eth.GenericSignedBeaconBlock
-
-	var fuluBlock *structs.SignedBlindedBeaconBlockFulu
-	if err = unmarshalStrict(body, &fuluBlock); err == nil {
-		consensusBlock, err = fuluBlock.ToGeneric()
-		if err == nil {
-			if err = s.validateBroadcast(ctx, r, consensusBlock); err != nil {
-				httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			s.proposeBlock(ctx, w, consensusBlock)
-			return
-		}
-	}
-	if versionHeader == version.String(version.Fulu) {
-		httputil.HandleError(
-			w,
-			fmt.Sprintf("Could not decode request body into %s consensus block: %v", version.String(version.Fulu), err.Error()),
-			http.StatusBadRequest,
-		)
+	versionHeader, err := validateVersionHeader(r, body, versionRequired)
+	if err != nil {
+		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	var electraBlock *structs.SignedBlindedBeaconBlockElectra
-	if err = unmarshalStrict(body, &electraBlock); err == nil {
-		consensusBlock, err = electraBlock.ToGeneric()
-		if err == nil {
-			if err = s.validateBroadcast(ctx, r, consensusBlock); err != nil {
-				httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			s.proposeBlock(ctx, w, consensusBlock)
-			return
-		}
-	}
-	if versionHeader == version.String(version.Electra) {
-		httputil.HandleError(
-			w,
-			fmt.Sprintf("Could not decode request body into %s consensus block: %v", version.String(version.Electra), err.Error()),
-			http.StatusBadRequest,
-		)
+	genericBlock, err := decodeBlindedBlockJSON(versionHeader, body)
+	if err != nil {
+		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	var denebBlock *structs.SignedBlindedBeaconBlockDeneb
-	if err = unmarshalStrict(body, &denebBlock); err == nil {
-		consensusBlock, err = denebBlock.ToGeneric()
-		if err == nil {
-			if err = s.validateBroadcast(ctx, r, consensusBlock); err != nil {
-				httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			s.proposeBlock(ctx, w, consensusBlock)
-			return
-		}
-	}
-	if versionHeader == version.String(version.Deneb) {
-		httputil.HandleError(
-			w,
-			fmt.Sprintf("Could not decode request body into %s consensus block: %v", version.String(version.Deneb), err.Error()),
-			http.StatusBadRequest,
-		)
+	if err := s.validateBroadcast(ctx, r, genericBlock); err != nil {
+		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	s.proposeBlock(ctx, w, genericBlock)
+}
 
-	var capellaBlock *structs.SignedBlindedBeaconBlockCapella
-	if err = unmarshalStrict(body, &capellaBlock); err == nil {
-		consensusBlock, err = capellaBlock.ToGeneric()
-		if err == nil {
-			if err = s.validateBroadcast(ctx, r, consensusBlock); err != nil {
-				httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			s.proposeBlock(ctx, w, consensusBlock)
-			return
-		}
+// decodeBlindedBlockJSON dispatches to the correct JSON decoder based on versionHeader.
+func decodeBlindedBlockJSON(versionHeader string, body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	if decoder, exists := blindedJSONDecoders[versionHeader]; exists {
+		return decoder(body)
 	}
-	if versionHeader == version.String(version.Capella) {
-		httputil.HandleError(
-			w,
-			fmt.Sprintf("Could not decode request body into %s consensus block: %v", version.String(version.Capella), err.Error()),
-			http.StatusBadRequest,
-		)
-		return
-	}
+	return nil, fmt.Errorf("body does not represent a valid blinded block type")
+}
 
-	var bellatrixBlock *structs.SignedBlindedBeaconBlockBellatrix
-	if err = unmarshalStrict(body, &bellatrixBlock); err == nil {
-		consensusBlock, err = bellatrixBlock.ToGeneric()
-		if err == nil {
-			if err = s.validateBroadcast(ctx, r, consensusBlock); err != nil {
-				httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			s.proposeBlock(ctx, w, consensusBlock)
-			return
-		}
-	}
-	if versionHeader == version.String(version.Bellatrix) {
-		httputil.HandleError(
-			w,
-			fmt.Sprintf("Could not decode request body into %s consensus block: %v", version.String(version.Bellatrix), err.Error()),
-			http.StatusBadRequest,
-		)
-		return
-	}
+var blindedJSONDecoders = map[string]blockDecoder{
+	version.String(version.Fulu):      decodeBlindedFuluJSON,
+	version.String(version.Electra):   decodeBlindedElectraJSON,
+	version.String(version.Deneb):     decodeBlindedDenebJSON,
+	version.String(version.Capella):   decodeBlindedCapellaJSON,
+	version.String(version.Bellatrix): decodeBlindedBellatrixJSON,
+	version.String(version.Altair):    decodeAltairJSON,
+	version.String(version.Phase0):    decodePhase0JSON,
+}
 
-	var altairBlock *structs.SignedBeaconBlockAltair
-	if err = unmarshalStrict(body, &altairBlock); err == nil {
-		consensusBlock, err = altairBlock.ToGeneric()
-		if err == nil {
-			if err = s.validateBroadcast(ctx, r, consensusBlock); err != nil {
-				httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			s.proposeBlock(ctx, w, consensusBlock)
-			return
-		}
-	}
-	if versionHeader == version.String(version.Altair) {
-		httputil.HandleError(
-			w,
-			fmt.Sprintf("Could not decode request body into %s consensus block: %v", version.String(version.Altair), err.Error()),
-			http.StatusBadRequest,
-		)
-		return
-	}
+func decodeBlindedFuluJSON(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	return decodeGenericJSON[*structs.SignedBlindedBeaconBlockFulu](
+		body,
+		version.String(version.Fulu),
+	)
+}
 
-	var phase0Block *structs.SignedBeaconBlock
-	if err = unmarshalStrict(body, &phase0Block); err == nil {
-		consensusBlock, err = phase0Block.ToGeneric()
-		if err == nil {
-			if err = s.validateBroadcast(ctx, r, consensusBlock); err != nil {
-				httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			s.proposeBlock(ctx, w, consensusBlock)
-			return
-		}
-	}
-	if versionHeader == version.String(version.Phase0) {
-		httputil.HandleError(
-			w,
-			fmt.Sprintf("Could not decode request body into %s consensus block: %v", version.String(version.Phase0), err.Error()),
-			http.StatusBadRequest,
-		)
-		return
-	}
+func decodeBlindedElectraJSON(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	return decodeGenericJSON[*structs.SignedBlindedBeaconBlockElectra](
+		body,
+		version.String(version.Electra),
+	)
+}
 
-	httputil.HandleError(w, "Body does not represent a valid block type", http.StatusBadRequest)
+func decodeBlindedDenebJSON(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	return decodeGenericJSON[*structs.SignedBlindedBeaconBlockDeneb](
+		body,
+		version.String(version.Deneb),
+	)
+}
+
+func decodeBlindedCapellaJSON(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	return decodeGenericJSON[*structs.SignedBlindedBeaconBlockCapella](
+		body,
+		version.String(version.Capella),
+	)
+}
+
+func decodeBlindedBellatrixJSON(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	return decodeGenericJSON[*structs.SignedBlindedBeaconBlockBellatrix](
+		body,
+		version.String(version.Bellatrix),
+	)
 }
 
 // PublishBlock instructs the beacon node to broadcast a newly signed beacon block to the beacon network,
@@ -724,404 +667,281 @@ func (s *Server) PublishBlockV2(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) publishBlockSSZ(ctx context.Context, w http.ResponseWriter, r *http.Request, versionRequired bool) { // nolint:gocognit
-	body, err := io.ReadAll(r.Body)
+// publishBlockSSZ handles publishing an SSZ-encoded block to the beacon node.
+func (s *Server) publishBlockSSZ(ctx context.Context, w http.ResponseWriter, r *http.Request, versionRequired bool) {
+	body, err := readRequestBody(r)
 	if err != nil {
 		httputil.HandleError(w, "Could not read request body", http.StatusInternalServerError)
 		return
 	}
-	versionHeader := r.Header.Get(api.VersionHeader)
-	if versionRequired && versionHeader == "" {
-		httputil.HandleError(w, api.VersionHeader+" header is required", http.StatusBadRequest)
+
+	versionHeader, err := validateVersionHeader(r, body, versionRequired)
+	if err != nil {
+		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	fuluBlock := &eth.SignedBeaconBlockContentsFulu{}
-	if err = fuluBlock.UnmarshalSSZ(body); err == nil {
-		genericBlock := &eth.GenericSignedBeaconBlock{
-			Block: &eth.GenericSignedBeaconBlock_Fulu{
-				Fulu: fuluBlock,
-			},
-		}
-		if err = s.validateBroadcast(ctx, r, genericBlock); err != nil {
-			if errors.Is(err, errEquivocatedBlock) {
-				b, err := blocks.NewSignedBeaconBlock(genericBlock)
-				if err != nil {
-					httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-					return
-				}
-				if err := s.broadcastSeenBlockSidecars(ctx, b, genericBlock.GetFulu().Blobs, genericBlock.GetFulu().KzgProofs); err != nil {
-					log.WithError(err).Error("Failed to broadcast blob sidecars")
-				}
+	// Decode SSZ into a generic block.
+	genericBlock, err := decodeSSZToGenericBlock(versionHeader, body)
+	if err != nil {
+		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Validate and optionally broadcast sidecars on equivocation.
+	if err := s.validateBroadcast(ctx, r, genericBlock); err != nil {
+		if errors.Is(err, errEquivocatedBlock) {
+			b, err := blocks.NewSignedBeaconBlock(genericBlock)
+			if err != nil {
+				httputil.HandleError(w, err.Error(), http.StatusBadRequest)
+				return
 			}
-			httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		s.proposeBlock(ctx, w, genericBlock)
-		return
-	}
-	if versionHeader == version.String(version.Fulu) {
-		httputil.HandleError(
-			w,
-			fmt.Sprintf("Could not decode request body into %s consensus block: %v", version.String(version.Fulu), err.Error()),
-			http.StatusBadRequest,
-		)
-		return
-	}
-
-	electraBlock := &eth.SignedBeaconBlockContentsElectra{}
-	if err = electraBlock.UnmarshalSSZ(body); err == nil {
-		genericBlock := &eth.GenericSignedBeaconBlock{
-			Block: &eth.GenericSignedBeaconBlock_Electra{
-				Electra: electraBlock,
-			},
-		}
-		if err = s.validateBroadcast(ctx, r, genericBlock); err != nil {
-			if errors.Is(err, errEquivocatedBlock) {
-				b, err := blocks.NewSignedBeaconBlock(genericBlock)
-				if err != nil {
-					httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-					return
-				}
-				if err := s.broadcastSeenBlockSidecars(ctx, b, genericBlock.GetElectra().Blobs, genericBlock.GetElectra().KzgProofs); err != nil {
-					log.WithError(err).Error("Failed to broadcast blob sidecars")
-				}
+			if err = broadcastSidecarsIfSupported(ctx, s, b, genericBlock, versionHeader); err != nil {
+				log.WithError(err).Error("Failed to broadcast blob sidecars")
 			}
-			httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-			return
 		}
-		s.proposeBlock(ctx, w, genericBlock)
-		return
-	}
-	if versionHeader == version.String(version.Electra) {
-		httputil.HandleError(
-			w,
-			fmt.Sprintf("Could not decode request body into %s consensus block: %v", version.String(version.Electra), err.Error()),
-			http.StatusBadRequest,
-		)
+		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	denebBlock := &eth.SignedBeaconBlockContentsDeneb{}
-	if err = denebBlock.UnmarshalSSZ(body); err == nil {
-		genericBlock := &eth.GenericSignedBeaconBlock{
-			Block: &eth.GenericSignedBeaconBlock_Deneb{
-				Deneb: denebBlock,
-			},
-		}
-		if err = s.validateBroadcast(ctx, r, genericBlock); err != nil {
-			if errors.Is(err, errEquivocatedBlock) {
-				b, err := blocks.NewSignedBeaconBlock(genericBlock)
-				if err != nil {
-					httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-					return
-				}
-				if err := s.broadcastSeenBlockSidecars(ctx, b, genericBlock.GetDeneb().Blobs, genericBlock.GetDeneb().KzgProofs); err != nil {
-					log.WithError(err).Error("Failed to broadcast blob sidecars")
-				}
-			}
-			httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		s.proposeBlock(ctx, w, genericBlock)
-		return
-	}
-	if versionHeader == version.String(version.Deneb) {
-		httputil.HandleError(
-			w,
-			fmt.Sprintf("Could not decode request body into %s consensus block: %v", version.String(version.Deneb), err.Error()),
-			http.StatusBadRequest,
-		)
-		return
-	}
-
-	capellaBlock := &eth.SignedBeaconBlockCapella{}
-	if err = capellaBlock.UnmarshalSSZ(body); err == nil {
-		genericBlock := &eth.GenericSignedBeaconBlock{
-			Block: &eth.GenericSignedBeaconBlock_Capella{
-				Capella: capellaBlock,
-			},
-		}
-		if err = s.validateBroadcast(ctx, r, genericBlock); err != nil {
-			httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		s.proposeBlock(ctx, w, genericBlock)
-		return
-	}
-	if versionHeader == version.String(version.Capella) {
-		httputil.HandleError(
-			w,
-			fmt.Sprintf("Could not decode request body into %s consensus block: %v", version.String(version.Capella), err.Error()),
-			http.StatusBadRequest,
-		)
-		return
-	}
-
-	bellatrixBlock := &eth.SignedBeaconBlockBellatrix{}
-	if err = bellatrixBlock.UnmarshalSSZ(body); err == nil {
-		genericBlock := &eth.GenericSignedBeaconBlock{
-			Block: &eth.GenericSignedBeaconBlock_Bellatrix{
-				Bellatrix: bellatrixBlock,
-			},
-		}
-		if err = s.validateBroadcast(ctx, r, genericBlock); err != nil {
-			httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		s.proposeBlock(ctx, w, genericBlock)
-		return
-	}
-	if versionHeader == version.String(version.Bellatrix) {
-		httputil.HandleError(
-			w,
-			fmt.Sprintf("Could not decode request body into %s consensus block: %v", version.String(version.Bellatrix), err.Error()),
-			http.StatusBadRequest,
-		)
-		return
-	}
-
-	altairBlock := &eth.SignedBeaconBlockAltair{}
-	if err = altairBlock.UnmarshalSSZ(body); err == nil {
-		genericBlock := &eth.GenericSignedBeaconBlock{
-			Block: &eth.GenericSignedBeaconBlock_Altair{
-				Altair: altairBlock,
-			},
-		}
-		if err = s.validateBroadcast(ctx, r, genericBlock); err != nil {
-			httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		s.proposeBlock(ctx, w, genericBlock)
-		return
-	}
-	if versionHeader == version.String(version.Altair) {
-		httputil.HandleError(
-			w,
-			fmt.Sprintf("Could not decode request body into %s consensus block: %v", version.String(version.Altair), err.Error()),
-			http.StatusBadRequest,
-		)
-		return
-	}
-
-	phase0Block := &eth.SignedBeaconBlock{}
-	if err = phase0Block.UnmarshalSSZ(body); err == nil {
-		genericBlock := &eth.GenericSignedBeaconBlock{
-			Block: &eth.GenericSignedBeaconBlock_Phase0{
-				Phase0: phase0Block,
-			},
-		}
-		if err = s.validateBroadcast(ctx, r, genericBlock); err != nil {
-			httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		s.proposeBlock(ctx, w, genericBlock)
-		return
-	}
-	if versionHeader == version.String(version.Phase0) {
-		httputil.HandleError(
-			w,
-			fmt.Sprintf("Could not decode request body into %s consensus block: %v", version.String(version.Phase0), err.Error()),
-			http.StatusBadRequest,
-		)
-		return
-	}
-
-	httputil.HandleError(w, "Body does not represent a valid block type", http.StatusBadRequest)
+	s.proposeBlock(ctx, w, genericBlock)
 }
 
-func (s *Server) publishBlock(ctx context.Context, w http.ResponseWriter, r *http.Request, versionRequired bool) { // nolint:gocognit
-	body, err := io.ReadAll(r.Body)
+var sszDecoders = map[string]blockDecoder{
+	version.String(version.Fulu):      decodeFuluSSZ,
+	version.String(version.Electra):   decodeElectraSSZ,
+	version.String(version.Deneb):     decodeDenebSSZ,
+	version.String(version.Capella):   decodeCapellaSSZ,
+	version.String(version.Bellatrix): decodeBellatrixSSZ,
+	version.String(version.Altair):    decodeAltairSSZ,
+	version.String(version.Phase0):    decodePhase0SSZ,
+}
+
+// decodeSSZToGenericBlock uses a lookup table to map a version string to the proper decoder.
+func decodeSSZToGenericBlock(versionHeader string, body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	if decoder, found := sszDecoders[versionHeader]; found {
+		return decoder(body)
+	}
+	return nil, errors.New("body does not represent a valid block type")
+}
+
+func decodeFuluSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	fuluBlock := &eth.SignedBeaconBlockContentsFulu{}
+	if err := fuluBlock.UnmarshalSSZ(body); err != nil {
+		return nil, decodingError(
+			version.String(version.Fulu), err,
+		)
+	}
+	return &eth.GenericSignedBeaconBlock{
+		Block: &eth.GenericSignedBeaconBlock_Fulu{Fulu: fuluBlock},
+	}, nil
+}
+
+func decodeElectraSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	electraBlock := &eth.SignedBeaconBlockContentsElectra{}
+	if err := electraBlock.UnmarshalSSZ(body); err != nil {
+		return nil, decodingError(
+			version.String(version.Electra), err,
+		)
+	}
+	return &eth.GenericSignedBeaconBlock{
+		Block: &eth.GenericSignedBeaconBlock_Electra{Electra: electraBlock},
+	}, nil
+}
+
+func decodeDenebSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	denebBlock := &eth.SignedBeaconBlockContentsDeneb{}
+	if err := denebBlock.UnmarshalSSZ(body); err != nil {
+		return nil, decodingError(
+			version.String(version.Deneb),
+			err,
+		)
+	}
+	return &eth.GenericSignedBeaconBlock{
+		Block: &eth.GenericSignedBeaconBlock_Deneb{
+			Deneb: denebBlock,
+		},
+	}, nil
+}
+
+func decodeCapellaSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	capellaBlock := &eth.SignedBeaconBlockCapella{}
+	if err := capellaBlock.UnmarshalSSZ(body); err != nil {
+		return nil, decodingError(
+			version.String(version.Capella),
+			err,
+		)
+	}
+	return &eth.GenericSignedBeaconBlock{
+		Block: &eth.GenericSignedBeaconBlock_Capella{
+			Capella: capellaBlock,
+		},
+	}, nil
+}
+
+func decodeBellatrixSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	bellatrixBlock := &eth.SignedBeaconBlockBellatrix{}
+	if err := bellatrixBlock.UnmarshalSSZ(body); err != nil {
+		return nil, decodingError(
+			version.String(version.Bellatrix),
+			err,
+		)
+	}
+	return &eth.GenericSignedBeaconBlock{
+		Block: &eth.GenericSignedBeaconBlock_Bellatrix{
+			Bellatrix: bellatrixBlock,
+		},
+	}, nil
+}
+
+func decodeAltairSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	altairBlock := &eth.SignedBeaconBlockAltair{}
+	if err := altairBlock.UnmarshalSSZ(body); err != nil {
+		return nil, decodingError(
+			version.String(version.Altair),
+			err,
+		)
+	}
+	return &eth.GenericSignedBeaconBlock{
+		Block: &eth.GenericSignedBeaconBlock_Altair{
+			Altair: altairBlock,
+		},
+	}, nil
+}
+
+func decodePhase0SSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	phase0Block := &eth.SignedBeaconBlock{}
+	if err := phase0Block.UnmarshalSSZ(body); err != nil {
+		return nil, decodingError(
+			version.String(version.Phase0), err,
+		)
+	}
+	return &eth.GenericSignedBeaconBlock{
+		Block: &eth.GenericSignedBeaconBlock_Phase0{Phase0: phase0Block},
+	}, nil
+}
+
+// publishBlock handles publishing a JSON-encoded block to the beacon node.
+func (s *Server) publishBlock(ctx context.Context, w http.ResponseWriter, r *http.Request, versionRequired bool) {
+	body, err := readRequestBody(r)
 	if err != nil {
 		httputil.HandleError(w, "Could not read request body", http.StatusInternalServerError)
 		return
 	}
-	versionHeader := r.Header.Get(api.VersionHeader)
-	if versionRequired && versionHeader == "" {
-		httputil.HandleError(w, api.VersionHeader+" header is required", http.StatusBadRequest)
+
+	versionHeader, err := validateVersionHeader(r, body, versionRequired)
+	if err != nil {
+		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	var consensusBlock *eth.GenericSignedBeaconBlock
+	// Decode JSON into a generic block.
+	genericBlock, decodeErr := decodeJSONToGenericBlock(versionHeader, body)
+	if decodeErr != nil {
+		httputil.HandleError(w, decodeErr.Error(), http.StatusBadRequest)
+		return
+	}
 
-	var fuluBlockContents *structs.SignedBeaconBlockContentsFulu
-	if err = unmarshalStrict(body, &fuluBlockContents); err == nil {
-		consensusBlock, err = fuluBlockContents.ToGeneric()
-		if err == nil {
-			if err = s.validateBroadcast(ctx, r, consensusBlock); err != nil {
-				if errors.Is(err, errEquivocatedBlock) {
-					b, err := blocks.NewSignedBeaconBlock(consensusBlock)
-					if err != nil {
-						httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-						return
-					}
-					if err := s.broadcastSeenBlockSidecars(ctx, b, consensusBlock.GetFulu().Blobs, consensusBlock.GetFulu().KzgProofs); err != nil {
-						log.WithError(err).Error("Failed to broadcast blob sidecars")
-					}
-				}
+	// Validate and optionally broadcast sidecars on equivocation.
+	if err := s.validateBroadcast(ctx, r, genericBlock); err != nil {
+		if errors.Is(err, errEquivocatedBlock) {
+			b, err := blocks.NewSignedBeaconBlock(genericBlock)
+			if err != nil {
 				httputil.HandleError(w, err.Error(), http.StatusBadRequest)
 				return
 			}
-			s.proposeBlock(ctx, w, consensusBlock)
-			return
-		}
-	}
-	if versionHeader == version.String(version.Fulu) {
-		httputil.HandleError(
-			w,
-			fmt.Sprintf("Could not decode request body into %s consensus block: %v", version.String(version.Fulu), err.Error()),
-			http.StatusBadRequest,
-		)
-		return
-	}
 
-	var electraBlockContents *structs.SignedBeaconBlockContentsElectra
-	if err = unmarshalStrict(body, &electraBlockContents); err == nil {
-		consensusBlock, err = electraBlockContents.ToGeneric()
-		if err == nil {
-			if err = s.validateBroadcast(ctx, r, consensusBlock); err != nil {
-				if errors.Is(err, errEquivocatedBlock) {
-					b, err := blocks.NewSignedBeaconBlock(consensusBlock)
-					if err != nil {
-						httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-						return
-					}
-					if err := s.broadcastSeenBlockSidecars(ctx, b, consensusBlock.GetElectra().Blobs, consensusBlock.GetElectra().KzgProofs); err != nil {
-						log.WithError(err).Error("Failed to broadcast blob sidecars")
-					}
-				}
-				httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-				return
+			if err := broadcastSidecarsIfSupported(ctx, s, b, genericBlock, versionHeader); err != nil {
+				log.WithError(err).Error("Failed to broadcast blob sidecars")
 			}
-			s.proposeBlock(ctx, w, consensusBlock)
-			return
 		}
-	}
-	if versionHeader == version.String(version.Electra) {
-		httputil.HandleError(
-			w,
-			fmt.Sprintf("Could not decode request body into %s consensus block: %v", version.String(version.Electra), err.Error()),
-			http.StatusBadRequest,
-		)
+		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	var denebBlockContents *structs.SignedBeaconBlockContentsDeneb
-	if err = unmarshalStrict(body, &denebBlockContents); err == nil {
-		consensusBlock, err = denebBlockContents.ToGeneric()
-		if err == nil {
-			if err = s.validateBroadcast(ctx, r, consensusBlock); err != nil {
-				if errors.Is(err, errEquivocatedBlock) {
-					b, err := blocks.NewSignedBeaconBlock(consensusBlock)
-					if err != nil {
-						httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-						return
-					}
-					if err := s.broadcastSeenBlockSidecars(ctx, b, consensusBlock.GetDeneb().Blobs, consensusBlock.GetDeneb().KzgProofs); err != nil {
-						log.WithError(err).Error("Failed to broadcast blob sidecars")
-					}
-				}
-				httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			s.proposeBlock(ctx, w, consensusBlock)
-			return
-		}
-	}
-	if versionHeader == version.String(version.Deneb) {
-		httputil.HandleError(
-			w,
-			fmt.Sprintf("Could not decode request body into %s consensus block: %v", version.String(version.Deneb), err.Error()),
-			http.StatusBadRequest,
-		)
-		return
-	}
+	s.proposeBlock(ctx, w, genericBlock)
+}
 
-	var capellaBlock *structs.SignedBeaconBlockCapella
-	if err = unmarshalStrict(body, &capellaBlock); err == nil {
-		consensusBlock, err = capellaBlock.ToGeneric()
-		if err == nil {
-			if err = s.validateBroadcast(ctx, r, consensusBlock); err != nil {
-				httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			s.proposeBlock(ctx, w, consensusBlock)
-			return
-		}
-	}
-	if versionHeader == version.String(version.Capella) {
-		httputil.HandleError(
-			w,
-			fmt.Sprintf("Could not decode request body into %s consensus block: %v", version.String(version.Capella), err.Error()),
-			http.StatusBadRequest,
-		)
-		return
-	}
+var jsonDecoders = map[string]blockDecoder{
+	version.String(version.Fulu):      decodeFuluJSON,
+	version.String(version.Electra):   decodeElectraJSON,
+	version.String(version.Deneb):     decodeDenebJSON,
+	version.String(version.Capella):   decodeCapellaJSON,
+	version.String(version.Bellatrix): decodeBellatrixJSON,
+	version.String(version.Altair):    decodeAltairJSON,
+	version.String(version.Phase0):    decodePhase0JSON,
+}
 
-	var bellatrixBlock *structs.SignedBeaconBlockBellatrix
-	if err = unmarshalStrict(body, &bellatrixBlock); err == nil {
-		consensusBlock, err = bellatrixBlock.ToGeneric()
-		if err == nil {
-			if err = s.validateBroadcast(ctx, r, consensusBlock); err != nil {
-				httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			s.proposeBlock(ctx, w, consensusBlock)
-			return
-		}
+// decodeJSONToGenericBlock uses a lookup table to map a version string to the proper decoder.
+func decodeJSONToGenericBlock(versionHeader string, body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	if decoder, found := jsonDecoders[versionHeader]; found {
+		return decoder(body)
 	}
-	if versionHeader == version.String(version.Bellatrix) {
-		httputil.HandleError(
-			w,
-			fmt.Sprintf("Could not decode request body into %s consensus block: %v", version.String(version.Bellatrix), err.Error()),
-			http.StatusBadRequest,
-		)
-		return
-	}
+	return nil, fmt.Errorf("body does not represent a valid block type")
+}
 
-	var altairBlock *structs.SignedBeaconBlockAltair
-	if err = unmarshalStrict(body, &altairBlock); err == nil {
-		consensusBlock, err = altairBlock.ToGeneric()
-		if err == nil {
-			if err = s.validateBroadcast(ctx, r, consensusBlock); err != nil {
-				httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			s.proposeBlock(ctx, w, consensusBlock)
-			return
-		}
-	}
-	if versionHeader == version.String(version.Altair) {
-		httputil.HandleError(
-			w,
-			fmt.Sprintf("Could not decode request body into %s consensus block: %v", version.String(version.Altair), err.Error()),
-			http.StatusBadRequest,
-		)
-		return
-	}
+func decodeFuluJSON(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	return decodeGenericJSON[*structs.SignedBeaconBlockContentsFulu](
+		body,
+		version.String(version.Fulu),
+	)
+}
 
-	var phase0Block *structs.SignedBeaconBlock
-	if err = unmarshalStrict(body, &phase0Block); err == nil {
-		consensusBlock, err = phase0Block.ToGeneric()
-		if err == nil {
-			if err = s.validateBroadcast(ctx, r, consensusBlock); err != nil {
-				httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			s.proposeBlock(ctx, w, consensusBlock)
-			return
-		}
-	}
-	if versionHeader == version.String(version.Phase0) {
-		httputil.HandleError(
-			w,
-			fmt.Sprintf("Could not decode request body into %s consensus block: %v", version.String(version.Phase0), err.Error()),
-			http.StatusBadRequest,
-		)
-		return
-	}
+func decodeElectraJSON(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	return decodeGenericJSON[*structs.SignedBeaconBlockContentsElectra](
+		body,
+		version.String(version.Electra),
+	)
+}
 
-	httputil.HandleError(w, "Body does not represent a valid block type", http.StatusBadRequest)
+func decodeDenebJSON(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	return decodeGenericJSON[*structs.SignedBeaconBlockContentsDeneb](
+		body,
+		version.String(version.Deneb),
+	)
+}
+
+func decodeCapellaJSON(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	return decodeGenericJSON[*structs.SignedBeaconBlockCapella](
+		body,
+		version.String(version.Capella),
+	)
+}
+
+func decodeBellatrixJSON(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	return decodeGenericJSON[*structs.SignedBeaconBlockBellatrix](
+		body,
+		version.String(version.Bellatrix),
+	)
+}
+
+func decodeAltairJSON(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	return decodeGenericJSON[*structs.SignedBeaconBlockAltair](
+		body,
+		version.String(version.Altair),
+	)
+}
+
+func decodePhase0JSON(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	return decodeGenericJSON[*structs.SignedBeaconBlock](
+		body,
+		version.String(version.Phase0),
+	)
+}
+
+// broadcastSidecarsIfSupported broadcasts blob sidecars when an equivocated block occurs.
+func broadcastSidecarsIfSupported(ctx context.Context, s *Server, b interfaces.SignedBeaconBlock, gb *eth.GenericSignedBeaconBlock, versionHeader string) error {
+	switch versionHeader {
+	case version.String(version.Fulu):
+		return s.broadcastSeenBlockSidecars(ctx, b, gb.GetFulu().Blobs, gb.GetFulu().KzgProofs)
+	case version.String(version.Electra):
+		return s.broadcastSeenBlockSidecars(ctx, b, gb.GetElectra().Blobs, gb.GetElectra().KzgProofs)
+	case version.String(version.Deneb):
+		return s.broadcastSeenBlockSidecars(ctx, b, gb.GetDeneb().Blobs, gb.GetDeneb().KzgProofs)
+	default:
+		// other forks before Deneb do not support blob sidecars
+		return nil
+	}
 }
 
 func (s *Server) proposeBlock(ctx context.Context, w http.ResponseWriter, blk *eth.GenericSignedBeaconBlock) {
