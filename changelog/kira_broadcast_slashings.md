@@ -1,5 +1,10 @@
-### Added
-- Added broadcast of slashing events (proposer and attester slashings) upon detection of equivocation.
+### Added 
+- Added immediate broadcasting of proposer slashings when equivocating blocks are detected during block processing.
+- Added dedicated block header verification for proposer slashing detection.
 
-### Updated
-- Updated attestation pool logic to prioritize slashings over regular attestations during block production.
+### Changed
+- Improved equivocation detection by validating blocks against head block instead of cache.
+- Removed reliance on seen block cache for slashing detection.
+
+### Fixed
+- Fixed potential false positives in equivocation detection by adding header validation.
