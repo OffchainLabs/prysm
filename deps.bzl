@@ -3363,8 +3363,8 @@ def prysm_deps():
     go_repository(
         name = "com_github_trailofbits_go_mutexasserts",
         importpath = "github.com/trailofbits/go-mutexasserts",
-        sum = "h1:+LynomhWB+14Plp/bOONEAZCtvCZk4leRbTvNzNVkL0=",
-        version = "v0.0.0-20230328101604-8cdbc5f3d279",
+        sum = "h1:EBoYk5zHOfuHDBqLFx4eSPRVcbnW+L3aFJzoCi8zRnk=",
+        version = "v0.0.0-20250212181730-4c2b8e9e784b",
     )
     go_repository(
         name = "com_github_tyler_smith_go_bip39",
