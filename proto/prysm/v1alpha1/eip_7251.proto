@@ -25,33 +25,48 @@ option java_package = "org.ethereum.eth.v1alpha1";
 option php_namespace = "Ethereum\\Eth\\v1alpha1";
 
 message PendingDeposit {
-    // 48 byte BLS public key of the validator.
-    bytes public_key = 1 [(ethereum.eth.ext.ssz_size) = "48", (ethereum.eth.ext.spec_name) = "pubkey"];
+  // 48 byte BLS public key of the validator.
+  bytes public_key = 1 [
+    (ethereum.eth.ext.ssz_size) = "48",
+    (ethereum.eth.ext.spec_name) = "pubkey"
+  ];
 
-    // A 32 byte hash of the withdrawal address public key.
-    bytes withdrawal_credentials = 2 [(ethereum.eth.ext.ssz_size) = "32"];
+  // A 32 byte hash of the withdrawal address public key.
+  bytes withdrawal_credentials = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
 
-    // The amount of the deposit (gwei).
-    uint64 amount = 3;
-    // 96 byte BLS signature from the validator that produced this block.
-    bytes signature = 4 [(ethereum.eth.ext.ssz_size) = "96"];
-    uint64 slot = 5 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"];
+  // The amount of the deposit (gwei).
+  uint64 amount = 3;
+  // 96 byte BLS signature from the validator that produced this block.
+  bytes signature = 4 [ (ethereum.eth.ext.ssz_size) = "96" ];
+  uint64 slot = 5 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"
+  ];
 }
 
 message PendingPartialWithdrawal {
-    // Validator index for the withdrawal.
-    uint64 index = 1 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.ValidatorIndex"];
+  // Validator index for the withdrawal.
+  uint64 index = 1 [ (ethereum.eth.ext.cast_type) =
+                         "github.com/prysmaticlabs/prysm/v5/consensus-types/"
+                         "primitives.ValidatorIndex" ];
 
-    // The amount of the withdrawal (gwei).
-    uint64 amount = 2;
+  // The amount of the withdrawal (gwei).
+  uint64 amount = 2;
 
-    // A partial withdrawal is valid at this epoch or later.
-    uint64 withdrawable_epoch = 3 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Epoch"];
+  // A partial withdrawal is valid at this epoch or later.
+  uint64 withdrawable_epoch = 3 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Epoch"
+  ];
 }
 
 message PendingConsolidation {
-    // Validator from which the funds will be moved.
-    uint64 source_index = 1 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.ValidatorIndex"];
-    // Validator to which the funds will be moved.
-    uint64 target_index = 2 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.ValidatorIndex"];
+  // Validator from which the funds will be moved.
+  uint64 source_index = 1 [ (ethereum.eth.ext.cast_type) =
+                                "github.com/prysmaticlabs/prysm/v5/"
+                                "consensus-types/primitives.ValidatorIndex" ];
+  // Validator to which the funds will be moved.
+  uint64 target_index = 2 [ (ethereum.eth.ext.cast_type) =
+                                "github.com/prysmaticlabs/prysm/v5/"
+                                "consensus-types/primitives.ValidatorIndex" ];
 }

@@ -105,7 +105,7 @@ type Reconstructor interface {
 	ReconstructFullBellatrixBlockBatch(
 		ctx context.Context, blindedBlocks []interfaces.ReadOnlySignedBeaconBlock,
 	) ([]interfaces.SignedBeaconBlock, error)
-	ReconstructBlobSidecars(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte, indices []bool) ([]blocks.VerifiedROBlob, error)
+	ReconstructBlobSidecars(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte, hi func(uint64) bool) ([]blocks.VerifiedROBlob, error)
 }
 
 // EngineCaller defines a client that can interact with an Ethereum
@@ -531,32 +531,23 @@ func (s *Service) ReconstructFullBellatrixBlockBatch(
 // It retrieves the KZG commitments from the block body, fetches the associated blobs and proofs,
 // and constructs the corresponding verified read-only blob sidecars.
 //
-// The 'exists' argument is a boolean list (must be the same length as body.BlobKzgCommitments), where each element corresponds to whether a
-// particular blob sidecar already exists. If exists[i] is true, the blob for the i-th KZG commitment
-// has already been retrieved and does not need to be fetched again from the execution layer (EL).
-//
-// For example:
-//   - len(block.Body().BlobKzgCommitments()) == 6
-//   - If exists = [true, false, true, false, true, false], the function will fetch the blobs
-//     associated with indices 1, 3, and 5 (since those are marked as non-existent).
-//   - If exists = [false ... x 6], the function will attempt to fetch all blobs.
-//
-// Only the blobs that do not already exist (where exists[i] is false) are fetched using the KZG commitments from block body.
-func (s *Service) ReconstructBlobSidecars(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte, exists []bool) ([]blocks.VerifiedROBlob, error) {
+// The 'hasIndex' argument is a function returns true if the given uint64 blob index already exists on disc.
+// Only the blobs that do not already exist (where hasIndex(i) is false)
+// will be fetched from the execution engine using the KZG commitments from block body.
+func (s *Service) ReconstructBlobSidecars(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte, hasIndex func(uint64) bool) ([]blocks.VerifiedROBlob, error) {
 	blockBody := block.Block().Body()
 	kzgCommitments, err := blockBody.BlobKzgCommitments()
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get blob KZG commitments")
 	}
-	if len(kzgCommitments) > len(exists) {
-		return nil, fmt.Errorf("length of KZG commitments (%d) is greater than length of exists (%d)", len(kzgCommitments), len(exists))
-	}
 
 	// Collect KZG hashes for non-existing blobs
 	var kzgHashes []common.Hash
+	var kzgIndexes []int
 	for i, commitment := range kzgCommitments {
-		if !exists[i] {
+		if !hasIndex(uint64(i)) {
 			kzgHashes = append(kzgHashes, primitives.ConvertKzgCommitmentToVersionedHash(commitment))
+			kzgIndexes = append(kzgIndexes, i)
 		}
 	}
 	if len(kzgHashes) == 0 {
@@ -579,27 +570,21 @@ func (s *Service) ReconstructBlobSidecars(ctx context.Context, block interfaces.
 
 	// Reconstruct verified blob sidecars
 	var verifiedBlobs []blocks.VerifiedROBlob
-	for i, blobIndex := 0, 0; i < len(kzgCommitments); i++ {
-		if exists[i] {
+	for i := 0; i < len(kzgHashes); i++ {
+		if blobs[i] == nil {
 			continue
 		}
-
-		if blobIndex >= len(blobs) || blobs[blobIndex] == nil {
-			blobIndex++
-			continue
-		}
-		blob := blobs[blobIndex]
-		blobIndex++
-
-		proof, err := blocks.MerkleProofKZGCommitment(blockBody, i)
+		blob := blobs[i]
+		blobIndex := kzgIndexes[i]
+		proof, err := blocks.MerkleProofKZGCommitment(blockBody, blobIndex)
 		if err != nil {
-			log.WithError(err).WithField("index", i).Error("failed to get Merkle proof for KZG commitment")
+			log.WithError(err).WithField("index", blobIndex).Error("failed to get Merkle proof for KZG commitment")
 			continue
 		}
 		sidecar := &ethpb.BlobSidecar{
-			Index:                    uint64(i),
+			Index:                    uint64(blobIndex),
 			Blob:                     blob.Blob,
-			KzgCommitment:            kzgCommitments[i],
+			KzgCommitment:            kzgCommitments[blobIndex],
 			KzgProof:                 blob.KzgProof,
 			SignedBlockHeader:        header,
 			CommitmentInclusionProof: proof,
@@ -607,14 +592,14 @@ func (s *Service) ReconstructBlobSidecars(ctx context.Context, block interfaces.
 
 		roBlob, err := blocks.NewROBlobWithRoot(sidecar, blockRoot)
 		if err != nil {
-			log.WithError(err).WithField("index", i).Error("failed to create RO blob with root")
+			log.WithError(err).WithField("index", blobIndex).Error("failed to create RO blob with root")
 			continue
 		}
 
 		v := s.blobVerifier(roBlob, verification.ELMemPoolRequirements)
 		verifiedBlob, err := v.VerifiedROBlob()
 		if err != nil {
-			log.WithError(err).WithField("index", i).Error("failed to verify RO blob")
+			log.WithError(err).WithField("index", blobIndex).Error("failed to verify RO blob")
 			continue
 		}
 

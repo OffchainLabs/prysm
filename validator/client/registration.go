@@ -94,9 +94,6 @@ func signValidatorRegistration(ctx context.Context, signer iface.SigningFunc, re
 
 // SignValidatorRegistrationRequest compares and returns either the cached validator registration request or signs a new one.
 func (v *validator) SignValidatorRegistrationRequest(ctx context.Context, signer iface.SigningFunc, newValidatorRegistration *ethpb.ValidatorRegistrationV1) (*ethpb.SignedValidatorRegistrationV1, bool /* isCached */, error) {
-	ctx, span := trace.StartSpan(ctx, "validator.SignValidatorRegistrationRequest")
-	defer span.End()
-
 	signedReg, ok := v.signedValidatorRegistrations[bytesutil.ToBytes48(newValidatorRegistration.Pubkey)]
 	if ok && isValidatorRegistrationSame(signedReg.Message, newValidatorRegistration) {
 		return signedReg, true, nil

@@ -110,6 +110,7 @@ func (tr *topicRequest) testHttpRequest(ctx context.Context, _ *testing.T) *http
 func operationEventsFixtures(t *testing.T) (*topicRequest, []*feed.Event) {
 	topics, err := newTopicRequest([]string{
 		AttestationTopic,
+		SingleAttestationTopic,
 		VoluntaryExitTopic,
 		SyncCommitteeContributionTopic,
 		BLSToExecutionChangeTopic,
@@ -123,13 +124,13 @@ func operationEventsFixtures(t *testing.T) (*topicRequest, []*feed.Event) {
 	vblob := blocks.NewVerifiedROBlob(ro)
 
 	return topics, []*feed.Event{
-		&feed.Event{
+		{
 			Type: operation.UnaggregatedAttReceived,
 			Data: &operation.UnAggregatedAttReceivedData{
 				Attestation: util.HydrateAttestation(&eth.Attestation{}),
 			},
 		},
-		&feed.Event{
+		{
 			Type: operation.AggregatedAttReceived,
 			Data: &operation.AggregatedAttReceivedData{
 				Attestation: &eth.AggregateAttestationAndProof{
@@ -139,7 +140,13 @@ func operationEventsFixtures(t *testing.T) (*topicRequest, []*feed.Event) {
 				},
 			},
 		},
-		&feed.Event{
+		{
+			Type: operation.SingleAttReceived,
+			Data: &operation.SingleAttReceivedData{
+				Attestation: util.HydrateSingleAttestation(&eth.SingleAttestation{}),
+			},
+		},
+		{
 			Type: operation.ExitReceived,
 			Data: &operation.ExitReceivedData{
 				Exit: &eth.SignedVoluntaryExit{
@@ -151,7 +158,7 @@ func operationEventsFixtures(t *testing.T) (*topicRequest, []*feed.Event) {
 				},
 			},
 		},
-		&feed.Event{
+		{
 			Type: operation.SyncCommitteeContributionReceived,
 			Data: &operation.SyncCommitteeContributionReceivedData{
 				Contribution: &eth.SignedContributionAndProof{
@@ -170,7 +177,7 @@ func operationEventsFixtures(t *testing.T) (*topicRequest, []*feed.Event) {
 				},
 			},
 		},
-		&feed.Event{
+		{
 			Type: operation.BLSToExecutionChangeReceived,
 			Data: &operation.BLSToExecutionChangeReceivedData{
 				Change: &eth.SignedBLSToExecutionChange{
@@ -183,13 +190,13 @@ func operationEventsFixtures(t *testing.T) (*topicRequest, []*feed.Event) {
 				},
 			},
 		},
-		&feed.Event{
+		{
 			Type: operation.BlobSidecarReceived,
 			Data: &operation.BlobSidecarReceivedData{
 				Blob: &vblob,
 			},
 		},
-		&feed.Event{
+		{
 			Type: operation.AttesterSlashingReceived,
 			Data: &operation.AttesterSlashingReceivedData{
 				AttesterSlashing: &eth.AttesterSlashing{
@@ -222,7 +229,40 @@ func operationEventsFixtures(t *testing.T) (*topicRequest, []*feed.Event) {
 				},
 			},
 		},
-		&feed.Event{
+		{
+			Type: operation.AttesterSlashingReceived,
+			Data: &operation.AttesterSlashingReceivedData{
+				AttesterSlashing: &eth.AttesterSlashingElectra{
+					Attestation_1: &eth.IndexedAttestationElectra{
+						AttestingIndices: []uint64{0, 1},
+						Data: &eth.AttestationData{
+							BeaconBlockRoot: make([]byte, fieldparams.RootLength),
+							Source: &eth.Checkpoint{
+								Root: make([]byte, fieldparams.RootLength),
+							},
+							Target: &eth.Checkpoint{
+								Root: make([]byte, fieldparams.RootLength),
+							},
+						},
+						Signature: make([]byte, fieldparams.BLSSignatureLength),
+					},
+					Attestation_2: &eth.IndexedAttestationElectra{
+						AttestingIndices: []uint64{0, 1},
+						Data: &eth.AttestationData{
+							BeaconBlockRoot: make([]byte, fieldparams.RootLength),
+							Source: &eth.Checkpoint{
+								Root: make([]byte, fieldparams.RootLength),
+							},
+							Target: &eth.Checkpoint{
+								Root: make([]byte, fieldparams.RootLength),
+							},
+						},
+						Signature: make([]byte, fieldparams.BLSSignatureLength),
+					},
+				},
+			},
+		},
+		{
 			Type: operation.ProposerSlashingReceived,
 			Data: &operation.ProposerSlashingReceivedData{
 				ProposerSlashing: &eth.ProposerSlashing{
@@ -334,7 +374,7 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 		b, err := blocks.NewSignedBeaconBlock(util.HydrateSignedBeaconBlock(&eth.SignedBeaconBlock{}))
 		require.NoError(t, err)
 		events := []*feed.Event{
-			&feed.Event{
+			{
 				Type: statefeed.BlockProcessed,
 				Data: &statefeed.BlockProcessedData{
 					Slot:        0,
@@ -344,7 +384,7 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 					Optimistic:  false,
 				},
 			},
-			&feed.Event{
+			{
 				Type: statefeed.NewHead,
 				Data: &ethpb.EventHead{
 					Slot:                      0,
@@ -356,7 +396,7 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 					ExecutionOptimistic:       false,
 				},
 			},
-			&feed.Event{
+			{
 				Type: statefeed.Reorg,
 				Data: &ethpb.EventChainReorg{
 					Slot:                0,
@@ -369,7 +409,7 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 					ExecutionOptimistic: false,
 				},
 			},
-			&feed.Event{
+			{
 				Type: statefeed.FinalizedCheckpoint,
 				Data: &ethpb.EventFinalizedCheckpoint{
 					Block:               make([]byte, 32),
@@ -492,7 +532,7 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 				request := topics.testHttpRequest(testSync.ctx, t)
 				w := NewStreamingResponseWriterRecorder(testSync.ctx)
 				events := []*feed.Event{
-					&feed.Event{
+					{
 						Type: statefeed.PayloadAttributes,
 						Data: payloadattribute.EventData{
 							ProposerIndex:     0,
@@ -544,7 +584,7 @@ func TestStuckReaderScenarios(t *testing.T) {
 
 func wedgedWriterTestCase(t *testing.T, queueDepth func([]*feed.Event) int) {
 	topics, events := operationEventsFixtures(t)
-	require.Equal(t, 8, len(events))
+	require.Equal(t, 10, len(events))
 
 	// set eventFeedDepth to a number lower than the events we intend to send to force the server to drop the reader.
 	stn := mockChain.NewEventFeedWrapper()
