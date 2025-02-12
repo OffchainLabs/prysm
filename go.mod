@@ -1,6 +1,6 @@
 module github.com/prysmaticlabs/prysm/v5
 
-go 1.23.5
+go 1.24.0
 
 require (
 	github.com/MariusVanDerWijden/FuzzyVM v0.0.0-20240516070431-7828990cad7d
