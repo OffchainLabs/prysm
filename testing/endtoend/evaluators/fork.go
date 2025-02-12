@@ -274,7 +274,7 @@ func electraForkOccurs(_ *types.EvaluationContext, conns ...*grpc.ClientConn) er
 		return errors.New("nil block returned by beacon node")
 	}
 	if res.GetElectraBlock() == nil {
-		return errors.Errorf("non-deneb block returned after the fork with type %T", res.Block)
+		return errors.Errorf("non-electra block returned after the fork with type %T", res.Block)
 	}
 	blk, err := blocks.NewSignedBeaconBlock(res.GetElectraBlock())
 	if err != nil {
