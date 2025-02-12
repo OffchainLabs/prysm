@@ -93,6 +93,8 @@ func (s *Service) validateExecutionPayloadHeader(ctx context.Context, pid peer.I
 		return pubsub.ValidationReject, err
 	}
 
+	msg.ValidatorData = signedHeader
+
 	return pubsub.ValidationAccept, nil
 }
 
