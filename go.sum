@@ -180,6 +180,8 @@ github.com/crate-crypto/go-eth-kzg v1.1.1-0.20250208205016-5b7ff3238c69 h1:FRLER
 github.com/crate-crypto/go-eth-kzg v1.1.1-0.20250208205016-5b7ff3238c69/go.mod h1:7P/mWlkz0h7yLzSuDyw39+YW+Gp+d6nH+Z5ZILVbhmI=
 github.com/crate-crypto/go-eth-kzg v1.1.1-0.20250208210356-f2bdd0a304ac h1:5amzYxWMgWF/bJRbTv/dakQd/lHJ7J1XfcXGenM6FQE=
 github.com/crate-crypto/go-eth-kzg v1.1.1-0.20250208210356-f2bdd0a304ac/go.mod h1:7P/mWlkz0h7yLzSuDyw39+YW+Gp+d6nH+Z5ZILVbhmI=
+github.com/crate-crypto/go-eth-kzg v1.1.1-0.20250208211337-4bf2fd6af8e1 h1:iPAfLPPIiO4vAqYvDkRtC4+GGK8HZ7509uTO2TWW0I0=
+github.com/crate-crypto/go-eth-kzg v1.1.1-0.20250208211337-4bf2fd6af8e1/go.mod h1:7P/mWlkz0h7yLzSuDyw39+YW+Gp+d6nH+Z5ZILVbhmI=
 github.com/crate-crypto/go-ipa v0.0.0-20240724233137-53bbb0ceb27a h1:W8mUrRp6NOVl3J+MYp5kPMoUZPp7aOYHtaua31lwRHg=
 github.com/crate-crypto/go-ipa v0.0.0-20240724233137-53bbb0ceb27a/go.mod h1:sTwzHBvIzm2RfVCGNEBZgRyjwK40bVoun3ZnGOCafNM=
 github.com/crate-crypto/go-kzg-4844 v1.1.0 h1:EN/u9k2TF6OWSHrCCDBBU6GLNMq88OspHHlMnHfoyU4=
