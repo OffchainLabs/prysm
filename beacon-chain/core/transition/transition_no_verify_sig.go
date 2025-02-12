@@ -13,6 +13,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
@@ -58,7 +59,25 @@ func ExecuteStateTransitionNoVerifyAnySig(
 	var err error
 
 	parentRoot := signed.Block().ParentRoot()
-	st, err = ProcessSlotsUsingNextSlotCache(ctx, st, parentRoot[:], signed.Block().Slot())
+	if st.Version() < version.EPBS {
+		st, err = ProcessSlotsUsingNextSlotCache(ctx, st, parentRoot[:], signed.Block().Slot())
+	} else {
+		var lastFullSlot primitives.Slot
+		lastFullSlot, err = st.LatestFullSlot()
+		if err != nil {
+			return nil, nil, errors.Wrap(err, "could not get state latest full slot")
+		}
+		if lastFullSlot == st.Slot() {
+			var hash []byte
+			hash, err = st.LatestBlockHash()
+			if err != nil {
+				return nil, nil, errors.Wrap(err, "could not get state latest block hash")
+			}
+			st, err = ProcessSlotsUsingNextSlotCache(ctx, st, hash, signed.Block().Slot())
+		} else {
+			st, err = ProcessSlotsUsingNextSlotCache(ctx, st, parentRoot[:], signed.Block().Slot())
+		}
+	}
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "could not process slots")
 	}

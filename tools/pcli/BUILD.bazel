@@ -16,6 +16,7 @@ go_library(
         "//consensus-types/interfaces:go_default_library",
         "//encoding/ssz/detect:go_default_library",
         "//encoding/ssz/equality:go_default_library",
+        "//proto/engine/v1:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "//runtime/logging/logrus-prefixed-formatter:go_default_library",
         "//runtime/version:go_default_library",
