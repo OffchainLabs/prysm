@@ -6,6 +6,15 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [v5.3.0](https://github.com/prysmaticlabs/prysm/compare/v5.2.0...v5.3.0) - 2025-02-12
 
+This release includes support for Pectra activation in the [Holesky](https://github.com/eth-clients/holesky) and [Sepolia](https://github.com/eth-clients/sepolia) testnets! The release contains many fixes for Electra that have been found in rigorous testing through devnets in the last few months.
+
+For mainnet, we have a few nice features for you to try:
+
+- [PR #14023](https://github.com/prysmaticlabs/prysm/pull/14023) introduces a new file layout structure for storing blobs. Rather than storing all blob root directories in one parent directory, blob root directories are organized in subdirectories by epoch. This should vastly decrease the blob cache warmup time when Prysm is starting. Try this feature with `--blob-storage-layout=by-epoch`.
+- [PR #14687](https://github.com/prysmaticlabs/prysm/pull/14687) introduces a feature which allows for the beacon database to remain a constant size once it reaches enough history to cover the weak subjectivity period. Try this feature with `--beacon-db-pruning`.
+
+Updating to this release is **required** for Holesky and Sepolia operators and it is **recommended** for mainnet users as there are a few bug fixes that apply to deneb logic.
+
 ### Added
 
 - Added an error field to log `Finished building block`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14696)
