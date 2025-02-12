@@ -1498,7 +1498,6 @@ func Test_validateDenebBeaconBlock(t *testing.T) {
 }
 
 func TestDetectAndBroadcastEquivocation_NoEquivocation(t *testing.T) {
-	// db := dbtest.SetupDB(t)
 	p := p2ptest.NewTestP2P(t)
 	ctx := context.Background()
 	beaconState, privKeys := util.DeterministicGenesisState(t, 100)
@@ -1511,9 +1510,17 @@ func TestDetectAndBroadcastEquivocation_NoEquivocation(t *testing.T) {
 	require.NoError(t, err)
 	block.Signature = sig
 
+	// Create head block with different slot/proposer
+	headBlock := util.NewBeaconBlock()
+	headBlock.Block.Slot = 2          // Different slot
+	headBlock.Block.ProposerIndex = 1 // Different proposer
+	signedHeadBlock, err := blocks.NewSignedBeaconBlock(headBlock)
+	require.NoError(t, err)
+
 	chainService := &mock.ChainService{
 		State:   beaconState,
 		Genesis: time.Now(),
+		Block:   signedHeadBlock,
 	}
 	r := &Service{
 		cfg: &config{
@@ -1521,7 +1528,6 @@ func TestDetectAndBroadcastEquivocation_NoEquivocation(t *testing.T) {
 			chain:        chainService,
 			slashingPool: &slashingsmock.PoolMock{},
 		},
-		seenBlockCache: lruwrpr.New(10),
 	}
 
 	signedBlock, err := blocks.NewSignedBeaconBlock(block)
@@ -1569,11 +1575,7 @@ func TestDetectAndBroadcastEquivocation_EquivocationDetected(t *testing.T) {
 			chain:        chainService,
 			slashingPool: slashingPool,
 		},
-		seenBlockCache: lruwrpr.New(10),
 	}
-
-	// Mark block as seen
-	r.setSeenBlockIndexSlot(newBlock.Block.Slot, newBlock.Block.ProposerIndex)
 
 	signedNewBlock, err := blocks.NewSignedBeaconBlock(newBlock)
 	require.NoError(t, err)
@@ -1616,13 +1618,8 @@ func TestDetectAndBroadcastEquivocation_SameSignature(t *testing.T) {
 			chain:        chainService,
 			slashingPool: slashingPool,
 		},
-		seenBlockCache: lruwrpr.New(10),
 	}
 
-	// Mark block as seen
-	r.setSeenBlockIndexSlot(block.Block.Slot, block.Block.ProposerIndex)
-
-	// Try to process the same block again
 	err = r.detectAndBroadcastEquivocation(ctx, signedBlock)
 	require.NoError(t, err)
 	assert.Equal(t, 0, len(slashingPool.PendingPropSlashings), "Expected no slashings for same signature")
@@ -1685,17 +1682,33 @@ func TestDetectAndBroadcastEquivocation_DifferentSignatures(t *testing.T) {
 func TestDetectAndBroadcastEquivocation_HeadStateError(t *testing.T) {
 	ctx := context.Background()
 	p := p2ptest.NewTestP2P(t)
+	beaconState, privKeys := util.DeterministicGenesisState(t, 100)
 
 	block := util.NewBeaconBlock()
 	block.Block.Slot = 1
 	block.Block.ProposerIndex = 0
+	block.Block.ParentRoot = bytesutil.PadTo([]byte("parent1"), 32)
+	sig1, err := signing.ComputeDomainAndSign(beaconState, 0, block.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[0])
+	require.NoError(t, err)
+	block.Signature = sig1
+
+	headBlock := util.NewBeaconBlock()
+	headBlock.Block.Slot = 1                                            // Same slot
+	headBlock.Block.ProposerIndex = 0                                   // Same proposer
+	headBlock.Block.ParentRoot = bytesutil.PadTo([]byte("parent2"), 32) // Different parent root
+	sig2, err := signing.ComputeDomainAndSign(beaconState, 0, headBlock.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[0])
+	require.NoError(t, err)
+	headBlock.Signature = sig2
 
 	signedBlock, err := blocks.NewSignedBeaconBlock(block)
 	require.NoError(t, err)
 
+	signedHeadBlock, err := blocks.NewSignedBeaconBlock(headBlock)
+	require.NoError(t, err)
+
 	chainService := &mock.ChainService{
 		State:        nil,
-		Block:        signedBlock,
+		Block:        signedHeadBlock,
 		HeadStateErr: errors.New("could not get head state"),
 	}
 	r := &Service{
@@ -1704,12 +1717,121 @@ func TestDetectAndBroadcastEquivocation_HeadStateError(t *testing.T) {
 			chain:        chainService,
 			slashingPool: &slashingsmock.PoolMock{},
 		},
-		seenBlockCache: lruwrpr.New(10),
 	}
-
-	// Mark block as seen to trigger equivocation check
-	r.setSeenBlockIndexSlot(block.Block.Slot, block.Block.ProposerIndex)
 
 	err = r.detectAndBroadcastEquivocation(ctx, signedBlock)
 	require.ErrorContains(t, "could not get head state", err)
+}
+
+func TestVerifySlashableBlock(t *testing.T) {
+	tests := []struct {
+		name          string
+		header1       *ethpb.SignedBeaconBlockHeader
+		header2       *ethpb.SignedBeaconBlockHeader
+		expectedError string
+	}{
+		{
+			name: "Valid slashable block",
+			header1: &ethpb.SignedBeaconBlockHeader{
+				Header: &ethpb.BeaconBlockHeader{
+					Slot:          1,
+					ProposerIndex: 0,
+					ParentRoot:    bytesutil.PadTo([]byte("parent1"), 32),
+					StateRoot:     bytesutil.PadTo([]byte("state1"), 32),
+					BodyRoot:      bytesutil.PadTo([]byte("body1"), 32),
+				},
+			},
+			header2: &ethpb.SignedBeaconBlockHeader{
+				Header: &ethpb.BeaconBlockHeader{
+					Slot:          1,
+					ProposerIndex: 0,
+					ParentRoot:    bytesutil.PadTo([]byte("parent2"), 32),
+					StateRoot:     bytesutil.PadTo([]byte("state2"), 32),
+					BodyRoot:      bytesutil.PadTo([]byte("body2"), 32),
+				},
+			},
+			expectedError: "",
+		},
+		{
+			name: "Different proposers",
+			header1: &ethpb.SignedBeaconBlockHeader{
+				Header: &ethpb.BeaconBlockHeader{
+					Slot:          1,
+					ProposerIndex: 0,
+					ParentRoot:    bytesutil.PadTo([]byte("parent"), 32),
+					StateRoot:     bytesutil.PadTo([]byte("state"), 32),
+					BodyRoot:      bytesutil.PadTo([]byte("body"), 32),
+				},
+			},
+			header2: &ethpb.SignedBeaconBlockHeader{
+				Header: &ethpb.BeaconBlockHeader{
+					Slot:          1,
+					ProposerIndex: 1,
+					ParentRoot:    bytesutil.PadTo([]byte("parent"), 32),
+					StateRoot:     bytesutil.PadTo([]byte("state"), 32),
+					BodyRoot:      bytesutil.PadTo([]byte("body"), 32),
+				},
+			},
+			expectedError: "headers are not from same proposer",
+		},
+		{
+			name: "Different slots",
+			header1: &ethpb.SignedBeaconBlockHeader{
+				Header: &ethpb.BeaconBlockHeader{
+					Slot:          1,
+					ProposerIndex: 0,
+					ParentRoot:    bytesutil.PadTo([]byte("parent"), 32),
+					StateRoot:     bytesutil.PadTo([]byte("state"), 32),
+					BodyRoot:      bytesutil.PadTo([]byte("body"), 32),
+				},
+			},
+			header2: &ethpb.SignedBeaconBlockHeader{
+				Header: &ethpb.BeaconBlockHeader{
+					Slot:          2,
+					ProposerIndex: 0,
+					ParentRoot:    bytesutil.PadTo([]byte("parent"), 32),
+					StateRoot:     bytesutil.PadTo([]byte("state"), 32),
+					BodyRoot:      bytesutil.PadTo([]byte("body"), 32),
+				},
+			},
+			expectedError: "headers are not from same slot",
+		},
+		{
+			name: "Identical headers",
+			header1: &ethpb.SignedBeaconBlockHeader{
+				Header: &ethpb.BeaconBlockHeader{
+					Slot:          1,
+					ProposerIndex: 0,
+					ParentRoot:    bytesutil.PadTo([]byte("parent"), 32),
+					StateRoot:     bytesutil.PadTo([]byte("state"), 32),
+					BodyRoot:      bytesutil.PadTo([]byte("body"), 32),
+				},
+			},
+			header2: &ethpb.SignedBeaconBlockHeader{
+				Header: &ethpb.BeaconBlockHeader{
+					Slot:          1,
+					ProposerIndex: 0,
+					ParentRoot:    bytesutil.PadTo([]byte("parent"), 32),
+					StateRoot:     bytesutil.PadTo([]byte("state"), 32),
+					BodyRoot:      bytesutil.PadTo([]byte("body"), 32),
+				},
+			},
+			expectedError: "headers are identical",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			slashing := &ethpb.ProposerSlashing{
+				Header_1: tt.header1,
+				Header_2: tt.header2,
+			}
+			err := verifySlashableBlock(slashing)
+			if tt.expectedError == "" {
+				require.NoError(t, err)
+			} else {
+				require.ErrorContains(t, tt.expectedError, err)
+			}
+		})
+	}
 }

@@ -535,6 +535,10 @@ func (s *Service) detectAndBroadcastEquivocation(ctx context.Context, blk interf
 	return nil
 }
 
+// verifySlashableBlock performs basic verification of a proposer slashing object to ensure the headers represent
+// a valid slashing condition. It checks that: both headers are from the same proposer,
+// both headers are for the same slot, headers have different roots
+// This verification is done before the state-dependent checks in blocks.VerifyProposerSlashing
 func verifySlashableBlock(slashing *ethpb.ProposerSlashing) error {
 	header1 := slashing.Header_1.Header
 	header2 := slashing.Header_2.Header
