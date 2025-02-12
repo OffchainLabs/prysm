@@ -165,10 +165,10 @@ http_archive(
         # Expose internals of go_test for custom build transitions.
         "//third_party:io_bazel_rules_go_test.patch",
     ],
-    sha256 = "b2038e2de2cace18f032249cb4bb0048abf583a36369fa98f687af1b3f880b26",
+    sha256 = "b78f77458e77162f45b4564d6b20b6f92f56431ed59eaaab09e7819d1d850313",
     urls = [
-        "https://mirror.bazel.build/github.com/bazelbuild/rules_go/releases/download/v0.48.1/rules_go-v0.48.1.zip",
-        "https://github.com/bazelbuild/rules_go/releases/download/v0.48.1/rules_go-v0.48.1.zip",
+        "https://mirror.bazel.build/github.com/bazel-contrib/rules_go/releases/download/v0.53.0/rules_go-v0.53.0.zip",
+        "https://github.com/bazel-contrib/rules_go/releases/download/v0.53.0/rules_go-v0.53.0.zip",
     ],
 )
 
@@ -431,7 +431,7 @@ gometalinter_dependencies()
 
 load("@bazel_gazelle//:deps.bzl", "gazelle_dependencies")
 
-gazelle_dependencies()
+gazelle_dependencies(go_sdk = "go_sdk")
 
 load("@com_google_protobuf//:protobuf_deps.bzl", "protobuf_deps")
 
