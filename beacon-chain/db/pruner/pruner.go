@@ -16,6 +16,10 @@ import (
 
 var log = logrus.WithField("prefix", "db-pruner")
 
+// defaultPrunableBatchSize is the number of slots that can be pruned at once.
+// It takes around 2.4s to delete these many slots.
+const defaultPrunableBatchSize = 12800
+
 type ServiceOption func(*Service)
 
 // WithRetentionPeriod allows the user to specify a different data retention period than the spec default.
@@ -143,7 +147,7 @@ func (p *Service) prune(slot primitives.Slot) error {
 	}).Debug("Pruning chain data")
 
 	tt := time.Now()
-	if err := p.db.DeleteHistoricalDataBeforeSlot(p.ctx, pruneUpto); err != nil {
+	if err := p.db.DeleteHistoricalDataBeforeSlot(p.ctx, pruneUpto, defaultPrunableBatchSize); err != nil {
 		return errors.Wrapf(err, "could not delete upto slot %d", pruneUpto)
 	}
 
