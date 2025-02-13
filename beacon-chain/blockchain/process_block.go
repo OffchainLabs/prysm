@@ -442,39 +442,62 @@ func (s *Service) pruneAttsFromPool(ctx context.Context, headState state.BeaconS
 			continue
 		}
 
-		offset := uint64(0)
-
-		committeeIndices := att.CommitteeBitsVal().BitIndices()
-		committees, err := helpers.AttestationCommittees(ctx, headState, att)
-		if err != nil {
+		if err := s.pruneElectraAttsFromPool(ctx, headState, att); err != nil {
 			return err
 		}
-		for i, c := range committees {
-			ab := bitfield.NewBitlist(uint64(len(c)))
-			for j := uint64(0); j < uint64(len(c)); j++ {
-				ab.SetBitAt(j, att.GetAggregationBits().BitAt(j+offset) == true)
-			}
+	}
+	return nil
+}
 
-			cb := primitives.NewAttestationCommitteeBits()
-			cb.SetBitAt(uint64(committeeIndices[i]), true)
+// pruneElectraAttsFromPool handles removing aggregated Electra attestations from the pool after receiving a block.
+// Because in Electra block attestations can combine aggregates for multiple committees, comparing attestations bits
+// of a block attestation with attestations bits of an aggregate can cause unexpected results, leading to covered
+// aggregates not being removed from the pool.
+//
+// To make sure aggregates are removed, we decompose the block attestation into dummy aggregates, with each
+// aggregate accounting for one committee. This allows us to compare aggregates in the same way it's done for
+// Phase0. Even though we can't provide a valid signature for the dummy aggregate, it does not matter because
+// signatures play no part in pruning attestations.
+func (s *Service) pruneElectraAttsFromPool(ctx context.Context, headState state.BeaconState, att ethpb.Att) error {
+	if att.Version() == version.Phase0 {
+		log.Error("Called pruneElectraAttsFromPool with a Phase0 attestation")
+		return nil
+	}
 
-			a := &ethpb.AttestationElectra{
-				AggregationBits: ab,
-				Data:            att.GetData(),
-				CommitteeBits:   cb,
-			}
+	offset := uint64(0)
 
-			if features.Get().EnableExperimentalAttestationPool {
-				if err := s.cfg.AttestationCache.DeleteCovered(a); err != nil {
-					return err
-				}
-			} else if err := s.cfg.AttPool.DeleteAggregatedAttestation(a); err != nil {
+	committeeIndices := att.CommitteeBitsVal().BitIndices()
+	committees, err := helpers.AttestationCommittees(ctx, headState, att)
+	if err != nil {
+		return err
+	}
+
+	for i, c := range committees {
+		ab := bitfield.NewBitlist(uint64(len(c)))
+		for j := uint64(0); j < uint64(len(c)); j++ {
+			ab.SetBitAt(j, att.GetAggregationBits().BitAt(j+offset) == true)
+		}
+
+		cb := primitives.NewAttestationCommitteeBits()
+		cb.SetBitAt(uint64(committeeIndices[i]), true)
+
+		a := &ethpb.AttestationElectra{
+			AggregationBits: ab,
+			Data:            att.GetData(),
+			CommitteeBits:   cb,
+		}
+
+		if features.Get().EnableExperimentalAttestationPool {
+			if err = s.cfg.AttestationCache.DeleteCovered(a); err != nil {
 				return err
 			}
-
-			offset += uint64(len(c))
+		} else if err = s.cfg.AttPool.DeleteAggregatedAttestation(a); err != nil {
+			return err
 		}
+
+		offset += uint64(len(c))
 	}
+
 	return nil
 }
 

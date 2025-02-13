@@ -122,6 +122,8 @@ func Test_pruneAttsFromPool_Electra(t *testing.T) {
 	st, _ := util.DeterministicGenesisStateElectra(t, 1024)
 	committees, err := helpers.BeaconCommittees(ctx, st, 0)
 	require.NoError(t, err)
+	// Sanity check to make sure the on-chain att will be decomposed
+	// into the correct number of aggregates.
 	require.Equal(t, 4, len(committees))
 
 	require.NoError(t, s.pruneAttsFromPool(ctx, st, rob))
