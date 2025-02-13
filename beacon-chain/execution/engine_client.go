@@ -36,16 +36,18 @@ var (
 		NewPayloadMethod,
 		NewPayloadMethodV2,
 		NewPayloadMethodV3,
-		NewPayloadMethodV4,
 		ForkchoiceUpdatedMethod,
 		ForkchoiceUpdatedMethodV2,
 		ForkchoiceUpdatedMethodV3,
 		GetPayloadMethod,
 		GetPayloadMethodV2,
 		GetPayloadMethodV3,
-		GetPayloadMethodV4,
 		GetPayloadBodiesByHashV1,
 		GetPayloadBodiesByRangeV1,
+	}
+	electraEngineEndpoints = []string{
+		NewPayloadMethodV4,
+		GetPayloadMethodV4,
 	}
 )
 
@@ -296,6 +298,10 @@ func (s *Service) ExchangeCapabilities(ctx context.Context) ([]string, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.ExchangeCapabilities")
 	defer span.End()
 
+	// Only check for electra related engine methods if it has been activated.
+	if params.ElectraEnabled() {
+		supportedEngineEndpoints = append(supportedEngineEndpoints, electraEngineEndpoints...)
+	}
 	var result []string
 	err := s.rpcClient.CallContext(ctx, &result, ExchangeCapabilities, supportedEngineEndpoints)
 	if err != nil {
