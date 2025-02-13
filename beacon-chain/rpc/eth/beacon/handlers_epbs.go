@@ -27,7 +27,7 @@ func (s *Server) GetExecutionPayloadV1(w http.ResponseWriter, r *http.Request) {
 		httputil.HandleError(w, "block_id is required in URL params", http.StatusBadRequest)
 		return
 	}
-	signed, err := s.Blocker.Payload(ctx, s.ExecutionReconstructor.Client(), []byte(blockId))
+	signed, err := s.Blocker.Payload(ctx, []byte(blockId))
 	if !writePayloadFetchError(w, signed, err) {
 		return
 	}

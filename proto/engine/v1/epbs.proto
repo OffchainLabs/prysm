@@ -76,7 +76,7 @@ message SignedBlindPayloadEnvelope {
 }
 
 message BlindPayloadEnvelope {
-  bytes payload_root = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes block_hash = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
   ExecutionRequests execution_requests = 2;
   uint64 builder_index = 3 [ (ethereum.eth.ext.cast_type) =
                                  "github.com/prysmaticlabs/prysm/v5/"

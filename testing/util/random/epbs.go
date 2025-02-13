@@ -465,7 +465,7 @@ func SignedBlindPayloadEnvelope(t *testing.T) *enginev1.SignedBlindPayloadEnvelo
 // BlindPayloadEnvelope creates a random BlindPayloadEnvelope for testing purposes.
 func BlindPayloadEnvelope(t *testing.T) *enginev1.BlindPayloadEnvelope {
 	return &enginev1.BlindPayloadEnvelope{
-		PayloadRoot:        randomBytes(32, t),
+		BlockHash:          randomBytes(32, t),
 		BuilderIndex:       primitives.ValidatorIndex(randomUint64(t)),
 		BeaconBlockRoot:    randomBytes(32, t),
 		Slot:               primitives.Slot(randomUint64(t)),

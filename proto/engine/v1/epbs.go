@@ -7,13 +7,9 @@ func (s *SignedExecutionPayloadEnvelope) Blind() *SignedBlindPayloadEnvelope {
 	if s.Message.Payload == nil {
 		return nil
 	}
-	payloadRoot, err := s.Message.Payload.HashTreeRoot()
-	if err != nil {
-		return nil
-	}
 	return &SignedBlindPayloadEnvelope{
 		Message: &BlindPayloadEnvelope{
-			PayloadRoot:        payloadRoot[:],
+			BlockHash:          s.Message.Payload.BlockHash,
 			ExecutionRequests:  s.Message.ExecutionRequests,
 			BuilderIndex:       s.Message.BuilderIndex,
 			BeaconBlockRoot:    s.Message.BeaconBlockRoot,

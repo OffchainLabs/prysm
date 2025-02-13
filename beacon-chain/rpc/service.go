@@ -192,10 +192,11 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		ReplayerBuilder:    ch,
 	}
 	blocker := &lookup.BeaconDbBlocker{
-		BeaconDB:           s.cfg.BeaconDB,
-		ChainInfoFetcher:   s.cfg.ChainInfoFetcher,
-		GenesisTimeFetcher: s.cfg.GenesisTimeFetcher,
-		BlobStorage:        s.cfg.BlobStorage,
+		BeaconDB:               s.cfg.BeaconDB,
+		ChainInfoFetcher:       s.cfg.ChainInfoFetcher,
+		GenesisTimeFetcher:     s.cfg.GenesisTimeFetcher,
+		BlobStorage:            s.cfg.BlobStorage,
+		ExecutionReconstructor: s.cfg.ExecutionReconstructor,
 	}
 	rewardFetcher := &rewards.BlockRewardService{Replayer: ch, DB: s.cfg.BeaconDB}
 	coreService := &core.Service{

@@ -19,7 +19,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	log "github.com/sirupsen/logrus"
@@ -46,39 +45,40 @@ func (e BlockIdParseError) Error() string {
 type Blocker interface {
 	Block(ctx context.Context, id []byte) (interfaces.ReadOnlySignedBeaconBlock, error)
 	Blobs(ctx context.Context, id string, indices []uint64) ([]*blocks.VerifiedROBlob, *core.RpcError)
-	Payload(ctx context.Context, client execution.RPCClient, id []byte) (interfaces.ROSignedExecutionPayloadEnvelope, error)
+	Payload(ctx context.Context, id []byte) (interfaces.ROSignedExecutionPayloadEnvelope, error)
 }
 
 // BeaconDbBlocker is an implementation of Blocker. It retrieves blocks from the beacon chain database.
 type BeaconDbBlocker struct {
-	BeaconDB           db.ReadOnlyDatabase
-	ChainInfoFetcher   blockchain.ChainInfoFetcher
-	GenesisTimeFetcher blockchain.TimeFetcher
-	BlobStorage        *filesystem.BlobStorage
+	BeaconDB               db.ReadOnlyDatabase
+	ChainInfoFetcher       blockchain.ChainInfoFetcher
+	GenesisTimeFetcher     blockchain.TimeFetcher
+	BlobStorage            *filesystem.BlobStorage
+	ExecutionReconstructor execution.Reconstructor
 }
 
-func (p *BeaconDbBlocker) headPayload(ctx context.Context, client execution.RPCClient) (interfaces.ROSignedExecutionPayloadEnvelope, error) {
+func (p *BeaconDbBlocker) headPayload(ctx context.Context) (interfaces.ROSignedExecutionPayloadEnvelope, error) {
 	root, err := p.ChainInfoFetcher.HeadRoot(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not retrieve head root")
 	}
-	return p.Payload(ctx, client, root)
+	return p.Payload(ctx, root)
 }
 
-func (p *BeaconDbBlocker) finalizedPayload(ctx context.Context, client execution.RPCClient) (interfaces.ROSignedExecutionPayloadEnvelope, error) {
+func (p *BeaconDbBlocker) finalizedPayload(ctx context.Context) (interfaces.ROSignedExecutionPayloadEnvelope, error) {
 	finalized := p.ChainInfoFetcher.FinalizedCheckpt()
-	return p.Payload(ctx, client, finalized.Root)
+	return p.Payload(ctx, finalized.Root)
 }
 
 // Payload returns a ROSignedExecutionPayloadEnvelope for a given block ID.
-func (p *BeaconDbBlocker) Payload(ctx context.Context, client execution.RPCClient, id []byte) (interfaces.ROSignedExecutionPayloadEnvelope, error) {
+func (p *BeaconDbBlocker) Payload(ctx context.Context, id []byte) (interfaces.ROSignedExecutionPayloadEnvelope, error) {
 	var err error
 	var blk interfaces.ReadOnlySignedBeaconBlock
 	switch string(id) {
 	case "head":
-		return p.headPayload(ctx, client)
+		return p.headPayload(ctx)
 	case "finalized":
-		return p.finalizedPayload(ctx, client)
+		return p.finalizedPayload(ctx)
 	case "genesis":
 
 	default:
@@ -144,44 +144,9 @@ func (p *BeaconDbBlocker) Payload(ctx context.Context, client execution.RPCClien
 	if err != nil {
 		return nil, errors.Wrap(err, "could not retrieve signed blind payload envelope")
 	}
-	result := make([]*enginev1.ExecutionPayloadBody, 0)
-	if err := client.CallContext(ctx, &result, execution.GetPayloadBodiesByHashV1, [][]byte{hash[:]}); err != nil {
-		return nil, err
-	}
-	if len(result) != 1 {
-		return nil, errors.New("could not find execution payload body")
-	}
-	body := result[0]
-	parentHash := header.ParentBlockHash()
-	transactions := make([][]byte, len(body.Transactions))
-	for i, tx := range body.Transactions {
-		transactions[i] = tx
-	}
-
-	pbFull := &enginev1.SignedExecutionPayloadEnvelope{
-		Message: &enginev1.ExecutionPayloadEnvelope{
-			Payload: &enginev1.ExecutionPayloadDeneb{
-				ParentHash:    parentHash[:],
-				FeeRecipient:  make([]byte, 20),
-				StateRoot:     make([]byte, 32),
-				ReceiptsRoot:  make([]byte, 32),
-				LogsBloom:     make([]byte, 256),
-				PrevRandao:    make([]byte, 32),
-				GasLimit:      header.GasLimit(),
-				ExtraData:     make([]byte, 32),
-				BaseFeePerGas: make([]byte, 32),
-				BlockHash:     hash[:],
-				Transactions:  transactions,
-				Withdrawals:   body.Withdrawals,
-			},
-			ExecutionRequests:  pb.Message.ExecutionRequests,
-			BuilderIndex:       pb.Message.BuilderIndex,
-			BeaconBlockRoot:    pb.Message.BeaconBlockRoot,
-			Slot:               pb.Message.Slot,
-			BlobKzgCommitments: pb.Message.BlobKzgCommitments,
-			StateRoot:          pb.Message.StateRoot,
-		},
-		Signature: pb.Signature,
+	pbFull, err := p.ExecutionReconstructor.ReconstructPayloadEnvelope(ctx, pb)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not reconstruct payload envelope")
 	}
 	return blocks.WrappedROSignedExecutionPayloadEnvelope(pbFull)
 }
