@@ -20,6 +20,7 @@ import (
 	consensusblocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/crypto/rand"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
@@ -34,25 +35,27 @@ var (
 	errRejectCommitmentLen = errors.New("[REJECT] The length of KZG commitments is less than or equal to the limitation defined in Consensus Layer")
 )
 
-// unknownConsensusOrExecutionParent returns true if the block has an unknown parent for both execution and consensus part of the block.
-func (s *Service) unknownConsensusOrExecutionParent(ctx context.Context, blk interfaces.ReadOnlySignedBeaconBlock) bool {
+// unknownConsensusOrExecutionParent returns true if the block has an unknown parent for both execution and consensus part of the block. If the parent block
+// is known, its root is returned.
+func (s *Service) unknownConsensusOrExecutionParent(ctx context.Context, blk interfaces.ReadOnlySignedBeaconBlock) ([]byte, bool) {
 	if !s.cfg.chain.HasBlock(ctx, blk.Block().ParentRoot()) {
-		return true
+		return nil, true
 	}
+	root := blk.Block().ParentRoot()
 	if blk.Version() < version.EPBS {
-		return false
+		return root[:], false
 	}
 	sg, err := blk.Block().Body().SignedExecutionPayloadHeader()
 	if err != nil {
 		log.WithError(err).Error("Could not extract signed execution payload header")
-		return true
+		return root[:], true
 	}
 	header, err := sg.Header()
 	if err != nil {
 		log.WithError(err).Error("Could not extract execution payload header")
-		return true
+		return root[:], true
 	}
-	return !s.cfg.chain.HashInForkchoice(header.ParentBlockHash())
+	return root[:], !s.cfg.chain.HashInForkchoice(header.ParentBlockHash())
 }
 
 // validateBeaconBlockPubSub checks that the incoming block has a valid BLS signature.
@@ -193,7 +196,8 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 	}
 
 	// Handle block when the consensus parent is unknown or the execution parent is unknown
-	if s.unknownConsensusOrExecutionParent(ctx, blk) {
+	root, unknown := s.unknownConsensusOrExecutionParent(ctx, blk)
+	if unknown {
 		if res, err := s.verifyPendingBlockSignature(ctx, blk, blockRoot); err != nil {
 			log.WithError(err).WithFields(getBlockFields(blk)).Debug("Could not verify block signature")
 			return res, err
@@ -205,8 +209,19 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 			return pubsub.ValidationIgnore, err
 		}
 		s.pendingQueueLock.Unlock()
-		err := errors.Errorf("unknown parent for block with slot %d and parent root %#x", blk.Block().Slot(), blk.Block().ParentRoot())
-		log.WithError(err).WithFields(getBlockFields(blk)).Debug("Could not identify parent for block")
+		if root == nil {
+			err := errors.Errorf("unknown parent for block with slot %d and parent root %#x", blk.Block().Slot(), root)
+			log.WithError(err).WithFields(getBlockFields(blk)).Debug("Could not identify parent for block")
+		} else {
+			// Request the parent payload
+			err := errors.Errorf("unknown execution parent for block with slot %d and parent root %#x", blk.Block().Slot(), root)
+			log.WithError(err).WithFields(getBlockFields(blk)).Debug("requesting parent payload")
+			go func() {
+				if err := s.sendBatchPayloadRequest(context.Background(), [][32]byte{[32]byte(root)}, rand.NewGenerator()); err != nil {
+					log.WithError(err).Error("failed to send batch payload request")
+				}
+			}()
+		}
 		return pubsub.ValidationIgnore, err
 	}
 

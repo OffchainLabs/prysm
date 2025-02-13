@@ -44,6 +44,7 @@ type BlockReceiver interface {
 	HasBlock(ctx context.Context, root [32]byte) bool
 	RecentBlockSlot(root [32]byte) (primitives.Slot, error)
 	BlockBeingSynced([32]byte) bool
+	PayloadBeingSynced([32]byte) bool
 }
 
 // PayloadAttestationReceiver defines methods of the chain service for receiving

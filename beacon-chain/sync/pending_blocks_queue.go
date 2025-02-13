@@ -220,9 +220,11 @@ func (s *Service) processAndBroadcastBlock(ctx context.Context, b interfaces.Rea
 		}
 	}
 
+	s.processPendingPayloads(b.Block().ParentRoot())
 	if err := s.cfg.chain.ReceiveBlock(ctx, b, blkRoot, nil); err != nil {
 		return err
 	}
+	go s.processPendingPayloads(blkRoot)
 
 	s.setSeenBlockIndexSlot(b.Block().Slot(), b.Block().ProposerIndex())
 

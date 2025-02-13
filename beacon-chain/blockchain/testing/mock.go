@@ -697,6 +697,11 @@ func (*ChainService) UnrealizedJustifiedPayloadBlockHash() [32]byte {
 	return [32]byte{}
 }
 
+// PayloadBeingSynced mocks the same method in the chain service
+func (c *ChainService) PayloadBeingSynced(root [32]byte) bool {
+	return root == c.SyncingRoot
+}
+
 // BlockBeingSynced mocks the same method in the chain service
 func (c *ChainService) BlockBeingSynced(root [32]byte) bool {
 	return root == c.SyncingRoot

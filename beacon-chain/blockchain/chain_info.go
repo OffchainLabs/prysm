@@ -552,6 +552,12 @@ func (s *Service) BlockBeingSynced(root [32]byte) bool {
 	return s.blockBeingSynced.isSyncing(root)
 }
 
+// PayloadBeingSynced returns whether the block with the given root is currently being synced
+func (s *Service) PayloadBeingSynced(root [32]byte) bool {
+	_, syncing := s.payloadBeingSynced.isSyncing(root)
+	return syncing
+}
+
 // RecentBlockSlot returns block slot form fork choice store
 func (s *Service) RecentBlockSlot(root [32]byte) (primitives.Slot, error) {
 	s.cfg.ForkChoiceStore.RLock()

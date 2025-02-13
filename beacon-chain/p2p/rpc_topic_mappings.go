@@ -43,6 +43,9 @@ const BlobSidecarsByRangeName = "/blob_sidecars_by_range"
 // BlobSidecarsByRootName is the name for the BlobSidecarsByRoot v1 message topic.
 const BlobSidecarsByRootName = "/blob_sidecars_by_root"
 
+// ExecutionPayloadsByRootMessageName is the name for the ExecutionPayloadsByRoot v1 message topic.
+const ExecutionPayloadsByRootMessageName = "/execution_payload_envelopes_by_root"
+
 const (
 	// V1 RPC Topics
 	// RPCStatusTopicV1 defines the v1 topic for the status rpc method.
@@ -57,6 +60,8 @@ const (
 	RPCPingTopicV1 = protocolPrefix + PingMessageName + SchemaVersionV1
 	// RPCMetaDataTopicV1 defines the v1 topic for the metadata rpc method.
 	RPCMetaDataTopicV1 = protocolPrefix + MetadataMessageName + SchemaVersionV1
+	// RPCExecutionPayloadsByRootTopicV1 defines the v1 topic for the execution payloads rpc method.
+	RPCExecutionPayloadsByRootTopicV1 = protocolPrefix + ExecutionPayloadsByRootMessageName + SchemaVersionV1
 
 	// RPCBlobSidecarsByRangeTopicV1 is a topic for requesting blob sidecars
 	// in the slot range [start_slot, start_slot + count), leading up to the current head block as selected by fork choice.
@@ -101,6 +106,8 @@ var RPCTopicMappings = map[string]interface{}{
 	RPCBlobSidecarsByRangeTopicV1: new(pb.BlobSidecarsByRangeRequest),
 	// BlobSidecarsByRoot v1 Message
 	RPCBlobSidecarsByRootTopicV1: new(p2ptypes.BlobSidecarsByRootReq),
+	// RPCExecutionPayloadsByRoot v1 Message
+	RPCExecutionPayloadsByRootTopicV1: new(p2ptypes.BeaconBlockByRootsReq),
 }
 
 // Maps all registered protocol prefixes.
@@ -111,14 +118,15 @@ var protocolMapping = map[string]bool{
 // Maps all the protocol message names for the different rpc
 // topics.
 var messageMapping = map[string]bool{
-	StatusMessageName:              true,
-	GoodbyeMessageName:             true,
-	BeaconBlocksByRangeMessageName: true,
-	BeaconBlocksByRootsMessageName: true,
-	PingMessageName:                true,
-	MetadataMessageName:            true,
-	BlobSidecarsByRangeName:        true,
-	BlobSidecarsByRootName:         true,
+	StatusMessageName:                  true,
+	GoodbyeMessageName:                 true,
+	BeaconBlocksByRangeMessageName:     true,
+	BeaconBlocksByRootsMessageName:     true,
+	PingMessageName:                    true,
+	MetadataMessageName:                true,
+	BlobSidecarsByRangeName:            true,
+	BlobSidecarsByRootName:             true,
+	ExecutionPayloadsByRootMessageName: true,
 }
 
 // Maps all the RPC messages which are to updated in altair.

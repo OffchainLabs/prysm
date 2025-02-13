@@ -40,6 +40,14 @@ func (q *PayloadPendingQueue) Get(root [32]byte) *enginev1.SignedExecutionPayloa
 	return q.queue[root]
 }
 
+// Has returns true if the pending queue contains a payload with the given root.
+func (q *PayloadPendingQueue) Has(root [32]byte) bool {
+	q.Lock()
+	defer q.Unlock()
+	_, ok := q.queue[root]
+	return ok
+}
+
 // Prune removes all payloads from the pending queue that are older than the given slot.
 func (q *PayloadPendingQueue) Prune(slot primitives.Slot) {
 	q.Lock()

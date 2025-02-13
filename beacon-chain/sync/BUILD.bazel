@@ -21,6 +21,7 @@ go_library(
         "payload_attestations.go",
         "pending_attestations_queue.go",
         "pending_blocks_queue.go",
+        "pending_payload_queue.go",
         "rate_limiter.go",
         "rpc.go",
         "rpc_beacon_blocks_by_range.go",
