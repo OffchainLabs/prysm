@@ -475,7 +475,7 @@ func (s *Service) pruneElectraAttsFromPool(ctx context.Context, headState state.
 	for i, c := range committees {
 		ab := bitfield.NewBitlist(uint64(len(c)))
 		for j := uint64(0); j < uint64(len(c)); j++ {
-			ab.SetBitAt(j, att.GetAggregationBits().BitAt(j+offset) == true)
+			ab.SetBitAt(j, att.GetAggregationBits().BitAt(j+offset))
 		}
 
 		cb := primitives.NewAttestationCommitteeBits()
