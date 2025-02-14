@@ -44,6 +44,9 @@ func (s *Service) sendPayloadRequest(ctx context.Context, requests *types.Beacon
 			return fmt.Errorf("received unexpected payload with block root %#x", root)
 		}
 		s.pendingExecutionPayloads.Add(signed)
+		if s.cfg.chain.InForkchoice(root) {
+			s.processPendingPayloads(root)
+		}
 		return nil
 	})
 }
