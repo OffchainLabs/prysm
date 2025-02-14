@@ -33,7 +33,7 @@ func Setup(ctx context.Context, serviceName, processName, endpoint string, sampl
 	}
 
 	log.Infof("Starting otel exporter endpoint at address = %s", endpoint)
-	exporter, err := otlptracehttp.New(ctx, otlptracehttp.WithEndpoint(endpoint))
+	exporter, err := otlptracehttp.New(ctx, otlptracehttp.WithEndpointURL(endpoint))
 	if err != nil {
 		return err
 	}
