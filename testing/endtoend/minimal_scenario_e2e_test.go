@@ -26,7 +26,7 @@ func TestEndToEnd_MinimalConfig_Web3Signer_PersistentKeys(t *testing.T) {
 }
 
 func TestEndToEnd_MinimalConfig_ValidatorRESTApi(t *testing.T) {
-	e2eMinimal(t, types.InitForkCfg(version.Bellatrix, version.Deneb, params.E2ETestConfig()), types.WithCheckpointSync(), types.WithValidatorRESTApi()).run()
+	e2eMinimal(t, types.InitForkCfg(version.Bellatrix, version.Electra, params.E2ETestConfig()), types.WithCheckpointSync(), types.WithValidatorRESTApi()).run()
 }
 
 func TestEndToEnd_ScenarioRun_EEOffline(t *testing.T) {

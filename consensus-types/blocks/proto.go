@@ -171,10 +171,10 @@ func (b *SignedBeaconBlock) Proto() (proto.Message, error) { // nolint:gocognit
 				Signature: b.signature[:],
 			}, nil
 		}
-		var block *eth.BeaconBlockFulu
+		var block *eth.BeaconBlockElectra
 		if blockMessage != nil {
 			var ok bool
-			block, ok = blockMessage.(*eth.BeaconBlockFulu)
+			block, ok = blockMessage.(*eth.BeaconBlockElectra)
 			if !ok {
 				return nil, errIncorrectBlockVersion
 			}
@@ -366,10 +366,10 @@ func (b *BeaconBlock) Proto() (proto.Message, error) { // nolint:gocognit
 		}, nil
 	case version.Fulu:
 		if b.IsBlinded() {
-			var body *eth.BlindedBeaconBlockBodyFulu
+			var body *eth.BlindedBeaconBlockBodyElectra
 			if bodyMessage != nil {
 				var ok bool
-				body, ok = bodyMessage.(*eth.BlindedBeaconBlockBodyFulu)
+				body, ok = bodyMessage.(*eth.BlindedBeaconBlockBodyElectra)
 				if !ok {
 					return nil, errIncorrectBodyVersion
 				}
@@ -382,22 +382,21 @@ func (b *BeaconBlock) Proto() (proto.Message, error) { // nolint:gocognit
 				Body:          body,
 			}, nil
 		}
-		var body *eth.BeaconBlockBodyFulu
+		var body *eth.BeaconBlockBodyElectra
 		if bodyMessage != nil {
 			var ok bool
-			body, ok = bodyMessage.(*eth.BeaconBlockBodyFulu)
+			body, ok = bodyMessage.(*eth.BeaconBlockBodyElectra)
 			if !ok {
 				return nil, errIncorrectBodyVersion
 			}
 		}
-		return &eth.BeaconBlockFulu{
+		return &eth.BeaconBlockElectra{
 			Slot:          b.slot,
 			ProposerIndex: b.proposerIndex,
 			ParentRoot:    b.parentRoot[:],
 			StateRoot:     b.stateRoot[:],
 			Body:          body,
 		}, nil
-
 	default:
 		return nil, errors.New("unsupported beacon block version")
 	}
@@ -628,7 +627,7 @@ func (b *BeaconBlockBody) Proto() (proto.Message, error) {
 					return nil, errPayloadHeaderWrongType
 				}
 			}
-			return &eth.BlindedBeaconBlockBodyFulu{
+			return &eth.BlindedBeaconBlockBodyElectra{
 				RandaoReveal:           b.randaoReveal[:],
 				Eth1Data:               b.eth1Data,
 				Graffiti:               b.graffiti[:],
@@ -652,7 +651,7 @@ func (b *BeaconBlockBody) Proto() (proto.Message, error) {
 				return nil, errPayloadWrongType
 			}
 		}
-		return &eth.BeaconBlockBodyFulu{
+		return &eth.BeaconBlockBodyElectra{
 			RandaoReveal:          b.randaoReveal[:],
 			Eth1Data:              b.eth1Data,
 			Graffiti:              b.graffiti[:],
@@ -667,7 +666,6 @@ func (b *BeaconBlockBody) Proto() (proto.Message, error) {
 			BlobKzgCommitments:    b.blobKzgCommitments,
 			ExecutionRequests:     b.executionRequests,
 		}, nil
-
 	default:
 		return nil, errors.New("unsupported beacon block body version")
 	}
@@ -1372,7 +1370,7 @@ func initBlindedSignedBlockFromProtoFulu(pb *eth.SignedBlindedBeaconBlockFulu) (
 	return b, nil
 }
 
-func initBlockFromProtoFulu(pb *eth.BeaconBlockFulu) (*BeaconBlock, error) {
+func initBlockFromProtoFulu(pb *eth.BeaconBlockElectra) (*BeaconBlock, error) {
 	if pb == nil {
 		return nil, errNilBlock
 	}
@@ -1412,7 +1410,7 @@ func initBlindedBlockFromProtoFulu(pb *eth.BlindedBeaconBlockFulu) (*BeaconBlock
 	return b, nil
 }
 
-func initBlockBodyFromProtoFulu(pb *eth.BeaconBlockBodyFulu) (*BeaconBlockBody, error) {
+func initBlockBodyFromProtoFulu(pb *eth.BeaconBlockBodyElectra) (*BeaconBlockBody, error) {
 	if pb == nil {
 		return nil, errNilBlockBody
 	}
@@ -1445,7 +1443,7 @@ func initBlockBodyFromProtoFulu(pb *eth.BeaconBlockBodyFulu) (*BeaconBlockBody, 
 	return b, nil
 }
 
-func initBlindedBlockBodyFromProtoFulu(pb *eth.BlindedBeaconBlockBodyFulu) (*BeaconBlockBody, error) {
+func initBlindedBlockBodyFromProtoFulu(pb *eth.BlindedBeaconBlockBodyElectra) (*BeaconBlockBody, error) {
 	if pb == nil {
 		return nil, errNilBlockBody
 	}

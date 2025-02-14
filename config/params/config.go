@@ -387,7 +387,7 @@ func (b *BeaconChainConfig) MaximumGossipClockDisparityDuration() time.Duration 
 // TargetBlobsPerBlock returns the target number of blobs per block for the given slot,
 // accounting for changes introduced by the Electra fork.
 func (b *BeaconChainConfig) TargetBlobsPerBlock(slot primitives.Slot) int {
-	if primitives.Epoch(slot.DivSlot(32)) >= b.ElectraForkEpoch {
+	if primitives.Epoch(slot.DivSlot(b.SlotsPerEpoch)) >= b.ElectraForkEpoch {
 		return b.DeprecatedTargetBlobsPerBlockElectra
 	}
 	return b.DeprecatedMaxBlobsPerBlock / 2
@@ -396,7 +396,7 @@ func (b *BeaconChainConfig) TargetBlobsPerBlock(slot primitives.Slot) int {
 // MaxBlobsPerBlock returns the maximum number of blobs per block for the given slot,
 // adjusting for the Electra fork.
 func (b *BeaconChainConfig) MaxBlobsPerBlock(slot primitives.Slot) int {
-	if primitives.Epoch(slot.DivSlot(32)) >= b.ElectraForkEpoch {
+	if primitives.Epoch(slot.DivSlot(b.SlotsPerEpoch)) >= b.ElectraForkEpoch {
 		return b.DeprecatedMaxBlobsPerBlockElectra
 	}
 	return b.DeprecatedMaxBlobsPerBlock
@@ -424,6 +424,13 @@ func (b *BeaconChainConfig) MaxBlobsPerBlockAtEpoch(epoch primitives.Epoch) int 
 // kind of check and remove them post-deneb.
 func DenebEnabled() bool {
 	return BeaconConfig().DenebForkEpoch < math.MaxUint64
+}
+
+// ElectraEnabled centralizes the check to determine if code paths
+// that are specific to electra should be allowed to execute. This will make it easier to find call sites that do this
+// kind of check and remove them post-electra.
+func ElectraEnabled() bool {
+	return BeaconConfig().ElectraForkEpoch < math.MaxUint64
 }
 
 // PeerDASEnabled centralizes the check to determine if code paths

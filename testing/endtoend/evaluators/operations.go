@@ -230,10 +230,16 @@ func activatesDepositedValidators(ec *e2etypes.EvaluationContext, conns ...*grpc
 			continue
 		}
 		delete(expected, key)
-		if v.ActivationEpoch != epoch {
+		// Validator can't be activated yet .
+		if v.ActivationEligibilityEpoch > chainHead.FinalizedEpoch {
 			continue
 		}
-		deposits++
+		if v.ActivationEpoch < epoch {
+			continue
+		}
+		if v.ActivationEpoch == epoch {
+			deposits++
+		}
 		if v.EffectiveBalance < params.BeaconConfig().MaxEffectiveBalance {
 			lowBalance++
 		}
@@ -250,7 +256,7 @@ func activatesDepositedValidators(ec *e2etypes.EvaluationContext, conns ...*grpc
 		return fmt.Errorf("missing %d validators for post-genesis deposits", len(expected))
 	}
 
-	if uint64(deposits) != params.BeaconConfig().MinPerEpochChurnLimit {
+	if deposits > 0 && uint64(deposits) != params.BeaconConfig().MinPerEpochChurnLimit {
 		return fmt.Errorf("expected %d deposits to be processed in epoch %d, received %d", params.BeaconConfig().MinPerEpochChurnLimit, epoch, deposits)
 	}
 
@@ -511,8 +517,16 @@ func validatorsVoteWithTheMajority(ec *e2etypes.EvaluationContext, conns ...*grp
 			b := blk.GetBlindedDenebBlock().Message
 			slot = b.Slot
 			vote = b.Body.Eth1Data.BlockHash
+		case *ethpb.BeaconBlockContainer_ElectraBlock:
+			b := blk.GetElectraBlock().Block
+			slot = b.Slot
+			vote = b.Body.Eth1Data.BlockHash
+		case *ethpb.BeaconBlockContainer_BlindedElectraBlock:
+			b := blk.GetBlindedElectraBlock().Message
+			slot = b.Slot
+			vote = b.Body.Eth1Data.BlockHash
 		default:
-			return errors.New("block neither phase0,altair or bellatrix")
+			return fmt.Errorf("block of type %T is unknown", blk.Block)
 		}
 		ec.SeenVotes[slot] = vote
 

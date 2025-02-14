@@ -36,16 +36,18 @@ var (
 		NewPayloadMethod,
 		NewPayloadMethodV2,
 		NewPayloadMethodV3,
-		NewPayloadMethodV4,
 		ForkchoiceUpdatedMethod,
 		ForkchoiceUpdatedMethodV2,
 		ForkchoiceUpdatedMethodV3,
 		GetPayloadMethod,
 		GetPayloadMethodV2,
 		GetPayloadMethodV3,
-		GetPayloadMethodV4,
 		GetPayloadBodiesByHashV1,
 		GetPayloadBodiesByRangeV1,
+	}
+	electraEngineEndpoints = []string{
+		NewPayloadMethodV4,
+		GetPayloadMethodV4,
 	}
 )
 
@@ -296,6 +298,10 @@ func (s *Service) ExchangeCapabilities(ctx context.Context) ([]string, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.ExchangeCapabilities")
 	defer span.End()
 
+	// Only check for electra related engine methods if it has been activated.
+	if params.ElectraEnabled() {
+		supportedEngineEndpoints = append(supportedEngineEndpoints, electraEngineEndpoints...)
+	}
 	var result []string
 	err := s.rpcClient.CallContext(ctx, &result, ExchangeCapabilities, supportedEngineEndpoints)
 	if err != nil {
@@ -543,9 +549,11 @@ func (s *Service) ReconstructBlobSidecars(ctx context.Context, block interfaces.
 
 	// Collect KZG hashes for non-existing blobs
 	var kzgHashes []common.Hash
+	var kzgIndexes []int
 	for i, commitment := range kzgCommitments {
 		if !hasIndex(uint64(i)) {
 			kzgHashes = append(kzgHashes, primitives.ConvertKzgCommitmentToVersionedHash(commitment))
+			kzgIndexes = append(kzgIndexes, i)
 		}
 	}
 	if len(kzgHashes) == 0 {
@@ -568,27 +576,21 @@ func (s *Service) ReconstructBlobSidecars(ctx context.Context, block interfaces.
 
 	// Reconstruct verified blob sidecars
 	var verifiedBlobs []blocks.VerifiedROBlob
-	for i, blobIndex := 0, 0; i < len(kzgCommitments); i++ {
-		if hasIndex(uint64(i)) {
+	for i := 0; i < len(kzgHashes); i++ {
+		if blobs[i] == nil {
 			continue
 		}
-
-		if blobIndex >= len(blobs) || blobs[blobIndex] == nil {
-			blobIndex++
-			continue
-		}
-		blob := blobs[blobIndex]
-		blobIndex++
-
-		proof, err := blocks.MerkleProofKZGCommitment(blockBody, i)
+		blob := blobs[i]
+		blobIndex := kzgIndexes[i]
+		proof, err := blocks.MerkleProofKZGCommitment(blockBody, blobIndex)
 		if err != nil {
-			log.WithError(err).WithField("index", i).Error("failed to get Merkle proof for KZG commitment")
+			log.WithError(err).WithField("index", blobIndex).Error("failed to get Merkle proof for KZG commitment")
 			continue
 		}
 		sidecar := &ethpb.BlobSidecar{
-			Index:                    uint64(i),
+			Index:                    uint64(blobIndex),
 			Blob:                     blob.Blob,
-			KzgCommitment:            kzgCommitments[i],
+			KzgCommitment:            kzgCommitments[blobIndex],
 			KzgProof:                 blob.KzgProof,
 			SignedBlockHeader:        header,
 			CommitmentInclusionProof: proof,
@@ -596,14 +598,14 @@ func (s *Service) ReconstructBlobSidecars(ctx context.Context, block interfaces.
 
 		roBlob, err := blocks.NewROBlobWithRoot(sidecar, blockRoot)
 		if err != nil {
-			log.WithError(err).WithField("index", i).Error("failed to create RO blob with root")
+			log.WithError(err).WithField("index", blobIndex).Error("failed to create RO blob with root")
 			continue
 		}
 
 		v := s.blobVerifier(roBlob, verification.ELMemPoolRequirements)
 		verifiedBlob, err := v.VerifiedROBlob()
 		if err != nil {
-			log.WithError(err).WithField("index", i).Error("failed to verify RO blob")
+			log.WithError(err).WithField("index", blobIndex).Error("failed to verify RO blob")
 			continue
 		}
 

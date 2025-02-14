@@ -159,6 +159,18 @@ func GethTestnetGenesis(genesisTime uint64, cfg *clparams.BeaconChainConfig) *co
 		ShanghaiTime:            shanghaiTime,
 		CancunTime:              cancunTime,
 		PragueTime:              pragueTime,
+		BlobScheduleConfig: &params.BlobScheduleConfig{
+			Cancun: &params.BlobConfig{
+				Target:         3,
+				Max:            6,
+				UpdateFraction: 3338477,
+			},
+			Prague: &params.BlobConfig{
+				Target:         6,
+				Max:            9,
+				UpdateFraction: 5007716,
+			},
+		},
 	}
 	da := defaultDepositContractAllocation(cfg.DepositContractAddress)
 	ma := minerAllocation()
