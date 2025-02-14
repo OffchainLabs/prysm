@@ -3,7 +3,6 @@ package filesystem
 import (
 	"fmt"
 	"io"
-	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -193,7 +192,7 @@ func rootFromPath(p string) ([32]byte, error) {
 }
 
 func idxFromPath(p string) (uint64, error) {
-	p = path.Base(p)
+	p = filepath.Base(p)
 
 	if !isSszFile(p) {
 		return 0, errors.Wrap(errNotBlobSSZ, "does not have .ssz extension")

@@ -518,9 +518,9 @@ func (s *Store) unmarshalState(_ context.Context, enc []byte, validatorEntries [
 
 	switch {
 	case hasFuluKey(enc):
-		protoState := &ethpb.BeaconStateFulu{}
+		protoState := &ethpb.BeaconStateElectra{}
 		if err := protoState.UnmarshalSSZ(enc[len(fuluKey):]); err != nil {
-			return nil, errors.Wrap(err, "failed to unmarshal encoding for Electra")
+			return nil, errors.Wrap(err, "failed to unmarshal encoding for Fulu")
 		}
 		ok, err := s.isStateValidatorMigrationOver()
 		if err != nil {
@@ -690,7 +690,7 @@ func marshalState(ctx context.Context, st state.ReadOnlyBeaconState) ([]byte, er
 		}
 		return snappy.Encode(nil, append(ElectraKey, rawObj...)), nil
 	case version.Fulu:
-		rState, ok := st.ToProtoUnsafe().(*ethpb.BeaconStateFulu)
+		rState, ok := st.ToProtoUnsafe().(*ethpb.BeaconStateElectra)
 		if !ok {
 			return nil, errors.New("non valid inner state")
 		}
