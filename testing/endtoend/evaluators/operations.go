@@ -222,6 +222,10 @@ func activatesDepositedValidators(ec *e2etypes.EvaluationContext, conns ...*grpc
 		return errors.Wrap(err, "failed to get validators")
 	}
 	expected := ec.Balances(e2etypes.PostGenesisDepositBatch)
+	isElectra := chainHead.HeadEpoch >= params.BeaconConfig().ElectraForkEpoch
+	if isElectra {
+		return checkPostElectraValidatorActivation(chainHead, validators, expected)
+	}
 
 	var deposits, lowBalance, wrongExit, wrongWithdraw int
 	for _, v := range validators {
@@ -252,6 +256,61 @@ func activatesDepositedValidators(ec *e2etypes.EvaluationContext, conns ...*grpc
 
 	if uint64(deposits) != params.BeaconConfig().MinPerEpochChurnLimit {
 		return fmt.Errorf("expected %d deposits to be processed in epoch %d, received %d", params.BeaconConfig().MinPerEpochChurnLimit, epoch, deposits)
+	}
+
+	if lowBalance > 0 {
+		return fmt.Errorf(
+			"%d validators did not have genesis validator effective balance of %d",
+			lowBalance,
+			params.BeaconConfig().MaxEffectiveBalance,
+		)
+	} else if wrongExit > 0 {
+		return fmt.Errorf("%d validators did not have an exit epoch of far future epoch", wrongExit)
+	} else if wrongWithdraw > 0 {
+		return fmt.Errorf("%d validators did not have a withdrawable epoch of far future epoch", wrongWithdraw)
+	}
+	return nil
+}
+
+func checkPostElectraValidatorActivation(chainHead *ethpb.ChainHead, validators []*ethpb.Validator, expected map[[48]byte]uint64) error {
+	currEpoch := chainHead.HeadEpoch
+	finalizedEpoch := chainHead.FinalizedEpoch
+
+	var viableDeposits, lowBalance, wrongExit, wrongWithdraw int
+	for _, v := range validators {
+		key := bytesutil.ToBytes48(v.PublicKey)
+		if _, ok := expected[key]; !ok {
+			continue
+		}
+		delete(expected, key)
+		// Validator can't be activated yet .
+		if v.ActivationEligibilityEpoch > finalizedEpoch {
+			continue
+		}
+		if v.ActivationEpoch < currEpoch {
+			continue
+		}
+		if v.ActivationEpoch == currEpoch {
+			viableDeposits++
+		}
+		if v.EffectiveBalance < params.BeaconConfig().MaxEffectiveBalance {
+			lowBalance++
+		}
+		if v.ExitEpoch != params.BeaconConfig().FarFutureEpoch {
+			wrongExit++
+		}
+		if v.WithdrawableEpoch != params.BeaconConfig().FarFutureEpoch {
+			wrongWithdraw++
+		}
+	}
+
+	// Make sure every post-genesis deposit has been processed, resulting in a validator.
+	if len(expected) > 0 {
+		return fmt.Errorf("missing %d validators for post-genesis deposits", len(expected))
+	}
+
+	if viableDeposits > 0 && uint64(viableDeposits) != params.BeaconConfig().MinPerEpochChurnLimit {
+		return fmt.Errorf("expected %d deposits to be processed in epoch %d, received %d", params.BeaconConfig().MinPerEpochChurnLimit, chainHead.HeadEpoch, viableDeposits)
 	}
 
 	if lowBalance > 0 {
