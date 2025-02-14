@@ -450,7 +450,7 @@ func (s *Service) pruneAttsFromPool(ctx context.Context, headState state.BeaconS
 }
 
 // pruneElectraAttsFromPool handles removing aggregated Electra attestations from the pool after receiving a block.
-// Because in Electra block attestations can combine aggregates for multiple committees, comparing attestations bits
+// Because in Electra block attestations can combine aggregates for multiple committees, comparing attestation bits
 // of a block attestation with attestations bits of an aggregate can cause unexpected results, leading to covered
 // aggregates not being removed from the pool.
 //
