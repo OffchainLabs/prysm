@@ -180,6 +180,9 @@ func (s *Service) processPendingPayloads(root [32]byte) {
 		log.WithError(err).Error("failed to receive pending payload")
 		return
 	}
+	if err := s.cfg.p2p.Broadcast(ctx, e.Proto()); err != nil {
+		log.WithError(err).Error("failed to broadcast pending payload")
+	}
 	s.pendingExecutionPayloads.Remove(root)
 	return
 }
