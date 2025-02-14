@@ -76,19 +76,33 @@ message SignedBlindPayloadEnvelope {
 }
 
 message BlindPayloadEnvelope {
-  bytes block_hash = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
-  ExecutionRequests execution_requests = 2;
-  uint64 builder_index = 3 [ (ethereum.eth.ext.cast_type) =
-                                 "github.com/prysmaticlabs/prysm/v5/"
-                                 "consensus-types/primitives.ValidatorIndex" ];
-  bytes beacon_block_root = 4 [ (ethereum.eth.ext.ssz_size) = "32" ];
-  uint64 slot = 5 [
+  bytes parent_hash = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes fee_recipient = 2 [ (ethereum.eth.ext.ssz_size) = "20" ];
+  bytes state_root = 3 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes receipts_root = 4 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes logs_bloom = 5 [ (ethereum.eth.ext.ssz_size) = "logs_bloom.size" ];
+  bytes prev_randao = 6 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  uint64 block_number = 7;
+  uint64 gas_limit = 8;
+  uint64 gas_used = 9;
+  uint64 timestamp = 10;
+  bytes extra_data = 11 [ (ethereum.eth.ext.ssz_max) = "extra_data.size" ];
+  bytes base_fee_per_gas = 12 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes block_hash = 13 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  uint64 blob_gas_used = 14;
+  uint64 excess_blob_gas = 15;
+
+  uint64 builder_index = 16 [ (ethereum.eth.ext.cast_type) =
+                                  "github.com/prysmaticlabs/prysm/v5/"
+                                  "consensus-types/primitives.ValidatorIndex" ];
+  bytes beacon_block_root = 17 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  uint64 slot = 18 [
     (ethereum.eth.ext.cast_type) =
         "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"
   ];
-  repeated bytes blob_kzg_commitments = 6 [
+  repeated bytes blob_kzg_commitments = 19 [
     (ethereum.eth.ext.ssz_size) = "?,48",
     (ethereum.eth.ext.ssz_max) = "max_blob_commitments.size"
   ];
-  bytes state_root = 7 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes beacon_state_root = 20 [ (ethereum.eth.ext.ssz_size) = "32" ];
 }
