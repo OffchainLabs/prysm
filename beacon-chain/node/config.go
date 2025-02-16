@@ -14,6 +14,7 @@ import (
 
 func configureTracing(cliCtx *cli.Context) error {
 	return tracing.Setup(
+		cliCtx.Context,
 		"beacon-chain", // service name
 		cliCtx.String(cmd.TracingProcessNameFlag.Name),
 		cliCtx.String(cmd.TracingEndpointFlag.Name),
