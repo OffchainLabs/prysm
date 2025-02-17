@@ -230,10 +230,16 @@ func activatesDepositedValidators(ec *e2etypes.EvaluationContext, conns ...*grpc
 			continue
 		}
 		delete(expected, key)
-		if v.ActivationEpoch != epoch {
+		// Validator can't be activated yet .
+		if v.ActivationEligibilityEpoch > chainHead.FinalizedEpoch {
 			continue
 		}
-		deposits++
+		if v.ActivationEpoch < epoch {
+			continue
+		}
+		if v.ActivationEpoch == epoch {
+			deposits++
+		}
 		if v.EffectiveBalance < params.BeaconConfig().MaxEffectiveBalance {
 			lowBalance++
 		}
@@ -250,7 +256,7 @@ func activatesDepositedValidators(ec *e2etypes.EvaluationContext, conns ...*grpc
 		return fmt.Errorf("missing %d validators for post-genesis deposits", len(expected))
 	}
 
-	if uint64(deposits) != params.BeaconConfig().MinPerEpochChurnLimit {
+	if deposits > 0 && uint64(deposits) != params.BeaconConfig().MinPerEpochChurnLimit {
 		return fmt.Errorf("expected %d deposits to be processed in epoch %d, received %d", params.BeaconConfig().MinPerEpochChurnLimit, epoch, deposits)
 	}
 

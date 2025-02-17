@@ -134,8 +134,6 @@ func NewBeaconBlock(i interface{}) (interfaces.ReadOnlyBeaconBlock, error) {
 		return initBlindedBlockFromProtoElectra(b.BlindedElectra)
 	case *eth.GenericBeaconBlock_Fulu:
 		return initBlockFromProtoFulu(b.Fulu.Block)
-	case *eth.BeaconBlockFulu:
-		return initBlockFromProtoFulu(b)
 	case *eth.BlindedBeaconBlockFulu:
 		return initBlindedBlockFromProtoFulu(b)
 	case *eth.GenericBeaconBlock_BlindedFulu:
@@ -170,10 +168,6 @@ func NewBeaconBlockBody(i interface{}) (interfaces.ReadOnlyBeaconBlockBody, erro
 		return initBlockBodyFromProtoElectra(b)
 	case *eth.BlindedBeaconBlockBodyElectra:
 		return initBlindedBlockBodyFromProtoElectra(b)
-	case *eth.BeaconBlockBodyFulu:
-		return initBlockBodyFromProtoFulu(b)
-	case *eth.BlindedBeaconBlockBodyFulu:
-		return initBlindedBlockBodyFromProtoFulu(b)
 	default:
 		return nil, errors.Wrapf(errUnsupportedBeaconBlockBody, "unable to create block body from type %T", i)
 	}
@@ -261,7 +255,7 @@ func BuildSignedBeaconBlock(blk interfaces.ReadOnlyBeaconBlock, signature []byte
 			}
 			return NewSignedBeaconBlock(&eth.SignedBlindedBeaconBlockFulu{Message: pb, Signature: signature})
 		}
-		pb, ok := pb.(*eth.BeaconBlockFulu)
+		pb, ok := pb.(*eth.BeaconBlockElectra)
 		if !ok {
 			return nil, errIncorrectBlockVersion
 		}
@@ -612,12 +606,12 @@ func BuildSignedBeaconBlockFromExecutionPayload(blk interfaces.ReadOnlySignedBea
 		}
 
 		fullBlock = &eth.SignedBeaconBlockFulu{
-			Block: &eth.BeaconBlockFulu{
+			Block: &eth.BeaconBlockElectra{
 				Slot:          b.Slot(),
 				ProposerIndex: b.ProposerIndex(),
 				ParentRoot:    parentRoot[:],
 				StateRoot:     stateRoot[:],
-				Body: &eth.BeaconBlockBodyFulu{
+				Body: &eth.BeaconBlockBodyElectra{
 					RandaoReveal:          randaoReveal[:],
 					Eth1Data:              b.Body().Eth1Data(),
 					Graffiti:              graffiti[:],

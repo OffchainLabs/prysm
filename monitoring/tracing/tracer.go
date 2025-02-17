@@ -3,6 +3,7 @@
 package tracing
 
 import (
+	"context"
 	"errors"
 	"time"
 
@@ -10,7 +11,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/exporters/jaeger"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
@@ -20,7 +21,7 @@ import (
 var log = logrus.WithField("prefix", "tracing")
 
 // Setup creates and initializes a new Jaegar tracing configuration with opentelemetry.
-func Setup(serviceName, processName, endpoint string, sampleFraction float64, enable bool) error {
+func Setup(ctx context.Context, serviceName, processName, endpoint string, sampleFraction float64, enable bool) error {
 	if !enable {
 		otel.SetTracerProvider(noop.NewTracerProvider())
 		return nil
@@ -31,8 +32,8 @@ func Setup(serviceName, processName, endpoint string, sampleFraction float64, en
 		return errors.New("tracing service name cannot be empty")
 	}
 
-	log.Infof("Starting Jaeger exporter endpoint at address = %s", endpoint)
-	exporter, err := jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(endpoint)))
+	log.Infof("Starting otel exporter endpoint at address = %s", endpoint)
+	exporter, err := otlptracehttp.New(ctx, otlptracehttp.WithEndpointURL(endpoint))
 	if err != nil {
 		return err
 	}
