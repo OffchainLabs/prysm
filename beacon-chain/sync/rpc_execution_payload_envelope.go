@@ -30,7 +30,11 @@ func (s *Service) executionPayloadByRootRPCHandler(ctx context.Context, msg inte
 		return errors.New("no block roots provided")
 	}
 	for _, root := range blockRoots {
-		blindPayload, err := s.cfg.beaconDB.SignedBlindPayloadEnvelope(ctx, root[:])
+		hash, err := s.cfg.chain.HashForBlockRoot(ctx, root)
+		if err != nil {
+			continue
+		}
+		blindPayload, err := s.cfg.beaconDB.SignedBlindPayloadEnvelope(ctx, hash)
 		if err != nil {
 			continue
 		}

@@ -147,9 +147,12 @@ func logFailedReorgAttempt(slot primitives.Slot, oldHeadRoot, headRoot [32]byte)
 
 func (vs *Server) getHeadNoReorg(ctx context.Context, slot primitives.Slot, parentRoot [32]byte) (state.BeaconState, error) {
 	// get the head block
-	hash := vs.ForkchoiceFetcher.HashForBlockRoot(parentRoot)
+	hash, err := vs.ForkchoiceFetcher.HashForBlockRoot(ctx, parentRoot)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not get head block hash: %v", err)
+	}
 	// try first to build on top of full (TODO, get this info from forkchoice instead)
-	head := transition.NextSlotState(hash[:], slot)
+	head := transition.NextSlotState(hash, slot)
 	if head != nil {
 		return head, nil
 	}
@@ -158,7 +161,7 @@ func (vs *Server) getHeadNoReorg(ctx context.Context, slot primitives.Slot, pare
 	if head != nil {
 		return head, nil
 	}
-	head, err := vs.HeadFetcher.HeadState(ctx)
+	head, err = vs.HeadFetcher.HeadState(ctx)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not get head state: %v", err)
 	}
@@ -515,7 +518,10 @@ func (vs *Server) computeStateRoot(ctx context.Context, block interfaces.ReadOnl
 		return nil, errors.Wrap(err, "could not get parent slot")
 	}
 	if block.Version() >= version.EPBS && slots.ToEpoch(parentSlot) >= params.BeaconConfig().EPBSForkEpoch {
-		parentHash := vs.ForkchoiceFetcher.HashForBlockRoot(parentRoot)
+		parentHash, err := vs.ForkchoiceFetcher.HashForBlockRoot(ctx, parentRoot)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not get parent hash")
+		}
 		signedBid, err := block.Block().Body().SignedExecutionPayloadHeader()
 		if err != nil {
 			return nil, errors.Wrap(err, "could not get signed execution payload header")
@@ -524,9 +530,10 @@ func (vs *Server) computeStateRoot(ctx context.Context, block interfaces.ReadOnl
 		if err != nil {
 			return nil, errors.Wrap(err, "could not get execution payload header")
 		}
-		if parentHash == bid.ParentBlockHash() {
+		hash := [32]byte(parentHash)
+		if hash == bid.ParentBlockHash() {
 			// It's based on full, use the state by hash
-			parentRoot = parentHash
+			parentRoot = hash
 		}
 	}
 

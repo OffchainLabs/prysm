@@ -3,11 +3,13 @@ package blockchain
 import (
 	"context"
 
+	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	consensus_blocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/forkchoice"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 )
 
 // CachedHeadRoot returns the corresponding value from Forkchoice
@@ -102,11 +104,31 @@ func (s *Service) ParentRoot(root [32]byte) ([32]byte, error) {
 	return s.cfg.ForkChoiceStore.ParentRoot(root)
 }
 
-// HashForBlockRoot wraps a call to the corresponding method in forkchoice
-func (s *Service) HashForBlockRoot(root [32]byte) [32]byte {
+// HashForBlockRoot wraps a call to the corresponding method in forkchoice. If the hash is older it will grab it from DB
+func (s *Service) HashForBlockRoot(ctx context.Context, root [32]byte) ([]byte, error) {
 	s.cfg.ForkChoiceStore.RLock()
 	defer s.cfg.ForkChoiceStore.RUnlock()
-	return s.cfg.ForkChoiceStore.HashForBlockRoot(root)
+	hash := s.cfg.ForkChoiceStore.HashForBlockRoot(root)
+	if hash != [32]byte{} {
+		return hash[:], nil
+	}
+	blk, err := s.cfg.BeaconDB.Block(ctx, root)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get block from DB and forkchoice")
+	}
+	if blk.Version() < version.EPBS {
+		return nil, errors.New("block version is too old")
+	}
+	sh, err := blk.Block().Body().SignedExecutionPayloadHeader()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get signed execution payload header")
+	}
+	h, err := sh.Header()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get execution payload header")
+	}
+	hash = h.BlockHash()
+	return hash[:], nil
 }
 
 // GetPTCVote wraps a call to the corresponding method in forkchoice and checks

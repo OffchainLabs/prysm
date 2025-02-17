@@ -732,6 +732,6 @@ func (c *ChainService) GetPTCVote(root [32]byte) primitives.PTCStatus {
 	return c.PayloadStatus
 }
 
-func (c *ChainService) HashForBlockRoot(root [32]byte) [32]byte {
-	return root
+func (c *ChainService) HashForBlockRoot(_ context.Context, root [32]byte) ([]byte, error) {
+	return root[:], nil
 }
