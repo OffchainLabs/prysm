@@ -63,7 +63,7 @@ func (s *Service) ReconstructPayloadEnvelope(ctx context.Context, e *pb.SignedBl
 			BeaconBlockRoot:    e.Message.BeaconBlockRoot,
 			Slot:               e.Message.Slot,
 			BlobKzgCommitments: e.Message.BlobKzgCommitments,
-			StateRoot:          e.Message.StateRoot,
+			BeaconStateRoot:    e.Message.BeaconStateRoot,
 		},
 		Signature: e.Signature,
 	}, nil

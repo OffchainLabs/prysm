@@ -86,7 +86,7 @@ func (p *executionPayloadEnvelope) IsNil() bool {
 	if p.p.BlobKzgCommitments == nil {
 		return true
 	}
-	if p.p.StateRoot == nil {
+	if p.p.BeaconStateRoot == nil {
 		return true
 	}
 	return false
@@ -132,7 +132,7 @@ func (p *executionPayloadEnvelope) BlobKzgCommitments() [][]byte {
 
 // StateRoot returns the wrapped value
 func (p *executionPayloadEnvelope) StateRoot() [field_params.RootLength]byte {
-	return [field_params.RootLength]byte(p.p.StateRoot)
+	return [field_params.RootLength]byte(p.p.BeaconStateRoot)
 }
 
 // VersionedHashes returns the Versioned Hashes of the KZG commitments within

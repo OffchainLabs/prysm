@@ -333,7 +333,7 @@ func ExecutionPayloadEnvelopeFromConsensus(b *enginev1.ExecutionPayloadEnvelope)
 		BeaconBlockRoot:    hexutil.Encode(b.BeaconBlockRoot),
 		Slot:               fmt.Sprintf("%d", b.Slot),
 		BlobKzgCommitments: committments,
-		StateRoot:          hexutil.Encode(b.StateRoot),
+		StateRoot:          hexutil.Encode(b.BeaconStateRoot),
 	}, nil
 }
 

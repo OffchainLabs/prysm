@@ -62,7 +62,7 @@ message ExecutionPayloadEnvelope {
     (ethereum.eth.ext.ssz_size) = "?,48",
     (ethereum.eth.ext.ssz_max) = "max_blob_commitments.size"
   ];
-  bytes state_root = 7 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes beacon_state_root = 7 [ (ethereum.eth.ext.ssz_size) = "32" ];
 }
 
 message SignedExecutionPayloadEnvelope {

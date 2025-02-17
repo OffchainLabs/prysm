@@ -54,7 +54,7 @@ func (vs *Server) GetExecutionPayloadEnvelope(ctx context.Context, req *eth.Payl
 	}
 	vs.payloadEnvelope.Slot = req.Slot
 
-	vs.payloadEnvelope.StateRoot = make([]byte, 32)
+	vs.payloadEnvelope.BeaconStateRoot = make([]byte, 32)
 	p, err := blocks.WrappedROExecutionPayloadEnvelope(vs.payloadEnvelope)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to wrap execution payload envelope: %v", err)
@@ -63,7 +63,7 @@ func (vs *Server) GetExecutionPayloadEnvelope(ctx context.Context, req *eth.Payl
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to compute post payload state root: %v", err)
 	}
-	vs.payloadEnvelope.StateRoot = stateRoot
+	vs.payloadEnvelope.BeaconStateRoot = stateRoot
 
 	log.WithField("stateRoot", fmt.Sprintf("%#x", stateRoot)).Debugf("Computed state root at execution stage")
 

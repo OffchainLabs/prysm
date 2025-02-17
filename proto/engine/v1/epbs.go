@@ -11,7 +11,7 @@ func (s *SignedExecutionPayloadEnvelope) Blind() *SignedBlindPayloadEnvelope {
 		Message: &BlindPayloadEnvelope{
 			ParentHash:         s.Message.Payload.ParentHash,
 			FeeRecipient:       s.Message.Payload.FeeRecipient,
-			StateRoot:          s.Message.StateRoot,
+			StateRoot:          s.Message.Payload.StateRoot,
 			ReceiptsRoot:       s.Message.Payload.ReceiptsRoot,
 			LogsBloom:          s.Message.Payload.LogsBloom,
 			PrevRandao:         s.Message.Payload.PrevRandao,
@@ -28,7 +28,7 @@ func (s *SignedExecutionPayloadEnvelope) Blind() *SignedBlindPayloadEnvelope {
 			BeaconBlockRoot:    s.Message.BeaconBlockRoot,
 			Slot:               s.Message.Slot,
 			BlobKzgCommitments: s.Message.BlobKzgCommitments,
-			BeaconStateRoot:    s.Message.StateRoot,
+			BeaconStateRoot:    s.Message.BeaconStateRoot,
 		},
 		Signature: s.Signature,
 	}

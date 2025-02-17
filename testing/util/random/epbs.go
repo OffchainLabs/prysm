@@ -377,7 +377,7 @@ func ExecutionPayloadEnvelope(t *testing.T) *enginev1.ExecutionPayloadEnvelope {
 		ExecutionRequests: ExecutionRequests(t), BuilderIndex: primitives.ValidatorIndex(randomUint64(t)),
 		BeaconBlockRoot:    randomBytes(32, t),
 		BlobKzgCommitments: [][]byte{randomBytes(48, t), randomBytes(48, t), randomBytes(48, t)},
-		StateRoot:          randomBytes(32, t),
+		BeaconStateRoot:    randomBytes(32, t),
 	}
 }
 

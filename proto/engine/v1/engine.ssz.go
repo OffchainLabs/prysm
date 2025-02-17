@@ -822,12 +822,12 @@ func (e *ExecutionPayloadEnvelope) MarshalSSZTo(buf []byte) (dst []byte, err err
 	dst = ssz.WriteOffset(dst, offset)
 	offset += len(e.BlobKzgCommitments) * 48
 
-	// Field (6) 'StateRoot'
-	if size := len(e.StateRoot); size != 32 {
-		err = ssz.ErrBytesLengthFn("--.StateRoot", size, 32)
+	// Field (6) 'BeaconStateRoot'
+	if size := len(e.BeaconStateRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.BeaconStateRoot", size, 32)
 		return
 	}
-	dst = append(dst, e.StateRoot...)
+	dst = append(dst, e.BeaconStateRoot...)
 
 	// Field (0) 'Payload'
 	if dst, err = e.Payload.MarshalSSZTo(dst); err != nil {
@@ -897,11 +897,11 @@ func (e *ExecutionPayloadEnvelope) UnmarshalSSZ(buf []byte) error {
 		return ssz.ErrOffset
 	}
 
-	// Field (6) 'StateRoot'
-	if cap(e.StateRoot) == 0 {
-		e.StateRoot = make([]byte, 0, len(buf[60:92]))
+	// Field (6) 'BeaconStateRoot'
+	if cap(e.BeaconStateRoot) == 0 {
+		e.BeaconStateRoot = make([]byte, 0, len(buf[60:92]))
 	}
-	e.StateRoot = append(e.StateRoot, buf[60:92]...)
+	e.BeaconStateRoot = append(e.BeaconStateRoot, buf[60:92]...)
 
 	// Field (0) 'Payload'
 	{
@@ -1016,12 +1016,12 @@ func (e *ExecutionPayloadEnvelope) HashTreeRootWith(hh *ssz.Hasher) (err error) 
 		hh.MerkleizeWithMixin(subIndx, numItems, 4096)
 	}
 
-	// Field (6) 'StateRoot'
-	if size := len(e.StateRoot); size != 32 {
-		err = ssz.ErrBytesLengthFn("--.StateRoot", size, 32)
+	// Field (6) 'BeaconStateRoot'
+	if size := len(e.BeaconStateRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.BeaconStateRoot", size, 32)
 		return
 	}
-	hh.PutBytes(e.StateRoot)
+	hh.PutBytes(e.BeaconStateRoot)
 
 	hh.Merkleize(indx)
 	return
