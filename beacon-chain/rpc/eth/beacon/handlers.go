@@ -1611,6 +1611,7 @@ func (s *Server) broadcastSeenBlockSidecars(
 
 // GetPendingDeposits returns pending deposits for state with given 'stateId'.
 // Should return 400 if the state retrieved is prior to Electra.
+// Supports both JSON and SSZ responses based on Accept header.
 func (s *Server) GetPendingDeposits(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "beacon.GetPendingDeposits")
 	defer span.End()
