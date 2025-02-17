@@ -141,7 +141,7 @@ func (s *Service) latePayloadTasks(ctx context.Context) {
 		log.WithError(err).Error("failed to get hash for block root")
 		return
 	}
-	if s.cfg.chain.HashInForkchoice([32]byte(hash)) {
+	if s.cfg.chain.PayloadBeingSynced(root) || s.cfg.chain.HashInForkchoice([32]byte(hash)) {
 		return
 	}
 	log.WithFields(logrus.Fields{"blockRoot": fmt.Sprintf("%#x", root), "slot": slot}).Debug("requesting late payload")

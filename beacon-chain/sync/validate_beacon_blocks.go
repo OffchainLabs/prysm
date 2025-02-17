@@ -217,7 +217,11 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 			err := errors.Errorf("unknown execution parent for block with slot %d and parent root %#x", blk.Block().Slot(), root)
 			log.WithError(err).WithFields(getBlockFields(blk)).Debug("requesting parent payload")
 			go func() {
-				if err := s.sendBatchPayloadRequest(context.Background(), [][32]byte{[32]byte(root)}, rand.NewGenerator()); err != nil {
+				blockRoot := [32]byte(root)
+				if s.cfg.chain.PayloadBeingSynced(blockRoot) {
+					return
+				}
+				if err := s.sendBatchPayloadRequest(context.Background(), [][32]byte{blockRoot}, rand.NewGenerator()); err != nil {
 					log.WithError(err).Error("failed to send batch payload request")
 				}
 			}()

@@ -162,6 +162,10 @@ func (s *Service) processPendingPayloads(root [32]byte) {
 	if payload == nil {
 		return
 	}
+	if s.cfg.chain.PayloadBeingSynced(root) || s.cfg.chain.HashInForkchoice([32]byte(payload.Message.Payload.BlockHash)) {
+		s.pendingExecutionPayloads.Remove(root)
+		return
+	}
 	e, err := blocks.WrappedROSignedExecutionPayloadEnvelope(payload)
 	if err != nil {
 		log.WithError(err).Error("failed to create read only signed payload execution envelope")
