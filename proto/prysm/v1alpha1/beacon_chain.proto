@@ -44,6 +44,7 @@ service BeaconChain {
   // information via a boolean query filter.
   rpc ListAttestations(ListAttestationsRequest)
       returns (ListAttestationsResponse) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/beacon/attestations"
     };
@@ -57,6 +58,7 @@ service BeaconChain {
   // information via a boolean query filter.
   rpc ListAttestationsElectra(ListAttestationsRequest)
       returns (ListAttestationsElectraResponse) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/beacon/attestations_electra"
     };
@@ -70,6 +72,7 @@ service BeaconChain {
   // genesis information via a boolean query filter.
   rpc ListIndexedAttestations(ListIndexedAttestationsRequest)
       returns (ListIndexedAttestationsResponse) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/beacon/attestations/indexed"
     };
@@ -83,6 +86,7 @@ service BeaconChain {
   // genesis information via a boolean query filter.
   rpc ListIndexedAttestationsElectra(ListIndexedAttestationsRequest)
       returns (ListIndexedAttestationsElectraResponse) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/beacon/attestations/indexed_electra"
     };
@@ -99,6 +103,7 @@ service BeaconChain {
   // https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#attestations
   rpc AttestationPool(AttestationPoolRequest)
       returns (AttestationPoolResponse) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/beacon/attestations/pool"
     };
@@ -115,6 +120,7 @@ service BeaconChain {
   // https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#attestations
   rpc AttestationPoolElectra(AttestationPoolRequest)
       returns (AttestationPoolElectraResponse) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/beacon/attestations/pool_electra"
     };
@@ -129,6 +135,7 @@ service BeaconChain {
   // endpoint allows for retrieval of genesis information via a boolean query
   // filter.
   rpc ListBeaconBlocks(ListBlocksRequest) returns (ListBeaconBlocksResponse) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha2/beacon/blocks"
     };
@@ -155,6 +162,7 @@ service BeaconChain {
   // default. This endpoint allows for retrieval of genesis information via a
   // boolean query filter.
   rpc ListBeaconCommittees(ListCommitteesRequest) returns (BeaconCommittees) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/beacon/committees"
     };
@@ -165,6 +173,7 @@ service BeaconChain {
   // via a boolean query filter.
   rpc ListValidatorBalances(ListValidatorBalancesRequest)
       returns (ValidatorBalances) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/validators/balances"
     };
@@ -176,6 +185,7 @@ service BeaconChain {
   // specific validator set in time. This endpoint allows for retrieval of
   // genesis information via a boolean query filter.
   rpc ListValidators(ListValidatorsRequest) returns (Validators) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/validators"
     };
@@ -185,6 +195,7 @@ service BeaconChain {
   //
   // This request may query by validator index or public key.
   rpc GetValidator(GetValidatorRequest) returns (Validator) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/validator"
     };
@@ -197,6 +208,7 @@ service BeaconChain {
   // information via a boolean query filter.
   rpc GetValidatorActiveSetChanges(GetValidatorActiveSetChangesRequest)
       returns (ActiveSetChanges) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/validators/activesetchanges"
     };
@@ -204,6 +216,7 @@ service BeaconChain {
 
   // Retrieve the current validator queue information.
   rpc GetValidatorQueue(google.protobuf.Empty) returns (ValidatorQueue) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/validators/queue"
     };
@@ -215,6 +228,7 @@ service BeaconChain {
   // and returns a performance report for all of them respectively.
   rpc GetValidatorPerformance(ValidatorPerformanceRequest)
       returns (ValidatorPerformanceResponse) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/validators/performance"
     };
@@ -227,6 +241,7 @@ service BeaconChain {
   // information via a boolean query filter.
   rpc ListValidatorAssignments(ListValidatorAssignmentsRequest)
       returns (ValidatorAssignments) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/validators/assignments"
     };
@@ -247,6 +262,7 @@ service BeaconChain {
 
   // Retrieve the current configuration parameters of the beacon chain.
   rpc GetBeaconConfig(google.protobuf.Empty) returns (BeaconConfig) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/beacon/config"
     };
@@ -255,6 +271,7 @@ service BeaconChain {
   // Submit an attester slashing object to the beacon node.
   rpc SubmitAttesterSlashing(AttesterSlashing)
       returns (SubmitSlashingResponse) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/beacon/slashings/attester/submit"
     };
@@ -263,6 +280,7 @@ service BeaconChain {
   // Submit an attester slashing object to the beacon node.
   rpc SubmitAttesterSlashingElectra(AttesterSlashingElectra)
       returns (SubmitSlashingResponse) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/beacon/slashings/attester/submit_electra"
     };
@@ -271,6 +289,7 @@ service BeaconChain {
   // Submit a proposer slashing object to the beacon node.
   rpc SubmitProposerSlashing(ProposerSlashing)
       returns (SubmitSlashingResponse) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/beacon/slashings/proposer/submit"
     };
@@ -279,6 +298,7 @@ service BeaconChain {
   // Returns a list of validators individual vote status of a given epoch.
   rpc GetIndividualVotes(IndividualVotesRequest)
       returns (IndividualVotesRespond) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/beacon/individual_votes"
     };
@@ -287,6 +307,8 @@ service BeaconChain {
 
 // Request for indexed attestations by target epoch.
 message ListIndexedAttestationsRequest {
+  option deprecated = true;
+
   oneof query_filter {
     // Retrieve attestations by epoch processed.
     uint64 epoch = 1 [
@@ -310,6 +332,7 @@ message ListIndexedAttestationsRequest {
 
 // Request for attestations.
 message ListAttestationsRequest {
+  option deprecated = true;
 
   oneof query_filter {
     // Filter attestations by epoch processed.
@@ -333,6 +356,8 @@ message ListAttestationsRequest {
 }
 
 message ListAttestationsResponse {
+  option deprecated = true;
+
   repeated Attestation attestations = 1;
 
   // A pagination token returned from a previous call to `ListAttestations`
@@ -345,6 +370,8 @@ message ListAttestationsResponse {
 }
 
 message ListAttestationsElectraResponse {
+  option deprecated = true;
+
   repeated AttestationElectra attestations = 1;
 
   // A pagination token returned from a previous call to `ListAttestations`
@@ -357,6 +384,8 @@ message ListAttestationsElectraResponse {
 }
 
 message ListIndexedAttestationsResponse {
+  option deprecated = true;
+
   repeated IndexedAttestation indexed_attestations = 1;
 
   // A pagination token returned from a previous call to
@@ -369,6 +398,8 @@ message ListIndexedAttestationsResponse {
 }
 
 message ListIndexedAttestationsElectraResponse {
+  option deprecated = true;
+
   repeated IndexedAttestationElectra indexed_attestations = 1;
 
   // A pagination token returned from a previous call to
@@ -381,6 +412,8 @@ message ListIndexedAttestationsElectraResponse {
 }
 
 message ListBlocksRequest {
+  option deprecated = true;
+
   oneof query_filter {
     // Block root filter to return a single block.
     bytes root = 1;
@@ -415,6 +448,8 @@ message ListBlocksRequest {
 }
 
 message ListBeaconBlocksResponse {
+  option deprecated = true;
+
   repeated BeaconBlockContainer block_containers = 1;
 
   // A pagination token returned from a previous call to `ListBeaconBlocks`
@@ -478,6 +513,8 @@ message BeaconBlockContainer {
 
 // Information about the head of the beacon chain.
 message ChainHead {
+  option deprecated = true;
+
   // Slot of the head block.
   uint64 head_slot = 1 [
     (ethereum.eth.ext.cast_type) =
@@ -544,6 +581,8 @@ message ChainHead {
 }
 
 message ListCommitteesRequest {
+  option deprecated = true;
+
   oneof query_filter {
     // Optional criteria to retrieve data at a specific epoch.
     uint64 epoch = 1 [
@@ -557,6 +596,8 @@ message ListCommitteesRequest {
 }
 
 message BeaconCommittees {
+  option deprecated = true;
+
   message CommitteeItem {
     // A committee is a list of validator indices participating in consensus at
     // a slot.
@@ -585,6 +626,8 @@ message BeaconCommittees {
 }
 
 message ListValidatorBalancesRequest {
+  option deprecated = true;
+
   oneof query_filter {
     // Optional criteria to retrieve balances at a specific epoch.
     uint64 epoch = 1 [
@@ -616,6 +659,8 @@ message ListValidatorBalancesRequest {
 }
 
 message ValidatorBalances {
+  option deprecated = true;
+
   // Epoch which the state was considered to determine the validator balances.
   uint64 epoch = 1 [
     (ethereum.eth.ext.cast_type) =
@@ -650,6 +695,8 @@ message ValidatorBalances {
 }
 
 message ListValidatorsRequest {
+  option deprecated = true;
+
   oneof query_filter {
     // Optional criteria to retrieve validators at a specific epoch.
     // Omitting this field or setting it to zero will retrieve a response
@@ -688,6 +735,8 @@ message ListValidatorsRequest {
 }
 
 message GetValidatorRequest {
+  option deprecated = true;
+
   oneof query_filter {
     // Validator index in the registry.
     uint64 index = 1 [ (ethereum.eth.ext.cast_type) =
@@ -700,6 +749,8 @@ message GetValidatorRequest {
 }
 
 message Validators {
+  option deprecated = true;
+
   // Epoch which the state was considered to determine the active validator
   // set. This field is not optional. Zero value epoch indicates the validator
   // set is from the Ethereum proof of stake genesis set.
@@ -727,6 +778,8 @@ message Validators {
 }
 
 message GetValidatorActiveSetChangesRequest {
+  option deprecated = true;
+
   oneof query_filter {
     // Optional criteria to retrieve balances at a specific epoch.
     uint64 epoch = 1 [
@@ -740,6 +793,8 @@ message GetValidatorActiveSetChangesRequest {
 }
 
 message ActiveSetChanges {
+  option deprecated = true;
+
   // Epoch which the state was considered to determine the active validator
   // set.
   uint64 epoch = 1 [
@@ -791,6 +846,8 @@ message ActiveSetChanges {
 }
 
 message ValidatorPerformanceRequest {
+  option deprecated = true;
+
   // A list of 48 byte validator public keys.
   repeated bytes public_keys = 1 [ deprecated = true ];
   // A list of validator indices to retrieve performance by their indices.
@@ -801,6 +858,8 @@ message ValidatorPerformanceRequest {
 }
 
 message ValidatorPerformanceResponse {
+  option deprecated = true;
+
   // A list of validator effective balances mapped 1-to-1 with the request's
   // public keys.
   repeated uint64 current_effective_balances = 1;
@@ -853,6 +912,7 @@ message ValidatorPerformanceResponse {
 // future hard fork.
 message ValidatorQueue {
   option deprecated = true;
+
   // The amount of ether in gwei allowed to enter or exit the active
   // validator set.
   uint64 churn_limit = 1;
@@ -883,6 +943,8 @@ message ValidatorQueue {
 }
 
 message ListValidatorAssignmentsRequest {
+  option deprecated = true;
+
   oneof query_filter {
     // Epoch to validator assignments for.
     uint64 epoch = 1 [
@@ -912,6 +974,8 @@ message ListValidatorAssignmentsRequest {
 }
 
 message ValidatorAssignments {
+  option deprecated = true;
+
   message CommitteeAssignment {
     // Beacon committees are responsible for crosslinking committee data back to
     // the beacon chain, they also attest and produce beacon chain blocks. This
@@ -1003,6 +1067,8 @@ message ValidatorParticipationResponse {
 }
 
 message AttestationPoolRequest {
+  option deprecated = true;
+
   // The maximum number of objects to return in the response.
   // This field is optional.
   int32 page_size = 1;
@@ -1014,6 +1080,8 @@ message AttestationPoolRequest {
 }
 
 message AttestationPoolResponse {
+  option deprecated = true;
+
   // List of attestations currently in the pool of the beacon chain.
   repeated Attestation attestations = 1;
 
@@ -1027,6 +1095,8 @@ message AttestationPoolResponse {
 }
 
 message AttestationPoolElectraResponse {
+  option deprecated = true;
+
   // List of attestations currently in the pool of the beacon chain.
   repeated AttestationElectra attestations = 1;
 
