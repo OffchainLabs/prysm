@@ -16,7 +16,7 @@ go_library(
         "@io_opentelemetry_go_otel//attribute:go_default_library",
         "@io_opentelemetry_go_otel//codes:go_default_library",
         "@io_opentelemetry_go_otel//semconv/v1.17.0:go_default_library",
-        "@io_opentelemetry_go_otel_exporters_jaeger//:go_default_library",
+        "@io_opentelemetry_go_otel_exporters_otlp_otlptrace_otlptracehttp//:go_default_library",
         "@io_opentelemetry_go_otel_sdk//resource:go_default_library",
         "@io_opentelemetry_go_otel_sdk//trace:go_default_library",
         "@io_opentelemetry_go_otel_trace//:go_default_library",
