@@ -324,6 +324,15 @@ func depositedValidatorsAreActive(ec *e2etypes.EvaluationContext, conns ...*grpc
 			delete(expected, key)
 			continue
 		}
+		// This is to handle the changed validator activation procedure post-electra.
+		if v.ActivationEligibilityEpoch != math.MaxUint64 && v.ActivationEligibilityEpoch > chainHead.FinalizedEpoch {
+			delete(expected, key)
+			continue
+		}
+		if v.ActivationEpoch != math.MaxUint64 && v.ActivationEpoch > chainHead.HeadEpoch {
+			delete(expected, key)
+			continue
+		}
 		if !corehelpers.IsActiveValidator(v, chainHead.HeadEpoch) {
 			inactive++
 		}
