@@ -17,6 +17,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// Deprecated: gRPC API is being deprecated in favour of REST API.
+//
 // GetBlock in an ssz-encoded format by block root.
 func (ds *Server) GetBlock(
 	ctx context.Context,
@@ -39,6 +41,8 @@ func (ds *Server) GetBlock(
 	}, nil
 }
 
+// Deprecated: gRPC API is being deprecated in favour of REST API.
+//
 // GetInclusionSlot of an attestation in block.
 func (ds *Server) GetInclusionSlot(ctx context.Context, req *pbrpc.InclusionSlotRequest) (*pbrpc.InclusionSlotResponse, error) {
 	ds.GenesisTimeFetcher.CurrentSlot()

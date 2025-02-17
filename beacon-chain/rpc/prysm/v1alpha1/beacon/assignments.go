@@ -18,6 +18,8 @@ import (
 
 const errEpoch = "cannot retrieve information about an epoch in the future, current epoch %d, requesting %d"
 
+// Deprecated: gRPC API is being deprecated in favour of REST API.
+//
 // ListValidatorAssignments retrieves the validator assignments for a given epoch,
 // optional validator indices or public keys may be included to filter validator assignments.
 func (bs *Server) ListValidatorAssignments(

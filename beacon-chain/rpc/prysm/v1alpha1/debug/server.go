@@ -33,6 +33,8 @@ type Server struct {
 	ReplayerBuilder    stategen.ReplayerBuilder
 }
 
+// Deprecated: gRPC API is being deprecated in favour of REST API.
+//
 // SetLoggingLevel of a beacon node according to a request type,
 // either INFO, DEBUG, or TRACE.
 func (_ *Server) SetLoggingLevel(_ context.Context, req *pbrpc.LoggingLevelRequest) (*empty.Empty, error) {

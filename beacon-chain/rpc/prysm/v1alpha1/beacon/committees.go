@@ -15,6 +15,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// Deprecated: gRPC API is being deprecated in favour of REST API.
+//
 // ListBeaconCommittees for a given epoch.
 //
 // If no filter criteria is specified, the response returns
