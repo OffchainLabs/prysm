@@ -250,3 +250,10 @@ type ChainHead struct {
 	PreviousJustifiedBlockRoot string `json:"previous_justified_block_root"`
 	OptimisticStatus           bool   `json:"optimistic_status"`
 }
+
+type GetPendingDepositsResponse struct {
+	Version             string            `json:"version"`
+	ExecutionOptimistic bool              `json:"execution_optimistic"`
+	Finalized           bool              `json:"finalized"`
+	Data                []*PendingDeposit `json:"data"`
+}

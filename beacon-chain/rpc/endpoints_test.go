@@ -27,6 +27,7 @@ func Test_endpoints(t *testing.T) {
 		"/eth/v1/beacon/states/{state_id}/committees":                {http.MethodGet},
 		"/eth/v1/beacon/states/{state_id}/sync_committees":           {http.MethodGet},
 		"/eth/v1/beacon/states/{state_id}/randao":                    {http.MethodGet},
+		"/eth/v1/beacon/states/{state_id}/pending_deposits":          {http.MethodGet},
 		"/eth/v1/beacon/headers":                                     {http.MethodGet},
 		"/eth/v1/beacon/headers/{block_id}":                          {http.MethodGet},
 		"/eth/v1/beacon/blinded_blocks":                              {http.MethodPost},

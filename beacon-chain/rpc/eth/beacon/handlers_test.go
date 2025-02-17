@@ -20,6 +20,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	chainMock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache/depositsnapshot"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
 	dbTest "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
@@ -4753,4 +4754,214 @@ func Test_validateBlobSidecars(t *testing.T) {
 	b, err = blocks.NewSignedBeaconBlock(blk)
 	require.NoError(t, err)
 	require.ErrorContains(t, "could not verify blob proof: can't verify opening proof", s.validateBlobSidecars(b, [][]byte{blob[:]}, [][]byte{proof[:]}))
+}
+
+func TestGetPendingDeposits(t *testing.T) {
+	config := params.BeaconConfig()
+	st, _ := util.DeterministicGenesisStateElectra(t, config.MaxValidatorsPerCommittee)
+
+	validators := st.Validators()
+	deps := make([]*eth.PendingDeposit, 20)
+	for i := 0; i < len(deps); i += 1 {
+		dummySig := make([]byte, 96)
+		for j := 0; j < 96; j++ {
+			dummySig[j] = byte(i)
+		}
+		deps[i] = &eth.PendingDeposit{
+			PublicKey:             validators[i].PublicKey,
+			WithdrawalCredentials: validators[i].WithdrawalCredentials,
+			Amount:                uint64(helpers.ActivationExitChurnLimit(1_000*1e9)) / 10,
+			Slot:                  0,
+			Signature:             dummySig,
+		}
+	}
+	require.NoError(t, st.SetPendingDeposits(deps))
+
+	chainService := &chainMock.ChainService{
+		Optimistic:     false,
+		FinalizedRoots: map[[32]byte]bool{},
+	}
+	server := &Server{
+		Stater: &testutil.MockStater{
+			BeaconState: st,
+		},
+		OptimisticModeFetcher: chainService,
+		FinalizationFetcher:   chainService,
+		BeaconDB:              nil,
+		ChainInfoFetcher:      chainService,
+	}
+
+	t.Run("json response", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/pending_deposits", nil)
+		req.SetPathValue("state_id", "head")
+		rec := httptest.NewRecorder()
+		rec.Body = new(bytes.Buffer)
+
+		server.GetPendingDeposits(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code)
+		require.Equal(t, "head", rec.Header().Get(api.VersionHeader))
+
+		var resp structs.GetPendingDepositsResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+
+		expectedVersion := version.String(st.Version())
+		require.Equal(t, expectedVersion, resp.Version)
+
+		require.Equal(t, false, resp.ExecutionOptimistic)
+		require.Equal(t, false, resp.Finalized)
+
+		expectedDeposits := structs.PendingDepositsFromConsensus(deps)
+		require.DeepEqual(t, expectedDeposits, resp.Data)
+	})
+	t.Run("ssz response", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/pending_deposits", nil)
+		req.Header.Set("Accept", "application/octet-stream")
+		req.SetPathValue("state_id", "head")
+		rec := httptest.NewRecorder()
+		rec.Body = new(bytes.Buffer)
+
+		server.GetPendingDeposits(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code)
+		require.Equal(t, "head", rec.Header().Get(api.VersionHeader))
+
+		responseBytes := rec.Body.Bytes()
+		var recoveredDeposits []*eth.PendingDeposit
+
+		// Each deposit should have the same size when serialized
+		depositSize := 0
+		if len(deps) > 0 {
+			firstDeposit, err := deps[0].MarshalSSZ()
+			require.NoError(t, err)
+			depositSize = len(firstDeposit)
+		}
+		// Verify total size matches expected number of deposits
+		require.Equal(t, len(responseBytes), depositSize*len(deps))
+
+		for i := 0; i < len(deps); i++ {
+			start := i * depositSize
+			end := start + depositSize
+
+			var deposit eth.PendingDeposit
+			require.NoError(t, deposit.UnmarshalSSZ(responseBytes[start:end]))
+			recoveredDeposits = append(recoveredDeposits, &deposit)
+		}
+		require.DeepEqual(t, deps, recoveredDeposits)
+	})
+	t.Run("pre electra state", func(t *testing.T) {
+		// Create a pre-Electra state (e.g., Deneb)
+		preElectraSt, _ := util.DeterministicGenesisStateDeneb(t, config.MaxValidatorsPerCommittee)
+
+		preElectraServer := &Server{
+			Stater: &testutil.MockStater{
+				BeaconState: preElectraSt,
+			},
+			OptimisticModeFetcher: chainService,
+			FinalizationFetcher:   chainService,
+			BeaconDB:              nil,
+			ChainInfoFetcher:      chainService,
+		}
+
+		// Test JSON request
+		req := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/pending_deposits", nil)
+		req.SetPathValue("state_id", "head")
+		rec := httptest.NewRecorder()
+		rec.Body = new(bytes.Buffer)
+
+		preElectraServer.GetPendingDeposits(rec, req)
+		require.Equal(t, http.StatusBadRequest, rec.Code)
+
+		var errResp struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		}
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &errResp))
+		require.Equal(t, "state_id is prior to electra", errResp.Message)
+
+		// Test SSZ request
+		sszReq := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/pending_deposits", nil)
+		sszReq.Header.Set("Accept", "application/octet-stream")
+		sszReq.SetPathValue("state_id", "head")
+		sszRec := httptest.NewRecorder()
+		sszRec.Body = new(bytes.Buffer)
+
+		preElectraServer.GetPendingDeposits(sszRec, sszReq)
+		require.Equal(t, http.StatusBadRequest, sszRec.Code)
+
+		var sszErrResp struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		}
+		require.NoError(t, json.Unmarshal(sszRec.Body.Bytes(), &sszErrResp))
+		require.Equal(t, "state_id is prior to electra", sszErrResp.Message)
+	})
+	t.Run("missing state_id parameter", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/pending_deposits", nil)
+		// Intentionally not setting state_id
+		rec := httptest.NewRecorder()
+		rec.Body = new(bytes.Buffer)
+
+		server.GetPendingDeposits(rec, req)
+		require.Equal(t, http.StatusBadRequest, rec.Code)
+
+		var errResp struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		}
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &errResp))
+		require.Equal(t, "state_id is required in URL params", errResp.Message)
+	})
+	t.Run("optimistic state", func(t *testing.T) {
+		optimisticChainService := &chainMock.ChainService{
+			Optimistic:     true,
+			FinalizedRoots: map[[32]byte]bool{},
+		}
+		optimisticServer := &Server{
+			Stater:                server.Stater,
+			OptimisticModeFetcher: optimisticChainService,
+			FinalizationFetcher:   optimisticChainService,
+			BeaconDB:              nil,
+			ChainInfoFetcher:      optimisticChainService,
+		}
+
+		req := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/pending_deposits", nil)
+		req.SetPathValue("state_id", "head")
+		rec := httptest.NewRecorder()
+		rec.Body = new(bytes.Buffer)
+
+		optimisticServer.GetPendingDeposits(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code)
+
+		var resp structs.GetPendingDepositsResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+		require.Equal(t, true, resp.ExecutionOptimistic)
+	})
+
+	t.Run("finalized state", func(t *testing.T) {
+		blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
+		require.NoError(t, err)
+
+		finalizedChainService := &chainMock.ChainService{
+			Optimistic:     false,
+			FinalizedRoots: map[[32]byte]bool{blockRoot: true},
+		}
+		finalizedServer := &Server{
+			Stater:                server.Stater,
+			OptimisticModeFetcher: finalizedChainService,
+			FinalizationFetcher:   finalizedChainService,
+			BeaconDB:              nil,
+			ChainInfoFetcher:      finalizedChainService,
+		}
+
+		req := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/pending_deposits", nil)
+		req.SetPathValue("state_id", "head")
+		rec := httptest.NewRecorder()
+		rec.Body = new(bytes.Buffer)
+
+		finalizedServer.GetPendingDeposits(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code)
+
+		var resp structs.GetPendingDepositsResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+		require.Equal(t, true, resp.Finalized)
+	})
 }

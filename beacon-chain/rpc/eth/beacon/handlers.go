@@ -1608,3 +1608,72 @@ func (s *Server) broadcastSeenBlockSidecars(
 	}
 	return nil
 }
+
+// GetPendingDeposits returns pending deposits for state with given 'stateId'.
+// Should return 400 if the state retrieved is prior to Electra.
+func (s *Server) GetPendingDeposits(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "beacon.GetPendingDeposits")
+	defer span.End()
+
+	stateId := r.PathValue("state_id")
+	if stateId == "" {
+		httputil.HandleError(w, "state_id is required in URL params", http.StatusBadRequest)
+		return
+	}
+	st, err := s.Stater.State(ctx, []byte(stateId))
+	if err != nil {
+		shared.WriteStateFetchError(w, err)
+		return
+	}
+	if st.Version() < version.Electra {
+		httputil.HandleError(w, "state_id is prior to electra", http.StatusBadRequest)
+		return
+	}
+	isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
+	if err != nil {
+		httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
+	if err != nil {
+		httputil.HandleError(w, "Could not calculate root of latest block header: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	isFinalized := s.FinalizationFetcher.IsFinalized(ctx, blockRoot)
+
+	pd, err := st.PendingDeposits()
+	if err != nil {
+		httputil.HandleError(w, "Could not get pending deposits: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set(api.VersionHeader, stateId)
+	if httputil.RespondWithSsz(r) {
+		sszData, err := s.serializePendingDeposits(pd)
+		if err != nil {
+			httputil.HandleError(w, "Failed to serialize pending deposits: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		httputil.WriteSsz(w, sszData, "pending_deposits.ssz")
+	} else {
+		resp := structs.GetPendingDepositsResponse{
+			Version:             version.String(st.Version()),
+			ExecutionOptimistic: isOptimistic,
+			Finalized:           isFinalized,
+			Data:                structs.PendingDepositsFromConsensus(pd),
+		}
+		httputil.WriteJson(w, resp)
+	}
+}
+
+// serializePendingDeposits serializes a slice of PendingDeposit objects into a single byte array.
+func (s *Server) serializePendingDeposits(pd []*eth.PendingDeposit) ([]byte, error) {
+	var result []byte
+	for _, d := range pd {
+		b, err := d.MarshalSSZ()
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, b...)
+	}
+	return result, nil
+}

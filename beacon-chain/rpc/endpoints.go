@@ -884,6 +884,15 @@ func (s *Service) beaconEndpoints(
 			handler: server.GetDepositSnapshot,
 			methods: []string{http.MethodGet},
 		},
+		{
+			template: "/eth/v1/beacon/states/{state_id}/pending_deposits",
+			name:     namespace + ".GetPendingDeposits",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+			},
+			handler: server.GetPendingDeposits,
+			methods: []string{http.MethodGet},
+		},
 	}
 }
 
