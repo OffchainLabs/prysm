@@ -187,7 +187,8 @@ var appHelpFlagGroups = []flagGroup{
 		Name:  "features",
 		Flags: features.ActiveFlags(features.BeaconChainFlags),
 	},
-	{
+	{ // The deprecated section represents beacon flags that still have use, but should not be used
+		// as they are expected to be deleted in a feature release.
 		Name: "deprecated",
 		Flags: []cli.Flag{
 			cmd.BackupWebhookOutputDir,
