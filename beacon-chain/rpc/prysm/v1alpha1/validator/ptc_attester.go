@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/golang/protobuf/ptypes/empty"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -28,7 +29,7 @@ func (vs *Server) GetPayloadAttestationData(ctx context.Context, req *ethpb.GetP
 	return &ethpb.PayloadAttestationData{
 		BeaconBlockRoot: root[:],
 		Slot:            highestSlot,
-		PayloadStatus:   payloadStatus,
+		PayloadStatus:   bytesutil.Bytes1(uint64(payloadStatus)),
 	}, nil
 }
 

@@ -77,7 +77,7 @@ func ProcessPayloadAttestations(state state.BeaconState, body interfaces.ReadOnl
 			return errors.New("invalid payload attestation")
 		}
 		payloadWasPreset := data.Slot == lfs
-		votedPresent := data.PayloadStatus == primitives.PAYLOAD_PRESENT
+		votedPresent := primitives.PTCStatus(data.PayloadStatus[0]) == primitives.PAYLOAD_PRESENT
 		if votedPresent != payloadWasPreset {
 			for _, idx := range indexed.GetAttestingIndices() {
 				flags := participation[idx]
