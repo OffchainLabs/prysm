@@ -1,3 +1,3 @@
 ### Added
 
-- Add missing endpoint for getting pending deposits.
+- Add endpoint for getting pending deposits.

@@ -20,7 +20,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	chainMock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache/depositsnapshot"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
 	dbTest "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
@@ -4757,20 +4756,19 @@ func Test_validateBlobSidecars(t *testing.T) {
 }
 
 func TestGetPendingDeposits(t *testing.T) {
-	config := params.BeaconConfig()
-	st, _ := util.DeterministicGenesisStateElectra(t, config.MaxValidatorsPerCommittee)
+	st, _ := util.DeterministicGenesisStateElectra(t, 10)
 
 	validators := st.Validators()
-	deps := make([]*eth.PendingDeposit, 20)
+	dummySig := make([]byte, 96)
+	for j := 0; j < 96; j++ {
+		dummySig[j] = byte(j)
+	}
+	deps := make([]*eth.PendingDeposit, 10)
 	for i := 0; i < len(deps); i += 1 {
-		dummySig := make([]byte, 96)
-		for j := 0; j < 96; j++ {
-			dummySig[j] = byte(i)
-		}
 		deps[i] = &eth.PendingDeposit{
 			PublicKey:             validators[i].PublicKey,
 			WithdrawalCredentials: validators[i].WithdrawalCredentials,
-			Amount:                uint64(helpers.ActivationExitChurnLimit(1_000*1e9)) / 10,
+			Amount:                uint64(100),
 			Slot:                  0,
 			Signature:             dummySig,
 		}
@@ -4787,8 +4785,6 @@ func TestGetPendingDeposits(t *testing.T) {
 		},
 		OptimisticModeFetcher: chainService,
 		FinalizationFetcher:   chainService,
-		BeaconDB:              nil,
-		ChainInfoFetcher:      chainService,
 	}
 
 	t.Run("json response", func(t *testing.T) {
@@ -4799,7 +4795,7 @@ func TestGetPendingDeposits(t *testing.T) {
 
 		server.GetPendingDeposits(rec, req)
 		require.Equal(t, http.StatusOK, rec.Code)
-		require.Equal(t, "head", rec.Header().Get(api.VersionHeader))
+		require.Equal(t, "electra", rec.Header().Get(api.VersionHeader))
 
 		var resp structs.GetPendingDepositsResponse
 		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
@@ -4822,19 +4818,13 @@ func TestGetPendingDeposits(t *testing.T) {
 
 		server.GetPendingDeposits(rec, req)
 		require.Equal(t, http.StatusOK, rec.Code)
-		require.Equal(t, "head", rec.Header().Get(api.VersionHeader))
+		require.Equal(t, "electra", rec.Header().Get(api.VersionHeader))
 
 		responseBytes := rec.Body.Bytes()
 		var recoveredDeposits []*eth.PendingDeposit
 
-		// Each deposit should have the same size when serialized
-		depositSize := 0
-		if len(deps) > 0 {
-			firstDeposit, err := deps[0].MarshalSSZ()
-			require.NoError(t, err)
-			depositSize = len(firstDeposit)
-		}
 		// Verify total size matches expected number of deposits
+		depositSize := (&eth.PendingDeposit{}).SizeSSZ()
 		require.Equal(t, len(responseBytes), depositSize*len(deps))
 
 		for i := 0; i < len(deps); i++ {
@@ -4848,9 +4838,7 @@ func TestGetPendingDeposits(t *testing.T) {
 		require.DeepEqual(t, deps, recoveredDeposits)
 	})
 	t.Run("pre electra state", func(t *testing.T) {
-		// Create a pre-Electra state (e.g., Deneb)
-		preElectraSt, _ := util.DeterministicGenesisStateDeneb(t, config.MaxValidatorsPerCommittee)
-
+		preElectraSt, _ := util.DeterministicGenesisStateDeneb(t, 1)
 		preElectraServer := &Server{
 			Stater: &testutil.MockStater{
 				BeaconState: preElectraSt,
@@ -4910,7 +4898,7 @@ func TestGetPendingDeposits(t *testing.T) {
 		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &errResp))
 		require.Equal(t, "state_id is required in URL params", errResp.Message)
 	})
-	t.Run("optimistic state", func(t *testing.T) {
+	t.Run("state_id=optimistic", func(t *testing.T) {
 		optimisticChainService := &chainMock.ChainService{
 			Optimistic:     true,
 			FinalizedRoots: map[[32]byte]bool{},
@@ -4919,8 +4907,6 @@ func TestGetPendingDeposits(t *testing.T) {
 			Stater:                server.Stater,
 			OptimisticModeFetcher: optimisticChainService,
 			FinalizationFetcher:   optimisticChainService,
-			BeaconDB:              nil,
-			ChainInfoFetcher:      optimisticChainService,
 		}
 
 		req := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/pending_deposits", nil)
@@ -4936,7 +4922,7 @@ func TestGetPendingDeposits(t *testing.T) {
 		require.Equal(t, true, resp.ExecutionOptimistic)
 	})
 
-	t.Run("finalized state", func(t *testing.T) {
+	t.Run("state_id=finalized", func(t *testing.T) {
 		blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
 		require.NoError(t, err)
 
@@ -4948,8 +4934,6 @@ func TestGetPendingDeposits(t *testing.T) {
 			Stater:                server.Stater,
 			OptimisticModeFetcher: finalizedChainService,
 			FinalizationFetcher:   finalizedChainService,
-			BeaconDB:              nil,
-			ChainInfoFetcher:      finalizedChainService,
 		}
 
 		req := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/pending_deposits", nil)

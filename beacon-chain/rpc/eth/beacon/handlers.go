@@ -1647,7 +1647,7 @@ func (s *Server) GetPendingDeposits(w http.ResponseWriter, r *http.Request) {
 		httputil.HandleError(w, "Could not get pending deposits: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set(api.VersionHeader, stateId)
+	w.Header().Set(api.VersionHeader, version.String(st.Version()))
 	if httputil.RespondWithSsz(r) {
 		sszData, err := s.serializePendingDeposits(pd)
 		if err != nil {
