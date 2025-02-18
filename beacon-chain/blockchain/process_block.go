@@ -425,7 +425,7 @@ func (s *Service) savePostStateInfo(ctx context.Context, r [32]byte, b interface
 func (s *Service) pruneAttsFromPool(ctx context.Context, headState state.BeaconState, headBlock interfaces.ReadOnlySignedBeaconBlock) error {
 	for _, att := range headBlock.Block().Body().Attestations() {
 		if err := s.pruneCoveredAttsFromPool(ctx, headState, att); err != nil {
-			return err
+			log.WithError(err).Warn("Could not prune attestations covered by a received block's attestation")
 		}
 	}
 	return nil
