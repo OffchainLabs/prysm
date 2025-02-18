@@ -1358,7 +1358,7 @@ func (b *BeaconBlockDeneb) ToConsensus() (*eth.BeaconBlockDeneb, error) {
 	}
 	payload, err := b.Body.ExecutionPayload.ToConsensus()
 	if err != nil {
-		return nil, server.NewDecodeError(err, fmt.Sprintf("Body.ExecutionPayload"))
+		return nil, server.NewDecodeError(err, "Body.ExecutionPayload")
 	}
 	blsChanges, err := SignedBLSChangesToConsensus(b.Body.BLSToExecutionChanges)
 	if err != nil {
@@ -1907,7 +1907,7 @@ func (b *BeaconBlockElectra) ToConsensus() (*eth.BeaconBlockElectra, error) {
 
 	payload, err := b.Body.ExecutionPayload.ToConsensus()
 	if err != nil {
-		return nil, server.NewDecodeError(err, fmt.Sprintf("Body.ExecutionPayload"))
+		return nil, server.NewDecodeError(err, "Body.ExecutionPayload")
 	}
 
 	blsChanges, err := SignedBLSChangesToConsensus(b.Body.BLSToExecutionChanges)
@@ -1929,7 +1929,7 @@ func (b *BeaconBlockElectra) ToConsensus() (*eth.BeaconBlockElectra, error) {
 
 	requests, err := b.Body.ExecutionRequests.ToConsensus()
 	if err != nil {
-		return nil, server.NewDecodeError(err, fmt.Sprintf("Body.ExecutionRequests"))
+		return nil, server.NewDecodeError(err, "Body.ExecutionRequests")
 	}
 
 	return &eth.BeaconBlockElectra{
