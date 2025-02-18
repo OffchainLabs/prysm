@@ -755,7 +755,7 @@ func (r *testRunner) multiScenario(ec *e2etypes.EvaluationContext, epoch uint64,
 	thirdRecoveryEpochStart, thirdRecoveryEpochEnd := lastForkEpoch+13, lastForkEpoch+14
 
 	newPayloadMethod := "engine_newPayloadV4"
-	//  Fallback if deneb is not set.
+	//  Fallback if Electra is not set.
 	if params.BeaconConfig().ElectraForkEpoch == math.MaxUint64 {
 		newPayloadMethod = "engine_newPayloadV3"
 	}
