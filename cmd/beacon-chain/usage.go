@@ -104,14 +104,8 @@ var appHelpFlagGroups = []flagGroup{
 			flags.NetworkID,
 			flags.WeakSubjectivityCheckpoint,
 			flags.Eth1HeaderReqLimit,
-			flags.MevRelayEndpoint,
-			flags.MaxBuilderEpochMissedSlots,
-			flags.MaxBuilderConsecutiveMissedSlots,
 			flags.EngineEndpointTimeoutSeconds,
 			flags.SlasherDirFlag,
-			flags.LocalBlockValueBoost,
-			flags.MinBuilderBid,
-			flags.MinBuilderDiff,
 			flags.JwtId,
 			checkpoint.BlockPath,
 			checkpoint.StatePath,
@@ -123,7 +117,6 @@ var appHelpFlagGroups = []flagGroup{
 	{
 		Name: "merge",
 		Flags: []cli.Flag{
-			flags.SuggestedFeeRecipient,
 			flags.TerminalTotalDifficultyOverride,
 			flags.TerminalBlockHashOverride,
 			flags.TerminalBlockHashActivationEpochOverride,
@@ -188,6 +181,18 @@ var appHelpFlagGroups = []flagGroup{
 			storage.BlobRetentionEpochFlag,
 			storage.BlobStorageLayout,
 			storage.BlobStoragePathFlag,
+		},
+	},
+	{ // Flags relevant to configuring local block production or external builders such as mev-boost.
+		Name: "builder",
+		Flags: []cli.Flag{
+			flags.LocalBlockValueBoost,
+			flags.MaxBuilderConsecutiveMissedSlots,
+			flags.MaxBuilderEpochMissedSlots,
+			flags.MevRelayEndpoint,
+			flags.MinBuilderBid,
+			flags.MinBuilderDiff,
+			flags.SuggestedFeeRecipient,
 		},
 	},
 	{
