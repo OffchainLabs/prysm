@@ -1637,7 +1637,7 @@ func (s *Server) GetPendingDeposits(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set(api.VersionHeader, version.String(st.Version()))
 	if httputil.RespondWithSsz(r) {
-		sszData, err := s.serializePendingDeposits(pd)
+		sszData, err := serializePendingDeposits(pd)
 		if err != nil {
 			httputil.HandleError(w, "Failed to serialize pending deposits: "+err.Error(), http.StatusInternalServerError)
 			return
@@ -1666,7 +1666,7 @@ func (s *Server) GetPendingDeposits(w http.ResponseWriter, r *http.Request) {
 }
 
 // serializePendingDeposits serializes a slice of PendingDeposit objects into a single byte array.
-func (s *Server) serializePendingDeposits(pd []*eth.PendingDeposit) ([]byte, error) {
+func serializePendingDeposits(pd []*eth.PendingDeposit) ([]byte, error) {
 	var result []byte
 	for _, d := range pd {
 		b, err := d.MarshalSSZ()
