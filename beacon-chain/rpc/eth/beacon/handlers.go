@@ -1630,18 +1630,6 @@ func (s *Server) GetPendingDeposits(w http.ResponseWriter, r *http.Request) {
 		httputil.HandleError(w, "state_id is prior to electra", http.StatusBadRequest)
 		return
 	}
-	isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
-	if err != nil {
-		httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
-	if err != nil {
-		httputil.HandleError(w, "Could not calculate root of latest block header: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	isFinalized := s.FinalizationFetcher.IsFinalized(ctx, blockRoot)
-
 	pd, err := st.PendingDeposits()
 	if err != nil {
 		httputil.HandleError(w, "Could not get pending deposits: "+err.Error(), http.StatusInternalServerError)
@@ -1656,6 +1644,17 @@ func (s *Server) GetPendingDeposits(w http.ResponseWriter, r *http.Request) {
 		}
 		httputil.WriteSsz(w, sszData, "pending_deposits.ssz")
 	} else {
+		isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
+		if err != nil {
+			httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
+		if err != nil {
+			httputil.HandleError(w, "Could not calculate root of latest block header: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		isFinalized := s.FinalizationFetcher.IsFinalized(ctx, blockRoot)
 		resp := structs.GetPendingDepositsResponse{
 			Version:             version.String(st.Version()),
 			ExecutionOptimistic: isOptimistic,
