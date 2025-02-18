@@ -635,7 +635,7 @@ func (r *testRunner) multiScenarioMulticlient(ec *e2etypes.EvaluationContext, ep
 
 	newPayloadMethod := "engine_newPayloadV4"
 	forkChoiceUpdatedMethod := "engine_forkchoiceUpdatedV3"
-	//  Fallback if deneb is not set.
+	//  Fallback if Electra is not set.
 	if params.BeaconConfig().ElectraForkEpoch == math.MaxUint64 {
 		newPayloadMethod = "engine_newPayloadV3"
 		forkChoiceUpdatedMethod = "engine_forkchoiceUpdatedV3"
