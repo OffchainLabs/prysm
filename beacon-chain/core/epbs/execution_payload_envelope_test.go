@@ -101,10 +101,10 @@ func TestCheckPostStateRoot(t *testing.T) {
 	require.NoError(t, err)
 	ctx := context.Background()
 	st, _ := util.DeterministicGenesisStateEpbs(t, 64)
-	p.StateRoot = make([]byte, 32)
+	p.BeaconStateRoot = make([]byte, 32)
 	require.ErrorContains(t, "state root mismatch", epbs.CheckPostStateRoot(ctx, st, e))
 	root, err := st.HashTreeRoot(ctx)
 	require.NoError(t, err)
-	p.StateRoot = root[:]
+	p.BeaconStateRoot = root[:]
 	require.NoError(t, epbs.CheckPostStateRoot(ctx, st, e))
 }

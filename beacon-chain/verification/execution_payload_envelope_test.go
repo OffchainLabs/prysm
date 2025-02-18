@@ -23,7 +23,7 @@ func TestExecutionPayloadEnvelope_VerifyBlockRootSeen(t *testing.T) {
 			Payload:            &enginev1.ExecutionPayloadDeneb{},
 			BeaconBlockRoot:    beaconBlockRoot[:],
 			BlobKzgCommitments: [][]byte{make([]byte, 48), make([]byte, 48), make([]byte, 48)},
-			StateRoot:          make([]byte, 32),
+			BeaconStateRoot:    make([]byte, 32),
 		},
 		Signature: make([]byte, 96),
 	})
@@ -54,7 +54,7 @@ func TestExecutionPayloadEnvelope_VerifyBlockRootValid(t *testing.T) {
 			Payload:            &enginev1.ExecutionPayloadDeneb{},
 			BeaconBlockRoot:    beaconBlockRoot[:],
 			BlobKzgCommitments: [][]byte{make([]byte, 48), make([]byte, 48), make([]byte, 48)},
-			StateRoot:          make([]byte, 32),
+			BeaconStateRoot:    make([]byte, 32),
 		},
 		Signature: make([]byte, 96),
 	})
@@ -82,7 +82,7 @@ func TestExecutionPayloadEnvelope_VerifyBuilderValid(t *testing.T) {
 			BuilderIndex:       builderIndexWanted,
 			BeaconBlockRoot:    make([]byte, 32),
 			BlobKzgCommitments: [][]byte{make([]byte, 48), make([]byte, 48), make([]byte, 48)},
-			StateRoot:          make([]byte, 32),
+			BeaconStateRoot:    make([]byte, 32),
 		},
 		Signature: make([]byte, 96),
 	})
@@ -127,7 +127,7 @@ func TestExecutionPayloadEnvelope_VerifyPayloadHash(t *testing.T) {
 			},
 			BeaconBlockRoot:    make([]byte, 32),
 			BlobKzgCommitments: [][]byte{make([]byte, 48), make([]byte, 48), make([]byte, 48)},
-			StateRoot:          make([]byte, 32),
+			BeaconStateRoot:    make([]byte, 32),
 		},
 		Signature: make([]byte, 96),
 	})
@@ -193,7 +193,7 @@ func TestExecutionPayloadEnvelope_VerifySignature(t *testing.T) {
 		BuilderIndex:       builderIndexWanted,
 		BeaconBlockRoot:    make([]byte, 32),
 		BlobKzgCommitments: [][]byte{make([]byte, 48), make([]byte, 48), make([]byte, 48)},
-		StateRoot:          make([]byte, 32),
+		BeaconStateRoot:    make([]byte, 32),
 	}
 
 	t.Run("signature valid", func(t *testing.T) {
@@ -246,7 +246,7 @@ func TestExecutionPayloadEnvelope_SatisfyRequirement(t *testing.T) {
 				Payload:            &enginev1.ExecutionPayloadDeneb{},
 				BeaconBlockRoot:    make([]byte, 32),
 				BlobKzgCommitments: [][]byte{make([]byte, 48), make([]byte, 48), make([]byte, 48)},
-				StateRoot:          make([]byte, 32),
+				BeaconStateRoot:    make([]byte, 32),
 			},
 			Signature: make([]byte, 96),
 		})
@@ -263,7 +263,7 @@ func TestExecutionPayloadEnvelope_SatisfyRequirement(t *testing.T) {
 				Payload:            &enginev1.ExecutionPayloadDeneb{},
 				BeaconBlockRoot:    make([]byte, 32),
 				BlobKzgCommitments: [][]byte{make([]byte, 48), make([]byte, 48), make([]byte, 48)},
-				StateRoot:          make([]byte, 32),
+				BeaconStateRoot:    make([]byte, 32),
 			},
 			Signature: make([]byte, 96),
 		})

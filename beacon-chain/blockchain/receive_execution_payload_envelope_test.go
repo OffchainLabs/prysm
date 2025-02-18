@@ -79,7 +79,7 @@ func Test_ReceiveExecutionPayloadEnvelope(t *testing.T) {
 		},
 		BeaconBlockRoot:    service.originBlockRoot[:],
 		BlobKzgCommitments: make([][]byte, 0),
-		StateRoot:          make([]byte, 32),
+		BeaconStateRoot:    make([]byte, 32),
 		ExecutionRequests:  &enginev1.ExecutionRequests{},
 	}
 	sp := &enginev1.SignedExecutionPayloadEnvelope{
@@ -96,7 +96,7 @@ func Test_ReceiveExecutionPayloadEnvelope(t *testing.T) {
 	require.NoError(t, post.SetLatestBlockHeader(blockHeader))
 	stRoot, err := post.HashTreeRoot(ctx)
 	require.NoError(t, err)
-	p.StateRoot = stRoot[:]
+	p.BeaconStateRoot = stRoot[:]
 	engine := &mockExecution.EngineClient{}
 	service.cfg.ExecutionEngineCaller = engine
 	require.NoError(t, service.ReceiveExecutionPayloadEnvelope(ctx, e, das))

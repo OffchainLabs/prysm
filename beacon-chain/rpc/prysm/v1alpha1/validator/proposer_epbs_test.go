@@ -24,7 +24,7 @@ func TestServer_SubmitSignedExecutionPayloadEnvelope(t *testing.T) {
 			Payload:            &enginev1.ExecutionPayloadDeneb{},
 			BeaconBlockRoot:    make([]byte, 32),
 			BlobKzgCommitments: [][]byte{},
-			StateRoot:          make([]byte, 32),
+			BeaconStateRoot:    make([]byte, 32),
 		},
 		Signature: make([]byte, 96),
 	}
@@ -94,7 +94,7 @@ func TestProposer_ComputePostPayloadStateRoot(t *testing.T) {
 		Payload:            &enginev1.ExecutionPayloadDeneb{},
 		ExecutionRequests:  &enginev1.ExecutionRequests{},
 		BlobKzgCommitments: make([][]byte, 0),
-		StateRoot:          expectedStateRoot[:],
+		BeaconStateRoot:    expectedStateRoot[:],
 	}
 	p.Payload.BlockHash = bh[:]
 	e, err := blocks.WrappedROExecutionPayloadEnvelope(p)
