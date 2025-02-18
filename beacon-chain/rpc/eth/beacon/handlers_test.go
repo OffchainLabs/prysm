@@ -4768,7 +4768,7 @@ func TestGetPendingDeposits(t *testing.T) {
 		deps[i] = &eth.PendingDeposit{
 			PublicKey:             validators[i].PublicKey,
 			WithdrawalCredentials: validators[i].WithdrawalCredentials,
-			Amount:                uint64(100),
+			Amount:                100,
 			Slot:                  0,
 			Signature:             dummySig,
 		}
@@ -4845,8 +4845,6 @@ func TestGetPendingDeposits(t *testing.T) {
 			},
 			OptimisticModeFetcher: chainService,
 			FinalizationFetcher:   chainService,
-			BeaconDB:              nil,
-			ChainInfoFetcher:      chainService,
 		}
 
 		// Test JSON request
@@ -4898,7 +4896,7 @@ func TestGetPendingDeposits(t *testing.T) {
 		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &errResp))
 		require.Equal(t, "state_id is required in URL params", errResp.Message)
 	})
-	t.Run("state_id=optimistic", func(t *testing.T) {
+	t.Run("optimistic node", func(t *testing.T) {
 		optimisticChainService := &chainMock.ChainService{
 			Optimistic:     true,
 			FinalizedRoots: map[[32]byte]bool{},
@@ -4922,7 +4920,7 @@ func TestGetPendingDeposits(t *testing.T) {
 		require.Equal(t, true, resp.ExecutionOptimistic)
 	})
 
-	t.Run("state_id=finalized", func(t *testing.T) {
+	t.Run("finalized node", func(t *testing.T) {
 		blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
 		require.NoError(t, err)
 
