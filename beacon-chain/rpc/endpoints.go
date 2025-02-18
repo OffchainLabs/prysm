@@ -897,7 +897,6 @@ func (s *Service) beaconEndpoints(
 			template: "/eth/v1/beacon/states/{state_id}/pending_partial_withdrawals",
 			name:     namespace + ".GetPendingPartialWithdrawals",
 			middleware: []middleware.Middleware{
-				middleware.ContentTypeHandler([]string{api.JsonMediaType}),
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
 			},
 			handler: server.GetPendingPartialWithdrawals,
