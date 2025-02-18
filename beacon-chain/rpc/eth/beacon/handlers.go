@@ -1637,7 +1637,7 @@ func (s *Server) GetPendingDeposits(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set(api.VersionHeader, version.String(st.Version()))
 	if httputil.RespondWithSsz(r) {
-		sszData, err := serializePendingDeposits(pd)
+		sszData, err := serializeItems(pd)
 		if err != nil {
 			httputil.HandleError(w, "Failed to serialize pending deposits: "+err.Error(), http.StatusInternalServerError)
 			return
@@ -1663,19 +1663,6 @@ func (s *Server) GetPendingDeposits(w http.ResponseWriter, r *http.Request) {
 		}
 		httputil.WriteJson(w, resp)
 	}
-}
-
-// serializePendingDeposits serializes a slice of PendingDeposit objects into a single byte array.
-func serializePendingDeposits(pd []*eth.PendingDeposit) ([]byte, error) {
-	var result []byte
-	for _, d := range pd {
-		b, err := d.MarshalSSZ()
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, b...)
-	}
-	return result, nil
 }
 
 // GetPendingPartialWithdrawals returns pending partial withdrawals for state with given 'stateId'.
@@ -1706,7 +1693,7 @@ func (s *Server) GetPendingPartialWithdrawals(w http.ResponseWriter, r *http.Req
 	}
 	w.Header().Set(api.VersionHeader, version.String(st.Version()))
 	if httputil.RespondWithSsz(r) {
-		sszData, err := serializePendingPartialWithdrawals(ppw)
+		sszData, err := serializeItems(ppw)
 		if err != nil {
 			httputil.HandleError(w, "Failed to serialize pending partial withdrawals: "+err.Error(), http.StatusInternalServerError)
 			return
@@ -1734,11 +1721,12 @@ func (s *Server) GetPendingPartialWithdrawals(w http.ResponseWriter, r *http.Req
 	}
 }
 
-// serializePendingPartialWithdrawals serializes a slice of PendingPartialWithdrawal objects into a single byte array.
-func serializePendingPartialWithdrawals(ppw []*eth.PendingPartialWithdrawal) ([]byte, error) {
+// SerializeItems serializes a slice of items, each of which implements the MarshalSSZ method,
+// into a single byte array.
+func serializeItems[T interface{ MarshalSSZ() ([]byte, error) }](items []T) ([]byte, error) {
 	var result []byte
-	for _, w := range ppw {
-		b, err := w.MarshalSSZ()
+	for _, item := range items {
+		b, err := item.MarshalSSZ()
 		if err != nil {
 			return nil, err
 		}
