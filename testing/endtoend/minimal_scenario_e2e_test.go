@@ -9,8 +9,8 @@ import (
 )
 
 func TestEndToEnd_MultiScenarioRun(t *testing.T) {
-	cfg := types.InitForkCfg(version.Bellatrix, version.Deneb, params.E2ETestConfig())
-	runner := e2eMinimal(t, cfg, types.WithEpochs(26))
+	cfg := types.InitForkCfg(version.Bellatrix, version.Electra, params.E2ETestConfig())
+	runner := e2eMinimal(t, cfg, types.WithEpochs(28))
 	// override for scenario tests
 	runner.config.Evaluators = scenarioEvals(cfg)
 	runner.config.EvalInterceptor = runner.multiScenario
