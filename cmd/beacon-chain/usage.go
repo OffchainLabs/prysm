@@ -58,7 +58,6 @@ var appHelpFlagGroups = []flagGroup{
 			cmd.P2PQUICPort,
 			cmd.P2PTCPPort,
 			cmd.DataDirFlag,
-			cmd.VerbosityFlag,
 			cmd.EnableTracingFlag,
 			cmd.TracingProcessNameFlag,
 			cmd.TracingEndpointFlag,
@@ -177,10 +176,12 @@ var appHelpFlagGroups = []flagGroup{
 		},
 	},
 	{
+		// Flags in the "log" section control how Prysm handles logging.
 		Name: "log",
 		Flags: []cli.Flag{
 			cmd.LogFormat,
 			cmd.LogFileName,
+			cmd.VerbosityFlag,
 		},
 	},
 	{
