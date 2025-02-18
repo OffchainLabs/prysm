@@ -4,6 +4,7 @@ go_library(
     name = "go_default_library",
     srcs = [
         "block.go",
+        "block_execution.go",
         "conversions.go",
         "conversions_blob.go",
         "conversions_block.go",
@@ -20,7 +21,6 @@ go_library(
         "endpoints_node.go",
         "endpoints_rewards.go",
         "endpoints_validator.go",
-        "execution.go",
         "other.go",
         "state.go",
     ],
