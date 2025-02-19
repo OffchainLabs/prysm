@@ -20,7 +20,6 @@ import (
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
-	"github.com/sirupsen/logrus"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -257,7 +256,7 @@ func (s *Store) DeleteHistoricalDataBeforeSlot(ctx context.Context, cutoffSlot p
 	}
 
 	// Perform all deletions in a single transaction for atomicity
-	err = s.db.Update(func(tx *bolt.Tx) error {
+	return s.db.Update(func(tx *bolt.Tx) error {
 		for _, sr := range slotRoots {
 			// Delete block
 			if err = s.deleteBlock(tx, sr.root[:]); err != nil {
@@ -306,14 +305,6 @@ func (s *Store) DeleteHistoricalDataBeforeSlot(ctx context.Context, cutoffSlot p
 
 		return nil
 	})
-
-	if err == nil {
-		log.WithFields(logrus.Fields{
-			"numSlotsDeleted": len(slotRoots),
-		}).Debug("Deleted historical data before slot")
-	}
-
-	return err
 }
 
 // SaveBlock to the db.
