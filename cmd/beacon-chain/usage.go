@@ -45,28 +45,14 @@ type flagGroup struct {
 }
 
 var appHelpFlagGroups = []flagGroup{
-	{
+	{ // Flags relevant to running the process.
 		Name: "cmd",
 		Flags: []cli.Flag{
 			cmd.AcceptTosFlag,
 			cmd.ConfigFileFlag,
 		},
 	},
-	{
-		Name: "debug",
-		Flags: []cli.Flag{
-			debug.BlockProfileRateFlag,
-			debug.CPUProfileFlag,
-			debug.MemProfileRateFlag,
-			debug.MutexProfileFractionFlag,
-			debug.PProfAddrFlag,
-			debug.PProfFlag,
-			debug.PProfPortFlag,
-			debug.TraceFlag,
-			flags.SetGCPercent,
-		},
-	},
-	{
+	{ // Flags relevant to configuring the beacon chain and APIs.
 		Name: "beacon-chain",
 		Flags: []cli.Flag{
 			cmd.ApiTimeoutFlag,
@@ -87,14 +73,6 @@ var appHelpFlagGroups = []flagGroup{
 			flags.NetworkID,
 			flags.RPCHost,
 			flags.RPCPort,
-		},
-	},
-	{
-		Name: "merge",
-		Flags: []cli.Flag{
-			flags.TerminalTotalDifficultyOverride,
-			flags.TerminalBlockHashOverride,
-			flags.TerminalBlockHashActivationEpochOverride,
 		},
 	},
 	{
@@ -127,15 +105,6 @@ var appHelpFlagGroups = []flagGroup{
 			flags.MinPeersPerSubnet,
 			flags.MinSyncPeers,
 			flags.SubscribeToAllSubnets,
-		},
-	},
-	{
-		// Flags in the "log" section control how Prysm handles logging.
-		Name: "log",
-		Flags: []cli.Flag{
-			cmd.LogFormat,
-			cmd.LogFileName,
-			cmd.VerbosityFlag,
 		},
 	},
 	{ // Flags relevant to storing data on disk and configuring the beacon chain database.
@@ -217,14 +186,45 @@ var appHelpFlagGroups = []flagGroup{
 		},
 	},
 	{
+		// Flags in the "log" section control how Prysm handles logging.
+		Name: "log",
+		Flags: []cli.Flag{
+			cmd.LogFormat,
+			cmd.LogFileName,
+			cmd.VerbosityFlag,
+		},
+	},
+	{ // Feature flags.
 		Name:  "features",
 		Flags: features.ActiveFlags(features.BeaconChainFlags),
+	},
+	{ // Flags required to configure the merge.
+		Name: "merge",
+		Flags: []cli.Flag{
+			flags.TerminalTotalDifficultyOverride,
+			flags.TerminalBlockHashOverride,
+			flags.TerminalBlockHashActivationEpochOverride,
+		},
 	},
 	{ // The deprecated section represents beacon flags that still have use, but should not be used
 		// as they are expected to be deleted in a feature release.
 		Name: "deprecated",
 		Flags: []cli.Flag{
 			cmd.BackupWebhookOutputDir,
+		},
+	},
+	{ // Flags used in debugging Prysm. These are flags not usually run by end users.
+		Name: "debug",
+		Flags: []cli.Flag{
+			debug.BlockProfileRateFlag,
+			debug.CPUProfileFlag,
+			debug.MemProfileRateFlag,
+			debug.MutexProfileFractionFlag,
+			debug.PProfAddrFlag,
+			debug.PProfFlag,
+			debug.PProfPortFlag,
+			debug.TraceFlag,
+			flags.SetGCPercent,
 		},
 	},
 }
