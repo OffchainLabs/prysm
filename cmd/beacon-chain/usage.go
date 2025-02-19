@@ -83,12 +83,10 @@ var appHelpFlagGroups = []flagGroup{
 			flags.HTTPServerCorsDomain,
 			flags.HTTPServerHost,
 			flags.HTTPServerPort,
-			flags.HistoricalSlasherNode,
 			flags.KeyFlag,
 			flags.NetworkID,
 			flags.RPCHost,
 			flags.RPCPort,
-			flags.SlasherDirFlag,
 		},
 	},
 	{
@@ -208,6 +206,13 @@ var appHelpFlagGroups = []flagGroup{
 			cmd.TracingProcessNameFlag,
 			cmd.ValidatorMonitorIndicesFlag,
 			flags.MonitoringPortFlag,
+		},
+	},
+	{ // Flags relevant to slasher operation.
+		Name: "slasher",
+		Flags: []cli.Flag{
+			flags.HistoricalSlasherNode,
+			flags.SlasherDirFlag,
 		},
 	},
 	{
