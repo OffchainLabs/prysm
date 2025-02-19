@@ -2190,7 +2190,7 @@ func (b *BlindedBeaconBlockElectra) ToConsensus() (*eth.BlindedBeaconBlockElectr
 
 	requests, err := b.Body.ExecutionRequests.ToConsensus()
 	if err != nil {
-		return nil, server.NewDecodeError(err, fmt.Sprintf("Body.ExecutionRequests"))
+		return nil, server.NewDecodeError(err, "Body.ExecutionRequests")
 	}
 
 	return &eth.BlindedBeaconBlockElectra{
