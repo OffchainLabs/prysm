@@ -160,15 +160,15 @@ oci_register_toolchains(
 
 http_archive(
     name = "io_bazel_rules_go",
+    integrity = "sha256-JD8o94crTb2DFiJJR8nMAGdBAW95zIENB4cbI+JnrI4=",
     patch_args = ["-p1"],
     patches = [
         # Expose internals of go_test for custom build transitions.
         "//third_party:io_bazel_rules_go_test.patch",
     ],
-    sha256 = "b78f77458e77162f45b4564d6b20b6f92f56431ed59eaaab09e7819d1d850313",
+    strip_prefix = "rules_go-cf3c3af34bd869b864f5f2b98e2f41c2b220d6c9",
     urls = [
-        "https://mirror.bazel.build/github.com/bazel-contrib/rules_go/releases/download/v0.53.0/rules_go-v0.53.0.zip",
-        "https://github.com/bazel-contrib/rules_go/releases/download/v0.53.0/rules_go-v0.53.0.zip",
+        "https://github.com/bazel-contrib/rules_go/archive/cf3c3af34bd869b864f5f2b98e2f41c2b220d6c9.tar.gz",
     ],
 )
 
