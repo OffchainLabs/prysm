@@ -10,7 +10,9 @@ func TestTrackedValidatorsCache(t *testing.T) {
 	vc := NewTrackedValidatorsCache()
 
 	// No validators in cache.
+	require.Equal(t, 0, vc.ItemCount())
 	require.Equal(t, false, vc.Validating())
+
 	_, ok := vc.Validator(41)
 	require.Equal(t, false, ok)
 
@@ -31,7 +33,8 @@ func TestTrackedValidatorsCache(t *testing.T) {
 	require.Equal(t, true, ok)
 	require.Equal(t, v43Expected, v43Actual)
 
-	// Check if the cache is validating.
+	// Check the item count and if the cache is validating.
+	require.Equal(t, 2, vc.ItemCount())
 	require.Equal(t, true, vc.Validating())
 
 	// Check if a non-existing validator is in the cache.
@@ -50,5 +53,6 @@ func TestTrackedValidatorsCache(t *testing.T) {
 	_, ok = vc.Validator(43)
 	require.Equal(t, false, ok)
 
+	require.Equal(t, 0, vc.ItemCount())
 	require.Equal(t, false, vc.Validating())
 }

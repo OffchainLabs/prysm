@@ -66,6 +66,11 @@ func (t *TrackedValidatorsCache) Validating() bool {
 	return t.trackedValidators.ItemCount() > 0
 }
 
+// ItemCount returns the number of tracked validators in the cache.
+func (t *TrackedValidatorsCache) ItemCount() int {
+	return t.trackedValidators.ItemCount()
+}
+
 // toCacheKey creates a cache key from the validator index.
 func toCacheKey(validatorIndex primitives.ValidatorIndex) string {
 	return strconv.FormatUint(uint64(validatorIndex), 10)
