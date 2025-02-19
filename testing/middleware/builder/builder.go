@@ -955,7 +955,7 @@ func unmarshalRPCObject(b []byte) (*jsonRPCObject, error) {
 }
 
 func modifyExecutionPayload(execPayload engine.ExecutableData, fees *big.Int, prevBeaconRoot []byte, requests [][]byte) (*engine.ExecutionPayloadEnvelope, error) {
-	modifiedBlock, err := executableDataToBlock(execPayload, prevBeaconRoot)
+	modifiedBlock, err := executableDataToBlock(execPayload, prevBeaconRoot, requests)
 	if err != nil {
 		return &engine.ExecutionPayloadEnvelope{}, err
 	}
@@ -963,7 +963,7 @@ func modifyExecutionPayload(execPayload engine.ExecutableData, fees *big.Int, pr
 }
 
 // This modifies the provided payload to imprint the builder's extra data
-func executableDataToBlock(params engine.ExecutableData, prevBeaconRoot []byte) (*gethTypes.Block, error) {
+func executableDataToBlock(params engine.ExecutableData, prevBeaconRoot []byte, requests [][]byte) (*gethTypes.Block, error) {
 	txs, err := decodeTransactions(params.Transactions)
 	if err != nil {
 		return nil, err
@@ -975,6 +975,12 @@ func executableDataToBlock(params engine.ExecutableData, prevBeaconRoot []byte) 
 	if params.Withdrawals != nil {
 		h := gethTypes.DeriveSha(gethTypes.Withdrawals(params.Withdrawals), trie.NewStackTrie(nil))
 		withdrawalsRoot = &h
+	}
+
+	var requestsHash *common.Hash
+	if requests != nil {
+		h := gethTypes.CalcRequestsHash(requests)
+		requestsHash = &h
 	}
 
 	header := &gethTypes.Header{
@@ -996,7 +1002,9 @@ func executableDataToBlock(params engine.ExecutableData, prevBeaconRoot []byte) 
 		WithdrawalsHash: withdrawalsRoot,
 		BlobGasUsed:     params.BlobGasUsed,
 		ExcessBlobGas:   params.ExcessBlobGas,
+		RequestsHash:    requestsHash,
 	}
+
 	if prevBeaconRoot != nil {
 		pRoot := common.Hash(prevBeaconRoot)
 		header.ParentBeaconRoot = &pRoot

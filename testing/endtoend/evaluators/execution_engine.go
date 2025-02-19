@@ -130,6 +130,15 @@ func retrieveHeadSlot(resp *structs.GetBlockV2Response) (uint64, error) {
 		if err != nil {
 			return 0, err
 		}
+	case version.String(version.Electra):
+		b := &structs.BeaconBlockElectra{}
+		if err := json.Unmarshal(resp.Data.Message, b); err != nil {
+			return 0, err
+		}
+		headSlot, err = strconv.ParseUint(b.Slot, 10, 64)
+		if err != nil {
+			return 0, err
+		}
 	default:
 		return 0, errors.New("no valid block type retrieved")
 	}

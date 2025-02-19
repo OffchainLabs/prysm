@@ -633,12 +633,12 @@ func (r *testRunner) multiScenarioMulticlient(ec *e2etypes.EvaluationContext, ep
 	recoveryEpochStart, recoveryEpochEnd := lastForkEpoch+3, lastForkEpoch+4
 	secondRecoveryEpochStart, secondRecoveryEpochEnd := lastForkEpoch+8, lastForkEpoch+9
 
-	newPayloadMethod := "engine_newPayloadV3"
+	newPayloadMethod := "engine_newPayloadV4"
 	forkChoiceUpdatedMethod := "engine_forkchoiceUpdatedV3"
-	//  Fallback if deneb is not set.
-	if params.BeaconConfig().DenebForkEpoch == math.MaxUint64 {
-		newPayloadMethod = "engine_newPayloadV2"
-		forkChoiceUpdatedMethod = "engine_forkchoiceUpdatedV2"
+	//  Fallback if Electra is not set.
+	if params.BeaconConfig().ElectraForkEpoch == math.MaxUint64 {
+		newPayloadMethod = "engine_newPayloadV3"
+		forkChoiceUpdatedMethod = "engine_forkchoiceUpdatedV3"
 	}
 
 	switch primitives.Epoch(epoch) {
@@ -754,10 +754,10 @@ func (r *testRunner) multiScenario(ec *e2etypes.EvaluationContext, epoch uint64,
 	secondRecoveryEpochStart, secondRecoveryEpochEnd := lastForkEpoch+8, lastForkEpoch+9
 	thirdRecoveryEpochStart, thirdRecoveryEpochEnd := lastForkEpoch+13, lastForkEpoch+14
 
-	newPayloadMethod := "engine_newPayloadV3"
-	//  Fallback if deneb is not set.
-	if params.BeaconConfig().DenebForkEpoch == math.MaxUint64 {
-		newPayloadMethod = "engine_newPayloadV2"
+	newPayloadMethod := "engine_newPayloadV4"
+	//  Fallback if Electra is not set.
+	if params.BeaconConfig().ElectraForkEpoch == math.MaxUint64 {
+		newPayloadMethod = "engine_newPayloadV3"
 	}
 	switch primitives.Epoch(epoch) {
 	case freezeStartEpoch:
