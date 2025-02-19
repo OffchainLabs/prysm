@@ -16,8 +16,12 @@ import (
 
 var log = logrus.WithField("prefix", "db-pruner")
 
-// defaultPrunableBatchSize is the number of slots that can be pruned at once.
-const defaultPrunableBatchSize = 12800
+const (
+	// defaultPrunableBatchSize is the number of slots that can be pruned at once.
+	defaultPrunableBatchSize = 32
+	// defaultPruningWindow is the duration of one pruning window.
+	defaultPruningWindow = time.Second * 3
+)
 
 type ServiceOption func(*Service)
 
@@ -146,8 +150,9 @@ func (p *Service) prune(slot primitives.Slot) error {
 	}).Debug("Pruning chain data")
 
 	tt := time.Now()
-	if err := p.db.DeleteHistoricalDataBeforeSlot(p.ctx, pruneUpto, defaultPrunableBatchSize); err != nil {
-		return errors.Wrapf(err, "could not delete upto slot %d", pruneUpto)
+	numBatches, err := p.pruneBatches(pruneUpto)
+	if err != nil {
+		return errors.Wrap(err, "failed to prune batches")
 	}
 
 	log.WithFields(logrus.Fields{
@@ -155,12 +160,31 @@ func (p *Service) prune(slot primitives.Slot) error {
 		"duration":    time.Since(tt),
 		"currentSlot": slot,
 		"batchSize":   defaultPrunableBatchSize,
+		"numBatches":  numBatches,
 	}).Debug("Successfully pruned chain data")
 
 	// Update pruning checkpoint.
 	p.prunedUpto = pruneUpto
 
 	return nil
+}
+
+func (p *Service) pruneBatches(pruneUpto primitives.Slot) (int, error) {
+	ctx, cancel := context.WithDeadline(p.ctx, time.Now().Add(defaultPruningWindow))
+	defer cancel()
+
+	numBatches := 0
+	for {
+		select {
+		case <-ctx.Done():
+			return numBatches, nil
+		default:
+			if err := p.db.DeleteHistoricalDataBeforeSlot(ctx, pruneUpto, defaultPrunableBatchSize); err != nil {
+				return 0, errors.Wrapf(err, "could not delete upto slot %d", pruneUpto)
+			}
+			numBatches++
+		}
+	}
 }
 
 // pruneStartSlotFunc returns the function to determine the start slot to start pruning.
