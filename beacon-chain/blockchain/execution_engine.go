@@ -72,7 +72,7 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*
 	if arg.attributes == nil {
 		arg.attributes = payloadattribute.EmptyWithVersion(headBlk.Version())
 	}
-	go firePayloadAttributesEvent(ctx, s.cfg.StateNotifier.StateFeed(), arg)
+	go firePayloadAttributesEvent(ctx, s.cfg.StateNotifier.StateFeed(), s.CurrentSlot()+1)
 	payloadID, lastValidHash, err := s.cfg.ExecutionEngineCaller.ForkchoiceUpdated(ctx, fcs, arg.attributes)
 	if err != nil {
 		switch {
@@ -171,35 +171,10 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*
 	return payloadID, nil
 }
 
-func firePayloadAttributesEvent(ctx context.Context, f event.SubscriberSender, cfg *fcuConfig) {
-	pidx, err := helpers.BeaconProposerIndex(ctx, cfg.headState)
-	if err != nil {
-		log.WithError(err).
-			WithField("head_root", cfg.headRoot[:]).
-			Error("Could not get proposer index for PayloadAttributes event")
-		return
-	}
-	evd := payloadattribute.EventData{
-		ProposerIndex:   pidx,
-		ProposalSlot:    cfg.headState.Slot(),
-		ParentBlockRoot: cfg.headRoot[:],
-		Attributer:      cfg.attributes,
-		HeadRoot:        cfg.headRoot,
-		HeadState:       cfg.headState,
-		HeadBlock:       cfg.headBlock,
-	}
-	if cfg.headBlock != nil && !cfg.headBlock.IsNil() {
-		headPayload, err := cfg.headBlock.Block().Body().Execution()
-		if err != nil {
-			log.WithError(err).Error("Could not get execution payload for head block")
-			return
-		}
-		evd.ParentBlockHash = headPayload.BlockHash()
-		evd.ParentBlockNumber = headPayload.BlockNumber()
-	}
+func firePayloadAttributesEvent(ctx context.Context, f event.SubscriberSender, slot primitives.Slot) {
 	f.Send(&feed.Event{
 		Type: statefeed.PayloadAttributes,
-		Data: evd,
+		Data: payloadattribute.EventData{ProposalSlot: slot},
 	})
 }
 
