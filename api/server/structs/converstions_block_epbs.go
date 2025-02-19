@@ -177,14 +177,14 @@ func (p *PayloadAttestationData) ToConsensus() (*eth.PayloadAttestationData, err
 	if err != nil {
 		return nil, server.NewDecodeError(err, "Slot")
 	}
-	payloadStatus, err := strconv.ParseUint(p.PayloadStatus, 10, 64)
+	payloadStatus, err := strconv.ParseUint(p.PayloadStatus, 10, 8)
 	if err != nil {
 		return nil, server.NewDecodeError(err, "PayloadStatus")
 	}
 	return &eth.PayloadAttestationData{
 		BeaconBlockRoot: beaconBlockRoot,
 		Slot:            primitives.Slot(slot),
-		PayloadStatus:   primitives.PTCStatus(payloadStatus),
+		PayloadStatus:   bytesutil.Bytes1(payloadStatus),
 	}, nil
 }
 

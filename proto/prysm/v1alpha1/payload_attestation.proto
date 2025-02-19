@@ -30,9 +30,8 @@ message PayloadAttestationData {
     (ethereum.eth.ext.cast_type) =
         "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"
   ];
-  uint64 payload_status = 3 [
-    (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.PTCStatus"
+  bytes payload_status = 3 [
+    (ethereum.eth.ext.ssz_size) = "1"
   ];
 }
 

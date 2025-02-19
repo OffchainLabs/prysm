@@ -2,6 +2,7 @@ package cache
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
@@ -90,9 +91,13 @@ func (p *PayloadAttestationCache) Add(att *eth.PayloadAttestationMessage, idx ui
 		p.root = root
 		p.attestations = [primitives.PAYLOAD_INVALID_STATUS]*eth.PayloadAttestation{}
 	}
-	agg := p.attestations[att.Data.PayloadStatus]
+	if len(att.Data.PayloadStatus) != 1 {
+		return fmt.Errorf("expected payload status length 1, got %d", len(att.Data.PayloadStatus))
+	}
+	status := uint64(att.Data.PayloadStatus[0])
+	agg := p.attestations[status]
 	if agg == nil {
-		p.attestations[att.Data.PayloadStatus] = messageToPayloadAttestation(att, idx)
+		p.attestations[status] = messageToPayloadAttestation(att, idx)
 		return nil
 	}
 	if agg.AggregationBits.BitAt(idx) {

@@ -234,7 +234,7 @@ func (b *BeaconBlockBodyEpbs) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 
 	// Offset (11) 'PayloadAttestations'
 	dst = ssz.WriteOffset(dst, offset)
-	offset += len(b.PayloadAttestations) * 208
+	offset += len(b.PayloadAttestations) * 201
 
 	// Field (3) 'ProposerSlashings'
 	if size := len(b.ProposerSlashings); size > 16 {
@@ -535,7 +535,7 @@ func (b *BeaconBlockBodyEpbs) UnmarshalSSZ(buf []byte) error {
 	// Field (11) 'PayloadAttestations'
 	{
 		buf = tail[o11:]
-		num, err := ssz.DivideInt2(len(buf), 208, 4)
+		num, err := ssz.DivideInt2(len(buf), 201, 4)
 		if err != nil {
 			return err
 		}
@@ -544,7 +544,7 @@ func (b *BeaconBlockBodyEpbs) UnmarshalSSZ(buf []byte) error {
 			if b.PayloadAttestations[ii] == nil {
 				b.PayloadAttestations[ii] = new(PayloadAttestation)
 			}
-			if err = b.PayloadAttestations[ii].UnmarshalSSZ(buf[ii*208 : (ii+1)*208]); err != nil {
+			if err = b.PayloadAttestations[ii].UnmarshalSSZ(buf[ii*201 : (ii+1)*201]); err != nil {
 				return err
 			}
 		}
@@ -581,7 +581,7 @@ func (b *BeaconBlockBodyEpbs) SizeSSZ() (size int) {
 	size += len(b.BlsToExecutionChanges) * 172
 
 	// Field (11) 'PayloadAttestations'
-	size += len(b.PayloadAttestations) * 208
+	size += len(b.PayloadAttestations) * 201
 
 	return
 }
@@ -2029,7 +2029,11 @@ func (p *PayloadAttestationData) MarshalSSZTo(buf []byte) (dst []byte, err error
 	dst = ssz.MarshalUint64(dst, uint64(p.Slot))
 
 	// Field (2) 'PayloadStatus'
-	dst = ssz.MarshalUint64(dst, uint64(p.PayloadStatus))
+	if size := len(p.PayloadStatus); size != 1 {
+		err = ssz.ErrBytesLengthFn("--.PayloadStatus", size, 1)
+		return
+	}
+	dst = append(dst, p.PayloadStatus...)
 
 	return
 }
@@ -2038,7 +2042,7 @@ func (p *PayloadAttestationData) MarshalSSZTo(buf []byte) (dst []byte, err error
 func (p *PayloadAttestationData) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size != 48 {
+	if size != 41 {
 		return ssz.ErrSize
 	}
 
@@ -2052,14 +2056,17 @@ func (p *PayloadAttestationData) UnmarshalSSZ(buf []byte) error {
 	p.Slot = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[32:40]))
 
 	// Field (2) 'PayloadStatus'
-	p.PayloadStatus = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.PTCStatus(ssz.UnmarshallUint64(buf[40:48]))
+	if cap(p.PayloadStatus) == 0 {
+		p.PayloadStatus = make([]byte, 0, len(buf[40:41]))
+	}
+	p.PayloadStatus = append(p.PayloadStatus, buf[40:41]...)
 
 	return err
 }
 
 // SizeSSZ returns the ssz encoded size in bytes for the PayloadAttestationData object
 func (p *PayloadAttestationData) SizeSSZ() (size int) {
-	size = 48
+	size = 41
 	return
 }
 
@@ -2083,7 +2090,11 @@ func (p *PayloadAttestationData) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	hh.PutUint64(uint64(p.Slot))
 
 	// Field (2) 'PayloadStatus'
-	hh.PutUint64(uint64(p.PayloadStatus))
+	if size := len(p.PayloadStatus); size != 1 {
+		err = ssz.ErrBytesLengthFn("--.PayloadStatus", size, 1)
+		return
+	}
+	hh.PutBytes(p.PayloadStatus)
 
 	hh.Merkleize(indx)
 	return
@@ -2127,7 +2138,7 @@ func (p *PayloadAttestation) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 func (p *PayloadAttestation) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size != 208 {
+	if size != 201 {
 		return ssz.ErrSize
 	}
 
@@ -2141,22 +2152,22 @@ func (p *PayloadAttestation) UnmarshalSSZ(buf []byte) error {
 	if p.Data == nil {
 		p.Data = new(PayloadAttestationData)
 	}
-	if err = p.Data.UnmarshalSSZ(buf[64:112]); err != nil {
+	if err = p.Data.UnmarshalSSZ(buf[64:105]); err != nil {
 		return err
 	}
 
 	// Field (2) 'Signature'
 	if cap(p.Signature) == 0 {
-		p.Signature = make([]byte, 0, len(buf[112:208]))
+		p.Signature = make([]byte, 0, len(buf[105:201]))
 	}
-	p.Signature = append(p.Signature, buf[112:208]...)
+	p.Signature = append(p.Signature, buf[105:201]...)
 
 	return err
 }
 
 // SizeSSZ returns the ssz encoded size in bytes for the PayloadAttestation object
 func (p *PayloadAttestation) SizeSSZ() (size int) {
-	size = 208
+	size = 201
 	return
 }
 
@@ -2226,7 +2237,7 @@ func (p *PayloadAttestationMessage) MarshalSSZTo(buf []byte) (dst []byte, err er
 func (p *PayloadAttestationMessage) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size != 152 {
+	if size != 145 {
 		return ssz.ErrSize
 	}
 
@@ -2237,22 +2248,22 @@ func (p *PayloadAttestationMessage) UnmarshalSSZ(buf []byte) error {
 	if p.Data == nil {
 		p.Data = new(PayloadAttestationData)
 	}
-	if err = p.Data.UnmarshalSSZ(buf[8:56]); err != nil {
+	if err = p.Data.UnmarshalSSZ(buf[8:49]); err != nil {
 		return err
 	}
 
 	// Field (2) 'Signature'
 	if cap(p.Signature) == 0 {
-		p.Signature = make([]byte, 0, len(buf[56:152]))
+		p.Signature = make([]byte, 0, len(buf[49:145]))
 	}
-	p.Signature = append(p.Signature, buf[56:152]...)
+	p.Signature = append(p.Signature, buf[49:145]...)
 
 	return err
 }
 
 // SizeSSZ returns the ssz encoded size in bytes for the PayloadAttestationMessage object
 func (p *PayloadAttestationMessage) SizeSSZ() (size int) {
-	size = 152
+	size = 145
 	return
 }
 

@@ -63,7 +63,10 @@ func (r *ROMessage) Slot() primitives.Slot {
 
 // PayloadStatus returns the payload status from the payload attestation message.
 func (r *ROMessage) PayloadStatus() primitives.PTCStatus {
-	return r.m.Data.PayloadStatus
+	if len(r.m.Data.PayloadStatus) == 0 {
+		return primitives.PAYLOAD_INVALID_STATUS
+	}
+	return primitives.PTCStatus(r.m.Data.PayloadStatus[0])
 }
 
 // SigningRoot returns the signing root from the payload attestation message.

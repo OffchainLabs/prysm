@@ -211,7 +211,7 @@ func IsValidIndexedPayloadAttestation(state state.ReadOnlyBeaconState, att *epbs
 	}
 
 	// Verify the data is valid.
-	if att.Data.PayloadStatus >= primitives.PAYLOAD_INVALID_STATUS {
+	if primitives.PTCStatus(att.Data.PayloadStatus[0]) >= primitives.PAYLOAD_INVALID_STATUS {
 		return false, nil
 	}
 
