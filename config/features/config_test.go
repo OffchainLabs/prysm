@@ -12,39 +12,39 @@ import (
 func TestInitFeatureConfig(t *testing.T) {
 	defer Init(&Flags{})
 	cfg := &Flags{
-		EnableSlasher: true,
+		EnableDoppelGanger: true,
 	}
 	Init(cfg)
 	c := Get()
-	assert.Equal(t, true, c.EnableSlasher)
+	assert.Equal(t, true, c.EnableDoppelGanger)
 }
 
 func TestInitWithReset(t *testing.T) {
 	defer Init(&Flags{})
 	Init(&Flags{
-		EnableSlasher: true,
+		EnableDoppelGanger: true,
 	})
-	assert.Equal(t, true, Get().EnableSlasher)
+	assert.Equal(t, true, Get().EnableDoppelGanger)
 
 	// Overwrite previously set value (value that didn't come by default).
 	resetCfg := InitWithReset(&Flags{
-		EnableSlasher: false,
+		EnableDoppelGanger: false,
 	})
-	assert.Equal(t, false, Get().EnableSlasher)
+	assert.Equal(t, false, Get().EnableDoppelGanger)
 
 	// Reset must get to previously set configuration (not to default config values).
 	resetCfg()
-	assert.Equal(t, true, Get().EnableSlasher)
+	assert.Equal(t, true, Get().EnableDoppelGanger)
 }
 
 func TestConfigureBeaconConfig(t *testing.T) {
 	app := cli.App{}
 	set := flag.NewFlagSet("test", 0)
-	set.Bool(enableSlasherFlag.Name, true, "test")
+	set.Bool(saveInvalidBlockTempFlag.Name, true, "test")
 	context := cli.NewContext(&app, set, nil)
 	require.NoError(t, ConfigureBeaconChain(context))
 	c := Get()
-	assert.Equal(t, true, c.EnableSlasher)
+	assert.Equal(t, true, c.SaveInvalidBlock)
 }
 
 func TestValidateNetworkFlags(t *testing.T) {

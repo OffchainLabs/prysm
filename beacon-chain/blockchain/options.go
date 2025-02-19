@@ -213,3 +213,10 @@ func WithSyncChecker(checker Checker) Option {
 		return nil
 	}
 }
+
+func WithSlasherEnabled(enabled bool) Option {
+	return func(s *Service) error {
+		s.slasherEnabled = enabled
+		return nil
+	}
+}

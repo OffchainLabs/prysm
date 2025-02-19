@@ -213,6 +213,7 @@ var appHelpFlagGroups = []flagGroup{
 		Flags: []cli.Flag{
 			flags.HistoricalSlasherNode,
 			flags.SlasherDirFlag,
+			flags.SlasherFlag,
 		},
 	},
 	{
