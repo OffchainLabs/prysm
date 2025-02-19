@@ -67,7 +67,7 @@ func (t *TrackedValidatorsCache) Validator(index primitives.ValidatorIndex) (Tra
 
 	val, ok := item.(TrackedValidator)
 	if !ok {
-		logrus.Error("Failed to cast tracked validator from cache")
+		logrus.Errorf("Failed to cast tracked validator from cache, got unexpected item type %T", item)
 		return TrackedValidator{}, false
 	}
 
