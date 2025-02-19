@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/patrickmn/go-cache"
+	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/sirupsen/logrus"
 )
@@ -71,7 +72,36 @@ func (t *TrackedValidatorsCache) ItemCount() int {
 	return t.trackedValidators.ItemCount()
 }
 
+// Indices returns a map of validator indices that are being tracked.
+func (t *TrackedValidatorsCache) Indices() map[primitives.ValidatorIndex]bool {
+	items := t.trackedValidators.Items()
+
+	indices := make(map[primitives.ValidatorIndex]bool, len(items))
+
+	for cacheKey := range items {
+		index, err := fromCacheKey(cacheKey)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to get validator index from cache key")
+			continue
+		}
+
+		indices[index] = true
+	}
+
+	return indices
+}
+
 // toCacheKey creates a cache key from the validator index.
 func toCacheKey(validatorIndex primitives.ValidatorIndex) string {
 	return strconv.FormatUint(uint64(validatorIndex), 10)
+}
+
+// fromCacheKey gets the validator index from the cache key.
+func fromCacheKey(key string) (primitives.ValidatorIndex, error) {
+	validatorIndex, err := strconv.ParseUint(key, 10, 64)
+	if err != nil {
+		return 0, errors.Wrapf(err, "parse Uint: %s", key)
+	}
+
+	return primitives.ValidatorIndex(validatorIndex), nil
 }

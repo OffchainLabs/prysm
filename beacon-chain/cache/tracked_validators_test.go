@@ -3,8 +3,23 @@ package cache
 import (
 	"testing"
 
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
+
+func mapEqual(a, b map[primitives.ValidatorIndex]bool) bool {
+	if len(a) != len(b) {
+		return false
+	}
+
+	for k, v := range a {
+		if b[k] != v {
+			return false
+		}
+	}
+
+	return true
+}
 
 func TestTrackedValidatorsCache(t *testing.T) {
 	vc := NewTrackedValidatorsCache()
@@ -12,6 +27,7 @@ func TestTrackedValidatorsCache(t *testing.T) {
 	// No validators in cache.
 	require.Equal(t, 0, vc.ItemCount())
 	require.Equal(t, false, vc.Validating())
+	require.Equal(t, 0, len(vc.Indices()))
 
 	_, ok := vc.Validator(41)
 	require.Equal(t, false, ok)
@@ -32,6 +48,10 @@ func TestTrackedValidatorsCache(t *testing.T) {
 	v43Actual, ok := vc.Validator(43)
 	require.Equal(t, true, ok)
 	require.Equal(t, v43Expected, v43Actual)
+
+	expected := map[primitives.ValidatorIndex]bool{42: true, 43: true}
+	actual := vc.Indices()
+	require.Equal(t, true, mapEqual(expected, actual))
 
 	// Check the item count and if the cache is validating.
 	require.Equal(t, 2, vc.ItemCount())
@@ -55,4 +75,5 @@ func TestTrackedValidatorsCache(t *testing.T) {
 
 	require.Equal(t, 0, vc.ItemCount())
 	require.Equal(t, false, vc.Validating())
+	require.Equal(t, 0, len(vc.Indices()))
 }
