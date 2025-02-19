@@ -1,49 +1,72 @@
 package cache
 
 import (
-	"sync"
+	"strconv"
+	"time"
 
+	"github.com/patrickmn/go-cache"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/sirupsen/logrus"
 )
 
-type TrackedValidator struct {
-	Active       bool
-	FeeRecipient primitives.ExecutionAddress
-	Index        primitives.ValidatorIndex
-}
+const (
+	defaultExpiration = 1 * time.Hour
+	cleanupInterval   = 15 * time.Minute
+)
 
-type TrackedValidatorsCache struct {
-	sync.Mutex
-	trackedValidators map[primitives.ValidatorIndex]TrackedValidator
-}
+type (
+	TrackedValidator struct {
+		Active       bool
+		FeeRecipient primitives.ExecutionAddress
+		Index        primitives.ValidatorIndex
+	}
 
+	TrackedValidatorsCache struct {
+		trackedValidators cache.Cache
+	}
+)
+
+// NewTrackedValidatorsCache creates a new cache for tracking validators.
 func NewTrackedValidatorsCache() *TrackedValidatorsCache {
 	return &TrackedValidatorsCache{
-		trackedValidators: make(map[primitives.ValidatorIndex]TrackedValidator),
+		trackedValidators: *cache.New(defaultExpiration, cleanupInterval),
 	}
 }
 
+// Validator retrieves a tracked validator from the cache (if present).
 func (t *TrackedValidatorsCache) Validator(index primitives.ValidatorIndex) (TrackedValidator, bool) {
-	t.Lock()
-	defer t.Unlock()
-	val, ok := t.trackedValidators[index]
-	return val, ok
+	key := toCacheKey(index)
+	item, ok := t.trackedValidators.Get(key)
+	if !ok {
+		return TrackedValidator{}, false
+	}
+
+	val, ok := item.(TrackedValidator)
+	if !ok {
+		logrus.Error("Failed to cast tracked validator from cache")
+		return TrackedValidator{}, false
+	}
+
+	return val, true
 }
 
+// Set adds a tracked validator to the cache.
 func (t *TrackedValidatorsCache) Set(val TrackedValidator) {
-	t.Lock()
-	defer t.Unlock()
-	t.trackedValidators[val.Index] = val
+	key := toCacheKey(val.Index)
+	t.trackedValidators.Set(key, val, cache.DefaultExpiration)
 }
 
+// Delete removes a tracked validator from the cache.
 func (t *TrackedValidatorsCache) Prune() {
-	t.Lock()
-	defer t.Unlock()
-	t.trackedValidators = make(map[primitives.ValidatorIndex]TrackedValidator)
+	t.trackedValidators.Flush()
 }
 
+// Validating returns true if there are at least one tracked validators in the cache.
 func (t *TrackedValidatorsCache) Validating() bool {
-	t.Lock()
-	defer t.Unlock()
-	return len(t.trackedValidators) > 0
+	return t.trackedValidators.ItemCount() > 0
+}
+
+// toCacheKey creates a cache key from the validator index.
+func toCacheKey(validatorIndex primitives.ValidatorIndex) string {
+	return strconv.FormatUint(uint64(validatorIndex), 10)
 }
