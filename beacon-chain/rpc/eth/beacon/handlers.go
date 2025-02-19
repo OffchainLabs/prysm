@@ -1637,7 +1637,7 @@ func (s *Server) GetPendingDeposits(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set(api.VersionHeader, version.String(st.Version()))
 	if httputil.RespondWithSsz(r) {
-		sszData, err := serializePendingDeposits(pd)
+		sszData, err := serializeItems(pd)
 		if err != nil {
 			httputil.HandleError(w, "Failed to serialize pending deposits: "+err.Error(), http.StatusInternalServerError)
 			return
@@ -1665,11 +1665,68 @@ func (s *Server) GetPendingDeposits(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// serializePendingDeposits serializes a slice of PendingDeposit objects into a single byte array.
-func serializePendingDeposits(pd []*eth.PendingDeposit) ([]byte, error) {
+// GetPendingPartialWithdrawals returns pending partial withdrawals for state with given 'stateId'.
+// Should return 400 if the state retrieved is prior to Electra.
+// Supports both JSON and SSZ responses based on Accept header.
+func (s *Server) GetPendingPartialWithdrawals(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "beacon.GetPendingPartialWithdrawals")
+	defer span.End()
+
+	stateId := r.PathValue("state_id")
+	if stateId == "" {
+		httputil.HandleError(w, "state_id is required in URL params", http.StatusBadRequest)
+		return
+	}
+	st, err := s.Stater.State(ctx, []byte(stateId))
+	if err != nil {
+		shared.WriteStateFetchError(w, err)
+		return
+	}
+	if st.Version() < version.Electra {
+		httputil.HandleError(w, "state_id is prior to electra", http.StatusBadRequest)
+		return
+	}
+	ppw, err := st.PendingPartialWithdrawals()
+	if err != nil {
+		httputil.HandleError(w, "Could not get pending partial withdrawals: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set(api.VersionHeader, version.String(st.Version()))
+	if httputil.RespondWithSsz(r) {
+		sszData, err := serializeItems(ppw)
+		if err != nil {
+			httputil.HandleError(w, "Failed to serialize pending partial withdrawals: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		httputil.WriteSsz(w, sszData, "pending_partial_withdrawals.ssz")
+	} else {
+		isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
+		if err != nil {
+			httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
+		if err != nil {
+			httputil.HandleError(w, "Could not calculate root of latest block header: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		isFinalized := s.FinalizationFetcher.IsFinalized(ctx, blockRoot)
+		resp := structs.GetPendingPartialWithdrawalsResponse{
+			Version:             version.String(st.Version()),
+			ExecutionOptimistic: isOptimistic,
+			Finalized:           isFinalized,
+			Data:                structs.PendingPartialWithdrawalsFromConsensus(ppw),
+		}
+		httputil.WriteJson(w, resp)
+	}
+}
+
+// SerializeItems serializes a slice of items, each of which implements the MarshalSSZ method,
+// into a single byte array.
+func serializeItems[T interface{ MarshalSSZ() ([]byte, error) }](items []T) ([]byte, error) {
 	var result []byte
-	for _, d := range pd {
-		b, err := d.MarshalSSZ()
+	for _, item := range items {
+		b, err := item.MarshalSSZ()
 		if err != nil {
 			return nil, err
 		}
