@@ -6,6 +6,8 @@ import (
 
 	"github.com/patrickmn/go-cache"
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/sirupsen/logrus"
 )
@@ -27,6 +29,24 @@ type (
 	}
 )
 
+var (
+	// Metrics.
+	trackedValidatorsCacheMiss = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "tracked_validators_cache_miss",
+		Help: "The number of tracked validators requests that are not present in the cache.",
+	})
+
+	trackedValidatorsCacheTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "tracked_validators_cache_total",
+		Help: "The total number of tracked validators requests in the cache.",
+	})
+
+	trackedValidatorsCacheCount = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "tracked_validators_cache_count",
+		Help: "The number of tracked validators in the cache.",
+	})
+)
+
 // NewTrackedValidatorsCache creates a new cache for tracking validators.
 func NewTrackedValidatorsCache() *TrackedValidatorsCache {
 	return &TrackedValidatorsCache{
@@ -36,9 +56,12 @@ func NewTrackedValidatorsCache() *TrackedValidatorsCache {
 
 // Validator retrieves a tracked validator from the cache (if present).
 func (t *TrackedValidatorsCache) Validator(index primitives.ValidatorIndex) (TrackedValidator, bool) {
+	trackedValidatorsCacheTotal.Inc()
+
 	key := toCacheKey(index)
 	item, ok := t.trackedValidators.Get(key)
 	if !ok {
+		trackedValidatorsCacheMiss.Inc()
 		return TrackedValidator{}, false
 	}
 
@@ -60,23 +83,32 @@ func (t *TrackedValidatorsCache) Set(val TrackedValidator) {
 // Delete removes a tracked validator from the cache.
 func (t *TrackedValidatorsCache) Prune() {
 	t.trackedValidators.Flush()
+	trackedValidatorsCacheCount.Set(0)
 }
 
 // Validating returns true if there are at least one tracked validators in the cache.
 func (t *TrackedValidatorsCache) Validating() bool {
-	return t.trackedValidators.ItemCount() > 0
+	count := t.trackedValidators.ItemCount()
+	trackedValidatorsCacheCount.Set(float64(count))
+
+	return count > 0
 }
 
 // ItemCount returns the number of tracked validators in the cache.
 func (t *TrackedValidatorsCache) ItemCount() int {
-	return t.trackedValidators.ItemCount()
+	count := t.trackedValidators.ItemCount()
+	trackedValidatorsCacheCount.Set(float64(count))
+
+	return count
 }
 
 // Indices returns a map of validator indices that are being tracked.
 func (t *TrackedValidatorsCache) Indices() map[primitives.ValidatorIndex]bool {
 	items := t.trackedValidators.Items()
+	count := len(items)
+	trackedValidatorsCacheCount.Set(float64(count))
 
-	indices := make(map[primitives.ValidatorIndex]bool, len(items))
+	indices := make(map[primitives.ValidatorIndex]bool, count)
 
 	for cacheKey := range items {
 		index, err := fromCacheKey(cacheKey)
