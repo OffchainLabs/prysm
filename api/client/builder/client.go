@@ -154,6 +154,10 @@ func (c *Client) do(ctx context.Context, method string, path string, body io.Rea
 	if err != nil {
 		return
 	}
+	if method == http.MethodPost {
+		req.Header.Set("Content-Type", api.JsonMediaType)
+	}
+	req.Header.Set("Accept", api.JsonMediaType)
 	req.Header.Add("User-Agent", version.BuildData())
 	for _, o := range opts {
 		o(req)
