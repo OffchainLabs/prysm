@@ -367,18 +367,11 @@ func TestExecutionPayloadHeaderDenebFromConsensus_HappyPath(t *testing.T) {
 	}
 
 	result, err := ExecutionPayloadHeaderDenebFromConsensus(denebHeader)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if result == nil {
-		t.Fatal("result is nil, expected valid ExecutionPayloadHeaderDeneb")
-	}
-	if result.BlockNumber != fmt.Sprintf("%d", denebHeader.BlockNumber) {
-		t.Errorf("block number mismatch, got %s, want %d", result.BlockNumber, denebHeader.BlockNumber)
-	}
-	if result.BlobGasUsed != fmt.Sprintf("%d", denebHeader.BlobGasUsed) {
-		t.Errorf("blob gas used mismatch, got %s, want %d", result.BlobGasUsed, denebHeader.BlobGasUsed)
-	}
+	require.NoError(t, err)
+	require.Equal(t, hexutil.Encode(denebHeader.ParentHash), result.ParentHash)
+	require.DeepEqual(t, hexutil.Encode(denebHeader.FeeRecipient), result.FeeRecipient)
+	require.DeepEqual(t, hexutil.Encode(denebHeader.StateRoot), result.StateRoot)
+	require.DeepEqual(t, fmt.Sprintf("%d", denebHeader.BlobGasUsed), result.BlobGasUsed)
 }
 
 func TestExecutionPayloadHeaderDeneb_ToConsensus_HappyPath(t *testing.T) {
