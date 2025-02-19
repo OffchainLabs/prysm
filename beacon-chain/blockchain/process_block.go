@@ -723,13 +723,9 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 	attribute := s.getPayloadAttribute(ctx, headState, s.CurrentSlot()+1, headRoot[:])
 	// return early if we are not proposing next slot
 	if attribute.IsEmpty() {
-		fcuArgs := &fcuConfig{
-			headState:  headState,
-			headRoot:   headRoot,
-			headBlock:  nil,
-			attributes: attribute,
-		}
-		go firePayloadAttributesEvent(ctx, s.cfg.StateNotifier.StateFeed(), fcuArgs)
+		// notifyForkchoiceUpdate fires the payload attribute event. But in this case, we won't
+		// call notifyForkchoiceUpdate, so the event is fired here.
+		go firePayloadAttributesEvent(ctx, s.cfg.StateNotifier.StateFeed(), s.CurrentSlot()+1)
 		return
 	}
 
