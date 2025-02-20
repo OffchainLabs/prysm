@@ -75,7 +75,6 @@ func e2eMinimal(t *testing.T, cfg *params.BeaconChainConfig, cfgo ...types.E2ECo
 		},
 		ValidatorFlags:      []string{},
 		EpochsToRun:         uint64(epochsToRun),
-		ExtraEpochs:         10,
 		TestSync:            true,
 		TestFeature:         true,
 		TestDeposits:        true,
