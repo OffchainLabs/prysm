@@ -468,56 +468,14 @@ outerLoop:
 	return outputDataColumnsByPeer, descriptions
 }
 
-// admissiblePeersForCustodyGroup returns a map of peers that:
-// - custody at least one custody group listed in `neededCustodyGroups`,
-// - are synced to `targetSlot`, and
-// - have enough bandwidth to serve data columns corresponding to `count` blocks.
-//
-// It returns:
-// - A map, where the key of the map is the peer, the value is the custody groups of the peer.
-// - A map, where the key of the map is the custody group, the value is the peer that custodies the group.
-// - A slice of descriptions for non admissible peers.
-// - An error if any.
-func (f *blocksFetcher) admissiblePeersForCustodyGroup(
-	peers []peer.ID,
-	targetSlot primitives.Slot,
-	neededCustodyGroups map[uint64]bool,
-	count uint64,
-) (map[peer.ID]map[uint64]bool, map[uint64][]peer.ID, []string, error) {
-	// If no peer is specified, get all connected peers.
-	inputPeers := peers
-	if inputPeers == nil {
-		inputPeers = f.p2p.Peers().Connected()
-	}
-
-	inputPeerCount := len(inputPeers)
-	neededCustodyGroupCount := uint64(len(neededCustodyGroups))
-
-	// Create description slice for non admissible peers.
-	descriptions := make([]string, 0, inputPeerCount)
-
-	// Filter peers on bandwidth.
-	peersWithSufficientBandwidth := f.hasSufficientBandwidth(inputPeers, count)
-
-	// Convert peers with sufficient bandwidth to a map.
-	peerWithSufficientBandwidthMap := make(map[peer.ID]bool, len(peersWithSufficientBandwidth))
-	for _, peer := range peersWithSufficientBandwidth {
-		peerWithSufficientBandwidthMap[peer] = true
-	}
-
-	for _, peer := range inputPeers {
-		if !peerWithSufficientBandwidthMap[peer] {
-			description := fmt.Sprintf("peer %s: does not have sufficient bandwidth", peer)
-			descriptions = append(descriptions, description)
-		}
-	}
-
+// Filter peers with head epoch lower than our target epoch for ByRange requests.
+func (f *blocksFetcher) filterPeersByTargetSlot(peers []peer.ID, targetSlot primitives.Slot) ([]peer.ID, []string, error) {
+	filteredPeers := make([]peer.ID, 0, len(peers))
+	descriptions := make([]string, 0, len(peers))
 	// Compute the target epoch from the target slot.
 	targetEpoch := slots.ToEpoch(targetSlot)
 
-	// Filter peers with head epoch lower than our target epoch.
-	peersWithAdmissibleHeadEpoch := make(map[peer.ID]bool, inputPeerCount)
-	for _, peer := range peersWithSufficientBandwidth {
+	for _, peer := range peers {
 		peerChainState, err := f.p2p.Peers().ChainState(peer)
 		if err != nil {
 			description := fmt.Sprintf("peer %s: error: %s", peer, err)
@@ -539,95 +497,24 @@ func (f *blocksFetcher) admissiblePeersForCustodyGroup(
 			continue
 		}
 
-		peersWithAdmissibleHeadEpoch[peer] = true
+		filteredPeers = append(filteredPeers, peer)
 	}
 
-	// Compute custody groups for each peer.
-	dataColumnsByPeerWithAdmissibleHeadEpoch, err := f.custodyGroupsFromPeer(peersWithAdmissibleHeadEpoch)
-	if err != nil {
-		return nil, nil, nil, errors.Wrap(err, "custody columns from peer")
-	}
-
-	// Filter peers which custody at least one needed data column.
-	dataColumnsByAdmissiblePeer, localDescriptions := filterPeerWhichCustodyAtLeastOneDataColumn(neededCustodyGroups, dataColumnsByPeerWithAdmissibleHeadEpoch)
-	descriptions = append(descriptions, localDescriptions...)
-
-	// Compute a map from needed data columns to their peers.
-	admissiblePeersByDataColumn := make(map[uint64][]peer.ID, neededCustodyGroupCount)
-	for peer, peerCustodyDataColumns := range dataColumnsByAdmissiblePeer {
-		for dataColumn := range peerCustodyDataColumns {
-			admissiblePeersByDataColumn[dataColumn] = append(admissiblePeersByDataColumn[dataColumn], peer)
-		}
-	}
-
-	return dataColumnsByAdmissiblePeer, admissiblePeersByDataColumn, descriptions, nil
+	return filteredPeers, descriptions, nil
 }
 
-// selectPeersToFetchDataColumnsFrom implements greedy algorithm in order to select peers to fetch data columns from.
-// https://en.wikipedia.org/wiki/Set_cover_problem#Greedy_algorithm
-func selectPeersToFetchDataColumnsFrom(
-	neededDataColumnsOriginal map[uint64]bool,
-	dataColumnsByPeer map[peer.ID]map[uint64]bool,
-) (map[peer.ID][]uint64, error) {
-	// Make a copy since we will modify it.
-	neededDataColumns := make(map[uint64]bool, len(neededDataColumnsOriginal))
-	for dataColumn, value := range neededDataColumnsOriginal {
-		neededDataColumns[dataColumn] = value
+// Filter peers to ensure they are synced to the target slot and have sufficient bandwidth to serve the request.
+func (f *blocksFetcher) filterPeersForRangeReq(peers []peer.ID, lastSlot primitives.Slot, blockCount uint64) ([]peer.ID, error) {
+	if len(peers) == 0 {
+		peers = f.p2p.Peers().Connected()
 	}
 
-	dataColumnsFromSelectedPeers := make(map[peer.ID][]uint64)
-
-	// Filter `dataColumnsByPeer` to only contain needed data columns.
-	neededDataColumnsByPeer := make(map[peer.ID]map[uint64]bool, len(dataColumnsByPeer))
-	for pid, dataColumns := range dataColumnsByPeer {
-		for dataColumn := range dataColumns {
-			if neededDataColumns[dataColumn] {
-				if _, ok := neededDataColumnsByPeer[pid]; !ok {
-					neededDataColumnsByPeer[pid] = make(map[uint64]bool, len(neededDataColumns))
-				}
-
-				neededDataColumnsByPeer[pid][dataColumn] = true
-			}
-		}
+	peers, _, err := f.filterPeersByTargetSlot(peers, lastSlot)
+	if err != nil {
+		return nil, errors.Wrap(err, "peers with slot and data columns")
 	}
 
-	for len(neededDataColumns) > 0 {
-		// Check if at least one peer remains. If not, it means that we don't have enough peers to fetch all needed data columns.
-		if len(neededDataColumnsByPeer) == 0 {
-			missingDataColumnsSortedSlice := uint64MapToSortedSlice(neededDataColumns)
-			return dataColumnsFromSelectedPeers, errors.Errorf("no peer to fetch the following data columns: %v", missingDataColumnsSortedSlice)
-		}
-
-		// Select the peer that custody the most needed data columns (greedy selection).
-		var bestPeer peer.ID
-		for peer, dataColumns := range neededDataColumnsByPeer {
-			if len(dataColumns) > len(neededDataColumnsByPeer[bestPeer]) {
-				bestPeer = peer
-			}
-		}
-
-		dataColumnsSortedSlice := uint64MapToSortedSlice(neededDataColumnsByPeer[bestPeer])
-		dataColumnsFromSelectedPeers[bestPeer] = dataColumnsSortedSlice
-
-		// Remove the selected peer from the list of peers.
-		delete(neededDataColumnsByPeer, bestPeer)
-
-		// Remove the selected peer's data columns from the list of needed data columns.
-		for _, dataColumn := range dataColumnsSortedSlice {
-			delete(neededDataColumns, dataColumn)
-		}
-
-		// Remove the selected peer's data columns from the list of needed data columns by peer.
-		for _, dataColumn := range dataColumnsSortedSlice {
-			for peer, dataColumns := range neededDataColumnsByPeer {
-				delete(dataColumns, dataColumn)
-
-				if len(dataColumns) == 0 {
-					delete(neededDataColumnsByPeer, peer)
-				}
-			}
-		}
-	}
-
-	return dataColumnsFromSelectedPeers, nil
+	// Filter for peers with sufficient bandwidth to serve the request.
+	peers = f.hasSufficientBandwidth(peers, blockCount)
+	return peers, nil
 }

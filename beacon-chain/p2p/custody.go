@@ -1,6 +1,9 @@
 package p2p
 
 import (
+	"fmt"
+	"slices"
+
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -8,6 +11,8 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 )
+
+var _ DataColumnsHandler = (*Service)(nil)
 
 // AdmissibleCustodyGroupsPeers returns a list of peers that custody a super set of the local node's custody groups.
 func (s *Service) AdmissibleCustodyGroupsPeers(peers []peer.ID) ([]peer.ID, error) {
@@ -149,4 +154,202 @@ func (s *Service) CustodyGroupCountFromPeer(pid peer.ID) uint64 {
 	}
 
 	return custodyCount
+}
+
+// DEV: For the BlocksFetcher to use this, it needs to handle some logic directly that we removed from this function:
+// - Providing a list of peers to start with if the array is empty.
+
+// AdmissiblePeersForCustodyGroup returns a map of peers that:
+// - custody at least one custody group listed in `neededCustodyGroups`,
+//
+// It returns:
+// - A map, where the key of the map is the peer, the value is the custody groups of the peer.
+// - A map, where the key of the map is the custody group, the value is the peer that custodies the group.
+// - A slice of descriptions for non admissible peers.
+// - An error if any.
+
+func (s *Service) AdmissiblePeersForCustodyGroups(
+	peers []peer.ID,
+	neededCustodyGroups map[uint64]bool,
+) (map[peer.ID]map[uint64]bool, map[uint64][]peer.ID, []string, error) {
+	peerCount := len(peers)
+	neededCustodyGroupCount := uint64(len(neededCustodyGroups))
+
+	// Create description slice for non admissible peers.
+	descriptions := make([]string, 0, peerCount)
+
+	// Compute custody groups for each peer.
+	dataColumnsByPeer, err := s.custodyGroupsFromPeer(peers)
+	if err != nil {
+		return nil, nil, nil, errors.Wrap(err, "custody columns from peer")
+	}
+
+	// Filter peers which custody at least one needed data column.
+	dataColumnsByAdmissiblePeer, localDescriptions := filterPeerWhichCustodyAtLeastOneDataColumn(neededCustodyGroups, dataColumnsByPeer)
+	descriptions = append(descriptions, localDescriptions...)
+
+	// Compute a map from needed data columns to their peers.
+	admissiblePeersByDataColumn := make(map[uint64][]peer.ID, neededCustodyGroupCount)
+	for peer, peerCustodyDataColumns := range dataColumnsByAdmissiblePeer {
+		for dataColumn := range peerCustodyDataColumns {
+			admissiblePeersByDataColumn[dataColumn] = append(admissiblePeersByDataColumn[dataColumn], peer)
+		}
+	}
+
+	return dataColumnsByAdmissiblePeer, admissiblePeersByDataColumn, descriptions, nil
+}
+
+// SelectPeersToFetchDataColumnsFrom implements greedy algorithm in order to select peers to fetch data columns from.
+// https://en.wikipedia.org/wiki/Set_cover_problem#Greedy_algorithm
+func SelectPeersToFetchDataColumnsFrom(
+	neededDataColumnsOriginal map[uint64]bool,
+	dataColumnsByPeer map[peer.ID]map[uint64]bool,
+) (map[peer.ID][]uint64, error) {
+	// Make a copy since we will modify it.
+	neededDataColumns := make(map[uint64]bool, len(neededDataColumnsOriginal))
+	for dataColumn, value := range neededDataColumnsOriginal {
+		neededDataColumns[dataColumn] = value
+	}
+
+	dataColumnsFromSelectedPeers := make(map[peer.ID][]uint64)
+
+	// Filter `dataColumnsByPeer` to only contain needed data columns.
+	neededDataColumnsByPeer := make(map[peer.ID]map[uint64]bool, len(dataColumnsByPeer))
+	for pid, dataColumns := range dataColumnsByPeer {
+		for dataColumn := range dataColumns {
+			if neededDataColumns[dataColumn] {
+				if _, ok := neededDataColumnsByPeer[pid]; !ok {
+					neededDataColumnsByPeer[pid] = make(map[uint64]bool, len(neededDataColumns))
+				}
+
+				neededDataColumnsByPeer[pid][dataColumn] = true
+			}
+		}
+	}
+
+	for len(neededDataColumns) > 0 {
+		// Check if at least one peer remains. If not, it means that we don't have enough peers to fetch all needed data columns.
+		if len(neededDataColumnsByPeer) == 0 {
+			missingDataColumnsSortedSlice := uint64MapToSortedSlice(neededDataColumns)
+			return dataColumnsFromSelectedPeers, errors.Errorf("no peer to fetch the following data columns: %v", missingDataColumnsSortedSlice)
+		}
+
+		// Select the peer that custody the most needed data columns (greedy selection).
+		var bestPeer peer.ID
+		for peer, dataColumns := range neededDataColumnsByPeer {
+			if len(dataColumns) > len(neededDataColumnsByPeer[bestPeer]) {
+				bestPeer = peer
+			}
+		}
+
+		dataColumnsSortedSlice := uint64MapToSortedSlice(neededDataColumnsByPeer[bestPeer])
+		dataColumnsFromSelectedPeers[bestPeer] = dataColumnsSortedSlice
+
+		// Remove the selected peer from the list of peers.
+		delete(neededDataColumnsByPeer, bestPeer)
+
+		// Remove the selected peer's data columns from the list of needed data columns.
+		for _, dataColumn := range dataColumnsSortedSlice {
+			delete(neededDataColumns, dataColumn)
+		}
+
+		// Remove the selected peer's data columns from the list of needed data columns by peer.
+		for _, dataColumn := range dataColumnsSortedSlice {
+			for peer, dataColumns := range neededDataColumnsByPeer {
+				delete(dataColumns, dataColumn)
+
+				if len(dataColumns) == 0 {
+					delete(neededDataColumnsByPeer, peer)
+				}
+			}
+		}
+	}
+
+	return dataColumnsFromSelectedPeers, nil
+}
+
+// custodyGroupsFromPeer compute all the custody groups indexed by peer.
+func (s *Service) custodyGroupsFromPeer(peers []peer.ID) (map[peer.ID]map[uint64]bool, error) {
+	peerCount := len(peers)
+
+	custodyGroupsByPeer := make(map[peer.ID]map[uint64]bool, peerCount)
+	for _, peer := range peers {
+		// Get the node ID from the peer ID.
+		nodeID, err := ConvertPeerIDToNodeID(peer)
+		if err != nil {
+			return nil, errors.Wrap(err, "convert peer ID to node ID")
+		}
+
+		// Get the custody group count of the peer.
+		custodyGroupCount := s.CustodyGroupCountFromPeer(peer)
+
+		// Get the custody groups of the peer.
+		custodyGroups, err := peerdas.CustodyGroups(nodeID, custodyGroupCount)
+		if err != nil {
+			return nil, errors.Wrap(err, "custody groups")
+		}
+
+		custodyGroupsByPeer[peer] = custodyGroups
+	}
+
+	return custodyGroupsByPeer, nil
+}
+
+// `filterPeerWhichCustodyAtLeastOneDataColumn` filters peers which custody at least one data column
+// specified in `neededDataColumns`. It returns also a list of descriptions for non admissible peers.
+func filterPeerWhichCustodyAtLeastOneDataColumn(
+	neededDataColumns map[uint64]bool,
+	inputDataColumnsByPeer map[peer.ID]map[uint64]bool,
+) (map[peer.ID]map[uint64]bool, []string) {
+	// Get the count of needed data columns.
+	neededDataColumnsCount := uint64(len(neededDataColumns))
+
+	// Create pretty needed data columns for logs.
+	var neededDataColumnsLog interface{} = "all"
+	numberOfColumns := params.BeaconConfig().NumberOfColumns
+
+	if neededDataColumnsCount < numberOfColumns {
+		neededDataColumnsLog = uint64MapToSortedSlice(neededDataColumns)
+	}
+
+	outputDataColumnsByPeer := make(map[peer.ID]map[uint64]bool, len(inputDataColumnsByPeer))
+	descriptions := make([]string, 0)
+
+outerLoop:
+	for peer, peerCustodyDataColumns := range inputDataColumnsByPeer {
+		for neededDataColumn := range neededDataColumns {
+			if peerCustodyDataColumns[neededDataColumn] {
+				outputDataColumnsByPeer[peer] = peerCustodyDataColumns
+
+				continue outerLoop
+			}
+		}
+
+		peerCustodyColumnsCount := uint64(len(peerCustodyDataColumns))
+		var peerCustodyColumnsLog interface{} = "all"
+
+		if peerCustodyColumnsCount < numberOfColumns {
+			peerCustodyColumnsLog = uint64MapToSortedSlice(peerCustodyDataColumns)
+		}
+
+		description := fmt.Sprintf(
+			"peer %s: does not custody any needed column, custody columns: %v, needed columns: %v",
+			peer, peerCustodyColumnsLog, neededDataColumnsLog,
+		)
+
+		descriptions = append(descriptions, description)
+	}
+
+	return outputDataColumnsByPeer, descriptions
+}
+
+// uint64MapToSortedSlice produces a sorted uint64 slice from a map.
+func uint64MapToSortedSlice(input map[uint64]bool) []uint64 {
+	output := make([]uint64, 0, len(input))
+	for idx := range input {
+		output = append(output, idx)
+	}
+
+	slices.Sort[[]uint64](output)
+	return output
 }

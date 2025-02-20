@@ -907,7 +907,7 @@ func (f *blocksFetcher) fetchBwbSliceFromPeers(
 	}
 
 	// Select the peers that will be requested.
-	dataColumnsToFetchByPeer, err := selectPeersToFetchDataColumnsFrom(bwbSlice.dataColumns, dataColumnsByAdmissiblePeer)
+	dataColumnsToFetchByPeer, err := p2p.SelectPeersToFetchDataColumnsFrom(bwbSlice.dataColumns, dataColumnsByAdmissiblePeer)
 	if err != nil {
 		// This should never happen.
 		return errors.Wrap(err, "select peers to fetch data columns from")
@@ -1114,8 +1114,14 @@ func (f *blocksFetcher) waitForPeersForDataColumns(
 		return result
 	}
 
+	// Filter for peers with head epoch greater than or equal to our target epoch for ByRange requests.
+	rangeReqPeers, err := f.filterPeersForRangeReq(peers, lastSlot, blockCount)
+	if err != nil {
+		return nil, errors.Wrap(err, "peers with slot and data columns")
+	}
+
 	// Get the peers that are admissible for the data columns.
-	dataColumnsByAdmissiblePeer, admissiblePeersByDataColumn, descriptions, err := f.admissiblePeersForCustodyGroup(peers, lastSlot, neededDataColumns, blockCount)
+	dataColumnsByAdmissiblePeer, admissiblePeersByDataColumn, descriptions, err := f.p2p.AdmissiblePeersForCustodyGroups(rangeReqPeers, neededDataColumns)
 	if err != nil {
 		return nil, errors.Wrap(err, "peers with slot and data columns")
 	}
@@ -1168,7 +1174,14 @@ func (f *blocksFetcher) waitForPeersForDataColumns(
 
 		time.Sleep(delay)
 
-		dataColumnsByAdmissiblePeer, admissiblePeersByDataColumn, descriptions, err = f.admissiblePeersForCustodyGroup(peers, lastSlot, neededDataColumns, blockCount)
+		// Filter for peers with head epoch greater than or equal to our target epoch for ByRange requests.
+		rangeReqPeers, err = f.filterPeersForRangeReq(peers, lastSlot, blockCount)
+		if err != nil {
+			return nil, errors.Wrap(err, "peers with slot and data columns")
+		}
+
+		// Get the peers that are admissible for the data columns.
+		dataColumnsByAdmissiblePeer, admissiblePeersByDataColumn, descriptions, err = f.p2p.AdmissiblePeersForCustodyGroups(rangeReqPeers, neededDataColumns)
 		if err != nil {
 			return nil, errors.Wrap(err, "peers with slot and data columns")
 		}
