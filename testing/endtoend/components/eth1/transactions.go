@@ -43,8 +43,9 @@ type TransactionGenerator struct {
 }
 
 func (t *TransactionGenerator) UnderlyingProcess() *os.Process {
-	//TODO implement me
-	panic("implement me")
+	// Transaction Generator runs under the same underlying process so
+	// we return an empty process object.
+	return &os.Process{}
 }
 
 func NewTransactionGenerator(keystore string, seed int64) *TransactionGenerator {
