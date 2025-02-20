@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	lightclient "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/light-client"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -129,7 +131,7 @@ func (s *Service) saveLightClientUpdate(cfg *postBlockProcessConfig) {
 	attestedRoot := cfg.roblock.Block().ParentRoot()
 	attestedBlock, err := s.getBlock(cfg.ctx, attestedRoot)
 	if err != nil {
-		log.WithError(err).Error("Saving light client update failed: Could not get attested block")
+		log.WithError(err).Errorf("Saving light client update failed: Could not get attested block for root %#x", attestedRoot)
 		return
 	}
 	if attestedBlock == nil || attestedBlock.IsNil() {
@@ -138,7 +140,7 @@ func (s *Service) saveLightClientUpdate(cfg *postBlockProcessConfig) {
 	}
 	attestedState, err := s.cfg.StateGen.StateByRoot(cfg.ctx, attestedRoot)
 	if err != nil {
-		log.WithError(err).Error("Saving light client update failed: Could not get attested state")
+		log.WithError(err).Errorf("Saving light client update failed: Could not get attested state for root %#x", attestedRoot)
 		return
 	}
 	if attestedState == nil || attestedState.IsNil() {
@@ -149,7 +151,11 @@ func (s *Service) saveLightClientUpdate(cfg *postBlockProcessConfig) {
 	finalizedRoot := attestedState.FinalizedCheckpoint().Root
 	finalizedBlock, err := s.getBlock(cfg.ctx, [32]byte(finalizedRoot))
 	if err != nil {
-		log.WithError(err).Error("Saving light client update failed: Could not get finalized block")
+		if errors.Is(err, errBlockNotFoundInCacheOrDB) {
+			log.Debugf("Skipping saving light client update: Finalized block is nil for root %#x", finalizedRoot)
+		} else {
+			log.WithError(err).Errorf("Saving light client update failed: Could not get finalized block for root %#x", finalizedRoot)
+		}
 		return
 	}
 
@@ -224,26 +230,28 @@ func (s *Service) processLightClientFinalityUpdate(
 	attestedRoot := signed.Block().ParentRoot()
 	attestedBlock, err := s.cfg.BeaconDB.Block(ctx, attestedRoot)
 	if err != nil {
-		return errors.Wrap(err, "could not get attested block")
+		return errors.Wrapf(err, "could not get attested block for root %#x", attestedRoot)
 	}
 	attestedState, err := s.cfg.StateGen.StateByRoot(ctx, attestedRoot)
 	if err != nil {
-		return errors.Wrap(err, "could not get attested state")
+		return errors.Wrapf(err, "could not get attested state for root %#x", attestedRoot)
 	}
 
-	var finalizedBlock interfaces.ReadOnlySignedBeaconBlock
-	finalizedCheckPoint := attestedState.FinalizedCheckpoint()
-	if finalizedCheckPoint != nil {
-		finalizedRoot := bytesutil.ToBytes32(finalizedCheckPoint.Root)
-		finalizedBlock, err = s.cfg.BeaconDB.Block(ctx, finalizedRoot)
-		if err != nil {
-			finalizedBlock = nil
-		}
-	}
+	finalizedCheckpoint := attestedState.FinalizedCheckpoint()
 
 	// Check if the finalized checkpoint has changed
-	if finalizedCheckPoint == nil || bytes.Equal(finalizedCheckPoint.GetRoot(), postState.FinalizedCheckpoint().Root) {
+	if finalizedCheckpoint == nil || bytes.Equal(finalizedCheckpoint.GetRoot(), postState.FinalizedCheckpoint().Root) {
 		return nil
+	}
+
+	finalizedRoot := bytesutil.ToBytes32(finalizedCheckpoint.Root)
+	finalizedBlock, err := s.cfg.BeaconDB.Block(ctx, finalizedRoot)
+	if err != nil {
+		if errors.Is(err, errBlockNotFoundInCacheOrDB) {
+			log.Debugf("Skipping processing light client finality update: Finalized block is nil for root %#x", finalizedRoot)
+			return nil
+		}
+		return errors.Wrapf(err, "could not get finalized block for root %#x", finalizedRoot)
 	}
 
 	update, err := lightclient.NewLightClientFinalityUpdateFromBeaconState(
@@ -272,11 +280,11 @@ func (s *Service) processLightClientOptimisticUpdate(ctx context.Context, signed
 	attestedRoot := signed.Block().ParentRoot()
 	attestedBlock, err := s.cfg.BeaconDB.Block(ctx, attestedRoot)
 	if err != nil {
-		return errors.Wrap(err, "could not get attested block")
+		return errors.Wrapf(err, "could not get attested block for root %#x", attestedRoot)
 	}
 	attestedState, err := s.cfg.StateGen.StateByRoot(ctx, attestedRoot)
 	if err != nil {
-		return errors.Wrap(err, "could not get attested state")
+		return errors.Wrapf(err, "could not get attested state for root %#x", attestedRoot)
 	}
 
 	update, err := lightclient.NewLightClientOptimisticUpdateFromBeaconState(
@@ -289,6 +297,10 @@ func (s *Service) processLightClientOptimisticUpdate(ctx context.Context, signed
 	)
 
 	if err != nil {
+		if strings.Contains(err.Error(), lightclient.ErrNotEnoughSyncCommitteeBits) {
+			log.WithError(err).Debug("Skipping processing light client optimistic update")
+			return nil
+		}
 		return errors.Wrap(err, "could not create light client optimistic update")
 	}
 
@@ -541,7 +553,8 @@ func (s *Service) fillInForkChoiceMissingBlocks(ctx context.Context, signed inte
 
 // inserts finalized deposits into our finalized deposit trie, needs to be
 // called in the background
-func (s *Service) insertFinalizedDeposits(ctx context.Context, fRoot [32]byte) {
+// Post-Electra: prunes all proofs and pending deposits in the cache
+func (s *Service) insertFinalizedDepositsAndPrune(ctx context.Context, fRoot [32]byte) {
 	ctx, span := trace.StartSpan(ctx, "blockChain.insertFinalizedDeposits")
 	defer span.End()
 	startTime := time.Now()
@@ -552,6 +565,16 @@ func (s *Service) insertFinalizedDeposits(ctx context.Context, fRoot [32]byte) {
 		log.WithError(err).Error("could not fetch finalized state")
 		return
 	}
+
+	// Check if we should prune all pending deposits.
+	// In post-Electra(after the legacy deposit mechanism is deprecated),
+	// we can prune all pending deposits in the deposit cache.
+	// See: https://eips.ethereum.org/EIPS/eip-6110#eth1data-poll-deprecation
+	if helpers.DepositRequestsStarted(finalizedState) {
+		s.pruneAllPendingDepositsAndProofs(ctx)
+		return
+	}
+
 	// We update the cache up to the last deposit index in the finalized block's state.
 	// We can be confident that these deposits will be included in some block
 	// because the Eth1 follow distance makes such long-range reorgs extremely unlikely.
@@ -578,6 +601,12 @@ func (s *Service) insertFinalizedDeposits(ctx context.Context, fRoot [32]byte) {
 	s.cfg.DepositCache.PrunePendingDeposits(ctx, int64(eth1DepositIndex)) // lint:ignore uintcast -- Deposit index should not exceed int64 in your lifetime.
 
 	log.WithField("duration", time.Since(startTime).String()).Debugf("Finalized deposit insertion completed at index %d", finalizedEth1DepIdx)
+}
+
+// pruneAllPendingDepositsAndProofs prunes all proofs and pending deposits in the cache.
+func (s *Service) pruneAllPendingDepositsAndProofs(ctx context.Context) {
+	s.cfg.DepositCache.PruneAllPendingDeposits(ctx)
+	s.cfg.DepositCache.PruneAllProofs(ctx)
 }
 
 // This ensures that the input root defaults to using genesis root instead of zero hashes. This is needed for handling

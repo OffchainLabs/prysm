@@ -9,6 +9,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
@@ -37,8 +38,7 @@ import (
 //	        break
 //
 //	    # Calculate the consolidated balance
-//	    max_effective_balance = get_max_effective_balance(source_validator)
-//	    source_effective_balance = min(state.balances[pending_consolidation.source_index], max_effective_balance)
+//	    source_effective_balance = min(state.balances[pending_consolidation.source_index], source_validator.effective_balance)
 //
 //	    # Move active balance to target. Excess balance is withdrawable.
 //	    decrease_balance(state, pending_consolidation.source_index, source_effective_balance)
@@ -78,7 +78,7 @@ func ProcessPendingConsolidations(ctx context.Context, st state.BeaconState) err
 		if err != nil {
 			return err
 		}
-		b := min(validatorBalance, helpers.ValidatorMaxEffectiveBalance(sourceValidator))
+		b := min(validatorBalance, sourceValidator.EffectiveBalance())
 
 		if err := helpers.DecreaseBalance(st, pc.SourceIndex, b); err != nil {
 			return err
@@ -141,8 +141,8 @@ func ProcessPendingConsolidations(ctx context.Context, st state.BeaconState) err
 //	    if not (has_correct_credential and is_correct_source_address):
 //	        return
 //
-//	    # Verify that target has execution withdrawal credentials
-//	    if not has_execution_withdrawal_credential(target_validator):
+//	    # Verify that target has compounding withdrawal credentials
+//	    if not has_compounding_withdrawal_credential(target_validator):
 //	        return
 //
 //	    # Verify the source and the target are active
@@ -175,10 +175,6 @@ func ProcessPendingConsolidations(ctx context.Context, st state.BeaconState) err
 //	        source_index=source_index,
 //	        target_index=target_index
 //	    ))
-//
-//	    # Churn any target excess active balance of target and raise its max
-//	    if has_eth1_withdrawal_credential(target_validator):
-//	        switch_to_compounding_validator(state, target_index)
 func ProcessConsolidationRequests(ctx context.Context, st state.BeaconState, reqs []*enginev1.ConsolidationRequest) error {
 	if len(reqs) == 0 || st == nil {
 		return nil
@@ -189,6 +185,9 @@ func ProcessConsolidationRequests(ctx context.Context, st state.BeaconState, req
 	pcLimit := params.BeaconConfig().PendingConsolidationsLimit
 
 	for _, cr := range reqs {
+		if cr == nil {
+			return errors.New("nil consolidation request")
+		}
 		if ctx.Err() != nil {
 			return fmt.Errorf("cannot process consolidation requests: %w", ctx.Err())
 		}
@@ -238,13 +237,18 @@ func ProcessConsolidationRequests(ctx context.Context, st state.BeaconState, req
 			return fmt.Errorf("failed to fetch source validator: %w", err) // This should never happen.
 		}
 
+		roSrcV, err := state_native.NewValidator(srcV)
+		if err != nil {
+			return err
+		}
+
 		tgtV, err := st.ValidatorAtIndexReadOnly(tgtIdx)
 		if err != nil {
 			return fmt.Errorf("failed to fetch target validator: %w", err) // This should never happen.
 		}
 
 		// Verify source withdrawal credentials
-		if !helpers.HasExecutionWithdrawalCredentials(srcV) {
+		if !roSrcV.HasExecutionWithdrawalCredentials() {
 			continue
 		}
 		// Confirm source_validator.withdrawal_credentials[12:] == consolidation_request.source_address
@@ -253,7 +257,7 @@ func ProcessConsolidationRequests(ctx context.Context, st state.BeaconState, req
 		}
 
 		// Target validator must have their withdrawal credentials set appropriately.
-		if !helpers.HasExecutionWithdrawalCredentials(tgtV) {
+		if !tgtV.HasCompoundingWithdrawalCredentials() {
 			continue
 		}
 
@@ -261,7 +265,7 @@ func ProcessConsolidationRequests(ctx context.Context, st state.BeaconState, req
 		if !helpers.IsActiveValidator(srcV, curEpoch) || !helpers.IsActiveValidatorUsingTrie(tgtV, curEpoch) {
 			continue
 		}
-		// Neither validator are exiting.
+		// Neither validator is exiting.
 		if srcV.ExitEpoch != ffe || tgtV.ExitEpoch() != ffe {
 			continue
 		}
@@ -297,13 +301,6 @@ func ProcessConsolidationRequests(ctx context.Context, st state.BeaconState, req
 
 		if err := st.AppendPendingConsolidation(&eth.PendingConsolidation{SourceIndex: srcIdx, TargetIndex: tgtIdx}); err != nil {
 			return fmt.Errorf("failed to append pending consolidation: %w", err) // This should never happen.
-		}
-
-		if helpers.HasETH1WithdrawalCredential(tgtV) {
-			if err := SwitchToCompoundingValidator(st, tgtIdx); err != nil {
-				log.WithError(err).Error("failed to switch to compounding validator")
-				continue
-			}
 		}
 	}
 
@@ -376,7 +373,7 @@ func IsValidSwitchToCompoundingRequest(st state.BeaconState, req *enginev1.Conso
 		return false
 	}
 
-	if !helpers.HasETH1WithdrawalCredential(srcV) {
+	if !srcV.HasETH1WithdrawalCredentials() {
 		return false
 	}
 

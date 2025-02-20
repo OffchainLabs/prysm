@@ -29,6 +29,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/kv"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/pruner"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/slasherkv"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/execution"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice"
@@ -93,6 +94,7 @@ type BeaconNode struct {
 	stop                    chan struct{} // Channel to wait for termination notifications.
 	db                      db.Database
 	slasherDB               db.SlasherDatabase
+	attestationCache        *cache.AttestationCache
 	attestationPool         attestations.Pool
 	exitPool                voluntaryexits.PoolManager
 	slashingsPool           slashings.PoolManager
@@ -144,6 +146,7 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 		stateFeed:               new(event.Feed),
 		blockFeed:               new(event.Feed),
 		opFeed:                  new(event.Feed),
+		attestationCache:        cache.NewAttestationCache(),
 		attestationPool:         attestations.NewPool(),
 		exitPool:                voluntaryexits.NewPool(),
 		slashingsPool:           slashings.NewPool(),
@@ -334,6 +337,11 @@ func registerServices(cliCtx *cli.Context, beacon *BeaconNode, synchronizer *sta
 		return errors.Wrap(err, "could not register sync service")
 	}
 
+	log.Debugln("Registering Slashing Pool Service")
+	if err := beacon.registerSlashingPoolService(); err != nil {
+		return errors.Wrap(err, "could not register slashing pool service")
+	}
+
 	log.Debugln("Registering Slasher Service")
 	if err := beacon.registerSlasherService(); err != nil {
 		return errors.Wrap(err, "could not register slasher service")
@@ -364,6 +372,13 @@ func registerServices(cliCtx *cli.Context, beacon *BeaconNode, synchronizer *sta
 		log.Debugln("Registering Prometheus Service")
 		if err := beacon.registerPrometheusService(cliCtx); err != nil {
 			return errors.Wrap(err, "could not register prometheus service")
+		}
+	}
+
+	if cliCtx.Bool(flags.BeaconDBPruning.Name) {
+		log.Debugln("Registering Pruner Service")
+		if err := beacon.registerPrunerService(cliCtx); err != nil {
+			return errors.Wrap(err, "could not register pruner service")
 		}
 	}
 
@@ -704,12 +719,23 @@ func (b *BeaconNode) fetchBuilderService() *builder.Service {
 
 func (b *BeaconNode) registerAttestationPool() error {
 	s, err := attestations.NewService(b.ctx, &attestations.Config{
+		Cache:               b.attestationCache,
 		Pool:                b.attestationPool,
 		InitialSyncComplete: b.initialSyncComplete,
 	})
 	if err != nil {
 		return errors.Wrap(err, "could not register atts pool service")
 	}
+	return b.services.RegisterService(s)
+}
+
+func (b *BeaconNode) registerSlashingPoolService() error {
+	var chainService *blockchain.Service
+	if err := b.services.FetchService(&chainService); err != nil {
+		return err
+	}
+
+	s := slashings.NewPoolService(b.ctx, b.slashingsPool, slashings.WithElectraTimer(b.clockWaiter, chainService.CurrentSlot))
 	return b.services.RegisterService(s)
 }
 
@@ -732,6 +758,7 @@ func (b *BeaconNode) registerBlockchainService(fc forkchoice.ForkChoicer, gs *st
 		blockchain.WithDepositCache(b.depositCache),
 		blockchain.WithChainStartFetcher(web3Service),
 		blockchain.WithExecutionEngineCaller(web3Service),
+		blockchain.WithAttestationCache(b.attestationCache),
 		blockchain.WithAttestationPool(b.attestationPool),
 		blockchain.WithExitPool(b.exitPool),
 		blockchain.WithSlashingPool(b.slashingsPool),
@@ -816,6 +843,7 @@ func (b *BeaconNode) registerSyncService(initialSyncComplete chan struct{}, bFil
 		regularsync.WithBlockNotifier(b),
 		regularsync.WithAttestationNotifier(b),
 		regularsync.WithOperationNotifier(b),
+		regularsync.WithAttestationCache(b.attestationCache),
 		regularsync.WithAttestationPool(b.attestationPool),
 		regularsync.WithExitPool(b.exitPool),
 		regularsync.WithSlashingPool(b.slashingsPool),
@@ -952,6 +980,7 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		GenesisTimeFetcher:        chainService,
 		GenesisFetcher:            chainService,
 		OptimisticModeFetcher:     chainService,
+		AttestationCache:          b.attestationCache,
 		AttestationsPool:          b.attestationPool,
 		ExitPool:                  b.exitPool,
 		SlashingsPool:             b.slashingsPool,
@@ -1081,6 +1110,34 @@ func (b *BeaconNode) registerBuilderService(cliCtx *cli.Context) error {
 		return err
 	}
 	return b.services.RegisterService(svc)
+}
+
+func (b *BeaconNode) registerPrunerService(cliCtx *cli.Context) error {
+	genesisTimeUnix := params.BeaconConfig().MinGenesisTime + params.BeaconConfig().GenesisDelay
+	var backfillService *backfill.Service
+	if err := b.services.FetchService(&backfillService); err != nil {
+		return err
+	}
+
+	var opts []pruner.ServiceOption
+	if cliCtx.IsSet(flags.PrunerRetentionEpochs.Name) {
+		uv := cliCtx.Uint64(flags.PrunerRetentionEpochs.Name)
+		opts = append(opts, pruner.WithRetentionPeriod(primitives.Epoch(uv)))
+	}
+
+	p, err := pruner.New(
+		cliCtx.Context,
+		b.db,
+		genesisTimeUnix,
+		initSyncWaiter(cliCtx.Context, b.initialSyncComplete),
+		backfillService.WaitForCompletion,
+		opts...,
+	)
+	if err != nil {
+		return err
+	}
+
+	return b.services.RegisterService(p)
 }
 
 func (b *BeaconNode) RegisterBackfillService(cliCtx *cli.Context, bfs *backfill.Store) error {

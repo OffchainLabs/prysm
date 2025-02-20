@@ -5,6 +5,7 @@ import (
 
 	slashertypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/slasher/types"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
@@ -12,8 +13,8 @@ func Test_attestationsQueue(t *testing.T) {
 	t.Run("push_and_dequeue", func(tt *testing.T) {
 		attQueue := newAttestationsQueue()
 		wantedAtts := []*slashertypes.IndexedAttestationWrapper{
-			createAttestationWrapperEmptySig(t, 0, 1, []uint64{1}, make([]byte, 32)),
-			createAttestationWrapperEmptySig(t, 1, 2, []uint64{1}, make([]byte, 32)),
+			createAttestationWrapperEmptySig(t, version.Phase0, 0, 1, []uint64{1}, make([]byte, 32)),
+			createAttestationWrapperEmptySig(t, version.Phase0, 1, 2, []uint64{1}, make([]byte, 32)),
 		}
 		attQueue.push(wantedAtts[0])
 		attQueue.push(wantedAtts[1])
@@ -27,8 +28,8 @@ func Test_attestationsQueue(t *testing.T) {
 	t.Run("extend_and_dequeue", func(tt *testing.T) {
 		attQueue := newAttestationsQueue()
 		wantedAtts := []*slashertypes.IndexedAttestationWrapper{
-			createAttestationWrapperEmptySig(t, 0, 1, []uint64{1}, make([]byte, 32)),
-			createAttestationWrapperEmptySig(t, 1, 2, []uint64{1}, make([]byte, 32)),
+			createAttestationWrapperEmptySig(t, version.Phase0, 0, 1, []uint64{1}, make([]byte, 32)),
+			createAttestationWrapperEmptySig(t, version.Phase0, 1, 2, []uint64{1}, make([]byte, 32)),
 		}
 		attQueue.extend(wantedAtts)
 		require.DeepEqual(t, 2, attQueue.size())

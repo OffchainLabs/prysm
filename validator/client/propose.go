@@ -148,6 +148,12 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 				log.WithError(err).Error("Failed to build generic signed block")
 				return
 			}
+		case version.Fulu:
+			genericSignedBlock, err = buildGenericSignedBlockFuluWithBlobs(pb, b)
+			if err != nil {
+				log.WithError(err).Error("Failed to build generic signed block")
+				return
+			}
 		default:
 			log.Errorf("Unsupported block version %s", version.String(blk.Version()))
 		}
@@ -265,6 +271,22 @@ func buildGenericSignedBlockElectraWithBlobs(pb proto.Message, b *ethpb.GenericB
 				Block:     electraBlock,
 				KzgProofs: b.GetElectra().KzgProofs,
 				Blobs:     b.GetElectra().Blobs,
+			},
+		},
+	}, nil
+}
+
+func buildGenericSignedBlockFuluWithBlobs(pb proto.Message, b *ethpb.GenericBeaconBlock) (*ethpb.GenericSignedBeaconBlock, error) {
+	fuluBlock, ok := pb.(*ethpb.SignedBeaconBlockFulu)
+	if !ok {
+		return nil, errors.New("could cast to fulu block")
+	}
+	return &ethpb.GenericSignedBeaconBlock{
+		Block: &ethpb.GenericSignedBeaconBlock_Fulu{
+			Fulu: &ethpb.SignedBeaconBlockContentsFulu{
+				Block:     fuluBlock,
+				KzgProofs: b.GetFulu().KzgProofs,
+				Blobs:     b.GetFulu().Blobs,
 			},
 		},
 	}, nil

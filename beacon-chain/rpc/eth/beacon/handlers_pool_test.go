@@ -498,11 +498,15 @@ func TestSubmitAttestations(t *testing.T) {
 	c.SlotsPerEpoch = 1
 	params.OverrideBeaconConfig(c)
 
-	_, keys, err := util.DeterministicDepositsAndKeys(1)
+	_, keys, err := util.DeterministicDepositsAndKeys(2)
 	require.NoError(t, err)
 	validators := []*ethpbv1alpha1.Validator{
 		{
 			PublicKey: keys[0].PublicKey().Marshal(),
+			ExitEpoch: params.BeaconConfig().FarFutureEpoch,
+		},
+		{
+			PublicKey: keys[1].PublicKey().Marshal(),
 			ExitEpoch: params.BeaconConfig().FarFutureEpoch,
 		},
 	}
@@ -521,9 +525,10 @@ func TestSubmitAttestations(t *testing.T) {
 
 	chainService := &blockchainmock.ChainService{State: bs}
 	s := &Server{
-		HeadFetcher:       chainService,
-		ChainInfoFetcher:  chainService,
-		OperationNotifier: &blockchainmock.MockOperationNotifier{},
+		HeadFetcher:             chainService,
+		ChainInfoFetcher:        chainService,
+		OperationNotifier:       &blockchainmock.MockOperationNotifier{},
+		AttestationStateFetcher: chainService,
 	}
 	t.Run("V1", func(t *testing.T) {
 		t.Run("single", func(t *testing.T) {
@@ -732,7 +737,7 @@ func TestSubmitAttestations(t *testing.T) {
 				assert.Equal(t, http.StatusOK, writer.Code)
 				assert.Equal(t, true, broadcaster.BroadcastCalled.Load())
 				assert.Equal(t, 1, broadcaster.NumAttestations())
-				assert.Equal(t, "0x03", hexutil.Encode(broadcaster.BroadcastAttestations[0].GetAggregationBits()))
+				assert.Equal(t, primitives.ValidatorIndex(1), broadcaster.BroadcastAttestations[0].GetAttestingIndex())
 				assert.Equal(t, "0x8146f4397bfd8fd057ebbcd6a67327bdc7ed5fb650533edcb6377b650dea0b6da64c14ecd60846d5c0a0cd43893d6972092500f82c9d8a955e2b58c5ed3cbe885d84008ace6bd86ba9e23652f58e2ec207cec494c916063257abf285b9b15b15", hexutil.Encode(broadcaster.BroadcastAttestations[0].GetSignature()))
 				assert.Equal(t, primitives.Slot(0), broadcaster.BroadcastAttestations[0].GetData().Slot)
 				assert.Equal(t, primitives.CommitteeIndex(0), broadcaster.BroadcastAttestations[0].GetData().CommitteeIndex)
@@ -1554,7 +1559,7 @@ func TestGetAttesterSlashings(t *testing.T) {
 			Signature: bytesutil.PadTo([]byte("signature4"), 96),
 		},
 	}
-	slashing1PostElectra := &ethpbv1alpha1.AttesterSlashingElectra{
+	slashingPostElectra := &ethpbv1alpha1.AttesterSlashingElectra{
 		Attestation_1: &ethpbv1alpha1.IndexedAttestationElectra{
 			AttestingIndices: []uint64{1, 10},
 			Data: &ethpbv1alpha1.AttestationData{
@@ -1588,42 +1593,6 @@ func TestGetAttesterSlashings(t *testing.T) {
 				},
 			},
 			Signature: bytesutil.PadTo([]byte("signature2"), 96),
-		},
-	}
-	slashing2PostElectra := &ethpbv1alpha1.AttesterSlashingElectra{
-		Attestation_1: &ethpbv1alpha1.IndexedAttestationElectra{
-			AttestingIndices: []uint64{3, 30},
-			Data: &ethpbv1alpha1.AttestationData{
-				Slot:            3,
-				CommitteeIndex:  3,
-				BeaconBlockRoot: bytesutil.PadTo([]byte("blockroot3"), 32),
-				Source: &ethpbv1alpha1.Checkpoint{
-					Epoch: 3,
-					Root:  bytesutil.PadTo([]byte("sourceroot3"), 32),
-				},
-				Target: &ethpbv1alpha1.Checkpoint{
-					Epoch: 30,
-					Root:  bytesutil.PadTo([]byte("targetroot3"), 32),
-				},
-			},
-			Signature: bytesutil.PadTo([]byte("signature3"), 96),
-		},
-		Attestation_2: &ethpbv1alpha1.IndexedAttestationElectra{
-			AttestingIndices: []uint64{4, 40},
-			Data: &ethpbv1alpha1.AttestationData{
-				Slot:            4,
-				CommitteeIndex:  4,
-				BeaconBlockRoot: bytesutil.PadTo([]byte("blockroot4"), 32),
-				Source: &ethpbv1alpha1.Checkpoint{
-					Epoch: 4,
-					Root:  bytesutil.PadTo([]byte("sourceroot4"), 32),
-				},
-				Target: &ethpbv1alpha1.Checkpoint{
-					Epoch: 40,
-					Root:  bytesutil.PadTo([]byte("targetroot4"), 32),
-				},
-			},
-			Signature: bytesutil.PadTo([]byte("signature4"), 96),
 		},
 	}
 
@@ -1697,7 +1666,7 @@ func TestGetAttesterSlashings(t *testing.T) {
 			s := &Server{
 				ChainInfoFetcher: chainService,
 				TimeFetcher:      chainService,
-				SlashingsPool:    &slashingsmock.PoolMock{PendingAttSlashings: []ethpbv1alpha1.AttSlashing{slashing1PostElectra, slashing2PostElectra, slashing1PreElectra}},
+				SlashingsPool:    &slashingsmock.PoolMock{PendingAttSlashings: []ethpbv1alpha1.AttSlashing{slashingPostElectra, slashing1PreElectra}},
 			}
 
 			request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v2/beacon/pool/attester_slashings", nil)
@@ -1719,8 +1688,7 @@ func TestGetAttesterSlashings(t *testing.T) {
 			ss, err := structs.AttesterSlashingsElectraToConsensus(slashings)
 			require.NoError(t, err)
 
-			require.DeepEqual(t, slashing1PostElectra, ss[0])
-			require.DeepEqual(t, slashing2PostElectra, ss[1])
+			require.DeepEqual(t, slashingPostElectra, ss[0])
 		})
 		t.Run("post-electra-ok", func(t *testing.T) {
 			bs, err := util.NewBeaconStateElectra()
@@ -1736,7 +1704,7 @@ func TestGetAttesterSlashings(t *testing.T) {
 			s := &Server{
 				ChainInfoFetcher: chainService,
 				TimeFetcher:      chainService,
-				SlashingsPool:    &slashingsmock.PoolMock{PendingAttSlashings: []ethpbv1alpha1.AttSlashing{slashing1PostElectra, slashing2PostElectra}},
+				SlashingsPool:    &slashingsmock.PoolMock{PendingAttSlashings: []ethpbv1alpha1.AttSlashing{slashingPostElectra}},
 			}
 
 			request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v2/beacon/pool/attester_slashings", nil)
@@ -1758,8 +1726,7 @@ func TestGetAttesterSlashings(t *testing.T) {
 			ss, err := structs.AttesterSlashingsElectraToConsensus(slashings)
 			require.NoError(t, err)
 
-			require.DeepEqual(t, slashing1PostElectra, ss[0])
-			require.DeepEqual(t, slashing2PostElectra, ss[1])
+			require.DeepEqual(t, slashingPostElectra, ss[0])
 		})
 		t.Run("pre-electra-ok", func(t *testing.T) {
 			bs, err := util.NewBeaconState()
@@ -1991,7 +1958,7 @@ func TestSubmitAttesterSlashings(t *testing.T) {
 			_, ok := broadcaster.BroadcastMessages[0].(*ethpbv1alpha1.AttesterSlashing)
 			assert.Equal(t, true, ok)
 		})
-		t.Run("accross-fork", func(t *testing.T) {
+		t.Run("across-fork", func(t *testing.T) {
 			attestationData1.Slot = params.BeaconConfig().SlotsPerEpoch
 			attestationData2.Slot = params.BeaconConfig().SlotsPerEpoch
 			slashing := &ethpbv1alpha1.AttesterSlashing{
@@ -2147,7 +2114,7 @@ func TestSubmitAttesterSlashings(t *testing.T) {
 			_, ok := broadcaster.BroadcastMessages[0].(*ethpbv1alpha1.AttesterSlashingElectra)
 			assert.Equal(t, true, ok)
 		})
-		t.Run("accross-fork", func(t *testing.T) {
+		t.Run("across-fork", func(t *testing.T) {
 			attestationData1.Slot = params.BeaconConfig().SlotsPerEpoch
 			attestationData2.Slot = params.BeaconConfig().SlotsPerEpoch
 			slashing := &ethpbv1alpha1.AttesterSlashingElectra{
@@ -2344,8 +2311,8 @@ var (
 ]`
 	singleAttElectra = `[
   {
-    "aggregation_bits": "0x03",
-	"committee_bits": "0x0100000000000000",
+    "committee_index": "0",
+	"attester_index": "1",
     "signature": "0x8146f4397bfd8fd057ebbcd6a67327bdc7ed5fb650533edcb6377b650dea0b6da64c14ecd60846d5c0a0cd43893d6972092500f82c9d8a955e2b58c5ed3cbe885d84008ace6bd86ba9e23652f58e2ec207cec494c916063257abf285b9b15b15",
     "data": {
       "slot": "0",
@@ -2364,8 +2331,8 @@ var (
 ]`
 	multipleAttsElectra = `[
   {
-    "aggregation_bits": "0x03",
-	"committee_bits": "0x0100000000000000",
+    "committee_index": "0",
+	"attester_index": "0",
     "signature": "0x8146f4397bfd8fd057ebbcd6a67327bdc7ed5fb650533edcb6377b650dea0b6da64c14ecd60846d5c0a0cd43893d6972092500f82c9d8a955e2b58c5ed3cbe885d84008ace6bd86ba9e23652f58e2ec207cec494c916063257abf285b9b15b15",
     "data": {
       "slot": "0",
@@ -2382,8 +2349,8 @@ var (
     }
   },
   {
-    "aggregation_bits": "0x03",
-	"committee_bits": "0x0100000000000000",
+    "committee_index": "0",
+	"attester_index": "1",
     "signature": "0x8146f4397bfd8fd057ebbcd6a67327bdc7ed5fb650533edcb6377b650dea0b6da64c14ecd60846d5c0a0cd43893d6972092500f82c9d8a955e2b58c5ed3cbe885d84008ace6bd86ba9e23652f58e2ec207cec494c916063257abf285b9b15b15",
     "data": {
       "slot": "0",
@@ -2403,8 +2370,8 @@ var (
 	// signature is invalid
 	invalidAttElectra = `[
   {
-    "aggregation_bits": "0x03",
-	"committee_bits": "0x0100000000000000",
+    "committee_index": "0",
+	"attester_index": "0",
 	"signature": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
     "data": {
       "slot": "0",

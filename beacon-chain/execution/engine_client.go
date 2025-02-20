@@ -36,16 +36,18 @@ var (
 		NewPayloadMethod,
 		NewPayloadMethodV2,
 		NewPayloadMethodV3,
-		NewPayloadMethodV4,
 		ForkchoiceUpdatedMethod,
 		ForkchoiceUpdatedMethodV2,
 		ForkchoiceUpdatedMethodV3,
 		GetPayloadMethod,
 		GetPayloadMethodV2,
 		GetPayloadMethodV3,
-		GetPayloadMethodV4,
 		GetPayloadBodiesByHashV1,
 		GetPayloadBodiesByRangeV1,
+	}
+	electraEngineEndpoints = []string{
+		NewPayloadMethodV4,
+		GetPayloadMethodV4,
 	}
 )
 
@@ -105,7 +107,7 @@ type Reconstructor interface {
 	ReconstructFullBellatrixBlockBatch(
 		ctx context.Context, blindedBlocks []interfaces.ReadOnlySignedBeaconBlock,
 	) ([]interfaces.SignedBeaconBlock, error)
-	ReconstructBlobSidecars(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte, indices []bool) ([]blocks.VerifiedROBlob, error)
+	ReconstructBlobSidecars(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte, hi func(uint64) bool) ([]blocks.VerifiedROBlob, error)
 }
 
 // EngineCaller defines a client that can interact with an Ethereum
@@ -136,30 +138,18 @@ func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionDa
 	defer cancel()
 	result := &pb.PayloadStatus{}
 
-	switch payload.Proto().(type) {
+	switch payloadPb := payload.Proto().(type) {
 	case *pb.ExecutionPayload:
-		payloadPb, ok := payload.Proto().(*pb.ExecutionPayload)
-		if !ok {
-			return nil, errors.New("execution data must be a Bellatrix or Capella execution payload")
-		}
 		err := s.rpcClient.CallContext(ctx, result, NewPayloadMethod, payloadPb)
 		if err != nil {
 			return nil, handleRPCError(err)
 		}
 	case *pb.ExecutionPayloadCapella:
-		payloadPb, ok := payload.Proto().(*pb.ExecutionPayloadCapella)
-		if !ok {
-			return nil, errors.New("execution data must be a Capella execution payload")
-		}
 		err := s.rpcClient.CallContext(ctx, result, NewPayloadMethodV2, payloadPb)
 		if err != nil {
 			return nil, handleRPCError(err)
 		}
 	case *pb.ExecutionPayloadDeneb:
-		payloadPb, ok := payload.Proto().(*pb.ExecutionPayloadDeneb)
-		if !ok {
-			return nil, errors.New("execution data must be a Deneb execution payload")
-		}
 		if executionRequests == nil {
 			err := s.rpcClient.CallContext(ctx, result, NewPayloadMethodV3, payloadPb, versionedHashes, parentBlockRoot)
 			if err != nil {
@@ -233,7 +223,7 @@ func (s *Service) ForkchoiceUpdated(
 		if err != nil {
 			return nil, nil, handleRPCError(err)
 		}
-	case version.Deneb, version.Electra:
+	case version.Deneb, version.Electra, version.Fulu:
 		a, err := attrs.PbV3()
 		if err != nil {
 			return nil, nil, err
@@ -308,6 +298,10 @@ func (s *Service) ExchangeCapabilities(ctx context.Context) ([]string, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.ExchangeCapabilities")
 	defer span.End()
 
+	// Only check for electra related engine methods if it has been activated.
+	if params.ElectraEnabled() {
+		supportedEngineEndpoints = append(supportedEngineEndpoints, electraEngineEndpoints...)
+	}
 	var result []string
 	err := s.rpcClient.CallContext(ctx, &result, ExchangeCapabilities, supportedEngineEndpoints)
 	if err != nil {
@@ -543,32 +537,23 @@ func (s *Service) ReconstructFullBellatrixBlockBatch(
 // It retrieves the KZG commitments from the block body, fetches the associated blobs and proofs,
 // and constructs the corresponding verified read-only blob sidecars.
 //
-// The 'exists' argument is a boolean list (must be the same length as body.BlobKzgCommitments), where each element corresponds to whether a
-// particular blob sidecar already exists. If exists[i] is true, the blob for the i-th KZG commitment
-// has already been retrieved and does not need to be fetched again from the execution layer (EL).
-//
-// For example:
-//   - len(block.Body().BlobKzgCommitments()) == 6
-//   - If exists = [true, false, true, false, true, false], the function will fetch the blobs
-//     associated with indices 1, 3, and 5 (since those are marked as non-existent).
-//   - If exists = [false ... x 6], the function will attempt to fetch all blobs.
-//
-// Only the blobs that do not already exist (where exists[i] is false) are fetched using the KZG commitments from block body.
-func (s *Service) ReconstructBlobSidecars(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte, exists []bool) ([]blocks.VerifiedROBlob, error) {
+// The 'hasIndex' argument is a function returns true if the given uint64 blob index already exists on disc.
+// Only the blobs that do not already exist (where hasIndex(i) is false)
+// will be fetched from the execution engine using the KZG commitments from block body.
+func (s *Service) ReconstructBlobSidecars(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte, hasIndex func(uint64) bool) ([]blocks.VerifiedROBlob, error) {
 	blockBody := block.Block().Body()
 	kzgCommitments, err := blockBody.BlobKzgCommitments()
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get blob KZG commitments")
 	}
-	if len(kzgCommitments) > len(exists) {
-		return nil, fmt.Errorf("length of KZG commitments (%d) is greater than length of exists (%d)", len(kzgCommitments), len(exists))
-	}
 
 	// Collect KZG hashes for non-existing blobs
 	var kzgHashes []common.Hash
+	var kzgIndexes []int
 	for i, commitment := range kzgCommitments {
-		if !exists[i] {
+		if !hasIndex(uint64(i)) {
 			kzgHashes = append(kzgHashes, primitives.ConvertKzgCommitmentToVersionedHash(commitment))
+			kzgIndexes = append(kzgIndexes, i)
 		}
 	}
 	if len(kzgHashes) == 0 {
@@ -591,27 +576,21 @@ func (s *Service) ReconstructBlobSidecars(ctx context.Context, block interfaces.
 
 	// Reconstruct verified blob sidecars
 	var verifiedBlobs []blocks.VerifiedROBlob
-	for i, blobIndex := 0, 0; i < len(kzgCommitments); i++ {
-		if exists[i] {
+	for i := 0; i < len(kzgHashes); i++ {
+		if blobs[i] == nil {
 			continue
 		}
-
-		if blobIndex >= len(blobs) || blobs[blobIndex] == nil {
-			blobIndex++
-			continue
-		}
-		blob := blobs[blobIndex]
-		blobIndex++
-
-		proof, err := blocks.MerkleProofKZGCommitment(blockBody, i)
+		blob := blobs[i]
+		blobIndex := kzgIndexes[i]
+		proof, err := blocks.MerkleProofKZGCommitment(blockBody, blobIndex)
 		if err != nil {
-			log.WithError(err).WithField("index", i).Error("failed to get Merkle proof for KZG commitment")
+			log.WithError(err).WithField("index", blobIndex).Error("failed to get Merkle proof for KZG commitment")
 			continue
 		}
 		sidecar := &ethpb.BlobSidecar{
-			Index:                    uint64(i),
+			Index:                    uint64(blobIndex),
 			Blob:                     blob.Blob,
-			KzgCommitment:            kzgCommitments[i],
+			KzgCommitment:            kzgCommitments[blobIndex],
 			KzgProof:                 blob.KzgProof,
 			SignedBlockHeader:        header,
 			CommitmentInclusionProof: proof,
@@ -619,14 +598,14 @@ func (s *Service) ReconstructBlobSidecars(ctx context.Context, block interfaces.
 
 		roBlob, err := blocks.NewROBlobWithRoot(sidecar, blockRoot)
 		if err != nil {
-			log.WithError(err).WithField("index", i).Error("failed to create RO blob with root")
+			log.WithError(err).WithField("index", blobIndex).Error("failed to create RO blob with root")
 			continue
 		}
 
 		v := s.blobVerifier(roBlob, verification.ELMemPoolRequirements)
 		verifiedBlob, err := v.VerifiedROBlob()
 		if err != nil {
-			log.WithError(err).WithField("index", i).Error("failed to verify RO blob")
+			log.WithError(err).WithField("index", blobIndex).Error("failed to verify RO blob")
 			continue
 		}
 
@@ -643,43 +622,7 @@ func fullPayloadFromPayloadBody(
 		return nil, errors.New("execution block and header cannot be nil")
 	}
 
-	switch bVersion {
-	case version.Bellatrix:
-		return blocks.WrappedExecutionPayload(&pb.ExecutionPayload{
-			ParentHash:    header.ParentHash(),
-			FeeRecipient:  header.FeeRecipient(),
-			StateRoot:     header.StateRoot(),
-			ReceiptsRoot:  header.ReceiptsRoot(),
-			LogsBloom:     header.LogsBloom(),
-			PrevRandao:    header.PrevRandao(),
-			BlockNumber:   header.BlockNumber(),
-			GasLimit:      header.GasLimit(),
-			GasUsed:       header.GasUsed(),
-			Timestamp:     header.Timestamp(),
-			ExtraData:     header.ExtraData(),
-			BaseFeePerGas: header.BaseFeePerGas(),
-			BlockHash:     header.BlockHash(),
-			Transactions:  pb.RecastHexutilByteSlice(body.Transactions),
-		})
-	case version.Capella:
-		return blocks.WrappedExecutionPayloadCapella(&pb.ExecutionPayloadCapella{
-			ParentHash:    header.ParentHash(),
-			FeeRecipient:  header.FeeRecipient(),
-			StateRoot:     header.StateRoot(),
-			ReceiptsRoot:  header.ReceiptsRoot(),
-			LogsBloom:     header.LogsBloom(),
-			PrevRandao:    header.PrevRandao(),
-			BlockNumber:   header.BlockNumber(),
-			GasLimit:      header.GasLimit(),
-			GasUsed:       header.GasUsed(),
-			Timestamp:     header.Timestamp(),
-			ExtraData:     header.ExtraData(),
-			BaseFeePerGas: header.BaseFeePerGas(),
-			BlockHash:     header.BlockHash(),
-			Transactions:  pb.RecastHexutilByteSlice(body.Transactions),
-			Withdrawals:   body.Withdrawals,
-		}) // We can't get the block value and don't care about the block value for this instance
-	case version.Deneb, version.Electra:
+	if bVersion >= version.Deneb {
 		ebg, err := header.ExcessBlobGas()
 		if err != nil {
 			return nil, errors.Wrap(err, "unable to extract ExcessBlobGas attribute from execution payload header")
@@ -708,9 +651,48 @@ func fullPayloadFromPayloadBody(
 				ExcessBlobGas: ebg,
 				BlobGasUsed:   bgu,
 			}) // We can't get the block value and don't care about the block value for this instance
-	default:
-		return nil, fmt.Errorf("unknown execution block version for payload %d", bVersion)
 	}
+
+	if bVersion >= version.Capella {
+		return blocks.WrappedExecutionPayloadCapella(&pb.ExecutionPayloadCapella{
+			ParentHash:    header.ParentHash(),
+			FeeRecipient:  header.FeeRecipient(),
+			StateRoot:     header.StateRoot(),
+			ReceiptsRoot:  header.ReceiptsRoot(),
+			LogsBloom:     header.LogsBloom(),
+			PrevRandao:    header.PrevRandao(),
+			BlockNumber:   header.BlockNumber(),
+			GasLimit:      header.GasLimit(),
+			GasUsed:       header.GasUsed(),
+			Timestamp:     header.Timestamp(),
+			ExtraData:     header.ExtraData(),
+			BaseFeePerGas: header.BaseFeePerGas(),
+			BlockHash:     header.BlockHash(),
+			Transactions:  pb.RecastHexutilByteSlice(body.Transactions),
+			Withdrawals:   body.Withdrawals,
+		}) // We can't get the block value and don't care about the block value for this instance
+	}
+
+	if bVersion >= version.Bellatrix {
+		return blocks.WrappedExecutionPayload(&pb.ExecutionPayload{
+			ParentHash:    header.ParentHash(),
+			FeeRecipient:  header.FeeRecipient(),
+			StateRoot:     header.StateRoot(),
+			ReceiptsRoot:  header.ReceiptsRoot(),
+			LogsBloom:     header.LogsBloom(),
+			PrevRandao:    header.PrevRandao(),
+			BlockNumber:   header.BlockNumber(),
+			GasLimit:      header.GasLimit(),
+			GasUsed:       header.GasUsed(),
+			Timestamp:     header.Timestamp(),
+			ExtraData:     header.ExtraData(),
+			BaseFeePerGas: header.BaseFeePerGas(),
+			BlockHash:     header.BlockHash(),
+			Transactions:  pb.RecastHexutilByteSlice(body.Transactions),
+		})
+	}
+
+	return nil, fmt.Errorf("unknown execution block version for payload %s", version.String(bVersion))
 }
 
 // Handles errors received from the RPC server according to the specification.
@@ -802,35 +784,7 @@ func tDStringToUint256(td string) (*uint256.Int, error) {
 }
 
 func EmptyExecutionPayload(v int) (proto.Message, error) {
-	switch v {
-	case version.Bellatrix:
-		return &pb.ExecutionPayload{
-			ParentHash:    make([]byte, fieldparams.RootLength),
-			FeeRecipient:  make([]byte, fieldparams.FeeRecipientLength),
-			StateRoot:     make([]byte, fieldparams.RootLength),
-			ReceiptsRoot:  make([]byte, fieldparams.RootLength),
-			LogsBloom:     make([]byte, fieldparams.LogsBloomLength),
-			PrevRandao:    make([]byte, fieldparams.RootLength),
-			ExtraData:     make([]byte, 0),
-			BaseFeePerGas: make([]byte, fieldparams.RootLength),
-			BlockHash:     make([]byte, fieldparams.RootLength),
-			Transactions:  make([][]byte, 0),
-		}, nil
-	case version.Capella:
-		return &pb.ExecutionPayloadCapella{
-			ParentHash:    make([]byte, fieldparams.RootLength),
-			FeeRecipient:  make([]byte, fieldparams.FeeRecipientLength),
-			StateRoot:     make([]byte, fieldparams.RootLength),
-			ReceiptsRoot:  make([]byte, fieldparams.RootLength),
-			LogsBloom:     make([]byte, fieldparams.LogsBloomLength),
-			PrevRandao:    make([]byte, fieldparams.RootLength),
-			ExtraData:     make([]byte, 0),
-			BaseFeePerGas: make([]byte, fieldparams.RootLength),
-			BlockHash:     make([]byte, fieldparams.RootLength),
-			Transactions:  make([][]byte, 0),
-			Withdrawals:   make([]*pb.Withdrawal, 0),
-		}, nil
-	case version.Deneb, version.Electra:
+	if v >= version.Deneb {
 		return &pb.ExecutionPayloadDeneb{
 			ParentHash:    make([]byte, fieldparams.RootLength),
 			FeeRecipient:  make([]byte, fieldparams.FeeRecipientLength),
@@ -844,15 +798,10 @@ func EmptyExecutionPayload(v int) (proto.Message, error) {
 			Transactions:  make([][]byte, 0),
 			Withdrawals:   make([]*pb.Withdrawal, 0),
 		}, nil
-	default:
-		return nil, errors.Wrapf(ErrUnsupportedVersion, "version=%s", version.String(v))
 	}
-}
 
-func EmptyExecutionPayloadHeader(v int) (proto.Message, error) {
-	switch v {
-	case version.Bellatrix:
-		return &pb.ExecutionPayloadHeader{
+	if v >= version.Capella {
+		return &pb.ExecutionPayloadCapella{
 			ParentHash:    make([]byte, fieldparams.RootLength),
 			FeeRecipient:  make([]byte, fieldparams.FeeRecipientLength),
 			StateRoot:     make([]byte, fieldparams.RootLength),
@@ -862,22 +811,31 @@ func EmptyExecutionPayloadHeader(v int) (proto.Message, error) {
 			ExtraData:     make([]byte, 0),
 			BaseFeePerGas: make([]byte, fieldparams.RootLength),
 			BlockHash:     make([]byte, fieldparams.RootLength),
+			Transactions:  make([][]byte, 0),
+			Withdrawals:   make([]*pb.Withdrawal, 0),
 		}, nil
-	case version.Capella:
-		return &pb.ExecutionPayloadHeaderCapella{
-			ParentHash:       make([]byte, fieldparams.RootLength),
-			FeeRecipient:     make([]byte, fieldparams.FeeRecipientLength),
-			StateRoot:        make([]byte, fieldparams.RootLength),
-			ReceiptsRoot:     make([]byte, fieldparams.RootLength),
-			LogsBloom:        make([]byte, fieldparams.LogsBloomLength),
-			PrevRandao:       make([]byte, fieldparams.RootLength),
-			ExtraData:        make([]byte, 0),
-			BaseFeePerGas:    make([]byte, fieldparams.RootLength),
-			BlockHash:        make([]byte, fieldparams.RootLength),
-			TransactionsRoot: make([]byte, fieldparams.RootLength),
-			WithdrawalsRoot:  make([]byte, fieldparams.RootLength),
+	}
+
+	if v >= version.Bellatrix {
+		return &pb.ExecutionPayload{
+			ParentHash:    make([]byte, fieldparams.RootLength),
+			FeeRecipient:  make([]byte, fieldparams.FeeRecipientLength),
+			StateRoot:     make([]byte, fieldparams.RootLength),
+			ReceiptsRoot:  make([]byte, fieldparams.RootLength),
+			LogsBloom:     make([]byte, fieldparams.LogsBloomLength),
+			PrevRandao:    make([]byte, fieldparams.RootLength),
+			ExtraData:     make([]byte, 0),
+			BaseFeePerGas: make([]byte, fieldparams.RootLength),
+			BlockHash:     make([]byte, fieldparams.RootLength),
+			Transactions:  make([][]byte, 0),
 		}, nil
-	case version.Deneb, version.Electra:
+	}
+
+	return nil, errors.Wrapf(ErrUnsupportedVersion, "version=%s", version.String(v))
+}
+
+func EmptyExecutionPayloadHeader(v int) (proto.Message, error) {
+	if v >= version.Deneb {
 		return &pb.ExecutionPayloadHeaderDeneb{
 			ParentHash:       make([]byte, fieldparams.RootLength),
 			FeeRecipient:     make([]byte, fieldparams.FeeRecipientLength),
@@ -891,9 +849,39 @@ func EmptyExecutionPayloadHeader(v int) (proto.Message, error) {
 			TransactionsRoot: make([]byte, fieldparams.RootLength),
 			WithdrawalsRoot:  make([]byte, fieldparams.RootLength),
 		}, nil
-	default:
-		return nil, errors.Wrapf(ErrUnsupportedVersion, "version=%s", version.String(v))
 	}
+
+	if v >= version.Capella {
+		return &pb.ExecutionPayloadHeaderCapella{
+			ParentHash:       make([]byte, fieldparams.RootLength),
+			FeeRecipient:     make([]byte, fieldparams.FeeRecipientLength),
+			StateRoot:        make([]byte, fieldparams.RootLength),
+			ReceiptsRoot:     make([]byte, fieldparams.RootLength),
+			LogsBloom:        make([]byte, fieldparams.LogsBloomLength),
+			PrevRandao:       make([]byte, fieldparams.RootLength),
+			ExtraData:        make([]byte, 0),
+			BaseFeePerGas:    make([]byte, fieldparams.RootLength),
+			BlockHash:        make([]byte, fieldparams.RootLength),
+			TransactionsRoot: make([]byte, fieldparams.RootLength),
+			WithdrawalsRoot:  make([]byte, fieldparams.RootLength),
+		}, nil
+	}
+
+	if v >= version.Bellatrix {
+		return &pb.ExecutionPayloadHeader{
+			ParentHash:    make([]byte, fieldparams.RootLength),
+			FeeRecipient:  make([]byte, fieldparams.FeeRecipientLength),
+			StateRoot:     make([]byte, fieldparams.RootLength),
+			ReceiptsRoot:  make([]byte, fieldparams.RootLength),
+			LogsBloom:     make([]byte, fieldparams.LogsBloomLength),
+			PrevRandao:    make([]byte, fieldparams.RootLength),
+			ExtraData:     make([]byte, 0),
+			BaseFeePerGas: make([]byte, fieldparams.RootLength),
+			BlockHash:     make([]byte, fieldparams.RootLength),
+		}, nil
+	}
+
+	return nil, errors.Wrapf(ErrUnsupportedVersion, "version=%s", version.String(v))
 }
 
 func toBlockNumArg(number *big.Int) string {

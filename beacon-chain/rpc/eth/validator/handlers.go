@@ -25,6 +25,7 @@ import (
 	rpchelpers "github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/shared"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v5/config/features"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	consensus_types "github.com/prysmaticlabs/prysm/v5/consensus-types"
@@ -129,13 +130,23 @@ func (s *Server) GetAggregateAttestationV2(w http.ResponseWriter, r *http.Reques
 }
 
 func (s *Server) aggregatedAttestation(w http.ResponseWriter, slot primitives.Slot, attDataRoot []byte, index primitives.CommitteeIndex) ethpbalpha.Att {
+	var match []ethpbalpha.Att
 	var err error
 
-	match, err := matchingAtts(s.AttestationsPool.AggregatedAttestations(), slot, attDataRoot, index)
-	if err != nil {
-		httputil.HandleError(w, "Could not get matching attestations: "+err.Error(), http.StatusInternalServerError)
-		return nil
+	if features.Get().EnableExperimentalAttestationPool {
+		match, err = matchingAtts(s.AttestationCache.GetAll(), slot, attDataRoot, index)
+		if err != nil {
+			httputil.HandleError(w, "Could not get matching attestations: "+err.Error(), http.StatusInternalServerError)
+			return nil
+		}
+	} else {
+		match, err = matchingAtts(s.AttestationsPool.AggregatedAttestations(), slot, attDataRoot, index)
+		if err != nil {
+			httputil.HandleError(w, "Could not get matching attestations: "+err.Error(), http.StatusInternalServerError)
+			return nil
+		}
 	}
+
 	if len(match) > 0 {
 		// If there are multiple matching aggregated attestations,
 		// then we return the one with the most aggregation bits.
@@ -143,6 +154,11 @@ func (s *Server) aggregatedAttestation(w http.ResponseWriter, slot primitives.Sl
 			return cmp.Compare(b.GetAggregationBits().Count(), a.GetAggregationBits().Count())
 		})
 		return match[0]
+	}
+
+	// No match was found and the new pool doesn't store aggregated and unaggregated attestations separately.
+	if features.Get().EnableExperimentalAttestationPool {
+		return nil
 	}
 
 	atts, err := s.AttestationsPool.UnaggregatedAttestations()
@@ -182,35 +198,20 @@ func matchingAtts(atts []ethpbalpha.Att, slot primitives.Slot, attDataRoot []byt
 			continue
 		}
 
+		root, err := att.GetData().HashTreeRoot()
+		if err != nil {
+			return nil, errors.Wrap(err, "could not get attestation data root")
+		}
+		if !bytes.Equal(root[:], attDataRoot) {
+			continue
+		}
+
 		// We ignore the committee index from the request before Electra.
 		// This is because before Electra the committee index is part of the attestation data,
 		// meaning that comparing the data root is sufficient.
 		// Post-Electra the committee index in the data root is always 0, so we need to
 		// compare the committee index separately.
-		if postElectra {
-			if att.Version() >= version.Electra {
-				ci, err := att.GetCommitteeIndex()
-				if err != nil {
-					return nil, err
-				}
-				if ci != index {
-					continue
-				}
-			} else {
-				continue
-			}
-		} else {
-			// If postElectra is false and att.Version >= version.Electra, ignore the attestation.
-			if att.Version() >= version.Electra {
-				continue
-			}
-		}
-
-		root, err := att.GetData().HashTreeRoot()
-		if err != nil {
-			return nil, errors.Wrap(err, "could not get attestation data root")
-		}
-		if bytes.Equal(root[:], attDataRoot) {
+		if (!postElectra && att.Version() < version.Electra) || (postElectra && att.Version() >= version.Electra && att.GetCommitteeIndex() == index) {
 			result = append(result, att)
 		}
 	}

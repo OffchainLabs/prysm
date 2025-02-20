@@ -1,12 +1,12 @@
 package builder
 
 import (
-	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
 	consensus_types "github.com/prysmaticlabs/prysm/v5/consensus-types"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	v1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 )
@@ -22,13 +22,24 @@ type SignedBid interface {
 // Bid is an interface describing the method set of a builder bid.
 type Bid interface {
 	Header() (interfaces.ExecutionData, error)
-	BlobKzgCommitments() ([][]byte, error)
 	Value() primitives.Wei
 	Pubkey() []byte
 	Version() int
 	IsNil() bool
 	HashTreeRoot() ([32]byte, error)
 	HashTreeRootWith(hh *ssz.Hasher) error
+}
+
+// BidDeneb is an interface that exposes newly added kzg commitments on top of builder bid
+type BidDeneb interface {
+	Bid
+	BlobKzgCommitments() [][]byte
+}
+
+// BidElectra is an interface that exposes the newly added execution requests on top of the builder bid
+type BidElectra interface {
+	BidDeneb
+	ExecutionRequests() *v1.ExecutionRequests
 }
 
 type signedBuilderBid struct {
@@ -115,11 +126,6 @@ func (b builderBid) Header() (interfaces.ExecutionData, error) {
 	return blocks.WrappedExecutionPayloadHeader(b.p.Header)
 }
 
-// BlobKzgCommitments --
-func (b builderBid) BlobKzgCommitments() ([][]byte, error) {
-	return [][]byte{}, errors.New("blob kzg commitments not available before Deneb")
-}
-
 // Version --
 func (b builderBid) Version() int {
 	return version.Bellatrix
@@ -167,11 +173,6 @@ func WrappedBuilderBidCapella(p *ethpb.BuilderBidCapella) (Bid, error) {
 func (b builderBidCapella) Header() (interfaces.ExecutionData, error) {
 	// We have to convert big endian to little endian because the value is coming from the execution layer.
 	return blocks.WrappedExecutionPayloadHeaderCapella(b.p.Header)
-}
-
-// BlobKzgCommitments --
-func (b builderBidCapella) BlobKzgCommitments() ([][]byte, error) {
-	return [][]byte{}, errors.New("blob kzg commitments not available before Deneb")
 }
 
 // Version --
@@ -254,8 +255,8 @@ func (b builderBidDeneb) Header() (interfaces.ExecutionData, error) {
 }
 
 // BlobKzgCommitments --
-func (b builderBidDeneb) BlobKzgCommitments() ([][]byte, error) {
-	return b.p.BlobKzgCommitments, nil
+func (b builderBidDeneb) BlobKzgCommitments() [][]byte {
+	return b.p.BlobKzgCommitments
 }
 
 type signedBuilderBidDeneb struct {
@@ -288,5 +289,97 @@ func (b signedBuilderBidDeneb) Version() int {
 
 // IsNil --
 func (b signedBuilderBidDeneb) IsNil() bool {
+	return b.p == nil
+}
+
+type builderBidElectra struct {
+	p *ethpb.BuilderBidElectra
+}
+
+// WrappedBuilderBidElectra is a constructor which wraps a protobuf bid into an interface.
+func WrappedBuilderBidElectra(p *ethpb.BuilderBidElectra) (Bid, error) {
+	w := builderBidElectra{p: p}
+	if w.IsNil() {
+		return nil, consensus_types.ErrNilObjectWrapped
+	}
+	return w, nil
+}
+
+// Version --
+func (b builderBidElectra) Version() int {
+	return version.Electra
+}
+
+// Value --
+func (b builderBidElectra) Value() primitives.Wei {
+	return primitives.LittleEndianBytesToWei(b.p.Value)
+}
+
+// Pubkey --
+func (b builderBidElectra) Pubkey() []byte {
+	return b.p.Pubkey
+}
+
+// IsNil --
+func (b builderBidElectra) IsNil() bool {
+	return b.p == nil
+}
+
+// HashTreeRoot --
+func (b builderBidElectra) HashTreeRoot() ([32]byte, error) {
+	return b.p.HashTreeRoot()
+}
+
+// HashTreeRootWith --
+func (b builderBidElectra) HashTreeRootWith(hh *ssz.Hasher) error {
+	return b.p.HashTreeRootWith(hh)
+}
+
+// Header --
+func (b builderBidElectra) Header() (interfaces.ExecutionData, error) {
+	// We have to convert big endian to little endian because the value is coming from the execution layer.
+	return blocks.WrappedExecutionPayloadHeaderDeneb(b.p.Header)
+}
+
+// ExecutionRequests --
+func (b builderBidElectra) ExecutionRequests() *v1.ExecutionRequests {
+	return b.p.ExecutionRequests // does not copy
+}
+
+// BlobKzgCommitments --
+func (b builderBidElectra) BlobKzgCommitments() [][]byte {
+	return b.p.BlobKzgCommitments
+}
+
+type signedBuilderBidElectra struct {
+	p *ethpb.SignedBuilderBidElectra
+}
+
+// WrappedSignedBuilderBidElectra is a constructor which wraps a protobuf signed bit into an interface.
+func WrappedSignedBuilderBidElectra(p *ethpb.SignedBuilderBidElectra) (SignedBid, error) {
+	w := signedBuilderBidElectra{p: p}
+	if w.IsNil() {
+		return nil, consensus_types.ErrNilObjectWrapped
+	}
+	return w, nil
+}
+
+// Message --
+func (b signedBuilderBidElectra) Message() (Bid, error) {
+	return WrappedBuilderBidElectra(b.p.Message)
+}
+
+// Signature --
+func (b signedBuilderBidElectra) Signature() []byte {
+	return b.p.Signature
+}
+
+// Version --
+func (b signedBuilderBidElectra) Version() int {
+	return version.Electra
+}
+
+// IsNil --
+func (b signedBuilderBidElectra) IsNil() bool {
 	return b.p == nil
 }

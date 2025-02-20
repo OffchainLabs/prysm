@@ -357,7 +357,7 @@ func (s *Store) processElectra(ctx context.Context, pbState *ethpb.BeaconStateEl
 	if err != nil {
 		return err
 	}
-	encodedState := snappy.Encode(nil, append(electraKey, rawObj...))
+	encodedState := snappy.Encode(nil, append(ElectraKey, rawObj...))
 	if err := bucket.Put(rootHash, encodedState); err != nil {
 		return err
 	}
@@ -517,9 +517,22 @@ func (s *Store) unmarshalState(_ context.Context, enc []byte, validatorEntries [
 	}
 
 	switch {
-	case hasElectraKey(enc):
+	case hasFuluKey(enc):
 		protoState := &ethpb.BeaconStateElectra{}
-		if err := protoState.UnmarshalSSZ(enc[len(electraKey):]); err != nil {
+		if err := protoState.UnmarshalSSZ(enc[len(fuluKey):]); err != nil {
+			return nil, errors.Wrap(err, "failed to unmarshal encoding for Fulu")
+		}
+		ok, err := s.isStateValidatorMigrationOver()
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			protoState.Validators = validatorEntries
+		}
+		return statenative.InitializeFromProtoUnsafeFulu(protoState)
+	case HasElectraKey(enc):
+		protoState := &ethpb.BeaconStateElectra{}
+		if err := protoState.UnmarshalSSZ(enc[len(ElectraKey):]); err != nil {
 			return nil, errors.Wrap(err, "failed to unmarshal encoding for Electra")
 		}
 		ok, err := s.isStateValidatorMigrationOver()
@@ -675,7 +688,20 @@ func marshalState(ctx context.Context, st state.ReadOnlyBeaconState) ([]byte, er
 		if err != nil {
 			return nil, err
 		}
-		return snappy.Encode(nil, append(electraKey, rawObj...)), nil
+		return snappy.Encode(nil, append(ElectraKey, rawObj...)), nil
+	case version.Fulu:
+		rState, ok := st.ToProtoUnsafe().(*ethpb.BeaconStateElectra)
+		if !ok {
+			return nil, errors.New("non valid inner state")
+		}
+		if rState == nil {
+			return nil, errors.New("nil state")
+		}
+		rawObj, err := rState.MarshalSSZ()
+		if err != nil {
+			return nil, err
+		}
+		return snappy.Encode(nil, append(fuluKey, rawObj...)), nil
 	default:
 		return nil, errors.New("invalid inner state")
 	}
@@ -699,7 +725,7 @@ func (s *Store) validatorEntries(ctx context.Context, blockRoot [32]byte) ([]*et
 		idxBkt := tx.Bucket(blockRootValidatorHashesBucket)
 		valKey := idxBkt.Get(blockRoot[:])
 		if len(valKey) == 0 {
-			return errors.Errorf("invalid compressed validator keys length")
+			return errors.Errorf("validator keys not found for given block root: %x", blockRoot)
 		}
 
 		// decompress the keys and check if they are of proper length.

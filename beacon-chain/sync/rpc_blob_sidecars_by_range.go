@@ -56,8 +56,10 @@ func (s *Service) streamBlobBatch(ctx context.Context, batch blockBatch, wQuota 
 		}
 
 		for i, l := uint64(0), uint64(len(idxs)); i < l; i++ {
+		idxs := s.cfg.blobStorage.Summary(root)
+		for i := range idxs.MaxBlobsForEpoch() {
 			// index not available, skip
-			if !idxs[i] {
+			if !idxs.HasIndex(i) {
 				continue
 			}
 			// We won't check for file not found since the .Indices method should normally prevent that from happening.
@@ -123,6 +125,9 @@ func (s *Service) blobSidecarsByRangeRPCHandler(ctx context.Context, msg interfa
 	var batch blockBatch
 
 	wQuota := params.BeaconConfig().MaxRequestBlobSidecars
+	if slots.ToEpoch(s.cfg.chain.CurrentSlot()) >= params.BeaconConfig().ElectraForkEpoch {
+		wQuota = params.BeaconConfig().MaxRequestBlobSidecarsElectra
+	}
 	for batch, ok = batcher.next(ctx, stream); ok; batch, ok = batcher.next(ctx, stream) {
 		batchStart := time.Now()
 		wQuota, err = s.streamBlobBatch(ctx, batch, wQuota, stream)
@@ -168,9 +173,14 @@ func BlobRPCMinValidSlot(current primitives.Slot) (primitives.Slot, error) {
 	return slots.EpochStart(minStart)
 }
 
+// This function is used to derive what is the ideal block batch size we can serve
+// blobs to the remote peer for. We compute the current limit which is the maximum
+// blobs to be served to the peer every period. And then using the maximum blobs per
+// block determine the block batch size satisfying this limit.
 func blobBatchLimit(slot primitives.Slot) uint64 {
 	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlock(slot)
-	return uint64(flags.Get().BlockBatchLimit / maxBlobsPerBlock)
+	maxPossibleBlobs := flags.Get().BlobBatchLimit * flags.Get().BlobBatchLimitBurstFactor
+	return uint64(maxPossibleBlobs / maxBlobsPerBlock)
 }
 
 func validateBlobsByRange(r *pb.BlobSidecarsByRangeRequest, current primitives.Slot) (rangeParams, error) {

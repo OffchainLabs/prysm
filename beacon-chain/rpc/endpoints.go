@@ -205,6 +205,7 @@ func (s *Service) validatorEndpoints(
 		TimeFetcher:            s.cfg.GenesisTimeFetcher,
 		SyncChecker:            s.cfg.SyncService,
 		OptimisticModeFetcher:  s.cfg.OptimisticModeFetcher,
+		AttestationCache:       s.cfg.AttestationCache,
 		AttestationsPool:       s.cfg.AttestationsPool,
 		PeerManager:            s.cfg.PeerManager,
 		Broadcaster:            s.cfg.Broadcaster,
@@ -508,6 +509,7 @@ func (s *Service) beaconEndpoints(
 	server := &beacon.Server{
 		CanonicalHistory:        ch,
 		BeaconDB:                s.cfg.BeaconDB,
+		AttestationCache:        s.cfg.AttestationCache,
 		AttestationsPool:        s.cfg.AttestationsPool,
 		SlashingsPool:           s.cfg.SlashingsPool,
 		ChainInfoFetcher:        s.cfg.ChainInfoFetcher,
@@ -530,6 +532,7 @@ func (s *Service) beaconEndpoints(
 		FinalizationFetcher:     s.cfg.FinalizationFetcher,
 		ForkchoiceFetcher:       s.cfg.ForkchoiceFetcher,
 		CoreService:             coreService,
+		AttestationStateFetcher: s.cfg.AttestationReceiver,
 	}
 
 	const namespace = "beacon"
@@ -879,6 +882,24 @@ func (s *Service) beaconEndpoints(
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
 			},
 			handler: server.GetDepositSnapshot,
+			methods: []string{http.MethodGet},
+		},
+		{
+			template: "/eth/v1/beacon/states/{state_id}/pending_deposits",
+			name:     namespace + ".GetPendingDeposits",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+			},
+			handler: server.GetPendingDeposits,
+			methods: []string{http.MethodGet},
+		},
+		{
+			template: "/eth/v1/beacon/states/{state_id}/pending_partial_withdrawals",
+			name:     namespace + ".GetPendingPartialWithdrawals",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+			},
+			handler: server.GetPendingPartialWithdrawals,
 			methods: []string{http.MethodGet},
 		},
 	}

@@ -3,7 +3,6 @@ package electra
 import (
 	"fmt"
 
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
@@ -40,7 +39,7 @@ func ProcessEffectiveBalanceUpdates(st state.BeaconState) error {
 
 	// Update effective balances with hysteresis.
 	validatorFunc := func(idx int, val state.ReadOnlyValidator) (newVal *ethpb.Validator, err error) {
-		if val == nil {
+		if val.IsNil() {
 			return nil, fmt.Errorf("validator %d is nil in state", idx)
 		}
 		if idx >= len(bals) {
@@ -49,7 +48,7 @@ func ProcessEffectiveBalanceUpdates(st state.BeaconState) error {
 		balance := bals[idx]
 
 		effectiveBalanceLimit := params.BeaconConfig().MinActivationBalance
-		if helpers.HasCompoundingWithdrawalCredential(val) {
+		if val.HasCompoundingWithdrawalCredentials() {
 			effectiveBalanceLimit = params.BeaconConfig().MaxEffectiveBalanceElectra
 		}
 

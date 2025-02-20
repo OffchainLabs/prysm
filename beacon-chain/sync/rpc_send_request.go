@@ -169,8 +169,11 @@ func SendBlobsByRangeRequest(ctx context.Context, tor blockchain.TemporalOracle,
 	}
 	defer closeStream(stream, log)
 
-	maxBlobsPerBlock := uint64(params.BeaconConfig().MaxBlobsPerBlock(req.StartSlot))
+	maxBlobsPerBlock := uint64(params.BeaconConfig().MaxBlobsPerBlock(req.StartSlot + primitives.Slot(req.Count)))
 	max := params.BeaconConfig().MaxRequestBlobSidecars
+	if slots.ToEpoch(req.StartSlot) >= params.BeaconConfig().ElectraForkEpoch {
+		max = params.BeaconConfig().MaxRequestBlobSidecarsElectra
+	}
 	if max > req.Count*maxBlobsPerBlock {
 		max = req.Count * maxBlobsPerBlock
 	}
@@ -201,6 +204,9 @@ func SendBlobSidecarByRoot(
 	defer closeStream(stream, log)
 
 	max := params.BeaconConfig().MaxRequestBlobSidecars
+	if slots.ToEpoch(slot) >= params.BeaconConfig().ElectraForkEpoch {
+		max = params.BeaconConfig().MaxRequestBlobSidecarsElectra
+	}
 	maxBlobCount := params.BeaconConfig().MaxBlobsPerBlock(slot)
 	if max > uint64(len(*req)*maxBlobCount) {
 		max = uint64(len(*req) * maxBlobCount)

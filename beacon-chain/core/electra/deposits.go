@@ -15,7 +15,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
@@ -273,7 +272,7 @@ func ProcessPendingDeposits(ctx context.Context, st state.BeaconState, activeBal
 	isChurnLimitReached := false
 
 	var pendingDepositsToBatchVerify []*ethpb.PendingDeposit
-	var pendingDepositsToPostpone []*eth.PendingDeposit
+	var pendingDepositsToPostpone []*ethpb.PendingDeposit
 
 	depBalToConsume, err := st.DepositBalanceToConsume()
 	if err != nil {
@@ -386,14 +385,8 @@ func batchProcessNewPendingDeposits(ctx context.Context, state state.BeaconState
 		return errors.Wrap(err, "batch signature verification failed")
 	}
 
-	pubKeyMap := make(map[[48]byte]struct{}, len(pendingDeposits))
-
 	// Process each deposit individually
 	for _, pendingDeposit := range pendingDeposits {
-		_, found := pubKeyMap[bytesutil.ToBytes48(pendingDeposit.PublicKey)]
-		if !found {
-			pubKeyMap[bytesutil.ToBytes48(pendingDeposit.PublicKey)] = struct{}{}
-		}
 		validSignature := allSignaturesVerified
 
 		// If batch verification failed, check the individual deposit signature
@@ -411,7 +404,8 @@ func batchProcessNewPendingDeposits(ctx context.Context, state state.BeaconState
 
 		// Add validator to the registry if the signature is valid
 		if validSignature {
-			if found {
+			_, has := state.ValidatorIndexByPubkey(bytesutil.ToBytes48(pendingDeposit.PublicKey))
+			if has {
 				index, _ := state.ValidatorIndexByPubkey(bytesutil.ToBytes48(pendingDeposit.PublicKey))
 				if err := helpers.IncreaseBalance(state, index, pendingDeposit.Amount); err != nil {
 					return errors.Wrap(err, "could not increase balance")
@@ -593,10 +587,10 @@ func processDepositRequest(beaconState state.BeaconState, request *enginev1.Depo
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get deposit requests start index")
 	}
+	if request == nil {
+		return nil, errors.New("nil deposit request")
+	}
 	if requestsStartIndex == params.BeaconConfig().UnsetDepositRequestsStartIndex {
-		if request == nil {
-			return nil, errors.New("nil deposit request")
-		}
 		if err := beaconState.SetDepositRequestsStartIndex(request.Index); err != nil {
 			return nil, errors.Wrap(err, "could not set deposit requests start index")
 		}

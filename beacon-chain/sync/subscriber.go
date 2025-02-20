@@ -117,7 +117,7 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 		s.persistentAndAggregatorSubnetIndices,
 		s.attesterSubnetIndices,
 	)
-	// Altair Fork Version
+	// Altair fork version
 	if params.BeaconConfig().AltairForkEpoch <= epoch {
 		s.subscribe(
 			p2p.SyncContributionAndProofSubnetTopicFormat,
@@ -135,7 +135,7 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 		)
 	}
 
-	// New Gossip Topic in Capella
+	// New gossip topic in Capella
 	if params.BeaconConfig().CapellaForkEpoch <= epoch {
 		s.subscribe(
 			p2p.BlsToExecutionChangeSubnetTopicFormat,
@@ -145,14 +145,30 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 		)
 	}
 
-	// New Gossip Topic in Deneb
-	if params.BeaconConfig().DenebForkEpoch <= epoch {
+	// New gossip topic in Deneb, modified in Electra
+	if params.BeaconConfig().DenebForkEpoch <= epoch && epoch < params.BeaconConfig().ElectraForkEpoch {
 		s.subscribeWithParameters(
 			p2p.BlobSubnetTopicFormat,
 			s.validateBlob,
 			s.blobSubscriber,
 			digest,
-			func(primitives.Slot) []uint64 { return sliceFromCount(params.BeaconConfig().BlobsidecarSubnetCount) },
+			func(currentSlot primitives.Slot) []uint64 {
+				return sliceFromCount(params.BeaconConfig().BlobsidecarSubnetCount)
+			},
+			func(currentSlot primitives.Slot) []uint64 { return []uint64{} },
+		)
+	}
+
+	// Modified gossip topic in Electra
+	if params.BeaconConfig().ElectraForkEpoch <= epoch {
+		s.subscribeWithParameters(
+			p2p.BlobSubnetTopicFormat,
+			s.validateBlob,
+			s.blobSubscriber,
+			digest,
+			func(currentSlot primitives.Slot) []uint64 {
+				return sliceFromCount(params.BeaconConfig().BlobsidecarSubnetCountElectra)
+			},
 			func(currentSlot primitives.Slot) []uint64 { return []uint64{} },
 		)
 	}
@@ -429,7 +445,14 @@ func (s *Service) subscribeToSubnets(
 			description = topicFormat[pos+1:]
 		}
 
-		log.WithField("digest", fmt.Sprintf("%#x", digest)).Warningf("%s subnets with this digest are no longer valid, unsubscribing from all of them.", description)
+		if pos := strings.LastIndex(description, "_"); pos != -1 {
+			description = description[:pos]
+		}
+
+		log.WithFields(logrus.Fields{
+			"digest":  fmt.Sprintf("%#x", digest),
+			"subnets": description,
+		}).Debug("Subnets with this digest are no longer valid, unsubscribing from all of them")
 		s.reValidateSubscriptions(subscriptions, []uint64{}, topicFormat, digest)
 		return false
 	}

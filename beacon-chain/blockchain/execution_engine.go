@@ -268,6 +268,9 @@ func (s *Service) notifyNewPayload(ctx context.Context, preStateVersion int,
 		if err != nil {
 			return false, errors.Wrap(err, "could not get execution requests")
 		}
+		if requests == nil {
+			return false, errors.New("nil execution requests")
+		}
 	}
 	lastValidHash, err = s.cfg.ExecutionEngineCaller.NewPayload(ctx, payload, versionedHashes, parentRoot, requests)
 
@@ -362,15 +365,16 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 		return emptyAttri
 	}
 
-	var attr payloadattribute.Attributer
-	switch st.Version() {
-	case version.Deneb, version.Electra:
+	v := st.Version()
+
+	if v >= version.Deneb {
 		withdrawals, _, err := st.ExpectedWithdrawals()
 		if err != nil {
 			log.WithError(err).Error("Could not get expected withdrawals to get payload attribute")
 			return emptyAttri
 		}
-		attr, err = payloadattribute.New(&enginev1.PayloadAttributesV3{
+
+		attr, err := payloadattribute.New(&enginev1.PayloadAttributesV3{
 			Timestamp:             uint64(t.Unix()),
 			PrevRandao:            prevRando,
 			SuggestedFeeRecipient: val.FeeRecipient[:],
@@ -381,13 +385,18 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 			log.WithError(err).Error("Could not get payload attribute")
 			return emptyAttri
 		}
-	case version.Capella:
+
+		return attr
+	}
+
+	if v >= version.Capella {
 		withdrawals, _, err := st.ExpectedWithdrawals()
 		if err != nil {
 			log.WithError(err).Error("Could not get expected withdrawals to get payload attribute")
 			return emptyAttri
 		}
-		attr, err = payloadattribute.New(&enginev1.PayloadAttributesV2{
+
+		attr, err := payloadattribute.New(&enginev1.PayloadAttributesV2{
 			Timestamp:             uint64(t.Unix()),
 			PrevRandao:            prevRando,
 			SuggestedFeeRecipient: val.FeeRecipient[:],
@@ -397,8 +406,12 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 			log.WithError(err).Error("Could not get payload attribute")
 			return emptyAttri
 		}
-	case version.Bellatrix:
-		attr, err = payloadattribute.New(&enginev1.PayloadAttributes{
+
+		return attr
+	}
+
+	if v >= version.Bellatrix {
+		attr, err := payloadattribute.New(&enginev1.PayloadAttributes{
 			Timestamp:             uint64(t.Unix()),
 			PrevRandao:            prevRando,
 			SuggestedFeeRecipient: val.FeeRecipient[:],
@@ -407,12 +420,12 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 			log.WithError(err).Error("Could not get payload attribute")
 			return emptyAttri
 		}
-	default:
-		log.WithField("version", st.Version()).Error("Could not get payload attribute due to unknown state version")
-		return emptyAttri
+
+		return attr
 	}
 
-	return attr
+	log.WithField("version", version.String(st.Version())).Error("Could not get payload attribute due to unknown state version")
+	return emptyAttri
 }
 
 // removeInvalidBlockAndState removes the invalid block, blob and its corresponding state from the cache and DB.

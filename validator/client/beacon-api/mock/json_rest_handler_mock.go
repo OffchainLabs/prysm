@@ -58,7 +58,7 @@ func (mr *MockJsonRestHandlerMockRecorder) Get(ctx, endpoint, resp any) *gomock.
 // Host mocks base method.
 func (m *MockJsonRestHandler) Host() string {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "HTTPHost")
+	ret := m.ctrl.Call(m, "Host")
 	ret0, _ := ret[0].(string)
 	return ret0
 }
@@ -66,7 +66,7 @@ func (m *MockJsonRestHandler) Host() string {
 // Host indicates an expected call of Host.
 func (mr *MockJsonRestHandlerMockRecorder) Host() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HTTPHost", reflect.TypeOf((*MockJsonRestHandler)(nil).Host))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Host", reflect.TypeOf((*MockJsonRestHandler)(nil).Host))
 }
 
 // HttpClient mocks base method.

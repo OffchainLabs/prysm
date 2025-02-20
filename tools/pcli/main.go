@@ -299,7 +299,7 @@ var stateTransitionCommand = &cli.Command{
 
 func main() {
 	customFormatter := new(prefixed.TextFormatter)
-	customFormatter.TimestampFormat = "2006-01-02 15:04:05"
+	customFormatter.TimestampFormat = time.DateTime
 	customFormatter.FullTimestamp = true
 	log.SetFormatter(customFormatter)
 	app := cli.App{}

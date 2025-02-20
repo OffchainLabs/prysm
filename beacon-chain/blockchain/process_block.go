@@ -69,6 +69,7 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 	if features.Get().EnableLightClient && slots.ToEpoch(s.CurrentSlot()) >= params.BeaconConfig().AltairForkEpoch {
 		defer s.processLightClientUpdates(cfg)
 		defer s.saveLightClientUpdate(cfg)
+		defer s.saveLightClientBootstrap(cfg)
 	}
 	defer s.sendStateFeedOnBlock(cfg)
 	defer reportProcessingTime(startTime)
@@ -378,7 +379,11 @@ func (s *Service) handleBlockAttestations(ctx context.Context, blk interfaces.Re
 		r := bytesutil.ToBytes32(a.GetData().BeaconBlockRoot)
 		if s.cfg.ForkChoiceStore.HasNode(r) {
 			s.cfg.ForkChoiceStore.ProcessAttestation(ctx, indices, r, a.GetData().Target.Epoch)
-		} else if err := s.cfg.AttPool.SaveBlockAttestation(a); err != nil {
+		} else if features.Get().EnableExperimentalAttestationPool {
+			if err = s.cfg.AttestationCache.Add(a); err != nil {
+				return err
+			}
+		} else if err = s.cfg.AttPool.SaveBlockAttestation(a); err != nil {
 			return err
 		}
 	}
@@ -418,7 +423,11 @@ func (s *Service) savePostStateInfo(ctx context.Context, r [32]byte, b interface
 func (s *Service) pruneAttsFromPool(headBlock interfaces.ReadOnlySignedBeaconBlock) error {
 	atts := headBlock.Block().Body().Attestations()
 	for _, att := range atts {
-		if helpers.IsAggregated(att) {
+		if features.Get().EnableExperimentalAttestationPool {
+			if err := s.cfg.AttestationCache.DeleteCovered(att); err != nil {
+				return errors.Wrap(err, "could not delete attestation")
+			}
+		} else if att.IsAggregated() {
 			if err := s.cfg.AttPool.DeleteAggregatedAttestation(att); err != nil {
 				return err
 			}
@@ -503,17 +512,11 @@ func missingIndices(bs *filesystem.BlobStorage, root [32]byte, expected [][]byte
 	if len(expected) > maxBlobsPerBlock {
 		return nil, errMaxBlobsExceeded
 	}
-	indices, err := bs.Indices(root, slot)
-	if err != nil {
-		return nil, err
-	}
+	indices := bs.Summary(root)
 	missing := make(map[uint64]struct{}, len(expected))
 	for i := range expected {
-		ui := uint64(i)
-		if len(expected[i]) > 0 {
-			if !indices[i] {
-				missing[ui] = struct{}{}
-			}
+		if len(expected[i]) > 0 && !indices.HasIndex(uint64(i)) {
+			missing[uint64(i)] = struct{}{}
 		}
 	}
 	return missing, nil

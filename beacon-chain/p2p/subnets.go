@@ -54,6 +54,8 @@ func (s *Service) nodeFilter(topic string, index uint64) (func(node *enode.Node)
 		return s.filterPeerForAttSubnet(index), nil
 	case strings.Contains(topic, GossipSyncCommitteeMessage):
 		return s.filterPeerForSyncSubnet(index), nil
+	case strings.Contains(topic, GossipBlobSidecarMessage):
+		return s.filterPeerForBlobSubnet(), nil
 	default:
 		return nil, errors.Errorf("no subnet exists for provided topic: %s", topic)
 	}
@@ -266,6 +268,14 @@ func (s *Service) filterPeerForSyncSubnet(index uint64) func(node *enode.Node) b
 	}
 }
 
+// returns a method with filters peers specifically for a particular blob subnet.
+// All peers are supposed to be subscribed to all blob subnets.
+func (s *Service) filterPeerForBlobSubnet() func(_ *enode.Node) bool {
+	return func(_ *enode.Node) bool {
+		return true
+	}
+}
+
 // lower threshold to broadcast object compared to searching
 // for a subnet. So that even in the event of poor peer
 // connectivity, we can still broadcast an attestation.
@@ -473,7 +483,7 @@ func syncBitvector(record *enr.Record) (bitfield.Bitvector4, error) {
 }
 
 // The subnet locker is a map which keeps track of all
-// mutexes stored per subnet. This locker is re-used
+// mutexes stored per subnet. This locker is reused
 // between both the attestation, sync and blob subnets.
 // Sync subnets are stored by (subnet+syncLockerVal).
 // Blob subnets are stored by (subnet+blobSubnetLockerVal).

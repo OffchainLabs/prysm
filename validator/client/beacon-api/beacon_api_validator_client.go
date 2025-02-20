@@ -154,7 +154,7 @@ func (c *beaconApiValidatorClient) ProposeAttestation(ctx context.Context, in *e
 	})
 }
 
-func (c *beaconApiValidatorClient) ProposeAttestationElectra(ctx context.Context, in *ethpb.AttestationElectra) (*ethpb.AttestResponse, error) {
+func (c *beaconApiValidatorClient) ProposeAttestationElectra(ctx context.Context, in *ethpb.SingleAttestation) (*ethpb.AttestResponse, error) {
 	ctx, span := trace.StartSpan(ctx, "beacon-api.ProposeAttestationElectra")
 	defer span.End()
 

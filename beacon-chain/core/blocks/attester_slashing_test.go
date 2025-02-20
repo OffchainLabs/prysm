@@ -7,12 +7,14 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
 	v "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/validators"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"github.com/prysmaticlabs/prysm/v5/testing/util"
@@ -105,293 +107,162 @@ func TestProcessAttesterSlashings_IndexedAttestationFailedToVerify(t *testing.T)
 }
 
 func TestProcessAttesterSlashings_AppliesCorrectStatus(t *testing.T) {
-	beaconState, privKeys := util.DeterministicGenesisState(t, 100)
-	for _, vv := range beaconState.Validators() {
-		vv.WithdrawableEpoch = primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)
-	}
+	statePhase0, keysPhase0 := util.DeterministicGenesisState(t, 100)
+	stateAltair, keysAltair := util.DeterministicGenesisStateAltair(t, 100)
+	stateBellatrix, keysBellatrix := util.DeterministicGenesisStateBellatrix(t, 100)
+	stateCapella, keysCapella := util.DeterministicGenesisStateCapella(t, 100)
+	stateDeneb, keysDeneb := util.DeterministicGenesisStateDeneb(t, 100)
+	stateElectra, keysElectra := util.DeterministicGenesisStateElectra(t, 100)
 
-	att1 := util.HydrateIndexedAttestation(&ethpb.IndexedAttestation{
+	att1Phase0 := util.HydrateIndexedAttestation(&ethpb.IndexedAttestation{
 		Data: &ethpb.AttestationData{
 			Source: &ethpb.Checkpoint{Epoch: 1},
 		},
 		AttestingIndices: []uint64{0, 1},
 	})
-	domain, err := signing.Domain(beaconState.Fork(), 0, params.BeaconConfig().DomainBeaconAttester, beaconState.GenesisValidatorsRoot())
-	require.NoError(t, err)
-	signingRoot, err := signing.ComputeSigningRoot(att1.Data, domain)
-	assert.NoError(t, err, "Could not get signing root of beacon block header")
-	sig0 := privKeys[0].Sign(signingRoot[:])
-	sig1 := privKeys[1].Sign(signingRoot[:])
-	aggregateSig := bls.AggregateSignatures([]bls.Signature{sig0, sig1})
-	att1.Signature = aggregateSig.Marshal()
-
-	att2 := util.HydrateIndexedAttestation(&ethpb.IndexedAttestation{
+	att2Phase0 := util.HydrateIndexedAttestation(&ethpb.IndexedAttestation{
 		AttestingIndices: []uint64{0, 1},
 	})
-	signingRoot, err = signing.ComputeSigningRoot(att2.Data, domain)
-	assert.NoError(t, err, "Could not get signing root of beacon block header")
-	sig0 = privKeys[0].Sign(signingRoot[:])
-	sig1 = privKeys[1].Sign(signingRoot[:])
-	aggregateSig = bls.AggregateSignatures([]bls.Signature{sig0, sig1})
-	att2.Signature = aggregateSig.Marshal()
-
-	slashings := []*ethpb.AttesterSlashing{
-		{
-			Attestation_1: att1,
-			Attestation_2: att2,
-		},
-	}
-
-	currentSlot := 2 * params.BeaconConfig().SlotsPerEpoch
-	require.NoError(t, beaconState.SetSlot(currentSlot))
-
-	b := util.NewBeaconBlock()
-	b.Block = &ethpb.BeaconBlock{
-		Body: &ethpb.BeaconBlockBody{
-			AttesterSlashings: slashings,
-		},
-	}
-
-	ss := make([]ethpb.AttSlashing, len(b.Block.Body.AttesterSlashings))
-	for i, s := range b.Block.Body.AttesterSlashings {
-		ss[i] = s
-	}
-	newState, err := blocks.ProcessAttesterSlashings(context.Background(), beaconState, ss, v.SlashValidator)
-	require.NoError(t, err)
-	newRegistry := newState.Validators()
-
-	// Given the intersection of slashable indices is [1], only validator
-	// at index 1 should be slashed and exited. We confirm this below.
-	if newRegistry[1].ExitEpoch != beaconState.Validators()[1].ExitEpoch {
-		t.Errorf(
-			`
-			Expected validator at index 1's exit epoch to match
-			%d, received %d instead
-			`,
-			beaconState.Validators()[1].ExitEpoch,
-			newRegistry[1].ExitEpoch,
-		)
-	}
-
-	require.Equal(t, uint64(31750000000), newState.Balances()[1])
-	require.Equal(t, uint64(32000000000), newState.Balances()[2])
-}
-
-func TestProcessAttesterSlashings_AppliesCorrectStatusAltair(t *testing.T) {
-	beaconState, privKeys := util.DeterministicGenesisStateAltair(t, 100)
-	for _, vv := range beaconState.Validators() {
-		vv.WithdrawableEpoch = primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)
-	}
-
-	att1 := util.HydrateIndexedAttestation(&ethpb.IndexedAttestation{
+	att1Electra := util.HydrateIndexedAttestationElectra(&ethpb.IndexedAttestationElectra{
 		Data: &ethpb.AttestationData{
 			Source: &ethpb.Checkpoint{Epoch: 1},
 		},
 		AttestingIndices: []uint64{0, 1},
 	})
-	domain, err := signing.Domain(beaconState.Fork(), 0, params.BeaconConfig().DomainBeaconAttester, beaconState.GenesisValidatorsRoot())
-	require.NoError(t, err)
-	signingRoot, err := signing.ComputeSigningRoot(att1.Data, domain)
-	assert.NoError(t, err, "Could not get signing root of beacon block header")
-	sig0 := privKeys[0].Sign(signingRoot[:])
-	sig1 := privKeys[1].Sign(signingRoot[:])
-	aggregateSig := bls.AggregateSignatures([]bls.Signature{sig0, sig1})
-	att1.Signature = aggregateSig.Marshal()
-
-	att2 := util.HydrateIndexedAttestation(&ethpb.IndexedAttestation{
+	att2Electra := util.HydrateIndexedAttestationElectra(&ethpb.IndexedAttestationElectra{
 		AttestingIndices: []uint64{0, 1},
 	})
-	signingRoot, err = signing.ComputeSigningRoot(att2.Data, domain)
-	assert.NoError(t, err, "Could not get signing root of beacon block header")
-	sig0 = privKeys[0].Sign(signingRoot[:])
-	sig1 = privKeys[1].Sign(signingRoot[:])
-	aggregateSig = bls.AggregateSignatures([]bls.Signature{sig0, sig1})
-	att2.Signature = aggregateSig.Marshal()
 
-	slashings := []*ethpb.AttesterSlashing{
+	slashingPhase0 := &ethpb.AttesterSlashing{
+		Attestation_1: att1Phase0,
+		Attestation_2: att2Phase0,
+	}
+	slashingElectra := &ethpb.AttesterSlashingElectra{
+		Attestation_1: att1Electra,
+		Attestation_2: att2Electra,
+	}
+
+	type testCase struct {
+		name           string
+		st             state.BeaconState
+		keys           []bls.SecretKey
+		att1           ethpb.IndexedAtt
+		att2           ethpb.IndexedAtt
+		slashing       ethpb.AttSlashing
+		slashedBalance uint64
+	}
+
+	testCases := []testCase{
 		{
-			Attestation_1: att1,
-			Attestation_2: att2,
+			name:           "phase0",
+			st:             statePhase0,
+			keys:           keysPhase0,
+			att1:           att1Phase0,
+			att2:           att2Phase0,
+			slashing:       slashingPhase0,
+			slashedBalance: 31750000000,
+		},
+		{
+			name:           "altair",
+			st:             stateAltair,
+			keys:           keysAltair,
+			att1:           att1Phase0,
+			att2:           att2Phase0,
+			slashing:       slashingPhase0,
+			slashedBalance: 31500000000,
+		},
+		{
+			name:           "bellatrix",
+			st:             stateBellatrix,
+			keys:           keysBellatrix,
+			att1:           att1Phase0,
+			att2:           att2Phase0,
+			slashing:       slashingPhase0,
+			slashedBalance: 31000000000,
+		},
+		{
+			name:           "capella",
+			st:             stateCapella,
+			keys:           keysCapella,
+			att1:           att1Phase0,
+			att2:           att2Phase0,
+			slashing:       slashingPhase0,
+			slashedBalance: 31000000000,
+		},
+		{
+			name:           "deneb",
+			st:             stateDeneb,
+			keys:           keysDeneb,
+			att1:           att1Phase0,
+			att2:           att2Phase0,
+			slashing:       slashingPhase0,
+			slashedBalance: 31000000000,
+		},
+		{
+			name:           "electra",
+			st:             stateElectra,
+			keys:           keysElectra,
+			att1:           att1Electra,
+			att2:           att2Electra,
+			slashing:       slashingElectra,
+			slashedBalance: 31992187500,
 		},
 	}
 
-	currentSlot := 2 * params.BeaconConfig().SlotsPerEpoch
-	require.NoError(t, beaconState.SetSlot(currentSlot))
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, vv := range tc.st.Validators() {
+				vv.WithdrawableEpoch = primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)
+			}
 
-	b := util.NewBeaconBlock()
-	b.Block = &ethpb.BeaconBlock{
-		Body: &ethpb.BeaconBlockBody{
-			AttesterSlashings: slashings,
-		},
-	}
+			domain, err := signing.Domain(tc.st.Fork(), 0, params.BeaconConfig().DomainBeaconAttester, tc.st.GenesisValidatorsRoot())
+			require.NoError(t, err)
+			signingRoot, err := signing.ComputeSigningRoot(tc.att1.GetData(), domain)
+			assert.NoError(t, err, "Could not get signing root of beacon block header")
+			sig0 := tc.keys[0].Sign(signingRoot[:])
+			sig1 := tc.keys[1].Sign(signingRoot[:])
+			aggregateSig := bls.AggregateSignatures([]bls.Signature{sig0, sig1})
 
-	ss := make([]ethpb.AttSlashing, len(b.Block.Body.AttesterSlashings))
-	for i, s := range b.Block.Body.AttesterSlashings {
-		ss[i] = s
-	}
-	newState, err := blocks.ProcessAttesterSlashings(context.Background(), beaconState, ss, v.SlashValidator)
-	require.NoError(t, err)
-	newRegistry := newState.Validators()
+			if tc.att1.Version() >= version.Electra {
+				tc.att1.(*ethpb.IndexedAttestationElectra).Signature = aggregateSig.Marshal()
+			} else {
+				tc.att1.(*ethpb.IndexedAttestation).Signature = aggregateSig.Marshal()
+			}
 
-	// Given the intersection of slashable indices is [1], only validator
-	// at index 1 should be slashed and exited. We confirm this below.
-	if newRegistry[1].ExitEpoch != beaconState.Validators()[1].ExitEpoch {
-		t.Errorf(
-			`
+			signingRoot, err = signing.ComputeSigningRoot(tc.att2.GetData(), domain)
+			assert.NoError(t, err, "Could not get signing root of beacon block header")
+			sig0 = tc.keys[0].Sign(signingRoot[:])
+			sig1 = tc.keys[1].Sign(signingRoot[:])
+			aggregateSig = bls.AggregateSignatures([]bls.Signature{sig0, sig1})
+
+			if tc.att2.Version() >= version.Electra {
+				tc.att2.(*ethpb.IndexedAttestationElectra).Signature = aggregateSig.Marshal()
+			} else {
+				tc.att2.(*ethpb.IndexedAttestation).Signature = aggregateSig.Marshal()
+			}
+
+			currentSlot := 2 * params.BeaconConfig().SlotsPerEpoch
+			require.NoError(t, tc.st.SetSlot(currentSlot))
+
+			newState, err := blocks.ProcessAttesterSlashings(context.Background(), tc.st, []ethpb.AttSlashing{tc.slashing}, v.SlashValidator)
+			require.NoError(t, err)
+			newRegistry := newState.Validators()
+
+			// Given the intersection of slashable indices is [1], only validator
+			// at index 1 should be slashed and exited. We confirm this below.
+			if newRegistry[1].ExitEpoch != tc.st.Validators()[1].ExitEpoch {
+				t.Errorf(
+					`
 			Expected validator at index 1's exit epoch to match
 			%d, received %d instead
 			`,
-			beaconState.Validators()[1].ExitEpoch,
-			newRegistry[1].ExitEpoch,
-		)
+					tc.st.Validators()[1].ExitEpoch,
+					newRegistry[1].ExitEpoch,
+				)
+			}
+
+			require.Equal(t, tc.slashedBalance, newState.Balances()[1])
+			require.Equal(t, uint64(32000000000), newState.Balances()[2])
+		})
 	}
-
-	require.Equal(t, uint64(31500000000), newState.Balances()[1])
-	require.Equal(t, uint64(32000000000), newState.Balances()[2])
-}
-
-func TestProcessAttesterSlashings_AppliesCorrectStatusBellatrix(t *testing.T) {
-	beaconState, privKeys := util.DeterministicGenesisStateBellatrix(t, 100)
-	for _, vv := range beaconState.Validators() {
-		vv.WithdrawableEpoch = primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)
-	}
-
-	att1 := util.HydrateIndexedAttestation(&ethpb.IndexedAttestation{
-		Data: &ethpb.AttestationData{
-			Source: &ethpb.Checkpoint{Epoch: 1},
-		},
-		AttestingIndices: []uint64{0, 1},
-	})
-	domain, err := signing.Domain(beaconState.Fork(), 0, params.BeaconConfig().DomainBeaconAttester, beaconState.GenesisValidatorsRoot())
-	require.NoError(t, err)
-	signingRoot, err := signing.ComputeSigningRoot(att1.Data, domain)
-	assert.NoError(t, err, "Could not get signing root of beacon block header")
-	sig0 := privKeys[0].Sign(signingRoot[:])
-	sig1 := privKeys[1].Sign(signingRoot[:])
-	aggregateSig := bls.AggregateSignatures([]bls.Signature{sig0, sig1})
-	att1.Signature = aggregateSig.Marshal()
-
-	att2 := util.HydrateIndexedAttestation(&ethpb.IndexedAttestation{
-		AttestingIndices: []uint64{0, 1},
-	})
-	signingRoot, err = signing.ComputeSigningRoot(att2.Data, domain)
-	assert.NoError(t, err, "Could not get signing root of beacon block header")
-	sig0 = privKeys[0].Sign(signingRoot[:])
-	sig1 = privKeys[1].Sign(signingRoot[:])
-	aggregateSig = bls.AggregateSignatures([]bls.Signature{sig0, sig1})
-	att2.Signature = aggregateSig.Marshal()
-
-	slashings := []*ethpb.AttesterSlashing{
-		{
-			Attestation_1: att1,
-			Attestation_2: att2,
-		},
-	}
-
-	currentSlot := 2 * params.BeaconConfig().SlotsPerEpoch
-	require.NoError(t, beaconState.SetSlot(currentSlot))
-
-	b := util.NewBeaconBlock()
-	b.Block = &ethpb.BeaconBlock{
-		Body: &ethpb.BeaconBlockBody{
-			AttesterSlashings: slashings,
-		},
-	}
-
-	ss := make([]ethpb.AttSlashing, len(b.Block.Body.AttesterSlashings))
-	for i, s := range b.Block.Body.AttesterSlashings {
-		ss[i] = s
-	}
-	newState, err := blocks.ProcessAttesterSlashings(context.Background(), beaconState, ss, v.SlashValidator)
-	require.NoError(t, err)
-	newRegistry := newState.Validators()
-
-	// Given the intersection of slashable indices is [1], only validator
-	// at index 1 should be slashed and exited. We confirm this below.
-	if newRegistry[1].ExitEpoch != beaconState.Validators()[1].ExitEpoch {
-		t.Errorf(
-			`
-			Expected validator at index 1's exit epoch to match
-			%d, received %d instead
-			`,
-			beaconState.Validators()[1].ExitEpoch,
-			newRegistry[1].ExitEpoch,
-		)
-	}
-
-	require.Equal(t, uint64(31000000000), newState.Balances()[1])
-	require.Equal(t, uint64(32000000000), newState.Balances()[2])
-}
-
-func TestProcessAttesterSlashings_AppliesCorrectStatusCapella(t *testing.T) {
-	beaconState, privKeys := util.DeterministicGenesisStateCapella(t, 100)
-	for _, vv := range beaconState.Validators() {
-		vv.WithdrawableEpoch = primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)
-	}
-
-	att1 := util.HydrateIndexedAttestation(&ethpb.IndexedAttestation{
-		Data: &ethpb.AttestationData{
-			Source: &ethpb.Checkpoint{Epoch: 1},
-		},
-		AttestingIndices: []uint64{0, 1},
-	})
-	domain, err := signing.Domain(beaconState.Fork(), 0, params.BeaconConfig().DomainBeaconAttester, beaconState.GenesisValidatorsRoot())
-	require.NoError(t, err)
-	signingRoot, err := signing.ComputeSigningRoot(att1.Data, domain)
-	assert.NoError(t, err, "Could not get signing root of beacon block header")
-	sig0 := privKeys[0].Sign(signingRoot[:])
-	sig1 := privKeys[1].Sign(signingRoot[:])
-	aggregateSig := bls.AggregateSignatures([]bls.Signature{sig0, sig1})
-	att1.Signature = aggregateSig.Marshal()
-
-	att2 := util.HydrateIndexedAttestation(&ethpb.IndexedAttestation{
-		AttestingIndices: []uint64{0, 1},
-	})
-	signingRoot, err = signing.ComputeSigningRoot(att2.Data, domain)
-	assert.NoError(t, err, "Could not get signing root of beacon block header")
-	sig0 = privKeys[0].Sign(signingRoot[:])
-	sig1 = privKeys[1].Sign(signingRoot[:])
-	aggregateSig = bls.AggregateSignatures([]bls.Signature{sig0, sig1})
-	att2.Signature = aggregateSig.Marshal()
-
-	slashings := []*ethpb.AttesterSlashing{
-		{
-			Attestation_1: att1,
-			Attestation_2: att2,
-		},
-	}
-
-	currentSlot := 2 * params.BeaconConfig().SlotsPerEpoch
-	require.NoError(t, beaconState.SetSlot(currentSlot))
-
-	b := util.NewBeaconBlock()
-	b.Block = &ethpb.BeaconBlock{
-		Body: &ethpb.BeaconBlockBody{
-			AttesterSlashings: slashings,
-		},
-	}
-
-	ss := make([]ethpb.AttSlashing, len(b.Block.Body.AttesterSlashings))
-	for i, s := range b.Block.Body.AttesterSlashings {
-		ss[i] = s
-	}
-	newState, err := blocks.ProcessAttesterSlashings(context.Background(), beaconState, ss, v.SlashValidator)
-	require.NoError(t, err)
-	newRegistry := newState.Validators()
-
-	// Given the intersection of slashable indices is [1], only validator
-	// at index 1 should be slashed and exited. We confirm this below.
-	if newRegistry[1].ExitEpoch != beaconState.Validators()[1].ExitEpoch {
-		t.Errorf(
-			`
-			Expected validator at index 1's exit epoch to match
-			%d, received %d instead
-			`,
-			beaconState.Validators()[1].ExitEpoch,
-			newRegistry[1].ExitEpoch,
-		)
-	}
-
-	require.Equal(t, uint64(31000000000), newState.Balances()[1])
-	require.Equal(t, uint64(32000000000), newState.Balances()[2])
 }

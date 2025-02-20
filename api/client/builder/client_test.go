@@ -16,7 +16,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	types "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	v1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
 	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
@@ -124,7 +123,7 @@ func TestClient_RegisterValidator(t *testing.T) {
 func TestClient_GetHeader(t *testing.T) {
 	ctx := context.Background()
 	expectedPath := "/eth/v1/builder/header/23/0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2/0x93247f2209abcacf57b75a51dafae777f9dd38bc7053d1af526f220a7489a6d3a2753e5f3e8b1cfe39b56f43611df74a"
-	var slot types.Slot = 23
+	var slot primitives.Slot = 23
 	parentHash := ezDecode(t, "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2")
 	pubkey := ezDecode(t, "0x93247f2209abcacf57b75a51dafae777f9dd38bc7053d1af526f220a7489a6d3a2753e5f3e8b1cfe39b56f43611df74a")
 	t.Run("server error", func(t *testing.T) {
@@ -267,9 +266,9 @@ func TestClient_GetHeader(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 0, value.Int.Cmp(primitives.WeiToBigInt(bid.Value())))
 		require.Equal(t, bidStr, primitives.WeiToBigInt(bid.Value()).String())
-
-		kcgCommitments, err := bid.BlobKzgCommitments()
-		require.NoError(t, err)
+		dbid, ok := bid.(builderBidDeneb)
+		require.Equal(t, true, ok)
+		kcgCommitments := dbid.BlobKzgCommitments()
 		require.Equal(t, len(kcgCommitments) > 0, true)
 		for i := range kcgCommitments {
 			require.Equal(t, len(kcgCommitments[i]) == 48, true)
@@ -292,6 +291,50 @@ func TestClient_GetHeader(t *testing.T) {
 		}
 		_, err := c.GetHeader(ctx, slot, bytesutil.ToBytes32(parentHash), bytesutil.ToBytes48(pubkey))
 		require.ErrorContains(t, "could not extract proto message from header: too many blob commitments: 7", err)
+	})
+	t.Run("electra", func(t *testing.T) {
+		hc := &http.Client{
+			Transport: roundtrip(func(r *http.Request) (*http.Response, error) {
+				require.Equal(t, expectedPath, r.URL.Path)
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(bytes.NewBufferString(testExampleHeaderResponseElectra)),
+					Request:    r.Clone(ctx),
+				}, nil
+			}),
+		}
+		c := &Client{
+			hc:      hc,
+			baseURL: &url.URL{Host: "localhost:3500", Scheme: "http"},
+		}
+		h, err := c.GetHeader(ctx, slot, bytesutil.ToBytes32(parentHash), bytesutil.ToBytes48(pubkey))
+		require.NoError(t, err)
+		expectedWithdrawalsRoot := ezDecode(t, "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2")
+		bid, err := h.Message()
+		require.NoError(t, err)
+		bidHeader, err := bid.Header()
+		require.NoError(t, err)
+		withdrawalsRoot, err := bidHeader.WithdrawalsRoot()
+		require.NoError(t, err)
+		require.Equal(t, true, bytes.Equal(expectedWithdrawalsRoot, withdrawalsRoot))
+
+		bidStr := "652312848583266388373324160190187140051835877600158453279131187530910662656"
+		value, err := stringToUint256(bidStr)
+		require.NoError(t, err)
+		require.Equal(t, 0, value.Int.Cmp(primitives.WeiToBigInt(bid.Value())))
+		require.Equal(t, bidStr, primitives.WeiToBigInt(bid.Value()).String())
+		ebid, ok := bid.(builderBidElectra)
+		require.Equal(t, true, ok)
+		kcgCommitments := ebid.BlobKzgCommitments()
+		require.Equal(t, len(kcgCommitments) > 0, true)
+		for i := range kcgCommitments {
+			require.Equal(t, len(kcgCommitments[i]) == 48, true)
+		}
+		requests := ebid.ExecutionRequests()
+		require.Equal(t, 1, len(requests.Deposits))
+		require.Equal(t, 1, len(requests.Withdrawals))
+		require.Equal(t, 1, len(requests.Consolidations))
+
 	})
 	t.Run("unsupported version", func(t *testing.T) {
 		hc := &http.Client{
@@ -370,7 +413,7 @@ func TestSubmitBlindedBlock(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 1, len(withdrawals))
 		assert.Equal(t, uint64(1), withdrawals[0].Index)
-		assert.Equal(t, types.ValidatorIndex(1), withdrawals[0].ValidatorIndex)
+		assert.Equal(t, primitives.ValidatorIndex(1), withdrawals[0].ValidatorIndex)
 		assert.DeepEqual(t, ezDecode(t, "0xcf8e0d4e9587369b2301d0790347320302cc0943"), withdrawals[0].Address)
 		assert.Equal(t, uint64(1), withdrawals[0].Amount)
 	})
@@ -409,7 +452,7 @@ func TestSubmitBlindedBlock(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 1, len(withdrawals))
 		assert.Equal(t, uint64(1), withdrawals[0].Index)
-		assert.Equal(t, types.ValidatorIndex(1), withdrawals[0].ValidatorIndex)
+		assert.Equal(t, primitives.ValidatorIndex(1), withdrawals[0].ValidatorIndex)
 		assert.DeepEqual(t, ezDecode(t, "0xcf8e0d4e9587369b2301d0790347320302cc0943"), withdrawals[0].Address)
 		assert.Equal(t, uint64(1), withdrawals[0].Amount)
 		require.NotNil(t, blobBundle)

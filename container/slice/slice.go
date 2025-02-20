@@ -79,10 +79,10 @@ func UnionUint64(s ...[]uint64) []uint64 {
 	for i := 1; i < len(s); i++ {
 		a := s[i-1]
 		b := s[i]
-		for j := 0; j < len(a); j++ {
+		for j := range a {
 			m[a[j]] = true
 		}
-		for j := 0; j < len(b); j++ {
+		for j := range b {
 			if _, found := m[b[j]]; !found {
 				set = append(set, b[j])
 			}
@@ -128,10 +128,10 @@ func NotUint64(a, b []uint64) []uint64 {
 	set := make([]uint64, 0)
 	m := make(map[uint64]bool)
 
-	for i := 0; i < len(a); i++ {
+	for i := range a {
 		m[a[i]] = true
 	}
-	for i := 0; i < len(b); i++ {
+	for i := range b {
 		if _, found := m[b[i]]; !found {
 			set = append(set, b[i])
 		}
@@ -189,10 +189,10 @@ func UnionInt64(s ...[]int64) []int64 {
 	for i := 1; i < len(s); i++ {
 		a := s[i-1]
 		b := s[i]
-		for j := 0; j < len(a); j++ {
+		for j := range a {
 			m[a[j]] = true
 		}
-		for j := 0; j < len(b); j++ {
+		for j := range b {
 			if _, found := m[b[j]]; !found {
 				set = append(set, b[j])
 			}
@@ -209,10 +209,10 @@ func NotInt64(a, b []int64) []int64 {
 	set := make([]int64, 0)
 	m := make(map[int64]bool)
 
-	for i := 0; i < len(a); i++ {
+	for i := range a {
 		m[a[i]] = true
 	}
-	for i := 0; i < len(b); i++ {
+	for i := range b {
 		if _, found := m[b[i]]; !found {
 			set = append(set, b[i])
 		}
@@ -236,10 +236,10 @@ func UnionByteSlices(s ...[][]byte) [][]byte {
 	set := s[0]
 	m := make(map[string]bool)
 	for i := 1; i < len(s); i++ {
-		for j := 0; j < len(s[i-1]); j++ {
+		for j := range s[i-1] {
 			m[string(s[i-1][j])] = true
 		}
-		for j := 0; j < len(s[i]); j++ {
+		for j := range s[i] {
 			if _, found := m[string(s[i][j])]; !found {
 				set = append(set, s[i][j])
 			}
@@ -336,10 +336,10 @@ func NotSlot(a, b []primitives.Slot) []primitives.Slot {
 	set := make([]primitives.Slot, 0)
 	m := make(map[primitives.Slot]bool)
 
-	for i := 0; i < len(a); i++ {
+	for i := range a {
 		m[a[i]] = true
 	}
-	for i := 0; i < len(b); i++ {
+	for i := range b {
 		if _, found := m[b[i]]; !found {
 			set = append(set, b[i])
 		}
@@ -360,7 +360,7 @@ func Unique[T comparable](a []T) []T {
 	found := map[T]bool{}
 	result := make([]T, len(a))
 	end := 0
-	for i := 0; i < len(a); i++ {
+	for i := range a {
 		if !found[a[i]] {
 			found[a[i]] = true
 			result[end] = a[i]
@@ -380,8 +380,8 @@ func Reverse[E any](s []E) []E {
 }
 
 // VerifyMaxLength takes a slice and a maximum length and validates the length.
-func VerifyMaxLength[T any](v []T, max int) error {
-	l := len(v)
+func VerifyMaxLength[T any](v []T, max uint64) error {
+	l := uint64(len(v))
 	if l > max {
 		return fmt.Errorf("length of %d exceeds max of %d", l, max)
 	}

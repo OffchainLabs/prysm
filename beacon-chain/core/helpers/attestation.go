@@ -32,6 +32,9 @@ func ValidateNilAttestation(attestation ethpb.Att) error {
 	if attestation.GetData().Target == nil {
 		return errors.New("attestation's target can't be nil")
 	}
+	if attestation.IsSingle() {
+		return nil
+	}
 	if attestation.GetAggregationBits() == nil {
 		return errors.New("attestation's bitfield can't be nil")
 	}
@@ -65,12 +68,6 @@ func IsAggregator(committeeCount uint64, slotSig []byte) (bool, error) {
 
 	b := hash.Hash(slotSig)
 	return binary.LittleEndian.Uint64(b[:8])%modulo == 0, nil
-}
-
-// IsAggregated returns true if the attestation is an aggregated attestation,
-// false otherwise.
-func IsAggregated(attestation ethpb.Att) bool {
-	return attestation.GetAggregationBits().Count() > 1
 }
 
 // ComputeSubnetForAttestation returns the subnet for which the provided attestation will be broadcasted to.

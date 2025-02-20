@@ -46,6 +46,7 @@ func TestProcessPendingConsolidations(t *testing.T) {
 					Validators: []*eth.Validator{
 						{
 							WithdrawalCredentials: []byte{0x01, 0xFF},
+							EffectiveBalance:      params.BeaconConfig().MinActivationBalance,
 						},
 						{
 							WithdrawalCredentials: []byte{0x01, 0xAB},
@@ -208,7 +209,22 @@ func TestProcessConsolidationRequests(t *testing.T) {
 		state    state.BeaconState
 		reqs     []*enginev1.ConsolidationRequest
 		validate func(*testing.T, state.BeaconState)
+		wantErr  bool
 	}{
+		{
+			name: "nil request",
+			state: func() state.BeaconState {
+				st := &eth.BeaconStateElectra{}
+				s, err := state_native.InitializeFromProtoElectra(st)
+				require.NoError(t, err)
+				return s
+			}(),
+			reqs: []*enginev1.ConsolidationRequest{nil},
+			validate: func(t *testing.T, st state.BeaconState) {
+				require.DeepEqual(t, st, st)
+			},
+			wantErr: true,
+		},
 		{
 			name: "one valid request",
 			state: func() state.BeaconState {
@@ -218,7 +234,7 @@ func TestProcessConsolidationRequests(t *testing.T) {
 				}
 				// Validator scenario setup. See comments in reqs section.
 				st.Validators[3].WithdrawalCredentials = bytesutil.Bytes32(0)
-				st.Validators[8].WithdrawalCredentials = bytesutil.Bytes32(0)
+				st.Validators[8].WithdrawalCredentials = bytesutil.Bytes32(1)
 				st.Validators[9].ActivationEpoch = params.BeaconConfig().FarFutureEpoch
 				st.Validators[12].ActivationEpoch = params.BeaconConfig().FarFutureEpoch
 				st.Validators[13].ExitEpoch = 10
@@ -246,7 +262,7 @@ func TestProcessConsolidationRequests(t *testing.T) {
 					SourcePubkey:  []byte("val_5"),
 					TargetPubkey:  []byte("val_6"),
 				},
-				// Target does not have their withdrawal credentials set appropriately.
+				// Target does not have their withdrawal credentials set appropriately. (Using eth1 address prefix)
 				{
 					SourceAddress: append(bytesutil.PadTo(nil, 19), byte(7)),
 					SourcePubkey:  []byte("val_7"),
@@ -404,7 +420,13 @@ func TestProcessConsolidationRequests(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := electra.ProcessConsolidationRequests(context.TODO(), tt.state, tt.reqs)
-			require.NoError(t, err)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ProcessWithdrawalRequests() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr {
+				require.NoError(t, err)
+			}
 			if tt.validate != nil {
 				tt.validate(t, tt.state)
 			}

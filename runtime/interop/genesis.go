@@ -1,13 +1,13 @@
 package interop
 
 import (
-	"fmt"
 	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 	clparams "github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
@@ -126,57 +126,63 @@ func GethPragueTime(genesisTime uint64, cfg *clparams.BeaconChainConfig) *uint64
 // like in an e2e test. The parameters are minimal but the full value is returned unmarshaled so that it can be
 // customized as desired.
 func GethTestnetGenesis(genesisTime uint64, cfg *clparams.BeaconChainConfig) *core.Genesis {
-	ttd, ok := big.NewInt(0).SetString(clparams.BeaconConfig().TerminalTotalDifficulty, 10)
-	if !ok {
-		panic(fmt.Sprintf("unable to parse TerminalTotalDifficulty as an integer = %s", clparams.BeaconConfig().TerminalTotalDifficulty))
-	}
-
 	shanghaiTime := GethShanghaiTime(genesisTime, cfg)
+	if cfg.CapellaForkEpoch == 0 {
+		shanghaiTime = &genesisTime
+	}
 	cancunTime := GethCancunTime(genesisTime, cfg)
+	if cfg.DenebForkEpoch == 0 {
+		cancunTime = &genesisTime
+	}
 	pragueTime := GethPragueTime(genesisTime, cfg)
+	if cfg.ElectraForkEpoch == 0 {
+		pragueTime = &genesisTime
+	}
 	cc := &params.ChainConfig{
-		ChainID:                       big.NewInt(defaultTestChainId),
-		HomesteadBlock:                bigz,
-		DAOForkBlock:                  bigz,
-		EIP150Block:                   bigz,
-		EIP155Block:                   bigz,
-		EIP158Block:                   bigz,
-		ByzantiumBlock:                bigz,
-		ConstantinopleBlock:           bigz,
-		PetersburgBlock:               bigz,
-		IstanbulBlock:                 bigz,
-		MuirGlacierBlock:              bigz,
-		BerlinBlock:                   bigz,
-		LondonBlock:                   bigz,
-		ArrowGlacierBlock:             bigz,
-		GrayGlacierBlock:              bigz,
-		MergeNetsplitBlock:            bigz,
-		TerminalTotalDifficulty:       ttd,
-		TerminalTotalDifficultyPassed: false,
-		Clique: &params.CliqueConfig{
-			Period: cfg.SecondsPerETH1Block,
-			Epoch:  20000,
+		ChainID:                 big.NewInt(defaultTestChainId),
+		HomesteadBlock:          bigz,
+		DAOForkBlock:            bigz,
+		EIP150Block:             bigz,
+		EIP155Block:             bigz,
+		EIP158Block:             bigz,
+		ByzantiumBlock:          bigz,
+		ConstantinopleBlock:     bigz,
+		PetersburgBlock:         bigz,
+		IstanbulBlock:           bigz,
+		MuirGlacierBlock:        bigz,
+		BerlinBlock:             bigz,
+		LondonBlock:             bigz,
+		ArrowGlacierBlock:       bigz,
+		GrayGlacierBlock:        bigz,
+		MergeNetsplitBlock:      bigz,
+		TerminalTotalDifficulty: bigz,
+		ShanghaiTime:            shanghaiTime,
+		CancunTime:              cancunTime,
+		PragueTime:              pragueTime,
+		BlobScheduleConfig: &params.BlobScheduleConfig{
+			Cancun: &params.BlobConfig{
+				Target:         3,
+				Max:            6,
+				UpdateFraction: 3338477,
+			},
+			Prague: &params.BlobConfig{
+				Target:         6,
+				Max:            9,
+				UpdateFraction: 5007716,
+			},
 		},
-		ShanghaiTime: shanghaiTime,
-		CancunTime:   cancunTime,
-		PragueTime:   pragueTime,
 	}
 	da := defaultDepositContractAllocation(cfg.DepositContractAddress)
 	ma := minerAllocation()
-	extra, err := hexutil.Decode(DefaultCliqueSigner)
-	if err != nil {
-		panic(fmt.Sprintf("unable to decode DefaultCliqueSigner, with error %v", err.Error()))
-	}
 	return &core.Genesis{
 		Config:     cc,
 		Nonce:      0, // overridden for authorized signer votes in clique, so we should leave it empty?
 		Timestamp:  genesisTime,
-		ExtraData:  extra,
 		GasLimit:   cfg.DefaultBuilderGasLimit,
 		Difficulty: common.HexToHash(defaultDifficulty).Big(),
 		Mixhash:    common.HexToHash(defaultMixhash),
 		Coinbase:   common.HexToAddress(defaultCoinbase),
-		Alloc: core.GenesisAlloc{
+		Alloc: types.GenesisAlloc{
 			da.Address: da.Account,
 			ma.Address: ma.Account,
 		},
@@ -186,13 +192,13 @@ func GethTestnetGenesis(genesisTime uint64, cfg *clparams.BeaconChainConfig) *co
 
 type depositAllocation struct {
 	Address common.Address
-	Account core.GenesisAccount
+	Account types.Account
 }
 
 func minerAllocation() depositAllocation {
 	return depositAllocation{
 		Address: common.HexToAddress(defaultMinerAddress),
-		Account: core.GenesisAccount{
+		Account: types.Account{
 			Balance: minerBalance,
 		},
 	}
@@ -209,7 +215,7 @@ func defaultDepositContractAllocation(contractAddress string) depositAllocation 
 	}
 	return depositAllocation{
 		Address: common.HexToAddress(contractAddress),
-		Account: core.GenesisAccount{
+		Account: types.Account{
 			Code:    codeBytes,
 			Storage: s,
 			Balance: bigz,
