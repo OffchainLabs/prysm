@@ -46,6 +46,7 @@ go_test(
     data = glob(["testdata/**"]),
     embed = [":go_default_library"],
     deps = [
+        "//api:go_default_library",
         "//api/server/structs:go_default_library",
         "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",

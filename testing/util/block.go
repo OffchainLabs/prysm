@@ -1346,9 +1346,9 @@ func HydrateSignedBeaconBlockContentsFulu(b *ethpb.SignedBeaconBlockContentsFulu
 
 // HydrateBeaconBlockFulu hydrates a beacon block with correct field length sizes
 // to comply with fssz marshalling and unmarshalling rules.
-func HydrateBeaconBlockFulu(b *ethpb.BeaconBlockFulu) *ethpb.BeaconBlockFulu {
+func HydrateBeaconBlockFulu(b *ethpb.BeaconBlockElectra) *ethpb.BeaconBlockElectra {
 	if b == nil {
-		b = &ethpb.BeaconBlockFulu{}
+		b = &ethpb.BeaconBlockElectra{}
 	}
 	if b.ParentRoot == nil {
 		b.ParentRoot = make([]byte, fieldparams.RootLength)
@@ -1362,9 +1362,9 @@ func HydrateBeaconBlockFulu(b *ethpb.BeaconBlockFulu) *ethpb.BeaconBlockFulu {
 
 // HydrateBeaconBlockBodyFulu hydrates a beacon block body with correct field length sizes
 // to comply with fssz marshalling and unmarshalling rules.
-func HydrateBeaconBlockBodyFulu(b *ethpb.BeaconBlockBodyFulu) *ethpb.BeaconBlockBodyFulu {
+func HydrateBeaconBlockBodyFulu(b *ethpb.BeaconBlockBodyElectra) *ethpb.BeaconBlockBodyElectra {
 	if b == nil {
-		b = &ethpb.BeaconBlockBodyFulu{}
+		b = &ethpb.BeaconBlockBodyElectra{}
 	}
 	if b.RandaoReveal == nil {
 		b.RandaoReveal = make([]byte, fieldparams.BLSSignatureLength)
@@ -1431,9 +1431,9 @@ func HydrateBlindedBeaconBlockFulu(b *ethpb.BlindedBeaconBlockFulu) *ethpb.Blind
 
 // HydrateBlindedBeaconBlockBodyFulu hydrates a blinded beacon block body with correct field length sizes
 // to comply with fssz marshalling and unmarshalling rules.
-func HydrateBlindedBeaconBlockBodyFulu(b *ethpb.BlindedBeaconBlockBodyFulu) *ethpb.BlindedBeaconBlockBodyFulu {
+func HydrateBlindedBeaconBlockBodyFulu(b *ethpb.BlindedBeaconBlockBodyElectra) *ethpb.BlindedBeaconBlockBodyElectra {
 	if b == nil {
-		b = &ethpb.BlindedBeaconBlockBodyFulu{}
+		b = &ethpb.BlindedBeaconBlockBodyElectra{}
 	}
 	if b.RandaoReveal == nil {
 		b.RandaoReveal = make([]byte, fieldparams.BLSSignatureLength)

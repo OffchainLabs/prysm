@@ -4,6 +4,141 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
+## [v5.3.0](https://github.com/prysmaticlabs/prysm/compare/v5.2.0...v5.3.0) - 2025-02-12
+
+This release includes support for Pectra activation in the [Holesky](https://github.com/eth-clients/holesky) and [Sepolia](https://github.com/eth-clients/sepolia) testnets! The release contains many fixes for Electra that have been found in rigorous testing through devnets in the last few months.
+
+For mainnet, we have a few nice features for you to try:
+
+- [PR #14023](https://github.com/prysmaticlabs/prysm/pull/14023) introduces a new file layout structure for storing blobs. Rather than storing all blob root directories in one parent directory, blob root directories are organized in subdirectories by epoch. This should vastly decrease the blob cache warmup time when Prysm is starting. Try this feature with `--blob-storage-layout=by-epoch`.
+
+Updating to this release is **required** for Holesky and Sepolia operators and it is **recommended** for mainnet users as there are a few bug fixes that apply to deneb logic.
+
+### Added
+
+- Added an error field to log `Finished building block`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14696)
+- Implemented a new `EmptyExecutionPayloadHeader` function. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14713)
+- Added proper gas limit check for header from the builder. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14707)
+- `Finished building block`: Display error only if not nil. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14722)
+- Added light client feature flag check to RPC handlers. [PR](https://github.com/prysmaticlabs/prysm/pull/14736). [[PR]](https://github.com/prysmaticlabs/prysm/pull/14782)
+- Added support to update target and max blob count to different values per hard fork config. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14678)
+- Log before blob filesystem cache warm-up. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14735)
+- New design for the attestation pool. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14324)
+- Add field param placeholder for Electra blob target and max to pass spec tests. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14733)
+- Light client: Add better error handling. [PR](https://github.com/prysmaticlabs/prysm/pull/14749). [[PR]](https://github.com/prysmaticlabs/prysm/pull/14782)
+- Add EIP-7691: Blob throughput increase. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14750)
+- Trace IDONTWANT Messages in Pubsub. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14778)
+- Add Fulu fork boilerplate. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14771)
+- DB optimization for saving light client bootstraps (save unique sync committees only). [[PR]](https://github.com/prysmaticlabs/prysm/pull/14782)
+- Separate type for unaggregated network attestations. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14659)
+- Remote signer electra fork support. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14477)
+- Add Electra test case to rewards API. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14816)
+- Update `proto_test.go` to Electra. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14817)
+- Update slasher service to Electra. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14812)
+- Builder API endpoint to support Electra. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14344)
+- Added protoc toolchains with a version of v25.3. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14818)
+- Add test cases for the eth_lightclient_bootstrap API SSZ support. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14824)
+- Handle `AttesterSlashingElectra` everywhere in the codebase. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14823)
+- Add Beacon DB pruning service to prune historical data older than MIN_EPOCHS_FOR_BLOCK_REQUESTS (roughly equivalent to the weak subjectivity period). [[PR]](https://github.com/prysmaticlabs/prysm/pull/14687)
+- Nil consolidation request check for core processing. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14851)
+- Updated blob sidecar api endpoint for Electra. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14852)
+- Slashing pool service to convert slashings from Phase0 to Electra at the fork. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14844)
+- check to stop eth1 voting after electra and eth1 deposits stop. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14835)
+- WARN log message on node startup advising of the upcoming deprecation of the --enable-historical-state-representation feature flag. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14856)
+- Beacon API event support for `SingleAttestation` and `SignedAggregateAttestationAndProofElectra`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14855)
+- Added Electra tests for `TestLightClient_NewLightClientOptimisticUpdateFromBeaconState` and `TestLightClient_NewLightClientFinalityUpdateFromBeaconState`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14783)
+- New option to select an alternate blob storage layout. Rather than a flat directory with a subdir for each block root, a multi-level scheme is used to organize blobs by epoch/slot/root, enabling leaner syscalls, indexing and pruning. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14023)
+- Send pending att queue's attestations through the notification feed. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14862)
+- Prune all pending deposits and proofs in post-Electra. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14829)
+- Add Pectra testnet dates. (Sepolia and Holesky). [[PR]](https://github.com/prysmaticlabs/prysm/pull/14884)
+
+### Changed
+
+- Process light client finality updates only for new finalized epochs instead of doing it for every block. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14713)
+- Refactor subnets subscriptions. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14711)
+- Refactor RPC handlers subscriptions. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14732)
+- Go deps upgrade, from `ioutil` to `io`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14737)
+- Move successfully registered validator(s) on builder log to debug. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14735)
+- Update some test files to use `crypto/rand` instead of `math/rand`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14747)
+- Re-organize the content of the `*.proto` files (No functional change). [[PR]](https://github.com/prysmaticlabs/prysm/pull/14755)
+- SSZ files generation: Remove the `// Hash: ...` header.[[PR]](https://github.com/prysmaticlabs/prysm/pull/14760)
+- Updated Electra spec definition for `process_epoch`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14768)
+- Update our `go-libp2p-pubsub` dependency. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14770)
+- Re-organize the content of files to ease the creation of a new fork boilerplate. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14761)
+- Updated spec definition electra `process_registry_updates`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14767)
+- Fixed Metadata errors for peers connected via QUIC. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14776)
+- Updated spec definitions for `process_slashings` in godocs. Simplified `ProcessSlashings` API. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14766)
+- Update spec tests to v1.5.0-beta.0. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14788)
+- Process light client finality updates only for new finalized epochs instead of doing it for every block. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14718)
+- Update blobs by rpc topics from V2 to V1. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14785)
+- Updated geth to 1.14~. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14351)
+- E2e tests start from bellatrix. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14351)
+- Version pinning unclog after making some ux improvements. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14802)
+- Remove helpers to check for execution/compounding withdrawal credentials and expose them as methods. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14808)
+- Refactor `2006-01-02 15:04:05` to `time.DateTime`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14792)
+- Updated Prysm to Go v1.23.5. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14818)
+- Updated Bazel version to v7.4.1. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14818)
+- Updated rules_go to v0.46.0. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14818)
+- Updated golang.org/x/tools to be compatible with v1.23.5. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14818)
+- CI now requires proto files to be properly formatted with clang-format. [[PR](https://github.com/prysmaticlabs/prysm/pull/14831)]. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14831)
+- Improved test coverage of beacon-chain/core/electra/churn.go. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14837)
+- Update electra spec test to beta1. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14841)
+- Move deposit request nil check to apply all. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14849)
+- Do not mark blocks as invalid on context deadlines during state transition. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14838)
+- Update electra core processing to not mark block bad if execution request error. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14826)
+- Dependency: Updated go-ethereum to v1.14.13. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14872)
+- improving readability on proposer settings loader. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14868)
+- Removes existing validator.processSlot span and adds validator.processSlot span to slotCtx. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14874)
+- DownloadFinalizedData has moved from the api/client package to beacon-chain/sync/checkpoint. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14871)
+- Updated Blob-Batch-Limit to increase to 192 for electra. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14883)
+- Updated Blob-Batch-Limit-Burst-Factor to increase to 3. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14883)
+- Changed the derived batch limit when serving blobs. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14883)
+- Updated go-libp2p-pubsub to v0.13.0. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14890)
+- Rename light client flag from `enable-lightclient` to `enable-light-client`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14887)
+- Update electra spec test to beta2. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14901)
+
+### Removed
+
+- Cleanup ProcessSlashings method to remove unnecessary argument. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14762)
+- Remove `/proto/eth/v2` directory. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14765)
+- Remove `/memsize/` pprof endpoint as it will no longer be supported in go 1.23. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14351)
+- Clean `TestCanUpgrade*` tests. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14791)
+- Remove `Copy()` from the `ReadOnlyBeaconBlock` interface. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14811)
+- Removed a tracing span on signature requests. These requests usually took less than 5 nanoseconds and are generally not worth tracing. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14864)
+
+### Fixed
+
+- Added check to prevent nil pointer deference or out of bounds array access when validating the BLSToExecutionChange on an impossibly nil validator. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14705)
+- EIP-7691: Ensure new blobs subnets are subscribed on epoch in advance. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14759)
+- Fix kzg commitment inclusion proof depth minimal value. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14787)
+- Replace exampleIP to `96.7.129.13`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14795)
+- Fixed a p2p test to reliably return a static IP through DNS resolution. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14800)
+- `ToBlinded`: Use Fulu struct for Fulu (instead of Electra). [[PR]](https://github.com/prysmaticlabs/prysm/pull/14797)
+- fix panic with type cast on pbgenericblock(). [[PR]](https://github.com/prysmaticlabs/prysm/pull/14801)
+- Prysmctl generate genesis state: fix truncation of ExtraData to 32 bytes to satisfy SSZ marshaling. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14803)
+- added conditional evaluators to fix scenario e2e tests. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14798)
+- Use `SingleAttestation` for Fulu in p2p attestation map. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14809)
+- `UpgradeToFulu`: Respect the specification. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14821)
+- `nodeFilter`: Implement `filterPeerForBlobSubnet` to avoid error logs. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14822)
+- Fixed deposit packing for post-Electra: early return if EIP-6110 is applied. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14697)
+- Fix batch process new pending deposits by getting validators from state. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14827)
+- Fix handling unfound block at slot. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14852)
+- Fixed incorrect attester slashing length check. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14833)
+- Fix monitor service for Electra. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14853)
+- add more nil checks on ToConsensus functions for added safety. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14867)
+- Fix electra state to safe share references on pending fields when append. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14895)
+- Add missing config values from the spec. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14903)
+- We remove the unused `rebuildTrie` assignments for fields which do not use them. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14906)
+- fix block api endpoint to handle blocks with the same structure but on different forks (i.e. fulu and electra). [[PR]](https://github.com/prysmaticlabs/prysm/pull/14897)
+- We change how we track blob indexes during their reconstruction from the EL to prevent. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14909)
+- We now use the correct maximum value when serving blobs for electra blocks. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14910)
+
+### Security
+
+- go version upgrade to 1.22.10 for CVE CVE-2024-34156. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14729)
+- Update golang.org/x/crypto to v0.31.0 to address CVE-2024-45337. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14777)
+- Update golang.org/x/net to v0.33.0 to address CVE-2024-45338. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14780)
+
 ## [v5.2.0](https://github.com/prysmaticlabs/prysm/compare/v5.1.2...v5.2.0)
 
 Updating to this release is highly recommended, especially for users running v5.1.1 or v5.1.2.

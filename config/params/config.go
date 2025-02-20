@@ -426,6 +426,13 @@ func DenebEnabled() bool {
 	return BeaconConfig().DenebForkEpoch < math.MaxUint64
 }
 
+// ElectraEnabled centralizes the check to determine if code paths
+// that are specific to electra should be allowed to execute. This will make it easier to find call sites that do this
+// kind of check and remove them post-electra.
+func ElectraEnabled() bool {
+	return BeaconConfig().ElectraForkEpoch < math.MaxUint64
+}
+
 // PeerDASEnabled centralizes the check to determine if code paths
 // that are specific to peerdas should be allowed to execute.
 func PeerDASEnabled() bool {
