@@ -172,7 +172,7 @@ func (p *Service) prune(slot primitives.Slot) error {
 }
 
 func (p *Service) pruneBatches(pruneUpto primitives.Slot) (int, error) {
-	ctx, cancel := context.WithDeadline(p.ctx, time.Now().Add(defaultPruningWindow))
+	ctx, cancel := context.WithTimeout(p.ctx, defaultPruningWindow)
 	defer cancel()
 
 	numBatches := 0
