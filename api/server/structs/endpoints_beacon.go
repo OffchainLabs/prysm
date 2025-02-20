@@ -257,3 +257,10 @@ type GetPendingDepositsResponse struct {
 	Finalized           bool              `json:"finalized"`
 	Data                []*PendingDeposit `json:"data"`
 }
+
+type GetPendingPartialWithdrawalsResponse struct {
+	Version             string                      `json:"version"`
+	ExecutionOptimistic bool                        `json:"execution_optimistic"`
+	Finalized           bool                        `json:"finalized"`
+	Data                []*PendingPartialWithdrawal `json:"data"`
+}
