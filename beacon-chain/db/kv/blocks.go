@@ -245,19 +245,30 @@ func (s *Store) DeleteBlock(ctx context.Context, root [32]byte) error {
 // - blockRootValidatorHashesBucket
 // - blockSlotIndicesBucket
 // - stateSlotIndicesBucket
-func (s *Store) DeleteHistoricalDataBeforeSlot(ctx context.Context, cutoffSlot primitives.Slot, batchSize int) error {
+func (s *Store) DeleteHistoricalDataBeforeSlot(ctx context.Context, cutoffSlot primitives.Slot, batchSize int) (int, error) {
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.DeleteHistoricalDataBeforeSlot")
 	defer span.End()
 
 	// Collect slot/root pairs to perform deletions in a separate read only transaction.
 	slotRoots, err := s.slotRootsInRange(ctx, primitives.Slot(0), cutoffSlot, batchSize)
 	if err != nil {
-		return err
+		return 0, err
+	}
+
+	// Return early if there's nothing to delete.
+	if len(slotRoots) == 0 {
+		return 0, nil
 	}
 
 	// Perform all deletions in a single transaction for atomicity
-	return s.db.Update(func(tx *bolt.Tx) error {
+	var numSlotsDeleted int
+	err = s.db.Update(func(tx *bolt.Tx) error {
 		for _, sr := range slotRoots {
+			// Return if context is cancelled or deadline is exceeded.
+			if ctx.Err() != nil {
+				return nil
+			}
+
 			// Delete block
 			if err = s.deleteBlock(tx, sr.root[:]); err != nil {
 				return err
@@ -282,6 +293,8 @@ func (s *Store) DeleteHistoricalDataBeforeSlot(ctx context.Context, cutoffSlot p
 			if err = s.deleteValidatorHashes(tx, sr.root[:]); err != nil {
 				return errors.Wrap(err, "could not delete validators")
 			}
+
+			numSlotsDeleted++
 		}
 
 		for _, sr := range slotRoots {
@@ -305,6 +318,8 @@ func (s *Store) DeleteHistoricalDataBeforeSlot(ctx context.Context, cutoffSlot p
 
 		return nil
 	})
+
+	return numSlotsDeleted, err
 }
 
 // SaveBlock to the db.

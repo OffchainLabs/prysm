@@ -21,6 +21,8 @@ const (
 	defaultPrunableBatchSize = 32
 	// defaultPruningWindow is the duration of one pruning window.
 	defaultPruningWindow = time.Second * 3
+	// defaultNumBatchesToPrune is the number of batches to prune in one pruning window.
+	defaultNumBatchesToPrune = 15
 )
 
 type ServiceOption func(*Service)
@@ -179,10 +181,19 @@ func (p *Service) pruneBatches(pruneUpto primitives.Slot) (int, error) {
 		case <-ctx.Done():
 			return numBatches, nil
 		default:
-			if err := p.db.DeleteHistoricalDataBeforeSlot(ctx, pruneUpto, defaultPrunableBatchSize); err != nil {
-				return 0, errors.Wrapf(err, "could not delete upto slot %d", pruneUpto)
+			for i := 0; i < defaultNumBatchesToPrune; i++ {
+				slotsDeleted, err := p.db.DeleteHistoricalDataBeforeSlot(ctx, pruneUpto, defaultPrunableBatchSize)
+				if err != nil {
+					return 0, errors.Wrapf(err, "could not delete upto slot %d", pruneUpto)
+				}
+
+				// Return if there's nothing to delete.
+				if slotsDeleted == 0 {
+					return numBatches, nil
+				}
+
+				numBatches++
 			}
-			numBatches++
 		}
 	}
 }

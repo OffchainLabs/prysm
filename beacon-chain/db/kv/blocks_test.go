@@ -379,12 +379,6 @@ func TestStore_HistoricalDataBeforeSlot(t *testing.T) {
 			numOfEpochs:      4,
 			deleteBeforeSlot: 15,
 		},
-		//{
-		//	name:             "default pruner batchSize",
-		//	batchSize:        12800,
-		//	numOfEpochs:      500, // 16000 slots
-		//	deleteBeforeSlot: 16000,
-		//},
 	}
 
 	for _, tt := range tests {
@@ -464,18 +458,19 @@ func TestStore_HistoricalDataBeforeSlot(t *testing.T) {
 			require.NoError(t, err)
 
 			// Delete data before slot
-			t0 := time.Now()
-			require.NoError(t, db.DeleteHistoricalDataBeforeSlot(ctx, primitives.Slot(tt.deleteBeforeSlot), tt.batchSize))
-			t.Log("Time to delete: ", time.Since(t0).Seconds())
+			slotsDeleted, err := db.DeleteHistoricalDataBeforeSlot(ctx, primitives.Slot(tt.deleteBeforeSlot), tt.batchSize)
+			require.NoError(t, err)
 
 			var startSlotDeleted, endSlotDeleted uint64
 			if tt.batchSize >= int(tt.deleteBeforeSlot) {
-				startSlotDeleted = 0
+				startSlotDeleted = 1
 				endSlotDeleted = tt.deleteBeforeSlot
 			} else {
 				startSlotDeleted = tt.deleteBeforeSlot - uint64(tt.batchSize) + 1
 				endSlotDeleted = tt.deleteBeforeSlot
 			}
+
+			require.Equal(t, endSlotDeleted-startSlotDeleted+1, uint64(slotsDeleted))
 
 			// Verify blocks before given slot/batch are deleted
 			for i := startSlotDeleted; i < endSlotDeleted; i++ {
