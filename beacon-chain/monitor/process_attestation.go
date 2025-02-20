@@ -173,7 +173,7 @@ func (s *Service) processSingleAttestation(att ethpb.Att) {
 
 	single, ok := att.(*ethpb.SingleAttestation)
 	if !ok {
-		log.Errorf("wrong attestation type (expected %T, got %T)", &ethpb.SingleAttestation{}, att)
+		log.Errorf("Wrong attestation type (expected %T, got %T)", &ethpb.SingleAttestation{}, att)
 		return
 	}
 
