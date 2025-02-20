@@ -39,6 +39,12 @@ type TransactionGenerator struct {
 	seed     int64
 	started  chan struct{}
 	cancel   context.CancelFunc
+	paused   bool
+}
+
+func (t *TransactionGenerator) UnderlyingProcess() *os.Process {
+	//TODO implement me
+	panic("implement me")
 }
 
 func NewTransactionGenerator(keystore string, seed int64) *TransactionGenerator {
@@ -94,6 +100,9 @@ func (t *TransactionGenerator) Start(ctx context.Context) error {
 		case <-ctx.Done():
 			return nil
 		case <-ticker.C:
+			if t.paused {
+				continue
+			}
 			backend := ethclient.NewClient(client)
 			err = SendTransaction(client, mineKey.PrivateKey, f, gasPrice, mineKey.Address.String(), txCount, backend, false)
 			if err != nil {
@@ -211,11 +220,13 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, f *filler.Filler
 
 // Pause pauses the component and its underlying process.
 func (t *TransactionGenerator) Pause() error {
+	t.paused = true
 	return nil
 }
 
 // Resume resumes the component and its underlying process.
 func (t *TransactionGenerator) Resume() error {
+	t.paused = false
 	return nil
 }
 

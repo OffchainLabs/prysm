@@ -159,6 +159,7 @@ func GethTestnetGenesis(genesisTime uint64, cfg *clparams.BeaconChainConfig) *co
 		ShanghaiTime:            shanghaiTime,
 		CancunTime:              cancunTime,
 		PragueTime:              pragueTime,
+		DepositContractAddress:  common.HexToAddress(cfg.DepositContractAddress),
 		BlobScheduleConfig: &params.BlobScheduleConfig{
 			Cancun: &params.BlobConfig{
 				Target:         3,
