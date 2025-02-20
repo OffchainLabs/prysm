@@ -241,7 +241,7 @@ func (s *Service) monitorRoutine(stateChannel chan *feed.Event, stateSub event.S
 				if !ok {
 					log.Error("Event feed data is not of type *operation.SingleAttReceivedData")
 				} else {
-					s.processUnaggregatedAttestation(s.ctx, data.Attestation)
+					s.processSingleAttestation(data.Attestation)
 				}
 			case operation.ExitReceived:
 				data, ok := e.Data.(*operation.ExitReceivedData)
