@@ -503,7 +503,7 @@ func (r *testRunner) defaultEndToEndRun() error {
 		return errors.Wrap(err, "one or more evaluators failed")
 	}
 	// Test execution request processing in electra.
-	if params.ElectraEnabled() {
+	if r.config.TestDeposits && params.ElectraEnabled() {
 		if err := r.comHandler.txGen.Pause(); err != nil {
 			r.t.Error(err)
 		}

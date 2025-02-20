@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	ev "github.com/prysmaticlabs/prysm/v5/testing/endtoend/evaluators"
 	e2eParams "github.com/prysmaticlabs/prysm/v5/testing/endtoend/params"
 	"github.com/prysmaticlabs/prysm/v5/testing/endtoend/types"
@@ -14,7 +13,7 @@ import (
 
 func TestEndToEnd_Slasher_MinimalConfig(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	params.OverrideBeaconConfig(types.InitForkCfg(version.Bellatrix, version.Electra, params.E2ETestConfig()))
+	params.OverrideBeaconConfig(params.E2ETestConfig().Copy())
 	require.NoError(t, e2eParams.Init(t, e2eParams.StandardBeaconCount))
 
 	tracingPort := e2eParams.TestParams.Ports.JaegerTracingPort
