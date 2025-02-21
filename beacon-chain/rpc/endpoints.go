@@ -161,6 +161,7 @@ func (s *Service) builderEndpoints(stater lookup.Stater) []endpoint {
 	const namespace = "builder"
 	return []endpoint{
 		{
+			// Deprecated: use SSE from /eth/v1/events for `Payload Attributes` instead
 			template: "/eth/v1/builder/states/{state_id}/expected_withdrawals",
 			name:     namespace + ".ExpectedWithdrawals",
 			middleware: []middleware.Middleware{
@@ -225,6 +226,7 @@ func (s *Service) validatorEndpoints(
 	const namespace = "validator"
 	return []endpoint{
 		{
+			// Deprecated: use /eth/v2/validator/aggregate_attestation instead
 			template: "/eth/v1/validator/aggregate_attestation",
 			name:     namespace + ".GetAggregateAttestation",
 			middleware: []middleware.Middleware{
@@ -253,6 +255,7 @@ func (s *Service) validatorEndpoints(
 			methods: []string{http.MethodPost},
 		},
 		{
+			// Deprecated: use /eth/v2/validator/aggregate_and_proofs instead
 			template: "/eth/v1/validator/aggregate_and_proofs",
 			name:     namespace + ".SubmitAggregateAndProofs",
 			middleware: []middleware.Middleware{
@@ -583,6 +586,7 @@ func (s *Service) beaconEndpoints(
 			methods: []string{http.MethodGet},
 		},
 		{
+			// Deprecated: use /eth/v2/beacon/blocks instead
 			template: "/eth/v1/beacon/blocks",
 			name:     namespace + ".PublishBlock",
 			middleware: []middleware.Middleware{
@@ -593,6 +597,7 @@ func (s *Service) beaconEndpoints(
 			methods: []string{http.MethodPost},
 		},
 		{
+			// Deprecated: use /eth/v2/beacon/blinded_blocks instead
 			template: "/eth/v1/beacon/blinded_blocks",
 			name:     namespace + ".PublishBlindedBlock",
 			middleware: []middleware.Middleware{
@@ -632,6 +637,7 @@ func (s *Service) beaconEndpoints(
 			methods: []string{http.MethodGet},
 		},
 		{
+			// Deprecated: use /eth/v2/beacon/blocks/{block_id}/attestations instead
 			template: "/eth/v1/beacon/blocks/{block_id}/attestations",
 			name:     namespace + ".GetBlockAttestations",
 			middleware: []middleware.Middleware{
@@ -668,6 +674,7 @@ func (s *Service) beaconEndpoints(
 			methods: []string{http.MethodGet},
 		},
 		{
+			// Deprecated: use /eth/v2/beacon/pool/attestations instead
 			template: "/eth/v1/beacon/pool/attestations",
 			name:     namespace + ".ListAttestations",
 			middleware: []middleware.Middleware{
@@ -754,6 +761,7 @@ func (s *Service) beaconEndpoints(
 			methods: []string{http.MethodPost},
 		},
 		{
+			// Deprecated: use /eth/v2/beacon/pool/attester_slashings instead
 			template: "/eth/v1/beacon/pool/attester_slashings",
 			name:     namespace + ".GetAttesterSlashings",
 			middleware: []middleware.Middleware{
@@ -876,6 +884,7 @@ func (s *Service) beaconEndpoints(
 			methods: []string{http.MethodGet, http.MethodPost},
 		},
 		{
+			// Deprecated: no longer needed post Electra
 			template: "/eth/v1/beacon/deposit_snapshot",
 			name:     namespace + ".GetDepositSnapshot",
 			middleware: []middleware.Middleware{

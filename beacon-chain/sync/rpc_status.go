@@ -295,7 +295,7 @@ func (s *Service) validateStatusMessage(ctx context.Context, msg *pb.Status) err
 		return err
 	}
 	if !bytes.Equal(forkDigest[:], msg.ForkDigest) {
-		return p2ptypes.ErrWrongForkDigestVersion
+		return fmt.Errorf("mismatch fork digest: expected %#x, got %#x: %w", forkDigest[:], msg.ForkDigest, p2ptypes.ErrWrongForkDigestVersion)
 	}
 	genesis := s.cfg.clock.GenesisTime()
 	cp := s.cfg.chain.FinalizedCheckpt()
