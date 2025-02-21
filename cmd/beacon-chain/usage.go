@@ -59,7 +59,6 @@ var appHelpFlagGroups = []flagGroup{
 			cmd.ChainConfigFileFlag,
 			cmd.E2EConfigFlag,
 			cmd.GrpcMaxCallRecvMsgSizeFlag,
-			cmd.MaxGoroutines,
 			cmd.MinimalConfigFlag,
 			cmd.RPCMaxPageSizeFlag,
 			flags.CertFlag,
@@ -216,6 +215,7 @@ var appHelpFlagGroups = []flagGroup{
 	{ // Flags used in debugging Prysm. These are flags not usually run by end users.
 		Name: "debug",
 		Flags: []cli.Flag{
+			cmd.MaxGoroutines,
 			debug.BlockProfileRateFlag,
 			debug.CPUProfileFlag,
 			debug.MemProfileRateFlag,
