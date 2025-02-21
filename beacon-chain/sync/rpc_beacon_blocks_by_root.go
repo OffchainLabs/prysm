@@ -11,6 +11,7 @@ import (
 	coreTime "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/execution"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/verify"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
@@ -78,25 +79,27 @@ func (s *Service) sendBeaconBlocksRequest(
 		peerDASIsActive := coreTime.PeerDASIsActive(blockSlot)
 
 		if peerDASIsActive {
-			// For the block, check if we store all the data columns we should custody,
-			// and build the corresponding data column sidecar requests if needed.
-			requests, err := s.buildRequestsForMissingDataColumns(blkRoot, blk)
+			// For the block, check if we store all the data columns we should custody.
+			missingColumns, err := s.findMissingDataColumns(blkRoot, blk)
 			if err != nil {
-				return errors.Wrap(err, "pending data column request for block")
+				return errors.Wrap(err, "find missing data columns")
 			}
 
 			// We already store all the data columns we should custody, nothing to request.
-			if len(requests) == 0 {
+			if len(missingColumns) == 0 {
 				continue
 			}
 
-			if err := s.requestAndSaveDataColumnSidecars(ctx, requests, id, blk); err != nil {
+			// Request and save the missing data column sidecars. This will issue multiple requests to
+			// different peers, not just the peer we happened to request the block from.
+			if err := s.requestAndSaveDataColumnSidecars(ctx, missingColumns, blk, blkRoot); err != nil {
 				return errors.Wrap(err, "send and save data column sidecars")
 			}
 
 			continue
 		}
 
+		// FIXME: Does this need to be in an else branch? It doesn't seem to apply if PeerDAS is active.
 		request, err := s.pendingBlobsRequestForBlock(blkRoot, blk)
 		if err != nil {
 			return errors.Wrap(err, "pending blobs request for block")
@@ -219,17 +222,45 @@ func (s *Service) sendAndSaveBlobSidecars(ctx context.Context, request types.Blo
 // to a peer and saves the received sidecars.
 func (s *Service) requestAndSaveDataColumnSidecars(
 	ctx context.Context,
-	request types.DataColumnSidecarsByRootReq,
-	peerID peer.ID,
+	dataColumns map[uint64]bool,
 	block interfaces.ReadOnlySignedBeaconBlock,
+	blkRoot [32]byte,
 ) error {
-	if len(request) == 0 {
+	if len(dataColumns) == 0 {
 		return nil
 	}
 
-	sidecars, err := SendDataColumnSidecarsByRootRequest(ctx, s.cfg.clock, s.cfg.p2p, peerID, s.ctxMap, &request)
+	// Assemble the peers who can provide the needed data columns.
+	peers := s.getBestPeers()
+	dataColumnsByAdmissiblePeer, _, _, err := s.cfg.p2p.AdmissiblePeersForCustodyGroups(peers, nil)
 	if err != nil {
 		return err
+	}
+	peersToFetchFrom, err := p2p.SelectPeersToFetchDataColumnsFrom(dataColumns, dataColumnsByAdmissiblePeer)
+	if err != nil {
+		return err
+	}
+	if len(peersToFetchFrom) == 0 {
+		return errors.Wrapf(errNoPeersForPending, "block root=%#x", blkRoot)
+	}
+
+	// Request the data columns from each peer.
+	sidecars := make([]blocks.RODataColumn, 0, len(dataColumns))
+	for peer, dataColumns := range peersToFetchFrom {
+		dataColumnsSet := make(map[uint64]bool, len(dataColumns))
+		for _, dataColumn := range dataColumns {
+			dataColumnsSet[dataColumn] = true
+		}
+		request, err := s.buildRequestsForMissingDataColumns(blkRoot, dataColumnsSet)
+		if err != nil {
+			return errors.Wrap(err, "build requests for missing data columns")
+		}
+
+		peerSidecars, err := SendDataColumnSidecarsByRootRequest(ctx, s.cfg.clock, s.cfg.p2p, peer, s.ctxMap, &request)
+		if err != nil {
+			return err
+		}
+		sidecars = append(sidecars, peerSidecars...)
 	}
 
 	roBlock, err := blocks.NewROBlock(block)
@@ -279,9 +310,9 @@ func (s *Service) pendingBlobsRequestForBlock(root [32]byte, b interfaces.ReadOn
 	return s.constructPendingBlobsRequest(root, len(cc))
 }
 
-// buildRequestsForMissingDataColumns looks at the data columns we should sample from and have via custody sampling
-// and that we don't actually store for a given block, and construct the corresponding data column sidecars by root requests.
-func (s *Service) buildRequestsForMissingDataColumns(root [32]byte, block interfaces.ReadOnlySignedBeaconBlock) (types.DataColumnSidecarsByRootReq, error) {
+// findMissingDataColumns looks at the data columns we should sample from and have via custody sampling
+// and that we don't actually store for a given block, and returns the corresponding data column indices.
+func (s *Service) findMissingDataColumns(root [32]byte, block interfaces.ReadOnlySignedBeaconBlock) (map[uint64]bool, error) {
 	// Blocks before Fulu have no data columns.
 	if block.Version() < version.Fulu {
 		return nil, nil
@@ -322,18 +353,25 @@ func (s *Service) buildRequestsForMissingDataColumns(root [32]byte, block interf
 	}
 
 	samplingColumns := peerInfo.CustodyColumns
-	samplingColumnCount := len(samplingColumns)
 
 	// Build the request for the columns we should sample from and we don't actually store.
-	req := make(types.DataColumnSidecarsByRootReq, 0, samplingColumnCount)
+	missingColumns := make(map[uint64]bool, len(samplingColumns))
 	for column := range samplingColumns {
-		isColumnStored := storedColumns[column]
-		if !isColumnStored {
-			req = append(req, &eth.DataColumnIdentifier{
-				BlockRoot:   root[:],
-				ColumnIndex: column,
-			})
+		if !storedColumns[column] {
+			missingColumns[column] = true
 		}
+	}
+
+	return missingColumns, nil
+}
+
+func (s *Service) buildRequestsForMissingDataColumns(root [32]byte, missingColumns map[uint64]bool) (types.DataColumnSidecarsByRootReq, error) {
+	req := make(types.DataColumnSidecarsByRootReq, 0, len(missingColumns))
+	for column := range missingColumns {
+		req = append(req, &eth.DataColumnIdentifier{
+			BlockRoot:   root[:],
+			ColumnIndex: column,
+		})
 	}
 
 	return req, nil

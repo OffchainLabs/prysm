@@ -202,13 +202,13 @@ func (s *Service) AdmissiblePeersForCustodyGroups(
 // SelectPeersToFetchDataColumnsFrom implements greedy algorithm in order to select peers to fetch data columns from.
 // https://en.wikipedia.org/wiki/Set_cover_problem#Greedy_algorithm
 func SelectPeersToFetchDataColumnsFrom(
-	neededDataColumnsOriginal map[uint64]bool,
+	neededDataColumns map[uint64]bool,
 	dataColumnsByPeer map[peer.ID]map[uint64]bool,
 ) (map[peer.ID][]uint64, error) {
-	// Make a copy since we will modify it.
-	neededDataColumns := make(map[uint64]bool, len(neededDataColumnsOriginal))
-	for dataColumn, value := range neededDataColumnsOriginal {
-		neededDataColumns[dataColumn] = value
+	// Copy the provided needed data columns into a set that we will remove elements from.
+	remainingDataColumns := make(map[uint64]bool, len(neededDataColumns))
+	for dataColumn := range neededDataColumns {
+		remainingDataColumns[dataColumn] = true
 	}
 
 	dataColumnsFromSelectedPeers := make(map[peer.ID][]uint64)
@@ -217,7 +217,7 @@ func SelectPeersToFetchDataColumnsFrom(
 	neededDataColumnsByPeer := make(map[peer.ID]map[uint64]bool, len(dataColumnsByPeer))
 	for pid, dataColumns := range dataColumnsByPeer {
 		for dataColumn := range dataColumns {
-			if neededDataColumns[dataColumn] {
+			if remainingDataColumns[dataColumn] {
 				if _, ok := neededDataColumnsByPeer[pid]; !ok {
 					neededDataColumnsByPeer[pid] = make(map[uint64]bool, len(neededDataColumns))
 				}
@@ -227,10 +227,10 @@ func SelectPeersToFetchDataColumnsFrom(
 		}
 	}
 
-	for len(neededDataColumns) > 0 {
+	for len(remainingDataColumns) > 0 {
 		// Check if at least one peer remains. If not, it means that we don't have enough peers to fetch all needed data columns.
 		if len(neededDataColumnsByPeer) == 0 {
-			missingDataColumnsSortedSlice := uint64MapToSortedSlice(neededDataColumns)
+			missingDataColumnsSortedSlice := uint64MapToSortedSlice(remainingDataColumns)
 			return dataColumnsFromSelectedPeers, errors.Errorf("no peer to fetch the following data columns: %v", missingDataColumnsSortedSlice)
 		}
 
@@ -248,9 +248,9 @@ func SelectPeersToFetchDataColumnsFrom(
 		// Remove the selected peer from the list of peers.
 		delete(neededDataColumnsByPeer, bestPeer)
 
-		// Remove the selected peer's data columns from the list of needed data columns.
+		// Remove the selected peer's data columns from the list of remaining data columns.
 		for _, dataColumn := range dataColumnsSortedSlice {
-			delete(neededDataColumns, dataColumn)
+			delete(remainingDataColumns, dataColumn)
 		}
 
 		// Remove the selected peer's data columns from the list of needed data columns by peer.

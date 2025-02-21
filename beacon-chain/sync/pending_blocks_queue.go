@@ -207,22 +207,13 @@ func (s *Service) processAndBroadcastBlock(ctx context.Context, b interfaces.Rea
 	}
 
 	if coreTime.PeerDASIsActive(blockSlot) {
-		request, err := s.buildRequestsForMissingDataColumns(blkRoot, b)
+		missingDataColumns, err := s.findMissingDataColumns(blkRoot, b)
 		if err != nil {
-			return errors.Wrap(err, "build requests for missing data columns")
+			return errors.Wrap(err, "find missing data columns")
 		}
 
-		if len(request) > 0 {
-			peers := s.getBestPeers()
-			peers, err = s.cfg.p2p.AdmissibleCustodyGroupsPeers(peers)
-			if err != nil {
-				return err
-			}
-			peerCount := len(peers)
-			if peerCount == 0 {
-				return errors.Wrapf(errNoPeersForPending, "block root=%#x", blkRoot)
-			}
-			if err := s.requestAndSaveDataColumnSidecars(ctx, request, peers[rand.NewGenerator().Int()%peerCount], b); err != nil {
+		if len(missingDataColumns) > 0 {
+			if err := s.requestAndSaveDataColumnSidecars(ctx, missingDataColumns, b, blkRoot); err != nil {
 				return err
 			}
 		}
@@ -340,20 +331,6 @@ func (s *Service) sendBatchRootRequest(ctx context.Context, roots [][32]byte, ra
 
 	// Fetch best peers to request blocks from.
 	bestPeers := s.getBestPeers()
-
-	// Filter out peers that do not custody a superset of our columns.
-	// (Very likely, keep only supernode peers)
-	// TODO: Change this to be able to fetch from all peers.
-	headSlot := s.cfg.chain.HeadSlot()
-	peerDASIsActive := coreTime.PeerDASIsActive(headSlot)
-
-	if peerDASIsActive {
-		var err error
-		bestPeers, err = s.cfg.p2p.AdmissibleCustodySamplingPeers(bestPeers)
-		if err != nil {
-			return errors.Wrap(err, "data columns admissible subnet sampling peers")
-		}
-	}
 
 	// No suitable peer, exit early.
 	if len(bestPeers) == 0 {
