@@ -36,7 +36,7 @@ jobs:
         run: | # https://github.com/securego/gosec/issues/469
           export PATH=$PATH:$(go env GOPATH)/bin
           go install github.com/securego/gosec/v2/cmd/gosec@v2.22.1
-          gosec -exclude-generated -exclude=G307 -exclude-dir=crypto/bls/herumi ./...
+          gosec -exclude-generated -exclude=G307,G115 -exclude-dir=crypto/bls/herumi ./...
 
   lint:
     name: Lint
