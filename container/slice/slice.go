@@ -354,7 +354,7 @@ func IsInSlots(a primitives.Slot, b []primitives.Slot) bool {
 
 // Unique returns an array with duplicates filtered based on the type given
 func Unique[T comparable](a []T) []T {
-	if a == nil || len(a) <= 1 {
+	if len(a) <= 1 {
 		return a
 	}
 	found := map[T]bool{}
