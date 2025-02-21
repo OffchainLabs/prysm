@@ -382,9 +382,17 @@ func (c *Client) RegisterValidator(ctx context.Context, svr []*ethpb.SignedValid
 		return err
 	}
 
-	postOpts := func(r *http.Request) {
-		r.Header.Set("Content-Type", api.JsonMediaType)
-		r.Header.Set("Accept", api.JsonMediaType)
+	var postOpts reqOption
+	if c.sszEnabled {
+		postOpts = func(r *http.Request) {
+			r.Header.Set("Content-Type", api.OctetStreamMediaType)
+			r.Header.Set("Accept", api.OctetStreamMediaType)
+		}
+	} else {
+		postOpts = func(r *http.Request) {
+			r.Header.Set("Content-Type", api.JsonMediaType)
+			r.Header.Set("Accept", api.JsonMediaType)
+		}
 	}
 
 	_, _, err = c.do(ctx, http.MethodPost, postRegisterValidatorPath, bytes.NewBuffer(body), postOpts)
