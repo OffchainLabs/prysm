@@ -25,7 +25,6 @@ import (
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	log "github.com/sirupsen/logrus"
-	"google.golang.org/protobuf/proto"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
@@ -39,6 +38,13 @@ const (
 var errMalformedHostname = errors.New("hostname must include port, separated by one colon, like example.com:3500")
 var errMalformedRequest = errors.New("required request data are missing")
 var errNotBlinded = errors.New("submitted block is not blinded")
+var blockToPayloadMapping = map[int]int{
+	version.Bellatrix: version.Bellatrix,
+	version.Capella:   version.Capella,
+	version.Deneb:     version.Deneb,
+	version.Electra:   version.Deneb,
+	version.Fulu:      version.Deneb,
+}
 
 // ClientOpt is a functional option for the Client type (http.Client wrapper)
 type ClientOpt func(*Client)
@@ -421,14 +427,21 @@ func (c *Client) SubmitBlindedBlock(ctx context.Context, sb interfaces.ReadOnlyS
 		return nil, nil, errors.Wrap(err, "error posting the blinded block to the builder api")
 	}
 
-	ver, err := c.checkVersion(data, header)
+	ver, err := c.checkBlockVersion(data, header)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// check if sent blinded block version matches received payload version
-	if version.String(ver) != version.String(sb.Version()) {
-		return nil, nil, errors.Wrapf(errResponseVersionMismatch, "req=%s, recv=%s", version.String(ver), version.String(sb.Version()))
+	expectedPayloadVer, ok := blockToPayloadMapping[sb.Version()]
+	if !ok {
+		return nil, nil, errors.Errorf("unsupported block version %d", sb.Version())
+	}
+	gotPayloadVer, ok := blockToPayloadMapping[ver]
+	if !ok {
+		return nil, nil, errors.Errorf("unsupported block version %d", ver)
+	}
+	if expectedPayloadVer != gotPayloadVer {
+		return nil, nil, errors.Wrapf(errResponseVersionMismatch, "expected payload version %d, got %d", expectedPayloadVer, gotPayloadVer)
 	}
 
 	ed, blobs, err := c.parseBlindedBlockResponse(data, ver)
@@ -439,10 +452,10 @@ func (c *Client) SubmitBlindedBlock(ctx context.Context, sb interfaces.ReadOnlyS
 	return ed, blobs, nil
 }
 
-func (c *Client) checkVersion(respBytes []byte, header http.Header) (int, error) {
+func (c *Client) checkBlockVersion(respBytes []byte, header http.Header) (int, error) {
 	var versionHeader string
-	if c.sszEnabled || header.Get(api.VersionHeader) != "" {
-		versionHeader = header.Get(api.VersionHeader)
+	if c.sszEnabled {
+		versionHeader = strings.ToLower(header.Get(api.VersionHeader))
 	} else {
 		// fallback to JSON-based version extraction
 		v := &VersionResponse{}
@@ -472,7 +485,7 @@ func (c *Client) buildBlindedBlockRequest(sb interfaces.ReadOnlySignedBeaconBloc
 			return nil, nil, errors.Wrap(err, "could not marshal SSZ for blinded block")
 		}
 		opt := func(r *http.Request) {
-			r.Header.Add("Eth-Consensus-Version", version.String(sb.Version()))
+			r.Header.Set(api.VersionHeader, version.String(sb.Version()))
 			r.Header.Set("Content-Type", api.OctetStreamMediaType)
 			r.Header.Set("Accept", api.OctetStreamMediaType)
 		}
@@ -488,7 +501,7 @@ func (c *Client) buildBlindedBlockRequest(sb interfaces.ReadOnlySignedBeaconBloc
 		return nil, nil, errors.Wrap(err, "error marshaling blinded block to JSON")
 	}
 	opt := func(r *http.Request) {
-		r.Header.Add("Eth-Consensus-Version", version.String(sb.Version()))
+		r.Header.Set(api.VersionHeader, version.String(sb.Version()))
 		r.Header.Set("Content-Type", api.JsonMediaType)
 		r.Header.Set("Accept", api.JsonMediaType)
 	}
@@ -512,33 +525,33 @@ func (c *Client) parseBlindedBlockResponseSSZ(
 ) (interfaces.ExecutionData, *v1.BlobsBundle, error) {
 	switch {
 	case forkVersion >= version.Deneb:
-		payload := v1.ExecutionPayloadDenebAndBlobsBundle{}
-		if err := payload.UnmarshalSSZ(respBytes); err != nil {
+		payloadAndBlobs := &v1.ExecutionPayloadDenebAndBlobsBundle{}
+		if err := payloadAndBlobs.UnmarshalSSZ(respBytes); err != nil {
 			return nil, nil, errors.Wrap(err, "unable to unmarshal ExecutionPayloadDenebAndBlobsBundle SSZ")
 		}
-		ed, err := blocks.NewWrappedExecutionData(proto.Message(&payload))
+		ed, err := blocks.NewWrappedExecutionData(payloadAndBlobs.Payload)
 		if err != nil {
-			return nil, nil, errors.Wrap(err, "unable to wrap execution data for Deneb")
+			return nil, nil, errors.Wrapf(err, "unable to wrap execution data for %s", version.String(forkVersion))
 		}
-		return ed, payload.BlobsBundle, nil
+		return ed, payloadAndBlobs.BlobsBundle, nil
 	case forkVersion >= version.Capella:
-		payload := v1.ExecutionPayloadCapella{}
+		payload := &v1.ExecutionPayloadCapella{}
 		if err := payload.UnmarshalSSZ(respBytes); err != nil {
 			return nil, nil, errors.Wrap(err, "unable to unmarshal ExecutionPayloadCapella SSZ")
 		}
-		ed, err := blocks.NewWrappedExecutionData(proto.Message(&payload))
+		ed, err := blocks.NewWrappedExecutionData(payload)
 		if err != nil {
-			return nil, nil, errors.Wrap(err, "unable to wrap execution data for Capella")
+			return nil, nil, errors.Wrapf(err, "unable to wrap execution data for %s", version.String(forkVersion))
 		}
 		return ed, nil, nil
 	case forkVersion >= version.Bellatrix:
-		payload := v1.ExecutionPayload{}
+		payload := &v1.ExecutionPayload{}
 		if err := payload.UnmarshalSSZ(respBytes); err != nil {
 			return nil, nil, errors.Wrap(err, "unable to unmarshal ExecutionPayload SSZ")
 		}
-		ed, err := blocks.NewWrappedExecutionData(proto.Message(&payload))
+		ed, err := blocks.NewWrappedExecutionData(payload)
 		if err != nil {
-			return nil, nil, errors.Wrap(err, "unable to wrap execution data for Bellatrix")
+			return nil, nil, errors.Wrapf(err, "unable to wrap execution data for %s", version.String(forkVersion))
 		}
 		return ed, nil, nil
 	default:
@@ -554,14 +567,6 @@ func (c *Client) parseBlindedBlockResponseJSON(
 	ep := &ExecutionPayloadResponse{}
 	if err := json.Unmarshal(respBytes, ep); err != nil {
 		return nil, nil, errors.Wrap(err, "error unmarshaling ExecutionPayloadResponse")
-	}
-	if strings.ToLower(ep.Version) != version.String(forkVersion) {
-		return nil, nil, errors.Wrapf(
-			errResponseVersionMismatch,
-			"req=%s, recv=%s",
-			strings.ToLower(ep.Version),
-			version.String(forkVersion),
-		)
 	}
 	pp, err := ep.ParsePayload()
 	if err != nil {
