@@ -126,7 +126,7 @@ func buildExpectedWithdrawalsData(withdrawals []*enginev1.Withdrawal) []*structs
 
 func handleWrapError(err error, message string, code int) *httputil.DefaultJsonError {
 	return &httputil.DefaultJsonError{
-		Message: errors.Wrapf(err, message).Error(),
+		Message: errors.Wrap(err, message).Error(),
 		Code:    code,
 	}
 }
