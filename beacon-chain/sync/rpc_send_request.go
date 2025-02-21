@@ -361,7 +361,7 @@ func readChunkedBlobSidecar(stream network.Stream, encoding encoder.NetworkEncod
 
 	v, found := ctxMap[bytesutil.ToBytes4(ctxb)]
 	if !found {
-		return b, errors.Wrapf(errBlobUnmarshal, fmt.Sprintf("unrecognized fork digest %#x", ctxb))
+		return b, errors.Wrapf(errBlobUnmarshal, "unrecognized fork digest %#x", ctxb)
 	}
 	// Only deneb and electra are supported at this time, because we lack a fork-spanning interface/union type for blobs.
 	// In electra, there's no changes to blob type.

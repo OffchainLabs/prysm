@@ -34,6 +34,7 @@ import (
 
 const broadcastBLSChangesRateLimit = 128
 
+// Deprecated: use ListAttestationsV2 instead
 // ListAttestations retrieves attestations known by the node but
 // not necessarily incorporated into any block. Allows filtering by committee index or slot.
 func (s *Server) ListAttestations(w http.ResponseWriter, r *http.Request) {
@@ -707,6 +708,7 @@ func (s *Server) ListBLSToExecutionChanges(w http.ResponseWriter, r *http.Reques
 	})
 }
 
+// Deprecated: use GetAttesterSlashingsV2 instead
 // GetAttesterSlashings retrieves attester slashings known by the node but
 // not necessarily incorporated into any block.
 func (s *Server) GetAttesterSlashings(w http.ResponseWriter, r *http.Request) {

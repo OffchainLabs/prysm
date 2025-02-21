@@ -33,6 +33,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/local"
 	remoteweb3signer "github.com/prysmaticlabs/prysm/v5/validator/keymanager/remote-web3signer"
 	"go.opencensus.io/plugin/ocgrpc"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
@@ -173,7 +174,7 @@ func (v *ValidatorService) Start() {
 		return
 	}
 	restHandler := beaconApi.NewBeaconApiJsonRestHandler(
-		http.Client{Timeout: v.conn.GetBeaconApiTimeout()},
+		http.Client{Timeout: v.conn.GetBeaconApiTimeout(), Transport: otelhttp.NewTransport(http.DefaultTransport)},
 		hosts[0],
 	)
 
