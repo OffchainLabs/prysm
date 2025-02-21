@@ -1,6 +1,7 @@
 package eth1
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/sha256"
@@ -13,12 +14,15 @@ import (
 	"github.com/MariusVanDerWijden/FuzzyVM/filler"
 	txfuzz "github.com/MariusVanDerWijden/tx-fuzz"
 	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	gethCrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/ethclient/gethclient"
+	gethparams "github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/holiman/uint256"
 	"github.com/pkg/errors"
@@ -91,7 +95,7 @@ func (t *TransactionGenerator) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	f := filler.NewFiller(rnd)
+	_ = filler.NewFiller(rnd)
 	// Broadcast Transactions every slot
 	txPeriod := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
 	ticker := time.NewTicker(txPeriod)
@@ -105,7 +109,7 @@ func (t *TransactionGenerator) Start(ctx context.Context) error {
 				continue
 			}
 			backend := ethclient.NewClient(client)
-			err = SendTransaction(client, mineKey.PrivateKey, f, gasPrice, mineKey.Address.String(), txCount, backend, false)
+			err = SendConsolidationTransaction(client, mineKey.PrivateKey, gasPrice, backend)
 			if err != nil {
 				return err
 			}
@@ -217,6 +221,67 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, f *filler.Filler
 		}
 	}
 	return nil
+}
+
+func SendConsolidationTransaction(client *rpc.Client, key *ecdsa.PrivateKey, gasPrice *big.Int, backend *ethclient.Client) error {
+	publicKey := key.Public().(*ecdsa.PublicKey)
+	fromAddress := gethCrypto.PubkeyToAddress(*publicKey)
+
+	// Get nonce
+	nonce, err := backend.PendingNonceAt(context.Background(), fromAddress)
+	if err != nil {
+		return err
+	}
+	chainid, err := backend.ChainID(context.Background())
+	if err != nil {
+		return err
+	}
+	gasLimit := uint64(200000)
+
+	// ABI-encode function call
+	funcABI := `[{
+		"name": "add_consolidation_request",
+		"type": "function",
+		"inputs": [
+			{"type": "bytes", "name": "source_pubkey"},
+			{"type": "bytes", "name": "target_pubkey"}
+		]
+	}]`
+
+	parsedABI, err := abi.JSON(bytes.NewBuffer([]byte(funcABI)))
+	if err != nil {
+		return err
+	}
+
+	// Replace with actual 48-byte keys
+	sourcePubkey := make([]byte, 48)
+	targetPubkey := make([]byte, 48)
+
+	// Encode function data
+	data, err := parsedABI.Pack("add_consolidation_request", sourcePubkey, targetPubkey)
+	if err != nil {
+		return err
+	}
+
+	// Set transaction value (fee from contract's `get_fee()`)
+	value := big.NewInt(100000000000000000) // 0.1 ETH (adjust as needed)
+
+	// Create transaction
+	tx := types.NewTx(&types.LegacyTx{
+		Nonce:    nonce,
+		To:       &gethparams.ConsolidationQueueAddress,
+		Value:    value,
+		Gas:      gasLimit,
+		GasPrice: gasPrice,
+		Data:     data,
+	})
+
+	// Sign transaction
+	signedTx, err := types.SignTx(tx, types.NewCancunSigner(chainid), key)
+	if err != nil {
+		return err
+	}
+	return backend.SendTransaction(context.Background(), signedTx)
 }
 
 // Pause pauses the component and its underlying process.
