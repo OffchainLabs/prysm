@@ -156,9 +156,6 @@ func (s *Service) CustodyGroupCountFromPeer(pid peer.ID) uint64 {
 	return custodyCount
 }
 
-// DEV: For the BlocksFetcher to use this, it needs to handle some logic directly that we removed from this function:
-// - Providing a list of peers to start with if the array is empty.
-
 // AdmissiblePeersForCustodyGroup returns a map of peers that:
 // - custody at least one custody group listed in `neededCustodyGroups`,
 //
