@@ -14,10 +14,15 @@ type Option func(s *Service) error
 // FlagOptions for builder service flag configurations.
 func FlagOptions(c *cli.Context) ([]Option, error) {
 	endpoint := c.String(flags.MevRelayEndpoint.Name)
+	sszEnabled := c.Bool(flags.EnableBuilderSSZ.Name)
 	var client *builder.Client
 	if endpoint != "" {
+		var opts []builder.ClientOpt
+		if sszEnabled {
+			opts = append(opts, builder.WithSSZ())
+		}
 		var err error
-		client, err = builder.NewClient(endpoint)
+		client, err = builder.NewClient(endpoint, opts...)
 		if err != nil {
 			return nil, err
 		}

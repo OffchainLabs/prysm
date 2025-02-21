@@ -104,7 +104,6 @@ ssz_bellatrix_objs = [
     "BlindedBeaconBlockBodyBellatrix",
     "SignedBeaconBlockBellatrix",
     "SignedBlindedBeaconBlockBellatrix",
-    "SignedBuilderBid",
 ]
 
 ssz_capella_objs = [
@@ -301,6 +300,7 @@ ssz_gen_marshal(
         "SignedValidatorRegistrationV1",
         "ValidatorRegistrationV1",
         "BuilderBid",
+        "SignedBuilderBid",
         "DepositSnapshot",
     ],
 )

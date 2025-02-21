@@ -293,7 +293,7 @@ func TestClient_GetHeader(t *testing.T) {
 			baseURL: &url.URL{Host: "localhost:3500", Scheme: "http"},
 		}
 		_, err := c.GetHeader(ctx, slot, bytesutil.ToBytes32(parentHash), bytesutil.ToBytes48(pubkey))
-		require.ErrorContains(t, "could not extract proto message from header: too many blob commitments: 7", err)
+		require.ErrorContains(t, "could not convert ExecHeaderResponseDeneb to proto: too many blob commitments: 7", err)
 	})
 	t.Run("electra", func(t *testing.T) {
 		hc := &http.Client{
