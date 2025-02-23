@@ -35,7 +35,7 @@ func run(pass *analysis.Pass) (interface{}, error) {
 	inspection.Preorder(nodeFilter, func(node ast.Node) {
 		if s, ok := node.(*ast.StructType); ok {
 			if err := malign(node.Pos(), pass.TypesInfo.Types[s].Type.(*types.Struct)); err != nil {
-				pass.Reportf(node.Pos(), err.Error())
+				pass.Reportf(node.Pos(), "error=%s", err)
 			}
 		}
 	})
