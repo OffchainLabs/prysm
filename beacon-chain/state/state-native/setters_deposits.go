@@ -23,13 +23,17 @@ func (b *BeaconState) AppendPendingDeposit(pd *ethpb.PendingDeposit) error {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
-	b.sharedFieldReferences[types.PendingDeposits].MinusRef()
-	b.sharedFieldReferences[types.PendingDeposits] = stateutil.NewRef(1)
+	pendingDeposits := b.pendingDeposits
+	if b.sharedFieldReferences[types.PendingDeposits].Refs() > 1 {
+		pendingDeposits = make([]*ethpb.PendingDeposit, 0, len(b.pendingDeposits)+1)
+		pendingDeposits = append(pendingDeposits, b.pendingDeposits...)
+		b.sharedFieldReferences[types.PendingDeposits].MinusRef()
+		b.sharedFieldReferences[types.PendingDeposits] = stateutil.NewRef(1)
+	}
 
-	b.pendingDeposits = append(b.pendingDeposits, pd)
-
+	b.pendingDeposits = append(pendingDeposits, pd)
 	b.markFieldAsDirty(types.PendingDeposits)
-	b.rebuildTrie[types.PendingDeposits] = true
+
 	return nil
 }
 
@@ -49,7 +53,6 @@ func (b *BeaconState) SetPendingDeposits(val []*ethpb.PendingDeposit) error {
 	b.pendingDeposits = val
 
 	b.markFieldAsDirty(types.PendingDeposits)
-	b.rebuildTrie[types.PendingDeposits] = true
 	return nil
 }
 
@@ -66,6 +69,5 @@ func (b *BeaconState) SetDepositBalanceToConsume(dbtc primitives.Gwei) error {
 	b.depositBalanceToConsume = dbtc
 
 	b.markFieldAsDirty(types.DepositBalanceToConsume)
-	b.rebuildTrie[types.DepositBalanceToConsume] = true
 	return nil
 }

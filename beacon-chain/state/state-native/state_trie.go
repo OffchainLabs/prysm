@@ -159,8 +159,8 @@ func InitializeFromProtoElectra(st *ethpb.BeaconStateElectra) (state.BeaconState
 }
 
 // InitializeFromProtoFulu the beacon state from a protobuf representation.
-func InitializeFromProtoFulu(st *ethpb.BeaconStateFulu) (state.BeaconState, error) {
-	return InitializeFromProtoUnsafeFulu(proto.Clone(st).(*ethpb.BeaconStateFulu))
+func InitializeFromProtoFulu(st *ethpb.BeaconStateElectra) (state.BeaconState, error) {
+	return InitializeFromProtoUnsafeFulu(proto.Clone(st).(*ethpb.BeaconStateElectra))
 }
 
 // InitializeFromProtoUnsafePhase0 directly uses the beacon state protobuf fields
@@ -820,7 +820,7 @@ func InitializeFromProtoUnsafeElectra(st *ethpb.BeaconStateElectra) (state.Beaco
 	b.sharedFieldReferences[types.Slashings] = stateutil.NewRef(1)
 	b.sharedFieldReferences[types.PreviousEpochParticipationBits] = stateutil.NewRef(1)
 	b.sharedFieldReferences[types.CurrentEpochParticipationBits] = stateutil.NewRef(1)
-	b.sharedFieldReferences[types.LatestExecutionPayloadHeaderDeneb] = stateutil.NewRef(1) // New in Electra.
+	b.sharedFieldReferences[types.LatestExecutionPayloadHeaderDeneb] = stateutil.NewRef(1)
 	b.sharedFieldReferences[types.HistoricalSummaries] = stateutil.NewRef(1)
 	b.sharedFieldReferences[types.PendingDeposits] = stateutil.NewRef(1)           // New in Electra.
 	b.sharedFieldReferences[types.PendingPartialWithdrawals] = stateutil.NewRef(1) // New in Electra.
@@ -842,7 +842,7 @@ func InitializeFromProtoUnsafeElectra(st *ethpb.BeaconStateElectra) (state.Beaco
 
 // InitializeFromProtoUnsafeFulu directly uses the beacon state protobuf fields
 // and sets them as fields of the BeaconState type.
-func InitializeFromProtoUnsafeFulu(st *ethpb.BeaconStateFulu) (state.BeaconState, error) {
+func InitializeFromProtoUnsafeFulu(st *ethpb.BeaconStateElectra) (state.BeaconState, error) {
 	if st == nil {
 		return nil, errors.New("received nil state")
 	}

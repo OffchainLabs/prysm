@@ -23,13 +23,17 @@ func (b *BeaconState) AppendPendingConsolidation(val *ethpb.PendingConsolidation
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
-	b.sharedFieldReferences[types.PendingConsolidations].MinusRef()
-	b.sharedFieldReferences[types.PendingConsolidations] = stateutil.NewRef(1)
+	pendingConsolidations := b.pendingConsolidations
+	if b.sharedFieldReferences[types.PendingConsolidations].Refs() > 1 {
+		pendingConsolidations = make([]*ethpb.PendingConsolidation, 0, len(b.pendingConsolidations)+1)
+		pendingConsolidations = append(pendingConsolidations, b.pendingConsolidations...)
+		b.sharedFieldReferences[types.PendingConsolidations].MinusRef()
+		b.sharedFieldReferences[types.PendingConsolidations] = stateutil.NewRef(1)
+	}
 
-	b.pendingConsolidations = append(b.pendingConsolidations, val)
-
+	b.pendingConsolidations = append(pendingConsolidations, val)
 	b.markFieldAsDirty(types.PendingConsolidations)
-	b.rebuildTrie[types.PendingConsolidations] = true
+
 	return nil
 }
 
@@ -49,7 +53,6 @@ func (b *BeaconState) SetPendingConsolidations(val []*ethpb.PendingConsolidation
 	b.pendingConsolidations = val
 
 	b.markFieldAsDirty(types.PendingConsolidations)
-	b.rebuildTrie[types.PendingConsolidations] = true
 	return nil
 }
 
@@ -66,7 +69,6 @@ func (b *BeaconState) SetEarliestConsolidationEpoch(epoch primitives.Epoch) erro
 	b.earliestConsolidationEpoch = epoch
 
 	b.markFieldAsDirty(types.EarliestConsolidationEpoch)
-	b.rebuildTrie[types.EarliestConsolidationEpoch] = true
 	return nil
 }
 
@@ -83,6 +85,5 @@ func (b *BeaconState) SetConsolidationBalanceToConsume(balance primitives.Gwei) 
 	b.consolidationBalanceToConsume = balance
 
 	b.markFieldAsDirty(types.ConsolidationBalanceToConsume)
-	b.rebuildTrie[types.ConsolidationBalanceToConsume] = true
 	return nil
 }

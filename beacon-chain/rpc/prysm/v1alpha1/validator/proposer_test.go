@@ -737,11 +737,11 @@ func TestServer_GetBeaconBlock_Fulu(t *testing.T) {
 		},
 	}
 	blk := &ethpb.SignedBeaconBlockFulu{
-		Block: &ethpb.BeaconBlockFulu{
+		Block: &ethpb.BeaconBlockElectra{
 			Slot:       fuluSlot + 1,
 			ParentRoot: parentRoot[:],
 			StateRoot:  genesis.Block.StateRoot,
-			Body: &ethpb.BeaconBlockBodyFulu{
+			Body: &ethpb.BeaconBlockBodyElectra{
 				RandaoReveal:  genesis.Block.Body.RandaoReveal,
 				Graffiti:      genesis.Block.Body.Graffiti,
 				Eth1Data:      genesis.Block.Body.Eth1Data,

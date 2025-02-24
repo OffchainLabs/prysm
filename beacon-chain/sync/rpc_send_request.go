@@ -169,7 +169,7 @@ func SendBlobsByRangeRequest(ctx context.Context, tor blockchain.TemporalOracle,
 	}
 	defer closeStream(stream, log)
 
-	maxBlobsPerBlock := uint64(params.BeaconConfig().MaxBlobsPerBlock(req.StartSlot))
+	maxBlobsPerBlock := uint64(params.BeaconConfig().MaxBlobsPerBlock(req.StartSlot + primitives.Slot(req.Count)))
 	max := params.BeaconConfig().MaxRequestBlobSidecars
 	if slots.ToEpoch(req.StartSlot) >= params.BeaconConfig().ElectraForkEpoch {
 		max = params.BeaconConfig().MaxRequestBlobSidecarsElectra
@@ -361,7 +361,7 @@ func readChunkedBlobSidecar(stream network.Stream, encoding encoder.NetworkEncod
 
 	v, found := ctxMap[bytesutil.ToBytes4(ctxb)]
 	if !found {
-		return b, errors.Wrapf(errBlobUnmarshal, fmt.Sprintf("unrecognized fork digest %#x", ctxb))
+		return b, errors.Wrapf(errBlobUnmarshal, "unrecognized fork digest %#x", ctxb)
 	}
 	// Only deneb and electra are supported at this time, because we lack a fork-spanning interface/union type for blobs.
 	// In electra, there's no changes to blob type.

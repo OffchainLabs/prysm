@@ -142,7 +142,7 @@ func newTopicRequest(topics []string) (*topicRequest, error) {
 		} else if topicsForOpsFeed[name] {
 			req.needOpsFeed = true
 		} else {
-			return nil, errors.Wrapf(errInvalidTopicName, name)
+			return nil, errors.Wrap(errInvalidTopicName, name)
 		}
 		req.topics[name] = true
 	}
