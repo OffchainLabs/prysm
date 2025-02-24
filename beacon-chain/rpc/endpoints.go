@@ -188,6 +188,7 @@ func (s *Service) blobEndpoints(blocker lookup.Blocker) []endpoint {
 			name:     namespace + ".Blobs",
 			middleware: []middleware.Middleware{
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+				middleware.GzipMiddleware(),
 			},
 			handler: server.Blobs,
 			methods: []string{http.MethodGet},
