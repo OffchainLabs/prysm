@@ -266,6 +266,7 @@ func (s *Store) DeleteHistoricalDataBeforeSlot(ctx context.Context, cutoffSlot p
 		for _, sr := range slotRoots {
 			// Return if context is cancelled or deadline is exceeded.
 			if ctx.Err() != nil {
+				//nolint:nilerr
 				return nil
 			}
 
