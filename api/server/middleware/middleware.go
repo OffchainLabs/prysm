@@ -128,7 +128,7 @@ func GzipMiddleware() Middleware {
 		// defer gz.Close()
 		defer func(){
 			if err:= gz.Close(); err != nil {
-				log.WithError(err).Error("failed to close gzip writer")
+				log.WithError(err).Error("Failed to close gzip writer")
 			}
 		}()
 
