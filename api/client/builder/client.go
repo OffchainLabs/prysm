@@ -16,6 +16,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/api"
 	"github.com/prysmaticlabs/prysm/v5/api/client"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
@@ -35,16 +36,20 @@ const (
 	postRegisterValidatorPath  = "/eth/v1/builder/validators"
 )
 
-var errMalformedHostname = errors.New("hostname must include port, separated by one colon, like example.com:3500")
-var errMalformedRequest = errors.New("required request data are missing")
-var errNotBlinded = errors.New("submitted block is not blinded")
-var blockToPayloadMapping = map[int]int{
-	version.Bellatrix: version.Bellatrix,
-	version.Capella:   version.Capella,
-	version.Deneb:     version.Deneb,
-	version.Electra:   version.Deneb,
-	version.Fulu:      version.Deneb,
-}
+var (
+	vrExample             = &ethpb.SignedValidatorRegistrationV1{}
+	vrSize                = vrExample.SizeSSZ()
+	errMalformedHostname  = errors.New("hostname must include port, separated by one colon, like example.com:3500")
+	errMalformedRequest   = errors.New("required request data are missing")
+	errNotBlinded         = errors.New("submitted block is not blinded")
+	blockToPayloadMapping = map[int]int{
+		version.Bellatrix: version.Bellatrix,
+		version.Capella:   version.Capella,
+		version.Deneb:     version.Deneb,
+		version.Electra:   version.Deneb,
+		version.Fulu:      version.Deneb,
+	}
+)
 
 // ClientOpt is a functional option for the Client type (http.Client wrapper)
 type ClientOpt func(*Client)
@@ -378,27 +383,31 @@ func (c *Client) RegisterValidator(ctx context.Context, svr []*ethpb.SignedValid
 		tracing.AnnotateError(span, err)
 		return err
 	}
-	vs := make([]*structs.SignedValidatorRegistration, len(svr))
-	for i := 0; i < len(svr); i++ {
-		vs[i] = structs.SignedValidatorRegistrationFromConsensus(svr[i])
-	}
-	body, err := json.Marshal(vs)
-	if err != nil {
-		err := errors.Wrap(err, "error encoding the SignedValidatorRegistration value body in RegisterValidator")
-		tracing.AnnotateError(span, err)
-		return err
-	}
 
+	var body []byte
+	var err error
 	var postOpts reqOption
 	if c.sszEnabled {
 		postOpts = func(r *http.Request) {
 			r.Header.Set("Content-Type", api.OctetStreamMediaType)
 			r.Header.Set("Accept", api.OctetStreamMediaType)
 		}
+		body, err = sszValidatorRegisterRequest(svr)
+		if err != nil {
+			err := errors.Wrap(err, "error ssz encoding the SignedValidatorRegistration value body in RegisterValidator")
+			tracing.AnnotateError(span, err)
+			return err
+		}
 	} else {
 		postOpts = func(r *http.Request) {
 			r.Header.Set("Content-Type", api.JsonMediaType)
 			r.Header.Set("Accept", api.JsonMediaType)
+		}
+		body, err = jsonValidatorRegisterRequest(svr)
+		if err != nil {
+			err := errors.Wrap(err, "error json encoding the SignedValidatorRegistration value body in RegisterValidator")
+			tracing.AnnotateError(span, err)
+			return err
 		}
 	}
 
@@ -408,6 +417,33 @@ func (c *Client) RegisterValidator(ctx context.Context, svr []*ethpb.SignedValid
 	}
 	log.WithField("registrationCount", len(svr)).Debug("Successfully registered validator(s) on builder")
 	return nil
+}
+
+func jsonValidatorRegisterRequest(svr []*ethpb.SignedValidatorRegistrationV1) ([]byte, error) {
+	vs := make([]*structs.SignedValidatorRegistration, len(svr))
+	for i := 0; i < len(svr); i++ {
+		vs[i] = structs.SignedValidatorRegistrationFromConsensus(svr[i])
+	}
+	body, err := json.Marshal(vs)
+	if err != nil {
+		return nil, err
+	}
+	return body, nil
+}
+
+func sszValidatorRegisterRequest(svr []*ethpb.SignedValidatorRegistrationV1) ([]byte, error) {
+	if uint64(len(svr)) > params.BeaconConfig().ValidatorRegistryLimit {
+		return nil, errors.Wrap(errMalformedRequest, "validator registry limit exceeded")
+	}
+	ssz := make([]byte, vrSize*len(svr))
+	for i, vr := range svr {
+		sszrep, err := vr.MarshalSSZ()
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to marshal validator registry ssz")
+		}
+		copy(ssz[i*vrSize:(i+1)*vrSize], sszrep)
+	}
+	return ssz, nil
 }
 
 var errResponseVersionMismatch = errors.New("builder API response uses a different version than requested in " + api.VersionHeader + " header")
@@ -614,6 +650,18 @@ func non200Err(response *http.Response) error {
 	}
 	msg := fmt.Sprintf("code=%d, url=%s, body=%s", response.StatusCode, response.Request.URL, body)
 	switch response.StatusCode {
+	case http.StatusUnsupportedMediaType:
+		log.WithError(ErrUnsupportedMediaType).Debugf(msg)
+		if jsonErr := json.Unmarshal(bodyBytes, &errMessage); jsonErr != nil {
+			return errors.Wrap(jsonErr, "unable to read response body")
+		}
+		return errors.Wrap(ErrUnsupportedMediaType, errMessage.Message)
+	case http.StatusNotAcceptable:
+		log.WithError(ErrNotAcceptable).Debugf(msg)
+		if jsonErr := json.Unmarshal(bodyBytes, &errMessage); jsonErr != nil {
+			return errors.Wrap(jsonErr, "unable to read response body")
+		}
+		return errors.Wrap(ErrNotAcceptable, errMessage.Message)
 	case http.StatusNoContent:
 		log.WithError(ErrNoContent).Debug(msg)
 		return ErrNoContent

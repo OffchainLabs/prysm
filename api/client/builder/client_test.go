@@ -87,39 +87,84 @@ func TestClient_RegisterValidator(t *testing.T) {
 	ctx := context.Background()
 	expectedBody := `[{"message":{"fee_recipient":"0x0000000000000000000000000000000000000000","gas_limit":"23","timestamp":"42","pubkey":"0x93247f2209abcacf57b75a51dafae777f9dd38bc7053d1af526f220a7489a6d3a2753e5f3e8b1cfe39b56f43611df74a"},"signature":"0x1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505cc411d61252fb6cb3fa0017b679f8bb2305b26a285fa2737f175668d0dff91cc1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505"}]`
 	expectedPath := "/eth/v1/builder/validators"
-	hc := &http.Client{
-		Transport: roundtrip(func(r *http.Request) (*http.Response, error) {
-			require.Equal(t, api.JsonMediaType, r.Header.Get("Content-Type"))
-			require.Equal(t, api.JsonMediaType, r.Header.Get("Accept"))
-			body, err := io.ReadAll(r.Body)
-			defer func() {
-				require.NoError(t, r.Body.Close())
-			}()
-			require.NoError(t, err)
-			require.Equal(t, expectedBody, string(body))
-			require.Equal(t, expectedPath, r.URL.Path)
-			require.Equal(t, http.MethodPost, r.Method)
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(bytes.NewBuffer(nil)),
-				Request:    r.Clone(ctx),
-			}, nil
-		}),
-	}
-	c := &Client{
-		hc:      hc,
-		baseURL: &url.URL{Host: "localhost:3500", Scheme: "http"},
-	}
-	reg := &eth.SignedValidatorRegistrationV1{
-		Message: &eth.ValidatorRegistrationV1{
-			FeeRecipient: ezDecode(t, params.BeaconConfig().EthBurnAddressHex),
-			GasLimit:     23,
-			Timestamp:    42,
-			Pubkey:       ezDecode(t, "0x93247f2209abcacf57b75a51dafae777f9dd38bc7053d1af526f220a7489a6d3a2753e5f3e8b1cfe39b56f43611df74a"),
-		},
-		Signature: ezDecode(t, "0x1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505cc411d61252fb6cb3fa0017b679f8bb2305b26a285fa2737f175668d0dff91cc1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505"),
-	}
-	require.NoError(t, c.RegisterValidator(ctx, []*eth.SignedValidatorRegistrationV1{reg}))
+	t.Run("JSON success", func(t *testing.T) {
+		hc := &http.Client{
+			Transport: roundtrip(func(r *http.Request) (*http.Response, error) {
+				require.Equal(t, api.JsonMediaType, r.Header.Get("Content-Type"))
+				require.Equal(t, api.JsonMediaType, r.Header.Get("Accept"))
+				body, err := io.ReadAll(r.Body)
+				defer func() {
+					require.NoError(t, r.Body.Close())
+				}()
+				require.NoError(t, err)
+				require.Equal(t, expectedBody, string(body))
+				require.Equal(t, expectedPath, r.URL.Path)
+				require.Equal(t, http.MethodPost, r.Method)
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(bytes.NewBuffer(nil)),
+					Request:    r.Clone(ctx),
+				}, nil
+			}),
+		}
+		c := &Client{
+			hc:      hc,
+			baseURL: &url.URL{Host: "localhost:3500", Scheme: "http"},
+		}
+		reg := &eth.SignedValidatorRegistrationV1{
+			Message: &eth.ValidatorRegistrationV1{
+				FeeRecipient: ezDecode(t, params.BeaconConfig().EthBurnAddressHex),
+				GasLimit:     23,
+				Timestamp:    42,
+				Pubkey:       ezDecode(t, "0x93247f2209abcacf57b75a51dafae777f9dd38bc7053d1af526f220a7489a6d3a2753e5f3e8b1cfe39b56f43611df74a"),
+			},
+			Signature: ezDecode(t, "0x1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505cc411d61252fb6cb3fa0017b679f8bb2305b26a285fa2737f175668d0dff91cc1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505"),
+		}
+		require.NoError(t, c.RegisterValidator(ctx, []*eth.SignedValidatorRegistrationV1{reg}))
+	})
+	t.Run("SSZ success", func(t *testing.T) {
+		hc := &http.Client{
+			Transport: roundtrip(func(r *http.Request) (*http.Response, error) {
+				require.Equal(t, api.OctetStreamMediaType, r.Header.Get("Content-Type"))
+				require.Equal(t, api.OctetStreamMediaType, r.Header.Get("Accept"))
+				body, err := io.ReadAll(r.Body)
+				defer func() {
+					require.NoError(t, r.Body.Close())
+				}()
+				require.NoError(t, err)
+				request := &eth.SignedValidatorRegistrationV1{}
+				itemBytes := body[:request.SizeSSZ()]
+				require.NoError(t, request.UnmarshalSSZ(itemBytes))
+				jsRequest := structs.SignedValidatorRegistrationFromConsensus(request)
+				js, err := json.Marshal([]*structs.SignedValidatorRegistration{jsRequest})
+				require.NoError(t, err)
+
+				require.Equal(t, expectedBody, string(js))
+				require.Equal(t, expectedPath, r.URL.Path)
+				require.Equal(t, http.MethodPost, r.Method)
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(bytes.NewBuffer(nil)),
+					Request:    r.Clone(ctx),
+				}, nil
+			}),
+		}
+		c := &Client{
+			hc:         hc,
+			baseURL:    &url.URL{Host: "localhost:3500", Scheme: "http"},
+			sszEnabled: true,
+		}
+		reg := &eth.SignedValidatorRegistrationV1{
+			Message: &eth.ValidatorRegistrationV1{
+				FeeRecipient: ezDecode(t, params.BeaconConfig().EthBurnAddressHex),
+				GasLimit:     23,
+				Timestamp:    42,
+				Pubkey:       ezDecode(t, "0x93247f2209abcacf57b75a51dafae777f9dd38bc7053d1af526f220a7489a6d3a2753e5f3e8b1cfe39b56f43611df74a"),
+			},
+			Signature: ezDecode(t, "0x1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505cc411d61252fb6cb3fa0017b679f8bb2305b26a285fa2737f175668d0dff91cc1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505"),
+		}
+		require.NoError(t, c.RegisterValidator(ctx, []*eth.SignedValidatorRegistrationV1{reg}))
+	})
 }
 
 func TestClient_GetHeader(t *testing.T) {
@@ -175,6 +220,7 @@ func TestClient_GetHeader(t *testing.T) {
 		hc := &http.Client{
 			Transport: roundtrip(func(r *http.Request) (*http.Response, error) {
 				require.Equal(t, expectedPath, r.URL.Path)
+				require.Equal(t, api.JsonMediaType, r.Header.Get("Accept"))
 				return &http.Response{
 					StatusCode: http.StatusOK,
 					Body:       io.NopCloser(bytes.NewBufferString(testExampleHeaderResponse)),
@@ -209,6 +255,7 @@ func TestClient_GetHeader(t *testing.T) {
 	t.Run("bellatrix ssz", func(t *testing.T) {
 		hc := &http.Client{
 			Transport: roundtrip(func(r *http.Request) (*http.Response, error) {
+				require.Equal(t, api.OctetStreamMediaType, r.Header.Get("Accept"))
 				require.Equal(t, expectedPath, r.URL.Path)
 				epr := &ExecHeaderResponse{}
 				require.NoError(t, json.Unmarshal([]byte(testExampleHeaderResponse), epr))
@@ -254,6 +301,7 @@ func TestClient_GetHeader(t *testing.T) {
 	t.Run("capella", func(t *testing.T) {
 		hc := &http.Client{
 			Transport: roundtrip(func(r *http.Request) (*http.Response, error) {
+				require.Equal(t, api.JsonMediaType, r.Header.Get("Accept"))
 				require.Equal(t, expectedPath, r.URL.Path)
 				return &http.Response{
 					StatusCode: http.StatusOK,
@@ -285,6 +333,7 @@ func TestClient_GetHeader(t *testing.T) {
 	t.Run("capella ssz", func(t *testing.T) {
 		hc := &http.Client{
 			Transport: roundtrip(func(r *http.Request) (*http.Response, error) {
+				require.Equal(t, api.OctetStreamMediaType, r.Header.Get("Accept"))
 				require.Equal(t, expectedPath, r.URL.Path)
 				epr := &ExecHeaderResponseCapella{}
 				require.NoError(t, json.Unmarshal([]byte(testExampleHeaderResponseCapella), epr))
@@ -326,6 +375,7 @@ func TestClient_GetHeader(t *testing.T) {
 	t.Run("deneb", func(t *testing.T) {
 		hc := &http.Client{
 			Transport: roundtrip(func(r *http.Request) (*http.Response, error) {
+				require.Equal(t, api.JsonMediaType, r.Header.Get("Accept"))
 				require.Equal(t, expectedPath, r.URL.Path)
 				return &http.Response{
 					StatusCode: http.StatusOK,
@@ -365,6 +415,7 @@ func TestClient_GetHeader(t *testing.T) {
 	t.Run("deneb ssz", func(t *testing.T) {
 		hc := &http.Client{
 			Transport: roundtrip(func(r *http.Request) (*http.Response, error) {
+				require.Equal(t, api.OctetStreamMediaType, r.Header.Get("Accept"))
 				require.Equal(t, expectedPath, r.URL.Path)
 				epr := &ExecHeaderResponseDeneb{}
 				require.NoError(t, json.Unmarshal([]byte(testExampleHeaderResponseDeneb), epr))
@@ -432,6 +483,7 @@ func TestClient_GetHeader(t *testing.T) {
 	t.Run("electra", func(t *testing.T) {
 		hc := &http.Client{
 			Transport: roundtrip(func(r *http.Request) (*http.Response, error) {
+				require.Equal(t, api.JsonMediaType, r.Header.Get("Accept"))
 				require.Equal(t, expectedPath, r.URL.Path)
 				return &http.Response{
 					StatusCode: http.StatusOK,
@@ -476,6 +528,7 @@ func TestClient_GetHeader(t *testing.T) {
 	t.Run("electra ssz", func(t *testing.T) {
 		hc := &http.Client{
 			Transport: roundtrip(func(r *http.Request) (*http.Response, error) {
+				require.Equal(t, api.OctetStreamMediaType, r.Header.Get("Accept"))
 				require.Equal(t, expectedPath, r.URL.Path)
 				epr := &ExecHeaderResponseElectra{}
 				require.NoError(t, json.Unmarshal([]byte(testExampleHeaderResponseElectra), epr))
