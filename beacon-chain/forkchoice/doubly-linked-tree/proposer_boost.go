@@ -1,8 +1,6 @@
 package doublylinkedtree
 
 import (
-	"fmt"
-
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 )
@@ -15,7 +13,7 @@ func (f *ForkChoice) applyProposerBoostScore() error {
 	if s.previousProposerBoostRoot != params.BeaconConfig().ZeroHash {
 		previousNode, ok := s.nodeByRoot[s.previousProposerBoostRoot]
 		if !ok || previousNode == nil {
-			log.WithError(errInvalidProposerBoostRoot).Errorf(fmt.Sprintf("invalid prev root %#x", s.previousProposerBoostRoot))
+			log.WithError(errInvalidProposerBoostRoot).Errorf("invalid prev root %#x", s.previousProposerBoostRoot)
 		} else {
 			previousNode.balance -= s.previousProposerBoostScore
 		}
@@ -24,7 +22,7 @@ func (f *ForkChoice) applyProposerBoostScore() error {
 	if s.proposerBoostRoot != params.BeaconConfig().ZeroHash {
 		currentNode, ok := s.nodeByRoot[s.proposerBoostRoot]
 		if !ok || currentNode == nil {
-			log.WithError(errInvalidProposerBoostRoot).Errorf(fmt.Sprintf("invalid current root %#x", s.proposerBoostRoot))
+			log.WithError(errInvalidProposerBoostRoot).Errorf("invalid current root %#x", s.proposerBoostRoot)
 		} else {
 			proposerScore = (s.committeeWeight * params.BeaconConfig().ProposerScoreBoost) / 100
 			currentNode.balance += proposerScore

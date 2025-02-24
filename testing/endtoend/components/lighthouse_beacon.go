@@ -189,7 +189,6 @@ func (node *LighthouseBeaconNode) Start(ctx context.Context) error {
 		fmt.Sprintf("--metrics-port=%d", e2e.TestParams.Ports.LighthouseBeaconNodeMetricsPort+index),
 		"--metrics",
 		"--http",
-		"--http-allow-sync-stalled",
 		"--enable-private-discovery",
 		"--debug-level=debug",
 		"--suggested-fee-recipient=0x878705ba3f8bc32fcf7f4caa1a35e72af65cf766",
@@ -266,7 +265,7 @@ func (node *LighthouseBeaconNode) createTestnetDir(ctx context.Context, index in
 	if err := file.WriteFile(bootPath, enrYaml); err != nil {
 		return "", err
 	}
-	deployPath := filepath.Join(testNetDir, "deploy_block.txt")
+	deployPath := filepath.Join(testNetDir, "deposit_contract_block.txt")
 	deployYaml := []byte("0")
 	if err := file.WriteFile(deployPath, deployYaml); err != nil {
 		return "", err
