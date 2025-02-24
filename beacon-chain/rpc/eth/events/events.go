@@ -357,6 +357,10 @@ func writeLazyReaderWithRecover(w *streamingResponseWriterController, lr lazyRea
 			debug.PrintStack()
 		}
 	}()
+	if lr == nil {
+		log.Warn("event stream skipping a nil lazy event reader")
+		return nil
+	}
 	r := lr()
 	out, err := io.ReadAll(r)
 	if err != nil {
