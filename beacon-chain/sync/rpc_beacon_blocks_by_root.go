@@ -220,6 +220,10 @@ func (s *Service) sendAndSaveBlobSidecars(ctx context.Context, request types.Blo
 
 // requestAndSaveDataColumnSidecars sends a data column sidecars by root request
 // to a peer and saves the received sidecars.
+//
+// NOTE: During the initial sync, LazilyPersistentStoreColumn caches sidecars
+// and saves them to disk within IsDataAvailable. requestAndSaveDataColumnSidecars is called
+// when no caching is done in the pending blocks queue.
 func (s *Service) requestAndSaveDataColumnSidecars(
 	ctx context.Context,
 	dataColumns map[uint64]bool,

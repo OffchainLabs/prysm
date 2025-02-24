@@ -20,12 +20,6 @@ func (s *Service) AdmissibleCustodyGroupsPeers(peers []peer.ID) ([]peer.ID, erro
 	return s.custodyGroupsAdmissiblePeers(peers, localCustodyGroupCount)
 }
 
-// AdmissibleCustodySamplingPeers returns a list of peers that custody a super set of the local node's sampling columns.
-func (s *Service) AdmissibleCustodySamplingPeers(peers []peer.ID) ([]peer.ID, error) {
-	localSubnetSamplingSize := peerdas.CustodyGroupSamplingSize()
-	return s.custodyGroupsAdmissiblePeers(peers, localSubnetSamplingSize)
-}
-
 // custodyGroupsAdmissiblePeers filters out `peers` that do not custody a super set of our own custody groups.
 func (s *Service) custodyGroupsAdmissiblePeers(peers []peer.ID, custodyGroupCount uint64) ([]peer.ID, error) {
 	// Get the total number of custody groups.
@@ -164,6 +158,9 @@ func (s *Service) CustodyGroupCountFromPeer(pid peer.ID) uint64 {
 // - A map, where the key of the map is the custody group, the value is the peer that custodies the group.
 // - A slice of descriptions for non admissible peers.
 // - An error if any.
+//
+// NOTE: distributeSamplesToPeer from the DataColumnSampler implements similar logic,
+// but with only one column queried in each request.
 
 func (s *Service) AdmissiblePeersForCustodyGroups(
 	peers []peer.ID,
