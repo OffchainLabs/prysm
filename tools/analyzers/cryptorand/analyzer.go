@@ -4,7 +4,6 @@ package cryptorand
 
 import (
 	"errors"
-	"fmt"
 	"go/ast"
 	"strings"
 
@@ -62,8 +61,8 @@ func run(pass *analysis.Pass) (interface{}, error) {
 			for pkg, path := range aliases {
 				for _, fn := range disallowedFns {
 					if isPkgDot(stmt.Fun, pkg, fn) {
-						pass.Reportf(node.Pos(), fmt.Sprintf(
-							"%s: %s.%s() (from %s)", errWeakCrypto.Error(), pkg, fn, path))
+						pass.Reportf(node.Pos(),
+							"%s: %s.%s() (from %s)", errWeakCrypto.Error(), pkg, fn, path)
 					}
 				}
 			}
