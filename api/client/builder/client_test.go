@@ -415,7 +415,6 @@ func TestClient_GetHeader(t *testing.T) {
 		hc := &http.Client{
 			Transport: roundtrip(func(r *http.Request) (*http.Response, error) {
 				require.Equal(t, expectedPath, r.URL.Path)
-				require.Equal(t, api.OctetStreamMediaType, r.Header.Get("Accept"))
 				return &http.Response{
 					StatusCode: http.StatusOK,
 					Body:       io.NopCloser(bytes.NewBufferString(testExampleHeaderResponseDenebTooManyBlobs)),

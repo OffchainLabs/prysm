@@ -563,7 +563,6 @@ func (c *Client) parseBlindedBlockResponseJSON(
 	respBytes []byte,
 	forkVersion int,
 ) (interfaces.ExecutionData, *v1.BlobsBundle, error) {
-
 	ep := &ExecutionPayloadResponse{}
 	if err := json.Unmarshal(respBytes, ep); err != nil {
 		return nil, nil, errors.Wrap(err, "error unmarshaling ExecutionPayloadResponse")

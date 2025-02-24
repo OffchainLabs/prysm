@@ -84,6 +84,7 @@ var appFlags = []cli.Flag{
 	flags.MinBuilderDiff,
 	flags.BeaconDBPruning,
 	flags.PrunerRetentionEpochs,
+	flags.EnableBuilderSSZ,
 	cmd.BackupWebhookOutputDir,
 	cmd.MinimalConfigFlag,
 	cmd.E2EConfigFlag,
