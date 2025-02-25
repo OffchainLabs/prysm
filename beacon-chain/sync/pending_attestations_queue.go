@@ -189,7 +189,7 @@ func (s *Service) processUnaggregated(ctx context.Context, att ethpb.Att) {
 			Attestation: singleAtt,
 		}
 	} else {
-		// Older version (non-SingleAttestation)
+		// Phase0 attestation
 		attForValidation = att
 		broadcastAtt = att
 		eventType = operation.UnaggregatedAttReceived
