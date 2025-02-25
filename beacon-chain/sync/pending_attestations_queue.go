@@ -168,7 +168,7 @@ func (s *Service) processUnaggregated(ctx context.Context, att ethpb.Att) {
 		return
 	}
 
-	// Decide if the attestation is a SingleAttestation (Electra) or a legacy unaggregated attestation
+	// Decide if the attestation is an Electra SingleAttestation or a Phase0 unaggregated attestation
 	var (
 		attForValidation ethpb.Att
 		broadcastAtt     ethpb.Att
