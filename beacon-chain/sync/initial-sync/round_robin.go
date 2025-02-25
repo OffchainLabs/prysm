@@ -169,7 +169,19 @@ func (s *Service) processFetchedDataRegSync(
 		"firstSlot":        data.bwb[0].Block.Block().Slot(),
 		"firstUnprocessed": bwb[0].Block.Block().Slot(),
 	}
+	hexStr := "2db899881ed8546476d0b92c6aa9110bea9a4cd0dbeb5519eb0ea69575f1f359"
+	bytes, err := hex.DecodeString(hexStr)
+	if err != nil {
+		log.WithError(err).Error("Could not decode hex string")
+		return
+	}
+	badRoot := [32]byte(bytes)
+
 	for _, b := range bwb {
+		if b.Block.Root() == badRoot {
+			log.Error("Syncing blacklisted invalid block")
+			return
+		}
 		if err := avs.Persist(s.clock.CurrentSlot(), b.Blobs...); err != nil {
 			log.WithError(err).WithFields(batchFields).WithFields(syncFields(b.Block)).Warn("Batch failure due to BlobSidecar issues")
 			return
