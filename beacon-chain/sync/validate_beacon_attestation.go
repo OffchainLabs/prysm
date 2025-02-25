@@ -42,6 +42,8 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 	if pid == s.cfg.p2p.PeerID() {
 		return pubsub.ValidationAccept, nil
 	}
+	// Attestation processing requires the target block to be present in the database, so we'll skip
+	// validating or processing attestations until fully synced.
 	if s.cfg.initialSync.Syncing() {
 		return pubsub.ValidationIgnore, nil
 	}
