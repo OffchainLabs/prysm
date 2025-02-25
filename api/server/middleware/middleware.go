@@ -114,7 +114,8 @@ func AcceptHeaderHandler(serverAcceptedTypes []string) Middleware {
 	}
 }
 
-func GzipMiddleware() Middleware {
+// AcceptEncodingHeaderHandler compresses the response before sending it back to the client, if gzip is supported.
+func AcceptEncodingHeaderHandler() Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request){
 			if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
@@ -125,7 +126,6 @@ func GzipMiddleware() Middleware {
 		w.Header().Set("Content-Encoding", "gzip")
 
 		gz := gzip.NewWriter(w)
-		// defer gz.Close()
 		defer func(){
 			if err:= gz.Close(); err != nil {
 				log.WithError(err).Error("Failed to close gzip writer")
@@ -133,8 +133,7 @@ func GzipMiddleware() Middleware {
 		}()
 
 		gzipRW := gzipResponseWriter{Writer: gz, ResponseWriter: w}
-
-		next.ServeHTTP(gzipRW, r)
+        next.ServeHTTP(gzipRW, r)
 	})
 	}
 }
