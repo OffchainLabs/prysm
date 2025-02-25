@@ -400,6 +400,9 @@ func (s *Service) setSeenBlockIndexSlot(slot primitives.Slot, proposerIdx primit
 
 // Returns true if the block is marked as a bad block.
 func (s *Service) hasBadBlock(root [32]byte) bool {
+	if root == badHoleskyRoot {
+		return true
+	}
 	s.badBlockLock.RLock()
 	defer s.badBlockLock.RUnlock()
 	_, seen := s.badBlockCache.Get(string(root[:]))
