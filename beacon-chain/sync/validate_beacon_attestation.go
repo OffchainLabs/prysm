@@ -173,7 +173,6 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 		return validationRes, err
 	}
 
-	// If slasher is enabled, process in background
 	if features.Get().EnableSlasher {
 		// Feed the indexed attestation to slasher if enabled. This action
 		// is done in the background to avoid adding more load to this critical code path.
