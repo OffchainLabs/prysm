@@ -167,7 +167,6 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 		}
 	}
 
-	// Validate final attestation object
 	validationRes, err = s.validateUnaggregatedAttWithState(ctx, attForValidation, preState)
 	if validationRes != pubsub.ValidationAccept {
 		return validationRes, err
