@@ -88,6 +88,9 @@ func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySig
 	if err != nil {
 		return err
 	}
+	if roblock.Root() == badHoleskyRoot {
+		return errHoleskyForbiddenRoot
+	}
 
 	postState, isValidPayload, err := s.validateExecutionAndConsensus(ctx, preState, roblock)
 	if err != nil {
