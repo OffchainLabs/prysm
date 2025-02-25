@@ -100,7 +100,7 @@ func (s *Service) resyncIfBehind() {
 			// actual resyncing).
 			highestEpoch, _ := s.cfg.p2p.Peers().BestNonFinalized(flags.Get().MinimumSyncPeers*2, syncedEpoch)
 			// Check if the current node is more than 1 epoch behind.
-			if highestEpoch > (syncedEpoch + 1) {
+			if highestEpoch > (syncedEpoch + 500) {
 				log.WithFields(logrus.Fields{
 					"currentEpoch": slots.ToEpoch(s.cfg.clock.CurrentSlot()),
 					"syncedEpoch":  syncedEpoch,
