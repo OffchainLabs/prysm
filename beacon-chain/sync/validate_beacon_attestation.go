@@ -74,6 +74,8 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 		return pubsub.ValidationIgnore, nil
 	}
 
+	// Attestation's slot is within ATTESTATION_PROPAGATION_SLOT_RANGE and early attestation
+	// processing tolerance.
 	if err := helpers.ValidateAttestationTime(data.Slot, s.cfg.clock.GenesisTime(), earlyAttestationProcessingTolerance); err != nil {
 		tracing.AnnotateError(span, err)
 		return pubsub.ValidationIgnore, err
@@ -85,9 +87,11 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 	committeeIndex := att.GetCommitteeIndex()
 
 	if !features.Get().EnableSlasher {
+		// Verify this the first attestation received for the participating validator for the slot.
 		if s.hasSeenCommitteeIndicesSlot(data.Slot, committeeIndex, att.GetAggregationBits()) {
 			return pubsub.ValidationIgnore, nil
 		}
+		// Reject an attestation if it references an invalid block.
 		if s.hasBadBlock(bytesutil.ToBytes32(data.BeaconBlockRoot)) ||
 			s.hasBadBlock(bytesutil.ToBytes32(data.Target.Root)) ||
 			s.hasBadBlock(bytesutil.ToBytes32(data.Source.Root)) {
@@ -96,6 +100,7 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 		}
 	}
 
+	// Verify the block being voted and the processed state is in beaconDB and the block has passed validation if it's in the beaconDB.
 	blockRoot := bytesutil.ToBytes32(data.BeaconBlockRoot)
 	if !s.hasBlockAndState(ctx, blockRoot) {
 		return s.saveToPendingAttPool(att)
@@ -170,7 +175,11 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 
 	// If slasher is enabled, process in background
 	if features.Get().EnableSlasher {
+		// Feed the indexed attestation to slasher if enabled. This action
+		// is done in the background to avoid adding more load to this critical code path.
 		go func() {
+			// Using a different context to prevent timeouts as this operation can be expensive
+			// and we want to avoid affecting the critical code path.
 			ctx := context.TODO()
 			preState, err := s.cfg.chain.AttestationTargetState(ctx, data.Target)
 			if err != nil {
