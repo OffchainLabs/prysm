@@ -182,6 +182,7 @@ func (s *Service) processUnaggregated(ctx context.Context, att ethpb.Att) {
 			log.Debugf("Attestation has wrong type (expected %T, got %T)", &ethpb.SingleAttestation{}, att)
 			return
 		}
+        // Convert Electra SingleAttestation to unaggregated ElectraAttestation. This is needed because many parts of the codebase assume that attestations have a certain structure and SingleAttestation validates these assumptions.
 		attForValidation = singleAtt.ToAttestationElectra(committee)
 		broadcastAtt = singleAtt
 		eventType = operation.SingleAttReceived
