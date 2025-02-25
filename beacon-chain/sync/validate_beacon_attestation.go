@@ -159,7 +159,7 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 			Attestation: singleAtt,
 		}
 	} else {
-		// Non-Electra (unaggregated) attestation
+		// Phase0 unaggregated attestation
 		attForValidation = att
 		eventType = operation.UnaggregatedAttReceived
 		eventData = &operation.UnAggregatedAttReceivedData{
