@@ -152,7 +152,7 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 				&eth.SingleAttestation{}, att,
 			)
 		}
-		// Convert Electra singleAttestation to the unaggregated form needed for local validation
+		// Convert Electra SingleAttestation to unaggregated ElectraAttestation. This is needed because many parts of the codebase assume that attestations have a certain structure and SingleAttestation validates these assumptions.
 		attForValidation = singleAtt.ToAttestationElectra(committee)
 		eventType = operation.SingleAttReceived
 		eventData = &operation.SingleAttReceivedData{
