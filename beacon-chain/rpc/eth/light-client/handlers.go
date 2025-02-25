@@ -10,6 +10,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/api"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
+	lightclient "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/light-client"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/shared"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
@@ -182,7 +183,7 @@ func (s *Server) GetLightClientFinalityUpdate(w http.ResponseWriter, req *http.R
 		return
 	}
 
-	update, err := newLightClientFinalityUpdateFromBeaconState(ctx, s.ChainInfoFetcher.CurrentSlot(), st, block, attestedState, attestedBlock, finalizedBlock)
+	update, err := lightclient.NewLightClientFinalityUpdateFromBeaconState(ctx, s.ChainInfoFetcher.CurrentSlot(), st, block, attestedState, attestedBlock, finalizedBlock)
 	if err != nil {
 		httputil.HandleError(w, "Could not get light client finality update: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -245,7 +246,7 @@ func (s *Server) GetLightClientOptimisticUpdate(w http.ResponseWriter, req *http
 		return
 	}
 
-	update, err := newLightClientOptimisticUpdateFromBeaconState(ctx, s.ChainInfoFetcher.CurrentSlot(), st, block, attestedState, attestedBlock)
+	update, err := lightclient.NewLightClientOptimisticUpdateFromBeaconState(ctx, s.ChainInfoFetcher.CurrentSlot(), st, block, attestedState, attestedBlock)
 	if err != nil {
 		httputil.HandleError(w, "Could not get light client optimistic update: "+err.Error(), http.StatusInternalServerError)
 		return
