@@ -137,7 +137,7 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 		return validationRes, err
 	}
 
-	// Consolidated handling of SingleAttestation vs. legacy unaggregated
+	// Consolidated handling of Electra SingleAttestation vs Phase0 unaggregated attestation
 	var (
 		attForValidation eth.Att // what we'll pass to further validation
 		eventType        feed.EventType
