@@ -16,6 +16,7 @@ import (
 	forkchoicetypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/types"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	consensusblocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
@@ -369,7 +370,7 @@ func (s *Service) handleEpochBoundary(ctx context.Context, slot primitives.Slot,
 func (s *Service) handleBlockAttestations(ctx context.Context, blk interfaces.ReadOnlyBeaconBlock, st state.BeaconState) error {
 	// Feed in block's attestations to fork choice store.
 	for _, a := range blk.Body().Attestations() {
-		committees, err := helpers.AttestationCommittees(ctx, st, a)
+		committees, err := helpers.AttestationCommitteesFromState(ctx, st, a)
 		if err != nil {
 			return err
 		}
@@ -460,13 +461,23 @@ func (s *Service) pruneCoveredElectraAttsFromPool(ctx context.Context, headState
 		return nil
 	}
 
-	offset := uint64(0)
-
-	committeeIndices := att.CommitteeBitsVal().BitIndices()
-	committees, err := helpers.AttestationCommittees(ctx, headState, att)
+	// We don't want to recompute committees. If they are not cached already,
+	// we allow attestations to stay in the pool. If these attestations are
+	// included in a later block, they will be redundant. But given that
+	// they were not cached in the first place, it's unlikely that they
+	// will be chosen into a block.
+	ok, committees, err := helpers.AttestationCommitteesFromCache(ctx, headState, att)
 	if err != nil {
 		return errors.Wrap(err, "could not get attestation committees")
 	}
+	if !ok {
+		log.Debug("Attestation committees are not cached. Skipping attestation pruning.")
+		return nil
+	}
+
+	committeeIndices := att.CommitteeBitsVal().BitIndices()
+	offset := uint64(0)
+
 	// Sanity check as this should never happen
 	if len(committeeIndices) != len(committees) {
 		return errors.New("committee indices and committees have different lengths")
@@ -485,6 +496,7 @@ func (s *Service) pruneCoveredElectraAttsFromPool(ctx context.Context, headState
 			AggregationBits: ab,
 			Data:            att.GetData(),
 			CommitteeBits:   cb,
+			Signature:       make([]byte, fieldparams.BLSSignatureLength),
 		}
 
 		if features.Get().EnableExperimentalAttestationPool {
