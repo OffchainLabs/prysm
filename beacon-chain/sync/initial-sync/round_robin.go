@@ -126,21 +126,7 @@ func (s *Service) syncToNonFinalizedEpoch(ctx context.Context, genesis time.Time
 		return err
 	}
 
-	hexStr := "2db899881ed8546476d0b92c6aa9110bea9a4cd0dbeb5519eb0ea69575f1f359"
-	bytes, err := hex.DecodeString(hexStr)
-	if err != nil {
-		log.WithError(err).Error("Could not decode hex string")
-		return nil
-	}
-	badRoot := [32]byte(bytes)
-
 	for data := range queue.fetchedData {
-		for _, b := range data.bwb {
-			if b.Block.Root() == badRoot {
-				log.Error("Syncing blacklisted invalid block")
-				return sync.ErrInvalidFetchedData
-			}
-		}
 		s.processFetchedDataRegSync(ctx, genesis, s.cfg.Chain.HeadSlot(), data)
 	}
 	log.WithFields(logrus.Fields{
