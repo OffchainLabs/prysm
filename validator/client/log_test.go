@@ -20,7 +20,7 @@ func TestLogSubmittedAtts(t *testing.T) {
 		}
 		att := util.HydrateAttestation(&ethpb.Attestation{})
 		att.Data.CommitteeIndex = 12
-		require.NoError(t, v.saveSubmittedAtt(att, make([]byte, field_params.BLSPubkeyLength), true))
+		require.NoError(t, v.saveSubmittedAtt(att, make([]byte, field_params.BLSPubkeyLength), false))
 		v.LogSubmittedAtts(0)
 		assert.LogsContain(t, logHook, "committeeIndices=\"[12]\"")
 	})
@@ -34,7 +34,7 @@ func TestLogSubmittedAtts(t *testing.T) {
 		att.CommitteeBits = primitives.NewAttestationCommitteeBits()
 		att.CommitteeBits[0] = 44
 		att.CommitteeBits[1] = 73
-		require.NoError(t, v.saveSubmittedAtt(att, make([]byte, field_params.BLSPubkeyLength), true))
+		require.NoError(t, v.saveSubmittedAtt(att, make([]byte, field_params.BLSPubkeyLength), false))
 		v.LogSubmittedAtts(0)
 		assert.LogsContain(t, logHook, "committeeIndices=\"[2]\"")
 	})
