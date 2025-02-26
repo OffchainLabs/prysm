@@ -40,9 +40,10 @@ func ProcessAttesterSlashings(
 	beaconState state.BeaconState,
 	slashings []ethpb.AttSlashing,
 	slashFunc slashValidatorFunc,
+	maxExitEpoch primitives.Epoch,
+	churn uint64,
 ) (state.BeaconState, error) {
 	var err error
-	maxExitEpoch, churn := validators.MaxExitEpochAndChurn(s)
 	for _, slashing := range slashings {
 		beaconState, err = ProcessAttesterSlashing(ctx, beaconState, slashing, slashFunc, maxExitEpoch, churn)
 		if err != nil {

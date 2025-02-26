@@ -62,7 +62,8 @@ func TestProcessAttesterSlashings_DataNotSlashable(t *testing.T) {
 	for i, s := range b.Block.Body.AttesterSlashings {
 		ss[i] = s
 	}
-	_, err = blocks.ProcessAttesterSlashings(t.Context(), beaconState, ss, v.SlashValidator)
+	maxExitEpoch, churn := v.MaxExitEpochAndChurn(beaconState)
+	_, err = blocks.ProcessAttesterSlashings(t.Context(), beaconState, ss, v.SlashValidator, maxExitEpoch, churn)
 	assert.ErrorContains(t, "attestations are not slashable", err)
 }
 
@@ -101,7 +102,8 @@ func TestProcessAttesterSlashings_IndexedAttestationFailedToVerify(t *testing.T)
 	for i, s := range b.Block.Body.AttesterSlashings {
 		ss[i] = s
 	}
-	_, err = blocks.ProcessAttesterSlashings(t.Context(), beaconState, ss, v.SlashValidator)
+	maxExitEpoch, churn := v.MaxExitEpochAndChurn(beaconState)
+	_, err = blocks.ProcessAttesterSlashings(t.Context(), beaconState, ss, v.SlashValidator, maxExitEpoch, churn)
 	assert.ErrorContains(t, "validator indices count exceeds MAX_VALIDATORS_PER_COMMITTEE", err)
 }
 
@@ -243,7 +245,8 @@ func TestProcessAttesterSlashings_AppliesCorrectStatus(t *testing.T) {
 			currentSlot := 2 * params.BeaconConfig().SlotsPerEpoch
 			require.NoError(t, tc.st.SetSlot(currentSlot))
 
-			newState, err := blocks.ProcessAttesterSlashings(t.Context(), tc.st, []ethpb.AttSlashing{tc.slashing}, v.SlashValidator)
+			maxExitEpoch, churn := v.MaxExitEpochAndChurn(tc.st)
+			newState, err := blocks.ProcessAttesterSlashings(t.Context(), tc.st, []ethpb.AttSlashing{tc.slashing}, v.SlashValidator, maxExitEpoch, churn)
 			require.NoError(t, err)
 			newRegistry := newState.Validators()
 

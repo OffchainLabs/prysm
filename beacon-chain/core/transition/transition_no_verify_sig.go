@@ -378,11 +378,12 @@ func altairOperations(
 	ctx context.Context,
 	st state.BeaconState,
 	beaconBlock interfaces.ReadOnlyBeaconBlock) (state.BeaconState, error) {
-	st, err := b.ProcessProposerSlashings(ctx, st, beaconBlock.Body().ProposerSlashings(), v.SlashValidator)
+	maxExitEpoch, churn := v.MaxExitEpochAndChurn(st)
+	st, err := b.ProcessProposerSlashings(ctx, st, beaconBlock.Body().ProposerSlashings(), v.SlashValidator, maxExitEpoch, churn)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process altair proposer slashing")
 	}
-	st, err = b.ProcessAttesterSlashings(ctx, st, beaconBlock.Body().AttesterSlashings(), v.SlashValidator)
+	st, err = b.ProcessAttesterSlashings(ctx, st, beaconBlock.Body().AttesterSlashings(), v.SlashValidator, maxExitEpoch, churn)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process altair attester slashing")
 	}
@@ -405,11 +406,12 @@ func phase0Operations(
 	ctx context.Context,
 	st state.BeaconState,
 	beaconBlock interfaces.ReadOnlyBeaconBlock) (state.BeaconState, error) {
-	st, err := b.ProcessProposerSlashings(ctx, st, beaconBlock.Body().ProposerSlashings(), v.SlashValidator)
+	maxExitEpoch, churn := v.MaxExitEpochAndChurn(st)
+	st, err := b.ProcessProposerSlashings(ctx, st, beaconBlock.Body().ProposerSlashings(), v.SlashValidator, maxExitEpoch, churn)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process block proposer slashings")
 	}
-	st, err = b.ProcessAttesterSlashings(ctx, st, beaconBlock.Body().AttesterSlashings(), v.SlashValidator)
+	st, err = b.ProcessAttesterSlashings(ctx, st, beaconBlock.Body().AttesterSlashings(), v.SlashValidator, maxExitEpoch, churn)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process block attester slashings")
 	}
