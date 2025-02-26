@@ -162,31 +162,33 @@ func (s *Service) CustodyGroupCountFromPeer(pid peer.ID) uint64 {
 // NOTE: distributeSamplesToPeer from the DataColumnSampler implements similar logic,
 // but with only one column queried in each request.
 
-func (s *Service) AdmissiblePeersForCustodyGroups(
+func (s *Service) AdmissiblePeersForDataColumns(
 	peers []peer.ID,
-	neededCustodyGroups map[uint64]bool,
+	neededDataColumns map[uint64]bool,
 ) (map[peer.ID]map[uint64]bool, map[uint64][]peer.ID, []string, error) {
 	peerCount := len(peers)
-	neededCustodyGroupCount := uint64(len(neededCustodyGroups))
+	neededDataColumnsCount := uint64(len(neededDataColumns))
 
 	// Create description slice for non admissible peers.
 	descriptions := make([]string, 0, peerCount)
 
 	// Compute custody groups for each peer.
-	dataColumnsByPeer, err := s.custodyGroupsFromPeer(peers)
+	custodyGroupsByPeer, err := s.custodyGroupsFromPeer(peers)
 	if err != nil {
 		return nil, nil, nil, errors.Wrap(err, "custody columns from peer")
 	}
 
 	// Filter peers which custody at least one needed data column.
-	dataColumnsByAdmissiblePeer, localDescriptions := filterPeerWhichCustodyAtLeastOneDataColumn(neededCustodyGroups, dataColumnsByPeer)
+	dataColumnsByAdmissiblePeer, localDescriptions := filterPeerWhichCustodyAtLeastOneDataColumn(neededDataColumns, custodyGroupsByPeer)
 	descriptions = append(descriptions, localDescriptions...)
 
 	// Compute a map from needed data columns to their peers.
-	admissiblePeersByDataColumn := make(map[uint64][]peer.ID, neededCustodyGroupCount)
-	for peer, peerCustodyDataColumns := range dataColumnsByAdmissiblePeer {
-		for dataColumn := range peerCustodyDataColumns {
-			admissiblePeersByDataColumn[dataColumn] = append(admissiblePeersByDataColumn[dataColumn], peer)
+	admissiblePeersByDataColumn := make(map[uint64][]peer.ID, neededDataColumnsCount)
+	for peer := range dataColumnsByAdmissiblePeer {
+		for dataColumn := range neededDataColumns {
+			if dataColumnsByAdmissiblePeer[peer][dataColumn] {
+				admissiblePeersByDataColumn[dataColumn] = append(admissiblePeersByDataColumn[dataColumn], peer)
+			}
 		}
 	}
 

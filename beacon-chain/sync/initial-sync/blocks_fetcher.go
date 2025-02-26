@@ -1121,7 +1121,7 @@ func (f *blocksFetcher) waitForPeersForDataColumns(
 	}
 
 	// Get the peers that are admissible for the data columns.
-	dataColumnsByAdmissiblePeer, admissiblePeersByDataColumn, descriptions, err := f.p2p.AdmissiblePeersForCustodyGroups(rangeReqPeers, neededDataColumns)
+	dataColumnsByAdmissiblePeer, admissiblePeersByDataColumn, descriptions, err := f.p2p.AdmissiblePeersForDataColumns(rangeReqPeers, neededDataColumns)
 	if err != nil {
 		return nil, errors.Wrap(err, "peers with slot and data columns")
 	}
@@ -1181,7 +1181,7 @@ func (f *blocksFetcher) waitForPeersForDataColumns(
 		}
 
 		// Get the peers that are admissible for the data columns.
-		dataColumnsByAdmissiblePeer, admissiblePeersByDataColumn, descriptions, err = f.p2p.AdmissiblePeersForCustodyGroups(rangeReqPeers, neededDataColumns)
+		dataColumnsByAdmissiblePeer, admissiblePeersByDataColumn, descriptions, err = f.p2p.AdmissiblePeersForDataColumns(rangeReqPeers, neededDataColumns)
 		if err != nil {
 			return nil, errors.Wrap(err, "peers with slot and data columns")
 		}

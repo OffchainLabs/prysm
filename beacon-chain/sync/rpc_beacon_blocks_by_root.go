@@ -236,7 +236,7 @@ func (s *Service) requestAndSaveDataColumnSidecars(
 
 	// Assemble the peers who can provide the needed data columns.
 	peers := s.getBestPeers()
-	dataColumnsByAdmissiblePeer, _, _, err := s.cfg.p2p.AdmissiblePeersForCustodyGroups(peers, nil)
+	dataColumnsByAdmissiblePeer, _, _, err := s.cfg.p2p.AdmissiblePeersForDataColumns(peers, nil)
 	if err != nil {
 		return err
 	}

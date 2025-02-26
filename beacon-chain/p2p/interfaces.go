@@ -116,5 +116,5 @@ type MetadataProvider interface {
 type DataColumnsHandler interface {
 	CustodyGroupCountFromPeer(peer.ID) uint64
 	AdmissibleCustodyGroupsPeers([]peer.ID) ([]peer.ID, error)
-	AdmissiblePeersForCustodyGroups([]peer.ID, map[uint64]bool) (map[peer.ID]map[uint64]bool, map[uint64][]peer.ID, []string, error)
+	AdmissiblePeersForDataColumns([]peer.ID, map[uint64]bool) (map[peer.ID]map[uint64]bool, map[uint64][]peer.ID, []string, error)
 }
