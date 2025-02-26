@@ -1,10 +1,13 @@
 package middleware
 
 import (
+	"bytes"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
+	"compress/gzip"
+	"io"
+	log "github.com/sirupsen/logrus"
 	"github.com/prysmaticlabs/prysm/v5/api"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
@@ -119,6 +122,77 @@ func TestContentTypeHandler(t *testing.T) {
 
 			if status := rr.Code; status != tt.expectedStatusCode {
 				t.Errorf("handler returned wrong status code: got %v want %v", status, tt.expectedStatusCode)
+			}
+		})
+	}
+}
+
+func TestAcceptEncodingHeaderHandler(t *testing.T) {
+
+	dummyContent := "Test gzip middleware content"
+	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, err := w.Write([]byte(dummyContent))
+		require.NoError(t, err)
+	})
+
+	handler := AcceptEncodingHeaderHandler()(nextHandler)
+
+	tests := []struct {
+		name             string
+		acceptEncoding   string
+		expectCompressed bool
+	}{
+		{
+			name:             "Gzip supported",
+			acceptEncoding:   "gzip",
+			expectCompressed: true,
+		},
+		{
+			name:             "Multiple encodings supported",
+			acceptEncoding:   "deflate, gzip",
+			expectCompressed: true,
+		},
+		{
+			name:             "Gzip not supported",
+			acceptEncoding:   "deflate",
+			expectCompressed: false,
+		},
+		{
+			name:             "No accept encoding header",
+			acceptEncoding:   "",
+			expectCompressed: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/", nil)
+			if tt.acceptEncoding != "" {
+				req.Header.Set("Accept-Encoding", tt.acceptEncoding)
+			}
+			rr := httptest.NewRecorder()
+
+			handler.ServeHTTP(rr, req)
+
+			if tt.expectCompressed {
+				require.Equal(t, "gzip", rr.Header().Get("Content-Encoding"), "Expected Content-Encoding header to be 'gzip'")
+
+				compressedBody := rr.Body.Bytes()
+				require.NotEqual(t, dummyContent, string(compressedBody), "Response body should be compressed and differ from the original")
+
+				gzReader, err := gzip.NewReader(bytes.NewReader(compressedBody))
+				require.NoError(t, err, "Failed to create gzipReader")
+				defer func() {
+					if err := gzReader.Close(); err != nil {
+						log.WithError(err).Error("Failed to close gzip writer")
+					}
+				}()
+
+				decompressedBody, err := io.ReadAll(gzReader)
+				require.NoError(t, err, "Failed to decompress response body")
+				require.Equal(t, dummyContent, string(decompressedBody), "Decompressed content should match the original")
+			} else {
+				require.Equal(t, dummyContent, rr.Body.String(), "Response body should be uncompressed and match the original")
 			}
 		})
 	}
