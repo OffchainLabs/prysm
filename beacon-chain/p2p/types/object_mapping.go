@@ -33,6 +33,9 @@ var (
 	// AggregateAttestationMap maps the fork-version to the underlying data type for that
 	// particular fork period.
 	AggregateAttestationMap map[[4]byte]func() (ethpb.SignedAggregateAttAndProof, error)
+	// AttesterSlashingMap maps the fork-version to the underlying data type for that particular
+	// fork period.
+	AttesterSlashingMap map[[4]byte]func() (ethpb.AttSlashing, error)
 )
 
 // InitializeDataMaps initializes all the relevant object maps. This function is called to
@@ -149,6 +152,31 @@ func InitializeDataMaps() {
 		},
 		bytesutil.ToBytes4(params.BeaconConfig().FuluForkVersion): func() (ethpb.SignedAggregateAttAndProof, error) {
 			return &ethpb.SignedAggregateAttestationAndProofElectra{}, nil
+		},
+	}
+
+	// Reset our aggregate attestation map.
+	AttesterSlashingMap = map[[4]byte]func() (ethpb.AttSlashing, error){
+		bytesutil.ToBytes4(params.BeaconConfig().GenesisForkVersion): func() (ethpb.AttSlashing, error) {
+			return &ethpb.AttesterSlashing{}, nil
+		},
+		bytesutil.ToBytes4(params.BeaconConfig().AltairForkVersion): func() (ethpb.AttSlashing, error) {
+			return &ethpb.AttesterSlashing{}, nil
+		},
+		bytesutil.ToBytes4(params.BeaconConfig().BellatrixForkVersion): func() (ethpb.AttSlashing, error) {
+			return &ethpb.AttesterSlashing{}, nil
+		},
+		bytesutil.ToBytes4(params.BeaconConfig().CapellaForkVersion): func() (ethpb.AttSlashing, error) {
+			return &ethpb.AttesterSlashing{}, nil
+		},
+		bytesutil.ToBytes4(params.BeaconConfig().DenebForkVersion): func() (ethpb.AttSlashing, error) {
+			return &ethpb.AttesterSlashing{}, nil
+		},
+		bytesutil.ToBytes4(params.BeaconConfig().ElectraForkVersion): func() (ethpb.AttSlashing, error) {
+			return &ethpb.AttesterSlashingElectra{}, nil
+		},
+		bytesutil.ToBytes4(params.BeaconConfig().FuluForkVersion): func() (ethpb.AttSlashing, error) {
+			return &ethpb.AttesterSlashingElectra{}, nil
 		},
 	}
 }
