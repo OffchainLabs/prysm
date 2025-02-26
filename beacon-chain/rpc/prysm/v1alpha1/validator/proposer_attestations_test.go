@@ -794,17 +794,19 @@ func Test_packAttestations_ElectraOnChainAggregates(t *testing.T) {
 
 	require.NoError(t, st.SetSlot(params.BeaconConfig().SlotsPerEpoch+1))
 
-	atts, err := s.packAttestations(ctx, st, params.BeaconConfig().SlotsPerEpoch)
-	require.NoError(t, err)
-	require.Equal(t, 6, len(atts))
-	assert.Equal(t, true,
-		atts[0].GetAggregationBits().Count() >= atts[1].GetAggregationBits().Count() &&
-			atts[1].GetAggregationBits().Count() >= atts[2].GetAggregationBits().Count() &&
-			atts[2].GetAggregationBits().Count() >= atts[3].GetAggregationBits().Count() &&
-			atts[3].GetAggregationBits().Count() >= atts[4].GetAggregationBits().Count() &&
-			atts[4].GetAggregationBits().Count() >= atts[5].GetAggregationBits().Count(),
-		"on-chain aggregates are not sorted by aggregation bit count",
-	)
+	t.Run("ok", func(t *testing.T) {
+		atts, err := s.packAttestations(ctx, st, params.BeaconConfig().SlotsPerEpoch)
+		require.NoError(t, err)
+		require.Equal(t, 6, len(atts))
+		assert.Equal(t, true,
+			atts[0].GetAggregationBits().Count() >= atts[1].GetAggregationBits().Count() &&
+				atts[1].GetAggregationBits().Count() >= atts[2].GetAggregationBits().Count() &&
+				atts[2].GetAggregationBits().Count() >= atts[3].GetAggregationBits().Count() &&
+				atts[3].GetAggregationBits().Count() >= atts[4].GetAggregationBits().Count() &&
+				atts[4].GetAggregationBits().Count() >= atts[5].GetAggregationBits().Count(),
+			"on-chain aggregates are not sorted by aggregation bit count",
+		)
+	})
 
 	t.Run("slot takes precedence", func(t *testing.T) {
 		moreRecentAtt := &ethpb.AttestationElectra{
@@ -814,7 +816,7 @@ func Test_packAttestations_ElectraOnChainAggregates(t *testing.T) {
 			Signature:       sig.Marshal(),
 		}
 		require.NoError(t, pool.SaveUnaggregatedAttestations([]ethpb.Att{moreRecentAtt}))
-		atts, err = s.packAttestations(ctx, st, params.BeaconConfig().SlotsPerEpoch)
+		atts, err := s.packAttestations(ctx, st, params.BeaconConfig().SlotsPerEpoch)
 		require.NoError(t, err)
 		require.Equal(t, 7, len(atts))
 		assert.Equal(t, true, atts[0].GetData().Slot == 1)

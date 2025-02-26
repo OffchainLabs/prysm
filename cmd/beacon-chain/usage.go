@@ -142,6 +142,7 @@ var appHelpFlagGroups = []flagGroup{
 			genesis.BeaconAPIURL,
 			storage.BlobStoragePathFlag,
 			storage.BlobRetentionEpochFlag,
+			storage.BlobStorageLayout,
 			backfill.EnableExperimentalBackfill,
 			backfill.BackfillWorkerCount,
 			backfill.BackfillBatchSize,

@@ -34,6 +34,7 @@ import (
 
 const broadcastBLSChangesRateLimit = 128
 
+// Deprecated: use ListAttestationsV2 instead
 // ListAttestations retrieves attestations known by the node but
 // not necessarily incorporated into any block. Allows filtering by committee index or slot.
 func (s *Server) ListAttestations(w http.ResponseWriter, r *http.Request) {
@@ -320,6 +321,13 @@ func (s *Server) handleAttestationsElectra(
 	}
 
 	for i, singleAtt := range validAttestations {
+		s.OperationNotifier.OperationFeed().Send(&feed.Event{
+			Type: operation.SingleAttReceived,
+			Data: &operation.SingleAttReceivedData{
+				Attestation: singleAtt,
+			},
+		})
+
 		targetState, err := s.AttestationStateFetcher.AttestationTargetState(ctx, singleAtt.Data.Target)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "could not get target state for attestation")
@@ -329,13 +337,6 @@ func (s *Server) handleAttestationsElectra(
 			return nil, nil, errors.Wrap(err, "could not get committee for attestation")
 		}
 		att := singleAtt.ToAttestationElectra(committee)
-
-		s.OperationNotifier.OperationFeed().Send(&feed.Event{
-			Type: operation.UnaggregatedAttReceived,
-			Data: &operation.UnAggregatedAttReceivedData{
-				Attestation: att,
-			},
-		})
 
 		wantedEpoch := slots.ToEpoch(att.Data.Slot)
 		vals, err := s.HeadFetcher.HeadValidatorsIndices(ctx, wantedEpoch)
@@ -707,6 +708,7 @@ func (s *Server) ListBLSToExecutionChanges(w http.ResponseWriter, r *http.Reques
 	})
 }
 
+// Deprecated: use GetAttesterSlashingsV2 instead
 // GetAttesterSlashings retrieves attester slashings known by the node but
 // not necessarily incorporated into any block.
 func (s *Server) GetAttesterSlashings(w http.ResponseWriter, r *http.Request) {

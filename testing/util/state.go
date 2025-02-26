@@ -455,13 +455,13 @@ func NewBeaconStateElectra(options ...func(state *ethpb.BeaconStateElectra) erro
 }
 
 // NewBeaconStateFulu creates a beacon state with minimum marshalable fields.
-func NewBeaconStateFulu(options ...func(state *ethpb.BeaconStateFulu) error) (state.BeaconState, error) {
+func NewBeaconStateFulu(options ...func(state *ethpb.BeaconStateElectra) error) (state.BeaconState, error) {
 	pubkeys := make([][]byte, 512)
 	for i := range pubkeys {
 		pubkeys[i] = make([]byte, 48)
 	}
 
-	seed := &ethpb.BeaconStateFulu{
+	seed := &ethpb.BeaconStateElectra{
 		BlockRoots:                 filledByteSlice2D(uint64(params.BeaconConfig().SlotsPerHistoricalRoot), 32),
 		StateRoots:                 filledByteSlice2D(uint64(params.BeaconConfig().SlotsPerHistoricalRoot), 32),
 		Slashings:                  make([]uint64, params.BeaconConfig().EpochsPerSlashingsVector),

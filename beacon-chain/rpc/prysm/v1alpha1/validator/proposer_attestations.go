@@ -2,8 +2,10 @@ package validator
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 
 	"github.com/pkg/errors"
@@ -277,7 +279,14 @@ func (a proposerAtts) sortOnChainAggregates() (proposerAtts, error) {
 		return a, nil
 	}
 
-	return a.sortByProfitabilityUsingMaxCover()
+	// Sort by slot first, then by bit count.
+	slices.SortFunc(a, func(a, b ethpb.Att) int {
+		return cmp.Or(
+			-cmp.Compare(a.GetData().Slot, b.GetData().Slot),
+			-cmp.Compare(a.GetAggregationBits().Count(), b.GetAggregationBits().Count()))
+	})
+
+	return a, nil
 }
 
 // Separate attestations by slot, as slot number takes higher precedence when sorting.

@@ -70,7 +70,7 @@ type BeaconChainConfig struct {
 
 	// Fork choice algorithm constants.
 	ProposerScoreBoost              uint64           `yaml:"PROPOSER_SCORE_BOOST" spec:"true"`                // ProposerScoreBoost defines a value that is a % of the committee weight for fork-choice boosting.
-	ReorgWeightThreshold            uint64           `yaml:"REORG_WEIGHT_THRESHOLD" spec:"true"`              // ReorgWeightThreshold defines a value that is a % of the committee weight to consider a block weak and subject to being orphaned.
+	ReorgHeadWeightThreshold        uint64           `yaml:"REORG_HEAD_WEIGHT_THRESHOLD" spec:"true"`         // ReorgHeadWeightThreshold defines a value that is a % of the committee weight to consider a block weak and subject to being orphaned.
 	ReorgParentWeightThreshold      uint64           `yaml:"REORG_PARENT_WEIGHT_THRESHOLD" spec:"true"`       // ReorgParentWeightThreshold defines a value that is a % of the committee weight to consider a parent block strong and subject its child to being orphaned.
 	ReorgMaxEpochsSinceFinalization primitives.Epoch `yaml:"REORG_MAX_EPOCHS_SINCE_FINALIZATION" spec:"true"` // This defines a limit to consider safe to orphan a block if the network is finalizing
 	IntervalsPerSlot                uint64           `yaml:"INTERVALS_PER_SLOT" spec:"true"`                  // IntervalsPerSlot defines the number of fork choice intervals in a slot defined in the fork choice spec.
@@ -217,6 +217,10 @@ type BeaconChainConfig struct {
 	TerminalBlockHash                common.Hash      `yaml:"TERMINAL_BLOCK_HASH" spec:"true"`                  // TerminalBlockHash of beacon chain.
 	TerminalBlockHashActivationEpoch primitives.Epoch `yaml:"TERMINAL_BLOCK_HASH_ACTIVATION_EPOCH" spec:"true"` // TerminalBlockHashActivationEpoch of beacon chain.
 	TerminalTotalDifficulty          string           `yaml:"TERMINAL_TOTAL_DIFFICULTY" spec:"true"`            // TerminalTotalDifficulty is part of the experimental Bellatrix spec. This value is type is currently TBD.
+	MaxBytesPerTransaction           uint64           `yaml:"MAX_BYTES_PER_TRANSACTION" spec:"true"`            // MaxBytesPerTransaction is the maximum number of bytes a single transaction can have.
+	MaxTransactionsPerPayload        uint64           `yaml:"MAX_TRANSACTIONS_PER_PAYLOAD" spec:"true"`         // MaxTransactionsPerPayload is the maximum number of transactions a single execution payload can include.
+	BytesPerLogsBloom                uint64           `yaml:"BYTES_PER_LOGS_BLOOM" spec:"true"`                 // BytesPerLogsBloom is the number of bytes that constitute a log bloom filter.
+	MaxExtraDataBytes                uint64           `yaml:"MAX_EXTRA_DATA_BYTES" spec:"true"`                 // MaxExtraDataBytes is the maximum number of bytes for the execution payload's extra data field.
 	DefaultFeeRecipient              common.Address   // DefaultFeeRecipient where the transaction fee goes to.
 	EthBurnAddressHex                string           // EthBurnAddressHex is the constant eth address written in hex format to burn fees in that network. the default is 0x0
 	DefaultBuilderGasLimit           uint64           // DefaultBuilderGasLimit is the default used to set the gaslimit for the Builder APIs, typically at around 30M wei.
@@ -240,6 +244,9 @@ type BeaconChainConfig struct {
 	MaxRequestBlobSidecars           uint64           `yaml:"MAX_REQUEST_BLOB_SIDECARS" spec:"true"`             // MaxRequestBlobSidecars is the maximum number of blobs to request in a single request.
 	MaxRequestBlobSidecarsElectra    uint64           `yaml:"MAX_REQUEST_BLOB_SIDECARS_ELECTRA" spec:"true"`     // MaxRequestBlobSidecarsElectra is the maximum number of blobs to request in a single request.
 	MaxRequestBlocksDeneb            uint64           `yaml:"MAX_REQUEST_BLOCKS_DENEB" spec:"true"`              // MaxRequestBlocksDeneb is the maximum number of blocks in a single request after the deneb epoch.
+	FieldElementsPerBlob             uint64           `yaml:"FIELD_ELEMENTS_PER_BLOB" spec:"true"`               // FieldElementsPerBlob is the number of field elements that constitute a single blob.
+	MaxBlobCommitmentsPerBlock       uint64           `yaml:"MAX_BLOB_COMMITMENTS_PER_BLOCK" spec:"true"`        // MaxBlobCommitmentsPerBlock is the maximum number of KZG commitments that a block can have.
+	KzgCommitmentInclusionProofDepth uint64           `yaml:"KZG_COMMITMENT_INCLUSION_PROOF_DEPTH" spec:"true"`  // KzgCommitmentInclusionProofDepth is the depth of the merkle proof of a KZG commitment.
 
 	// Values introduced in Electra upgrade
 	MaxPerEpochActivationExitChurnLimit   uint64 `yaml:"MAX_PER_EPOCH_ACTIVATION_EXIT_CHURN_LIMIT" spec:"true"`  // MaxPerEpochActivationExitChurnLimit represents the maximum combined activation and exit churn.
@@ -380,7 +387,7 @@ func (b *BeaconChainConfig) MaximumGossipClockDisparityDuration() time.Duration 
 // TargetBlobsPerBlock returns the target number of blobs per block for the given slot,
 // accounting for changes introduced by the Electra fork.
 func (b *BeaconChainConfig) TargetBlobsPerBlock(slot primitives.Slot) int {
-	if primitives.Epoch(slot.DivSlot(32)) >= b.ElectraForkEpoch {
+	if primitives.Epoch(slot.DivSlot(b.SlotsPerEpoch)) >= b.ElectraForkEpoch {
 		return b.DeprecatedTargetBlobsPerBlockElectra
 	}
 	return b.DeprecatedMaxBlobsPerBlock / 2
@@ -389,7 +396,7 @@ func (b *BeaconChainConfig) TargetBlobsPerBlock(slot primitives.Slot) int {
 // MaxBlobsPerBlock returns the maximum number of blobs per block for the given slot,
 // adjusting for the Electra fork.
 func (b *BeaconChainConfig) MaxBlobsPerBlock(slot primitives.Slot) int {
-	if primitives.Epoch(slot.DivSlot(32)) >= b.ElectraForkEpoch {
+	if primitives.Epoch(slot.DivSlot(b.SlotsPerEpoch)) >= b.ElectraForkEpoch {
 		return b.DeprecatedMaxBlobsPerBlockElectra
 	}
 	return b.DeprecatedMaxBlobsPerBlock
@@ -403,11 +410,27 @@ func (b *BeaconChainConfig) MaxBlobsPerBlockByVersion(v int) int {
 	return b.DeprecatedMaxBlobsPerBlock
 }
 
+// MaxBlobsPerBlockByEpoch returns the maximum number of blobs per block for the given epoch,
+// adjusting for the Electra fork.
+func (b *BeaconChainConfig) MaxBlobsPerBlockAtEpoch(epoch primitives.Epoch) int {
+	if epoch >= b.ElectraForkEpoch {
+		return b.DeprecatedMaxBlobsPerBlockElectra
+	}
+	return b.DeprecatedMaxBlobsPerBlock
+}
+
 // DenebEnabled centralizes the check to determine if code paths
 // that are specific to deneb should be allowed to execute. This will make it easier to find call sites that do this
 // kind of check and remove them post-deneb.
 func DenebEnabled() bool {
 	return BeaconConfig().DenebForkEpoch < math.MaxUint64
+}
+
+// ElectraEnabled centralizes the check to determine if code paths
+// that are specific to electra should be allowed to execute. This will make it easier to find call sites that do this
+// kind of check and remove them post-electra.
+func ElectraEnabled() bool {
+	return BeaconConfig().ElectraForkEpoch < math.MaxUint64
 }
 
 // PeerDASEnabled centralizes the check to determine if code paths

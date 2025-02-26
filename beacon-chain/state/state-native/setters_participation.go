@@ -22,7 +22,6 @@ func (b *BeaconState) SetPreviousParticipationBits(val []byte) error {
 
 	b.previousEpochParticipation = val
 	b.markFieldAsDirty(types.PreviousEpochParticipationBits)
-	b.rebuildTrie[types.PreviousEpochParticipationBits] = true
 	return nil
 }
 
@@ -41,7 +40,6 @@ func (b *BeaconState) SetCurrentParticipationBits(val []byte) error {
 
 	b.currentEpochParticipation = val
 	b.markFieldAsDirty(types.CurrentEpochParticipationBits)
-	b.rebuildTrie[types.CurrentEpochParticipationBits] = true
 	return nil
 }
 
@@ -126,7 +124,6 @@ func (b *BeaconState) ModifyPreviousParticipationBits(mutator func(val []byte) (
 	defer b.lock.Unlock()
 	b.previousEpochParticipation = participation
 	b.markFieldAsDirty(types.PreviousEpochParticipationBits)
-	b.rebuildTrie[types.PreviousEpochParticipationBits] = true
 	return nil
 }
 
@@ -161,6 +158,5 @@ func (b *BeaconState) ModifyCurrentParticipationBits(mutator func(val []byte) ([
 	defer b.lock.Unlock()
 	b.currentEpochParticipation = participation
 	b.markFieldAsDirty(types.CurrentEpochParticipationBits)
-	b.rebuildTrie[types.CurrentEpochParticipationBits] = true
 	return nil
 }

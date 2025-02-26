@@ -144,7 +144,7 @@ var (
 		Usage: "Informs the engine to prepare all local payloads. Useful for relayers and builders.",
 	}
 	EnableLightClient = &cli.BoolFlag{
-		Name:  "enable-lightclient",
+		Name:  "enable-light-client",
 		Usage: "Enables the light client support in the beacon node",
 	}
 	disableResourceManager = &cli.BoolFlag{

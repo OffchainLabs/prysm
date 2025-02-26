@@ -43,6 +43,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// Deprecated: use GetAggregateAttestationV2 instead
 // GetAggregateAttestation aggregates all attestations matching the given attestation data root and slot, returning the aggregated result.
 func (s *Server) GetAggregateAttestation(w http.ResponseWriter, r *http.Request) {
 	_, span := trace.StartSpan(r.Context(), "validator.GetAggregateAttestation")
@@ -256,6 +257,7 @@ func (s *Server) SubmitContributionAndProofs(w http.ResponseWriter, r *http.Requ
 	}
 }
 
+// Deprecated: use SubmitAggregateAndProofsV2 instead
 // SubmitAggregateAndProofs verifies given aggregate and proofs and publishes them on appropriate gossipsub topic.
 func (s *Server) SubmitAggregateAndProofs(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "validator.SubmitAggregateAndProofs")

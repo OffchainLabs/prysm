@@ -131,7 +131,7 @@ func (s *Server) BackupAccounts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.PublicKeys == nil || len(req.PublicKeys) < 1 {
+	if len(req.PublicKeys) < 1 {
 		httputil.HandleError(w, "No public keys specified to backup", http.StatusBadRequest)
 		return
 	}

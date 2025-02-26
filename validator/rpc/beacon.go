@@ -16,6 +16,7 @@ import (
 	nodeClientFactory "github.com/prysmaticlabs/prysm/v5/validator/client/node-client-factory"
 	validatorClientFactory "github.com/prysmaticlabs/prysm/v5/validator/client/validator-client-factory"
 	validatorHelpers "github.com/prysmaticlabs/prysm/v5/validator/helpers"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"google.golang.org/grpc"
 )
 
@@ -55,7 +56,7 @@ func (s *Server) registerBeaconClient() error {
 	)
 
 	restHandler := beaconApi.NewBeaconApiJsonRestHandler(
-		http.Client{Timeout: s.beaconApiTimeout},
+		http.Client{Timeout: s.beaconApiTimeout, Transport: otelhttp.NewTransport(http.DefaultTransport)},
 		s.beaconApiEndpoint,
 	)
 
