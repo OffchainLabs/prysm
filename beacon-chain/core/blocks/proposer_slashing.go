@@ -22,7 +22,8 @@ var ErrCouldNotVerifyBlockHeader = errors.New("could not verify beacon block hea
 type slashValidatorFunc func(
 	ctx context.Context,
 	st state.BeaconState,
-	vid primitives.ValidatorIndex) (state.BeaconState, error)
+	vid primitives.ValidatorIndex,
+	maxEpoch primitives.Epoch, churn uint64) (state.BeaconState, error)
 
 // ProcessProposerSlashings is one of the operations performed
 // on each processed beacon block to slash proposers based on

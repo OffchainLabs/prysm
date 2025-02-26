@@ -153,7 +153,6 @@ func SlashValidator(
 	ctx context.Context,
 	s state.BeaconState,
 	slashedIdx primitives.ValidatorIndex) (state.BeaconState, error) {
-	maxExitEpoch, churn := MaxExitEpochAndChurn(s)
 	s, _, err := InitiateValidatorExit(ctx, s, slashedIdx, maxExitEpoch, churn)
 	if err != nil && !errors.Is(err, ErrValidatorAlreadyExited) {
 		return nil, errors.Wrapf(err, "could not initiate validator %d exit", slashedIdx)
