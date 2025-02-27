@@ -907,7 +907,7 @@ func (f *blocksFetcher) fetchBwbSliceFromPeers(
 	}
 
 	// Select the peers that will be requested.
-	dataColumnsToFetchByPeer, err := p2p.SelectPeersToFetchDataColumnsFrom(bwbSlice.dataColumns, dataColumnsByAdmissiblePeer)
+	dataColumnsToFetchByPeer, err := prysmsync.SelectPeersToFetchDataColumnsFrom(bwbSlice.dataColumns, dataColumnsByAdmissiblePeer)
 	if err != nil {
 		// This should never happen.
 		return errors.Wrap(err, "select peers to fetch data columns from")

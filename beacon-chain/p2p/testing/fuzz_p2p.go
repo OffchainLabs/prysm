@@ -196,3 +196,16 @@ func (*FakeP2P) AdmissibleCustodyGroupsPeers(peers []peer.ID) ([]peer.ID, error)
 func (*FakeP2P) AdmissibleCustodySamplingPeers(peers []peer.ID) ([]peer.ID, error) {
 	return peers, nil
 }
+
+func (*FakeP2P) AdmissiblePeersForDataColumns(peers []peer.ID, dataColumns map[uint64]bool) (map[peer.ID]map[uint64]bool, map[uint64][]peer.ID, []string, error) {
+	dataColumnsByAdmissiblePeer := make(map[peer.ID]map[uint64]bool)
+	admissiblePeersByDataColumn := make(map[uint64][]peer.ID)
+	for dataColumn := range dataColumns {
+		for _, peer := range peers {
+			dataColumnsByAdmissiblePeer[peer][dataColumn] = true
+			admissiblePeersByDataColumn[dataColumn] = append(admissiblePeersByDataColumn[dataColumn], peer)
+		}
+	}
+	descriptions := make([]string, 0)
+	return dataColumnsByAdmissiblePeer, admissiblePeersByDataColumn, descriptions, nil
+}

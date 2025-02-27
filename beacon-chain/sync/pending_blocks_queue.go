@@ -207,7 +207,8 @@ func (s *Service) processAndBroadcastBlock(ctx context.Context, b interfaces.Rea
 	}
 
 	if coreTime.PeerDASIsActive(blockSlot) {
-		missingDataColumns, err := s.findMissingDataColumns(blkRoot, b)
+		missingDataColumns, err := FindMissingDataColumns(blkRoot, b, s.cfg.p2p.NodeID(), s.cfg.blobStorage)
+
 		if err != nil {
 			return errors.Wrap(err, "find missing data columns")
 		}
