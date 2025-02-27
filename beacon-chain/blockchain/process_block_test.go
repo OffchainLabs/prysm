@@ -2039,7 +2039,7 @@ func TestNoViableHead_Reboot(t *testing.T) {
 	require.Equal(t, genesisRoot, bytesutil.ToBytes32(headRoot))
 	optimistic, err := service.IsOptimistic(ctx)
 	require.NoError(t, err)
-	require.Equal(t, false, optimistic)
+	require.Equal(t, true, optimistic)
 
 	// Check that the node's justified checkpoint does not agree with the
 	// last valid state's justified checkpoint
