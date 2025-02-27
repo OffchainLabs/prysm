@@ -38,7 +38,7 @@ func aesCTRXOR(key, inText, iv []byte) ([]byte, error) {
 	stream := cipher.NewCTR(aesBlock, iv)
 	outText := make([]byte, len(inText))
 	stream.XORKeyStream(outText, inText)
-	return outText, err
+	return outText, nil
 }
 
 func ensureInt(x interface{}) int {
