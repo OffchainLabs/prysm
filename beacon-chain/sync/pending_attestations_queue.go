@@ -197,7 +197,7 @@ func (s *Service) processUnaggregated(ctx context.Context, att ethpb.Att) {
 				return
 			}
 		}
-		s.setSeenCommitteeIndicesSlot(data.Slot, data.CommitteeIndex, att.GetAggregationBits())
+		s.setSeenCommitteeIndicesSlot(data.Slot, att.GetCommitteeIndex(), att.GetAggregationBits())
 
 		valCount, err := helpers.ActiveValidatorCount(ctx, preState, slots.ToEpoch(data.Slot))
 		if err != nil {
