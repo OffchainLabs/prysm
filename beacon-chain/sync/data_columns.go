@@ -46,10 +46,10 @@ func RequestDataColumnSidecars(
 	}
 	peersToFetchFrom, err := SelectPeersToFetchDataColumnsFrom(dataColumns, dataColumnsByAdmissiblePeer)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "couldn't select peers to fetch data columns from")
 	}
 	if len(peersToFetchFrom) == 0 {
-		return nil, errors.Wrapf(errNoPeersForPending, "block root=%#x", blkRoot)
+		return nil, errors.Wrapf(err, "no peers to fetch data columns from for block root=%#x", blkRoot)
 	}
 
 	// Request the data columns from each peer.
@@ -66,7 +66,7 @@ func RequestDataColumnSidecars(
 
 		peerSidecars, err := SendDataColumnSidecarsByRootRequest(ctx, clock, p2p, peer, ctxMap, &request)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "couldn't send data column sidecars by root request")
 		}
 		sidecars = append(sidecars, peerSidecars...)
 	}

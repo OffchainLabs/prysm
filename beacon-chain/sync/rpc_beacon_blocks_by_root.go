@@ -103,7 +103,6 @@ func (s *Service) sendBeaconBlocksRequest(
 			continue
 		}
 
-		// FIXME: Does this need to be in an else branch? It doesn't seem to apply if PeerDAS is active.
 		request, err := s.pendingBlobsRequestForBlock(blkRoot, blk)
 		if err != nil {
 			return errors.Wrap(err, "pending blobs request for block")
@@ -240,12 +239,12 @@ func (s *Service) requestAndSaveDataColumnSidecars(
 	peers := s.getBestPeers()
 	sidecars, err := RequestDataColumnSidecars(ctx, dataColumns, block, blkRoot, peers, s.cfg.clock, s.cfg.p2p, s.ctxMap, s.newColumnsVerifier)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "couldn't request data column sidecars")
 	}
 
 	err = SaveDataColumns(sidecars, s.cfg.blobStorage)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "couldn't save data column sidecars")
 	}
 
 	return nil
