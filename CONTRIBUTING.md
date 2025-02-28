@@ -125,7 +125,7 @@ Navigate to your fork of the repo on GitHub. On the upper left where the current
 
 **16. Add an entry to CHANGELOG.md.**
 
-All PRs must must include a changelog fragment file in the `changelog` directory. If your change is not user-facing or should not be mentioned in the changelog for some other reason, you may use the `Ignored` changelog section in your fragment's header to satisfy this requirement without altering the final release changelog. See the [Maintaining CHANGELOG.md](#maintaining-changelogmd) section for more information.
+All PRs must include a changelog fragment file in the `changelog` directory. If your change is not user-facing or should not be mentioned in the changelog for some other reason, you may use the `Ignored` changelog section in your fragment's header to satisfy this requirement without altering the final release changelog. See the [Maintaining CHANGELOG.md](#maintaining-changelogmd) section for more information.
 
 **17. Create a pull request.**
 
