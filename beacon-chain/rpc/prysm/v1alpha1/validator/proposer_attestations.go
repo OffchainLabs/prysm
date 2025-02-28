@@ -39,13 +39,6 @@ func (vs *Server) packAttestations(ctx context.Context, latestState state.Beacon
 	} else {
 		atts = vs.AttPool.AggregatedAttestations()
 		atts = vs.validateAndDeleteAttsInPool(ctx, latestState, atts)
-
-		uAtts, err := vs.AttPool.UnaggregatedAttestations()
-		if err != nil {
-			return nil, errors.Wrap(err, "could not get unaggregated attestations")
-		}
-		uAtts = vs.validateAndDeleteAttsInPool(ctx, latestState, uAtts)
-		atts = append(atts, uAtts...)
 	}
 
 	// Checking the state's version here will give the wrong result if the last slot of Deneb is missed.

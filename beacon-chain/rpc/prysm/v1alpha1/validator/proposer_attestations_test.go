@@ -815,7 +815,7 @@ func Test_packAttestations_ElectraOnChainAggregates(t *testing.T) {
 			Data:            util.HydrateAttestationData(&ethpb.AttestationData{Slot: 1, BeaconBlockRoot: bytesutil.PadTo([]byte{'0'}, 32)}),
 			Signature:       sig.Marshal(),
 		}
-		require.NoError(t, pool.SaveUnaggregatedAttestations([]ethpb.Att{moreRecentAtt}))
+		require.NoError(t, pool.SaveAggregatedAttestations([]ethpb.Att{moreRecentAtt}))
 		atts, err := s.packAttestations(ctx, st, params.BeaconConfig().SlotsPerEpoch)
 		require.NoError(t, err)
 		require.Equal(t, 7, len(atts))
