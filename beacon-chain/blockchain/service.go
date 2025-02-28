@@ -315,33 +315,37 @@ func (s *Service) originRootFromSavedState(ctx context.Context) ([32]byte, error
 	return genesisBlkRoot, nil
 }
 
-// initializeHeadFromDB uses the finalized checkpoint and head block found in the database to set the current head.
+// initializeHeadFromDB uses the finalized checkpoint and head block root from forkchoice to set the current head.
 // Note that this may block until stategen replays blocks between the finalized and head blocks
 // if the head sync flag was specified and the gap between the finalized and head blocks is at least 128 epochs long.
-func (s *Service) initializeHeadFromDB(ctx context.Context, finalizedState state.BeaconState) error {
+func (s *Service) initializeHead(ctx context.Context, st state.BeaconState) error {
 	cp := s.FinalizedCheckpt()
-	fRoot := [32]byte(cp.Root)
-	finalizedRoot := s.ensureRootNotZeros(fRoot)
-
-	if finalizedState == nil || finalizedState.IsNil() {
+	fRoot := s.ensureRootNotZeros([32]byte(cp.Root))
+	if st == nil || st.IsNil() {
 		return errors.New("finalized state can't be nil")
 	}
 
-	finalizedBlock, err := s.getBlock(ctx, finalizedRoot)
+	root, err := s.cfg.ForkChoiceStore.Head(s.ctx)
 	if err != nil {
-		return errors.Wrap(err, "could not get finalized block")
+		return errors.Wrap(err, "could not get head from fork choice")
 	}
-	if err := s.setHead(&head{
-		finalizedRoot,
-		finalizedBlock,
-		finalizedState,
-		finalizedBlock.Block().Slot(),
+	blk, err := s.cfg.BeaconDB.Block(ctx, root)
+	if err != nil {
+		return errors.Wrap(err, "could not get head block")
+	}
+	if root != fRoot {
+		st, err = s.cfg.StateGen.StateByRoot(ctx, root)
+		if err != nil {
+			return errors.Wrap(err, "could not get head state")
+		}
+	}
+	return errors.Wrap(s.setHead(&head{
+		root,
+		blk,
+		st,
+		blk.Block().Slot(),
 		false,
-	}); err != nil {
-		return errors.Wrap(err, "could not set head")
-	}
-
-	return nil
+	}), "could not set head")
 }
 
 func (s *Service) startFromExecutionChain() error {
