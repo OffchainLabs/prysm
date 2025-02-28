@@ -38,6 +38,25 @@ func TestLogSubmittedAtts(t *testing.T) {
 		v.LogSubmittedAtts(0)
 		assert.LogsContain(t, logHook, "committeeIndices=\"[2]\"")
 	})
+	t.Run("electra attestations multiple saved", func(t *testing.T) {
+		logHook := logTest.NewGlobal()
+		v := validator{
+			submittedAtts: make(map[submittedAttKey]*submittedAtt),
+		}
+		att := util.HydrateAttestationElectra(&ethpb.AttestationElectra{})
+		att.Data.CommitteeIndex = 0
+		att.CommitteeBits = primitives.NewAttestationCommitteeBits()
+		att.CommitteeBits[0] = 44
+		att.CommitteeBits[1] = 33
+		require.NoError(t, v.saveSubmittedAtt(att, make([]byte, field_params.BLSPubkeyLength), false))
+		att2 := util.HydrateAttestationElectra(&ethpb.AttestationElectra{})
+		att2.Data.CommitteeIndex = 0
+		att2.CommitteeBits = primitives.NewAttestationCommitteeBits()
+		att2.CommitteeBits[0] = 2
+		require.NoError(t, v.saveSubmittedAtt(att2, make([]byte, field_params.BLSPubkeyLength), false))
+		v.LogSubmittedAtts(0)
+		assert.LogsContain(t, logHook, "committeeIndices=\"[2 1]\"")
+	})
 	t.Run("phase0 aggregates", func(t *testing.T) {
 		logHook := logTest.NewGlobal()
 		v := validator{
