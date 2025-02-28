@@ -83,13 +83,12 @@ func (s *Service) CustodyGroupCountFromPeer(pid peer.ID) uint64 {
 //
 // It returns:
 // - A map, where the key of the map is the peer, the value is the custody groups of the peer.
-// - A map, where the key of the map is the custody group, the value is the peer that custodies the group.
+// - A map, where the key of the map is the custody group, the value is a list of peers that custody the group.
 // - A slice of descriptions for non admissible peers.
 // - An error if any.
 //
 // NOTE: distributeSamplesToPeer from the DataColumnSampler implements similar logic,
 // but with only one column queried in each request.
-
 func (s *Service) AdmissiblePeersForDataColumns(
 	peers []peer.ID,
 	neededDataColumns map[uint64]bool,
@@ -123,7 +122,7 @@ func (s *Service) AdmissiblePeersForDataColumns(
 	return dataColumnsByAdmissiblePeer, admissiblePeersByDataColumn, descriptions, nil
 }
 
-// custodyGroupsFromPeer compute all the custody groups indexed by peer.
+// custodyGroupsFromPeer computes all the custody groups indexed by peer.
 func (s *Service) custodyGroupsFromPeer(peers []peer.ID) (map[peer.ID]map[uint64]bool, error) {
 	peerCount := len(peers)
 
