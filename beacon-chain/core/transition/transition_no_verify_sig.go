@@ -378,12 +378,13 @@ func altairOperations(
 	ctx context.Context,
 	st state.BeaconState,
 	beaconBlock interfaces.ReadOnlyBeaconBlock) (state.BeaconState, error) {
-	maxExitEpoch, churn := v.MaxExitEpochAndChurn(st)
-	st, err := b.ProcessProposerSlashings(ctx, st, beaconBlock.Body().ProposerSlashings(), v.SlashValidator, maxExitEpoch, churn)
+	// TODO It might be unclear that exitData is mutated
+	exitData := v.MaxExitEpochAndChurn(st)
+	st, err := b.ProcessProposerSlashings(ctx, st, beaconBlock.Body().ProposerSlashings(), v.SlashValidator, exitData)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process altair proposer slashing")
 	}
-	st, err = b.ProcessAttesterSlashings(ctx, st, beaconBlock.Body().AttesterSlashings(), v.SlashValidator, maxExitEpoch, churn)
+	st, err = b.ProcessAttesterSlashings(ctx, st, beaconBlock.Body().AttesterSlashings(), v.SlashValidator, exitData)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process altair attester slashing")
 	}
@@ -394,7 +395,7 @@ func altairOperations(
 	if _, err := altair.ProcessDeposits(ctx, st, beaconBlock.Body().Deposits()); err != nil {
 		return nil, errors.Wrap(err, "could not process altair deposit")
 	}
-	st, err = b.ProcessVoluntaryExits(ctx, st, beaconBlock.Body().VoluntaryExits())
+	st, err = b.ProcessVoluntaryExits(ctx, st, beaconBlock.Body().VoluntaryExits(), exitData)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process voluntary exits")
 	}
@@ -406,12 +407,12 @@ func phase0Operations(
 	ctx context.Context,
 	st state.BeaconState,
 	beaconBlock interfaces.ReadOnlyBeaconBlock) (state.BeaconState, error) {
-	maxExitEpoch, churn := v.MaxExitEpochAndChurn(st)
-	st, err := b.ProcessProposerSlashings(ctx, st, beaconBlock.Body().ProposerSlashings(), v.SlashValidator, maxExitEpoch, churn)
+	exitData := v.MaxExitEpochAndChurn(st)
+	st, err := b.ProcessProposerSlashings(ctx, st, beaconBlock.Body().ProposerSlashings(), v.SlashValidator, exitData)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process block proposer slashings")
 	}
-	st, err = b.ProcessAttesterSlashings(ctx, st, beaconBlock.Body().AttesterSlashings(), v.SlashValidator, maxExitEpoch, churn)
+	st, err = b.ProcessAttesterSlashings(ctx, st, beaconBlock.Body().AttesterSlashings(), v.SlashValidator, exitData)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process block attester slashings")
 	}
@@ -422,5 +423,5 @@ func phase0Operations(
 	if _, err := altair.ProcessDeposits(ctx, st, beaconBlock.Body().Deposits()); err != nil {
 		return nil, errors.Wrap(err, "could not process deposits")
 	}
-	return b.ProcessVoluntaryExits(ctx, st, beaconBlock.Body().VoluntaryExits())
+	return b.ProcessVoluntaryExits(ctx, st, beaconBlock.Body().VoluntaryExits(), exitData)
 }

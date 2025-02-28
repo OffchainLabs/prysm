@@ -19,28 +19,36 @@ import (
 	"github.com/pkg/errors"
 )
 
+type ExitData struct {
+	MaxExitEpoch primitives.Epoch
+	Churn        uint64
+}
+
 // ErrValidatorAlreadyExited is an error raised when trying to process an exit of
 // an already exited validator
 var ErrValidatorAlreadyExited = errors.New("validator already exited")
 
+// TODO: rename
 // MaxExitEpochAndChurn returns the maximum non-FAR_FUTURE_EPOCH exit
 // epoch and the number of them
-func MaxExitEpochAndChurn(s state.BeaconState) (maxExitEpoch primitives.Epoch, churn uint64) {
+func MaxExitEpochAndChurn(s state.BeaconState) *ExitData {
+	exitData := &ExitData{}
+
 	farFutureEpoch := params.BeaconConfig().FarFutureEpoch
 	err := s.ReadFromEveryValidator(func(idx int, val state.ReadOnlyValidator) error {
 		e := val.ExitEpoch()
 		if e != farFutureEpoch {
-			if e > maxExitEpoch {
-				maxExitEpoch = e
-				churn = 1
-			} else if e == maxExitEpoch {
-				churn++
+			if e > exitData.MaxExitEpoch {
+				exitData.MaxExitEpoch = e
+				exitData.Churn = 1
+			} else if e == exitData.MaxExitEpoch {
+				exitData.Churn++
 			}
 		}
 		return nil
 	})
 	_ = err
-	return
+	return exitData
 }
 
 // InitiateValidatorExit takes in validator index and updates
@@ -64,7 +72,12 @@ func MaxExitEpochAndChurn(s state.BeaconState) (maxExitEpoch primitives.Epoch, c
 //	    # Set validator exit epoch and withdrawable epoch
 //	    validator.exit_epoch = exit_queue_epoch
 //	    validator.withdrawable_epoch = Epoch(validator.exit_epoch + MIN_VALIDATOR_WITHDRAWABILITY_DELAY)
-func InitiateValidatorExit(ctx context.Context, s state.BeaconState, idx primitives.ValidatorIndex, exitQueueEpoch primitives.Epoch, churn uint64) (state.BeaconState, primitives.Epoch, error) {
+func InitiateValidatorExit(
+	ctx context.Context,
+	s state.BeaconState,
+	idx primitives.ValidatorIndex,
+	exitData *ExitData,
+) (state.BeaconState, primitives.Epoch, error) {
 	validator, err := s.ValidatorAtIndex(idx)
 	if err != nil {
 		return nil, 0, err
@@ -83,9 +96,9 @@ func InitiateValidatorExit(ctx context.Context, s state.BeaconState, idx primiti
 		//	if exit_queue_churn >= get_validator_churn_limit(state):
 		//	    exit_queue_epoch += Epoch(1)
 		exitableEpoch := helpers.ActivationExitEpoch(time.CurrentEpoch(s))
-		if exitableEpoch > exitQueueEpoch {
-			exitQueueEpoch = exitableEpoch
-			churn = 0
+		if exitableEpoch > exitData.MaxExitEpoch {
+			exitData.MaxExitEpoch = exitableEpoch
+			exitData.Churn = 0
 		}
 		activeValidatorCount, err := helpers.ActiveValidatorCount(ctx, s, time.CurrentEpoch(s))
 		if err != nil {
@@ -93,30 +106,33 @@ func InitiateValidatorExit(ctx context.Context, s state.BeaconState, idx primiti
 		}
 		currentChurn := helpers.ValidatorExitChurnLimit(activeValidatorCount)
 
-		if churn >= currentChurn {
-			exitQueueEpoch, err = exitQueueEpoch.SafeAdd(1)
+		if exitData.Churn >= currentChurn {
+			exitData.MaxExitEpoch, err = exitData.MaxExitEpoch.SafeAdd(1)
 			if err != nil {
 				return nil, 0, err
 			}
+			exitData.Churn = 1
+		} else {
+			exitData.Churn = exitData.Churn + 1
 		}
 	} else {
 		// [Modified in Electra:EIP7251]
 		// exit_queue_epoch = compute_exit_epoch_and_update_churn(state, validator.effective_balance)
 		var err error
-		exitQueueEpoch, err = s.ExitEpochAndUpdateChurn(primitives.Gwei(validator.EffectiveBalance))
+		exitData.MaxExitEpoch, err = s.ExitEpochAndUpdateChurn(primitives.Gwei(validator.EffectiveBalance))
 		if err != nil {
 			return nil, 0, err
 		}
 	}
-	validator.ExitEpoch = exitQueueEpoch
-	validator.WithdrawableEpoch, err = exitQueueEpoch.SafeAddEpoch(params.BeaconConfig().MinValidatorWithdrawabilityDelay)
+	validator.ExitEpoch = exitData.MaxExitEpoch
+	validator.WithdrawableEpoch, err = exitData.MaxExitEpoch.SafeAddEpoch(params.BeaconConfig().MinValidatorWithdrawabilityDelay)
 	if err != nil {
 		return nil, 0, err
 	}
 	if err := s.UpdateValidatorAtIndex(idx, validator); err != nil {
 		return nil, 0, err
 	}
-	return s, exitQueueEpoch, nil
+	return s, exitData.MaxExitEpoch, nil
 }
 
 // SlashValidator slashes the malicious validator's balance and awards
@@ -153,9 +169,8 @@ func SlashValidator(
 	ctx context.Context,
 	s state.BeaconState,
 	slashedIdx primitives.ValidatorIndex,
-	maxExitEpoch primitives.Epoch,
-	churn uint64) (state.BeaconState, error) {
-	s, _, err := InitiateValidatorExit(ctx, s, slashedIdx, maxExitEpoch, churn)
+	exitData *ExitData) (state.BeaconState, error) {
+	s, _, err := InitiateValidatorExit(ctx, s, slashedIdx, exitData)
 	if err != nil && !errors.Is(err, ErrValidatorAlreadyExited) {
 		return nil, errors.Wrapf(err, "could not initiate validator %d exit", slashedIdx)
 	}

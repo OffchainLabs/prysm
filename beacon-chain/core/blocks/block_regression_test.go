@@ -94,8 +94,7 @@ func TestProcessAttesterSlashings_RegressionSlashableIndices(t *testing.T) {
 	for i, s := range b.Block.Body.AttesterSlashings {
 		ss[i] = s
 	}
-	maxExitEpoch, churn := v.MaxExitEpochAndChurn(beaconState)
-	newState, err := blocks.ProcessAttesterSlashings(t.Context(), beaconState, ss, v.SlashValidator, maxExitEpoch, churn)
+	newState, err := blocks.ProcessAttesterSlashings(t.Context(), beaconState, ss, v.SlashValidator, v.MaxExitEpochAndChurn(beaconState))
 	require.NoError(t, err)
 	newRegistry := newState.Validators()
 	if !newRegistry[expectedSlashedVal].Slashed {

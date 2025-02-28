@@ -53,12 +53,12 @@ func ProcessOperations(
 	// 6110 validations are in VerifyOperationLengths
 	bb := block.Body()
 	// Electra extends the altair operations.
-	maxExitEpoch, churn := v.MaxExitEpochAndChurn(st)
-	st, err := ProcessProposerSlashings(ctx, st, bb.ProposerSlashings(), v.SlashValidator, maxExitEpoch, churn)
+	exitData := v.MaxExitEpochAndChurn(st)
+	st, err := ProcessProposerSlashings(ctx, st, bb.ProposerSlashings(), v.SlashValidator, exitData)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process altair proposer slashing")
 	}
-	st, err = ProcessAttesterSlashings(ctx, st, bb.AttesterSlashings(), v.SlashValidator, maxExitEpoch, churn)
+	st, err = ProcessAttesterSlashings(ctx, st, bb.AttesterSlashings(), v.SlashValidator, exitData)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process altair attester slashing")
 	}
@@ -69,7 +69,7 @@ func ProcessOperations(
 	if _, err := ProcessDeposits(ctx, st, bb.Deposits()); err != nil { // new in electra
 		return nil, errors.Wrap(err, "could not process altair deposit")
 	}
-	st, err = ProcessVoluntaryExits(ctx, st, bb.VoluntaryExits())
+	st, err = ProcessVoluntaryExits(ctx, st, bb.VoluntaryExits(), exitData)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process voluntary exits")
 	}
