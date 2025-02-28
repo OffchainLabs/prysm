@@ -125,7 +125,7 @@ func getChan(key string) chan byte {
 
 // Return a new string with unique elements.
 func unique(arr []string) []string {
-	if arr == nil || len(arr) <= 1 {
+	if len(arr) <= 1 {
 		return arr
 	}
 

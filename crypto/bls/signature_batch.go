@@ -77,7 +77,7 @@ func (s *SignatureBatch) VerifyVerbosely() (bool, error) {
 		}
 	}
 
-	return false, errors.Errorf(errmsg)
+	return false, errors.New(errmsg)
 }
 
 // Copy the attached signature batch and return it
