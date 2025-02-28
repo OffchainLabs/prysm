@@ -504,7 +504,7 @@ func (f *blocksFetcher) filterPeersByTargetSlot(peers []peer.ID, targetSlot prim
 }
 
 // Filter peers to ensure they are synced to the target slot and have sufficient bandwidth to serve the request.
-func (f *blocksFetcher) filterPeersForRangeReq(peers []peer.ID, lastSlot primitives.Slot, blockCount uint64) ([]peer.ID, error) {
+func (f *blocksFetcher) filterPeersByTargetSlotAndBandwidth(peers []peer.ID, lastSlot primitives.Slot, blockCount uint64) ([]peer.ID, error) {
 	if len(peers) == 0 {
 		peers = f.p2p.Peers().Connected()
 	}

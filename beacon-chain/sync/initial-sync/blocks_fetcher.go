@@ -1115,7 +1115,7 @@ func (f *blocksFetcher) waitForPeersForDataColumns(
 	}
 
 	// Filter for peers with head epoch greater than or equal to our target epoch for ByRange requests.
-	rangeReqPeers, err := f.filterPeersForRangeReq(peers, lastSlot, blockCount)
+	rangeReqPeers, err := f.filterPeersByTargetSlotAndBandwidth(peers, lastSlot, blockCount)
 	if err != nil {
 		return nil, errors.Wrap(err, "peers with slot and data columns")
 	}
@@ -1175,7 +1175,7 @@ func (f *blocksFetcher) waitForPeersForDataColumns(
 		time.Sleep(delay)
 
 		// Filter for peers with head epoch greater than or equal to our target epoch for ByRange requests.
-		rangeReqPeers, err = f.filterPeersForRangeReq(peers, lastSlot, blockCount)
+		rangeReqPeers, err = f.filterPeersByTargetSlotAndBandwidth(peers, lastSlot, blockCount)
 		if err != nil {
 			return nil, errors.Wrap(err, "peers with slot and data columns")
 		}
