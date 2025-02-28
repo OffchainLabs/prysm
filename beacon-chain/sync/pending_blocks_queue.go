@@ -12,6 +12,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/async"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	coreTime "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
 	p2ptypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
@@ -207,7 +208,13 @@ func (s *Service) processAndBroadcastBlock(ctx context.Context, b interfaces.Rea
 	}
 
 	if coreTime.PeerDASIsActive(blockSlot) {
-		missingDataColumns, err := FindMissingDataColumns(blkRoot, b, s.cfg.p2p.NodeID(), s.cfg.blobStorage)
+		missingDataColumns, err := FindMissingDataColumns(
+			blkRoot,
+			b,
+			s.cfg.p2p.NodeID(),
+			peerdas.CustodyGroupSamplingSize(),
+			s.cfg.blobStorage,
+		)
 
 		if err != nil {
 			return errors.Wrap(err, "find missing data columns")

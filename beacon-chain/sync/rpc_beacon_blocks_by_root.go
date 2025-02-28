@@ -7,6 +7,7 @@ import (
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	coreTime "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/execution"
@@ -77,7 +78,13 @@ func (s *Service) sendBeaconBlocksRequest(
 
 		if peerDASIsActive {
 			// For the block, check if we store all the data columns we should custody.
-			missingColumns, err := FindMissingDataColumns(blkRoot, blk, s.cfg.p2p.NodeID(), s.cfg.blobStorage)
+			missingColumns, err := FindMissingDataColumns(
+				blkRoot,
+				blk,
+				s.cfg.p2p.NodeID(),
+				peerdas.CustodyGroupSamplingSize(),
+				s.cfg.blobStorage,
+			)
 			if err != nil {
 				return errors.Wrap(err, "find missing data columns")
 			}

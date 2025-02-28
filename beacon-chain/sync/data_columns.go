@@ -119,6 +119,7 @@ func FindMissingDataColumns(
 	root [32]byte,
 	block interfaces.ReadOnlySignedBeaconBlock,
 	nodeID enode.ID,
+	custodyGroupCount uint64,
 	blobStorage *filesystem.BlobStorage,
 ) (map[uint64]bool, error) {
 	// Blocks before Fulu have no data columns.
@@ -148,11 +149,8 @@ func FindMissingDataColumns(
 		}
 	}
 
-	// Retrieve the number of groups we should sample from.
-	samplingGroupSize := peerdas.CustodyGroupSamplingSize()
-
 	// Retrieve the peer info.
-	peerInfo, _, err := peerdas.Info(nodeID, samplingGroupSize)
+	peerInfo, _, err := peerdas.Info(nodeID, custodyGroupCount)
 	if err != nil {
 		return nil, errors.Wrap(err, "peer info")
 	}
