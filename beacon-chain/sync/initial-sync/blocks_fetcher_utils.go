@@ -504,17 +504,30 @@ func (f *blocksFetcher) filterPeersByTargetSlot(peers []peer.ID, targetSlot prim
 }
 
 // Filter peers to ensure they are synced to the target slot and have sufficient bandwidth to serve the request.
-func (f *blocksFetcher) filterPeersByTargetSlotAndBandwidth(peers []peer.ID, lastSlot primitives.Slot, blockCount uint64) ([]peer.ID, error) {
+func (f *blocksFetcher) filterPeersByTargetSlotAndBandwidth(peers []peer.ID, lastSlot primitives.Slot, blockCount uint64) ([]peer.ID, []string, error) {
 	if len(peers) == 0 {
 		peers = f.p2p.Peers().Connected()
 	}
 
-	peers, _, err := f.filterPeersByTargetSlot(peers, lastSlot)
+	slotPeers, descriptions, err := f.filterPeersByTargetSlot(peers, lastSlot)
 	if err != nil {
-		return nil, errors.Wrap(err, "peers with slot and data columns")
+		return nil, nil, errors.Wrap(err, "peers with slot and data columns")
 	}
 
 	// Filter for peers with sufficient bandwidth to serve the request.
-	peers = f.hasSufficientBandwidth(peers, blockCount)
-	return peers, nil
+	slotAndBandwidthPeers := f.hasSufficientBandwidth(slotPeers, blockCount)
+
+	// Add debugging logs for the filtered peers.
+	peerWithSufficientBandwidthMap := make(map[peer.ID]bool, len(peers))
+	for _, peer := range slotAndBandwidthPeers {
+		peerWithSufficientBandwidthMap[peer] = true
+	}
+
+	for _, peer := range slotPeers {
+		if !peerWithSufficientBandwidthMap[peer] {
+			description := fmt.Sprintf("peer %s: does not have sufficient bandwidth", peer)
+			descriptions = append(descriptions, description)
+		}
+	}
+	return slotAndBandwidthPeers, descriptions, nil
 }

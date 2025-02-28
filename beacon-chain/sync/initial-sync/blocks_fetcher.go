@@ -1115,16 +1115,17 @@ func (f *blocksFetcher) waitForPeersForDataColumns(
 	}
 
 	// Filter for peers with head epoch greater than or equal to our target epoch for ByRange requests.
-	rangeReqPeers, err := f.filterPeersByTargetSlotAndBandwidth(peers, lastSlot, blockCount)
+	rangeReqPeers, descriptions, err := f.filterPeersByTargetSlotAndBandwidth(peers, lastSlot, blockCount)
 	if err != nil {
 		return nil, errors.Wrap(err, "peers with slot and data columns")
 	}
 
 	// Get the peers that are admissible for the data columns.
-	dataColumnsByAdmissiblePeer, admissiblePeersByDataColumn, descriptions, err := f.p2p.AdmissiblePeersForDataColumns(rangeReqPeers, neededDataColumns)
+	dataColumnsByAdmissiblePeer, admissiblePeersByDataColumn, moreDescriptions, err := f.p2p.AdmissiblePeersForDataColumns(rangeReqPeers, neededDataColumns)
 	if err != nil {
 		return nil, errors.Wrap(err, "peers with slot and data columns")
 	}
+	descriptions = append(descriptions, moreDescriptions...)
 
 	dataColumnsWithoutPeers := computeDataColumnsWithoutPeers(neededDataColumns, admissiblePeersByDataColumn)
 
@@ -1175,16 +1176,17 @@ func (f *blocksFetcher) waitForPeersForDataColumns(
 		time.Sleep(delay)
 
 		// Filter for peers with head epoch greater than or equal to our target epoch for ByRange requests.
-		rangeReqPeers, err = f.filterPeersByTargetSlotAndBandwidth(peers, lastSlot, blockCount)
+		rangeReqPeers, descriptions, err = f.filterPeersByTargetSlotAndBandwidth(peers, lastSlot, blockCount)
 		if err != nil {
 			return nil, errors.Wrap(err, "peers with slot and data columns")
 		}
 
 		// Get the peers that are admissible for the data columns.
-		dataColumnsByAdmissiblePeer, admissiblePeersByDataColumn, descriptions, err = f.p2p.AdmissiblePeersForDataColumns(rangeReqPeers, neededDataColumns)
+		dataColumnsByAdmissiblePeer, admissiblePeersByDataColumn, moreDescriptions, err = f.p2p.AdmissiblePeersForDataColumns(rangeReqPeers, neededDataColumns)
 		if err != nil {
 			return nil, errors.Wrap(err, "peers with slot and data columns")
 		}
+		descriptions = append(descriptions, moreDescriptions...)
 
 		dataColumnsWithoutPeers = computeDataColumnsWithoutPeers(neededDataColumns, admissiblePeersByDataColumn)
 	}
