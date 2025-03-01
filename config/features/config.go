@@ -276,8 +276,10 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 		logEnabled(enableExperimentalAttestationPool)
 		cfg.EnableExperimentalAttestationPool = true
 	}
-
-	cfg.ForceHead = forceHeadFlag.Value
+	if ctx.IsSet(forceHeadFlag.Name) {
+		logEnabled(forceHeadFlag)
+		cfg.ForceHead = ctx.String(forceHeadFlag.Name)
+	}
 
 	cfg.AggregateIntervals = [3]time.Duration{aggregateFirstInterval.Value, aggregateSecondInterval.Value, aggregateThirdInterval.Value}
 	Init(cfg)

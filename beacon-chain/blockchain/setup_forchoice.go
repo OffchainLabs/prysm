@@ -41,6 +41,7 @@ func (s *Service) startupHeadRoot() [32]byte {
 			log.WithError(err).Error("could not get head block root, starting with finalized block as head")
 			return fRoot
 		}
+		log.Infof("Using Head root of %#x", root)
 		return root
 	}
 	root, err := bytesutil.DecodeHexWithLength(headStr, 32)
@@ -55,24 +56,42 @@ func (s *Service) setupForkchoiceTree(st state.BeaconState) error {
 	headRoot := s.startupHeadRoot()
 	cp := s.FinalizedCheckpt()
 	fRoot := s.ensureRootNotZeros([32]byte(cp.Root))
+	if err := s.setupForkchoiceRoot(st); err != nil {
+		return errors.Wrap(err, "could not set up forkchoice root")
+	}
+	fBlk, err := s.cfg.BeaconDB.Block(s.ctx, fRoot)
+	if err != nil {
+		return errors.Wrap(err, "could not get finalized block")
+	}
+	if err := s.setHead(&head{
+		fRoot,
+		fBlk,
+		st,
+		fBlk.Block().Slot(),
+		false,
+	}); err != nil {
+		return errors.Wrap(err, "could not set head")
+	}
+
 	if headRoot == fRoot {
-		return s.setupForkchoiceRoot(st)
+		return nil
 	}
 	blk, err := s.cfg.BeaconDB.Block(s.ctx, headRoot)
 	if err != nil {
 		log.WithError(err).Error("could not get head block, starting with finalized block as head")
-		return s.setupForkchoiceRoot(st)
+		return nil
 	}
 	if slots.ToEpoch(blk.Block().Slot()) < cp.Epoch {
 		log.WithField("headRoot", fmt.Sprintf("%#x", headRoot)).Error("head block is older than finalized block, starting with finalized block as head")
-		return s.setupForkchoiceRoot(st)
+		return nil
 	}
 	chain, err := s.buildForkchoiceChain(s.ctx, blk)
 	if err != nil {
 		log.WithError(err).Error("could not build forkchoice chain, starting with finalized block as head")
-		return s.setupForkchoiceRoot(st)
+		return nil
 	}
 	s.cfg.ForkChoiceStore.Lock()
+	defer s.cfg.ForkChoiceStore.Unlock()
 	return s.cfg.ForkChoiceStore.InsertChain(s.ctx, chain)
 }
 
@@ -93,7 +112,7 @@ func (s *Service) buildForkchoiceChain(ctx context.Context, head interfaces.Read
 		// This chain sets the justified checkpoint for every block, including some that are older than jp.
 		// This should be however safe for forkchoice at startup.
 		chain = append(chain, &forkchoicetypes.BlockAndCheckpoints{Block: roblock, JustifiedCheckpoint: jp, FinalizedCheckpoint: cp})
-		root := head.Block().ParentRoot()
+		root = head.Block().ParentRoot()
 		if root == fRoot {
 			break
 		}
@@ -155,6 +174,7 @@ func (s *Service) setupForkchoiceCheckpoints() error {
 	fRoot := s.ensureRootNotZeros(bytesutil.ToBytes32(finalized.Root))
 	s.cfg.ForkChoiceStore.Lock()
 	defer s.cfg.ForkChoiceStore.Unlock()
+	log.Infof("jp %#x and %d, fp %#x and %d", justified.Root, justified.Epoch, finalized.Root, finalized.Epoch)
 	if err := s.cfg.ForkChoiceStore.UpdateJustifiedCheckpoint(s.ctx, &forkchoicetypes.Checkpoint{Epoch: justified.Epoch,
 		Root: bytesutil.ToBytes32(justified.Root)}); err != nil {
 		return errors.Wrap(err, "could not update forkchoice's justified checkpoint")
