@@ -174,7 +174,6 @@ func (s *Service) setupForkchoiceCheckpoints() error {
 	fRoot := s.ensureRootNotZeros(bytesutil.ToBytes32(finalized.Root))
 	s.cfg.ForkChoiceStore.Lock()
 	defer s.cfg.ForkChoiceStore.Unlock()
-	log.Infof("jp %#x and %d, fp %#x and %d", justified.Root, justified.Epoch, finalized.Root, finalized.Epoch)
 	if err := s.cfg.ForkChoiceStore.UpdateJustifiedCheckpoint(s.ctx, &forkchoicetypes.Checkpoint{Epoch: justified.Epoch,
 		Root: bytesutil.ToBytes32(justified.Root)}); err != nil {
 		return errors.Wrap(err, "could not update forkchoice's justified checkpoint")
