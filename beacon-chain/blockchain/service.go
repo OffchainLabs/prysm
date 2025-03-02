@@ -39,6 +39,7 @@ import (
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	prysmTime "github.com/prysmaticlabs/prysm/v5/time"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
+	"github.com/sirupsen/logrus"
 )
 
 // Service represents a service that handles the internal
@@ -325,10 +326,9 @@ func (s *Service) initializeHead(ctx context.Context, st state.BeaconState) erro
 		return errors.New("finalized state can't be nil")
 	}
 
-	root, err := s.cfg.ForkChoiceStore.Head(s.ctx)
-	if err != nil {
-		return errors.Wrap(err, "could not get head from fork choice")
-	}
+	s.cfg.ForkChoiceStore.RLock()
+	root := s.cfg.ForkChoiceStore.HighestReceivedBlockRoot()
+	s.cfg.ForkChoiceStore.RUnlock()
 	blk, err := s.cfg.BeaconDB.Block(ctx, root)
 	if err != nil {
 		return errors.Wrap(err, "could not get head block")
@@ -339,6 +339,10 @@ func (s *Service) initializeHead(ctx context.Context, st state.BeaconState) erro
 			return errors.Wrap(err, "could not get head state")
 		}
 	}
+	log.WithFields(logrus.Fields{
+		"root": fmt.Sprintf("%#x", root),
+		"slot": blk.Block().Slot(),
+	}).Info("Initialized head block from DB")
 	return errors.Wrap(s.setHead(&head{
 		root,
 		blk,
