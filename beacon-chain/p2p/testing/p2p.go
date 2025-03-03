@@ -467,14 +467,6 @@ func (s *TestP2P) CustodyGroupCountFromPeer(pid peer.ID) uint64 {
 	return custodyGroupCount
 }
 
-func (*TestP2P) AdmissibleCustodyGroupsPeers(peers []peer.ID) ([]peer.ID, error) {
-	return peers, nil
-}
-
-func (*TestP2P) AdmissibleCustodySamplingPeers(peers []peer.ID) ([]peer.ID, error) {
-	return peers, nil
-}
-
 func (*TestP2P) AdmissiblePeersForDataColumns(peers []peer.ID, dataColumns map[uint64]bool) (map[peer.ID]map[uint64]bool, map[uint64][]peer.ID, []string, error) {
 	dataColumnsByAdmissiblePeer := make(map[peer.ID]map[uint64]bool)
 	admissiblePeersByDataColumn := make(map[uint64][]peer.ID)
