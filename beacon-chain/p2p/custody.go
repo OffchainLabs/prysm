@@ -101,7 +101,7 @@ func (s *Service) AdmissiblePeersForDataColumns(
 	// Compute custody columns for each peer.
 	dataColumnsByPeer, err := s.custodyColumnsFromPeers(peers)
 	if err != nil {
-		return nil, nil, nil, errors.Wrap(err, "couldn't get custody columns from peers")
+		return nil, nil, nil, errors.Wrap(err, "custody columns from peers")
 	}
 
 	// Filter peers which custody at least one needed data column.
@@ -162,7 +162,7 @@ func convertCustodyGroupsToDataColumnsByPeer(custodyGroupsByPeer map[peer.ID]map
 	for peer, custodyGroups := range custodyGroupsByPeer {
 		custodyColumns, err := peerdas.CustodyColumns(custodyGroups)
 		if err != nil {
-			return nil, errors.Wrap(err, "couldn't get custody columns from groups")
+			return nil, errors.Wrap(err, "custody columns")
 		}
 
 		dataColumnsByPeer[peer] = custodyColumns
