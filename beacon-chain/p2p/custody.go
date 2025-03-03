@@ -110,10 +110,10 @@ func (s *Service) AdmissiblePeersForDataColumns(
 
 	// Compute a map from needed data columns to their peers.
 	admissiblePeersByDataColumn := make(map[uint64][]peer.ID, neededDataColumnsCount)
-	for peer := range dataColumnsByAdmissiblePeer {
+	for peerId, peerDataColumns := range dataColumnsByAdmissiblePeer {
 		for dataColumn := range neededDataColumns {
-			if dataColumnsByAdmissiblePeer[peer][dataColumn] {
-				admissiblePeersByDataColumn[dataColumn] = append(admissiblePeersByDataColumn[dataColumn], peer)
+			if peerDataColumns[dataColumn] {
+				admissiblePeersByDataColumn[dataColumn] = append(admissiblePeersByDataColumn[dataColumn], peerId)
 			}
 		}
 	}
