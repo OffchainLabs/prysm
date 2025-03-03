@@ -428,7 +428,7 @@ func (s *Service) fetchOriginColumns(pids []peer.ID) error {
 		return fmt.Errorf("couldn't assemble the required columns from peers for checkpoint sync block %#x", r)
 	}
 
-	log.WithField("nColumns", len(sidecars)).WithField("root", fmt.Sprintf("%#x", r)).Info("Successfully downloaded blobs for checkpoint sync block")
+	log.WithField("nColumns", len(sidecars)).WithField("root", fmt.Sprintf("%#x", r)).Info("Successfully downloaded data columns for checkpoint sync block")
 	return nil
 }
 
