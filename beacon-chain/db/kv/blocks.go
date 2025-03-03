@@ -229,7 +229,8 @@ func (s *Store) DeleteBlock(ctx context.Context, root [32]byte) error {
 	defer span.End()
 
 	if err := s.DeleteState(ctx, root); err != nil {
-		return err
+		// TODO: Find out why invalid states are in the db
+		log.WithError(err).Error("Could not delete state")
 	}
 
 	if err := s.deleteStateSummary(root); err != nil {
