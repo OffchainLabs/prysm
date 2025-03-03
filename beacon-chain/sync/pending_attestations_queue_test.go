@@ -706,3 +706,41 @@ func Test_attsAreEqual_Committee(t *testing.T) {
 		assert.Equal(t, false, attsAreEqual(att1, att2))
 	})
 }
+
+func Test_SeenCommitteeIndicesSlot(t *testing.T) {
+	t.Run("phase 0 success", func(t *testing.T) {
+		s := &Service{
+			seenUnAggregatedAttestationCache: lruwrpr.New(1),
+		}
+		data := &ethpb.AttestationData{Slot: 1, CommitteeIndex: 44}
+		att := &ethpb.Attestation{
+			AggregationBits: bitfield.Bitlist{0x01},
+			Data:            data,
+		}
+		s.setSeenCommitteeIndicesSlot(data.Slot, att.GetCommitteeIndex(), att.GetAggregationBits())
+		b := append(bytesutil.Bytes32(uint64(1)), bytesutil.Bytes32(uint64(44))...)
+		b = append(b, bytesutil.SafeCopyBytes(att.GetAggregationBits())...)
+		_, ok := s.seenUnAggregatedAttestationCache.Get(string(b))
+		require.Equal(t, true, ok)
+	})
+	t.Run("electra success", func(t *testing.T) {
+		s := &Service{
+			seenUnAggregatedAttestationCache: lruwrpr.New(1),
+		}
+		// committee index is 0 post electra for attestation electra
+		data := &ethpb.AttestationData{Slot: 1, CommitteeIndex: 0}
+		cb := primitives.NewAttestationCommitteeBits()
+		cb.SetBitAt(uint64(63), true)
+		att := &ethpb.AttestationElectra{
+			AggregationBits: bitfield.Bitlist{0x01},
+			Data:            data,
+			CommitteeBits:   cb,
+		}
+		ci := att.GetCommitteeIndex()
+		s.setSeenCommitteeIndicesSlot(data.Slot, ci, att.GetAggregationBits())
+		b := append(bytesutil.Bytes32(uint64(1)), bytesutil.Bytes32(uint64(63))...)
+		b = append(b, bytesutil.SafeCopyBytes(att.GetAggregationBits())...)
+		_, ok := s.seenUnAggregatedAttestationCache.Get(string(b))
+		require.Equal(t, true, ok)
+	})
+}
