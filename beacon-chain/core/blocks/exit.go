@@ -67,7 +67,7 @@ func ProcessVoluntaryExits(
 		if err := VerifyExitAndSignature(val, beaconState, exit); err != nil {
 			return nil, nil, errors.Wrapf(err, "could not verify exit %d", idx)
 		}
-		beaconState, _, err = v.InitiateValidatorExit(ctx, beaconState, exit.Exit.ValidatorIndex, exitInfo)
+		beaconState, exitInfo, err = v.InitiateValidatorExit(ctx, beaconState, exit.Exit.ValidatorIndex, exitInfo)
 		if err != nil && !errors.Is(err, v.ErrValidatorAlreadyExited) {
 			return nil, nil, err
 		}

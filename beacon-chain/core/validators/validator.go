@@ -19,7 +19,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-// ExitInfo provides information about validator exits.
+// ExitInfo provides information about validator exits in the state.
 type ExitInfo struct {
 	HighestExitEpoch primitives.Epoch
 	Churn            uint64
@@ -76,13 +76,13 @@ func InitiateValidatorExit(
 	s state.BeaconState,
 	idx primitives.ValidatorIndex,
 	exitInfo *ExitInfo,
-) (state.BeaconState, primitives.Epoch, error) {
+) (state.BeaconState, *ExitInfo, error) {
 	validator, err := s.ValidatorAtIndex(idx)
 	if err != nil {
-		return nil, 0, err
+		return nil, nil, err
 	}
 	if validator.ExitEpoch != params.BeaconConfig().FarFutureEpoch {
-		return s, validator.ExitEpoch, ErrValidatorAlreadyExited
+		return s, exitInfo, ErrValidatorAlreadyExited
 	}
 
 	// Compute exit queue epoch.
@@ -101,14 +101,14 @@ func InitiateValidatorExit(
 		}
 		activeValidatorCount, err := helpers.ActiveValidatorCount(ctx, s, time.CurrentEpoch(s))
 		if err != nil {
-			return nil, 0, errors.Wrap(err, "could not get active validator count")
+			return nil, nil, errors.Wrap(err, "could not get active validator count")
 		}
 		currentChurn := helpers.ValidatorExitChurnLimit(activeValidatorCount)
 
 		if exitInfo.Churn >= currentChurn {
 			exitInfo.HighestExitEpoch, err = exitInfo.HighestExitEpoch.SafeAdd(1)
 			if err != nil {
-				return nil, 0, err
+				return nil, nil, err
 			}
 			exitInfo.Churn = 1
 		} else {
@@ -120,18 +120,18 @@ func InitiateValidatorExit(
 		var err error
 		exitInfo.HighestExitEpoch, err = s.ExitEpochAndUpdateChurn(primitives.Gwei(validator.EffectiveBalance))
 		if err != nil {
-			return nil, 0, err
+			return nil, nil, err
 		}
 	}
 	validator.ExitEpoch = exitInfo.HighestExitEpoch
 	validator.WithdrawableEpoch, err = exitInfo.HighestExitEpoch.SafeAddEpoch(params.BeaconConfig().MinValidatorWithdrawabilityDelay)
 	if err != nil {
-		return nil, 0, err
+		return nil, nil, err
 	}
 	if err := s.UpdateValidatorAtIndex(idx, validator); err != nil {
-		return nil, 0, err
+		return nil, nil, err
 	}
-	return s, exitInfo.HighestExitEpoch, nil
+	return s, exitInfo, nil
 }
 
 // SlashValidator slashes the malicious validator's balance and awards
@@ -170,7 +170,9 @@ func SlashValidator(
 	slashedIdx primitives.ValidatorIndex,
 	exitInfo *ExitInfo,
 ) (state.BeaconState, *ExitInfo, error) {
-	s, _, err := InitiateValidatorExit(ctx, s, slashedIdx, exitInfo)
+	var err error
+
+	s, exitInfo, err = InitiateValidatorExit(ctx, s, slashedIdx, exitInfo)
 	if err != nil && !errors.Is(err, ErrValidatorAlreadyExited) {
 		return nil, nil, errors.Wrapf(err, "could not initiate validator %d exit", slashedIdx)
 	}
