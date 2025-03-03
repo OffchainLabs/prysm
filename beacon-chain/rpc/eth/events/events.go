@@ -358,10 +358,14 @@ func writeLazyReaderWithRecover(w *streamingResponseWriterController, lr lazyRea
 		}
 	}()
 	if lr == nil {
-		log.Warn("event stream skipping a nil lazy event reader")
+		log.Warn("event stream skipping a nil lazy event reader callback")
 		return nil
 	}
 	r := lr()
+	if r == nil {
+		log.Warn("event stream skipping a nil event reader")
+		return nil
+	}
 	out, err := io.ReadAll(r)
 	if err != nil {
 		return err
@@ -765,11 +769,11 @@ func (s *Server) payloadAttributesReader(ctx context.Context, ev payloadattribut
 		select {
 		case <-ctx.Done():
 			log.WithError(ctx.Err()).Warn("Context canceled while waiting for payload attributes event data")
-			return newlineReader()
+			return nil
 		case ed := <-edc:
 			if ed.err != nil {
 				log.WithError(ed.err).Warn("Error while marshaling payload attributes event data")
-				return newlineReader()
+				return nil
 			}
 			return jsonMarshalReader(PayloadAttributesTopic, &structs.PayloadAttributesEvent{
 				Version: ed.version,
