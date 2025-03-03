@@ -217,6 +217,7 @@ func (s *Service) processUnaggregated(ctx context.Context, att ethpb.Att) {
 				return
 			}
 		}
+
 		s.setSeenCommitteeIndicesSlot(data.Slot, attForValidation.GetCommitteeIndex(), attForValidation.GetAggregationBits())
 
 		valCount, err := helpers.ActiveValidatorCount(ctx, preState, slots.ToEpoch(data.Slot))
