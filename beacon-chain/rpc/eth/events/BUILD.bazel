@@ -59,6 +59,7 @@ go_test(
         "//consensus-types/interfaces:go_default_library",
         "//consensus-types/payload-attribute:go_default_library",
         "//consensus-types/primitives:go_default_library",
+        "//proto/engine/v1:go_default_library",
         "//proto/eth/v1:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "//testing/require:go_default_library",
