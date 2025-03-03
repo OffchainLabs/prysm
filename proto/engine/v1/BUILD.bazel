@@ -44,6 +44,7 @@ ssz_gen_marshal(
         "ExecutionPayloadDeneb",
         "BlindedBlobsBundle",
         "BlobsBundle",
+        "BlobsBundleV2",
         "Withdrawal",
         "WithdrawalRequest",
         "DepositRequest",
@@ -76,6 +77,7 @@ go_library(
     srcs = [
         "electra.go",
         "execution_engine.go",
+        "execution_engine_eip7594.go",
         "json_marshal_unmarshal.go",
         ":ssz_generated_files",  # keep
     ],
@@ -111,7 +113,8 @@ ssz_proto_files(
     name = "ssz_proto_files",
     srcs = [
         "execution_engine.proto",
-	"electra.proto",
+        "execution_engine_eip7594.proto",
+	    "electra.proto",
     ],
     config = select({
         "//conditions:default": "mainnet",
