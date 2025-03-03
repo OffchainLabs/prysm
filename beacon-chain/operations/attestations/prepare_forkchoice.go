@@ -36,6 +36,11 @@ func (s *Service) prepareForkChoiceAtts() {
 		select {
 		case slotInterval := <-ticker.C():
 			t := time.Now()
+			_, err := s.cfg.Pool.UnaggregatedAttestations()
+			if err != nil {
+				log.WithError(err).Error("Could not get unaggregated attestations")
+				continue
+			}
 			if err := s.batchForkChoiceAtts(s.ctx); err != nil {
 				log.WithError(err).Error("Could not prepare attestations for fork choice")
 			}

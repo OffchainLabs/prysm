@@ -6,6 +6,7 @@ import (
 	"github.com/prysmaticlabs/go-bitfield"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/attestation"
+	log "github.com/sirupsen/logrus"
 )
 
 func (c *AttCaches) insertSeenBit(att ethpb.Att) error {
@@ -54,6 +55,10 @@ func (c *AttCaches) hasSeenBit(att ethpb.Att) (bool, error) {
 		}
 		for _, bit := range seenBits {
 			if c, err := bit.Contains(att.GetAggregationBits()); err != nil {
+				log.WithFields(log.Fields{
+					"bitLength":         bit.Len(),
+					"incomingBitLength": att.GetAggregationBits().Len(),
+				}).Error("could not check if bit contains aggregation bits")
 				return false, err
 			} else if c {
 				return true, nil

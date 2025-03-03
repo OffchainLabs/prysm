@@ -61,7 +61,12 @@ func (c *AttCaches) UnaggregatedAttestations() ([]ethpb.Att, error) {
 	for _, att := range unAggregatedAtts {
 		seen, err := c.hasSeenBit(att)
 		if err != nil {
-			log.WithError(err).Debug("Could not check if attestations bits have been seen")
+			log.WithFields(log.Fields{
+				"slot":    att.GetData().Slot,
+				"index":   att.GetData().CommitteeIndex,
+				"version": att.Version(),
+				"aggBits": att.GetAggregationBits(),
+			}).WithError(err).Error("could not check if attestation has been seen")
 			continue
 		}
 		if !seen {
