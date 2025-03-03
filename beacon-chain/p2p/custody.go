@@ -148,16 +148,15 @@ func (s *Service) custodyGroupsFromPeers(peers []peer.ID) (map[peer.ID]map[uint6
 	return custodyGroupsByPeer, nil
 }
 
+// custodyColumnsFromPeers computes all the custody columns indexed by peer.
 func (s *Service) custodyColumnsFromPeers(peers []peer.ID) (map[peer.ID]map[uint64]bool, error) {
+	// Get the custody groups of the peers.
 	custodyGroupsByPeer, err := s.custodyGroupsFromPeers(peers)
 	if err != nil {
 		return nil, errors.Wrap(err, "custody groups from peer")
 	}
 
-	return convertCustodyGroupsToDataColumnsByPeer(custodyGroupsByPeer)
-}
-
-func convertCustodyGroupsToDataColumnsByPeer(custodyGroupsByPeer map[peer.ID]map[uint64]bool) (map[peer.ID]map[uint64]bool, error) {
+	// Compute the custody columns of the peers.
 	dataColumnsByPeer := make(map[peer.ID]map[uint64]bool, len(custodyGroupsByPeer))
 	for peer, custodyGroups := range custodyGroupsByPeer {
 		custodyColumns, err := peerdas.CustodyColumns(custodyGroups)
