@@ -669,11 +669,11 @@ func needsFill(ev payloadattribute.EventData) bool {
 
 func (s *Server) fillEventData(ctx context.Context, ev payloadattribute.EventData) (payloadattribute.EventData, error) {
 	var err error
-	/*
-		if !needsFill(ev) {
-			return ev, nil
-		}
-	*/
+
+	if !needsFill(ev) {
+		return ev, nil
+	}
+
 	ev.HeadState, err = s.HeadFetcher.HeadState(ctx)
 	if err != nil {
 		return ev, errors.Wrap(err, "Could not get head state")
