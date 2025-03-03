@@ -20,6 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/holiman/uint256"
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/kzg"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
 	mocks "github.com/prysmaticlabs/prysm/v5/beacon-chain/execution/testing"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
@@ -2424,7 +2425,7 @@ func TestReconstructBlobSidecars(t *testing.T) {
 	t.Run("get-blobs end point is not supported", func(t *testing.T) {
 		hi := mockSummary(t, []bool{true, true, true, true, true, false})
 		verifiedBlobs, err := client.ReconstructBlobSidecars(ctx, sb, r, hi)
-		require.NoError(t, err)
+		require.ErrorContains(t, "engine_getBlobsV1 is not supported", err)
 		require.Equal(t, 0, len(verifiedBlobs))
 	})
 
@@ -2476,6 +2477,63 @@ func TestReconstructBlobSidecars(t *testing.T) {
 	})
 }
 
+func TestReconstructDataColumnSidecars(t *testing.T) {
+	// Start the trusted setup.
+	err := kzg.Start()
+	require.NoError(t, err)
+
+	// Setup right fork epoch
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.CapellaForkEpoch = 1
+	cfg.DenebForkEpoch = 2
+	cfg.ElectraForkEpoch = 3
+	cfg.FuluForkEpoch = 4
+	params.OverrideBeaconConfig(cfg)
+
+	client := &Service{capabilityCache: &capabilityCache{}}
+	b := util.NewBeaconBlockFulu()
+	b.Block.Slot = 4 * params.BeaconConfig().SlotsPerEpoch
+	kzgCommitments := createRandomKzgCommitments(t, 6)
+	b.Block.Body.BlobKzgCommitments = kzgCommitments
+	r, err := b.Block.HashTreeRoot()
+	require.NoError(t, err)
+	sb, err := blocks.NewSignedBeaconBlock(b)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	t.Run("GetBlobsV2 is not supported", func(t *testing.T) {
+		_, err := client.ReconstructDataColumnSidecars(ctx, sb, r)
+		require.ErrorContains(t, "could not get blobs", err)
+	})
+
+	t.Run("receiving all blobs", func(t *testing.T) {
+		blobMasks := []bool{true, true, true, true, true, true}
+		srv := createBlobServerV2(t, 6, blobMasks)
+		defer srv.Close()
+
+		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
+		defer rpcClient.Close()
+
+		dataColumns, err := client.ReconstructDataColumnSidecars(ctx, sb, r)
+		require.NoError(t, err)
+		require.Equal(t, 128, len(dataColumns))
+	})
+
+	t.Run("missing some blobs", func(t *testing.T) {
+		blobMasks := []bool{false, true, true, true, true, true}
+		srv := createBlobServerV2(t, 6, blobMasks)
+		defer srv.Close()
+
+		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
+		defer rpcClient.Close()
+
+		dataColumns, err := client.ReconstructDataColumnSidecars(ctx, sb, r)
+		require.ErrorContains(t, "unable to reconstruct data column sidecars, did not get all blobs from EL", err)
+		require.Equal(t, 0, len(dataColumns))
+	})
+}
+
 func createRandomKzgCommitments(t *testing.T, num int) [][]byte {
 	kzgCommitments := make([][]byte, num)
 	for i := range kzgCommitments {
@@ -2511,6 +2569,41 @@ func createBlobServer(t *testing.T, numBlobs int, callbackFuncs ...func()) *http
 	}))
 }
 
+func createBlobServerV2(t *testing.T, numBlobs int, blobMasks []bool) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		defer func() {
+			require.NoError(t, r.Body.Close())
+		}()
+
+		require.Equal(t, len(blobMasks), numBlobs)
+
+		blobAndCellProofs := make([]*pb.BlobAndCellProofJson, numBlobs)
+		for i := range blobAndCellProofs {
+			if !blobMasks[i] {
+				continue
+			}
+
+			blobAndCellProofs[i] = &pb.BlobAndCellProofJson{
+				Blob:       []byte("0xblob"),
+				CellProofs: []hexutil.Bytes{},
+			}
+			for j := 0; j < int(params.BeaconConfig().NumberOfColumns); j++ {
+				blobAndCellProofs[i].CellProofs = append(blobAndCellProofs[i].CellProofs, []byte(fmt.Sprintf("0xproof%d", j)))
+			}
+		}
+
+		respJSON := map[string]interface{}{
+			"jsonrpc": "2.0",
+			"id":      1,
+			"result":  blobAndCellProofs,
+		}
+
+		err := json.NewEncoder(w).Encode(respJSON)
+		require.NoError(t, err)
+	}))
+}
+
 func setupRpcClient(t *testing.T, url string, client *Service) (*rpc.Client, *Service) {
 	rpcClient, err := rpc.DialHTTP(url)
 	require.NoError(t, err)
@@ -2519,6 +2612,12 @@ func setupRpcClient(t *testing.T, url string, client *Service) (*rpc.Client, *Se
 	client.capabilityCache = &capabilityCache{capabilities: map[string]interface{}{GetBlobsV1: nil}}
 	client.blobVerifier = testNewBlobVerifier()
 
+	return rpcClient, client
+}
+
+func setupRpcClientV2(t *testing.T, url string, client *Service) (*rpc.Client, *Service) {
+	rpcClient, client := setupRpcClient(t, url, client)
+	client.capabilityCache = &capabilityCache{capabilities: map[string]interface{}{GetBlobsV2: nil}}
 	return rpcClient, client
 }
 

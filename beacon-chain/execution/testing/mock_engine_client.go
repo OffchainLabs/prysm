@@ -113,6 +113,10 @@ func (e *EngineClient) ReconstructBlobSidecars(context.Context, interfaces.ReadO
 	return e.BlobSidecars, e.ErrorBlobSidecars
 }
 
+func (e *EngineClient) ReconstructDataColumnSidecars(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte) ([]blocks.VerifiedRODataColumn, error) {
+	return nil, nil
+}
+
 // GetTerminalBlockHash --
 func (e *EngineClient) GetTerminalBlockHash(ctx context.Context, transitionTime uint64) ([]byte, bool, error) {
 	ttd := new(big.Int)
