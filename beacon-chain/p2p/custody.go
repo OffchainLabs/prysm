@@ -78,8 +78,7 @@ func (s *Service) CustodyGroupCountFromPeer(pid peer.ID) uint64 {
 	return custodyCount
 }
 
-// AdmissiblePeersForCustodyGroup returns a map of peers that:
-// - custody at least one custody group listed in `neededCustodyGroups`,
+// AdmissiblePeersForCustodyGroup returns a map of peers that custody at least one custody group listed in `neededCustodyGroups`.
 //
 // It returns:
 // - A map, where the key of the map is the peer, the value is the custody groups of the peer.
