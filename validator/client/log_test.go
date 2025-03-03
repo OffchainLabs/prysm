@@ -32,11 +32,10 @@ func TestLogSubmittedAtts(t *testing.T) {
 		att := util.HydrateAttestationElectra(&ethpb.AttestationElectra{})
 		att.Data.CommitteeIndex = 0
 		att.CommitteeBits = primitives.NewAttestationCommitteeBits()
-		att.CommitteeBits[0] = 44
-		att.CommitteeBits[1] = 73
+		att.CommitteeBits.SetBitAt(44, true)
 		require.NoError(t, v.saveSubmittedAtt(att, make([]byte, field_params.BLSPubkeyLength), false))
 		v.LogSubmittedAtts(0)
-		assert.LogsContain(t, logHook, "committeeIndices=\"[2]\"")
+		assert.LogsContain(t, logHook, "committeeIndices=\"[44]\"")
 	})
 	t.Run("electra attestations multiple saved", func(t *testing.T) {
 		logHook := logTest.NewGlobal()
@@ -46,16 +45,15 @@ func TestLogSubmittedAtts(t *testing.T) {
 		att := util.HydrateAttestationElectra(&ethpb.AttestationElectra{})
 		att.Data.CommitteeIndex = 0
 		att.CommitteeBits = primitives.NewAttestationCommitteeBits()
-		att.CommitteeBits[0] = 44
-		att.CommitteeBits[1] = 33
+		att.CommitteeBits.SetBitAt(23, true)
 		require.NoError(t, v.saveSubmittedAtt(att, make([]byte, field_params.BLSPubkeyLength), false))
 		att2 := util.HydrateAttestationElectra(&ethpb.AttestationElectra{})
 		att2.Data.CommitteeIndex = 0
 		att2.CommitteeBits = primitives.NewAttestationCommitteeBits()
-		att2.CommitteeBits[0] = 2
+		att2.CommitteeBits.SetBitAt(2, true)
 		require.NoError(t, v.saveSubmittedAtt(att2, make([]byte, field_params.BLSPubkeyLength), false))
 		v.LogSubmittedAtts(0)
-		assert.LogsContain(t, logHook, "committeeIndices=\"[2 1]\"")
+		assert.LogsContain(t, logHook, "committeeIndices=\"[23 2]\"")
 	})
 	t.Run("phase0 aggregates", func(t *testing.T) {
 		logHook := logTest.NewGlobal()
@@ -78,9 +76,9 @@ func TestLogSubmittedAtts(t *testing.T) {
 		agg.Aggregate = util.HydrateAttestationElectra(&ethpb.AttestationElectra{})
 		agg.Aggregate.Data.CommitteeIndex = 0
 		agg.Aggregate.CommitteeBits = primitives.NewAttestationCommitteeBits()
-		agg.Aggregate.CommitteeBits[0] = 66
+		agg.Aggregate.CommitteeBits.SetBitAt(63, true)
 		require.NoError(t, v.saveSubmittedAtt(agg.AggregateVal(), make([]byte, field_params.BLSPubkeyLength), true))
 		v.LogSubmittedAtts(0)
-		assert.LogsContain(t, logHook, "committeeIndices=\"[1]\"")
+		assert.LogsContain(t, logHook, "committeeIndices=\"[63]\"")
 	})
 }
