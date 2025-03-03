@@ -133,16 +133,17 @@ func (v *validator) SubmitAttestation(ctx context.Context, slot primitives.Slot,
 	}
 
 	var aggregationBitfield bitfield.Bitlist
-
+	var attestation ethpb.Att
 	var attResp *ethpb.AttestResponse
 	if postElectra {
-		attestation := &ethpb.SingleAttestation{
+		sa := &ethpb.SingleAttestation{
 			Data:          data,
 			AttesterIndex: duty.ValidatorIndex,
 			CommitteeId:   duty.CommitteeIndex,
 			Signature:     sig,
 		}
-		attResp, err = v.validatorClient.ProposeAttestationElectra(ctx, attestation)
+		attestation = sa
+		attResp, err = v.validatorClient.ProposeAttestationElectra(ctx, sa)
 	} else {
 		var indexInCommittee uint64
 		var found bool
@@ -162,12 +163,13 @@ func (v *validator) SubmitAttestation(ctx context.Context, slot primitives.Slot,
 		}
 		aggregationBitfield = bitfield.NewBitlist(uint64(len(duty.Committee)))
 		aggregationBitfield.SetBitAt(indexInCommittee, true)
-		attestation := &ethpb.Attestation{
+		a := &ethpb.Attestation{
 			Data:            data,
 			AggregationBits: aggregationBitfield,
 			Signature:       sig,
 		}
-		attResp, err = v.validatorClient.ProposeAttestation(ctx, attestation)
+		attestation = a
+		attResp, err = v.validatorClient.ProposeAttestation(ctx, a)
 	}
 	if err != nil {
 		log.WithError(err).Error("Could not submit attestation to beacon node")
@@ -178,7 +180,7 @@ func (v *validator) SubmitAttestation(ctx context.Context, slot primitives.Slot,
 		return
 	}
 
-	if err := v.saveSubmittedAtt(data, pubKey[:], false); err != nil {
+	if err := v.saveSubmittedAtt(attestation, pubKey[:], false); err != nil {
 		log.WithError(err).Error("Could not save validator index for logging")
 		if v.emitAccountMetrics {
 			ValidatorAttestFailVec.WithLabelValues(fmtKey).Inc()

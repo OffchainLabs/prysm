@@ -49,10 +49,10 @@ func (k submittedAttKey) FromAttData(data *ethpb.AttestationData) error {
 
 // saveSubmittedAtt saves the submitted attestation data along with the attester's pubkey.
 // The purpose of this is to display combined attesting logs for all keys managed by the validator client.
-func (v *validator) saveSubmittedAtt(data *ethpb.AttestationData, pubkey []byte, isAggregate bool) error {
+func (v *validator) saveSubmittedAtt(att ethpb.Att, pubkey []byte, isAggregate bool) error {
 	v.attLogsLock.Lock()
 	defer v.attLogsLock.Unlock()
-
+	data := att.GetData()
 	key := submittedAttKey{}
 	if err := key.FromAttData(data); err != nil {
 		return errors.Wrapf(err, "could not create submitted attestation key")
@@ -80,7 +80,7 @@ func (v *validator) saveSubmittedAtt(data *ethpb.AttestationData, pubkey []byte,
 	submittedAtts[key] = &submittedAtt{
 		d,
 		append(submittedAtts[key].pubkeys, pubkey),
-		append(submittedAtts[key].committees, data.CommitteeIndex),
+		append(submittedAtts[key].committees, att.GetCommitteeIndex()),
 	}
 
 	return nil
