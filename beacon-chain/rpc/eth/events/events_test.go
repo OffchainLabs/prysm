@@ -569,6 +569,7 @@ func TestFillEventData(t *testing.T) {
 		attributor, err := payloadattribute.New(&enginev1.PayloadAttributes{
 			Timestamp: uint64(time.Now().Unix()),
 		})
+		require.NoError(t, err)
 		alreadyFilled := payloadattribute.EventData{
 			HeadState:       st,
 			HeadBlock:       b,
@@ -597,6 +598,7 @@ func TestFillEventData(t *testing.T) {
 		attributor, err := payloadattribute.New(&enginev1.PayloadAttributes{
 			Timestamp: uint64(time.Now().Unix()),
 		})
+		require.NoError(t, err)
 		// Create an event data object missing certain fields:
 		partial := payloadattribute.EventData{
 			// The presence of a nil HeadState, nil HeadBlock, zeroed HeadRoot, etc.
