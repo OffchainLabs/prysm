@@ -68,8 +68,8 @@ func (rs *BlockRewardService) GetBlockRewardsData(ctx context.Context, blk inter
 			Code:    http.StatusInternalServerError,
 		}
 	}
-	exitData := validators.MaxExitEpochAndChurn(st)
-	st, err = coreblocks.ProcessAttesterSlashings(ctx, st, blk.Body().AttesterSlashings(), validators.SlashValidator, exitData)
+	exitInfo := validators.ExitInformation(st)
+	st, exitInfo, err = coreblocks.ProcessAttesterSlashings(ctx, st, blk.Body().AttesterSlashings(), validators.SlashValidator, exitInfo)
 	if err != nil {
 		return nil, &httputil.DefaultJsonError{
 			Message: "Could not get attester slashing rewards: " + err.Error(),
@@ -83,7 +83,7 @@ func (rs *BlockRewardService) GetBlockRewardsData(ctx context.Context, blk inter
 			Code:    http.StatusInternalServerError,
 		}
 	}
-	st, err = coreblocks.ProcessProposerSlashings(ctx, st, blk.Body().ProposerSlashings(), validators.SlashValidator, exitData)
+	st, _, err = coreblocks.ProcessProposerSlashings(ctx, st, blk.Body().ProposerSlashings(), validators.SlashValidator, exitInfo)
 	if err != nil {
 		return nil, &httputil.DefaultJsonError{
 			Message: "Could not get proposer slashing rewards: " + err.Error(),

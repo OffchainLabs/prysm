@@ -40,16 +40,16 @@ func ProcessAttesterSlashings(
 	beaconState state.BeaconState,
 	slashings []ethpb.AttSlashing,
 	slashFunc slashValidatorFunc,
-	exitData *validators.ExitData,
-) (state.BeaconState, error) {
+	exitInfo *validators.ExitInfo,
+) (state.BeaconState, *validators.ExitInfo, error) {
 	var err error
 	for _, slashing := range slashings {
-		beaconState, err = ProcessAttesterSlashing(ctx, beaconState, slashing, slashFunc, exitData)
+		beaconState, exitInfo, err = ProcessAttesterSlashing(ctx, beaconState, slashing, slashFunc, exitInfo)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
-	return beaconState, nil
+	return beaconState, exitInfo, nil
 }
 
 // ProcessAttesterSlashing processes individual attester slashing.
@@ -58,10 +58,10 @@ func ProcessAttesterSlashing(
 	beaconState state.BeaconState,
 	slashing ethpb.AttSlashing,
 	slashFunc slashValidatorFunc,
-	exitData *validators.ExitData,
-) (state.BeaconState, error) {
+	exitInfo *validators.ExitInfo,
+) (state.BeaconState, *validators.ExitInfo, error) {
 	if err := VerifyAttesterSlashing(ctx, beaconState, slashing); err != nil {
-		return nil, errors.Wrap(err, "could not verify attester slashing")
+		return nil, nil, errors.Wrap(err, "could not verify attester slashing")
 	}
 	slashableIndices := SlashableAttesterIndices(slashing)
 	sort.SliceStable(slashableIndices, func(i, j int) bool {
@@ -74,21 +74,21 @@ func ProcessAttesterSlashing(
 	for _, validatorIndex := range slashableIndices {
 		val, err = beaconState.ValidatorAtIndexReadOnly(primitives.ValidatorIndex(validatorIndex))
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if helpers.IsSlashableValidator(val.ActivationEpoch(), val.WithdrawableEpoch(), val.Slashed(), currentEpoch) {
-			beaconState, err = slashFunc(ctx, beaconState, primitives.ValidatorIndex(validatorIndex), exitData)
+			beaconState, _, err = slashFunc(ctx, beaconState, primitives.ValidatorIndex(validatorIndex), exitInfo)
 			if err != nil {
-				return nil, errors.Wrapf(err, "could not slash validator index %d",
+				return nil, nil, errors.Wrapf(err, "could not slash validator index %d",
 					validatorIndex)
 			}
 			slashedAny = true
 		}
 	}
 	if !slashedAny {
-		return nil, errors.New("unable to slash any validator despite confirmed attester slashing")
+		return nil, nil, errors.New("unable to slash any validator despite confirmed attester slashing")
 	}
-	return beaconState, nil
+	return beaconState, exitInfo, nil
 }
 
 // VerifyAttesterSlashing validates the attestation data in both attestations in the slashing object.

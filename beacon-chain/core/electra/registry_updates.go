@@ -84,7 +84,7 @@ func ProcessRegistryUpdates(ctx context.Context, st state.BeaconState) error {
 	// Handle validator ejections.
 	for _, idx := range eligibleForEjection {
 		var err error
-		st, _, err = validators.InitiateValidatorExit(ctx, st, idx, &validators.ExitData{})
+		st, _, err = validators.InitiateValidatorExit(ctx, st, idx, &validators.ExitInfo{})
 		if err != nil && !errors.Is(err, validators.ErrValidatorAlreadyExited) {
 			return fmt.Errorf("failed to initiate validator exit at index %d: %w", idx, err)
 		}

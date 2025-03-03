@@ -46,19 +46,18 @@ var (
 //      # [New in Electra:EIP7251]
 //      for_ops(body.execution_payload.consolidation_requests, process_consolidation_request)
 
-func ProcessOperations(
-	ctx context.Context,
-	st state.BeaconState,
-	block interfaces.ReadOnlyBeaconBlock) (state.BeaconState, error) {
+func ProcessOperations(ctx context.Context, st state.BeaconState, block interfaces.ReadOnlyBeaconBlock) (state.BeaconState, error) {
+	var err error
+
 	// 6110 validations are in VerifyOperationLengths
 	bb := block.Body()
 	// Electra extends the altair operations.
-	exitData := v.MaxExitEpochAndChurn(st)
-	st, err := ProcessProposerSlashings(ctx, st, bb.ProposerSlashings(), v.SlashValidator, exitData)
+	exitInfo := v.ExitInformation(st)
+	st, exitInfo, err = ProcessProposerSlashings(ctx, st, bb.ProposerSlashings(), v.SlashValidator, exitInfo)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process altair proposer slashing")
 	}
-	st, err = ProcessAttesterSlashings(ctx, st, bb.AttesterSlashings(), v.SlashValidator, exitData)
+	st, exitInfo, err = ProcessAttesterSlashings(ctx, st, bb.AttesterSlashings(), v.SlashValidator, exitInfo)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process altair attester slashing")
 	}
@@ -69,7 +68,7 @@ func ProcessOperations(
 	if _, err := ProcessDeposits(ctx, st, bb.Deposits()); err != nil { // new in electra
 		return nil, errors.Wrap(err, "could not process altair deposit")
 	}
-	st, err = ProcessVoluntaryExits(ctx, st, bb.VoluntaryExits(), exitData)
+	st, _, err = ProcessVoluntaryExits(ctx, st, bb.VoluntaryExits(), exitInfo)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process voluntary exits")
 	}

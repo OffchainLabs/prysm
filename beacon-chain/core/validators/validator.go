@@ -19,36 +19,35 @@ import (
 	"github.com/pkg/errors"
 )
 
-type ExitData struct {
-	MaxExitEpoch primitives.Epoch
-	Churn        uint64
+// ExitInfo provides information about validator exits.
+type ExitInfo struct {
+	HighestExitEpoch primitives.Epoch
+	Churn            uint64
 }
 
 // ErrValidatorAlreadyExited is an error raised when trying to process an exit of
 // an already exited validator
 var ErrValidatorAlreadyExited = errors.New("validator already exited")
 
-// TODO: rename
-// MaxExitEpochAndChurn returns the maximum non-FAR_FUTURE_EPOCH exit
-// epoch and the number of them
-func MaxExitEpochAndChurn(s state.BeaconState) *ExitData {
-	exitData := &ExitData{}
+// ExitInformation returns information about validator exits.
+func ExitInformation(s state.BeaconState) *ExitInfo {
+	exitInfo := &ExitInfo{}
 
 	farFutureEpoch := params.BeaconConfig().FarFutureEpoch
 	err := s.ReadFromEveryValidator(func(idx int, val state.ReadOnlyValidator) error {
 		e := val.ExitEpoch()
 		if e != farFutureEpoch {
-			if e > exitData.MaxExitEpoch {
-				exitData.MaxExitEpoch = e
-				exitData.Churn = 1
-			} else if e == exitData.MaxExitEpoch {
-				exitData.Churn++
+			if e > exitInfo.HighestExitEpoch {
+				exitInfo.HighestExitEpoch = e
+				exitInfo.Churn = 1
+			} else if e == exitInfo.HighestExitEpoch {
+				exitInfo.Churn++
 			}
 		}
 		return nil
 	})
 	_ = err
-	return exitData
+	return exitInfo
 }
 
 // InitiateValidatorExit takes in validator index and updates
@@ -76,7 +75,7 @@ func InitiateValidatorExit(
 	ctx context.Context,
 	s state.BeaconState,
 	idx primitives.ValidatorIndex,
-	exitData *ExitData,
+	exitInfo *ExitInfo,
 ) (state.BeaconState, primitives.Epoch, error) {
 	validator, err := s.ValidatorAtIndex(idx)
 	if err != nil {
@@ -96,9 +95,9 @@ func InitiateValidatorExit(
 		//	if exit_queue_churn >= get_validator_churn_limit(state):
 		//	    exit_queue_epoch += Epoch(1)
 		exitableEpoch := helpers.ActivationExitEpoch(time.CurrentEpoch(s))
-		if exitableEpoch > exitData.MaxExitEpoch {
-			exitData.MaxExitEpoch = exitableEpoch
-			exitData.Churn = 0
+		if exitableEpoch > exitInfo.HighestExitEpoch {
+			exitInfo.HighestExitEpoch = exitableEpoch
+			exitInfo.Churn = 0
 		}
 		activeValidatorCount, err := helpers.ActiveValidatorCount(ctx, s, time.CurrentEpoch(s))
 		if err != nil {
@@ -106,33 +105,33 @@ func InitiateValidatorExit(
 		}
 		currentChurn := helpers.ValidatorExitChurnLimit(activeValidatorCount)
 
-		if exitData.Churn >= currentChurn {
-			exitData.MaxExitEpoch, err = exitData.MaxExitEpoch.SafeAdd(1)
+		if exitInfo.Churn >= currentChurn {
+			exitInfo.HighestExitEpoch, err = exitInfo.HighestExitEpoch.SafeAdd(1)
 			if err != nil {
 				return nil, 0, err
 			}
-			exitData.Churn = 1
+			exitInfo.Churn = 1
 		} else {
-			exitData.Churn = exitData.Churn + 1
+			exitInfo.Churn = exitInfo.Churn + 1
 		}
 	} else {
 		// [Modified in Electra:EIP7251]
 		// exit_queue_epoch = compute_exit_epoch_and_update_churn(state, validator.effective_balance)
 		var err error
-		exitData.MaxExitEpoch, err = s.ExitEpochAndUpdateChurn(primitives.Gwei(validator.EffectiveBalance))
+		exitInfo.HighestExitEpoch, err = s.ExitEpochAndUpdateChurn(primitives.Gwei(validator.EffectiveBalance))
 		if err != nil {
 			return nil, 0, err
 		}
 	}
-	validator.ExitEpoch = exitData.MaxExitEpoch
-	validator.WithdrawableEpoch, err = exitData.MaxExitEpoch.SafeAddEpoch(params.BeaconConfig().MinValidatorWithdrawabilityDelay)
+	validator.ExitEpoch = exitInfo.HighestExitEpoch
+	validator.WithdrawableEpoch, err = exitInfo.HighestExitEpoch.SafeAddEpoch(params.BeaconConfig().MinValidatorWithdrawabilityDelay)
 	if err != nil {
 		return nil, 0, err
 	}
 	if err := s.UpdateValidatorAtIndex(idx, validator); err != nil {
 		return nil, 0, err
 	}
-	return s, exitData.MaxExitEpoch, nil
+	return s, exitInfo.HighestExitEpoch, nil
 }
 
 // SlashValidator slashes the malicious validator's balance and awards
@@ -169,22 +168,23 @@ func SlashValidator(
 	ctx context.Context,
 	s state.BeaconState,
 	slashedIdx primitives.ValidatorIndex,
-	exitData *ExitData) (state.BeaconState, error) {
-	s, _, err := InitiateValidatorExit(ctx, s, slashedIdx, exitData)
+	exitInfo *ExitInfo,
+) (state.BeaconState, *ExitInfo, error) {
+	s, _, err := InitiateValidatorExit(ctx, s, slashedIdx, exitInfo)
 	if err != nil && !errors.Is(err, ErrValidatorAlreadyExited) {
-		return nil, errors.Wrapf(err, "could not initiate validator %d exit", slashedIdx)
+		return nil, nil, errors.Wrapf(err, "could not initiate validator %d exit", slashedIdx)
 	}
 	currentEpoch := slots.ToEpoch(s.Slot())
 	validator, err := s.ValidatorAtIndex(slashedIdx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	validator.Slashed = true
 	maxWithdrawableEpoch := primitives.MaxEpoch(validator.WithdrawableEpoch, currentEpoch+params.BeaconConfig().EpochsPerSlashingsVector)
 	validator.WithdrawableEpoch = maxWithdrawableEpoch
 
 	if err := s.UpdateValidatorAtIndex(slashedIdx, validator); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// The slashing amount is represented by epochs per slashing vector. The validator's effective balance is then applied to that amount.
@@ -194,42 +194,42 @@ func SlashValidator(
 		uint64(currentEpoch%params.BeaconConfig().EpochsPerSlashingsVector),
 		currentSlashing+validator.EffectiveBalance,
 	); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	slashingQuotient, proposerRewardQuotient, whistleblowerRewardQuotient, err := SlashingParamsPerVersion(s.Version())
 	if err != nil {
-		return nil, errors.Wrap(err, "could not get slashing parameters per version")
+		return nil, nil, errors.Wrap(err, "could not get slashing parameters per version")
 	}
 
 	slashingPenalty, err := math.Div64(validator.EffectiveBalance, slashingQuotient)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to compute slashing slashingPenalty")
+		return nil, nil, errors.Wrap(err, "failed to compute slashing slashingPenalty")
 	}
 	if err := helpers.DecreaseBalance(s, slashedIdx, slashingPenalty); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	proposerIdx, err := helpers.BeaconProposerIndex(ctx, s)
 	if err != nil {
-		return nil, errors.Wrap(err, "could not get proposer idx")
+		return nil, nil, errors.Wrap(err, "could not get proposer idx")
 	}
 	whistleBlowerIdx := proposerIdx
 	whistleblowerReward, err := math.Div64(validator.EffectiveBalance, whistleblowerRewardQuotient)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to compute whistleblowerReward")
+		return nil, nil, errors.Wrap(err, "failed to compute whistleblowerReward")
 	}
 	proposerReward, err := math.Div64(whistleblowerReward, proposerRewardQuotient)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to compute proposer reward")
+		return nil, nil, errors.Wrap(err, "failed to compute proposer reward")
 	}
 	if err := helpers.IncreaseBalance(s, proposerIdx, proposerReward); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if err := helpers.IncreaseBalance(s, whistleBlowerIdx, whistleblowerReward-proposerReward); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return s, nil
+	return s, exitInfo, nil
 }
 
 // ActivatedValidatorIndices determines the indices activated during the given epoch.
