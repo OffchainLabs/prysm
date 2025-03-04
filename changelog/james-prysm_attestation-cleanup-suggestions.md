@@ -1,3 +1,4 @@
-### Fixed
+### Ignored
 
-- fixed using GetCommitteeIndex() function in setSeenCommitteeIndicesSlot instead of .CommitteeIndex for post electra
+- Cleanup single attestation code for readability.
+
