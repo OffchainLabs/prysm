@@ -42,13 +42,7 @@ var (
 	errMalformedHostname  = errors.New("hostname must include port, separated by one colon, like example.com:3500")
 	errMalformedRequest   = errors.New("required request data are missing")
 	errNotBlinded         = errors.New("submitted block is not blinded")
-	blockToPayloadMapping = map[int]int{
-		version.Bellatrix: version.Bellatrix,
-		version.Capella:   version.Capella,
-		version.Deneb:     version.Deneb,
-		version.Electra:   version.Deneb,
-		version.Fulu:      version.Deneb,
-	}
+	errVersionUnsupported = errors.New("version is not supported")
 )
 
 // ClientOpt is a functional option for the Client type (http.Client wrapper)
@@ -281,16 +275,15 @@ func (c *Client) parseHeaderResponse(data []byte, header http.Header) (SignedBid
 		return nil, errors.Wrap(err, fmt.Sprintf("unsupported header version %s", versionHeader))
 	}
 
-	switch {
-	case ver >= version.Electra:
+	if ver >= version.Electra {
 		return c.parseHeaderElectra(data)
-	case ver >= version.Deneb:
+	} else if ver >= version.Deneb {
 		return c.parseHeaderDeneb(data)
-	case ver >= version.Capella:
+	} else if ver >= version.Capella {
 		return c.parseHeaderCapella(data)
-	case ver >= version.Bellatrix:
+	} else if ver >= version.Bellatrix {
 		return c.parseHeaderBellatrix(data)
-	default:
+	} else {
 		return nil, fmt.Errorf("unsupported header version %s", versionHeader)
 	}
 }
@@ -449,6 +442,18 @@ func sszValidatorRegisterRequest(svr []*ethpb.SignedValidatorRegistrationV1) ([]
 
 var errResponseVersionMismatch = errors.New("builder API response uses a different version than requested in " + api.VersionHeader + " header")
 
+func getVersionsBlockToPayload(blockVersion int) (int, error) {
+	if blockVersion >= version.Deneb {
+		return version.Deneb, nil
+	} else if blockVersion == version.Capella {
+		return version.Capella, nil
+	} else if blockVersion == version.Bellatrix {
+		return version.Bellatrix, nil
+	} else {
+		return 0, errors.Wrapf(errVersionUnsupported, "block version %d", blockVersion)
+	}
+}
+
 // SubmitBlindedBlock calls the builder API endpoint that binds the validator to the builder and submits the block.
 // The response is the full execution payload used to create the blinded block.
 func (c *Client) SubmitBlindedBlock(ctx context.Context, sb interfaces.ReadOnlySignedBeaconBlock) (interfaces.ExecutionData, *v1.BlobsBundle, error) {
@@ -469,13 +474,13 @@ func (c *Client) SubmitBlindedBlock(ctx context.Context, sb interfaces.ReadOnlyS
 		return nil, nil, err
 	}
 
-	expectedPayloadVer, ok := blockToPayloadMapping[sb.Version()]
-	if !ok {
-		return nil, nil, errors.Errorf("unsupported block version %d", sb.Version())
+	expectedPayloadVer, err := getVersionsBlockToPayload(sb.Version())
+	if err != nil {
+		return nil, nil, err
 	}
-	gotPayloadVer, ok := blockToPayloadMapping[ver]
-	if !ok {
-		return nil, nil, errors.Errorf("unsupported block version %d", ver)
+	gotPayloadVer, err := getVersionsBlockToPayload(ver)
+	if err != nil {
+		return nil, nil, err
 	}
 	if expectedPayloadVer != gotPayloadVer {
 		return nil, nil, errors.Wrapf(errResponseVersionMismatch, "expected payload version %d, got %d", expectedPayloadVer, gotPayloadVer)
@@ -560,8 +565,8 @@ func (c *Client) parseBlindedBlockResponseSSZ(
 	respBytes []byte,
 	forkVersion int,
 ) (interfaces.ExecutionData, *v1.BlobsBundle, error) {
-	switch {
-	case forkVersion >= version.Deneb:
+
+	if forkVersion >= version.Deneb {
 		payloadAndBlobs := &v1.ExecutionPayloadDenebAndBlobsBundle{}
 		if err := payloadAndBlobs.UnmarshalSSZ(respBytes); err != nil {
 			return nil, nil, errors.Wrap(err, "unable to unmarshal ExecutionPayloadDenebAndBlobsBundle SSZ")
@@ -571,7 +576,7 @@ func (c *Client) parseBlindedBlockResponseSSZ(
 			return nil, nil, errors.Wrapf(err, "unable to wrap execution data for %s", version.String(forkVersion))
 		}
 		return ed, payloadAndBlobs.BlobsBundle, nil
-	case forkVersion >= version.Capella:
+	} else if forkVersion >= version.Capella {
 		payload := &v1.ExecutionPayloadCapella{}
 		if err := payload.UnmarshalSSZ(respBytes); err != nil {
 			return nil, nil, errors.Wrap(err, "unable to unmarshal ExecutionPayloadCapella SSZ")
@@ -581,7 +586,7 @@ func (c *Client) parseBlindedBlockResponseSSZ(
 			return nil, nil, errors.Wrapf(err, "unable to wrap execution data for %s", version.String(forkVersion))
 		}
 		return ed, nil, nil
-	case forkVersion >= version.Bellatrix:
+	} else if forkVersion >= version.Bellatrix {
 		payload := &v1.ExecutionPayload{}
 		if err := payload.UnmarshalSSZ(respBytes); err != nil {
 			return nil, nil, errors.Wrap(err, "unable to unmarshal ExecutionPayload SSZ")
@@ -591,7 +596,7 @@ func (c *Client) parseBlindedBlockResponseSSZ(
 			return nil, nil, errors.Wrapf(err, "unable to wrap execution data for %s", version.String(forkVersion))
 		}
 		return ed, nil, nil
-	default:
+	} else {
 		return nil, nil, fmt.Errorf("unsupported header version %s", version.String(forkVersion))
 	}
 }
