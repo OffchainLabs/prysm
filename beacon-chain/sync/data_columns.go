@@ -2,6 +2,8 @@ package sync
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/libp2p/go-libp2p/core"
@@ -20,6 +22,7 @@ import (
 	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/logging"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
+	"github.com/sirupsen/logrus"
 )
 
 // RequestDataColumnSidecars sends a data column sidecars by root request to one
@@ -39,38 +42,106 @@ func RequestDataColumnSidecars(
 		return nil, nil
 	}
 
-	// Assemble the peers who can provide the needed data columns.
-	dataColumnsByAdmissiblePeer, _, _, err := p2p.AdmissiblePeersForDataColumns(peers, nil)
-	if err != nil {
-		return nil, err
-	}
-	peersToFetchFrom, err := SelectPeersToFetchDataColumnsFrom(dataColumns, dataColumnsByAdmissiblePeer)
-	if err != nil {
-		return nil, errors.Wrap(err, "couldn't select peers to fetch data columns from")
-	}
-	if len(peersToFetchFrom) == 0 {
-		return nil, errors.Wrapf(err, "no peers to fetch data columns from for block root=%#x", blkRoot)
+	// Keep track of remaining data columns to fetch
+	remainingColumns := make(map[uint64]bool, len(dataColumns))
+	for col := range dataColumns {
+		remainingColumns[col] = true
 	}
 
-	// Request the data columns from each peer.
+	// Track successfully retrieved sidecars
 	sidecars := make([]blocks.RODataColumn, 0, len(dataColumns))
-	for peer, dataColumns := range peersToFetchFrom {
-		dataColumnsSet := make(map[uint64]bool, len(dataColumns))
-		for _, dataColumn := range dataColumns {
-			dataColumnsSet[dataColumn] = true
-		}
-		request, err := RequestsForDataColumnsByRoot(blkRoot, dataColumnsSet)
-		if err != nil {
-			return nil, errors.Wrap(err, "build requests for missing data columns")
+
+	// Maximum retry attempts
+	maxRetries := 3
+
+	for retry := 0; retry < maxRetries && len(remainingColumns) > 0; retry++ {
+		// If this is a retry, log it
+		if retry > 0 {
+			log.WithFields(logrus.Fields{
+				"retry":       retry,
+				"blockRoot":   fmt.Sprintf("%#x", blkRoot),
+				"columnsLeft": len(remainingColumns),
+			}).Debug("Retrying data column sidecars request")
 		}
 
-		peerSidecars, err := SendDataColumnSidecarsByRootRequest(ctx, clock, p2p, peer, ctxMap, &request)
+		// Assemble the peers who can provide the needed data columns.
+		dataColumnsByAdmissiblePeer, _, _, err := p2p.AdmissiblePeersForDataColumns(peers, remainingColumns)
 		if err != nil {
-			return nil, errors.Wrap(err, "couldn't send data column sidecars by root request")
+			return nil, err
 		}
-		sidecars = append(sidecars, peerSidecars...)
+
+		peersToFetchFrom, err := SelectPeersToFetchDataColumnsFrom(remainingColumns, dataColumnsByAdmissiblePeer)
+		if err != nil {
+			return nil, errors.Wrap(err, "couldn't select peers to fetch data columns from")
+		}
+
+		if len(peersToFetchFrom) == 0 {
+			if retry == maxRetries-1 {
+				// If this is the last retry and we still have no peers, return an error
+				return nil, errors.Wrapf(err, "no peers to fetch data columns from for block root=%#x", blkRoot)
+			}
+
+			// If we have no peers but can retry, wait a bit before retrying
+			select {
+			case <-time.After(time.Duration(500*(retry+1)) * time.Millisecond):
+				continue
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+		}
+
+		// Request the data columns from each peer
+		successfulColumns := make(map[uint64]bool)
+		for peer, dataColumns := range peersToFetchFrom {
+			request, err := RequestsForDataColumnsByRoot(blkRoot, dataColumns)
+			if err != nil {
+				log.WithError(err).Debug("Failed to build request for data columns")
+				continue
+			}
+
+			peerSidecars, err := SendDataColumnSidecarsByRootRequest(ctx, clock, p2p, peer, ctxMap, &request)
+			if err != nil {
+				log.WithFields(logrus.Fields{
+					"peer":      peer.String(),
+					"blockRoot": fmt.Sprintf("%#x", blkRoot),
+					"error":     err.Error(),
+				}).Debug("Failed to request data columns from peer")
+				continue
+			}
+
+			// Mark columns as successful and collect sidecars
+			for _, sidecar := range peerSidecars {
+				colIndex := sidecar.ColumnIndex
+				successfulColumns[colIndex] = true
+				sidecars = append(sidecars, sidecar)
+			}
+		}
+
+		// Update remaining columns for the next retry
+		for col := range successfulColumns {
+			delete(remainingColumns, col)
+		}
+
+		if len(remainingColumns) == 0 {
+			break
+		}
 	}
 
+	// If we still have remaining columns after all retries, log it but continue with what we have
+	if len(remainingColumns) > 0 {
+		log.WithFields(logrus.Fields{
+			"blockRoot":      fmt.Sprintf("%#x", blkRoot),
+			"missingColumns": uint64MapToSortedSlice(remainingColumns),
+			"retrievedCount": len(sidecars),
+		}).Debug("Could not retrieve all requested data columns after retries")
+	}
+
+	// If we didn't get any sidecars, return error
+	if len(sidecars) == 0 {
+		return nil, errors.Errorf("failed to retrieve any data columns for block root=%#x", blkRoot)
+	}
+
+	// Validate the received sidecars
 	roBlock, err := blocks.NewROBlock(block)
 	if err != nil {
 		return nil, err
@@ -170,10 +241,10 @@ func FindMissingDataColumns(
 
 func RequestsForDataColumnsByRoot(
 	root [32]byte,
-	missingColumns map[uint64]bool,
+	missingColumns []uint64,
 ) (types.DataColumnSidecarsByRootReq, error) {
 	req := make(types.DataColumnSidecarsByRootReq, 0, len(missingColumns))
-	for column := range missingColumns {
+	for _, column := range missingColumns {
 		req = append(req, &eth.DataColumnIdentifier{
 			BlockRoot:   root[:],
 			ColumnIndex: column,
