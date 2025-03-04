@@ -77,7 +77,6 @@ go_library(
     srcs = [
         "electra.go",
         "execution_engine.go",
-        "execution_engine_eip7594.go",
         "json_marshal_unmarshal.go",
         ":ssz_generated_files",  # keep
     ],
