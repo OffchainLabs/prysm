@@ -413,9 +413,8 @@ func (c *Client) RegisterValidator(ctx context.Context, svr []*ethpb.SignedValid
 		}
 	}
 
-	_, _, err = c.do(ctx, http.MethodPost, postRegisterValidatorPath, bytes.NewBuffer(body), postOpts)
-	if err != nil {
-		return err
+	if _, _, err = c.do(ctx, http.MethodPost, postRegisterValidatorPath, bytes.NewBuffer(body), postOpts); err != nil {
+		return errors.Wrap(err, "do")
 	}
 	log.WithField("registrationCount", len(svr)).Debug("Successfully registered validator(s) on builder")
 	return nil
