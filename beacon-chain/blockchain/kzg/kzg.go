@@ -1,7 +1,7 @@
 package kzg
 
 import (
-	"errors"
+	"github.com/pkg/errors"
 
 	ckzg4844 "github.com/ethereum/c-kzg-4844/v2/bindings/go"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
@@ -51,7 +51,7 @@ func ComputeCells(blob *Blob) ([]Cell, error) {
 	ckzgBlob := (*ckzg4844.Blob)(blob)
 	ckzgCells, err := ckzg4844.ComputeCells(ckzgBlob)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "compute cells")
 	}
 
 	cells := make([]Cell, len(ckzgCells))
