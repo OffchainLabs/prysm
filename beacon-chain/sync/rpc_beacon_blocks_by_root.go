@@ -239,12 +239,11 @@ func (s *Service) requestAndSaveDataColumnSidecars(
 	peers := s.getBestPeers()
 	sidecars, err := RequestDataColumnSidecars(ctx, dataColumns, block, blkRoot, peers, s.cfg.clock, s.cfg.p2p, s.ctxMap, s.newColumnsVerifier)
 	if err != nil {
-		return errors.Wrap(err, "couldn't request data column sidecars")
+		return errors.Wrap(err, "request data column sidecars")
 	}
 
-	err = SaveDataColumns(sidecars, s.cfg.blobStorage)
-	if err != nil {
-		return errors.Wrap(err, "couldn't save data column sidecars")
+	if err := SaveDataColumns(sidecars, s.cfg.blobStorage); err != nil {
+		return errors.Wrap(err, "save data column")
 	}
 
 	return nil
