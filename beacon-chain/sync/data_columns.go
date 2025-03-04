@@ -3,7 +3,6 @@ package sync
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/libp2p/go-libp2p/core"
@@ -42,32 +41,20 @@ func RequestDataColumnSidecars(
 		return nil, nil
 	}
 
+	// Assemble the peers who can provide the needed data columns.
+	dataColumnsByAdmissiblePeer, _, _, err := p2p.AdmissiblePeersForDataColumns(peers, dataColumns)
+	if err != nil {
+		return nil, errors.Wrap(err, "couldn't get admissible peers for data columns")
+	}
+
+	badPeers := make(map[peer.ID]bool)
+	sidecars := make([]blocks.RODataColumn, 0, len(dataColumns))
 	remainingColumns := make(map[uint64]bool, len(dataColumns))
 	for col := range dataColumns {
 		remainingColumns[col] = true
 	}
 
-	sidecars := make([]blocks.RODataColumn, 0, len(dataColumns))
-	maxRetries := 3
-	badPeers := make(map[peer.ID]bool)
-
-	for retry := 0; retry < maxRetries && len(remainingColumns) > 0; retry++ {
-		// If this is a retry, log it
-		if retry > 0 {
-			log.WithFields(logrus.Fields{
-				"retry":       retry,
-				"blockRoot":   fmt.Sprintf("%#x", blkRoot),
-				"columnsLeft": len(remainingColumns),
-				"badPeers":    len(badPeers),
-			}).Debug("Retrying data column sidecars request")
-		}
-
-		// Assemble the peers who can provide the needed data columns.
-		dataColumnsByAdmissiblePeer, _, _, err := p2p.AdmissiblePeersForDataColumns(peers, remainingColumns)
-		if err != nil {
-			return nil, errors.Wrap(err, "couldn't get admissible peers for data columns")
-		}
-
+	for len(peers) > len(badPeers) && len(remainingColumns) > 0 {
 		// Filter out bad peers from the admissible peers
 		filteredDataColumnsByAdmissiblePeer := make(map[peer.ID]map[uint64]bool)
 		for p, cols := range dataColumnsByAdmissiblePeer {
@@ -79,27 +66,10 @@ func RequestDataColumnSidecars(
 		// Try to select peers excluding bad peers
 		peersToFetchFrom, err := SelectPeersToFetchDataColumnsFrom(remainingColumns, filteredDataColumnsByAdmissiblePeer)
 		if err != nil {
-			// If excluding bad peers results in an error, try again with all admissible peers
-			log.WithError(err).Debug("Failed to select peers after excluding bad peers, trying with all admissible peers")
-			peersToFetchFrom, err = SelectPeersToFetchDataColumnsFrom(remainingColumns, dataColumnsByAdmissiblePeer)
-			if err != nil {
-				return nil, errors.Wrap(err, "couldn't select peers to fetch data columns from")
-			}
-		}
-
-		if len(peersToFetchFrom) == 0 {
-			if retry == maxRetries-1 {
-				// If this is the last retry and we still have no peers, return an error
-				return nil, fmt.Errorf("no peers to fetch data columns from for block root=%#x", blkRoot)
-			}
-
-			// If we have no peers but can retry, wait a bit before retrying
-			select {
-			case <-time.After(time.Duration(500*(retry+1)) * time.Millisecond):
-				continue
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			}
+			// Return an error if some columns are unavailable from the filtered set
+			// of peers. Filtering out bad peers can make columns unavailable, and
+			// when that happens, the caller needs to know about it.
+			return nil, errors.Wrap(err, "couldn't select peers to fetch data columns from")
 		}
 
 		// Request the data columns from each peer
@@ -123,21 +93,22 @@ func RequestDataColumnSidecars(
 				continue
 			}
 
-			expectedCount := len(dataColumns)
-			if len(peerSidecars) != expectedCount {
-				// Mark this peer as bad since it didn't return the sidecars we requested
-				badPeers[peer] = true
-				log.WithFields(logrus.Fields{
-					"peer":          peer.String(),
-					"expectedCount": expectedCount,
-					"receivedCount": len(peerSidecars),
-				}).Debug("Peer returned incorrect number of sidecars")
-			}
-
 			// Mark columns as successful
 			for _, sidecar := range peerSidecars {
 				colIndex := sidecar.ColumnIndex
 				successfulColumns[colIndex] = true
+			}
+
+			for _, colIndex := range dataColumns {
+				if !successfulColumns[colIndex] {
+					// Mark peer as bad if any requested column wasn't successful
+					badPeers[peer] = true
+					log.WithFields(logrus.Fields{
+						"peer":          peer.String(),
+						"missingColumn": colIndex,
+					}).Debug("Peer failed to return requested data column")
+					break
+				}
 			}
 
 			sidecars = append(sidecars, peerSidecars...)
