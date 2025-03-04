@@ -42,17 +42,14 @@ func RequestDataColumnSidecars(
 		return nil, nil
 	}
 
-	// Keep track of remaining data columns to fetch
 	remainingColumns := make(map[uint64]bool, len(dataColumns))
 	for col := range dataColumns {
 		remainingColumns[col] = true
 	}
 
-	// Track successfully retrieved sidecars
 	sidecars := make([]blocks.RODataColumn, 0, len(dataColumns))
-
-	// Maximum retry attempts
 	maxRetries := 3
+	badPeers := make(map[peer.ID]bool)
 
 	for retry := 0; retry < maxRetries && len(remainingColumns) > 0; retry++ {
 		// If this is a retry, log it
@@ -61,6 +58,7 @@ func RequestDataColumnSidecars(
 				"retry":       retry,
 				"blockRoot":   fmt.Sprintf("%#x", blkRoot),
 				"columnsLeft": len(remainingColumns),
+				"badPeers":    len(badPeers),
 			}).Debug("Retrying data column sidecars request")
 		}
 
@@ -70,9 +68,23 @@ func RequestDataColumnSidecars(
 			return nil, err
 		}
 
-		peersToFetchFrom, err := SelectPeersToFetchDataColumnsFrom(remainingColumns, dataColumnsByAdmissiblePeer)
+		// Filter out bad peers from the admissible peers
+		filteredDataColumnsByAdmissiblePeer := make(map[peer.ID]map[uint64]bool)
+		for p, cols := range dataColumnsByAdmissiblePeer {
+			if !badPeers[p] {
+				filteredDataColumnsByAdmissiblePeer[p] = cols
+			}
+		}
+
+		// Try to select peers excluding bad peers
+		peersToFetchFrom, err := SelectPeersToFetchDataColumnsFrom(remainingColumns, filteredDataColumnsByAdmissiblePeer)
 		if err != nil {
-			return nil, errors.Wrap(err, "couldn't select peers to fetch data columns from")
+			// If excluding bad peers results in an error, try again with all admissible peers
+			log.WithError(err).Debug("Failed to select peers after excluding bad peers, trying with all admissible peers")
+			peersToFetchFrom, err = SelectPeersToFetchDataColumnsFrom(remainingColumns, dataColumnsByAdmissiblePeer)
+			if err != nil {
+				return nil, errors.Wrap(err, "couldn't select peers to fetch data columns from")
+			}
 		}
 
 		if len(peersToFetchFrom) == 0 {
@@ -101,12 +113,25 @@ func RequestDataColumnSidecars(
 
 			peerSidecars, err := SendDataColumnSidecarsByRootRequest(ctx, clock, p2p, peer, ctxMap, &request)
 			if err != nil {
+				// Mark this peer as bad since it failed to respond correctly
+				badPeers[peer] = true
 				log.WithFields(logrus.Fields{
 					"peer":      peer.String(),
 					"blockRoot": fmt.Sprintf("%#x", blkRoot),
 					"error":     err.Error(),
 				}).Debug("Failed to request data columns from peer")
 				continue
+			}
+
+			expectedCount := len(dataColumns)
+			if len(peerSidecars) != expectedCount {
+				// Mark this peer as bad since it didn't return the sidecars we requested
+				badPeers[peer] = true
+				log.WithFields(logrus.Fields{
+					"peer":          peer.String(),
+					"expectedCount": expectedCount,
+					"receivedCount": len(peerSidecars),
+				}).Debug("Peer returned incorrect number of sidecars")
 			}
 
 			// Mark columns as successful and collect sidecars
@@ -133,6 +158,7 @@ func RequestDataColumnSidecars(
 			"blockRoot":      fmt.Sprintf("%#x", blkRoot),
 			"missingColumns": uint64MapToSortedSlice(remainingColumns),
 			"retrievedCount": len(sidecars),
+			"badPeers":       len(badPeers),
 		}).Debug("Could not retrieve all requested data columns after retries")
 	}
 
