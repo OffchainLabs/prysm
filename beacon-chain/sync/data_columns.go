@@ -152,19 +152,9 @@ func RequestDataColumnSidecars(
 		}
 	}
 
-	// If we still have remaining columns after all retries, log it but continue with what we have
+	// If we still have remaining columns after all retries, return error
 	if len(remainingColumns) > 0 {
-		log.WithFields(logrus.Fields{
-			"blockRoot":      fmt.Sprintf("%#x", blkRoot),
-			"missingColumns": uint64MapToSortedSlice(remainingColumns),
-			"retrievedCount": len(sidecars),
-			"badPeers":       len(badPeers),
-		}).Debug("Could not retrieve all requested data columns after retries")
-	}
-
-	// If we didn't get any sidecars, return error
-	if len(sidecars) == 0 {
-		return nil, errors.Errorf("failed to retrieve any data columns for block root=%#x", blkRoot)
+		return nil, errors.Errorf("failed to retrieve all requested data columns after retries for block root=%#x, missing columns=%v", blkRoot, uint64MapToSortedSlice(remainingColumns))
 	}
 
 	// Validate the received sidecars
