@@ -65,7 +65,7 @@ func RequestDataColumnSidecars(
 		// Assemble the peers who can provide the needed data columns.
 		dataColumnsByAdmissiblePeer, _, _, err := p2p.AdmissiblePeersForDataColumns(peers, remainingColumns)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "couldn't get admissible peers for data columns")
 		}
 
 		// Filter out bad peers from the admissible peers
@@ -90,7 +90,7 @@ func RequestDataColumnSidecars(
 		if len(peersToFetchFrom) == 0 {
 			if retry == maxRetries-1 {
 				// If this is the last retry and we still have no peers, return an error
-				return nil, errors.Wrapf(err, "no peers to fetch data columns from for block root=%#x", blkRoot)
+				return nil, fmt.Errorf("no peers to fetch data columns from for block root=%#x", blkRoot)
 			}
 
 			// If we have no peers but can retry, wait a bit before retrying
@@ -134,12 +134,13 @@ func RequestDataColumnSidecars(
 				}).Debug("Peer returned incorrect number of sidecars")
 			}
 
-			// Mark columns as successful and collect sidecars
+			// Mark columns as successful
 			for _, sidecar := range peerSidecars {
 				colIndex := sidecar.ColumnIndex
 				successfulColumns[colIndex] = true
-				sidecars = append(sidecars, sidecar)
 			}
+
+			sidecars = append(sidecars, peerSidecars...)
 		}
 
 		// Update remaining columns for the next retry
