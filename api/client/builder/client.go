@@ -565,7 +565,6 @@ func (c *Client) parseBlindedBlockResponseSSZ(
 	respBytes []byte,
 	forkVersion int,
 ) (interfaces.ExecutionData, *v1.BlobsBundle, error) {
-
 	if forkVersion >= version.Deneb {
 		payloadAndBlobs := &v1.ExecutionPayloadDenebAndBlobsBundle{}
 		if err := payloadAndBlobs.UnmarshalSSZ(respBytes); err != nil {
