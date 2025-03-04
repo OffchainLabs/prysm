@@ -384,9 +384,11 @@ func (c *Client) RegisterValidator(ctx context.Context, svr []*ethpb.SignedValid
 		return err
 	}
 
-	var body []byte
-	var err error
-	var postOpts reqOption
+	var (
+		body     []byte
+		err      error
+		postOpts reqOption
+	)
 	if c.sszEnabled {
 		postOpts = func(r *http.Request) {
 			r.Header.Set("Content-Type", api.OctetStreamMediaType)
