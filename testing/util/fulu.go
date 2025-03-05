@@ -156,6 +156,7 @@ func GenerateTestFuluBlockWithSidecar(
 	}
 	sidecars := make([]blocks.RODataColumn, params.BeaconConfig().NumberOfColumns)
 	dataColumns, err := peerdas.DataColumnSidecars(sbb, blobs)
+	require.NoError(t, err)
 	for i, dc := range dataColumns {
 		sidecars[i], err = blocks.NewRODataColumnWithRoot(dc, root)
 		require.NoError(t, err)
