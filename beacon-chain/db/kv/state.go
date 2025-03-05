@@ -820,30 +820,25 @@ func (s *Store) slotByBlockRoot(ctx context.Context, tx *bolt.Tx, blockRoot []by
 			// no need to construct the validator entries as it is not used here.
 			s, err := s.unmarshalState(ctx, enc, nil)
 			if err != nil {
-				return 0, err
+				return 0, errors.Wrap(err, "could not unmarshal state")
 			}
 			if s == nil || s.IsNil() {
 				return 0, errors.New("state can't be nil")
 			}
 			return s.Slot(), nil
 		}
-		b := &ethpb.SignedBeaconBlock{}
-		err := decode(ctx, enc, b)
+		b, err := unmarshalBlock(ctx, enc)
 		if err != nil {
+			return 0, errors.Wrap(err, "could not unmarshal block")
+		}
+		if err := blocks.BeaconBlockIsNil(b); err != nil {
 			return 0, err
 		}
-		wsb, err := blocks.NewSignedBeaconBlock(b)
-		if err != nil {
-			return 0, err
-		}
-		if err := blocks.BeaconBlockIsNil(wsb); err != nil {
-			return 0, err
-		}
-		return b.Block.Slot, nil
+		return b.Block().Slot(), nil
 	}
 	stateSummary := &ethpb.StateSummary{}
 	if err := decode(ctx, enc, stateSummary); err != nil {
-		return 0, err
+		return 0, errors.Wrap(err, "could not unmarshal state summary")
 	}
 	return stateSummary.Slot, nil
 }

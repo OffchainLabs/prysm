@@ -16,6 +16,15 @@ import (
 
 var log = logrus.WithField("prefix", "db-pruner")
 
+const (
+	// defaultPrunableBatchSize is the number of slots that can be pruned at once.
+	defaultPrunableBatchSize = 32
+	// defaultPruningWindow is the duration of one pruning window.
+	defaultPruningWindow = time.Second * 3
+	// defaultNumBatchesToPrune is the number of batches to prune in one pruning window.
+	defaultNumBatchesToPrune = 15
+)
+
 type ServiceOption func(*Service)
 
 // WithRetentionPeriod allows the user to specify a different data retention period than the spec default.
@@ -143,20 +152,50 @@ func (p *Service) prune(slot primitives.Slot) error {
 	}).Debug("Pruning chain data")
 
 	tt := time.Now()
-	if err := p.db.DeleteHistoricalDataBeforeSlot(p.ctx, pruneUpto); err != nil {
-		return errors.Wrapf(err, "could not delete upto slot %d", pruneUpto)
+	numBatches, err := p.pruneBatches(pruneUpto)
+	if err != nil {
+		return errors.Wrap(err, "failed to prune batches")
 	}
 
 	log.WithFields(logrus.Fields{
 		"prunedUpto":  pruneUpto,
 		"duration":    time.Since(tt),
 		"currentSlot": slot,
+		"batchSize":   defaultPrunableBatchSize,
+		"numBatches":  numBatches,
 	}).Debug("Successfully pruned chain data")
 
 	// Update pruning checkpoint.
 	p.prunedUpto = pruneUpto
 
 	return nil
+}
+
+func (p *Service) pruneBatches(pruneUpto primitives.Slot) (int, error) {
+	ctx, cancel := context.WithTimeout(p.ctx, defaultPruningWindow)
+	defer cancel()
+
+	numBatches := 0
+	for {
+		select {
+		case <-ctx.Done():
+			return numBatches, nil
+		default:
+			for i := 0; i < defaultNumBatchesToPrune; i++ {
+				slotsDeleted, err := p.db.DeleteHistoricalDataBeforeSlot(ctx, pruneUpto, defaultPrunableBatchSize)
+				if err != nil {
+					return 0, errors.Wrapf(err, "could not delete upto slot %d", pruneUpto)
+				}
+
+				// Return if there's nothing to delete.
+				if slotsDeleted == 0 {
+					return numBatches, nil
+				}
+
+				numBatches++
+			}
+		}
+	}
 }
 
 // pruneStartSlotFunc returns the function to determine the start slot to start pruning.
