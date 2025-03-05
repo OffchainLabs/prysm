@@ -504,7 +504,7 @@ func (s *Service) HeaderByNumber(ctx context.Context, number *big.Int) (*types.H
 }
 
 // GetBlobs returns the blob and proof from the execution engine for the given versioned hashes.
-func (s *Service) GetBlobs(ctx context.Context, slot primitives.Slot, versionedHashes []common.Hash) ([]*pb.BlobAndProof, error) {
+func (s *Service) GetBlobs(ctx context.Context, versionedHashes []common.Hash) ([]*pb.BlobAndProof, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetBlobs")
 	defer span.End()
 
@@ -518,7 +518,7 @@ func (s *Service) GetBlobs(ctx context.Context, slot primitives.Slot, versionedH
 	return result, handleRPCError(err)
 }
 
-func (s *Service) GetBlobsV2(ctx context.Context, slot primitives.Slot, versionedHashes []common.Hash) ([]*pb.BlobAndProofV2, error) {
+func (s *Service) GetBlobsV2(ctx context.Context, versionedHashes []common.Hash) ([]*pb.BlobAndProofV2, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetBlobsV2")
 	defer span.End()
 
@@ -587,7 +587,7 @@ func (s *Service) ReconstructBlobSidecars(ctx context.Context, block interfaces.
 	}
 
 	// Fetch blobs from EL
-	blobs, err := s.GetBlobs(ctx, block.Block().Slot(), kzgHashes)
+	blobs, err := s.GetBlobs(ctx, kzgHashes)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get blobs")
 	}
@@ -648,7 +648,7 @@ func (s *Service) ReconstructDataColumnSidecars(ctx context.Context, block inter
 	blockBody := block.Block().Body()
 	kzgCommitments, err := blockBody.BlobKzgCommitments()
 	if err != nil {
-		return nil, errors.Wrap(err, "could not get blob KZG commitments")
+		return nil, wrapWithBlockRoot(err, blockRoot, "could not get blob KZG commitments")
 	}
 
 	// Collect KZG hashes for all blobs
@@ -660,14 +660,14 @@ func (s *Service) ReconstructDataColumnSidecars(ctx context.Context, block inter
 	}
 
 	// Fetch all blobs from EL
-	blobs, err := s.GetBlobsV2(ctx, block.Block().Slot(), kzgHashes)
+	blobs, err := s.GetBlobsV2(ctx, kzgHashes)
 	if err != nil {
-		return nil, errors.Wrap(err, "could not get blobs")
+		return nil, wrapWithBlockRoot(err, blockRoot, "could not get blobs")
 	}
 
 	for _, blobAndCellProofs := range blobs {
 		if blobAndCellProofs == nil {
-			return nil, errors.New("unable to reconstruct data column sidecars, did not get all blobs from EL")
+			return nil, wrapWithBlockRoot(errors.New("unable to reconstruct data column sidecars, did not get all blobs from EL"), blockRoot, "")
 		}
 	}
 
@@ -677,7 +677,7 @@ func (s *Service) ReconstructDataColumnSidecars(ctx context.Context, block inter
 		copy(blob[:], blobAndCellProofs.Blob)
 		cells, err := kzg.ComputeCells(&blob)
 		if err != nil {
-			return nil, errors.Wrap(err, "could not compute cells")
+			return nil, wrapWithBlockRoot(err, blockRoot, "could not compute cells")
 		}
 
 		proofs := make([]kzg.Proof, len(blobAndCellProofs.CellProofs))
@@ -692,24 +692,24 @@ func (s *Service) ReconstructDataColumnSidecars(ctx context.Context, block inter
 
 	header, err := block.Header()
 	if err != nil {
-		return nil, errors.Wrap(err, "could not get header")
+		return nil, wrapWithBlockRoot(err, blockRoot, "could not get header")
 	}
 
 	kzgCommitmentsInclusionProof, err := blocks.MerkleProofKZGCommitments(blockBody)
 	if err != nil {
-		return nil, errors.Wrap(err, "could not get Merkle proof for KZG commitments")
+		return nil, wrapWithBlockRoot(err, blockRoot, "could not get Merkle proof for KZG commitments")
 	}
 
 	dataColumnSidecars, err := peerdas.DataColumnSidecarsForReconstruct(kzgCommitments, header, kzgCommitmentsInclusionProof, cellsAndProofs)
 	if err != nil {
-		return nil, errors.Wrap(err, "could not reconstruct data column sidecars")
+		return nil, wrapWithBlockRoot(err, blockRoot, "could not reconstruct data column sidecars")
 	}
 
 	verifiedRODataColumns := make([]blocks.VerifiedRODataColumn, len(dataColumnSidecars))
 	for i, dataColumnSidecar := range dataColumnSidecars {
 		roDataColumn, err := blocks.NewRODataColumnWithRoot(dataColumnSidecar, blockRoot)
 		if err != nil {
-			return nil, errors.Wrap(err, "new read-only data column with root")
+			return nil, wrapWithBlockRoot(err, blockRoot, "new read-only data column with root")
 		}
 
 		verifiedRODataColumns[i] = blocks.NewVerifiedRODataColumn(roDataColumn)
@@ -1006,4 +1006,9 @@ func toBlockNumArg(number *big.Int) string {
 		return "safe"
 	}
 	return hexutil.EncodeBig(number)
+}
+
+// wrapWithBlockRoot returns a new error with the given block root.
+func wrapWithBlockRoot(err error, blockRoot [32]byte, message string) error {
+	return errors.Wrap(err, fmt.Sprintf("%s for block %#x", message, blockRoot))
 }
