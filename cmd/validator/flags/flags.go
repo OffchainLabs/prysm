@@ -381,7 +381,7 @@ var (
 	ValidatorsRegistrationBatchSizeFlag = &cli.IntFlag{
 		Name:  "validators-registration-batch-size",
 		Usage: "Sets the maximum size for one batch of validator registrations. Use a non-positive value to disable batching.",
-		Value: 0,
+		Value: 200,
 	}
 	// EnableDistributed enables the usage of prysm validator client in a Distributed Validator Cluster.
 	EnableDistributed = &cli.BoolFlag{

@@ -89,10 +89,6 @@ var (
 		Name:  "attest-timely",
 		Usage: "Fixes validator can attest timely after current block processes. See #8185 for more details.",
 	}
-	enableSlasherFlag = &cli.BoolFlag{
-		Name:  "slasher",
-		Usage: "Enables a slasher in the beacon node for detecting slashable offenses.",
-	}
 	enableSlashingProtectionPruning = &cli.BoolFlag{
 		Name:  "enable-slashing-protection-history-pruning",
 		Usage: "Enables the pruning of the validator client's slashing protection database.",
@@ -217,7 +213,6 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	Mainnet,
 	disablePeerScorer,
 	disableBroadcastSlashingFlag,
-	enableSlasherFlag,
 	disableStakinContractCheck,
 	SaveFullExecutionPayloads,
 	enableStartupOptimistic,
