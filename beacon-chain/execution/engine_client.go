@@ -653,10 +653,8 @@ func (s *Service) ReconstructDataColumnSidecars(ctx context.Context, block inter
 
 	// Collect KZG hashes for all blobs
 	var kzgHashes []common.Hash
-	var kzgIndexes []int
-	for i, commitment := range kzgCommitments {
+	for _, commitment := range kzgCommitments {
 		kzgHashes = append(kzgHashes, primitives.ConvertKzgCommitmentToVersionedHash(commitment))
-		kzgIndexes = append(kzgIndexes, i)
 	}
 
 	// Fetch all blobs from EL
