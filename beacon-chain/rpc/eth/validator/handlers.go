@@ -638,11 +638,12 @@ func (s *Server) ProduceSyncCommitteeContribution(w http.ResponseWriter, r *http
 
 	isOptimistic, err := s.OptimisticModeFetcher.IsOptimistic(ctx)
 	if err != nil {
-		httputil.HandleError(w, "Beacon node is currently syncing and not serving request on that endpoint", http.StatusServiceUnavailable)
+		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if isOptimistic {
-		httputil.HandleError(w, "Optimistic mode fetcher is optimistic only", http.StatusBadRequest)
+		httputil.HandleError(w, "Beacon node is currently syncing and not serving request on that endpoint", http.StatusServiceUnavailable)
+		return
 	}
 	_, index, ok := shared.UintFromQuery(w, r, "subcommittee_index", true)
 	if !ok {
