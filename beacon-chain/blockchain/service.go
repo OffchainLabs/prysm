@@ -62,6 +62,7 @@ type Service struct {
 	blobNotifiers        *blobNotifierMap
 	blockBeingSynced     *currentlySyncingBlock
 	blobStorage          *filesystem.BlobStorage
+	slasherEnabled       bool
 }
 
 // config options for the service.

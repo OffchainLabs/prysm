@@ -103,7 +103,7 @@ func (s *Service) forkchoiceUpdateWithExecution(ctx context.Context, args *fcuCo
 	}
 
 	// Only need to prune attestations from pool if the head has changed.
-	if err := s.pruneAttsFromPool(args.headBlock); err != nil {
+	if err := s.pruneAttsFromPool(s.ctx, args.headState, args.headBlock); err != nil {
 		log.WithError(err).Error("could not prune attestations from pool")
 	}
 	return nil
