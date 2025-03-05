@@ -358,12 +358,12 @@ func writeLazyReaderWithRecover(w *streamingResponseWriterController, lr lazyRea
 		}
 	}()
 	if lr == nil {
-		log.Warn("event stream skipping a nil lazy event reader callback")
+		log.Warn("Event stream skipping a nil lazy event reader callback")
 		return nil
 	}
 	r := lr()
 	if r == nil {
-		log.Warn("event stream skipping a nil event reader")
+		log.Warn("Event stream skipping a nil event reader")
 		return nil
 	}
 	out, err := io.ReadAll(r)
@@ -680,23 +680,23 @@ func (s *Server) fillEventData(ctx context.Context, ev payloadattribute.EventDat
 
 	ev.HeadState, err = s.HeadFetcher.HeadState(ctx)
 	if err != nil {
-		return ev, errors.Wrap(err, "Could not get head state")
+		return ev, errors.Wrap(err, "could not get head state")
 	}
 
 	ev.HeadBlock, err = s.HeadFetcher.HeadBlock(ctx)
 	if err != nil {
-		return ev, errors.Wrap(err, "Could not look up head block")
+		return ev, errors.Wrap(err, "could not look up head block")
 	}
 	ev.HeadRoot, err = ev.HeadBlock.Block().HashTreeRoot()
 	if err != nil {
-		return ev, errors.Wrap(err, "Could not compute head block root")
+		return ev, errors.Wrap(err, "could not compute head block root")
 	}
 	pr := ev.HeadBlock.Block().ParentRoot()
 	ev.ParentBlockRoot = pr[:]
 
 	hsr, err := ev.HeadState.LatestBlockHeader().HashTreeRoot()
 	if err != nil {
-		return ev, errors.Wrap(err, "Could not compute latest block header root")
+		return ev, errors.Wrap(err, "could not compute latest block header root")
 	}
 
 	pse := slots.ToEpoch(ev.ProposalSlot)
@@ -704,7 +704,7 @@ func (s *Server) fillEventData(ctx context.Context, ev payloadattribute.EventDat
 	if slots.ToEpoch(st.Slot()) != pse {
 		st, err = transition.ProcessSlotsUsingNextSlotCache(ctx, st, hsr[:], ev.ProposalSlot)
 		if err != nil {
-			return ev, errors.Wrap(err, "Could not run process blocks on head state into the proposal slot epoch")
+			return ev, errors.Wrap(err, "could not run process blocks on head state into the proposal slot epoch")
 		}
 	}
 	ev.ProposerIndex, err = helpers.BeaconProposerIndexAtSlot(ctx, st, ev.ProposalSlot)
@@ -718,7 +718,7 @@ func (s *Server) fillEventData(ctx context.Context, ev payloadattribute.EventDat
 
 	payload, err := ev.HeadBlock.Block().Body().Execution()
 	if err != nil {
-		return ev, errors.Wrap(err, "Could not get execution payload for head block")
+		return ev, errors.Wrap(err, "could not get execution payload for head block")
 	}
 	ev.ParentBlockHash = payload.BlockHash()
 	ev.ParentBlockNumber = payload.BlockNumber()
