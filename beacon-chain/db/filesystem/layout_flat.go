@@ -1,13 +1,12 @@
 package filesystem
 
 import (
-	"encoding/binary"
-	"io"
 	"os"
 	"path"
 
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/spf13/afero"
 )
@@ -115,29 +114,26 @@ func (l *flatLayout) pruneBefore(before primitives.Epoch) (*pruneSummary, error)
 
 // Read slot from marshaled BlobSidecar data in the given file. See slotFromBlob for details.
 func slotFromFile(name string, fs afero.Fs) (primitives.Slot, error) {
-	f, err := fs.Open(name)
+	// read whole file, try to unmarshal it as blob sidecar, if it fails, try to unmarshal it as data column sidecar
+	content, err := afero.ReadFile(fs, name)
 	if err != nil {
 		return 0, err
 	}
-	defer func() {
-		if err := f.Close(); err != nil {
-			log.WithError(err).Errorf("Could not close blob file")
-		}
-	}()
-	return slotFromBlob(f)
-}
 
-// slotFromBlob reads the ssz data of a file at the specified offset (8 + 131072 + 48 + 48 = 131176 bytes),
-// which is calculated based on the size of the BlobSidecar struct and is based on the size of the fields
-// preceding the slot information within SignedBeaconBlockHeader.
-func slotFromBlob(at io.ReaderAt) (primitives.Slot, error) {
-	b := make([]byte, 8)
-	_, err := at.ReadAt(b, 131176)
-	if err != nil {
-		return 0, err
+	blobSidecar := &ethpb.BlobSidecar{}
+	err = blobSidecar.UnmarshalSSZ(content)
+	if err == nil {
+		return blobSidecar.SignedBlockHeader.Header.Slot, nil
 	}
-	rawSlot := binary.LittleEndian.Uint64(b)
-	return primitives.Slot(rawSlot), nil
+
+	// if it fails, try to unmarshal it as data column sidecar
+	dataColumnSidecar := &ethpb.DataColumnSidecar{}
+	err = dataColumnSidecar.UnmarshalSSZ(content)
+	if err == nil {
+		return dataColumnSidecar.SignedBlockHeader.Header.Slot, nil
+	}
+
+	return 0, errors.New("failed to unmarshal as blob sidecar or data column sidecar")
 }
 
 type flatSlotReader struct {
