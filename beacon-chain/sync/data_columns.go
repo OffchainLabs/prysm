@@ -109,10 +109,6 @@ func RequestDataColumnSidecars(
 		for col := range successfulColumns {
 			delete(remainingColumns, col)
 		}
-
-		if len(remainingColumns) == 0 {
-			break
-		}
 	}
 
 	// If we still have remaining columns after all retries, return error
