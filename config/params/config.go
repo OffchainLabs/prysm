@@ -235,8 +235,8 @@ type BeaconChainConfig struct {
 	ExecutionEngineTimeoutValue uint64 // ExecutionEngineTimeoutValue defines the seconds to wait before timing out engine endpoints with execution payload execution semantics (newPayload, forkchoiceUpdated).
 
 	// Subnet value
-	BlobsidecarSubnetCount        uint64 `yaml:"BLOB_SIDECAR_SUBNET_COUNT"`         // BlobsidecarSubnetCount is the number of blobsidecar subnets used in the gossipsub protocol.
-	BlobsidecarSubnetCountElectra uint64 `yaml:"BLOB_SIDECAR_SUBNET_COUNT_ELECTRA"` // BlobsidecarSubnetCountElectra is the number of blobsidecar subnets used in the gossipsub protocol post Electra hard fork.
+	BlobsidecarSubnetCount        uint64 `yaml:"BLOB_SIDECAR_SUBNET_COUNT" spec:"true"`         // BlobsidecarSubnetCount is the number of blobsidecar subnets used in the gossipsub protocol.
+	BlobsidecarSubnetCountElectra uint64 `yaml:"BLOB_SIDECAR_SUBNET_COUNT_ELECTRA" spec:"true"` // BlobsidecarSubnetCountElectra is the number of blobsidecar subnets used in the gossipsub protocol post Electra hard fork.
 
 	// Values introduced in Deneb hard fork
 	MaxPerEpochActivationChurnLimit  uint64           `yaml:"MAX_PER_EPOCH_ACTIVATION_CHURN_LIMIT" spec:"true"`  // MaxPerEpochActivationChurnLimit is the maximum amount of churn allotted for validator activation.

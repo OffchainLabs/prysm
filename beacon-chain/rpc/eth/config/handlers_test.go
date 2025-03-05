@@ -160,6 +160,8 @@ func TestGetSpec(t *testing.T) {
 	config.MaxTransactionsPerPayload = 99
 	config.FieldElementsPerBlob = 100
 	config.KzgCommitmentInclusionProofDepth = 101
+	config.BlobsidecarSubnetCount = 102
+	config.BlobsidecarSubnetCountElectra = 103
 
 	var dbp [4]byte
 	copy(dbp[:], []byte{'0', '0', '0', '1'})
@@ -559,6 +561,10 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "100", v)
 			case "KZG_COMMITMENT_INCLUSION_PROOF_DEPTH":
 				assert.Equal(t, "101", v)
+			case "BLOB_SIDECAR_SUBNET_COUNT":
+				assert.Equal(t, "102", v)
+			case "BLOB_SIDECAR_SUBNET_COUNT_ELECTRA":
+				assert.Equal(t, "103", v)
 			default:
 				t.Errorf("Incorrect key: %s", k)
 			}
