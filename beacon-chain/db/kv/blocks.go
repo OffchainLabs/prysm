@@ -249,6 +249,9 @@ func (s *Store) DeleteBlock(ctx context.Context, root [32]byte) error {
 		if err := s.deleteSlotIndexEntry(tx, blk.Block().Slot(), root); err != nil {
 			return err
 		}
+		if err := s.deleteMatchingParentIndex(tx, blk.Block().ParentRoot(), root); err != nil {
+			return err
+		}
 		if err := s.deleteBlock(tx, root[:]); err != nil {
 			return err
 		}
@@ -1072,6 +1075,18 @@ func (s *Store) deleteBlock(tx *bolt.Tx, root []byte) error {
 		return errors.Wrap(err, "could not delete block parent indices")
 	}
 
+	return nil
+}
+
+func (s *Store) deleteMatchingParentIndex(tx *bolt.Tx, parent, child [32]byte) error {
+	bkt := tx.Bucket(blockParentRootIndicesBucket)
+	v := bkt.Get(parent[:])
+	if !bytes.Equal(v, child[:]) {
+		return nil // don't delete non-matching entry
+	}
+	if err := bkt.Delete(parent[:]); err != nil {
+		return errors.Wrap(err, "could not remove parent root index entry")
+	}
 	return nil
 }
 
