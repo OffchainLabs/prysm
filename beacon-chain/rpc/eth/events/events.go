@@ -664,8 +664,7 @@ var zeroRoot [32]byte
 // needsFill allows tests to provide filled EventData values. An ordinary event data value fired by the blockchain package will have
 // all of the checked fields empty, so the logical short circuit should hit immediately.
 func needsFill(ev payloadattribute.EventData) bool {
-	return ev.HeadState == nil || ev.HeadState.IsNil() ||
-		ev.HeadState.LatestBlockHeader() == nil || ev.HeadState.LatestBlockHeader() == nil ||
+	return ev.HeadState == nil || ev.HeadState.IsNil() || ev.HeadState.LatestBlockHeader() == nil ||
 		ev.HeadBlock == nil || ev.HeadBlock.IsNil() ||
 		ev.HeadRoot == zeroRoot || len(ev.ParentBlockRoot) == 0 || len(ev.ParentBlockHash) == 0 ||
 		ev.Attributer == nil || ev.Attributer.IsEmpty()
