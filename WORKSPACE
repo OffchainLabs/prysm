@@ -160,15 +160,15 @@ oci_register_toolchains(
 
 http_archive(
     name = "io_bazel_rules_go",
+    integrity = "sha256-JD8o94crTb2DFiJJR8nMAGdBAW95zIENB4cbI+JnrI4=",
     patch_args = ["-p1"],
     patches = [
         # Expose internals of go_test for custom build transitions.
         "//third_party:io_bazel_rules_go_test.patch",
     ],
-    sha256 = "b2038e2de2cace18f032249cb4bb0048abf583a36369fa98f687af1b3f880b26",
+    strip_prefix = "rules_go-cf3c3af34bd869b864f5f2b98e2f41c2b220d6c9",
     urls = [
-        "https://mirror.bazel.build/github.com/bazelbuild/rules_go/releases/download/v0.48.1/rules_go-v0.48.1.zip",
-        "https://github.com/bazelbuild/rules_go/releases/download/v0.48.1/rules_go-v0.48.1.zip",
+        "https://github.com/bazel-contrib/rules_go/archive/cf3c3af34bd869b864f5f2b98e2f41c2b220d6c9.tar.gz",
     ],
 )
 
@@ -210,7 +210,7 @@ load("@io_bazel_rules_go//go:deps.bzl", "go_register_toolchains", "go_rules_depe
 go_rules_dependencies()
 
 go_register_toolchains(
-    go_version = "1.23.5",
+    go_version = "1.24.0",
     nogo = "@//:nogo",
 )
 
@@ -431,7 +431,7 @@ gometalinter_dependencies()
 
 load("@bazel_gazelle//:deps.bzl", "gazelle_dependencies")
 
-gazelle_dependencies()
+gazelle_dependencies(go_sdk = "go_sdk")
 
 load("@com_google_protobuf//:protobuf_deps.bzl", "protobuf_deps")
 
