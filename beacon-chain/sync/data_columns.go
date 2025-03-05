@@ -47,24 +47,15 @@ func RequestDataColumnSidecars(
 		return nil, errors.Wrap(err, "couldn't get admissible peers for data columns")
 	}
 
-	badPeers := make(map[peer.ID]bool)
 	sidecars := make([]blocks.RODataColumn, 0, len(dataColumns))
 	remainingColumns := make(map[uint64]bool, len(dataColumns))
 	for col := range dataColumns {
 		remainingColumns[col] = true
 	}
 
-	for len(peers) > len(badPeers) && len(remainingColumns) > 0 {
-		// Filter out bad peers from the admissible peers
-		filteredDataColumnsByAdmissiblePeer := make(map[peer.ID]map[uint64]bool)
-		for p, cols := range dataColumnsByAdmissiblePeer {
-			if !badPeers[p] {
-				filteredDataColumnsByAdmissiblePeer[p] = cols
-			}
-		}
-
+	for len(dataColumnsByAdmissiblePeer) > 0 && len(remainingColumns) > 0 {
 		// Try to select peers excluding bad peers
-		peersToFetchFrom, err := SelectPeersToFetchDataColumnsFrom(remainingColumns, filteredDataColumnsByAdmissiblePeer)
+		peersToFetchFrom, err := SelectPeersToFetchDataColumnsFrom(remainingColumns, dataColumnsByAdmissiblePeer)
 		if err != nil {
 			// Return an error if some columns are unavailable from the filtered set
 			// of peers. Filtering out bad peers can make columns unavailable, and
@@ -83,8 +74,8 @@ func RequestDataColumnSidecars(
 
 			peerSidecars, err := SendDataColumnSidecarsByRootRequest(ctx, clock, p2p, peer, ctxMap, &request)
 			if err != nil {
-				// Mark this peer as bad since it failed to respond correctly
-				badPeers[peer] = true
+				// Remove this peer since it failed to respond correctly
+				delete(dataColumnsByAdmissiblePeer, peer)
 				log.WithFields(logrus.Fields{
 					"peer":      peer.String(),
 					"blockRoot": fmt.Sprintf("%#x", blkRoot),
@@ -101,8 +92,8 @@ func RequestDataColumnSidecars(
 
 			for _, colIndex := range dataColumns {
 				if !successfulColumns[colIndex] {
-					// Mark peer as bad if any requested column wasn't successful
-					badPeers[peer] = true
+					// Remove this peer if any requested column wasn't successful
+					delete(dataColumnsByAdmissiblePeer, peer)
 					log.WithFields(logrus.Fields{
 						"peer":          peer.String(),
 						"missingColumn": colIndex,
