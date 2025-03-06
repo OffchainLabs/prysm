@@ -1121,7 +1121,7 @@ func (f *blocksFetcher) waitForPeersForDataColumns(
 	}
 
 	// Get the peers that are admissible for the data columns.
-	dataColumnsByAdmissiblePeer, admissiblePeersByDataColumn, moreDescriptions, err := f.p2p.AdmissiblePeersForDataColumns(rangeReqPeers, neededDataColumns)
+	dataColumnsByAdmissiblePeer, admissiblePeersByDataColumn, moreDescriptions, err := prysmsync.AdmissiblePeersForDataColumns(rangeReqPeers, neededDataColumns, f.p2p)
 	if err != nil {
 		return nil, errors.Wrap(err, "peers with slot and data columns")
 	}
@@ -1182,7 +1182,7 @@ func (f *blocksFetcher) waitForPeersForDataColumns(
 		}
 
 		// Get the peers that are admissible for the data columns.
-		dataColumnsByAdmissiblePeer, admissiblePeersByDataColumn, moreDescriptions, err = f.p2p.AdmissiblePeersForDataColumns(rangeReqPeers, neededDataColumns)
+		dataColumnsByAdmissiblePeer, admissiblePeersByDataColumn, moreDescriptions, err = prysmsync.AdmissiblePeersForDataColumns(rangeReqPeers, neededDataColumns, f.p2p)
 		if err != nil {
 			return nil, errors.Wrap(err, "peers with slot and data columns")
 		}

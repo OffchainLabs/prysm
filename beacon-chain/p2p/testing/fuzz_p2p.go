@@ -188,17 +188,3 @@ func (*FakeP2P) InterceptUpgraded(network.Conn) (allow bool, reason control.Disc
 func (*FakeP2P) CustodyGroupCountFromPeer(peer.ID) uint64 {
 	return 0
 }
-
-func (*FakeP2P) AdmissiblePeersForDataColumns(peers []peer.ID, dataColumns map[uint64]bool) (map[peer.ID]map[uint64]bool, map[uint64][]peer.ID, []string, error) {
-	dataColumnsByAdmissiblePeer := make(map[peer.ID]map[uint64]bool)
-	admissiblePeersByDataColumn := make(map[uint64][]peer.ID)
-	for _, peer := range peers {
-		dataColumnsByAdmissiblePeer[peer] = make(map[uint64]bool)
-		for dataColumn := range dataColumns {
-			dataColumnsByAdmissiblePeer[peer][dataColumn] = true
-			admissiblePeersByDataColumn[dataColumn] = append(admissiblePeersByDataColumn[dataColumn], peer)
-		}
-	}
-	descriptions := make([]string, 0)
-	return dataColumnsByAdmissiblePeer, admissiblePeersByDataColumn, descriptions, nil
-}

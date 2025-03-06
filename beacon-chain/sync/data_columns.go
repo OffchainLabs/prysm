@@ -11,6 +11,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
+	prsymP2P "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/verify"
@@ -42,7 +43,7 @@ func RequestDataColumnSidecars(
 	}
 
 	// Assemble the peers who can provide the needed data columns.
-	dataColumnsByAdmissiblePeer, _, _, err := p2p.AdmissiblePeersForDataColumns(peers, dataColumns)
+	dataColumnsByAdmissiblePeer, _, _, err := AdmissiblePeersForDataColumns(peers, dataColumns, p2p)
 	if err != nil {
 		return nil, errors.Wrap(err, "couldn't get admissible peers for data columns")
 	}
@@ -299,4 +300,145 @@ func SelectPeersToFetchDataColumnsFrom(
 	}
 
 	return dataColumnsFromSelectedPeers, nil
+}
+
+// AdmissiblePeersForCustodyGroup returns a map of peers that custody at least one custody group listed in `neededCustodyGroups`.
+//
+// It returns:
+// - A map, where the key of the map is the peer, the value is the custody groups of the peer.
+// - A map, where the key of the map is the custody group, the value is a list of peers that custody the group.
+// - A slice of descriptions for non admissible peers.
+// - An error if any.
+//
+// NOTE: distributeSamplesToPeer from the DataColumnSampler implements similar logic,
+// but with only one column queried in each request.
+func AdmissiblePeersForDataColumns(
+	peers []peer.ID,
+	neededDataColumns map[uint64]bool,
+	p2p prsymP2P.P2P,
+) (map[peer.ID]map[uint64]bool, map[uint64][]peer.ID, []string, error) {
+	peerCount := len(peers)
+	neededDataColumnsCount := uint64(len(neededDataColumns))
+
+	// Create description slice for non admissible peers.
+	descriptions := make([]string, 0, peerCount)
+
+	// Compute custody columns for each peer.
+	dataColumnsByPeer, err := custodyColumnsFromPeers(peers, p2p)
+	if err != nil {
+		return nil, nil, nil, errors.Wrap(err, "custody columns from peers")
+	}
+
+	// Filter peers which custody at least one needed data column.
+	dataColumnsByAdmissiblePeer, localDescriptions := filterPeerWhichCustodyAtLeastOneDataColumn(neededDataColumns, dataColumnsByPeer)
+	descriptions = append(descriptions, localDescriptions...)
+
+	// Compute a map from needed data columns to their peers.
+	admissiblePeersByDataColumn := make(map[uint64][]peer.ID, neededDataColumnsCount)
+	for peerId, peerDataColumns := range dataColumnsByAdmissiblePeer {
+		for dataColumn := range neededDataColumns {
+			if peerDataColumns[dataColumn] {
+				admissiblePeersByDataColumn[dataColumn] = append(admissiblePeersByDataColumn[dataColumn], peerId)
+			}
+		}
+	}
+
+	return dataColumnsByAdmissiblePeer, admissiblePeersByDataColumn, descriptions, nil
+}
+
+// custodyGroupsFromPeer computes all the custody groups indexed by peer.
+func custodyGroupsFromPeers(peers []peer.ID, p2p prsymP2P.P2P) (map[peer.ID]map[uint64]bool, error) {
+	peerCount := len(peers)
+
+	custodyGroupsByPeer := make(map[peer.ID]map[uint64]bool, peerCount)
+	for _, peer := range peers {
+		// Get the node ID from the peer ID.
+		nodeID, err := prsymP2P.ConvertPeerIDToNodeID(peer)
+		if err != nil {
+			return nil, errors.Wrap(err, "convert peer ID to node ID")
+		}
+
+		// Get the custody group count of the peer.
+		custodyGroupCount := p2p.CustodyGroupCountFromPeer(peer)
+
+		// Get the custody groups of the peer.
+		dasInfo, _, err := peerdas.Info(nodeID, custodyGroupCount)
+		if err != nil {
+			return nil, errors.Wrap(err, "custody groups")
+		}
+
+		custodyGroupsByPeer[peer] = dasInfo.CustodyGroups
+	}
+
+	return custodyGroupsByPeer, nil
+}
+
+// custodyColumnsFromPeers computes all the custody columns indexed by peer.
+func custodyColumnsFromPeers(peers []peer.ID, p2p prsymP2P.P2P) (map[peer.ID]map[uint64]bool, error) {
+	// Get the custody groups of the peers.
+	custodyGroupsByPeer, err := custodyGroupsFromPeers(peers, p2p)
+	if err != nil {
+		return nil, errors.Wrap(err, "custody groups from peer")
+	}
+
+	// Compute the custody columns of the peers.
+	dataColumnsByPeer := make(map[peer.ID]map[uint64]bool, len(custodyGroupsByPeer))
+	for peer, custodyGroups := range custodyGroupsByPeer {
+		custodyColumns, err := peerdas.CustodyColumns(custodyGroups)
+		if err != nil {
+			return nil, errors.Wrap(err, "custody columns")
+		}
+
+		dataColumnsByPeer[peer] = custodyColumns
+	}
+
+	return dataColumnsByPeer, nil
+}
+
+// `filterPeerWhichCustodyAtLeastOneDataColumn` filters peers which custody at least one data column
+// specified in `neededDataColumns`. It returns also a list of descriptions for non admissible peers.
+func filterPeerWhichCustodyAtLeastOneDataColumn(
+	neededDataColumns map[uint64]bool,
+	inputDataColumnsByPeer map[peer.ID]map[uint64]bool,
+) (map[peer.ID]map[uint64]bool, []string) {
+	// Get the count of needed data columns.
+	neededDataColumnsCount := uint64(len(neededDataColumns))
+
+	// Create pretty needed data columns for logs.
+	var neededDataColumnsLog interface{} = "all"
+	numberOfColumns := params.BeaconConfig().NumberOfColumns
+
+	if neededDataColumnsCount < numberOfColumns {
+		neededDataColumnsLog = uint64MapToSortedSlice(neededDataColumns)
+	}
+
+	outputDataColumnsByPeer := make(map[peer.ID]map[uint64]bool, len(inputDataColumnsByPeer))
+	descriptions := make([]string, 0)
+
+outerLoop:
+	for peer, peerCustodyDataColumns := range inputDataColumnsByPeer {
+		for neededDataColumn := range neededDataColumns {
+			if peerCustodyDataColumns[neededDataColumn] {
+				outputDataColumnsByPeer[peer] = peerCustodyDataColumns
+
+				continue outerLoop
+			}
+		}
+
+		peerCustodyColumnsCount := uint64(len(peerCustodyDataColumns))
+		var peerCustodyColumnsLog interface{} = "all"
+
+		if peerCustodyColumnsCount < numberOfColumns {
+			peerCustodyColumnsLog = uint64MapToSortedSlice(peerCustodyDataColumns)
+		}
+
+		description := fmt.Sprintf(
+			"peer %s: does not custody any needed column, custody columns: %v, needed columns: %v",
+			peer, peerCustodyColumnsLog, neededDataColumnsLog,
+		)
+
+		descriptions = append(descriptions, description)
+	}
+
+	return outputDataColumnsByPeer, descriptions
 }
