@@ -264,6 +264,8 @@ func TestRemoveRoot(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			before := make([]byte, len(c.roots))
+			copy(before, c.roots)
 			r, err := removeRoot(c.roots, c.root)
 			if c.err != nil {
 				require.ErrorIs(t, err, c.err)
@@ -272,6 +274,7 @@ func TestRemoveRoot(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, len(c.expect), len(r))
 			require.Equal(t, true, bytes.Equal(c.expect, r))
+			require.Equal(t, true, bytes.Equal(before, c.roots))
 		})
 	}
 }

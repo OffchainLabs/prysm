@@ -125,17 +125,16 @@ func removeRoot(roots []byte, root [32]byte) ([]byte, error) {
 	if len(roots)%32 != 0 {
 		return nil, errors.Wrapf(errMisalignedRootList, "root list len=%d", len(roots))
 	}
-	rEnd := 0
-	for s := 0; s <= len(roots)-32; s += 32 {
-		end := s + 32
-		if !bytes.Equal(roots[s:end], root[:]) {
-			continue
+
+	search := root[:]
+	for i := 0; i <= len(roots)-32; i += 32 {
+		if bytes.Equal(roots[i:i+32], search) {
+			result := make([]byte, len(roots)-32)
+			copy(result, roots[:i])
+			copy(result[i:], roots[i+32:])
+			return result, nil
 		}
-		rEnd = end
-		break
 	}
-	if rEnd == 0 {
-		return roots, nil
-	}
-	return append(roots[:rEnd-32], roots[rEnd:]...), nil
+
+	return roots, nil
 }
