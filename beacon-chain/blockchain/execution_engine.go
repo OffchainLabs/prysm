@@ -72,8 +72,6 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*
 	if arg.attributes == nil {
 		arg.attributes = payloadattribute.EmptyWithVersion(headBlk.Version())
 	}
-	nextSlot := s.CurrentSlot() + 1
-	go firePayloadAttributesEvent(ctx, s.cfg.StateNotifier.StateFeed(), nextSlot)
 	payloadID, lastValidHash, err := s.cfg.ExecutionEngineCaller.ForkchoiceUpdated(ctx, fcs, arg.attributes)
 	if err != nil {
 		switch {
@@ -153,6 +151,7 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*
 	}
 	// If the forkchoice update call has an attribute, update the payload ID cache.
 	hasAttr := arg.attributes != nil && !arg.attributes.IsEmpty()
+	nextSlot := s.CurrentSlot() + 1
 	if hasAttr && payloadID != nil {
 		var pId [8]byte
 		copy(pId[:], payloadID[:])
