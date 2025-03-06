@@ -53,7 +53,7 @@ func RequestDataColumnSidecars(
 		remainingColumns[col] = true
 	}
 
-	for len(dataColumnsByAdmissiblePeer) > 0 && len(remainingColumns) > 0 {
+	for len(dataColumnsByAdmissiblePeer) > 0 {
 		// Try to select peers excluding bad peers
 		peersToFetchFrom, err := SelectPeersToFetchDataColumnsFrom(remainingColumns, dataColumnsByAdmissiblePeer)
 		if err != nil {
@@ -109,38 +109,41 @@ func RequestDataColumnSidecars(
 		for col := range successfulColumns {
 			delete(remainingColumns, col)
 		}
+
+		if len(remainingColumns) > 0 {
+			// Some columns are still missing, retry with the remaining peers.
+			continue
+		}
+
+		// All columns have been successfully retrieved, validate the received sidecars.
+		roBlock, err := blocks.NewROBlock(block)
+		if err != nil {
+			return nil, err
+		}
+
+		wrappedBlockDataColumns := make([]verify.WrappedBlockDataColumn, 0, len(sidecars))
+		for _, sidecar := range sidecars {
+			wrappedBlockDataColumn := verify.WrappedBlockDataColumn{
+				ROBlock:      roBlock.Block(),
+				RODataColumn: sidecar,
+			}
+
+			wrappedBlockDataColumns = append(wrappedBlockDataColumns, wrappedBlockDataColumn)
+		}
+
+		if err := verify.DataColumnsAlignWithBlock(wrappedBlockDataColumns, newColumnsVerifier); err != nil {
+			return nil, errors.Wrap(err, "data columns align with block")
+		}
+
+		for _, sidecar := range sidecars {
+			log.WithFields(logging.DataColumnFields(sidecar)).Debug("Received data column sidecar RPC")
+		}
+
+		return sidecars, nil
 	}
 
 	// If we still have remaining columns after all retries, return error
-	if len(remainingColumns) > 0 {
-		return nil, errors.Errorf("failed to retrieve all requested data columns after retries for block root=%#x, missing columns=%v", blkRoot, uint64MapToSortedSlice(remainingColumns))
-	}
-
-	// Validate the received sidecars
-	roBlock, err := blocks.NewROBlock(block)
-	if err != nil {
-		return nil, err
-	}
-
-	wrappedBlockDataColumns := make([]verify.WrappedBlockDataColumn, 0, len(sidecars))
-	for _, sidecar := range sidecars {
-		wrappedBlockDataColumn := verify.WrappedBlockDataColumn{
-			ROBlock:      roBlock.Block(),
-			RODataColumn: sidecar,
-		}
-
-		wrappedBlockDataColumns = append(wrappedBlockDataColumns, wrappedBlockDataColumn)
-	}
-
-	if err := verify.DataColumnsAlignWithBlock(wrappedBlockDataColumns, newColumnsVerifier); err != nil {
-		return nil, errors.Wrap(err, "data columns align with block")
-	}
-
-	for _, sidecar := range sidecars {
-		log.WithFields(logging.DataColumnFields(sidecar)).Debug("Received data column sidecar RPC")
-	}
-
-	return sidecars, nil
+	return nil, errors.Errorf("failed to retrieve all requested data columns after retries for block root=%#x, missing columns=%v", blkRoot, uint64MapToSortedSlice(remainingColumns))
 }
 
 // SaveDataColumns saves the received data columns to disk.
