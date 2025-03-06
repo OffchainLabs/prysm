@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"pAYloAdStAtus\":{\"000000\":\"0000000000000000000000\",\"witness\":\"0\"}}")
