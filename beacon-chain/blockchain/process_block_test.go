@@ -1983,6 +1983,7 @@ func TestNoViableHead_Reboot(t *testing.T) {
 
 	require.NoError(t, service.cfg.BeaconDB.SaveState(ctx, genesisState, genesisRoot), "Could not save genesis state")
 	require.NoError(t, service.cfg.BeaconDB.SaveHeadBlockRoot(ctx, genesisRoot), "Could not save genesis state")
+	require.NoError(t, service.cfg.BeaconDB.SaveGenesisBlockRoot(ctx, genesisRoot), "Could not save genesis state")
 
 	for i := 1; i < 6; i++ {
 		driftGenesisTime(service, int64(i), 0)
@@ -2117,6 +2118,7 @@ func TestNoViableHead_Reboot(t *testing.T) {
 	require.NoError(t, service.cfg.BeaconDB.SaveState(ctx, genesisState, jroot))
 	service.cfg.ForkChoiceStore.SetBalancesByRooter(service.cfg.StateGen.ActiveNonSlashedBalancesByRoot)
 	require.NoError(t, service.StartFromSavedState(genesisState))
+	require.NoError(t, service.cfg.BeaconDB.SaveGenesisBlockRoot(ctx, genesisRoot))
 
 	// Forkchoice has the genesisRoot loaded at startup
 	require.Equal(t, genesisRoot, service.ensureRootNotZeros(service.cfg.ForkChoiceStore.CachedHeadRoot()))
@@ -2126,7 +2128,7 @@ func TestNoViableHead_Reboot(t *testing.T) {
 	require.Equal(t, genesisRoot, bytesutil.ToBytes32(headRoot))
 	optimistic, err := service.IsOptimistic(ctx)
 	require.NoError(t, err)
-	require.Equal(t, true, optimistic)
+	require.Equal(t, false, optimistic)
 
 	// Check that the node's justified checkpoint does not agree with the
 	// last valid state's justified checkpoint
