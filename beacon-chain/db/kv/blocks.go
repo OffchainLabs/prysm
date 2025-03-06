@@ -30,22 +30,32 @@ var errInvalidSlotRange = errors.New("invalid end slot and start slot provided")
 func (s *Store) Block(ctx context.Context, blockRoot [32]byte) (interfaces.ReadOnlySignedBeaconBlock, error) {
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.Block")
 	defer span.End()
-	// Return block from cache if it exists.
+	blk, err := s.getBlock(ctx, blockRoot, nil)
+	if errors.Is(err, ErrNotFound) {
+		return nil, nil
+	}
+	return blk, err
+}
+
+func (s *Store) getBlock(ctx context.Context, blockRoot [32]byte, tx *bolt.Tx) (interfaces.ReadOnlySignedBeaconBlock, error) {
 	if v, ok := s.blockCache.Get(string(blockRoot[:])); v != nil && ok {
 		return v.(interfaces.ReadOnlySignedBeaconBlock), nil
 	}
-	var blk interfaces.ReadOnlySignedBeaconBlock
-	err := s.db.View(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(blocksBucket)
-		enc := bkt.Get(blockRoot[:])
-		if enc == nil {
-			return nil
-		}
+	// This method allows the caller to pass in its tx if one is already open.
+	// Or if a nil value is used, a transaction will be managed intenally.
+	if tx == nil {
 		var err error
-		blk, err = unmarshalBlock(ctx, enc)
-		return err
-	})
-	return blk, err
+		tx, err = s.db.Begin(false)
+		if err != nil {
+			return nil, err
+		}
+		defer func() {
+			if err := tx.Rollback(); err != nil {
+				log.WithError(err).Error("could not rollback read-only getBlock transaction")
+			}
+		}()
+	}
+	return unmarshalBlock(ctx, tx.Bucket(blocksBucket).Get(blockRoot[:]))
 }
 
 // OriginCheckpointBlockRoot returns the value written to the db in SaveOriginCheckpointBlockRoot
@@ -227,6 +237,21 @@ func (s *Store) DeleteBlock(ctx context.Context, root [32]byte) error {
 			return ErrDeleteJustifiedAndFinalized
 		}
 
+		// Look up the block to find its slot; needed to remove the slot index entry.
+		blk, err := s.getBlock(ctx, root, tx)
+		if err != nil {
+			// getBlock can return ErrNotFound, in which case we won't even try to delete it.
+			if errors.Is(err, ErrNotFound) {
+				return nil
+			}
+			return err
+		}
+		if err := s.deleteSlotIndexEntry(tx, blk.Block().Slot(), root); err != nil {
+			return err
+		}
+		if err := s.deleteMatchingParentIndex(tx, blk.Block().ParentRoot(), root); err != nil {
+			return err
+		}
 		if err := s.deleteBlock(tx, root[:]); err != nil {
 			return err
 		}
@@ -899,6 +924,9 @@ func createBlockIndicesFromFilters(ctx context.Context, f *filters.QueryFilter) 
 
 // unmarshal block from marshaled proto beacon block bytes to versioned beacon block struct type.
 func unmarshalBlock(_ context.Context, enc []byte) (interfaces.ReadOnlySignedBeaconBlock, error) {
+	if len(enc) == 0 {
+		return nil, errors.Wrap(ErrNotFound, "empty block bytes in db")
+	}
 	var err error
 	enc, err = snappy.Decode(nil, enc)
 	if err != nil {
@@ -1048,6 +1076,47 @@ func (s *Store) deleteBlock(tx *bolt.Tx, root []byte) error {
 	}
 
 	return nil
+}
+
+func (s *Store) deleteMatchingParentIndex(tx *bolt.Tx, parent, child [32]byte) error {
+	bkt := tx.Bucket(blockParentRootIndicesBucket)
+	if err := deleteRootIndexEntry(bkt, parent[:], child); err != nil {
+		return errors.Wrap(err, "could not delete parent root index entry")
+	}
+	return nil
+}
+
+func (s *Store) deleteSlotIndexEntry(tx *bolt.Tx, slot primitives.Slot, root [32]byte) error {
+	key := bytesutil.SlotToBytesBigEndian(slot)
+	bkt := tx.Bucket(blockSlotIndicesBucket)
+	if err := deleteRootIndexEntry(bkt, key, root); err != nil {
+		return errors.Wrap(err, "could not delete slot index entry")
+	}
+	return nil
+}
+
+func deleteRootIndexEntry(bkt *bolt.Bucket, key []byte, root [32]byte) error {
+	packed := bkt.Get(key)
+	if len(packed) == 0 {
+		return nil
+	}
+	updated, err := removeRoot(packed, root)
+	if err != nil {
+		return err
+	}
+	// Don't update the value if the root was not found.
+	if bytes.Equal(updated, packed) {
+		return nil
+	}
+	// If there are no other roots in the key, just delete it.
+	if len(updated) == 0 {
+		if err := bkt.Delete(key); err != nil {
+			return err
+		}
+		return nil
+	}
+	// Update the key with the root removed.
+	return bkt.Put(key, updated)
 }
 
 func (s *Store) deleteValidatorHashes(tx *bolt.Tx, root []byte) error {

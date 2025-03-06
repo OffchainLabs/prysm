@@ -633,7 +633,7 @@ func (s *Server) SubmitBLSToExecutionChanges(w http.ResponseWriter, r *http.Requ
 			toBroadcast = append(toBroadcast, sbls)
 		}
 	}
-	go s.broadcastBLSChanges(ctx, toBroadcast)
+	go s.broadcastBLSChanges(context.Background(), toBroadcast)
 	if len(failures) > 0 {
 		failuresErr := &server.IndexedVerificationFailureError{
 			Code:     http.StatusBadRequest,
