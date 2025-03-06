@@ -25,11 +25,11 @@ func (s *Store) LastValidatedCheckpoint(ctx context.Context) (*ethpb.Checkpoint,
 				return finErr
 			}
 			if bytes.Equal(checkpoint.Root, params.BeaconConfig().ZeroHash[:]) {
-				genesisRoot, genErr := s.GenesisBlockRoot(ctx)
-				if genErr != nil {
-					return genErr
+				bkt = tx.Bucket(blocksBucket)
+				r := bkt.Get(genesisBlockRootKey)
+				if r != nil {
+					checkpoint.Root = r
 				}
-				checkpoint.Root = genesisRoot[:]
 			}
 			return nil
 		}
