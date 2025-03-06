@@ -1080,12 +1080,8 @@ func (s *Store) deleteBlock(tx *bolt.Tx, root []byte) error {
 
 func (s *Store) deleteMatchingParentIndex(tx *bolt.Tx, parent, child [32]byte) error {
 	bkt := tx.Bucket(blockParentRootIndicesBucket)
-	v := bkt.Get(parent[:])
-	if !bytes.Equal(v, child[:]) {
-		return nil // don't delete non-matching entry
-	}
-	if err := bkt.Delete(parent[:]); err != nil {
-		return errors.Wrap(err, "could not remove parent root index entry")
+	if err := deleteRootIndexEntry(bkt, parent[:], child); err != nil {
+		return errors.Wrap(err, "could not delete parent root index entry")
 	}
 	return nil
 }
@@ -1093,18 +1089,29 @@ func (s *Store) deleteMatchingParentIndex(tx *bolt.Tx, parent, child [32]byte) e
 func (s *Store) deleteSlotIndexEntry(tx *bolt.Tx, slot primitives.Slot, root [32]byte) error {
 	key := bytesutil.SlotToBytesBigEndian(slot)
 	bkt := tx.Bucket(blockSlotIndicesBucket)
+	if err := deleteRootIndexEntry(bkt, key, root); err != nil {
+		return errors.Wrap(err, "could not delete slot index entry")
+	}
+	return nil
+}
+
+func deleteRootIndexEntry(bkt *bolt.Bucket, key []byte, root [32]byte) error {
 	packed := bkt.Get(key)
 	if len(packed) == 0 {
 		return nil
 	}
 	updated, err := removeRoot(packed, root)
 	if err != nil {
-		return errors.Wrap(err, "could not remove root from slot index with invalid packing")
+		return err
+	}
+	// Don't update the value if the root was not found.
+	if bytes.Equal(updated, packed) {
+		return nil
 	}
 	// If there are no other roots in the key, just delete it.
 	if len(updated) == 0 {
 		if err := bkt.Delete(key); err != nil {
-			return errors.Wrap(err, "could not delete slot index")
+			return err
 		}
 		return nil
 	}
