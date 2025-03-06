@@ -1584,7 +1584,8 @@ func TestProduceSyncCommitteeContribution(t *testing.T) {
 				SyncCommitteeIndices: []primitives.CommitteeIndex{0},
 			},
 		},
-		SyncCommitteePool: syncCommitteePool,
+		SyncCommitteePool:     syncCommitteePool,
+		OptimisticModeFetcher: &mockChain.ChainService{},
 	}
 	t.Run("ok", func(t *testing.T) {
 		url := "http://example.com?slot=1&subcommittee_index=1&beacon_block_root=0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2"
@@ -1672,13 +1673,34 @@ func TestProduceSyncCommitteeContribution(t *testing.T) {
 					SyncCommitteeIndices: []primitives.CommitteeIndex{0},
 				},
 			},
-			SyncCommitteePool: syncCommitteePool,
+			SyncCommitteePool:     syncCommitteePool,
+			OptimisticModeFetcher: &mockChain.ChainService{},
 		}
 		server.ProduceSyncCommitteeContribution(writer, request)
 		assert.Equal(t, http.StatusNotFound, writer.Code)
 		resp2 := &structs.ProduceSyncCommitteeContributionResponse{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp2))
 		require.ErrorContains(t, "No subcommittee messages found", errors.New(writer.Body.String()))
+	})
+	t.Run("Optimistic returns 503", func(t *testing.T) {
+		url := "http://example.com?slot=1&subcommittee_index=1&beacon_block_root=0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2"
+		request := httptest.NewRequest(http.MethodGet, url, nil)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+		syncCommitteePool = synccommittee.NewStore()
+		server = Server{
+			CoreService: &core.Service{
+				HeadFetcher: &mockChain.ChainService{
+					SyncCommitteeIndices: []primitives.CommitteeIndex{0},
+				},
+			},
+			SyncCommitteePool: syncCommitteePool,
+			OptimisticModeFetcher: &mockChain.ChainService{
+				Optimistic: true,
+			},
+		}
+		server.ProduceSyncCommitteeContribution(writer, request)
+		assert.Equal(t, http.StatusServiceUnavailable, writer.Code)
 	})
 }
 
