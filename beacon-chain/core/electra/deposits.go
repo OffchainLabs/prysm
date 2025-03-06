@@ -587,10 +587,10 @@ func processDepositRequest(beaconState state.BeaconState, request *enginev1.Depo
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get deposit requests start index")
 	}
+	if request == nil {
+		return nil, errors.New("nil deposit request")
+	}
 	if requestsStartIndex == params.BeaconConfig().UnsetDepositRequestsStartIndex {
-		if request == nil {
-			return nil, errors.New("nil deposit request")
-		}
 		if err := beaconState.SetDepositRequestsStartIndex(request.Index); err != nil {
 			return nil, errors.Wrap(err, "could not set deposit requests start index")
 		}

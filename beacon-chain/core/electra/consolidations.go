@@ -185,6 +185,9 @@ func ProcessConsolidationRequests(ctx context.Context, st state.BeaconState, req
 	pcLimit := params.BeaconConfig().PendingConsolidationsLimit
 
 	for _, cr := range reqs {
+		if cr == nil {
+			return errors.New("nil consolidation request")
+		}
 		if ctx.Err() != nil {
 			return fmt.Errorf("cannot process consolidation requests: %w", ctx.Err())
 		}
@@ -262,7 +265,7 @@ func ProcessConsolidationRequests(ctx context.Context, st state.BeaconState, req
 		if !helpers.IsActiveValidator(srcV, curEpoch) || !helpers.IsActiveValidatorUsingTrie(tgtV, curEpoch) {
 			continue
 		}
-		// Neither validator are exiting.
+		// Neither validator is exiting.
 		if srcV.ExitEpoch != ffe || tgtV.ExitEpoch() != ffe {
 			continue
 		}

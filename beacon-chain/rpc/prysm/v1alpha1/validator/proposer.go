@@ -417,7 +417,7 @@ func (vs *Server) PrepareBeaconProposer(
 	for _, r := range request.Recipients {
 		recipient := hexutil.Encode(r.FeeRecipient)
 		if !common.IsHexAddress(recipient) {
-			return nil, status.Errorf(codes.InvalidArgument, fmt.Sprintf("Invalid fee recipient address: %v", recipient))
+			return nil, status.Errorf(codes.InvalidArgument, "Invalid fee recipient address: %v", recipient)
 		}
 		// Use default address if the burn address is return
 		feeRecipient := primitives.ExecutionAddress(r.FeeRecipient)
@@ -470,7 +470,7 @@ func (vs *Server) GetFeeRecipientByPubKey(ctx context.Context, request *ethpb.Fe
 			}, nil
 		} else {
 			log.WithError(err).Error("An error occurred while retrieving fee recipient from db")
-			return nil, status.Errorf(codes.Internal, err.Error())
+			return nil, status.Errorf(codes.Internal, "error=%s", err)
 		}
 	}
 	return &ethpb.FeeRecipientByPubKeyResponse{

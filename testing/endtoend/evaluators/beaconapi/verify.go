@@ -154,12 +154,21 @@ func postEvaluation(nodeIdx int, requests map[string]endpoint, epoch primitives.
 		if err := bb.UnmarshalSSZ(blindedBlockData.getSszResp()); err != nil {
 			return errors.Wrap(err, msgSSZUnmarshalFailed)
 		}
-	} else {
+	} else if epoch < params.BeaconConfig().ElectraForkEpoch {
 		b := &ethpb.SignedBeaconBlockDeneb{}
 		if err := b.UnmarshalSSZ(blockData.getSszResp()); err != nil {
 			return errors.Wrap(err, msgSSZUnmarshalFailed)
 		}
 		bb := &ethpb.SignedBlindedBeaconBlockDeneb{}
+		if err := bb.UnmarshalSSZ(blindedBlockData.getSszResp()); err != nil {
+			return errors.Wrap(err, msgSSZUnmarshalFailed)
+		}
+	} else {
+		b := &ethpb.SignedBeaconBlockElectra{}
+		if err := b.UnmarshalSSZ(blockData.getSszResp()); err != nil {
+			return errors.Wrap(err, msgSSZUnmarshalFailed)
+		}
+		bb := &ethpb.SignedBlindedBeaconBlockElectra{}
 		if err := bb.UnmarshalSSZ(blindedBlockData.getSszResp()); err != nil {
 			return errors.Wrap(err, msgSSZUnmarshalFailed)
 		}

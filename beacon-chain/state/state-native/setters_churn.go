@@ -71,9 +71,7 @@ func (b *BeaconState) ExitEpochAndUpdateChurn(exitBalance primitives.Gwei) (prim
 	b.earliestExitEpoch = earliestExitEpoch
 
 	b.markFieldAsDirty(types.ExitBalanceToConsume)
-	b.rebuildTrie[types.ExitBalanceToConsume] = true
 	b.markFieldAsDirty(types.EarliestExitEpoch)
-	b.rebuildTrie[types.EarliestExitEpoch] = true
 
 	return b.earliestExitEpoch, nil
 }

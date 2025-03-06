@@ -160,15 +160,15 @@ oci_register_toolchains(
 
 http_archive(
     name = "io_bazel_rules_go",
+    integrity = "sha256-JD8o94crTb2DFiJJR8nMAGdBAW95zIENB4cbI+JnrI4=",
     patch_args = ["-p1"],
     patches = [
         # Expose internals of go_test for custom build transitions.
         "//third_party:io_bazel_rules_go_test.patch",
     ],
-    sha256 = "b2038e2de2cace18f032249cb4bb0048abf583a36369fa98f687af1b3f880b26",
+    strip_prefix = "rules_go-cf3c3af34bd869b864f5f2b98e2f41c2b220d6c9",
     urls = [
-        "https://mirror.bazel.build/github.com/bazelbuild/rules_go/releases/download/v0.48.1/rules_go-v0.48.1.zip",
-        "https://github.com/bazelbuild/rules_go/releases/download/v0.48.1/rules_go-v0.48.1.zip",
+        "https://github.com/bazel-contrib/rules_go/archive/cf3c3af34bd869b864f5f2b98e2f41c2b220d6c9.tar.gz",
     ],
 )
 
@@ -210,7 +210,7 @@ load("@io_bazel_rules_go//go:deps.bzl", "go_register_toolchains", "go_rules_depe
 go_rules_dependencies()
 
 go_register_toolchains(
-    go_version = "1.23.5",
+    go_version = "1.24.0",
     nogo = "@//:nogo",
 )
 
@@ -255,7 +255,7 @@ filegroup(
     url = "https://github.com/ethereum/EIPs/archive/5480440fe51742ed23342b68cf106cefd427e39d.tar.gz",
 )
 
-consensus_spec_version = "v1.5.0-beta.0"
+consensus_spec_version = "v1.5.0-beta.2"
 
 bls_test_version = "v0.1.1"
 
@@ -271,7 +271,7 @@ filegroup(
     visibility = ["//visibility:public"],
 )
     """,
-    integrity = "sha256-HdMlTN3wv+hUMCkIRPk+EHcLixY1cSZlvkx3obEp4AM=",
+    integrity = "sha256-X/bMxbKg1clo2aFEjBoeuFq/U+BF1eQopgRP/7nI3Qg=",
     url = "https://github.com/ethereum/consensus-spec-tests/releases/download/%s/general.tar.gz" % consensus_spec_version,
 )
 
@@ -287,7 +287,7 @@ filegroup(
     visibility = ["//visibility:public"],
 )
     """,
-    integrity = "sha256-eX/ihmHQ+OvfoGJxSMgy22yAU3SZ3xjsX0FU0EaZrSs=",
+    integrity = "sha256-WSxdri5OJGuNApW+odKle5UzToDyEOx+F3lMiqamJAg=",
     url = "https://github.com/ethereum/consensus-spec-tests/releases/download/%s/minimal.tar.gz" % consensus_spec_version,
 )
 
@@ -303,7 +303,7 @@ filegroup(
     visibility = ["//visibility:public"],
 )
     """,
-    integrity = "sha256-k3Onf42vOzIqyddecR6G82sDy3mmDA+R8RN66QjB0GI=",
+    integrity = "sha256-LYE8l3y/zSt4YVrehrJ3ralqtgeYNildiIp+HR6+xAI=",
     url = "https://github.com/ethereum/consensus-spec-tests/releases/download/%s/mainnet.tar.gz" % consensus_spec_version,
 )
 
@@ -318,7 +318,7 @@ filegroup(
     visibility = ["//visibility:public"],
 )
     """,
-    integrity = "sha256-N/d4AwdOSlb70Dr+2l20dfXxNSzJDj/qKA9Rkn8Gb5w=",
+    integrity = "sha256-jvZQ90qcJMTOqMsPO7sgeEVQmewZTHcz7LVDkNqwTFQ=",
     strip_prefix = "consensus-specs-" + consensus_spec_version[1:],
     url = "https://github.com/ethereum/consensus-specs/archive/refs/tags/%s.tar.gz" % consensus_spec_version,
 )
@@ -431,7 +431,7 @@ gometalinter_dependencies()
 
 load("@bazel_gazelle//:deps.bzl", "gazelle_dependencies")
 
-gazelle_dependencies()
+gazelle_dependencies(go_sdk = "go_sdk")
 
 load("@com_google_protobuf//:protobuf_deps.bzl", "protobuf_deps")
 

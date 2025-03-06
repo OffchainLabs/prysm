@@ -188,3 +188,11 @@ func WithAvailableBlocker(avb coverage.AvailableBlocker) Option {
 		return nil
 	}
 }
+
+// WithSlasherEnabled configures the sync package to support slashing detection.
+func WithSlasherEnabled(enabled bool) Option {
+	return func(s *Service) error {
+		s.slasherEnabled = enabled
+		return nil
+	}
+}
