@@ -215,24 +215,24 @@ func TestRequestDataColumnSidecars(t *testing.T) {
 		},
 		{
 			name:        "Single data column successful request",
-			dataColumns: map[uint64]bool{1: true},
+			dataColumns: map[uint64]bool{37: true},
 			peerSetup: []peerSetup{
-				{offset: 1, custodyGroupCount: 4}, // This peer will custody columns [1, 17, 87, 102]
+				{offset: 1, custodyGroupCount: 4}, // This peer will custody columns [6, 37, 48, 113]
 			},
 			expectError: false,
 		},
 		{
 			name:        "Multiple data columns successful request",
-			dataColumns: map[uint64]bool{1: true, 35: true},
+			dataColumns: map[uint64]bool{37: true, 28: true},
 			peerSetup: []peerSetup{
-				{offset: 1, custodyGroupCount: 4},  // This peer will custody columns [1, 17, 87, 102]
-				{offset: 10, custodyGroupCount: 4}, // This peer will custody columns [35, 79, 92, 109]
+				{offset: 1, custodyGroupCount: 4},  // This peer will custody columns [6, 37, 48, 113]
+				{offset: 10, custodyGroupCount: 4}, // This peer will custody columns [6, 28, 53, 71]
 			},
 			expectError: false,
 		},
 		{
 			name:        "No peers respond",
-			dataColumns: map[uint64]bool{1: true},
+			dataColumns: map[uint64]bool{37: true},
 			peerSetup:   []peerSetup{}, // No peers
 			expectError: true,
 		},
@@ -321,7 +321,15 @@ func createAndConnectCustodyPeer(t *testing.T, setup peerSetup, dataColumnSideca
 			return
 		}
 
-		peerInfo, _, err := peerdas.Info(peer.EnodeID, setup.custodyGroupCount)
+		// The test peers have peer.EnodeID set to zero. Derive the enode ID from the peer ID instead.
+		enodeID, err := p2p.ConvertPeerIDToNodeID(peer.PeerID())
+		if err != nil {
+			log.WithError(err).Error("Failed to convert peer ID to enode ID")
+			closeStream(stream, log)
+			return
+		}
+
+		peerInfo, _, err := peerdas.Info(enodeID, setup.custodyGroupCount)
 		if err != nil {
 			log.WithError(err).Error("Failed to get peer info")
 			closeStream(stream, log)
@@ -334,7 +342,7 @@ func createAndConnectCustodyPeer(t *testing.T, setup peerSetup, dataColumnSideca
 			if !peerInfo.CustodyGroups[identifier.ColumnIndex] {
 				log.Debugf("Peer %s does not custody column %d", peer.PeerID(), identifier.ColumnIndex)
 				log.Debugf("Peer custody columns: %+v", peerInfo.CustodyColumns)
-				log.Debugf("Peer enode id: %s", peer.EnodeID)
+				log.Debugf("Peer enode id: %s", enodeID)
 				continue
 			}
 			// Send the response
