@@ -3,8 +3,7 @@ package sync
 import (
 	"context"
 	"crypto/ecdsa"
-	"fmt"
-	"os"
+	"sort"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -33,7 +32,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"github.com/prysmaticlabs/prysm/v5/testing/util"
-	"github.com/sirupsen/logrus"
 )
 
 func TestAdmissiblePeersForDataColumns(t *testing.T) {
@@ -337,6 +335,21 @@ type peerSetup struct {
 	custodyGroupCount uint64
 }
 
+// requestTracker is used to track requests made to peers during tests
+type requestTracker struct {
+	requests map[int][]uint64 // maps peer offset to requested columns
+}
+
+func newRequestTracker() *requestTracker {
+	return &requestTracker{
+		requests: make(map[int][]uint64),
+	}
+}
+
+func (rt *requestTracker) trackRequest(offset int, columns []uint64) {
+	rt.requests[offset] = columns
+}
+
 func TestRequestDataColumnSidecars(t *testing.T) {
 	const (
 		blobsCount = 6
@@ -347,11 +360,8 @@ func TestRequestDataColumnSidecars(t *testing.T) {
 	require.NoError(t, err)
 
 	// Set up test environment
-	log.Logger.SetOutput(os.Stdout)
-	log.Logger.SetLevel(logrus.DebugLevel)
 	params.BeaconConfig().FuluForkEpoch = 1
 	chainService, clock := defaultMockChain(t)
-	p2pService := p2ptest.NewTestP2P(t)
 
 	// Create test block with blobs
 	pbSignedBeaconBlock := util.NewBeaconBlockDeneb()
@@ -389,6 +399,8 @@ func TestRequestDataColumnSidecars(t *testing.T) {
 		dataColumns map[uint64]bool
 		peerSetup   []peerSetup
 		expectError bool
+		// Expected request optimization
+		expectedPeerRequests map[int][]uint64 // maps peer offset to expected requested columns
 	}{
 		{
 			name:        "No data columns requested",
@@ -396,7 +408,8 @@ func TestRequestDataColumnSidecars(t *testing.T) {
 			peerSetup: []peerSetup{
 				{offset: 1, custodyGroupCount: 4},
 			},
-			expectError: false,
+			expectError:          false,
+			expectedPeerRequests: map[int][]uint64{},
 		},
 		{
 			name:        "Single data column successful request",
@@ -405,6 +418,9 @@ func TestRequestDataColumnSidecars(t *testing.T) {
 				{offset: 1, custodyGroupCount: 4}, // This peer will custody columns [6, 37, 48, 113]
 			},
 			expectError: false,
+			expectedPeerRequests: map[int][]uint64{
+				1: {37},
+			},
 		},
 		{
 			name:        "Multiple data columns successful request",
@@ -414,30 +430,68 @@ func TestRequestDataColumnSidecars(t *testing.T) {
 				{offset: 10, custodyGroupCount: 4}, // This peer will custody columns [6, 28, 53, 71]
 			},
 			expectError: false,
+			expectedPeerRequests: map[int][]uint64{
+				1:  {37},
+				10: {28},
+			},
 		},
 		{
-			name:        "No peers respond",
-			dataColumns: map[uint64]bool{37: true},
-			peerSetup:   []peerSetup{}, // No peers
-			expectError: true,
+			name:                 "No peers respond",
+			dataColumns:          map[uint64]bool{37: true},
+			peerSetup:            []peerSetup{}, // No peers
+			expectError:          true,
+			expectedPeerRequests: map[int][]uint64{},
 		},
 		{
-			name:        "No peer has the requested column",
-			dataColumns: map[uint64]bool{1000: true}, // Column that no peer will have
-			peerSetup:   []peerSetup{},               // No peers
-			expectError: true,
+			name:                 "No peer has the requested column",
+			dataColumns:          map[uint64]bool{1000: true}, // Column that no peer will have
+			peerSetup:            []peerSetup{},               // No peers
+			expectError:          true,
+			expectedPeerRequests: map[int][]uint64{},
+		},
+		{
+			name: "Multiple peers with overlapping custody",
+			dataColumns: map[uint64]bool{
+				6:   true, // Column custodied by both peers
+				37:  true, // Column custodied by peer 1 only
+				113: true, // Column custodied by peer 1 only
+				28:  true, // Column custodied by peer 2 only
+			},
+			peerSetup: []peerSetup{
+				{offset: 1, custodyGroupCount: 4},  // Peer 1 custodies [6, 37, 48, 113]
+				{offset: 10, custodyGroupCount: 4}, // Peer 2 custodies [6, 28, 53, 71]
+			},
+			expectError: false,
+			expectedPeerRequests: map[int][]uint64{
+				1:  {6, 37, 113}, // Peer 1 should handle column 6 since it's already getting other columns
+				10: {28},         // Peer 2 should only handle column 28
+			},
+		},
+		{
+			name: "Mixed valid and invalid columns",
+			dataColumns: map[uint64]bool{
+				37:   true, // Valid column
+				1000: true, // Invalid column
+				6:    true, // Valid column
+			},
+			peerSetup: []peerSetup{
+				{offset: 1, custodyGroupCount: 4}, // This peer will custody columns [6, 37, 48, 113]
+			},
+			expectError:          true,
+			expectedPeerRequests: map[int][]uint64{},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			hostP2P := p2ptest.NewTestP2P(t)
+			tracker := newRequestTracker()
+
 			// Create responding peers with deterministic peer IDs
 			peerIDs := make([]core.PeerID, 0, len(tc.peerSetup))
 			for _, setup := range tc.peerSetup {
-				// Create the private key, depending on the offset
-				peer := createAndConnectCustodyPeer(t, setup, dataColumnSidecars, chainService, p2pService)
-
-				peerIDs = append(peerIDs, peer.PeerID())
+				peerP2P := createAndConnectCustodyPeer(t, setup, dataColumnSidecars, chainService, hostP2P, tracker)
+				peerIDs = append(peerIDs, peerP2P.PeerID())
 			}
 
 			ctxMap := map[[4]byte]int{{245, 165, 253, 66}: version.Fulu}
@@ -454,7 +508,7 @@ func TestRequestDataColumnSidecars(t *testing.T) {
 				blockRoot,
 				peerIDs,
 				clock,
-				p2pService,
+				hostP2P,
 				ctxMap,
 				verifier,
 			)
@@ -466,17 +520,41 @@ func TestRequestDataColumnSidecars(t *testing.T) {
 			}
 			require.NoError(t, err)
 
+			// Verify response columns
 			require.Equal(t, len(tc.dataColumns), len(responseCols))
 			expectedColumns := make([]uint64, 0, len(tc.dataColumns))
 			for col := range tc.dataColumns {
 				expectedColumns = append(expectedColumns, col)
 			}
 
-			fmt.Println("tc.dataColumns", tc.dataColumns)
-			fmt.Println("expectedColumns", expectedColumns)
+			sort.Slice(expectedColumns, func(i, j int) bool {
+				return expectedColumns[i] < expectedColumns[j]
+			})
+			sort.Slice(responseCols, func(i, j int) bool {
+				return responseCols[i].DataColumnSidecar.ColumnIndex < responseCols[j].DataColumnSidecar.ColumnIndex
+			})
 
 			for i := range responseCols {
 				require.Equal(t, expectedColumns[i], responseCols[i].DataColumnSidecar.ColumnIndex)
+			}
+
+			// Verify peer request optimization
+			require.Equal(t, len(tc.expectedPeerRequests), len(tracker.requests),
+				"Number of peers requested from doesn't match expected")
+
+			for offset, expectedCols := range tc.expectedPeerRequests {
+				actualCols, exists := tracker.requests[offset]
+				require.Equal(t, true, exists, "Expected requests from peer with offset %d", offset)
+				require.Equal(t, len(expectedCols), len(actualCols),
+					"Number of columns requested from peer with offset %d doesn't match expected", offset)
+
+				// Sort both slices for comparison
+				sort.Slice(expectedCols, func(i, j int) bool { return expectedCols[i] < expectedCols[j] })
+				sort.Slice(actualCols, func(i, j int) bool { return actualCols[i] < actualCols[j] })
+				for i := range expectedCols {
+					require.Equal(t, expectedCols[i], actualCols[i],
+						"Columns requested from peer with offset %d don't match expected", offset)
+				}
 			}
 		})
 	}
@@ -484,7 +562,7 @@ func TestRequestDataColumnSidecars(t *testing.T) {
 
 // createAndConnectCustodyPeer creates a new peer with a deterministic private key and connects it to the p2p service.
 // It then sets up the peer to respond with data columns it custodies.
-func createAndConnectCustodyPeer(t *testing.T, setup peerSetup, dataColumnSidecars []*eth.DataColumnSidecar, chainService *mock.ChainService, p2pService *p2ptest.TestP2P) *p2ptest.TestP2P {
+func createAndConnectCustodyPeer(t *testing.T, setup peerSetup, dataColumnSidecars []*eth.DataColumnSidecar, chainService *mock.ChainService, hostP2P *p2ptest.TestP2P, tracker *requestTracker) *p2ptest.TestP2P {
 	privateKeyBytes := make([]byte, 32)
 	for i := 0; i < 32; i++ {
 		privateKeyBytes[i] = byte(setup.offset + i)
@@ -493,21 +571,30 @@ func createAndConnectCustodyPeer(t *testing.T, setup peerSetup, dataColumnSideca
 	privateKey, err := crypto.UnmarshalSecp256k1PrivateKey(privateKeyBytes)
 	require.NoError(t, err)
 
-	// Create the peer
-	peer := p2ptest.NewTestP2P(t, libp2p.Identity(privateKey))
+	// Create the peerP2P
+	peerP2P := p2ptest.NewTestP2P(t, libp2p.Identity(privateKey))
 
 	// Set up the peer to respond with data columns it custodies
-	peer.SetStreamHandler(p2p.RPCDataColumnSidecarsByRootTopicV1+"/ssz_snappy", func(stream network.Stream) {
+	peerP2P.SetStreamHandler(p2p.RPCDataColumnSidecarsByRootTopicV1+"/ssz_snappy", func(stream network.Stream) {
 		// Decode the request
 		req := new(p2pTypes.DataColumnSidecarsByRootReq)
-		if err := peer.Encoding().DecodeWithMaxLength(stream, req); err != nil {
+		if err := peerP2P.Encoding().DecodeWithMaxLength(stream, req); err != nil {
 			log.WithError(err).Error("Failed to decode request")
 			closeStream(stream, log)
 			return
 		}
 
-		// The test peers have peer.EnodeID set to zero. Derive the enode ID from the peer ID instead.
-		enodeID, err := p2p.ConvertPeerIDToNodeID(peer.PeerID())
+		// Track the request if we have a tracker
+		if tracker != nil {
+			requestedColumns := make([]uint64, 0, len(*req))
+			for _, identifier := range *req {
+				requestedColumns = append(requestedColumns, identifier.ColumnIndex)
+			}
+			tracker.trackRequest(setup.offset, requestedColumns)
+		}
+
+		// Continue with normal response handling
+		enodeID, err := p2p.ConvertPeerIDToNodeID(peerP2P.PeerID())
 		if err != nil {
 			log.WithError(err).Error("Failed to convert peer ID to enode ID")
 			closeStream(stream, log)
@@ -521,25 +608,17 @@ func createAndConnectCustodyPeer(t *testing.T, setup peerSetup, dataColumnSideca
 			return
 		}
 
-		// For each requested column, check if we custody it and respond if we do
 		for _, identifier := range *req {
-			// Skip columns that we don't custody
 			if !peerInfo.CustodyGroups[identifier.ColumnIndex] {
-				log.Debugf("Peer %s does not custody column %d", peer.PeerID(), identifier.ColumnIndex)
-				log.Debugf("Peer custody columns: %+v", peerInfo.CustodyColumns)
-				log.Debugf("Peer enode id: %s", enodeID)
 				continue
 			}
-			// Send the response
 			col := dataColumnSidecars[identifier.ColumnIndex]
-			if err := WriteDataColumnSidecarChunk(stream, chainService, p2pService.Encoding(), col); err != nil {
+			if err := WriteDataColumnSidecarChunk(stream, chainService, peerP2P.Encoding(), col); err != nil {
 				log.WithError(err).Error("Failed to write data column sidecar chunk")
 				closeStream(stream, log)
 				return
 			}
 		}
-
-		// Close the stream
 		closeStream(stream, log)
 	})
 
@@ -548,10 +627,11 @@ func createAndConnectCustodyPeer(t *testing.T, setup peerSetup, dataColumnSideca
 	enr.Set(peerdas.Cgc(setup.custodyGroupCount))
 
 	// Add the peer and connect it
-	p2pService.Peers().Add(enr, peer.PeerID(), nil, network.DirOutbound)
-	p2pService.Peers().SetConnectionState(peer.PeerID(), peers.Connected)
-	p2pService.Connect(peer)
-	return peer
+	hostP2P.Peers().Add(enr, peerP2P.PeerID(), nil, network.DirOutbound)
+	hostP2P.Peers().SetConnectionState(peerP2P.PeerID(), peers.Connected)
+	hostP2P.Connect(peerP2P)
+
+	return peerP2P
 }
 
 func createCustodyPeer(t *testing.T, privateKeyOffset int, custodyCount uint64) (*enr.Record, peer.ID, *ecdsa.PrivateKey) {
