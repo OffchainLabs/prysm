@@ -59,20 +59,6 @@ func (s *Service) setupForkchoiceTree(st state.BeaconState) error {
 	if err := s.setupForkchoiceRoot(st); err != nil {
 		return errors.Wrap(err, "could not set up forkchoice root")
 	}
-	fBlk, err := s.cfg.BeaconDB.Block(s.ctx, fRoot)
-	if err != nil {
-		return errors.Wrap(err, "could not get finalized block")
-	}
-	if err := s.setHead(&head{
-		fRoot,
-		fBlk,
-		st,
-		fBlk.Block().Slot(),
-		false,
-	}); err != nil {
-		return errors.Wrap(err, "could not set head")
-	}
-
 	if headRoot == fRoot {
 		return nil
 	}
