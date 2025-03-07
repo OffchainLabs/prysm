@@ -114,23 +114,22 @@ func (l *flatLayout) pruneBefore(before primitives.Epoch) (*pruneSummary, error)
 
 // Read slot from marshaled BlobSidecar data in the given file. See slotFromBlob for details.
 func slotFromFile(name string, fs afero.Fs) (primitives.Slot, error) {
-	// read whole file, try to unmarshal it as blob sidecar, if it fails, try to unmarshal it as data column sidecar
+	// Read whole file, try to unmarshal it as data columns sidecar, if it fails, try to unmarshal it as blob sidecar.
 	content, err := afero.ReadFile(fs, name)
 	if err != nil {
 		return 0, err
+	}
+
+	dataColumnSidecar := &ethpb.DataColumnSidecar{}
+	err = dataColumnSidecar.UnmarshalSSZ(content)
+	if err == nil {
+		return dataColumnSidecar.SignedBlockHeader.Header.Slot, nil
 	}
 
 	blobSidecar := &ethpb.BlobSidecar{}
 	err = blobSidecar.UnmarshalSSZ(content)
 	if err == nil {
 		return blobSidecar.SignedBlockHeader.Header.Slot, nil
-	}
-
-	// if it fails, try to unmarshal it as data column sidecar
-	dataColumnSidecar := &ethpb.DataColumnSidecar{}
-	err = dataColumnSidecar.UnmarshalSSZ(content)
-	if err == nil {
-		return dataColumnSidecar.SignedBlockHeader.Header.Slot, nil
 	}
 
 	return 0, errors.New("failed to unmarshal as blob sidecar or data column sidecar")
