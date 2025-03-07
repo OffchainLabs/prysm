@@ -241,7 +241,7 @@ func CustodyColumns(custodyGroups map[uint64]bool) (map[uint64]bool, error) {
 
 // ValidatorsCustodyRequirement returns the number of custody groups regarding the validator indices attached to the beacon node.
 // https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/das-core.md#validator-custody
-func ValidatorsCustodyRequirement(state beaconState.BeaconState, validatorsIndex map[primitives.ValidatorIndex]bool) (uint64, error) {
+func ValidatorsCustodyRequirement(state beaconState.ReadOnlyBeaconState, validatorsIndex map[primitives.ValidatorIndex]bool) (uint64, error) {
 	totalNodeBalance := uint64(0)
 	for index := range validatorsIndex {
 		balance, err := state.BalanceAtIndex(index)

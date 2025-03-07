@@ -4,9 +4,8 @@ import (
 	"context"
 	"testing"
 
+	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
-	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	testDB "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
 	doublylinkedtree "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/doubly-linked-tree"
@@ -80,74 +79,23 @@ func TestUpdateToAdvertiseCustodyGroupCount(t *testing.T) {
 
 }
 
-func TestHandleEvent(t *testing.T) {
-	verifiedEvent := &feed.Event{
-		Type: statefeed.BlockProcessed,
-		Data: &statefeed.BlockProcessedData{
-			Slot:      33,
-			BlockRoot: [32]byte{},
-			Verified:  true,
-		},
-	}
-
+func TestSetTargetValidatorsCustodyRequirement(t *testing.T) {
 	testCases := []struct {
 		name                            string
-		event                           *feed.Event
 		latestProcessedEpoch            primitives.Epoch
 		validatorsBalance               []uint64
 		expectedTargetCustodyGroupCount uint64
-		expectedEpoch                   primitives.Epoch
 	}{
 		{
-			name:                            "wrong event type",
-			event:                           &feed.Event{Type: statefeed.ChainStarted},
-			latestProcessedEpoch:            42,
-			expectedTargetCustodyGroupCount: 4,
-			expectedEpoch:                   42,
-		},
-		{
-			name: "wrong data type",
-			event: &feed.Event{
-				Type: statefeed.BlockProcessed,
-				Data: "wrong data type",
-			},
-			latestProcessedEpoch:            42,
-			expectedTargetCustodyGroupCount: 4,
-			expectedEpoch:                   42,
-		},
-		{
-			name: "data not verified",
-			event: &feed.Event{
-				Type: statefeed.BlockProcessed,
-				Data: &statefeed.BlockProcessedData{
-					Verified: false,
-				},
-			},
-			latestProcessedEpoch:            42,
-			expectedTargetCustodyGroupCount: 4,
-			expectedEpoch:                   42,
-		},
-		{
-			name:                            "epoch already processed",
-			event:                           verifiedEvent,
-			latestProcessedEpoch:            1,
-			expectedTargetCustodyGroupCount: 4,
-			expectedEpoch:                   1,
-		},
-		{
 			name:                            "no tracked validators",
-			event:                           verifiedEvent,
 			latestProcessedEpoch:            0,
 			expectedTargetCustodyGroupCount: 4,
-			expectedEpoch:                   1,
 		},
 		{
 			name:                            "some tracked validators",
-			event:                           verifiedEvent,
 			latestProcessedEpoch:            0,
 			validatorsBalance:               []uint64{64_000_000_000, 64_000_000_000, 64_000_000_000, 64_000_000_000, 33_000_000_000},
 			expectedTargetCustodyGroupCount: 9,
-			expectedEpoch:                   1,
 		},
 	}
 
@@ -165,7 +113,9 @@ func TestHandleEvent(t *testing.T) {
 			service := &Service{
 				trackedValidatorsCache: cache.NewTrackedValidatorsCache(),
 				cfg: &config{
-					stateGen: stateGen,
+					chain: &mock.ChainService{
+						State: state,
+					},
 				},
 			}
 
@@ -178,8 +128,7 @@ func TestHandleEvent(t *testing.T) {
 				service.trackedValidatorsCache.Set(validator)
 			}
 
-			actualEpoch := service.handleEvent(tc.event, tc.latestProcessedEpoch)
-			require.Equal(t, tc.expectedEpoch, actualEpoch)
+			service.setTargetValidatorsCustodyRequirement()
 
 			actualTargetCustodyGroup := peerdas.TargetCustodyGroupCount.Get()
 			require.Equal(t, tc.expectedTargetCustodyGroupCount, actualTargetCustodyGroup)
