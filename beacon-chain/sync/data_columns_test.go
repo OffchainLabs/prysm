@@ -359,8 +359,12 @@ func TestRequestDataColumnSidecars(t *testing.T) {
 	err := kzg.Start()
 	require.NoError(t, err)
 
-	// Set up test environment
-	params.BeaconConfig().FuluForkEpoch = 1
+	// Configure forks for testing with proper cleanup
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.FuluForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
 	chainService, clock := defaultMockChain(t)
 
 	// Create test block with blobs
