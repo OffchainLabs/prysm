@@ -790,9 +790,57 @@ func TestSavePendingAtts_BeyondLimit(t *testing.T) {
 }
 
 func Test_pendingAggregatesAreEqual(t *testing.T) {
-
+	t.Run("equal", func(t *testing.T) {
+		a := &ethpb.SignedAggregateAttestationAndProof{Message: &ethpb.AggregateAttestationAndProof{AggregatorIndex: 1}}
+		b := &ethpb.SignedAggregateAttestationAndProof{Message: &ethpb.AggregateAttestationAndProof{AggregatorIndex: 1}}
+		assert.Equal(t, true, pendingAggregatesAreEqual(a, b))
+	})
+	t.Run("different version", func(t *testing.T) {
+		a := &ethpb.SignedAggregateAttestationAndProof{Message: &ethpb.AggregateAttestationAndProof{AggregatorIndex: 1}}
+		b := &ethpb.SignedAggregateAttestationAndProofElectra{Message: &ethpb.AggregateAttestationAndProofElectra{AggregatorIndex: 1}}
+		assert.Equal(t, false, pendingAggregatesAreEqual(a, b))
+	})
+	t.Run("different aggregator index", func(t *testing.T) {
+		a := &ethpb.SignedAggregateAttestationAndProof{Message: &ethpb.AggregateAttestationAndProof{AggregatorIndex: 1}}
+		b := &ethpb.SignedAggregateAttestationAndProof{Message: &ethpb.AggregateAttestationAndProof{AggregatorIndex: 2}}
+		assert.Equal(t, false, pendingAggregatesAreEqual(a, b))
+	})
 }
 
 func Test_pendingAttsAreEqual(t *testing.T) {
-
+	t.Run("equal Phase0", func(t *testing.T) {
+		a := &ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 1, CommitteeIndex: 1}, AggregationBits: bitfield.Bitlist{0b1111}}
+		b := &ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 1, CommitteeIndex: 1}, AggregationBits: bitfield.Bitlist{0b1111}}
+		assert.Equal(t, true, pendingAttsAreEqual(a, b))
+	})
+	t.Run("equal Electra", func(t *testing.T) {
+		a := &ethpb.SingleAttestation{Data: &ethpb.AttestationData{Slot: 1}, AttesterIndex: 1}
+		b := &ethpb.SingleAttestation{Data: &ethpb.AttestationData{Slot: 1}, AttesterIndex: 1}
+		assert.Equal(t, true, pendingAttsAreEqual(a, b))
+	})
+	t.Run("different version", func(t *testing.T) {
+		a := &ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 1, CommitteeIndex: 1}, AggregationBits: bitfield.Bitlist{0b1111}}
+		b := &ethpb.SingleAttestation{Data: &ethpb.AttestationData{Slot: 1}, AttesterIndex: 1}
+		assert.Equal(t, false, pendingAttsAreEqual(a, b))
+	})
+	t.Run("different slot", func(t *testing.T) {
+		a := &ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 1, CommitteeIndex: 1}, AggregationBits: bitfield.Bitlist{0b1111}}
+		b := &ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 2, CommitteeIndex: 1}, AggregationBits: bitfield.Bitlist{0b1111}}
+		assert.Equal(t, false, pendingAttsAreEqual(a, b))
+	})
+	t.Run("different committee index", func(t *testing.T) {
+		a := &ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 1, CommitteeIndex: 1}, AggregationBits: bitfield.Bitlist{0b1111}}
+		b := &ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 1, CommitteeIndex: 2}, AggregationBits: bitfield.Bitlist{0b1111}}
+		assert.Equal(t, false, pendingAttsAreEqual(a, b))
+	})
+	t.Run("different aggregation bits", func(t *testing.T) {
+		a := &ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 1, CommitteeIndex: 1}, AggregationBits: bitfield.Bitlist{0b1111}}
+		b := &ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 1, CommitteeIndex: 1}, AggregationBits: bitfield.Bitlist{0b1000}}
+		assert.Equal(t, false, pendingAttsAreEqual(a, b))
+	})
+	t.Run("different attester index", func(t *testing.T) {
+		a := &ethpb.SingleAttestation{Data: &ethpb.AttestationData{Slot: 1}, AttesterIndex: 1}
+		b := &ethpb.SingleAttestation{Data: &ethpb.AttestationData{Slot: 1}, AttesterIndex: 2}
+		assert.Equal(t, false, pendingAttsAreEqual(a, b))
+	})
 }
