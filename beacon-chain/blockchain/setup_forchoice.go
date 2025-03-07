@@ -96,7 +96,9 @@ func (s *Service) buildForkchoiceChain(ctx context.Context, head interfaces.Read
 			return nil, err
 		}
 		// This chain sets the justified checkpoint for every block, including some that are older than jp.
-		// This should be however safe for forkchoice at startup.
+		// This should be however safe for forkchoice at startup. An alternative would be to hook during the
+		// block processing pipeline when setting the head state, to compute the right states for the justified
+		// checkpoint.
 		chain = append(chain, &forkchoicetypes.BlockAndCheckpoints{Block: roblock, JustifiedCheckpoint: jp, FinalizedCheckpoint: cp})
 		root = head.Block().ParentRoot()
 		if root == fRoot {

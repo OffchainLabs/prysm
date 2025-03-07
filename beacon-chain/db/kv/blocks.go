@@ -86,7 +86,7 @@ func (s *Store) HeadBlockRoot() ([32]byte, error) {
 	err := s.db.View(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(blocksBucket)
 		headRoot := bkt.Get(headBlockRootKey)
-		if headRoot == nil {
+		if len(headRoot) == 0 {
 			return errors.New("no head block root found")
 		}
 		copy(root[:], headRoot)
