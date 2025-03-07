@@ -93,20 +93,20 @@ func (s *Service) processPendingAtts(ctx context.Context) error {
 
 func (s *Service) processAttestations(ctx context.Context, attestations []any) {
 	for _, signedAtt := range attestations {
-		// The pending attestations can arrive in both aggregated and unaggregated forms,
-		// each from has distinct validation steps.
+		// The pending attestations can arrive as both aggregates and attestations,
+		// and each form has to be processed differently.
 		switch t := signedAtt.(type) {
 		case ethpb.Att:
-			s.processUnaggregated(ctx, t)
+			s.processAtt(ctx, t)
 		case ethpb.SignedAggregateAttAndProof:
-			s.processAggregated(ctx, t)
+			s.processAggregate(ctx, t)
 		default:
 			log.Debugf("Unexpected attestation type %T in pending attestation queue. Attestation will not be processed", t)
 		}
 	}
 }
 
-func (s *Service) processAggregated(ctx context.Context, aggregate ethpb.SignedAggregateAttAndProof) {
+func (s *Service) processAggregate(ctx context.Context, aggregate ethpb.SignedAggregateAttAndProof) {
 	att := aggregate.AggregateAttestationAndProof().AggregateVal()
 
 	// Save the pending aggregated attestation to the pool if it passes the aggregated
@@ -145,7 +145,7 @@ func (s *Service) processAggregated(ctx context.Context, aggregate ethpb.SignedA
 	}
 }
 
-func (s *Service) processUnaggregated(ctx context.Context, att ethpb.Att) {
+func (s *Service) processAtt(ctx context.Context, att ethpb.Att) {
 	data := att.GetData()
 
 	// This is an important validation before retrieving attestation pre state to defend against
