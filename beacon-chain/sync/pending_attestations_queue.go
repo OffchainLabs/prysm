@@ -101,7 +101,7 @@ func (s *Service) processAttestations(ctx context.Context, attestations []any) {
 		case ethpb.SignedAggregateAttAndProof:
 			s.processAggregate(ctx, t)
 		default:
-			log.Debugf("Unexpected attestation type %T in pending attestation queue. Attestation will not be processed", t)
+			log.Debugf("Unexpected item of type %T in pending attestation queue. Item will not be processed", t)
 		}
 	}
 }
@@ -128,11 +128,9 @@ func (s *Service) processAggregate(ctx context.Context, aggregate ethpb.SignedAg
 					log.WithError(err).Debug("Could not save aggregated attestation")
 					return
 				}
-			} else {
-				if err = s.cfg.attPool.SaveUnaggregatedAttestation(att); err != nil {
-					log.WithError(err).Debug("Could not save unaggregated attestation")
-					return
-				}
+			} else if err = s.cfg.attPool.SaveUnaggregatedAttestation(att); err != nil {
+				log.WithError(err).Debug("Could not save unaggregated attestation")
+				return
 			}
 		}
 
@@ -354,7 +352,7 @@ func (s *Service) validatePendingAtts(ctx context.Context, slot primitives.Slot)
 			case ethpb.SignedAggregateAttAndProof:
 				attSlot = t.AggregateAttestationAndProof().AggregateVal().GetData().Slot
 			default:
-				log.Debugf("Unexpected attestation type %T in pending attestation queue. Attestation will be removed", t)
+				log.Debugf("Unexpected item of type %T in pending attestation queue. Item will be removed", t)
 				// Remove the pending attestation from the map in place.
 				atts = append(atts[:i], atts[i+1:]...)
 				continue
