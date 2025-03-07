@@ -340,17 +340,14 @@ func (s *Service) initializeHead(ctx context.Context, st state.BeaconState) erro
 			return errors.Wrap(err, "could not get head state")
 		}
 	}
+	if err := s.setHead(&head{root, blk, st, blk.Block().Slot(), false}); err != nil {
+		return errors.Wrap(err, "could not set head")
+	}
 	log.WithFields(logrus.Fields{
 		"root": fmt.Sprintf("%#x", root),
 		"slot": blk.Block().Slot(),
 	}).Info("Initialized head block from DB")
-	return errors.Wrap(s.setHead(&head{
-		root,
-		blk,
-		st,
-		blk.Block().Slot(),
-		false,
-	}), "could not set head")
+	return nil
 }
 
 func (s *Service) startFromExecutionChain() error {
