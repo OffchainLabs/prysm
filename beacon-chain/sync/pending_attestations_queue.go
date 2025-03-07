@@ -106,33 +106,40 @@ func (s *Service) processAttestations(ctx context.Context, attestations []any) {
 	}
 }
 
-func (s *Service) processAggregated(ctx context.Context, att ethpb.SignedAggregateAttAndProof) {
-	aggregate := att.AggregateAttestationAndProof().AggregateVal()
+func (s *Service) processAggregated(ctx context.Context, aggregate ethpb.SignedAggregateAttAndProof) {
+	att := aggregate.AggregateAttestationAndProof().AggregateVal()
 
 	// Save the pending aggregated attestation to the pool if it passes the aggregated
 	// validation steps.
-	valRes, err := s.validateAggregatedAtt(ctx, att)
+	valRes, err := s.validateAggregatedAtt(ctx, aggregate)
 	if err != nil {
 		log.WithError(err).Debug("Pending aggregated attestation failed validation")
 	}
 	aggValid := pubsub.ValidationAccept == valRes
-	if s.validateBlockInAttestation(ctx, att) && aggValid {
+	if s.validateBlockInAttestation(ctx, aggregate) && aggValid {
 		if features.Get().EnableExperimentalAttestationPool {
-			if err = s.cfg.attestationCache.Add(aggregate); err != nil {
-				log.WithError(err).Debug("Could not save aggregate attestation")
+			if err = s.cfg.attestationCache.Add(att); err != nil {
+				log.WithError(err).Debug("Could not save aggregated attestation")
 				return
 			}
 		} else {
-			if err := s.cfg.attPool.SaveAggregatedAttestation(aggregate); err != nil {
-				log.WithError(err).Debug("Could not save aggregate attestation")
-				return
+			if att.IsAggregated() {
+				if err = s.cfg.attPool.SaveAggregatedAttestation(att); err != nil {
+					log.WithError(err).Debug("Could not save aggregated attestation")
+					return
+				}
+			} else {
+				if err = s.cfg.attPool.SaveUnaggregatedAttestation(att); err != nil {
+					log.WithError(err).Debug("Could not save unaggregated attestation")
+					return
+				}
 			}
 		}
 
-		s.setAggregatorIndexEpochSeen(aggregate.GetData().Target.Epoch, att.AggregateAttestationAndProof().GetAggregatorIndex())
+		s.setAggregatorIndexEpochSeen(att.GetData().Target.Epoch, aggregate.AggregateAttestationAndProof().GetAggregatorIndex())
 
 		// Broadcasting the signed attestation again once a node is able to process it.
-		if err := s.cfg.p2p.Broadcast(ctx, att); err != nil {
+		if err := s.cfg.p2p.Broadcast(ctx, aggregate); err != nil {
 			log.WithError(err).Debug("Could not broadcast")
 		}
 	}

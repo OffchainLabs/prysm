@@ -420,58 +420,72 @@ func TestProcessPendingAtts_HasBlockSaveUnAggregatedAttElectra_VerifyAlreadySeen
 }
 
 func TestProcessPendingAtts_NoBroadcastWithBadSignature(t *testing.T) {
-	db := dbtest.SetupDB(t)
-	p1 := p2ptest.NewTestP2P(t)
+	ctx, cancel := context.WithCancel(context.Background())
 
-	s, _ := util.DeterministicGenesisState(t, 256)
+	db := dbtest.SetupDB(t)
+	p2p := p2ptest.NewTestP2P(t)
+	st, privKeys := util.DeterministicGenesisState(t, 256)
+	require.NoError(t, st.SetGenesisTime(uint64(time.Now().Unix())))
+	b := util.NewBeaconBlock()
+	r32, err := b.Block.HashTreeRoot()
+	require.NoError(t, err)
+	util.SaveBlock(t, context.Background(), db, b)
+	require.NoError(t, db.SaveState(context.Background(), st, r32))
+
 	chain := &mock.ChainService{
-		State:   s,
-		Genesis: prysmTime.Now(), FinalizedCheckPoint: &ethpb.Checkpoint{Root: make([]byte, 32)}}
-	r := &Service{
+		State:   st,
+		Genesis: prysmTime.Now(),
+		DB:      db,
+		FinalizedCheckPoint: &ethpb.Checkpoint{
+			Root:  r32[:],
+			Epoch: 0,
+		},
+	}
+
+	s := &Service{
+		ctx: ctx,
 		cfg: &config{
-			p2p:      p1,
+			p2p:      p2p,
 			beaconDB: db,
 			chain:    chain,
 			clock:    startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
 			attPool:  attestations.NewPool(),
 		},
-		blkRootToPendingAtts: make(map[[32]byte][]any),
+		blkRootToPendingAtts:           make(map[[32]byte][]any),
+		signatureChan:                  make(chan *signatureVerifier, verifierLimit),
+		seenAggregatedAttestationCache: lruwrpr.New(10),
 	}
+	go s.verifierRoutine()
+
+	committee, err := helpers.BeaconCommitteeFromState(context.Background(), st, 0, 0)
+	assert.NoError(t, err)
+	// Arbitrary aggregator index for testing purposes.
+	aggregatorIndex := committee[0]
 
 	priv, err := bls.RandKey()
 	require.NoError(t, err)
+	aggBits := bitfield.NewBitlist(8)
+	aggBits.SetBitAt(1, true)
+
 	a := &ethpb.AggregateAttestationAndProof{
 		Aggregate: &ethpb.Attestation{
 			Signature:       priv.Sign([]byte("foo")).Marshal(),
-			AggregationBits: bitfield.Bitlist{0x02},
+			AggregationBits: aggBits,
 			Data:            util.HydrateAttestationData(&ethpb.AttestationData{}),
 		},
-		SelectionProof: make([]byte, fieldparams.BLSSignatureLength),
+		AggregatorIndex: aggregatorIndex,
+		SelectionProof:  make([]byte, fieldparams.BLSSignatureLength),
 	}
 
-	b := util.NewBeaconBlock()
-	r32, err := b.Block.HashTreeRoot()
-	require.NoError(t, err)
-	util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b)
-	require.NoError(t, r.cfg.beaconDB.SaveState(t.Context(), s, r32))
+	s.blkRootToPendingAtts[r32] = []any{&ethpb.SignedAggregateAttestationAndProof{Message: a, Signature: make([]byte, fieldparams.BLSSignatureLength)}}
+	require.NoError(t, s.processPendingAtts(t.Context()))
 
-	util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b)
-	require.NoError(t, r.cfg.beaconDB.SaveState(t.Context(), s, r32))
-
-	r.blkRootToPendingAtts[r32] = []any{&ethpb.SignedAggregateAttestationAndProof{Message: a, Signature: make([]byte, fieldparams.BLSSignatureLength)}}
-	require.NoError(t, r.processPendingAtts(t.Context()))
-
-	assert.Equal(t, false, p1.BroadcastCalled.Load(), "Broadcasted bad aggregate")
+	assert.Equal(t, false, p2p.BroadcastCalled.Load(), "Broadcasted bad aggregate")
 
 	// Clear pool.
-	err = r.cfg.attPool.DeleteUnaggregatedAttestation(a.Aggregate)
+	err = s.cfg.attPool.DeleteUnaggregatedAttestation(a.Aggregate)
 	require.NoError(t, err)
 
-	validators := uint64(256)
-
-	_, privKeys := util.DeterministicGenesisState(t, validators)
-	aggBits := bitfield.NewBitlist(8)
-	aggBits.SetBitAt(1, true)
 	att := &ethpb.Attestation{
 		Data: &ethpb.AttestationData{
 			BeaconBlockRoot: r32[:],
@@ -480,11 +494,10 @@ func TestProcessPendingAtts_NoBroadcastWithBadSignature(t *testing.T) {
 		},
 		AggregationBits: aggBits,
 	}
-	committee, err := helpers.BeaconCommitteeFromState(t.Context(), s, att.Data.Slot, att.Data.CommitteeIndex)
-	assert.NoError(t, err)
+
 	attestingIndices, err := attestation.AttestingIndices(att, committee)
 	require.NoError(t, err)
-	attesterDomain, err := signing.Domain(s.Fork(), 0, params.BeaconConfig().DomainBeaconAttester, s.GenesisValidatorsRoot())
+	attesterDomain, err := signing.Domain(st.Fork(), 0, params.BeaconConfig().DomainBeaconAttester, st.GenesisValidatorsRoot())
 	require.NoError(t, err)
 	hashTreeRoot, err := signing.ComputeSigningRoot(att.Data, attesterDomain)
 	assert.NoError(t, err)
@@ -492,47 +505,22 @@ func TestProcessPendingAtts_NoBroadcastWithBadSignature(t *testing.T) {
 		att.Signature = privKeys[i].Sign(hashTreeRoot[:]).Marshal()
 	}
 
-	// Arbitrary aggregator index for testing purposes.
-	aggregatorIndex := committee[0]
 	sszSlot := primitives.SSZUint64(att.Data.Slot)
-	sig, err := signing.ComputeDomainAndSign(s, 0, &sszSlot, params.BeaconConfig().DomainSelectionProof, privKeys[aggregatorIndex])
+	sig, err := signing.ComputeDomainAndSign(st, 0, &sszSlot, params.BeaconConfig().DomainSelectionProof, privKeys[aggregatorIndex])
 	require.NoError(t, err)
 	aggregateAndProof := &ethpb.AggregateAttestationAndProof{
 		SelectionProof:  sig,
 		Aggregate:       att,
 		AggregatorIndex: aggregatorIndex,
 	}
-	aggreSig, err := signing.ComputeDomainAndSign(s, 0, aggregateAndProof, params.BeaconConfig().DomainAggregateAndProof, privKeys[aggregatorIndex])
+	aggreSig, err := signing.ComputeDomainAndSign(st, 0, aggregateAndProof, params.BeaconConfig().DomainAggregateAndProof, privKeys[aggregatorIndex])
 	require.NoError(t, err)
 
-	require.NoError(t, s.SetGenesisTime(time.Now()))
-	ctx, cancel := context.WithCancel(t.Context())
-	chain2 := &mock.ChainService{Genesis: time.Now(),
-		State: s,
-		FinalizedCheckPoint: &ethpb.Checkpoint{
-			Root:  aggregateAndProof.Aggregate.Data.BeaconBlockRoot,
-			Epoch: 0,
-		}}
-	r = &Service{
-		ctx: ctx,
-		cfg: &config{
-			p2p:                 p1,
-			beaconDB:            db,
-			chain:               chain2,
-			clock:               startup.NewClock(chain2.Genesis, chain2.ValidatorsRoot),
-			attPool:             attestations.NewPool(),
-			attestationNotifier: &mock.MockOperationNotifier{},
-		},
-		blkRootToPendingAtts:             make(map[[32]byte][]any),
-		seenUnAggregatedAttestationCache: lruwrpr.New(10),
-		signatureChan:                    make(chan *signatureVerifier, verifierLimit),
-	}
-	go r.verifierRoutine()
+	s.blkRootToPendingAtts[r32] = []any{&ethpb.SignedAggregateAttestationAndProof{Message: aggregateAndProof, Signature: aggreSig}}
+	require.NoError(t, s.processPendingAtts(t.Context()))
 
-	r.blkRootToPendingAtts[r32] = []any{&ethpb.SignedAggregateAttestationAndProof{Message: aggregateAndProof, Signature: aggreSig}}
-	require.NoError(t, r.processPendingAtts(t.Context()))
+	assert.Equal(t, true, p2p.BroadcastCalled.Load(), "The good aggregate was not broadcasted")
 
-	assert.Equal(t, true, p1.BroadcastCalled.Load(), "Could not broadcast the good aggregate")
 	cancel()
 }
 
