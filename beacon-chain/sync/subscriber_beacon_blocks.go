@@ -7,6 +7,7 @@ import (
 	"path"
 
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition/interop"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
@@ -35,6 +36,7 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 		return err
 	}
 
+	// TODO: do we only do this for super nodes?
 	go s.reconstructAndBroadcastBlobs(ctx, signed)
 
 	if err := s.cfg.chain.ReceiveBlock(ctx, signed, root, nil); err != nil {
@@ -60,18 +62,65 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 }
 
 // reconstructAndBroadcastBlobs processes and broadcasts blob sidecars for a given beacon block.
-// This function reconstructs the blob sidecars from the EL using the block's KZG commitments,
-// broadcasts the reconstructed blobs over P2P, and saves them into the blob storage.
 func (s *Service) reconstructAndBroadcastBlobs(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) {
 	if block.Version() < version.Deneb {
 		return
+	} else if block.Version() < version.Fulu {
+		s.reconstructAndBroadcastFullBlobs(ctx, block)
+	} else {
+		s.reconstructAndBroadcastBlobsInDataColumn(ctx, block)
 	}
+}
 
-	// TODO: Apply the equivalent strategy for data columns.
-	if block.Version() >= version.Fulu {
+// reconstructAndBroadcastBlobsInDataColumn reconstructs and broadcasts blobs in data column format for a given beacon block, it also saves data column sidecars into the blob storage.
+func (s *Service) reconstructAndBroadcastBlobsInDataColumn(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) {
+	blockRoot, err := block.Block().HashTreeRoot()
+	if err != nil {
+		log.WithError(err).Error("Failed to calculate block root")
 		return
 	}
 
+	if s.cfg.blobStorage == nil {
+		log.Warn("Blob storage is not enabled, skip saving data column, but continue to reconstruct and broadcast blobs")
+	}
+
+	// when this function is called, it's from the time when the block is received, so in almost all situations we need to get the data column from EL instead of the blob storage.
+	sidecars, err := s.cfg.executionReconstructor.ReconstructDataColumnSidecars(ctx, block, blockRoot)
+	if err != nil {
+		log.WithError(err).Debug("Cannot reconstruct data column sidecars after receiving the block")
+		return
+	}
+
+	nodeID := s.cfg.p2p.NodeID()
+	peerdas.CustodyGroupCountMut.RLock()
+	defer peerdas.CustodyGroupCountMut.RUnlock()
+	cgc := peerdas.ActualCustodyGroupCount()
+	info, _, err := peerdas.Info(nodeID, cgc)
+	if err != nil {
+		log.WithError(err).Error("Failed to get peer info")
+		return
+	}
+
+	// Broadcast data column and then save to db (if needs to be custodied)
+	for _, sidecar := range sidecars {
+		if !info.CustodyColumns[sidecar.ColumnIndex] {
+			continue
+		}
+
+		// first broadcast the data column
+		if err := s.cfg.p2p.BroadcastDataColumn(ctx, blockRoot, sidecar.ColumnIndex, sidecar.DataColumnSidecar); err != nil {
+			log.WithFields(dataColumnFields(sidecar.RODataColumn)).WithError(err).Error("Failed to broadcast data column")
+		}
+
+		if err := s.receiveDataColumn(ctx, sidecar); err != nil {
+			log.WithFields(dataColumnFields(sidecar.RODataColumn)).WithError(err).Error("Failed to receive data column")
+		}
+	}
+}
+
+// reconstructAndBroadcastFullBlobs reconstructs the blob sidecars from the EL using the block's KZG commitments,
+// broadcasts the reconstructed blobs over P2P, and saves them into the blob storage.
+func (s *Service) reconstructAndBroadcastFullBlobs(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) {
 	startTime, err := slots.ToTime(uint64(s.cfg.chain.GenesisTime().Unix()), block.Block().Slot())
 	if err != nil {
 		log.WithError(err).Error("Failed to convert slot to time")
