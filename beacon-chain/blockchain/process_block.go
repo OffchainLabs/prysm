@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/go-bitfield"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	coreTime "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
@@ -15,6 +16,7 @@ import (
 	forkchoicetypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/types"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	consensusblocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
@@ -368,7 +370,7 @@ func (s *Service) handleEpochBoundary(ctx context.Context, slot primitives.Slot,
 func (s *Service) handleBlockAttestations(ctx context.Context, blk interfaces.ReadOnlyBeaconBlock, st state.BeaconState) error {
 	// Feed in block's attestations to fork choice store.
 	for _, a := range blk.Body().Attestations() {
-		committees, err := helpers.AttestationCommittees(ctx, st, a)
+		committees, err := helpers.AttestationCommitteesFromState(ctx, st, a)
 		if err != nil {
 			return err
 		}
@@ -419,24 +421,95 @@ func (s *Service) savePostStateInfo(ctx context.Context, r [32]byte, b interface
 	return nil
 }
 
-// This removes the attestations in block `b` from the attestation mem pool.
-func (s *Service) pruneAttsFromPool(headBlock interfaces.ReadOnlySignedBeaconBlock) error {
-	atts := headBlock.Block().Body().Attestations()
-	for _, att := range atts {
-		if features.Get().EnableExperimentalAttestationPool {
-			if err := s.cfg.AttestationCache.DeleteCovered(att); err != nil {
-				return errors.Wrap(err, "could not delete attestation")
-			}
-		} else if att.IsAggregated() {
-			if err := s.cfg.AttPool.DeleteAggregatedAttestation(att); err != nil {
-				return err
-			}
-		} else {
-			if err := s.cfg.AttPool.DeleteUnaggregatedAttestation(att); err != nil {
-				return err
-			}
+// pruneAttsFromPool removes these attestations from the attestation pool
+// which are covered by attestations from the received block.
+func (s *Service) pruneAttsFromPool(ctx context.Context, headState state.BeaconState, headBlock interfaces.ReadOnlySignedBeaconBlock) error {
+	for _, att := range headBlock.Block().Body().Attestations() {
+		if err := s.pruneCoveredAttsFromPool(ctx, headState, att); err != nil {
+			log.WithError(err).Warn("Could not prune attestations covered by a received block's attestation")
 		}
 	}
+	return nil
+}
+
+func (s *Service) pruneCoveredAttsFromPool(ctx context.Context, headState state.BeaconState, att ethpb.Att) error {
+	switch {
+	case !att.IsAggregated():
+		return s.cfg.AttPool.DeleteUnaggregatedAttestation(att)
+	case att.Version() == version.Phase0:
+		if features.Get().EnableExperimentalAttestationPool {
+			return errors.Wrap(s.cfg.AttestationCache.DeleteCovered(att), "could not delete covered attestation")
+		}
+		return errors.Wrap(s.cfg.AttPool.DeleteAggregatedAttestation(att), "could not delete aggregated attestation")
+	default:
+		return s.pruneCoveredElectraAttsFromPool(ctx, headState, att)
+	}
+}
+
+// pruneCoveredElectraAttsFromPool handles removing aggregated Electra attestations from the pool after receiving a block.
+// Because in Electra block attestations can combine aggregates for multiple committees, comparing attestation bits
+// of a block attestation with attestations bits of an aggregate can cause unexpected results, leading to covered
+// aggregates not being removed from the pool.
+//
+// To make sure aggregates are removed, we decompose the block attestation into dummy aggregates, with each
+// aggregate accounting for one committee. This allows us to compare aggregates in the same way it's done for
+// Phase0. Even though we can't provide a valid signature for the dummy aggregate, it does not matter because
+// signatures play no part in pruning attestations.
+func (s *Service) pruneCoveredElectraAttsFromPool(ctx context.Context, headState state.BeaconState, att ethpb.Att) error {
+	if att.Version() == version.Phase0 {
+		log.Error("Called pruneCoveredElectraAttsFromPool with a Phase0 attestation")
+		return nil
+	}
+
+	// We don't want to recompute committees. If they are not cached already,
+	// we allow attestations to stay in the pool. If these attestations are
+	// included in a later block, they will be redundant. But given that
+	// they were not cached in the first place, it's unlikely that they
+	// will be chosen into a block.
+	ok, committees, err := helpers.AttestationCommitteesFromCache(ctx, headState, att)
+	if err != nil {
+		return errors.Wrap(err, "could not get attestation committees")
+	}
+	if !ok {
+		log.Debug("Attestation committees are not cached. Skipping attestation pruning.")
+		return nil
+	}
+
+	committeeIndices := att.CommitteeBitsVal().BitIndices()
+	offset := uint64(0)
+
+	// Sanity check as this should never happen
+	if len(committeeIndices) != len(committees) {
+		return errors.New("committee indices and committees have different lengths")
+	}
+
+	for i, c := range committees {
+		ab := bitfield.NewBitlist(uint64(len(c)))
+		for j := uint64(0); j < uint64(len(c)); j++ {
+			ab.SetBitAt(j, att.GetAggregationBits().BitAt(j+offset))
+		}
+
+		cb := primitives.NewAttestationCommitteeBits()
+		cb.SetBitAt(uint64(committeeIndices[i]), true)
+
+		a := &ethpb.AttestationElectra{
+			AggregationBits: ab,
+			Data:            att.GetData(),
+			CommitteeBits:   cb,
+			Signature:       make([]byte, fieldparams.BLSSignatureLength),
+		}
+
+		if features.Get().EnableExperimentalAttestationPool {
+			if err = s.cfg.AttestationCache.DeleteCovered(a); err != nil {
+				return errors.Wrap(err, "could not delete covered attestation")
+			}
+		} else if err = s.cfg.AttPool.DeleteAggregatedAttestation(a); err != nil {
+			return errors.Wrap(err, "could not delete aggregated attestation")
+		}
+
+		offset += uint64(len(c))
+	}
+
 	return nil
 }
 

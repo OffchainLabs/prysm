@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	mathRand "math/rand"
-
 	"strconv"
 	"testing"
 	"time"
@@ -1055,6 +1054,31 @@ func TestBellatrixState_CanDelete(t *testing.T) {
 	db := setupDB(t)
 
 	r := [32]byte{'A'}
+
+	require.Equal(t, false, db.HasState(context.Background(), r))
+
+	st, _ := util.DeterministicGenesisStateBellatrix(t, 1)
+	require.NoError(t, st.SetSlot(100))
+
+	require.NoError(t, db.SaveState(context.Background(), st, r))
+	require.Equal(t, true, db.HasState(context.Background(), r))
+
+	require.NoError(t, db.DeleteState(context.Background(), r))
+	savedS, err := db.State(context.Background(), r)
+	require.NoError(t, err)
+	require.Equal(t, state.ReadOnlyBeaconState(nil), savedS, "Unsaved state should've been nil")
+}
+
+func TestBellatrixState_CanDeleteWithBlock(t *testing.T) {
+	db := setupDB(t)
+
+	b := util.NewBeaconBlockBellatrix()
+	b.Block.Slot = 100
+	r, err := b.Block.HashTreeRoot()
+	require.NoError(t, err)
+	wsb, err := blocks.NewSignedBeaconBlock(b)
+	require.NoError(t, err)
+	require.NoError(t, db.SaveBlock(context.Background(), wsb))
 
 	require.Equal(t, false, db.HasState(context.Background(), r))
 

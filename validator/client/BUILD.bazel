@@ -105,6 +105,7 @@ go_test(
         "aggregate_test.go",
         "attest_test.go",
         "key_reload_test.go",
+        "log_test.go",
         "metrics_test.go",
         "propose_test.go",
         "registration_test.go",
