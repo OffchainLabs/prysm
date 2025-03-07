@@ -398,13 +398,11 @@ func TestRequestDataColumnSidecars(t *testing.T) {
 	require.NoError(t, err)
 
 	testCases := []struct {
-		name string
-		// Test inputs
-		dataColumns map[uint64]bool
-		peerSetup   []peerSetup
-		expectError bool
-		// Expected request optimization
-		expectedPeerRequests map[int][]uint64 // maps peer offset to expected requested columns
+		name                 string
+		dataColumns          map[uint64]bool
+		peerSetup            []peerSetup
+		expectError          bool
+		expectedPeerRequests map[int][]uint64
 	}{
 		{
 			name:        "No data columns requested",
