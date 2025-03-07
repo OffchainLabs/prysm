@@ -24,7 +24,7 @@ func TestSlotByRoot_Summary(t *testing.T) {
 	cases := []struct {
 		name     string
 		root     [32]byte
-		expected blobIndexMask
+		expected dataIndexMask
 	}{
 		{
 			name: "not found",
@@ -193,7 +193,7 @@ func TestHasDataColumnIndex(t *testing.T) {
 				}
 			}
 
-			mask := make(blobIndexMask, maxIndex+1)
+			mask := make(dataIndexMask, maxIndex+1)
 
 			for idx := range storedIndices {
 				mask[idx] = true
@@ -263,7 +263,7 @@ func TestAllDataColumnAvailable(t *testing.T) {
 				}
 			}
 
-			mask := make(blobIndexMask, maxIndex+1)
+			mask := make(dataIndexMask, maxIndex+1)
 
 			for idx := range c.storedIndices {
 				mask[idx] = true
