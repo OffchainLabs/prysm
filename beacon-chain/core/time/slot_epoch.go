@@ -29,7 +29,7 @@ func CurrentEpoch(state state.ReadOnlyBeaconState) primitives.Epoch {
 // Spec pseudocode definition:
 //
 //	def get_previous_epoch(state: BeaconState) -> Epoch:
-//	  """`
+//	  """
 //	  Return the previous epoch (unless the current epoch is ``GENESIS_EPOCH``).
 //	  """
 //	  current_epoch = get_current_epoch(state)

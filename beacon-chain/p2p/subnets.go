@@ -64,7 +64,7 @@ func (s *Service) nodeFilter(topic string, index uint64) (func(node *enode.Node)
 // searchForPeers performs a network search for peers subscribed to a particular subnet.
 // It exits as soon as one of these conditions is met:
 // - It looped through `batchSize` nodes.
-// - It found `peersToFindCount“ peers corresponding to the `filter` criteria.
+// - It found `peersToFindCount` peers corresponding to the `filter` criteria.
 // - Iterator is exhausted.
 func searchForPeers(
 	iterator enode.Iterator,
