@@ -8,6 +8,8 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
+	opfeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/operation"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/encoding/ssz"
@@ -146,5 +148,13 @@ func (s *Service) subscriberInclusionList(ctx context.Context, msg proto.Message
 		slots.TimeIntoSlot(uint64(s.cfg.clock.GenesisTime().Unix())) < time.Duration(params.BeaconConfig().InclusionListFreezeDeadLine)*time.Second
 
 	s.inclusionLists.Add(il.Message.Slot, il.Message.ValidatorIndex, il.Message.Transactions, isBeforeFreezeDeadline)
+
+	s.cfg.operationNotifier.OperationFeed().Send(&feed.Event{
+		Type: opfeed.InclusionListReceived,
+		Data: &opfeed.InclusionListReceivedData{
+			SignedInclusionList: il,
+		},
+	})
+
 	return nil
 }

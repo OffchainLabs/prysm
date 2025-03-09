@@ -133,6 +133,66 @@ func SignedBLSChangesFromConsensus(src []*eth.SignedBLSToExecutionChange) []*Sig
 	return changes
 }
 
+func SignedInclusionListFromConsensus(src *eth.SignedInclusionList) *SignedInclusionList {
+	transactions := make([]string, len(src.Message.Transactions))
+	for i, transaction := range src.Message.Transactions {
+		transactions[i] = hexutil.Encode(transaction)
+	}
+
+	return &SignedInclusionList{
+		Message: &InclusionList{
+			Slot:                       fmt.Sprintf("%d", src.Message.Slot),
+			ValidatorIndex:             fmt.Sprintf("%d", src.Message.ValidatorIndex),
+			InclusionListCommitteeRoot: hexutil.Encode(src.Message.InclusionListCommitteeRoot),
+			Transactions:               transactions,
+		},
+		Signature: hexutil.Encode(src.Signature),
+	}
+}
+
+func (s *SignedInclusionList) ToConsensus() (*eth.SignedInclusionList, error) {
+	message, err := s.Message.ToConsensus()
+	if err != nil {
+		return nil, server.NewDecodeError(err, "Message")
+	}
+	signature, err := bytesutil.DecodeHexWithLength(s.Signature, fieldparams.BLSSignatureLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "Signature")
+	}
+	return &eth.SignedInclusionList{
+		Message:   message,
+		Signature: signature,
+	}, nil
+}
+
+func (s *InclusionList) ToConsensus() (*eth.InclusionList, error) {
+	slot, err := strconv.ParseUint(s.Slot, 10, 64)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "Slot")
+	}
+	validatorIndex, err := strconv.ParseUint(s.ValidatorIndex, 10, 64)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "ValidatorIndex")
+	}
+	inclusionListCommitteeRoot, err := bytesutil.DecodeHexWithLength(s.InclusionListCommitteeRoot, fieldparams.RootLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "InclusionListCommitteeRoot")
+	}
+	transactions := make([][]byte, len(s.Transactions))
+	for i, transaction := range s.Transactions {
+		transactions[i], err = bytesutil.DecodeHexWithMaxLength(transaction, fieldparams.MaxBytesPerTxLength)
+		if err != nil {
+			return nil, server.NewDecodeError(err, fmt.Sprintf("Transactions[%d]", i))
+		}
+	}
+	return &eth.InclusionList{
+		Slot:                       primitives.Slot(slot),
+		ValidatorIndex:             primitives.ValidatorIndex(validatorIndex),
+		InclusionListCommitteeRoot: inclusionListCommitteeRoot,
+		Transactions:               transactions,
+	}, nil
+}
+
 func (s *Fork) ToConsensus() (*eth.Fork, error) {
 	previousVersion, err := bytesutil.DecodeHexWithLength(s.PreviousVersion, 4)
 	if err != nil {

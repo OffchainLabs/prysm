@@ -61,6 +61,8 @@ const (
 	PayloadAttributesTopic = "payload_attributes"
 	// BlobSidecarTopic represents a new blob sidecar event topic
 	BlobSidecarTopic = "blob_sidecar"
+	// InclusionListTopic represents a new inclusion list event topic
+	InclusionListTopic = "inclusion_list"
 	// ProposerSlashingTopic represents a new proposer slashing event topic
 	ProposerSlashingTopic = "proposer_slashing"
 	// AttesterSlashingTopic represents a new attester slashing event topic
@@ -99,6 +101,7 @@ var opsFeedEventTopics = map[feed.EventType]string{
 	operation.SyncCommitteeContributionReceived: SyncCommitteeContributionTopic,
 	operation.BLSToExecutionChangeReceived:      BLSToExecutionChangeTopic,
 	operation.BlobSidecarReceived:               BlobSidecarTopic,
+	operation.InclusionListReceived:             InclusionListTopic,
 	operation.AttesterSlashingReceived:          AttesterSlashingTopic,
 	operation.ProposerSlashingReceived:          ProposerSlashingTopic,
 }
@@ -428,6 +431,8 @@ func topicForEvent(event *feed.Event) string {
 		return BLSToExecutionChangeTopic
 	case *operation.BlobSidecarReceivedData:
 		return BlobSidecarTopic
+	case *operation.InclusionListReceivedData:
+		return InclusionListTopic
 	case *operation.AttesterSlashingReceivedData:
 		return AttesterSlashingTopic
 	case *operation.ProposerSlashingReceivedData:
@@ -529,6 +534,13 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 				Slot:          fmt.Sprintf("%d", v.Blob.Slot()),
 				VersionedHash: versionedHash.String(),
 				KzgCommitment: hexutil.Encode(v.Blob.KzgCommitment),
+			})
+		}, nil
+	case *operation.InclusionListReceivedData:
+		return func() io.Reader {
+			return jsonMarshalReader(eventName, structs.InclusionListEvent{
+				Version: "eip7805",
+				Data:    structs.SignedInclusionListFromConsensus(v.SignedInclusionList),
 			})
 		}, nil
 	case *operation.AttesterSlashingReceivedData:

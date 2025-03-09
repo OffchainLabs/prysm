@@ -28,6 +28,7 @@ const (
 	EventLightClientOptimisticUpdate = "light_client_optimistic_update"
 	EventPayloadAttributes           = "payload_attributes"
 	EventBlobSidecar                 = "blob_sidecar"
+	EventInclusionList               = "inclusion_list"
 	EventError                       = "error"
 	EventConnectionError             = "connection_error"
 )
