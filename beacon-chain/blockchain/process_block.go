@@ -503,6 +503,10 @@ func (s *Service) pruneCoveredElectraAttsFromPool(ctx context.Context, headState
 			if err = s.cfg.AttestationCache.DeleteCovered(a); err != nil {
 				return errors.Wrap(err, "could not delete covered attestation")
 			}
+		} else if !a.IsAggregated() {
+			if err = s.cfg.AttPool.DeleteUnaggregatedAttestation(a); err != nil {
+				return errors.Wrap(err, "could not delete unaggregated attestation")
+			}
 		} else if err = s.cfg.AttPool.DeleteAggregatedAttestation(a); err != nil {
 			return errors.Wrap(err, "could not delete aggregated attestation")
 		}
@@ -723,13 +727,9 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 	attribute := s.getPayloadAttribute(ctx, headState, s.CurrentSlot()+1, headRoot[:])
 	// return early if we are not proposing next slot
 	if attribute.IsEmpty() {
-		fcuArgs := &fcuConfig{
-			headState:  headState,
-			headRoot:   headRoot,
-			headBlock:  nil,
-			attributes: attribute,
-		}
-		go firePayloadAttributesEvent(ctx, s.cfg.StateNotifier.StateFeed(), fcuArgs)
+		// notifyForkchoiceUpdate fires the payload attribute event. But in this case, we won't
+		// call notifyForkchoiceUpdate, so the event is fired here.
+		go firePayloadAttributesEvent(ctx, s.cfg.StateNotifier.StateFeed(), s.CurrentSlot()+1)
 		return
 	}
 
