@@ -3,6 +3,7 @@ package sync
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -15,6 +16,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	consensusblocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
@@ -30,8 +32,9 @@ import (
 )
 
 var (
-	ErrOptimisticParent    = errors.New("parent of the block is optimistic")
-	errRejectCommitmentLen = errors.New("[REJECT] The length of KZG commitments is less than or equal to the limitation defined in Consensus Layer")
+	ErrOptimisticParent         = errors.New("parent of the block is optimistic")
+	errRejectCommitmentLen      = errors.New("[REJECT] The length of KZG commitments is less than or equal to the limitation defined in Consensus Layer")
+	ErrSlashingSignatureFailure = errors.New("proposer slashing signature verification failed")
 )
 
 // validateBeaconBlockPubSub checks that the incoming block has a valid BLS signature.
@@ -100,7 +103,13 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 	// Verify the block is the first block received for the proposer for the slot.
 	if s.hasSeenBlockIndexSlot(blk.Block().Slot(), blk.Block().ProposerIndex()) {
 		// Attempt to detect and broadcast equivocation before ignoring
-		if err := s.detectAndBroadcastEquivocation(ctx, blk); err != nil {
+		err = s.detectAndBroadcastEquivocation(ctx, blk)
+		if err != nil {
+			// If signature verification fails, reject the block
+			if errors.Is(err, ErrSlashingSignatureFailure) {
+				return pubsub.ValidationReject, err
+			}
+			// In case there is some other error log but don't reject
 			log.WithError(err).Debug("Could not detect/broadcast equivocation")
 		}
 		return pubsub.ValidationIgnore, nil
@@ -463,8 +472,7 @@ func getBlockFields(b interfaces.ReadOnlySignedBeaconBlock) logrus.Fields {
 
 // detectAndBroadcastEquivocation checks if the given block is an equivocating block by comparing it with
 // the head block. If the blocks are from the same slot and proposer but have different signatures,
-// it verifies the difference constitutes a slashable offense before creating and broadcasting a proposer
-// slashing object.
+// it creates and broadcasts a proposer slashing object after verification.
 func (s *Service) detectAndBroadcastEquivocation(ctx context.Context, blk interfaces.ReadOnlySignedBeaconBlock) error {
 	slot := blk.Block().Slot()
 	proposerIndex := blk.Block().ProposerIndex()
@@ -489,6 +497,7 @@ func (s *Service) detectAndBroadcastEquivocation(ctx context.Context, blk interf
 		return nil
 	}
 
+	// Extract headers for slashing
 	header1, err := blk.Header()
 	if err != nil {
 		return errors.Wrap(err, "could not get header from new block")
@@ -503,19 +512,19 @@ func (s *Service) detectAndBroadcastEquivocation(ctx context.Context, blk interf
 		Header_2: header2,
 	}
 
-	// Verify basic slashing conditions before state check
-	if err := verifySlashableBlock(slashing); err != nil {
-		return errors.Wrap(err, "block headers not slashable")
-	}
-
-	// Get state for final verification
+	// Get state for verification
 	headState, err := s.cfg.chain.HeadStateReadOnly(ctx)
 	if err != nil {
 		return errors.Wrap(err, "could not get head state")
 	}
 
 	// Verify the slashing against current state
+	// This already performs all needed checks including signature verification
 	if err := blocks.VerifyProposerSlashing(headState, slashing); err != nil {
+		// Check if this is a signature verification error
+		if strings.Contains(err.Error(), "signature did not verify") {
+			return errors.Wrap(ErrSlashingSignatureFailure, err.Error())
+		}
 		return errors.Wrap(err, "could not verify proposer slashing")
 	}
 
@@ -529,40 +538,6 @@ func (s *Service) detectAndBroadcastEquivocation(ctx context.Context, blk interf
 	// Insert into slashing pool
 	if err := s.cfg.slashingPool.InsertProposerSlashing(ctx, headState, slashing); err != nil {
 		return errors.Wrap(err, "could not insert proposer slashing into pool")
-	}
-
-	return nil
-}
-
-// verifySlashableBlock performs basic verification of a proposer slashing object to ensure the headers represent
-// a valid slashing condition. It checks that: both headers are from the same proposer,
-// both headers are for the same slot, headers have different roots
-// This verification is done before the state-dependent checks in blocks.VerifyProposerSlashing
-func verifySlashableBlock(slashing *ethpb.ProposerSlashing) error {
-	header1 := slashing.Header_1.Header
-	header2 := slashing.Header_2.Header
-
-	// Headers should be from same proposer
-	if header1.ProposerIndex != header2.ProposerIndex {
-		return errors.New("headers are not from same proposer")
-	}
-
-	// Headers should be for same slot
-	if header1.Slot != header2.Slot {
-		return errors.New("headers are not from same slot")
-	}
-
-	// Headers should be different
-	root1, err := header1.HashTreeRoot()
-	if err != nil {
-		return errors.Wrap(err, "could not hash header 1")
-	}
-	root2, err := header2.HashTreeRoot()
-	if err != nil {
-		return errors.Wrap(err, "could not hash header 2")
-	}
-	if root1 == root2 {
-		return errors.New("headers are identical")
 	}
 
 	return nil
