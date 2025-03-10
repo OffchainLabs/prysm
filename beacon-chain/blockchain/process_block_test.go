@@ -50,6 +50,7 @@ import (
 
 func Test_pruneAttsFromPool_Electra(t *testing.T) {
 	ctx := context.Background()
+	logHook := logTest.NewGlobal()
 
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
@@ -71,7 +72,7 @@ func Test_pruneAttsFromPool_Electra(t *testing.T) {
 	cb := primitives.NewAttestationCommitteeBits()
 	cb.SetBitAt(0, true)
 	att1 := &ethpb.AttestationElectra{
-		AggregationBits: bitfield.Bitlist{0b11110111, 0b00000001},
+		AggregationBits: bitfield.Bitlist{0b10000000, 0b00000001},
 		Data:            data,
 		Signature:       make([]byte, 96),
 		CommitteeBits:   cb,
@@ -95,16 +96,15 @@ func Test_pruneAttsFromPool_Electra(t *testing.T) {
 		CommitteeBits:   cb,
 	}
 
-	require.NoError(t, s.cfg.AttPool.SaveAggregatedAttestation(att1))
+	require.NoError(t, s.cfg.AttPool.SaveUnaggregatedAttestation(att1))
 	require.NoError(t, s.cfg.AttPool.SaveAggregatedAttestation(att2))
 	require.NoError(t, s.cfg.AttPool.SaveAggregatedAttestation(att3))
-	require.Equal(t, 3, len(s.cfg.AttPool.AggregatedAttestations()))
 
 	cb = primitives.NewAttestationCommitteeBits()
 	cb.SetBitAt(0, true)
 	cb.SetBitAt(1, true)
 	onChainAtt := &ethpb.AttestationElectra{
-		AggregationBits: bitfield.Bitlist{0b11110111, 0b11110111, 0b00000001},
+		AggregationBits: bitfield.Bitlist{0b10000000, 0b11110111, 0b00000001},
 		Data:            data,
 		Signature:       make([]byte, 96),
 		CommitteeBits:   cb,
@@ -127,7 +127,12 @@ func Test_pruneAttsFromPool_Electra(t *testing.T) {
 	require.Equal(t, 4, len(committees))
 
 	require.NoError(t, s.pruneAttsFromPool(ctx, st, rob))
-	attsInPool := s.cfg.AttPool.AggregatedAttestations()
+	require.LogsDoNotContain(t, logHook, "Could not prune attestations")
+
+	attsInPool, err := s.cfg.AttPool.UnaggregatedAttestations()
+	require.NoError(t, err)
+	assert.Equal(t, 0, len(attsInPool))
+	attsInPool = s.cfg.AttPool.AggregatedAttestations()
 	require.Equal(t, 1, len(attsInPool))
 	assert.DeepEqual(t, att3, attsInPool[0])
 }
@@ -908,6 +913,8 @@ func TestInsertFinalizedDeposits_MultipleFinalizedRoutines(t *testing.T) {
 }
 
 func TestRemoveBlockAttestationsInPool(t *testing.T) {
+	logHook := logTest.NewGlobal()
+
 	genesis, keys := util.DeterministicGenesisState(t, 64)
 	b, err := util.GenerateFullBlock(genesis, keys, util.DefaultBlockGenConfig(), 1)
 	assert.NoError(t, err)
@@ -928,6 +935,7 @@ func TestRemoveBlockAttestationsInPool(t *testing.T) {
 	wsb, err := consensusblocks.NewSignedBeaconBlock(b)
 	require.NoError(t, err)
 	require.NoError(t, service.pruneAttsFromPool(context.Background(), nil /* state not needed pre-Electra */, wsb))
+	require.LogsDoNotContain(t, logHook, "Could not prune attestations")
 	require.Equal(t, 0, service.cfg.AttPool.AggregatedAttestationCount())
 }
 

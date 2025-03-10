@@ -503,6 +503,10 @@ func (s *Service) pruneCoveredElectraAttsFromPool(ctx context.Context, headState
 			if err = s.cfg.AttestationCache.DeleteCovered(a); err != nil {
 				return errors.Wrap(err, "could not delete covered attestation")
 			}
+		} else if !a.IsAggregated() {
+			if err = s.cfg.AttPool.DeleteUnaggregatedAttestation(a); err != nil {
+				return errors.Wrap(err, "could not delete unaggregated attestation")
+			}
 		} else if err = s.cfg.AttPool.DeleteAggregatedAttestation(a); err != nil {
 			return errors.Wrap(err, "could not delete aggregated attestation")
 		}
