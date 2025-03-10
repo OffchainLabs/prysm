@@ -54,4 +54,5 @@ type ForkChoiceNodeExtraData struct {
 	Balance                  string `json:"balance"`
 	ExecutionOptimistic      bool   `json:"execution_optimistic"`
 	TimeStamp                string `json:"timestamp"`
+	Target                   string `json:"target"`
 }

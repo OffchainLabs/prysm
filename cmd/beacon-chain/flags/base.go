@@ -296,6 +296,11 @@ var (
 		Usage: "Directory for the slasher database",
 		Value: cmd.DefaultDataDir(),
 	}
+	// SlasherFlag defines a flag to enable the beacon chain slasher.
+	SlasherFlag = &cli.BoolFlag{
+		Name:  "slasher",
+		Usage: "Enables a slasher in the beacon node for detecting slashable offenses.",
+	}
 	// BeaconDBPruning enables the pruning of beacon db.
 	BeaconDBPruning = &cli.BoolFlag{
 		Name: "beacon-db-pruning",

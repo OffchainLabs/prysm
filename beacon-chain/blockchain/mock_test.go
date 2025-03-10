@@ -3,6 +3,7 @@ package blockchain
 import (
 	"testing"
 
+	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
 	testDB "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
 	doublylinkedtree "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/doubly-linked-tree"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
@@ -18,6 +19,7 @@ func testServiceOptsWithDB(t *testing.T) []Option {
 		WithStateGen(stategen.New(beaconDB, fcs)),
 		WithForkChoiceStore(fcs),
 		WithClockSynchronizer(cs),
+		WithStateNotifier(&mock.MockStateNotifier{RecordEvents: true}),
 	}
 }
 

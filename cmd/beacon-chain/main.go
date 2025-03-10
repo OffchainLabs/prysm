@@ -142,6 +142,7 @@ var appFlags = []cli.Flag{
 	genesis.StatePath,
 	genesis.BeaconAPIURL,
 	flags.SlasherDirFlag,
+	flags.SlasherFlag,
 	flags.JwtId,
 	storage.BlobStoragePathFlag,
 	storage.BlobRetentionEpochFlag,

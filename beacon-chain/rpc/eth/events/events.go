@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"runtime/debug"
 	"strconv"
 	"time"
 
@@ -20,7 +21,8 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/operation"
 	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	chaintime "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	payloadattribute "github.com/prysmaticlabs/prysm/v5/consensus-types/payload-attribute"
@@ -352,9 +354,18 @@ func writeLazyReaderWithRecover(w *streamingResponseWriterController, lr lazyRea
 		if r := recover(); r != nil {
 			log.WithField("panic", r).Error("Recovered from panic while writing event to client.")
 			err = errWriterUnusable
+			debug.PrintStack()
 		}
 	}()
+	if lr == nil {
+		log.Warn("Event stream skipping a nil lazy event reader callback")
+		return nil
+	}
 	r := lr()
+	if r == nil {
+		log.Warn("Event stream skipping a nil event reader")
+		return nil
+	}
 	out, err := io.ReadAll(r)
 	if err != nil {
 		return err
@@ -600,27 +611,14 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 
 var errUnsupportedPayloadAttribute = errors.New("cannot compute payload attributes pre-Bellatrix")
 
-func (s *Server) computePayloadAttributes(ctx context.Context, ev payloadattribute.EventData) (payloadattribute.Attributer, error) {
-	v := ev.HeadState.Version()
+func (s *Server) computePayloadAttributes(ctx context.Context, st state.ReadOnlyBeaconState, root [32]byte, proposer primitives.ValidatorIndex, timestamp uint64, randao []byte) (payloadattribute.Attributer, error) {
+	v := st.Version()
 	if v < version.Bellatrix {
 		return nil, errors.Wrapf(errUnsupportedPayloadAttribute, "%s is not supported", version.String(v))
 	}
 
-	t, err := slots.ToTime(ev.HeadState.GenesisTime(), ev.HeadState.Slot())
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get head state slot time")
-	}
-	timestamp := uint64(t.Unix())
-	prevRando, err := helpers.RandaoMix(ev.HeadState, chaintime.CurrentEpoch(ev.HeadState))
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get head state randao mix")
-	}
-	proposerIndex, err := helpers.BeaconProposerIndex(ctx, ev.HeadState)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get head state proposer index")
-	}
 	feeRecpt := params.BeaconConfig().DefaultFeeRecipient.Bytes()
-	tValidator, exists := s.TrackedValidatorsCache.Validator(proposerIndex)
+	tValidator, exists := s.TrackedValidatorsCache.Validator(proposer)
 	if exists {
 		feeRecpt = tValidator.FeeRecipient[:]
 	}
@@ -628,34 +626,30 @@ func (s *Server) computePayloadAttributes(ctx context.Context, ev payloadattribu
 	if v == version.Bellatrix {
 		return payloadattribute.New(&engine.PayloadAttributes{
 			Timestamp:             timestamp,
-			PrevRandao:            prevRando,
+			PrevRandao:            randao,
 			SuggestedFeeRecipient: feeRecpt,
 		})
 	}
 
-	w, _, err := ev.HeadState.ExpectedWithdrawals()
+	w, _, err := st.ExpectedWithdrawals()
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get withdrawals from head state")
 	}
 	if v == version.Capella {
 		return payloadattribute.New(&engine.PayloadAttributesV2{
 			Timestamp:             timestamp,
-			PrevRandao:            prevRando,
+			PrevRandao:            randao,
 			SuggestedFeeRecipient: feeRecpt,
 			Withdrawals:           w,
 		})
 	}
 
-	pr, err := ev.HeadBlock.Block().HashTreeRoot()
-	if err != nil {
-		return nil, errors.Wrap(err, "could not compute head block root")
-	}
 	return payloadattribute.New(&engine.PayloadAttributesV3{
 		Timestamp:             timestamp,
-		PrevRandao:            prevRando,
+		PrevRandao:            randao,
 		SuggestedFeeRecipient: feeRecpt,
 		Withdrawals:           w,
-		ParentBeaconBlockRoot: pr[:],
+		ParentBeaconBlockRoot: root[:],
 	})
 }
 
@@ -665,37 +659,75 @@ type asyncPayloadAttrData struct {
 	err     error
 }
 
+var zeroRoot [32]byte
+
+// needsFill allows tests to provide filled EventData values. An ordinary event data value fired by the blockchain package will have
+// all of the checked fields empty, so the logical short circuit should hit immediately.
+func needsFill(ev payloadattribute.EventData) bool {
+	return ev.HeadState == nil || ev.HeadState.IsNil() || ev.HeadState.LatestBlockHeader() == nil ||
+		ev.HeadBlock == nil || ev.HeadBlock.IsNil() ||
+		ev.HeadRoot == zeroRoot || len(ev.ParentBlockRoot) == 0 || len(ev.ParentBlockHash) == 0 ||
+		ev.Attributer == nil || ev.Attributer.IsEmpty()
+}
+
 func (s *Server) fillEventData(ctx context.Context, ev payloadattribute.EventData) (payloadattribute.EventData, error) {
-	if ev.HeadBlock == nil || ev.HeadBlock.IsNil() {
-		hb, err := s.HeadFetcher.HeadBlock(ctx)
-		if err != nil {
-			return ev, errors.Wrap(err, "Could not look up head block")
-		}
-		root, err := hb.Block().HashTreeRoot()
-		if err != nil {
-			return ev, errors.Wrap(err, "Could not compute head block root")
-		}
-		if ev.HeadRoot != root {
-			return ev, errors.Wrap(err, "head root changed before payload attribute event handler execution")
-		}
-		ev.HeadBlock = hb
-		payload, err := hb.Block().Body().Execution()
-		if err != nil {
-			return ev, errors.Wrap(err, "Could not get execution payload for head block")
-		}
-		ev.ParentBlockHash = payload.BlockHash()
-		ev.ParentBlockNumber = payload.BlockNumber()
+	var err error
+
+	if !needsFill(ev) {
+		return ev, nil
 	}
 
-	attr := ev.Attributer
-	if attr == nil || attr.IsEmpty() {
-		attr, err := s.computePayloadAttributes(ctx, ev)
-		if err != nil {
-			return ev, errors.Wrap(err, "Could not compute payload attributes")
-		}
-		ev.Attributer = attr
+	ev.HeadState, err = s.HeadFetcher.HeadState(ctx)
+	if err != nil {
+		return ev, errors.Wrap(err, "could not get head state")
 	}
-	return ev, nil
+
+	ev.HeadBlock, err = s.HeadFetcher.HeadBlock(ctx)
+	if err != nil {
+		return ev, errors.Wrap(err, "could not look up head block")
+	}
+	ev.HeadRoot, err = ev.HeadBlock.Block().HashTreeRoot()
+	if err != nil {
+		return ev, errors.Wrap(err, "could not compute head block root")
+	}
+	pr := ev.HeadBlock.Block().ParentRoot()
+	ev.ParentBlockRoot = pr[:]
+
+	hsr, err := ev.HeadState.LatestBlockHeader().HashTreeRoot()
+	if err != nil {
+		return ev, errors.Wrap(err, "could not compute latest block header root")
+	}
+
+	pse := slots.ToEpoch(ev.ProposalSlot)
+	st := ev.HeadState
+	if slots.ToEpoch(st.Slot()) != pse {
+		st, err = transition.ProcessSlotsUsingNextSlotCache(ctx, st, hsr[:], ev.ProposalSlot)
+		if err != nil {
+			return ev, errors.Wrap(err, "could not run process blocks on head state into the proposal slot epoch")
+		}
+	}
+	ev.ProposerIndex, err = helpers.BeaconProposerIndexAtSlot(ctx, st, ev.ProposalSlot)
+	if err != nil {
+		return ev, errors.Wrap(err, "failed to compute proposer index")
+	}
+	randao, err := helpers.RandaoMix(st, pse)
+	if err != nil {
+		return ev, errors.Wrap(err, "could not get head state randado")
+	}
+
+	payload, err := ev.HeadBlock.Block().Body().Execution()
+	if err != nil {
+		return ev, errors.Wrap(err, "could not get execution payload for head block")
+	}
+	ev.ParentBlockHash = payload.BlockHash()
+	ev.ParentBlockNumber = payload.BlockNumber()
+
+	t, err := slots.ToTime(st.GenesisTime(), ev.ProposalSlot)
+	if err != nil {
+		return ev, errors.Wrap(err, "could not get head state slot time")
+	}
+	ev.Attributer, err = s.computePayloadAttributes(ctx, st, hsr, ev.ProposerIndex, uint64(t.Unix()), randao)
+	return ev, err
 }
 
 // This event stream is intended to be used by builders and relays.
@@ -704,10 +736,7 @@ func (s *Server) payloadAttributesReader(ctx context.Context, ev payloadattribut
 	ctx, cancel := context.WithTimeout(ctx, payloadAttributeTimeout)
 	edc := make(chan asyncPayloadAttrData)
 	go func() {
-		d := asyncPayloadAttrData{
-			version: version.String(ev.HeadState.Version()),
-		}
-
+		d := asyncPayloadAttrData{}
 		defer func() {
 			edc <- d
 		}()
@@ -716,6 +745,7 @@ func (s *Server) payloadAttributesReader(ctx context.Context, ev payloadattribut
 			d.err = errors.Wrap(err, "Could not fill event data")
 			return
 		}
+		d.version = version.String(ev.HeadBlock.Version())
 		attributesBytes, err := marshalAttributes(ev.Attributer)
 		if err != nil {
 			d.err = errors.Wrap(err, "errors marshaling payload attributes to json")

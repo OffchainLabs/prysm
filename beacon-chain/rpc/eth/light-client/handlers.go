@@ -10,6 +10,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/api"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
+	lightclient "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/light-client"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/shared"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
@@ -182,18 +183,31 @@ func (s *Server) GetLightClientFinalityUpdate(w http.ResponseWriter, req *http.R
 		return
 	}
 
-	update, err := newLightClientFinalityUpdateFromBeaconState(ctx, s.ChainInfoFetcher.CurrentSlot(), st, block, attestedState, attestedBlock, finalizedBlock)
+	update, err := lightclient.NewLightClientFinalityUpdateFromBeaconState(ctx, s.ChainInfoFetcher.CurrentSlot(), st, block, attestedState, attestedBlock, finalizedBlock)
 	if err != nil {
 		httputil.HandleError(w, "Could not get light client finality update: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	response := &structs.LightClientFinalityUpdateResponse{
-		Version: version.String(attestedState.Version()),
-		Data:    update,
+	if httputil.RespondWithSsz(req) {
+		ssz, err := update.MarshalSSZ()
+		if err != nil {
+			httputil.HandleError(w, "Could not marshal finality update to SSZ: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		httputil.WriteSsz(w, ssz, "light_client_finality_update.ssz")
+	} else {
+		updateStruct, err := structs.LightClientFinalityUpdateFromConsensus(update)
+		if err != nil {
+			httputil.HandleError(w, "Could not convert light client finality update to API struct: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		response := &structs.LightClientFinalityUpdateResponse{
+			Version: version.String(attestedState.Version()),
+			Data:    updateStruct,
+		}
+		httputil.WriteJson(w, response)
 	}
-
-	httputil.WriteJson(w, response)
 }
 
 // GetLightClientOptimisticUpdate - implements https://github.com/ethereum/beacon-APIs/blob/263f4ed6c263c967f13279c7a9f5629b51c5fc55/apis/beacon/light_client/optimistic_update.yaml
@@ -232,18 +246,31 @@ func (s *Server) GetLightClientOptimisticUpdate(w http.ResponseWriter, req *http
 		return
 	}
 
-	update, err := newLightClientOptimisticUpdateFromBeaconState(ctx, s.ChainInfoFetcher.CurrentSlot(), st, block, attestedState, attestedBlock)
+	update, err := lightclient.NewLightClientOptimisticUpdateFromBeaconState(ctx, s.ChainInfoFetcher.CurrentSlot(), st, block, attestedState, attestedBlock)
 	if err != nil {
 		httputil.HandleError(w, "Could not get light client optimistic update: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	response := &structs.LightClientOptimisticUpdateResponse{
-		Version: version.String(attestedState.Version()),
-		Data:    update,
+	if httputil.RespondWithSsz(req) {
+		ssz, err := update.MarshalSSZ()
+		if err != nil {
+			httputil.HandleError(w, "Could not marshal optimistic update to SSZ: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		httputil.WriteSsz(w, ssz, "light_client_optimistic_update.ssz")
+	} else {
+		updateStruct, err := structs.LightClientOptimisticUpdateFromConsensus(update)
+		if err != nil {
+			httputil.HandleError(w, "Could not convert light client optimistic update to API struct: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		response := &structs.LightClientOptimisticUpdateResponse{
+			Version: version.String(attestedState.Version()),
+			Data:    updateStruct,
+		}
+		httputil.WriteJson(w, response)
 	}
-
-	httputil.WriteJson(w, response)
 }
 
 // suitableBlock returns the latest block that satisfies all criteria required for creating a new update
