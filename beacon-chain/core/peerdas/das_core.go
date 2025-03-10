@@ -202,11 +202,11 @@ func DataColumnSidecars(signedBlock interfaces.ReadOnlySignedBeaconBlock, blobs 
 
 // CustodyGroupSamplingSize returns the number of custody groups the node should sample from.
 // https://github.com/ethereum/consensus-specs/blob/v1.5.0-alpha.10/specs/fulu/das-core.md#custody-sampling
-func CustodyGroupSamplingSize(ct CustodyType) uint64 {
-	custodyGroupCount := TargetCustodyGroupCount.Get()
+func (custodyInfo *CustodyInfo) CustodyGroupSamplingSize(ct CustodyType) uint64 {
+	custodyGroupCount := custodyInfo.TargetGroupCount.Get()
 
 	if ct == Actual {
-		custodyGroupCount = ActualCustodyGroupCount()
+		custodyGroupCount = custodyInfo.ActualGroupCount()
 	}
 
 	samplesPerSlot := params.BeaconConfig().SamplesPerSlot

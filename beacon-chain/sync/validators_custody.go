@@ -25,12 +25,12 @@ func (s *Service) setTargetValidatorsCustodyRequirement() {
 	indices := s.trackedValidatorsCache.Indices()
 
 	// Write lock custody group count.
-	peerdas.CustodyGroupCountMut.Lock()
-	defer peerdas.CustodyGroupCountMut.Unlock()
+	s.cfg.custodyInfo.Mut.Lock()
+	defer s.cfg.custodyInfo.Mut.Unlock()
 
 	// Set the validators custody requirement if there are no tracked validators.
 	if len(indices) == 0 {
-		peerdas.TargetCustodyGroupCount.SetValidatorsCustodyRequirement(0)
+		s.cfg.custodyInfo.TargetGroupCount.SetValidatorsCustodyRequirement(0)
 		return
 	}
 
@@ -49,7 +49,7 @@ func (s *Service) setTargetValidatorsCustodyRequirement() {
 	}
 
 	// Set the validators custody requirement.
-	peerdas.TargetCustodyGroupCount.SetValidatorsCustodyRequirement(validatorsCustodyRequirement)
+	s.cfg.custodyInfo.TargetGroupCount.SetValidatorsCustodyRequirement(validatorsCustodyRequirement)
 }
 
 // updateToAdvertiseCustodyGroupCount updates the custody group count to advertise.
@@ -66,11 +66,11 @@ func (s *Service) updateToAdvertiseCustodyGroupCount() {
 	// Get the node ID.
 	nodeID := s.cfg.p2p.NodeID()
 
-	peerdas.CustodyGroupCountMut.Lock()
-	defer peerdas.CustodyGroupCountMut.Unlock()
+	s.cfg.custodyInfo.Mut.Lock()
+	defer s.cfg.custodyInfo.Mut.Unlock()
 
 	// Get the custody group count.
-	targetCustodyGroupCount := peerdas.TargetCustodyGroupCount.Get()
+	targetCustodyGroupCount := s.cfg.custodyInfo.TargetGroupCount.Get()
 
 	// Get the peerDAS info.
 	info, _, err := peerdas.Info(nodeID, targetCustodyGroupCount)
@@ -88,7 +88,7 @@ func (s *Service) updateToAdvertiseCustodyGroupCount() {
 	}
 
 	// All data column subnets we should be subscribed to are.
-	peerdas.ToAdvertiseCustodyGroupCount.Set(targetCustodyGroupCount)
+	s.cfg.custodyInfo.ToAdvertiseGroupCount.Set(targetCustodyGroupCount)
 }
 
 // extractGossipMessage extracts the gossip data column sidecar message from a topic.

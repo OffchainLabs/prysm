@@ -11,6 +11,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	dbtest "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
 	p2pm "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
 	p2pt "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
@@ -189,10 +190,11 @@ func TestBlocksFetcher_findFork(t *testing.T) {
 	fetcher := newBlocksFetcher(
 		ctx,
 		&blocksFetcherConfig{
-			chain: mc,
-			clock: startup.NewClock(mc.Genesis, mc.ValidatorsRoot),
-			p2p:   p2p,
-			db:    beaconDB,
+			chain:       mc,
+			clock:       startup.NewClock(mc.Genesis, mc.ValidatorsRoot),
+			p2p:         p2p,
+			db:          beaconDB,
+			custodyInfo: &peerdas.CustodyInfo{},
 		},
 	)
 	fetcher.rateLimiter = leakybucket.NewCollector(6400, 6400, 1*time.Second, false)
@@ -357,10 +359,11 @@ func TestBlocksFetcher_findForkWithPeer(t *testing.T) {
 	fetcher := newBlocksFetcher(
 		ctx,
 		&blocksFetcherConfig{
-			chain: mc,
-			clock: startup.NewClock(mc.Genesis, mc.ValidatorsRoot),
-			p2p:   p1,
-			db:    beaconDB,
+			chain:       mc,
+			clock:       startup.NewClock(mc.Genesis, mc.ValidatorsRoot),
+			p2p:         p1,
+			db:          beaconDB,
+			custodyInfo: &peerdas.CustodyInfo{},
 		},
 	)
 	fetcher.rateLimiter = leakybucket.NewCollector(6400, 6400, 1*time.Second, false)

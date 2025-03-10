@@ -58,6 +58,7 @@ type Config struct {
 	ClockWaiter         startup.ClockWaiter
 	InitialSyncComplete chan struct{}
 	BlobStorage         *filesystem.BlobStorage
+	CustodyInfo         *peerdas.CustodyInfo
 }
 
 // Service service.
@@ -352,7 +353,7 @@ func (s *Service) missingColumnRequest(roBlock blocks.ROBlock, store *filesystem
 	nodeID := s.cfg.P2P.NodeID()
 
 	// Get the custody group count.
-	custodyGroupsCount := peerdas.ActualCustodyGroupCount()
+	custodyGroupsCount := s.cfg.CustodyInfo.ActualGroupCount()
 
 	// Retrieve the peer info.
 	peerInfo, _, err := peerdas.Info(nodeID, custodyGroupsCount)
@@ -481,7 +482,7 @@ func (s *Service) fetchOriginColumns(pids []peer.ID) error {
 			return errors.Wrap(err, "data columns align with block")
 		}
 
-		avs := das.NewLazilyPersistentStoreColumn(s.cfg.BlobStorage)
+		avs := das.NewLazilyPersistentStoreColumn(s.cfg.BlobStorage, s.cfg.CustodyInfo)
 		current := s.clock.CurrentSlot()
 		if err := avs.PersistColumns(current, sidecars...); err != nil {
 			return err

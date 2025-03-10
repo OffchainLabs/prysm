@@ -58,19 +58,20 @@ func TestUpdateToAdvertiseCustodyGroupCount(t *testing.T) {
 			// Create a new service.
 			service := &Service{
 				cfg: &config{
-					p2p: &p2p.Service{},
+					p2p:         &p2p.Service{},
+					custodyInfo: &peerdas.CustodyInfo{},
 				},
 				subHandler: subHandler,
 			}
 
 			// Set the target custody group count.
-			peerdas.TargetCustodyGroupCount.SetValidatorsCustodyRequirement(tc.validatorsCustodyRequirement)
+			service.cfg.custodyInfo.TargetGroupCount.SetValidatorsCustodyRequirement(tc.validatorsCustodyRequirement)
 
 			// Update the custody group count to advertise.
 			service.updateToAdvertiseCustodyGroupCount()
 
 			// Get the custody group count to advertise.
-			actual := peerdas.ToAdvertiseCustodyGroupCount.Get()
+			actual := service.cfg.custodyInfo.ToAdvertiseGroupCount.Get()
 
 			// Check if the custody group count to advertise is as expected.
 			require.Equal(t, tc.expected, actual)
@@ -116,6 +117,7 @@ func TestSetTargetValidatorsCustodyRequirement(t *testing.T) {
 					chain: &mock.ChainService{
 						State: state,
 					},
+					custodyInfo: &peerdas.CustodyInfo{},
 				},
 			}
 
@@ -130,7 +132,7 @@ func TestSetTargetValidatorsCustodyRequirement(t *testing.T) {
 
 			service.setTargetValidatorsCustodyRequirement()
 
-			actualTargetCustodyGroup := peerdas.TargetCustodyGroupCount.Get()
+			actualTargetCustodyGroup := service.cfg.custodyInfo.TargetGroupCount.Get()
 			require.Equal(t, tc.expectedTargetCustodyGroupCount, actualTargetCustodyGroup)
 		})
 	}

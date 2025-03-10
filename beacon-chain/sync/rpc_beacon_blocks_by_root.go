@@ -313,7 +313,7 @@ func (s *Service) buildRequestsForMissingDataColumns(root [32]byte, block interf
 	nodeID := s.cfg.p2p.NodeID()
 
 	// Retrieve the number of groups we should sample from.
-	samplingGroupSize := peerdas.CustodyGroupSamplingSize(peerdas.Actual)
+	samplingGroupSize := s.cfg.custodyInfo.CustodyGroupSamplingSize(peerdas.Actual)
 
 	// Retrieve the peer info.
 	peerInfo, _, err := peerdas.Info(nodeID, samplingGroupSize)

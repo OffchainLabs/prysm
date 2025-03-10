@@ -26,6 +26,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/builder"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache/depositsnapshot"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/kv"
@@ -122,6 +123,7 @@ type BeaconNode struct {
 	BlobStorageOptions      []filesystem.BlobStorageOption
 	verifyInitWaiter        *verification.InitializerWaiter
 	syncChecker             *initialsync.SyncChecker
+	custodyInfo             *peerdas.CustodyInfo
 }
 
 // New creates a new node instance, sets up configuration options, and registers
@@ -159,6 +161,7 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 		serviceFlagOpts:         &serviceFlagOpts{},
 		initialSyncComplete:     make(chan struct{}),
 		syncChecker:             &initialsync.SyncChecker{},
+		custodyInfo:             &peerdas.CustodyInfo{},
 	}
 
 	for _, opt := range opts {
@@ -694,6 +697,7 @@ func (b *BeaconNode) registerP2P(cliCtx *cli.Context) error {
 		StateNotifier:        b,
 		DB:                   b.db,
 		ClockWaiter:          b.clockWaiter,
+		CustodyInfo:          b.custodyInfo,
 	})
 	if err != nil {
 		return err
@@ -775,6 +779,7 @@ func (b *BeaconNode) registerBlockchainService(fc forkchoice.ForkChoicer, gs *st
 		blockchain.WithTrackedValidatorsCache(b.trackedValidatorsCache),
 		blockchain.WithPayloadIDCache(b.payloadIDCache),
 		blockchain.WithSyncChecker(b.syncChecker),
+		blockchain.WithCustodyInfo(b.custodyInfo),
 	)
 
 	blockchainService, err := blockchain.NewService(b.ctx, opts...)
@@ -860,6 +865,7 @@ func (b *BeaconNode) registerSyncService(initialSyncComplete chan struct{}, bFil
 		regularsync.WithVerifierWaiter(b.verifyInitWaiter),
 		regularsync.WithAvailableBlocker(bFillStore),
 		regularsync.WithTrackedValidatorsCache(b.trackedValidatorsCache),
+		regularsync.WithCustodyInfo(b.custodyInfo),
 	)
 	return b.services.RegisterService(rs)
 }
@@ -883,6 +889,7 @@ func (b *BeaconNode) registerInitialSyncService(complete chan struct{}) error {
 		ClockWaiter:         b.clockWaiter,
 		InitialSyncComplete: complete,
 		BlobStorage:         b.BlobStorage,
+		CustodyInfo:         b.custodyInfo,
 	}, opts...)
 	return b.services.RegisterService(is)
 }

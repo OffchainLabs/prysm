@@ -82,6 +82,7 @@ func (s *Service) startBlocksQueue(ctx context.Context, highestSlot primitives.S
 		mode:                mode,
 		bs:                  s.cfg.BlobStorage,
 		cv:                  s.newDataColumnsVerifier,
+		custodyInfo:         s.cfg.CustodyInfo,
 	}
 	queue := newBlocksQueue(ctx, cfg)
 	if err := queue.start(); err != nil {
@@ -221,7 +222,7 @@ func (s *Service) processFetchedDataRegSync(
 		logPost = log.WithField("firstUnprocessed", postFuluBwbs[0].Block.Block().Slot())
 	}
 
-	lazilyPersistentStoreColumn := das.NewLazilyPersistentStoreColumn(s.cfg.BlobStorage)
+	lazilyPersistentStoreColumn := das.NewLazilyPersistentStoreColumn(s.cfg.BlobStorage, s.cfg.CustodyInfo)
 
 	for _, b := range postFuluBwbs {
 		log := logPost.WithFields(syncFields(b.Block))
@@ -411,7 +412,7 @@ func (s *Service) processPostFuluBatchedBlocks(
 		return nil
 	}
 
-	persistentStoreColumn := das.NewLazilyPersistentStoreColumn(s.cfg.BlobStorage)
+	persistentStoreColumn := das.NewLazilyPersistentStoreColumn(s.cfg.BlobStorage, s.cfg.CustodyInfo)
 	s.logBatchSyncStatus(genesis, firstBlock, bwbCount)
 	for _, bwb := range bwbs {
 		if len(bwb.Columns) == 0 {

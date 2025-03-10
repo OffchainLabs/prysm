@@ -228,14 +228,17 @@ func TestCustodyGroupSamplingSize(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			// Create a custody info.
+			custodyInfo := peerdas.CustodyInfo{}
+
 			// Set the validators custody requirement for target custody group count.
-			peerdas.TargetCustodyGroupCount.SetValidatorsCustodyRequirement(tc.validatorsCustodyRequirement)
+			custodyInfo.TargetGroupCount.SetValidatorsCustodyRequirement(tc.validatorsCustodyRequirement)
 
 			// Set the to advertise custody group count.
-			peerdas.ToAdvertiseCustodyGroupCount.Set(tc.toAdvertiseCustodyGroupCount)
+			custodyInfo.ToAdvertiseGroupCount.Set(tc.toAdvertiseCustodyGroupCount)
 
 			// Compute the custody group sampling size.
-			actual := peerdas.CustodyGroupSamplingSize(tc.custodyType)
+			actual := custodyInfo.CustodyGroupSamplingSize(tc.custodyType)
 
 			// Check the result.
 			require.Equal(t, tc.expected, actual)

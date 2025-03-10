@@ -28,6 +28,20 @@ type (
 		mut   sync.RWMutex
 		value uint64
 	}
+
+	CustodyInfo struct {
+		// Mut is a mutex to be used by caller to ensure neither
+		// TargetCustodyGroupCount nor ToAdvertiseCustodyGroupCount are being modified.
+		// (This is not necessary to use this mutex for any data protection.)
+		Mut sync.RWMutex
+
+		// TargetGroupCount represents the target number of custody groups we should custody
+		// regarding the validators we are tracking.
+		TargetGroupCount targetCustodyGroupCount
+
+		// ToAdvertiseGroupCount represents the number of custody groups to advertise to the network.
+		ToAdvertiseGroupCount toAdverstiseCustodyGroupCount
+	}
 )
 
 const (
@@ -36,18 +50,6 @@ const (
 )
 
 var (
-	// CustodyGroupCountMut is a mutex to be used by caller to ensure neither
-	// TargetCustodyGroupCount nor ToAdvertiseCustodyGroupCount are being modified.
-	// (This is not necessary to use this mutex for any data protection.)
-	CustodyGroupCountMut sync.RWMutex
-
-	// TargetCustodyGroupCount represents the target number of custody groups we should custody
-	// regarding the validators we are tracking.
-	TargetCustodyGroupCount targetCustodyGroupCount
-
-	// ToAdvertiseCustodyGroupCount represents the number of custody groups to advertise to the network.
-	ToAdvertiseCustodyGroupCount toAdverstiseCustodyGroupCount
-
 	nodeInfoCacheMut sync.Mutex
 	nodeInfoCache    *lru.Cache
 )
@@ -178,7 +180,7 @@ func (tacgc *toAdverstiseCustodyGroupCount) Get() uint64 {
 	return max(tacgc.value, custodyRequirement)
 }
 
-// ActualCustodyGroupCount returns the actual custody group count.
-func ActualCustodyGroupCount() uint64 {
-	return min(TargetCustodyGroupCount.Get(), ToAdvertiseCustodyGroupCount.Get())
+// ActualGroupCount returns the actual custody group count.
+func (custodyInfo *CustodyInfo) ActualGroupCount() uint64 {
+	return min(custodyInfo.TargetGroupCount.Get(), custodyInfo.ToAdvertiseGroupCount.Get())
 }

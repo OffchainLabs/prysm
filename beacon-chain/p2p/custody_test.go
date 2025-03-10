@@ -55,7 +55,7 @@ func TestAdmissibleCustodyGroupsPeers(t *testing.T) {
 	}
 
 	service := &Service{
-		cfg:                   &Config{},
+		cfg:                   &Config{CustodyInfo: &peerdas.CustodyInfo{}},
 		genesisTime:           time.Now(),
 		genesisValidatorsRoot: genesisValidatorRoot,
 		peers: peers.NewStatus(context.Background(), &peers.StatusConfig{

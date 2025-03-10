@@ -683,11 +683,11 @@ func (s *Service) areDataColumnsAvailable(ctx context.Context, root [32]byte, si
 	nodeID := s.cfg.P2P.NodeID()
 
 	// Prevent custody group count to change during the rest of the function.
-	peerdas.CustodyGroupCountMut.RLock()
-	defer peerdas.CustodyGroupCountMut.RUnlock()
+	s.cfg.CustodyInfo.Mut.RLock()
+	defer s.cfg.CustodyInfo.Mut.RUnlock()
 
 	// Get the custody group sampling size for the node.
-	custodyGroupSamplingSize := peerdas.CustodyGroupSamplingSize(peerdas.Actual)
+	custodyGroupSamplingSize := s.cfg.CustodyInfo.CustodyGroupSamplingSize(peerdas.Actual)
 	peerInfo, _, err := peerdas.Info(nodeID, custodyGroupSamplingSize)
 	if err != nil {
 		return errors.Wrap(err, "peer info")

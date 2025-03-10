@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
@@ -80,7 +81,9 @@ func TestFullCommitmentsToCheck(t *testing.T) {
 			defer flags.Init(resetFlags)
 
 			b := c.block(t)
-			co, err := fullCommitmentsToCheck(enode.ID{}, b, c.slot)
+			s := NewLazilyPersistentStoreColumn(nil, &peerdas.CustodyInfo{})
+
+			co, err := s.fullCommitmentsToCheck(enode.ID{}, b, c.slot)
 			if c.err != nil {
 				require.ErrorIs(t, err, c.err)
 			} else {

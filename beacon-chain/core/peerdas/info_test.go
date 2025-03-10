@@ -65,11 +65,13 @@ func TestTargetCustodyGroupCount(t *testing.T) {
 				defer flags.Init(resetFlags)
 			}
 
+			var custodyInfo peerdas.CustodyInfo
+
 			// Set the validators custody requirement.
-			peerdas.TargetCustodyGroupCount.SetValidatorsCustodyRequirement(tc.validatorsCustodyRequirement)
+			custodyInfo.TargetGroupCount.SetValidatorsCustodyRequirement(tc.validatorsCustodyRequirement)
 
 			// Get the target custody group count.
-			actual := peerdas.TargetCustodyGroupCount.Get()
+			actual := custodyInfo.TargetGroupCount.Get()
 
 			// Compare the expected and actual values.
 			require.Equal(t, tc.expected, actual)
@@ -115,11 +117,14 @@ func TestToAdvertiseCustodyGroupCount(t *testing.T) {
 				defer flags.Init(resetFlags)
 			}
 
+			// Create a custody info.
+			var custodyInfo peerdas.CustodyInfo
+
 			// Set the to advertise custody group count.
-			peerdas.ToAdvertiseCustodyGroupCount.Set(tc.toAdvertiseCustodyGroupCount)
+			custodyInfo.ToAdvertiseGroupCount.Set(tc.toAdvertiseCustodyGroupCount)
 
 			// Get the to advertise custody group count.
-			actual := peerdas.ToAdvertiseCustodyGroupCount.Get()
+			actual := custodyInfo.ToAdvertiseGroupCount.Get()
 
 			// Compare the expected and actual values.
 			require.Equal(t, tc.expected, actual)

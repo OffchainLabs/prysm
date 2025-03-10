@@ -83,6 +83,7 @@ type blocksFetcherConfig struct {
 	bs                       filesystem.BlobStorageSummarizer
 	bv                       verification.NewBlobVerifier
 	cv                       verification.NewDataColumnsVerifier
+	custodyInfo              *peerdas.CustodyInfo
 }
 
 // blocksFetcher is a service to fetch chain data from peers.
@@ -109,6 +110,7 @@ type blocksFetcher struct {
 	capacityWeight  float64       // how remaining capacity affects peer selection
 	mode            syncMode      // allows to use fetcher in different sync scenarios
 	quit            chan struct{} // termination notifier
+	custodyInfo     *peerdas.CustodyInfo
 }
 
 // peerLock restricts fetcher actions on per peer basis. Currently, used for rate limiting.
@@ -170,6 +172,7 @@ func newBlocksFetcher(ctx context.Context, cfg *blocksFetcherConfig) *blocksFetc
 		capacityWeight:  capacityWeight,
 		mode:            cfg.mode,
 		quit:            make(chan struct{}),
+		custodyInfo:     cfg.custodyInfo,
 	}
 }
 
@@ -771,7 +774,7 @@ func (f *blocksFetcher) custodyColumns() (map[uint64]bool, error) {
 	localNodeID := f.p2p.NodeID()
 
 	// Retrieve the number of groups we should custody.
-	localCustodyGroupCount := peerdas.ActualCustodyGroupCount()
+	localCustodyGroupCount := f.custodyInfo.ActualGroupCount()
 
 	// Retrieve the local node info.
 	localNodeInfo, _, err := peerdas.Info(localNodeID, localCustodyGroupCount)
