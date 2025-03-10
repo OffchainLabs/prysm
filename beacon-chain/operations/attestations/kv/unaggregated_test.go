@@ -29,8 +29,7 @@ func TestKV_Unaggregated_UnaggregatedAttestations(t *testing.T) {
 		// cache a bitlist whose length is different from the attestation bitlist's length
 		cache.seenAtt.Set(id.String(), []bitfield.Bitlist{{0b1001}}, c.DefaultExpiration)
 
-		atts, err := cache.UnaggregatedAttestations()
-		require.NoError(t, err)
+		atts := cache.UnaggregatedAttestations()
 		assert.Equal(t, 0, len(atts))
 	})
 }
@@ -169,8 +168,7 @@ func TestKV_Unaggregated_DeleteUnaggregatedAttestation(t *testing.T) {
 		for _, att := range atts {
 			assert.NoError(t, cache.DeleteUnaggregatedAttestation(att))
 		}
-		returned, err := cache.UnaggregatedAttestations()
-		require.NoError(t, err)
+		returned := cache.UnaggregatedAttestations()
 		assert.DeepEqual(t, []ethpb.Att{}, returned)
 	})
 
@@ -234,11 +232,10 @@ func TestKV_Unaggregated_DeleteSeenUnaggregatedAttestations(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, 1, count)
 		assert.Equal(t, 2, cache.UnaggregatedAttestationCount())
-		returned, err := cache.UnaggregatedAttestations()
+		returned := cache.UnaggregatedAttestations()
 		sort.Slice(returned, func(i, j int) bool {
 			return bytes.Compare(returned[i].GetAggregationBits(), returned[j].GetAggregationBits()) < 0
 		})
-		require.NoError(t, err)
 		assert.DeepEqual(t, []ethpb.Att{atts[0], atts[2]}, returned)
 	})
 
@@ -261,8 +258,7 @@ func TestKV_Unaggregated_DeleteSeenUnaggregatedAttestations(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, 3, count)
 		assert.Equal(t, 0, cache.UnaggregatedAttestationCount())
-		returned, err := cache.UnaggregatedAttestations()
-		require.NoError(t, err)
+		returned := cache.UnaggregatedAttestations()
 		assert.DeepEqual(t, []ethpb.Att{}, returned)
 	})
 

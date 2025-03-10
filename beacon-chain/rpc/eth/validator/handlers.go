@@ -162,11 +162,7 @@ func (s *Server) aggregatedAttestation(w http.ResponseWriter, slot primitives.Sl
 		return nil
 	}
 
-	atts, err := s.AttestationsPool.UnaggregatedAttestations()
-	if err != nil {
-		httputil.HandleError(w, "Could not get unaggregated attestations: "+err.Error(), http.StatusInternalServerError)
-		return nil
-	}
+	atts := s.AttestationsPool.UnaggregatedAttestations()
 	match, err = matchingAtts(atts, slot, attDataRoot, index)
 	if err != nil {
 		httputil.HandleError(w, "Could not get matching attestations: "+err.Error(), http.StatusInternalServerError)

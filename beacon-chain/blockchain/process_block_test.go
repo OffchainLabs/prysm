@@ -126,11 +126,10 @@ func Test_pruneAttsFromPool_Electra(t *testing.T) {
 	// into the correct number of aggregates.
 	require.Equal(t, 4, len(committees))
 
-	require.NoError(t, s.pruneAttsFromPool(ctx, st, rob))
+	s.pruneAttsFromPool(ctx, st, rob)
 	require.LogsDoNotContain(t, logHook, "Could not prune attestations")
 
-	attsInPool, err := s.cfg.AttPool.UnaggregatedAttestations()
-	require.NoError(t, err)
+	attsInPool := s.cfg.AttPool.UnaggregatedAttestations()
 	assert.Equal(t, 0, len(attsInPool))
 	attsInPool = s.cfg.AttPool.AggregatedAttestations()
 	require.Equal(t, 1, len(attsInPool))
@@ -934,7 +933,7 @@ func TestRemoveBlockAttestationsInPool(t *testing.T) {
 	require.NoError(t, service.cfg.AttPool.SaveAggregatedAttestations(atts))
 	wsb, err := consensusblocks.NewSignedBeaconBlock(b)
 	require.NoError(t, err)
-	require.NoError(t, service.pruneAttsFromPool(context.Background(), nil /* state not needed pre-Electra */, wsb))
+	service.pruneAttsFromPool(context.Background(), nil /* state not needed pre-Electra */, wsb)
 	require.LogsDoNotContain(t, logHook, "Could not prune attestations")
 	require.Equal(t, 0, service.cfg.AttPool.AggregatedAttestationCount())
 }

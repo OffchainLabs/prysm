@@ -53,7 +53,7 @@ func (c *AttCaches) SaveUnaggregatedAttestations(atts []ethpb.Att) error {
 }
 
 // UnaggregatedAttestations returns all the unaggregated attestations in cache.
-func (c *AttCaches) UnaggregatedAttestations() ([]ethpb.Att, error) {
+func (c *AttCaches) UnaggregatedAttestations() []ethpb.Att {
 	c.unAggregateAttLock.RLock()
 	defer c.unAggregateAttLock.RUnlock()
 	unAggregatedAtts := c.unAggregatedAtt
@@ -68,7 +68,7 @@ func (c *AttCaches) UnaggregatedAttestations() ([]ethpb.Att, error) {
 			atts = append(atts, att.Clone())
 		}
 	}
-	return atts, nil
+	return atts
 }
 
 // UnaggregatedAttestationsBySlotIndex returns the unaggregated attestations in cache,
