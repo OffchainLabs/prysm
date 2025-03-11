@@ -68,11 +68,6 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 		return pubsub.ValidationReject, err
 	}
 
-	// Attestation must be unaggregated
-	if att.Version() == version.Phase0 && att.GetAggregationBits().Count() != 1 {
-		return pubsub.ValidationReject, errors.New("attestation does not have a single aggregation bit set")
-	}
-
 	data := att.GetData()
 
 	// Do not process slot 0 attestations.
@@ -282,10 +277,10 @@ func validateAttesterData(
 	if err := helpers.VerifyBitfieldLength(a.GetAggregationBits(), uint64(len(committee))); err != nil {
 		return pubsub.ValidationReject, err
 	}
-	// The bit index must exist in the range of committee indices.
+	// Attestation must be unaggregated and the bit index must exist in the range of committee indices.
 	// Note: The Ethereum Beacon chain spec suggests (len(get_attesting_indices(state, attestation.data, attestation.aggregation_bits)) == 1)
 	// however this validation can be achieved without use of get_attesting_indices which is an O(n) lookup.
-	if a.GetAggregationBits().BitIndices()[0] >= len(committee) {
+	if a.GetAggregationBits().Count() != 1 || a.GetAggregationBits().BitIndices()[0] >= len(committee) {
 		return pubsub.ValidationReject, errors.New("attestation bitfield is invalid")
 	}
 
