@@ -467,9 +467,10 @@ func TestService_validateCommitteeIndexBeaconAttestationElectra(t *testing.T) {
 
 func TestService_setSeenUnaggregatedAtt(t *testing.T) {
 	s := NewService(context.Background(), WithP2P(p2ptest.NewTestP2P(t)))
-	s.initCaches()
 
 	t.Run("phase0", func(t *testing.T) {
+		s.initCaches()
+
 		s0c0a0 := &ethpb.Attestation{
 			Data:            &ethpb.AttestationData{Slot: 0, CommitteeIndex: 0},
 			AggregationBits: bitfield.Bitlist{0b1001},
@@ -520,6 +521,8 @@ func TestService_setSeenUnaggregatedAtt(t *testing.T) {
 		})
 	})
 	t.Run("electra", func(t *testing.T) {
+		s.initCaches()
+
 		s0c0a0 := &ethpb.SingleAttestation{
 			Data:          &ethpb.AttestationData{Slot: 0},
 			CommitteeId:   0,
