@@ -96,6 +96,11 @@ type BlobSidecarEvent struct {
 	VersionedHash string `json:"versioned_hash"`
 }
 
+type InclusionListEvent struct {
+	Version string               `json:"version"`
+	Data    *SignedInclusionList `json:"data"`
+}
+
 type LightClientFinalityUpdateEvent struct {
 	Version string                     `json:"version"`
 	Data    *LightClientFinalityUpdate `json:"data"`
