@@ -2949,8 +2949,7 @@ func TestProposer_DeleteAttsInPool_Aggregated(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, s.deleteAttsInPool(context.Background(), append(aa, unaggregatedAtts...)))
 	assert.Equal(t, 0, len(s.AttPool.AggregatedAttestations()), "Did not delete aggregated attestation")
-	atts, err := s.AttPool.UnaggregatedAttestations()
-	require.NoError(t, err)
+	atts := s.AttPool.UnaggregatedAttestations()
 	assert.Equal(t, 0, len(atts), "Did not delete unaggregated attestation")
 }
 

@@ -86,6 +86,9 @@ type Flags struct {
 
 	// AggregateIntervals specifies the time durations at which we aggregate attestations preparing for forkchoice.
 	AggregateIntervals [3]time.Duration
+
+	// Feature related flags (alignment forced in the end)
+	ForceHead string // ForceHead forces the head block to be a specific block root, the last head block, or the last finalized block.
 }
 
 var featureConfig *Flags
@@ -267,6 +270,10 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 	if ctx.IsSet(enableExperimentalAttestationPool.Name) {
 		logEnabled(enableExperimentalAttestationPool)
 		cfg.EnableExperimentalAttestationPool = true
+	}
+	if ctx.IsSet(forceHeadFlag.Name) {
+		logEnabled(forceHeadFlag)
+		cfg.ForceHead = ctx.String(forceHeadFlag.Name)
 	}
 
 	cfg.AggregateIntervals = [3]time.Duration{aggregateFirstInterval.Value, aggregateSecondInterval.Value, aggregateThirdInterval.Value}

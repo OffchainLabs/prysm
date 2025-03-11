@@ -196,9 +196,13 @@ func TestStore_BlocksCRUD(t *testing.T) {
 			blockRoot, err := blk.Block().HashTreeRoot()
 			require.NoError(t, err)
 
+			_, err = db.getBlock(ctx, blockRoot, nil)
+			require.ErrorIs(t, err, ErrNotFound)
 			retrievedBlock, err := db.Block(ctx, blockRoot)
 			require.NoError(t, err)
 			assert.DeepEqual(t, nil, retrievedBlock, "Expected nil block")
+			_, err = db.getBlock(ctx, blockRoot, nil)
+			require.ErrorIs(t, err, ErrNotFound)
 
 			require.NoError(t, db.SaveBlock(ctx, blk))
 			assert.Equal(t, true, db.HasBlock(ctx, blockRoot), "Expected block to exist in the db")
@@ -214,8 +218,32 @@ func TestStore_BlocksCRUD(t *testing.T) {
 			retrievedPb, err := retrievedBlock.Proto()
 			require.NoError(t, err)
 			assert.Equal(t, true, proto.Equal(wantedPb, retrievedPb), "Wanted: %v, received: %v", wanted, retrievedBlock)
+			// Check that the block is in the slot->block index
+			found, roots, err := db.BlockRootsBySlot(ctx, blk.Block().Slot())
+			require.NoError(t, err)
+			require.Equal(t, true, found)
+			require.Equal(t, 1, len(roots))
+			require.Equal(t, blockRoot, roots[0])
+			// Delete the block, then check that it is no longer in the index.
+
+			parent := blk.Block().ParentRoot()
+			testCheckParentIndices(t, db.db, parent, true)
+			require.NoError(t, db.DeleteBlock(ctx, blockRoot))
+			require.NoError(t, err)
+			testCheckParentIndices(t, db.db, parent, false)
+			found, roots, err = db.BlockRootsBySlot(ctx, blk.Block().Slot())
+			require.NoError(t, err)
+			require.Equal(t, false, found)
+			require.Equal(t, 0, len(roots))
 		})
 	}
+}
+
+func testCheckParentIndices(t *testing.T, db *bolt.DB, parent [32]byte, expected bool) {
+	require.NoError(t, db.View(func(tx *bolt.Tx) error {
+		require.Equal(t, expected, tx.Bucket(blockParentRootIndicesBucket).Get(parent[:]) != nil)
+		return nil
+	}))
 }
 
 func TestStore_BlocksHandleZeroCase(t *testing.T) {
