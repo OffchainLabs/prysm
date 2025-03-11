@@ -465,25 +465,27 @@ func TestService_validateCommitteeIndexBeaconAttestationElectra(t *testing.T) {
 	}
 }
 
-func TestService_setSeenCommitteeIndicesSlot(t *testing.T) {
+func TestService_setSeenUnaggregatedAtt(t *testing.T) {
 	s := NewService(context.Background(), WithP2P(p2ptest.NewTestP2P(t)))
 	s.initCaches()
 
-	// Empty cache
-	b0 := []byte{9} // 1001
-	require.Equal(t, false, s.hasSeenCommitteeIndicesSlot(0, 0, b0))
-
-	// Cache some entries but same key
-	s.setSeenCommitteeIndicesSlot(0, 0, b0)
-	require.Equal(t, true, s.hasSeenCommitteeIndicesSlot(0, 0, b0))
-	b1 := []byte{14} // 1110
-	s.setSeenCommitteeIndicesSlot(0, 0, b1)
-	require.Equal(t, true, s.hasSeenCommitteeIndicesSlot(0, 0, b0))
-	require.Equal(t, true, s.hasSeenCommitteeIndicesSlot(0, 0, b1))
-
-	// Cache some entries with diff keys
-	s.setSeenCommitteeIndicesSlot(1, 2, b1)
-	require.Equal(t, false, s.hasSeenCommitteeIndicesSlot(1, 0, b1))
-	require.Equal(t, false, s.hasSeenCommitteeIndicesSlot(0, 2, b1))
-	require.Equal(t, true, s.hasSeenCommitteeIndicesSlot(1, 2, b1))
+	t.Run("empty cache", func(t *testing.T) {
+		require.Equal(t, false, s.hasSeenUnaggregatedAtt(0, 0, 0))
+	})
+	t.Run("ok", func(t *testing.T) {
+		s.setSeenUnaggregatedAtt(0, 0, 0)
+		require.Equal(t, true, s.hasSeenUnaggregatedAtt(0, 0, 0))
+	})
+	t.Run("different slot", func(t *testing.T) {
+		s.setSeenUnaggregatedAtt(1, 0, 0)
+		require.Equal(t, false, s.hasSeenUnaggregatedAtt(2, 0, 0))
+	})
+	t.Run("different committee index", func(t *testing.T) {
+		s.setSeenUnaggregatedAtt(0, 1, 0)
+		require.Equal(t, false, s.hasSeenUnaggregatedAtt(0, 2, 0))
+	})
+	t.Run("different attester index", func(t *testing.T) {
+		s.setSeenUnaggregatedAtt(0, 0, 1)
+		require.Equal(t, false, s.hasSeenUnaggregatedAtt(0, 0, 2))
+	})
 }

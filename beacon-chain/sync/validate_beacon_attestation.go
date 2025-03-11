@@ -68,6 +68,11 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 		return pubsub.ValidationReject, err
 	}
 
+	// Attestation must be unaggregated
+	if att.Version() == version.Phase0 && att.GetAggregationBits().Count() != 1 {
+		return pubsub.ValidationReject, errors.New("attestation does not have a single aggregation bit set")
+	}
+
 	data := att.GetData()
 
 	// Do not process slot 0 attestations.
@@ -89,8 +94,15 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 
 	if !s.slasherEnabled {
 		// Verify this the first attestation received for the participating validator for the slot.
-		if s.hasSeenCommitteeIndicesSlot(data.Slot, committeeIndex, att.GetAggregationBits()) {
-			return pubsub.ValidationIgnore, nil
+		if att.Version() >= version.Electra {
+			if s.hasSeenUnaggregatedAtt(data.Slot, committeeIndex, uint64(att.GetAttestingIndex())) {
+				return pubsub.ValidationIgnore, nil
+			}
+		} else {
+			// Indexing is safe because we already validated that 1 bit is set.
+			if s.hasSeenUnaggregatedAtt(data.Slot, committeeIndex, uint64(att.GetAggregationBits().BitIndices()[0])) {
+				return pubsub.ValidationIgnore, nil
+			}
 		}
 		// Reject an attestation if it references an invalid block.
 		if s.hasBadBlock(bytesutil.ToBytes32(data.BeaconBlockRoot)) ||
@@ -208,7 +220,12 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 		Data: eventData,
 	})
 
-	s.setSeenCommitteeIndicesSlot(data.Slot, committeeIndex, attForValidation.GetAggregationBits())
+	if att.Version() >= version.Electra {
+		s.setSeenUnaggregatedAtt(data.Slot, committeeIndex, uint64(att.GetAttestingIndex()))
+	} else {
+		// Indexing is safe because we already validated that 1 bit is set.
+		s.setSeenUnaggregatedAtt(data.Slot, committeeIndex, uint64(att.GetAggregationBits().BitIndices()[0]))
+	}
 
 	// Attach final validated attestation to the message for further pipeline use
 	msg.ValidatorData = attForValidation
@@ -277,10 +294,10 @@ func validateAttesterData(
 	if err := helpers.VerifyBitfieldLength(a.GetAggregationBits(), uint64(len(committee))); err != nil {
 		return pubsub.ValidationReject, err
 	}
-	// Attestation must be unaggregated and the bit index must exist in the range of committee indices.
+	// The bit index must exist in the range of committee indices.
 	// Note: The Ethereum Beacon chain spec suggests (len(get_attesting_indices(state, attestation.data, attestation.aggregation_bits)) == 1)
 	// however this validation can be achieved without use of get_attesting_indices which is an O(n) lookup.
-	if a.GetAggregationBits().Count() != 1 || a.GetAggregationBits().BitIndices()[0] >= len(committee) {
+	if a.GetAggregationBits().BitIndices()[0] >= len(committee) {
 		return pubsub.ValidationReject, errors.New("attestation bitfield is invalid")
 	}
 
@@ -327,21 +344,25 @@ func validateAttestingIndex(
 }
 
 // Returns true if the attestation was already seen for the participating validator for the slot.
-func (s *Service) hasSeenCommitteeIndicesSlot(slot primitives.Slot, committeeID primitives.CommitteeIndex, aggregateBits []byte) bool {
+// Pre-Electra, the attester is the bit index set in aggregation bits.
+// Post-Electra, the attester is the attesting index.
+func (s *Service) hasSeenUnaggregatedAtt(slot primitives.Slot, committeeID primitives.CommitteeIndex, attester uint64) bool {
 	s.seenUnAggregatedAttestationLock.RLock()
 	defer s.seenUnAggregatedAttestationLock.RUnlock()
 	b := append(bytesutil.Bytes32(uint64(slot)), bytesutil.Bytes32(uint64(committeeID))...)
-	b = append(b, aggregateBits...)
+	b = append(b, bytesutil.Bytes32(attester)...)
 	_, seen := s.seenUnAggregatedAttestationCache.Get(string(b))
 	return seen
 }
 
-// Set committee's indices and slot as seen for incoming attestations.
-func (s *Service) setSeenCommitteeIndicesSlot(slot primitives.Slot, committeeID primitives.CommitteeIndex, aggregateBits []byte) {
+// Set an incoming attestation as seen for the participating validator for the slot.
+// Pre-Electra, the attester is the bit index set in aggregation bits.
+// Post-Electra, the attester is the attesting index.
+func (s *Service) setSeenUnaggregatedAtt(slot primitives.Slot, committeeID primitives.CommitteeIndex, attester uint64) {
 	s.seenUnAggregatedAttestationLock.Lock()
 	defer s.seenUnAggregatedAttestationLock.Unlock()
 	b := append(bytesutil.Bytes32(uint64(slot)), bytesutil.Bytes32(uint64(committeeID))...)
-	b = append(b, bytesutil.SafeCopyBytes(aggregateBits)...)
+	b = append(b, bytesutil.Bytes32(attester)...)
 	s.seenUnAggregatedAttestationCache.Add(string(b), true)
 }
 
