@@ -400,6 +400,7 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 		peerSetup            []peerSetup
 		expectError          bool
 		expectedPeerRequests map[int][]uint64
+		skipColumns          map[int]map[uint64]bool // Maps peer offset -> column index -> should skip
 	}{
 		{
 			name:        "No data columns requested",
@@ -479,6 +480,57 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 			expectError:          true,
 			expectedPeerRequests: map[int][]uint64{},
 		},
+		{
+			name: "Peer doesn't respond with all claimed columns",
+			dataColumns: map[uint64]bool{
+				6:  true, // Column that peer claims but won't respond with
+				37: true, // Column that peer will respond with
+				48: true, // Column that peer claims but won't respond with
+			},
+			peerSetup: []peerSetup{
+				{
+					offset:            1,
+					custodyGroupCount: 4, // This peer claims custody of [6, 37, 48, 113] but only responds with [37]
+				},
+			},
+			expectError: true, // Should error since not all requested columns were received
+			expectedPeerRequests: map[int][]uint64{
+				1: {6, 37, 48}, // Peer should be asked for all columns it claims to have
+			},
+			skipColumns: map[int]map[uint64]bool{
+				1: {
+					6:  true, // Skip column 6
+					48: true, // Skip column 48
+				},
+			},
+		},
+		{
+			name: "Fallback to other peers when primary peer skips columns",
+			dataColumns: map[uint64]bool{
+				37: true, // Column that both peers custody (peer with offset 1 will skip)
+				48: true, // Column that only peer with offset 1 custodies
+			},
+			peerSetup: []peerSetup{
+				{
+					offset:            1,
+					custodyGroupCount: 4, // Peer custodies [6, 37, 48, 113]
+				},
+				{
+					offset:            12,
+					custodyGroupCount: 4, // Peer custodies [2, 37, 120, 121]
+				},
+			},
+			expectError: false, // Should succeed since peer with offset 12 can provide column 37
+			expectedPeerRequests: map[int][]uint64{
+				1:  {37, 48}, // First peer is asked for both columns initially
+				12: {37},     // Second peer is asked for column 37 as fallback
+			},
+			skipColumns: map[int]map[uint64]bool{
+				1: {
+					37: true, // First peer skips column 37, which second peer provides
+				},
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -489,7 +541,11 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 			// Create responding peers with deterministic peer IDs
 			peerIDs := make([]core.PeerID, 0, len(tc.peerSetup))
 			for _, setup := range tc.peerSetup {
-				peerP2P := createAndConnectCustodyPeer(t, setup, dataColumnSidecars, chainService, hostP2P, tracker)
+				skipColumnsMap := make(map[uint64]bool)
+				if cols, exists := tc.skipColumns[setup.offset]; exists {
+					skipColumnsMap = cols
+				}
+				peerP2P := createAndConnectCustodyPeer(t, setup, dataColumnSidecars, chainService, hostP2P, tracker, skipColumnsMap)
 				peerIDs = append(peerIDs, peerP2P.PeerID())
 			}
 
@@ -561,7 +617,7 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 
 // createAndConnectCustodyPeer creates a new peer with a deterministic private key and connects it to the p2p service.
 // It then sets up the peer to respond with data columns it custodies.
-func createAndConnectCustodyPeer(t *testing.T, setup peerSetup, dataColumnSidecars []*pb.DataColumnSidecar, chainService *mock.ChainService, hostP2P *p2ptest.TestP2P, tracker *requestTracker) *p2ptest.TestP2P {
+func createAndConnectCustodyPeer(t *testing.T, setup peerSetup, dataColumnSidecars []*pb.DataColumnSidecar, chainService *mock.ChainService, hostP2P *p2ptest.TestP2P, tracker *requestTracker, skipColumns map[uint64]bool) *p2ptest.TestP2P {
 	privateKeyBytes := make([]byte, 32)
 	for i := 0; i < 32; i++ {
 		privateKeyBytes[i] = byte(setup.offset + i)
@@ -608,7 +664,12 @@ func createAndConnectCustodyPeer(t *testing.T, setup peerSetup, dataColumnSideca
 		}
 
 		for _, identifier := range *req {
-			if !peerInfo.CustodyGroups[identifier.ColumnIndex] {
+			// Check if this column should be skipped using direct map lookup
+			if skipColumns[identifier.ColumnIndex] {
+				continue
+			}
+
+			if !peerInfo.CustodyColumns[identifier.ColumnIndex] {
 				continue
 			}
 			col := dataColumnSidecars[identifier.ColumnIndex]
@@ -654,3 +715,42 @@ func createCustodyPeer(t *testing.T, privateKeyOffset int, custodyCount uint64) 
 
 	return record, peerID, privateKey
 }
+
+/*
+// findPeersWithOverlappingColumns returns an offset that custodies the target column while avoiding the provided offsets
+func findPeersWithOverlappingColumns(t *testing.T, skipOffsets []int, targetColumn uint64) (int, map[uint64]bool) {
+	custodyCount := params.BeaconConfig().CustodyRequirement
+
+	// Try different peer IDs until we find one that has the target column
+	for i := 1; i < 100; i++ {
+		// Skip if this offset is in the skipOffsets list
+		shouldSkip := false
+		for _, skipOffset := range skipOffsets {
+			if i == skipOffset {
+				shouldSkip = true
+				break
+			}
+		}
+		if shouldSkip {
+			continue
+		}
+
+		// Get peer info
+		_, _, peerKey := createCustodyPeer(t, i, custodyCount)
+		db, err := enode.OpenDB("")
+		require.NoError(t, err)
+		peerNode := enode.NewLocalNode(db, peerKey)
+		peerNode.Set(peerdas.Cgc(custodyCount))
+		peerInfo, _, err := peerdas.Info(peerNode.ID(), custodyCount)
+		require.NoError(t, err)
+
+		// Check if this peer custodies the target column
+		if peerInfo.CustodyColumns[targetColumn] {
+			return i, peerInfo.CustodyColumns
+		}
+	}
+
+	t.Fatal("Could not find a peer that custodies the target column")
+	return 0, nil
+}
+*/
