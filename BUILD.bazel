@@ -165,7 +165,7 @@ STATICCHECK_ANALYZERS = [
     "sa6006",
     "sa9001",
     "sa9002",
-    #"sa9003", # Doesn't build. See https://github.com/dominikh/go-tools/pull/1483
+    "sa9003",
     "sa9004",
     "sa9005",
     "sa9006",

@@ -55,11 +55,7 @@ func (s *Server) ListAttestations(w http.ResponseWriter, r *http.Request) {
 		attestations = s.AttestationCache.GetAll()
 	} else {
 		attestations = s.AttestationsPool.AggregatedAttestations()
-		unaggAtts, err := s.AttestationsPool.UnaggregatedAttestations()
-		if err != nil {
-			httputil.HandleError(w, "Could not get unaggregated attestations: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
+		unaggAtts := s.AttestationsPool.UnaggregatedAttestations()
 		attestations = append(attestations, unaggAtts...)
 	}
 
@@ -114,11 +110,7 @@ func (s *Server) ListAttestationsV2(w http.ResponseWriter, r *http.Request) {
 		attestations = s.AttestationCache.GetAll()
 	} else {
 		attestations = s.AttestationsPool.AggregatedAttestations()
-		unaggAtts, err := s.AttestationsPool.UnaggregatedAttestations()
-		if err != nil {
-			httputil.HandleError(w, "Could not get unaggregated attestations: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
+		unaggAtts := s.AttestationsPool.UnaggregatedAttestations()
 		attestations = append(attestations, unaggAtts...)
 	}
 
@@ -633,7 +625,7 @@ func (s *Server) SubmitBLSToExecutionChanges(w http.ResponseWriter, r *http.Requ
 			toBroadcast = append(toBroadcast, sbls)
 		}
 	}
-	go s.broadcastBLSChanges(ctx, toBroadcast)
+	go s.broadcastBLSChanges(context.Background(), toBroadcast)
 	if len(failures) > 0 {
 		failuresErr := &server.IndexedVerificationFailureError{
 			Code:     http.StatusBadRequest,

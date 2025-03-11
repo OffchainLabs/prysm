@@ -40,10 +40,7 @@ func (vs *Server) packAttestations(ctx context.Context, latestState state.Beacon
 		atts = vs.AttPool.AggregatedAttestations()
 		atts = vs.validateAndDeleteAttsInPool(ctx, latestState, atts)
 
-		uAtts, err := vs.AttPool.UnaggregatedAttestations()
-		if err != nil {
-			return nil, errors.Wrap(err, "could not get unaggregated attestations")
-		}
+		uAtts := vs.AttPool.UnaggregatedAttestations()
 		uAtts = vs.validateAndDeleteAttsInPool(ctx, latestState, uAtts)
 		atts = append(atts, uAtts...)
 	}

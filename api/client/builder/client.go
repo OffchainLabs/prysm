@@ -25,6 +25,7 @@ import (
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	log "github.com/sirupsen/logrus"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 const (
@@ -108,7 +109,7 @@ func NewClient(host string, opts ...ClientOpt) (*Client, error) {
 		return nil, err
 	}
 	c := &Client{
-		hc:      &http.Client{},
+		hc:      &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)},
 		baseURL: u,
 	}
 	for _, o := range opts {
