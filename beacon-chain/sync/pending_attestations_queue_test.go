@@ -287,6 +287,7 @@ func TestProcessPendingAtts_HasBlockSaveUnAggregatedAttElectra_VerifySeen(t *tes
 
 	// Create genesis state and associated keys.
 	beaconState, privKeys := util.DeterministicGenesisStateElectra(t, validators)
+	require.NoError(t, beaconState.SetSlot(1))
 
 	// Create and save a new Beacon block.
 	sb := util.NewBeaconBlockElectra()
@@ -298,10 +299,13 @@ func TestProcessPendingAtts_HasBlockSaveUnAggregatedAttElectra_VerifySeen(t *tes
 
 	// Build a new attestation and its aggregate proof.
 	att := &ethpb.SingleAttestation{
+		CommitteeId: 8, // choose a non 0
 		Data: &ethpb.AttestationData{
+			Slot:            1,
 			BeaconBlockRoot: root[:],
 			Source:          &ethpb.Checkpoint{Epoch: 0, Root: make([]byte, fieldparams.RootLength)},
 			Target:          &ethpb.Checkpoint{Epoch: 0, Root: root[:]},
+			CommitteeIndex:  0,
 		},
 	}
 	aggregateAndProof := &ethpb.AggregateAttestationAndProofSingle{
@@ -309,7 +313,7 @@ func TestProcessPendingAtts_HasBlockSaveUnAggregatedAttElectra_VerifySeen(t *tes
 	}
 
 	// Retrieve the beacon committee and set the attester index.
-	committee, err := helpers.BeaconCommitteeFromState(context.Background(), beaconState, att.Data.Slot, att.Data.CommitteeIndex)
+	committee, err := helpers.BeaconCommitteeFromState(context.Background(), beaconState, att.Data.Slot, att.CommitteeId)
 	assert.NoError(t, err)
 	att.AttesterIndex = committee[0]
 
@@ -350,7 +354,7 @@ func TestProcessPendingAtts_HasBlockSaveUnAggregatedAttElectra_VerifySeen(t *tes
 			p2p:                 p1,
 			beaconDB:            db,
 			chain:               chain,
-			clock:               startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
+			clock:               startup.NewClock(chain.Genesis.Add(time.Duration(-1*int(params.BeaconConfig().SecondsPerSlot))*time.Second), chain.ValidatorsRoot),
 			attPool:             attestations.NewPool(),
 			attestationNotifier: &mock.SimpleNotifier{Feed: opn},
 		},
