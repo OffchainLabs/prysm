@@ -153,8 +153,7 @@ func TestProcessPendingAtts_HasBlockSaveUnAggregatedAtt(t *testing.T) {
 			}
 		}
 	}()
-	atts, err := r.cfg.attPool.UnaggregatedAttestations()
-	require.NoError(t, err)
+	atts := r.cfg.attPool.UnaggregatedAttestations()
 	assert.Equal(t, 1, len(atts), "Did not save unaggregated att")
 	assert.DeepEqual(t, att, atts[0], "Incorrect saved att")
 	assert.Equal(t, 0, len(r.cfg.attPool.AggregatedAttestations()), "Did save aggregated att")
@@ -248,8 +247,7 @@ func TestProcessPendingAtts_HasBlockSaveUnAggregatedAttElectra(t *testing.T) {
 			}
 		}
 	}()
-	atts, err := r.cfg.attPool.UnaggregatedAttestations()
-	require.NoError(t, err)
+	atts := r.cfg.attPool.UnaggregatedAttestations()
 	require.Equal(t, 1, len(atts), "Did not save unaggregated att")
 	assert.DeepEqual(t, att.ToAttestationElectra(committee), atts[0], "Incorrect saved att")
 	assert.Equal(t, 0, len(r.cfg.attPool.AggregatedAttestations()), "Did save aggregated att")
@@ -457,8 +455,7 @@ func TestProcessPendingAtts_HasBlockSaveAggregatedAtt(t *testing.T) {
 
 	assert.Equal(t, 1, len(r.cfg.attPool.AggregatedAttestations()), "Did not save aggregated att")
 	assert.DeepEqual(t, att, r.cfg.attPool.AggregatedAttestations()[0], "Incorrect saved att")
-	atts, err := r.cfg.attPool.UnaggregatedAttestations()
-	require.NoError(t, err)
+	atts := r.cfg.attPool.UnaggregatedAttestations()
 	assert.Equal(t, 0, len(atts), "Did save aggregated att")
 	require.LogsContain(t, hook, "Verified and saved pending attestations to pool")
 	cancel()

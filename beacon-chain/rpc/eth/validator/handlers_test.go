@@ -118,8 +118,7 @@ func TestGetAggregateAttestation(t *testing.T) {
 
 		pool := attestations.NewPool()
 		require.NoError(t, pool.SaveUnaggregatedAttestations([]ethpbalpha.Att{unaggSlot3_Root1_1, unaggSlot3_Root1_2, unaggSlot3_Root2, unaggSlot4}), "Failed to save unaggregated attestations")
-		unagg, err := pool.UnaggregatedAttestations()
-		require.NoError(t, err)
+		unagg := pool.UnaggregatedAttestations()
 		require.Equal(t, 4, len(unagg), "Expected 4 unaggregated attestations")
 		require.NoError(t, pool.SaveAggregatedAttestations([]ethpbalpha.Att{aggSlot1_Root1_1, aggSlot1_Root1_2, aggSlot1_Root2, aggSlot2}), "Failed to save aggregated attestations")
 		agg := pool.AggregatedAttestations()
@@ -268,8 +267,7 @@ func TestGetAggregateAttestation(t *testing.T) {
 
 			pool := attestations.NewPool()
 			require.NoError(t, pool.SaveUnaggregatedAttestations([]ethpbalpha.Att{unaggSlot3_Root1_1, unaggSlot3_Root1_2, unaggSlot3_Root2, unaggSlot4}), "Failed to save unaggregated attestations")
-			unagg, err := pool.UnaggregatedAttestations()
-			require.NoError(t, err)
+			unagg := pool.UnaggregatedAttestations()
 			require.Equal(t, 4, len(unagg), "Expected 4 unaggregated attestations")
 			require.NoError(t, pool.SaveAggregatedAttestations([]ethpbalpha.Att{aggSlot1_Root1_1, aggSlot1_Root1_2, aggSlot1_Root2, aggSlot2, postElectraAtt}), "Failed to save aggregated attestations")
 			agg := pool.AggregatedAttestations()
@@ -373,8 +371,7 @@ func TestGetAggregateAttestation(t *testing.T) {
 
 			pool := attestations.NewPool()
 			require.NoError(t, pool.SaveUnaggregatedAttestations([]ethpbalpha.Att{unaggSlot3_Root1_1, unaggSlot3_Root1_2, unaggSlot3_Root2, unaggSlot4}), "Failed to save unaggregated attestations")
-			unagg, err := pool.UnaggregatedAttestations()
-			require.NoError(t, err)
+			unagg := pool.UnaggregatedAttestations()
 			require.Equal(t, 4, len(unagg), "Expected 4 unaggregated attestations")
 			require.NoError(t, pool.SaveAggregatedAttestations([]ethpbalpha.Att{aggSlot1_Root1_1, aggSlot1_Root1_2, aggSlot1_Root2, aggSlot2, preElectraAtt}), "Failed to save aggregated attestations")
 			agg := pool.AggregatedAttestations()

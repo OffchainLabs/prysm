@@ -78,8 +78,8 @@ type GetBlockHeaderResponse struct {
 }
 
 type GetValidatorsRequest struct {
-	Ids      []string `json:"ids"`
-	Statuses []string `json:"statuses"`
+	Ids      []string `json:"ids,omitempty"`
+	Statuses []string `json:"statuses,omitempty"`
 }
 
 type GetValidatorsResponse struct {
