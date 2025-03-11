@@ -259,6 +259,8 @@ func SelectPeersToFetchDataColumnsFrom(
 		}
 	}
 
+	maxRequestDataColumnSidecars := params.BeaconConfig().MaxRequestDataColumnSidecars
+
 	for len(remainingDataColumns) > 0 {
 		// Check if at least one peer remains. If not, it means that we don't have enough peers to fetch all needed data columns.
 		if len(neededDataColumnsByPeer) == 0 {
@@ -275,6 +277,9 @@ func SelectPeersToFetchDataColumnsFrom(
 		}
 
 		dataColumnsSortedSlice := uint64MapToSortedSlice(neededDataColumnsByPeer[bestPeer])
+		if uint64(len(dataColumnsSortedSlice)) > maxRequestDataColumnSidecars {
+			dataColumnsSortedSlice = dataColumnsSortedSlice[:maxRequestDataColumnSidecars]
+		}
 		dataColumnsFromSelectedPeers[bestPeer] = dataColumnsSortedSlice
 
 		// Remove the selected peer from the list of peers.

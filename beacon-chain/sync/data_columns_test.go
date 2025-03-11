@@ -227,6 +227,9 @@ func TestAdmissiblePeersForDataColumns(t *testing.T) {
 }
 
 func TestSelectPeersToFetchDataColumnsFrom(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	originalConfig := params.BeaconConfig().Copy()
+
 	testCases := []struct {
 		name string
 
@@ -237,6 +240,9 @@ func TestSelectPeersToFetchDataColumnsFrom(t *testing.T) {
 		// Expected outputs
 		dataColumnsToFetchByPeer map[peer.ID][]uint64
 		err                      error
+
+		// Optional test configuration
+		maxRequestDataColumnSidecars uint64
 	}{
 		{
 			name:              "no data columns needed",
@@ -305,10 +311,31 @@ func TestSelectPeersToFetchDataColumnsFrom(t *testing.T) {
 			},
 			err: errors.New("no peer to fetch the following data columns: [3 7]"),
 		},
+		{
+			name:              "respects MaxRequestDataColumnSidecars limit",
+			neededDataColumns: map[uint64]bool{1: true, 2: true, 3: true, 4: true},
+			dataColumnsByPeer: map[peer.ID]map[uint64]bool{
+				peer.ID("peer1"): {1: true, 2: true, 3: true, 4: true},
+				peer.ID("peer2"): {3: true, 4: true}, // Duplicate peer for remaining columns
+			},
+			dataColumnsToFetchByPeer: map[peer.ID][]uint64{
+				peer.ID("peer1"): {1, 2}, // First request limited to 2 columns
+				peer.ID("peer2"): {3, 4}, // Second request with remaining columns from different peer
+			},
+			err:                          nil,
+			maxRequestDataColumnSidecars: 2,
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			// Start each test case with a fresh copy of the original config
+			cfg := originalConfig.Copy()
+			if tc.maxRequestDataColumnSidecars > 0 {
+				cfg.MaxRequestDataColumnSidecars = tc.maxRequestDataColumnSidecars
+			}
+			params.OverrideBeaconConfig(cfg)
+
 			actual, err := SelectPeersToFetchDataColumnsFrom(tc.neededDataColumns, tc.dataColumnsByPeer)
 
 			if tc.err != nil {
