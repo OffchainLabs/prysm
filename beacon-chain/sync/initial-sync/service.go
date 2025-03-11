@@ -400,7 +400,7 @@ func (s *Service) fetchOriginColumns(pids []peer.ID) error {
 		log.WithField("root", fmt.Sprintf("%#x", r)).Debug("All columns for checkpoint block are present")
 		return nil
 	}
-	sidecars, err := sync.RequestDataColumnSidecars(
+	sidecars, err := sync.RequestDataColumnSidecarsByRoot(
 		s.ctx,
 		missingColumns,
 		rob,

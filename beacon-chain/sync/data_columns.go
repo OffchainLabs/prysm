@@ -11,7 +11,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
-	prsymP2P "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/verify"
@@ -25,9 +24,9 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// RequestDataColumnSidecars sends a data column sidecars by root request to one
+// RequestDataColumnSidecarsByRoot sends a data column sidecars by root request to one
 // or more peers that can provide the needed data columns.
-func RequestDataColumnSidecars(
+func RequestDataColumnSidecarsByRoot(
 	ctx context.Context,
 	dataColumns map[uint64]bool,
 	block interfaces.ReadOnlySignedBeaconBlock,
@@ -55,7 +54,6 @@ func RequestDataColumnSidecars(
 	}
 
 	for len(dataColumnsByAdmissiblePeer) > 0 {
-		// Try to select peers excluding bad peers
 		peersToFetchFrom, err := SelectPeersToFetchDataColumnsFrom(remainingColumns, dataColumnsByAdmissiblePeer)
 		if err != nil {
 			// Return an error if some columns are unavailable from the filtered set
@@ -315,7 +313,7 @@ func SelectPeersToFetchDataColumnsFrom(
 func AdmissiblePeersForDataColumns(
 	peers []peer.ID,
 	neededDataColumns map[uint64]bool,
-	p2p prsymP2P.P2P,
+	p2p p2p.P2P,
 ) (map[peer.ID]map[uint64]bool, map[uint64][]peer.ID, []string, error) {
 	peerCount := len(peers)
 	neededDataColumnsCount := uint64(len(neededDataColumns))
@@ -347,19 +345,19 @@ func AdmissiblePeersForDataColumns(
 }
 
 // custodyGroupsFromPeer computes all the custody groups indexed by peer.
-func custodyGroupsFromPeers(peers []peer.ID, p2p prsymP2P.P2P) (map[peer.ID]map[uint64]bool, error) {
+func custodyGroupsFromPeers(peers []peer.ID, p2pIface p2p.P2P) (map[peer.ID]map[uint64]bool, error) {
 	peerCount := len(peers)
 
 	custodyGroupsByPeer := make(map[peer.ID]map[uint64]bool, peerCount)
 	for _, peer := range peers {
 		// Get the node ID from the peer ID.
-		nodeID, err := prsymP2P.ConvertPeerIDToNodeID(peer)
+		nodeID, err := p2p.ConvertPeerIDToNodeID(peer)
 		if err != nil {
 			return nil, errors.Wrap(err, "convert peer ID to node ID")
 		}
 
 		// Get the custody group count of the peer.
-		custodyGroupCount := p2p.CustodyGroupCountFromPeer(peer)
+		custodyGroupCount := p2pIface.CustodyGroupCountFromPeer(peer)
 
 		// Get the custody groups of the peer.
 		dasInfo, _, err := peerdas.Info(nodeID, custodyGroupCount)
@@ -374,7 +372,7 @@ func custodyGroupsFromPeers(peers []peer.ID, p2p prsymP2P.P2P) (map[peer.ID]map[
 }
 
 // custodyColumnsFromPeers computes all the custody columns indexed by peer.
-func custodyColumnsFromPeers(peers []peer.ID, p2p prsymP2P.P2P) (map[peer.ID]map[uint64]bool, error) {
+func custodyColumnsFromPeers(peers []peer.ID, p2p p2p.P2P) (map[peer.ID]map[uint64]bool, error) {
 	// Get the custody groups of the peers.
 	custodyGroupsByPeer, err := custodyGroupsFromPeers(peers, p2p)
 	if err != nil {

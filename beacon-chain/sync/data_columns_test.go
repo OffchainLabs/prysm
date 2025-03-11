@@ -27,7 +27,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/wrapper"
 	ecdsaprysm "github.com/prysmaticlabs/prysm/v5/crypto/ecdsa"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	pb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
@@ -350,10 +349,8 @@ func (rt *requestTracker) trackRequest(offset int, columns []uint64) {
 	rt.requests[offset] = columns
 }
 
-func TestRequestDataColumnSidecars(t *testing.T) {
-	const (
-		blobsCount = 6
-	)
+func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
+	const blobsCount = 6
 
 	// Start the trusted setup.
 	err := kzg.Start()
@@ -503,7 +500,7 @@ func TestRequestDataColumnSidecars(t *testing.T) {
 			}
 
 			// Call the function under test
-			responseCols, err := RequestDataColumnSidecars(
+			responseCols, err := RequestDataColumnSidecarsByRoot(
 				context.Background(),
 				tc.dataColumns,
 				signedBlock,
@@ -564,7 +561,7 @@ func TestRequestDataColumnSidecars(t *testing.T) {
 
 // createAndConnectCustodyPeer creates a new peer with a deterministic private key and connects it to the p2p service.
 // It then sets up the peer to respond with data columns it custodies.
-func createAndConnectCustodyPeer(t *testing.T, setup peerSetup, dataColumnSidecars []*eth.DataColumnSidecar, chainService *mock.ChainService, hostP2P *p2ptest.TestP2P, tracker *requestTracker) *p2ptest.TestP2P {
+func createAndConnectCustodyPeer(t *testing.T, setup peerSetup, dataColumnSidecars []*pb.DataColumnSidecar, chainService *mock.ChainService, hostP2P *p2ptest.TestP2P, tracker *requestTracker) *p2ptest.TestP2P {
 	privateKeyBytes := make([]byte, 32)
 	for i := 0; i < 32; i++ {
 		privateKeyBytes[i] = byte(setup.offset + i)
