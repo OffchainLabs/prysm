@@ -3,7 +3,6 @@ package sync
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -32,9 +31,10 @@ import (
 )
 
 var (
-	ErrOptimisticParent         = errors.New("parent of the block is optimistic")
-	errRejectCommitmentLen      = errors.New("[REJECT] The length of KZG commitments is less than or equal to the limitation defined in Consensus Layer")
-	ErrSlashingSignatureFailure = errors.New("proposer slashing signature verification failed")
+	ErrOptimisticParent             = errors.New("parent of the block is optimistic")
+	errRejectCommitmentLen          = errors.New("[REJECT] The length of KZG commitments is less than or equal to the limitation defined in Consensus Layer")
+	ErrSlashingSignatureFailure     = errors.New("proposer slashing signature verification failed")
+	errSignatureVerificationFailure = errors.New("could not verify beacon block header")
 )
 
 // validateBeaconBlockPubSub checks that the incoming block has a valid BLS signature.
@@ -519,12 +519,7 @@ func (s *Service) detectAndBroadcastEquivocation(ctx context.Context, blk interf
 	}
 
 	// Verify the slashing against current state
-	// This already performs all needed checks including signature verification
 	if err := blocks.VerifyProposerSlashing(headState, slashing); err != nil {
-		// Check if this is a signature verification error
-		if strings.Contains(err.Error(), "signature did not verify") {
-			return errors.Wrap(ErrSlashingSignatureFailure, err.Error())
-		}
 		return errors.Wrap(err, "could not verify proposer slashing")
 	}
 
