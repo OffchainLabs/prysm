@@ -31,10 +31,9 @@ import (
 )
 
 var (
-	ErrOptimisticParent             = errors.New("parent of the block is optimistic")
-	errRejectCommitmentLen          = errors.New("[REJECT] The length of KZG commitments is less than or equal to the limitation defined in Consensus Layer")
-	ErrSlashingSignatureFailure     = errors.New("proposer slashing signature verification failed")
-	errSignatureVerificationFailure = errors.New("could not verify beacon block header")
+	ErrOptimisticParent         = errors.New("parent of the block is optimistic")
+	errRejectCommitmentLen      = errors.New("[REJECT] The length of KZG commitments is less than or equal to the limitation defined in Consensus Layer")
+	ErrSlashingSignatureFailure = errors.New("proposer slashing signature verification failed")
 )
 
 // validateBeaconBlockPubSub checks that the incoming block has a valid BLS signature.
