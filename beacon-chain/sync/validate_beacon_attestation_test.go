@@ -469,23 +469,111 @@ func TestService_setSeenUnaggregatedAtt(t *testing.T) {
 	s := NewService(context.Background(), WithP2P(p2ptest.NewTestP2P(t)))
 	s.initCaches()
 
-	t.Run("empty cache", func(t *testing.T) {
-		require.Equal(t, false, s.hasSeenUnaggregatedAtt(0, 0, 0))
+	t.Run("phase0", func(t *testing.T) {
+		s0c0a0 := &ethpb.Attestation{
+			Data:            &ethpb.AttestationData{Slot: 0, CommitteeIndex: 0},
+			AggregationBits: bitfield.Bitlist{0b1001},
+		}
+		s0c0a1 := &ethpb.Attestation{
+			Data:            &ethpb.AttestationData{Slot: 0, CommitteeIndex: 0},
+			AggregationBits: bitfield.Bitlist{0b1010},
+		}
+		s0c0a2 := &ethpb.Attestation{
+			Data:            &ethpb.AttestationData{Slot: 0, CommitteeIndex: 0},
+			AggregationBits: bitfield.Bitlist{0b1100},
+		}
+		s0c1a0 := &ethpb.Attestation{
+			Data:            &ethpb.AttestationData{Slot: 0, CommitteeIndex: 1},
+			AggregationBits: bitfield.Bitlist{0b1001},
+		}
+		s0c2a0 := &ethpb.Attestation{
+			Data:            &ethpb.AttestationData{Slot: 0, CommitteeIndex: 2},
+			AggregationBits: bitfield.Bitlist{0b1001},
+		}
+		s1c0a0 := &ethpb.Attestation{
+			Data:            &ethpb.AttestationData{Slot: 1, CommitteeIndex: 0},
+			AggregationBits: bitfield.Bitlist{0b1001},
+		}
+		s2c0a0 := &ethpb.Attestation{
+			Data:            &ethpb.AttestationData{Slot: 2, CommitteeIndex: 0},
+			AggregationBits: bitfield.Bitlist{0b1001},
+		}
+
+		t.Run("empty cache", func(t *testing.T) {
+			require.Equal(t, false, s.hasSeenUnaggregatedAtt(s0c0a0))
+		})
+		t.Run("ok", func(t *testing.T) {
+			s.setSeenUnaggregatedAtt(s0c0a0)
+			require.Equal(t, true, s.hasSeenUnaggregatedAtt(s0c0a0))
+		})
+		t.Run("different slot", func(t *testing.T) {
+			s.setSeenUnaggregatedAtt(s1c0a0)
+			require.Equal(t, false, s.hasSeenUnaggregatedAtt(s2c0a0))
+		})
+		t.Run("different committee index", func(t *testing.T) {
+			s.setSeenUnaggregatedAtt(s0c1a0)
+			require.Equal(t, false, s.hasSeenUnaggregatedAtt(s0c2a0))
+		})
+		t.Run("different bit", func(t *testing.T) {
+			s.setSeenUnaggregatedAtt(s0c0a1)
+			require.Equal(t, false, s.hasSeenUnaggregatedAtt(s0c0a2))
+		})
 	})
-	t.Run("ok", func(t *testing.T) {
-		s.setSeenUnaggregatedAtt(0, 0, 0)
-		require.Equal(t, true, s.hasSeenUnaggregatedAtt(0, 0, 0))
-	})
-	t.Run("different slot", func(t *testing.T) {
-		s.setSeenUnaggregatedAtt(1, 0, 0)
-		require.Equal(t, false, s.hasSeenUnaggregatedAtt(2, 0, 0))
-	})
-	t.Run("different committee index", func(t *testing.T) {
-		s.setSeenUnaggregatedAtt(0, 1, 0)
-		require.Equal(t, false, s.hasSeenUnaggregatedAtt(0, 2, 0))
-	})
-	t.Run("different attester index", func(t *testing.T) {
-		s.setSeenUnaggregatedAtt(0, 0, 1)
-		require.Equal(t, false, s.hasSeenUnaggregatedAtt(0, 0, 2))
+	t.Run("electra", func(t *testing.T) {
+		s0c0a0 := &ethpb.SingleAttestation{
+			Data:          &ethpb.AttestationData{Slot: 0},
+			CommitteeId:   0,
+			AttesterIndex: 0,
+		}
+		s0c0a1 := &ethpb.SingleAttestation{
+			Data:          &ethpb.AttestationData{Slot: 0},
+			CommitteeId:   0,
+			AttesterIndex: 1,
+		}
+		s0c0a2 := &ethpb.SingleAttestation{
+			Data:          &ethpb.AttestationData{Slot: 0},
+			CommitteeId:   0,
+			AttesterIndex: 2,
+		}
+		s0c1a0 := &ethpb.SingleAttestation{
+			Data:          &ethpb.AttestationData{Slot: 0},
+			CommitteeId:   1,
+			AttesterIndex: 0,
+		}
+		s0c2a0 := &ethpb.SingleAttestation{
+			Data:          &ethpb.AttestationData{Slot: 0},
+			CommitteeId:   2,
+			AttesterIndex: 0,
+		}
+		s1c0a0 := &ethpb.SingleAttestation{
+			Data:          &ethpb.AttestationData{Slot: 1},
+			CommitteeId:   0,
+			AttesterIndex: 0,
+		}
+		s2c0a0 := &ethpb.SingleAttestation{
+			Data:          &ethpb.AttestationData{Slot: 2},
+			CommitteeId:   0,
+			AttesterIndex: 0,
+		}
+
+		t.Run("empty cache", func(t *testing.T) {
+			require.Equal(t, false, s.hasSeenUnaggregatedAtt(s0c0a0))
+		})
+		t.Run("ok", func(t *testing.T) {
+			s.setSeenUnaggregatedAtt(s0c0a0)
+			require.Equal(t, true, s.hasSeenUnaggregatedAtt(s0c0a0))
+		})
+		t.Run("different slot", func(t *testing.T) {
+			s.setSeenUnaggregatedAtt(s1c0a0)
+			require.Equal(t, false, s.hasSeenUnaggregatedAtt(s2c0a0))
+		})
+		t.Run("different committee index", func(t *testing.T) {
+			s.setSeenUnaggregatedAtt(s0c1a0)
+			require.Equal(t, false, s.hasSeenUnaggregatedAtt(s0c2a0))
+		})
+		t.Run("different attester", func(t *testing.T) {
+			s.setSeenUnaggregatedAtt(s0c0a1)
+			require.Equal(t, false, s.hasSeenUnaggregatedAtt(s0c0a2))
+		})
 	})
 }

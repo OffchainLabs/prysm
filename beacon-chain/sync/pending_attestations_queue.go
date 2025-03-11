@@ -218,13 +218,7 @@ func (s *Service) processUnaggregated(ctx context.Context, att ethpb.Att) {
 			}
 		}
 
-		if att.Version() >= version.Electra {
-			s.setSeenUnaggregatedAtt(data.Slot, att.GetCommitteeIndex(), uint64(att.GetAttestingIndex()))
-		} else {
-			// Indexing is safe because we already validated that 1 bit is set
-			// prior to saving the attestation in the pending queue.
-			s.setSeenUnaggregatedAtt(data.Slot, att.GetCommitteeIndex(), uint64(attForValidation.GetAggregationBits().BitIndices()[0]))
-		}
+		s.setSeenUnaggregatedAtt(att)
 
 		valCount, err := helpers.ActiveValidatorCount(ctx, preState, slots.ToEpoch(data.Slot))
 		if err != nil {
