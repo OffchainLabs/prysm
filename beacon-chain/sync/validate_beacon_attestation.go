@@ -338,8 +338,8 @@ func (s *Service) hasSeenUnaggregatedAtt(att eth.Att) bool {
 		attester = uint64(att.GetAttestingIndex())
 	} else {
 		aggBits := att.GetAggregationBits()
-		if len(aggBits) == 0 {
-			log.Debug("Attestation has no aggregation bits set. It will be considered not seen")
+		if aggBits.Count() != 1 {
+			log.Debug("Attestation does not have exactly 1 bit set. It will be considered not seen")
 			return false
 		}
 		attester = uint64(att.GetAggregationBits().BitIndices()[0])
@@ -362,8 +362,8 @@ func (s *Service) setSeenUnaggregatedAtt(att eth.Att) {
 		attester = uint64(att.GetAttestingIndex())
 	} else {
 		aggBits := att.GetAggregationBits()
-		if len(aggBits) == 0 {
-			log.Debug("Attestation has no aggregation bits set. It will not be marked as seen")
+		if aggBits.Count() != 1 {
+			log.Debug("Attestation does not have exactly 1 bit set. It will not be marked as seen")
 			return
 		}
 		attester = uint64(att.GetAggregationBits().BitIndices()[0])
