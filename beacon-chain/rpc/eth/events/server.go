@@ -8,7 +8,6 @@ import (
 
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
-	blockfeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/block"
 	opfeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/operation"
 	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
 )
@@ -18,7 +17,6 @@ import (
 type Server struct {
 	StateNotifier          statefeed.Notifier
 	OperationNotifier      opfeed.Notifier
-	BlockNotifier          blockfeed.Notifier
 	HeadFetcher            blockchain.HeadFetcher
 	ChainInfoFetcher       blockchain.ChainInfoFetcher
 	TrackedValidatorsCache *cache.TrackedValidatorsCache

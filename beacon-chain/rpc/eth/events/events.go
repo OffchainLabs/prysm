@@ -106,6 +106,7 @@ var opsFeedEventTopics = map[feed.EventType]string{
 	operation.BlobSidecarReceived:               BlobSidecarTopic,
 	operation.AttesterSlashingReceived:          AttesterSlashingTopic,
 	operation.ProposerSlashingReceived:          ProposerSlashingTopic,
+	operation.BlockGossipReceived:               BlockGossipTopic,
 }
 
 var stateFeedEventTopics = map[feed.EventType]string{
@@ -118,13 +119,8 @@ var stateFeedEventTopics = map[feed.EventType]string{
 	statefeed.PayloadAttributes:           PayloadAttributesTopic,
 }
 
-var blockFeedEventTopics = map[feed.EventType]string{
-	blockfeed.ReceivedBlock: BlockGossipTopic,
-}
-
 var topicsForStateFeed = topicsForFeed(stateFeedEventTopics)
 var topicsForOpsFeed = topicsForFeed(opsFeedEventTopics)
-var topicsForBlockFeed = topicsForFeed(blockFeedEventTopics)
 
 func topicsForFeed(em map[feed.EventType]string) map[string]bool {
 	topics := make(map[string]bool, len(em))
@@ -138,7 +134,6 @@ type topicRequest struct {
 	topics        map[string]bool
 	needStateFeed bool
 	needOpsFeed   bool
-	needBlockFeed bool
 }
 
 func (req *topicRequest) requested(topic string) bool {
@@ -152,14 +147,12 @@ func newTopicRequest(topics []string) (*topicRequest, error) {
 			req.needStateFeed = true
 		} else if topicsForOpsFeed[name] {
 			req.needOpsFeed = true
-		} else if topicsForBlockFeed[name] {
-			req.needBlockFeed = true
 		} else {
 			return nil, errors.Wrap(errInvalidTopicName, name)
 		}
 		req.topics[name] = true
 	}
-	if len(req.topics) == 0 || (!req.needStateFeed && !req.needOpsFeed && !req.needBlockFeed) {
+	if len(req.topics) == 0 || (!req.needStateFeed && !req.needOpsFeed) {
 		return nil, errNoValidTopics
 	}
 
@@ -241,10 +234,6 @@ func (es *eventStreamer) recvEventLoop(ctx context.Context, cancel context.Cance
 	if req.needStateFeed {
 		stateSub := s.StateNotifier.StateFeed().Subscribe(eventsChan)
 		defer stateSub.Unsubscribe()
-	}
-	if req.needBlockFeed {
-		blockSub := s.BlockNotifier.BlockFeed().Subscribe(eventsChan)
-		defer blockSub.Unsubscribe()
 	}
 	for {
 		select {
@@ -458,6 +447,8 @@ func topicForEvent(event *feed.Event) string {
 		return AttesterSlashingTopic
 	case *operation.ProposerSlashingReceivedData:
 		return ProposerSlashingTopic
+	case *operation.BlockGossipReceivedData:
+		return BlockGossipTopic
 	case *ethpb.EventHead:
 		return HeadTopic
 	case *ethpb.EventFinalizedCheckpoint:
@@ -470,8 +461,6 @@ func topicForEvent(event *feed.Event) string {
 		return ChainReorgTopic
 	case *statefeed.BlockProcessedData:
 		return BlockTopic
-	case *blockfeed.ReceivedBlockData:
-		return BlockGossipTopic
 	case payloadattribute.EventData:
 		return PayloadAttributesTopic
 	default:
@@ -511,6 +500,18 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 			}, nil
 		}
 		return nil, errNotRequested
+	case *operation.BlockGossipReceivedData:
+		blockRoot, err := v.SignedBlock.Block().HashTreeRoot()
+		if err != nil {
+			return nil, errors.Wrap(err, "could not compute block root for BlockGossipReceivedData")
+		}
+		return func() io.Reader {
+			blk := &structs.BlockGossipEvent{
+				Slot:  fmt.Sprintf("%d", v.SignedBlock.Block().Slot()),
+				Block: hexutil.Encode(blockRoot[:]),
+			}
+			return jsonMarshalReader(eventName, blk)
+		}, nil
 	case *operation.AggregatedAttReceivedData:
 		switch att := v.Attestation.AggregateVal().(type) {
 		case *eth.Attestation:
