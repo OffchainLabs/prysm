@@ -656,13 +656,13 @@ func non200Err(response *http.Response) error {
 	msg := fmt.Sprintf("code=%d, url=%s, body=%s", response.StatusCode, response.Request.URL, body)
 	switch response.StatusCode {
 	case http.StatusUnsupportedMediaType:
-		log.WithError(ErrUnsupportedMediaType).Debugf(msg)
+		log.WithError(ErrUnsupportedMediaType).Debug(msg)
 		if jsonErr := json.Unmarshal(bodyBytes, &errMessage); jsonErr != nil {
 			return errors.Wrap(jsonErr, "unable to read response body")
 		}
 		return errors.Wrap(ErrUnsupportedMediaType, errMessage.Message)
 	case http.StatusNotAcceptable:
-		log.WithError(ErrNotAcceptable).Debugf(msg)
+		log.WithError(ErrNotAcceptable).Debug(msg)
 		if jsonErr := json.Unmarshal(bodyBytes, &errMessage); jsonErr != nil {
 			return errors.Wrap(jsonErr, "unable to read response body")
 		}
