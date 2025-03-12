@@ -729,7 +729,9 @@ func TestCommitteeIndices(t *testing.T) {
 	assert.DeepEqual(t, []primitives.CommitteeIndex{0, 1, 3}, indices)
 }
 
-func TestAttestationCommittees(t *testing.T) {
+func TestAttestationCommitteesFromState(t *testing.T) {
+	ctx := context.Background()
+
 	validators := make([]*ethpb.Validator, params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().TargetCommitteeSize))
 	for i := 0; i < len(validators); i++ {
 		validators[i] = &ethpb.Validator{
@@ -745,7 +747,7 @@ func TestAttestationCommittees(t *testing.T) {
 
 	t.Run("pre-Electra", func(t *testing.T) {
 		att := &ethpb.Attestation{Data: &ethpb.AttestationData{CommitteeIndex: 0}}
-		committees, err := helpers.AttestationCommittees(context.Background(), state, att)
+		committees, err := helpers.AttestationCommitteesFromState(ctx, state, att)
 		require.NoError(t, err)
 		require.Equal(t, 1, len(committees))
 		assert.Equal(t, params.BeaconConfig().TargetCommitteeSize, uint64(len(committees[0])))
@@ -755,7 +757,7 @@ func TestAttestationCommittees(t *testing.T) {
 		bits.SetBitAt(0, true)
 		bits.SetBitAt(1, true)
 		att := &ethpb.AttestationElectra{CommitteeBits: bits, Data: &ethpb.AttestationData{}}
-		committees, err := helpers.AttestationCommittees(context.Background(), state, att)
+		committees, err := helpers.AttestationCommitteesFromState(ctx, state, att)
 		require.NoError(t, err)
 		require.Equal(t, 2, len(committees))
 		assert.Equal(t, params.BeaconConfig().TargetCommitteeSize, uint64(len(committees[0])))
@@ -763,9 +765,58 @@ func TestAttestationCommittees(t *testing.T) {
 	})
 }
 
-func TestBeaconCommittees(t *testing.T) {
-	prevConfig := params.BeaconConfig().Copy()
-	defer params.OverrideBeaconConfig(prevConfig)
+func TestAttestationCommitteesFromCache(t *testing.T) {
+	ctx := context.Background()
+
+	validators := make([]*ethpb.Validator, params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().TargetCommitteeSize))
+	for i := 0; i < len(validators); i++ {
+		validators[i] = &ethpb.Validator{
+			ExitEpoch: params.BeaconConfig().FarFutureEpoch,
+		}
+	}
+
+	state, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+		Validators:  validators,
+		RandaoMixes: make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
+	})
+	require.NoError(t, err)
+
+	t.Run("pre-Electra", func(t *testing.T) {
+		helpers.ClearCache()
+		att := &ethpb.Attestation{Data: &ethpb.AttestationData{CommitteeIndex: 0}}
+		ok, _, err := helpers.AttestationCommitteesFromCache(ctx, state, att)
+		require.NoError(t, err)
+		require.Equal(t, false, ok)
+		require.NoError(t, helpers.UpdateCommitteeCache(ctx, state, 0))
+		ok, committees, err := helpers.AttestationCommitteesFromCache(ctx, state, att)
+		require.NoError(t, err)
+		require.Equal(t, true, ok)
+		require.Equal(t, 1, len(committees))
+		assert.Equal(t, params.BeaconConfig().TargetCommitteeSize, uint64(len(committees[0])))
+	})
+	t.Run("post-Electra", func(t *testing.T) {
+		helpers.ClearCache()
+		bits := primitives.NewAttestationCommitteeBits()
+		bits.SetBitAt(0, true)
+		bits.SetBitAt(1, true)
+		att := &ethpb.AttestationElectra{CommitteeBits: bits, Data: &ethpb.AttestationData{}}
+		ok, _, err := helpers.AttestationCommitteesFromCache(ctx, state, att)
+		require.NoError(t, err)
+		require.Equal(t, false, ok)
+		require.NoError(t, helpers.UpdateCommitteeCache(ctx, state, 0))
+		ok, committees, err := helpers.AttestationCommitteesFromCache(ctx, state, att)
+		require.NoError(t, err)
+		require.Equal(t, true, ok)
+		require.Equal(t, 2, len(committees))
+		assert.Equal(t, params.BeaconConfig().TargetCommitteeSize, uint64(len(committees[0])))
+		assert.Equal(t, params.BeaconConfig().TargetCommitteeSize, uint64(len(committees[1])))
+	})
+}
+
+func TestBeaconCommitteesFromState(t *testing.T) {
+	ctx := context.Background()
+
+	params.SetupTestConfigCleanup(t)
 	c := params.BeaconConfig().Copy()
 	c.MinGenesisActiveValidatorCount = 128
 	c.SlotsPerEpoch = 4
@@ -774,15 +825,49 @@ func TestBeaconCommittees(t *testing.T) {
 
 	state, _ := util.DeterministicGenesisState(t, 256)
 
-	activeCount, err := helpers.ActiveValidatorCount(context.Background(), state, 0)
+	activeCount, err := helpers.ActiveValidatorCount(ctx, state, 0)
 	require.NoError(t, err)
 	committeesPerSlot := helpers.SlotCommitteeCount(activeCount)
-	committees, err := helpers.BeaconCommittees(context.Background(), state, 0)
+	committees, err := helpers.BeaconCommittees(ctx, state, 0)
 	require.NoError(t, err)
 	require.Equal(t, committeesPerSlot, uint64(len(committees)))
 	for idx := primitives.CommitteeIndex(0); idx < primitives.CommitteeIndex(len(committees)); idx++ {
-		committee, err := helpers.BeaconCommitteeFromState(context.Background(), state, 0, idx)
+		committee, err := helpers.BeaconCommitteeFromState(ctx, state, 0, idx)
 		require.NoError(t, err)
-		require.DeepEqual(t, committees[idx], committee)
+		assert.DeepEqual(t, committees[idx], committee)
+	}
+}
+
+func TestBeaconCommitteesFromCache(t *testing.T) {
+	ctx := context.Background()
+
+	params.SetupTestConfigCleanup(t)
+	c := params.BeaconConfig().Copy()
+	c.MinGenesisActiveValidatorCount = 128
+	c.SlotsPerEpoch = 4
+	c.TargetCommitteeSize = 16
+	params.OverrideBeaconConfig(c)
+
+	state, _ := util.DeterministicGenesisState(t, 256)
+
+	activeCount, err := helpers.ActiveValidatorCount(ctx, state, 0)
+	require.NoError(t, err)
+	committeesPerSlot := helpers.SlotCommitteeCount(activeCount)
+	committees, err := helpers.BeaconCommittees(ctx, state, 0)
+	require.NoError(t, err)
+	require.Equal(t, committeesPerSlot, uint64(len(committees)))
+
+	helpers.ClearCache()
+	for idx := primitives.CommitteeIndex(0); idx < primitives.CommitteeIndex(len(committees)); idx++ {
+		committee, err := helpers.BeaconCommitteeFromCache(ctx, state, 0, idx)
+		require.NoError(t, err)
+		assert.Equal(t, 0, len(committee))
+	}
+
+	require.NoError(t, helpers.UpdateCommitteeCache(ctx, state, 0))
+	for idx := primitives.CommitteeIndex(0); idx < primitives.CommitteeIndex(len(committees)); idx++ {
+		committee, err := helpers.BeaconCommitteeFromCache(ctx, state, 0, idx)
+		require.NoError(t, err)
+		assert.DeepEqual(t, committees[idx], committee)
 	}
 }

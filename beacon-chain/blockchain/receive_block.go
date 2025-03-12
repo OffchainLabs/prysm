@@ -547,7 +547,7 @@ func (s *Service) sendBlockAttestationsToSlasher(signed interfaces.ReadOnlySigne
 	// is done in the background to avoid adding more load to this critical code path.
 	ctx := context.TODO()
 	for _, att := range signed.Block().Body().Attestations() {
-		committees, err := helpers.AttestationCommittees(ctx, preState, att)
+		committees, err := helpers.AttestationCommitteesFromState(ctx, preState, att)
 		if err != nil {
 			log.WithError(err).Error("Could not get attestation committees")
 			return

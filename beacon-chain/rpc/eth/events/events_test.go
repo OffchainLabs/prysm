@@ -2,6 +2,7 @@ package events
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"math"
@@ -24,6 +25,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	payloadattribute "github.com/prysmaticlabs/prysm/v5/consensus-types/payload-attribute"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/eth/v1"
 	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
@@ -555,6 +557,110 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 			})
 		}
 	})
+}
+
+func TestFillEventData(t *testing.T) {
+	ctx := context.Background()
+	t.Run("AlreadyFilledData_ShouldShortCircuitWithoutError", func(t *testing.T) {
+		st, err := util.NewBeaconStateBellatrix()
+		require.NoError(t, err)
+		b, err := blocks.NewSignedBeaconBlock(util.HydrateSignedBeaconBlockBellatrix(&eth.SignedBeaconBlockBellatrix{}))
+		require.NoError(t, err)
+		attributor, err := payloadattribute.New(&enginev1.PayloadAttributes{
+			Timestamp: uint64(time.Now().Unix()),
+		})
+		require.NoError(t, err)
+		alreadyFilled := payloadattribute.EventData{
+			HeadState:       st,
+			HeadBlock:       b,
+			HeadRoot:        [32]byte{1, 2, 3},
+			Attributer:      attributor,
+			ParentBlockRoot: []byte{1, 2, 3},
+			ParentBlockHash: []byte{4, 5, 6},
+		}
+		srv := &Server{} // No real HeadFetcher needed here since it won't be called.
+		result, err := srv.fillEventData(ctx, alreadyFilled)
+		require.NoError(t, err)
+		require.DeepEqual(t, alreadyFilled, result)
+	})
+	t.Run("Electra PartialData_ShouldFetchHeadStateAndBlock", func(t *testing.T) {
+		st, err := util.NewBeaconStateElectra()
+		require.NoError(t, err)
+		valCount := 10
+		setActiveValidators(t, st, valCount)
+		inactivityScores := make([]uint64, valCount)
+		for i := range inactivityScores {
+			inactivityScores[i] = 10
+		}
+		require.NoError(t, st.SetInactivityScores(inactivityScores))
+		b, err := blocks.NewSignedBeaconBlock(util.HydrateSignedBeaconBlockElectra(&eth.SignedBeaconBlockElectra{}))
+		require.NoError(t, err)
+		attributor, err := payloadattribute.New(&enginev1.PayloadAttributes{
+			Timestamp: uint64(time.Now().Unix()),
+		})
+		require.NoError(t, err)
+		// Create an event data object missing certain fields:
+		partial := payloadattribute.EventData{
+			// The presence of a nil HeadState, nil HeadBlock, zeroed HeadRoot, etc.
+			// will cause fillEventData to try to fill the values.
+			ProposalSlot: 42,         // different epoch from current slot
+			Attributer:   attributor, // Must be Bellatrix or later
+		}
+		currentSlot := primitives.Slot(0)
+		// to avoid slot processing
+		require.NoError(t, st.SetSlot(currentSlot+1))
+		mockChainService := &mockChain.ChainService{
+			Root:  make([]byte, 32),
+			State: st,
+			Block: b,
+			Slot:  &currentSlot,
+		}
+
+		stn := mockChain.NewEventFeedWrapper()
+		opn := mockChain.NewEventFeedWrapper()
+		srv := &Server{
+			StateNotifier:          &mockChain.SimpleNotifier{Feed: stn},
+			OperationNotifier:      &mockChain.SimpleNotifier{Feed: opn},
+			HeadFetcher:            mockChainService,
+			ChainInfoFetcher:       mockChainService,
+			TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
+			EventWriteTimeout:      testEventWriteTimeout,
+		}
+
+		filled, err := srv.fillEventData(ctx, partial)
+		require.NoError(t, err, "expected successful fill of partial event data")
+
+		// Verify that fields have been updated from the mock data:
+		require.NotNil(t, filled.HeadState, "HeadState should be assigned")
+		require.NotNil(t, filled.HeadBlock, "HeadBlock should be assigned")
+		require.NotEqual(t, [32]byte{}, filled.HeadRoot, "HeadRoot should no longer be zero")
+		require.NotEmpty(t, filled.ParentBlockRoot, "ParentBlockRoot should be filled")
+		require.NotEmpty(t, filled.ParentBlockHash, "ParentBlockHash should be filled")
+		require.Equal(t, uint64(0), filled.ParentBlockNumber, "ParentBlockNumber must match mock block")
+
+		// Check that a valid Attributer was set:
+		require.NotNil(t, filled.Attributer, "Should have a valid payload attributes object")
+		require.Equal(t, false, filled.Attributer.IsEmpty(), "Attributer should not be empty after fill")
+	})
+}
+
+func setActiveValidators(t *testing.T, st state.BeaconState, count int) {
+	balances := make([]uint64, count)
+	validators := make([]*eth.Validator, 0, count)
+	for i := 0; i < count; i++ {
+		pubKey := make([]byte, params.BeaconConfig().BLSPubkeyLength)
+		binary.LittleEndian.PutUint64(pubKey, uint64(i))
+		balances[i] = uint64(i)
+		validators = append(validators, &eth.Validator{
+			PublicKey:             pubKey,
+			ActivationEpoch:       0,
+			ExitEpoch:             params.BeaconConfig().FarFutureEpoch,
+			WithdrawalCredentials: make([]byte, 32),
+		})
+	}
+
+	require.NoError(t, st.SetValidators(validators))
+	require.NoError(t, st.SetBalances(balances))
 }
 
 func TestStuckReaderScenarios(t *testing.T) {

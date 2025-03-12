@@ -93,15 +93,20 @@ var (
 		Name:  "no-discovery",
 		Usage: "Enable only local network p2p and do not connect to cloud bootstrap nodes",
 	}
-	// StaticPeers specifies a set of peers to connect to explicitly.
+	// StaticPeers specifies a set of peers to connect to explicitly, accepting following format of addresses:
+	// enode, multiaddr, enr.
 	StaticPeers = &cli.StringSliceFlag{
-		Name:  "peer",
-		Usage: "Connect with this peer, this flag may be used multiple times. This peer is recognized as a trusted peer.",
+		Name: "peer",
+		Usage: "Connect with this peer, this flag may be used multiple times. " +
+			"This peer is recognized as a trusted peer." +
+			"Accepts enode, multiaddr, and enr formats.",
 	}
 	// BootstrapNode tells the beacon node which bootstrap node to connect to
 	BootstrapNode = &cli.StringSliceFlag{
-		Name:  "bootstrap-node",
-		Usage: "The address of bootstrap node. Beacon node will connect for peer discovery via DHT.  Multiple nodes can be passed by using the flag multiple times but not comma-separated. You can also pass YAML files containing multiple nodes.",
+		Name: "bootstrap-node",
+		Usage: "The enr/enode address of bootstrap node. Beacon node will connect for peer discovery via DHT. " +
+			"Multiple nodes can be passed by using the flag multiple times but not comma-separated. " +
+			"You can also pass YAML files containing multiple nodes.",
 		Value: cli.NewStringSlice(params.BeaconNetworkConfig().BootstrapNodes...),
 	}
 	// RelayNode tells the beacon node which relay node to connect to.

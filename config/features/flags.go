@@ -174,6 +174,12 @@ var (
 		Name:  "enable-experimental-attestation-pool",
 		Usage: "Enables an experimental attestation pool design.",
 	}
+	// forceHeadFlag is a flag to force the head of the beacon chain to a specific block.
+	forceHeadFlag = &cli.StringFlag{
+		Name: "sync-from",
+		Usage: "Forces the head of the beacon chain to a specific block root. Values can be 'head' or a block root." +
+			" The block root has to be known to the beacon node and correspond to a block newer than the current finalized checkpoint.",
+	}
 )
 
 // devModeFlags holds list of flags that are set when development mode is on.
@@ -230,6 +236,7 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	DisableCommitteeAwarePacking,
 	EnableDiscoveryReboot,
 	enableExperimentalAttestationPool,
+	forceHeadFlag,
 }, deprecatedBeaconFlags, deprecatedFlags, upcomingDeprecation)
 
 func combinedFlags(flags ...[]cli.Flag) []cli.Flag {

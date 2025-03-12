@@ -399,7 +399,7 @@ func (p *Builder) handleHeaderRequest(w http.ResponseWriter, req *http.Request) 
 			Message:   bid,
 		},
 	}
-
+	w.WriteHeader(http.StatusOK)
 	err = json.NewEncoder(w).Encode(hdrResp)
 	if err != nil {
 		p.cfg.logger.WithError(err).Error("Could not encode response")
@@ -408,7 +408,6 @@ func (p *Builder) handleHeaderRequest(w http.ResponseWriter, req *http.Request) 
 	}
 	p.currVersion = version.Bellatrix
 	p.currPayload = wObj
-	w.WriteHeader(http.StatusOK)
 }
 
 func (p *Builder) handleHeaderRequestCapella(w http.ResponseWriter) {
@@ -477,7 +476,7 @@ func (p *Builder) handleHeaderRequestCapella(w http.ResponseWriter) {
 			Message:   bid,
 		},
 	}
-
+	w.WriteHeader(http.StatusOK)
 	err = json.NewEncoder(w).Encode(hdrResp)
 	if err != nil {
 		p.cfg.logger.WithError(err).Error("Could not encode response")
@@ -486,7 +485,6 @@ func (p *Builder) handleHeaderRequestCapella(w http.ResponseWriter) {
 	}
 	p.currVersion = version.Capella
 	p.currPayload = wObj
-	w.WriteHeader(http.StatusOK)
 }
 
 func (p *Builder) handleHeaderRequestDeneb(w http.ResponseWriter) {
@@ -563,7 +561,7 @@ func (p *Builder) handleHeaderRequestDeneb(w http.ResponseWriter) {
 			Message:   bid,
 		},
 	}
-
+	w.WriteHeader(http.StatusOK)
 	err = json.NewEncoder(w).Encode(hdrResp)
 	if err != nil {
 		p.cfg.logger.WithError(err).Error("Could not encode response")
@@ -573,7 +571,6 @@ func (p *Builder) handleHeaderRequestDeneb(w http.ResponseWriter) {
 	p.currVersion = version.Deneb
 	p.currPayload = wObj
 	p.blobBundle = b.BlobsBundle
-	w.WriteHeader(http.StatusOK)
 }
 
 func (p *Builder) handleHeaderRequestElectra(w http.ResponseWriter) {
@@ -697,7 +694,7 @@ func (p *Builder) handleHeaderRequestElectra(w http.ResponseWriter) {
 			Message:   bid,
 		},
 	}
-
+	w.WriteHeader(http.StatusOK)
 	err = json.NewEncoder(w).Encode(hdrResp)
 	if err != nil {
 		p.cfg.logger.WithError(err).Error("Could not encode response")
@@ -707,7 +704,6 @@ func (p *Builder) handleHeaderRequestElectra(w http.ResponseWriter) {
 	p.currVersion = version.Electra
 	p.currPayload = wObj
 	p.blobBundle = b.BlobsBundle
-	w.WriteHeader(http.StatusOK)
 }
 
 func (p *Builder) handleBlindedBlock(w http.ResponseWriter, req *http.Request) {
@@ -732,13 +728,13 @@ func (p *Builder) handleBlindedBlock(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	w.WriteHeader(http.StatusOK)
 	err = json.NewEncoder(w).Encode(resp)
 	if err != nil {
 		p.cfg.logger.WithError(err).Error("Could not encode full payload response")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	w.WriteHeader(http.StatusOK)
 }
 
 var errInvalidTypeConversion = errors.New("unable to translate between api and foreign type")

@@ -192,7 +192,7 @@ func createAttestationSignatureBatch(
 	descs := make([]string, len(atts))
 	for i, a := range atts {
 		sigs[i] = a.GetSignature()
-		committees, err := helpers.AttestationCommittees(ctx, beaconState, a)
+		committees, err := helpers.AttestationCommitteesFromState(ctx, beaconState, a)
 		if err != nil {
 			return nil, err
 		}
