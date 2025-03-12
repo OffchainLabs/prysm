@@ -30,8 +30,9 @@ type beaconApiDutiesProvider struct {
 }
 
 type committeeIndexSlotPair struct {
-	committeeIndex primitives.CommitteeIndex
-	slot           primitives.Slot
+	committeeIndex  primitives.CommitteeIndex
+	slot            primitives.Slot
+	committeeLength uint64
 }
 
 type validatorForDuty struct {
@@ -97,8 +98,6 @@ func (c *beaconApiValidatorClient) dutiesForEpoch(
 	syncDutiesMapping := make(map[primitives.ValidatorIndex]bool)
 	// Mapping from a validator index to its proposal slot
 	proposerDutySlots := make(map[primitives.ValidatorIndex][]primitives.Slot)
-	// Mapping from the {committeeIndex, slot} to each of the committee's validator indices
-	committeeMapping := make(map[committeeIndexSlotPair][]primitives.ValidatorIndex)
 
 	var wg errgroup.Group
 
@@ -121,9 +120,14 @@ func (c *beaconApiValidatorClient) dutiesForEpoch(
 			if err != nil {
 				return errors.Wrapf(err, "failed to parse attester committee index `%s`", attesterDuty.CommitteeIndex)
 			}
+			committeeLength, err := strconv.ParseUint(attesterDuty.CommitteeLength, 10, 64)
+			if err != nil {
+				return errors.Wrapf(err, "failed to parse attester committee length `%s`", attesterDuty.CommitteeLength)
+			}
 			attesterDutiesMapping[primitives.ValidatorIndex(validatorIndex)] = committeeIndexSlotPair{
-				slot:           primitives.Slot(slot),
-				committeeIndex: primitives.CommitteeIndex(committeeIndex),
+				slot:            primitives.Slot(slot),
+				committeeIndex:  primitives.CommitteeIndex(committeeIndex),
+				committeeLength: committeeLength,
 			}
 		}
 		return nil
@@ -168,44 +172,7 @@ func (c *beaconApiValidatorClient) dutiesForEpoch(
 		return nil
 	})
 
-	committees, err := c.dutiesProvider.Committees(ctx, epoch)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to get committees for epoch `%d`", epoch)
-	}
-	slotCommittees := make(map[string]uint64)
-	for _, c := range committees {
-		n, ok := slotCommittees[c.Slot]
-		if !ok {
-			n = 0
-		}
-		slotCommittees[c.Slot] = n + 1
-	}
-
-	for _, committee := range committees {
-		committeeIndex, err := strconv.ParseUint(committee.Index, 10, 64)
-		if err != nil {
-			return nil, errors.Wrapf(err, "failed to parse committee index `%s`", committee.Index)
-		}
-		slot, err := strconv.ParseUint(committee.Slot, 10, 64)
-		if err != nil {
-			return nil, errors.Wrapf(err, "failed to parse slot `%s`", committee.Slot)
-		}
-		validatorIndices := make([]primitives.ValidatorIndex, len(committee.Validators))
-		for index, validatorIndexString := range committee.Validators {
-			validatorIndex, err := strconv.ParseUint(validatorIndexString, 10, 64)
-			if err != nil {
-				return nil, errors.Wrapf(err, "failed to parse committee validator index `%s`", validatorIndexString)
-			}
-			validatorIndices[index] = primitives.ValidatorIndex(validatorIndex)
-		}
-		key := committeeIndexSlotPair{
-			committeeIndex: primitives.CommitteeIndex(committeeIndex),
-			slot:           primitives.Slot(slot),
-		}
-		committeeMapping[key] = validatorIndices
-	}
-
-	if err = wg.Wait(); err != nil {
+	if err := wg.Wait(); err != nil {
 		return nil, err
 	}
 
@@ -220,22 +187,18 @@ func (c *beaconApiValidatorClient) dutiesForEpoch(
 		if committeeMappingKey, ok := attesterDutiesMapping[v.index]; ok {
 			committeeIndex = committeeMappingKey.committeeIndex
 			attesterSlot = committeeMappingKey.slot
-
-			if committeeValidatorIndices, ok = committeeMapping[committeeMappingKey]; !ok {
-				return nil, errors.Errorf("failed to find validators for committee index `%d` and slot `%d`", committeeIndex, attesterSlot)
-			}
+			committeeValidatorIndices = make([]primitives.ValidatorIndex, committeeMappingKey.committeeLength) // make a fake committee because only length is used
 		}
 
 		duties[i] = &ethpb.DutiesResponse_Duty{
-			Committee:        committeeValidatorIndices,
-			CommitteeIndex:   committeeIndex,
-			AttesterSlot:     attesterSlot,
-			ProposerSlots:    proposerDutySlots[v.index],
-			PublicKey:        v.pubkey,
-			Status:           v.status,
-			ValidatorIndex:   v.index,
-			IsSyncCommittee:  syncDutiesMapping[v.index],
-			CommitteesAtSlot: slotCommittees[strconv.FormatUint(uint64(attesterSlot), 10)],
+			Committee:       committeeValidatorIndices,
+			CommitteeIndex:  committeeIndex,
+			AttesterSlot:    attesterSlot,
+			ProposerSlots:   proposerDutySlots[v.index],
+			PublicKey:       v.pubkey,
+			Status:          v.status,
+			ValidatorIndex:  v.index,
+			IsSyncCommittee: syncDutiesMapping[v.index],
 		}
 	}
 
