@@ -11,6 +11,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
 	kzg "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/kzg"
 	chainMock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
 	dbtest "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/execution"
@@ -252,7 +253,7 @@ func TestReconstructAndBroadcastDataColumns(t *testing.T) {
 		{
 			name:                    "Constructed 128 data columns with all blobs",
 			dataColumnSidecars:      allColumns,
-			expectedDataColumnCount: 4, // minimum custody requirement is 4
+			expectedDataColumnCount: 8, // default is 8
 		},
 	}
 
@@ -268,6 +269,7 @@ func TestReconstructAndBroadcastDataColumns(t *testing.T) {
 						DataColumnSidecars: tt.dataColumnSidecars,
 					},
 					operationNotifier: &chainMock.MockOperationNotifier{},
+					custodyInfo:       &peerdas.CustodyInfo{},
 				},
 				seenDataColumnCache:         lruwrpr.New(1),
 				receivedDataColumnsFromRoot: gcache.New(1*time.Minute, 2*time.Minute),
