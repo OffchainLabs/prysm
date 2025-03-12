@@ -18,7 +18,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/api"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
-	blockfeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/block"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/operation"
 	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
@@ -485,21 +484,6 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 		return func() io.Reader {
 			return jsonMarshalReader(eventName, structs.HeadEventFromV1(v))
 		}, nil
-	case *blockfeed.ReceivedBlockData:
-		if eventName == BlockGossipTopic {
-			blockRoot, err := v.SignedBlock.Block().HashTreeRoot()
-			if err != nil {
-				return nil, errors.Wrap(err, "could not compute block root for ReceivedBlockData")
-			}
-			return func() io.Reader {
-				blk := &structs.BlockGossipEvent{
-					Slot:  fmt.Sprintf("%d", v.SignedBlock.Block().Slot()),
-					Block: hexutil.Encode(blockRoot[:]),
-				}
-				return jsonMarshalReader(eventName, blk)
-			}, nil
-		}
-		return nil, errNotRequested
 	case *operation.BlockGossipReceivedData:
 		blockRoot, err := v.SignedBlock.Block().HashTreeRoot()
 		if err != nil {
