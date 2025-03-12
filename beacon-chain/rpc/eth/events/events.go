@@ -18,6 +18,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/api"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
+	blockfeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/block"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/operation"
 	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
@@ -45,6 +46,8 @@ const (
 	HeadTopic = "head"
 	// BlockTopic represents a new produced block event topic.
 	BlockTopic = "block"
+	// BlockGossipTopic represents a block received from gossip or API that passes validation rules.
+	BlockGossipTopic = "block_gossip"
 	// AttestationTopic represents a new submitted attestation event topic.
 	AttestationTopic = "attestation"
 	// SingleAttestationTopic represents a new submitted single attestation event topic.
@@ -115,8 +118,13 @@ var stateFeedEventTopics = map[feed.EventType]string{
 	statefeed.PayloadAttributes:           PayloadAttributesTopic,
 }
 
+var blockFeedEventTopics = map[feed.EventType]string{
+	blockfeed.ReceivedBlock: BlockGossipTopic,
+}
+
 var topicsForStateFeed = topicsForFeed(stateFeedEventTopics)
 var topicsForOpsFeed = topicsForFeed(opsFeedEventTopics)
+var topicsForBlockFeed = topicsForFeed(blockFeedEventTopics)
 
 func topicsForFeed(em map[feed.EventType]string) map[string]bool {
 	topics := make(map[string]bool, len(em))
@@ -130,6 +138,7 @@ type topicRequest struct {
 	topics        map[string]bool
 	needStateFeed bool
 	needOpsFeed   bool
+	needBlockFeed bool
 }
 
 func (req *topicRequest) requested(topic string) bool {
@@ -143,12 +152,14 @@ func newTopicRequest(topics []string) (*topicRequest, error) {
 			req.needStateFeed = true
 		} else if topicsForOpsFeed[name] {
 			req.needOpsFeed = true
+		} else if topicsForBlockFeed[name] {
+			req.needBlockFeed = true
 		} else {
 			return nil, errors.Wrap(errInvalidTopicName, name)
 		}
 		req.topics[name] = true
 	}
-	if len(req.topics) == 0 || (!req.needStateFeed && !req.needOpsFeed) {
+	if len(req.topics) == 0 || (!req.needStateFeed && !req.needOpsFeed && !req.needBlockFeed) {
 		return nil, errNoValidTopics
 	}
 
@@ -230,6 +241,10 @@ func (es *eventStreamer) recvEventLoop(ctx context.Context, cancel context.Cance
 	if req.needStateFeed {
 		stateSub := s.StateNotifier.StateFeed().Subscribe(eventsChan)
 		defer stateSub.Unsubscribe()
+	}
+	if req.needBlockFeed {
+		blockSub := s.BlockNotifier.BlockFeed().Subscribe(eventsChan)
+		defer blockSub.Unsubscribe()
 	}
 	for {
 		select {
@@ -455,6 +470,8 @@ func topicForEvent(event *feed.Event) string {
 		return ChainReorgTopic
 	case *statefeed.BlockProcessedData:
 		return BlockTopic
+	case *blockfeed.ReceivedBlockData:
+		return BlockGossipTopic
 	case payloadattribute.EventData:
 		return PayloadAttributesTopic
 	default:
@@ -479,6 +496,21 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 		return func() io.Reader {
 			return jsonMarshalReader(eventName, structs.HeadEventFromV1(v))
 		}, nil
+	case *blockfeed.ReceivedBlockData:
+		if eventName == BlockGossipTopic {
+			blockRoot, err := v.SignedBlock.Block().HashTreeRoot()
+			if err != nil {
+				return nil, errors.Wrap(err, "could not compute block root for ReceivedBlockData")
+			}
+			return func() io.Reader {
+				blk := &structs.BlockGossipEvent{
+					Slot:  fmt.Sprintf("%d", v.SignedBlock.Block().Slot()),
+					Block: hexutil.Encode(blockRoot[:]),
+				}
+				return jsonMarshalReader(eventName, blk)
+			}, nil
+		}
+		return nil, errNotRequested
 	case *operation.AggregatedAttReceivedData:
 		switch att := v.Attestation.AggregateVal().(type) {
 		case *eth.Attestation:
