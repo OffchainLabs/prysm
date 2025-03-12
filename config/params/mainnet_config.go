@@ -315,6 +315,8 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	CustodyRequirement:                    4,
 	MinEpochsForDataColumnSidecarsRequest: 4096,
 	MaxCellsInExtendedMatrix:              768,
+	ValidatorCustodyRequirement:           8,
+	BalancePerAdditionalCustodyGroup:      32_000_000_000,
 
 	// Values related to networking parameters.
 	GossipMaxSize:                   10 * 1 << 20, // 10 MiB

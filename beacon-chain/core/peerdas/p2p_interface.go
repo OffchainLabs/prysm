@@ -4,7 +4,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/kzg"
-	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 )
@@ -109,15 +108,6 @@ func ComputeCustodyGroupForColumn(columnIndex uint64) (uint64, error) {
 	columnsPerGroup := numberOfColumns / numberOfCustodyGroups
 
 	return columnIndex / columnsPerGroup, nil
-}
-
-// CustodyGroupCount returns the number of groups we should participate in for custody.
-func CustodyGroupCount() uint64 {
-	if flags.Get().SubscribeToAllSubnets {
-		return params.BeaconConfig().NumberOfCustodyGroups
-	}
-
-	return params.BeaconConfig().CustodyRequirement
 }
 
 // CustodyGroupCountFromRecord extracts the custody group count from an ENR record.

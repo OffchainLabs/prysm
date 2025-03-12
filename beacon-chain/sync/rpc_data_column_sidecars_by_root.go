@@ -10,7 +10,6 @@ import (
 
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	coreTime "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
@@ -103,32 +102,9 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 		return errors.Wrapf(err, "unexpected error computing min valid blob request slot, current_slot=%d", cs)
 	}
 
-	// Retrieve our node ID.
-	nodeID := s.cfg.p2p.NodeID()
-
-	// Retrieve the number of groups we should custody.
-	custodyGroupCount := peerdas.CustodyGroupCount()
-
-	// Retrieve the peer info.
-	peerInfo, _, err := peerdas.Info(nodeID, custodyGroupCount)
-	if err != nil {
-		s.writeErrorResponseToStream(responseCodeServerError, err.Error(), stream)
-		return errors.Wrap(err, "peer info")
-	}
-
-	custodyColumns := peerInfo.CustodyColumns
-	custodyColumnsCount := uint64(len(custodyColumns))
-
-	var custody interface{} = "all"
-
-	if custodyColumnsCount != numberOfColumns {
-		custody = uint64MapToSortedSlice(custodyColumns)
-	}
-
 	remotePeer := stream.Conn().RemotePeer()
 	log := log.WithFields(logrus.Fields{
 		"peer":    remotePeer,
-		"custody": custody,
 		"columns": requestedColumnsByRootLog,
 	})
 

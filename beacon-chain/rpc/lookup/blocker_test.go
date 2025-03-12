@@ -22,7 +22,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/core"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/testutil"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
-	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
@@ -306,37 +305,27 @@ func TestBlobsFromStoredDataColumns(t *testing.T) {
 	params.OverrideBeaconConfig(cfg)
 
 	testCases := []struct {
-		errorReason           core.ErrorReason
-		isError               bool
-		subscribeToAllSubnets bool
-		storedColumnsIndice   []int
-		name                  string
+		errorReason         core.ErrorReason
+		isError             bool
+		storedColumnsIndice []int
+		name                string
 	}{
+
 		{
-			name:                  "Cannot theoretically nor actually reconstruct",
-			subscribeToAllSubnets: false,
-			storedColumnsIndice:   noDataColumnsIndice,
-			isError:               true,
-			errorReason:           core.NotFound,
+			name:                "Cannot reconstruct",
+			storedColumnsIndice: noDataColumnsIndice,
+			isError:             true,
+			errorReason:         core.NotFound,
 		},
 		{
-			name:                  "Can theoretically but not actually reconstruct",
-			subscribeToAllSubnets: true,
-			storedColumnsIndice:   noDataColumnsIndice,
-			isError:               true,
-			errorReason:           core.NotFound,
+			name:                "No need to reconstruct",
+			storedColumnsIndice: originalColumnsIndice,
+			isError:             false,
 		},
 		{
-			name:                  "No need to reconstruct",
-			subscribeToAllSubnets: true,
-			storedColumnsIndice:   originalColumnsIndice,
-			isError:               false,
-		},
-		{
-			name:                  "Reconstruction needed",
-			subscribeToAllSubnets: false,
-			storedColumnsIndice:   extendedColumnsIndice,
-			isError:               false,
+			name:                "Reconstruction needed",
+			storedColumnsIndice: extendedColumnsIndice,
+			isError:             false,
 		},
 	}
 
@@ -374,13 +363,6 @@ func TestBlobsFromStoredDataColumns(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Set the subscription to all subnets flags.
-			resetFlags := flags.Get()
-			params.SetupTestConfigCleanup(t)
-			gFlags := new(flags.GlobalFlags)
-			gFlags.SubscribeToAllSubnets = tc.subscribeToAllSubnets
-			flags.Init(gFlags)
-
 			// Define a blob storage.
 			blobStorage := filesystem.NewEphemeralBlobStorage(t)
 
@@ -405,9 +387,6 @@ func TestBlobsFromStoredDataColumns(t *testing.T) {
 				expected := verifiedRoBlobs
 				require.DeepSSZEqual(t, expected, actual)
 			}
-
-			// Reset flags.
-			flags.Init(resetFlags)
 		})
 	}
 }

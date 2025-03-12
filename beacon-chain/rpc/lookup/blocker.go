@@ -294,12 +294,6 @@ func (p *BeaconDbBlocker) blobsFromStoredDataColumns(indices map[uint64]bool, ro
 
 	root := bytesutil.ToBytes32(rootBytes)
 
-	// Get the number of groups we should custody.
-	custodyGroupCount := peerdas.CustodyGroupCount()
-
-	// Determine if we are theoretically able to reconstruct the data columns.
-	canTheoreticallyReconstruct := peerdas.CanSelfReconstruct(custodyGroupCount)
-
 	// Retrieve the data columns indice actually we store.
 	summary := p.BlobStorage.Summary(root)
 
@@ -313,29 +307,18 @@ func (p *BeaconDbBlocker) blobsFromStoredDataColumns(indices map[uint64]bool, ro
 	storedDataColumnCount := uint64(len(storedDataColumnsIndices))
 	storedGroupCount := storedDataColumnCount / columnsPerGroup
 
-	// Determine is we acually able to reconstruct the data columns.
-	canActuallyReconstruct := peerdas.CanSelfReconstruct(storedGroupCount)
+	// Determine is we are able to reconstruct the data columns.
+	canReconstruct := peerdas.CanSelfReconstruct(storedGroupCount)
 
-	if !canTheoreticallyReconstruct && !canActuallyReconstruct {
+	if !canReconstruct {
 		// There is no way to reconstruct the data columns.
 		return nil, &core.RpcError{
-			Err:    errors.Errorf("the node does not custody enough data columns to reconstruct blobs. Please start the beacon node with the `--%s` flag to ensure this call to success.", flags.SubscribeToAllSubnets.Name),
+			Err:    errors.Errorf("the node does not custody enough data columns to reconstruct blobs. Please start the beacon node with the `--%s` flag to ensure this call to success, or retry later if it already the case.", flags.SubscribeToAllSubnets.Name),
 			Reason: core.NotFound,
 		}
 	}
 
 	nonExtendedColumnsCount := uint64(fieldparams.NumberOfColumns / 2)
-
-	if canTheoreticallyReconstruct && !canActuallyReconstruct {
-		// This case may happen if the node started recently with a big enough custody count, but did not (yet) backfill all the columns.
-		return nil, &core.RpcError{
-			Err:    errors.Errorf("not all data columns are available for this blob. Wanted: %d, got: %d. Please retry later.", nonExtendedColumnsCount, storedDataColumnCount),
-			Reason: core.NotFound}
-	}
-
-	// - The case !canTheoreticallyReconstruct && canActuallyReconstruct may happen if the node used to custody enough columns,
-	//   but do not custody enough columns anymore. We are still able to reconstruct the data columns.
-	// - The case canTheoreticallyReconstruct && canActuallyReconstruct is the happy path.
 
 	// Check if we store all the non extended columns. If so, we can respond without reconstructing.
 	missingColumns := make(map[uint64]bool)

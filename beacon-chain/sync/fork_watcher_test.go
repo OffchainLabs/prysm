@@ -7,6 +7,7 @@ import (
 
 	"github.com/prysmaticlabs/prysm/v5/async/abool"
 	mockChain "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
 	p2ptest "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
@@ -46,6 +47,7 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 						chain:       chainService,
 						clock:       startup.NewClock(gt, vr),
 						initialSync: &mockSync.Sync{IsSyncing: false},
+						custodyInfo: &peerdas.CustodyInfo{},
 					},
 					chainStarted: abool.New(),
 					subHandler:   newSubTopicHandler(),
@@ -81,6 +83,7 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 						chain:       chainService,
 						clock:       startup.NewClock(gt, vr),
 						initialSync: &mockSync.Sync{IsSyncing: false},
+						custodyInfo: &peerdas.CustodyInfo{},
 					},
 					chainStarted: abool.New(),
 					subHandler:   newSubTopicHandler(),
@@ -125,6 +128,7 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 						chain:       chainService,
 						clock:       startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot),
 						initialSync: &mockSync.Sync{IsSyncing: false},
+						custodyInfo: &peerdas.CustodyInfo{},
 					},
 					chainStarted: abool.New(),
 					subHandler:   newSubTopicHandler(),
@@ -167,6 +171,7 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 						chain:       chainService,
 						clock:       startup.NewClock(gt, vr),
 						initialSync: &mockSync.Sync{IsSyncing: false},
+						custodyInfo: &peerdas.CustodyInfo{},
 					},
 					chainStarted: abool.New(),
 					subHandler:   newSubTopicHandler(),
@@ -211,6 +216,7 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 						chain:       chainService,
 						clock:       startup.NewClock(gt, vr),
 						initialSync: &mockSync.Sync{IsSyncing: false},
+						custodyInfo: &peerdas.CustodyInfo{},
 					},
 					chainStarted: abool.New(),
 					subHandler:   newSubTopicHandler(),
@@ -255,6 +261,7 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 						chain:       chainService,
 						clock:       startup.NewClock(gt, vr),
 						initialSync: &mockSync.Sync{IsSyncing: false},
+						custodyInfo: &peerdas.CustodyInfo{},
 					},
 					chainStarted: abool.New(),
 					subHandler:   newSubTopicHandler(),

@@ -682,8 +682,12 @@ func (s *Service) areDataColumnsAvailable(ctx context.Context, root [32]byte, si
 	// https://github.com/ethereum/consensus-specs/blob/v1.5.0-alpha.10/specs/fulu/das-core.md#custody-sampling
 	nodeID := s.cfg.P2P.NodeID()
 
+	// Prevent custody group count to change during the rest of the function.
+	s.cfg.CustodyInfo.Mut.RLock()
+	defer s.cfg.CustodyInfo.Mut.RUnlock()
+
 	// Get the custody group sampling size for the node.
-	custodyGroupSamplingSize := peerdas.CustodyGroupSamplingSize()
+	custodyGroupSamplingSize := s.cfg.CustodyInfo.CustodyGroupSamplingSize(peerdas.Actual)
 	peerInfo, _, err := peerdas.Info(nodeID, custodyGroupSamplingSize)
 	if err != nil {
 		return errors.Wrap(err, "peer info")

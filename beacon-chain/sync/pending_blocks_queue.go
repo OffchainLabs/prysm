@@ -212,7 +212,7 @@ func (s *Service) processAndBroadcastBlock(ctx context.Context, b interfaces.Rea
 			blkRoot,
 			b,
 			s.cfg.p2p.NodeID(),
-			peerdas.CustodyGroupSamplingSize(),
+			s.cfg.custodyInfo.CustodyGroupSamplingSize(peerdas.Target),
 			s.cfg.blobStorage,
 		)
 

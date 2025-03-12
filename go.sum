@@ -237,8 +237,8 @@ github.com/envoyproxy/go-control-plane v0.9.9-0.20201210154907-fd9021fe5dad/go.m
 github.com/envoyproxy/protoc-gen-validate v0.1.0/go.mod h1:iSmxcyjqTsJpI2R4NaDN7+kN2VEUnK/pcBlmesArF7c=
 github.com/ethereum/c-kzg-4844 v1.0.3-0.20240715192038-0e753e2603db h1:GR54UuHLwl7tCA527fdLSj2Rk0aUVK8bLJZPWSIv79Q=
 github.com/ethereum/c-kzg-4844 v1.0.3-0.20240715192038-0e753e2603db/go.mod h1:VewdlzQmpT5QSrVhbBuGoCdFJkpaJlO1aQputP83wc0=
-github.com/ethereum/c-kzg-4844/v2 v2.0.1 h1:NuErvd0Ha5gLvvZ1m9Id9UZ11kcqMBUUXsbm7yXcAYI=
-github.com/ethereum/c-kzg-4844/v2 v2.0.1/go.mod h1:urP+cLBtKCW4BS5bnA2IXYs1PRGPpXmdotqpBuU6/5s=
+github.com/ethereum/c-kzg-4844/v2 v2.0.2-0.20250227151419-2ec9138a5d97 h1:F7mxaaLUiWZ93qfjKHe4xUXZO5WQa0Mt2pXE1IF5Xx0=
+github.com/ethereum/c-kzg-4844/v2 v2.0.2-0.20250227151419-2ec9138a5d97/go.mod h1:xekiQpYbUjETEoLBT/i3IKtDBXQDvjytxGuxuox1RnA=
 github.com/ethereum/go-ethereum v1.15.0 h1:LLb2jCPsbJZcB4INw+E/MgzUX5wlR6SdwXcv09/1ME4=
 github.com/ethereum/go-ethereum v1.15.0/go.mod h1:4q+4t48P2C03sjqGvTXix5lEOplf5dz4CTosbjt5tGs=
 github.com/ethereum/go-verkle v0.2.2 h1:I2W0WjnrFUIzzVPwm8ykY+7pL2d4VhlsePn4j7cnFk8=

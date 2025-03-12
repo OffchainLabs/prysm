@@ -157,27 +157,27 @@ func TestCreateLocalNode(t *testing.T) {
 	}{
 		{
 			name:          "valid config",
-			cfg:           nil,
+			cfg:           &Config{CustodyInfo: &peerdas.CustodyInfo{}},
 			expectedError: false,
 		},
 		{
 			name:          "invalid host address",
-			cfg:           &Config{HostAddress: "invalid"},
+			cfg:           &Config{HostAddress: "invalid", CustodyInfo: &peerdas.CustodyInfo{}},
 			expectedError: true,
 		},
 		{
 			name:          "valid host address",
-			cfg:           &Config{HostAddress: "192.168.0.1"},
+			cfg:           &Config{HostAddress: "192.168.0.1", CustodyInfo: &peerdas.CustodyInfo{}},
 			expectedError: false,
 		},
 		{
 			name:          "invalid host DNS",
-			cfg:           &Config{HostDNS: "invalid"},
+			cfg:           &Config{HostDNS: "invalid", CustodyInfo: &peerdas.CustodyInfo{}},
 			expectedError: true,
 		},
 		{
 			name:          "valid host DNS",
-			cfg:           &Config{HostDNS: "www.google.com"},
+			cfg:           &Config{HostDNS: "www.google.com", CustodyInfo: &peerdas.CustodyInfo{}},
 			expectedError: false,
 		},
 	}
@@ -210,7 +210,7 @@ func TestCreateLocalNode(t *testing.T) {
 			require.NoError(t, err)
 
 			expectedAddress := address
-			if tt.cfg != nil && tt.cfg.HostAddress != "" {
+			if tt.cfg.HostAddress != "" {
 				expectedAddress = net.ParseIP(tt.cfg.HostAddress)
 			}
 
@@ -784,7 +784,7 @@ func TestRefreshPersistentSubnets(t *testing.T) {
 					actualPingCount++
 					return nil
 				},
-				cfg:                   &Config{UDPPort: 2000},
+				cfg:                   &Config{UDPPort: 2000, CustodyInfo: &peerdas.CustodyInfo{}},
 				peers:                 p2p.Peers(),
 				genesisTime:           time.Now().Add(-time.Duration(tc.epochSinceGenesis*secondsPerEpoch) * time.Second),
 				genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),

@@ -18,14 +18,16 @@ import (
 // This implementation will hold any blobs passed to Persist until the IsDataAvailable is called for their
 // block, at which time they will undergo full verification and be saved to the disk.
 type LazilyPersistentStoreColumn struct {
-	store *filesystem.BlobStorage
-	cache *cache
+	store       *filesystem.BlobStorage
+	cache       *cache
+	custodyInfo *peerdas.CustodyInfo
 }
 
-func NewLazilyPersistentStoreColumn(store *filesystem.BlobStorage) *LazilyPersistentStoreColumn {
+func NewLazilyPersistentStoreColumn(store *filesystem.BlobStorage, custodyInfo *peerdas.CustodyInfo) *LazilyPersistentStoreColumn {
 	return &LazilyPersistentStoreColumn{
-		store: store,
-		cache: newCache(),
+		store:       store,
+		cache:       newCache(),
+		custodyInfo: custodyInfo,
 	}
 }
 
@@ -64,14 +66,14 @@ func (s *LazilyPersistentStoreColumn) PersistColumns(current primitives.Slot, sc
 }
 
 // IsDataAvailable returns nil if all the commitments in the given block are persisted to the db and have been verified.
-// BlobSidecars already in the db are assumed to have been previously verified against the block.
+// DataColumnsSidecars already in the db are assumed to have been previously verified against the block.
 func (s *LazilyPersistentStoreColumn) IsDataAvailable(
 	ctx context.Context,
 	nodeID enode.ID,
 	currentSlot primitives.Slot,
 	block blocks.ROBlock,
 ) error {
-	blockCommitments, err := fullCommitmentsToCheck(nodeID, block, currentSlot)
+	blockCommitments, err := s.fullCommitmentsToCheck(nodeID, block, currentSlot)
 	if err != nil {
 		return errors.Wrapf(err, "full commitments to check with block root `%#x` and current slot `%d`", block.Root(), currentSlot)
 	}
@@ -124,7 +126,7 @@ func (s *LazilyPersistentStoreColumn) IsDataAvailable(
 }
 
 // fullCommitmentsToCheck returns the commitments to check for a given block.
-func fullCommitmentsToCheck(nodeID enode.ID, block blocks.ROBlock, currentSlot primitives.Slot) (*safeCommitmentsArray, error) {
+func (s *LazilyPersistentStoreColumn) fullCommitmentsToCheck(nodeID enode.ID, block blocks.ROBlock, currentSlot primitives.Slot) (*safeCommitmentsArray, error) {
 	// Return early for blocks that are pre-Fulu.
 	if block.Version() < version.Fulu {
 		return &safeCommitmentsArray{}, nil
@@ -154,7 +156,7 @@ func fullCommitmentsToCheck(nodeID enode.ID, block blocks.ROBlock, currentSlot p
 	}
 
 	// Retrieve the groups count.
-	custodyGroupCount := peerdas.CustodyGroupCount()
+	custodyGroupCount := s.custodyInfo.ActualGroupCount()
 
 	// Retrieve peer info.
 	peerInfo, _, err := peerdas.Info(nodeID, custodyGroupCount)

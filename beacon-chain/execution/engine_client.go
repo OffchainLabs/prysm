@@ -13,6 +13,8 @@ import (
 	gethRPC "github.com/ethereum/go-ethereum/rpc"
 	"github.com/holiman/uint256"
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/kzg"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/execution/types"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
@@ -44,10 +46,14 @@ var (
 		GetPayloadMethodV3,
 		GetPayloadBodiesByHashV1,
 		GetPayloadBodiesByRangeV1,
+		GetBlobsV1,
 	}
 	electraEngineEndpoints = []string{
 		NewPayloadMethodV4,
 		GetPayloadMethodV4,
+	}
+	fuluEngineEndpoints = []string{
+		GetBlobsV2,
 	}
 )
 
@@ -85,6 +91,8 @@ const (
 	ExchangeCapabilities = "engine_exchangeCapabilities"
 	// GetBlobsV1 request string for JSON-RPC.
 	GetBlobsV1 = "engine_getBlobsV1"
+	// GetBlobsV2 request string for JSON-RPC.
+	GetBlobsV2 = "engine_getBlobsV2"
 	// Defines the seconds before timing out engine endpoints with non-block execution semantics.
 	defaultEngineTimeout = time.Second
 )
@@ -108,6 +116,7 @@ type Reconstructor interface {
 		ctx context.Context, blindedBlocks []interfaces.ReadOnlySignedBeaconBlock,
 	) ([]interfaces.SignedBeaconBlock, error)
 	ReconstructBlobSidecars(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte, hi func(uint64) bool) ([]blocks.VerifiedROBlob, error)
+	ReconstructDataColumnSidecars(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte) ([]blocks.VerifiedRODataColumn, error)
 }
 
 // EngineCaller defines a client that can interact with an Ethereum
@@ -302,6 +311,9 @@ func (s *Service) ExchangeCapabilities(ctx context.Context) ([]string, error) {
 	if params.ElectraEnabled() {
 		supportedEngineEndpoints = append(supportedEngineEndpoints, electraEngineEndpoints...)
 	}
+	if params.FuluEnabled() {
+		supportedEngineEndpoints = append(supportedEngineEndpoints, fuluEngineEndpoints...)
+	}
 	var result []string
 	err := s.rpcClient.CallContext(ctx, &result, ExchangeCapabilities, supportedEngineEndpoints)
 	if err != nil {
@@ -495,13 +507,27 @@ func (s *Service) HeaderByNumber(ctx context.Context, number *big.Int) (*types.H
 func (s *Service) GetBlobs(ctx context.Context, versionedHashes []common.Hash) ([]*pb.BlobAndProof, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetBlobs")
 	defer span.End()
+
 	// If the execution engine does not support `GetBlobsV1`, return early to prevent encountering an error later.
 	if !s.capabilityCache.has(GetBlobsV1) {
-		return nil, nil
+		return nil, errors.New(fmt.Sprintf("%s is not supported", GetBlobsV1))
 	}
 
 	result := make([]*pb.BlobAndProof, len(versionedHashes))
 	err := s.rpcClient.CallContext(ctx, &result, GetBlobsV1, versionedHashes)
+	return result, handleRPCError(err)
+}
+
+func (s *Service) GetBlobsV2(ctx context.Context, versionedHashes []common.Hash) ([]*pb.BlobAndProofV2, error) {
+	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetBlobsV2")
+	defer span.End()
+
+	if !s.capabilityCache.has(GetBlobsV2) {
+		return nil, errors.New(fmt.Sprintf("%s is not supported", GetBlobsV2))
+	}
+
+	result := make([]*pb.BlobAndProofV2, len(versionedHashes))
+	err := s.rpcClient.CallContext(ctx, &result, GetBlobsV2, versionedHashes)
 	return result, handleRPCError(err)
 }
 
@@ -613,6 +639,83 @@ func (s *Service) ReconstructBlobSidecars(ctx context.Context, block interfaces.
 	}
 
 	return verifiedBlobs, nil
+}
+
+// ReconstructDataColumnSidecars reconstructs the verified data column sidecars for a given beacon block.
+// It retrieves the KZG commitments from the block body, fetches the associated blobs and cell proofs,
+// and constructs the corresponding verified read-only data column sidecars.
+func (s *Service) ReconstructDataColumnSidecars(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte) ([]blocks.VerifiedRODataColumn, error) {
+	blockBody := block.Block().Body()
+	kzgCommitments, err := blockBody.BlobKzgCommitments()
+	if err != nil {
+		return nil, wrapWithBlockRoot(err, blockRoot, "could not get blob KZG commitments")
+	}
+
+	// Collect KZG hashes for all blobs
+	var kzgHashes []common.Hash
+	for _, commitment := range kzgCommitments {
+		kzgHashes = append(kzgHashes, primitives.ConvertKzgCommitmentToVersionedHash(commitment))
+	}
+
+	// Fetch all blobs from EL
+	blobs, err := s.GetBlobsV2(ctx, kzgHashes)
+	if err != nil {
+		return nil, wrapWithBlockRoot(err, blockRoot, "could not get blobs")
+	}
+
+	for _, blobAndCellProofs := range blobs {
+		if blobAndCellProofs == nil {
+			return nil, wrapWithBlockRoot(errors.New("unable to reconstruct data column sidecars, did not get all blobs from EL"), blockRoot, "")
+		}
+	}
+
+	var cellsAndProofs []kzg.CellsAndProofs
+	for _, blobAndCellProofs := range blobs {
+		var blob kzg.Blob
+		copy(blob[:], blobAndCellProofs.Blob)
+		cells, err := kzg.ComputeCells(&blob)
+		if err != nil {
+			return nil, wrapWithBlockRoot(err, blockRoot, "could not compute cells")
+		}
+
+		proofs := make([]kzg.Proof, len(blobAndCellProofs.CellProofs))
+		for i, proof := range blobAndCellProofs.CellProofs {
+			proofs[i] = kzg.Proof(proof)
+		}
+		cellsAndProofs = append(cellsAndProofs, kzg.CellsAndProofs{
+			Cells:  cells,
+			Proofs: proofs,
+		})
+	}
+
+	header, err := block.Header()
+	if err != nil {
+		return nil, wrapWithBlockRoot(err, blockRoot, "could not get header")
+	}
+
+	kzgCommitmentsInclusionProof, err := blocks.MerkleProofKZGCommitments(blockBody)
+	if err != nil {
+		return nil, wrapWithBlockRoot(err, blockRoot, "could not get Merkle proof for KZG commitments")
+	}
+
+	dataColumnSidecars, err := peerdas.DataColumnSidecarsForReconstruct(kzgCommitments, header, kzgCommitmentsInclusionProof, cellsAndProofs)
+	if err != nil {
+		return nil, wrapWithBlockRoot(err, blockRoot, "could not reconstruct data column sidecars")
+	}
+
+	verifiedRODataColumns := make([]blocks.VerifiedRODataColumn, len(dataColumnSidecars))
+	for i, dataColumnSidecar := range dataColumnSidecars {
+		roDataColumn, err := blocks.NewRODataColumnWithRoot(dataColumnSidecar, blockRoot)
+		if err != nil {
+			return nil, wrapWithBlockRoot(err, blockRoot, "new read-only data column with root")
+		}
+
+		verifiedRODataColumns[i] = blocks.NewVerifiedRODataColumn(roDataColumn)
+	}
+
+	log.WithField("root", fmt.Sprintf("%x", blockRoot)).Debug("Data columns reconstructed successfully")
+
+	return verifiedRODataColumns, nil
 }
 
 func fullPayloadFromPayloadBody(
@@ -901,4 +1004,9 @@ func toBlockNumArg(number *big.Int) string {
 		return "safe"
 	}
 	return hexutil.EncodeBig(number)
+}
+
+// wrapWithBlockRoot returns a new error with the given block root.
+func wrapWithBlockRoot(err error, blockRoot [32]byte, message string) error {
+	return errors.Wrap(err, fmt.Sprintf("%s for block %#x", message, blockRoot))
 }

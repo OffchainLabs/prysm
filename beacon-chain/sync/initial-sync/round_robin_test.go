@@ -8,6 +8,7 @@ import (
 	"github.com/paulbellamy/ratecounter"
 	"github.com/prysmaticlabs/prysm/v5/async/abool"
 	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/das"
 	dbtest "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
 	p2pt "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
@@ -309,7 +310,7 @@ func TestService_roundRobinSync(t *testing.T) {
 			clock := startup.NewClock(gt, vr)
 			s := &Service{
 				ctx:          context.Background(),
-				cfg:          &Config{Chain: mc, P2P: p, DB: beaconDB},
+				cfg:          &Config{Chain: mc, P2P: p, DB: beaconDB, CustodyInfo: &peerdas.CustodyInfo{}},
 				synced:       abool.New(),
 				chainStarted: abool.NewBool(true),
 				clock:        clock,
@@ -563,7 +564,7 @@ func TestService_blockProviderScoring(t *testing.T) {
 	clock := startup.NewClock(gt, vr)
 	s := &Service{
 		ctx:          context.Background(),
-		cfg:          &Config{Chain: mc, P2P: p, DB: beaconDB},
+		cfg:          &Config{Chain: mc, P2P: p, DB: beaconDB, CustodyInfo: &peerdas.CustodyInfo{}},
 		synced:       abool.New(),
 		chainStarted: abool.NewBool(true),
 		clock:        clock,
@@ -631,7 +632,7 @@ func TestService_syncToFinalizedEpoch(t *testing.T) {
 	}
 	s := &Service{
 		ctx:          context.Background(),
-		cfg:          &Config{Chain: mc, P2P: p, DB: beaconDB},
+		cfg:          &Config{Chain: mc, P2P: p, DB: beaconDB, CustodyInfo: &peerdas.CustodyInfo{}},
 		synced:       abool.New(),
 		chainStarted: abool.NewBool(true),
 		counter:      ratecounter.NewRateCounter(counterSeconds * time.Second),

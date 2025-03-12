@@ -7,50 +7,10 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/kzg"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
-	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"github.com/prysmaticlabs/prysm/v5/testing/util"
 )
-
-func TestCustodyGroupCount(t *testing.T) {
-	testCases := []struct {
-		name                  string
-		subscribeToAllSubnets bool
-		expected              uint64
-	}{
-		{
-			name:                  "subscribeToAllSubnets=false",
-			subscribeToAllSubnets: false,
-			expected:              params.BeaconConfig().CustodyRequirement,
-		},
-		{
-			name:                  "subscribeToAllSubnets=true",
-			subscribeToAllSubnets: true,
-			expected:              params.BeaconConfig().DataColumnSidecarSubnetCount,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			// Set flags.
-			resetFlags := flags.Get()
-			defer func() {
-				flags.Init(resetFlags)
-			}()
-
-			params.SetupTestConfigCleanup(t)
-			gFlags := new(flags.GlobalFlags)
-			gFlags.SubscribeToAllSubnets = tc.subscribeToAllSubnets
-			flags.Init(gFlags)
-
-			// Get the custody subnet count.
-			actual := peerdas.CustodyGroupCount()
-			require.Equal(t, tc.expected, actual)
-		})
-	}
-}
 
 func TestVerifyDataColumnSidecarKZGProofs(t *testing.T) {
 	dbBlock := util.NewBeaconBlockDeneb()

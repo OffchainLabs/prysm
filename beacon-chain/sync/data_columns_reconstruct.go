@@ -54,8 +54,12 @@ func (s *Service) reconstructDataColumns(ctx context.Context, verifiedRODataColu
 	// Retrieve the node ID.
 	nodeID := s.cfg.p2p.NodeID()
 
+	// Prevent custody group count to change during the rest of the function.
+	s.cfg.custodyInfo.Mut.RLock()
+	defer s.cfg.custodyInfo.Mut.RUnlock()
+
 	// Compute the custody group count.
-	custodyGroupCount := peerdas.CustodyGroupCount()
+	custodyGroupCount := s.cfg.custodyInfo.ActualGroupCount()
 
 	// Retrieve our local node info.
 	localNodeInfo, _, err := peerdas.Info(nodeID, custodyGroupCount)
@@ -167,8 +171,12 @@ func (s *Service) scheduleReconstructedDataColumnsBroadcast(
 		// Get the node ID.
 		nodeID := s.cfg.p2p.NodeID()
 
+		// Prevent custody group count to change during the rest of the function.
+		s.cfg.custodyInfo.Mut.RLock()
+		defer s.cfg.custodyInfo.Mut.RUnlock()
+
 		// Get the custody group count.
-		custodyGroupCount := peerdas.CustodyGroupCount()
+		custodyGroupCount := s.cfg.custodyInfo.ActualGroupCount()
 
 		// Retrieve the local node info.
 		localNodeInfo, _, err := peerdas.Info(nodeID, custodyGroupCount)

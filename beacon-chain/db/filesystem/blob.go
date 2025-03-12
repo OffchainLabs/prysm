@@ -401,7 +401,7 @@ func (bs *BlobStorage) GetColumn(root [32]byte, idx uint64) (blocks.VerifiedRODa
 	return verification.VerifiedRODataColumnFromDisk(bs.fs, root, bs.layout.sszPath(ident))
 }
 
-// Remove removes all blobs for a given root.
+// Remove removes all blobs or data columns for a given root.
 func (bs *BlobStorage) Remove(root [32]byte) error {
 	dirIdent, err := bs.layout.dirIdent(root)
 	if err != nil {

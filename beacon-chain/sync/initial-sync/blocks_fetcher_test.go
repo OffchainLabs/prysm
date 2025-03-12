@@ -1329,7 +1329,8 @@ type blockParams struct {
 
 func TestCustodyColumns(t *testing.T) {
 	blocksFetcher := newBlocksFetcher(context.Background(), &blocksFetcherConfig{
-		p2p: p2ptest.NewTestP2P(t),
+		p2p:         p2ptest.NewTestP2P(t),
+		custodyInfo: &peerdas.CustodyInfo{},
 	})
 
 	expected := params.BeaconConfig().CustodyRequirement
@@ -2270,11 +2271,12 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 
 			// Create the block fetcher.
 			blocksFetcher := newBlocksFetcher(ctx, &blocksFetcherConfig{
-				clock:  clock,
-				ctxMap: map[[4]byte]int{{245, 165, 253, 66}: version.Fulu},
-				p2p:    p2pSvc,
-				bs:     blobStorageSummarizer,
-				cv:     newDataColumnsVerifierFromInitializer(ini),
+				clock:       clock,
+				ctxMap:      map[[4]byte]int{{245, 165, 253, 66}: version.Fulu},
+				p2p:         p2pSvc,
+				bs:          blobStorageSummarizer,
+				cv:          newDataColumnsVerifierFromInitializer(ini),
+				custodyInfo: &peerdas.CustodyInfo{},
 			})
 
 			// Fetch the data columns from the peers.

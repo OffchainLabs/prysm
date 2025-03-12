@@ -25,6 +25,7 @@ import (
 	blockfeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/block"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/operation"
 	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/execution"
@@ -102,6 +103,7 @@ type config struct {
 	clock                   *startup.Clock
 	stateNotifier           statefeed.Notifier
 	blobStorage             *filesystem.BlobStorage
+	custodyInfo             *peerdas.CustodyInfo
 }
 
 // This defines the interface for interacting with block chain service
@@ -167,6 +169,7 @@ type Service struct {
 	newBlobVerifier                  verification.NewBlobVerifier
 	newColumnsVerifier               verification.NewDataColumnsVerifier
 	availableBlocker                 coverage.AvailableBlocker
+	trackedValidatorsCache           *cache.TrackedValidatorsCache
 	dataColumsnReconstructionLock    sync.Mutex
 	receivedDataColumnsFromRoot      *gcache.Cache
 	receivedDataColumnsFromRootLock  sync.RWMutex
@@ -265,6 +268,7 @@ func (s *Service) Start() {
 	s.processPendingAttsQueue()
 	s.maintainPeerStatuses()
 	s.resyncIfBehind()
+	s.maintainValidatorsCustody()
 
 	// Update sync metrics.
 	async.RunEvery(s.ctx, syncMetricsInterval, s.updateMetrics)

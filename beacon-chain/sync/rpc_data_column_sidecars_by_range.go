@@ -8,7 +8,6 @@ import (
 
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	p2ptypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
@@ -94,36 +93,14 @@ func (s *Service) dataColumnSidecarsByRangeRPCHandler(ctx context.Context, msg i
 		return errors.New("message is not type *pb.DataColumnSidecarsByRangeRequest")
 	}
 
-	// Get our node ID.
-	nodeID := s.cfg.p2p.NodeID()
 	numberOfColumns := params.BeaconConfig().NumberOfColumns
-
-	// Get the number of groups we should custody.
-	custodyGroupCount := peerdas.CustodyGroupCount()
-
-	// Retrieve the peer info.
-	peerInfo, _, err := peerdas.Info(nodeID, custodyGroupCount)
-	if err != nil {
-		s.writeErrorResponseToStream(responseCodeServerError, err.Error(), stream)
-		return errors.Wrap(err, "peer info")
-	}
-
-	custodyColumns := peerInfo.CustodyColumns
-	custodyColumnsCount := uint64(len(custodyColumns))
 
 	// Compute requested columns.
 	requestedColumns := r.Columns
 	requestedColumnsCount := uint64(len(requestedColumns))
 
 	// Format log fields.
-	var (
-		custodyColumnsLog   interface{} = "all"
-		requestedColumnsLog interface{} = "all"
-	)
-
-	if custodyColumnsCount != numberOfColumns {
-		custodyColumnsLog = uint64MapToSortedSlice(custodyColumns)
-	}
+	var requestedColumnsLog interface{} = "all"
 
 	if requestedColumnsCount != numberOfColumns {
 		requestedColumnsLog = requestedColumns
@@ -134,7 +111,6 @@ func (s *Service) dataColumnSidecarsByRangeRPCHandler(ctx context.Context, msg i
 
 	log.WithFields(logrus.Fields{
 		"remotePeer":       remotePeer,
-		"custodyColumns":   custodyColumnsLog,
 		"requestedColumns": requestedColumnsLog,
 		"startSlot":        r.StartSlot,
 		"count":            r.Count,

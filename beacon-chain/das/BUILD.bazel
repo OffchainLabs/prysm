@@ -37,6 +37,7 @@ go_test(
     ],
     embed = [":go_default_library"],
     deps = [
+        "//beacon-chain/core/peerdas:go_default_library",
         "//beacon-chain/db/filesystem:go_default_library",
         "//beacon-chain/verification:go_default_library",
         "//cmd/beacon-chain/flags:go_default_library",

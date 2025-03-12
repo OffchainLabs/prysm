@@ -11,10 +11,12 @@ import (
 	"github.com/holiman/uint256"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/kzg"
+	beaconState "github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/crypto/hash"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
@@ -28,6 +30,13 @@ var (
 
 	// maxUint256 is the maximum value of a uint256.
 	maxUint256 = &uint256.Int{math.MaxUint64, math.MaxUint64, math.MaxUint64, math.MaxUint64}
+)
+
+type CustodyType int
+
+const (
+	Target CustodyType = iota
+	Actual
 )
 
 // CustodyGroups computes the custody groups the node should participate in for custody.
@@ -193,10 +202,14 @@ func DataColumnSidecars(signedBlock interfaces.ReadOnlySignedBeaconBlock, blobs 
 
 // CustodyGroupSamplingSize returns the number of custody groups the node should sample from.
 // https://github.com/ethereum/consensus-specs/blob/v1.5.0-alpha.10/specs/fulu/das-core.md#custody-sampling
-func CustodyGroupSamplingSize() uint64 {
-	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
-	custodyGroupCount := CustodyGroupCount()
+func (custodyInfo *CustodyInfo) CustodyGroupSamplingSize(ct CustodyType) uint64 {
+	custodyGroupCount := custodyInfo.TargetGroupCount.Get()
 
+	if ct == Actual {
+		custodyGroupCount = custodyInfo.ActualGroupCount()
+	}
+
+	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
 	return max(samplesPerSlot, custodyGroupCount)
 }
 
@@ -224,6 +237,28 @@ func CustodyColumns(custodyGroups map[uint64]bool) (map[uint64]bool, error) {
 	}
 
 	return columns, nil
+}
+
+// ValidatorsCustodyRequirement returns the number of custody groups regarding the validator indices attached to the beacon node.
+// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/das-core.md#validator-custody
+func ValidatorsCustodyRequirement(state beaconState.ReadOnlyBeaconState, validatorsIndex map[primitives.ValidatorIndex]bool) (uint64, error) {
+	totalNodeBalance := uint64(0)
+	for index := range validatorsIndex {
+		balance, err := state.BalanceAtIndex(index)
+		if err != nil {
+			return 0, errors.Wrapf(err, "balance at index for validator index %v", index)
+		}
+
+		totalNodeBalance += balance
+	}
+
+	beaconConfig := params.BeaconConfig()
+	numberOfCustodyGroup := beaconConfig.NumberOfCustodyGroups
+	validatorCustodyRequirement := beaconConfig.ValidatorCustodyRequirement
+	balancePerAdditionalCustodyGroup := beaconConfig.BalancePerAdditionalCustodyGroup
+
+	count := totalNodeBalance / balancePerAdditionalCustodyGroup
+	return min(max(count, validatorCustodyRequirement), numberOfCustodyGroup), nil
 }
 
 // Blobs extract blobs from `dataColumnsSidecar`.

@@ -82,7 +82,7 @@ func (s *Service) sendBeaconBlocksRequest(
 				blkRoot,
 				blk,
 				s.cfg.p2p.NodeID(),
-				peerdas.CustodyGroupSamplingSize(),
+				s.cfg.custodyInfo.CustodyGroupSamplingSize(peerdas.Actual),
 				s.cfg.blobStorage,
 			)
 			if err != nil {

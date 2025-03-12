@@ -57,6 +57,7 @@ type Config struct {
 	ClockWaiter         startup.ClockWaiter
 	InitialSyncComplete chan struct{}
 	BlobStorage         *filesystem.BlobStorage
+	CustodyInfo         *peerdas.CustodyInfo
 }
 
 // Service service.
@@ -386,11 +387,14 @@ func (s *Service) fetchOriginColumns(pids []peer.ID) error {
 	if err != nil {
 		return err
 	}
+
+	custodyGroupCount := s.cfg.CustodyInfo.ActualGroupCount()
+
 	missingColumns, err := sync.FindMissingDataColumns(
 		r,
 		rob,
 		s.cfg.P2P.NodeID(),
-		peerdas.CustodyGroupCount(),
+		custodyGroupCount,
 		s.cfg.BlobStorage,
 	)
 	if err != nil {
@@ -417,7 +421,7 @@ func (s *Service) fetchOriginColumns(pids []peer.ID) error {
 
 	// FIXME: It's not clear that the caching layer is doing anything here or in
 	// fetchOriginBlobs, which is presumably where this logic was derived from.
-	avs := das.NewLazilyPersistentStoreColumn(s.cfg.BlobStorage)
+	avs := das.NewLazilyPersistentStoreColumn(s.cfg.BlobStorage, s.cfg.CustodyInfo)
 	current := s.clock.CurrentSlot()
 	if err := avs.PersistColumns(current, sidecars...); err != nil {
 		return err

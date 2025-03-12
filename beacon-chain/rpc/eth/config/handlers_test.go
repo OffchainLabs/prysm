@@ -198,7 +198,7 @@ func TestGetSpec(t *testing.T) {
 	data, ok := resp.Data.(map[string]interface{})
 	require.Equal(t, true, ok)
 
-	assert.Equal(t, 171, len(data))
+	assert.Equal(t, 173, len(data))
 	for k, v := range data {
 		t.Run(k, func(t *testing.T) {
 			switch k {
@@ -547,9 +547,13 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "1152", v)
 			case "NUMBER_OF_CUSTODY_GROUPS":
 				assert.Equal(t, "128", v)
+			case "BALANCE_PER_ADDITIONAL_CUSTODY_GROUP":
+				assert.Equal(t, "32000000000", v)
 			case "CUSTODY_REQUIREMENT":
 				assert.Equal(t, "4", v)
 			case "SAMPLES_PER_SLOT":
+				assert.Equal(t, "8", v)
+			case "VALIDATOR_CUSTODY_REQUIREMENT":
 				assert.Equal(t, "8", v)
 			case "MIN_EPOCHS_FOR_DATA_COLUMN_SIDECARS_REQUESTS":
 				assert.Equal(t, "4096", v)
