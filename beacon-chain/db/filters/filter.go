@@ -132,3 +132,21 @@ func (q *QueryFilter) SetSlotStep(val uint64) *QueryFilter {
 	q.queries[SlotStep] = val
 	return q
 }
+
+// SimpleSlotRange returns the start and end slot of a query filter if it is a simple slot range query.
+// A simple slot range query is one where the filter only contains a start slot and an end slot.
+// If the query is not a simple slot range query, the bool return value will be false.
+func (q *QueryFilter) SimpleSlotRange() (primitives.Slot, primitives.Slot, bool) {
+	if len(q.queries) != 2 || q.queries[StartSlot] == nil || q.queries[EndSlot] == nil {
+		return 0, 0, false
+	}
+	start, ok := q.queries[StartSlot].(primitives.Slot)
+	if !ok {
+		return 0, 0, false
+	}
+	end, ok := q.queries[EndSlot].(primitives.Slot)
+	if !ok {
+		return 0, 0, false
+	}
+	return start, end, true
+}

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/golang/snappy"
@@ -124,6 +125,10 @@ func (s *Store) Blocks(ctx context.Context, f *filters.QueryFilter) ([]interface
 	blocks := make([]interfaces.ReadOnlySignedBeaconBlock, 0)
 	blockRoots := make([][32]byte, 0)
 
+	if start, end, isSimple := f.SimpleSlotRange(); isSimple {
+		return s.blocksForSlotRange(ctx, start, end)
+	}
+
 	err := s.db.View(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(blocksBucket)
 
@@ -144,6 +149,69 @@ func (s *Store) Blocks(ctx context.Context, f *filters.QueryFilter) ([]interface
 		return nil
 	})
 	return blocks, blockRoots, err
+}
+
+// cleanupMissingBlockIndices cleans up the slot->root mapping, and the parent root index pointing
+// from each of these blocks to each of their children. Since we don't have the blocks themselves,
+// we don't know their parent root to efficiently clean the index going the other direction.
+func (s *Store) cleanupMissingBlockIndices(ctx context.Context, badBlocks []slotRoot) {
+	errs := make([]error, 0)
+	err := s.db.Update(func(tx *bolt.Tx) error {
+		for _, sr := range badBlocks {
+			log.WithField("root", fmt.Sprintf("%#x", sr.root)).WithField("slot", sr.slot).Warn("Cleaning up indices for missing block")
+			if err := s.deleteSlotIndexEntry(tx, sr.slot, sr.root); err != nil {
+				errs = append(errs, errors.Wrapf(err, "failed to clean up slot index entry for root %#x and slot %d", sr.root, sr.slot))
+			}
+			if err := tx.Bucket(blockParentRootIndicesBucket).Delete(sr.root[:]); err != nil {
+				errs = append(errs, errors.Wrapf(err, "failed to clean up block parent index for root %#x", sr.root))
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		errs = append(errs, err)
+	}
+	for _, err := range errs {
+		log.WithError(err).Error("Failed to clean up indices for missing block")
+	}
+}
+
+// blocksForSlotRange gets all blocks and roots for a given slot range.
+// This function uses the slot->root index, which can contain multiple entries for the same slot
+// in case of forks. It will return all blocks for the given slot range, and the roots of those blocks.
+// The [i]th element of the blocks slice corresponds to the [i]th element of the roots slice.
+// If a block is not found, it will be added to a slice of missing blocks, which will have their indices cleaned
+// in a separate Update transaction before the method returns. This is done to compensate for a previous bug where
+// block deletions left danging index entries.
+func (s *Store) blocksForSlotRange(ctx context.Context, startSlot, endSlot primitives.Slot) ([]interfaces.ReadOnlySignedBeaconBlock, [][32]byte, error) {
+	slotRootPairs, err := s.slotRootsInRange(ctx, startSlot, endSlot, -1) // set batch size to zero to retrieve all
+	if err != nil {
+		return nil, nil, err
+	}
+	slices.Reverse(slotRootPairs)
+	badBlocks := make([]slotRoot, 0)
+	defer func() { s.cleanupMissingBlockIndices(ctx, badBlocks) }()
+	roots := make([][32]byte, 0, len(slotRootPairs))
+	blks := make([]interfaces.ReadOnlySignedBeaconBlock, 0, len(slotRootPairs))
+	err = s.db.View(func(tx *bolt.Tx) error {
+		for _, sr := range slotRootPairs {
+			blk, err := s.getBlock(ctx, sr.root, tx)
+			if err != nil {
+				if errors.Is(err, ErrNotFound) {
+					badBlocks = append(badBlocks, sr)
+					continue
+				}
+				return err
+			}
+			roots = append(roots, sr.root)
+			blks = append(blks, blk)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	return blks, roots, nil
 }
 
 // BlockRoots retrieves a list of beacon block roots by filter criteria. If the caller
@@ -720,6 +788,7 @@ type slotRoot struct {
 }
 
 // slotRootsInRange returns slot and block root pairs of length min(batchSize, end-slot)
+// If batchSize < 0, the limit check will be skipped entirely.
 func (s *Store) slotRootsInRange(ctx context.Context, start, end primitives.Slot, batchSize int) ([]slotRoot, error) {
 	_, span := trace.StartSpan(ctx, "BeaconDB.slotRootsInRange")
 	defer span.End()
@@ -729,10 +798,26 @@ func (s *Store) slotRootsInRange(ctx context.Context, start, end primitives.Slot
 
 	var pairs []slotRoot
 	key := bytesutil.SlotToBytesBigEndian(end)
+
+	edge := false // used to detect whether we are at the very beginning or end of the index
 	err := s.db.View(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(blockSlotIndicesBucket)
 		c := bkt.Cursor()
-		for k, v := c.Seek(key); k != nil; k, v = c.Prev() {
+		for k, v := c.Seek(key); ; /* rely on internal checks to exit */ k, v = c.Prev() {
+			if len(k) == 0 && len(v) == 0 {
+				// The `edge`` variable and this `if` deal with 2 edge cases:
+				// - Seeking past the end of the bucket (the `end` param is higher than the highest slot).
+				// - Seeking before the beginning of the bucket (the `start` param is lower than the lowest slot).
+				// In both of these cases k,v will be nil and we can handle the same way using `edge` to
+				// - continue to the next iteration. If the following Prev() key/value is nil, Prev has gone past the beginning.
+				// - Otherwise, iterate as usual.
+				if edge {
+					return nil
+				}
+				edge = true
+				continue
+			}
+			edge = false
 			slot := bytesutil.BytesToSlotBigEndian(k)
 			if slot > end {
 				continue // Seek will seek to the next key *after* the given one if not present
@@ -747,11 +832,13 @@ func (s *Store) slotRootsInRange(ctx context.Context, start, end primitives.Slot
 			for _, r := range roots {
 				pairs = append(pairs, slotRoot{slot: slot, root: r})
 			}
+			if batchSize < 0 {
+				continue
+			}
 			if len(pairs) >= batchSize {
 				return nil // allows code to easily cap the number of items pruned
 			}
 		}
-		return nil
 	})
 
 	return pairs, err
