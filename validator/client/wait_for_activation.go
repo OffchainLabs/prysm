@@ -84,9 +84,27 @@ func (v *validator) retryWaitForActivation(ctx context.Context, span octrace.Spa
 	tracing.AnnotateError(span, err)
 	attempts := activationAttempts(ctx)
 	log.WithError(err).WithField("attempts", attempts).Error(message)
-	// Reconnection attempt backoff, up to 60s.
-	time.Sleep(time.Second * time.Duration(math.Min(uint64(attempts), 60)))
-	// TODO: refactor this to use the health tracker instead for reattempt
+
+	// Use the health tracker to determine if we should retry
+	healthTracker := v.HealthTracker()
+	if !healthTracker.IsHealthy() {
+		// Wait for the health tracker to signal that the connection is healthy again
+		select {
+		case <-ctx.Done():
+			log.Debug("Context closed, exiting retryWaitForActivation")
+			return ctx.Err()
+		case isHealthy := <-healthTracker.HealthUpdates():
+			if !isHealthy {
+				// If still not healthy, continue with exponential backoff
+				time.Sleep(time.Second * time.Duration(math.Min(uint64(attempts), 60)))
+			}
+		}
+	} else {
+		// If the health tracker says we're healthy but we still got an error,
+		// use exponential backoff before retrying
+		time.Sleep(time.Second * time.Duration(math.Min(uint64(attempts), 60)))
+	}
+
 	return v.internalWaitForActivation(incrementRetries(ctx), accountsChangedChan)
 }
 
