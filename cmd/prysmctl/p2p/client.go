@@ -180,18 +180,15 @@ func (c *client) initializeMockChainService(ctx context.Context, forkVersion int
 		return nil, err
 	}
 
-	// Create chain service with specific fork version if specified
 	currEpoch := slots.ToEpoch(slots.SinceGenesis(genesisResp.GenesisTime.AsTime()))
 	var currFork *pb.Fork
 
 	if forkVersion == -1 {
-		// Auto-detect fork version based on current epoch (default behavior)
 		currFork, err = forks.Fork(currEpoch)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		// Create fork based on explicit fork version
 		var forkVersionBytes [fieldparams.VersionLength]byte
 
 		// Map runtime/version constants to beacon config version bytes
