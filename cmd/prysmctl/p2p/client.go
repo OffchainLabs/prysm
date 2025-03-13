@@ -21,6 +21,8 @@ import (
 	"github.com/prysmaticlabs/go-bitfield"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/encoder"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/wrapper"
 	ecdsaprysm "github.com/prysmaticlabs/prysm/v5/crypto/ecdsa"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
@@ -172,16 +174,55 @@ func (c *client) retrievePeerAddressesViaRPC(ctx context.Context, beaconEndpoint
 	return peers, nil
 }
 
-func (c *client) initializeMockChainService(ctx context.Context) (*mockChain, error) {
+func (c *client) initializeMockChainService(ctx context.Context, forkVersion int) (*mockChain, error) {
 	genesisResp, err := c.nodeClient.GetGenesis(ctx, &emptypb.Empty{})
 	if err != nil {
 		return nil, err
 	}
+
+	// Create chain service with specific fork version if specified
 	currEpoch := slots.ToEpoch(slots.SinceGenesis(genesisResp.GenesisTime.AsTime()))
-	currFork, err := forks.Fork(currEpoch)
-	if err != nil {
-		return nil, err
+	var currFork *pb.Fork
+
+	if forkVersion == -1 {
+		// Auto-detect fork version based on current epoch (default behavior)
+		currFork, err = forks.Fork(currEpoch)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		// Create fork based on explicit fork version
+		var forkVersionBytes [fieldparams.VersionLength]byte
+
+		// Map runtime/version constants to beacon config version bytes
+		switch forkVersion {
+		case version.Phase0:
+			forkVersionBytes = bytesutil.ToBytes4(params.BeaconConfig().GenesisForkVersion)
+		case version.Altair:
+			forkVersionBytes = bytesutil.ToBytes4(params.BeaconConfig().AltairForkVersion)
+		case version.Bellatrix:
+			forkVersionBytes = bytesutil.ToBytes4(params.BeaconConfig().BellatrixForkVersion)
+		case version.Capella:
+			forkVersionBytes = bytesutil.ToBytes4(params.BeaconConfig().CapellaForkVersion)
+		case version.Deneb:
+			forkVersionBytes = bytesutil.ToBytes4(params.BeaconConfig().DenebForkVersion)
+		case version.Electra:
+			forkVersionBytes = bytesutil.ToBytes4(params.BeaconConfig().ElectraForkVersion)
+		case version.Fulu:
+			forkVersionBytes = bytesutil.ToBytes4(params.BeaconConfig().FuluForkVersion)
+		default:
+			return nil, errors.Errorf("unsupported fork version: %d", forkVersion)
+		}
+
+		// Create fork data from version bytes
+		orderedSchedule := forks.NewOrderedSchedule(params.BeaconConfig())
+		currFork, err = orderedSchedule.ForkFromVersion(forkVersionBytes)
+		if err != nil {
+			return nil, err
+		}
+		log.Infof("Using explicit fork version: %s", version.String(forkVersion))
 	}
+
 	return &mockChain{
 		genesisTime:     genesisResp.GenesisTime.AsTime(),
 		currentFork:     currFork,

@@ -15,6 +15,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	pb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
@@ -28,6 +29,7 @@ var requestBlobsFlags = struct {
 	APIEndpoints   string
 	StartSlot      uint64
 	Count          uint64
+	Fork           string
 }{}
 
 var requestBlobsCmd = &cli.Command{
@@ -41,6 +43,12 @@ var requestBlobsCmd = &cli.Command{
 	},
 	Flags: []cli.Flag{
 		cmd.ChainConfigFileFlag,
+		&cli.StringFlag{
+			Name:        "fork",
+			Usage:       "fork version to use (phase0, altair, bellatrix, capella, deneb, electra, fulu)",
+			Destination: &requestBlobsFlags.Fork,
+			Value:       "",
+		},
 		&cli.StringFlag{
 			Name:        "peer-multiaddrs",
 			Usage:       "comma-separated, peer multiaddr(s) to connect to for p2p requests",
@@ -118,7 +126,28 @@ func cliActionRequestBlobs(cliCtx *cli.Context) error {
 		return errors.New("no peers found")
 	}
 	log.WithField("peers", allPeers).Info("List of peers")
-	chain, err := c.initializeMockChainService(ctx)
+
+	// Process fork flag
+	forkVersion := -1 // -1 means auto-detect based on current epoch
+	if requestBlobsFlags.Fork != "" {
+		forkVersion, err = version.FromString(strings.ToLower(requestBlobsFlags.Fork))
+		if err != nil {
+			availableForks := []string{}
+			for _, id := range version.All() {
+				availableForks = append(availableForks, version.String(id))
+			}
+			return errors.Errorf("invalid fork %q, available options: %s",
+				requestBlobsFlags.Fork, strings.Join(availableForks, ", "))
+		}
+
+		// For blobs, we need at least Deneb fork
+		if forkVersion < version.Deneb {
+			return errors.Errorf("blob sidecars are only available from Deneb fork onwards (requested: %s)",
+				version.String(forkVersion))
+		}
+	}
+
+	chain, err := c.initializeMockChainService(ctx, forkVersion)
 	if err != nil {
 		return err
 	}

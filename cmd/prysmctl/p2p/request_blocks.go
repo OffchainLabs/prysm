@@ -16,6 +16,7 @@ import (
 	consensus_types "github.com/prysmaticlabs/prysm/v5/consensus-types"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	pb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
@@ -31,6 +32,7 @@ var requestBlocksFlags = struct {
 	StartSlot      uint64
 	Count          uint64
 	Step           uint64
+	Fork           string
 }{}
 
 var requestBlocksCmd = &cli.Command{
@@ -49,6 +51,12 @@ var requestBlocksCmd = &cli.Command{
 			Usage:       "network to run on (mainnet, sepolia, holesky)",
 			Destination: &requestBlocksFlags.Network,
 			Value:       "mainnet",
+		},
+		&cli.StringFlag{
+			Name:        "fork",
+			Usage:       "fork version to use (phase0, altair, bellatrix, capella, deneb, electra, fulu)",
+			Destination: &requestBlocksFlags.Fork,
+			Value:       "",
 		},
 		&cli.StringFlag{
 			Name:        "peer-multiaddrs",
@@ -148,7 +156,22 @@ func cliActionRequestBlocks(cliCtx *cli.Context) error {
 		return errors.New("no peers found")
 	}
 	log.WithField("peers", allPeers).Info("List of peers")
-	chain, err := c.initializeMockChainService(ctx)
+
+	// Process fork flag
+	forkVersion := -1 // -1 means auto-detect based on current epoch
+	if requestBlocksFlags.Fork != "" {
+		forkVersion, err = version.FromString(strings.ToLower(requestBlocksFlags.Fork))
+		if err != nil {
+			availableForks := []string{}
+			for _, id := range version.All() {
+				availableForks = append(availableForks, version.String(id))
+			}
+			return errors.Errorf("invalid fork %q, available options: %s",
+				requestBlocksFlags.Fork, strings.Join(availableForks, ", "))
+		}
+	}
+
+	chain, err := c.initializeMockChainService(ctx, forkVersion)
 	if err != nil {
 		return err
 	}
