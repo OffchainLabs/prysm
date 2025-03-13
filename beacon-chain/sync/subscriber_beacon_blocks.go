@@ -63,12 +63,14 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 
 // reconstructAndBroadcastBlobs processes and broadcasts blob sidecars for a given beacon block.
 func (s *Service) reconstructAndBroadcastBlobs(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) {
-	if block.Version() < version.Deneb {
-		return
-	} else if block.Version() < version.Fulu {
-		s.reconstructAndBroadcastFullBlobs(ctx, block)
-	} else {
+	if block.Version() >= version.Fulu {
 		s.reconstructAndBroadcastBlobsInDataColumn(ctx, block)
+		return
+	}
+
+	if block.Version() >= version.Deneb {
+		s.reconstructAndBroadcastFullBlobs(ctx, block)
+		return
 	}
 }
 
@@ -93,15 +95,15 @@ func (s *Service) reconstructAndBroadcastBlobsInDataColumn(ctx context.Context, 
 
 	nodeID := s.cfg.p2p.NodeID()
 	s.cfg.custodyInfo.Mut.RLock()
-	cgc := s.cfg.custodyInfo.CustodyGroupSamplingSize(peerdas.Actual)
-	s.cfg.custodyInfo.Mut.RUnlock()
-	info, _, err := peerdas.Info(nodeID, cgc)
+	defer s.cfg.custodyInfo.Mut.RUnlock()
+	samplingSize := s.cfg.custodyInfo.CustodyGroupSamplingSize(peerdas.Actual)
+	info, _, err := peerdas.Info(nodeID, samplingSize)
 	if err != nil {
 		log.WithError(err).Error("Failed to get peer info")
 		return
 	}
 
-	// Broadcast data column and then save to db (if needs to be custodied)
+	// Broadcast data column and then save to db (if needs to be in custody)
 	for _, sidecar := range sidecars {
 		if !info.CustodyColumns[sidecar.ColumnIndex] {
 			continue
