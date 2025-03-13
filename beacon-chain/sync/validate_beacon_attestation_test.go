@@ -23,6 +23,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"github.com/prysmaticlabs/prysm/v5/testing/util"
 )
@@ -501,23 +502,31 @@ func TestService_setSeenUnaggregatedAtt(t *testing.T) {
 		}
 
 		t.Run("empty cache", func(t *testing.T) {
-			require.Equal(t, false, s.hasSeenUnaggregatedAtt(s0c0a0))
+			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(s0c0a0))
 		})
 		t.Run("ok", func(t *testing.T) {
 			s.setSeenUnaggregatedAtt(s0c0a0)
-			require.Equal(t, true, s.hasSeenUnaggregatedAtt(s0c0a0))
+			assert.Equal(t, true, s.hasSeenUnaggregatedAtt(s0c0a0))
 		})
 		t.Run("different slot", func(t *testing.T) {
 			s.setSeenUnaggregatedAtt(s1c0a0)
-			require.Equal(t, false, s.hasSeenUnaggregatedAtt(s2c0a0))
+			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(s2c0a0))
 		})
 		t.Run("different committee index", func(t *testing.T) {
 			s.setSeenUnaggregatedAtt(s0c1a0)
-			require.Equal(t, false, s.hasSeenUnaggregatedAtt(s0c2a0))
+			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(s0c2a0))
 		})
 		t.Run("different bit", func(t *testing.T) {
 			s.setSeenUnaggregatedAtt(s0c0a1)
-			require.Equal(t, false, s.hasSeenUnaggregatedAtt(s0c0a2))
+			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(s0c0a2))
+		})
+		t.Run("0 bits set is considered seen", func(t *testing.T) {
+			a := &ethpb.Attestation{AggregationBits: bitfield.Bitlist{0b1000}}
+			assert.Equal(t, true, s.hasSeenUnaggregatedAtt(a))
+		})
+		t.Run("multiple bits set is considered seen", func(t *testing.T) {
+			a := &ethpb.Attestation{AggregationBits: bitfield.Bitlist{0b1111}}
+			assert.Equal(t, true, s.hasSeenUnaggregatedAtt(a))
 		})
 	})
 	t.Run("electra", func(t *testing.T) {
@@ -560,23 +569,27 @@ func TestService_setSeenUnaggregatedAtt(t *testing.T) {
 		}
 
 		t.Run("empty cache", func(t *testing.T) {
-			require.Equal(t, false, s.hasSeenUnaggregatedAtt(s0c0a0))
+			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(s0c0a0))
 		})
 		t.Run("ok", func(t *testing.T) {
 			s.setSeenUnaggregatedAtt(s0c0a0)
-			require.Equal(t, true, s.hasSeenUnaggregatedAtt(s0c0a0))
+			assert.Equal(t, true, s.hasSeenUnaggregatedAtt(s0c0a0))
 		})
 		t.Run("different slot", func(t *testing.T) {
 			s.setSeenUnaggregatedAtt(s1c0a0)
-			require.Equal(t, false, s.hasSeenUnaggregatedAtt(s2c0a0))
+			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(s2c0a0))
 		})
 		t.Run("different committee index", func(t *testing.T) {
 			s.setSeenUnaggregatedAtt(s0c1a0)
-			require.Equal(t, false, s.hasSeenUnaggregatedAtt(s0c2a0))
+			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(s0c2a0))
 		})
 		t.Run("different attester", func(t *testing.T) {
 			s.setSeenUnaggregatedAtt(s0c0a1)
-			require.Equal(t, false, s.hasSeenUnaggregatedAtt(s0c0a2))
+			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(s0c0a2))
+		})
+		t.Run("single attestation is considered seen", func(t *testing.T) {
+			a := &ethpb.AttestationElectra{}
+			assert.Equal(t, true, s.hasSeenUnaggregatedAtt(a))
 		})
 	})
 }

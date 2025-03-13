@@ -2,6 +2,7 @@ package sync
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"reflect"
 	"strings"
@@ -330,22 +331,27 @@ func validateAttestingIndex(
 func (s *Service) hasSeenUnaggregatedAtt(att eth.Att) bool {
 	s.seenUnAggregatedAttestationLock.RLock()
 	defer s.seenUnAggregatedAttestationLock.RUnlock()
+
 	var attester uint64
 	if att.Version() >= version.Electra {
 		if !att.IsSingle() {
-			log.Debug("Called hasSeenUnaggregatedAtt with a non-single Electra attestation")
+			log.Debug("Called hasSeenUnaggregatedAtt with a non-single Electra attestation. It will be considered seen")
+			return true
 		}
 		attester = uint64(att.GetAttestingIndex())
 	} else {
 		aggBits := att.GetAggregationBits()
 		if aggBits.Count() != 1 {
-			log.Debug("Attestation does not have exactly 1 bit set. It will be considered not seen")
-			return false
+			log.Debug("Attestation does not have exactly 1 bit set. It will be considered seen")
+			return true
 		}
 		attester = uint64(att.GetAggregationBits().BitIndices()[0])
 	}
-	b := append(bytesutil.Bytes32(uint64(att.GetData().Slot)), bytesutil.Bytes32(uint64(att.GetCommitteeIndex()))...)
-	b = append(b, bytesutil.Bytes32(attester)...)
+
+	b := make([]byte, 24)
+	binary.LittleEndian.PutUint64(b, uint64(att.GetData().Slot))
+	binary.LittleEndian.PutUint64(b[8:16], uint64(att.GetCommitteeIndex()))
+	binary.LittleEndian.PutUint64(b[16:], attester)
 	_, seen := s.seenUnAggregatedAttestationCache.Get(string(b))
 	return seen
 }
@@ -354,10 +360,12 @@ func (s *Service) hasSeenUnaggregatedAtt(att eth.Att) bool {
 func (s *Service) setSeenUnaggregatedAtt(att eth.Att) {
 	s.seenUnAggregatedAttestationLock.Lock()
 	defer s.seenUnAggregatedAttestationLock.Unlock()
+
 	var attester uint64
 	if att.Version() >= version.Electra {
 		if !att.IsSingle() {
-			log.Debug("Called setSeenUnaggregatedAtt with a non-single Electra attestation")
+			log.Debug("Called setSeenUnaggregatedAtt with a non-single Electra attestation. It will not be marked as seen")
+			return
 		}
 		attester = uint64(att.GetAttestingIndex())
 	} else {
@@ -368,8 +376,11 @@ func (s *Service) setSeenUnaggregatedAtt(att eth.Att) {
 		}
 		attester = uint64(att.GetAggregationBits().BitIndices()[0])
 	}
-	b := append(bytesutil.Bytes32(uint64(att.GetData().Slot)), bytesutil.Bytes32(uint64(att.GetCommitteeIndex()))...)
-	b = append(b, bytesutil.Bytes32(attester)...)
+
+	b := make([]byte, 24)
+	binary.LittleEndian.PutUint64(b, uint64(att.GetData().Slot))
+	binary.LittleEndian.PutUint64(b[8:16], uint64(att.GetCommitteeIndex()))
+	binary.LittleEndian.PutUint64(b[16:], attester)
 	s.seenUnAggregatedAttestationCache.Add(string(b), true)
 }
 
