@@ -8,21 +8,27 @@ import (
 )
 
 var (
+	// NetworkFlag is the unified flag for selecting which network to connect to.
+	NetworkFlag = &cli.StringFlag{
+		Name:  "network",
+		Usage: "The network to connect to. Options: mainnet, sepolia, holesky.",
+		Value: "mainnet", // Default to mainnet
+	}
 	// SepoliaTestnet flag for the multiclient Ethereum consensus testnet.
 	SepoliaTestnet = &cli.BoolFlag{
 		Name:  "sepolia",
-		Usage: "Runs Prysm configured for the Sepolia test network.",
+		Usage: "Runs Prysm configured for the Sepolia test network. Will be deprecated in Prysm V7, use --network=sepolia instead.",
 	}
 	// HoleskyTestnet flag for the multiclient Ethereum consensus testnet.
 	HoleskyTestnet = &cli.BoolFlag{
 		Name:  "holesky",
-		Usage: "Runs Prysm configured for the Holesky test network.",
+		Usage: "Runs Prysm configured for the Holesky test network. Will be deprecated in Prysm V7, use --network=holesky instead.",
 	}
 	// Mainnet flag for easier tooling, no-op
 	Mainnet = &cli.BoolFlag{
 		Value: true,
 		Name:  "mainnet",
-		Usage: "Runs on Ethereum main network. This is the default and can be omitted.",
+		Usage: "Runs on Ethereum main network. This is the default and can be omitted. Will be deprecated in Prysm V7, use --network=mainnet instead.",
 	}
 	devModeFlag = &cli.BoolFlag{
 		Name:  "dev",
@@ -188,6 +194,7 @@ var devModeFlags = []cli.Flag{
 // ValidatorFlags contains a list of all the feature flags that apply to the validator client.
 var ValidatorFlags = append(deprecatedFlags, []cli.Flag{
 	writeWalletPasswordOnWebOnboarding,
+	NetworkFlag,
 	HoleskyTestnet,
 	SepoliaTestnet,
 	Mainnet,
@@ -212,6 +219,7 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	saveInvalidBlockTempFlag,
 	saveInvalidBlobTempFlag,
 	disableGRPCConnectionLogging,
+	NetworkFlag,
 	HoleskyTestnet,
 	SepoliaTestnet,
 	Mainnet,
@@ -255,6 +263,7 @@ var E2EBeaconChainFlags = []string{
 
 // NetworkFlags contains a list of network flags.
 var NetworkFlags = []cli.Flag{
+	NetworkFlag,
 	Mainnet,
 	SepoliaTestnet,
 	HoleskyTestnet,

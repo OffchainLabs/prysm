@@ -126,9 +126,44 @@ func InitWithReset(c *Flags) func() {
 	return resetFunc
 }
 
-// configureTestnet sets the config according to specified testnet flag
+// configureTestnet sets the config according to specified network flag
 func configureTestnet(ctx *cli.Context) error {
+	// Handle new --network flag if set
+	if ctx.IsSet(NetworkFlag.Name) {
+		networkValue := ctx.String(NetworkFlag.Name)
+		switch networkValue {
+		case "sepolia":
+			log.Info("Running on the Sepolia Beacon Chain Testnet")
+			if err := params.SetActive(params.SepoliaConfig().Copy()); err != nil {
+				return err
+			}
+			applySepoliaFeatureFlags(ctx)
+			params.UseSepoliaNetworkConfig()
+			return nil
+		case "holesky":
+			log.Info("Running on the Holesky Beacon Chain Testnet")
+			if err := params.SetActive(params.HoleskyConfig().Copy()); err != nil {
+				return err
+			}
+			applyHoleskyFeatureFlags(ctx)
+			params.UseHoleskyNetworkConfig()
+			return nil
+		case "mainnet":
+			if ctx.IsSet(cmd.ChainConfigFileFlag.Name) {
+				log.Warn("Running on custom Ethereum network specified in a chain configuration yaml file")
+			} else {
+				log.Info("Running on Ethereum Mainnet")
+			}
+			if err := params.SetActive(params.MainnetConfig().Copy()); err != nil {
+				return err
+			}
+			return nil
+		}
+	}
+
+	// Legacy flag handling
 	if ctx.Bool(SepoliaTestnet.Name) {
+		log.Warn("The --sepolia flag is deprecated and will be removed in Prysm V7. Please use --network=sepolia instead.")
 		log.Info("Running on the Sepolia Beacon Chain Testnet")
 		if err := params.SetActive(params.SepoliaConfig().Copy()); err != nil {
 			return err
@@ -136,6 +171,7 @@ func configureTestnet(ctx *cli.Context) error {
 		applySepoliaFeatureFlags(ctx)
 		params.UseSepoliaNetworkConfig()
 	} else if ctx.Bool(HoleskyTestnet.Name) {
+		log.Warn("The --holesky flag is deprecated and will be removed in Prysm V7. Please use --network=holesky instead.")
 		log.Info("Running on the Holesky Beacon Chain Testnet")
 		if err := params.SetActive(params.HoleskyConfig().Copy()); err != nil {
 			return err
@@ -143,6 +179,11 @@ func configureTestnet(ctx *cli.Context) error {
 		applyHoleskyFeatureFlags(ctx)
 		params.UseHoleskyNetworkConfig()
 	} else {
+		// If --mainnet is explicitly set, show deprecation warning
+		if ctx.IsSet(Mainnet.Name) {
+			log.Warn("The --mainnet flag is deprecated and will be removed in Prysm V7. Please use --network=mainnet instead.")
+		}
+		
 		if ctx.IsSet(cmd.ChainConfigFileFlag.Name) {
 			log.Warn("Running on custom Ethereum network specified in a chain configuration yaml file")
 		} else {
@@ -371,22 +412,62 @@ func logDisabled(flag cli.DocGenerationFlag) {
 
 // ValidateNetworkFlags validates provided flags and
 // prevents beacon node or validator to start
-// if more than one network flag is provided
+// if more than one network flag or if both old and new style flags are provided
 func ValidateNetworkFlags(ctx *cli.Context) error {
-	networkFlagsCount := 0
-	for _, flag := range NetworkFlags {
-		if ctx.IsSet(flag.Names()[0]) {
-			networkFlagsCount++
-			if networkFlagsCount > 1 {
-				// using a forLoop so future addition
-				// doesn't require changes in this function
-				var flagNames []string
-				for _, flag := range NetworkFlags {
-					flagNames = append(flagNames, "--"+flag.Names()[0])
-				}
-				return fmt.Errorf("cannot use more than one network flag at the same time. Possible network flags are: %s", strings.Join(flagNames, ", "))
-			}
+	// Check if the new network flag is provided
+	isNewNetworkFlagSet := ctx.IsSet(NetworkFlag.Names()[0])
+	
+	// Count old-style network flags
+	oldNetworkFlagsCount := 0
+	oldNetworkFlagNames := []string{}
+	
+	// Only counting explicitly set flags, ignoring defaults
+	if ctx.IsSet(Mainnet.Names()[0]) {
+		oldNetworkFlagsCount++
+		oldNetworkFlagNames = append(oldNetworkFlagNames, "--"+Mainnet.Names()[0])
+	}
+	if ctx.IsSet(SepoliaTestnet.Names()[0]) {
+		oldNetworkFlagsCount++
+		oldNetworkFlagNames = append(oldNetworkFlagNames, "--"+SepoliaTestnet.Names()[0])
+	}
+	if ctx.IsSet(HoleskyTestnet.Names()[0]) {
+		oldNetworkFlagsCount++
+		oldNetworkFlagNames = append(oldNetworkFlagNames, "--"+HoleskyTestnet.Names()[0])
+	}
+	
+	// Error if both new and old style flags are used
+	if isNewNetworkFlagSet && oldNetworkFlagsCount > 0 {
+		return fmt.Errorf(
+			"cannot use both --network and old-style network flags at the same time. "+
+			"Please use only --network=%s instead of %s",
+			ctx.String(NetworkFlag.Names()[0]),
+			strings.Join(oldNetworkFlagNames, ", "),
+		)
+	}
+	
+	// Error if multiple old-style network flags are provided
+	if oldNetworkFlagsCount > 1 {
+		return fmt.Errorf(
+			"cannot use more than one network flag at the same time. "+
+			"Consider using --network=<network> instead of %s",
+			strings.Join(oldNetworkFlagNames, ", "),
+		)
+	}
+	
+	// Validate that network value is valid when using the new flag
+	if isNewNetworkFlagSet {
+		networkValue := ctx.String(NetworkFlag.Names()[0])
+		switch networkValue {
+		case "mainnet", "sepolia", "holesky":
+			// These are valid
+		default:
+			return fmt.Errorf(
+				"invalid network value %q for --network flag. "+
+				"Valid options are: mainnet, sepolia, holesky",
+				networkValue,
+			)
 		}
 	}
+	
 	return nil
 }
