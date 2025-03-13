@@ -642,13 +642,13 @@ func (s *Service) ReconstructBlobSidecars(ctx context.Context, block interfaces.
 }
 
 // ReconstructDataColumnSidecars reconstructs the verified data column sidecars for a given beacon block.
-// It retrieves the KZG commitments from the block body, fetches the associated blobs and cell proofs,
+// It retrieves the KZG commitments from the block body, fetches the associated blobs and cell proofs from the EL,
 // and constructs the corresponding verified read-only data column sidecars.
 func (s *Service) ReconstructDataColumnSidecars(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte) ([]blocks.VerifiedRODataColumn, error) {
 	blockBody := block.Block().Body()
 	kzgCommitments, err := blockBody.BlobKzgCommitments()
 	if err != nil {
-		return nil, wrapWithBlockRoot(err, blockRoot, "could not get blob KZG commitments")
+		return nil, wrapWithBlockRoot(err, blockRoot, "blob KZG commitments")
 	}
 
 	// Collect KZG hashes for all blobs
@@ -657,20 +657,18 @@ func (s *Service) ReconstructDataColumnSidecars(ctx context.Context, block inter
 		kzgHashes = append(kzgHashes, primitives.ConvertKzgCommitmentToVersionedHash(commitment))
 	}
 
-	// Fetch all blobs from EL
-	blobs, err := s.GetBlobsV2(ctx, kzgHashes)
+	// Fetch all blobsAndCellsProofs from EL
+	blobsAndCellsProofs, err := s.GetBlobsV2(ctx, kzgHashes)
 	if err != nil {
-		return nil, wrapWithBlockRoot(err, blockRoot, "could not get blobs")
-	}
-
-	for _, blobAndCellProofs := range blobs {
-		if blobAndCellProofs == nil {
-			return nil, wrapWithBlockRoot(errors.New("unable to reconstruct data column sidecars, did not get all blobs from EL"), blockRoot, "")
-		}
+		return nil, wrapWithBlockRoot(err, blockRoot, "get blobs V2")
 	}
 
 	var cellsAndProofs []kzg.CellsAndProofs
-	for _, blobAndCellProofs := range blobs {
+	for _, blobAndCellProofs := range blobsAndCellsProofs {
+		if blobAndCellProofs == nil {
+			return nil, wrapWithBlockRoot(errors.New("unable to reconstruct data column sidecars, did not get all blobs from EL"), blockRoot, "")
+		}
+
 		var blob kzg.Blob
 		copy(blob[:], blobAndCellProofs.Blob)
 		cells, err := kzg.ComputeCells(&blob)
@@ -713,7 +711,7 @@ func (s *Service) ReconstructDataColumnSidecars(ctx context.Context, block inter
 		verifiedRODataColumns[i] = blocks.NewVerifiedRODataColumn(roDataColumn)
 	}
 
-	log.WithField("root", fmt.Sprintf("%x", blockRoot)).Debug("Data columns reconstructed successfully")
+	log.WithField("root", fmt.Sprintf("%x", blockRoot)).Debug("Data columns reconstructed successfully from EL")
 
 	return verifiedRODataColumns, nil
 }

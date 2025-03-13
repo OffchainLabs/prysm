@@ -38,6 +38,8 @@ type EngineClient struct {
 	ErrGetPayload               error
 	BlobSidecars                []blocks.VerifiedROBlob
 	ErrorBlobSidecars           error
+	DataColumnSidecars          []blocks.VerifiedRODataColumn
+	ErrorDataColumnSidecars     error
 }
 
 // NewPayload --
@@ -114,7 +116,7 @@ func (e *EngineClient) ReconstructBlobSidecars(context.Context, interfaces.ReadO
 }
 
 func (e *EngineClient) ReconstructDataColumnSidecars(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte) ([]blocks.VerifiedRODataColumn, error) {
-	return nil, nil
+	return e.DataColumnSidecars, e.ErrorDataColumnSidecars
 }
 
 // GetTerminalBlockHash --

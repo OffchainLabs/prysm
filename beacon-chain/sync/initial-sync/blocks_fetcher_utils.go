@@ -8,9 +8,7 @@ import (
 
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	coreTime "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
 	p2pTypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
 	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
@@ -382,33 +380,6 @@ func (f *blocksFetcher) calculateHeadAndTargetEpochs() (headEpoch, targetEpoch p
 	return headEpoch, targetEpoch, peers
 }
 
-// custodyGroupsFromPeer compute all the custody groups indexed by peer.
-func (f *blocksFetcher) custodyGroupsFromPeer(peers map[peer.ID]bool) (map[peer.ID]map[uint64]bool, error) {
-	peerCount := len(peers)
-
-	custodyGroupsByPeer := make(map[peer.ID]map[uint64]bool, peerCount)
-	for peer := range peers {
-		// Get the node ID from the peer ID.
-		nodeID, err := p2p.ConvertPeerIDToNodeID(peer)
-		if err != nil {
-			return nil, errors.Wrap(err, "convert peer ID to node ID")
-		}
-
-		// Get the custody group count of the peer.
-		custodyGroupCount := f.p2p.CustodyGroupCountFromPeer(peer)
-
-		// Retrieve the peer info.
-		peerInfo, _, err := peerdas.Info(nodeID, custodyGroupCount)
-		if err != nil {
-			return nil, errors.Wrap(err, "peer info")
-		}
-
-		custodyGroupsByPeer[peer] = peerInfo.CustodyGroups
-	}
-
-	return custodyGroupsByPeer, nil
-}
-
 // uint64MapToSortedSlice produces a sorted uint64 slice from a map.
 func uint64MapToSortedSlice(input map[uint64]bool) []uint64 {
 	output := make([]uint64, 0, len(input))
@@ -418,54 +389,6 @@ func uint64MapToSortedSlice(input map[uint64]bool) []uint64 {
 
 	slices.Sort[[]uint64](output)
 	return output
-}
-
-// `filterPeerWhichCustodyAtLeastOneDataColumn` filters peers which custody at least one data column
-// specified in `neededDataColumns`. It returns also a list of descriptions for non admissible peers.
-func filterPeerWhichCustodyAtLeastOneDataColumn(
-	neededDataColumns map[uint64]bool,
-	inputDataColumnsByPeer map[peer.ID]map[uint64]bool,
-) (map[peer.ID]map[uint64]bool, []string) {
-	// Get the count of needed data columns.
-	neededDataColumnsCount := uint64(len(neededDataColumns))
-
-	// Create pretty needed data columns for logs.
-	var neededDataColumnsLog interface{} = "all"
-	numberOfColumns := params.BeaconConfig().NumberOfColumns
-
-	if neededDataColumnsCount < numberOfColumns {
-		neededDataColumnsLog = uint64MapToSortedSlice(neededDataColumns)
-	}
-
-	outputDataColumnsByPeer := make(map[peer.ID]map[uint64]bool, len(inputDataColumnsByPeer))
-	descriptions := make([]string, 0)
-
-outerLoop:
-	for peer, peerCustodyDataColumns := range inputDataColumnsByPeer {
-		for neededDataColumn := range neededDataColumns {
-			if peerCustodyDataColumns[neededDataColumn] {
-				outputDataColumnsByPeer[peer] = peerCustodyDataColumns
-
-				continue outerLoop
-			}
-		}
-
-		peerCustodyColumnsCount := uint64(len(peerCustodyDataColumns))
-		var peerCustodyColumnsLog interface{} = "all"
-
-		if peerCustodyColumnsCount < numberOfColumns {
-			peerCustodyColumnsLog = uint64MapToSortedSlice(peerCustodyDataColumns)
-		}
-
-		description := fmt.Sprintf(
-			"peer %s: does not custody any needed column, custody columns: %v, needed columns: %v",
-			peer, peerCustodyColumnsLog, neededDataColumnsLog,
-		)
-
-		descriptions = append(descriptions, description)
-	}
-
-	return outputDataColumnsByPeer, descriptions
 }
 
 // Filter peers with head epoch lower than our target epoch for ByRange requests.

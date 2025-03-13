@@ -2504,7 +2504,7 @@ func TestReconstructDataColumnSidecars(t *testing.T) {
 	ctx := context.Background()
 	t.Run("GetBlobsV2 is not supported", func(t *testing.T) {
 		_, err := client.ReconstructDataColumnSidecars(ctx, sb, r)
-		require.ErrorContains(t, "could not get blobs", err)
+		require.ErrorContains(t, "get blobs V2 for block", err)
 	})
 
 	t.Run("receiving all blobs", func(t *testing.T) {
