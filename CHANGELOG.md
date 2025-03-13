@@ -6,6 +6,23 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [v5.3.1](https://github.com/prysmaticlabs/prysm/compare/v5.3.0...v5.3.1) - 2025-03-13
 
+This release is packed with critical fixes for **Electra** and some important fixes for mainnet too. 
+
+The release highlights include:
+
+- Ensure that deleting a block from the database clears its entry in the slot->root db index. This issue was causing some operators to have a bricked database, requiring a full resync. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15011)
+- Updated go to go1.24.0. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14969)
+- Added a feature flag to sync from an arbitrary beacon block root at startup. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15000)
+- Updated default gas limit from 30M to 36M. Override this with `--suggested-gas-limit=` in the validator client. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14858)
+
+Known issues in **Electra**:
+
+- Duplicate attestations are needlessly processed. This is being addressed in [[PR]](https://github.com/prysmaticlabs/prysm/pull/15034).
+
+Testnet operators are strongly encouraged to update to this release. There are many fixes and improvements from the Holesky upgrade incident.
+
+Mainner operators are recommended to update to this release at their regular cadence. 
+
 ### Added
 
 - enable E2E for minimal and mainnet tests. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14842)
