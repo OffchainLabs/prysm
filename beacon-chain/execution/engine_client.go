@@ -94,7 +94,12 @@ const (
 	// GetBlobsV2 request string for JSON-RPC.
 	GetBlobsV2 = "engine_getBlobsV2"
 	// Defines the seconds before timing out engine endpoints with non-block execution semantics.
-	defaultEngineTimeout = time.Second
+	// TODO: Remove temporarily needed hack since geth takes an input blobs txs with blobs proofs, and
+	// does the heavy lifting of building cells proofs, while normally this is done by the tx sender.
+	// This is a cool hack because it lets the CL to act as if the tx sender actually computed the cells proofs.
+	// The only counter part is the `engine_getPayloadv<x>` takes a lot of time.
+	// defaultEngineTimeout = time.Second
+	defaultEngineTimeout = 2 * time.Second
 )
 
 var errInvalidPayloadBodyResponse = errors.New("engine api payload body response is invalid")
@@ -711,7 +716,10 @@ func (s *Service) ReconstructDataColumnSidecars(ctx context.Context, block inter
 		verifiedRODataColumns[i] = blocks.NewVerifiedRODataColumn(roDataColumn)
 	}
 
-	log.WithField("root", fmt.Sprintf("%x", blockRoot)).Debug("Data columns reconstructed successfully from EL")
+	log.WithFields(logrus.Fields{
+		"root": fmt.Sprintf("%#x", blockRoot),
+		"slot": block.Block().Slot(),
+	}).Debug("Data columns successfully reconstructed from EL")
 
 	return verifiedRODataColumns, nil
 }

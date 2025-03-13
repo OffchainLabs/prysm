@@ -119,7 +119,7 @@ func (s *Service) reconstructDataColumns(ctx context.Context, verifiedRODataColu
 		}
 	}
 
-	log.WithField("root", fmt.Sprintf("%x", blockRoot)).Debug("Data columns reconstructed and saved successfully")
+	log.WithField("root", fmt.Sprintf("%#x", blockRoot)).Debug("Data columns successfully reconstructed from database and saved")
 
 	// Schedule the broadcast.
 	if err := s.scheduleReconstructedDataColumnsBroadcast(ctx, blockRoot, verifiedRODataColumn); err != nil {
