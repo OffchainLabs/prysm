@@ -1670,3 +1670,51 @@ func TestDetectAndBroadcastEquivocation_HeadStateError(t *testing.T) {
 	err = r.detectAndBroadcastEquivocation(ctx, signedBlock)
 	require.ErrorContains(t, "could not get head state", err)
 }
+
+func TestDetectAndBroadcastEquivocation_SignatureVerificationFailure(t *testing.T) {
+	ctx := context.Background()
+	p := p2ptest.NewTestP2P(t)
+	beaconState, privKeys := util.DeterministicGenesisState(t, 100)
+
+	// Create head block
+	headBlock := util.NewBeaconBlock()
+	headBlock.Block.Slot = 1
+	headBlock.Block.ProposerIndex = 0
+	sig1, err := signing.ComputeDomainAndSign(beaconState, 0, headBlock.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[0])
+	require.NoError(t, err)
+	headBlock.Signature = sig1
+
+	// Create test block with invalid signature
+	newBlock := util.NewBeaconBlock()
+	newBlock.Block.Slot = 1
+	newBlock.Block.ProposerIndex = 0
+	newBlock.Block.ParentRoot = bytesutil.PadTo([]byte("different"), 32)
+	// generate invalid signature
+	invalidSig := make([]byte, 96)
+	copy(invalidSig, []byte("invalid signature"))
+	newBlock.Signature = invalidSig
+
+	signedHeadBlock, err := blocks.NewSignedBeaconBlock(headBlock)
+	require.NoError(t, err)
+
+	signedNewBlock, err := blocks.NewSignedBeaconBlock(newBlock)
+	require.NoError(t, err)
+
+	slashingPool := &slashingsmock.PoolMock{}
+	chainService := &mock.ChainService{
+		State:   beaconState,
+		Genesis: time.Now(),
+		Block:   signedHeadBlock,
+	}
+	r := &Service{
+		cfg: &config{
+			p2p:          p,
+			chain:        chainService,
+			slashingPool: slashingPool,
+		},
+		seenBlockCache: lruwrpr.New(10),
+	}
+
+	err = r.detectAndBroadcastEquivocation(ctx, signedNewBlock)
+	require.ErrorIs(t, err, ErrSlashingSignatureFailure)
+}
