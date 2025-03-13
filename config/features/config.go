@@ -185,7 +185,7 @@ func configureTestnet(ctx *cli.Context) error {
 		if ctx.IsSet(Mainnet.Name) {
 			log.Warn("The --mainnet flag is deprecated and will be removed in Prysm V7. Please use --network=mainnet instead.")
 		}
-		
+
 		if ctx.IsSet(cmd.ChainConfigFileFlag.Name) {
 			log.Warn("Running on custom Ethereum network specified in a chain configuration yaml file")
 		} else {
@@ -418,11 +418,11 @@ func logDisabled(flag cli.DocGenerationFlag) {
 func ValidateNetworkFlags(ctx *cli.Context) error {
 	// Check if the new network flag is provided
 	isNewNetworkFlagSet := ctx.IsSet(NetworkFlag.Names()[0])
-	
+
 	// Count old-style network flags
 	oldNetworkFlagsCount := 0
 	oldNetworkFlagNames := []string{}
-	
+
 	// Only counting explicitly set flags, ignoring defaults
 	if ctx.IsSet(Mainnet.Names()[0]) {
 		oldNetworkFlagsCount++
@@ -436,26 +436,26 @@ func ValidateNetworkFlags(ctx *cli.Context) error {
 		oldNetworkFlagsCount++
 		oldNetworkFlagNames = append(oldNetworkFlagNames, "--"+HoleskyTestnet.Names()[0])
 	}
-	
+
 	// Error if both new and old style flags are used
 	if isNewNetworkFlagSet && oldNetworkFlagsCount > 0 {
 		return fmt.Errorf(
 			"cannot use both --network and old-style network flags at the same time. "+
-			"Please use only --network=%s instead of %s",
+				"Please use only --network=%s instead of %s",
 			ctx.String(NetworkFlag.Names()[0]),
 			strings.Join(oldNetworkFlagNames, ", "),
 		)
 	}
-	
+
 	// Error if multiple old-style network flags are provided
 	if oldNetworkFlagsCount > 1 {
 		return fmt.Errorf(
 			"cannot use more than one network flag at the same time. "+
-			"Consider using --network=<network> instead of %s",
+				"Consider using --network=<network> instead of %s",
 			strings.Join(oldNetworkFlagNames, ", "),
 		)
 	}
-	
+
 	// Validate that network value is valid when using the new flag
 	if isNewNetworkFlagSet {
 		networkValue := ctx.String(NetworkFlag.Names()[0])
@@ -465,11 +465,11 @@ func ValidateNetworkFlags(ctx *cli.Context) error {
 		default:
 			return fmt.Errorf(
 				"invalid network value %q for --network flag. "+
-				"Valid options are: mainnet, sepolia, holesky",
+					"Valid options are: mainnet, sepolia, holesky",
 				networkValue,
 			)
 		}
 	}
-	
+
 	return nil
 }
