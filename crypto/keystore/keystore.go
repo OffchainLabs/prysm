@@ -146,7 +146,7 @@ func EncryptKey(key *Key, password string, scryptN, scryptP int) ([]byte, error)
 		return nil, errors.New("reading from crypto/rand failed: " + err.Error())
 	}
 
-	cipherText, err := aesCTRXOR(encryptKey, keyBytes, iv)
+	cipherText, err := aesCTRXOR(encryptKey, keyBytes, iv) // #nosec G407
 	if err != nil {
 		return nil, err
 	}

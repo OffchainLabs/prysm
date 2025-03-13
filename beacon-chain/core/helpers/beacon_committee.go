@@ -30,6 +30,13 @@ var (
 	proposerIndicesCache = cache.NewProposerIndicesCache()
 )
 
+type beaconCommitteeFunc = func(
+	ctx context.Context,
+	state state.ReadOnlyBeaconState,
+	slot primitives.Slot,
+	committeeIndex primitives.CommitteeIndex,
+) ([]primitives.ValidatorIndex, error)
+
 // SlotCommitteeCount returns the number of beacon committees of a slot. The
 // active validator count is provided as an argument rather than an imported implementation
 // from the spec definition. Having the active validator count as an argument allows for
@@ -59,21 +66,48 @@ func SlotCommitteeCount(activeValidatorCount uint64) uint64 {
 	return committeesPerSlot
 }
 
-// AttestationCommittees returns beacon state committees that reflect attestation's committee indices.
-func AttestationCommittees(ctx context.Context, st state.ReadOnlyBeaconState, att ethpb.Att) ([][]primitives.ValidatorIndex, error) {
+// AttestationCommitteesFromState returns beacon state committees that reflect attestation's committee indices.
+func AttestationCommitteesFromState(ctx context.Context, st state.ReadOnlyBeaconState, att ethpb.Att) ([][]primitives.ValidatorIndex, error) {
+	return attestationCommittees(ctx, st, att, BeaconCommitteeFromState)
+}
+
+// AttestationCommitteesFromCache has the same functionality as AttestationCommitteesFromState, but only returns a value
+// when all attestation committees are already cached.
+func AttestationCommitteesFromCache(ctx context.Context, st state.ReadOnlyBeaconState, att ethpb.Att) (bool, [][]primitives.ValidatorIndex, error) {
+	committees, err := attestationCommittees(ctx, st, att, BeaconCommitteeFromCache)
+	if err != nil {
+		return false, nil, err
+	}
+	if len(committees) == 0 {
+		return false, nil, nil
+	}
+	for _, c := range committees {
+		if len(c) == 0 {
+			return false, nil, nil
+		}
+	}
+	return true, committees, nil
+}
+
+func attestationCommittees(
+	ctx context.Context,
+	st state.ReadOnlyBeaconState,
+	att ethpb.Att,
+	committeeFunc beaconCommitteeFunc,
+) ([][]primitives.ValidatorIndex, error) {
 	var committees [][]primitives.ValidatorIndex
 	if att.Version() >= version.Electra {
 		committeeIndices := att.CommitteeBitsVal().BitIndices()
 		committees = make([][]primitives.ValidatorIndex, len(committeeIndices))
 		for i, ci := range committeeIndices {
-			committee, err := BeaconCommitteeFromState(ctx, st, att.GetData().Slot, primitives.CommitteeIndex(ci))
+			committee, err := committeeFunc(ctx, st, att.GetData().Slot, primitives.CommitteeIndex(ci))
 			if err != nil {
 				return nil, err
 			}
 			committees[i] = committee
 		}
 	} else {
-		committee, err := BeaconCommitteeFromState(ctx, st, att.GetData().Slot, att.GetData().CommitteeIndex)
+		committee, err := committeeFunc(ctx, st, att.GetData().Slot, att.GetData().CommitteeIndex)
 		if err != nil {
 			return nil, err
 		}
@@ -162,6 +196,27 @@ func BeaconCommitteeFromState(ctx context.Context, state state.ReadOnlyBeaconSta
 	}
 
 	return BeaconCommittee(ctx, activeIndices, seed, slot, committeeIndex)
+}
+
+// BeaconCommitteeFromCache has the same functionality as BeaconCommitteeFromState, but only returns a value
+// when the committee is already cached.
+func BeaconCommitteeFromCache(
+	ctx context.Context,
+	state state.ReadOnlyBeaconState,
+	slot primitives.Slot,
+	committeeIndex primitives.CommitteeIndex,
+) ([]primitives.ValidatorIndex, error) {
+	epoch := slots.ToEpoch(slot)
+	seed, err := Seed(state, epoch, params.BeaconConfig().DomainBeaconAttester)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get seed")
+	}
+
+	committee, err := committeeCache.Committee(ctx, slot, seed, committeeIndex)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not interface with committee cache")
+	}
+	return committee, nil
 }
 
 // BeaconCommittee returns the beacon committee of a given slot and committee index. The

@@ -66,11 +66,9 @@ func run(ctx context.Context, v iface.Validator) {
 		log.WithError(err).Fatal("Failed to update proposer settings")
 	}
 	for {
-		ctx, span := prysmTrace.StartSpan(ctx, "validator.processSlot")
 		select {
 		case <-ctx.Done():
 			log.Info("Context canceled, stopping validator")
-			span.End()
 			sub.Unsubscribe()
 			close(accountsChangedChan)
 			return // Exit if context is canceled.
@@ -78,16 +76,20 @@ func run(ctx context.Context, v iface.Validator) {
 			if !healthTracker.IsHealthy() {
 				continue
 			}
-			span.SetAttributes(prysmTrace.Int64Attribute("slot", int64(slot))) // lint:ignore uintcast -- This conversion is OK for tracing.
 
 			deadline := v.SlotDeadline(slot)
 			slotCtx, cancel := context.WithDeadline(ctx, deadline)
+
+			var span trace.Span
+			slotCtx, span = prysmTrace.StartSpan(slotCtx, "validator.processSlot")
+			span.SetAttributes(prysmTrace.Int64Attribute("slot", int64(slot))) // lint:ignore uintcast -- This conversion is OK for tracing.
+
 			log := log.WithField("slot", slot)
 			log.WithField("deadline", deadline).Debug("Set deadline for proposals and attestations")
 
 			// Keep trying to update assignments if they are nil or if we are past an
 			// epoch transition in the beacon node's state.
-			if err := v.UpdateDuties(ctx, slot); err != nil {
+			if err := v.UpdateDuties(slotCtx, slot); err != nil {
 				handleAssignmentError(err, slot)
 				cancel()
 				span.End()
@@ -97,18 +99,18 @@ func run(ctx context.Context, v iface.Validator) {
 			// call push proposer settings often to account for the following edge cases:
 			// proposer is activated at the start of epoch and tries to propose immediately
 			// account has changed in the middle of an epoch
-			if err := v.PushProposerSettings(ctx, km, slot, false); err != nil {
+			if err := v.PushProposerSettings(slotCtx, km, slot, false); err != nil {
 				log.WithError(err).Warn("Failed to update proposer settings")
 			}
 
 			// Start fetching domain data for the next epoch.
 			if slots.IsEpochEnd(slot) {
-				go v.UpdateDomainDataCaches(ctx, slot+1)
+				go v.UpdateDomainDataCaches(slotCtx, slot+1)
 			}
 
 			var wg sync.WaitGroup
 
-			allRoles, err := v.RolesAt(ctx, slot)
+			allRoles, err := v.RolesAt(slotCtx, slot)
 			if err != nil {
 				log.WithError(err).Error("Could not get validator roles")
 				cancel()
@@ -137,6 +139,9 @@ func run(ctx context.Context, v iface.Validator) {
 }
 
 func onAccountsChanged(ctx context.Context, v iface.Validator, current [][48]byte, ac chan [][fieldparams.BLSPubkeyLength]byte) {
+	ctx, span := prysmTrace.StartSpan(ctx, "validator.accountsChanged")
+	defer span.End()
+
 	anyActive, err := v.HandleKeyReload(ctx, current)
 	if err != nil {
 		log.WithError(err).Error("Could not properly handle reloaded keys")

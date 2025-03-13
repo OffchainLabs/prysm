@@ -489,7 +489,7 @@ func unmarshalSignedElectraBlock(t *testing.T, raw []byte) interfaces.SignedBeac
 // ----------------------------------------------------------------------------
 
 func unmarshalFuluState(t *testing.T, raw []byte) state.BeaconState {
-	base := &ethpb.BeaconStateFulu{}
+	base := &ethpb.BeaconStateElectra{}
 	require.NoError(t, base.UnmarshalSSZ(raw))
 	st, err := state_native.InitializeFromProtoFulu(base)
 	require.NoError(t, err)
@@ -497,7 +497,7 @@ func unmarshalFuluState(t *testing.T, raw []byte) state.BeaconState {
 }
 
 func unmarshalFuluBlock(t *testing.T, raw []byte) interfaces.SignedBeaconBlock {
-	base := &ethpb.BeaconBlockFulu{}
+	base := &ethpb.BeaconBlockElectra{}
 	require.NoError(t, base.UnmarshalSSZ(raw))
 	blk, err := blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockFulu{Block: base, Signature: make([]byte, fieldparams.BLSSignatureLength)})
 	require.NoError(t, err)

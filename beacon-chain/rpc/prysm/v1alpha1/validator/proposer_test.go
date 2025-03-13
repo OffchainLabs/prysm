@@ -737,11 +737,11 @@ func TestServer_GetBeaconBlock_Fulu(t *testing.T) {
 		},
 	}
 	blk := &ethpb.SignedBeaconBlockFulu{
-		Block: &ethpb.BeaconBlockFulu{
+		Block: &ethpb.BeaconBlockElectra{
 			Slot:       fuluSlot + 1,
 			ParentRoot: parentRoot[:],
 			StateRoot:  genesis.Block.StateRoot,
-			Body: &ethpb.BeaconBlockBodyFulu{
+			Body: &ethpb.BeaconBlockBodyElectra{
 				RandaoReveal:  genesis.Block.Body.RandaoReveal,
 				Graffiti:      genesis.Block.Body.Graffiti,
 				Eth1Data:      genesis.Block.Body.Eth1Data,
@@ -2949,8 +2949,7 @@ func TestProposer_DeleteAttsInPool_Aggregated(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, s.deleteAttsInPool(context.Background(), append(aa, unaggregatedAtts...)))
 	assert.Equal(t, 0, len(s.AttPool.AggregatedAttestations()), "Did not delete aggregated attestation")
-	atts, err := s.AttPool.UnaggregatedAttestations()
-	require.NoError(t, err)
+	atts := s.AttPool.UnaggregatedAttestations()
 	assert.Equal(t, 0, len(atts), "Did not delete unaggregated attestation")
 }
 
