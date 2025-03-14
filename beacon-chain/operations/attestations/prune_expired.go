@@ -70,16 +70,6 @@ func (s *Service) pruneExpiredAtts() {
 			expiredUnaggregatedAtts.Inc()
 		}
 	}
-
-	blockAtts := s.cfg.Pool.BlockAttestations()
-	for _, att := range blockAtts {
-		if s.expired(att.GetData().Slot) {
-			if err := s.cfg.Pool.DeleteBlockAttestation(att); err != nil {
-				log.WithError(err).Error("Could not delete expired block attestation")
-			}
-			expiredBlockAtts.Inc()
-		}
-	}
 }
 
 // Return true if the input slot has been expired.

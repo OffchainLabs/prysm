@@ -68,8 +68,7 @@ func (s *Service) batchForkChoiceAtts(ctx context.Context) error {
 		if err := s.cfg.Pool.AggregateUnaggregatedAttestations(ctx); err != nil {
 			return err
 		}
-		atts = append(s.cfg.Pool.AggregatedAttestations(), s.cfg.Pool.BlockAttestations()...)
-		atts = append(atts, s.cfg.Pool.ForkchoiceAttestations()...)
+		atts = append(s.cfg.Pool.AggregatedAttestations(), s.cfg.Pool.ForkchoiceAttestations()...)
 	}
 
 	attsById := make(map[attestation.Id][]ethpb.Att, len(atts))
@@ -94,14 +93,6 @@ func (s *Service) batchForkChoiceAtts(ctx context.Context) error {
 	for _, atts := range attsById {
 		if err := s.aggregateAndSaveForkChoiceAtts(atts); err != nil {
 			return err
-		}
-	}
-
-	if !features.Get().EnableExperimentalAttestationPool {
-		for _, a := range s.cfg.Pool.BlockAttestations() {
-			if err := s.cfg.Pool.DeleteBlockAttestation(a); err != nil {
-				return err
-			}
 		}
 	}
 

@@ -23,8 +23,6 @@ type AttCaches struct {
 	unAggregateAttLock sync.RWMutex
 	unAggregatedAtt    map[attestation.Id]ethpb.Att
 	forkchoiceAtt      *attmap.Attestations
-	blockAttLock       sync.RWMutex
-	blockAtt           map[attestation.Id][]ethpb.Att
 	seenAtt            *cache.Cache
 }
 
@@ -37,7 +35,6 @@ func NewAttCaches() *AttCaches {
 		unAggregatedAtt: make(map[attestation.Id]ethpb.Att),
 		aggregatedAtt:   make(map[attestation.Id][]ethpb.Att),
 		forkchoiceAtt:   attmap.New(),
-		blockAtt:        make(map[attestation.Id][]ethpb.Att),
 		seenAtt:         c,
 	}
 
