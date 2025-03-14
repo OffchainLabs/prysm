@@ -520,13 +520,13 @@ func TestService_setSeenUnaggregatedAtt(t *testing.T) {
 			s.setSeenUnaggregatedAtt(s0c0a1)
 			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(s0c0a2))
 		})
-		t.Run("0 bits set is considered seen", func(t *testing.T) {
+		t.Run("0 bits set is considered not seen", func(t *testing.T) {
 			a := &ethpb.Attestation{AggregationBits: bitfield.Bitlist{0b1000}}
-			assert.Equal(t, true, s.hasSeenUnaggregatedAtt(a))
+			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(a))
 		})
-		t.Run("multiple bits set is considered seen", func(t *testing.T) {
+		t.Run("multiple bits set is considered not seen", func(t *testing.T) {
 			a := &ethpb.Attestation{AggregationBits: bitfield.Bitlist{0b1111}}
-			assert.Equal(t, true, s.hasSeenUnaggregatedAtt(a))
+			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(a))
 		})
 	})
 	t.Run("electra", func(t *testing.T) {
@@ -587,9 +587,9 @@ func TestService_setSeenUnaggregatedAtt(t *testing.T) {
 			s.setSeenUnaggregatedAtt(s0c0a1)
 			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(s0c0a2))
 		})
-		t.Run("single attestation is considered seen", func(t *testing.T) {
+		t.Run("single attestation is considered not seen", func(t *testing.T) {
 			a := &ethpb.AttestationElectra{}
-			assert.Equal(t, true, s.hasSeenUnaggregatedAtt(a))
+			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(a))
 		})
 	})
 }

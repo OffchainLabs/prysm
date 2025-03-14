@@ -335,15 +335,15 @@ func (s *Service) hasSeenUnaggregatedAtt(att eth.Att) bool {
 	var attester uint64
 	if att.Version() >= version.Electra {
 		if !att.IsSingle() {
-			log.Debug("Called hasSeenUnaggregatedAtt with a non-single Electra attestation. It will be considered seen")
-			return true
+			log.Debug("Called hasSeenUnaggregatedAtt with a non-single Electra attestation")
+			return false
 		}
 		attester = uint64(att.GetAttestingIndex())
 	} else {
 		aggBits := att.GetAggregationBits()
 		if aggBits.Count() != 1 {
-			log.Debug("Attestation does not have exactly 1 bit set. It will be considered seen")
-			return true
+			log.Debug("Attestation does not have exactly 1 bit set")
+			return false
 		}
 		attester = uint64(att.GetAggregationBits().BitIndices()[0])
 	}
