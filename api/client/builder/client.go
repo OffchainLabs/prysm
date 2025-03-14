@@ -16,6 +16,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/api"
 	"github.com/prysmaticlabs/prysm/v5/api/client"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
@@ -35,9 +36,14 @@ const (
 	postRegisterValidatorPath  = "/eth/v1/builder/validators"
 )
 
-var errMalformedHostname = errors.New("hostname must include port, separated by one colon, like example.com:3500")
-var errMalformedRequest = errors.New("required request data are missing")
-var errNotBlinded = errors.New("submitted block is not blinded")
+var (
+	vrExample             = &ethpb.SignedValidatorRegistrationV1{}
+	vrSize                = vrExample.SizeSSZ()
+	errMalformedHostname  = errors.New("hostname must include port, separated by one colon, like example.com:3500")
+	errMalformedRequest   = errors.New("required request data are missing")
+	errNotBlinded         = errors.New("submitted block is not blinded")
+	errVersionUnsupported = errors.New("version is not supported")
+)
 
 // ClientOpt is a functional option for the Client type (http.Client wrapper)
 type ClientOpt func(*Client)
@@ -49,6 +55,12 @@ type observer interface {
 func WithObserver(m observer) ClientOpt {
 	return func(c *Client) {
 		c.obvs = append(c.obvs, m)
+	}
+}
+
+func WithSSZ() ClientOpt {
+	return func(c *Client) {
+		c.sszEnabled = true
 	}
 }
 
@@ -95,9 +107,10 @@ type BuilderClient interface {
 
 // Client provides a collection of helper methods for calling Builder API endpoints.
 type Client struct {
-	hc      *http.Client
-	baseURL *url.URL
-	obvs    []observer
+	hc         *http.Client
+	baseURL    *url.URL
+	obvs       []observer
+	sszEnabled bool
 }
 
 // NewClient constructs a new client with the provided options (ex WithTimeout).
@@ -139,7 +152,7 @@ func (c *Client) NodeURL() string {
 type reqOption func(*http.Request)
 
 // do is a generic, opinionated request function to reduce boilerplate amongst the methods in this package api/client/builder.
-func (c *Client) do(ctx context.Context, method string, path string, body io.Reader, opts ...reqOption) (res []byte, err error) {
+func (c *Client) do(ctx context.Context, method string, path string, body io.Reader, opts ...reqOption) (res []byte, header http.Header, err error) {
 	ctx, span := trace.StartSpan(ctx, "builder.client.do")
 	defer func() {
 		tracing.AnnotateError(span, err)
@@ -155,10 +168,6 @@ func (c *Client) do(ctx context.Context, method string, path string, body io.Rea
 	if err != nil {
 		return
 	}
-	if method == http.MethodPost {
-		req.Header.Set("Content-Type", api.JsonMediaType)
-	}
-	req.Header.Set("Accept", api.JsonMediaType)
 	req.Header.Add("User-Agent", version.BuildData())
 	for _, o := range opts {
 		o(req)
@@ -187,6 +196,7 @@ func (c *Client) do(ctx context.Context, method string, path string, body io.Rea
 		err = errors.Wrap(err, "error reading http response body from builder server")
 		return
 	}
+	header = r.Header
 	return
 }
 
@@ -216,64 +226,145 @@ func (c *Client) GetHeader(ctx context.Context, slot primitives.Slot, parentHash
 	if err != nil {
 		return nil, err
 	}
-	hb, err := c.do(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
+	var getOpts reqOption
+	if c.sszEnabled {
+		getOpts = func(r *http.Request) {
+			r.Header.Set("Accept", api.OctetStreamMediaType)
+		}
+	} else {
+		getOpts = func(r *http.Request) {
+			r.Header.Set("Accept", api.JsonMediaType)
+		}
 	}
-	v := &VersionResponse{}
-	if err := json.Unmarshal(hb, v); err != nil {
-		return nil, errors.Wrapf(err, "error unmarshaling the builder GetHeader response, using slot=%d, parentHash=%#x, pubkey=%#x", slot, parentHash, pubkey)
+	data, header, err := c.do(ctx, http.MethodGet, path, nil, getOpts)
+	if err != nil {
+		return nil, errors.Wrap(err, "error getting header from builder server")
 	}
 
-	ver, err := version.FromString(strings.ToLower(v.Version))
+	bid, err := c.parseHeaderResponse(data, header)
 	if err != nil {
-		return nil, errors.Wrap(err, fmt.Sprintf("unsupported header version %s", strings.ToLower(v.Version)))
+		return nil, errors.Wrapf(
+			err,
+			"error rendering exec header template with slot=%d, parentHash=%#x, pubkey=%#x",
+			slot,
+			parentHash,
+			pubkey,
+		)
 	}
+	return bid, nil
+}
+
+func (c *Client) parseHeaderResponse(data []byte, header http.Header) (SignedBid, error) {
+	var versionHeader string
+	if c.sszEnabled || header.Get(api.VersionHeader) != "" {
+		versionHeader = header.Get(api.VersionHeader)
+	} else {
+		// If we don't have a version header, attempt to parse JSON for version
+		v := &VersionResponse{}
+		if err := json.Unmarshal(data, v); err != nil {
+			return nil, errors.Wrap(
+				err,
+				"error unmarshaling builder GetHeader response",
+			)
+		}
+		versionHeader = strings.ToLower(v.Version)
+	}
+
+	ver, err := version.FromString(versionHeader)
+	if err != nil {
+		return nil, errors.Wrap(err, fmt.Sprintf("unsupported header version %s", versionHeader))
+	}
+
 	if ver >= version.Electra {
-		hr := &ExecHeaderResponseElectra{}
-		if err := json.Unmarshal(hb, hr); err != nil {
-			return nil, errors.Wrapf(err, "error unmarshaling the builder GetHeader response, using slot=%d, parentHash=%#x, pubkey=%#x", slot, parentHash, pubkey)
-		}
-		p, err := hr.ToProto()
-		if err != nil {
-			return nil, errors.Wrapf(err, "could not extract proto message from header")
-		}
-		return WrappedSignedBuilderBidElectra(p)
+		return c.parseHeaderElectra(data)
 	}
 	if ver >= version.Deneb {
-		hr := &ExecHeaderResponseDeneb{}
-		if err := json.Unmarshal(hb, hr); err != nil {
-			return nil, errors.Wrapf(err, "error unmarshaling the builder GetHeader response, using slot=%d, parentHash=%#x, pubkey=%#x", slot, parentHash, pubkey)
-		}
-		p, err := hr.ToProto()
-		if err != nil {
-			return nil, errors.Wrapf(err, "could not extract proto message from header")
-		}
-		return WrappedSignedBuilderBidDeneb(p)
+		return c.parseHeaderDeneb(data)
 	}
 	if ver >= version.Capella {
-		hr := &ExecHeaderResponseCapella{}
-		if err := json.Unmarshal(hb, hr); err != nil {
-			return nil, errors.Wrapf(err, "error unmarshaling the builder GetHeader response, using slot=%d, parentHash=%#x, pubkey=%#x", slot, parentHash, pubkey)
-		}
-		p, err := hr.ToProto()
-		if err != nil {
-			return nil, errors.Wrapf(err, "could not extract proto message from header")
-		}
-		return WrappedSignedBuilderBidCapella(p)
+		return c.parseHeaderCapella(data)
 	}
 	if ver >= version.Bellatrix {
-		hr := &ExecHeaderResponse{}
-		if err := json.Unmarshal(hb, hr); err != nil {
-			return nil, errors.Wrapf(err, "error unmarshaling the builder GetHeader response, using slot=%d, parentHash=%#x, pubkey=%#x", slot, parentHash, pubkey)
-		}
-		p, err := hr.ToProto()
-		if err != nil {
-			return nil, errors.Wrap(err, "could not extract proto message from header")
-		}
-		return WrappedSignedBuilderBid(p)
+		return c.parseHeaderBellatrix(data)
 	}
-	return nil, fmt.Errorf("unsupported header version %s", strings.ToLower(v.Version))
+
+	return nil, fmt.Errorf("unsupported header version %s", versionHeader)
+}
+
+func (c *Client) parseHeaderElectra(data []byte) (SignedBid, error) {
+	if c.sszEnabled {
+		sb := &ethpb.SignedBuilderBidElectra{}
+		if err := sb.UnmarshalSSZ(data); err != nil {
+			return nil, errors.Wrap(err, "could not unmarshal SignedBuilderBidElectra SSZ")
+		}
+		return WrappedSignedBuilderBidElectra(sb)
+	}
+	hr := &ExecHeaderResponseElectra{}
+	if err := json.Unmarshal(data, hr); err != nil {
+		return nil, errors.Wrap(err, "could not unmarshal ExecHeaderResponseElectra JSON")
+	}
+	p, err := hr.ToProto()
+	if err != nil {
+		return nil, errors.Wrap(err, "could not convert ExecHeaderResponseElectra to proto")
+	}
+	return WrappedSignedBuilderBidElectra(p)
+}
+
+func (c *Client) parseHeaderDeneb(data []byte) (SignedBid, error) {
+	if c.sszEnabled {
+		sb := &ethpb.SignedBuilderBidDeneb{}
+		if err := sb.UnmarshalSSZ(data); err != nil {
+			return nil, errors.Wrap(err, "could not unmarshal SignedBuilderBidDeneb SSZ")
+		}
+		return WrappedSignedBuilderBidDeneb(sb)
+	}
+	hr := &ExecHeaderResponseDeneb{}
+	if err := json.Unmarshal(data, hr); err != nil {
+		return nil, errors.Wrap(err, "could not unmarshal ExecHeaderResponseDeneb JSON")
+	}
+	p, err := hr.ToProto()
+	if err != nil {
+		return nil, errors.Wrap(err, "could not convert ExecHeaderResponseDeneb to proto")
+	}
+	return WrappedSignedBuilderBidDeneb(p)
+}
+
+func (c *Client) parseHeaderCapella(data []byte) (SignedBid, error) {
+	if c.sszEnabled {
+		sb := &ethpb.SignedBuilderBidCapella{}
+		if err := sb.UnmarshalSSZ(data); err != nil {
+			return nil, errors.Wrap(err, "could not unmarshal SignedBuilderBidCapella SSZ")
+		}
+		return WrappedSignedBuilderBidCapella(sb)
+	}
+	hr := &ExecHeaderResponseCapella{}
+	if err := json.Unmarshal(data, hr); err != nil {
+		return nil, errors.Wrap(err, "could not unmarshal ExecHeaderResponseCapella JSON")
+	}
+	p, err := hr.ToProto()
+	if err != nil {
+		return nil, errors.Wrap(err, "could not convert ExecHeaderResponseCapella to proto")
+	}
+	return WrappedSignedBuilderBidCapella(p)
+}
+
+func (c *Client) parseHeaderBellatrix(data []byte) (SignedBid, error) {
+	if c.sszEnabled {
+		sb := &ethpb.SignedBuilderBid{}
+		if err := sb.UnmarshalSSZ(data); err != nil {
+			return nil, errors.Wrap(err, "could not unmarshal SignedBuilderBid SSZ")
+		}
+		return WrappedSignedBuilderBid(sb)
+	}
+	hr := &ExecHeaderResponse{}
+	if err := json.Unmarshal(data, hr); err != nil {
+		return nil, errors.Wrap(err, "could not unmarshal ExecHeaderResponse JSON")
+	}
+	p, err := hr.ToProto()
+	if err != nil {
+		return nil, errors.Wrap(err, "could not convert ExecHeaderResponse to proto")
+	}
+	return WrappedSignedBuilderBid(p)
 }
 
 // RegisterValidator encodes the SignedValidatorRegistrationV1 message to json (including hex-encoding the byte
@@ -288,70 +379,243 @@ func (c *Client) RegisterValidator(ctx context.Context, svr []*ethpb.SignedValid
 		tracing.AnnotateError(span, err)
 		return err
 	}
+
+	var (
+		body     []byte
+		err      error
+		postOpts reqOption
+	)
+	if c.sszEnabled {
+		postOpts = func(r *http.Request) {
+			r.Header.Set("Content-Type", api.OctetStreamMediaType)
+			r.Header.Set("Accept", api.OctetStreamMediaType)
+		}
+		body, err = sszValidatorRegisterRequest(svr)
+		if err != nil {
+			err := errors.Wrap(err, "error ssz encoding the SignedValidatorRegistration value body in RegisterValidator")
+			tracing.AnnotateError(span, err)
+			return err
+		}
+	} else {
+		postOpts = func(r *http.Request) {
+			r.Header.Set("Content-Type", api.JsonMediaType)
+			r.Header.Set("Accept", api.JsonMediaType)
+		}
+		body, err = jsonValidatorRegisterRequest(svr)
+		if err != nil {
+			err := errors.Wrap(err, "error json encoding the SignedValidatorRegistration value body in RegisterValidator")
+			tracing.AnnotateError(span, err)
+			return err
+		}
+	}
+
+	if _, _, err = c.do(ctx, http.MethodPost, postRegisterValidatorPath, bytes.NewBuffer(body), postOpts); err != nil {
+		return errors.Wrap(err, "do")
+	}
+	log.WithField("registrationCount", len(svr)).Debug("Successfully registered validator(s) on builder")
+	return nil
+}
+
+func jsonValidatorRegisterRequest(svr []*ethpb.SignedValidatorRegistrationV1) ([]byte, error) {
 	vs := make([]*structs.SignedValidatorRegistration, len(svr))
 	for i := 0; i < len(svr); i++ {
 		vs[i] = structs.SignedValidatorRegistrationFromConsensus(svr[i])
 	}
 	body, err := json.Marshal(vs)
 	if err != nil {
-		err := errors.Wrap(err, "error encoding the SignedValidatorRegistration value body in RegisterValidator")
-		tracing.AnnotateError(span, err)
-		return err
+		return nil, err
 	}
+	return body, nil
+}
 
-	_, err = c.do(ctx, http.MethodPost, postRegisterValidatorPath, bytes.NewBuffer(body))
-	if err != nil {
-		return err
+func sszValidatorRegisterRequest(svr []*ethpb.SignedValidatorRegistrationV1) ([]byte, error) {
+	if uint64(len(svr)) > params.BeaconConfig().ValidatorRegistryLimit {
+		return nil, errors.Wrap(errMalformedRequest, "validator registry limit exceeded")
 	}
-	log.WithField("registrationCount", len(svr)).Debug("Successfully registered validator(s) on builder")
-	return nil
+	ssz := make([]byte, vrSize*len(svr))
+	for i, vr := range svr {
+		sszrep, err := vr.MarshalSSZ()
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to marshal validator registry ssz")
+		}
+		copy(ssz[i*vrSize:(i+1)*vrSize], sszrep)
+	}
+	return ssz, nil
 }
 
 var errResponseVersionMismatch = errors.New("builder API response uses a different version than requested in " + api.VersionHeader + " header")
 
+func getVersionsBlockToPayload(blockVersion int) (int, error) {
+	if blockVersion >= version.Deneb {
+		return version.Deneb, nil
+	}
+	if blockVersion == version.Capella {
+		return version.Capella, nil
+	}
+	if blockVersion == version.Bellatrix {
+		return version.Bellatrix, nil
+	}
+	return 0, errors.Wrapf(errVersionUnsupported, "block version %d", blockVersion)
+}
+
 // SubmitBlindedBlock calls the builder API endpoint that binds the validator to the builder and submits the block.
 // The response is the full execution payload used to create the blinded block.
 func (c *Client) SubmitBlindedBlock(ctx context.Context, sb interfaces.ReadOnlySignedBeaconBlock) (interfaces.ExecutionData, *v1.BlobsBundle, error) {
+	body, postOpts, err := c.buildBlindedBlockRequest(sb)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// post the blinded block - the execution payload response should contain the unblinded payload, along with the
+	// blobs bundle if it is post deneb.
+	data, header, err := c.do(ctx, http.MethodPost, postBlindedBeaconBlockPath, bytes.NewBuffer(body), postOpts)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "error posting the blinded block to the builder api")
+	}
+
+	ver, err := c.checkBlockVersion(data, header)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	expectedPayloadVer, err := getVersionsBlockToPayload(sb.Version())
+	if err != nil {
+		return nil, nil, err
+	}
+	gotPayloadVer, err := getVersionsBlockToPayload(ver)
+	if err != nil {
+		return nil, nil, err
+	}
+	if expectedPayloadVer != gotPayloadVer {
+		return nil, nil, errors.Wrapf(errResponseVersionMismatch, "expected payload version %d, got %d", expectedPayloadVer, gotPayloadVer)
+	}
+
+	ed, blobs, err := c.parseBlindedBlockResponse(data, ver)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return ed, blobs, nil
+}
+
+func (c *Client) checkBlockVersion(respBytes []byte, header http.Header) (int, error) {
+	var versionHeader string
+	if c.sszEnabled {
+		versionHeader = strings.ToLower(header.Get(api.VersionHeader))
+	} else {
+		// fallback to JSON-based version extraction
+		v := &VersionResponse{}
+		if err := json.Unmarshal(respBytes, v); err != nil {
+			return 0, errors.Wrapf(err, "error unmarshaling JSON version fallback")
+		}
+		versionHeader = strings.ToLower(v.Version)
+	}
+
+	ver, err := version.FromString(versionHeader)
+	if err != nil {
+		return 0, errors.Wrapf(err, "unsupported header version %s", versionHeader)
+	}
+
+	return ver, nil
+}
+
+// Helper: build request body for SubmitBlindedBlock
+func (c *Client) buildBlindedBlockRequest(sb interfaces.ReadOnlySignedBeaconBlock) ([]byte, reqOption, error) {
 	if !sb.IsBlinded() {
 		return nil, nil, errNotBlinded
 	}
 
-	// massage the proto struct type data into the api response type.
+	if c.sszEnabled {
+		body, err := sb.MarshalSSZ()
+		if err != nil {
+			return nil, nil, errors.Wrap(err, "could not marshal SSZ for blinded block")
+		}
+		opt := func(r *http.Request) {
+			r.Header.Set(api.VersionHeader, version.String(sb.Version()))
+			r.Header.Set("Content-Type", api.OctetStreamMediaType)
+			r.Header.Set("Accept", api.OctetStreamMediaType)
+		}
+		return body, opt, nil
+	}
+
 	mj, err := structs.SignedBeaconBlockMessageJsoner(sb)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "error generating blinded beacon block post request")
 	}
-
 	body, err := json.Marshal(mj)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "error marshaling blinded block post request to json")
+		return nil, nil, errors.Wrap(err, "error marshaling blinded block to JSON")
 	}
-	postOpts := func(r *http.Request) {
-		r.Header.Add("Eth-Consensus-Version", version.String(sb.Version()))
+	opt := func(r *http.Request) {
+		r.Header.Set(api.VersionHeader, version.String(sb.Version()))
 		r.Header.Set("Content-Type", api.JsonMediaType)
 		r.Header.Set("Accept", api.JsonMediaType)
 	}
-	// post the blinded block - the execution payload response should contain the unblinded payload, along with the
-	// blobs bundle if it is post deneb.
-	rb, err := c.do(ctx, http.MethodPost, postBlindedBeaconBlockPath, bytes.NewBuffer(body), postOpts)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "error posting the blinded block to the builder api")
+	return body, opt, nil
+}
+
+// Helper: parse the response returned by SubmitBlindedBlock
+func (c *Client) parseBlindedBlockResponse(
+	respBytes []byte,
+	forkVersion int,
+) (interfaces.ExecutionData, *v1.BlobsBundle, error) {
+	if c.sszEnabled {
+		return c.parseBlindedBlockResponseSSZ(respBytes, forkVersion)
 	}
-	// ExecutionPayloadResponse parses just the outer container and the Value key, enabling it to use the .Value
-	// key to determine which underlying data type to use to finish the unmarshaling.
+	return c.parseBlindedBlockResponseJSON(respBytes, forkVersion)
+}
+
+func (c *Client) parseBlindedBlockResponseSSZ(
+	respBytes []byte,
+	forkVersion int,
+) (interfaces.ExecutionData, *v1.BlobsBundle, error) {
+	if forkVersion >= version.Deneb {
+		payloadAndBlobs := &v1.ExecutionPayloadDenebAndBlobsBundle{}
+		if err := payloadAndBlobs.UnmarshalSSZ(respBytes); err != nil {
+			return nil, nil, errors.Wrap(err, "unable to unmarshal ExecutionPayloadDenebAndBlobsBundle SSZ")
+		}
+		ed, err := blocks.NewWrappedExecutionData(payloadAndBlobs.Payload)
+		if err != nil {
+			return nil, nil, errors.Wrapf(err, "unable to wrap execution data for %s", version.String(forkVersion))
+		}
+		return ed, payloadAndBlobs.BlobsBundle, nil
+	} else if forkVersion >= version.Capella {
+		payload := &v1.ExecutionPayloadCapella{}
+		if err := payload.UnmarshalSSZ(respBytes); err != nil {
+			return nil, nil, errors.Wrap(err, "unable to unmarshal ExecutionPayloadCapella SSZ")
+		}
+		ed, err := blocks.NewWrappedExecutionData(payload)
+		if err != nil {
+			return nil, nil, errors.Wrapf(err, "unable to wrap execution data for %s", version.String(forkVersion))
+		}
+		return ed, nil, nil
+	} else if forkVersion >= version.Bellatrix {
+		payload := &v1.ExecutionPayload{}
+		if err := payload.UnmarshalSSZ(respBytes); err != nil {
+			return nil, nil, errors.Wrap(err, "unable to unmarshal ExecutionPayload SSZ")
+		}
+		ed, err := blocks.NewWrappedExecutionData(payload)
+		if err != nil {
+			return nil, nil, errors.Wrapf(err, "unable to wrap execution data for %s", version.String(forkVersion))
+		}
+		return ed, nil, nil
+	} else {
+		return nil, nil, fmt.Errorf("unsupported header version %s", version.String(forkVersion))
+	}
+}
+
+func (c *Client) parseBlindedBlockResponseJSON(
+	respBytes []byte,
+	forkVersion int,
+) (interfaces.ExecutionData, *v1.BlobsBundle, error) {
 	ep := &ExecutionPayloadResponse{}
-	if err := json.Unmarshal(rb, ep); err != nil {
-		return nil, nil, errors.Wrap(err, "error unmarshaling the builder ExecutionPayloadResponse")
+	if err := json.Unmarshal(respBytes, ep); err != nil {
+		return nil, nil, errors.Wrap(err, "error unmarshaling ExecutionPayloadResponse")
 	}
-	if strings.ToLower(ep.Version) != version.String(sb.Version()) {
-		return nil, nil, errors.Wrapf(errResponseVersionMismatch, "req=%s, recv=%s", strings.ToLower(ep.Version), version.String(sb.Version()))
-	}
-	// This parses the rest of the response and returns the inner data field.
 	pp, err := ep.ParsePayload()
 	if err != nil {
-		return nil, nil, errors.Wrapf(err, "failed to parse execution payload from builder with version=%s", ep.Version)
+		return nil, nil, errors.Wrapf(err, "failed to parse payload with version=%s", ep.Version)
 	}
-	// Get the payload as a proto.Message so it can be wrapped as an execution payload interface.
 	pb, err := pp.PayloadProto()
 	if err != nil {
 		return nil, nil, err
@@ -360,11 +624,13 @@ func (c *Client) SubmitBlindedBlock(ctx context.Context, sb interfaces.ReadOnlyS
 	if err != nil {
 		return nil, nil, err
 	}
+
+	// Check if it contains blobs
 	bb, ok := pp.(BlobBundler)
 	if ok {
 		bbpb, err := bb.BundleProto()
 		if err != nil {
-			return nil, nil, errors.Wrapf(err, "failed to extract blobs bundle from builder response with version=%s", ep.Version)
+			return nil, nil, errors.Wrapf(err, "failed to extract blobs bundle from version=%s", ep.Version)
 		}
 		return ed, bbpb, nil
 	}
@@ -375,7 +641,10 @@ func (c *Client) SubmitBlindedBlock(ctx context.Context, sb interfaces.ReadOnlyS
 // response, and an error response may have an error message. This method will return a nil value for error in the
 // happy path, and an error with information about the server response body for a non-200 response.
 func (c *Client) Status(ctx context.Context) error {
-	_, err := c.do(ctx, http.MethodGet, getStatus, nil)
+	getOpts := func(r *http.Request) {
+		r.Header.Set("Accept", api.JsonMediaType)
+	}
+	_, _, err := c.do(ctx, http.MethodGet, getStatus, nil, getOpts)
 	return err
 }
 
@@ -390,6 +659,18 @@ func non200Err(response *http.Response) error {
 	}
 	msg := fmt.Sprintf("code=%d, url=%s, body=%s", response.StatusCode, response.Request.URL, body)
 	switch response.StatusCode {
+	case http.StatusUnsupportedMediaType:
+		log.WithError(ErrUnsupportedMediaType).Debug(msg)
+		if jsonErr := json.Unmarshal(bodyBytes, &errMessage); jsonErr != nil {
+			return errors.Wrap(jsonErr, "unable to read response body")
+		}
+		return errors.Wrap(ErrUnsupportedMediaType, errMessage.Message)
+	case http.StatusNotAcceptable:
+		log.WithError(ErrNotAcceptable).Debug(msg)
+		if jsonErr := json.Unmarshal(bodyBytes, &errMessage); jsonErr != nil {
+			return errors.Wrap(jsonErr, "unable to read response body")
+		}
+		return errors.Wrap(ErrNotAcceptable, errMessage.Message)
 	case http.StatusNoContent:
 		log.WithError(ErrNoContent).Debug(msg)
 		return ErrNoContent
