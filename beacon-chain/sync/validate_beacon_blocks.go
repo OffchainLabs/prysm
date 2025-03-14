@@ -73,12 +73,14 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 
 	// Broadcast the block on both block and operation feeds to notify other services in the beacon node
 	// of a received block (even if it does not process correctly through a state transition).
-	s.cfg.operationNotifier.OperationFeed().Send(&feed.Event{
-		Type: operation.BlockGossipReceived,
-		Data: &operation.BlockGossipReceivedData{
-			SignedBlock: blk,
-		},
-	})
+	if s.cfg.operationNotifier != nil {
+		s.cfg.operationNotifier.OperationFeed().Send(&feed.Event{
+			Type: operation.BlockGossipReceived,
+			Data: &operation.BlockGossipReceivedData{
+				SignedBlock: blk,
+			},
+		})
+	}
 
 	s.cfg.blockNotifier.BlockFeed().Send(&feed.Event{
 		Type: blockfeed.ReceivedBlock,
