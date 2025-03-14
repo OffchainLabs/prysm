@@ -218,10 +218,6 @@ func TestReconstructAndBroadcastBlobs(t *testing.T) {
 			Genesis: time.Now(),
 		}
 
-		b := util.NewBeaconBlockFulu()
-		sb, err := blocks.NewSignedBeaconBlock(b)
-		require.NoError(t, err)
-
 		allColumns := make([]blocks.VerifiedRODataColumn, 128)
 		for i := range allColumns {
 			rod, err := blocks.NewRODataColumn(
@@ -244,15 +240,18 @@ func TestReconstructAndBroadcastBlobs(t *testing.T) {
 		tests := []struct {
 			name                    string
 			dataColumnSidecars      []blocks.VerifiedRODataColumn
+			blobCount               int
 			expectedDataColumnCount int
 		}{
 			{
 				name:                    "Constructed 0 data columns with no blobs",
+				blobCount:               0,
 				dataColumnSidecars:      nil,
 				expectedDataColumnCount: 0,
 			},
 			{
 				name:                    "Constructed 128 data columns with all blobs",
+				blobCount:               1,
 				dataColumnSidecars:      allColumns,
 				expectedDataColumnCount: 8, // default is 8
 			},
@@ -276,6 +275,19 @@ func TestReconstructAndBroadcastBlobs(t *testing.T) {
 					receivedDataColumnsFromRoot: gcache.New(1*time.Minute, 2*time.Minute),
 					storedDataColumnsFromRoot:   gcache.New(1*time.Minute, 2*time.Minute),
 				}
+
+				kzgCommitments := make([][]byte, 0, tt.blobCount)
+				for range tt.blobCount {
+					kzgCommitment := make([]byte, 48)
+					kzgCommitments = append(kzgCommitments, kzgCommitment)
+				}
+
+				b := util.NewBeaconBlockFulu()
+				b.Block.Body.BlobKzgCommitments = kzgCommitments
+
+				sb, err := blocks.NewSignedBeaconBlock(b)
+				require.NoError(t, err)
+
 				s.reconstructAndBroadcastBlobs(context.Background(), sb)
 				require.Equal(t, tt.expectedDataColumnCount, len(chainService.DataColumns))
 			})

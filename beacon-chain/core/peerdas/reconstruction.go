@@ -97,16 +97,24 @@ func DataColumnSidecarsForReconstruct(
 
 	// Get the column sidecars.
 	sidecars := make([]*ethpb.DataColumnSidecar, 0, fieldparams.NumberOfColumns)
-	for columnIndex := uint64(0); columnIndex < fieldparams.NumberOfColumns; columnIndex++ {
+	for columnIndex := range fieldparams.NumberOfColumns {
 		column := make([]kzg.Cell, 0, blobsCount)
 		kzgProofOfColumn := make([]kzg.Proof, 0, blobsCount)
 
-		for rowIndex := 0; rowIndex < blobsCount; rowIndex++ {
+		for rowIndex := range blobsCount {
 			cellsForRow := cellsAndProofs[rowIndex].Cells
 			proofsForRow := cellsAndProofs[rowIndex].Proofs
 
+			if len(cellsForRow) != fieldparams.NumberOfColumns {
+				return nil, errors.Errorf("cells don't have the expected size: expected %d - actual %d", fieldparams.NumberOfColumns, len(cellsForRow))
+			}
+
 			cell := cellsForRow[columnIndex]
 			column = append(column, cell)
+
+			if len(proofsForRow) != fieldparams.NumberOfColumns {
+				return nil, errors.Errorf("proofs don't have the expected size: expected %d - actual %d", fieldparams.NumberOfColumns, len(proofsForRow))
+			}
 
 			kzgProof := proofsForRow[columnIndex]
 			kzgProofOfColumn = append(kzgProofOfColumn, kzgProof)
@@ -124,7 +132,7 @@ func DataColumnSidecarsForReconstruct(
 		}
 
 		sidecar := &ethpb.DataColumnSidecar{
-			ColumnIndex:                  columnIndex,
+			ColumnIndex:                  uint64(columnIndex),
 			DataColumn:                   columnBytes,
 			KzgCommitments:               blobKzgCommitments,
 			KzgProof:                     kzgProofOfColumnBytes,

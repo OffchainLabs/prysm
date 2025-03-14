@@ -75,8 +75,21 @@ func (s *Service) reconstructAndBroadcastBlobs(ctx context.Context, block interf
 }
 
 // reconstructAndBroadcastBlobsInDataColumn reconstructs and broadcasts blobs in data column format for a given beacon block, it also saves data column sidecars into the blob storage.
-func (s *Service) reconstructAndBroadcastBlobsInDataColumn(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) {
-	blockRoot, err := block.Block().HashTreeRoot()
+func (s *Service) reconstructAndBroadcastBlobsInDataColumn(ctx context.Context, roSignedBlock interfaces.ReadOnlySignedBeaconBlock) {
+	block := roSignedBlock.Block()
+
+	kzgCommitments, err := block.Body().BlobKzgCommitments()
+	if err != nil {
+		log.WithError(err).Error("Failed to read commitments from block")
+		return
+	}
+
+	if len(kzgCommitments) == 0 {
+		// No blobs to reconstruct.
+		return
+	}
+
+	blockRoot, err := block.HashTreeRoot()
 	if err != nil {
 		log.WithError(err).Error("Failed to calculate block root")
 		return
@@ -87,7 +100,7 @@ func (s *Service) reconstructAndBroadcastBlobsInDataColumn(ctx context.Context, 
 	}
 
 	// when this function is called, it's from the time when the block is received, so in almost all situations we need to get the data column from EL instead of the blob storage.
-	sidecars, err := s.cfg.executionReconstructor.ReconstructDataColumnSidecars(ctx, block, blockRoot)
+	sidecars, err := s.cfg.executionReconstructor.ReconstructDataColumnSidecars(ctx, roSignedBlock, blockRoot)
 	if err != nil {
 		log.WithError(err).Debug("Cannot reconstruct data column sidecars after receiving the block")
 		return
