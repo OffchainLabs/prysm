@@ -184,7 +184,7 @@ func TestAcceptEncodingHeaderHandler(t *testing.T) {
 				require.NoError(t, err, "Failed to create gzipReader")
 				defer func() {
 					if err := gzReader.Close(); err != nil {
-						log.WithError(err).Error("Failed to close gzip writer")
+						log.WithError(err).Error("Failed to close gzip reader")
 					}
 				}()
 
