@@ -6,7 +6,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
 	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
-	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
 
@@ -20,7 +19,7 @@ func FlagOptions(c *cli.Context) ([]Option, error) {
 	if endpoint != "" {
 		var opts []builder.ClientOpt
 		if sszEnabled {
-			log.Info("Using Builder APIs with SSZ enabled.")
+			log.Info("Using APIs with SSZ enabled")
 			opts = append(opts, builder.WithSSZ())
 		}
 		var err error

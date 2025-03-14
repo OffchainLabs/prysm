@@ -277,15 +277,18 @@ func (c *Client) parseHeaderResponse(data []byte, header http.Header) (SignedBid
 
 	if ver >= version.Electra {
 		return c.parseHeaderElectra(data)
-	} else if ver >= version.Deneb {
-		return c.parseHeaderDeneb(data)
-	} else if ver >= version.Capella {
-		return c.parseHeaderCapella(data)
-	} else if ver >= version.Bellatrix {
-		return c.parseHeaderBellatrix(data)
-	} else {
-		return nil, fmt.Errorf("unsupported header version %s", versionHeader)
 	}
+	if ver >= version.Deneb {
+		return c.parseHeaderDeneb(data)
+	}
+	if ver >= version.Capella {
+		return c.parseHeaderCapella(data)
+	}
+	if ver >= version.Bellatrix {
+		return c.parseHeaderBellatrix(data)
+	}
+
+	return nil, fmt.Errorf("unsupported header version %s", versionHeader)
 }
 
 func (c *Client) parseHeaderElectra(data []byte) (SignedBid, error) {
@@ -445,13 +448,14 @@ var errResponseVersionMismatch = errors.New("builder API response uses a differe
 func getVersionsBlockToPayload(blockVersion int) (int, error) {
 	if blockVersion >= version.Deneb {
 		return version.Deneb, nil
-	} else if blockVersion == version.Capella {
-		return version.Capella, nil
-	} else if blockVersion == version.Bellatrix {
-		return version.Bellatrix, nil
-	} else {
-		return 0, errors.Wrapf(errVersionUnsupported, "block version %d", blockVersion)
 	}
+	if blockVersion == version.Capella {
+		return version.Capella, nil
+	}
+	if blockVersion == version.Bellatrix {
+		return version.Bellatrix, nil
+	}
+	return 0, errors.Wrapf(errVersionUnsupported, "block version %d", blockVersion)
 }
 
 // SubmitBlindedBlock calls the builder API endpoint that binds the validator to the builder and submits the block.
