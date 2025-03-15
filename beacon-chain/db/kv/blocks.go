@@ -16,6 +16,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/container/slice"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/encoding/ssz/detect"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
@@ -1019,4 +1020,60 @@ func (s *Store) deleteValidatorHashes(tx *bolt.Tx, root []byte) error {
 	}
 
 	return nil
+}
+
+func (s *Store) AddBeaconBlock(ctx context.Context, serBlock []byte) error {
+	ctx, span := trace.StartSpan(ctx, "BeaconDB.AddBeaconBlock")
+	defer span.End()
+
+	cf, err := detect.FromBlock(serBlock)
+	if err != nil {
+		return errors.Wrap(err, "could not sniff config+fork for origin state bytes")
+	}
+
+	wblk, err := cf.UnmarshalBeaconBlock(serBlock)
+	if err != nil {
+		return errors.Wrap(err, "failed to initialize origin block w/ bytes + config+fork")
+	}
+	blk := wblk.Block()
+
+	blockRoot, err := blk.HashTreeRoot()
+	if err != nil {
+		return errors.Wrap(err, "could not compute HashTreeRoot of checkpoint block")
+	}
+
+	pr := blk.ParentRoot()
+
+	return s.db.Update(func(tx *bolt.Tx) error {
+		bkt := tx.Bucket(blocksBucket)
+
+		// Check 1: Error if block with same root exists
+		if exists := bkt.Get(blockRoot[:]); exists != nil {
+			return errors.Errorf("block with root %#x already exists in database", blockRoot)
+		}
+
+		// Check 2: Error if parent root is not known
+		parentExists := bkt.Get(pr[:])
+		if parentExists == nil {
+			return errors.Errorf("parent root %#x not found in database for block %#x", pr, blockRoot)
+		}
+
+		parentBlk, err := unmarshalBlock(ctx, parentExists)
+		if err != nil {
+			return err
+		}
+
+		// Check 3: Ensure block slot is greater than parent slot
+		if blk.Slot() <= parentBlk.Block().Slot() {
+			return errors.Errorf("block slot %d must be higher than parent slot %d for root %#x",
+				blk.Slot(), parentBlk.Block().Slot(), blockRoot)
+		}
+
+		// Save the block
+		if err := bkt.Put(blockRoot[:], serBlock); err != nil {
+			return errors.Wrapf(err, "could not write block to db with root %#x", blockRoot)
+		}
+
+		return nil
+	})
 }
