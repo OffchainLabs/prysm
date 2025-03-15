@@ -354,7 +354,7 @@ func IsInSlots(a primitives.Slot, b []primitives.Slot) bool {
 
 // Unique returns an array with duplicates filtered based on the type given
 func Unique[T comparable](a []T) []T {
-	if a == nil || len(a) <= 1 {
+	if len(a) <= 1 {
 		return a
 	}
 	found := map[T]bool{}
@@ -380,8 +380,8 @@ func Reverse[E any](s []E) []E {
 }
 
 // VerifyMaxLength takes a slice and a maximum length and validates the length.
-func VerifyMaxLength[T any](v []T, max int) error {
-	l := len(v)
+func VerifyMaxLength[T any](v []T, max uint64) error {
+	l := uint64(len(v))
 	if l > max {
 		return fmt.Errorf("length of %d exceeds max of %d", l, max)
 	}

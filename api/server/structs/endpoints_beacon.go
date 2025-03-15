@@ -78,8 +78,8 @@ type GetBlockHeaderResponse struct {
 }
 
 type GetValidatorsRequest struct {
-	Ids      []string `json:"ids"`
-	Statuses []string `json:"statuses"`
+	Ids      []string `json:"ids,omitempty"`
+	Statuses []string `json:"statuses,omitempty"`
 }
 
 type GetValidatorsResponse struct {
@@ -249,4 +249,18 @@ type ChainHead struct {
 	PreviousJustifiedEpoch     string `json:"previous_justified_epoch"`
 	PreviousJustifiedBlockRoot string `json:"previous_justified_block_root"`
 	OptimisticStatus           bool   `json:"optimistic_status"`
+}
+
+type GetPendingDepositsResponse struct {
+	Version             string            `json:"version"`
+	ExecutionOptimistic bool              `json:"execution_optimistic"`
+	Finalized           bool              `json:"finalized"`
+	Data                []*PendingDeposit `json:"data"`
+}
+
+type GetPendingPartialWithdrawalsResponse struct {
+	Version             string                      `json:"version"`
+	ExecutionOptimistic bool                        `json:"execution_optimistic"`
+	Finalized           bool                        `json:"finalized"`
+	Data                []*PendingPartialWithdrawal `json:"data"`
 }

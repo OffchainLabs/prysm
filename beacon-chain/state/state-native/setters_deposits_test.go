@@ -34,6 +34,21 @@ func TestAppendPendingDeposit(t *testing.T) {
 	require.Equal(t, primitives.Slot(1), pbd[0].Slot)
 	require.DeepEqual(t, sig, pbd[0].Signature)
 
+	ds := make([]*eth.PendingDeposit, 0, 4)
+	require.NoError(t, s.SetPendingDeposits(ds))
+	require.NoError(t, s.AppendPendingDeposit(&eth.PendingDeposit{Amount: 1}))
+	s2 := s.Copy()
+	require.NoError(t, s2.AppendPendingDeposit(&eth.PendingDeposit{Amount: 3}))
+	require.NoError(t, s.AppendPendingDeposit(&eth.PendingDeposit{Amount: 2}))
+	d, err := s.PendingDeposits()
+	require.NoError(t, err)
+	require.Equal(t, uint64(1), d[0].Amount)
+	require.Equal(t, uint64(2), d[1].Amount)
+	d, err = s2.PendingDeposits()
+	require.NoError(t, err)
+	require.Equal(t, uint64(1), d[0].Amount)
+	require.Equal(t, uint64(3), d[1].Amount)
+
 	// Fails for versions older than electra
 	s, err = state_native.InitializeFromProtoDeneb(&eth.BeaconStateDeneb{})
 	require.NoError(t, err)

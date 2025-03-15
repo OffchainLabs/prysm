@@ -39,8 +39,8 @@ func HoleskyConfig() *BeaconChainConfig {
 	cfg.CapellaForkVersion = []byte{0x4, 0x1, 0x70, 0x0}
 	cfg.DenebForkEpoch = 29696
 	cfg.DenebForkVersion = []byte{0x05, 0x1, 0x70, 0x0}
-	cfg.ElectraForkEpoch = math.MaxUint64
-	cfg.ElectraForkVersion = []byte{0x06, 0x1, 0x70, 0x0} // TODO: Define holesky fork version for electra. This is a placeholder value.
+	cfg.ElectraForkEpoch = 115968 // Mon, Feb 24 at 21:55:12 UTC
+	cfg.ElectraForkVersion = []byte{0x06, 0x1, 0x70, 0x0}
 	cfg.FuluForkEpoch = math.MaxUint64
 	cfg.FuluForkVersion = []byte{0x07, 0x1, 0x70, 0x0} // TODO: Define holesky fork version for fulu. This is a placeholder value.
 	cfg.TerminalTotalDifficulty = "0"
