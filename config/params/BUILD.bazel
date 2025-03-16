@@ -16,6 +16,7 @@ go_library(
         "network_config.go",
         "testnet_e2e_config.go",
         "testnet_holesky_config.go",
+        "testnet_hoodi_config.go",
         "testnet_sepolia_config.go",
         "testutils.go",
         "testutils_develop.go",  # keep
