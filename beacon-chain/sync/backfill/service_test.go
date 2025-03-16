@@ -132,3 +132,30 @@ func TestBackfillMinSlotDefault(t *testing.T) {
 		require.Equal(t, specMin, s.ms(current))
 	})
 }
+
+func TestServiceWithBackfillDisabled(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+	db := &mockBackfillDB{}
+	su, err := NewUpdater(ctx, db)
+	require.NoError(t, err)
+	
+	cw := startup.NewClockSynchronizer()
+	require.NoError(t, cw.SetClock(startup.NewClock(time.Now(), [32]byte{})))
+	p2pt := p2ptest.NewTestP2P(t)
+	bfs := filesystem.NewEphemeralBlobStorage(t)
+	
+	// Create service with backfill disabled
+	srv, err := NewService(ctx, su, bfs, cw, p2pt, &mockAssigner{},
+		WithEnableBackfill(false), WithVerifierWaiter(&mockInitalizerWaiter{}))
+	require.NoError(t, err)
+	
+	// Start the service
+	go srv.Start()
+	
+	// Give it a moment to run
+	time.Sleep(100 * time.Millisecond)
+	
+	// Verify that the service is not actively backfilling
+	require.False(t, srv.isBackfilling.Load())
+}
