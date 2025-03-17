@@ -244,26 +244,6 @@ type Withdrawal struct {
 	Amount           string `json:"amount"`
 }
 
-type DepositRequest struct {
-	Pubkey                string `json:"pubkey"`
-	WithdrawalCredentials string `json:"withdrawal_credentials"`
-	Amount                string `json:"amount"`
-	Signature             string `json:"signature"`
-	Index                 string `json:"index"`
-}
-
-type WithdrawalRequest struct {
-	SourceAddress   string `json:"source_address"`
-	ValidatorPubkey string `json:"validator_pubkey"`
-	Amount          string `json:"amount"`
-}
-
-type ConsolidationRequest struct {
-	SourceAddress string `json:"source_address"`
-	SourcePubkey  string `json:"source_pubkey"`
-	TargetPubkey  string `json:"target_pubkey"`
-}
-
 type PendingDeposit struct {
 	Pubkey                string `json:"pubkey"`
 	WithdrawalCredentials string `json:"withdrawal_credentials"`

@@ -26,10 +26,12 @@ option php_namespace = "Ethereum\\Eth\\v1alpha1";
 
 message HighestAttestation {
   uint64 validator_index = 1;
-  uint64 highest_source_epoch = 2
-  [ (ethereum.eth.ext.cast_type) =
-      "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Epoch" ];
-  uint64 highest_target_epoch = 3
-  [ (ethereum.eth.ext.cast_type) =
-      "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Epoch" ];
+  uint64 highest_source_epoch = 2 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Epoch"
+  ];
+  uint64 highest_target_epoch = 3 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Epoch"
+  ];
 }

@@ -122,31 +122,28 @@ func (v *validator) SubmitAttestation(ctx context.Context, slot primitives.Slot,
 		return
 	}
 
-	// TODO: Extend to Electra
-	phase0Att, ok := indexedAtt.(*ethpb.IndexedAttestation)
-	if ok {
-		// Send the attestation to the beacon node.
-		if err := v.db.SlashableAttestationCheck(ctx, phase0Att, pubKey, signingRoot, v.emitAccountMetrics, ValidatorAttestFailVec); err != nil {
-			log.WithError(err).Error("Failed attestation slashing protection check")
-			log.WithFields(
-				attestationLogFields(pubKey, indexedAtt),
-			).Debug("Attempted slashable attestation details")
-			tracing.AnnotateError(span, err)
-			return
-		}
+	// Send the attestation to the beacon node.
+	if err := v.db.SlashableAttestationCheck(ctx, indexedAtt, pubKey, signingRoot, v.emitAccountMetrics, ValidatorAttestFailVec); err != nil {
+		log.WithError(err).Error("Failed attestation slashing protection check")
+		log.WithFields(
+			attestationLogFields(pubKey, indexedAtt),
+		).Debug("Attempted slashable attestation details")
+		tracing.AnnotateError(span, err)
+		return
 	}
 
 	var aggregationBitfield bitfield.Bitlist
-
+	var attestation ethpb.Att
 	var attResp *ethpb.AttestResponse
 	if postElectra {
-		attestation := &ethpb.SingleAttestation{
+		sa := &ethpb.SingleAttestation{
 			Data:          data,
 			AttesterIndex: duty.ValidatorIndex,
 			CommitteeId:   duty.CommitteeIndex,
 			Signature:     sig,
 		}
-		attResp, err = v.validatorClient.ProposeAttestationElectra(ctx, attestation)
+		attestation = sa
+		attResp, err = v.validatorClient.ProposeAttestationElectra(ctx, sa)
 	} else {
 		var indexInCommittee uint64
 		var found bool
@@ -166,12 +163,13 @@ func (v *validator) SubmitAttestation(ctx context.Context, slot primitives.Slot,
 		}
 		aggregationBitfield = bitfield.NewBitlist(uint64(len(duty.Committee)))
 		aggregationBitfield.SetBitAt(indexInCommittee, true)
-		attestation := &ethpb.Attestation{
+		a := &ethpb.Attestation{
 			Data:            data,
 			AggregationBits: aggregationBitfield,
 			Signature:       sig,
 		}
-		attResp, err = v.validatorClient.ProposeAttestation(ctx, attestation)
+		attestation = a
+		attResp, err = v.validatorClient.ProposeAttestation(ctx, a)
 	}
 	if err != nil {
 		log.WithError(err).Error("Could not submit attestation to beacon node")
@@ -182,7 +180,7 @@ func (v *validator) SubmitAttestation(ctx context.Context, slot primitives.Slot,
 		return
 	}
 
-	if err := v.saveSubmittedAtt(data, pubKey[:], false); err != nil {
+	if err := v.saveSubmittedAtt(attestation, pubKey[:], false); err != nil {
 		log.WithError(err).Error("Could not save validator index for logging")
 		if v.emitAccountMetrics {
 			ValidatorAttestFailVec.WithLabelValues(fmtKey).Inc()

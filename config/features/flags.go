@@ -18,6 +18,11 @@ var (
 		Name:  "holesky",
 		Usage: "Runs Prysm configured for the Holesky test network.",
 	}
+	// HoodiTestnet flag for ethereum testnet.
+	HoodiTestnet = &cli.BoolFlag{
+		Name:  "hoodi",
+		Usage: "Runs Prysm configured for the Hoodi test network.",
+	}
 	// Mainnet flag for easier tooling, no-op
 	Mainnet = &cli.BoolFlag{
 		Value: true,
@@ -89,10 +94,6 @@ var (
 		Name:  "attest-timely",
 		Usage: "Fixes validator can attest timely after current block processes. See #8185 for more details.",
 	}
-	enableSlasherFlag = &cli.BoolFlag{
-		Name:  "slasher",
-		Usage: "Enables a slasher in the beacon node for detecting slashable offenses.",
-	}
 	enableSlashingProtectionPruning = &cli.BoolFlag{
 		Name:  "enable-slashing-protection-history-pruning",
 		Usage: "Enables the pruning of the validator client's slashing protection database.",
@@ -144,7 +145,7 @@ var (
 		Usage: "Informs the engine to prepare all local payloads. Useful for relayers and builders.",
 	}
 	EnableLightClient = &cli.BoolFlag{
-		Name:  "enable-lightclient",
+		Name:  "enable-light-client",
 		Usage: "Enables the light client support in the beacon node",
 	}
 	disableResourceManager = &cli.BoolFlag{
@@ -178,6 +179,12 @@ var (
 		Name:  "enable-experimental-attestation-pool",
 		Usage: "Enables an experimental attestation pool design.",
 	}
+	// forceHeadFlag is a flag to force the head of the beacon chain to a specific block.
+	forceHeadFlag = &cli.StringFlag{
+		Name: "sync-from",
+		Usage: "Forces the head of the beacon chain to a specific block root. Values can be 'head' or a block root." +
+			" The block root has to be known to the beacon node and correspond to a block newer than the current finalized checkpoint.",
+	}
 )
 
 // devModeFlags holds list of flags that are set when development mode is on.
@@ -190,6 +197,7 @@ var ValidatorFlags = append(deprecatedFlags, []cli.Flag{
 	writeWalletPasswordOnWebOnboarding,
 	HoleskyTestnet,
 	SepoliaTestnet,
+	HoodiTestnet,
 	Mainnet,
 	dynamicKeyReloadDebounceInterval,
 	attestTimely,
@@ -205,7 +213,7 @@ var E2EValidatorFlags = []string{
 }
 
 // BeaconChainFlags contains a list of all the feature flags that apply to the beacon-chain client.
-var BeaconChainFlags = append(deprecatedBeaconFlags, append(deprecatedFlags, []cli.Flag{
+var BeaconChainFlags = combinedFlags([]cli.Flag{
 	devModeFlag,
 	disableExperimentalState,
 	writeSSZStateTransitionsFlag,
@@ -214,11 +222,10 @@ var BeaconChainFlags = append(deprecatedBeaconFlags, append(deprecatedFlags, []c
 	disableGRPCConnectionLogging,
 	HoleskyTestnet,
 	SepoliaTestnet,
+	HoodiTestnet,
 	Mainnet,
 	disablePeerScorer,
 	disableBroadcastSlashingFlag,
-	enableSlasherFlag,
-	enableHistoricalSpaceRepresentation,
 	disableStakinContractCheck,
 	SaveFullExecutionPayloads,
 	enableStartupOptimistic,
@@ -236,7 +243,19 @@ var BeaconChainFlags = append(deprecatedBeaconFlags, append(deprecatedFlags, []c
 	DisableCommitteeAwarePacking,
 	EnableDiscoveryReboot,
 	enableExperimentalAttestationPool,
-}...)...)
+	forceHeadFlag,
+}, deprecatedBeaconFlags, deprecatedFlags, upcomingDeprecation)
+
+func combinedFlags(flags ...[]cli.Flag) []cli.Flag {
+	if len(flags) == 0 {
+		return []cli.Flag{}
+	}
+	collected := flags[0]
+	for _, f := range flags[1:] {
+		collected = append(collected, f...)
+	}
+	return collected
+}
 
 // E2EBeaconChainFlags contains a list of the beacon chain feature flags to be tested in E2E.
 var E2EBeaconChainFlags = []string{
@@ -248,4 +267,5 @@ var NetworkFlags = []cli.Flag{
 	Mainnet,
 	SepoliaTestnet,
 	HoleskyTestnet,
+	HoodiTestnet,
 }

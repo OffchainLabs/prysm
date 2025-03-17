@@ -178,52 +178,6 @@ func (c *Cache) NonFinalizedDeposits(ctx context.Context, lastFinalizedIndex int
 	return deposits
 }
 
-// PruneProofs removes proofs from all deposits whose index is equal or less than untilDepositIndex.
-func (c *Cache) PruneProofs(ctx context.Context, untilDepositIndex int64) error {
-	_, span := trace.StartSpan(ctx, "Cache.PruneProofs")
-	defer span.End()
-	c.depositsLock.Lock()
-	defer c.depositsLock.Unlock()
-
-	if untilDepositIndex >= int64(len(c.deposits)) {
-		untilDepositIndex = int64(len(c.deposits) - 1)
-	}
-
-	for i := untilDepositIndex; i >= 0; i-- {
-		// Finding a nil proof means that all proofs up to this deposit have been already pruned.
-		if c.deposits[i].Deposit.Proof == nil {
-			break
-		}
-		c.deposits[i].Deposit.Proof = nil
-	}
-
-	return nil
-}
-
-// PrunePendingDeposits removes any deposit which is older than the given deposit merkle tree index.
-func (c *Cache) PrunePendingDeposits(ctx context.Context, merkleTreeIndex int64) {
-	_, span := trace.StartSpan(ctx, "Cache.PrunePendingDeposits")
-	defer span.End()
-
-	if merkleTreeIndex == 0 {
-		log.Debug("Ignoring 0 deposit removal")
-		return
-	}
-
-	c.depositsLock.Lock()
-	defer c.depositsLock.Unlock()
-
-	cleanDeposits := make([]*ethpb.DepositContainer, 0, len(c.pendingDeposits))
-	for _, dp := range c.pendingDeposits {
-		if dp.Index >= merkleTreeIndex {
-			cleanDeposits = append(cleanDeposits, dp)
-		}
-	}
-
-	c.pendingDeposits = cleanDeposits
-	pendingDepositsCount.Set(float64(len(c.pendingDeposits)))
-}
-
 // InsertPendingDeposit into the database. If deposit or block number are nil
 // then this method does nothing.
 func (c *Cache) InsertPendingDeposit(ctx context.Context, d *ethpb.Deposit, blockNum uint64, index int64, depositRoot [32]byte) {

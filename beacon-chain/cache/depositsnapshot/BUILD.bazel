@@ -5,6 +5,7 @@ go_library(
     srcs = [
         "deposit_fetcher.go",
         "deposit_inserter.go",
+        "deposit_pruner.go",
         "deposit_tree.go",
         "deposit_tree_snapshot.go",
         "merkle_tree.go",
@@ -35,6 +36,7 @@ go_test(
     srcs = [
         "deposit_cache_test.go",
         "deposit_fetcher_test.go",
+        "deposit_pruner_test.go",
         "deposit_tree_snapshot_test.go",
         "merkle_tree_test.go",
         "spec_test.go",

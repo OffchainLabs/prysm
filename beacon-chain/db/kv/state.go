@@ -357,7 +357,7 @@ func (s *Store) processElectra(ctx context.Context, pbState *ethpb.BeaconStateEl
 	if err != nil {
 		return err
 	}
-	encodedState := snappy.Encode(nil, append(electraKey, rawObj...))
+	encodedState := snappy.Encode(nil, append(ElectraKey, rawObj...))
 	if err := bucket.Put(rootHash, encodedState); err != nil {
 		return err
 	}
@@ -518,9 +518,9 @@ func (s *Store) unmarshalState(_ context.Context, enc []byte, validatorEntries [
 
 	switch {
 	case hasFuluKey(enc):
-		protoState := &ethpb.BeaconStateFulu{}
+		protoState := &ethpb.BeaconStateElectra{}
 		if err := protoState.UnmarshalSSZ(enc[len(fuluKey):]); err != nil {
-			return nil, errors.Wrap(err, "failed to unmarshal encoding for Electra")
+			return nil, errors.Wrap(err, "failed to unmarshal encoding for Fulu")
 		}
 		ok, err := s.isStateValidatorMigrationOver()
 		if err != nil {
@@ -530,9 +530,9 @@ func (s *Store) unmarshalState(_ context.Context, enc []byte, validatorEntries [
 			protoState.Validators = validatorEntries
 		}
 		return statenative.InitializeFromProtoUnsafeFulu(protoState)
-	case hasElectraKey(enc):
+	case HasElectraKey(enc):
 		protoState := &ethpb.BeaconStateElectra{}
-		if err := protoState.UnmarshalSSZ(enc[len(electraKey):]); err != nil {
+		if err := protoState.UnmarshalSSZ(enc[len(ElectraKey):]); err != nil {
 			return nil, errors.Wrap(err, "failed to unmarshal encoding for Electra")
 		}
 		ok, err := s.isStateValidatorMigrationOver()
@@ -688,9 +688,9 @@ func marshalState(ctx context.Context, st state.ReadOnlyBeaconState) ([]byte, er
 		if err != nil {
 			return nil, err
 		}
-		return snappy.Encode(nil, append(electraKey, rawObj...)), nil
+		return snappy.Encode(nil, append(ElectraKey, rawObj...)), nil
 	case version.Fulu:
-		rState, ok := st.ToProtoUnsafe().(*ethpb.BeaconStateFulu)
+		rState, ok := st.ToProtoUnsafe().(*ethpb.BeaconStateElectra)
 		if !ok {
 			return nil, errors.New("non valid inner state")
 		}
@@ -725,7 +725,7 @@ func (s *Store) validatorEntries(ctx context.Context, blockRoot [32]byte) ([]*et
 		idxBkt := tx.Bucket(blockRootValidatorHashesBucket)
 		valKey := idxBkt.Get(blockRoot[:])
 		if len(valKey) == 0 {
-			return errors.Errorf("invalid compressed validator keys length")
+			return errors.Errorf("validator keys not found for given block root: %x", blockRoot)
 		}
 
 		// decompress the keys and check if they are of proper length.
@@ -820,30 +820,25 @@ func (s *Store) slotByBlockRoot(ctx context.Context, tx *bolt.Tx, blockRoot []by
 			// no need to construct the validator entries as it is not used here.
 			s, err := s.unmarshalState(ctx, enc, nil)
 			if err != nil {
-				return 0, err
+				return 0, errors.Wrap(err, "could not unmarshal state")
 			}
 			if s == nil || s.IsNil() {
 				return 0, errors.New("state can't be nil")
 			}
 			return s.Slot(), nil
 		}
-		b := &ethpb.SignedBeaconBlock{}
-		err := decode(ctx, enc, b)
+		b, err := unmarshalBlock(ctx, enc)
 		if err != nil {
+			return 0, errors.Wrap(err, "could not unmarshal block")
+		}
+		if err := blocks.BeaconBlockIsNil(b); err != nil {
 			return 0, err
 		}
-		wsb, err := blocks.NewSignedBeaconBlock(b)
-		if err != nil {
-			return 0, err
-		}
-		if err := blocks.BeaconBlockIsNil(wsb); err != nil {
-			return 0, err
-		}
-		return b.Block.Slot, nil
+		return b.Block().Slot(), nil
 	}
 	stateSummary := &ethpb.StateSummary{}
 	if err := decode(ctx, enc, stateSummary); err != nil {
-		return 0, err
+		return 0, errors.Wrap(err, "could not unmarshal state summary")
 	}
 	return stateSummary.Slot, nil
 }

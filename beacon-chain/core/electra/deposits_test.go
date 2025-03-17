@@ -333,6 +333,7 @@ func TestProcessDepositRequests(t *testing.T) {
 	st, _ := util.DeterministicGenesisStateElectra(t, 1)
 	sk, err := bls.RandKey()
 	require.NoError(t, err)
+	require.NoError(t, st.SetDepositRequestsStartIndex(1))
 
 	t.Run("empty requests continues", func(t *testing.T) {
 		newSt, err := electra.ProcessDepositRequests(context.Background(), st, []*enginev1.DepositRequest{})

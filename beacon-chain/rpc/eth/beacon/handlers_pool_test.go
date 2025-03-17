@@ -1559,7 +1559,7 @@ func TestGetAttesterSlashings(t *testing.T) {
 			Signature: bytesutil.PadTo([]byte("signature4"), 96),
 		},
 	}
-	slashing1PostElectra := &ethpbv1alpha1.AttesterSlashingElectra{
+	slashingPostElectra := &ethpbv1alpha1.AttesterSlashingElectra{
 		Attestation_1: &ethpbv1alpha1.IndexedAttestationElectra{
 			AttestingIndices: []uint64{1, 10},
 			Data: &ethpbv1alpha1.AttestationData{
@@ -1593,42 +1593,6 @@ func TestGetAttesterSlashings(t *testing.T) {
 				},
 			},
 			Signature: bytesutil.PadTo([]byte("signature2"), 96),
-		},
-	}
-	slashing2PostElectra := &ethpbv1alpha1.AttesterSlashingElectra{
-		Attestation_1: &ethpbv1alpha1.IndexedAttestationElectra{
-			AttestingIndices: []uint64{3, 30},
-			Data: &ethpbv1alpha1.AttestationData{
-				Slot:            3,
-				CommitteeIndex:  3,
-				BeaconBlockRoot: bytesutil.PadTo([]byte("blockroot3"), 32),
-				Source: &ethpbv1alpha1.Checkpoint{
-					Epoch: 3,
-					Root:  bytesutil.PadTo([]byte("sourceroot3"), 32),
-				},
-				Target: &ethpbv1alpha1.Checkpoint{
-					Epoch: 30,
-					Root:  bytesutil.PadTo([]byte("targetroot3"), 32),
-				},
-			},
-			Signature: bytesutil.PadTo([]byte("signature3"), 96),
-		},
-		Attestation_2: &ethpbv1alpha1.IndexedAttestationElectra{
-			AttestingIndices: []uint64{4, 40},
-			Data: &ethpbv1alpha1.AttestationData{
-				Slot:            4,
-				CommitteeIndex:  4,
-				BeaconBlockRoot: bytesutil.PadTo([]byte("blockroot4"), 32),
-				Source: &ethpbv1alpha1.Checkpoint{
-					Epoch: 4,
-					Root:  bytesutil.PadTo([]byte("sourceroot4"), 32),
-				},
-				Target: &ethpbv1alpha1.Checkpoint{
-					Epoch: 40,
-					Root:  bytesutil.PadTo([]byte("targetroot4"), 32),
-				},
-			},
-			Signature: bytesutil.PadTo([]byte("signature4"), 96),
 		},
 	}
 
@@ -1702,7 +1666,7 @@ func TestGetAttesterSlashings(t *testing.T) {
 			s := &Server{
 				ChainInfoFetcher: chainService,
 				TimeFetcher:      chainService,
-				SlashingsPool:    &slashingsmock.PoolMock{PendingAttSlashings: []ethpbv1alpha1.AttSlashing{slashing1PostElectra, slashing2PostElectra, slashing1PreElectra}},
+				SlashingsPool:    &slashingsmock.PoolMock{PendingAttSlashings: []ethpbv1alpha1.AttSlashing{slashingPostElectra, slashing1PreElectra}},
 			}
 
 			request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v2/beacon/pool/attester_slashings", nil)
@@ -1724,8 +1688,7 @@ func TestGetAttesterSlashings(t *testing.T) {
 			ss, err := structs.AttesterSlashingsElectraToConsensus(slashings)
 			require.NoError(t, err)
 
-			require.DeepEqual(t, slashing1PostElectra, ss[0])
-			require.DeepEqual(t, slashing2PostElectra, ss[1])
+			require.DeepEqual(t, slashingPostElectra, ss[0])
 		})
 		t.Run("post-electra-ok", func(t *testing.T) {
 			bs, err := util.NewBeaconStateElectra()
@@ -1741,7 +1704,7 @@ func TestGetAttesterSlashings(t *testing.T) {
 			s := &Server{
 				ChainInfoFetcher: chainService,
 				TimeFetcher:      chainService,
-				SlashingsPool:    &slashingsmock.PoolMock{PendingAttSlashings: []ethpbv1alpha1.AttSlashing{slashing1PostElectra, slashing2PostElectra}},
+				SlashingsPool:    &slashingsmock.PoolMock{PendingAttSlashings: []ethpbv1alpha1.AttSlashing{slashingPostElectra}},
 			}
 
 			request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v2/beacon/pool/attester_slashings", nil)
@@ -1763,8 +1726,7 @@ func TestGetAttesterSlashings(t *testing.T) {
 			ss, err := structs.AttesterSlashingsElectraToConsensus(slashings)
 			require.NoError(t, err)
 
-			require.DeepEqual(t, slashing1PostElectra, ss[0])
-			require.DeepEqual(t, slashing2PostElectra, ss[1])
+			require.DeepEqual(t, slashingPostElectra, ss[0])
 		})
 		t.Run("pre-electra-ok", func(t *testing.T) {
 			bs, err := util.NewBeaconState()

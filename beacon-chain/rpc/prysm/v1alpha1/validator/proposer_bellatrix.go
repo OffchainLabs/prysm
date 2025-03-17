@@ -72,18 +72,10 @@ func setExecutionData(ctx context.Context, blk interfaces.SignedBeaconBlock, loc
 		return local.Bid, local.BlobsBundle, setLocalExecution(blk, local)
 	}
 
-	var builderKzgCommitments [][]byte
 	builderPayload, err := bid.Header()
 	if err != nil {
 		log.WithError(err).Warn("Proposer: failed to retrieve header from BuilderBid")
 		return local.Bid, local.BlobsBundle, setLocalExecution(blk, local)
-	}
-	//TODO: add builder execution requests here.
-	if bid.Version() >= version.Deneb {
-		builderKzgCommitments, err = bid.BlobKzgCommitments()
-		if err != nil {
-			log.WithError(err).Warn("Proposer: failed to retrieve kzg commitments from BuilderBid")
-		}
 	}
 
 	switch {
@@ -136,7 +128,28 @@ func setExecutionData(ctx context.Context, blk interfaces.SignedBeaconBlock, loc
 
 		// If we can't get the builder value, just use local block.
 		if higherValueBuilder && withdrawalsMatched { // Builder value is higher and withdrawals match.
-			if err := setBuilderExecution(blk, builderPayload, builderKzgCommitments); err != nil {
+			var builderKzgCommitments [][]byte
+			if bid.Version() >= version.Deneb {
+				bidDeneb, ok := bid.(builder.BidDeneb)
+				if !ok {
+					log.Warnf("bid type %T does not implement builder.BidDeneb", bid)
+					return local.Bid, local.BlobsBundle, setLocalExecution(blk, local)
+				} else {
+					builderKzgCommitments = bidDeneb.BlobKzgCommitments()
+				}
+			}
+
+			var executionRequests *enginev1.ExecutionRequests
+			if bid.Version() >= version.Electra {
+				bidElectra, ok := bid.(builder.BidElectra)
+				if !ok {
+					log.Warnf("bid type %T does not implement builder.BidElectra", bid)
+					return local.Bid, local.BlobsBundle, setLocalExecution(blk, local)
+				} else {
+					executionRequests = bidElectra.ExecutionRequests()
+				}
+			}
+			if err := setBuilderExecution(blk, builderPayload, builderKzgCommitments, executionRequests); err != nil {
 				log.WithError(err).Warn("Proposer: failed to set builder payload")
 				return local.Bid, local.BlobsBundle, setLocalExecution(blk, local)
 			} else {
@@ -160,7 +173,7 @@ func setExecutionData(ctx context.Context, blk interfaces.SignedBeaconBlock, loc
 		)
 		return local.Bid, local.BlobsBundle, setLocalExecution(blk, local)
 	default: // Bellatrix case.
-		if err := setBuilderExecution(blk, builderPayload, builderKzgCommitments); err != nil {
+		if err := setBuilderExecution(blk, builderPayload, nil, nil); err != nil {
 			log.WithError(err).Warn("Proposer: failed to set builder payload")
 			return local.Bid, local.BlobsBundle, setLocalExecution(blk, local)
 		} else {
@@ -270,23 +283,22 @@ func (vs *Server) getPayloadHeaderFromBuilder(
 		return nil, errors.Wrap(err, "could not validate builder signature")
 	}
 
-	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlock(slot)
 	var kzgCommitments [][]byte
 	if bid.Version() >= version.Deneb {
-		kzgCommitments, err = bid.BlobKzgCommitments()
-		if err != nil {
-			return nil, errors.Wrap(err, "could not get blob kzg commitments")
+		dBid, ok := bid.(builder.BidDeneb)
+		if !ok {
+			return nil, fmt.Errorf("bid type %T does not implement builder.BidDeneb", dBid)
 		}
-		if len(kzgCommitments) > maxBlobsPerBlock {
-			return nil, fmt.Errorf("builder returned too many kzg commitments: %d", len(kzgCommitments))
-		}
-		for _, c := range kzgCommitments {
-			if len(c) != fieldparams.BLSPubkeyLength {
-				return nil, fmt.Errorf("builder returned invalid kzg commitment length: %d", len(c))
-			}
-		}
+		kzgCommitments = dBid.BlobKzgCommitments()
 	}
-
+	var executionRequests *enginev1.ExecutionRequests
+	if bid.Version() >= version.Electra {
+		eBid, ok := bid.(builder.BidElectra)
+		if !ok {
+			return nil, fmt.Errorf("bid type %T does not implement builder.BidElectra", eBid)
+		}
+		executionRequests = eBid.ExecutionRequests()
+	}
 	l := log.WithFields(logrus.Fields{
 		"gweiValue":          primitives.WeiToGwei(v),
 		"builderPubKey":      fmt.Sprintf("%#x", bid.Pubkey()),
@@ -297,6 +309,11 @@ func (vs *Server) getPayloadHeaderFromBuilder(
 	})
 	if len(kzgCommitments) > 0 {
 		l = l.WithField("kzgCommitmentCount", len(kzgCommitments))
+	}
+	if executionRequests != nil {
+		l = l.WithField("depositRequestCount", len(executionRequests.Deposits))
+		l = l.WithField("withdrawalRequestCount", len(executionRequests.Withdrawals))
+		l = l.WithField("consolidationRequestCount", len(executionRequests.Consolidations))
 	}
 	l.Info("Received header with bid")
 
@@ -366,20 +383,18 @@ func setLocalExecution(blk interfaces.SignedBeaconBlock, local *blocks.GetPayloa
 			return errors.Wrap(err, "could not set execution requests")
 		}
 	}
-
-	return setExecution(blk, local.ExecutionData, false, kzgCommitments)
+	return setExecution(blk, local.ExecutionData, false, kzgCommitments, local.ExecutionRequests)
 }
 
 // setBuilderExecution sets the execution context for a builder's beacon block.
 // It delegates to setExecution for the actual work.
-func setBuilderExecution(blk interfaces.SignedBeaconBlock, execution interfaces.ExecutionData, builderKzgCommitments [][]byte) error {
-	// TODO #14344: add execution requests for electra
-	return setExecution(blk, execution, true, builderKzgCommitments)
+func setBuilderExecution(blk interfaces.SignedBeaconBlock, execution interfaces.ExecutionData, builderKzgCommitments [][]byte, requests *enginev1.ExecutionRequests) error {
+	return setExecution(blk, execution, true, builderKzgCommitments, requests)
 }
 
 // setExecution sets the execution context for a beacon block. It also sets KZG commitments based on the block version.
 // The function is designed to be flexible and handle both local and builder executions.
-func setExecution(blk interfaces.SignedBeaconBlock, execution interfaces.ExecutionData, isBlinded bool, kzgCommitments [][]byte) error {
+func setExecution(blk interfaces.SignedBeaconBlock, execution interfaces.ExecutionData, isBlinded bool, kzgCommitments [][]byte, requests *enginev1.ExecutionRequests) error {
 	if execution == nil {
 		return errors.New("execution is nil")
 	}
@@ -399,14 +414,27 @@ func setExecution(blk interfaces.SignedBeaconBlock, execution interfaces.Executi
 	}
 
 	// Set the KZG commitments for the block
-	errMessage = "failed to set local kzg commitments"
+	kzgErr := "failed to set local kzg commitments"
 	if isBlinded {
-		errMessage = "failed to set builder kzg commitments"
+		kzgErr = "failed to set builder kzg commitments"
 	}
 	if err := blk.SetBlobKzgCommitments(kzgCommitments); err != nil {
-		return errors.Wrap(err, errMessage)
+		return errors.Wrap(err, kzgErr)
 	}
 
+	// If the block version is below Electra, no further actions are needed
+	if blk.Version() < version.Electra {
+		return nil
+	}
+
+	// Set the execution requests
+	requestsErr := "failed to set local execution requests"
+	if isBlinded {
+		requestsErr = "failed to set builder execution requests"
+	}
+	if err := blk.SetExecutionRequests(requests); err != nil {
+		return errors.Wrap(err, requestsErr)
+	}
 	return nil
 }
 

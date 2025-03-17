@@ -196,7 +196,7 @@ random:
   - "Takoyaki"
 `)
 	f := filepath.Join(testDir, "graffiti.yaml")
-	if err := os.WriteFile(f, b, os.ModePerm); err != nil {
+	if err := os.WriteFile(f, b, 0600); err != nil {
 		return "", err
 	}
 	return f, nil
@@ -358,7 +358,6 @@ func WaitOnNodes(ctx context.Context, nodes []e2etypes.ComponentRunner, nodesSta
 	// Start nodes.
 	g, ctx := errgroup.WithContext(ctx)
 	for _, node := range nodes {
-		node := node
 		g.Go(func() error {
 			return node.Start(ctx)
 		})

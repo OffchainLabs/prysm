@@ -52,11 +52,12 @@ func hasDenebBlindKey(enc []byte) bool {
 	return bytes.Equal(enc[:len(denebBlindKey)], denebBlindKey)
 }
 
-func hasElectraKey(enc []byte) bool {
-	if len(electraKey) >= len(enc) {
+// HasElectraKey verifies if the encoding is Electra compatible.
+func HasElectraKey(enc []byte) bool {
+	if len(ElectraKey) >= len(enc) {
 		return false
 	}
-	return bytes.Equal(enc[:len(electraKey)], electraKey)
+	return bytes.Equal(enc[:len(ElectraKey)], ElectraKey)
 }
 
 func hasElectraBlindKey(enc []byte) bool {

@@ -29,6 +29,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/kv"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/pruner"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/slasherkv"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/execution"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice"
@@ -121,6 +122,7 @@ type BeaconNode struct {
 	BlobStorageOptions      []filesystem.BlobStorageOption
 	verifyInitWaiter        *verification.InitializerWaiter
 	syncChecker             *initialsync.SyncChecker
+	slasherEnabled          bool
 }
 
 // New creates a new node instance, sets up configuration options, and registers
@@ -158,6 +160,7 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 		serviceFlagOpts:         &serviceFlagOpts{},
 		initialSyncComplete:     make(chan struct{}),
 		syncChecker:             &initialsync.SyncChecker{},
+		slasherEnabled:          cliCtx.Bool(flags.SlasherFlag.Name),
 	}
 
 	for _, opt := range opts {
@@ -336,7 +339,12 @@ func registerServices(cliCtx *cli.Context, beacon *BeaconNode, synchronizer *sta
 		return errors.Wrap(err, "could not register sync service")
 	}
 
-	log.Debugln("Registering Slasher Service")
+	log.Debugln("Registering Slashing Pool Service")
+	if err := beacon.registerSlashingPoolService(); err != nil {
+		return errors.Wrap(err, "could not register slashing pool service")
+	}
+
+	log.WithField("enabled", beacon.slasherEnabled).Debugln("Registering Slasher Service")
 	if err := beacon.registerSlasherService(); err != nil {
 		return errors.Wrap(err, "could not register slasher service")
 	}
@@ -366,6 +374,13 @@ func registerServices(cliCtx *cli.Context, beacon *BeaconNode, synchronizer *sta
 		log.Debugln("Registering Prometheus Service")
 		if err := beacon.registerPrometheusService(cliCtx); err != nil {
 			return errors.Wrap(err, "could not register prometheus service")
+		}
+	}
+
+	if cliCtx.Bool(flags.BeaconDBPruning.Name) {
+		log.Debugln("Registering Pruner Service")
+		if err := beacon.registerPrunerService(cliCtx); err != nil {
+			return errors.Wrap(err, "could not register pruner service")
 		}
 	}
 
@@ -574,7 +589,7 @@ func (b *BeaconNode) startDB(cliCtx *cli.Context, depositAddress string) error {
 }
 
 func (b *BeaconNode) startSlasherDB(cliCtx *cli.Context) error {
-	if !features.Get().EnableSlasher {
+	if !b.slasherEnabled {
 		return nil
 	}
 	baseDir := cliCtx.String(cmd.DataDirFlag.Name)
@@ -716,6 +731,16 @@ func (b *BeaconNode) registerAttestationPool() error {
 	return b.services.RegisterService(s)
 }
 
+func (b *BeaconNode) registerSlashingPoolService() error {
+	var chainService *blockchain.Service
+	if err := b.services.FetchService(&chainService); err != nil {
+		return err
+	}
+
+	s := slashings.NewPoolService(b.ctx, b.slashingsPool, slashings.WithElectraTimer(b.clockWaiter, chainService.CurrentSlot))
+	return b.services.RegisterService(s)
+}
+
 func (b *BeaconNode) registerBlockchainService(fc forkchoice.ForkChoicer, gs *startup.ClockSynchronizer, syncComplete chan struct{}) error {
 	var web3Service *execution.Service
 	if err := b.services.FetchService(&web3Service); err != nil {
@@ -752,6 +777,7 @@ func (b *BeaconNode) registerBlockchainService(fc forkchoice.ForkChoicer, gs *st
 		blockchain.WithTrackedValidatorsCache(b.trackedValidatorsCache),
 		blockchain.WithPayloadIDCache(b.payloadIDCache),
 		blockchain.WithSyncChecker(b.syncChecker),
+		blockchain.WithSlasherEnabled(b.slasherEnabled),
 	)
 
 	blockchainService, err := blockchain.NewService(b.ctx, opts...)
@@ -836,6 +862,7 @@ func (b *BeaconNode) registerSyncService(initialSyncComplete chan struct{}, bFil
 		regularsync.WithBlobStorage(b.BlobStorage),
 		regularsync.WithVerifierWaiter(b.verifyInitWaiter),
 		regularsync.WithAvailableBlocker(bFillStore),
+		regularsync.WithSlasherEnabled(b.slasherEnabled),
 	)
 	return b.services.RegisterService(rs)
 }
@@ -864,7 +891,7 @@ func (b *BeaconNode) registerInitialSyncService(complete chan struct{}) error {
 }
 
 func (b *BeaconNode) registerSlasherService() error {
-	if !features.Get().EnableSlasher {
+	if !b.slasherEnabled {
 		return nil
 	}
 	var chainService *blockchain.Service
@@ -911,7 +938,7 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 	}
 
 	var slasherService *slasher.Service
-	if features.Get().EnableSlasher {
+	if b.slasherEnabled {
 		if err := b.services.FetchService(&slasherService); err != nil {
 			return err
 		}
@@ -1087,6 +1114,34 @@ func (b *BeaconNode) registerBuilderService(cliCtx *cli.Context) error {
 		return err
 	}
 	return b.services.RegisterService(svc)
+}
+
+func (b *BeaconNode) registerPrunerService(cliCtx *cli.Context) error {
+	genesisTimeUnix := params.BeaconConfig().MinGenesisTime + params.BeaconConfig().GenesisDelay
+	var backfillService *backfill.Service
+	if err := b.services.FetchService(&backfillService); err != nil {
+		return err
+	}
+
+	var opts []pruner.ServiceOption
+	if cliCtx.IsSet(flags.PrunerRetentionEpochs.Name) {
+		uv := cliCtx.Uint64(flags.PrunerRetentionEpochs.Name)
+		opts = append(opts, pruner.WithRetentionPeriod(primitives.Epoch(uv)))
+	}
+
+	p, err := pruner.New(
+		cliCtx.Context,
+		b.db,
+		genesisTimeUnix,
+		initSyncWaiter(cliCtx.Context, b.initialSyncComplete),
+		backfillService.WaitForCompletion,
+		opts...,
+	)
+	if err != nil {
+		return err
+	}
+
+	return b.services.RegisterService(p)
 }
 
 func (b *BeaconNode) RegisterBackfillService(cliCtx *cli.Context, bfs *backfill.Store) error {

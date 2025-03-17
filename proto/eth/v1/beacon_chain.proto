@@ -27,7 +27,8 @@ option php_namespace = "Ethereum\\Eth\\v1";
 // Beacon State API related messages.
 
 message StateRequest {
-    // The state id which can be any of: "head" (canonical head in node's view),
-    // "genesis", "finalized", "justified", <slot>, <hex encoded stateRoot with 0x prefix>.
-    bytes state_id = 1;
+  // The state id which can be any of: "head" (canonical head in node's view),
+  // "genesis", "finalized", "justified", <slot>, <hex encoded stateRoot with 0x
+  // prefix>.
+  bytes state_id = 1;
 }
