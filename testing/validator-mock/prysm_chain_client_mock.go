@@ -14,6 +14,7 @@ import (
 	reflect "reflect"
 
 	validator "github.com/prysmaticlabs/prysm/v5/consensus-types/validator"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	iface "github.com/prysmaticlabs/prysm/v5/validator/client/iface"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -55,3 +56,19 @@ func (mr *MockPrysmChainClientMockRecorder) ValidatorCount(arg0, arg1, arg2 any)
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidatorCount", reflect.TypeOf((*MockPrysmChainClient)(nil).ValidatorCount), arg0, arg1, arg2)
 }
+// ValidatorPerformance mocks base method.
+func (m *MockPrysmChainClient) ValidatorPerformance(arg0 context.Context, arg1 *ethpb.ValidatorPerformanceRequest) (*ethpb.ValidatorPerformanceResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ValidatorPerformance", arg0, arg1)
+	ret0, _ := ret[0].(*ethpb.ValidatorPerformanceResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ValidatorPerformance indicates an expected call of ValidatorPerformance.
+func (mr *MockPrysmChainClientMockRecorder) ValidatorPerformance(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidatorCount", reflect.TypeOf((*MockPrysmChainClient)(nil).ValidatorPerformance), arg0, arg1)
+}
+
+
