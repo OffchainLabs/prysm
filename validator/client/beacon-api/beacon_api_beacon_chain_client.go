@@ -1,9 +1,7 @@
 package beacon_api
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"reflect"
 	"strconv"
 
@@ -22,8 +20,6 @@ type beaconApiChainClient struct {
 	jsonRestHandler         JsonRestHandler
 	stateValidatorsProvider StateValidatorsProvider
 }
-
-const getValidatorPerformanceEndpoint = "/prysm/validators/performance"
 
 func (c beaconApiChainClient) headBlockHeaders(ctx context.Context) (*structs.GetBlockHeaderResponse, error) {
 	blockHeader := structs.GetBlockHeaderResponse{}
@@ -320,29 +316,12 @@ func (c beaconApiChainClient) ValidatorQueue(ctx context.Context, in *empty.Empt
 }
 
 func (c beaconApiChainClient) ValidatorPerformance(ctx context.Context, in *ethpb.ValidatorPerformanceRequest) (*ethpb.ValidatorPerformanceResponse, error) {
-	request, err := json.Marshal(structs.GetValidatorPerformanceRequest{
-		PublicKeys: in.PublicKeys,
-		Indices:    in.Indices,
-	})
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to marshal request")
-	}
-	resp := &structs.GetValidatorPerformanceResponse{}
-	if err = c.jsonRestHandler.Post(ctx, getValidatorPerformanceEndpoint, nil, bytes.NewBuffer(request), resp); err != nil {
-		return nil, err
+	if c.fallbackClient != nil {
+		return c.fallbackClient.ValidatorPerformance(ctx, in)
 	}
 
-	return &ethpb.ValidatorPerformanceResponse{
-		CurrentEffectiveBalances:      resp.CurrentEffectiveBalances,
-		CorrectlyVotedSource:          resp.CorrectlyVotedSource,
-		CorrectlyVotedTarget:          resp.CorrectlyVotedTarget,
-		CorrectlyVotedHead:            resp.CorrectlyVotedHead,
-		BalancesBeforeEpochTransition: resp.BalancesBeforeEpochTransition,
-		BalancesAfterEpochTransition:  resp.BalancesAfterEpochTransition,
-		MissingValidators:             resp.MissingValidators,
-		PublicKeys:                    resp.PublicKeys,
-		InactivityScores:              resp.InactivityScores,
-	}, nil
+	// TODO: Implement me
+	panic("beaconApiChainClient.ValidatorPerformance is not implemented. To use a fallback client, pass a fallback client as the last argument of NewBeaconApiChainClientWithFallback.")
 }
 
 func (c beaconApiChainClient) ValidatorParticipation(ctx context.Context, in *ethpb.GetValidatorParticipationRequest) (*ethpb.ValidatorParticipationResponse, error) {
