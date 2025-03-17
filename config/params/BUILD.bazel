@@ -50,6 +50,7 @@ go_test(
         "mainnet_config_test.go",
         "testnet_config_test.go",
         "testnet_holesky_config_test.go",
+        "testnet_hoodi_config_test.go",
         "testnet_sepolia_config_test.go",
     ],
     data = glob(["*.yaml"]) + [
@@ -59,6 +60,7 @@ go_test(
         "@consensus_spec_tests_minimal//:test_data",
         "@eth2_networks//:configs",
         "@holesky_testnet//:configs",
+        "@hoodi_testnet//:configs",
         "@sepolia_testnet//:configs",
     ],
     embed = [":go_default_library"],
