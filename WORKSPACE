@@ -387,6 +387,22 @@ filegroup(
 )
 
 http_archive(
+    name = "hoodi_testnet",
+    build_file_content = """
+filegroup(
+    name = "configs",
+    srcs = [
+        "metadata/config.yaml",
+    ],
+    visibility = ["//visibility:public"],
+)
+""",
+    integrity = "sha256-o51qGunwjDib2kxxdQfjbyHGdpTVQCd4ff2KE30IToc=",
+    strip_prefix = "hoodi-db5bfa8c65caeef23afa225797167e956477a3ee",
+    url = "https://github.com/eth-clients/hoodi/archive/db5bfa8c65caeef23afa225797167e956477a3ee.tar.gz",
+)
+
+http_archive(
     name = "com_google_protobuf",
     sha256 = "9bd87b8280ef720d3240514f884e56a712f2218f0d693b48050c836028940a42",
     strip_prefix = "protobuf-25.1",
