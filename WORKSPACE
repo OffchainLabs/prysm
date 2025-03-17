@@ -365,9 +365,9 @@ filegroup(
     visibility = ["//visibility:public"],
 )
 """,
-    integrity = "sha256-b7ZTT+olF+VXEJYNTV5jggNtCkt9dOejm1i2VE+zy+0=",
-    strip_prefix = "holesky-874c199423ccd180607320c38cbaca05d9a1573a",
-    url = "https://github.com/eth-clients/holesky/archive/874c199423ccd180607320c38cbaca05d9a1573a.tar.gz",  # 2024-06-18
+    integrity = "sha256-YVFFrCmjoGZ3fXMWpsCpSsYbANy1grnqYwOLKIg2SsA=",
+    strip_prefix = "holesky-32a72e21c6e53c262f27d50dd540cb654517d03a",
+    url = "https://github.com/eth-clients/holesky/archive/32a72e21c6e53c262f27d50dd540cb654517d03a.tar.gz",  # 2025-03-17
 )
 
 http_archive(
@@ -381,9 +381,9 @@ filegroup(
     visibility = ["//visibility:public"],
 )
 """,
-    integrity = "sha256-cY/UgpCcYEhQf7JefD65FI8tn/A+rAvKhcm2/qiVdqY=",
-    strip_prefix = "sepolia-f2c219a93c4491cee3d90c18f2f8e82aed850eab",
-    url = "https://github.com/eth-clients/sepolia/archive/f2c219a93c4491cee3d90c18f2f8e82aed850eab.tar.gz",  # 2024-09-19
+    integrity = "sha256-b5F7Wg9LLMqGRIpP2uqb/YsSFVn2ynzlV7g/Nb1EFLk=",
+    strip_prefix = "sepolia-562d9938f08675e9ba490a1dfba21fb05843f39f",
+    url = "https://github.com/eth-clients/sepolia/archive/562d9938f08675e9ba490a1dfba21fb05843f39f.tar.gz",  # 2025-03-17
 )
 
 http_archive(
@@ -397,9 +397,9 @@ filegroup(
     visibility = ["//visibility:public"],
 )
 """,
-    integrity = "sha256-o51qGunwjDib2kxxdQfjbyHGdpTVQCd4ff2KE30IToc=",
-    strip_prefix = "hoodi-db5bfa8c65caeef23afa225797167e956477a3ee",
-    url = "https://github.com/eth-clients/hoodi/archive/db5bfa8c65caeef23afa225797167e956477a3ee.tar.gz",
+    integrity = "sha256-dPiEWUd8QvbYGwGtIm0QtCekitVLOLsW5rpQIGzz8PU=",
+    strip_prefix = "hoodi-828c2c940e1141092bd4bb979cef547ea926d272",
+    url = "https://github.com/eth-clients/hoodi/archive/828c2c940e1141092bd4bb979cef547ea926d272.tar.gz",
 )
 
 http_archive(
