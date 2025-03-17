@@ -24,5 +24,5 @@ func TestHoodiConfigMatchesUpstreamYaml(t *testing.T) {
 	pcfg, err := params.UnmarshalConfigFile(configFP, nil)
 	require.NoError(t, err)
 	fields := fieldsFromYamls(t, append(presetFPs, configFP))
-	assertYamlFieldsMatch(t, "hoodi", fields, pcfg, params.SepoliaConfig())
+	assertYamlFieldsMatch(t, "hoodi", fields, pcfg, params.HoodiConfig())
 }
