@@ -1,11 +1,35 @@
+# Prysm Validator Web UI
 
-## Note on future releases
-** There is no longer an automated PR workflow for releasing the web ui due to its frozen state **
-This is due to this PR removal of build content:https://github.com/prysmaticlabs/prysm/pull/12719
+This directory contains the files necessary for the Prysm validator web user interface. The UI itself is maintained in a separate repository at [prysmaticlabs/prysm-web-ui](https://github.com/prysmaticlabs/prysm-web-ui).
 
-in order to update the `site_data.go` follow the following steps to update the specific release of https://github.com/prysmaticlabs/prysm-web-ui/releases
-1. download and install https://github.com/kevinburke/go-bindata. (working as of version `4.0.2`) This tool will be used to generate the site_data.go file.
-2. download the specific release from https://github.com/prysmaticlabs/prysm-web-ui/releases
-3. run `go-bindata -pkg web -nometadata -modtime 0 -o site_data.go  prysm-web-ui/` . `prysm-web-ui/` represents the extracted folder from the release.
-4. copy and replace the site_data.go in this package.
-5. Open a PR
+## Current Status
+
+**Note: The web UI is currently in a frozen state and there is no longer an automated PR workflow for releasing updates.**
+
+This freeze was implemented in [PR #12719](https://github.com/prysmaticlabs/prysm/pull/12719) which removed the build content.
+
+## Updating the Web UI
+
+To update the `site_data.go` file with a new release from the [prysm-web-ui repository](https://github.com/prysmaticlabs/prysm-web-ui/releases), follow these steps:
+
+1. Download and install [go-bindata](https://github.com/kevinburke/go-bindata) (version 4.0.2 confirmed working):
+   ```
+   go get -u github.com/kevinburke/go-bindata/...
+   ```
+
+2. Download the specific release from https://github.com/prysmaticlabs/prysm-web-ui/releases
+
+3. Extract the downloaded release to a folder named `prysm-web-ui/`
+
+4. Run the following command to generate the site_data.go file:
+   ```
+   go-bindata -pkg web -nometadata -modtime 0 -o site_data.go prysm-web-ui/
+   ```
+
+5. Copy and replace the generated `site_data.go` file into this directory
+
+6. Open a PR to submit your changes
+
+## Development
+
+For information on developing the web UI itself, please refer to the [prysm-web-ui repository](https://github.com/prysmaticlabs/prysm-web-ui).
