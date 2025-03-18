@@ -312,7 +312,7 @@ func (c beaconApiChainClient) ValidatorQueue(ctx context.Context, in *empty.Empt
 	}
 
 	// TODO: Implement me
-	panic("beaconApiChainClient.ValidatorQueue is not implemented. To use a fallback client, pass a fallback client as the last argument of NewBeaconApiChainClientWithFallback.")
+	return nil, errors.New("beaconApiChainClient.ValidatorQueue is not implemented. To use a fallback client, pass a fallback client as the last argument of NewBeaconApiChainClientWithFallback.")
 }
 
 func (c beaconApiChainClient) ValidatorPerformance(ctx context.Context, in *ethpb.ValidatorPerformanceRequest) (*ethpb.ValidatorPerformanceResponse, error) {
@@ -321,7 +321,7 @@ func (c beaconApiChainClient) ValidatorPerformance(ctx context.Context, in *ethp
 	}
 
 	// TODO: Implement me
-	panic("beaconApiChainClient.ValidatorPerformance is not implemented. To use a fallback client, pass a fallback client as the last argument of NewBeaconApiChainClientWithFallback.")
+	return nil, errors.New("beaconApiChainClient.ValidatorPerformance is not implemented. To use a fallback client, pass a fallback client as the last argument of NewBeaconApiChainClientWithFallback.")
 }
 
 func (c beaconApiChainClient) ValidatorParticipation(ctx context.Context, in *ethpb.GetValidatorParticipationRequest) (*ethpb.ValidatorParticipationResponse, error) {
@@ -330,7 +330,7 @@ func (c beaconApiChainClient) ValidatorParticipation(ctx context.Context, in *et
 	}
 
 	// TODO: Implement me
-	panic("beaconApiChainClient.ValidatorParticipation is not implemented. To use a fallback client, pass a fallback client as the last argument of NewBeaconApiChainClientWithFallback.")
+	return nil, errors.New("beaconApiChainClient.ValidatorParticipation is not implemented. To use a fallback client, pass a fallback client as the last argument of NewBeaconApiChainClientWithFallback.")
 }
 
 func NewBeaconApiChainClientWithFallback(jsonRestHandler JsonRestHandler, fallbackClient iface.ChainClient) iface.ChainClient {
