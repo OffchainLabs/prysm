@@ -66,7 +66,7 @@ func TestNewKeymanager(t *testing.T) {
 		{
 			name: "happy path public key url",
 			args: &SetupConfig{
-				BaseEndpoint:          "http://prysm.xyz/",
+				BaseEndpoint:          "https://lore.xyz",
 				GenesisValidatorsRoot: root,
 				PublicKeysURL:         srv.URL + "/public_keys",
 			},
@@ -75,7 +75,7 @@ func TestNewKeymanager(t *testing.T) {
 		{
 			name: "bad public key url",
 			args: &SetupConfig{
-				BaseEndpoint:          "http://prysm.xyz/",
+				BaseEndpoint:          "https://lore.xyz",
 				GenesisValidatorsRoot: root,
 				PublicKeysURL:         "0x270d43e74ce340de4bca2b1936beca0f4f5408d9e78aec4850920baf659d5b69",
 			},
