@@ -28,6 +28,14 @@ var (
 		Usage: "A MEV builder relay string http endpoint, this will be used to interact MEV builder network using API defined in: https://ethereum.github.io/builder-specs/#/Builder",
 		Value: "",
 	}
+
+	// EnableBuilderSSZ enables Builder APIs to send and receive in SSZ format
+	EnableBuilderSSZ = &cli.BoolFlag{
+		Name:    "enable-builder-ssz",
+		Aliases: []string{"builder-ssz"},
+		Usage:   "Enables Builder APIs to send and receive in SSZ format",
+	}
+
 	MaxBuilderConsecutiveMissedSlots = &cli.IntFlag{
 		Name:  "max-builder-consecutive-missed-slots",
 		Usage: "Number of consecutive skip slot to fallback from using relay/builder to local execution engine for block construction",

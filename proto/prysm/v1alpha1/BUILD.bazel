@@ -124,6 +124,7 @@ ssz_capella_objs = [
     "SignedBeaconBlockCapella",
     "SignedBlindedBeaconBlockCapella",
     "Withdrawal",
+    "SignedBuilderBidCapella",
 ]
 
 ssz_deneb_objs = [
@@ -145,6 +146,7 @@ ssz_deneb_objs = [
     "SignedBeaconBlockContentsDeneb",
     "SignedBeaconBlockDeneb",
     "SignedBlindedBeaconBlockDeneb",
+    "SignedBuilderBidDeneb",
 ]
 
 ssz_electra_objs = [
@@ -175,7 +177,8 @@ ssz_electra_objs = [
     "SignedBeaconBlockElectra",
     "SignedBlindedBeaconBlockElectra",
     "SignedConsolidation",
-    "SingleAttestation"
+    "SingleAttestation",
+    "SignedBuilderBidElectra",
 ]
 
 ssz_fulu_objs = [
@@ -297,6 +300,7 @@ ssz_gen_marshal(
         "SignedValidatorRegistrationV1",
         "ValidatorRegistrationV1",
         "BuilderBid",
+        "SignedBuilderBid",
         "DepositSnapshot",
     ],
 )

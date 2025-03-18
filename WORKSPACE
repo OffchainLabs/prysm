@@ -255,7 +255,7 @@ filegroup(
     url = "https://github.com/ethereum/EIPs/archive/5480440fe51742ed23342b68cf106cefd427e39d.tar.gz",
 )
 
-consensus_spec_version = "v1.5.0-beta.2"
+consensus_spec_version = "v1.5.0-beta.3"
 
 bls_test_version = "v0.1.1"
 
@@ -271,7 +271,7 @@ filegroup(
     visibility = ["//visibility:public"],
 )
     """,
-    integrity = "sha256-X/bMxbKg1clo2aFEjBoeuFq/U+BF1eQopgRP/7nI3Qg=",
+    integrity = "sha256-z+j0BEJuXMBKbGL+7jq35zddzZMW1je8/uvTz5+wboQ=",
     url = "https://github.com/ethereum/consensus-spec-tests/releases/download/%s/general.tar.gz" % consensus_spec_version,
 )
 
@@ -287,7 +287,7 @@ filegroup(
     visibility = ["//visibility:public"],
 )
     """,
-    integrity = "sha256-WSxdri5OJGuNApW+odKle5UzToDyEOx+F3lMiqamJAg=",
+    integrity = "sha256-5/YUOXH65CmM1plZ8twJ3BQxwM51jgSpOB8/VSBI19k=",
     url = "https://github.com/ethereum/consensus-spec-tests/releases/download/%s/minimal.tar.gz" % consensus_spec_version,
 )
 
@@ -303,7 +303,7 @@ filegroup(
     visibility = ["//visibility:public"],
 )
     """,
-    integrity = "sha256-LYE8l3y/zSt4YVrehrJ3ralqtgeYNildiIp+HR6+xAI=",
+    integrity = "sha256-iZ2eNhwRnbxrjR+5gMBUYakaCXicvPChwFUkZtQUbbI=",
     url = "https://github.com/ethereum/consensus-spec-tests/releases/download/%s/mainnet.tar.gz" % consensus_spec_version,
 )
 
@@ -318,7 +318,7 @@ filegroup(
     visibility = ["//visibility:public"],
 )
     """,
-    integrity = "sha256-jvZQ90qcJMTOqMsPO7sgeEVQmewZTHcz7LVDkNqwTFQ=",
+    integrity = "sha256-inAXV7xNM5J1aUdP7JNXFO2iFFZ7dth38Ji+mJW50Ts=",
     strip_prefix = "consensus-specs-" + consensus_spec_version[1:],
     url = "https://github.com/ethereum/consensus-specs/archive/refs/tags/%s.tar.gz" % consensus_spec_version,
 )
@@ -365,9 +365,9 @@ filegroup(
     visibility = ["//visibility:public"],
 )
 """,
-    integrity = "sha256-b7ZTT+olF+VXEJYNTV5jggNtCkt9dOejm1i2VE+zy+0=",
-    strip_prefix = "holesky-874c199423ccd180607320c38cbaca05d9a1573a",
-    url = "https://github.com/eth-clients/holesky/archive/874c199423ccd180607320c38cbaca05d9a1573a.tar.gz",  # 2024-06-18
+    integrity = "sha256-YVFFrCmjoGZ3fXMWpsCpSsYbANy1grnqYwOLKIg2SsA=",
+    strip_prefix = "holesky-32a72e21c6e53c262f27d50dd540cb654517d03a",
+    url = "https://github.com/eth-clients/holesky/archive/32a72e21c6e53c262f27d50dd540cb654517d03a.tar.gz",  # 2025-03-17
 )
 
 http_archive(
@@ -381,9 +381,25 @@ filegroup(
     visibility = ["//visibility:public"],
 )
 """,
-    integrity = "sha256-cY/UgpCcYEhQf7JefD65FI8tn/A+rAvKhcm2/qiVdqY=",
-    strip_prefix = "sepolia-f2c219a93c4491cee3d90c18f2f8e82aed850eab",
-    url = "https://github.com/eth-clients/sepolia/archive/f2c219a93c4491cee3d90c18f2f8e82aed850eab.tar.gz",  # 2024-09-19
+    integrity = "sha256-b5F7Wg9LLMqGRIpP2uqb/YsSFVn2ynzlV7g/Nb1EFLk=",
+    strip_prefix = "sepolia-562d9938f08675e9ba490a1dfba21fb05843f39f",
+    url = "https://github.com/eth-clients/sepolia/archive/562d9938f08675e9ba490a1dfba21fb05843f39f.tar.gz",  # 2025-03-17
+)
+
+http_archive(
+    name = "hoodi_testnet",
+    build_file_content = """
+filegroup(
+    name = "configs",
+    srcs = [
+        "metadata/config.yaml",
+    ],
+    visibility = ["//visibility:public"],
+)
+""",
+    integrity = "sha256-dPiEWUd8QvbYGwGtIm0QtCekitVLOLsW5rpQIGzz8PU=",
+    strip_prefix = "hoodi-828c2c940e1141092bd4bb979cef547ea926d272",
+    url = "https://github.com/eth-clients/hoodi/archive/828c2c940e1141092bd4bb979cef547ea926d272.tar.gz",
 )
 
 http_archive(

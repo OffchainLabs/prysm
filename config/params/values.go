@@ -10,4 +10,5 @@ const (
 	MinimalName         = "minimal"
 	SepoliaName         = "sepolia"
 	HoleskyName         = "holesky"
+	HoodiName           = "hoodi"
 )

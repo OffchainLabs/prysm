@@ -97,6 +97,11 @@ message ExecutionPayloadCapellaWithValue {
   bytes value = 2;
 }
 
+message ExecutionPayloadDenebAndBlobsBundle {
+  ExecutionPayloadDeneb payload = 1;
+  BlobsBundle blobs_bundle = 2;
+}
+
 message ExecutionPayloadDenebWithValueAndBlobsBundle {
   ExecutionPayloadDeneb payload = 1;
   bytes value = 2;
