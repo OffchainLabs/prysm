@@ -709,6 +709,11 @@ func (c *ChainService) ReceiveDataColumn(dc blocks.VerifiedRODataColumn) error {
 	return nil
 }
 
+// ReceiveDataColumns implements the same method in chain service
+func (*ChainService) ReceiveDataColumns(_ []blocks.VerifiedRODataColumn) error {
+	return nil
+}
+
 // TargetRootForEpoch mocks the same method in the chain service
 func (c *ChainService) TargetRootForEpoch(_ [32]byte, _ primitives.Epoch) ([32]byte, error) {
 	return c.TargetRoot, nil

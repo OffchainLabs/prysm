@@ -6,12 +6,10 @@ import (
 	"slices"
 	"time"
 
-	"github.com/patrickmn/go-cache"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
@@ -21,16 +19,13 @@ import (
 const broadCastMissingDataColumnsTimeIntoSlot = 3 * time.Second
 
 func (s *Service) reconstructDataColumns(ctx context.Context, verifiedRODataColumn blocks.VerifiedRODataColumn) error {
-	// Get the block root.
+	// Get the block root and the slot.
 	blockRoot := verifiedRODataColumn.BlockRoot()
+	slot := verifiedRODataColumn.Slot()
 
 	// Get the columns we store.
-	storedDataColumns, err := s.storedDataColumns(blockRoot)
-	if err != nil {
-		return errors.Wrap(err, "stored data columns")
-	}
-
-	storedColumnsCount := uint64(len(storedDataColumns))
+	storedDataColumns := s.cfg.dataColumnStorage.Summary(blockRoot)
+	storedColumnsCount := storedDataColumns.Count()
 	numberOfColumns := params.BeaconConfig().NumberOfColumns
 
 	// If less than half of the columns are stored, reconstruction is not possible.
@@ -67,14 +62,14 @@ func (s *Service) reconstructDataColumns(ctx context.Context, verifiedRODataColu
 		return errors.Wrap(err, "peer info")
 	}
 
-	// Load the data columns sidecars.
-	dataColumnSideCars := make([]*ethpb.DataColumnSidecar, 0, storedColumnsCount)
-	for index := range storedDataColumns {
-		verifiedRODataColumn, err := s.cfg.blobStorage.GetColumn(blockRoot, index)
-		if err != nil {
-			return errors.Wrap(err, "get column")
-		}
+	// Load all the possible data columns sidecars, to minimize reconstruction time.
+	verifiedRODataColumnSidecars, err := s.cfg.dataColumnStorage.Get(blockRoot, nil)
+	if err != nil {
+		return errors.Wrap(err, "get data column sidecars")
+	}
 
+	dataColumnSideCars := make([]*ethpb.DataColumnSidecar, 0, storedColumnsCount)
+	for _, verifiedRODataColumn := range verifiedRODataColumnSidecars {
 		dataColumnSideCars = append(dataColumnSideCars, verifiedRODataColumn.DataColumnSidecar)
 	}
 
@@ -95,7 +90,8 @@ func (s *Service) reconstructDataColumns(ctx context.Context, verifiedRODataColu
 		return errors.Wrap(err, "data column sidecars")
 	}
 
-	// Save the data columns sidecars in the database.
+	// Build verified read only data columns to save.
+	verifiedRODataColumns := make([]blocks.VerifiedRODataColumn, 0, len(localNodeInfo.CustodyColumns))
 	for _, dataColumnSidecar := range dataColumnSidecars {
 		shouldSave := localNodeInfo.CustodyColumns[dataColumnSidecar.ColumnIndex]
 		if !shouldSave {
@@ -109,35 +105,41 @@ func (s *Service) reconstructDataColumns(ctx context.Context, verifiedRODataColu
 		}
 
 		verifiedRoDataColumn := blocks.NewVerifiedRODataColumn(roDataColumn)
-		if err := s.cfg.blobStorage.SaveDataColumn(verifiedRoDataColumn); err != nil {
-			return errors.Wrap(err, "save column")
-		}
-
-		// Mark the data column as stored (but not received).
-		if err := s.setStoredDataColumn(blockRoot, dataColumnSidecar.ColumnIndex); err != nil {
-			return errors.Wrap(err, "set stored data column")
-		}
+		verifiedRODataColumns = append(verifiedRODataColumns, verifiedRoDataColumn)
 	}
 
-	log.WithField("root", fmt.Sprintf("%#x", blockRoot)).Debug("Data columns successfully reconstructed from database and saved")
+	// Save the data columns sidecars in the database.
+	if err := s.cfg.dataColumnStorage.Store(verifiedRODataColumns); err != nil {
+		return errors.Wrap(err, "save data column sidecars")
+	}
 
 	// Schedule the broadcast.
-	if err := s.scheduleReconstructedDataColumnsBroadcast(ctx, blockRoot, verifiedRODataColumn); err != nil {
+	if err := s.scheduleReconstructedDataColumnsBroadcast(ctx, verifiedRODataColumn); err != nil {
 		return errors.Wrap(err, "schedule reconstructed data columns broadcast")
 	}
+
+	log.WithFields(logrus.Fields{
+		"root":             fmt.Sprintf("%#x", blockRoot),
+		"slot":             slot,
+		"fromColumnsCount": storedColumnsCount,
+	}).Debug("Data columns reconstructed and saved")
 
 	return nil
 }
 
 func (s *Service) scheduleReconstructedDataColumnsBroadcast(
 	ctx context.Context,
-	blockRoot [fieldparams.RootLength]byte,
-	dataColumn blocks.VerifiedRODataColumn,
+	dataColumnSidecar blocks.VerifiedRODataColumn,
 ) error {
-	log := log.WithField("root", fmt.Sprintf("%x", blockRoot))
+	// Extract the block root, the proposer index and the slot from the data column sidecar
+	root := dataColumnSidecar.BlockRoot()
+	proposerIndex := dataColumnSidecar.ProposerIndex()
+	slot := dataColumnSidecar.Slot()
 
-	// Retrieve the slot of the block.
-	slot := dataColumn.Slot()
+	log := log.WithFields(logrus.Fields{
+		"root": fmt.Sprintf("%x", root),
+		"slot": slot,
+	})
 
 	// Get the time corresponding to the start of the slot.
 	genesisTime := uint64(s.cfg.chain.GenesisTime().Unix())
@@ -155,18 +157,6 @@ func (s *Service) scheduleReconstructedDataColumnsBroadcast(
 	time.AfterFunc(waitingTime, func() {
 		s.dataColumsnReconstructionLock.Lock()
 		defer s.dataColumsnReconstructionLock.Unlock()
-
-		// Get the received by gossip data columns.
-		receivedDataColumns, err := s.receivedDataColumns(blockRoot)
-		if err != nil {
-			log.WithError(err).Error("Received data columns")
-			return
-		}
-
-		if receivedDataColumns == nil {
-			log.Error("No received data columns")
-			return
-		}
 
 		// Get the node ID.
 		nodeID := s.cfg.p2p.NodeID()
@@ -186,17 +176,13 @@ func (s *Service) scheduleReconstructedDataColumnsBroadcast(
 		}
 
 		// Get the data columns we actually store.
-		storedDataColumns, err := s.storedDataColumns(blockRoot)
-		if err != nil {
-			log.WithField("root", fmt.Sprintf("%x", blockRoot)).WithError(err).Error("Columns indices")
-			return
-		}
+		summary := s.cfg.dataColumnStorage.Summary(root)
 
 		// Compute the missing data columns (data columns we should custody but we do not have received via gossip.)
-		missingColumns := make(map[uint64]bool, len(localNodeInfo.CustodyColumns))
+		missingColumns := make([]uint64, 0, len(localNodeInfo.CustodyColumns))
 		for column := range localNodeInfo.CustodyColumns {
-			if ok := receivedDataColumns[column]; !ok {
-				missingColumns[column] = true
+			if !s.hasSeenDataColumnIndex(slot, proposerIndex, column) {
+				missingColumns = append(missingColumns, column)
 			}
 		}
 
@@ -206,161 +192,38 @@ func (s *Service) scheduleReconstructedDataColumnsBroadcast(
 			return
 		}
 
-		for column := range missingColumns {
-			if ok := storedDataColumns[column]; !ok {
+		for _, column := range missingColumns {
+			if !summary.HasIndex(column) {
 				// This column was not received nor reconstructed. This should not happen.
-				log.WithFields(logrus.Fields{
-					"root":   fmt.Sprintf("%x", blockRoot),
-					"slot":   slot,
-					"column": column,
-				}).Error("Data column not received nor reconstructed")
-				continue
+				log.WithField("column", column).Error("Data column not received nor reconstructed")
 			}
+		}
 
-			// Get the non received but reconstructed data column.
-			verifiedRODataColumn, err := s.cfg.blobStorage.GetColumn(blockRoot, column)
-			if err != nil {
-				log.WithError(err).Error("Get column")
-				continue
-			}
+		// Get the non received but reconstructed data column.
+		verifiedRODataColumnSidecars, err := s.cfg.dataColumnStorage.Get(root, missingColumns)
+		if err != nil {
+			log.WithError(err).Error("get data column sidecars")
+			return
+		}
 
+		for _, verifiedRODataColumn := range verifiedRODataColumnSidecars {
 			// Compute the subnet for this column.
-			subnet := column % params.BeaconConfig().DataColumnSidecarSubnetCount
+			subnet := peerdas.ComputeSubnetForDataColumnSidecar(verifiedRODataColumn.ColumnIndex)
+
 			// Broadcast the missing data column.
-			if err := s.cfg.p2p.BroadcastDataColumn(ctx, blockRoot, subnet, verifiedRODataColumn.DataColumnSidecar); err != nil {
+			if err := s.cfg.p2p.BroadcastDataColumn(ctx, root, subnet, verifiedRODataColumn.DataColumnSidecar); err != nil {
 				log.WithError(err).Error("Broadcast data column")
 			}
 		}
 
-		// Get the missing data columns under sorted form.
-		missingColumnsList := make([]uint64, 0, len(missingColumns))
-		for column := range missingColumns {
-			missingColumnsList = append(missingColumnsList, column)
-		}
-
 		// Sort the missing data columns.
-		slices.Sort[[]uint64](missingColumnsList)
+		slices.Sort[[]uint64](missingColumns)
 
 		log.WithFields(logrus.Fields{
-			"root":         fmt.Sprintf("%x", blockRoot),
-			"slot":         slot,
 			"timeIntoSlot": broadCastMissingDataColumnsTimeIntoSlot,
-			"columns":      missingColumnsList,
+			"columns":      missingColumns,
 		}).Debug("Start broadcasting not seen via gossip but reconstructed data columns")
 	})
 
 	return nil
-}
-
-// setReceivedDataColumn marks the data column for a given root as received.
-func (s *Service) setReceivedDataColumn(root [fieldparams.RootLength]byte, columnIndex uint64) error {
-	s.receivedDataColumnsFromRootLock.Lock()
-	defer s.receivedDataColumnsFromRootLock.Unlock()
-
-	if err := setDataColumnCache(s.receivedDataColumnsFromRoot, root, columnIndex); err != nil {
-		return errors.Wrap(err, "set data column cache")
-	}
-
-	return nil
-}
-
-// receivedDataColumns returns the received data columns for a given root.
-func (s *Service) receivedDataColumns(root [fieldparams.RootLength]byte) (map[uint64]bool, error) {
-	dataColumns, err := dataColumnsCache(s.receivedDataColumnsFromRoot, root)
-	if err != nil {
-		return nil, errors.Wrap(err, "data columns cache")
-	}
-
-	return dataColumns, nil
-}
-
-// setStorededDataColumn marks the data column for a given root as stored.
-func (s *Service) setStoredDataColumn(root [fieldparams.RootLength]byte, columnIndex uint64) error {
-	s.storedDataColumnsFromRootLock.Lock()
-	defer s.storedDataColumnsFromRootLock.Unlock()
-
-	if err := setDataColumnCache(s.storedDataColumnsFromRoot, root, columnIndex); err != nil {
-		return errors.Wrap(err, "set data column cache")
-	}
-
-	return nil
-}
-
-// storedDataColumns returns the received data columns for a given root.
-func (s *Service) storedDataColumns(root [fieldparams.RootLength]byte) (map[uint64]bool, error) {
-	dataColumns, err := dataColumnsCache(s.storedDataColumnsFromRoot, root)
-	if err != nil {
-		return nil, errors.Wrap(err, "data columns cache")
-	}
-
-	return dataColumns, nil
-}
-
-// setDataColumnCache sets the data column for a given root in columnsCache.
-// The caller should hold the lock for the cache.
-func setDataColumnCache(columnsCache *cache.Cache, root [fieldparams.RootLength]byte, columnIndex uint64) error {
-	if columnIndex >= fieldparams.NumberOfColumns {
-		return errors.Errorf("column index out of bounds: got %d, expected < %d", columnIndex, fieldparams.NumberOfColumns)
-	}
-
-	rootString := fmt.Sprintf("%#x", root)
-
-	// Get all the data columns for this root.
-	items, ok := columnsCache.Get(rootString)
-	if !ok {
-		var columns [fieldparams.NumberOfColumns]bool
-		columns[columnIndex] = true
-		columnsCache.Set(rootString, columns, cache.DefaultExpiration)
-
-		return nil
-	}
-
-	// Cast the array.
-	columns, ok := items.([fieldparams.NumberOfColumns]bool)
-	if !ok {
-		return errors.New("cannot cast data columns from cache")
-	}
-
-	// Add the data column to the data columns.
-	columns[columnIndex] = true
-
-	// Update the data columns in the cache.
-	columnsCache.Set(rootString, columns, cache.DefaultExpiration)
-
-	return nil
-}
-
-// dataColumnsCache returns the data columns for a given root in columnsCache.
-func dataColumnsCache(columnsCache *cache.Cache, root [fieldparams.RootLength]byte) (map[uint64]bool, error) {
-	rootString := fmt.Sprintf("%#x", root)
-
-	// Get all the data columns for this root.
-	items, ok := columnsCache.Get(rootString)
-	if !ok {
-		return nil, nil
-	}
-
-	// Cast the array.
-	dataColumns, ok := items.([fieldparams.NumberOfColumns]bool)
-	if !ok {
-		return nil, errors.New("Cannot cast data columns from cache")
-	}
-
-	// Convert to map.
-	result := columnsArrayToMap(dataColumns)
-
-	return result, nil
-}
-
-// columnsArrayToMap converts an array of columns to a map of columns.
-func columnsArrayToMap(columnsArray [fieldparams.NumberOfColumns]bool) map[uint64]bool {
-	columnsMap := make(map[uint64]bool)
-
-	for i, v := range columnsArray {
-		if v {
-			columnsMap[uint64(i)] = v
-		}
-	}
-
-	return columnsMap
 }

@@ -56,6 +56,7 @@ type BeaconDbBlocker struct {
 	ChainInfoFetcher   blockchain.ChainInfoFetcher
 	GenesisTimeFetcher blockchain.TimeFetcher
 	BlobStorage        *filesystem.BlobStorage
+	DataColumnStorage  *filesystem.DataColumnStorage
 }
 
 // Block returns the beacon block for a given identifier. The identifier can be one of:
@@ -188,31 +189,42 @@ func (p *BeaconDbBlocker) blobsFromStoredBlobs(
 // This function assumes that all the non-extended data columns are available in the store.
 func (p *BeaconDbBlocker) blobsFromNonExtendedStoredDataColumns(
 	root [fieldparams.RootLength]byte,
-	indices map[uint64]bool,
+	blobIndices map[uint64]bool,
 ) ([]*blocks.VerifiedROBlob, *core.RpcError) {
 	nonExtendedColumnsCount := uint64(fieldparams.NumberOfColumns / 2)
 
 	// Load the data columns corresponding to the non-extended blobs.
-	storedDataColumnsSidecar := make([]*ethpb.DataColumnSidecar, 0, nonExtendedColumnsCount)
+	dataColumnIndices := make([]uint64, 0, nonExtendedColumnsCount)
 	for index := range nonExtendedColumnsCount {
-		verifiedRODataColumn, err := p.BlobStorage.GetColumn(root, index)
-		if err != nil {
-			log.WithFields(log.Fields{
-				"blockRoot": hexutil.Encode(root[:]),
-				"column":    index,
-			}).Error(errors.Wrapf(err, "could not retrieve column %d for block root %#x.", index, root))
+		dataColumnIndices = append(dataColumnIndices, index)
+	}
 
-			return nil, &core.RpcError{
-				Err:    fmt.Errorf("could not retrieve column %d for block root %#x", index, root),
-				Reason: core.Internal,
-			}
+	verifiedRODataColumns, err := p.DataColumnStorage.Get(root, dataColumnIndices)
+	if err != nil {
+		log.WithField("blockRoot", hexutil.Encode(root[:])).Error(errors.Wrapf(err, "missing data columns for block root %#x", root))
+
+		return nil, &core.RpcError{
+			Err:    fmt.Errorf("could not retrieve data column sidecars for block root %#x", root),
+			Reason: core.Internal,
 		}
+	}
 
+	if uint64(len(verifiedRODataColumns)) != nonExtendedColumnsCount {
+		log.WithField("blockRoot", hexutil.Encode(root[:])).Error("not enough data columns returned to extract blobs")
+
+		return nil, &core.RpcError{
+			Err:    fmt.Errorf("not enough data columns returned to extract blobs for block root %#x", root),
+			Reason: core.Internal,
+		}
+	}
+
+	storedDataColumnsSidecar := make([]*ethpb.DataColumnSidecar, 0, nonExtendedColumnsCount)
+	for _, verifiedRODataColumn := range verifiedRODataColumns {
 		storedDataColumnsSidecar = append(storedDataColumnsSidecar, verifiedRODataColumn.DataColumnSidecar)
 	}
 
 	// Get verified RO blobs from the data columns.
-	verifiedROBlobs, err := peerdas.Blobs(indices, storedDataColumnsSidecar)
+	verifiedROBlobs, err := peerdas.Blobs(blobIndices, storedDataColumnsSidecar)
 	if err != nil {
 		log.WithField("blockRoot", hexutil.Encode(root[:])).Error(errors.Wrap(err, "could not compute blobs from data columns"))
 		return nil, &core.RpcError{Err: errors.Wrap(err, "could not compute blobs from data columns"), Reason: core.Internal}
@@ -224,28 +236,37 @@ func (p *BeaconDbBlocker) blobsFromNonExtendedStoredDataColumns(
 // blobsFromReconstructedDataColumns retrieves data columns from the store, reconstruct the whole matrix and returns the verified RO blobs.
 func (p *BeaconDbBlocker) blobsFromReconstructedDataColumns(
 	root [fieldparams.RootLength]byte,
-	indices map[uint64]bool,
-	storedDataColumnsIndices map[uint64]bool,
+	blobIndices map[uint64]bool,
 ) ([]*blocks.VerifiedROBlob, *core.RpcError) {
-	// Load all the data columns we have in the store.
+	// Load all possible data columns for this block root.
 	// Theoretically, we could only retrieve the minimum number of columns needed to reconstruct the missing ones,
 	// but here we make the assumption that the cost of loading all the columns from the store is negligible
 	// compared to the cost of reconstructing them.
-	storedDataColumnsSidecar := make([]*ethpb.DataColumnSidecar, 0, len(storedDataColumnsIndices))
-	for index := range storedDataColumnsIndices {
-		verifiedRODataColumn, err := p.BlobStorage.GetColumn(root, index)
-		if err != nil {
-			log.WithFields(log.Fields{
-				"blockRoot": hexutil.Encode(root[:]),
-				"column":    index,
-			}).Error(errors.Wrapf(err, "could not retrieve column %d for block root %#x.", index, root))
+	numberOfColumns := params.BeaconConfig().NumberOfColumns
 
-			return nil, &core.RpcError{
-				Err:    fmt.Errorf("could not retrieve column %d for block root %#x", index, root),
-				Reason: core.Internal,
-			}
+	verifiedRODataColumnSidecars, err := p.DataColumnStorage.Get(root, nil)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"blockRoot": hexutil.Encode(root[:]),
+		}).Error(errors.Wrapf(err, "get data column sidecars"))
+
+		return nil, &core.RpcError{
+			Err:    fmt.Errorf("could not retrieve data column sidecars for block root %#x", root),
+			Reason: core.Internal,
 		}
+	}
 
+	if uint64(len(verifiedRODataColumnSidecars)) < numberOfColumns/2 {
+		log.WithField("blockRoot", hexutil.Encode(root[:])).Error("not enough data columns returned to reconstruct blobs")
+
+		return nil, &core.RpcError{
+			Err:    fmt.Errorf("not enough data columns returned to reconstruct blobs for block root %#x", root),
+			Reason: core.Internal,
+		}
+	}
+
+	storedDataColumnsSidecar := make([]*ethpb.DataColumnSidecar, 0, len(verifiedRODataColumnSidecars))
+	for _, verifiedRODataColumn := range verifiedRODataColumnSidecars {
 		storedDataColumnsSidecar = append(storedDataColumnsSidecar, verifiedRODataColumn.DataColumnSidecar)
 	}
 
@@ -266,14 +287,13 @@ func (p *BeaconDbBlocker) blobsFromReconstructedDataColumns(
 		firstDataColumnSidecar.KzgCommitmentsInclusionProof,
 		recoveredCellsAndProofs,
 	)
-
 	if err != nil {
 		log.WithField("blockRoot", hexutil.Encode(root[:])).Error(errors.Wrap(err, "could not reconstruct data columns sidecars"))
 		return nil, &core.RpcError{Err: errors.Wrap(err, "could not reconstruct data columns sidecars"), Reason: core.Internal}
 	}
 
 	// Get verified RO blobs from the data columns.
-	verifiedROBlobs, err := peerdas.Blobs(indices, reconstructedDataColumnSidecars)
+	verifiedROBlobs, err := peerdas.Blobs(blobIndices, reconstructedDataColumnSidecars)
 	if err != nil {
 		log.WithField("blockRoot", hexutil.Encode(root[:])).Error(errors.Wrap(err, "could not compute blobs from data columns"))
 		return nil, &core.RpcError{Err: errors.Wrap(err, "could not compute blobs from data columns"), Reason: core.Internal}
@@ -295,7 +315,7 @@ func (p *BeaconDbBlocker) blobsFromStoredDataColumns(indices map[uint64]bool, ro
 	root := bytesutil.ToBytes32(rootBytes)
 
 	// Retrieve the data columns indice actually we store.
-	summary := p.BlobStorage.Summary(root)
+	summary := p.DataColumnStorage.Summary(root)
 
 	storedDataColumnsIndices := make(map[uint64]bool, numberOfColumns)
 	for i := range numberOfColumns {
@@ -334,7 +354,7 @@ func (p *BeaconDbBlocker) blobsFromStoredDataColumns(indices map[uint64]bool, ro
 	}
 
 	// Some non-extended data columns are missing, we need to reconstruct them.
-	return p.blobsFromReconstructedDataColumns(root, indices, storedDataColumnsIndices)
+	return p.blobsFromReconstructedDataColumns(root, indices)
 }
 
 // Blobs returns the blobs for a given block id identifier and blob indices. The identifier can be one of:

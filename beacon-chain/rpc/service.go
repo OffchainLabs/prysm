@@ -120,6 +120,7 @@ type Config struct {
 	Router                    *http.ServeMux
 	ClockWaiter               startup.ClockWaiter
 	BlobStorage               *filesystem.BlobStorage
+	DataColumnStorage         *filesystem.DataColumnStorage
 	TrackedValidatorsCache    *cache.TrackedValidatorsCache
 	PayloadIDCache            *cache.PayloadIDCache
 }
@@ -195,6 +196,7 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		ChainInfoFetcher:   s.cfg.ChainInfoFetcher,
 		GenesisTimeFetcher: s.cfg.GenesisTimeFetcher,
 		BlobStorage:        s.cfg.BlobStorage,
+		DataColumnStorage:  s.cfg.DataColumnStorage,
 	}
 	rewardFetcher := &rewards.BlockRewardService{Replayer: ch, DB: s.cfg.BeaconDB}
 	coreService := &core.Service{

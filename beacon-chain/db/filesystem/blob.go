@@ -8,9 +8,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/async/event"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
@@ -30,15 +28,8 @@ var (
 	errNoBasePath          = errors.New("BlobStorage base path not specified in init")
 )
 
-type (
-	// BlobStorageOption is a functional option for configuring a BlobStorage.
-	BlobStorageOption func(*BlobStorage) error
-
-	RootIndexPair struct {
-		Root  [fieldparams.RootLength]byte
-		Index uint64
-	}
-)
+// BlobStorageOption is a functional option for configuring a BlobStorage.
+type BlobStorageOption func(*BlobStorage) error
 
 // WithBasePath is a required option that sets the base path of blob storage.
 func WithBasePath(base string) BlobStorageOption {
@@ -85,10 +76,7 @@ func WithLayout(name string) BlobStorageOption {
 // attempt to hold a file lock to guarantee exclusive control of the blob storage directory, so this should only be
 // initialized once per beacon node.
 func NewBlobStorage(opts ...BlobStorageOption) (*BlobStorage, error) {
-	b := &BlobStorage{
-		DataColumnFeed: new(event.Feed),
-	}
-
+	b := &BlobStorage{}
 	for _, o := range opts {
 		if err := o(b); err != nil {
 			return nil, errors.Wrap(err, "failed to create blob storage")
@@ -127,7 +115,6 @@ type BlobStorage struct {
 	fs              afero.Fs
 	layout          fsLayout
 	cache           *blobStorageSummaryCache
-	DataColumnFeed  *event.Feed
 }
 
 // WarmCache runs the prune routine with an expiration of slot of 0, so nothing will be pruned, but the pruner's cache
@@ -279,7 +266,7 @@ func (bs *BlobStorage) Get(root [32]byte, idx uint64) (blocks.VerifiedROBlob, er
 	return verification.VerifiedROBlobFromDisk(bs.fs, root, bs.layout.sszPath(ident))
 }
 
-// Remove removes all blobs or data columns for a given root.
+// Remove removes all blobs for a given root.
 func (bs *BlobStorage) Remove(root [32]byte) error {
 	dirIdent, err := bs.layout.dirIdent(root)
 	if err != nil {

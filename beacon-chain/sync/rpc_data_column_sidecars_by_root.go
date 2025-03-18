@@ -11,14 +11,11 @@ import (
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/pkg/errors"
 	coreTime "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
 	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
@@ -60,24 +57,21 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 		return errors.Wrap(err, "validate data columns by root request")
 	}
 
-	// Sort the identifiers so that requests for the same blob root will be adjacent, minimizing db lookups.
+	// Sort the identifiers so that requests for the same data columns root will be adjacent, minimizing db lookups.
 	sort.Sort(&requestedColumnIdents)
 
 	numberOfColumns := params.BeaconConfig().NumberOfColumns
 
-	requestedColumnsByRoot := make(map[[fieldparams.RootLength]byte]map[uint64]bool)
+	requestedColumnsByRoot := make(map[[fieldparams.RootLength]byte][]uint64)
 	for _, columnIdent := range requestedColumnIdents {
 		var root [fieldparams.RootLength]byte
 		copy(root[:], columnIdent.BlockRoot)
+		requestedColumnsByRoot[root] = append(requestedColumnsByRoot[root], columnIdent.ColumnIndex)
+	}
 
-		columnIndex := columnIdent.ColumnIndex
-
-		if _, ok := requestedColumnsByRoot[root]; !ok {
-			requestedColumnsByRoot[root] = map[uint64]bool{columnIndex: true}
-			continue
-		}
-
-		requestedColumnsByRoot[root][columnIndex] = true
+	// Sort by column index for each root.
+	for _, columns := range requestedColumnsByRoot {
+		slices.Sort[[]uint64](columns)
 	}
 
 	requestedColumnsByRootLog := make(map[string]interface{})
@@ -85,7 +79,7 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 		rootStr := fmt.Sprintf("%#x", root)
 		requestedColumnsByRootLog[rootStr] = "all"
 		if uint64(len(columns)) != numberOfColumns {
-			requestedColumnsByRootLog[rootStr] = uint64MapToSortedSlice(columns)
+			requestedColumnsByRootLog[rootStr] = columns
 		}
 	}
 
@@ -99,75 +93,61 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 	cs := s.cfg.clock.CurrentSlot()
 	minReqSlot, err := DataColumnsRPCMinValidSlot(cs)
 	if err != nil {
-		return errors.Wrapf(err, "unexpected error computing min valid blob request slot, current_slot=%d", cs)
+		return errors.Wrapf(err, "unexpected error computing min valid data columns request slot, currentSlot=%d", cs)
 	}
 
-	remotePeer := stream.Conn().RemotePeer()
 	log := log.WithFields(logrus.Fields{
-		"peer":    remotePeer,
+		"peer":    stream.Conn().RemotePeer(),
 		"columns": requestedColumnsByRootLog,
 	})
 
 	log.Debug("Serving data column sidecar by root request")
 
-	// Subscribe to the data column feed.
-	rootIndexChan := make(chan filesystem.RootIndexPair)
-	subscription := s.cfg.blobStorage.DataColumnFeed.Subscribe(rootIndexChan)
-	defer subscription.Unsubscribe()
-
-	for i := range requestedColumnIdents {
+	count := 0
+	for root, columns := range requestedColumnsByRoot {
 		if err := ctx.Err(); err != nil {
 			closeStream(stream, log)
 			return errors.Wrap(err, "context error")
 		}
 
 		// Throttle request processing to no more than batchSize/sec.
-		if ticker != nil && i != 0 && i%batchSize == 0 {
-			for {
-				select {
-				case <-ticker.C:
-					log.Debug("Throttling data column sidecar request")
-				case <-ctx.Done():
-					log.Debug("Context closed, exiting routine")
-					return nil
+		// TODO: Find a more efficient way to throttle requests...
+		for range columns {
+			if ticker != nil && count != 0 && count%batchSize == 0 {
+				for {
+					select {
+					case <-ticker.C:
+						log.Debug("Throttling data column sidecar request")
+					case <-ctx.Done():
+						log.Debug("Context closed, exiting routine")
+						return nil
+					}
 				}
 			}
+
+			count++
 		}
 
-		s.rateLimiter.add(stream, 1)
-		requestedRoot, requestedIndex := bytesutil.ToBytes32(requestedColumnIdents[i].BlockRoot), requestedColumnIdents[i].ColumnIndex
+		s.rateLimiter.add(stream, int64(len(columns)))
 
-		// TODO: Differentiate between blobs and columns for our storage engine
-		// Retrieve the data column from the database.
-		verifiedRODataColumn, err := s.cfg.blobStorage.GetColumn(requestedRoot, requestedIndex)
-
-		if err != nil && !db.IsNotFound(err) {
+		verifiedRODataColumns, err := s.cfg.dataColumnStorage.Get(root, columns)
+		if err != nil {
 			s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)
-			return errors.Wrap(err, "get column")
+			return errors.Wrap(err, "get data column sidecars")
 		}
 
-		// If the data column is not found in the db, just skip it.
-		if err != nil && db.IsNotFound(err) {
-			continue
-		}
+		for _, verifiedRODataColumn := range verifiedRODataColumns {
+			if verifiedRODataColumn.SignedBlockHeader.Header.Slot < minReqSlot {
+				continue
+			}
 
-		// If any root in the request content references a block earlier than minimum_request_epoch,
-		// peers MAY respond with error code 3: ResourceUnavailable or not include the data column in the response.
-		// note: we are deviating from the spec to allow requests for data column that are before minimum_request_epoch,
-		// up to the beginning of the retention period.
-		if verifiedRODataColumn.SignedBlockHeader.Header.Slot < minReqSlot {
-			s.writeErrorResponseToStream(responseCodeResourceUnavailable, types.ErrDataColumnLTMinRequest.Error(), stream)
-			log.WithError(types.ErrDataColumnLTMinRequest).
-				Debugf("requested data column for block %#x before minimum_request_epoch", requestedColumnIdents[i].BlockRoot)
-			return types.ErrDataColumnLTMinRequest
-		}
-
-		SetStreamWriteDeadline(stream, defaultWriteDuration)
-		if chunkErr := WriteDataColumnSidecarChunk(stream, s.cfg.chain, s.cfg.p2p.Encoding(), verifiedRODataColumn.DataColumnSidecar); chunkErr != nil {
-			log.WithError(chunkErr).Debug("Could not send a chunked response")
-			s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)
-			tracing.AnnotateError(span, chunkErr)
-			return chunkErr
+			SetStreamWriteDeadline(stream, defaultWriteDuration)
+			if chunkErr := WriteDataColumnSidecarChunk(stream, s.cfg.chain, s.cfg.p2p.Encoding(), verifiedRODataColumn.DataColumnSidecar); chunkErr != nil {
+				log.WithError(chunkErr).Debug("Could not send a chunked response")
+				s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)
+				tracing.AnnotateError(span, chunkErr)
+				return chunkErr
+			}
 		}
 	}
 

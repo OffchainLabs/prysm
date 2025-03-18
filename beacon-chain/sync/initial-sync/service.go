@@ -57,6 +57,7 @@ type Config struct {
 	ClockWaiter         startup.ClockWaiter
 	InitialSyncComplete chan struct{}
 	BlobStorage         *filesystem.BlobStorage
+	DataColumnStorage   *filesystem.DataColumnStorage
 	CustodyInfo         *peerdas.CustodyInfo
 }
 
@@ -344,10 +345,13 @@ func (s *Service) fetchOriginBlobs(pids []peer.ID) error {
 	}
 	shufflePeers(pids)
 	for i := range pids {
-		sidecars, err := sync.SendBlobSidecarByRoot(s.ctx, s.clock, s.cfg.P2P, pids[i], s.ctxMap, &req, rob.Block().Slot())
+		blobSidecars, err := sync.SendBlobSidecarByRoot(s.ctx, s.clock, s.cfg.P2P, pids[i], s.ctxMap, &req, rob.Block().Slot())
 		if err != nil {
 			continue
 		}
+
+		sidecars := blocks.NewSidecarsFromBlobSidecars(blobSidecars)
+
 		if len(sidecars) != len(req) {
 			continue
 		}
@@ -395,7 +399,7 @@ func (s *Service) fetchOriginColumns(pids []peer.ID) error {
 		rob,
 		s.cfg.P2P.NodeID(),
 		custodyGroupCount,
-		s.cfg.BlobStorage,
+		s.cfg.DataColumnStorage,
 	)
 	if err != nil {
 		return err
@@ -404,26 +408,18 @@ func (s *Service) fetchOriginColumns(pids []peer.ID) error {
 		log.WithField("root", fmt.Sprintf("%#x", r)).Debug("All columns for checkpoint block are present")
 		return nil
 	}
-	sidecars, err := sync.RequestDataColumnSidecarsByRoot(
-		s.ctx,
-		missingColumns,
-		rob,
-		r,
-		pids,
-		s.clock,
-		s.cfg.P2P,
-		s.ctxMap,
-		s.newDataColumnsVerifier,
-	)
+	dataColumnSidecars, err := sync.RequestDataColumnSidecarsByRoot(s.ctx, missingColumns, rob, r, pids, s.clock, s.cfg.P2P, s.ctxMap, s.newDataColumnsVerifier)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "request data column sidecars by root")
 	}
+
+	sidecars := blocks.NewSidecarsFromDataColumnSidecars(dataColumnSidecars)
 
 	// FIXME: It's not clear that the caching layer is doing anything here or in
 	// fetchOriginBlobs, which is presumably where this logic was derived from.
-	avs := das.NewLazilyPersistentStoreColumn(s.cfg.BlobStorage, s.cfg.CustodyInfo)
+	avs := das.NewLazilyPersistentStoreColumn(s.cfg.DataColumnStorage, s.cfg.CustodyInfo)
 	current := s.clock.CurrentSlot()
-	if err := avs.PersistColumns(current, sidecars...); err != nil {
+	if err := avs.Persist(current, sidecars...); err != nil {
 		return err
 	}
 

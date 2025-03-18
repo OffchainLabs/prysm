@@ -56,7 +56,7 @@ func TestBlobStorage_SaveBlobData(t *testing.T) {
 		require.NoError(t, bs.Save(sc))
 		actualSc, err := bs.Get(sc.BlockRoot(), sc.Index)
 		require.NoError(t, err)
-		expectedIdx := dataIndexMask{false, false, true, false, false, false}
+		expectedIdx := blobIndexMask{false, false, true, false, false, false}
 		actualIdx := bs.Summary(actualSc.BlockRoot()).mask
 		require.NoError(t, err)
 		require.DeepEqual(t, expectedIdx, actualIdx)

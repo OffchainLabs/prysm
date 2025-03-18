@@ -26,9 +26,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var errBlobChunkedReadFailure = errors.New("failed to read stream of chunk-encoded blobs")
-var errBlobUnmarshal = errors.New("Could not unmarshal chunk-encoded blob")
-
 // Any error from the following declaration block should result in peer downscoring.
 var (
 	// ErrInvalidFetchedData is used to signal that an error occurred which should result in peer downscoring.
@@ -41,6 +38,9 @@ var (
 	errBlobResponseOutOfBounds        = errors.Wrap(ErrInvalidFetchedData, "received BlobSidecar with slot outside BlobSidecarsByRangeRequest bounds")
 	errChunkResponseBlockMismatch     = errors.Wrap(ErrInvalidFetchedData, "blob block details do not match")
 	errChunkResponseParentMismatch    = errors.Wrap(ErrInvalidFetchedData, "parent root for response element doesn't match previous element root")
+	errBlobChunkedReadFailure         = errors.New("failed to read stream of chunk-encoded blobs")
+	errBlobUnmarshal                  = errors.New("Could not unmarshal chunk-encoded blob")
+	errDataColumnChunkedReadFailure   = errors.New("failed to read stream of chunk-encoded data columns")
 )
 
 // BeaconBlockProcessor defines a block processing function, which allows to start utilizing
@@ -441,7 +441,7 @@ func readChunkedDataColumnSideCar(
 	}
 
 	if statusCode != 0 {
-		return nil, errors.Wrap(errBlobChunkedReadFailure, errMessage)
+		return nil, errors.Wrap(errDataColumnChunkedReadFailure, errMessage)
 	}
 	// Retrieve the fork digest.
 	ctxBytes, err := readContextFromStream(stream)

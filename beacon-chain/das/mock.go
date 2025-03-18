@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	errors "github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 )
@@ -25,9 +26,13 @@ func (m *MockAvailabilityStore) IsDataAvailable(ctx context.Context, _ enode.ID,
 }
 
 // Persist satisfies the corresponding method of the AvailabilityStore interface in a way that is useful for tests.
-func (m *MockAvailabilityStore) Persist(current primitives.Slot, sc ...blocks.ROBlob) error {
+func (m *MockAvailabilityStore) Persist(current primitives.Slot, sc ...blocks.ROSidecar) error {
+	blobSidecars, err := blocks.BlobSidecarsFromSidecars(sc)
+	if err != nil {
+		return errors.Wrap(err, "blob sidecars from sidecars")
+	}
 	if m.PersistBlobsCallback != nil {
-		return m.PersistBlobsCallback(current, sc...)
+		return m.PersistBlobsCallback(current, blobSidecars...)
 	}
 	return nil
 }

@@ -213,7 +213,7 @@ func (s *Service) processAndBroadcastBlock(ctx context.Context, b interfaces.Rea
 			b,
 			s.cfg.p2p.NodeID(),
 			s.cfg.custodyInfo.CustodyGroupSamplingSize(peerdas.Target),
-			s.cfg.blobStorage,
+			s.cfg.dataColumnStorage,
 		)
 
 		if err != nil {

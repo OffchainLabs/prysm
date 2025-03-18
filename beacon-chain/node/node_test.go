@@ -54,7 +54,7 @@ func TestNodeClose_OK(t *testing.T) {
 	cmd.ValidatorMonitorIndicesFlag.Value.SetInt(1)
 	ctx, cancel := newCliContextWithCancel(&app, set)
 
-	node, err := New(ctx, cancel, WithBlobStorage(filesystem.NewEphemeralBlobStorage(t)))
+	node, err := New(ctx, cancel, WithBlobStorage(filesystem.NewEphemeralBlobStorage(t)), WithDataColumnStorage(filesystem.NewEphemeralDataColumnStorage(t)))
 	require.NoError(t, err)
 
 	node.Close()
@@ -75,7 +75,7 @@ func TestNodeStart_Ok(t *testing.T) {
 	node, err := New(ctx, cancel, WithBlockchainFlagOptions([]blockchain.Option{}),
 		WithBuilderFlagOptions([]builder.Option{}),
 		WithExecutionChainOptions([]execution.Option{}),
-		WithBlobStorage(filesystem.NewEphemeralBlobStorage(t)))
+		WithBlobStorage(filesystem.NewEphemeralBlobStorage(t)), WithDataColumnStorage(filesystem.NewEphemeralDataColumnStorage(t)))
 	require.NoError(t, err)
 	node.services = &runtime.ServiceRegistry{}
 	go func() {
@@ -99,7 +99,7 @@ func TestNodeStart_SyncChecker(t *testing.T) {
 	node, err := New(ctx, cancel, WithBlockchainFlagOptions([]blockchain.Option{}),
 		WithBuilderFlagOptions([]builder.Option{}),
 		WithExecutionChainOptions([]execution.Option{}),
-		WithBlobStorage(filesystem.NewEphemeralBlobStorage(t)))
+		WithBlobStorage(filesystem.NewEphemeralBlobStorage(t)), WithDataColumnStorage(filesystem.NewEphemeralDataColumnStorage(t)))
 	require.NoError(t, err)
 	go func() {
 		node.Start()
@@ -130,7 +130,7 @@ func TestClearDB(t *testing.T) {
 	context, cancel := newCliContextWithCancel(&app, set)
 	options := []Option{
 		WithExecutionChainOptions([]execution.Option{execution.WithHttpEndpoint(endpoint)}),
-		WithBlobStorage(filesystem.NewEphemeralBlobStorage(t)),
+		WithBlobStorage(filesystem.NewEphemeralBlobStorage(t)), WithDataColumnStorage(filesystem.NewEphemeralDataColumnStorage(t)),
 	}
 	_, err = New(context, cancel, options...)
 	require.NoError(t, err)

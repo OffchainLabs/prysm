@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	gcache "github.com/patrickmn/go-cache"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/go-bitfield"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
@@ -271,9 +270,7 @@ func TestReconstructAndBroadcastBlobs(t *testing.T) {
 						operationNotifier: &chainMock.MockOperationNotifier{},
 						custodyInfo:       &peerdas.CustodyInfo{},
 					},
-					seenDataColumnCache:         lruwrpr.New(1),
-					receivedDataColumnsFromRoot: gcache.New(1*time.Minute, 2*time.Minute),
-					storedDataColumnsFromRoot:   gcache.New(1*time.Minute, 2*time.Minute),
+					seenDataColumnCache: lruwrpr.New(1),
 				}
 
 				kzgCommitments := make([][]byte, 0, tt.blobCount)

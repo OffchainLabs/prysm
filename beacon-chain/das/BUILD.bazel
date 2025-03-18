@@ -6,6 +6,7 @@ go_library(
         "availability.go",
         "availability_columns.go",
         "cache.go",
+        "data_column_cache.go",
         "iface.go",
         "mock.go",
     ],
@@ -34,6 +35,7 @@ go_test(
         "availability_columns_test.go",
         "availability_test.go",
         "cache_test.go",
+        "data_column_cache_test.go",
     ],
     embed = [":go_default_library"],
     deps = [
@@ -41,6 +43,7 @@ go_test(
         "//beacon-chain/db/filesystem:go_default_library",
         "//beacon-chain/verification:go_default_library",
         "//cmd/beacon-chain/flags:go_default_library",
+        "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/blocks:go_default_library",
         "//consensus-types/primitives:go_default_library",

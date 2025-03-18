@@ -95,11 +95,11 @@ func (s *Service) reconstructAndBroadcastBlobsInDataColumn(ctx context.Context, 
 		return
 	}
 
-	if s.cfg.blobStorage == nil {
-		log.Warn("Blob storage is not enabled, skip saving data column, but continue to reconstruct and broadcast blobs")
+	if s.cfg.dataColumnStorage == nil {
+		log.Warning("Data column storage is not enabled, skip saving data column, but continue to reconstruct and broadcast data column")
 	}
 
-	// when this function is called, it's from the time when the block is received, so in almost all situations we need to get the data column from EL instead of the blob storage.
+	// When this function is called, it's from the time when the block is received, so in almost all situations we need to get the data column from EL instead of the blob storage.
 	sidecars, err := s.cfg.executionReconstructor.ReconstructDataColumnSidecars(ctx, roSignedBlock, blockRoot)
 	if err != nil {
 		log.WithError(err).Debug("Cannot reconstruct data column sidecars after receiving the block")

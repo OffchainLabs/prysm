@@ -16,5 +16,5 @@ import (
 // durably persisted before returning a non-error value.
 type AvailabilityStore interface {
 	IsDataAvailable(ctx context.Context, nodeID enode.ID, current primitives.Slot, b blocks.ROBlock) error
-	Persist(current primitives.Slot, sc ...blocks.ROBlob) error
+	Persist(current primitives.Slot, sc ...blocks.ROSidecar) error
 }

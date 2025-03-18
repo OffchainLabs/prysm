@@ -67,6 +67,7 @@ type Service struct {
 	blobNotifiers        *blobNotifierMap
 	blockBeingSynced     *currentlySyncingBlock
 	blobStorage          *filesystem.BlobStorage
+	dataColumnStorage    *filesystem.DataColumnStorage
 }
 
 // config options for the service.

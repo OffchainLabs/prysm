@@ -5,9 +5,20 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 )
 
-func (s *Service) ReceiveDataColumn(ds blocks.VerifiedRODataColumn) error {
-	if err := s.blobStorage.SaveDataColumn(ds); err != nil {
-		return errors.Wrap(err, "save data column")
+// ReceiveDataColumns receives a batch of data columns.
+func (s *Service) ReceiveDataColumns(dataColumnSidecars []blocks.VerifiedRODataColumn) error {
+	if err := s.dataColumnStorage.Store(dataColumnSidecars); err != nil {
+		return errors.Wrap(err, "save data column sidecars")
+	}
+
+	return nil
+}
+
+// ReceiveDataColumn receives a single data column.
+// (It is only a wrapper around ReceiveDataColumns.)
+func (s *Service) ReceiveDataColumn(dataColumnSidecar blocks.VerifiedRODataColumn) error {
+	if err := s.dataColumnStorage.Store([]blocks.VerifiedRODataColumn{dataColumnSidecar}); err != nil {
+		return errors.Wrap(err, "save data column sidecars")
 	}
 
 	return nil

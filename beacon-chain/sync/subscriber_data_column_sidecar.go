@@ -33,21 +33,11 @@ func (s *Service) receiveDataColumn(ctx context.Context, dc blocks.VerifiedRODat
 	slot := dc.SignedBlockHeader.Header.Slot
 	proposerIndex := dc.SignedBlockHeader.Header.ProposerIndex
 	columnIndex := dc.ColumnIndex
-	blockRoot := dc.BlockRoot()
 
 	s.setSeenDataColumnIndex(slot, proposerIndex, columnIndex)
 
 	if err := s.cfg.chain.ReceiveDataColumn(dc); err != nil {
 		return errors.Wrap(err, "receive data column")
-	}
-
-	// Mark the data column as both received and stored.
-	if err := s.setReceivedDataColumn(blockRoot, columnIndex); err != nil {
-		return errors.Wrap(err, "set received data column")
-	}
-
-	if err := s.setStoredDataColumn(blockRoot, columnIndex); err != nil {
-		return errors.Wrap(err, "set stored data column")
 	}
 
 	s.cfg.operationNotifier.OperationFeed().Send(&feed.Event{

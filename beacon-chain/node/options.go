@@ -50,3 +50,20 @@ func WithBlobStorageOptions(opt ...filesystem.BlobStorageOption) Option {
 		return nil
 	}
 }
+
+// WithDataColumnStorage sets the DataColumnStorage backend for the BeaconNode
+func WithDataColumnStorage(bs *filesystem.DataColumnStorage) Option {
+	return func(bn *BeaconNode) error {
+		bn.DataColumnStorage = bs
+		return nil
+	}
+}
+
+// WithDataColumnStorageOptions appends 1 or more filesystem.DataColumnStorageOption on the beacon node,
+// to be used when initializing data column storage.
+func WithDataColumnStorageOptions(opt ...filesystem.DataColumnStorageOption) Option {
+	return func(bn *BeaconNode) error {
+		bn.DataColumnStorageOptions = append(bn.DataColumnStorageOptions, opt...)
+		return nil
+	}
+}

@@ -56,10 +56,6 @@ func identForSidecar(sc blocks.VerifiedROBlob) blobIdent {
 	return newBlobIdent(sc.BlockRoot(), slots.ToEpoch(sc.Slot()), sc.Index)
 }
 
-func identForDataColumnSidecar(sc blocks.VerifiedRODataColumn) blobIdent {
-	return newBlobIdent(sc.BlockRoot(), slots.ToEpoch(sc.Slot()), sc.ColumnIndex)
-}
-
 func (n blobIdent) sszFname() string {
 	return fmt.Sprintf("%d.%s", n.index, sszExt)
 }

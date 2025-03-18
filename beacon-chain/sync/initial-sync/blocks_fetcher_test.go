@@ -1106,7 +1106,7 @@ func TestCommitmentCountList(t *testing.T) {
 					bytesutil.ToBytes32([]byte("0")): {0, 1},
 					bytesutil.ToBytes32([]byte("1")): {0, 1, 2, 3, 4, 5},
 				}
-				return filesystem.NewMockBlobStorageSummarizer(t, onDisk, 0)
+				return filesystem.NewMockBlobStorageSummarizer(t, onDisk)
 			},
 			cc: []commitmentCount{
 				{slot: 0, count: 3, root: bytesutil.ToBytes32([]byte("0"))},
@@ -1123,7 +1123,7 @@ func TestCommitmentCountList(t *testing.T) {
 					bytesutil.ToBytes32([]byte("0")): {0, 1},
 					bytesutil.ToBytes32([]byte("2")): {0, 1, 2, 3, 4, 5},
 				}
-				return filesystem.NewMockBlobStorageSummarizer(t, onDisk, 0)
+				return filesystem.NewMockBlobStorageSummarizer(t, onDisk)
 			},
 			cc: []commitmentCount{
 				{slot: 0, count: 2, root: bytesutil.ToBytes32([]byte("0"))},
@@ -1140,7 +1140,7 @@ func TestCommitmentCountList(t *testing.T) {
 					bytesutil.ToBytes32([]byte("0")): {0, 1},
 					bytesutil.ToBytes32([]byte("2")): {0, 1, 2, 3, 4, 5},
 				}
-				return filesystem.NewMockBlobStorageSummarizer(t, onDisk, 0)
+				return filesystem.NewMockBlobStorageSummarizer(t, onDisk)
 			},
 			cc: []commitmentCount{
 				{slot: 0, count: 2, root: bytesutil.ToBytes32([]byte("0"))},
@@ -1159,7 +1159,7 @@ func TestCommitmentCountList(t *testing.T) {
 					bytesutil.ToBytes32([]byte("1")): {0, 1},
 					bytesutil.ToBytes32([]byte("2")): {0, 1, 2, 3, 4, 5},
 				}
-				return filesystem.NewMockBlobStorageSummarizer(t, onDisk, 0)
+				return filesystem.NewMockBlobStorageSummarizer(t, onDisk)
 			},
 			cc: []commitmentCount{
 				{slot: 0, count: 2, root: bytesutil.ToBytes32([]byte("0"))},
@@ -1264,7 +1264,7 @@ func TestVerifyAndPopulateBlobs(t *testing.T) {
 			r1: {0, 1},
 			r7: {0, 1, 2, 3, 4, 5},
 		}
-		bss := filesystem.NewMockBlobStorageSummarizer(t, onDisk, 0)
+		bss := filesystem.NewMockBlobStorageSummarizer(t, onDisk)
 		err := verifyAndPopulateBlobs(bwb, blobs, testReqFromResp(bwb), bss)
 		require.NoError(t, err)
 		require.Equal(t, 6, len(bwb[i1].Blobs))
@@ -1771,7 +1771,7 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 
 		// What data columns do we store for the block in the same position in blocksParams.
 		// len(storedDataColumns) has to be the same than len(blocksParams).
-		storedDataColumns []map[int]bool
+		storedDataColumns []map[uint64]bool
 
 		// Each item in the list represents a peer.
 		// We can specify what the peer will respond to each data column by range request.
@@ -1839,7 +1839,7 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 				{slot: 32, hasBlobs: false},
 				{slot: 33, hasBlobs: true},
 			},
-			storedDataColumns: []map[int]bool{
+			storedDataColumns: []map[uint64]bool{
 				nil,
 				nil,
 				nil,
@@ -1866,7 +1866,7 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 				{slot: 38, hasBlobs: true},
 				{slot: 39, hasBlobs: false},
 			},
-			storedDataColumns: []map[int]bool{
+			storedDataColumns: []map[uint64]bool{
 				nil,                                      // Slot 25
 				nil,                                      // Slot 27
 				nil,                                      // Slot 32
@@ -1967,7 +1967,7 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 				{slot: 35, hasBlobs: false},
 				{slot: 36, hasBlobs: true},
 			},
-			storedDataColumns: []map[int]bool{
+			storedDataColumns: []map[uint64]bool{
 				{6: true, 38: true}, // Slot 33
 				{6: true, 38: true}, // Slot 34
 				nil,                 // Slot 35
@@ -2017,7 +2017,7 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 			blocksParams: []blockParams{
 				{slot: 38, hasBlobs: true},
 			},
-			storedDataColumns: []map[int]bool{{38: true, 102: true}},
+			storedDataColumns: []map[uint64]bool{{38: true, 102: true}},
 			peersParams: []peerParams{
 				{
 					cgc: 128,
@@ -2048,7 +2048,7 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 			fuluForkEpoch:     1,
 			currentSlot:       40,
 			blocksParams:      []blockParams{{slot: 38, hasBlobs: true}},
-			storedDataColumns: []map[int]bool{{38: true, 102: true}},
+			storedDataColumns: []map[uint64]bool{{38: true, 102: true}},
 			peersParams: []peerParams{
 				{
 					cgc: 128,
@@ -2076,7 +2076,7 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 			fuluForkEpoch:     1,
 			currentSlot:       40,
 			blocksParams:      []blockParams{{slot: 38, hasBlobs: true}},
-			storedDataColumns: []map[int]bool{{38: true, 102: true}},
+			storedDataColumns: []map[uint64]bool{{38: true, 102: true}},
 			peersParams: []peerParams{
 				{
 					cgc: 128,
@@ -2101,7 +2101,7 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 				{slot: 32, hasBlobs: true}, {slot: 33, hasBlobs: true}, {slot: 34, hasBlobs: true}, {slot: 35, hasBlobs: true}, // 4
 				{slot: 36, hasBlobs: true}, {slot: 37, hasBlobs: true}, // 6
 			},
-			storedDataColumns: []map[int]bool{
+			storedDataColumns: []map[uint64]bool{
 				nil, nil, nil, nil, // 4
 				nil, nil, // 6
 
@@ -2216,11 +2216,11 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 			params.BeaconConfig().FuluForkEpoch = tc.fuluForkEpoch
 
 			// Save the blocks in the store.
-			storage := make(map[[fieldparams.RootLength]byte][]int)
+			storage := make(map[[fieldparams.RootLength]byte][]uint64)
 			for index, columns := range tc.storedDataColumns {
 				root := roBlocks[index].Root()
 
-				columnsSlice := make([]int, 0, len(columns))
+				columnsSlice := make([]uint64, 0, len(columns))
 				for column := range columns {
 					columnsSlice = append(columnsSlice, column)
 				}
@@ -2228,7 +2228,7 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 				storage[root] = columnsSlice
 			}
 
-			blobStorageSummarizer := filesystem.NewMockBlobStorageSummarizer(t, storage, tc.fuluForkEpoch)
+			dataColumnStorageSummarizer := filesystem.NewMockDataColumnStorageSummarizer(t, storage)
 
 			// Create a chain and a clock.
 			chain, clock := defaultMockChain(t, tc.currentSlot)
@@ -2274,7 +2274,7 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 				clock:       clock,
 				ctxMap:      map[[4]byte]int{{245, 165, 253, 66}: version.Fulu},
 				p2p:         p2pSvc,
-				bs:          blobStorageSummarizer,
+				dcs:         dataColumnStorageSummarizer,
 				cv:          newDataColumnsVerifierFromInitializer(ini),
 				custodyInfo: &peerdas.CustodyInfo{},
 			})

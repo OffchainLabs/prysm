@@ -10,35 +10,20 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 )
 
-// dataIndexMask is a bitmask representing the set of blob or data column indices that are currently set.
-type dataIndexMask []bool
+// blobIndexMask is a bitmask representing the set of blob indices that are currently set.
+type blobIndexMask []bool
 
-// BlobStorageSummary represents cached information about the BlobSidecars or DataColumnSidecars on disk for each root the cache knows about.
+// BlobStorageSummary represents cached information about the BlobSidecars on disk for each root the cache knows about.
 type BlobStorageSummary struct {
 	epoch primitives.Epoch
-	mask  dataIndexMask
+	mask  blobIndexMask
 }
 
-// HasIndex returns true if the BlobSidecar or DataColumnSidecar at the given index is available in the filesystem.
+// HasIndex returns true if the BlobSidecar at the given index is available in the filesystem.
 func (s BlobStorageSummary) HasIndex(idx uint64) bool {
 	if idx >= uint64(len(s.mask)) {
 		return false
 	}
-	return s.mask[idx]
-}
-
-// HasDataColumnIndex returns true if the DataColumnSidecar at the given index is available in the filesystem.
-func (s BlobStorageSummary) HasDataColumnIndex(idx uint64) bool {
-	// Protect from panic, but assume callers are sophisticated enough to not need an error telling them they have an invalid idx.
-	numberOfColumns := params.BeaconConfig().NumberOfColumns
-	if idx >= numberOfColumns {
-		return false
-	}
-
-	if idx >= uint64(len(s.mask)) {
-		return false
-	}
-
 	return s.mask[idx]
 }
 
@@ -52,21 +37,6 @@ func (s BlobStorageSummary) AllAvailable(count int) bool {
 			return false
 		}
 	}
-	return true
-}
-
-// AllDataColumnsAvailable returns true if we have all data columns for corresponding indices.
-func (s BlobStorageSummary) AllDataColumnsAvailable(indices map[uint64]bool) bool {
-	if len(indices) > len(s.mask) {
-		return false
-	}
-
-	for indice := range indices {
-		if !s.mask[indice] {
-			return false
-		}
-	}
-
 	return true
 }
 
@@ -115,23 +85,16 @@ func (s *blobStorageSummaryCache) Summary(root [32]byte) BlobStorageSummary {
 }
 
 func (s *blobStorageSummaryCache) ensure(ident blobIdent) error {
-	maskSize := uint64(params.BeaconConfig().MaxBlobsPerBlockAtEpoch(ident.epoch))
-
-	fuluForkEpoch := params.BeaconConfig().FuluForkEpoch
-	if ident.epoch >= fuluForkEpoch {
-		maskSize = params.BeaconConfig().NumberOfColumns
-	}
-
-	if ident.index >= maskSize {
+	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlockAtEpoch(ident.epoch)
+	if ident.index >= uint64(maxBlobsPerBlock) {
 		return errIndexOutOfBounds
 	}
-
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	v := s.cache[ident.root]
 	v.epoch = ident.epoch
 	if v.mask == nil {
-		v.mask = make(dataIndexMask, maskSize)
+		v.mask = make(blobIndexMask, maxBlobsPerBlock)
 	}
 	if !v.mask[ident.index] {
 		s.updateMetrics(1)

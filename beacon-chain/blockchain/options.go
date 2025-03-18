@@ -1,6 +1,8 @@
 package blockchain
 
 import (
+	"time"
+
 	"github.com/prysmaticlabs/prysm/v5/async/event"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
 	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
@@ -208,6 +210,14 @@ func WithBlobStorage(b *filesystem.BlobStorage) Option {
 	}
 }
 
+// WithDataColumnStorage sets the data column storage backend for the blockchain service.
+func WithDataColumnStorage(b *filesystem.DataColumnStorage) Option {
+	return func(s *Service) error {
+		s.dataColumnStorage = b
+		return nil
+	}
+}
+
 func WithSyncChecker(checker Checker) Option {
 	return func(s *Service) error {
 		s.cfg.SyncChecker = checker
@@ -218,6 +228,13 @@ func WithSyncChecker(checker Checker) Option {
 func WithCustodyInfo(custodyInfo *peerdas.CustodyInfo) Option {
 	return func(s *Service) error {
 		s.cfg.CustodyInfo = custodyInfo
+		return nil
+	}
+}
+
+func WithGenesisTime(genesisTime time.Time) Option {
+	return func(s *Service) error {
+		s.genesisTime = genesisTime
 		return nil
 	}
 }

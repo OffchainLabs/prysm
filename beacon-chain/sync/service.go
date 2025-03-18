@@ -103,6 +103,7 @@ type config struct {
 	clock                   *startup.Clock
 	stateNotifier           statefeed.Notifier
 	blobStorage             *filesystem.BlobStorage
+	dataColumnStorage       *filesystem.DataColumnStorage
 	custodyInfo             *peerdas.CustodyInfo
 }
 
@@ -142,7 +143,6 @@ type Service struct {
 	seenBlockCache                   *lru.Cache
 	seenBlobLock                     sync.RWMutex
 	seenBlobCache                    *lru.Cache
-	seenDataColumnLock               sync.RWMutex
 	seenDataColumnCache              *lru.Cache
 	seenAggregatedAttestationLock    sync.RWMutex
 	seenAggregatedAttestationCache   *lru.Cache
@@ -171,32 +171,21 @@ type Service struct {
 	availableBlocker                 coverage.AvailableBlocker
 	trackedValidatorsCache           *cache.TrackedValidatorsCache
 	dataColumsnReconstructionLock    sync.Mutex
-	receivedDataColumnsFromRoot      *gcache.Cache
-	receivedDataColumnsFromRootLock  sync.RWMutex
-	storedDataColumnsFromRoot        *gcache.Cache
-	storedDataColumnsFromRootLock    sync.RWMutex
 	ctxMap                           ContextByteVersions
 }
 
 // NewService initializes new regular sync service.
 func NewService(ctx context.Context, opts ...Option) *Service {
-	const (
-		dataColumnCacheExpiration      = 1 * time.Minute
-		dataColumnCacheCleanupInterval = 2 * time.Minute
-	)
-
 	ctx, cancel := context.WithCancel(ctx)
 	r := &Service{
-		ctx:                         ctx,
-		cancel:                      cancel,
-		chainStarted:                abool.New(),
-		cfg:                         &config{clock: startup.NewClock(time.Unix(0, 0), [32]byte{})},
-		slotToPendingBlocks:         gcache.New(pendingBlockExpTime /* exp time */, 0 /* disable janitor */),
-		seenPendingBlocks:           make(map[[32]byte]bool),
-		blkRootToPendingAtts:        make(map[[32]byte][]ethpb.SignedAggregateAttAndProof),
-		signatureChan:               make(chan *signatureVerifier, verifierLimit),
-		receivedDataColumnsFromRoot: gcache.New(dataColumnCacheExpiration, dataColumnCacheCleanupInterval),
-		storedDataColumnsFromRoot:   gcache.New(dataColumnCacheExpiration, dataColumnCacheCleanupInterval),
+		ctx:                  ctx,
+		cancel:               cancel,
+		chainStarted:         abool.New(),
+		cfg:                  &config{clock: startup.NewClock(time.Unix(0, 0), [32]byte{})},
+		slotToPendingBlocks:  gcache.New(pendingBlockExpTime /* exp time */, 0 /* disable janitor */),
+		seenPendingBlocks:    make(map[[32]byte]bool),
+		blkRootToPendingAtts: make(map[[32]byte][]ethpb.SignedAggregateAttAndProof),
+		signatureChan:        make(chan *signatureVerifier, verifierLimit),
 	}
 
 	for _, opt := range opts {

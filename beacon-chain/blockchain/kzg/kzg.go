@@ -99,7 +99,7 @@ func RecoverCellsAndKZGProofs(cellIndices []uint64, partialCells []Cell) (CellsA
 
 	ckzgCells, ckzgProofs, err := ckzg4844.RecoverCellsAndKZGProofs(cellIndices, ckzgPartialCells)
 	if err != nil {
-		return CellsAndProofs{}, err
+		return CellsAndProofs{}, errors.Wrap(err, "recover cells and KZG proofs")
 	}
 
 	return makeCellsAndProofs(ckzgCells[:], ckzgProofs[:])

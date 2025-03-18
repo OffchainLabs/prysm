@@ -1,174 +1,683 @@
 package filesystem
 
 import (
-	"bytes"
-	"fmt"
+	"context"
+	"encoding/binary"
 	"os"
 	"testing"
 
-	ssz "github.com/prysmaticlabs/fastssz"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/kzg"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
 	"github.com/spf13/afero"
 )
 
-func TestBlobStorage_DataColumn_WithAllLayouts(t *testing.T) {
-	for _, layout := range LayoutNames {
-		t.Run(fmt.Sprintf("layout=%s", layout), func(t *testing.T) {
-			sidecars := setupDataColumnTest(t)
+func TestNewDataColumnStorage(t *testing.T) {
+	ctx := context.Background()
 
-			t.Run("no error for duplicate", func(t *testing.T) {
-				fs, bs := NewEphemeralBlobStorageAndFs(t, WithLayout(layout))
-				sidecar := sidecars[0]
+	t.Run("No base path", func(t *testing.T) {
+		_, err := NewDataColumnStorage(ctx)
+		require.ErrorIs(t, err, errNoBasePath)
+	})
 
-				columnPath := bs.layout.sszPath(identForDataColumnSidecar(sidecar))
-				data, err := ssz.MarshalSSZ(sidecar)
+	t.Run("Nominal", func(t *testing.T) {
+		dir := t.TempDir()
+
+		storage, err := NewDataColumnStorage(ctx, WithDataColumnBasePath(dir))
+		require.NoError(t, err)
+		require.Equal(t, dir, storage.base)
+	})
+}
+
+func TestWarmCache(t *testing.T) {
+	storage, err := NewDataColumnStorage(
+		context.Background(),
+		WithDataColumnBasePath(t.TempDir()),
+		WithDataColumnRetentionEpochs(10_000),
+	)
+	require.NoError(t, err)
+
+	_, verifiedRoDataColumnSidecars := CreateTestVerifiedRoDataColumnSidecars(
+		t,
+		DataColumnsParamsByRoot{
+			{0}: {
+				{Slot: 33, ColumnIndex: 2, DataColumn: []byte{1, 2, 3}}, // Period 0 - Epoch 1
+				{Slot: 33, ColumnIndex: 4, DataColumn: []byte{2, 3, 4}}, // Period 0 - Epoch 1
+			},
+			{1}: {
+				{Slot: 128_002, ColumnIndex: 2, DataColumn: []byte{1, 2, 3}}, // Period 0 - Epoch 4000
+				{Slot: 128_002, ColumnIndex: 4, DataColumn: []byte{2, 3, 4}}, // Period 0 - Epoch 4000
+			},
+			{2}: {
+				{Slot: 128_003, ColumnIndex: 1, DataColumn: []byte{1, 2, 3}}, // Period 0 - Epoch 4000
+				{Slot: 128_003, ColumnIndex: 3, DataColumn: []byte{2, 3, 4}}, // Period 0 - Epoch 4000
+			},
+			{3}: {
+				{Slot: 128_034, ColumnIndex: 2, DataColumn: []byte{1, 2, 3}}, // Period 0 - Epoch 4001
+				{Slot: 128_034, ColumnIndex: 4, DataColumn: []byte{2, 3, 4}}, // Period 0 - Epoch 4001
+			},
+			{4}: {
+				{Slot: 131_138, ColumnIndex: 2, DataColumn: []byte{1, 2, 3}}, // Period 1 - Epoch 4098
+			},
+			{5}: {
+				{Slot: 131_138, ColumnIndex: 1, DataColumn: []byte{1, 2, 3}}, // Period 1 - Epoch 4098
+			},
+			{6}: {
+				{Slot: 131_168, ColumnIndex: 0, DataColumn: []byte{1, 2, 3}}, // Period 1 - Epoch 4099
+			},
+		},
+	)
+
+	err = storage.Store(verifiedRoDataColumnSidecars)
+	require.NoError(t, err)
+
+	storage.retentionEpochs = 4_096
+
+	storage.WarmCache()
+	require.Equal(t, primitives.Epoch(4_000), storage.cache.lowestCachedEpoch)
+	require.Equal(t, 6, len(storage.cache.cache))
+
+	summary, ok := storage.cache.get([fieldparams.RootLength]byte{1})
+	require.Equal(t, true, ok)
+	require.DeepEqual(t, DataColumnStorageSummary{epoch: 4_000, mask: [fieldparams.NumberOfColumns]bool{false, false, true, false, true}}, summary)
+
+	summary, ok = storage.cache.get([fieldparams.RootLength]byte{2})
+	require.Equal(t, true, ok)
+	require.DeepEqual(t, DataColumnStorageSummary{epoch: 4_000, mask: [fieldparams.NumberOfColumns]bool{false, true, false, true}}, summary)
+
+	summary, ok = storage.cache.get([fieldparams.RootLength]byte{3})
+	require.Equal(t, true, ok)
+	require.DeepEqual(t, DataColumnStorageSummary{epoch: 4_001, mask: [fieldparams.NumberOfColumns]bool{false, false, true, false, true}}, summary)
+
+	summary, ok = storage.cache.get([fieldparams.RootLength]byte{4})
+	require.Equal(t, true, ok)
+	require.DeepEqual(t, DataColumnStorageSummary{epoch: 4_098, mask: [fieldparams.NumberOfColumns]bool{false, false, true}}, summary)
+
+	summary, ok = storage.cache.get([fieldparams.RootLength]byte{5})
+	require.Equal(t, true, ok)
+	require.DeepEqual(t, DataColumnStorageSummary{epoch: 4_098, mask: [fieldparams.NumberOfColumns]bool{false, true}}, summary)
+
+	summary, ok = storage.cache.get([fieldparams.RootLength]byte{6})
+	require.Equal(t, true, ok)
+	require.DeepEqual(t, DataColumnStorageSummary{epoch: 4_099, mask: [fieldparams.NumberOfColumns]bool{true}}, summary)
+}
+
+func TestSaveDataColumnsSidecars(t *testing.T) {
+	t.Run("wrong numbers of columns", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		cfg.NumberOfColumns = 0
+		params.OverrideBeaconConfig(cfg)
+		params.SetupTestConfigCleanup(t)
+
+		_, verifiedRoDataColumnSidecars := CreateTestVerifiedRoDataColumnSidecars(
+			t,
+			DataColumnsParamsByRoot{
+				{}: {{ColumnIndex: 12}, {ColumnIndex: 1_000_000}, {ColumnIndex: 48}},
+			},
+		)
+
+		_, dataColumnStorage := NewEphemeralDataColumnStorageAndFs(t)
+		err := dataColumnStorage.Store(verifiedRoDataColumnSidecars)
+		require.ErrorIs(t, err, ErrWrongNumberOfColumns)
+	})
+
+	t.Run("one of the column index is too large", func(t *testing.T) {
+		_, verifiedRoDataColumnSidecars := CreateTestVerifiedRoDataColumnSidecars(
+			t,
+			DataColumnsParamsByRoot{{}: {{ColumnIndex: 12}, {ColumnIndex: 1_000_000}, {ColumnIndex: 48}}},
+		)
+
+		_, dataColumnStorage := NewEphemeralDataColumnStorageAndFs(t)
+		err := dataColumnStorage.Store(verifiedRoDataColumnSidecars)
+		require.ErrorIs(t, err, ErrDataColumnIndexTooLarge)
+	})
+
+	t.Run("different slots", func(t *testing.T) {
+		_, verifiedRoDataColumnSidecars := CreateTestVerifiedRoDataColumnSidecars(
+			t,
+			DataColumnsParamsByRoot{
+				{}: {
+					{Slot: 1, ColumnIndex: 12, DataColumn: []byte{1, 2, 3}},
+					{Slot: 2, ColumnIndex: 12, DataColumn: []byte{1, 2, 3}},
+				},
+			},
+		)
+
+		_, dataColumnStorage := NewEphemeralDataColumnStorageAndFs(t)
+		err := dataColumnStorage.Store(verifiedRoDataColumnSidecars)
+		require.ErrorIs(t, err, ErrDataColumnSidecarsFromDifferentSlots)
+	})
+
+	t.Run("new file - no data columns to save", func(t *testing.T) {
+		_, verifiedRoDataColumnSidecars := CreateTestVerifiedRoDataColumnSidecars(
+			t,
+			DataColumnsParamsByRoot{{}: {}},
+		)
+
+		_, dataColumnStorage := NewEphemeralDataColumnStorageAndFs(t)
+		err := dataColumnStorage.Store(verifiedRoDataColumnSidecars)
+		require.NoError(t, err)
+	})
+
+	t.Run("new file - different data column size", func(t *testing.T) {
+		_, verifiedRoDataColumnSidecars := CreateTestVerifiedRoDataColumnSidecars(
+			t,
+			DataColumnsParamsByRoot{
+				{}: {
+					{ColumnIndex: 12, DataColumn: []byte{1, 2, 3}},
+					{ColumnIndex: 11, DataColumn: []byte{1, 2, 3, 4}},
+				},
+			},
+		)
+
+		_, dataColumnStorage := NewEphemeralDataColumnStorageAndFs(t)
+		err := dataColumnStorage.Store(verifiedRoDataColumnSidecars)
+		require.ErrorIs(t, err, ErrWrongSszEncodedDataColumnSidecarSize)
+	})
+
+	t.Run("existing file - wrong incoming SSZ encoded size", func(t *testing.T) {
+		_, verifiedRoDataColumnSidecars := CreateTestVerifiedRoDataColumnSidecars(
+			t,
+			DataColumnsParamsByRoot{{1}: {{ColumnIndex: 12, DataColumn: []byte{1, 2, 3}}}},
+		)
+
+		// Save data columns into a file.
+		_, dataColumnStorage := NewEphemeralDataColumnStorageAndFs(t)
+		err := dataColumnStorage.Store(verifiedRoDataColumnSidecars)
+		require.NoError(t, err)
+
+		// Build a data column sidecar for the same block but with a different
+		// column index and an different SSZ encoded size.
+		_, verifiedRoDataColumnSidecars = CreateTestVerifiedRoDataColumnSidecars(
+			t,
+			DataColumnsParamsByRoot{{1}: {{ColumnIndex: 13, DataColumn: []byte{1, 2, 3, 4}}}},
+		)
+
+		// Try to rewrite the file.
+		err = dataColumnStorage.Store(verifiedRoDataColumnSidecars)
+		require.ErrorIs(t, err, ErrWrongSszEncodedDataColumnSidecarSize)
+	})
+
+	t.Run("nominal", func(t *testing.T) {
+		_, inputVerifiedRoDataColumnSidecars := CreateTestVerifiedRoDataColumnSidecars(
+			t,
+			DataColumnsParamsByRoot{
+				{1}: {
+					{ColumnIndex: 12, DataColumn: []byte{1, 2, 3}},
+					{ColumnIndex: 11, DataColumn: []byte{3, 4, 5}},
+					{ColumnIndex: 12, DataColumn: []byte{1, 2, 3}}, // OK if duplicate
+					{ColumnIndex: 13, DataColumn: []byte{6, 7, 8}},
+				},
+				{2}: {
+					{ColumnIndex: 12, DataColumn: []byte{3, 4, 5}},
+					{ColumnIndex: 13, DataColumn: []byte{6, 7, 8}},
+				},
+			},
+		)
+
+		_, dataColumnStorage := NewEphemeralDataColumnStorageAndFs(t)
+		err := dataColumnStorage.Store(inputVerifiedRoDataColumnSidecars)
+		require.NoError(t, err)
+
+		_, inputVerifiedRoDataColumnSidecars = CreateTestVerifiedRoDataColumnSidecars(
+			t,
+			DataColumnsParamsByRoot{
+				{1}: {
+					{ColumnIndex: 12, DataColumn: []byte{1, 2, 3}}, // OK if duplicate
+					{ColumnIndex: 15, DataColumn: []byte{2, 3, 4}},
+					{ColumnIndex: 1, DataColumn: []byte{2, 3, 4}},
+				},
+				{3}: {
+					{ColumnIndex: 6, DataColumn: []byte{3, 4, 5}},
+					{ColumnIndex: 2, DataColumn: []byte{6, 7, 8}},
+				},
+			},
+		)
+
+		err = dataColumnStorage.Store(inputVerifiedRoDataColumnSidecars)
+		require.NoError(t, err)
+
+		type fixture struct {
+			fileName         string
+			blockRoot        [fieldparams.RootLength]byte
+			expectedIndices  [mandatoryNumberOfColumns]byte
+			dataColumnParams []DataColumnParams
+		}
+
+		fixtures := []fixture{
+			{
+				fileName:  "0/0/0x0100000000000000000000000000000000000000000000000000000000000000.sszs",
+				blockRoot: [fieldparams.RootLength]byte{1},
+				expectedIndices: [mandatoryNumberOfColumns]byte{
+					0, limit + 4, 0, 0, 0, 0, 0, 0,
+					0, 0, 0, limit + 1, limit, limit + 2, 0, limit + 3,
+					// The rest is filled with zeroes.
+				},
+				dataColumnParams: []DataColumnParams{
+					{ColumnIndex: 12, DataColumn: []byte{1, 2, 3}},
+					{ColumnIndex: 11, DataColumn: []byte{3, 4, 5}},
+					{ColumnIndex: 13, DataColumn: []byte{6, 7, 8}},
+					{ColumnIndex: 15, DataColumn: []byte{2, 3, 4}},
+					{ColumnIndex: 1, DataColumn: []byte{2, 3, 4}},
+				},
+			},
+			{
+				fileName:  "0/0/0x0200000000000000000000000000000000000000000000000000000000000000.sszs",
+				blockRoot: [fieldparams.RootLength]byte{2},
+				expectedIndices: [mandatoryNumberOfColumns]byte{
+					0, 0, 0, 0, 0, 0, 0, 0,
+					0, 0, 0, 0, limit, limit + 1, 0, 0,
+					// The rest is filled with zeroes.
+				},
+				dataColumnParams: []DataColumnParams{
+					{ColumnIndex: 12, DataColumn: []byte{3, 4, 5}},
+					{ColumnIndex: 13, DataColumn: []byte{6, 7, 8}},
+				},
+			},
+			{
+				fileName:  "0/0/0x0300000000000000000000000000000000000000000000000000000000000000.sszs",
+				blockRoot: [fieldparams.RootLength]byte{3},
+				expectedIndices: [mandatoryNumberOfColumns]byte{
+					0, 0, limit + 1, 0, 0, 0, limit, 0,
+					// The rest is filled with zeroes.
+				},
+				dataColumnParams: []DataColumnParams{
+					{ColumnIndex: 6, DataColumn: []byte{3, 4, 5}},
+					{ColumnIndex: 2, DataColumn: []byte{6, 7, 8}},
+				},
+			},
+		}
+
+		for _, fixture := range fixtures {
+			// Build expected data column sidecars.
+			_, expectedDataColumnSidecars := CreateTestVerifiedRoDataColumnSidecars(
+				t,
+				DataColumnsParamsByRoot{fixture.blockRoot: fixture.dataColumnParams},
+			)
+
+			// Build expected bytes.
+			firstSszEncodedDataColumnSidecar, err := expectedDataColumnSidecars[0].MarshalSSZ()
+			require.NoError(t, err)
+
+			dataColumnSidecarsCount := len(expectedDataColumnSidecars)
+			sszEncodedDataColumnSidecarSize := len(firstSszEncodedDataColumnSidecar)
+
+			sszEncodedDataColumnSidecars := make([]byte, 0, dataColumnSidecarsCount*sszEncodedDataColumnSidecarSize)
+			sszEncodedDataColumnSidecars = append(sszEncodedDataColumnSidecars, firstSszEncodedDataColumnSidecar...)
+			for _, dataColumnSidecar := range expectedDataColumnSidecars[1:] {
+				sszEncodedDataColumnSidecar, err := dataColumnSidecar.MarshalSSZ()
 				require.NoError(t, err)
+				sszEncodedDataColumnSidecars = append(sszEncodedDataColumnSidecars, sszEncodedDataColumnSidecar...)
+			}
 
-				require.NoError(t, bs.SaveDataColumn(sidecar))
-				// No error when attempting to write twice.
-				require.NoError(t, bs.SaveDataColumn(sidecar))
+			var encodedSszEncodedDataColumnSidecarSize [encodedSszEncodedDataColumnSidecarSizeSize]byte
+			binary.BigEndian.PutUint32(encodedSszEncodedDataColumnSidecarSize[:], uint32(sszEncodedDataColumnSidecarSize))
 
-				content, err := afero.ReadFile(fs, columnPath)
-				require.NoError(t, err)
-				require.Equal(t, true, bytes.Equal(data, content))
+			expectedBytes := make([]byte, 0, headerSize+dataColumnSidecarsCount*sszEncodedDataColumnSidecarSize)
+			expectedBytes = append(expectedBytes, []byte{0x01}...)
+			expectedBytes = append(expectedBytes, encodedSszEncodedDataColumnSidecarSize[:]...)
+			expectedBytes = append(expectedBytes, fixture.expectedIndices[:]...)
+			expectedBytes = append(expectedBytes, sszEncodedDataColumnSidecars...)
 
-				// Deserialize the DataColumnSidecar from the saved file data.
-				saved := &ethpb.DataColumnSidecar{}
-				err = saved.UnmarshalSSZ(content)
-				require.NoError(t, err)
+			// Check the actual content of the file.
+			actualBytes, err := afero.ReadFile(dataColumnStorage.fs, fixture.fileName)
+			require.NoError(t, err)
+			require.DeepSSZEqual(t, expectedBytes, actualBytes)
 
-				// Compare the original Sidecar and the saved Sidecar.
-				require.DeepSSZEqual(t, sidecar.DataColumnSidecar, saved)
-			})
+			// Check the summary.
+			indices := map[uint64]bool{}
+			for _, dataColumnParam := range fixture.dataColumnParams {
+				indices[dataColumnParam.ColumnIndex] = true
+			}
 
-			t.Run("indices", func(t *testing.T) {
-				bs := NewEphemeralBlobStorage(t, WithLayout(layout))
-				sidecar := sidecars[2]
-				require.NoError(t, bs.SaveDataColumn(sidecar))
-				actual, err := bs.GetColumn(sidecar.BlockRoot(), sidecar.ColumnIndex)
-				require.NoError(t, err)
-				require.DeepEqual(t, sidecar, actual)
+			summary := dataColumnStorage.Summary(fixture.blockRoot)
+			for index := range uint64(mandatoryNumberOfColumns) {
+				require.Equal(t, indices[index], summary.HasIndex(index))
+			}
 
-				expectedIdx := make(dataIndexMask, params.BeaconConfig().NumberOfColumns)
-				expectedIdx[2] = true
-				actualIdx := bs.Summary(actual.BlockRoot()).mask
-				require.NoError(t, err)
-				require.DeepEqual(t, expectedIdx, actualIdx)
+			err = dataColumnStorage.Remove(fixture.blockRoot)
+			require.NoError(t, err)
 
-				sidecar = sidecars[10]
-				expectedIdx[10] = true
-				require.NoError(t, bs.SaveDataColumn(sidecar))
-				actual, err = bs.GetColumn(sidecar.BlockRoot(), sidecar.ColumnIndex)
-				require.NoError(t, err)
-				require.DeepEqual(t, sidecar, actual)
-				actualIdx = bs.Summary(actual.BlockRoot()).mask
-				require.NoError(t, err)
-				require.DeepEqual(t, expectedIdx, actualIdx)
-			})
+			summary = dataColumnStorage.Summary(fixture.blockRoot)
+			for index := range uint64(mandatoryNumberOfColumns) {
+				require.Equal(t, false, summary.HasIndex(index))
+			}
 
-			t.Run("write -> read -> delete", func(t *testing.T) {
-				bs := NewEphemeralBlobStorage(t, WithLayout(layout))
-				err := bs.SaveDataColumn(sidecars[0])
-				require.NoError(t, err)
+			_, err = afero.ReadFile(dataColumnStorage.fs, fixture.fileName)
+			require.ErrorIs(t, err, os.ErrNotExist)
+		}
+	})
+}
 
-				expected := sidecars[0]
-				actual, err := bs.GetColumn(expected.BlockRoot(), expected.ColumnIndex)
-				require.NoError(t, err)
-				require.DeepEqual(t, expected, actual)
+func TestGetDataColumnSidecars(t *testing.T) {
+	t.Run("index too large", func(t *testing.T) {
+		_, dataColumnStorage := NewEphemeralDataColumnStorageAndFs(t)
+		_, err := dataColumnStorage.Get([fieldparams.RootLength]byte{1}, []uint64{1_000_000})
+		require.ErrorIs(t, err, ErrDataColumnIndexTooLarge)
+	})
 
-				require.NoError(t, bs.Remove(expected.BlockRoot()))
-				for i := range params.BeaconConfig().NumberOfColumns {
-					_, err = bs.GetColumn(expected.BlockRoot(), uint64(i))
-					require.Equal(t, true, db.IsNotFound(err))
+	t.Run("not found", func(t *testing.T) {
+		_, dataColumnStorage := NewEphemeralDataColumnStorageAndFs(t)
+
+		verifiedRODataColumnSidecars, err := dataColumnStorage.Get([fieldparams.RootLength]byte{1}, []uint64{12, 13, 14})
+		require.NoError(t, err)
+		require.Equal(t, 0, len(verifiedRODataColumnSidecars))
+	})
+
+	t.Run("nominal", func(t *testing.T) {
+		_, expectedVerifiedRoDataColumnSidecars := CreateTestVerifiedRoDataColumnSidecars(
+			t,
+			DataColumnsParamsByRoot{
+				{1}: {
+					{ColumnIndex: 12, DataColumn: []byte{1, 2, 3}},
+					{ColumnIndex: 14, DataColumn: []byte{2, 3, 4}},
+				},
+			},
+		)
+
+		_, dataColumnStorage := NewEphemeralDataColumnStorageAndFs(t)
+		err := dataColumnStorage.Store(expectedVerifiedRoDataColumnSidecars)
+		require.NoError(t, err)
+
+		verifiedRODataColumnSidecars, err := dataColumnStorage.Get([fieldparams.RootLength]byte{1}, nil)
+		require.NoError(t, err)
+		require.DeepSSZEqual(t, expectedVerifiedRoDataColumnSidecars, verifiedRODataColumnSidecars)
+
+		verifiedRODataColumnSidecars, err = dataColumnStorage.Get([fieldparams.RootLength]byte{1}, []uint64{12, 13, 14})
+		require.NoError(t, err)
+		require.DeepSSZEqual(t, expectedVerifiedRoDataColumnSidecars, verifiedRODataColumnSidecars)
+	})
+}
+
+func TestRemove(t *testing.T) {
+	t.Run("not found", func(t *testing.T) {
+		_, dataColumnStorage := NewEphemeralDataColumnStorageAndFs(t)
+		err := dataColumnStorage.Remove([fieldparams.RootLength]byte{1})
+		require.NoError(t, err)
+	})
+
+	t.Run("nominal", func(t *testing.T) {
+		_, inputVerifiedRoDataColumnSidecars := CreateTestVerifiedRoDataColumnSidecars(
+			t,
+			DataColumnsParamsByRoot{
+				{1}: {
+					{Slot: 32, ColumnIndex: 10, DataColumn: []byte{1, 2, 3}},
+					{Slot: 32, ColumnIndex: 11, DataColumn: []byte{2, 3, 4}},
+				},
+				{2}: {
+					{Slot: 33, ColumnIndex: 10, DataColumn: []byte{1, 2, 3}},
+					{Slot: 33, ColumnIndex: 11, DataColumn: []byte{2, 3, 4}},
+				},
+			},
+		)
+
+		_, dataColumnStorage := NewEphemeralDataColumnStorageAndFs(t)
+		err := dataColumnStorage.Store(inputVerifiedRoDataColumnSidecars)
+		require.NoError(t, err)
+
+		err = dataColumnStorage.Remove([fieldparams.RootLength]byte{1})
+		require.NoError(t, err)
+
+		summary := dataColumnStorage.Summary([fieldparams.RootLength]byte{1})
+		require.Equal(t, primitives.Epoch(0), summary.epoch)
+		require.Equal(t, uint64(0), summary.Count())
+
+		summary = dataColumnStorage.Summary([fieldparams.RootLength]byte{2})
+		require.Equal(t, primitives.Epoch(1), summary.epoch)
+		require.Equal(t, uint64(2), summary.Count())
+
+		actual, err := dataColumnStorage.Get([fieldparams.RootLength]byte{1}, nil)
+		require.NoError(t, err)
+		require.Equal(t, 0, len(actual))
+
+		actual, err = dataColumnStorage.Get([fieldparams.RootLength]byte{2}, nil)
+		require.NoError(t, err)
+		require.Equal(t, 2, len(actual))
+	})
+}
+
+func TestClear(t *testing.T) {
+	_, inputVerifiedRoDataColumnSidecars := CreateTestVerifiedRoDataColumnSidecars(
+		t,
+		DataColumnsParamsByRoot{
+			{1}: []DataColumnParams{{ColumnIndex: 12, DataColumn: []byte{1, 2, 3}}},
+			{2}: []DataColumnParams{{ColumnIndex: 13, DataColumn: []byte{6, 7, 8}}},
+		},
+	)
+
+	_, dataColumnStorage := NewEphemeralDataColumnStorageAndFs(t)
+	err := dataColumnStorage.Store(inputVerifiedRoDataColumnSidecars)
+	require.NoError(t, err)
+
+	filePaths := []string{
+		"0/0/0x0100000000000000000000000000000000000000000000000000000000000000.sszs",
+		"0/0/0x0200000000000000000000000000000000000000000000000000000000000000.sszs",
+	}
+
+	for _, filePath := range filePaths {
+		_, err = afero.ReadFile(dataColumnStorage.fs, filePath)
+		require.NoError(t, err)
+	}
+
+	err = dataColumnStorage.Clear()
+	require.NoError(t, err)
+
+	summary := dataColumnStorage.Summary([fieldparams.RootLength]byte{1})
+	for index := range uint64(mandatoryNumberOfColumns) {
+		require.Equal(t, false, summary.HasIndex(index))
+	}
+
+	for _, filePath := range filePaths {
+		_, err = afero.ReadFile(dataColumnStorage.fs, filePath)
+		require.ErrorIs(t, err, os.ErrNotExist)
+	}
+}
+
+func TestMetadata(t *testing.T) {
+	t.Run("wrong version", func(t *testing.T) {
+		_, verifiedRoDataColumnSidecars := CreateTestVerifiedRoDataColumnSidecars(
+			t,
+			DataColumnsParamsByRoot{
+				{1}: {{ColumnIndex: 12, DataColumn: []byte{1, 2, 3}}},
+			},
+		)
+
+		// Save data columns into a file.
+		_, dataColumnStorage := NewEphemeralDataColumnStorageAndFs(t)
+		err := dataColumnStorage.Store(verifiedRoDataColumnSidecars)
+		require.NoError(t, err)
+
+		// Alter the version.
+		const filePath = "0/0/0x0100000000000000000000000000000000000000000000000000000000000000.sszs"
+		file, err := dataColumnStorage.fs.OpenFile(filePath, os.O_WRONLY, os.FileMode(0600))
+		require.NoError(t, err)
+
+		count, err := file.Write([]byte{42})
+		require.NoError(t, err)
+		require.Equal(t, 1, count)
+
+		// Try to read the metadata.
+		_, err = dataColumnStorage.metadata(file)
+		require.ErrorIs(t, err, ErrWrongVersion)
+
+		err = file.Close()
+		require.NoError(t, err)
+	})
+
+	t.Run("wrong file size", func(t *testing.T) {
+		_, verifiedRoDataColumnSidecars := CreateTestVerifiedRoDataColumnSidecars(
+			t,
+			DataColumnsParamsByRoot{
+				{1}: {{ColumnIndex: 12, DataColumn: []byte{1, 2, 3}}},
+			},
+		)
+
+		// Save data columns into a file.
+		_, dataColumnStorage := NewEphemeralDataColumnStorageAndFs(t)
+		err := dataColumnStorage.Store(verifiedRoDataColumnSidecars)
+		require.NoError(t, err)
+
+		// Append an extra byte to the file.
+		const filePath = "0/0/0x0100000000000000000000000000000000000000000000000000000000000000.sszs"
+		file, err := dataColumnStorage.fs.OpenFile(filePath, os.O_APPEND, os.FileMode(0600))
+		require.NoError(t, err)
+
+		count, err := file.Write([]byte{42})
+		require.NoError(t, err)
+		require.Equal(t, 1, count)
+
+		// Try to read the metadata.
+		_, err = dataColumnStorage.metadata(file)
+		require.ErrorIs(t, err, ErrWrongFileSize)
+
+		err = file.Close()
+		require.NoError(t, err)
+	})
+}
+
+func TestPrune(t *testing.T) {
+	t.Run(("nothing to prune"), func(t *testing.T) {
+		dir := t.TempDir()
+		dataColumnStorage, err := NewDataColumnStorage(context.Background(), WithDataColumnBasePath(dir))
+		require.NoError(t, err)
+
+		dataColumnStorage.prune()
+	})
+	t.Run("nominal", func(t *testing.T) {
+		var compareSlices = func(left, right []string) bool {
+			if len(left) != len(right) {
+				return false
+			}
+
+			leftMap := make(map[string]bool, len(left))
+			for _, leftItem := range left {
+				leftMap[leftItem] = true
+			}
+
+			for _, rightItem := range right {
+				if _, ok := leftMap[rightItem]; !ok {
+					return false
 				}
-			})
+			}
 
-			t.Run("clear", func(t *testing.T) {
-				bs := NewEphemeralBlobStorage(t, WithLayout(layout))
-				err := bs.SaveDataColumn(sidecars[0])
-				require.NoError(t, err)
-				res, err := bs.GetColumn(sidecars[0].BlockRoot(), sidecars[0].ColumnIndex)
-				require.NoError(t, err)
-				require.NotNil(t, res)
-				require.NoError(t, bs.Clear())
-				// After clearing, the blob should not exist in the db.
-				_, err = bs.GetColumn(sidecars[0].BlockRoot(), sidecars[0].ColumnIndex)
-				require.ErrorIs(t, err, os.ErrNotExist)
-			})
-		})
-	}
-}
+			return true
+		}
+		_, verifiedRoDataColumnSidecars := CreateTestVerifiedRoDataColumnSidecars(
+			t,
+			DataColumnsParamsByRoot{
+				{0}: {
+					{Slot: 33, ColumnIndex: 2, DataColumn: []byte{1, 2, 3}}, // Period 0 - Epoch 1
+					{Slot: 33, ColumnIndex: 4, DataColumn: []byte{2, 3, 4}}, // Period 0 - Epoch 1
+				},
+				{1}: {
+					{Slot: 128_002, ColumnIndex: 2, DataColumn: []byte{1, 2, 3}}, // Period 0 - Epoch 4000
+					{Slot: 128_002, ColumnIndex: 4, DataColumn: []byte{2, 3, 4}}, // Period 0 - Epoch 4000
+				},
+				{2}: {
+					{Slot: 128_003, ColumnIndex: 1, DataColumn: []byte{1, 2, 3}}, // Period 0 - Epoch 4000
+					{Slot: 128_003, ColumnIndex: 3, DataColumn: []byte{2, 3, 4}}, // Period 0 - Epoch 4000
+				},
+				{3}: {
+					{Slot: 131_138, ColumnIndex: 2, DataColumn: []byte{1, 2, 3}}, // Period 1 - Epoch 4098
+					{Slot: 131_138, ColumnIndex: 3, DataColumn: []byte{1, 2, 3}}, // Period 1 - Epoch 4098
+				},
+				{4}: {
+					{Slot: 131_169, ColumnIndex: 2, DataColumn: []byte{1, 2, 3}}, // Period 1 - Epoch 4099
+					{Slot: 131_169, ColumnIndex: 3, DataColumn: []byte{1, 2, 3}}, // Period 1 - Epoch 4099
+				},
+				{5}: {
+					{Slot: 262_144, ColumnIndex: 2, DataColumn: []byte{1, 2, 3}}, // Period 2 - Epoch 8192
+					{Slot: 262_144, ColumnIndex: 3, DataColumn: []byte{1, 2, 3}}, // Period 2 - Epoch 8292
+				},
+			},
+		)
 
-func TestBlobStorage_DataColumn_WithMigrationFromFlatToByEpoch(t *testing.T) {
-	sidecars := setupDataColumnTest(t)
+		dir := t.TempDir()
+		dataColumnStorage, err := NewDataColumnStorage(context.Background(), WithDataColumnBasePath(dir), WithDataColumnRetentionEpochs(10_000))
+		require.NoError(t, err)
 
-	// Setup flat layout
-	fs, bs := NewEphemeralBlobStorageAndFs(t, WithLayout(LayoutNameFlat))
-	sidecar := sidecars[0]
-	columnPath := bs.layout.sszPath(identForDataColumnSidecar(sidecar))
-	data, err := ssz.MarshalSSZ(sidecar)
-	require.NoError(t, err)
-	require.NoError(t, bs.SaveDataColumn(sidecar))
-	content, err := afero.ReadFile(fs, columnPath)
-	require.NoError(t, err)
-	require.Equal(t, true, bytes.Equal(data, content))
+		err = dataColumnStorage.Store(verifiedRoDataColumnSidecars)
+		require.NoError(t, err)
 
-	// Setup by-epoch layout
-	bs = NewWarmedEphemeralBlobStorageUsingFs(t, fs, WithLayout(LayoutNameByEpoch))
+		dirs, err := listDir(dataColumnStorage.fs, ".")
+		require.NoError(t, err)
+		require.Equal(t, true, compareSlices([]string{"0", "1", "2"}, dirs))
 
-	// Verify data is the same
-	columnPath = bs.layout.sszPath(identForDataColumnSidecar(sidecar))
-	content, err = afero.ReadFile(fs, columnPath)
-	require.NoError(t, err)
-	require.Equal(t, true, bytes.Equal(data, content))
-}
+		dirs, err = listDir(dataColumnStorage.fs, "0")
+		require.NoError(t, err)
+		require.Equal(t, true, compareSlices([]string{"1", "4000"}, dirs))
 
-func TestBlobStorage_DataColumn_WithMigrationFromByEpochToFlat(t *testing.T) {
-	sidecars := setupDataColumnTest(t)
+		dirs, err = listDir(dataColumnStorage.fs, "1")
+		require.NoError(t, err)
+		require.Equal(t, true, compareSlices([]string{"4099", "4098"}, dirs))
 
-	// Setup by-epoch layout
-	fs, bs := NewEphemeralBlobStorageAndFs(t, WithLayout(LayoutNameFlat))
-	for _, sidecar := range sidecars {
-		require.NoError(t, bs.SaveDataColumn(sidecar))
-	}
-	columnPath := bs.layout.sszPath(identForDataColumnSidecar(sidecars[0]))
-	content, err := afero.ReadFile(fs, columnPath)
-	require.NoError(t, err)
-	data, err := ssz.MarshalSSZ(sidecars[0])
-	require.NoError(t, err)
-	require.Equal(t, true, bytes.Equal(data, content))
+		dirs, err = listDir(dataColumnStorage.fs, "2")
+		require.NoError(t, err)
+		require.Equal(t, true, compareSlices([]string{"8192"}, dirs))
 
-	// Setup flat layout
-	bs = NewWarmedEphemeralBlobStorageUsingFs(t, fs, WithLayout(LayoutNameByEpoch))
+		dirs, err = listDir(dataColumnStorage.fs, "0/1")
+		require.NoError(t, err)
+		require.Equal(t, true, compareSlices([]string{"0x0000000000000000000000000000000000000000000000000000000000000000.sszs"}, dirs))
 
-	// Verify data is the same
-	columnPath = bs.layout.sszPath(identForDataColumnSidecar(sidecars[0]))
-	content, err = afero.ReadFile(fs, columnPath)
-	require.NoError(t, err)
-	require.Equal(t, true, bytes.Equal(data, content))
-}
+		dirs, err = listDir(dataColumnStorage.fs, "0/4000")
+		require.NoError(t, err)
+		require.Equal(t, true, compareSlices([]string{
+			"0x0200000000000000000000000000000000000000000000000000000000000000.sszs",
+			"0x0100000000000000000000000000000000000000000000000000000000000000.sszs",
+		}, dirs))
 
-func setupDataColumnTest(t *testing.T) []blocks.VerifiedRODataColumn {
-	// load trusted setup
-	err := kzg.Start()
-	require.NoError(t, err)
+		dirs, err = listDir(dataColumnStorage.fs, "1/4098")
+		require.NoError(t, err)
+		require.Equal(t, true, compareSlices([]string{"0x0300000000000000000000000000000000000000000000000000000000000000.sszs"}, dirs))
 
-	// Setup right fork epoch
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig().Copy()
-	cfg.CapellaForkEpoch = 0
-	cfg.DenebForkEpoch = 0
-	cfg.ElectraForkEpoch = 0
-	cfg.FuluForkEpoch = 0
-	params.OverrideBeaconConfig(cfg)
+		dirs, err = listDir(dataColumnStorage.fs, "1/4099")
+		require.NoError(t, err)
+		require.Equal(t, true, compareSlices([]string{"0x0400000000000000000000000000000000000000000000000000000000000000.sszs"}, dirs))
 
-	_, scs := util.GenerateTestFuluBlockWithSidecar(t, [32]byte{}, 0, 1)
-	return verification.FakeVerifyDataColumnSliceForTest(t, scs)
+		dirs, err = listDir(dataColumnStorage.fs, "2/8192")
+		require.NoError(t, err)
+		require.Equal(t, true, compareSlices([]string{"0x0500000000000000000000000000000000000000000000000000000000000000.sszs"}, dirs))
+
+		_, verifiedRoDataColumnSidecars = CreateTestVerifiedRoDataColumnSidecars(
+			t,
+			DataColumnsParamsByRoot{
+				{6}: {{Slot: 451_141, ColumnIndex: 2, DataColumn: []byte{1, 2, 3}}}, // Period 3 - Epoch 14_098
+			},
+		)
+
+		err = dataColumnStorage.Store(verifiedRoDataColumnSidecars)
+		require.NoError(t, err)
+
+		// dataColumnStorage.prune(14_098)
+		dataColumnStorage.prune()
+
+		dirs, err = listDir(dataColumnStorage.fs, ".")
+		require.NoError(t, err)
+		require.Equal(t, true, compareSlices([]string{"1", "2", "3"}, dirs))
+
+		dirs, err = listDir(dataColumnStorage.fs, "1")
+		require.NoError(t, err)
+		require.Equal(t, true, compareSlices([]string{"4099"}, dirs))
+
+		dirs, err = listDir(dataColumnStorage.fs, "2")
+		require.NoError(t, err)
+		require.Equal(t, true, compareSlices([]string{"8192"}, dirs))
+
+		dirs, err = listDir(dataColumnStorage.fs, "3")
+		require.NoError(t, err)
+		require.Equal(t, true, compareSlices([]string{"14098"}, dirs))
+
+		dirs, err = listDir(dataColumnStorage.fs, "1/4099")
+		require.NoError(t, err)
+		require.Equal(t, true, compareSlices([]string{"0x0400000000000000000000000000000000000000000000000000000000000000.sszs"}, dirs))
+
+		dirs, err = listDir(dataColumnStorage.fs, "2/8192")
+		require.NoError(t, err)
+		require.Equal(t, true, compareSlices([]string{"0x0500000000000000000000000000000000000000000000000000000000000000.sszs"}, dirs))
+
+		dirs, err = listDir(dataColumnStorage.fs, "3/14098")
+		require.NoError(t, err)
+		require.Equal(t, true, compareSlices([]string{"0x0600000000000000000000000000000000000000000000000000000000000000.sszs"}, dirs))
+	})
 }

@@ -54,10 +54,16 @@ func NewLazilyPersistentStore(store *filesystem.BlobStorage, verifier BlobBatchV
 // Persist adds blobs to the working blob cache. Blobs stored in this cache will be persisted
 // for at least as long as the node is running. Once IsDataAvailable succeeds, all blobs referenced
 // by the given block are guaranteed to be persisted for the remainder of the retention period.
-func (s *LazilyPersistentStore) Persist(current primitives.Slot, sc ...blocks.ROBlob) error {
-	if len(sc) == 0 {
+func (s *LazilyPersistentStore) Persist(current primitives.Slot, scg ...blocks.ROSidecar) error {
+	if len(scg) == 0 {
 		return nil
 	}
+
+	sc, err := blocks.BlobSidecarsFromSidecars(scg)
+	if err != nil {
+		return errors.Wrap(err, "blob sidecars from sidecars")
+	}
+
 	if len(sc) > 1 {
 		first := sc[0].BlockRoot()
 		for i := 1; i < len(sc); i++ {

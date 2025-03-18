@@ -90,7 +90,10 @@ func (bs *blobSync) validateNext(rb blocks.ROBlob) error {
 	if err := v.SidecarKzgProofVerified(); err != nil {
 		return err
 	}
-	if err := bs.store.Persist(bs.current, rb); err != nil {
+
+	sc := blocks.NewSidecarFromBlobSidecar(rb)
+
+	if err := bs.store.Persist(bs.current, sc); err != nil {
 		return err
 	}
 

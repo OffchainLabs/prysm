@@ -81,6 +81,7 @@ func (s *Service) startBlocksQueue(ctx context.Context, highestSlot primitives.S
 		highestExpectedSlot: highestSlot,
 		mode:                mode,
 		bs:                  s.cfg.BlobStorage,
+		dcs:                 s.cfg.DataColumnStorage,
 		cv:                  s.newDataColumnsVerifier,
 		custodyInfo:         s.cfg.CustodyInfo,
 	}
@@ -187,6 +188,7 @@ func (s *Service) processFetchedDataRegSync(
 
 	blobBatchVerifier := verification.NewBlobBatchVerifier(s.newBlobVerifier, verification.InitsyncBlobSidecarRequirements)
 	lazilyPersistentStore := das.NewLazilyPersistentStore(s.cfg.BlobStorage, blobBatchVerifier)
+	lazilyPersistentStoreColumn := das.NewLazilyPersistentStoreColumn(s.cfg.DataColumnStorage, s.cfg.CustodyInfo)
 
 	log := log.WithField("firstSlot", data.bwb[0].Block.Block().Slot())
 
@@ -198,7 +200,9 @@ func (s *Service) processFetchedDataRegSync(
 	for _, b := range preFuluBwbs {
 		log := logPre.WithFields(syncFields(b.Block))
 
-		if err := lazilyPersistentStore.Persist(s.clock.CurrentSlot(), b.Blobs...); err != nil {
+		sidecars := blocks.NewSidecarsFromBlobSidecars(b.Blobs)
+
+		if err := lazilyPersistentStore.Persist(s.clock.CurrentSlot(), sidecars...); err != nil {
 			log.WithError(err).Warning("Batch failure due to BlobSidecar issues")
 			return
 		}
@@ -222,12 +226,12 @@ func (s *Service) processFetchedDataRegSync(
 		logPost = log.WithField("firstUnprocessed", postFuluBwbs[0].Block.Block().Slot())
 	}
 
-	lazilyPersistentStoreColumn := das.NewLazilyPersistentStoreColumn(s.cfg.BlobStorage, s.cfg.CustodyInfo)
-
 	for _, b := range postFuluBwbs {
 		log := logPost.WithFields(syncFields(b.Block))
 
-		if err := lazilyPersistentStoreColumn.PersistColumns(s.clock.CurrentSlot(), b.Columns...); err != nil {
+		sicecars := blocks.NewSidecarsFromDataColumnSidecars(b.Columns)
+
+		if err := lazilyPersistentStoreColumn.Persist(s.clock.CurrentSlot(), sicecars...); err != nil {
 			log.WithError(err).Warning("Batch failure due to DataColumnSidecar issues")
 			return
 		}
@@ -387,7 +391,9 @@ func (s *Service) processPreFuluBatchedBlocks(
 			continue
 		}
 
-		if err := persistentStore.Persist(s.clock.CurrentSlot(), bwb.Blobs...); err != nil {
+		sidecars := blocks.NewSidecarsFromBlobSidecars(bwb.Blobs)
+
+		if err := persistentStore.Persist(s.clock.CurrentSlot(), sidecars...); err != nil {
 			return errors.Wrap(err, "persisting blobs")
 		}
 	}
@@ -412,14 +418,16 @@ func (s *Service) processPostFuluBatchedBlocks(
 		return nil
 	}
 
-	persistentStoreColumn := das.NewLazilyPersistentStoreColumn(s.cfg.BlobStorage, s.cfg.CustodyInfo)
+	persistentStoreColumn := das.NewLazilyPersistentStoreColumn(s.cfg.DataColumnStorage, s.cfg.CustodyInfo)
 	s.logBatchSyncStatus(genesis, firstBlock, bwbCount)
 	for _, bwb := range bwbs {
 		if len(bwb.Columns) == 0 {
 			continue
 		}
 
-		if err := persistentStoreColumn.PersistColumns(s.clock.CurrentSlot(), bwb.Columns...); err != nil {
+		sidecars := blocks.NewSidecarsFromDataColumnSidecars(bwb.Columns)
+
+		if err := persistentStoreColumn.Persist(s.clock.CurrentSlot(), sidecars...); err != nil {
 			return errors.Wrap(err, "persisting columns")
 		}
 	}
