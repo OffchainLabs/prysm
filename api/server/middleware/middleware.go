@@ -1,13 +1,14 @@
 package middleware
 
 import (
+	"compress/gzip"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
-    "compress/gzip"
-	"io"
-	log "github.com/sirupsen/logrus"
+
 	"github.com/rs/cors"
+	log "github.com/sirupsen/logrus"
 )
 
 type Middleware func(http.Handler) http.Handler
@@ -117,24 +118,24 @@ func AcceptHeaderHandler(serverAcceptedTypes []string) Middleware {
 // AcceptEncodingHeaderHandler compresses the response before sending it back to the client, if gzip is supported.
 func AcceptEncodingHeaderHandler() Middleware {
 	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request){
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
 				next.ServeHTTP(w, r)
 				return
-		}
-
-		w.Header().Set("Content-Encoding", "gzip")
-
-		gz := gzip.NewWriter(w)
-		defer func(){
-			if err:= gz.Close(); err != nil {
-				log.WithError(err).Error("Failed to close gzip writer")
 			}
-		}()
 
-		gzipRW := gzipResponseWriter{Writer: gz, ResponseWriter: w}
-        next.ServeHTTP(gzipRW, r)
-	})
+			w.Header().Set("Content-Encoding", "gzip")
+
+			gz := gzip.NewWriter(w)
+			defer func() {
+				if err := gz.Close(); err != nil {
+					log.WithError(err).Error("Failed to close gzip writer")
+				}
+			}()
+
+			gzipRW := gzipResponseWriter{Writer: gz, ResponseWriter: w}
+			next.ServeHTTP(gzipRW, r)
+		})
 	}
 }
 
