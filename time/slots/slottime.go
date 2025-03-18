@@ -126,7 +126,7 @@ func EpochStart(epoch primitives.Epoch) (primitives.Slot, error) {
 func UnsafeEpochStart(epoch primitives.Epoch) primitives.Slot {
 	es, err := EpochStart(epoch)
 	if err != nil {
-		panic(err)
+		panic(err) // lint:nopanic -- Unsafe is implied and communicated in the godoc commentary.
 	}
 	return es
 }

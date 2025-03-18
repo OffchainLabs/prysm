@@ -148,7 +148,7 @@ func (c beaconApiChainClient) ValidatorBalances(ctx context.Context, in *ethpb.L
 	}
 
 	// TODO: Implement me
-	panic("beaconApiChainClient.ValidatorBalances is not implemented. To use a fallback client, pass a fallback client as the last argument of NewBeaconApiChainClientWithFallback.")
+	return nil, errors.New("beaconApiChainClient.ValidatorBalances is not implemented. To use a fallback client, pass a fallback client as the last argument of NewBeaconApiChainClientWithFallback.")
 }
 
 func (c beaconApiChainClient) Validators(ctx context.Context, in *ethpb.ListValidatorsRequest) (*ethpb.Validators, error) {

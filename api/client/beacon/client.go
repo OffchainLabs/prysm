@@ -71,7 +71,7 @@ func idTemplate(ts string) func(StateOrBlockId) string {
 		b := bytes.NewBuffer(nil)
 		err := t.Execute(b, struct{ Id string }{Id: string(id)})
 		if err != nil {
-			panic(fmt.Sprintf("invalid idTemplate: %s", ts))
+			return fmt.Sprintf("invalid idTemplate: %s", ts)
 		}
 		return b.String()
 	}

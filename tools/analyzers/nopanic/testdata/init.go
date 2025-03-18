@@ -1,6 +1,6 @@
 package testdata
 
-func init() {
+func Init() {
 	if false {
 		panic("this should never happen")
 	}

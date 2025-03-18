@@ -56,6 +56,7 @@ func (mr *MockPrysmChainClientMockRecorder) ValidatorCount(arg0, arg1, arg2 any)
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidatorCount", reflect.TypeOf((*MockPrysmChainClient)(nil).ValidatorCount), arg0, arg1, arg2)
 }
+
 // ValidatorPerformance mocks base method.
 func (m *MockPrysmChainClient) ValidatorPerformance(arg0 context.Context, arg1 *ethpb.ValidatorPerformanceRequest) (*ethpb.ValidatorPerformanceResponse, error) {
 	m.ctrl.T.Helper()
@@ -70,5 +71,3 @@ func (mr *MockPrysmChainClientMockRecorder) ValidatorPerformance(arg0, arg1 any)
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidatorCount", reflect.TypeOf((*MockPrysmChainClient)(nil).ValidatorPerformance), arg0, arg1)
 }
-
-

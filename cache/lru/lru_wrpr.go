@@ -10,7 +10,7 @@ import (
 func New(size int) *lru.Cache {
 	cache, err := lru.New(size)
 	if err != nil {
-		panic(fmt.Errorf("lru new failed: %w", err))
+		panic(fmt.Errorf("lru new failed: %w", err)) // lint:nopanic -- This should never panic.
 	}
 	return cache
 }
@@ -20,7 +20,7 @@ func New(size int) *lru.Cache {
 func NewWithEvict(size int, onEvicted func(key interface{}, value interface{})) *lru.Cache {
 	cache, err := lru.NewWithEvict(size, onEvicted)
 	if err != nil {
-		panic(fmt.Errorf("lru new with evict failed: %w", err))
+		panic(fmt.Errorf("lru new with evict failed: %w", err)) // lint:nopanic -- This should never panic.
 	}
 	return cache
 }
