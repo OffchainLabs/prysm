@@ -145,24 +145,8 @@ func (v *validator) SubmitAttestation(ctx context.Context, slot primitives.Slot,
 		attestation = sa
 		attResp, err = v.validatorClient.ProposeAttestationElectra(ctx, sa)
 	} else {
-		var indexInCommittee uint64
-		var found bool
-		for i, vID := range duty.Committee {
-			if vID == duty.ValidatorIndex {
-				indexInCommittee = uint64(i)
-				found = true
-				break
-			}
-		}
-		if !found {
-			log.Errorf("Validator ID %d not found in committee of %v", duty.ValidatorIndex, duty.Committee)
-			if v.emitAccountMetrics {
-				ValidatorAttestFailVec.WithLabelValues(fmtKey).Inc()
-			}
-			return
-		}
 		aggregationBitfield = bitfield.NewBitlist(uint64(len(duty.Committee)))
-		aggregationBitfield.SetBitAt(indexInCommittee, true)
+		aggregationBitfield.SetBitAt(uint64(data.CommitteeIndex), true)
 		a := &ethpb.Attestation{
 			Data:            data,
 			AggregationBits: aggregationBitfield,
