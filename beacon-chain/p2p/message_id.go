@@ -50,7 +50,7 @@ func MsgID(genesisValidatorsRoot []byte, pmsg *pubsubpb.Message) string {
 	if fEpoch >= params.BeaconConfig().AltairForkEpoch {
 		return postAltairMsgID(pmsg, fEpoch)
 	}
-	decodedData, err := encoder.DecodeSnappy(pmsg.Data, params.BeaconConfig().GossipMaxSize)
+	decodedData, err := encoder.DecodeSnappy(pmsg.Data, params.BeaconConfig().MaxPayloadSize)
 	if err != nil {
 		combinedData := append(params.BeaconConfig().MessageDomainInvalidSnappy[:], pmsg.Data...)
 		h := hash.Hash(combinedData)
@@ -77,10 +77,9 @@ func postAltairMsgID(pmsg *pubsubpb.Message, fEpoch primitives.Epoch) string {
 	topicLen := len(topic)
 	topicLenBytes := bytesutil.Uint64ToBytesLittleEndian(uint64(topicLen)) // topicLen cannot be negative
 
-	// beyond Bellatrix epoch, allow 10 Mib gossip data size
-	gossipPubSubSize := params.BeaconConfig().GossipMaxSize
+	gossipPayloadSize := params.BeaconConfig().MaxPayloadSize
 
-	decodedData, err := encoder.DecodeSnappy(pmsg.Data, gossipPubSubSize)
+	decodedData, err := encoder.DecodeSnappy(pmsg.Data, gossipPayloadSize)
 	if err != nil {
 		totalLength, err := math.AddInt(
 			len(params.BeaconConfig().MessageDomainInvalidSnappy),
@@ -95,7 +94,7 @@ func postAltairMsgID(pmsg *pubsubpb.Message, fEpoch primitives.Epoch) string {
 			copy(msg, "invalid")
 			return bytesutil.UnsafeCastToString(msg)
 		}
-		if uint64(totalLength) > gossipPubSubSize {
+		if uint64(totalLength) > gossipPayloadSize {
 			// this should never happen
 			msg := make([]byte, 20)
 			copy(msg, "invalid")

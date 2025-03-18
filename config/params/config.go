@@ -275,8 +275,7 @@ type BeaconChainConfig struct {
 	DataColumnSidecarSubnetCount          uint64           `yaml:"DATA_COLUMN_SIDECAR_SUBNET_COUNT" spec:"true"` // DataColumnSidecarSubnetCount is the number of data column sidecar subnets used in the gossipsub protocol
 
 	// Networking Specific Parameters
-	GossipMaxSize                   uint64          `yaml:"GOSSIP_MAX_SIZE" spec:"true"`                    // GossipMaxSize is the maximum allowed size of uncompressed gossip messages.
-	MaxChunkSize                    uint64          `yaml:"MAX_CHUNK_SIZE" spec:"true"`                     // MaxChunkSize is the maximum allowed size of uncompressed req/resp chunked responses.
+	MaxPayloadSize                  uint64          `yaml:"MAX_PAYLOAD_SIZE" spec:"true"`                   // MAX_PAYLOAD_SIZE is the maximum allowed size of uncompressed payload in gossip messages and rpc chunks.
 	AttestationSubnetCount          uint64          `yaml:"ATTESTATION_SUBNET_COUNT" spec:"true"`           // AttestationSubnetCount is the number of attestation subnets used in the gossipsub protocol.
 	AttestationPropagationSlotRange primitives.Slot `yaml:"ATTESTATION_PROPAGATION_SLOT_RANGE" spec:"true"` // AttestationPropagationSlotRange is the maximum number of slots during which an attestation can be propagated.
 	MaxRequestBlocks                uint64          `yaml:"MAX_REQUEST_BLOCKS" spec:"true"`                 // MaxRequestBlocks is the maximum number of blocks in a single request.

@@ -144,6 +144,12 @@ func configureTestnet(ctx *cli.Context) error {
 		}
 		applyHoleskyFeatureFlags(ctx)
 		params.UseHoleskyNetworkConfig()
+	} else if ctx.Bool(HoodiTestnet.Name) {
+		log.Info("Running on the Hoodi Beacon Chain Testnet")
+		if err := params.SetActive(params.HoodiConfig().Copy()); err != nil {
+			return err
+		}
+		params.UseHoodiNetworkConfig()
 	} else {
 		if ctx.IsSet(cmd.ChainConfigFileFlag.Name) {
 			log.Warn("Running on custom Ethereum network specified in a chain configuration yaml file")
