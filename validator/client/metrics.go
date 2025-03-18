@@ -234,7 +234,7 @@ func (v *validator) LogValidatorGainsAndLosses(ctx context.Context, slot primiti
 	resp, err := v.prysmChainClient.ValidatorPerformance(ctx, req)
 	if err != nil {
 		if errors.Is(err, iface.ErrNotSupported) {
-			log.WithError(err).Debug("skipping validator performance metric")
+			log.WithError(err).Debug("Skipping validator performance metric for non-Prysm beacon node")
 			return nil
 		}
 		return err
