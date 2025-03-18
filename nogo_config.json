@@ -214,5 +214,10 @@
       "external/com_github_ethereum_go_ethereum/.*": "Unsafe third party code",
       "rules_go_work-.*": "Third party code"
     }
+  }, 
+  "nopanic": {
+    "exclude_files": {
+      "external/.*": "Third party code"
+    }
   }
 }
