@@ -11,6 +11,7 @@ import (
 	eventClient "github.com/prysmaticlabs/prysm/v5/api/client/event"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
@@ -23,8 +24,60 @@ type grpcValidatorClient struct {
 	isEventStreamRunning      bool
 }
 
-func (c *grpcValidatorClient) Duties(ctx context.Context, in *ethpb.DutiesRequest) (*ethpb.DutiesResponse, error) {
-	return c.beaconNodeValidatorClient.GetDuties(ctx, in)
+func (c *grpcValidatorClient) Duties(ctx context.Context, in *ethpb.DutiesRequest) (*ethpb.ValidatorDutiesContainer, error) {
+	dutiesResponse, err := c.beaconNodeValidatorClient.GetDuties(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return toValidatorDutiesContainer(dutiesResponse)
+}
+
+func toValidatorDutiesContainer(dutiesResponse *ethpb.DutiesResponse) (*ethpb.ValidatorDutiesContainer, error) {
+	currentDuties := make([]*ethpb.ValidatorDuty, len(dutiesResponse.CurrentEpochDuties))
+	for i, cd := range dutiesResponse.CurrentEpochDuties {
+		duty, err := toValidatorDuty(cd)
+		if err != nil {
+			return nil, err
+		}
+		currentDuties[i] = duty
+	}
+	nextDuties := make([]*ethpb.ValidatorDuty, len(dutiesResponse.NextEpochDuties))
+	for i, nd := range dutiesResponse.NextEpochDuties {
+		duty, err := toValidatorDuty(nd)
+		if err != nil {
+			return nil, err
+		}
+		nextDuties[i] = duty
+	}
+	return &ethpb.ValidatorDutiesContainer{
+		CurrentEpochDuties: currentDuties,
+		NextEpochDuties:    nextDuties,
+	}, nil
+}
+
+func toValidatorDuty(duties *ethpb.DutiesResponse_Duty) (*ethpb.ValidatorDuty, error) {
+	var valIndexInCommittee uint64
+	// valIndexInCommittee will be 0 in case we don't get a match. This is a potential false positive,
+	// however it's an impossible condition because every validator must be assigned to a committee.
+	for cIndex, vIndex := range duties.Committee {
+		if vIndex == duties.ValidatorIndex {
+			valIndexInCommittee = uint64(cIndex)
+			break
+		}
+	}
+	return &ethpb.ValidatorDuty{
+		CommitteeLength:         uint64(len(duties.Committee)),
+		CommitteeIndex:          duties.CommitteeIndex,
+		CommittesAtSlot:         duties.CommitteesAtSlot, // GRPC doesn't use this value though
+		ValidatorCommitteeIndex: valIndexInCommittee,
+		AttesterSlot:            duties.AttesterSlot,
+		ProposerSlots:           duties.ProposerSlots,
+		PublicKey:               bytesutil.SafeCopyBytes(duties.PublicKey),
+		Status:                  duties.Status,
+		ValidatorIndex:          duties.ValidatorIndex,
+		IsSyncCommittee:         duties.IsSyncCommittee,
+		CommitteesAtSlot:        duties.CommitteesAtSlot,
+	}, nil
 }
 
 func (c *grpcValidatorClient) CheckDoppelGanger(ctx context.Context, in *ethpb.DoppelGangerRequest) (*ethpb.DoppelGangerResponse, error) {
@@ -115,7 +168,7 @@ func (c *grpcValidatorClient) SubmitValidatorRegistrations(ctx context.Context, 
 	return c.beaconNodeValidatorClient.SubmitValidatorRegistrations(ctx, in)
 }
 
-func (c *grpcValidatorClient) SubscribeCommitteeSubnets(ctx context.Context, in *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.DutiesResponse_Duty) (*empty.Empty, error) {
+func (c *grpcValidatorClient) SubscribeCommitteeSubnets(ctx context.Context, in *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.ValidatorDuty) (*empty.Empty, error) {
 	return c.beaconNodeValidatorClient.SubscribeCommitteeSubnets(ctx, in)
 }
 

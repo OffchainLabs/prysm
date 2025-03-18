@@ -66,7 +66,7 @@ func (v *validator) SubmitAttestation(ctx context.Context, slot primitives.Slot,
 		tracing.AnnotateError(span, err)
 		return
 	}
-	if len(duty.Committee) == 0 {
+	if duty.CommitteeLength == 0 {
 		log.Debug("Empty committee for validator duty, not attesting")
 		return
 	}
@@ -145,8 +145,8 @@ func (v *validator) SubmitAttestation(ctx context.Context, slot primitives.Slot,
 		attestation = sa
 		attResp, err = v.validatorClient.ProposeAttestationElectra(ctx, sa)
 	} else {
-		aggregationBitfield = bitfield.NewBitlist(uint64(len(duty.Committee)))
-		aggregationBitfield.SetBitAt(uint64(data.CommitteeIndex), true)
+		aggregationBitfield = bitfield.NewBitlist(uint64(duty.CommitteeLength))
+		aggregationBitfield.SetBitAt(duty.ValidatorCommitteeIndex, true)
 		a := &ethpb.Attestation{
 			Data:            data,
 			AggregationBits: aggregationBitfield,
@@ -195,7 +195,7 @@ func (v *validator) SubmitAttestation(ctx context.Context, slot primitives.Slot,
 }
 
 // Given the validator public key, this gets the validator assignment.
-func (v *validator) duty(pubKey [fieldparams.BLSPubkeyLength]byte) (*ethpb.DutiesResponse_Duty, error) {
+func (v *validator) duty(pubKey [fieldparams.BLSPubkeyLength]byte) (*ethpb.ValidatorDuty, error) {
 	v.dutiesLock.RLock()
 	defer v.dutiesLock.RUnlock()
 	if v.duties == nil {
