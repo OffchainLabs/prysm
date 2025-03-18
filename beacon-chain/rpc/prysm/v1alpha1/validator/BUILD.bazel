@@ -73,6 +73,7 @@ go_library(
         "//container/trie:go_default_library",
         "//contracts/deposit:go_default_library",
         "//crypto/bls:go_default_library",
+        "//crypto/bls/common:go_default_library",
         "//crypto/hash:go_default_library",
         "//crypto/rand:go_default_library",
         "//encoding/bytesutil:go_default_library",

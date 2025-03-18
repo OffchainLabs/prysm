@@ -16,6 +16,7 @@ import (
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/crypto/bls/common"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	"github.com/prysmaticlabs/prysm/v5/network/httputil"
@@ -57,7 +58,7 @@ func (s *Server) ProduceBlockV2(w http.ResponseWriter, r *http.Request) {
 
 	var randaoReveal []byte
 	if rawSkipRandaoVerification == "true" {
-		randaoReveal = primitives.PointAtInfinity
+		randaoReveal = common.InfiniteSignature[:]
 	} else {
 		rr, err := bytesutil.DecodeHexWithLength(rawRandaoReveal, fieldparams.BLSSignatureLength)
 		if err != nil {
@@ -109,7 +110,7 @@ func (s *Server) ProduceBlindedBlock(w http.ResponseWriter, r *http.Request) {
 
 	var randaoReveal []byte
 	if rawSkipRandaoVerification == "true" {
-		randaoReveal = primitives.PointAtInfinity
+		randaoReveal = common.InfiniteSignature[:]
 	} else {
 		rr, err := bytesutil.DecodeHexWithLength(rawRandaoReveal, fieldparams.BLSSignatureLength)
 		if err != nil {
@@ -174,7 +175,7 @@ func (s *Server) ProduceBlockV3(w http.ResponseWriter, r *http.Request) {
 
 	var randaoReveal []byte
 	if rawSkipRandaoVerification == "true" {
-		randaoReveal = primitives.PointAtInfinity
+		randaoReveal = common.InfiniteSignature[:]
 	} else {
 		rr, err := bytesutil.DecodeHexWithLength(rawRandaoReveal, fieldparams.BLSSignatureLength)
 		if err != nil {
