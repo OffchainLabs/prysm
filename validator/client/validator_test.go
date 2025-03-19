@@ -508,8 +508,8 @@ func TestUpdateDuties_OK_FilterBlacklistedPublicKeys(t *testing.T) {
 		blacklistedPubkeys: blacklistedPublicKeys,
 	}
 
-	resp := &ethpb.DutiesResponse{
-		CurrentEpochDuties: []*ethpb.DutiesResponse_Duty{},
+	resp := &ethpb.ValidatorDutiesContainer{
+		CurrentEpochDuties: []*ethpb.ValidatorDuty{},
 	}
 	client.EXPECT().Duties(
 		gomock.Any(),
@@ -522,7 +522,7 @@ func TestUpdateDuties_OK_FilterBlacklistedPublicKeys(t *testing.T) {
 		gomock.Any(),
 		gomock.Any(),
 		gomock.Any(),
-	).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.DutiesResponse_Duty) (*emptypb.Empty, error) {
+	).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.ValidatorDuty) (*emptypb.Empty, error) {
 		wg.Done()
 		return nil, nil
 	})
@@ -655,7 +655,7 @@ func TestUpdateDuties_Distributed(t *testing.T) {
 		gomock.Any(),
 		gomock.Any(),
 		gomock.Any(),
-	).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.DutiesResponse_Duty) (*emptypb.Empty, error) {
+	).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.ValidatorDuty) (*emptypb.Empty, error) {
 		wg.Done()
 		return nil, nil
 	})
