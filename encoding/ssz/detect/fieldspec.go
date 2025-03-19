@@ -35,7 +35,7 @@ func (f fieldType) Size() int {
 	case typeBytes4:
 		return 4
 	default:
-		panic("can't determine size for unrecognizedtype ")
+		panic("can't determine size for unrecognizedtype ") // lint:nopanic -- Impossible field type.
 	}
 }
 

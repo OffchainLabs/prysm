@@ -1,3 +1,4 @@
+// lint:nopanic -- Mock / test code, panic is allowed.
 package mock
 
 import (

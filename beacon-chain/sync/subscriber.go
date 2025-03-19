@@ -181,12 +181,12 @@ func (s *Service) subscribe(topic string, validator wrappedVal, handle subHandle
 	_, e, err := forks.RetrieveForkDataFromDigest(digest, genRoot[:])
 	if err != nil {
 		// Impossible condition as it would mean digest does not exist.
-		panic(err)
+		panic(err) // lint:nopanic -- Impossible condition.
 	}
 	base := p2p.GossipTopicMappings(topic, e)
 	if base == nil {
 		// Impossible condition as it would mean topic does not exist.
-		panic(fmt.Sprintf("%s is not mapped to any message in GossipTopicMappings", topic))
+		panic(fmt.Sprintf("%s is not mapped to any message in GossipTopicMappings", topic)) // lint:nopanic -- Impossible condition.
 	}
 	return s.subscribeWithBase(s.addDigestToTopic(topic, digest), validator, handle)
 }
@@ -497,13 +497,13 @@ func (s *Service) subscribeWithParameters(
 	// Retrieve the epoch of the fork corresponding to the digest.
 	_, epoch, err := forks.RetrieveForkDataFromDigest(digest, genesisValidatorsRoot[:])
 	if err != nil {
-		panic(err)
+		panic(err) // lint:nopanic -- Impossible condition.
 	}
 
 	// Retrieve the base protobuf message.
 	base := p2p.GossipTopicMappings(topicFormat, epoch)
 	if base == nil {
-		panic(fmt.Sprintf("%s is not mapped to any message in GossipTopicMappings", topicFormat))
+		panic(fmt.Sprintf("%s is not mapped to any message in GossipTopicMappings", topicFormat)) // lint:nopanic -- Impossible condition.
 	}
 
 	// Retrieve the genesis time.

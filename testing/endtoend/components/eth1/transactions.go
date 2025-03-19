@@ -321,7 +321,7 @@ func RandomBlobTx(rpc *rpc.Client, f *filler.Filler, sender common.Address, nonc
 func New4844Tx(nonce uint64, to *common.Address, gasLimit uint64, chainID, tip, feeCap, value *big.Int, code []byte, blobFeeCap *big.Int, blobData []byte, al types.AccessList) *types.Transaction {
 	blobs, comms, proofs, versionedHashes, err := EncodeBlobs(blobData)
 	if err != nil {
-		panic(err)
+		panic(err) // lint:nopanic -- Test code.
 	}
 	tx := types.NewTx(&types.BlobTx{
 		ChainID:    uint256.MustFromBig(chainID),
@@ -427,7 +427,7 @@ func randomAddress() common.Address {
 		b := make([]byte, 20)
 		_, err := mathRand.Read(b) // #nosec G404
 		if err != nil {
-			panic(err)
+			panic(err) // lint:nopanic -- Test code.
 		}
 		return common.BytesToAddress(b)
 	case 3:

@@ -178,7 +178,7 @@ func (e *epochBoundaryState) delete(blockRoot [32]byte) error {
 func trim(queue *cache.FIFO, maxSize uint64) {
 	for s := uint64(len(queue.ListKeys())); s > maxSize; s-- {
 		if _, err := queue.Pop(popProcessNoopFunc); err != nil { // This never returns an error, but we'll handle anyway for sanity.
-			panic(err)
+			panic(err) // lint:nopanic -- Never returns an error.
 		}
 	}
 }
