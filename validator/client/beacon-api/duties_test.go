@@ -1132,7 +1132,7 @@ func TestGetDuties_Valid(t *testing.T) {
 			)
 			require.NoError(t, err)
 
-			expectedDuties := &ethpb.DutiesResponse{
+			expectedDuties := &ethpb.ValidatorDutiesContainer{
 				CurrentEpochDuties: expectedCurrentEpochDuties,
 				NextEpochDuties:    expectedNextEpochDuties,
 			}
