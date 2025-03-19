@@ -11,10 +11,12 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/api"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	lightclient "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/light-client"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/shared"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
+	bytesutil2 "github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	"github.com/prysmaticlabs/prysm/v5/network/httputil"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
@@ -111,27 +113,64 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 		return
 	}
 
-	updates := make([]*structs.LightClientUpdateResponse, 0, len(updatesMap))
+	if httputil.RespondWithSsz(req) {
+		var response []byte
 
-	for i := startPeriod; i <= endPeriod; i++ {
-		update, ok := updatesMap[i]
-		if !ok {
-			// Only return the first contiguous range of updates
-			break
+		for i := startPeriod; i <= endPeriod; i++ {
+			update, ok := updatesMap[i]
+			if !ok {
+				// Only return the first contiguous range of updates
+				break
+			}
+			st, err := s.Stater.StateBySlot(ctx, update.AttestedHeader().Beacon().Slot)
+			if err != nil {
+				httputil.HandleError(w, "Could not get state: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			forkDigest, err := signing.ComputeForkDigest(bytesutil2.Uint64ToBytesLittleEndian(uint64(update.Version())), st.GenesisValidatorsRoot())
+			if err != nil {
+				httputil.HandleError(w, "Could not compute fork digest: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			updateSSZ, err := update.MarshalSSZ()
+			if err != nil {
+				httputil.HandleError(w, "Could not marshal update to SSZ: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			chunkLength := len(updateSSZ) + len(forkDigest)
+			chunkLengthBytes := bytesutil2.Uint64ToBytesLittleEndian(uint64(chunkLength))
+			response = append(response, chunkLengthBytes...)
+			response = append(response, forkDigest[:]...)
+			response = append(response, updateSSZ...)
 		}
 
-		updateJson, err := structs.LightClientUpdateFromConsensus(update)
-		if err != nil {
-			httputil.HandleError(w, "Could not convert light client update: "+err.Error(), http.StatusInternalServerError)
-			return
+		httputil.WriteSsz(w, response, "light_client_updates.ssz")
+
+	} else {
+		updates := make([]*structs.LightClientUpdateResponse, 0, len(updatesMap))
+
+		for i := startPeriod; i <= endPeriod; i++ {
+			update, ok := updatesMap[i]
+			if !ok {
+				// Only return the first contiguous range of updates
+				break
+			}
+
+			updateJson, err := structs.LightClientUpdateFromConsensus(update)
+			if err != nil {
+				httputil.HandleError(w, "Could not convert light client update: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			updateResponse := &structs.LightClientUpdateResponse{
+				Version: version.String(update.Version()),
+				Data:    updateJson,
+			}
+			updates = append(updates, updateResponse)
 		}
-		updateResponse := &structs.LightClientUpdateResponse{
-			Version: version.String(update.Version()),
-			Data:    updateJson,
-		}
-		updates = append(updates, updateResponse)
+
+		httputil.WriteJson(w, updates)
 	}
-	httputil.WriteJson(w, updates)
 }
 
 // GetLightClientFinalityUpdate - implements https://github.com/ethereum/beacon-APIs/blob/263f4ed6c263c967f13279c7a9f5629b51c5fc55/apis/beacon/light_client/finality_update.yaml
@@ -324,4 +363,18 @@ func (s *Server) suitableBlock(ctx context.Context, minSignaturesRequired uint64
 	}
 
 	return block, nil
+}
+
+// SerializeItems serializes a slice of items, each of which implements the MarshalSSZ method,
+// into a single byte array.
+func serializeItems[T interface{ MarshalSSZ() ([]byte, error) }](items []T) ([]byte, error) {
+	var result []byte
+	for _, item := range items {
+		b, err := item.MarshalSSZ()
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, b...)
+	}
+	return result, nil
 }
