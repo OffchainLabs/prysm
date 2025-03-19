@@ -364,17 +364,3 @@ func (s *Server) suitableBlock(ctx context.Context, minSignaturesRequired uint64
 
 	return block, nil
 }
-
-// SerializeItems serializes a slice of items, each of which implements the MarshalSSZ method,
-// into a single byte array.
-func serializeItems[T interface{ MarshalSSZ() ([]byte, error) }](items []T) ([]byte, error) {
-	var result []byte
-	for _, item := range items {
-		b, err := item.MarshalSSZ()
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, b...)
-	}
-	return result, nil
-}
