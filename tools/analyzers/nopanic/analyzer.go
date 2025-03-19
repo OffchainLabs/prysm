@@ -66,15 +66,14 @@ func hasExclusion(pass *analysis.Pass, stack []ast.Node) bool {
 	}
 	// The first value in the stack is always the file, then the second value would be a package level function.
 	// Init functions are always package level.
-	if fd, ok := stack[1].(*ast.FuncDecl); ok && strings.ToLower(fd.Name.Name) == "init" {
+	if fd, ok := stack[1].(*ast.FuncDecl); ok && fd.Name.Name == "init" {
 		return true
 	}
 
 	// Build a comment map and scan the comments of this node stack.
 	cm := ast.NewCommentMap(pass.Fset, stack[0], stack[0].(*ast.File).Comments)
 	for _, n := range stack {
-		c := cm[n]
-		for _, cmt := range c {
+		for _, cmt := range cm[n] {
 			for _, l := range cmt.List {
 				if strings.Contains(l.Text, "lint:nopanic") {
 					return true
