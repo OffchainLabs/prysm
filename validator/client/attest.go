@@ -145,7 +145,7 @@ func (v *validator) SubmitAttestation(ctx context.Context, slot primitives.Slot,
 		attestation = sa
 		attResp, err = v.validatorClient.ProposeAttestationElectra(ctx, sa)
 	} else {
-		aggregationBitfield = bitfield.NewBitlist(uint64(duty.CommitteeLength))
+		aggregationBitfield = bitfield.NewBitlist(duty.CommitteeLength)
 		aggregationBitfield.SetBitAt(duty.ValidatorCommitteeIndex, true)
 		a := &ethpb.Attestation{
 			Data:            data,
