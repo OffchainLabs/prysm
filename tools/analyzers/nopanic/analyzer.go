@@ -36,7 +36,11 @@ func run(pass *analysis.Pass) (interface{}, error) {
 		switch stmt := n.(type) {
 		case *ast.CallExpr:
 			if isPanic(stmt) && !hasExclusion(pass, stack) {
-				pass.Reportf(n.Pos(), errNoPanic.Error())
+				pass.Report(analysis.Diagnostic{
+					Pos:     n.Pos(),
+					End:     n.End(),
+					Message: errNoPanic.Error(),
+				})
 				return false
 			}
 		}
