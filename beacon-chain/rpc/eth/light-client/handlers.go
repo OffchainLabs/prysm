@@ -8,6 +8,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
+	ssz "github.com/prysmaticlabs/fastssz"
 	"github.com/prysmaticlabs/prysm/v5/api"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	lightclient "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/light-client"
@@ -122,12 +123,7 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 				// Only return the first contiguous range of updates
 				break
 			}
-			st, err := s.Stater.StateBySlot(ctx, update.AttestedHeader().Beacon().Slot)
-			if err != nil {
-				httputil.HandleError(w, "Could not get state: "+err.Error(), http.StatusInternalServerError)
-				return
-			}
-			forkDigest, err := signing.ComputeForkDigest(bytesutil2.Uint64ToBytesLittleEndian(uint64(update.Version())), st.GenesisValidatorsRoot())
+			forkDigest, err := signing.ComputeForkDigest(bytesutil2.Uint64ToBytesLittleEndian(uint64(update.Version())), params.BeaconConfig().GenesisValidatorsRoot[:])
 			if err != nil {
 				httputil.HandleError(w, "Could not compute fork digest: "+err.Error(), http.StatusInternalServerError)
 				return
@@ -138,9 +134,9 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 				return
 			}
 
-			chunkLength := len(updateSSZ) + len(forkDigest)
-			chunkLengthBytes := bytesutil2.Uint64ToBytesLittleEndian(uint64(chunkLength))
-			response = append(response, chunkLengthBytes...)
+			var chunkLength []byte
+			ssz.MarshalUint64(chunkLength, uint64(len(updateSSZ)+4))
+			response = append(response, chunkLength...)
 			response = append(response, forkDigest[:]...)
 			response = append(response, updateSSZ...)
 		}
