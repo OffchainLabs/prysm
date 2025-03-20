@@ -626,6 +626,7 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 		s.GetLightClientUpdatesByRange(writer, request)
 
 		require.Equal(t, http.StatusOK, writer.Code)
+		fmt.Println(writer.Body.Bytes()[:25])
 		//var resp structs.LightClientUpdatesByRangeResponse
 		//err = json.Unmarshal(writer.Body.Bytes(), &resp.Updates)
 		//require.NoError(t, err)
