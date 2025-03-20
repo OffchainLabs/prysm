@@ -594,6 +594,48 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 		require.DeepEqual(t, updateJson, resp.Updates[0].Data)
 	})
 
+	t.Run("deneb ssz", func(t *testing.T) {
+		slot := primitives.Slot(config.DenebForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
+
+		st, err := util.NewBeaconStateDeneb()
+		require.NoError(t, err)
+		err = st.SetSlot(slot)
+		require.NoError(t, err)
+
+		db := dbtesting.SetupDB(t)
+
+		updatePeriod := uint64(slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch)))
+
+		update, err := createUpdate(t, version.Deneb)
+		require.NoError(t, err)
+		err = db.SaveLightClientUpdate(ctx, updatePeriod, update)
+		require.NoError(t, err)
+
+		mockChainService := &mock.ChainService{State: st}
+		s := &Server{
+			HeadFetcher: mockChainService,
+			BeaconDB:    db,
+		}
+		startPeriod := slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
+		url := fmt.Sprintf("http://foo.com/?count=1&start_period=%d", startPeriod)
+		request := httptest.NewRequest("GET", url, nil)
+		request.Header.Add("Accept", "application/octet-stream")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetLightClientUpdatesByRange(writer, request)
+
+		require.Equal(t, http.StatusOK, writer.Code)
+		//var resp structs.LightClientUpdatesByRangeResponse
+		//err = json.Unmarshal(writer.Body.Bytes(), &resp.Updates)
+		//require.NoError(t, err)
+		//require.Equal(t, 1, len(resp.Updates))
+		//require.Equal(t, "deneb", resp.Updates[0].Version)
+		//updateJson, err := structs.LightClientUpdateFromConsensus(update)
+		//require.NoError(t, err)
+		//require.DeepEqual(t, updateJson, resp.Updates[0].Data)
+	})
+
 	t.Run("altair Multiple", func(t *testing.T) {
 		slot := primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
 

@@ -2,6 +2,7 @@ package lightclient
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"math"
 	"net/http"
@@ -17,10 +18,10 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	"github.com/prysmaticlabs/prysm/v5/network/httputil"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/wealdtech/go-bytesutil"
 )
 
 // GetLightClientBootstrap - implements https://github.com/ethereum/beacon-APIs/blob/263f4ed6c263c967f13279c7a9f5629b51c5fc55/apis/beacon/light_client/bootstrap.yaml
@@ -122,7 +123,9 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 				// Only return the first contiguous range of updates
 				break
 			}
-			forkDigest, err := signing.ComputeForkDigest(bytesutil.Bytes64(uint64(update.Version())), params.BeaconConfig().GenesisValidatorsRoot[:])
+			versionBytes := make([]byte, 4)
+			binary.BigEndian.PutUint32(versionBytes, uint32(update.Version()))
+			forkDigest, err := signing.ComputeForkDigest(versionBytes, params.BeaconConfig().GenesisValidatorsRoot[:])
 			if err != nil {
 				httputil.HandleError(w, "Could not compute fork digest: "+err.Error(), http.StatusInternalServerError)
 				return
