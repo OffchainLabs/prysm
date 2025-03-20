@@ -17,7 +17,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	bytesutil2 "github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	"github.com/prysmaticlabs/prysm/v5/network/httputil"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
@@ -123,7 +122,7 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 				// Only return the first contiguous range of updates
 				break
 			}
-			forkDigest, err := signing.ComputeForkDigest(bytesutil2.Uint64ToBytesLittleEndian(uint64(update.Version())), params.BeaconConfig().GenesisValidatorsRoot[:])
+			forkDigest, err := signing.ComputeForkDigest(bytesutil.Bytes64(uint64(update.Version())), params.BeaconConfig().GenesisValidatorsRoot[:])
 			if err != nil {
 				httputil.HandleError(w, "Could not compute fork digest: "+err.Error(), http.StatusInternalServerError)
 				return
