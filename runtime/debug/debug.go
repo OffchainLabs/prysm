@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+
 	// We are safe to expose this import as we are using a custom
 	// handler only enabled if the pprof flag is on.
 	_ "net/http/pprof" // #nosec G108
@@ -328,7 +329,7 @@ func Setup(ctx *cli.Context) error {
 		runtime.SetMutexProfileFraction(ctx.Int(MutexProfileFractionFlag.Name))
 	}
 	if traceFile := ctx.String(TraceFlag.Name); traceFile != "" {
-		if err := Handler.StartGoTrace(traceFile); err != nil {
+		if err := Handler.StartGoTrace(TraceFlag.Name); err != nil {
 			return err
 		}
 	}
