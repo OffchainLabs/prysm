@@ -87,17 +87,6 @@ func NewValidatorClient(cliCtx *cli.Context) (*ValidatorClient, error) {
 	// Warn if user's platform is not supported
 	prereqs.WarnIfPlatformNotSupported(cliCtx.Context)
 
-	registry := runtime.NewServiceRegistry()
-	ctx, cancel := context.WithCancel(cliCtx.Context)
-	validatorClient := &ValidatorClient{
-		cliCtx:                cliCtx,
-		ctx:                   ctx,
-		cancel:                cancel,
-		services:              registry,
-		walletInitializedFeed: new(event.Feed),
-		stop:                  make(chan struct{}),
-	}
-
 	if err := features.ConfigureValidator(cliCtx); err != nil {
 		return nil, err
 	}
@@ -112,7 +101,28 @@ func NewValidatorClient(cliCtx *cli.Context) (*ValidatorClient, error) {
 		}
 	}
 
-	if err := validatorClient.initialize(cliCtx); err != nil {
+	w, err := getWallet(cliCtx)
+	if err != nil {
+		return nil, err
+	}
+
+	registry := runtime.NewServiceRegistry()
+	ctx, cancel := context.WithCancel(cliCtx.Context)
+	validatorClient := &ValidatorClient{
+		cliCtx:                cliCtx,
+		ctx:                   ctx,
+		cancel:                cancel,
+		services:              registry,
+		wallet:                w,
+		walletInitializedFeed: new(event.Feed),
+		stop:                  make(chan struct{}),
+	}
+
+	if err := validatorClient.initializeDB(cliCtx); err != nil {
+		return nil, errors.Wrapf(err, "could not initialize database")
+	}
+
+	if err := validatorClient.registerServices(cliCtx); err != nil {
 		return nil, err
 	}
 
@@ -214,37 +224,35 @@ func (c *ValidatorClient) getLegacyDatabaseLocation(
 	return dataDir, dataFile, nil
 }
 
-func (c *ValidatorClient) initialize(cliCtx *cli.Context) error {
-	isInteropNumValidatorsSet := cliCtx.IsSet(flags.InteropNumValidators.Name)
-	isWeb3SignerURLFlagSet := cliCtx.IsSet(flags.Web3SignerURLFlag.Name)
-
-	if !isInteropNumValidatorsSet {
-		// Custom Check For Web3Signer
-		if isWeb3SignerURLFlagSet {
-			c.wallet = wallet.NewWalletForWeb3Signer(cliCtx)
-		} else {
-			//// Read the wallet password file from the cli context.
-			if err := setWalletPasswordFilePath(cliCtx); err != nil {
-				return errors.Wrap(err, "could not read wallet password file")
-			}
-			w, err := wallet.OpenWalletOrElseCli(cliCtx, func(cliCtx *cli.Context) (*wallet.Wallet, error) {
-				return nil, wallet.ErrNoWalletFound
-			})
-			if err != nil {
-				return errors.Wrap(err, "could not open wallet")
-			}
-			c.wallet = w
-			// TODO(#9883) - Remove this when we have a better way to handle this.
-			log.WithFields(logrus.Fields{
-				"wallet":         w.AccountsDir(),
-				"keymanagerKind": w.KeymanagerKind().String(),
-			}).Info("Opened validator wallet")
-		}
+func getWallet(cliCtx *cli.Context) (*wallet.Wallet, error) {
+	if cliCtx.IsSet(flags.InteropNumValidators.Name) {
+		log.Info("no wallet required for interop validation")
+		return nil, nil
+	}
+	// Custom Check For Web3Signer
+	if cliCtx.IsSet(flags.Web3SignerURLFlag.Name) {
+		return wallet.NewWalletForWeb3Signer(cliCtx), nil
+	}
+	//// Read the wallet password file from the cli context.
+	if err := setWalletPasswordFilePath(cliCtx); err != nil {
+		return nil, errors.Wrap(err, "could not read wallet password file")
+	}
+	w, err := wallet.OpenWalletOrElseCli(cliCtx, func(cliCtx *cli.Context) (*wallet.Wallet, error) {
+		return nil, wallet.ErrNoWalletFound
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "could not open wallet")
 	}
 
-	if err := c.initializeDB(cliCtx); err != nil {
-		return errors.Wrapf(err, "could not initialize database")
-	}
+	// TODO(#9883) - Remove this when we have a better way to handle this.
+	log.WithFields(logrus.Fields{
+		"wallet":         w.AccountsDir(),
+		"keymanagerKind": w.KeymanagerKind().String(),
+	}).Info("Opened validator wallet")
+	return w, nil
+}
+
+func (c *ValidatorClient) registerServices(cliCtx *cli.Context) error {
 
 	if err := c.registerPrometheusService(cliCtx); err != nil {
 		return errors.Wrapf(err, "could not register prometheus service")
