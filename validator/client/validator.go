@@ -102,7 +102,7 @@ type validator struct {
 	submittedAggregates                map[submittedAttKey]*submittedAtt
 	logValidatorPerformance            bool
 	emitAccountMetrics                 bool
-	useWeb                             bool
+	enableAPI                          bool
 	distributed                        bool
 	domainDataLock                     sync.RWMutex
 	attLogsLock                        sync.Mutex
@@ -156,9 +156,7 @@ func (v *validator) WaitForKeymanagerInitialization(ctx context.Context) error {
 			return errors.Wrap(err, "could not generate interop keys for key manager")
 		}
 		v.km = keyManager
-	case v.useWeb:
-		log.Info("Waiting for keymanager to initialize validator client with web UI")
-		// if wallet is not set, wait for it to be set through the UI
+	case v.enableAPI:
 		km, err := waitForWebWalletInitialization(ctx, v.walletInitializedFeed, v.walletInitializedChan)
 		if err != nil {
 			return err
@@ -183,6 +181,7 @@ func waitForWebWalletInitialization(
 	ctx, span := trace.StartSpan(ctx, "validator.waitForWebWalletInitialization")
 	defer span.End()
 
+	log.Info("Waiting for keymanager to initialize validator client with web UI or /v2/validator/wallet/create REST api")
 	sub := walletInitializedEvent.Subscribe(walletChan)
 	defer sub.Unsubscribe()
 	for {

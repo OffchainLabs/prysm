@@ -451,7 +451,7 @@ func (c *ValidatorClient) registerValidatorService(cliCtx *cli.Context) error {
 		Web3SignerConfig:        web3signerConfig,
 		ProposerSettings:        ps,
 		ValidatorsRegBatchSize:  cliCtx.Int(flags.ValidatorsRegistrationBatchSizeFlag.Name),
-		UseWeb:                  cliCtx.Bool(flags.EnableWebFlag.Name),
+		EnableAPI:               cliCtx.Bool(flags.EnableWebFlag.Name) || cliCtx.Bool(flags.EnableRPCFlag.Name),
 		LogValidatorPerformance: !cliCtx.Bool(flags.DisablePenaltyRewardLogFlag.Name),
 		EmitAccountMetrics:      !cliCtx.Bool(flags.DisableAccountMetricsFlag.Name),
 		Distributed:             cliCtx.Bool(flags.EnableDistributed.Name),
