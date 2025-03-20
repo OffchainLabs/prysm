@@ -1,3 +1,3 @@
-### Fixed
+### Ignored
 
 - `subscribeToSubnets`: Remove unused parameter.
