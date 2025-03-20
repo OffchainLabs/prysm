@@ -236,20 +236,12 @@ func getWallet(cliCtx *cli.Context) (*wallet.Wallet, error) {
 		return nil, errors.Wrap(err, "could not read wallet password file")
 	}
 	w, err := wallet.OpenWalletOrElseCli(cliCtx, func(cliCtx *cli.Context) (*wallet.Wallet, error) {
-		if cliCtx.Bool(flags.EnableWebFlag.Name) {
-			return nil, nil
-		}
-		return nil, wallet.ErrNoWalletFound
+		// handle nil wallet in key manager initialization, give a chance for user to create a wallet
+		return nil, nil
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "could not open wallet")
 	}
-
-	// TODO(#9883) - Remove this when we have a better way to handle this.
-	log.WithFields(logrus.Fields{
-		"wallet":         w.AccountsDir(),
-		"keymanagerKind": w.KeymanagerKind().String(),
-	}).Info("Opened validator wallet")
 	return w, nil
 }
 

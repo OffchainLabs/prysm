@@ -140,25 +140,8 @@ func (v *validator) WaitForKeymanagerInitialization(ctx context.Context) error {
 		return errors.Wrap(err, "unable to retrieve valid genesis validators root while initializing key manager")
 	}
 
-	if v.wallet == nil {
-		if v.interopKeysConfig != nil {
-			keyManager, err := local.NewInteropKeymanager(ctx, v.interopKeysConfig.Offset, v.interopKeysConfig.NumValidatorKeys)
-			if err != nil {
-				return errors.Wrap(err, "could not generate interop keys for key manager")
-			}
-			v.km = keyManager
-		}
-		if v.useWeb {
-			log.Info("Waiting for keymanager to initialize validator client with web UI")
-			// if wallet is not set, wait for it to be set through the UI
-			km, err := waitForWebWalletInitialization(ctx, v.walletInitializedFeed, v.walletInitializedChan)
-			if err != nil {
-				return err
-			}
-			v.km = km
-		}
-		return errors.New("wallet not set")
-	} else {
+	switch {
+	case v.wallet != nil:
 		if v.web3SignerConfig != nil {
 			v.web3SignerConfig.GenesisValidatorsRoot = genesisRoot
 		}
@@ -167,8 +150,26 @@ func (v *validator) WaitForKeymanagerInitialization(ctx context.Context) error {
 			return errors.Wrap(err, "could not initialize key manager")
 		}
 		v.km = keyManager
+	case v.interopKeysConfig != nil:
+		keyManager, err := local.NewInteropKeymanager(ctx, v.interopKeysConfig.Offset, v.interopKeysConfig.NumValidatorKeys)
+		if err != nil {
+			return errors.Wrap(err, "could not generate interop keys for key manager")
+		}
+		v.km = keyManager
+	case v.useWeb:
+		log.Info("Waiting for keymanager to initialize validator client with web UI")
+		// if wallet is not set, wait for it to be set through the UI
+		km, err := waitForWebWalletInitialization(ctx, v.walletInitializedFeed, v.walletInitializedChan)
+		if err != nil {
+			return err
+		}
+		v.km = km
+	default:
+		return wallet.ErrNoWalletFound
 	}
-
+	if v.km == nil {
+		return errors.New("key manager not set")
+	}
 	recheckKeys(ctx, v.db, v.km)
 	return nil
 }
