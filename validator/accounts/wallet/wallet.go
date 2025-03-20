@@ -292,7 +292,6 @@ func OpenWallet(_ context.Context, cfg *Config) (*Wallet, error) {
 		return nil, errors.Wrap(err, "could not read keymanager kind for wallet")
 	}
 	accountsPath := filepath.Join(cfg.WalletDir, keymanagerKind.String())
-	// TODO(#9883) - Remove this when we have a better way to handle this.
 	log.WithFields(logrus.Fields{
 		"wallet":         accountsPath,
 		"keymanagerKind": keymanagerKind.String(),
