@@ -48,37 +48,37 @@ type Config struct {
 
 // Server defining a HTTP server for the remote signer API and registering clients
 type Server struct {
-	ctx                       context.Context
-	cancel                    context.CancelFunc
-	httpHost                  string
-	httpPort                  int
-	server                    *httprest.Server
+	serveWebUI                bool
+	walletInitialized         bool
+	logStreamerBufferSize     int
 	grpcMaxCallRecvMsgSize    int
+	walletInitializedFeed     *event.Feed
+	beaconApiTimeout          time.Duration
+	wallet                    *wallet.Wallet
+	validatorService          *client.ValidatorService
+	httpPort                  int
+	cancel                    context.CancelFunc
 	grpcRetries               uint
 	grpcRetryDelay            time.Duration
-	grpcHeaders               []string
-	beaconNodeValidatorClient iface.ValidatorClient
-	chainClient               iface.ChainClient
-	nodeClient                iface.NodeClient
-	healthClient              ethpb.HealthClient
-	beaconNodeEndpoint        string
-	beaconApiEndpoint         string
-	beaconApiTimeout          time.Duration
-	beaconNodeCert            string
-	jwtSecret                 []byte
+	server                    *httprest.Server
+	router                    *http.ServeMux
 	authTokenPath             string
+	beaconNodeCert            string
+	beaconApiEndpoint         string
+	beaconNodeEndpoint        string
+	healthClient              ethpb.HealthClient
+	nodeClient                iface.NodeClient
+	chainClient               iface.ChainClient
+	beaconNodeValidatorClient iface.ValidatorClient
+	httpHost                  string
 	authToken                 string
 	db                        db.Database
-	walletDir                 string
-	wallet                    *wallet.Wallet
-	walletInitializedFeed     *event.Feed
-	walletInitialized         bool
-	validatorService          *client.ValidatorService
-	router                    *http.ServeMux
 	logStreamer               logs.Streamer
-	logStreamerBufferSize     int
 	startFailure              error
-	serveWebUI                bool
+	ctx                       context.Context
+	walletDir                 string
+	jwtSecret                 []byte
+	grpcHeaders               []string
 }
 
 // NewServer instantiates a new HTTP server.
