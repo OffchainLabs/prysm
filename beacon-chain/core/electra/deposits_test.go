@@ -14,7 +14,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls/common"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
 	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
@@ -196,7 +195,7 @@ func TestProcessPendingDeposits(t *testing.T) {
 			},
 		},
 		{
-			name: "process excess balance that uses a point to infinity signature, processed as a topup",
+			name: "process excess balance as a topup",
 			state: func() state.BeaconState {
 				excessBalance := uint64(100)
 				st := stateWithActiveBalanceETH(t, 32)
@@ -209,7 +208,6 @@ func TestProcessPendingDeposits(t *testing.T) {
 				validators[0].PublicKey = sk.PublicKey().Marshal()
 				validators[0].WithdrawalCredentials = wc
 				dep := stateTesting.GeneratePendingDeposit(t, sk, excessBalance, bytesutil.ToBytes32(wc), 0)
-				dep.Signature = common.InfiniteSignature[:]
 				require.NoError(t, st.SetValidators(validators))
 				require.NoError(t, st.SetPendingDeposits([]*eth.PendingDeposit{dep}))
 				return st
@@ -558,7 +556,6 @@ func TestApplyPendingDeposit_TopUp(t *testing.T) {
 	validators[0].PublicKey = sk.PublicKey().Marshal()
 	validators[0].WithdrawalCredentials = wc
 	dep := stateTesting.GeneratePendingDeposit(t, sk, excessBalance, bytesutil.ToBytes32(wc), 0)
-	dep.Signature = common.InfiniteSignature[:]
 	require.NoError(t, st.SetValidators(validators))
 
 	require.NoError(t, electra.ApplyPendingDeposit(context.Background(), st, dep))

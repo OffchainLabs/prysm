@@ -20,6 +20,11 @@ type BlockEvent struct {
 	ExecutionOptimistic bool   `json:"execution_optimistic"`
 }
 
+type BlockGossipEvent struct {
+	Slot  string `json:"slot"`
+	Block string `json:"block"`
+}
+
 type AggregatedAttEventSource struct {
 	Aggregate *Attestation `json:"aggregate"`
 }

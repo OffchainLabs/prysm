@@ -1,5 +1,7 @@
 // This binary is a simple rest API endpoint to calculate
 // the ENR value of a node given its private key,ip address and port.
+//
+// lint:nopanic -- Tooling allowed to panic.
 package main
 
 import (

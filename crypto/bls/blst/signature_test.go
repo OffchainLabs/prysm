@@ -171,8 +171,7 @@ func TestEth2FastAggregateVerify_ReturnsTrueOnG2PointAtInfinity(t *testing.T) {
 	var pubkeys []common.PublicKey
 	msg := [32]byte{'h', 'e', 'l', 'l', 'o'}
 
-	g2PointAtInfinity := append([]byte{0xC0}, make([]byte, 95)...)
-	aggSig, err := SignatureFromBytes(g2PointAtInfinity)
+	aggSig, err := SignatureFromBytes(common.InfiniteSignature[:])
 	require.NoError(t, err)
 	assert.Equal(t, true, aggSig.Eth2FastAggregateVerify(pubkeys, msg))
 }
