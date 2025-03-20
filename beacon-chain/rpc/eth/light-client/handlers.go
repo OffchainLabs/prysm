@@ -146,8 +146,6 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 
 			var chunkLength []byte
 			chunkLength = ssz.MarshalUint64(chunkLength, uint64(len(updateSSZ)+4))
-			//fmt.Println("chunkLength", chunkLength)
-			//fmt.Println("forkDigest", forkDigest)
 			response = append(response, chunkLength...)
 			response = append(response, forkDigest[:]...)
 			response = append(response, updateSSZ...)
