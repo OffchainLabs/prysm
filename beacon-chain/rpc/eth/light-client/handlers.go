@@ -152,7 +152,6 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 		}
 
 		httputil.WriteSsz(w, response, "light_client_updates.ssz")
-
 	} else {
 		updates := make([]*structs.LightClientUpdateResponse, 0, len(updatesMap))
 
