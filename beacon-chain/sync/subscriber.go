@@ -424,7 +424,6 @@ func (s *Service) subscribeToSubnets(
 	validate wrappedVal,
 	handle subHandler,
 	getSubnetsToSubscribe func(currentSlot primitives.Slot) []uint64,
-	getSubnetsToFindPeersOnly func(currentSlot primitives.Slot) []uint64,
 ) bool {
 	// Do not subscribe if not synced.
 	if s.chainStarted.IsSet() && s.cfg.initialSync.Syncing() {
@@ -517,7 +516,7 @@ func (s *Service) subscribeWithParameters(
 	currentSlot := s.cfg.clock.CurrentSlot()
 
 	// Subscribe to subnets.
-	s.subscribeToSubnets(topicFormat, digest, genesisValidatorsRoot, genesisTime, subscriptions, currentSlot, validate, handle, getSubnetsToSubscribe, getSubnetsToFindPeersOnly)
+	s.subscribeToSubnets(topicFormat, digest, genesisValidatorsRoot, genesisTime, subscriptions, currentSlot, validate, handle, getSubnetsToSubscribe)
 
 	// Derive a new context and cancel function.
 	ctx, cancel := context.WithCancel(s.ctx)
@@ -529,7 +528,7 @@ func (s *Service) subscribeWithParameters(
 		for {
 			select {
 			case currentSlot := <-ticker.C():
-				isDigestValid := s.subscribeToSubnets(topicFormat, digest, genesisValidatorsRoot, genesisTime, subscriptions, currentSlot, validate, handle, getSubnetsToSubscribe, getSubnetsToFindPeersOnly)
+				isDigestValid := s.subscribeToSubnets(topicFormat, digest, genesisValidatorsRoot, genesisTime, subscriptions, currentSlot, validate, handle, getSubnetsToSubscribe)
 
 				// Stop the ticker if the digest is not valid. Likely to happen after a hard fork.
 				if !isDigestValid {
