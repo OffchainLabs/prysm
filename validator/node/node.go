@@ -229,15 +229,16 @@ func getWallet(cliCtx *cli.Context) (*wallet.Wallet, error) {
 		log.Info("no wallet required for interop validation")
 		return nil, nil
 	}
-
 	if cliCtx.IsSet(flags.Web3SignerURLFlag.Name) {
 		return wallet.NewWalletForWeb3Signer(cliCtx), nil
 	}
-
 	if err := setWalletPasswordFilePath(cliCtx); err != nil {
 		return nil, errors.Wrap(err, "could not read wallet password file")
 	}
 	w, err := wallet.OpenWalletOrElseCli(cliCtx, func(cliCtx *cli.Context) (*wallet.Wallet, error) {
+		if cliCtx.Bool(flags.EnableWebFlag.Name) {
+			return nil, nil
+		}
 		return nil, wallet.ErrNoWalletFound
 	})
 	if err != nil {

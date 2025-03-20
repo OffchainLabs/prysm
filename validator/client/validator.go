@@ -140,34 +140,35 @@ func (v *validator) WaitForKeymanagerInitialization(ctx context.Context) error {
 		return errors.Wrap(err, "unable to retrieve valid genesis validators root while initializing key manager")
 	}
 
-	if v.useWeb && v.wallet == nil {
-		log.Info("Waiting for keymanager to initialize validator client with web UI")
-		// if wallet is not set, wait for it to be set through the UI
-		km, err := waitForWebWalletInitialization(ctx, v.walletInitializedFeed, v.walletInitializedChan)
-		if err != nil {
-			return err
-		}
-		v.km = km
-	} else {
+	if v.wallet == nil {
 		if v.interopKeysConfig != nil {
 			keyManager, err := local.NewInteropKeymanager(ctx, v.interopKeysConfig.Offset, v.interopKeysConfig.NumValidatorKeys)
 			if err != nil {
 				return errors.Wrap(err, "could not generate interop keys for key manager")
 			}
 			v.km = keyManager
-		} else if v.wallet == nil {
-			return errors.New("wallet not set")
-		} else {
-			if v.web3SignerConfig != nil {
-				v.web3SignerConfig.GenesisValidatorsRoot = genesisRoot
-			}
-			keyManager, err := v.wallet.InitializeKeymanager(ctx, accountsiface.InitKeymanagerConfig{ListenForChanges: true, Web3SignerConfig: v.web3SignerConfig})
-			if err != nil {
-				return errors.Wrap(err, "could not initialize key manager")
-			}
-			v.km = keyManager
 		}
+		if v.useWeb {
+			log.Info("Waiting for keymanager to initialize validator client with web UI")
+			// if wallet is not set, wait for it to be set through the UI
+			km, err := waitForWebWalletInitialization(ctx, v.walletInitializedFeed, v.walletInitializedChan)
+			if err != nil {
+				return err
+			}
+			v.km = km
+		}
+		return errors.New("wallet not set")
+	} else {
+		if v.web3SignerConfig != nil {
+			v.web3SignerConfig.GenesisValidatorsRoot = genesisRoot
+		}
+		keyManager, err := v.wallet.InitializeKeymanager(ctx, accountsiface.InitKeymanagerConfig{ListenForChanges: true, Web3SignerConfig: v.web3SignerConfig})
+		if err != nil {
+			return errors.Wrap(err, "could not initialize key manager")
+		}
+		v.km = keyManager
 	}
+
 	recheckKeys(ctx, v.db, v.km)
 	return nil
 }
