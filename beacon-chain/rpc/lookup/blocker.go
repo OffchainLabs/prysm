@@ -172,7 +172,7 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, indices []uint64
 	default:
 		if bytesutil.IsHex([]byte(id)) {
 			var err error
-			rootSlice, err = hexutil.Decode(id)
+			rootSlice, err = bytesutil.DecodeHexWithLength(id, fieldparams.RootLength)
 			if err != nil {
 				return nil, &core.RpcError{Err: NewBlockIdParseError(err), Reason: core.BadRequest}
 			}
@@ -217,12 +217,12 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, indices []uint64
 
 	root := bytesutil.ToBytes32(rootSlice)
 
-	if !p.BeaconDB.HasBlock(ctx, root) {
-		return nil, &core.RpcError{Err: fmt.Errorf("block %#x not found in db", rootSlice), Reason: core.NotFound}
-	}
 	b, err := p.BeaconDB.Block(ctx, root)
 	if err != nil {
 		return nil, &core.RpcError{Err: errors.Wrapf(err, "failed to retrieve block %#x from db", rootSlice), Reason: core.Internal}
+	}
+	if b == nil {
+		return nil, &core.RpcError{Err: fmt.Errorf("block %#x not found in db", rootSlice), Reason: core.NotFound}
 	}
 
 	// if block is not in the retention window, return 200 w/ empty list
