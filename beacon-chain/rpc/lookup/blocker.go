@@ -176,9 +176,6 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, indices []uint64
 			if err != nil {
 				return nil, &core.RpcError{Err: NewBlockIdParseError(err), Reason: core.BadRequest}
 			}
-			if len(rootSlice) != fieldparams.RootLength {
-				return nil, &core.RpcError{Err: fmt.Errorf("invalid block root of length %d", len(rootSlice)), Reason: core.BadRequest}
-			}
 		} else {
 			slot, err := strconv.ParseUint(id, 10, 64)
 			if err != nil {
