@@ -55,20 +55,20 @@ func TestToValidatorDutiesContainer_HappyPath(t *testing.T) {
 	require.NoError(t, err)
 
 	// Validate we have the correct number of duties in current and next epochs.
-	require.Equal(t, len(gotContainer.CurrentEpochDuties), len(dutiesResp.CurrentEpochDuties))
-	require.Equal(t, len(gotContainer.NextEpochDuties), len(dutiesResp.NextEpochDuties))
+	assert.Equal(t, len(gotContainer.CurrentEpochDuties), len(dutiesResp.CurrentEpochDuties))
+	assert.Equal(t, len(gotContainer.NextEpochDuties), len(dutiesResp.NextEpochDuties))
 
 	firstCurrentDuty := gotContainer.CurrentEpochDuties[0]
 	expectedCurrentDuty := dutiesResp.CurrentEpochDuties[0]
-	require.DeepEqual(t, firstCurrentDuty.PublicKey, expectedCurrentDuty.PublicKey)
-	require.Equal(t, firstCurrentDuty.ValidatorIndex, expectedCurrentDuty.ValidatorIndex)
-	require.DeepEqual(t, firstCurrentDuty.ProposerSlots, expectedCurrentDuty.ProposerSlots)
+	assert.DeepEqual(t, firstCurrentDuty.PublicKey, expectedCurrentDuty.PublicKey)
+	assert.Equal(t, firstCurrentDuty.ValidatorIndex, expectedCurrentDuty.ValidatorIndex)
+	assert.DeepEqual(t, firstCurrentDuty.ProposerSlots, expectedCurrentDuty.ProposerSlots)
 
 	firstNextDuty := gotContainer.NextEpochDuties[0]
 	expectedNextDuty := dutiesResp.NextEpochDuties[0]
-	require.DeepEqual(t, firstNextDuty.PublicKey, expectedNextDuty.PublicKey)
-	require.Equal(t, firstNextDuty.ValidatorIndex, expectedNextDuty.ValidatorIndex)
-	require.DeepEqual(t, firstNextDuty.ProposerSlots, expectedNextDuty.ProposerSlots)
+	assert.DeepEqual(t, firstNextDuty.PublicKey, expectedNextDuty.PublicKey)
+	assert.Equal(t, firstNextDuty.ValidatorIndex, expectedNextDuty.ValidatorIndex)
+	assert.DeepEqual(t, firstNextDuty.ProposerSlots, expectedNextDuty.ProposerSlots)
 }
 
 func TestWaitForChainStart_StreamSetupFails(t *testing.T) {

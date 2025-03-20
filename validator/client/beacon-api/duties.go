@@ -29,7 +29,7 @@ type beaconApiDutiesProvider struct {
 	jsonRestHandler JsonRestHandler
 }
 
-type attDuty struct {
+type attesterDuty struct {
 	committeeIndex          primitives.CommitteeIndex
 	slot                    primitives.Slot
 	committeeLength         uint64
@@ -95,7 +95,7 @@ func (c *beaconApiValidatorClient) dutiesForEpoch(
 	// will return only once all goroutines finish their execution.
 
 	// Mapping from a validator index to its attesting committee's index and slot
-	attesterDutiesMapping := make(map[primitives.ValidatorIndex]attDuty)
+	attesterDutiesMapping := make(map[primitives.ValidatorIndex]attesterDuty)
 	// Set containing all validator indices that are part of a sync committee for this epoch
 	syncDutiesMapping := make(map[primitives.ValidatorIndex]bool)
 	// Mapping from a validator index to its proposal slot
@@ -109,32 +109,32 @@ func (c *beaconApiValidatorClient) dutiesForEpoch(
 			return errors.Wrapf(err, "failed to get attester duties for epoch `%d`", epoch)
 		}
 
-		for _, attesterDuty := range attesterDuties {
-			validatorIndex, err := strconv.ParseUint(attesterDuty.ValidatorIndex, 10, 64)
+		for _, duty := range attesterDuties {
+			validatorIndex, err := strconv.ParseUint(duty.ValidatorIndex, 10, 64)
 			if err != nil {
-				return errors.Wrapf(err, "failed to parse attester validator index `%s`", attesterDuty.ValidatorIndex)
+				return errors.Wrapf(err, "failed to parse attester validator index `%s`", duty.ValidatorIndex)
 			}
-			slot, err := strconv.ParseUint(attesterDuty.Slot, 10, 64)
+			slot, err := strconv.ParseUint(duty.Slot, 10, 64)
 			if err != nil {
-				return errors.Wrapf(err, "failed to parse attester slot `%s`", attesterDuty.Slot)
+				return errors.Wrapf(err, "failed to parse attester slot `%s`", duty.Slot)
 			}
-			committeeIndex, err := strconv.ParseUint(attesterDuty.CommitteeIndex, 10, 64)
+			committeeIndex, err := strconv.ParseUint(duty.CommitteeIndex, 10, 64)
 			if err != nil {
-				return errors.Wrapf(err, "failed to parse attester committee index `%s`", attesterDuty.CommitteeIndex)
+				return errors.Wrapf(err, "failed to parse attester committee index `%s`", duty.CommitteeIndex)
 			}
-			committeeLength, err := strconv.ParseUint(attesterDuty.CommitteeLength, 10, 64)
+			committeeLength, err := strconv.ParseUint(duty.CommitteeLength, 10, 64)
 			if err != nil {
-				return errors.Wrapf(err, "failed to parse attester committee length `%s`", attesterDuty.CommitteeLength)
+				return errors.Wrapf(err, "failed to parse attester committee length `%s`", duty.CommitteeLength)
 			}
-			validatorCommitteeIndex, err := strconv.ParseUint(attesterDuty.ValidatorCommitteeIndex, 10, 64)
+			validatorCommitteeIndex, err := strconv.ParseUint(duty.ValidatorCommitteeIndex, 10, 64)
 			if err != nil {
-				return errors.Wrapf(err, "failed to parse attester validator committee index `%s`", attesterDuty.ValidatorCommitteeIndex)
+				return errors.Wrapf(err, "failed to parse attester validator committee index `%s`", duty.ValidatorCommitteeIndex)
 			}
-			committeesAtSlot, err := strconv.ParseUint(attesterDuty.CommitteesAtSlot, 10, 64)
+			committeesAtSlot, err := strconv.ParseUint(duty.CommitteesAtSlot, 10, 64)
 			if err != nil {
-				return errors.Wrapf(err, "failed to parse attester committees at slot `%s`", attesterDuty.CommitteesAtSlot)
+				return errors.Wrapf(err, "failed to parse attester committees at slot `%s`", duty.CommitteesAtSlot)
 			}
-			attesterDutiesMapping[primitives.ValidatorIndex(validatorIndex)] = attDuty{
+			attesterDutiesMapping[primitives.ValidatorIndex(validatorIndex)] = attesterDuty{
 				slot:                    primitives.Slot(slot),
 				committeeIndex:          primitives.CommitteeIndex(committeeIndex),
 				committeeLength:         committeeLength,

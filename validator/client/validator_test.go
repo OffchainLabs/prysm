@@ -445,14 +445,13 @@ func TestUpdateDuties_OK(t *testing.T) {
 	client := validatormock.NewMockValidatorClient(ctrl)
 
 	slot := params.BeaconConfig().SlotsPerEpoch
-	committee := []primitives.ValidatorIndex{0, 1, 2, 3}
 	resp := &ethpb.ValidatorDutiesContainer{
 		CurrentEpochDuties: []*ethpb.ValidatorDuty{
 			{
 				AttesterSlot:    params.BeaconConfig().SlotsPerEpoch,
 				ValidatorIndex:  200,
 				CommitteeIndex:  100,
-				CommitteeLength: uint64(len(committee)),
+				CommitteeLength: 4,
 				PublicKey:       []byte("testPubKey_1"),
 				ProposerSlots:   []primitives.Slot{params.BeaconConfig().SlotsPerEpoch + 1},
 			},
@@ -542,14 +541,13 @@ func TestUpdateDuties_AllValidatorsExited(t *testing.T) {
 	client := validatormock.NewMockValidatorClient(ctrl)
 
 	slot := params.BeaconConfig().SlotsPerEpoch
-	committee := []primitives.ValidatorIndex{0, 1, 2, 3}
 	resp := &ethpb.ValidatorDutiesContainer{
 		CurrentEpochDuties: []*ethpb.ValidatorDuty{
 			{
 				AttesterSlot:    params.BeaconConfig().SlotsPerEpoch,
 				ValidatorIndex:  200,
 				CommitteeIndex:  100,
-				CommitteeLength: uint64(len(committee)),
+				CommitteeLength: 4,
 				PublicKey:       []byte("testPubKey_1"),
 				ProposerSlots:   []primitives.Slot{params.BeaconConfig().SlotsPerEpoch + 1},
 				Status:          ethpb.ValidatorStatus_EXITED,
@@ -558,7 +556,7 @@ func TestUpdateDuties_AllValidatorsExited(t *testing.T) {
 				AttesterSlot:    params.BeaconConfig().SlotsPerEpoch,
 				ValidatorIndex:  201,
 				CommitteeIndex:  101,
-				CommitteeLength: uint64(len(committee)),
+				CommitteeLength: 4,
 				PublicKey:       []byte("testPubKey_2"),
 				ProposerSlots:   []primitives.Slot{params.BeaconConfig().SlotsPerEpoch + 1},
 				Status:          ethpb.ValidatorStatus_EXITED,

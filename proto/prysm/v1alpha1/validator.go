@@ -14,7 +14,7 @@ type ValidatorDutiesContainer struct {
 type ValidatorDuty struct {
 	CommitteeLength         uint64
 	CommitteeIndex          primitives.CommitteeIndex
-	CommittesAtSlot         uint64
+	CommitteesAtSlot        uint64
 	ValidatorCommitteeIndex uint64
 	AttesterSlot            primitives.Slot
 	ProposerSlots           []primitives.Slot
@@ -22,5 +22,4 @@ type ValidatorDuty struct {
 	Status                  ValidatorStatus
 	ValidatorIndex          primitives.ValidatorIndex
 	IsSyncCommittee         bool
-	CommitteesAtSlot        uint64
 }

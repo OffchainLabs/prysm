@@ -55,28 +55,27 @@ func toValidatorDutiesContainer(dutiesResponse *ethpb.DutiesResponse) (*ethpb.Va
 	}, nil
 }
 
-func toValidatorDuty(duties *ethpb.DutiesResponse_Duty) (*ethpb.ValidatorDuty, error) {
+func toValidatorDuty(duty *ethpb.DutiesResponse_Duty) (*ethpb.ValidatorDuty, error) {
 	var valIndexInCommittee uint64
 	// valIndexInCommittee will be 0 in case we don't get a match. This is a potential false positive,
 	// however it's an impossible condition because every validator must be assigned to a committee.
-	for cIndex, vIndex := range duties.Committee {
-		if vIndex == duties.ValidatorIndex {
+	for cIndex, vIndex := range duty.Committee {
+		if vIndex == duty.ValidatorIndex {
 			valIndexInCommittee = uint64(cIndex)
 			break
 		}
 	}
 	return &ethpb.ValidatorDuty{
-		CommitteeLength:         uint64(len(duties.Committee)),
-		CommitteeIndex:          duties.CommitteeIndex,
-		CommittesAtSlot:         duties.CommitteesAtSlot, // GRPC doesn't use this value though
+		CommitteeLength:         uint64(len(duty.Committee)),
+		CommitteeIndex:          duty.CommitteeIndex,
+		CommitteesAtSlot:        duty.CommitteesAtSlot, // GRPC doesn't use this value though
 		ValidatorCommitteeIndex: valIndexInCommittee,
-		AttesterSlot:            duties.AttesterSlot,
-		ProposerSlots:           duties.ProposerSlots,
-		PublicKey:               bytesutil.SafeCopyBytes(duties.PublicKey),
-		Status:                  duties.Status,
-		ValidatorIndex:          duties.ValidatorIndex,
-		IsSyncCommittee:         duties.IsSyncCommittee,
-		CommitteesAtSlot:        duties.CommitteesAtSlot,
+		AttesterSlot:            duty.AttesterSlot,
+		ProposerSlots:           duty.ProposerSlots,
+		PublicKey:               bytesutil.SafeCopyBytes(duty.PublicKey),
+		Status:                  duty.Status,
+		ValidatorIndex:          duty.ValidatorIndex,
+		IsSyncCommittee:         duty.IsSyncCommittee,
 	}, nil
 }
 

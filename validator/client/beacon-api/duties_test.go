@@ -891,11 +891,11 @@ func TestGetDutiesForEpoch_Valid(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, len(expectedDuties), len(duties))
 			for i, duty := range expectedDuties {
-				require.DeepEqual(t, duty.CommitteeIndex, duties[i].CommitteeIndex)
-				require.DeepEqual(t, duty.ProposerSlots, duties[i].ProposerSlots)
-				require.DeepEqual(t, duty.ValidatorIndex, duties[i].ValidatorIndex)
-				require.DeepEqual(t, duty.IsSyncCommittee, duties[i].IsSyncCommittee)
-				require.DeepEqual(t, duty.Status, duties[i].Status)
+				assert.Equal(t, duty.CommitteeIndex, duties[i].CommitteeIndex)
+				assert.DeepEqual(t, duty.ProposerSlots, duties[i].ProposerSlots)
+				assert.Equal(t, duty.ValidatorIndex, duties[i].ValidatorIndex)
+				assert.Equal(t, duty.IsSyncCommittee, duties[i].IsSyncCommittee)
+				assert.Equal(t, duty.Status, duties[i].Status)
 			}
 		})
 	}

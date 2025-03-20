@@ -137,6 +137,20 @@ func NewValidatorService(ctx context.Context, cfg *Config) (*ValidatorService, e
 	return s, nil
 }
 
+// DebugTransport wraps an existing RoundTripper.
+type DebugTransport struct {
+	rt http.RoundTripper
+}
+
+func (d *DebugTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	start := time.Now()
+	resp, err := d.rt.RoundTrip(req)
+	duration := time.Since(start)
+	log.Errorf("HTTP %s %s took %v", req.Method, req.URL, duration)
+
+	return resp, err
+}
+
 // Start the validator service. Launches the main go routine for the validator
 // client.
 func (v *ValidatorService) Start() {
@@ -173,8 +187,9 @@ func (v *ValidatorService) Start() {
 		log.WithError(err).Error("No API hosts provided")
 		return
 	}
+
 	restHandler := beaconApi.NewBeaconApiJsonRestHandler(
-		http.Client{Timeout: v.conn.GetBeaconApiTimeout(), Transport: otelhttp.NewTransport(http.DefaultTransport)},
+		http.Client{Timeout: v.conn.GetBeaconApiTimeout(), Transport: otelhttp.NewTransport(&DebugTransport{rt: http.DefaultTransport})},
 		hosts[0],
 	)
 
