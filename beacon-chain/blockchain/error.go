@@ -30,6 +30,8 @@ var (
 	ErrNotCheckpoint = errors.New("not a checkpoint in forkchoice")
 	// ErrNilHead is returned when no head is present in the blockchain service.
 	ErrNilHead = errors.New("nil head")
+	// errNotGenesisRoot is returned when the root is not the genesis block root.
+	errNotGenesisRoot = errors.New("root is not the genesis block root")
 )
 
 var errMaxBlobsExceeded = errors.New("Expected commitments in block exceeds MAX_BLOBS_PER_BLOCK")
