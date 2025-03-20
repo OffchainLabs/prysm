@@ -43,6 +43,7 @@ type Config struct {
 	AuthTokenPath          string
 	Middlewares            []middleware.Middleware
 	Router                 *http.ServeMux
+	ServeWebUI             bool
 }
 
 // Server defining a HTTP server for the remote signer API and registering clients
@@ -77,6 +78,7 @@ type Server struct {
 	logStreamer               logs.Streamer
 	logStreamerBufferSize     int
 	startFailure              error
+	serveWebUI                bool
 }
 
 // NewServer instantiates a new HTTP server.
@@ -104,6 +106,7 @@ func NewServer(ctx context.Context, cfg *Config) *Server {
 		beaconApiEndpoint:      cfg.BeaconApiEndpoint,
 		beaconNodeEndpoint:     cfg.BeaconNodeGRPCEndpoint,
 		router:                 cfg.Router,
+		serveWebUI:             cfg.ServeWebUI,
 	}
 
 	if server.authTokenPath == "" && server.walletDir != "" {
@@ -159,8 +162,9 @@ func (s *Server) InitializeRoutesWithWebHandler() error {
 		if strings.HasPrefix(r.URL.Path, "/api") {
 			r.URL.Path = strings.Replace(r.URL.Path, "/api", "", 1) // used to redirect apis to standard rest APIs
 			s.router.ServeHTTP(w, r)
-		} else {
-			// Finally, we handle with the web server.
+			return
+		}
+		if s.serveWebUI {
 			web.Handler(w, r)
 		}
 	})

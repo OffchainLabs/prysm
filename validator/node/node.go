@@ -112,23 +112,7 @@ func NewValidatorClient(cliCtx *cli.Context) (*ValidatorClient, error) {
 		}
 	}
 
-	// initialize router used for endpoints
-	router := http.NewServeMux()
-	// If the --web flag is enabled to administer the validator
-	// client via a web portal, we start the validator client in a different way.
-	// Change Web flag name to enable keymanager API, look at merging initializeFromCLI and initializeForWeb maybe after WebUI DEPRECATED.
-	if cliCtx.IsSet(flags.EnableWebFlag.Name) {
-		if cliCtx.IsSet(flags.Web3SignerURLFlag.Name) || cliCtx.IsSet(flags.Web3SignerPublicValidatorKeysFlag.Name) {
-			log.Warn("Remote Keymanager API enabled. Prysm web does not properly support web3signer at this time")
-		}
-		log.Info("Enabling web portal to manage the validator client")
-		if err := validatorClient.initializeForWeb(cliCtx, router); err != nil {
-			return nil, err
-		}
-		return validatorClient, nil
-	}
-
-	if err := validatorClient.initializeFromCLI(cliCtx, router); err != nil {
+	if err := validatorClient.initialize(); err != nil {
 		return nil, err
 	}
 
@@ -230,16 +214,20 @@ func (c *ValidatorClient) getLegacyDatabaseLocation(
 	return dataDir, dataFile, nil
 }
 
-func (c *ValidatorClient) initializeFromCLI(cliCtx *cli.Context, router *http.ServeMux) error {
-	isInteropNumValidatorsSet := cliCtx.IsSet(flags.InteropNumValidators.Name)
-	isWeb3SignerURLFlagSet := cliCtx.IsSet(flags.Web3SignerURLFlag.Name)
+func (c *ValidatorClient) initialize() error {
+	isInteropNumValidatorsSet := c.cliCtx.IsSet(flags.InteropNumValidators.Name)
+	isWeb3SignerURLFlagSet := c.cliCtx.IsSet(flags.Web3SignerURLFlag.Name)
 
 	if !isInteropNumValidatorsSet {
 		// Custom Check For Web3Signer
 		if isWeb3SignerURLFlagSet {
-			c.wallet = wallet.NewWalletForWeb3Signer(cliCtx)
+			c.wallet = wallet.NewWalletForWeb3Signer(c.cliCtx)
 		} else {
-			w, err := wallet.OpenWalletOrElseCli(cliCtx, func(cliCtx *cli.Context) (*wallet.Wallet, error) {
+			//// Read the wallet password file from the cli context.
+			if err := setWalletPasswordFilePath(c.cliCtx); err != nil {
+				return errors.Wrap(err, "could not read wallet password file")
+			}
+			w, err := wallet.OpenWalletOrElseCli(c.cliCtx, func(cliCtx *cli.Context) (*wallet.Wallet, error) {
 				return nil, wallet.ErrNoWalletFound
 			})
 			if err != nil {
@@ -254,81 +242,34 @@ func (c *ValidatorClient) initializeFromCLI(cliCtx *cli.Context, router *http.Se
 		}
 	}
 
-	if err := c.initializeDB(cliCtx); err != nil {
+	if err := c.initializeDB(); err != nil {
 		return errors.Wrapf(err, "could not initialize database")
 	}
 
-	if !cliCtx.Bool(cmd.DisableMonitoringFlag.Name) {
-		if err := c.registerPrometheusService(cliCtx); err != nil {
-			return err
-		}
+	if err := c.registerPrometheusService(); err != nil {
+		return errors.Wrapf(err, "could not register prometheus service")
 	}
-	if err := c.registerValidatorService(cliCtx); err != nil {
-		return err
+
+	if err := c.registerValidatorService(); err != nil {
+		return errors.Wrapf(err, "could not register validator service")
 	}
-	if cliCtx.Bool(flags.EnableRPCFlag.Name) {
-		if err := c.registerRPCService(router); err != nil {
-			return err
-		}
+
+	if err := c.registerRPCService(); err != nil {
+		return errors.Wrapf(err, "could not register RPC service")
 	}
+
 	return nil
 }
 
-func (c *ValidatorClient) initializeForWeb(cliCtx *cli.Context, router *http.ServeMux) error {
-	if cliCtx.IsSet(flags.Web3SignerURLFlag.Name) {
-		// Custom Check For Web3Signer
-		c.wallet = wallet.NewWalletForWeb3Signer(cliCtx)
-	} else {
-		// Read the wallet password file from the cli context.
-		if err := setWalletPasswordFilePath(cliCtx); err != nil {
-			return errors.Wrap(err, "could not read wallet password file")
-		}
-
-		// Read the wallet from the specified path.
-		w, err := wallet.OpenWalletOrElseCli(cliCtx, func(cliCtx *cli.Context) (*wallet.Wallet, error) {
-			return nil, nil
-		})
-		if err != nil {
-			return errors.Wrap(err, "could not open wallet")
-		}
-		c.wallet = w
-	}
-
-	if err := c.initializeDB(cliCtx); err != nil {
-		return errors.Wrapf(err, "could not initialize database")
-	}
-
-	if !cliCtx.Bool(cmd.DisableMonitoringFlag.Name) {
-		if err := c.registerPrometheusService(cliCtx); err != nil {
-			return err
-		}
-	}
-	if err := c.registerValidatorService(cliCtx); err != nil {
-		return err
-	}
-
-	if err := c.registerRPCService(router); err != nil {
-		return err
-	}
-
-	host := cliCtx.String(flags.HTTPServerHost.Name)
-	port := cliCtx.Int(flags.HTTPServerPort.Name)
-	webAddress := fmt.Sprintf("http://%s:%d", host, port)
-	log.WithField("address", webAddress).Info(
-		"Starting Prysm web UI on address, open in browser to access",
-	)
-	return nil
-}
-
-func (c *ValidatorClient) initializeDB(cliCtx *cli.Context) error {
-	fileSystemDataDir := cliCtx.String(cmd.DataDirFlag.Name)
-	kvDataDir := cliCtx.String(cmd.DataDirFlag.Name)
+func (c *ValidatorClient) initializeDB() error {
+	fileSystemDataDir := c.cliCtx.String(cmd.DataDirFlag.Name)
+	kvDataDir := c.cliCtx.String(cmd.DataDirFlag.Name)
 	kvDataFile := filepath.Join(kvDataDir, kv.ProtectionDbFileName)
-	walletDir := cliCtx.String(flags.WalletDirFlag.Name)
-	isInteropNumValidatorsSet := cliCtx.IsSet(flags.InteropNumValidators.Name)
-	isWeb3SignerURLFlagSet := cliCtx.IsSet(flags.Web3SignerURLFlag.Name)
-	clearFlag := cliCtx.Bool(cmd.ClearDB.Name)
-	forceClearFlag := cliCtx.Bool(cmd.ForceClearDB.Name)
+	walletDir := c.cliCtx.String(flags.WalletDirFlag.Name)
+	isInteropNumValidatorsSet := c.cliCtx.IsSet(flags.InteropNumValidators.Name)
+	isWeb3SignerURLFlagSet := c.cliCtx.IsSet(flags.Web3SignerURLFlag.Name)
+	clearFlag := c.cliCtx.Bool(cmd.ClearDB.Name)
+	forceClearFlag := c.cliCtx.Bool(cmd.ForceClearDB.Name)
 
 	// Workaround for https://github.com/prysmaticlabs/prysm/issues/13391
 	kvDataDir, _, err := c.getLegacyDatabaseLocation(
@@ -344,17 +285,17 @@ func (c *ValidatorClient) initializeDB(cliCtx *cli.Context) error {
 	}
 
 	// Check if minimal slashing protection is requested.
-	isMinimalSlashingProtectionRequested := cliCtx.Bool(features.EnableMinimalSlashingProtection.Name)
+	isMinimalSlashingProtectionRequested := c.cliCtx.Bool(features.EnableMinimalSlashingProtection.Name)
 
 	if clearFlag || forceClearFlag {
 		var err error
 
 		if isMinimalSlashingProtectionRequested {
-			err = clearDB(cliCtx.Context, fileSystemDataDir, forceClearFlag, true)
+			err = clearDB(c.cliCtx.Context, fileSystemDataDir, forceClearFlag, true)
 		} else {
-			err = clearDB(cliCtx.Context, kvDataDir, forceClearFlag, false)
+			err = clearDB(c.cliCtx.Context, kvDataDir, forceClearFlag, false)
 			// Reset the BoltDB datadir to the requested location, so the new one is not located any more in the legacy location.
-			kvDataDir = cliCtx.String(cmd.DataDirFlag.Name)
+			kvDataDir = c.cliCtx.String(cmd.DataDirFlag.Name)
 		}
 
 		if err != nil {
@@ -391,7 +332,7 @@ func (c *ValidatorClient) initializeDB(cliCtx *cli.Context) error {
 	if !isMinimalSlashingProtectionRequested && minimalDatabaseExists {
 		log.Warning("Complete slashing protection database requested, while minimal slashing protection database currently used. Converting.")
 
-		if err := db.ConvertDatabase(cliCtx.Context, fileSystemDataDir, kvDataDir, true); err != nil {
+		if err := db.ConvertDatabase(c.cliCtx.Context, fileSystemDataDir, kvDataDir, true); err != nil {
 			return errors.Wrapf(err, "could not convert minimal slashing protection database to complete slashing protection database")
 		}
 	}
@@ -415,7 +356,7 @@ func (c *ValidatorClient) initializeDB(cliCtx *cli.Context) error {
 		valDB, err = filesystem.NewStore(fileSystemDataDir, nil)
 	} else {
 		log.WithField("databasePath", kvDataDir).Info("Checking DB")
-		valDB, err = kv.NewKVStore(cliCtx.Context, kvDataDir, nil)
+		valDB, err = kv.NewKVStore(c.cliCtx.Context, kvDataDir, nil)
 	}
 
 	if err != nil {
@@ -426,21 +367,25 @@ func (c *ValidatorClient) initializeDB(cliCtx *cli.Context) error {
 	c.db = valDB
 
 	// Migrate the database
-	if err := valDB.RunUpMigrations(cliCtx.Context); err != nil {
+	if err := valDB.RunUpMigrations(c.cliCtx.Context); err != nil {
 		return errors.Wrap(err, "could not run database migration")
 	}
 
 	return nil
 }
 
-func (c *ValidatorClient) registerPrometheusService(cliCtx *cli.Context) error {
+func (c *ValidatorClient) registerPrometheusService() error {
+	if c.cliCtx.Bool(cmd.DisableMonitoringFlag.Name) {
+		log.Info("Prometheus service disabled")
+		return nil
+	}
 	var additionalHandlers []prometheus.Handler
-	if cliCtx.IsSet(cmd.EnableBackupWebhookFlag.Name) {
+	if c.cliCtx.IsSet(cmd.EnableBackupWebhookFlag.Name) {
 		additionalHandlers = append(
 			additionalHandlers,
 			prometheus.Handler{
 				Path:    "/db/backup",
-				Handler: backup.Handler(c.db, cliCtx.String(cmd.BackupWebhookOutputDir.Name)),
+				Handler: backup.Handler(c.db, c.cliCtx.String(cmd.BackupWebhookOutputDir.Name)),
 			},
 		)
 	}
@@ -453,7 +398,7 @@ func (c *ValidatorClient) registerPrometheusService(cliCtx *cli.Context) error {
 	return c.services.RegisterService(service)
 }
 
-func (c *ValidatorClient) registerValidatorService(cliCtx *cli.Context) error {
+func (c *ValidatorClient) registerValidatorService() error {
 	var (
 		interopKmConfig *local.InteropKeymanagerConfig
 		err             error
@@ -462,8 +407,8 @@ func (c *ValidatorClient) registerValidatorService(cliCtx *cli.Context) error {
 	// Configure interop.
 	if c.cliCtx.IsSet(flags.InteropNumValidators.Name) {
 		interopKmConfig = &local.InteropKeymanagerConfig{
-			Offset:           cliCtx.Uint64(flags.InteropStartIndex.Name),
-			NumValidatorKeys: cliCtx.Uint64(flags.InteropNumValidators.Name),
+			Offset:           c.cliCtx.Uint64(flags.InteropStartIndex.Name),
+			NumValidatorKeys: c.cliCtx.Uint64(flags.InteropNumValidators.Name),
 		}
 	}
 
@@ -569,13 +514,31 @@ func proposerSettings(cliCtx *cli.Context, db iface.ValidatorDB) (*proposer.Sett
 	return l.Load(cliCtx)
 }
 
-func (c *ValidatorClient) registerRPCService(router *http.ServeMux) error {
+func (c *ValidatorClient) registerRPCService() error {
+	serveWebUI := c.cliCtx.IsSet(flags.EnableWebFlag.Name)
+	if !c.cliCtx.IsSet(flags.EnableRPCFlag.Name) && !serveWebUI {
+		return nil
+	}
+	host := c.cliCtx.String(flags.HTTPServerHost.Name)
+	port := c.cliCtx.Int(flags.HTTPServerPort.Name)
+	authTokenPath := c.cliCtx.String(flags.AuthTokenPathFlag.Name)
+	walletDir := c.cliCtx.String(flags.WalletDirFlag.Name)
+
+	if serveWebUI {
+		if c.cliCtx.IsSet(flags.Web3SignerURLFlag.Name) || c.cliCtx.IsSet(flags.Web3SignerPublicValidatorKeysFlag.Name) {
+			log.Warn("Remote Keymanager API enabled. Prysm web does not properly support web3signer at this time")
+		}
+		webAddress := fmt.Sprintf("http://%s:%d", host, port)
+		log.WithField("address", webAddress).Info(
+			"Starting Prysm web UI on address, open in browser to access",
+		)
+	}
+
 	var vs *client.ValidatorService
 	if err := c.services.FetchService(&vs); err != nil {
 		return err
 	}
-	authTokenPath := c.cliCtx.String(flags.AuthTokenPathFlag.Name)
-	walletDir := c.cliCtx.String(flags.WalletDirFlag.Name)
+
 	// if no auth token path flag was passed try to set a default value
 	if authTokenPath == "" {
 		authTokenPath = flags.AuthTokenPathFlag.Value
@@ -584,14 +547,12 @@ func (c *ValidatorClient) registerRPCService(router *http.ServeMux) error {
 			authTokenPath = filepath.Join(walletDir, api.AuthTokenFileName)
 		}
 	}
-	host := c.cliCtx.String(flags.HTTPServerHost.Name)
 	if host != flags.DefaultHTTPServerHost {
 		log.WithField("webHost", host).Warn(
 			"You are using a non-default web host. Web traffic is served by HTTP, so be wary of " +
 				"changing this parameter if you are exposing this host to the Internet!",
 		)
 	}
-	port := c.cliCtx.Int(flags.HTTPServerPort.Name)
 	var allowedOrigins []string
 	if c.cliCtx.IsSet(flags.HTTPServerCorsDomain.Name) {
 		allowedOrigins = strings.Split(c.cliCtx.String(flags.HTTPServerCorsDomain.Name), ",")
@@ -621,7 +582,8 @@ func (c *ValidatorClient) registerRPCService(router *http.ServeMux) error {
 		ValidatorService:       vs,
 		AuthTokenPath:          authTokenPath,
 		Middlewares:            middlewares,
-		Router:                 router,
+		Router:                 http.NewServeMux(),
+		ServeWebUI:             serveWebUI,
 	})
 	return c.services.RegisterService(s)
 }
