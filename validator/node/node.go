@@ -229,11 +229,11 @@ func getWallet(cliCtx *cli.Context) (*wallet.Wallet, error) {
 		log.Info("no wallet required for interop validation")
 		return nil, nil
 	}
-	// Custom Check For Web3Signer
+
 	if cliCtx.IsSet(flags.Web3SignerURLFlag.Name) {
 		return wallet.NewWalletForWeb3Signer(cliCtx), nil
 	}
-	//// Read the wallet password file from the cli context.
+
 	if err := setWalletPasswordFilePath(cliCtx); err != nil {
 		return nil, errors.Wrap(err, "could not read wallet password file")
 	}
@@ -253,7 +253,6 @@ func getWallet(cliCtx *cli.Context) (*wallet.Wallet, error) {
 }
 
 func (c *ValidatorClient) registerServices(cliCtx *cli.Context) error {
-
 	if err := c.registerPrometheusService(cliCtx); err != nil {
 		return errors.Wrapf(err, "could not register prometheus service")
 	}
