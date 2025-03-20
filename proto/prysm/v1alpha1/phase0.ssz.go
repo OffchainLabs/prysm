@@ -4048,3 +4048,83 @@ func (v *Validator) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	hh.Merkleize(indx)
 	return
 }
+
+// MarshalSSZ ssz marshals the ValidatorIdentity object
+func (v *ValidatorIdentity) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(v)
+}
+
+// MarshalSSZTo ssz marshals the ValidatorIdentity object to a target array
+func (v *ValidatorIdentity) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+
+	// Field (0) 'Index'
+	dst = ssz.MarshalUint64(dst, uint64(v.Index))
+
+	// Field (1) 'Pubkey'
+	if size := len(v.Pubkey); size != 48 {
+		err = ssz.ErrBytesLengthFn("--.Pubkey", size, 48)
+		return
+	}
+	dst = append(dst, v.Pubkey...)
+
+	// Field (2) 'ActivationEpoch'
+	dst = ssz.MarshalUint64(dst, uint64(v.ActivationEpoch))
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the ValidatorIdentity object
+func (v *ValidatorIdentity) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size != 64 {
+		return ssz.ErrSize
+	}
+
+	// Field (0) 'Index'
+	v.Index = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[0:8]))
+
+	// Field (1) 'Pubkey'
+	if cap(v.Pubkey) == 0 {
+		v.Pubkey = make([]byte, 0, len(buf[8:56]))
+	}
+	v.Pubkey = append(v.Pubkey, buf[8:56]...)
+
+	// Field (2) 'ActivationEpoch'
+	v.ActivationEpoch = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Epoch(ssz.UnmarshallUint64(buf[56:64]))
+
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the ValidatorIdentity object
+func (v *ValidatorIdentity) SizeSSZ() (size int) {
+	size = 64
+	return
+}
+
+// HashTreeRoot ssz hashes the ValidatorIdentity object
+func (v *ValidatorIdentity) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(v)
+}
+
+// HashTreeRootWith ssz hashes the ValidatorIdentity object with a hasher
+func (v *ValidatorIdentity) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'Index'
+	hh.PutUint64(uint64(v.Index))
+
+	// Field (1) 'Pubkey'
+	if size := len(v.Pubkey); size != 48 {
+		err = ssz.ErrBytesLengthFn("--.Pubkey", size, 48)
+		return
+	}
+	hh.PutBytes(v.Pubkey)
+
+	// Field (2) 'ActivationEpoch'
+	hh.PutUint64(uint64(v.ActivationEpoch))
+
+	hh.Merkleize(indx)
+	return
+}
