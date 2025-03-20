@@ -220,7 +220,7 @@ func buildResponse(
 func (c *beaconApiValidatorClient) indexToLiveness(ctx context.Context, epoch primitives.Epoch, indexes []string) (map[string]bool, error) {
 	livenessResponse, err := c.liveness(ctx, epoch, indexes)
 	if err != nil || livenessResponse.Data == nil {
-		return nil, errors.Wrapf(err, fmt.Sprintf("failed to get liveness for epoch %d", epoch))
+		return nil, errors.Wrapf(err, "failed to get liveness for epoch %d", epoch)
 	}
 
 	indexToLiveness := make(map[string]bool, len(livenessResponse.Data))

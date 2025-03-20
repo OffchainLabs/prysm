@@ -166,7 +166,7 @@ func configureExecutionSetting(cliCtx *cli.Context) error {
 	}
 
 	if !cliCtx.IsSet(flags.SuggestedFeeRecipient.Name) {
-		log.Warnf("In order to receive transaction fees from proposing blocks, " +
+		log.Warn("In order to receive transaction fees from proposing blocks, " +
 			"you must provide flag --" + flags.SuggestedFeeRecipient.Name + " with a valid ethereum address when starting your beacon node. " +
 			"Please see our documentation for more information on this requirement (https://docs.prylabs.network/docs/execution-node/fee-recipient).")
 		return nil

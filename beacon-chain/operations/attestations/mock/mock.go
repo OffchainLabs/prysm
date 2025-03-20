@@ -1,3 +1,4 @@
+// lint:nopanic -- Mock / test code, panic is allowed.
 package mock
 
 import (
@@ -79,8 +80,8 @@ func (m *PoolMock) SaveUnaggregatedAttestations(atts []ethpb.Att) error {
 }
 
 // UnaggregatedAttestations --
-func (m *PoolMock) UnaggregatedAttestations() ([]ethpb.Att, error) {
-	return m.UnaggregatedAtts, nil
+func (m *PoolMock) UnaggregatedAttestations() []ethpb.Att {
+	return m.UnaggregatedAtts
 }
 
 // UnaggregatedAttestationsBySlotIndex --

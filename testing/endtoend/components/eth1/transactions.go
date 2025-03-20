@@ -39,6 +39,13 @@ type TransactionGenerator struct {
 	seed     int64
 	started  chan struct{}
 	cancel   context.CancelFunc
+	paused   bool
+}
+
+func (t *TransactionGenerator) UnderlyingProcess() *os.Process {
+	// Transaction Generator runs under the same underlying process so
+	// we return an empty process object.
+	return &os.Process{}
 }
 
 func NewTransactionGenerator(keystore string, seed int64) *TransactionGenerator {
@@ -94,6 +101,9 @@ func (t *TransactionGenerator) Start(ctx context.Context) error {
 		case <-ctx.Done():
 			return nil
 		case <-ticker.C:
+			if t.paused {
+				continue
+			}
 			backend := ethclient.NewClient(client)
 			err = SendTransaction(client, mineKey.PrivateKey, f, gasPrice, mineKey.Address.String(), txCount, backend, false)
 			if err != nil {
@@ -211,11 +221,13 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, f *filler.Filler
 
 // Pause pauses the component and its underlying process.
 func (t *TransactionGenerator) Pause() error {
+	t.paused = true
 	return nil
 }
 
 // Resume resumes the component and its underlying process.
 func (t *TransactionGenerator) Resume() error {
+	t.paused = false
 	return nil
 }
 
@@ -309,7 +321,7 @@ func RandomBlobTx(rpc *rpc.Client, f *filler.Filler, sender common.Address, nonc
 func New4844Tx(nonce uint64, to *common.Address, gasLimit uint64, chainID, tip, feeCap, value *big.Int, code []byte, blobFeeCap *big.Int, blobData []byte, al types.AccessList) *types.Transaction {
 	blobs, comms, proofs, versionedHashes, err := EncodeBlobs(blobData)
 	if err != nil {
-		panic(err)
+		panic(err) // lint:nopanic -- Test code.
 	}
 	tx := types.NewTx(&types.BlobTx{
 		ChainID:    uint256.MustFromBig(chainID),
@@ -415,7 +427,7 @@ func randomAddress() common.Address {
 		b := make([]byte, 20)
 		_, err := mathRand.Read(b) // #nosec G404
 		if err != nil {
-			panic(err)
+			panic(err) // lint:nopanic -- Test code.
 		}
 		return common.BytesToAddress(b)
 	case 3:

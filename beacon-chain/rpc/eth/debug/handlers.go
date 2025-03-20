@@ -190,6 +190,7 @@ func (s *Server) GetForkChoice(w http.ResponseWriter, r *http.Request) {
 				Balance:                  fmt.Sprintf("%d", n.Balance),
 				ExecutionOptimistic:      n.ExecutionOptimistic,
 				TimeStamp:                fmt.Sprintf("%d", n.Timestamp),
+				Target:                   fmt.Sprintf("%#x", n.Target),
 			},
 		}
 	}
