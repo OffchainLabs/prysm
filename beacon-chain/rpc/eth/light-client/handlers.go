@@ -2,7 +2,6 @@ package lightclient
 
 import (
 	"context"
-	"encoding/binary"
 	"fmt"
 	"math"
 	"net/http"
@@ -20,8 +19,10 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
+	"github.com/prysmaticlabs/prysm/v5/network/forks"
 	"github.com/prysmaticlabs/prysm/v5/network/httputil"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
+	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
 // GetLightClientBootstrap - implements https://github.com/ethereum/beacon-APIs/blob/263f4ed6c263c967f13279c7a9f5629b51c5fc55/apis/beacon/light_client/bootstrap.yaml
@@ -123,9 +124,16 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 				// Only return the first contiguous range of updates
 				break
 			}
-			versionBytes := make([]byte, 4)
-			binary.BigEndian.PutUint32(versionBytes, uint32(update.Version()))
-			forkDigest, err := signing.ComputeForkDigest(versionBytes, params.BeaconConfig().GenesisValidatorsRoot[:])
+
+			updateSlot := update.AttestedHeader().Beacon().Slot
+			updateEpoch := slots.ToEpoch(updateSlot)
+			updateFork, err := forks.Fork(updateEpoch)
+			if err != nil {
+				httputil.HandleError(w, "Could not get fork Version: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			forkDigest, err := signing.ComputeForkDigest(updateFork.CurrentVersion, params.BeaconConfig().GenesisValidatorsRoot[:])
 			if err != nil {
 				httputil.HandleError(w, "Could not compute fork digest: "+err.Error(), http.StatusInternalServerError)
 				return
@@ -138,8 +146,8 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 
 			var chunkLength []byte
 			chunkLength = ssz.MarshalUint64(chunkLength, uint64(len(updateSSZ)+4))
-			fmt.Println("chunkLength", chunkLength)
-			fmt.Println("forkDigest", forkDigest)
+			//fmt.Println("chunkLength", chunkLength)
+			//fmt.Println("forkDigest", forkDigest)
 			response = append(response, chunkLength...)
 			response = append(response, forkDigest[:]...)
 			response = append(response, updateSSZ...)
