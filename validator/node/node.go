@@ -112,7 +112,7 @@ func NewValidatorClient(cliCtx *cli.Context) (*ValidatorClient, error) {
 		}
 	}
 
-	if err := validatorClient.initialize(); err != nil {
+	if err := validatorClient.initialize(cliCtx); err != nil {
 		return nil, err
 	}
 
@@ -214,20 +214,20 @@ func (c *ValidatorClient) getLegacyDatabaseLocation(
 	return dataDir, dataFile, nil
 }
 
-func (c *ValidatorClient) initialize() error {
-	isInteropNumValidatorsSet := c.cliCtx.IsSet(flags.InteropNumValidators.Name)
-	isWeb3SignerURLFlagSet := c.cliCtx.IsSet(flags.Web3SignerURLFlag.Name)
+func (c *ValidatorClient) initialize(cliCtx *cli.Context) error {
+	isInteropNumValidatorsSet := cliCtx.IsSet(flags.InteropNumValidators.Name)
+	isWeb3SignerURLFlagSet := cliCtx.IsSet(flags.Web3SignerURLFlag.Name)
 
 	if !isInteropNumValidatorsSet {
 		// Custom Check For Web3Signer
 		if isWeb3SignerURLFlagSet {
-			c.wallet = wallet.NewWalletForWeb3Signer(c.cliCtx)
+			c.wallet = wallet.NewWalletForWeb3Signer(cliCtx)
 		} else {
 			//// Read the wallet password file from the cli context.
-			if err := setWalletPasswordFilePath(c.cliCtx); err != nil {
+			if err := setWalletPasswordFilePath(cliCtx); err != nil {
 				return errors.Wrap(err, "could not read wallet password file")
 			}
-			w, err := wallet.OpenWalletOrElseCli(c.cliCtx, func(cliCtx *cli.Context) (*wallet.Wallet, error) {
+			w, err := wallet.OpenWalletOrElseCli(cliCtx, func(cliCtx *cli.Context) (*wallet.Wallet, error) {
 				return nil, wallet.ErrNoWalletFound
 			})
 			if err != nil {
@@ -242,34 +242,34 @@ func (c *ValidatorClient) initialize() error {
 		}
 	}
 
-	if err := c.initializeDB(); err != nil {
+	if err := c.initializeDB(cliCtx); err != nil {
 		return errors.Wrapf(err, "could not initialize database")
 	}
 
-	if err := c.registerPrometheusService(); err != nil {
+	if err := c.registerPrometheusService(cliCtx); err != nil {
 		return errors.Wrapf(err, "could not register prometheus service")
 	}
 
-	if err := c.registerValidatorService(); err != nil {
+	if err := c.registerValidatorService(cliCtx); err != nil {
 		return errors.Wrapf(err, "could not register validator service")
 	}
 
-	if err := c.registerRPCService(); err != nil {
+	if err := c.registerRPCService(cliCtx); err != nil {
 		return errors.Wrapf(err, "could not register RPC service")
 	}
 
 	return nil
 }
 
-func (c *ValidatorClient) initializeDB() error {
-	fileSystemDataDir := c.cliCtx.String(cmd.DataDirFlag.Name)
-	kvDataDir := c.cliCtx.String(cmd.DataDirFlag.Name)
+func (c *ValidatorClient) initializeDB(cliCtx *cli.Context) error {
+	fileSystemDataDir := cliCtx.String(cmd.DataDirFlag.Name)
+	kvDataDir := cliCtx.String(cmd.DataDirFlag.Name)
 	kvDataFile := filepath.Join(kvDataDir, kv.ProtectionDbFileName)
-	walletDir := c.cliCtx.String(flags.WalletDirFlag.Name)
-	isInteropNumValidatorsSet := c.cliCtx.IsSet(flags.InteropNumValidators.Name)
-	isWeb3SignerURLFlagSet := c.cliCtx.IsSet(flags.Web3SignerURLFlag.Name)
-	clearFlag := c.cliCtx.Bool(cmd.ClearDB.Name)
-	forceClearFlag := c.cliCtx.Bool(cmd.ForceClearDB.Name)
+	walletDir := cliCtx.String(flags.WalletDirFlag.Name)
+	isInteropNumValidatorsSet := cliCtx.IsSet(flags.InteropNumValidators.Name)
+	isWeb3SignerURLFlagSet := cliCtx.IsSet(flags.Web3SignerURLFlag.Name)
+	clearFlag := cliCtx.Bool(cmd.ClearDB.Name)
+	forceClearFlag := cliCtx.Bool(cmd.ForceClearDB.Name)
 
 	// Workaround for https://github.com/prysmaticlabs/prysm/issues/13391
 	kvDataDir, _, err := c.getLegacyDatabaseLocation(
@@ -285,17 +285,17 @@ func (c *ValidatorClient) initializeDB() error {
 	}
 
 	// Check if minimal slashing protection is requested.
-	isMinimalSlashingProtectionRequested := c.cliCtx.Bool(features.EnableMinimalSlashingProtection.Name)
+	isMinimalSlashingProtectionRequested := cliCtx.Bool(features.EnableMinimalSlashingProtection.Name)
 
 	if clearFlag || forceClearFlag {
 		var err error
 
 		if isMinimalSlashingProtectionRequested {
-			err = clearDB(c.cliCtx.Context, fileSystemDataDir, forceClearFlag, true)
+			err = clearDB(cliCtx.Context, fileSystemDataDir, forceClearFlag, true)
 		} else {
-			err = clearDB(c.cliCtx.Context, kvDataDir, forceClearFlag, false)
+			err = clearDB(cliCtx.Context, kvDataDir, forceClearFlag, false)
 			// Reset the BoltDB datadir to the requested location, so the new one is not located any more in the legacy location.
-			kvDataDir = c.cliCtx.String(cmd.DataDirFlag.Name)
+			kvDataDir = cliCtx.String(cmd.DataDirFlag.Name)
 		}
 
 		if err != nil {
@@ -332,7 +332,7 @@ func (c *ValidatorClient) initializeDB() error {
 	if !isMinimalSlashingProtectionRequested && minimalDatabaseExists {
 		log.Warning("Complete slashing protection database requested, while minimal slashing protection database currently used. Converting.")
 
-		if err := db.ConvertDatabase(c.cliCtx.Context, fileSystemDataDir, kvDataDir, true); err != nil {
+		if err := db.ConvertDatabase(cliCtx.Context, fileSystemDataDir, kvDataDir, true); err != nil {
 			return errors.Wrapf(err, "could not convert minimal slashing protection database to complete slashing protection database")
 		}
 	}
@@ -356,7 +356,7 @@ func (c *ValidatorClient) initializeDB() error {
 		valDB, err = filesystem.NewStore(fileSystemDataDir, nil)
 	} else {
 		log.WithField("databasePath", kvDataDir).Info("Checking DB")
-		valDB, err = kv.NewKVStore(c.cliCtx.Context, kvDataDir, nil)
+		valDB, err = kv.NewKVStore(cliCtx.Context, kvDataDir, nil)
 	}
 
 	if err != nil {
@@ -367,30 +367,30 @@ func (c *ValidatorClient) initializeDB() error {
 	c.db = valDB
 
 	// Migrate the database
-	if err := valDB.RunUpMigrations(c.cliCtx.Context); err != nil {
+	if err := valDB.RunUpMigrations(cliCtx.Context); err != nil {
 		return errors.Wrap(err, "could not run database migration")
 	}
 
 	return nil
 }
 
-func (c *ValidatorClient) registerPrometheusService() error {
-	if c.cliCtx.Bool(cmd.DisableMonitoringFlag.Name) {
+func (c *ValidatorClient) registerPrometheusService(cliCtx *cli.Context) error {
+	if cliCtx.Bool(cmd.DisableMonitoringFlag.Name) {
 		log.Info("Prometheus service disabled")
 		return nil
 	}
 	var additionalHandlers []prometheus.Handler
-	if c.cliCtx.IsSet(cmd.EnableBackupWebhookFlag.Name) {
+	if cliCtx.IsSet(cmd.EnableBackupWebhookFlag.Name) {
 		additionalHandlers = append(
 			additionalHandlers,
 			prometheus.Handler{
 				Path:    "/db/backup",
-				Handler: backup.Handler(c.db, c.cliCtx.String(cmd.BackupWebhookOutputDir.Name)),
+				Handler: backup.Handler(c.db, cliCtx.String(cmd.BackupWebhookOutputDir.Name)),
 			},
 		)
 	}
 	service := prometheus.NewService(
-		fmt.Sprintf("%s:%d", c.cliCtx.String(cmd.MonitoringHostFlag.Name), c.cliCtx.Int(flags.MonitoringPortFlag.Name)),
+		fmt.Sprintf("%s:%d", cliCtx.String(cmd.MonitoringHostFlag.Name), cliCtx.Int(flags.MonitoringPortFlag.Name)),
 		c.services,
 		additionalHandlers...,
 	)
@@ -398,24 +398,24 @@ func (c *ValidatorClient) registerPrometheusService() error {
 	return c.services.RegisterService(service)
 }
 
-func (c *ValidatorClient) registerValidatorService() error {
+func (c *ValidatorClient) registerValidatorService(cliCtx *cli.Context) error {
 	var (
 		interopKmConfig *local.InteropKeymanagerConfig
 		err             error
 	)
 
 	// Configure interop.
-	if c.cliCtx.IsSet(flags.InteropNumValidators.Name) {
+	if cliCtx.IsSet(flags.InteropNumValidators.Name) {
 		interopKmConfig = &local.InteropKeymanagerConfig{
-			Offset:           c.cliCtx.Uint64(flags.InteropStartIndex.Name),
-			NumValidatorKeys: c.cliCtx.Uint64(flags.InteropNumValidators.Name),
+			Offset:           cliCtx.Uint64(flags.InteropStartIndex.Name),
+			NumValidatorKeys: cliCtx.Uint64(flags.InteropNumValidators.Name),
 		}
 	}
 
 	// Configure graffiti.
 	graffitiStruct := &g.Graffiti{}
-	if c.cliCtx.IsSet(flags.GraffitiFileFlag.Name) {
-		graffitiFilePath := c.cliCtx.String(flags.GraffitiFileFlag.Name)
+	if cliCtx.IsSet(flags.GraffitiFileFlag.Name) {
+		graffitiFilePath := cliCtx.String(flags.GraffitiFileFlag.Name)
 
 		graffitiStruct, err = g.ParseGraffitiFile(graffitiFilePath)
 		if err != nil {
@@ -423,38 +423,38 @@ func (c *ValidatorClient) registerValidatorService() error {
 		}
 	}
 
-	web3signerConfig, err := Web3SignerConfig(c.cliCtx)
+	web3signerConfig, err := Web3SignerConfig(cliCtx)
 	if err != nil {
 		return err
 	}
 
-	ps, err := proposerSettings(c.cliCtx, c.db)
+	ps, err := proposerSettings(cliCtx, c.db)
 	if err != nil {
 		return err
 	}
 
-	validatorService, err := client.NewValidatorService(c.cliCtx.Context, &client.Config{
+	validatorService, err := client.NewValidatorService(cliCtx.Context, &client.Config{
 		DB:                      c.db,
 		Wallet:                  c.wallet,
 		WalletInitializedFeed:   c.walletInitializedFeed,
-		GRPCMaxCallRecvMsgSize:  c.cliCtx.Int(cmd.GrpcMaxCallRecvMsgSizeFlag.Name),
-		GRPCRetries:             c.cliCtx.Uint(flags.GRPCRetriesFlag.Name),
-		GRPCRetryDelay:          c.cliCtx.Duration(flags.GRPCRetryDelayFlag.Name),
-		GRPCHeaders:             strings.Split(c.cliCtx.String(flags.GRPCHeadersFlag.Name), ","),
-		BeaconNodeGRPCEndpoint:  c.cliCtx.String(flags.BeaconRPCProviderFlag.Name),
-		BeaconNodeCert:          c.cliCtx.String(flags.CertFlag.Name),
-		BeaconApiEndpoint:       c.cliCtx.String(flags.BeaconRESTApiProviderFlag.Name),
+		GRPCMaxCallRecvMsgSize:  cliCtx.Int(cmd.GrpcMaxCallRecvMsgSizeFlag.Name),
+		GRPCRetries:             cliCtx.Uint(flags.GRPCRetriesFlag.Name),
+		GRPCRetryDelay:          cliCtx.Duration(flags.GRPCRetryDelayFlag.Name),
+		GRPCHeaders:             strings.Split(cliCtx.String(flags.GRPCHeadersFlag.Name), ","),
+		BeaconNodeGRPCEndpoint:  cliCtx.String(flags.BeaconRPCProviderFlag.Name),
+		BeaconNodeCert:          cliCtx.String(flags.CertFlag.Name),
+		BeaconApiEndpoint:       cliCtx.String(flags.BeaconRESTApiProviderFlag.Name),
 		BeaconApiTimeout:        time.Second * 30,
-		Graffiti:                g.ParseHexGraffiti(c.cliCtx.String(flags.GraffitiFlag.Name)),
+		Graffiti:                g.ParseHexGraffiti(cliCtx.String(flags.GraffitiFlag.Name)),
 		GraffitiStruct:          graffitiStruct,
 		InteropKmConfig:         interopKmConfig,
 		Web3SignerConfig:        web3signerConfig,
 		ProposerSettings:        ps,
-		ValidatorsRegBatchSize:  c.cliCtx.Int(flags.ValidatorsRegistrationBatchSizeFlag.Name),
-		UseWeb:                  c.cliCtx.Bool(flags.EnableWebFlag.Name),
-		LogValidatorPerformance: !c.cliCtx.Bool(flags.DisablePenaltyRewardLogFlag.Name),
-		EmitAccountMetrics:      !c.cliCtx.Bool(flags.DisableAccountMetricsFlag.Name),
-		Distributed:             c.cliCtx.Bool(flags.EnableDistributed.Name),
+		ValidatorsRegBatchSize:  cliCtx.Int(flags.ValidatorsRegistrationBatchSizeFlag.Name),
+		UseWeb:                  cliCtx.Bool(flags.EnableWebFlag.Name),
+		LogValidatorPerformance: !cliCtx.Bool(flags.DisablePenaltyRewardLogFlag.Name),
+		EmitAccountMetrics:      !cliCtx.Bool(flags.DisableAccountMetricsFlag.Name),
+		Distributed:             cliCtx.Bool(flags.EnableDistributed.Name),
 	})
 	if err != nil {
 		return errors.Wrap(err, "could not initialize validator service")
@@ -514,18 +514,18 @@ func proposerSettings(cliCtx *cli.Context, db iface.ValidatorDB) (*proposer.Sett
 	return l.Load(cliCtx)
 }
 
-func (c *ValidatorClient) registerRPCService() error {
-	serveWebUI := c.cliCtx.IsSet(flags.EnableWebFlag.Name)
-	if !c.cliCtx.IsSet(flags.EnableRPCFlag.Name) && !serveWebUI {
+func (c *ValidatorClient) registerRPCService(cliCtx *cli.Context) error {
+	serveWebUI := cliCtx.IsSet(flags.EnableWebFlag.Name)
+	if !cliCtx.IsSet(flags.EnableRPCFlag.Name) && !serveWebUI {
 		return nil
 	}
-	host := c.cliCtx.String(flags.HTTPServerHost.Name)
-	port := c.cliCtx.Int(flags.HTTPServerPort.Name)
-	authTokenPath := c.cliCtx.String(flags.AuthTokenPathFlag.Name)
-	walletDir := c.cliCtx.String(flags.WalletDirFlag.Name)
+	host := cliCtx.String(flags.HTTPServerHost.Name)
+	port := cliCtx.Int(flags.HTTPServerPort.Name)
+	authTokenPath := cliCtx.String(flags.AuthTokenPathFlag.Name)
+	walletDir := cliCtx.String(flags.WalletDirFlag.Name)
 
 	if serveWebUI {
-		if c.cliCtx.IsSet(flags.Web3SignerURLFlag.Name) || c.cliCtx.IsSet(flags.Web3SignerPublicValidatorKeysFlag.Name) {
+		if cliCtx.IsSet(flags.Web3SignerURLFlag.Name) || cliCtx.IsSet(flags.Web3SignerPublicValidatorKeysFlag.Name) {
 			log.Warn("Remote Keymanager API enabled. Prysm web does not properly support web3signer at this time")
 		}
 		webAddress := fmt.Sprintf("http://%s:%d", host, port)
@@ -554,8 +554,8 @@ func (c *ValidatorClient) registerRPCService() error {
 		)
 	}
 	var allowedOrigins []string
-	if c.cliCtx.IsSet(flags.HTTPServerCorsDomain.Name) {
-		allowedOrigins = strings.Split(c.cliCtx.String(flags.HTTPServerCorsDomain.Name), ",")
+	if cliCtx.IsSet(flags.HTTPServerCorsDomain.Name) {
+		allowedOrigins = strings.Split(cliCtx.String(flags.HTTPServerCorsDomain.Name), ",")
 	} else {
 		allowedOrigins = strings.Split(flags.HTTPServerCorsDomain.Value, ",")
 	}
@@ -564,17 +564,17 @@ func (c *ValidatorClient) registerRPCService() error {
 		middleware.NormalizeQueryValuesHandler,
 		middleware.CorsHandler(allowedOrigins),
 	}
-	s := rpc.NewServer(c.cliCtx.Context, &rpc.Config{
+	s := rpc.NewServer(cliCtx.Context, &rpc.Config{
 		HTTPHost:               host,
 		HTTPPort:               port,
-		GRPCMaxCallRecvMsgSize: c.cliCtx.Int(cmd.GrpcMaxCallRecvMsgSizeFlag.Name),
-		GRPCRetries:            c.cliCtx.Uint(flags.GRPCRetriesFlag.Name),
-		GRPCRetryDelay:         c.cliCtx.Duration(flags.GRPCRetryDelayFlag.Name),
-		GRPCHeaders:            strings.Split(c.cliCtx.String(flags.GRPCHeadersFlag.Name), ","),
-		BeaconNodeGRPCEndpoint: c.cliCtx.String(flags.BeaconRPCProviderFlag.Name),
-		BeaconApiEndpoint:      c.cliCtx.String(flags.BeaconRESTApiProviderFlag.Name),
+		GRPCMaxCallRecvMsgSize: cliCtx.Int(cmd.GrpcMaxCallRecvMsgSizeFlag.Name),
+		GRPCRetries:            cliCtx.Uint(flags.GRPCRetriesFlag.Name),
+		GRPCRetryDelay:         cliCtx.Duration(flags.GRPCRetryDelayFlag.Name),
+		GRPCHeaders:            strings.Split(cliCtx.String(flags.GRPCHeadersFlag.Name), ","),
+		BeaconNodeGRPCEndpoint: cliCtx.String(flags.BeaconRPCProviderFlag.Name),
+		BeaconApiEndpoint:      cliCtx.String(flags.BeaconRESTApiProviderFlag.Name),
 		BeaconApiTimeout:       time.Second * 30,
-		BeaconNodeCert:         c.cliCtx.String(flags.CertFlag.Name),
+		BeaconNodeCert:         cliCtx.String(flags.CertFlag.Name),
 		DB:                     c.db,
 		Wallet:                 c.wallet,
 		WalletDir:              walletDir,
