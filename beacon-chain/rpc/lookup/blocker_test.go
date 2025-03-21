@@ -3,6 +3,7 @@ package lookup
 import (
 	"context"
 	"fmt"
+	"math"
 	"net/http"
 	"reflect"
 	"testing"
@@ -298,5 +299,32 @@ func TestGetBlob(t *testing.T) {
 		verifiedBlobs, rpcErr := blocker.Blobs(ctx, "123", nil)
 		assert.Equal(t, rpcErr == nil, true)
 		require.Equal(t, 0, len(verifiedBlobs))
+	})
+	t.Run("no blob at index", func(t *testing.T) {
+		blocker := &BeaconDbBlocker{
+			ChainInfoFetcher: &mockChain.ChainService{FinalizedCheckPoint: &ethpbalpha.Checkpoint{Root: blockRoot[:]}},
+			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
+				Genesis: time.Now(),
+			},
+			BeaconDB:    db,
+			BlobStorage: bs,
+		}
+		noBlobIndex := uint64(len(blobs)) + 1
+		_, rpcErr := blocker.Blobs(ctx, "123", []uint64{0, noBlobIndex})
+		require.NotNil(t, rpcErr)
+		assert.Equal(t, core.ErrorReason(core.NotFound), rpcErr.Reason)
+	})
+	t.Run("index too big", func(t *testing.T) {
+		blocker := &BeaconDbBlocker{
+			ChainInfoFetcher: &mockChain.ChainService{FinalizedCheckPoint: &ethpbalpha.Checkpoint{Root: blockRoot[:]}},
+			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
+				Genesis: time.Now(),
+			},
+			BeaconDB:    db,
+			BlobStorage: bs,
+		}
+		_, rpcErr := blocker.Blobs(ctx, "123", []uint64{0, math.MaxUint})
+		require.NotNil(t, rpcErr)
+		assert.Equal(t, core.ErrorReason(core.BadRequest), rpcErr.Reason)
 	})
 }

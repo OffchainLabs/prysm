@@ -440,7 +440,7 @@ func (b *BeaconNode) Start() {
 				log.WithField("times", i-1).Info("Already shutting down, interrupt more to panic")
 			}
 		}
-		panic("Panic closing the beacon node")
+		panic("Panic closing the beacon node") // lint:nopanic -- Panic is requested by user.
 	}()
 
 	// Wait for stop channel to be closed.
@@ -706,7 +706,7 @@ func (b *BeaconNode) registerP2P(cliCtx *cli.Context) error {
 func (b *BeaconNode) fetchP2P() p2p.P2P {
 	var p *p2p.Service
 	if err := b.services.FetchService(&p); err != nil {
-		panic(err)
+		panic(err) // lint:nopanic -- This could panic application start if the services are misconfigured.
 	}
 	return p
 }
@@ -714,7 +714,7 @@ func (b *BeaconNode) fetchP2P() p2p.P2P {
 func (b *BeaconNode) fetchBuilderService() *builder.Service {
 	var s *builder.Service
 	if err := b.services.FetchService(&s); err != nil {
-		panic(err)
+		panic(err) // lint:nopanic -- This could panic application start if the services are misconfigured.
 	}
 	return s
 }
@@ -1018,13 +1018,13 @@ func (b *BeaconNode) registerPrometheusService(_ *cli.Context) error {
 	var additionalHandlers []prometheus.Handler
 	var p *p2p.Service
 	if err := b.services.FetchService(&p); err != nil {
-		panic(err)
+		panic(err) // lint:nopanic -- This could panic application start if the services are misconfigured.
 	}
 	additionalHandlers = append(additionalHandlers, prometheus.Handler{Path: "/p2p", Handler: p.InfoHandler})
 
 	var c *blockchain.Service
 	if err := b.services.FetchService(&c); err != nil {
-		panic(err)
+		panic(err) // lint:nopanic -- This could panic application start if the services are misconfigured.
 	}
 
 	service := prometheus.NewService(

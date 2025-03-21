@@ -11,7 +11,7 @@ import (
 func InitForkCfg(start, end int, c *params.BeaconChainConfig) *params.BeaconChainConfig {
 	c = c.Copy()
 	if end < start {
-		panic("end fork is less than the start fork")
+		panic("end fork is less than the start fork") // lint:nopanic -- test code.
 	}
 	if start >= version.Altair {
 		c.AltairForkEpoch = 0

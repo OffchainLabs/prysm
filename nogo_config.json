@@ -214,5 +214,13 @@
       "external/com_github_ethereum_go_ethereum/.*": "Unsafe third party code",
       "rules_go_work-.*": "Third party code"
     }
+  }, 
+  "nopanic": {
+    "exclude_files": {
+      "validator/web/site_data.go": "generated code",
+      ".*/.*_test\\.go": "Tests are OK",
+      ".*/main\\.go": "main methods are OK",
+      "external/.*": "Third party code"
+    }
   }
 }

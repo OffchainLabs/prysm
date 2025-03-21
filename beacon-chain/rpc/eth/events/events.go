@@ -45,6 +45,8 @@ const (
 	HeadTopic = "head"
 	// BlockTopic represents a new produced block event topic.
 	BlockTopic = "block"
+	// BlockGossipTopic represents a block received from gossip or API that passes validation rules.
+	BlockGossipTopic = "block_gossip"
 	// AttestationTopic represents a new submitted attestation event topic.
 	AttestationTopic = "attestation"
 	// SingleAttestationTopic represents a new submitted single attestation event topic.
@@ -103,6 +105,7 @@ var opsFeedEventTopics = map[feed.EventType]string{
 	operation.BlobSidecarReceived:               BlobSidecarTopic,
 	operation.AttesterSlashingReceived:          AttesterSlashingTopic,
 	operation.ProposerSlashingReceived:          ProposerSlashingTopic,
+	operation.BlockGossipReceived:               BlockGossipTopic,
 }
 
 var stateFeedEventTopics = map[feed.EventType]string{
@@ -443,6 +446,8 @@ func topicForEvent(event *feed.Event) string {
 		return AttesterSlashingTopic
 	case *operation.ProposerSlashingReceivedData:
 		return ProposerSlashingTopic
+	case *operation.BlockGossipReceivedData:
+		return BlockGossipTopic
 	case *ethpb.EventHead:
 		return HeadTopic
 	case *ethpb.EventFinalizedCheckpoint:
@@ -478,6 +483,18 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 		// we send two event messages in reaction; the head event and the payload attributes.
 		return func() io.Reader {
 			return jsonMarshalReader(eventName, structs.HeadEventFromV1(v))
+		}, nil
+	case *operation.BlockGossipReceivedData:
+		blockRoot, err := v.SignedBlock.Block().HashTreeRoot()
+		if err != nil {
+			return nil, errors.Wrap(err, "could not compute block root for BlockGossipReceivedData")
+		}
+		return func() io.Reader {
+			blk := &structs.BlockGossipEvent{
+				Slot:  fmt.Sprintf("%d", v.SignedBlock.Block().Slot()),
+				Block: hexutil.Encode(blockRoot[:]),
+			}
+			return jsonMarshalReader(eventName, blk)
 		}, nil
 	case *operation.AggregatedAttReceivedData:
 		switch att := v.Attestation.AggregateVal().(type) {
