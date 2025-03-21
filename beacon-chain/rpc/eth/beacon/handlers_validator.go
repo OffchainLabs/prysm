@@ -334,6 +334,7 @@ func (s *Server) GetValidatorIdentities(w http.ResponseWriter, r *http.Request) 
 	stateId := r.PathValue("state_id")
 	if stateId == "" {
 		httputil.HandleError(w, "state_id is required in URL params", http.StatusBadRequest)
+		return
 	}
 	st, err := s.Stater.State(ctx, []byte(stateId))
 	if err != nil {
