@@ -21,12 +21,14 @@ package features
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/prysmaticlabs/prysm/v5/cmd"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
@@ -88,7 +90,8 @@ type Flags struct {
 	AggregateIntervals [3]time.Duration
 
 	// Feature related flags (alignment forced in the end)
-	ForceHead string // ForceHead forces the head block to be a specific block root, the last head block, or the last finalized block.
+	ForceHead        string     // ForceHead forces the head block to be a specific block root, the last head block, or the last finalized block.
+	BlacklistedRoots [][32]byte // BlacklistedRoots is a list of roots that are blacklisted from processing.
 }
 
 var featureConfig *Flags
@@ -282,9 +285,27 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 		cfg.ForceHead = ctx.String(forceHeadFlag.Name)
 	}
 
+	if ctx.IsSet(blackListRoots.Name) {
+		logEnabled(blackListRoots)
+		cfg.BlacklistedRoots = parseBlacklistedRoots(ctx.StringSlice(blackListRoots.Name))
+	}
+
 	cfg.AggregateIntervals = [3]time.Duration{aggregateFirstInterval.Value, aggregateSecondInterval.Value, aggregateThirdInterval.Value}
 	Init(cfg)
 	return nil
+}
+
+func parseBlacklistedRoots(blacklistedRoots []string) [][32]byte {
+	roots := make([][32]byte, 0)
+	for _, root := range blacklistedRoots {
+		r, err := bytesutil.DecodeHexWithLength(root, 32)
+		if err != nil {
+			log.WithError(err).WithField("root", root).Warn("Failed to parse blacklisted root")
+			continue
+		}
+		roots = append(roots, [32]byte(r))
+	}
+	return roots
 }
 
 // ConfigureValidator sets the global config based
@@ -397,4 +418,13 @@ func ValidateNetworkFlags(ctx *cli.Context) error {
 		}
 	}
 	return nil
+}
+
+// BlacklistedBlock returns weather the given block root belongs to the list of blacklisted roots.
+func BlacklistedBlock(r [32]byte) bool {
+	blacklisted := Get().BlacklistedRoots
+	if len(blacklisted) == 0 {
+		return false
+	}
+	return slices.Contains(blacklisted, r)
 }

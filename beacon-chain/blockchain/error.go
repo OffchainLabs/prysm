@@ -32,6 +32,8 @@ var (
 	ErrNilHead = errors.New("nil head")
 	// errNotGenesisRoot is returned when the root is not the genesis block root.
 	errNotGenesisRoot = errors.New("root is not the genesis block root")
+	// errBlacklistedBlock is returned when a block is blacklisted as invalid.
+	errBlacklistedRoot = errors.New("block root is blacklisted")
 )
 
 var errMaxBlobsExceeded = errors.New("Expected commitments in block exceeds MAX_BLOBS_PER_BLOCK")
