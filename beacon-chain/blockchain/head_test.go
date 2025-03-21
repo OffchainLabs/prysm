@@ -324,6 +324,72 @@ func TestSaveOrphanedAtts(t *testing.T) {
 	require.DeepEqual(t, wantAtts, atts)
 }
 
+func TestSaveOrphanedAttsElectra(t *testing.T) {
+	ctx := context.Background()
+	beaconDB := testDB.SetupDB(t)
+	service := setupBeaconChain(t, beaconDB)
+	service.genesisTime = time.Now().Add(time.Duration(-10*int64(1)*int64(params.BeaconConfig().SecondsPerSlot)) * time.Second)
+
+	// Chain setup
+	// 0 -- 1 -- 2 -- 3
+	//  \-4
+	st, keys := util.DeterministicGenesisStateElectra(t, 64)
+	blkG, err := util.GenerateFullBlockElectra(st, keys, util.DefaultBlockGenConfig(), 1)
+	assert.NoError(t, err)
+
+	util.SaveBlock(t, ctx, service.cfg.BeaconDB, blkG)
+	rG, err := blkG.Block.HashTreeRoot()
+	require.NoError(t, err)
+
+	blk1, err := util.GenerateFullBlockElectra(st, keys, util.DefaultBlockGenConfig(), 2)
+	assert.NoError(t, err)
+	blk1.Block.ParentRoot = rG[:]
+	r1, err := blk1.Block.HashTreeRoot()
+	require.NoError(t, err)
+
+	blk2, err := util.GenerateFullBlockElectra(st, keys, util.DefaultBlockGenConfig(), 3)
+	assert.NoError(t, err)
+	blk2.Block.ParentRoot = r1[:]
+	r2, err := blk2.Block.HashTreeRoot()
+	require.NoError(t, err)
+
+	blk3, err := util.GenerateFullBlockElectra(st, keys, util.DefaultBlockGenConfig(), 4)
+	assert.NoError(t, err)
+	blk3.Block.ParentRoot = r2[:]
+	r3, err := blk3.Block.HashTreeRoot()
+	require.NoError(t, err)
+
+	blk4 := util.NewBeaconBlockElectra()
+	blk4.Block.Slot = 4
+	blk4.Block.ParentRoot = rG[:]
+	r4, err := blk4.Block.HashTreeRoot()
+	require.NoError(t, err)
+	ojc := &ethpb.Checkpoint{Root: params.BeaconConfig().ZeroHash[:]}
+	ofc := &ethpb.Checkpoint{Root: params.BeaconConfig().ZeroHash[:]}
+
+	for _, blk := range []*ethpb.SignedBeaconBlockElectra{blkG, blk1, blk2, blk3, blk4} {
+		r, err := blk.Block.HashTreeRoot()
+		require.NoError(t, err)
+		state, blkRoot, err := prepareForkchoiceState(ctx, blk.Block.Slot, r, bytesutil.ToBytes32(blk.Block.ParentRoot), [32]byte{}, ojc, ofc)
+		require.NoError(t, err)
+		require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, state, blkRoot))
+		util.SaveBlock(t, ctx, beaconDB, blk)
+	}
+
+	require.NoError(t, service.saveOrphanedOperations(ctx, r3, r4))
+	require.Equal(t, 3, len(service.cfg.AttPool.BlockAttestations()))
+	wantAtts := []ethpb.Att{
+		blk3.Block.Body.Attestations[0],
+		blk2.Block.Body.Attestations[0],
+		blk1.Block.Body.Attestations[0],
+	}
+	atts := service.cfg.AttPool.BlockAttestations()
+	sort.Slice(atts, func(i, j int) bool {
+		return atts[i].GetData().Slot > atts[j].GetData().Slot
+	})
+	require.DeepEqual(t, wantAtts, atts)
+}
+
 func TestSaveOrphanedOps(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	config := params.BeaconConfig()
