@@ -95,7 +95,7 @@ func TestValidateNetworkFlags(t *testing.T) {
 	}
 }
 
-func Test_parseBlaclistedRoots(t *testing.T) {
+func Test_parseBlacklistedRoots(t *testing.T) {
 	strings := []string{"0xf98e27558ac9ba27ab7d0d3b97d5742a4a68b5e3d7f33c520eda14c39df6368c",
 		"0x31604da144e1047b250ee87c5049774870e4a140e8eb0087f38ebc4584c2e7",
 		"0x4fcf04e7e4075962360a91be0c54c1d3f67237aa2ce07d83b0479971af3f7e78",
