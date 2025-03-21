@@ -40,7 +40,10 @@ func run(ctx context.Context, v iface.Validator) {
 	defer cleanup()
 
 	if err := v.Init(ctx); err != nil {
-		return // Exit if context is canceled.
+		if errors.Is(err, context.Canceled) {
+			return // Exit if context is canceled.
+		}
+		log.WithError(err).Fatal("Failed to initialize validator")
 	}
 
 	eventsChan := make(chan *event.Event, 1)

@@ -139,8 +139,7 @@ func (v *validator) Init(ctx context.Context) error {
 
 	firstTime := true
 	var (
-		currentSlot primitives.Slot
-		err         error
+		err error
 	)
 	for {
 		if !firstTime {
@@ -152,20 +151,20 @@ func (v *validator) Init(ctx context.Context) error {
 		}
 
 		firstTime = false
-		currentSlot, err = v.WaitForChainStart(ctx)
+		_, err = v.WaitForChainStart(ctx)
 		if err != nil {
 			if isConnectionError(err) {
 				log.WithError(err).Warn("Could not determine if beacon chain started")
 				continue
 			}
 
-			log.WithError(err).Fatal("Could not determine if beacon chain started")
+			return errors.Wrap(err, "Could not determine if beacon chain started")
 		}
 
 		if err := v.WaitForKeymanagerInitialization(ctx); err != nil {
 			// log.Fatal will prevent defer from being called
 			v.Done()
-			log.WithError(err).Fatal("Wallet is not ready")
+			return errors.Wrap(err, "Wallet is not ready")
 		}
 
 		if err := v.WaitForSync(ctx); err != nil {
@@ -174,11 +173,11 @@ func (v *validator) Init(ctx context.Context) error {
 				continue
 			}
 
-			log.WithError(err).Fatal("Could not determine if beacon node synced")
+			return errors.Wrap(err, "Could not determine if beacon node synced")
 		}
 
 		if err := v.WaitForActivation(ctx, nil /* accountsChangedChan */); err != nil {
-			log.WithError(err).Fatal("Could not wait for validator activation")
+			return errors.Wrap(err, "Could not wait for validator activation")
 		}
 
 		if err := v.CheckDoppelGanger(ctx); err != nil {
@@ -187,13 +186,9 @@ func (v *validator) Init(ctx context.Context) error {
 				continue
 			}
 
-			log.WithError(err).Fatal("Could not succeed with doppelganger check")
+			return errors.Wrap(err, "Could not succeed with doppelganger check")
 		}
 		break
-	}
-	// should there be a check if it's too later into current slot?
-	if err := v.UpdateDuties(ctx, currentSlot); err != nil {
-		handleAssignmentError(err, currentSlot)
 	}
 
 	km, err := v.Keymanager()
@@ -206,8 +201,13 @@ func (v *validator) Init(ctx context.Context) error {
 		log.Warn("Validator client started without proposer settings such as fee recipient" +
 			" and will continue to use settings provided in the beacon node.")
 	}
-	if err := v.PushProposerSettings(ctx, km, currentSlot, true); err != nil {
-		log.WithError(err).Fatal("Failed to update proposer settings")
+	pubkeys, err := km.FetchValidatingPublicKeys(ctx)
+	if err != nil {
+		return err
+	}
+	// update the status of our keys
+	if err = v.updateValidatorStatusCache(ctx, pubkeys); err != nil {
+		return errors.Wrap(err, "failed to update validator status cache")
 	}
 	return nil
 }
