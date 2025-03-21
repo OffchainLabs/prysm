@@ -63,17 +63,18 @@ func (vs *Server) GetInclusionList(ctx context.Context, request *ethpb.GetInclus
 
 // SubmitInclusionList broadcasts a signed inclusion list to the P2P network and caches it locally.
 func (vs *Server) SubmitInclusionList(ctx context.Context, il *ethpb.SignedInclusionList) (*emptypb.Empty, error) {
-	isBeforeFreezeDeadline := vs.TimeFetcher.CurrentSlot() == il.Message.Slot &&
-		slots.TimeIntoSlot(uint64(vs.TimeFetcher.GenesisTime().Unix())) < time.Duration(params.BeaconConfig().InclusionListFreezeDeadLine)*time.Second
-	if !isBeforeFreezeDeadline {
-		return nil, status.Errorf(codes.InvalidArgument, "inclusion list submission is after freeze deadline")
+	submissionDeadline := params.BeaconConfig().SecondsPerSlot * 2 / params.BeaconConfig().IntervalsPerSlot
+	isBeforeSubmissionDeadline := vs.TimeFetcher.CurrentSlot() == il.Message.Slot &&
+		slots.TimeIntoSlot(uint64(vs.TimeFetcher.GenesisTime().Unix())) < time.Duration(submissionDeadline)*time.Second
+	if !isBeforeSubmissionDeadline {
+		return nil, status.Errorf(codes.InvalidArgument, "inclusion list submitted after the deadline")
 	}
 
 	if err := vs.P2P.Broadcast(ctx, il); err != nil {
 		return nil, err
 	}
 
-	vs.InclusionLists.Add(il.Message.Slot, il.Message.ValidatorIndex, il.Message.Transactions, isBeforeFreezeDeadline)
+	vs.InclusionLists.Add(il.Message.Slot, il.Message.ValidatorIndex, il.Message.Transactions, isBeforeSubmissionDeadline)
 
 	log.WithFields(logrus.Fields{
 		"slot":          il.Message.Slot,
