@@ -116,7 +116,8 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 	}
 
 	if httputil.RespondWithSsz(req) {
-		var response []byte
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Header().Set("Content-Disposition", "attachment; filename="+"light_client_updates.ssz")
 
 		for i := startPeriod; i <= endPeriod; i++ {
 			if ctx.Err() != nil {
@@ -150,12 +151,16 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 
 			var chunkLength []byte
 			chunkLength = ssz.MarshalUint64(chunkLength, uint64(len(updateSSZ)+4))
-			response = append(response, chunkLength...)
-			response = append(response, forkDigest[:]...)
-			response = append(response, updateSSZ...)
+			if _, err := w.Write(chunkLength); err != nil {
+				httputil.HandleError(w, "Could not write chunk length: "+err.Error(), http.StatusInternalServerError)
+			}
+			if _, err := w.Write(forkDigest[:]); err != nil {
+				httputil.HandleError(w, "Could not write fork digest: "+err.Error(), http.StatusInternalServerError)
+			}
+			if _, err := w.Write(updateSSZ); err != nil {
+				httputil.HandleError(w, "Could not write update SSZ: "+err.Error(), http.StatusInternalServerError)
+			}
 		}
-
-		httputil.WriteSsz(w, response, "light_client_updates.ssz")
 	} else {
 		updates := make([]*structs.LightClientUpdateResponse, 0, len(updatesMap))
 

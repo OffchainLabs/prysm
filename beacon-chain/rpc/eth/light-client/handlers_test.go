@@ -544,12 +544,10 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 		s.GetLightClientUpdatesByRange(writer, request)
 
 		require.Equal(t, http.StatusOK, writer.Code)
-		fmt.Println(writer.Header())
-		fmt.Println(writer.Body.Bytes())
-		//var resp pb.LightClientUpdateAltair
-		//err = resp.UnmarshalSSZ(writer.Body.Bytes()[12:]) // skip the length and fork digest prefixes
-		//require.NoError(t, err)
-		//require.DeepEqual(t, resp.AttestedHeader, update.AttestedHeader().Proto())
+		var resp pb.LightClientUpdateAltair
+		err = resp.UnmarshalSSZ(writer.Body.Bytes()[12:]) // skip the length and fork digest prefixes
+		require.NoError(t, err)
+		require.DeepEqual(t, resp.AttestedHeader, update.AttestedHeader().Proto())
 	})
 
 	t.Run("capella", func(t *testing.T) {
