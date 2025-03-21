@@ -120,8 +120,9 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 
 		for i := startPeriod; i <= endPeriod; i++ {
 			if ctx.Err() != nil {
-				httputil.HandleError(w, "context error: "+ctx.Err(), http.StatusInternalServerError)
+				httputil.HandleError(w, "Context error: "+ctx.Err().Error(), http.StatusInternalServerError)
 			}
+
 			update, ok := updatesMap[i]
 			if !ok {
 				// Only return the first contiguous range of updates
@@ -159,6 +160,10 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 		updates := make([]*structs.LightClientUpdateResponse, 0, len(updatesMap))
 
 		for i := startPeriod; i <= endPeriod; i++ {
+			if ctx.Err() != nil {
+				httputil.HandleError(w, "Context error: "+ctx.Err().Error(), http.StatusInternalServerError)
+			}
+
 			update, ok := updatesMap[i]
 			if !ok {
 				// Only return the first contiguous range of updates
