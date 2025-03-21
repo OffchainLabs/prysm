@@ -21,7 +21,6 @@ package features
 
 import (
 	"fmt"
-	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -90,8 +89,8 @@ type Flags struct {
 	AggregateIntervals [3]time.Duration
 
 	// Feature related flags (alignment forced in the end)
-	ForceHead        string     // ForceHead forces the head block to be a specific block root, the last head block, or the last finalized block.
-	BlacklistedRoots [][32]byte // BlacklistedRoots is a list of roots that are blacklisted from processing.
+	ForceHead        string                // ForceHead forces the head block to be a specific block root, the last head block, or the last finalized block.
+	BlacklistedRoots map[[32]byte]struct{} // BlacklistedRoots is a list of roots that are blacklisted from processing.
 }
 
 var featureConfig *Flags
@@ -295,15 +294,15 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 	return nil
 }
 
-func parseBlacklistedRoots(blacklistedRoots []string) [][32]byte {
-	roots := make([][32]byte, 0)
+func parseBlacklistedRoots(blacklistedRoots []string) map[[32]byte]struct{} {
+	roots := make(map[[32]byte]struct{})
 	for _, root := range blacklistedRoots {
 		r, err := bytesutil.DecodeHexWithLength(root, 32)
 		if err != nil {
 			log.WithError(err).WithField("root", root).Warn("Failed to parse blacklisted root")
 			continue
 		}
-		roots = append(roots, [32]byte(r))
+		roots[[32]byte(r)] = struct{}{}
 	}
 	return roots
 }
@@ -423,8 +422,6 @@ func ValidateNetworkFlags(ctx *cli.Context) error {
 // BlacklistedBlock returns weather the given block root belongs to the list of blacklisted roots.
 func BlacklistedBlock(r [32]byte) bool {
 	blacklisted := Get().BlacklistedRoots
-	if len(blacklisted) == 0 {
-		return false
-	}
-	return slices.Contains(blacklisted, r)
+	_, ok := blacklisted[r]
+	return ok
 }
