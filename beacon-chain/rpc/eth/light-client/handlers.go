@@ -119,6 +119,9 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 		var response []byte
 
 		for i := startPeriod; i <= endPeriod; i++ {
+			if ctx.Err() != nil {
+				httputil.HandleError(w, "context error: "+ctx.Err(), http.StatusInternalServerError)
+			}
 			update, ok := updatesMap[i]
 			if !ok {
 				// Only return the first contiguous range of updates
