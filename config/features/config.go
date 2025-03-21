@@ -284,9 +284,9 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 		cfg.ForceHead = ctx.String(forceHeadFlag.Name)
 	}
 
-	if ctx.IsSet(blackListRoots.Name) {
-		logEnabled(blackListRoots)
-		cfg.BlacklistedRoots = parseBlacklistedRoots(ctx.StringSlice(blackListRoots.Name))
+	if ctx.IsSet(blacklistRoots.Name) {
+		logEnabled(blacklistRoots)
+		cfg.BlacklistedRoots = parseBlacklistedRoots(ctx.StringSlice(blacklistRoots.Name))
 	}
 
 	cfg.AggregateIntervals = [3]time.Duration{aggregateFirstInterval.Value, aggregateSecondInterval.Value, aggregateThirdInterval.Value}
