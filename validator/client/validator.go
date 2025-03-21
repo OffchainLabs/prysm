@@ -139,7 +139,8 @@ func (v *validator) Init(ctx context.Context) error {
 
 	firstTime := true
 	var (
-		err error
+		currentSlot primitives.Slot
+		err         error
 	)
 	for {
 		if !firstTime {
@@ -151,7 +152,7 @@ func (v *validator) Init(ctx context.Context) error {
 		}
 
 		firstTime = false
-		_, err = v.WaitForChainStart(ctx)
+		currentSlot, err = v.WaitForChainStart(ctx)
 		if err != nil {
 			if isConnectionError(err) {
 				log.WithError(err).Warn("Could not determine if beacon chain started")
@@ -191,9 +192,14 @@ func (v *validator) Init(ctx context.Context) error {
 		break
 	}
 
+	// should there be a check if it's too later into current slot?
+	if err := v.UpdateDuties(ctx, currentSlot); err != nil {
+		handleAssignmentError(err, currentSlot)
+	}
+
 	km, err := v.Keymanager()
 	if err != nil {
-		log.WithError(err).Fatal("Could not get keymanager")
+		return errors.Wrap(err, "Could not get keymanager")
 	}
 	// check if proposer settings is still nil
 	// Set properties on the beacon node like the fee recipient for validators that are being used & active.
@@ -201,13 +207,8 @@ func (v *validator) Init(ctx context.Context) error {
 		log.Warn("Validator client started without proposer settings such as fee recipient" +
 			" and will continue to use settings provided in the beacon node.")
 	}
-	pubkeys, err := km.FetchValidatingPublicKeys(ctx)
-	if err != nil {
-		return err
-	}
-	// update the status of our keys
-	if err = v.updateValidatorStatusCache(ctx, pubkeys); err != nil {
-		return errors.Wrap(err, "failed to update validator status cache")
+	if err := v.PushProposerSettings(ctx, km, currentSlot, true); err != nil {
+		return errors.Wrap(err, "Failed to update proposer settings")
 	}
 	return nil
 }
