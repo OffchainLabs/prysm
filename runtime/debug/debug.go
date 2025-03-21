@@ -80,13 +80,15 @@ var (
 	}
 	// deprecated: CPUProfileFlag
 	CPUProfileFlag = &cli.StringFlag{
-		Name:  "cpuprofile",
-		Usage: "Do not use, deprecated",
+		Name:   "cpuprofile",
+		Hidden: true,
+		Usage:  "Do not use, deprecated",
 	}
 	// deprecated: TraceFlag
 	TraceFlag = &cli.StringFlag{
-		Name:  "trace",
-		Usage: "Do not use, deprecated",
+		Name:   "trace",
+		Hidden: true,
+		Usage:  "Do not use, deprecated",
 	}
 )
 
