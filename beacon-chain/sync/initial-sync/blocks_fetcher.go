@@ -18,6 +18,7 @@ import (
 	prysmsync "github.com/prysmaticlabs/prysm/v5/beacon-chain/sync"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/verify"
 	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
+	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
@@ -356,6 +357,13 @@ func (f *blocksFetcher) fetchBlocksFromPeer(
 		if err != nil {
 			log.WithField("peer", p).WithError(err).Debug("invalid BeaconBlocksByRange response")
 			continue
+		}
+		if len(features.Get().BlacklistedRoots) > 0 {
+			for _, b := range robs {
+				if features.BlacklistedBlock(b.Block.Root()) {
+					return nil, p, prysmsync.ErrInvalidFetchedData
+				}
+			}
 		}
 		return robs, p, err
 	}
