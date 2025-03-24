@@ -185,6 +185,12 @@ var (
 		Usage: "Forces the head of the beacon chain to a specific block root. Values can be 'head' or a block root." +
 			" The block root has to be known to the beacon node and correspond to a block newer than the current finalized checkpoint.",
 	}
+	// blacklistRoots is a flag for blacklisting block roots from gossip and
+	// downscore peers that send them.
+	blacklistRoots = &cli.StringSliceFlag{
+		Name:  "blacklist-roots",
+		Usage: "A comma-separatted list of 0x-prefixed hexstrings. Declares blocks with the given blockroots to be invalid. It downscores peers that send these blocks.",
+	}
 )
 
 // devModeFlags holds list of flags that are set when development mode is on.
@@ -244,6 +250,7 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	EnableDiscoveryReboot,
 	enableExperimentalAttestationPool,
 	forceHeadFlag,
+	blacklistRoots,
 }, deprecatedBeaconFlags, deprecatedFlags, upcomingDeprecation)
 
 func combinedFlags(flags ...[]cli.Flag) []cli.Flag {
