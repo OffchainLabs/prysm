@@ -1,6 +1,8 @@
 package sync
 
 import (
+	"io"
+
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/pkg/errors"
@@ -40,7 +42,7 @@ func readContextFromStream(stream network.Stream) ([]byte, error) {
 	}
 	// Read context (fork-digest) from stream
 	b := make([]byte, forkDigestLength)
-	if _, err := stream.Read(b); err != nil {
+	if _, err := io.ReadFull(stream, b); err != nil {
 		return nil, err
 	}
 	return b, nil
