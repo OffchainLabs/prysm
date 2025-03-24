@@ -1263,8 +1263,8 @@ func TestGetValidatorIdentities(t *testing.T) {
 			}
 			pubkey1 := st.Validators[0].PublicKey
 			pubkey2 := st.Validators[1].PublicKey
-			hexPubkey1 := hexutil.Encode(pubkey1[:])
-			hexPubkey2 := hexutil.Encode(pubkey2[:])
+			hexPubkey1 := hexutil.Encode(pubkey1)
+			hexPubkey2 := hexutil.Encode(pubkey2)
 
 			body := bytes.Buffer{}
 			_, err := body.WriteString(fmt.Sprintf("[\"%s\",\"%s\"]", hexPubkey1, hexPubkey2))
@@ -1294,7 +1294,7 @@ func TestGetValidatorIdentities(t *testing.T) {
 			}
 
 			pubkey := st.Validators[0].PublicKey
-			hexPubkey := hexutil.Encode(pubkey[:])
+			hexPubkey := hexutil.Encode(pubkey)
 
 			body := bytes.Buffer{}
 			_, err := body.WriteString(fmt.Sprintf("[\"%s\",\"1\"]", hexPubkey))
@@ -1324,7 +1324,7 @@ func TestGetValidatorIdentities(t *testing.T) {
 			}
 
 			pubkey := st.Validators[1].PublicKey
-			hexPubkey := hexutil.Encode(pubkey[:])
+			hexPubkey := hexutil.Encode(pubkey)
 
 			body := bytes.Buffer{}
 			_, err := body.WriteString(fmt.Sprintf("[\"%s\",\"%s\"]", hexPubkey, hexutil.Encode([]byte(strings.Repeat("x", fieldparams.BLSPubkeyLength)))))
@@ -1487,8 +1487,8 @@ func TestGetValidatorIdentities(t *testing.T) {
 			}
 			pubkey1 := st.Validators[0].PublicKey
 			pubkey2 := st.Validators[1].PublicKey
-			hexPubkey1 := hexutil.Encode(pubkey1[:])
-			hexPubkey2 := hexutil.Encode(pubkey2[:])
+			hexPubkey1 := hexutil.Encode(pubkey1)
+			hexPubkey2 := hexutil.Encode(pubkey2)
 
 			body := bytes.Buffer{}
 			_, err := body.WriteString(fmt.Sprintf("[\"%s\",\"%s\"]", hexPubkey1, hexPubkey2))
@@ -1515,7 +1515,7 @@ func TestGetValidatorIdentities(t *testing.T) {
 			}
 
 			pubkey := st.Validators[0].PublicKey
-			hexPubkey := hexutil.Encode(pubkey[:])
+			hexPubkey := hexutil.Encode(pubkey)
 
 			body := bytes.Buffer{}
 			_, err := body.WriteString(fmt.Sprintf("[\"%s\",\"1\"]", hexPubkey))
@@ -1542,7 +1542,7 @@ func TestGetValidatorIdentities(t *testing.T) {
 			}
 
 			pubkey := st.Validators[1].PublicKey
-			hexPubkey := hexutil.Encode(pubkey[:])
+			hexPubkey := hexutil.Encode(pubkey)
 
 			body := bytes.Buffer{}
 			_, err := body.WriteString(fmt.Sprintf("[\"%s\",\"%s\"]", hexPubkey, hexutil.Encode([]byte(strings.Repeat("x", fieldparams.BLSPubkeyLength)))))
