@@ -58,7 +58,7 @@ func (s *Server) GetLightClientBootstrap(w http.ResponseWriter, req *http.Reques
 			httputil.HandleError(w, "Could not marshal bootstrap to SSZ: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
-		httputil.WriteSsz(w, ssz, "light_client_bootstrap.ssz")
+		httputil.WriteSsz(w, ssz)
 	} else {
 		data, err := structs.LightClientBootstrapFromConsensus(bootstrap)
 		if err != nil {
@@ -195,7 +195,7 @@ func (s *Server) GetLightClientFinalityUpdate(w http.ResponseWriter, req *http.R
 			httputil.HandleError(w, "Could not marshal finality update to SSZ: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
-		httputil.WriteSsz(w, ssz, "light_client_finality_update.ssz")
+		httputil.WriteSsz(w, ssz)
 	} else {
 		updateStruct, err := structs.LightClientFinalityUpdateFromConsensus(update)
 		if err != nil {
@@ -258,7 +258,7 @@ func (s *Server) GetLightClientOptimisticUpdate(w http.ResponseWriter, req *http
 			httputil.HandleError(w, "Could not marshal optimistic update to SSZ: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
-		httputil.WriteSsz(w, ssz, "light_client_optimistic_update.ssz")
+		httputil.WriteSsz(w, ssz)
 	} else {
 		updateStruct, err := structs.LightClientOptimisticUpdateFromConsensus(update)
 		if err != nil {
