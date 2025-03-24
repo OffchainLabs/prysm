@@ -110,7 +110,7 @@ func (vs *Server) packAttestations(ctx context.Context, latestState state.Beacon
 
 	var sorted proposerAtts
 	if postElectra {
-		sorted, err = deduped.sortOnChainAggregates()
+		sorted, err = deduped.sortOnChainAggregates(blkSlot)
 		if err != nil {
 			return nil, err
 		}
@@ -271,16 +271,16 @@ func (a proposerAtts) sort() (proposerAtts, error) {
 	return a.sortBySlotAndCommittee()
 }
 
-func (a proposerAtts) sortOnChainAggregates() (proposerAtts, error) {
+func (a proposerAtts) sortOnChainAggregates(s primitives.Slot) (proposerAtts, error) {
 	if len(a) < 2 {
 		return a, nil
 	}
 
-	// Sort by slot first, then by bit count.
+	// Sort by `bit_count / (slot - attestation_slot)` to maximize effectiveness.
 	slices.SortFunc(a, func(a, b ethpb.Att) int {
-		return cmp.Or(
-			-cmp.Compare(a.GetData().Slot, b.GetData().Slot),
-			-cmp.Compare(a.GetAggregationBits().Count(), b.GetAggregationBits().Count()))
+		aScore := float64(a.GetAggregationBits().Count()) / float64(s-a.GetData().Slot)
+		bScore := float64(b.GetAggregationBits().Count()) / float64(s-b.GetData().Slot)
+		return cmp.Compare(bScore, aScore)
 	})
 
 	return a, nil
