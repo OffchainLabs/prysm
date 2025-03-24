@@ -117,7 +117,6 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 
 	if httputil.RespondWithSsz(req) {
 		w.Header().Set("Content-Type", "application/octet-stream")
-		w.Header().Set("Content-Disposition", "attachment; filename="+"light_client_updates.ssz")
 
 		for i := startPeriod; i <= endPeriod; i++ {
 			if ctx.Err() != nil {
