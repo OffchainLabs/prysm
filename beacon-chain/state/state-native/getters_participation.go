@@ -39,6 +39,40 @@ func (b *BeaconState) PreviousEpochParticipation() ([]byte, error) {
 	return b.previousEpochParticipationVal(), nil
 }
 
+// CurrentEpochParticipationNoCopy corresponding to participation bits on the beacon chain without copying the data.
+// Modifications to the returned slice will modify the underlying data.
+func (b *BeaconState) CurrentEpochParticipationNoCopy() ([]byte, error) {
+	if b.version == version.Phase0 {
+		return nil, errNotSupported("CurrentEpochParticipation", b.version)
+	}
+
+	if b.currentEpochParticipation == nil {
+		return nil, nil
+	}
+
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+
+	return b.currentEpochParticipation, nil
+}
+
+// PreviousEpochParticipationNoCopy corresponding to participation bits on the beacon chain without copying the data.
+// Modifications to the returned slice will modify the underlying data.
+func (b *BeaconState) PreviousEpochParticipationNoCopy() ([]byte, error) {
+	if b.version == version.Phase0 {
+		return nil, errNotSupported("PreviousEpochParticipation", b.version)
+	}
+
+	if b.previousEpochParticipation == nil {
+		return nil, nil
+	}
+
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+
+	return b.previousEpochParticipation, nil
+}
+
 // UnrealizedCheckpointBalances returns the total balances: active, target attested in
 // current epoch and target attested in previous epoch. This function is used to
 // compute the "unrealized justification" that a synced Beacon Block will have.

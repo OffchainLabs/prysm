@@ -210,6 +210,8 @@ type ReadOnlyWithdrawals interface {
 type ReadOnlyParticipation interface {
 	CurrentEpochParticipation() ([]byte, error)
 	PreviousEpochParticipation() ([]byte, error)
+	CurrentEpochParticipationNoCopy() ([]byte, error)
+	PreviousEpochParticipationNoCopy() ([]byte, error)
 }
 
 // ReadOnlyInactivity defines a struct which only has read access to inactivity methods.
