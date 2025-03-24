@@ -213,4 +213,3 @@ windows_cc_toolchain_config = rule(
     },
     provides = [CcToolchainConfigInfo],
 )
-

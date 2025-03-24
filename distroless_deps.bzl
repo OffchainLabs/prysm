@@ -14,4 +14,3 @@ def distroless_deps():
         sum = "h1:9B623Cfs+mclYK6dsae7gLSwuIBHvlgmEup87qpqsAQ=",
         version = "v0.3.1-0.20230104082527-d6f58551be3f",
     )
-

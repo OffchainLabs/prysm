@@ -12,7 +12,7 @@ repos:
     hooks:
       - id: gci
         name: goimports
-        entry: bash -c 'command -v gci >/dev/null 2>&1 || go install github.com/daixiang0/gci@latest; gci write --skip-generated -s standard -s default "$@"' --
+        entry: bash -c 'command -v gci >/dev/null 2>&1 || go install github.com/daixiang0/gci@latest; gci write --skip-generated -s standard -s default "$@"; goimports -w "$@"' --
         language: golang
         files: \.go$
 

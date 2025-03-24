@@ -5,15 +5,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	light_client "github.com/prysmaticlabs/prysm/v5/consensus-types/light-client"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-
 	"github.com/pkg/errors"
 	lightClient "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/light-client"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
 	consensustypes "github.com/prysmaticlabs/prysm/v5/consensus-types"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	light_client "github.com/prysmaticlabs/prysm/v5/consensus-types/light-client"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/encoding/ssz"
 	v11 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
 	pb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"

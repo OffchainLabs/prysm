@@ -2874,7 +2874,7 @@ func TestUpdateValidatorStatusCache(t *testing.T) {
 		beaconNodeHosts:  []string{"http://localhost:8080", "http://localhost:8081"},
 		currentHostIndex: 0,
 		pubkeyToStatus: map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus{
-			[fieldparams.BLSPubkeyLength]byte{0x03}: &validatorStatus{ // add non existent key and status to cache, should be fully removed on update
+			{0x03}: { // add non existent key and status to cache, should be fully removed on update
 				publicKey: []byte{0x03},
 				status: &ethpb.ValidatorStatusResponse{
 					Status: ethpb.ValidatorStatus_ACTIVE,
