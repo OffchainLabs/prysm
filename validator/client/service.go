@@ -173,6 +173,7 @@ func (v *ValidatorService) Start() {
 		log.WithError(err).Error("No API hosts provided")
 		return
 	}
+
 	restHandler := beaconApi.NewBeaconApiJsonRestHandler(
 		http.Client{Timeout: v.conn.GetBeaconApiTimeout(), Transport: otelhttp.NewTransport(http.DefaultTransport)},
 		hosts[0],

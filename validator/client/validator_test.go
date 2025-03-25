@@ -394,10 +394,9 @@ func TestUpdateDuties_DoesNothingWhenNotEpochStart_AlreadyExistingAssignments(t 
 	slot := primitives.Slot(1)
 	v := validator{
 		validatorClient: client,
-		duties: &ethpb.DutiesResponse{
-			CurrentEpochDuties: []*ethpb.DutiesResponse_Duty{
+		duties: &ethpb.ValidatorDutiesContainer{
+			CurrentEpochDuties: []*ethpb.ValidatorDuty{
 				{
-					Committee:      []primitives.ValidatorIndex{},
 					AttesterSlot:   10,
 					CommitteeIndex: 20,
 				},
@@ -420,8 +419,8 @@ func TestUpdateDuties_ReturnsError(t *testing.T) {
 	v := validator{
 		validatorClient: client,
 		km:              newMockKeymanager(t, randKeypair(t)),
-		duties: &ethpb.DutiesResponse{
-			CurrentEpochDuties: []*ethpb.DutiesResponse_Duty{
+		duties: &ethpb.ValidatorDutiesContainer{
+			CurrentEpochDuties: []*ethpb.ValidatorDuty{
 				{
 					CommitteeIndex: 1,
 				},
@@ -437,7 +436,7 @@ func TestUpdateDuties_ReturnsError(t *testing.T) {
 	).Return(nil, expected)
 
 	assert.ErrorContains(t, expected.Error(), v.UpdateDuties(context.Background(), params.BeaconConfig().SlotsPerEpoch))
-	assert.Equal(t, (*ethpb.DutiesResponse)(nil), v.duties, "Assignments should have been cleared on failure")
+	assert.Equal(t, (*ethpb.ValidatorDutiesContainer)(nil), v.duties, "Assignments should have been cleared on failure")
 }
 
 func TestUpdateDuties_OK(t *testing.T) {
@@ -446,15 +445,15 @@ func TestUpdateDuties_OK(t *testing.T) {
 	client := validatormock.NewMockValidatorClient(ctrl)
 
 	slot := params.BeaconConfig().SlotsPerEpoch
-	resp := &ethpb.DutiesResponse{
-		CurrentEpochDuties: []*ethpb.DutiesResponse_Duty{
+	resp := &ethpb.ValidatorDutiesContainer{
+		CurrentEpochDuties: []*ethpb.ValidatorDuty{
 			{
-				AttesterSlot:   params.BeaconConfig().SlotsPerEpoch,
-				ValidatorIndex: 200,
-				CommitteeIndex: 100,
-				Committee:      []primitives.ValidatorIndex{0, 1, 2, 3},
-				PublicKey:      []byte("testPubKey_1"),
-				ProposerSlots:  []primitives.Slot{params.BeaconConfig().SlotsPerEpoch + 1},
+				AttesterSlot:    params.BeaconConfig().SlotsPerEpoch,
+				ValidatorIndex:  200,
+				CommitteeIndex:  100,
+				CommitteeLength: 4,
+				PublicKey:       []byte("testPubKey_1"),
+				ProposerSlots:   []primitives.Slot{params.BeaconConfig().SlotsPerEpoch + 1},
 			},
 		},
 	}
@@ -474,7 +473,7 @@ func TestUpdateDuties_OK(t *testing.T) {
 		gomock.Any(),
 		gomock.Any(),
 		gomock.Any(),
-	).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.DutiesResponse_Duty) (*emptypb.Empty, error) {
+	).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.ValidatorDuty) (*emptypb.Empty, error) {
 		wg.Done()
 		return nil, nil
 	})
@@ -508,8 +507,8 @@ func TestUpdateDuties_OK_FilterBlacklistedPublicKeys(t *testing.T) {
 		blacklistedPubkeys: blacklistedPublicKeys,
 	}
 
-	resp := &ethpb.DutiesResponse{
-		CurrentEpochDuties: []*ethpb.DutiesResponse_Duty{},
+	resp := &ethpb.ValidatorDutiesContainer{
+		CurrentEpochDuties: []*ethpb.ValidatorDuty{},
 	}
 	client.EXPECT().Duties(
 		gomock.Any(),
@@ -522,7 +521,7 @@ func TestUpdateDuties_OK_FilterBlacklistedPublicKeys(t *testing.T) {
 		gomock.Any(),
 		gomock.Any(),
 		gomock.Any(),
-	).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.DutiesResponse_Duty) (*emptypb.Empty, error) {
+	).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.ValidatorDuty) (*emptypb.Empty, error) {
 		wg.Done()
 		return nil, nil
 	})
@@ -542,25 +541,25 @@ func TestUpdateDuties_AllValidatorsExited(t *testing.T) {
 	client := validatormock.NewMockValidatorClient(ctrl)
 
 	slot := params.BeaconConfig().SlotsPerEpoch
-	resp := &ethpb.DutiesResponse{
-		CurrentEpochDuties: []*ethpb.DutiesResponse_Duty{
+	resp := &ethpb.ValidatorDutiesContainer{
+		CurrentEpochDuties: []*ethpb.ValidatorDuty{
 			{
-				AttesterSlot:   params.BeaconConfig().SlotsPerEpoch,
-				ValidatorIndex: 200,
-				CommitteeIndex: 100,
-				Committee:      []primitives.ValidatorIndex{0, 1, 2, 3},
-				PublicKey:      []byte("testPubKey_1"),
-				ProposerSlots:  []primitives.Slot{params.BeaconConfig().SlotsPerEpoch + 1},
-				Status:         ethpb.ValidatorStatus_EXITED,
+				AttesterSlot:    params.BeaconConfig().SlotsPerEpoch,
+				ValidatorIndex:  200,
+				CommitteeIndex:  100,
+				CommitteeLength: 4,
+				PublicKey:       []byte("testPubKey_1"),
+				ProposerSlots:   []primitives.Slot{params.BeaconConfig().SlotsPerEpoch + 1},
+				Status:          ethpb.ValidatorStatus_EXITED,
 			},
 			{
-				AttesterSlot:   params.BeaconConfig().SlotsPerEpoch,
-				ValidatorIndex: 201,
-				CommitteeIndex: 101,
-				Committee:      []primitives.ValidatorIndex{0, 1, 2, 3},
-				PublicKey:      []byte("testPubKey_2"),
-				ProposerSlots:  []primitives.Slot{params.BeaconConfig().SlotsPerEpoch + 1},
-				Status:         ethpb.ValidatorStatus_EXITED,
+				AttesterSlot:    params.BeaconConfig().SlotsPerEpoch,
+				ValidatorIndex:  201,
+				CommitteeIndex:  101,
+				CommitteeLength: 4,
+				PublicKey:       []byte("testPubKey_2"),
+				ProposerSlots:   []primitives.Slot{params.BeaconConfig().SlotsPerEpoch + 1},
+				Status:          ethpb.ValidatorStatus_EXITED,
 			},
 		},
 	}
@@ -586,8 +585,8 @@ func TestUpdateDuties_Distributed(t *testing.T) {
 	// Start of third epoch.
 	slot := 2 * params.BeaconConfig().SlotsPerEpoch
 	keys := randKeypair(t)
-	resp := &ethpb.DutiesResponse{
-		CurrentEpochDuties: []*ethpb.DutiesResponse_Duty{
+	resp := &ethpb.ValidatorDutiesContainer{
+		CurrentEpochDuties: []*ethpb.ValidatorDuty{
 			{
 				AttesterSlot:   slot, // First slot in epoch.
 				ValidatorIndex: 200,
@@ -596,7 +595,7 @@ func TestUpdateDuties_Distributed(t *testing.T) {
 				Status:         ethpb.ValidatorStatus_ACTIVE,
 			},
 		},
-		NextEpochDuties: []*ethpb.DutiesResponse_Duty{
+		NextEpochDuties: []*ethpb.ValidatorDuty{
 			{
 				AttesterSlot:   slot + params.BeaconConfig().SlotsPerEpoch, // First slot in next epoch.
 				ValidatorIndex: 200,
@@ -654,7 +653,7 @@ func TestUpdateDuties_Distributed(t *testing.T) {
 		gomock.Any(),
 		gomock.Any(),
 		gomock.Any(),
-	).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.DutiesResponse_Duty) (*emptypb.Empty, error) {
+	).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.ValidatorDuty) (*emptypb.Empty, error) {
 		wg.Done()
 		return nil, nil
 	})
@@ -670,8 +669,8 @@ func TestRolesAt_OK(t *testing.T) {
 			v, m, validatorKey, finish := setup(t, isSlashingProtectionMinimal)
 			defer finish()
 
-			v.duties = &ethpb.DutiesResponse{
-				CurrentEpochDuties: []*ethpb.DutiesResponse_Duty{
+			v.duties = &ethpb.ValidatorDutiesContainer{
+				CurrentEpochDuties: []*ethpb.ValidatorDuty{
 					{
 						CommitteeIndex:  1,
 						AttesterSlot:    1,
@@ -679,7 +678,7 @@ func TestRolesAt_OK(t *testing.T) {
 						IsSyncCommittee: true,
 					},
 				},
-				NextEpochDuties: []*ethpb.DutiesResponse_Duty{
+				NextEpochDuties: []*ethpb.ValidatorDuty{
 					{
 						CommitteeIndex:  1,
 						AttesterSlot:    1,
@@ -710,8 +709,8 @@ func TestRolesAt_OK(t *testing.T) {
 			assert.Equal(t, iface.RoleSyncCommittee, roleMap[bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())][2])
 
 			// Test sync committee role at epoch boundary.
-			v.duties = &ethpb.DutiesResponse{
-				CurrentEpochDuties: []*ethpb.DutiesResponse_Duty{
+			v.duties = &ethpb.ValidatorDutiesContainer{
+				CurrentEpochDuties: []*ethpb.ValidatorDuty{
 					{
 						CommitteeIndex:  1,
 						AttesterSlot:    1,
@@ -719,7 +718,7 @@ func TestRolesAt_OK(t *testing.T) {
 						IsSyncCommittee: false,
 					},
 				},
-				NextEpochDuties: []*ethpb.DutiesResponse_Duty{
+				NextEpochDuties: []*ethpb.ValidatorDuty{
 					{
 						CommitteeIndex:  1,
 						AttesterSlot:    1,
@@ -750,8 +749,8 @@ func TestRolesAt_DoesNotAssignProposer_Slot0(t *testing.T) {
 			v, m, validatorKey, finish := setup(t, isSlashingProtectionMinimal)
 			defer finish()
 
-			v.duties = &ethpb.DutiesResponse{
-				CurrentEpochDuties: []*ethpb.DutiesResponse_Duty{
+			v.duties = &ethpb.ValidatorDutiesContainer{
+				CurrentEpochDuties: []*ethpb.ValidatorDuty{
 					{
 						CommitteeIndex: 1,
 						AttesterSlot:   0,
@@ -865,8 +864,8 @@ func TestCheckAndLogValidatorStatus_OK(t *testing.T) {
 			client := validatormock.NewMockValidatorClient(ctrl)
 			v := validator{
 				validatorClient: client,
-				duties: &ethpb.DutiesResponse{
-					CurrentEpochDuties: []*ethpb.DutiesResponse_Duty{
+				duties: &ethpb.ValidatorDutiesContainer{
+					CurrentEpochDuties: []*ethpb.ValidatorDuty{
 						{
 							CommitteeIndex: 1,
 						},
