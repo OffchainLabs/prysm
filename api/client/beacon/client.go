@@ -11,7 +11,6 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
-	"text/template"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
@@ -64,23 +63,6 @@ func IdFromSlot(s primitives.Slot) StateOrBlockId {
 	return StateOrBlockId(strconv.FormatUint(uint64(s), 10))
 }
 
-// idTemplate is used to create template functions that can interpolate StateOrBlockId values.
-func idTemplate(ts string) func(StateOrBlockId) string {
-	t := template.Must(template.New("").Parse(ts))
-	f := func(id StateOrBlockId) string {
-		b := bytes.NewBuffer(nil)
-		err := t.Execute(b, struct{ Id string }{Id: string(id)})
-		if err != nil {
-			panic(fmt.Sprintf("invalid idTemplate: %s", ts))
-		}
-		return b.String()
-	}
-	// run the template to ensure that it is valid
-	// this should happen load time (using package scoped vars) to ensure runtime errors aren't possible
-	_ = f(IdGenesis)
-	return f
-}
-
 // RenderGetBlockPath formats a block id into a path for the GetBlock API endpoint.
 func RenderGetBlockPath(id StateOrBlockId) string {
 	return path.Join(getSignedBlockPath, string(id))
@@ -114,8 +96,6 @@ func (c *Client) GetBlock(ctx context.Context, blockId StateOrBlockId) ([]byte, 
 	return b, nil
 }
 
-var getBlockRootTpl = idTemplate(getBlockRootPath)
-
 // GetBlockRoot retrieves the hash_tree_root of the BeaconBlock for the given block id.
 // Block identifier can be one of: "head" (canonical head in node's view), "genesis", "finalized",
 // <slot>, <hex encoded blockRoot with 0x prefix>. Variables of type StateOrBlockId are exported by this package
@@ -137,8 +117,6 @@ func (c *Client) GetBlockRoot(ctx context.Context, blockId StateOrBlockId) ([32]
 	}
 	return bytesutil.ToBytes32(rs), nil
 }
-
-var getForkTpl = idTemplate(getForkForStatePath)
 
 // GetFork queries the Beacon Node API for the Fork from the state identified by stateId.
 // Block identifier can be one of: "head" (canonical head in node's view), "genesis", "finalized",

@@ -37,7 +37,7 @@ func (v *votes) Insert(blk interfaces.ReadOnlyBeaconBlock) {
 	e1d := blk.Body().Eth1Data()
 	htr, err := e1d.HashTreeRoot()
 	if err != nil {
-		panic(err)
+		panic(err) // lint:nopanic -- Panic is OK for this tool.
 	}
 	v.hashes[bytesutil.ToBytes32(e1d.BlockHash)]++
 	v.roots[bytesutil.ToBytes32(e1d.DepositRoot)]++

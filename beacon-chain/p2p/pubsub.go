@@ -11,9 +11,11 @@ import (
 	pubsubpb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/encoder"
 	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	mathutil "github.com/prysmaticlabs/prysm/v5/math"
 	pbrpc "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
@@ -141,7 +143,7 @@ func (s *Service) pubsubOptions() []pubsub.Option {
 		}),
 		pubsub.WithSubscriptionFilter(s),
 		pubsub.WithPeerOutboundQueueSize(int(s.cfg.QueueSize)),
-		pubsub.WithMaxMessageSize(int(params.BeaconConfig().GossipMaxSize)),
+		pubsub.WithMaxMessageSize(int(MaxMessageSize())), // lint:ignore uintcast -- Max Message Size is a config value and is naturally bounded by networking limitations.
 		pubsub.WithValidateQueueSize(int(s.cfg.QueueSize)),
 		pubsub.WithPeerScore(peerScoringParams()),
 		pubsub.WithPeerScoreInspect(s.peerInspector, time.Minute),
@@ -234,4 +236,15 @@ func ExtractGossipDigest(topic string) ([4]byte, error) {
 		return [4]byte{}, errors.Errorf("invalid digest length wanted %d but got %d", digestLength, len(digest))
 	}
 	return bytesutil.ToBytes4(digest), nil
+}
+
+// MaxMessageSize returns the maximum allowed compressed message size.
+//
+// Spec pseudocode definition:
+// def max_message_size() -> uint64:
+//
+//	# Allow 1024 bytes for framing and encoding overhead but at least 1MiB in case MAX_PAYLOAD_SIZE is small.
+//	return max(max_compressed_len(MAX_PAYLOAD_SIZE) + 1024, 1024 * 1024)
+func MaxMessageSize() uint64 {
+	return mathutil.Max(encoder.MaxCompressedLen(params.BeaconConfig().MaxPayloadSize)+1024, 1024*1024)
 }

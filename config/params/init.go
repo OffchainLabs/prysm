@@ -9,6 +9,7 @@ func init() {
 		InteropConfig(),
 		HoleskyConfig(),
 		SepoliaConfig(),
+		HoodiConfig(),
 	}
 	configs = newConfigset(defaults...)
 	// ensure that main net is always present and active by default

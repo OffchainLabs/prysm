@@ -175,6 +175,9 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 	var set *bls.SignatureBatch
 	boundaries := make(map[[32]byte]state.BeaconState)
 	for i, b := range blks {
+		if features.BlacklistedBlock(b.Root()) {
+			return errBlacklistedRoot
+		}
 		v, h, err := getStateVersionAndPayload(preState)
 		if err != nil {
 			return err

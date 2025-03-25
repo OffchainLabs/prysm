@@ -19,7 +19,7 @@ type Slot uint64
 func (s Slot) Mul(x uint64) Slot {
 	res, err := s.SafeMul(x)
 	if err != nil {
-		panic(err.Error())
+		panic(err.Error()) // lint:nopanic -- Panic is communicated in the godoc commentary.
 	}
 	return res
 }
@@ -48,7 +48,7 @@ func (s Slot) SafeMulSlot(x Slot) (Slot, error) {
 func (s Slot) Div(x uint64) Slot {
 	res, err := s.SafeDiv(x)
 	if err != nil {
-		panic(err.Error())
+		panic(err.Error()) // lint:nopanic -- Panic is communicated in the godoc commentary.
 	}
 	return res
 }
@@ -77,7 +77,7 @@ func (s Slot) SafeDivSlot(x Slot) (Slot, error) {
 func (s Slot) Add(x uint64) Slot {
 	res, err := s.SafeAdd(x)
 	if err != nil {
-		panic(err.Error())
+		panic(err.Error()) // lint:nopanic -- Panic is communicated in the godoc commentary.
 	}
 	return res
 }
@@ -106,7 +106,7 @@ func (s Slot) SafeAddSlot(x Slot) (Slot, error) {
 func (s Slot) Sub(x uint64) Slot {
 	res, err := s.SafeSub(x)
 	if err != nil {
-		panic(err.Error())
+		panic(err.Error()) // lint:nopanic -- Panic is communicated in the godoc commentary.
 	}
 	return res
 }
@@ -143,7 +143,7 @@ func (s Slot) SafeSubSlot(x Slot) (Slot, error) {
 func (s Slot) Mod(x uint64) Slot {
 	res, err := s.SafeMod(x)
 	if err != nil {
-		panic(err.Error())
+		panic(err.Error()) // lint:nopanic -- Panic is communicated in the godoc commentary.
 	}
 	return res
 }

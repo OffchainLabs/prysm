@@ -52,7 +52,7 @@ func newConfigset(configs ...*BeaconChainConfig) *configset {
 	}
 	for _, c := range configs {
 		if err := r.add(c); err != nil {
-			panic(err)
+			panic(err) // lint:nopanic -- This would only panic with an application misconfiguration and it should fail right away.
 		}
 	}
 	return r

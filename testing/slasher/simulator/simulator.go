@@ -1,3 +1,4 @@
+// lint:nopanic -- Test tooling / code.
 package simulator
 
 import (

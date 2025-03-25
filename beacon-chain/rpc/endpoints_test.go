@@ -150,7 +150,14 @@ func Test_endpoints(t *testing.T) {
 			actualRoutes[e.template] = e.methods
 		}
 	}
-	expectedRoutes := combineMaps(beaconRoutes, builderRoutes, configRoutes, debugRoutes, eventsRoutes, nodeRoutes, validatorRoutes, rewardsRoutes, lightClientRoutes, blobRoutes, prysmValidatorRoutes, prysmNodeRoutes, prysmBeaconRoutes)
+	expectedRoutes := make(map[string][]string)
+	for _, m := range []map[string][]string{
+		beaconRoutes, builderRoutes, configRoutes, debugRoutes, eventsRoutes,
+		nodeRoutes, validatorRoutes, rewardsRoutes, lightClientRoutes, blobRoutes,
+		prysmValidatorRoutes, prysmNodeRoutes, prysmBeaconRoutes,
+	} {
+		maps.Copy(expectedRoutes, m)
+	}
 
 	assert.Equal(t, true, maps.EqualFunc(expectedRoutes, actualRoutes, func(actualMethods []string, expectedMethods []string) bool {
 		return slices.Equal(expectedMethods, actualMethods)

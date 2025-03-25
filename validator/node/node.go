@@ -32,7 +32,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/monitoring/prometheus"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
 	"github.com/prysmaticlabs/prysm/v5/runtime"
-	"github.com/prysmaticlabs/prysm/v5/runtime/debug"
 	"github.com/prysmaticlabs/prysm/v5/runtime/prereqs"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/validator/accounts/wallet"
@@ -154,7 +153,6 @@ func (c *ValidatorClient) Start() {
 		defer signal.Stop(sigc)
 		<-sigc
 		log.Info("Got interrupt, shutting down...")
-		debug.Exit(c.cliCtx) // Ensure trace and CPU profile data are flushed.
 		go c.Close()
 		for i := 10; i > 0; i-- {
 			<-sigc
@@ -162,7 +160,7 @@ func (c *ValidatorClient) Start() {
 				log.WithField("times", i-1).Info("Already shutting down, interrupt more to panic.")
 			}
 		}
-		panic("Panic closing the validator client")
+		panic("Panic closing the validator client") // lint:nopanic -- Panic is requested by user.
 	}()
 
 	// Wait for stop channel to be closed.

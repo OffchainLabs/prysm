@@ -197,6 +197,7 @@ nogo(
         "//tools/analyzers/logruswitherror:go_default_library",
         "//tools/analyzers/maligned:go_default_library",
         "//tools/analyzers/nop:go_default_library",
+        "//tools/analyzers/nopanic:go_default_library",
         "//tools/analyzers/properpermissions:go_default_library",
         "//tools/analyzers/recursivelock:go_default_library",
         "//tools/analyzers/shadowpredecl:go_default_library",
