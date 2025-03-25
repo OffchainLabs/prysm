@@ -59,7 +59,7 @@ func (s *Service) getRecentPreState(ctx context.Context, c *ethpb.Checkpoint) st
 		return nil
 	}
 	if err := s.checkpointStateCache.AddCheckpointState(c, st); err != nil {
-		log.WithError(err).Error("could not save checkpoint state to cache")
+		log.WithError(err).Error("Could not save checkpoint state to cache")
 	}
 	return st
 }
