@@ -6,6 +6,17 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [v5.3.2](https://github.com/prysmaticlabs/prysm/compare/v5.3.1...v5.3.2) - 2025-03-25
 
+This release introduces support for the `Hoodi` testnet.
+
+Release highlights:
+
+- Ability to run the node on the `Hoodi` tesnet. See https://blog.ethereum.org/2025/03/18/hoodi-holesky for more information about `Hoodi`.
+- A new feature that allows treat certain blocks as invalid. This is especially useful when the network is split, allowing the node to discontinue following unwanted forks.
+
+Testnet operators are required to update to this release. Without this release you will be unable to run the node on the `Hoodi` testnet.
+
+Mainnet operators are recommended to update to this release at their regular cadence.
+
 ### Added
 
 - enable SSZ for builder API calls. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14976)
@@ -47,7 +58,7 @@ Known issues in **Electra**:
 
 Testnet operators are strongly encouraged to update to this release. There are many fixes and improvements from the Holesky upgrade incident.
 
-Mainner operators are recommended to update to this release at their regular cadence. 
+Mainnet operators are recommended to update to this release at their regular cadence. 
 
 ### Added
 
