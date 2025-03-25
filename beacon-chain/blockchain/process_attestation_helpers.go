@@ -18,6 +18,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
+// The caller of this function must have a lock on forkchoice.
 func (s *Service) getRecentPreState(ctx context.Context, c *ethpb.Checkpoint) state.ReadOnlyBeaconState {
 	headEpoch := slots.ToEpoch(s.HeadSlot())
 	if c.Epoch < headEpoch {
@@ -27,13 +28,6 @@ func (s *Service) getRecentPreState(ctx context.Context, c *ethpb.Checkpoint) st
 		return nil
 	}
 	if c.Epoch == headEpoch {
-		targetSlot, err := s.cfg.ForkChoiceStore.Slot([32]byte(c.Root))
-		if err != nil {
-			return nil
-		}
-		if slots.ToEpoch(targetSlot)+1 < headEpoch {
-			return nil
-		}
 		st, err := s.HeadStateReadOnly(ctx)
 		if err != nil {
 			return nil
@@ -65,12 +59,13 @@ func (s *Service) getRecentPreState(ctx context.Context, c *ethpb.Checkpoint) st
 		return nil
 	}
 	if err := s.checkpointStateCache.AddCheckpointState(c, st); err != nil {
-		return nil
+		log.WithError(err).Error("Could not save checkpoint state to cache")
 	}
 	return st
 }
 
 // getAttPreState retrieves the att pre state by either from the cache or the DB.
+// The caller of this function must have a lock on forkchoice.
 func (s *Service) getAttPreState(ctx context.Context, c *ethpb.Checkpoint) (state.ReadOnlyBeaconState, error) {
 	// If the attestation is recent and canonical we can use the head state to compute the shuffling.
 	if st := s.getRecentPreState(ctx, c); st != nil {
