@@ -16,6 +16,7 @@ import (
 	ssz "github.com/prysmaticlabs/fastssz"
 	"github.com/prysmaticlabs/prysm/v5/api"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/kzg"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache/depositsnapshot"
 	corehelpers "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
@@ -935,6 +936,7 @@ func decodePhase0JSON(body []byte) (*eth.GenericSignedBeaconBlock, error) {
 // broadcastSidecarsIfSupported broadcasts blob sidecars when an equivocated block occurs.
 func broadcastSidecarsIfSupported(ctx context.Context, s *Server, b interfaces.SignedBeaconBlock, gb *eth.GenericSignedBeaconBlock, versionHeader string) error {
 	switch versionHeader {
+	// TODO: should broadcast column sidecars for Fulu here?
 	case version.String(version.Fulu):
 		return s.broadcastSeenBlockSidecars(ctx, b, gb.GetFulu().Blobs, gb.GetFulu().KzgProofs)
 	case version.String(version.Electra):
@@ -1044,19 +1046,74 @@ func (s *Server) validateBlobSidecars(blk interfaces.SignedBeaconBlock, blobs []
 	if blk.Version() < version.Deneb {
 		return nil
 	}
+
 	kzgs, err := blk.Block().Body().BlobKzgCommitments()
 	if err != nil {
 		return errors.Wrap(err, "could not get blob kzg commitments")
 	}
-	if len(blobs) != len(proofs) || len(blobs) != len(kzgs) {
-		return errors.New("number of blobs, proofs, and commitments do not match")
+
+	if len(blobs) != len(kzgs) {
+		return errors.New("number of blobs and kzg commitments do not match")
 	}
+
+	// Deneb & Electra use blob proofs
+	if blk.Version() < version.Fulu {
+		if len(blobs) != len(proofs) {
+			return errors.New("number of blobs and proofs do not match")
+		}
+
+		for i, blob := range blobs {
+			b := kzg4844.Blob(blob)
+			if err := kzg4844.VerifyBlobProof(&b, kzg4844.Commitment(kzgs[i]), kzg4844.Proof(proofs[i])); err != nil {
+				return errors.Wrap(err, "could not verify blob proof")
+			}
+		}
+
+		return nil
+	}
+
+	// Fulu uses cell proofs
+	numColumns := int(params.BeaconConfig().NumberOfColumns)
+	if len(blobs)*numColumns != len(proofs) {
+		return fmt.Errorf("number of blobs, cell proofs do not match: blobs=%d, proofs=%d", len(blobs), len(proofs))
+	}
+
+	count := numColumns * len(blobs)
+	commitments := make([]kzg.Bytes48, 0, count)
+	indices := make([]uint64, 0, count)
+	cells := make([]kzg.Cell, 0, count)
+	cellProofs := make([]kzg.Bytes48, 0, count)
+
 	for i, blob := range blobs {
-		b := kzg4844.Blob(blob)
-		if err := kzg4844.VerifyBlobProof(&b, kzg4844.Commitment(kzgs[i]), kzg4844.Proof(proofs[i])); err != nil {
-			return errors.Wrap(err, "could not verify blob proof")
+		var b kzg.Blob
+		copy(b[:], blob)
+		cs, err := kzg.ComputeCells(&b)
+		if err != nil {
+			return errors.Wrap(err, "could not compute cells")
+		}
+
+		// For each cell in the blob, add the corresponding data
+		for j := 0; j < numColumns; j++ {
+			// Add the commitment for each cell
+			commitments = append(commitments, kzg.Bytes48(kzgs[i]))
+			// Add the cell indexes
+			indices = append(indices, uint64(i))
+			// Add the cells
+			cells = append(cells, cs[j])
+			// Add the cell proofs, converting from Proof to Bytes48
+			cellProofs = append(cellProofs, kzg.Bytes48(proofs[i*numColumns+j]))
 		}
 	}
+
+	verified, err := kzg.VerifyCellKZGProofBatch(commitments, indices, cells, cellProofs)
+	if err != nil {
+		return errors.Wrap(err, "error verifying cell proofs")
+	}
+
+	if !verified {
+		return errors.New("cell proofs are invalid")
+	}
+
 	return nil
 }
 

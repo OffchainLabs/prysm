@@ -737,16 +737,16 @@ func TestServer_GetBeaconBlock_Fulu(t *testing.T) {
 		},
 	}
 	blk := &ethpb.SignedBeaconBlockFulu{
-		Block: &ethpb.BeaconBlockElectra{
+		Block: &ethpb.BeaconBlockFulu{
 			Slot:       fuluSlot + 1,
 			ParentRoot: parentRoot[:],
 			StateRoot:  genesis.Block.StateRoot,
-			Body: &ethpb.BeaconBlockBodyElectra{
+			Body: &ethpb.BeaconBlockBodyFulu{
 				RandaoReveal:  genesis.Block.Body.RandaoReveal,
 				Graffiti:      genesis.Block.Body.Graffiti,
 				Eth1Data:      genesis.Block.Body.Eth1Data,
 				SyncAggregate: &ethpb.SyncAggregate{SyncCommitteeBits: scBits[:], SyncCommitteeSignature: make([]byte, 96)},
-				ExecutionPayload: &enginev1.ExecutionPayloadDeneb{
+				ExecutionPayload: &enginev1.ExecutionPayloadFulu{
 					ParentHash:    make([]byte, fieldparams.RootLength),
 					FeeRecipient:  make([]byte, fieldparams.FeeRecipientLength),
 					StateRoot:     make([]byte, fieldparams.RootLength),
@@ -755,6 +755,7 @@ func TestServer_GetBeaconBlock_Fulu(t *testing.T) {
 					PrevRandao:    make([]byte, fieldparams.RootLength),
 					BaseFeePerGas: make([]byte, fieldparams.RootLength),
 					BlockHash:     make([]byte, fieldparams.RootLength),
+					ProofVersion:  make([]byte, 1),
 				},
 				ExecutionRequests: &enginev1.ExecutionRequests{
 					Withdrawals:    wr,

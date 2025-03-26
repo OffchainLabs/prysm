@@ -325,9 +325,10 @@ func TestGetBlockV2(t *testing.T) {
 		s.GetBlockV2(writer, request)
 		require.Equal(t, http.StatusOK, writer.Code)
 		resp := &structs.GetBlockV2Response{}
+
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
 		assert.Equal(t, version.String(version.Fulu), resp.Version)
-		sbb := &structs.SignedBeaconBlockFulu{Message: &structs.BeaconBlockElectra{}}
+		sbb := &structs.SignedBeaconBlockFulu{Message: &structs.BeaconBlockFulu{}}
 		require.NoError(t, json.Unmarshal(resp.Data.Message, sbb.Message))
 		sbb.Signature = resp.Data.Signature
 		blk, err := sbb.ToConsensus()
@@ -1469,7 +1470,7 @@ func TestPublishBlock(t *testing.T) {
 			converted, err := structs.SignedBeaconBlockContentsElectraFromConsensus(block.Electra)
 			require.NoError(t, err)
 			var signedblock *structs.SignedBeaconBlockContentsElectra
-			err = json.Unmarshal([]byte(rpctesting.FuluBlockContents), &signedblock)
+			err = json.Unmarshal([]byte(rpctesting.ElectraBlockContents), &signedblock)
 			require.NoError(t, err)
 			require.DeepEqual(t, converted, signedblock)
 			return ok
@@ -4745,7 +4746,7 @@ func Test_validateBlobSidecars(t *testing.T) {
 	s := &Server{}
 	require.NoError(t, s.validateBlobSidecars(b, [][]byte{blob[:]}, [][]byte{proof[:]}))
 
-	require.ErrorContains(t, "number of blobs, proofs, and commitments do not match", s.validateBlobSidecars(b, [][]byte{blob[:]}, [][]byte{}))
+	require.ErrorContains(t, "number of blobs and proofs do not match", s.validateBlobSidecars(b, [][]byte{blob[:]}, [][]byte{}))
 
 	sk, err := bls.RandKey()
 	require.NoError(t, err)

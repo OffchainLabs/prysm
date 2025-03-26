@@ -4,17 +4,15 @@ import (
 	"bytes"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/kzg"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	consensusblocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 )
 
-func unblindBlobsSidecars(block interfaces.SignedBeaconBlock, bundle *enginev1.BlobsBundle) ([]*ethpb.BlobSidecar, error) {
+func unblindBlobsSidecars(block interfaces.SignedBeaconBlock, bundle blocks.BlobsBundle) ([]*ethpb.BlobSidecar, error) {
 	if block.Version() < version.Deneb {
 		return nil, nil
 	}
@@ -36,25 +34,25 @@ func unblindBlobsSidecars(block interfaces.SignedBeaconBlock, bundle *enginev1.B
 	}
 
 	// Ensure there are equal counts of blobs/commitments/proofs.
-	if len(bundle.KzgCommitments) != len(bundle.Blobs) {
+	if len(bundle.GetKzgCommitments()) != len(bundle.GetBlobs()) {
 		return nil, errors.New("mismatch commitments count")
 	}
-	if len(bundle.Proofs) != len(bundle.Blobs) {
+	if len(bundle.GetProofs()) != len(bundle.GetBlobs()) {
 		return nil, errors.New("mismatch proofs count")
 	}
 
 	// Verify that commitments in the bundle match the block.
-	if len(bundle.KzgCommitments) != len(blockCommitments) {
+	if len(bundle.GetKzgCommitments()) != len(blockCommitments) {
 		return nil, errors.New("commitment count doesn't match block")
 	}
 	for i, commitment := range blockCommitments {
-		if !bytes.Equal(bundle.KzgCommitments[i], commitment) {
+		if !bytes.Equal(bundle.GetKzgCommitments()[i], commitment) {
 			return nil, errors.New("commitment value doesn't match block")
 		}
 	}
 
-	sidecars := make([]*ethpb.BlobSidecar, len(bundle.Blobs))
-	for i, b := range bundle.Blobs {
+	sidecars := make([]*ethpb.BlobSidecar, len(bundle.GetBlobs()))
+	for i, b := range bundle.GetBlobs() {
 		proof, err := consensusblocks.MerkleProofKZGCommitment(body, i)
 		if err != nil {
 			return nil, err
@@ -62,37 +60,11 @@ func unblindBlobsSidecars(block interfaces.SignedBeaconBlock, bundle *enginev1.B
 		sidecars[i] = &ethpb.BlobSidecar{
 			Index:                    uint64(i),
 			Blob:                     bytesutil.SafeCopyBytes(b),
-			KzgCommitment:            bytesutil.SafeCopyBytes(bundle.KzgCommitments[i]),
-			KzgProof:                 bytesutil.SafeCopyBytes(bundle.Proofs[i]),
+			KzgCommitment:            bytesutil.SafeCopyBytes(bundle.GetKzgCommitments()[i]),
+			KzgProof:                 bytesutil.SafeCopyBytes(bundle.GetProofs()[i]),
 			SignedBlockHeader:        header,
 			CommitmentInclusionProof: proof,
 		}
 	}
 	return sidecars, nil
-}
-
-// TODO: Add tests
-func unblindDataColumnsSidecars(block interfaces.SignedBeaconBlock, bundle *enginev1.BlobsBundle) ([]*ethpb.DataColumnSidecar, error) {
-	// Check if the block is at least a Deneb block.
-	if block.Version() < version.Deneb {
-		return nil, nil
-	}
-
-	// Convert blobs from slices to array.
-	blobs := make([]kzg.Blob, 0, len(bundle.Blobs))
-	for _, blob := range bundle.Blobs {
-		if len(blob) != kzg.BytesPerBlob {
-			return nil, errors.Errorf("invalid blob size. expected %d bytes, got %d bytes", kzg.BytesPerBlob, len(blob))
-		}
-
-		blobs = append(blobs, kzg.Blob(blob))
-	}
-
-	// Retrieve data columns from blobs.
-	dataColumnSidecars, err := peerdas.DataColumnSidecars(block, blobs)
-	if err != nil {
-		return nil, errors.Wrap(err, "data column sidecars")
-	}
-
-	return dataColumnSidecars, nil
 }
