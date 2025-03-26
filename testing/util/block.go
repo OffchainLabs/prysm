@@ -1346,9 +1346,9 @@ func HydrateSignedBeaconBlockContentsFulu(b *ethpb.SignedBeaconBlockContentsFulu
 
 // HydrateBeaconBlockFulu hydrates a beacon block with correct field length sizes
 // to comply with fssz marshalling and unmarshalling rules.
-func HydrateBeaconBlockFulu(b *ethpb.BeaconBlockElectra) *ethpb.BeaconBlockElectra {
+func HydrateBeaconBlockFulu(b *ethpb.BeaconBlockFulu) *ethpb.BeaconBlockFulu {
 	if b == nil {
-		b = &ethpb.BeaconBlockElectra{}
+		b = &ethpb.BeaconBlockFulu{}
 	}
 	if b.ParentRoot == nil {
 		b.ParentRoot = make([]byte, fieldparams.RootLength)
@@ -1362,9 +1362,9 @@ func HydrateBeaconBlockFulu(b *ethpb.BeaconBlockElectra) *ethpb.BeaconBlockElect
 
 // HydrateBeaconBlockBodyFulu hydrates a beacon block body with correct field length sizes
 // to comply with fssz marshalling and unmarshalling rules.
-func HydrateBeaconBlockBodyFulu(b *ethpb.BeaconBlockBodyElectra) *ethpb.BeaconBlockBodyElectra {
+func HydrateBeaconBlockBodyFulu(b *ethpb.BeaconBlockBodyFulu) *ethpb.BeaconBlockBodyFulu {
 	if b == nil {
-		b = &ethpb.BeaconBlockBodyElectra{}
+		b = &ethpb.BeaconBlockBodyFulu{}
 	}
 	if b.RandaoReveal == nil {
 		b.RandaoReveal = make([]byte, fieldparams.BLSSignatureLength)
@@ -1385,7 +1385,7 @@ func HydrateBeaconBlockBodyFulu(b *ethpb.BeaconBlockBodyElectra) *ethpb.BeaconBl
 		}
 	}
 	if b.ExecutionPayload == nil {
-		b.ExecutionPayload = &enginev1.ExecutionPayloadDeneb{
+		b.ExecutionPayload = &enginev1.ExecutionPayloadFulu{
 			ParentHash:    make([]byte, fieldparams.RootLength),
 			FeeRecipient:  make([]byte, 20),
 			StateRoot:     make([]byte, fieldparams.RootLength),
@@ -1397,6 +1397,7 @@ func HydrateBeaconBlockBodyFulu(b *ethpb.BeaconBlockBodyElectra) *ethpb.BeaconBl
 			BlockHash:     make([]byte, fieldparams.RootLength),
 			Transactions:  make([][]byte, 0),
 			Withdrawals:   make([]*enginev1.Withdrawal, 0),
+			ProofVersion:  make([]byte, 1),
 		}
 	}
 	b.ExecutionRequests = HydrateExecutionRequests(b.ExecutionRequests)

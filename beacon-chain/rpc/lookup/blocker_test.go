@@ -348,7 +348,8 @@ func TestBlobsFromStoredDataColumns(t *testing.T) {
 	}
 
 	// Convert blobs to data columns.
-	dataColumnSidecars, err := peerdas.DataColumnSidecars(signedBeaconBlock, blobs)
+	cellsAndProofs := util.GenerateCellsAndProofs(t, blobs)
+	dataColumnSidecars, err := peerdas.DataColumnSidecars(signedBeaconBlock, cellsAndProofs)
 	require.NoError(t, err)
 
 	// Create verified RO data columns.

@@ -155,6 +155,11 @@ func BigIntToLittleEndianBytes(bigInt *big.Int) []byte {
 	return ReverseByteOrder(bigInt.Bytes())
 }
 
+// Uint8ToSSZBytes takes a uint8 and returns its bytes stored as little-endian
+func Uint8ToSSZBytes(num uint8) []byte {
+	return []byte{num}
+}
+
 // Uint256ToSSZBytes takes a string representation of uint256 and returns its bytes stored as little-endian
 func Uint256ToSSZBytes(num string) ([]byte, error) {
 	uint256, ok := new(big.Int).SetString(num, 10)

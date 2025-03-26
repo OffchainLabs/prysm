@@ -32,7 +32,7 @@ type fuluBlockGenerator struct {
 	sk       bls.SecretKey
 	proposer primitives.ValidatorIndex
 	valRoot  []byte
-	payload  *enginev1.ExecutionPayloadDeneb
+	payload  *enginev1.ExecutionPayloadFulu
 }
 
 func WithFuluProposerSigning(idx primitives.ValidatorIndex, sk bls.SecretKey, valRoot []byte) FuluBlockGeneratorOption {
@@ -44,7 +44,7 @@ func WithFuluProposerSigning(idx primitives.ValidatorIndex, sk bls.SecretKey, va
 	}
 }
 
-func WithFuluPayload(p *enginev1.ExecutionPayloadDeneb) FuluBlockGeneratorOption {
+func WithFuluPayload(p *enginev1.ExecutionPayloadFulu) FuluBlockGeneratorOption {
 	return func(g *fuluBlockGenerator) {
 		g.payload = p
 	}
@@ -87,7 +87,7 @@ func GenerateTestFuluBlockWithSidecar(
 		require.NoError(t, err)
 
 		blockHash := bytesutil.ToBytes32([]byte("foo"))
-		g.payload = &enginev1.ExecutionPayloadDeneb{
+		g.payload = &enginev1.ExecutionPayloadFulu{
 			ParentHash:    bytesutil.PadTo([]byte("parentHash"), fieldparams.RootLength),
 			FeeRecipient:  make([]byte, fieldparams.FeeRecipientLength),
 			StateRoot:     bytesutil.PadTo([]byte("stateRoot"), fieldparams.RootLength),
@@ -105,6 +105,7 @@ func GenerateTestFuluBlockWithSidecar(
 			Withdrawals:   make([]*enginev1.Withdrawal, 0),
 			BlobGasUsed:   0,
 			ExcessBlobGas: 0,
+			ProofVersion:  []byte{1},
 		}
 	}
 
@@ -155,7 +156,9 @@ func GenerateTestFuluBlockWithSidecar(
 		blobs[i] = kzg.Blob(GenerateTestDenebBlobSidecar(t, root, sh, i, comt, inclusion[i]).Blob)
 	}
 	sidecars := make([]blocks.RODataColumn, params.BeaconConfig().NumberOfColumns)
-	dataColumns, err := peerdas.DataColumnSidecars(sbb, blobs)
+
+	cellsAndProofs := GenerateCellsAndProofs(t, blobs)
+	dataColumns, err := peerdas.DataColumnSidecars(sbb, cellsAndProofs)
 	require.NoError(t, err)
 	for i, dc := range dataColumns {
 		sidecars[i], err = blocks.NewRODataColumnWithRoot(dc, root)
@@ -166,4 +169,14 @@ func GenerateTestFuluBlockWithSidecar(
 	require.NoError(t, err)
 
 	return rob, sidecars
+}
+
+func GenerateCellsAndProofs(t *testing.T, blobs []kzg.Blob) []kzg.CellsAndProofs {
+	cellsAndProofs := make([]kzg.CellsAndProofs, len(blobs))
+	for i := range blobs {
+		cp, err := kzg.ComputeCellsAndKZGProofs(&blobs[i])
+		require.NoError(t, err)
+		cellsAndProofs[i] = cp
+	}
+	return cellsAndProofs
 }

@@ -542,10 +542,27 @@ func TestService_BroadcastDataColumn(t *testing.T) {
 		}),
 	}
 
-	b, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlockElectra())
+	var (
+		comts [][]byte
+		blobs []kzg.Blob
+	)
+	for i := int64(0); i < 6; i++ {
+		blob := kzg.Blob(util.GetRandBlob(i))
+		commitment, err := kzg.BlobToKZGCommitment(&blob)
+		require.NoError(t, err)
+		comts = append(comts, commitment[:])
+		blobs = append(blobs, blob)
+	}
+
+	b := util.NewBeaconBlockFulu()
+	b.Block.Body.BlobKzgCommitments = comts
+	sb, err := blocks.NewSignedBeaconBlock(b)
 	require.NoError(t, err)
-	blobs := make([]kzg.Blob, 6)
-	sidecars, err := peerdas.DataColumnSidecars(b, blobs)
+	for i := range blobs {
+		blobs[i] = kzg.Blob(util.GetRandBlob(int64(i)))
+	}
+	cellsAndProofs := util.GenerateCellsAndProofs(t, blobs)
+	sidecars, err := peerdas.DataColumnSidecars(sb, cellsAndProofs)
 	require.NoError(t, err)
 
 	sidecar := sidecars[0]
