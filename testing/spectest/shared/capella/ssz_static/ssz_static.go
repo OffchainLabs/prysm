@@ -117,9 +117,6 @@ func unmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (i
 		obj = &ethpb.LightClientFinalityUpdateCapella{}
 	case "LightClientBootstrap":
 		obj = &ethpb.LightClientBootstrapCapella{}
-	case "LightClientSnapshot":
-		t.Skip("Removed type")
-		return nil, nil
 	case "LightClientUpdate":
 		obj = &ethpb.LightClientUpdateCapella{}
 	case "PowBlock":
