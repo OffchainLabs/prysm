@@ -19,6 +19,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/golang/protobuf/ptypes/empty"
+	"github.com/prysmaticlabs/prysm/v5/api/client"
 	"github.com/prysmaticlabs/prysm/v5/async/event"
 	"github.com/prysmaticlabs/prysm/v5/cmd/validator/flags"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
@@ -38,6 +39,7 @@ import (
 	validatormock "github.com/prysmaticlabs/prysm/v5/testing/validator-mock"
 	"github.com/prysmaticlabs/prysm/v5/validator/accounts/wallet"
 	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
+	"github.com/prysmaticlabs/prysm/v5/validator/client/testutil"
 	dbTest "github.com/prysmaticlabs/prysm/v5/validator/db/testing"
 	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
 	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/local"
@@ -157,16 +159,106 @@ func (*mockKeymanager) DeleteKeystores(context.Context, [][]byte,
 	return nil, nil
 }
 
+func TestValidatorInit(t *testing.T) {
+	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		ctx := context.Background()
+		mockCLient := validatormock.NewMockValidatorClient(ctrl)
+
+		genesis := uint64(time.Unix(1, 0).Unix())
+		genesisValidatorsRoot := bytesutil.ToBytes32([]byte("validators"))
+		mockCLient.EXPECT().WaitForChainStart(
+			gomock.Any(),
+			&emptypb.Empty{},
+		).Return(nil, client.ErrConnectionIssue).Times(1).Return(&ethpb.ChainStartResponse{
+			Started:               true,
+			GenesisTime:           genesis,
+			GenesisValidatorsRoot: genesisValidatorsRoot[:],
+		}, nil)
+
+		db := dbTest.SetupDB(t, [][fieldparams.BLSPubkeyLength]byte{}, isSlashingProtectionMinimal)
+		require.NoError(t, db.SaveGenesisValidatorsRoot(context.Background(), genesisValidatorsRoot[:]))
+
+		n := validatormock.NewMockNodeClient(ctrl)
+		n.EXPECT().SyncStatus(
+			gomock.Any(),
+			gomock.Any(),
+		).Return(&ethpb.SyncStatus{Syncing: false}, nil)
+		ick := &local.InteropKeymanagerConfig{
+			NumValidatorKeys: 2,
+			Offset:           1,
+		}
+		km, err := local.NewInteropKeymanager(ctx, ick.Offset, ick.NumValidatorKeys)
+		require.NoError(t, err)
+		pubs, err := km.FetchValidatingPublicKeys(ctx)
+		require.NoError(t, err)
+
+		resp := testutil.GenerateMultipleValidatorStatusResponse(bytesutil.FromBytes48Array(pubs))
+		for i := range resp.Statuses {
+			resp.Statuses[i] = &ethpb.ValidatorStatusResponse{
+				Status: ethpb.ValidatorStatus_ACTIVE,
+			}
+		}
+		mockCLient.EXPECT().MultipleValidatorStatus(
+			gomock.Any(),
+			gomock.Any(),
+		).Return(resp, nil)
+
+		mockCLient.EXPECT().PrepareBeaconProposer(gomock.Any(), gomock.Any()).Return(nil, nil)
+
+		v := &validator{
+			validatorClient:   mockCLient,
+			nodeClient:        n,
+			db:                db,
+			interopKeysConfig: ick,
+			duties:            &ethpb.DutiesResponse{}, // skip update duties
+		}
+
+		require.NoError(t, v.Init(ctx))
+	}
+
+}
+
+func TestValidatorInit_Retry_On_ConnectionError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockCLient := validatormock.NewMockValidatorClient(ctrl)
+	v := &validator{
+		validatorClient: mockCLient,
+	}
+	WaitForChainStartCalled := 0
+	times := 2
+
+	mockCLient.EXPECT().WaitForChainStart(
+		gomock.Any(),
+		&emptypb.Empty{},
+	).Do(func(arg0 interface{}, arg1 interface{}) { WaitForChainStartCalled++ }).Return(nil, client.ErrConnectionIssue).Times(times)
+
+	backOffPeriod = 100 * time.Millisecond
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		err := v.Init(ctx)
+		require.NoError(t, err)
+	}()
+
+	time.Sleep(backOffPeriod + (backOffPeriod / 2)) // stop the sleep before the next backoff period
+	cancel()
+
+	assert.Equal(t, times, WaitForChainStartCalled, "Expected WaitForChainStart() to be called")
+}
+
 func TestWaitForChainStart_SetsGenesisInfo(t *testing.T) {
 	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
 		t.Run(fmt.Sprintf("SlashingProtectionMinimal:%v", isSlashingProtectionMinimal), func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
-			client := validatormock.NewMockValidatorClient(ctrl)
+			mockValidatorClient := validatormock.NewMockValidatorClient(ctrl)
 
 			db := dbTest.SetupDB(t, [][fieldparams.BLSPubkeyLength]byte{}, isSlashingProtectionMinimal)
 			v := validator{
-				validatorClient: client,
+				validatorClient: mockValidatorClient,
 				db:              db,
 			}
 
@@ -177,7 +269,7 @@ func TestWaitForChainStart_SetsGenesisInfo(t *testing.T) {
 
 			genesis := uint64(time.Unix(1, 0).Unix())
 			genesisValidatorsRoot := bytesutil.ToBytes32([]byte("validators"))
-			client.EXPECT().WaitForChainStart(
+			mockValidatorClient.EXPECT().WaitForChainStart(
 				gomock.Any(),
 				&emptypb.Empty{},
 			).Return(&ethpb.ChainStartResponse{
@@ -185,7 +277,8 @@ func TestWaitForChainStart_SetsGenesisInfo(t *testing.T) {
 				GenesisTime:           genesis,
 				GenesisValidatorsRoot: genesisValidatorsRoot[:],
 			}, nil)
-			require.NoError(t, v.WaitForChainStart(context.Background()))
+			_, err = v.WaitForChainStart(context.Background())
+			require.NoError(t, err)
 			savedGenValRoot, err = db.GenesisValidatorsRoot(context.Background())
 			require.NoError(t, err)
 
@@ -194,7 +287,7 @@ func TestWaitForChainStart_SetsGenesisInfo(t *testing.T) {
 			assert.NotNil(t, v.ticker, "Expected ticker to be set, received nil")
 
 			// Make sure there are no errors running if it is the same data.
-			client.EXPECT().WaitForChainStart(
+			mockValidatorClient.EXPECT().WaitForChainStart(
 				gomock.Any(),
 				&emptypb.Empty{},
 			).Return(&ethpb.ChainStartResponse{
@@ -202,7 +295,8 @@ func TestWaitForChainStart_SetsGenesisInfo(t *testing.T) {
 				GenesisTime:           genesis,
 				GenesisValidatorsRoot: genesisValidatorsRoot[:],
 			}, nil)
-			require.NoError(t, v.WaitForChainStart(context.Background()))
+			_, err = v.WaitForChainStart(context.Background())
+			require.NoError(t, err)
 		})
 	}
 }
@@ -229,7 +323,8 @@ func TestWaitForChainStart_SetsGenesisInfo_IncorrectSecondTry(t *testing.T) {
 				GenesisTime:           genesis,
 				GenesisValidatorsRoot: genesisValidatorsRoot[:],
 			}, nil)
-			require.NoError(t, v.WaitForChainStart(context.Background()))
+			_, err := v.WaitForChainStart(context.Background())
+			require.NoError(t, err)
 			savedGenValRoot, err := db.GenesisValidatorsRoot(context.Background())
 			require.NoError(t, err)
 
@@ -248,7 +343,7 @@ func TestWaitForChainStart_SetsGenesisInfo_IncorrectSecondTry(t *testing.T) {
 				GenesisTime:           genesis,
 				GenesisValidatorsRoot: genesisValidatorsRoot[:],
 			}, nil)
-			err = v.WaitForChainStart(context.Background())
+			_, err = v.WaitForChainStart(context.Background())
 			require.ErrorContains(t, "does not match root saved", err)
 		})
 	}
@@ -275,7 +370,8 @@ func TestWaitForChainStart_ContextCanceled(t *testing.T) {
 	}, nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	assert.ErrorContains(t, cancelledCtx, v.WaitForChainStart(ctx))
+	_, err := v.WaitForChainStart(ctx)
+	assert.ErrorContains(t, cancelledCtx, err)
 }
 
 func TestWaitForChainStart_ReceiveErrorFromStream(t *testing.T) {
@@ -290,7 +386,7 @@ func TestWaitForChainStart_ReceiveErrorFromStream(t *testing.T) {
 		gomock.Any(),
 		&emptypb.Empty{},
 	).Return(nil, errors.New("fails"))
-	err := v.WaitForChainStart(context.Background())
+	_, err := v.WaitForChainStart(context.Background())
 	want := "could not receive ChainStart from stream"
 	assert.ErrorContains(t, want, err)
 }

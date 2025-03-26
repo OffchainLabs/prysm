@@ -64,6 +64,9 @@ var (
 	msgNoKeysFetched     = "No validating keys fetched. Waiting for keys..."
 )
 
+// Time to wait before trying to reconnect with beacon node.
+var backOffPeriod = 10 * time.Second
+
 type validator struct {
 	duties                             *ethpb.DutiesResponse
 	ticker                             slots.Ticker

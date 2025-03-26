@@ -42,58 +42,6 @@ func TestCancelledContext_CleansUpValidator(t *testing.T) {
 	assert.Equal(t, true, v.DoneCalled, "Expected Done() to be called")
 }
 
-func TestCancelledContext_WaitsForChainStart(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	node := healthTesting.NewMockHealthClient(ctrl)
-	tracker := beacon.NewNodeHealthTracker(node)
-	v := &testutil.FakeValidator{
-		Km:      &mockKeymanager{accountsChangedFeed: &event.Feed{}},
-		Tracker: tracker,
-	}
-	run(cancelledContext(), v)
-	assert.Equal(t, 1, v.WaitForChainStartCalled, "Expected WaitForChainStart() to be called")
-}
-
-func TestRetry_On_ConnectionError(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	node := healthTesting.NewMockHealthClient(ctrl)
-	tracker := beacon.NewNodeHealthTracker(node)
-	retry := 10
-	node.EXPECT().IsHealthy(gomock.Any()).Return(true)
-	v := &testutil.FakeValidator{
-		Km:               &mockKeymanager{accountsChangedFeed: &event.Feed{}},
-		Tracker:          tracker,
-		RetryTillSuccess: retry,
-	}
-	backOffPeriod = 10 * time.Millisecond
-	ctx, cancel := context.WithCancel(context.Background())
-	go run(ctx, v)
-	// each step will fail (retry times)=10 this sleep times will wait more then
-	// the time it takes for all steps to succeed before main loop.
-	time.Sleep(time.Duration(retry*6) * backOffPeriod)
-	cancel()
-	// every call will fail retry=10 times so first one will be called 4 * retry=10.
-	assert.Equal(t, retry*3, v.WaitForChainStartCalled, "Expected WaitForChainStart() to be called")
-	assert.Equal(t, retry*2, v.WaitForSyncCalled, "Expected WaitForSync() to be called")
-	assert.Equal(t, retry, v.WaitForActivationCalled, "Expected WaitForActivation() to be called")
-	assert.Equal(t, retry, v.CanonicalHeadSlotCalled, "Expected CanonicalHeadSlotCalled() to be called")
-}
-
-func TestCancelledContext_WaitsForActivation(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	node := healthTesting.NewMockHealthClient(ctrl)
-	tracker := beacon.NewNodeHealthTracker(node)
-	v := &testutil.FakeValidator{
-		Km:      &mockKeymanager{accountsChangedFeed: &event.Feed{}},
-		Tracker: tracker,
-	}
-	run(cancelledContext(), v)
-	assert.Equal(t, 1, v.WaitForActivationCalled, "Expected WaitForActivation() to be called")
-}
-
 func TestUpdateDuties_NextSlot(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

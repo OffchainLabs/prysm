@@ -22,9 +22,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// Time to wait before trying to reconnect with beacon node.
-var backOffPeriod = 10 * time.Second
-
 // Run the main validator routine. This routine exits if the context is
 // canceled.
 //
