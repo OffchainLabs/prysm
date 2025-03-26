@@ -78,12 +78,12 @@ func GetProposerRewardNumerator(
 			{cfg.TimelyTargetFlagIndex, cfg.TimelyTargetWeight},
 			{cfg.TimelyHeadFlagIndex, cfg.TimelyHeadWeight},
 		} {
-			if flags[entry.flagIndex] {
-				has, err := altair.HasValidatorFlag(participation.At(index), entry.flagIndex)
+			if flags[entry.flagIndex] { // If set, the validator voted correctly for the attestation given flag index.
+				hasVoted, err := altair.HasValidatorFlag(participation.At(index), entry.flagIndex)
 				if err != nil {
 					return 0, err
 				}
-				if !has {
+				if !hasVoted { // If set, the validator has already voted in the beacon state so we don't double count.
 					rewardNumerator += br * entry.weight
 				}
 			}
