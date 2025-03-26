@@ -212,7 +212,7 @@ func TestValidatorInit(t *testing.T) {
 			nodeClient:        n,
 			db:                db,
 			interopKeysConfig: ick,
-			duties:            &ethpb.DutiesResponse{}, // skip update duties
+			duties:            &ethpb.ValidatorDutiesContainer{}, // skip update duties
 		}
 
 		require.NoError(t, v.Init(ctx))
