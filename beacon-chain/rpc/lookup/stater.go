@@ -185,7 +185,16 @@ func (p *BeaconDbStater) StateRoot(ctx context.Context, stateId []byte) (root []
 	case "justified":
 		root, err = p.justifiedStateRoot(ctx)
 	default:
-		if len(stateId) == 32 {
+		stringId := strings.ToLower(string(stateId))
+		if len(stringId) >= 2 && stringId[:2] == "0x" {
+			var decoded []byte
+			decoded, err = hexutil.Decode(string(stateId))
+			if err != nil {
+				e := NewStateIdParseError(err)
+				return nil, &e
+			}
+			root, err = p.stateRootByRoot(ctx, decoded)
+		} else if len(stateId) == 32 {
 			root, err = p.stateRootByRoot(ctx, stateId)
 		} else {
 			slotNumber, parseErr := strconv.ParseUint(stateIdString, 10, 64)
