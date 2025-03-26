@@ -199,10 +199,6 @@ func main() {
 
 			return cmd.ValidateNoArgs(ctx)
 		},
-		After: func(ctx *cli.Context) error {
-			debug.Exit(ctx)
-			return nil
-		},
 	}
 
 	defer func() {

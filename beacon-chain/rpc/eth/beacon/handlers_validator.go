@@ -1,6 +1,7 @@
 package beacon
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -21,6 +22,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	"github.com/prysmaticlabs/prysm/v5/network/httputil"
+	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
@@ -318,6 +320,152 @@ func (s *Server) GetValidatorBalances(w http.ResponseWriter, r *http.Request) {
 
 	resp := &structs.GetValidatorBalancesResponse{
 		Data:                valBalances,
+		ExecutionOptimistic: isOptimistic,
+		Finalized:           isFinalized,
+	}
+	httputil.WriteJson(w, resp)
+}
+
+// GetValidatorIdentities returns a filterable list of validators identities.
+func (s *Server) GetValidatorIdentities(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "beacon.GetValidatorIdentities")
+	defer span.End()
+
+	stateId := r.PathValue("state_id")
+	if stateId == "" {
+		httputil.HandleError(w, "state_id is required in URL params", http.StatusBadRequest)
+		return
+	}
+	st, err := s.Stater.State(ctx, []byte(stateId))
+	if err != nil {
+		shared.WriteStateFetchError(w, err)
+		return
+	}
+
+	var rawIds []string
+	err = json.NewDecoder(r.Body).Decode(&rawIds)
+	switch {
+	case errors.Is(err, io.EOF):
+		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		return
+	case err != nil:
+		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	ids, ok := decodeIds(w, st, rawIds, true /* ignore unknown */)
+	if !ok {
+		return
+	}
+
+	if httputil.RespondWithSsz(r) {
+		s.getValidatorIdentitiesSSZ(w, st, rawIds, ids)
+	} else {
+		s.getValidatorIdentitiesJSON(r.Context(), w, st, stateId, rawIds, ids)
+	}
+}
+
+func (s *Server) getValidatorIdentitiesSSZ(w http.ResponseWriter, st state.BeaconState, rawIds []string, ids []primitives.ValidatorIndex) {
+	// return no data if all IDs are ignored
+	if len(rawIds) > 0 && len(ids) == 0 {
+		httputil.WriteSsz(w, []byte{}, "validator_identities.ssz")
+		return
+	}
+
+	vals := st.ValidatorsReadOnly()
+	var identities []*eth.ValidatorIdentity
+	if len(ids) == 0 {
+		identities = make([]*eth.ValidatorIdentity, len(vals))
+		for i, v := range vals {
+			pubkey := v.PublicKey()
+			identities[i] = &eth.ValidatorIdentity{
+				Index:           primitives.ValidatorIndex(i),
+				Pubkey:          pubkey[:],
+				ActivationEpoch: v.ActivationEpoch(),
+			}
+		}
+	} else {
+		identities = make([]*eth.ValidatorIdentity, len(ids))
+		for i, id := range ids {
+			pubkey := vals[id].PublicKey()
+			identities[i] = &eth.ValidatorIdentity{
+				Index:           id,
+				Pubkey:          pubkey[:],
+				ActivationEpoch: vals[id].ActivationEpoch(),
+			}
+		}
+	}
+
+	sszLen := (&eth.ValidatorIdentity{}).SizeSSZ()
+	resp := make([]byte, len(identities)*sszLen)
+	for i, vi := range identities {
+		ssz, err := vi.MarshalSSZ()
+		if err != nil {
+			httputil.HandleError(w, "Could not marshal validator identity to SSZ: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		copy(resp[i*sszLen:(i+1)*sszLen], ssz)
+	}
+	httputil.WriteSsz(w, resp, "validator_identities.ssz")
+}
+
+func (s *Server) getValidatorIdentitiesJSON(
+	ctx context.Context,
+	w http.ResponseWriter,
+	st state.BeaconState,
+	stateId string,
+	rawIds []string,
+	ids []primitives.ValidatorIndex,
+) {
+	isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
+	if err != nil {
+		httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
+	if err != nil {
+		httputil.HandleError(w, "Could not calculate root of latest block header: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	isFinalized := s.FinalizationFetcher.IsFinalized(ctx, blockRoot)
+
+	// return no data if all IDs are ignored
+	if len(rawIds) > 0 && len(ids) == 0 {
+		resp := &structs.GetValidatorIdentitiesResponse{
+			Data:                []*structs.ValidatorIdentity{},
+			ExecutionOptimistic: isOptimistic,
+			Finalized:           isFinalized,
+		}
+		httputil.WriteJson(w, resp)
+		return
+	}
+
+	vals := st.ValidatorsReadOnly()
+	var identities []*structs.ValidatorIdentity
+	if len(ids) == 0 {
+		identities = make([]*structs.ValidatorIdentity, len(vals))
+		for i, v := range vals {
+			pubkey := v.PublicKey()
+			identities[i] = &structs.ValidatorIdentity{
+				Index:           strconv.FormatUint(uint64(i), 10),
+				Pubkey:          hexutil.Encode(pubkey[:]),
+				ActivationEpoch: strconv.FormatUint(uint64(v.ActivationEpoch()), 10),
+			}
+		}
+	} else {
+		identities = make([]*structs.ValidatorIdentity, len(ids))
+		for i, id := range ids {
+			pubkey := vals[id].PublicKey()
+			identities[i] = &structs.ValidatorIdentity{
+				Index:           strconv.FormatUint(uint64(id), 10),
+				Pubkey:          hexutil.Encode(pubkey[:]),
+				ActivationEpoch: strconv.FormatUint(uint64(vals[id].ActivationEpoch()), 10),
+			}
+		}
+	}
+
+	resp := &structs.GetValidatorIdentitiesResponse{
+		Data:                identities,
 		ExecutionOptimistic: isOptimistic,
 		Finalized:           isFinalized,
 	}

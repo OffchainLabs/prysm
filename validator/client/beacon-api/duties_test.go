@@ -527,8 +527,6 @@ func TestGetDutiesForEpoch_Error(t *testing.T) {
 		fetchProposerDutiesError error
 		generateSyncDuties       func() []*structs.SyncCommitteeDuty
 		fetchSyncDutiesError     error
-		generateCommittees       func() []*structs.Committee
-		fetchCommitteesError     error
 	}{
 		{
 			name:                     "get attester duties failed",
@@ -544,11 +542,6 @@ func TestGetDutiesForEpoch_Error(t *testing.T) {
 			name:                 "get sync duties failed",
 			expectedError:        "failed to get sync duties for epoch `1`: foo error",
 			fetchSyncDutiesError: errors.New("foo error"),
-		},
-		{
-			name:                 "get committees failed",
-			expectedError:        "failed to get committees for epoch `1`: foo error",
-			fetchCommitteesError: errors.New("foo error"),
 		},
 		{
 			name:          "bad attester validator index",
@@ -604,46 +597,6 @@ func TestGetDutiesForEpoch_Error(t *testing.T) {
 				return syncDuties
 			},
 		},
-		{
-			name:          "bad committee index",
-			expectedError: "failed to parse committee index `foo`",
-			generateCommittees: func() []*structs.Committee {
-				committees := generateValidCommittees(committeeIndices, committeeSlots, validatorIndices)
-				committees[0].Index = "foo"
-				return committees
-			},
-		},
-		{
-			name:          "bad committee slot",
-			expectedError: "failed to parse slot `foo`",
-			generateCommittees: func() []*structs.Committee {
-				committees := generateValidCommittees(committeeIndices, committeeSlots, validatorIndices)
-				committees[0].Slot = "foo"
-				return committees
-			},
-		},
-		{
-			name:          "bad committee validator index",
-			expectedError: "failed to parse committee validator index `foo`",
-			generateCommittees: func() []*structs.Committee {
-				committees := generateValidCommittees(committeeIndices, committeeSlots, validatorIndices)
-				committees[0].Validators[0] = "foo"
-				return committees
-			},
-		},
-		{
-			name:          "committee index and slot not found in committees mapping",
-			expectedError: "failed to find validators for committee index `1` and slot `2`",
-			generateAttesterDuties: func() []*structs.AttesterDuty {
-				attesterDuties := generateValidAttesterDuties(pubkeys, validatorIndices, committeeIndices, committeeSlots)
-				attesterDuties[0].CommitteeIndex = "1"
-				attesterDuties[0].Slot = "2"
-				return attesterDuties
-			},
-			generateCommittees: func() []*structs.Committee {
-				return []*structs.Committee{}
-			},
-		},
 	}
 
 	for _, testCase := range testCases {
@@ -674,13 +627,6 @@ func TestGetDutiesForEpoch_Error(t *testing.T) {
 				syncDuties = testCase.generateSyncDuties()
 			}
 
-			var committees []*structs.Committee
-			if testCase.generateCommittees == nil {
-				committees = generateValidCommittees(committeeIndices, committeeSlots, validatorIndices)
-			} else {
-				committees = testCase.generateCommittees()
-			}
-
 			dutiesProvider := mock.NewMockdutiesProvider(ctrl)
 			dutiesProvider.EXPECT().AttesterDuties(
 				ctx,
@@ -706,14 +652,6 @@ func TestGetDutiesForEpoch_Error(t *testing.T) {
 			).Return(
 				syncDuties,
 				testCase.fetchSyncDutiesError,
-			).AnyTimes()
-
-			dutiesProvider.EXPECT().Committees(
-				ctx,
-				epoch,
-			).Return(
-				committees,
-				testCase.fetchCommitteesError,
 			).AnyTimes()
 
 			vals := make([]validatorForDuty, len(pubkeys))
@@ -767,13 +705,6 @@ func TestGetDutiesForEpoch_Valid(t *testing.T) {
 			ctx := context.Background()
 
 			dutiesProvider := mock.NewMockdutiesProvider(ctrl)
-			dutiesProvider.EXPECT().Committees(
-				ctx,
-				epoch,
-			).Return(
-				generateValidCommittees(committeeIndices, committeeSlots, validatorIndices),
-				nil,
-			).Times(1)
 
 			dutiesProvider.EXPECT().AttesterDuties(
 				ctx,
@@ -958,7 +889,14 @@ func TestGetDutiesForEpoch_Valid(t *testing.T) {
 				testCase.fetchSyncDuties,
 			)
 			require.NoError(t, err)
-			assert.DeepEqual(t, expectedDuties, duties)
+			require.Equal(t, len(expectedDuties), len(duties))
+			for i, duty := range expectedDuties {
+				assert.Equal(t, duty.CommitteeIndex, duties[i].CommitteeIndex)
+				assert.DeepEqual(t, duty.ProposerSlots, duties[i].ProposerSlots)
+				assert.Equal(t, duty.ValidatorIndex, duties[i].ValidatorIndex)
+				assert.Equal(t, duty.IsSyncCommittee, duties[i].IsSyncCommittee)
+				assert.Equal(t, duty.Status, duties[i].Status)
+			}
 		})
 	}
 }
@@ -1004,13 +942,6 @@ func TestGetDuties_Valid(t *testing.T) {
 			ctx := context.Background()
 
 			dutiesProvider := mock.NewMockdutiesProvider(ctrl)
-			dutiesProvider.EXPECT().Committees(
-				ctx,
-				testCase.epoch,
-			).Return(
-				generateValidCommittees(committeeIndices, committeeSlots, validatorIndices),
-				nil,
-			).Times(2)
 
 			dutiesProvider.EXPECT().AttesterDuties(
 				ctx,
@@ -1040,14 +971,6 @@ func TestGetDuties_Valid(t *testing.T) {
 					nil,
 				).Times(2)
 			}
-
-			dutiesProvider.EXPECT().Committees(
-				ctx,
-				testCase.epoch+1,
-			).Return(
-				reverseSlice(generateValidCommittees(committeeIndices, committeeSlots, validatorIndices)),
-				nil,
-			).Times(2)
 
 			dutiesProvider.EXPECT().AttesterDuties(
 				ctx,
@@ -1209,7 +1132,7 @@ func TestGetDuties_Valid(t *testing.T) {
 			)
 			require.NoError(t, err)
 
-			expectedDuties := &ethpb.DutiesResponse{
+			expectedDuties := &ethpb.ValidatorDutiesContainer{
 				CurrentEpochDuties: expectedCurrentEpochDuties,
 				NextEpochDuties:    expectedNextEpochDuties,
 			}
@@ -1298,10 +1221,6 @@ func TestGetDuties_GetDutiesForEpochFailed(t *testing.T) {
 		ctx,
 		gomock.Any(),
 	).Times(2)
-	dutiesProvider.EXPECT().Committees(
-		ctx,
-		gomock.Any(),
-	).Times(2)
 
 	validatorClient := &beaconApiValidatorClient{
 		stateValidatorsProvider: stateValidatorsProvider,
@@ -1316,72 +1235,61 @@ func TestGetDuties_GetDutiesForEpochFailed(t *testing.T) {
 	assert.ErrorContains(t, "foo error", err)
 }
 
-func generateValidCommittees(committeeIndices []primitives.CommitteeIndex, slots []primitives.Slot, validatorIndices []primitives.ValidatorIndex) []*structs.Committee {
-	return []*structs.Committee{
-		{
-			Index: strconv.FormatUint(uint64(committeeIndices[0]), 10),
-			Slot:  strconv.FormatUint(uint64(slots[0]), 10),
-			Validators: []string{
-				strconv.FormatUint(uint64(validatorIndices[0]), 10),
-				strconv.FormatUint(uint64(validatorIndices[1]), 10),
-			},
-		},
-		{
-			Index: strconv.FormatUint(uint64(committeeIndices[1]), 10),
-			Slot:  strconv.FormatUint(uint64(slots[1]), 10),
-			Validators: []string{
-				strconv.FormatUint(uint64(validatorIndices[2]), 10),
-				strconv.FormatUint(uint64(validatorIndices[3]), 10),
-			},
-		},
-		{
-			Index: strconv.FormatUint(uint64(committeeIndices[2]), 10),
-			Slot:  strconv.FormatUint(uint64(slots[2]), 10),
-			Validators: []string{
-				strconv.FormatUint(uint64(validatorIndices[4]), 10),
-				strconv.FormatUint(uint64(validatorIndices[5]), 10),
-			},
-		},
-	}
-}
-
 func generateValidAttesterDuties(pubkeys [][]byte, validatorIndices []primitives.ValidatorIndex, committeeIndices []primitives.CommitteeIndex, slots []primitives.Slot) []*structs.AttesterDuty {
 	return []*structs.AttesterDuty{
 		{
-			Pubkey:         hexutil.Encode(pubkeys[0]),
-			ValidatorIndex: strconv.FormatUint(uint64(validatorIndices[0]), 10),
-			CommitteeIndex: strconv.FormatUint(uint64(committeeIndices[0]), 10),
-			Slot:           strconv.FormatUint(uint64(slots[0]), 10),
+			Pubkey:                  hexutil.Encode(pubkeys[0]),
+			ValidatorIndex:          strconv.FormatUint(uint64(validatorIndices[0]), 10),
+			CommitteeIndex:          strconv.FormatUint(uint64(committeeIndices[0]), 10),
+			CommitteeLength:         fmt.Sprintf("%d", len(committeeIndices)),
+			ValidatorCommitteeIndex: strconv.FormatUint(uint64(0), 10),
+			CommitteesAtSlot:        strconv.FormatUint(uint64(10), 10),
+			Slot:                    strconv.FormatUint(uint64(slots[0]), 10),
 		},
 		{
-			Pubkey:         hexutil.Encode(pubkeys[1]),
-			ValidatorIndex: strconv.FormatUint(uint64(validatorIndices[1]), 10),
-			CommitteeIndex: strconv.FormatUint(uint64(committeeIndices[0]), 10),
-			Slot:           strconv.FormatUint(uint64(slots[0]), 10),
+			Pubkey:                  hexutil.Encode(pubkeys[1]),
+			ValidatorIndex:          strconv.FormatUint(uint64(validatorIndices[1]), 10),
+			CommitteeIndex:          strconv.FormatUint(uint64(committeeIndices[0]), 10),
+			CommitteeLength:         fmt.Sprintf("%d", len(committeeIndices)),
+			ValidatorCommitteeIndex: strconv.FormatUint(uint64(0), 10),
+			CommitteesAtSlot:        strconv.FormatUint(uint64(10), 10),
+			Slot:                    strconv.FormatUint(uint64(slots[0]), 10),
 		},
 		{
-			Pubkey:         hexutil.Encode(pubkeys[2]),
-			ValidatorIndex: strconv.FormatUint(uint64(validatorIndices[2]), 10),
-			CommitteeIndex: strconv.FormatUint(uint64(committeeIndices[1]), 10),
-			Slot:           strconv.FormatUint(uint64(slots[1]), 10),
+			Pubkey:                  hexutil.Encode(pubkeys[2]),
+			ValidatorIndex:          strconv.FormatUint(uint64(validatorIndices[2]), 10),
+			CommitteeIndex:          strconv.FormatUint(uint64(committeeIndices[1]), 10),
+			CommitteeLength:         fmt.Sprintf("%d", len(committeeIndices)),
+			ValidatorCommitteeIndex: strconv.FormatUint(uint64(0), 10),
+			CommitteesAtSlot:        strconv.FormatUint(uint64(10), 10),
+			Slot:                    strconv.FormatUint(uint64(slots[1]), 10),
 		},
 		{
-			Pubkey:         hexutil.Encode(pubkeys[3]),
-			ValidatorIndex: strconv.FormatUint(uint64(validatorIndices[3]), 10),
-			CommitteeIndex: strconv.FormatUint(uint64(committeeIndices[1]), 10),
-			Slot:           strconv.FormatUint(uint64(slots[1]), 10),
+			Pubkey:                  hexutil.Encode(pubkeys[3]),
+			ValidatorIndex:          strconv.FormatUint(uint64(validatorIndices[3]), 10),
+			CommitteeIndex:          strconv.FormatUint(uint64(committeeIndices[1]), 10),
+			CommitteeLength:         fmt.Sprintf("%d", len(committeeIndices)),
+			ValidatorCommitteeIndex: strconv.FormatUint(uint64(0), 10),
+			CommitteesAtSlot:        strconv.FormatUint(uint64(10), 10),
+			Slot:                    strconv.FormatUint(uint64(slots[1]), 10),
 		},
 		{
-			Pubkey:         hexutil.Encode(pubkeys[4]),
-			ValidatorIndex: strconv.FormatUint(uint64(validatorIndices[4]), 10),
-			CommitteeIndex: strconv.FormatUint(uint64(committeeIndices[2]), 10),
-			Slot:           strconv.FormatUint(uint64(slots[2]), 10),
+			Pubkey:                  hexutil.Encode(pubkeys[4]),
+			ValidatorIndex:          strconv.FormatUint(uint64(validatorIndices[4]), 10),
+			CommitteeIndex:          strconv.FormatUint(uint64(committeeIndices[2]), 10),
+			CommitteeLength:         fmt.Sprintf("%d", len(committeeIndices)),
+			ValidatorCommitteeIndex: strconv.FormatUint(uint64(0), 10),
+			CommitteesAtSlot:        strconv.FormatUint(uint64(10), 10),
+			Slot:                    strconv.FormatUint(uint64(slots[2]), 10),
 		},
 		{
-			Pubkey:         hexutil.Encode(pubkeys[5]),
-			ValidatorIndex: strconv.FormatUint(uint64(validatorIndices[5]), 10),
-			CommitteeIndex: strconv.FormatUint(uint64(committeeIndices[2]), 10),
-			Slot:           strconv.FormatUint(uint64(slots[2]), 10),
+			Pubkey:                  hexutil.Encode(pubkeys[5]),
+			ValidatorIndex:          strconv.FormatUint(uint64(validatorIndices[5]), 10),
+			CommitteeIndex:          strconv.FormatUint(uint64(committeeIndices[2]), 10),
+			CommitteeLength:         fmt.Sprintf("%d", len(committeeIndices)),
+			ValidatorCommitteeIndex: strconv.FormatUint(uint64(0), 10),
+			CommitteesAtSlot:        strconv.FormatUint(uint64(10), 10),
+			Slot:                    strconv.FormatUint(uint64(slots[2]), 10),
 		},
 	}
 }

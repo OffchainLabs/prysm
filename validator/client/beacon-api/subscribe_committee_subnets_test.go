@@ -76,7 +76,7 @@ func TestSubscribeCommitteeSubnets_Valid(t *testing.T) {
 			CommitteeIds: committeeIndices,
 			IsAggregator: isAggregator,
 		},
-		[]*ethpb.DutiesResponse_Duty{
+		[]*ethpb.ValidatorDuty{
 			{
 				ValidatorIndex:   validatorIndices[0],
 				CommitteesAtSlot: committeesAtSlot[0],
@@ -100,7 +100,7 @@ func TestSubscribeCommitteeSubnets_Error(t *testing.T) {
 	testCases := []struct {
 		name                    string
 		subscribeRequest        *ethpb.CommitteeSubnetsSubscribeRequest
-		duties                  []*ethpb.DutiesResponse_Duty
+		duties                  []*ethpb.ValidatorDuty
 		expectSubscribeRestCall bool
 		expectedErrorMessage    string
 	}{
@@ -116,7 +116,7 @@ func TestSubscribeCommitteeSubnets_Error(t *testing.T) {
 				Slots:        []primitives.Slot{1, 2},
 				IsAggregator: []bool{false, true},
 			},
-			duties: []*ethpb.DutiesResponse_Duty{
+			duties: []*ethpb.ValidatorDuty{
 				{
 					ValidatorIndex:   1,
 					CommitteesAtSlot: 1,
@@ -135,7 +135,7 @@ func TestSubscribeCommitteeSubnets_Error(t *testing.T) {
 				Slots:        []primitives.Slot{1},
 				IsAggregator: []bool{false, true},
 			},
-			duties: []*ethpb.DutiesResponse_Duty{
+			duties: []*ethpb.ValidatorDuty{
 				{
 					ValidatorIndex:   1,
 					CommitteesAtSlot: 1,
@@ -154,7 +154,7 @@ func TestSubscribeCommitteeSubnets_Error(t *testing.T) {
 				Slots:        []primitives.Slot{1, 2},
 				IsAggregator: []bool{false},
 			},
-			duties: []*ethpb.DutiesResponse_Duty{
+			duties: []*ethpb.ValidatorDuty{
 				{
 					ValidatorIndex:   1,
 					CommitteesAtSlot: 1,
@@ -173,7 +173,7 @@ func TestSubscribeCommitteeSubnets_Error(t *testing.T) {
 				Slots:        []primitives.Slot{1, 2},
 				IsAggregator: []bool{false, true},
 			},
-			duties: []*ethpb.DutiesResponse_Duty{
+			duties: []*ethpb.ValidatorDuty{
 				{
 					ValidatorIndex:   1,
 					CommitteesAtSlot: 1,
@@ -188,7 +188,7 @@ func TestSubscribeCommitteeSubnets_Error(t *testing.T) {
 				CommitteeIds: []primitives.CommitteeIndex{2},
 				IsAggregator: []bool{false},
 			},
-			duties: []*ethpb.DutiesResponse_Duty{
+			duties: []*ethpb.ValidatorDuty{
 				{
 					ValidatorIndex:   1,
 					CommitteesAtSlot: 1,
