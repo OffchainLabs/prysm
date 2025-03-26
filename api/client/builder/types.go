@@ -13,6 +13,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/api/server"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	consensusblocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	types "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
@@ -574,7 +575,9 @@ func (r *ExecutionPayloadResponse) ParsePayload() (ParsedPayload, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, fmt.Sprintf("unsupported version %s", strings.ToLower(r.Version)))
 	}
-	if v >= version.Deneb {
+	if v >= version.Fulu {
+		toProto = &ExecutionPayloadFuluAndBlobsBundle{}
+	} else if v >= version.Deneb {
 		toProto = &ExecutionPayloadDenebAndBlobsBundle{}
 	} else if v >= version.Capella {
 		toProto = &ExecutionPayloadCapella{}
@@ -664,6 +667,11 @@ type Withdrawal struct {
 // SignedBlindedBeaconBlockBellatrix is the request object for builder API /eth/v1/builder/blinded_blocks.
 type SignedBlindedBeaconBlockBellatrix struct {
 	*eth.SignedBlindedBeaconBlockBellatrix
+}
+
+// SignedBlindedBeaconBlockFulu is the request object for builder API /eth/v1/builder/blinded_blocks after Fulu.
+type SignedBlindedBeaconBlockFulu struct {
+	*eth.SignedBlindedBeaconBlockFulu
 }
 
 // ProposerSlashing is a field in BlindedBeaconBlockBodyCapella.
@@ -1178,18 +1186,18 @@ func (b BlobsBundle) ToProto() (*v1.BlobsBundle, error) {
 
 // FromBundleProto converts the proto bundle type to the builder
 // type.
-func FromBundleProto(bundle *v1.BlobsBundle) *BlobsBundle {
-	commitments := make([]hexutil.Bytes, len(bundle.KzgCommitments))
-	for i := range bundle.KzgCommitments {
-		commitments[i] = bytesutil.SafeCopyBytes(bundle.KzgCommitments[i])
+func FromBundleProto(bundle blocks.BlobsBundle) *BlobsBundle {
+	commitments := make([]hexutil.Bytes, len(bundle.GetKzgCommitments()))
+	for i := range bundle.GetKzgCommitments() {
+		commitments[i] = bytesutil.SafeCopyBytes(bundle.GetKzgCommitments()[i])
 	}
-	proofs := make([]hexutil.Bytes, len(bundle.Proofs))
-	for i := range bundle.Proofs {
-		proofs[i] = bytesutil.SafeCopyBytes(bundle.Proofs[i])
+	proofs := make([]hexutil.Bytes, len(bundle.GetProofs()))
+	for i := range bundle.GetProofs() {
+		proofs[i] = bytesutil.SafeCopyBytes(bundle.GetProofs()[i])
 	}
-	blobs := make([]hexutil.Bytes, len(bundle.Blobs))
-	for i := range bundle.Blobs {
-		blobs[i] = bytesutil.SafeCopyBytes(bundle.Blobs[i])
+	blobs := make([]hexutil.Bytes, len(bundle.GetBlobs()))
+	for i := range bundle.GetBlobs() {
+		blobs[i] = bytesutil.SafeCopyBytes(bundle.GetBlobs()[i])
 	}
 	return &BlobsBundle{
 		Commitments: commitments,
@@ -1327,6 +1335,131 @@ func (bb *BuilderBidElectra) ToProto() (*eth.BuilderBidElectra, error) {
 		// Uint256.Bytes() is big-endian, SSZBytes takes this value and reverses it.
 		Value:  bytesutil.SafeCopyBytes(bb.Value.SSZBytes()),
 		Pubkey: bytesutil.SafeCopyBytes(bb.Pubkey),
+	}, nil
+}
+
+// ExecutionPayloadFuluAndBlobsBundle is a field of ExecPayloadResponseFulu.
+type ExecutionPayloadFuluAndBlobsBundle struct {
+	ExecutionPayload *ExecutionPayloadFulu `json:"execution_payload"`
+	BlobsBundle      *BlobsBundle          `json:"blobs_bundle"`
+}
+
+func (r *ExecutionPayloadFuluAndBlobsBundle) PayloadProto() (proto.Message, error) {
+	if r.ExecutionPayload == nil {
+		return nil, errors.Wrap(consensusblocks.ErrNilObject, "nil execution payload in combined fulu payload")
+	}
+	pb, err := r.ExecutionPayload.ToProto()
+	return pb, err
+}
+
+func (r *ExecutionPayloadFuluAndBlobsBundle) BundleProto() (proto.Message, error) {
+	if r.BlobsBundle == nil {
+		return nil, errors.Wrap(consensusblocks.ErrNilObject, "nil blobs bundle")
+	}
+	return r.BlobsBundle.ToProto()
+}
+
+// ExecutionPayloadFulu is a field of ExecutionPayloadFuluAndBlobsBundle
+type ExecutionPayloadFulu struct {
+	ParentHash    hexutil.Bytes   `json:"parent_hash"`
+	FeeRecipient  hexutil.Bytes   `json:"fee_recipient"`
+	StateRoot     hexutil.Bytes   `json:"state_root"`
+	ReceiptsRoot  hexutil.Bytes   `json:"receipts_root"`
+	LogsBloom     hexutil.Bytes   `json:"logs_bloom"`
+	PrevRandao    hexutil.Bytes   `json:"prev_randao"`
+	BlockNumber   Uint64String    `json:"block_number"`
+	GasLimit      Uint64String    `json:"gas_limit"`
+	GasUsed       Uint64String    `json:"gas_used"`
+	Timestamp     Uint64String    `json:"timestamp"`
+	ExtraData     hexutil.Bytes   `json:"extra_data"`
+	BaseFeePerGas Uint256         `json:"base_fee_per_gas"`
+	BlockHash     hexutil.Bytes   `json:"block_hash"`
+	Transactions  []hexutil.Bytes `json:"transactions"`
+	Withdrawals   []Withdrawal    `json:"withdrawals"`
+	BlobGasUsed   Uint64String    `json:"blob_gas_used"`   // new in deneb
+	ExcessBlobGas Uint64String    `json:"excess_blob_gas"` // new in deneb
+	ProofVersion  hexutil.Bytes   `json:"proof_version"`   // new in fulu
+}
+
+// ToProto returns the ExecutionPayloadFulu Proto.
+func (p *ExecutionPayloadFulu) ToProto() (*v1.ExecutionPayloadFulu, error) {
+	if p == nil {
+		return nil, errors.Wrap(consensusblocks.ErrNilObject, "nil execution payload")
+	}
+
+	txs := make([][]byte, len(p.Transactions))
+	for i := range p.Transactions {
+		txs[i] = bytesutil.SafeCopyBytes(p.Transactions[i])
+	}
+	withdrawals := make([]*v1.Withdrawal, len(p.Withdrawals))
+	for i, w := range p.Withdrawals {
+		withdrawals[i] = &v1.Withdrawal{
+			Index:          w.Index.Uint64(),
+			ValidatorIndex: types.ValidatorIndex(w.ValidatorIndex.Uint64()),
+			Address:        bytesutil.SafeCopyBytes(w.Address),
+			Amount:         w.Amount.Uint64(),
+		}
+	}
+
+	return &v1.ExecutionPayloadFulu{
+		ParentHash:    bytesutil.SafeCopyBytes(p.ParentHash),
+		FeeRecipient:  bytesutil.SafeCopyBytes(p.FeeRecipient),
+		StateRoot:     bytesutil.SafeCopyBytes(p.StateRoot),
+		ReceiptsRoot:  bytesutil.SafeCopyBytes(p.ReceiptsRoot),
+		LogsBloom:     bytesutil.SafeCopyBytes(p.LogsBloom),
+		PrevRandao:    bytesutil.SafeCopyBytes(p.PrevRandao),
+		BlockNumber:   uint64(p.BlockNumber),
+		GasLimit:      uint64(p.GasLimit),
+		GasUsed:       uint64(p.GasUsed),
+		Timestamp:     uint64(p.Timestamp),
+		ExtraData:     bytesutil.SafeCopyBytes(p.ExtraData),
+		BaseFeePerGas: bytesutil.SafeCopyBytes(p.BaseFeePerGas.SSZBytes()),
+		BlockHash:     bytesutil.SafeCopyBytes(p.BlockHash),
+		Transactions:  txs,
+		Withdrawals:   withdrawals,
+		BlobGasUsed:   uint64(p.BlobGasUsed),
+		ExcessBlobGas: uint64(p.ExcessBlobGas),
+		ProofVersion:  bytesutil.SafeCopyBytes(p.ProofVersion),
+	}, nil
+}
+
+func FromProtoFulu(payload *v1.ExecutionPayloadFulu) (ExecutionPayloadFulu, error) {
+	bFee, err := sszBytesToUint256(payload.BaseFeePerGas)
+	if err != nil {
+		return ExecutionPayloadFulu{}, err
+	}
+	txs := make([]hexutil.Bytes, len(payload.Transactions))
+	for i := range payload.Transactions {
+		txs[i] = bytesutil.SafeCopyBytes(payload.Transactions[i])
+	}
+	withdrawals := make([]Withdrawal, len(payload.Withdrawals))
+	for i, w := range payload.Withdrawals {
+		withdrawals[i] = Withdrawal{
+			Index:          Uint256{Int: big.NewInt(0).SetUint64(w.Index)},
+			ValidatorIndex: Uint256{Int: big.NewInt(0).SetUint64(uint64(w.ValidatorIndex))},
+			Address:        bytesutil.SafeCopyBytes(w.Address),
+			Amount:         Uint256{Int: big.NewInt(0).SetUint64(w.Amount)},
+		}
+	}
+	return ExecutionPayloadFulu{
+		ParentHash:    bytesutil.SafeCopyBytes(payload.ParentHash),
+		FeeRecipient:  bytesutil.SafeCopyBytes(payload.FeeRecipient),
+		StateRoot:     bytesutil.SafeCopyBytes(payload.StateRoot),
+		ReceiptsRoot:  bytesutil.SafeCopyBytes(payload.ReceiptsRoot),
+		LogsBloom:     bytesutil.SafeCopyBytes(payload.LogsBloom),
+		PrevRandao:    bytesutil.SafeCopyBytes(payload.PrevRandao),
+		BlockNumber:   Uint64String(payload.BlockNumber),
+		GasLimit:      Uint64String(payload.GasLimit),
+		GasUsed:       Uint64String(payload.GasUsed),
+		Timestamp:     Uint64String(payload.Timestamp),
+		ExtraData:     bytesutil.SafeCopyBytes(payload.ExtraData),
+		BaseFeePerGas: bFee,
+		BlockHash:     bytesutil.SafeCopyBytes(payload.BlockHash),
+		Transactions:  txs,
+		Withdrawals:   withdrawals,
+		BlobGasUsed:   Uint64String(payload.BlobGasUsed),
+		ExcessBlobGas: Uint64String(payload.ExcessBlobGas),
+		ProofVersion:  bytesutil.SafeCopyBytes(payload.ProofVersion),
 	}, nil
 }
 

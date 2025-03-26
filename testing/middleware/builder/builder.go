@@ -59,6 +59,8 @@ const (
 	GetPayloadMethodV3 = "engine_getPayloadV3"
 	// GetPayloadMethodV4 v4 request string for JSON-RPC.
 	GetPayloadMethodV4 = "engine_getPayloadV4"
+	// GetPayloadMethodV5 v5 request string for JSON-RPC.
+	GetPayloadMethodV5 = "engine_getPayloadV5"
 )
 
 var (
@@ -97,7 +99,7 @@ type Builder struct {
 	prevBeaconRoot []byte
 	currVersion    int
 	currPayload    interfaces.ExecutionData
-	blobBundle     *v1.BlobsBundle
+	blobBundle     blocks.BlobsBundle
 	mux            *http.ServeMux
 	validatorMap   map[string]*eth.ValidatorRegistrationV1
 	valLock        sync.RWMutex
@@ -321,6 +323,11 @@ func (p *Builder) handleHeaderRequest(w http.ResponseWriter, req *http.Request) 
 	}
 	ax := types.Slot(slot)
 	currEpoch := types.Epoch(ax / params.BeaconConfig().SlotsPerEpoch)
+	if currEpoch >= params.BeaconConfig().FuluForkEpoch {
+		p.handleHeaderRequestFulu(w)
+		return
+	}
+
 	if currEpoch >= params.BeaconConfig().ElectraForkEpoch {
 		p.handleHeaderRequestElectra(w)
 		return
@@ -710,6 +717,93 @@ func (p *Builder) handleHeaderRequestElectra(w http.ResponseWriter) {
 	w.WriteHeader(http.StatusOK)
 }
 
+func (p *Builder) handleHeaderRequestFulu(w http.ResponseWriter) {
+	b, err := p.retrievePendingBlockFulu()
+	if err != nil {
+		p.cfg.logger.WithError(err).Error("Could not retrieve pending block")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	secKey, err := bls.RandKey()
+	if err != nil {
+		p.cfg.logger.WithError(err).Error("Could not retrieve secret key")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	v := big.NewInt(0).SetBytes(bytesutil.ReverseByteOrder(b.Value))
+	// we set the payload value as twice its actual one so that it always chooses builder payloads vs local payloads
+	v = v.Mul(v, big.NewInt(2))
+	wObj, err := blocks.WrappedExecutionPayloadFulu(b.Payload)
+	if err != nil {
+		p.cfg.logger.WithError(err).Error("Could not wrap execution payload")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	hdr, err := blocks.PayloadToHeaderFulu(wObj)
+	if err != nil {
+		p.cfg.logger.WithError(err).Error("Could not make payload into header")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	val := builderAPI.Uint256{Int: v}
+	var commitments []hexutil.Bytes
+	for _, c := range b.BlobsBundle.KzgCommitments {
+		copiedC := c
+		commitments = append(commitments, copiedC)
+	}
+	wrappedHdr := &builderAPI.ExecutionPayloadHeaderDeneb{ExecutionPayloadHeaderDeneb: hdr}
+	bid := &builderAPI.BuilderBidDeneb{
+		Header:             wrappedHdr,
+		BlobKzgCommitments: commitments,
+		Value:              val,
+		Pubkey:             secKey.PublicKey().Marshal(),
+	}
+	sszBid := &eth.BuilderBidDeneb{
+		Header:             hdr,
+		BlobKzgCommitments: b.BlobsBundle.KzgCommitments,
+		Value:              val.SSZBytes(),
+		Pubkey:             secKey.PublicKey().Marshal(),
+	}
+	d, err := signing.ComputeDomain(params.BeaconConfig().DomainApplicationBuilder,
+		nil, /* fork version */
+		nil /* genesis val root */)
+	if err != nil {
+		p.cfg.logger.WithError(err).Error("Could not compute the domain")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	rt, err := signing.ComputeSigningRoot(sszBid, d)
+	if err != nil {
+		p.cfg.logger.WithError(err).Error("Could not compute the signing root")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	sig := secKey.Sign(rt[:])
+	hdrResp := &builderAPI.ExecHeaderResponseDeneb{
+		Version: "deneb",
+		Data: struct {
+			Signature hexutil.Bytes               `json:"signature"`
+			Message   *builderAPI.BuilderBidDeneb `json:"message"`
+		}{
+			Signature: sig.Marshal(),
+			Message:   bid,
+		},
+	}
+
+	err = json.NewEncoder(w).Encode(hdrResp)
+	if err != nil {
+		p.cfg.logger.WithError(err).Error("Could not encode response")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	p.currVersion = version.Deneb
+	p.currPayload = wObj
+	p.blobBundle = b.BlobsBundle
+	w.WriteHeader(http.StatusOK)
+}
+
 func (p *Builder) handleBlindedBlock(w http.ResponseWriter, req *http.Request) {
 	// TODO update for fork specific
 	sb := &builderAPI.SignedBlindedBeaconBlockBellatrix{
@@ -745,7 +839,7 @@ var errInvalidTypeConversion = errors.New("unable to translate between api and f
 
 // ExecutionPayloadResponseFromData converts an ExecutionData interface value to a payload response.
 // This involves serializing the execution payload value so that the abstract payload envelope can be used.
-func ExecutionPayloadResponseFromData(v int, ed interfaces.ExecutionData, bundle *v1.BlobsBundle) (*builderAPI.ExecutionPayloadResponse, error) {
+func ExecutionPayloadResponseFromData(v int, ed interfaces.ExecutionData, bundle blocks.BlobsBundle) (*builderAPI.ExecutionPayloadResponse, error) {
 	pb := ed.Proto()
 	var data interface{}
 	var err error
@@ -890,6 +984,36 @@ func (p *Builder) retrievePendingBlockElectra() (*v1.ExecutionBundleElectra, err
 	}
 	p.currId = nil
 	return electraPayload, nil
+}
+
+func (p *Builder) retrievePendingBlockFulu() (*v1.ExecutionBundleFulu, error) {
+	result := &engine.ExecutionPayloadEnvelope{}
+	if p.currId == nil {
+		return nil, errors.New("no payload id is cached")
+	}
+	err := p.execClient.CallContext(context.Background(), result, GetPayloadMethodV5, *p.currId)
+	if err != nil {
+		return nil, err
+	}
+	if p.prevBeaconRoot == nil {
+		p.cfg.logger.Errorf("previous root is nil")
+	}
+
+	payloadEnv, err := modifyExecutionPayload(*result.ExecutionPayload, result.BlockValue, p.prevBeaconRoot, result.Requests)
+	if err != nil {
+		return nil, err
+	}
+	payloadEnv.BlobsBundle = result.BlobsBundle
+	marshalledOutput, err := payloadEnv.MarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+	fuluPayload := &v1.ExecutionBundleFulu{}
+	if err = json.Unmarshal(marshalledOutput, fuluPayload); err != nil {
+		return nil, err
+	}
+	p.currId = nil
+	return fuluPayload, nil
 }
 
 func (p *Builder) sendHttpRequest(req *http.Request, requestBytes []byte) (*http.Response, error) {

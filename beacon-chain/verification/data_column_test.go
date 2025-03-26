@@ -29,7 +29,8 @@ func GenerateTestDataColumns(t *testing.T, parent [fieldparams.RootLength]byte, 
 		blobs = append(blobs, kzg.Blob(roBlobs[i].Blob))
 	}
 
-	dataColumnSidecars, err := peerdas.DataColumnSidecars(roBlock, blobs)
+	cellsAndProofs := util.GenerateCellsAndProofs(t, blobs)
+	dataColumnSidecars, err := peerdas.DataColumnSidecars(roBlock, cellsAndProofs)
 	require.NoError(t, err)
 
 	roDataColumns := make([]blocks.RODataColumn, 0, len(dataColumnSidecars))

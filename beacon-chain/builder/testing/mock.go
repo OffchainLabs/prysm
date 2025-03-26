@@ -28,6 +28,7 @@ type MockBuilderService struct {
 	Payload               *v1.ExecutionPayload
 	PayloadCapella        *v1.ExecutionPayloadCapella
 	PayloadDeneb          *v1.ExecutionPayloadDeneb
+	PayloadFulu           *v1.ExecutionPayloadFulu
 	BlobBundle            *v1.BlobsBundle
 	ErrSubmitBlindedBlock error
 	Bid                   *ethpb.SignedBuilderBid
@@ -46,7 +47,7 @@ func (s *MockBuilderService) Configured() bool {
 }
 
 // SubmitBlindedBlock for mocking.
-func (s *MockBuilderService) SubmitBlindedBlock(_ context.Context, b interfaces.ReadOnlySignedBeaconBlock) (interfaces.ExecutionData, *v1.BlobsBundle, error) {
+func (s *MockBuilderService) SubmitBlindedBlock(_ context.Context, b interfaces.ReadOnlySignedBeaconBlock) (interfaces.ExecutionData, blocks.BlobsBundle, error) {
 	switch b.Version() {
 	case version.Bellatrix:
 		w, err := blocks.WrappedExecutionPayload(s.Payload)
