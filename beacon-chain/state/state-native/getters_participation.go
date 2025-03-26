@@ -41,7 +41,6 @@ func (b *BeaconState) PreviousEpochParticipation() ([]byte, error) {
 }
 
 // CurrentEpochParticipationReadOnly corresponding to participation bits on the beacon chain without copying the data.
-// Modifications to the returned slice will modify the underlying data.
 func (b *BeaconState) CurrentEpochParticipationReadOnly() (customtypes.ReadOnlyParticipation, error) {
 	if b.version == version.Phase0 {
 		return customtypes.ReadOnlyParticipation{}, errNotSupported("CurrentEpochParticipation", b.version)
@@ -54,7 +53,6 @@ func (b *BeaconState) CurrentEpochParticipationReadOnly() (customtypes.ReadOnlyP
 }
 
 // PreviousEpochParticipationReadOnly corresponding to participation bits on the beacon chain without copying the data.
-// Modifications to the returned slice will modify the underlying data.
 func (b *BeaconState) PreviousEpochParticipationReadOnly() (customtypes.ReadOnlyParticipation, error) {
 	if b.version == version.Phase0 {
 		return customtypes.ReadOnlyParticipation{}, errNotSupported("PreviousEpochParticipation", b.version)

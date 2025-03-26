@@ -287,18 +287,25 @@ func (a proposerAtts) sortOnChainAggregates(ctx context.Context, st state.ReadOn
 		return nil, err
 	}
 
-	// Sort attestation by proposer reward numerator
+	// Sort attestation by proposer reward numerator using a cache.
+	cache := make(map[ethpb.Att]uint64)
+
+	getCachedReward := func(att ethpb.Att) uint64 {
+		if val, ok := cache[att]; ok {
+			return val
+		}
+		r, err := electra.GetProposerRewardNumerator(ctx, st, att, totalBalance)
+		if err != nil {
+			log.WithError(err).Debug("Failed to get proposer reward numerator")
+			return 0
+		}
+		cache[att] = r
+		return r
+	}
+
 	slices.SortFunc(a, func(a, b ethpb.Att) int {
-		r1, err := electra.GetProposerRewardNumerator(ctx, st, a, totalBalance)
-		if err != nil {
-			log.WithError(err).Debug("Failed to get proposer reward numerator")
-			return 0
-		}
-		r2, err := electra.GetProposerRewardNumerator(ctx, st, b, totalBalance)
-		if err != nil {
-			log.WithError(err).Debug("Failed to get proposer reward numerator")
-			return 0
-		}
+		r1 := getCachedReward(a)
+		r2 := getCachedReward(b)
 		return cmp.Compare(r2, r1)
 	})
 
