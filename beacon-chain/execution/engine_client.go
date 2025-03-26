@@ -53,6 +53,7 @@ var (
 		GetPayloadMethodV4,
 	}
 	fuluEngineEndpoints = []string{
+		GetPayloadMethodV5,
 		GetBlobsV2,
 	}
 )
@@ -79,6 +80,8 @@ const (
 	GetPayloadMethodV3 = "engine_getPayloadV3"
 	// GetPayloadMethodV4 is the get payload method added for electra
 	GetPayloadMethodV4 = "engine_getPayloadV4"
+	// GetPayloadMethodV5 is the get payload method added for fulu
+	GetPayloadMethodV5 = "engine_getPayloadV5"
 	// BlockByHashMethod request string for JSON-RPC.
 	BlockByHashMethod = "eth_getBlockByHash"
 	// BlockByNumberMethod request string for JSON-RPC.
@@ -271,6 +274,9 @@ func (s *Service) ForkchoiceUpdated(
 
 func getPayloadMethodAndMessage(slot primitives.Slot) (string, proto.Message) {
 	pe := slots.ToEpoch(slot)
+	if pe >= params.BeaconConfig().FuluForkEpoch {
+		return GetPayloadMethodV5, &pb.ExecutionBundleFulu{}
+	}
 	if pe >= params.BeaconConfig().ElectraForkEpoch {
 		return GetPayloadMethodV4, &pb.ExecutionBundleElectra{}
 	}
@@ -663,13 +669,13 @@ func (s *Service) ReconstructDataColumnSidecars(ctx context.Context, block inter
 	}
 
 	// Fetch all blobsAndCellsProofs from EL
-	blobsAndCellsProofs, err := s.GetBlobsV2(ctx, kzgHashes)
+	blobsAndCellProofs, err := s.GetBlobsV2(ctx, kzgHashes)
 	if err != nil {
 		return nil, wrapWithBlockRoot(err, blockRoot, "get blobs V2")
 	}
 
 	var cellsAndProofs []kzg.CellsAndProofs
-	for _, blobAndCellProofs := range blobsAndCellsProofs {
+	for _, blobAndCellProofs := range blobsAndCellProofs {
 		if blobAndCellProofs == nil {
 			return nil, wrapWithBlockRoot(errors.New("unable to reconstruct data column sidecars, did not get all blobs from EL"), blockRoot, "")
 		}
@@ -681,8 +687,8 @@ func (s *Service) ReconstructDataColumnSidecars(ctx context.Context, block inter
 			return nil, wrapWithBlockRoot(err, blockRoot, "could not compute cells")
 		}
 
-		proofs := make([]kzg.Proof, len(blobAndCellProofs.CellProofs))
-		for i, proof := range blobAndCellProofs.CellProofs {
+		proofs := make([]kzg.Proof, len(blobAndCellProofs.KzgProofs))
+		for i, proof := range blobAndCellProofs.KzgProofs {
 			proofs[i] = kzg.Proof(proof)
 		}
 		cellsAndProofs = append(cellsAndProofs, kzg.CellsAndProofs{
