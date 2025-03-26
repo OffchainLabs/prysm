@@ -185,8 +185,7 @@ func (p *BeaconDbStater) StateRoot(ctx context.Context, stateId []byte) (root []
 	case "justified":
 		root, err = p.justifiedStateRoot(ctx)
 	default:
-		stringId := strings.ToLower(string(stateId))
-		if len(stringId) >= 2 && stringId[:2] == "0x" {
+		if len(stateIdString) >= 2 && stateIdString[:2] == "0x" {
 			var decoded []byte
 			decoded, err = hexutil.Decode(string(stateId))
 			if err != nil {
