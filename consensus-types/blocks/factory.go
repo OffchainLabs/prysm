@@ -168,6 +168,8 @@ func NewBeaconBlockBody(i interface{}) (interfaces.ReadOnlyBeaconBlockBody, erro
 		return initBlockBodyFromProtoElectra(b)
 	case *eth.BlindedBeaconBlockBodyElectra:
 		return initBlindedBlockBodyFromProtoElectra(b)
+	case *eth.BeaconBlockBodyFulu:
+		return initBlockBodyFromProtoFulu(b)
 	default:
 		return nil, errors.Wrapf(errUnsupportedBeaconBlockBody, "unable to create block body from type %T", i)
 	}
@@ -255,7 +257,7 @@ func BuildSignedBeaconBlock(blk interfaces.ReadOnlyBeaconBlock, signature []byte
 			}
 			return NewSignedBeaconBlock(&eth.SignedBlindedBeaconBlockFulu{Message: pb, Signature: signature})
 		}
-		pb, ok := pb.(*eth.BeaconBlockElectra)
+		pb, ok := pb.(*eth.BeaconBlockFulu)
 		if !ok {
 			return nil, errIncorrectBlockVersion
 		}
@@ -565,9 +567,9 @@ func BuildSignedBeaconBlockFromExecutionPayload(blk interfaces.ReadOnlySignedBea
 			Signature: sig[:],
 		}
 	case version.Fulu:
-		p, ok := payload.(*enginev1.ExecutionPayloadDeneb)
+		p, ok := payload.(*enginev1.ExecutionPayloadFulu)
 		if !ok {
-			return nil, fmt.Errorf("payload has wrong type (expected %T, got %T)", &enginev1.ExecutionPayloadDeneb{}, payload)
+			return nil, fmt.Errorf("payload has wrong type (expected %T, got %T)", &enginev1.ExecutionPayloadFulu{}, payload)
 		}
 		blsToExecutionChanges, err := b.Body().BLSToExecutionChanges()
 		if err != nil {
@@ -606,12 +608,12 @@ func BuildSignedBeaconBlockFromExecutionPayload(blk interfaces.ReadOnlySignedBea
 		}
 
 		fullBlock = &eth.SignedBeaconBlockFulu{
-			Block: &eth.BeaconBlockElectra{
+			Block: &eth.BeaconBlockFulu{
 				Slot:          b.Slot(),
 				ProposerIndex: b.ProposerIndex(),
 				ParentRoot:    parentRoot[:],
 				StateRoot:     stateRoot[:],
-				Body: &eth.BeaconBlockBodyElectra{
+				Body: &eth.BeaconBlockBodyFulu{
 					RandaoReveal:          randaoReveal[:],
 					Eth1Data:              b.Body().Eth1Data(),
 					Graffiti:              graffiti[:],

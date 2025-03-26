@@ -1598,6 +1598,13 @@ func SignedExitsFromConsensus(src []*eth.SignedVoluntaryExit) []*SignedVoluntary
 	return exits
 }
 
+func sszBytesToUint8String(b []byte) (string, error) {
+	if len(b) != 1 {
+		return "", fmt.Errorf("expected 1 byte, got %d", len(b))
+	}
+	return fmt.Sprintf("%d", b[0]), nil
+}
+
 func sszBytesToUint256String(b []byte) (string, error) {
 	bi := bytesutil.LittleEndianBytesToBigInt(b)
 	if !math.IsValidUint256(bi) {

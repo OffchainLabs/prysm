@@ -747,7 +747,7 @@ func (b *BeaconBlock) HashTreeRoot() ([field_params.RootLength]byte, error) {
 		if b.IsBlinded() {
 			return pb.(*eth.BlindedBeaconBlockFulu).HashTreeRoot()
 		}
-		return pb.(*eth.BeaconBlockElectra).HashTreeRoot()
+		return pb.(*eth.BeaconBlockFulu).HashTreeRoot()
 	default:
 		return [field_params.RootLength]byte{}, errIncorrectBlockVersion
 	}
@@ -788,7 +788,7 @@ func (b *BeaconBlock) HashTreeRootWith(h *ssz.Hasher) error {
 		if b.IsBlinded() {
 			return pb.(*eth.BlindedBeaconBlockFulu).HashTreeRootWith(h)
 		}
-		return pb.(*eth.BeaconBlockElectra).HashTreeRootWith(h)
+		return pb.(*eth.BeaconBlockFulu).HashTreeRootWith(h)
 	default:
 		return errIncorrectBlockVersion
 	}
@@ -830,7 +830,7 @@ func (b *BeaconBlock) MarshalSSZ() ([]byte, error) {
 		if b.IsBlinded() {
 			return pb.(*eth.BlindedBeaconBlockFulu).MarshalSSZ()
 		}
-		return pb.(*eth.BeaconBlockElectra).MarshalSSZ()
+		return pb.(*eth.BeaconBlockFulu).MarshalSSZ()
 	default:
 		return []byte{}, errIncorrectBlockVersion
 	}
@@ -1049,7 +1049,7 @@ func (b *BeaconBlock) UnmarshalSSZ(buf []byte) error {
 				return err
 			}
 		} else {
-			pb := &eth.BeaconBlockElectra{}
+			pb := &eth.BeaconBlockFulu{}
 			if err := pb.UnmarshalSSZ(buf); err != nil {
 				return err
 			}
@@ -1277,7 +1277,7 @@ func (b *BeaconBlockBody) HashTreeRoot() ([field_params.RootLength]byte, error) 
 		if b.IsBlinded() {
 			return pb.(*eth.BlindedBeaconBlockBodyElectra).HashTreeRoot()
 		}
-		return pb.(*eth.BeaconBlockBodyElectra).HashTreeRoot()
+		return pb.(*eth.BeaconBlockBodyFulu).HashTreeRoot()
 	default:
 		return [field_params.RootLength]byte{}, errIncorrectBodyVersion
 	}

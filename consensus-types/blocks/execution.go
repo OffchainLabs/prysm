@@ -40,6 +40,8 @@ func NewWrappedExecutionData(v proto.Message) (interfaces.ExecutionData, error) 
 	case *enginev1.ExecutionBundleElectra:
 		// note: no payload changes in electra so using deneb
 		return WrappedExecutionPayloadDeneb(pbStruct.Payload)
+	case *enginev1.ExecutionBundleFulu:
+		return WrappedExecutionPayloadFulu(pbStruct.Payload)
 	default:
 		return nil, ErrUnsupportedVersion
 	}
@@ -1160,5 +1162,161 @@ func (e executionPayloadDeneb) ExcessBlobGas() (uint64, error) {
 
 // IsBlinded returns true if the underlying data is blinded.
 func (e executionPayloadDeneb) IsBlinded() bool {
+	return false
+}
+
+// executionPayloadFulu is a convenience wrapper around a beacon block body's execution payload data structure
+// This wrapper allows us to conform to a common interface so that beacon
+// blocks for future forks can also be applied across Prysm without issues.
+type executionPayloadFulu struct {
+	p *enginev1.ExecutionPayloadFulu
+}
+
+var _ interfaces.ExecutionData = &executionPayloadFulu{}
+
+// WrappedExecutionPayloadFulu is a constructor which wraps a protobuf execution payload into an interface.
+func WrappedExecutionPayloadFulu(p *enginev1.ExecutionPayloadFulu) (interfaces.ExecutionData, error) {
+	w := executionPayloadFulu{p: p}
+	if w.IsNil() {
+		return nil, consensus_types.ErrNilObjectWrapped
+	}
+	return w, nil
+}
+
+// IsNil checks if the underlying data is nil.
+func (e executionPayloadFulu) IsNil() bool {
+	return e.p == nil
+}
+
+// MarshalSSZ --
+func (e executionPayloadFulu) MarshalSSZ() ([]byte, error) {
+	return e.p.MarshalSSZ()
+}
+
+// MarshalSSZTo --
+func (e executionPayloadFulu) MarshalSSZTo(dst []byte) ([]byte, error) {
+	return e.p.MarshalSSZTo(dst)
+}
+
+// SizeSSZ --
+func (e executionPayloadFulu) SizeSSZ() int {
+	return e.p.SizeSSZ()
+}
+
+// UnmarshalSSZ --
+func (e executionPayloadFulu) UnmarshalSSZ(buf []byte) error {
+	return e.p.UnmarshalSSZ(buf)
+}
+
+// HashTreeRoot --
+func (e executionPayloadFulu) HashTreeRoot() ([32]byte, error) {
+	return e.p.HashTreeRoot()
+}
+
+// HashTreeRootWith --
+func (e executionPayloadFulu) HashTreeRootWith(hh *fastssz.Hasher) error {
+	return e.p.HashTreeRootWith(hh)
+}
+
+// Proto --
+func (e executionPayloadFulu) Proto() proto.Message {
+	return e.p
+}
+
+// ParentHash --
+func (e executionPayloadFulu) ParentHash() []byte {
+	return e.p.ParentHash
+}
+
+// FeeRecipient --
+func (e executionPayloadFulu) FeeRecipient() []byte {
+	return e.p.FeeRecipient
+}
+
+// StateRoot --
+func (e executionPayloadFulu) StateRoot() []byte {
+	return e.p.StateRoot
+}
+
+// ReceiptsRoot --
+func (e executionPayloadFulu) ReceiptsRoot() []byte {
+	return e.p.ReceiptsRoot
+}
+
+// LogsBloom --
+func (e executionPayloadFulu) LogsBloom() []byte {
+	return e.p.LogsBloom
+}
+
+// PrevRandao --
+func (e executionPayloadFulu) PrevRandao() []byte {
+	return e.p.PrevRandao
+}
+
+// BlockNumber --
+func (e executionPayloadFulu) BlockNumber() uint64 {
+	return e.p.BlockNumber
+}
+
+// GasLimit --
+func (e executionPayloadFulu) GasLimit() uint64 {
+	return e.p.GasLimit
+}
+
+// GasUsed --
+func (e executionPayloadFulu) GasUsed() uint64 {
+	return e.p.GasUsed
+}
+
+// Timestamp --
+func (e executionPayloadFulu) Timestamp() uint64 {
+	return e.p.Timestamp
+}
+
+// ExtraData --
+func (e executionPayloadFulu) ExtraData() []byte {
+	return e.p.ExtraData
+}
+
+// BaseFeePerGas --
+func (e executionPayloadFulu) BaseFeePerGas() []byte {
+	return e.p.BaseFeePerGas
+}
+
+// BlockHash --
+func (e executionPayloadFulu) BlockHash() []byte {
+	return e.p.BlockHash
+}
+
+// Transactions --
+func (e executionPayloadFulu) Transactions() ([][]byte, error) {
+	return e.p.Transactions, nil
+}
+
+// TransactionsRoot --
+func (e executionPayloadFulu) TransactionsRoot() ([]byte, error) {
+	return nil, consensus_types.ErrUnsupportedField
+}
+
+// Withdrawals --
+func (e executionPayloadFulu) Withdrawals() ([]*enginev1.Withdrawal, error) {
+	return e.p.Withdrawals, nil
+}
+
+// WithdrawalsRoot --
+func (e executionPayloadFulu) WithdrawalsRoot() ([]byte, error) {
+	return nil, consensus_types.ErrUnsupportedField
+}
+
+func (e executionPayloadFulu) BlobGasUsed() (uint64, error) {
+	return e.p.BlobGasUsed, nil
+}
+
+func (e executionPayloadFulu) ExcessBlobGas() (uint64, error) {
+	return e.p.ExcessBlobGas, nil
+}
+
+// IsBlinded returns true if the underlying data is blinded.
+func (e executionPayloadFulu) IsBlinded() bool {
 	return false
 }

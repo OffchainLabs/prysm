@@ -171,10 +171,10 @@ func (b *SignedBeaconBlock) Proto() (proto.Message, error) { // nolint:gocognit
 				Signature: b.signature[:],
 			}, nil
 		}
-		var block *eth.BeaconBlockElectra
+		var block *eth.BeaconBlockFulu
 		if blockMessage != nil {
 			var ok bool
-			block, ok = blockMessage.(*eth.BeaconBlockElectra)
+			block, ok = blockMessage.(*eth.BeaconBlockFulu)
 			if !ok {
 				return nil, errIncorrectBlockVersion
 			}
@@ -382,15 +382,15 @@ func (b *BeaconBlock) Proto() (proto.Message, error) { // nolint:gocognit
 				Body:          body,
 			}, nil
 		}
-		var body *eth.BeaconBlockBodyElectra
+		var body *eth.BeaconBlockBodyFulu
 		if bodyMessage != nil {
 			var ok bool
-			body, ok = bodyMessage.(*eth.BeaconBlockBodyElectra)
+			body, ok = bodyMessage.(*eth.BeaconBlockBodyFulu)
 			if !ok {
 				return nil, errIncorrectBodyVersion
 			}
 		}
-		return &eth.BeaconBlockElectra{
+		return &eth.BeaconBlockFulu{
 			Slot:          b.slot,
 			ProposerIndex: b.proposerIndex,
 			ParentRoot:    b.parentRoot[:],
@@ -643,15 +643,15 @@ func (b *BeaconBlockBody) Proto() (proto.Message, error) {
 				ExecutionRequests:      b.executionRequests,
 			}, nil
 		}
-		var p *enginev1.ExecutionPayloadDeneb
+		var p *enginev1.ExecutionPayloadFulu
 		var ok bool
 		if b.executionPayload != nil {
-			p, ok = b.executionPayload.Proto().(*enginev1.ExecutionPayloadDeneb)
+			p, ok = b.executionPayload.Proto().(*enginev1.ExecutionPayloadFulu)
 			if !ok {
 				return nil, errPayloadWrongType
 			}
 		}
-		return &eth.BeaconBlockBodyElectra{
+		return &eth.BeaconBlockBodyFulu{
 			RandaoReveal:          b.randaoReveal[:],
 			Eth1Data:              b.eth1Data,
 			Graffiti:              b.graffiti[:],
@@ -1370,7 +1370,7 @@ func initBlindedSignedBlockFromProtoFulu(pb *eth.SignedBlindedBeaconBlockFulu) (
 	return b, nil
 }
 
-func initBlockFromProtoFulu(pb *eth.BeaconBlockElectra) (*BeaconBlock, error) {
+func initBlockFromProtoFulu(pb *eth.BeaconBlockFulu) (*BeaconBlock, error) {
 	if pb == nil {
 		return nil, errNilBlock
 	}
@@ -1410,12 +1410,12 @@ func initBlindedBlockFromProtoFulu(pb *eth.BlindedBeaconBlockFulu) (*BeaconBlock
 	return b, nil
 }
 
-func initBlockBodyFromProtoFulu(pb *eth.BeaconBlockBodyElectra) (*BeaconBlockBody, error) {
+func initBlockBodyFromProtoFulu(pb *eth.BeaconBlockBodyFulu) (*BeaconBlockBody, error) {
 	if pb == nil {
 		return nil, errNilBlockBody
 	}
 
-	p, err := WrappedExecutionPayloadDeneb(pb.ExecutionPayload)
+	p, err := WrappedExecutionPayloadFulu(pb.ExecutionPayload)
 	// We allow the payload to be nil
 	if err != nil && !errors.Is(err, consensus_types.ErrNilObjectWrapped) {
 		return nil, err
