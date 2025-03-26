@@ -5,6 +5,7 @@ go_library(
     srcs = [
         "block_roots.go",
         "historical_roots.go",
+        "participation.go",
         "randao_mixes.go",
         "state_roots.go",
     ],

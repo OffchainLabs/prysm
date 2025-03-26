@@ -8,6 +8,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	customtypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native/custom-types"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
@@ -47,11 +48,11 @@ func GetProposerRewardNumerator(
 		return 0, err
 	}
 
-	var participation []byte
+	var participation customtypes.ReadOnlyParticipation
 	if data.Target.Epoch == time.CurrentEpoch(st) {
-		participation, err = st.CurrentEpochParticipationNoCopy()
+		participation, err = st.CurrentEpochParticipationReadOnly()
 	} else {
-		participation, err = st.PreviousEpochParticipationNoCopy()
+		participation, err = st.PreviousEpochParticipationReadOnly()
 	}
 	if err != nil {
 		return 0, err
@@ -60,8 +61,8 @@ func GetProposerRewardNumerator(
 	cfg := params.BeaconConfig()
 	var rewardNumerator uint64
 	for _, index := range indices {
-		if index >= uint64(len(participation)) {
-			return 0, fmt.Errorf("index %d exceeds participation length %d", index, len(participation))
+		if index >= uint64(participation.Len()) {
+			return 0, fmt.Errorf("index %d exceeds participation length %d", index, participation.Len())
 		}
 
 		br, err := altair.BaseRewardWithTotalBalance(st, primitives.ValidatorIndex(index), totalBalance)
@@ -78,7 +79,7 @@ func GetProposerRewardNumerator(
 			{cfg.TimelyHeadFlagIndex, cfg.TimelyHeadWeight},
 		} {
 			if flags[entry.flagIndex] {
-				has, err := altair.HasValidatorFlag(participation[index], entry.flagIndex)
+				has, err := altair.HasValidatorFlag(participation.At(index), entry.flagIndex)
 				if err != nil {
 					return 0, err
 				}
