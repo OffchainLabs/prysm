@@ -67,6 +67,33 @@ func (cr *ConsolidationRequest) Copy() *ConsolidationRequest {
 	}
 }
 
+// Copy -- Fulu
+func (payload *ExecutionPayloadFulu) Copy() *ExecutionPayloadFulu {
+	if payload == nil {
+		return nil
+	}
+	return &ExecutionPayloadFulu{
+		ParentHash:    bytesutil.SafeCopyBytes(payload.ParentHash),
+		FeeRecipient:  bytesutil.SafeCopyBytes(payload.FeeRecipient),
+		StateRoot:     bytesutil.SafeCopyBytes(payload.StateRoot),
+		ReceiptsRoot:  bytesutil.SafeCopyBytes(payload.ReceiptsRoot),
+		LogsBloom:     bytesutil.SafeCopyBytes(payload.LogsBloom),
+		PrevRandao:    bytesutil.SafeCopyBytes(payload.PrevRandao),
+		BlockNumber:   payload.BlockNumber,
+		GasLimit:      payload.GasLimit,
+		GasUsed:       payload.GasUsed,
+		Timestamp:     payload.Timestamp,
+		ExtraData:     bytesutil.SafeCopyBytes(payload.ExtraData),
+		BaseFeePerGas: bytesutil.SafeCopyBytes(payload.BaseFeePerGas),
+		BlockHash:     bytesutil.SafeCopyBytes(payload.BlockHash),
+		Transactions:  bytesutil.SafeCopy2dBytes(payload.Transactions),
+		Withdrawals:   copySlice(payload.Withdrawals),
+		BlobGasUsed:   payload.BlobGasUsed,
+		ExcessBlobGas: payload.ExcessBlobGas,
+		ProofVersion:  payload.ProofVersion,
+	}
+}
+
 // Copy -- Deneb
 func (payload *ExecutionPayloadDeneb) Copy() *ExecutionPayloadDeneb {
 	if payload == nil {

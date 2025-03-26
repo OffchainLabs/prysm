@@ -4,6 +4,7 @@ package eth
 import (
 	ssz "github.com/prysmaticlabs/fastssz"
 	github_com_prysmaticlabs_prysm_v5_consensus_types_primitives "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	v1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
 )
 
 // MarshalSSZ ssz marshals the SignedBeaconBlockContentsFulu object
@@ -228,7 +229,7 @@ func (s *SignedBeaconBlockFulu) MarshalSSZTo(buf []byte) (dst []byte, err error)
 	// Offset (0) 'Block'
 	dst = ssz.WriteOffset(dst, offset)
 	if s.Block == nil {
-		s.Block = new(BeaconBlockElectra)
+		s.Block = new(BeaconBlockFulu)
 	}
 	offset += s.Block.SizeSSZ()
 
@@ -277,7 +278,7 @@ func (s *SignedBeaconBlockFulu) UnmarshalSSZ(buf []byte) error {
 	{
 		buf = tail[o0:]
 		if s.Block == nil {
-			s.Block = new(BeaconBlockElectra)
+			s.Block = new(BeaconBlockFulu)
 		}
 		if err = s.Block.UnmarshalSSZ(buf); err != nil {
 			return err
@@ -292,7 +293,7 @@ func (s *SignedBeaconBlockFulu) SizeSSZ() (size int) {
 
 	// Field (0) 'Block'
 	if s.Block == nil {
-		s.Block = new(BeaconBlockElectra)
+		s.Block = new(BeaconBlockFulu)
 	}
 	size += s.Block.SizeSSZ()
 
@@ -337,7 +338,7 @@ func (b *BeaconBlockContentsFulu) MarshalSSZTo(buf []byte) (dst []byte, err erro
 	// Offset (0) 'Block'
 	dst = ssz.WriteOffset(dst, offset)
 	if b.Block == nil {
-		b.Block = new(BeaconBlockElectra)
+		b.Block = new(BeaconBlockFulu)
 	}
 	offset += b.Block.SizeSSZ()
 
@@ -355,8 +356,8 @@ func (b *BeaconBlockContentsFulu) MarshalSSZTo(buf []byte) (dst []byte, err erro
 	}
 
 	// Field (1) 'KzgProofs'
-	if size := len(b.KzgProofs); size > 4096 {
-		err = ssz.ErrListTooBigFn("--.KzgProofs", size, 4096)
+	if size := len(b.KzgProofs); size > 33554432 {
+		err = ssz.ErrListTooBigFn("--.KzgProofs", size, 33554432)
 		return
 	}
 	for ii := 0; ii < len(b.KzgProofs); ii++ {
@@ -417,7 +418,7 @@ func (b *BeaconBlockContentsFulu) UnmarshalSSZ(buf []byte) error {
 	{
 		buf = tail[o0:o1]
 		if b.Block == nil {
-			b.Block = new(BeaconBlockElectra)
+			b.Block = new(BeaconBlockFulu)
 		}
 		if err = b.Block.UnmarshalSSZ(buf); err != nil {
 			return err
@@ -427,7 +428,7 @@ func (b *BeaconBlockContentsFulu) UnmarshalSSZ(buf []byte) error {
 	// Field (1) 'KzgProofs'
 	{
 		buf = tail[o1:o2]
-		num, err := ssz.DivideInt2(len(buf), 48, 4096)
+		num, err := ssz.DivideInt2(len(buf), 48, 33554432)
 		if err != nil {
 			return err
 		}
@@ -464,7 +465,7 @@ func (b *BeaconBlockContentsFulu) SizeSSZ() (size int) {
 
 	// Field (0) 'Block'
 	if b.Block == nil {
-		b.Block = new(BeaconBlockElectra)
+		b.Block = new(BeaconBlockFulu)
 	}
 	size += b.Block.SizeSSZ()
 
@@ -493,8 +494,8 @@ func (b *BeaconBlockContentsFulu) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 
 	// Field (1) 'KzgProofs'
 	{
-		if size := len(b.KzgProofs); size > 4096 {
-			err = ssz.ErrListTooBigFn("--.KzgProofs", size, 4096)
+		if size := len(b.KzgProofs); size > 33554432 {
+			err = ssz.ErrListTooBigFn("--.KzgProofs", size, 33554432)
 			return
 		}
 		subIndx := hh.Index()
@@ -507,7 +508,7 @@ func (b *BeaconBlockContentsFulu) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 		}
 
 		numItems := uint64(len(b.KzgProofs))
-		hh.MerkleizeWithMixin(subIndx, numItems, 4096)
+		hh.MerkleizeWithMixin(subIndx, numItems, 33554432)
 	}
 
 	// Field (2) 'Blobs'
@@ -527,6 +528,799 @@ func (b *BeaconBlockContentsFulu) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 
 		numItems := uint64(len(b.Blobs))
 		hh.MerkleizeWithMixin(subIndx, numItems, 4096)
+	}
+
+	hh.Merkleize(indx)
+	return
+}
+
+// MarshalSSZ ssz marshals the BeaconBlockFulu object
+func (b *BeaconBlockFulu) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(b)
+}
+
+// MarshalSSZTo ssz marshals the BeaconBlockFulu object to a target array
+func (b *BeaconBlockFulu) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(84)
+
+	// Field (0) 'Slot'
+	dst = ssz.MarshalUint64(dst, uint64(b.Slot))
+
+	// Field (1) 'ProposerIndex'
+	dst = ssz.MarshalUint64(dst, uint64(b.ProposerIndex))
+
+	// Field (2) 'ParentRoot'
+	if size := len(b.ParentRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.ParentRoot", size, 32)
+		return
+	}
+	dst = append(dst, b.ParentRoot...)
+
+	// Field (3) 'StateRoot'
+	if size := len(b.StateRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.StateRoot", size, 32)
+		return
+	}
+	dst = append(dst, b.StateRoot...)
+
+	// Offset (4) 'Body'
+	dst = ssz.WriteOffset(dst, offset)
+	if b.Body == nil {
+		b.Body = new(BeaconBlockBodyFulu)
+	}
+	offset += b.Body.SizeSSZ()
+
+	// Field (4) 'Body'
+	if dst, err = b.Body.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the BeaconBlockFulu object
+func (b *BeaconBlockFulu) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 84 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o4 uint64
+
+	// Field (0) 'Slot'
+	b.Slot = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
+
+	// Field (1) 'ProposerIndex'
+	b.ProposerIndex = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[8:16]))
+
+	// Field (2) 'ParentRoot'
+	if cap(b.ParentRoot) == 0 {
+		b.ParentRoot = make([]byte, 0, len(buf[16:48]))
+	}
+	b.ParentRoot = append(b.ParentRoot, buf[16:48]...)
+
+	// Field (3) 'StateRoot'
+	if cap(b.StateRoot) == 0 {
+		b.StateRoot = make([]byte, 0, len(buf[48:80]))
+	}
+	b.StateRoot = append(b.StateRoot, buf[48:80]...)
+
+	// Offset (4) 'Body'
+	if o4 = ssz.ReadOffset(buf[80:84]); o4 > size {
+		return ssz.ErrOffset
+	}
+
+	if o4 != 84 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Field (4) 'Body'
+	{
+		buf = tail[o4:]
+		if b.Body == nil {
+			b.Body = new(BeaconBlockBodyFulu)
+		}
+		if err = b.Body.UnmarshalSSZ(buf); err != nil {
+			return err
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the BeaconBlockFulu object
+func (b *BeaconBlockFulu) SizeSSZ() (size int) {
+	size = 84
+
+	// Field (4) 'Body'
+	if b.Body == nil {
+		b.Body = new(BeaconBlockBodyFulu)
+	}
+	size += b.Body.SizeSSZ()
+
+	return
+}
+
+// HashTreeRoot ssz hashes the BeaconBlockFulu object
+func (b *BeaconBlockFulu) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(b)
+}
+
+// HashTreeRootWith ssz hashes the BeaconBlockFulu object with a hasher
+func (b *BeaconBlockFulu) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'Slot'
+	hh.PutUint64(uint64(b.Slot))
+
+	// Field (1) 'ProposerIndex'
+	hh.PutUint64(uint64(b.ProposerIndex))
+
+	// Field (2) 'ParentRoot'
+	if size := len(b.ParentRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.ParentRoot", size, 32)
+		return
+	}
+	hh.PutBytes(b.ParentRoot)
+
+	// Field (3) 'StateRoot'
+	if size := len(b.StateRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.StateRoot", size, 32)
+		return
+	}
+	hh.PutBytes(b.StateRoot)
+
+	// Field (4) 'Body'
+	if err = b.Body.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	hh.Merkleize(indx)
+	return
+}
+
+// MarshalSSZ ssz marshals the BeaconBlockBodyFulu object
+func (b *BeaconBlockBodyFulu) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(b)
+}
+
+// MarshalSSZTo ssz marshals the BeaconBlockBodyFulu object to a target array
+func (b *BeaconBlockBodyFulu) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(396)
+
+	// Field (0) 'RandaoReveal'
+	if size := len(b.RandaoReveal); size != 96 {
+		err = ssz.ErrBytesLengthFn("--.RandaoReveal", size, 96)
+		return
+	}
+	dst = append(dst, b.RandaoReveal...)
+
+	// Field (1) 'Eth1Data'
+	if b.Eth1Data == nil {
+		b.Eth1Data = new(Eth1Data)
+	}
+	if dst, err = b.Eth1Data.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (2) 'Graffiti'
+	if size := len(b.Graffiti); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.Graffiti", size, 32)
+		return
+	}
+	dst = append(dst, b.Graffiti...)
+
+	// Offset (3) 'ProposerSlashings'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.ProposerSlashings) * 416
+
+	// Offset (4) 'AttesterSlashings'
+	dst = ssz.WriteOffset(dst, offset)
+	for ii := 0; ii < len(b.AttesterSlashings); ii++ {
+		offset += 4
+		offset += b.AttesterSlashings[ii].SizeSSZ()
+	}
+
+	// Offset (5) 'Attestations'
+	dst = ssz.WriteOffset(dst, offset)
+	for ii := 0; ii < len(b.Attestations); ii++ {
+		offset += 4
+		offset += b.Attestations[ii].SizeSSZ()
+	}
+
+	// Offset (6) 'Deposits'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.Deposits) * 1240
+
+	// Offset (7) 'VoluntaryExits'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.VoluntaryExits) * 112
+
+	// Field (8) 'SyncAggregate'
+	if b.SyncAggregate == nil {
+		b.SyncAggregate = new(SyncAggregate)
+	}
+	if dst, err = b.SyncAggregate.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Offset (9) 'ExecutionPayload'
+	dst = ssz.WriteOffset(dst, offset)
+	if b.ExecutionPayload == nil {
+		b.ExecutionPayload = new(v1.ExecutionPayloadFulu)
+	}
+	offset += b.ExecutionPayload.SizeSSZ()
+
+	// Offset (10) 'BlsToExecutionChanges'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.BlsToExecutionChanges) * 172
+
+	// Offset (11) 'BlobKzgCommitments'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.BlobKzgCommitments) * 48
+
+	// Offset (12) 'ExecutionRequests'
+	dst = ssz.WriteOffset(dst, offset)
+	if b.ExecutionRequests == nil {
+		b.ExecutionRequests = new(v1.ExecutionRequests)
+	}
+	offset += b.ExecutionRequests.SizeSSZ()
+
+	// Field (3) 'ProposerSlashings'
+	if size := len(b.ProposerSlashings); size > 16 {
+		err = ssz.ErrListTooBigFn("--.ProposerSlashings", size, 16)
+		return
+	}
+	for ii := 0; ii < len(b.ProposerSlashings); ii++ {
+		if dst, err = b.ProposerSlashings[ii].MarshalSSZTo(dst); err != nil {
+			return
+		}
+	}
+
+	// Field (4) 'AttesterSlashings'
+	if size := len(b.AttesterSlashings); size > 1 {
+		err = ssz.ErrListTooBigFn("--.AttesterSlashings", size, 1)
+		return
+	}
+	{
+		offset = 4 * len(b.AttesterSlashings)
+		for ii := 0; ii < len(b.AttesterSlashings); ii++ {
+			dst = ssz.WriteOffset(dst, offset)
+			offset += b.AttesterSlashings[ii].SizeSSZ()
+		}
+	}
+	for ii := 0; ii < len(b.AttesterSlashings); ii++ {
+		if dst, err = b.AttesterSlashings[ii].MarshalSSZTo(dst); err != nil {
+			return
+		}
+	}
+
+	// Field (5) 'Attestations'
+	if size := len(b.Attestations); size > 8 {
+		err = ssz.ErrListTooBigFn("--.Attestations", size, 8)
+		return
+	}
+	{
+		offset = 4 * len(b.Attestations)
+		for ii := 0; ii < len(b.Attestations); ii++ {
+			dst = ssz.WriteOffset(dst, offset)
+			offset += b.Attestations[ii].SizeSSZ()
+		}
+	}
+	for ii := 0; ii < len(b.Attestations); ii++ {
+		if dst, err = b.Attestations[ii].MarshalSSZTo(dst); err != nil {
+			return
+		}
+	}
+
+	// Field (6) 'Deposits'
+	if size := len(b.Deposits); size > 16 {
+		err = ssz.ErrListTooBigFn("--.Deposits", size, 16)
+		return
+	}
+	for ii := 0; ii < len(b.Deposits); ii++ {
+		if dst, err = b.Deposits[ii].MarshalSSZTo(dst); err != nil {
+			return
+		}
+	}
+
+	// Field (7) 'VoluntaryExits'
+	if size := len(b.VoluntaryExits); size > 16 {
+		err = ssz.ErrListTooBigFn("--.VoluntaryExits", size, 16)
+		return
+	}
+	for ii := 0; ii < len(b.VoluntaryExits); ii++ {
+		if dst, err = b.VoluntaryExits[ii].MarshalSSZTo(dst); err != nil {
+			return
+		}
+	}
+
+	// Field (9) 'ExecutionPayload'
+	if dst, err = b.ExecutionPayload.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (10) 'BlsToExecutionChanges'
+	if size := len(b.BlsToExecutionChanges); size > 16 {
+		err = ssz.ErrListTooBigFn("--.BlsToExecutionChanges", size, 16)
+		return
+	}
+	for ii := 0; ii < len(b.BlsToExecutionChanges); ii++ {
+		if dst, err = b.BlsToExecutionChanges[ii].MarshalSSZTo(dst); err != nil {
+			return
+		}
+	}
+
+	// Field (11) 'BlobKzgCommitments'
+	if size := len(b.BlobKzgCommitments); size > 4096 {
+		err = ssz.ErrListTooBigFn("--.BlobKzgCommitments", size, 4096)
+		return
+	}
+	for ii := 0; ii < len(b.BlobKzgCommitments); ii++ {
+		if size := len(b.BlobKzgCommitments[ii]); size != 48 {
+			err = ssz.ErrBytesLengthFn("--.BlobKzgCommitments[ii]", size, 48)
+			return
+		}
+		dst = append(dst, b.BlobKzgCommitments[ii]...)
+	}
+
+	// Field (12) 'ExecutionRequests'
+	if dst, err = b.ExecutionRequests.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the BeaconBlockBodyFulu object
+func (b *BeaconBlockBodyFulu) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 396 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o3, o4, o5, o6, o7, o9, o10, o11, o12 uint64
+
+	// Field (0) 'RandaoReveal'
+	if cap(b.RandaoReveal) == 0 {
+		b.RandaoReveal = make([]byte, 0, len(buf[0:96]))
+	}
+	b.RandaoReveal = append(b.RandaoReveal, buf[0:96]...)
+
+	// Field (1) 'Eth1Data'
+	if b.Eth1Data == nil {
+		b.Eth1Data = new(Eth1Data)
+	}
+	if err = b.Eth1Data.UnmarshalSSZ(buf[96:168]); err != nil {
+		return err
+	}
+
+	// Field (2) 'Graffiti'
+	if cap(b.Graffiti) == 0 {
+		b.Graffiti = make([]byte, 0, len(buf[168:200]))
+	}
+	b.Graffiti = append(b.Graffiti, buf[168:200]...)
+
+	// Offset (3) 'ProposerSlashings'
+	if o3 = ssz.ReadOffset(buf[200:204]); o3 > size {
+		return ssz.ErrOffset
+	}
+
+	if o3 != 396 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Offset (4) 'AttesterSlashings'
+	if o4 = ssz.ReadOffset(buf[204:208]); o4 > size || o3 > o4 {
+		return ssz.ErrOffset
+	}
+
+	// Offset (5) 'Attestations'
+	if o5 = ssz.ReadOffset(buf[208:212]); o5 > size || o4 > o5 {
+		return ssz.ErrOffset
+	}
+
+	// Offset (6) 'Deposits'
+	if o6 = ssz.ReadOffset(buf[212:216]); o6 > size || o5 > o6 {
+		return ssz.ErrOffset
+	}
+
+	// Offset (7) 'VoluntaryExits'
+	if o7 = ssz.ReadOffset(buf[216:220]); o7 > size || o6 > o7 {
+		return ssz.ErrOffset
+	}
+
+	// Field (8) 'SyncAggregate'
+	if b.SyncAggregate == nil {
+		b.SyncAggregate = new(SyncAggregate)
+	}
+	if err = b.SyncAggregate.UnmarshalSSZ(buf[220:380]); err != nil {
+		return err
+	}
+
+	// Offset (9) 'ExecutionPayload'
+	if o9 = ssz.ReadOffset(buf[380:384]); o9 > size || o7 > o9 {
+		return ssz.ErrOffset
+	}
+
+	// Offset (10) 'BlsToExecutionChanges'
+	if o10 = ssz.ReadOffset(buf[384:388]); o10 > size || o9 > o10 {
+		return ssz.ErrOffset
+	}
+
+	// Offset (11) 'BlobKzgCommitments'
+	if o11 = ssz.ReadOffset(buf[388:392]); o11 > size || o10 > o11 {
+		return ssz.ErrOffset
+	}
+
+	// Offset (12) 'ExecutionRequests'
+	if o12 = ssz.ReadOffset(buf[392:396]); o12 > size || o11 > o12 {
+		return ssz.ErrOffset
+	}
+
+	// Field (3) 'ProposerSlashings'
+	{
+		buf = tail[o3:o4]
+		num, err := ssz.DivideInt2(len(buf), 416, 16)
+		if err != nil {
+			return err
+		}
+		b.ProposerSlashings = make([]*ProposerSlashing, num)
+		for ii := 0; ii < num; ii++ {
+			if b.ProposerSlashings[ii] == nil {
+				b.ProposerSlashings[ii] = new(ProposerSlashing)
+			}
+			if err = b.ProposerSlashings[ii].UnmarshalSSZ(buf[ii*416 : (ii+1)*416]); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Field (4) 'AttesterSlashings'
+	{
+		buf = tail[o4:o5]
+		num, err := ssz.DecodeDynamicLength(buf, 1)
+		if err != nil {
+			return err
+		}
+		b.AttesterSlashings = make([]*AttesterSlashingElectra, num)
+		err = ssz.UnmarshalDynamic(buf, num, func(indx int, buf []byte) (err error) {
+			if b.AttesterSlashings[indx] == nil {
+				b.AttesterSlashings[indx] = new(AttesterSlashingElectra)
+			}
+			if err = b.AttesterSlashings[indx].UnmarshalSSZ(buf); err != nil {
+				return err
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	}
+
+	// Field (5) 'Attestations'
+	{
+		buf = tail[o5:o6]
+		num, err := ssz.DecodeDynamicLength(buf, 8)
+		if err != nil {
+			return err
+		}
+		b.Attestations = make([]*AttestationElectra, num)
+		err = ssz.UnmarshalDynamic(buf, num, func(indx int, buf []byte) (err error) {
+			if b.Attestations[indx] == nil {
+				b.Attestations[indx] = new(AttestationElectra)
+			}
+			if err = b.Attestations[indx].UnmarshalSSZ(buf); err != nil {
+				return err
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	}
+
+	// Field (6) 'Deposits'
+	{
+		buf = tail[o6:o7]
+		num, err := ssz.DivideInt2(len(buf), 1240, 16)
+		if err != nil {
+			return err
+		}
+		b.Deposits = make([]*Deposit, num)
+		for ii := 0; ii < num; ii++ {
+			if b.Deposits[ii] == nil {
+				b.Deposits[ii] = new(Deposit)
+			}
+			if err = b.Deposits[ii].UnmarshalSSZ(buf[ii*1240 : (ii+1)*1240]); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Field (7) 'VoluntaryExits'
+	{
+		buf = tail[o7:o9]
+		num, err := ssz.DivideInt2(len(buf), 112, 16)
+		if err != nil {
+			return err
+		}
+		b.VoluntaryExits = make([]*SignedVoluntaryExit, num)
+		for ii := 0; ii < num; ii++ {
+			if b.VoluntaryExits[ii] == nil {
+				b.VoluntaryExits[ii] = new(SignedVoluntaryExit)
+			}
+			if err = b.VoluntaryExits[ii].UnmarshalSSZ(buf[ii*112 : (ii+1)*112]); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Field (9) 'ExecutionPayload'
+	{
+		buf = tail[o9:o10]
+		if b.ExecutionPayload == nil {
+			b.ExecutionPayload = new(v1.ExecutionPayloadFulu)
+		}
+		if err = b.ExecutionPayload.UnmarshalSSZ(buf); err != nil {
+			return err
+		}
+	}
+
+	// Field (10) 'BlsToExecutionChanges'
+	{
+		buf = tail[o10:o11]
+		num, err := ssz.DivideInt2(len(buf), 172, 16)
+		if err != nil {
+			return err
+		}
+		b.BlsToExecutionChanges = make([]*SignedBLSToExecutionChange, num)
+		for ii := 0; ii < num; ii++ {
+			if b.BlsToExecutionChanges[ii] == nil {
+				b.BlsToExecutionChanges[ii] = new(SignedBLSToExecutionChange)
+			}
+			if err = b.BlsToExecutionChanges[ii].UnmarshalSSZ(buf[ii*172 : (ii+1)*172]); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Field (11) 'BlobKzgCommitments'
+	{
+		buf = tail[o11:o12]
+		num, err := ssz.DivideInt2(len(buf), 48, 4096)
+		if err != nil {
+			return err
+		}
+		b.BlobKzgCommitments = make([][]byte, num)
+		for ii := 0; ii < num; ii++ {
+			if cap(b.BlobKzgCommitments[ii]) == 0 {
+				b.BlobKzgCommitments[ii] = make([]byte, 0, len(buf[ii*48:(ii+1)*48]))
+			}
+			b.BlobKzgCommitments[ii] = append(b.BlobKzgCommitments[ii], buf[ii*48:(ii+1)*48]...)
+		}
+	}
+
+	// Field (12) 'ExecutionRequests'
+	{
+		buf = tail[o12:]
+		if b.ExecutionRequests == nil {
+			b.ExecutionRequests = new(v1.ExecutionRequests)
+		}
+		if err = b.ExecutionRequests.UnmarshalSSZ(buf); err != nil {
+			return err
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the BeaconBlockBodyFulu object
+func (b *BeaconBlockBodyFulu) SizeSSZ() (size int) {
+	size = 396
+
+	// Field (3) 'ProposerSlashings'
+	size += len(b.ProposerSlashings) * 416
+
+	// Field (4) 'AttesterSlashings'
+	for ii := 0; ii < len(b.AttesterSlashings); ii++ {
+		size += 4
+		size += b.AttesterSlashings[ii].SizeSSZ()
+	}
+
+	// Field (5) 'Attestations'
+	for ii := 0; ii < len(b.Attestations); ii++ {
+		size += 4
+		size += b.Attestations[ii].SizeSSZ()
+	}
+
+	// Field (6) 'Deposits'
+	size += len(b.Deposits) * 1240
+
+	// Field (7) 'VoluntaryExits'
+	size += len(b.VoluntaryExits) * 112
+
+	// Field (9) 'ExecutionPayload'
+	if b.ExecutionPayload == nil {
+		b.ExecutionPayload = new(v1.ExecutionPayloadFulu)
+	}
+	size += b.ExecutionPayload.SizeSSZ()
+
+	// Field (10) 'BlsToExecutionChanges'
+	size += len(b.BlsToExecutionChanges) * 172
+
+	// Field (11) 'BlobKzgCommitments'
+	size += len(b.BlobKzgCommitments) * 48
+
+	// Field (12) 'ExecutionRequests'
+	if b.ExecutionRequests == nil {
+		b.ExecutionRequests = new(v1.ExecutionRequests)
+	}
+	size += b.ExecutionRequests.SizeSSZ()
+
+	return
+}
+
+// HashTreeRoot ssz hashes the BeaconBlockBodyFulu object
+func (b *BeaconBlockBodyFulu) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(b)
+}
+
+// HashTreeRootWith ssz hashes the BeaconBlockBodyFulu object with a hasher
+func (b *BeaconBlockBodyFulu) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'RandaoReveal'
+	if size := len(b.RandaoReveal); size != 96 {
+		err = ssz.ErrBytesLengthFn("--.RandaoReveal", size, 96)
+		return
+	}
+	hh.PutBytes(b.RandaoReveal)
+
+	// Field (1) 'Eth1Data'
+	if err = b.Eth1Data.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (2) 'Graffiti'
+	if size := len(b.Graffiti); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.Graffiti", size, 32)
+		return
+	}
+	hh.PutBytes(b.Graffiti)
+
+	// Field (3) 'ProposerSlashings'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(b.ProposerSlashings))
+		if num > 16 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range b.ProposerSlashings {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 16)
+	}
+
+	// Field (4) 'AttesterSlashings'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(b.AttesterSlashings))
+		if num > 1 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range b.AttesterSlashings {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 1)
+	}
+
+	// Field (5) 'Attestations'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(b.Attestations))
+		if num > 8 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range b.Attestations {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 8)
+	}
+
+	// Field (6) 'Deposits'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(b.Deposits))
+		if num > 16 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range b.Deposits {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 16)
+	}
+
+	// Field (7) 'VoluntaryExits'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(b.VoluntaryExits))
+		if num > 16 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range b.VoluntaryExits {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 16)
+	}
+
+	// Field (8) 'SyncAggregate'
+	if err = b.SyncAggregate.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (9) 'ExecutionPayload'
+	if err = b.ExecutionPayload.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (10) 'BlsToExecutionChanges'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(b.BlsToExecutionChanges))
+		if num > 16 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range b.BlsToExecutionChanges {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 16)
+	}
+
+	// Field (11) 'BlobKzgCommitments'
+	{
+		if size := len(b.BlobKzgCommitments); size > 4096 {
+			err = ssz.ErrListTooBigFn("--.BlobKzgCommitments", size, 4096)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range b.BlobKzgCommitments {
+			if len(i) != 48 {
+				err = ssz.ErrBytesLength
+				return
+			}
+			hh.PutBytes(i)
+		}
+
+		numItems := uint64(len(b.BlobKzgCommitments))
+		hh.MerkleizeWithMixin(subIndx, numItems, 4096)
+	}
+
+	// Field (12) 'ExecutionRequests'
+	if err = b.ExecutionRequests.HashTreeRootWith(hh); err != nil {
+		return
 	}
 
 	hh.Merkleize(indx)

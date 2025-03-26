@@ -231,7 +231,6 @@ message BlobsBundle {
     (ethereum.eth.ext.ssz_max) = "max_blob_commitments.size"
   ];
 
-  // The proofs of the blobs.
   repeated bytes proofs = 2 [
     (ethereum.eth.ext.ssz_size) = "?,48",
     (ethereum.eth.ext.ssz_max) = "max_blob_commitments.size"
@@ -252,5 +251,6 @@ message Blob {
 
 message BlobAndProof {
   bytes blob = 1 [ (ethereum.eth.ext.ssz_size) = "blob.size" ];
+
   bytes kzg_proof = 2 [ (ethereum.eth.ext.ssz_size) = "48" ];
 }

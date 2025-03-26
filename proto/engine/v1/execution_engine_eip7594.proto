@@ -24,6 +24,8 @@ option java_outer_classname = "ExecutionEngineProto";
 option java_package = "org.ethereum.engine.v1";
 option php_namespace = "Ethereum\\Engine\\v1";
 
+// BlobsBundleV2 is retrieved through engine-api from the execution layer client engine_getBlobsV2.
+// It is introduced in Fulu network upgrade.
 message BlobsBundleV2 {
   // The KZG commitments of the blobs.
   repeated bytes kzg_commitments = 1 [
@@ -31,11 +33,10 @@ message BlobsBundleV2 {
     (ethereum.eth.ext.ssz_max) = "max_blob_commitments.size"
   ];
 
-  // The cell_proofs for all blobs
-  // TODO: update ssz_max when it's defined in the spec
-  repeated bytes cell_proofs = 2 [
+  // The cell proofs of the blobs
+  repeated bytes proofs = 2 [
     (ethereum.eth.ext.ssz_size) = "?,48",
-    (ethereum.eth.ext.ssz_max) = "max_blob_commitments.size"
+    (ethereum.eth.ext.ssz_max) = "max_cell_proofs_length.size"
   ];
 
   // The blobs itself.
@@ -46,11 +47,12 @@ message BlobsBundleV2 {
 }
 
 // BlobAndProofV2 consists of the blob and the cell proofs for each cell in the blob.
-// TODO: update ssz_max when it's defined in the spec
+// It is introduced in Fulu network upgrade.
 message BlobAndProofV2 {
   bytes blob = 1 [ (ethereum.eth.ext.ssz_size) = "blob.size" ];
-  repeated bytes cell_proofs = 2 [ 
-    (ethereum.eth.ext.ssz_size) = "48",
-    (ethereum.eth.ext.ssz_max) = "max_blob_commitments.size"
+
+  repeated bytes kzg_proofs = 2 [
+    (ethereum.eth.ext.ssz_size) = "?,48",
+    (ethereum.eth.ext.ssz_max) = "max_cell_proofs_length.size"
   ];
 }

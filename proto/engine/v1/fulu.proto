@@ -1,0 +1,63 @@
+// Copyright 2025 Prysmatic Labs.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+syntax = "proto3";
+
+package ethereum.engine.v1;
+
+import "proto/eth/ext/options.proto";
+import "proto/engine/v1/execution_engine.proto";
+import "proto/engine/v1/execution_engine_eip7594.proto";
+
+option csharp_namespace = "Ethereum.Engine.V1";
+option go_package = "github.com/prysmaticlabs/prysm/v5/proto/engine/v1;enginev1";
+option java_multiple_files = true;
+option java_outer_classname = "FuluProto";
+option java_package = "org.ethereum.engine.v1";
+option php_namespace = "Ethereum\\Engine\\v1";
+
+// ExecutionPayloadFulu is based on ExecutionPayloadDeneb with one additional field: proof_version.
+message ExecutionPayloadFulu {
+  bytes parent_hash = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes fee_recipient = 2 [ (ethereum.eth.ext.ssz_size) = "20" ];
+  bytes state_root = 3 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes receipts_root = 4 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes logs_bloom = 5 [ (ethereum.eth.ext.ssz_size) = "logs_bloom.size" ];
+  bytes prev_randao = 6 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  uint64 block_number = 7;
+  uint64 gas_limit = 8;
+  uint64 gas_used = 9;
+  uint64 timestamp = 10;
+  bytes extra_data = 11 [ (ethereum.eth.ext.ssz_max) = "extra_data.size" ];
+  bytes base_fee_per_gas = 12 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes block_hash = 13 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  repeated bytes transactions = 14 [
+    (ethereum.eth.ext.ssz_size) = "?,?",
+    (ethereum.eth.ext.ssz_max) = "1048576,1073741824"
+  ];
+  // MAX_WITHDRAWALS_PER_PAYLOAD
+  repeated Withdrawal withdrawals = 15
+      [ (ethereum.eth.ext.ssz_max) = "withdrawal.size" ];
+  uint64 blob_gas_used = 16;
+  uint64 excess_blob_gas = 17;
+  bytes proof_version = 18 [ (ethereum.eth.ext.ssz_size) = "1" ]; // introduced in Fulu
+}
+
+// ExecutionBundleFulu is a container that builds on Payload V5
+message ExecutionBundleFulu {
+  ExecutionPayloadFulu payload = 1;
+  bytes value = 2;
+  BlobsBundleV2 blobs_bundle = 3;
+  bool should_override_builder = 4;
+  repeated bytes execution_requests = 5;
+}
