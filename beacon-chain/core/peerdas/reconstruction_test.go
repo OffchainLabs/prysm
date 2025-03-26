@@ -95,7 +95,8 @@ func TestReconstructionRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 
 	// Convert data columns sidecars from signed block and blobs.
-	dataColumnSidecars, err := peerdas.DataColumnSidecars(signedBeaconBlock, blobs)
+	cellsAndProofs := util.GenerateCellsAndProofs(t, blobs)
+	dataColumnSidecars, err := peerdas.DataColumnSidecars(signedBeaconBlock, cellsAndProofs)
 	require.NoError(t, err)
 
 	// Create verified RO data columns.

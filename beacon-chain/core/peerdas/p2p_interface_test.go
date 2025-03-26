@@ -31,7 +31,8 @@ func TestVerifyDataColumnSidecarKZGProofs(t *testing.T) {
 	dbBlock.Block.Body.BlobKzgCommitments = comms
 	sBlock, err := blocks.NewSignedBeaconBlock(dbBlock)
 	require.NoError(t, err)
-	sCars, err := peerdas.DataColumnSidecars(sBlock, blobs)
+	cellsAndProofs := util.GenerateCellsAndProofs(t, blobs)
+	sCars, err := peerdas.DataColumnSidecars(sBlock, cellsAndProofs)
 	require.NoError(t, err)
 
 	for i, sidecar := range sCars {
