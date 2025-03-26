@@ -53,6 +53,7 @@ var (
 		GetPayloadMethodV4,
 	}
 	fuluEngineEndpoints = []string{
+		GetPayloadMethodV5,
 		GetBlobsV2,
 	}
 )
@@ -79,6 +80,8 @@ const (
 	GetPayloadMethodV3 = "engine_getPayloadV3"
 	// GetPayloadMethodV4 is the get payload method added for electra
 	GetPayloadMethodV4 = "engine_getPayloadV4"
+	// GetPayloadMethodV5 is the get payload method added for fulu
+	GetPayloadMethodV5 = "engine_getPayloadV5"
 	// BlockByHashMethod request string for JSON-RPC.
 	BlockByHashMethod = "eth_getBlockByHash"
 	// BlockByNumberMethod request string for JSON-RPC.
@@ -271,6 +274,9 @@ func (s *Service) ForkchoiceUpdated(
 
 func getPayloadMethodAndMessage(slot primitives.Slot) (string, proto.Message) {
 	pe := slots.ToEpoch(slot)
+	if pe >= params.BeaconConfig().FuluForkEpoch {
+		return GetPayloadMethodV5, &pb.ExecutionBundleFulu{}
+	}
 	if pe >= params.BeaconConfig().ElectraForkEpoch {
 		return GetPayloadMethodV4, &pb.ExecutionBundleElectra{}
 	}

@@ -318,11 +318,11 @@ func TestClient_HTTP(t *testing.T) {
 		require.DeepEqual(t, uint64(2), g)
 
 		commitments := [][]byte{bytesutil.PadTo([]byte("commitment1"), fieldparams.BLSPubkeyLength), bytesutil.PadTo([]byte("commitment2"), fieldparams.BLSPubkeyLength)}
-		require.DeepEqual(t, commitments, resp.BlobsBundle.KzgCommitments)
+		require.DeepEqual(t, commitments, resp.BlobsBundle.GetKzgCommitments())
 		proofs := [][]byte{bytesutil.PadTo([]byte("proof1"), fieldparams.BLSPubkeyLength), bytesutil.PadTo([]byte("proof2"), fieldparams.BLSPubkeyLength)}
-		require.DeepEqual(t, proofs, resp.BlobsBundle.Proofs)
+		require.DeepEqual(t, proofs, resp.BlobsBundle.GetProofs())
 		blobs := [][]byte{bytesutil.PadTo([]byte("a"), fieldparams.BlobLength), bytesutil.PadTo([]byte("b"), fieldparams.BlobLength)}
-		require.DeepEqual(t, blobs, resp.BlobsBundle.Blobs)
+		require.DeepEqual(t, blobs, resp.BlobsBundle.GetBlobs())
 	})
 	t.Run(GetPayloadMethodV4, func(t *testing.T) {
 		payloadId := [8]byte{1}
@@ -373,11 +373,11 @@ func TestClient_HTTP(t *testing.T) {
 		require.DeepEqual(t, uint64(2), g)
 
 		commitments := [][]byte{bytesutil.PadTo([]byte("commitment1"), fieldparams.BLSPubkeyLength), bytesutil.PadTo([]byte("commitment2"), fieldparams.BLSPubkeyLength)}
-		require.DeepEqual(t, commitments, resp.BlobsBundle.KzgCommitments)
+		require.DeepEqual(t, commitments, resp.BlobsBundle.GetKzgCommitments())
 		proofs := [][]byte{bytesutil.PadTo([]byte("proof1"), fieldparams.BLSPubkeyLength), bytesutil.PadTo([]byte("proof2"), fieldparams.BLSPubkeyLength)}
-		require.DeepEqual(t, proofs, resp.BlobsBundle.Proofs)
+		require.DeepEqual(t, proofs, resp.BlobsBundle.GetProofs())
 		blobs := [][]byte{bytesutil.PadTo([]byte("a"), fieldparams.BlobLength), bytesutil.PadTo([]byte("b"), fieldparams.BlobLength)}
-		require.DeepEqual(t, blobs, resp.BlobsBundle.Blobs)
+		require.DeepEqual(t, blobs, resp.BlobsBundle.GetBlobs())
 		requests := &pb.ExecutionRequests{
 			Deposits: []*pb.DepositRequest{
 				{
@@ -2502,6 +2502,7 @@ func TestReconstructDataColumnSidecars(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
+
 	t.Run("GetBlobsV2 is not supported", func(t *testing.T) {
 		_, err := client.ReconstructDataColumnSidecars(ctx, sb, r)
 		require.ErrorContains(t, "get blobs V2 for block", err)
@@ -2589,7 +2590,8 @@ func createBlobServerV2(t *testing.T, numBlobs int, blobMasks []bool) *httptest.
 				KzgProofs: []hexutil.Bytes{},
 			}
 			for j := 0; j < int(params.BeaconConfig().NumberOfColumns); j++ {
-				blobAndCellProofs[i].KzgProofs = append(blobAndCellProofs[i].KzgProofs, []byte(fmt.Sprintf("0xproof%d", j)))
+				cellProof := make([]byte, 48)
+				blobAndCellProofs[i].KzgProofs = append(blobAndCellProofs[i].KzgProofs, cellProof)
 			}
 		}
 
