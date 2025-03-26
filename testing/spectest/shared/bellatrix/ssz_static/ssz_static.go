@@ -76,8 +76,7 @@ func unmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (i
 	case "IndexedAttestation":
 		obj = &ethpb.IndexedAttestation{}
 	case "LightClientHeader":
-		t.Skip("not a beacon node type, this is a light node type")
-		return nil, nil
+		obj = &ethpb.LightClientHeaderAltair{}
 	case "PendingAttestation":
 		obj = &ethpb.PendingAttestation{}
 	case "ProposerSlashing":
@@ -111,20 +110,16 @@ func unmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (i
 	case "SyncCommittee":
 		obj = &ethpb.SyncCommittee{}
 	case "LightClientOptimisticUpdate":
-		t.Skip("not a beacon node type, this is a light node type")
-		return nil, nil
+		obj = &ethpb.LightClientOptimisticUpdateAltair{}
 	case "LightClientFinalityUpdate":
-		t.Skip("not a beacon node type, this is a light node type")
-		return nil, nil
+		obj = &ethpb.LightClientFinalityUpdateAltair{}
 	case "LightClientBootstrap":
-		t.Skip("not a beacon node type, this is a light node type")
-		return nil, nil
+		obj = &ethpb.LightClientBootstrapAltair{}
 	case "LightClientSnapshot":
-		t.Skip("not a beacon node type, this is a light node type")
+		t.Skip("Removed type")
 		return nil, nil
 	case "LightClientUpdate":
-		t.Skip("not a beacon node type, this is a light node type")
-		return nil, nil
+		obj = &ethpb.LightClientUpdateAltair{}
 	case "PowBlock":
 		obj = &ethpb.PowBlock{}
 	default:
