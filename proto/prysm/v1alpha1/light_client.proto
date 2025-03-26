@@ -204,7 +204,7 @@ message LightClientUpdateElectra {
 message LightClientFinalityUpdateElectra {
   LightClientHeaderDeneb attested_header = 1;
   LightClientHeaderDeneb finalized_header = 2;
-  repeated bytes finality_branch = 3 [ (ethereum.eth.ext.ssz_max) = "7,32" ];
+  repeated bytes finality_branch = 3 [ (ethereum.eth.ext.ssz_size) = "7,32" ];
   SyncAggregate sync_aggregate = 4;
   uint64 signature_slot = 5 [
     (ethereum.eth.ext.cast_type) =

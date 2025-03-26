@@ -355,7 +355,7 @@ func handleProducePhase0V3(
 			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		httputil.WriteSsz(w, sszResp, "phase0Block.ssz")
+		httputil.WriteSsz(w, sszResp)
 		return
 	}
 	jsonBytes, err := json.Marshal(structs.BeaconBlockFromConsensus(blk.Phase0))
@@ -385,7 +385,7 @@ func handleProduceAltairV3(
 			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		httputil.WriteSsz(w, sszResp, "altairBlock.ssz")
+		httputil.WriteSsz(w, sszResp)
 		return
 	}
 	jsonBytes, err := json.Marshal(structs.BeaconBlockAltairFromConsensus(blk.Altair))
@@ -415,7 +415,7 @@ func handleProduceBellatrixV3(
 			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		httputil.WriteSsz(w, sszResp, "bellatrixBlock.ssz")
+		httputil.WriteSsz(w, sszResp)
 		return
 	}
 	block, err := structs.BeaconBlockBellatrixFromConsensus(blk.Bellatrix)
@@ -450,7 +450,7 @@ func handleProduceBlindedBellatrixV3(
 			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		httputil.WriteSsz(w, sszResp, "blindedBellatrixBlock.ssz")
+		httputil.WriteSsz(w, sszResp)
 		return
 	}
 	block, err := structs.BlindedBeaconBlockBellatrixFromConsensus(blk.BlindedBellatrix)
@@ -485,7 +485,7 @@ func handleProduceBlindedCapellaV3(
 			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		httputil.WriteSsz(w, sszResp, "blindedCapellaBlock.ssz")
+		httputil.WriteSsz(w, sszResp)
 		return
 	}
 	block, err := structs.BlindedBeaconBlockCapellaFromConsensus(blk.BlindedCapella)
@@ -520,7 +520,7 @@ func handleProduceCapellaV3(
 			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		httputil.WriteSsz(w, sszResp, "capellaBlock.ssz")
+		httputil.WriteSsz(w, sszResp)
 		return
 	}
 	block, err := structs.BeaconBlockCapellaFromConsensus(blk.Capella)
@@ -555,7 +555,7 @@ func handleProduceBlindedDenebV3(
 			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		httputil.WriteSsz(w, sszResp, "blindedDenebBlockContents.ssz")
+		httputil.WriteSsz(w, sszResp)
 		return
 	}
 	blindedBlock, err := structs.BlindedBeaconBlockDenebFromConsensus(blk.BlindedDeneb)
@@ -590,7 +590,7 @@ func handleProduceDenebV3(
 			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		httputil.WriteSsz(w, sszResp, "denebBlockContents.ssz")
+		httputil.WriteSsz(w, sszResp)
 		return
 	}
 
@@ -626,7 +626,7 @@ func handleProduceBlindedElectraV3(
 			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		httputil.WriteSsz(w, sszResp, "blindedElectraBlockContents.ssz")
+		httputil.WriteSsz(w, sszResp)
 		return
 	}
 	blindedBlock, err := structs.BlindedBeaconBlockElectraFromConsensus(blk.BlindedElectra)
@@ -661,7 +661,7 @@ func handleProduceElectraV3(
 			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		httputil.WriteSsz(w, sszResp, "electraBlockContents.ssz")
+		httputil.WriteSsz(w, sszResp)
 		return
 	}
 
@@ -697,7 +697,7 @@ func handleProduceBlindedFuluV3(
 			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		httputil.WriteSsz(w, sszResp, "blindedFuluBlockContents.ssz")
+		httputil.WriteSsz(w, sszResp)
 		return
 	}
 	blindedBlock, err := structs.BlindedBeaconBlockFuluFromConsensus(blk.BlindedFulu)
@@ -732,7 +732,7 @@ func handleProduceFuluV3(
 			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		httputil.WriteSsz(w, sszResp, "fuluBlockContents.ssz")
+		httputil.WriteSsz(w, sszResp)
 		return
 	}
 

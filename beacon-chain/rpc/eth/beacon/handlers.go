@@ -219,7 +219,7 @@ func (s *Server) getBlockV2Ssz(w http.ResponseWriter, blk interfaces.ReadOnlySig
 		return
 	}
 	w.Header().Set(api.VersionHeader, version.String(blk.Version()))
-	httputil.WriteSsz(w, result, "beacon_block.ssz")
+	httputil.WriteSsz(w, result)
 }
 
 func (*Server) getBlockResponseBodySsz(blk interfaces.ReadOnlySignedBeaconBlock) ([]byte, error) {
@@ -1568,7 +1568,7 @@ func (s *Server) GetDepositSnapshot(w http.ResponseWriter, r *http.Request) {
 			httputil.HandleError(w, "Could not marshal deposit snapshot into SSZ: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
-		httputil.WriteSsz(w, sszData, "deposit_snapshot.ssz")
+		httputil.WriteSsz(w, sszData)
 		return
 	}
 	httputil.WriteJson(
@@ -1646,7 +1646,7 @@ func (s *Server) GetPendingDeposits(w http.ResponseWriter, r *http.Request) {
 			httputil.HandleError(w, "Failed to serialize pending deposits: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
-		httputil.WriteSsz(w, sszData, "pending_deposits.ssz")
+		httputil.WriteSsz(w, sszData)
 	} else {
 		isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
 		if err != nil {
@@ -1702,7 +1702,7 @@ func (s *Server) GetPendingPartialWithdrawals(w http.ResponseWriter, r *http.Req
 			httputil.HandleError(w, "Failed to serialize pending partial withdrawals: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
-		httputil.WriteSsz(w, sszData, "pending_partial_withdrawals.ssz")
+		httputil.WriteSsz(w, sszData)
 	} else {
 		isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
 		if err != nil {

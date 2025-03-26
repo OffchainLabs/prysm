@@ -70,7 +70,7 @@ func (s *Server) Blobs(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		w.Header().Set(api.VersionHeader, version.String(blk.Version()))
-		httputil.WriteSsz(w, sszResp, "blob_sidecars.ssz")
+		httputil.WriteSsz(w, sszResp)
 		return
 	}
 

@@ -368,7 +368,7 @@ func (s *Server) GetValidatorIdentities(w http.ResponseWriter, r *http.Request) 
 func (s *Server) getValidatorIdentitiesSSZ(w http.ResponseWriter, st state.BeaconState, rawIds []string, ids []primitives.ValidatorIndex) {
 	// return no data if all IDs are ignored
 	if len(rawIds) > 0 && len(ids) == 0 {
-		httputil.WriteSsz(w, []byte{}, "validator_identities.ssz")
+		httputil.WriteSsz(w, []byte{})
 		return
 	}
 
@@ -406,7 +406,7 @@ func (s *Server) getValidatorIdentitiesSSZ(w http.ResponseWriter, st state.Beaco
 		}
 		copy(resp[i*sszLen:(i+1)*sszLen], ssz)
 	}
-	httputil.WriteSsz(w, resp, "validator_identities.ssz")
+	httputil.WriteSsz(w, resp)
 }
 
 func (s *Server) getValidatorIdentitiesJSON(

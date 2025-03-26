@@ -40,10 +40,9 @@ func WriteJson(w http.ResponseWriter, v any) {
 }
 
 // WriteSsz writes the response message in ssz format
-func WriteSsz(w http.ResponseWriter, respSsz []byte, fileName string) {
+func WriteSsz(w http.ResponseWriter, respSsz []byte) {
 	w.Header().Set("Content-Length", strconv.Itoa(len(respSsz)))
 	w.Header().Set("Content-Type", api.OctetStreamMediaType)
-	w.Header().Set("Content-Disposition", "attachment; filename="+fileName)
 	if _, err := io.Copy(w, io.NopCloser(bytes.NewReader(respSsz))); err != nil {
 		log.WithError(err).Error("could not write response message")
 	}
