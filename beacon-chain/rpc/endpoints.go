@@ -884,6 +884,16 @@ func (s *Service) beaconEndpoints(
 			methods: []string{http.MethodGet, http.MethodPost},
 		},
 		{
+			template: "/eth/v1/beacon/states/{state_id}/validator_identities",
+			name:     namespace + ".GetValidatorIdentities",
+			middleware: []middleware.Middleware{
+				middleware.ContentTypeHandler([]string{api.JsonMediaType}),
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+			},
+			handler: server.GetValidatorIdentities,
+			methods: []string{http.MethodPost},
+		},
+		{
 			// Deprecated: no longer needed post Electra
 			template: "/eth/v1/beacon/deposit_snapshot",
 			name:     namespace + ".GetDepositSnapshot",

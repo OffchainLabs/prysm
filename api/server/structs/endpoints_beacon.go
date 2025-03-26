@@ -100,6 +100,12 @@ type GetValidatorBalancesResponse struct {
 	Data                []*ValidatorBalance `json:"data"`
 }
 
+type GetValidatorIdentitiesResponse struct {
+	ExecutionOptimistic bool                 `json:"execution_optimistic"`
+	Finalized           bool                 `json:"finalized"`
+	Data                []*ValidatorIdentity `json:"data"`
+}
+
 type ValidatorContainer struct {
 	Index     string     `json:"index"`
 	Balance   string     `json:"balance"`
@@ -110,6 +116,12 @@ type ValidatorContainer struct {
 type ValidatorBalance struct {
 	Index   string `json:"index"`
 	Balance string `json:"balance"`
+}
+
+type ValidatorIdentity struct {
+	Index           string `json:"index"`
+	Pubkey          string `json:"pubkey"`
+	ActivationEpoch string `json:"activation_epoch"`
 }
 
 type GetBlockResponse struct {

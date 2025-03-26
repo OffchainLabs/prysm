@@ -4,6 +4,43 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
+## [v5.3.2](https://github.com/prysmaticlabs/prysm/compare/v5.3.1...v5.3.2) - 2025-03-25
+
+This release introduces support for the `Hoodi` testnet.
+
+Release highlights:
+
+- Ability to run the node on the `Hoodi` tesnet. See https://blog.ethereum.org/2025/03/18/hoodi-holesky for more information about `Hoodi`.
+- A new feature that allows treat certain blocks as invalid. This is especially useful when the network is split, allowing the node to discontinue following unwanted forks.
+
+Testnet operators are required to update to this release. Without this release you will be unable to run the node on the `Hoodi` testnet.
+
+Mainnet operators are recommended to update to this release at their regular cadence.
+
+### Added
+
+- enable SSZ for builder API calls. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14976)
+- Add Hoodi testnet flag `--hoodi` to specify Hoodi testnet config and bootnodes. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15057)
+- block_gossip topic support to the beacon api event stream. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15038)
+- Added a static analyzer to discourage use of panic() in Prysm. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15075)
+- Add a feature flag `--blacklist-roots` to allow the node to specify blocks that will be treated as invalid. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15030)
+
+### Changed
+
+- changed request object for `POST /eth/v1/beacon/states/head/validators` to omit the field if empty for satisfying other clients. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15031)
+- Update spec test to v1.5.0-beta.3. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15050)
+- Update Gossip and RPC message limits to comply with the spec. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14799)
+- Return 404 instead of 500 from API when when a blob for a requested index is not found. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14845)
+- Save Electra orphaned attestations into attestations pool's block attestations. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15060)
+- Removed redundant string conversion in `BeaconDbStater.State` to improve code clarity and maintainability. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15081)
+
+### Fixed
+
+- Update seen unaggregated att cache to properly handle Electra attestations. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15034)
+- cosmetic fix for calling `/prysm/validators/performance` when connecting to non prysm beacon nodes and removing the 404 error log. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15062)
+- Tracked validator cache: Make sure no to loose the reference. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15077)
+- Fixed proposing at genesis when starting post Bellatrix. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15084)
+
 ## [v5.3.1](https://github.com/prysmaticlabs/prysm/compare/v5.3.0...v5.3.1) - 2025-03-13
 
 This release is packed with critical fixes for **Electra** and some important fixes for mainnet too. 
@@ -21,7 +58,7 @@ Known issues in **Electra**:
 
 Testnet operators are strongly encouraged to update to this release. There are many fixes and improvements from the Holesky upgrade incident.
 
-Mainner operators are recommended to update to this release at their regular cadence. 
+Mainnet operators are recommended to update to this release at their regular cadence. 
 
 ### Added
 
