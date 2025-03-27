@@ -8,6 +8,7 @@ import (
 
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/runtime/interop"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"google.golang.org/grpc"
 )
@@ -129,18 +130,28 @@ type DepositBalancer interface {
 // EvaluationContext allows for additional data to be provided to evaluators that need extra state.
 type EvaluationContext struct {
 	DepositBalancer
-	ExitedVals           map[[48]byte]bool
-	SeenVotes            map[primitives.Slot][]byte
-	ExpectedEth1DataVote []byte
+	ExitedVals                map[[48]byte]bool
+	SeenVotes                 map[primitives.Slot][]byte
+	ExpectedEth1DataVote      []byte
+	ValidExecutionCredentials map[[48]byte]bool
 }
 
 // NewEvaluationContext handles initializing internal datastructures (like maps) provided by the EvaluationContext.
-func NewEvaluationContext(d DepositBalancer) *EvaluationContext {
-	return &EvaluationContext{
-		DepositBalancer: d,
-		ExitedVals:      make(map[[48]byte]bool),
-		SeenVotes:       make(map[primitives.Slot][]byte),
+func NewEvaluationContext(d DepositBalancer, execCreds uint64) (*EvaluationContext, error) {
+	_, pkeys, err := interop.DeterministicallyGenerateKeys(0, execCreds)
+	if err != nil {
+		return nil, err
 	}
+	execMap := make(map[[48]byte]bool)
+	for _, k := range pkeys {
+		execMap[[48]byte(k.Marshal())] = true
+	}
+	return &EvaluationContext{
+		DepositBalancer:           d,
+		ExitedVals:                make(map[[48]byte]bool),
+		SeenVotes:                 make(map[primitives.Slot][]byte),
+		ValidExecutionCredentials: execMap,
+	}, nil
 }
 
 // ComponentRunner defines an interface via which E2E component's configuration, execution and termination is managed.

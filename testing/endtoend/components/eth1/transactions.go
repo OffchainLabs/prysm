@@ -29,6 +29,7 @@ import (
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/crypto/rand"
+	"github.com/prysmaticlabs/prysm/v5/runtime/interop"
 	e2e "github.com/prysmaticlabs/prysm/v5/testing/endtoend/params"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
@@ -36,14 +37,23 @@ import (
 
 const txCount = 20
 
+type txType int
+
+const (
+	RandomTx txType = iota
+	ConsolidationTx
+	WithdrawalTx
+)
+
 var fundedAccount *keystore.Key
 
 type TransactionGenerator struct {
-	keystore string
-	seed     int64
-	started  chan struct{}
-	cancel   context.CancelFunc
-	paused   bool
+	keystore  string
+	seed      int64
+	started   chan struct{}
+	cancel    context.CancelFunc
+	paused    bool
+	txGenType txType
 }
 
 func (t *TransactionGenerator) UnderlyingProcess() *os.Process {
@@ -53,7 +63,7 @@ func (t *TransactionGenerator) UnderlyingProcess() *os.Process {
 }
 
 func NewTransactionGenerator(keystore string, seed int64) *TransactionGenerator {
-	return &TransactionGenerator{keystore: keystore, seed: seed}
+	return &TransactionGenerator{keystore: keystore, seed: seed, txGenType: RandomTx}
 }
 
 func (t *TransactionGenerator) Start(ctx context.Context) error {
@@ -95,7 +105,7 @@ func (t *TransactionGenerator) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	_ = filler.NewFiller(rnd)
+	f := filler.NewFiller(rnd)
 	// Broadcast Transactions every slot
 	txPeriod := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
 	ticker := time.NewTicker(txPeriod)
@@ -109,10 +119,22 @@ func (t *TransactionGenerator) Start(ctx context.Context) error {
 				continue
 			}
 			backend := ethclient.NewClient(client)
-			err = SendConsolidationTransaction(client, mineKey.PrivateKey, gasPrice, backend)
-			if err != nil {
-				return err
+			switch t.txGenType {
+			case ConsolidationTx:
+				err = SendConsolidationTransaction(client, mineKey.PrivateKey, gasPrice, backend)
+				if err != nil {
+					return err
+				}
+			case WithdrawalTx:
+			case RandomTx:
+				err = SendTransaction(client, mineKey.PrivateKey, f, gasPrice, mineKey.Address.String(), txCount, backend, false)
+				if err != nil {
+					return err
+				}
+			default:
+				logrus.Warnf("Unknown transaction type: %v", t.txGenType)
 			}
+
 			backend.Close()
 		}
 	}
@@ -223,10 +245,38 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, f *filler.Filler
 	return nil
 }
 
-func SendConsolidationTransaction(client *rpc.Client, key *ecdsa.PrivateKey, gasPrice *big.Int, backend *ethclient.Client) error {
+func SendConsolidationTransaction(key *ecdsa.PrivateKey, gasPrice *big.Int, backend *ethclient.Client) error {
+	totalCreds := e2e.TestParams.NumberOfExecutionCreds
+	_, pKeys, err := interop.DeterministicallyGenerateKeys(0, totalCreds)
+	if err != nil {
+		return err
+	}
+	compoundedKey := pKeys[len(pKeys)-1].Marshal()
+
+	// Create compounding credentials
+	if err := createAndSendConsolidation(compoundedKey, compoundedKey, key, gasPrice, backend); err != nil {
+		return err
+	}
+	for _, k := range pKeys {
+		if err := createAndSendConsolidation(k.Marshal(), compoundedKey, key, gasPrice, backend); err != nil {
+			return err
+		}
+	}
+
+	// Junk Requests
+	for i := 0; i < 2; i++ {
+		sourcePubkey := [48]byte{byte(i), 0xFF, 0x34, 0xEE}
+		targetPubkey := compoundedKey
+		if err := createAndSendConsolidation(sourcePubkey[:], targetPubkey, key, gasPrice, backend); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func createAndSendConsolidation(sourceKey, targetKey []byte, key *ecdsa.PrivateKey, gasPrice *big.Int, backend *ethclient.Client) error {
 	publicKey := key.Public().(*ecdsa.PublicKey)
 	fromAddress := gethCrypto.PubkeyToAddress(*publicKey)
-
 	// Get nonce
 	nonce, err := backend.PendingNonceAt(context.Background(), fromAddress)
 	if err != nil {
@@ -253,9 +303,8 @@ func SendConsolidationTransaction(client *rpc.Client, key *ecdsa.PrivateKey, gas
 		return err
 	}
 
-	// Replace with actual 48-byte keys
-	sourcePubkey := make([]byte, 48)
-	targetPubkey := make([]byte, 48)
+	sourcePubkey := sourceKey
+	targetPubkey := targetKey
 
 	// Encode function data
 	data, err := parsedABI.Pack("add_consolidation_request", sourcePubkey, targetPubkey)
@@ -264,7 +313,7 @@ func SendConsolidationTransaction(client *rpc.Client, key *ecdsa.PrivateKey, gas
 	}
 
 	// Set transaction value (fee from contract's `get_fee()`)
-	value := big.NewInt(100000000000000000) // 0.1 ETH (adjust as needed)
+	value := big.NewInt(100000000000000000) // 0.1 ETH
 
 	// Create transaction
 	tx := types.NewTx(&types.LegacyTx{
@@ -281,7 +330,14 @@ func SendConsolidationTransaction(client *rpc.Client, key *ecdsa.PrivateKey, gas
 	if err != nil {
 		return err
 	}
-	return backend.SendTransaction(context.Background(), signedTx)
+	if err := backend.SendTransaction(context.Background(), signedTx); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (t *TransactionGenerator) SetTxType(typ txType) {
+	t.txGenType = typ
 }
 
 // Pause pauses the component and its underlying process.
