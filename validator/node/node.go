@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api"
 	"github.com/prysmaticlabs/prysm/v5/api/server/middleware"
 	"github.com/prysmaticlabs/prysm/v5/async/event"
 	"github.com/prysmaticlabs/prysm/v5/cmd"
@@ -522,29 +521,17 @@ func (c *ValidatorClient) registerRPCService(cliCtx *cli.Context) error {
 	authTokenPath := cliCtx.String(flags.AuthTokenPathFlag.Name)
 	walletDir := cliCtx.String(flags.WalletDirFlag.Name)
 
-	if serveWebUI {
-		if cliCtx.IsSet(flags.Web3SignerURLFlag.Name) || cliCtx.IsSet(flags.Web3SignerPublicValidatorKeysFlag.Name) {
-			log.Warn("Remote Keymanager API enabled. Prysm web does not properly support web3signer at this time")
-		}
-		webAddress := fmt.Sprintf("http://%s:%d", host, port)
-		log.WithField("address", webAddress).Info(
-			"Starting Prysm web UI on address, open in browser to access",
-		)
-	}
-
 	var vs *client.ValidatorService
 	if err := c.services.FetchService(&vs); err != nil {
 		return err
 	}
 
-	// if no auth token path flag was passed try to set a default value
-	if authTokenPath == "" {
-		authTokenPath = flags.AuthTokenPathFlag.Value
-		// if a wallet dir is passed without an auth token then override the default with the wallet dir
-		if walletDir != "" {
-			authTokenPath = filepath.Join(walletDir, api.AuthTokenFileName)
+	if serveWebUI {
+		if cliCtx.IsSet(flags.Web3SignerURLFlag.Name) || cliCtx.IsSet(flags.Web3SignerPublicValidatorKeysFlag.Name) {
+			log.Warn("Remote Keymanager API enabled. Prysm web does not properly support web3signer at this time")
 		}
 	}
+
 	if host != flags.DefaultHTTPServerHost {
 		log.WithField("webHost", host).Warn(
 			"You are using a non-default web host. Web traffic is served by HTTP, so be wary of " +

@@ -110,6 +110,7 @@ func NewServer(ctx context.Context, cfg *Config) *Server {
 	}
 
 	if server.authTokenPath == "" && server.walletDir != "" {
+		// if a wallet dir is passed without an auth token then override the default with the wallet dir
 		server.authTokenPath = filepath.Join(server.walletDir, api.AuthTokenFileName)
 	}
 
@@ -118,9 +119,10 @@ func NewServer(ctx context.Context, cfg *Config) *Server {
 			log.WithError(err).Error("Could not initialize web auth token")
 		}
 		validatorWebAddr := fmt.Sprintf("%s:%d", server.httpHost, server.httpPort)
-		logValidatorWebAuth(validatorWebAddr, server.authToken, server.authTokenPath)
+		logValidatorWebAuth(server.serveWebUI, validatorWebAddr, server.authToken, server.authTokenPath)
 		go server.refreshAuthTokenFromFileChanges(server.ctx, server.authTokenPath)
 	}
+
 	// Register a gRPC or HTTP client to the beacon node.
 	// Used for proxy calls to beacon node from validator REST handlers
 	if err := server.registerBeaconClient(); err != nil {
