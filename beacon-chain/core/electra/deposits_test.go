@@ -307,7 +307,7 @@ func TestProcessPendingDeposits(t *testing.T) {
 }
 
 func TestBatchProcessNewPendingDeposits(t *testing.T) {
-	t.Run("invalid batch initiates correct individual validation", func(t *testing.T) {
+	t.Run("one valid deposit one garbage deposit", func(t *testing.T) {
 		st := stateWithActiveBalanceETH(t, 0)
 		require.Equal(t, 0, len(st.Validators()))
 		require.Equal(t, 0, len(st.Balances()))
@@ -318,12 +318,46 @@ func TestBatchProcessNewPendingDeposits(t *testing.T) {
 		wc[31] = byte(0)
 		validDep := stateTesting.GeneratePendingDeposit(t, sk, params.BeaconConfig().MinActivationBalance, bytesutil.ToBytes32(wc), 0)
 		invalidDep := &eth.PendingDeposit{PublicKey: make([]byte, 48)}
-		// have a combination of valid and invalid deposits
 		deps := []*eth.PendingDeposit{validDep, invalidDep}
 		require.NoError(t, electra.BatchProcessNewPendingDeposits(context.Background(), st, deps))
-		// successfully added to register
 		require.Equal(t, 1, len(st.Validators()))
 		require.Equal(t, 1, len(st.Balances()))
+	})
+
+	t.Run("two valid deposits from same key", func(t *testing.T) {
+		st := stateWithActiveBalanceETH(t, 0)
+		require.Equal(t, 0, len(st.Validators()))
+		require.Equal(t, 0, len(st.Balances()))
+		sk, err := bls.RandKey()
+		require.NoError(t, err)
+		wc := make([]byte, 32)
+		wc[0] = params.BeaconConfig().ETH1AddressWithdrawalPrefixByte
+		wc[31] = byte(0)
+		validDep := stateTesting.GeneratePendingDeposit(t, sk, params.BeaconConfig().MinActivationBalance, bytesutil.ToBytes32(wc), 0)
+		deps := []*eth.PendingDeposit{validDep, validDep}
+		require.NoError(t, electra.BatchProcessNewPendingDeposits(context.Background(), st, deps))
+		require.Equal(t, 1, len(st.Validators()))
+		require.Equal(t, 1, len(st.Balances()))
+		require.Equal(t, params.BeaconConfig().MinActivationBalance*2, st.Balances()[0])
+	})
+
+	t.Run("one valid one with invalid signature deposit", func(t *testing.T) {
+		st := stateWithActiveBalanceETH(t, 0)
+		require.Equal(t, 0, len(st.Validators()))
+		require.Equal(t, 0, len(st.Balances()))
+		sk, err := bls.RandKey()
+		require.NoError(t, err)
+		wc := make([]byte, 32)
+		wc[0] = params.BeaconConfig().ETH1AddressWithdrawalPrefixByte
+		wc[31] = byte(0)
+		validDep := stateTesting.GeneratePendingDeposit(t, sk, params.BeaconConfig().MinActivationBalance, bytesutil.ToBytes32(wc), 0)
+		invalidSigDep := stateTesting.GeneratePendingDeposit(t, sk, params.BeaconConfig().MinActivationBalance, bytesutil.ToBytes32(wc), 0)
+		invalidSigDep.Signature = make([]byte, 96)
+		deps := []*eth.PendingDeposit{validDep, invalidSigDep}
+		require.NoError(t, electra.BatchProcessNewPendingDeposits(context.Background(), st, deps))
+		require.Equal(t, 1, len(st.Validators()))
+		require.Equal(t, 1, len(st.Balances()))
+		require.Equal(t, 2*params.BeaconConfig().MinActivationBalance, st.Balances()[0])
 	})
 }
 
