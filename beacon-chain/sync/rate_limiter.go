@@ -102,6 +102,9 @@ func newRateLimiter(p2pProvider p2p.P2P) *limiter {
 	// General topic for all rpc requests.
 	topicMap[rpcLimiterTopic] = leakybucket.NewCollector(5, defaultBurstLimit*2, leakyBucketPeriod, false /* deleteEmptyBuckets */)
 
+	// PayloadByRoots requests
+	topicMap[addEncoding(p2p.RPCExecutionPayloadsByRootTopicV1)] = blockCollector // Use the same rate limiter as block since payload and block comes at similar rate.
+
 	return &limiter{limiterMap: topicMap, p2p: p2pProvider}
 }
 

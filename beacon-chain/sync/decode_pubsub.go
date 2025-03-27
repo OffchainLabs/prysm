@@ -95,6 +95,12 @@ func extractValidDataTypeFromTopic(topic string, digest []byte, clock *startup.C
 		return extractDataTypeFromTypeMap(types.LightClientOptimisticUpdateMap, digest, clock)
 	case p2p.LightClientFinalityUpdateTopicFormat:
 		return extractDataTypeFromTypeMap(types.LightClientFinalityUpdateMap, digest, clock)
+	case p2p.GossipSignedExecutionPayloadHeader:
+		return extractDataTypeFromTypeMap(types.SignedExecutionPayloadHeaderMap, digest, clock)
+	case p2p.GossipSignedExecutionPayloadEnvelope:
+		return extractDataTypeFromTypeMap(types.SignedExecutionPayloadEnvelopeMap, digest, clock)
+	case p2p.PayloadAttestationMessageTopicFormat:
+		return extractDataTypeFromTypeMap(types.PayloadAttestationMap, digest, clock)
 	}
 	return nil, nil
 }

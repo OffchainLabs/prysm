@@ -60,7 +60,7 @@ func (p *Pool) PendingAttesterSlashings(ctx context.Context, state state.ReadOnl
 		slashing := p.pendingAttesterSlashing[i]
 		valid, err := p.validatorSlashingPreconditionCheck(state, slashing.validatorToSlash)
 		if err != nil {
-			log.WithError(err).Error("could not validate attester slashing")
+			log.WithError(err).Error("Could not validate attester slashing")
 			continue
 		}
 		if included[slashing.validatorToSlash] || !valid {
@@ -108,7 +108,7 @@ func (p *Pool) PendingProposerSlashings(ctx context.Context, state state.ReadOnl
 		slashing := p.pendingProposerSlashing[i]
 		valid, err := p.validatorSlashingPreconditionCheck(state, slashing.Header_1.Header.ProposerIndex)
 		if err != nil {
-			log.WithError(err).Error("could not validate proposer slashing")
+			log.WithError(err).Error("Could not validate proposer slashing")
 			continue
 		}
 		if !valid {

@@ -32,6 +32,13 @@ type DataColumnGossipEvent struct {
 	KzgCommitments []string `json:"kzg_commitments"`
 }
 
+type PayloadEvent struct {
+	Slot                string `json:"slot"`
+	BlockRoot           string `json:"block_root"`
+	ExecutionBlockHash  string `json:"execution_block_hash"`
+	ExecutionOptimistic bool   `json:"execution_optimistic"`
+}
+
 type AggregatedAttEventSource struct {
 	Aggregate *Attestation `json:"aggregate"`
 }

@@ -20,6 +20,10 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
+// Variables defined in the placeholderFields will not be tested in `TestGetSpec`.
+// These are variables that we don't use in Prysm. (i.e. future hardfork, light client... etc)
+var placeholderFields = []string{"DOMAIN_BEACON_BUILDER", "DOMAIN_PTC_ATTESTER"}
+
 func TestGetDepositContract(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	config := params.BeaconConfig().Copy()
@@ -81,6 +85,8 @@ func TestGetSpec(t *testing.T) {
 	config.ElectraForkEpoch = 107
 	config.FuluForkVersion = []byte("FuluForkVersion")
 	config.FuluForkEpoch = 109
+	config.EPBSForkVersion = []byte("Eip7732ForkVersion")
+	config.EPBSForkEpoch = 110
 	config.BLSWithdrawalPrefixByte = byte('b')
 	config.ETH1AddressWithdrawalPrefixByte = byte('c')
 	config.GenesisDelay = 24
@@ -282,6 +288,10 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "0x"+hex.EncodeToString([]byte("FuluForkVersion")), v)
 			case "FULU_FORK_EPOCH":
 				assert.Equal(t, "109", v)
+			case "EIP7732_FORK_VERSION":
+				assert.Equal(t, "0x"+hex.EncodeToString([]byte("Eip7732ForkVersion")), v)
+			case "EIP7732_FORK_EPOCH":
+				assert.Equal(t, "110", v)
 			case "MIN_ANCHOR_POW_BLOCK_DIFFICULTY":
 				assert.Equal(t, "1000", v)
 			case "BLS_WITHDRAWAL_PREFIX":
@@ -577,7 +587,25 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "102", v)
 			case "BLOB_SIDECAR_SUBNET_COUNT_ELECTRA":
 				assert.Equal(t, "103", v)
+			case "PROPOSER_SCORE_BOOST_EPBS":
+				assert.Equal(t, "20", v)
+			case "PAYLOAD_REVEAL_BOOST":
+				assert.Equal(t, "40", v)
+			case "PAYLOAD_WITHHOLD_BOOST":
+				assert.Equal(t, "40", v)
+			case "PAYLOAD_TIMELY_THRESHOLD":
+				assert.Equal(t, "256", v)
+			case "INTERVALS_PER_SLOT_EPBS":
+				assert.Equal(t, "4", v)
+			case "MIN_BUILDER_BALANCE":
+				assert.Equal(t, "0", v)
 			default:
+				for _, pf := range placeholderFields {
+					if k == pf {
+						t.Logf("Skipping placeholder field: %s", k)
+						return
+					}
+				}
 				t.Errorf("Incorrect key: %s", k)
 			}
 		})

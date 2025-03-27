@@ -283,6 +283,14 @@ func (b *BeaconBlockBody) Version() int {
 	panic("implement me")
 }
 
+func (b *BeaconBlockBody) PayloadAttestations() ([]*eth.PayloadAttestation, error) {
+	panic("implement me")
+}
+
+func (b *BeaconBlockBody) SignedExecutionPayloadHeader() (interfaces.ROSignedExecutionPayloadHeader, error) {
+	panic("implement me")
+}
+
 var _ interfaces.ReadOnlySignedBeaconBlock = &SignedBeaconBlock{}
 var _ interfaces.ReadOnlyBeaconBlock = &BeaconBlock{}
 var _ interfaces.ReadOnlyBeaconBlockBody = &BeaconBlockBody{}

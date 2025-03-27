@@ -29,12 +29,35 @@ func (n *Node) applyWeightChanges(ctx context.Context) error {
 			return err
 		}
 		childrenWeight += child.weight
+		if child.full {
+			childrenWeight -= child.block.balance
+		}
 	}
-	if n.root == params.BeaconConfig().ZeroHash {
+	if n.block.root == params.BeaconConfig().ZeroHash {
 		return nil
 	}
-	n.weight = n.balance + childrenWeight
+	n.weight = n.block.balance + childrenWeight
 	return nil
+}
+
+func compareChildren(child, bestChild *Node) *Node {
+	// If both are viable, compare their weights.
+	if child.weight == bestChild.weight {
+		// tie breaker of equal weights for full blocks
+		if child.full != bestChild.full {
+			if child.full {
+				return child
+			}
+		} else {
+			// Tie-breaker of equal weights by root.
+			if bytes.Compare(child.block.root[:], bestChild.block.root[:]) > 0 {
+				return child
+			}
+		}
+	} else if child.weight > bestChild.weight {
+		return child
+	}
+	return bestChild
 }
 
 // updateBestDescendant updates the best descendant of this node and its
@@ -49,7 +72,6 @@ func (n *Node) updateBestDescendant(ctx context.Context, justifiedEpoch, finaliz
 	}
 
 	var bestChild *Node
-	bestWeight := uint64(0)
 	hasViableDescendant := false
 	for _, child := range n.children {
 		if child == nil {
@@ -62,20 +84,10 @@ func (n *Node) updateBestDescendant(ctx context.Context, justifiedEpoch, finaliz
 		if childLeadsToViableHead && !hasViableDescendant {
 			// The child leads to a viable head, but the current
 			// parent's best child doesn't.
-			bestWeight = child.weight
 			bestChild = child
 			hasViableDescendant = true
 		} else if childLeadsToViableHead {
-			// If both are viable, compare their weights.
-			if child.weight == bestWeight {
-				// Tie-breaker of equal weights by root.
-				if bytes.Compare(child.root[:], bestChild.root[:]) > 0 {
-					bestChild = child
-				}
-			} else if child.weight > bestWeight {
-				bestChild = child
-				bestWeight = child.weight
-			}
+			bestChild = compareChildren(child, bestChild)
 		}
 	}
 	if hasViableDescendant {
@@ -100,7 +112,7 @@ func (n *Node) viableForHead(justifiedEpoch, currentEpoch primitives.Epoch) bool
 	// We use n.justifiedEpoch as the voting source because:
 	//   1. if this node is from current epoch, n.justifiedEpoch is the realized justification epoch.
 	//   2. if this node is from a previous epoch, n.justifiedEpoch has already been updated to the unrealized justification epoch.
-	return n.justifiedEpoch == justifiedEpoch || n.justifiedEpoch+2 >= currentEpoch
+	return n.block.justifiedEpoch == justifiedEpoch || n.block.justifiedEpoch+2 >= currentEpoch
 }
 
 func (n *Node) leadsToViableHead(justifiedEpoch, currentEpoch primitives.Epoch) bool {
@@ -121,10 +133,10 @@ func (n *Node) setNodeAndParentValidated(ctx context.Context) error {
 	}
 	n.optimistic = false
 
-	if n.parent == nil {
+	if n.block.parent == nil {
 		return nil
 	}
-	return n.parent.setNodeAndParentValidated(ctx)
+	return n.block.parent.setNodeAndParentValidated(ctx)
 }
 
 // arrivedEarly returns whether this node was inserted before the first
@@ -132,9 +144,16 @@ func (n *Node) setNodeAndParentValidated(ctx context.Context) error {
 // Note that genesisTime has seconds granularity, therefore we use a strict
 // inequality < here. For example a block that arrives 3.9999 seconds into the
 // slot will have secs = 3 below.
-func (n *Node) arrivedEarly(genesis time.Time) (bool, error) {
+func (n *BlockNode) arrivedEarly(genesis time.Time) (bool, error) {
 	sss, err := slots.SinceSlotStart(n.slot, genesis, n.timestamp.Truncate(time.Second)) // Truncate such that 3.9999 seconds will have a value of 3.
-	votingWindow := time.Duration(params.BeaconConfig().SecondsPerSlot/params.BeaconConfig().IntervalsPerSlot) * time.Second
+
+	var votingWindow time.Duration
+	if slots.ToEpoch(n.slot) >= params.BeaconConfig().EPBSForkEpoch {
+		votingWindow = time.Duration(params.BeaconConfig().SecondsPerSlot/params.BeaconConfig().IntervalsPerSlotEPBS) * time.Second
+	} else {
+		votingWindow = time.Duration(params.BeaconConfig().SecondsPerSlot/params.BeaconConfig().IntervalsPerSlot) * time.Second
+	}
+
 	return sss < votingWindow, err
 }
 
@@ -143,7 +162,7 @@ func (n *Node) arrivedEarly(genesis time.Time) (bool, error) {
 // Note that genesisTime has seconds granularity, therefore we use an
 // inequality >= here. For example a block that arrives 10.00001 seconds into the
 // slot will have secs = 10 below.
-func (n *Node) arrivedAfterOrphanCheck(genesis time.Time) (bool, error) {
+func (n *BlockNode) arrivedAfterOrphanCheck(genesis time.Time) (bool, error) {
 	secs, err := slots.SinceSlotStart(n.slot, genesis, n.timestamp.Truncate(time.Second)) // Truncate such that 10.00001 seconds will have a value of 10.
 	return secs >= ProcessAttestationsThreshold, err
 }
@@ -154,26 +173,26 @@ func (n *Node) nodeTreeDump(ctx context.Context, nodes []*forkchoice2.Node) ([]*
 		return nil, ctx.Err()
 	}
 	var parentRoot [32]byte
-	if n.parent != nil {
-		parentRoot = n.parent.root
+	if n.block.parent != nil {
+		parentRoot = n.block.parent.block.root
 	}
 	target := [32]byte{}
-	if n.target != nil {
-		target = n.target.root
+	if n.block.target != nil {
+		target = n.block.target.root
 	}
 	thisNode := &forkchoice2.Node{
-		Slot:                     n.slot,
-		BlockRoot:                n.root[:],
+		Slot:                     n.block.slot,
+		BlockRoot:                n.block.root[:],
 		ParentRoot:               parentRoot[:],
-		JustifiedEpoch:           n.justifiedEpoch,
-		FinalizedEpoch:           n.finalizedEpoch,
-		UnrealizedJustifiedEpoch: n.unrealizedJustifiedEpoch,
-		UnrealizedFinalizedEpoch: n.unrealizedFinalizedEpoch,
-		Balance:                  n.balance,
+		JustifiedEpoch:           n.block.justifiedEpoch,
+		FinalizedEpoch:           n.block.finalizedEpoch,
+		UnrealizedJustifiedEpoch: n.block.unrealizedJustifiedEpoch,
+		UnrealizedFinalizedEpoch: n.block.unrealizedFinalizedEpoch,
+		Balance:                  n.block.balance,
 		Weight:                   n.weight,
 		ExecutionOptimistic:      n.optimistic,
-		ExecutionBlockHash:       n.payloadHash[:],
-		Timestamp:                n.timestamp,
+		ExecutionBlockHash:       n.block.payloadHash[:],
+		Timestamp:                n.block.timestamp,
 		Target:                   target[:],
 	}
 	if n.optimistic {

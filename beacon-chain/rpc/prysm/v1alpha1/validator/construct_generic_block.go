@@ -57,6 +57,8 @@ func (vs *Server) constructGenericBeaconBlock(
 			return nil, fmt.Errorf("expected *BlobsBundleV2, got %T", blobsBundler)
 		}
 		return vs.constructFuluBlock(blockProto, isBlinded, bidStr, bundle), nil
+	case version.EPBS:
+		return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Epbs{Epbs: blockProto.(*ethpb.BeaconBlockEpbs)}}, nil
 	default:
 		return nil, fmt.Errorf("unknown block version: %d", sBlk.Version())
 	}

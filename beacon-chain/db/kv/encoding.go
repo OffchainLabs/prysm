@@ -6,6 +6,7 @@ import (
 	"reflect"
 
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	engine "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/golang/snappy"
 	fastssz "github.com/prysmaticlabs/fastssz"
@@ -77,6 +78,8 @@ func isSSZStorageFormat(obj interface{}) bool {
 	case *ethpb.ProposerSlashing:
 		return true
 	case *ethpb.VoluntaryExit:
+		return true
+	case *engine.SignedBlindPayloadEnvelope:
 		return true
 	case *ethpb.ValidatorRegistrationV1:
 		return true

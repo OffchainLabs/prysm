@@ -950,3 +950,7 @@ func (c *capabilityCache) has(capability string) bool {
 	_, ok := c.capabilities[capability]
 	return ok
 }
+
+func (s *Service) Client() RPCClient {
+	return s.rpcClient
+}

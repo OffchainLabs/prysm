@@ -58,6 +58,9 @@ func IsMergeTransitionComplete(st state.BeaconState) (bool, error) {
 //
 //	return block.body.execution_payload != ExecutionPayload()
 func IsExecutionBlock(body interfaces.ReadOnlyBeaconBlockBody) (bool, error) {
+	if body.Version() >= version.Capella {
+		return true, nil
+	}
 	if body == nil {
 		return false, errors.New("nil block body")
 	}
@@ -92,6 +95,9 @@ func IsExecutionEnabled(st state.BeaconState, body interfaces.ReadOnlyBeaconBloc
 	}
 	if IsPreBellatrixVersion(st.Version()) {
 		return false, nil
+	}
+	if body.Version() >= version.Capella {
+		return true, nil
 	}
 	header, err := st.LatestExecutionPayloadHeader()
 	if err != nil {

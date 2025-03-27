@@ -41,10 +41,18 @@ var epochsSinceFinalityExpandCache = primitives.Epoch(4)
 // BlockReceiver interface defines the methods of chain service for receiving and processing new blocks.
 type BlockReceiver interface {
 	ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte, avs das.AvailabilityStore) error
+	ReceiveExecutionPayloadEnvelope(ctx context.Context, env interfaces.ROSignedExecutionPayloadEnvelope, avs das.AvailabilityStore) error
 	ReceiveBlockBatch(ctx context.Context, blocks []blocks.ROBlock, avs das.AvailabilityStore) error
 	HasBlock(ctx context.Context, root [32]byte) bool
 	RecentBlockSlot(root [32]byte) (primitives.Slot, error)
 	BlockBeingSynced([32]byte) bool
+	PayloadBeingSynced([32]byte) bool
+}
+
+// PayloadAttestationReceiver defines methods of the chain service for receiving
+// and processing new payload attestations and payload attestation messages
+type PayloadAttestationReceiver interface {
+	ReceivePayloadAttestationMessage(ctx context.Context, a *ethpb.PayloadAttestationMessage) error
 }
 
 // BlobReceiver interface defines the methods of chain service for receiving new
@@ -58,6 +66,11 @@ type BlobReceiver interface {
 type DataColumnReceiver interface {
 	ReceiveDataColumn(blocks.VerifiedRODataColumn) error
 	ReceiveDataColumns([]blocks.VerifiedRODataColumn) error
+}
+
+// ExecutionPayloadReceiver interface defines the methods of chain service for receiving `ROExecutionPayloadEnvelope`.
+type ExecutionPayloadReceiver interface {
+	ReceiveExecutionPayloadEnvelope(ctx context.Context, envelope interfaces.ROSignedExecutionPayloadEnvelope, _ das.AvailabilityStore) error
 }
 
 // SlashingReceiver interface defines the methods of chain service for receiving validated slashing over the wire.
@@ -103,14 +116,30 @@ func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySig
 		return err
 	}
 
-	postState, isValidPayload, err := s.validateExecutionAndConsensus(ctx, preState, roblock)
-	if err != nil {
-		return err
-	}
-
-	daWaitedTime, err := s.handleDA(ctx, blockCopy, blockRoot, avs)
-	if err != nil {
-		return err
+	var postState state.BeaconState
+	var isValidPayload bool
+	var daWaitedTime time.Duration
+	if blockCopy.Version() >= version.EPBS {
+		postState, err = s.validateStateTransition(ctx, preState, roblock)
+		if err != nil {
+			return errors.Wrap(err, "could not validate state transition")
+		}
+		optimistic, err := s.IsOptimisticForRoot(ctx, roblock.Block().ParentRoot())
+		if err != nil {
+			return errors.Wrap(err, "could not check if parent is optimistic")
+		}
+		// if the parent is not optimistic then we can set the block as
+		// not optimistic.
+		isValidPayload = !optimistic
+	} else {
+		postState, isValidPayload, err = s.validateExecutionAndConsensus(ctx, preState, roblock)
+		if err != nil {
+			return err
+		}
+		daWaitedTime, err = s.handleDA(ctx, blockCopy, blockRoot, avs)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Defragment the state before continuing block processing.

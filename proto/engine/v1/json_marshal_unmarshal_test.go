@@ -631,7 +631,7 @@ func TestJsonMarshalUnmarshal(t *testing.T) {
 			BlobGasUsed:   1024,
 			ExcessBlobGas: 2048,
 		}
-		
+
 		bundleV2 := &enginev1.BlobsBundleV2{
 			KzgCommitments: [][]byte{make([]byte, 48), make([]byte, 48)},
 			Proofs:         [][]byte{make([]byte, 48), make([]byte, 48)},

@@ -319,7 +319,7 @@ func beaconProposerIndexAtSlotFulu(state state.ReadOnlyBeaconState, slot primiti
 // BeaconProposerIndexAtSlot returns proposer index at the given slot from the
 // point of view of the given state as head state
 func BeaconProposerIndexAtSlot(ctx context.Context, state state.ReadOnlyBeaconState, slot primitives.Slot) (primitives.ValidatorIndex, error) {
-	if state.Version() >= version.Fulu {
+	if state.Version() >= version.Fulu && state.Version() != version.EPBS {
 		return beaconProposerIndexAtSlotFulu(state, slot)
 	}
 	e := slots.ToEpoch(slot)

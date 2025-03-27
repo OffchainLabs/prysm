@@ -18,6 +18,7 @@ import (
 	consensusblocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/crypto/rand"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
@@ -36,6 +37,29 @@ var (
 	errRejectCommitmentLen      = errors.New("[REJECT] The length of KZG commitments is less than or equal to the limitation defined in Consensus Layer")
 	ErrSlashingSignatureFailure = errors.New("proposer slashing signature verification failed")
 )
+
+// unknownConsensusOrExecutionParent returns true if the block has an unknown parent for both execution and consensus part of the block. If the parent block
+// is known, its root is returned.
+func (s *Service) unknownConsensusOrExecutionParent(ctx context.Context, blk interfaces.ReadOnlySignedBeaconBlock) ([]byte, bool) {
+	if !s.cfg.chain.HasBlock(ctx, blk.Block().ParentRoot()) {
+		return nil, true
+	}
+	root := blk.Block().ParentRoot()
+	if blk.Version() < version.EPBS {
+		return root[:], false
+	}
+	sg, err := blk.Block().Body().SignedExecutionPayloadHeader()
+	if err != nil {
+		log.WithError(err).Error("Could not extract signed execution payload header")
+		return root[:], true
+	}
+	header, err := sg.Header()
+	if err != nil {
+		log.WithError(err).Error("Could not extract execution payload header")
+		return root[:], true
+	}
+	return root[:], !s.cfg.chain.HashInForkchoice(header.ParentBlockHash())
+}
 
 // validateBeaconBlockPubSub checks that the incoming block has a valid BLS signature.
 // Blocks that have already been seen are ignored. If the BLS signature is any valid signature,
@@ -193,8 +217,9 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 		return pubsub.ValidationIgnore, err
 	}
 
-	// Handle block when the parent is unknown.
-	if !s.cfg.chain.HasBlock(ctx, blk.Block().ParentRoot()) {
+	// Handle block when the consensus parent is unknown or the execution parent is unknown
+	root, unknown := s.unknownConsensusOrExecutionParent(ctx, blk)
+	if unknown {
 		if res, err := s.verifyPendingBlockSignature(ctx, blk, blockRoot); err != nil {
 			log.WithError(err).WithFields(getBlockFields(blk)).Debug("Could not verify block signature")
 			return res, err
@@ -206,8 +231,23 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 			return pubsub.ValidationIgnore, err
 		}
 		s.pendingQueueLock.Unlock()
-		err := errors.Errorf("unknown parent for block with slot %d and parent root %#x", blk.Block().Slot(), blk.Block().ParentRoot())
-		log.WithError(err).WithFields(getBlockFields(blk)).Debug("Could not identify parent for block")
+		if root == nil {
+			err := errors.Errorf("unknown parent for block with slot %d and parent root %#x", blk.Block().Slot(), root)
+			log.WithError(err).WithFields(getBlockFields(blk)).Debug("Could not identify parent for block")
+		} else {
+			// Request the parent payload
+			err := errors.Errorf("unknown execution parent for block with slot %d and parent root %#x", blk.Block().Slot(), root)
+			log.WithError(err).WithFields(getBlockFields(blk)).Debug("Requesting parent payload")
+			go func() {
+				blockRoot := [32]byte(root)
+				if s.cfg.chain.PayloadBeingSynced(blockRoot) {
+					return
+				}
+				if err := s.sendBatchPayloadRequest(context.Background(), [][32]byte{blockRoot}, rand.NewGenerator()); err != nil {
+					log.WithError(err).Error("Failed to send batch payload request")
+				}
+			}()
+		}
 		return pubsub.ValidationIgnore, err
 	}
 
@@ -216,7 +256,9 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 		// If the parent is optimistic, process the block as usual
 		// This also does not penalize a peer which sends optimistic blocks
 		if !errors.Is(ErrOptimisticParent, err) {
-			log.WithError(err).WithFields(getBlockFields(blk)).Debug("Could not validate beacon block")
+			fields := getBlockFields(blk)
+			fields["blockRoot"] = fmt.Sprintf("%#x", blockRoot)
+			log.WithError(err).WithFields(fields).Debug("Could not validate beacon block")
 			return pubsub.ValidationReject, err
 		}
 	}
@@ -364,17 +406,18 @@ func (s *Service) validateBellatrixBeaconBlock(ctx context.Context, parentState 
 	if err != nil {
 		return err
 	}
-	payload, err := body.Execution()
-	if err != nil {
-		return err
+	if body.Version() < version.EPBS {
+		payload, err := body.Execution()
+		if err != nil {
+			return err
+		}
+		if payload == nil || payload.IsNil() {
+			return errors.New("execution payload is nil")
+		}
+		if payload.Timestamp() != uint64(t.Unix()) {
+			return errors.New("incorrect timestamp")
+		}
 	}
-	if payload == nil || payload.IsNil() {
-		return errors.New("execution payload is nil")
-	}
-	if payload.Timestamp() != uint64(t.Unix()) {
-		return errors.New("incorrect timestamp")
-	}
-
 	isParentOptimistic, err := s.cfg.chain.IsOptimisticForRoot(ctx, blk.ParentRoot())
 	if err != nil {
 		return err
@@ -429,6 +472,20 @@ func (s *Service) hasBadBlock(root [32]byte) bool {
 	defer s.badBlockLock.RUnlock()
 	_, seen := s.badBlockCache.Get(string(root[:]))
 	return seen
+}
+
+// seenBlockRoot returns true if the block is marked as a bad block or if not, if the block is
+// in forkchoice
+func (s *Service) seenBlockRoot(root [32]byte) bool {
+	if s.hasBadBlock(root) {
+		return true
+	}
+	return s.cfg.chain.InForkchoice(root)
+}
+
+// seenBlockHash returns true if the block hash is seen in the fork choice store.
+func (s *Service) seenBlockHash(hash [32]byte) bool {
+	return s.cfg.chain.HashInForkchoice(hash)
 }
 
 // Set bad block in the cache.

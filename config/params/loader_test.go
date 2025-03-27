@@ -38,6 +38,9 @@ var placeholderFields = []string{
 	"EIP7805_FORK_VERSION",
 	"EPOCHS_PER_SHUFFLING_PHASE",
 	"MAX_BYTES_PER_INCLUSION_LIST",
+	"FIELD_ELEMENTS_PER_BLOB",              // Compile time constant.
+	"KZG_COMMITMENT_INCLUSION_PROOF_DEPTH", // Compile time constant on BlobSidecar.commitment_inclusion_proof.
+	"MAX_BLOBS_PER_BLOCK_FULU",
 	"MAX_REQUEST_BLOB_SIDECARS_FULU",
 	"MAX_REQUEST_INCLUSION_LIST",
 	"MAX_REQUEST_PAYLOADS", // Compile time constant on BeaconBlockBody.ExecutionRequests
@@ -156,6 +159,7 @@ func assertEqualConfigs(t *testing.T, name string, fields []string, expected, ac
 	assert.Equal(t, expected.DenebForkEpoch, actual.DenebForkEpoch, "%s: DenebForkEpoch", name)
 	assert.Equal(t, expected.ElectraForkEpoch, actual.ElectraForkEpoch, "%s: ElectraForkEpoch", name)
 	assert.Equal(t, expected.FuluForkEpoch, actual.FuluForkEpoch, "%s: FuluForkEpoch", name)
+	assert.Equal(t, expected.EPBSForkEpoch, actual.EPBSForkEpoch, "%s: EPBSForkEpoch", name)
 	assert.Equal(t, expected.SqrRootSlotsPerEpoch, actual.SqrRootSlotsPerEpoch, "%s: SqrRootSlotsPerEpoch", name)
 	assert.DeepEqual(t, expected.GenesisForkVersion, actual.GenesisForkVersion, "%s: GenesisForkVersion", name)
 	assert.DeepEqual(t, expected.AltairForkVersion, actual.AltairForkVersion, "%s: AltairForkVersion", name)
@@ -164,6 +168,7 @@ func assertEqualConfigs(t *testing.T, name string, fields []string, expected, ac
 	assert.DeepEqual(t, expected.DenebForkVersion, actual.DenebForkVersion, "%s: DenebForkVersion", name)
 	assert.DeepEqual(t, expected.ElectraForkVersion, actual.ElectraForkVersion, "%s: ElectraForkVersion", name)
 	assert.DeepEqual(t, expected.FuluForkVersion, actual.FuluForkVersion, "%s: FuluForkVersion", name)
+	assert.DeepEqual(t, expected.EPBSForkVersion, actual.EPBSForkVersion, "%s: EPBSForkVersion", name)
 
 	assertYamlFieldsMatch(t, name, fields, expected, actual)
 }

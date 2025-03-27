@@ -15,6 +15,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/monitoring/backup"
 	"github.com/OffchainLabs/prysm/v6/proto/dbval"
+	engine "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -23,11 +24,13 @@ import (
 type ReadOnlyDatabase interface {
 	// Block related methods.
 	Block(ctx context.Context, blockRoot [32]byte) (interfaces.ReadOnlySignedBeaconBlock, error)
+	SignedExecutionPayloadHeader(ctx context.Context, blockRoot [32]byte) (interfaces.ROSignedExecutionPayloadHeader, error)
 	Blocks(ctx context.Context, f *filters.QueryFilter) ([]interfaces.ReadOnlySignedBeaconBlock, [][32]byte, error)
 	BlockRoots(ctx context.Context, f *filters.QueryFilter) ([][32]byte, error)
 	BlocksBySlot(ctx context.Context, slot primitives.Slot) ([]interfaces.ReadOnlySignedBeaconBlock, error)
 	BlockRootsBySlot(ctx context.Context, slot primitives.Slot) (bool, [][32]byte, error)
 	HasBlock(ctx context.Context, blockRoot [32]byte) bool
+	HasBlindPayloadEnvelope(ctx context.Context, hash [32]byte) bool
 	GenesisBlock(ctx context.Context) (interfaces.ReadOnlySignedBeaconBlock, error)
 	GenesisBlockRoot(ctx context.Context) ([32]byte, error)
 	IsFinalizedBlock(ctx context.Context, blockRoot [32]byte) bool
@@ -53,6 +56,7 @@ type ReadOnlyDatabase interface {
 	DepositContractAddress(ctx context.Context) ([]byte, error)
 	// ExecutionChainData operations.
 	ExecutionChainData(ctx context.Context) (*ethpb.ETH1ChainData, error)
+	SignedBlindPayloadEnvelope(ctx context.Context, blockHash []byte) (*engine.SignedBlindPayloadEnvelope, error)
 	// Fee recipients operations.
 	FeeRecipientByValidatorID(ctx context.Context, id primitives.ValidatorIndex) (common.Address, error)
 	RegistrationByValidatorID(ctx context.Context, id primitives.ValidatorIndex) (*ethpb.ValidatorRegistrationV1, error)
@@ -91,6 +95,7 @@ type NoHeadAccessDatabase interface {
 	SaveDepositContractAddress(ctx context.Context, addr common.Address) error
 	// SaveExecutionChainData operations.
 	SaveExecutionChainData(ctx context.Context, data *ethpb.ETH1ChainData) error
+	SaveBlindPayloadEnvelope(ctx context.Context, envelope interfaces.ROSignedExecutionPayloadEnvelope) error
 	// Run any required database migrations.
 	RunMigrations(ctx context.Context) error
 	// Fee recipients operations.

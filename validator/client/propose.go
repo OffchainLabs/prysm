@@ -58,6 +58,13 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 	span.SetAttributes(trace.StringAttribute("validator", fmtKey))
 	log := log.WithField("pubkey", fmt.Sprintf("%#x", bytesutil.Trunc(pubKey[:])))
 
+	if slots.ToEpoch(slot) >= params.BeaconConfig().EPBSForkEpoch {
+		if err := v.SubmitHeader(ctx, slot, pubKey); err != nil {
+			log.WithError(err).Error("Failed to submit header")
+			return
+		}
+	}
+
 	// Sign randao reveal, it's used to request block from beacon node
 	epoch := primitives.Epoch(slot / params.BeaconConfig().SlotsPerEpoch)
 	randaoReveal, err := v.signRandaoReveal(ctx, pubKey, epoch, slot)
@@ -128,7 +135,7 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 
 	var genericSignedBlock *ethpb.GenericSignedBeaconBlock
 	// Special handling for Deneb blocks and later version because of blob side cars.
-	if blk.Version() >= version.Deneb && !blk.IsBlinded() {
+	if blk.Version() >= version.Deneb && !blk.IsBlinded() && blk.Version() < version.EPBS {
 		pb, err := blk.Proto()
 		if err != nil {
 			log.WithError(err).Error("Failed to get deneb block")
@@ -181,6 +188,12 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 		trace.Int64Attribute("numDeposits", int64(len(blk.Block().Body().Deposits()))),
 		trace.Int64Attribute("numAttestations", int64(len(blk.Block().Body().Attestations()))),
 	)
+	if slots.ToEpoch(slot) >= params.BeaconConfig().EPBSForkEpoch {
+		if err := v.SubmitExecutionPayloadEnvelope(ctx, slot, pubKey); err != nil {
+			log.WithError(err).Error("Failed to submit payload")
+			return
+		}
+	}
 
 	if err := logProposedBlock(log, blk, blkResp.BlockRoot); err != nil {
 		log.WithError(err).Error("Failed to log proposed block")
@@ -192,7 +205,7 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 }
 
 func logProposedBlock(log *logrus.Entry, blk interfaces.SignedBeaconBlock, blkRoot []byte) error {
-	if blk.Version() >= version.Bellatrix {
+	if blk.Version() >= version.Bellatrix && blk.Version() < version.EPBS {
 		p, err := blk.Block().Body().Execution()
 		if err != nil {
 			return errors.Wrap(err, "failed to get execution payload")
@@ -227,6 +240,21 @@ func logProposedBlock(log *logrus.Entry, blk interfaces.SignedBeaconBlock, blkRo
 				log = log.WithField("kzgCommitmentCount", len(kzgs))
 			}
 		}
+	}
+	if blk.Version() >= version.EPBS {
+		signedHeader, err := blk.Block().Body().SignedExecutionPayloadHeader()
+		if err != nil {
+			return errors.Wrap(err, "failed to get signed header")
+		}
+		header, err := signedHeader.Header()
+		if err != nil {
+			return errors.Wrap(err, "failed to get header")
+		}
+		log = log.WithFields(logrus.Fields{
+			"builderIndex":      header.BuilderIndex(),
+			"value":             header.Value(),
+			"kzgCommitmentRoot": fmt.Sprintf("%#x", header.BlobKzgCommitmentsRoot()),
+		})
 	}
 
 	br := fmt.Sprintf("%#x", bytesutil.Trunc(blkRoot))

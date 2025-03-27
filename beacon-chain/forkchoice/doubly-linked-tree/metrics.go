@@ -18,7 +18,13 @@ var (
 	nodeCount = promauto.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "doublylinkedtree_node_count",
-			Help: "The number of nodes in the doubly linked tree based store structure.",
+			Help: "The number of nodes for blocks in the doubly linked tree based store structure.",
+		},
+	)
+	payloadCount = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "doublylinkedtree_payload_count",
+			Help: "The number of nodes for execution payloads in the doubly linked tree based store structure.",
 		},
 	)
 	headChangesCount = promauto.NewCounter(
@@ -37,6 +43,12 @@ var (
 		prometheus.CounterOpts{
 			Name: "doublylinkedtree_block_processed_count",
 			Help: "The number of times a block is processed for fork choice.",
+		},
+	)
+	processedPayloadCount = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "doublylinkedtree_payload_processed_count",
+			Help: "The number of times an execution payload is processed for fork choice.",
 		},
 	)
 	processedAttestationCount = promauto.NewCounter(

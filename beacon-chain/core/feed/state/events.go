@@ -33,6 +33,8 @@ const (
 	LightClientOptimisticUpdate
 	// PayloadAttributes events are fired upon a missed slot or new head.
 	PayloadAttributes
+	// PayloadProcessed is fired when a payload is processed.
+	PayloadProcessed
 )
 
 // BlockProcessedData is the data sent with BlockProcessed events.
@@ -51,6 +53,17 @@ type BlockProcessedData struct {
 	Verified bool
 	// Optimistic is true if the block is optimistic.
 	Optimistic bool
+}
+
+type PayloadProcessedData struct {
+	// Slot is the slot of the processed block.
+	Slot primitives.Slot
+	// BlockRoot of the processed block.
+	BlockRoot [32]byte
+	// ExecutionBlockHash is the hash of the execution payload.
+	ExecutionBlockHash [32]byte
+	// ExecutionOptimistic is true if the execution payload is optimistic.
+	ExecutionOptimistic bool
 }
 
 // ChainStartedData is the data sent with ChainStarted events.

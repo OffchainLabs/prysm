@@ -48,4 +48,9 @@ const (
 	// Introduced in Fulu network upgrade.
 	NumberOfColumns = 128 // NumberOfColumns refers to the specified number of data columns that can exist in a network.
 	CellsPerBlob    = 64  // CellsPerBlob refers to the number of cells in a (non-extended) blob.
+
+	// Introduced in epbs network upgrade.
+	PTCSize                        = 512 // PTC_SIZE [New in ePBS]
+	MaxPayloadAttestationsPerBlock = 4   // MAX_PAYLOAD_ATTESTATIONS [New in ePBS]
+	PayloadTimelyThreshold         = 256 // PTC_SIZE / 2 [New in ePBS]
 )

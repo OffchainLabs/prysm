@@ -154,3 +154,15 @@ func (dc *domainCache) forEpoch(e primitives.Epoch) ([]byte, error) {
 	}
 	return d, nil
 }
+
+func (dc *domainCache) forName(n string) ([]byte, error) {
+	fork, err := dc.fsched.VersionForName(n)
+	if err != nil {
+		return nil, err
+	}
+	d, ok := dc.forkDomains[fork]
+	if !ok {
+		return nil, errors.Wrapf(errUnknownDomain, "fork version=%#x, name=%s", fork, n)
+	}
+	return d, nil
+}

@@ -62,6 +62,8 @@ func BlockSignature(
 		wsb, err = blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockDeneb{Block: b})
 	case *ethpb.BeaconBlockElectra:
 		wsb, err = blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockElectra{Block: b})
+	case *ethpb.BeaconBlockEpbs:
+		wsb, err = blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockEpbs{Block: b})
 	default:
 		return nil, fmt.Errorf("unsupported block type %T", b)
 	}
@@ -86,6 +88,8 @@ func BlockSignature(
 		b.StateRoot = s[:]
 	case *ethpb.BeaconBlockElectra:
 		b.StateRoot = s[:]
+	case *ethpb.BeaconBlockEpbs:
+		b.StateRoot = s[:]
 	}
 
 	// Temporarily increasing the beacon state slot here since BeaconProposerIndex is a
@@ -103,6 +107,8 @@ func BlockSignature(
 	case *ethpb.BeaconBlockDeneb:
 		blockSlot = b.Slot
 	case *ethpb.BeaconBlockElectra:
+		blockSlot = b.Slot
+	case *ethpb.BeaconBlockEpbs:
 		blockSlot = b.Slot
 	}
 
@@ -130,6 +136,8 @@ func BlockSignature(
 	case *ethpb.BeaconBlockDeneb:
 		blockRoot, err = signing.ComputeSigningRoot(b, domain)
 	case *ethpb.BeaconBlockElectra:
+		blockRoot, err = signing.ComputeSigningRoot(b, domain)
+	case *ethpb.BeaconBlockEpbs:
 		blockRoot, err = signing.ComputeSigningRoot(b, domain)
 	}
 	if err != nil {

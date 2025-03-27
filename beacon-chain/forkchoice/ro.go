@@ -37,6 +37,13 @@ func (ro *ROForkChoice) HasNode(root [32]byte) bool {
 	return ro.getter.HasNode(root)
 }
 
+// HasHash delegates to the underlying forkchoice call, under a lock.
+func (ro *ROForkChoice) HasHash(root [32]byte) bool {
+	ro.l.RLock()
+	defer ro.l.RUnlock()
+	return ro.getter.HasHash(root)
+}
+
 // ProposerBoost delegates to the underlying forkchoice call, under a lock.
 func (ro *ROForkChoice) ProposerBoost() [fieldparams.RootLength]byte {
 	ro.l.RLock()
@@ -107,11 +114,11 @@ func (ro *ROForkChoice) NodeCount() int {
 	return ro.getter.NodeCount()
 }
 
-// HighestReceivedBlockSlot delegates to the underlying forkchoice call, under a lock.
-func (ro *ROForkChoice) HighestReceivedBlockSlot() primitives.Slot {
+// HighestReceivedBlockSlotRoot delegates to the underlying forkchoice call, under a lock.
+func (ro *ROForkChoice) HighestReceivedBlockSlotRoot() (primitives.Slot, [32]byte) {
 	ro.l.RLock()
 	defer ro.l.RUnlock()
-	return ro.getter.HighestReceivedBlockSlot()
+	return ro.getter.HighestReceivedBlockSlotRoot()
 }
 
 // HighestReceivedBlockRoot delegates to the underlying forkchoice call, under a lock.
@@ -119,6 +126,13 @@ func (ro *ROForkChoice) HighestReceivedBlockRoot() [32]byte {
 	ro.l.RLock()
 	defer ro.l.RUnlock()
 	return ro.getter.HighestReceivedBlockRoot()
+}
+
+// HighestReceivedBlockSlot delegates to the underlying forkchoice call, under a lock.
+func (ro *ROForkChoice) HighestReceivedBlockSlot() primitives.Slot {
+	ro.l.RLock()
+	defer ro.l.RUnlock()
+	return ro.getter.HighestReceivedBlockSlot()
 }
 
 // HighestReceivedBlockDelay delegates to the underlying forkchoice call, under a lock.
@@ -189,4 +203,17 @@ func (ro *ROForkChoice) ParentRoot(root [32]byte) ([32]byte, error) {
 	ro.l.RLock()
 	defer ro.l.RUnlock()
 	return ro.getter.ParentRoot(root)
+}
+
+// GetPTCVote delegates to the underlying forkchoice call, under a lock.
+func (ro *ROForkChoice) GetPTCVote() primitives.PTCStatus {
+	ro.l.RLock()
+	defer ro.l.RUnlock()
+	return ro.getter.GetPTCVote()
+}
+
+func (ro *ROForkChoice) HashForBlockRoot(root [32]byte) [32]byte {
+	ro.l.RLock()
+	defer ro.l.RUnlock()
+	return ro.getter.HashForBlockRoot(root)
 }

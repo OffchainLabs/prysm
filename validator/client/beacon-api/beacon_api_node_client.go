@@ -103,7 +103,7 @@ func (c *beaconApiNodeClient) Peers(ctx context.Context, in *empty.Empty) (*ethp
 
 func (c *beaconApiNodeClient) IsHealthy(ctx context.Context) bool {
 	if err := c.jsonRestHandler.Get(ctx, "/eth/v1/node/health", nil); err != nil {
-		log.WithError(err).Error("failed to get health of node")
+		log.WithError(err).Error("Failed to get health of node")
 		return false
 	}
 	return true

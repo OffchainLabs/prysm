@@ -7,15 +7,16 @@ package kv
 // it easy to scan for keys that have a certain shard number as a prefix and return those
 // corresponding attestations.
 var (
-	blocksBucket          = []byte("blocks")
-	stateBucket           = []byte("state")
-	stateSummaryBucket    = []byte("state-summary")
-	chainMetadataBucket   = []byte("chain-metadata")
-	checkpointBucket      = []byte("check-point")
-	powchainBucket        = []byte("powchain")
-	stateValidatorsBucket = []byte("state-validators")
-	feeRecipientBucket    = []byte("fee-recipient")
-	registrationBucket    = []byte("registration")
+	blocksBucket                   = []byte("blocks")
+	stateBucket                    = []byte("state")
+	stateSummaryBucket             = []byte("state-summary")
+	chainMetadataBucket            = []byte("chain-metadata")
+	checkpointBucket               = []byte("check-point")
+	powchainBucket                 = []byte("powchain")
+	stateValidatorsBucket          = []byte("state-validators")
+	feeRecipientBucket             = []byte("fee-recipient")
+	registrationBucket             = []byte("registration")
+	executionPayloadEnvelopeBucket = []byte("execution-payload-envelope")
 
 	// Light Client Updates Bucket
 	lightClientUpdatesBucket       = []byte("light-client-updates")
@@ -57,6 +58,7 @@ var (
 	electraBlindKey            = []byte("blind-electra")
 	fuluKey                    = []byte("fulu")
 	fuluBlindKey               = []byte("blind-fulu")
+	epbsKey                    = []byte("epbs")
 
 	// block root included in the beacon state used by weak subjectivity initial sync
 	originCheckpointBlockRootKey = []byte("origin-checkpoint-block-root")

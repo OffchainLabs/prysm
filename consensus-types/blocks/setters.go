@@ -144,7 +144,7 @@ func (b *SignedBeaconBlock) SetSyncAggregate(s *eth.SyncAggregate) error {
 // SetExecution sets the execution payload of the block body.
 // This function is not thread safe, it is only used during block creation.
 func (b *SignedBeaconBlock) SetExecution(e interfaces.ExecutionData) error {
-	if b.version == version.Phase0 || b.version == version.Altair {
+	if b.version >= version.EPBS || b.version < version.Bellatrix {
 		return consensus_types.ErrNotSupported("Execution", b.version)
 	}
 	if e.IsBlinded() {

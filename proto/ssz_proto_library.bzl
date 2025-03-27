@@ -43,6 +43,10 @@ mainnet = {
     "cells_per_blob.size": "128",
     "kzg_commitments_inclusion_proof_depth.size": "4",
     "proposer_lookahead_size": "64",  # (MIN_SEED_LOOKAHEAD + 1) * SLOTS_PER_EPOCH
+    "max_inclusion_list.size": "1024", #MAX_TRANSACTIONS_PER_INCLUSION_LIST
+    "ptc.size": "64", #PTC_SIZE
+    "ptc.type": "github.com/prysmaticlabs/go-bitfield.Bitvector512",
+    "payload_attestation.size": "4",
 }
 
 minimal = {
@@ -82,6 +86,10 @@ minimal = {
     "cells_per_blob.size": "128",
     "kzg_commitments_inclusion_proof_depth.size": "4",
     "proposer_lookahead_size": "16",  # (MIN_SEED_LOOKAHEAD + 1) * SLOTS_PER_EPOCH
+    "max_inclusion_list.size": "16", #MAX_TRANSACTIONS_PER_INCLUSION_LIST
+    "ptc.size": "4", #PTC_SIZE
+    "ptc.type": "github.com/prysmaticlabs/go-bitfield.Bitvector32",
+    "payload_attestation.size": "4",
 }
 
 ###### Rules definitions #######

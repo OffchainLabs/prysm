@@ -30,6 +30,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/network/forks"
+	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"google.golang.org/grpc/codes"
@@ -42,44 +43,50 @@ import (
 // and committees in which particular validators need to perform their responsibilities,
 // and more.
 type Server struct {
-	Ctx                     context.Context
-	PayloadIDCache          *cache.PayloadIDCache
-	TrackedValidatorsCache  *cache.TrackedValidatorsCache
-	HeadFetcher             blockchain.HeadFetcher
-	ForkFetcher             blockchain.ForkFetcher
-	ForkchoiceFetcher       blockchain.ForkchoiceFetcher
-	GenesisFetcher          blockchain.GenesisFetcher
-	FinalizationFetcher     blockchain.FinalizationFetcher
-	TimeFetcher             blockchain.TimeFetcher
-	BlockFetcher            execution.POWBlockFetcher
-	DepositFetcher          cache.DepositFetcher
-	ChainStartFetcher       execution.ChainStartFetcher
-	Eth1InfoFetcher         execution.ChainInfoFetcher
-	OptimisticModeFetcher   blockchain.OptimisticModeFetcher
-	SyncChecker             sync.Checker
-	StateNotifier           statefeed.Notifier
-	BlockNotifier           blockfeed.Notifier
-	P2P                     p2p.Broadcaster
-	AttestationCache        *cache.AttestationCache
-	AttPool                 attestations.Pool
-	SlashingsPool           slashings.PoolManager
-	ExitPool                voluntaryexits.PoolManager
-	SyncCommitteePool       synccommittee.Pool
-	BlockReceiver           blockchain.BlockReceiver
-	BlobReceiver            blockchain.BlobReceiver
-	MockEth1Votes           bool
-	Eth1BlockFetcher        execution.POWBlockFetcher
-	PendingDepositsFetcher  depositsnapshot.PendingDepositsFetcher
-	OperationNotifier       opfeed.Notifier
-	StateGen                stategen.StateManager
-	ReplayerBuilder         stategen.ReplayerBuilder
-	BeaconDB                db.HeadAccessDatabase
-	ExecutionEngineCaller   execution.EngineCaller
-	BlockBuilder            builder.BlockBuilder
-	BLSChangesPool          blstoexec.PoolManager
-	ClockWaiter             startup.ClockWaiter
-	CoreService             *core.Service
-	AttestationStateFetcher blockchain.AttestationStateFetcher
+	Ctx                          context.Context
+	PayloadIDCache               *cache.PayloadIDCache
+	TrackedValidatorsCache       *cache.TrackedValidatorsCache
+	HeadFetcher                  blockchain.HeadFetcher
+	ForkFetcher                  blockchain.ForkFetcher
+	ForkchoiceFetcher            blockchain.ForkchoiceFetcher
+	GenesisFetcher               blockchain.GenesisFetcher
+	FinalizationFetcher          blockchain.FinalizationFetcher
+	TimeFetcher                  blockchain.TimeFetcher
+	BlockFetcher                 execution.POWBlockFetcher
+	DepositFetcher               cache.DepositFetcher
+	ChainStartFetcher            execution.ChainStartFetcher
+	Eth1InfoFetcher              execution.ChainInfoFetcher
+	OptimisticModeFetcher        blockchain.OptimisticModeFetcher
+	SyncChecker                  sync.Checker
+	StateNotifier                statefeed.Notifier
+	BlockNotifier                blockfeed.Notifier
+	P2P                          p2p.Broadcaster
+	AttestationCache             *cache.AttestationCache
+	AttPool                      attestations.Pool
+	SlashingsPool                slashings.PoolManager
+	ExitPool                     voluntaryexits.PoolManager
+	SyncCommitteePool            synccommittee.Pool
+	BlockReceiver                blockchain.BlockReceiver
+	BlobReceiver                 blockchain.BlobReceiver
+	ExecutionPayloadReceiver     blockchain.ExecutionPayloadReceiver
+	MockEth1Votes                bool
+	Eth1BlockFetcher             execution.POWBlockFetcher
+	PendingDepositsFetcher       depositsnapshot.PendingDepositsFetcher
+	OperationNotifier            opfeed.Notifier
+	StateGen                     stategen.StateManager
+	ReplayerBuilder              stategen.ReplayerBuilder
+	BeaconDB                     db.HeadAccessDatabase
+	ExecutionEngineCaller        execution.EngineCaller
+	BlockBuilder                 builder.BlockBuilder
+	BLSChangesPool               blstoexec.PoolManager
+	ClockWaiter                  startup.ClockWaiter
+	CoreService                  *core.Service
+	AttestationStateFetcher      blockchain.AttestationStateFetcher
+	PayloadAttestationReceiver   blockchain.PayloadAttestationReceiver
+	signedExecutionPayloadHeader *enginev1.SignedExecutionPayloadHeader
+	PayloadAttestationCache      cache.PayloadAttestationCache
+	payloadEnvelope              *enginev1.ExecutionPayloadEnvelope
+	blobsBundle                  enginev1.BlobsBundler
 }
 
 // Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.

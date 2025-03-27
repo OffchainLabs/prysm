@@ -37,7 +37,7 @@ func (v *validator) SubmitAttestation(ctx context.Context, slot primitives.Slot,
 	defer span.End()
 	span.SetAttributes(trace.StringAttribute("validator", fmt.Sprintf("%#x", pubKey)))
 
-	v.waitOneThirdOrValidBlock(ctx, slot)
+	v.waitAttesterDuty(ctx, slot)
 
 	var b strings.Builder
 	if err := b.WriteByte(byte(iface.RoleAttester)); err != nil {
@@ -263,12 +263,9 @@ func (v *validator) setHighestSlot(slot primitives.Slot) {
 	}
 }
 
-// waitOneThirdOrValidBlock waits until (a) or (b) whichever comes first:
-//
-//	(a) the validator has received a valid block that is the same slot as input slot
-//	(b) one-third of the slot has transpired (SECONDS_PER_SLOT / 3 seconds after the start of slot)
-func (v *validator) waitOneThirdOrValidBlock(ctx context.Context, slot primitives.Slot) {
-	ctx, span := trace.StartSpan(ctx, "validator.waitOneThirdOrValidBlock")
+// waitAttesterDuty waits for attestor duty given the slot intervals and if current slot block has arrived.
+func (v *validator) waitAttesterDuty(ctx context.Context, slot primitives.Slot) {
+	ctx, span := trace.StartSpan(ctx, "validator.waitAttesterDuty")
 	defer span.End()
 
 	// Don't need to wait if requested slot is the same as highest valid slot.
@@ -276,7 +273,13 @@ func (v *validator) waitOneThirdOrValidBlock(ctx context.Context, slot primitive
 		return
 	}
 
-	delay := slots.DivideSlotBy(3 /* a third of the slot duration */)
+	var delay time.Duration
+	if slots.ToEpoch(slot) >= params.BeaconConfig().EPBSForkEpoch {
+		delay = slots.DivideSlotBy(int64(params.BeaconConfig().IntervalsPerSlotEPBS))
+	} else {
+		delay = slots.DivideSlotBy(int64(params.BeaconConfig().IntervalsPerSlot))
+	}
+
 	startTime, err := slots.StartTime(v.genesisTime, slot)
 	if err != nil {
 		log.WithError(err).WithField("slot", slot).Error("Slot overflows, unable to wait for slot two thirds!")

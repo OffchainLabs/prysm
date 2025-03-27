@@ -35,6 +35,7 @@ const (
 
 	GetNodeVersionPath      = "/eth/v1/node/version"
 	GetWeakSubjectivityPath = "/prysm/v1/beacon/weak_subjectivity"
+	getPayloadEnvelopePath  = "/eth/v1/beacon/execution_payload"
 )
 
 // StateOrBlockId represents the block_id / state_id parameters that several of the Eth Beacon API methods accept.

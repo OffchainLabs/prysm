@@ -52,11 +52,17 @@ type BeaconState struct {
 	latestExecutionPayloadHeader        *enginev1.ExecutionPayloadHeader
 	latestExecutionPayloadHeaderCapella *enginev1.ExecutionPayloadHeaderCapella
 	latestExecutionPayloadHeaderDeneb   *enginev1.ExecutionPayloadHeaderDeneb
+	latestExecutionPayloadHeaderEPBS    *enginev1.ExecutionPayloadHeaderEPBS
 
 	// Capella fields
 	nextWithdrawalIndex          uint64
 	nextWithdrawalValidatorIndex primitives.ValidatorIndex
 	historicalSummaries          []*ethpb.HistoricalSummary
+
+	// ePBS fields
+	latestBlockHash       [32]byte
+	latestFullSlot        primitives.Slot
+	latestWithdrawalsRoot [32]byte
 
 	// Electra fields
 	depositRequestsStartIndex     uint64
@@ -112,6 +118,7 @@ type beaconStateMarshalable struct {
 	LatestExecutionPayloadHeader        *enginev1.ExecutionPayloadHeader        `json:"latest_execution_payload_header" yaml:"latest_execution_payload_header"`
 	LatestExecutionPayloadHeaderCapella *enginev1.ExecutionPayloadHeaderCapella `json:"latest_execution_payload_header_capella" yaml:"latest_execution_payload_header_capella"`
 	LatestExecutionPayloadHeaderDeneb   *enginev1.ExecutionPayloadHeaderDeneb   `json:"latest_execution_payload_header_deneb" yaml:"latest_execution_payload_header_deneb"`
+	LatestExecutionPayloadHeaderEPBS    *enginev1.ExecutionPayloadHeaderEPBS    `json:"latest_execution_payload_header_eip7732" yaml:"latest_execution_payload_header_eip7732"`
 	NextWithdrawalIndex                 uint64                                  `json:"next_withdrawal_index" yaml:"next_withdrawal_index"`
 	NextWithdrawalValidatorIndex        primitives.ValidatorIndex               `json:"next_withdrawal_validator_index" yaml:"next_withdrawal_validator_index"`
 	HistoricalSummaries                 []*ethpb.HistoricalSummary              `json:"historical_summaries" yaml:"historical_summaries"`
@@ -125,6 +132,9 @@ type beaconStateMarshalable struct {
 	PendingPartialWithdrawals           []*ethpb.PendingPartialWithdrawal       `json:"pending_partial_withdrawals" yaml:"pending_partial_withdrawals"`
 	PendingConsolidations               []*ethpb.PendingConsolidation           `json:"pending_consolidations" yaml:"pending_consolidations"`
 	ProposerLookahead                   []primitives.ValidatorIndex             `json:"proposer_look_ahead" yaml:"proposer_look_ahead"`
+	LatestBlockHash                     [32]byte                                `json:"latest_block_hash" yaml:"latest_block_hash"`
+	LatestFullSlot                      primitives.Slot                         `json:"latest_full_slot" yaml:"latest_full_slot"`
+	LatestWithdrawalsRoot               [32]byte                                `json:"latest_withdrawals_root" yaml:"latest_withdrawals_root"`
 }
 
 func (b *BeaconState) MarshalJSON() ([]byte, error) {
@@ -166,6 +176,7 @@ func (b *BeaconState) MarshalJSON() ([]byte, error) {
 		LatestExecutionPayloadHeader:        b.latestExecutionPayloadHeader,
 		LatestExecutionPayloadHeaderCapella: b.latestExecutionPayloadHeaderCapella,
 		LatestExecutionPayloadHeaderDeneb:   b.latestExecutionPayloadHeaderDeneb,
+		LatestExecutionPayloadHeaderEPBS:    b.latestExecutionPayloadHeaderEPBS,
 		NextWithdrawalIndex:                 b.nextWithdrawalIndex,
 		NextWithdrawalValidatorIndex:        b.nextWithdrawalValidatorIndex,
 		HistoricalSummaries:                 b.historicalSummaries,
@@ -179,6 +190,9 @@ func (b *BeaconState) MarshalJSON() ([]byte, error) {
 		PendingPartialWithdrawals:           b.pendingPartialWithdrawals,
 		PendingConsolidations:               b.pendingConsolidations,
 		ProposerLookahead:                   b.proposerLookahead,
+		LatestBlockHash:                     b.latestBlockHash,
+		LatestFullSlot:                      b.latestFullSlot,
+		LatestWithdrawalsRoot:               b.latestWithdrawalsRoot,
 	}
 	return json.Marshal(marshalable)
 }

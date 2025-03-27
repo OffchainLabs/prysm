@@ -22,6 +22,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
+	prysmTime "github.com/OffchainLabs/prysm/v6/time"
 	"github.com/prysmaticlabs/go-bitfield"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"go.uber.org/mock/gomock"
@@ -444,7 +445,7 @@ func TestAttestToBlockHead_DoesNotAttestBeforeDelay(t *testing.T) {
 
 			var pubKey [fieldparams.BLSPubkeyLength]byte
 			copy(pubKey[:], validatorKey.PublicKey().Marshal())
-			validator.genesisTime = time.Now()
+			validator.genesisTime = uint64(prysmTime.Now().Unix())
 			m.validatorClient.EXPECT().Duties(
 				gomock.Any(), // ctx
 				gomock.AssignableToTypeOf(&ethpb.DutiesRequest{}),
@@ -477,7 +478,7 @@ func TestAttestToBlockHead_DoesAttestAfterDelay(t *testing.T) {
 			wg.Add(1)
 			defer wg.Wait()
 
-			validator.genesisTime = time.Now()
+			validator.genesisTime = uint64(prysmTime.Now().Unix())
 			validatorIndex := primitives.ValidatorIndex(5)
 			committee := []primitives.ValidatorIndex{0, 3, 4, 2, validatorIndex, 6, 8, 9, 10}
 			var pubKey [fieldparams.BLSPubkeyLength]byte
@@ -602,9 +603,9 @@ func TestSignAttestation(t *testing.T) {
 }
 
 func TestServer_WaitToSlotOneThird_CanWait(t *testing.T) {
-	currentTime := time.Now()
+	currentTime := uint64(time.Now().Unix())
 	currentSlot := primitives.Slot(4)
-	genesisTime := currentTime.Add(-1 * time.Duration(currentSlot.Mul(params.BeaconConfig().SecondsPerSlot)) * time.Second)
+	genesisTime := currentTime - uint64(currentSlot.Mul(params.BeaconConfig().SecondsPerSlot))
 
 	v := &validator{
 		genesisTime: genesisTime,
@@ -612,18 +613,42 @@ func TestServer_WaitToSlotOneThird_CanWait(t *testing.T) {
 	}
 
 	timeToSleep := params.BeaconConfig().SecondsPerSlot / 3
-	oneThird := currentTime.Add(time.Duration(timeToSleep) * time.Second)
-	v.waitOneThirdOrValidBlock(t.Context(), currentSlot)
+	oneThird := currentTime + timeToSleep
+	v.waitAttesterDuty(t.Context(), currentSlot)
 
-	if oneThird.Sub(time.Now()) > 10*time.Millisecond { // Allow for small diff due to execution time.
-		t.Errorf("Wanted %s time for slot one third but got %s", oneThird, currentTime)
+	if oneThird != uint64(time.Now().Unix()) {
+		t.Errorf("Wanted %d time for slot one third but got %d", oneThird, currentTime)
+	}
+}
+
+func TestServer_WaitAttesterDutyEpbs_CanWait(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.EPBSForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	currentTime := uint64(time.Now().Unix())
+	currentSlot := primitives.Slot(4)
+	genesisTime := currentTime - uint64(currentSlot.Mul(params.BeaconConfig().SecondsPerSlot))
+
+	v := &validator{
+		genesisTime: genesisTime,
+		slotFeed:    new(event.Feed),
+	}
+
+	timeToSleep := params.BeaconConfig().SecondsPerSlot / params.BeaconConfig().IntervalsPerSlotEPBS
+	dutyTime := currentTime + timeToSleep
+	v.waitAttesterDuty(context.Background(), currentSlot)
+
+	if dutyTime != uint64(time.Now().Unix()) {
+		t.Errorf("Wanted %d time for slot one third but got %d", dutyTime, currentTime)
 	}
 }
 
 func TestServer_WaitToSlotOneThird_SameReqSlot(t *testing.T) {
-	currentTime := time.Now()
+	currentTime := uint64(time.Now().Unix())
 	currentSlot := primitives.Slot(4)
-	genesisTime := currentTime.Add(-1 * time.Duration(currentSlot.Mul(params.BeaconConfig().SecondsPerSlot)) * time.Second)
+	genesisTime := currentTime - uint64(currentSlot.Mul(params.BeaconConfig().SecondsPerSlot))
 
 	v := &validator{
 		genesisTime:      genesisTime,
@@ -631,10 +656,10 @@ func TestServer_WaitToSlotOneThird_SameReqSlot(t *testing.T) {
 		highestValidSlot: currentSlot,
 	}
 
-	v.waitOneThirdOrValidBlock(t.Context(), currentSlot)
+	v.waitAttesterDuty(t.Context(), currentSlot)
 
-	if currentTime.Sub(time.Now()) > 10*time.Millisecond { // Allow for small diff due to execution time.
-		t.Errorf("Wanted %s time for slot one third but got %s", time.Now(), currentTime)
+	if currentTime != uint64(time.Now().Unix()) {
+		t.Errorf("Wanted %d time for slot one third but got %d", uint64(time.Now().Unix()), currentTime)
 	}
 }
 
@@ -642,9 +667,9 @@ func TestServer_WaitToSlotOneThird_ReceiveBlockSlot(t *testing.T) {
 	resetCfg := features.InitWithReset(&features.Flags{AttestTimely: true})
 	defer resetCfg()
 
-	currentTime := time.Now()
+	currentTime := uint64(time.Now().Unix())
 	currentSlot := primitives.Slot(4)
-	genesisTime := currentTime.Add(-1 * time.Duration(currentSlot.Mul(params.BeaconConfig().SecondsPerSlot)) * time.Second)
+	genesisTime := currentTime - uint64(currentSlot.Mul(params.BeaconConfig().SecondsPerSlot))
 
 	v := &validator{
 		genesisTime: genesisTime,
@@ -659,10 +684,10 @@ func TestServer_WaitToSlotOneThird_ReceiveBlockSlot(t *testing.T) {
 		wg.Done()
 	}()
 
-	v.waitOneThirdOrValidBlock(t.Context(), currentSlot)
+	v.waitAttesterDuty(t.Context(), currentSlot)
 
-	if currentTime.Sub(time.Now()) > 10*time.Millisecond { // Allow for small diff due to execution time.
-		t.Errorf("Wanted %s time for slot one third but got %s", time.Now(), currentTime)
+	if currentTime != uint64(time.Now().Unix()) {
+		t.Errorf("Wanted %d time for slot one third but got %d", uint64(time.Now().Unix()), currentTime)
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	consensus_blocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/forkchoice"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
@@ -34,11 +35,11 @@ func (s *Service) SetForkChoiceGenesisTime(timestamp time.Time) {
 	s.cfg.ForkChoiceStore.SetGenesisTime(timestamp)
 }
 
-// HighestReceivedBlockSlot returns the corresponding value from forkchoice
-func (s *Service) HighestReceivedBlockSlot() primitives.Slot {
+// HighestReceivedBlockSlotRoot returns the corresponding value from forkchoice
+func (s *Service) HighestReceivedBlockSlotRoot() (primitives.Slot, [32]byte) {
 	s.cfg.ForkChoiceStore.RLock()
 	defer s.cfg.ForkChoiceStore.RUnlock()
-	return s.cfg.ForkChoiceStore.HighestReceivedBlockSlot()
+	return s.cfg.ForkChoiceStore.HighestReceivedBlockSlotRoot()
 }
 
 // ReceivedBlocksLastEpoch returns the corresponding value from forkchoice
@@ -121,6 +122,13 @@ func (s *Service) hashForGenesisBlock(ctx context.Context, root [32]byte) ([]byt
 	if st.Version() < version.Bellatrix {
 		return nil, nil
 	}
+	if st.Version() >= version.EPBS {
+		header, err := st.LatestExecutionPayloadHeaderEPBS()
+		if err != nil {
+			return nil, errors.Wrap(err, "could not get latest execution payload header")
+		}
+		return bytesutil.SafeCopyBytes(header.BlockHash), nil
+	}
 	header, err := st.LatestExecutionPayloadHeader()
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get latest execution payload header")
@@ -133,4 +141,66 @@ func (s *Service) DependentRoot(epoch primitives.Epoch) ([32]byte, error) {
 	s.cfg.ForkChoiceStore.RLock()
 	defer s.cfg.ForkChoiceStore.RUnlock()
 	return s.cfg.ForkChoiceStore.DependentRoot(epoch)
+}
+
+// HashForBlockRoot wraps a call to the corresponding method in forkchoice. If the hash is older it will grab it from DB
+func (s *Service) HashForBlockRoot(ctx context.Context, root [32]byte) ([]byte, error) {
+	s.cfg.ForkChoiceStore.RLock()
+	defer s.cfg.ForkChoiceStore.RUnlock()
+	hash := s.cfg.ForkChoiceStore.HashForBlockRoot(root)
+	if hash != [32]byte{} {
+		return hash[:], nil
+	}
+	blk, err := s.cfg.BeaconDB.Block(ctx, root)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get block from DB and forkchoice")
+	}
+	// check for genesis block hash
+	genHash, err := s.hashForGenesisBlock(ctx, root)
+	if err == nil {
+		return genHash, nil
+	}
+	if !errors.Is(err, errNotGenesisRoot) {
+		return nil, errors.Wrap(err, "failed to get genesis block hash")
+	}
+	if blk.Version() < version.EPBS {
+		return nil, errors.New("block version is too old")
+	}
+	sh, err := blk.Block().Body().SignedExecutionPayloadHeader()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get signed execution payload header")
+	}
+	h, err := sh.Header()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get execution payload header")
+	}
+	hash = h.BlockHash()
+	return hash[:], nil
+}
+
+// GetPTCVote wraps a call to the corresponding method in forkchoice and checks
+// the currently syncing status
+// Warning: this method will return the current PTC status regardless of
+// timeliness. A client MUST call this method when about to submit a PTC
+// attestation, that is exactly at the threshold to submit the attestation.
+func (s *Service) GetPTCVote(root [32]byte) primitives.PTCStatus {
+	s.cfg.ForkChoiceStore.RLock()
+	f := s.cfg.ForkChoiceStore.GetPTCVote()
+	s.cfg.ForkChoiceStore.RUnlock()
+	if f != primitives.PAYLOAD_ABSENT {
+		return f
+	}
+	f, isSyncing := s.payloadBeingSynced.isSyncing(root)
+	if isSyncing {
+		return f
+	}
+	return primitives.PAYLOAD_ABSENT
+}
+
+// insertPayloadEnvelope wraps a locked call to the corresponding method in
+// forkchoice
+func (s *Service) insertPayloadEnvelope(envelope interfaces.ROExecutionPayloadEnvelope) error {
+	s.cfg.ForkChoiceStore.Lock()
+	defer s.cfg.ForkChoiceStore.Unlock()
+	return s.cfg.ForkChoiceStore.InsertPayloadEnvelope(envelope)
 }

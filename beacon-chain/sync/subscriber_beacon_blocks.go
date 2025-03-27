@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition/interop"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
@@ -18,6 +19,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 )
+
+const slotDeadline = time.Duration(5) * time.Second
 
 func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) error {
 	signed, err := blocks.NewSignedBeaconBlock(msg)
@@ -45,9 +48,6 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 			if r != [32]byte{} {
 				s.setBadBlock(ctx, r) // Setting head block as bad.
 			} else {
-				// TODO(13721): Remove this once we can deprecate the flag.
-				interop.WriteBlockToDisk(signed, true /*failed*/)
-
 				saveInvalidBlockToTemp(signed)
 				s.setBadBlock(ctx, root)
 			}
@@ -58,7 +58,8 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 		}
 		return err
 	}
-	return err
+	go s.processPendingPayloads(root)
+	return nil
 }
 
 // processSidecarsFromExecution retrieves (if available) sidecars data from the execution client,
@@ -245,4 +246,40 @@ func saveInvalidBlockToTemp(block interfaces.ReadOnlySignedBeaconBlock) {
 	if err := file.WriteFile(fp, enc); err != nil {
 		log.WithError(err).Error("Failed to write to disk")
 	}
+}
+
+func (s *Service) processPendingPayloads(root [32]byte) {
+	ctx, cancel := context.WithTimeout(context.Background(), slotDeadline)
+	defer cancel()
+	payload := s.pendingExecutionPayloads.Get(root)
+	if payload == nil {
+		return
+	}
+	if s.cfg.chain.PayloadBeingSynced(root) || s.cfg.chain.HashInForkchoice([32]byte(payload.Message.Payload.BlockHash)) {
+		s.pendingExecutionPayloads.Remove(root)
+		return
+	}
+	e, err := blocks.WrappedROSignedExecutionPayloadEnvelope(payload)
+	if err != nil {
+		log.WithError(err).Error("Failed to create read only signed payload execution envelope")
+		return
+	}
+	v := s.newExecutionPayloadEnvelopeVerifier(e, verification.GossipExecutionPayloadEnvelopeRequirements)
+	if err := v.VerifyBlockRootSeen(func([32]byte) bool { return true }); err != nil {
+		// This can't happen
+		return
+	}
+	if _, err := s.validateAfterBlockRootSeen(ctx, payload, v); err != nil {
+		log.WithError(err).Error("Failed to validate pending payload")
+		return
+	}
+	if err := s.cfg.chain.ReceiveExecutionPayloadEnvelope(ctx, e, nil); err != nil {
+		log.WithError(err).Error("Failed to receive pending payload")
+		return
+	}
+	if err := s.cfg.p2p.Broadcast(ctx, e.Proto()); err != nil {
+		log.WithError(err).Error("Failed to broadcast pending payload")
+	}
+	s.pendingExecutionPayloads.Remove(root)
+	return
 }

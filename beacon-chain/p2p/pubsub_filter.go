@@ -83,6 +83,11 @@ func (s *Service) CanSubscribe(topic string) bool {
 		log.WithError(err).Error("Could not determine Fulu fork digest")
 		return false
 	}
+	epbsForkDigest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().EPBSForkEpoch, s.genesisValidatorsRoot)
+	if err != nil {
+		log.WithError(err).Error("Could not determine EPBS fork digest")
+		return false
+	}
 	switch parts[2] {
 	case fmt.Sprintf("%x", phase0ForkDigest):
 	case fmt.Sprintf("%x", altairForkDigest):
@@ -91,6 +96,7 @@ func (s *Service) CanSubscribe(topic string) bool {
 	case fmt.Sprintf("%x", denebForkDigest):
 	case fmt.Sprintf("%x", electraForkDigest):
 	case fmt.Sprintf("%x", fuluForkDigest):
+	case fmt.Sprintf("%x", epbsForkDigest):
 	default:
 		return false
 	}

@@ -1733,3 +1733,28 @@ func TestDetectAndBroadcastEquivocation(t *testing.T) {
 		require.ErrorIs(t, err, ErrSlashingSignatureFailure)
 	})
 }
+
+func Test_seenBlockRoot(t *testing.T) {
+	chainService := &mock.ChainService{
+		NotFinalized: false, // InForkchoice returns true
+	}
+	s := Service{
+		cfg: &config{
+			chain: chainService,
+		},
+	}
+	s.initCaches()
+	root := [32]byte{'b', 'a', 'd'}
+	ctx := context.Background()
+
+	// Block is not bad but is in forkchoice
+	require.Equal(t, true, s.seenBlockRoot(root))
+
+	// Block is not bad and not in forkchoice
+	chainService.NotFinalized = true
+	require.Equal(t, false, s.seenBlockRoot(root))
+
+	// Block is bad
+	s.setBadBlock(ctx, root)
+	require.Equal(t, true, s.seenBlockRoot(root))
+}

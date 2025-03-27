@@ -42,31 +42,47 @@ func logStateTransitionData(b interfaces.ReadOnlyBeaconBlock) error {
 		}
 		log = log.WithField("syncBitsCount", agg.SyncCommitteeBits.Count())
 	}
-	if b.Version() >= version.Bellatrix {
-		p, err := b.Body().Execution()
+	if b.Version() >= version.EPBS {
+		sh, err := b.Body().SignedExecutionPayloadHeader()
 		if err != nil {
 			return err
 		}
-		log = log.WithField("payloadHash", fmt.Sprintf("%#x", bytesutil.Trunc(p.BlockHash())))
-		txs, err := p.Transactions()
-		switch {
-		case errors.Is(err, consensus_types.ErrUnsupportedField):
-		case err != nil:
-			return err
-		default:
-			log = log.WithField("txCount", len(txs))
-			txsPerSlotCount.Set(float64(len(txs)))
-		}
-	}
-	if b.Version() >= version.Deneb {
-		kzgs, err := b.Body().BlobKzgCommitments()
+		header, err := sh.Header()
 		if err != nil {
-			log.WithError(err).Error("Failed to get blob KZG commitments")
-		} else if len(kzgs) > 0 {
-			log = log.WithField("kzgCommitmentCount", len(kzgs))
+			return err
+		}
+		log = log.WithFields(logrus.Fields{"payloadHash": fmt.Sprintf("%#x", header.BlockHash()),
+			"builderIndex":           header.BuilderIndex(),
+			"value":                  header.Value(),
+			"blobKzgCommitmentsRoot": fmt.Sprintf("%#x", header.BlobKzgCommitmentsRoot()),
+		})
+	} else {
+		if b.Version() >= version.Bellatrix {
+			p, err := b.Body().Execution()
+			if err != nil {
+				return err
+			}
+			log = log.WithField("payloadHash", fmt.Sprintf("%#x", bytesutil.Trunc(p.BlockHash())))
+			txs, err := p.Transactions()
+			switch {
+			case errors.Is(err, consensus_types.ErrUnsupportedField):
+			case err != nil:
+				return err
+			default:
+				log = log.WithField("txCount", len(txs))
+				txsPerSlotCount.Set(float64(len(txs)))
+			}
+		}
+		if b.Version() >= version.Deneb {
+			kzgs, err := b.Body().BlobKzgCommitments()
+			if err != nil {
+				log.WithError(err).Error("Failed to get blob KZG commitments")
+			} else if len(kzgs) > 0 {
+				log = log.WithField("kzgCommitmentCount", len(kzgs))
+			}
 		}
 	}
-	if b.Version() >= version.Electra {
+	if b.Version() >= version.Electra && b.Version() < version.EPBS {
 		eReqs, err := b.Body().ExecutionRequests()
 		if err != nil {
 			log.WithError(err).Error("Failed to get execution requests")
@@ -109,6 +125,18 @@ func logBlockSyncStatus(block interfaces.ReadOnlyBeaconBlock, blockRoot [32]byte
 			"chainServiceProcessedTime":  prysmTime.Now().Sub(receivedTime) - daWaitedTime,
 			"dataAvailabilityWaitedTime": daWaitedTime,
 		}
+		if block.Version() >= version.EPBS {
+			ph, err := block.Body().SignedExecutionPayloadHeader()
+			if err != nil {
+				return err
+			}
+			header, err := ph.Header()
+			if err != nil {
+				return err
+			}
+			hash := header.ParentBlockHash()
+			lf["parentHash"] = fmt.Sprintf("0x%s...", hex.EncodeToString(hash[:])[:8])
+		}
 		log.WithFields(lf).Debug("Synced new block")
 	} else {
 		log.WithFields(logrus.Fields{
@@ -124,6 +152,9 @@ func logBlockSyncStatus(block interfaces.ReadOnlyBeaconBlock, blockRoot [32]byte
 
 // logs payload related data every slot.
 func logPayload(block interfaces.ReadOnlyBeaconBlock) error {
+	if block.Version() >= version.EPBS {
+		return nil
+	}
 	isExecutionBlk, err := blocks.IsExecutionBlock(block.Body())
 	if err != nil {
 		return errors.Wrap(err, "could not determine if block is execution block")

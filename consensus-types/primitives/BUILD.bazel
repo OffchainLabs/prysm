@@ -10,7 +10,10 @@ go_library(
         "epoch.go",
         "execution_address.go",
         "kzg.go",
+        "payload_attestations_mainnet.go",
+        "payload_attestations_minimal.go",  #keep
         "payload_id.go",
+        "ptc_status.go",
         "slot.go",
         "sszbytes.go",
         "sszuint64.go",

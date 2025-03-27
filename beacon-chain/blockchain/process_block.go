@@ -68,7 +68,9 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 	fcuArgs := &fcuConfig{}
 
 	if s.inRegularSync() {
-		defer s.handleSecondFCUCall(cfg, fcuArgs)
+		if cfg.roblock.Version() < version.EPBS {
+			defer s.handleSecondFCUCall(cfg, fcuArgs)
+		}
 	}
 	if features.Get().EnableLightClient && slots.ToEpoch(s.CurrentSlot()) >= params.BeaconConfig().AltairForkEpoch {
 		defer s.processLightClientUpdates(cfg)
@@ -103,6 +105,16 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 	if cfg.headRoot != cfg.roblock.Root() {
 		s.logNonCanonicalBlockReceived(cfg.roblock.Root(), cfg.headRoot)
 		return nil
+	}
+	if cfg.roblock.Version() >= version.EPBS {
+		if err := s.saveHead(ctx, cfg.headRoot, cfg.roblock, cfg.postState); err != nil {
+			log.WithError(err).Error("Could not save head")
+		}
+		s.pruneAttsFromPool(ctx, cfg.postState, cfg.roblock)
+
+		// update the NSC and handle epoch boundaries here since we do
+		// not send FCU at all
+		return s.updateCachesPostBlockProcessing(cfg)
 	}
 	if err := s.getFCUArgs(cfg, fcuArgs); err != nil {
 		log.WithError(err).Error("Could not get forkchoice update argument")
@@ -384,7 +396,7 @@ func (s *Service) handleBlockAttestations(ctx context.Context, blk interfaces.Re
 		}
 		r := bytesutil.ToBytes32(a.GetData().BeaconBlockRoot)
 		if s.cfg.ForkChoiceStore.HasNode(r) {
-			s.cfg.ForkChoiceStore.ProcessAttestation(ctx, indices, r, a.GetData().Target.Epoch)
+			s.cfg.ForkChoiceStore.ProcessAttestation(ctx, indices, r, a.GetData().Slot)
 		} else if features.Get().EnableExperimentalAttestationPool {
 			if err = s.cfg.AttestationCache.Add(a); err != nil {
 				return err
@@ -568,9 +580,15 @@ func (s *Service) runLateBlockTasks() {
 
 	attThreshold := params.BeaconConfig().SecondsPerSlot / 3
 	ticker := slots.NewSlotTickerWithOffset(s.genesisTime, time.Duration(attThreshold)*time.Second, params.BeaconConfig().SecondsPerSlot)
+	epbs := params.BeaconConfig().EPBSForkEpoch
 	for {
 		select {
-		case <-ticker.C():
+		case slot := <-ticker.C():
+			if slots.ToEpoch(slot) == epbs && slot%32 == 0 {
+				ticker.Done()
+				attThreshold := params.BeaconConfig().SecondsPerSlot / 4
+				ticker = slots.NewSlotTickerWithOffset(s.genesisTime, time.Duration(attThreshold)*time.Second, params.BeaconConfig().SecondsPerSlot)
+			}
 			s.lateBlockTasks(s.ctx)
 		case <-s.ctx.Done():
 			log.Debug("Context closed, exiting routine")
@@ -958,24 +976,36 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 		return
 	}
 
-	s.headLock.RLock()
-	headBlock, err := s.headBlock()
-	if err != nil {
+	if headState.Version() >= version.EPBS {
+		bh, err := headState.LatestBlockHash()
+		if err != nil {
+			log.WithError(err).Debug("could not perform late block tasks: failed to retrieve latest block hash")
+			return
+		}
+		_, err = s.notifyForkchoiceUpdateEPBS(ctx, [32]byte(bh), attribute)
+		if err != nil {
+			log.WithError(err).Debug("could not perform late block tasks: failed to update forkchoice with engine")
+		}
+	} else {
+		s.headLock.RLock()
+		headBlock, err := s.headBlock()
+		if err != nil {
+			s.headLock.RUnlock()
+			log.WithError(err).Debug("could not perform late block tasks: failed to retrieve head block")
+			return
+		}
 		s.headLock.RUnlock()
-		log.WithError(err).Debug("could not perform late block tasks: failed to retrieve head block")
-		return
-	}
-	s.headLock.RUnlock()
 
-	fcuArgs := &fcuConfig{
-		headState:  headState,
-		headRoot:   headRoot,
-		headBlock:  headBlock,
-		attributes: attribute,
-	}
-	_, err = s.notifyForkchoiceUpdate(ctx, fcuArgs)
-	if err != nil {
-		log.WithError(err).Debug("could not perform late block tasks: failed to update forkchoice with engine")
+		fcuArgs := &fcuConfig{
+			headState:  headState,
+			headRoot:   headRoot,
+			headBlock:  headBlock,
+			attributes: attribute,
+		}
+		_, err = s.notifyForkchoiceUpdate(ctx, fcuArgs)
+		if err != nil {
+			log.WithError(err).Debug("could not perform late block tasks: failed to update forkchoice with engine")
+		}
 	}
 }
 

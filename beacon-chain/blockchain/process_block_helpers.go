@@ -338,7 +338,31 @@ func (s *Service) getBlockPreState(ctx context.Context, b interfaces.ReadOnlyBea
 		return nil, err
 	}
 
-	preState, err := s.cfg.StateGen.StateByRoot(ctx, b.ParentRoot())
+	parentRoot := b.ParentRoot()
+	s.ForkChoicer().RLock()
+	slot, err := s.ForkChoicer().Slot(parentRoot)
+	s.ForkChoicer().RUnlock()
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get slot for parent root")
+	}
+	if slots.ToEpoch(slot) >= params.BeaconConfig().EPBSForkEpoch {
+		s.ForkChoicer().RLock()
+		parentHash := s.ForkChoicer().HashForBlockRoot(parentRoot)
+		s.ForkChoicer().RUnlock()
+		signedBid, err := b.Body().SignedExecutionPayloadHeader()
+		if err != nil {
+			return nil, errors.Wrap(err, "could not get signed execution payload header")
+		}
+		bid, err := signedBid.Header()
+		if err != nil {
+			return nil, errors.Wrap(err, "could not get execution payload header")
+		}
+		if parentHash == bid.ParentBlockHash() {
+			// It's based on full, use the state by hash
+			parentRoot = parentHash
+		}
+	}
+	preState, err := s.cfg.StateGen.StateByRoot(ctx, parentRoot)
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not get pre state for slot %d", b.Slot())
 	}

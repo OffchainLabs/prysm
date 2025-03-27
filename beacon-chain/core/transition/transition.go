@@ -13,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/capella"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/deneb"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/electra"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/epbs"
 	e "github.com/OffchainLabs/prysm/v6/beacon-chain/core/epoch"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/epoch/precompute"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/execution"
@@ -303,7 +304,7 @@ func ProcessSlotsCore(ctx context.Context, span trace.Span, state state.BeaconSt
 func ProcessEpoch(ctx context.Context, state state.BeaconState) (state.BeaconState, error) {
 	var err error
 	if time.CanProcessEpoch(state) {
-		if state.Version() >= version.Fulu {
+		if state.Version() >= version.Fulu && state.Version() != version.EPBS {
 			if err = fulu.ProcessEpoch(ctx, state); err != nil {
 				return nil, errors.Wrap(err, fmt.Sprintf("could not process %s epoch", version.String(state.Version())))
 			}
@@ -382,6 +383,15 @@ func UpgradeState(ctx context.Context, state state.BeaconState) (state.BeaconSta
 
 	if time.CanUpgradeToFulu(slot) {
 		state, err = fulu.UpgradeToFulu(ctx, state)
+		if err != nil {
+			tracing.AnnotateError(span, err)
+			return nil, err
+		}
+		upgraded = true
+	}
+
+	if time.CanUpgradeToEip7732(slot) {
+		state, err = epbs.UpgradeToEIP7732(state)
 		if err != nil {
 			tracing.AnnotateError(span, err)
 			return nil, err

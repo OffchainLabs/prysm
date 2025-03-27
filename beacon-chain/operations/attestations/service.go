@@ -57,7 +57,7 @@ func NewService(ctx context.Context, cfg *Config) (*Service, error) {
 // Start an attestation pool service's main event loop.
 func (s *Service) Start() {
 	if err := s.waitForSync(s.cfg.InitialSyncComplete); err != nil {
-		log.WithError(err).Error("failed to wait for initial sync")
+		log.WithError(err).Error("Failed to wait for initial sync")
 		return
 	}
 	go s.prepareForkChoiceAtts()

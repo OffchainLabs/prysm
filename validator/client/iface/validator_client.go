@@ -7,6 +7,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/api/client/event"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/golang/protobuf/ptypes/empty"
@@ -134,6 +135,9 @@ type ValidatorClient interface {
 	AttestationData(ctx context.Context, in *ethpb.AttestationDataRequest) (*ethpb.AttestationData, error)
 	ProposeAttestation(ctx context.Context, in *ethpb.Attestation) (*ethpb.AttestResponse, error)
 	ProposeAttestationElectra(ctx context.Context, in *ethpb.SingleAttestation) (*ethpb.AttestResponse, error)
+	GetPayloadAttestationData(ctx context.Context, in *ethpb.GetPayloadAttestationDataRequest) (*ethpb.PayloadAttestationData, error)
+	SubmitPayloadAttestation(ctx context.Context, in *ethpb.PayloadAttestationMessage) (*empty.Empty, error)
+
 	SubmitAggregateSelectionProof(ctx context.Context, in *ethpb.AggregateSelectionRequest, index primitives.ValidatorIndex, committeeLength uint64) (*ethpb.AggregateSelectionResponse, error)
 	SubmitAggregateSelectionProofElectra(ctx context.Context, in *ethpb.AggregateSelectionRequest, _ primitives.ValidatorIndex, _ uint64) (*ethpb.AggregateSelectionElectraResponse, error)
 	SubmitSignedAggregateSelectionProof(ctx context.Context, in *ethpb.SignedAggregateSubmitRequest) (*ethpb.SignedAggregateSubmitResponse, error)
@@ -153,4 +157,9 @@ type ValidatorClient interface {
 	AggregatedSyncSelections(ctx context.Context, selections []SyncCommitteeSelection) ([]SyncCommitteeSelection, error)
 	Host() string
 	SetHost(host string)
+
+	GetLocalHeader(ctx context.Context, req *ethpb.HeaderRequest) (*enginev1.ExecutionPayloadHeaderEPBS, error)
+	GetExecutionPayloadEnvelope(ctx context.Context, in *ethpb.PayloadEnvelopeRequest) (*enginev1.ExecutionPayloadEnvelope, error)
+	SubmitSignedExecutionPayloadHeader(ctx context.Context, h *enginev1.SignedExecutionPayloadHeader) (*empty.Empty, error)
+	SubmitSignedExecutionPayloadEnvelope(ctx context.Context, env *enginev1.SignedExecutionPayloadEnvelope) (*empty.Empty, error)
 }

@@ -112,6 +112,14 @@ func (vs *Server) GetBeaconBlock(ctx context.Context, req *ethpb.BlockRequest) (
 		return nil, errors.Wrap(err, "could not build block in parallel")
 	}
 
+	if sBlk.Version() >= version.EPBS {
+		beaconBlockRoot, err := sBlk.Block().HashTreeRoot()
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Could not hash tree root: %v", err)
+		}
+		vs.payloadEnvelope.BeaconBlockRoot = beaconBlockRoot[:]
+	}
+
 	log.Info("Finished building block")
 	return resp, nil
 }
@@ -140,12 +148,22 @@ func logFailedReorgAttempt(slot primitives.Slot, oldHeadRoot, headRoot [32]byte)
 }
 
 func (vs *Server) getHeadNoReorg(ctx context.Context, slot primitives.Slot, parentRoot [32]byte) (state.BeaconState, error) {
-	// Try to get the state from the NSC
-	head := transition.NextSlotState(parentRoot[:], slot)
+	// get the head block
+	hash, err := vs.ForkchoiceFetcher.HashForBlockRoot(ctx, parentRoot)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not get head block hash: %v", err)
+	}
+	// try first to build on top of full (TODO, get this info from forkchoice instead)
+	head := transition.NextSlotState(hash, slot)
 	if head != nil {
 		return head, nil
 	}
-	head, err := vs.HeadFetcher.HeadState(ctx)
+	// Try to get the state for empty then
+	head = transition.NextSlotState(parentRoot[:], slot)
+	if head != nil {
+		return head, nil
+	}
+	head, err = vs.HeadFetcher.HeadState(ctx)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not get head state: %v", err)
 	}
@@ -229,11 +247,24 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 
 		// Set bls to execution change. New in Capella.
 		vs.setBlsToExecData(sBlk, head)
+
+		// Set payload attestations to block. New in ePBS
+		if err := vs.setPayloadAttestations(sBlk, head); err != nil {
+			log.WithError(err).Error("Could not set payload attestations on block")
+		}
 	}()
 
 	winningBid := primitives.ZeroWei()
 	var bundle enginev1.BlobsBundler
-	if sBlk.Version() >= version.Bellatrix {
+	if sBlk.Version() >= version.EPBS {
+		if vs.signedExecutionPayloadHeader == nil {
+			log.Warn("Failed to retrieve the signed execution payload header, proposing a block without it")
+		} else {
+			if err := sBlk.SetSignedExecutionPayloadHeader(vs.signedExecutionPayloadHeader); err != nil {
+				log.Warn("Failed to set the signed execution payload header, proposing a block without it")
+			}
+		}
+	} else if sBlk.Version() >= version.Bellatrix {
 		local, err := vs.getLocalPayload(ctx, sBlk.Block(), head)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "Could not get local payload: %v", err)
@@ -290,7 +321,7 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 	var sidecars []*ethpb.BlobSidecar
 	if block.IsBlinded() {
 		block, sidecars, err = vs.handleBlindedBlock(ctx, block)
-	} else if block.Version() >= version.Deneb {
+	} else if block.Version() >= version.Deneb && block.Version() < version.EPBS {
 		sidecars, err = vs.blobSidecarsFromUnblindedBlock(block, req)
 	}
 	if err != nil {
@@ -489,7 +520,32 @@ func (vs *Server) GetFeeRecipientByPubKey(ctx context.Context, request *ethpb.Fe
 // computeStateRoot computes the state root after a block has been processed through a state transition and
 // returns it to the validator client.
 func (vs *Server) computeStateRoot(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) ([]byte, error) {
-	beaconState, err := vs.StateGen.StateByRoot(ctx, block.Block().ParentRoot())
+	parentRoot := block.Block().ParentRoot()
+	parentSlot, err := vs.ForkchoiceFetcher.RecentBlockSlot(parentRoot)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get parent slot")
+	}
+	if block.Version() >= version.EPBS && slots.ToEpoch(parentSlot) >= params.BeaconConfig().EPBSForkEpoch {
+		parentHash, err := vs.ForkchoiceFetcher.HashForBlockRoot(ctx, parentRoot)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not get parent hash")
+		}
+		signedBid, err := block.Block().Body().SignedExecutionPayloadHeader()
+		if err != nil {
+			return nil, errors.Wrap(err, "could not get signed execution payload header")
+		}
+		bid, err := signedBid.Header()
+		if err != nil {
+			return nil, errors.Wrap(err, "could not get execution payload header")
+		}
+		hash := [32]byte(parentHash)
+		if hash == bid.ParentBlockHash() {
+			// It's based on full, use the state by hash
+			parentRoot = hash
+		}
+	}
+
+	beaconState, err := vs.StateGen.StateByRoot(ctx, parentRoot)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not retrieve beacon state")
 	}

@@ -156,6 +156,16 @@ func TestState_CanSaveRetrieve(t *testing.T) {
 			},
 			rootSeed: 'E',
 		},
+		{
+			name: "epbs",
+			s: func() state.BeaconState {
+				stPb := random.BeaconState(t)
+				st, err := statenative.InitializeFromProtoUnsafeEpbs(stPb)
+				require.NoError(t, err)
+				return st
+			},
+			rootSeed: 'F',
+		},
 	}
 
 	db := setupDB(t)
@@ -164,6 +174,9 @@ func TestState_CanSaveRetrieve(t *testing.T) {
 		reset := features.InitWithReset(&features.Flags{EnableHistoricalSpaceRepresentation: enableFlag})
 
 		for _, tc := range cases {
+			if tc.name == "epbs" && enableFlag {
+				t.Skip("Skipping epbs test as EnableHistoricalSpaceRepresentation is true")
+			}
 			t.Run(tc.name+" - EnableHistoricalSpaceRepresentation is "+strconv.FormatBool(enableFlag), func(t *testing.T) {
 				rootNonce := byte('0')
 				if enableFlag {
@@ -1127,6 +1140,26 @@ func TestDenebState_CanDelete(t *testing.T) {
 
 	require.NoError(t, db.DeleteState(t.Context(), r))
 	savedS, err := db.State(t.Context(), r)
+	require.NoError(t, err)
+	require.Equal(t, state.ReadOnlyBeaconState(nil), savedS, "Unsaved state should've been nil")
+}
+
+func TestEpbsState_CanDelete(t *testing.T) {
+	db := setupDB(t)
+
+	r := [32]byte{'A'}
+
+	require.Equal(t, false, db.HasState(context.Background(), r))
+
+	s := random.BeaconState(t)
+	st, err := statenative.InitializeFromProtoUnsafeEpbs(s)
+	require.NoError(t, err)
+
+	require.NoError(t, db.SaveState(context.Background(), st, r))
+	require.Equal(t, true, db.HasState(context.Background(), r))
+
+	require.NoError(t, db.DeleteState(context.Background(), r))
+	savedS, err := db.State(context.Background(), r)
 	require.NoError(t, err)
 	require.Equal(t, state.ReadOnlyBeaconState(nil), savedS, "Unsaved state should've been nil")
 }

@@ -8,8 +8,16 @@ import (
 	"errors"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/OffchainLabs/prysm/v6/api/client/beacon/health"
+	"github.com/OffchainLabs/prysm/v6/api/client/event"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/proposer"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/validator/accounts/iface"
+	iface2 "github.com/OffchainLabs/prysm/v6/validator/client/iface"
 	"github.com/OffchainLabs/prysm/v6/validator/keymanager"
 )
 
@@ -95,4 +103,176 @@ func (w *Wallet) ReadFileAtPath(_ context.Context, pathName, fileName string) ([
 // InitializeKeymanager --
 func (_ *Wallet) InitializeKeymanager(_ context.Context, _ iface.InitKeymanagerConfig) (keymanager.IKeymanager, error) {
 	return nil, nil
+}
+
+type Validator struct {
+	Km               keymanager.IKeymanager
+	graffiti         string
+	proposerSettings *proposer.Settings
+}
+
+func (_ *Validator) LogSubmittedSyncCommitteeMessages() {}
+
+func (_ *Validator) Done() {
+	panic("implement me")
+}
+
+func (_ *Validator) WaitForChainStart(_ context.Context) error {
+	panic("implement me")
+}
+
+func (_ *Validator) WaitForSync(_ context.Context) error {
+	panic("implement me")
+}
+
+func (_ *Validator) WaitForActivation(_ context.Context, _ chan [][48]byte) error {
+	panic("implement me")
+}
+
+func (_ *Validator) CanonicalHeadSlot(_ context.Context) (primitives.Slot, error) {
+	panic("implement me")
+}
+
+func (_ *Validator) NextSlot() <-chan primitives.Slot {
+	panic("implement me")
+}
+
+func (_ *Validator) SlotDeadline(_ primitives.Slot) time.Time {
+	panic("implement me")
+}
+
+func (_ *Validator) LogValidatorGainsAndLosses(_ context.Context, _ primitives.Slot) error {
+	panic("implement me")
+}
+
+func (_ *Validator) UpdateDuties(_ context.Context, _ primitives.Slot) error {
+	panic("implement me")
+}
+
+func (_ *Validator) RolesAt(_ context.Context, _ primitives.Slot) (map[[48]byte][]iface2.ValidatorRole, error) {
+	panic("implement me")
+}
+
+func (_ *Validator) SubmitAttestation(_ context.Context, _ primitives.Slot, _ [48]byte) {
+	panic("implement me")
+}
+
+func (_ *Validator) ProposeBlock(_ context.Context, _ primitives.Slot, _ [48]byte) {
+	panic("implement me")
+}
+
+func (_ *Validator) SubmitAggregateAndProof(_ context.Context, _ primitives.Slot, _ [48]byte) {
+	panic("implement me")
+}
+
+func (_ *Validator) SubmitSyncCommitteeMessage(_ context.Context, _ primitives.Slot, _ [48]byte) {
+	panic("implement me")
+}
+
+func (_ *Validator) SubmitSignedContributionAndProof(_ context.Context, _ primitives.Slot, _ [48]byte) {
+	panic("implement me")
+}
+
+func (_ *Validator) SubmitPayloadAttestationMessage(_ context.Context, _ primitives.Slot, _ [48]byte) {
+	panic("implement me")
+}
+
+func (_ *Validator) LogSubmittedAtts(_ primitives.Slot) {
+	panic("implement me")
+}
+
+func (_ *Validator) UpdateDomainDataCaches(_ context.Context, _ primitives.Slot) {
+	panic("implement me")
+}
+
+func (_ *Validator) WaitForKeymanagerInitialization(_ context.Context) error {
+	panic("implement me")
+}
+
+func (m *Validator) Keymanager() (keymanager.IKeymanager, error) {
+	return m.Km, nil
+}
+
+func (_ *Validator) ReceiveSlots(_ context.Context, _ chan<- error) {
+	panic("implement me")
+}
+
+func (_ *Validator) HandleKeyReload(_ context.Context, _ [][48]byte) (bool, error) {
+	panic("implement me")
+}
+
+func (_ *Validator) CheckDoppelGanger(_ context.Context) error {
+	panic("implement me")
+}
+
+// HasProposerSettings for mocking
+func (*Validator) HasProposerSettings() bool {
+	panic("implement me")
+}
+
+// PushProposerSettings for mocking
+func (_ *Validator) PushProposerSettings(_ context.Context, _ keymanager.IKeymanager, _ primitives.Slot, _ bool) error {
+	panic("implement me")
+}
+
+// SetPubKeyToValidatorIndexMap for mocking
+func (_ *Validator) SetPubKeyToValidatorIndexMap(_ context.Context, _ keymanager.IKeymanager) error {
+	panic("implement me")
+}
+
+// SignValidatorRegistrationRequest for mocking
+func (_ *Validator) SignValidatorRegistrationRequest(_ context.Context, _ iface2.SigningFunc, _ *ethpb.ValidatorRegistrationV1) (*ethpb.SignedValidatorRegistrationV1, bool, error) {
+	panic("implement me")
+}
+
+// ProposerSettings for mocking
+func (m *Validator) ProposerSettings() *proposer.Settings {
+	return m.proposerSettings
+}
+
+// SetProposerSettings for mocking
+func (m *Validator) SetProposerSettings(_ context.Context, settings *proposer.Settings) error {
+	m.proposerSettings = settings
+	return nil
+}
+
+// Graffiti for mocking
+func (m *Validator) Graffiti(_ context.Context, _ [fieldparams.BLSPubkeyLength]byte) ([]byte, error) {
+	return []byte(m.graffiti), nil
+}
+
+// SetGraffiti for mocking
+func (m *Validator) SetGraffiti(_ context.Context, _ [fieldparams.BLSPubkeyLength]byte, graffiti []byte) error {
+	m.graffiti = string(graffiti)
+	return nil
+}
+
+// DeleteGraffiti for mocking
+func (m *Validator) DeleteGraffiti(_ context.Context, _ [fieldparams.BLSPubkeyLength]byte) error {
+	m.graffiti = ""
+	return nil
+}
+
+func (*Validator) StartEventStream(_ context.Context, _ []string, _ chan<- *event.Event) {
+	panic("implement me")
+}
+
+func (*Validator) ProcessEvent(event *event.Event) {
+	panic("implement me")
+}
+
+func (*Validator) EventStreamIsRunning() bool {
+	panic("implement me")
+}
+
+func (*Validator) HealthTracker() *health.NodeHealthTracker {
+	panic("implement me")
+}
+
+func (*Validator) Host() string {
+	panic("implement me")
+}
+
+func (*Validator) ChangeHost() {
+	panic("implement me")
 }

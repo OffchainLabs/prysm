@@ -46,9 +46,9 @@ func New(i interface{}) (Attributer, error) {
 }
 
 // EmptyWithVersion returns an empty payload attribute with the given version.
-func EmptyWithVersion(version int) Attributer {
+func EmptyWithVersion(ver int) Attributer {
 	return &data{
-		version: version,
+		version: ver,
 	}
 }
 

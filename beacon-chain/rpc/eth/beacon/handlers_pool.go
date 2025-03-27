@@ -350,11 +350,11 @@ func (s *Server) handleAttestationsElectra(
 
 		if features.Get().EnableExperimentalAttestationPool {
 			if err = s.AttestationCache.Add(att); err != nil {
-				log.WithError(err).Error("could not save attestation")
+				log.WithError(err).Error("Could not save attestation")
 			}
 		} else {
 			if err = s.AttestationsPool.SaveUnaggregatedAttestation(att); err != nil {
-				log.WithError(err).Error("could not save attestation")
+				log.WithError(err).Error("Could not save attestation")
 			}
 		}
 	}
@@ -426,15 +426,15 @@ func (s *Server) handleAttestations(ctx context.Context, data json.RawMessage) (
 
 		if features.Get().EnableExperimentalAttestationPool {
 			if err = s.AttestationCache.Add(att); err != nil {
-				log.WithError(err).Error("could not save attestation")
+				log.WithError(err).Error("Could not save attestation")
 			}
 		} else if att.IsAggregated() {
 			if err = s.AttestationsPool.SaveAggregatedAttestation(att); err != nil {
-				log.WithError(err).Error("could not save aggregated attestation")
+				log.WithError(err).Error("Could not save aggregated attestation")
 			}
 		} else {
 			if err = s.AttestationsPool.SaveUnaggregatedAttestation(att); err != nil {
-				log.WithError(err).Error("could not save unaggregated attestation")
+				log.WithError(err).Error("Could not save unaggregated attestation")
 			}
 		}
 	}
@@ -655,18 +655,18 @@ func (s *Server) broadcastBLSBatch(ctx context.Context, ptr *[]*eth.SignedBLSToE
 	}
 	st, err := s.ChainInfoFetcher.HeadStateReadOnly(ctx)
 	if err != nil {
-		log.WithError(err).Error("could not get head state")
+		log.WithError(err).Error("Could not get head state")
 		return
 	}
 	for _, ch := range (*ptr)[:limit] {
 		if ch != nil {
 			_, err := blocks.ValidateBLSToExecutionChange(st, ch)
 			if err != nil {
-				log.WithError(err).Error("could not validate BLS to execution change")
+				log.WithError(err).Error("Could not validate BLS to execution change")
 				continue
 			}
 			if err := s.Broadcaster.Broadcast(ctx, ch); err != nil {
-				log.WithError(err).Error("could not broadcast BLS to execution changes.")
+				log.WithError(err).Error("Could not broadcast BLS to execution changes.")
 			}
 		}
 	}

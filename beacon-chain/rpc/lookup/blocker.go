@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"strings"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
@@ -18,6 +20,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
@@ -44,15 +47,111 @@ func (e BlockIdParseError) Error() string {
 type Blocker interface {
 	Block(ctx context.Context, id []byte) (interfaces.ReadOnlySignedBeaconBlock, error)
 	Blobs(ctx context.Context, id string, indices []int) ([]*blocks.VerifiedROBlob, *core.RpcError)
+	Payload(ctx context.Context, id []byte) (interfaces.ROSignedExecutionPayloadEnvelope, error)
 }
 
 // BeaconDbBlocker is an implementation of Blocker. It retrieves blocks from the beacon chain database.
 type BeaconDbBlocker struct {
-	BeaconDB           db.ReadOnlyDatabase
-	ChainInfoFetcher   blockchain.ChainInfoFetcher
-	GenesisTimeFetcher blockchain.TimeFetcher
-	BlobStorage        *filesystem.BlobStorage
-	DataColumnStorage  *filesystem.DataColumnStorage
+	BeaconDB               db.ReadOnlyDatabase
+	ChainInfoFetcher       blockchain.ChainInfoFetcher
+	GenesisTimeFetcher     blockchain.TimeFetcher
+	BlobStorage            *filesystem.BlobStorage
+	DataColumnStorage      *filesystem.DataColumnStorage
+	ExecutionReconstructor execution.Reconstructor
+}
+
+func (p *BeaconDbBlocker) headPayload(ctx context.Context) (interfaces.ROSignedExecutionPayloadEnvelope, error) {
+	root, err := p.ChainInfoFetcher.HeadRoot(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not retrieve head root")
+	}
+	return p.Payload(ctx, root)
+}
+
+func (p *BeaconDbBlocker) finalizedPayload(ctx context.Context) (interfaces.ROSignedExecutionPayloadEnvelope, error) {
+	finalized := p.ChainInfoFetcher.FinalizedCheckpt()
+	return p.Payload(ctx, finalized.Root)
+}
+
+// Payload returns a ROSignedExecutionPayloadEnvelope for a given block ID.
+func (p *BeaconDbBlocker) Payload(ctx context.Context, id []byte) (interfaces.ROSignedExecutionPayloadEnvelope, error) {
+	var err error
+	var blk interfaces.ReadOnlySignedBeaconBlock
+	switch string(id) {
+	case "head":
+		return p.headPayload(ctx)
+	case "finalized":
+		return p.finalizedPayload(ctx)
+	case "genesis":
+
+	default:
+		stringId := strings.ToLower(string(id))
+		if len(stringId) >= 2 && stringId[:2] == "0x" {
+			decoded, err := hexutil.Decode(string(id))
+			if err != nil {
+				e := NewBlockIdParseError(err)
+				return nil, &e
+			}
+			blk, err = p.BeaconDB.Block(ctx, bytesutil.ToBytes32(decoded))
+			if err != nil {
+				return nil, errors.Wrap(err, "could not retrieve block")
+			}
+		} else if len(id) == 32 {
+			blk, err = p.BeaconDB.Block(ctx, bytesutil.ToBytes32(id))
+			if err != nil {
+				return nil, errors.Wrap(err, "could not retrieve block")
+			}
+		} else {
+			slot, err := strconv.ParseUint(string(id), 10, 64)
+			if err != nil {
+				e := NewBlockIdParseError(err)
+				return nil, &e
+			}
+			blks, err := p.BeaconDB.BlocksBySlot(ctx, primitives.Slot(slot))
+			if err != nil {
+				return nil, errors.Wrapf(err, "could not retrieve blocks for slot %d", slot)
+			}
+			_, roots, err := p.BeaconDB.BlockRootsBySlot(ctx, primitives.Slot(slot))
+			if err != nil {
+				return nil, errors.Wrapf(err, "could not retrieve block roots for slot %d", slot)
+			}
+			numBlks := len(blks)
+			if numBlks == 0 {
+				return nil, nil
+			}
+			for i, b := range blks {
+				canonical, err := p.ChainInfoFetcher.IsCanonical(ctx, roots[i])
+				if err != nil {
+					return nil, errors.Wrapf(err, "could not determine if block root is canonical")
+				}
+				if canonical {
+					blk = b
+					break
+				}
+			}
+		}
+	}
+	if blk.Version() < version.EPBS {
+		return nil, errors.New("signed execution payload envelope not supported pre EIP-7732")
+	}
+	signedHeader, err := blk.Block().Body().SignedExecutionPayloadHeader()
+	if err != nil {
+		return nil, err
+	}
+	header, err := signedHeader.Header()
+	if err != nil {
+		return nil, err
+	}
+	hash := header.BlockHash()
+	pb, err := p.BeaconDB.SignedBlindPayloadEnvelope(ctx, hash[:])
+	if err != nil {
+		return nil, errors.Wrap(err, "could not retrieve signed blind payload envelope")
+	}
+	pbFull, err := p.ExecutionReconstructor.ReconstructPayloadEnvelope(ctx, pb)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not reconstruct payload envelope")
+	}
+	return blocks.WrappedROSignedExecutionPayloadEnvelope(pbFull)
 }
 
 // Block returns the beacon block for a given identifier. The identifier can be one of:

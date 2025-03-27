@@ -74,6 +74,8 @@ const (
 	LightClientOptimisticUpdateTopic = "light_client_optimistic_update"
 	// DataColumnTopic represents a data column sidecar event topic
 	DataColumnTopic = "data_column_sidecar"
+	// ExecutionPayloadTopic represents a new execution payload event topic. New in EIP-7732
+	ExecutionPayloadTopic = "execution_payload"
 )
 
 var (
@@ -118,6 +120,7 @@ var stateFeedEventTopics = map[feed.EventType]string{
 	statefeed.Reorg:                       ChainReorgTopic,
 	statefeed.BlockProcessed:              BlockTopic,
 	statefeed.PayloadAttributes:           PayloadAttributesTopic,
+	statefeed.PayloadProcessed:            ExecutionPayloadTopic,
 }
 
 var topicsForStateFeed = topicsForFeed(stateFeedEventTopics)
@@ -466,6 +469,8 @@ func topicForEvent(event *feed.Event) string {
 		return PayloadAttributesTopic
 	case *operation.DataColumnReceivedData:
 		return DataColumnTopic
+	case *statefeed.PayloadProcessedData:
+		return ExecutionPayloadTopic
 	default:
 		return InvalidTopic
 	}
@@ -637,6 +642,16 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 				ExecutionOptimistic: v.Optimistic,
 			}
 			return jsonMarshalReader(eventName, blk)
+		}, nil
+	case *statefeed.PayloadProcessedData:
+		return func() io.Reader {
+			pld := &structs.PayloadEvent{
+				Slot:                fmt.Sprintf("%d", v.Slot),
+				BlockRoot:           hexutil.Encode(v.BlockRoot[:]),
+				ExecutionBlockHash:  hexutil.Encode(v.ExecutionBlockHash[:]),
+				ExecutionOptimistic: v.ExecutionOptimistic,
+			}
+			return jsonMarshalReader(eventName, pld)
 		}, nil
 	default:
 		return nil, errors.Wrapf(errUnhandledEventData, "event data type %T unsupported", v)

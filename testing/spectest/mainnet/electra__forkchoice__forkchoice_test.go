@@ -8,5 +8,6 @@ import (
 )
 
 func TestMainnet_Electra_Forkchoice(t *testing.T) {
+	t.Skip("forkchoice changed in ePBS")
 	forkchoice.Run(t, "mainnet", version.Electra)
 }

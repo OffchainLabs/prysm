@@ -1,0 +1,70 @@
+package state_native
+
+import (
+	"context"
+	"testing"
+
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util/random"
+)
+
+func Test_InitializeFromProtoEpbs(t *testing.T) {
+	st := random.BeaconState(t)
+
+	// Cache initial values to check against after initialization.
+	latestBlockHash := st.LatestBlockHash
+	latestFullSlot := st.LatestFullSlot
+	header := st.LatestExecutionPayloadHeader
+	lastWithdrawalsRoot := st.LatestWithdrawalsRoot
+
+	s, err := InitializeFromProtoEpbs(st)
+	require.NoError(t, err)
+
+	// Assert that initial values match those in the new state.
+	gotLatestBlockHash, err := s.LatestBlockHash()
+	require.NoError(t, err)
+	require.DeepEqual(t, latestBlockHash, gotLatestBlockHash)
+	gotLatestFullSlot, err := s.LatestFullSlot()
+	require.NoError(t, err)
+	require.Equal(t, latestFullSlot, gotLatestFullSlot)
+	gotHeader, err := s.LatestExecutionPayloadHeaderEPBS()
+	require.NoError(t, err)
+	require.DeepEqual(t, header, gotHeader)
+	gotLastWithdrawalsRoot, err := s.LastWithdrawalsRoot()
+	require.NoError(t, err)
+	require.DeepEqual(t, lastWithdrawalsRoot, gotLastWithdrawalsRoot)
+}
+
+func Test_CopyEpbs(t *testing.T) {
+	st := random.BeaconState(t)
+	s, err := InitializeFromProtoUnsafeEpbs(st)
+	require.NoError(t, err)
+
+	// Test shallow copy.
+	sNoCopy := s
+	require.DeepEqual(t, s.latestExecutionPayloadHeaderEPBS, sNoCopy.latestExecutionPayloadHeaderEPBS)
+
+	// Modify a field to check if it reflects in the shallow copy.
+	s.latestExecutionPayloadHeaderEPBS.Slot = 100
+	require.Equal(t, s.latestExecutionPayloadHeaderEPBS, sNoCopy.latestExecutionPayloadHeaderEPBS)
+
+	// Copy the state
+	sCopy := s.Copy()
+	require.NoError(t, err)
+	header, err := sCopy.LatestExecutionPayloadHeaderEPBS()
+	require.NoError(t, err)
+	require.DeepEqual(t, s.latestExecutionPayloadHeaderEPBS, header)
+
+	// Modify the original to check if the copied state is independent.
+	s.latestExecutionPayloadHeaderEPBS.Slot = 200
+	require.DeepNotEqual(t, s.latestExecutionPayloadHeaderEPBS, header)
+}
+
+func Test_HashTreeRootEpbs(t *testing.T) {
+	st := random.BeaconState(t)
+	s, err := InitializeFromProtoUnsafeEpbs(st)
+	require.NoError(t, err)
+
+	_, err = s.HashTreeRoot(context.Background())
+	require.NoError(t, err)
+}

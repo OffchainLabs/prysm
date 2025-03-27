@@ -26,7 +26,7 @@ func (s *Service) broadcastBLSChanges(currSlot types.Slot) {
 	}
 	changes, err := s.cfg.blsToExecPool.PendingBLSToExecChanges()
 	if err != nil {
-		log.WithError(err).Error("could not get BLS to execution changes")
+		log.WithError(err).Error("Could not get BLS to execution changes")
 	}
 	if len(changes) == 0 {
 		return
@@ -50,18 +50,18 @@ func (s *Service) broadcastBLSBatch(ctx context.Context, ptr *[]*ethpb.SignedBLS
 	}
 	st, err := s.cfg.chain.HeadStateReadOnly(ctx)
 	if err != nil {
-		log.WithError(err).Error("could not get head state")
+		log.WithError(err).Error("Could not get head state")
 		return
 	}
 	for _, ch := range (*ptr)[:limit] {
 		if ch != nil {
 			_, err := blocks.ValidateBLSToExecutionChange(st, ch)
 			if err != nil {
-				log.WithError(err).Error("could not validate BLS to execution change")
+				log.WithError(err).Error("Could not validate BLS to execution change")
 				continue
 			}
 			if err := s.cfg.p2p.Broadcast(ctx, ch); err != nil {
-				log.WithError(err).Error("could not broadcast BLS to execution changes.")
+				log.WithError(err).Error("Could not broadcast BLS to execution changes.")
 			}
 		}
 	}

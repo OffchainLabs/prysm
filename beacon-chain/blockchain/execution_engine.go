@@ -2,6 +2,7 @@ package blockchain
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 
 	"github.com/OffchainLabs/prysm/v6/async/event"
@@ -29,6 +30,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
+
+const blobCommitmentVersionKZG uint8 = 0x01
 
 var defaultLatestValidHash = bytesutil.PadTo([]byte{0xff}, 32)
 
@@ -106,6 +109,14 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*
 				log.WithError(err).Error("Could not set head root to invalid")
 				return nil, nil
 			}
+			if len(invalidRoots) == 0 {
+				log.WithFields(logrus.Fields{
+					"slot":      headBlk.Slot(),
+					"blockRoot": fmt.Sprintf("%#x", bytesutil.Trunc(headRoot[:])),
+				}).Warn("Invalid payload")
+				return nil, nil
+			}
+
 			if err := s.removeInvalidBlockAndState(ctx, invalidRoots); err != nil {
 				log.WithError(err).Error("Could not remove invalid block and state")
 				return nil, nil
@@ -120,6 +131,7 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*
 				}).Warn("Pruned invalid blocks, could not update head root")
 				return nil, invalidBlock{error: ErrInvalidPayload, root: arg.headRoot, invalidAncestorRoots: invalidRoots}
 			}
+
 			b, err := s.getBlock(ctx, r)
 			if err != nil {
 				log.WithError(err).Error("Could not get head block")
@@ -454,7 +466,13 @@ func kzgCommitmentsToVersionedHashes(body interfaces.ReadOnlyBeaconBlockBody) ([
 
 	versionedHashes := make([]common.Hash, len(commitments))
 	for i, commitment := range commitments {
-		versionedHashes[i] = primitives.ConvertKzgCommitmentToVersionedHash(commitment)
+		versionedHashes[i] = ConvertKzgCommitmentToVersionedHash(commitment)
 	}
 	return versionedHashes, nil
+}
+
+func ConvertKzgCommitmentToVersionedHash(commitment []byte) common.Hash {
+	versionedHash := sha256.Sum256(commitment)
+	versionedHash[0] = blobCommitmentVersionKZG
+	return versionedHash
 }

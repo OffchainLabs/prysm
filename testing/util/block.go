@@ -41,10 +41,12 @@ type BlockGenConfig struct {
 	FullSyncAggregate        bool
 	NumBLSChanges            uint64 // Only for post Capella blocks
 	NumWithdrawals           uint64
-	NumDepositRequests       uint64 // Only for post Electra blocks
-	NumWithdrawalRequests    uint64 // Only for post Electra blocks
-	NumConsolidationRequests uint64 // Only for post Electra blocks
-	NumBlobKzgCommitments    uint64 // Only for post Deneb blocks
+	NumDepositRequests       uint64                    // Only for post Electra blocks
+	NumWithdrawalRequests    uint64                    // Only for post Electra blocks
+	NumConsolidationRequests uint64                    // Only for post Electra blocks
+	NumBlobKzgCommitments    uint64                    // Only for post Deneb blocks
+	BuilderIndex             primitives.ValidatorIndex // Only for post EIP-7732 blocks.
+	PayloadValue             uint64                    // Only for post EIP-7732 blocks
 }
 
 // DefaultBlockGenConfig returns the block config that utilizes the

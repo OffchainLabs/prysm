@@ -15,63 +15,63 @@ import (
 )
 
 func (s *Store) setUnrealizedJustifiedEpoch(root [32]byte, epoch primitives.Epoch) error {
-	node, ok := s.nodeByRoot[root]
+	node, ok := s.emptyNodeByRoot[root]
 	if !ok || node == nil {
 		return errors.Wrap(ErrNilNode, "could not set unrealized justified epoch")
 	}
-	if epoch < node.unrealizedJustifiedEpoch {
+	if epoch < node.block.unrealizedJustifiedEpoch {
 		return errInvalidUnrealizedJustifiedEpoch
 	}
-	node.unrealizedJustifiedEpoch = epoch
+	node.block.unrealizedJustifiedEpoch = epoch
 	return nil
 }
 
 func (s *Store) setUnrealizedFinalizedEpoch(root [32]byte, epoch primitives.Epoch) error {
-	node, ok := s.nodeByRoot[root]
+	node, ok := s.emptyNodeByRoot[root]
 	if !ok || node == nil {
 		return errors.Wrap(ErrNilNode, "could not set unrealized finalized epoch")
 	}
-	if epoch < node.unrealizedFinalizedEpoch {
+	if epoch < node.block.unrealizedFinalizedEpoch {
 		return errInvalidUnrealizedFinalizedEpoch
 	}
-	node.unrealizedFinalizedEpoch = epoch
+	node.block.unrealizedFinalizedEpoch = epoch
 	return nil
 }
 
 // updateUnrealizedCheckpoints "realizes" the unrealized justified and finalized
 // epochs stored within nodes. It should be called at the beginning of each epoch.
 func (f *ForkChoice) updateUnrealizedCheckpoints(ctx context.Context) error {
-	for _, node := range f.store.nodeByRoot {
-		node.justifiedEpoch = node.unrealizedJustifiedEpoch
-		node.finalizedEpoch = node.unrealizedFinalizedEpoch
-		if node.justifiedEpoch > f.store.justifiedCheckpoint.Epoch {
+	for _, node := range f.store.emptyNodeByRoot {
+		node.block.justifiedEpoch = node.block.unrealizedJustifiedEpoch
+		node.block.finalizedEpoch = node.block.unrealizedFinalizedEpoch
+		if node.block.justifiedEpoch > f.store.justifiedCheckpoint.Epoch {
 			f.store.prevJustifiedCheckpoint = f.store.justifiedCheckpoint
 			f.store.justifiedCheckpoint = f.store.unrealizedJustifiedCheckpoint
 			if err := f.updateJustifiedBalances(ctx, f.store.justifiedCheckpoint.Root); err != nil {
 				return errors.Wrap(err, "could not update justified balances")
 			}
 		}
-		if node.finalizedEpoch > f.store.finalizedCheckpoint.Epoch {
+		if node.block.finalizedEpoch > f.store.finalizedCheckpoint.Epoch {
 			f.store.finalizedCheckpoint = f.store.unrealizedFinalizedCheckpoint
 		}
 	}
 	return nil
 }
 
-func (s *Store) pullTips(state state.BeaconState, node *Node, jc, fc *ethpb.Checkpoint) (*ethpb.Checkpoint, *ethpb.Checkpoint) {
+func (s *Store) pullTips(state state.BeaconState, node *BlockNode, jc, fc *ethpb.Checkpoint) (*ethpb.Checkpoint, *ethpb.Checkpoint) {
 	if node.parent == nil { // Nothing to do if the parent is nil.
 		return jc, fc
 	}
 	currentEpoch := slots.ToEpoch(slots.CurrentSlot(s.genesisTime))
 	stateSlot := state.Slot()
 	stateEpoch := slots.ToEpoch(stateSlot)
-	currJustified := node.parent.unrealizedJustifiedEpoch == currentEpoch
-	prevJustified := node.parent.unrealizedJustifiedEpoch+1 == currentEpoch
+	currJustified := node.parent.block.unrealizedJustifiedEpoch == currentEpoch
+	prevJustified := node.parent.block.unrealizedJustifiedEpoch+1 == currentEpoch
 	tooEarlyForCurr := slots.SinceEpochStarts(stateSlot)*3 < params.BeaconConfig().SlotsPerEpoch*2
 	// Exit early if it's justified or too early to be justified.
 	if currJustified || (stateEpoch == currentEpoch && prevJustified && tooEarlyForCurr) {
-		node.unrealizedJustifiedEpoch = node.parent.unrealizedJustifiedEpoch
-		node.unrealizedFinalizedEpoch = node.parent.unrealizedFinalizedEpoch
+		node.unrealizedJustifiedEpoch = node.parent.block.unrealizedJustifiedEpoch
+		node.unrealizedFinalizedEpoch = node.parent.block.unrealizedFinalizedEpoch
 		return jc, fc
 	}
 

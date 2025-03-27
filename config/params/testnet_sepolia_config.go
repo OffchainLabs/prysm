@@ -48,6 +48,8 @@ func SepoliaConfig() *BeaconChainConfig {
 	cfg.ElectraForkVersion = []byte{0x90, 0x00, 0x00, 0x74}
 	cfg.FuluForkEpoch = math.MaxUint64
 	cfg.FuluForkVersion = []byte{0x90, 0x00, 0x00, 0x75} // TODO: Define sepolia fork version for fulu. This is a placeholder value.
+	cfg.EPBSForkEpoch = math.MaxUint64
+	cfg.EPBSForkVersion = []byte{0x90, 0x00, 0x00, 0x76} // TODO: Define sepolia fork version for ePBS. This is a placeholder value.
 	cfg.TerminalTotalDifficulty = "17000000000000000"
 	cfg.DepositContractAddress = "0x7f02C3E3c98b133055B8B348B2Ac625669Ed295D"
 	cfg.DefaultBuilderGasLimit = uint64(60000000)

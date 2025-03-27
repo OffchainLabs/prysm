@@ -7,12 +7,12 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
 	b "github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/electra"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition/interop"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/epbs"
 	v "github.com/OffchainLabs/prysm/v6/beacon-chain/core/validators"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/crypto/bls"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
@@ -58,15 +58,29 @@ func ExecuteStateTransitionNoVerifyAnySig(
 	defer span.End()
 	var err error
 
-	interop.WriteBlockToDisk(signed, false /* Has the block failed */)
-	interop.WriteStateToDisk(st)
-
 	parentRoot := signed.Block().ParentRoot()
-	st, err = ProcessSlotsUsingNextSlotCache(ctx, st, parentRoot[:], signed.Block().Slot())
+	if st.Version() < version.EPBS {
+		st, err = ProcessSlotsUsingNextSlotCache(ctx, st, parentRoot[:], signed.Block().Slot())
+	} else {
+		var lastFullSlot primitives.Slot
+		lastFullSlot, err = st.LatestFullSlot()
+		if err != nil {
+			return nil, nil, errors.Wrap(err, "could not get state latest full slot")
+		}
+		if lastFullSlot == st.Slot() {
+			var hash []byte
+			hash, err = st.LatestBlockHash()
+			if err != nil {
+				return nil, nil, errors.Wrap(err, "could not get state latest block hash")
+			}
+			st, err = ProcessSlotsUsingNextSlotCache(ctx, st, hash, signed.Block().Slot())
+		} else {
+			st, err = ProcessSlotsUsingNextSlotCache(ctx, st, parentRoot[:], signed.Block().Slot())
+		}
+	}
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "could not process slots")
 	}
-
 	// Execute per block transition.
 	set, st, err := ProcessBlockNoVerifyAnySig(ctx, st, signed)
 	if err != nil {
@@ -132,7 +146,26 @@ func CalculateStateRoot(
 
 	// Execute per slots transition.
 	var err error
-	parentRoot := signed.Block().ParentRoot()
+	var parentRoot [32]byte
+	if state.Version() >= version.EPBS {
+		signedHeader, err := signed.Block().Body().SignedExecutionPayloadHeader()
+		if err != nil {
+			return [32]byte{}, errors.Wrap(err, "could not retrieve signed execution payload header")
+		}
+		header, err := signedHeader.Header()
+		if err != nil {
+			return [32]byte{}, errors.Wrap(err, "could not retrieve execution payload header")
+		}
+		lbh, err := state.LatestBlockHash()
+		if err != nil {
+			return [32]byte{}, errors.Wrap(err, "could not get state latest block hash")
+		}
+		if header.ParentBlockHash() == [32]byte(lbh) {
+			parentRoot = [32]byte(lbh)
+		} else {
+			parentRoot = signed.Block().ParentRoot()
+		}
+	}
 	state, err = ProcessSlotsUsingNextSlotCache(ctx, state, parentRoot[:], signed.Block().Slot())
 	if err != nil {
 		return [32]byte{}, errors.Wrap(err, "could not process slots")
@@ -272,7 +305,7 @@ func ProcessOperationsNoVerifyAttsSigs(
 			return nil, err
 		}
 	} else {
-		state, err = electra.ProcessOperations(ctx, state, beaconBlock)
+		state, err = epbs.ProcessOperations(ctx, state, beaconBlock)
 		if err != nil {
 			return nil, err
 		}
@@ -318,26 +351,9 @@ func ProcessBlockForStateRoot(
 		return nil, errors.Wrap(err, "could not process block header")
 	}
 
-	enabled, err := b.IsExecutionEnabled(state, blk.Body())
-	if err != nil {
-		return nil, errors.Wrap(err, "could not check if execution is enabled")
+	if err := processExecution(state, blk.Body()); err != nil {
+		return nil, errors.Wrap(err, "could not process execution")
 	}
-	if enabled {
-		executionData, err := blk.Body().Execution()
-		if err != nil {
-			return nil, err
-		}
-		if state.Version() >= version.Capella {
-			state, err = b.ProcessWithdrawals(state, executionData)
-			if err != nil {
-				return nil, errors.Wrap(err, "could not process withdrawals")
-			}
-		}
-		if err = b.ProcessPayload(state, blk.Body()); err != nil {
-			return nil, errors.Wrap(err, "could not process execution data")
-		}
-	}
-
 	randaoReveal := signed.Block().Body().RandaoReveal()
 	state, err = b.ProcessRandaoNoVerify(state, randaoReveal[:])
 	if err != nil {

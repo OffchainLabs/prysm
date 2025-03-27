@@ -1,12 +1,14 @@
-package electra
+package epbs
 
 import (
 	"context"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/electra"
 	v "github.com/OffchainLabs/prysm/v6/beacon-chain/core/validators"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/pkg/errors"
 )
 
@@ -61,11 +63,11 @@ func ProcessOperations(
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process altair attester slashing")
 	}
-	st, err = ProcessAttestationsNoVerifySignature(ctx, st, block)
+	st, err = electra.ProcessAttestationsNoVerifySignature(ctx, st, block)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process altair attestation")
 	}
-	if _, err := ProcessDeposits(ctx, st, bb.Deposits()); err != nil { // new in electra
+	if _, err := electra.ProcessDeposits(ctx, st, bb.Deposits()); err != nil { // new in electra
 		return nil, errors.Wrap(err, "could not process altair deposit")
 	}
 	st, err = ProcessVoluntaryExits(ctx, st, bb.VoluntaryExits())
@@ -75,6 +77,13 @@ func ProcessOperations(
 	st, err = ProcessBLSToExecutionChanges(st, block)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process bls-to-execution changes")
+	}
+	// new in ePBS
+	if block.Version() >= version.EPBS {
+		if err := ProcessPayloadAttestations(st, bb); err != nil {
+			return nil, err
+		}
+		return st, nil
 	}
 	// new in electra
 	requests, err := bb.ExecutionRequests()
@@ -86,7 +95,7 @@ func ProcessOperations(
 			return nil, errors.New("nil deposit request")
 		}
 	}
-	st, err = ProcessDepositRequests(ctx, st, requests.Deposits)
+	st, err = electra.ProcessDepositRequests(ctx, st, requests.Deposits)
 	if err != nil {
 		return nil, execReqErr{errors.Wrap(err, "could not process deposit requests")}
 	}
@@ -95,7 +104,7 @@ func ProcessOperations(
 			return nil, errors.New("nil withdrawal request")
 		}
 	}
-	st, err = ProcessWithdrawalRequests(ctx, st, requests.Withdrawals)
+	st, err = electra.ProcessWithdrawalRequests(ctx, st, requests.Withdrawals)
 	if err != nil {
 		return nil, execReqErr{errors.Wrap(err, "could not process withdrawal requests")}
 	}
@@ -104,7 +113,7 @@ func ProcessOperations(
 			return nil, errors.New("nil consolidation request")
 		}
 	}
-	if err := ProcessConsolidationRequests(ctx, st, requests.Consolidations); err != nil {
+	if err := electra.ProcessConsolidationRequests(ctx, st, requests.Consolidations); err != nil {
 		return nil, execReqErr{errors.Wrap(err, "could not process consolidation requests")}
 	}
 	return st, nil

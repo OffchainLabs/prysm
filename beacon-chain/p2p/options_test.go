@@ -84,7 +84,7 @@ func TestIPV6Support(t *testing.T) {
 	require.NoError(t, err)
 	db, err := enode.OpenDB("")
 	if err != nil {
-		log.Error("could not open node's peer database")
+		log.Error("Could not open node's peer database")
 	}
 	lNode := enode.NewLocalNode(db, key)
 	mockIPV6 := net.IP{0xff, 0x02, 0xAA, 0, 0x1F, 0, 0x2E, 0, 0, 0x36, 0x45, 0, 0, 0, 0, 0x02}

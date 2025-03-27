@@ -1,0 +1,62 @@
+load("@prysm//tools/go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "attestation.go",
+        "error.go",
+        "execution_payload_envelope.go",
+        "execution_payload_header.go",
+        "operations.go",
+        "payload_attestation.go",
+        "upgrade.go",
+    ],
+    importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/core/epbs",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//beacon-chain/core/altair:go_default_library",
+        "//beacon-chain/core/blocks:go_default_library",
+        "//beacon-chain/core/electra:go_default_library",
+        "//beacon-chain/core/helpers:go_default_library",
+        "//beacon-chain/core/signing:go_default_library",
+        "//beacon-chain/core/time:go_default_library",
+        "//beacon-chain/core/validators:go_default_library",
+        "//beacon-chain/state:go_default_library",
+        "//beacon-chain/state/state-native:go_default_library",
+        "//config/params:go_default_library",
+        "//consensus-types/interfaces:go_default_library",
+        "//consensus-types/primitives:go_default_library",
+        "//crypto/bls:go_default_library",
+        "//network/forks:go_default_library",
+        "//proto/engine/v1:go_default_library",
+        "//proto/prysm/v1alpha1:go_default_library",
+        "//runtime/version:go_default_library",
+        "//time/slots:go_default_library",
+        "@com_github_pkg_errors//:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = [
+        "attestation_test.go",
+        "execution_payload_envelope_test.go",
+        "upgrade_test.go",
+    ],
+    deps = [
+        ":go_default_library",
+        "//beacon-chain/core/altair:go_default_library",
+        "//beacon-chain/core/helpers:go_default_library",
+        "//beacon-chain/core/time:go_default_library",
+        "//beacon-chain/state/state-native:go_default_library",
+        "//config/params:go_default_library",
+        "//consensus-types/blocks:go_default_library",
+        "//consensus-types/primitives:go_default_library",
+        "//proto/engine/v1:go_default_library",
+        "//proto/prysm/v1alpha1:go_default_library",
+        "//testing/require:go_default_library",
+        "//testing/util:go_default_library",
+        "//testing/util/random:go_default_library",
+        "//time/slots:go_default_library",
+    ],
+)

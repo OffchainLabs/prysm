@@ -2,6 +2,7 @@ package validator
 
 import (
 	"context"
+	"math"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	coreTime "github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
@@ -214,11 +215,13 @@ func (vs *Server) buildValidatorDuty(
 	assignment.CommitteesAtSlot = meta.current.committeesAtSlot
 	assignment.ProposerSlots = meta.current.proposalSlots[idx]
 	populateCommitteeFields(assignment, meta.current.liteAssignment)
+	populatePTCSlot(assignment, meta.current.liteAssignment, meta.current.committeesAtSlot)
 
 	nextAssignment.ValidatorIndex = idx
 	nextAssignment.Status = statusEnum
 	nextAssignment.CommitteesAtSlot = meta.next.committeesAtSlot
 	populateCommitteeFields(nextAssignment, meta.next.liteAssignment)
+	populatePTCSlot(nextAssignment, meta.next.liteAssignment, meta.next.committeesAtSlot)
 
 	// Sync committee flags
 	if coreTime.HigherEqualThanAltairVersionAndEpoch(s, reqEpoch) {
@@ -269,4 +272,20 @@ func populateCommitteeFields(duty *ethpb.DutiesV2Response_Duty, la *helpers.Lite
 	duty.CommitteeIndex = la.CommitteeIndex
 	duty.ValidatorCommitteeIndex = la.ValidatorCommitteeIndex
 	duty.AttesterSlot = la.AttesterSlot
+}
+
+func populatePTCSlot(duty *ethpb.DutiesV2Response_Duty, la *helpers.LiteAssignment, committeesAtSlot uint64) {
+	if duty == nil || la == nil {
+		return
+	}
+
+	// Calculate PTC allocation using the same logic as CommitteeAssignments
+	// Convert uint64 to int safely using math.Min to avoid overflow
+	committeesAtSlotInt := int(math.Min(float64(committeesAtSlot), float64(math.MaxInt)))
+	ptcPerSlot, ptcMembersPerCommittee := helpers.PtcAllocation(committeesAtSlotInt)
+	
+	// Check if this validator is part of the PTC for their attester slot
+	if uint64(la.CommitteeIndex) < ptcPerSlot && la.ValidatorCommitteeIndex < ptcMembersPerCommittee {
+		duty.PtcSlot = la.AttesterSlot
+	}
 }

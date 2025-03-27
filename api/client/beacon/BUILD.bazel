@@ -4,6 +4,7 @@ go_library(
     name = "go_default_library",
     srcs = [
         "client.go",
+        "client_epbs.go",
         "doc.go",
         "log.go",
         "template.go",

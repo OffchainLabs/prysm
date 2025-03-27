@@ -19,6 +19,10 @@ type MockBlocker struct {
 	RootBlockMap  map[[32]byte]interfaces.ReadOnlySignedBeaconBlock
 }
 
+func (m *MockBlocker) Payload(_ context.Context, _ []byte) (interfaces.ROSignedExecutionPayloadEnvelope, error) {
+	panic("implement me")
+}
+
 // Block --
 func (m *MockBlocker) Block(_ context.Context, b []byte) (interfaces.ReadOnlySignedBeaconBlock, error) {
 	if m.ErrorToReturn != nil {

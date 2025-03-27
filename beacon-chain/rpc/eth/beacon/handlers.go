@@ -47,6 +47,7 @@ var (
 	errNilBlock         = errors.New("nil block")
 	errEquivocatedBlock = errors.New("block is equivocated")
 	errMarshalSSZ       = errors.New("could not marshal block into SSZ")
+	errNilPayload       = errors.New("nil payload")
 )
 
 type blockDecoder func([]byte) (*eth.GenericSignedBeaconBlock, error)
@@ -1034,7 +1035,8 @@ func (s *Server) validateConsensus(ctx context.Context, b *eth.GenericSignedBeac
 }
 
 func (s *Server) validateEquivocation(blk interfaces.ReadOnlyBeaconBlock) error {
-	if s.ForkchoiceFetcher.HighestReceivedBlockSlot() == blk.Slot() {
+	slot, _ := s.ForkchoiceFetcher.HighestReceivedBlockSlotRoot()
+	if slot == blk.Slot() {
 		return errors.Wrapf(errEquivocatedBlock, "block for slot %d already exists in fork choice", blk.Slot())
 	}
 	return nil
