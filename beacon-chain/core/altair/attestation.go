@@ -165,7 +165,7 @@ func AddValidatorFlag(flag, flagPosition uint8) (uint8, error) {
 //	        if flag_index in participation_flag_indices and not has_flag(epoch_participation[index], flag_index):
 //	            epoch_participation[index] = add_flag(epoch_participation[index], flag_index)
 //	            proposer_reward_numerator += get_base_reward(state, index) * weight
-func EpochParticipation(beaconState state.BeaconState, indices []uint64, epochParticipation []byte, participatedFlags map[uint8]bool, totalBalance uint64) (uint64, []byte, error) {
+func EpochParticipation(beaconState state.ReadOnlyBeaconState, indices []uint64, epochParticipation []byte, participatedFlags map[uint8]bool, totalBalance uint64) (uint64, []byte, error) {
 	cfg := params.BeaconConfig()
 	sourceFlagIndex := cfg.TimelySourceFlagIndex
 	targetFlagIndex := cfg.TimelyTargetFlagIndex
@@ -267,7 +267,7 @@ func RewardProposer(ctx context.Context, beaconState state.BeaconState, proposer
 //	    participation_flag_indices.append(TIMELY_HEAD_FLAG_INDEX)
 //
 //	return participation_flag_indices
-func AttestationParticipationFlagIndices(beaconState state.BeaconState, data *ethpb.AttestationData, delay primitives.Slot) (map[uint8]bool, error) {
+func AttestationParticipationFlagIndices(beaconState state.ReadOnlyBeaconState, data *ethpb.AttestationData, delay primitives.Slot) (map[uint8]bool, error) {
 	currEpoch := time.CurrentEpoch(beaconState)
 	var justifiedCheckpt *ethpb.Checkpoint
 	if data.Target.Epoch == currEpoch {
@@ -312,7 +312,7 @@ func AttestationParticipationFlagIndices(beaconState state.BeaconState, data *et
 //	is_matching_source = data.source == justified_checkpoint
 //	is_matching_target = is_matching_source and data.target.root == get_block_root(state, data.target.epoch)
 //	is_matching_head = is_matching_target and data.beacon_block_root == get_block_root_at_slot(state, data.slot)
-func MatchingStatus(beaconState state.BeaconState, data *ethpb.AttestationData, cp *ethpb.Checkpoint) (matchedSrc, matchedTgt, matchedHead bool, err error) {
+func MatchingStatus(beaconState state.ReadOnlyBeaconState, data *ethpb.AttestationData, cp *ethpb.Checkpoint) (matchedSrc, matchedTgt, matchedHead bool, err error) {
 	matchedSrc = attestation.CheckPointIsEqual(data.Source, cp)
 
 	r, err := helpers.BlockRoot(beaconState, data.Target.Epoch)

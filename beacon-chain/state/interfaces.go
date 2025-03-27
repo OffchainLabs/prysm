@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 
 	"github.com/prysmaticlabs/go-bitfield"
+	customtypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native/custom-types"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
@@ -210,6 +211,8 @@ type ReadOnlyWithdrawals interface {
 type ReadOnlyParticipation interface {
 	CurrentEpochParticipation() ([]byte, error)
 	PreviousEpochParticipation() ([]byte, error)
+	CurrentEpochParticipationReadOnly() (customtypes.ReadOnlyParticipation, error)
+	PreviousEpochParticipationReadOnly() (customtypes.ReadOnlyParticipation, error)
 }
 
 // ReadOnlyInactivity defines a struct which only has read access to inactivity methods.
