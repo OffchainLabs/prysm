@@ -10,6 +10,7 @@ import (
 
 	"github.com/prysmaticlabs/go-bitfield"
 	chainMock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/electra"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/attestations"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/attestations/mock"
@@ -685,7 +686,7 @@ func Test_packAttestations(t *testing.T) {
 	})
 }
 
-func Test_packAttestations_ElectraOnChainAggregates(t *testing.T) {
+func TestPackAttestations_ElectraOnChainAggregates(t *testing.T) {
 	ctx := context.Background()
 
 	params.SetupTestConfigCleanup(t)
@@ -702,125 +703,103 @@ func Test_packAttestations_ElectraOnChainAggregates(t *testing.T) {
 	cb1 := primitives.NewAttestationCommitteeBits()
 	cb1.SetBitAt(1, true)
 
-	data0 := util.HydrateAttestationData(&ethpb.AttestationData{BeaconBlockRoot: bytesutil.PadTo([]byte{'0'}, 32)})
-	data1 := util.HydrateAttestationData(&ethpb.AttestationData{BeaconBlockRoot: bytesutil.PadTo([]byte{'1'}, 32)})
+	data0 := util.HydrateAttestationData(&ethpb.AttestationData{
+		BeaconBlockRoot: bytesutil.PadTo([]byte{'0'}, 32),
+	})
+	data1 := util.HydrateAttestationData(&ethpb.AttestationData{
+		BeaconBlockRoot: bytesutil.PadTo([]byte{'1'}, 32),
+	})
+
+	att := func(bits byte, cb []byte, data *ethpb.AttestationData) *ethpb.AttestationElectra {
+		return &ethpb.AttestationElectra{
+			AggregationBits: bitfield.Bitlist{bits},
+			CommitteeBits:   cb,
+			Data:            util.HydrateAttestationData(data),
+			Signature:       sig.Marshal(),
+		}
+	}
 
 	// Glossary:
-	// - Single Aggregate: aggregate with exactly one committee bit set, from which an On-Chain Aggregate is constructed
-	// - On-Chain Aggregate: final aggregate packed into a block
-	//
-	// We construct the following number of single aggregates:
-	// - data_root_0 and committee_index_0: 3 single aggregates
-	// - data_root_0 and committee_index_1: 2 single aggregates
-	// - data_root_1 and committee_index_0: 1 single aggregate
-	// - data_root_1 and committee_index_1: 3 single aggregates
-	//
-	// Because the function tries to aggregate attestations, we have to create attestations which are not aggregatable
-	// and are not redundant when using MaxCover.
-	// The function should also sort attestation by ID before computing the On-Chain Aggregate, so we want unsorted aggregation bits
-	// to test the sorting part.
-	//
-	// The result should be the following six on-chain aggregates:
-	// - for data_root_0 combining the most profitable aggregate for each committee
-	// - for data_root_0 combining the second most profitable aggregate for each committee
-	// - for data_root_0 constructed from the single aggregate at index 2 for committee_index_0
-	// - for data_root_1 combining the most profitable aggregate for each committee
-	// - for data_root_1 constructed from the single aggregate at index 1 for committee_index_1
-	// - for data_root_1 constructed from the single aggregate at index 2 for committee_index_1
+	// - Single Aggregate: one committee bit set, becomes an On-Chain Aggregate
+	// - On-Chain Aggregate: final packed aggregate in block
 
-	d0_c0_a1 := &ethpb.AttestationElectra{
-		AggregationBits: bitfield.Bitlist{0b1000011},
-		CommitteeBits:   cb0,
-		Data:            data0,
-		Signature:       sig.Marshal(),
-	}
-	d0_c0_a2 := &ethpb.AttestationElectra{
-		AggregationBits: bitfield.Bitlist{0b1100101},
-		CommitteeBits:   cb0,
-		Data:            data0,
-		Signature:       sig.Marshal(),
-	}
-	d0_c0_a3 := &ethpb.AttestationElectra{
-		AggregationBits: bitfield.Bitlist{0b1111000},
-		CommitteeBits:   cb0,
-		Data:            data0,
-		Signature:       sig.Marshal(),
-	}
-	d0_c1_a1 := &ethpb.AttestationElectra{
-		AggregationBits: bitfield.Bitlist{0b1111100},
-		CommitteeBits:   cb1,
-		Data:            data0,
-		Signature:       sig.Marshal(),
-	}
-	d0_c1_a2 := &ethpb.AttestationElectra{
-		AggregationBits: bitfield.Bitlist{0b1001111},
-		CommitteeBits:   cb1,
-		Data:            data0,
-		Signature:       sig.Marshal(),
-	}
-	d1_c0_a1 := &ethpb.AttestationElectra{
-		AggregationBits: bitfield.Bitlist{0b1111111},
-		CommitteeBits:   cb0,
-		Data:            data1,
-		Signature:       sig.Marshal(),
-	}
-	d1_c1_a1 := &ethpb.AttestationElectra{
-		AggregationBits: bitfield.Bitlist{0b1000011},
-		CommitteeBits:   cb1,
-		Data:            data1,
-		Signature:       sig.Marshal(),
-	}
-	d1_c1_a2 := &ethpb.AttestationElectra{
-		AggregationBits: bitfield.Bitlist{0b1100101},
-		CommitteeBits:   cb1,
-		Data:            data1,
-		Signature:       sig.Marshal(),
-	}
-	d1_c1_a3 := &ethpb.AttestationElectra{
-		AggregationBits: bitfield.Bitlist{0b1111000},
-		CommitteeBits:   cb1,
-		Data:            data1,
-		Signature:       sig.Marshal(),
+	aggregates := []*ethpb.AttestationElectra{
+		att(0b1000011, cb0, data0), // d0_c0_a1
+		att(0b1100101, cb0, data0), // d0_c0_a2
+		att(0b1111000, cb0, data0), // d0_c0_a3
+		att(0b1111100, cb1, data0), // d0_c1_a1
+		att(0b1001111, cb1, data0), // d0_c1_a2
+		att(0b1111111, cb0, data1), // d1_c0_a1
+		att(0b1000011, cb1, data1), // d1_c1_a1
+		att(0b1100101, cb1, data1), // d1_c1_a2
+		att(0b1111000, cb1, data1), // d1_c1_a3
 	}
 
 	pool := &mock.PoolMock{}
-	require.NoError(t, pool.SaveAggregatedAttestations([]ethpb.Att{d0_c0_a1, d0_c0_a2, d0_c0_a3, d0_c1_a1, d0_c1_a2, d1_c0_a1, d1_c1_a1, d1_c1_a2, d1_c1_a3}))
-	slot := primitives.Slot(1)
-	s := &Server{AttPool: pool, HeadFetcher: &chainMock.ChainService{}, TimeFetcher: &chainMock.ChainService{Slot: &slot}}
+	require.NoError(t, pool.SaveAggregatedAttestations(sliceCast(aggregates)))
 
-	// We need the correct number of validators so that there are at least 2 committees per slot
-	// and each committee has exactly 6 validators (this is because we have 6 aggregation bits).
+	// 192 validators → 2 committees per slot with 6 validators each
 	st, _ := util.DeterministicGenesisStateElectra(t, 192)
-
 	require.NoError(t, st.SetSlot(params.BeaconConfig().SlotsPerEpoch+1))
+
+	slot := primitives.Slot(1)
+	headSlot := primitives.Slot(0)
+	s := &Server{
+		AttPool:     pool,
+		HeadFetcher: &chainMock.ChainService{State: st, MockHeadSlot: &headSlot},
+		TimeFetcher: &chainMock.ChainService{Slot: &slot},
+	}
 
 	t.Run("ok", func(t *testing.T) {
 		atts, err := s.packAttestations(ctx, st, params.BeaconConfig().SlotsPerEpoch)
 		require.NoError(t, err)
 		require.Equal(t, 6, len(atts))
-		assert.Equal(t, true,
-			atts[0].GetAggregationBits().Count() >= atts[1].GetAggregationBits().Count() &&
-				atts[1].GetAggregationBits().Count() >= atts[2].GetAggregationBits().Count() &&
-				atts[2].GetAggregationBits().Count() >= atts[3].GetAggregationBits().Count() &&
-				atts[3].GetAggregationBits().Count() >= atts[4].GetAggregationBits().Count() &&
-				atts[4].GetAggregationBits().Count() >= atts[5].GetAggregationBits().Count(),
-			"on-chain aggregates are not sorted by aggregation bit count",
-		)
+
+		totalBalance, err := helpers.TotalActiveBalance(st)
+		require.NoError(t, err)
+
+		expected := []uint64{
+			193332672,
+			150369856,
+			150369856,
+			64444224,
+			42962816,
+			42962816,
+		}
+		for i, want := range expected {
+			got, err := electra.GetProposerRewardNumerator(ctx, st, atts[i], totalBalance)
+			require.NoError(t, err)
+			require.Equal(t, want, got)
+		}
 	})
 
-	t.Run("slot takes precedence", func(t *testing.T) {
-		moreRecentAtt := &ethpb.AttestationElectra{
-			AggregationBits: bitfield.Bitlist{0b1100000}, // we set only one bit for committee_index_0
-			CommitteeBits:   cb1,
-			Data:            util.HydrateAttestationData(&ethpb.AttestationData{Slot: 1, BeaconBlockRoot: bytesutil.PadTo([]byte{'0'}, 32)}),
-			Signature:       sig.Marshal(),
-		}
-		require.NoError(t, pool.SaveUnaggregatedAttestations([]ethpb.Att{moreRecentAtt}))
+	t.Run("reward takes precedence", func(t *testing.T) {
+		moreRecent := att(0b1100000, cb1, &ethpb.AttestationData{
+			Slot:            1,
+			BeaconBlockRoot: bytesutil.PadTo([]byte{'0'}, 32),
+		})
+		require.NoError(t, pool.SaveUnaggregatedAttestations([]ethpb.Att{moreRecent}))
+
 		atts, err := s.packAttestations(ctx, st, params.BeaconConfig().SlotsPerEpoch)
 		require.NoError(t, err)
 		require.Equal(t, 7, len(atts))
-		assert.Equal(t, true, atts[0].GetData().Slot == 1)
+
+		totalBalance, err := helpers.TotalActiveBalance(st)
+		require.NoError(t, err)
+
+		got, err := electra.GetProposerRewardNumerator(ctx, st, atts[6], totalBalance)
+		require.NoError(t, err)
+		require.Equal(t, uint64(21481408), got)
+		require.Equal(t, primitives.Slot(1), atts[6].GetData().Slot)
 	})
+}
+
+func sliceCast(atts []*ethpb.AttestationElectra) []ethpb.Att {
+	res := make([]ethpb.Att, len(atts))
+	for i, att := range atts {
+		res[i] = att
+	}
+	return res
 }
 
 func Benchmark_packAttestations_Electra(b *testing.B) {

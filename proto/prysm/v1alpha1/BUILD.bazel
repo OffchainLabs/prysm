@@ -73,6 +73,7 @@ ssz_phase0_objs = [
     "Status",
     "Status",
     "Validator",
+    "ValidatorIdentity",
     "VoluntaryExit",
 ]
 
@@ -188,7 +189,7 @@ ssz_fulu_objs = [
     "DataColumnSidecar",
     "SignedBeaconBlockContentsFulu",
     "SignedBeaconBlockFulu",
-    "SignedBlindedBeaconBlockFulu"
+    "SignedBlindedBeaconBlockFulu",
 ]
 
 ssz_gen_marshal(
@@ -337,9 +338,9 @@ go_library(
     srcs = [
         "attestation.go",
         "beacon_block.go",
-        "log.go",
         "cloners.go",
         "eip_7521.go",
+        "log.go",
         "sync_committee_mainnet.go",
         "sync_committee_minimal.go",  # keep
         "validator.go",
