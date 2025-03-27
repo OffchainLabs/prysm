@@ -528,7 +528,7 @@ func (r *testRunner) defaultEndToEndRun() error {
 
 		for _, evaluator := range []e2etypes.Evaluator{ev.ValidatorsHaveConsolidated} {
 			t.Run(evaluator.Name, func(t *testing.T) {
-				assert.NoError(t, evaluator.Evaluation(nil, conns...), "Evaluation failed for sync node")
+				assert.NoError(t, evaluator.Evaluation(ec, conns...), "Evaluation failed for sync node")
 			})
 		}
 		r.comHandler.txGen.SetTxType(eth1.RandomTx)

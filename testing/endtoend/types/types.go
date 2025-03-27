@@ -137,8 +137,8 @@ type EvaluationContext struct {
 }
 
 // NewEvaluationContext handles initializing internal datastructures (like maps) provided by the EvaluationContext.
-func NewEvaluationContext(d DepositBalancer, execCreds uint64) (*EvaluationContext, error) {
-	_, pkeys, err := interop.DeterministicallyGenerateKeys(0, execCreds)
+func NewEvaluationContext(d DepositBalancer, numExecCreds uint64) (*EvaluationContext, error) {
+	_, pkeys, err := interop.DeterministicallyGenerateKeys(0, numExecCreds)
 	if err != nil {
 		return nil, err
 	}
