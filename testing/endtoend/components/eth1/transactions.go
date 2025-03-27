@@ -121,7 +121,7 @@ func (t *TransactionGenerator) Start(ctx context.Context) error {
 			backend := ethclient.NewClient(client)
 			switch t.txGenType {
 			case ConsolidationTx:
-				err = SendConsolidationTransaction(client, mineKey.PrivateKey, gasPrice, backend)
+				err = SendConsolidationTransaction(mineKey.PrivateKey, gasPrice, backend)
 				if err != nil {
 					return err
 				}
