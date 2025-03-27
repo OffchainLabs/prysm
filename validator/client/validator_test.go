@@ -236,7 +236,7 @@ func TestValidatorInit_Retry_On_ConnectionError(t *testing.T) {
 		&emptypb.Empty{},
 	).Do(func(arg0 interface{}, arg1 interface{}) { WaitForChainStartCalled++ }).Return(nil, client.ErrConnectionIssue).Times(times)
 
-	backOffPeriod = 100 * time.Millisecond
+	backOffPeriod = 1000 * time.Millisecond
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
 		err := v.Init(ctx)
