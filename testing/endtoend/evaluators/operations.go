@@ -748,7 +748,7 @@ func validatorsHaveBeenConsolidated(ec *e2etypes.EvaluationContext, conns ...*gr
 			continue
 		}
 		if val.ExitEpoch() == params.BeaconConfig().FarFutureEpoch {
-			return errors.Errorf("validator was not exited after consolidation, itx exit epoch is %d", val.ExitEpoch())
+			return errors.Errorf("validator was not exited after consolidation, its exit epoch is %d", val.ExitEpoch())
 		}
 	}
 	if compoundingVal != 1 {

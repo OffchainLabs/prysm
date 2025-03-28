@@ -1,7 +1,6 @@
 package eth1
 
 import (
-	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/sha256"
@@ -14,7 +13,6 @@ import (
 	"github.com/MariusVanDerWijden/FuzzyVM/filler"
 	txfuzz "github.com/MariusVanDerWijden/tx-fuzz"
 	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -288,41 +286,28 @@ func createAndSendConsolidation(sourceKey, targetKey []byte, key *ecdsa.PrivateK
 	}
 	gasLimit := uint64(200000)
 
-	// ABI-encode function call
-	funcABI := `[{
-		"name": "add_consolidation_request",
-		"type": "function",
-		"inputs": [
-			{"type": "bytes", "name": "source_pubkey"},
-			{"type": "bytes", "name": "target_pubkey"}
-		]
-	}]`
-
-	parsedABI, err := abi.JSON(bytes.NewBuffer([]byte(funcABI)))
-	if err != nil {
-		return err
-	}
-
 	sourcePubkey := sourceKey
 	targetPubkey := targetKey
 
-	// Encode function data
-	data, err := parsedABI.Pack("add_consolidation_request", sourcePubkey, targetPubkey)
-	if err != nil {
-		return err
-	}
+	consolidationData := []byte{}
+	consolidationData = append(consolidationData, sourcePubkey...)
+	consolidationData = append(consolidationData, targetPubkey...)
 
-	// Set transaction value (fee from contract's `get_fee()`)
-	value := big.NewInt(100000000000000000) // 0.1 ETH
+	ret, err := backend.CallContract(context.Background(), ethereum.CallMsg{To: &gethparams.ConsolidationQueueAddress}, nil)
+	if err != nil {
+		return errors.Wrapf(err, "%s", string(ret))
+	}
+	fee := new(big.Int).SetBytes(ret)
+	fee = fee.Mul(fee, big.NewInt(2))
 
 	// Create transaction
 	tx := types.NewTx(&types.LegacyTx{
 		Nonce:    nonce,
 		To:       &gethparams.ConsolidationQueueAddress,
-		Value:    value,
+		Value:    fee,
 		Gas:      gasLimit,
 		GasPrice: gasPrice,
-		Data:     data,
+		Data:     consolidationData,
 	})
 
 	// Sign transaction
@@ -330,10 +315,7 @@ func createAndSendConsolidation(sourceKey, targetKey []byte, key *ecdsa.PrivateK
 	if err != nil {
 		return err
 	}
-	if err := backend.SendTransaction(context.Background(), signedTx); err != nil {
-		return err
-	}
-	return nil
+	return backend.SendTransaction(context.Background(), signedTx)
 }
 
 func (t *TransactionGenerator) SetTxType(typ txType) {
