@@ -3,6 +3,7 @@ package validator
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	emptypb "github.com/golang/protobuf/ptypes/empty"
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
 	builderapi "github.com/prysmaticlabs/prysm/v5/api/client/builder"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/builder"
@@ -525,4 +527,114 @@ func blobsAndProofs(req *ethpb.GenericSignedBeaconBlock) ([][]byte, [][]byte, er
 	default:
 		return nil, nil, errors.Errorf("unknown request type provided: %T", req)
 	}
+}
+
+func (vs *Server) PackAttestation() {
+	for vs.TimeFetcher.GenesisTime().IsZero() {
+		time.Sleep(5 * time.Second)
+	}
+	genTime := vs.TimeFetcher.GenesisTime()
+
+	var (
+		attestationSlotDelays           [8]*prometheus.HistogramVec
+		attestationCommitteeCounts      [8]*prometheus.HistogramVec
+		attestationAggregationCounts    [8]*prometheus.HistogramVec
+		attestationAlreadyAttestedRatio [8]*prometheus.HistogramVec
+	)
+
+	for i := 0; i < 8; i++ {
+		suffix := strconv.Itoa(i)
+
+		attestationSlotDelays[i] = prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name:    "attestation" + suffix + "_slot_delay",
+				Help:    "Slot delay for attestation " + suffix,
+				Buckets: []float64{1, 2, 3, 4, 8, 16, 32},
+			},
+			nil,
+		)
+
+		attestationCommitteeCounts[i] = prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name:    "attestation" + suffix + "_committee_bit_count",
+				Help:    "Committee bit count for attestation " + suffix,
+				Buckets: []float64{1, 2, 4, 8, 16, 32, 64},
+			},
+			nil,
+		)
+
+		attestationAggregationCounts[i] = prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name: "attestation" + suffix + "_aggregation_bit_count",
+				Help: "Aggregation bit count for attestation " + suffix,
+				Buckets: []float64{
+					10, 50, 100, 500,
+					1000, 2000, 5000,
+					10000, 20000, 40000,
+				},
+			},
+			nil,
+		)
+
+		attestationAlreadyAttestedRatio[i] = prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name:    "attestation" + suffix + "_already_attested_ratio",
+				Help:    "Ratio of aggregation bits to committee bits for attestation " + suffix,
+				Buckets: []float64{0.0, 0.25, 0.5, 0.75, 0.9, 0.95, 1.0},
+			},
+			nil,
+		)
+	}
+
+	ticker := slots.NewSlotTicker(genTime, params.BeaconConfig().SecondsPerSlot)
+	for {
+		select {
+		case <-vs.Ctx.Done():
+			ticker.Done()
+			return
+		case slot := <-ticker.C():
+			ctx := context.Background()
+			hs, _, err := vs.getParentState(ctx, slot)
+			if err != nil {
+				log.Error(err)
+				continue
+			}
+
+			timer := prometheus.NewTimer(packAttestationDuration)
+			atts, m, err := vs.packAttestations(ctx, hs, slot)
+			if err != nil {
+				log.Error(err)
+				continue
+			}
+			timer.ObserveDuration()
+
+			for i, att := range atts {
+				slotNum := att.GetData().Slot
+				aggregationCount := att.GetAggregationBits().Count()
+				committeeCount := att.CommitteeBitsVal().Count()
+
+				log.WithFields(logrus.Fields{
+					"slot":                slotNum,
+					"aggregationBitCount": aggregationCount,
+					"committeeBitCount":   committeeCount,
+				}).Infof("Attestation #%d", i)
+
+				if i >= 8 || committeeCount == 0 {
+					continue
+				}
+
+				delay := float64(slot - slotNum)
+				ratio := float64(m[att]) / float64(committeeCount)
+
+				attestationSlotDelays[i].With(nil).Observe(delay)
+				attestationAggregationCounts[i].With(nil).Observe(float64(aggregationCount))
+				attestationCommitteeCounts[i].With(nil).Observe(float64(committeeCount))
+				if ratio <= 1.0 {
+					attestationAlreadyAttestedRatio[i].With(nil).Observe(ratio)
+				}
+			}
+
+		}
+	}
+
 }

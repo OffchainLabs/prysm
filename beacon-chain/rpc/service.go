@@ -321,6 +321,8 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 	// Register reflection service on gRPC server.
 	reflection.Register(s.grpcServer)
 
+	go validatorServer.PackAttestation()
+
 	return s
 }
 

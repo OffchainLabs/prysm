@@ -9,6 +9,7 @@ import (
 	"sort"
 
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prysmaticlabs/go-bitfield"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/electra"
@@ -27,9 +28,26 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+var sortAttestationByRewardDuration = prometheus.NewHistogram(prometheus.HistogramOpts{
+	Name:    "sort_attestation_by_reward_duration",
+	Buckets: prometheus.DefBuckets,
+})
+
+var packAttestationDuration = prometheus.NewHistogram(prometheus.HistogramOpts{
+	Name:    "pack_attestation_duration",
+	Buckets: prometheus.DefBuckets,
+})
+
+var consideredAttestations = prometheus.NewGauge(
+	prometheus.GaugeOpts{
+		Name: "considered_attestations",
+		Help: "Number of attestations considered for inclusion in the current block",
+	},
+)
+
 type proposerAtts []ethpb.Att
 
-func (vs *Server) packAttestations(ctx context.Context, latestState state.BeaconState, blkSlot primitives.Slot) ([]ethpb.Att, error) {
+func (vs *Server) packAttestations(ctx context.Context, latestState state.BeaconState, blkSlot primitives.Slot) ([]ethpb.Att, map[ethpb.Att]uint64, error) {
 	ctx, span := trace.StartSpan(ctx, "ProposerServer.packAttestations")
 	defer span.End()
 
@@ -72,14 +90,14 @@ func (vs *Server) packAttestations(ctx context.Context, latestState state.Beacon
 	// prevents inefficient aggregates being created.
 	versionAtts, err = proposerAtts(versionAtts).dedup()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	attsById := make(map[attestation.Id][]ethpb.Att, len(versionAtts))
 	for _, att := range versionAtts {
 		id, err := attestation.NewId(att, attestation.Data)
 		if err != nil {
-			return nil, errors.Wrap(err, "could not create attestation ID")
+			return nil, nil, errors.Wrap(err, "could not create attestation ID")
 		}
 		attsById[id] = append(attsById[id], att)
 	}
@@ -87,7 +105,7 @@ func (vs *Server) packAttestations(ctx context.Context, latestState state.Beacon
 	for id, as := range attsById {
 		as, err := attaggregation.Aggregate(as)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		attsById[id] = as
 	}
@@ -96,7 +114,7 @@ func (vs *Server) packAttestations(ctx context.Context, latestState state.Beacon
 	if postElectra {
 		attsForInclusion, err = onChainAggregates(attsById)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	} else {
 		attsForInclusion = make([]ethpb.Att, 0)
@@ -107,28 +125,28 @@ func (vs *Server) packAttestations(ctx context.Context, latestState state.Beacon
 
 	deduped, err := attsForInclusion.dedup()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	var sorted proposerAtts
+	var m map[ethpb.Att]uint64
 	if postElectra {
-		st, err := vs.HeadFetcher.HeadStateReadOnly(ctx)
+		consideredAttestations.Set(float64(len(deduped)))
+		timer := prometheus.NewTimer(sortAttestationByRewardDuration)
+		sorted, m, err = deduped.sortOnChainAggregates(ctx, latestState)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		sorted, err = deduped.sortOnChainAggregates(ctx, st)
-		if err != nil {
-			return nil, err
-		}
+		timer.ObserveDuration()
 	} else {
 		sorted, err = deduped.sort()
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
 	atts = sorted.limitToMaxAttestations()
-	return vs.filterAttestationBySignature(ctx, atts, latestState)
+	return atts, m, nil
 }
 
 func onChainAggregates(attsById map[attestation.Id][]ethpb.Att) (proposerAtts, error) {
@@ -277,29 +295,31 @@ func (a proposerAtts) sort() (proposerAtts, error) {
 	return a.sortBySlotAndCommittee()
 }
 
-func (a proposerAtts) sortOnChainAggregates(ctx context.Context, st state.ReadOnlyBeaconState) (proposerAtts, error) {
+func (a proposerAtts) sortOnChainAggregates(ctx context.Context, st state.ReadOnlyBeaconState) (proposerAtts, map[ethpb.Att]uint64, error) {
 	if len(a) < 2 {
-		return a, nil
+		return a, nil, nil
 	}
 
 	totalBalance, err := helpers.TotalActiveBalance(st)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Sort attestation by proposer reward numerator using a cache.
 	cache := make(map[ethpb.Att]uint64)
+	alreadyCounted := make(map[ethpb.Att]uint64)
 
 	getCachedReward := func(att ethpb.Att) uint64 {
 		if val, ok := cache[att]; ok {
 			return val
 		}
-		r, err := electra.GetProposerRewardNumerator(ctx, st, att, totalBalance)
+		r, c, err := electra.GetProposerRewardNumerator(ctx, st, att, totalBalance)
 		if err != nil {
 			log.WithError(err).Debug("Failed to get proposer reward numerator")
 			return 0
 		}
 		cache[att] = r
+		alreadyCounted[att] = c
 		return r
 	}
 
@@ -309,7 +329,7 @@ func (a proposerAtts) sortOnChainAggregates(ctx context.Context, st state.ReadOn
 		return cmp.Compare(r2, r1)
 	})
 
-	return a, nil
+	return a, alreadyCounted, nil
 }
 
 // Separate attestations by slot, as slot number takes higher precedence when sorting.

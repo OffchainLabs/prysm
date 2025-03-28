@@ -50,7 +50,7 @@ func (vs *Server) packDepositsAndAttestations(
 
 	eg.Go(func() error {
 		// Pack aggregated attestations which have not been included in the beacon chain.
-		localAtts, err := vs.packAttestations(egctx, head, blkSlot)
+		localAtts, _, err := vs.packAttestations(egctx, head, blkSlot)
 		if err != nil {
 			return status.Errorf(codes.Internal, "Could not get attestations to pack into block: %v", err)
 		}
