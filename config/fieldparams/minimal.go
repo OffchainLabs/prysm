@@ -54,4 +54,9 @@ const (
 	MaxRandomByte                         = uint64(1<<8 - 1)  // Maximum value for a random value using for proposer and sync committee sampling.
 	MaxRandomValueElectra                 = uint64(1<<16 - 1) // Maximum value for a random value using for proposer and sync committee sampling.
 	NumberOfColumns                       = 128               // NumberOfColumns refers to the specified number of data columns that can exist in a network.
+
+	// Introduced in Fulu network upgrade.
+	FieldElementsPerCell              = 64   // FieldElementsPerCell refers to the specified number of field elements that can exist in a cell.
+	FieldElementsPerExtBlob           = 8192 // FieldElementsPerExtBlob refers to the specified number of field elements that can exist in an extended blob.
+	KZGCommitmentsInclusionProofDepth = 4    // KZGCommitmentsInclusionProofDepth refers to the specified depth of the KZG commitments inclusion proof.
 )
