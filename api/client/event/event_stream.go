@@ -36,7 +36,7 @@ var (
 	_ = EventStreamClient(&EventStream{})
 )
 
-var DefaultEventTopics = []string{EventHead}
+var DefaultEventTopics = []string{EventHead, EventChainReorg}
 
 type EventStreamClient interface {
 	Subscribe(eventsChannel chan<- *Event)

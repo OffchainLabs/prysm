@@ -342,6 +342,17 @@ service BeaconNodeValidator {
     };
   }
 
+  // Server-side stream of all reorg observed by the beacon chain node.
+  // DEPRECATED: This endpoint is superseded by the /eth/v1/events Beacon API
+  // endpoint
+  rpc StreamReorgs(google.protobuf.Empty) returns (stream StreamReorgsResponse) {
+    option (google.api.http) = {
+      get : "/eth/v1alpha1/validator/blocks/stream_reorgs"
+    };
+    option deprecated = true;
+  }
+
+
   // Server-side stream of all slots of valid blocks as they are received by
   // the beacon chain node.
   // DEPRECATED: This endpoint is superseded by the /eth/v1/events Beacon API
@@ -434,6 +445,17 @@ message SyncSubcommitteeIndexResponse {
       [ (ethereum.eth.ext.cast_type) =
             "github.com/prysmaticlabs/prysm/v5/consensus-types/"
             "primitives.CommitteeIndex" ];
+}
+
+// DEPRECATED: This endpoint StreamSlots is superseded by the /eth/v1/events
+// Beacon API endpoint
+message StreamReorgsResponse {
+  option deprecated = true;
+  uint64 slot = 1 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"
+  ];
+  uint64 depth = 2;
 }
 
 // DEPRECATED: This endpoint StreamSlots is superseded by the /eth/v1/events

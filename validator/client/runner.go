@@ -131,7 +131,7 @@ func run(ctx context.Context, v iface.Validator) {
 				}
 			}
 		case e := <-eventsChan:
-			v.ProcessEvent(e)
+			v.ProcessEvent(ctx, e)
 		case currentKeys := <-accountsChangedChan: // should be less of a priority than next slot
 			onAccountsChanged(ctx, v, currentKeys, accountsChangedChan)
 		}
@@ -297,6 +297,7 @@ func runHealthCheckRoutine(ctx context.Context, v iface.Validator, eventsChan ch
 	log.Info("Starting health check routine for beacon node apis")
 	healthCheckTicker := time.NewTicker(time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
 	tracker := v.HealthTracker()
+	go v.StartEventStream(ctx, event.DefaultEventTopics, eventsChan)
 	go func() {
 		// trigger the healthcheck immediately the first time
 		for ; true; <-healthCheckTicker.C {

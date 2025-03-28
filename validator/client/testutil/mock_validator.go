@@ -312,7 +312,7 @@ func (*FakeValidator) StartEventStream(_ context.Context, _ []string, _ chan<- *
 
 }
 
-func (*FakeValidator) ProcessEvent(_ *event.Event) {}
+func (*FakeValidator) ProcessEvent(_ context.Context, _ *event.Event) {}
 
 func (*FakeValidator) EventStreamIsRunning() bool {
 	return true

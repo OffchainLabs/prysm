@@ -1,6 +1,7 @@
 package validator
 
 import (
+	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/async/event"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
@@ -8,6 +9,7 @@ import (
 	blockfeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/block"
 	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	ethpbv1 "github.com/prysmaticlabs/prysm/v5/proto/eth/v1"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"google.golang.org/grpc/codes"
@@ -38,6 +40,38 @@ func (vs *Server) StreamBlocksAltair(req *ethpb.StreamBlocksRequest, stream ethp
 				}
 			}
 		case <-blockSub.Err():
+			return status.Error(codes.Aborted, "Subscriber closed, exiting goroutine")
+		case <-vs.Ctx.Done():
+			return status.Error(codes.Canceled, "Context canceled")
+		case <-stream.Context().Done():
+			return status.Error(codes.Canceled, "Context canceled")
+		}
+	}
+}
+
+// StreamReorgs sends the slot and the depth of a reorg to clients every single time a reorg is received by the beacon node.
+func (vs *Server) StreamReorgs(req *empty.Empty, stream ethpb.BeaconNodeValidator_StreamReorgsServer) error {
+	ch := make(chan *feed.Event, 1)
+	sub := vs.StateNotifier.StateFeed().Subscribe(ch)
+	defer sub.Unsubscribe()
+
+	for {
+		select {
+		case ev := <-ch:
+			if ev.Type != statefeed.Reorg {
+				continue
+			}
+			data, ok := ev.Data.(*ethpbv1.EventChainReorg)
+			if !ok || data == nil {
+				continue
+			}
+			if err := stream.Send(&ethpb.StreamReorgsResponse{
+				Slot:  data.Slot,
+				Depth: data.Depth,
+			}); err != nil {
+				return status.Errorf(codes.Unavailable, "Could not send over stream: %v", err)
+			}
+		case <-sub.Err():
 			return status.Error(codes.Aborted, "Subscriber closed, exiting goroutine")
 		case <-vs.Ctx.Done():
 			return status.Error(codes.Canceled, "Context canceled")

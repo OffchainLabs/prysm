@@ -19,6 +19,11 @@ import (
 	"google.golang.org/grpc"
 )
 
+var supportedEvents = map[string]struct{}{
+	eventClient.EventHead:       {},
+	eventClient.EventChainReorg: {},
+}
+
 type grpcValidatorClient struct {
 	beaconNodeValidatorClient ethpb.BeaconNodeValidatorClient
 	isEventStreamRunning      bool
@@ -214,33 +219,70 @@ func NewGrpcValidatorClient(cc grpc.ClientConnInterface) iface.ValidatorClient {
 	return &grpcValidatorClient{ethpb.NewBeaconNodeValidatorClient(cc), false}
 }
 
-func (c *grpcValidatorClient) StartEventStream(ctx context.Context, topics []string, eventsChannel chan<- *eventClient.Event) {
-	ctx, span := trace.StartSpan(ctx, "validator.gRPCClient.StartEventStream")
-	defer span.End()
-	if len(topics) == 0 {
+func (c *grpcValidatorClient) streamReorg(ctx context.Context, eventsChannel chan<- *eventClient.Event) {
+	stream, err := c.beaconNodeValidatorClient.StreamReorgs(ctx, &empty.Empty{})
+	if err != nil {
 		eventsChannel <- &eventClient.Event{
-			EventType: eventClient.EventError,
-			Data:      []byte(errors.New("no topics were added").Error()),
+			EventType: eventClient.EventConnectionError,
+			Data:      []byte(errors.Wrap(client.ErrConnectionIssue, err.Error()).Error()),
 		}
 		return
 	}
-	// TODO(13563): ONLY WORKS WITH HEAD TOPIC RIGHT NOW/ONLY PROVIDES THE SLOT
-	containsHead := false
-	for i := range topics {
-		if topics[i] == eventClient.EventHead {
-			containsHead = true
+	c.isEventStreamRunning = true
+	for {
+		select {
+		case <-ctx.Done():
+			log.Info("Context canceled, stopping event stream")
+			close(eventsChannel)
+			c.isEventStreamRunning = false
+			return
+		default:
+			if ctx.Err() != nil {
+				c.isEventStreamRunning = false
+				if errors.Is(ctx.Err(), context.Canceled) {
+					eventsChannel <- &eventClient.Event{
+						EventType: eventClient.EventConnectionError,
+						Data:      []byte(errors.Wrap(client.ErrConnectionIssue, ctx.Err().Error()).Error()),
+					}
+					return
+				}
+				eventsChannel <- &eventClient.Event{
+					EventType: eventClient.EventError,
+					Data:      []byte(ctx.Err().Error()),
+				}
+				return
+			}
+			res, err := stream.Recv()
+			if err != nil {
+				c.isEventStreamRunning = false
+				eventsChannel <- &eventClient.Event{
+					EventType: eventClient.EventConnectionError,
+					Data:      []byte(errors.Wrap(client.ErrConnectionIssue, err.Error()).Error()),
+				}
+				return
+			}
+			if res == nil {
+				continue
+			}
+			b, err := json.Marshal(structs.ChainReorgEvent{
+				Slot:  strconv.FormatUint(uint64(res.Slot), 10),
+				Depth: strconv.FormatUint(uint64(res.Depth), 10),
+			})
+			if err != nil {
+				eventsChannel <- &eventClient.Event{
+					EventType: eventClient.EventError,
+					Data:      []byte(errors.Wrap(err, "failed to marshal Head Event").Error()),
+				}
+			}
+			eventsChannel <- &eventClient.Event{
+				EventType: eventClient.EventChainReorg,
+				Data:      b,
+			}
 		}
 	}
-	if !containsHead {
-		eventsChannel <- &eventClient.Event{
-			EventType: eventClient.EventConnectionError,
-			Data:      []byte(errors.Wrap(client.ErrConnectionIssue, "gRPC only supports the head topic, and head topic was not passed").Error()),
-		}
-	}
-	if containsHead && len(topics) > 1 {
-		log.Warn("gRPC only supports the head topic, other topics will be ignored")
-	}
+}
 
+func (c *grpcValidatorClient) streamHead(ctx context.Context, eventsChannel chan<- *eventClient.Event) {
 	stream, err := c.beaconNodeValidatorClient.StreamSlots(ctx, &ethpb.StreamSlotsRequest{VerifiedOnly: true})
 	if err != nil {
 		eventsChannel <- &eventClient.Event{
@@ -298,6 +340,46 @@ func (c *grpcValidatorClient) StartEventStream(ctx context.Context, topics []str
 				EventType: eventClient.EventHead,
 				Data:      b,
 			}
+		}
+	}
+}
+
+func (c *grpcValidatorClient) StartEventStream(ctx context.Context, topics []string, eventsChannel chan<- *eventClient.Event) {
+	ctx, span := trace.StartSpan(ctx, "validator.gRPCClient.StartEventStream")
+	defer span.End()
+	if len(topics) == 0 {
+		eventsChannel <- &eventClient.Event{
+			EventType: eventClient.EventError,
+			Data:      []byte(errors.New("no topics were added").Error()),
+		}
+		return
+	}
+	containsUnsupported := false
+	var supportedRequested []string
+	for _, topic := range topics {
+		_, supported := supportedEvents[topic]
+		if supported {
+			supportedRequested = append(supportedRequested, topic)
+		} else {
+			containsUnsupported = true
+		}
+	}
+	if containsUnsupported {
+		log.Warn("Requested unsuported event topics, they will be ignored")
+	}
+	if len(supportedRequested) == 0 {
+		eventsChannel <- &eventClient.Event{
+			EventType: eventClient.EventError,
+			Data:      []byte(errors.New("no topics were added").Error()),
+		}
+		return
+	}
+	for _, topic := range supportedRequested {
+		switch topic {
+		case eventClient.EventHead:
+			go c.streamHead(ctx, eventsChannel)
+		case eventClient.EventChainReorg:
+			go c.streamReorg(ctx, eventsChannel)
 		}
 	}
 }

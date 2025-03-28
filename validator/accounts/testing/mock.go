@@ -253,7 +253,7 @@ func (*Validator) StartEventStream(_ context.Context, _ []string, _ chan<- *even
 	panic("implement me")
 }
 
-func (*Validator) ProcessEvent(event *event.Event) {
+func (*Validator) ProcessEvent(_ context.Context, event *event.Event) {
 	panic("implement me")
 }
 

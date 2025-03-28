@@ -1138,26 +1138,57 @@ func (v *validator) StartEventStream(ctx context.Context, topics []string, event
 	v.validatorClient.StartEventStream(ctx, topics, eventsChannel)
 }
 
-func (v *validator) ProcessEvent(event *eventClient.Event) {
+func (v *validator) processHeadEvent(event *eventClient.Event) {
+	log.Debug("Received head event")
+	head := &structs.HeadEvent{}
+	if err := json.Unmarshal(event.Data, head); err != nil {
+		log.WithError(err).Error("Failed to unmarshal head Event into JSON")
+	}
+	uintSlot, err := strconv.ParseUint(head.Slot, 10, 64)
+	if err != nil {
+		log.WithError(err).Error("Failed to parse slot")
+	}
+	v.setHighestSlot(primitives.Slot(uintSlot))
+}
+
+func (v *validator) processReorgEvent(ctx context.Context, event *eventClient.Event) {
+	log.Debug("Received chain reorg event")
+	reorg := &structs.ChainReorgEvent{}
+	if err := json.Unmarshal(event.Data, reorg); err != nil {
+		log.WithError(err).Error("Failed to unmarshal chain reorg Event into JSON")
+	}
+	slot, err := strconv.ParseUint(reorg.Slot, 10, 64)
+	if err != nil {
+		log.WithError(err).Error("Failed to parse slot")
+	}
+	depth, err := strconv.ParseUint(reorg.Depth, 10, 64)
+	if err != nil {
+		log.WithError(err).Error("Failed to parse depth")
+	}
+	if slots.ToEpoch(primitives.Slot(slot-depth)) < slots.ToEpoch(primitives.Slot(slot)) {
+		v.dutiesLock.Lock()
+		v.duties = nil
+		v.dutiesLock.Unlock()
+		if err := v.UpdateDuties(ctx, primitives.Slot(slot)); err != nil {
+			log.WithError(err).Error("Failed to update duties after reorg")
+		}
+		v.setHighestSlot(primitives.Slot(slot))
+	}
+}
+
+func (v *validator) ProcessEvent(ctx context.Context, event *eventClient.Event) {
 	if event == nil || event.Data == nil {
 		log.Warn("Received empty event")
 	}
 	switch event.EventType {
 	case eventClient.EventError:
-		log.Error(string(event.Data))
+		log.WithError(errors.New(string(event.Data))).Error("Received error in event")
 	case eventClient.EventConnectionError:
 		log.WithError(errors.New(string(event.Data))).Error("Event stream interrupted")
 	case eventClient.EventHead:
-		log.Debug("Received head event")
-		head := &structs.HeadEvent{}
-		if err := json.Unmarshal(event.Data, head); err != nil {
-			log.WithError(err).Error("Failed to unmarshal head Event into JSON")
-		}
-		uintSlot, err := strconv.ParseUint(head.Slot, 10, 64)
-		if err != nil {
-			log.WithError(err).Error("Failed to parse slot")
-		}
-		v.setHighestSlot(primitives.Slot(uintSlot))
+		v.processHeadEvent(event)
+	case eventClient.EventChainReorg:
+		v.processReorgEvent(ctx, event)
 	default:
 		// just keep going and log the error
 		log.WithField("type", event.EventType).WithField("data", string(event.Data)).Warn("Received an unknown event")
