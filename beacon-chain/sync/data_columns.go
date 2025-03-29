@@ -3,6 +3,7 @@ package sync
 import (
 	"context"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
@@ -25,6 +26,12 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+)
+
+var (
+	ErrNoPeersForDataColumns  = errors.New("no peers available to fetch data columns from")
+	ErrNotEnoughColsAvailable = errors.New("not enough columns available across peers for reconstruction")
+	ErrReconstructionFailed   = errors.New("failed to reconstruct data columns")
 )
 
 // RequestDataColumnSidecarsByRoot is an opinionated, high level function which, for each data column in `dataColumnsToFetch`:
@@ -423,14 +430,18 @@ func SelectPeersToFetchDataColumnsFrom(neededDataColumns []uint64, dataColumnsBy
 	// Filter `dataColumnsByPeer` to only contain needed data columns.
 	neededDataColumnsByPeer := make(map[peer.ID]map[uint64]bool, len(dataColumnsByPeer))
 	for pid, dataColumns := range dataColumnsByPeer {
+		// Create a map for the current peer's needed columns
+		currentPeerNeededColumns := make(map[uint64]bool)
+		hasNeeded := false
 		for dataColumn := range dataColumns {
 			if remainingDataColumns[dataColumn] {
-				if _, ok := neededDataColumnsByPeer[pid]; !ok {
-					neededDataColumnsByPeer[pid] = make(map[uint64]bool, len(neededDataColumns))
-				}
-
-				neededDataColumnsByPeer[pid][dataColumn] = true
+				currentPeerNeededColumns[dataColumn] = true
+				hasNeeded = true
 			}
+		}
+		// Only add the peer if they have at least one needed column
+		if hasNeeded {
+			neededDataColumnsByPeer[pid] = currentPeerNeededColumns
 		}
 	}
 
@@ -440,47 +451,64 @@ func SelectPeersToFetchDataColumnsFrom(neededDataColumns []uint64, dataColumnsBy
 		// Check if at least one peer remains. If not, it means that we don't have enough peers to fetch all needed data columns.
 		if len(neededDataColumnsByPeer) == 0 {
 			missingDataColumnsSortedSlice := uint64MapToSortedSlice(remainingDataColumns)
-			return dataColumnsFromSelectedPeers, errors.Errorf("no peer to fetch the following data columns: %v", missingDataColumnsSortedSlice)
+			return nil, errors.Errorf("%w: missing data columns: %v", ErrNoPeersForDataColumns, missingDataColumnsSortedSlice)
 		}
 
 		// Select the peer that custody the most needed data columns (greedy selection).
 		var bestPeer peer.ID
+		maxCovered := -1 // Use -1 to handle the first peer correctly
+
 		for peer, dataColumns := range neededDataColumnsByPeer {
-			if len(dataColumns) > len(neededDataColumnsByPeer[bestPeer]) {
+			// Count how many *remaining* data columns this peer covers
+			coveredCount := 0
+			for col := range dataColumns {
+				if remainingDataColumns[col] {
+					coveredCount++
+				}
+			}
+
+			// Update best peer if this one covers more *remaining* columns
+			if coveredCount > maxCovered {
+				maxCovered = coveredCount
 				bestPeer = peer
 			}
 		}
 
-		dataColumnsSortedSlice := uint64MapToSortedSlice(neededDataColumnsByPeer[bestPeer])
-		if uint64(len(dataColumnsSortedSlice)) > maxRequestDataColumnSidecars {
-			dataColumnsSortedSlice = dataColumnsSortedSlice[:maxRequestDataColumnSidecars]
+		// If maxCovered is 0 or less, it means no available peer covers any remaining needed column.
+		if maxCovered <= 0 {
+			missingDataColumnsSortedSlice := uint64MapToSortedSlice(remainingDataColumns)
+			return nil, errors.Errorf("%w: remaining peers do not cover missing columns: %v", ErrNoPeersForDataColumns, missingDataColumnsSortedSlice)
 		}
-		dataColumnsFromSelectedPeers[bestPeer] = dataColumnsSortedSlice
 
-		// Remove the selected peer from the list of peers.
+		// Get the actual columns this best peer provides from the set we still need.
+		columnsProvidedByBestPeer := make([]uint64, 0)
+		for col := range neededDataColumnsByPeer[bestPeer] {
+			if remainingDataColumns[col] {
+				columnsProvidedByBestPeer = append(columnsProvidedByBestPeer, col)
+			}
+		}
+		// Sort for deterministic selection if truncated
+		sort.Slice(columnsProvidedByBestPeer, func(i, j int) bool { return columnsProvidedByBestPeer[i] < columnsProvidedByBestPeer[j] })
+
+		// Limit the request size per peer.
+		if uint64(len(columnsProvidedByBestPeer)) > maxRequestDataColumnSidecars {
+			columnsProvidedByBestPeer = columnsProvidedByBestPeer[:maxRequestDataColumnSidecars]
+		}
+		dataColumnsFromSelectedPeers[bestPeer] = columnsProvidedByBestPeer
+
+		// Remove the selected peer from the pool for the next iteration.
 		delete(neededDataColumnsByPeer, bestPeer)
 
-		// Remove the selected peer's data columns from the list of remaining data columns.
-		for _, dataColumn := range dataColumnsSortedSlice {
+		// Remove the columns covered by the selected peer from the remaining set.
+		for _, dataColumn := range columnsProvidedByBestPeer {
 			delete(remainingDataColumns, dataColumn)
-		}
-
-		// Remove the selected peer's data columns from the list of needed data columns by peer.
-		for _, dataColumn := range dataColumnsSortedSlice {
-			for peer, dataColumns := range neededDataColumnsByPeer {
-				delete(dataColumns, dataColumn)
-
-				if len(dataColumns) == 0 {
-					delete(neededDataColumnsByPeer, peer)
-				}
-			}
 		}
 	}
 
 	return dataColumnsFromSelectedPeers, nil
 }
 
-// AdmissiblePeersForCustodyGroup returns a map of peers that custody at least one custody group listed in `neededCustodyGroups`.
+// AdmissiblePeersForDataColumns returns a map of peers that custody at least one data column listed in `neededDataColumns`.
 //
 // It returns:
 // - A map, where the key of the map is the peer, the value is the custody groups of the peer.
