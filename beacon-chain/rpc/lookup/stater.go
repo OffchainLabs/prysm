@@ -143,7 +143,7 @@ func (p *BeaconDbStater) State(ctx context.Context, stateId []byte) (state.Beaco
 			return nil, errors.Wrap(err, "could not get justified state")
 		}
 	default:
-		if len(stateIdString) >= 2 && stateIdString[:2] == "0x" {
+		if bytesutil.IsHex(stateId) {
 			decoded, parseErr := hexutil.Decode(string(stateId))
 			if parseErr != nil {
 				e := NewStateIdParseError(parseErr)
@@ -185,7 +185,15 @@ func (p *BeaconDbStater) StateRoot(ctx context.Context, stateId []byte) (root []
 	case "justified":
 		root, err = p.justifiedStateRoot(ctx)
 	default:
-		if len(stateId) == 32 {
+		if bytesutil.IsHex(stateId) {
+			var decoded []byte
+			decoded, err = hexutil.Decode(string(stateId))
+			if err != nil {
+				e := NewStateIdParseError(err)
+				return nil, &e
+			}
+			root, err = p.stateRootByRoot(ctx, decoded)
+		} else if len(stateId) == 32 {
 			root, err = p.stateRootByRoot(ctx, stateId)
 		} else {
 			slotNumber, parseErr := strconv.ParseUint(stateIdString, 10, 64)
