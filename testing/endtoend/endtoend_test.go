@@ -531,6 +531,17 @@ func (r *testRunner) defaultEndToEndRun() error {
 				assert.NoError(t, evaluator.Evaluation(ec, conns...), "Evaluation failed for sync node")
 			})
 		}
+
+		// Test Withdrawal Transactions
+		r.comHandler.txGen.SetTxType(eth1.WithdrawalTx)
+		// Wait For an epoch before running evaluator
+		time.Sleep(waitForSync)
+
+		for _, evaluator := range []e2etypes.Evaluator{ev.ValidatorsHaveWithdrawnViaExecution} {
+			t.Run(evaluator.Name, func(t *testing.T) {
+				assert.NoError(t, evaluator.Evaluation(ec, conns...), "Evaluation failed for sync node")
+			})
+		}
 		r.comHandler.txGen.SetTxType(eth1.RandomTx)
 	}
 

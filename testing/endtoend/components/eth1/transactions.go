@@ -27,6 +27,7 @@ import (
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/crypto/rand"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/v5/runtime/interop"
 	e2e "github.com/prysmaticlabs/prysm/v5/testing/endtoend/params"
 	"github.com/sirupsen/logrus"
@@ -124,6 +125,10 @@ func (t *TransactionGenerator) Start(ctx context.Context) error {
 					return err
 				}
 			case WithdrawalTx:
+				err = SendWithdrawalTransaction(mineKey.PrivateKey, newKey.PrivateKey, gasPrice, backend)
+				if err != nil {
+					return err
+				}
 			case RandomTx:
 				err = SendTransaction(client, mineKey.PrivateKey, f, gasPrice, mineKey.Address.String(), txCount, backend, false)
 				if err != nil {
@@ -308,6 +313,83 @@ func createAndSendConsolidation(sourceKey, targetKey []byte, key *ecdsa.PrivateK
 		Gas:      gasLimit,
 		GasPrice: gasPrice,
 		Data:     consolidationData,
+	})
+
+	// Sign transaction
+	signedTx, err := types.SignTx(tx, types.NewCancunSigner(chainid), key)
+	if err != nil {
+		return err
+	}
+	return backend.SendTransaction(context.Background(), signedTx)
+}
+
+func SendWithdrawalTransaction(key, newKey *ecdsa.PrivateKey, gasPrice *big.Int, backend *ethclient.Client) error {
+	totalCreds := e2e.TestParams.NumberOfExecutionCreds
+	_, pKeys, err := interop.DeterministicallyGenerateKeys(0, totalCreds)
+	if err != nil {
+		return err
+	}
+	compoundedKey := pKeys[len(pKeys)-1].Marshal()
+
+	_, invalidWithdrawalKeys, err := interop.DeterministicallyGenerateKeys(totalCreds, totalCreds+4)
+	if err != nil {
+		return err
+	}
+
+	// Send Withdrawal for compounded key.
+	if err := createAndSendWithdrawal(compoundedKey, 0, key, gasPrice, backend); err != nil {
+		return err
+	}
+
+	rGen := rand.NewDeterministicGenerator()
+	for _, k := range pKeys {
+		if err := createAndSendWithdrawal(k.Marshal(), uint64(rGen.Int63n(32000000000)), key, gasPrice, backend); err != nil {
+			return err
+		}
+	}
+
+	// Junk Requests
+	for _, k := range invalidWithdrawalKeys {
+		if err := createAndSendWithdrawal(k.Marshal(), uint64(rGen.Int63n(32000000000)), newKey, gasPrice, backend); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func createAndSendWithdrawal(sourceKey []byte, amount uint64, key *ecdsa.PrivateKey, gasPrice *big.Int, backend *ethclient.Client) error {
+	publicKey := key.Public().(*ecdsa.PublicKey)
+	fromAddress := gethCrypto.PubkeyToAddress(*publicKey)
+	// Get nonce
+	nonce, err := backend.PendingNonceAt(context.Background(), fromAddress)
+	if err != nil {
+		return err
+	}
+	chainid, err := backend.ChainID(context.Background())
+	if err != nil {
+		return err
+	}
+	gasLimit := uint64(200000)
+
+	withdrawalData := []byte{}
+	withdrawalData = append(withdrawalData, sourceKey...)
+	withdrawalData = append(withdrawalData, bytesutil.Uint64ToBytesBigEndian(amount)...)
+
+	ret, err := backend.CallContract(context.Background(), ethereum.CallMsg{To: &gethparams.WithdrawalQueueAddress}, nil)
+	if err != nil {
+		return errors.Wrapf(err, "%s", string(ret))
+	}
+	fee := new(big.Int).SetBytes(ret)
+	fee = fee.Mul(fee, big.NewInt(2))
+
+	// Create transaction
+	tx := types.NewTx(&types.LegacyTx{
+		Nonce:    nonce,
+		To:       &gethparams.WithdrawalQueueAddress,
+		Value:    fee,
+		Gas:      gasLimit,
+		GasPrice: gasPrice,
+		Data:     withdrawalData,
 	})
 
 	// Sign transaction
