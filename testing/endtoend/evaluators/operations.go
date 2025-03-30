@@ -743,7 +743,7 @@ func validatorsHaveBeenConsolidated(ec *e2etypes.EvaluationContext, conns ...*gr
 
 	var compoundingVal int
 
-	for pubkey, _ := range ec.ValidExecutionCredentials {
+	for pubkey := range ec.ValidExecutionCredentials {
 		if ec.ExitedVals[pubkey] {
 			continue
 		}
