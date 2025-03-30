@@ -197,11 +197,11 @@ func RequestDataColumnSidecarsByRoot(
 	return nil, errors.Errorf("failed to retrieve all requested data columns after retries for block root=%#x, missing columns=%v", blockRoot, uint64MapToSortedSlice(remainingMissingColumns))
 }
 
-// RecoverDataColumns attempts to recover a requested set of data columns for a given block.
+// ReconstructDataColumnsByRoot attempts to reconstruct a requested set of data columns for a given block.
 // It identifies at least half of the total columns available from peers, requests them,
 // and then uses erasure coding to reconstruct the full set of columns. Finally, it filters
 // and returns only the initially requested columns.
-func RecoverDataColumns(
+func ReconstructDataColumnsByRoot(
 	ctx context.Context,
 	requestedColumns map[uint64]bool,
 	block interfaces.ReadOnlySignedBeaconBlock,

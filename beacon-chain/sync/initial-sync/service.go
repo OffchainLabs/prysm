@@ -406,8 +406,8 @@ func (s *Service) fetchOriginColumns(pids []peer.ID, roBlock blocks.ROBlock) err
 	if err != nil {
 		if errors.Is(err, sync.ErrNoPeersForDataColumns) {
 			// If specific data columns are missing, try to recover the data column sidecars.
-			var recoverErr error
-			sidecars, recoverErr = sync.RecoverDataColumns(
+			var reconstructErr error
+			sidecars, reconstructErr = sync.ReconstructDataColumnsByRoot(
 				s.ctx,
 				missingColumns,
 				roBlock,
@@ -418,8 +418,8 @@ func (s *Service) fetchOriginColumns(pids []peer.ID, roBlock blocks.ROBlock) err
 				s.ctxMap,
 				s.newDataColumnsVerifier,
 			)
-			if recoverErr != nil {
-				return errors.Wrapf(err, "could not recover data column sidecars. recoverErr: %v", recoverErr)
+			if reconstructErr != nil {
+				return errors.Wrapf(err, "could not reconstruct data column sidecars. reconstructErr: %v", reconstructErr)
 			}
 		} else {
 			return errors.Wrap(err, "could not request and save data column sidecars")
