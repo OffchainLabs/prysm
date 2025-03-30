@@ -792,7 +792,7 @@ func validatorsHaveBeenWithdrawnWithExecution(ec *e2etypes.EvaluationContext, co
 		return errors.Wrap(err, "could not get state")
 	}
 
-	for pubkey, _ := range ec.ValidExecutionCredentials {
+	for pubkey := range ec.ValidExecutionCredentials {
 		if ec.ExitedVals[pubkey] {
 			continue
 		}
