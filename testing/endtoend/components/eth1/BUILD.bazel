@@ -29,7 +29,6 @@ go_library(
         "//testing/middleware/engine-api-proxy:go_default_library",
         "//testing/util:go_default_library",
         "@com_github_ethereum_go_ethereum//:go_default_library",
-        "@com_github_ethereum_go_ethereum//accounts/abi:go_default_library",
         "@com_github_ethereum_go_ethereum//accounts/abi/bind:go_default_library",
         "@com_github_ethereum_go_ethereum//accounts/keystore:go_default_library",
         "@com_github_ethereum_go_ethereum//common:go_default_library",

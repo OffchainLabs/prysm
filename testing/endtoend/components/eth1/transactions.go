@@ -336,38 +336,71 @@ func SendWithdrawalTransaction(key, newKey *ecdsa.PrivateKey, gasPrice *big.Int,
 		return err
 	}
 
-	// Send Withdrawal for compounded key.
-	if err := createAndSendWithdrawal(compoundedKey, 0, key, gasPrice, backend); err != nil {
+	publicKey := key.Public().(*ecdsa.PublicKey)
+	fromAddress := gethCrypto.PubkeyToAddress(*publicKey)
+	nonce, err := backend.PendingNonceAt(context.Background(), fromAddress)
+	if err != nil {
 		return err
 	}
 
+	var withdrawalTxs []*types.Transaction
+	// Create Withdrawal for compounded key.
+	tx, err := createWithdrawal(compoundedKey, 0, nonce, key, gasPrice, backend)
+	if err != nil {
+		return err
+	}
+	withdrawalTxs = append(withdrawalTxs, tx)
+	nonce++
+
 	rGen := rand.NewDeterministicGenerator()
 	for _, k := range pKeys {
-		if err := createAndSendWithdrawal(k.Marshal(), uint64(rGen.Int63n(32000000000)), key, gasPrice, backend); err != nil {
+		tx, err := createWithdrawal(k.Marshal(), uint64(rGen.Int63n(32000000000)), nonce, key, gasPrice, backend)
+		if err != nil {
 			return err
 		}
+		withdrawalTxs = append(withdrawalTxs, tx)
+		nonce++
 	}
 
 	// Junk Requests
 	for _, k := range invalidWithdrawalKeys {
-		if err := createAndSendWithdrawal(k.Marshal(), uint64(rGen.Int63n(32000000000)), newKey, gasPrice, backend); err != nil {
+		tx, err := createWithdrawal(k.Marshal(), uint64(rGen.Int63n(32000000000)), nonce, newKey, gasPrice, backend)
+		if err != nil {
 			return err
+		}
+		withdrawalTxs = append(withdrawalTxs, tx)
+		nonce++
+	}
+	currExecHead := uint64(0)
+	// Batch And Send Withdrawals
+	for len(withdrawalTxs) > 0 {
+		currBlock, err := backend.BlockNumber(context.Background())
+		if err != nil {
+			return err
+		}
+		if currBlock > currExecHead {
+			currExecHead = currBlock
+			maxWithdrawalPerPayload := params.BeaconConfig().MaxWithdrawalRequestsPerPayload
+			if maxWithdrawalPerPayload > uint64(len(withdrawalTxs)) {
+				maxWithdrawalPerPayload = uint64(len(withdrawalTxs))
+			}
+			for _, tx := range withdrawalTxs[:maxWithdrawalPerPayload] {
+				if err := backend.SendTransaction(context.Background(), tx); err != nil {
+					return err
+				}
+			}
+			// Shift slice to only have unsent transactions
+			withdrawalTxs = withdrawalTxs[maxWithdrawalPerPayload:]
+			time.Sleep(2 * time.Second)
 		}
 	}
 	return nil
 }
 
-func createAndSendWithdrawal(sourceKey []byte, amount uint64, key *ecdsa.PrivateKey, gasPrice *big.Int, backend *ethclient.Client) error {
-	publicKey := key.Public().(*ecdsa.PublicKey)
-	fromAddress := gethCrypto.PubkeyToAddress(*publicKey)
-	// Get nonce
-	nonce, err := backend.PendingNonceAt(context.Background(), fromAddress)
-	if err != nil {
-		return err
-	}
+func createWithdrawal(sourceKey []byte, amount, nonce uint64, key *ecdsa.PrivateKey, gasPrice *big.Int, backend *ethclient.Client) (*types.Transaction, error) {
 	chainid, err := backend.ChainID(context.Background())
 	if err != nil {
-		return err
+		return nil, err
 	}
 	gasLimit := uint64(200000)
 
@@ -377,7 +410,7 @@ func createAndSendWithdrawal(sourceKey []byte, amount uint64, key *ecdsa.Private
 
 	ret, err := backend.CallContract(context.Background(), ethereum.CallMsg{To: &gethparams.WithdrawalQueueAddress}, nil)
 	if err != nil {
-		return errors.Wrapf(err, "%s", string(ret))
+		return nil, errors.Wrapf(err, "%s", string(ret))
 	}
 	fee := new(big.Int).SetBytes(ret)
 	fee = fee.Mul(fee, big.NewInt(2))
@@ -395,9 +428,9 @@ func createAndSendWithdrawal(sourceKey []byte, amount uint64, key *ecdsa.Private
 	// Sign transaction
 	signedTx, err := types.SignTx(tx, types.NewCancunSigner(chainid), key)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return backend.SendTransaction(context.Background(), signedTx)
+	return signedTx, nil
 }
 
 func (t *TransactionGenerator) SetTxType(typ txType) {
