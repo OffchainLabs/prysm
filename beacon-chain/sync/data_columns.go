@@ -25,6 +25,19 @@ import (
 	"github.com/libp2p/go-libp2p/core"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
+
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/verify"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/sirupsen/logrus"
 )
 
@@ -182,6 +195,172 @@ func RequestDataColumnSidecarsByRoot(
 
 	// If we still have remaining columns after all retries, return error
 	return nil, errors.Errorf("failed to retrieve all requested data columns after retries for block root=%#x, missing columns=%v", blockRoot, uint64MapToSortedSlice(remainingMissingColumns))
+}
+
+// RecoverDataColumns attempts to recover a requested set of data columns for a given block.
+// It identifies at least half of the total columns available from peers, requests them,
+// and then uses erasure coding to reconstruct the full set of columns. Finally, it filters
+// and returns only the initially requested columns.
+func RecoverDataColumns(
+	ctx context.Context,
+	requestedColumns map[uint64]bool,
+	block interfaces.ReadOnlySignedBeaconBlock,
+	blkRoot [32]byte,
+	peers []core.PeerID,
+	clock *startup.Clock,
+	p2p p2p.P2P,
+	ctxMap ContextByteVersions,
+	newColumnsVerifier verification.NewDataColumnsVerifier,
+) ([]blocks.RODataColumn, error) {
+	if len(requestedColumns) == 0 {
+		return nil, nil // Nothing requested, nothing to recover.
+	}
+
+	// Determine recovery threshold.
+	numberOfColumns := params.BeaconConfig().NumberOfColumns
+	// If total is odd, then we need total / 2 + 1 columns to reconstruct.
+	// If total is even, then we need total / 2 columns to reconstruct.
+	recoveryThreshold := numberOfColumns/2 + numberOfColumns%2
+	log.WithFields(logrus.Fields{
+		"blockRoot":         fmt.Sprintf("%#x", blkRoot),
+		"totalColumns":      numberOfColumns,
+		"recoveryThreshold": recoveryThreshold,
+	}).Debug("Attempting data column recovery")
+
+	// Find available columns from peers.
+	allNeededCols := make(map[uint64]bool, numberOfColumns)
+	for i := uint64(0); i < numberOfColumns; i++ {
+		allNeededCols[i] = true
+	}
+	dataColumnsByAdmissiblePeer, _, _, err := AdmissiblePeersForDataColumns(peers, allNeededCols, p2p)
+	if err != nil {
+		return nil, errors.Wrap(err, "couldn't get admissible peers for all data columns")
+	}
+
+	availableColumns := make(map[uint64]bool)
+	for _, cols := range dataColumnsByAdmissiblePeer {
+		for col := range cols {
+			availableColumns[col] = true
+		}
+	}
+
+	if uint64(len(availableColumns)) < recoveryThreshold {
+		return nil, ErrNotEnoughColsAvailable
+	}
+
+	// Select columns to fetch (prioritize requested, then fill up to threshold).
+	columnsToFetch := make(map[uint64]bool)
+	// Add requested columns first if they are available
+	for col := range requestedColumns {
+		if availableColumns[col] {
+			columnsToFetch[col] = true
+		}
+	}
+
+	// If not enough, add other available columns until threshold is met
+	if uint64(len(columnsToFetch)) < recoveryThreshold {
+		for col := range availableColumns {
+			if !columnsToFetch[col] { // If not already added
+				columnsToFetch[col] = true
+				if uint64(len(columnsToFetch)) >= recoveryThreshold {
+					break // Stop once we have enough
+				}
+			}
+		}
+	}
+
+	// Fetch selected columns.
+	// Note: We use RequestDataColumnSidecarsByRoot, which internally handles peer selection and retries.
+	// We pass the specifically selected 'columnsToFetch'.
+	fetchedSidecars, err := RequestDataColumnSidecarsByRoot(
+		ctx,
+		columnsToFetch,
+		block,
+		blkRoot,
+		peers,
+		clock,
+		p2p,
+		ctxMap,
+		newColumnsVerifier,
+	)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to request data columns for recovery")
+	}
+
+	// Check if we actually got enough sidecars after the request.
+	if uint64(len(fetchedSidecars)) < recoveryThreshold {
+		return nil, errors.Wrapf(ErrReconstructionFailed, "received only %d columns, need %d", len(fetchedSidecars), recoveryThreshold)
+	}
+
+	// Convert fetched RODataColumn to []*ethpb.DataColumnSidecar for peerdas functions.
+	pbFetchedSidecars := make([]*ethpb.DataColumnSidecar, 0, len(fetchedSidecars))
+	for i := range fetchedSidecars {
+		verifiedCol := blocks.NewVerifiedRODataColumn(fetchedSidecars[i])
+		pbFetchedSidecars = append(pbFetchedSidecars, verifiedCol.DataColumnSidecar)
+	}
+
+	// Recover Cells and Proofs.
+	recoveredCellsAndProofs, err := peerdas.RecoverCellsAndProofs(pbFetchedSidecars, blkRoot)
+	if err != nil {
+		log.WithError(err).WithField("blockRoot", fmt.Sprintf("%#x", blkRoot)).Error("Failed to recover cells and proofs")
+		return nil, errors.Wrapf(ErrReconstructionFailed, "peerdas.RecoverCellsAndProofs failed: %v", err)
+	}
+
+	// Get Reconstruction Data.
+	blockBody := block.Block().Body()
+	blobKzgCommitments, err := blockBody.BlobKzgCommitments()
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get blob KZG commitments from block body")
+	}
+	signedBlockHeader, err := block.Header()
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get signed block header")
+	}
+	kzgCommitmentsInclusionProof, err := blocks.MerkleProofKZGCommitments(blockBody)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get KZG commitments inclusion proof")
+	}
+
+	// Reconstruct All Sidecars.
+	allPbSidecars, err := peerdas.DataColumnSidecarsForReconstruct(
+		blobKzgCommitments,
+		signedBlockHeader,
+		kzgCommitmentsInclusionProof,
+		recoveredCellsAndProofs,
+	)
+	if err != nil {
+		log.WithError(err).WithField("blockRoot", fmt.Sprintf("%#x", blkRoot)).Error("Failed to reconstruct all data column sidecars")
+		return nil, errors.Wrapf(ErrReconstructionFailed, "peerdas.DataColumnSidecarsForReconstruct failed: %v", err)
+	}
+
+	// Convert all reconstructed sidecars back to RODataColumn.
+	allROSidecars := make(map[uint64]blocks.RODataColumn, len(allPbSidecars))
+	for _, pbSidecar := range allPbSidecars {
+		roSidecar, err := blocks.NewRODataColumn(pbSidecar)
+		if err != nil {
+			return nil, errors.Wrapf(ErrReconstructionFailed, "failed to create RODataColumn from reconstructed sidecar index %d: %v", pbSidecar.ColumnIndex, err)
+		}
+		allROSidecars[roSidecar.ColumnIndex] = roSidecar
+	}
+
+	// Filter to return only the originally requested columns.
+	resultColumns := make([]blocks.RODataColumn, 0, len(requestedColumns))
+	missingRecovered := make(map[uint64]bool)
+	for colIdx := range requestedColumns {
+		if recoveredCol, ok := allROSidecars[colIdx]; ok {
+			resultColumns = append(resultColumns, recoveredCol)
+		} else {
+			// This indicates a potential issue with reconstruction or the returned data.
+			missingRecovered[colIdx] = true
+		}
+	}
+
+	if len(missingRecovered) > 0 {
+		return nil, errors.Wrapf(ErrReconstructionFailed, "reconstruction succeeded, but requested columns %v are missing from the result", uint64MapToSortedSlice(missingRecovered))
+	}
+
+	// Return the successfully recovered and filtered columns.
+	return resultColumns, nil
 }
 
 // RequestMissingDataColumnsByRange is an opinionated, high level function which, for each block in `blks`:
@@ -414,6 +593,21 @@ func MissingDataColumns(block blocks.ROBlock, nodeID enode.ID, custodyGroupCount
 	}
 
 	return missingColumns, nil
+}
+
+func RequestsForDataColumnsByRoot(
+	root [32]byte,
+	missingColumns []uint64,
+) (types.DataColumnSidecarsByRootReq, error) {
+	req := make(types.DataColumnSidecarsByRootReq, 0, len(missingColumns))
+	for _, column := range missingColumns {
+		req = append(req, &ethpb.DataColumnIdentifier{
+			BlockRoot:   root[:],
+			ColumnIndex: column,
+		})
+	}
+
+	return req, nil
 }
 
 // SelectPeersToFetchDataColumnsFrom implements greedy algorithm in order to select peers to fetch data columns from.
