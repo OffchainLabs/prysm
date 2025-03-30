@@ -740,6 +740,7 @@ func validatorsHaveBeenConsolidated(ec *e2etypes.EvaluationContext, conns ...*gr
 	if err != nil {
 		return errors.Wrap(err, "could not get state")
 	}
+
 	var compoundingVal int
 
 	for pubkey, _ := range ec.ValidExecutionCredentials {
