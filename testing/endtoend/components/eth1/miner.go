@@ -146,6 +146,7 @@ func (m *Miner) initAttempt(ctx context.Context, attempt int) (*os.File, error) 
 		fmt.Sprintf("--unlock=%s", EthAddress),
 		"--allow-insecure-unlock",
 		"--syncmode=full",
+		fmt.Sprintf("--miner.gaslimit=%d", params.BeaconConfig().DefaultBuilderGasLimit),
 		fmt.Sprintf("--txpool.locals=%s", EthAddress),
 		fmt.Sprintf("--password=%s", pwFile),
 	}

@@ -166,6 +166,23 @@ func (s *Service) processIncludedAttestation(ctx context.Context, state state.Be
 	}
 }
 
+// processSingleAttestation logs when the beacon node observes a single attestation from tracked validator.
+func (s *Service) processSingleAttestation(att ethpb.Att) {
+	s.RLock()
+	defer s.RUnlock()
+
+	single, ok := att.(*ethpb.SingleAttestation)
+	if !ok {
+		log.Errorf("Wrong attestation type (expected %T, got %T)", &ethpb.SingleAttestation{}, att)
+		return
+	}
+
+	if s.canUpdateAttestedValidator(single.AttesterIndex, single.GetData().Slot) {
+		logFields := logMessageTimelyFlagsForIndex(single.AttesterIndex, att.GetData())
+		log.WithFields(logFields).Info("Processed unaggregated attestation")
+	}
+}
+
 // processUnaggregatedAttestation logs when the beacon node observes an unaggregated attestation from tracked validator.
 func (s *Service) processUnaggregatedAttestation(ctx context.Context, att ethpb.Att) {
 	s.RLock()

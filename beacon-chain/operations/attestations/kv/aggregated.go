@@ -23,10 +23,7 @@ import (
 func (c *AttCaches) AggregateUnaggregatedAttestations(ctx context.Context) error {
 	ctx, span := trace.StartSpan(ctx, "operations.attestations.kv.AggregateUnaggregatedAttestations")
 	defer span.End()
-	unaggregatedAtts, err := c.UnaggregatedAttestations()
-	if err != nil {
-		return err
-	}
+	unaggregatedAtts := c.UnaggregatedAttestations()
 	return c.aggregateUnaggregatedAtts(ctx, unaggregatedAtts)
 }
 

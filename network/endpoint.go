@@ -12,6 +12,7 @@ import (
 	gethRPC "github.com/ethereum/go-ethereum/rpc"
 	"github.com/prysmaticlabs/prysm/v5/network/authorization"
 	log "github.com/sirupsen/logrus"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 // Endpoint is an endpoint with authorization data.
@@ -36,7 +37,7 @@ func (e Endpoint) Equals(other Endpoint) bool {
 // on the properties of the network endpoint.
 func (e Endpoint) HttpClient() *http.Client {
 	if e.Auth.Method != authorization.Bearer {
-		return http.DefaultClient
+		return &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)}
 	}
 	return NewHttpClientWithSecret(e.Auth.Value, e.Auth.JwtId)
 }
@@ -121,7 +122,7 @@ func NewHttpClientWithSecret(secret, id string) *http.Client {
 	}
 	return &http.Client{
 		Timeout:   DefaultRPCHTTPTimeout,
-		Transport: authTransport,
+		Transport: otelhttp.NewTransport(authTransport),
 	}
 }
 

@@ -63,30 +63,33 @@ func (ebe *ExecutionBundleElectra) GetDecodedExecutionRequests() (*ExecutionRequ
 
 func unmarshalDeposits(requestListInSSZBytes []byte) ([]*DepositRequest, error) {
 	if len(requestListInSSZBytes) < drSize {
-		return nil, fmt.Errorf("invalid deposit requests length, requests should be at least the size of %d", drSize)
+		return nil, fmt.Errorf("invalid deposit requests SSZ size, got %d expected at least %d", len(requestListInSSZBytes), drSize)
 	}
-	if uint64(len(requestListInSSZBytes)) > uint64(drSize)*params.BeaconConfig().MaxDepositRequestsPerPayload {
-		return nil, fmt.Errorf("invalid deposit requests length, requests should not be more than the max per payload, got %d max %d", len(requestListInSSZBytes), drSize)
+	maxSSZsize := uint64(drSize) * params.BeaconConfig().MaxDepositRequestsPerPayload
+	if uint64(len(requestListInSSZBytes)) > maxSSZsize {
+		return nil, fmt.Errorf("invalid deposit requests SSZ size, requests should not be more than the max per payload, got %d max %d", len(requestListInSSZBytes), maxSSZsize)
 	}
 	return unmarshalItems(requestListInSSZBytes, drSize, func() *DepositRequest { return &DepositRequest{} })
 }
 
 func unmarshalWithdrawals(requestListInSSZBytes []byte) ([]*WithdrawalRequest, error) {
 	if len(requestListInSSZBytes) < wrSize {
-		return nil, fmt.Errorf("invalid withdrawal requests length, requests should be at least the size of %d", wrSize)
+		return nil, fmt.Errorf("invalid withdrawal requests SSZ size, got %d expected at least %d", len(requestListInSSZBytes), wrSize)
 	}
-	if uint64(len(requestListInSSZBytes)) > uint64(wrSize)*params.BeaconConfig().MaxWithdrawalRequestsPerPayload {
-		return nil, fmt.Errorf("invalid withdrawal requests length, requests should not be more than the max per payload, got %d max %d", len(requestListInSSZBytes), wrSize)
+	maxSSZsize := uint64(wrSize) * params.BeaconConfig().MaxWithdrawalRequestsPerPayload
+	if uint64(len(requestListInSSZBytes)) > maxSSZsize {
+		return nil, fmt.Errorf("invalid withdrawal requests SSZ size, requests should not be more than the max per payload, got %d max %d", len(requestListInSSZBytes), maxSSZsize)
 	}
 	return unmarshalItems(requestListInSSZBytes, wrSize, func() *WithdrawalRequest { return &WithdrawalRequest{} })
 }
 
 func unmarshalConsolidations(requestListInSSZBytes []byte) ([]*ConsolidationRequest, error) {
 	if len(requestListInSSZBytes) < crSize {
-		return nil, fmt.Errorf("invalid consolidation requests length, requests should be at least the size of %d", crSize)
+		return nil, fmt.Errorf("invalid consolidation requests SSZ size, got %d expected at least %d", len(requestListInSSZBytes), crSize)
 	}
-	if uint64(len(requestListInSSZBytes)) > uint64(crSize)*params.BeaconConfig().MaxConsolidationsRequestsPerPayload {
-		return nil, fmt.Errorf("invalid consolidation requests length, requests should not be more than the max per payload, got %d max %d", len(requestListInSSZBytes), crSize)
+	maxSSZsize := uint64(crSize) * params.BeaconConfig().MaxConsolidationsRequestsPerPayload
+	if uint64(len(requestListInSSZBytes)) > maxSSZsize {
+		return nil, fmt.Errorf("invalid consolidation requests SSZ size, requests should not be more than the max per payload, got %d max %d", len(requestListInSSZBytes), maxSSZsize)
 	}
 	return unmarshalItems(requestListInSSZBytes, crSize, func() *ConsolidationRequest { return &ConsolidationRequest{} })
 }

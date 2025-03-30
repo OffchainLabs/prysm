@@ -11,7 +11,6 @@ go_library(
         "execution_address.go",
         "kzg.go",
         "payload_id.go",
-        "randao.go",
         "slot.go",
         "sszbytes.go",
         "sszuint64.go",

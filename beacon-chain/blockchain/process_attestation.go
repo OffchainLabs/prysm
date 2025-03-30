@@ -80,7 +80,7 @@ func (s *Service) OnAttestation(ctx context.Context, a ethpb.Att, disparity time
 	}
 
 	// Use the target state to verify attesting indices are valid.
-	committees, err := helpers.AttestationCommittees(ctx, baseState, a)
+	committees, err := helpers.AttestationCommitteesFromState(ctx, baseState, a)
 	if err != nil {
 		return err
 	}

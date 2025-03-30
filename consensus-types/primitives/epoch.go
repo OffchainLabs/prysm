@@ -27,7 +27,7 @@ func MaxEpoch(a, b Epoch) Epoch {
 func (e Epoch) Mul(x uint64) Epoch {
 	res, err := e.SafeMul(x)
 	if err != nil {
-		panic(err.Error())
+		panic(err.Error()) // lint:nopanic -- Panic is communicated in the godoc commentary.
 	}
 	return res
 }
@@ -44,7 +44,7 @@ func (e Epoch) SafeMul(x uint64) (Epoch, error) {
 func (e Epoch) Div(x uint64) Epoch {
 	res, err := e.SafeDiv(x)
 	if err != nil {
-		panic(err.Error())
+		panic(err.Error()) // lint:nopanic -- Panic is communicated in the godoc commentary.
 	}
 	return res
 }
@@ -61,7 +61,7 @@ func (e Epoch) SafeDiv(x uint64) (Epoch, error) {
 func (e Epoch) Add(x uint64) Epoch {
 	res, err := e.SafeAdd(x)
 	if err != nil {
-		panic(err.Error())
+		panic(err.Error()) // lint:nopanic -- Panic is communicated in the godoc commentary.
 	}
 	return res
 }
@@ -90,7 +90,7 @@ func (e Epoch) SafeAddEpoch(x Epoch) (Epoch, error) {
 func (e Epoch) Sub(x uint64) Epoch {
 	res, err := e.SafeSub(x)
 	if err != nil {
-		panic(err.Error())
+		panic(err.Error()) // lint:nopanic -- Panic is communicated in the godoc commentary.
 	}
 	return res
 }
@@ -107,7 +107,7 @@ func (e Epoch) SafeSub(x uint64) (Epoch, error) {
 func (e Epoch) Mod(x uint64) Epoch {
 	res, err := e.SafeMod(x)
 	if err != nil {
-		panic(err.Error())
+		panic(err.Error()) // lint:nopanic -- Panic is communicated in the godoc commentary.
 	}
 	return res
 }

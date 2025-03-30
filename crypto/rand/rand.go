@@ -57,7 +57,7 @@ func (_ *source) Uint64() (val uint64) {
 	lock.RLock()
 	defer lock.RUnlock()
 	if err := binary.Read(rand.Reader, binary.BigEndian, &val); err != nil {
-		panic(err)
+		panic(err) // lint:nopanic -- Panic risk is communicated in the godoc commentary.
 	}
 	return
 }

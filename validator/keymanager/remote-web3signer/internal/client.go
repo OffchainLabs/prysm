@@ -20,6 +20,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	"github.com/sirupsen/logrus"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 const (
@@ -56,7 +57,7 @@ func NewApiClient(baseEndpoint string) (*ApiClient, error) {
 	}
 	return &ApiClient{
 		BaseURL:    u,
-		RestClient: &http.Client{},
+		RestClient: &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)},
 	}, nil
 }
 

@@ -291,6 +291,8 @@ func (a *AttestationElectra) GetCommitteeIndex() primitives.CommitteeIndex {
 	indices := a.CommitteeBits.BitIndices()
 	if len(indices) == 0 {
 		return 0
+	} else if len(indices) != 1 {
+		log.WithField("indices", a.CommitteeBits).Debugf("expected 1 committee bit indice got %d", len(indices))
 	}
 	return primitives.CommitteeIndex(uint64(indices[0]))
 }

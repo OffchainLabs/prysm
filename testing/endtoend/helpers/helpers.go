@@ -196,7 +196,7 @@ random:
   - "Takoyaki"
 `)
 	f := filepath.Join(testDir, "graffiti.yaml")
-	if err := os.WriteFile(f, b, os.ModePerm); err != nil {
+	if err := os.WriteFile(f, b, 0600); err != nil {
 		return "", err
 	}
 	return f, nil

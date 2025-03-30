@@ -1,12 +1,16 @@
 package beacon_api
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/validator"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api/mock"
 	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
@@ -156,5 +160,61 @@ func TestGetValidatorCount(t *testing.T) {
 			}
 		})
 	}
+}
 
+func Test_beaconApiBeaconChainClient_GetValidatorPerformance(t *testing.T) {
+	const nodeVersion = "prysm/v0.0.1"
+	publicKeys := [][48]byte{
+		bytesutil.ToBytes48([]byte{1}),
+		bytesutil.ToBytes48([]byte{2}),
+		bytesutil.ToBytes48([]byte{3}),
+	}
+
+	ctx := context.Background()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	request, err := json.Marshal(structs.GetValidatorPerformanceRequest{
+		PublicKeys: [][]byte{publicKeys[0][:], publicKeys[2][:], publicKeys[1][:]},
+	})
+	require.NoError(t, err)
+	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+	// Expect node version endpoint call.
+	var nodeVersionResponse structs.GetVersionResponse
+	jsonRestHandler.EXPECT().Get(
+		gomock.Any(),
+		"/eth/v1/node/version",
+		&nodeVersionResponse,
+	).Return(
+		nil,
+	).SetArg(
+		2,
+		structs.GetVersionResponse{
+			Data: &structs.Version{Version: nodeVersion},
+		},
+	)
+
+	wantResponse := &structs.GetValidatorPerformanceResponse{}
+	want := &ethpb.ValidatorPerformanceResponse{}
+
+	jsonRestHandler.EXPECT().Post(
+		gomock.Any(),
+		"/prysm/validators/performance",
+		nil,
+		bytes.NewBuffer(request),
+		wantResponse,
+	).Return(
+		nil,
+	)
+
+	var client iface.PrysmChainClient = &prysmChainClient{
+		nodeClient:      &beaconApiNodeClient{jsonRestHandler: jsonRestHandler},
+		jsonRestHandler: jsonRestHandler,
+	}
+
+	got, err := client.ValidatorPerformance(ctx, &ethpb.ValidatorPerformanceRequest{
+		PublicKeys: [][]byte{publicKeys[0][:], publicKeys[2][:], publicKeys[1][:]},
+	})
+	require.NoError(t, err)
+	require.DeepEqual(t, want.PublicKeys, got.PublicKeys)
 }

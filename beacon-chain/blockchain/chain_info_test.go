@@ -582,6 +582,7 @@ func TestService_IsOptimisticForRoot_StateSummaryRecovered(t *testing.T) {
 	br, err := b.Block.HashTreeRoot()
 	require.NoError(t, err)
 	util.SaveBlock(t, context.Background(), beaconDB, b)
+	require.NoError(t, beaconDB.SaveGenesisBlockRoot(ctx, [32]byte{}))
 	_, err = c.IsOptimisticForRoot(ctx, br)
 	assert.NoError(t, err)
 	summ, err := beaconDB.StateSummary(ctx, br)
@@ -611,4 +612,21 @@ func TestService_IsFinalized(t *testing.T) {
 	require.Equal(t, true, c.IsFinalized(ctx, r1))
 	require.Equal(t, true, c.IsFinalized(ctx, br))
 	require.Equal(t, false, c.IsFinalized(ctx, [32]byte{'c'}))
+}
+
+func Test_hashForGenesisRoot(t *testing.T) {
+	beaconDB := testDB.SetupDB(t)
+	ctx := context.Background()
+	c := setupBeaconChain(t, beaconDB)
+	st, _ := util.DeterministicGenesisStateElectra(t, 10)
+	require.NoError(t, c.cfg.BeaconDB.SaveGenesisData(ctx, st))
+	root, err := beaconDB.GenesisBlockRoot(ctx)
+	require.NoError(t, err)
+	genRoot, err := c.hashForGenesisBlock(ctx, [32]byte{'a'})
+	require.ErrorIs(t, err, errNotGenesisRoot)
+	require.IsNil(t, genRoot)
+
+	genRoot, err = c.hashForGenesisBlock(ctx, root)
+	require.NoError(t, err)
+	require.Equal(t, [32]byte{}, [32]byte(genRoot))
 }

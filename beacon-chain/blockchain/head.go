@@ -410,7 +410,11 @@ func (s *Service) saveOrphanedOperations(ctx context.Context, orphanedRoot [32]b
 					return err
 				}
 			} else {
-				if a.IsAggregated() {
+				if orphanedBlk.Version() >= version.Electra {
+					if err = s.cfg.AttPool.SaveBlockAttestation(a); err != nil {
+						return err
+					}
+				} else if a.IsAggregated() {
 					if err = s.cfg.AttPool.SaveAggregatedAttestation(a); err != nil {
 						return err
 					}
