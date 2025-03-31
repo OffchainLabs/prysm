@@ -72,6 +72,7 @@ type E2EConfig struct {
 	UseValidatorCrossClient bool
 	UseBeaconRestApi        bool
 	UseBuilder              bool
+	TestExecutionRequests   bool
 	EpochsToRun             uint64
 	Seed                    int64
 	TracingSinkEndpoint     string

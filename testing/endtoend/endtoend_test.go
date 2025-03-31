@@ -505,7 +505,7 @@ func (r *testRunner) defaultEndToEndRun() error {
 		return errors.Wrap(err, "one or more evaluators failed")
 	}
 	// Test execution request processing in electra.
-	if r.config.TestDeposits && params.ElectraEnabled() {
+	if r.config.TestDeposits && r.config.TestExecutionRequests && params.ElectraEnabled() {
 		if err := r.comHandler.txGen.Pause(); err != nil {
 			r.t.Error(err)
 		}
@@ -518,7 +518,7 @@ func (r *testRunner) defaultEndToEndRun() error {
 		}
 	}
 
-	if params.ElectraEnabled() {
+	if r.config.TestExecutionRequests && params.ElectraEnabled() {
 		// Test Consolidation Transactions
 		r.comHandler.txGen.SetTxType(eth1.ConsolidationTx)
 		// Wait For an epoch before running evaluator
