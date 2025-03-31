@@ -272,6 +272,71 @@ func ReconstructDataColumnsByRoot(
 	return reconstructAndFilterColumns(requestedColumns, fetchedSidecars, block, blkRoot)
 }
 
+// FetchOrReconstructDataColumnsByRoot attempts to fetch the requested data columns from peers.
+// If fetching fails specifically because no peers are available (ErrNoPeersForDataColumns),
+// it attempts to reconstruct the columns using available data from other peers.
+func FetchOrReconstructDataColumnsByRoot(
+	ctx context.Context,
+	requestedColumns map[uint64]bool,
+	block interfaces.ReadOnlySignedBeaconBlock,
+	blkRoot [32]byte,
+	clock *startup.Clock,
+	p2p p2p.P2P,
+	chain blockchain.FinalizationFetcher,
+	ctxMap ContextByteVersions,
+	newColumnsVerifier verification.NewDataColumnsVerifier,
+) ([]blocks.RODataColumn, error) {
+	log := log.WithFields(logrus.Fields{
+		"blockRoot":        fmt.Sprintf("%#x", blkRoot),
+		"requestedColumns": uint64MapToSortedSlice(requestedColumns),
+	})
+	log.Debug("Attempting to fetch or reconstruct data columns")
+
+	// First, try to request the columns directly.
+	sidecars, err := RequestDataColumnSidecarsByRoot(
+		ctx,
+		requestedColumns,
+		block,
+		blkRoot,
+		clock,
+		p2p,
+		chain,
+		ctxMap,
+		newColumnsVerifier,
+	)
+	if err == nil {
+		// Successfully fetched.
+		log.Debug("Successfully fetched requested data columns")
+		return sidecars, nil
+	}
+
+	// If the error is specifically ErrNoPeersForDataColumns, attempt reconstruction.
+	if errors.Is(err, ErrNoPeersForDataColumns) {
+		log.WithError(err).Debug("Fetching failed due to no available peers, attempting reconstruction")
+		reconstructedSidecars, reconstructErr := ReconstructDataColumnsByRoot(
+			ctx,
+			requestedColumns,
+			block,
+			blkRoot,
+			clock,
+			p2p,
+			chain,
+			ctxMap,
+			newColumnsVerifier,
+		)
+		if reconstructErr != nil {
+			// Reconstruction also failed. Wrap the original error with the reconstruction error.
+			return nil, errors.Wrapf(err, "failed to fetch (no peers) and reconstruction failed: %v", reconstructErr)
+		}
+		// Successfully reconstructed.
+		log.Debug("Successfully reconstructed requested data columns")
+		return reconstructedSidecars, nil
+	}
+
+	// If fetching failed for a different reason, return that error directly.
+	return nil, errors.Wrap(err, "failed to fetch data columns")
+}
+
 // fetchAndVerifyRecoveryColumns selects a prioritized set of recoveryThreshold columns to fetch,
 // requests them using RequestDataColumnSidecarsByRoot, and verifies enough were received.
 func fetchAndVerifyRecoveryColumns(

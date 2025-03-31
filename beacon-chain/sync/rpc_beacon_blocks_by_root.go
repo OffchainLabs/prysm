@@ -299,36 +299,22 @@ func (s *Service) reconstructAndSaveDataColumnSidecars(
 		missingColumns,
 		block,
 		blkRoot,
-		peers,
 		s.cfg.clock,
 		s.cfg.p2p,
+		s.cfg.chain,
 		s.ctxMap,
 		s.newColumnsVerifier,
 	)
 	if err != nil {
-		return errors.Wrap(err, "failed to reconstruct data columns")
+		// If fetching/reconstruction failed, return the error.
+		return errors.Wrap(err, "could not fetch or reconstruct data column sidecars")
 	}
 
+	// If successful, save the obtained sidecars.
 	if err := SaveDataColumns(sidecars, s.cfg.blobStorage); err != nil {
-		return errors.Wrap(err, "failed to save reconstructed data columns")
+		return errors.Wrap(err, "could not save fetched/reconstructed data column sidecars")
 	}
 
-	return nil
-}
-
-// requestOrRecoverDataColumnSidecars attempts to request data column sidecars from peers.
-// If no peers are available, it attempts to recover the data column sidecars.
-func (s *Service) requestOrRecoverDataColumnSidecars(ctx context.Context, missingColumns map[uint64]bool, block interfaces.ReadOnlySignedBeaconBlock, blkRoot [32]byte) error {
-	if err := s.requestAndSaveDataColumnSidecars(ctx, missingColumns, block, blkRoot); err != nil {
-		if errors.Is(err, ErrNoPeersForDataColumns) {
-			// If specific data columns are missing, try to recover the data column sidecars.
-			if reconstructErr := s.reconstructAndSaveDataColumnSidecars(ctx, missingColumns, block, blkRoot); reconstructErr != nil {
-				return errors.Wrapf(err, "could not request or reconstruct and save data column sidecars. reconstructErr: %v", reconstructErr)
-			}
-		} else {
-			return errors.Wrap(err, "could not request and save data column sidecars")
-		}
-	}
 	return nil
 }
 
