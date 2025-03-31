@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
@@ -45,6 +46,8 @@ var (
 	ErrNoPeersForDataColumns  = errors.New("no peers available to fetch data columns from")
 	ErrNotEnoughColsAvailable = errors.New("not enough columns available across peers for reconstruction")
 	ErrReconstructionFailed   = errors.New("failed to reconstruct data columns")
+	// ErrFailedToFetchAnyCombination indicates all attempts to fetch column combinations failed.
+	ErrFailedToFetchAnyCombination = errors.New("failed to fetch any combination of data columns for reconstruction")
 )
 
 // RequestDataColumnSidecarsByRoot is an opinionated, high level function which, for each data column in `dataColumnsToFetch`:
@@ -198,9 +201,10 @@ func RequestDataColumnSidecarsByRoot(
 }
 
 // ReconstructDataColumnsByRoot attempts to reconstruct a requested set of data columns for a given block.
-// It identifies at least half of the total columns available from peers, requests them,
-// and then uses erasure coding to reconstruct the full set of columns. Finally, it filters
-// and returns only the initially requested columns.
+// It identifies available columns from peers, calculates the recovery threshold, and tries to fetch
+// combinations of 'recoveryThreshold' columns. If a fetch fails, it tries the next combination.
+// Once a fetch succeeds, it uses erasure coding to reconstruct the full set of columns and returns
+// the originally requested ones. Errors after a successful fetch are fatal.
 func ReconstructDataColumnsByRoot(
 	ctx context.Context,
 	requestedColumns map[uint64]bool,
@@ -221,11 +225,13 @@ func ReconstructDataColumnsByRoot(
 	// If total is odd, then we need total / 2 + 1 columns to reconstruct.
 	// If total is even, then we need total / 2 columns to reconstruct.
 	recoveryThreshold := numberOfColumns/2 + numberOfColumns%2
-	log.WithFields(logrus.Fields{
+	log := log.WithFields(logrus.Fields{
 		"blockRoot":         fmt.Sprintf("%#x", blkRoot),
 		"totalColumns":      numberOfColumns,
 		"recoveryThreshold": recoveryThreshold,
-	}).Debug("Attempting data column recovery")
+		"requestedColumns":  uint64MapToSortedSlice(requestedColumns),
+	})
+	log.Debug("Attempting data column recovery")
 
 	// Find available columns from peers.
 	allNeededCols := make(map[uint64]bool, numberOfColumns)
@@ -248,50 +254,115 @@ func ReconstructDataColumnsByRoot(
 		return nil, ErrNotEnoughColsAvailable
 	}
 
-	// Select columns to fetch (prioritize requested, then fill up to threshold).
-	columnsToFetch := make(map[uint64]bool)
-	// Add requested columns first if they are available
-	for col := range requestedColumns {
-		if availableColumns[col] {
-			columnsToFetch[col] = true
-		}
+	// Convert available column indices to a sorted slice for deterministic combination generation.
+	availableColumnIndices := make([]uint64, 0, len(availableColumns))
+	for col := range availableColumns {
+		availableColumnIndices = append(availableColumnIndices, col)
 	}
+	sort.Slice(availableColumnIndices, func(i, j int) bool {
+		return availableColumnIndices[i] < availableColumnIndices[j]
+	})
 
-	// If not enough, add other available columns until threshold is met
-	if uint64(len(columnsToFetch)) < recoveryThreshold {
-		for col := range availableColumns {
-			if !columnsToFetch[col] { // If not already added
-				columnsToFetch[col] = true
-				if uint64(len(columnsToFetch)) >= recoveryThreshold {
-					break // Stop once we have enough
-				}
-			}
-		}
-	}
-
-	// Fetch selected columns.
-	// Note: We use RequestDataColumnSidecarsByRoot, which internally handles peer selection and retries.
-	// We pass the specifically selected 'columnsToFetch'.
-	fetchedSidecars, err := RequestDataColumnSidecarsByRoot(
-		ctx,
-		columnsToFetch,
-		block,
-		blkRoot,
-		peers,
-		clock,
-		p2p,
-		ctxMap,
-		newColumnsVerifier,
+	// Fetch the first successful combination of sidecars.
+	fetchedSidecars, err := fetchFirstSuccessfulCombination(
+		ctx, availableColumnIndices, recoveryThreshold,
+		block, blkRoot, peers, clock, p2p, ctxMap, newColumnsVerifier,
 	)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to request data columns for recovery")
+		return nil, err
 	}
 
-	// Check if we actually got enough sidecars after the request.
-	if uint64(len(fetchedSidecars)) < recoveryThreshold {
-		return nil, errors.Wrapf(ErrReconstructionFailed, "received only %d columns, need %d", len(fetchedSidecars), recoveryThreshold)
+	return reconstructAndFilterColumns(requestedColumns, fetchedSidecars, block, blkRoot)
+}
+
+// fetchFirstSuccessfulCombination iterates through combinations of available column indices
+// and attempts to fetch them using RequestDataColumnSidecarsByRoot. It returns the sidecars
+// from the first successful fetch or an aggregated error if all attempts fail.
+func fetchFirstSuccessfulCombination(
+	ctx context.Context,
+	availableColumnIndices []uint64,
+	recoveryThreshold uint64,
+	block interfaces.ReadOnlySignedBeaconBlock,
+	blkRoot [32]byte,
+	peers []core.PeerID,
+	clock *startup.Clock,
+	p2p p2p.P2P,
+	ctxMap ContextByteVersions,
+	newColumnsVerifier verification.NewDataColumnsVerifier,
+) ([]blocks.RODataColumn, error) {
+	combinationIterator := newCombinationIterator(availableColumnIndices, recoveryThreshold)
+	var fetchErrors []error
+	var fetchedSidecars []blocks.RODataColumn
+	var err error
+
+	for combinationIterator.hasNext() {
+		combinationIndices := combinationIterator.next()
+		columnsToFetch := make(map[uint64]bool, len(combinationIndices))
+		for _, idx := range combinationIndices {
+			columnsToFetch[idx] = true
+		}
+
+		// Fetch the current combination of columns.
+		fetchedSidecars, err = RequestDataColumnSidecarsByRoot(
+			ctx,
+			columnsToFetch,
+			block,
+			blkRoot,
+			peers,
+			clock,
+			p2p,
+			ctxMap,
+			newColumnsVerifier,
+		)
+		if err != nil {
+			log.WithError(err).WithField("combination", combinationIndices).Warn("Failed to fetch data column combination")
+			// Store the error and try the next combination.
+			fetchErrors = append(fetchErrors, errors.Wrapf(err, "combination %v", combinationIndices))
+			continue
+		}
+
+		// Double check if we actually got enough sidecars after the request.
+		// RequestDataColumnSidecarsByRoot should have already returned an error if some columns are missing.
+		if uint64(len(fetchedSidecars)) < recoveryThreshold {
+			warnMsg := fmt.Sprintf("RequestDataColumnSidecarsByRoot succeeded but returned only %d columns, need %d for combination %v", len(fetchedSidecars), recoveryThreshold, combinationIndices)
+			log.Warn(warnMsg)
+			fetchErrors = append(fetchErrors, errors.New(warnMsg))
+			// Ensure fetchedSidecars is cleared so the final check works correctly
+			fetchedSidecars = nil
+			continue
+		}
+
+		// We've fetched enough sidecars to reconstruct the requested columns.
+		log.WithField("combination", combinationIndices).Debug("Successfully fetched data column combination")
+		return fetchedSidecars, nil // Return success immediately
 	}
 
+	// If the loop completes, no combination was successful.
+	log.Warn("Failed to fetch any combination of data columns for reconstruction")
+	if len(fetchErrors) > 0 {
+		// Format collected errors into a single string.
+		errorStrings := make([]string, len(fetchErrors))
+		for i, fetchErr := range fetchErrors {
+			errorStrings[i] = fetchErr.Error()
+		}
+		combinedErrorString := strings.Join(errorStrings, "; ")
+		return nil, errors.Wrapf(ErrFailedToFetchAnyCombination, "all fetch attempts failed: %s", combinedErrorString)
+	}
+
+	// Should theoretically not be reached if availableColumns >= recoveryThreshold,
+	// but return base error just in case.
+	return nil, ErrFailedToFetchAnyCombination
+}
+
+// reconstructAndFilterColumns takes successfully fetched sidecars and performs the erasure coding
+// reconstruction process. It then filters the results to return only the columns
+// originally requested.
+func reconstructAndFilterColumns(
+	requestedColumns map[uint64]bool,
+	fetchedSidecars []blocks.RODataColumn,
+	block interfaces.ReadOnlySignedBeaconBlock,
+	blkRoot [32]byte,
+) ([]blocks.RODataColumn, error) {
 	// Convert fetched RODataColumn to []*ethpb.DataColumnSidecar for peerdas functions.
 	pbFetchedSidecars := make([]*ethpb.DataColumnSidecar, 0, len(fetchedSidecars))
 	for i := range fetchedSidecars {
@@ -299,14 +370,12 @@ func ReconstructDataColumnsByRoot(
 		pbFetchedSidecars = append(pbFetchedSidecars, verifiedCol.DataColumnSidecar)
 	}
 
-	// Recover Cells and Proofs.
 	recoveredCellsAndProofs, err := peerdas.RecoverCellsAndProofs(pbFetchedSidecars, blkRoot)
 	if err != nil {
-		log.WithError(err).WithField("blockRoot", fmt.Sprintf("%#x", blkRoot)).Error("Failed to recover cells and proofs")
+		log.WithError(err).Error("Failed to recover cells and proofs after fetching columns")
 		return nil, errors.Wrapf(ErrReconstructionFailed, "peerdas.RecoverCellsAndProofs failed: %v", err)
 	}
 
-	// Get Reconstruction Data.
 	blockBody := block.Block().Body()
 	blobKzgCommitments, err := blockBody.BlobKzgCommitments()
 	if err != nil {
@@ -321,7 +390,6 @@ func ReconstructDataColumnsByRoot(
 		return nil, errors.Wrap(err, "could not get KZG commitments inclusion proof")
 	}
 
-	// Reconstruct All Sidecars.
 	allPbSidecars, err := peerdas.DataColumnSidecarsForReconstruct(
 		blobKzgCommitments,
 		signedBlockHeader,
@@ -329,7 +397,7 @@ func ReconstructDataColumnsByRoot(
 		recoveredCellsAndProofs,
 	)
 	if err != nil {
-		log.WithError(err).WithField("blockRoot", fmt.Sprintf("%#x", blkRoot)).Error("Failed to reconstruct all data column sidecars")
+		log.WithError(err).Error("Failed to reconstruct all data column sidecars")
 		return nil, errors.Wrapf(ErrReconstructionFailed, "peerdas.DataColumnSidecarsForReconstruct failed: %v", err)
 	}
 
@@ -356,11 +424,198 @@ func ReconstructDataColumnsByRoot(
 	}
 
 	if len(missingRecovered) > 0 {
+		log.WithField("missing", uint64MapToSortedSlice(missingRecovered)).Error("Reconstruction succeeded, but requested columns are missing from the result")
 		return nil, errors.Wrapf(ErrReconstructionFailed, "reconstruction succeeded, but requested columns %v are missing from the result", uint64MapToSortedSlice(missingRecovered))
 	}
 
-	// Return the successfully recovered and filtered columns.
+	log.Info("Successfully reconstructed and recovered requested data columns")
 	return resultColumns, nil
+}
+
+// combinationIterator helps iterate through combinations of k elements from a set.
+type combinationIterator struct {
+	elements []uint64 // The set of elements to choose from (must be sorted)
+	n        uint64   // Total number of elements
+	k        uint64   // Size of each combination
+	indices  []uint64 // Current indices pointing to elements for the combination
+	first    bool     // Flag to indicate if next() is called for the first time
+}
+
+// newCombinationIterator creates a new iterator. Assumes elements is sorted.
+func newCombinationIterator(elements []uint64, k uint64) *combinationIterator {
+	if k <= 0 || k > uint64(len(elements)) {
+		return &combinationIterator{elements: elements, n: uint64(len(elements)), k: k, indices: nil, first: false} // Invalid k, hasNext will be false
+	}
+	indices := make([]uint64, k)
+	for i := uint64(0); i < k; i++ {
+		indices[i] = i
+	}
+	return &combinationIterator{
+		elements: elements,
+		n:        uint64(len(elements)),
+		k:        k,
+		indices:  indices,
+		first:    true,
+	}
+}
+
+// hasNext returns true if there are more combinations to generate.
+func (it *combinationIterator) hasNext() bool {
+	// No combinations possible if k is invalid or indices is nil
+	if it.indices == nil {
+		return false
+	}
+	// If it's the first call, a combination always exists (if k was valid)
+	if it.first {
+		return true
+	}
+	// Check if the current indices represent the last possible combination
+	// The last combination has indices [n-k, n-k+1, ..., n-1]
+	// We only need to check the first index
+	return it.indices[0] <= it.n-it.k
+}
+
+// next generates the next combination. Call hasNext() before calling next().
+func (it *combinationIterator) next() []uint64 {
+	if !it.hasNext() {
+		// Or handle error appropriately
+		return nil
+	}
+
+	// If first time, return the initial combination
+	if it.first {
+		it.first = false
+		result := make([]uint64, it.k)
+		for i := uint64(0); i < it.k; i++ {
+			result[i] = it.elements[it.indices[i]]
+		}
+		return result
+	}
+
+	// Find the rightmost index that can be incremented
+	i := it.k - 1
+	for i >= 0 && it.indices[i] == it.n-it.k+i {
+		i--
+	}
+
+	// If i < 0, it means we have exhausted all combinations (should have been caught by hasNext)
+	// This check is mainly for safety.
+	if i < 0 {
+		// Mark as exhausted. Subsequent hasNext calls will be false.
+		// Make indices[0] > n-k to ensure hasNext fails.
+		if len(it.indices) > 0 {
+			it.indices[0] = it.n // Or some other invalid state
+		}
+		return nil
+	}
+
+	// Increment the found index
+	it.indices[i]++
+
+	// Reset indices to the right of i to their lowest possible values
+	for j := i + 1; j < it.k; j++ {
+		it.indices[j] = it.indices[j-1] + 1
+	}
+
+	// Construct the result combination from the new indices
+	result := make([]uint64, it.k)
+	for i := uint64(0); i < it.k; i++ {
+		result[i] = it.elements[it.indices[i]]
+	}
+	return result
+}
+
+// combinationIterator helps iterate through combinations of k elements from a set.
+type combinationIterator struct {
+	elements []uint64 // The set of elements to choose from (must be sorted)
+	n        uint64   // Total number of elements
+	k        uint64   // Size of each combination
+	indices  []uint64 // Current indices pointing to elements for the combination
+	first    bool     // Flag to indicate if next() is called for the first time
+}
+
+// newCombinationIterator creates a new iterator. Assumes elements is sorted.
+func newCombinationIterator(elements []uint64, k uint64) *combinationIterator {
+	if k <= 0 || k > uint64(len(elements)) {
+		return &combinationIterator{elements: elements, n: uint64(len(elements)), k: k, indices: nil, first: false} // Invalid k, hasNext will be false
+	}
+	indices := make([]uint64, k)
+	for i := uint64(0); i < k; i++ {
+		indices[i] = i
+	}
+	return &combinationIterator{
+		elements: elements,
+		n:        uint64(len(elements)),
+		k:        k,
+		indices:  indices,
+		first:    true,
+	}
+}
+
+// hasNext returns true if there are more combinations to generate.
+func (it *combinationIterator) hasNext() bool {
+	// No combinations possible if k is invalid or indices is nil
+	if it.indices == nil {
+		return false
+	}
+	// If it's the first call, a combination always exists (if k was valid)
+	if it.first {
+		return true
+	}
+	// Check if the current indices represent the last possible combination
+	// The last combination has indices [n-k, n-k+1, ..., n-1]
+	// We only need to check the first index
+	return it.indices[0] <= it.n-it.k
+}
+
+// next generates the next combination. Call hasNext() before calling next().
+func (it *combinationIterator) next() []uint64 {
+	if !it.hasNext() {
+		// Or handle error appropriately
+		return nil
+	}
+
+	// If first time, return the initial combination
+	if it.first {
+		it.first = false
+		result := make([]uint64, it.k)
+		for i := uint64(0); i < it.k; i++ {
+			result[i] = it.elements[it.indices[i]]
+		}
+		return result
+	}
+
+	// Find the rightmost index that can be incremented
+	i := it.k - 1
+	for i >= 0 && it.indices[i] == it.n-it.k+i {
+		i--
+	}
+
+	// If i < 0, it means we have exhausted all combinations (should have been caught by hasNext)
+	// This check is mainly for safety.
+	if i < 0 {
+		// Mark as exhausted. Subsequent hasNext calls will be false.
+		// Make indices[0] > n-k to ensure hasNext fails.
+		if len(it.indices) > 0 {
+			it.indices[0] = it.n // Or some other invalid state
+		}
+		return nil
+	}
+
+	// Increment the found index
+	it.indices[i]++
+
+	// Reset indices to the right of i to their lowest possible values
+	for j := i + 1; j < it.k; j++ {
+		it.indices[j] = it.indices[j-1] + 1
+	}
+
+	// Construct the result combination from the new indices
+	result := make([]uint64, it.k)
+	for i := uint64(0); i < it.k; i++ {
+		result[i] = it.elements[it.indices[i]]
+	}
+	return result
 }
 
 // RequestMissingDataColumnsByRange is an opinionated, high level function which, for each block in `blks`:
