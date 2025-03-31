@@ -74,7 +74,7 @@ func computeOnChainAggregate(aggregates []ethpb.Att) ([]ethpb.Att, error) {
 			if err != nil {
 				return nil, err
 			}
-			cb.SetBitAt(uint64(helpers.CommitteeIndices(a.CommitteeBitsVal())[0]), true)
+			cb.SetBitAt(uint64(a.GetCommitteeIndex()), true)
 
 			aggBitsOffset += a.GetAggregationBits().Len()
 		}
