@@ -128,6 +128,7 @@ go_test(
         "receive_block_test.go",
         "service_norace_test.go",
         "service_test.go",
+        "setup_forkchoice_test.go",
         "setup_test.go",
         "weak_subjectivity_checks_test.go",
     ],

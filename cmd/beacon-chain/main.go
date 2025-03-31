@@ -84,6 +84,7 @@ var appFlags = []cli.Flag{
 	flags.MinBuilderDiff,
 	flags.BeaconDBPruning,
 	flags.PrunerRetentionEpochs,
+	flags.EnableBuilderSSZ,
 	cmd.BackupWebhookOutputDir,
 	cmd.MinimalConfigFlag,
 	cmd.E2EConfigFlag,
@@ -179,7 +180,7 @@ func before(ctx *cli.Context) error {
 		f := joonix.NewFormatter()
 
 		if err := joonix.DisableTimestampFormat(f); err != nil {
-			panic(err)
+			panic(err) // lint:nopanic -- This shouldn't happen, but crashing immediately at startup is OK.
 		}
 
 		logrus.SetFormatter(f)
@@ -249,7 +250,7 @@ func main() {
 	defer func() {
 		if x := recover(); x != nil {
 			log.Errorf("Runtime panic: %v\n%v", x, string(runtimeDebug.Stack()))
-			panic(x)
+			panic(x) // lint:nopanic -- This is just resurfacing the original panic.
 		}
 	}()
 

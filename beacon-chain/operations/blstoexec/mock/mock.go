@@ -28,10 +28,10 @@ func (m *PoolMock) InsertBLSToExecChange(change *eth.SignedBLSToExecutionChange)
 
 // MarkIncluded --
 func (*PoolMock) MarkIncluded(_ *eth.SignedBLSToExecutionChange) {
-	panic("implement me")
+	panic("implement me") // lint:nopanic -- mock / test code.
 }
 
 // ValidatorExists --
 func (*PoolMock) ValidatorExists(_ primitives.ValidatorIndex) bool {
-	panic("implement me")
+	panic("implement me") // lint:nopanic -- mock / test code.
 }

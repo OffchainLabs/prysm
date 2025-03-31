@@ -110,6 +110,7 @@ type HeadAccessDatabase interface {
 
 	// Block related methods.
 	HeadBlock(ctx context.Context) (interfaces.ReadOnlySignedBeaconBlock, error)
+	HeadBlockRoot() ([32]byte, error)
 	SaveHeadBlockRoot(ctx context.Context, blockRoot [32]byte) error
 
 	// Genesis operations.

@@ -18,6 +18,11 @@ var (
 		Name:  "holesky",
 		Usage: "Runs Prysm configured for the Holesky test network.",
 	}
+	// HoodiTestnet flag for ethereum testnet.
+	HoodiTestnet = &cli.BoolFlag{
+		Name:  "hoodi",
+		Usage: "Runs Prysm configured for the Hoodi test network.",
+	}
 	// Mainnet flag for easier tooling, no-op
 	Mainnet = &cli.BoolFlag{
 		Value: true,
@@ -174,6 +179,18 @@ var (
 		Name:  "enable-experimental-attestation-pool",
 		Usage: "Enables an experimental attestation pool design.",
 	}
+	// forceHeadFlag is a flag to force the head of the beacon chain to a specific block.
+	forceHeadFlag = &cli.StringFlag{
+		Name: "sync-from",
+		Usage: "Forces the head of the beacon chain to a specific block root. Values can be 'head' or a block root." +
+			" The block root has to be known to the beacon node and correspond to a block newer than the current finalized checkpoint.",
+	}
+	// blacklistRoots is a flag for blacklisting block roots from gossip and
+	// downscore peers that send them.
+	blacklistRoots = &cli.StringSliceFlag{
+		Name:  "blacklist-roots",
+		Usage: "A comma-separatted list of 0x-prefixed hexstrings. Declares blocks with the given blockroots to be invalid. It downscores peers that send these blocks.",
+	}
 )
 
 // devModeFlags holds list of flags that are set when development mode is on.
@@ -186,6 +203,7 @@ var ValidatorFlags = append(deprecatedFlags, []cli.Flag{
 	writeWalletPasswordOnWebOnboarding,
 	HoleskyTestnet,
 	SepoliaTestnet,
+	HoodiTestnet,
 	Mainnet,
 	dynamicKeyReloadDebounceInterval,
 	attestTimely,
@@ -210,6 +228,7 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	disableGRPCConnectionLogging,
 	HoleskyTestnet,
 	SepoliaTestnet,
+	HoodiTestnet,
 	Mainnet,
 	disablePeerScorer,
 	disableBroadcastSlashingFlag,
@@ -230,6 +249,8 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	DisableCommitteeAwarePacking,
 	EnableDiscoveryReboot,
 	enableExperimentalAttestationPool,
+	forceHeadFlag,
+	blacklistRoots,
 }, deprecatedBeaconFlags, deprecatedFlags, upcomingDeprecation)
 
 func combinedFlags(flags ...[]cli.Flag) []cli.Flag {
@@ -253,4 +274,5 @@ var NetworkFlags = []cli.Flag{
 	Mainnet,
 	SepoliaTestnet,
 	HoleskyTestnet,
+	HoodiTestnet,
 }

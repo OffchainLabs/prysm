@@ -175,6 +175,9 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 	var set *bls.SignatureBatch
 	boundaries := make(map[[32]byte]state.BeaconState)
 	for i, b := range blks {
+		if features.BlacklistedBlock(b.Root()) {
+			return errBlacklistedRoot
+		}
 		v, h, err := getStateVersionAndPayload(preState)
 		if err != nil {
 			return err
@@ -423,13 +426,12 @@ func (s *Service) savePostStateInfo(ctx context.Context, r [32]byte, b interface
 
 // pruneAttsFromPool removes these attestations from the attestation pool
 // which are covered by attestations from the received block.
-func (s *Service) pruneAttsFromPool(ctx context.Context, headState state.BeaconState, headBlock interfaces.ReadOnlySignedBeaconBlock) error {
+func (s *Service) pruneAttsFromPool(ctx context.Context, headState state.BeaconState, headBlock interfaces.ReadOnlySignedBeaconBlock) {
 	for _, att := range headBlock.Block().Body().Attestations() {
 		if err := s.pruneCoveredAttsFromPool(ctx, headState, att); err != nil {
 			log.WithError(err).Warn("Could not prune attestations covered by a received block's attestation")
 		}
 	}
-	return nil
 }
 
 func (s *Service) pruneCoveredAttsFromPool(ctx context.Context, headState state.BeaconState, att ethpb.Att) error {
@@ -502,6 +504,10 @@ func (s *Service) pruneCoveredElectraAttsFromPool(ctx context.Context, headState
 		if features.Get().EnableExperimentalAttestationPool {
 			if err = s.cfg.AttestationCache.DeleteCovered(a); err != nil {
 				return errors.Wrap(err, "could not delete covered attestation")
+			}
+		} else if !a.IsAggregated() {
+			if err = s.cfg.AttPool.DeleteUnaggregatedAttestation(a); err != nil {
+				return errors.Wrap(err, "could not delete unaggregated attestation")
 			}
 		} else if err = s.cfg.AttPool.DeleteAggregatedAttestation(a); err != nil {
 			return errors.Wrap(err, "could not delete aggregated attestation")
@@ -723,13 +729,9 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 	attribute := s.getPayloadAttribute(ctx, headState, s.CurrentSlot()+1, headRoot[:])
 	// return early if we are not proposing next slot
 	if attribute.IsEmpty() {
-		fcuArgs := &fcuConfig{
-			headState:  headState,
-			headRoot:   headRoot,
-			headBlock:  nil,
-			attributes: attribute,
-		}
-		go firePayloadAttributesEvent(ctx, s.cfg.StateNotifier.StateFeed(), fcuArgs)
+		// notifyForkchoiceUpdate fires the payload attribute event. But in this case, we won't
+		// call notifyForkchoiceUpdate, so the event is fired here.
+		go firePayloadAttributesEvent(ctx, s.cfg.StateNotifier.StateFeed(), s.CurrentSlot()+1)
 		return
 	}
 
