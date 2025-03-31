@@ -57,7 +57,7 @@ func computeOnChainAggregate(aggregates []ethpb.Att) ([]ethpb.Att, error) {
 
 	for _, aggs := range aggsByDataRoot {
 		slices.SortFunc(aggs, func(a, b ethpb.Att) int {
-			return a.CommitteeBitsVal().BitIndices()[0] - b.CommitteeBitsVal().BitIndices()[0]
+			return int(a.GetCommitteeIndex()) - int(b.GetCommitteeIndex())
 		})
 
 		sigs := make([]bls.Signature, len(aggs))
