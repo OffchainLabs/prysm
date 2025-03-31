@@ -18,7 +18,7 @@ import (
 
 // GetDuties returns the duties assigned to a list of validators specified
 // in the request object.
-func (vs *Server) GetDuties(ctx context.Context, req *ethpb.DutiesRequest) (*ethpb.DutiesResponse, error) {
+func (vs *Server) GetDuties(ctx context.Context, req *ethpb.DutiesRequest) (*ethpb.ValidatorDutiesContainer, error) {
 	if vs.SyncChecker.Syncing() {
 		return nil, status.Error(codes.Unavailable, "Syncing to latest head, not ready to respond")
 	}
@@ -27,7 +27,7 @@ func (vs *Server) GetDuties(ctx context.Context, req *ethpb.DutiesRequest) (*eth
 
 // Compute the validator duties from the head state's corresponding epoch
 // for validators public key / indices requested.
-func (vs *Server) duties(ctx context.Context, req *ethpb.DutiesRequest) (*ethpb.DutiesResponse, error) {
+func (vs *Server) duties(ctx context.Context, req *ethpb.DutiesRequest) (*ethpb.ValidatorDutiesContainer, error) {
 	currentEpoch := slots.ToEpoch(vs.TimeFetcher.CurrentSlot())
 	if req.Epoch > currentEpoch+1 {
 		return nil, status.Errorf(codes.Unavailable, "Request epoch %d can not be greater than next epoch %d", req.Epoch, currentEpoch+1)
@@ -78,17 +78,17 @@ func (vs *Server) duties(ctx context.Context, req *ethpb.DutiesRequest) (*ethpb.
 		return nil, status.Errorf(codes.Internal, "Could not compute proposer slots: %v", err)
 	}
 
-	validatorAssignments := make([]*ethpb.DutiesResponse_Duty, 0, len(req.PublicKeys))
-	nextValidatorAssignments := make([]*ethpb.DutiesResponse_Duty, 0, len(req.PublicKeys))
+	validatorAssignments := make([]*ethpb.ValidatorDuty, 0, len(req.PublicKeys))
+	nextValidatorAssignments := make([]*ethpb.ValidatorDuty, 0, len(req.PublicKeys))
 
 	for _, pubKey := range req.PublicKeys {
 		if ctx.Err() != nil {
 			return nil, status.Errorf(codes.Aborted, "Could not continue fetching assignments: %v", ctx.Err())
 		}
-		assignment := &ethpb.DutiesResponse_Duty{
+		assignment := &ethpb.ValidatorDuty{
 			PublicKey: pubKey,
 		}
-		nextAssignment := &ethpb.DutiesResponse_Duty{
+		nextAssignment := &ethpb.ValidatorDuty{
 			PublicKey: pubKey,
 		}
 		idx, ok := s.ValidatorIndexByPubkey(bytesutil.ToBytes48(pubKey))
@@ -157,7 +157,7 @@ func (vs *Server) duties(ctx context.Context, req *ethpb.DutiesRequest) (*ethpb.
 		validatorAssignments = append(validatorAssignments, assignment)
 		nextValidatorAssignments = append(nextValidatorAssignments, nextAssignment)
 	}
-	return &ethpb.DutiesResponse{
+	return &ethpb.ValidatorDutiesContainer{
 		CurrentEpochDuties: validatorAssignments,
 		NextEpochDuties:    nextValidatorAssignments,
 	}, nil
