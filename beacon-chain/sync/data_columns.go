@@ -777,7 +777,7 @@ func SelectPeersToFetchDataColumnsFrom(neededDataColumns []uint64, dataColumnsBy
 		// Check if at least one peer remains. If not, it means that we don't have enough peers to fetch all needed data columns.
 		if len(neededDataColumnsByPeer) == 0 {
 			missingDataColumnsSortedSlice := uint64MapToSortedSlice(remainingDataColumns)
-			return nil, errors.Errorf("%w: missing data columns: %v", ErrNoPeersForDataColumns, missingDataColumnsSortedSlice)
+			return nil, fmt.Errorf("%w: missing data columns: %v", ErrNoPeersForDataColumns, missingDataColumnsSortedSlice)
 		}
 
 		// Select the peer that custody the most needed data columns (greedy selection).
@@ -803,7 +803,7 @@ func SelectPeersToFetchDataColumnsFrom(neededDataColumns []uint64, dataColumnsBy
 		// If maxCovered is 0 or less, it means no available peer covers any remaining needed column.
 		if maxCovered <= 0 {
 			missingDataColumnsSortedSlice := uint64MapToSortedSlice(remainingDataColumns)
-			return nil, errors.Errorf("%w: remaining peers do not cover missing columns: %v", ErrNoPeersForDataColumns, missingDataColumnsSortedSlice)
+			return nil, fmt.Errorf("%w: remaining peers do not cover missing columns: %v", ErrNoPeersForDataColumns, missingDataColumnsSortedSlice)
 		}
 
 		// Get the actual columns this best peer provides from the set we still need.
