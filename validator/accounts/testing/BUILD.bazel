@@ -10,14 +10,7 @@ go_library(
         "//validator:__subpackages__",
     ],
     deps = [
-        "//api/client/beacon:go_default_library",
-        "//api/client/event:go_default_library",
-        "//config/fieldparams:go_default_library",
-        "//config/proposer:go_default_library",
-        "//consensus-types/primitives:go_default_library",
-        "//proto/prysm/v1alpha1:go_default_library",
         "//validator/accounts/iface:go_default_library",
-        "//validator/client/iface:go_default_library",
         "//validator/keymanager:go_default_library",
     ],
 )
