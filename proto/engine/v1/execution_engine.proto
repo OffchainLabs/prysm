@@ -234,7 +234,8 @@ message BlobsBundle {
   // The proofs of the blobs.
   repeated bytes proofs = 2 [
     (ethereum.eth.ext.ssz_size) = "?,48",
-    (ethereum.eth.ext.ssz_max) = "max_blob_commitments.size"
+    // TODO: That a trick: Use BlobsBundleV2 if accepted in the spec.
+    (ethereum.eth.ext.ssz_max) = "max_cell_proofs_length.size"
   ];
 
   // The blobs itself.

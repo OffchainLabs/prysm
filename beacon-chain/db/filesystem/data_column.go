@@ -417,7 +417,7 @@ func (dcs *DataColumnStorage) Get(root [fieldparams.RootLength]byte, indices []u
 		}
 
 		// Compute the offset of the data column sidecar.
-		offset := headerSize + int64(position)*int64(metadata.sszEncodedDataColumnSidecarSize)
+		offset := headerSize + position*int64(metadata.sszEncodedDataColumnSidecarSize)
 
 		// Seek to the beginning of the data column sidecar.
 		_, err = file.Seek(offset, io.SeekStart)

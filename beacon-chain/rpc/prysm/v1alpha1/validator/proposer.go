@@ -13,7 +13,6 @@ import (
 	"github.com/pkg/errors"
 	builderapi "github.com/prysmaticlabs/prysm/v5/api/client/builder"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/kzg"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/builder"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
@@ -370,9 +369,9 @@ func (vs *Server) handleBlindedBlock(ctx context.Context, block interfaces.Signe
 	}
 
 	if isPeerDASEnabled {
-		dataColumnSideCars, err := unblindDataColumnsSidecars(copiedBlock, bundle)
+		dataColumnSideCars, err := peerdas.ConstructDataColumnSidecars(block, bundle.Blobs, bundle.Proofs)
 		if err != nil {
-			return nil, nil, nil, errors.Wrap(err, "unblind data columns sidecars")
+			return nil, nil, nil, errors.Wrap(err, "construct data column sidecars")
 		}
 
 		return copiedBlock, nil, dataColumnSideCars, nil
@@ -397,19 +396,9 @@ func (vs *Server) handleUnblindedBlock(
 	}
 
 	if isPeerDASEnabled {
-		// Convert blobs from slices to array.
-		blobs := make([]kzg.Blob, 0, len(rawBlobs))
-		for _, blob := range rawBlobs {
-			if len(blob) != kzg.BytesPerBlob {
-				return nil, nil, errors.Errorf("invalid blob size. expected %d bytes, got %d bytes", kzg.BytesPerBlob, len(blob))
-			}
-
-			blobs = append(blobs, kzg.Blob(blob))
-		}
-
-		dataColumnSideCars, err := peerdas.DataColumnSidecars(block, blobs)
+		dataColumnSideCars, err := peerdas.ConstructDataColumnSidecars(block, rawBlobs, proofs)
 		if err != nil {
-			return nil, nil, errors.Wrap(err, "data column sidecars")
+			return nil, nil, errors.Wrap(err, "construct data column sidecars")
 		}
 
 		return nil, dataColumnSideCars, nil

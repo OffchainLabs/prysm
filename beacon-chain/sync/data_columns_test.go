@@ -414,7 +414,8 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 	signedBlock, err := blocks.NewSignedBeaconBlock(pbSignedBeaconBlock)
 	require.NoError(t, err)
 
-	dataColumnSidecars, err := peerdas.DataColumnSidecars(signedBlock, blobs)
+	cellsAndProofs := util.GenerateCellsAndProofs(t, blobs)
+	dataColumnSidecars, err := peerdas.DataColumnSidecars(signedBlock, cellsAndProofs)
 	require.NoError(t, err)
 
 	// Calculate block root

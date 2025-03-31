@@ -1283,14 +1283,13 @@ func (b *BlobAndProof) UnmarshalJSON(enc []byte) error {
 	return nil
 }
 
-type BlobAndCellProofJson struct {
-	Blob       hexutil.Bytes   `json:"blob"`
-	CellProofs []hexutil.Bytes `json:"cell_proofs"`
+type BlobAndProofV2Json struct {
+	Blob      hexutil.Bytes   `json:"blob"`
+	KzgProofs []hexutil.Bytes `json:"proofs"`
 }
 
-// UnmarshalJSON implements the json unmarshaler interface for BlobAndCellProofJson.
 func (b *BlobAndProofV2) UnmarshalJSON(enc []byte) error {
-	var dec *BlobAndCellProofJson
+	var dec *BlobAndProofV2Json
 	if err := json.Unmarshal(enc, &dec); err != nil {
 		return err
 	}
@@ -1299,13 +1298,12 @@ func (b *BlobAndProofV2) UnmarshalJSON(enc []byte) error {
 	copy(blob, dec.Blob)
 	b.Blob = blob
 
-	cellProofs := make([][]byte, len(dec.CellProofs))
-	for i, proof := range dec.CellProofs {
-		p := make([]byte, fieldparams.BLSPubkeyLength)
-		copy(p, proof)
-		cellProofs[i] = p
+	proofs := make([][]byte, len(dec.KzgProofs))
+	for i, proof := range dec.KzgProofs {
+		p := proof
+		proofs[i] = bytesutil.PadTo(p[:], fieldparams.BLSPubkeyLength)
 	}
-	b.CellProofs = cellProofs
+	b.KzgProofs = proofs
 
 	return nil
 }
