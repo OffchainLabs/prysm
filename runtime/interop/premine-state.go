@@ -65,7 +65,7 @@ func NewPreminedGenesis(ctx context.Context, t, nvals, pCreds uint64, version in
 
 func (s *PremineGenesisConfig) prepare(ctx context.Context) (state.BeaconState, error) {
 	switch s.Version {
-	case version.Phase0, version.Altair, version.Bellatrix, version.Capella, version.Deneb, version.Electra, version.Fulu:
+	case version.Phase0, version.Altair, version.Bellatrix, version.Capella, version.Deneb, version.Electra, version.Fulu, version.Eip7805:
 	default:
 		return nil, errors.Wrapf(errUnsupportedVersion, "version=%s", version.String(s.Version))
 	}
@@ -154,7 +154,7 @@ func (s *PremineGenesisConfig) empty() (state.BeaconState, error) {
 		if err != nil {
 			return nil, err
 		}
-	case version.Electra:
+	case version.Electra, version.Eip7805:
 		e, err = state_native.InitializeFromProtoElectra(&ethpb.BeaconStateElectra{})
 		if err != nil {
 			return nil, err
@@ -349,6 +349,8 @@ func (s *PremineGenesisConfig) setFork(g state.BeaconState) error {
 		pv, cv = params.BeaconConfig().DenebForkVersion, params.BeaconConfig().ElectraForkVersion
 	case version.Fulu:
 		pv, cv = params.BeaconConfig().ElectraForkVersion, params.BeaconConfig().FuluForkVersion
+	case version.Eip7805:
+		pv, cv = params.BeaconConfig().ElectraForkVersion, params.BeaconConfig().Eip7805ForkVersion
 	default:
 		return errUnsupportedVersion
 	}
@@ -537,7 +539,7 @@ func (s *PremineGenesisConfig) setLatestBlockHeader(g state.BeaconState) error {
 			BlsToExecutionChanges: make([]*ethpb.SignedBLSToExecutionChange, 0),
 			BlobKzgCommitments:    make([][]byte, 0),
 		}
-	case version.Electra:
+	case version.Electra, version.Eip7805:
 		body = &ethpb.BeaconBlockBodyElectra{
 			RandaoReveal: make([]byte, 96),
 			Eth1Data: &ethpb.Eth1Data{

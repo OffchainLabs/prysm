@@ -43,6 +43,8 @@ func HoleskyConfig() *BeaconChainConfig {
 	cfg.ElectraForkVersion = []byte{0x06, 0x1, 0x70, 0x0}
 	cfg.FuluForkEpoch = math.MaxUint64
 	cfg.FuluForkVersion = []byte{0x07, 0x1, 0x70, 0x0} // TODO: Define holesky fork version for fulu. This is a placeholder value.
+	cfg.Eip7805ForkEpoch = math.MaxUint64
+	cfg.Eip7805ForkVersion = []byte{0x08, 0x1, 0x70, 0x0} // TODO: Define holesky fork version for Eip7805. This is a placeholder value.
 	cfg.TerminalTotalDifficulty = "0"
 	cfg.DepositContractAddress = "0x4242424242424242424242424242424242424242"
 	cfg.EjectionBalance = 28000000000

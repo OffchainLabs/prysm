@@ -187,7 +187,8 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 		)
 	}
 
-	if params.BeaconConfig().FuluForkEpoch <= epoch {
+	// New gossip topic in Eip7805
+	if params.BeaconConfig().Eip7805ForkEpoch <= epoch {
 		s.subscribe(
 			p2p.InclusionListTopicFormat,
 			s.validateInclusionList,
