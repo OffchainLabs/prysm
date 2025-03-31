@@ -62,7 +62,7 @@ func computeOnChainAggregate(aggregates []ethpb.Att) ([]ethpb.Att, error) {
 		})
 
 		sigs := make([]bls.Signature, len(aggs))
-		committeeIndices := make([]primitives.CommitteeIndex, len(aggs))
+		cb := primitives.NewAttestationCommitteeBits()
 		aggBitsIndices := make([]uint64, 0)
 		aggBitsOffset := uint64(0)
 		var err error
@@ -74,7 +74,7 @@ func computeOnChainAggregate(aggregates []ethpb.Att) ([]ethpb.Att, error) {
 			if err != nil {
 				return nil, err
 			}
-			committeeIndices[i] = helpers.CommitteeIndices(a.CommitteeBitsVal())[0]
+			cb.SetBitAt(uint64(helpers.CommitteeIndices(a.CommitteeBitsVal())[0]), true)
 
 			aggBitsOffset += a.GetAggregationBits().Len()
 		}
@@ -84,15 +84,11 @@ func computeOnChainAggregate(aggregates []ethpb.Att) ([]ethpb.Att, error) {
 			aggregationBits.SetBitAt(bi, true)
 		}
 
-		cb := primitives.NewAttestationCommitteeBits()
 		att := &ethpb.AttestationElectra{
 			AggregationBits: aggregationBits,
 			Data:            aggs[0].GetData(),
 			CommitteeBits:   cb,
 			Signature:       bls.AggregateSignatures(sigs).Marshal(),
-		}
-		for _, ci := range committeeIndices {
-			att.CommitteeBits.SetBitAt(uint64(ci), true)
 		}
 		result = append(result, att)
 	}
