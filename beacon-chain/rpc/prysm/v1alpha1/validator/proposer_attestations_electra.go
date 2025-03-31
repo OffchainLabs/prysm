@@ -1,6 +1,7 @@
 package validator
 
 import (
+	"cmp"
 	"slices"
 
 	"github.com/prysmaticlabs/go-bitfield"
@@ -57,7 +58,7 @@ func computeOnChainAggregate(aggregates []ethpb.Att) ([]ethpb.Att, error) {
 
 	for _, aggs := range aggsByDataRoot {
 		slices.SortFunc(aggs, func(a, b ethpb.Att) int {
-			return int(a.GetCommitteeIndex()) - int(b.GetCommitteeIndex())
+			return cmp.Compare(a.GetCommitteeIndex(), b.GetCommitteeIndex())
 		})
 
 		sigs := make([]bls.Signature, len(aggs))
