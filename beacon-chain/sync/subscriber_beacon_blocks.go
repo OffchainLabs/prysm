@@ -109,8 +109,8 @@ func (s *Service) reconstructAndBroadcastBlobsInDataColumn(ctx context.Context, 
 	nodeID := s.cfg.p2p.NodeID()
 	s.cfg.custodyInfo.Mut.RLock()
 	defer s.cfg.custodyInfo.Mut.RUnlock()
-	samplingSize := s.cfg.custodyInfo.CustodyGroupSamplingSize(peerdas.Actual)
-	info, _, err := peerdas.Info(nodeID, samplingSize)
+	groupCount := s.cfg.custodyInfo.ActualGroupCount()
+	info, _, err := peerdas.Info(nodeID, groupCount)
 	if err != nil {
 		log.WithError(err).Error("Failed to get peer info")
 		return

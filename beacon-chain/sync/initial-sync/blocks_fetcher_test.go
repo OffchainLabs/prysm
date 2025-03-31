@@ -2187,7 +2187,8 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 					signedBeaconBlock, err := blocks.NewSignedBeaconBlock(pbSignedBeaconBlock)
 					require.NoError(t, err)
 
-					pbDataColumnsSidecar, err := peerdas.DataColumnSidecars(signedBeaconBlock, blobs)
+					cellsAndProofs := util.GenerateCellsAndProofs(t, blobs)
+					pbDataColumnsSidecar, err := peerdas.DataColumnSidecars(signedBeaconBlock, cellsAndProofs)
 					require.NoError(t, err)
 
 					dataColumnsSidecarFromSlot[blockParams.slot] = pbDataColumnsSidecar
