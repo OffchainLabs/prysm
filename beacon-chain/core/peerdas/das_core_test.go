@@ -17,7 +17,7 @@ import (
 
 func TestDataColumnSidecars(t *testing.T) {
 	var expected []*ethpb.DataColumnSidecar = nil
-	actual, err := peerdas.DataColumnSidecars(nil, []kzg.Blob{})
+	actual, err := peerdas.DataColumnSidecars(nil, []kzg.CellsAndProofs{})
 	require.NoError(t, err)
 
 	require.DeepSSZEqual(t, expected, actual)
@@ -139,7 +139,8 @@ func TestDataColumnsSidecarsBlobsRoundtrip(t *testing.T) {
 	}
 
 	// Compute data columns sidecars from the signed beacon block and from the blobs.
-	dataColumnsSidecar, err := peerdas.DataColumnSidecars(signedBeaconBlock, blobs)
+	cellsAndProofs := util.GenerateCellsAndProofs(t, blobs)
+	dataColumnsSidecar, err := peerdas.DataColumnSidecars(signedBeaconBlock, cellsAndProofs)
 	require.NoError(t, err)
 
 	// Compute the blobs from the data columns sidecar.
