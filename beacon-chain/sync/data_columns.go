@@ -25,7 +25,7 @@ import (
 	"github.com/libp2p/go-libp2p/core"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
-
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
@@ -66,11 +66,17 @@ func RequestDataColumnSidecarsByRoot(
 	peers []core.PeerID,
 	clock *startup.Clock,
 	p2p p2p.P2P,
+	chain blockchain.FinalizationFetcher,
 	ctxMap ContextByteVersions,
 	newColumnsVerifier verification.NewDataColumnsVerifier,
 ) ([]blocks.VerifiedRODataColumn, error) {
 	if len(dataColumnsToFetch) == 0 {
 		return nil, nil
+	}
+
+	if len(peers) == 0 {
+		// Get the best peers to fetch from.
+		peers = getBestPeers(p2p, chain)
 	}
 
 	// Assemble the peers who can provide the needed data columns.
@@ -206,9 +212,9 @@ func ReconstructDataColumnsByRoot(
 	requestedColumns map[uint64]bool,
 	block interfaces.ReadOnlySignedBeaconBlock,
 	blkRoot [32]byte,
-	peers []core.PeerID,
 	clock *startup.Clock,
 	p2p p2p.P2P,
+	chain blockchain.FinalizationFetcher,
 	ctxMap ContextByteVersions,
 	newColumnsVerifier verification.NewDataColumnsVerifier,
 ) ([]blocks.RODataColumn, error) {
@@ -228,6 +234,9 @@ func ReconstructDataColumnsByRoot(
 		"requestedColumns":  uint64MapToSortedSlice(requestedColumns),
 	})
 	log.Debug("Attempting data column recovery")
+
+	// Get the best peers to fetch from.
+	peers := getBestPeers(p2p, chain)
 
 	// Find available columns from peers.
 	allNeededCols := make(map[uint64]bool, numberOfColumns)
@@ -253,7 +262,7 @@ func ReconstructDataColumnsByRoot(
 	// Fetch the required sidecars for reconstruction.
 	fetchedSidecars, err := fetchAndVerifyRecoveryColumns(
 		ctx, requestedColumns, availableColumns, recoveryThreshold,
-		block, blkRoot, peers, clock, p2p, ctxMap, newColumnsVerifier,
+		block, blkRoot, peers, clock, p2p, chain, ctxMap, newColumnsVerifier,
 	)
 	if err != nil {
 		return nil, err
@@ -275,6 +284,7 @@ func fetchAndVerifyRecoveryColumns(
 	peers []core.PeerID,
 	clock *startup.Clock,
 	p2p p2p.P2P,
+	chain blockchain.FinalizationFetcher,
 	ctxMap ContextByteVersions,
 	newColumnsVerifier verification.NewDataColumnsVerifier,
 ) ([]blocks.RODataColumn, error) {
@@ -307,9 +317,9 @@ func fetchAndVerifyRecoveryColumns(
 		columnsToFetch,
 		block,
 		blkRoot,
-		peers,
 		clock,
 		p2p,
+		chain,
 		ctxMap,
 		newColumnsVerifier,
 	)
@@ -895,6 +905,12 @@ outerLoop:
 	}
 
 	return outputDataColumnsByPeer, descriptions
+}
+
+// getBestPeers returns the list of best peers based on finalized checkpoint epoch.
+func getBestPeers(p2p p2p.P2P, chain blockchain.FinalizationFetcher) []core.PeerID {
+	_, bestPeers := p2p.Peers().BestFinalized(maxPeerRequest, chain.FinalizedCheckpt().Epoch)
+	return bestPeers
 }
 
 // buildDataColumnByRangeRequests builds an optimized slices of data column by range requests:
