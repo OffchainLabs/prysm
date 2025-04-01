@@ -338,7 +338,7 @@ func reviewGasLimit(gasLimit validator.Uint64) validator.Uint64 {
 	}
 	// If gas limit is very high (above 150% of default), warn about potential block propagation issues
 	if gasLimit > validator.Uint64(defaultGasLimit*3/2) {
-		log.Warnf("Gas limit %d is very high compared to default %d, which may cause block propagation issues", gasLimit, defaultGasLimit)
+		log.Warnf("Gas limit %d is very high compared to default %d", gasLimit, defaultGasLimit)
 	}
 
 	return gasLimit
