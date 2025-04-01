@@ -11,6 +11,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/go-bitfield"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/electra"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
@@ -110,7 +112,11 @@ func (vs *Server) packAttestations(ctx context.Context, latestState state.Beacon
 
 	var sorted proposerAtts
 	if postElectra {
-		sorted, err = deduped.sortOnChainAggregates()
+		st, err := vs.HeadFetcher.HeadStateReadOnly(ctx)
+		if err != nil {
+			return nil, err
+		}
+		sorted, err = deduped.sortOnChainAggregates(ctx, st)
 		if err != nil {
 			return nil, err
 		}
@@ -271,16 +277,36 @@ func (a proposerAtts) sort() (proposerAtts, error) {
 	return a.sortBySlotAndCommittee()
 }
 
-func (a proposerAtts) sortOnChainAggregates() (proposerAtts, error) {
+func (a proposerAtts) sortOnChainAggregates(ctx context.Context, st state.ReadOnlyBeaconState) (proposerAtts, error) {
 	if len(a) < 2 {
 		return a, nil
 	}
 
-	// Sort by slot first, then by bit count.
+	totalBalance, err := helpers.TotalActiveBalance(st)
+	if err != nil {
+		return nil, err
+	}
+
+	// Sort attestation by proposer reward numerator using a cache.
+	cache := make(map[ethpb.Att]uint64)
+
+	getCachedReward := func(att ethpb.Att) uint64 {
+		if val, ok := cache[att]; ok {
+			return val
+		}
+		r, err := electra.GetProposerRewardNumerator(ctx, st, att, totalBalance)
+		if err != nil {
+			log.WithError(err).Debug("Failed to get proposer reward numerator")
+			return 0
+		}
+		cache[att] = r
+		return r
+	}
+
 	slices.SortFunc(a, func(a, b ethpb.Att) int {
-		return cmp.Or(
-			-cmp.Compare(a.GetData().Slot, b.GetData().Slot),
-			-cmp.Compare(a.GetAggregationBits().Count(), b.GetAggregationBits().Count()))
+		r1 := getCachedReward(a)
+		r2 := getCachedReward(b)
+		return cmp.Compare(r2, r1)
 	})
 
 	return a, nil

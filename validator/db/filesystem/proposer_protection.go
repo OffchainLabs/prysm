@@ -14,12 +14,12 @@ import (
 
 // HighestSignedProposal is implemented only to satisfy the interface.
 func (*Store) HighestSignedProposal(_ context.Context, _ [fieldparams.BLSPubkeyLength]byte) (primitives.Slot, bool, error) {
-	panic("not implemented")
+	return 0, false, errors.New("not implemented")
 }
 
 // LowestSignedProposal is implemented only to satisfy the interface.
 func (*Store) LowestSignedProposal(_ context.Context, _ [fieldparams.BLSPubkeyLength]byte) (primitives.Slot, bool, error) {
-	panic("not implemented")
+	return 0, false, errors.New("not implemented")
 }
 
 // ProposalHistoryForPubKey returns the proposal history for a given public key.
@@ -45,7 +45,7 @@ func (s *Store) ProposalHistoryForPubKey(_ context.Context, publicKey [fieldpara
 
 // ProposalHistoryForSlot is implemented only to satisfy the interface.
 func (*Store) ProposalHistoryForSlot(_ context.Context, _ [fieldparams.BLSPubkeyLength]byte, _ primitives.Slot) ([fieldparams.RootLength]byte, bool, bool, error) {
-	panic("not implemented")
+	return [32]byte{}, false, false, errors.New("not implemented")
 }
 
 // SaveProposalHistoryForSlot checks if the incoming proposal is valid regarding EIP-3076 minimal slashing protection.

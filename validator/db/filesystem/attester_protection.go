@@ -27,7 +27,7 @@ func (*Store) SaveEIPImportBlacklistedPublicKeys(_ context.Context, _ [][fieldpa
 
 // SigningRootAtTargetEpoch is implemented only to satisfy the interface.
 func (*Store) SigningRootAtTargetEpoch(_ context.Context, _ [fieldparams.BLSPubkeyLength]byte, _ primitives.Epoch) ([]byte, error) {
-	panic("not implemented")
+	return nil, errors.New("not implemented")
 }
 
 // LowestSignedTargetEpoch returns the lowest signed target epoch for a public key, a boolean indicating if it exists and an error.

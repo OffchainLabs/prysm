@@ -69,7 +69,7 @@ func main() {
 		case "fluentd":
 			f := joonix.NewFormatter()
 			if err := joonix.DisableTimestampFormat(f); err != nil {
-				panic(err)
+				panic(err) // lint:nopanic -- This shouldn't happen, but crashing immediately at startup is OK.
 			}
 			logrus.SetFormatter(f)
 		case "json":
@@ -94,7 +94,7 @@ func main() {
 	defer func() {
 		if x := recover(); x != nil {
 			log.Errorf("Runtime panic: %v\n%v", x, string(runtimeDebug.Stack()))
-			panic(x)
+			panic(x) // lint:nopanic -- This is just resurfacing the original panic.
 		}
 	}()
 

@@ -28,5 +28,5 @@ func (m *PoolMock) InsertVoluntaryExit(exit *eth.SignedVoluntaryExit) {
 
 // MarkIncluded --
 func (*PoolMock) MarkIncluded(_ *eth.SignedVoluntaryExit) {
-	panic("implement me")
+	panic("implement me") // lint:nopanic -- Mock / test code.
 }

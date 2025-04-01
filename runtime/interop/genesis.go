@@ -212,7 +212,7 @@ func defaultDepositContractAllocation(contractAddress string) depositAllocation 
 	}
 	codeBytes, err := hexutil.Decode(DepositContractCode)
 	if err != nil {
-		panic(err)
+		panic(err) // lint:nopanic -- The deposit contract code is hardcoded and checked in tests.
 	}
 	return depositAllocation{
 		Address: common.HexToAddress(contractAddress),

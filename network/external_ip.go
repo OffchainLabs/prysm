@@ -10,7 +10,7 @@ import (
 func IPAddr() net.IP {
 	ip, err := ExternalIP()
 	if err != nil {
-		panic(err)
+		panic(err) // lint:nopanic -- Only panics if a network interface is not available. This is a requirement to run the application anyway.
 	}
 	return net.ParseIP(ip)
 }

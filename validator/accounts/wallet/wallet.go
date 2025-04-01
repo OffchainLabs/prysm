@@ -186,6 +186,7 @@ func OpenWalletOrElseCli(cliCtx *cli.Context, otherwise func(cliCtx *cli.Context
 	if err != nil {
 		return nil, err
 	}
+
 	return OpenWallet(cliCtx.Context, &Config{
 		WalletDir:      walletDir,
 		WalletPassword: walletPassword,
@@ -291,6 +292,10 @@ func OpenWallet(_ context.Context, cfg *Config) (*Wallet, error) {
 		return nil, errors.Wrap(err, "could not read keymanager kind for wallet")
 	}
 	accountsPath := filepath.Join(cfg.WalletDir, keymanagerKind.String())
+	log.WithFields(logrus.Fields{
+		"wallet":         accountsPath,
+		"keymanagerKind": keymanagerKind.String(),
+	}).Info("Opened validator wallet")
 	return &Wallet{
 		walletDir:      cfg.WalletDir,
 		accountsPath:   accountsPath,

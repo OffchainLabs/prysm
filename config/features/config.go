@@ -27,6 +27,7 @@ import (
 
 	"github.com/prysmaticlabs/prysm/v5/cmd"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
@@ -88,7 +89,8 @@ type Flags struct {
 	AggregateIntervals [3]time.Duration
 
 	// Feature related flags (alignment forced in the end)
-	ForceHead string // ForceHead forces the head block to be a specific block root, the last head block, or the last finalized block.
+	ForceHead        string                // ForceHead forces the head block to be a specific block root, the last head block, or the last finalized block.
+	BlacklistedRoots map[[32]byte]struct{} // BlacklistedRoots is a list of roots that are blacklisted from processing.
 }
 
 var featureConfig *Flags
@@ -180,6 +182,12 @@ func configureTestnet(ctx *cli.Context) error {
 		}
 		applyHoleskyFeatureFlags(ctx)
 		params.UseHoleskyNetworkConfig()
+	} else if ctx.Bool(HoodiTestnet.Name) {
+		log.Info("Running on the Hoodi Beacon Chain Testnet")
+		if err := params.SetActive(params.HoodiConfig().Copy()); err != nil {
+			return err
+		}
+		params.UseHoodiNetworkConfig()
 	} else {
 		// If --mainnet is explicitly set, show deprecation warning
 		if ctx.IsSet(Mainnet.Name) {
@@ -317,9 +325,27 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 		cfg.ForceHead = ctx.String(forceHeadFlag.Name)
 	}
 
+	if ctx.IsSet(blacklistRoots.Name) {
+		logEnabled(blacklistRoots)
+		cfg.BlacklistedRoots = parseBlacklistedRoots(ctx.StringSlice(blacklistRoots.Name))
+	}
+
 	cfg.AggregateIntervals = [3]time.Duration{aggregateFirstInterval.Value, aggregateSecondInterval.Value, aggregateThirdInterval.Value}
 	Init(cfg)
 	return nil
+}
+
+func parseBlacklistedRoots(blacklistedRoots []string) map[[32]byte]struct{} {
+	roots := make(map[[32]byte]struct{})
+	for _, root := range blacklistedRoots {
+		r, err := bytesutil.DecodeHexWithLength(root, 32)
+		if err != nil {
+			log.WithError(err).WithField("root", root).Warn("Failed to parse blacklisted root")
+			continue
+		}
+		roots[[32]byte(r)] = struct{}{}
+	}
+	return roots
 }
 
 // ConfigureValidator sets the global config based
@@ -472,4 +498,11 @@ func ValidateNetworkFlags(ctx *cli.Context) error {
 	}
 
 	return nil
+}
+
+// BlacklistedBlock returns weather the given block root belongs to the list of blacklisted roots.
+func BlacklistedBlock(r [32]byte) bool {
+	blacklisted := Get().BlacklistedRoots
+	_, ok := blacklisted[r]
+	return ok
 }
