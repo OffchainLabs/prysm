@@ -2,18 +2,17 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
-    srcs = ["tracker.go"],
+    srcs = [
+        "interfaces.go",
+        "tracker.go",
+    ],
     importpath = "github.com/prysmaticlabs/prysm/v5/api/client/beacon/health",
     visibility = ["//visibility:public"],
-    deps = ["//api/client/beacon/iface:go_default_library"],
 )
 
 go_test(
     name = "go_default_test",
     srcs = ["tracker_test.go"],
     embed = [":go_default_library"],
-    deps = [
-        "//api/client/beacon/testing:go_default_library",
-        "@org_uber_go_mock//gomock:go_default_library",
-    ],
+    deps = ["@org_uber_go_mock//gomock:go_default_library"],
 )

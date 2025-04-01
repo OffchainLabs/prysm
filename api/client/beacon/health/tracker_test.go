@@ -5,7 +5,7 @@ import (
 	"sync"
 	"testing"
 
-	healthTesting "github.com/prysmaticlabs/prysm/v5/api/client/beacon/testing"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/health/mock"
 	"go.uber.org/mock/gomock"
 )
 
@@ -20,11 +20,11 @@ func TestNodeHealth_IsHealthy(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			n := &Tracker{
+			n := &healthTracker{
 				isHealthy:  &tt.isHealthy,
 				healthChan: make(chan bool, 1),
 			}
-			if got := n.IsHealthy(); got != tt.want {
+			if got := n.IsHealthy(context.Background()); got != tt.want {
 				t.Errorf("IsHealthy() = %v, want %v", got, tt.want)
 			}
 		})
@@ -47,9 +47,9 @@ func TestNodeHealth_UpdateNodeHealth(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
-			client := healthTesting.NewMockHealthClient(ctrl)
+			client := mock.NewMockHealthClient(ctrl)
 			client.EXPECT().IsHealthy(gomock.Any()).Return(tt.newStatus)
-			n := &Tracker{
+			n := &healthTracker{
 				isHealthy:  &tt.initial,
 				node:       client,
 				healthChan: make(chan bool, 1),
@@ -80,7 +80,7 @@ func TestNodeHealth_UpdateNodeHealth(t *testing.T) {
 func TestNodeHealth_Concurrency(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	client := healthTesting.NewMockHealthClient(ctrl)
+	client := mock.NewMockHealthClient(ctrl)
 	n := NewTracker(client)
 	var wg sync.WaitGroup
 
@@ -104,7 +104,7 @@ func TestNodeHealth_Concurrency(t *testing.T) {
 	for i := 0; i < numGoroutines; i++ {
 		go func() {
 			defer wg.Done()
-			_ = n.IsHealthy() // Just read the value
+			_ = n.IsHealthy(context.Background()) // Just read the value
 		}()
 	}
 

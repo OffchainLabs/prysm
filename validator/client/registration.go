@@ -6,6 +6,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/validator_api"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/builder"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
@@ -13,14 +14,13 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	validatorpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/validator-client"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
 )
 
 // SubmitValidatorRegistrations signs validator registration objects and submits it to the beacon node by batch of validatorRegsBatchSize size maximum.
 // If at least one error occurs during a registration call to the beacon node, the last error is returned.
 func SubmitValidatorRegistrations(
 	ctx context.Context,
-	validatorClient iface.ValidatorClient,
+	validatorClient validator_api.Client,
 	signedRegs []*ethpb.SignedValidatorRegistrationV1,
 	validatorRegsBatchSize int,
 ) error {
@@ -61,7 +61,7 @@ func SubmitValidatorRegistrations(
 }
 
 // Sings validator registration obj with the proposer domain and private key.
-func signValidatorRegistration(ctx context.Context, signer iface.SigningFunc, reg *ethpb.ValidatorRegistrationV1) ([]byte, error) {
+func signValidatorRegistration(ctx context.Context, signer SigningFunc, reg *ethpb.ValidatorRegistrationV1) ([]byte, error) {
 	ctx, span := trace.StartSpan(ctx, "validator.signValidatorRegistration")
 	defer span.End()
 
@@ -70,7 +70,7 @@ func signValidatorRegistration(ctx context.Context, signer iface.SigningFunc, re
 	d, err := signing.ComputeDomain(
 		params.BeaconConfig().DomainApplicationBuilder,
 		nil, /* fork version */
-		nil /* genesis val root */)
+		nil  /* genesis val root */)
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +93,7 @@ func signValidatorRegistration(ctx context.Context, signer iface.SigningFunc, re
 }
 
 // SignValidatorRegistrationRequest compares and returns either the cached validator registration request or signs a new one.
-func (v *validator) SignValidatorRegistrationRequest(ctx context.Context, signer iface.SigningFunc, newValidatorRegistration *ethpb.ValidatorRegistrationV1) (*ethpb.SignedValidatorRegistrationV1, bool /* isCached */, error) {
+func (v *validator) SignValidatorRegistrationRequest(ctx context.Context, signer SigningFunc, newValidatorRegistration *ethpb.ValidatorRegistrationV1) (*ethpb.SignedValidatorRegistrationV1, bool /* isCached */, error) {
 	signedReg, ok := v.signedValidatorRegistrations[bytesutil.ToBytes48(newValidatorRegistration.Pubkey)]
 	if ok && isValidatorRegistrationSame(signedReg.Message, newValidatorRegistration) {
 		return signedReg, true, nil

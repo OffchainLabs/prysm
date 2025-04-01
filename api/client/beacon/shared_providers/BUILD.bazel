@@ -2,27 +2,44 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
-    srcs = ["provider.go"],
-    importpath = "github.com/prysmaticlabs/prysm/v5/api/client/beacon/state_validators_api",
+    srcs = [
+        "duties.go",
+        "genesis.go",
+        "interfaces.go",
+        "providers.go",
+        "state_validators.go",
+        "structs.go",
+    ],
+    importpath = "github.com/prysmaticlabs/prysm/v5/api/client/beacon/shared_providers",
     visibility = ["//visibility:public"],
     deps = [
+        "//api/client:go_default_library",
         "//api/server/structs:go_default_library",
         "//consensus-types/primitives:go_default_library",
+        "//proto/prysm/v1alpha1:go_default_library",
         "@com_github_pkg_errors//:go_default_library",
     ],
 )
 
 go_test(
     name = "go_default_test",
-    srcs = ["provider_test.go"],
+    srcs = [
+        "duties_test.go",
+        "genesis_test.go",
+        "state_validators_test.go",
+    ],
     embed = [":go_default_library"],
     deps = [
+        "//api/client/beacon/mock:go_default_library",
         "//api/server/structs:go_default_library",
+        "//config/params:go_default_library",
         "//consensus-types/primitives:go_default_library",
+        "//proto/prysm/v1alpha1:go_default_library",
         "//testing/assert:go_default_library",
         "//testing/require:go_default_library",
-        "//validator/client/beacon-api/mock:go_default_library",
+        "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",
         "@com_github_pkg_errors//:go_default_library",
+        "@com_github_prysmaticlabs_prysm_v5//validator/client/beacon-api/mock:go_default_library",
         "@org_uber_go_mock//gomock:go_default_library",
     ],
 )

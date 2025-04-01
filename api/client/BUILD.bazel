@@ -5,16 +5,31 @@ go_library(
     srcs = [
         "client.go",
         "errors.go",
+        "json_rest_handler.go",
         "options.go",
     ],
     importpath = "github.com/prysmaticlabs/prysm/v5/api/client",
     visibility = ["//visibility:public"],
-    deps = ["@com_github_pkg_errors//:go_default_library"],
+    deps = [
+        "//api:go_default_library",
+        "//network/httputil:go_default_library",
+        "@com_github_pkg_errors//:go_default_library",
+    ],
 )
 
 go_test(
     name = "go_default_test",
-    srcs = ["client_test.go"],
+    srcs = [
+        "client_test.go",
+        "json_rest_handler_test.go",
+    ],
     embed = [":go_default_library"],
-    deps = ["//testing/require:go_default_library"],
+    deps = [
+        "//api:go_default_library",
+        "//api/server/structs:go_default_library",
+        "//network/httputil:go_default_library",
+        "//testing/assert:go_default_library",
+        "//testing/require:go_default_library",
+        "@com_github_pkg_errors//:go_default_library",
+    ],
 )

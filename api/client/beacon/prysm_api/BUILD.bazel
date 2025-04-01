@@ -1,0 +1,58 @@
+load("@prysm//tools/go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "client.go",
+        "grpc_client.go",
+        "interfaces.go",
+        "rest_client.go",
+        "structs.go",
+    ],
+    importpath = "github.com/prysmaticlabs/prysm/v5/api/client/beacon/prysm_api",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//api/client:go_default_library",
+        "//api/client/beacon:go_default_library",
+        "//api/client/beacon/chain:go_default_library",
+        "//api/client/beacon/node:go_default_library",
+        "//api/server/structs:go_default_library",
+        "//beacon-chain/rpc/eth/helpers:go_default_library",
+        "//beacon-chain/state/state-native:go_default_library",
+        "//config/features:go_default_library",
+        "//consensus-types/primitives:go_default_library",
+        "//consensus-types/validator:go_default_library",
+        "//proto/eth/v1:go_default_library",
+        "//proto/prysm/v1alpha1:go_default_library",
+        "//validator/helpers:go_default_library",
+        "@com_github_golang_protobuf//ptypes/empty",
+        "@com_github_pkg_errors//:go_default_library",
+        "@com_github_prysmaticlabs_prysm_v5//validator/client/beacon-api:go_default_library",
+        "@com_github_prysmaticlabs_prysm_v5//validator/client/iface:go_default_library",
+        "@com_github_prysmaticlabs_prysm_v5//validator/client/node-client-factory:go_default_library",
+        "@org_golang_google_grpc//:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = [
+        "grpc_client_test.go",
+        "rest_client_test.go",
+    ],
+    embed = [":go_default_library"],
+    deps = [
+        "//api/server/structs:go_default_library",
+        "//config/params:go_default_library",
+        "//consensus-types/primitives:go_default_library",
+        "//consensus-types/validator:go_default_library",
+        "//encoding/bytesutil:go_default_library",
+        "//proto/prysm/v1alpha1:go_default_library",
+        "//testing/require:go_default_library",
+        "//testing/util:go_default_library",
+        "//testing/validator-mock:go_default_library",
+        "@com_github_prysmaticlabs_prysm_v5//validator/client/beacon-api/mock:go_default_library",
+        "@com_github_prysmaticlabs_prysm_v5//validator/client/iface:go_default_library",
+        "@org_uber_go_mock//gomock:go_default_library",
+    ],
+)

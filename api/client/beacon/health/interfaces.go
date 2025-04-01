@@ -2,12 +2,12 @@ package health
 
 import "context"
 
-type HealthTracker interface {
+type Tracker interface {
 	HealthUpdates() <-chan bool
-	IsHealthy() bool
+	IsHealthy(ctx context.Context) bool
 	CheckHealth(ctx context.Context) bool
 }
 
-type HealthNode interface {
+type Node interface {
 	IsHealthy(ctx context.Context) bool
 }

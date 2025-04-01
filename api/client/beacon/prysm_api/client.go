@@ -1,22 +1,30 @@
 package prysm_api
 
 import (
+	"github.com/prysmaticlabs/prysm/v5/api/client"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/chain"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/node"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	beaconApi "github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api"
-	nodeClientFactory "github.com/prysmaticlabs/prysm/v5/validator/client/node-client-factory"
 	validatorHelpers "github.com/prysmaticlabs/prysm/v5/validator/helpers"
 	"google.golang.org/grpc"
 )
 
-func NewPrysmChainClient(validatorConn validatorHelpers.NodeConnection, jsonRestHandler beaconApi.JsonRestHandler) PrysmChainClient {
+func NewPrysmChainClient(validatorConn validatorHelpers.NodeConnection, jsonRestHandler client.JsonRestHandler) Client {
 	if features.Get().EnableBeaconRESTApi {
-		return beaconApi.NewPrysmChainClient(jsonRestHandler, nodeClientFactory.NewNodeClient(validatorConn, jsonRestHandler))
+		return NewPrysmChainRestClient(jsonRestHandler, node.NewClient(validatorConn, jsonRestHandler))
 	} else {
 		return NewGrpcPrysmChainClient(validatorConn.GetGrpcClientConn())
 	}
 }
 
-func NewGrpcPrysmChainClient(cc grpc.ClientConnInterface) PrysmChainClient {
-	return &grpcPrysmChainClient{chainClient: &grpcChainClient{ethpb.NewBeaconChainClient(cc)}}
+// NewPrysmChainClient returns implementation of Client.
+func NewPrysmChainRestClient(jsonRestHandler client.JsonRestHandler, nodeClient node.Client) Client {
+	return prysmChainClient{
+		jsonRestHandler: jsonRestHandler,
+		nodeClient:      nodeClient,
+	}
+}
+
+func NewGrpcPrysmChainClient(cc grpc.ClientConnInterface) Client {
+	return &grpcPrysmChainClient{chainClient: chain.NewGrpcChainClient(cc)}}
 }

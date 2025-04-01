@@ -8,6 +8,9 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/api"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/shared_providers"
 	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/state_validators"
 	"github.com/prysmaticlabs/prysm/v5/api/client/validator/state_validators_api"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
@@ -18,8 +21,8 @@ import (
 
 type beaconApiChainClient struct {
 	fallbackClient          Client
-	jsonRestHandler         JsonRestHandler
-	stateValidatorsProvider shared_providers.StateValidatorsProvider
+	jsonRestHandler         beacon.JsonRestHandler
+	stateValidatorsProvider shared_providers.StateValidators
 }
 
 func (c beaconApiChainClient) headBlockHeaders(ctx context.Context) (*structs.GetBlockHeaderResponse, error) {
@@ -334,10 +337,10 @@ func (c beaconApiChainClient) ValidatorParticipation(ctx context.Context, in *et
 	return nil, errors.New("beaconApiChainClient.ValidatorParticipation is not implemented. To use a fallback client, pass a fallback client as the last argument of NewBeaconApiChainClientWithFallback.")
 }
 
-func NewBeaconApiChainClientWithFallback(jsonRestHandler JsonRestHandler, fallbackClient Client) Client {
+func NewBeaconApiChainClientWithFallback(jsonRestHandler beacon.JsonRestHandler, fallbackClient Client) Client {
 	return &beaconApiChainClient{
 		jsonRestHandler:         jsonRestHandler,
 		fallbackClient:          fallbackClient,
-		stateValidatorsProvider: state_validators_api.Provider{jsonRestHandler: jsonRestHandler},
+		stateValidatorsProvider: shared_providers.stateValidatorsProvider{jsonRestHandler: jsonRestHandler},
 	}
 }

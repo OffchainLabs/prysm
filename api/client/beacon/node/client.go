@@ -1,12 +1,12 @@
 package node
 
 import (
+	"github.com/prysmaticlabs/prysm/v5/api/client"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
-	beaconApi "github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api"
 	validatorHelpers "github.com/prysmaticlabs/prysm/v5/validator/helpers"
 )
 
-func NewNodeClient(validatorConn validatorHelpers.NodeConnection, jsonRestHandler beaconApi.JsonRestHandler) NodeClient {
+func NewClient(validatorConn validatorHelpers.NodeConnection, jsonRestHandler client.JsonRestHandler) Client {
 	grpcClient := NewNodeClient(validatorConn.GetGrpcClientConn())
 	if features.Get().EnableBeaconRESTApi {
 		return NewNodeClientWithFallback(jsonRestHandler, grpcClient)

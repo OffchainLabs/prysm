@@ -5,26 +5,26 @@ import (
 	"sync"
 )
 
-type Tracker struct {
+type healthTracker struct {
 	isHealthy  *bool
 	healthChan chan bool
-	node       HealthNode
+	node       Node
 	sync.RWMutex
 }
 
-func NewTracker(node HealthNode) *Tracker {
-	return &Tracker{
+func NewTracker(node Node) Tracker {
+	return &healthTracker{
 		node:       node,
 		healthChan: make(chan bool, 1),
 	}
 }
 
 // HealthUpdates provides a read-only channel for health updates.
-func (n *Tracker) HealthUpdates() <-chan bool {
+func (n *healthTracker) HealthUpdates() <-chan bool {
 	return n.healthChan
 }
 
-func (n *Tracker) IsHealthy() bool {
+func (n *healthTracker) IsHealthy(_ context.Context) bool {
 	n.RLock()
 	defer n.RUnlock()
 	if n.isHealthy == nil {
@@ -33,7 +33,7 @@ func (n *Tracker) IsHealthy() bool {
 	return *n.isHealthy
 }
 
-func (n *Tracker) CheckHealth(ctx context.Context) bool {
+func (n *healthTracker) CheckHealth(ctx context.Context) bool {
 	n.Lock()
 	defer n.Unlock()
 

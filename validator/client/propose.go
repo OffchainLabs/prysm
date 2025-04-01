@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/validator_api"
 	"github.com/prysmaticlabs/prysm/v5/async"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
@@ -26,7 +27,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	prysmTime "github.com/prysmaticlabs/prysm/v5/time"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 )
@@ -51,7 +51,7 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 	ctx, span := trace.StartSpan(ctx, "validator.ProposeBlock")
 	defer span.End()
 
-	lock := async.NewMultilock(fmt.Sprint(iface.RoleProposer), string(pubKey[:]))
+	lock := async.NewMultilock(fmt.Sprint(RoleProposer), string(pubKey[:]))
 	lock.Lock()
 	defer lock.Unlock()
 
@@ -296,8 +296,8 @@ func buildGenericSignedBlockFuluWithBlobs(pb proto.Message, b *ethpb.GenericBeac
 // The exit is signed by the validator before being sent to the beacon node for broadcasting.
 func ProposeExit(
 	ctx context.Context,
-	validatorClient iface.ValidatorClient,
-	signer iface.SigningFunc,
+	validatorClient validator_api.Client,
+	signer SigningFunc,
 	pubKey []byte,
 	epoch primitives.Epoch,
 ) error {
@@ -328,8 +328,8 @@ func CurrentEpoch(genesisTime *timestamp.Timestamp) (primitives.Epoch, error) {
 
 func CreateSignedVoluntaryExit(
 	ctx context.Context,
-	validatorClient iface.ValidatorClient,
-	signer iface.SigningFunc,
+	validatorClient validator_api.Client,
+	signer SigningFunc,
 	pubKey []byte,
 	epoch primitives.Epoch,
 ) (*ethpb.SignedVoluntaryExit, error) {
@@ -423,8 +423,8 @@ func (v *validator) signBlock(ctx context.Context, pubKey [fieldparams.BLSPubkey
 // Sign voluntary exit with proposer domain and private key.
 func signVoluntaryExit(
 	ctx context.Context,
-	validatorClient iface.ValidatorClient,
-	signer iface.SigningFunc,
+	validatorClient validator_api.Client,
+	signer SigningFunc,
 	pubKey []byte,
 	exit *ethpb.VoluntaryExit,
 	slot primitives.Slot,

@@ -21,7 +21,11 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/api/client"
-	"github.com/prysmaticlabs/prysm/v5/api/client/beacon"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/chain"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/health"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/node"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/prysm_api"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/validator_api"
 	eventClient "github.com/prysmaticlabs/prysm/v5/api/client/event"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	"github.com/prysmaticlabs/prysm/v5/async/event"
@@ -39,7 +43,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	accountsiface "github.com/prysmaticlabs/prysm/v5/validator/accounts/iface"
 	"github.com/prysmaticlabs/prysm/v5/validator/accounts/wallet"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
 	"github.com/prysmaticlabs/prysm/v5/validator/db"
 	dbCommon "github.com/prysmaticlabs/prysm/v5/validator/db/common"
 	"github.com/prysmaticlabs/prysm/v5/validator/graffiti"
@@ -82,10 +85,10 @@ type validator struct {
 	graffitiOrderedIndex               uint64
 	beaconNodeHosts                    []string
 	currentHostIndex                   uint64
-	validatorClient                    iface.ValidatorClient
-	chainClient                        iface.ChainClient
-	nodeClient                         iface.NodeClient
-	prysmChainClient                   iface.PrysmChainClient
+	validatorClient                    validator_api.Client
+	chainClient                        chain.Client
+	nodeClient                         node.Client
+	prysmChainClient                   prysm_api.Client
 	db                                 db.Database
 	km                                 keymanager.IKeymanager
 	web3SignerConfig                   *remoteweb3signer.SetupConfig
@@ -93,7 +96,7 @@ type validator struct {
 	signedValidatorRegistrations       map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1
 	validatorsRegBatchSize             int
 	interopKeysConfig                  *local.InteropKeymanagerConfig
-	attSelections                      map[attSelectionKey]iface.BeaconCommitteeSelection
+	attSelections                      map[attSelectionKey]validator_api.BeaconCommitteeSelection
 	aggregatedSlotCommitteeIDCache     *lru.Cache
 	domainDataCache                    *ristretto.Cache
 	voteStats                          voteStats
@@ -681,7 +684,7 @@ func (v *validator) subscribeToSubnets(ctx context.Context, duties *ethpb.Valida
 // RolesAt slot returns the validator roles at the given slot. Returns nil if the
 // validator is known to not have a roles at the slot. Returns UNKNOWN if the
 // validator assignments are unknown. Otherwise, returns a valid ValidatorRole map.
-func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fieldparams.BLSPubkeyLength]byte][]iface.ValidatorRole, error) {
+func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fieldparams.BLSPubkeyLength]byte][]ValidatorRole, error) {
 	ctx, span := trace.StartSpan(ctx, "validator.RolesAt")
 	defer span.End()
 
@@ -689,7 +692,7 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 	defer v.dutiesLock.RUnlock()
 
 	var (
-		rolesAt = make(map[[fieldparams.BLSPubkeyLength]byte][]iface.ValidatorRole)
+		rolesAt = make(map[[fieldparams.BLSPubkeyLength]byte][]ValidatorRole)
 
 		// store sync committee duties pubkeys and share indices in slices for
 		// potential DV processing
@@ -697,7 +700,7 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 	)
 
 	for validator, duty := range v.duties.CurrentEpochDuties {
-		var roles []iface.ValidatorRole
+		var roles []ValidatorRole
 
 		if duty == nil {
 			continue
@@ -705,14 +708,14 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 		if len(duty.ProposerSlots) > 0 {
 			for _, proposerSlot := range duty.ProposerSlots {
 				if proposerSlot != 0 && proposerSlot == slot {
-					roles = append(roles, iface.RoleProposer)
+					roles = append(roles, RoleProposer)
 					break
 				}
 			}
 		}
 
 		if duty.AttesterSlot == slot {
-			roles = append(roles, iface.RoleAttester)
+			roles = append(roles, RoleAttester)
 
 			aggregator, err := v.isAggregator(ctx, duty.CommitteeLength, slot, bytesutil.ToBytes48(duty.PublicKey), duty.ValidatorIndex)
 			if err != nil {
@@ -720,7 +723,7 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 				log.WithError(err).Errorf("Could not check if validator %#x is an aggregator", bytesutil.Trunc(duty.PublicKey))
 			}
 			if aggregator {
-				roles = append(roles, iface.RoleAggregator)
+				roles = append(roles, RoleAggregator)
 			}
 		}
 
@@ -730,12 +733,12 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 		inSyncCommittee := false
 		if slots.IsEpochEnd(slot) {
 			if v.duties.NextEpochDuties[validator].IsSyncCommittee {
-				roles = append(roles, iface.RoleSyncCommittee)
+				roles = append(roles, RoleSyncCommittee)
 				inSyncCommittee = true
 			}
 		} else {
 			if duty.IsSyncCommittee {
-				roles = append(roles, iface.RoleSyncCommittee)
+				roles = append(roles, RoleSyncCommittee)
 				inSyncCommittee = true
 			}
 		}
@@ -745,7 +748,7 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 		}
 
 		if len(roles) == 0 {
-			roles = append(roles, iface.RoleUnknown)
+			roles = append(roles, RoleUnknown)
 		}
 
 		var pubKey [fieldparams.BLSPubkeyLength]byte
@@ -774,7 +777,7 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 				continue
 			}
 
-			rolesAt[bytesutil.ToBytes48(valPubkey[:])] = append(rolesAt[bytesutil.ToBytes48(valPubkey[:])], iface.RoleSyncCommitteeAggregator)
+			rolesAt[bytesutil.ToBytes48(valPubkey[:])] = append(rolesAt[bytesutil.ToBytes48(valPubkey[:])], RoleSyncCommitteeAggregator)
 		}
 	}
 
@@ -840,7 +843,7 @@ func (v *validator) isSyncCommitteeAggregator(ctx context.Context, slot primitiv
 	defer span.End()
 
 	var (
-		selections []iface.SyncCommitteeSelection
+		selections []validator_api.SyncCommitteeSelection
 		isAgg      = make(map[primitives.ValidatorIndex]bool)
 	)
 
@@ -862,7 +865,7 @@ func (v *validator) isSyncCommitteeAggregator(ctx context.Context, slot primitiv
 				return nil, errors.Wrap(err, "can't sign selection data")
 			}
 
-			selections = append(selections, iface.SyncCommitteeSelection{
+			selections = append(selections, validator_api.SyncCommitteeSelection{
 				SelectionProof:    sig,
 				Slot:              slot,
 				SubcommitteeIndex: primitives.CommitteeIndex(subnet),
@@ -1169,7 +1172,7 @@ func (v *validator) EventStreamIsRunning() bool {
 	return v.validatorClient.EventStreamIsRunning()
 }
 
-func (v *validator) HealthTracker() *beacon.NodeHealthTracker {
+func (v *validator) HealthTracker() health.Tracker {
 	return v.nodeClient.HealthTracker()
 }
 
@@ -1298,7 +1301,7 @@ func (v *validator) buildPrepProposerReqs(activePubkeys [][fieldparams.BLSPubkey
 func (v *validator) buildSignedRegReqs(
 	ctx context.Context,
 	activePubkeys [][fieldparams.BLSPubkeyLength]byte,
-	signer iface.SigningFunc,
+	signer SigningFunc,
 	slot primitives.Slot,
 	forceFullPush bool,
 ) []*ethpb.SignedValidatorRegistrationV1 {
@@ -1399,7 +1402,7 @@ func (v *validator) aggregatedSelectionProofs(ctx context.Context, duties *ethpb
 	// Create new instance of attestation selections map.
 	v.newAttSelections()
 
-	var req []iface.BeaconCommitteeSelection
+	var req []validator_api.BeaconCommitteeSelection
 	for _, duty := range duties.CurrentEpochDuties {
 		if duty.Status != ethpb.ValidatorStatus_ACTIVE && duty.Status != ethpb.ValidatorStatus_EXITING {
 			continue
@@ -1411,7 +1414,7 @@ func (v *validator) aggregatedSelectionProofs(ctx context.Context, duties *ethpb
 			return err
 		}
 
-		req = append(req, iface.BeaconCommitteeSelection{
+		req = append(req, validator_api.BeaconCommitteeSelection{
 			SelectionProof: slotSig,
 			Slot:           duty.AttesterSlot,
 			ValidatorIndex: duty.ValidatorIndex,
@@ -1429,7 +1432,7 @@ func (v *validator) aggregatedSelectionProofs(ctx context.Context, duties *ethpb
 			return err
 		}
 
-		req = append(req, iface.BeaconCommitteeSelection{
+		req = append(req, validator_api.BeaconCommitteeSelection{
 			SelectionProof: slotSig,
 			Slot:           duty.AttesterSlot,
 			ValidatorIndex: duty.ValidatorIndex,
@@ -1447,7 +1450,7 @@ func (v *validator) aggregatedSelectionProofs(ctx context.Context, duties *ethpb
 	return nil
 }
 
-func (v *validator) addAttSelections(selections []iface.BeaconCommitteeSelection) {
+func (v *validator) addAttSelections(selections []validator_api.BeaconCommitteeSelection) {
 	v.attSelectionLock.Lock()
 	defer v.attSelectionLock.Unlock()
 
@@ -1463,7 +1466,7 @@ func (v *validator) newAttSelections() {
 	v.attSelectionLock.Lock()
 	defer v.attSelectionLock.Unlock()
 
-	v.attSelections = make(map[attSelectionKey]iface.BeaconCommitteeSelection)
+	v.attSelections = make(map[attSelectionKey]validator_api.BeaconCommitteeSelection)
 }
 
 func (v *validator) attSelection(key attSelectionKey) ([]byte, error) {

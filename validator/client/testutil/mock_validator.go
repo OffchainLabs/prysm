@@ -60,7 +60,7 @@ type FakeValidator struct {
 	ProposerSettingWait               time.Duration
 	Km                                keymanager.IKeymanager
 	graffiti                          string
-	Tracker                           *health.Tracker
+	Tracker                           *health.healthTracker
 	AttSubmitted                      chan interface{}
 	BlockProposed                     chan interface{}
 }
@@ -318,7 +318,7 @@ func (*FakeValidator) EventStreamIsRunning() bool {
 	return true
 }
 
-func (fv *FakeValidator) HealthTracker() *health.Tracker {
+func (fv *FakeValidator) HealthTracker() *health.healthTracker {
 	return fv.Tracker
 }
 

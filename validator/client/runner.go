@@ -16,7 +16,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	prysmTrace "github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -73,7 +72,7 @@ func run(ctx context.Context, v Validator) {
 			close(accountsChangedChan)
 			return // Exit if context is canceled.
 		case slot := <-v.NextSlot():
-			if !healthTracker.IsHealthy() {
+			if !healthTracker.IsHealthy(ctx) {
 				continue
 			}
 
@@ -240,15 +239,15 @@ func performRoles(slotCtx context.Context, allRoles map[[48]byte][]ValidatorRole
 				switch role {
 				case RoleAttester:
 					v.SubmitAttestation(slotCtx, slot, pubKey)
-				case iface.RoleProposer:
+				case RoleProposer:
 					v.ProposeBlock(slotCtx, slot, pubKey)
-				case iface.RoleAggregator:
+				case RoleAggregator:
 					v.SubmitAggregateAndProof(slotCtx, slot, pubKey)
-				case iface.RoleSyncCommittee:
+				case RoleSyncCommittee:
 					v.SubmitSyncCommitteeMessage(slotCtx, slot, pubKey)
-				case iface.RoleSyncCommitteeAggregator:
+				case RoleSyncCommitteeAggregator:
 					v.SubmitSignedContributionAndProof(slotCtx, slot, pubKey)
-				case iface.RoleUnknown:
+				case RoleUnknown:
 					log.WithField("pubkey", fmt.Sprintf("%#x", bytesutil.Trunc(pubKey[:]))).Trace("No active roles, doing nothing")
 				default:
 					log.Warnf("Unhandled role %v", role)
@@ -293,7 +292,7 @@ func handleAssignmentError(err error, slot primitives.Slot) {
 	}
 }
 
-func runHealthCheckRoutine(ctx context.Context, v iface.Validator, eventsChan chan<- *event.Event) {
+func runHealthCheckRoutine(ctx context.Context, v Validator, eventsChan chan<- *event.Event) {
 	log.Info("Starting health check routine for beacon node apis")
 	healthCheckTicker := time.NewTicker(time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
 	tracker := v.HealthTracker()

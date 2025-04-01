@@ -8,10 +8,10 @@ import (
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
-type NodeClient interface {
+type Client interface {
 	SyncStatus(ctx context.Context, in *empty.Empty) (*ethpb.SyncStatus, error)
 	Genesis(ctx context.Context, in *empty.Empty) (*ethpb.Genesis, error)
 	Version(ctx context.Context, in *empty.Empty) (*ethpb.Version, error)
 	Peers(ctx context.Context, in *empty.Empty) (*ethpb.Peers, error)
-	HealthTracker() *health.Tracker
+	HealthTracker() health.Tracker
 }

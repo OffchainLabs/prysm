@@ -11,12 +11,12 @@ import (
 )
 
 var (
-	_ = NodeClient(&grpcNodeClient{})
+	_ = Client(&grpcNodeClient{})
 )
 
 type grpcNodeClient struct {
 	nodeClient    ethpb.NodeClient
-	healthTracker *health.Tracker
+	healthTracker health.Tracker
 }
 
 func (c *grpcNodeClient) SyncStatus(ctx context.Context, in *empty.Empty) (*ethpb.SyncStatus, error) {
@@ -44,11 +44,11 @@ func (c *grpcNodeClient) IsHealthy(ctx context.Context) bool {
 	return true
 }
 
-func (c *grpcNodeClient) HealthTracker() *health.Tracker {
+func (c *grpcNodeClient) HealthTracker() health.Tracker {
 	return c.healthTracker
 }
 
-func NewNodeClient(cc grpc.ClientConnInterface) NodeClient {
+func NewNodeClient(cc grpc.ClientConnInterface) Client {
 	g := &grpcNodeClient{nodeClient: ethpb.NewNodeClient(cc)}
 	g.healthTracker = health.NewTracker(g)
 	return g
