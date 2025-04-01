@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"encoding/hex"
+	"fmt"
 	"math"
 	"sort"
 	"testing"
@@ -37,8 +38,59 @@ import (
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/pkg/errors"
 )
+
+// Mock implementation for blockchain.FinalizationFetcher
+type mockFinalizationFetcher struct {
+	finalizedCheckpoint *pb.Checkpoint
+	justifiedCheckpoint *pb.Checkpoint
+	finalizedRoot       [32]byte // Added field for finalized block root
+}
+
+func (m *mockFinalizationFetcher) FinalizedCheckpt() *pb.Checkpoint {
+	if m.finalizedCheckpoint == nil {
+		return &pb.Checkpoint{Epoch: 0} // Default checkpoint if not set
+	}
+	return m.finalizedCheckpoint
+}
+
+func (m *mockFinalizationFetcher) CurrentJustifiedCheckpt() *pb.Checkpoint {
+	if m.justifiedCheckpoint == nil {
+		return &pb.Checkpoint{Epoch: 0} // Default checkpoint if not set
+	}
+	return m.justifiedCheckpoint
+}
+
+// Corrected FinalizedBlockHash method signature
+func (m *mockFinalizationFetcher) FinalizedBlockHash() [32]byte {
+	return m.finalizedRoot // Return the stored root (or zero value)
+}
+
+// Added missing InForkchoice method
+func (m *mockFinalizationFetcher) InForkchoice(root [32]byte) bool {
+	return true // Default mock behavior: assume block is in forkchoice
+}
+
+// Corrected IsFinalized method signature
+func (m *mockFinalizationFetcher) IsFinalized(ctx context.Context, root [32]byte) bool {
+	// Basic mock implementation - check if the root matches the stored finalized root
+	return m.finalizedRoot == root
+}
+
+// Added missing PreviousJustifiedCheckpt method
+func (m *mockFinalizationFetcher) PreviousJustifiedCheckpt() *pb.Checkpoint {
+	// For simplicity, returning the same as current justified in the mock
+	if m.justifiedCheckpoint == nil {
+		return &pb.Checkpoint{Epoch: 0} // Default checkpoint if not set
+	}
+	return m.justifiedCheckpoint
+}
+
+// Corrected UnrealizedJustifiedPayloadBlockHash method signature
+func (m *mockFinalizationFetcher) UnrealizedJustifiedPayloadBlockHash() [32]byte {
+	// Basic mock implementation: return zero hash
+	return [32]byte{}
+}
 
 func TestAdmissiblePeersForDataColumns(t *testing.T) {
 	type testCase struct {
@@ -312,11 +364,8 @@ func TestSelectPeersToFetchDataColumnsFrom(t *testing.T) {
 				peer.ID("peer2"): {2: true, 6: true},
 				peer.ID("peer3"): {1: true, 5: true},
 			},
-			dataColumnsToFetchByPeer: map[peer.ID][]uint64{
-				peer.ID("peer1"): {9},
-				peer.ID("peer3"): {1, 5},
-			},
-			err: errors.New("no peer to fetch the following data columns: [3 7]"),
+			dataColumnsToFetchByPeer: nil,
+			err:                      fmt.Errorf("%w: missing data columns: %v", ErrNoPeersForDataColumns, []uint64{3, 7}),
 		},
 		{
 			name:              "respects MaxRequestDataColumnSidecars limit",
@@ -589,6 +638,12 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 				return initializer.NewDataColumnsVerifier(cols, reqs)
 			}
 
+			// Create mock finalization fetcher explicitly setting epoch 0
+			mockChain := &mockFinalizationFetcher{
+				finalizedCheckpoint: &pb.Checkpoint{Epoch: 0},
+				justifiedCheckpoint: &pb.Checkpoint{Epoch: 0},
+			}
+
 			// Call the function under test
 			responseCols, err := RequestDataColumnSidecarsByRoot(
 				context.Background(),
@@ -597,6 +652,7 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 				peerIDs,
 				clock,
 				hostP2P,
+				mockChain,
 				ctxMap,
 				verifier,
 			)
@@ -723,6 +779,10 @@ func createAndConnectCustodyPeer(t *testing.T, setup peerSetup, dataColumnSideca
 	hostP2P.Peers().Add(enr, peerP2P.PeerID(), nil, network.DirOutbound)
 	hostP2P.Peers().SetConnectionState(peerP2P.PeerID(), peers.Connected)
 	hostP2P.Connect(peerP2P)
+	hostP2P.Peers().SetChainState(peerP2P.PeerID(), &pb.Status{
+		FinalizedEpoch: 0,
+		HeadSlot:       0,
+	})
 
 	return peerP2P
 }
