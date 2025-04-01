@@ -34,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/libp2p/go-libp2p"
-	core "github.com/libp2p/go-libp2p/core"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -622,14 +621,12 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 			tracker := newRequestTracker()
 
 			// Create responding peers with deterministic peer IDs
-			peerIDs := make([]core.PeerID, 0, len(tc.peerSetup))
 			for _, setup := range tc.peerSetup {
 				skipColumnsMap := make(map[uint64]bool)
 				if cols, exists := tc.skipColumns[setup.offset]; exists {
 					skipColumnsMap = cols
 				}
-				peerP2P := createAndConnectCustodyPeer(t, setup, dataColumnSidecars, chainService, hostP2P, tracker, skipColumnsMap)
-				peerIDs = append(peerIDs, peerP2P.PeerID())
+				createAndConnectCustodyPeer(t, setup, dataColumnSidecars, chainService, hostP2P, tracker, skipColumnsMap)
 			}
 
 			ctxMap := map[[4]byte]int{{245, 165, 253, 66}: version.Fulu}
