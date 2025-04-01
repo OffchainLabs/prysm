@@ -4,7 +4,6 @@ go_library(
     name = "go_default_library",
     srcs = [
         "attestation_data.go",
-        "beacon_api_beacon_chain_client.go",
         "beacon_api_helpers.go",
         "beacon_api_node_client.go",
         "beacon_api_validator_client.go",
@@ -27,7 +26,6 @@ go_library(
         "propose_exit.go",
         "prysm_beacon_chain_client.go",
         "registration.go",
-        "state_validators.go",
         "status.go",
         "stream_blocks.go",
         "submit_aggregate_selection_proof.go",
@@ -75,7 +73,6 @@ go_test(
     size = "small",
     srcs = [
         "attestation_data_test.go",
-        "beacon_api_beacon_chain_client_test.go",
         "beacon_api_helpers_test.go",
         "beacon_api_node_client_test.go",
         "beacon_api_validator_client_test.go",
@@ -108,7 +105,6 @@ go_test(
         "propose_exit_test.go",
         "prysm_beacon_chain_client_test.go",
         "registration_test.go",
-        "state_validators_test.go",
         "status_test.go",
         "stream_blocks_test.go",
         "submit_aggregate_selection_proof_test.go",

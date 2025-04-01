@@ -1,4 +1,4 @@
-package beacon_api
+package node
 
 import (
 	"context"
@@ -7,25 +7,24 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api/client/beacon"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/health"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 var (
-	_ = iface.NodeClient(&beaconApiNodeClient{})
+	_ = NodeClient(&Client{})
 )
 
-type beaconApiNodeClient struct {
-	fallbackClient  iface.NodeClient
+type Client struct {
+	fallbackClient  NodeClient
 	jsonRestHandler JsonRestHandler
 	genesisProvider GenesisProvider
-	healthTracker   *beacon.NodeHealthTracker
+	healthTracker   *health.Tracker
 }
 
-func (c *beaconApiNodeClient) SyncStatus(ctx context.Context, _ *empty.Empty) (*ethpb.SyncStatus, error) {
+func (c *Client) SyncStatus(ctx context.Context, _ *empty.Empty) (*ethpb.SyncStatus, error) {
 	syncingResponse := structs.SyncStatusResponse{}
 	if err := c.jsonRestHandler.Get(ctx, "/eth/v1/node/syncing", &syncingResponse); err != nil {
 		return nil, err
@@ -40,7 +39,7 @@ func (c *beaconApiNodeClient) SyncStatus(ctx context.Context, _ *empty.Empty) (*
 	}, nil
 }
 
-func (c *beaconApiNodeClient) Genesis(ctx context.Context, _ *empty.Empty) (*ethpb.Genesis, error) {
+func (c *Client) Genesis(ctx context.Context, _ *empty.Empty) (*ethpb.Genesis, error) {
 	genesisJson, err := c.genesisProvider.Genesis(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get genesis")
@@ -79,7 +78,7 @@ func (c *beaconApiNodeClient) Genesis(ctx context.Context, _ *empty.Empty) (*eth
 	}, nil
 }
 
-func (c *beaconApiNodeClient) Version(ctx context.Context, _ *empty.Empty) (*ethpb.Version, error) {
+func (c *Client) Version(ctx context.Context, _ *empty.Empty) (*ethpb.Version, error) {
 	var versionResponse structs.GetVersionResponse
 	if err := c.jsonRestHandler.Get(ctx, "/eth/v1/node/version", &versionResponse); err != nil {
 		return nil, err
@@ -94,29 +93,29 @@ func (c *beaconApiNodeClient) Version(ctx context.Context, _ *empty.Empty) (*eth
 	}, nil
 }
 
-func (c *beaconApiNodeClient) Peers(ctx context.Context, in *empty.Empty) (*ethpb.Peers, error) {
+func (c *Client) Peers(ctx context.Context, in *empty.Empty) (*ethpb.Peers, error) {
 	if c.fallbackClient != nil {
 		return c.fallbackClient.Peers(ctx, in)
 	}
 
 	// TODO: Implement me
-	return nil, errors.New("beaconApiNodeClient.Peers is not implemented. To use a fallback client, pass a fallback client as the last argument of NewBeaconApiNodeClientWithFallback.")
+	return nil, errors.New("Client.Peers is not implemented. To use a fallback client, pass a fallback client as the last argument of NewBeaconApiNodeClientWithFallback.")
 }
 
-func (c *beaconApiNodeClient) IsHealthy(ctx context.Context) bool {
+func (c *Client) IsHealthy(ctx context.Context) bool {
 	return c.jsonRestHandler.Get(ctx, "/eth/v1/node/health", nil) == nil
 }
 
-func (c *beaconApiNodeClient) HealthTracker() *beacon.NodeHealthTracker {
+func (c *Client) HealthTracker() *health.Tracker {
 	return c.healthTracker
 }
 
-func NewNodeClientWithFallback(jsonRestHandler JsonRestHandler, fallbackClient iface.NodeClient) iface.NodeClient {
-	b := &beaconApiNodeClient{
+func NewNodeClientWithFallback(jsonRestHandler JsonRestHandler, fallbackClient NodeClient) NodeClient {
+	b := &Client{
 		jsonRestHandler: jsonRestHandler,
 		fallbackClient:  fallbackClient,
 		genesisProvider: &beaconApiGenesisProvider{jsonRestHandler: jsonRestHandler},
 	}
-	b.healthTracker = beacon.NewNodeHealthTracker(b)
+	b.healthTracker = health.NewTracker(b)
 	return b
 }

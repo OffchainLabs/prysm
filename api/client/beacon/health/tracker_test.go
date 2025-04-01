@@ -1,4 +1,4 @@
-package beacon
+package health
 
 import (
 	"context"
@@ -20,7 +20,7 @@ func TestNodeHealth_IsHealthy(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			n := &NodeHealthTracker{
+			n := &Tracker{
 				isHealthy:  &tt.isHealthy,
 				healthChan: make(chan bool, 1),
 			}
@@ -49,7 +49,7 @@ func TestNodeHealth_UpdateNodeHealth(t *testing.T) {
 			defer ctrl.Finish()
 			client := healthTesting.NewMockHealthClient(ctrl)
 			client.EXPECT().IsHealthy(gomock.Any()).Return(tt.newStatus)
-			n := &NodeHealthTracker{
+			n := &Tracker{
 				isHealthy:  &tt.initial,
 				node:       client,
 				healthChan: make(chan bool, 1),
@@ -81,7 +81,7 @@ func TestNodeHealth_Concurrency(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	client := healthTesting.NewMockHealthClient(ctrl)
-	n := NewNodeHealthTracker(client)
+	n := NewTracker(client)
 	var wg sync.WaitGroup
 
 	// Number of goroutines to spawn for both reading and writing

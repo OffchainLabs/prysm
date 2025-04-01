@@ -1,4 +1,4 @@
-package beacon_api
+package node
 
 import (
 	"context"
@@ -135,7 +135,7 @@ func TestGetGenesis(t *testing.T) {
 				)
 			}
 
-			nodeClient := &beaconApiNodeClient{
+			nodeClient := &Client{
 				genesisProvider: genesisProvider,
 				jsonRestHandler: jsonRestHandler,
 			}
@@ -213,7 +213,7 @@ func TestGetSyncStatus(t *testing.T) {
 				testCase.restEndpointResponse,
 			)
 
-			nodeClient := &beaconApiNodeClient{jsonRestHandler: jsonRestHandler}
+			nodeClient := &Client{jsonRestHandler: jsonRestHandler}
 			syncStatus, err := nodeClient.SyncStatus(ctx, &emptypb.Empty{})
 
 			if testCase.expectedResponse == nil {
@@ -277,7 +277,7 @@ func TestGetVersion(t *testing.T) {
 				testCase.restEndpointResponse,
 			)
 
-			nodeClient := &beaconApiNodeClient{jsonRestHandler: jsonRestHandler}
+			nodeClient := &Client{jsonRestHandler: jsonRestHandler}
 			version, err := nodeClient.Version(ctx, &emptypb.Empty{})
 
 			if testCase.expectedResponse == nil {

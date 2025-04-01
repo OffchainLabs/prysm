@@ -1,4 +1,4 @@
-package beacon_api
+package chain
 
 import (
 	"context"

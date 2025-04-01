@@ -13,7 +13,7 @@ go_library(
     deps = [
         "//api/client:go_default_library",
         "//api/client/beacon:go_default_library",
-        "//api/client/validator:go_default_library",
+        "//api/client/validator/keymanager_api:go_default_library",
         "//api/server/structs:go_default_library",
         "//cmd:go_default_library",
         "//cmd/validator/accounts:go_default_library",

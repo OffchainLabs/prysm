@@ -1,4 +1,4 @@
-package beacon_api
+package shared_providers
 
 import (
 	"bytes"
@@ -13,17 +13,11 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 )
 
-type StateValidatorsProvider interface {
-	StateValidators(context.Context, []string, []primitives.ValidatorIndex, []string) (*structs.GetValidatorsResponse, error)
-	StateValidatorsForSlot(context.Context, primitives.Slot, []string, []primitives.ValidatorIndex, []string) (*structs.GetValidatorsResponse, error)
-	StateValidatorsForHead(context.Context, []string, []primitives.ValidatorIndex, []string) (*structs.GetValidatorsResponse, error)
-}
-
-type beaconApiStateValidatorsProvider struct {
+type Provider struct {
 	jsonRestHandler JsonRestHandler
 }
 
-func (c beaconApiStateValidatorsProvider) StateValidators(
+func (c Provider) StateValidators(
 	ctx context.Context,
 	stringPubkeys []string,
 	indexes []primitives.ValidatorIndex,
@@ -33,7 +27,7 @@ func (c beaconApiStateValidatorsProvider) StateValidators(
 	return c.getStateValidatorsHelper(ctx, "/eth/v1/beacon/states/head/validators", append(stringIndices, stringPubkeys...), statuses)
 }
 
-func (c beaconApiStateValidatorsProvider) StateValidatorsForSlot(
+func (c Provider) StateValidatorsForSlot(
 	ctx context.Context,
 	slot primitives.Slot,
 	stringPubkeys []string,
@@ -44,7 +38,7 @@ func (c beaconApiStateValidatorsProvider) StateValidatorsForSlot(
 	return c.getStateValidatorsHelper(ctx, fmt.Sprintf("/eth/v1/beacon/states/%d/validators", slot), append(stringIndices, stringPubkeys...), statuses)
 }
 
-func (c beaconApiStateValidatorsProvider) StateValidatorsForHead(
+func (c Provider) StateValidatorsForHead(
 	ctx context.Context,
 	stringPubkeys []string,
 	indices []primitives.ValidatorIndex,
@@ -66,7 +60,7 @@ func convertValidatorIndicesToStrings(indices []primitives.ValidatorIndex) []str
 	return result
 }
 
-func (c beaconApiStateValidatorsProvider) getStateValidatorsHelper(
+func (c Provider) getStateValidatorsHelper(
 	ctx context.Context,
 	endpoint string,
 	vals []string,

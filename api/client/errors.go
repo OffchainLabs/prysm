@@ -24,6 +24,9 @@ var ErrInvalidNodeVersion = errors.New("invalid node version response")
 // ErrConnectionIssue represents a connection problem.
 var ErrConnectionIssue = errors.New("could not connect")
 
+// ErrNotSupported represents a connection to a beacon node that is non prysm or wrong version
+var ErrNotSupported = errors.New("endpoint not supported")
+
 // Non200Err is a function that parses an HTTP response to handle responses that are not 200 with a formatted error.
 func Non200Err(r *http.Response) error {
 	b, err := io.ReadAll(io.LimitReader(r.Body, MaxErrBodySize))

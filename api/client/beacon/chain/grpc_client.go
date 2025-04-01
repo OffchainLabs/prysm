@@ -1,11 +1,10 @@
-package grpc_api
+package chain
 
 import (
 	"context"
 
 	"github.com/golang/protobuf/ptypes/empty"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
 	"google.golang.org/grpc"
 )
 
@@ -35,8 +34,4 @@ func (c *grpcChainClient) ValidatorPerformance(ctx context.Context, in *ethpb.Va
 
 func (c *grpcChainClient) ValidatorParticipation(ctx context.Context, in *ethpb.GetValidatorParticipationRequest) (*ethpb.ValidatorParticipationResponse, error) {
 	return c.beaconChainClient.GetValidatorParticipation(ctx, in)
-}
-
-func NewGrpcChainClient(cc grpc.ClientConnInterface) iface.ChainClient {
-	return &grpcChainClient{ethpb.NewBeaconChainClient(cc)}
 }

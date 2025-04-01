@@ -3,7 +3,6 @@ load("@prysm//tools/go:def.bzl", "go_library")
 go_library(
     name = "go_default_library",
     srcs = [
-        "chain_client.go",
         "node_client.go",
         "prysm_chain_client.go",
         "validator.go",

@@ -35,7 +35,7 @@ var backOffPeriod = 10 * time.Second
 // 4 - Update assignments
 // 5 - Determine role at current slot
 // 6 - Perform assigned role, if any
-func run(ctx context.Context, v iface.Validator) {
+func run(ctx context.Context, v Validator) {
 	cleanup := v.Done
 	defer cleanup()
 
@@ -138,7 +138,7 @@ func run(ctx context.Context, v iface.Validator) {
 	}
 }
 
-func onAccountsChanged(ctx context.Context, v iface.Validator, current [][48]byte, ac chan [][fieldparams.BLSPubkeyLength]byte) {
+func onAccountsChanged(ctx context.Context, v Validator, current [][48]byte, ac chan [][fieldparams.BLSPubkeyLength]byte) {
 	ctx, span := prysmTrace.StartSpan(ctx, "validator.accountsChanged")
 	defer span.End()
 
@@ -155,7 +155,7 @@ func onAccountsChanged(ctx context.Context, v iface.Validator, current [][48]byt
 	}
 }
 
-func initializeValidatorAndGetHeadSlot(ctx context.Context, v iface.Validator) (primitives.Slot, error) {
+func initializeValidatorAndGetHeadSlot(ctx context.Context, v Validator) (primitives.Slot, error) {
 	ctx, span := prysmTrace.StartSpan(ctx, "validator.initializeValidatorAndGetHeadSlot")
 	defer span.End()
 
@@ -231,14 +231,14 @@ func initializeValidatorAndGetHeadSlot(ctx context.Context, v iface.Validator) (
 	return headSlot, nil
 }
 
-func performRoles(slotCtx context.Context, allRoles map[[48]byte][]iface.ValidatorRole, v iface.Validator, slot primitives.Slot, wg *sync.WaitGroup, span trace.Span) {
+func performRoles(slotCtx context.Context, allRoles map[[48]byte][]ValidatorRole, v Validator, slot primitives.Slot, wg *sync.WaitGroup, span trace.Span) {
 	for pubKey, roles := range allRoles {
 		wg.Add(len(roles))
 		for _, role := range roles {
-			go func(role iface.ValidatorRole, pubKey [fieldparams.BLSPubkeyLength]byte) {
+			go func(role ValidatorRole, pubKey [fieldparams.BLSPubkeyLength]byte) {
 				defer wg.Done()
 				switch role {
-				case iface.RoleAttester:
+				case RoleAttester:
 					v.SubmitAttestation(slotCtx, slot, pubKey)
 				case iface.RoleProposer:
 					v.ProposeBlock(slotCtx, slot, pubKey)

@@ -1,4 +1,4 @@
-package grpc_api
+package prysm_api
 
 import (
 	"context"

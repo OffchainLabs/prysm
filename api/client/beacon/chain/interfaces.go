@@ -1,4 +1,4 @@
-package iface
+package chain
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
-type ChainClient interface {
+type Client interface {
 	ChainHead(ctx context.Context, in *empty.Empty) (*ethpb.ChainHead, error)
 	ValidatorBalances(ctx context.Context, in *ethpb.ListValidatorBalancesRequest) (*ethpb.ValidatorBalances, error)
 	Validators(ctx context.Context, in *ethpb.ListValidatorsRequest) (*ethpb.Validators, error)

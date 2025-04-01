@@ -7,7 +7,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/prysmaticlabs/prysm/v5/api/client"
-	"github.com/prysmaticlabs/prysm/v5/api/client/validator"
+	"github.com/prysmaticlabs/prysm/v5/api/client/validator/keymanager_api"
 	"github.com/prysmaticlabs/prysm/v5/cmd/validator/flags"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	validatorType "github.com/prysmaticlabs/prysm/v5/consensus-types/validator"
@@ -47,7 +47,7 @@ func getProposerSettings(c *cli.Context, r io.Reader) error {
 		}
 	}
 
-	cl, err := validator.NewClient(c.String(HostFlag.Name), client.WithAuthenticationToken(c.String(TokenFlag.Name)))
+	cl, err := keymanager_api.NewClient(c.String(HostFlag.Name), client.WithAuthenticationToken(c.String(TokenFlag.Name)))
 	if err != nil {
 		return err
 	}
