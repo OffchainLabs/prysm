@@ -7,6 +7,7 @@ go_library(
         "beacon_committee.go",
         "block.go",
         "genesis.go",
+        "legacy.go",
         "metrics.go",
         "randao.go",
         "rewards_penalties.go",
@@ -52,6 +53,7 @@ go_test(
         "attestation_test.go",
         "beacon_committee_test.go",
         "block_test.go",
+        "legacy_test.go",
         "private_access_fuzz_noop_test.go",  # keep
         "private_access_test.go",
         "randao_test.go",
@@ -86,5 +88,6 @@ go_test(
         "//time:go_default_library",
         "//time/slots:go_default_library",
         "@com_github_prysmaticlabs_go_bitfield//:go_default_library",
+        "@com_github_stretchr_testify//require:go_default_library",
     ],
 )

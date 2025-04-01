@@ -53,7 +53,7 @@ var (
 	saveBlindedBeaconBlocksKey = []byte("save-blinded-beacon-blocks")
 	denebKey                   = []byte("deneb")
 	denebBlindKey              = []byte("blind-deneb")
-	electraKey                 = []byte("electra")
+	ElectraKey                 = []byte("electra")
 	electraBlindKey            = []byte("blind-electra")
 	fuluKey                    = []byte("fulu")
 	fuluBlindKey               = []byte("blind-fulu")

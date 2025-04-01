@@ -74,6 +74,7 @@ type ChainService struct {
 	BlockSlot                   primitives.Slot
 	SyncingRoot                 [32]byte
 	Blobs                       []blocks.VerifiedROBlob
+	DataColumns                 []blocks.VerifiedRODataColumn
 	TargetRoot                  [32]byte
 }
 
@@ -703,7 +704,8 @@ func (c *ChainService) ReceiveBlob(_ context.Context, b blocks.VerifiedROBlob) e
 }
 
 // ReceiveDataColumn implements the same method in chain service
-func (*ChainService) ReceiveDataColumn(_ blocks.VerifiedRODataColumn) error {
+func (c *ChainService) ReceiveDataColumn(dc blocks.VerifiedRODataColumn) error {
+	c.DataColumns = append(c.DataColumns, dc)
 	return nil
 }
 

@@ -723,7 +723,7 @@ func TestInsertFinalizedDeposits(t *testing.T) {
 			Signature:             zeroSig[:],
 		}, Proof: [][]byte{root}}, 100+i, int64(i), bytesutil.ToBytes32(root)))
 	}
-	service.insertFinalizedDeposits(ctx, [32]byte{'m', 'o', 'c', 'k'})
+	service.insertFinalizedDepositsAndPrune(ctx, [32]byte{'m', 'o', 'c', 'k'})
 	fDeposits, err := depositCache.FinalizedDeposits(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, 7, int(fDeposits.MerkleTrieIndex()), "Finalized deposits not inserted correctly")
@@ -759,7 +759,7 @@ func TestInsertFinalizedDeposits_PrunePendingDeposits(t *testing.T) {
 			Signature:             zeroSig[:],
 		}, Proof: [][]byte{root}}, 100+i, int64(i), bytesutil.ToBytes32(root))
 	}
-	service.insertFinalizedDeposits(ctx, [32]byte{'m', 'o', 'c', 'k'})
+	service.insertFinalizedDepositsAndPrune(ctx, [32]byte{'m', 'o', 'c', 'k'})
 	fDeposits, err := depositCache.FinalizedDeposits(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, 7, int(fDeposits.MerkleTrieIndex()), "Finalized deposits not inserted correctly")
@@ -799,7 +799,7 @@ func TestInsertFinalizedDeposits_MultipleFinalizedRoutines(t *testing.T) {
 	}
 	// Insert 3 deposits before hand.
 	require.NoError(t, depositCache.InsertFinalizedDeposits(ctx, 2, [32]byte{}, 0))
-	service.insertFinalizedDeposits(ctx, [32]byte{'m', 'o', 'c', 'k'})
+	service.insertFinalizedDepositsAndPrune(ctx, [32]byte{'m', 'o', 'c', 'k'})
 	fDeposits, err := depositCache.FinalizedDeposits(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, 5, int(fDeposits.MerkleTrieIndex()), "Finalized deposits not inserted correctly")
@@ -810,7 +810,7 @@ func TestInsertFinalizedDeposits_MultipleFinalizedRoutines(t *testing.T) {
 	}
 
 	// Insert New Finalized State with higher deposit count.
-	service.insertFinalizedDeposits(ctx, [32]byte{'m', 'o', 'c', 'k', '2'})
+	service.insertFinalizedDepositsAndPrune(ctx, [32]byte{'m', 'o', 'c', 'k', '2'})
 	fDeposits, err = depositCache.FinalizedDeposits(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, 12, int(fDeposits.MerkleTrieIndex()), "Finalized deposits not inserted correctly")
@@ -1070,6 +1070,48 @@ func TestService_insertSlashingsToForkChoiceStore(t *testing.T) {
 		},
 	}
 	b := util.NewBeaconBlock()
+	b.Block.Body.AttesterSlashings = slashings
+	wb, err := consensusblocks.NewSignedBeaconBlock(b)
+	require.NoError(t, err)
+	service.InsertSlashingsToForkChoiceStore(ctx, wb.Block().Body().AttesterSlashings())
+}
+
+func TestService_insertSlashingsToForkChoiceStoreElectra(t *testing.T) {
+	service, tr := minimalTestService(t)
+	ctx := tr.ctx
+
+	beaconState, privKeys := util.DeterministicGenesisStateElectra(t, 100)
+	att1 := util.HydrateIndexedAttestationElectra(&ethpb.IndexedAttestationElectra{
+		Data: &ethpb.AttestationData{
+			Source: &ethpb.Checkpoint{Epoch: 1},
+		},
+		AttestingIndices: []uint64{0, 1},
+	})
+	domain, err := signing.Domain(beaconState.Fork(), 0, params.BeaconConfig().DomainBeaconAttester, beaconState.GenesisValidatorsRoot())
+	require.NoError(t, err)
+	signingRoot, err := signing.ComputeSigningRoot(att1.Data, domain)
+	assert.NoError(t, err, "Could not get signing root of beacon block header")
+	sig0 := privKeys[0].Sign(signingRoot[:])
+	sig1 := privKeys[1].Sign(signingRoot[:])
+	aggregateSig := bls.AggregateSignatures([]bls.Signature{sig0, sig1})
+	att1.Signature = aggregateSig.Marshal()
+
+	att2 := util.HydrateIndexedAttestationElectra(&ethpb.IndexedAttestationElectra{
+		AttestingIndices: []uint64{0, 1},
+	})
+	signingRoot, err = signing.ComputeSigningRoot(att2.Data, domain)
+	assert.NoError(t, err, "Could not get signing root of beacon block header")
+	sig0 = privKeys[0].Sign(signingRoot[:])
+	sig1 = privKeys[1].Sign(signingRoot[:])
+	aggregateSig = bls.AggregateSignatures([]bls.Signature{sig0, sig1})
+	att2.Signature = aggregateSig.Marshal()
+	slashings := []*ethpb.AttesterSlashingElectra{
+		{
+			Attestation_1: att1,
+			Attestation_2: att2,
+		},
+	}
+	b := util.NewBeaconBlockElectra()
 	b.Block.Body.AttesterSlashings = slashings
 	wb, err := consensusblocks.NewSignedBeaconBlock(b)
 	require.NoError(t, err)
@@ -2255,7 +2297,7 @@ func TestMissingIndices(t *testing.T) {
 	for _, c := range cases {
 		bm, bs := filesystem.NewEphemeralBlobStorageWithMocker(t)
 		t.Run(c.name, func(t *testing.T) {
-			require.NoError(t, bm.CreateFakeIndices(c.root, c.present...))
+			require.NoError(t, bm.CreateFakeIndices(c.root, 0, c.present...))
 			missing, err := missingIndices(bs, c.root, c.expected, 0)
 			if c.err != nil {
 				require.ErrorIs(t, err, c.err)

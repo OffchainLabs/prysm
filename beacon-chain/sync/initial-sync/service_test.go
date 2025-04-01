@@ -10,6 +10,7 @@ import (
 	"github.com/paulbellamy/ratecounter"
 	"github.com/prysmaticlabs/prysm/v5/async/abool"
 	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/kv"
 	dbtest "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
@@ -161,6 +162,7 @@ func TestService_InitStartStop(t *testing.T) {
 				ClockWaiter:         gs,
 				StateNotifier:       &mock.MockStateNotifier{},
 				InitialSyncComplete: make(chan struct{}),
+				CustodyInfo:         &peerdas.CustodyInfo{},
 			})
 			s.verifierWaiter = verification.NewInitializerWaiter(gs, nil, nil)
 			time.Sleep(500 * time.Millisecond)
@@ -197,7 +199,7 @@ func TestService_waitForStateInitialization(t *testing.T) {
 		cs := startup.NewClockSynchronizer()
 		ctx, cancel := context.WithCancel(ctx)
 		s := &Service{
-			cfg:          &Config{Chain: mc, StateNotifier: mc.StateNotifier(), ClockWaiter: cs, InitialSyncComplete: make(chan struct{})},
+			cfg:          &Config{Chain: mc, StateNotifier: mc.StateNotifier(), ClockWaiter: cs, InitialSyncComplete: make(chan struct{}), CustodyInfo: &peerdas.CustodyInfo{}},
 			ctx:          ctx,
 			cancel:       cancel,
 			synced:       abool.New(),
@@ -305,6 +307,7 @@ func TestService_markSynced(t *testing.T) {
 		Chain:               mc,
 		StateNotifier:       mc.StateNotifier(),
 		InitialSyncComplete: make(chan struct{}),
+		CustodyInfo:         &peerdas.CustodyInfo{},
 	})
 	require.NotNil(t, s)
 	assert.Equal(t, false, s.chainStarted.IsSet())
@@ -390,6 +393,7 @@ func TestService_Resync(t *testing.T) {
 				Chain:         mc,
 				StateNotifier: mc.StateNotifier(),
 				BlobStorage:   filesystem.NewEphemeralBlobStorage(t),
+				CustodyInfo:   &peerdas.CustodyInfo{},
 			})
 			assert.NotNil(t, s)
 			assert.Equal(t, primitives.Slot(0), s.cfg.Chain.HeadSlot())
@@ -409,6 +413,7 @@ func TestService_Resync(t *testing.T) {
 func TestService_Initialized(t *testing.T) {
 	s := NewService(context.Background(), &Config{
 		StateNotifier: &mock.MockStateNotifier{},
+		CustodyInfo:   &peerdas.CustodyInfo{},
 	})
 	s.chainStarted.Set()
 	assert.Equal(t, true, s.Initialized())
@@ -464,7 +469,7 @@ func TestMissingBlobRequest(t *testing.T) {
 			setup: func(t *testing.T) (blocks.ROBlock, *filesystem.BlobStorage) {
 				bk, _ := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 0, 2)
 				bm, fs := filesystem.NewEphemeralBlobStorageWithMocker(t)
-				require.NoError(t, bm.CreateFakeIndices(bk.Root(), 1))
+				require.NoError(t, bm.CreateFakeIndices(bk.Root(), bk.Block().Slot(), 1))
 				return bk, fs
 			},
 			nReq: 1,
@@ -474,7 +479,7 @@ func TestMissingBlobRequest(t *testing.T) {
 			setup: func(t *testing.T) (blocks.ROBlock, *filesystem.BlobStorage) {
 				bk, _ := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 0, 2)
 				bm, fs := filesystem.NewEphemeralBlobStorageWithMocker(t)
-				require.NoError(t, bm.CreateFakeIndices(bk.Root(), 0, 1))
+				require.NoError(t, bm.CreateFakeIndices(bk.Root(), bk.Block().Slot(), 0, 1))
 				return bk, fs
 			},
 			nReq: 0,

@@ -516,17 +516,11 @@ func missingIndices(bs *filesystem.BlobStorage, root [32]byte, expected [][]byte
 	if len(expected) > maxBlobsPerBlock {
 		return nil, errMaxBlobsExceeded
 	}
-	indices, err := bs.Indices(root, slot)
-	if err != nil {
-		return nil, errors.Wrap(err, "indices")
-	}
+	indices := bs.Summary(root)
 	missing := make(map[uint64]struct{}, len(expected))
 	for i := range expected {
-		ui := uint64(i)
-		if len(expected[i]) > 0 {
-			if !indices[i] {
-				missing[ui] = struct{}{}
-			}
+		if len(expected[i]) > 0 && !indices.HasIndex(uint64(i)) {
+			missing[uint64(i)] = struct{}{}
 		}
 	}
 	return missing, nil
@@ -541,15 +535,14 @@ func missingDataColumns(bs *filesystem.BlobStorage, root [32]byte, expected map[
 		return nil, errMaxDataColumnsExceeded
 	}
 
-	indices, err := bs.ColumnIndices(root)
-	if err != nil {
-		return nil, err
-	}
+	// Get a summary of the data columns stored in the database.
+	summary := bs.Summary(root)
 
-	missing := make(map[uint64]bool, len(expected))
-	for col := range expected {
-		if !indices[col] {
-			missing[col] = true
+	// Check all expected data columns against the summary.
+	missing := make(map[uint64]bool)
+	for column := range expected {
+		if !summary.HasDataColumnIndex(column) {
+			missing[column] = true
 		}
 	}
 
@@ -652,12 +645,12 @@ func uint64MapToSortedSlice(input map[uint64]bool) []uint64 {
 	return output
 }
 
-func (s *Service) areDataColumnsAvailable(ctx context.Context, root [32]byte, signed interfaces.ReadOnlySignedBeaconBlock) error {
-	if signed.Version() < version.Fulu {
+func (s *Service) areDataColumnsAvailable(ctx context.Context, root [32]byte, signedBlock interfaces.ReadOnlySignedBeaconBlock) error {
+	if signedBlock.Version() < version.Fulu {
 		return nil
 	}
 
-	block := signed.Block()
+	block := signedBlock.Block()
 	if block == nil {
 		return errors.New("invalid nil beacon block")
 	}
@@ -688,22 +681,21 @@ func (s *Service) areDataColumnsAvailable(ctx context.Context, root [32]byte, si
 	// All columns to sample need to be available for the block to be considered available.
 	// https://github.com/ethereum/consensus-specs/blob/v1.5.0-alpha.10/specs/fulu/das-core.md#custody-sampling
 	nodeID := s.cfg.P2P.NodeID()
-	custodyGroupSamplingSize := peerdas.CustodyGroupSamplingSize()
 
-	custodyGroups, err := peerdas.CustodyGroups(nodeID, custodyGroupSamplingSize)
+	// Prevent custody group count to change during the rest of the function.
+	s.cfg.CustodyInfo.Mut.RLock()
+	defer s.cfg.CustodyInfo.Mut.RUnlock()
+
+	// Get the custody group sampling size for the node.
+	custodyGroupSamplingSize := s.cfg.CustodyInfo.CustodyGroupSamplingSize(peerdas.Actual)
+	peerInfo, _, err := peerdas.Info(nodeID, custodyGroupSamplingSize)
 	if err != nil {
-		return errors.Wrap(err, "custody groups")
+		return errors.Wrap(err, "peer info")
 	}
 
 	// Exit early if the node is not expected to custody any data columns.
-	if len(custodyGroups) == 0 {
+	if len(peerInfo.CustodyColumns) == 0 {
 		return nil
-	}
-
-	// Get the custody columns from the groups.
-	columnsMap, err := peerdas.CustodyColumns(custodyGroups)
-	if err != nil {
-		return errors.Wrap(err, "custody columns")
 	}
 
 	// Subscribe to newsly data columns stored in the database.
@@ -712,12 +704,15 @@ func (s *Service) areDataColumnsAvailable(ctx context.Context, root [32]byte, si
 	defer subscription.Unsubscribe()
 
 	// Get the count of data columns we already have in the store.
-	retrievedDataColumns, err := s.blobStorage.ColumnIndices(root)
-	if err != nil {
-		return errors.Wrap(err, "column indices")
-	}
+	summary := s.blobStorage.Summary(root)
+	numberOfColumns := params.BeaconConfig().NumberOfColumns
 
-	retrievedDataColumnsCount := uint64(len(retrievedDataColumns))
+	retrievedDataColumnsCount := uint64(0)
+	for column := range numberOfColumns {
+		if summary.HasDataColumnIndex(column) {
+			retrievedDataColumnsCount++
+		}
+	}
 
 	// As soon as we have more than half of the data columns, we can reconstruct the missing ones.
 	// We don't need to wait for the rest of the data columns to declare the block as available.
@@ -726,7 +721,7 @@ func (s *Service) areDataColumnsAvailable(ctx context.Context, root [32]byte, si
 	}
 
 	// Get a map of data column indices that are not currently available.
-	missingMap, err := missingDataColumns(s.blobStorage, root, columnsMap)
+	missingMap, err := missingDataColumns(s.blobStorage, root, peerInfo.CustodyColumns)
 	if err != nil {
 		return err
 	}
@@ -738,7 +733,7 @@ func (s *Service) areDataColumnsAvailable(ctx context.Context, root [32]byte, si
 	}
 
 	// Log for DA checks that cross over into the next slot; helpful for debugging.
-	nextSlot := slots.BeginsAt(signed.Block().Slot()+1, s.genesisTime)
+	nextSlot := slots.BeginsAt(signedBlock.Block().Slot()+1, s.genesisTime)
 	// Avoid logging if DA check is called after next slot start.
 	if nextSlot.After(time.Now()) {
 		nst := time.AfterFunc(time.Until(nextSlot), func() {
@@ -754,10 +749,10 @@ func (s *Service) areDataColumnsAvailable(ctx context.Context, root [32]byte, si
 			)
 
 			numberOfColumns := params.BeaconConfig().NumberOfColumns
-			colMapCount := uint64(len(columnsMap))
+			colMapCount := uint64(len(peerInfo.CustodyColumns))
 
 			if colMapCount < numberOfColumns {
-				expected = uint64MapToSortedSlice(columnsMap)
+				expected = uint64MapToSortedSlice(peerInfo.CustodyColumns)
 			}
 
 			if missingMapCount < numberOfColumns {
@@ -765,7 +760,7 @@ func (s *Service) areDataColumnsAvailable(ctx context.Context, root [32]byte, si
 			}
 
 			log.WithFields(logrus.Fields{
-				"slot":            signed.Block().Slot(),
+				"slot":            signedBlock.Block().Slot(),
 				"root":            fmt.Sprintf("%#x", root),
 				"columnsExpected": expected,
 				"columnsWaiting":  missing,

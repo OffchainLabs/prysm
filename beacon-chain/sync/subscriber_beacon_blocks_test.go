@@ -3,11 +3,15 @@ package sync
 import (
 	"context"
 	"testing"
+	"time"
 
+	gcache "github.com/patrickmn/go-cache"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/go-bitfield"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
+	kzg "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/kzg"
 	chainMock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
 	dbtest "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/execution"
@@ -16,12 +20,13 @@ import (
 	mockp2p "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
 	lruwrpr "github.com/prysmaticlabs/prysm/v5/cache/lru"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"github.com/prysmaticlabs/prysm/v5/testing/util"
-	"github.com/prysmaticlabs/prysm/v5/time"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -133,63 +138,160 @@ func TestService_BeaconBlockSubscribe_UndefinedEeError(t *testing.T) {
 }
 
 func TestReconstructAndBroadcastBlobs(t *testing.T) {
-	rob, err := blocks.NewROBlob(
-		&ethpb.BlobSidecar{
-			SignedBlockHeader: &ethpb.SignedBeaconBlockHeader{
-				Header: &ethpb.BeaconBlockHeader{
-					ParentRoot: make([]byte, 32),
-					BodyRoot:   make([]byte, 32),
-					StateRoot:  make([]byte, 32),
-				},
-				Signature: []byte("signature"),
-			},
-		})
-	require.NoError(t, err)
-
-	chainService := &chainMock.ChainService{
-		Genesis: time.Now(),
-	}
-
-	b := util.NewBeaconBlockDeneb()
-	sb, err := blocks.NewSignedBeaconBlock(b)
-	require.NoError(t, err)
-
-	tests := []struct {
-		name              string
-		blobSidecars      []blocks.VerifiedROBlob
-		expectedBlobCount int
-	}{
-		{
-			name:              "Constructed 0 blobs",
-			blobSidecars:      nil,
-			expectedBlobCount: 0,
-		},
-		{
-			name: "Constructed 6 blobs",
-			blobSidecars: []blocks.VerifiedROBlob{
-				{ROBlob: rob}, {ROBlob: rob}, {ROBlob: rob}, {ROBlob: rob}, {ROBlob: rob}, {ROBlob: rob},
-			},
-			expectedBlobCount: 6,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			s := Service{
-				cfg: &config{
-					p2p:         mockp2p.NewTestP2P(t),
-					chain:       chainService,
-					clock:       startup.NewClock(time.Now(), [32]byte{}),
-					blobStorage: filesystem.NewEphemeralBlobStorage(t),
-					executionReconstructor: &mockExecution.EngineClient{
-						BlobSidecars: tt.blobSidecars,
+	t.Run("blobs", func(t *testing.T) {
+		rob, err := blocks.NewROBlob(
+			&ethpb.BlobSidecar{
+				SignedBlockHeader: &ethpb.SignedBeaconBlockHeader{
+					Header: &ethpb.BeaconBlockHeader{
+						ParentRoot: make([]byte, 32),
+						BodyRoot:   make([]byte, 32),
+						StateRoot:  make([]byte, 32),
 					},
-					operationNotifier: &chainMock.MockOperationNotifier{},
+					Signature: []byte("signature"),
 				},
-				seenBlobCache: lruwrpr.New(1),
-			}
-			s.reconstructAndBroadcastBlobs(context.Background(), sb)
-			require.Equal(t, tt.expectedBlobCount, len(chainService.Blobs))
-		})
-	}
+			})
+		require.NoError(t, err)
+
+		chainService := &chainMock.ChainService{
+			Genesis: time.Now(),
+		}
+
+		b := util.NewBeaconBlockDeneb()
+		sb, err := blocks.NewSignedBeaconBlock(b)
+		require.NoError(t, err)
+
+		tests := []struct {
+			name              string
+			blobSidecars      []blocks.VerifiedROBlob
+			expectedBlobCount int
+		}{
+			{
+				name:              "Constructed 0 blobs",
+				blobSidecars:      nil,
+				expectedBlobCount: 0,
+			},
+			{
+				name: "Constructed 6 blobs",
+				blobSidecars: []blocks.VerifiedROBlob{
+					{ROBlob: rob}, {ROBlob: rob}, {ROBlob: rob}, {ROBlob: rob}, {ROBlob: rob}, {ROBlob: rob},
+				},
+				expectedBlobCount: 6,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				s := Service{
+					cfg: &config{
+						p2p:         mockp2p.NewTestP2P(t),
+						chain:       chainService,
+						clock:       startup.NewClock(time.Now(), [32]byte{}),
+						blobStorage: filesystem.NewEphemeralBlobStorage(t),
+						executionReconstructor: &mockExecution.EngineClient{
+							BlobSidecars: tt.blobSidecars,
+						},
+						operationNotifier: &chainMock.MockOperationNotifier{},
+					},
+					seenBlobCache: lruwrpr.New(1),
+				}
+				s.reconstructAndBroadcastBlobs(context.Background(), sb)
+				require.Equal(t, tt.expectedBlobCount, len(chainService.Blobs))
+			})
+		}
+	})
+
+	t.Run("data columns", func(t *testing.T) {
+		// load trusted setup
+		err := kzg.Start()
+		require.NoError(t, err)
+
+		// Setup right fork epoch
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.CapellaForkEpoch = 0
+		cfg.DenebForkEpoch = 0
+		cfg.ElectraForkEpoch = 0
+		cfg.FuluForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		chainService := &chainMock.ChainService{
+			Genesis: time.Now(),
+		}
+
+		allColumns := make([]blocks.VerifiedRODataColumn, 128)
+		for i := range allColumns {
+			rod, err := blocks.NewRODataColumn(
+				&ethpb.DataColumnSidecar{
+					SignedBlockHeader: &ethpb.SignedBeaconBlockHeader{
+						Header: &ethpb.BeaconBlockHeader{
+							ParentRoot:    make([]byte, 32),
+							BodyRoot:      make([]byte, 32),
+							StateRoot:     make([]byte, 32),
+							ProposerIndex: primitives.ValidatorIndex(123),
+							Slot:          primitives.Slot(123),
+						},
+						Signature: []byte("signature"),
+					},
+					ColumnIndex: uint64(i),
+				})
+			require.NoError(t, err)
+			allColumns[i] = blocks.VerifiedRODataColumn{RODataColumn: rod}
+		}
+		tests := []struct {
+			name                    string
+			dataColumnSidecars      []blocks.VerifiedRODataColumn
+			blobCount               int
+			expectedDataColumnCount int
+		}{
+			{
+				name:                    "Constructed 0 data columns with no blobs",
+				blobCount:               0,
+				dataColumnSidecars:      nil,
+				expectedDataColumnCount: 0,
+			},
+			{
+				name:                    "Constructed 128 data columns with all blobs",
+				blobCount:               1,
+				dataColumnSidecars:      allColumns,
+				expectedDataColumnCount: 8, // default is 8
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				s := Service{
+					cfg: &config{
+						p2p:         mockp2p.NewTestP2P(t),
+						chain:       chainService,
+						clock:       startup.NewClock(time.Now(), [32]byte{}),
+						blobStorage: filesystem.NewEphemeralBlobStorage(t),
+						executionReconstructor: &mockExecution.EngineClient{
+							DataColumnSidecars: tt.dataColumnSidecars,
+						},
+						operationNotifier: &chainMock.MockOperationNotifier{},
+						custodyInfo:       &peerdas.CustodyInfo{},
+					},
+					seenDataColumnCache:         lruwrpr.New(1),
+					receivedDataColumnsFromRoot: gcache.New(1*time.Minute, 2*time.Minute),
+					storedDataColumnsFromRoot:   gcache.New(1*time.Minute, 2*time.Minute),
+				}
+
+				kzgCommitments := make([][]byte, 0, tt.blobCount)
+				for range tt.blobCount {
+					kzgCommitment := make([]byte, 48)
+					kzgCommitments = append(kzgCommitments, kzgCommitment)
+				}
+
+				b := util.NewBeaconBlockFulu()
+				b.Block.Body.BlobKzgCommitments = kzgCommitments
+
+				sb, err := blocks.NewSignedBeaconBlock(b)
+				require.NoError(t, err)
+
+				s.reconstructAndBroadcastBlobs(context.Background(), sb)
+				require.Equal(t, tt.expectedDataColumnCount, len(chainService.DataColumns))
+			})
+		}
+	})
+
 }

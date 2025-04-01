@@ -2,6 +2,7 @@ package attestations
 
 import (
 	"io"
+	"os"
 	"sort"
 	"testing"
 
@@ -19,7 +20,7 @@ import (
 func TestMain(m *testing.M) {
 	logrus.SetLevel(logrus.DebugLevel)
 	logrus.SetOutput(io.Discard)
-	m.Run()
+	os.Exit(m.Run())
 }
 
 func TestAggregateAttestations_AggregatePair(t *testing.T) {

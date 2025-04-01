@@ -11,11 +11,13 @@ import (
 	"github.com/golang/snappy"
 	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/kv"
 	slashertypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/slasher/types"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	bolt "go.etcd.io/bbolt"
 	"golang.org/x/sync/errgroup"
 )
@@ -692,6 +694,11 @@ func encodeAttestationRecord(att *slashertypes.IndexedAttestationWrapper) ([]byt
 		return []byte{}, errors.New("nil proposal record")
 	}
 
+	var versionKey []byte
+	if att.IndexedAttestation.Version() >= version.Electra {
+		versionKey = kv.ElectraKey
+	}
+
 	// Encode attestation.
 	encodedAtt, err := att.IndexedAttestation.MarshalSSZ()
 	if err != nil {
@@ -701,7 +708,14 @@ func encodeAttestationRecord(att *slashertypes.IndexedAttestationWrapper) ([]byt
 	// Compress attestation.
 	compressedAtt := snappy.Encode(nil, encodedAtt)
 
-	return append(att.DataRoot[:], compressedAtt...), nil
+	enc := make([]byte, len(versionKey)+len(att.DataRoot)+len(compressedAtt))
+	if len(versionKey) > 0 {
+		copy(enc, versionKey)
+	}
+	copy(enc[len(versionKey):len(versionKey)+len(att.DataRoot)], att.DataRoot[:])
+	copy(enc[len(versionKey)+len(att.DataRoot):], compressedAtt)
+
+	return enc, nil
 }
 
 // Decode attestation record from bytes.
@@ -711,6 +725,11 @@ func decodeAttestationRecord(encoded []byte) (*slashertypes.IndexedAttestationWr
 		return nil, fmt.Errorf("wrong length for encoded attestation record, want minimum %d, got %d", rootSize, len(encoded))
 	}
 
+	postElectra := kv.HasElectraKey(encoded)
+	if postElectra {
+		encoded = encoded[len(kv.ElectraKey):]
+	}
+
 	// Decompress attestation.
 	decodedAttBytes, err := snappy.Decode(nil, encoded[rootSize:])
 	if err != nil {
@@ -718,8 +737,14 @@ func decodeAttestationRecord(encoded []byte) (*slashertypes.IndexedAttestationWr
 	}
 
 	// Decode attestation.
-	decodedAtt := &ethpb.IndexedAttestation{}
-	if err := decodedAtt.UnmarshalSSZ(decodedAttBytes); err != nil {
+	var decodedAtt ethpb.IndexedAtt
+	if postElectra {
+		decodedAtt = &ethpb.IndexedAttestationElectra{}
+	} else {
+		decodedAtt = &ethpb.IndexedAttestation{}
+	}
+
+	if err = decodedAtt.UnmarshalSSZ(decodedAttBytes); err != nil {
 		return nil, err
 	}
 

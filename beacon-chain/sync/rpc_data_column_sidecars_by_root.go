@@ -10,7 +10,6 @@ import (
 
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	coreTime "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
@@ -103,37 +102,9 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 		return errors.Wrapf(err, "unexpected error computing min valid blob request slot, current_slot=%d", cs)
 	}
 
-	// Retrieve our node ID.
-	nodeID := s.cfg.p2p.NodeID()
-
-	// Retrieve the number of groups we should custody.
-	custodyGroupCount := peerdas.CustodyGroupCount()
-
-	// Compute the groups we should custody.
-	custodyGroups, err := peerdas.CustodyGroups(nodeID, custodyGroupCount)
-	if err != nil {
-		return errors.Wrap(err, "custody groups")
-	}
-
-	custodyColumns, err := peerdas.CustodyColumns(custodyGroups)
-	custodyColumnsCount := uint64(len(custodyColumns))
-
-	if err != nil {
-		log.WithError(err).Errorf("unexpected error retrieving the node id")
-		s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)
-		return errors.Wrap(err, "custody columns")
-	}
-
-	var custody interface{} = "all"
-
-	if custodyColumnsCount != numberOfColumns {
-		custody = uint64MapToSortedSlice(custodyColumns)
-	}
-
 	remotePeer := stream.Conn().RemotePeer()
 	log := log.WithFields(logrus.Fields{
 		"peer":    remotePeer,
-		"custody": custody,
 		"columns": requestedColumnsByRootLog,
 	})
 
@@ -168,7 +139,7 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 
 		// TODO: Differentiate between blobs and columns for our storage engine
 		// Retrieve the data column from the database.
-		dataColumnSidecar, err := s.cfg.blobStorage.GetColumn(requestedRoot, requestedIndex)
+		verifiedRODataColumn, err := s.cfg.blobStorage.GetColumn(requestedRoot, requestedIndex)
 
 		if err != nil && !db.IsNotFound(err) {
 			s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)
@@ -184,7 +155,7 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 		// peers MAY respond with error code 3: ResourceUnavailable or not include the data column in the response.
 		// note: we are deviating from the spec to allow requests for data column that are before minimum_request_epoch,
 		// up to the beginning of the retention period.
-		if dataColumnSidecar.SignedBlockHeader.Header.Slot < minReqSlot {
+		if verifiedRODataColumn.SignedBlockHeader.Header.Slot < minReqSlot {
 			s.writeErrorResponseToStream(responseCodeResourceUnavailable, types.ErrDataColumnLTMinRequest.Error(), stream)
 			log.WithError(types.ErrDataColumnLTMinRequest).
 				Debugf("requested data column for block %#x before minimum_request_epoch", requestedColumnIdents[i].BlockRoot)
@@ -192,7 +163,7 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 		}
 
 		SetStreamWriteDeadline(stream, defaultWriteDuration)
-		if chunkErr := WriteDataColumnSidecarChunk(stream, s.cfg.chain, s.cfg.p2p.Encoding(), dataColumnSidecar); chunkErr != nil {
+		if chunkErr := WriteDataColumnSidecarChunk(stream, s.cfg.chain, s.cfg.p2p.Encoding(), verifiedRODataColumn.DataColumnSidecar); chunkErr != nil {
 			log.WithError(chunkErr).Debug("Could not send a chunked response")
 			s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)
 			tracing.AnnotateError(span, chunkErr)
@@ -213,9 +184,10 @@ func validateDataColumnsByRootRequest(colIdents types.DataColumnSidecarsByRootRe
 
 func DataColumnsRPCMinValidSlot(current primitives.Slot) (primitives.Slot, error) {
 	// Avoid overflow if we're running on a config where deneb is set to far future epoch.
-	if params.BeaconConfig().DenebForkEpoch == math.MaxUint64 || !coreTime.PeerDASIsActive(current) {
+	if !coreTime.PeerDASIsActive(current) {
 		return primitives.Slot(math.MaxUint64), nil
 	}
+
 	minReqEpochs := params.BeaconConfig().MinEpochsForDataColumnSidecarsRequest
 	currEpoch := slots.ToEpoch(current)
 	minStart := params.BeaconConfig().FuluForkEpoch

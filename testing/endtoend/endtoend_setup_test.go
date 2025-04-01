@@ -43,6 +43,7 @@ func e2eMinimal(t *testing.T, cfg *params.BeaconChainConfig, cfgo ...types.E2ECo
 	evals = addIfForkSet(evals, cfg.BellatrixForkEpoch, ev.BellatrixForkTransition)
 	evals = addIfForkSet(evals, cfg.CapellaForkEpoch, ev.CapellaForkTransition)
 	evals = addIfForkSet(evals, cfg.DenebForkEpoch, ev.DenebForkTransition)
+	evals = addIfForkSet(evals, cfg.ElectraForkEpoch, ev.ElectraForkTransition)
 
 	testConfig := &types.E2EConfig{
 		BeaconFlags: []string{
@@ -83,7 +84,7 @@ func e2eMainnet(t *testing.T, usePrysmSh, useMultiClient bool, cfg *params.Beaco
 	}
 	// Run for 14 epochs if not in long-running to confirm long-running has no issues.
 	var err error
-	epochsToRun := 14
+	epochsToRun := 16
 	epochStr, longRunning := os.LookupEnv("E2E_EPOCHS")
 	if longRunning {
 		epochsToRun, err = strconv.Atoi(epochStr)
@@ -118,6 +119,7 @@ func e2eMainnet(t *testing.T, usePrysmSh, useMultiClient bool, cfg *params.Beaco
 	evals = addIfForkSet(evals, cfg.BellatrixForkEpoch, ev.BellatrixForkTransition)
 	evals = addIfForkSet(evals, cfg.CapellaForkEpoch, ev.CapellaForkTransition)
 	evals = addIfForkSet(evals, cfg.DenebForkEpoch, ev.DenebForkTransition)
+	evals = addIfForkSet(evals, cfg.ElectraForkEpoch, ev.ElectraForkTransition)
 
 	testConfig := &types.E2EConfig{
 		BeaconFlags: []string{
@@ -185,6 +187,7 @@ func scenarioEvals(cfg *params.BeaconChainConfig) []types.Evaluator {
 	evals = addIfForkSet(evals, cfg.BellatrixForkEpoch, ev.BellatrixForkTransition)
 	evals = addIfForkSet(evals, cfg.CapellaForkEpoch, ev.CapellaForkTransition)
 	evals = addIfForkSet(evals, cfg.DenebForkEpoch, ev.DenebForkTransition)
+	evals = addIfForkSet(evals, cfg.ElectraForkEpoch, ev.ElectraForkTransition)
 	return evals
 }
 
@@ -205,5 +208,6 @@ func scenarioEvalsMulti(cfg *params.BeaconChainConfig) []types.Evaluator {
 	evals = addIfForkSet(evals, cfg.BellatrixForkEpoch, ev.BellatrixForkTransition)
 	evals = addIfForkSet(evals, cfg.CapellaForkEpoch, ev.CapellaForkTransition)
 	evals = addIfForkSet(evals, cfg.DenebForkEpoch, ev.DenebForkTransition)
+	evals = addIfForkSet(evals, cfg.ElectraForkEpoch, ev.ElectraForkTransition)
 	return evals
 }

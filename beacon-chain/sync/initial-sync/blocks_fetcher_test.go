@@ -1106,7 +1106,7 @@ func TestCommitmentCountList(t *testing.T) {
 					bytesutil.ToBytes32([]byte("0")): {0, 1},
 					bytesutil.ToBytes32([]byte("1")): {0, 1, 2, 3, 4, 5},
 				}
-				return filesystem.NewMockBlobStorageSummarizer(t, onDisk)
+				return filesystem.NewMockBlobStorageSummarizer(t, onDisk, 0)
 			},
 			cc: []commitmentCount{
 				{slot: 0, count: 3, root: bytesutil.ToBytes32([]byte("0"))},
@@ -1123,7 +1123,7 @@ func TestCommitmentCountList(t *testing.T) {
 					bytesutil.ToBytes32([]byte("0")): {0, 1},
 					bytesutil.ToBytes32([]byte("2")): {0, 1, 2, 3, 4, 5},
 				}
-				return filesystem.NewMockBlobStorageSummarizer(t, onDisk)
+				return filesystem.NewMockBlobStorageSummarizer(t, onDisk, 0)
 			},
 			cc: []commitmentCount{
 				{slot: 0, count: 2, root: bytesutil.ToBytes32([]byte("0"))},
@@ -1140,7 +1140,7 @@ func TestCommitmentCountList(t *testing.T) {
 					bytesutil.ToBytes32([]byte("0")): {0, 1},
 					bytesutil.ToBytes32([]byte("2")): {0, 1, 2, 3, 4, 5},
 				}
-				return filesystem.NewMockBlobStorageSummarizer(t, onDisk)
+				return filesystem.NewMockBlobStorageSummarizer(t, onDisk, 0)
 			},
 			cc: []commitmentCount{
 				{slot: 0, count: 2, root: bytesutil.ToBytes32([]byte("0"))},
@@ -1159,7 +1159,7 @@ func TestCommitmentCountList(t *testing.T) {
 					bytesutil.ToBytes32([]byte("1")): {0, 1},
 					bytesutil.ToBytes32([]byte("2")): {0, 1, 2, 3, 4, 5},
 				}
-				return filesystem.NewMockBlobStorageSummarizer(t, onDisk)
+				return filesystem.NewMockBlobStorageSummarizer(t, onDisk, 0)
 			},
 			cc: []commitmentCount{
 				{slot: 0, count: 2, root: bytesutil.ToBytes32([]byte("0"))},
@@ -1264,7 +1264,7 @@ func TestVerifyAndPopulateBlobs(t *testing.T) {
 			r1: {0, 1},
 			r7: {0, 1, 2, 3, 4, 5},
 		}
-		bss := filesystem.NewMockBlobStorageSummarizer(t, onDisk)
+		bss := filesystem.NewMockBlobStorageSummarizer(t, onDisk, 0)
 		err := verifyAndPopulateBlobs(bwb, blobs, testReqFromResp(bwb), bss)
 		require.NoError(t, err)
 		require.Equal(t, 6, len(bwb[i1].Blobs))
@@ -1329,7 +1329,8 @@ type blockParams struct {
 
 func TestCustodyColumns(t *testing.T) {
 	blocksFetcher := newBlocksFetcher(context.Background(), &blocksFetcherConfig{
-		p2p: p2ptest.NewTestP2P(t),
+		p2p:         p2ptest.NewTestP2P(t),
+		custodyInfo: &peerdas.CustodyInfo{},
 	})
 
 	expected := params.BeaconConfig().CustodyRequirement
@@ -1535,7 +1536,8 @@ func TestBuildBwbSlices(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name string
+		name      string
+		batchSize int
 
 		// input
 		missingColumnsWithCommitments []*missingColumnsWithCommitment
@@ -1545,21 +1547,25 @@ func TestBuildBwbSlices(t *testing.T) {
 	}{
 		{
 			name:                          "no item",
+			batchSize:                     32,
 			missingColumnsWithCommitments: []*missingColumnsWithCommitment{},
 			bwbSlices:                     []bwbSlice{},
 		},
 		{
 			name:                          "one item, - no missing columns",
+			batchSize:                     32,
 			missingColumnsWithCommitments: []*missingColumnsWithCommitment{{areCommitments: true, missingColumns: map[uint64]bool{}}},
 			bwbSlices:                     []bwbSlice{{start: 0, end: 0, dataColumns: map[uint64]bool{}}},
 		},
 		{
 			name:                          "one item - some missing columns",
+			batchSize:                     32,
 			missingColumnsWithCommitments: []*missingColumnsWithCommitment{{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}}},
 			bwbSlices:                     []bwbSlice{{start: 0, end: 0, dataColumns: map[uint64]bool{1: true, 3: true, 5: true}}},
 		},
 		{
-			name: "two items - no break",
+			name:      "two items - no break",
+			batchSize: 32,
 			missingColumnsWithCommitments: []*missingColumnsWithCommitment{
 				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
 				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
@@ -1567,7 +1573,8 @@ func TestBuildBwbSlices(t *testing.T) {
 			bwbSlices: []bwbSlice{{start: 0, end: 1, dataColumns: map[uint64]bool{1: true, 3: true, 5: true}}},
 		},
 		{
-			name: "three items - no break",
+			name:      "three items - no break",
+			batchSize: 32,
 			missingColumnsWithCommitments: []*missingColumnsWithCommitment{
 				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
 				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
@@ -1576,7 +1583,8 @@ func TestBuildBwbSlices(t *testing.T) {
 			bwbSlices: []bwbSlice{{start: 0, end: 2, dataColumns: map[uint64]bool{1: true, 3: true, 5: true}}},
 		},
 		{
-			name: "five items - columns break",
+			name:      "five items - columns break",
+			batchSize: 32,
 			missingColumnsWithCommitments: []*missingColumnsWithCommitment{
 				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
 				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
@@ -1591,7 +1599,8 @@ func TestBuildBwbSlices(t *testing.T) {
 			},
 		},
 		{
-			name: "seven items - gap",
+			name:      "seven items - gap",
+			batchSize: 32,
 			missingColumnsWithCommitments: []*missingColumnsWithCommitment{
 				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}}, // 0
 				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}}, // 1
@@ -1606,7 +1615,8 @@ func TestBuildBwbSlices(t *testing.T) {
 			},
 		},
 		{
-			name: "seven items - only breaks",
+			name:      "seven items - only breaks",
+			batchSize: 32,
 			missingColumnsWithCommitments: []*missingColumnsWithCommitment{
 				{areCommitments: true, missingColumns: map[uint64]bool{}},                          // 0
 				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}}, // 1
@@ -1623,7 +1633,8 @@ func TestBuildBwbSlices(t *testing.T) {
 			},
 		},
 		{
-			name: "thirteen items - some blocks without commitments",
+			name:      "thirteen items - some blocks without commitments",
+			batchSize: 32,
 			missingColumnsWithCommitments: []*missingColumnsWithCommitment{
 				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}}, // 0
 				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}}, // 1
@@ -1639,12 +1650,50 @@ func TestBuildBwbSlices(t *testing.T) {
 				{areCommitments: true, missingColumns: map[uint64]bool{1: true}}, // 8
 				{areCommitments: false, missingColumns: nil},                     // 9
 				{areCommitments: false, missingColumns: nil},                     // 10
-
 			},
 			bwbSlices: []bwbSlice{
 				{start: 0, end: 2, dataColumns: map[uint64]bool{1: true, 3: true, 5: true}},
 				{start: 3, end: 6, dataColumns: map[uint64]bool{2: true, 4: true}},
 				{start: 7, end: 10, dataColumns: map[uint64]bool{1: true}},
+			},
+		},
+		{
+			name:      "five items - no break, limiting batch size",
+			batchSize: 3,
+			missingColumnsWithCommitments: []*missingColumnsWithCommitment{
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+			},
+			bwbSlices: []bwbSlice{
+				{start: 0, end: 2, dataColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+				{start: 3, end: 4, dataColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+			},
+		},
+		{
+			name:      "eleven items - columns break, limiting batch size",
+			batchSize: 3,
+			missingColumnsWithCommitments: []*missingColumnsWithCommitment{
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{}},
+				{areCommitments: false, missingColumns: nil},
+				{areCommitments: false, missingColumns: nil},
+				{areCommitments: true, missingColumns: map[uint64]bool{}},
+			},
+			bwbSlices: []bwbSlice{
+				{start: 0, end: 2, dataColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+				{start: 3, end: 5, dataColumns: map[uint64]bool{1: true, 3: true}},
+				{start: 6, end: 6, dataColumns: map[uint64]bool{1: true, 3: true}},
+				{start: 7, end: 9, dataColumns: map[uint64]bool{}},
+				{start: 10, end: 10, dataColumns: map[uint64]bool{}},
 			},
 		},
 	}
@@ -1690,7 +1739,7 @@ func TestBuildBwbSlices(t *testing.T) {
 				missingColumnsByRoot: missingColumnsByRoot,
 			}
 
-			bwbSlices, err := buildBwbSlices(wrappedBwbsMissingColumns)
+			bwbSlices, err := buildBwbSlices(wrappedBwbsMissingColumns, tt.batchSize)
 			require.NoError(t, err)
 			require.Equal(t, true, areBwbSlicesEqual(tt.bwbSlices, bwbSlices))
 		})
@@ -1730,7 +1779,7 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 		peersParams []peerParams
 
 		// The max count of data columns that will be requested in each batch.
-		batchSize uint64
+		batchSize int
 
 		// OUTPUTS
 		// -------
@@ -2179,7 +2228,7 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 				storage[root] = columnsSlice
 			}
 
-			blobStorageSummarizer := filesystem.NewMockBlobStorageSummarizer(t, storage)
+			blobStorageSummarizer := filesystem.NewMockBlobStorageSummarizer(t, storage, tc.fuluForkEpoch)
 
 			// Create a chain and a clock.
 			chain, clock := defaultMockChain(t, tc.currentSlot)
@@ -2222,11 +2271,12 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 
 			// Create the block fetcher.
 			blocksFetcher := newBlocksFetcher(ctx, &blocksFetcherConfig{
-				clock:  clock,
-				ctxMap: map[[4]byte]int{{245, 165, 253, 66}: version.Fulu},
-				p2p:    p2pSvc,
-				bs:     blobStorageSummarizer,
-				cv:     newDataColumnsVerifierFromInitializer(ini),
+				clock:       clock,
+				ctxMap:      map[[4]byte]int{{245, 165, 253, 66}: version.Fulu},
+				p2p:         p2pSvc,
+				bs:          blobStorageSummarizer,
+				cv:          newDataColumnsVerifierFromInitializer(ini),
+				custodyInfo: &peerdas.CustodyInfo{},
 			})
 
 			// Fetch the data columns from the peers.

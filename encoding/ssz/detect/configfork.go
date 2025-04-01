@@ -166,7 +166,7 @@ func (cf *VersionedUnmarshaler) UnmarshalBeaconState(marshaled []byte) (s state.
 			return nil, errors.Wrapf(err, "failed to init state trie from state, detected fork=%s", forkName)
 		}
 	case version.Fulu:
-		st := &ethpb.BeaconStateFulu{}
+		st := &ethpb.BeaconStateElectra{}
 		err = st.UnmarshalSSZ(marshaled)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to unmarshal state, detected fork=%s", forkName)

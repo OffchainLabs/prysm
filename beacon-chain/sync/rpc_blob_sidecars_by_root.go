@@ -37,8 +37,9 @@ func (s *Service) blobSidecarByRootRPCHandler(ctx context.Context, msg interface
 
 	blobIdents := *ref
 	cs := s.cfg.clock.CurrentSlot()
+	remotePeer := stream.Conn().RemotePeer()
 	if err := validateBlobByRootRequest(blobIdents, cs); err != nil {
-		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(stream.Conn().RemotePeer())
+		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(remotePeer)
 		s.writeErrorResponseToStream(responseCodeInvalidRequest, err.Error(), stream)
 		return err
 	}
@@ -75,6 +76,7 @@ func (s *Service) blobSidecarByRootRPCHandler(ctx context.Context, msg interface
 				log.WithError(err).WithFields(logrus.Fields{
 					"root":  fmt.Sprintf("%#x", root),
 					"index": idx,
+					"peer":  remotePeer.String(),
 				}).Debugf("Peer requested blob sidecar by root not found in db")
 				continue
 			}

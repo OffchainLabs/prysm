@@ -125,6 +125,12 @@ func validatorsParticipating(_ *types.EvaluationContext, conns ...*grpc.ClientCo
 	if e2eparams.TestParams.LighthouseBeaconNodeCount != 0 {
 		expected = float32(expectedMulticlientParticipation)
 	}
+	if participation.Epoch == params.BeaconConfig().ElectraForkEpoch {
+		// The first slot of Electra will be missed due to the switching of attestation types
+		// 5/6 slots =~0.83
+		// validator REST always is slightly reduced at ~0.82
+		expected = 0.82
+	}
 	if participation.Epoch > 0 && participation.Epoch.Sub(1) == params.BeaconConfig().BellatrixForkEpoch {
 		// Reduce Participation requirement to 95% to account for longer EE calls for
 		// the merge block. Target and head will likely be missed for a few validators at
@@ -167,6 +173,18 @@ func validatorsParticipating(_ *types.EvaluationContext, conns ...*grpc.ClientCo
 			respPrevEpochParticipation = st.PreviousEpochParticipation
 		case version.String(version.Capella):
 			st := &structs.BeaconStateCapella{}
+			if err = json.Unmarshal(resp.Data, st); err != nil {
+				return err
+			}
+			respPrevEpochParticipation = st.PreviousEpochParticipation
+		case version.String(version.Deneb):
+			st := &structs.BeaconStateDeneb{}
+			if err = json.Unmarshal(resp.Data, st); err != nil {
+				return err
+			}
+			respPrevEpochParticipation = st.PreviousEpochParticipation
+		case version.String(version.Electra):
+			st := &structs.BeaconStateElectra{}
 			if err = json.Unmarshal(resp.Data, st); err != nil {
 				return err
 			}
@@ -327,6 +345,12 @@ func syncCompatibleBlockFromCtr(container *ethpb.BeaconBlockContainer) (interfac
 	}
 	if container.GetBlindedDenebBlock() != nil {
 		return blocks.NewSignedBeaconBlock(container.GetBlindedDenebBlock())
+	}
+	if container.GetElectraBlock() != nil {
+		return blocks.NewSignedBeaconBlock(container.GetElectraBlock())
+	}
+	if container.GetBlindedElectraBlock() != nil {
+		return blocks.NewSignedBeaconBlock(container.GetBlindedElectraBlock())
 	}
 	return nil, errors.New("no supported block type in container")
 }

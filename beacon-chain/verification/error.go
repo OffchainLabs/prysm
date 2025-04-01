@@ -1,6 +1,9 @@
 package verification
 
-import "github.com/pkg/errors"
+import (
+	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+)
 
 var (
 	// ErrFromFutureSlot means RequireSlotNotTooEarly failed.
@@ -35,6 +38,10 @@ var (
 
 	// ErrMissingVerification indicates that the given verification function was never performed on the value.
 	ErrMissingVerification = errors.New("verification was not performed for requirement")
+
+	// errVerificationImplementationFault indicates that a code path yielding VerifiedROBlobs has an implementation
+	// error, leading it to call VerifiedROBlobError with a nil error.
+	errVerificationImplementationFault = errors.New("could not verify blob data or create a valid VerifiedROBlob.")
 )
 
 // VerificationMultiError is a custom error that can be used to access individual verification failures.
@@ -67,4 +74,22 @@ func (ve VerificationMultiError) Failures() map[Requirement]error {
 
 func newVerificationMultiError(r *results, err error) VerificationMultiError {
 	return VerificationMultiError{r: r, err: err}
+}
+
+// VerifiedROBlobError can be used by methods that have a VerifiedROBlob return type but do not have permission to
+// create a value of that type in order to generate an error return value.
+func VerifiedROBlobError(err error) (blocks.VerifiedROBlob, error) {
+	if err == nil {
+		return blocks.VerifiedROBlob{}, errVerificationImplementationFault
+	}
+	return blocks.VerifiedROBlob{}, err
+}
+
+// VerifiedRODataColumnError can be used by methods that have a VerifiedRODataColumn return type but do not have permission to
+// create a value of that type in order to generate an error return value.
+func VerifiedRODataColumnError(err error) (blocks.VerifiedRODataColumn, error) {
+	if err == nil {
+		return blocks.VerifiedRODataColumn{}, errVerificationImplementationFault
+	}
+	return blocks.VerifiedRODataColumn{}, err
 }

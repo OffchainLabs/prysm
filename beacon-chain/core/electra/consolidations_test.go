@@ -209,7 +209,22 @@ func TestProcessConsolidationRequests(t *testing.T) {
 		state    state.BeaconState
 		reqs     []*enginev1.ConsolidationRequest
 		validate func(*testing.T, state.BeaconState)
+		wantErr  bool
 	}{
+		{
+			name: "nil request",
+			state: func() state.BeaconState {
+				st := &eth.BeaconStateElectra{}
+				s, err := state_native.InitializeFromProtoElectra(st)
+				require.NoError(t, err)
+				return s
+			}(),
+			reqs: []*enginev1.ConsolidationRequest{nil},
+			validate: func(t *testing.T, st state.BeaconState) {
+				require.DeepEqual(t, st, st)
+			},
+			wantErr: true,
+		},
 		{
 			name: "one valid request",
 			state: func() state.BeaconState {
@@ -405,7 +420,13 @@ func TestProcessConsolidationRequests(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := electra.ProcessConsolidationRequests(context.TODO(), tt.state, tt.reqs)
-			require.NoError(t, err)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ProcessWithdrawalRequests() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr {
+				require.NoError(t, err)
+			}
 			if tt.validate != nil {
 				tt.validate(t, tt.state)
 			}

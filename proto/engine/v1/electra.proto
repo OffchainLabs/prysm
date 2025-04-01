@@ -25,52 +25,59 @@ option java_outer_classname = "ElectraProto";
 option java_package = "org.ethereum.engine.v1";
 option php_namespace = "Ethereum\\Engine\\v1";
 
-// WithdrawalRequest is the message from the execution layer to trigger the withdrawal of a validator's balance to its withdrawal address
-// new in Electra
+// WithdrawalRequest is the message from the execution layer to trigger the
+// withdrawal of a validator's balance to its withdrawal address new in Electra
 message WithdrawalRequest {
-	// The execution address receiving the funds
-	bytes source_address = 1 [(ethereum.eth.ext.ssz_size) = "20"];
+  // The execution address receiving the funds
+  bytes source_address = 1 [ (ethereum.eth.ext.ssz_size) = "20" ];
 
-	// 48 byte BLS public key of the validator.
-	bytes validator_pubkey = 2 [(ethereum.eth.ext.ssz_size) = "48"];
+  // 48 byte BLS public key of the validator.
+  bytes validator_pubkey = 2 [ (ethereum.eth.ext.ssz_size) = "48" ];
 
-	// Deposit amount in gwei.
-	uint64 amount = 3;
+  // Deposit amount in gwei.
+  uint64 amount = 3;
 }
 
-// DepositRequest is the message from the execution layer to trigger the deposit of a validator's balance to its balance
-// new in Electra
+// DepositRequest is the message from the execution layer to trigger the deposit
+// of a validator's balance to its balance new in Electra
 message DepositRequest {
-	bytes pubkey = 1 [(ethereum.eth.ext.ssz_size) = "48"];
-	bytes withdrawal_credentials = 2 [(ethereum.eth.ext.ssz_size) = "32"];
-	uint64 amount = 3;
-	bytes signature = 4 [(ethereum.eth.ext.ssz_size) = "96"];
-	uint64 index = 5;
+  bytes pubkey = 1 [ (ethereum.eth.ext.ssz_size) = "48" ];
+  bytes withdrawal_credentials = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  uint64 amount = 3;
+  bytes signature = 4 [ (ethereum.eth.ext.ssz_size) = "96" ];
+  uint64 index = 5;
 }
 
-// ConsolidationRequest is the message from the execution layer to trigger the consolidation of one
-// validator to another validator.
+// ConsolidationRequest is the message from the execution layer to trigger the
+// consolidation of one validator to another validator.
 message ConsolidationRequest {
-	// Source address of account which originated the request.
-	bytes source_address = 1 [(ethereum.eth.ext.ssz_size) = "20"];
-	// Funds will be moved from this public key.
-	bytes source_pubkey = 2 [(ethereum.eth.ext.ssz_size) = "48"];
-	// Funds will be moved to this public key.
-	bytes target_pubkey = 3 [(ethereum.eth.ext.ssz_size) = "48"];
+  // Source address of account which originated the request.
+  bytes source_address = 1 [ (ethereum.eth.ext.ssz_size) = "20" ];
+  // Funds will be moved from this public key.
+  bytes source_pubkey = 2 [ (ethereum.eth.ext.ssz_size) = "48" ];
+  // Funds will be moved to this public key.
+  bytes target_pubkey = 3 [ (ethereum.eth.ext.ssz_size) = "48" ];
 }
 
-// ExecutionRequests is a container that contains all the requests from the execution layer to be included in a block
+// ExecutionRequests is a container that contains all the requests from the
+// execution layer to be included in a block
 message ExecutionRequests {
-	repeated DepositRequest deposits = 1 [(ethereum.eth.ext.ssz_max) = "max_deposit_requests_per_payload.size"];
-	repeated WithdrawalRequest	withdrawals = 2 [(ethereum.eth.ext.ssz_max) = "max_withdrawal_requests_per_payload.size"];
-	repeated ConsolidationRequest consolidations = 3 [(ethereum.eth.ext.ssz_max) = "max_consolidation_requests_per_payload.size"];
+  repeated DepositRequest deposits = 1
+      [ (ethereum.eth.ext.ssz_max) = "max_deposit_requests_per_payload.size" ];
+  repeated WithdrawalRequest withdrawals = 2
+      [ (ethereum.eth.ext.ssz_max) =
+            "max_withdrawal_requests_per_payload.size" ];
+  repeated ConsolidationRequest consolidations = 3
+      [ (ethereum.eth.ext.ssz_max) =
+            "max_consolidation_requests_per_payload.size" ];
 }
 
-// ExecutionBundleElectra is a container that builds on Payload V4 and includes execution requests sidecar needed post Electra
+// ExecutionBundleElectra is a container that builds on Payload V4 and includes
+// execution requests sidecar needed post Electra
 message ExecutionBundleElectra {
-	ExecutionPayloadDeneb payload = 1;
-	bytes value = 2;
-	BlobsBundle blobs_bundle = 3;
-	bool should_override_builder = 4;
-	repeated bytes execution_requests = 5;
+  ExecutionPayloadDeneb payload = 1;
+  bytes value = 2;
+  BlobsBundle blobs_bundle = 3;
+  bool should_override_builder = 4;
+  repeated bytes execution_requests = 5;
 }

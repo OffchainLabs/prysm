@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -136,6 +137,16 @@ func (p *BeaconDbBlocker) Block(ctx context.Context, id []byte) (interfaces.Read
 	return blk, nil
 }
 
+// uint64MapToSortedSlice produces a sorted uint64 slice from a map.
+func uint64MapToSortedSlice(input map[uint64]bool) []uint64 {
+	output := make([]uint64, 0, len(input))
+	for idx := range input {
+		output = append(output, idx)
+	}
+	slices.Sort[[]uint64](output)
+	return output
+}
+
 // blobsFromStoredBlobs retrieves blobs corresponding to `indices` and `root` from the store.
 // This function expects blobs to be stored directly (aka. no data columns).
 func (p *BeaconDbBlocker) blobsFromStoredBlobs(
@@ -144,47 +155,32 @@ func (p *BeaconDbBlocker) blobsFromStoredBlobs(
 	slot primitives.Slot,
 	commitments [][]byte,
 ) ([]*blocks.VerifiedROBlob, *core.RpcError) {
-	// If no indices are provided in the request, we fetch all available blobs for the block.
 	if len(indices) == 0 {
-		indicesMap, err := p.BlobStorage.Indices(bytesutil.ToBytes32(root), slot)
-		if err != nil {
-			log.WithField("blockRoot", hexutil.Encode(root)).Error("Could not retrieve blob indices for root")
-			return nil, &core.RpcError{Err: fmt.Errorf("could not retrieve blob indices for root %#x", root), Reason: core.Internal}
-		}
-
-		// Get the maximum index.
-		maxIndex := -1
-		for index, exists := range indicesMap {
-			if exists && index > maxIndex {
-				maxIndex = index
-			}
-		}
-
-		if maxIndex >= len(commitments) {
-			return nil, &core.RpcError{Err: fmt.Errorf("%d blob indices for only %d blob kzg commitments", len(indicesMap), len(commitments)), Reason: core.BadRequest}
-		}
-
-		for indice, exists := range indicesMap {
-			if exists {
-				indices[uint64(indice)] = true
+		sum := p.BlobStorage.Summary(bytesutil.ToBytes32(root))
+		for i := range commitments {
+			if sum.HasIndex(uint64(i)) {
+				indices[uint64(i)] = true
 			}
 		}
 	}
 
-	// Retrieve from the store the blobs corresponding to the indices for this block root.
+	// Sort the indices to ensure the blobs are returned in the correct order.
+	// This is not specifically required by the spec, but it makes the response deterministic.
+	sortedIndices := uint64MapToSortedSlice(indices)
+
+	// returns empty slice if there are no indices
 	blobs := make([]*blocks.VerifiedROBlob, 0, len(indices))
-	for index := range indices {
+	for _, index := range sortedIndices {
 		vblob, err := p.BlobStorage.Get(bytesutil.ToBytes32(root), index)
 		if err != nil {
 			log.WithFields(log.Fields{
 				"blockRoot": hexutil.Encode(root),
 				"blobIndex": index,
-			}).Error("Could not retrieve blob for block root")
+			}).Error(errors.Wrapf(err, "could not retrieve blob for block root %#x at index %d", root, index))
 			return nil, &core.RpcError{Err: fmt.Errorf("could not retrieve blob for block root %#x at index %d", root, index), Reason: core.Internal}
 		}
 		blobs = append(blobs, &vblob)
 	}
-
 	return blobs, nil
 }
 
@@ -199,7 +195,7 @@ func (p *BeaconDbBlocker) blobsFromNonExtendedStoredDataColumns(
 	// Load the data columns corresponding to the non-extended blobs.
 	storedDataColumnsSidecar := make([]*ethpb.DataColumnSidecar, 0, nonExtendedColumnsCount)
 	for index := range nonExtendedColumnsCount {
-		dataColumnSidecar, err := p.BlobStorage.GetColumn(root, index)
+		verifiedRODataColumn, err := p.BlobStorage.GetColumn(root, index)
 		if err != nil {
 			log.WithFields(log.Fields{
 				"blockRoot": hexutil.Encode(root[:]),
@@ -212,7 +208,7 @@ func (p *BeaconDbBlocker) blobsFromNonExtendedStoredDataColumns(
 			}
 		}
 
-		storedDataColumnsSidecar = append(storedDataColumnsSidecar, dataColumnSidecar)
+		storedDataColumnsSidecar = append(storedDataColumnsSidecar, verifiedRODataColumn.DataColumnSidecar)
 	}
 
 	// Get verified RO blobs from the data columns.
@@ -237,7 +233,7 @@ func (p *BeaconDbBlocker) blobsFromReconstructedDataColumns(
 	// compared to the cost of reconstructing them.
 	storedDataColumnsSidecar := make([]*ethpb.DataColumnSidecar, 0, len(storedDataColumnsIndices))
 	for index := range storedDataColumnsIndices {
-		dataColumnSidecar, err := p.BlobStorage.GetColumn(root, index)
+		verifiedRODataColumn, err := p.BlobStorage.GetColumn(root, index)
 		if err != nil {
 			log.WithFields(log.Fields{
 				"blockRoot": hexutil.Encode(root[:]),
@@ -250,7 +246,7 @@ func (p *BeaconDbBlocker) blobsFromReconstructedDataColumns(
 			}
 		}
 
-		storedDataColumnsSidecar = append(storedDataColumnsSidecar, dataColumnSidecar)
+		storedDataColumnsSidecar = append(storedDataColumnsSidecar, verifiedRODataColumn.DataColumnSidecar)
 	}
 
 	// Recover cells and proofs.
@@ -298,45 +294,31 @@ func (p *BeaconDbBlocker) blobsFromStoredDataColumns(indices map[uint64]bool, ro
 
 	root := bytesutil.ToBytes32(rootBytes)
 
-	// Get the number of groups we should custody.
-	custodyGroupCount := peerdas.CustodyGroupCount()
-
-	// Determine if we are theoretically able to reconstruct the data columns.
-	canTheoreticallyReconstruct := peerdas.CanSelfReconstruct(custodyGroupCount)
-
 	// Retrieve the data columns indice actually we store.
-	storedDataColumnsIndices, err := p.BlobStorage.ColumnIndices(root)
-	if err != nil {
-		log.WithField("blockRoot", hexutil.Encode(rootBytes)).Error(errors.Wrap(err, "Could not retrieve columns indices stored for block root"))
-		return nil, &core.RpcError{Err: errors.Wrap(err, "could not retrieve columns indices stored for block root"), Reason: core.Internal}
+	summary := p.BlobStorage.Summary(root)
+
+	storedDataColumnsIndices := make(map[uint64]bool, numberOfColumns)
+	for i := range numberOfColumns {
+		if summary.HasIndex(i) {
+			storedDataColumnsIndices[i] = true
+		}
 	}
 
 	storedDataColumnCount := uint64(len(storedDataColumnsIndices))
 	storedGroupCount := storedDataColumnCount / columnsPerGroup
 
-	// Determine is we acually able to reconstruct the data columns.
-	canActuallyReconstruct := peerdas.CanSelfReconstruct(storedGroupCount)
+	// Determine is we are able to reconstruct the data columns.
+	canReconstruct := peerdas.CanSelfReconstruct(storedGroupCount)
 
-	if !canTheoreticallyReconstruct && !canActuallyReconstruct {
+	if !canReconstruct {
 		// There is no way to reconstruct the data columns.
 		return nil, &core.RpcError{
-			Err:    errors.Errorf("the node does not custody enough data columns to reconstruct blobs. Please start the beacon node with the `--%s` flag to ensure this call to success.", flags.SubscribeToAllSubnets.Name),
+			Err:    errors.Errorf("the node does not custody enough data columns to reconstruct blobs. Please start the beacon node with the `--%s` flag to ensure this call to success, or retry later if it already the case.", flags.SubscribeToAllSubnets.Name),
 			Reason: core.NotFound,
 		}
 	}
 
 	nonExtendedColumnsCount := uint64(fieldparams.NumberOfColumns / 2)
-
-	if canTheoreticallyReconstruct && !canActuallyReconstruct {
-		// This case may happen if the node started recently with a big enough custody count, but did not (yet) backfill all the columns.
-		return nil, &core.RpcError{
-			Err:    errors.Errorf("not all data columns are available for this blob. Wanted: %d, got: %d. Please retry later.", nonExtendedColumnsCount, storedDataColumnCount),
-			Reason: core.NotFound}
-	}
-
-	// - The case !canTheoreticallyReconstruct && canActuallyReconstruct may happen if the node used to custody enough columns,
-	//   but do not custody enough columns anymore. We are still able to reconstruct the data columns.
-	// - The case canTheoreticallyReconstruct && canActuallyReconstruct is the happy path.
 
 	// Check if we store all the non extended columns. If so, we can respond without reconstructing.
 	missingColumns := make(map[uint64]bool)
@@ -355,98 +337,6 @@ func (p *BeaconDbBlocker) blobsFromStoredDataColumns(indices map[uint64]bool, ro
 	return p.blobsFromReconstructedDataColumns(root, indices, storedDataColumnsIndices)
 }
 
-// extractRootDefault extracts the block root from the given identifier for the default case.
-func (p *BeaconDbBlocker) extractRootDefault(ctx context.Context, id string) ([]byte, *core.RpcError) {
-	if bytesutil.IsHex([]byte(id)) {
-		root, err := hexutil.Decode(id)
-		if len(root) != fieldparams.RootLength {
-			return nil, &core.RpcError{Err: fmt.Errorf("invalid block root of length %d", len(root)), Reason: core.BadRequest}
-		}
-
-		if err != nil {
-			return nil, &core.RpcError{Err: NewBlockIdParseError(err), Reason: core.BadRequest}
-		}
-
-		return root, nil
-	} else {
-		slot, err := strconv.ParseUint(id, 10, 64)
-		if err != nil {
-			return nil, &core.RpcError{Err: NewBlockIdParseError(err), Reason: core.BadRequest}
-		}
-
-		denebStart, err := slots.EpochStart(params.BeaconConfig().DenebForkEpoch)
-		if err != nil {
-			return nil, &core.RpcError{Err: errors.Wrap(err, "could not calculate Deneb start slot"), Reason: core.Internal}
-		}
-
-		if primitives.Slot(slot) < denebStart {
-			return nil, &core.RpcError{Err: errors.New("blobs are not supported before Deneb fork"), Reason: core.BadRequest}
-		}
-
-		ok, roots, err := p.BeaconDB.BlockRootsBySlot(ctx, primitives.Slot(slot))
-		if !ok {
-			return nil, &core.RpcError{Err: fmt.Errorf("block not found: no block roots at slot %d", slot), Reason: core.NotFound}
-		}
-		if err != nil {
-			return nil, &core.RpcError{Err: errors.Wrap(err, "failed to get block roots by slot"), Reason: core.Internal}
-		}
-
-		root := roots[0][:]
-		if len(roots) == 1 {
-			return root, nil
-		}
-
-		for _, blockRoot := range roots {
-			canonical, err := p.ChainInfoFetcher.IsCanonical(ctx, blockRoot)
-			if err != nil {
-				return nil, &core.RpcError{Err: errors.Wrap(err, "could not determine if block root is canonical"), Reason: core.Internal}
-			}
-
-			if canonical {
-				return blockRoot[:], nil
-			}
-		}
-
-		return nil, &core.RpcError{Err: errors.Wrap(err, "could not find any canonical block for this slot"), Reason: core.NotFound}
-	}
-}
-
-// extractRoot extracts the block root from the given identifier.
-func (p *BeaconDbBlocker) extractRoot(ctx context.Context, id string) ([]byte, *core.RpcError) {
-	switch id {
-	case "genesis":
-		return nil, &core.RpcError{Err: errors.New("blobs are not supported for Phase 0 fork"), Reason: core.BadRequest}
-
-	case "head":
-		var err error
-		root, err := p.ChainInfoFetcher.HeadRoot(ctx)
-		if err != nil {
-			return nil, &core.RpcError{Err: errors.Wrapf(err, "could not retrieve head root"), Reason: core.Internal}
-		}
-
-		return root, nil
-
-	case "finalized":
-		fcp := p.ChainInfoFetcher.FinalizedCheckpt()
-		if fcp == nil {
-			return nil, &core.RpcError{Err: errors.New("received nil finalized checkpoint"), Reason: core.Internal}
-		}
-
-		return fcp.Root, nil
-
-	case "justified":
-		jcp := p.ChainInfoFetcher.CurrentJustifiedCheckpt()
-		if jcp == nil {
-			return nil, &core.RpcError{Err: errors.New("received nil justified checkpoint"), Reason: core.Internal}
-		}
-
-		return jcp.Root, nil
-
-	default:
-		return p.extractRootDefault(ctx, id)
-	}
-}
-
 // Blobs returns the blobs for a given block id identifier and blob indices. The identifier can be one of:
 //   - "head" (canonical head in node's view)
 //   - "genesis"
@@ -463,11 +353,73 @@ func (p *BeaconDbBlocker) extractRoot(ctx context.Context, id string) ([]byte, *
 //     we are technically not supposed to import a block to forkchoice unless we have the blobs, so the nuance here is if we can't find the file and we are inside the protocol-defined retention period, then it's actually a 500.
 //   - block exists, has commitments, outside retention period (greater of protocol- or user-specified) - ie just like block exists, no commitment
 func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, indices map[uint64]bool) ([]*blocks.VerifiedROBlob, *core.RpcError) {
-	root, rpcErr := p.extractRoot(ctx, id)
-	if rpcErr != nil {
-		return nil, rpcErr
+	var root []byte
+	switch id {
+	case "genesis":
+		return nil, &core.RpcError{Err: errors.New("blobs are not supported for Phase 0 fork"), Reason: core.BadRequest}
+	case "head":
+		var err error
+		root, err = p.ChainInfoFetcher.HeadRoot(ctx)
+		if err != nil {
+			return nil, &core.RpcError{Err: errors.Wrapf(err, "could not retrieve head root"), Reason: core.Internal}
+		}
+	case "finalized":
+		fcp := p.ChainInfoFetcher.FinalizedCheckpt()
+		if fcp == nil {
+			return nil, &core.RpcError{Err: errors.New("received nil finalized checkpoint"), Reason: core.Internal}
+		}
+		root = fcp.Root
+	case "justified":
+		jcp := p.ChainInfoFetcher.CurrentJustifiedCheckpt()
+		if jcp == nil {
+			return nil, &core.RpcError{Err: errors.New("received nil justified checkpoint"), Reason: core.Internal}
+		}
+		root = jcp.Root
+	default:
+		if bytesutil.IsHex([]byte(id)) {
+			var err error
+			root, err = hexutil.Decode(id)
+			if len(root) != fieldparams.RootLength {
+				return nil, &core.RpcError{Err: fmt.Errorf("invalid block root of length %d", len(root)), Reason: core.BadRequest}
+			}
+			if err != nil {
+				return nil, &core.RpcError{Err: NewBlockIdParseError(err), Reason: core.BadRequest}
+			}
+		} else {
+			slot, err := strconv.ParseUint(id, 10, 64)
+			if err != nil {
+				return nil, &core.RpcError{Err: NewBlockIdParseError(err), Reason: core.BadRequest}
+			}
+			denebStart, err := slots.EpochStart(params.BeaconConfig().DenebForkEpoch)
+			if err != nil {
+				return nil, &core.RpcError{Err: errors.Wrap(err, "could not calculate Deneb start slot"), Reason: core.Internal}
+			}
+			if primitives.Slot(slot) < denebStart {
+				return nil, &core.RpcError{Err: errors.New("blobs are not supported before Deneb fork"), Reason: core.BadRequest}
+			}
+			ok, roots, err := p.BeaconDB.BlockRootsBySlot(ctx, primitives.Slot(slot))
+			if !ok {
+				return nil, &core.RpcError{Err: fmt.Errorf("block not found: no block roots at slot %d", slot), Reason: core.NotFound}
+			}
+			if err != nil {
+				return nil, &core.RpcError{Err: errors.Wrap(err, "failed to get block roots by slot"), Reason: core.Internal}
+			}
+			root = roots[0][:]
+			if len(roots) == 1 {
+				break
+			}
+			for _, blockRoot := range roots {
+				canonical, err := p.ChainInfoFetcher.IsCanonical(ctx, blockRoot)
+				if err != nil {
+					return nil, &core.RpcError{Err: errors.Wrap(err, "could not determine if block root is canonical"), Reason: core.Internal}
+				}
+				if canonical {
+					root = blockRoot[:]
+					break
+				}
+			}
+		}
 	}
-
 	if !p.BeaconDB.HasBlock(ctx, bytesutil.ToBytes32(root)) {
 		return nil, &core.RpcError{Err: errors.New("block not found"), Reason: core.NotFound}
 	}
@@ -488,6 +440,10 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, indices map[uint
 		return make([]*blocks.VerifiedROBlob, 0), nil
 	}
 
+	if indices == nil {
+		indices = make(map[uint64]bool)
+	}
+
 	// Get the slot of the block.
 	blockSlot := b.Block().Slot()
 
@@ -506,13 +462,9 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, indices map[uint
 	// Is peerDAS enabled for this block?
 	isPeerDASEnabledForBlock := blockSlot >= peerDASStartSlot
 
-	if indices == nil {
-		indices = make(map[uint64]bool)
+	if isPeerDASEnabledForBlock {
+		return p.blobsFromStoredDataColumns(indices, root)
 	}
 
-	if !isPeerDASEnabledForBlock {
-		return p.blobsFromStoredBlobs(indices, root, blockSlot, commitments)
-	}
-
-	return p.blobsFromStoredDataColumns(indices, root)
+	return p.blobsFromStoredBlobs(indices, root, blockSlot, commitments)
 }

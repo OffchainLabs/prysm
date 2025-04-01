@@ -28,7 +28,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/encoding/ssz"
 	v1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"github.com/prysmaticlabs/prysm/v5/testing/util"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
@@ -173,11 +172,6 @@ func TestServer_setExecutionData(t *testing.T) {
 		require.NoError(t, err)
 		_, err = builderBid.Header()
 		require.NoError(t, err)
-		builderKzgCommitments, err := builderBid.BlobKzgCommitments()
-		if builderBid.Version() >= version.Deneb {
-			require.NoError(t, err)
-		}
-		require.DeepEqual(t, [][]uint8{}, builderKzgCommitments)
 		_, bundle, err := setExecutionData(context.Background(), blk, res, builderBid, defaultBuilderBoostFactor)
 		require.NoError(t, err)
 		require.IsNil(t, bundle)
@@ -250,11 +244,6 @@ func TestServer_setExecutionData(t *testing.T) {
 		require.NoError(t, err)
 		_, err = builderBid.Header()
 		require.NoError(t, err)
-		builderKzgCommitments, err := builderBid.BlobKzgCommitments()
-		if builderBid.Version() >= version.Deneb {
-			require.NoError(t, err)
-		}
-		require.DeepEqual(t, [][]uint8{}, builderKzgCommitments)
 		_, bundle, err := setExecutionData(context.Background(), blk, res, builderBid, defaultBuilderBoostFactor)
 		require.NoError(t, err)
 		require.IsNil(t, bundle)
@@ -326,11 +315,6 @@ func TestServer_setExecutionData(t *testing.T) {
 		require.NoError(t, err)
 		_, err = builderBid.Header()
 		require.NoError(t, err)
-		builderKzgCommitments, err := builderBid.BlobKzgCommitments()
-		if builderBid.Version() >= version.Deneb {
-			require.NoError(t, err)
-		}
-		require.DeepEqual(t, [][]uint8{}, builderKzgCommitments)
 		_, bundle, err := setExecutionData(context.Background(), blk, res, builderBid, math.MaxUint64)
 		require.NoError(t, err)
 		require.IsNil(t, bundle)
@@ -402,11 +386,6 @@ func TestServer_setExecutionData(t *testing.T) {
 		require.NoError(t, err)
 		_, err = builderBid.Header()
 		require.NoError(t, err)
-		builderKzgCommitments, err := builderBid.BlobKzgCommitments()
-		if builderBid.Version() >= version.Deneb {
-			require.NoError(t, err)
-		}
-		require.DeepEqual(t, [][]uint8{}, builderKzgCommitments)
 		_, bundle, err := setExecutionData(context.Background(), blk, res, builderBid, 0)
 		require.NoError(t, err)
 		require.IsNil(t, bundle)
@@ -428,11 +407,6 @@ func TestServer_setExecutionData(t *testing.T) {
 		require.NoError(t, err)
 		_, err = builderBid.Header()
 		require.NoError(t, err)
-		builderKzgCommitments, err := builderBid.BlobKzgCommitments()
-		if builderBid.Version() >= version.Deneb {
-			require.NoError(t, err)
-		}
-		require.DeepEqual(t, [][]uint8{}, builderKzgCommitments)
 		_, bundle, err := setExecutionData(context.Background(), blk, res, builderBid, defaultBuilderBoostFactor)
 		require.NoError(t, err)
 		require.IsNil(t, bundle)
@@ -460,11 +434,6 @@ func TestServer_setExecutionData(t *testing.T) {
 		require.NoError(t, err)
 		_, err = builderBid.Header()
 		require.NoError(t, err)
-		builderKzgCommitments, err := builderBid.BlobKzgCommitments()
-		if builderBid.Version() >= version.Deneb {
-			require.NoError(t, err)
-		}
-		require.DeepEqual(t, [][]uint8{}, builderKzgCommitments)
 		_, bundle, err := setExecutionData(context.Background(), blk, res, builderBid, defaultBuilderBoostFactor)
 		require.NoError(t, err)
 		require.IsNil(t, bundle)
@@ -493,13 +462,8 @@ func TestServer_setExecutionData(t *testing.T) {
 		require.NoError(t, err)
 		builderBid, err := vs.getBuilderPayloadAndBlobs(ctx, b.Slot(), b.ProposerIndex(), gasLimit)
 		require.NoError(t, err)
-		builderKzgCommitments, err := builderBid.BlobKzgCommitments()
-		if builderBid.Version() >= version.Deneb {
-			require.NoError(t, err)
-		}
 		_, err = builderBid.Header()
 		require.NoError(t, err)
-		require.DeepEqual(t, [][]uint8{}, builderKzgCommitments)
 		_, bundle, err := setExecutionData(context.Background(), blk, res, builderBid, defaultBuilderBoostFactor)
 		require.NoError(t, err)
 		require.IsNil(t, bundle)
@@ -648,8 +612,9 @@ func TestServer_setExecutionData(t *testing.T) {
 		require.NoError(t, err)
 		builderPayload, err := builderBid.Header()
 		require.NoError(t, err)
-		builderKzgCommitments, err := builderBid.BlobKzgCommitments()
-		require.NoError(t, err)
+		dbid, ok := builderBid.(builder.BidDeneb)
+		require.Equal(t, true, ok)
+		builderKzgCommitments := dbid.BlobKzgCommitments()
 		require.DeepEqual(t, bid.BlobKzgCommitments, builderKzgCommitments)
 		require.Equal(t, bid.Header.BlockNumber, builderPayload.BlockNumber()) // header should be the same from block
 
@@ -662,6 +627,134 @@ func TestServer_setExecutionData(t *testing.T) {
 		got, err := blk.Block().Body().BlobKzgCommitments()
 		require.NoError(t, err)
 		require.DeepEqual(t, bid.BlobKzgCommitments, got)
+	})
+	t.Run("Can get builder payload, blobs, and execution requests Electra", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		cfg.ElectraForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+		params.SetupTestConfigCleanup(t)
+
+		blk, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlockElectra())
+		require.NoError(t, err)
+		ti, err := slots.ToTime(uint64(time.Now().Unix()), 0)
+		require.NoError(t, err)
+		sk, err := bls.RandKey()
+		require.NoError(t, err)
+		wr, err := ssz.WithdrawalSliceRoot(withdrawals, fieldparams.MaxWithdrawalsPerPayload)
+		require.NoError(t, err)
+		builderValue := bytesutil.ReverseByteOrder(big.NewInt(1e9).Bytes())
+
+		requests := &v1.ExecutionRequests{
+			Deposits: []*v1.DepositRequest{
+				{
+					Pubkey:                bytesutil.PadTo([]byte{byte('a')}, fieldparams.BLSPubkeyLength),
+					WithdrawalCredentials: bytesutil.PadTo([]byte{byte('b')}, fieldparams.RootLength),
+					Amount:                params.BeaconConfig().MinActivationBalance,
+					Signature:             bytesutil.PadTo([]byte{byte('c')}, fieldparams.BLSSignatureLength),
+					Index:                 0,
+				},
+			},
+			Withdrawals: []*v1.WithdrawalRequest{
+				{
+					SourceAddress:   bytesutil.PadTo([]byte{byte('d')}, common.AddressLength),
+					ValidatorPubkey: bytesutil.PadTo([]byte{byte('e')}, fieldparams.BLSPubkeyLength),
+					Amount:          params.BeaconConfig().MinActivationBalance,
+				},
+			},
+			Consolidations: []*v1.ConsolidationRequest{
+				{
+					SourceAddress: bytesutil.PadTo([]byte{byte('f')}, common.AddressLength),
+					SourcePubkey:  bytesutil.PadTo([]byte{byte('g')}, fieldparams.BLSPubkeyLength),
+					TargetPubkey:  bytesutil.PadTo([]byte{byte('h')}, fieldparams.BLSPubkeyLength),
+				},
+			},
+		}
+
+		bid := &ethpb.BuilderBidElectra{
+			Header: &v1.ExecutionPayloadHeaderDeneb{
+				FeeRecipient:     make([]byte, fieldparams.FeeRecipientLength),
+				StateRoot:        make([]byte, fieldparams.RootLength),
+				ReceiptsRoot:     make([]byte, fieldparams.RootLength),
+				LogsBloom:        make([]byte, fieldparams.LogsBloomLength),
+				PrevRandao:       make([]byte, fieldparams.RootLength),
+				BaseFeePerGas:    make([]byte, fieldparams.RootLength),
+				BlockHash:        make([]byte, fieldparams.RootLength),
+				TransactionsRoot: bytesutil.PadTo([]byte{1}, fieldparams.RootLength),
+				ParentHash:       params.BeaconConfig().ZeroHash[:],
+				Timestamp:        uint64(ti.Unix()),
+				BlockNumber:      2,
+				WithdrawalsRoot:  wr[:],
+				BlobGasUsed:      123,
+				ExcessBlobGas:    456,
+				GasLimit:         gasLimit,
+			},
+			Pubkey:             sk.PublicKey().Marshal(),
+			Value:              bytesutil.PadTo(builderValue, 32),
+			BlobKzgCommitments: [][]byte{bytesutil.PadTo([]byte{2}, fieldparams.BLSPubkeyLength), bytesutil.PadTo([]byte{5}, fieldparams.BLSPubkeyLength)},
+			ExecutionRequests:  requests,
+		}
+
+		d := params.BeaconConfig().DomainApplicationBuilder
+		domain, err := signing.ComputeDomain(d, nil, nil)
+		require.NoError(t, err)
+		sr, err := signing.ComputeSigningRoot(bid, domain)
+		require.NoError(t, err)
+		sBid := &ethpb.SignedBuilderBidElectra{
+			Message:   bid,
+			Signature: sk.Sign(sr[:]).Marshal(),
+		}
+		vs.BlockBuilder = &builderTest.MockBuilderService{
+			BidElectra:    sBid,
+			HasConfigured: true,
+			Cfg:           &builderTest.Config{BeaconDB: beaconDB},
+		}
+		require.NoError(t, beaconDB.SaveRegistrationsByValidatorIDs(ctx, []primitives.ValidatorIndex{blk.Block().ProposerIndex()},
+			[]*ethpb.ValidatorRegistrationV1{{
+				FeeRecipient: make([]byte, fieldparams.FeeRecipientLength),
+				Timestamp:    uint64(time.Now().Unix()),
+				GasLimit:     gasLimit,
+				Pubkey:       make([]byte, fieldparams.BLSPubkeyLength)}}))
+		wb, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlockElectra())
+		require.NoError(t, err)
+		chain := &blockchainTest.ChainService{ForkChoiceStore: doublylinkedtree.New(), Genesis: time.Now(), Block: wb}
+		vs.ForkFetcher = chain
+		vs.ForkchoiceFetcher.SetForkChoiceGenesisTime(uint64(time.Now().Unix()))
+		vs.TimeFetcher = chain
+		vs.HeadFetcher = chain
+
+		ed, err := blocks.NewWrappedExecutionData(&v1.ExecutionPayloadDeneb{BlockNumber: 4, Withdrawals: withdrawals})
+		require.NoError(t, err)
+		vs.ExecutionEngineCaller = &powtesting.EngineClient{
+			PayloadIDBytes:     id,
+			GetPayloadResponse: &blocks.GetPayloadResponse{ExecutionData: ed},
+		}
+
+		require.NoError(t, err)
+		blk.SetSlot(0)
+		require.NoError(t, err)
+		builderBid, err := vs.getBuilderPayloadAndBlobs(ctx, blk.Block().Slot(), blk.Block().ProposerIndex(), gasLimit)
+		require.NoError(t, err)
+		builderPayload, err := builderBid.Header()
+		require.NoError(t, err)
+		eBid, ok := builderBid.(builder.BidElectra)
+		require.Equal(t, true, ok)
+		require.DeepEqual(t, bid.BlobKzgCommitments, eBid.BlobKzgCommitments())
+		require.DeepEqual(t, bid.ExecutionRequests, eBid.ExecutionRequests())
+		require.Equal(t, bid.Header.BlockNumber, builderPayload.BlockNumber()) // header should be the same from block
+
+		res, err := vs.getLocalPayload(ctx, blk.Block(), denebTransitionState)
+		require.NoError(t, err)
+		_, bundle, err := setExecutionData(context.Background(), blk, res, builderBid, defaultBuilderBoostFactor)
+		require.NoError(t, err)
+		require.IsNil(t, bundle)
+
+		got, err := blk.Block().Body().BlobKzgCommitments()
+		require.NoError(t, err)
+		require.DeepEqual(t, bid.BlobKzgCommitments, got)
+
+		gRequests, err := blk.Block().Body().ExecutionRequests()
+		require.NoError(t, err)
+		require.DeepEqual(t, bid.ExecutionRequests, gRequests)
 	})
 }
 

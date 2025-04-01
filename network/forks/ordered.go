@@ -100,3 +100,26 @@ func NewOrderedSchedule(b *params.BeaconChainConfig) OrderedSchedule {
 	sort.Sort(ofs)
 	return ofs
 }
+
+// ForkForEpochFromConfig returns the fork data for the given epoch from the provided config.
+func ForkForEpochFromConfig(cfg *params.BeaconChainConfig, epoch primitives.Epoch) (*ethpb.Fork, error) {
+	os := NewOrderedSchedule(cfg)
+	currentVersion, err := os.VersionForEpoch(epoch)
+	if err != nil {
+		return nil, err
+	}
+	prevVersion, err := os.Previous(currentVersion)
+	if err != nil {
+		if !errors.Is(err, ErrNoPreviousVersion) {
+			return nil, err
+		}
+		// use same version for both in the case of genesis
+		prevVersion = currentVersion
+	}
+	forkEpoch := cfg.ForkVersionSchedule[currentVersion]
+	return &ethpb.Fork{
+		PreviousVersion: prevVersion[:],
+		CurrentVersion:  currentVersion[:],
+		Epoch:           forkEpoch,
+	}, nil
+}

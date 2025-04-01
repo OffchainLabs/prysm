@@ -319,6 +319,7 @@ func (s *Service) registerRPC(baseTopic string, handle rpcHandler) {
 			}
 		}
 	})
+	log.Debug("Registered new RPC handler")
 }
 
 func logStreamErrors(err error, topic string) {

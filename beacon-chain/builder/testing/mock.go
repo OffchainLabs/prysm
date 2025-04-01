@@ -33,6 +33,7 @@ type MockBuilderService struct {
 	Bid                   *ethpb.SignedBuilderBid
 	BidCapella            *ethpb.SignedBuilderBidCapella
 	BidDeneb              *ethpb.SignedBuilderBidDeneb
+	BidElectra            *ethpb.SignedBuilderBidElectra
 	RegistrationCache     *cache.RegistrationCache
 	ErrGetHeader          error
 	ErrRegisterValidator  error
@@ -59,7 +60,7 @@ func (s *MockBuilderService) SubmitBlindedBlock(_ context.Context, b interfaces.
 			return nil, nil, errors.Wrap(err, "could not wrap capella payload")
 		}
 		return w, nil, s.ErrSubmitBlindedBlock
-	case version.Deneb:
+	case version.Deneb, version.Electra:
 		w, err := blocks.WrappedExecutionPayloadDeneb(s.PayloadDeneb)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "could not wrap deneb payload")
@@ -72,6 +73,9 @@ func (s *MockBuilderService) SubmitBlindedBlock(_ context.Context, b interfaces.
 
 // GetHeader for mocking.
 func (s *MockBuilderService) GetHeader(_ context.Context, slot primitives.Slot, _ [32]byte, _ [48]byte) (builder.SignedBid, error) {
+	if slots.ToEpoch(slot) >= params.BeaconConfig().ElectraForkEpoch || s.BidElectra != nil {
+		return builder.WrappedSignedBuilderBidElectra(s.BidElectra)
+	}
 	if slots.ToEpoch(slot) >= params.BeaconConfig().DenebForkEpoch || s.BidDeneb != nil {
 		return builder.WrappedSignedBuilderBidDeneb(s.BidDeneb)
 	}

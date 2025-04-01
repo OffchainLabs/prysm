@@ -358,7 +358,6 @@ func WaitOnNodes(ctx context.Context, nodes []e2etypes.ComponentRunner, nodesSta
 	// Start nodes.
 	g, ctx := errgroup.WithContext(ctx)
 	for _, node := range nodes {
-		node := node
 		g.Go(func() error {
 			return node.Start(ctx)
 		})

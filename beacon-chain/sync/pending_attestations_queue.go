@@ -9,6 +9,8 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/prysmaticlabs/prysm/v5/async"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/operation"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
@@ -202,6 +204,7 @@ func (s *Service) processUnaggregated(ctx context.Context, att ethpb.Att) {
 			log.WithError(err).Debug("Could not retrieve active validator count")
 			return
 		}
+
 		// Broadcasting the signed attestation again once a node is able to process it.
 		var attToBroadcast ethpb.Att
 		if singleAtt != nil {
@@ -211,6 +214,24 @@ func (s *Service) processUnaggregated(ctx context.Context, att ethpb.Att) {
 		}
 		if err := s.cfg.p2p.BroadcastAttestation(ctx, helpers.ComputeSubnetForAttestation(valCount, attToBroadcast), attToBroadcast); err != nil {
 			log.WithError(err).Debug("Could not broadcast")
+		}
+
+		// Broadcast the unaggregated attestation on a feed to notify other services in the beacon node
+		// of a received unaggregated attestation.
+		if singleAtt != nil {
+			s.cfg.attestationNotifier.OperationFeed().Send(&feed.Event{
+				Type: operation.SingleAttReceived,
+				Data: &operation.SingleAttReceivedData{
+					Attestation: singleAtt,
+				},
+			})
+		} else {
+			s.cfg.attestationNotifier.OperationFeed().Send(&feed.Event{
+				Type: operation.UnaggregatedAttReceived,
+				Data: &operation.UnAggregatedAttReceivedData{
+					Attestation: att,
+				},
+			})
 		}
 	}
 }

@@ -72,7 +72,7 @@ func InitializeDataMaps() {
 		},
 		bytesutil.ToBytes4(params.BeaconConfig().FuluForkVersion): func() (interfaces.ReadOnlySignedBeaconBlock, error) {
 			return blocks.NewSignedBeaconBlock(
-				&ethpb.SignedBeaconBlockFulu{Block: &ethpb.BeaconBlockFulu{Body: &ethpb.BeaconBlockBodyFulu{ExecutionPayload: &enginev1.ExecutionPayloadDeneb{}}}},
+				&ethpb.SignedBeaconBlockFulu{Block: &ethpb.BeaconBlockElectra{Body: &ethpb.BeaconBlockBodyElectra{ExecutionPayload: &enginev1.ExecutionPayloadDeneb{}}}},
 			)
 		},
 	}

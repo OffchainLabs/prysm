@@ -34,36 +34,45 @@ option php_namespace = "Ethereum\\Eth\\v1alpha1";
 message LightClientBootstrapAltair {
   LightClientHeaderAltair header = 1;
   SyncCommittee current_sync_committee = 2;
-  repeated bytes current_sync_committee_branch = 3 [(ethereum.eth.ext.ssz_size) = "5,32"];
+  repeated bytes current_sync_committee_branch = 3
+      [ (ethereum.eth.ext.ssz_size) = "5,32" ];
 }
 
 message LightClientUpdateAltair {
   LightClientHeaderAltair attested_header = 1;
   SyncCommittee next_sync_committee = 2;
-  repeated bytes next_sync_committee_branch = 3 [(ethereum.eth.ext.ssz_size) = "5,32"];
+  repeated bytes next_sync_committee_branch = 3
+      [ (ethereum.eth.ext.ssz_size) = "5,32" ];
   LightClientHeaderAltair finalized_header = 4;
-  repeated bytes finality_branch = 5 [(ethereum.eth.ext.ssz_size) = "6,32"];
+  repeated bytes finality_branch = 5 [ (ethereum.eth.ext.ssz_size) = "6,32" ];
   SyncAggregate sync_aggregate = 6;
-  uint64 signature_slot = 7 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"];
+  uint64 signature_slot = 7 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"
+  ];
 }
 
 message LightClientFinalityUpdateAltair {
   LightClientHeaderAltair attested_header = 1;
   LightClientHeaderAltair finalized_header = 2;
-  repeated bytes finality_branch = 3 [(ethereum.eth.ext.ssz_size) = "6,32"];
+  repeated bytes finality_branch = 3 [ (ethereum.eth.ext.ssz_size) = "6,32" ];
   SyncAggregate sync_aggregate = 4;
-  uint64 signature_slot = 5 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"];
+  uint64 signature_slot = 5 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"
+  ];
 }
 
 message LightClientOptimisticUpdateAltair {
   LightClientHeaderAltair attested_header = 1;
   SyncAggregate sync_aggregate = 2;
-  uint64 signature_slot = 3 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"];
+  uint64 signature_slot = 3 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"
+  ];
 }
 
-message LightClientHeaderAltair {
-  BeaconBlockHeader beacon = 1;
-}
+message LightClientHeaderAltair { BeaconBlockHeader beacon = 1; }
 
 // ----------------------------------------------------------------------------
 // Capella
@@ -72,37 +81,48 @@ message LightClientHeaderAltair {
 message LightClientBootstrapCapella {
   LightClientHeaderCapella header = 1;
   SyncCommittee current_sync_committee = 2;
-  repeated bytes current_sync_committee_branch = 3 [(ethereum.eth.ext.ssz_size) = "5,32"];
+  repeated bytes current_sync_committee_branch = 3
+      [ (ethereum.eth.ext.ssz_size) = "5,32" ];
 }
 
 message LightClientUpdateCapella {
   LightClientHeaderCapella attested_header = 1;
   SyncCommittee next_sync_committee = 2;
-  repeated bytes next_sync_committee_branch = 3 [(ethereum.eth.ext.ssz_size) = "5,32"];
+  repeated bytes next_sync_committee_branch = 3
+      [ (ethereum.eth.ext.ssz_size) = "5,32" ];
   LightClientHeaderCapella finalized_header = 4;
-  repeated bytes finality_branch = 5 [(ethereum.eth.ext.ssz_size) = "6,32"];
+  repeated bytes finality_branch = 5 [ (ethereum.eth.ext.ssz_size) = "6,32" ];
   SyncAggregate sync_aggregate = 6;
-  uint64 signature_slot = 7 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"];
+  uint64 signature_slot = 7 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"
+  ];
 }
 
 message LightClientFinalityUpdateCapella {
   LightClientHeaderCapella attested_header = 1;
   LightClientHeaderCapella finalized_header = 2;
-  repeated bytes finality_branch = 3 [(ethereum.eth.ext.ssz_size) = "6,32"];
+  repeated bytes finality_branch = 3 [ (ethereum.eth.ext.ssz_size) = "6,32" ];
   SyncAggregate sync_aggregate = 4;
-  uint64 signature_slot = 5 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"];
+  uint64 signature_slot = 5 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"
+  ];
 }
 
 message LightClientOptimisticUpdateCapella {
   LightClientHeaderCapella attested_header = 1;
   SyncAggregate sync_aggregate = 2;
-  uint64 signature_slot = 3 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"];
+  uint64 signature_slot = 3 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"
+  ];
 }
 
 message LightClientHeaderCapella {
   BeaconBlockHeader beacon = 1;
   ethereum.engine.v1.ExecutionPayloadHeaderCapella execution = 2;
-  repeated bytes execution_branch = 3 [(ethereum.eth.ext.ssz_size) = "4,32"];
+  repeated bytes execution_branch = 3 [ (ethereum.eth.ext.ssz_size) = "4,32" ];
 }
 
 // ----------------------------------------------------------------------------
@@ -112,37 +132,48 @@ message LightClientHeaderCapella {
 message LightClientBootstrapDeneb {
   LightClientHeaderDeneb header = 1;
   SyncCommittee current_sync_committee = 2;
-  repeated bytes current_sync_committee_branch = 3 [(ethereum.eth.ext.ssz_size) = "5,32"];
+  repeated bytes current_sync_committee_branch = 3
+      [ (ethereum.eth.ext.ssz_size) = "5,32" ];
 }
 
 message LightClientUpdateDeneb {
   LightClientHeaderDeneb attested_header = 1;
   SyncCommittee next_sync_committee = 2;
-  repeated bytes next_sync_committee_branch = 3 [(ethereum.eth.ext.ssz_size) = "5,32"];
+  repeated bytes next_sync_committee_branch = 3
+      [ (ethereum.eth.ext.ssz_size) = "5,32" ];
   LightClientHeaderDeneb finalized_header = 4;
-  repeated bytes finality_branch = 5 [(ethereum.eth.ext.ssz_size) = "6,32"];
+  repeated bytes finality_branch = 5 [ (ethereum.eth.ext.ssz_size) = "6,32" ];
   SyncAggregate sync_aggregate = 6;
-  uint64 signature_slot = 7 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"];
+  uint64 signature_slot = 7 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"
+  ];
 }
 
 message LightClientFinalityUpdateDeneb {
   LightClientHeaderDeneb attested_header = 1;
   LightClientHeaderDeneb finalized_header = 2;
-  repeated bytes finality_branch = 3 [(ethereum.eth.ext.ssz_size) = "6,32"];
+  repeated bytes finality_branch = 3 [ (ethereum.eth.ext.ssz_size) = "6,32" ];
   SyncAggregate sync_aggregate = 4;
-  uint64 signature_slot = 5 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"];
+  uint64 signature_slot = 5 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"
+  ];
 }
 
 message LightClientOptimisticUpdateDeneb {
   LightClientHeaderDeneb attested_header = 1;
   SyncAggregate sync_aggregate = 2;
-  uint64 signature_slot = 3 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"];
+  uint64 signature_slot = 3 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"
+  ];
 }
 
 message LightClientHeaderDeneb {
   BeaconBlockHeader beacon = 1;
   ethereum.engine.v1.ExecutionPayloadHeaderDeneb execution = 2;
-  repeated bytes execution_branch = 3 [(ethereum.eth.ext.ssz_size) = "4,32"];
+  repeated bytes execution_branch = 3 [ (ethereum.eth.ext.ssz_size) = "4,32" ];
 }
 
 // ----------------------------------------------------------------------------
@@ -152,23 +183,31 @@ message LightClientHeaderDeneb {
 message LightClientBootstrapElectra {
   LightClientHeaderDeneb header = 1;
   SyncCommittee current_sync_committee = 2;
-  repeated bytes current_sync_committee_branch = 3 [(ethereum.eth.ext.ssz_size) = "6,32"];
+  repeated bytes current_sync_committee_branch = 3
+      [ (ethereum.eth.ext.ssz_size) = "6,32" ];
 }
 
 message LightClientUpdateElectra {
   LightClientHeaderDeneb attested_header = 1;
   SyncCommittee next_sync_committee = 2;
-  repeated bytes next_sync_committee_branch = 3 [(ethereum.eth.ext.ssz_size) = "6,32"];
+  repeated bytes next_sync_committee_branch = 3
+      [ (ethereum.eth.ext.ssz_size) = "6,32" ];
   LightClientHeaderDeneb finalized_header = 4;
-  repeated bytes finality_branch = 5 [(ethereum.eth.ext.ssz_size) = "7,32"];
+  repeated bytes finality_branch = 5 [ (ethereum.eth.ext.ssz_size) = "7,32" ];
   SyncAggregate sync_aggregate = 6;
-  uint64 signature_slot = 7 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"];
+  uint64 signature_slot = 7 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"
+  ];
 }
 
 message LightClientFinalityUpdateElectra {
   LightClientHeaderDeneb attested_header = 1;
   LightClientHeaderDeneb finalized_header = 2;
-  repeated bytes finality_branch = 3 [(ethereum.eth.ext.ssz_max) = "7,32"];
+  repeated bytes finality_branch = 3 [ (ethereum.eth.ext.ssz_max) = "7,32" ];
   SyncAggregate sync_aggregate = 4;
-  uint64 signature_slot = 5 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"];
+  uint64 signature_slot = 5 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"
+  ];
 }

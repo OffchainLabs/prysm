@@ -13,7 +13,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/das"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
@@ -73,14 +72,6 @@ func (s *Service) startBlocksQueue(ctx context.Context, highestSlot primitives.S
 		return nil, errors.Wrapf(err, "unable to initialize context version map using genesis validator root = %#x", vr)
 	}
 
-	summarizer, err := s.cfg.BlobStorage.WaitForSummarizer(ctx)
-	if err != nil {
-		// The summarizer is an optional optimization, we can continue without, only stop if there is a different error.
-		if !errors.Is(err, filesystem.ErrBlobStorageSummarizerUnavailable) {
-			return nil, err
-		}
-		summarizer = nil // This should already be nil, but we'll set it just to be safe.
-	}
 	cfg := &blocksQueueConfig{
 		p2p:                 s.cfg.P2P,
 		db:                  s.cfg.DB,
@@ -89,9 +80,9 @@ func (s *Service) startBlocksQueue(ctx context.Context, highestSlot primitives.S
 		ctxMap:              ctxMap,
 		highestExpectedSlot: highestSlot,
 		mode:                mode,
-		bs:                  summarizer,
-		bv:                  s.newBlobVerifier,
+		bs:                  s.cfg.BlobStorage,
 		cv:                  s.newDataColumnsVerifier,
+		custodyInfo:         s.cfg.CustodyInfo,
 	}
 	queue := newBlocksQueue(ctx, cfg)
 	if err := queue.start(); err != nil {
@@ -231,7 +222,7 @@ func (s *Service) processFetchedDataRegSync(
 		logPost = log.WithField("firstUnprocessed", postFuluBwbs[0].Block.Block().Slot())
 	}
 
-	lazilyPersistentStoreColumn := das.NewLazilyPersistentStoreColumn(s.cfg.BlobStorage)
+	lazilyPersistentStoreColumn := das.NewLazilyPersistentStoreColumn(s.cfg.BlobStorage, s.cfg.CustodyInfo)
 
 	for _, b := range postFuluBwbs {
 		log := logPost.WithFields(syncFields(b.Block))
@@ -421,7 +412,7 @@ func (s *Service) processPostFuluBatchedBlocks(
 		return nil
 	}
 
-	persistentStoreColumn := das.NewLazilyPersistentStoreColumn(s.cfg.BlobStorage)
+	persistentStoreColumn := das.NewLazilyPersistentStoreColumn(s.cfg.BlobStorage, s.cfg.CustodyInfo)
 	s.logBatchSyncStatus(genesis, firstBlock, bwbCount)
 	for _, bwb := range bwbs {
 		if len(bwb.Columns) == 0 {

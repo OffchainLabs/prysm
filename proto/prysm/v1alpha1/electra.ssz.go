@@ -659,6 +659,234 @@ func (s *SingleAttestation) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	return
 }
 
+// MarshalSSZ ssz marshals the BuilderBidElectra object
+func (b *BuilderBidElectra) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(b)
+}
+
+// MarshalSSZTo ssz marshals the BuilderBidElectra object to a target array
+func (b *BuilderBidElectra) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(92)
+
+	// Offset (0) 'Header'
+	dst = ssz.WriteOffset(dst, offset)
+	if b.Header == nil {
+		b.Header = new(v1.ExecutionPayloadHeaderDeneb)
+	}
+	offset += b.Header.SizeSSZ()
+
+	// Offset (1) 'BlobKzgCommitments'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.BlobKzgCommitments) * 48
+
+	// Offset (2) 'ExecutionRequests'
+	dst = ssz.WriteOffset(dst, offset)
+	if b.ExecutionRequests == nil {
+		b.ExecutionRequests = new(v1.ExecutionRequests)
+	}
+	offset += b.ExecutionRequests.SizeSSZ()
+
+	// Field (3) 'Value'
+	if size := len(b.Value); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.Value", size, 32)
+		return
+	}
+	dst = append(dst, b.Value...)
+
+	// Field (4) 'Pubkey'
+	if size := len(b.Pubkey); size != 48 {
+		err = ssz.ErrBytesLengthFn("--.Pubkey", size, 48)
+		return
+	}
+	dst = append(dst, b.Pubkey...)
+
+	// Field (0) 'Header'
+	if dst, err = b.Header.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (1) 'BlobKzgCommitments'
+	if size := len(b.BlobKzgCommitments); size > 4096 {
+		err = ssz.ErrListTooBigFn("--.BlobKzgCommitments", size, 4096)
+		return
+	}
+	for ii := 0; ii < len(b.BlobKzgCommitments); ii++ {
+		if size := len(b.BlobKzgCommitments[ii]); size != 48 {
+			err = ssz.ErrBytesLengthFn("--.BlobKzgCommitments[ii]", size, 48)
+			return
+		}
+		dst = append(dst, b.BlobKzgCommitments[ii]...)
+	}
+
+	// Field (2) 'ExecutionRequests'
+	if dst, err = b.ExecutionRequests.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the BuilderBidElectra object
+func (b *BuilderBidElectra) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 92 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o0, o1, o2 uint64
+
+	// Offset (0) 'Header'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
+	}
+
+	if o0 != 92 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Offset (1) 'BlobKzgCommitments'
+	if o1 = ssz.ReadOffset(buf[4:8]); o1 > size || o0 > o1 {
+		return ssz.ErrOffset
+	}
+
+	// Offset (2) 'ExecutionRequests'
+	if o2 = ssz.ReadOffset(buf[8:12]); o2 > size || o1 > o2 {
+		return ssz.ErrOffset
+	}
+
+	// Field (3) 'Value'
+	if cap(b.Value) == 0 {
+		b.Value = make([]byte, 0, len(buf[12:44]))
+	}
+	b.Value = append(b.Value, buf[12:44]...)
+
+	// Field (4) 'Pubkey'
+	if cap(b.Pubkey) == 0 {
+		b.Pubkey = make([]byte, 0, len(buf[44:92]))
+	}
+	b.Pubkey = append(b.Pubkey, buf[44:92]...)
+
+	// Field (0) 'Header'
+	{
+		buf = tail[o0:o1]
+		if b.Header == nil {
+			b.Header = new(v1.ExecutionPayloadHeaderDeneb)
+		}
+		if err = b.Header.UnmarshalSSZ(buf); err != nil {
+			return err
+		}
+	}
+
+	// Field (1) 'BlobKzgCommitments'
+	{
+		buf = tail[o1:o2]
+		num, err := ssz.DivideInt2(len(buf), 48, 4096)
+		if err != nil {
+			return err
+		}
+		b.BlobKzgCommitments = make([][]byte, num)
+		for ii := 0; ii < num; ii++ {
+			if cap(b.BlobKzgCommitments[ii]) == 0 {
+				b.BlobKzgCommitments[ii] = make([]byte, 0, len(buf[ii*48:(ii+1)*48]))
+			}
+			b.BlobKzgCommitments[ii] = append(b.BlobKzgCommitments[ii], buf[ii*48:(ii+1)*48]...)
+		}
+	}
+
+	// Field (2) 'ExecutionRequests'
+	{
+		buf = tail[o2:]
+		if b.ExecutionRequests == nil {
+			b.ExecutionRequests = new(v1.ExecutionRequests)
+		}
+		if err = b.ExecutionRequests.UnmarshalSSZ(buf); err != nil {
+			return err
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the BuilderBidElectra object
+func (b *BuilderBidElectra) SizeSSZ() (size int) {
+	size = 92
+
+	// Field (0) 'Header'
+	if b.Header == nil {
+		b.Header = new(v1.ExecutionPayloadHeaderDeneb)
+	}
+	size += b.Header.SizeSSZ()
+
+	// Field (1) 'BlobKzgCommitments'
+	size += len(b.BlobKzgCommitments) * 48
+
+	// Field (2) 'ExecutionRequests'
+	if b.ExecutionRequests == nil {
+		b.ExecutionRequests = new(v1.ExecutionRequests)
+	}
+	size += b.ExecutionRequests.SizeSSZ()
+
+	return
+}
+
+// HashTreeRoot ssz hashes the BuilderBidElectra object
+func (b *BuilderBidElectra) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(b)
+}
+
+// HashTreeRootWith ssz hashes the BuilderBidElectra object with a hasher
+func (b *BuilderBidElectra) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'Header'
+	if err = b.Header.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (1) 'BlobKzgCommitments'
+	{
+		if size := len(b.BlobKzgCommitments); size > 4096 {
+			err = ssz.ErrListTooBigFn("--.BlobKzgCommitments", size, 4096)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range b.BlobKzgCommitments {
+			if len(i) != 48 {
+				err = ssz.ErrBytesLength
+				return
+			}
+			hh.PutBytes(i)
+		}
+
+		numItems := uint64(len(b.BlobKzgCommitments))
+		hh.MerkleizeWithMixin(subIndx, numItems, 4096)
+	}
+
+	// Field (2) 'ExecutionRequests'
+	if err = b.ExecutionRequests.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (3) 'Value'
+	if size := len(b.Value); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.Value", size, 32)
+		return
+	}
+	hh.PutBytes(b.Value)
+
+	// Field (4) 'Pubkey'
+	if size := len(b.Pubkey); size != 48 {
+		err = ssz.ErrBytesLengthFn("--.Pubkey", size, 48)
+		return
+	}
+	hh.PutBytes(b.Pubkey)
+
+	hh.Merkleize(indx)
+	return
+}
+
 // MarshalSSZ ssz marshals the SignedBeaconBlockContentsElectra object
 func (s *SignedBeaconBlockContentsElectra) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(s)

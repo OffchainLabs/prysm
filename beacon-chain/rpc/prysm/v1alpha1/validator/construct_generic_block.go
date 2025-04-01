@@ -96,7 +96,7 @@ func (vs *Server) constructFuluBlock(blockProto proto.Message, isBlinded bool, p
 	if isBlinded {
 		return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_BlindedFulu{BlindedFulu: blockProto.(*ethpb.BlindedBeaconBlockFulu)}, IsBlinded: true, PayloadValue: payloadValue}
 	}
-	fuluContents := &ethpb.BeaconBlockContentsFulu{Block: blockProto.(*ethpb.BeaconBlockFulu)}
+	fuluContents := &ethpb.BeaconBlockContentsFulu{Block: blockProto.(*ethpb.BeaconBlockElectra)}
 	if bundle != nil {
 		fuluContents.KzgProofs = bundle.Proofs
 		fuluContents.Blobs = bundle.Blobs

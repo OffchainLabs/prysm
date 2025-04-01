@@ -27,7 +27,6 @@ import (
 	p2ptypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/verify"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
 	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
@@ -58,6 +57,7 @@ type Config struct {
 	ClockWaiter         startup.ClockWaiter
 	InitialSyncComplete chan struct{}
 	BlobStorage         *filesystem.BlobStorage
+	CustodyInfo         *peerdas.CustodyInfo
 }
 
 // Service service.
@@ -306,76 +306,14 @@ func missingBlobRequest(blk blocks.ROBlock, store *filesystem.BlobStorage) (p2pt
 	if len(cmts) == 0 {
 		return nil, nil
 	}
-	onDisk, err := store.Indices(r, blk.Block().Slot())
-	if err != nil {
-		return nil, errors.Wrapf(err, "error checking existing blobs for checkpoint sync block root %#x", r)
-	}
+	onDisk := store.Summary(r)
 	req := make(p2ptypes.BlobSidecarsByRootReq, 0, len(cmts))
 	for i := range cmts {
-		if onDisk[i] {
+		if onDisk.HasIndex(uint64(i)) {
 			continue
 		}
 		req = append(req, &eth.BlobIdentifier{BlockRoot: r[:], Index: uint64(i)})
 	}
-	return req, nil
-}
-
-func (s *Service) missingColumnRequest(roBlock blocks.ROBlock, store *filesystem.BlobStorage) (p2ptypes.DataColumnSidecarsByRootReq, error) {
-	// No columns for pre-Fulu blocks.
-	if roBlock.Version() < version.Fulu {
-		return nil, nil
-	}
-
-	// Get the block root.
-	blockRoot := roBlock.Root()
-
-	// Get the commitments from the block.
-	commitments, err := roBlock.Block().Body().BlobKzgCommitments()
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to get blob KZG commitments")
-	}
-
-	// Return early if there are no commitments.
-	if len(commitments) == 0 {
-		return nil, nil
-	}
-
-	// Check which columns are already on disk.
-	storedColumns, err := store.ColumnIndices(blockRoot)
-	if err != nil {
-		return nil, errors.Wrapf(err, "error checking existing blobs for checkpoint sync block root %#x", blockRoot)
-	}
-
-	// Get our node ID.
-	nodeID := s.cfg.P2P.NodeID()
-
-	// Get the custody group count.
-	custodyGroupsCount := peerdas.CustodyGroupCount()
-
-	// Compute the custody groups.
-	custodyGroups, err := peerdas.CustodyGroups(nodeID, custodyGroupsCount)
-	if err != nil {
-		return nil, errors.Wrap(err, "custody groups")
-	}
-
-	// Compute the custody columns.
-	custodyColumns, err := peerdas.CustodyColumns(custodyGroups)
-	if err != nil {
-		return nil, errors.Wrap(err, "custody columns")
-	}
-
-	// Build blob sidecars by root requests based on missing columns.
-	req := make(p2ptypes.DataColumnSidecarsByRootReq, 0, len(commitments))
-	for columnIndex := range custodyColumns {
-		isColumnAvailable := storedColumns[columnIndex]
-		if !isColumnAvailable {
-			req = append(req, &eth.DataColumnIdentifier{
-				BlockRoot:   blockRoot[:],
-				ColumnIndex: columnIndex,
-			})
-		}
-	}
-
 	return req, nil
 }
 
@@ -449,57 +387,53 @@ func (s *Service) fetchOriginColumns(pids []peer.ID) error {
 	if err != nil {
 		return err
 	}
-	req, err := s.missingColumnRequest(rob, s.cfg.BlobStorage)
+
+	custodyGroupCount := s.cfg.CustodyInfo.ActualGroupCount()
+
+	missingColumns, err := sync.FindMissingDataColumns(
+		r,
+		rob,
+		s.cfg.P2P.NodeID(),
+		custodyGroupCount,
+		s.cfg.BlobStorage,
+	)
 	if err != nil {
 		return err
 	}
-	if len(req) == 0 {
+	if len(missingColumns) == 0 {
 		log.WithField("root", fmt.Sprintf("%#x", r)).Debug("All columns for checkpoint block are present")
 		return nil
 	}
-	shufflePeers(pids)
-	pids, err = s.cfg.P2P.AdmissibleCustodyGroupsPeers(pids)
+	sidecars, err := sync.RequestDataColumnSidecarsByRoot(
+		s.ctx,
+		missingColumns,
+		rob,
+		r,
+		pids,
+		s.clock,
+		s.cfg.P2P,
+		s.ctxMap,
+		s.newDataColumnsVerifier,
+	)
 	if err != nil {
 		return err
 	}
-	for i := range pids {
-		sidecars, err := sync.SendDataColumnSidecarsByRootRequest(s.ctx, s.clock, s.cfg.P2P, pids[i], s.ctxMap, &req)
-		if err != nil {
-			continue
-		}
-		if len(sidecars) != len(req) {
-			continue
-		}
 
-		wrappedBlockDataColumns := make([]verify.WrappedBlockDataColumn, 0, len(sidecars))
-		for _, sidecar := range sidecars {
-			wrappedBlockDataColumn := verify.WrappedBlockDataColumn{
-				ROBlock:      blk.Block(),
-				RODataColumn: sidecar,
-			}
-
-			wrappedBlockDataColumns = append(wrappedBlockDataColumns, wrappedBlockDataColumn)
-		}
-
-		if err := verify.DataColumnsAlignWithBlock(wrappedBlockDataColumns, s.newDataColumnsVerifier); err != nil {
-			return errors.Wrap(err, "data columns align with block")
-		}
-
-		avs := das.NewLazilyPersistentStoreColumn(s.cfg.BlobStorage)
-		current := s.clock.CurrentSlot()
-		if err := avs.PersistColumns(current, sidecars...); err != nil {
-			return err
-		}
-
-		nodeID := s.cfg.P2P.NodeID()
-		if err := avs.IsDataAvailable(s.ctx, nodeID, current, rob); err != nil {
-			log.WithField("root", fmt.Sprintf("%#x", r)).WithField("peerID", pids[i]).Warn("Columns from peer for origin block were unusable")
-			continue
-		}
-		log.WithField("nColumns", len(sidecars)).WithField("root", fmt.Sprintf("%#x", r)).Info("Successfully downloaded blobs for checkpoint sync block")
-		return nil
+	// FIXME: It's not clear that the caching layer is doing anything here or in
+	// fetchOriginBlobs, which is presumably where this logic was derived from.
+	avs := das.NewLazilyPersistentStoreColumn(s.cfg.BlobStorage, s.cfg.CustodyInfo)
+	current := s.clock.CurrentSlot()
+	if err := avs.PersistColumns(current, sidecars...); err != nil {
+		return err
 	}
-	return fmt.Errorf("no connected peer able to provide columns for checkpoint sync block %#x", r)
+
+	nodeID := s.cfg.P2P.NodeID()
+	if err := avs.IsDataAvailable(s.ctx, nodeID, current, rob); err != nil {
+		return fmt.Errorf("couldn't assemble the required columns from peers for checkpoint sync block %#x", r)
+	}
+
+	log.WithField("nColumns", len(sidecars)).WithField("root", fmt.Sprintf("%#x", r)).Info("Successfully downloaded data columns for checkpoint sync block")
+	return nil
 }
 
 func shufflePeers(pids []peer.ID) {

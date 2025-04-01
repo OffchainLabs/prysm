@@ -4,6 +4,7 @@ import (
 	"time"
 
 	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
 )
@@ -38,6 +39,7 @@ type Config struct {
 	StateNotifier        statefeed.Notifier
 	DB                   db.ReadOnlyDatabase
 	ClockWaiter          startup.ClockWaiter
+	CustodyInfo          *peerdas.CustodyInfo
 }
 
 // validateConfig validates whether the values provided are accurate and will set

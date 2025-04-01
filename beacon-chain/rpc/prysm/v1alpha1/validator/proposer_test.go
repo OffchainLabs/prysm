@@ -90,7 +90,7 @@ func TestServer_GetBeaconBlock_Phase0(t *testing.T) {
 	require.NoError(t, db.SaveState(ctx, beaconState, parentRoot), "Could not save genesis state")
 	require.NoError(t, db.SaveHeadBlockRoot(ctx, parentRoot), "Could not save genesis state")
 
-	proposerServer := getProposerServer(db, beaconState, parentRoot[:])
+	proposerServer := getProposerServer(ctx, db, beaconState, parentRoot[:])
 
 	randaoReveal, err := util.RandaoReveal(beaconState, 0, privKeys)
 	require.NoError(t, err)
@@ -162,7 +162,7 @@ func TestServer_GetBeaconBlock_Altair(t *testing.T) {
 	require.NoError(t, db.SaveState(ctx, beaconState, blkRoot), "Could not save genesis state")
 	require.NoError(t, db.SaveHeadBlockRoot(ctx, blkRoot), "Could not save genesis state")
 
-	proposerServer := getProposerServer(db, beaconState, parentRoot[:])
+	proposerServer := getProposerServer(ctx, db, beaconState, parentRoot[:])
 
 	randaoReveal, err := util.RandaoReveal(beaconState, 0, privKeys)
 	require.NoError(t, err)
@@ -275,7 +275,7 @@ func TestServer_GetBeaconBlock_Bellatrix(t *testing.T) {
 		Timestamp:     uint64(timeStamp.Unix()),
 	}
 
-	proposerServer := getProposerServer(db, beaconState, parentRoot[:])
+	proposerServer := getProposerServer(ctx, db, beaconState, parentRoot[:])
 	proposerServer.Eth1BlockFetcher = c
 	ed, err := blocks.NewWrappedExecutionData(payload)
 	require.NoError(t, err)
@@ -401,7 +401,7 @@ func TestServer_GetBeaconBlock_Capella(t *testing.T) {
 		Withdrawals:   make([]*enginev1.Withdrawal, 0),
 	}
 
-	proposerServer := getProposerServer(db, beaconState, parentRoot[:])
+	proposerServer := getProposerServer(ctx, db, beaconState, parentRoot[:])
 	ed, err := blocks.NewWrappedExecutionData(payload)
 	require.NoError(t, err)
 	proposerServer.ExecutionEngineCaller = &mockExecution.EngineClient{
@@ -524,7 +524,7 @@ func TestServer_GetBeaconBlock_Deneb(t *testing.T) {
 	proofs := [][]byte{[]byte("proof"), []byte("proof1"), []byte("proof2")}
 	blobs := [][]byte{[]byte("blob"), []byte("blob1"), []byte("blob2")}
 	bundle := &enginev1.BlobsBundle{KzgCommitments: kc, Proofs: proofs, Blobs: blobs}
-	proposerServer := getProposerServer(db, beaconState, parentRoot[:])
+	proposerServer := getProposerServer(ctx, db, beaconState, parentRoot[:])
 	proposerServer.ExecutionEngineCaller = &mockExecution.EngineClient{
 		PayloadIDBytes: &enginev1.PayloadIDBytes{1},
 		GetPayloadResponse: &blocks.GetPayloadResponse{
@@ -657,12 +657,16 @@ func TestServer_GetBeaconBlock_Electra(t *testing.T) {
 		BaseFeePerGas: make([]byte, fieldparams.RootLength),
 		BlockHash:     make([]byte, fieldparams.RootLength),
 	}
-	proposerServer := getProposerServer(db, beaconState, parentRoot[:])
+	proposerServer := getProposerServer(ctx, db, beaconState, parentRoot[:])
 	ed, err := blocks.NewWrappedExecutionData(payload)
 	require.NoError(t, err)
 	proposerServer.ExecutionEngineCaller = &mockExecution.EngineClient{
-		PayloadIDBytes:     &enginev1.PayloadIDBytes{1},
-		GetPayloadResponse: &blocks.GetPayloadResponse{ExecutionData: ed},
+		PayloadIDBytes: &enginev1.PayloadIDBytes{1},
+		GetPayloadResponse: &blocks.GetPayloadResponse{ExecutionData: ed, ExecutionRequests: &enginev1.ExecutionRequests{
+			Withdrawals:    wr,
+			Deposits:       dr,
+			Consolidations: cr,
+		}},
 	}
 
 	randaoReveal, err := util.RandaoReveal(beaconState, 0, privKeys)
@@ -733,11 +737,11 @@ func TestServer_GetBeaconBlock_Fulu(t *testing.T) {
 		},
 	}
 	blk := &ethpb.SignedBeaconBlockFulu{
-		Block: &ethpb.BeaconBlockFulu{
+		Block: &ethpb.BeaconBlockElectra{
 			Slot:       fuluSlot + 1,
 			ParentRoot: parentRoot[:],
 			StateRoot:  genesis.Block.StateRoot,
-			Body: &ethpb.BeaconBlockBodyFulu{
+			Body: &ethpb.BeaconBlockBodyElectra{
 				RandaoReveal:  genesis.Block.Body.RandaoReveal,
 				Graffiti:      genesis.Block.Body.Graffiti,
 				Eth1Data:      genesis.Block.Body.Eth1Data,
@@ -782,12 +786,16 @@ func TestServer_GetBeaconBlock_Fulu(t *testing.T) {
 		BaseFeePerGas: make([]byte, fieldparams.RootLength),
 		BlockHash:     make([]byte, fieldparams.RootLength),
 	}
-	proposerServer := getProposerServer(db, beaconState, parentRoot[:])
+	proposerServer := getProposerServer(ctx, db, beaconState, parentRoot[:])
 	ed, err := blocks.NewWrappedExecutionData(payload)
 	require.NoError(t, err)
 	proposerServer.ExecutionEngineCaller = &mockExecution.EngineClient{
-		PayloadIDBytes:     &enginev1.PayloadIDBytes{1},
-		GetPayloadResponse: &blocks.GetPayloadResponse{ExecutionData: ed},
+		PayloadIDBytes: &enginev1.PayloadIDBytes{1},
+		GetPayloadResponse: &blocks.GetPayloadResponse{ExecutionData: ed, ExecutionRequests: &enginev1.ExecutionRequests{
+			Withdrawals:    wr,
+			Deposits:       dr,
+			Consolidations: cr,
+		}},
 	}
 
 	randaoReveal, err := util.RandaoReveal(beaconState, 0, privKeys)
@@ -832,7 +840,7 @@ func TestServer_GetBeaconBlock_Optimistic(t *testing.T) {
 	require.ErrorContains(t, errOptimisticMode.Error(), err)
 }
 
-func getProposerServer(db db.HeadAccessDatabase, headState state.BeaconState, headRoot []byte) *Server {
+func getProposerServer(ctx context.Context, db db.HeadAccessDatabase, headState state.BeaconState, headRoot []byte) *Server {
 	mockChainService := &mock.ChainService{State: headState, Root: headRoot, ForkChoiceStore: doublylinkedtree.New()}
 	return &Server{
 		HeadFetcher:           mockChainService,
@@ -2688,6 +2696,41 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 		hash := majorityVoteEth1Data.BlockHash
 
 		expectedHash := []byte("eth1data")
+		assert.DeepEqual(t, expectedHash, hash)
+	})
+
+	t.Run("post electra the head eth1data should be returned", func(t *testing.T) {
+		p := mockExecution.New().
+			InsertBlock(50, earliestValidTime, []byte("earliest")).
+			InsertBlock(100, latestValidTime, []byte("latest"))
+		p.Eth1Data = &ethpb.Eth1Data{
+			BlockHash: []byte("eth1data"),
+		}
+
+		depositCache, err := depositsnapshot.New()
+		require.NoError(t, err)
+
+		beaconState, err := state_native.InitializeFromProtoElectra(&ethpb.BeaconStateElectra{
+			Slot:     slot,
+			Eth1Data: &ethpb.Eth1Data{BlockHash: []byte("legacy"), DepositCount: 1},
+		})
+		require.NoError(t, err)
+
+		ps := &Server{
+			ChainStartFetcher: p,
+			Eth1InfoFetcher:   p,
+			Eth1BlockFetcher:  p,
+			BlockFetcher:      p,
+			DepositFetcher:    depositCache,
+		}
+
+		ctx := context.Background()
+		majorityVoteEth1Data, err := ps.eth1DataMajorityVote(ctx, beaconState)
+		require.NoError(t, err)
+
+		hash := majorityVoteEth1Data.BlockHash
+
+		expectedHash := []byte("legacy")
 		assert.DeepEqual(t, expectedHash, hash)
 	})
 }

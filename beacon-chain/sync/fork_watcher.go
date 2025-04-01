@@ -148,6 +148,7 @@ func (s *Service) deregisterFromPastFork(currentEpoch primitives.Epoch) error {
 	for topic := range topicsToRemove {
 		fullTopic := topic + s.cfg.p2p.Encoding().ProtocolSuffix()
 		s.cfg.p2p.Host().RemoveStreamHandler(protocol.ID(fullTopic))
+		log.WithField("topic", fullTopic).Debug("Removed RPC handler")
 	}
 
 	// Run through all our current active topics and see

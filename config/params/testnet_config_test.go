@@ -88,6 +88,7 @@ func compareConfigs(t *testing.T, expected, actual *params.BeaconChainConfig) {
 	require.DeepEqual(t, expected.ProportionalSlashingMultiplier, actual.ProportionalSlashingMultiplier)
 	require.DeepEqual(t, expected.MaxProposerSlashings, actual.MaxProposerSlashings)
 	require.DeepEqual(t, expected.MaxAttesterSlashings, actual.MaxAttesterSlashings)
+	require.DeepEqual(t, expected.MaxAttesterSlashingsElectra, actual.MaxAttesterSlashingsElectra)
 	require.DeepEqual(t, expected.MaxAttestations, actual.MaxAttestations)
 	require.DeepEqual(t, expected.MaxDeposits, actual.MaxDeposits)
 	require.DeepEqual(t, expected.MaxVoluntaryExits, actual.MaxVoluntaryExits)

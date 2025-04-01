@@ -17,6 +17,19 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 		return fmt.Errorf("message was not type blocks.VerifiedRODataColumn, type=%T", msg)
 	}
 
+	if err := s.receiveDataColumn(ctx, dc); err != nil {
+		return errors.Wrap(err, "receive data column")
+	}
+
+	// Reconstruct the data columns if needed.
+	if err := s.reconstructDataColumns(ctx, dc); err != nil {
+		return errors.Wrap(err, "reconstruct data columns")
+	}
+
+	return nil
+}
+
+func (s *Service) receiveDataColumn(ctx context.Context, dc blocks.VerifiedRODataColumn) error {
 	slot := dc.SignedBlockHeader.Header.Slot
 	proposerIndex := dc.SignedBlockHeader.Header.ProposerIndex
 	columnIndex := dc.ColumnIndex
@@ -43,11 +56,6 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 			DataColumn: &dc,
 		},
 	})
-
-	// Reconstruct the data columns if needed.
-	if err := s.reconstructDataColumns(ctx, dc); err != nil {
-		return errors.Wrap(err, "reconstruct data columns")
-	}
 
 	return nil
 }

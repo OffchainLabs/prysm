@@ -119,6 +119,9 @@ const (
 	// PostGenesisDepositBatch deposits are sent to test that deposits appear in blocks as expected
 	// and validators become active.
 	PostGenesisDepositBatch
+	// PostElectraDepositBatch deposits are sent to test that deposits sent after electra has been transitioned
+	// work as expected.
+	PostElectraDepositBatch
 )
 
 // DepositBalancer represents a type that can sum, by validator, all deposits made in E2E prior to the function call.

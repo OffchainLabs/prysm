@@ -167,7 +167,7 @@ func (s *PremineGenesisConfig) empty() (state.BeaconState, error) {
 			return nil, err
 		}
 	case version.Fulu:
-		e, err = state_native.InitializeFromProtoFulu(&ethpb.BeaconStateFulu{})
+		e, err = state_native.InitializeFromProtoFulu(&ethpb.BeaconStateElectra{})
 		if err != nil {
 			return nil, err
 		}
@@ -578,7 +578,7 @@ func (s *PremineGenesisConfig) setLatestBlockHeader(g state.BeaconState) error {
 			},
 		}
 	case version.Fulu:
-		body = &ethpb.BeaconBlockBodyFulu{
+		body = &ethpb.BeaconBlockBodyElectra{
 			RandaoReveal: make([]byte, 96),
 			Eth1Data: &ethpb.Eth1Data{
 				DepositRoot: make([]byte, 32),

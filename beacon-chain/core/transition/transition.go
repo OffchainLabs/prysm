@@ -403,11 +403,15 @@ func VerifyOperationLengths(_ context.Context, state state.BeaconState, b interf
 		)
 	}
 
-	if uint64(len(body.AttesterSlashings())) > params.BeaconConfig().MaxAttesterSlashings {
+	maxSlashings := params.BeaconConfig().MaxAttesterSlashings
+	if body.Version() >= version.Electra {
+		maxSlashings = params.BeaconConfig().MaxAttesterSlashingsElectra
+	}
+	if uint64(len(body.AttesterSlashings())) > maxSlashings {
 		return nil, fmt.Errorf(
 			"number of attester slashings (%d) in block body exceeds allowed threshold of %d",
 			len(body.AttesterSlashings()),
-			params.BeaconConfig().MaxAttesterSlashings,
+			maxSlashings,
 		)
 	}
 

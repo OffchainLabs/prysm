@@ -8,7 +8,6 @@ import (
 
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	p2ptypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
@@ -33,11 +32,14 @@ func (s *Service) streamDataColumnBatch(ctx context.Context, batch blockBatch, w
 		blockRoot := block.Root()
 
 		// Retrieve stored data columns indices for this block root.
-		storedDataColumnsIndices, err := s.cfg.blobStorage.ColumnIndices(blockRoot)
+		summary := s.cfg.blobStorage.Summary(blockRoot)
+		numberOfColumns := params.BeaconConfig().NumberOfColumns
 
-		if err != nil {
-			s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
-			return wQuota, errors.Wrapf(err, "could not retrieve data columns indice for block root %#x", blockRoot)
+		storedDataColumnsIndices := make(map[uint64]bool, numberOfColumns)
+		for i := range numberOfColumns {
+			if summary.HasDataColumnIndex(i) {
+				storedDataColumnsIndices[i] = true
+			}
 		}
 
 		for _, dataColumnIndex := range wantedDataColumnIndices {
@@ -49,14 +51,14 @@ func (s *Service) streamDataColumnBatch(ctx context.Context, batch blockBatch, w
 			}
 
 			// We won't check for file not found since the .Indices method should normally prevent that from happening.
-			sc, err := s.cfg.blobStorage.GetColumn(blockRoot, dataColumnIndex)
+			verifiedRODataColumn, err := s.cfg.blobStorage.GetColumn(blockRoot, dataColumnIndex)
 			if err != nil {
 				s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
 				return wQuota, errors.Wrapf(err, "could not retrieve data column sidecar: index %d, block root %#x", dataColumnIndex, blockRoot)
 			}
 
 			SetStreamWriteDeadline(stream, defaultWriteDuration)
-			if chunkErr := WriteDataColumnSidecarChunk(stream, s.cfg.chain, s.cfg.p2p.Encoding(), sc); chunkErr != nil {
+			if chunkErr := WriteDataColumnSidecarChunk(stream, s.cfg.chain, s.cfg.p2p.Encoding(), verifiedRODataColumn.DataColumnSidecar); chunkErr != nil {
 				log.WithError(chunkErr).Debug("Could not send a chunked response")
 				s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
 				tracing.AnnotateError(span, chunkErr)
@@ -91,42 +93,14 @@ func (s *Service) dataColumnSidecarsByRangeRPCHandler(ctx context.Context, msg i
 		return errors.New("message is not type *pb.DataColumnSidecarsByRangeRequest")
 	}
 
-	// Get our node ID.
-	nodeID := s.cfg.p2p.NodeID()
 	numberOfColumns := params.BeaconConfig().NumberOfColumns
-
-	// Get the number of groups we should custody.
-	custodyGroupCount := peerdas.CustodyGroupCount()
-
-	// Compute the groups we should custody.
-	custodyGroups, err := peerdas.CustodyGroups(nodeID, custodyGroupCount)
-	if err != nil {
-		s.writeErrorResponseToStream(responseCodeServerError, err.Error(), stream)
-		return errors.Wrap(err, "custody groups")
-	}
-
-	// Compute the columns we should custody.
-	custodyColumns, err := peerdas.CustodyColumns(custodyGroups)
-	if err != nil {
-		s.writeErrorResponseToStream(responseCodeServerError, err.Error(), stream)
-		return errors.Wrap(err, "custody columns")
-	}
-
-	custodyColumnsCount := uint64(len(custodyColumns))
 
 	// Compute requested columns.
 	requestedColumns := r.Columns
 	requestedColumnsCount := uint64(len(requestedColumns))
 
 	// Format log fields.
-	var (
-		custodyColumnsLog   interface{} = "all"
-		requestedColumnsLog interface{} = "all"
-	)
-
-	if custodyColumnsCount != numberOfColumns {
-		custodyColumnsLog = uint64MapToSortedSlice(custodyColumns)
-	}
+	var requestedColumnsLog interface{} = "all"
 
 	if requestedColumnsCount != numberOfColumns {
 		requestedColumnsLog = requestedColumns
@@ -137,7 +111,6 @@ func (s *Service) dataColumnSidecarsByRangeRPCHandler(ctx context.Context, msg i
 
 	log.WithFields(logrus.Fields{
 		"remotePeer":       remotePeer,
-		"custodyColumns":   custodyColumnsLog,
 		"requestedColumns": requestedColumnsLog,
 		"startSlot":        r.StartSlot,
 		"count":            r.Count,

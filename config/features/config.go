@@ -173,6 +173,7 @@ func applyHoleskyFeatureFlags(_ *cli.Context) {
 // ConfigureBeaconChain sets the global config based
 // on what flags are enabled for the beacon-chain client.
 func ConfigureBeaconChain(ctx *cli.Context) error {
+	warnDeprecationUpcoming(ctx)
 	complainOnDeprecatedFlags(ctx)
 	cfg := &Flags{}
 	if ctx.Bool(devModeFlag.Name) {
@@ -349,6 +350,22 @@ func complainOnDeprecatedFlags(ctx *cli.Context) {
 	for _, f := range deprecatedFlags {
 		if ctx.IsSet(f.Names()[0]) {
 			log.Errorf("%s is deprecated and has no effect. Do not use this flag, it will be deleted soon.", f.Names()[0])
+		}
+	}
+}
+
+var upcomingDeprecationExtra = map[string]string{
+	enableHistoricalSpaceRepresentation.Name: "The node needs to be resynced after flag removal.",
+}
+
+func warnDeprecationUpcoming(ctx *cli.Context) {
+	for _, f := range upcomingDeprecation {
+		if ctx.IsSet(f.Names()[0]) {
+			extra := "Please remove this flag from your configuration."
+			if special, ok := upcomingDeprecationExtra[f.Names()[0]]; ok {
+				extra += " " + special
+			}
+			log.Warnf("--%s is pending deprecation and will be removed in the next release. %s", f.Names()[0], extra)
 		}
 	}
 }

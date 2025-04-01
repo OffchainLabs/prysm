@@ -2,85 +2,13 @@ package p2p
 
 import (
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 )
 
-// AdmissibleCustodyGroupsPeers returns a list of peers that custody a super set of the local node's custody groups.
-func (s *Service) AdmissibleCustodyGroupsPeers(peers []peer.ID) ([]peer.ID, error) {
-	localCustodyGroupCount := peerdas.CustodyGroupCount()
-	return s.custodyGroupsAdmissiblePeers(peers, localCustodyGroupCount)
-}
-
-// AdmissibleCustodySamplingPeers returns a list of peers that custody a super set of the local node's sampling columns.
-func (s *Service) AdmissibleCustodySamplingPeers(peers []peer.ID) ([]peer.ID, error) {
-	localSubnetSamplingSize := peerdas.CustodyGroupSamplingSize()
-	return s.custodyGroupsAdmissiblePeers(peers, localSubnetSamplingSize)
-}
-
-// custodyGroupsAdmissiblePeers filters out `peers` that do not custody a super set of our own custody groups.
-func (s *Service) custodyGroupsAdmissiblePeers(peers []peer.ID, custodyGroupCount uint64) ([]peer.ID, error) {
-	// Get the total number of custody groups.
-	numberOfCustodyGroups := params.BeaconConfig().NumberOfCustodyGroups
-
-	// Retrieve the local node ID.
-	localNodeId := s.NodeID()
-
-	// Retrieve the needed custody groups.
-	neededCustodyGroups, err := peerdas.CustodyGroups(localNodeId, custodyGroupCount)
-	if err != nil {
-		return nil, errors.Wrap(err, "custody groups")
-	}
-
-	// Find the valid peers.
-	validPeers := make([]peer.ID, 0, len(peers))
-
-loop:
-	for _, pid := range peers {
-		// Get the custody group count of the remote peer.
-		remoteCustodyGroupCount := s.CustodyGroupCountFromPeer(pid)
-
-		// If the remote peer custodies less groups than we do, skip it.
-		if remoteCustodyGroupCount < custodyGroupCount {
-			continue
-		}
-
-		// Get the remote node ID from the peer ID.
-		remoteNodeID, err := ConvertPeerIDToNodeID(pid)
-		if err != nil {
-			return nil, errors.Wrap(err, "convert peer ID to node ID")
-		}
-
-		// Get the custody groups of the remote peer.
-		remoteCustodyGroups, err := peerdas.CustodyGroups(remoteNodeID, remoteCustodyGroupCount)
-		if err != nil {
-			return nil, errors.Wrap(err, "custody groups")
-		}
-
-		remoteCustodyGroupsCount := uint64(len(remoteCustodyGroups))
-
-		// If the remote peers custodies all the possible columns, add it to the list.
-		if remoteCustodyGroupsCount == numberOfCustodyGroups {
-			validPeers = append(validPeers, pid)
-			continue
-		}
-
-		// Filter out invalid peers.
-		for custodyGroup := range neededCustodyGroups {
-			if !remoteCustodyGroups[custodyGroup] {
-				continue loop
-			}
-		}
-
-		// Add valid peer to list
-		validPeers = append(validPeers, pid)
-	}
-
-	return validPeers, nil
-}
+var _ DataColumnsHandler = (*Service)(nil)
 
 // custodyGroupCountFromPeerENR retrieves the custody count from the peer ENR.
 // If the ENR is not available, it defaults to the minimum number of custody groups

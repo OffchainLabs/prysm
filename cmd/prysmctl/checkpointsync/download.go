@@ -7,6 +7,7 @@ import (
 
 	"github.com/prysmaticlabs/prysm/v5/api/client"
 	"github.com/prysmaticlabs/prysm/v5/api/client/beacon"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/checkpoint"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
@@ -57,7 +58,7 @@ func cliActionDownload(_ *cli.Context) error {
 		return err
 	}
 
-	od, err := beacon.DownloadFinalizedData(ctx, client)
+	od, err := checkpoint.DownloadFinalizedData(ctx, client)
 	if err != nil {
 		return err
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -70,7 +71,7 @@ func TestMain(m *testing.M) {
 		flags.Init(resetFlags)
 	}()
 
-	m.Run()
+	os.Exit(m.Run())
 }
 
 func initializeTestServices(t *testing.T, slots []primitives.Slot, peers []*peerData) (*mock.ChainService, *p2pt.TestP2P, db.Database) {

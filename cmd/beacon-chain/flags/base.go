@@ -196,13 +196,13 @@ var (
 	BlobBatchLimit = &cli.IntFlag{
 		Name:  "blob-batch-limit",
 		Usage: "The amount of blobs the local peer is bounded to request and respond to in a batch.",
-		Value: 64,
+		Value: 192,
 	}
 	// BlobBatchLimitBurstFactor specifies the factor by which blob batch size may increase.
 	BlobBatchLimitBurstFactor = &cli.IntFlag{
 		Name:  "blob-batch-limit-burst-factor",
 		Usage: "The factor by which blob batch limit may increase on burst.",
-		Value: 2,
+		Value: 3,
 	}
 	// DataColumnBatchLimit specifies the requested data column batch size.
 	DataColumnBatchLimit = &cli.IntFlag{
@@ -308,5 +308,17 @@ var (
 		Name:  "slasher-datadir",
 		Usage: "Directory for the slasher database",
 		Value: cmd.DefaultDataDir(),
+	}
+	// BeaconDBPruning enables the pruning of beacon db.
+	BeaconDBPruning = &cli.BoolFlag{
+		Name: "beacon-db-pruning",
+		Usage: "Enables pruning of beacon db beyond MIN_EPOCHS_FOR_BLOCK_REQUESTS duration. This is an opt-in feature," +
+			" and should only be enabled if operators doesn't require historical data.",
+	}
+	// PrunerRetentionEpochs defines the retention period for the pruner service in terms of epochs.
+	PrunerRetentionEpochs = &cli.Uint64Flag{
+		Name: "pruner-retention-epochs",
+		Usage: "Specifies the retention period for the pruner service in terms of epochs. " +
+			"If this value is less than MIN_EPOCHS_FOR_BLOCK_REQUESTS, it will be ignored.",
 	}
 )

@@ -2,7 +2,6 @@ package das
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	errors "github.com/pkg/errors"
@@ -13,21 +12,22 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
-	log "github.com/sirupsen/logrus"
 )
 
 // LazilyPersistentStoreColumn is an implementation of AvailabilityStore to be used when batch syncing data columns.
 // This implementation will hold any blobs passed to Persist until the IsDataAvailable is called for their
 // block, at which time they will undergo full verification and be saved to the disk.
 type LazilyPersistentStoreColumn struct {
-	store *filesystem.BlobStorage
-	cache *cache
+	store       *filesystem.BlobStorage
+	cache       *cache
+	custodyInfo *peerdas.CustodyInfo
 }
 
-func NewLazilyPersistentStoreColumn(store *filesystem.BlobStorage) *LazilyPersistentStoreColumn {
+func NewLazilyPersistentStoreColumn(store *filesystem.BlobStorage, custodyInfo *peerdas.CustodyInfo) *LazilyPersistentStoreColumn {
 	return &LazilyPersistentStoreColumn{
-		store: store,
-		cache: newCache(),
+		store:       store,
+		cache:       newCache(),
+		custodyInfo: custodyInfo,
 	}
 }
 
@@ -66,14 +66,14 @@ func (s *LazilyPersistentStoreColumn) PersistColumns(current primitives.Slot, sc
 }
 
 // IsDataAvailable returns nil if all the commitments in the given block are persisted to the db and have been verified.
-// BlobSidecars already in the db are assumed to have been previously verified against the block.
+// DataColumnsSidecars already in the db are assumed to have been previously verified against the block.
 func (s *LazilyPersistentStoreColumn) IsDataAvailable(
 	ctx context.Context,
 	nodeID enode.ID,
 	currentSlot primitives.Slot,
 	block blocks.ROBlock,
 ) error {
-	blockCommitments, err := fullCommitmentsToCheck(nodeID, block, currentSlot)
+	blockCommitments, err := s.fullCommitmentsToCheck(nodeID, block, currentSlot)
 	if err != nil {
 		return errors.Wrapf(err, "full commitments to check with block root `%#x` and current slot `%d`", block.Root(), currentSlot)
 	}
@@ -95,18 +95,8 @@ func (s *LazilyPersistentStoreColumn) IsDataAvailable(
 	// Get the root of the block.
 	blockRoot := block.Root()
 
-	// Wait for the summarizer to be ready before proceeding.
-	summarizer, err := s.store.WaitForSummarizer(ctx)
-	if err != nil {
-		log.
-			WithField("root", fmt.Sprintf("%#x", blockRoot)).
-			WithError(err).
-			Debug("Failed to receive BlobStorageSummarizer within IsDataAvailable")
-	} else {
-		// Get the summary for the block, and set it in the cache entry.
-		summary := summarizer.Summary(blockRoot)
-		entry.setDiskSummary(summary)
-	}
+	// Set the disk summary for the block in the cache entry.
+	entry.setDiskSummary(s.store.Summary(blockRoot))
 
 	// Verify we have all the expected sidecars, and fail fast if any are missing or inconsistent.
 	// We don't try to salvage problematic batches because this indicates a misbehaving peer and we'd rather
@@ -136,7 +126,7 @@ func (s *LazilyPersistentStoreColumn) IsDataAvailable(
 }
 
 // fullCommitmentsToCheck returns the commitments to check for a given block.
-func fullCommitmentsToCheck(nodeID enode.ID, block blocks.ROBlock, currentSlot primitives.Slot) (*safeCommitmentsArray, error) {
+func (s *LazilyPersistentStoreColumn) fullCommitmentsToCheck(nodeID enode.ID, block blocks.ROBlock, currentSlot primitives.Slot) (*safeCommitmentsArray, error) {
 	// Return early for blocks that are pre-Fulu.
 	if block.Version() < version.Fulu {
 		return &safeCommitmentsArray{}, nil
@@ -166,23 +156,16 @@ func fullCommitmentsToCheck(nodeID enode.ID, block blocks.ROBlock, currentSlot p
 	}
 
 	// Retrieve the groups count.
-	custodyGroupCount := peerdas.CustodyGroupCount()
+	custodyGroupCount := s.custodyInfo.ActualGroupCount()
 
-	// Retrieve custody groups.
-	custodyGroups, err := peerdas.CustodyGroups(nodeID, custodyGroupCount)
+	// Retrieve peer info.
+	peerInfo, _, err := peerdas.Info(nodeID, custodyGroupCount)
 	if err != nil {
-		return nil, errors.Wrap(err, "custody groups")
+		return nil, errors.Wrap(err, "peer info")
 	}
-
-	// Retrieve custody columns.
-	custodyColumns, err := peerdas.CustodyColumns(custodyGroups)
-	if err != nil {
-		return nil, errors.Wrap(err, "custody columns")
-	}
-
 	// Create a safe commitments array for the custody columns.
 	commitmentsArray := &safeCommitmentsArray{}
-	for column := range custodyColumns {
+	for column := range peerInfo.CustodyColumns {
 		commitmentsArray[column] = kzgCommitments
 	}
 

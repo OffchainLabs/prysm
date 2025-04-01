@@ -321,6 +321,17 @@ func HydrateAttestationElectra(a *ethpb.AttestationElectra) *ethpb.AttestationEl
 	return a
 }
 
+func HydrateSingleAttestation(a *ethpb.SingleAttestation) *ethpb.SingleAttestation {
+	if a.Signature == nil {
+		a.Signature = make([]byte, 96)
+	}
+	if a.Data == nil {
+		a.Data = &ethpb.AttestationData{}
+	}
+	a.Data = HydrateAttestationData(a.Data)
+	return a
+}
+
 // HydrateV1Attestation hydrates a v1 attestation object with correct field length sizes
 // to comply with fssz marshalling and unmarshalling rules.
 func HydrateV1Attestation(a *attv1.Attestation) *attv1.Attestation {
@@ -382,6 +393,19 @@ func HydrateV1AttestationData(d *attv1.AttestationData) *attv1.AttestationData {
 // HydrateIndexedAttestation hydrates an indexed attestation with correct field length sizes
 // to comply with fssz marshalling and unmarshalling rules.
 func HydrateIndexedAttestation(a *ethpb.IndexedAttestation) *ethpb.IndexedAttestation {
+	if a.Signature == nil {
+		a.Signature = make([]byte, 96)
+	}
+	if a.Data == nil {
+		a.Data = &ethpb.AttestationData{}
+	}
+	a.Data = HydrateAttestationData(a.Data)
+	return a
+}
+
+// HydrateIndexedAttestationElectra hydrates an indexed attestation with correct field length sizes
+// to comply with fssz marshalling and unmarshalling rules.
+func HydrateIndexedAttestationElectra(a *ethpb.IndexedAttestationElectra) *ethpb.IndexedAttestationElectra {
 	if a.Signature == nil {
 		a.Signature = make([]byte, 96)
 	}

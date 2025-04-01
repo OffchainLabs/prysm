@@ -466,11 +466,3 @@ func (s *TestP2P) CustodyGroupCountFromPeer(pid peer.ID) uint64 {
 
 	return custodyGroupCount
 }
-
-func (*TestP2P) AdmissibleCustodyGroupsPeers(peers []peer.ID) ([]peer.ID, error) {
-	return peers, nil
-}
-
-func (*TestP2P) AdmissibleCustodySamplingPeers(peers []peer.ID) ([]peer.ID, error) {
-	return peers, nil
-}

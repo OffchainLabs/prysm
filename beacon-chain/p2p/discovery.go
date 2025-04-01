@@ -164,12 +164,6 @@ func (s *Service) RefreshPersistentSubnets() {
 		return
 	}
 
-	// Initialize persistent column subnets.
-	if err := initializePersistentColumnSubnets(nodeID); err != nil {
-		log.WithError(err).Error("Could not initialize persistent column subnets")
-		return
-	}
-
 	// Get the current attestation subnet bitfield.
 	bitV := bitfield.NewBitvector64()
 	attestationCommittees := cache.SubnetIDs.GetAllSubnets()
@@ -248,7 +242,7 @@ func (s *Service) RefreshPersistentSubnets() {
 	}
 
 	// Get the current custody group count.
-	custodyGroupCount := peerdas.CustodyGroupCount()
+	custodyGroupCount := s.cfg.CustodyInfo.ActualGroupCount()
 
 	// Get the custody group count we store in our record.
 	inRecordCustodyGroupCount, err := peerdas.CustodyGroupCountFromRecord(record)
@@ -498,7 +492,7 @@ func (s *Service) createLocalNode(
 	}
 
 	if params.FuluEnabled() {
-		custodyGroupCount := peerdas.CustodyGroupCount()
+		custodyGroupCount := s.cfg.CustodyInfo.ActualGroupCount()
 		localNode.Set(peerdas.Cgc(custodyGroupCount))
 	}
 

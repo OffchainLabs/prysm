@@ -1,0 +1,56 @@
+// Copyright 2022 Prysmatic Labs.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+syntax = "proto3";
+
+package ethereum.engine.v1;
+
+import "proto/eth/ext/options.proto";
+
+option csharp_namespace = "Ethereum.Engine.V1";
+option go_package = "github.com/prysmaticlabs/prysm/v5/proto/engine/v1;enginev1";
+option java_multiple_files = true;
+option java_outer_classname = "ExecutionEngineProto";
+option java_package = "org.ethereum.engine.v1";
+option php_namespace = "Ethereum\\Engine\\v1";
+
+message BlobsBundleV2 {
+  // The KZG commitments of the blobs.
+  repeated bytes kzg_commitments = 1 [
+    (ethereum.eth.ext.ssz_size) = "?,48",
+    (ethereum.eth.ext.ssz_max) = "max_blob_commitments.size"
+  ];
+
+  // The cell_proofs for all blobs
+  // TODO: update ssz_max when it's defined in the spec
+  repeated bytes cell_proofs = 2 [
+    (ethereum.eth.ext.ssz_size) = "?,48",
+    (ethereum.eth.ext.ssz_max) = "max_blob_commitments.size"
+  ];
+
+  // The blobs itself.
+  repeated bytes blobs = 3 [
+    (ethereum.eth.ext.ssz_size) = "?,blob.size",
+    (ethereum.eth.ext.ssz_max) = "max_blob_commitments.size"
+  ];
+}
+
+// BlobAndProofV2 consists of the blob and the cell proofs for each cell in the blob.
+// TODO: update ssz_max when it's defined in the spec
+message BlobAndProofV2 {
+  bytes blob = 1 [ (ethereum.eth.ext.ssz_size) = "blob.size" ];
+  repeated bytes cell_proofs = 2 [ 
+    (ethereum.eth.ext.ssz_size) = "48",
+    (ethereum.eth.ext.ssz_max) = "max_blob_commitments.size"
+  ];
+}

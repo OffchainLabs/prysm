@@ -9,6 +9,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/api"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/core"
 	field_params "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
@@ -52,21 +53,27 @@ func (s *Server) Blobs(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	blk, err := s.Blocker.Block(ctx, []byte(blockId))
+	if err != nil {
+		httputil.HandleError(w, "Could not fetch block: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if blk == nil {
+		httputil.HandleError(w, "Block not found", http.StatusNotFound)
+		return
+	}
+
 	if httputil.RespondWithSsz(r) {
 		sszResp, err := buildSidecarsSSZResponse(verifiedBlobs)
 		if err != nil {
 			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		w.Header().Set(api.VersionHeader, version.String(blk.Version()))
 		httputil.WriteSsz(w, sszResp, "blob_sidecars.ssz")
 		return
 	}
 
-	blk, err := s.Blocker.Block(ctx, []byte(blockId))
-	if err != nil {
-		httputil.HandleError(w, "Could not fetch block: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
 	blkRoot, err := blk.Block().HashTreeRoot()
 	if err != nil {
 		httputil.HandleError(w, "Could not hash block: "+err.Error(), http.StatusInternalServerError)
@@ -85,6 +92,7 @@ func (s *Server) Blobs(w http.ResponseWriter, r *http.Request) {
 		ExecutionOptimistic: isOptimistic,
 		Finalized:           s.FinalizationFetcher.IsFinalized(ctx, blkRoot),
 	}
+	w.Header().Set(api.VersionHeader, version.String(blk.Version()))
 	httputil.WriteJson(w, resp)
 }
 

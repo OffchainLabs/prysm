@@ -16,7 +16,7 @@ import (
 // SettingFromConsensus converts struct to Settings while verifying the fields
 func SettingFromConsensus(ps *validatorpb.ProposerSettingsPayload) (*Settings, error) {
 	settings := &Settings{}
-	if ps.ProposerConfig != nil && len(ps.ProposerConfig) != 0 {
+	if len(ps.ProposerConfig) != 0 {
 		settings.ProposeConfig = make(map[[fieldparams.BLSPubkeyLength]byte]*Option)
 		for key, optionPayload := range ps.ProposerConfig {
 			decodedKey, err := hexutil.Decode(key)

@@ -2,7 +2,6 @@ package initialsync
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 	"testing"
@@ -11,6 +10,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	dbtest "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
 	p2pm "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
 	p2pt "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
@@ -189,10 +189,11 @@ func TestBlocksFetcher_findFork(t *testing.T) {
 	fetcher := newBlocksFetcher(
 		ctx,
 		&blocksFetcherConfig{
-			chain: mc,
-			clock: startup.NewClock(mc.Genesis, mc.ValidatorsRoot),
-			p2p:   p2p,
-			db:    beaconDB,
+			chain:       mc,
+			clock:       startup.NewClock(mc.Genesis, mc.ValidatorsRoot),
+			p2p:         p2p,
+			db:          beaconDB,
+			custodyInfo: &peerdas.CustodyInfo{},
 		},
 	)
 	fetcher.rateLimiter = leakybucket.NewCollector(6400, 6400, 1*time.Second, false)
@@ -357,10 +358,11 @@ func TestBlocksFetcher_findForkWithPeer(t *testing.T) {
 	fetcher := newBlocksFetcher(
 		ctx,
 		&blocksFetcherConfig{
-			chain: mc,
-			clock: startup.NewClock(mc.Genesis, mc.ValidatorsRoot),
-			p2p:   p1,
-			db:    beaconDB,
+			chain:       mc,
+			clock:       startup.NewClock(mc.Genesis, mc.ValidatorsRoot),
+			p2p:         p1,
+			db:          beaconDB,
+			custodyInfo: &peerdas.CustodyInfo{},
 		},
 	)
 	fetcher.rateLimiter = leakybucket.NewCollector(6400, 6400, 1*time.Second, false)
@@ -641,214 +643,6 @@ func TestBlocksFetcher_currentHeadAndTargetEpochs(t *testing.T) {
 			} else {
 				assert.Equal(t, finalizedSlot, fetcher.bestNonFinalizedSlot(), "Unexpected non-finalized slot")
 			}
-		})
-	}
-}
-
-func TestSelectPeersToFetchDataColumnsFrom(t *testing.T) {
-	testCases := []struct {
-		name string
-
-		// Inputs
-		neededDataColumns map[uint64]bool
-		dataColumnsByPeer map[peer.ID]map[uint64]bool
-
-		// Expected outputs
-		dataColumnsToFetchByPeer map[peer.ID][]uint64
-		err                      error
-	}{
-		{
-			name:              "no data columns needed",
-			neededDataColumns: map[uint64]bool{},
-			dataColumnsByPeer: map[peer.ID]map[uint64]bool{
-				peer.ID("peer1"): {1: true, 2: true},
-				peer.ID("peer2"): {3: true, 4: true},
-			},
-			dataColumnsToFetchByPeer: map[peer.ID][]uint64{},
-			err:                      nil,
-		},
-		{
-			name:              "one peer has all data columns needed",
-			neededDataColumns: map[uint64]bool{1: true, 3: true, 5: true},
-			dataColumnsByPeer: map[peer.ID]map[uint64]bool{
-				peer.ID("peer1"): {2: true, 4: true},
-				peer.ID("peer2"): {1: true, 3: true, 5: true, 7: true, 9: true},
-				peer.ID("peer3"): {6: true},
-			},
-			dataColumnsToFetchByPeer: map[peer.ID][]uint64{
-				peer.ID("peer2"): {1, 3, 5},
-			},
-			err: nil,
-		},
-		{
-			name:              "multiple peers are needed - 1",
-			neededDataColumns: map[uint64]bool{1: true, 3: true, 5: true, 7: true, 9: true},
-			dataColumnsByPeer: map[peer.ID]map[uint64]bool{
-				peer.ID("peer1"): {3: true, 7: true},
-				peer.ID("peer2"): {1: true, 3: true, 5: true, 9: true, 10: true},
-				peer.ID("peer3"): {6: true, 10: true, 12: true, 14: true, 16: true, 18: true, 20: true},
-				peer.ID("peer4"): {9: true},
-			},
-			dataColumnsToFetchByPeer: map[peer.ID][]uint64{
-				peer.ID("peer2"): {1, 3, 5, 9},
-				peer.ID("peer1"): {7},
-			},
-			err: nil,
-		},
-		{
-			name:              "multiple peers are needed - 2",
-			neededDataColumns: map[uint64]bool{1: true, 3: true, 5: true, 7: true, 9: true},
-			dataColumnsByPeer: map[peer.ID]map[uint64]bool{
-				peer.ID("peer1"): {9: true, 10: true},
-				peer.ID("peer2"): {3: true, 7: true},
-				peer.ID("peer3"): {1: true, 5: true},
-			},
-			dataColumnsToFetchByPeer: map[peer.ID][]uint64{
-				peer.ID("peer1"): {9},
-				peer.ID("peer2"): {3, 7},
-				peer.ID("peer3"): {1, 5},
-			},
-			err: nil,
-		},
-		{
-			name:              "some columns are not owned by any peer",
-			neededDataColumns: map[uint64]bool{1: true, 3: true, 5: true, 7: true, 9: true},
-			dataColumnsByPeer: map[peer.ID]map[uint64]bool{
-				peer.ID("peer1"): {9: true, 10: true},
-				peer.ID("peer2"): {2: true, 6: true},
-				peer.ID("peer3"): {1: true, 5: true},
-			},
-			dataColumnsToFetchByPeer: map[peer.ID][]uint64{
-				peer.ID("peer1"): {9},
-				peer.ID("peer3"): {1, 5},
-			},
-			err: errors.New("no peer to fetch the following data columns: [3 7]"),
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			actual, err := selectPeersToFetchDataColumnsFrom(tc.neededDataColumns, tc.dataColumnsByPeer)
-
-			if tc.err != nil {
-				require.Equal(t, tc.err.Error(), err.Error())
-			} else {
-				require.NoError(t, err)
-			}
-
-			expected := tc.dataColumnsToFetchByPeer
-			require.Equal(t, len(expected), len(actual))
-
-			for peerID, expectedDataColumns := range expected {
-				actualDataColumns, ok := actual[peerID]
-				require.Equal(t, true, ok)
-				require.DeepSSZEqual(t, expectedDataColumns, actualDataColumns)
-			}
-		})
-	}
-
-}
-
-func TestBuildDataColumnSidecarsByRangeRequest(t *testing.T) {
-	const batchSize = 32
-	testCases := []struct {
-		name      string
-		startSlot primitives.Slot
-		count     uint64
-		columns   []uint64
-		expected  []*ethpb.DataColumnSidecarsByRangeRequest
-	}{
-		{
-			name:      "one item - 1",
-			startSlot: 20,
-			count:     10,
-			columns:   []uint64{1, 2, 3, 4, 5},
-			expected: []*ethpb.DataColumnSidecarsByRangeRequest{
-				{
-					StartSlot: 20,
-					Count:     10,
-					Columns:   []uint64{1, 2, 3, 4, 5},
-				},
-			},
-		},
-		{
-			name:      "one item - 2",
-			startSlot: 20,
-			count:     32,
-			columns:   []uint64{1, 2, 3, 4, 5},
-			expected: []*ethpb.DataColumnSidecarsByRangeRequest{
-				{
-					StartSlot: 20,
-					Count:     32,
-					Columns:   []uint64{1, 2, 3, 4, 5},
-				},
-			},
-		},
-		{
-			name:      "two items - 1",
-			startSlot: 20,
-			count:     33,
-			columns:   []uint64{1, 2, 3, 4, 5},
-			expected: []*ethpb.DataColumnSidecarsByRangeRequest{
-				{
-					StartSlot: 20,
-					Count:     32,
-					Columns:   []uint64{1, 2, 3, 4, 5},
-				},
-				{
-					StartSlot: 52,
-					Count:     1,
-					Columns:   []uint64{1, 2, 3, 4, 5},
-				},
-			},
-		},
-		{
-			name:      "two items - 2",
-			startSlot: 20,
-			count:     64,
-			columns:   []uint64{1, 2, 3, 4, 5},
-			expected: []*ethpb.DataColumnSidecarsByRangeRequest{
-				{
-					StartSlot: 20,
-					Count:     32,
-					Columns:   []uint64{1, 2, 3, 4, 5},
-				},
-				{
-					StartSlot: 52,
-					Count:     32,
-					Columns:   []uint64{1, 2, 3, 4, 5},
-				},
-			},
-		},
-		{
-			name:      "three items",
-			startSlot: 20,
-			count:     66,
-			columns:   []uint64{1, 2, 3, 4, 5},
-			expected: []*ethpb.DataColumnSidecarsByRangeRequest{
-				{
-					StartSlot: 20,
-					Count:     32,
-					Columns:   []uint64{1, 2, 3, 4, 5},
-				},
-				{
-					StartSlot: 52,
-					Count:     32,
-					Columns:   []uint64{1, 2, 3, 4, 5},
-				},
-				{
-					StartSlot: 84,
-					Count:     2,
-					Columns:   []uint64{1, 2, 3, 4, 5},
-				},
-			},
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			actual := buildDataColumnSidecarsByRangeRequests(tc.startSlot, tc.count, tc.columns, batchSize)
-			require.DeepSSZEqual(t, tc.expected, actual)
 		})
 	}
 }

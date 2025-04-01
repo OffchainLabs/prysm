@@ -71,14 +71,14 @@ func genesisBeaconStateElectra(ctx context.Context, deposits []*ethpb.Deposit, g
 	return buildGenesisBeaconStateElectra(genesisTime, st, st.Eth1Data())
 }
 
-// emptyGenesisStateDeneb returns an empty genesis state in Electra format.
+// emptyGenesisStateElectra returns an empty genesis state in Electra format.
 func emptyGenesisStateElectra() (state.BeaconState, error) {
 	st := &ethpb.BeaconStateElectra{
 		// Misc fields.
 		Slot: 0,
 		Fork: &ethpb.Fork{
-			PreviousVersion: params.BeaconConfig().BellatrixForkVersion,
-			CurrentVersion:  params.BeaconConfig().DenebForkVersion,
+			PreviousVersion: params.BeaconConfig().DenebForkVersion,
+			CurrentVersion:  params.BeaconConfig().ElectraForkVersion,
 			Epoch:           0,
 		},
 		// Validator registry fields.

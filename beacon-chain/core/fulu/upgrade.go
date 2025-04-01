@@ -102,7 +102,7 @@ func UpgradeToFulu(beaconState state.BeaconState) (state.BeaconState, error) {
 		return nil, err
 	}
 
-	s := &ethpb.BeaconStateFulu{
+	s := &ethpb.BeaconStateElectra{
 		GenesisTime:           beaconState.GenesisTime(),
 		GenesisValidatorsRoot: beaconState.GenesisValidatorsRoot(),
 		Slot:                  beaconState.Slot(),

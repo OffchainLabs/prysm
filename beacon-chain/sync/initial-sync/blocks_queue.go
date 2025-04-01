@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
@@ -74,6 +75,7 @@ type blocksQueueConfig struct {
 	bs                  filesystem.BlobStorageSummarizer
 	bv                  verification.NewBlobVerifier
 	cv                  verification.NewDataColumnsVerifier
+	custodyInfo         *peerdas.CustodyInfo
 }
 
 // blocksQueue is a priority queue that serves as a intermediary between block fetchers (producers)
@@ -110,14 +112,15 @@ func newBlocksQueue(ctx context.Context, cfg *blocksQueueConfig) *blocksQueue {
 			log.Warn("rpc fetcher starting without blob availability cache, duplicate blobs may be requested.")
 		}
 		blocksFetcher = newBlocksFetcher(ctx, &blocksFetcherConfig{
-			ctxMap: cfg.ctxMap,
-			chain:  cfg.chain,
-			p2p:    cfg.p2p,
-			db:     cfg.db,
-			clock:  cfg.clock,
-			bs:     cfg.bs,
-			bv:     cfg.bv,
-			cv:     cfg.cv,
+			ctxMap:      cfg.ctxMap,
+			chain:       cfg.chain,
+			p2p:         cfg.p2p,
+			db:          cfg.db,
+			clock:       cfg.clock,
+			bs:          cfg.bs,
+			bv:          cfg.bv,
+			cv:          cfg.cv,
+			custodyInfo: cfg.custodyInfo,
 		})
 	}
 	highestExpectedSlot := cfg.highestExpectedSlot

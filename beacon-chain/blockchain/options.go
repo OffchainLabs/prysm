@@ -4,6 +4,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/async/event"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
 	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/execution"
@@ -210,6 +211,13 @@ func WithBlobStorage(b *filesystem.BlobStorage) Option {
 func WithSyncChecker(checker Checker) Option {
 	return func(s *Service) error {
 		s.cfg.SyncChecker = checker
+		return nil
+	}
+}
+
+func WithCustodyInfo(custodyInfo *peerdas.CustodyInfo) Option {
+	return func(s *Service) error {
+		s.cfg.CustodyInfo = custodyInfo
 		return nil
 	}
 }

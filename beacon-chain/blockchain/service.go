@@ -17,6 +17,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
 	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	coreTime "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
@@ -93,6 +94,7 @@ type config struct {
 	FinalizedStateAtStartUp state.BeaconState
 	ExecutionEngineCaller   execution.EngineCaller
 	SyncChecker             Checker
+	CustodyInfo             *peerdas.CustodyInfo
 }
 
 // Checker is an interface used to determine if a node is in initial sync

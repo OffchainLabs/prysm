@@ -83,6 +83,7 @@ type blocksFetcherConfig struct {
 	bs                       filesystem.BlobStorageSummarizer
 	bv                       verification.NewBlobVerifier
 	cv                       verification.NewDataColumnsVerifier
+	custodyInfo              *peerdas.CustodyInfo
 }
 
 // blocksFetcher is a service to fetch chain data from peers.
@@ -109,6 +110,7 @@ type blocksFetcher struct {
 	capacityWeight  float64       // how remaining capacity affects peer selection
 	mode            syncMode      // allows to use fetcher in different sync scenarios
 	quit            chan struct{} // termination notifier
+	custodyInfo     *peerdas.CustodyInfo
 }
 
 // peerLock restricts fetcher actions on per peer basis. Currently, used for rate limiting.
@@ -170,6 +172,7 @@ func newBlocksFetcher(ctx context.Context, cfg *blocksFetcherConfig) *blocksFetc
 		capacityWeight:  capacityWeight,
 		mode:            cfg.mode,
 		quit:            make(chan struct{}),
+		custodyInfo:     cfg.custodyInfo,
 	}
 }
 
@@ -642,7 +645,7 @@ type bwbSlice struct {
 
 // buildBwbSlices builds slices of `bwb` that aims to optimize the count of
 // by range requests needed to fetch missing data columns.
-func buildBwbSlices(wrappedBwbsMissingColumns *bwbsMissingColumns) ([]bwbSlice, error) {
+func buildBwbSlices(wrappedBwbsMissingColumns *bwbsMissingColumns, batchsize int) ([]bwbSlice, error) {
 	wrappedBwbsMissingColumns.mu.Lock()
 	defer wrappedBwbsMissingColumns.mu.Unlock()
 
@@ -668,12 +671,15 @@ func buildBwbSlices(wrappedBwbsMissingColumns *bwbsMissingColumns) ([]bwbSlice, 
 
 	previousBlockSlot := firstROBlock.Block().Slot()
 	previousStartIndex := 0
+	previousStartBlockSlot := previousBlockSlot
+	batchSizeSlot := primitives.Slot(batchsize)
 
 	const offset = 1
 
 	result := make([]bwbSlice, 0, 1)
 	for currentIndexWithoutOffest, bwb := range bwbs[offset:] {
 		currentIndex := currentIndexWithoutOffest + offset
+
 		// Extract the ROBlock from the blockWithROBlob.
 		currentROBlock := bwb.Block
 
@@ -683,8 +689,8 @@ func buildBwbSlices(wrappedBwbsMissingColumns *bwbsMissingColumns) ([]bwbSlice, 
 		// Extract the slot from the block.
 		currentBlockSlot := currentBlock.Slot()
 
-		if currentBlockSlot < previousBlockSlot {
-			return nil, errors.New("blocks are not sorted by slot")
+		if currentBlockSlot <= previousBlockSlot {
+			return nil, errors.Errorf("blocks are not strictly sorted by slot. Previous block slot: %d, current block slot: %d", previousBlockSlot, currentBlockSlot)
 		}
 
 		// Extract KZG commitments count from the current block body
@@ -714,8 +720,10 @@ func buildBwbSlices(wrappedBwbsMissingColumns *bwbsMissingColumns) ([]bwbSlice, 
 		// Compute if the missing data columns differ.
 		missingDataColumnsDiffer := uint64MapDiffer(previousMissingDataColumns, missingDataColumns)
 
-		// Check if there is a gap or if the missing data columns differ.
-		if missingDataColumnsDiffer {
+		// Compute if the batch size is reached.
+		batchSizeReached := currentBlockSlot-previousStartBlockSlot >= batchSizeSlot
+
+		if missingDataColumnsDiffer || batchSizeReached {
 			// Append the slice to the result.
 			slice := bwbSlice{
 				start:       previousStartIndex,
@@ -726,6 +734,7 @@ func buildBwbSlices(wrappedBwbsMissingColumns *bwbsMissingColumns) ([]bwbSlice, 
 			result = append(result, slice)
 
 			previousStartIndex = currentIndex
+			previousStartBlockSlot = currentBlockSlot
 			previousMissingDataColumns = missingDataColumns
 		}
 
@@ -765,21 +774,15 @@ func (f *blocksFetcher) custodyColumns() (map[uint64]bool, error) {
 	localNodeID := f.p2p.NodeID()
 
 	// Retrieve the number of groups we should custody.
-	localCustodyGroupCount := peerdas.CustodyGroupCount()
+	localCustodyGroupCount := f.custodyInfo.ActualGroupCount()
 
-	// Compute the groups we should custody.
-	localCustodyGroups, err := peerdas.CustodyGroups(localNodeID, localCustodyGroupCount)
+	// Retrieve the local node info.
+	localNodeInfo, _, err := peerdas.Info(localNodeID, localCustodyGroupCount)
 	if err != nil {
-		return nil, errors.Wrap(err, "custody groups")
+		return nil, errors.Wrap(err, "node info")
 	}
 
-	// Compute the columns we should custody.
-	localCustodyColumns, err := peerdas.CustodyColumns(localCustodyGroups)
-	if err != nil {
-		return nil, errors.Wrap(err, "custody columns")
-	}
-
-	return localCustodyColumns, nil
+	return localNodeInfo.CustodyColumns, nil
 }
 
 // missingColumnsFromRoot computes the columns corresponding to blocks in `bwbs` that
@@ -868,12 +871,14 @@ func computeMissingDataColumnsCount(missingColumnsByRoot map[[fieldparams.RootLe
 	return count
 }
 
+// fetchBwbSliceFromPeers requests data columns by range to relevant peers, then mutates
+// - `wrappedBwbsMissingColumns.bwbs` by adding the fetched data columns,
+// - `wrappedBwbsMissingColumns.missingColumnsByRoot` by removing the fetched data columns.
 func (f *blocksFetcher) fetchBwbSliceFromPeers(
 	ctx context.Context,
 	identifier int,
 	wrappedBwbsMissingColumns *bwbsMissingColumns,
 	peers []peer.ID,
-	batchSize uint64,
 	bwbSlice bwbSlice) error {
 	// Filter out slices that are already complete.
 	if len(bwbSlice.dataColumns) == 0 {
@@ -905,13 +910,11 @@ func (f *blocksFetcher) fetchBwbSliceFromPeers(
 	}
 
 	// Select the peers that will be requested.
-	dataColumnsToFetchByPeer, err := selectPeersToFetchDataColumnsFrom(bwbSlice.dataColumns, dataColumnsByAdmissiblePeer)
+	dataColumnsToFetchByPeer, err := prysmsync.SelectPeersToFetchDataColumnsFrom(bwbSlice.dataColumns, dataColumnsByAdmissiblePeer)
 	if err != nil {
 		// This should never happen.
 		return errors.Wrap(err, "select peers to fetch data columns from")
 	}
-
-	var wg sync.WaitGroup
 
 	for peer, dataColumnsToFetch := range dataColumnsToFetchByPeer {
 		// Extract peer custody columns.
@@ -933,18 +936,15 @@ func (f *blocksFetcher) fetchBwbSliceFromPeers(
 		// Sort data columns.
 		slices.Sort[[]uint64](dataColumnsToFetch)
 
-		// Build the requests.
-		requests := buildDataColumnSidecarsByRangeRequests(startSlot, blockCount, dataColumnsToFetch, batchSize)
-
-		for _, request := range requests {
-			// Fetch the missing data columns from the peers.
-			wg.Add(1)
-			go f.fetchDataColumnFromPeer(ctx, &wg, identifier, wrappedBwbsMissingColumns, blocksByRoot, indicesByRoot, peer, peerCustodyColumns, request)
+		// Build the request.
+		request := &p2ppb.DataColumnSidecarsByRangeRequest{
+			StartSlot: startSlot,
+			Count:     blockCount,
+			Columns:   dataColumnsToFetch,
 		}
-	}
 
-	// Wait for all requests to finish.
-	wg.Wait()
+		f.fetchDataColumnFromPeer(ctx, identifier, wrappedBwbsMissingColumns, blocksByRoot, indicesByRoot, peer, peerCustodyColumns, request)
+	}
 
 	return nil
 }
@@ -966,7 +966,7 @@ func (f *blocksFetcher) fetchDataColumnsFromPeers(
 	bwbs []blocks.BlockWithROBlobs,
 	peers []peer.ID,
 	delay time.Duration,
-	batchSize uint64,
+	batchSize int,
 ) error {
 	// Time to wait if no peers are available.
 	const (
@@ -1030,13 +1030,14 @@ func (f *blocksFetcher) fetchDataColumnsFromPeers(
 
 	for len(missingColumnsByRoot) > 0 {
 		// Compute the optimal slices of `bwb` to minimize the number of by range returned columns.
-		bwbSlices, err := buildBwbSlices(wrappedBwbsMissingColumns)
+		bwbSlices, err := buildBwbSlices(wrappedBwbsMissingColumns, batchSize)
 		if err != nil {
 			return errors.Wrap(err, "build bwb slices")
 		}
 
+		// TODO: Parallelize `fetchBwbSliceFromPeers`?
 		for _, bwbSlice := range bwbSlices {
-			if err := f.fetchBwbSliceFromPeers(ctx, identifier, wrappedBwbsMissingColumns, peers, batchSize, bwbSlice); err != nil {
+			if err := f.fetchBwbSliceFromPeers(ctx, identifier, wrappedBwbsMissingColumns, peers, bwbSlice); err != nil {
 				return errors.Wrap(err, "fetch BWB slice from peers")
 			}
 		}
@@ -1090,12 +1091,11 @@ func sortBwbsByColumnIndex(bwbs []blocks.BlockWithROBlobs) {
 	}
 }
 
-// waitForPeersForDataColumns filters `peers` to only include peers that are:
-// - synced up to `lastSlot`,
-// - custody all columns in `dataColumns`, and
+// waitForPeersForDataColumns returns a map, where the key of the map is the peer, the value is the custody columns of the peer.
+// It uses only peers
+// - synced up to `lastSlot`, and
 // - have bandwidth to serve `blockCount` blocks.
-// It waits until at least one peer is available for all needed columns.
-// It returns a map, where the key of the map is the peer, the value is the custody columns of the peer.
+// It waits until at least one peer per data column is available.
 func (f *blocksFetcher) waitForPeersForDataColumns(
 	reqIdentifier int,
 	peers []peer.ID,
@@ -1117,11 +1117,18 @@ func (f *blocksFetcher) waitForPeersForDataColumns(
 		return result
 	}
 
-	// Get the peers that are admissible for the data columns.
-	dataColumnsByAdmissiblePeer, admissiblePeersByDataColumn, descriptions, err := f.admissiblePeersForCustodyGroup(peers, lastSlot, neededDataColumns, blockCount)
+	// Filter for peers with head epoch greater than or equal to our target epoch for ByRange requests.
+	rangeReqPeers, descriptions, err := f.filterPeersByTargetSlotAndBandwidth(peers, lastSlot, blockCount)
 	if err != nil {
 		return nil, errors.Wrap(err, "peers with slot and data columns")
 	}
+
+	// Get the peers that are admissible for the data columns.
+	dataColumnsByAdmissiblePeer, admissiblePeersByDataColumn, moreDescriptions, err := prysmsync.AdmissiblePeersForDataColumns(rangeReqPeers, neededDataColumns, f.p2p)
+	if err != nil {
+		return nil, errors.Wrap(err, "peers with slot and data columns")
+	}
+	descriptions = append(descriptions, moreDescriptions...)
 
 	dataColumnsWithoutPeers := computeDataColumnsWithoutPeers(neededDataColumns, admissiblePeersByDataColumn)
 
@@ -1171,10 +1178,18 @@ func (f *blocksFetcher) waitForPeersForDataColumns(
 
 		time.Sleep(delay)
 
-		dataColumnsByAdmissiblePeer, admissiblePeersByDataColumn, descriptions, err = f.admissiblePeersForCustodyGroup(peers, lastSlot, neededDataColumns, blockCount)
+		// Filter for peers with head epoch greater than or equal to our target epoch for ByRange requests.
+		rangeReqPeers, descriptions, err = f.filterPeersByTargetSlotAndBandwidth(peers, lastSlot, blockCount)
 		if err != nil {
 			return nil, errors.Wrap(err, "peers with slot and data columns")
 		}
+
+		// Get the peers that are admissible for the data columns.
+		dataColumnsByAdmissiblePeer, admissiblePeersByDataColumn, moreDescriptions, err = prysmsync.AdmissiblePeersForDataColumns(rangeReqPeers, neededDataColumns, f.p2p)
+		if err != nil {
+			return nil, errors.Wrap(err, "peers with slot and data columns")
+		}
+		descriptions = append(descriptions, moreDescriptions...)
 
 		dataColumnsWithoutPeers = computeDataColumnsWithoutPeers(neededDataColumns, admissiblePeersByDataColumn)
 	}
@@ -1182,8 +1197,8 @@ func (f *blocksFetcher) waitForPeersForDataColumns(
 	return dataColumnsByAdmissiblePeer, nil
 }
 
-// processDataColumns mutates `bwbs` argument by adding the data column,
-// and mutates `missingColumnsByRoot` by removing the data column if the
+// processDataColumns mutates `wrappedBwbsMissingColumns.bwbs` argument by adding the data column,
+// and mutates `wrappedBwbsMissingColumns.missingColumnsByRoot` by removing the data column if the
 // data column passes all the check.
 func (f *blocksFetcher) processDataColumns(
 	wrappedBwbsMissingColumns *bwbsMissingColumns,
@@ -1272,11 +1287,10 @@ func (f *blocksFetcher) processDataColumns(
 }
 
 // fetchDataColumnsFromPeer sends `request` to `peer`, then mutates:
-// - `bwbs` by adding the fetched data columns,
-// - `missingColumnsByRoot` by removing the fetched data columns.
+// - `wrappedBwbsMissingColumns.bwbs` by adding the fetched data columns,
+// - `wrappedBwbsMissingColumns.missingColumnsByRoot` by removing the fetched data columns.
 func (f *blocksFetcher) fetchDataColumnFromPeer(
 	ctx context.Context,
-	wg *sync.WaitGroup,
 	identifier int,
 	wrappedBwbsMissingColumns *bwbsMissingColumns,
 	blocksByRoot map[[fieldparams.RootLength]byte]blocks.ROBlock,
@@ -1285,8 +1299,6 @@ func (f *blocksFetcher) fetchDataColumnFromPeer(
 	peerCustodyColumns map[uint64]bool,
 	request *p2ppb.DataColumnSidecarsByRangeRequest,
 ) {
-	defer wg.Done()
-
 	// Extract the number of columns.
 	numberOfColumns := params.BeaconConfig().NumberOfColumns
 

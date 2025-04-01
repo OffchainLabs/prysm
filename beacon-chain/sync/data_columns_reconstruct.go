@@ -57,30 +57,28 @@ func (s *Service) reconstructDataColumns(ctx context.Context, verifiedRODataColu
 	// Retrieve the node ID.
 	nodeID := s.cfg.p2p.NodeID()
 
+	// Prevent custody group count to change during the rest of the function.
+	s.cfg.custodyInfo.Mut.RLock()
+	defer s.cfg.custodyInfo.Mut.RUnlock()
+
 	// Compute the custody group count.
-	custodyGroupCount := peerdas.CustodyGroupCount()
+	custodyGroupCount := s.cfg.custodyInfo.ActualGroupCount()
 
-	// Compute the custody groups.
-	custodyGroups, err := peerdas.CustodyGroups(nodeID, custodyGroupCount)
+	// Retrieve our local node info.
+	localNodeInfo, _, err := peerdas.Info(nodeID, custodyGroupCount)
 	if err != nil {
-		return errors.Wrap(err, "custody groups")
-	}
-
-	// Compute the custody columns.
-	custodyColumns, err := peerdas.CustodyColumns(custodyGroups)
-	if err != nil {
-		return errors.Wrap(err, "custody columns")
+		return errors.Wrap(err, "peer info")
 	}
 
 	// Load the data columns sidecars.
 	dataColumnSideCars := make([]*ethpb.DataColumnSidecar, 0, storedColumnsCount)
 	for index := range storedDataColumns {
-		dataColumnSidecar, err := s.cfg.blobStorage.GetColumn(blockRoot, index)
+		verifiedRODataColumn, err := s.cfg.blobStorage.GetColumn(blockRoot, index)
 		if err != nil {
 			return errors.Wrap(err, "get column")
 		}
 
-		dataColumnSideCars = append(dataColumnSideCars, dataColumnSidecar)
+		dataColumnSideCars = append(dataColumnSideCars, verifiedRODataColumn.DataColumnSidecar)
 	}
 
 	// Recover cells and proofs.
@@ -102,7 +100,7 @@ func (s *Service) reconstructDataColumns(ctx context.Context, verifiedRODataColu
 
 	// Save the data columns sidecars in the database.
 	for _, dataColumnSidecar := range dataColumnSidecars {
-		shouldSave := custodyColumns[dataColumnSidecar.ColumnIndex]
+		shouldSave := localNodeInfo.CustodyColumns[dataColumnSidecar.ColumnIndex]
 		if !shouldSave {
 			// We do not custody this column, so we dot not need to save it.
 			continue
@@ -128,7 +126,7 @@ func (s *Service) reconstructDataColumns(ctx context.Context, verifiedRODataColu
 	dataColumnReconstructionHistogram.Observe(float64(time.Since(startTime).Milliseconds()))
 	dataColumnReconstructionCounter.Add(float64(cellsCount(recoveredCellsAndProofs)))
 
-	log.WithField("root", fmt.Sprintf("%x", blockRoot)).Debug("Data columns reconstructed and saved successfully")
+	log.WithField("root", fmt.Sprintf("%#x", blockRoot)).Debug("Data columns successfully reconstructed from database and saved")
 
 	// Schedule the broadcast.
 	if err := s.scheduleReconstructedDataColumnsBroadcast(ctx, blockRoot, verifiedRODataColumn); err != nil {
@@ -180,20 +178,17 @@ func (s *Service) scheduleReconstructedDataColumnsBroadcast(
 		// Get the node ID.
 		nodeID := s.cfg.p2p.NodeID()
 
+		// Prevent custody group count to change during the rest of the function.
+		s.cfg.custodyInfo.Mut.RLock()
+		defer s.cfg.custodyInfo.Mut.RUnlock()
+
 		// Get the custody group count.
-		custodyGroupCount := peerdas.CustodyGroupCount()
+		custodyGroupCount := s.cfg.custodyInfo.ActualGroupCount()
 
-		// Compute the custody groups.
-		custodyGroups, err := peerdas.CustodyGroups(nodeID, custodyGroupCount)
+		// Retrieve the local node info.
+		localNodeInfo, _, err := peerdas.Info(nodeID, custodyGroupCount)
 		if err != nil {
-			log.WithError(err).Error("Custody groups")
-			return
-		}
-
-		// Compute the custody columns.
-		custodyDataColumns, err := peerdas.CustodyColumns(custodyGroups)
-		if err != nil {
-			log.WithError(err).Error("Custody columns")
+			log.WithError(err).Error("Peer info")
 			return
 		}
 
@@ -205,8 +200,8 @@ func (s *Service) scheduleReconstructedDataColumnsBroadcast(
 		}
 
 		// Compute the missing data columns (data columns we should custody but we do not have received via gossip.)
-		missingColumns := make(map[uint64]bool, len(custodyDataColumns))
-		for column := range custodyDataColumns {
+		missingColumns := make(map[uint64]bool, len(localNodeInfo.CustodyColumns))
+		for column := range localNodeInfo.CustodyColumns {
 			if ok := receivedDataColumns[column]; !ok {
 				missingColumns[column] = true
 			}
@@ -230,7 +225,7 @@ func (s *Service) scheduleReconstructedDataColumnsBroadcast(
 			}
 
 			// Get the non received but reconstructed data column.
-			dataColumnSidecar, err := s.cfg.blobStorage.GetColumn(blockRoot, column)
+			verifiedRODataColumn, err := s.cfg.blobStorage.GetColumn(blockRoot, column)
 			if err != nil {
 				log.WithError(err).Error("Get column")
 				continue
@@ -239,7 +234,7 @@ func (s *Service) scheduleReconstructedDataColumnsBroadcast(
 			// Compute the subnet for this column.
 			subnet := column % params.BeaconConfig().DataColumnSidecarSubnetCount
 			// Broadcast the missing data column.
-			if err := s.cfg.p2p.BroadcastDataColumn(ctx, blockRoot, subnet, dataColumnSidecar); err != nil {
+			if err := s.cfg.p2p.BroadcastDataColumn(ctx, blockRoot, subnet, verifiedRODataColumn.DataColumnSidecar); err != nil {
 				log.WithError(err).Error("Broadcast data column")
 			}
 		}

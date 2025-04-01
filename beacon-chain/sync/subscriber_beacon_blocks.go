@@ -7,6 +7,7 @@ import (
 	"path"
 
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition/interop"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
@@ -35,6 +36,7 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 		return err
 	}
 
+	// TODO: do we only do this for super nodes?
 	go s.reconstructAndBroadcastBlobs(ctx, signed)
 
 	if err := s.cfg.chain.ReceiveBlock(ctx, signed, root, nil); err != nil {
@@ -60,13 +62,80 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 }
 
 // reconstructAndBroadcastBlobs processes and broadcasts blob sidecars for a given beacon block.
-// This function reconstructs the blob sidecars from the EL using the block's KZG commitments,
-// broadcasts the reconstructed blobs over P2P, and saves them into the blob storage.
 func (s *Service) reconstructAndBroadcastBlobs(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) {
-	if block.Version() < version.Deneb {
+	if block.Version() >= version.Fulu {
+		s.reconstructAndBroadcastBlobsInDataColumn(ctx, block)
 		return
 	}
 
+	if block.Version() >= version.Deneb {
+		s.reconstructAndBroadcastFullBlobs(ctx, block)
+		return
+	}
+}
+
+// reconstructAndBroadcastBlobsInDataColumn reconstructs and broadcasts blobs in data column format for a given beacon block, it also saves data column sidecars into the blob storage.
+func (s *Service) reconstructAndBroadcastBlobsInDataColumn(ctx context.Context, roSignedBlock interfaces.ReadOnlySignedBeaconBlock) {
+	block := roSignedBlock.Block()
+
+	kzgCommitments, err := block.Body().BlobKzgCommitments()
+	if err != nil {
+		log.WithError(err).Error("Failed to read commitments from block")
+		return
+	}
+
+	if len(kzgCommitments) == 0 {
+		// No blobs to reconstruct.
+		return
+	}
+
+	blockRoot, err := block.HashTreeRoot()
+	if err != nil {
+		log.WithError(err).Error("Failed to calculate block root")
+		return
+	}
+
+	if s.cfg.blobStorage == nil {
+		log.Warn("Blob storage is not enabled, skip saving data column, but continue to reconstruct and broadcast blobs")
+	}
+
+	// when this function is called, it's from the time when the block is received, so in almost all situations we need to get the data column from EL instead of the blob storage.
+	sidecars, err := s.cfg.executionReconstructor.ReconstructDataColumnSidecars(ctx, roSignedBlock, blockRoot)
+	if err != nil {
+		log.WithError(err).Debug("Cannot reconstruct data column sidecars after receiving the block")
+		return
+	}
+
+	nodeID := s.cfg.p2p.NodeID()
+	s.cfg.custodyInfo.Mut.RLock()
+	defer s.cfg.custodyInfo.Mut.RUnlock()
+	samplingSize := s.cfg.custodyInfo.CustodyGroupSamplingSize(peerdas.Actual)
+	info, _, err := peerdas.Info(nodeID, samplingSize)
+	if err != nil {
+		log.WithError(err).Error("Failed to get peer info")
+		return
+	}
+
+	// Broadcast data column and then save to db (if needs to be in custody)
+	for _, sidecar := range sidecars {
+		if !info.CustodyColumns[sidecar.ColumnIndex] {
+			continue
+		}
+
+		// first broadcast the data column
+		if err := s.cfg.p2p.BroadcastDataColumn(ctx, blockRoot, sidecar.ColumnIndex, sidecar.DataColumnSidecar); err != nil {
+			log.WithFields(dataColumnFields(sidecar.RODataColumn)).WithError(err).Error("Failed to broadcast data column")
+		}
+
+		if err := s.receiveDataColumn(ctx, sidecar); err != nil {
+			log.WithFields(dataColumnFields(sidecar.RODataColumn)).WithError(err).Error("Failed to receive data column")
+		}
+	}
+}
+
+// reconstructAndBroadcastFullBlobs reconstructs the blob sidecars from the EL using the block's KZG commitments,
+// broadcasts the reconstructed blobs over P2P, and saves them into the blob storage.
+func (s *Service) reconstructAndBroadcastFullBlobs(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) {
 	startTime, err := slots.ToTime(uint64(s.cfg.chain.GenesisTime().Unix()), block.Block().Slot())
 	if err != nil {
 		log.WithError(err).Error("Failed to convert slot to time")
@@ -81,19 +150,20 @@ func (s *Service) reconstructAndBroadcastBlobs(ctx context.Context, block interf
 	if s.cfg.blobStorage == nil {
 		return
 	}
-	indices, err := s.cfg.blobStorage.Indices(blockRoot, block.Block().Slot())
+	summary := s.cfg.blobStorage.Summary(blockRoot)
+	cmts, err := block.Block().Body().BlobKzgCommitments()
 	if err != nil {
-		log.WithError(err).Error("Failed to retrieve indices for block")
+		log.WithError(err).Error("Failed to read commitments from block")
 		return
 	}
-	for _, index := range indices {
-		if index {
+	for i := range cmts {
+		if summary.HasIndex(uint64(i)) {
 			blobExistedInDBTotal.Inc()
 		}
 	}
 
 	// Reconstruct blob sidecars from the EL
-	blobSidecars, err := s.cfg.executionReconstructor.ReconstructBlobSidecars(ctx, block, blockRoot, indices)
+	blobSidecars, err := s.cfg.executionReconstructor.ReconstructBlobSidecars(ctx, block, blockRoot, summary.HasIndex)
 	if err != nil {
 		log.WithError(err).Error("Failed to reconstruct blob sidecars")
 		return
@@ -103,15 +173,12 @@ func (s *Service) reconstructAndBroadcastBlobs(ctx context.Context, block interf
 	}
 
 	// Refresh indices as new blobs may have been added to the db
-	indices, err = s.cfg.blobStorage.Indices(blockRoot, block.Block().Slot())
-	if err != nil {
-		log.WithError(err).Error("Failed to retrieve indices for block")
-		return
-	}
+	summary = s.cfg.blobStorage.Summary(blockRoot)
 
 	// Broadcast blob sidecars first than save them to the db
 	for _, sidecar := range blobSidecars {
-		if sidecar.Index >= uint64(len(indices)) || indices[sidecar.Index] {
+		// Don't broadcast the blob if it has appeared on disk.
+		if summary.HasIndex(sidecar.Index) {
 			continue
 		}
 		if err := s.cfg.p2p.BroadcastBlob(ctx, sidecar.Index, sidecar.BlobSidecar); err != nil {
@@ -120,8 +187,7 @@ func (s *Service) reconstructAndBroadcastBlobs(ctx context.Context, block interf
 	}
 
 	for _, sidecar := range blobSidecars {
-		if sidecar.Index >= uint64(len(indices)) || indices[sidecar.Index] {
-			blobExistedInDBTotal.Inc()
+		if summary.HasIndex(sidecar.Index) {
 			continue
 		}
 		if err := s.subscribeBlob(ctx, sidecar); err != nil {

@@ -22,7 +22,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	prysmTime "github.com/prysmaticlabs/prysm/v5/time"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
@@ -69,18 +68,12 @@ func (s *Service) validateAggregateAndProof(ctx context.Context, pid peer.ID, ms
 
 	// Broadcast the aggregated attestation on a feed to notify other services in the beacon node
 	// of a received aggregated attestation.
-	// TODO: this will be extended to Electra in a later PR
-	if m.Version() == version.Phase0 {
-		phase0Att, ok := m.(*ethpb.SignedAggregateAttestationAndProof)
-		if ok {
-			s.cfg.attestationNotifier.OperationFeed().Send(&feed.Event{
-				Type: operation.AggregatedAttReceived,
-				Data: &operation.AggregatedAttReceivedData{
-					Attestation: phase0Att.Message,
-				},
-			})
-		}
-	}
+	s.cfg.attestationNotifier.OperationFeed().Send(&feed.Event{
+		Type: operation.AggregatedAttReceived,
+		Data: &operation.AggregatedAttReceivedData{
+			Attestation: m.AggregateAttestationAndProof(),
+		},
+	})
 
 	if err := helpers.ValidateSlotTargetEpoch(data); err != nil {
 		return pubsub.ValidationReject, err
