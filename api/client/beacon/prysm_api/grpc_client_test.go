@@ -11,11 +11,10 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"github.com/prysmaticlabs/prysm/v5/testing/util"
 	mock "github.com/prysmaticlabs/prysm/v5/testing/validator-mock"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
 	"go.uber.org/mock/gomock"
 )
 
-func TestGetValidatorCount(t *testing.T) {
+func TestGRPC_GetValidatorCount(t *testing.T) {
 	st, _ := util.DeterministicGenesisState(t, 10)
 	farFutureEpoch := params.BeaconConfig().FarFutureEpoch
 	validators := []*ethpb.Validator{
@@ -92,12 +91,12 @@ func TestGetValidatorCount(t *testing.T) {
 		name             string
 		statuses         []string
 		currentEpoch     int
-		expectedResponse []iface.ValidatorCount
+		expectedResponse []ValidatorCount
 	}{
 		{
 			name:     "Head count active validators",
 			statuses: []string{"active"},
-			expectedResponse: []iface.ValidatorCount{
+			expectedResponse: []ValidatorCount{
 				{
 					Status: "active",
 					Count:  13,
@@ -107,7 +106,7 @@ func TestGetValidatorCount(t *testing.T) {
 		{
 			name:     "Head count active ongoing validators",
 			statuses: []string{"active_ongoing"},
-			expectedResponse: []iface.ValidatorCount{
+			expectedResponse: []ValidatorCount{
 				{
 					Status: "active_ongoing",
 					Count:  11,
@@ -117,7 +116,7 @@ func TestGetValidatorCount(t *testing.T) {
 		{
 			name:     "Head count active exiting validators",
 			statuses: []string{"active_exiting"},
-			expectedResponse: []iface.ValidatorCount{
+			expectedResponse: []ValidatorCount{
 				{
 					Status: "active_exiting",
 					Count:  1,
@@ -127,7 +126,7 @@ func TestGetValidatorCount(t *testing.T) {
 		{
 			name:     "Head count active slashed validators",
 			statuses: []string{"active_slashed"},
-			expectedResponse: []iface.ValidatorCount{
+			expectedResponse: []ValidatorCount{
 				{
 					Status: "active_slashed",
 					Count:  1,
@@ -137,7 +136,7 @@ func TestGetValidatorCount(t *testing.T) {
 		{
 			name:     "Head count pending validators",
 			statuses: []string{"pending"},
-			expectedResponse: []iface.ValidatorCount{
+			expectedResponse: []ValidatorCount{
 				{
 					Status: "pending",
 					Count:  6,
@@ -147,7 +146,7 @@ func TestGetValidatorCount(t *testing.T) {
 		{
 			name:     "Head count pending initialized validators",
 			statuses: []string{"pending_initialized"},
-			expectedResponse: []iface.ValidatorCount{
+			expectedResponse: []ValidatorCount{
 				{
 					Status: "pending_initialized",
 					Count:  1,
@@ -157,7 +156,7 @@ func TestGetValidatorCount(t *testing.T) {
 		{
 			name:     "Head count pending queued validators",
 			statuses: []string{"pending_queued"},
-			expectedResponse: []iface.ValidatorCount{
+			expectedResponse: []ValidatorCount{
 				{
 					Status: "pending_queued",
 					Count:  5,
@@ -168,7 +167,7 @@ func TestGetValidatorCount(t *testing.T) {
 			name:         "Head count exited validators",
 			statuses:     []string{"exited"},
 			currentEpoch: 35,
-			expectedResponse: []iface.ValidatorCount{
+			expectedResponse: []ValidatorCount{
 				{
 					Status: "exited",
 					Count:  6,
@@ -179,7 +178,7 @@ func TestGetValidatorCount(t *testing.T) {
 			name:         "Head count exited slashed validators",
 			statuses:     []string{"exited_slashed"},
 			currentEpoch: 35,
-			expectedResponse: []iface.ValidatorCount{
+			expectedResponse: []ValidatorCount{
 				{
 					Status: "exited_slashed",
 					Count:  2,
@@ -190,7 +189,7 @@ func TestGetValidatorCount(t *testing.T) {
 			name:         "Head count exited unslashed validators",
 			statuses:     []string{"exited_unslashed"},
 			currentEpoch: 35,
-			expectedResponse: []iface.ValidatorCount{
+			expectedResponse: []ValidatorCount{
 				{
 					Status: "exited_unslashed",
 					Count:  4,
@@ -201,7 +200,7 @@ func TestGetValidatorCount(t *testing.T) {
 			name:         "Head count withdrawal validators",
 			statuses:     []string{"withdrawal"},
 			currentEpoch: 45,
-			expectedResponse: []iface.ValidatorCount{
+			expectedResponse: []ValidatorCount{
 				{
 					Status: "withdrawal",
 					Count:  2,
@@ -212,7 +211,7 @@ func TestGetValidatorCount(t *testing.T) {
 			name:         "Head count withdrawal possible validators",
 			statuses:     []string{"withdrawal_possible"},
 			currentEpoch: 45,
-			expectedResponse: []iface.ValidatorCount{
+			expectedResponse: []ValidatorCount{
 				{
 					Status: "withdrawal_possible",
 					Count:  1,
@@ -223,7 +222,7 @@ func TestGetValidatorCount(t *testing.T) {
 			name:         "Head count withdrawal done validators",
 			statuses:     []string{"withdrawal_done"},
 			currentEpoch: 45,
-			expectedResponse: []iface.ValidatorCount{
+			expectedResponse: []ValidatorCount{
 				{
 					Status: "withdrawal_done",
 					Count:  1,
@@ -233,7 +232,7 @@ func TestGetValidatorCount(t *testing.T) {
 		{
 			name:     "Head count active and pending validators",
 			statuses: []string{"active", "pending"},
-			expectedResponse: []iface.ValidatorCount{
+			expectedResponse: []ValidatorCount{
 				{
 					Status: "active",
 					Count:  13,
@@ -246,7 +245,7 @@ func TestGetValidatorCount(t *testing.T) {
 		},
 		{
 			name: "Head count of ALL validators",
-			expectedResponse: []iface.ValidatorCount{
+			expectedResponse: []ValidatorCount{
 				{
 					Status: "active",
 					Count:  13,

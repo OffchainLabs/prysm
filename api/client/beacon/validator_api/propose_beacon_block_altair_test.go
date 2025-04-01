@@ -10,7 +10,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/mock"
 	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/validator/test_helpers"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"

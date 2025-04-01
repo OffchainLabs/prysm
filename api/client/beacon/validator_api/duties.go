@@ -2,13 +2,16 @@ package validator_api
 
 import (
 	"context"
+	"strconv"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/shared_providers"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/validator"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"golang.org/x/sync/errgroup"
 )
 
 func (c *beaconApiValidatorClient) duties(ctx context.Context, in *ethpb.DutiesRequest) (*ethpb.ValidatorDutiesContainer, error) {
@@ -50,12 +53,12 @@ func (c *beaconApiValidatorClient) duties(ctx context.Context, in *ethpb.DutiesR
 func (c *beaconApiValidatorClient) dutiesForEpoch(
 	ctx context.Context,
 	epoch primitives.Epoch,
-	vals []validatorForDuty,
+	vals []shared_providers.ValidatorForDuty,
 	fetchSyncDuties bool,
 ) ([]*ethpb.ValidatorDuty, error) {
 	indices := make([]primitives.ValidatorIndex, len(vals))
 	for i, v := range vals {
-		indices[i] = v.index
+		indices[i] = v.Index
 	}
 
 	// Below variables MUST NOT be used in the main function before wg.Wait().
@@ -63,7 +66,7 @@ func (c *beaconApiValidatorClient) dutiesForEpoch(
 	// will return only once all goroutines finish their execution.
 
 	// Mapping from a validator index to its attesting committee's index and slot
-	attesterDutiesMapping := make(map[primitives.ValidatorIndex]attesterDuty)
+	attesterDutiesMapping := make(map[primitives.ValidatorIndex]shared_providers.AttesterDuty)
 	// Set containing all validator indices that are part of a sync committee for this epoch
 	syncDutiesMapping := make(map[primitives.ValidatorIndex]bool)
 	// Mapping from a validator index to its proposal slot
@@ -102,12 +105,12 @@ func (c *beaconApiValidatorClient) dutiesForEpoch(
 			if err != nil {
 				return errors.Wrapf(err, "failed to parse attester committees at slot `%s`", duty.CommitteesAtSlot)
 			}
-			attesterDutiesMapping[primitives.ValidatorIndex(validatorIndex)] = attesterDuty{
-				slot:                    primitives.Slot(slot),
-				committeeIndex:          primitives.CommitteeIndex(committeeIndex),
-				committeeLength:         committeeLength,
-				validatorCommitteeIndex: validatorCommitteeIndex,
-				committeesAtSlot:        committeesAtSlot,
+			attesterDutiesMapping[primitives.ValidatorIndex(validatorIndex)] = shared_providers.AttesterDuty{
+				Slot:                    primitives.Slot(slot),
+				CommitteeIndex:          primitives.CommitteeIndex(committeeIndex),
+				CommitteeLength:         committeeLength,
+				ValidatorCommitteeIndex: validatorCommitteeIndex,
+				CommitteesAtSlot:        committeesAtSlot,
 			}
 		}
 		return nil
@@ -157,30 +160,30 @@ func (c *beaconApiValidatorClient) dutiesForEpoch(
 
 	duties := make([]*ethpb.ValidatorDuty, len(vals))
 	for i, v := range vals {
-		att, ok := attesterDutiesMapping[v.index]
+		att, ok := attesterDutiesMapping[v.Index]
 		if !ok {
-			log.Debugf("failed to find attester duty for validator `%d`", v.index)
+			log.Debugf("failed to find attester duty for validator `%d`", v.Index)
 		}
 
 		duties[i] = &ethpb.ValidatorDuty{
-			ValidatorCommitteeIndex: att.validatorCommitteeIndex,
-			CommitteeLength:         att.committeeLength,
-			CommitteeIndex:          att.committeeIndex,
-			AttesterSlot:            att.slot,
-			CommitteesAtSlot:        att.committeesAtSlot,
-			ProposerSlots:           proposerDutySlots[v.index],
-			PublicKey:               v.pubkey,
-			Status:                  v.status,
-			ValidatorIndex:          v.index,
-			IsSyncCommittee:         syncDutiesMapping[v.index],
+			ValidatorCommitteeIndex: att.ValidatorCommitteeIndex,
+			CommitteeLength:         att.CommitteeLength,
+			CommitteeIndex:          att.CommitteeIndex,
+			AttesterSlot:            att.Slot,
+			CommitteesAtSlot:        att.CommitteesAtSlot,
+			ProposerSlots:           proposerDutySlots[v.Index],
+			PublicKey:               v.Pubkey,
+			Status:                  v.Status,
+			ValidatorIndex:          v.Index,
+			IsSyncCommittee:         syncDutiesMapping[v.Index],
 		}
 	}
 
 	return duties, nil
 }
 
-func (c *beaconApiValidatorClient) validatorsForDuties(ctx context.Context, pubkeys [][]byte) ([]validatorForDuty, error) {
-	vals := make([]validatorForDuty, 0, len(pubkeys))
+func (c *beaconApiValidatorClient) validatorsForDuties(ctx context.Context, pubkeys [][]byte) ([]shared_providers.ValidatorForDuty, error) {
+	vals := make([]shared_providers.ValidatorForDuty, 0, len(pubkeys))
 	stringPubkeysToPubkeys := make(map[string][]byte, len(pubkeys))
 	stringPubkeys := make([]string, len(pubkeys))
 
@@ -197,26 +200,26 @@ func (c *beaconApiValidatorClient) validatorsForDuties(ctx context.Context, pubk
 	}
 
 	for _, validatorContainer := range stateValidatorsResponse.Data {
-		val := validatorForDuty{}
+		val := shared_providers.ValidatorForDuty{}
 
 		validatorIndex, err := strconv.ParseUint(validatorContainer.Index, 10, 64)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to parse validator index %s", validatorContainer.Index)
 		}
-		val.index = primitives.ValidatorIndex(validatorIndex)
+		val.Index = primitives.ValidatorIndex(validatorIndex)
 
 		stringPubkey := validatorContainer.Validator.Pubkey
 		pubkey, ok := stringPubkeysToPubkeys[stringPubkey]
 		if !ok {
 			return nil, errors.Wrapf(err, "returned public key %s not requested", stringPubkey)
 		}
-		val.pubkey = pubkey
+		val.Pubkey = pubkey
 
 		status, ok := beaconAPITogRPCValidatorStatus[validatorContainer.Status]
 		if !ok {
 			return nil, errors.New("invalid validator status " + validatorContainer.Status)
 		}
-		val.status = status
+		val.Status = status
 
 		vals = append(vals, val)
 	}

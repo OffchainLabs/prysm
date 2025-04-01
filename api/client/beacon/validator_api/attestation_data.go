@@ -7,6 +7,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/api/client/apiutil"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
@@ -21,7 +22,7 @@ func (c *beaconApiValidatorClient) attestationData(
 	params.Add("slot", strconv.FormatUint(uint64(reqSlot), 10))
 	params.Add("committee_index", strconv.FormatUint(uint64(reqCommitteeIndex), 10))
 
-	query := buildURL("/eth/v1/validator/attestation_data", params)
+	query := apiutil.BuildURL("/eth/v1/validator/attestation_data", params)
 	produceAttestationDataResponseJson := structs.GetAttestationDataResponse{}
 
 	if err := c.jsonRestHandler.Get(ctx, query, &produceAttestationDataResponseJson); err != nil {
@@ -38,7 +39,7 @@ func (c *beaconApiValidatorClient) attestationData(
 		return nil, errors.Wrapf(err, "failed to parse attestation committee index: %s", attestationData.CommitteeIndex)
 	}
 
-	if !validRoot(attestationData.BeaconBlockRoot) {
+	if !apiutil.ValidRoot(attestationData.BeaconBlockRoot) {
 		return nil, errors.Errorf("invalid beacon block root: %s", attestationData.BeaconBlockRoot)
 	}
 
@@ -61,7 +62,7 @@ func (c *beaconApiValidatorClient) attestationData(
 		return nil, errors.Wrapf(err, "failed to parse attestation source epoch: %s", attestationData.Source.Epoch)
 	}
 
-	if !validRoot(attestationData.Source.Root) {
+	if !apiutil.ValidRoot(attestationData.Source.Root) {
 		return nil, errors.Errorf("invalid attestation source root: %s", attestationData.Source.Root)
 	}
 
@@ -79,7 +80,7 @@ func (c *beaconApiValidatorClient) attestationData(
 		return nil, errors.Wrapf(err, "failed to parse attestation target epoch: %s", attestationData.Target.Epoch)
 	}
 
-	if !validRoot(attestationData.Target.Root) {
+	if !apiutil.ValidRoot(attestationData.Target.Root) {
 		return nil, errors.Errorf("invalid attestation target root: %s", attestationData.Target.Root)
 	}
 

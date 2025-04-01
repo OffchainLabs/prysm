@@ -5,7 +5,6 @@ import (
 
 	"github.com/golang/protobuf/ptypes/empty"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"google.golang.org/grpc"
 )
 
 type grpcChainClient struct {

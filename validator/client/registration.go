@@ -70,7 +70,7 @@ func signValidatorRegistration(ctx context.Context, signer SigningFunc, reg *eth
 	d, err := signing.ComputeDomain(
 		params.BeaconConfig().DomainApplicationBuilder,
 		nil, /* fork version */
-		nil  /* genesis val root */)
+		nil /* genesis val root */)
 	if err != nil {
 		return nil, err
 	}

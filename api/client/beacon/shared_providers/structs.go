@@ -6,15 +6,15 @@ import (
 )
 
 type AttesterDuty struct {
-	committeeIndex          primitives.CommitteeIndex
-	slot                    primitives.Slot
-	committeeLength         uint64
-	validatorCommitteeIndex uint64
-	committeesAtSlot        uint64
+	CommitteeIndex          primitives.CommitteeIndex
+	Slot                    primitives.Slot
+	CommitteeLength         uint64
+	ValidatorCommitteeIndex uint64
+	CommitteesAtSlot        uint64
 }
 
 type ValidatorForDuty struct {
-	pubkey []byte
-	index  primitives.ValidatorIndex
-	status ethpb.ValidatorStatus
+	Pubkey []byte
+	Index  primitives.ValidatorIndex
+	Status ethpb.ValidatorStatus
 }

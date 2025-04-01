@@ -12,6 +12,11 @@ import (
 	grpcopentracing "github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing"
 	grpcprometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/api/client"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/chain"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/node"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/prysm_api"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/validator_api"
 	grpcutil "github.com/prysmaticlabs/prysm/v5/api/grpc"
 	"github.com/prysmaticlabs/prysm/v5/async/event"
 	lruwrpr "github.com/prysmaticlabs/prysm/v5/cache/lru"
@@ -21,11 +26,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/validator/accounts/wallet"
-	beaconApi "github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api"
-	beaconChainClientFactory "github.com/prysmaticlabs/prysm/v5/validator/client/beacon-chain-client-factory"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
-	nodeclientfactory "github.com/prysmaticlabs/prysm/v5/validator/client/node-client-factory"
-	validatorclientfactory "github.com/prysmaticlabs/prysm/v5/validator/client/validator-client-factory"
 	"github.com/prysmaticlabs/prysm/v5/validator/db"
 	"github.com/prysmaticlabs/prysm/v5/validator/graffiti"
 	validatorHelpers "github.com/prysmaticlabs/prysm/v5/validator/helpers"
@@ -43,7 +43,7 @@ import (
 type ValidatorService struct {
 	ctx                     context.Context
 	cancel                  context.CancelFunc
-	validator               iface.Validator
+	validator               Validator
 	db                      db.Database
 	conn                    validatorHelpers.NodeConnection
 	wallet                  *wallet.Wallet
@@ -62,7 +62,7 @@ type ValidatorService struct {
 
 // Config for the validator service.
 type Config struct {
-	Validator               iface.Validator
+	Validator               Validator
 	DB                      db.Database
 	Wallet                  *wallet.Wallet
 	WalletInitializedFeed   *event.Feed
@@ -174,12 +174,10 @@ func (v *ValidatorService) Start() {
 		return
 	}
 
-	restHandler := beaconApi.NewBeaconApiJsonRestHandler(
+	restHandler := client.NewBeaconApiJsonRestHandler(
 		http.Client{Timeout: v.conn.GetBeaconApiTimeout(), Transport: otelhttp.NewTransport(http.DefaultTransport)},
 		hosts[0],
 	)
-
-	validatorClient := validatorclientfactory.NewValidatorClient(v.conn, restHandler)
 
 	valStruct := &validator{
 		slotFeed:                       new(event.Feed),
@@ -195,10 +193,10 @@ func (v *ValidatorService) Start() {
 		graffitiOrderedIndex:           graffitiOrderedIndex,
 		beaconNodeHosts:                hosts,
 		currentHostIndex:               0,
-		validatorClient:                validatorClient,
-		chainClient:                    beaconChainClientFactory.NewChainClient(v.conn, restHandler),
-		nodeClient:                     nodeclientfactory.NewNodeClient(v.conn, restHandler),
-		prysmChainClient:               beaconChainClientFactory.NewPrysmChainClient(v.conn, restHandler),
+		validatorClient:                validator_api.NewClient(v.conn, restHandler),
+		chainClient:                    chain.NewClient(v.conn, restHandler),
+		nodeClient:                     node.NewClient(v.conn, restHandler),
+		prysmChainClient:               prysm_api.NewClient(v.conn, restHandler),
 		db:                             v.db,
 		km:                             nil,
 		web3SignerConfig:               v.web3SignerConfig,
@@ -206,7 +204,7 @@ func (v *ValidatorService) Start() {
 		signedValidatorRegistrations:   make(map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1),
 		validatorsRegBatchSize:         v.validatorsRegBatchSize,
 		interopKeysConfig:              v.interopKeysConfig,
-		attSelections:                  make(map[attSelectionKey]iface.BeaconCommitteeSelection),
+		attSelections:                  make(map[attSelectionKey]validator_api.BeaconCommitteeSelection),
 		aggregatedSlotCommitteeIDCache: aggregatedSlotCommitteeIDCache,
 		domainDataCache:                cache,
 		voteStats:                      voteStats{startEpoch: primitives.Epoch(^uint64(0))},

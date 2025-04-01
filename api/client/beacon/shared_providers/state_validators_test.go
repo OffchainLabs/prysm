@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/api/client/apiutil"
 	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/mock"
-	"github.com/prysmaticlabs/prysm/v5/api/client/httputil"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"

@@ -10,8 +10,8 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
-	api "github.com/prysmaticlabs/prysm/v5/api/client"
-	"github.com/prysmaticlabs/prysm/v5/api/client/beacon"
+	"github.com/prysmaticlabs/prysm/v5/api/client"
+	"github.com/prysmaticlabs/prysm/v5/api/client/apiutil"
 	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/node"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	validator2 "github.com/prysmaticlabs/prysm/v5/consensus-types/validator"
@@ -19,7 +19,7 @@ import (
 )
 
 type prysmChainClient struct {
-	jsonRestHandler beacon.JsonRestHandler
+	jsonRestHandler client.JsonRestHandler
 	nodeClient      node.Client
 }
 
@@ -31,7 +31,7 @@ func (c prysmChainClient) ValidatorCount(ctx context.Context, stateID string, st
 	}
 
 	if !strings.Contains(strings.ToLower(nodeVersion.Version), "prysm") {
-		return nil, api.ErrNotSupported
+		return nil, client.ErrNotSupported
 	}
 
 	queryParams := neturl.Values{}
@@ -39,7 +39,7 @@ func (c prysmChainClient) ValidatorCount(ctx context.Context, stateID string, st
 		queryParams.Add("status", status.String())
 	}
 
-	queryUrl := buildURL(fmt.Sprintf("/eth/v1/beacon/states/%s/validator_count", stateID), queryParams)
+	queryUrl := apiutil.BuildURL(fmt.Sprintf("/eth/v1/beacon/states/%s/validator_count", stateID), queryParams)
 
 	var validatorCountResponse structs.GetValidatorCountResponse
 	if err = c.jsonRestHandler.Get(ctx, queryUrl, &validatorCountResponse); err != nil {
@@ -78,7 +78,7 @@ func (c prysmChainClient) ValidatorPerformance(ctx context.Context, in *ethpb.Va
 	}
 
 	if !strings.Contains(strings.ToLower(nodeVersion.Version), "prysm") {
-		return nil, api.ErrNotSupported
+		return nil, client.ErrNotSupported
 	}
 
 	request, err := json.Marshal(structs.GetValidatorPerformanceRequest{

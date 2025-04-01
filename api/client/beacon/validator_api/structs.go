@@ -119,3 +119,7 @@ func (s *SyncCommitteeSelection) UnmarshalJSON(input []byte) error {
 type aggregatedSelectionResponse struct {
 	Data []BeaconCommitteeSelection `json:"data"`
 }
+
+type aggregatedSyncSelectionResponse struct {
+	Data []SyncCommitteeSelection `json:"data"`
+}

@@ -1,36 +1,35 @@
 package validator_api
 
 import (
+	"github.com/prysmaticlabs/prysm/v5/api/client"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/node"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/prysm_api"
 	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/shared_providers"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
-	beaconApi "github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api"
 	validatorHelpers "github.com/prysmaticlabs/prysm/v5/validator/helpers"
 )
 
-func NewValidatorClient(
+func NewClient(
 	validatorConn validatorHelpers.NodeConnection,
-	jsonRestHandler beaconApi.JsonRestHandler,
-	opt ...beaconApi.ValidatorClientOpt,
+	jsonRestHandler client.JsonRestHandler,
+	opt ...ValidatorClientOpt,
 ) Client {
 	if features.Get().EnableBeaconRESTApi {
-		return beaconApi.NewBeaconApiValidatorClient(jsonRestHandler, opt...)
+		return NewBeaconApiValidatorClient(jsonRestHandler, opt...)
 	} else {
-		return grpcApi.NewGrpcValidatorClient(validatorConn.GetGrpcClientConn())
+		return NewGrpcValidatorClient(validatorConn.GetGrpcClientConn())
 	}
 }
 
-func NewBeaconApiValidatorClient(jsonRestHandler JsonRestHandler, opts ...ValidatorClientOpt) iface.ValidatorClient {
+func NewBeaconApiValidatorClient(jsonRestHandler client.JsonRestHandler, opts ...ValidatorClientOpt) Client {
 	c := &beaconApiValidatorClient{
-		genesisProvider:         &shared_providers.Genesis{jsonRestHandler: jsonRestHandler},
-		dutiesProvider:          beaconApiDutiesProvider{jsonRestHandler: jsonRestHandler},
-		stateValidatorsProvider: beaconApiStateValidatorsProvider{jsonRestHandler: jsonRestHandler},
+		genesisProvider:         shared_providers.NewGenesis(jsonRestHandler),
+		dutiesProvider:          shared_providers.NewDuties(jsonRestHandler),
+		stateValidatorsProvider: shared_providers.NewStateValidators(jsonRestHandler),
 		jsonRestHandler:         jsonRestHandler,
 		beaconBlockConverter:    beaconApiBeaconBlockConverter{},
-		prysmChainClient: prysmChainClient{
-			nodeClient:      &beaconApiNodeClient{jsonRestHandler: jsonRestHandler},
-			jsonRestHandler: jsonRestHandler,
-		},
-		isEventStreamRunning: false,
+		prysmChainClient:        prysm_api.NewPrysmChainRestClient(jsonRestHandler, node.NewNodeClientWithFallback(jsonRestHandler, nil)), //TODO: this is really bad design...
+		isEventStreamRunning:    false,
 	}
 	for _, o := range opts {
 		o(c)

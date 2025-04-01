@@ -7,13 +7,13 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/mock"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/node"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/validator"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api/mock"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
 	"go.uber.org/mock/gomock"
 )
 
@@ -27,7 +27,7 @@ func TestGetValidatorCount(t *testing.T) {
 		versionResponse             structs.GetVersionResponse
 		validatorCountResponse      structs.GetValidatorCountResponse
 		validatorCountCalled        int
-		expectedResponse            []iface.ValidatorCount
+		expectedResponse            []ValidatorCount
 		expectedError               string
 	}{
 		{
@@ -46,7 +46,7 @@ func TestGetValidatorCount(t *testing.T) {
 				},
 			},
 			validatorCountCalled: 1,
-			expectedResponse: []iface.ValidatorCount{
+			expectedResponse: []ValidatorCount{
 				{
 					Status: "active",
 					Count:  10,
@@ -145,8 +145,8 @@ func TestGetValidatorCount(t *testing.T) {
 			).Times(test.validatorCountCalled)
 
 			// Type assertion.
-			var client iface.PrysmChainClient = &prysmChainClient{
-				nodeClient:      &beaconApiNodeClient{jsonRestHandler: jsonRestHandler},
+			var client Client = &prysmChainClient{
+				nodeClient:      node.NewNodeClientWithFallback(jsonRestHandler, nil),
 				jsonRestHandler: jsonRestHandler,
 			}
 
@@ -207,8 +207,8 @@ func Test_beaconApiBeaconChainClient_GetValidatorPerformance(t *testing.T) {
 		nil,
 	)
 
-	var client iface.PrysmChainClient = &prysmChainClient{
-		nodeClient:      &beaconApiNodeClient{jsonRestHandler: jsonRestHandler},
+	var client Client = &prysmChainClient{
+		nodeClient:      node.NewNodeClientWithFallback(jsonRestHandler, nil),
 		jsonRestHandler: jsonRestHandler,
 	}
 

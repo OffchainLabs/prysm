@@ -67,7 +67,7 @@ type Validator interface {
 	Graffiti(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte) ([]byte, error)
 	SetGraffiti(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte, graffiti []byte) error
 	DeleteGraffiti(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte) error
-	HealthTracker() *health.healthTracker
+	HealthTracker() health.Tracker
 	Host() string
 	ChangeHost()
 }

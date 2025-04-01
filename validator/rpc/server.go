@@ -11,6 +11,9 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/api"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/chain"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/node"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/validator_api"
 	"github.com/prysmaticlabs/prysm/v5/api/server/httprest"
 	"github.com/prysmaticlabs/prysm/v5/api/server/middleware"
 	"github.com/prysmaticlabs/prysm/v5/async/event"
@@ -18,7 +21,6 @@ import (
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/validator/accounts/wallet"
 	"github.com/prysmaticlabs/prysm/v5/validator/client"
-	iface "github.com/prysmaticlabs/prysm/v5/validator/client/iface"
 	"github.com/prysmaticlabs/prysm/v5/validator/db"
 	"github.com/prysmaticlabs/prysm/v5/validator/web"
 )
@@ -67,9 +69,9 @@ type Server struct {
 	beaconApiEndpoint         string
 	beaconNodeEndpoint        string
 	healthClient              ethpb.HealthClient
-	nodeClient                iface.NodeClient
-	chainClient               iface.ChainClient
-	beaconNodeValidatorClient iface.ValidatorClient
+	nodeClient                node.Client
+	chainClient               chain.Client
+	beaconNodeValidatorClient validator_api.Client
 	httpHost                  string
 	authToken                 string
 	db                        db.Database

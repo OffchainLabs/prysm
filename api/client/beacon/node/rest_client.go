@@ -111,13 +111,3 @@ func (c *beaconapiNodeClient) IsHealthy(ctx context.Context) bool {
 func (c *beaconapiNodeClient) HealthTracker() health.Tracker {
 	return c.healthTracker
 }
-
-func NewNodeClientWithFallback(jsonRestHandler client.JsonRestHandler, fallbackClient Client) Client {
-	b := &beaconapiNodeClient{
-		jsonRestHandler: jsonRestHandler,
-		fallbackClient:  fallbackClient,
-		genesisProvider: shared_providers.NewGenesis(jsonRestHandler),
-	}
-	b.healthTracker = health.NewTracker(b)
-	return b
-}

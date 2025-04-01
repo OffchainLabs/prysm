@@ -7,21 +7,20 @@ import (
 
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/chain"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/helpers"
 	statenative "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/validator"
 	eth "github.com/prysmaticlabs/prysm/v5/proto/eth/v1"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
-	"google.golang.org/grpc"
 )
 
 type grpcPrysmChainClient struct {
-	chainClient iface.ChainClient
+	chainClient chain.Client
 }
 
-func (g grpcPrysmChainClient) ValidatorCount(ctx context.Context, _ string, statuses []validator.Status) ([]iface.ValidatorCount, error) {
+func (g grpcPrysmChainClient) ValidatorCount(ctx context.Context, _ string, statuses []validator.Status) ([]ValidatorCount, error) {
 	resp, err := g.chainClient.Validators(ctx, &ethpb.ListValidatorsRequest{PageSize: 0})
 	if err != nil {
 		return nil, errors.Wrap(err, "list validators failed")
@@ -52,7 +51,7 @@ func (g grpcPrysmChainClient) ValidatorCount(ctx context.Context, _ string, stat
 }
 
 // validatorCountByStatus returns a slice of validator count for each status in the given epoch.
-func validatorCountByStatus(validators []*ethpb.Validator, statuses []validator.Status, epoch primitives.Epoch) ([]iface.ValidatorCount, error) {
+func validatorCountByStatus(validators []*ethpb.Validator, statuses []validator.Status, epoch primitives.Epoch) ([]ValidatorCount, error) {
 	countByStatus := make(map[validator.Status]uint64)
 	for _, val := range validators {
 		readOnlyVal, err := statenative.NewValidator(val)
@@ -75,9 +74,9 @@ func validatorCountByStatus(validators []*ethpb.Validator, statuses []validator.
 		}
 	}
 
-	var resp []iface.ValidatorCount
+	var resp []ValidatorCount
 	for status, count := range countByStatus {
-		resp = append(resp, iface.ValidatorCount{
+		resp = append(resp, ValidatorCount{
 			Status: status.String(),
 			Count:  count,
 		})

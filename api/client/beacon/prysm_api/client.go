@@ -9,7 +9,7 @@ import (
 	"google.golang.org/grpc"
 )
 
-func NewPrysmChainClient(validatorConn validatorHelpers.NodeConnection, jsonRestHandler client.JsonRestHandler) Client {
+func NewClient(validatorConn validatorHelpers.NodeConnection, jsonRestHandler client.JsonRestHandler) Client {
 	if features.Get().EnableBeaconRESTApi {
 		return NewPrysmChainRestClient(jsonRestHandler, node.NewClient(validatorConn, jsonRestHandler))
 	} else {
@@ -26,5 +26,5 @@ func NewPrysmChainRestClient(jsonRestHandler client.JsonRestHandler, nodeClient 
 }
 
 func NewGrpcPrysmChainClient(cc grpc.ClientConnInterface) Client {
-	return &grpcPrysmChainClient{chainClient: chain.NewGrpcChainClient(cc)}}
+	return &grpcPrysmChainClient{chainClient: chain.NewGrpcChainClient(cc)}
 }
