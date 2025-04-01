@@ -255,7 +255,7 @@ filegroup(
     url = "https://github.com/ethereum/EIPs/archive/5480440fe51742ed23342b68cf106cefd427e39d.tar.gz",
 )
 
-consensus_spec_version = "v1.5.0-beta.3"
+consensus_spec_version = "v1.5.0-beta.4"
 
 bls_test_version = "v0.1.1"
 
@@ -271,7 +271,7 @@ filegroup(
     visibility = ["//visibility:public"],
 )
     """,
-    integrity = "sha256-z+j0BEJuXMBKbGL+7jq35zddzZMW1je8/uvTz5+wboQ=",
+    integrity = "sha256-QG0NUqaCvP5lKaKKwF/fmeICZVjONMlb7EE+MtYl0C0=",
     url = "https://github.com/ethereum/consensus-spec-tests/releases/download/%s/general.tar.gz" % consensus_spec_version,
 )
 
@@ -287,7 +287,7 @@ filegroup(
     visibility = ["//visibility:public"],
 )
     """,
-    integrity = "sha256-5/YUOXH65CmM1plZ8twJ3BQxwM51jgSpOB8/VSBI19k=",
+    integrity = "sha256-8NQngTSSqzW/j3tOUi3r5h+94ChRbLNWTt7BOGqr4+E=",
     url = "https://github.com/ethereum/consensus-spec-tests/releases/download/%s/minimal.tar.gz" % consensus_spec_version,
 )
 
@@ -303,7 +303,7 @@ filegroup(
     visibility = ["//visibility:public"],
 )
     """,
-    integrity = "sha256-iZ2eNhwRnbxrjR+5gMBUYakaCXicvPChwFUkZtQUbbI=",
+    integrity = "sha256-gFqxbaBnJ7dtdoj0zFbVrtlHv/bLNuWjrTHkyCAjFjI=",
     url = "https://github.com/ethereum/consensus-spec-tests/releases/download/%s/mainnet.tar.gz" % consensus_spec_version,
 )
 
@@ -318,7 +318,7 @@ filegroup(
     visibility = ["//visibility:public"],
 )
     """,
-    integrity = "sha256-inAXV7xNM5J1aUdP7JNXFO2iFFZ7dth38Ji+mJW50Ts=",
+    integrity = "sha256-9paalF0POULpP2ga+4ouHSETKYrWNCUCZoJHPuFw06E=",
     strip_prefix = "consensus-specs-" + consensus_spec_version[1:],
     url = "https://github.com/ethereum/consensus-specs/archive/refs/tags/%s.tar.gz" % consensus_spec_version,
 )

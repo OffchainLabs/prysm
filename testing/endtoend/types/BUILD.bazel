@@ -13,6 +13,7 @@ go_library(
     deps = [
         "//config/params:go_default_library",
         "//consensus-types/primitives:go_default_library",
+        "//runtime/interop:go_default_library",
         "//runtime/version:go_default_library",
         "@org_golang_google_grpc//:go_default_library",
     ],

@@ -497,13 +497,15 @@ func (r *testRunner) defaultEndToEndRun() error {
 	require.NoError(t, err)
 	tickingStartTime := helpers.EpochTickerStartTime(genesis)
 
-	ec := e2etypes.NewEvaluationContext(r.depositor.History())
+	ec, err := e2etypes.NewEvaluationContext(r.depositor.History(), e2e.TestParams.NumberOfExecutionCreds)
+	require.NoError(t, err)
+
 	// Run assigned evaluators.
 	if err := r.runEvaluators(ec, conns, tickingStartTime); err != nil {
 		return errors.Wrap(err, "one or more evaluators failed")
 	}
 	// Test execution request processing in electra.
-	if r.config.TestDeposits && params.ElectraEnabled() {
+	if r.config.TestDeposits && r.config.TestExecutionRequests && params.ElectraEnabled() {
 		if err := r.comHandler.txGen.Pause(); err != nil {
 			r.t.Error(err)
 		}
@@ -514,6 +516,33 @@ func (r *testRunner) defaultEndToEndRun() error {
 		if err := r.comHandler.txGen.Resume(); err != nil {
 			r.t.Error(err)
 		}
+	}
+
+	if r.config.TestExecutionRequests && params.ElectraEnabled() {
+		// Test Consolidation Transactions
+		r.comHandler.txGen.SetTxType(eth1.ConsolidationTx)
+		// Wait For an epoch before running evaluator
+		secondsPerEpoch := time.Duration(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot))
+		waitForSync := secondsPerEpoch * time.Second
+		time.Sleep(waitForSync)
+
+		for _, evaluator := range []e2etypes.Evaluator{ev.ValidatorsHaveConsolidated} {
+			t.Run(evaluator.Name, func(t *testing.T) {
+				assert.NoError(t, evaluator.Evaluation(ec, conns...), "Evaluation failed for sync node")
+			})
+		}
+
+		// Test Withdrawal Transactions
+		r.comHandler.txGen.SetTxType(eth1.WithdrawalTx)
+		// Wait For an epoch before running evaluator
+		time.Sleep(waitForSync)
+
+		for _, evaluator := range []e2etypes.Evaluator{ev.ValidatorsHaveWithdrawnViaExecution} {
+			t.Run(evaluator.Name, func(t *testing.T) {
+				assert.NoError(t, evaluator.Evaluation(ec, conns...), "Evaluation failed for sync node")
+			})
+		}
+		r.comHandler.txGen.SetTxType(eth1.RandomTx)
 	}
 
 	index := e2e.TestParams.BeaconNodeCount + e2e.TestParams.LighthouseBeaconNodeCount
@@ -596,7 +625,8 @@ func (r *testRunner) scenarioRun() error {
 	require.NoError(t, err)
 	tickingStartTime := helpers.EpochTickerStartTime(genesis)
 
-	ec := e2etypes.NewEvaluationContext(r.depositor.History())
+	ec, err := e2etypes.NewEvaluationContext(r.depositor.History(), e2e.TestParams.NumberOfExecutionCreds)
+	require.NoError(t, err)
 	// Run assigned evaluators.
 	return r.runEvaluators(ec, conns, tickingStartTime)
 }

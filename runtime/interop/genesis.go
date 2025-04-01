@@ -184,8 +184,10 @@ func GethTestnetGenesis(genesisTime uint64, cfg *clparams.BeaconChainConfig) *co
 		Mixhash:    common.HexToHash(defaultMixhash),
 		Coinbase:   common.HexToAddress(defaultCoinbase),
 		Alloc: types.GenesisAlloc{
-			da.Address: da.Account,
-			ma.Address: ma.Account,
+			da.Address:                       da.Account,
+			ma.Address:                       ma.Account,
+			params.WithdrawalQueueAddress:    {Nonce: 1, Code: params.WithdrawalQueueCode, Balance: common.Big0},
+			params.ConsolidationQueueAddress: {Nonce: 1, Code: params.ConsolidationQueueCode, Balance: common.Big0},
 		},
 		ParentHash: common.HexToHash(defaultParenthash),
 	}
