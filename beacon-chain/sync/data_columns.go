@@ -85,6 +85,18 @@ func RequestDataColumnSidecarsByRoot(
 		return nil, errors.Wrap(err, "couldn't get admissible peers for data columns")
 	}
 
+	// If the request was non-empty but no peers were found for any needed column,
+	// return the specific error immediately.
+	if len(dataColumns) > 0 && len(dataColumnsByAdmissiblePeer) == 0 {
+		return nil, ErrNoPeersForDataColumns
+	}
+
+	// If the request was non-empty but no peers were found for any needed column,
+	// return the specific error immediately.
+	if len(dataColumns) > 0 && len(dataColumnsByAdmissiblePeer) == 0 {
+		return nil, ErrNoPeersForDataColumns
+	}
+
 	verifiedSidecars := make([]blocks.VerifiedRODataColumn, 0, len(dataColumnsToFetch))
 	remainingMissingColumns := make(map[uint64]bool, len(dataColumnsToFetch))
 	for _, column := range dataColumnsToFetch {
@@ -262,7 +274,7 @@ func ReconstructDataColumnsByRoot(
 	// Fetch the required sidecars for reconstruction.
 	fetchedSidecars, err := fetchAndVerifyRecoveryColumns(
 		ctx, requestedColumns, availableColumns, recoveryThreshold,
-		block, blkRoot, peers, clock, p2p, chain, ctxMap, newColumnsVerifier,
+		block, blkRoot, clock, p2p, chain, ctxMap, newColumnsVerifier,
 	)
 	if err != nil {
 		return nil, err
@@ -346,7 +358,6 @@ func fetchAndVerifyRecoveryColumns(
 	recoveryThreshold uint64,
 	block interfaces.ReadOnlySignedBeaconBlock,
 	blkRoot [32]byte,
-	peers []core.PeerID,
 	clock *startup.Clock,
 	p2p p2p.P2P,
 	chain blockchain.FinalizationFetcher,
@@ -370,11 +381,15 @@ func fetchAndVerifyRecoveryColumns(
 	sort.Slice(otherAvailable, func(i, j int) bool { return otherAvailable[i] < otherAvailable[j] })
 
 	for uint64(len(columnsToFetch)) < recoveryThreshold {
+		if len(otherAvailable) == 0 {
+			// This state should be unreachable since we already checked that the available columns meet the recovery threshold.
+			return nil, errors.New("internal error: not enough fetchable columns available to reach recovery threshold during selection")
+		}
 		columnsToFetch[otherAvailable[0]] = true
 		otherAvailable = otherAvailable[1:]
 	}
 
-	log.WithField("columnsToFetch", uint64MapToSortedSlice(columnsToFetch)).Debug("Selected columns for fetch")
+	log.WithField("columnsToFetch", uint64MapToSortedSlice(columnsToFetch)).Debug("Selected columns for fetch for recovery")
 
 	// Fetch selected columns.
 	fetchedSidecars, err := RequestDataColumnSidecarsByRoot(
