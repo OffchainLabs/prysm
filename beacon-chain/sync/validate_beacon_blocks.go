@@ -3,7 +3,6 @@ package sync
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -533,7 +532,7 @@ func (s *Service) detectAndBroadcastEquivocation(ctx context.Context, blk interf
 
 	// Verify the slashing against current state
 	if err := blocks.VerifyProposerSlashing(headState, slashing); err != nil {
-		if strings.Contains(err.Error(), "could not verify beacon block header") {
+		if errors.Is(err, blocks.ErrCouldNotVerifyBlockHeader) {
 			return errors.Wrap(ErrSlashingSignatureFailure, err.Error())
 		}
 		return errors.Wrap(err, "could not verify proposer slashing")

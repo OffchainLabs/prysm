@@ -1497,224 +1497,217 @@ func Test_validateDenebBeaconBlock(t *testing.T) {
 	require.ErrorIs(t, validateDenebBeaconBlock(bdb.Block()), errRejectCommitmentLen)
 }
 
-func TestDetectAndBroadcastEquivocation_NoEquivocation(t *testing.T) {
-	p := p2ptest.NewTestP2P(t)
-	ctx := context.Background()
-	beaconState, privKeys := util.DeterministicGenesisState(t, 100)
-
-	block := util.NewBeaconBlock()
-	block.Block.Slot = 1
-	block.Block.ProposerIndex = 0
-
-	sig, err := signing.ComputeDomainAndSign(beaconState, 0, block.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[0])
-	require.NoError(t, err)
-	block.Signature = sig
-
-	// Create head block with different slot/proposer
-	headBlock := util.NewBeaconBlock()
-	headBlock.Block.Slot = 2          // Different slot
-	headBlock.Block.ProposerIndex = 1 // Different proposer
-	signedHeadBlock, err := blocks.NewSignedBeaconBlock(headBlock)
-	require.NoError(t, err)
-
-	chainService := &mock.ChainService{
-		State:   beaconState,
-		Genesis: time.Now(),
-		Block:   signedHeadBlock,
-	}
-	r := &Service{
-		cfg: &config{
-			p2p:          p,
-			chain:        chainService,
-			slashingPool: &slashingsmock.PoolMock{},
-		},
-		seenBlockCache: lruwrpr.New(10),
-	}
-
-	signedBlock, err := blocks.NewSignedBeaconBlock(block)
-	require.NoError(t, err)
-
-	err = r.detectAndBroadcastEquivocation(ctx, signedBlock)
-	require.NoError(t, err)
-}
-
-func TestDetectAndBroadcastEquivocation_EquivocationDetected(t *testing.T) {
-	p := p2ptest.NewTestP2P(t)
-	ctx := context.Background()
-	beaconState, privKeys := util.DeterministicGenesisState(t, 100)
-
-	headBlock := util.NewBeaconBlock()
-	headBlock.Block.Slot = 1
-	headBlock.Block.ProposerIndex = 0
-	headBlock.Block.ParentRoot = bytesutil.PadTo([]byte("parent1"), 32)
-	sig1, err := signing.ComputeDomainAndSign(beaconState, 0, headBlock.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[0])
-	require.NoError(t, err)
-	headBlock.Signature = sig1
-
-	newBlock := util.NewBeaconBlock()
-	newBlock.Block.Slot = 1
-	newBlock.Block.ProposerIndex = 0
-	newBlock.Block.ParentRoot = bytesutil.PadTo([]byte("parent2"), 32)
-	sig2, err := signing.ComputeDomainAndSign(beaconState, 0, newBlock.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[0])
-	require.NoError(t, err)
-	newBlock.Signature = sig2
-
-	signedHeadBlock, err := blocks.NewSignedBeaconBlock(headBlock)
-	require.NoError(t, err)
-
-	slashingPool := &slashingsmock.PoolMock{}
-	chainService := &mock.ChainService{
-		State:   beaconState,
-		Genesis: time.Now(),
-		Block:   signedHeadBlock,
-	}
-	r := &Service{
-		cfg: &config{
-			p2p:          p,
-			chain:        chainService,
-			slashingPool: slashingPool,
-		},
-		seenBlockCache: lruwrpr.New(10),
-	}
-
-	signedNewBlock, err := blocks.NewSignedBeaconBlock(newBlock)
-	require.NoError(t, err)
-
-	err = r.detectAndBroadcastEquivocation(ctx, signedNewBlock)
-	require.NoError(t, err)
-
-	// Verify slashing was inserted
-	require.Equal(t, 1, len(slashingPool.PendingPropSlashings), "Expected a slashing to be inserted")
-	slashing := slashingPool.PendingPropSlashings[0]
-	assert.Equal(t, primitives.ValidatorIndex(0), slashing.Header_1.Header.ProposerIndex, "Wrong proposer index")
-	assert.Equal(t, primitives.Slot(1), slashing.Header_1.Header.Slot, "Wrong slot")
-}
-
-func TestDetectAndBroadcastEquivocation_SameSignature(t *testing.T) {
-	p := p2ptest.NewTestP2P(t)
-	ctx := context.Background()
-	beaconState, privKeys := util.DeterministicGenesisState(t, 100)
-
-	// Create block
-	block := util.NewBeaconBlock()
-	block.Block.Slot = 1
-	block.Block.ProposerIndex = 0
-	sig, err := signing.ComputeDomainAndSign(beaconState, 0, block.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[0])
-	require.NoError(t, err)
-	block.Signature = sig
-
-	signedBlock, err := blocks.NewSignedBeaconBlock(block)
-	require.NoError(t, err)
-
-	slashingPool := &slashingsmock.PoolMock{}
-	chainService := &mock.ChainService{
-		State:   beaconState,
-		Genesis: time.Now(),
-		Block:   signedBlock,
-	}
-	r := &Service{
-		cfg: &config{
-			p2p:          p,
-			chain:        chainService,
-			slashingPool: slashingPool,
-		},
-		seenBlockCache: lruwrpr.New(10),
-	}
-
-	err = r.detectAndBroadcastEquivocation(ctx, signedBlock)
-	require.NoError(t, err)
-	assert.Equal(t, 0, len(slashingPool.PendingPropSlashings), "Expected no slashings for same signature")
-}
-
-func TestDetectAndBroadcastEquivocation_HeadStateError(t *testing.T) {
+func TestDetectAndBroadcastEquivocation(t *testing.T) {
 	ctx := context.Background()
 	p := p2ptest.NewTestP2P(t)
 	beaconState, privKeys := util.DeterministicGenesisState(t, 100)
 
-	block := util.NewBeaconBlock()
-	block.Block.Slot = 1
-	block.Block.ProposerIndex = 0
-	block.Block.ParentRoot = bytesutil.PadTo([]byte("parent1"), 32)
-	sig1, err := signing.ComputeDomainAndSign(beaconState, 0, block.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[0])
-	require.NoError(t, err)
-	block.Signature = sig1
+	t.Run("no equivocation", func(t *testing.T) {
+		block := util.NewBeaconBlock()
+		block.Block.Slot = 1
+		block.Block.ProposerIndex = 0
 
-	headBlock := util.NewBeaconBlock()
-	headBlock.Block.Slot = 1                                            // Same slot
-	headBlock.Block.ProposerIndex = 0                                   // Same proposer
-	headBlock.Block.ParentRoot = bytesutil.PadTo([]byte("parent2"), 32) // Different parent root
-	sig2, err := signing.ComputeDomainAndSign(beaconState, 0, headBlock.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[0])
-	require.NoError(t, err)
-	headBlock.Signature = sig2
+		sig, err := signing.ComputeDomainAndSign(beaconState, 0, block.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[0])
+		require.NoError(t, err)
+		block.Signature = sig
 
-	signedBlock, err := blocks.NewSignedBeaconBlock(block)
-	require.NoError(t, err)
+		// Create head block with different slot/proposer
+		headBlock := util.NewBeaconBlock()
+		headBlock.Block.Slot = 2          // Different slot
+		headBlock.Block.ProposerIndex = 1 // Different proposer
+		signedHeadBlock, err := blocks.NewSignedBeaconBlock(headBlock)
+		require.NoError(t, err)
 
-	signedHeadBlock, err := blocks.NewSignedBeaconBlock(headBlock)
-	require.NoError(t, err)
+		chainService := &mock.ChainService{
+			State:   beaconState,
+			Genesis: time.Now(),
+			Block:   signedHeadBlock,
+		}
 
-	chainService := &mock.ChainService{
-		State:        nil,
-		Block:        signedHeadBlock,
-		HeadStateErr: errors.New("could not get head state"),
-	}
-	r := &Service{
-		cfg: &config{
-			p2p:          p,
-			chain:        chainService,
-			slashingPool: &slashingsmock.PoolMock{},
-		},
-		seenBlockCache: lruwrpr.New(10),
-	}
+		slashingPool := &slashingsmock.PoolMock{}
+		r := &Service{
+			cfg: &config{
+				p2p:          p,
+				chain:        chainService,
+				slashingPool: slashingPool,
+			},
+			seenBlockCache: lruwrpr.New(10),
+		}
 
-	err = r.detectAndBroadcastEquivocation(ctx, signedBlock)
-	require.ErrorContains(t, "could not get head state", err)
-}
+		signedBlock, err := blocks.NewSignedBeaconBlock(block)
+		require.NoError(t, err)
 
-func TestDetectAndBroadcastEquivocation_SignatureVerificationFailure(t *testing.T) {
-	ctx := context.Background()
-	p := p2ptest.NewTestP2P(t)
-	beaconState, privKeys := util.DeterministicGenesisState(t, 100)
+		err = r.detectAndBroadcastEquivocation(ctx, signedBlock)
+		require.NoError(t, err)
+		assert.Equal(t, 0, len(slashingPool.PendingPropSlashings), "Expected no slashings")
+	})
 
-	// Create head block
-	headBlock := util.NewBeaconBlock()
-	headBlock.Block.Slot = 1
-	headBlock.Block.ProposerIndex = 0
-	sig1, err := signing.ComputeDomainAndSign(beaconState, 0, headBlock.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[0])
-	require.NoError(t, err)
-	headBlock.Signature = sig1
+	t.Run("equivocation detected", func(t *testing.T) {
+		// Create head block
+		headBlock := util.NewBeaconBlock()
+		headBlock.Block.Slot = 1
+		headBlock.Block.ProposerIndex = 0
+		headBlock.Block.ParentRoot = bytesutil.PadTo([]byte("parent1"), 32)
+		sig1, err := signing.ComputeDomainAndSign(beaconState, 0, headBlock.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[0])
+		require.NoError(t, err)
+		headBlock.Signature = sig1
 
-	// Create test block with invalid signature
-	newBlock := util.NewBeaconBlock()
-	newBlock.Block.Slot = 1
-	newBlock.Block.ProposerIndex = 0
-	newBlock.Block.ParentRoot = bytesutil.PadTo([]byte("different"), 32)
-	// generate invalid signature
-	invalidSig := make([]byte, 96)
-	copy(invalidSig, []byte("invalid signature"))
-	newBlock.Signature = invalidSig
+		// Create second block with same slot/proposer but different contents
+		newBlock := util.NewBeaconBlock()
+		newBlock.Block.Slot = 1
+		newBlock.Block.ProposerIndex = 0
+		newBlock.Block.ParentRoot = bytesutil.PadTo([]byte("parent2"), 32)
+		sig2, err := signing.ComputeDomainAndSign(beaconState, 0, newBlock.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[0])
+		require.NoError(t, err)
+		newBlock.Signature = sig2
 
-	signedHeadBlock, err := blocks.NewSignedBeaconBlock(headBlock)
-	require.NoError(t, err)
+		signedHeadBlock, err := blocks.NewSignedBeaconBlock(headBlock)
+		require.NoError(t, err)
 
-	signedNewBlock, err := blocks.NewSignedBeaconBlock(newBlock)
-	require.NoError(t, err)
+		slashingPool := &slashingsmock.PoolMock{}
+		chainService := &mock.ChainService{
+			State:   beaconState,
+			Genesis: time.Now(),
+			Block:   signedHeadBlock,
+		}
 
-	slashingPool := &slashingsmock.PoolMock{}
-	chainService := &mock.ChainService{
-		State:   beaconState,
-		Genesis: time.Now(),
-		Block:   signedHeadBlock,
-	}
-	r := &Service{
-		cfg: &config{
-			p2p:          p,
-			chain:        chainService,
-			slashingPool: slashingPool,
-		},
-		seenBlockCache: lruwrpr.New(10),
-	}
+		r := &Service{
+			cfg: &config{
+				p2p:          p,
+				chain:        chainService,
+				slashingPool: slashingPool,
+			},
+			seenBlockCache: lruwrpr.New(10),
+		}
 
-	err = r.detectAndBroadcastEquivocation(ctx, signedNewBlock)
-	require.ErrorIs(t, err, ErrSlashingSignatureFailure)
+		signedNewBlock, err := blocks.NewSignedBeaconBlock(newBlock)
+		require.NoError(t, err)
+
+		err = r.detectAndBroadcastEquivocation(ctx, signedNewBlock)
+		require.NoError(t, err)
+
+		// Verify slashing was inserted
+		require.Equal(t, 1, len(slashingPool.PendingPropSlashings), "Expected a slashing to be inserted")
+		slashing := slashingPool.PendingPropSlashings[0]
+		assert.Equal(t, primitives.ValidatorIndex(0), slashing.Header_1.Header.ProposerIndex, "Wrong proposer index")
+		assert.Equal(t, primitives.Slot(1), slashing.Header_1.Header.Slot, "Wrong slot")
+	})
+
+	t.Run("same signature", func(t *testing.T) {
+		// Create block
+		block := util.NewBeaconBlock()
+		block.Block.Slot = 1
+		block.Block.ProposerIndex = 0
+		sig, err := signing.ComputeDomainAndSign(beaconState, 0, block.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[0])
+		require.NoError(t, err)
+		block.Signature = sig
+
+		signedBlock, err := blocks.NewSignedBeaconBlock(block)
+		require.NoError(t, err)
+
+		slashingPool := &slashingsmock.PoolMock{}
+		chainService := &mock.ChainService{
+			State:   beaconState,
+			Genesis: time.Now(),
+			Block:   signedBlock,
+		}
+
+		r := &Service{
+			cfg: &config{
+				p2p:          p,
+				chain:        chainService,
+				slashingPool: slashingPool,
+			},
+			seenBlockCache: lruwrpr.New(10),
+		}
+
+		err = r.detectAndBroadcastEquivocation(ctx, signedBlock)
+		require.NoError(t, err)
+		assert.Equal(t, 0, len(slashingPool.PendingPropSlashings), "Expected no slashings for same signature")
+	})
+
+	t.Run("head state error", func(t *testing.T) {
+		block := util.NewBeaconBlock()
+		block.Block.Slot = 1
+		block.Block.ProposerIndex = 0
+		block.Block.ParentRoot = bytesutil.PadTo([]byte("parent1"), 32)
+		sig1, err := signing.ComputeDomainAndSign(beaconState, 0, block.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[0])
+		require.NoError(t, err)
+		block.Signature = sig1
+
+		headBlock := util.NewBeaconBlock()
+		headBlock.Block.Slot = 1                                            // Same slot
+		headBlock.Block.ProposerIndex = 0                                   // Same proposer
+		headBlock.Block.ParentRoot = bytesutil.PadTo([]byte("parent2"), 32) // Different parent root
+		sig2, err := signing.ComputeDomainAndSign(beaconState, 0, headBlock.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[0])
+		require.NoError(t, err)
+		headBlock.Signature = sig2
+
+		signedBlock, err := blocks.NewSignedBeaconBlock(block)
+		require.NoError(t, err)
+
+		signedHeadBlock, err := blocks.NewSignedBeaconBlock(headBlock)
+		require.NoError(t, err)
+
+		chainService := &mock.ChainService{
+			State:        nil,
+			Block:        signedHeadBlock,
+			HeadStateErr: errors.New("could not get head state"),
+		}
+
+		r := &Service{
+			cfg: &config{
+				p2p:          p,
+				chain:        chainService,
+				slashingPool: &slashingsmock.PoolMock{},
+			},
+			seenBlockCache: lruwrpr.New(10),
+		}
+
+		err = r.detectAndBroadcastEquivocation(ctx, signedBlock)
+		require.ErrorContains(t, "could not get head state", err)
+	})
+	t.Run("signature verification failure", func(t *testing.T) {
+		// Create head block
+		headBlock := util.NewBeaconBlock()
+		headBlock.Block.Slot = 1
+		headBlock.Block.ProposerIndex = 0
+		sig1, err := signing.ComputeDomainAndSign(beaconState, 0, headBlock.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[0])
+		require.NoError(t, err)
+		headBlock.Signature = sig1
+
+		// Create test block with invalid signature
+		newBlock := util.NewBeaconBlock()
+		newBlock.Block.Slot = 1
+		newBlock.Block.ProposerIndex = 0
+		newBlock.Block.ParentRoot = bytesutil.PadTo([]byte("different"), 32)
+		// generate invalid signature
+		invalidSig := make([]byte, 96)
+		copy(invalidSig, []byte("invalid signature"))
+		newBlock.Signature = invalidSig
+
+		signedHeadBlock, err := blocks.NewSignedBeaconBlock(headBlock)
+		require.NoError(t, err)
+		signedNewBlock, err := blocks.NewSignedBeaconBlock(newBlock)
+		require.NoError(t, err)
+
+		slashingPool := &slashingsmock.PoolMock{}
+		chainService := &mock.ChainService{
+			State:   beaconState,
+			Genesis: time.Now(),
+			Block:   signedHeadBlock,
+		}
+
+		r := &Service{
+			cfg: &config{
+				p2p:          p,
+				chain:        chainService,
+				slashingPool: slashingPool,
+			},
+			seenBlockCache: lruwrpr.New(10),
+		}
+
+		err = r.detectAndBroadcastEquivocation(ctx, signedNewBlock)
+		require.ErrorIs(t, err, ErrSlashingSignatureFailure)
+	})
 }
