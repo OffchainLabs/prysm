@@ -217,6 +217,10 @@ var stateTransitionCommand = &cli.Command{
 				if err := params.SetActive(params.HoleskyConfig()); err != nil {
 					log.Fatal(err)
 				}
+			case params.HoodiName:
+				if err := params.SetActive(params.HoodiConfig()); err != nil {
+					log.Fatal(err)
+				}
 			default:
 				log.Fatalf("Unknown network provided: %s", network)
 			}

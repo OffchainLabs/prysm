@@ -43,40 +43,42 @@ type Config struct {
 	AuthTokenPath          string
 	Middlewares            []middleware.Middleware
 	Router                 *http.ServeMux
+	ServeWebUI             bool
 }
 
 // Server defining a HTTP server for the remote signer API and registering clients
 type Server struct {
-	ctx                       context.Context
-	cancel                    context.CancelFunc
-	httpHost                  string
-	httpPort                  int
-	server                    *httprest.Server
+	serveWebUI                bool
+	walletInitialized         bool
+	logStreamerBufferSize     int
 	grpcMaxCallRecvMsgSize    int
+	walletInitializedFeed     *event.Feed
+	beaconApiTimeout          time.Duration
+	wallet                    *wallet.Wallet
+	validatorService          *client.ValidatorService
+	httpPort                  int
+	cancel                    context.CancelFunc
 	grpcRetries               uint
 	grpcRetryDelay            time.Duration
-	grpcHeaders               []string
-	beaconNodeValidatorClient iface.ValidatorClient
-	chainClient               iface.ChainClient
-	nodeClient                iface.NodeClient
-	healthClient              ethpb.HealthClient
-	beaconNodeEndpoint        string
-	beaconApiEndpoint         string
-	beaconApiTimeout          time.Duration
-	beaconNodeCert            string
-	jwtSecret                 []byte
+	server                    *httprest.Server
+	router                    *http.ServeMux
 	authTokenPath             string
+	beaconNodeCert            string
+	beaconApiEndpoint         string
+	beaconNodeEndpoint        string
+	healthClient              ethpb.HealthClient
+	nodeClient                iface.NodeClient
+	chainClient               iface.ChainClient
+	beaconNodeValidatorClient iface.ValidatorClient
+	httpHost                  string
 	authToken                 string
 	db                        db.Database
-	walletDir                 string
-	wallet                    *wallet.Wallet
-	walletInitializedFeed     *event.Feed
-	walletInitialized         bool
-	validatorService          *client.ValidatorService
-	router                    *http.ServeMux
 	logStreamer               logs.Streamer
-	logStreamerBufferSize     int
 	startFailure              error
+	ctx                       context.Context
+	walletDir                 string
+	jwtSecret                 []byte
+	grpcHeaders               []string
 }
 
 // NewServer instantiates a new HTTP server.
@@ -104,9 +106,11 @@ func NewServer(ctx context.Context, cfg *Config) *Server {
 		beaconApiEndpoint:      cfg.BeaconApiEndpoint,
 		beaconNodeEndpoint:     cfg.BeaconNodeGRPCEndpoint,
 		router:                 cfg.Router,
+		serveWebUI:             cfg.ServeWebUI,
 	}
 
 	if server.authTokenPath == "" && server.walletDir != "" {
+		// if a wallet dir is passed without an auth token then override the default with the wallet dir
 		server.authTokenPath = filepath.Join(server.walletDir, api.AuthTokenFileName)
 	}
 
@@ -115,9 +119,10 @@ func NewServer(ctx context.Context, cfg *Config) *Server {
 			log.WithError(err).Error("Could not initialize web auth token")
 		}
 		validatorWebAddr := fmt.Sprintf("%s:%d", server.httpHost, server.httpPort)
-		logValidatorWebAuth(validatorWebAddr, server.authToken, server.authTokenPath)
+		logValidatorWebAuth(server.serveWebUI, validatorWebAddr, server.authToken, server.authTokenPath)
 		go server.refreshAuthTokenFromFileChanges(server.ctx, server.authTokenPath)
 	}
+
 	// Register a gRPC or HTTP client to the beacon node.
 	// Used for proxy calls to beacon node from validator REST handlers
 	if err := server.registerBeaconClient(); err != nil {
@@ -159,8 +164,9 @@ func (s *Server) InitializeRoutesWithWebHandler() error {
 		if strings.HasPrefix(r.URL.Path, "/api") {
 			r.URL.Path = strings.Replace(r.URL.Path, "/api", "", 1) // used to redirect apis to standard rest APIs
 			s.router.ServeHTTP(w, r)
-		} else {
-			// Finally, we handle with the web server.
+			return
+		}
+		if s.serveWebUI {
 			web.Handler(w, r)
 		}
 	})

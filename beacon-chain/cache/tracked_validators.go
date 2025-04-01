@@ -25,7 +25,7 @@ type (
 	}
 
 	TrackedValidatorsCache struct {
-		trackedValidators cache.Cache
+		trackedValidators *cache.Cache
 	}
 )
 
@@ -50,7 +50,7 @@ var (
 // NewTrackedValidatorsCache creates a new cache for tracking validators.
 func NewTrackedValidatorsCache() *TrackedValidatorsCache {
 	return &TrackedValidatorsCache{
-		trackedValidators: *cache.New(defaultExpiration, cleanupInterval),
+		trackedValidators: cache.New(defaultExpiration, cleanupInterval),
 	}
 }
 

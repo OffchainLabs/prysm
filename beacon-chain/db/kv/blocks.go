@@ -185,7 +185,7 @@ func (s *Store) HasBlock(ctx context.Context, blockRoot [32]byte) bool {
 		exists = bkt.Get(blockRoot[:]) != nil
 		return nil
 	}); err != nil { // This view never returns an error, but we'll handle anyway for sanity.
-		panic(err)
+		panic(err) // lint:nopanic -- View never returns an error.
 	}
 	return exists
 }

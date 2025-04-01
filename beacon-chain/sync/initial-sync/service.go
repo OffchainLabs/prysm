@@ -192,7 +192,7 @@ func (s *Service) Start() {
 		if errors.Is(s.ctx.Err(), context.Canceled) {
 			return
 		}
-		panic(err)
+		panic(err) // lint:nopanic -- Unexpected error. This should probably be surfaced with a returned error.
 	}
 	log.WithField("slot", s.cfg.Chain.HeadSlot()).Info("Synced up to")
 	s.markSynced()

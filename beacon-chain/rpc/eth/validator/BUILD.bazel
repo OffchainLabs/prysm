@@ -37,6 +37,7 @@ go_library(
         "//consensus-types/blocks:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//consensus-types/validator:go_default_library",
+        "//crypto/bls/common:go_default_library",
         "//encoding/bytesutil:go_default_library",
         "//monitoring/tracing/trace:go_default_library",
         "//network/httputil:go_default_library",

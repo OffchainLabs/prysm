@@ -21,14 +21,6 @@ func (s *Service) committeeIndexBeaconAttestationSubscriber(_ context.Context, m
 		return fmt.Errorf("message was not type eth.Att, type=%T", msg)
 	}
 
-	data := a.GetData()
-
-	if data == nil {
-		return errors.New("nil attestation")
-	}
-	committeeIndex := a.GetCommitteeIndex()
-	s.setSeenCommitteeIndicesSlot(data.Slot, committeeIndex, a.GetAggregationBits())
-
 	if features.Get().EnableExperimentalAttestationPool {
 		return s.cfg.attestationCache.Add(a)
 	} else {

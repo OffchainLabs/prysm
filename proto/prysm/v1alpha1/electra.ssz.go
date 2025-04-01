@@ -887,6 +887,115 @@ func (b *BuilderBidElectra) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	return
 }
 
+// MarshalSSZ ssz marshals the SignedBuilderBidElectra object
+func (s *SignedBuilderBidElectra) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(s)
+}
+
+// MarshalSSZTo ssz marshals the SignedBuilderBidElectra object to a target array
+func (s *SignedBuilderBidElectra) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(100)
+
+	// Offset (0) 'Message'
+	dst = ssz.WriteOffset(dst, offset)
+	if s.Message == nil {
+		s.Message = new(BuilderBidElectra)
+	}
+	offset += s.Message.SizeSSZ()
+
+	// Field (1) 'Signature'
+	if size := len(s.Signature); size != 96 {
+		err = ssz.ErrBytesLengthFn("--.Signature", size, 96)
+		return
+	}
+	dst = append(dst, s.Signature...)
+
+	// Field (0) 'Message'
+	if dst, err = s.Message.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the SignedBuilderBidElectra object
+func (s *SignedBuilderBidElectra) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 100 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o0 uint64
+
+	// Offset (0) 'Message'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
+	}
+
+	if o0 != 100 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Field (1) 'Signature'
+	if cap(s.Signature) == 0 {
+		s.Signature = make([]byte, 0, len(buf[4:100]))
+	}
+	s.Signature = append(s.Signature, buf[4:100]...)
+
+	// Field (0) 'Message'
+	{
+		buf = tail[o0:]
+		if s.Message == nil {
+			s.Message = new(BuilderBidElectra)
+		}
+		if err = s.Message.UnmarshalSSZ(buf); err != nil {
+			return err
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the SignedBuilderBidElectra object
+func (s *SignedBuilderBidElectra) SizeSSZ() (size int) {
+	size = 100
+
+	// Field (0) 'Message'
+	if s.Message == nil {
+		s.Message = new(BuilderBidElectra)
+	}
+	size += s.Message.SizeSSZ()
+
+	return
+}
+
+// HashTreeRoot ssz hashes the SignedBuilderBidElectra object
+func (s *SignedBuilderBidElectra) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(s)
+}
+
+// HashTreeRootWith ssz hashes the SignedBuilderBidElectra object with a hasher
+func (s *SignedBuilderBidElectra) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'Message'
+	if err = s.Message.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (1) 'Signature'
+	if size := len(s.Signature); size != 96 {
+		err = ssz.ErrBytesLengthFn("--.Signature", size, 96)
+		return
+	}
+	hh.PutBytes(s.Signature)
+
+	hh.Merkleize(indx)
+	return
+}
+
 // MarshalSSZ ssz marshals the SignedBeaconBlockContentsElectra object
 func (s *SignedBeaconBlockContentsElectra) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(s)
@@ -5170,7 +5279,7 @@ func (l *LightClientFinalityUpdateElectra) MarshalSSZ() ([]byte, error) {
 // MarshalSSZTo ssz marshals the LightClientFinalityUpdateElectra object to a target array
 func (l *LightClientFinalityUpdateElectra) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
-	offset := int(180)
+	offset := int(400)
 
 	// Offset (0) 'AttestedHeader'
 	dst = ssz.WriteOffset(dst, offset)
@@ -5186,11 +5295,17 @@ func (l *LightClientFinalityUpdateElectra) MarshalSSZTo(buf []byte) (dst []byte,
 	}
 	offset += l.FinalizedHeader.SizeSSZ()
 
-	// Offset (2) 'FinalityBranch'
-	dst = ssz.WriteOffset(dst, offset)
-	for ii := 0; ii < len(l.FinalityBranch); ii++ {
-		offset += 4
-		offset += len(l.FinalityBranch[ii])
+	// Field (2) 'FinalityBranch'
+	if size := len(l.FinalityBranch); size != 7 {
+		err = ssz.ErrVectorLengthFn("--.FinalityBranch", size, 7)
+		return
+	}
+	for ii := 0; ii < 7; ii++ {
+		if size := len(l.FinalityBranch[ii]); size != 32 {
+			err = ssz.ErrBytesLengthFn("--.FinalityBranch[ii]", size, 32)
+			return
+		}
+		dst = append(dst, l.FinalityBranch[ii]...)
 	}
 
 	// Field (3) 'SyncAggregate'
@@ -5214,26 +5329,6 @@ func (l *LightClientFinalityUpdateElectra) MarshalSSZTo(buf []byte) (dst []byte,
 		return
 	}
 
-	// Field (2) 'FinalityBranch'
-	if size := len(l.FinalityBranch); size > 7 {
-		err = ssz.ErrListTooBigFn("--.FinalityBranch", size, 7)
-		return
-	}
-	{
-		offset = 4 * len(l.FinalityBranch)
-		for ii := 0; ii < len(l.FinalityBranch); ii++ {
-			dst = ssz.WriteOffset(dst, offset)
-			offset += len(l.FinalityBranch[ii])
-		}
-	}
-	for ii := 0; ii < len(l.FinalityBranch); ii++ {
-		if size := len(l.FinalityBranch[ii]); size > 32 {
-			err = ssz.ErrBytesLengthFn("--.FinalityBranch[ii]", size, 32)
-			return
-		}
-		dst = append(dst, l.FinalityBranch[ii]...)
-	}
-
 	return
 }
 
@@ -5241,19 +5336,19 @@ func (l *LightClientFinalityUpdateElectra) MarshalSSZTo(buf []byte) (dst []byte,
 func (l *LightClientFinalityUpdateElectra) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size < 180 {
+	if size < 400 {
 		return ssz.ErrSize
 	}
 
 	tail := buf
-	var o0, o1, o2 uint64
+	var o0, o1 uint64
 
 	// Offset (0) 'AttestedHeader'
 	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
 		return ssz.ErrOffset
 	}
 
-	if o0 != 180 {
+	if o0 != 400 {
 		return ssz.ErrInvalidVariableOffset
 	}
 
@@ -5262,21 +5357,25 @@ func (l *LightClientFinalityUpdateElectra) UnmarshalSSZ(buf []byte) error {
 		return ssz.ErrOffset
 	}
 
-	// Offset (2) 'FinalityBranch'
-	if o2 = ssz.ReadOffset(buf[8:12]); o2 > size || o1 > o2 {
-		return ssz.ErrOffset
+	// Field (2) 'FinalityBranch'
+	l.FinalityBranch = make([][]byte, 7)
+	for ii := 0; ii < 7; ii++ {
+		if cap(l.FinalityBranch[ii]) == 0 {
+			l.FinalityBranch[ii] = make([]byte, 0, len(buf[8:232][ii*32:(ii+1)*32]))
+		}
+		l.FinalityBranch[ii] = append(l.FinalityBranch[ii], buf[8:232][ii*32:(ii+1)*32]...)
 	}
 
 	// Field (3) 'SyncAggregate'
 	if l.SyncAggregate == nil {
 		l.SyncAggregate = new(SyncAggregate)
 	}
-	if err = l.SyncAggregate.UnmarshalSSZ(buf[12:172]); err != nil {
+	if err = l.SyncAggregate.UnmarshalSSZ(buf[232:392]); err != nil {
 		return err
 	}
 
 	// Field (4) 'SignatureSlot'
-	l.SignatureSlot = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[172:180]))
+	l.SignatureSlot = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[392:400]))
 
 	// Field (0) 'AttestedHeader'
 	{
@@ -5291,34 +5390,11 @@ func (l *LightClientFinalityUpdateElectra) UnmarshalSSZ(buf []byte) error {
 
 	// Field (1) 'FinalizedHeader'
 	{
-		buf = tail[o1:o2]
+		buf = tail[o1:]
 		if l.FinalizedHeader == nil {
 			l.FinalizedHeader = new(LightClientHeaderDeneb)
 		}
 		if err = l.FinalizedHeader.UnmarshalSSZ(buf); err != nil {
-			return err
-		}
-	}
-
-	// Field (2) 'FinalityBranch'
-	{
-		buf = tail[o2:]
-		num, err := ssz.DecodeDynamicLength(buf, 7)
-		if err != nil {
-			return err
-		}
-		l.FinalityBranch = make([][]byte, num)
-		err = ssz.UnmarshalDynamic(buf, num, func(indx int, buf []byte) (err error) {
-			if len(buf) > 32 {
-				return ssz.ErrBytesLength
-			}
-			if cap(l.FinalityBranch[indx]) == 0 {
-				l.FinalityBranch[indx] = make([]byte, 0, len(buf))
-			}
-			l.FinalityBranch[indx] = append(l.FinalityBranch[indx], buf...)
-			return nil
-		})
-		if err != nil {
 			return err
 		}
 	}
@@ -5327,7 +5403,7 @@ func (l *LightClientFinalityUpdateElectra) UnmarshalSSZ(buf []byte) error {
 
 // SizeSSZ returns the ssz encoded size in bytes for the LightClientFinalityUpdateElectra object
 func (l *LightClientFinalityUpdateElectra) SizeSSZ() (size int) {
-	size = 180
+	size = 400
 
 	// Field (0) 'AttestedHeader'
 	if l.AttestedHeader == nil {
@@ -5340,12 +5416,6 @@ func (l *LightClientFinalityUpdateElectra) SizeSSZ() (size int) {
 		l.FinalizedHeader = new(LightClientHeaderDeneb)
 	}
 	size += l.FinalizedHeader.SizeSSZ()
-
-	// Field (2) 'FinalityBranch'
-	for ii := 0; ii < len(l.FinalityBranch); ii++ {
-		size += 4
-		size += len(l.FinalityBranch[ii])
-	}
 
 	return
 }
@@ -5371,25 +5441,19 @@ func (l *LightClientFinalityUpdateElectra) HashTreeRootWith(hh *ssz.Hasher) (err
 
 	// Field (2) 'FinalityBranch'
 	{
-		subIndx := hh.Index()
-		num := uint64(len(l.FinalityBranch))
-		if num > 7 {
-			err = ssz.ErrIncorrectListSize
+		if size := len(l.FinalityBranch); size != 7 {
+			err = ssz.ErrVectorLengthFn("--.FinalityBranch", size, 7)
 			return
 		}
-		for _, elem := range l.FinalityBranch {
-			{
-				elemIndx := hh.Index()
-				byteLen := uint64(len(elem))
-				if byteLen > 32 {
-					err = ssz.ErrIncorrectListSize
-					return
-				}
-				hh.AppendBytes32(elem)
-				hh.MerkleizeWithMixin(elemIndx, byteLen, (32+31)/32)
+		subIndx := hh.Index()
+		for _, i := range l.FinalityBranch {
+			if len(i) != 32 {
+				err = ssz.ErrBytesLength
+				return
 			}
+			hh.Append(i)
 		}
-		hh.MerkleizeWithMixin(subIndx, num, 7)
+		hh.Merkleize(subIndx)
 	}
 
 	// Field (3) 'SyncAggregate'

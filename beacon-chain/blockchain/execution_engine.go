@@ -69,6 +69,18 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*
 		SafeBlockHash:      justifiedHash[:],
 		FinalizedBlockHash: finalizedHash[:],
 	}
+	if len(fcs.HeadBlockHash) != 32 || [32]byte(fcs.HeadBlockHash) == [32]byte{} {
+		// check if we are sending FCU at genesis
+		hash, err := s.hashForGenesisBlock(ctx, arg.headRoot)
+		if errors.Is(err, errNotGenesisRoot) {
+			log.Error("Sending nil head block hash to execution engine")
+			return nil, nil
+		}
+		if err != nil {
+			return nil, errors.Wrap(err, "could not get head block hash")
+		}
+		fcs.HeadBlockHash = hash
+	}
 	if arg.attributes == nil {
 		arg.attributes = payloadattribute.EmptyWithVersion(headBlk.Version())
 	}
