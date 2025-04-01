@@ -255,16 +255,14 @@ func ReconstructDataColumnsByRoot(
 	for i := uint64(0); i < numberOfColumns; i++ {
 		allNeededCols[i] = true
 	}
-	dataColumnsByAdmissiblePeer, _, _, err := AdmissiblePeersForDataColumns(peers, allNeededCols, p2p)
+	_, admissiblePeersByDataColumn, _, err := AdmissiblePeersForDataColumns(peers, allNeededCols, p2p)
 	if err != nil {
 		return nil, errors.Wrap(err, "couldn't get admissible peers for all data columns")
 	}
 
-	availableColumns := make(map[uint64]bool)
-	for _, cols := range dataColumnsByAdmissiblePeer {
-		for col := range cols {
-			availableColumns[col] = true
-		}
+	availableColumns := make(map[uint64]bool, len(admissiblePeersByDataColumn))
+	for colIdx := range admissiblePeersByDataColumn {
+		availableColumns[colIdx] = true
 	}
 
 	if uint64(len(availableColumns)) < recoveryThreshold {
