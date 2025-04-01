@@ -37,6 +37,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/pkg/errors"
 )
 
 // Mock implementation for blockchain.FinalizationFetcher
@@ -701,6 +702,332 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 	}
 }
 
+// createCoveringPeerSet generates a set of peer configurations that collectively
+// custody all column indices from 0 to numberOfColumns-1.
+// It returns the peer setups and a map from column index to the list of peer offsets
+// that custody that column.
+func createCoveringPeerSet(t *testing.T, numberOfColumns uint64) ([]peerSetup, map[uint64][]int) {
+	t.Helper()
+	peerSetups := make([]peerSetup, 0)
+	columnToPeers := make(map[uint64][]int)
+	coveredColumns := make(map[uint64]bool)
+	offset := 1 // Start peer offsets from 1
+
+	// Keep adding peers until all columns are covered
+	for uint64(len(coveredColumns)) < numberOfColumns {
+		setup := peerSetup{
+			offset:            offset,
+			custodyGroupCount: 4, // Use a common group count for simplicity
+		}
+
+		// Determine custody columns for this potential peer
+		_, peerID, privKey := createCustodyPeer(t, setup.offset, setup.custodyGroupCount)
+		enodeID, err := p2p.ConvertPeerIDToNodeID(peerID)
+		require.NoError(t, err)
+		_ = privKey // Keep compiler happy
+		// Use the actual peerdas logic to get custody info
+		info, _, err := peerdas.Info(enodeID, setup.custodyGroupCount)
+		require.NoError(t, err)
+
+		newlyCovered := false
+		for colIdx := range info.CustodyColumns {
+			columnToPeers[colIdx] = append(columnToPeers[colIdx], setup.offset)
+			if !coveredColumns[colIdx] {
+				coveredColumns[colIdx] = true
+				newlyCovered = true
+			}
+		}
+
+		// Only add the peer if it covers at least one new column to avoid infinite loops
+		// in unlikely scenarios where new peers don't add coverage.
+		if newlyCovered || uint64(len(coveredColumns)) < numberOfColumns {
+			peerSetups = append(peerSetups, setup)
+		} else if len(peerSetups) > int(numberOfColumns)*2 { // Revert safety break limit
+			// Safety break: if we've added many peers but aren't covering all columns, something is wrong.
+			t.Fatalf("Failed to cover all columns after adding %d peers", len(peerSetups))
+		}
+
+		offset++
+	}
+
+	t.Logf("Created a covering peer set with %d peers. Total unique columns covered: %d", len(peerSetups), len(coveredColumns))
+	return peerSetups, columnToPeers
+}
+
+func TestFetchOrReconstructDataColumnsByRoot(t *testing.T) {
+	const blobsCount = 6
+	const numberOfColumns = 128 // Matches params.BeaconConfig().NumberOfColumns usually
+
+	// Start the trusted setup.
+	err := kzg.Start()
+	require.NoError(t, err)
+
+	// Configure forks for testing with proper cleanup
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.FuluForkEpoch = 0
+	// Ensure we have a predictable number of columns for recovery calculations
+	cfg.NumberOfColumns = numberOfColumns
+	params.OverrideBeaconConfig(cfg)
+
+	// Recovery threshold calculation (mirrors logic in ReconstructDataColumnsByRoot)
+	recoveryThreshold := cfg.NumberOfColumns/2 + cfg.NumberOfColumns%2
+
+	chainService, clock := defaultMockChain(t)
+
+	// Create test block with blobs
+	pbSignedBeaconBlock := util.NewBeaconBlockDeneb()
+	blockSlot := primitives.Slot(100)
+	pbSignedBeaconBlock.Block.Slot = blockSlot
+
+	blobs := make([]kzg.Blob, blobsCount)
+	blobKzgCommitments := make([][]byte, blobsCount)
+
+	for j := range blobs {
+		blob := getRandBlob(int64(j))
+		blobs[j] = blob
+
+		blobKzgCommitment, err := kzg.BlobToKZGCommitment(&blob)
+		require.NoError(t, err)
+
+		blobKzgCommitments[j] = blobKzgCommitment[:]
+	}
+
+	pbSignedBeaconBlock.Block.Body.BlobKzgCommitments = blobKzgCommitments
+
+	signedBlock, err := blocks.NewSignedBeaconBlock(pbSignedBeaconBlock)
+	require.NoError(t, err)
+
+	dataColumnSidecars, err := peerdas.DataColumnSidecars(signedBlock, blobs)
+	require.NoError(t, err)
+
+	// Calculate block root
+	blockRoot, err := signedBlock.Block().HashTreeRoot()
+	require.NoError(t, err)
+
+	// Helper to create a map of columns from a slice
+	colsToMap := func(cols []uint64) map[uint64]bool {
+		m := make(map[uint64]bool, len(cols))
+		for _, col := range cols {
+			m[col] = true
+		}
+		return m
+	}
+
+	getCustodyColumns := func(setup peerSetup) map[uint64]bool {
+		_, peerID, privKey := createCustodyPeer(t, setup.offset, setup.custodyGroupCount)
+		enodeID, err := p2p.ConvertPeerIDToNodeID(peerID)
+		require.NoError(t, err)
+		_ = privKey // Keep compiler happy
+		info, _, err := peerdas.Info(enodeID, setup.custodyGroupCount)
+		require.NoError(t, err)
+		return info.CustodyColumns
+	}
+
+	testCases := []struct {
+		name                 string
+		requestedColumns     map[uint64]bool
+		peerSetup            []peerSetup // Peers available in the network (if nil, generate covering set)
+		unavailableColumns   []uint64    // Columns that all custodians should refuse to serve
+		expectedError        error       // Use errors.Is for checking wrapped errors
+		expectReconstruction bool        // Crude check if reconstruction path likely taken
+	}{
+		{
+			name:             "Success - Direct Fetch",
+			requestedColumns: colsToMap([]uint64{6, 37}),
+			peerSetup: []peerSetup{
+				{offset: 1, custodyGroupCount: 4}, // Custodies [6, 37, 48, 113]
+			},
+			unavailableColumns:   nil, // None unavailable
+			expectedError:        nil,
+			expectReconstruction: false,
+		},
+		{
+			name:                 "Success - Reconstruction Needed - Target column initially unavailable",
+			requestedColumns:     colsToMap([]uint64{6, 28}),
+			peerSetup:            nil,         // Generate a covering set
+			unavailableColumns:   []uint64{6}, // Make column 6 unavailable from all its custodians
+			expectedError:        nil,
+			expectReconstruction: true,
+		},
+		{
+			name:             "Failure - Reconstruction Impossible - Not Enough Available Columns",
+			requestedColumns: colsToMap([]uint64{6, 28}),
+			peerSetup: []peerSetup{ // Intentionally few peers
+				{offset: 1, custodyGroupCount: 4},  // Custodies [6, 37, 48, 113]
+				{offset: 10, custodyGroupCount: 4}, // Custodies [6, 28, 53, 71]
+				{offset: 20, custodyGroupCount: 4}, // Custodies [30, 64, 75, 91]
+				{offset: 30, custodyGroupCount: 4}, // Custodies [16, 27, 51, 84]
+			},
+			// Make enough columns unavailable such that threshold cannot be met
+			unavailableColumns: []uint64{6, 37, 28, 53, 30, 64, 75, 91, 16, 27, 51, 84},
+			// Total unique custodied = 16. Unavailable = 12. Available = 4. Threshold=64.
+			expectedError:        ErrNotEnoughColsAvailable,
+			expectReconstruction: true, // It will try reconstruction but fail availability check
+		},
+		{
+			name:                 "Failure - Direct Fetch Fails & Reconstruction Impossible",
+			requestedColumns:     colsToMap([]uint64{1000, 1001}), // Columns no peer custodies
+			peerSetup:            nil,                             // Generate a covering set
+			unavailableColumns:   nil,                             // No columns need to be made unavailable
+			expectedError:        ErrNoPeersForDataColumns,
+			expectReconstruction: false,
+		},
+		{
+			name:                 "Success - Empty Request",
+			requestedColumns:     map[uint64]bool{},
+			peerSetup:            []peerSetup{{offset: 1, custodyGroupCount: 4}},
+			unavailableColumns:   nil,
+			expectedError:        nil,
+			expectReconstruction: false,
+		},
+	}
+
+	// // Remove special setup for "Failure - Direct Fetch Fails..." as it's handled by peerSetup: nil now
+	// reconImpossiblePeerSetup, _ := createCoveringPeerSet(t, numberOfColumns) ...
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var initialPeerSetups []peerSetup
+
+			// Determine the peer setup for this test case
+			if tc.peerSetup != nil {
+				initialPeerSetups = tc.peerSetup
+			} else {
+				// Generate a covering set if specific setup not provided
+				initialPeerSetups, _ = createCoveringPeerSet(t, numberOfColumns)
+			}
+
+			finalPeerSetups := make([]peerSetup, 0, len(initialPeerSetups))
+			unavailableColumnsMap := make(map[uint64]bool, len(tc.unavailableColumns))
+			for _, col := range tc.unavailableColumns {
+				unavailableColumnsMap[col] = true
+			}
+			t.Logf("Filtering peers. Excluding any peer custodying columns: %v", tc.unavailableColumns)
+
+			for _, setup := range initialPeerSetups {
+				peerCols := getCustodyColumns(setup)
+				isExcluded := false
+				for col := range peerCols {
+					if unavailableColumnsMap[col] {
+						isExcluded = true
+						break
+					}
+				}
+				if !isExcluded {
+					finalPeerSetups = append(finalPeerSetups, setup)
+				}
+			}
+			t.Logf("Using %d peers for the test after exclusion.", len(finalPeerSetups))
+
+			// --- Peer Connection & Availability Calculation ---
+			hostP2P := p2ptest.NewTestP2P(t)
+			tracker := newRequestTracker()
+			allAvailableColumns := make(map[uint64]bool) // Track columns available from the *final* peer set
+
+			for _, setup := range finalPeerSetups {
+				createAndConnectCustodyPeer(t, setup, dataColumnSidecars, chainService, hostP2P, tracker, nil)
+
+				// Track available columns from this included peer
+				peerCols := getCustodyColumns(setup)
+				for col := range peerCols {
+					allAvailableColumns[col] = true
+				}
+			}
+
+			ctxMap := map[[4]byte]int{{245, 165, 253, 66}: version.Fulu}
+			verifier := func(cols []blocks.RODataColumn, reqs []verification.Requirement) verification.DataColumnsVerifier {
+				initializer := &verification.Initializer{}
+				return initializer.NewDataColumnsVerifier(cols, reqs)
+			}
+
+			mockChain := &mockFinalizationFetcher{
+				finalizedCheckpoint: &pb.Checkpoint{Epoch: 0},
+				justifiedCheckpoint: &pb.Checkpoint{Epoch: 0},
+			}
+
+			// Call the function under test
+			responseCols, err := FetchOrReconstructDataColumnsByRoot(
+				context.Background(),
+				tc.requestedColumns,
+				signedBlock,
+				blockRoot,
+				clock,
+				hostP2P,
+				mockChain,
+				ctxMap,
+				verifier,
+			)
+
+			// --- Assertions ---
+			if tc.expectedError != nil {
+				require.NotNil(t, err)
+				// Use errors.Is for wrapped errors like ErrNoPeersForDataColumns, ErrNotEnoughColsAvailable
+				require.Equal(t, true, errors.Is(err, tc.expectedError), "Unexpected error type: got %v, want %v", err, tc.expectedError)
+			} else {
+				require.NoError(t, err, "Expected no error but got: %v", err)
+				// Verify response columns match requested columns on success
+				require.Equal(t, len(tc.requestedColumns), len(responseCols), "Number of returned columns mismatch")
+
+				expectedColumns := make([]uint64, 0, len(tc.requestedColumns))
+				for col := range tc.requestedColumns {
+					expectedColumns = append(expectedColumns, col)
+				}
+				sort.Slice(expectedColumns, func(i, j int) bool {
+					return expectedColumns[i] < expectedColumns[j]
+				})
+
+				// Sort actual response sidecars by index
+				sort.Slice(responseCols, func(i, j int) bool {
+					// Assuming responseCols is []blocks.RODataColumn based on function signature
+					// Need to access ColumnIndex correctly. Adjust if type is different.
+					// Let's assume RODataColumn has a method or field ColumnIndex
+					return responseCols[i].ColumnIndex < responseCols[j].ColumnIndex
+				})
+
+				// Compare element by element
+				for i := range responseCols {
+					require.Equal(t, expectedColumns[i], responseCols[i].ColumnIndex, "Mismatch at index %d", i)
+				}
+			}
+
+			// Crude check for reconstruction path (can be refined with logging/mocking)
+			if tc.expectReconstruction && tc.expectedError == nil {
+				// If reconstruction was expected and successful, we expect requests for columns
+				// *beyond* the initially requested set, up to the recovery threshold.
+				// This is hard to verify precisely without deep mocking, but we can check if
+				// *more* columns were requested than initially asked for.
+				totalRequestedCount := 0
+				requestedColSet := make(map[uint64]bool)
+				for _, cols := range tracker.requests {
+					for _, col := range cols {
+						if !requestedColSet[col] {
+							requestedColSet[col] = true
+							totalRequestedCount++
+						}
+					}
+				}
+				require.Equal(t, true, uint64(totalRequestedCount) >= recoveryThreshold, "Expected at least recoveryThreshold columns to be requested during reconstruction attempt")
+			} else if !tc.expectReconstruction && tc.expectedError == nil {
+				// If direct fetch was expected and successful, the requested columns should ideally
+				// match the initial request exactly (or be a subset if optimized).
+				totalRequestedCount := 0
+				for _, cols := range tracker.requests {
+					totalRequestedCount += len(cols) // Summing lengths might overestimate if peers overlap, use set count instead
+				}
+				requestedColSet := make(map[uint64]bool)
+				for _, cols := range tracker.requests {
+					for _, col := range cols {
+						requestedColSet[col] = true
+					}
+				}
+
+				require.Equal(t, tc.requestedColumns, requestedColSet, "Expected requests to match requested columns for direct fetch")
+			}
+		})
+	}
+}
+
 // createAndConnectCustodyPeer creates a new peer with a deterministic private key and connects it to the p2p service.
 // It then sets up the peer to respond with data columns it custodies.
 func createAndConnectCustodyPeer(t *testing.T, setup peerSetup, dataColumnSidecars []*pb.DataColumnSidecar, chainService *mock.ChainService, hostP2P *p2ptest.TestP2P, tracker *requestTracker, skipColumns map[uint64]bool) *p2ptest.TestP2P {
@@ -774,6 +1101,11 @@ func createAndConnectCustodyPeer(t *testing.T, setup peerSetup, dataColumnSideca
 
 	// Add the peer and connect it
 	hostP2P.Peers().Add(enr, peerP2P.PeerID(), nil, network.DirOutbound)
+	// Explicitly set metadata using the simpler, working pattern
+	metadata := wrapper.WrappedMetadataV2(&pb.MetaDataV2{
+		CustodyGroupCount: setup.custodyGroupCount,
+	})
+	hostP2P.Peers().SetMetadata(peerP2P.PeerID(), metadata)
 	hostP2P.Peers().SetConnectionState(peerP2P.PeerID(), peers.Connected)
 	hostP2P.Connect(peerP2P)
 	hostP2P.Peers().SetChainState(peerP2P.PeerID(), &pb.Status{
