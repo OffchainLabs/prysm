@@ -110,6 +110,26 @@ var ValidatorsHaveWithdrawn = e2etypes.Evaluator{
 	Evaluation: validatorsAreWithdrawn,
 }
 
+// ValidatorsHaveConsolidated checks the beacon state for the consolidated validator and ensures it is exited.
+var ValidatorsHaveConsolidated = e2etypes.Evaluator{
+	Name: "validators_have_consolidated_%d",
+	Policy: func(currentEpoch primitives.Epoch) bool {
+		fEpoch := params.BeaconConfig().ElectraForkEpoch
+		return policies.OnwardsNthEpoch(fEpoch)(currentEpoch)
+	},
+	Evaluation: validatorsHaveBeenConsolidated,
+}
+
+// ValidatorsHaveWithdrawnViaExecution checks the beacon state for the compounded validator and makes sure it is withdrawn.
+var ValidatorsHaveWithdrawnViaExecution = e2etypes.Evaluator{
+	Name: "validators_have_withdrawn_with_execution_%d",
+	Policy: func(currentEpoch primitives.Epoch) bool {
+		fEpoch := params.BeaconConfig().ElectraForkEpoch
+		return policies.OnwardsNthEpoch(fEpoch)(currentEpoch)
+	},
+	Evaluation: validatorsHaveBeenWithdrawnWithExecution,
+}
+
 // ValidatorsVoteWithTheMajority verifies whether validator vote for eth1data using the majority algorithm.
 var ValidatorsVoteWithTheMajority = e2etypes.Evaluator{
 	Name:       "validators_vote_with_the_majority_%d",
@@ -438,7 +458,7 @@ func proposeVoluntaryExit(ec *e2etypes.EvaluationContext, conns ...*grpc.ClientC
 	// Send an exit for a non-exited validator.
 	for i := 0; i < numOfExits; {
 		randIndex := primitives.ValidatorIndex(rand.Uint64() % params.BeaconConfig().MinGenesisActiveValidatorCount)
-		if ec.ExitedVals[bytesutil.ToBytes48(privKeys[randIndex].PublicKey().Marshal())] {
+		if ec.ExitedVals[bytesutil.ToBytes48(privKeys[randIndex].PublicKey().Marshal())] || ec.ValidExecutionCredentials[[48]byte(privKeys[randIndex].PublicKey().Marshal())] {
 			continue
 		}
 		if err := sendExit(randIndex); err != nil {
@@ -693,6 +713,101 @@ func validatorsAreWithdrawn(ec *e2etypes.EvaluationContext, conns ...*grpc.Clien
 		// in its balance.
 		if bal > 1*params.BeaconConfig().GweiPerEth {
 			return errors.Errorf("Validator index %d with key %#x hasn't withdrawn. Their balance is %d.", valIdx, key, bal)
+		}
+	}
+	return nil
+}
+
+func validatorsHaveBeenConsolidated(ec *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) error {
+	conn := conns[0]
+	beaconClient := ethpb.NewBeaconChainClient(conn)
+	debugClient := ethpb.NewDebugClient(conn)
+
+	ctx := context.Background()
+	chainHead, err := beaconClient.GetChainHead(ctx, &emptypb.Empty{})
+	if err != nil {
+		return errors.Wrap(err, "could not get chain head")
+	}
+	stObj, err := debugClient.GetBeaconState(ctx, &ethpb.BeaconStateRequest{QueryFilter: &ethpb.BeaconStateRequest_Slot{Slot: chainHead.HeadSlot}})
+	if err != nil {
+		return errors.Wrap(err, "could not get state object")
+	}
+	versionedMarshaler, err := detect.FromState(stObj.Encoded)
+	if err != nil {
+		return errors.Wrap(err, "could not get state marshaler")
+	}
+	st, err := versionedMarshaler.UnmarshalBeaconState(stObj.Encoded)
+	if err != nil {
+		return errors.Wrap(err, "could not get state")
+	}
+
+	var compoundingVal int
+
+	for pubkey := range ec.ValidExecutionCredentials {
+		if ec.ExitedVals[pubkey] {
+			continue
+		}
+		valIdx, ok := st.ValidatorIndexByPubkey(pubkey)
+		if !ok {
+			return errors.Errorf("pubkey %#x does not exist in our state", pubkey)
+		}
+		val, err := st.ValidatorAtIndexReadOnly(valIdx)
+		if err != nil {
+			return err
+		}
+		if val.HasCompoundingWithdrawalCredentials() {
+			compoundingVal++
+			continue
+		}
+		if val.ExitEpoch() == params.BeaconConfig().FarFutureEpoch {
+			return errors.Errorf("validator was not exited after consolidation, its exit epoch is %d", val.ExitEpoch())
+		}
+	}
+	if compoundingVal != 1 {
+		return errors.Errorf("no compounding validators observed, wanted 1 but got %d", compoundingVal)
+	}
+	return nil
+}
+
+func validatorsHaveBeenWithdrawnWithExecution(ec *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) error {
+	conn := conns[0]
+	beaconClient := ethpb.NewBeaconChainClient(conn)
+	debugClient := ethpb.NewDebugClient(conn)
+
+	ctx := context.Background()
+	chainHead, err := beaconClient.GetChainHead(ctx, &emptypb.Empty{})
+	if err != nil {
+		return errors.Wrap(err, "could not get chain head")
+	}
+	stObj, err := debugClient.GetBeaconState(ctx, &ethpb.BeaconStateRequest{QueryFilter: &ethpb.BeaconStateRequest_Slot{Slot: chainHead.HeadSlot}})
+	if err != nil {
+		return errors.Wrap(err, "could not get state object")
+	}
+	versionedMarshaler, err := detect.FromState(stObj.Encoded)
+	if err != nil {
+		return errors.Wrap(err, "could not get state marshaler")
+	}
+	st, err := versionedMarshaler.UnmarshalBeaconState(stObj.Encoded)
+	if err != nil {
+		return errors.Wrap(err, "could not get state")
+	}
+
+	for pubkey := range ec.ValidExecutionCredentials {
+		if ec.ExitedVals[pubkey] {
+			continue
+		}
+		valIdx, ok := st.ValidatorIndexByPubkey(pubkey)
+		if !ok {
+			return errors.Errorf("pubkey %#x does not exist in our state", pubkey)
+		}
+		val, err := st.ValidatorAtIndexReadOnly(valIdx)
+		if err != nil {
+			return err
+		}
+		if val.HasCompoundingWithdrawalCredentials() {
+			if val.ExitEpoch() == params.BeaconConfig().FarFutureEpoch {
+				return errors.Errorf("validator was not exited after withdrawal, its exit epoch is %d", val.ExitEpoch())
+			}
 		}
 	}
 	return nil
