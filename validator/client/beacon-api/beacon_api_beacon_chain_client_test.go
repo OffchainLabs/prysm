@@ -1,9 +1,7 @@
 package beacon_api
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -13,7 +11,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
@@ -918,44 +915,4 @@ func TestGetChainHead(t *testing.T) {
 		require.NoError(t, err)
 		assert.DeepEqual(t, expectedChainHead, chainHead)
 	})
-}
-
-func Test_beaconApiBeaconChainClient_GetValidatorPerformance(t *testing.T) {
-	publicKeys := [][48]byte{
-		bytesutil.ToBytes48([]byte{1}),
-		bytesutil.ToBytes48([]byte{2}),
-		bytesutil.ToBytes48([]byte{3}),
-	}
-
-	ctx := context.Background()
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	request, err := json.Marshal(structs.GetValidatorPerformanceRequest{
-		PublicKeys: [][]byte{publicKeys[0][:], publicKeys[2][:], publicKeys[1][:]},
-	})
-	require.NoError(t, err)
-
-	wantResponse := &structs.GetValidatorPerformanceResponse{}
-	want := &ethpb.ValidatorPerformanceResponse{}
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().Post(
-		gomock.Any(),
-		getValidatorPerformanceEndpoint,
-		nil,
-		bytes.NewBuffer(request),
-		wantResponse,
-	).Return(
-		nil,
-	)
-
-	c := beaconApiChainClient{
-		jsonRestHandler: jsonRestHandler,
-	}
-
-	got, err := c.ValidatorPerformance(ctx, &ethpb.ValidatorPerformanceRequest{
-		PublicKeys: [][]byte{publicKeys[0][:], publicKeys[2][:], publicKeys[1][:]},
-	})
-	require.NoError(t, err)
-	require.DeepEqual(t, want.PublicKeys, got.PublicKeys)
 }

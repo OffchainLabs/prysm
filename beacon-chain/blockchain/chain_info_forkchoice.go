@@ -3,10 +3,13 @@ package blockchain
 import (
 	"context"
 
+	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	consensus_blocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/forkchoice"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 )
 
 // CachedHeadRoot returns the corresponding value from Forkchoice
@@ -99,4 +102,27 @@ func (s *Service) ParentRoot(root [32]byte) ([32]byte, error) {
 	s.cfg.ForkChoiceStore.RLock()
 	defer s.cfg.ForkChoiceStore.RUnlock()
 	return s.cfg.ForkChoiceStore.ParentRoot(root)
+}
+
+// hashForGenesisBlock returns the right hash for the genesis block
+func (s *Service) hashForGenesisBlock(ctx context.Context, root [32]byte) ([]byte, error) {
+	genRoot, err := s.cfg.BeaconDB.GenesisBlockRoot(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get genesis block root")
+	}
+	if root != genRoot {
+		return nil, errNotGenesisRoot
+	}
+	st, err := s.cfg.BeaconDB.GenesisState(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get genesis state")
+	}
+	if st.Version() < version.Bellatrix {
+		return nil, nil
+	}
+	header, err := st.LatestExecutionPayloadHeader()
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get latest execution payload header")
+	}
+	return bytesutil.SafeCopyBytes(header.BlockHash()), nil
 }

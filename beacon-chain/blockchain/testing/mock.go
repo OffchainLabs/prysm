@@ -76,6 +76,7 @@ type ChainService struct {
 	SyncingRoot                 [32]byte
 	Blobs                       []blocks.VerifiedROBlob
 	TargetRoot                  [32]byte
+	MockHeadSlot                *primitives.Slot
 }
 
 func (s *ChainService) Ancestor(ctx context.Context, root []byte, slot primitives.Slot) ([]byte, error) {
@@ -335,6 +336,9 @@ func (s *ChainService) ReceiveBlock(ctx context.Context, block interfaces.ReadOn
 
 // HeadSlot mocks HeadSlot method in chain service.
 func (s *ChainService) HeadSlot() primitives.Slot {
+	if s.MockHeadSlot != nil {
+		return *s.MockHeadSlot
+	}
 	if s.State == nil {
 		return 0
 	}

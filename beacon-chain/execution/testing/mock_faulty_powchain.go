@@ -57,7 +57,7 @@ func (*FaultyExecutionChain) ChainStartEth1Data() *ethpb.Eth1Data {
 func (*FaultyExecutionChain) PreGenesisState() state.BeaconState {
 	s, err := state_native.InitializeFromProtoUnsafePhase0(&ethpb.BeaconState{})
 	if err != nil {
-		panic("could not initialize state")
+		panic("could not initialize state") // lint:nopanic -- test code.
 	}
 	return s
 }

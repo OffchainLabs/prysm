@@ -37,5 +37,5 @@ func (m *MockBlocker) Block(_ context.Context, b []byte) (interfaces.ReadOnlySig
 
 // Blobs --
 func (m *MockBlocker) Blobs(_ context.Context, _ string, _ []uint64) ([]*blocks.VerifiedROBlob, *core.RpcError) {
-	panic("implement me")
+	panic("implement me") // lint:nopanic -- Test code.
 }

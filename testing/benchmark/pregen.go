@@ -104,7 +104,7 @@ func SetBenchmarkConfig() (func(), error) {
 	undo, err := params.SetActiveWithUndo(c)
 	return func() {
 		if err := undo(); err != nil {
-			panic(err)
+			panic(err) // lint:nopanic -- Test code / impossible scenario.
 		}
 	}, err
 }

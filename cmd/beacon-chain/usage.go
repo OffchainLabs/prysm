@@ -136,6 +136,7 @@ var appHelpFlagGroups = []flagGroup{
 			flags.MinBuilderBid,
 			flags.MinBuilderDiff,
 			flags.SuggestedFeeRecipient,
+			flags.EnableBuilderSSZ,
 		},
 	},
 	{ // Flags relevant to syncing the beacon chain.
@@ -210,6 +211,8 @@ var appHelpFlagGroups = []flagGroup{
 		Name: "deprecated",
 		Flags: []cli.Flag{
 			cmd.BackupWebhookOutputDir,
+			debug.CPUProfileFlag,
+			debug.TraceFlag,
 		},
 	},
 	{ // Flags used in debugging Prysm. These are flags not usually run by end users.
@@ -217,13 +220,11 @@ var appHelpFlagGroups = []flagGroup{
 		Flags: []cli.Flag{
 			cmd.MaxGoroutines,
 			debug.BlockProfileRateFlag,
-			debug.CPUProfileFlag,
 			debug.MemProfileRateFlag,
 			debug.MutexProfileFractionFlag,
 			debug.PProfAddrFlag,
 			debug.PProfFlag,
 			debug.PProfPortFlag,
-			debug.TraceFlag,
 			flags.SetGCPercent,
 		},
 	},

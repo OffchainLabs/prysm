@@ -91,6 +91,10 @@ func validatorCountByStatus(validators []*ethpb.Validator, statuses []validator.
 	return resp, nil
 }
 
+func (c *grpcPrysmChainClient) ValidatorPerformance(ctx context.Context, in *ethpb.ValidatorPerformanceRequest) (*ethpb.ValidatorPerformanceResponse, error) {
+	return c.chainClient.ValidatorPerformance(ctx, in)
+}
+
 func NewGrpcPrysmChainClient(cc grpc.ClientConnInterface) iface.PrysmChainClient {
 	return &grpcPrysmChainClient{chainClient: &grpcChainClient{ethpb.NewBeaconChainClient(cc)}}
 }
