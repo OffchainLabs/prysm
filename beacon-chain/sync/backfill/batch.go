@@ -38,8 +38,8 @@ func (s batchState) String() string {
 		return "import_complete"
 	case batchEndSequence:
 		return "end_sequence"
-	case batchBlobSync:
-		return "blob_sync"
+	case batchSidecarSync:
+		return "sidecar_sync"
 	default:
 		return "unknown"
 	}
@@ -50,7 +50,7 @@ const (
 	batchInit
 	batchSequenced
 	batchErrRetryable
-	batchBlobSync
+	batchSidecarSync
 	batchImportable
 	batchImportComplete
 	batchEndSequence
@@ -140,7 +140,7 @@ func (b batch) withResults(results verifiedROBlocks, bs *blobSync) batch {
 	b.results = results
 	b.bs = bs
 	if bs.blobsNeeded() > 0 {
-		return b.withState(batchBlobSync)
+		return b.withState(batchSidecarSync)
 	}
 	return b.withState(batchImportable)
 }

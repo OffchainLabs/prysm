@@ -31,7 +31,7 @@ func (w *p2pWorker) run(ctx context.Context) {
 		select {
 		case b := <-w.todo:
 			log.WithFields(b.logFields()).WithField("backfillWorker", w.id).Debug("Backfill worker received batch")
-			if b.state == batchBlobSync {
+			if b.state == batchSidecarSync {
 				w.done <- w.handleBlobs(ctx, b)
 			} else {
 				w.done <- w.handleBlocks(ctx, b)
