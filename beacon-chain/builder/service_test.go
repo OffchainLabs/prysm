@@ -54,7 +54,7 @@ func Test_RegisterValidator_WithCache(t *testing.T) {
 	require.DeepEqual(t, reg, registration)
 }
 
-func Test_BuilderMethodsWithouClient(t *testing.T) {
+func Test_BuilderMethodsWithoutClient(t *testing.T) {
 	s, err := NewService(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, false, s.Configured())
