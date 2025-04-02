@@ -6,6 +6,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/async"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
@@ -171,7 +172,7 @@ func createDepositData(privKey bls.SecretKey, pubKey bls.PublicKey, withExecCred
 	if withExecCreds {
 		newCredentials := make([]byte, 12)
 		newCredentials[0] = params.BeaconConfig().ETH1AddressWithdrawalPrefixByte
-		execAddr := bytesutil.ToBytes20(pubKey.Marshal())
+		execAddr := bytesutil.ToBytes20(hexutil.MustDecode(executionAddress))
 		depositMessage.WithdrawalCredentials = append(newCredentials, execAddr[:]...)
 	}
 	sr, err := depositMessage.HashTreeRoot()

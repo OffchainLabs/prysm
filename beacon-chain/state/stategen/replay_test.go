@@ -280,13 +280,14 @@ func TestLoadBlocks_FirstBranch(t *testing.T) {
 	require.NoError(t, err)
 
 	wanted := []*ethpb.SignedBeaconBlock{
-		savedBlocks[8],
-		savedBlocks[6],
-		savedBlocks[4],
-		savedBlocks[2],
-		savedBlocks[1],
 		savedBlocks[0],
+		savedBlocks[1],
+		savedBlocks[2],
+		savedBlocks[4],
+		savedBlocks[6],
+		savedBlocks[8],
 	}
+	require.Equal(t, len(wanted), len(filteredBlocks))
 
 	for i, block := range wanted {
 		filteredBlocksPb, err := filteredBlocks[i].Proto()
@@ -311,10 +312,10 @@ func TestLoadBlocks_SecondBranch(t *testing.T) {
 	require.NoError(t, err)
 
 	wanted := []*ethpb.SignedBeaconBlock{
-		savedBlocks[5],
-		savedBlocks[3],
-		savedBlocks[1],
 		savedBlocks[0],
+		savedBlocks[1],
+		savedBlocks[3],
+		savedBlocks[5],
 	}
 
 	for i, block := range wanted {
@@ -340,13 +341,15 @@ func TestLoadBlocks_ThirdBranch(t *testing.T) {
 	require.NoError(t, err)
 
 	wanted := []*ethpb.SignedBeaconBlock{
-		savedBlocks[7],
-		savedBlocks[6],
-		savedBlocks[4],
-		savedBlocks[2],
-		savedBlocks[1],
 		savedBlocks[0],
+		savedBlocks[1],
+		savedBlocks[2],
+		savedBlocks[4],
+		savedBlocks[6],
+		savedBlocks[7],
 	}
+
+	require.Equal(t, len(wanted), len(filteredBlocks))
 
 	for i, block := range wanted {
 		filteredBlocksPb, err := filteredBlocks[i].Proto()
@@ -371,11 +374,12 @@ func TestLoadBlocks_SameSlots(t *testing.T) {
 	require.NoError(t, err)
 
 	wanted := []*ethpb.SignedBeaconBlock{
-		savedBlocks[6],
-		savedBlocks[5],
-		savedBlocks[1],
 		savedBlocks[0],
+		savedBlocks[1],
+		savedBlocks[5],
+		savedBlocks[6],
 	}
+	require.Equal(t, len(wanted), len(filteredBlocks))
 
 	for i, block := range wanted {
 		filteredBlocksPb, err := filteredBlocks[i].Proto()
@@ -400,10 +404,11 @@ func TestLoadBlocks_SameEndSlots(t *testing.T) {
 	require.NoError(t, err)
 
 	wanted := []*ethpb.SignedBeaconBlock{
-		savedBlocks[2],
-		savedBlocks[1],
 		savedBlocks[0],
+		savedBlocks[1],
+		savedBlocks[2],
 	}
+	require.Equal(t, len(wanted), len(filteredBlocks))
 
 	for i, block := range wanted {
 		filteredBlocksPb, err := filteredBlocks[i].Proto()
@@ -428,9 +433,10 @@ func TestLoadBlocks_SameEndSlotsWith2blocks(t *testing.T) {
 	require.NoError(t, err)
 
 	wanted := []*ethpb.SignedBeaconBlock{
-		savedBlocks[1],
 		savedBlocks[0],
+		savedBlocks[1],
 	}
+	require.Equal(t, len(wanted), len(filteredBlocks))
 
 	for i, block := range wanted {
 		filteredBlocksPb, err := filteredBlocks[i].Proto()
@@ -439,19 +445,6 @@ func TestLoadBlocks_SameEndSlotsWith2blocks(t *testing.T) {
 			t.Error("Did not get wanted blocks")
 		}
 	}
-}
-
-func TestLoadBlocks_BadStart(t *testing.T) {
-	beaconDB := testDB.SetupDB(t)
-	ctx := context.Background()
-	s := &State{
-		beaconDB: beaconDB,
-	}
-
-	roots, _, err := tree1(t, beaconDB, bytesutil.PadTo([]byte{'A'}, 32))
-	require.NoError(t, err)
-	_, err = s.loadBlocks(ctx, 0, 5, roots[8])
-	assert.ErrorContains(t, "end block roots don't match", err)
 }
 
 // tree1 constructs the following tree:
