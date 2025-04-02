@@ -78,6 +78,13 @@ func (s *Service) pollConnectionStatus(ctx context.Context) {
 				currClient.Close()
 			}
 			log.WithField("endpoint", logs.MaskCredentialsLogging(s.cfg.currHttpEndpoint.Url)).Info("Connected to new endpoint")
+
+			c, err := s.ExchangeCapabilities(ctx)
+			if err != nil {
+				errorLogger(err, "Could not exchange capabilities with execution client")
+			}
+			s.capabilityCache.save(c)
+
 			return
 		case <-s.ctx.Done():
 			log.Debug("Received cancelled context,closing existing powchain service")

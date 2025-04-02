@@ -3,95 +3,68 @@ package trace
 import (
 	"context"
 
-	"go.opencensus.io/trace"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 )
 
-// TracingEnabled tracks whether tracing is enabled in prysm.
+// TracingEnabled tracks whether tracing is enabled in your application.
 var TracingEnabled = false
 
-// StartSpan is a wrapper over the opencensus package method. This is to allow us to skip
+// StartSpan is a wrapper over the OpenTelemetry package method. This is to allow us to skip
 // calling that particular method if tracing has been disabled.
-func StartSpan(ctx context.Context, name string, o ...trace.StartOption) (context.Context, *trace.Span) {
+func StartSpan(ctx context.Context, name string, opts ...trace.SpanStartOption) (context.Context, trace.Span) {
 	if !TracingEnabled {
 		// Return an empty span if tracing has been disabled.
-		return ctx, trace.NewSpan(EmptySpan{})
+		return ctx, noop.Span{}
 	}
-	return trace.StartSpan(ctx, name, o...)
+	tracer := otel.Tracer("")
+	ctx, span := tracer.Start(ctx, name, opts...)
+	return ctx, span
 }
 
 // NewContext is a wrapper which returns back the parent context
 // if tracing is disabled.
-func NewContext(parent context.Context, s *trace.Span) context.Context {
+func NewContext(parent context.Context, s trace.Span) context.Context {
 	if !TracingEnabled {
 		return parent
 	}
-	return trace.NewContext(parent, s)
+	return trace.ContextWithSpan(parent, s)
 }
 
-// FromContext is a wrapper which returns a nil span
+// FromContext is a wrapper which returns a no-op span
 // if tracing is disabled.
-func FromContext(ctx context.Context) *trace.Span {
+func FromContext(ctx context.Context) trace.Span {
 	if !TracingEnabled {
-		return trace.NewSpan(EmptySpan{})
+		return noop.Span{}
 	}
-	return trace.FromContext(ctx)
+	span := trace.SpanFromContext(ctx)
+	return span
+}
+
+// AddMessageSendEvent adds a message send event to the provided span.
+// This function is useful for tracking the sending of messages within a trace.
+func AddMessageSendEvent(span trace.Span, iid int64, uncompressedLen int64, compressedLen int64) trace.Span {
+	span.AddEvent("message_send", trace.WithAttributes(
+		attribute.Int64("message.id", iid),
+		attribute.Int64("message.uncompressed_size", uncompressedLen),
+		attribute.Int64("message.compressed_size", compressedLen),
+	))
+	return span
 }
 
 // Int64Attribute --
-func Int64Attribute(key string, value int64) trace.Attribute {
-	return trace.Int64Attribute(key, value)
+func Int64Attribute(key string, value int64) attribute.KeyValue {
+	return attribute.Int64(key, value)
 }
 
 // StringAttribute --
-func StringAttribute(key, value string) trace.Attribute {
-	return trace.StringAttribute(key, value)
+func StringAttribute(key, value string) attribute.KeyValue {
+	return attribute.String(key, value)
 }
 
 // BoolAttribute --
-func BoolAttribute(key string, value bool) trace.Attribute {
-	return trace.BoolAttribute(key, value)
-}
-
-type EmptySpan struct{}
-
-func (EmptySpan) IsRecordingEvents() bool {
-	return false
-}
-
-func (EmptySpan) End() {
-}
-
-func (EmptySpan) SpanContext() trace.SpanContext {
-	return trace.SpanContext{}
-}
-
-func (EmptySpan) SetName(string) {
-
-}
-
-func (EmptySpan) SetStatus(trace.Status) {
-
-}
-
-func (EmptySpan) AddAttributes(...trace.Attribute) {
-}
-
-func (EmptySpan) Annotate([]trace.Attribute, string) {
-
-}
-
-func (EmptySpan) Annotatef([]trace.Attribute, string, ...interface{}) {
-}
-
-func (EmptySpan) AddMessageSendEvent(_, _, _ int64) {
-}
-
-func (EmptySpan) AddMessageReceiveEvent(_, _, _ int64) {
-}
-
-func (EmptySpan) AddLink(trace.Link) {
-}
-
-func (EmptySpan) String() string {
-	return ""
+func BoolAttribute(key string, value bool) attribute.KeyValue {
+	return attribute.Bool(key, value)
 }

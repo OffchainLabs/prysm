@@ -50,13 +50,11 @@ func TestPruneExpired_Ticker(t *testing.T) {
 	// Rewind back one epoch worth of time.
 	s.genesisTime = uint64(prysmTime.Now().Unix()) - uint64(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot))
 
-	go s.pruneAttsPool()
+	go s.pruneExpired()
 
 	done := make(chan struct{}, 1)
 	async.RunEvery(ctx, 500*time.Millisecond, func() {
-		atts, err := s.cfg.Pool.UnaggregatedAttestations()
-		require.NoError(t, err)
-		for _, attestation := range atts {
+		for _, attestation := range s.cfg.Pool.UnaggregatedAttestations() {
 			if attestation.GetData().Slot == 0 {
 				return
 			}
@@ -145,5 +143,4 @@ func TestPruneExpired_ExpiredDeneb(t *testing.T) {
 
 	assert.Equal(t, true, s.expired(secondEpochStart), "Should be expired")
 	assert.Equal(t, false, s.expired(thirdEpochStart), "Should not be expired")
-
 }

@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/gorilla/mux"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync"
@@ -29,7 +28,7 @@ func UintFromQuery(w http.ResponseWriter, r *http.Request, name string, required
 }
 
 func UintFromRoute(w http.ResponseWriter, r *http.Request, name string) (string, uint64, bool) {
-	raw := mux.Vars(r)[name]
+	raw := r.PathValue(name)
 	v, valid := ValidateUint(w, name, raw)
 	if !valid {
 		return "", 0, false
@@ -50,7 +49,7 @@ func HexFromQuery(w http.ResponseWriter, r *http.Request, name string, length in
 }
 
 func HexFromRoute(w http.ResponseWriter, r *http.Request, name string, length int) (string, []byte, bool) {
-	raw := mux.Vars(r)[name]
+	raw := r.PathValue(name)
 	v, valid := ValidateHex(w, name, raw, length)
 	if !valid {
 		return "", nil, false

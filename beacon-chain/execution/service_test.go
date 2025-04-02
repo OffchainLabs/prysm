@@ -8,10 +8,10 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethclient/simulated"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/async/event"
@@ -19,8 +19,11 @@ import (
 	dbutil "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
 	mockExecution "github.com/prysmaticlabs/prysm/v5/beacon-chain/execution/testing"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/execution/types"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice"
 	doublylinkedtree "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/doubly-linked-tree"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stategen"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/container/trie"
 	contracts "github.com/prysmaticlabs/prysm/v5/contracts/deposit"
@@ -41,7 +44,7 @@ var _ POWBlockFetcher = (*Service)(nil)
 var _ Chain = (*Service)(nil)
 
 type goodLogger struct {
-	backend *backends.SimulatedBackend
+	backend *simulated.Backend
 }
 
 func (_ *goodLogger) Close() {}
@@ -50,7 +53,7 @@ func (g *goodLogger) SubscribeFilterLogs(ctx context.Context, q ethereum.FilterQ
 	if g.backend == nil {
 		return new(event.Feed).Subscribe(ch), nil
 	}
-	return g.backend.SubscribeFilterLogs(ctx, q, ch)
+	return g.backend.Client().SubscribeFilterLogs(ctx, q, ch)
 }
 
 func (g *goodLogger) FilterLogs(ctx context.Context, q ethereum.FilterQuery) ([]gethTypes.Log, error) {
@@ -66,14 +69,14 @@ func (g *goodLogger) FilterLogs(ctx context.Context, q ethereum.FilterQuery) ([]
 		}
 		return logs, nil
 	}
-	return g.backend.FilterLogs(ctx, q)
+	return g.backend.Client().FilterLogs(ctx, q)
 }
 
 type goodNotifier struct {
 	MockStateFeed *event.Feed
 }
 
-func (g *goodNotifier) StateFeed() *event.Feed {
+func (g *goodNotifier) StateFeed() event.SubscriberSender {
 	if g.MockStateFeed == nil {
 		g.MockStateFeed = new(event.Feed)
 	}
@@ -92,15 +95,21 @@ func TestStart_OK(t *testing.T) {
 	t.Cleanup(func() {
 		server.Stop()
 	})
+	c := startup.NewClockSynchronizer()
+	require.NoError(t, c.SetClock(startup.NewClock(time.Unix(0, 0), [32]byte{})))
+	waiter := verification.NewInitializerWaiter(
+		c, forkchoice.NewROForkChoice(nil), nil)
+
 	web3Service, err := NewService(context.Background(),
 		WithHttpEndpoint(endpoint),
 		WithDepositContractAddress(testAcc.ContractAddr),
 		WithDatabase(beaconDB),
+		WithVerifierWaiter(waiter),
 	)
 	require.NoError(t, err, "unable to setup execution service")
 	web3Service = setDefaultMocks(web3Service)
 	web3Service.rpcClient = &mockExecution.RPCClient{Backend: testAcc.Backend}
-	web3Service.depositContractCaller, err = contracts.NewDepositContractCaller(testAcc.ContractAddr, testAcc.Backend)
+	web3Service.depositContractCaller, err = contracts.NewDepositContractCaller(testAcc.ContractAddr, testAcc.Backend.Client())
 	require.NoError(t, err)
 	testAcc.Backend.Commit()
 
@@ -147,7 +156,7 @@ func TestStop_OK(t *testing.T) {
 	)
 	require.NoError(t, err, "unable to setup web3 ETH1.0 chain service")
 	web3Service = setDefaultMocks(web3Service)
-	web3Service.depositContractCaller, err = contracts.NewDepositContractCaller(testAcc.ContractAddr, testAcc.Backend)
+	web3Service.depositContractCaller, err = contracts.NewDepositContractCaller(testAcc.ContractAddr, testAcc.Backend.Client())
 	require.NoError(t, err)
 
 	testAcc.Backend.Commit()
@@ -177,10 +186,12 @@ func TestService_Eth1Synced(t *testing.T) {
 	)
 	require.NoError(t, err, "unable to setup web3 ETH1.0 chain service")
 	web3Service = setDefaultMocks(web3Service)
-	web3Service.depositContractCaller, err = contracts.NewDepositContractCaller(testAcc.ContractAddr, testAcc.Backend)
+	web3Service.depositContractCaller, err = contracts.NewDepositContractCaller(testAcc.ContractAddr, testAcc.Backend.Client())
 	require.NoError(t, err)
 
-	currTime := testAcc.Backend.Blockchain().CurrentHeader().Time
+	header, err := testAcc.Backend.Client().HeaderByNumber(context.Background(), nil)
+	require.NoError(t, err)
+	currTime := header.Time
 	now := time.Now()
 	assert.NoError(t, testAcc.Backend.AdjustTime(now.Sub(time.Unix(int64(currTime), 0))))
 	testAcc.Backend.Commit()
@@ -203,22 +214,29 @@ func TestFollowBlock_OK(t *testing.T) {
 	require.NoError(t, err, "unable to setup web3 ETH1.0 chain service")
 
 	// simulated backend sets eth1 block
-	// time as 10 seconds
 	params.SetupTestConfigCleanup(t)
 	conf := params.BeaconConfig().Copy()
-	conf.SecondsPerETH1Block = 10
+	conf.SecondsPerETH1Block = 1
 	params.OverrideBeaconConfig(conf)
 
 	web3Service = setDefaultMocks(web3Service)
 	web3Service.rpcClient = &mockExecution.RPCClient{Backend: testAcc.Backend}
-	baseHeight := testAcc.Backend.Blockchain().CurrentBlock().Number.Uint64()
+	block, err := testAcc.Backend.Client().BlockByNumber(context.Background(), nil)
+	require.NoError(t, err)
+	baseHeight := block.NumberU64()
 	// process follow_distance blocks
+	var lastHash common.Hash
 	for i := 0; i < int(params.BeaconConfig().Eth1FollowDistance); i++ {
-		testAcc.Backend.Commit()
+		lastHash = testAcc.Backend.Commit()
 	}
+	lb, err := testAcc.Backend.Client().BlockByHash(context.Background(), lastHash)
+	require.NoError(t, err)
+	log.Println(lb.NumberU64())
 	// set current height
-	web3Service.latestEth1Data.BlockHeight = testAcc.Backend.Blockchain().CurrentBlock().Number.Uint64()
-	web3Service.latestEth1Data.BlockTime = testAcc.Backend.Blockchain().CurrentBlock().Time
+	block, err = testAcc.Backend.Client().BlockByNumber(context.Background(), nil)
+	require.NoError(t, err)
+	web3Service.latestEth1Data.BlockHeight = block.NumberU64()
+	web3Service.latestEth1Data.BlockTime = block.Time()
 
 	h, err := web3Service.followedBlockHeight(context.Background())
 	require.NoError(t, err)
@@ -229,9 +247,12 @@ func TestFollowBlock_OK(t *testing.T) {
 	for i := uint64(0); i < numToForward; i++ {
 		testAcc.Backend.Commit()
 	}
+
+	newBlock, err := testAcc.Backend.Client().BlockByNumber(context.Background(), nil)
+	require.NoError(t, err)
 	// set current height
-	web3Service.latestEth1Data.BlockHeight = testAcc.Backend.Blockchain().CurrentBlock().Number.Uint64()
-	web3Service.latestEth1Data.BlockTime = testAcc.Backend.Blockchain().CurrentBlock().Time
+	web3Service.latestEth1Data.BlockHeight = newBlock.NumberU64()
+	web3Service.latestEth1Data.BlockTime = newBlock.Time()
 
 	h, err = web3Service.followedBlockHeight(context.Background())
 	require.NoError(t, err)
@@ -316,11 +337,11 @@ func TestLogTillGenesis_OK(t *testing.T) {
 		WithDatabase(beaconDB),
 	)
 	require.NoError(t, err, "unable to setup web3 ETH1.0 chain service")
-	web3Service.depositContractCaller, err = contracts.NewDepositContractCaller(testAcc.ContractAddr, testAcc.Backend)
+	web3Service.depositContractCaller, err = contracts.NewDepositContractCaller(testAcc.ContractAddr, testAcc.Backend.Client())
 	require.NoError(t, err)
 
 	web3Service.rpcClient = &mockExecution.RPCClient{Backend: testAcc.Backend}
-	web3Service.httpLogger = testAcc.Backend
+	web3Service.httpLogger = testAcc.Backend.Client()
 	for i := 0; i < 30; i++ {
 		testAcc.Backend.Commit()
 	}
@@ -476,15 +497,18 @@ func TestNewService_EarliestVotingBlock(t *testing.T) {
 	for i := 0; i < numToForward; i++ {
 		testAcc.Backend.Commit()
 	}
-	currTime := testAcc.Backend.Blockchain().CurrentHeader().Time
+	currHeader, err := testAcc.Backend.Client().HeaderByNumber(context.Background(), nil)
+	require.NoError(t, err)
+	currTime := currHeader.Time
 	now := time.Now()
 	err = testAcc.Backend.AdjustTime(now.Sub(time.Unix(int64(currTime), 0)))
 	require.NoError(t, err)
 	testAcc.Backend.Commit()
-
-	currTime = testAcc.Backend.Blockchain().CurrentHeader().Time
-	web3Service.latestEth1Data.BlockHeight = testAcc.Backend.Blockchain().CurrentHeader().Number.Uint64()
-	web3Service.latestEth1Data.BlockTime = testAcc.Backend.Blockchain().CurrentHeader().Time
+	currHeader, err = testAcc.Backend.Client().HeaderByNumber(context.Background(), nil)
+	require.NoError(t, err)
+	currTime = currHeader.Time
+	web3Service.latestEth1Data.BlockHeight = currHeader.Number.Uint64()
+	web3Service.latestEth1Data.BlockTime = currHeader.Time
 	web3Service.chainStartData.GenesisTime = currTime
 
 	// With a current slot of zero, only request follow_blocks behind.

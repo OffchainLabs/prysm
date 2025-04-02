@@ -3,6 +3,7 @@ package doublylinkedtree
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"testing"
 	"time"
 
@@ -31,7 +32,7 @@ func prepareForkchoiceState(
 	payloadHash [32]byte,
 	justifiedEpoch primitives.Epoch,
 	finalizedEpoch primitives.Epoch,
-) (state.BeaconState, [32]byte, error) {
+) (state.BeaconState, blocks.ROBlock, error) {
 	blockHeader := &ethpb.BeaconBlockHeader{
 		ParentRoot: parentRoot[:],
 	}
@@ -58,21 +59,40 @@ func prepareForkchoiceState(
 	}
 
 	st, err := state_native.InitializeFromProtoBellatrix(base)
-	return st, blockRoot, err
+	if err != nil {
+		return nil, blocks.ROBlock{}, err
+	}
+	blk := &ethpb.SignedBeaconBlockBellatrix{
+		Block: &ethpb.BeaconBlockBellatrix{
+			Slot:       slot,
+			ParentRoot: parentRoot[:],
+			Body: &ethpb.BeaconBlockBodyBellatrix{
+				ExecutionPayload: &enginev1.ExecutionPayload{
+					BlockHash: payloadHash[:],
+				},
+			},
+		},
+	}
+	signed, err := blocks.NewSignedBeaconBlock(blk)
+	if err != nil {
+		return nil, blocks.ROBlock{}, err
+	}
+	roblock, err := blocks.NewROBlockWithRoot(signed, blockRoot)
+	return st, roblock, err
 }
 
 func TestForkChoice_UpdateBalancesPositiveChange(t *testing.T) {
 	f := setup(0, 0)
 	ctx := context.Background()
-	st, blkRoot, err := prepareForkchoiceState(ctx, 1, indexToHash(1), params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 0, 0)
+	st, roblock, err := prepareForkchoiceState(ctx, 1, indexToHash(1), params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 0, 0)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
-	st, blkRoot, err = prepareForkchoiceState(ctx, 2, indexToHash(2), indexToHash(1), params.BeaconConfig().ZeroHash, 0, 0)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+	st, roblock, err = prepareForkchoiceState(ctx, 2, indexToHash(2), indexToHash(1), params.BeaconConfig().ZeroHash, 0, 0)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
-	st, blkRoot, err = prepareForkchoiceState(ctx, 3, indexToHash(3), indexToHash(2), params.BeaconConfig().ZeroHash, 0, 0)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+	st, roblock, err = prepareForkchoiceState(ctx, 3, indexToHash(3), indexToHash(2), params.BeaconConfig().ZeroHash, 0, 0)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
 
 	f.votes = []Vote{
 		{indexToHash(1), indexToHash(1), 0},
@@ -93,15 +113,15 @@ func TestForkChoice_UpdateBalancesPositiveChange(t *testing.T) {
 func TestForkChoice_UpdateBalancesNegativeChange(t *testing.T) {
 	f := setup(0, 0)
 	ctx := context.Background()
-	st, blkRoot, err := prepareForkchoiceState(ctx, 1, indexToHash(1), params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 0, 0)
+	st, roblock, err := prepareForkchoiceState(ctx, 1, indexToHash(1), params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 0, 0)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
-	st, blkRoot, err = prepareForkchoiceState(ctx, 2, indexToHash(2), indexToHash(1), params.BeaconConfig().ZeroHash, 0, 0)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+	st, roblock, err = prepareForkchoiceState(ctx, 2, indexToHash(2), indexToHash(1), params.BeaconConfig().ZeroHash, 0, 0)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
-	st, blkRoot, err = prepareForkchoiceState(ctx, 3, indexToHash(3), indexToHash(2), params.BeaconConfig().ZeroHash, 0, 0)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+	st, roblock, err = prepareForkchoiceState(ctx, 3, indexToHash(3), indexToHash(2), params.BeaconConfig().ZeroHash, 0, 0)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
 	s := f.store
 	s.nodeByRoot[indexToHash(1)].balance = 100
 	s.nodeByRoot[indexToHash(2)].balance = 100
@@ -124,15 +144,15 @@ func TestForkChoice_UpdateBalancesNegativeChange(t *testing.T) {
 func TestForkChoice_UpdateBalancesUnderflow(t *testing.T) {
 	f := setup(0, 0)
 	ctx := context.Background()
-	st, blkRoot, err := prepareForkchoiceState(ctx, 1, indexToHash(1), params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 0, 0)
+	st, roblock, err := prepareForkchoiceState(ctx, 1, indexToHash(1), params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 0, 0)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
-	st, blkRoot, err = prepareForkchoiceState(ctx, 2, indexToHash(2), indexToHash(1), params.BeaconConfig().ZeroHash, 0, 0)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+	st, roblock, err = prepareForkchoiceState(ctx, 2, indexToHash(2), indexToHash(1), params.BeaconConfig().ZeroHash, 0, 0)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
-	st, blkRoot, err = prepareForkchoiceState(ctx, 3, indexToHash(3), indexToHash(2), params.BeaconConfig().ZeroHash, 0, 0)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+	st, roblock, err = prepareForkchoiceState(ctx, 3, indexToHash(3), indexToHash(2), params.BeaconConfig().ZeroHash, 0, 0)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
 	s := f.store
 	s.nodeByRoot[indexToHash(1)].balance = 100
 	s.nodeByRoot[indexToHash(2)].balance = 100
@@ -155,24 +175,24 @@ func TestForkChoice_UpdateBalancesUnderflow(t *testing.T) {
 func TestForkChoice_IsCanonical(t *testing.T) {
 	f := setup(1, 1)
 	ctx := context.Background()
-	st, blkRoot, err := prepareForkchoiceState(ctx, 1, indexToHash(1), params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 1, 1)
+	st, roblock, err := prepareForkchoiceState(ctx, 1, indexToHash(1), params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 1, 1)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
-	st, blkRoot, err = prepareForkchoiceState(ctx, 2, indexToHash(2), params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 1, 1)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+	st, roblock, err = prepareForkchoiceState(ctx, 2, indexToHash(2), params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 1, 1)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
-	st, blkRoot, err = prepareForkchoiceState(ctx, 3, indexToHash(3), indexToHash(1), params.BeaconConfig().ZeroHash, 1, 1)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+	st, roblock, err = prepareForkchoiceState(ctx, 3, indexToHash(3), indexToHash(1), params.BeaconConfig().ZeroHash, 1, 1)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
-	st, blkRoot, err = prepareForkchoiceState(ctx, 4, indexToHash(4), indexToHash(2), params.BeaconConfig().ZeroHash, 1, 1)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+	st, roblock, err = prepareForkchoiceState(ctx, 4, indexToHash(4), indexToHash(2), params.BeaconConfig().ZeroHash, 1, 1)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
-	st, blkRoot, err = prepareForkchoiceState(ctx, 5, indexToHash(5), indexToHash(4), params.BeaconConfig().ZeroHash, 1, 1)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+	st, roblock, err = prepareForkchoiceState(ctx, 5, indexToHash(5), indexToHash(4), params.BeaconConfig().ZeroHash, 1, 1)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
-	st, blkRoot, err = prepareForkchoiceState(ctx, 6, indexToHash(6), indexToHash(5), params.BeaconConfig().ZeroHash, 1, 1)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+	st, roblock, err = prepareForkchoiceState(ctx, 6, indexToHash(6), indexToHash(5), params.BeaconConfig().ZeroHash, 1, 1)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
 
 	require.Equal(t, true, f.IsCanonical(params.BeaconConfig().ZeroHash))
 	require.Equal(t, false, f.IsCanonical(indexToHash(1)))
@@ -186,24 +206,24 @@ func TestForkChoice_IsCanonical(t *testing.T) {
 func TestForkChoice_IsCanonicalReorg(t *testing.T) {
 	f := setup(1, 1)
 	ctx := context.Background()
-	st, blkRoot, err := prepareForkchoiceState(ctx, 1, [32]byte{'1'}, params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 1, 1)
+	st, roblock, err := prepareForkchoiceState(ctx, 1, [32]byte{'1'}, params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 1, 1)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
-	st, blkRoot, err = prepareForkchoiceState(ctx, 2, [32]byte{'2'}, params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 1, 1)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+	st, roblock, err = prepareForkchoiceState(ctx, 2, [32]byte{'2'}, params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 1, 1)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
-	st, blkRoot, err = prepareForkchoiceState(ctx, 3, [32]byte{'3'}, [32]byte{'1'}, params.BeaconConfig().ZeroHash, 1, 1)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+	st, roblock, err = prepareForkchoiceState(ctx, 3, [32]byte{'3'}, [32]byte{'1'}, params.BeaconConfig().ZeroHash, 1, 1)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
-	st, blkRoot, err = prepareForkchoiceState(ctx, 4, [32]byte{'4'}, [32]byte{'2'}, params.BeaconConfig().ZeroHash, 1, 1)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+	st, roblock, err = prepareForkchoiceState(ctx, 4, [32]byte{'4'}, [32]byte{'2'}, params.BeaconConfig().ZeroHash, 1, 1)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
-	st, blkRoot, err = prepareForkchoiceState(ctx, 5, [32]byte{'5'}, [32]byte{'4'}, params.BeaconConfig().ZeroHash, 1, 1)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+	st, roblock, err = prepareForkchoiceState(ctx, 5, [32]byte{'5'}, [32]byte{'4'}, params.BeaconConfig().ZeroHash, 1, 1)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
-	st, blkRoot, err = prepareForkchoiceState(ctx, 6, [32]byte{'6'}, [32]byte{'5'}, params.BeaconConfig().ZeroHash, 1, 1)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+	st, roblock, err = prepareForkchoiceState(ctx, 6, [32]byte{'6'}, [32]byte{'5'}, params.BeaconConfig().ZeroHash, 1, 1)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
 
 	f.store.nodeByRoot[[32]byte{'3'}].balance = 10
 	require.NoError(t, f.store.treeRootNode.applyWeightChanges(ctx))
@@ -232,15 +252,15 @@ func TestForkChoice_IsCanonicalReorg(t *testing.T) {
 func TestForkChoice_AncestorRoot(t *testing.T) {
 	f := setup(1, 1)
 	ctx := context.Background()
-	st, blkRoot, err := prepareForkchoiceState(ctx, 1, indexToHash(1), params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 1, 1)
+	st, roblock, err := prepareForkchoiceState(ctx, 1, indexToHash(1), params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 1, 1)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
-	st, blkRoot, err = prepareForkchoiceState(ctx, 2, indexToHash(2), indexToHash(1), params.BeaconConfig().ZeroHash, 1, 1)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+	st, roblock, err = prepareForkchoiceState(ctx, 2, indexToHash(2), indexToHash(1), params.BeaconConfig().ZeroHash, 1, 1)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
-	st, blkRoot, err = prepareForkchoiceState(ctx, 5, indexToHash(3), indexToHash(2), params.BeaconConfig().ZeroHash, 1, 1)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+	st, roblock, err = prepareForkchoiceState(ctx, 5, indexToHash(3), indexToHash(2), params.BeaconConfig().ZeroHash, 1, 1)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
 	f.store.treeRootNode = f.store.nodeByRoot[indexToHash(1)]
 	f.store.treeRootNode.parent = nil
 
@@ -264,12 +284,12 @@ func TestForkChoice_AncestorRoot(t *testing.T) {
 func TestForkChoice_AncestorEqualSlot(t *testing.T) {
 	f := setup(1, 1)
 	ctx := context.Background()
-	st, blkRoot, err := prepareForkchoiceState(ctx, 100, [32]byte{'1'}, params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 1, 1)
+	st, roblock, err := prepareForkchoiceState(ctx, 100, [32]byte{'1'}, params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 1, 1)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
-	st, blkRoot, err = prepareForkchoiceState(ctx, 101, [32]byte{'3'}, [32]byte{'1'}, params.BeaconConfig().ZeroHash, 1, 1)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+	st, roblock, err = prepareForkchoiceState(ctx, 101, [32]byte{'3'}, [32]byte{'1'}, params.BeaconConfig().ZeroHash, 1, 1)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
 
 	r, err := f.AncestorRoot(ctx, [32]byte{'3'}, 100)
 	require.NoError(t, err)
@@ -279,12 +299,12 @@ func TestForkChoice_AncestorEqualSlot(t *testing.T) {
 func TestForkChoice_AncestorLowerSlot(t *testing.T) {
 	f := setup(1, 1)
 	ctx := context.Background()
-	st, blkRoot, err := prepareForkchoiceState(ctx, 100, [32]byte{'1'}, params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 1, 1)
+	st, roblock, err := prepareForkchoiceState(ctx, 100, [32]byte{'1'}, params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 1, 1)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
-	st, blkRoot, err = prepareForkchoiceState(ctx, 200, [32]byte{'3'}, [32]byte{'1'}, params.BeaconConfig().ZeroHash, 1, 1)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+	st, roblock, err = prepareForkchoiceState(ctx, 200, [32]byte{'3'}, [32]byte{'1'}, params.BeaconConfig().ZeroHash, 1, 1)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
 
 	r, err := f.AncestorRoot(ctx, [32]byte{'3'}, 150)
 	require.NoError(t, err)
@@ -295,20 +315,20 @@ func TestForkChoice_RemoveEquivocating(t *testing.T) {
 	ctx := context.Background()
 	f := setup(1, 1)
 	// Insert a block it will be head
-	st, blkRoot, err := prepareForkchoiceState(ctx, 1, [32]byte{'a'}, params.BeaconConfig().ZeroHash, [32]byte{'A'}, 1, 1)
+	st, roblock, err := prepareForkchoiceState(ctx, 1, [32]byte{'a'}, params.BeaconConfig().ZeroHash, [32]byte{'A'}, 1, 1)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
 	head, err := f.Head(ctx)
 	require.NoError(t, err)
 	require.Equal(t, [32]byte{'a'}, head)
 
 	// Insert two extra blocks
-	st, blkRoot, err = prepareForkchoiceState(ctx, 2, [32]byte{'b'}, [32]byte{'a'}, [32]byte{'B'}, 1, 1)
+	st, roblock, err = prepareForkchoiceState(ctx, 2, [32]byte{'b'}, [32]byte{'a'}, [32]byte{'B'}, 1, 1)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
-	st, blkRoot, err = prepareForkchoiceState(ctx, 3, [32]byte{'c'}, [32]byte{'a'}, [32]byte{'C'}, 1, 1)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+	st, roblock, err = prepareForkchoiceState(ctx, 3, [32]byte{'c'}, [32]byte{'a'}, [32]byte{'C'}, 1, 1)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
 	head, err = f.Head(ctx)
 	require.NoError(t, err)
 	require.Equal(t, [32]byte{'c'}, head)
@@ -377,36 +397,36 @@ func TestStore_CommonAncestor(t *testing.T) {
 	//  \-- c -- f
 	//        \-- g
 	//        \ -- h -- i -- j
-	st, blkRoot, err := prepareForkchoiceState(ctx, 0, [32]byte{'a'}, params.BeaconConfig().ZeroHash, [32]byte{'A'}, 1, 1)
+	st, roblock, err := prepareForkchoiceState(ctx, 0, [32]byte{'a'}, params.BeaconConfig().ZeroHash, [32]byte{'A'}, 1, 1)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
-	st, blkRoot, err = prepareForkchoiceState(ctx, 1, [32]byte{'b'}, [32]byte{'a'}, [32]byte{'B'}, 1, 1)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+	st, roblock, err = prepareForkchoiceState(ctx, 1, [32]byte{'b'}, [32]byte{'a'}, [32]byte{'B'}, 1, 1)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
-	st, blkRoot, err = prepareForkchoiceState(ctx, 2, [32]byte{'c'}, [32]byte{'a'}, [32]byte{'C'}, 1, 1)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+	st, roblock, err = prepareForkchoiceState(ctx, 2, [32]byte{'c'}, [32]byte{'a'}, [32]byte{'C'}, 1, 1)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
-	st, blkRoot, err = prepareForkchoiceState(ctx, 3, [32]byte{'d'}, [32]byte{'b'}, [32]byte{}, 1, 1)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+	st, roblock, err = prepareForkchoiceState(ctx, 3, [32]byte{'d'}, [32]byte{'b'}, [32]byte{}, 1, 1)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
-	st, blkRoot, err = prepareForkchoiceState(ctx, 4, [32]byte{'e'}, [32]byte{'d'}, [32]byte{}, 1, 1)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+	st, roblock, err = prepareForkchoiceState(ctx, 4, [32]byte{'e'}, [32]byte{'d'}, [32]byte{}, 1, 1)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
-	st, blkRoot, err = prepareForkchoiceState(ctx, 5, [32]byte{'f'}, [32]byte{'c'}, [32]byte{}, 1, 1)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+	st, roblock, err = prepareForkchoiceState(ctx, 5, [32]byte{'f'}, [32]byte{'c'}, [32]byte{}, 1, 1)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
-	st, blkRoot, err = prepareForkchoiceState(ctx, 6, [32]byte{'g'}, [32]byte{'c'}, [32]byte{}, 1, 1)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+	st, roblock, err = prepareForkchoiceState(ctx, 6, [32]byte{'g'}, [32]byte{'c'}, [32]byte{}, 1, 1)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
-	st, blkRoot, err = prepareForkchoiceState(ctx, 7, [32]byte{'h'}, [32]byte{'c'}, [32]byte{}, 1, 1)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+	st, roblock, err = prepareForkchoiceState(ctx, 7, [32]byte{'h'}, [32]byte{'c'}, [32]byte{}, 1, 1)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
-	st, blkRoot, err = prepareForkchoiceState(ctx, 8, [32]byte{'i'}, [32]byte{'h'}, [32]byte{}, 1, 1)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+	st, roblock, err = prepareForkchoiceState(ctx, 8, [32]byte{'i'}, [32]byte{'h'}, [32]byte{}, 1, 1)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
-	st, blkRoot, err = prepareForkchoiceState(ctx, 9, [32]byte{'j'}, [32]byte{'i'}, [32]byte{}, 1, 1)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+	st, roblock, err = prepareForkchoiceState(ctx, 9, [32]byte{'j'}, [32]byte{'i'}, [32]byte{}, 1, 1)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
 
 	tests := []struct {
 		name     string
@@ -497,18 +517,18 @@ func TestStore_CommonAncestor(t *testing.T) {
 
 	// a -- b -- c -- d
 	f = setup(0, 0)
-	st, blkRoot, err = prepareForkchoiceState(ctx, 0, [32]byte{'a'}, params.BeaconConfig().ZeroHash, [32]byte{'A'}, 1, 1)
+	st, roblock, err = prepareForkchoiceState(ctx, 0, [32]byte{'a'}, params.BeaconConfig().ZeroHash, [32]byte{'A'}, 1, 1)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
-	st, blkRoot, err = prepareForkchoiceState(ctx, 1, [32]byte{'b'}, [32]byte{'a'}, [32]byte{'B'}, 1, 1)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+	st, roblock, err = prepareForkchoiceState(ctx, 1, [32]byte{'b'}, [32]byte{'a'}, [32]byte{'B'}, 1, 1)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
-	st, blkRoot, err = prepareForkchoiceState(ctx, 2, [32]byte{'c'}, [32]byte{'b'}, [32]byte{'C'}, 1, 1)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+	st, roblock, err = prepareForkchoiceState(ctx, 2, [32]byte{'c'}, [32]byte{'b'}, [32]byte{'C'}, 1, 1)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
-	st, blkRoot, err = prepareForkchoiceState(ctx, 3, [32]byte{'d'}, [32]byte{'c'}, [32]byte{}, 1, 1)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+	st, roblock, err = prepareForkchoiceState(ctx, 3, [32]byte{'d'}, [32]byte{'c'}, [32]byte{}, 1, 1)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
 	tests = []struct {
 		name     string
 		r1       [32]byte
@@ -589,7 +609,9 @@ func TestStore_InsertChain(t *testing.T) {
 	require.NoError(t, err)
 	wsb, err := blocks.NewSignedBeaconBlock(blk)
 	require.NoError(t, err)
-	blks = append(blks, &forkchoicetypes.BlockAndCheckpoints{Block: wsb.Block(),
+	roblock, err := blocks.NewROBlockWithRoot(wsb, root)
+	require.NoError(t, err)
+	blks = append(blks, &forkchoicetypes.BlockAndCheckpoints{Block: roblock,
 		JustifiedCheckpoint: &ethpb.Checkpoint{Epoch: 1, Root: params.BeaconConfig().ZeroHash[:]},
 		FinalizedCheckpoint: &ethpb.Checkpoint{Epoch: 1, Root: params.BeaconConfig().ZeroHash[:]},
 	})
@@ -598,14 +620,16 @@ func TestStore_InsertChain(t *testing.T) {
 		blk.Block.Slot = primitives.Slot(i)
 		copiedRoot := root
 		blk.Block.ParentRoot = copiedRoot[:]
+		root, err = blk.Block.HashTreeRoot()
+		require.NoError(t, err)
 		wsb, err = blocks.NewSignedBeaconBlock(blk)
 		require.NoError(t, err)
-		blks = append(blks, &forkchoicetypes.BlockAndCheckpoints{Block: wsb.Block(),
+		roblock, err := blocks.NewROBlockWithRoot(wsb, root)
+		require.NoError(t, err)
+		blks = append(blks, &forkchoicetypes.BlockAndCheckpoints{Block: roblock,
 			JustifiedCheckpoint: &ethpb.Checkpoint{Epoch: 1, Root: params.BeaconConfig().ZeroHash[:]},
 			FinalizedCheckpoint: &ethpb.Checkpoint{Epoch: 1, Root: params.BeaconConfig().ZeroHash[:]},
 		})
-		root, err = blk.Block.HashTreeRoot()
-		require.NoError(t, err)
 	}
 	args := make([]*forkchoicetypes.BlockAndCheckpoints, 10)
 	for i := 0; i < len(blks); i++ {
@@ -669,26 +693,26 @@ func TestForkChoice_UpdateCheckpoints(t *testing.T) {
 			fcs.store.finalizedCheckpoint = tt.finalized
 			fcs.store.genesisTime = uint64(time.Now().Unix()) - uint64(tt.currentSlot)*params.BeaconConfig().SecondsPerSlot
 
-			st, blkRoot, err := prepareForkchoiceState(ctx, 32, [32]byte{'f'},
+			st, roblock, err := prepareForkchoiceState(ctx, 32, [32]byte{'f'},
 				[32]byte{}, [32]byte{}, tt.finalized.Epoch, tt.finalized.Epoch)
 			require.NoError(t, err)
-			require.NoError(t, fcs.InsertNode(ctx, st, blkRoot))
-			st, blkRoot, err = prepareForkchoiceState(ctx, 64, [32]byte{'j'},
+			require.NoError(t, fcs.InsertNode(ctx, st, roblock))
+			st, roblock, err = prepareForkchoiceState(ctx, 64, [32]byte{'j'},
 				[32]byte{'f'}, [32]byte{}, tt.justified.Epoch, tt.finalized.Epoch)
 			require.NoError(t, err)
-			require.NoError(t, fcs.InsertNode(ctx, st, blkRoot))
-			st, blkRoot, err = prepareForkchoiceState(ctx, 96, [32]byte{'b'},
+			require.NoError(t, fcs.InsertNode(ctx, st, roblock))
+			st, roblock, err = prepareForkchoiceState(ctx, 96, [32]byte{'b'},
 				[32]byte{'j'}, [32]byte{}, tt.newJustified.Epoch, tt.newFinalized.Epoch)
 			require.NoError(t, err)
-			require.NoError(t, fcs.InsertNode(ctx, st, blkRoot))
-			st, blkRoot, err = prepareForkchoiceState(ctx, 96, [32]byte{'c'},
+			require.NoError(t, fcs.InsertNode(ctx, st, roblock))
+			st, roblock, err = prepareForkchoiceState(ctx, 96, [32]byte{'c'},
 				[32]byte{'f'}, [32]byte{}, tt.newJustified.Epoch, tt.newFinalized.Epoch)
 			require.NoError(t, err)
-			require.NoError(t, fcs.InsertNode(ctx, st, blkRoot))
-			st, blkRoot, err = prepareForkchoiceState(ctx, 65, [32]byte{'h'},
+			require.NoError(t, fcs.InsertNode(ctx, st, roblock))
+			st, roblock, err = prepareForkchoiceState(ctx, 65, [32]byte{'h'},
 				[32]byte{'f'}, [32]byte{}, tt.newFinalized.Epoch, tt.newFinalized.Epoch)
 			require.NoError(t, err)
-			require.NoError(t, fcs.InsertNode(ctx, st, blkRoot))
+			require.NoError(t, fcs.InsertNode(ctx, st, roblock))
 			// restart justifications cause insertion messed it up
 			fcs.store.justifiedCheckpoint = tt.justified
 			fcs.store.finalizedCheckpoint = tt.finalized
@@ -714,9 +738,9 @@ func TestWeight(t *testing.T) {
 	f := setup(0, 0)
 
 	root := [32]byte{'a'}
-	st, blkRoot, err := prepareForkchoiceState(ctx, 0, root, params.BeaconConfig().ZeroHash, [32]byte{'A'}, 1, 1)
+	st, roblock, err := prepareForkchoiceState(ctx, 0, root, params.BeaconConfig().ZeroHash, [32]byte{'A'}, 1, 1)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
 
 	n, ok := f.store.nodeByRoot[root]
 	require.Equal(t, true, ok)
@@ -746,9 +770,9 @@ func TestForkChoice_UnrealizedJustifiedPayloadBlockHash(t *testing.T) {
 	ctx := context.Background()
 	f := setup(0, 0)
 
-	st, blkRoot, err := prepareForkchoiceState(ctx, 0, [32]byte{'a'}, params.BeaconConfig().ZeroHash, [32]byte{'A'}, 1, 1)
+	st, roblock, err := prepareForkchoiceState(ctx, 0, [32]byte{'a'}, params.BeaconConfig().ZeroHash, [32]byte{'A'}, 1, 1)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
 
 	f.store.unrealizedJustifiedCheckpoint.Root = [32]byte{'a'}
 	got := f.UnrealizedJustifiedPayloadBlockHash()
@@ -759,90 +783,90 @@ func TestForkChoiceIsViableForCheckpoint(t *testing.T) {
 	f := setup(0, 0)
 	ctx := context.Background()
 
-	st, root, err := prepareForkchoiceState(ctx, 0, [32]byte{'a'}, params.BeaconConfig().ZeroHash, [32]byte{'A'}, 0, 0)
+	st, blk, err := prepareForkchoiceState(ctx, 0, [32]byte{'a'}, params.BeaconConfig().ZeroHash, [32]byte{'A'}, 0, 0)
 	require.NoError(t, err)
 	// No Node
-	viable, err := f.IsViableForCheckpoint(&forkchoicetypes.Checkpoint{Root: root})
+	viable, err := f.IsViableForCheckpoint(&forkchoicetypes.Checkpoint{Root: blk.Root()})
 	require.NoError(t, err)
 	require.Equal(t, false, viable)
 
 	// No Children
-	require.NoError(t, f.InsertNode(ctx, st, root))
-	viable, err = f.IsViableForCheckpoint(&forkchoicetypes.Checkpoint{Root: root, Epoch: 0})
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+	viable, err = f.IsViableForCheckpoint(&forkchoicetypes.Checkpoint{Root: blk.Root(), Epoch: 0})
 	require.NoError(t, err)
 	require.Equal(t, true, viable)
 
-	viable, err = f.IsViableForCheckpoint(&forkchoicetypes.Checkpoint{Root: root, Epoch: 1})
+	viable, err = f.IsViableForCheckpoint(&forkchoicetypes.Checkpoint{Root: blk.Root(), Epoch: 1})
 	require.NoError(t, err)
 	require.Equal(t, true, viable)
 
-	viable, err = f.IsViableForCheckpoint(&forkchoicetypes.Checkpoint{Root: root, Epoch: 2})
+	viable, err = f.IsViableForCheckpoint(&forkchoicetypes.Checkpoint{Root: blk.Root(), Epoch: 2})
 	require.NoError(t, err)
 	require.Equal(t, true, viable)
 
-	st, bRoot, err := prepareForkchoiceState(ctx, 1, [32]byte{'b'}, root, [32]byte{'B'}, 0, 0)
+	st, blk2, err := prepareForkchoiceState(ctx, 1, [32]byte{'b'}, blk.Root(), [32]byte{'B'}, 0, 0)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, bRoot))
+	require.NoError(t, f.InsertNode(ctx, st, blk2))
 
 	// Epoch start
-	viable, err = f.IsViableForCheckpoint(&forkchoicetypes.Checkpoint{Root: root})
+	viable, err = f.IsViableForCheckpoint(&forkchoicetypes.Checkpoint{Root: blk.Root()})
 	require.NoError(t, err)
 	require.Equal(t, true, viable)
 
-	viable, err = f.IsViableForCheckpoint(&forkchoicetypes.Checkpoint{Root: root, Epoch: 1})
+	viable, err = f.IsViableForCheckpoint(&forkchoicetypes.Checkpoint{Root: blk.Root(), Epoch: 1})
 	require.NoError(t, err)
 	require.Equal(t, false, viable)
 
 	// No Children but impossible checkpoint
-	viable, err = f.IsViableForCheckpoint(&forkchoicetypes.Checkpoint{Root: bRoot})
+	viable, err = f.IsViableForCheckpoint(&forkchoicetypes.Checkpoint{Root: blk2.Root()})
 	require.NoError(t, err)
 	require.Equal(t, false, viable)
 
-	viable, err = f.IsViableForCheckpoint(&forkchoicetypes.Checkpoint{Root: bRoot, Epoch: 1})
+	viable, err = f.IsViableForCheckpoint(&forkchoicetypes.Checkpoint{Root: blk2.Root(), Epoch: 1})
 	require.NoError(t, err)
 	require.Equal(t, true, viable)
 
-	st, cRoot, err := prepareForkchoiceState(ctx, 2, [32]byte{'c'}, bRoot, [32]byte{'C'}, 0, 0)
+	st, blk3, err := prepareForkchoiceState(ctx, 2, [32]byte{'c'}, blk2.Root(), [32]byte{'C'}, 0, 0)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, cRoot))
+	require.NoError(t, f.InsertNode(ctx, st, blk3))
 
 	// Children in same epoch
-	viable, err = f.IsViableForCheckpoint(&forkchoicetypes.Checkpoint{Root: bRoot})
+	viable, err = f.IsViableForCheckpoint(&forkchoicetypes.Checkpoint{Root: blk2.Root()})
 	require.NoError(t, err)
 	require.Equal(t, false, viable)
 
-	viable, err = f.IsViableForCheckpoint(&forkchoicetypes.Checkpoint{Root: bRoot, Epoch: 1})
+	viable, err = f.IsViableForCheckpoint(&forkchoicetypes.Checkpoint{Root: blk2.Root(), Epoch: 1})
 	require.NoError(t, err)
 	require.Equal(t, false, viable)
 
-	st, dRoot, err := prepareForkchoiceState(ctx, params.BeaconConfig().SlotsPerEpoch, [32]byte{'d'}, bRoot, [32]byte{'D'}, 0, 0)
+	st, blk4, err := prepareForkchoiceState(ctx, params.BeaconConfig().SlotsPerEpoch, [32]byte{'d'}, blk2.Root(), [32]byte{'D'}, 0, 0)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, dRoot))
+	require.NoError(t, f.InsertNode(ctx, st, blk4))
 
 	// Children in next epoch but boundary
-	viable, err = f.IsViableForCheckpoint(&forkchoicetypes.Checkpoint{Root: bRoot})
+	viable, err = f.IsViableForCheckpoint(&forkchoicetypes.Checkpoint{Root: blk2.Root()})
 	require.NoError(t, err)
 	require.Equal(t, false, viable)
 
-	viable, err = f.IsViableForCheckpoint(&forkchoicetypes.Checkpoint{Root: bRoot, Epoch: 1})
+	viable, err = f.IsViableForCheckpoint(&forkchoicetypes.Checkpoint{Root: blk2.Root(), Epoch: 1})
 	require.NoError(t, err)
 	require.Equal(t, false, viable)
 
 	// Boundary block
-	viable, err = f.IsViableForCheckpoint(&forkchoicetypes.Checkpoint{Root: dRoot, Epoch: 1})
+	viable, err = f.IsViableForCheckpoint(&forkchoicetypes.Checkpoint{Root: blk4.Root(), Epoch: 1})
 	require.NoError(t, err)
 	require.Equal(t, true, viable)
 
-	viable, err = f.IsViableForCheckpoint(&forkchoicetypes.Checkpoint{Root: dRoot, Epoch: 0})
+	viable, err = f.IsViableForCheckpoint(&forkchoicetypes.Checkpoint{Root: blk4.Root(), Epoch: 0})
 	require.NoError(t, err)
 	require.Equal(t, false, viable)
 
 	// Children in next epoch
-	st, eRoot, err := prepareForkchoiceState(ctx, params.BeaconConfig().SlotsPerEpoch+1, [32]byte{'e'}, bRoot, [32]byte{'E'}, 0, 0)
+	st, blk5, err := prepareForkchoiceState(ctx, params.BeaconConfig().SlotsPerEpoch+1, [32]byte{'e'}, blk2.Root(), [32]byte{'E'}, 0, 0)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, eRoot))
+	require.NoError(t, f.InsertNode(ctx, st, blk5))
 
-	viable, err = f.IsViableForCheckpoint(&forkchoicetypes.Checkpoint{Root: bRoot, Epoch: 1})
+	viable, err = f.IsViableForCheckpoint(&forkchoicetypes.Checkpoint{Root: blk2.Root(), Epoch: 1})
 	require.NoError(t, err)
 	require.Equal(t, true, viable)
 }
@@ -850,14 +874,14 @@ func TestForkChoiceIsViableForCheckpoint(t *testing.T) {
 func TestForkChoiceSlot(t *testing.T) {
 	f := setup(0, 0)
 	ctx := context.Background()
-	st, root, err := prepareForkchoiceState(ctx, 3, [32]byte{'a'}, params.BeaconConfig().ZeroHash, [32]byte{'A'}, 0, 0)
+	st, blk, err := prepareForkchoiceState(ctx, 3, [32]byte{'a'}, params.BeaconConfig().ZeroHash, [32]byte{'A'}, 0, 0)
 	require.NoError(t, err)
 	// No Node
-	_, err = f.Slot(root)
+	_, err = f.Slot(blk.Root())
 	require.ErrorIs(t, ErrNilNode, err)
 
-	require.NoError(t, f.InsertNode(ctx, st, root))
-	slot, err := f.Slot(root)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+	slot, err := f.Slot(blk.Root())
 	require.NoError(t, err)
 	require.Equal(t, primitives.Slot(3), slot)
 }
@@ -866,16 +890,16 @@ func TestForkchoiceParentRoot(t *testing.T) {
 	f := setup(0, 0)
 	ctx := context.Background()
 	root1 := [32]byte{'a'}
-	st, root, err := prepareForkchoiceState(ctx, 3, root1, params.BeaconConfig().ZeroHash, [32]byte{'A'}, 0, 0)
+	st, blk, err := prepareForkchoiceState(ctx, 3, root1, params.BeaconConfig().ZeroHash, [32]byte{'A'}, 0, 0)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, root))
+	require.NoError(t, f.InsertNode(ctx, st, blk))
 
 	root2 := [32]byte{'b'}
-	st, root, err = prepareForkchoiceState(ctx, 3, root2, root1, [32]byte{'A'}, 0, 0)
+	st, blk, err = prepareForkchoiceState(ctx, 3, root2, root1, [32]byte{'A'}, 0, 0)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, root))
+	require.NoError(t, f.InsertNode(ctx, st, blk))
 
-	root, err = f.ParentRoot(root2)
+	root, err := f.ParentRoot(root2)
 	require.NoError(t, err)
 	require.Equal(t, root1, root)
 
@@ -886,4 +910,17 @@ func TestForkchoiceParentRoot(t *testing.T) {
 	root, err = f.ParentRoot(zeroHash)
 	require.NoError(t, err)
 	require.Equal(t, zeroHash, root)
+}
+
+func TestForkChoice_CleanupInserting(t *testing.T) {
+	f := setup(0, 0)
+	ctx := context.Background()
+	st, roblock, err := prepareForkchoiceState(ctx, 1, indexToHash(1), params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 2, 2)
+	f.SetBalancesByRooter(func(_ context.Context, _ [32]byte) ([]uint64, error) {
+		return f.justifiedBalances, errors.New("mock err")
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, f.InsertNode(ctx, st, roblock))
+	require.Equal(t, false, f.HasNode(roblock.Root()))
 }

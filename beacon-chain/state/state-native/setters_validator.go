@@ -2,6 +2,7 @@ package state_native
 
 import (
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native/types"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stateutil"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
@@ -38,7 +39,7 @@ func (b *BeaconState) SetValidators(val []*ethpb.Validator) error {
 
 // ApplyToEveryValidator applies the provided callback function to each validator in the
 // validator registry.
-func (b *BeaconState) ApplyToEveryValidator(f func(idx int, val *ethpb.Validator) (bool, *ethpb.Validator, error)) error {
+func (b *BeaconState) ApplyToEveryValidator(f func(idx int, val state.ReadOnlyValidator) (*ethpb.Validator, error)) error {
 	var changedVals []uint64
 	if features.Get().EnableExperimentalState {
 		l := b.validatorsMultiValue.Len(b)
@@ -47,11 +48,15 @@ func (b *BeaconState) ApplyToEveryValidator(f func(idx int, val *ethpb.Validator
 			if err != nil {
 				return err
 			}
-			changed, newVal, err := f(i, v)
+			ro, err := NewValidator(v)
 			if err != nil {
 				return err
 			}
-			if changed {
+			newVal, err := f(i, ro)
+			if err != nil {
+				return err
+			}
+			if newVal != nil {
 				changedVals = append(changedVals, uint64(i))
 				if err = b.validatorsMultiValue.UpdateAt(b, uint64(i), newVal); err != nil {
 					return errors.Wrapf(err, "could not update validator at index %d", i)
@@ -71,11 +76,15 @@ func (b *BeaconState) ApplyToEveryValidator(f func(idx int, val *ethpb.Validator
 		b.lock.Unlock()
 
 		for i, val := range v {
-			changed, newVal, err := f(i, val)
+			ro, err := NewValidator(val)
 			if err != nil {
 				return err
 			}
-			if changed {
+			newVal, err := f(i, ro)
+			if err != nil {
+				return err
+			}
+			if newVal != nil {
 				changedVals = append(changedVals, uint64(i))
 				v[i] = newVal
 			}
@@ -89,8 +98,10 @@ func (b *BeaconState) ApplyToEveryValidator(f func(idx int, val *ethpb.Validator
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
-	b.markFieldAsDirty(types.Validators)
-	b.addDirtyIndices(types.Validators, changedVals)
+	if len(changedVals) > 0 {
+		b.markFieldAsDirty(types.Validators)
+		b.addDirtyIndices(types.Validators, changedVals)
+	}
 	return nil
 }
 

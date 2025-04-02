@@ -437,6 +437,25 @@ func TestProcessBlock_OverMaxAttesterSlashings(t *testing.T) {
 	assert.ErrorContains(t, want, err)
 }
 
+func TestProcessBlock_OverMaxAttesterSlashingsElectra(t *testing.T) {
+	maxSlashings := params.BeaconConfig().MaxAttesterSlashingsElectra
+	b := &ethpb.SignedBeaconBlockElectra{
+		Block: &ethpb.BeaconBlockElectra{
+			Body: &ethpb.BeaconBlockBodyElectra{
+				AttesterSlashings: make([]*ethpb.AttesterSlashingElectra, maxSlashings+1),
+			},
+		},
+	}
+	want := fmt.Sprintf("number of attester slashings (%d) in block body exceeds allowed threshold of %d",
+		len(b.Block.Body.AttesterSlashings), params.BeaconConfig().MaxAttesterSlashingsElectra)
+	s, err := state_native.InitializeFromProtoUnsafeElectra(&ethpb.BeaconStateElectra{})
+	require.NoError(t, err)
+	wsb, err := consensusblocks.NewSignedBeaconBlock(b)
+	require.NoError(t, err)
+	_, err = transition.VerifyOperationLengths(context.Background(), s, wsb.Block())
+	assert.ErrorContains(t, want, err)
+}
+
 func TestProcessBlock_OverMaxAttestations(t *testing.T) {
 	b := &ethpb.SignedBeaconBlock{
 		Block: &ethpb.BeaconBlock{
@@ -665,6 +684,20 @@ func TestProcessSlots_ThroughElectraEpoch(t *testing.T) {
 	require.Equal(t, params.BeaconConfig().SlotsPerEpoch*10, st.Slot())
 }
 
+func TestProcessSlots_ThroughFuluEpoch(t *testing.T) {
+	transition.SkipSlotCache.Disable()
+	params.SetupTestConfigCleanup(t)
+	conf := params.BeaconConfig()
+	conf.FuluForkEpoch = 5
+	params.OverrideBeaconConfig(conf)
+
+	st, _ := util.DeterministicGenesisStateElectra(t, params.BeaconConfig().MaxValidatorsPerCommittee)
+	st, err := transition.ProcessSlots(context.Background(), st, params.BeaconConfig().SlotsPerEpoch*10)
+	require.NoError(t, err)
+	require.Equal(t, version.Fulu, st.Version())
+	require.Equal(t, params.BeaconConfig().SlotsPerEpoch*10, st.Slot())
+}
+
 func TestProcessSlotsUsingNextSlotCache(t *testing.T) {
 	s, _ := util.DeterministicGenesisState(t, 1)
 	r := []byte{'a'}
@@ -697,4 +730,46 @@ func TestProcessSlotsConditionally(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, primitives.Slot(6), s.Slot())
 	})
+}
+
+func BenchmarkProcessSlots_Capella(b *testing.B) {
+	st, _ := util.DeterministicGenesisStateCapella(b, params.BeaconConfig().MaxValidatorsPerCommittee)
+
+	var err error
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		st, err = transition.ProcessSlots(context.Background(), st, st.Slot()+1)
+		if err != nil {
+			b.Fatalf("Failed to process slot %v", err)
+		}
+	}
+}
+
+func BenchmarkProcessSlots_Deneb(b *testing.B) {
+	st, _ := util.DeterministicGenesisStateDeneb(b, params.BeaconConfig().MaxValidatorsPerCommittee)
+
+	var err error
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		st, err = transition.ProcessSlots(context.Background(), st, st.Slot()+1)
+		if err != nil {
+			b.Fatalf("Failed to process slot %v", err)
+		}
+	}
+}
+
+func BenchmarkProcessSlots_Electra(b *testing.B) {
+	st, _ := util.DeterministicGenesisStateElectra(b, params.BeaconConfig().MaxValidatorsPerCommittee)
+
+	var err error
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		st, err = transition.ProcessSlots(context.Background(), st, st.Slot()+1)
+		if err != nil {
+			b.Fatalf("Failed to process slot %v", err)
+		}
+	}
 }

@@ -158,12 +158,12 @@ func trim(queue *cache.FIFO, maxSize uint64) {
 	for s := uint64(len(queue.ListKeys())); s > maxSize; s-- {
 		// #nosec G104 popProcessNoopFunc never returns an error
 		if _, err := queue.Pop(popProcessNoopFunc); err != nil { // This never returns an error, but we'll handle anyway for sanity.
-			panic(err)
+			panic(err) // lint:nopanic -- popProcessNoopFunc never returns an error.
 		}
 	}
 }
 
 // popProcessNoopFunc is a no-op function that never returns an error.
-func popProcessNoopFunc(_ interface{}) error {
+func popProcessNoopFunc(_ interface{}, _ bool) error {
 	return nil
 }

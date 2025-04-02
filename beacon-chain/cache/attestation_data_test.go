@@ -9,7 +9,7 @@ import (
 )
 
 func TestAttestationCache_RoundTrip(t *testing.T) {
-	c := cache.NewAttestationCache()
+	c := cache.NewAttestationDataCache()
 
 	a := c.Get()
 	require.Nil(t, a)

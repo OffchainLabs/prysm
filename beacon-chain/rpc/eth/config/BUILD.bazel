@@ -8,10 +8,10 @@ go_library(
     deps = [
         "//api/server/structs:go_default_library",
         "//config/params:go_default_library",
+        "//monitoring/tracing/trace:go_default_library",
         "//network/forks:go_default_library",
         "//network/httputil:go_default_library",
         "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",
-        "@io_opencensus_go//trace:go_default_library",
     ],
 )
 

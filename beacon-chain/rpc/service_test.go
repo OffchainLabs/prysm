@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net/http"
 	"testing"
 	"time"
 
-	"github.com/gorilla/mux"
 	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
 	mockExecution "github.com/prysmaticlabs/prysm/v5/beacon-chain/execution/testing"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
@@ -21,18 +21,6 @@ import (
 func init() {
 	logrus.SetLevel(logrus.DebugLevel)
 	logrus.SetOutput(io.Discard)
-}
-
-func combineMaps(maps ...map[string][]string) map[string][]string {
-	combinedMap := make(map[string][]string)
-
-	for _, m := range maps {
-		for k, v := range m {
-			combinedMap[k] = v
-		}
-	}
-
-	return combinedMap
 }
 
 func TestLifecycle_OK(t *testing.T) {
@@ -49,7 +37,7 @@ func TestLifecycle_OK(t *testing.T) {
 		GenesisTimeFetcher:    chainService,
 		ExecutionChainService: &mockExecution.Chain{},
 		StateNotifier:         chainService.StateNotifier(),
-		Router:                mux.NewRouter(),
+		Router:                http.NewServeMux(),
 		ClockWaiter:           startup.NewClockSynchronizer(),
 	})
 
@@ -91,7 +79,7 @@ func TestRPC_InsecureEndpoint(t *testing.T) {
 		HeadFetcher:           chainService,
 		ExecutionChainService: &mockExecution.Chain{},
 		StateNotifier:         chainService.StateNotifier(),
-		Router:                mux.NewRouter(),
+		Router:                http.NewServeMux(),
 		ClockWaiter:           startup.NewClockSynchronizer(),
 	})
 

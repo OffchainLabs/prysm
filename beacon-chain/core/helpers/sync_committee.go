@@ -69,15 +69,16 @@ func IsNextPeriodSyncCommittee(
 	}
 	indices, err := syncCommitteeCache.NextPeriodIndexPosition(root, valIdx)
 	if errors.Is(err, cache.ErrNonExistingSyncCommitteeKey) {
-		val, err := st.ValidatorAtIndex(valIdx)
+		val, err := st.ValidatorAtIndexReadOnly(valIdx)
 		if err != nil {
 			return false, err
 		}
+		pk := val.PublicKey()
 		committee, err := st.NextSyncCommittee()
 		if err != nil {
 			return false, err
 		}
-		return len(findSubCommitteeIndices(val.PublicKey, committee.Pubkeys)) > 0, nil
+		return len(findSubCommitteeIndices(pk[:], committee.Pubkeys)) > 0, nil
 	}
 	if err != nil {
 		return false, err
@@ -96,10 +97,11 @@ func CurrentPeriodSyncSubcommitteeIndices(
 	}
 	indices, err := syncCommitteeCache.CurrentPeriodIndexPosition(root, valIdx)
 	if errors.Is(err, cache.ErrNonExistingSyncCommitteeKey) {
-		val, err := st.ValidatorAtIndex(valIdx)
+		val, err := st.ValidatorAtIndexReadOnly(valIdx)
 		if err != nil {
 			return nil, err
 		}
+		pk := val.PublicKey()
 		committee, err := st.CurrentSyncCommittee()
 		if err != nil {
 			return nil, err
@@ -112,7 +114,7 @@ func CurrentPeriodSyncSubcommitteeIndices(
 			}
 		}()
 
-		return findSubCommitteeIndices(val.PublicKey, committee.Pubkeys), nil
+		return findSubCommitteeIndices(pk[:], committee.Pubkeys), nil
 	}
 	if err != nil {
 		return nil, err
@@ -130,15 +132,16 @@ func NextPeriodSyncSubcommitteeIndices(
 	}
 	indices, err := syncCommitteeCache.NextPeriodIndexPosition(root, valIdx)
 	if errors.Is(err, cache.ErrNonExistingSyncCommitteeKey) {
-		val, err := st.ValidatorAtIndex(valIdx)
+		val, err := st.ValidatorAtIndexReadOnly(valIdx)
 		if err != nil {
 			return nil, err
 		}
+		pk := val.PublicKey()
 		committee, err := st.NextSyncCommittee()
 		if err != nil {
 			return nil, err
 		}
-		return findSubCommitteeIndices(val.PublicKey, committee.Pubkeys), nil
+		return findSubCommitteeIndices(pk[:], committee.Pubkeys), nil
 	}
 	if err != nil {
 		return nil, err

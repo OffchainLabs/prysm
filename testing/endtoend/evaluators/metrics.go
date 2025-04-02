@@ -207,7 +207,7 @@ func valueOfTopic(pageContent, topic string) (int, error) {
 	}
 	var result float64
 	for i, stringIndex := range indexesFound {
-		// Only performing every third result found since theres 2 comments above every metric.
+		// Only performing every third result found since there are 2 comments above every metric.
 		if i == 0 || i%2 != 0 {
 			continue
 		}

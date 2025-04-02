@@ -42,6 +42,7 @@ func (s *Server) GetBeaconStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	genesisTime := uint64(time.Unix(genesis.GenesisTime.Seconds, 0).Unix())
 	address := genesis.DepositContractAddress
+
 	chainHead, err := s.chainClient.ChainHead(ctx, &emptypb.Empty{})
 	if err != nil {
 		httputil.HandleError(w, errors.Wrap(err, "ChainHead").Error(), http.StatusInternalServerError)

@@ -13,10 +13,12 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
 	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
+	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
+	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/sirupsen/logrus"
-	"go.opencensus.io/trace"
 )
 
 // blobSidecarByRootRPCHandler handles the /eth2/beacon_chain/req/blob_sidecars_by_root/1/ RPC request.
@@ -34,7 +36,8 @@ func (s *Service) blobSidecarByRootRPCHandler(ctx context.Context, msg interface
 	}
 
 	blobIdents := *ref
-	if err := validateBlobByRootRequest(blobIdents); err != nil {
+	cs := s.cfg.clock.CurrentSlot()
+	if err := validateBlobByRootRequest(blobIdents, cs); err != nil {
 		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(stream.Conn().RemotePeer())
 		s.writeErrorResponseToStream(responseCodeInvalidRequest, err.Error(), stream)
 		return err
@@ -49,7 +52,6 @@ func (s *Service) blobSidecarByRootRPCHandler(ctx context.Context, msg interface
 	}
 
 	// Compute the oldest slot we'll allow a peer to request, based on the current slot.
-	cs := s.cfg.clock.CurrentSlot()
 	minReqSlot, err := BlobRPCMinValidSlot(cs)
 	if err != nil {
 		return errors.Wrapf(err, "unexpected error computing min valid blob request slot, current_slot=%d", cs)
@@ -104,9 +106,15 @@ func (s *Service) blobSidecarByRootRPCHandler(ctx context.Context, msg interface
 	return nil
 }
 
-func validateBlobByRootRequest(blobIdents types.BlobSidecarsByRootReq) error {
-	if uint64(len(blobIdents)) > params.BeaconConfig().MaxRequestBlobSidecars {
-		return types.ErrMaxBlobReqExceeded
+func validateBlobByRootRequest(blobIdents types.BlobSidecarsByRootReq, slot primitives.Slot) error {
+	if slots.ToEpoch(slot) >= params.BeaconConfig().ElectraForkEpoch {
+		if uint64(len(blobIdents)) > params.BeaconConfig().MaxRequestBlobSidecarsElectra {
+			return types.ErrMaxBlobReqExceeded
+		}
+	} else {
+		if uint64(len(blobIdents)) > params.BeaconConfig().MaxRequestBlobSidecars {
+			return types.ErrMaxBlobReqExceeded
+		}
 	}
 	return nil
 }

@@ -85,8 +85,6 @@ var appHelpFlagGroups = []flagGroup{
 			debug.PProfAddrFlag,
 			debug.PProfPortFlag,
 			debug.MemProfileRateFlag,
-			debug.CPUProfileFlag,
-			debug.TraceFlag,
 			debug.BlockProfileRateFlag,
 			debug.MutexProfileFractionFlag,
 		},
@@ -96,15 +94,14 @@ var appHelpFlagGroups = []flagGroup{
 		Flags: []cli.Flag{
 			flags.CertFlag,
 			flags.BeaconRPCProviderFlag,
-			flags.BeaconRPCGatewayProviderFlag,
 			flags.EnableRPCFlag,
 			flags.RPCHost,
 			flags.RPCPort,
-			flags.GRPCGatewayPort,
-			flags.GRPCGatewayHost,
+			flags.HTTPServerPort,
+			flags.HTTPServerHost,
 			flags.GRPCRetriesFlag,
 			flags.GRPCRetryDelayFlag,
-			flags.GRPCGatewayCorsDomain,
+			flags.HTTPServerCorsDomain,
 			flags.GRPCHeadersFlag,
 			flags.BeaconRESTApiProviderFlag,
 		},
@@ -156,6 +153,13 @@ var appHelpFlagGroups = []flagGroup{
 		Flags: []cli.Flag{
 			flags.InteropNumValidators,
 			flags.InteropStartIndex,
+		},
+	},
+	{
+		Name: "deprecated",
+		Flags: []cli.Flag{
+			debug.CPUProfileFlag,
+			debug.TraceFlag,
 		},
 	},
 }

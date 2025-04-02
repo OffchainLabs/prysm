@@ -9,7 +9,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/epoch/precompute"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"github.com/prysmaticlabs/prysm/v5/testing/spectest/utils"
 )
@@ -32,10 +31,9 @@ func RunSlashingsTests(t *testing.T, config string) {
 	}
 }
 
-func processSlashingsWrapper(t *testing.T, s state.BeaconState) (state.BeaconState, error) {
-	s, err := epoch.ProcessSlashings(s, params.BeaconConfig().ProportionalSlashingMultiplier)
-	require.NoError(t, err, "Could not process slashings")
-	return s, nil
+func processSlashingsWrapper(t *testing.T, st state.BeaconState) (state.BeaconState, error) {
+	require.NoError(t, epoch.ProcessSlashings(st), "Could not process slashings")
+	return st, nil
 }
 
 func processSlashingsPrecomputeWrapper(t *testing.T, state state.BeaconState) (state.BeaconState, error) {

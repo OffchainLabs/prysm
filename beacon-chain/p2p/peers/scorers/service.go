@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers/peerdata"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
 )
@@ -24,7 +25,7 @@ const BadPeerScore = gossipThreshold
 // Scorer defines minimum set of methods every peer scorer must expose.
 type Scorer interface {
 	Score(pid peer.ID) float64
-	IsBadPeer(pid peer.ID) bool
+	IsBadPeer(pid peer.ID) error
 	BadPeers() []peer.ID
 }
 
@@ -124,26 +125,29 @@ func (s *Service) ScoreNoLock(pid peer.ID) float64 {
 }
 
 // IsBadPeer traverses all the scorers to see if any of them classifies peer as bad.
-func (s *Service) IsBadPeer(pid peer.ID) bool {
+func (s *Service) IsBadPeer(pid peer.ID) error {
 	s.store.RLock()
 	defer s.store.RUnlock()
 	return s.IsBadPeerNoLock(pid)
 }
 
 // IsBadPeerNoLock is a lock-free version of IsBadPeer.
-func (s *Service) IsBadPeerNoLock(pid peer.ID) bool {
-	if s.scorers.badResponsesScorer.isBadPeerNoLock(pid) {
-		return true
+func (s *Service) IsBadPeerNoLock(pid peer.ID) error {
+	if err := s.scorers.badResponsesScorer.isBadPeerNoLock(pid); err != nil {
+		return errors.Wrap(err, "bad responses scorer")
 	}
-	if s.scorers.peerStatusScorer.isBadPeerNoLock(pid) {
-		return true
+
+	if err := s.scorers.peerStatusScorer.isBadPeerNoLock(pid); err != nil {
+		return errors.Wrap(err, "peer status scorer")
 	}
+
 	if features.Get().EnablePeerScorer {
-		if s.scorers.gossipScorer.isBadPeerNoLock(pid) {
-			return true
+		if err := s.scorers.gossipScorer.isBadPeerNoLock(pid); err != nil {
+			return errors.Wrap(err, "gossip scorer")
 		}
 	}
-	return false
+
+	return nil
 }
 
 // BadPeers returns the peers that are considered bad by any of registered scorers.
@@ -153,7 +157,7 @@ func (s *Service) BadPeers() []peer.ID {
 
 	badPeers := make([]peer.ID, 0)
 	for pid := range s.store.Peers() {
-		if s.IsBadPeerNoLock(pid) {
+		if s.IsBadPeerNoLock(pid) != nil {
 			badPeers = append(badPeers, pid)
 		}
 	}

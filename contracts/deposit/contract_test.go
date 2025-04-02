@@ -67,7 +67,7 @@ func TestValidatorRegister_OK(t *testing.T) {
 		},
 	}
 
-	logs, err := testAccount.Backend.FilterLogs(context.Background(), query)
+	logs, err := testAccount.Backend.Client().FilterLogs(context.Background(), query)
 	assert.NoError(t, err, "Unable to get logs of deposit contract")
 
 	merkleTreeIndex := make([]uint64, 5)

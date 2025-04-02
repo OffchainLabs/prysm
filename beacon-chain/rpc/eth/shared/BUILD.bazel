@@ -17,7 +17,6 @@ go_library(
         "//consensus-types/interfaces:go_default_library",
         "//network/httputil:go_default_library",
         "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",
-        "@com_github_gorilla_mux//:go_default_library",
         "@com_github_pkg_errors//:go_default_library",
     ],
 )

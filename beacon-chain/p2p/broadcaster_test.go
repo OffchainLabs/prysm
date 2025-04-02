@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/p2p/discover"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/prysmaticlabs/go-bitfield"
@@ -210,7 +209,7 @@ func TestService_BroadcastAttestation(t *testing.T) {
 
 func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 	// Setup bootnode.
-	cfg := &Config{}
+	cfg := &Config{PingInterval: testPingInterval}
 	port := 2000
 	cfg.UDPPort = uint(port)
 	_, pkey := createAddrAndPrivKey(t)
@@ -226,28 +225,25 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 	require.NoError(t, err)
 	defer bootListener.Close()
 
-	// Use shorter period for testing.
-	currentPeriod := pollingPeriod
-	pollingPeriod = 1 * time.Second
-	defer func() {
-		pollingPeriod = currentPeriod
-	}()
-
 	bootNode := bootListener.Self()
 	subnet := uint64(5)
 
-	var listeners []*discover.UDPv5
+	var listeners []*listenerWrapper
 	var hosts []host.Host
 	// setup other nodes.
 	cfg = &Config{
 		Discv5BootStrapAddrs: []string{bootNode.String()},
-		MaxPeers:             30,
+		MaxPeers:             2,
+		PingInterval:         testPingInterval,
 	}
 	// Setup 2 different hosts
 	for i := 1; i <= 2; i++ {
 		h, pkey, ipAddr := createHost(t, port+i)
 		cfg.UDPPort = uint(port + i)
 		cfg.TCPPort = uint(port + i)
+		if len(listeners) > 0 {
+			cfg.Discv5BootStrapAddrs = append(cfg.Discv5BootStrapAddrs, listeners[len(listeners)-1].Self().String())
+		}
 		s := &Service{
 			cfg:                   cfg,
 			genesisTime:           genesisTime,

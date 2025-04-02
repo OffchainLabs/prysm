@@ -1,0 +1,28 @@
+load("@prysm//tools/go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "bootstrap.go",
+        "finality_update.go",
+        "header.go",
+        "helpers.go",
+        "optimistic_update.go",
+        "update.go",
+    ],
+    importpath = "github.com/prysmaticlabs/prysm/v5/consensus-types/light-client",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//config/fieldparams:go_default_library",
+        "//config/params:go_default_library",
+        "//consensus-types:go_default_library",
+        "//consensus-types/blocks:go_default_library",
+        "//consensus-types/interfaces:go_default_library",
+        "//consensus-types/primitives:go_default_library",
+        "//encoding/bytesutil:go_default_library",
+        "//proto/prysm/v1alpha1:go_default_library",
+        "//runtime/version:go_default_library",
+        "//time/slots:go_default_library",
+        "@org_golang_google_protobuf//proto:go_default_library",
+    ],
+)

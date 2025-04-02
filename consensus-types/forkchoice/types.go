@@ -51,4 +51,5 @@ type Node struct {
 	BlockRoot                []byte
 	ParentRoot               []byte
 	ExecutionBlockHash       []byte
+	Target                   []byte
 }

@@ -75,6 +75,7 @@ type ChainService struct {
 	SyncingRoot                 [32]byte
 	Blobs                       []blocks.VerifiedROBlob
 	TargetRoot                  [32]byte
+	MockHeadSlot                *primitives.Slot
 }
 
 func (s *ChainService) Ancestor(ctx context.Context, root []byte, slot primitives.Slot) ([]byte, error) {
@@ -96,6 +97,44 @@ func (s *ChainService) BlockNotifier() blockfeed.Notifier {
 		s.blockNotifier = &MockBlockNotifier{}
 	}
 	return s.blockNotifier
+}
+
+type EventFeedWrapper struct {
+	feed       *event.Feed
+	subscribed chan struct{} // this channel is closed once a subscription is made
+}
+
+func (w *EventFeedWrapper) Subscribe(channel interface{}) event.Subscription {
+	select {
+	case <-w.subscribed:
+		break // already closed
+	default:
+		close(w.subscribed)
+	}
+	return w.feed.Subscribe(channel)
+}
+
+func (w *EventFeedWrapper) Send(value interface{}) int {
+	return w.feed.Send(value)
+}
+
+// WaitForSubscription allows test to wait for the feed to have a subscription before beginning to send events.
+func (w *EventFeedWrapper) WaitForSubscription(ctx context.Context) error {
+	select {
+	case <-w.subscribed:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+var _ event.SubscriberSender = &EventFeedWrapper{}
+
+func NewEventFeedWrapper() *EventFeedWrapper {
+	return &EventFeedWrapper{
+		feed:       new(event.Feed),
+		subscribed: make(chan struct{}),
+	}
 }
 
 // MockBlockNotifier mocks the block notifier.
@@ -131,7 +170,7 @@ func (msn *MockStateNotifier) ReceivedEvents() []*feed.Event {
 }
 
 // StateFeed returns a state feed.
-func (msn *MockStateNotifier) StateFeed() *event.Feed {
+func (msn *MockStateNotifier) StateFeed() event.SubscriberSender {
 	msn.feedLock.Lock()
 	defer msn.feedLock.Unlock()
 
@@ -159,6 +198,23 @@ func (msn *MockStateNotifier) StateFeed() *event.Feed {
 	return msn.feed
 }
 
+// NewSimpleStateNotifier makes a state feed without the custom mock feed machinery.
+func NewSimpleStateNotifier() *MockStateNotifier {
+	return &MockStateNotifier{feed: new(event.Feed)}
+}
+
+type SimpleNotifier struct {
+	Feed event.SubscriberSender
+}
+
+func (n *SimpleNotifier) StateFeed() event.SubscriberSender {
+	return n.Feed
+}
+
+func (n *SimpleNotifier) OperationFeed() event.SubscriberSender {
+	return n.Feed
+}
+
 // OperationNotifier mocks the same method in the chain service.
 func (s *ChainService) OperationNotifier() opfeed.Notifier {
 	if s.opNotifier == nil {
@@ -173,7 +229,7 @@ type MockOperationNotifier struct {
 }
 
 // OperationFeed returns an operation feed.
-func (mon *MockOperationNotifier) OperationFeed() *event.Feed {
+func (mon *MockOperationNotifier) OperationFeed() event.SubscriberSender {
 	if mon.feed == nil {
 		mon.feed = new(event.Feed)
 	}
@@ -279,6 +335,9 @@ func (s *ChainService) ReceiveBlock(ctx context.Context, block interfaces.ReadOn
 
 // HeadSlot mocks HeadSlot method in chain service.
 func (s *ChainService) HeadSlot() primitives.Slot {
+	if s.MockHeadSlot != nil {
+		return *s.MockHeadSlot
+	}
 	if s.State == nil {
 		return 0
 	}
@@ -512,7 +571,7 @@ func prepareForkchoiceState(
 	payloadHash [32]byte,
 	justified *ethpb.Checkpoint,
 	finalized *ethpb.Checkpoint,
-) (state.BeaconState, [32]byte, error) {
+) (state.BeaconState, blocks.ROBlock, error) {
 	blockHeader := &ethpb.BeaconBlockHeader{
 		ParentRoot: parentRoot[:],
 	}
@@ -533,7 +592,26 @@ func prepareForkchoiceState(
 
 	base.BlockRoots[0] = append(base.BlockRoots[0], blockRoot[:]...)
 	st, err := state_native.InitializeFromProtoBellatrix(base)
-	return st, blockRoot, err
+	if err != nil {
+		return nil, blocks.ROBlock{}, err
+	}
+	blk := &ethpb.SignedBeaconBlockBellatrix{
+		Block: &ethpb.BeaconBlockBellatrix{
+			Slot:       slot,
+			ParentRoot: parentRoot[:],
+			Body: &ethpb.BeaconBlockBodyBellatrix{
+				ExecutionPayload: &enginev1.ExecutionPayload{
+					BlockHash: payloadHash[:],
+				},
+			},
+		},
+	}
+	signed, err := blocks.NewSignedBeaconBlock(blk)
+	if err != nil {
+		return nil, blocks.ROBlock{}, err
+	}
+	roblock, err := blocks.NewROBlockWithRoot(signed, blockRoot)
+	return st, roblock, err
 }
 
 // CachedHeadRoot mocks the same method in the chain service
@@ -576,9 +654,9 @@ func (s *ChainService) HighestReceivedBlockSlot() primitives.Slot {
 }
 
 // InsertNode mocks the same method in the chain service
-func (s *ChainService) InsertNode(ctx context.Context, st state.BeaconState, root [32]byte) error {
+func (s *ChainService) InsertNode(ctx context.Context, st state.BeaconState, block blocks.ROBlock) error {
 	if s.ForkChoiceStore != nil {
-		return s.ForkChoiceStore.InsertNode(ctx, st, root)
+		return s.ForkChoiceStore.InsertNode(ctx, st, block)
 	}
 	return nil
 }

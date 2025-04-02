@@ -32,7 +32,7 @@ type mockBeaconNode struct {
 }
 
 // StateFeed mocks the same method in the beacon node.
-func (mbn *mockBeaconNode) StateFeed() *event.Feed {
+func (mbn *mockBeaconNode) StateFeed() event.SubscriberSender {
 	mbn.mu.Lock()
 	defer mbn.mu.Unlock()
 	if mbn.stateFeed == nil {

@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"runtime/debug"
 	"slices"
 	"sort"
 
@@ -39,7 +40,7 @@ import (
 //	     data=attestation.data,
 //	     signature=attestation.signature,
 //	 )
-func ConvertToIndexed(ctx context.Context, attestation ethpb.Att, committees ...[]primitives.ValidatorIndex) (ethpb.IndexedAtt, error) {
+func ConvertToIndexed(_ context.Context, attestation ethpb.Att, committees ...[]primitives.ValidatorIndex) (ethpb.IndexedAtt, error) {
 	attIndices, err := AttestingIndices(attestation, committees...)
 	if err != nil {
 		return nil, err
@@ -65,7 +66,7 @@ func ConvertToIndexed(ctx context.Context, attestation ethpb.Att, committees ...
 
 // AttestingIndices returns the attesting participants indices from the attestation data.
 // Committees are provided as an argument rather than an imported implementation from the spec definition.
-// Having committees as an argument allows for re-use of beacon committees when possible.
+// Having committees as an argument allows for reuse of beacon committees when possible.
 //
 // Spec pseudocode definition (Electra version):
 //
@@ -100,6 +101,10 @@ func AttestingIndices(att ethpb.Att, committees ...[]primitives.ValidatorIndex) 
 	for _, c := range committees {
 		committeesLen += len(c)
 	}
+	if aggBits.Len() == 0 {
+		fmt.Printf("committee_bits: %v, aggregation_bits: %v, slot: %d", att.CommitteeBitsVal(), att.GetAggregationBits(), att.GetData().Slot)
+		debug.PrintStack()
+	}
 	if aggBits.Len() != uint64(committeesLen) {
 		return nil, fmt.Errorf("bitfield length %d is not equal to committee length %d", aggBits.Len(), committeesLen)
 	}
@@ -112,6 +117,9 @@ func AttestingIndices(att ethpb.Att, committees ...[]primitives.ValidatorIndex) 
 			if aggBits.BitAt(uint64(committeeOffset + i)) {
 				committeeAttesters = append(committeeAttesters, uint64(vi))
 			}
+		}
+		if len(committeeAttesters) == 0 {
+			return nil, fmt.Errorf("no attesting indices found in committee %v", c)
 		}
 		attesters = append(attesters, committeeAttesters...)
 		committeeOffset += len(c)
@@ -185,12 +193,10 @@ func IsValidAttestationIndices(ctx context.Context, indexedAttestation ethpb.Ind
 	_, span := trace.StartSpan(ctx, "attestationutil.IsValidAttestationIndices")
 	defer span.End()
 
-	if indexedAttestation == nil ||
-		indexedAttestation.GetData() == nil ||
-		indexedAttestation.GetData().Target == nil ||
-		indexedAttestation.GetAttestingIndices() == nil {
+	if indexedAttestation == nil || indexedAttestation.IsNil() || indexedAttestation.GetData().Target == nil || indexedAttestation.GetData().Source == nil {
 		return errors.New("nil or missing indexed attestation data")
 	}
+
 	indices := indexedAttestation.GetAttestingIndices()
 	if len(indices) == 0 {
 		return errors.New("expected non-empty attesting indices")
@@ -253,7 +259,7 @@ func CheckPointIsEqual(checkPt1, checkPt2 *ethpb.Checkpoint) bool {
 
 // attestingIndicesPhase0 returns the attesting participants indices from the attestation data.
 // Committees are provided as an argument rather than an imported implementation from the spec definition.
-// Having committees as an argument allows for re-use of beacon committees when possible.
+// Having committees as an argument allows for reuse of beacon committees when possible.
 //
 // Spec pseudocode definition (Phase0 version):
 //

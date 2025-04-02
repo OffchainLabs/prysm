@@ -7,8 +7,8 @@ import (
 	"runtime"
 	"runtime/debug"
 
+	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	"github.com/sirupsen/logrus"
-	"go.opencensus.io/trace"
 )
 
 // RecoveryHandlerFunc is a function that recovers from the panic `p` by returning an `error`.
@@ -16,7 +16,7 @@ import (
 func RecoveryHandlerFunc(ctx context.Context, p interface{}) error {
 	span := trace.FromContext(ctx)
 	if span != nil {
-		span.AddAttributes(trace.StringAttribute("stack", string(debug.Stack())))
+		span.SetAttributes(trace.StringAttribute("stack", string(debug.Stack())))
 	}
 	var err error
 	switch v := p.(type) {

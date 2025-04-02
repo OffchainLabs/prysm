@@ -76,7 +76,7 @@ func TestProposeBeaconBlock_Capella(t *testing.T) {
 	headers := map[string]string{"Eth-Consensus-Version": "capella"}
 	jsonRestHandler.EXPECT().Post(
 		gomock.Any(),
-		"/eth/v1/beacon/blocks",
+		"/eth/v2/beacon/blocks",
 		headers,
 		bytes.NewBuffer(marshalledBlock),
 		nil,

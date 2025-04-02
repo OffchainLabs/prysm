@@ -31,11 +31,9 @@ func RunWithdrawalRequestTest(t *testing.T, config string, fork string, block bl
 			require.NoError(t, err)
 			RunBlockOperationTest(t, folderPath, blk, sszToState, func(ctx context.Context, s state.BeaconState, b interfaces.ReadOnlySignedBeaconBlock) (state.BeaconState, error) {
 				bod := b.Block().Body()
-				e, err := bod.Execution()
+				e, err := bod.ExecutionRequests()
 				require.NoError(t, err)
-				exe, ok := e.(interfaces.ExecutionDataElectra)
-				require.Equal(t, true, ok)
-				return electra.ProcessWithdrawalRequests(ctx, s, exe.WithdrawalRequests())
+				return electra.ProcessWithdrawalRequests(ctx, s, e.Withdrawals)
 			})
 		})
 	}

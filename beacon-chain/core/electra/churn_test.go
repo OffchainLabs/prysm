@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/electra"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
@@ -20,7 +21,7 @@ func createValidatorsWithTotalActiveBalance(totalBal primitives.Gwei) []*eth.Val
 	vals := make([]*eth.Validator, num)
 	for i := range vals {
 		wd := make([]byte, 32)
-		wd[0] = params.BeaconConfig().ETH1AddressWithdrawalPrefixByte
+		wd[0] = params.BeaconConfig().CompoundingWithdrawalPrefixByte
 		wd[31] = byte(i)
 
 		vals[i] = &eth.Validator{
@@ -128,6 +129,57 @@ func TestComputeConsolidationEpochAndUpdateChurn(t *testing.T) {
 			consolidationBalance:                  232000000000, // 232 ETH
 			expectedEpoch:                         16,           // Flows into another epoch.
 			expectedConsolidationBalanceToConsume: 200000000000, // 200 ETH
+		},
+		{
+			name: "balance to consume is zero, consolidation balance at limit",
+			state: func(t *testing.T) state.BeaconState {
+				activeBal := 32000000000000000 // 32M ETH
+				s, err := state_native.InitializeFromProtoUnsafeElectra(&eth.BeaconStateElectra{
+					Slot:                          slots.UnsafeEpochStart(10),
+					EarliestConsolidationEpoch:    16,
+					ConsolidationBalanceToConsume: 0,
+					Validators:                    createValidatorsWithTotalActiveBalance(primitives.Gwei(activeBal)),
+				})
+				require.NoError(t, err)
+				return s
+			}(t),
+			consolidationBalance:                  helpers.ConsolidationChurnLimit(32000000000000000),
+			expectedEpoch:                         17, // Flows into another epoch.
+			expectedConsolidationBalanceToConsume: 0,
+		},
+		{
+			name: "consolidation balance equals consolidation balance to consume",
+			state: func(t *testing.T) state.BeaconState {
+				activeBal := 32000000000000000 // 32M ETH
+				s, err := state_native.InitializeFromProtoUnsafeElectra(&eth.BeaconStateElectra{
+					Slot:                          slots.UnsafeEpochStart(10),
+					EarliestConsolidationEpoch:    16,
+					ConsolidationBalanceToConsume: helpers.ConsolidationChurnLimit(32000000000000000),
+					Validators:                    createValidatorsWithTotalActiveBalance(primitives.Gwei(activeBal)),
+				})
+				require.NoError(t, err)
+				return s
+			}(t),
+			consolidationBalance:                  helpers.ConsolidationChurnLimit(32000000000000000),
+			expectedEpoch:                         16,
+			expectedConsolidationBalanceToConsume: 0,
+		},
+		{
+			name: "consolidation balance exceeds limit by one",
+			state: func(t *testing.T) state.BeaconState {
+				activeBal := 32000000000000000 // 32M ETH
+				s, err := state_native.InitializeFromProtoUnsafeElectra(&eth.BeaconStateElectra{
+					Slot:                          slots.UnsafeEpochStart(10),
+					EarliestConsolidationEpoch:    16,
+					ConsolidationBalanceToConsume: 0,
+					Validators:                    createValidatorsWithTotalActiveBalance(primitives.Gwei(activeBal)),
+				})
+				require.NoError(t, err)
+				return s
+			}(t),
+			consolidationBalance:                  helpers.ConsolidationChurnLimit(32000000000000000) + 1,
+			expectedEpoch:                         18, // Flows into another epoch.
+			expectedConsolidationBalanceToConsume: helpers.ConsolidationChurnLimit(32000000000000000) - 1,
 		},
 	}
 

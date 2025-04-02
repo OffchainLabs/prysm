@@ -8,11 +8,12 @@ import (
 
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stateutil"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v5/container/trie"
 	"github.com/prysmaticlabs/prysm/v5/crypto/hash/htr"
 	"github.com/prysmaticlabs/prysm/v5/encoding/ssz"
+	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"go.opencensus.io/trace"
 )
 
 const (
@@ -41,7 +42,9 @@ func ComputeBlockBodyFieldRoots(ctx context.Context, blockBody *BeaconBlockBody)
 	case version.Deneb:
 		fieldRoots = make([][]byte, 12)
 	case version.Electra:
-		fieldRoots = make([][]byte, 12)
+		fieldRoots = make([][]byte, 13)
+	case version.Fulu:
+		fieldRoots = make([][]byte, 13)
 	default:
 		return nil, fmt.Errorf("unknown block body version %s", version.String(blockBody.version))
 	}
@@ -178,10 +181,22 @@ func ComputeBlockBodyFieldRoots(ctx context.Context, blockBody *BeaconBlockBody)
 		copy(fieldRoots[11], root[:])
 	}
 
+	if blockBody.version >= version.Electra {
+		// Execution Requests
+		er, err := blockBody.ExecutionRequests()
+		if err != nil {
+			return nil, err
+		}
+		root, err := er.HashTreeRoot()
+		if err != nil {
+			return nil, err
+		}
+		copy(fieldRoots[12], root[:])
+	}
 	return fieldRoots, nil
 }
 
-func ComputeBlockFieldRoots(ctx context.Context, block *BeaconBlock) ([][]byte, error) {
+func ComputeBlockFieldRoots(ctx context.Context, block interfaces.ReadOnlyBeaconBlock) ([][]byte, error) {
 	_, span := trace.StartSpan(ctx, "blocks.ComputeBlockFieldRoots")
 	defer span.End()
 
@@ -195,21 +210,23 @@ func ComputeBlockFieldRoots(ctx context.Context, block *BeaconBlock) ([][]byte, 
 	}
 
 	// Slot
-	slotRoot := ssz.Uint64Root(uint64(block.slot))
+	slotRoot := ssz.Uint64Root(uint64(block.Slot()))
 	copy(fieldRoots[0], slotRoot[:])
 
 	// Proposer Index
-	proposerRoot := ssz.Uint64Root(uint64(block.proposerIndex))
+	proposerRoot := ssz.Uint64Root(uint64(block.ProposerIndex()))
 	copy(fieldRoots[1], proposerRoot[:])
 
 	// Parent Root
-	copy(fieldRoots[2], block.parentRoot[:])
+	parentRoot := block.ParentRoot()
+	copy(fieldRoots[2], parentRoot[:])
 
 	// State Root
-	copy(fieldRoots[3], block.stateRoot[:])
+	stateRoot := block.StateRoot()
+	copy(fieldRoots[3], stateRoot[:])
 
 	// block body Root
-	blockBodyRoot, err := block.body.HashTreeRoot()
+	blockBodyRoot, err := block.Body().HashTreeRoot()
 	if err != nil {
 		return nil, err
 	}
@@ -218,30 +235,20 @@ func ComputeBlockFieldRoots(ctx context.Context, block *BeaconBlock) ([][]byte, 
 	return fieldRoots, nil
 }
 
-func PayloadProof(ctx context.Context, block *BeaconBlock) ([][]byte, error) {
+func PayloadProof(ctx context.Context, block interfaces.ReadOnlyBeaconBlock) ([][]byte, error) {
 	i := block.Body()
 	blockBody, ok := i.(*BeaconBlockBody)
 	if !ok {
 		return nil, errors.New("failed to cast block body")
 	}
 
-	blockBodyFieldRoots, err := ComputeBlockBodyFieldRoots(ctx, blockBody)
+	fieldRoots, err := ComputeBlockBodyFieldRoots(ctx, blockBody)
 	if err != nil {
 		return nil, err
 	}
 
-	blockBodyFieldRootsTrie := stateutil.Merkleize(blockBodyFieldRoots)
-	blockBodyProof := trie.ProofFromMerkleLayers(blockBodyFieldRootsTrie, payloadFieldIndex)
+	fieldRootsTrie := stateutil.Merkleize(fieldRoots)
+	proof := trie.ProofFromMerkleLayers(fieldRootsTrie, payloadFieldIndex)
 
-	beaconBlockFieldRoots, err := ComputeBlockFieldRoots(ctx, block)
-	if err != nil {
-		return nil, err
-	}
-
-	beaconBlockFieldRootsTrie := stateutil.Merkleize(beaconBlockFieldRoots)
-	beaconBlockProof := trie.ProofFromMerkleLayers(beaconBlockFieldRootsTrie, bodyFieldIndex)
-
-	finalProof := append(blockBodyProof, beaconBlockProof...)
-
-	return finalProof, nil
+	return proof, nil
 }

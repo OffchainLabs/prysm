@@ -665,6 +665,19 @@ func testProposeBlock(t *testing.T, graffiti []byte) {
 				},
 			},
 		},
+		{
+			name:    "fulu block",
+			version: version.Fulu,
+			block: &ethpb.GenericBeaconBlock{
+				Block: &ethpb.GenericBeaconBlock_Fulu{
+					Fulu: func() *ethpb.BeaconBlockContentsFulu {
+						blk := util.NewBeaconBlockContentsFulu()
+						blk.Block.Block.Body.Graffiti = graffiti
+						return &ethpb.BeaconBlockContentsFulu{Block: blk.Block.Block, KzgProofs: blk.KzgProofs, Blobs: blk.Blobs}
+					}(),
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {

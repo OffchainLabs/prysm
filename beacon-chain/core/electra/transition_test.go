@@ -57,14 +57,17 @@ func TestProcessEpoch_CanProcessElectra(t *testing.T) {
 	require.NoError(t, st.SetSlot(10*params.BeaconConfig().SlotsPerEpoch))
 	require.NoError(t, st.SetDepositBalanceToConsume(100))
 	amountAvailForProcessing := helpers.ActivationExitChurnLimit(1_000 * 1e9)
-	deps := make([]*ethpb.PendingBalanceDeposit, 20)
+	validators := st.Validators()
+	deps := make([]*ethpb.PendingDeposit, 20)
 	for i := 0; i < len(deps); i += 1 {
-		deps[i] = &ethpb.PendingBalanceDeposit{
-			Amount: uint64(amountAvailForProcessing) / 10,
-			Index:  primitives.ValidatorIndex(i),
+		deps[i] = &ethpb.PendingDeposit{
+			PublicKey:             validators[i].PublicKey,
+			WithdrawalCredentials: validators[i].WithdrawalCredentials,
+			Amount:                uint64(amountAvailForProcessing) / 10,
+			Slot:                  0,
 		}
 	}
-	require.NoError(t, st.SetPendingBalanceDeposits(deps))
+	require.NoError(t, st.SetPendingDeposits(deps))
 	require.NoError(t, st.SetPendingConsolidations([]*ethpb.PendingConsolidation{
 		{
 			SourceIndex: 2,
@@ -108,7 +111,7 @@ func TestProcessEpoch_CanProcessElectra(t *testing.T) {
 	require.Equal(t, primitives.Gwei(100), res)
 
 	// Half of the balance deposits should have been processed.
-	remaining, err := st.PendingBalanceDeposits()
+	remaining, err := st.PendingDeposits()
 	require.NoError(t, err)
 	require.Equal(t, 10, len(remaining))
 

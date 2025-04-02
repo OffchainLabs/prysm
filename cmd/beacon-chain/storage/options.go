@@ -2,6 +2,7 @@ package storage
 
 import (
 	"path"
+	"strings"
 
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
@@ -24,7 +25,29 @@ var (
 		Value:   uint64(params.BeaconConfig().MinEpochsForBlobsSidecarsRequest),
 		Aliases: []string{"extend-blob-retention-epoch"},
 	}
+	BlobStorageLayout = &cli.StringFlag{
+		Name:  "blob-storage-layout",
+		Usage: layoutFlagUsage(),
+		Value: filesystem.LayoutNameFlat,
+	}
 )
+
+func layoutOptions() string {
+	return "available options are: " + strings.Join(filesystem.LayoutNames, ", ") + "."
+}
+
+func layoutFlagUsage() string {
+	return "Dictates how to organize the blob directory structure on disk, " + layoutOptions()
+}
+
+func validateLayoutFlag(_ *cli.Context, v string) error {
+	for _, l := range filesystem.LayoutNames {
+		if v == l {
+			return nil
+		}
+	}
+	return errors.Errorf("invalid value '%s' for flag --%s, %s", v, BlobStorageLayout.Name, layoutOptions())
+}
 
 // BeaconNodeOptions sets configuration values on the node.BeaconNode value at node startup.
 // Note: we can't get the right context from cli.Context, because the beacon node setup code uses this context to
@@ -36,7 +59,9 @@ func BeaconNodeOptions(c *cli.Context) ([]node.Option, error) {
 		return nil, err
 	}
 	opts := []node.Option{node.WithBlobStorageOptions(
-		filesystem.WithBlobRetentionEpochs(e), filesystem.WithBasePath(blobStoragePath(c)),
+		filesystem.WithBlobRetentionEpochs(e),
+		filesystem.WithBasePath(blobStoragePath(c)),
+		filesystem.WithLayout(c.String(BlobStorageLayout.Name)), // This is validated in the Action func for BlobStorageLayout.
 	)}
 	return opts, nil
 }
@@ -68,4 +93,8 @@ func blobRetentionEpoch(cliCtx *cli.Context) (primitives.Epoch, error) {
 	}
 
 	return re, nil
+}
+
+func init() {
+	BlobStorageLayout.Action = validateLayoutFlag
 }

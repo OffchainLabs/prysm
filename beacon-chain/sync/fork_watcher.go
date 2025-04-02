@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
@@ -39,87 +40,129 @@ func (s *Service) forkWatcher() {
 	}
 }
 
-// Checks if there is a fork in the next epoch and if there is
-// it registers the appropriate gossip and rpc topics.
-func (s *Service) registerForUpcomingFork(currEpoch primitives.Epoch) error {
-	genRoot := s.cfg.clock.GenesisValidatorsRoot()
-	isNextForkEpoch, err := forks.IsForkNextEpoch(s.cfg.clock.GenesisTime(), genRoot[:])
+// registerForUpcomingFork registers appropriate gossip and RPC topic if there is a fork in the next epoch.
+func (s *Service) registerForUpcomingFork(currentEpoch primitives.Epoch) error {
+	// Get the genesis validators root.
+	genesisValidatorsRoot := s.cfg.clock.GenesisValidatorsRoot()
+
+	// Check if there is a fork in the next epoch.
+	isForkNextEpoch, err := forks.IsForkNextEpoch(s.cfg.clock.GenesisTime(), genesisValidatorsRoot[:])
 	if err != nil {
 		return errors.Wrap(err, "Could not retrieve next fork epoch")
 	}
-	// In preparation for the upcoming fork
-	// in the following epoch, the node
-	// will subscribe the new topics in advance.
-	if isNextForkEpoch {
-		nextEpoch := currEpoch + 1
-		digest, err := forks.ForkDigestFromEpoch(nextEpoch, genRoot[:])
-		if err != nil {
-			return errors.Wrap(err, "could not retrieve fork digest")
-		}
-		if s.subHandler.digestExists(digest) {
-			return nil
-		}
-		s.registerSubscribers(nextEpoch, digest)
-		if nextEpoch == params.BeaconConfig().AltairForkEpoch {
-			s.registerRPCHandlersAltair()
-		}
-		if nextEpoch == params.BeaconConfig().DenebForkEpoch {
-			s.registerRPCHandlersDeneb()
-		}
+
+	// Exit early if there is no fork in the next epoch.
+	if !isForkNextEpoch {
+		return nil
 	}
+
+	beforeForkEpoch := currentEpoch
+	forkEpoch := beforeForkEpoch + 1
+
+	// Get the fork afterForkDigest for the next epoch.
+	afterForkDigest, err := forks.ForkDigestFromEpoch(forkEpoch, genesisValidatorsRoot[:])
+	if err != nil {
+		return errors.Wrap(err, "could not retrieve fork digest")
+	}
+
+	// Exit early if the topics for the next epoch are already registered.
+	// It likely to be the case for all slots of the epoch that are not the first one.
+	if s.subHandler.digestExists(afterForkDigest) {
+		return nil
+	}
+
+	// Register the subscribers (gossipsub) for the next epoch.
+	s.registerSubscribers(forkEpoch, afterForkDigest)
+
+	// Get the handlers for the current and next fork.
+	beforeForkHandlerByTopic, err := s.rpcHandlerByTopicFromEpoch(beforeForkEpoch)
+	if err != nil {
+		return errors.Wrap(err, "RPC handler by topic from before fork epoch")
+	}
+
+	forkHandlerByTopic, err := s.rpcHandlerByTopicFromEpoch(forkEpoch)
+	if err != nil {
+		return errors.Wrap(err, "RPC handler by topic from fork epoch")
+	}
+
+	// Compute newly added topics.
+	newRPCHandlerByTopic := addedRPCHandlerByTopic(beforeForkHandlerByTopic, forkHandlerByTopic)
+
+	// Register the new RPC handlers.
+	for topic, handler := range newRPCHandlerByTopic {
+		s.registerRPC(topic, handler)
+	}
+
 	return nil
 }
 
-// Checks if there was a fork in the previous epoch, and if there
-// was then we deregister the topics from that particular fork.
-func (s *Service) deregisterFromPastFork(currEpoch primitives.Epoch) error {
-	genRoot := s.cfg.clock.GenesisValidatorsRoot()
-	// This method takes care of the de-registration of
-	// old gossip pubsub handlers. Once we are at the epoch
-	// after the fork, we de-register from all the outdated topics.
-	currFork, err := forks.Fork(currEpoch)
+// deregisterFromPastFork deregisters appropriate gossip and RPC topic if there is a fork in the current epoch.
+func (s *Service) deregisterFromPastFork(currentEpoch primitives.Epoch) error {
+	// Extract the genesis validators root.
+	genesisValidatorsRoot := s.cfg.clock.GenesisValidatorsRoot()
+
+	// Get the fork.
+	currentFork, err := forks.Fork(currentEpoch)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "genesis validators root")
 	}
-	// If we are still in our genesis fork version then
-	// we simply exit early.
-	if currFork.Epoch == params.BeaconConfig().GenesisEpoch {
+
+	// If we are still in our genesis fork version then exit early.
+	if currentFork.Epoch == params.BeaconConfig().GenesisEpoch {
 		return nil
 	}
-	epochAfterFork := currFork.Epoch + 1
-	// If we are in the epoch after the fork, we start de-registering.
-	if epochAfterFork == currEpoch {
-		// Look at the previous fork's digest.
-		epochBeforeFork := currFork.Epoch - 1
-		prevDigest, err := forks.ForkDigestFromEpoch(epochBeforeFork, genRoot[:])
-		if err != nil {
-			return errors.Wrap(err, "Failed to determine previous epoch fork digest")
-		}
 
-		// Exit early if there are no topics with that particular
-		// digest.
-		if !s.subHandler.digestExists(prevDigest) {
-			return nil
-		}
-		prevFork, err := forks.Fork(epochBeforeFork)
+	// Get the epoch after the fork epoch.
+	afterForkEpoch := currentFork.Epoch + 1
+
+	// Start de-registering if the current epoch is after the fork epoch.
+	if currentEpoch != afterForkEpoch {
+		return nil
+	}
+
+	// Look at the previous fork's digest.
+	beforeForkEpoch := currentFork.Epoch - 1
+
+	beforeForkDigest, err := forks.ForkDigestFromEpoch(beforeForkEpoch, genesisValidatorsRoot[:])
+	if err != nil {
+		return errors.Wrap(err, "fork digest from epoch")
+	}
+
+	// Exit early if there are no topics with that particular digest.
+	if !s.subHandler.digestExists(beforeForkDigest) {
+		return nil
+	}
+
+	// Compute the RPC handlers that are no longer needed.
+	beforeForkHandlerByTopic, err := s.rpcHandlerByTopicFromEpoch(beforeForkEpoch)
+	if err != nil {
+		return errors.Wrap(err, "RPC handler by topic from before fork epoch")
+	}
+
+	forkHandlerByTopic, err := s.rpcHandlerByTopicFromEpoch(currentFork.Epoch)
+	if err != nil {
+		return errors.Wrap(err, "RPC handler by topic from fork epoch")
+	}
+
+	topicsToRemove := removedRPCTopics(beforeForkHandlerByTopic, forkHandlerByTopic)
+	for topic := range topicsToRemove {
+		fullTopic := topic + s.cfg.p2p.Encoding().ProtocolSuffix()
+		s.cfg.p2p.Host().RemoveStreamHandler(protocol.ID(fullTopic))
+		log.WithField("topic", fullTopic).Debug("Removed RPC handler")
+	}
+
+	// Run through all our current active topics and see
+	// if there are any subscriptions to be removed.
+	for _, t := range s.subHandler.allTopics() {
+		retDigest, err := p2p.ExtractGossipDigest(t)
 		if err != nil {
-			return errors.Wrap(err, "failed to determine previous epoch fork data")
+			log.WithError(err).Error("Could not retrieve digest")
+			continue
 		}
-		if prevFork.Epoch == params.BeaconConfig().GenesisEpoch {
-			s.unregisterPhase0Handlers()
-		}
-		// Run through all our current active topics and see
-		// if there are any subscriptions to be removed.
-		for _, t := range s.subHandler.allTopics() {
-			retDigest, err := p2p.ExtractGossipDigest(t)
-			if err != nil {
-				log.WithError(err).Error("Could not retrieve digest")
-				continue
-			}
-			if retDigest == prevDigest {
-				s.unSubscribeFromTopic(t)
-			}
+		if retDigest == beforeForkDigest {
+			s.unSubscribeFromTopic(t)
 		}
 	}
+
 	return nil
 }

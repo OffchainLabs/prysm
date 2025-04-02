@@ -19,6 +19,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/encoder"
 	mockp2p "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stategen"
 	mockSync "github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/initial-sync/testing"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
@@ -293,12 +294,13 @@ func TestService_ValidateBlsToExecutionChange(t *testing.T) {
 				s.cfg.clock = startup.NewClock(time.Now(), [32]byte{'A'})
 				s.initCaches()
 				st, keys := util.DeterministicGenesisStateCapella(t, 128)
-				assert.NoError(t, st.ApplyToEveryValidator(func(idx int, val *ethpb.Validator) (bool, *ethpb.Validator, error) {
+				assert.NoError(t, st.ApplyToEveryValidator(func(idx int, val state.ReadOnlyValidator) (*ethpb.Validator, error) {
 					newCreds := make([]byte, 32)
 					newCreds[0] = params.BeaconConfig().ETH1AddressWithdrawalPrefixByte
 					copy(newCreds[12:], wantedExecAddress)
-					val.WithdrawalCredentials = newCreds
-					return true, val, nil
+					newVal := val.Copy()
+					newVal.WithdrawalCredentials = newCreds
+					return newVal, nil
 				}))
 				s.cfg.chain = &mockChain.ChainService{
 					State:   st,

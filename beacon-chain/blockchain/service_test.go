@@ -376,11 +376,15 @@ func TestHasBlock_ForkChoiceAndDB_DoublyLinkedTree(t *testing.T) {
 		cfg: &config{ForkChoiceStore: doublylinkedtree.New(), BeaconDB: beaconDB},
 	}
 	b := util.NewBeaconBlock()
+	wsb, err := consensusblocks.NewSignedBeaconBlock(b)
+	require.NoError(t, err)
 	r, err := b.Block.HashTreeRoot()
+	require.NoError(t, err)
+	roblock, err := consensusblocks.NewROBlockWithRoot(wsb, r)
 	require.NoError(t, err)
 	beaconState, err := util.NewBeaconState()
 	require.NoError(t, err)
-	require.NoError(t, s.cfg.ForkChoiceStore.InsertNode(ctx, beaconState, r))
+	require.NoError(t, s.cfg.ForkChoiceStore.InsertNode(ctx, beaconState, roblock))
 
 	assert.Equal(t, false, s.hasBlock(ctx, [32]byte{}), "Should not have block")
 	assert.Equal(t, true, s.hasBlock(ctx, r), "Should have block")
@@ -453,7 +457,11 @@ func BenchmarkHasBlockForkChoiceStore_DoublyLinkedTree(b *testing.B) {
 	require.NoError(b, err)
 	beaconState, err := util.NewBeaconState()
 	require.NoError(b, err)
-	require.NoError(b, s.cfg.ForkChoiceStore.InsertNode(ctx, beaconState, r))
+	wsb, err := consensusblocks.NewSignedBeaconBlock(blk)
+	require.NoError(b, err)
+	roblock, err := consensusblocks.NewROBlockWithRoot(wsb, r)
+	require.NoError(b, err)
+	require.NoError(b, s.cfg.ForkChoiceStore.InsertNode(ctx, beaconState, roblock))
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -579,7 +587,7 @@ func (s *MockClockSetter) SetClock(g *startup.Clock) error {
 func TestNotifyIndex(t *testing.T) {
 	// Initialize a blobNotifierMap
 	bn := &blobNotifierMap{
-		seenIndex: make(map[[32]byte][fieldparams.MaxBlobsPerBlock]bool),
+		seenIndex: make(map[[32]byte][]bool),
 		notifiers: make(map[[32]byte]chan uint64),
 	}
 
@@ -588,7 +596,7 @@ func TestNotifyIndex(t *testing.T) {
 	copy(root[:], "exampleRoot")
 
 	// Test notifying a new index
-	bn.notifyIndex(root, 1)
+	bn.notifyIndex(root, 1, 1)
 	if !bn.seenIndex[root][1] {
 		t.Errorf("Index was not marked as seen")
 	}
@@ -599,13 +607,13 @@ func TestNotifyIndex(t *testing.T) {
 	}
 
 	// Test notifying an already seen index
-	bn.notifyIndex(root, 1)
+	bn.notifyIndex(root, 1, 1)
 	if len(bn.notifiers[root]) > 1 {
 		t.Errorf("Notifier channel should not receive multiple messages for the same index")
 	}
 
 	// Test notifying a new index again
-	bn.notifyIndex(root, 2)
+	bn.notifyIndex(root, 2, 1)
 	if !bn.seenIndex[root][2] {
 		t.Errorf("Index was not marked as seen")
 	}

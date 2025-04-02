@@ -2,8 +2,6 @@ package grpc
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"strings"
 	"time"
 
@@ -76,21 +74,8 @@ func AppendHeaders(parent context.Context, headers []string) context.Context {
 				logrus.Warnf("Incorrect gRPC header flag format. Skipping %v", keyValue[0])
 				continue
 			}
-			parent = metadata.AppendToOutgoingContext(parent, keyValue[0], strings.Join(keyValue[1:], "="))
+			parent = metadata.AppendToOutgoingContext(parent, keyValue[0], strings.Join(keyValue[1:], "=")) // nolint:fatcontext
 		}
 	}
 	return parent
-}
-
-// AppendCustomErrorHeader sets a CustomErrorMetadataKey gRPC header on the passed in context,
-// using the passed in error data as the header's value. The data is serialized as JSON.
-func AppendCustomErrorHeader(ctx context.Context, errorData interface{}) error {
-	j, err := json.Marshal(errorData)
-	if err != nil {
-		return fmt.Errorf("could not marshal error data into JSON: %w", err)
-	}
-	if err := grpc.SetHeader(ctx, metadata.Pairs(CustomErrorMetadataKey, string(j))); err != nil {
-		return fmt.Errorf("could not set custom error header: %w", err)
-	}
-	return nil
 }

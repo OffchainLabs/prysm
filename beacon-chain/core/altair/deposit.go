@@ -37,7 +37,7 @@ func ProcessDeposits(
 	beaconState state.BeaconState,
 	deposits []*ethpb.Deposit,
 ) (state.BeaconState, error) {
-	batchVerified, err := blocks.BatchVerifyDepositsSignatures(ctx, deposits)
+	allSignaturesVerified, err := blocks.BatchVerifyDepositsSignatures(ctx, deposits)
 	if err != nil {
 		return nil, err
 	}
@@ -46,7 +46,7 @@ func ProcessDeposits(
 		if deposit == nil || deposit.Data == nil {
 			return nil, errors.New("got a nil deposit in block")
 		}
-		beaconState, err = ProcessDeposit(beaconState, deposit, batchVerified)
+		beaconState, err = ProcessDeposit(beaconState, deposit, allSignaturesVerified)
 		if err != nil {
 			return nil, errors.Wrapf(err, "could not process deposit from %#x", bytesutil.Trunc(deposit.Data.PublicKey))
 		}
@@ -81,7 +81,7 @@ func ProcessDeposits(
 //	  amount=deposit.data.amount,
 //	  signature=deposit.data.signature,
 //	 )
-func ProcessDeposit(beaconState state.BeaconState, deposit *ethpb.Deposit, verifySignature bool) (state.BeaconState, error) {
+func ProcessDeposit(beaconState state.BeaconState, deposit *ethpb.Deposit, allSignaturesVerified bool) (state.BeaconState, error) {
 	if err := blocks.VerifyDeposit(beaconState, deposit); err != nil {
 		if deposit == nil || deposit.Data == nil {
 			return nil, err
@@ -92,7 +92,7 @@ func ProcessDeposit(beaconState state.BeaconState, deposit *ethpb.Deposit, verif
 		return nil, err
 	}
 
-	return ApplyDeposit(beaconState, deposit.Data, verifySignature)
+	return ApplyDeposit(beaconState, deposit.Data, allSignaturesVerified)
 }
 
 // ApplyDeposit
@@ -115,13 +115,13 @@ func ProcessDeposit(beaconState state.BeaconState, deposit *ethpb.Deposit, verif
 //	    # Increase balance by deposit amount
 //	    index = ValidatorIndex(validator_pubkeys.index(pubkey))
 //	    increase_balance(state, index, amount)
-func ApplyDeposit(beaconState state.BeaconState, data *ethpb.Deposit_Data, verifySignature bool) (state.BeaconState, error) {
+func ApplyDeposit(beaconState state.BeaconState, data *ethpb.Deposit_Data, allSignaturesVerified bool) (state.BeaconState, error) {
 	pubKey := data.PublicKey
 	amount := data.Amount
 	withdrawalCredentials := data.WithdrawalCredentials
 	index, ok := beaconState.ValidatorIndexByPubkey(bytesutil.ToBytes48(pubKey))
 	if !ok {
-		if verifySignature {
+		if !allSignaturesVerified {
 			valid, err := blocks.IsValidDepositSignature(data)
 			if err != nil {
 				return nil, err
@@ -187,11 +187,12 @@ func AddValidatorToRegistry(beaconState state.BeaconState, pubKey []byte, withdr
 //	return Validator(
 //	    pubkey=pubkey,
 //	    withdrawal_credentials=withdrawal_credentials,
+//	    effective_balance=effective_balance,
+//	    slashed=False,
 //	    activation_eligibility_epoch=FAR_FUTURE_EPOCH,
 //	    activation_epoch=FAR_FUTURE_EPOCH,
 //	    exit_epoch=FAR_FUTURE_EPOCH,
 //	    withdrawable_epoch=FAR_FUTURE_EPOCH,
-//	    effective_balance=effective_balance,
 //	)
 func GetValidatorFromDeposit(pubKey []byte, withdrawalCredentials []byte, amount uint64) *ethpb.Validator {
 	effectiveBalance := amount - (amount % params.BeaconConfig().EffectiveBalanceIncrement)
@@ -202,10 +203,11 @@ func GetValidatorFromDeposit(pubKey []byte, withdrawalCredentials []byte, amount
 	return &ethpb.Validator{
 		PublicKey:                  pubKey,
 		WithdrawalCredentials:      withdrawalCredentials,
+		EffectiveBalance:           effectiveBalance,
+		Slashed:                    false,
 		ActivationEligibilityEpoch: params.BeaconConfig().FarFutureEpoch,
 		ActivationEpoch:            params.BeaconConfig().FarFutureEpoch,
 		ExitEpoch:                  params.BeaconConfig().FarFutureEpoch,
 		WithdrawableEpoch:          params.BeaconConfig().FarFutureEpoch,
-		EffectiveBalance:           effectiveBalance,
 	}
 }

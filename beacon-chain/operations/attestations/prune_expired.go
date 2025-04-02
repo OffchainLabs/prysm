@@ -9,8 +9,8 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
-// pruneAttsPool prunes attestations pool on every slot interval.
-func (s *Service) pruneAttsPool() {
+// pruneExpired prunes attestations pool on every slot interval.
+func (s *Service) pruneExpired() {
 	ticker := time.NewTicker(s.cfg.pruneInterval)
 	defer ticker.Stop()
 	for {
@@ -18,6 +18,27 @@ func (s *Service) pruneAttsPool() {
 		case <-ticker.C:
 			s.pruneExpiredAtts()
 			s.updateMetrics()
+		case <-s.ctx.Done():
+			log.Debug("Context closed, exiting routine")
+			return
+		}
+	}
+}
+
+// pruneExpiredExperimental prunes attestations on every prune interval.
+func (s *Service) pruneExpiredExperimental() {
+	ticker := time.NewTicker(s.cfg.pruneInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			expirySlot, err := s.expirySlot()
+			if err != nil {
+				log.WithError(err).Error("Could not get expiry slot")
+				continue
+			}
+			numExpired := s.cfg.Cache.PruneBefore(expirySlot)
+			s.updateMetricsExperimental(numExpired)
 		case <-s.ctx.Done():
 			log.Debug("Context closed, exiting routine")
 			return
@@ -40,12 +61,8 @@ func (s *Service) pruneExpiredAtts() {
 	if _, err := s.cfg.Pool.DeleteSeenUnaggregatedAttestations(); err != nil {
 		log.WithError(err).Error("Cannot delete seen attestations")
 	}
-	unAggregatedAtts, err := s.cfg.Pool.UnaggregatedAttestations()
-	if err != nil {
-		log.WithError(err).Error("Could not get unaggregated attestations")
-		return
-	}
-	for _, att := range unAggregatedAtts {
+
+	for _, att := range s.cfg.Pool.UnaggregatedAttestations() {
 		if s.expired(att.GetData().Slot) {
 			if err := s.cfg.Pool.DeleteUnaggregatedAttestation(att); err != nil {
 				log.WithError(err).Error("Could not delete expired unaggregated attestation")
@@ -83,4 +100,18 @@ func (s *Service) expiredPreDeneb(slot primitives.Slot) bool {
 	expirationTime := s.genesisTime + uint64(expirationSlot.Mul(params.BeaconConfig().SecondsPerSlot))
 	currentTime := uint64(prysmTime.Now().Unix())
 	return currentTime >= expirationTime
+}
+
+// Attestations for a slot before the returned slot are considered expired.
+func (s *Service) expirySlot() (primitives.Slot, error) {
+	currSlot := slots.CurrentSlot(s.genesisTime)
+	currEpoch := slots.ToEpoch(currSlot)
+	if currEpoch == 0 {
+		return 0, nil
+	}
+	if currEpoch < params.BeaconConfig().DenebForkEpoch {
+		// Safe to subtract because we exited early for epoch 0.
+		return currSlot - 31, nil
+	}
+	return slots.EpochStart(currEpoch - 1)
 }

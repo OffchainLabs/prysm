@@ -4,7 +4,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 )
 
-// DepositRequestsStartIndex is used for returning the deposit receipts start index which is used for eip6110
+// DepositRequestsStartIndex is used for returning the deposit requests start index which is used for eip6110
 func (b *BeaconState) DepositRequestsStartIndex() (uint64, error) {
 	if b.version < version.Electra {
 		return 0, errNotSupported("DepositRequestsStartIndex", b.version)

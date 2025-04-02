@@ -4,6 +4,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
@@ -70,11 +71,6 @@ func (v readOnlyValidator) PublicKey() [fieldparams.BLSPubkeyLength]byte {
 	return pubkey
 }
 
-// publicKeySlice returns the public key in the slice form for the read only validator.
-func (v readOnlyValidator) publicKeySlice() []byte {
-	return v.validator.PublicKey
-}
-
 // WithdrawalCredentials returns the withdrawal credentials of the
 // read only validator.
 func (v readOnlyValidator) GetWithdrawalCredentials() []byte {
@@ -91,4 +87,41 @@ func (v readOnlyValidator) Slashed() bool {
 // IsNil returns true if the validator is nil.
 func (v readOnlyValidator) IsNil() bool {
 	return v.validator == nil
+}
+
+// HasETH1WithdrawalCredentials returns true if the validator has an ETH1 withdrawal credentials.
+func (v readOnlyValidator) HasETH1WithdrawalCredentials() bool {
+	if v.IsNil() {
+		return false
+	}
+	return v.validator.WithdrawalCredentials[0] == params.BeaconConfig().ETH1AddressWithdrawalPrefixByte
+}
+
+// HasCompoundingWithdrawalCredentials returns true if the validator has a compounding withdrawal credentials.
+func (v readOnlyValidator) HasCompoundingWithdrawalCredentials() bool {
+	if v.IsNil() {
+		return false
+	}
+	return v.validator.WithdrawalCredentials[0] == params.BeaconConfig().CompoundingWithdrawalPrefixByte
+}
+
+// HasExecutionWithdrawalCredentials returns true if the validator has an execution withdrawal credentials.
+func (v readOnlyValidator) HasExecutionWithdrawalCredentials() bool {
+	return v.HasETH1WithdrawalCredentials() || v.HasCompoundingWithdrawalCredentials()
+}
+
+// Copy returns a new validator from the read only validator
+func (v readOnlyValidator) Copy() *ethpb.Validator {
+	pubKey := v.PublicKey()
+	withdrawalCreds := v.GetWithdrawalCredentials()
+	return &ethpb.Validator{
+		PublicKey:                  pubKey[:],
+		WithdrawalCredentials:      withdrawalCreds,
+		EffectiveBalance:           v.EffectiveBalance(),
+		Slashed:                    v.Slashed(),
+		ActivationEligibilityEpoch: v.ActivationEligibilityEpoch(),
+		ActivationEpoch:            v.ActivationEpoch(),
+		ExitEpoch:                  v.ExitEpoch(),
+		WithdrawableEpoch:          v.WithdrawableEpoch(),
+	}
 }

@@ -27,7 +27,7 @@ var OptimisticSyncEnabled = types.Evaluator{
 
 func optimisticSyncEnabled(_ *types.EvaluationContext, conns ...*grpc.ClientConn) error {
 	for nodeIndex := range conns {
-		path := fmt.Sprintf("http://localhost:%d/eth/v1/beacon/blinded_blocks/head", params.TestParams.Ports.PrysmBeaconNodeGatewayPort+nodeIndex)
+		path := fmt.Sprintf("http://localhost:%d/eth/v1/beacon/blinded_blocks/head", params.TestParams.Ports.PrysmBeaconNodeHTTPPort+nodeIndex)
 		resp := structs.GetBlockV2Response{}
 		httpResp, err := http.Get(path) // #nosec G107 -- path can't be constant because it depends on port param and node index
 		if err != nil {
@@ -53,7 +53,7 @@ func optimisticSyncEnabled(_ *types.EvaluationContext, conns ...*grpc.ClientConn
 			return err
 		}
 		for i := startSlot; i <= primitives.Slot(headSlot); i++ {
-			path = fmt.Sprintf("http://localhost:%d/eth/v1/beacon/blinded_blocks/%d", params.TestParams.Ports.PrysmBeaconNodeGatewayPort+nodeIndex, i)
+			path = fmt.Sprintf("http://localhost:%d/eth/v1/beacon/blinded_blocks/%d", params.TestParams.Ports.PrysmBeaconNodeHTTPPort+nodeIndex, i)
 			resp = structs.GetBlockV2Response{}
 			httpResp, err = http.Get(path) // #nosec G107 -- path can't be constant because it depends on port param and node index
 			if err != nil {
@@ -123,6 +123,15 @@ func retrieveHeadSlot(resp *structs.GetBlockV2Response) (uint64, error) {
 		}
 	case version.String(version.Deneb):
 		b := &structs.BeaconBlockDeneb{}
+		if err := json.Unmarshal(resp.Data.Message, b); err != nil {
+			return 0, err
+		}
+		headSlot, err = strconv.ParseUint(b.Slot, 10, 64)
+		if err != nil {
+			return 0, err
+		}
+	case version.String(version.Electra):
+		b := &structs.BeaconBlockElectra{}
 		if err := json.Unmarshal(resp.Data.Message, b); err != nil {
 			return 0, err
 		}

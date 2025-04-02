@@ -12,11 +12,11 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	log "github.com/sirupsen/logrus"
-	"go.opencensus.io/trace"
 )
 
 // ProcessWithdrawalRequests processes the validator withdrawals from the provided execution payload
@@ -111,30 +111,31 @@ func ProcessWithdrawalRequests(ctx context.Context, st state.BeaconState, wrs []
 			log.Debugf("Skipping execution layer withdrawal request, validator index for %s not found\n", hexutil.Encode(wr.ValidatorPubkey))
 			continue
 		}
-		validator, err := st.ValidatorAtIndex(vIdx)
+		validator, err := st.ValidatorAtIndexReadOnly(vIdx)
 		if err != nil {
 			return nil, err
 		}
 		// Verify withdrawal credentials
-		hasCorrectCredential := helpers.HasExecutionWithdrawalCredentials(validator)
-		isCorrectSourceAddress := bytes.Equal(validator.WithdrawalCredentials[12:], wr.SourceAddress)
+		hasCorrectCredential := validator.HasExecutionWithdrawalCredentials()
+		wc := validator.GetWithdrawalCredentials()
+		isCorrectSourceAddress := bytes.Equal(wc[12:], wr.SourceAddress)
 		if !hasCorrectCredential || !isCorrectSourceAddress {
 			log.Debugln("Skipping execution layer withdrawal request, wrong withdrawal credentials")
 			continue
 		}
 
 		// Verify the validator is active.
-		if !helpers.IsActiveValidator(validator, currentEpoch) {
+		if !helpers.IsActiveValidatorUsingTrie(validator, currentEpoch) {
 			log.Debugln("Skipping execution layer withdrawal request, validator not active")
 			continue
 		}
 		// Verify the validator has not yet submitted an exit.
-		if validator.ExitEpoch != params.BeaconConfig().FarFutureEpoch {
+		if validator.ExitEpoch() != params.BeaconConfig().FarFutureEpoch {
 			log.Debugln("Skipping execution layer withdrawal request, validator has submitted an exit already")
 			continue
 		}
 		// Verify the validator has been active long enough.
-		if currentEpoch < validator.ActivationEpoch.AddEpoch(params.BeaconConfig().ShardCommitteePeriod) {
+		if currentEpoch < validator.ActivationEpoch().AddEpoch(params.BeaconConfig().ShardCommitteePeriod) {
 			log.Debugln("Skipping execution layer withdrawal request, validator has not been active long enough")
 			continue
 		}
@@ -156,7 +157,7 @@ func ProcessWithdrawalRequests(ctx context.Context, st state.BeaconState, wrs []
 			continue
 		}
 
-		hasSufficientEffectiveBalance := validator.EffectiveBalance >= params.BeaconConfig().MinActivationBalance
+		hasSufficientEffectiveBalance := validator.EffectiveBalance() >= params.BeaconConfig().MinActivationBalance
 		vBal, err := st.BalanceAtIndex(vIdx)
 		if err != nil {
 			return nil, err
@@ -164,7 +165,7 @@ func ProcessWithdrawalRequests(ctx context.Context, st state.BeaconState, wrs []
 		hasExcessBalance := vBal > params.BeaconConfig().MinActivationBalance+pendingBalanceToWithdraw
 
 		// Only allow partial withdrawals with compounding withdrawal credentials
-		if helpers.HasCompoundingWithdrawalCredential(validator) && hasSufficientEffectiveBalance && hasExcessBalance {
+		if validator.HasCompoundingWithdrawalCredentials() && hasSufficientEffectiveBalance && hasExcessBalance {
 			// Spec definition:
 			//  to_withdraw = min(
 			//	  state.balances[index] - MIN_ACTIVATION_BALANCE - pending_balance_to_withdraw,

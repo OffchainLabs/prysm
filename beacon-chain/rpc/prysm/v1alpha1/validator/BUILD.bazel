@@ -40,6 +40,7 @@ go_library(
         "//beacon-chain/cache:go_default_library",
         "//beacon-chain/cache/depositsnapshot:go_default_library",
         "//beacon-chain/core/blocks:go_default_library",
+        "//beacon-chain/core/electra:go_default_library",
         "//beacon-chain/core/feed:go_default_library",
         "//beacon-chain/core/feed/block:go_default_library",
         "//beacon-chain/core/feed/operation:go_default_library",
@@ -62,6 +63,7 @@ go_library(
         "//beacon-chain/startup:go_default_library",
         "//beacon-chain/state:go_default_library",
         "//beacon-chain/state/stategen:go_default_library",
+        "//beacon-chain/state/state-native:go_default_library",
         "//beacon-chain/sync:go_default_library",
         "//config/features:go_default_library",
         "//config/fieldparams:go_default_library",
@@ -73,6 +75,7 @@ go_library(
         "//container/trie:go_default_library",
         "//contracts/deposit:go_default_library",
         "//crypto/bls:go_default_library",
+        "//crypto/bls/common:go_default_library",
         "//crypto/hash:go_default_library",
         "//crypto/rand:go_default_library",
         "//encoding/bytesutil:go_default_library",
@@ -212,7 +215,9 @@ go_test(
     embed = [":go_default_library"],
     eth_network = "minimal",
     tags = ["minimal"],
-    deps = common_deps,
+    deps = common_deps + [
+        "//beacon-chain/operations/attestations/mock:go_default_library",
+    ],
 )
 
 go_test(

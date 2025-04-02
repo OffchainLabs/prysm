@@ -12,7 +12,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	pb "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -67,7 +66,7 @@ func (r *blindedBlockReconstructor) addToBatch(b interfaces.ReadOnlySignedBeacon
 	if err != nil {
 		return err
 	}
-	if header.IsNil() {
+	if header == nil || header.IsNil() {
 		return errors.New("execution payload header in blinded block was nil")
 	}
 	r.orderedBlocks = append(r.orderedBlocks, &blockWithHeader{block: b, header: header})
@@ -87,10 +86,7 @@ func (r *blindedBlockReconstructor) addToBatch(b interfaces.ReadOnlySignedBeacon
 	return nil
 }
 
-func payloadBodyMethodForBlock(b interface{ Version() int }) string {
-	if b.Version() > version.Deneb {
-		return GetPayloadBodiesByHashV2
-	}
+func payloadBodyMethodForBlock(_ interface{ Version() int }) string {
 	return GetPayloadBodiesByHashV1
 }
 
@@ -209,7 +205,7 @@ func (r *blindedBlockReconstructor) requestBodiesByHash(ctx context.Context, cli
 func (r *blindedBlockReconstructor) payloadForHeader(header interfaces.ExecutionData, v int) (proto.Message, error) {
 	bodyKey := bytesutil.ToBytes32(header.BlockHash())
 	if bodyKey == params.BeaconConfig().ZeroHash {
-		payload, err := buildEmptyExecutionPayload(v)
+		payload, err := EmptyExecutionPayload(v)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to reconstruct payload for body hash %#x", bodyKey)
 		}
@@ -243,9 +239,6 @@ func (r *blindedBlockReconstructor) unblinded() ([]interfaces.SignedBeaconBlock,
 	return unblinded, nil
 }
 
-func rangeMethodForHashMethod(method string) string {
-	if method == GetPayloadBodiesByHashV2 {
-		return GetPayloadBodiesByRangeV2
-	}
+func rangeMethodForHashMethod(_ string) string {
 	return GetPayloadBodiesByRangeV1
 }

@@ -90,7 +90,7 @@ func newClient(beaconEndpoints []string, tcpPort, quicPort uint) (*client, error
 
 func (c *client) Close() {
 	if err := c.host.Close(); err != nil {
-		panic(err)
+		panic(err) // lint:nopanic -- The client is closing anyway...
 	}
 }
 
@@ -114,7 +114,7 @@ func (c *client) Send(
 	ctx, span := trace.StartSpan(ctx, "p2p.Send")
 	defer span.End()
 	topic := baseTopic + c.Encoding().ProtocolSuffix()
-	span.AddAttributes(trace.StringAttribute("topic", topic))
+	span.SetAttributes(trace.StringAttribute("topic", topic))
 
 	// Apply max dial timeout when opening a new stream.
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
@@ -193,7 +193,7 @@ func (c *client) initializeMockChainService(ctx context.Context) (*mockChain, er
 func ipAddr() net.IP {
 	ip, err := network.ExternalIP()
 	if err != nil {
-		panic(err)
+		panic(err) // lint:nopanic -- Only returns an error when network interfaces are not available. This is a requirement for the application anyway.
 	}
 	return net.ParseIP(ip)
 }

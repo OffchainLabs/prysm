@@ -13,7 +13,6 @@ go_library(
     deps = [
         "//beacon-chain/db/filesystem:go_default_library",
         "//beacon-chain/verification:go_default_library",
-        "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/blocks:go_default_library",
         "//consensus-types/primitives:go_default_library",
@@ -35,7 +34,6 @@ go_test(
     deps = [
         "//beacon-chain/db/filesystem:go_default_library",
         "//beacon-chain/verification:go_default_library",
-        "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/blocks:go_default_library",
         "//consensus-types/primitives:go_default_library",

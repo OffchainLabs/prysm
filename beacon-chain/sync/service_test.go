@@ -62,7 +62,7 @@ func TestSyncHandlers_WaitToSync(t *testing.T) {
 	}
 
 	topic := "/eth2/%x/beacon_block"
-	go r.registerHandlers()
+	go r.startTasksPostInitialSync()
 	time.Sleep(100 * time.Millisecond)
 
 	var vr [32]byte
@@ -143,7 +143,7 @@ func TestSyncHandlers_WaitTillSynced(t *testing.T) {
 
 	syncCompleteCh := make(chan bool)
 	go func() {
-		r.registerHandlers()
+		r.startTasksPostInitialSync()
 		syncCompleteCh <- true
 	}()
 
@@ -200,7 +200,7 @@ func TestSyncService_StopCleanly(t *testing.T) {
 		initialSyncComplete: make(chan struct{}),
 	}
 
-	go r.registerHandlers()
+	go r.startTasksPostInitialSync()
 	var vr [32]byte
 	require.NoError(t, gs.SetClock(startup.NewClock(time.Now(), vr)))
 	r.waitForChainStart()

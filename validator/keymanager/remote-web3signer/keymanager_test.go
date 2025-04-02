@@ -22,7 +22,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
 	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/remote-web3signer/internal"
-	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/remote-web3signer/v1/mock"
+	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/remote-web3signer/types/mock"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"github.com/stretchr/testify/assert"
 )
@@ -403,6 +403,14 @@ func TestKeymanager_Sign(t *testing.T) {
 			name: "AGGREGATE_AND_PROOF",
 			args: args{
 				request: mock.GetMockSignRequest("AGGREGATE_AND_PROOF"),
+			},
+			want:    desiredSig,
+			wantErr: false,
+		},
+		{
+			name: "AGGREGATE_AND_PROOF_V2",
+			args: args{
+				request: mock.GetMockSignRequest("AGGREGATE_AND_PROOF_V2"),
 			},
 			want:    desiredSig,
 			wantErr: false,

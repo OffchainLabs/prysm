@@ -107,22 +107,6 @@ func (b *BeaconState) SetHistoricalRoots(val [][]byte) error {
 	return nil
 }
 
-// SaveValidatorIndices save validator indices of beacon chain to cache
-func (b *BeaconState) SaveValidatorIndices() {
-	if b.Version() < version.Electra {
-		return
-	}
-
-	b.lock.Lock()
-	defer b.lock.Unlock()
-
-	if b.validatorIndexCache == nil {
-		b.validatorIndexCache = newFinalizedValidatorIndexCache()
-	}
-
-	b.saveValidatorIndices()
-}
-
 // AppendHistoricalRoots for the beacon state. Appends the new value
 // to the end of list.
 func (b *BeaconState) AppendHistoricalRoots(root [32]byte) error {

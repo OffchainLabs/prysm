@@ -5,5 +5,10 @@ go_library(
     srcs = ["span.go"],
     importpath = "github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace",
     visibility = ["//visibility:public"],
-    deps = ["@io_opencensus_go//trace:go_default_library"],
+    deps = [
+        "@io_opentelemetry_go_otel//:go_default_library",
+        "@io_opentelemetry_go_otel//attribute:go_default_library",
+        "@io_opentelemetry_go_otel_trace//:go_default_library",
+        "@io_opentelemetry_go_otel_trace//noop:go_default_library",
+    ],
 )

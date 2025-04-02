@@ -13,7 +13,7 @@ import (
 )
 
 func blockWithWithdrawals(ssz []byte) (interfaces.SignedBeaconBlock, error) {
-	e := &enginev1.ExecutionPayloadElectra{}
+	e := &enginev1.ExecutionPayloadDeneb{}
 	if err := e.UnmarshalSSZ(ssz); err != nil {
 		return nil, err
 	}

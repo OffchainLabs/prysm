@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/golang/snappy"
@@ -23,29 +24,39 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
-// used to represent errors for inconsistent slot ranges.
+// Used to represent errors for inconsistent slot ranges.
 var errInvalidSlotRange = errors.New("invalid end slot and start slot provided")
 
-// Block retrieval by root.
+// Block retrieval by root. Return nil if block is not found.
 func (s *Store) Block(ctx context.Context, blockRoot [32]byte) (interfaces.ReadOnlySignedBeaconBlock, error) {
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.Block")
 	defer span.End()
-	// Return block from cache if it exists.
+	blk, err := s.getBlock(ctx, blockRoot, nil)
+	if errors.Is(err, ErrNotFound) {
+		return nil, nil
+	}
+	return blk, err
+}
+
+func (s *Store) getBlock(ctx context.Context, blockRoot [32]byte, tx *bolt.Tx) (interfaces.ReadOnlySignedBeaconBlock, error) {
 	if v, ok := s.blockCache.Get(string(blockRoot[:])); v != nil && ok {
 		return v.(interfaces.ReadOnlySignedBeaconBlock), nil
 	}
-	var blk interfaces.ReadOnlySignedBeaconBlock
-	err := s.db.View(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(blocksBucket)
-		enc := bkt.Get(blockRoot[:])
-		if enc == nil {
-			return nil
-		}
+	// This method allows the caller to pass in its tx if one is already open.
+	// Or if a nil value is used, a transaction will be managed intenally.
+	if tx == nil {
 		var err error
-		blk, err = unmarshalBlock(ctx, enc)
-		return err
-	})
-	return blk, err
+		tx, err = s.db.Begin(false)
+		if err != nil {
+			return nil, err
+		}
+		defer func() {
+			if err := tx.Rollback(); err != nil {
+				log.WithError(err).Error("could not rollback read-only getBlock transaction")
+			}
+		}()
+	}
+	return unmarshalBlock(ctx, tx.Bucket(blocksBucket).Get(blockRoot[:]))
 }
 
 // OriginCheckpointBlockRoot returns the value written to the db in SaveOriginCheckpointBlockRoot
@@ -67,6 +78,21 @@ func (s *Store) OriginCheckpointBlockRoot(ctx context.Context) ([32]byte, error)
 		return nil
 	})
 
+	return root, err
+}
+
+// HeadBlockRoot returns the latest canonical block root in the Ethereum Beacon Chain.
+func (s *Store) HeadBlockRoot() ([32]byte, error) {
+	var root [32]byte
+	err := s.db.View(func(tx *bolt.Tx) error {
+		bkt := tx.Bucket(blocksBucket)
+		headRoot := bkt.Get(headBlockRootKey)
+		if len(headRoot) == 0 {
+			return errors.New("no head block root found")
+		}
+		copy(root[:], headRoot)
+		return nil
+	})
 	return root, err
 }
 
@@ -92,12 +118,94 @@ func (s *Store) HeadBlock(ctx context.Context) (interfaces.ReadOnlySignedBeaconB
 	return headBlock, err
 }
 
+// blocksAncestryQuery returns all blocks *before* the descendent block;
+// that is: inclusive of q.Earliest, exclusive of q.Descendent.Slot.
+func (s *Store) blocksAncestryQuery(ctx context.Context, q filters.AncestryQuery) ([]interfaces.ReadOnlySignedBeaconBlock, [][32]byte, error) {
+	// Save resources if no blocks will be found by the query.
+	if q.Span() < 1 {
+		return nil, nil, filters.ErrInvalidQuery
+	}
+
+	blocks := make([]interfaces.ReadOnlySignedBeaconBlock, 0, q.Span())
+	roots := make([][32]byte, 0, q.Span())
+	// Handle edge case where start and end are equal; slotRootsInRange would see end < start and err.
+	// So, just grab the descendent in its own tx and stop there.
+	if q.Span() == 1 {
+		err := s.db.View(func(tx *bolt.Tx) error {
+			descendent, err := s.getBlock(ctx, q.Descendent.Root, tx)
+			if err != nil {
+				return errors.Wrap(err, "descendent block not in db")
+			}
+			blocks = append(blocks, descendent)
+			roots = append(roots, q.Descendent.Root)
+			return nil
+		})
+		return blocks, roots, err
+	}
+
+	// stop before the descendent slot since it is determined by the query
+	sr, err := s.slotRootsInRange(ctx, q.Earliest, q.Descendent.Slot-1, -1)
+	if err != nil {
+		return nil, nil, err
+	}
+	err = s.db.View(func(tx *bolt.Tx) error {
+		descendent, err := s.getBlock(ctx, q.Descendent.Root, tx)
+		if err != nil {
+			return errors.Wrap(err, "descendent block not in db")
+		}
+		proot := descendent.Block().ParentRoot()
+		lowest := descendent.Block().Slot()
+		blocks = append(blocks, descendent)
+		roots = append(roots, q.Descendent.Root)
+		// slotRootsInRange returns the roots in descending order
+		for _, prev := range sr {
+			if prev.slot < q.Earliest {
+				return nil
+			}
+			if prev.slot >= lowest {
+				continue
+			}
+			if prev.root == proot {
+				p, err := s.getBlock(ctx, prev.root, tx)
+				if err != nil {
+					return err
+				}
+				roots = append(roots, prev.root)
+				blocks = append(blocks, p)
+				proot = p.Block().ParentRoot()
+				lowest = p.Block().Slot()
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	slices.Reverse(roots)
+	slices.Reverse(blocks)
+
+	return blocks, roots, err
+}
+
 // Blocks retrieves a list of beacon blocks and its respective roots by filter criteria.
 func (s *Store) Blocks(ctx context.Context, f *filters.QueryFilter) ([]interfaces.ReadOnlySignedBeaconBlock, [][32]byte, error) {
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.Blocks")
 	defer span.End()
+
+	if q, err := f.GetAncestryQuery(); err == nil {
+		return s.blocksAncestryQuery(ctx, q)
+	} else {
+		if !errors.Is(err, filters.ErrNotSet) {
+			return nil, nil, err
+		}
+	}
+
 	blocks := make([]interfaces.ReadOnlySignedBeaconBlock, 0)
 	blockRoots := make([][32]byte, 0)
+
+	if start, end, isSimple := f.SimpleSlotRange(); isSimple {
+		return s.blocksForSlotRange(ctx, start, end)
+	}
 
 	err := s.db.View(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(blocksBucket)
@@ -119,6 +227,69 @@ func (s *Store) Blocks(ctx context.Context, f *filters.QueryFilter) ([]interface
 		return nil
 	})
 	return blocks, blockRoots, err
+}
+
+// cleanupMissingBlockIndices cleans up the slot->root mapping, and the parent root index pointing
+// from each of these blocks to each of their children. Since we don't have the blocks themselves,
+// we don't know their parent root to efficiently clean the index going the other direction.
+func (s *Store) cleanupMissingBlockIndices(ctx context.Context, badBlocks []slotRoot) {
+	errs := make([]error, 0)
+	err := s.db.Update(func(tx *bolt.Tx) error {
+		for _, sr := range badBlocks {
+			log.WithField("root", fmt.Sprintf("%#x", sr.root)).WithField("slot", sr.slot).Warn("Cleaning up indices for missing block")
+			if err := s.deleteSlotIndexEntry(tx, sr.slot, sr.root); err != nil {
+				errs = append(errs, errors.Wrapf(err, "failed to clean up slot index entry for root %#x and slot %d", sr.root, sr.slot))
+			}
+			if err := tx.Bucket(blockParentRootIndicesBucket).Delete(sr.root[:]); err != nil {
+				errs = append(errs, errors.Wrapf(err, "failed to clean up block parent index for root %#x", sr.root))
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		errs = append(errs, err)
+	}
+	for _, err := range errs {
+		log.WithError(err).Error("Failed to clean up indices for missing block")
+	}
+}
+
+// blocksForSlotRange gets all blocks and roots for a given slot range.
+// This function uses the slot->root index, which can contain multiple entries for the same slot
+// in case of forks. It will return all blocks for the given slot range, and the roots of those blocks.
+// The [i]th element of the blocks slice corresponds to the [i]th element of the roots slice.
+// If a block is not found, it will be added to a slice of missing blocks, which will have their indices cleaned
+// in a separate Update transaction before the method returns. This is done to compensate for a previous bug where
+// block deletions left danging index entries.
+func (s *Store) blocksForSlotRange(ctx context.Context, startSlot, endSlot primitives.Slot) ([]interfaces.ReadOnlySignedBeaconBlock, [][32]byte, error) {
+	slotRootPairs, err := s.slotRootsInRange(ctx, startSlot, endSlot, -1) // set batch size to zero to retrieve all
+	if err != nil {
+		return nil, nil, err
+	}
+	slices.Reverse(slotRootPairs)
+	badBlocks := make([]slotRoot, 0)
+	defer func() { s.cleanupMissingBlockIndices(ctx, badBlocks) }()
+	roots := make([][32]byte, 0, len(slotRootPairs))
+	blks := make([]interfaces.ReadOnlySignedBeaconBlock, 0, len(slotRootPairs))
+	err = s.db.View(func(tx *bolt.Tx) error {
+		for _, sr := range slotRootPairs {
+			blk, err := s.getBlock(ctx, sr.root, tx)
+			if err != nil {
+				if errors.Is(err, ErrNotFound) {
+					badBlocks = append(badBlocks, sr)
+					continue
+				}
+				return err
+			}
+			roots = append(roots, sr.root)
+			blks = append(blks, blk)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	return blks, roots, nil
 }
 
 // BlockRoots retrieves a list of beacon block roots by filter criteria. If the caller
@@ -160,7 +331,7 @@ func (s *Store) HasBlock(ctx context.Context, blockRoot [32]byte) bool {
 		exists = bkt.Get(blockRoot[:]) != nil
 		return nil
 	}); err != nil { // This view never returns an error, but we'll handle anyway for sanity.
-		panic(err)
+		panic(err) // lint:nopanic -- View never returns an error.
 	}
 	return exists
 }
@@ -227,15 +398,115 @@ func (s *Store) DeleteBlock(ctx context.Context, root [32]byte) error {
 			return ErrDeleteJustifiedAndFinalized
 		}
 
-		if err := tx.Bucket(blocksBucket).Delete(root[:]); err != nil {
+		// Look up the block to find its slot; needed to remove the slot index entry.
+		blk, err := s.getBlock(ctx, root, tx)
+		if err != nil {
+			// getBlock can return ErrNotFound, in which case we won't even try to delete it.
+			if errors.Is(err, ErrNotFound) {
+				return nil
+			}
 			return err
 		}
-		if err := tx.Bucket(blockParentRootIndicesBucket).Delete(root[:]); err != nil {
+		if err := s.deleteSlotIndexEntry(tx, blk.Block().Slot(), root); err != nil {
+			return err
+		}
+		if err := s.deleteMatchingParentIndex(tx, blk.Block().ParentRoot(), root); err != nil {
+			return err
+		}
+		if err := s.deleteBlock(tx, root[:]); err != nil {
 			return err
 		}
 		s.blockCache.Del(string(root[:]))
 		return nil
 	})
+}
+
+// DeleteHistoricalDataBeforeSlot deletes all blocks and states before the given slot.
+// This function deletes data from the following buckets:
+// - blocksBucket
+// - blockParentRootIndicesBucket
+// - finalizedBlockRootsIndexBucket
+// - stateBucket
+// - stateSummaryBucket
+// - blockRootValidatorHashesBucket
+// - blockSlotIndicesBucket
+// - stateSlotIndicesBucket
+func (s *Store) DeleteHistoricalDataBeforeSlot(ctx context.Context, cutoffSlot primitives.Slot, batchSize int) (int, error) {
+	ctx, span := trace.StartSpan(ctx, "BeaconDB.DeleteHistoricalDataBeforeSlot")
+	defer span.End()
+
+	// Collect slot/root pairs to perform deletions in a separate read only transaction.
+	slotRoots, err := s.slotRootsInRange(ctx, primitives.Slot(0), cutoffSlot, batchSize)
+	if err != nil {
+		return 0, err
+	}
+
+	// Return early if there's nothing to delete.
+	if len(slotRoots) == 0 {
+		return 0, nil
+	}
+
+	// Perform all deletions in a single transaction for atomicity
+	var numSlotsDeleted int
+	err = s.db.Update(func(tx *bolt.Tx) error {
+		for _, sr := range slotRoots {
+			// Return if context is cancelled or deadline is exceeded.
+			if ctx.Err() != nil {
+				//nolint:nilerr
+				return nil
+			}
+
+			// Delete block
+			if err = s.deleteBlock(tx, sr.root[:]); err != nil {
+				return err
+			}
+
+			// Delete finalized block roots index
+			if err = tx.Bucket(finalizedBlockRootsIndexBucket).Delete(sr.root[:]); err != nil {
+				return errors.Wrap(err, "could not delete finalized block root index")
+			}
+
+			// Delete state
+			if err = tx.Bucket(stateBucket).Delete(sr.root[:]); err != nil {
+				return errors.Wrap(err, "could not delete state")
+			}
+
+			// Delete state summary
+			if err = tx.Bucket(stateSummaryBucket).Delete(sr.root[:]); err != nil {
+				return errors.Wrap(err, "could not delete state summary")
+			}
+
+			// Delete validator entries
+			if err = s.deleteValidatorHashes(tx, sr.root[:]); err != nil {
+				return errors.Wrap(err, "could not delete validators")
+			}
+
+			numSlotsDeleted++
+		}
+
+		for _, sr := range slotRoots {
+			// Delete slot indices
+			if err = tx.Bucket(blockSlotIndicesBucket).Delete(bytesutil.SlotToBytesBigEndian(sr.slot)); err != nil {
+				return errors.Wrap(err, "could not delete block slot index")
+			}
+			if err = tx.Bucket(stateSlotIndicesBucket).Delete(bytesutil.SlotToBytesBigEndian(sr.slot)); err != nil {
+				return errors.Wrap(err, "could not delete state slot index")
+			}
+		}
+
+		// Delete all caches after we have deleted everything from buckets.
+		// This is done after the buckets are deleted to avoid any issues in case of transaction rollback.
+		for _, sr := range slotRoots {
+			// Delete block from cache
+			s.blockCache.Del(string(sr.root[:]))
+			// Delete state summary from cache
+			s.stateSummaryCache.delete(sr.root)
+		}
+
+		return nil
+	})
+
+	return numSlotsDeleted, err
 }
 
 // SaveBlock to the db.
@@ -256,7 +527,7 @@ func (s *Store) SaveBlock(ctx context.Context, signed interfaces.ReadOnlySignedB
 // if a `saveBlindedBeaconBlocks` key exists in the database. Otherwise, we check if the last
 // blocked stored to check if it is blinded, and then write that `saveBlindedBeaconBlocks` key
 // to the DB for future checks.
-func (s *Store) shouldSaveBlinded(ctx context.Context) (bool, error) {
+func (s *Store) shouldSaveBlinded() (bool, error) {
 	var saveBlinded bool
 	if err := s.db.View(func(tx *bolt.Tx) error {
 		metadataBkt := tx.Bucket(chainMetadataBucket)
@@ -318,7 +589,7 @@ func prepareBlockBatch(blks []blocks.ROBlock, shouldBlind bool) ([]blockBatchEnt
 }
 
 func (s *Store) SaveROBlocks(ctx context.Context, blks []blocks.ROBlock, cache bool) error {
-	shouldBlind, err := s.shouldSaveBlinded(ctx)
+	shouldBlind, err := s.shouldSaveBlinded()
 	if err != nil {
 		return err
 	}
@@ -589,6 +860,68 @@ func (s *Store) SaveRegistrationsByValidatorIDs(ctx context.Context, ids []primi
 	})
 }
 
+type slotRoot struct {
+	slot primitives.Slot
+	root [32]byte
+}
+
+// slotRootsInRange returns slot and block root pairs of length min(batchSize, end-slot)
+// If batchSize < 0, the limit check will be skipped entirely.
+func (s *Store) slotRootsInRange(ctx context.Context, start, end primitives.Slot, batchSize int) ([]slotRoot, error) {
+	_, span := trace.StartSpan(ctx, "BeaconDB.slotRootsInRange")
+	defer span.End()
+	if end < start {
+		return nil, errInvalidSlotRange
+	}
+
+	var pairs []slotRoot
+	key := bytesutil.SlotToBytesBigEndian(end)
+
+	edge := false // used to detect whether we are at the very beginning or end of the index
+	err := s.db.View(func(tx *bolt.Tx) error {
+		bkt := tx.Bucket(blockSlotIndicesBucket)
+		c := bkt.Cursor()
+		for k, v := c.Seek(key); ; /* rely on internal checks to exit */ k, v = c.Prev() {
+			if len(k) == 0 && len(v) == 0 {
+				// The `edge`` variable and this `if` deal with 2 edge cases:
+				// - Seeking past the end of the bucket (the `end` param is higher than the highest slot).
+				// - Seeking before the beginning of the bucket (the `start` param is lower than the lowest slot).
+				// In both of these cases k,v will be nil and we can handle the same way using `edge` to
+				// - continue to the next iteration. If the following Prev() key/value is nil, Prev has gone past the beginning.
+				// - Otherwise, iterate as usual.
+				if edge {
+					return nil
+				}
+				edge = true
+				continue
+			}
+			edge = false
+			slot := bytesutil.BytesToSlotBigEndian(k)
+			if slot > end {
+				continue // Seek will seek to the next key *after* the given one if not present
+			}
+			if slot < start {
+				return nil
+			}
+			roots, err := splitRoots(v)
+			if err != nil {
+				return errors.Wrapf(err, "corrupt value %v in block slot index for slot=%d", v, slot)
+			}
+			for _, r := range roots {
+				pairs = append(pairs, slotRoot{slot: slot, root: r})
+			}
+			if batchSize < 0 {
+				continue
+			}
+			if len(pairs) >= batchSize {
+				return nil // allows code to easily cap the number of items pruned
+			}
+		}
+	})
+
+	return pairs, err
+}
+
 // blockRootsByFilter retrieves the block roots given the filter criteria.
 func blockRootsByFilter(ctx context.Context, tx *bolt.Tx, f *filters.QueryFilter) ([][]byte, error) {
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.blockRootsByFilter")
@@ -627,6 +960,7 @@ func blockRootsByFilter(ctx context.Context, tx *bolt.Tx, f *filters.QueryFilter
 	// that list of roots to lookup the block. These block will
 	// meet the filter criteria.
 	indices := lookupValuesForIndices(ctx, indicesByBucket, tx)
+
 	keys := rootsBySlotRange
 	if len(indices) > 0 {
 		// If we have found indices that meet the filter criteria, and there are also
@@ -701,8 +1035,8 @@ func blockRootsBySlotRange(
 	roots := make([][]byte, 0, rootsRange)
 	c := bkt.Cursor()
 	for k, v := c.Seek(min); conditional(k, max); k, v = c.Next() {
+		slot := bytesutil.BytesToSlotBigEndian(k)
 		if step > 1 {
-			slot := bytesutil.BytesToSlotBigEndian(k)
 			if slot.SubSlot(startSlot).Mod(step) != 0 {
 				continue
 			}
@@ -770,6 +1104,9 @@ func createBlockIndicesFromFilters(ctx context.Context, f *filters.QueryFilter) 
 
 // unmarshal block from marshaled proto beacon block bytes to versioned beacon block struct type.
 func unmarshalBlock(_ context.Context, enc []byte) (interfaces.ReadOnlySignedBeaconBlock, error) {
+	if len(enc) == 0 {
+		return nil, errors.Wrap(ErrNotFound, "empty block bytes in db")
+	}
 	var err error
 	enc, err = snappy.Decode(nil, enc)
 	if err != nil {
@@ -813,15 +1150,25 @@ func unmarshalBlock(_ context.Context, enc []byte) (interfaces.ReadOnlySignedBea
 		if err := rawBlock.UnmarshalSSZ(enc[len(denebBlindKey):]); err != nil {
 			return nil, errors.Wrap(err, "could not unmarshal blinded Deneb block")
 		}
-	case hasElectraKey(enc):
+	case HasElectraKey(enc):
 		rawBlock = &ethpb.SignedBeaconBlockElectra{}
-		if err := rawBlock.UnmarshalSSZ(enc[len(electraKey):]); err != nil {
+		if err := rawBlock.UnmarshalSSZ(enc[len(ElectraKey):]); err != nil {
 			return nil, errors.Wrap(err, "could not unmarshal Electra block")
 		}
 	case hasElectraBlindKey(enc):
 		rawBlock = &ethpb.SignedBlindedBeaconBlockElectra{}
 		if err := rawBlock.UnmarshalSSZ(enc[len(electraBlindKey):]); err != nil {
 			return nil, errors.Wrap(err, "could not unmarshal blinded Electra block")
+		}
+	case hasFuluKey(enc):
+		rawBlock = &ethpb.SignedBeaconBlockFulu{}
+		if err := rawBlock.UnmarshalSSZ(enc[len(fuluKey):]); err != nil {
+			return nil, errors.Wrap(err, "could not unmarshal Fulu block")
+		}
+	case hasFuluBlindKey(enc):
+		rawBlock = &ethpb.SignedBlindedBeaconBlockFulu{}
+		if err := rawBlock.UnmarshalSSZ(enc[len(fuluBlindKey):]); err != nil {
+			return nil, errors.Wrap(err, "could not unmarshal blinded Fulu block")
 		}
 	default:
 		// Marshal block bytes to phase 0 beacon block.
@@ -851,32 +1198,120 @@ func encodeBlock(blk interfaces.ReadOnlySignedBeaconBlock) ([]byte, error) {
 }
 
 func keyForBlock(blk interfaces.ReadOnlySignedBeaconBlock) ([]byte, error) {
-	switch blk.Version() {
-	case version.Electra:
+	v := blk.Version()
+
+	if v >= version.Fulu {
+		if blk.IsBlinded() {
+			return fuluBlindKey, nil
+		}
+		return fuluKey, nil
+	}
+
+	if v >= version.Electra {
 		if blk.IsBlinded() {
 			return electraBlindKey, nil
 		}
-		return electraKey, nil
-	case version.Deneb:
+		return ElectraKey, nil
+	}
+
+	if v >= version.Deneb {
 		if blk.IsBlinded() {
 			return denebBlindKey, nil
 		}
 		return denebKey, nil
-	case version.Capella:
+	}
+
+	if v >= version.Capella {
 		if blk.IsBlinded() {
 			return capellaBlindKey, nil
 		}
 		return capellaKey, nil
-	case version.Bellatrix:
+	}
+
+	if v >= version.Bellatrix {
 		if blk.IsBlinded() {
 			return bellatrixBlindKey, nil
 		}
 		return bellatrixKey, nil
-	case version.Altair:
-		return altairKey, nil
-	case version.Phase0:
-		return nil, nil
-	default:
-		return nil, fmt.Errorf("unsupported block version: %v", blk.Version())
 	}
+
+	if v >= version.Altair {
+		return altairKey, nil
+	}
+
+	if v >= version.Phase0 {
+		return nil, nil
+	}
+
+	return nil, fmt.Errorf("unsupported block version: %v", blk.Version())
+}
+
+func (s *Store) deleteBlock(tx *bolt.Tx, root []byte) error {
+	if err := tx.Bucket(blocksBucket).Delete(root); err != nil {
+		return errors.Wrap(err, "could not delete block")
+	}
+
+	if err := tx.Bucket(blockParentRootIndicesBucket).Delete(root); err != nil {
+		return errors.Wrap(err, "could not delete block parent indices")
+	}
+
+	return nil
+}
+
+func (s *Store) deleteMatchingParentIndex(tx *bolt.Tx, parent, child [32]byte) error {
+	bkt := tx.Bucket(blockParentRootIndicesBucket)
+	if err := deleteRootIndexEntry(bkt, parent[:], child); err != nil {
+		return errors.Wrap(err, "could not delete parent root index entry")
+	}
+	return nil
+}
+
+func (s *Store) deleteSlotIndexEntry(tx *bolt.Tx, slot primitives.Slot, root [32]byte) error {
+	key := bytesutil.SlotToBytesBigEndian(slot)
+	bkt := tx.Bucket(blockSlotIndicesBucket)
+	if err := deleteRootIndexEntry(bkt, key, root); err != nil {
+		return errors.Wrap(err, "could not delete slot index entry")
+	}
+	return nil
+}
+
+func deleteRootIndexEntry(bkt *bolt.Bucket, key []byte, root [32]byte) error {
+	packed := bkt.Get(key)
+	if len(packed) == 0 {
+		return nil
+	}
+	updated, err := removeRoot(packed, root)
+	if err != nil {
+		return err
+	}
+	// Don't update the value if the root was not found.
+	if bytes.Equal(updated, packed) {
+		return nil
+	}
+	// If there are no other roots in the key, just delete it.
+	if len(updated) == 0 {
+		if err := bkt.Delete(key); err != nil {
+			return err
+		}
+		return nil
+	}
+	// Update the key with the root removed.
+	return bkt.Put(key, updated)
+}
+
+func (s *Store) deleteValidatorHashes(tx *bolt.Tx, root []byte) error {
+	ok, err := s.isStateValidatorMigrationOver()
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return nil
+	}
+
+	// Delete the validator hash index
+	if err = tx.Bucket(blockRootValidatorHashesBucket).Delete(root); err != nil {
+		return errors.Wrap(err, "could not delete validator index")
+	}
+
+	return nil
 }

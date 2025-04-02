@@ -269,7 +269,7 @@ func (vs *Server) optimisticStatus(ctx context.Context) error {
 		return nil
 	}
 
-	return status.Errorf(codes.Unavailable, errOptimisticMode.Error())
+	return status.Errorf(codes.Unavailable, "error=%v", errOptimisticMode)
 }
 
 // validatorStatus searches for the requested validator's state and deposit to retrieve its inclusion estimate. Also returns the validators index.
@@ -286,6 +286,9 @@ func (vs *Server) validatorStatus(
 	resp := &ethpb.ValidatorStatusResponse{
 		Status:          ethpb.ValidatorStatus_UNKNOWN_STATUS,
 		ActivationEpoch: params.BeaconConfig().FarFutureEpoch,
+	}
+	if len(pubKey) == 0 {
+		return resp, nonExistentIndex
 	}
 	vStatus, idx, err := statusForPubKey(headState, pubKey)
 	if err != nil && !errors.Is(err, errPubkeyDoesNotExist) {
@@ -402,16 +405,13 @@ func statusForPubKey(headState state.ReadOnlyBeaconState, pubKey []byte) (ethpb.
 
 func assignmentStatus(beaconState state.ReadOnlyBeaconState, validatorIndex primitives.ValidatorIndex) ethpb.ValidatorStatus {
 	validator, err := beaconState.ValidatorAtIndexReadOnly(validatorIndex)
-	if err != nil {
+	if err != nil || validator.IsNil() {
 		return ethpb.ValidatorStatus_UNKNOWN_STATUS
 	}
+
 	currentEpoch := time.CurrentEpoch(beaconState)
 	farFutureEpoch := params.BeaconConfig().FarFutureEpoch
 	validatorBalance := validator.EffectiveBalance()
-
-	if validator.IsNil() {
-		return ethpb.ValidatorStatus_UNKNOWN_STATUS
-	}
 	if currentEpoch < validator.ActivationEligibilityEpoch() {
 		return depositStatus(validatorBalance)
 	}

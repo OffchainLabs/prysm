@@ -49,12 +49,12 @@ func TestKV_Aggregated_SaveAggregatedAttestation(t *testing.T) {
 		{
 			name:          "nil attestation",
 			att:           nil,
-			wantErrString: "attestation can't be nil",
+			wantErrString: "attestation is nil",
 		},
 		{
 			name:          "nil attestation data",
 			att:           &ethpb.Attestation{},
-			wantErrString: "attestation's data can't be nil",
+			wantErrString: "attestation is nil",
 		},
 		{
 			name: "not aggregated",
@@ -206,7 +206,7 @@ func TestKV_Aggregated_AggregatedAttestations(t *testing.T) {
 func TestKV_Aggregated_DeleteAggregatedAttestation(t *testing.T) {
 	t.Run("nil attestation", func(t *testing.T) {
 		cache := NewAttCaches()
-		assert.ErrorContains(t, "attestation can't be nil", cache.DeleteAggregatedAttestation(nil))
+		assert.ErrorContains(t, "attestation is nil", cache.DeleteAggregatedAttestation(nil))
 		att := util.HydrateAttestation(&ethpb.Attestation{AggregationBits: bitfield.Bitlist{0b10101}, Data: &ethpb.AttestationData{Slot: 2}})
 		assert.NoError(t, cache.DeleteAggregatedAttestation(att))
 	})
@@ -288,7 +288,7 @@ func TestKV_Aggregated_HasAggregatedAttestation(t *testing.T) {
 			name:  "nil attestation",
 			input: nil,
 			want:  false,
-			err:   errors.New("can't be nil"),
+			err:   errors.New("is nil"),
 		},
 		{
 			name: "nil attestation data",
@@ -296,7 +296,7 @@ func TestKV_Aggregated_HasAggregatedAttestation(t *testing.T) {
 				AggregationBits: bitfield.Bitlist{0b1111},
 			},
 			want: false,
-			err:  errors.New("can't be nil"),
+			err:  errors.New("is nil"),
 		},
 		{
 			name: "empty cache aggregated",

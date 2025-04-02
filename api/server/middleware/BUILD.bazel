@@ -8,10 +8,7 @@ go_library(
     ],
     importpath = "github.com/prysmaticlabs/prysm/v5/api/server/middleware",
     visibility = ["//visibility:public"],
-    deps = [
-        "@com_github_gorilla_mux//:go_default_library",
-        "@com_github_rs_cors//:go_default_library",
-    ],
+    deps = ["@com_github_rs_cors//:go_default_library"],
 )
 
 go_test(

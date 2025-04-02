@@ -139,7 +139,7 @@ func TestBeaconApiValidatorClient_ProposeBeaconBlockValid(t *testing.T) {
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Post(
 		gomock.Any(),
-		"/eth/v1/beacon/blocks",
+		"/eth/v2/beacon/blocks",
 		map[string]string{"Eth-Consensus-Version": "phase0"},
 		gomock.Any(),
 		nil,
@@ -175,7 +175,7 @@ func TestBeaconApiValidatorClient_ProposeBeaconBlockError(t *testing.T) {
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Post(
 		gomock.Any(),
-		"/eth/v1/beacon/blocks",
+		"/eth/v2/beacon/blocks",
 		map[string]string{"Eth-Consensus-Version": "phase0"},
 		gomock.Any(),
 		nil,

@@ -3,6 +3,7 @@ package kv
 import (
 	"context"
 	"io"
+	"os"
 	"testing"
 
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
@@ -14,7 +15,7 @@ func TestMain(m *testing.M) {
 	logrus.SetLevel(logrus.DebugLevel)
 	logrus.SetOutput(io.Discard)
 
-	m.Run()
+	os.Exit(m.Run())
 }
 
 // setupDB instantiates and returns a DB instance for the validator client.

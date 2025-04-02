@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	ma "github.com/multiformats/go-multiaddr"
@@ -35,8 +34,10 @@ func TestStartDiscv5_DifferentForkDigests(t *testing.T) {
 	genesisValidatorsRoot := make([]byte, fieldparams.RootLength)
 	s := &Service{
 		cfg: &Config{
-			UDPPort:       uint(port),
-			StateNotifier: &mock.MockStateNotifier{},
+			UDPPort:              uint(port),
+			StateNotifier:        &mock.MockStateNotifier{},
+			PingInterval:         testPingInterval,
+			DisableLivenessCheck: true,
 		},
 		genesisTime:           genesisTime,
 		genesisValidatorsRoot: genesisValidatorsRoot,
@@ -45,14 +46,20 @@ func TestStartDiscv5_DifferentForkDigests(t *testing.T) {
 	require.NoError(t, err)
 	defer bootListener.Close()
 
+	// Allow bootnode's table to have its initial refresh. This allows
+	// inbound nodes to be added in.
+	time.Sleep(5 * time.Second)
+
 	bootNode := bootListener.Self()
 	cfg := &Config{
 		Discv5BootStrapAddrs: []string{bootNode.String()},
 		UDPPort:              uint(port),
 		StateNotifier:        &mock.MockStateNotifier{},
+		PingInterval:         testPingInterval,
+		DisableLivenessCheck: true,
 	}
 
-	var listeners []*discover.UDPv5
+	var listeners []*listenerWrapper
 	for i := 1; i <= 5; i++ {
 		port := 3000 + i
 		cfg.UDPPort = uint(port)
@@ -125,7 +132,7 @@ func TestStartDiscv5_SameForkDigests_DifferentNextForkData(t *testing.T) {
 	genesisTime := time.Now()
 	genesisValidatorsRoot := make([]byte, 32)
 	s := &Service{
-		cfg:                   &Config{UDPPort: uint(port)},
+		cfg:                   &Config{UDPPort: uint(port), PingInterval: testPingInterval, DisableLivenessCheck: true},
 		genesisTime:           genesisTime,
 		genesisValidatorsRoot: genesisValidatorsRoot,
 	}
@@ -133,18 +140,23 @@ func TestStartDiscv5_SameForkDigests_DifferentNextForkData(t *testing.T) {
 	require.NoError(t, err)
 	defer bootListener.Close()
 
+	// Allow bootnode's table to have its initial refresh. This allows
+	// inbound nodes to be added in.
+	time.Sleep(5 * time.Second)
+
 	bootNode := bootListener.Self()
 	cfg := &Config{
 		Discv5BootStrapAddrs: []string{bootNode.String()},
 		UDPPort:              uint(port),
+		PingInterval:         testPingInterval,
+		DisableLivenessCheck: true,
 	}
 
-	var listeners []*discover.UDPv5
+	var listeners []*listenerWrapper
 	for i := 1; i <= 5; i++ {
 		port := 3000 + i
 		cfg.UDPPort = uint(port)
 		ipAddr, pkey := createAddrAndPrivKey(t)
-
 		c := params.BeaconConfig().Copy()
 		nextForkEpoch := primitives.Epoch(i)
 		c.ForkVersionSchedule[[4]byte{'A', 'B', 'C', 'D'}] = nextForkEpoch

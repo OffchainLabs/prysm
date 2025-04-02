@@ -32,7 +32,7 @@ func CreateAuthToken(authPath, validatorWebAddr string) error {
 	if err := saveAuthToken(authPath, token); err != nil {
 		return err
 	}
-	logValidatorWebAuth(validatorWebAddr, token, authPath)
+	logValidatorWebAuth(true, validatorWebAddr, token, authPath)
 	return nil
 }
 
@@ -104,8 +104,8 @@ func (s *Server) refreshAuthTokenFromFileChanges(ctx context.Context, authTokenP
 				log.WithError(err).Errorf("Could not watch for file changes for: %s", authTokenPath)
 				continue
 			}
-			validatorWebAddr := fmt.Sprintf("%s:%d", s.grpcGatewayHost, s.grpcGatewayPort)
-			logValidatorWebAuth(validatorWebAddr, s.authToken, authTokenPath)
+			validatorWebAddr := fmt.Sprintf("%s:%d", s.httpHost, s.httpPort)
+			logValidatorWebAuth(s.serveWebUI, validatorWebAddr, s.authToken, authTokenPath)
 		case err := <-watcher.Errors:
 			log.WithError(err).Errorf("Could not watch for file changes for: %s", authTokenPath)
 		case <-ctx.Done():
@@ -114,18 +114,19 @@ func (s *Server) refreshAuthTokenFromFileChanges(ctx context.Context, authTokenP
 	}
 }
 
-func logValidatorWebAuth(validatorWebAddr, token, tokenPath string) {
-	webAuthURLTemplate := "http://%s/initialize?token=%s"
-	webAuthURL := fmt.Sprintf(
-		webAuthURLTemplate,
-		validatorWebAddr,
-		url.QueryEscape(token),
-	)
-	log.Infof(
-		"Once your validator process is running, navigate to the link below to authenticate with " +
-			"the Prysm web interface",
-	)
-	log.Info(webAuthURL)
+func logValidatorWebAuth(useWeb bool, validatorWebAddr, token, tokenPath string) {
+	if useWeb {
+		webAuthURLTemplate := "http://%s/initialize?token=%s"
+		webAuthURL := fmt.Sprintf(
+			webAuthURLTemplate,
+			validatorWebAddr,
+			url.QueryEscape(token),
+		)
+		log.Infof(
+			"Starting Prysm WebUI, once your validator process is running, navigate to the link below to authenticate",
+		)
+		log.Info(webAuthURL)
+	}
 	log.Infof("Validator Client auth token for gRPC and REST authentication set at %s", tokenPath)
 }
 

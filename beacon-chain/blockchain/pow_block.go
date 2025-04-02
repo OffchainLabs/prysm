@@ -46,7 +46,7 @@ func (s *Service) validateMergeBlock(ctx context.Context, b interfaces.ReadOnlyS
 	if err != nil {
 		return err
 	}
-	if payload.IsNil() {
+	if payload == nil || payload.IsNil() {
 		return errors.New("nil execution payload")
 	}
 	ok, err := canUseValidatedTerminalBlockHash(b.Block().Slot(), payload)

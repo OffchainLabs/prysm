@@ -28,15 +28,11 @@ func RunConsolidationTest(t *testing.T, config string, fork string, block blockW
 			blk, err := block(consolidationSSZ)
 			require.NoError(t, err)
 			RunBlockOperationTest(t, folderPath, blk, sszToState, func(ctx context.Context, s state.BeaconState, b interfaces.ReadOnlySignedBeaconBlock) (state.BeaconState, error) {
-				ed, err := b.Block().Body().Execution()
+				er, err := b.Block().Body().ExecutionRequests()
 				if err != nil {
 					return nil, err
 				}
-				eed, ok := ed.(interfaces.ExecutionDataElectra)
-				if !ok {
-					t.Fatal("block does not have execution data for electra")
-				}
-				return s, electra.ProcessConsolidationRequests(ctx, s, eed.ConsolidationRequests())
+				return s, electra.ProcessConsolidationRequests(ctx, s, er.Consolidations)
 			})
 		})
 	}

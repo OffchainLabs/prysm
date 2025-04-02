@@ -22,6 +22,7 @@ type Server struct {
 	HeadFetcher            blockchain.HeadFetcher
 	TimeFetcher            blockchain.TimeFetcher
 	SyncChecker            sync.Checker
+	AttestationCache       *cache.AttestationCache
 	AttestationsPool       attestations.Pool
 	PeerManager            p2p.PeerManager
 	Broadcaster            p2p.Broadcaster

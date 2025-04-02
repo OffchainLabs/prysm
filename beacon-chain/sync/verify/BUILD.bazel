@@ -6,7 +6,7 @@ go_library(
     importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/verify",
     visibility = ["//visibility:public"],
     deps = [
-        "//config/fieldparams:go_default_library",
+        "//config/params:go_default_library",
         "//consensus-types/blocks:go_default_library",
         "//encoding/bytesutil:go_default_library",
         "//runtime/version:go_default_library",

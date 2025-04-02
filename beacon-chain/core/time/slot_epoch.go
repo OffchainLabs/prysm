@@ -99,6 +99,15 @@ func CanUpgradeToElectra(slot primitives.Slot) bool {
 	return epochStart && electraEpoch
 }
 
+// CanUpgradeToFulu returns true if the input `slot` can upgrade to Fulu.
+// Spec code:
+// If state.slot % SLOTS_PER_EPOCH == 0 and compute_epoch_at_slot(state.slot) == FULU_FORK_EPOCH
+func CanUpgradeToFulu(slot primitives.Slot) bool {
+	epochStart := slots.IsEpochStart(slot)
+	fuluEpoch := slots.ToEpoch(slot) == params.BeaconConfig().FuluForkEpoch
+	return epochStart && fuluEpoch
+}
+
 // CanProcessEpoch checks the eligibility to process epoch.
 // The epoch can be processed at the end of the last slot of every epoch.
 //

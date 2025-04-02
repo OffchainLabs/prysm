@@ -11,6 +11,29 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
+func TestProcessEffectiveBalanceUpdates_SafeCopy(t *testing.T) {
+	pb := &eth.BeaconStateElectra{
+		Validators: []*eth.Validator{
+			{
+				EffectiveBalance:      params.BeaconConfig().MinActivationBalance,
+				WithdrawalCredentials: []byte{params.BeaconConfig().CompoundingWithdrawalPrefixByte, 0x11},
+			},
+		},
+		Balances: []uint64{
+			params.BeaconConfig().MaxEffectiveBalanceElectra * 2,
+		},
+	}
+	st, err := state_native.InitializeFromProtoElectra(pb)
+	require.NoError(t, err)
+	copiedState := st.Copy()
+
+	err = electra.ProcessEffectiveBalanceUpdates(copiedState)
+	require.NoError(t, err)
+
+	require.Equal(t, st.Validators()[0].EffectiveBalance, params.BeaconConfig().MinActivationBalance)
+	require.Equal(t, copiedState.Validators()[0].EffectiveBalance, params.BeaconConfig().MaxEffectiveBalanceElectra)
+}
+
 func TestProcessEffectiveBalnceUpdates(t *testing.T) {
 	effBalanceInc := params.BeaconConfig().EffectiveBalanceIncrement
 	hysteresisInc := effBalanceInc / params.BeaconConfig().HysteresisQuotient
@@ -54,7 +77,7 @@ func TestProcessEffectiveBalnceUpdates(t *testing.T) {
 					Validators: []*eth.Validator{
 						{
 							EffectiveBalance:      params.BeaconConfig().MinActivationBalance / 2,
-							WithdrawalCredentials: nil,
+							WithdrawalCredentials: make([]byte, 32),
 						},
 					},
 					Balances: []uint64{

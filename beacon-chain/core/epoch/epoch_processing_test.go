@@ -32,10 +32,9 @@ func TestProcessSlashings_NotSlashed(t *testing.T) {
 	}
 	s, err := state_native.InitializeFromProtoPhase0(base)
 	require.NoError(t, err)
-	newState, err := epoch.ProcessSlashings(s, params.BeaconConfig().ProportionalSlashingMultiplier)
-	require.NoError(t, err)
+	require.NoError(t, epoch.ProcessSlashings(s))
 	wanted := params.BeaconConfig().MaxEffectiveBalance
-	assert.Equal(t, wanted, newState.Balances()[0], "Unexpected slashed balance")
+	assert.Equal(t, wanted, s.Balances()[0], "Unexpected slashed balance")
 }
 
 func TestProcessSlashings_SlashedLess(t *testing.T) {
@@ -111,9 +110,8 @@ func TestProcessSlashings_SlashedLess(t *testing.T) {
 			s, err := state_native.InitializeFromProtoPhase0(tt.state)
 			require.NoError(t, err)
 			helpers.ClearCache()
-			newState, err := epoch.ProcessSlashings(s, params.BeaconConfig().ProportionalSlashingMultiplier)
-			require.NoError(t, err)
-			assert.Equal(t, tt.want, newState.Balances()[0], "ProcessSlashings({%v}) = newState; newState.Balances[0] = %d", original, newState.Balances()[0])
+			require.NoError(t, epoch.ProcessSlashings(s))
+			assert.Equal(t, tt.want, s.Balances()[0], "ProcessSlashings({%v}) = newState; newState.Balances[0] = %d", original, s.Balances()[0])
 		})
 	}
 }
@@ -365,8 +363,7 @@ func TestProcessSlashings_BadValue(t *testing.T) {
 	}
 	s, err := state_native.InitializeFromProtoPhase0(base)
 	require.NoError(t, err)
-	_, err = epoch.ProcessSlashings(s, params.BeaconConfig().ProportionalSlashingMultiplier)
-	require.ErrorContains(t, "addition overflows", err)
+	require.ErrorContains(t, "addition overflows", epoch.ProcessSlashings(s))
 }
 
 func TestProcessHistoricalDataUpdate(t *testing.T) {
@@ -445,6 +442,77 @@ func TestProcessHistoricalDataUpdate(t *testing.T) {
 			got, err := epoch.ProcessHistoricalDataUpdate(tt.st())
 			require.NoError(t, err)
 			tt.verifier(got)
+		})
+	}
+}
+
+func TestProcessSlashings_SlashedElectra(t *testing.T) {
+	tests := []struct {
+		state *ethpb.BeaconStateElectra
+		want  uint64
+	}{
+		{
+			state: &ethpb.BeaconStateElectra{
+				Validators: []*ethpb.Validator{
+					{Slashed: true,
+						WithdrawableEpoch: params.BeaconConfig().EpochsPerSlashingsVector / 2,
+						EffectiveBalance:  params.BeaconConfig().MaxEffectiveBalance},
+					{ExitEpoch: params.BeaconConfig().FarFutureEpoch, EffectiveBalance: params.BeaconConfig().MaxEffectiveBalance}},
+				Balances:  []uint64{params.BeaconConfig().MaxEffectiveBalance, params.BeaconConfig().MaxEffectiveBalance},
+				Slashings: []uint64{0, 1e9},
+			},
+			want: uint64(29000000000),
+		},
+		{
+			state: &ethpb.BeaconStateElectra{
+				Validators: []*ethpb.Validator{
+					{Slashed: true,
+						WithdrawableEpoch: params.BeaconConfig().EpochsPerSlashingsVector / 2,
+						EffectiveBalance:  params.BeaconConfig().MaxEffectiveBalance},
+					{ExitEpoch: params.BeaconConfig().FarFutureEpoch, EffectiveBalance: params.BeaconConfig().MaxEffectiveBalance},
+					{ExitEpoch: params.BeaconConfig().FarFutureEpoch, EffectiveBalance: params.BeaconConfig().MaxEffectiveBalance},
+				},
+				Balances:  []uint64{params.BeaconConfig().MaxEffectiveBalance, params.BeaconConfig().MaxEffectiveBalance},
+				Slashings: []uint64{0, 1e9},
+			},
+			want: uint64(30500000000),
+		},
+		{
+			state: &ethpb.BeaconStateElectra{
+				Validators: []*ethpb.Validator{
+					{Slashed: true,
+						WithdrawableEpoch: params.BeaconConfig().EpochsPerSlashingsVector / 2,
+						EffectiveBalance:  params.BeaconConfig().MaxEffectiveBalanceElectra},
+					{ExitEpoch: params.BeaconConfig().FarFutureEpoch, EffectiveBalance: params.BeaconConfig().MaxEffectiveBalanceElectra},
+					{ExitEpoch: params.BeaconConfig().FarFutureEpoch, EffectiveBalance: params.BeaconConfig().MaxEffectiveBalanceElectra},
+				},
+				Balances:  []uint64{params.BeaconConfig().MaxEffectiveBalance * 10, params.BeaconConfig().MaxEffectiveBalance * 20},
+				Slashings: []uint64{0, 2 * 1e9},
+			},
+			want: uint64(317000001536),
+		},
+		{
+			state: &ethpb.BeaconStateElectra{
+				Validators: []*ethpb.Validator{
+					{Slashed: true,
+						WithdrawableEpoch: params.BeaconConfig().EpochsPerSlashingsVector / 2,
+						EffectiveBalance:  params.BeaconConfig().MaxEffectiveBalanceElectra - params.BeaconConfig().EffectiveBalanceIncrement},
+					{ExitEpoch: params.BeaconConfig().FarFutureEpoch, EffectiveBalance: params.BeaconConfig().MaxEffectiveBalanceElectra - params.BeaconConfig().EffectiveBalanceIncrement}},
+				Balances:  []uint64{params.BeaconConfig().MaxEffectiveBalanceElectra - params.BeaconConfig().EffectiveBalanceIncrement, params.BeaconConfig().MaxEffectiveBalanceElectra - params.BeaconConfig().EffectiveBalanceIncrement},
+				Slashings: []uint64{0, 1e9},
+			},
+			want: uint64(2044000000727),
+		},
+	}
+
+	for i, tt := range tests {
+		t.Run(fmt.Sprint(i), func(t *testing.T) {
+			original := proto.Clone(tt.state)
+			s, err := state_native.InitializeFromProtoElectra(tt.state)
+			require.NoError(t, err)
+			helpers.ClearCache()
+			require.NoError(t, epoch.ProcessSlashings(s))
+			assert.Equal(t, tt.want, s.Balances()[0], "ProcessSlashings({%v}); s.Balances[0] = %d", original, s.Balances()[0])
 		})
 	}
 }

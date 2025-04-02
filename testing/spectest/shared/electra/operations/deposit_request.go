@@ -17,8 +17,11 @@ func blockWithDepositRequest(ssz []byte) (interfaces.SignedBeaconBlock, error) {
 	if err := dr.UnmarshalSSZ(ssz); err != nil {
 		return nil, err
 	}
+	er := &enginev1.ExecutionRequests{
+		Deposits: []*enginev1.DepositRequest{dr},
+	}
 	b := util.NewBeaconBlockElectra()
-	b.Block.Body = &ethpb.BeaconBlockBodyElectra{ExecutionPayload: &enginev1.ExecutionPayloadElectra{DepositRequests: []*enginev1.DepositRequest{dr}}}
+	b.Block.Body = &ethpb.BeaconBlockBodyElectra{ExecutionRequests: er}
 	return blocks.NewSignedBeaconBlock(b)
 }
 

@@ -100,6 +100,7 @@ func FuzzValidateBeaconBlockPubSub_Phase0(f *testing.F) {
 		}
 		r.cfg.chain = cService
 		r.cfg.blockNotifier = cService.BlockNotifier()
+		r.cfg.operationNotifier = cService.OperationNotifier()
 		strTop := string(topic)
 		msg := &pubsub.Message{
 			Message: &pb.Message{
@@ -146,13 +147,14 @@ func FuzzValidateBeaconBlockPubSub_Altair(f *testing.F) {
 	}
 	r := &Service{
 		cfg: &config{
-			beaconDB:      db,
-			p2p:           p,
-			initialSync:   &mockSync.Sync{IsSyncing: false},
-			chain:         chainService,
-			blockNotifier: chainService.BlockNotifier(),
-			stateGen:      stateGen,
-			clock:         startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot),
+			beaconDB:          db,
+			p2p:               p,
+			initialSync:       &mockSync.Sync{IsSyncing: false},
+			chain:             chainService,
+			clock:             startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot),
+			blockNotifier:     chainService.BlockNotifier(),
+			operationNotifier: chainService.OperationNotifier(),
+			stateGen:          stateGen,
 		},
 		seenBlockCache:      lruwrpr.New(10),
 		badBlockCache:       lruwrpr.New(10),
@@ -182,6 +184,7 @@ func FuzzValidateBeaconBlockPubSub_Altair(f *testing.F) {
 		}
 		r.cfg.chain = cService
 		r.cfg.blockNotifier = cService.BlockNotifier()
+		r.cfg.operationNotifier = cService.OperationNotifier()
 		strTop := string(topic)
 		msg := &pubsub.Message{
 			Message: &pb.Message{
@@ -228,13 +231,14 @@ func FuzzValidateBeaconBlockPubSub_Bellatrix(f *testing.F) {
 	}
 	r := &Service{
 		cfg: &config{
-			beaconDB:      db,
-			p2p:           p,
-			initialSync:   &mockSync.Sync{IsSyncing: false},
-			chain:         chainService,
-			clock:         startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot),
-			blockNotifier: chainService.BlockNotifier(),
-			stateGen:      stateGen,
+			beaconDB:          db,
+			p2p:               p,
+			initialSync:       &mockSync.Sync{IsSyncing: false},
+			chain:             chainService,
+			clock:             startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot),
+			blockNotifier:     chainService.BlockNotifier(),
+			operationNotifier: chainService.OperationNotifier(),
+			stateGen:          stateGen,
 		},
 		seenBlockCache:      lruwrpr.New(10),
 		badBlockCache:       lruwrpr.New(10),
@@ -264,6 +268,7 @@ func FuzzValidateBeaconBlockPubSub_Bellatrix(f *testing.F) {
 		}
 		r.cfg.chain = cService
 		r.cfg.blockNotifier = cService.BlockNotifier()
+		r.cfg.operationNotifier = cService.OperationNotifier()
 		strTop := string(topic)
 		msg := &pubsub.Message{
 			Message: &pb.Message{

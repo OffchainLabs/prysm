@@ -413,7 +413,7 @@ func TestHandshakeHandlers_Roundtrip(t *testing.T) {
 	assert.Equal(t, numActive1+1, numActive2, "Number of active peers unexpected")
 
 	require.NoError(t, p2.Disconnect(p1.PeerID()))
-	p1.Peers().SetConnectionState(p2.PeerID(), peers.PeerDisconnected)
+	p1.Peers().SetConnectionState(p2.PeerID(), peers.Disconnected)
 
 	// Wait for disconnect event to trigger.
 	time.Sleep(200 * time.Millisecond)
@@ -877,7 +877,7 @@ func TestStatusRPCRequest_BadPeerHandshake(t *testing.T) {
 
 	require.NoError(t, cw.SetClock(startup.NewClock(chain.Genesis, chain.ValidatorsRoot)))
 
-	assert.Equal(t, false, p1.Peers().Scorers().IsBadPeer(p2.PeerID()), "Peer is marked as bad")
+	assert.NoError(t, p1.Peers().Scorers().IsBadPeer(p2.PeerID()), "Peer is marked as bad")
 	p1.Connect(p2)
 
 	if util.WaitTimeout(&wg, time.Second) {
@@ -887,9 +887,9 @@ func TestStatusRPCRequest_BadPeerHandshake(t *testing.T) {
 
 	connectionState, err := p1.Peers().ConnectionState(p2.PeerID())
 	require.NoError(t, err, "Could not obtain peer connection state")
-	assert.Equal(t, peers.PeerDisconnected, connectionState, "Expected peer to be disconnected")
+	assert.Equal(t, peers.Disconnected, connectionState, "Expected peer to be disconnected")
 
-	assert.Equal(t, true, p1.Peers().Scorers().IsBadPeer(p2.PeerID()), "Peer is not marked as bad")
+	assert.NotNil(t, p1.Peers().Scorers().IsBadPeer(p2.PeerID()), "Peer is not marked as bad")
 }
 
 func TestStatusRPC_ValidGenesisMessage(t *testing.T) {

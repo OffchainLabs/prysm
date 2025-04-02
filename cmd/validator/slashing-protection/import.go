@@ -33,7 +33,7 @@ func importSlashingProtectionJSON(cliCtx *cli.Context) error {
 	)
 
 	// Check if a minimal database is requested
-	isDatabaseMimimal := cliCtx.Bool(features.EnableMinimalSlashingProtection.Name)
+	isDatabaseMinimal := cliCtx.Bool(features.EnableMinimalSlashingProtection.Name)
 
 	// Get the data directory from the CLI context.
 	dataDir := cliCtx.String(cmd.DataDirFlag.Name)
@@ -45,7 +45,7 @@ func importSlashingProtectionJSON(cliCtx *cli.Context) error {
 	}
 
 	// Ensure that the database is found under the specified directory or its subdirectories
-	if isDatabaseMimimal {
+	if isDatabaseMinimal {
 		found, _, err = file.RecursiveDirFind(filesystem.DatabaseDirName, dataDir)
 	} else {
 		found, _, err = file.RecursiveFileFind(kv.ProtectionDbFileName, dataDir)
@@ -63,7 +63,7 @@ func importSlashingProtectionJSON(cliCtx *cli.Context) error {
 	log.Infof(message, dataDir)
 
 	// Open the validator database.
-	if isDatabaseMimimal {
+	if isDatabaseMinimal {
 		valDB, err = filesystem.NewStore(dataDir, nil)
 	} else {
 		valDB, err = kv.NewKVStore(cliCtx.Context, dataDir, nil)

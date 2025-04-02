@@ -38,6 +38,16 @@ func (a *data) Withdrawals() ([]*enginev1.Withdrawal, error) {
 	return a.withdrawals, nil
 }
 
+func (a *data) ParentBeaconBlockRoot() ([]byte, error) {
+	if len(a.parentBeaconBlockRoot) == 0 {
+		return nil, errNoParentRoot
+	}
+	if a.version < version.Deneb {
+		return nil, consensus_types.ErrNotSupported("ParentBeaconBlockRoot", a.version)
+	}
+	return a.parentBeaconBlockRoot, nil
+}
+
 // PbV1 returns the payload attribute in version 1.
 func (a *data) PbV1() (*enginev1.PayloadAttributes, error) {
 	if a == nil {
@@ -97,6 +107,9 @@ func (a *data) PbV3() (*enginev1.PayloadAttributesV3, error) {
 
 // IsEmpty returns whether the given payload attribute is empty
 func (a *data) IsEmpty() bool {
+	if a == nil {
+		return true
+	}
 	if len(a.PrevRandao()) != 0 {
 		return false
 	}

@@ -7,6 +7,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stategen"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
 	"github.com/prysmaticlabs/prysm/v5/network"
 	"github.com/prysmaticlabs/prysm/v5/network/authorization"
 )
@@ -112,6 +113,14 @@ func WithFinalizedStateAtStartup(st state.BeaconState) Option {
 func WithJwtId(jwtId string) Option {
 	return func(s *Service) error {
 		s.cfg.jwtId = jwtId
+		return nil
+	}
+}
+
+// WithVerifierWaiter gives the sync package direct access to the verifier waiter.
+func WithVerifierWaiter(v *verification.InitializerWaiter) Option {
+	return func(s *Service) error {
+		s.verifierWaiter = v
 		return nil
 	}
 }

@@ -2,15 +2,11 @@ package grpc
 
 import (
 	"context"
-	"encoding/json"
-	"strings"
 	"testing"
 
-	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	logTest "github.com/sirupsen/logrus/hooks/test"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -61,18 +57,4 @@ func TestAppendHeaders(t *testing.T) {
 		require.Equal(t, 1, md.Len(), "MetadataV0 contains wrong number of values")
 		assert.Equal(t, "value=1", md.Get("first")[0])
 	})
-}
-
-func TestAppendCustomErrorHeader(t *testing.T) {
-	stream := &runtime.ServerTransportStream{}
-	ctx := grpc.NewContextWithServerTransportStream(context.Background(), stream)
-	data := &customErrorData{Message: "foo"}
-	require.NoError(t, AppendCustomErrorHeader(ctx, data))
-	// The stream used in test setup sets the metadata key in lowercase.
-	value, ok := stream.Header()[strings.ToLower(CustomErrorMetadataKey)]
-	require.Equal(t, true, ok, "Failed to retrieve custom error metadata value")
-	expected, err := json.Marshal(data)
-	require.NoError(t, err)
-	assert.Equal(t, string(expected), value[0])
-
 }

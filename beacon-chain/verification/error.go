@@ -1,9 +1,48 @@
 package verification
 
-import "github.com/pkg/errors"
+import (
+	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+)
 
-// ErrMissingVerification indicates that the given verification function was never performed on the value.
-var ErrMissingVerification = errors.New("verification was not performed for requirement")
+var (
+	// ErrFromFutureSlot means RequireSlotNotTooEarly failed.
+	ErrFromFutureSlot = errors.New("slot is too far in the future")
+
+	// ErrSlotNotAfterFinalized means RequireSlotAboveFinalized failed.
+	ErrSlotNotAfterFinalized = errors.New("slot <= finalized checkpoint")
+
+	// ErrInvalidProposerSignature means RequireValidProposerSignature failed.
+	ErrInvalidProposerSignature = errors.New("proposer signature could not be verified")
+
+	// ErrSidecarParentNotSeen means RequireSidecarParentSeen failed.
+	ErrSidecarParentNotSeen = errors.New("parent root has not been seen")
+
+	// ErrSidecarParentInvalid means RequireSidecarParentValid failed.
+	ErrSidecarParentInvalid = errors.New("parent block is not valid")
+
+	// ErrSlotNotAfterParent means RequireSidecarParentSlotLower failed.
+	ErrSlotNotAfterParent = errors.New("slot <= slot")
+
+	// ErrSidecarNotFinalizedDescendent means RequireSidecarDescendsFromFinalized failed.
+	ErrSidecarNotFinalizedDescendent = errors.New("parent is not descended from the finalized block")
+
+	// ErrSidecarInclusionProofInvalid means RequireSidecarInclusionProven failed.
+	ErrSidecarInclusionProofInvalid = errors.New("sidecar inclusion proof verification failed")
+
+	// ErrSidecarKzgProofInvalid means RequireSidecarKzgProofVerified failed.
+	ErrSidecarKzgProofInvalid = errors.New("sidecar kzg commitment proof verification failed")
+
+	// ErrSidecarUnexpectedProposer means RequireSidecarProposerExpected failed.
+	ErrSidecarUnexpectedProposer = errors.New("sidecar was not proposed by the expected proposer_index")
+
+	// ErrMissingVerification indicates that the given verification function was never performed on the value.
+	ErrMissingVerification = errors.New("verification was not performed for requirement")
+
+	// errVerificationImplementationFault indicates that a code path yielding VerifiedROBlobs has an implementation
+	// error, leading it to call VerifiedROBlobError with a nil error.
+	errVerificationImplementationFault = errors.New("could not verify blob data or create a valid VerifiedROBlob.")
+)
 
 // VerificationMultiError is a custom error that can be used to access individual verification failures.
 type VerificationMultiError struct {
@@ -35,4 +74,13 @@ func (ve VerificationMultiError) Failures() map[Requirement]error {
 
 func newVerificationMultiError(r *results, err error) VerificationMultiError {
 	return VerificationMultiError{r: r, err: err}
+}
+
+// VerifiedROBlobError can be used by methods that have a VerifiedROBlob return type but do not have permission to
+// create a value of that type in order to generate an error return value.
+func VerifiedROBlobError(err error) (blocks.VerifiedROBlob, error) {
+	if err == nil {
+		return blocks.VerifiedROBlob{}, errVerificationImplementationFault
+	}
+	return blocks.VerifiedROBlob{}, err
 }

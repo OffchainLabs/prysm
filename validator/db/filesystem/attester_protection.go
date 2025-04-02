@@ -27,7 +27,7 @@ func (*Store) SaveEIPImportBlacklistedPublicKeys(_ context.Context, _ [][fieldpa
 
 // SigningRootAtTargetEpoch is implemented only to satisfy the interface.
 func (*Store) SigningRootAtTargetEpoch(_ context.Context, _ [fieldparams.BLSPubkeyLength]byte, _ primitives.Epoch) ([]byte, error) {
-	panic("not implemented")
+	return nil, errors.New("not implemented")
 }
 
 // LowestSignedTargetEpoch returns the lowest signed target epoch for a public key, a boolean indicating if it exists and an error.
@@ -131,10 +131,9 @@ func (s *Store) SaveAttestationForPubKey(
 	att ethpb.IndexedAtt,
 ) error {
 	// If there is no attestation, return on error.
-	if att == nil || att.GetData() == nil || att.GetData().Source == nil || att.GetData().Target == nil {
+	if att == nil || att.IsNil() || att.GetData().Source == nil || att.GetData().Target == nil {
 		return errors.New("incoming attestation does not contain source and/or target epoch")
 	}
-
 	// Get validator slashing protection.
 	validatorSlashingProtection, err := s.validatorSlashingProtection(pubkey)
 	if err != nil {

@@ -884,6 +884,8 @@ func genPayloadDeneb() *enginev1.ExecutionPayloadDeneb {
 	}
 }
 
+var genPayloadElectra = genPayloadDeneb
+
 func genPayloadHeader() *enginev1.ExecutionPayloadHeader {
 	return &enginev1.ExecutionPayloadHeader{
 		ParentHash:       bytes(32),
@@ -944,6 +946,8 @@ func genPayloadHeaderDeneb() *enginev1.ExecutionPayloadHeaderDeneb {
 		ExcessBlobGas:    6,
 	}
 }
+
+var genPayloadHeaderElectra = genPayloadHeaderDeneb
 
 func genWithdrawals(num int) []*enginev1.Withdrawal {
 	ws := make([]*enginev1.Withdrawal, num)
@@ -1049,34 +1053,10 @@ func genBlindedBeaconBlockBodyElectra() *v1alpha1.BlindedBeaconBlockBodyElectra 
 		Deposits:               genDeposits(5),
 		VoluntaryExits:         genSignedVoluntaryExits(12),
 		SyncAggregate:          genSyncAggregate(),
-		ExecutionPayloadHeader: genExecutionPayloadHeaderElectra(),
+		ExecutionPayloadHeader: genPayloadHeaderElectra(),
 		BlsToExecutionChanges:  genBLSToExecutionChanges(10),
 		BlobKzgCommitments:     getKZGCommitments(4),
-	}
-}
-
-func genExecutionPayloadHeaderElectra() *enginev1.ExecutionPayloadHeaderElectra {
-	return &enginev1.ExecutionPayloadHeaderElectra{
-		ParentHash:                bytes(32),
-		FeeRecipient:              bytes(20),
-		StateRoot:                 bytes(32),
-		ReceiptsRoot:              bytes(32),
-		LogsBloom:                 bytes(256),
-		PrevRandao:                bytes(32),
-		BlockNumber:               1,
-		GasLimit:                  2,
-		GasUsed:                   3,
-		Timestamp:                 4,
-		ExtraData:                 bytes(32),
-		BaseFeePerGas:             bytes(32),
-		BlockHash:                 bytes(32),
-		TransactionsRoot:          bytes(32),
-		WithdrawalsRoot:           bytes(32),
-		BlobGasUsed:               5,
-		ExcessBlobGas:             6,
-		DepositRequestsRoot:       bytes(32),
-		WithdrawalRequestsRoot:    bytes(32),
-		ConsolidationRequestsRoot: bytes(32),
+		ExecutionRequests:      genExecutionRequests(),
 	}
 }
 
@@ -1108,34 +1088,18 @@ func genBeaconBlockBodyElectra() *v1alpha1.BeaconBlockBodyElectra {
 		Deposits:              genDeposits(5),
 		VoluntaryExits:        genSignedVoluntaryExits(12),
 		SyncAggregate:         genSyncAggregate(),
-		ExecutionPayload:      genExecutionPayloadElectra(),
+		ExecutionPayload:      genPayloadElectra(),
 		BlsToExecutionChanges: genBLSToExecutionChanges(10),
 		BlobKzgCommitments:    getKZGCommitments(4),
+		ExecutionRequests:     genExecutionRequests(),
 	}
 }
 
-func genExecutionPayloadElectra() *enginev1.ExecutionPayloadElectra {
-	return &enginev1.ExecutionPayloadElectra{
-		ParentHash:            bytes(32),
-		FeeRecipient:          bytes(20),
-		StateRoot:             bytes(32),
-		ReceiptsRoot:          bytes(32),
-		LogsBloom:             bytes(256),
-		PrevRandao:            bytes(32),
-		BlockNumber:           1,
-		GasLimit:              2,
-		GasUsed:               3,
-		Timestamp:             4,
-		ExtraData:             bytes(32),
-		BaseFeePerGas:         bytes(32),
-		BlockHash:             bytes(32),
-		Transactions:          [][]byte{{'a'}, {'b'}, {'c'}},
-		Withdrawals:           genWithdrawals(10),
-		BlobGasUsed:           5,
-		ExcessBlobGas:         6,
-		DepositRequests:       genDepositRequests(10),
-		WithdrawalRequests:    genWithdrawalRequests(10),
-		ConsolidationRequests: genConsolidationRequests(10),
+func genExecutionRequests() *enginev1.ExecutionRequests {
+	return &enginev1.ExecutionRequests{
+		Deposits:       genDepositRequests(10),
+		Withdrawals:    genWithdrawalRequests(10),
+		Consolidations: genConsolidationRequests(10),
 	}
 }
 
@@ -1186,51 +1150,5 @@ func genConsolidationRequest() *enginev1.ConsolidationRequest {
 		SourceAddress: bytes(20),
 		SourcePubkey:  bytes(48),
 		TargetPubkey:  bytes(48),
-	}
-}
-
-func genPendingPartialWithdrawals(num int) []*v1alpha1.PendingPartialWithdrawal {
-	ppws := make([]*v1alpha1.PendingPartialWithdrawal, num)
-	for i := 0; i < num; i++ {
-		ppws[i] = genPendingPartialWithdrawal()
-	}
-	return ppws
-}
-
-func genPendingPartialWithdrawal() *v1alpha1.PendingPartialWithdrawal {
-	return &v1alpha1.PendingPartialWithdrawal{
-		Index:             123456,
-		Amount:            55555,
-		WithdrawableEpoch: 444444,
-	}
-}
-
-func genPendingConsolidations(num int) []*v1alpha1.PendingConsolidation {
-	pcs := make([]*v1alpha1.PendingConsolidation, num)
-	for i := 0; i < num; i++ {
-		pcs[i] = genPendingConsolidation()
-	}
-	return pcs
-}
-
-func genPendingConsolidation() *v1alpha1.PendingConsolidation {
-	return &v1alpha1.PendingConsolidation{
-		SourceIndex: 1,
-		TargetIndex: 2,
-	}
-}
-
-func genPendingBalanceDeposits(num int) []*v1alpha1.PendingBalanceDeposit {
-	pbds := make([]*v1alpha1.PendingBalanceDeposit, num)
-	for i := 0; i < num; i++ {
-		pbds[i] = genPendingBalanceDeposit()
-	}
-	return pbds
-}
-
-func genPendingBalanceDeposit() *v1alpha1.PendingBalanceDeposit {
-	return &v1alpha1.PendingBalanceDeposit{
-		Index:  123456,
-		Amount: 55555,
 	}
 }

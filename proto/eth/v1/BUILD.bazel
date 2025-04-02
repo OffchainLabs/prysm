@@ -84,24 +84,13 @@ go_proto_library(
     ],
 )
 
-go_proto_library(
-    name = "go_grpc_gateway_library",
-    compilers = [
-        "@com_github_grpc_ecosystem_grpc_gateway_v2//protoc-gen-grpc-gateway:go_gen_grpc_gateway",
-    ],
-    embed = [":go_proto"],
-    importpath = "github.com/prysmaticlabs/prysm/v5/proto/eth/v1",
-    protos = [":proto"],
-    visibility = ["//proto:__subpackages__"],
-)
-
 go_library(
     name = "go_default_library",
     srcs = [
         ":ssz_generated_files",
     ],
     embed = [
-        ":go_grpc_gateway_library",
+        ":go_proto",
     ],
     importpath = "github.com/prysmaticlabs/prysm/v5/proto/eth/v1",
     visibility = ["//visibility:public"],

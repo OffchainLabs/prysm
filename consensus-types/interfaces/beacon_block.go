@@ -47,7 +47,6 @@ type ReadOnlyBeaconBlock interface {
 	ssz.HashRoot
 	Version() int
 	AsSignRequestObject() (validatorpb.SignRequestObject, error)
-	Copy() (ReadOnlyBeaconBlock, error)
 }
 
 // ReadOnlyBeaconBlockBody describes the method set employed by an object
@@ -69,6 +68,7 @@ type ReadOnlyBeaconBlockBody interface {
 	Execution() (ExecutionData, error)
 	BLSToExecutionChanges() ([]*ethpb.SignedBLSToExecutionChange, error)
 	BlobKzgCommitments() ([][]byte, error)
+	ExecutionRequests() (*enginev1.ExecutionRequests, error)
 }
 
 type SignedBeaconBlock interface {
@@ -90,6 +90,7 @@ type SignedBeaconBlock interface {
 	SetProposerIndex(idx primitives.ValidatorIndex)
 	SetSlot(slot primitives.Slot)
 	SetSignature(sig []byte)
+	SetExecutionRequests(er *enginev1.ExecutionRequests) error
 	Unblind(e ExecutionData) error
 }
 
@@ -121,11 +122,4 @@ type ExecutionData interface {
 	TransactionsRoot() ([]byte, error)
 	Withdrawals() ([]*enginev1.Withdrawal, error)
 	WithdrawalsRoot() ([]byte, error)
-}
-
-type ExecutionDataElectra interface {
-	ExecutionData
-	DepositRequests() []*enginev1.DepositRequest
-	WithdrawalRequests() []*enginev1.WithdrawalRequest
-	ConsolidationRequests() []*enginev1.ConsolidationRequest
 }

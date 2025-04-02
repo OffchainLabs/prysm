@@ -77,7 +77,7 @@ func TestProposeBeaconBlock_BlindedBellatrix(t *testing.T) {
 	headers := map[string]string{"Eth-Consensus-Version": "bellatrix"}
 	jsonRestHandler.EXPECT().Post(
 		gomock.Any(),
-		"/eth/v1/beacon/blinded_blocks",
+		"/eth/v2/beacon/blinded_blocks",
 		headers,
 		bytes.NewBuffer(marshalledBlock),
 		nil,

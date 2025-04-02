@@ -2,13 +2,16 @@ package validator
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/go-bitfield"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/electra"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
@@ -30,21 +33,19 @@ func (vs *Server) packAttestations(ctx context.Context, latestState state.Beacon
 	ctx, span := trace.StartSpan(ctx, "ProposerServer.packAttestations")
 	defer span.End()
 
-	atts := vs.AttPool.AggregatedAttestations()
-	atts, err := vs.validateAndDeleteAttsInPool(ctx, latestState, atts)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not filter attestations")
-	}
+	var atts []ethpb.Att
 
-	uAtts, err := vs.AttPool.UnaggregatedAttestations()
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get unaggregated attestations")
+	if features.Get().EnableExperimentalAttestationPool {
+		atts = vs.AttestationCache.GetAll()
+		atts = vs.validateAndDeleteAttsInPool(ctx, latestState, atts)
+	} else {
+		atts = vs.AttPool.AggregatedAttestations()
+		atts = vs.validateAndDeleteAttsInPool(ctx, latestState, atts)
+
+		uAtts := vs.AttPool.UnaggregatedAttestations()
+		uAtts = vs.validateAndDeleteAttsInPool(ctx, latestState, uAtts)
+		atts = append(atts, uAtts...)
 	}
-	uAtts, err = vs.validateAndDeleteAttsInPool(ctx, latestState, uAtts)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not filter attestations")
-	}
-	atts = append(atts, uAtts...)
 
 	// Checking the state's version here will give the wrong result if the last slot of Deneb is missed.
 	// The head state will still be in Deneb while we are trying to build an Electra block.
@@ -64,6 +65,8 @@ func (vs *Server) packAttestations(ctx context.Context, latestState state.Beacon
 			}
 		}
 	}
+
+	var err error
 
 	// Remove duplicates from both aggregated/unaggregated attestations. This
 	// prevents inefficient aggregates being created.
@@ -91,14 +94,7 @@ func (vs *Server) packAttestations(ctx context.Context, latestState state.Beacon
 
 	var attsForInclusion proposerAtts
 	if postElectra {
-		// TODO: hack for Electra devnet-1, take only one aggregate per ID
-		// (which essentially means one aggregate for an attestation_data+committee combination
-		topAggregates := make([]ethpb.Att, 0)
-		for _, v := range attsById {
-			topAggregates = append(topAggregates, v[0])
-		}
-
-		attsForInclusion, err = computeOnChainAggregate(topAggregates)
+		attsForInclusion, err = onChainAggregates(attsById)
 		if err != nil {
 			return nil, err
 		}
@@ -113,12 +109,66 @@ func (vs *Server) packAttestations(ctx context.Context, latestState state.Beacon
 	if err != nil {
 		return nil, err
 	}
-	sorted, err := deduped.sort()
-	if err != nil {
-		return nil, err
+
+	var sorted proposerAtts
+	if postElectra {
+		sorted, err = deduped.sortOnChainAggregates(ctx, latestState)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		sorted, err = deduped.sort()
+		if err != nil {
+			return nil, err
+		}
 	}
+
 	atts = sorted.limitToMaxAttestations()
 	return vs.filterAttestationBySignature(ctx, atts, latestState)
+}
+
+func onChainAggregates(attsById map[attestation.Id][]ethpb.Att) (proposerAtts, error) {
+	var result proposerAtts
+	var err error
+
+	// When constructing on-chain aggregates, we want to combine the most profitable
+	// aggregate for each ID, then the second most profitable, and so on and so forth.
+	// Because of this we sort attestations at the beginning.
+	for id, as := range attsById {
+		attsById[id], err = proposerAtts(as).sort()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// We construct the first on-chain aggregate by taking the first aggregate for each ID.
+	// We construct the second on-chain aggregate by taking the second aggregate for each ID.
+	// We continue doing this until we run out of aggregates.
+	idx := 0
+	for {
+		topAggregates := make([]ethpb.Att, 0, len(attsById))
+		for _, as := range attsById {
+			// In case there are no more aggregates for an ID, we skip that ID.
+			if len(as) > idx {
+				topAggregates = append(topAggregates, as[idx])
+			}
+		}
+
+		// Once there are no more aggregates for any ID, we are done.
+		if len(topAggregates) == 0 {
+			break
+		}
+
+		onChainAggs, err := computeOnChainAggregate(topAggregates)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, onChainAggs...)
+
+		idx++
+	}
+
+	return result, nil
 }
 
 // filter separates attestation list into two groups: valid and invalid attestations.
@@ -217,10 +267,45 @@ func (a proposerAtts) sort() (proposerAtts, error) {
 		return a, nil
 	}
 
-	if features.Get().EnableCommitteeAwarePacking {
-		return a.sortBySlotAndCommittee()
+	if features.Get().DisableCommitteeAwarePacking {
+		return a.sortByProfitabilityUsingMaxCover()
 	}
-	return a.sortByProfitabilityUsingMaxCover()
+	return a.sortBySlotAndCommittee()
+}
+
+func (a proposerAtts) sortOnChainAggregates(ctx context.Context, st state.ReadOnlyBeaconState) (proposerAtts, error) {
+	if len(a) < 2 {
+		return a, nil
+	}
+
+	totalBalance, err := helpers.TotalActiveBalance(st)
+	if err != nil {
+		return nil, err
+	}
+
+	// Sort attestation by proposer reward numerator using a cache.
+	cache := make(map[ethpb.Att]uint64)
+
+	getCachedReward := func(att ethpb.Att) uint64 {
+		if val, ok := cache[att]; ok {
+			return val
+		}
+		r, err := electra.GetProposerRewardNumerator(ctx, st, att, totalBalance)
+		if err != nil {
+			log.WithError(err).Debug("Failed to get proposer reward numerator")
+			return 0
+		}
+		cache[att] = r
+		return r
+	}
+
+	slices.SortFunc(a, func(a, b ethpb.Att) int {
+		r1 := getCachedReward(a)
+		r2 := getCachedReward(b)
+		return cmp.Compare(r2, r1)
+	})
+
+	return a, nil
 }
 
 // Separate attestations by slot, as slot number takes higher precedence when sorting.
@@ -231,7 +316,6 @@ func (a proposerAtts) sortBySlotAndCommittee() (proposerAtts, error) {
 	type slotAtts struct {
 		candidates map[primitives.CommitteeIndex]proposerAtts
 		selected   map[primitives.CommitteeIndex]proposerAtts
-		leftover   map[primitives.CommitteeIndex]proposerAtts
 	}
 
 	var slots []primitives.Slot
@@ -250,7 +334,6 @@ func (a proposerAtts) sortBySlotAndCommittee() (proposerAtts, error) {
 	var err error
 	for _, sa := range attsBySlot {
 		sa.selected = make(map[primitives.CommitteeIndex]proposerAtts)
-		sa.leftover = make(map[primitives.CommitteeIndex]proposerAtts)
 		for ci, committeeAtts := range sa.candidates {
 			sa.selected[ci], err = committeeAtts.sortByProfitabilityUsingMaxCover_committeeAwarePacking()
 			if err != nil {
@@ -265,9 +348,6 @@ func (a proposerAtts) sortBySlotAndCommittee() (proposerAtts, error) {
 	})
 	for _, slot := range slots {
 		sortedAtts = append(sortedAtts, sortSlotAttestations(attsBySlot[slot].selected)...)
-	}
-	for _, slot := range slots {
-		sortedAtts = append(sortedAtts, sortSlotAttestations(attsBySlot[slot].leftover)...)
 	}
 
 	return sortedAtts, nil
@@ -287,15 +367,11 @@ func (a proposerAtts) sortByProfitabilityUsingMaxCover_committeeAwarePacking() (
 			return nil, err
 		}
 	}
-	// Add selected candidates on top, those that are not selected - append at bottom.
 	selectedKeys, _, err := aggregation.MaxCover(candidates, len(candidates), true /* allowOverlaps */)
 	if err != nil {
 		log.WithError(err).Debug("MaxCover aggregation failed")
 		return a, nil
 	}
-
-	// Pick selected attestations first, leftover attestations will be appended at the end.
-	// Both lists will be sorted by number of bits set.
 	selected := make(proposerAtts, selectedKeys.Count())
 	for i, key := range selectedKeys.BitIndices() {
 		selected[i] = a[key]
@@ -409,15 +485,15 @@ func (a proposerAtts) dedup() (proposerAtts, error) {
 }
 
 // This filters the input attestations to return a list of valid attestations to be packaged inside a beacon block.
-func (vs *Server) validateAndDeleteAttsInPool(ctx context.Context, st state.BeaconState, atts []ethpb.Att) ([]ethpb.Att, error) {
+func (vs *Server) validateAndDeleteAttsInPool(ctx context.Context, st state.BeaconState, atts []ethpb.Att) []ethpb.Att {
 	ctx, span := trace.StartSpan(ctx, "ProposerServer.validateAndDeleteAttsInPool")
 	defer span.End()
 
 	validAtts, invalidAtts := proposerAtts(atts).filter(ctx, st)
 	if err := vs.deleteAttsInPool(ctx, invalidAtts); err != nil {
-		return nil, err
+		log.WithError(err).Error("Could not delete invalid attestations")
 	}
-	return validAtts, nil
+	return validAtts
 }
 
 // The input attestations are processed and seen by the node, this deletes them from pool
@@ -430,13 +506,19 @@ func (vs *Server) deleteAttsInPool(ctx context.Context, atts []ethpb.Att) error 
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		if helpers.IsAggregated(att) {
-			if err := vs.AttPool.DeleteAggregatedAttestation(att); err != nil {
-				return err
+		if features.Get().EnableExperimentalAttestationPool {
+			if err := vs.AttestationCache.DeleteCovered(att); err != nil {
+				return errors.Wrap(err, "could not delete attestation")
 			}
 		} else {
-			if err := vs.AttPool.DeleteUnaggregatedAttestation(att); err != nil {
-				return err
+			if att.IsAggregated() {
+				if err := vs.AttPool.DeleteAggregatedAttestation(att); err != nil {
+					return err
+				}
+			} else {
+				if err := vs.AttPool.DeleteUnaggregatedAttestation(att); err != nil {
+					return err
+				}
 			}
 		}
 	}

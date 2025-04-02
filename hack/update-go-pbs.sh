@@ -9,7 +9,7 @@ bazel query 'attr(testonly, 0, //proto/...)' | xargs bazel build $@
 file_list=()
 while IFS= read -d $'\0' -r file; do
     file_list=("${file_list[@]}" "$file")
-done < <($findutil -L "$(bazel info bazel-bin)"/proto -type f -regextype sed -regex ".*pb\.\(gw\.\)\?go$" -print0)
+done < <($findutil -L "$(bazel info bazel-bin)"/proto -type f -regextype sed -regex ".*pb\.go$" -print0)
 
 arraylength=${#file_list[@]}
 searchstring="prysmaticlabs/prysm/v5/"

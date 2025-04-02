@@ -42,14 +42,14 @@ ssz_gen_marshal(
         "ExecutionPayloadHeaderCapella",
         "ExecutionPayloadHeaderDeneb",
         "ExecutionPayloadDeneb",
-        "ExecutionPayloadHeaderElectra",
-        "ExecutionPayloadElectra",
+        'ExecutionPayloadDenebAndBlobsBundle',
         "BlindedBlobsBundle",
         "BlobsBundle",
         "Withdrawal",
         "WithdrawalRequest",
         "DepositRequest",
         "ConsolidationRequest",
+        "ExecutionRequests",
     ],
 )
 
@@ -75,6 +75,7 @@ go_proto_library(
 go_library(
     name = "go_default_library",
     srcs = [
+        "electra.go",
         "execution_engine.go",
         "json_marshal_unmarshal.go",
         ":ssz_generated_files",  # keep
@@ -111,6 +112,7 @@ ssz_proto_files(
     name = "ssz_proto_files",
     srcs = [
         "execution_engine.proto",
+	"electra.proto",
     ],
     config = select({
         "//conditions:default": "mainnet",

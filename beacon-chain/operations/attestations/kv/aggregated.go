@@ -8,12 +8,12 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/attestation"
 	attaggregation "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/attestation/aggregation/attestations"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	log "github.com/sirupsen/logrus"
-	"go.opencensus.io/trace"
 )
 
 // AggregateUnaggregatedAttestations aggregates the unaggregated attestations and saves the
@@ -23,10 +23,7 @@ import (
 func (c *AttCaches) AggregateUnaggregatedAttestations(ctx context.Context) error {
 	ctx, span := trace.StartSpan(ctx, "operations.attestations.kv.AggregateUnaggregatedAttestations")
 	defer span.End()
-	unaggregatedAtts, err := c.UnaggregatedAttestations()
-	if err != nil {
-		return err
-	}
+	unaggregatedAtts := c.UnaggregatedAttestations()
 	return c.aggregateUnaggregatedAtts(ctx, unaggregatedAtts)
 }
 
@@ -88,7 +85,7 @@ func (c *AttCaches) aggregateParallel(atts map[attestation.Id][]ethpb.Att, leftO
 					log.Error("nil aggregated attestation")
 					continue
 				}
-				if helpers.IsAggregated(aggregated) {
+				if aggregated.IsAggregated() {
 					if err := c.SaveAggregatedAttestations([]ethpb.Att{aggregated}); err != nil {
 						log.WithError(err).Error("could not save aggregated attestation")
 						continue
@@ -122,7 +119,7 @@ func (c *AttCaches) SaveAggregatedAttestation(att ethpb.Att) error {
 	if err := helpers.ValidateNilAttestation(att); err != nil {
 		return err
 	}
-	if !helpers.IsAggregated(att) {
+	if !att.IsAggregated() {
 		return errors.New("attestation is not aggregated")
 	}
 	has, err := c.HasAggregatedAttestation(att)
@@ -236,7 +233,7 @@ func (c *AttCaches) AggregatedAttestationsBySlotIndexElectra(
 	c.aggregatedAttLock.RLock()
 	defer c.aggregatedAttLock.RUnlock()
 	for _, as := range c.aggregatedAtt {
-		if as[0].Version() == version.Electra && slot == as[0].GetData().Slot && as[0].CommitteeBitsVal().BitAt(uint64(committeeIndex)) {
+		if as[0].Version() >= version.Electra && slot == as[0].GetData().Slot && as[0].CommitteeBitsVal().BitAt(uint64(committeeIndex)) {
 			for _, a := range as {
 				att, ok := a.(*ethpb.AttestationElectra)
 				// This will never fail in practice because we asserted the version
@@ -255,7 +252,7 @@ func (c *AttCaches) DeleteAggregatedAttestation(att ethpb.Att) error {
 	if err := helpers.ValidateNilAttestation(att); err != nil {
 		return err
 	}
-	if !helpers.IsAggregated(att) {
+	if !att.IsAggregated() {
 		return errors.New("attestation is not aggregated")
 	}
 

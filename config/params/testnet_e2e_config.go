@@ -7,7 +7,8 @@ const (
 	BellatrixE2EForkEpoch = 8
 	CapellaE2EForkEpoch   = 10
 	DenebE2EForkEpoch     = 12
-	ElectraE2EForkEpoch   = math.MaxUint64
+	ElectraE2EForkEpoch   = 14
+	FuluE2EForkEpoch      = math.MaxUint64
 )
 
 // E2ETestConfig retrieves the configurations made specifically for E2E testing.
@@ -23,6 +24,7 @@ func E2ETestConfig() *BeaconChainConfig {
 	e2eConfig.GenesisDelay = 10 // 10 seconds so E2E has enough time to process deposits and get started.
 	e2eConfig.ChurnLimitQuotient = 65536
 	e2eConfig.MaxValidatorsPerWithdrawalsSweep = 128
+	e2eConfig.MinPerEpochChurnLimitElectra = 256000000000
 
 	// Time parameters.
 	e2eConfig.SecondsPerSlot = 10
@@ -44,6 +46,7 @@ func E2ETestConfig() *BeaconChainConfig {
 	e2eConfig.CapellaForkEpoch = CapellaE2EForkEpoch
 	e2eConfig.DenebForkEpoch = DenebE2EForkEpoch
 	e2eConfig.ElectraForkEpoch = ElectraE2EForkEpoch
+	e2eConfig.FuluForkEpoch = FuluE2EForkEpoch
 
 	// Terminal Total Difficulty.
 	e2eConfig.TerminalTotalDifficulty = "480"
@@ -56,6 +59,7 @@ func E2ETestConfig() *BeaconChainConfig {
 	e2eConfig.CapellaForkVersion = []byte{3, 0, 0, 253}
 	e2eConfig.DenebForkVersion = []byte{4, 0, 0, 253}
 	e2eConfig.ElectraForkVersion = []byte{5, 0, 0, 253}
+	e2eConfig.FuluForkVersion = []byte{6, 0, 0, 253}
 
 	e2eConfig.InitializeForkSchedule()
 	return e2eConfig
@@ -70,6 +74,7 @@ func E2EMainnetTestConfig() *BeaconChainConfig {
 	e2eConfig.MinGenesisActiveValidatorCount = 256
 	e2eConfig.GenesisDelay = 25 // 25 seconds so E2E has enough time to process deposits and get started.
 	e2eConfig.ChurnLimitQuotient = 65536
+	e2eConfig.MinPerEpochChurnLimitElectra = 256000000000
 
 	// Time parameters.
 	e2eConfig.SecondsPerSlot = 6
@@ -88,6 +93,7 @@ func E2EMainnetTestConfig() *BeaconChainConfig {
 	e2eConfig.CapellaForkEpoch = CapellaE2EForkEpoch
 	e2eConfig.DenebForkEpoch = DenebE2EForkEpoch
 	e2eConfig.ElectraForkEpoch = ElectraE2EForkEpoch
+	e2eConfig.FuluForkEpoch = FuluE2EForkEpoch
 
 	// Terminal Total Difficulty.
 	e2eConfig.TerminalTotalDifficulty = "480"
@@ -100,6 +106,7 @@ func E2EMainnetTestConfig() *BeaconChainConfig {
 	e2eConfig.CapellaForkVersion = []byte{3, 0, 0, 254}
 	e2eConfig.DenebForkVersion = []byte{4, 0, 0, 254}
 	e2eConfig.ElectraForkVersion = []byte{5, 0, 0, 254}
+	e2eConfig.FuluForkVersion = []byte{6, 0, 0, 254}
 
 	// Deneb changes.
 	e2eConfig.MinPerEpochChurnLimit = 2

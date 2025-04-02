@@ -217,6 +217,10 @@ var stateTransitionCommand = &cli.Command{
 				if err := params.SetActive(params.HoleskyConfig()); err != nil {
 					log.Fatal(err)
 				}
+			case params.HoodiName:
+				if err := params.SetActive(params.HoodiConfig()); err != nil {
+					log.Fatal(err)
+				}
 			default:
 				log.Fatalf("Unknown network provided: %s", network)
 			}
@@ -299,7 +303,7 @@ var stateTransitionCommand = &cli.Command{
 
 func main() {
 	customFormatter := new(prefixed.TextFormatter)
-	customFormatter.TimestampFormat = "2006-01-02 15:04:05"
+	customFormatter.TimestampFormat = time.DateTime
 	customFormatter.FullTimestamp = true
 	log.SetFormatter(customFormatter)
 	app := cli.App{}

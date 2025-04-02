@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/gorilla/mux"
 	"github.com/prysmaticlabs/go-bitfield"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
@@ -150,7 +149,7 @@ func TestServer_GetValidatorParticipation_CurrentAndPrevEpoch(t *testing.T) {
 
 	url := "http://example.com"
 	request := httptest.NewRequest(http.MethodGet, url, nil)
-	request = mux.SetURLVars(request, map[string]string{"state_id": "head"})
+	request.SetPathValue("state_id", "head")
 	writer := httptest.NewRecorder()
 	writer.Body = &bytes.Buffer{}
 
@@ -250,7 +249,7 @@ func TestServer_GetValidatorParticipation_OrphanedUntilGenesis(t *testing.T) {
 
 	url := "http://example.com"
 	request := httptest.NewRequest(http.MethodGet, url, nil)
-	request = mux.SetURLVars(request, map[string]string{"state_id": "head"})
+	request.SetPathValue("state_id", "head")
 	writer := httptest.NewRecorder()
 	writer.Body = &bytes.Buffer{}
 
@@ -380,7 +379,7 @@ func runGetValidatorParticipationCurrentEpoch(t *testing.T, genState state.Beaco
 
 	url := "http://example.com"
 	request := httptest.NewRequest(http.MethodGet, url, nil)
-	request = mux.SetURLVars(request, map[string]string{"state_id": "head"})
+	request.SetPathValue("state_id", "head")
 	writer := httptest.NewRecorder()
 	writer.Body = &bytes.Buffer{}
 
@@ -430,7 +429,7 @@ func TestServer_GetValidatorActiveSetChanges_NoState(t *testing.T) {
 
 	url := "http://example.com" + fmt.Sprintf("%d", slots.ToEpoch(s.CoreService.GenesisTimeFetcher.CurrentSlot())+1)
 	request := httptest.NewRequest(http.MethodGet, url, nil)
-	request = mux.SetURLVars(request, map[string]string{"state_id": ""})
+	request.SetPathValue("state_id", "")
 	writer := httptest.NewRecorder()
 	writer.Body = &bytes.Buffer{}
 
@@ -507,7 +506,7 @@ func TestServer_GetValidatorActiveSetChanges(t *testing.T) {
 
 	url := "http://example.com"
 	request := httptest.NewRequest(http.MethodGet, url, nil)
-	request = mux.SetURLVars(request, map[string]string{"state_id": "genesis"})
+	request.SetPathValue("state_id", "genesis")
 	writer := httptest.NewRecorder()
 	writer.Body = &bytes.Buffer{}
 

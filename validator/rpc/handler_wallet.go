@@ -291,7 +291,7 @@ func (*Server) ValidateKeystores(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Needs to unmarshal the keystores from the requests.
-	if req.Keystores == nil || len(req.Keystores) < 1 {
+	if len(req.Keystores) < 1 {
 		httputil.HandleError(w, "No keystores included in request", http.StatusBadRequest)
 		return
 	}

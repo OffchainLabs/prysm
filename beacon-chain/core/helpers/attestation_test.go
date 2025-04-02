@@ -260,12 +260,12 @@ func TestValidateNilAttestation(t *testing.T) {
 		{
 			name:        "nil attestation",
 			attestation: nil,
-			errString:   "attestation can't be nil",
+			errString:   "attestation is nil",
 		},
 		{
 			name:        "nil attestation data",
 			attestation: &ethpb.Attestation{},
-			errString:   "attestation's data can't be nil",
+			errString:   "attestation is nil",
 		},
 		{
 			name: "nil attestation source",
@@ -305,6 +305,16 @@ func TestValidateNilAttestation(t *testing.T) {
 					Source: &ethpb.Checkpoint{},
 				},
 				AggregationBits: []byte{},
+			},
+			errString: "",
+		},
+		{
+			name: "single attestation",
+			attestation: &ethpb.SingleAttestation{
+				Data: &ethpb.AttestationData{
+					Target: &ethpb.Checkpoint{},
+					Source: &ethpb.Checkpoint{},
+				},
 			},
 			errString: "",
 		},

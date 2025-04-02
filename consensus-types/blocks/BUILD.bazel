@@ -28,6 +28,7 @@ go_library(
         "//crypto/hash/htr:go_default_library",
         "//encoding/bytesutil:go_default_library",
         "//encoding/ssz:go_default_library",
+        "//monitoring/tracing/trace:go_default_library",
         "//proto/engine/v1:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "//proto/prysm/v1alpha1/validator-client:go_default_library",
@@ -35,7 +36,6 @@ go_library(
         "@com_github_pkg_errors//:go_default_library",
         "@com_github_prysmaticlabs_fastssz//:go_default_library",
         "@com_github_prysmaticlabs_gohashtree//:go_default_library",
-        "@io_opencensus_go//trace:go_default_library",
         "@org_golang_google_protobuf//proto:go_default_library",
     ],
 )
@@ -55,6 +55,7 @@ go_test(
     embed = [":go_default_library"],
     deps = [
         "//config/fieldparams:go_default_library",
+        "//config/params:go_default_library",
         "//consensus-types:go_default_library",
         "//consensus-types/interfaces:go_default_library",
         "//consensus-types/primitives:go_default_library",

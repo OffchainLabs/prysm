@@ -198,7 +198,7 @@ func NewGenesisBlockForState(ctx context.Context, st state.BeaconState) (interfa
 						SyncCommitteeBits:      make([]byte, fieldparams.SyncCommitteeLength/8),
 						SyncCommitteeSignature: make([]byte, fieldparams.BLSSignatureLength),
 					},
-					ExecutionPayload: &enginev1.ExecutionPayloadElectra{
+					ExecutionPayload: &enginev1.ExecutionPayloadDeneb{
 						ParentHash:    make([]byte, 32),
 						FeeRecipient:  make([]byte, 20),
 						StateRoot:     make([]byte, 32),
@@ -213,6 +213,11 @@ func NewGenesisBlockForState(ctx context.Context, st state.BeaconState) (interfa
 					},
 					BlsToExecutionChanges: make([]*ethpb.SignedBLSToExecutionChange, 0),
 					BlobKzgCommitments:    make([][]byte, 0),
+					ExecutionRequests: &enginev1.ExecutionRequests{
+						Withdrawals:    make([]*enginev1.WithdrawalRequest, 0),
+						Deposits:       make([]*enginev1.DepositRequest, 0),
+						Consolidations: make([]*enginev1.ConsolidationRequest, 0),
+					},
 				},
 			},
 			Signature: params.BeaconConfig().EmptySignature[:],

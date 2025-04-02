@@ -56,7 +56,7 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 	defer lock.Unlock()
 
 	fmtKey := fmt.Sprintf("%#x", pubKey[:])
-	span.AddAttributes(trace.StringAttribute("validator", fmtKey))
+	span.SetAttributes(trace.StringAttribute("validator", fmtKey))
 	log := log.WithField("pubkey", fmt.Sprintf("%#x", bytesutil.Trunc(pubKey[:])))
 
 	// Sign randao reveal, it's used to request block from beacon node
@@ -148,6 +148,12 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 				log.WithError(err).Error("Failed to build generic signed block")
 				return
 			}
+		case version.Fulu:
+			genericSignedBlock, err = buildGenericSignedBlockFuluWithBlobs(pb, b)
+			if err != nil {
+				log.WithError(err).Error("Failed to build generic signed block")
+				return
+			}
 		default:
 			log.Errorf("Unsupported block version %s", version.String(blk.Version()))
 		}
@@ -171,28 +177,36 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 		return
 	}
 
-	span.AddAttributes(
+	span.SetAttributes(
 		trace.StringAttribute("blockRoot", fmt.Sprintf("%#x", blkResp.BlockRoot)),
 		trace.Int64Attribute("numDeposits", int64(len(blk.Block().Body().Deposits()))),
 		trace.Int64Attribute("numAttestations", int64(len(blk.Block().Body().Attestations()))),
 	)
 
+	if err := logProposedBlock(log, blk, blkResp.BlockRoot); err != nil {
+		log.WithError(err).Error("Failed to log proposed block")
+	}
+
+	if v.emitAccountMetrics {
+		ValidatorProposeSuccessVec.WithLabelValues(fmtKey).Inc()
+	}
+}
+
+func logProposedBlock(log *logrus.Entry, blk interfaces.SignedBeaconBlock, blkRoot []byte) error {
 	if blk.Version() >= version.Bellatrix {
 		p, err := blk.Block().Body().Execution()
 		if err != nil {
-			log.WithError(err).Error("Failed to get execution payload")
-			return
+			return errors.Wrap(err, "failed to get execution payload")
 		}
 		log = log.WithFields(logrus.Fields{
 			"payloadHash": fmt.Sprintf("%#x", bytesutil.Trunc(p.BlockHash())),
 			"parentHash":  fmt.Sprintf("%#x", bytesutil.Trunc(p.ParentHash())),
-			"blockNumber": p.BlockNumber,
+			"blockNumber": p.BlockNumber(),
 		})
 		if !blk.IsBlinded() {
 			txs, err := p.Transactions()
 			if err != nil {
-				log.WithError(err).Error("Failed to get execution payload transactions")
-				return
+				return errors.Wrap(err, "failed to get execution payload transactions")
 			}
 			log = log.WithField("txCount", len(txs))
 		}
@@ -202,36 +216,32 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 		if blk.Version() >= version.Capella && !blk.IsBlinded() {
 			withdrawals, err := p.Withdrawals()
 			if err != nil {
-				log.WithError(err).Error("Failed to get execution payload withdrawals")
-				return
+				return errors.Wrap(err, "failed to get execution payload withdrawals")
 			}
 			log = log.WithField("withdrawalCount", len(withdrawals))
 		}
 		if blk.Version() >= version.Deneb {
 			kzgs, err := blk.Block().Body().BlobKzgCommitments()
 			if err != nil {
-				log.WithError(err).Error("Failed to get blob KZG commitments")
-				return
+				return errors.Wrap(err, "failed to get kzg commitments")
 			} else if len(kzgs) != 0 {
 				log = log.WithField("kzgCommitmentCount", len(kzgs))
 			}
 		}
 	}
 
-	blkRoot := fmt.Sprintf("%#x", bytesutil.Trunc(blkResp.BlockRoot))
+	br := fmt.Sprintf("%#x", bytesutil.Trunc(blkRoot))
 	graffiti := blk.Block().Body().Graffiti()
 	log.WithFields(logrus.Fields{
 		"slot":             blk.Block().Slot(),
-		"blockRoot":        blkRoot,
+		"blockRoot":        br,
 		"attestationCount": len(blk.Block().Body().Attestations()),
 		"depositCount":     len(blk.Block().Body().Deposits()),
 		"graffiti":         string(graffiti[:]),
 		"fork":             version.String(blk.Block().Version()),
 	}).Info("Submitted new block")
 
-	if v.emitAccountMetrics {
-		ValidatorProposeSuccessVec.WithLabelValues(fmtKey).Inc()
-	}
+	return nil
 }
 
 func buildGenericSignedBlockDenebWithBlobs(pb proto.Message, b *ethpb.GenericBeaconBlock) (*ethpb.GenericSignedBeaconBlock, error) {
@@ -266,6 +276,22 @@ func buildGenericSignedBlockElectraWithBlobs(pb proto.Message, b *ethpb.GenericB
 	}, nil
 }
 
+func buildGenericSignedBlockFuluWithBlobs(pb proto.Message, b *ethpb.GenericBeaconBlock) (*ethpb.GenericSignedBeaconBlock, error) {
+	fuluBlock, ok := pb.(*ethpb.SignedBeaconBlockFulu)
+	if !ok {
+		return nil, errors.New("could cast to fulu block")
+	}
+	return &ethpb.GenericSignedBeaconBlock{
+		Block: &ethpb.GenericSignedBeaconBlock_Fulu{
+			Fulu: &ethpb.SignedBeaconBlockContentsFulu{
+				Block:     fuluBlock,
+				KzgProofs: b.GetFulu().KzgProofs,
+				Blobs:     b.GetFulu().Blobs,
+			},
+		},
+	}, nil
+}
+
 // ProposeExit performs a voluntary exit on a validator.
 // The exit is signed by the validator before being sent to the beacon node for broadcasting.
 func ProposeExit(
@@ -287,7 +313,7 @@ func ProposeExit(
 		return errors.Wrap(err, "failed to propose voluntary exit")
 	}
 
-	span.AddAttributes(
+	span.SetAttributes(
 		trace.StringAttribute("exitRoot", fmt.Sprintf("%#x", exitResp.ExitRoot)),
 	)
 	return nil

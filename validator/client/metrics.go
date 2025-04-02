@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
@@ -12,11 +13,12 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
+	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
 	"github.com/sirupsen/logrus"
 )
 
 var (
-	// ValidatorStatusesGaugeVec used to track validator statuses by public key.
+	// ValidatorStatusesGaugeVec used to track validator statuses by public key and validator index.
 	ValidatorStatusesGaugeVec = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "validator",
@@ -24,7 +26,7 @@ var (
 			Help:      "validator statuses: 0 UNKNOWN, 1 DEPOSITED, 2 PENDING, 3 ACTIVE, 4 EXITING, 5 SLASHING, 6 EXITED",
 		},
 		[]string{
-			"pubkey",
+			"pubkey", "index",
 		},
 	)
 	// ValidatorAggSuccessVec used to count successful aggregations.
@@ -229,8 +231,12 @@ func (v *validator) LogValidatorGainsAndLosses(ctx context.Context, slot primiti
 	req := &ethpb.ValidatorPerformanceRequest{
 		PublicKeys: pubKeys,
 	}
-	resp, err := v.chainClient.ValidatorPerformance(ctx, req)
+	resp, err := v.prysmChainClient.ValidatorPerformance(ctx, req)
 	if err != nil {
+		if errors.Is(err, iface.ErrNotSupported) {
+			log.WithError(err).Debug("Skipping validator performance metric for non-Prysm beacon node")
+			return nil
+		}
 		return err
 	}
 

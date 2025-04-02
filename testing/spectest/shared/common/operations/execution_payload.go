@@ -54,10 +54,10 @@ func RunExecutionPayloadTest(t *testing.T, config string, fork string, sszToBloc
 			config := &ExecutionConfig{}
 			require.NoError(t, utils.UnmarshalYaml(file, config), "Failed to Unmarshal")
 
-			gotState, err := blocks.ProcessPayload(preBeaconState, body)
+			err = blocks.ProcessPayload(preBeaconState, body)
 			if postSSZExists {
 				require.NoError(t, err)
-				comparePostState(t, postSSZFilepath, sszToState, preBeaconState, gotState)
+				comparePostState(t, postSSZFilepath, sszToState, preBeaconState)
 			} else if config.Valid {
 				// Note: This doesn't test anything worthwhile. It essentially tests
 				// that *any* error has occurred, not any specific error.

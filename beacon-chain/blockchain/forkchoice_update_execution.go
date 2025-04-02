@@ -12,9 +12,9 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	payloadattribute "github.com/prysmaticlabs/prysm/v5/consensus-types/payload-attribute"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/sirupsen/logrus"
-	"go.opencensus.io/trace"
 )
 
 func (s *Service) isNewHead(r [32]byte) bool {
@@ -102,10 +102,10 @@ func (s *Service) forkchoiceUpdateWithExecution(ctx context.Context, args *fcuCo
 		log.WithError(err).Error("could not save head")
 	}
 
+	go firePayloadAttributesEvent(ctx, s.cfg.StateNotifier.StateFeed(), s.CurrentSlot()+1)
+
 	// Only need to prune attestations from pool if the head has changed.
-	if err := s.pruneAttsFromPool(args.headBlock); err != nil {
-		log.WithError(err).Error("could not prune attestations from pool")
-	}
+	s.pruneAttsFromPool(s.ctx, args.headState, args.headBlock)
 	return nil
 }
 

@@ -17,8 +17,11 @@ func blockWithConsolidation(ssz []byte) (interfaces.SignedBeaconBlock, error) {
 	if err := cr.UnmarshalSSZ(ssz); err != nil {
 		return nil, err
 	}
+	er := &enginev1.ExecutionRequests{
+		Consolidations: []*enginev1.ConsolidationRequest{cr},
+	}
 	b := util.NewBeaconBlockElectra()
-	b.Block.Body = &ethpb.BeaconBlockBodyElectra{ExecutionPayload: &enginev1.ExecutionPayloadElectra{ConsolidationRequests: []*enginev1.ConsolidationRequest{cr}}}
+	b.Block.Body = &ethpb.BeaconBlockBodyElectra{ExecutionRequests: er}
 	return blocks.NewSignedBeaconBlock(b)
 }
 

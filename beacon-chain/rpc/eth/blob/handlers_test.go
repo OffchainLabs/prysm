@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/prysmaticlabs/prysm/v5/api"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	mockChain "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
@@ -20,9 +22,11 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/lookup"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/testutil"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/network/httputil"
 	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"github.com/prysmaticlabs/prysm/v5/testing/util"
@@ -38,23 +42,27 @@ func TestBlobs(t *testing.T) {
 	denebBlock, blobs := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 123, 4)
 	require.NoError(t, db.SaveBlock(context.Background(), denebBlock))
 	bs := filesystem.NewEphemeralBlobStorage(t)
-	testSidecars, err := verification.BlobSidecarSliceNoop(blobs)
-	require.NoError(t, err)
+	testSidecars := verification.FakeVerifySliceForTest(t, blobs)
 	for i := range testSidecars {
 		require.NoError(t, bs.Save(testSidecars[i]))
 	}
 	blockRoot := blobs[0].BlockRoot()
+
+	mockChainService := &mockChain.ChainService{
+		FinalizedRoots: map[[32]byte]bool{},
+	}
+	s := &Server{
+		OptimisticModeFetcher: mockChainService,
+		FinalizationFetcher:   mockChainService,
+		TimeFetcher:           mockChainService,
+	}
 
 	t.Run("genesis", func(t *testing.T) {
 		u := "http://foo.example/genesis"
 		request := httptest.NewRequest("GET", u, nil)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
-		blocker := &lookup.BeaconDbBlocker{}
-		s := &Server{
-			Blocker: blocker,
-		}
-
+		s.Blocker = &lookup.BeaconDbBlocker{}
 		s.Blobs(writer, request)
 
 		assert.Equal(t, http.StatusBadRequest, writer.Code)
@@ -68,18 +76,14 @@ func TestBlobs(t *testing.T) {
 		request := httptest.NewRequest("GET", u, nil)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
-		blocker := &lookup.BeaconDbBlocker{
-			ChainInfoFetcher: &mockChain.ChainService{Root: blockRoot[:]},
+		s.Blocker = &lookup.BeaconDbBlocker{
+			ChainInfoFetcher: &mockChain.ChainService{Root: blockRoot[:], Block: denebBlock},
 			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
 				Genesis: time.Now(),
 			},
 			BeaconDB:    db,
 			BlobStorage: bs,
 		}
-		s := &Server{
-			Blocker: blocker,
-		}
-
 		s.Blobs(writer, request)
 
 		assert.Equal(t, http.StatusOK, writer.Code)
@@ -110,120 +114,116 @@ func TestBlobs(t *testing.T) {
 		assert.Equal(t, hexutil.Encode(blobs[3].Blob), sidecar.Blob)
 		assert.Equal(t, hexutil.Encode(blobs[3].KzgCommitment), sidecar.KzgCommitment)
 		assert.Equal(t, hexutil.Encode(blobs[3].KzgProof), sidecar.KzgProof)
+
+		require.Equal(t, "deneb", resp.Version)
+		require.Equal(t, false, resp.ExecutionOptimistic)
+		require.Equal(t, false, resp.Finalized)
 	})
 	t.Run("finalized", func(t *testing.T) {
 		u := "http://foo.example/finalized"
 		request := httptest.NewRequest("GET", u, nil)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
-		blocker := &lookup.BeaconDbBlocker{
-			ChainInfoFetcher: &mockChain.ChainService{FinalizedCheckPoint: &eth.Checkpoint{Root: blockRoot[:]}},
+		s.Blocker = &lookup.BeaconDbBlocker{
+			ChainInfoFetcher: &mockChain.ChainService{FinalizedCheckPoint: &eth.Checkpoint{Root: blockRoot[:]}, Block: denebBlock},
 			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
 				Genesis: time.Now(),
 			},
 			BeaconDB:    db,
 			BlobStorage: bs,
 		}
-		s := &Server{
-			Blocker: blocker,
-		}
-
 		s.Blobs(writer, request)
 
 		assert.Equal(t, http.StatusOK, writer.Code)
 		resp := &structs.SidecarsResponse{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
 		require.Equal(t, 4, len(resp.Data))
-	})
-	t.Run("justified", func(t *testing.T) {
-		u := "http://foo.example/justified"
-		request := httptest.NewRequest("GET", u, nil)
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		blocker := &lookup.BeaconDbBlocker{
-			ChainInfoFetcher: &mockChain.ChainService{CurrentJustifiedCheckPoint: &eth.Checkpoint{Root: blockRoot[:]}},
-			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
-				Genesis: time.Now(),
-			},
-			BeaconDB:    db,
-			BlobStorage: bs,
-		}
-		s := &Server{
-			Blocker: blocker,
-		}
 
-		s.Blobs(writer, request)
-
-		assert.Equal(t, http.StatusOK, writer.Code)
-		resp := &structs.SidecarsResponse{}
-		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
-		require.Equal(t, 4, len(resp.Data))
+		require.Equal(t, "deneb", resp.Version)
+		require.Equal(t, false, resp.ExecutionOptimistic)
+		require.Equal(t, false, resp.Finalized)
 	})
 	t.Run("root", func(t *testing.T) {
 		u := "http://foo.example/" + hexutil.Encode(blockRoot[:])
 		request := httptest.NewRequest("GET", u, nil)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
-		blocker := &lookup.BeaconDbBlocker{
-			BeaconDB: db,
+		s.Blocker = &lookup.BeaconDbBlocker{
+			ChainInfoFetcher: &mockChain.ChainService{Block: denebBlock},
+			BeaconDB:         db,
 			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
 				Genesis: time.Now(),
 			},
 			BlobStorage: bs,
 		}
-		s := &Server{
-			Blocker: blocker,
-		}
-
 		s.Blobs(writer, request)
 
 		assert.Equal(t, http.StatusOK, writer.Code)
 		resp := &structs.SidecarsResponse{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
 		require.Equal(t, 4, len(resp.Data))
+
+		require.Equal(t, "deneb", resp.Version)
+		require.Equal(t, false, resp.ExecutionOptimistic)
+		require.Equal(t, false, resp.Finalized)
 	})
 	t.Run("slot", func(t *testing.T) {
 		u := "http://foo.example/123"
 		request := httptest.NewRequest("GET", u, nil)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
-		blocker := &lookup.BeaconDbBlocker{
-			BeaconDB: db,
+		s.Blocker = &lookup.BeaconDbBlocker{
+			ChainInfoFetcher: &mockChain.ChainService{Block: denebBlock},
+			BeaconDB:         db,
 			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
 				Genesis: time.Now(),
 			},
 			BlobStorage: bs,
 		}
-		s := &Server{
-			Blocker: blocker,
-		}
-
 		s.Blobs(writer, request)
 
 		assert.Equal(t, http.StatusOK, writer.Code)
 		resp := &structs.SidecarsResponse{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
 		require.Equal(t, 4, len(resp.Data))
+
+		require.Equal(t, "deneb", resp.Version)
+		require.Equal(t, false, resp.ExecutionOptimistic)
+		require.Equal(t, false, resp.Finalized)
+	})
+	t.Run("slot not found", func(t *testing.T) {
+		u := "http://foo.example/122"
+		request := httptest.NewRequest("GET", u, nil)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+		s.Blocker = &lookup.BeaconDbBlocker{
+			ChainInfoFetcher: &mockChain.ChainService{Block: denebBlock},
+			BeaconDB:         db,
+			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
+				Genesis: time.Now(),
+			},
+			BlobStorage: bs,
+		}
+		s.Blobs(writer, request)
+
+		assert.Equal(t, http.StatusNotFound, writer.Code)
 	})
 	t.Run("one blob only", func(t *testing.T) {
 		u := "http://foo.example/123?indices=2"
 		request := httptest.NewRequest("GET", u, nil)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
-		blocker := &lookup.BeaconDbBlocker{
-			ChainInfoFetcher: &mockChain.ChainService{FinalizedCheckPoint: &eth.Checkpoint{Root: blockRoot[:]}},
+		s.Blocker = &lookup.BeaconDbBlocker{
+			ChainInfoFetcher: &mockChain.ChainService{FinalizedCheckPoint: &eth.Checkpoint{Root: blockRoot[:]}, Block: denebBlock},
 			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
 				Genesis: time.Now(),
 			},
 			BeaconDB:    db,
 			BlobStorage: bs,
 		}
-		s := &Server{
-			Blocker: blocker,
-		}
-
 		s.Blobs(writer, request)
 
+		assert.Equal(t, version.String(version.Deneb), writer.Header().Get(api.VersionHeader))
 		assert.Equal(t, http.StatusOK, writer.Code)
 		resp := &structs.SidecarsResponse{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
@@ -234,22 +234,23 @@ func TestBlobs(t *testing.T) {
 		assert.Equal(t, hexutil.Encode(blobs[2].Blob), sidecar.Blob)
 		assert.Equal(t, hexutil.Encode(blobs[2].KzgCommitment), sidecar.KzgCommitment)
 		assert.Equal(t, hexutil.Encode(blobs[2].KzgProof), sidecar.KzgProof)
+
+		require.Equal(t, "deneb", resp.Version)
+		require.Equal(t, false, resp.ExecutionOptimistic)
+		require.Equal(t, false, resp.Finalized)
 	})
 	t.Run("no blobs returns an empty array", func(t *testing.T) {
 		u := "http://foo.example/123"
 		request := httptest.NewRequest("GET", u, nil)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
-		blocker := &lookup.BeaconDbBlocker{
-			ChainInfoFetcher: &mockChain.ChainService{FinalizedCheckPoint: &eth.Checkpoint{Root: blockRoot[:]}},
+		s.Blocker = &lookup.BeaconDbBlocker{
+			ChainInfoFetcher: &mockChain.ChainService{FinalizedCheckPoint: &eth.Checkpoint{Root: blockRoot[:]}, Block: denebBlock},
 			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
 				Genesis: time.Now(),
 			},
 			BeaconDB:    db,
 			BlobStorage: filesystem.NewEphemeralBlobStorage(t), // new ephemeral storage
-		}
-		s := &Server{
-			Blocker: blocker,
 		}
 
 		s.Blobs(writer, request)
@@ -257,21 +258,37 @@ func TestBlobs(t *testing.T) {
 		resp := &structs.SidecarsResponse{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
 		require.Equal(t, len(resp.Data), 0)
+
+		require.Equal(t, "deneb", resp.Version)
+		require.Equal(t, false, resp.ExecutionOptimistic)
+		require.Equal(t, false, resp.Finalized)
+	})
+	t.Run("blob index over max", func(t *testing.T) {
+		overLimit := params.BeaconConfig().MaxBlobsPerBlockByVersion(version.Deneb)
+		u := fmt.Sprintf("http://foo.example/123?indices=%d", overLimit)
+		request := httptest.NewRequest("GET", u, nil)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+		s.Blocker = &lookup.BeaconDbBlocker{}
+		s.Blobs(writer, request)
+
+		assert.Equal(t, http.StatusBadRequest, writer.Code)
+		e := &httputil.DefaultJsonError{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+		assert.Equal(t, http.StatusBadRequest, e.Code)
+		assert.Equal(t, true, strings.Contains(e.Message, fmt.Sprintf("requested blob indices [%d] are invalid", overLimit)))
 	})
 	t.Run("outside retention period returns 200 w/ empty list ", func(t *testing.T) {
 		u := "http://foo.example/123"
 		request := httptest.NewRequest("GET", u, nil)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
-		moc := &mockChain.ChainService{FinalizedCheckPoint: &eth.Checkpoint{Root: blockRoot[:]}}
-		blocker := &lookup.BeaconDbBlocker{
+		moc := &mockChain.ChainService{FinalizedCheckPoint: &eth.Checkpoint{Root: blockRoot[:]}, Block: denebBlock}
+		s.Blocker = &lookup.BeaconDbBlocker{
 			ChainInfoFetcher:   moc,
 			GenesisTimeFetcher: moc, // genesis time is set to 0 here, so it results in current epoch being extremely large
 			BeaconDB:           db,
 			BlobStorage:        bs,
-		}
-		s := &Server{
-			Blocker: blocker,
 		}
 
 		s.Blobs(writer, request)
@@ -280,6 +297,10 @@ func TestBlobs(t *testing.T) {
 		resp := &structs.SidecarsResponse{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
 		require.Equal(t, 0, len(resp.Data))
+
+		require.Equal(t, "deneb", resp.Version)
+		require.Equal(t, false, resp.ExecutionOptimistic)
+		require.Equal(t, false, resp.Finalized)
 	})
 	t.Run("block without commitments returns 200 w/empty list ", func(t *testing.T) {
 		denebBlock, _ := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 333, 0)
@@ -292,16 +313,13 @@ func TestBlobs(t *testing.T) {
 		request := httptest.NewRequest("GET", u, nil)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
-		blocker := &lookup.BeaconDbBlocker{
-			ChainInfoFetcher: &mockChain.ChainService{FinalizedCheckPoint: &eth.Checkpoint{Root: blockRoot[:]}},
+		s.Blocker = &lookup.BeaconDbBlocker{
+			ChainInfoFetcher: &mockChain.ChainService{FinalizedCheckPoint: &eth.Checkpoint{Root: blockRoot[:]}, Block: denebBlock},
 			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
 				Genesis: time.Now(),
 			},
 			BeaconDB:    db,
 			BlobStorage: bs,
-		}
-		s := &Server{
-			Blocker: blocker,
 		}
 
 		s.Blobs(writer, request)
@@ -310,16 +328,17 @@ func TestBlobs(t *testing.T) {
 		resp := &structs.SidecarsResponse{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
 		require.Equal(t, 0, len(resp.Data))
+
+		require.Equal(t, "deneb", resp.Version)
+		require.Equal(t, false, resp.ExecutionOptimistic)
+		require.Equal(t, false, resp.Finalized)
 	})
 	t.Run("slot before Deneb fork", func(t *testing.T) {
 		u := "http://foo.example/31"
 		request := httptest.NewRequest("GET", u, nil)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
-		blocker := &lookup.BeaconDbBlocker{}
-		s := &Server{
-			Blocker: blocker,
-		}
+		s.Blocker = &lookup.BeaconDbBlocker{}
 
 		s.Blobs(writer, request)
 
@@ -334,11 +353,7 @@ func TestBlobs(t *testing.T) {
 		request := httptest.NewRequest("GET", u, nil)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
-		blocker := &lookup.BeaconDbBlocker{}
-		s := &Server{
-			Blocker: blocker,
-		}
-
+		s.Blocker = &lookup.BeaconDbBlocker{}
 		s.Blobs(writer, request)
 
 		assert.Equal(t, http.StatusBadRequest, writer.Code)
@@ -353,7 +368,7 @@ func TestBlobs(t *testing.T) {
 		request.Header.Add("Accept", "application/octet-stream")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
-		blocker := &lookup.BeaconDbBlocker{
+		s.Blocker = &lookup.BeaconDbBlocker{
 			ChainInfoFetcher: &mockChain.ChainService{FinalizedCheckPoint: &eth.Checkpoint{Root: blockRoot[:]}},
 			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
 				Genesis: time.Now(),
@@ -361,12 +376,138 @@ func TestBlobs(t *testing.T) {
 			BeaconDB:    db,
 			BlobStorage: bs,
 		}
-		s := &Server{
-			Blocker: blocker,
+		s.Blobs(writer, request)
+		assert.Equal(t, version.String(version.Deneb), writer.Header().Get(api.VersionHeader))
+		assert.Equal(t, http.StatusOK, writer.Code)
+		require.Equal(t, len(writer.Body.Bytes()), fieldparams.BlobSidecarSize) // size of each sidecar
+		// can directly unmarshal to sidecar since there's only 1
+		var sidecar eth.BlobSidecar
+		require.NoError(t, sidecar.UnmarshalSSZ(writer.Body.Bytes()))
+		require.NotNil(t, sidecar.Blob)
+	})
+	t.Run("ssz multiple blobs", func(t *testing.T) {
+		u := "http://foo.example/finalized"
+		request := httptest.NewRequest("GET", u, nil)
+		request.Header.Add("Accept", "application/octet-stream")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+		s.Blocker = &lookup.BeaconDbBlocker{
+			ChainInfoFetcher: &mockChain.ChainService{FinalizedCheckPoint: &eth.Checkpoint{Root: blockRoot[:]}},
+			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
+				Genesis: time.Now(),
+			},
+			BeaconDB:    db,
+			BlobStorage: bs,
 		}
 		s.Blobs(writer, request)
+
 		assert.Equal(t, http.StatusOK, writer.Code)
-		require.Equal(t, len(writer.Body.Bytes()), 131932)
+		require.Equal(t, len(writer.Body.Bytes()), fieldparams.BlobSidecarSize*4) // size of each sidecar
+	})
+}
+
+func TestBlobs_Electra(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.DenebForkEpoch = 0
+	cfg.ElectraForkEpoch = 1
+	params.OverrideBeaconConfig(cfg)
+
+	db := testDB.SetupDB(t)
+	electraBlock, blobs := util.GenerateTestElectraBlockWithSidecar(t, [32]byte{}, 123, params.BeaconConfig().MaxBlobsPerBlockByVersion(version.Electra))
+	require.NoError(t, db.SaveBlock(context.Background(), electraBlock))
+	bs := filesystem.NewEphemeralBlobStorage(t)
+	testSidecars := verification.FakeVerifySliceForTest(t, blobs)
+	for i := range testSidecars {
+		require.NoError(t, bs.Save(testSidecars[i]))
+	}
+	blockRoot := blobs[0].BlockRoot()
+
+	mockChainService := &mockChain.ChainService{
+		FinalizedRoots: map[[32]byte]bool{},
+	}
+	s := &Server{
+		OptimisticModeFetcher: mockChainService,
+		FinalizationFetcher:   mockChainService,
+		TimeFetcher:           mockChainService,
+	}
+	t.Run("max blobs for electra", func(t *testing.T) {
+		u := "http://foo.example/123"
+		request := httptest.NewRequest("GET", u, nil)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+		s.Blocker = &lookup.BeaconDbBlocker{
+			ChainInfoFetcher: &mockChain.ChainService{FinalizedCheckPoint: &eth.Checkpoint{Root: blockRoot[:]}, Block: electraBlock},
+			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
+				Genesis: time.Now(),
+			},
+			BeaconDB:    db,
+			BlobStorage: bs,
+		}
+		s.Blobs(writer, request)
+
+		assert.Equal(t, version.String(version.Electra), writer.Header().Get(api.VersionHeader))
+		assert.Equal(t, http.StatusOK, writer.Code)
+		resp := &structs.SidecarsResponse{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+		require.Equal(t, params.BeaconConfig().MaxBlobsPerBlockByVersion(version.Electra), len(resp.Data))
+		sidecar := resp.Data[0]
+		require.NotNil(t, sidecar)
+		assert.Equal(t, "0", sidecar.Index)
+		assert.Equal(t, hexutil.Encode(blobs[0].Blob), sidecar.Blob)
+		assert.Equal(t, hexutil.Encode(blobs[0].KzgCommitment), sidecar.KzgCommitment)
+		assert.Equal(t, hexutil.Encode(blobs[0].KzgProof), sidecar.KzgProof)
+
+		require.Equal(t, version.String(version.Electra), resp.Version)
+		require.Equal(t, false, resp.ExecutionOptimistic)
+		require.Equal(t, false, resp.Finalized)
+	})
+	t.Run("requested blob index at max", func(t *testing.T) {
+		limit := params.BeaconConfig().MaxBlobsPerBlockByVersion(version.Electra) - 1
+		u := fmt.Sprintf("http://foo.example/123?indices=%d", limit)
+		request := httptest.NewRequest("GET", u, nil)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+		s.Blocker = &lookup.BeaconDbBlocker{
+			ChainInfoFetcher: &mockChain.ChainService{FinalizedCheckPoint: &eth.Checkpoint{Root: blockRoot[:]}, Block: electraBlock},
+			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
+				Genesis: time.Now(),
+			},
+			BeaconDB:    db,
+			BlobStorage: bs,
+		}
+		s.Blobs(writer, request)
+
+		assert.Equal(t, version.String(version.Electra), writer.Header().Get(api.VersionHeader))
+		assert.Equal(t, http.StatusOK, writer.Code)
+		resp := &structs.SidecarsResponse{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+		require.Equal(t, 1, len(resp.Data))
+		sidecar := resp.Data[0]
+		require.NotNil(t, sidecar)
+		assert.Equal(t, fmt.Sprintf("%d", limit), sidecar.Index)
+		assert.Equal(t, hexutil.Encode(blobs[limit].Blob), sidecar.Blob)
+		assert.Equal(t, hexutil.Encode(blobs[limit].KzgCommitment), sidecar.KzgCommitment)
+		assert.Equal(t, hexutil.Encode(blobs[limit].KzgProof), sidecar.KzgProof)
+
+		require.Equal(t, version.String(version.Electra), resp.Version)
+		require.Equal(t, false, resp.ExecutionOptimistic)
+		require.Equal(t, false, resp.Finalized)
+	})
+	t.Run("blob index over max", func(t *testing.T) {
+		overLimit := params.BeaconConfig().MaxBlobsPerBlockByVersion(version.Electra)
+		u := fmt.Sprintf("http://foo.example/123?indices=%d", overLimit)
+		request := httptest.NewRequest("GET", u, nil)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+		s.Blocker = &lookup.BeaconDbBlocker{}
+		s.Blobs(writer, request)
+
+		assert.Equal(t, http.StatusBadRequest, writer.Code)
+		e := &httputil.DefaultJsonError{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+		assert.Equal(t, http.StatusBadRequest, e.Code)
+		assert.Equal(t, true, strings.Contains(e.Message, fmt.Sprintf("requested blob indices [%d] are invalid", overLimit)))
 	})
 }
 
@@ -400,7 +541,7 @@ func Test_parseIndices(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := parseIndices(&url.URL{RawQuery: tt.query})
+			got, err := parseIndices(&url.URL{RawQuery: tt.query}, 0)
 			if err != nil && tt.wantErr != "" {
 				require.StringContains(t, tt.wantErr, err.Error())
 				return

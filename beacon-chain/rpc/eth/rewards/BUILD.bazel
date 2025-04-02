@@ -27,11 +27,11 @@ go_library(
         "//consensus-types/blocks:go_default_library",
         "//consensus-types/interfaces:go_default_library",
         "//consensus-types/primitives:go_default_library",
+        "//monitoring/tracing/trace:go_default_library",
         "//network/httputil:go_default_library",
         "//runtime/version:go_default_library",
         "//time/slots:go_default_library",
         "@com_github_wealdtech_go_bytesutil//:go_default_library",
-        "@io_opencensus_go//trace:go_default_library",
     ],
 )
 
@@ -63,6 +63,7 @@ go_test(
         "//encoding/bytesutil:go_default_library",
         "//network/httputil:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
+        "//runtime/version:go_default_library",
         "//testing/assert:go_default_library",
         "//testing/require:go_default_library",
         "//testing/util:go_default_library",

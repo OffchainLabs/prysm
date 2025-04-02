@@ -160,28 +160,32 @@ func GenerateFullBlockElectra(
 			return nil, errors.Wrapf(err, "failed generating %d consolidation requests:", conf.NumConsolidationRequests)
 		}
 	}
+
+	executionRequests := &v1.ExecutionRequests{
+		Withdrawals:    withdrawalRequests,
+		Deposits:       depositRequests,
+		Consolidations: consolidationRequests,
+	}
+
 	parentExecution, err := stCopy.LatestExecutionPayloadHeader()
 	if err != nil {
 		return nil, err
 	}
 	blockHash := indexToHash(uint64(slot))
-	newExecutionPayloadElectra := &v1.ExecutionPayloadElectra{
-		ParentHash:            parentExecution.BlockHash(),
-		FeeRecipient:          make([]byte, 20),
-		StateRoot:             params.BeaconConfig().ZeroHash[:],
-		ReceiptsRoot:          params.BeaconConfig().ZeroHash[:],
-		LogsBloom:             make([]byte, 256),
-		PrevRandao:            random,
-		BlockNumber:           uint64(slot),
-		ExtraData:             params.BeaconConfig().ZeroHash[:],
-		BaseFeePerGas:         params.BeaconConfig().ZeroHash[:],
-		BlockHash:             blockHash[:],
-		Timestamp:             uint64(timestamp.Unix()),
-		Transactions:          newTransactions,
-		Withdrawals:           newWithdrawals,
-		DepositRequests:       depositRequests,
-		WithdrawalRequests:    withdrawalRequests,
-		ConsolidationRequests: consolidationRequests,
+	newExecutionPayloadElectra := &v1.ExecutionPayloadDeneb{
+		ParentHash:    parentExecution.BlockHash(),
+		FeeRecipient:  make([]byte, 20),
+		StateRoot:     params.BeaconConfig().ZeroHash[:],
+		ReceiptsRoot:  params.BeaconConfig().ZeroHash[:],
+		LogsBloom:     make([]byte, 256),
+		PrevRandao:    random,
+		BlockNumber:   uint64(slot),
+		ExtraData:     params.BeaconConfig().ZeroHash[:],
+		BaseFeePerGas: params.BeaconConfig().ZeroHash[:],
+		BlockHash:     blockHash[:],
+		Timestamp:     uint64(timestamp.Unix()),
+		Transactions:  newTransactions,
+		Withdrawals:   newWithdrawals,
 	}
 	var syncCommitteeBits []byte
 	currSize := new(ethpb.SyncAggregate).SyncCommitteeBits.Len()
@@ -247,6 +251,7 @@ func GenerateFullBlockElectra(
 			SyncAggregate:         newSyncAggregate,
 			ExecutionPayload:      newExecutionPayloadElectra,
 			BlsToExecutionChanges: changes,
+			ExecutionRequests:     executionRequests,
 		},
 	}
 

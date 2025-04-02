@@ -19,23 +19,23 @@ func TestForkChoice_ShouldOverrideFCU(t *testing.T) {
 	f.store.committeeWeight /= uint64(params.BeaconConfig().SlotsPerEpoch)
 	ctx := context.Background()
 	driftGenesisTime(f, 1, 0)
-	st, root, err := prepareForkchoiceState(ctx, 1, [32]byte{'a'}, [32]byte{}, [32]byte{'A'}, 0, 0)
+	st, blk, err := prepareForkchoiceState(ctx, 1, [32]byte{'a'}, [32]byte{}, [32]byte{'A'}, 0, 0)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, root))
+	require.NoError(t, f.InsertNode(ctx, st, blk))
 	attesters := make([]uint64, f.numActiveValidators-64)
 	for i := range attesters {
 		attesters[i] = uint64(i + 64)
 	}
-	f.ProcessAttestation(ctx, attesters, root, 0)
+	f.ProcessAttestation(ctx, attesters, blk.Root(), 0)
 
 	orphanLateBlockFirstThreshold := params.BeaconConfig().SecondsPerSlot / params.BeaconConfig().IntervalsPerSlot
 	driftGenesisTime(f, 2, orphanLateBlockFirstThreshold+1)
-	st, root, err = prepareForkchoiceState(ctx, 2, [32]byte{'b'}, [32]byte{'a'}, [32]byte{'B'}, 0, 0)
+	st, blk, err = prepareForkchoiceState(ctx, 2, [32]byte{'b'}, [32]byte{'a'}, [32]byte{'B'}, 0, 0)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, root))
+	require.NoError(t, f.InsertNode(ctx, st, blk))
 	headRoot, err := f.Head(ctx)
 	require.NoError(t, err)
-	require.Equal(t, root, headRoot)
+	require.Equal(t, blk.Root(), headRoot)
 	t.Run("head is weak", func(t *testing.T) {
 		require.Equal(t, true, f.ShouldOverrideFCU())
 
@@ -117,23 +117,23 @@ func TestForkChoice_GetProposerHead(t *testing.T) {
 	ctx := context.Background()
 	driftGenesisTime(f, 1, 0)
 	parentRoot := [32]byte{'a'}
-	st, root, err := prepareForkchoiceState(ctx, 1, parentRoot, [32]byte{}, [32]byte{'A'}, 0, 0)
+	st, blk, err := prepareForkchoiceState(ctx, 1, parentRoot, [32]byte{}, [32]byte{'A'}, 0, 0)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, root))
+	require.NoError(t, f.InsertNode(ctx, st, blk))
 	attesters := make([]uint64, f.numActiveValidators-64)
 	for i := range attesters {
 		attesters[i] = uint64(i + 64)
 	}
-	f.ProcessAttestation(ctx, attesters, root, 0)
+	f.ProcessAttestation(ctx, attesters, blk.Root(), 0)
 
 	driftGenesisTime(f, 3, 1)
 	childRoot := [32]byte{'b'}
-	st, root, err = prepareForkchoiceState(ctx, 2, childRoot, [32]byte{'a'}, [32]byte{'B'}, 0, 0)
+	st, blk, err = prepareForkchoiceState(ctx, 2, childRoot, [32]byte{'a'}, [32]byte{'B'}, 0, 0)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, root))
+	require.NoError(t, f.InsertNode(ctx, st, blk))
 	headRoot, err := f.Head(ctx)
 	require.NoError(t, err)
-	require.Equal(t, root, headRoot)
+	require.Equal(t, blk.Root(), headRoot)
 	orphanLateBlockFirstThreshold := params.BeaconConfig().SecondsPerSlot / params.BeaconConfig().IntervalsPerSlot
 	f.store.headNode.timestamp -= params.BeaconConfig().SecondsPerSlot - orphanLateBlockFirstThreshold
 	t.Run("head is weak", func(t *testing.T) {

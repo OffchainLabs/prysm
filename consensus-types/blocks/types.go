@@ -5,6 +5,7 @@ import (
 	field_params "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
 	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
@@ -54,6 +55,7 @@ type BeaconBlockBody struct {
 	executionPayloadHeader   interfaces.ExecutionData
 	blsToExecutionChanges    []*eth.SignedBLSToExecutionChange
 	blobKzgCommitments       [][]byte
+	executionRequests        *enginev1.ExecutionRequests
 }
 
 var _ interfaces.ReadOnlyBeaconBlockBody = &BeaconBlockBody{}

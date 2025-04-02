@@ -35,12 +35,15 @@ func (m *PoolMock) InsertProposerSlashing(_ context.Context, _ state.ReadOnlyBea
 	return nil
 }
 
+// ConvertToElectra --
+func (*PoolMock) ConvertToElectra() {}
+
 // MarkIncludedAttesterSlashing --
 func (*PoolMock) MarkIncludedAttesterSlashing(_ ethpb.AttSlashing) {
-	panic("implement me")
+	panic("implement me") // lint:nopanic -- Test / mock code.
 }
 
 // MarkIncludedProposerSlashing --
 func (*PoolMock) MarkIncludedProposerSlashing(_ *ethpb.ProposerSlashing) {
-	panic("implement me")
+	panic("implement me") // lint:nopanic -- Test / mock code.
 }

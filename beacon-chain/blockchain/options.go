@@ -85,6 +85,14 @@ func WithTrackedValidatorsCache(c *cache.TrackedValidatorsCache) Option {
 	}
 }
 
+// WithAttestationCache for attestation lifecycle after chain inclusion.
+func WithAttestationCache(c *cache.AttestationCache) Option {
+	return func(s *Service) error {
+		s.cfg.AttestationCache = c
+		return nil
+	}
+}
+
 // WithAttestationPool for attestation lifecycle after chain inclusion.
 func WithAttestationPool(p attestations.Pool) Option {
 	return func(s *Service) error {
@@ -202,6 +210,13 @@ func WithBlobStorage(b *filesystem.BlobStorage) Option {
 func WithSyncChecker(checker Checker) Option {
 	return func(s *Service) error {
 		s.cfg.SyncChecker = checker
+		return nil
+	}
+}
+
+func WithSlasherEnabled(enabled bool) Option {
+	return func(s *Service) error {
+		s.slasherEnabled = enabled
 		return nil
 	}
 }

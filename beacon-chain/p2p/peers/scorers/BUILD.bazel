@@ -20,6 +20,7 @@ go_library(
         "//crypto/rand:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "@com_github_libp2p_go_libp2p//core/peer:go_default_library",
+        "@com_github_pkg_errors//:go_default_library",
     ],
 )
 

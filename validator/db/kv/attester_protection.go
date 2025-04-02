@@ -419,7 +419,7 @@ func (s *Store) batchAttestationWrites(ctx context.Context) {
 			_, span := trace.StartSpan(v.ctx, "batchAttestationWrites.handleBatchedAttestationSaveRequest")
 			s.batchedAttestations.Append(v.record)
 
-			span.AddAttributes(trace.Int64Attribute("num_records", int64(s.batchedAttestations.Len())))
+			span.SetAttributes(trace.Int64Attribute("num_records", int64(s.batchedAttestations.Len())))
 
 			if numRecords := s.batchedAttestations.Len(); numRecords >= attestationBatchCapacity {
 				log.WithField("recordCount", numRecords).Debug(

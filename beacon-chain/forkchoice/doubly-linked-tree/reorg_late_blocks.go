@@ -53,7 +53,7 @@ func (f *ForkChoice) ShouldOverrideFCU() (override bool) {
 	// Only reorg blocks that arrive late
 	early, err := head.arrivedEarly(f.store.genesisTime)
 	if err != nil {
-		log.WithError(err).Error("could not check if block arrived early")
+		log.WithError(err).Error("Could not check if block arrived early")
 		return
 	}
 	if early {
@@ -78,7 +78,7 @@ func (f *ForkChoice) ShouldOverrideFCU() (override bool) {
 	// }
 
 	// Only orphan a block if the head LMD vote is weak
-	if head.weight*100 > f.store.committeeWeight*params.BeaconConfig().ReorgWeightThreshold {
+	if head.weight*100 > f.store.committeeWeight*params.BeaconConfig().ReorgHeadWeightThreshold {
 		return
 	}
 
@@ -143,7 +143,7 @@ func (f *ForkChoice) GetProposerHead() [32]byte {
 	}
 
 	// Only orphan a block if the head LMD vote is weak
-	if head.weight*100 > f.store.committeeWeight*params.BeaconConfig().ReorgWeightThreshold {
+	if head.weight*100 > f.store.committeeWeight*params.BeaconConfig().ReorgHeadWeightThreshold {
 		return head.root
 	}
 

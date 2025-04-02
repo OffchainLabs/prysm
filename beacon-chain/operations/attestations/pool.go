@@ -26,7 +26,7 @@ type Pool interface {
 	// For unaggregated attestations.
 	SaveUnaggregatedAttestation(att ethpb.Att) error
 	SaveUnaggregatedAttestations(atts []ethpb.Att) error
-	UnaggregatedAttestations() ([]ethpb.Att, error)
+	UnaggregatedAttestations() []ethpb.Att
 	UnaggregatedAttestationsBySlotIndex(ctx context.Context, slot primitives.Slot, committeeIndex primitives.CommitteeIndex) []*ethpb.Attestation
 	UnaggregatedAttestationsBySlotIndexElectra(ctx context.Context, slot primitives.Slot, committeeIndex primitives.CommitteeIndex) []*ethpb.AttestationElectra
 	DeleteUnaggregatedAttestation(att ethpb.Att) error
@@ -37,7 +37,6 @@ type Pool interface {
 	BlockAttestations() []ethpb.Att
 	DeleteBlockAttestation(att ethpb.Att) error
 	// For attestations to be passed to fork choice.
-	SaveForkchoiceAttestation(att ethpb.Att) error
 	SaveForkchoiceAttestations(atts []ethpb.Att) error
 	ForkchoiceAttestations() []ethpb.Att
 	DeleteForkchoiceAttestation(att ethpb.Att) error

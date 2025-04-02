@@ -23,8 +23,8 @@ var (
 	ErrNoPeerStatus = errors.New("no chain status for peer")
 )
 
-// PeerConnectionState is the state of the connection.
-type PeerConnectionState ethpb.ConnectionState
+// ConnectionState is the state of the connection.
+type ConnectionState ethpb.ConnectionState
 
 // StoreConfig holds peer store parameters.
 type StoreConfig struct {
@@ -49,7 +49,7 @@ type PeerData struct {
 	// Network related data.
 	Address       ma.Multiaddr
 	Direction     network.Direction
-	ConnState     PeerConnectionState
+	ConnState     ConnectionState
 	Enr           *enr.Record
 	NextValidTime time.Time
 	// Chain related data.

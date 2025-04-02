@@ -64,7 +64,7 @@ func TestNextWithdrawalValidatorIndex(t *testing.T) {
 }
 
 func TestExpectedWithdrawals(t *testing.T) {
-	for _, stateVersion := range []int{version.Capella, version.Deneb, version.Electra} {
+	for _, stateVersion := range []int{version.Capella, version.Deneb, version.Electra, version.Fulu} {
 		t.Run(version.String(stateVersion), func(t *testing.T) {
 			t.Run("no withdrawals", func(t *testing.T) {
 				s := state_native.EmptyStateFromVersion(t, stateVersion)
@@ -343,10 +343,76 @@ func TestExpectedWithdrawals(t *testing.T) {
 		require.NoError(t, pb.UnmarshalSSZ(serializedSSZ))
 		s, err := state_native.InitializeFromProtoElectra(pb)
 		require.NoError(t, err)
-		t.Log(s.NumPendingPartialWithdrawals())
 		expected, partialWithdrawalsCount, err := s.ExpectedWithdrawals()
 		require.NoError(t, err)
 		require.Equal(t, 8, len(expected))
 		require.Equal(t, uint64(8), partialWithdrawalsCount)
+	})
+
+	t.Run("electra some pending partial withdrawals", func(t *testing.T) {
+		// Load a serialized Electra state from disk.
+		// This spectest has a fully hydrated beacon state with partial pending withdrawals.
+		serializedBytes, err := util.BazelFileBytes("tests/mainnet/electra/operations/withdrawal_request/pyspec_tests/pending_withdrawals_consume_all_excess_balance/pre.ssz_snappy")
+		require.NoError(t, err)
+		serializedSSZ, err := snappy.Decode(nil /* dst */, serializedBytes)
+		require.NoError(t, err)
+		pb := &ethpb.BeaconStateElectra{}
+		require.NoError(t, pb.UnmarshalSSZ(serializedSSZ))
+		s, err := state_native.InitializeFromProtoElectra(pb)
+		require.NoError(t, err)
+		p, err := s.PendingPartialWithdrawals()
+		require.NoError(t, err)
+		require.NoError(t, s.UpdateBalancesAtIndex(p[0].Index, 0)) // This should still count as partial withdrawal.
+		_, partialWithdrawalsCount, err := s.ExpectedWithdrawals()
+		require.NoError(t, err)
+		require.Equal(t, uint64(10), partialWithdrawalsCount)
+	})
+	t.Run("electra same validator has one partially and one fully withdrawable", func(t *testing.T) {
+		s, _ := util.DeterministicGenesisStateElectra(t, 1)
+		vals := make([]*ethpb.Validator, 100)
+		balances := make([]uint64, 100)
+		for i := range vals {
+			balances[i] = params.BeaconConfig().MaxEffectiveBalance
+			val := &ethpb.Validator{
+				WithdrawalCredentials: make([]byte, 32),
+				EffectiveBalance:      params.BeaconConfig().MaxEffectiveBalance,
+				WithdrawableEpoch:     primitives.Epoch(1),
+				ExitEpoch:             params.BeaconConfig().FarFutureEpoch,
+			}
+			val.WithdrawalCredentials[0] = params.BeaconConfig().ETH1AddressWithdrawalPrefixByte
+			val.WithdrawalCredentials[31] = byte(i)
+			vals[i] = val
+		}
+		balances[1] += params.BeaconConfig().MinDepositAmount
+		vals[1].WithdrawableEpoch = primitives.Epoch(0)
+		require.NoError(t, s.SetValidators(vals))
+		require.NoError(t, s.SetBalances(balances))
+		// Give validator a pending balance to withdraw.
+		require.NoError(t, s.AppendPendingPartialWithdrawal(&ethpb.PendingPartialWithdrawal{
+			Index:             1,
+			Amount:            balances[1], // will only deduct excess even though balance is more that minimum activation
+			WithdrawableEpoch: primitives.Epoch(0),
+		}))
+		p, err := s.PendingPartialWithdrawals()
+		require.NoError(t, err)
+		require.Equal(t, 1, len(p))
+		expected, _, err := s.ExpectedWithdrawals()
+		require.NoError(t, err)
+		require.Equal(t, 2, len(expected))
+
+		withdrawalFull := &enginev1.Withdrawal{
+			Index:          1,
+			ValidatorIndex: 1,
+			Address:        vals[1].WithdrawalCredentials[12:],
+			Amount:         balances[1] - params.BeaconConfig().MinDepositAmount, // subtract the partial from this
+		}
+		withdrawalPartial := &enginev1.Withdrawal{
+			Index:          0,
+			ValidatorIndex: 1,
+			Address:        vals[1].WithdrawalCredentials[12:],
+			Amount:         params.BeaconConfig().MinDepositAmount,
+		}
+		require.DeepEqual(t, withdrawalPartial, expected[0])
+		require.DeepEqual(t, withdrawalFull, expected[1])
 	})
 }

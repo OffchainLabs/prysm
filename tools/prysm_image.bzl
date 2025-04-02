@@ -14,6 +14,7 @@ def prysm_image_upload(
         srcs = [binary],
         symlinks = symlinks,
         tags = tags,
+        extension = "tar.gz",
     )
 
     oci_image(

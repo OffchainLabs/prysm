@@ -253,7 +253,7 @@ func (mr *MockBeaconNodeValidatorServerMockRecorder) ProposeAttestation(arg0, ar
 }
 
 // ProposeAttestationElectra mocks base method.
-func (m *MockBeaconNodeValidatorServer) ProposeAttestationElectra(arg0 context.Context, arg1 *eth.AttestationElectra) (*eth.AttestResponse, error) {
+func (m *MockBeaconNodeValidatorServer) ProposeAttestationElectra(arg0 context.Context, arg1 *eth.SingleAttestation) (*eth.AttestResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ProposeAttestationElectra", arg0, arg1)
 	ret0, _ := ret[0].(*eth.AttestResponse)

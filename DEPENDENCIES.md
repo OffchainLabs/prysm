@@ -55,7 +55,7 @@ bazel build //beacon-chain --config=release
 ## Adding / updating dependencies
 
 1. Add your dependency as you would with go modules. I.e. `go get ...`
-1. Run `bazel run //:gazelle -- update-repos -from_file=go.mod` to update the bazel managed dependencies.
+1. Run `bazel run //:gazelle -- update-repos -from_file=go.mod -to_macro=deps.bzl%prysm_deps -prune=true` to update the bazel managed dependencies.
 
 Example:
 

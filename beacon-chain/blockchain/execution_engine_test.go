@@ -84,7 +84,7 @@ func Test_NotifyForkchoiceUpdate_GetPayloadAttrErrorCanContinue(t *testing.T) {
 	service.cfg.PayloadIDCache.Set(1, [32]byte{}, [8]byte{})
 	got, err := service.notifyForkchoiceUpdate(ctx, arg)
 	require.NoError(t, err)
-	require.DeepEqual(t, got, pid) // We still get a payload ID even though the state is bad. This means it returns until the end.
+	require.IsNil(t, got)
 }
 
 func Test_NotifyForkchoiceUpdate(t *testing.T) {
@@ -113,6 +113,7 @@ func Test_NotifyForkchoiceUpdate(t *testing.T) {
 	state, blkRoot, err = prepareForkchoiceState(ctx, 2, bellatrixBlkRoot, altairBlkRoot, params.BeaconConfig().ZeroHash, ojc, ofc)
 	require.NoError(t, err)
 	require.NoError(t, fcs.InsertNode(ctx, state, blkRoot))
+	badHash := [32]byte{'h'}
 
 	tests := []struct {
 		name             string
@@ -210,7 +211,7 @@ func Test_NotifyForkchoiceUpdate(t *testing.T) {
 			blk: func() interfaces.ReadOnlySignedBeaconBlock {
 				b, err := consensusblocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockBellatrix{Block: &ethpb.BeaconBlockBellatrix{
 					Body: &ethpb.BeaconBlockBodyBellatrix{
-						ExecutionPayload: &v1.ExecutionPayload{},
+						ExecutionPayload: &v1.ExecutionPayload{BlockHash: badHash[:]},
 					},
 				}})
 				require.NoError(t, err)
@@ -1135,9 +1136,14 @@ func TestComputePayloadAttribute(t *testing.T) {
 	// Cache hit, advance state, no fee recipient
 	slot := primitives.Slot(1)
 	service.cfg.PayloadIDCache.Set(slot, [32]byte{}, [8]byte{})
+	blk := util.NewBeaconBlockBellatrix()
+	signed, err := consensusblocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+	roblock, err := consensusblocks.NewROBlockWithRoot(signed, [32]byte{'a'})
+	require.NoError(t, err)
 	cfg := &postBlockProcessConfig{
-		ctx:       ctx,
-		blockRoot: [32]byte{'a'},
+		ctx:     ctx,
+		roblock: roblock,
 	}
 	fcu := &fcuConfig{
 		headState:     st,

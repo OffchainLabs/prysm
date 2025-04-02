@@ -7,11 +7,11 @@ import (
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/execution"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/verify"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
@@ -20,9 +20,9 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
-// sendRecentBeaconBlocksRequest sends a recent beacon blocks request to a peer to get
+// sendBeaconBlocksRequest sends a recent beacon blocks request to a peer to get
 // those corresponding blocks from that peer.
-func (s *Service) sendRecentBeaconBlocksRequest(ctx context.Context, requests *types.BeaconBlockByRootsReq, id peer.ID) error {
+func (s *Service) sendBeaconBlocksRequest(ctx context.Context, requests *types.BeaconBlockByRootsReq, id peer.ID) error {
 	ctx, cancel := context.WithTimeout(ctx, respTimeout)
 	defer cancel()
 
@@ -112,7 +112,7 @@ func (s *Service) beaconBlocksRootRPCHandler(ctx context.Context, msg interface{
 		}
 
 		if blk.Block().IsBlinded() {
-			blk, err = s.cfg.executionPayloadReconstructor.ReconstructFullBlock(ctx, blk)
+			blk, err = s.cfg.executionReconstructor.ReconstructFullBlock(ctx, blk)
 			if err != nil {
 				if errors.Is(err, execution.ErrEmptyBlockHash) {
 					log.WithError(err).Warn("Could not reconstruct block from header with syncing execution client. Waiting to complete syncing")
@@ -139,7 +139,7 @@ func (s *Service) sendAndSaveBlobSidecars(ctx context.Context, request types.Blo
 		return nil
 	}
 
-	sidecars, err := SendBlobSidecarByRoot(ctx, s.cfg.clock, s.cfg.p2p, peerID, s.ctxMap, &request)
+	sidecars, err := SendBlobSidecarByRoot(ctx, s.cfg.clock, s.cfg.p2p, peerID, s.ctxMap, &request, block.Block().Slot())
 	if err != nil {
 		return err
 	}
@@ -151,7 +151,7 @@ func (s *Service) sendAndSaveBlobSidecars(ctx context.Context, request types.Blo
 	if len(sidecars) != len(request) {
 		return fmt.Errorf("received %d blob sidecars, expected %d for RPC", len(sidecars), len(request))
 	}
-	bv := verification.NewBlobBatchVerifier(s.newBlobVerifier, verification.PendingQueueSidecarRequirements)
+	bv := verification.NewBlobBatchVerifier(s.newBlobVerifier, verification.PendingQueueBlobSidecarRequirements)
 	for _, sidecar := range sidecars {
 		if err := verify.BlobAlignsWithBlock(sidecar, RoBlock); err != nil {
 			return err
@@ -189,21 +189,18 @@ func (s *Service) constructPendingBlobsRequest(root [32]byte, commitments int) (
 	if commitments == 0 {
 		return nil, nil
 	}
-	stored, err := s.cfg.blobStorage.Indices(root)
-	if err != nil {
-		return nil, err
-	}
+	summary := s.cfg.blobStorage.Summary(root)
 
-	return requestsForMissingIndices(stored, commitments, root), nil
+	return requestsForMissingIndices(summary, commitments, root), nil
 }
 
 // requestsForMissingIndices constructs a slice of BlobIdentifiers that are missing from
 // local storage, based on a mapping that represents which indices are locally stored,
 // and the highest expected index.
-func requestsForMissingIndices(storedIndices [fieldparams.MaxBlobsPerBlock]bool, commitments int, root [32]byte) []*eth.BlobIdentifier {
+func requestsForMissingIndices(stored filesystem.BlobStorageSummary, commitments int, root [32]byte) []*eth.BlobIdentifier {
 	var ids []*eth.BlobIdentifier
 	for i := uint64(0); i < uint64(commitments); i++ {
-		if !storedIndices[i] {
+		if !stored.HasIndex(i) {
 			ids = append(ids, &eth.BlobIdentifier{Index: i, BlockRoot: root[:]})
 		}
 	}

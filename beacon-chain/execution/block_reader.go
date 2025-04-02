@@ -31,10 +31,10 @@ func (s *Service) BlockExists(ctx context.Context, hash common.Hash) (bool, *big
 		if err != nil {
 			return false, nil, err
 		}
-		span.AddAttributes(trace.BoolAttribute("blockCacheHit", true))
+		span.SetAttributes(trace.BoolAttribute("blockCacheHit", true))
 		return true, hdrInfo.Number, nil
 	}
-	span.AddAttributes(trace.BoolAttribute("blockCacheHit", false))
+	span.SetAttributes(trace.BoolAttribute("blockCacheHit", false))
 	header, err := s.HeaderByHash(ctx, hash)
 	if err != nil {
 		return false, big.NewInt(0), errors.Wrap(err, "could not query block with given hash")
@@ -56,10 +56,10 @@ func (s *Service) BlockHashByHeight(ctx context.Context, height *big.Int) (commo
 		if err != nil {
 			return [32]byte{}, err
 		}
-		span.AddAttributes(trace.BoolAttribute("headerCacheHit", true))
+		span.SetAttributes(trace.BoolAttribute("headerCacheHit", true))
 		return hInfo.Hash, nil
 	}
-	span.AddAttributes(trace.BoolAttribute("headerCacheHit", false))
+	span.SetAttributes(trace.BoolAttribute("headerCacheHit", false))
 
 	if s.rpcClient == nil {
 		err := errors.New("nil rpc client")

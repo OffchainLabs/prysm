@@ -67,35 +67,6 @@ func (cr *ConsolidationRequest) Copy() *ConsolidationRequest {
 	}
 }
 
-// Copy -- Electra
-func (payload *ExecutionPayloadElectra) Copy() *ExecutionPayloadElectra {
-	if payload == nil {
-		return nil
-	}
-	return &ExecutionPayloadElectra{
-		ParentHash:            bytesutil.SafeCopyBytes(payload.ParentHash),
-		FeeRecipient:          bytesutil.SafeCopyBytes(payload.FeeRecipient),
-		StateRoot:             bytesutil.SafeCopyBytes(payload.StateRoot),
-		ReceiptsRoot:          bytesutil.SafeCopyBytes(payload.ReceiptsRoot),
-		LogsBloom:             bytesutil.SafeCopyBytes(payload.LogsBloom),
-		PrevRandao:            bytesutil.SafeCopyBytes(payload.PrevRandao),
-		BlockNumber:           payload.BlockNumber,
-		GasLimit:              payload.GasLimit,
-		GasUsed:               payload.GasUsed,
-		Timestamp:             payload.Timestamp,
-		ExtraData:             bytesutil.SafeCopyBytes(payload.ExtraData),
-		BaseFeePerGas:         bytesutil.SafeCopyBytes(payload.BaseFeePerGas),
-		BlockHash:             bytesutil.SafeCopyBytes(payload.BlockHash),
-		Transactions:          bytesutil.SafeCopy2dBytes(payload.Transactions),
-		Withdrawals:           copySlice(payload.Withdrawals),
-		BlobGasUsed:           payload.BlobGasUsed,
-		ExcessBlobGas:         payload.ExcessBlobGas,
-		DepositRequests:       copySlice(payload.DepositRequests),
-		WithdrawalRequests:    copySlice(payload.WithdrawalRequests),
-		ConsolidationRequests: copySlice(payload.ConsolidationRequests),
-	}
-}
-
 // Copy -- Deneb
 func (payload *ExecutionPayloadDeneb) Copy() *ExecutionPayloadDeneb {
 	if payload == nil {
@@ -168,36 +139,6 @@ func (payload *ExecutionPayload) Copy() *ExecutionPayload {
 		BaseFeePerGas: bytesutil.SafeCopyBytes(payload.BaseFeePerGas),
 		BlockHash:     bytesutil.SafeCopyBytes(payload.BlockHash),
 		Transactions:  bytesutil.SafeCopy2dBytes(payload.Transactions),
-	}
-}
-
-// Copy -- Electra
-func (payload *ExecutionPayloadHeaderElectra) Copy() *ExecutionPayloadHeaderElectra {
-	if payload == nil {
-		return nil
-	}
-
-	return &ExecutionPayloadHeaderElectra{
-		ParentHash:                bytesutil.SafeCopyBytes(payload.ParentHash),
-		FeeRecipient:              bytesutil.SafeCopyBytes(payload.FeeRecipient),
-		StateRoot:                 bytesutil.SafeCopyBytes(payload.StateRoot),
-		ReceiptsRoot:              bytesutil.SafeCopyBytes(payload.ReceiptsRoot),
-		LogsBloom:                 bytesutil.SafeCopyBytes(payload.LogsBloom),
-		PrevRandao:                bytesutil.SafeCopyBytes(payload.PrevRandao),
-		BlockNumber:               payload.BlockNumber,
-		GasLimit:                  payload.GasLimit,
-		GasUsed:                   payload.GasUsed,
-		Timestamp:                 payload.Timestamp,
-		ExtraData:                 bytesutil.SafeCopyBytes(payload.ExtraData),
-		BaseFeePerGas:             bytesutil.SafeCopyBytes(payload.BaseFeePerGas),
-		BlockHash:                 bytesutil.SafeCopyBytes(payload.BlockHash),
-		TransactionsRoot:          bytesutil.SafeCopyBytes(payload.TransactionsRoot),
-		WithdrawalsRoot:           bytesutil.SafeCopyBytes(payload.WithdrawalsRoot),
-		BlobGasUsed:               payload.BlobGasUsed,
-		ExcessBlobGas:             payload.ExcessBlobGas,
-		DepositRequestsRoot:       bytesutil.SafeCopyBytes(payload.DepositRequestsRoot),
-		WithdrawalRequestsRoot:    bytesutil.SafeCopyBytes(payload.WithdrawalRequestsRoot),
-		ConsolidationRequestsRoot: bytesutil.SafeCopyBytes(payload.ConsolidationRequestsRoot),
 	}
 }
 

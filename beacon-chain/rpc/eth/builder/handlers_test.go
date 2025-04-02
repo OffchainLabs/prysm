@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/gorilla/mux"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/testutil"
@@ -91,7 +90,7 @@ func TestExpectedWithdrawals_BadRequest(t *testing.T) {
 				Stater:                &testutil.MockStater{BeaconState: testCase.state},
 			}
 			request := httptest.NewRequest("GET", testCase.path, nil)
-			request = mux.SetURLVars(request, testCase.urlParams)
+			request.SetPathValue("state_id", testCase.urlParams["state_id"])
 			writer := httptest.NewRecorder()
 			writer.Body = &bytes.Buffer{}
 
@@ -172,7 +171,7 @@ func TestExpectedWithdrawals(t *testing.T) {
 		request := httptest.NewRequest(
 			"GET", "/eth/v1/builder/states/{state_id}/expected_withdrawals?proposal_slot="+
 				strconv.FormatUint(uint64(currentSlot+params.BeaconConfig().SlotsPerEpoch), 10), nil)
-		request = mux.SetURLVars(request, map[string]string{"state_id": "head"})
+		request.SetPathValue("state_id", "head")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 

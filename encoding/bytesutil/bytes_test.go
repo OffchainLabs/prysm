@@ -217,6 +217,50 @@ func TestToBytes20(t *testing.T) {
 	}
 }
 
+func TestCastToString(t *testing.T) {
+	bSlice := []byte{'a', 'b', 'c'}
+	bString := bytesutil.UnsafeCastToString(bSlice)
+
+	originalString := "abc"
+
+	// Mutate original slice to make sure that a copy was not performed.
+	bSlice[0] = 'd'
+	assert.NotEqual(t, originalString, bString)
+	assert.Equal(t, "dbc", bString)
+}
+
+func BenchmarkUnsafeCastToString(b *testing.B) {
+	data := []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
+	empty := []byte{}
+	var nilData []byte
+
+	b.Run("string(b)", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			_ = string(data)
+			_ = string(empty)
+			_ = string(nilData)
+		}
+	})
+
+	b.Run("bytesutil.UnsafeCastToString(b)", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			_ = bytesutil.UnsafeCastToString(data)
+			_ = bytesutil.UnsafeCastToString(empty)
+			_ = bytesutil.UnsafeCastToString(nilData)
+		}
+	})
+}
+
+func FuzzUnsafeCastToString(f *testing.F) {
+	f.Fuzz(func(t *testing.T, input []byte) {
+		want := string(input)
+		result := bytesutil.UnsafeCastToString(input)
+		if result != want {
+			t.Fatalf("input (%v) result (%s) did not match expected (%s)", input, result, want)
+		}
+	})
+}
+
 func BenchmarkToBytes32(b *testing.B) {
 	x := []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31}
 	for i := 0; i < b.N; i++ {

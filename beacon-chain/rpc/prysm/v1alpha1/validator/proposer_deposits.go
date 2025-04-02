@@ -7,6 +7,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
@@ -71,6 +72,10 @@ func (vs *Server) packDepositsAndAttestations(
 // this eth1data has enough support to be considered for deposits inclusion. If current vote has
 // enough support, then use that vote for basis of determining deposits, otherwise use current state
 // eth1data.
+// In the post-electra phase, this function will usually return an empty list,
+// as the legacy deposit process is deprecated. (EIP-6110)
+// NOTE: During the transition period, the legacy deposit process
+// may still be active and managed. This function handles that scenario.
 func (vs *Server) deposits(
 	ctx context.Context,
 	beaconState state.BeaconState,
@@ -87,6 +92,12 @@ func (vs *Server) deposits(
 		log.Warn("not connected to eth1 node, skip pending deposit insertion")
 		return []*ethpb.Deposit{}, nil
 	}
+
+	// skip legacy deposits if eth1 deposit index is already at the index of deposit requests start
+	if helpers.DepositRequestsStarted(beaconState) {
+		return []*ethpb.Deposit{}, nil
+	}
+
 	// Need to fetch if the deposits up to the state's latest eth1 data matches
 	// the number of all deposits in this RPC call. If not, then we return nil.
 	canonicalEth1Data, canonicalEth1DataHeight, err := vs.canonicalEth1Data(ctx, beaconState, currentVote)

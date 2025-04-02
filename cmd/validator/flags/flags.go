@@ -17,8 +17,8 @@ import (
 const (
 	// WalletDefaultDirName for accounts.
 	WalletDefaultDirName = "prysm-wallet-v2"
-	// DefaultGatewayHost for the validator client.
-	DefaultGatewayHost = "127.0.0.1"
+	// DefaultHTTPServerHost for the validator client.
+	DefaultHTTPServerHost = "127.0.0.1"
 )
 
 var (
@@ -35,12 +35,7 @@ var (
 		Usage: "Beacon node RPC provider endpoint.",
 		Value: "127.0.0.1:4000",
 	}
-	// BeaconRPCGatewayProviderFlag defines a beacon node JSON-RPC endpoint.
-	BeaconRPCGatewayProviderFlag = &cli.StringFlag{
-		Name:  "beacon-rpc-gateway-provider",
-		Usage: "Beacon node RPC gateway provider endpoint.",
-		Value: "127.0.0.1:3500",
-	}
+
 	// BeaconRESTApiProviderFlag defines a beacon node REST API endpoint.
 	BeaconRESTApiProviderFlag = &cli.StringFlag{
 		Name:  "beacon-rest-api-provider",
@@ -109,25 +104,27 @@ var (
 		Usage: `Comma separated list of key value pairs to pass as gRPC headers for all gRPC calls.
 		Example: --grpc-headers=key=value`,
 	}
-	// GRPCGatewayHost specifies a gRPC gateway host for the validator client.
-	GRPCGatewayHost = &cli.StringFlag{
-		Name:  "grpc-gateway-host",
-		Usage: "Host on which the gateway server runs on.",
-		Value: DefaultGatewayHost,
+	// HTTPServerHost specifies a HTTP server host for the validator client.
+	HTTPServerHost = &cli.StringFlag{
+		Name:    "http-host",
+		Usage:   "Host on which the HTTP server runs on.",
+		Value:   DefaultHTTPServerHost,
+		Aliases: []string{"grpc-gateway-host"},
 	}
-	// GRPCGatewayPort enables a gRPC gateway to be exposed for the validator client.
-	GRPCGatewayPort = &cli.IntFlag{
-		Name:  "grpc-gateway-port",
-		Usage: "Enables gRPC gateway for JSON requests.",
-		Value: 7500,
+	// HTTPServerPort enables a HTTP server port to be exposed for the validator client.
+	HTTPServerPort = &cli.IntFlag{
+		Name:    "http-port",
+		Usage:   "Port on which the HTTP server runs on.",
+		Value:   7500,
+		Aliases: []string{"grpc-gateway-port"},
 	}
-	// GRPCGatewayCorsDomain serves preflight requests when serving gRPC JSON gateway.
-	GRPCGatewayCorsDomain = &cli.StringFlag{
-		Name: "grpc-gateway-corsdomain",
-		Usage: `Comma separated list of domains from which to accept cross origin requests (browser enforced).
-		This flag has no effect if not used with --grpc-gateway-port.
-`,
-		Value: "http://localhost:7500,http://127.0.0.1:7500,http://0.0.0.0:7500,http://localhost:4242,http://127.0.0.1:4242,http://localhost:4200,http://0.0.0.0:4242,http://127.0.0.1:4200,http://0.0.0.0:4200,http://localhost:3000,http://0.0.0.0:3000,http://127.0.0.1:3000"}
+	// HTTPServerCorsDomain adds accepted cross origin request addresses.
+	HTTPServerCorsDomain = &cli.StringFlag{
+		Name:    "http-cors-domain",
+		Usage:   `Comma separated list of domains from which to accept cross origin requests (browser enforced).`,
+		Value:   "http://localhost:7500,http://127.0.0.1:7500,http://0.0.0.0:7500,http://localhost:4242,http://127.0.0.1:4242,http://localhost:4200,http://0.0.0.0:4242,http://127.0.0.1:4200,http://0.0.0.0:4200,http://localhost:3000,http://0.0.0.0:3000,http://127.0.0.1:3000",
+		Aliases: []string{"grpc-gateway-corsdomain"},
+	}
 	// MonitoringPortFlag defines the http port used to serve prometheus metrics.
 	MonitoringPortFlag = &cli.IntFlag{
 		Name:  "monitoring-port",
@@ -384,7 +381,7 @@ var (
 	ValidatorsRegistrationBatchSizeFlag = &cli.IntFlag{
 		Name:  "validators-registration-batch-size",
 		Usage: "Sets the maximum size for one batch of validator registrations. Use a non-positive value to disable batching.",
-		Value: 0,
+		Value: 200,
 	}
 	// EnableDistributed enables the usage of prysm validator client in a Distributed Validator Cluster.
 	EnableDistributed = &cli.BoolFlag{

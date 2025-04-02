@@ -35,7 +35,7 @@ func TestSetLatestExecutionPayloadHeader(t *testing.T) {
 		}(),
 		func() interfaces.ExecutionData {
 			e := util.NewBeaconBlockElectra().Block.Body.ExecutionPayload
-			ee, err := blocks.WrappedExecutionPayloadElectra(e)
+			ee, err := blocks.WrappedExecutionPayloadDeneb(e)
 			require.NoError(t, err)
 			return ee
 		}(),
@@ -62,7 +62,7 @@ func TestSetLatestExecutionPayloadHeader(t *testing.T) {
 		}(),
 		func() interfaces.ExecutionData {
 			e := util.NewBlindedBeaconBlockElectra().Message.Body.ExecutionPayloadHeader
-			ee, err := blocks.WrappedExecutionPayloadHeaderElectra(e)
+			ee, err := blocks.WrappedExecutionPayloadHeaderDeneb(e)
 			require.NoError(t, err)
 			return ee
 		}(),
@@ -91,6 +91,13 @@ func TestSetLatestExecutionPayloadHeader(t *testing.T) {
 		for i := 0; i < len(payloads); i++ {
 			for j := 0; j < len(payloads); j++ {
 				if i == j {
+					continue
+				}
+				// Skip Deneb-Electra combinations
+				if i == len(payloads)-1 && j == len(payloads)-2 {
+					continue
+				}
+				if i == len(payloads)-2 && j == len(payloads)-1 {
 					continue
 				}
 				t.Run(fmt.Sprintf("%s state with %s payload", version.String(i+versionOffset), version.String(j+versionOffset)), func(t *testing.T) {

@@ -1,15 +1,12 @@
 package state_native_test
 
 import (
-	"math"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	statenative "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
 	testtmpl "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/testing"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	consensus_types "github.com/prysmaticlabs/prysm/v5/consensus-types"
 	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
@@ -70,60 +67,6 @@ func TestValidatorIndexes(t *testing.T) {
 		require.NotEmpty(t, readOnlyBytes)
 		require.Equal(t, hexutil.Encode(readOnlyBytes[:]), hexutil.Encode(byteValue[:]))
 	})
-}
-
-func TestActiveBalanceAtIndex(t *testing.T) {
-	// Test setup with a state with 4 validators.
-	// Validators 0 & 1 have compounding withdrawal credentials while validators 2 & 3 have BLS withdrawal credentials.
-	pb := &ethpb.BeaconStateElectra{
-		Validators: []*ethpb.Validator{
-			{
-				WithdrawalCredentials: []byte{params.BeaconConfig().CompoundingWithdrawalPrefixByte},
-			},
-			{
-				WithdrawalCredentials: []byte{params.BeaconConfig().CompoundingWithdrawalPrefixByte},
-			},
-			{
-				WithdrawalCredentials: []byte{params.BeaconConfig().BLSWithdrawalPrefixByte},
-			},
-			{
-				WithdrawalCredentials: []byte{params.BeaconConfig().BLSWithdrawalPrefixByte},
-			},
-		},
-		Balances: []uint64{
-			55,
-			math.MaxUint64,
-			55,
-			math.MaxUint64,
-		},
-	}
-	state, err := statenative.InitializeFromProtoUnsafeElectra(pb)
-	require.NoError(t, err)
-
-	ab, err := state.ActiveBalanceAtIndex(0)
-	require.NoError(t, err)
-	require.Equal(t, uint64(55), ab)
-
-	ab, err = state.ActiveBalanceAtIndex(1)
-	require.NoError(t, err)
-	require.Equal(t, params.BeaconConfig().MaxEffectiveBalanceElectra, ab)
-
-	ab, err = state.ActiveBalanceAtIndex(2)
-	require.NoError(t, err)
-	require.Equal(t, uint64(55), ab)
-
-	ab, err = state.ActiveBalanceAtIndex(3)
-	require.NoError(t, err)
-	require.Equal(t, params.BeaconConfig().MinActivationBalance, ab)
-
-	// Accessing a validator index out of bounds should error.
-	_, err = state.ActiveBalanceAtIndex(4)
-	require.ErrorIs(t, err, consensus_types.ErrOutOfBounds)
-
-	// Accessing a validator wwhere balance slice is out of bounds for some reason.
-	require.NoError(t, state.SetBalances([]uint64{}))
-	_, err = state.ActiveBalanceAtIndex(0)
-	require.ErrorIs(t, err, consensus_types.ErrOutOfBounds)
 }
 
 func TestPendingBalanceToWithdraw(t *testing.T) {

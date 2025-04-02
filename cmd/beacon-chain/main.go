@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	runtimeDebug "runtime/debug"
+	"time"
 
 	gethlog "github.com/ethereum/go-ethereum/log"
 	golog "github.com/ipfs/go-log/v2"
@@ -49,10 +50,9 @@ var appFlags = []cli.Flag{
 	flags.CertFlag,
 	flags.KeyFlag,
 	flags.HTTPModules,
-	flags.DisableGRPCGateway,
-	flags.GRPCGatewayHost,
-	flags.GRPCGatewayPort,
-	flags.GPRCGatewayCorsDomain,
+	flags.HTTPServerHost,
+	flags.HTTPServerPort,
+	flags.HTTPServerCorsDomain,
 	flags.MinSyncPeers,
 	flags.ContractDeploymentBlock,
 	flags.SetGCPercent,
@@ -61,8 +61,6 @@ var appFlags = []cli.Flag{
 	flags.BlobBatchLimit,
 	flags.BlobBatchLimitBurstFactor,
 	flags.InteropMockEth1DataVotesFlag,
-	flags.InteropNumValidatorsFlag,
-	flags.InteropGenesisTimeFlag,
 	flags.SlotsPerArchivedPoint,
 	flags.DisableDebugRPCEndpoints,
 	flags.SubscribeToAllSubnets,
@@ -84,6 +82,9 @@ var appFlags = []cli.Flag{
 	flags.LocalBlockValueBoost,
 	flags.MinBuilderBid,
 	flags.MinBuilderDiff,
+	flags.BeaconDBPruning,
+	flags.PrunerRetentionEpochs,
+	flags.EnableBuilderSSZ,
 	cmd.BackupWebhookOutputDir,
 	cmd.MinimalConfigFlag,
 	cmd.E2EConfigFlag,
@@ -142,9 +143,11 @@ var appFlags = []cli.Flag{
 	genesis.StatePath,
 	genesis.BeaconAPIURL,
 	flags.SlasherDirFlag,
+	flags.SlasherFlag,
 	flags.JwtId,
 	storage.BlobStoragePathFlag,
 	storage.BlobRetentionEpochFlag,
+	storage.BlobStorageLayout,
 	bflags.EnableExperimentalBackfill,
 	bflags.BackfillBatchSize,
 	bflags.BackfillWorkerCount,
@@ -166,7 +169,7 @@ func before(ctx *cli.Context) error {
 	switch format {
 	case "text":
 		formatter := new(prefixed.TextFormatter)
-		formatter.TimestampFormat = "2006-01-02 15:04:05"
+		formatter.TimestampFormat = time.DateTime
 		formatter.FullTimestamp = true
 
 		// If persistent log files are written - we disable the log messages coloring because
@@ -177,7 +180,7 @@ func before(ctx *cli.Context) error {
 		f := joonix.NewFormatter()
 
 		if err := joonix.DisableTimestampFormat(f); err != nil {
-			panic(err)
+			panic(err) // lint:nopanic -- This shouldn't happen, but crashing immediately at startup is OK.
 		}
 
 		logrus.SetFormatter(f)
@@ -247,7 +250,7 @@ func main() {
 	defer func() {
 		if x := recover(); x != nil {
 			log.Errorf("Runtime panic: %v\n%v", x, string(runtimeDebug.Stack()))
-			panic(x)
+			panic(x) // lint:nopanic -- This is just resurfacing the original panic.
 		}
 	}()
 
@@ -286,9 +289,7 @@ func startNode(ctx *cli.Context, cancel context.CancelFunc) error {
 		// libp2p specific logging.
 		golog.SetAllLoggers(golog.LevelDebug)
 		// Geth specific logging.
-		glogger := gethlog.NewGlogHandler(gethlog.StreamHandler(os.Stderr, gethlog.TerminalFormat(true)))
-		glogger.Verbosity(gethlog.LvlTrace)
-		gethlog.Root().SetHandler(glogger)
+		gethlog.SetDefault(gethlog.NewLogger(gethlog.NewTerminalHandlerWithLevel(os.Stderr, gethlog.LvlTrace, true)))
 	}
 
 	blockchainFlagOpts, err := blockchaincmd.FlagOptions(ctx)

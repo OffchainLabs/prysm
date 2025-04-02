@@ -46,7 +46,7 @@ func TestVerifyLMDFFGConsistent(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, r32))
 
-	state, r33, err := prepareForkchoiceState(ctx, 33, [32]byte{'b'}, r32, params.BeaconConfig().ZeroHash, fc, fc)
+	state, r33, err := prepareForkchoiceState(ctx, 33, [32]byte{'b'}, r32.Root(), params.BeaconConfig().ZeroHash, fc, fc)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, r33))
 
@@ -54,10 +54,12 @@ func TestVerifyLMDFFGConsistent(t *testing.T) {
 	a := util.NewAttestation()
 	a.Data.Target.Epoch = 1
 	a.Data.Target.Root = []byte{'c'}
-	a.Data.BeaconBlockRoot = r33[:]
+	r33Root := r33.Root()
+	a.Data.BeaconBlockRoot = r33Root[:]
 	require.ErrorContains(t, wanted, service.VerifyLmdFfgConsistency(context.Background(), a))
 
-	a.Data.Target.Root = r32[:]
+	r32Root := r32.Root()
+	a.Data.Target.Root = r32Root[:]
 	err = service.VerifyLmdFfgConsistency(context.Background(), a)
 	require.NoError(t, err, "Could not verify LMD and FFG votes to be consistent")
 }
@@ -84,9 +86,7 @@ func TestProcessAttestations_Ok(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, state, blkRoot))
 	attsToSave := make([]ethpb.Att, len(atts))
-	for i, a := range atts {
-		attsToSave[i] = a
-	}
+	copy(attsToSave, atts)
 	require.NoError(t, service.cfg.AttPool.SaveForkchoiceAttestations(attsToSave))
 	service.processAttestations(ctx, 0)
 	require.Equal(t, 0, len(service.cfg.AttPool.ForkchoiceAttestations()))
@@ -116,7 +116,9 @@ func TestService_ProcessAttestationsAndUpdateHead(t *testing.T) {
 	postState, err := service.validateStateTransition(ctx, preState, wsb)
 	require.NoError(t, err)
 	require.NoError(t, service.savePostStateInfo(ctx, tRoot, wsb, postState))
-	require.NoError(t, service.postBlockProcess(&postBlockProcessConfig{ctx, wsb, tRoot, [32]byte{}, postState, false}))
+	roblock, err := blocks.NewROBlockWithRoot(wsb, tRoot)
+	require.NoError(t, err)
+	require.NoError(t, service.postBlockProcess(&postBlockProcessConfig{ctx, roblock, [32]byte{}, postState, false}))
 	copied, err = service.cfg.StateGen.StateByRoot(ctx, tRoot)
 	require.NoError(t, err)
 	require.Equal(t, 2, fcs.NodeCount())
@@ -126,9 +128,7 @@ func TestService_ProcessAttestationsAndUpdateHead(t *testing.T) {
 	atts, err := util.GenerateAttestations(copied, pks, 1, 1, false)
 	require.NoError(t, err)
 	attsToSave := make([]ethpb.Att, len(atts))
-	for i, a := range atts {
-		attsToSave[i] = a
-	}
+	copy(attsToSave, atts)
 	require.NoError(t, service.cfg.AttPool.SaveForkchoiceAttestations(attsToSave))
 	// Verify the target is in forkchoice
 	require.Equal(t, true, fcs.HasNode(bytesutil.ToBytes32(atts[0].GetData().BeaconBlockRoot)))
@@ -176,7 +176,9 @@ func TestService_UpdateHead_NoAtts(t *testing.T) {
 	postState, err := service.validateStateTransition(ctx, preState, wsb)
 	require.NoError(t, err)
 	require.NoError(t, service.savePostStateInfo(ctx, tRoot, wsb, postState))
-	require.NoError(t, service.postBlockProcess(&postBlockProcessConfig{ctx, wsb, tRoot, [32]byte{}, postState, false}))
+	roblock, err := blocks.NewROBlockWithRoot(wsb, tRoot)
+	require.NoError(t, err)
+	require.NoError(t, service.postBlockProcess(&postBlockProcessConfig{ctx, roblock, [32]byte{}, postState, false}))
 	require.Equal(t, 2, fcs.NodeCount())
 	require.NoError(t, service.cfg.BeaconDB.SaveBlock(ctx, wsb))
 	require.Equal(t, tRoot, service.head.root)

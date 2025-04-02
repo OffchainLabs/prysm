@@ -24,8 +24,8 @@ var Commands = &cli.Command{
 			Description: `Generate an authentication token for the Prysm web interface`,
 			Flags: cmd.WrapFlags([]cli.Flag{
 				flags.WalletDirFlag,
-				flags.GRPCGatewayHost,
-				flags.GRPCGatewayPort,
+				flags.HTTPServerHost,
+				flags.HTTPServerPort,
 				flags.AuthTokenPathFlag,
 				cmd.AcceptTosFlag,
 			}),
@@ -43,9 +43,9 @@ var Commands = &cli.Command{
 				if walletDirPath == "" {
 					log.Fatal("--wallet-dir not specified")
 				}
-				gatewayHost := cliCtx.String(flags.GRPCGatewayHost.Name)
-				gatewayPort := cliCtx.Int(flags.GRPCGatewayPort.Name)
-				validatorWebAddr := fmt.Sprintf("%s:%d", gatewayHost, gatewayPort)
+				host := cliCtx.String(flags.HTTPServerHost.Name)
+				port := cliCtx.Int(flags.HTTPServerPort.Name)
+				validatorWebAddr := fmt.Sprintf("%s:%d", host, port)
 				authTokenPath := filepath.Join(walletDirPath, api.AuthTokenFileName)
 				tempAuthTokenPath := cliCtx.String(flags.AuthTokenPathFlag.Name)
 				if tempAuthTokenPath != "" {

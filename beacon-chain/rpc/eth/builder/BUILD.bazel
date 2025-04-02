@@ -20,7 +20,6 @@ go_library(
         "//proto/engine/v1:go_default_library",
         "//time/slots:go_default_library",
         "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",
-        "@com_github_gorilla_mux//:go_default_library",
         "@com_github_pkg_errors//:go_default_library",
     ],
 )
@@ -44,6 +43,5 @@ go_test(
         "//testing/util:go_default_library",
         "//time/slots:go_default_library",
         "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",
-        "@com_github_gorilla_mux//:go_default_library",
     ],
 )

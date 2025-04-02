@@ -2,13 +2,15 @@ package blockchain
 
 import (
 	"context"
-	"crypto/sha256"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/async/event"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
+	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
@@ -28,8 +30,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const blobCommitmentVersionKZG uint8 = 0x01
-
 var defaultLatestValidHash = bytesutil.PadTo([]byte{0xff}, 32)
 
 // notifyForkchoiceUpdate signals execution engine the fork choice updates. Execution engine should:
@@ -39,7 +39,7 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*
 	ctx, span := trace.StartSpan(ctx, "blockChain.notifyForkchoiceUpdate")
 	defer span.End()
 
-	if arg.headBlock.IsNil() {
+	if arg.headBlock == nil || arg.headBlock.IsNil() {
 		log.Error("Head block is nil")
 		return nil, nil
 	}
@@ -68,6 +68,18 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*
 		HeadBlockHash:      headPayload.BlockHash(),
 		SafeBlockHash:      justifiedHash[:],
 		FinalizedBlockHash: finalizedHash[:],
+	}
+	if len(fcs.HeadBlockHash) != 32 || [32]byte(fcs.HeadBlockHash) == [32]byte{} {
+		// check if we are sending FCU at genesis
+		hash, err := s.hashForGenesisBlock(ctx, arg.headRoot)
+		if errors.Is(err, errNotGenesisRoot) {
+			log.Error("Sending nil head block hash to execution engine")
+			return nil, nil
+		}
+		if err != nil {
+			return nil, errors.Wrap(err, "could not get head block hash")
+		}
+		fcs.HeadBlockHash = hash
 	}
 	if arg.attributes == nil {
 		arg.attributes = payloadattribute.EmptyWithVersion(headBlk.Version())
@@ -158,6 +170,7 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*
 		log.WithFields(logrus.Fields{
 			"blockRoot": fmt.Sprintf("%#x", bytesutil.Trunc(arg.headRoot[:])),
 			"headSlot":  headBlk.Slot(),
+			"nextSlot":  nextSlot,
 			"payloadID": fmt.Sprintf("%#x", bytesutil.Trunc(payloadID[:])),
 		}).Info("Forkchoice updated with payload attributes for proposal")
 		s.cfg.PayloadIDCache.Set(nextSlot, arg.headRoot, pId)
@@ -165,9 +178,20 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*
 		log.WithFields(logrus.Fields{
 			"blockHash": fmt.Sprintf("%#x", headPayload.BlockHash()),
 			"slot":      headBlk.Slot(),
+			"nextSlot":  nextSlot,
 		}).Error("Received nil payload ID on VALID engine response")
 	}
 	return payloadID, nil
+}
+
+func firePayloadAttributesEvent(_ context.Context, f event.SubscriberSender, nextSlot primitives.Slot) {
+	// the fcu args have differing amounts of completeness based on the code path,
+	// and there is work we only want to do if a client is actually listening to the events beacon api endpoint.
+	// temporary solution: just fire a blank event and fill in the details in the api handler.
+	f.Send(&feed.Event{
+		Type: statefeed.PayloadAttributes,
+		Data: payloadattribute.EventData{ProposalSlot: nextSlot},
+	})
 }
 
 // getPayloadHash returns the payload hash given the block root.
@@ -219,17 +243,28 @@ func (s *Service) notifyNewPayload(ctx context.Context, preStateVersion int,
 	}
 
 	var lastValidHash []byte
+	var parentRoot *common.Hash
+	var versionedHashes []common.Hash
+	var requests *enginev1.ExecutionRequests
 	if blk.Version() >= version.Deneb {
-		var versionedHashes []common.Hash
 		versionedHashes, err = kzgCommitmentsToVersionedHashes(blk.Block().Body())
 		if err != nil {
 			return false, errors.Wrap(err, "could not get versioned hashes to feed the engine")
 		}
-		pr := common.Hash(blk.Block().ParentRoot())
-		lastValidHash, err = s.cfg.ExecutionEngineCaller.NewPayload(ctx, payload, versionedHashes, &pr)
-	} else {
-		lastValidHash, err = s.cfg.ExecutionEngineCaller.NewPayload(ctx, payload, []common.Hash{}, &common.Hash{} /*empty version hashes and root before Deneb*/)
+		prh := common.Hash(blk.Block().ParentRoot())
+		parentRoot = &prh
 	}
+	if blk.Version() >= version.Electra {
+		requests, err = blk.Block().Body().ExecutionRequests()
+		if err != nil {
+			return false, errors.Wrap(err, "could not get execution requests")
+		}
+		if requests == nil {
+			return false, errors.New("nil execution requests")
+		}
+	}
+	lastValidHash, err = s.cfg.ExecutionEngineCaller.NewPayload(ctx, payload, versionedHashes, parentRoot, requests)
+
 	switch {
 	case err == nil:
 		newPayloadValidNodeCount.Inc()
@@ -321,15 +356,16 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 		return emptyAttri
 	}
 
-	var attr payloadattribute.Attributer
-	switch st.Version() {
-	case version.Deneb, version.Electra:
+	v := st.Version()
+
+	if v >= version.Deneb {
 		withdrawals, _, err := st.ExpectedWithdrawals()
 		if err != nil {
 			log.WithError(err).Error("Could not get expected withdrawals to get payload attribute")
 			return emptyAttri
 		}
-		attr, err = payloadattribute.New(&enginev1.PayloadAttributesV3{
+
+		attr, err := payloadattribute.New(&enginev1.PayloadAttributesV3{
 			Timestamp:             uint64(t.Unix()),
 			PrevRandao:            prevRando,
 			SuggestedFeeRecipient: val.FeeRecipient[:],
@@ -340,13 +376,18 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 			log.WithError(err).Error("Could not get payload attribute")
 			return emptyAttri
 		}
-	case version.Capella:
+
+		return attr
+	}
+
+	if v >= version.Capella {
 		withdrawals, _, err := st.ExpectedWithdrawals()
 		if err != nil {
 			log.WithError(err).Error("Could not get expected withdrawals to get payload attribute")
 			return emptyAttri
 		}
-		attr, err = payloadattribute.New(&enginev1.PayloadAttributesV2{
+
+		attr, err := payloadattribute.New(&enginev1.PayloadAttributesV2{
 			Timestamp:             uint64(t.Unix()),
 			PrevRandao:            prevRando,
 			SuggestedFeeRecipient: val.FeeRecipient[:],
@@ -356,8 +397,12 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 			log.WithError(err).Error("Could not get payload attribute")
 			return emptyAttri
 		}
-	case version.Bellatrix:
-		attr, err = payloadattribute.New(&enginev1.PayloadAttributes{
+
+		return attr
+	}
+
+	if v >= version.Bellatrix {
+		attr, err := payloadattribute.New(&enginev1.PayloadAttributes{
 			Timestamp:             uint64(t.Unix()),
 			PrevRandao:            prevRando,
 			SuggestedFeeRecipient: val.FeeRecipient[:],
@@ -366,12 +411,12 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 			log.WithError(err).Error("Could not get payload attribute")
 			return emptyAttri
 		}
-	default:
-		log.WithField("version", st.Version()).Error("Could not get payload attribute due to unknown state version")
-		return emptyAttri
+
+		return attr
 	}
 
-	return attr
+	log.WithField("version", version.String(st.Version())).Error("Could not get payload attribute due to unknown state version")
+	return emptyAttri
 }
 
 // removeInvalidBlockAndState removes the invalid block, blob and its corresponding state from the cache and DB.
@@ -402,13 +447,7 @@ func kzgCommitmentsToVersionedHashes(body interfaces.ReadOnlyBeaconBlockBody) ([
 
 	versionedHashes := make([]common.Hash, len(commitments))
 	for i, commitment := range commitments {
-		versionedHashes[i] = ConvertKzgCommitmentToVersionedHash(commitment)
+		versionedHashes[i] = primitives.ConvertKzgCommitmentToVersionedHash(commitment)
 	}
 	return versionedHashes, nil
-}
-
-func ConvertKzgCommitmentToVersionedHash(commitment []byte) common.Hash {
-	versionedHash := sha256.Sum256(commitment)
-	versionedHash[0] = blobCommitmentVersionKZG
-	return versionedHash
 }

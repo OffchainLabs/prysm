@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"github.com/prysmaticlabs/go-bitfield"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
 	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
@@ -17,8 +19,10 @@ type fields struct {
 	sig                      [96]byte
 	deposits                 []*eth.Deposit
 	atts                     []*eth.Attestation
+	attsElectra              []*eth.AttestationElectra
 	proposerSlashings        []*eth.ProposerSlashing
 	attesterSlashings        []*eth.AttesterSlashing
+	attesterSlashingsElectra []*eth.AttesterSlashingElectra
 	voluntaryExits           []*eth.SignedVoluntaryExit
 	syncAggregate            *eth.SyncAggregate
 	execPayload              *enginev1.ExecutionPayload
@@ -29,6 +33,7 @@ type fields struct {
 	execPayloadHeaderDeneb   *enginev1.ExecutionPayloadHeaderDeneb
 	blsToExecutionChanges    []*eth.SignedBLSToExecutionChange
 	kzgCommitments           [][]byte
+	execRequests             *enginev1.ExecutionRequests
 }
 
 func Test_SignedBeaconBlock_Proto(t *testing.T) {
@@ -306,6 +311,74 @@ func Test_SignedBeaconBlock_Proto(t *testing.T) {
 		require.NoError(t, err)
 		assert.DeepEqual(t, expectedHTR, resultHTR)
 	})
+	t.Run("Electra", func(t *testing.T) {
+		expectedBlock := &eth.SignedBeaconBlockElectra{
+			Block: &eth.BeaconBlockElectra{
+				Slot:          128,
+				ProposerIndex: 128,
+				ParentRoot:    f.root[:],
+				StateRoot:     f.root[:],
+				Body:          bodyPbElectra(),
+			},
+			Signature: f.sig[:],
+		}
+		block := &SignedBeaconBlock{
+			version: version.Electra,
+			block: &BeaconBlock{
+				version:       version.Electra,
+				slot:          128,
+				proposerIndex: 128,
+				parentRoot:    f.root,
+				stateRoot:     f.root,
+				body:          bodyElectra(t),
+			},
+			signature: f.sig,
+		}
+
+		result, err := block.Proto()
+		require.NoError(t, err)
+		resultBlock, ok := result.(*eth.SignedBeaconBlockElectra)
+		require.Equal(t, true, ok)
+		resultHTR, err := resultBlock.HashTreeRoot()
+		require.NoError(t, err)
+		expectedHTR, err := expectedBlock.HashTreeRoot()
+		require.NoError(t, err)
+		assert.DeepEqual(t, expectedHTR, resultHTR)
+	})
+	t.Run("ElectraBlind", func(t *testing.T) {
+		expectedBlock := &eth.SignedBlindedBeaconBlockElectra{
+			Message: &eth.BlindedBeaconBlockElectra{
+				Slot:          128,
+				ProposerIndex: 128,
+				ParentRoot:    f.root[:],
+				StateRoot:     f.root[:],
+				Body:          bodyPbBlindedElectra(),
+			},
+			Signature: f.sig[:],
+		}
+		block := &SignedBeaconBlock{
+			version: version.Electra,
+			block: &BeaconBlock{
+				version:       version.Electra,
+				slot:          128,
+				proposerIndex: 128,
+				parentRoot:    f.root,
+				stateRoot:     f.root,
+				body:          bodyBlindedElectra(t),
+			},
+			signature: f.sig,
+		}
+
+		result, err := block.Proto()
+		require.NoError(t, err)
+		resultBlock, ok := result.(*eth.SignedBlindedBeaconBlockElectra)
+		require.Equal(t, true, ok)
+		resultHTR, err := resultBlock.HashTreeRoot()
+		require.NoError(t, err)
+		expectedHTR, err := expectedBlock.HashTreeRoot()
+		require.NoError(t, err)
+		assert.DeepEqual(t, expectedHTR, resultHTR)
+	})
 }
 
 func Test_BeaconBlock_Proto(t *testing.T) {
@@ -527,6 +600,60 @@ func Test_BeaconBlock_Proto(t *testing.T) {
 		require.NoError(t, err)
 		assert.DeepEqual(t, expectedHTR, resultHTR)
 	})
+	t.Run("Electra", func(t *testing.T) {
+		expectedBlock := &eth.BeaconBlockElectra{
+			Slot:          128,
+			ProposerIndex: 128,
+			ParentRoot:    f.root[:],
+			StateRoot:     f.root[:],
+			Body:          bodyPbElectra(),
+		}
+		block := &BeaconBlock{
+			version:       version.Electra,
+			slot:          128,
+			proposerIndex: 128,
+			parentRoot:    f.root,
+			stateRoot:     f.root,
+			body:          bodyElectra(t),
+		}
+
+		result, err := block.Proto()
+		require.NoError(t, err)
+		resultBlock, ok := result.(*eth.BeaconBlockElectra)
+		require.Equal(t, true, ok)
+		resultHTR, err := resultBlock.HashTreeRoot()
+		require.NoError(t, err)
+		expectedHTR, err := expectedBlock.HashTreeRoot()
+		require.NoError(t, err)
+		assert.DeepEqual(t, expectedHTR, resultHTR)
+	})
+	t.Run("ElectraBlind", func(t *testing.T) {
+		expectedBlock := &eth.BlindedBeaconBlockElectra{
+			Slot:          128,
+			ProposerIndex: 128,
+			ParentRoot:    f.root[:],
+			StateRoot:     f.root[:],
+			Body:          bodyPbBlindedElectra(),
+		}
+		block := &BeaconBlock{
+			version:       version.Electra,
+			slot:          128,
+			proposerIndex: 128,
+			parentRoot:    f.root,
+			stateRoot:     f.root,
+			body:          bodyBlindedElectra(t),
+		}
+
+		result, err := block.Proto()
+		require.NoError(t, err)
+		resultBlock, ok := result.(*eth.BlindedBeaconBlockElectra)
+		require.Equal(t, true, ok)
+		resultHTR, err := resultBlock.HashTreeRoot()
+		require.NoError(t, err)
+		expectedHTR, err := expectedBlock.HashTreeRoot()
+		require.NoError(t, err)
+		assert.DeepEqual(t, expectedHTR, resultHTR)
+	})
 }
 
 func Test_BeaconBlockBody_Proto(t *testing.T) {
@@ -635,6 +762,32 @@ func Test_BeaconBlockBody_Proto(t *testing.T) {
 		require.NoError(t, err)
 		assert.DeepEqual(t, expectedHTR, resultHTR)
 	})
+	t.Run("Electra", func(t *testing.T) {
+		expectedBody := bodyPbElectra()
+		body := bodyElectra(t)
+		result, err := body.Proto()
+		require.NoError(t, err)
+		resultBlock, ok := result.(*eth.BeaconBlockBodyElectra)
+		require.Equal(t, true, ok)
+		resultHTR, err := resultBlock.HashTreeRoot()
+		require.NoError(t, err)
+		expectedHTR, err := expectedBody.HashTreeRoot()
+		require.NoError(t, err)
+		assert.DeepEqual(t, expectedHTR, resultHTR)
+	})
+	t.Run("ElectraBlind", func(t *testing.T) {
+		expectedBody := bodyPbBlindedElectra()
+		body := bodyBlindedElectra(t)
+		result, err := body.Proto()
+		require.NoError(t, err)
+		resultBlock, ok := result.(*eth.BlindedBeaconBlockBodyElectra)
+		require.Equal(t, true, ok)
+		resultHTR, err := resultBlock.HashTreeRoot()
+		require.NoError(t, err)
+		expectedHTR, err := expectedBody.HashTreeRoot()
+		require.NoError(t, err)
+		assert.DeepEqual(t, expectedHTR, resultHTR)
+	})
 	t.Run("Bellatrix - wrong payload type", func(t *testing.T) {
 		body := bodyBellatrix(t)
 		body.executionPayload = &executionPayloadHeader{}
@@ -667,6 +820,18 @@ func Test_BeaconBlockBody_Proto(t *testing.T) {
 	})
 	t.Run("DenebBlind - wrong payload type", func(t *testing.T) {
 		body := bodyBlindedDeneb(t)
+		body.executionPayloadHeader = &executionPayloadDeneb{}
+		_, err := body.Proto()
+		require.ErrorIs(t, err, errPayloadHeaderWrongType)
+	})
+	t.Run("Electra - wrong payload type", func(t *testing.T) {
+		body := bodyElectra(t)
+		body.executionPayload = &executionPayloadHeaderDeneb{}
+		_, err := body.Proto()
+		require.ErrorIs(t, err, errPayloadWrongType)
+	})
+	t.Run("ElectraBlind - wrong payload type", func(t *testing.T) {
+		body := bodyBlindedElectra(t)
 		body.executionPayloadHeader = &executionPayloadDeneb{}
 		_, err := body.Proto()
 		require.ErrorIs(t, err, errPayloadHeaderWrongType)
@@ -849,6 +1014,50 @@ func Test_initBlindedSignedBlockFromProtoDeneb(t *testing.T) {
 	assert.DeepEqual(t, expectedBlock.Signature, resultBlock.signature[:])
 }
 
+func Test_initSignedBlockFromProtoElectra(t *testing.T) {
+	f := getFields()
+	expectedBlock := &eth.SignedBeaconBlockElectra{
+		Block: &eth.BeaconBlockElectra{
+			Slot:          128,
+			ProposerIndex: 128,
+			ParentRoot:    f.root[:],
+			StateRoot:     f.root[:],
+			Body:          bodyPbElectra(),
+		},
+		Signature: f.sig[:],
+	}
+	resultBlock, err := initSignedBlockFromProtoElectra(expectedBlock)
+	require.NoError(t, err)
+	resultHTR, err := resultBlock.block.HashTreeRoot()
+	require.NoError(t, err)
+	expectedHTR, err := expectedBlock.Block.HashTreeRoot()
+	require.NoError(t, err)
+	assert.DeepEqual(t, expectedHTR, resultHTR)
+	assert.DeepEqual(t, expectedBlock.Signature, resultBlock.signature[:])
+}
+
+func Test_initBlindedSignedBlockFromProtoElectra(t *testing.T) {
+	f := getFields()
+	expectedBlock := &eth.SignedBlindedBeaconBlockElectra{
+		Message: &eth.BlindedBeaconBlockElectra{
+			Slot:          128,
+			ProposerIndex: 128,
+			ParentRoot:    f.root[:],
+			StateRoot:     f.root[:],
+			Body:          bodyPbBlindedElectra(),
+		},
+		Signature: f.sig[:],
+	}
+	resultBlock, err := initBlindedSignedBlockFromProtoElectra(expectedBlock)
+	require.NoError(t, err)
+	resultHTR, err := resultBlock.block.HashTreeRoot()
+	require.NoError(t, err)
+	expectedHTR, err := expectedBlock.Message.HashTreeRoot()
+	require.NoError(t, err)
+	assert.DeepEqual(t, expectedHTR, resultHTR)
+	assert.DeepEqual(t, expectedBlock.Signature, resultBlock.signature[:])
+}
+
 func Test_initBlockFromProtoPhase0(t *testing.T) {
 	f := getFields()
 	expectedBlock := &eth.BeaconBlock{
@@ -993,6 +1202,42 @@ func Test_initBlockFromProtoBlindedDeneb(t *testing.T) {
 	assert.DeepEqual(t, expectedHTR, resultHTR)
 }
 
+func Test_initBlockFromProtoElectra(t *testing.T) {
+	f := getFields()
+	expectedBlock := &eth.BeaconBlockElectra{
+		Slot:          128,
+		ProposerIndex: 128,
+		ParentRoot:    f.root[:],
+		StateRoot:     f.root[:],
+		Body:          bodyPbElectra(),
+	}
+	resultBlock, err := initBlockFromProtoElectra(expectedBlock)
+	require.NoError(t, err)
+	resultHTR, err := resultBlock.HashTreeRoot()
+	require.NoError(t, err)
+	expectedHTR, err := expectedBlock.HashTreeRoot()
+	require.NoError(t, err)
+	assert.DeepEqual(t, expectedHTR, resultHTR)
+}
+
+func Test_initBlockFromProtoBlindedElectra(t *testing.T) {
+	f := getFields()
+	expectedBlock := &eth.BlindedBeaconBlockElectra{
+		Slot:          128,
+		ProposerIndex: 128,
+		ParentRoot:    f.root[:],
+		StateRoot:     f.root[:],
+		Body:          bodyPbBlindedElectra(),
+	}
+	resultBlock, err := initBlindedBlockFromProtoElectra(expectedBlock)
+	require.NoError(t, err)
+	resultHTR, err := resultBlock.HashTreeRoot()
+	require.NoError(t, err)
+	expectedHTR, err := expectedBlock.HashTreeRoot()
+	require.NoError(t, err)
+	assert.DeepEqual(t, expectedHTR, resultHTR)
+}
+
 func Test_initBlockBodyFromProtoPhase0(t *testing.T) {
 	expectedBody := bodyPbPhase0()
 	resultBody, err := initBlockBodyFromProtoPhase0(expectedBody)
@@ -1073,6 +1318,28 @@ func Test_initBlockBodyFromProtoDeneb(t *testing.T) {
 func Test_initBlockBodyFromProtoBlindedDeneb(t *testing.T) {
 	expectedBody := bodyPbBlindedDeneb()
 	resultBody, err := initBlindedBlockBodyFromProtoDeneb(expectedBody)
+	require.NoError(t, err)
+	resultHTR, err := resultBody.HashTreeRoot()
+	require.NoError(t, err)
+	expectedHTR, err := expectedBody.HashTreeRoot()
+	require.NoError(t, err)
+	assert.DeepEqual(t, expectedHTR, resultHTR)
+}
+
+func Test_initBlockBodyFromProtoElectra(t *testing.T) {
+	expectedBody := bodyPbElectra()
+	resultBody, err := initBlockBodyFromProtoElectra(expectedBody)
+	require.NoError(t, err)
+	resultHTR, err := resultBody.HashTreeRoot()
+	require.NoError(t, err)
+	expectedHTR, err := expectedBody.HashTreeRoot()
+	require.NoError(t, err)
+	assert.DeepEqual(t, expectedHTR, resultHTR)
+}
+
+func Test_initBlockBodyFromProtoBlindedElectra(t *testing.T) {
+	expectedBody := bodyPbBlindedElectra()
+	resultBody, err := initBlindedBlockBodyFromProtoElectra(expectedBody)
 	require.NoError(t, err)
 	resultHTR, err := resultBody.HashTreeRoot()
 	require.NoError(t, err)
@@ -1241,6 +1508,52 @@ func bodyPbBlindedDeneb() *eth.BlindedBeaconBlockBodyDeneb {
 		ExecutionPayloadHeader: f.execPayloadHeaderDeneb,
 		BlsToExecutionChanges:  f.blsToExecutionChanges,
 		BlobKzgCommitments:     f.kzgCommitments,
+	}
+}
+
+func bodyPbElectra() *eth.BeaconBlockBodyElectra {
+	f := getFields()
+	return &eth.BeaconBlockBodyElectra{
+		RandaoReveal: f.sig[:],
+		Eth1Data: &eth.Eth1Data{
+			DepositRoot:  f.root[:],
+			DepositCount: 128,
+			BlockHash:    f.root[:],
+		},
+		Graffiti:              f.root[:],
+		ProposerSlashings:     f.proposerSlashings,
+		AttesterSlashings:     f.attesterSlashingsElectra,
+		Attestations:          f.attsElectra,
+		Deposits:              f.deposits,
+		VoluntaryExits:        f.voluntaryExits,
+		SyncAggregate:         f.syncAggregate,
+		ExecutionPayload:      f.execPayloadDeneb,
+		BlsToExecutionChanges: f.blsToExecutionChanges,
+		BlobKzgCommitments:    f.kzgCommitments,
+		ExecutionRequests:     f.execRequests,
+	}
+}
+
+func bodyPbBlindedElectra() *eth.BlindedBeaconBlockBodyElectra {
+	f := getFields()
+	return &eth.BlindedBeaconBlockBodyElectra{
+		RandaoReveal: f.sig[:],
+		Eth1Data: &eth.Eth1Data{
+			DepositRoot:  f.root[:],
+			DepositCount: 128,
+			BlockHash:    f.root[:],
+		},
+		Graffiti:               f.root[:],
+		ProposerSlashings:      f.proposerSlashings,
+		AttesterSlashings:      f.attesterSlashingsElectra,
+		Attestations:           f.attsElectra,
+		Deposits:               f.deposits,
+		VoluntaryExits:         f.voluntaryExits,
+		SyncAggregate:          f.syncAggregate,
+		ExecutionPayloadHeader: f.execPayloadHeaderDeneb,
+		BlsToExecutionChanges:  f.blsToExecutionChanges,
+		BlobKzgCommitments:     f.kzgCommitments,
+		ExecutionRequests:      f.execRequests,
 	}
 }
 
@@ -1427,6 +1740,58 @@ func bodyBlindedDeneb(t *testing.T) *BeaconBlockBody {
 	}
 }
 
+func bodyElectra(t *testing.T) *BeaconBlockBody {
+	f := getFields()
+	p, err := WrappedExecutionPayloadDeneb(f.execPayloadDeneb)
+	require.NoError(t, err)
+	return &BeaconBlockBody{
+		version:      version.Electra,
+		randaoReveal: f.sig,
+		eth1Data: &eth.Eth1Data{
+			DepositRoot:  f.root[:],
+			DepositCount: 128,
+			BlockHash:    f.root[:],
+		},
+		graffiti:                 f.root,
+		proposerSlashings:        f.proposerSlashings,
+		attesterSlashingsElectra: f.attesterSlashingsElectra,
+		attestationsElectra:      f.attsElectra,
+		deposits:                 f.deposits,
+		voluntaryExits:           f.voluntaryExits,
+		syncAggregate:            f.syncAggregate,
+		executionPayload:         p,
+		blsToExecutionChanges:    f.blsToExecutionChanges,
+		blobKzgCommitments:       f.kzgCommitments,
+		executionRequests:        f.execRequests,
+	}
+}
+
+func bodyBlindedElectra(t *testing.T) *BeaconBlockBody {
+	f := getFields()
+	ph, err := WrappedExecutionPayloadHeaderDeneb(f.execPayloadHeaderDeneb)
+	require.NoError(t, err)
+	return &BeaconBlockBody{
+		version:      version.Electra,
+		randaoReveal: f.sig,
+		eth1Data: &eth.Eth1Data{
+			DepositRoot:  f.root[:],
+			DepositCount: 128,
+			BlockHash:    f.root[:],
+		},
+		graffiti:                 f.root,
+		proposerSlashings:        f.proposerSlashings,
+		attesterSlashingsElectra: f.attesterSlashingsElectra,
+		attestationsElectra:      f.attsElectra,
+		deposits:                 f.deposits,
+		voluntaryExits:           f.voluntaryExits,
+		syncAggregate:            f.syncAggregate,
+		executionPayloadHeader:   ph,
+		blsToExecutionChanges:    f.blsToExecutionChanges,
+		blobKzgCommitments:       f.kzgCommitments,
+		executionRequests:        f.execRequests,
+	}
+}
+
 func getFields() fields {
 	b20 := make([]byte, 20)
 	b48 := make([]byte, 48)
@@ -1452,11 +1817,14 @@ func getFields() fields {
 			Signature:             sig[:],
 		}
 	}
-	atts := make([]*eth.Attestation, 128)
+
+	attBits := bitfield.NewBitlist(1)
+	committeeBits := primitives.NewAttestationCommitteeBits()
+	atts := make([]*eth.Attestation, params.BeaconConfig().MaxAttestations)
 	for i := range atts {
 		atts[i] = &eth.Attestation{}
 		atts[i].Signature = sig[:]
-		atts[i].AggregationBits = bitfield.NewBitlist(1)
+		atts[i].AggregationBits = attBits
 		atts[i].Data = &eth.AttestationData{
 			Slot:            128,
 			CommitteeIndex:  128,
@@ -1471,6 +1839,27 @@ func getFields() fields {
 			},
 		}
 	}
+	attsElectra := make([]*eth.AttestationElectra, params.BeaconConfig().MaxAttestationsElectra)
+	for i := range attsElectra {
+		attsElectra[i] = &eth.AttestationElectra{}
+		attsElectra[i].Signature = sig[:]
+		attsElectra[i].AggregationBits = attBits
+		attsElectra[i].CommitteeBits = committeeBits
+		attsElectra[i].Data = &eth.AttestationData{
+			Slot:            128,
+			CommitteeIndex:  128,
+			BeaconBlockRoot: root[:],
+			Source: &eth.Checkpoint{
+				Epoch: 128,
+				Root:  root[:],
+			},
+			Target: &eth.Checkpoint{
+				Epoch: 128,
+				Root:  root[:],
+			},
+		}
+	}
+
 	proposerSlashing := &eth.ProposerSlashing{
 		Header_1: &eth.SignedBeaconBlockHeader{
 			Header: &eth.BeaconBlockHeader{
@@ -1512,6 +1901,42 @@ func getFields() fields {
 			Signature: sig[:],
 		},
 		Attestation_2: &eth.IndexedAttestation{
+			AttestingIndices: []uint64{1, 2, 8},
+			Data: &eth.AttestationData{
+				Slot:            128,
+				CommitteeIndex:  128,
+				BeaconBlockRoot: root[:],
+				Source: &eth.Checkpoint{
+					Epoch: 128,
+					Root:  root[:],
+				},
+				Target: &eth.Checkpoint{
+					Epoch: 128,
+					Root:  root[:],
+				},
+			},
+			Signature: sig[:],
+		},
+	}
+	attesterSlashingElectra := &eth.AttesterSlashingElectra{
+		Attestation_1: &eth.IndexedAttestationElectra{
+			AttestingIndices: []uint64{1, 2, 8},
+			Data: &eth.AttestationData{
+				Slot:            128,
+				CommitteeIndex:  128,
+				BeaconBlockRoot: root[:],
+				Source: &eth.Checkpoint{
+					Epoch: 128,
+					Root:  root[:],
+				},
+				Target: &eth.Checkpoint{
+					Epoch: 128,
+					Root:  root[:],
+				},
+			},
+			Signature: sig[:],
+		},
+		Attestation_2: &eth.IndexedAttestationElectra{
 			AttestingIndices: []uint64{1, 2, 8},
 			Data: &eth.AttestationData{
 				Slot:            128,
@@ -1689,13 +2114,35 @@ func getFields() fields {
 		bytesutil.PadTo([]byte{143}, 48),
 	}
 
+	execRequests := &enginev1.ExecutionRequests{
+		Deposits: []*enginev1.DepositRequest{{
+			Pubkey:                b48,
+			WithdrawalCredentials: root[:],
+			Amount:                128,
+			Signature:             sig[:],
+			Index:                 128,
+		}},
+		Withdrawals: []*enginev1.WithdrawalRequest{{
+			SourceAddress:   b20,
+			ValidatorPubkey: b48,
+			Amount:          128,
+		}},
+		Consolidations: []*enginev1.ConsolidationRequest{{
+			SourceAddress: b20,
+			SourcePubkey:  b48,
+			TargetPubkey:  b48,
+		}},
+	}
+
 	return fields{
 		root:                     root,
 		sig:                      sig,
 		deposits:                 deposits,
 		atts:                     atts,
+		attsElectra:              attsElectra,
 		proposerSlashings:        []*eth.ProposerSlashing{proposerSlashing},
 		attesterSlashings:        []*eth.AttesterSlashing{attesterSlashing},
+		attesterSlashingsElectra: []*eth.AttesterSlashingElectra{attesterSlashingElectra},
 		voluntaryExits:           []*eth.SignedVoluntaryExit{voluntaryExit},
 		syncAggregate:            syncAggregate,
 		execPayload:              execPayload,
@@ -1706,5 +2153,6 @@ func getFields() fields {
 		execPayloadHeaderDeneb:   execPayloadHeaderDeneb,
 		blsToExecutionChanges:    blsToExecutionChanges,
 		kzgCommitments:           kzgCommitments,
+		execRequests:             execRequests,
 	}
 }

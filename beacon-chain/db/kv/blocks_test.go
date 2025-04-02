@@ -2,12 +2,14 @@ package kv
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filters"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
@@ -18,12 +20,15 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"github.com/prysmaticlabs/prysm/v5/testing/util"
+	bolt "go.etcd.io/bbolt"
 	"google.golang.org/protobuf/proto"
 )
 
+type testNewBlockFunc func(primitives.Slot, []byte) (interfaces.ReadOnlySignedBeaconBlock, error)
+
 var blockTests = []struct {
 	name     string
-	newBlock func(primitives.Slot, []byte) (interfaces.ReadOnlySignedBeaconBlock, error)
+	newBlock testNewBlockFunc
 }{
 	{
 		name: "phase0",
@@ -193,9 +198,13 @@ func TestStore_BlocksCRUD(t *testing.T) {
 			blockRoot, err := blk.Block().HashTreeRoot()
 			require.NoError(t, err)
 
+			_, err = db.getBlock(ctx, blockRoot, nil)
+			require.ErrorIs(t, err, ErrNotFound)
 			retrievedBlock, err := db.Block(ctx, blockRoot)
 			require.NoError(t, err)
 			assert.DeepEqual(t, nil, retrievedBlock, "Expected nil block")
+			_, err = db.getBlock(ctx, blockRoot, nil)
+			require.ErrorIs(t, err, ErrNotFound)
 
 			require.NoError(t, db.SaveBlock(ctx, blk))
 			assert.Equal(t, true, db.HasBlock(ctx, blockRoot), "Expected block to exist in the db")
@@ -211,8 +220,32 @@ func TestStore_BlocksCRUD(t *testing.T) {
 			retrievedPb, err := retrievedBlock.Proto()
 			require.NoError(t, err)
 			assert.Equal(t, true, proto.Equal(wantedPb, retrievedPb), "Wanted: %v, received: %v", wanted, retrievedBlock)
+			// Check that the block is in the slot->block index
+			found, roots, err := db.BlockRootsBySlot(ctx, blk.Block().Slot())
+			require.NoError(t, err)
+			require.Equal(t, true, found)
+			require.Equal(t, 1, len(roots))
+			require.Equal(t, blockRoot, roots[0])
+			// Delete the block, then check that it is no longer in the index.
+
+			parent := blk.Block().ParentRoot()
+			testCheckParentIndices(t, db.db, parent, true)
+			require.NoError(t, db.DeleteBlock(ctx, blockRoot))
+			require.NoError(t, err)
+			testCheckParentIndices(t, db.db, parent, false)
+			found, roots, err = db.BlockRootsBySlot(ctx, blk.Block().Slot())
+			require.NoError(t, err)
+			require.Equal(t, false, found)
+			require.Equal(t, 0, len(roots))
 		})
 	}
+}
+
+func testCheckParentIndices(t *testing.T, db *bolt.DB, parent [32]byte, expected bool) {
+	require.NoError(t, db.View(func(tx *bolt.Tx) error {
+		require.Equal(t, expected, tx.Bucket(blockParentRootIndicesBucket).Get(parent[:]) != nil)
+		return nil
+	}))
 }
 
 func TestStore_BlocksHandleZeroCase(t *testing.T) {
@@ -353,6 +386,226 @@ func TestStore_DeleteFinalizedBlock(t *testing.T) {
 	require.NoError(t, db.SaveFinalizedCheckpoint(ctx, cp))
 	require.ErrorIs(t, db.DeleteBlock(ctx, root), ErrDeleteJustifiedAndFinalized)
 }
+
+func TestStore_HistoricalDataBeforeSlot(t *testing.T) {
+	slotsPerEpoch := uint64(params.BeaconConfig().SlotsPerEpoch)
+	ctx := context.Background()
+
+	tests := []struct {
+		name             string
+		batchSize        int
+		numOfEpochs      uint64
+		deleteBeforeSlot uint64
+	}{
+		{
+			name:             "batchSize less than delete range",
+			batchSize:        10,
+			numOfEpochs:      4,
+			deleteBeforeSlot: 25,
+		},
+		{
+			name:             "batchSize greater than delete range",
+			batchSize:        30,
+			numOfEpochs:      4,
+			deleteBeforeSlot: 15,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db := setupDB(t)
+			// Save genesis block root
+			require.NoError(t, db.SaveGenesisBlockRoot(ctx, genesisBlockRoot))
+
+			// Create and save blocks for given epochs
+			blks := makeBlocks(t, 0, slotsPerEpoch*tt.numOfEpochs, genesisBlockRoot)
+			require.NoError(t, db.SaveBlocks(ctx, blks))
+
+			// Mark state validator migration as complete
+			err := db.db.Update(func(tx *bolt.Tx) error {
+				return tx.Bucket(migrationsBucket).Put(migrationStateValidatorsKey, migrationCompleted)
+			})
+			require.NoError(t, err)
+
+			migrated, err := db.isStateValidatorMigrationOver()
+			require.NoError(t, err)
+			require.Equal(t, true, migrated)
+
+			// Create state summaries and states for each block
+			ss := make([]*ethpb.StateSummary, len(blks))
+			states := make([]state.BeaconState, len(blks))
+
+			for i, blk := range blks {
+				slot := blk.Block().Slot()
+				r, err := blk.Block().HashTreeRoot()
+				require.NoError(t, err)
+
+				// Create and save state summary
+				ss[i] = &ethpb.StateSummary{
+					Slot: slot,
+					Root: r[:],
+				}
+
+				// Create and save state with validator entries
+				vals := make([]*ethpb.Validator, 2)
+				for j := range vals {
+					vals[j] = &ethpb.Validator{
+						PublicKey:             bytesutil.PadTo([]byte{byte(i*j + 1)}, 48),
+						WithdrawalCredentials: bytesutil.PadTo([]byte{byte(i*j + 2)}, 32),
+					}
+				}
+
+				st, err := util.NewBeaconState(func(state *ethpb.BeaconState) error {
+					state.Validators = vals
+					state.Slot = slot
+					return nil
+				})
+				require.NoError(t, err)
+				require.NoError(t, db.SaveState(ctx, st, r))
+				states[i] = st
+
+				// Verify validator entries are saved to db
+				valsActual, err := db.validatorEntries(ctx, r)
+				require.NoError(t, err)
+				for j, val := range valsActual {
+					require.DeepEqual(t, vals[j], val)
+				}
+			}
+			require.NoError(t, db.SaveStateSummaries(ctx, ss))
+
+			// Verify slot indices exist before deletion
+			err = db.db.View(func(tx *bolt.Tx) error {
+				blockSlotBkt := tx.Bucket(blockSlotIndicesBucket)
+				stateSlotBkt := tx.Bucket(stateSlotIndicesBucket)
+
+				for i := uint64(0); i < uint64(tt.deleteBeforeSlot); i++ {
+					slot := bytesutil.SlotToBytesBigEndian(primitives.Slot(i + 1))
+					assert.NotNil(t, blockSlotBkt.Get(slot), "Expected block slot index to exist")
+					assert.NotNil(t, stateSlotBkt.Get(slot), "Expected state slot index to exist", i)
+				}
+				return nil
+			})
+			require.NoError(t, err)
+
+			// Delete data before slot
+			slotsDeleted, err := db.DeleteHistoricalDataBeforeSlot(ctx, primitives.Slot(tt.deleteBeforeSlot), tt.batchSize)
+			require.NoError(t, err)
+
+			var startSlotDeleted, endSlotDeleted uint64
+			if tt.batchSize >= int(tt.deleteBeforeSlot) {
+				startSlotDeleted = 1
+				endSlotDeleted = tt.deleteBeforeSlot
+			} else {
+				startSlotDeleted = tt.deleteBeforeSlot - uint64(tt.batchSize) + 1
+				endSlotDeleted = tt.deleteBeforeSlot
+			}
+
+			require.Equal(t, endSlotDeleted-startSlotDeleted+1, uint64(slotsDeleted))
+
+			// Verify blocks before given slot/batch are deleted
+			for i := startSlotDeleted; i < endSlotDeleted; i++ {
+				root, err := blks[i].Block().HashTreeRoot()
+				require.NoError(t, err)
+
+				// Check block is deleted
+				retrievedBlocks, err := db.BlocksBySlot(ctx, primitives.Slot(i))
+				require.NoError(t, err)
+				assert.Equal(t, 0, len(retrievedBlocks), fmt.Sprintf("Expected %d blocks, got %d for slot %d", 0, len(retrievedBlocks), i))
+
+				// Verify block does not exist
+				assert.Equal(t, false, db.HasBlock(ctx, root), fmt.Sprintf("Expected block index to not exist for slot %d", i))
+
+				// Verify block parent root does not exist
+				err = db.db.View(func(tx *bolt.Tx) error {
+					require.Equal(t, 0, len(tx.Bucket(blockParentRootIndicesBucket).Get(root[:])))
+					return nil
+				})
+				require.NoError(t, err)
+
+				// Verify state is deleted
+				hasState := db.HasState(ctx, root)
+				assert.Equal(t, false, hasState)
+
+				// Verify state summary is deleted
+				hasSummary := db.HasStateSummary(ctx, root)
+				assert.Equal(t, false, hasSummary)
+
+				// Verify validator hashes for block roots are deleted
+				err = db.db.View(func(tx *bolt.Tx) error {
+					assert.Equal(t, 0, len(tx.Bucket(blockRootValidatorHashesBucket).Get(root[:])))
+					return nil
+				})
+				require.NoError(t, err)
+			}
+
+			// Verify slot indices are deleted
+			err = db.db.View(func(tx *bolt.Tx) error {
+				blockSlotBkt := tx.Bucket(blockSlotIndicesBucket)
+				stateSlotBkt := tx.Bucket(stateSlotIndicesBucket)
+
+				for i := startSlotDeleted; i < endSlotDeleted; i++ {
+					slot := bytesutil.SlotToBytesBigEndian(primitives.Slot(i + 1))
+					assert.Equal(t, 0, len(blockSlotBkt.Get(slot)), fmt.Sprintf("Expected block slot index to be deleted, slot: %d", slot))
+					assert.Equal(t, 0, len(stateSlotBkt.Get(slot)), fmt.Sprintf("Expected state slot index to be deleted, slot: %d", slot))
+				}
+				return nil
+			})
+			require.NoError(t, err)
+
+			// Verify blocks from expectedLastDeletedSlot till numEpochs still exist
+			for i := endSlotDeleted; i < slotsPerEpoch*tt.numOfEpochs; i++ {
+				root, err := blks[i].Block().HashTreeRoot()
+				require.NoError(t, err)
+
+				// Verify block exists
+				assert.Equal(t, true, db.HasBlock(ctx, root))
+
+				// Verify remaining block parent root exists, except last slot since we store parent roots of each block.
+				if i < slotsPerEpoch*tt.numOfEpochs-1 {
+					err = db.db.View(func(tx *bolt.Tx) error {
+						require.NotNil(t, tx.Bucket(blockParentRootIndicesBucket).Get(root[:]), fmt.Sprintf("Expected block parent index to be deleted, slot: %d", i))
+						return nil
+					})
+					require.NoError(t, err)
+				}
+
+				// Verify state exists
+				hasState := db.HasState(ctx, root)
+				assert.Equal(t, true, hasState)
+
+				// Verify state summary exists
+				hasSummary := db.HasStateSummary(ctx, root)
+				assert.Equal(t, true, hasSummary)
+
+				// Verify slot indices still exist
+				err = db.db.View(func(tx *bolt.Tx) error {
+					blockSlotBkt := tx.Bucket(blockSlotIndicesBucket)
+					stateSlotBkt := tx.Bucket(stateSlotIndicesBucket)
+
+					slot := bytesutil.SlotToBytesBigEndian(primitives.Slot(i + 1))
+					assert.NotNil(t, blockSlotBkt.Get(slot), "Expected block slot index to exist")
+					assert.NotNil(t, stateSlotBkt.Get(slot), "Expected state slot index to exist")
+					return nil
+				})
+				require.NoError(t, err)
+
+				// Verify validator entries still exist
+				valsActual, err := db.validatorEntries(ctx, root)
+				require.NoError(t, err)
+				assert.NotNil(t, valsActual)
+
+				// Verify remaining validator hashes for block roots exists
+				err = db.db.View(func(tx *bolt.Tx) error {
+					assert.NotNil(t, tx.Bucket(blockRootValidatorHashesBucket).Get(root[:]))
+					return nil
+				})
+				require.NoError(t, err)
+			}
+		})
+	}
+
+}
+
 func TestStore_GenesisBlock(t *testing.T) {
 	db := setupDB(t)
 	ctx := context.Background()
@@ -487,6 +740,120 @@ func TestStore_Blocks_FiltersCorrectly(t *testing.T) {
 				require.NoError(t, err)
 				assert.Equal(t, tt2.expectedNumBlocks, len(retrievedBlocks), "Unexpected number of blocks")
 			}
+		})
+	}
+}
+
+func testBlockChain(t *testing.T, nb testNewBlockFunc, slots []primitives.Slot, parent []byte) []interfaces.ReadOnlySignedBeaconBlock {
+	if len(parent) < 32 {
+		var zero [32]byte
+		copy(parent, zero[:])
+	}
+	chain := make([]interfaces.ReadOnlySignedBeaconBlock, 0, len(slots))
+	for _, slot := range slots {
+		pr := make([]byte, 32)
+		copy(pr, parent)
+		b, err := nb(slot, pr)
+		require.NoError(t, err)
+		chain = append(chain, b)
+		npr, err := b.Block().HashTreeRoot()
+		parent = npr[:]
+		require.NoError(t, err)
+	}
+	return chain
+}
+
+func testSlotSlice(start, end primitives.Slot) []primitives.Slot {
+	end += 1 // add 1 to make the range inclusive
+	slots := make([]primitives.Slot, 0, end-start)
+	for ; start < end; start++ {
+		slots = append(slots, start)
+	}
+	return slots
+}
+
+func TestCleanupMissingBlockIndices(t *testing.T) {
+	for _, tt := range blockTests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			db := setupDB(t)
+			chain := testBlockChain(t, tt.newBlock, testSlotSlice(1, 10), nil)
+			require.NoError(t, db.SaveBlocks(ctx, chain))
+			corrupt, err := blocks.NewROBlock(chain[5])
+			require.NoError(t, err)
+			cr := corrupt.Root()
+			require.NoError(t, db.db.Update(func(tx *bolt.Tx) error {
+				return tx.Bucket(blocksBucket).Delete(cr[:])
+			}))
+			// Need to also delete it from the cache!!
+			db.blockCache.Del(string(cr[:]))
+			res, roots, err := db.Blocks(ctx, filters.NewFilter().SetEndSlot(10).SetStartSlot(1))
+			require.NoError(t, err)
+			require.Equal(t, 9, len(roots))
+			require.Equal(t, len(res), len(roots))
+			require.NoError(t, db.db.View(func(tx *bolt.Tx) error {
+				encSlot := bytesutil.SlotToBytesBigEndian(corrupt.Block().Slot())
+				// make sure slot->root index is cleaned up
+				require.Equal(t, 0, len(tx.Bucket(blockSlotIndicesBucket).Get(encSlot)))
+				require.Equal(t, 0, len(tx.Bucket(blockParentRootIndicesBucket).Get(cr[:])))
+				return nil
+			}))
+		})
+	}
+}
+
+func TestCleanupMissingForkedBlockIndices(t *testing.T) {
+	for _, tt := range blockTests[0:1] {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			db := setupDB(t)
+
+			chain := testBlockChain(t, tt.newBlock, testSlotSlice(1, 10), nil)
+			require.NoError(t, db.SaveBlocks(ctx, chain))
+
+			// forkChain should skip the slot at skipBlock, and have the same parent
+			skipBlockParent := chain[4].Block().ParentRoot()
+			// It should start at the same slot as missingBlock, which comes one slot after the skip slot,
+			// so there are 2 blocks in that slot
+			missingBlock, err := blocks.NewROBlock(chain[5])
+			require.NoError(t, err)
+			// missingBlock will be deleted in the main chain, but there will be a block at that slot in the fork chain
+			forkChain := testBlockChain(t, tt.newBlock, testSlotSlice(missingBlock.Block().Slot(), 10), skipBlockParent[:])
+			require.NoError(t, db.SaveBlocks(ctx, forkChain))
+			forkChainStart, err := blocks.NewROBlock(forkChain[0])
+			require.NoError(t, err)
+
+			encMissingSlot := bytesutil.SlotToBytesBigEndian(missingBlock.Block().Slot())
+			require.NoError(t, db.db.View(func(tx *bolt.Tx) error {
+				require.Equal(t, 32, len(tx.Bucket(blockParentRootIndicesBucket).Get(missingBlock.RootSlice())))
+				// There are 2 block roots packed in this slot, so it is 64 bytes long
+				require.Equal(t, 64, len(tx.Bucket(blockSlotIndicesBucket).Get(encMissingSlot)))
+				// skipBlockParent should also have 2 entries and be 64 bytes, since the forkChain is based on the same parent as the skip block
+				childRoots := tx.Bucket(blockParentRootIndicesBucket).Get(skipBlockParent[:])
+				require.Equal(t, 64, len(childRoots))
+				return nil
+			}))
+
+			require.NoError(t, db.db.Update(func(tx *bolt.Tx) error {
+				return tx.Bucket(blocksBucket).Delete(missingBlock.RootSlice())
+			}))
+			// Need to also delete it from the cache!!
+			db.blockCache.Del(string(missingBlock.RootSlice()))
+
+			// Blocks should give us blocks from all chains.
+			res, roots, err := db.Blocks(ctx, filters.NewFilter().SetEndSlot(10).SetStartSlot(1))
+			require.NoError(t, err)
+			require.Equal(t, (len(chain)-1)+len(forkChain), len(roots))
+			require.Equal(t, len(res), len(roots))
+			require.NoError(t, db.db.View(func(tx *bolt.Tx) error {
+				// There should now be 32 bytes in this index - one root from the forked chain
+				slotIdxVal := tx.Bucket(blockSlotIndicesBucket).Get(encMissingSlot)
+				require.Equal(t, forkChainStart.Root(), [32]byte(slotIdxVal))
+				require.Equal(t, 0, len(tx.Bucket(blockParentRootIndicesBucket).Get(missingBlock.RootSlice())))
+				forkChildRoot := tx.Bucket(blockParentRootIndicesBucket).Get(skipBlockParent[:])
+				require.Equal(t, 64, len(forkChildRoot))
+				return nil
+			}))
 		})
 	}
 }

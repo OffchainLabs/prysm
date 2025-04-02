@@ -3,11 +3,13 @@ package evaluators
 import (
 	"context"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/encoding/ssz"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/testing/endtoend/policies"
 	e2etypes "github.com/prysmaticlabs/prysm/v5/testing/endtoend/types"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
@@ -64,7 +66,7 @@ func builderActive(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) err
 		if err != nil {
 			return err
 		}
-		if forkStartSlot == b.Block().Slot() || forkStartSlot+1 == b.Block().Slot() {
+		if forkStartSlot == b.Block().Slot() || forkStartSlot+1 == b.Block().Slot() || lowestBound <= 1 {
 			// Skip fork slot and the next one, as we don't send FCUs yet.
 			continue
 		}
@@ -82,10 +84,10 @@ func builderActive(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) err
 			continue
 		}
 		if string(execPayload.ExtraData()) != "prysm-builder" {
-			return errors.Errorf("block with slot %d was not built by the builder. It has an extra data of %s", b.Block().Slot(), string(execPayload.ExtraData()))
+			return errors.Errorf("%s block with slot %d was not built by the builder. It has an extra data of %s and txRoot of %s", version.String(b.Version()), b.Block().Slot(), string(execPayload.ExtraData()), hexutil.Encode(txRoot))
 		}
 		if execPayload.GasLimit() == 0 {
-			return errors.Errorf("block with slot %d has a gas limit of 0, when it should be in the 30M range", b.Block().Slot())
+			return errors.Errorf("%s block with slot %d has a gas limit of 0, when it should be in the 30M range", version.String(b.Version()), b.Block().Slot())
 		}
 	}
 	if lowestBound == currEpoch {
@@ -107,7 +109,7 @@ func builderActive(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) err
 		if err != nil {
 			return err
 		}
-		if forkStartSlot == b.Block().Slot() || forkStartSlot+1 == b.Block().Slot() {
+		if forkStartSlot == b.Block().Slot() || forkStartSlot+1 == b.Block().Slot() || lowestBound <= 1 {
 			// Skip fork slot and the next one, as we don't send FCUs yet.
 			continue
 		}
@@ -125,10 +127,10 @@ func builderActive(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) err
 			continue
 		}
 		if string(execPayload.ExtraData()) != "prysm-builder" {
-			return errors.Errorf("block with slot %d was not built by the builder. It has an extra data of %s", b.Block().Slot(), string(execPayload.ExtraData()))
+			return errors.Errorf("%s block with slot %d was not built by the builder. It has an extra data of %s and txRoot of %s", version.String(b.Version()), b.Block().Slot(), string(execPayload.ExtraData()), hexutil.Encode(txRoot))
 		}
 		if execPayload.GasLimit() == 0 {
-			return errors.Errorf("block with slot %d has a gas limit of 0, when it should be in the 30M range", b.Block().Slot())
+			return errors.Errorf("%s block with slot %d has a gas limit of 0, when it should be in the 30M range", version.String(b.Version()), b.Block().Slot())
 		}
 	}
 	return nil

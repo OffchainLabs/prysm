@@ -12,8 +12,8 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/v5/encoding/ssz"
+	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"go.opencensus.io/trace"
 )
 
 // ComputeFieldRootsWithHasher hashes the provided state and returns its respective field roots.
@@ -41,6 +41,8 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 		fieldRoots = make([][]byte, params.BeaconConfig().BeaconStateDenebFieldCount)
 	case version.Electra:
 		fieldRoots = make([][]byte, params.BeaconConfig().BeaconStateElectraFieldCount)
+	case version.Fulu:
+		fieldRoots = make([][]byte, params.BeaconConfig().BeaconStateFuluFieldCount)
 	default:
 		return nil, fmt.Errorf("unknown state version %s", version.String(state.version))
 	}
@@ -243,22 +245,13 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 		fieldRoots[types.LatestExecutionPayloadHeaderCapella.RealPosition()] = executionPayloadRoot[:]
 	}
 
-	if state.version == version.Deneb {
+	if state.version >= version.Deneb {
 		// Execution payload root.
 		executionPayloadRoot, err := state.latestExecutionPayloadHeaderDeneb.HashTreeRoot()
 		if err != nil {
 			return nil, err
 		}
 		fieldRoots[types.LatestExecutionPayloadHeaderDeneb.RealPosition()] = executionPayloadRoot[:]
-	}
-
-	if state.version == version.Electra {
-		// Execution payload root.
-		executionPayloadRoot, err := state.latestExecutionPayloadHeaderElectra.HashTreeRoot()
-		if err != nil {
-			return nil, err
-		}
-		fieldRoots[types.LatestExecutionPayloadHeaderElectra.RealPosition()] = executionPayloadRoot[:]
 	}
 
 	if state.version >= version.Capella {
@@ -305,12 +298,12 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 		eceRoot := ssz.Uint64Root(uint64(state.earliestConsolidationEpoch))
 		fieldRoots[types.EarliestConsolidationEpoch.RealPosition()] = eceRoot[:]
 
-		// PendingBalanceDeposits root.
-		pbdRoot, err := stateutil.PendingBalanceDepositsRoot(state.pendingBalanceDeposits)
+		// PendingDeposits root.
+		pbdRoot, err := stateutil.PendingDepositsRoot(state.pendingDeposits)
 		if err != nil {
 			return nil, errors.Wrap(err, "could not compute pending balance deposits merkleization")
 		}
-		fieldRoots[types.PendingBalanceDeposits.RealPosition()] = pbdRoot[:]
+		fieldRoots[types.PendingDeposits.RealPosition()] = pbdRoot[:]
 
 		// PendingPartialWithdrawals root.
 		ppwRoot, err := stateutil.PendingPartialWithdrawalsRoot(state.pendingPartialWithdrawals)

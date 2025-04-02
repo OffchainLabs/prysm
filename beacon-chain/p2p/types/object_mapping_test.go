@@ -76,6 +76,13 @@ func TestInitializeDataMaps(t *testing.T) {
 				require.NoError(t, err)
 				assert.Equal(t, version.Phase0, agg.Version())
 			}
+			attSlashFunc, ok := AttesterSlashingMap[bytesutil.ToBytes4(params.BeaconConfig().GenesisForkVersion)]
+			assert.Equal(t, tt.exists, ok)
+			if tt.exists {
+				attSlash, err := attSlashFunc()
+				require.NoError(t, err)
+				assert.Equal(t, version.Phase0, attSlash.Version())
+			}
 		})
 	}
 }

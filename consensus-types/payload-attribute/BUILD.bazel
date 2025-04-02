@@ -10,8 +10,12 @@ go_library(
     importpath = "github.com/prysmaticlabs/prysm/v5/consensus-types/payload-attribute",
     visibility = ["//visibility:public"],
     deps = [
+        "//beacon-chain/state:go_default_library",
+        "//config/fieldparams:go_default_library",
         "//consensus-types:go_default_library",
         "//consensus-types/blocks:go_default_library",
+        "//consensus-types/interfaces:go_default_library",
+        "//consensus-types/primitives:go_default_library",
         "//proto/engine/v1:go_default_library",
         "//runtime/version:go_default_library",
         "@com_github_pkg_errors//:go_default_library",

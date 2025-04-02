@@ -17,13 +17,12 @@ go_library(
         "//beacon-chain/rpc/eth/shared:go_default_library",
         "//beacon-chain/rpc/lookup:go_default_library",
         "//consensus-types/primitives:go_default_library",
+        "//monitoring/tracing/trace:go_default_library",
         "//network/httputil:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "//time/slots:go_default_library",
         "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",
-        "@com_github_gorilla_mux//:go_default_library",
         "@com_github_pkg_errors//:go_default_library",
-        "@io_opencensus_go//trace:go_default_library",
     ],
 )
 
@@ -64,7 +63,6 @@ go_test(
         "//time:go_default_library",
         "//time/slots:go_default_library",
         "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",
-        "@com_github_gorilla_mux//:go_default_library",
         "@com_github_prysmaticlabs_go_bitfield//:go_default_library",
     ],
 )

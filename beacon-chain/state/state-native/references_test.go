@@ -865,8 +865,8 @@ func TestValidatorReferences_RemainsConsistent_Phase0(t *testing.T) {
 
 	assert.DeepNotEqual(t, a.Validators()[0], b.Validators()[0], "validators are equal when they are supposed to be different")
 	// Modify all validators from copied state.
-	assert.NoError(t, b.ApplyToEveryValidator(func(idx int, val *ethpb.Validator) (bool, *ethpb.Validator, error) {
-		return true, &ethpb.Validator{PublicKey: []byte{'V'}}, nil
+	assert.NoError(t, b.ApplyToEveryValidator(func(idx int, val state.ReadOnlyValidator) (*ethpb.Validator, error) {
+		return &ethpb.Validator{PublicKey: []byte{'V'}}, nil
 	}))
 
 	// Ensure reference is properly accounted for.
@@ -900,8 +900,8 @@ func TestValidatorReferences_RemainsConsistent_Altair(t *testing.T) {
 
 	assert.DeepNotEqual(t, a.Validators()[0], b.Validators()[0], "validators are equal when they are supposed to be different")
 	// Modify all validators from copied state.
-	assert.NoError(t, b.ApplyToEveryValidator(func(idx int, val *ethpb.Validator) (bool, *ethpb.Validator, error) {
-		return true, &ethpb.Validator{PublicKey: []byte{'V'}}, nil
+	assert.NoError(t, b.ApplyToEveryValidator(func(idx int, val state.ReadOnlyValidator) (*ethpb.Validator, error) {
+		return &ethpb.Validator{PublicKey: []byte{'V'}}, nil
 	}))
 
 	// Ensure reference is properly accounted for.
@@ -935,8 +935,8 @@ func TestValidatorReferences_RemainsConsistent_Capella(t *testing.T) {
 
 	assert.DeepNotEqual(t, a.Validators()[0], b.Validators()[0], "validators are equal when they are supposed to be different")
 	// Modify all validators from copied state.
-	assert.NoError(t, b.ApplyToEveryValidator(func(idx int, val *ethpb.Validator) (bool, *ethpb.Validator, error) {
-		return true, &ethpb.Validator{PublicKey: []byte{'V'}}, nil
+	assert.NoError(t, b.ApplyToEveryValidator(func(idx int, val state.ReadOnlyValidator) (*ethpb.Validator, error) {
+		return &ethpb.Validator{PublicKey: []byte{'V'}}, nil
 	}))
 
 	// Ensure reference is properly accounted for.
@@ -970,8 +970,8 @@ func TestValidatorReferences_RemainsConsistent_Deneb(t *testing.T) {
 
 	assert.DeepNotEqual(t, a.Validators()[0], b.Validators()[0], "validators are equal when they are supposed to be different")
 	// Modify all validators from copied state.
-	assert.NoError(t, b.ApplyToEveryValidator(func(idx int, val *ethpb.Validator) (bool, *ethpb.Validator, error) {
-		return true, &ethpb.Validator{PublicKey: []byte{'V'}}, nil
+	assert.NoError(t, b.ApplyToEveryValidator(func(idx int, val state.ReadOnlyValidator) (*ethpb.Validator, error) {
+		return &ethpb.Validator{PublicKey: []byte{'V'}}, nil
 	}))
 
 	// Ensure reference is properly accounted for.
@@ -1005,8 +1005,8 @@ func TestValidatorReferences_RemainsConsistent_Bellatrix(t *testing.T) {
 
 	assert.DeepNotEqual(t, a.Validators()[0], b.Validators()[0], "validators are equal when they are supposed to be different")
 	// Modify all validators from copied state.
-	assert.NoError(t, b.ApplyToEveryValidator(func(idx int, val *ethpb.Validator) (bool, *ethpb.Validator, error) {
-		return true, &ethpb.Validator{PublicKey: []byte{'V'}}, nil
+	assert.NoError(t, b.ApplyToEveryValidator(func(idx int, val state.ReadOnlyValidator) (*ethpb.Validator, error) {
+		return &ethpb.Validator{PublicKey: []byte{'V'}}, nil
 	}))
 
 	// Ensure reference is properly accounted for.
@@ -1041,15 +1041,14 @@ func TestValidatorReferences_ApplyValidator_BalancesRead(t *testing.T) {
 	require.Equal(t, true, ok)
 
 	// Modify all validators from copied state, it should not deadlock.
-	assert.NoError(t, b.ApplyToEveryValidator(func(idx int, val *ethpb.Validator) (bool, *ethpb.Validator, error) {
+	assert.NoError(t, b.ApplyToEveryValidator(func(idx int, val state.ReadOnlyValidator) (*ethpb.Validator, error) {
 		b, err := b.BalanceAtIndex(0)
 		if err != nil {
-			return false, nil, err
+			return nil, err
 		}
-		newVal := ethpb.CopyValidator(val)
+		newVal := val.Copy()
 		newVal.EffectiveBalance += b
-		val.EffectiveBalance += b
-		return true, val, nil
+		return newVal, nil
 	}))
 }
 

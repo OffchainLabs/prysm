@@ -8,6 +8,7 @@ go_library(
         "bellatrix_beacon_block_test_helpers.go",
         "capella_beacon_block_test_helpers.go",
         "deneb_beacon_block_test_helpers.go",
+        "electra_beacon_block_test_helpers.go",
         "phase0_beacon_block_test_helpers.go",
         "test_helpers.go",
     ],

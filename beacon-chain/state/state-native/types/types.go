@@ -88,8 +88,6 @@ func (f FieldIndex) String() string {
 		return "latestExecutionPayloadHeaderCapella"
 	case LatestExecutionPayloadHeaderDeneb:
 		return "latestExecutionPayloadHeaderDeneb"
-	case LatestExecutionPayloadHeaderElectra:
-		return "latestExecutionPayloadHeaderElectra"
 	case NextWithdrawalIndex:
 		return "nextWithdrawalIndex"
 	case NextWithdrawalValidatorIndex:
@@ -108,8 +106,8 @@ func (f FieldIndex) String() string {
 		return "consolidationBalanceToConsume"
 	case EarliestConsolidationEpoch:
 		return "earliestConsolidationEpoch"
-	case PendingBalanceDeposits:
-		return "pendingBalanceDeposits"
+	case PendingDeposits:
+		return "pendingDeposits"
 	case PendingPartialWithdrawals:
 		return "pendingPartialWithdrawals"
 	case PendingConsolidations:
@@ -171,7 +169,7 @@ func (f FieldIndex) RealPosition() int {
 		return 22
 	case NextSyncCommittee:
 		return 23
-	case LatestExecutionPayloadHeader, LatestExecutionPayloadHeaderCapella, LatestExecutionPayloadHeaderDeneb, LatestExecutionPayloadHeaderElectra:
+	case LatestExecutionPayloadHeader, LatestExecutionPayloadHeaderCapella, LatestExecutionPayloadHeaderDeneb:
 		return 24
 	case NextWithdrawalIndex:
 		return 25
@@ -191,7 +189,7 @@ func (f FieldIndex) RealPosition() int {
 		return 32
 	case EarliestConsolidationEpoch:
 		return 33
-	case PendingBalanceDeposits:
+	case PendingDeposits:
 		return 34
 	case PendingPartialWithdrawals:
 		return 35
@@ -249,7 +247,6 @@ const (
 	LatestExecutionPayloadHeader
 	LatestExecutionPayloadHeaderCapella
 	LatestExecutionPayloadHeaderDeneb
-	LatestExecutionPayloadHeaderElectra
 	NextWithdrawalIndex
 	NextWithdrawalValidatorIndex
 	HistoricalSummaries
@@ -259,7 +256,7 @@ const (
 	EarliestExitEpoch             // Electra: EIP-7251
 	ConsolidationBalanceToConsume // Electra: EIP-7251
 	EarliestConsolidationEpoch    // Electra: EIP-7251
-	PendingBalanceDeposits        // Electra: EIP-7251
+	PendingDeposits               // Electra: EIP-7251
 	PendingPartialWithdrawals     // Electra: EIP-7251
 	PendingConsolidations         // Electra: EIP-7251
 )

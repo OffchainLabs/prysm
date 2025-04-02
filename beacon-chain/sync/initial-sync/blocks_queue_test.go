@@ -1094,7 +1094,7 @@ func TestBlocksQueue_stuckInUnfavourableFork(t *testing.T) {
 		// its claims with actual blocks.
 		emptyPeer := connectPeerHavingBlocks(t, p2p, chain1, finalizedSlot, p2p.Peers())
 		defer func() {
-			p2p.Peers().SetConnectionState(emptyPeer, peers.PeerDisconnected)
+			p2p.Peers().SetConnectionState(emptyPeer, peers.Disconnected)
 		}()
 		chainState, err := p2p.Peers().ChainState(emptyPeer)
 		require.NoError(t, err)
@@ -1291,7 +1291,7 @@ func TestBlocksQueue_stuckWhenHeadIsSetToOrphanedBlock(t *testing.T) {
 	// Connect peer that has all the blocks available.
 	allBlocksPeer := connectPeerHavingBlocks(t, p2p, chain, finalizedSlot, p2p.Peers())
 	defer func() {
-		p2p.Peers().SetConnectionState(allBlocksPeer, peers.PeerDisconnected)
+		p2p.Peers().SetConnectionState(allBlocksPeer, peers.Disconnected)
 	}()
 
 	// Queue should be able to fetch whole chain (including slot which comes before the currently set head).

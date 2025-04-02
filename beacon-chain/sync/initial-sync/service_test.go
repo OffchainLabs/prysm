@@ -464,7 +464,7 @@ func TestMissingBlobRequest(t *testing.T) {
 			setup: func(t *testing.T) (blocks.ROBlock, *filesystem.BlobStorage) {
 				bk, _ := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 0, 2)
 				bm, fs := filesystem.NewEphemeralBlobStorageWithMocker(t)
-				require.NoError(t, bm.CreateFakeIndices(bk.Root(), 1))
+				require.NoError(t, bm.CreateFakeIndices(bk.Root(), bk.Block().Slot(), 1))
 				return bk, fs
 			},
 			nReq: 1,
@@ -474,7 +474,7 @@ func TestMissingBlobRequest(t *testing.T) {
 			setup: func(t *testing.T) (blocks.ROBlock, *filesystem.BlobStorage) {
 				bk, _ := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 0, 2)
 				bm, fs := filesystem.NewEphemeralBlobStorageWithMocker(t)
-				require.NoError(t, bm.CreateFakeIndices(bk.Root(), 0, 1))
+				require.NoError(t, bm.CreateFakeIndices(bk.Root(), bk.Block().Slot(), 0, 1))
 				return bk, fs
 			},
 			nReq: 0,
@@ -495,8 +495,8 @@ func TestOriginOutsideRetention(t *testing.T) {
 	bdb := dbtest.SetupDB(t)
 	genesis := time.Unix(0, 0)
 	secsPerEpoch := params.BeaconConfig().SecondsPerSlot * uint64(params.BeaconConfig().SlotsPerEpoch)
-	retentionSeconds := time.Second * time.Duration(uint64(params.BeaconConfig().MinEpochsForBlobsSidecarsRequest+1)*secsPerEpoch)
-	outsideRetention := genesis.Add(retentionSeconds)
+	retentionPeriod := time.Second * time.Duration(uint64(params.BeaconConfig().MinEpochsForBlobsSidecarsRequest+1)*secsPerEpoch)
+	outsideRetention := genesis.Add(retentionPeriod)
 	now := func() time.Time {
 		return outsideRetention
 	}

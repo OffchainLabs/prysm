@@ -154,12 +154,21 @@ func postEvaluation(nodeIdx int, requests map[string]endpoint, epoch primitives.
 		if err := bb.UnmarshalSSZ(blindedBlockData.getSszResp()); err != nil {
 			return errors.Wrap(err, msgSSZUnmarshalFailed)
 		}
-	} else {
+	} else if epoch < params.BeaconConfig().ElectraForkEpoch {
 		b := &ethpb.SignedBeaconBlockDeneb{}
 		if err := b.UnmarshalSSZ(blockData.getSszResp()); err != nil {
 			return errors.Wrap(err, msgSSZUnmarshalFailed)
 		}
 		bb := &ethpb.SignedBlindedBeaconBlockDeneb{}
+		if err := bb.UnmarshalSSZ(blindedBlockData.getSszResp()); err != nil {
+			return errors.Wrap(err, msgSSZUnmarshalFailed)
+		}
+	} else {
+		b := &ethpb.SignedBeaconBlockElectra{}
+		if err := b.UnmarshalSSZ(blockData.getSszResp()); err != nil {
+			return errors.Wrap(err, msgSSZUnmarshalFailed)
+		}
+		bb := &ethpb.SignedBlindedBeaconBlockElectra{}
 		if err := bb.UnmarshalSSZ(blindedBlockData.getSszResp()); err != nil {
 			return errors.Wrap(err, msgSSZUnmarshalFailed)
 		}
@@ -181,7 +190,7 @@ func postEvaluation(nodeIdx int, requests map[string]endpoint, epoch primitives.
 	}
 
 	// perform a health check
-	basePath := fmt.Sprintf(v1PathTemplate, params2.TestParams.Ports.PrysmBeaconNodeGatewayPort+nodeIdx)
+	basePath := fmt.Sprintf(v1PathTemplate, params2.TestParams.Ports.PrysmBeaconNodeHTTPPort+nodeIdx)
 	resp, err := http.Get(basePath + "/node/health")
 	if err != nil {
 		return errors.Wrap(err, "could not perform a health check")

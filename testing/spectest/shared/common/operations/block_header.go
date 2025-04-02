@@ -56,10 +56,10 @@ func RunBlockHeaderTest(t *testing.T, config string, fork string, sszToBlock SSZ
 			bodyRoot, err := block.Block().Body().HashTreeRoot()
 			require.NoError(t, err)
 			pr := block.Block().ParentRoot()
-			beaconState, err := blocks.ProcessBlockHeaderNoVerify(context.Background(), preBeaconState, block.Block().Slot(), block.Block().ProposerIndex(), pr[:], bodyRoot[:])
+			_, err = blocks.ProcessBlockHeaderNoVerify(context.Background(), preBeaconState, block.Block().Slot(), block.Block().ProposerIndex(), pr[:], bodyRoot[:])
 			if postSSZExists {
 				require.NoError(t, err)
-				comparePostState(t, postSSZFilepath, sszToState, preBeaconState, beaconState)
+				comparePostState(t, postSSZFilepath, sszToState, preBeaconState)
 			} else {
 				// Note: This doesn't test anything worthwhile. It essentially tests
 				// that *any* error has occurred, not any specific error.

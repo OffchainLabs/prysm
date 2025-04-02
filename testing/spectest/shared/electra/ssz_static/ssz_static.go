@@ -37,9 +37,9 @@ func UnmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (i
 	var obj interface{}
 	switch folderName {
 	case "ExecutionPayload":
-		obj = &enginev1.ExecutionPayloadElectra{}
+		obj = &enginev1.ExecutionPayloadDeneb{}
 	case "ExecutionPayloadHeader":
-		obj = &enginev1.ExecutionPayloadHeaderElectra{}
+		obj = &enginev1.ExecutionPayloadHeaderDeneb{}
 	case "Attestation":
 		obj = &ethpb.AttestationElectra{}
 	case "AttestationData":
@@ -103,6 +103,8 @@ func UnmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (i
 		obj = &ethpb.ContributionAndProof{}
 	case "SignedContributionAndProof":
 		obj = &ethpb.SignedContributionAndProof{}
+	case "SingleAttestation":
+		obj = &ethpb.SingleAttestation{}
 	case "SyncAggregate":
 		obj = &ethpb.SyncAggregate{}
 	case "SyncAggregatorSelectionData":
@@ -110,23 +112,15 @@ func UnmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (i
 	case "SyncCommittee":
 		obj = &ethpb.SyncCommittee{}
 	case "LightClientOptimisticUpdate":
-		t.Skip("not a beacon node type, this is a light node type")
-		return nil, nil
+		obj = &ethpb.LightClientOptimisticUpdateDeneb{}
 	case "LightClientFinalityUpdate":
-		t.Skip("not a beacon node type, this is a light node type")
-		return nil, nil
+		obj = &ethpb.LightClientFinalityUpdateElectra{}
 	case "LightClientBootstrap":
-		t.Skip("not a beacon node type, this is a light node type")
-		return nil, nil
-	case "LightClientSnapshot":
-		t.Skip("not a beacon node type, this is a light node type")
-		return nil, nil
+		obj = &ethpb.LightClientBootstrapElectra{}
 	case "LightClientUpdate":
-		t.Skip("not a beacon node type, this is a light node type")
-		return nil, nil
+		obj = &ethpb.LightClientUpdateElectra{}
 	case "LightClientHeader":
-		t.Skip("not a beacon node type, this is a light node type")
-		return nil, nil
+		obj = &ethpb.LightClientHeaderDeneb{}
 	case "BlobIdentifier":
 		obj = &ethpb.BlobIdentifier{}
 	case "BlobSidecar":
@@ -141,8 +135,8 @@ func UnmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (i
 		obj = &ethpb.BLSToExecutionChange{}
 	case "SignedBLSToExecutionChange":
 		obj = &ethpb.SignedBLSToExecutionChange{}
-	case "PendingBalanceDeposit":
-		obj = &ethpb.PendingBalanceDeposit{}
+	case "PendingDeposit":
+		obj = &ethpb.PendingDeposit{}
 	case "PendingPartialWithdrawal":
 		obj = &ethpb.PendingPartialWithdrawal{}
 	case "PendingConsolidation":
@@ -153,6 +147,8 @@ func UnmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (i
 		obj = &enginev1.DepositRequest{}
 	case "ConsolidationRequest":
 		obj = &enginev1.ConsolidationRequest{}
+	case "ExecutionRequests":
+		obj = &enginev1.ExecutionRequests{}
 	default:
 		return nil, errors.New("type not found")
 	}

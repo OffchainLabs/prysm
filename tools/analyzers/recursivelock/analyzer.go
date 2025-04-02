@@ -236,30 +236,24 @@ func checkForRecLocks(node ast.Node, pass *analysis.Pass, inspect *inspector.Ins
 			if lockTracker.rLockSelector.isRelated(selMap, 0) {
 				pass.Reportf(
 					node.Pos(),
-					fmt.Sprintf(
-						"%v",
-						errNestedMixedLock,
-					),
+					"%v",
+					errNestedMixedLock,
 				)
 			}
 			if lockTracker.rLockSelector.isEqual(selMap, 0) {
 				pass.Reportf(
 					node.Pos(),
-					fmt.Sprintf(
-						"%v",
-						lockmode.ErrorFound(),
-					),
+					"%v",
+					lockmode.ErrorFound(),
 				)
 			} else {
 				if stack := hasNestedlock(lockTracker.rLockSelector, lockTracker.goroutinePos, selMap, call, inspect, pass, make(map[string]bool),
 					lockmode.UnLockName()); stack != "" {
 					pass.Reportf(
 						node.Pos(),
-						fmt.Sprintf(
-							"%v\n%v",
-							lockmode.ErrorFound(),
-							stack,
-						),
+						"%v\n%v",
+						lockmode.ErrorFound(),
+						stack,
 					)
 				}
 			}

@@ -12,7 +12,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gorilla/mux"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	chainMock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/lookup"
@@ -85,7 +84,7 @@ func TestGetValidatorCountInvalidRequest(t *testing.T) {
 				Stater:                test.stater,
 			}
 
-			testRouter := mux.NewRouter()
+			testRouter := http.NewServeMux()
 			testRouter.HandleFunc("/eth/v1/beacon/states/{state_id}/validator_count", server.GetValidatorCount)
 			s := httptest.NewServer(testRouter)
 			defer s.Close()
@@ -465,7 +464,7 @@ func TestGetValidatorCount(t *testing.T) {
 				},
 			}
 
-			testRouter := mux.NewRouter()
+			testRouter := http.NewServeMux()
 			testRouter.HandleFunc("/eth/v1/beacon/states/{state_id}/validator_count", server.GetValidatorCount)
 			s := httptest.NewServer(testRouter)
 			defer s.Close()

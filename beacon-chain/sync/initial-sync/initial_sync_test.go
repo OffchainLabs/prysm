@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -70,7 +71,7 @@ func TestMain(m *testing.M) {
 		flags.Init(resetFlags)
 	}()
 
-	m.Run()
+	os.Exit(m.Run())
 }
 
 func initializeTestServices(t *testing.T, slots []primitives.Slot, peers []*peerData) (*mock.ChainService, *p2pt.TestP2P, db.Database) {
@@ -227,7 +228,7 @@ func connectPeer(t *testing.T, host *p2pt.TestP2P, datum *peerData, peerStatus *
 	p.Connect(host)
 
 	peerStatus.Add(new(enr.Record), p.PeerID(), nil, network.DirOutbound)
-	peerStatus.SetConnectionState(p.PeerID(), peers.PeerConnected)
+	peerStatus.SetConnectionState(p.PeerID(), peers.Connected)
 	peerStatus.SetChainState(p.PeerID(), &ethpb.Status{
 		ForkDigest:     params.BeaconConfig().GenesisForkVersion,
 		FinalizedRoot:  []byte(fmt.Sprintf("finalized_root %d", datum.finalizedEpoch)),
@@ -326,7 +327,7 @@ func connectPeerHavingBlocks(
 	require.NoError(t, err)
 
 	peerStatus.Add(new(enr.Record), p.PeerID(), nil, network.DirOutbound)
-	peerStatus.SetConnectionState(p.PeerID(), peers.PeerConnected)
+	peerStatus.SetConnectionState(p.PeerID(), peers.Connected)
 	peerStatus.SetChainState(p.PeerID(), &ethpb.Status{
 		ForkDigest:     params.BeaconConfig().GenesisForkVersion,
 		FinalizedRoot:  []byte(fmt.Sprintf("finalized_root %d", finalizedEpoch)),

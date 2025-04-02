@@ -47,7 +47,7 @@ func TestProcessDepositLog_OK(t *testing.T) {
 	)
 	require.NoError(t, err, "unable to setup web3 ETH1.0 chain service")
 	web3Service = setDefaultMocks(web3Service)
-	web3Service.depositContractCaller, err = contracts.NewDepositContractCaller(testAcc.ContractAddr, testAcc.Backend)
+	web3Service.depositContractCaller, err = contracts.NewDepositContractCaller(testAcc.ContractAddr, testAcc.Backend.Client())
 	require.NoError(t, err)
 
 	testAcc.Backend.Commit()
@@ -72,7 +72,7 @@ func TestProcessDepositLog_OK(t *testing.T) {
 		},
 	}
 
-	logs, err := testAcc.Backend.FilterLogs(web3Service.ctx, query)
+	logs, err := testAcc.Backend.Client().FilterLogs(web3Service.ctx, query)
 	require.NoError(t, err, "Unable to retrieve logs")
 
 	if len(logs) == 0 {
@@ -116,7 +116,7 @@ func TestProcessDepositLog_InsertsPendingDeposit(t *testing.T) {
 	)
 	require.NoError(t, err, "unable to setup web3 ETH1.0 chain service")
 	web3Service = setDefaultMocks(web3Service)
-	web3Service.depositContractCaller, err = contracts.NewDepositContractCaller(testAcc.ContractAddr, testAcc.Backend)
+	web3Service.depositContractCaller, err = contracts.NewDepositContractCaller(testAcc.ContractAddr, testAcc.Backend.Client())
 	require.NoError(t, err)
 
 	testAcc.Backend.Commit()
@@ -144,7 +144,7 @@ func TestProcessDepositLog_InsertsPendingDeposit(t *testing.T) {
 		},
 	}
 
-	logs, err := testAcc.Backend.FilterLogs(web3Service.ctx, query)
+	logs, err := testAcc.Backend.Client().FilterLogs(web3Service.ctx, query)
 	require.NoError(t, err, "Unable to retrieve logs")
 
 	web3Service.chainStartData.Chainstarted = true
@@ -176,7 +176,7 @@ func TestUnpackDepositLogData_OK(t *testing.T) {
 	)
 	require.NoError(t, err, "unable to setup web3 ETH1.0 chain service")
 	web3Service = setDefaultMocks(web3Service)
-	web3Service.depositContractCaller, err = contracts.NewDepositContractCaller(testAcc.ContractAddr, testAcc.Backend)
+	web3Service.depositContractCaller, err = contracts.NewDepositContractCaller(testAcc.ContractAddr, testAcc.Backend.Client())
 	require.NoError(t, err)
 
 	testAcc.Backend.Commit()
@@ -199,7 +199,7 @@ func TestUnpackDepositLogData_OK(t *testing.T) {
 		},
 	}
 
-	logz, err := testAcc.Backend.FilterLogs(web3Service.ctx, query)
+	logz, err := testAcc.Backend.Client().FilterLogs(web3Service.ctx, query)
 	require.NoError(t, err, "Unable to retrieve logs")
 
 	loggedPubkey, withCreds, _, loggedSig, index, err := contracts.UnpackDepositLogData(logz[0].Data)
@@ -232,7 +232,7 @@ func TestProcessETH2GenesisLog_8DuplicatePubkeys(t *testing.T) {
 	)
 	require.NoError(t, err, "unable to setup web3 ETH1.0 chain service")
 	web3Service = setDefaultMocks(web3Service)
-	web3Service.depositContractCaller, err = contracts.NewDepositContractCaller(testAcc.ContractAddr, testAcc.Backend)
+	web3Service.depositContractCaller, err = contracts.NewDepositContractCaller(testAcc.ContractAddr, testAcc.Backend.Client())
 	require.NoError(t, err)
 
 	params.SetupTestConfigCleanup(t)
@@ -269,7 +269,7 @@ func TestProcessETH2GenesisLog_8DuplicatePubkeys(t *testing.T) {
 		},
 	}
 
-	logs, err := testAcc.Backend.FilterLogs(web3Service.ctx, query)
+	logs, err := testAcc.Backend.Client().FilterLogs(web3Service.ctx, query)
 	require.NoError(t, err, "Unable to retrieve logs")
 
 	for i := range logs {
@@ -307,7 +307,7 @@ func TestProcessETH2GenesisLog(t *testing.T) {
 	)
 	require.NoError(t, err, "unable to setup web3 ETH1.0 chain service")
 	web3Service = setDefaultMocks(web3Service)
-	web3Service.depositContractCaller, err = contracts.NewDepositContractCaller(testAcc.ContractAddr, testAcc.Backend)
+	web3Service.depositContractCaller, err = contracts.NewDepositContractCaller(testAcc.ContractAddr, testAcc.Backend.Client())
 	web3Service.rpcClient = &mockExecution.RPCClient{Backend: testAcc.Backend}
 	require.NoError(t, err)
 	params.SetupTestConfigCleanup(t)
@@ -342,7 +342,7 @@ func TestProcessETH2GenesisLog(t *testing.T) {
 		},
 	}
 
-	logs, err := testAcc.Backend.FilterLogs(web3Service.ctx, query)
+	logs, err := testAcc.Backend.Client().FilterLogs(web3Service.ctx, query)
 	require.NoError(t, err, "Unable to retrieve logs")
 	require.Equal(t, depositsReqForChainStart, len(logs))
 
@@ -400,16 +400,18 @@ func TestProcessETH2GenesisLog_CorrectNumOfDeposits(t *testing.T) {
 	)
 	require.NoError(t, err, "unable to setup web3 ETH1.0 chain service")
 	web3Service = setDefaultMocks(web3Service)
-	web3Service.depositContractCaller, err = contracts.NewDepositContractCaller(testAcc.ContractAddr, testAcc.Backend)
+	web3Service.depositContractCaller, err = contracts.NewDepositContractCaller(testAcc.ContractAddr, testAcc.Backend.Client())
 	require.NoError(t, err)
 	web3Service.rpcClient = &mockExecution.RPCClient{Backend: testAcc.Backend}
-	web3Service.httpLogger = testAcc.Backend
+	web3Service.httpLogger = testAcc.Backend.Client()
 	web3Service.latestEth1Data.LastRequestedBlock = 0
-	web3Service.latestEth1Data.BlockHeight = testAcc.Backend.Blockchain().CurrentBlock().Number.Uint64()
-	web3Service.latestEth1Data.BlockTime = testAcc.Backend.Blockchain().CurrentBlock().Time
+	block, err := testAcc.Backend.Client().BlockByNumber(context.Background(), nil)
+	require.NoError(t, err)
+	web3Service.latestEth1Data.BlockHeight = block.NumberU64()
+	web3Service.latestEth1Data.BlockTime = block.Time()
 	bConfig := params.MinimalSpecConfig().Copy()
 	bConfig.MinGenesisTime = 0
-	bConfig.SecondsPerETH1Block = 10
+	bConfig.SecondsPerETH1Block = 1
 	params.OverrideBeaconConfig(bConfig)
 	nConfig := params.BeaconNetworkConfig()
 	nConfig.ContractDeploymentBlock = 0
@@ -444,8 +446,10 @@ func TestProcessETH2GenesisLog_CorrectNumOfDeposits(t *testing.T) {
 	for i := uint64(0); i < params.BeaconConfig().Eth1FollowDistance; i++ {
 		testAcc.Backend.Commit()
 	}
-	web3Service.latestEth1Data.BlockHeight = testAcc.Backend.Blockchain().CurrentBlock().Number.Uint64()
-	web3Service.latestEth1Data.BlockTime = testAcc.Backend.Blockchain().CurrentBlock().Time
+	b, err := testAcc.Backend.Client().BlockByNumber(context.Background(), nil)
+	require.NoError(t, err)
+	web3Service.latestEth1Data.BlockHeight = b.NumberU64()
+	web3Service.latestEth1Data.BlockTime = b.Time()
 
 	// Set up our subscriber now to listen for the chain started event.
 	stateChannel := make(chan *feed.Event, 1)
@@ -497,13 +501,15 @@ func TestProcessETH2GenesisLog_LargePeriodOfNoLogs(t *testing.T) {
 	)
 	require.NoError(t, err, "unable to setup web3 ETH1.0 chain service")
 	web3Service = setDefaultMocks(web3Service)
-	web3Service.depositContractCaller, err = contracts.NewDepositContractCaller(testAcc.ContractAddr, testAcc.Backend)
+	web3Service.depositContractCaller, err = contracts.NewDepositContractCaller(testAcc.ContractAddr, testAcc.Backend.Client())
 	require.NoError(t, err)
 	web3Service.rpcClient = &mockExecution.RPCClient{Backend: testAcc.Backend}
-	web3Service.httpLogger = testAcc.Backend
+	web3Service.httpLogger = testAcc.Backend.Client()
 	web3Service.latestEth1Data.LastRequestedBlock = 0
-	web3Service.latestEth1Data.BlockHeight = testAcc.Backend.Blockchain().CurrentBlock().Number.Uint64()
-	web3Service.latestEth1Data.BlockTime = testAcc.Backend.Blockchain().CurrentBlock().Time
+	b, err := testAcc.Backend.Client().BlockByNumber(context.Background(), nil)
+	require.NoError(t, err)
+	web3Service.latestEth1Data.BlockHeight = b.NumberU64()
+	web3Service.latestEth1Data.BlockTime = b.Time()
 	bConfig := params.MinimalSpecConfig().Copy()
 	bConfig.SecondsPerETH1Block = 10
 	params.OverrideBeaconConfig(bConfig)
@@ -540,14 +546,19 @@ func TestProcessETH2GenesisLog_LargePeriodOfNoLogs(t *testing.T) {
 	for i := uint64(0); i < 1500; i++ {
 		testAcc.Backend.Commit()
 	}
-	wantedGenesisTime := testAcc.Backend.Blockchain().CurrentBlock().Time
+	genesisBlock, err := testAcc.Backend.Client().BlockByNumber(context.Background(), nil)
+	require.NoError(t, err)
+
+	wantedGenesisTime := genesisBlock.Time()
 
 	// Forward the chain to account for the follow distance
 	for i := uint64(0); i < params.BeaconConfig().Eth1FollowDistance; i++ {
 		testAcc.Backend.Commit()
 	}
-	web3Service.latestEth1Data.BlockHeight = testAcc.Backend.Blockchain().CurrentBlock().Number.Uint64()
-	web3Service.latestEth1Data.BlockTime = testAcc.Backend.Blockchain().CurrentBlock().Time
+	currBlock, err := testAcc.Backend.Client().BlockByNumber(context.Background(), nil)
+	require.NoError(t, err)
+	web3Service.latestEth1Data.BlockHeight = currBlock.NumberU64()
+	web3Service.latestEth1Data.BlockTime = currBlock.Time()
 
 	// Set the genesis time 500 blocks ahead of the last
 	// deposit log.
@@ -608,7 +619,7 @@ func newPowchainService(t *testing.T, eth1Backend *mock.TestAccount, beaconDB db
 	)
 	require.NoError(t, err, "unable to setup web3 ETH1.0 chain service")
 	web3Service = setDefaultMocks(web3Service)
-	web3Service.depositContractCaller, err = contracts.NewDepositContractCaller(eth1Backend.ContractAddr, eth1Backend.Backend)
+	web3Service.depositContractCaller, err = contracts.NewDepositContractCaller(eth1Backend.ContractAddr, eth1Backend.Backend.Client())
 	require.NoError(t, err)
 
 	web3Service.rpcClient = &mockExecution.RPCClient{Backend: eth1Backend.Backend}

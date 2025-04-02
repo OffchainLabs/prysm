@@ -39,7 +39,7 @@ func TestResultList(t *testing.T) {
 func TestExportedBlobSanityCheck(t *testing.T) {
 	// make sure all requirement lists contain the bare minimum checks
 	sanity := []Requirement{RequireValidProposerSignature, RequireSidecarKzgProofVerified, RequireBlobIndexInBounds, RequireSidecarInclusionProven}
-	reqs := [][]Requirement{GossipSidecarRequirements, SpectestSidecarRequirements, InitsyncSidecarRequirements, BackfillSidecarRequirements, PendingQueueSidecarRequirements}
+	reqs := [][]Requirement{GossipBlobSidecarRequirements, SpectestBlobSidecarRequirements, InitsyncBlobSidecarRequirements, BackfillBlobSidecarRequirements, PendingQueueBlobSidecarRequirements}
 	for i := range reqs {
 		r := reqs[i]
 		reqMap := make(map[Requirement]struct{})
@@ -51,13 +51,13 @@ func TestExportedBlobSanityCheck(t *testing.T) {
 			require.Equal(t, true, ok)
 		}
 	}
-	require.DeepEqual(t, allSidecarRequirements, GossipSidecarRequirements)
+	require.DeepEqual(t, allBlobSidecarRequirements, GossipBlobSidecarRequirements)
 }
 
 func TestAllBlobRequirementsHaveStrings(t *testing.T) {
 	var derp Requirement = math.MaxInt
 	require.Equal(t, unknownRequirementName, derp.String())
-	for i := range allSidecarRequirements {
-		require.NotEqual(t, unknownRequirementName, allSidecarRequirements[i].String())
+	for i := range allBlobSidecarRequirements {
+		require.NotEqual(t, unknownRequirementName, allBlobSidecarRequirements[i].String())
 	}
 }

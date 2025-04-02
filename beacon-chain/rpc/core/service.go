@@ -21,7 +21,7 @@ type Service struct {
 	Broadcaster           p2p.Broadcaster
 	SyncCommitteePool     synccommittee.Pool
 	OperationNotifier     opfeed.Notifier
-	AttestationCache      *cache.AttestationCache
+	AttestationCache      *cache.AttestationDataCache
 	StateGen              stategen.StateManager
 	P2P                   p2p.Broadcaster
 	ReplayerBuilder       stategen.ReplayerBuilder

@@ -47,10 +47,10 @@ func NewBeaconApiValidatorClient(jsonRestHandler JsonRestHandler, opts ...Valida
 	return c
 }
 
-func (c *beaconApiValidatorClient) Duties(ctx context.Context, in *ethpb.DutiesRequest) (*ethpb.DutiesResponse, error) {
+func (c *beaconApiValidatorClient) Duties(ctx context.Context, in *ethpb.DutiesRequest) (*ethpb.ValidatorDutiesContainer, error) {
 	ctx, span := trace.StartSpan(ctx, "beacon-api.Duties")
 	defer span.End()
-	return wrapInMetrics[*ethpb.DutiesResponse]("Duties", func() (*ethpb.DutiesResponse, error) {
+	return wrapInMetrics[*ethpb.ValidatorDutiesContainer]("Duties", func() (*ethpb.ValidatorDutiesContainer, error) {
 		return c.duties(ctx, in)
 	})
 }
@@ -154,8 +154,13 @@ func (c *beaconApiValidatorClient) ProposeAttestation(ctx context.Context, in *e
 	})
 }
 
-func (c *beaconApiValidatorClient) ProposeAttestationElectra(ctx context.Context, in *ethpb.AttestationElectra) (*ethpb.AttestResponse, error) {
-	return nil, errors.New("ProposeAttestationElectra is not implemented")
+func (c *beaconApiValidatorClient) ProposeAttestationElectra(ctx context.Context, in *ethpb.SingleAttestation) (*ethpb.AttestResponse, error) {
+	ctx, span := trace.StartSpan(ctx, "beacon-api.ProposeAttestationElectra")
+	defer span.End()
+
+	return wrapInMetrics[*ethpb.AttestResponse]("ProposeAttestationElectra", func() (*ethpb.AttestResponse, error) {
+		return c.proposeAttestationElectra(ctx, in)
+	})
 }
 
 func (c *beaconApiValidatorClient) ProposeBeaconBlock(ctx context.Context, in *ethpb.GenericSignedBeaconBlock) (*ethpb.ProposeResponse, error) {
@@ -190,7 +195,12 @@ func (c *beaconApiValidatorClient) SubmitAggregateSelectionProof(ctx context.Con
 }
 
 func (c *beaconApiValidatorClient) SubmitAggregateSelectionProofElectra(ctx context.Context, in *ethpb.AggregateSelectionRequest, index primitives.ValidatorIndex, committeeLength uint64) (*ethpb.AggregateSelectionElectraResponse, error) {
-	return nil, errors.New("SubmitAggregateSelectionProofElectra is not implemented")
+	ctx, span := trace.StartSpan(ctx, "beacon-api.SubmitAggregateSelectionProofElectra")
+	defer span.End()
+
+	return wrapInMetrics[*ethpb.AggregateSelectionElectraResponse]("SubmitAggregateSelectionProofElectra", func() (*ethpb.AggregateSelectionElectraResponse, error) {
+		return c.submitAggregateSelectionProofElectra(ctx, in, index, committeeLength)
+	})
 }
 
 func (c *beaconApiValidatorClient) SubmitSignedAggregateSelectionProof(ctx context.Context, in *ethpb.SignedAggregateSubmitRequest) (*ethpb.SignedAggregateSubmitResponse, error) {
@@ -203,7 +213,12 @@ func (c *beaconApiValidatorClient) SubmitSignedAggregateSelectionProof(ctx conte
 }
 
 func (c *beaconApiValidatorClient) SubmitSignedAggregateSelectionProofElectra(ctx context.Context, in *ethpb.SignedAggregateSubmitElectraRequest) (*ethpb.SignedAggregateSubmitResponse, error) {
-	return nil, errors.New("SubmitSignedAggregateSelectionProofElectra is not implemented")
+	ctx, span := trace.StartSpan(ctx, "beacon-api.SubmitSignedAggregateSelectionProofElectra")
+	defer span.End()
+
+	return wrapInMetrics[*ethpb.SignedAggregateSubmitResponse]("SubmitSignedAggregateSelectionProofElectra", func() (*ethpb.SignedAggregateSubmitResponse, error) {
+		return c.submitSignedAggregateSelectionProofElectra(ctx, in)
+	})
 }
 
 func (c *beaconApiValidatorClient) SubmitSignedContributionAndProof(ctx context.Context, in *ethpb.SignedContributionAndProof) (*empty.Empty, error) {
@@ -233,7 +248,7 @@ func (c *beaconApiValidatorClient) SubmitValidatorRegistrations(ctx context.Cont
 	})
 }
 
-func (c *beaconApiValidatorClient) SubscribeCommitteeSubnets(ctx context.Context, in *ethpb.CommitteeSubnetsSubscribeRequest, duties []*ethpb.DutiesResponse_Duty) (*empty.Empty, error) {
+func (c *beaconApiValidatorClient) SubscribeCommitteeSubnets(ctx context.Context, in *ethpb.CommitteeSubnetsSubscribeRequest, duties []*ethpb.ValidatorDuty) (*empty.Empty, error) {
 	ctx, span := trace.StartSpan(ctx, "beacon-api.SubscribeCommitteeSubnets")
 	defer span.End()
 
@@ -256,13 +271,6 @@ func (c *beaconApiValidatorClient) ValidatorStatus(ctx context.Context, in *ethp
 	defer span.End()
 
 	return c.validatorStatus(ctx, in)
-}
-
-func (c *beaconApiValidatorClient) WaitForActivation(ctx context.Context, in *ethpb.ValidatorActivationRequest) (ethpb.BeaconNodeValidator_WaitForActivationClient, error) {
-	ctx, span := trace.StartSpan(ctx, "beacon-api.WaitForActivation")
-	defer span.End()
-
-	return c.waitForActivation(ctx, in)
 }
 
 // Deprecated: Do not use.

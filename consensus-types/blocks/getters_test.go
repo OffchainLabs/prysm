@@ -169,70 +169,6 @@ func Test_BeaconBlock_Body(t *testing.T) {
 	assert.Equal(t, bb, b.Body())
 }
 
-func Test_BeaconBlock_Copy(t *testing.T) {
-	bb := &BeaconBlockBody{randaoReveal: bytesutil.ToBytes96([]byte{246}), graffiti: bytesutil.ToBytes32([]byte("graffiti"))}
-	b := &BeaconBlock{body: bb, slot: 123, proposerIndex: 456, parentRoot: bytesutil.ToBytes32([]byte("parentroot")), stateRoot: bytesutil.ToBytes32([]byte("stateroot"))}
-	cp, err := b.Copy()
-	require.NoError(t, err)
-	assert.NotEqual(t, cp, b)
-	assert.NotEqual(t, cp.Body(), bb)
-
-	b.version = version.Altair
-	b.body.version = b.version
-	cp, err = b.Copy()
-	require.NoError(t, err)
-	assert.NotEqual(t, cp, b)
-	assert.NotEqual(t, cp.Body(), bb)
-
-	b.version = version.Bellatrix
-	b.body.version = b.version
-	cp, err = b.Copy()
-	require.NoError(t, err)
-	assert.NotEqual(t, cp, b)
-	assert.NotEqual(t, cp.Body(), bb)
-
-	b.version = version.Capella
-	b.body.version = b.version
-	cp, err = b.Copy()
-	require.NoError(t, err)
-	assert.NotEqual(t, cp, b)
-	assert.NotEqual(t, cp.Body(), bb)
-
-	b.version = version.Bellatrix
-	b.body.version = b.version
-	cp, err = b.Copy()
-	require.NoError(t, err)
-	assert.NotEqual(t, cp, b)
-	assert.NotEqual(t, cp.Body(), bb)
-
-	b.version = version.Capella
-	b.body.version = b.version
-	cp, err = b.Copy()
-	require.NoError(t, err)
-	assert.NotEqual(t, cp, b)
-	assert.NotEqual(t, cp.Body(), bb)
-
-	payload := &pb.ExecutionPayloadDeneb{ExcessBlobGas: 123}
-	header := &pb.ExecutionPayloadHeaderDeneb{ExcessBlobGas: 223}
-	payloadInterface, err := WrappedExecutionPayloadDeneb(payload)
-	require.NoError(t, err)
-	headerInterface, err := WrappedExecutionPayloadHeaderDeneb(header)
-	require.NoError(t, err)
-	bb = &BeaconBlockBody{executionPayload: payloadInterface, executionPayloadHeader: headerInterface, randaoReveal: bytesutil.ToBytes96([]byte{246}), graffiti: bytesutil.ToBytes32([]byte("graffiti"))}
-	b = &BeaconBlock{body: bb, slot: 123, proposerIndex: 456, parentRoot: bytesutil.ToBytes32([]byte("parentroot")), stateRoot: bytesutil.ToBytes32([]byte("stateroot"))}
-	b.version = version.Deneb
-	b.body.version = b.version
-	cp, err = b.Copy()
-	require.NoError(t, err)
-	assert.NotEqual(t, cp, b)
-	assert.NotEqual(t, cp.Body(), bb)
-	e, err := cp.Body().Execution()
-	require.NoError(t, err)
-	gas, err := e.ExcessBlobGas()
-	require.NoError(t, err)
-	require.DeepEqual(t, gas, uint64(123))
-}
-
 func Test_BeaconBlock_IsNil(t *testing.T) {
 	t.Run("nil block", func(t *testing.T) {
 		var b *BeaconBlock
@@ -613,27 +549,23 @@ func hydrateBeaconBlockBodyElectra() *eth.BeaconBlockBodyElectra {
 			SyncCommitteeBits:      make([]byte, fieldparams.SyncAggregateSyncCommitteeBytesLength),
 			SyncCommitteeSignature: make([]byte, fieldparams.BLSSignatureLength),
 		},
-		ExecutionPayload: &pb.ExecutionPayloadElectra{
-			ParentHash:            make([]byte, fieldparams.RootLength),
-			FeeRecipient:          make([]byte, 20),
-			StateRoot:             make([]byte, fieldparams.RootLength),
-			ReceiptsRoot:          make([]byte, fieldparams.RootLength),
-			LogsBloom:             make([]byte, 256),
-			PrevRandao:            make([]byte, fieldparams.RootLength),
-			ExtraData:             make([]byte, 0),
-			BaseFeePerGas:         make([]byte, fieldparams.RootLength),
-			BlockHash:             make([]byte, fieldparams.RootLength),
-			Transactions:          make([][]byte, 0),
-			Withdrawals:           make([]*pb.Withdrawal, 0),
-			DepositRequests:       make([]*pb.DepositRequest, 0),
-			WithdrawalRequests:    make([]*pb.WithdrawalRequest, 0),
-			ConsolidationRequests: make([]*pb.ConsolidationRequest, 0),
+		ExecutionPayload: &pb.ExecutionPayloadDeneb{
+			ParentHash:    make([]byte, fieldparams.RootLength),
+			FeeRecipient:  make([]byte, 20),
+			StateRoot:     make([]byte, fieldparams.RootLength),
+			ReceiptsRoot:  make([]byte, fieldparams.RootLength),
+			LogsBloom:     make([]byte, 256),
+			PrevRandao:    make([]byte, fieldparams.RootLength),
+			ExtraData:     make([]byte, 0),
+			BaseFeePerGas: make([]byte, fieldparams.RootLength),
+			BlockHash:     make([]byte, fieldparams.RootLength),
+			Transactions:  make([][]byte, 0),
+			Withdrawals:   make([]*pb.Withdrawal, 0),
+		},
+		ExecutionRequests: &pb.ExecutionRequests{
+			Deposits:       make([]*pb.DepositRequest, 0),
+			Withdrawals:    make([]*pb.WithdrawalRequest, 0),
+			Consolidations: make([]*pb.ConsolidationRequest, 0),
 		},
 	}
-}
-
-func TestPreElectraFailsInterfaceAssertion(t *testing.T) {
-	var epd interfaces.ExecutionData = &executionPayloadDeneb{}
-	_, ok := epd.(interfaces.ExecutionDataElectra)
-	require.Equal(t, false, ok)
 }

@@ -39,6 +39,17 @@ func TestProcessWithdrawRequests(t *testing.T) {
 		wantErr bool
 	}{
 		{
+			name: "nil request",
+			args: args{
+				st:  func() state.BeaconState { return st }(),
+				wrs: []*enginev1.WithdrawalRequest{nil},
+			},
+			wantErr: true,
+			wantFn: func(t *testing.T, got state.BeaconState) {
+				require.DeepEqual(t, got, nil)
+			},
+		},
+		{
 			name: "happy path exit and withdrawal only",
 			args: args{
 				st: func() state.BeaconState {

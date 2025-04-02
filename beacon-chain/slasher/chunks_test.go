@@ -3,12 +3,14 @@ package slasher
 import (
 	"context"
 	"math"
+	"reflect"
 	"testing"
 
 	dbtest "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
 	slashertypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/slasher/types"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
@@ -82,6 +84,99 @@ func TestMaxSpanChunksSlice_MaxChunkSpanFrom(t *testing.T) {
 
 func TestMinSpanChunksSlice_CheckSlashable(t *testing.T) {
 	ctx := context.Background()
+
+	for _, v := range []int{version.Phase0, version.Electra} {
+		t.Run(version.String(v), func(t *testing.T) {
+			slasherDB := dbtest.SetupSlasherDB(t)
+			params := &Parameters{
+				chunkSize:          3,
+				validatorChunkSize: 2,
+				historyLength:      3,
+			}
+			validatorIdx := primitives.ValidatorIndex(1)
+			source := primitives.Epoch(1)
+			target := primitives.Epoch(2)
+			att := createAttestationWrapperEmptySig(t, v, source, target, nil, nil)
+
+			// A faulty chunk should lead to error.
+			chunk := &MinSpanChunksSlice{
+				params: params,
+				data:   []uint16{},
+			}
+			_, err := chunk.CheckSlashable(ctx, nil, validatorIdx, att)
+			require.ErrorContains(t, "could not get min target for validator", err)
+
+			// We initialize a proper slice with 2 chunks with chunk size 3, 2 validators, and
+			// a history length of 3 representing a perfect attesting history.
+			//
+			//     val0     val1
+			//   {     }  {     }
+			//  [2, 2, 2, 2, 2, 2]
+			data := []uint16{2, 2, 2, 2, 2, 2}
+			chunk, err = MinChunkSpansSliceFrom(params, data)
+			require.NoError(t, err)
+
+			// An attestation with source 1 and target 2 should not be slashable
+			// based on our min chunk for either validator.
+			slashing, err := chunk.CheckSlashable(ctx, slasherDB, validatorIdx, att)
+			require.NoError(t, err)
+			require.Equal(t, nil, slashing)
+
+			slashing, err = chunk.CheckSlashable(ctx, slasherDB, validatorIdx.Sub(1), att)
+			require.NoError(t, err)
+			require.Equal(t, nil, slashing)
+
+			// Next up we initialize an empty chunks slice and mark an attestation
+			// with (source 1, target 2) as attested.
+			chunk = EmptyMinSpanChunksSlice(params)
+			source = primitives.Epoch(1)
+			target = primitives.Epoch(2)
+			att = createAttestationWrapperEmptySig(t, v, source, target, nil, nil)
+			chunkIndex := uint64(0)
+			startEpoch := target
+			currentEpoch := target
+			_, err = chunk.Update(chunkIndex, currentEpoch, validatorIdx, startEpoch, target)
+			require.NoError(t, err)
+
+			// Next up, we create a surrounding vote, but it should NOT be slashable
+			// because we DO NOT have an existing attestation record in our database at the min target epoch.
+			source = primitives.Epoch(0)
+			target = primitives.Epoch(3)
+			surroundingVote := createAttestationWrapperEmptySig(t, v, source, target, nil, nil)
+
+			slashing, err = chunk.CheckSlashable(ctx, slasherDB, validatorIdx, surroundingVote)
+			require.NoError(t, err)
+			require.Equal(t, nil, slashing)
+
+			// Next up, we save the old attestation record, then check if the
+			// surrounding vote is indeed slashable.
+			attData := att.IndexedAttestation.GetData()
+			attRecord := createAttestationWrapperEmptySig(t, v, attData.Source.Epoch, attData.Target.Epoch, []uint64{uint64(validatorIdx)}, []byte{1})
+			err = slasherDB.SaveAttestationRecordsForValidators(
+				ctx,
+				[]*slashertypes.IndexedAttestationWrapper{attRecord},
+			)
+			require.NoError(t, err)
+
+			slashing, err = chunk.CheckSlashable(ctx, slasherDB, validatorIdx, surroundingVote)
+			require.NoError(t, err)
+			require.Equal(t, false, reflect.ValueOf(slashing).IsNil())
+
+			// We check the attestation with the lower data root is the first attestation.
+			// Firstly we require the setup to have the surrounding vote as the second attestation.
+			// Then we modify the root of the surrounding vote and expect the vote to be the first attestation.
+			require.DeepEqual(t, surroundingVote.IndexedAttestation, slashing.SecondAttestation())
+			surroundingVote.DataRoot = [32]byte{}
+			slashing, err = chunk.CheckSlashable(ctx, slasherDB, validatorIdx, surroundingVote)
+			require.NoError(t, err)
+			require.Equal(t, false, reflect.ValueOf(slashing).IsNil())
+			assert.DeepEqual(t, surroundingVote.IndexedAttestation, slashing.FirstAttestation())
+		})
+	}
+}
+
+func TestMinSpanChunksSlice_CheckSlashable_DifferentVersions(t *testing.T) {
+	ctx := context.Background()
 	slasherDB := dbtest.SetupSlasherDB(t)
 	params := &Parameters{
 		chunkSize:          3,
@@ -91,74 +186,137 @@ func TestMinSpanChunksSlice_CheckSlashable(t *testing.T) {
 	validatorIdx := primitives.ValidatorIndex(1)
 	source := primitives.Epoch(1)
 	target := primitives.Epoch(2)
-	att := createAttestationWrapperEmptySig(t, source, target, nil, nil)
 
-	// A faulty chunk should lead to error.
-	chunk := &MinSpanChunksSlice{
-		params: params,
-		data:   []uint16{},
-	}
-	_, err := chunk.CheckSlashable(ctx, nil, validatorIdx, att)
-	require.ErrorContains(t, "could not get min target for validator", err)
+	// We create a vote with Phase0 version.
+	att := createAttestationWrapperEmptySig(t, version.Phase0, source, target, nil, nil)
 
-	// We initialize a proper slice with 2 chunks with chunk size 3, 2 validators, and
-	// a history length of 3 representing a perfect attesting history.
-	//
-	//     val0     val1
-	//   {     }  {     }
-	//  [2, 2, 2, 2, 2, 2]
-	data := []uint16{2, 2, 2, 2, 2, 2}
-	chunk, err = MinChunkSpansSliceFrom(params, data)
-	require.NoError(t, err)
-
-	// An attestation with source 1 and target 2 should not be slashable
-	// based on our min chunk for either validator.
-	slashing, err := chunk.CheckSlashable(ctx, slasherDB, validatorIdx, att)
-	require.NoError(t, err)
-	require.Equal(t, nil, slashing)
-
-	slashing, err = chunk.CheckSlashable(ctx, slasherDB, validatorIdx.Sub(1), att)
-	require.NoError(t, err)
-	require.Equal(t, nil, slashing)
-
-	// Next up we initialize an empty chunks slice and mark an attestation
-	// with (source 1, target 2) as attested.
-	chunk = EmptyMinSpanChunksSlice(params)
-	source = primitives.Epoch(1)
-	target = primitives.Epoch(2)
-	att = createAttestationWrapperEmptySig(t, source, target, nil, nil)
+	// We initialize an empty chunks slice and mark an attestation with (source 1, target 2) as attested.
+	chunk := EmptyMinSpanChunksSlice(params)
 	chunkIndex := uint64(0)
 	startEpoch := target
 	currentEpoch := target
-	_, err = chunk.Update(chunkIndex, currentEpoch, validatorIdx, startEpoch, target)
+	_, err := chunk.Update(chunkIndex, currentEpoch, validatorIdx, startEpoch, target)
 	require.NoError(t, err)
 
-	// Next up, we create a surrounding vote, but it should NOT be slashable
-	// because we DO NOT have an existing attestation record in our database at the min target epoch.
+	// We create a surrounding vote with Electra version.
 	source = primitives.Epoch(0)
 	target = primitives.Epoch(3)
-	surroundingVote := createAttestationWrapperEmptySig(t, source, target, nil, nil)
+	surroundingVote := createAttestationWrapperEmptySig(t, version.Electra, source, target, nil, nil)
 
-	slashing, err = chunk.CheckSlashable(ctx, slasherDB, validatorIdx, surroundingVote)
-	require.NoError(t, err)
-	require.Equal(t, nil, slashing)
-
-	// Next up, we save the old attestation record, then check if the
-	// surrounding vote is indeed slashable.
+	// We save the old attestation record, then check if the surrounding vote is indeed slashable.
 	attData := att.IndexedAttestation.GetData()
-	attRecord := createAttestationWrapperEmptySig(t, attData.Source.Epoch, attData.Target.Epoch, []uint64{uint64(validatorIdx)}, []byte{1})
+	attRecord := createAttestationWrapperEmptySig(t, version.Phase0, attData.Source.Epoch, attData.Target.Epoch, []uint64{uint64(validatorIdx)}, []byte{1})
 	err = slasherDB.SaveAttestationRecordsForValidators(
 		ctx,
 		[]*slashertypes.IndexedAttestationWrapper{attRecord},
 	)
 	require.NoError(t, err)
 
-	slashing, err = chunk.CheckSlashable(ctx, slasherDB, validatorIdx, surroundingVote)
+	slashing, err := chunk.CheckSlashable(ctx, slasherDB, validatorIdx, surroundingVote)
 	require.NoError(t, err)
-	require.NotEqual(t, (*ethpb.AttesterSlashing)(nil), slashing)
+	// The old record should be converted to Electra and the resulting slashing should be an Electra slashing.
+	electraSlashing, ok := slashing.(*ethpb.AttesterSlashingElectra)
+	require.Equal(t, true, ok, "slashing has the wrong type")
+	assert.NotNil(t, electraSlashing)
 }
 
 func TestMaxSpanChunksSlice_CheckSlashable(t *testing.T) {
+	ctx := context.Background()
+
+	for _, v := range []int{version.Phase0, version.Electra} {
+		t.Run(version.String(v), func(t *testing.T) {
+			slasherDB := dbtest.SetupSlasherDB(t)
+			params := &Parameters{
+				chunkSize:          4,
+				validatorChunkSize: 2,
+				historyLength:      4,
+			}
+			validatorIdx := primitives.ValidatorIndex(1)
+			source := primitives.Epoch(1)
+			target := primitives.Epoch(2)
+			att := createAttestationWrapperEmptySig(t, v, source, target, nil, nil)
+
+			// A faulty chunk should lead to error.
+			chunk := &MaxSpanChunksSlice{
+				params: params,
+				data:   []uint16{},
+			}
+			_, err := chunk.CheckSlashable(ctx, nil, validatorIdx, att)
+			require.ErrorContains(t, "could not get max target for validator", err)
+
+			// We initialize a proper slice with 2 chunks with chunk size 4, 2 validators, and
+			// a history length of 4 representing a perfect attesting history.
+			//
+			//      val0        val1
+			//   {        }  {        }
+			//  [0, 0, 0, 0, 0, 0, 0, 0]
+			data := []uint16{0, 0, 0, 0, 0, 0, 0, 0}
+			chunk, err = MaxChunkSpansSliceFrom(params, data)
+			require.NoError(t, err)
+
+			// An attestation with source 1 and target 2 should not be slashable
+			// based on our max chunk for either validator.
+			slashing, err := chunk.CheckSlashable(ctx, slasherDB, validatorIdx, att)
+			require.NoError(t, err)
+			require.Equal(t, nil, slashing)
+
+			slashing, err = chunk.CheckSlashable(ctx, slasherDB, validatorIdx.Sub(1), att)
+			require.NoError(t, err)
+			require.Equal(t, nil, slashing)
+
+			// Next up we initialize an empty chunks slice and mark an attestation
+			// with (source 0, target 3) as attested.
+			chunk = EmptyMaxSpanChunksSlice(params)
+			source = primitives.Epoch(0)
+			target = primitives.Epoch(3)
+			att = createAttestationWrapperEmptySig(t, v, source, target, nil, nil)
+			chunkIndex := uint64(0)
+			startEpoch := source
+			currentEpoch := target
+			_, err = chunk.Update(chunkIndex, currentEpoch, validatorIdx, startEpoch, target)
+			require.NoError(t, err)
+
+			// Next up, we create a surrounded vote, but it should NOT be slashable
+			// because we DO NOT have an existing attestation record in our database at the max target epoch.
+			source = primitives.Epoch(1)
+			target = primitives.Epoch(2)
+			surroundedVote := createAttestationWrapperEmptySig(t, v, source, target, nil, nil)
+
+			slashing, err = chunk.CheckSlashable(ctx, slasherDB, validatorIdx, surroundedVote)
+			require.NoError(t, err)
+			require.Equal(t, nil, slashing)
+
+			// Next up, we save the old attestation record, then check if the
+			// surroundedVote vote is indeed slashable.
+			attData := att.IndexedAttestation.GetData()
+			signingRoot := [32]byte{1}
+			attRecord := createAttestationWrapperEmptySig(
+				t, v, attData.Source.Epoch, attData.Target.Epoch, []uint64{uint64(validatorIdx)}, signingRoot[:],
+			)
+			err = slasherDB.SaveAttestationRecordsForValidators(
+				ctx,
+				[]*slashertypes.IndexedAttestationWrapper{attRecord},
+			)
+			require.NoError(t, err)
+
+			slashing, err = chunk.CheckSlashable(ctx, slasherDB, validatorIdx, surroundedVote)
+			require.NoError(t, err)
+			require.Equal(t, false, reflect.ValueOf(slashing).IsNil())
+
+			// We check the attestation with the lower data root is the first attestation.
+			// Firstly we require the setup to have the surrounded vote as the second attestation.
+			// Then we modify the root of the surrounded vote and expect the vote to be the first attestation.
+			require.DeepEqual(t, surroundedVote.IndexedAttestation, slashing.SecondAttestation())
+			surroundedVote.DataRoot = [32]byte{}
+			slashing, err = chunk.CheckSlashable(ctx, slasherDB, validatorIdx, surroundedVote)
+			require.NoError(t, err)
+			require.Equal(t, false, reflect.ValueOf(slashing).IsNil())
+			assert.DeepEqual(t, surroundedVote.IndexedAttestation, slashing.FirstAttestation())
+		})
+	}
+}
+
+func TestMaxSpanChunksSlice_CheckSlashable_DifferentVersions(t *testing.T) {
 	ctx := context.Background()
 	slasherDB := dbtest.SetupSlasherDB(t)
 	params := &Parameters{
@@ -167,76 +325,38 @@ func TestMaxSpanChunksSlice_CheckSlashable(t *testing.T) {
 		historyLength:      4,
 	}
 	validatorIdx := primitives.ValidatorIndex(1)
-	source := primitives.Epoch(1)
-	target := primitives.Epoch(2)
-	att := createAttestationWrapperEmptySig(t, source, target, nil, nil)
+	source := primitives.Epoch(0)
+	target := primitives.Epoch(3)
 
-	// A faulty chunk should lead to error.
-	chunk := &MaxSpanChunksSlice{
-		params: params,
-		data:   []uint16{},
-	}
-	_, err := chunk.CheckSlashable(ctx, nil, validatorIdx, att)
-	require.ErrorContains(t, "could not get max target for validator", err)
+	// We create a vote with Phase0 version.
+	att := createAttestationWrapperEmptySig(t, version.Phase0, source, target, nil, nil)
 
-	// We initialize a proper slice with 2 chunks with chunk size 4, 2 validators, and
-	// a history length of 4 representing a perfect attesting history.
-	//
-	//      val0        val1
-	//   {        }  {        }
-	//  [0, 0, 0, 0, 0, 0, 0, 0]
-	data := []uint16{0, 0, 0, 0, 0, 0, 0, 0}
-	chunk, err = MaxChunkSpansSliceFrom(params, data)
-	require.NoError(t, err)
-
-	// An attestation with source 1 and target 2 should not be slashable
-	// based on our max chunk for either validator.
-	slashing, err := chunk.CheckSlashable(ctx, slasherDB, validatorIdx, att)
-	require.NoError(t, err)
-	require.Equal(t, nil, slashing)
-
-	slashing, err = chunk.CheckSlashable(ctx, slasherDB, validatorIdx.Sub(1), att)
-	require.NoError(t, err)
-	require.Equal(t, nil, slashing)
-
-	// Next up we initialize an empty chunks slice and mark an attestation
-	// with (source 0, target 3) as attested.
-	chunk = EmptyMaxSpanChunksSlice(params)
-	source = primitives.Epoch(0)
-	target = primitives.Epoch(3)
-	att = createAttestationWrapperEmptySig(t, source, target, nil, nil)
+	// We initialize an empty chunks slice and mark an attestation with (source 0, target 3) as attested.
+	chunk := EmptyMaxSpanChunksSlice(params)
 	chunkIndex := uint64(0)
-	startEpoch := source
-	currentEpoch := target
-	_, err = chunk.Update(chunkIndex, currentEpoch, validatorIdx, startEpoch, target)
+	_, err := chunk.Update(chunkIndex, target, validatorIdx, source, target)
 	require.NoError(t, err)
 
-	// Next up, we create a surrounded vote, but it should NOT be slashable
-	// because we DO NOT have an existing attestation record in our database at the max target epoch.
+	// We create a surrounded vote with Electra version.
 	source = primitives.Epoch(1)
 	target = primitives.Epoch(2)
-	surroundedVote := createAttestationWrapperEmptySig(t, source, target, nil, nil)
+	surroundedVote := createAttestationWrapperEmptySig(t, version.Electra, source, target, nil, nil)
 
-	slashing, err = chunk.CheckSlashable(ctx, slasherDB, validatorIdx, surroundedVote)
-	require.NoError(t, err)
-	require.Equal(t, nil, slashing)
-
-	// Next up, we save the old attestation record, then check if the
-	// surroundedVote vote is indeed slashable.
+	// We save the old attestation record, then check if the surrounded vote is indeed slashable.
 	attData := att.IndexedAttestation.GetData()
-	signingRoot := [32]byte{1}
-	attRecord := createAttestationWrapperEmptySig(
-		t, attData.Source.Epoch, attData.Target.Epoch, []uint64{uint64(validatorIdx)}, signingRoot[:],
-	)
+	attRecord := createAttestationWrapperEmptySig(t, version.Phase0, attData.Source.Epoch, attData.Target.Epoch, []uint64{uint64(validatorIdx)}, []byte{1})
 	err = slasherDB.SaveAttestationRecordsForValidators(
 		ctx,
 		[]*slashertypes.IndexedAttestationWrapper{attRecord},
 	)
 	require.NoError(t, err)
 
-	slashing, err = chunk.CheckSlashable(ctx, slasherDB, validatorIdx, surroundedVote)
+	slashing, err := chunk.CheckSlashable(ctx, slasherDB, validatorIdx, surroundedVote)
 	require.NoError(t, err)
-	require.NotEqual(t, (*ethpb.AttesterSlashing)(nil), slashing)
+	// The old record should be converted to Electra and the resulting slashing should be an Electra slashing.
+	electraSlashing, ok := slashing.(*ethpb.AttesterSlashingElectra)
+	require.Equal(t, true, ok, "slashing has wrong type")
+	assert.NotNil(t, electraSlashing)
 }
 
 func TestMinSpanChunksSlice_Update_MultipleChunks(t *testing.T) {

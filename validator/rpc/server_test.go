@@ -4,13 +4,12 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/gorilla/mux"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func TestServer_InitializeRoutes(t *testing.T) {
 	s := Server{
-		router: mux.NewRouter(),
+		router: http.NewServeMux(),
 	}
 	err := s.InitializeRoutes()
 	require.NoError(t, err)
@@ -41,20 +40,23 @@ func TestServer_InitializeRoutes(t *testing.T) {
 		"/v2/validator/beacon/validators":            {http.MethodGet},
 		"/v2/validator/initialize":                   {http.MethodGet},
 	}
-	gotRouteList := make(map[string][]string)
-	err = s.router.Walk(func(route *mux.Route, router *mux.Router, ancestors []*mux.Route) error {
-		tpl, err1 := route.GetPathTemplate()
-		require.NoError(t, err1)
-		met, err2 := route.GetMethods()
-		require.NoError(t, err2)
-		methods, ok := gotRouteList[tpl]
-		if !ok {
-			gotRouteList[tpl] = []string{met[0]}
-		} else {
-			gotRouteList[tpl] = append(methods, met[0])
+	for route, methods := range wantRouteList {
+		for _, method := range methods {
+			r, err := http.NewRequest(method, route, nil)
+			require.NoError(t, err)
+			if method == http.MethodGet {
+				_, path := s.router.Handler(r)
+				require.Equal(t, "GET "+route, path)
+			} else if method == http.MethodPost {
+				_, path := s.router.Handler(r)
+				require.Equal(t, "POST "+route, path)
+			} else if method == http.MethodDelete {
+				_, path := s.router.Handler(r)
+				require.Equal(t, "DELETE "+route, path)
+			} else {
+				t.Errorf("Unsupported method %v", method)
+			}
 		}
-		return nil
-	})
-	require.NoError(t, err)
-	require.DeepEqual(t, wantRouteList, gotRouteList)
+	}
+
 }

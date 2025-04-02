@@ -18,10 +18,13 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	dbTest "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
 	doublylinkedtree "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/doubly-linked-tree"
+	mockp2p "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/core"
+	rpctesting "github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/prysm/testing"
 	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stategen"
 	mockstategen "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stategen/mock"
+	mockSync "github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/initial-sync/testing"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
@@ -869,4 +872,164 @@ func TestServer_GetChainHead(t *testing.T) {
 	assert.DeepEqual(t, hexutil.Encode(jRoot[:]), ch.JustifiedBlockRoot, "Unexpected JustifiedBlockRoot")
 	assert.DeepEqual(t, hexutil.Encode(fRoot[:]), ch.FinalizedBlockRoot, "Unexpected FinalizedBlockRoot")
 	assert.Equal(t, false, ch.OptimisticStatus)
+}
+
+func TestPublishBlobs_InvalidJson(t *testing.T) {
+	server := &Server{
+		BlobReceiver: &chainMock.ChainService{},
+		Broadcaster:  &mockp2p.MockBroadcaster{},
+		SyncChecker:  &mockSync.Sync{IsSyncing: false},
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.InvalidJson)))
+	writer := httptest.NewRecorder()
+	writer.Body = &bytes.Buffer{}
+	server.PublishBlobs(writer, request)
+	assert.Equal(t, http.StatusBadRequest, writer.Code)
+	assert.StringContains(t, "Could not decode JSON request body", writer.Body.String())
+
+	assert.Equal(t, len(server.BlobReceiver.(*chainMock.ChainService).Blobs), 0)
+	assert.Equal(t, server.Broadcaster.(*mockp2p.MockBroadcaster).BroadcastCalled.Load(), false)
+}
+
+func TestPublishBlobs_MissingBlob(t *testing.T) {
+	server := &Server{
+		BlobReceiver: &chainMock.ChainService{},
+		Broadcaster:  &mockp2p.MockBroadcaster{},
+		SyncChecker:  &mockSync.Sync{IsSyncing: false},
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.PublishBlobsRequestMissingBlob)))
+	writer := httptest.NewRecorder()
+	writer.Body = &bytes.Buffer{}
+	server.PublishBlobs(writer, request)
+	assert.Equal(t, http.StatusBadRequest, writer.Code)
+	assert.StringContains(t, "Could not decode blob sidecar", writer.Body.String())
+
+	assert.Equal(t, len(server.BlobReceiver.(*chainMock.ChainService).Blobs), 0)
+	assert.Equal(t, server.Broadcaster.(*mockp2p.MockBroadcaster).BroadcastCalled.Load(), false)
+}
+
+func TestPublishBlobs_MissingSignedBlockHeader(t *testing.T) {
+	server := &Server{
+		BlobReceiver: &chainMock.ChainService{},
+		Broadcaster:  &mockp2p.MockBroadcaster{},
+		SyncChecker:  &mockSync.Sync{IsSyncing: false},
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.PublishBlobsRequestMissingSignedBlockHeader)))
+	writer := httptest.NewRecorder()
+	writer.Body = &bytes.Buffer{}
+	server.PublishBlobs(writer, request)
+	assert.Equal(t, http.StatusBadRequest, writer.Code)
+	assert.StringContains(t, "Could not decode blob sidecar", writer.Body.String())
+
+	assert.Equal(t, len(server.BlobReceiver.(*chainMock.ChainService).Blobs), 0)
+	assert.Equal(t, server.Broadcaster.(*mockp2p.MockBroadcaster).BroadcastCalled.Load(), false)
+}
+
+func TestPublishBlobs_MissingSidecars(t *testing.T) {
+	server := &Server{
+		BlobReceiver: &chainMock.ChainService{},
+		Broadcaster:  &mockp2p.MockBroadcaster{},
+		SyncChecker:  &mockSync.Sync{IsSyncing: false},
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.PublishBlobsRequestMissingSidecars)))
+	writer := httptest.NewRecorder()
+	writer.Body = &bytes.Buffer{}
+	server.PublishBlobs(writer, request)
+	assert.Equal(t, http.StatusBadRequest, writer.Code)
+	assert.StringContains(t, "Missing blob sidecars", writer.Body.String())
+
+	assert.Equal(t, len(server.BlobReceiver.(*chainMock.ChainService).Blobs), 0)
+	assert.Equal(t, server.Broadcaster.(*mockp2p.MockBroadcaster).BroadcastCalled.Load(), false)
+}
+
+func TestPublishBlobs_EmptySidecarsList(t *testing.T) {
+	server := &Server{
+		BlobReceiver: &chainMock.ChainService{},
+		Broadcaster:  &mockp2p.MockBroadcaster{},
+		SyncChecker:  &mockSync.Sync{IsSyncing: false},
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.PublishBlobsRequestEmptySidecarsList)))
+	writer := httptest.NewRecorder()
+	writer.Body = &bytes.Buffer{}
+	server.PublishBlobs(writer, request)
+	assert.Equal(t, http.StatusOK, writer.Code)
+
+	assert.Equal(t, len(server.BlobReceiver.(*chainMock.ChainService).Blobs), 0)
+	assert.Equal(t, server.Broadcaster.(*mockp2p.MockBroadcaster).BroadcastCalled.Load(), false)
+}
+
+func TestPublishBlobs_NullSidecar(t *testing.T) {
+	server := &Server{
+		BlobReceiver: &chainMock.ChainService{},
+		Broadcaster:  &mockp2p.MockBroadcaster{},
+		SyncChecker:  &mockSync.Sync{IsSyncing: false},
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.PublishBlobsRequestNullSidecar)))
+	writer := httptest.NewRecorder()
+	writer.Body = &bytes.Buffer{}
+	server.PublishBlobs(writer, request)
+	assert.Equal(t, http.StatusBadRequest, writer.Code)
+	assert.StringContains(t, "Could not decode blob sidecar", writer.Body.String())
+
+	assert.Equal(t, len(server.BlobReceiver.(*chainMock.ChainService).Blobs), 0)
+	assert.Equal(t, server.Broadcaster.(*mockp2p.MockBroadcaster).BroadcastCalled.Load(), false)
+}
+
+func TestPublishBlobs_SeveralFieldsMissing(t *testing.T) {
+	server := &Server{
+		BlobReceiver: &chainMock.ChainService{},
+		Broadcaster:  &mockp2p.MockBroadcaster{},
+		SyncChecker:  &mockSync.Sync{IsSyncing: false},
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.PublishBlobsRequestSeveralFieldsMissing)))
+	writer := httptest.NewRecorder()
+	writer.Body = &bytes.Buffer{}
+	server.PublishBlobs(writer, request)
+	assert.Equal(t, http.StatusBadRequest, writer.Code)
+	assert.StringContains(t, "Could not decode blob sidecar", writer.Body.String())
+
+	assert.Equal(t, len(server.BlobReceiver.(*chainMock.ChainService).Blobs), 0)
+	assert.Equal(t, server.Broadcaster.(*mockp2p.MockBroadcaster).BroadcastCalled.Load(), false)
+}
+
+func TestPublishBlobs_BadBlockRoot(t *testing.T) {
+	server := &Server{
+		BlobReceiver: &chainMock.ChainService{},
+		Broadcaster:  &mockp2p.MockBroadcaster{},
+		SyncChecker:  &mockSync.Sync{IsSyncing: false},
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.PublishBlobsRequestBadBlockRoot)))
+	writer := httptest.NewRecorder()
+	writer.Body = &bytes.Buffer{}
+	server.PublishBlobs(writer, request)
+	assert.Equal(t, http.StatusBadRequest, writer.Code)
+	assert.StringContains(t, "Could not decode block root", writer.Body.String())
+
+	assert.Equal(t, len(server.BlobReceiver.(*chainMock.ChainService).Blobs), 0)
+	assert.Equal(t, server.Broadcaster.(*mockp2p.MockBroadcaster).BroadcastCalled.Load(), false)
+}
+
+func TestPublishBlobs(t *testing.T) {
+	server := &Server{
+		BlobReceiver: &chainMock.ChainService{},
+		Broadcaster:  &mockp2p.MockBroadcaster{},
+		SyncChecker:  &mockSync.Sync{IsSyncing: false},
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.PublishBlobsRequest)))
+	writer := httptest.NewRecorder()
+	writer.Body = &bytes.Buffer{}
+	server.PublishBlobs(writer, request)
+	assert.Equal(t, http.StatusOK, writer.Code)
+
+	assert.Equal(t, len(server.BlobReceiver.(*chainMock.ChainService).Blobs), 1)
+	assert.Equal(t, server.Broadcaster.(*mockp2p.MockBroadcaster).BroadcastCalled.Load(), true)
 }

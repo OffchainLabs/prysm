@@ -6,34 +6,27 @@ import (
 	"net"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"time"
 
-	"github.com/gorilla/mux"
-	middleware "github.com/grpc-ecosystem/go-grpc-middleware"
-	recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
-	grpcopentracing "github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing"
-	grpcprometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/api"
+	"github.com/prysmaticlabs/prysm/v5/api/server/httprest"
+	"github.com/prysmaticlabs/prysm/v5/api/server/middleware"
 	"github.com/prysmaticlabs/prysm/v5/async/event"
 	"github.com/prysmaticlabs/prysm/v5/io/logs"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/validator/accounts/wallet"
 	"github.com/prysmaticlabs/prysm/v5/validator/client"
 	iface "github.com/prysmaticlabs/prysm/v5/validator/client/iface"
 	"github.com/prysmaticlabs/prysm/v5/validator/db"
-	"go.opencensus.io/plugin/ocgrpc"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/reflection"
+	"github.com/prysmaticlabs/prysm/v5/validator/web"
 )
 
-// Config options for the gRPC server.
+// Config options for the HTTP server.
 type Config struct {
-	Host                   string
-	Port                   string
-	GRPCGatewayHost        string
-	GRPCGatewayPort        int
+	HTTPHost               string
+	HTTPPort               int
 	GRPCMaxCallRecvMsgSize int
 	GRPCRetries            uint
 	GRPCRetryDelay         time.Duration
@@ -48,46 +41,47 @@ type Config struct {
 	WalletInitializedFeed  *event.Feed
 	ValidatorService       *client.ValidatorService
 	AuthTokenPath          string
-	Router                 *mux.Router
+	Middlewares            []middleware.Middleware
+	Router                 *http.ServeMux
+	ServeWebUI             bool
 }
 
-// Server defining a gRPC server for the remote signer API.
+// Server defining a HTTP server for the remote signer API and registering clients
 type Server struct {
-	ctx                       context.Context
-	cancel                    context.CancelFunc
-	host                      string
-	port                      string
-	grpcGatewayHost           string
-	grpcGatewayPort           int
-	listener                  net.Listener
+	serveWebUI                bool
+	walletInitialized         bool
+	logStreamerBufferSize     int
 	grpcMaxCallRecvMsgSize    int
+	walletInitializedFeed     *event.Feed
+	beaconApiTimeout          time.Duration
+	wallet                    *wallet.Wallet
+	validatorService          *client.ValidatorService
+	httpPort                  int
+	cancel                    context.CancelFunc
 	grpcRetries               uint
 	grpcRetryDelay            time.Duration
-	grpcHeaders               []string
-	grpcServer                *grpc.Server
-	beaconNodeValidatorClient iface.ValidatorClient
-	chainClient               iface.ChainClient
-	nodeClient                iface.NodeClient
-	healthClient              ethpb.HealthClient
-	beaconNodeEndpoint        string
-	beaconApiEndpoint         string
-	beaconApiTimeout          time.Duration
-	beaconNodeCert            string
-	jwtSecret                 []byte
+	server                    *httprest.Server
+	router                    *http.ServeMux
 	authTokenPath             string
+	beaconNodeCert            string
+	beaconApiEndpoint         string
+	beaconNodeEndpoint        string
+	healthClient              ethpb.HealthClient
+	nodeClient                iface.NodeClient
+	chainClient               iface.ChainClient
+	beaconNodeValidatorClient iface.ValidatorClient
+	httpHost                  string
 	authToken                 string
 	db                        db.Database
-	walletDir                 string
-	wallet                    *wallet.Wallet
-	walletInitializedFeed     *event.Feed
-	walletInitialized         bool
-	validatorService          *client.ValidatorService
-	router                    *mux.Router
 	logStreamer               logs.Streamer
-	logStreamerBufferSize     int
+	startFailure              error
+	ctx                       context.Context
+	walletDir                 string
+	jwtSecret                 []byte
+	grpcHeaders               []string
 }
 
-// NewServer instantiates a new gRPC server.
+// NewServer instantiates a new HTTP server.
 func NewServer(ctx context.Context, cfg *Config) *Server {
 	ctx, cancel := context.WithCancel(ctx)
 	server := &Server{
@@ -95,10 +89,8 @@ func NewServer(ctx context.Context, cfg *Config) *Server {
 		cancel:                 cancel,
 		logStreamer:            logs.NewStreamServer(),
 		logStreamerBufferSize:  1000, // Enough to handle most bursts of logs in the validator client.
-		host:                   cfg.Host,
-		port:                   cfg.Port,
-		grpcGatewayHost:        cfg.GRPCGatewayHost,
-		grpcGatewayPort:        cfg.GRPCGatewayPort,
+		httpHost:               cfg.HTTPHost,
+		httpPort:               cfg.HTTPPort,
 		grpcMaxCallRecvMsgSize: cfg.GRPCMaxCallRecvMsgSize,
 		grpcRetries:            cfg.GRPCRetries,
 		grpcRetryDelay:         cfg.GRPCRetryDelay,
@@ -114,9 +106,11 @@ func NewServer(ctx context.Context, cfg *Config) *Server {
 		beaconApiEndpoint:      cfg.BeaconApiEndpoint,
 		beaconNodeEndpoint:     cfg.BeaconNodeGRPCEndpoint,
 		router:                 cfg.Router,
+		serveWebUI:             cfg.ServeWebUI,
 	}
 
 	if server.authTokenPath == "" && server.walletDir != "" {
+		// if a wallet dir is passed without an auth token then override the default with the wallet dir
 		server.authTokenPath = filepath.Join(server.walletDir, api.AuthTokenFileName)
 	}
 
@@ -124,62 +118,59 @@ func NewServer(ctx context.Context, cfg *Config) *Server {
 		if err := server.initializeAuthToken(); err != nil {
 			log.WithError(err).Error("Could not initialize web auth token")
 		}
-		validatorWebAddr := fmt.Sprintf("%s:%d", server.grpcGatewayHost, server.grpcGatewayPort)
-		logValidatorWebAuth(validatorWebAddr, server.authToken, server.authTokenPath)
+		validatorWebAddr := fmt.Sprintf("%s:%d", server.httpHost, server.httpPort)
+		logValidatorWebAuth(server.serveWebUI, validatorWebAddr, server.authToken, server.authTokenPath)
 		go server.refreshAuthTokenFromFileChanges(server.ctx, server.authTokenPath)
 	}
-	// immediately register routes to override any catchalls
-	if err := server.InitializeRoutes(); err != nil {
-		log.WithError(err).Fatal("Could not initialize routes")
+
+	// Register a gRPC or HTTP client to the beacon node.
+	// Used for proxy calls to beacon node from validator REST handlers
+	if err := server.registerBeaconClient(); err != nil {
+		log.WithError(err).Fatal("Could not register beacon chain gRPC or HTTP client")
 	}
+
+	// Adding AuthTokenHandler to the list of middlewares
+	cfg.Middlewares = append(cfg.Middlewares, server.AuthTokenHandler)
+	opts := []httprest.Option{
+		httprest.WithRouter(cfg.Router),
+		httprest.WithHTTPAddr(net.JoinHostPort(server.httpHost, fmt.Sprintf("%d", server.httpPort))),
+		httprest.WithMiddlewares(cfg.Middlewares),
+	}
+
+	if err := server.InitializeRoutesWithWebHandler(); err != nil {
+		log.WithError(err).Fatal("Could not initialize routes with web handler")
+	}
+	// create and set a new http server
+	s, err := httprest.New(server.ctx, opts...)
+	if err != nil {
+		log.WithError(err).Fatal("Failed to create HTTP server")
+	}
+	server.server = s
+
 	return server
 }
 
-// Start the gRPC server.
+// Start the HTTP server and registers clients that can communicate via HTTP or gRPC.
 func (s *Server) Start() {
-	// Setup the gRPC server options and TLS configuration.
-	address := net.JoinHostPort(s.host, s.port)
-	lis, err := net.Listen("tcp", address)
-	if err != nil {
-		log.WithError(err).Errorf("Could not listen to port in Start() %s", address)
+	s.server.Start()
+}
+
+// InitializeRoutesWithWebHandler adds a catchall wrapper for web handling
+func (s *Server) InitializeRoutesWithWebHandler() error {
+	if err := s.InitializeRoutes(); err != nil {
+		return err
 	}
-	s.listener = lis
-
-	// Register interceptors for metrics gathering as well as our
-	// own, custom JWT unary interceptor.
-	opts := []grpc.ServerOption{
-		grpc.StatsHandler(&ocgrpc.ServerHandler{}),
-		grpc.UnaryInterceptor(middleware.ChainUnaryServer(
-			recovery.UnaryServerInterceptor(
-				recovery.WithRecoveryHandlerContext(tracing.RecoveryHandlerFunc),
-			),
-			grpcprometheus.UnaryServerInterceptor,
-			grpcopentracing.UnaryServerInterceptor(),
-			s.AuthTokenInterceptor(),
-		)),
-	}
-	grpcprometheus.EnableHandlingTimeHistogram()
-
-	s.grpcServer = grpc.NewServer(opts...)
-
-	// Register a gRPC client to the beacon node.
-	if err := s.registerBeaconClient(); err != nil {
-		log.WithError(err).Fatal("Could not register beacon chain gRPC client")
-	}
-
-	// Register services available for the gRPC server.
-	reflection.Register(s.grpcServer)
-
-	// routes needs to be set before the server calls the server function
-	go func() {
-		if s.listener != nil {
-			if err := s.grpcServer.Serve(s.listener); err != nil {
-				log.WithError(err).Error("Could not serve")
-			}
+	s.router.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api") {
+			r.URL.Path = strings.Replace(r.URL.Path, "/api", "", 1) // used to redirect apis to standard rest APIs
+			s.router.ServeHTTP(w, r)
+			return
 		}
-	}()
-
-	log.WithField("address", address).Info("gRPC server listening on address")
+		if s.serveWebUI {
+			web.Handler(w, r)
+		}
+	})
+	return nil
 }
 
 // InitializeRoutes initializes pure HTTP REST endpoints for the validator client.
@@ -188,66 +179,63 @@ func (s *Server) InitializeRoutes() error {
 	if s.router == nil {
 		return errors.New("no router found on server")
 	}
-	// Adding Auth Interceptor for the routes below
-	s.router.Use(s.AuthTokenHandler)
 	// Register all services, HandleFunc calls, etc.
 	// ...
-	s.router.HandleFunc("/eth/v1/keystores", s.ListKeystores).Methods(http.MethodGet)
-	s.router.HandleFunc("/eth/v1/keystores", s.ImportKeystores).Methods(http.MethodPost)
-	s.router.HandleFunc("/eth/v1/keystores", s.DeleteKeystores).Methods(http.MethodDelete)
-	s.router.HandleFunc("/eth/v1/remotekeys", s.ListRemoteKeys).Methods(http.MethodGet)
-	s.router.HandleFunc("/eth/v1/remotekeys", s.ImportRemoteKeys).Methods(http.MethodPost)
-	s.router.HandleFunc("/eth/v1/remotekeys", s.DeleteRemoteKeys).Methods(http.MethodDelete)
-	s.router.HandleFunc("/eth/v1/validator/{pubkey}/gas_limit", s.GetGasLimit).Methods(http.MethodGet)
-	s.router.HandleFunc("/eth/v1/validator/{pubkey}/gas_limit", s.SetGasLimit).Methods(http.MethodPost)
-	s.router.HandleFunc("/eth/v1/validator/{pubkey}/gas_limit", s.DeleteGasLimit).Methods(http.MethodDelete)
-	s.router.HandleFunc("/eth/v1/validator/{pubkey}/feerecipient", s.ListFeeRecipientByPubkey).Methods(http.MethodGet)
-	s.router.HandleFunc("/eth/v1/validator/{pubkey}/feerecipient", s.SetFeeRecipientByPubkey).Methods(http.MethodPost)
-	s.router.HandleFunc("/eth/v1/validator/{pubkey}/feerecipient", s.DeleteFeeRecipientByPubkey).Methods(http.MethodDelete)
-	s.router.HandleFunc("/eth/v1/validator/{pubkey}/voluntary_exit", s.SetVoluntaryExit).Methods(http.MethodPost)
-	s.router.HandleFunc("/eth/v1/validator/{pubkey}/graffiti", s.GetGraffiti).Methods(http.MethodGet)
-	s.router.HandleFunc("/eth/v1/validator/{pubkey}/graffiti", s.SetGraffiti).Methods(http.MethodPost)
-	s.router.HandleFunc("/eth/v1/validator/{pubkey}/graffiti", s.DeleteGraffiti).Methods(http.MethodDelete)
+	s.router.HandleFunc("GET /eth/v1/keystores", s.ListKeystores)
+	s.router.HandleFunc("POST /eth/v1/keystores", s.ImportKeystores)
+	s.router.HandleFunc("DELETE /eth/v1/keystores", s.DeleteKeystores)
+	s.router.HandleFunc("GET /eth/v1/remotekeys", s.ListRemoteKeys)
+	s.router.HandleFunc("POST /eth/v1/remotekeys", s.ImportRemoteKeys)
+	s.router.HandleFunc("DELETE /eth/v1/remotekeys", s.DeleteRemoteKeys)
+	s.router.HandleFunc("GET /eth/v1/validator/{pubkey}/gas_limit", s.GetGasLimit)
+	s.router.HandleFunc("POST /eth/v1/validator/{pubkey}/gas_limit", s.SetGasLimit)
+	s.router.HandleFunc("DELETE /eth/v1/validator/{pubkey}/gas_limit", s.DeleteGasLimit)
+	s.router.HandleFunc("GET /eth/v1/validator/{pubkey}/feerecipient", s.ListFeeRecipientByPubkey)
+	s.router.HandleFunc("POST /eth/v1/validator/{pubkey}/feerecipient", s.SetFeeRecipientByPubkey)
+	s.router.HandleFunc("DELETE /eth/v1/validator/{pubkey}/feerecipient", s.DeleteFeeRecipientByPubkey)
+	s.router.HandleFunc("POST /eth/v1/validator/{pubkey}/voluntary_exit", s.SetVoluntaryExit)
+	s.router.HandleFunc("GET /eth/v1/validator/{pubkey}/graffiti", s.GetGraffiti)
+	s.router.HandleFunc("POST /eth/v1/validator/{pubkey}/graffiti", s.SetGraffiti)
+	s.router.HandleFunc("DELETE /eth/v1/validator/{pubkey}/graffiti", s.DeleteGraffiti)
 
 	// auth endpoint
-	s.router.HandleFunc(api.WebUrlPrefix+"initialize", s.Initialize).Methods(http.MethodGet)
+	s.router.HandleFunc("GET "+api.WebUrlPrefix+"initialize", s.Initialize)
 	// accounts endpoints
-	s.router.HandleFunc(api.WebUrlPrefix+"accounts", s.ListAccounts).Methods(http.MethodGet)
-	s.router.HandleFunc(api.WebUrlPrefix+"accounts/backup", s.BackupAccounts).Methods(http.MethodPost)
-	s.router.HandleFunc(api.WebUrlPrefix+"accounts/voluntary-exit", s.VoluntaryExit).Methods(http.MethodPost)
+	s.router.HandleFunc("GET "+api.WebUrlPrefix+"accounts", s.ListAccounts)
+	s.router.HandleFunc("POST "+api.WebUrlPrefix+"accounts/backup", s.BackupAccounts)
+	s.router.HandleFunc("POST "+api.WebUrlPrefix+"accounts/voluntary-exit", s.VoluntaryExit)
 	// web health endpoints
-	s.router.HandleFunc(api.WebUrlPrefix+"health/version", s.GetVersion).Methods(http.MethodGet)
-	s.router.HandleFunc(api.WebUrlPrefix+"health/logs/validator/stream", s.StreamValidatorLogs).Methods(http.MethodGet)
-	s.router.HandleFunc(api.WebUrlPrefix+"health/logs/beacon/stream", s.StreamBeaconLogs).Methods(http.MethodGet)
+	s.router.HandleFunc("GET "+api.WebUrlPrefix+"health/version", s.GetVersion)
+	s.router.HandleFunc("GET "+api.WebUrlPrefix+"health/logs/validator/stream", s.StreamValidatorLogs)
+	s.router.HandleFunc("GET "+api.WebUrlPrefix+"health/logs/beacon/stream", s.StreamBeaconLogs)
 	// Beacon calls
-	s.router.HandleFunc(api.WebUrlPrefix+"beacon/status", s.GetBeaconStatus).Methods(http.MethodGet)
-	s.router.HandleFunc(api.WebUrlPrefix+"beacon/summary", s.GetValidatorPerformance).Methods(http.MethodGet)
-	s.router.HandleFunc(api.WebUrlPrefix+"beacon/validators", s.GetValidators).Methods(http.MethodGet)
-	s.router.HandleFunc(api.WebUrlPrefix+"beacon/balances", s.GetValidatorBalances).Methods(http.MethodGet)
-	s.router.HandleFunc(api.WebUrlPrefix+"beacon/peers", s.GetPeers).Methods(http.MethodGet)
+	s.router.HandleFunc("GET "+api.WebUrlPrefix+"beacon/status", s.GetBeaconStatus)
+	s.router.HandleFunc("GET "+api.WebUrlPrefix+"beacon/summary", s.GetValidatorPerformance)
+	s.router.HandleFunc("GET "+api.WebUrlPrefix+"beacon/validators", s.GetValidators)
+	s.router.HandleFunc("GET "+api.WebUrlPrefix+"beacon/balances", s.GetValidatorBalances)
+	s.router.HandleFunc("GET "+api.WebUrlPrefix+"beacon/peers", s.GetPeers)
 	// web wallet endpoints
-	s.router.HandleFunc(api.WebUrlPrefix+"wallet", s.WalletConfig).Methods(http.MethodGet)
-	s.router.HandleFunc(api.WebUrlPrefix+"wallet/create", s.CreateWallet).Methods(http.MethodPost)
-	s.router.HandleFunc(api.WebUrlPrefix+"wallet/keystores/validate", s.ValidateKeystores).Methods(http.MethodPost)
-	s.router.HandleFunc(api.WebUrlPrefix+"wallet/recover", s.RecoverWallet).Methods(http.MethodPost)
+	s.router.HandleFunc("GET "+api.WebUrlPrefix+"wallet", s.WalletConfig)
+	s.router.HandleFunc("POST "+api.WebUrlPrefix+"wallet/create", s.CreateWallet)
+	s.router.HandleFunc("POST "+api.WebUrlPrefix+"wallet/keystores/validate", s.ValidateKeystores)
+	s.router.HandleFunc("POST "+api.WebUrlPrefix+"wallet/recover", s.RecoverWallet)
 	// slashing protection endpoints
-	s.router.HandleFunc(api.WebUrlPrefix+"slashing-protection/export", s.ExportSlashingProtection).Methods(http.MethodGet)
-	s.router.HandleFunc(api.WebUrlPrefix+"slashing-protection/import", s.ImportSlashingProtection).Methods(http.MethodPost)
+	s.router.HandleFunc("GET "+api.WebUrlPrefix+"slashing-protection/export", s.ExportSlashingProtection)
+	s.router.HandleFunc("POST "+api.WebUrlPrefix+"slashing-protection/import", s.ImportSlashingProtection)
+
 	log.Info("Initialized REST API routes")
 	return nil
 }
 
-// Stop the gRPC server.
+// Stop the HTTP server.
 func (s *Server) Stop() error {
-	s.cancel()
-	if s.listener != nil {
-		s.grpcServer.GracefulStop()
-		log.Debug("Initiated graceful stop of server")
-	}
-	return nil
+	return s.server.Stop()
 }
 
 // Status returns an error if the service is unhealthy.
 func (s *Server) Status() error {
+	if s.startFailure != nil {
+		return s.startFailure
+	}
 	return nil
 }

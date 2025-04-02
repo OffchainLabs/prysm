@@ -100,7 +100,7 @@ func TestScorers_Service_Score(t *testing.T) {
 		return scores
 	}
 
-	pack := func(scorer *scorers.Service, s1, s2, s3 float64) map[string]float64 {
+	pack := func(_ *scorers.Service, s1, s2, s3 float64) map[string]float64 {
 		return map[string]float64{
 			"peer1": roundScore(s1),
 			"peer2": roundScore(s2),
@@ -237,7 +237,7 @@ func TestScorers_Service_loop(t *testing.T) {
 	for i := 0; i < s1.Params().Threshold+5; i++ {
 		s1.Increment(pid1)
 	}
-	assert.Equal(t, true, s1.IsBadPeer(pid1), "Peer should be marked as bad")
+	assert.NotNil(t, s1.IsBadPeer(pid1), "Peer should be marked as bad")
 
 	s2.IncrementProcessedBlocks("peer1", 221)
 	assert.Equal(t, uint64(221), s2.ProcessedBlocks("peer1"))
@@ -252,7 +252,7 @@ func TestScorers_Service_loop(t *testing.T) {
 		for {
 			select {
 			case <-ticker.C:
-				if s1.IsBadPeer(pid1) == false && s2.ProcessedBlocks("peer1") == 0 {
+				if s1.IsBadPeer(pid1) == nil && s2.ProcessedBlocks("peer1") == 0 {
 					return
 				}
 			case <-ctx.Done():
@@ -263,7 +263,7 @@ func TestScorers_Service_loop(t *testing.T) {
 	}()
 
 	<-done
-	assert.Equal(t, false, s1.IsBadPeer(pid1), "Peer should not be marked as bad")
+	assert.NoError(t, s1.IsBadPeer(pid1), "Peer should not be marked as bad")
 	assert.Equal(t, uint64(0), s2.ProcessedBlocks("peer1"), "No blocks are expected")
 }
 
@@ -278,10 +278,10 @@ func TestScorers_Service_IsBadPeer(t *testing.T) {
 		},
 	})
 
-	assert.Equal(t, false, peerStatuses.Scorers().IsBadPeer("peer1"))
+	assert.NoError(t, peerStatuses.Scorers().IsBadPeer("peer1"))
 	peerStatuses.Scorers().BadResponsesScorer().Increment("peer1")
 	peerStatuses.Scorers().BadResponsesScorer().Increment("peer1")
-	assert.Equal(t, true, peerStatuses.Scorers().IsBadPeer("peer1"))
+	assert.NotNil(t, peerStatuses.Scorers().IsBadPeer("peer1"))
 }
 
 func TestScorers_Service_BadPeers(t *testing.T) {
@@ -295,16 +295,16 @@ func TestScorers_Service_BadPeers(t *testing.T) {
 		},
 	})
 
-	assert.Equal(t, false, peerStatuses.Scorers().IsBadPeer("peer1"))
-	assert.Equal(t, false, peerStatuses.Scorers().IsBadPeer("peer2"))
-	assert.Equal(t, false, peerStatuses.Scorers().IsBadPeer("peer3"))
+	assert.NoError(t, peerStatuses.Scorers().IsBadPeer("peer1"))
+	assert.NoError(t, peerStatuses.Scorers().IsBadPeer("peer2"))
+	assert.NoError(t, peerStatuses.Scorers().IsBadPeer("peer3"))
 	assert.Equal(t, 0, len(peerStatuses.Scorers().BadPeers()))
 	for _, pid := range []peer.ID{"peer1", "peer3"} {
 		peerStatuses.Scorers().BadResponsesScorer().Increment(pid)
 		peerStatuses.Scorers().BadResponsesScorer().Increment(pid)
 	}
-	assert.Equal(t, true, peerStatuses.Scorers().IsBadPeer("peer1"))
-	assert.Equal(t, false, peerStatuses.Scorers().IsBadPeer("peer2"))
-	assert.Equal(t, true, peerStatuses.Scorers().IsBadPeer("peer3"))
+	assert.NotNil(t, peerStatuses.Scorers().IsBadPeer("peer1"))
+	assert.NoError(t, peerStatuses.Scorers().IsBadPeer("peer2"))
+	assert.NotNil(t, peerStatuses.Scorers().IsBadPeer("peer3"))
 	assert.Equal(t, 2, len(peerStatuses.Scorers().BadPeers()))
 }

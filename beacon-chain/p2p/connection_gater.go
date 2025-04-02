@@ -33,7 +33,7 @@ func (*Service) InterceptPeerDial(_ peer.ID) (allow bool) {
 // multiaddr for the given peer.
 func (s *Service) InterceptAddrDial(pid peer.ID, m multiaddr.Multiaddr) (allow bool) {
 	// Disallow bad peers from dialing in.
-	if s.peers.IsBad(pid) {
+	if s.peers.IsBad(pid) != nil {
 		return false
 	}
 	return filterConnections(s.addrFilter, m)

@@ -33,7 +33,7 @@ func doJSONGetRequest(template, requestPath string, beaconNodeIdx int, resp inte
 	var port int
 	switch bnType[0] {
 	case "Prysm":
-		port = params.TestParams.Ports.PrysmBeaconNodeGatewayPort
+		port = params.TestParams.Ports.PrysmBeaconNodeHTTPPort
 	case "Lighthouse":
 		port = params.TestParams.Ports.LighthouseBeaconNodeHTTPPort
 	default:
@@ -74,7 +74,7 @@ func doSSZGetRequest(template, requestPath string, beaconNodeIdx int, bnType ...
 	var port int
 	switch bnType[0] {
 	case "Prysm":
-		port = params.TestParams.Ports.PrysmBeaconNodeGatewayPort
+		port = params.TestParams.Ports.PrysmBeaconNodeHTTPPort
 	case "Lighthouse":
 		port = params.TestParams.Ports.LighthouseBeaconNodeHTTPPort
 	default:
@@ -116,7 +116,7 @@ func doJSONPostRequest(template, requestPath string, beaconNodeIdx int, postObj,
 	var port int
 	switch bnType[0] {
 	case "Prysm":
-		port = params.TestParams.Ports.PrysmBeaconNodeGatewayPort
+		port = params.TestParams.Ports.PrysmBeaconNodeHTTPPort
 	case "Lighthouse":
 		port = params.TestParams.Ports.LighthouseBeaconNodeHTTPPort
 	default:

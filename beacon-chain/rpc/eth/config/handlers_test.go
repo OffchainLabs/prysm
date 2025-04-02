@@ -79,6 +79,8 @@ func TestGetSpec(t *testing.T) {
 	config.DenebForkEpoch = 105
 	config.ElectraForkVersion = []byte("ElectraForkVersion")
 	config.ElectraForkEpoch = 107
+	config.FuluForkVersion = []byte("FuluForkVersion")
+	config.FuluForkEpoch = 109
 	config.BLSWithdrawalPrefixByte = byte('b')
 	config.ETH1AddressWithdrawalPrefixByte = byte('c')
 	config.GenesisDelay = 24
@@ -138,7 +140,7 @@ func TestGetSpec(t *testing.T) {
 	config.WhistleBlowerRewardQuotientElectra = 79
 	config.PendingPartialWithdrawalsLimit = 80
 	config.MinActivationBalance = 81
-	config.PendingBalanceDepositLimit = 82
+	config.PendingDepositsLimit = 82
 	config.MaxPendingPartialsPerWithdrawalsSweep = 83
 	config.PendingConsolidationsLimit = 84
 	config.MaxPartialWithdrawalsPerPayload = 85
@@ -150,6 +152,16 @@ func TestGetSpec(t *testing.T) {
 	config.MaxCellsInExtendedMatrix = 91
 	config.UnsetDepositRequestsStartIndex = 92
 	config.MaxDepositRequestsPerPayload = 93
+	config.MaxPendingDepositsPerEpoch = 94
+	config.MaxBlobCommitmentsPerBlock = 95
+	config.MaxBytesPerTransaction = 96
+	config.MaxExtraDataBytes = 97
+	config.BytesPerLogsBloom = 98
+	config.MaxTransactionsPerPayload = 99
+	config.FieldElementsPerBlob = 100
+	config.KzgCommitmentInclusionProofDepth = 101
+	config.BlobsidecarSubnetCount = 102
+	config.BlobsidecarSubnetCountElectra = 103
 
 	var dbp [4]byte
 	copy(dbp[:], []byte{'0', '0', '0', '1'})
@@ -175,10 +187,6 @@ func TestGetSpec(t *testing.T) {
 	var dam [4]byte
 	copy(dam[:], []byte{'1', '0', '0', '0'})
 	config.DomainApplicationMask = dam
-	var dc [4]byte
-	copy(dc[:], []byte{'1', '1', '0', '0'})
-	config.DomainConsolidation = dc
-
 	params.OverrideBeaconConfig(config)
 
 	request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/config/spec", nil)
@@ -192,7 +200,7 @@ func TestGetSpec(t *testing.T) {
 	data, ok := resp.Data.(map[string]interface{})
 	require.Equal(t, true, ok)
 
-	assert.Equal(t, 155, len(data))
+	assert.Equal(t, 169, len(data))
 	for k, v := range data {
 		t.Run(k, func(t *testing.T) {
 			switch k {
@@ -270,6 +278,10 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "0x"+hex.EncodeToString([]byte("ElectraForkVersion")), v)
 			case "ELECTRA_FORK_EPOCH":
 				assert.Equal(t, "107", v)
+			case "FULU_FORK_VERSION":
+				assert.Equal(t, "0x"+hex.EncodeToString([]byte("FuluForkVersion")), v)
+			case "FULU_FORK_EPOCH":
+				assert.Equal(t, "109", v)
 			case "MIN_ANCHOR_POW_BLOCK_DIFFICULTY":
 				assert.Equal(t, "1000", v)
 			case "BLS_WITHDRAWAL_PREFIX":
@@ -335,7 +347,7 @@ func TestGetSpec(t *testing.T) {
 			case "MAX_VOLUNTARY_EXITS":
 				assert.Equal(t, "52", v)
 			case "MAX_BLOBS_PER_BLOCK":
-				assert.Equal(t, "4", v)
+				assert.Equal(t, "6", v)
 			case "TIMELY_HEAD_FLAG_INDEX":
 				assert.Equal(t, "0x35", v)
 			case "TIMELY_SOURCE_FLAG_INDEX":
@@ -434,7 +446,7 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "76", v)
 			case "REORG_MAX_EPOCHS_SINCE_FINALIZATION":
 				assert.Equal(t, "2", v)
-			case "REORG_WEIGHT_THRESHOLD":
+			case "REORG_HEAD_WEIGHT_THRESHOLD":
 				assert.Equal(t, "20", v)
 			case "REORG_PARENT_WEIGHT_THRESHOLD":
 				assert.Equal(t, "160", v)
@@ -469,9 +481,7 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "5", v)
 			case "MIN_EPOCHS_FOR_BLOCK_REQUESTS":
 				assert.Equal(t, "33024", v)
-			case "GOSSIP_MAX_SIZE":
-				assert.Equal(t, "10485760", v)
-			case "MAX_CHUNK_SIZE":
+			case "MAX_PAYLOAD_SIZE":
 				assert.Equal(t, "10485760", v)
 			case "ATTESTATION_SUBNET_COUNT":
 				assert.Equal(t, "64", v)
@@ -503,7 +513,7 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "80", v)
 			case "MIN_ACTIVATION_BALANCE":
 				assert.Equal(t, "81", v)
-			case "PENDING_BALANCE_DEPOSITS_LIMIT":
+			case "PENDING_DEPOSITS_LIMIT":
 				assert.Equal(t, "82", v)
 			case "MAX_PENDING_PARTIALS_PER_WITHDRAWALS_SWEEP":
 				assert.Equal(t, "83", v)
@@ -515,8 +525,6 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "86", v)
 			case "MAX_CONSOLIDATION_REQUESTS_PER_PAYLOAD":
 				assert.Equal(t, "87", v)
-			case "DOMAIN_CONSOLIDATION":
-				assert.Equal(t, "0x31313030", v)
 			case "MAX_ATTESTER_SLASHINGS_ELECTRA":
 				assert.Equal(t, "88", v)
 			case "MAX_ATTESTATIONS_ELECTRA":
@@ -529,6 +537,32 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "92", v)
 			case "MAX_DEPOSIT_REQUESTS_PER_PAYLOAD":
 				assert.Equal(t, "93", v)
+			case "MAX_PENDING_DEPOSITS_PER_EPOCH":
+				assert.Equal(t, "94", v)
+			case "TARGET_BLOBS_PER_BLOCK_ELECTRA":
+				assert.Equal(t, "6", v)
+			case "MAX_BLOBS_PER_BLOCK_ELECTRA":
+				assert.Equal(t, "9", v)
+			case "MAX_REQUEST_BLOB_SIDECARS_ELECTRA":
+				assert.Equal(t, "1152", v)
+			case "MAX_BLOB_COMMITMENTS_PER_BLOCK":
+				assert.Equal(t, "95", v)
+			case "MAX_BYTES_PER_TRANSACTION":
+				assert.Equal(t, "96", v)
+			case "MAX_EXTRA_DATA_BYTES":
+				assert.Equal(t, "97", v)
+			case "BYTES_PER_LOGS_BLOOM":
+				assert.Equal(t, "98", v)
+			case "MAX_TRANSACTIONS_PER_PAYLOAD":
+				assert.Equal(t, "99", v)
+			case "FIELD_ELEMENTS_PER_BLOB":
+				assert.Equal(t, "100", v)
+			case "KZG_COMMITMENT_INCLUSION_PROOF_DEPTH":
+				assert.Equal(t, "101", v)
+			case "BLOB_SIDECAR_SUBNET_COUNT":
+				assert.Equal(t, "102", v)
+			case "BLOB_SIDECAR_SUBNET_COUNT_ELECTRA":
+				assert.Equal(t, "103", v)
 			default:
 				t.Errorf("Incorrect key: %s", k)
 			}

@@ -27,11 +27,9 @@ func RunDepositRequestsTest(t *testing.T, config string, fork string, block bloc
 			blk, err := block(depositRequestSSZ)
 			require.NoError(t, err)
 			RunBlockOperationTest(t, folderPath, blk, sszToState, func(ctx context.Context, s state.BeaconState, b interfaces.ReadOnlySignedBeaconBlock) (state.BeaconState, error) {
-				e, err := b.Block().Body().Execution()
-				require.NoError(t, err, "Failed to get execution")
-				ee, ok := e.(interfaces.ExecutionDataElectra)
-				require.Equal(t, true, ok, "Invalid execution payload")
-				return electra.ProcessDepositRequests(ctx, s, ee.DepositRequests())
+				e, err := b.Block().Body().ExecutionRequests()
+				require.NoError(t, err, "Failed to get execution requests")
+				return electra.ProcessDepositRequests(ctx, s, e.Deposits)
 			})
 		})
 	}

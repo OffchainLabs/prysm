@@ -19,7 +19,7 @@ func BeaconNodeOptions(c *cli.Context) ([]node.Option, error) {
 		}
 		// The zero value of this uint flag would be genesis, so we use IsSet to differentiate nil from zero case.
 		if c.IsSet(flags.BackfillOldestSlot.Name) {
-			uv := c.Uint64(flags.BackfillBatchSize.Name)
+			uv := c.Uint64(flags.BackfillOldestSlot.Name)
 			bno = append(bno, backfill.WithMinimumSlot(primitives.Slot(uv)))
 		}
 		node.BackfillOpts = bno

@@ -8,7 +8,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
 	p2pTypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	types "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
@@ -223,7 +222,7 @@ func TestBlobsByRootValidation(t *testing.T) {
 			name:    "block with all indices missing between 2 full blocks",
 			nblocks: 3,
 			missing: map[int]bool{1: true},
-			total:   func(i int) *int { return &i }(2 * fieldparams.MaxBlobsPerBlock),
+			total:   func(i int) *int { return &i }(2 * int(params.BeaconConfig().MaxBlobsPerBlock(0))),
 		},
 		{
 			name:    "exceeds req max",

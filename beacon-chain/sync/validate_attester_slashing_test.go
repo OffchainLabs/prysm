@@ -3,7 +3,7 @@ package sync
 import (
 	"bytes"
 	"context"
-	"math/rand"
+	"crypto/rand"
 	"reflect"
 	"testing"
 	"time"

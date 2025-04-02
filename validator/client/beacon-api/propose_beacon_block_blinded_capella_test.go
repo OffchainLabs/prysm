@@ -79,7 +79,7 @@ func TestProposeBeaconBlock_BlindedCapella(t *testing.T) {
 	headers := map[string]string{"Eth-Consensus-Version": "capella"}
 	jsonRestHandler.EXPECT().Post(
 		gomock.Any(),
-		"/eth/v1/beacon/blinded_blocks",
+		"/eth/v2/beacon/blinded_blocks",
 		headers,
 		bytes.NewBuffer(marshalledBlock),
 		nil,

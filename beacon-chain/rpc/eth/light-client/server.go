@@ -7,8 +7,9 @@ import (
 )
 
 type Server struct {
-	Blocker     lookup.Blocker
-	Stater      lookup.Stater
-	HeadFetcher blockchain.HeadFetcher
-	BeaconDB    db.HeadAccessDatabase
+	Blocker          lookup.Blocker
+	Stater           lookup.Stater
+	HeadFetcher      blockchain.HeadFetcher
+	ChainInfoFetcher blockchain.ChainInfoFetcher
+	BeaconDB         db.HeadAccessDatabase
 }

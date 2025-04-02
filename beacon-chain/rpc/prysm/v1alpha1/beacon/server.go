@@ -39,6 +39,7 @@ type Server struct {
 	BlockNotifier               blockfeed.Notifier
 	AttestationNotifier         operation.Notifier
 	Broadcaster                 p2p.Broadcaster
+	AttestationCache            *cache.AttestationCache
 	AttestationsPool            attestations.Pool
 	SlashingsPool               slashings.PoolManager
 	ChainStartChan              chan time.Time

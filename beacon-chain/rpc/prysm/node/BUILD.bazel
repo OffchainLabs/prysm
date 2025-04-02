@@ -17,12 +17,12 @@ go_library(
         "//beacon-chain/p2p/peers:go_default_library",
         "//beacon-chain/p2p/peers/peerdata:go_default_library",
         "//beacon-chain/sync:go_default_library",
+        "//monitoring/tracing/trace:go_default_library",
         "//network/httputil:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "@com_github_libp2p_go_libp2p//core/network:go_default_library",
         "@com_github_libp2p_go_libp2p//core/peer:go_default_library",
         "@com_github_pkg_errors//:go_default_library",
-        "@io_opencensus_go//trace:go_default_library",
     ],
 )
 

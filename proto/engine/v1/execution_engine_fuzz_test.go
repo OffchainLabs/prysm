@@ -10,14 +10,12 @@ import (
 )
 
 func TestCopyExecutionPayload_Fuzz(t *testing.T) {
-	fuzzCopies(t, &enginev1.ExecutionPayloadElectra{})
 	fuzzCopies(t, &enginev1.ExecutionPayloadDeneb{})
 	fuzzCopies(t, &enginev1.ExecutionPayloadCapella{})
 	fuzzCopies(t, &enginev1.ExecutionPayload{})
 }
 
 func TestCopyExecutionPayloadHeader_Fuzz(t *testing.T) {
-	fuzzCopies(t, &enginev1.ExecutionPayloadHeaderElectra{})
 	fuzzCopies(t, &enginev1.ExecutionPayloadHeaderDeneb{})
 	fuzzCopies(t, &enginev1.ExecutionPayloadHeaderCapella{})
 	fuzzCopies(t, &enginev1.ExecutionPayloadHeader{})

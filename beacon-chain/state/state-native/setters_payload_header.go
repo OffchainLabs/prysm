@@ -45,7 +45,7 @@ func (b *BeaconState) SetLatestExecutionPayloadHeader(val interfaces.ExecutionDa
 		b.markFieldAsDirty(types.LatestExecutionPayloadHeaderCapella)
 		return nil
 	case *enginev1.ExecutionPayloadDeneb:
-		if b.version != version.Deneb {
+		if !(b.version >= version.Deneb) {
 			return fmt.Errorf("wrong state version (%s) for deneb execution payload", version.String(b.version))
 		}
 		latest, err := consensusblocks.PayloadToHeaderDeneb(val)
@@ -54,21 +54,6 @@ func (b *BeaconState) SetLatestExecutionPayloadHeader(val interfaces.ExecutionDa
 		}
 		b.latestExecutionPayloadHeaderDeneb = latest
 		b.markFieldAsDirty(types.LatestExecutionPayloadHeaderDeneb)
-		return nil
-	case *enginev1.ExecutionPayloadElectra:
-		if b.version != version.Electra {
-			return fmt.Errorf("wrong state version (%s) for electra execution payload", version.String(b.version))
-		}
-		eVal, ok := val.(interfaces.ExecutionDataElectra)
-		if !ok {
-			return fmt.Errorf("could not cast %T to ExecutionDataElectra: %w", val, interfaces.ErrInvalidCast)
-		}
-		latest, err := consensusblocks.PayloadToHeaderElectra(eVal)
-		if err != nil {
-			return errors.Wrap(err, "could not convert payload to header")
-		}
-		b.latestExecutionPayloadHeaderElectra = latest
-		b.markFieldAsDirty(types.LatestExecutionPayloadHeaderElectra)
 		return nil
 	case *enginev1.ExecutionPayloadHeader:
 		if b.version != version.Bellatrix {
@@ -85,18 +70,11 @@ func (b *BeaconState) SetLatestExecutionPayloadHeader(val interfaces.ExecutionDa
 		b.markFieldAsDirty(types.LatestExecutionPayloadHeaderCapella)
 		return nil
 	case *enginev1.ExecutionPayloadHeaderDeneb:
-		if b.version != version.Deneb {
+		if !(b.version >= version.Deneb) {
 			return fmt.Errorf("wrong state version (%s) for deneb execution payload header", version.String(b.version))
 		}
 		b.latestExecutionPayloadHeaderDeneb = header
 		b.markFieldAsDirty(types.LatestExecutionPayloadHeaderDeneb)
-		return nil
-	case *enginev1.ExecutionPayloadHeaderElectra:
-		if b.version != version.Electra {
-			return fmt.Errorf("wrong state version (%s) for electra execution payload header", version.String(b.version))
-		}
-		b.latestExecutionPayloadHeaderElectra = header
-		b.markFieldAsDirty(types.LatestExecutionPayloadHeaderElectra)
 		return nil
 	default:
 		return errors.New("value must be an execution payload header")

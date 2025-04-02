@@ -29,6 +29,7 @@ const (
 	unrealizedJustifiedPayloadBlockHashCalled
 	nodeCountCalled
 	highestReceivedBlockSlotCalled
+	highestReceivedBlockRootCalled
 	highestReceivedBlockDelayCalled
 	receivedBlocksLastEpochCalled
 	weightCalled
@@ -250,6 +251,11 @@ func (ro *mockROForkchoice) NodeCount() int {
 func (ro *mockROForkchoice) HighestReceivedBlockSlot() primitives.Slot {
 	ro.calls = append(ro.calls, highestReceivedBlockSlotCalled)
 	return 0
+}
+
+func (ro *mockROForkchoice) HighestReceivedBlockRoot() [32]byte {
+	ro.calls = append(ro.calls, highestReceivedBlockRootCalled)
+	return [32]byte{}
 }
 
 func (ro *mockROForkchoice) HighestReceivedBlockDelay() primitives.Slot {

@@ -4,26 +4,25 @@ go_library(
     name = "go_default_library",
     srcs = [
         "feed.go",
+        "interface.go",
         "subscription.go",
     ],
     importpath = "github.com/prysmaticlabs/prysm/v5/async/event",
     visibility = ["//visibility:public"],
-    deps = ["//time/mclock:go_default_library"],
+    deps = [
+        "//time/mclock:go_default_library",
+        "@com_github_ethereum_go_ethereum//event:go_default_library",
+    ],
 )
 
 go_test(
     name = "go_default_test",
     size = "small",
     srcs = [
-        "example_feed_test.go",
         "example_scope_test.go",
         "example_subscription_test.go",
-        "feed_test.go",
         "subscription_test.go",
     ],
     embed = [":go_default_library"],
-    deps = [
-        "//testing/assert:go_default_library",
-        "//testing/require:go_default_library",
-    ],
+    deps = ["//testing/require:go_default_library"],
 )
