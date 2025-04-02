@@ -112,11 +112,7 @@ func (vs *Server) packAttestations(ctx context.Context, latestState state.Beacon
 
 	var sorted proposerAtts
 	if postElectra {
-		st, err := vs.HeadFetcher.HeadStateReadOnly(ctx)
-		if err != nil {
-			return nil, err
-		}
-		sorted, err = deduped.sortOnChainAggregates(ctx, st)
+		sorted, err = deduped.sortOnChainAggregates(ctx, latestState)
 		if err != nil {
 			return nil, err
 		}

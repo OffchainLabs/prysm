@@ -1,10 +1,10 @@
 package validator
 
 import (
+	"cmp"
 	"slices"
 
 	"github.com/prysmaticlabs/go-bitfield"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
@@ -58,11 +58,11 @@ func computeOnChainAggregate(aggregates []ethpb.Att) ([]ethpb.Att, error) {
 
 	for _, aggs := range aggsByDataRoot {
 		slices.SortFunc(aggs, func(a, b ethpb.Att) int {
-			return a.CommitteeBitsVal().BitIndices()[0] - b.CommitteeBitsVal().BitIndices()[0]
+			return cmp.Compare(a.GetCommitteeIndex(), b.GetCommitteeIndex())
 		})
 
 		sigs := make([]bls.Signature, len(aggs))
-		committeeIndices := make([]primitives.CommitteeIndex, len(aggs))
+		cb := primitives.NewAttestationCommitteeBits()
 		aggBitsIndices := make([]uint64, 0)
 		aggBitsOffset := uint64(0)
 		var err error
@@ -74,7 +74,7 @@ func computeOnChainAggregate(aggregates []ethpb.Att) ([]ethpb.Att, error) {
 			if err != nil {
 				return nil, err
 			}
-			committeeIndices[i] = helpers.CommitteeIndices(a.CommitteeBitsVal())[0]
+			cb.SetBitAt(uint64(a.GetCommitteeIndex()), true)
 
 			aggBitsOffset += a.GetAggregationBits().Len()
 		}
@@ -84,15 +84,11 @@ func computeOnChainAggregate(aggregates []ethpb.Att) ([]ethpb.Att, error) {
 			aggregationBits.SetBitAt(bi, true)
 		}
 
-		cb := primitives.NewAttestationCommitteeBits()
 		att := &ethpb.AttestationElectra{
 			AggregationBits: aggregationBits,
 			Data:            aggs[0].GetData(),
 			CommitteeBits:   cb,
 			Signature:       bls.AggregateSignatures(sigs).Marshal(),
-		}
-		for _, ci := range committeeIndices {
-			att.CommitteeBits.SetBitAt(uint64(ci), true)
 		}
 		result = append(result, att)
 	}

@@ -17,6 +17,7 @@ go_library(
         "//validator/client:__pkg__",
     ],
     deps = [
+        "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/blocks:go_default_library",
         "//consensus-types/interfaces:go_default_library",

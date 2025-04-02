@@ -23,7 +23,7 @@ const (
 
 // We test that using a '25th word' mnemonic passphrase leads to different
 // public keys derived than not specifying the passphrase.
-func TestDerivedKeymanager_MnemnonicPassphrase_DifferentResults(t *testing.T) {
+func TestDerivedKeymanager_MnemonicPassphrase_DifferentResults(t *testing.T) {
 	ctx := context.Background()
 	wallet := &mock.Wallet{
 		Files:            make(map[string]map[string][]byte),

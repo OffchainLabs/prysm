@@ -792,6 +792,44 @@ func TestPackAttestations_ElectraOnChainAggregates(t *testing.T) {
 		require.Equal(t, uint64(21481408), got)
 		require.Equal(t, primitives.Slot(1), atts[6].GetData().Slot)
 	})
+
+	t.Run("use latest state", func(t *testing.T) {
+		moreRecent := att(0b1100000, cb1, &ethpb.AttestationData{
+			Slot:            1,
+			BeaconBlockRoot: bytesutil.PadTo([]byte{'0'}, 32),
+		})
+		require.NoError(t, pool.SaveUnaggregatedAttestations([]ethpb.Att{moreRecent}))
+
+		copiedState := st.Copy()
+		// Setting head state validator set to empty, but it shouldn't matter as pack attestation should be using latest state.
+		require.NoError(t, copiedState.SetValidators([]*ethpb.Validator{}))
+		s := &Server{
+			AttPool:     pool,
+			HeadFetcher: &chainMock.ChainService{State: copiedState, MockHeadSlot: &headSlot},
+			TimeFetcher: &chainMock.ChainService{Slot: &slot},
+		}
+		atts, err := s.packAttestations(ctx, st, params.BeaconConfig().SlotsPerEpoch)
+		require.NoError(t, err)
+		require.Equal(t, 7, len(atts))
+
+		totalBalance, err := helpers.TotalActiveBalance(st)
+		require.NoError(t, err)
+
+		// The reward numerator should be the same as the previous test.
+		expected := []uint64{
+			193332672,
+			150369856,
+			150369856,
+			64444224,
+			42962816,
+			42962816,
+		}
+		for i, want := range expected {
+			got, err := electra.GetProposerRewardNumerator(ctx, st, atts[i], totalBalance)
+			require.NoError(t, err)
+			require.Equal(t, want, got)
+		}
+	})
 }
 
 func sliceCast(atts []*ethpb.AttestationElectra) []ethpb.Att {
