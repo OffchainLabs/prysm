@@ -2,13 +2,19 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
-    srcs = ["filter.go"],
+    srcs = [
+        "errors.go",
+        "filter.go",
+    ],
     importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filters",
     visibility = [
         "//beacon-chain:__subpackages__",
         "//tools:__subpackages__",
     ],
-    deps = ["//consensus-types/primitives:go_default_library"],
+    deps = [
+        "//consensus-types/primitives:go_default_library",
+        "@com_github_pkg_errors//:go_default_library",
+    ],
 )
 
 go_test(

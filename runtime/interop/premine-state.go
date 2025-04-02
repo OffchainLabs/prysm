@@ -23,8 +23,6 @@ import (
 
 var errUnsupportedVersion = errors.New("schema version not supported by PremineGenesisConfig")
 
-const executionAddress = "0x878705ba3f8bc32fcf7f4caa1a35e72af65cf766"
-
 type PremineGenesisConfig struct {
 	GenesisTime     uint64
 	NVals           uint64
