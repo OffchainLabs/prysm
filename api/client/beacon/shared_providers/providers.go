@@ -14,5 +14,4 @@ func NewDuties(jsonRestHandler client.JsonRestHandler) Duties {
 
 func NewGenesis(jsonRestHandler client.JsonRestHandler) Genesis {
 	return &genesisProvider{jsonRestHandler: jsonRestHandler}
-
 }
