@@ -16,15 +16,19 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	gethCrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/ethclient/gethclient"
+	gethparams "github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/holiman/uint256"
 	"github.com/pkg/errors"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/crypto/rand"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/runtime/interop"
 	e2e "github.com/prysmaticlabs/prysm/v5/testing/endtoend/params"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
@@ -32,14 +36,23 @@ import (
 
 const txCount = 20
 
+type txType int
+
+const (
+	RandomTx txType = iota
+	ConsolidationTx
+	WithdrawalTx
+)
+
 var fundedAccount *keystore.Key
 
 type TransactionGenerator struct {
-	keystore string
-	seed     int64
-	started  chan struct{}
-	cancel   context.CancelFunc
-	paused   bool
+	keystore  string
+	seed      int64
+	started   chan struct{}
+	cancel    context.CancelFunc
+	paused    bool
+	txGenType txType
 }
 
 func (t *TransactionGenerator) UnderlyingProcess() *os.Process {
@@ -49,7 +62,7 @@ func (t *TransactionGenerator) UnderlyingProcess() *os.Process {
 }
 
 func NewTransactionGenerator(keystore string, seed int64) *TransactionGenerator {
-	return &TransactionGenerator{keystore: keystore, seed: seed}
+	return &TransactionGenerator{keystore: keystore, seed: seed, txGenType: RandomTx}
 }
 
 func (t *TransactionGenerator) Start(ctx context.Context) error {
@@ -105,10 +118,26 @@ func (t *TransactionGenerator) Start(ctx context.Context) error {
 				continue
 			}
 			backend := ethclient.NewClient(client)
-			err = SendTransaction(client, mineKey.PrivateKey, f, gasPrice, mineKey.Address.String(), txCount, backend, false)
-			if err != nil {
-				return err
+			switch t.txGenType {
+			case ConsolidationTx:
+				err = SendConsolidationTransaction(mineKey.PrivateKey, gasPrice, backend)
+				if err != nil {
+					return err
+				}
+			case WithdrawalTx:
+				err = SendWithdrawalTransaction(mineKey.PrivateKey, newKey.PrivateKey, gasPrice, backend)
+				if err != nil {
+					return err
+				}
+			case RandomTx:
+				err = SendTransaction(client, mineKey.PrivateKey, f, gasPrice, mineKey.Address.String(), txCount, backend, false)
+				if err != nil {
+					return err
+				}
+			default:
+				logrus.Warnf("Unknown transaction type: %v", t.txGenType)
 			}
+
 			backend.Close()
 		}
 	}
@@ -217,6 +246,195 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, f *filler.Filler
 		}
 	}
 	return nil
+}
+
+func SendConsolidationTransaction(key *ecdsa.PrivateKey, gasPrice *big.Int, backend *ethclient.Client) error {
+	totalCreds := e2e.TestParams.NumberOfExecutionCreds
+	_, pKeys, err := interop.DeterministicallyGenerateKeys(0, totalCreds)
+	if err != nil {
+		return err
+	}
+	compoundedKey := pKeys[len(pKeys)-1].Marshal()
+
+	// Create compounding credentials
+	if err := createAndSendConsolidation(compoundedKey, compoundedKey, key, gasPrice, backend); err != nil {
+		return err
+	}
+	for _, k := range pKeys {
+		if err := createAndSendConsolidation(k.Marshal(), compoundedKey, key, gasPrice, backend); err != nil {
+			return err
+		}
+	}
+
+	// Junk Requests
+	for i := 0; i < 2; i++ {
+		sourcePubkey := [48]byte{byte(i), 0xFF, 0x34, 0xEE}
+		targetPubkey := compoundedKey
+		if err := createAndSendConsolidation(sourcePubkey[:], targetPubkey, key, gasPrice, backend); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func createAndSendConsolidation(sourceKey, targetKey []byte, key *ecdsa.PrivateKey, gasPrice *big.Int, backend *ethclient.Client) error {
+	publicKey := key.Public().(*ecdsa.PublicKey)
+	fromAddress := gethCrypto.PubkeyToAddress(*publicKey)
+	// Get nonce
+	nonce, err := backend.PendingNonceAt(context.Background(), fromAddress)
+	if err != nil {
+		return err
+	}
+	chainid, err := backend.ChainID(context.Background())
+	if err != nil {
+		return err
+	}
+	gasLimit := uint64(200000)
+
+	sourcePubkey := sourceKey
+	targetPubkey := targetKey
+
+	consolidationData := []byte{}
+	consolidationData = append(consolidationData, sourcePubkey...)
+	consolidationData = append(consolidationData, targetPubkey...)
+
+	ret, err := backend.CallContract(context.Background(), ethereum.CallMsg{To: &gethparams.ConsolidationQueueAddress}, nil)
+	if err != nil {
+		return errors.Wrapf(err, "%s", string(ret))
+	}
+	fee := new(big.Int).SetBytes(ret)
+	fee = fee.Mul(fee, big.NewInt(2))
+
+	// Create transaction
+	tx := types.NewTx(&types.LegacyTx{
+		Nonce:    nonce,
+		To:       &gethparams.ConsolidationQueueAddress,
+		Value:    fee,
+		Gas:      gasLimit,
+		GasPrice: gasPrice,
+		Data:     consolidationData,
+	})
+
+	// Sign transaction
+	signedTx, err := types.SignTx(tx, types.NewCancunSigner(chainid), key)
+	if err != nil {
+		return err
+	}
+	return backend.SendTransaction(context.Background(), signedTx)
+}
+
+func SendWithdrawalTransaction(key, newKey *ecdsa.PrivateKey, gasPrice *big.Int, backend *ethclient.Client) error {
+	totalCreds := e2e.TestParams.NumberOfExecutionCreds
+	_, pKeys, err := interop.DeterministicallyGenerateKeys(0, totalCreds)
+	if err != nil {
+		return err
+	}
+	compoundedKey := pKeys[len(pKeys)-1].Marshal()
+
+	_, invalidWithdrawalKeys, err := interop.DeterministicallyGenerateKeys(totalCreds, totalCreds+4)
+	if err != nil {
+		return err
+	}
+
+	publicKey := key.Public().(*ecdsa.PublicKey)
+	fromAddress := gethCrypto.PubkeyToAddress(*publicKey)
+	nonce, err := backend.PendingNonceAt(context.Background(), fromAddress)
+	if err != nil {
+		return err
+	}
+
+	var withdrawalTxs []*types.Transaction
+	// Create Withdrawal for compounded key.
+	tx, err := createWithdrawal(compoundedKey, 0, nonce, key, gasPrice, backend)
+	if err != nil {
+		return err
+	}
+	withdrawalTxs = append(withdrawalTxs, tx)
+	nonce++
+
+	rGen := rand.NewDeterministicGenerator()
+	for _, k := range pKeys {
+		tx, err := createWithdrawal(k.Marshal(), uint64(rGen.Int63n(32000000000)), nonce, key, gasPrice, backend)
+		if err != nil {
+			return err
+		}
+		withdrawalTxs = append(withdrawalTxs, tx)
+		nonce++
+	}
+
+	// Junk Requests
+	for _, k := range invalidWithdrawalKeys {
+		tx, err := createWithdrawal(k.Marshal(), uint64(rGen.Int63n(32000000000)), nonce, newKey, gasPrice, backend)
+		if err != nil {
+			return err
+		}
+		withdrawalTxs = append(withdrawalTxs, tx)
+		nonce++
+	}
+	currExecHead := uint64(0)
+	// Batch And Send Withdrawals
+	for len(withdrawalTxs) > 0 {
+		currBlock, err := backend.BlockNumber(context.Background())
+		if err != nil {
+			return err
+		}
+		if currBlock > currExecHead {
+			currExecHead = currBlock
+			maxWithdrawalPerPayload := params.BeaconConfig().MaxWithdrawalRequestsPerPayload
+			if maxWithdrawalPerPayload > uint64(len(withdrawalTxs)) {
+				maxWithdrawalPerPayload = uint64(len(withdrawalTxs))
+			}
+			for _, tx := range withdrawalTxs[:maxWithdrawalPerPayload] {
+				if err := backend.SendTransaction(context.Background(), tx); err != nil {
+					return err
+				}
+			}
+			// Shift slice to only have unsent transactions
+			withdrawalTxs = withdrawalTxs[maxWithdrawalPerPayload:]
+			time.Sleep(2 * time.Second)
+		}
+	}
+	return nil
+}
+
+func createWithdrawal(sourceKey []byte, amount, nonce uint64, key *ecdsa.PrivateKey, gasPrice *big.Int, backend *ethclient.Client) (*types.Transaction, error) {
+	chainid, err := backend.ChainID(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	gasLimit := uint64(200000)
+
+	withdrawalData := []byte{}
+	withdrawalData = append(withdrawalData, sourceKey...)
+	withdrawalData = append(withdrawalData, bytesutil.Uint64ToBytesBigEndian(amount)...)
+
+	ret, err := backend.CallContract(context.Background(), ethereum.CallMsg{To: &gethparams.WithdrawalQueueAddress}, nil)
+	if err != nil {
+		return nil, errors.Wrapf(err, "%s", string(ret))
+	}
+	fee := new(big.Int).SetBytes(ret)
+	fee = fee.Mul(fee, big.NewInt(2))
+
+	// Create transaction
+	tx := types.NewTx(&types.LegacyTx{
+		Nonce:    nonce,
+		To:       &gethparams.WithdrawalQueueAddress,
+		Value:    fee,
+		Gas:      gasLimit,
+		GasPrice: gasPrice,
+		Data:     withdrawalData,
+	})
+
+	// Sign transaction
+	signedTx, err := types.SignTx(tx, types.NewCancunSigner(chainid), key)
+	if err != nil {
+		return nil, err
+	}
+	return signedTx, nil
+}
+
+func (t *TransactionGenerator) SetTxType(typ txType) {
+	t.txGenType = typ
 }
 
 // Pause pauses the component and its underlying process.
