@@ -32,7 +32,7 @@ func (w *p2pWorker) run(ctx context.Context) {
 		case b := <-w.todo:
 			log.WithFields(b.logFields()).WithField("backfillWorker", w.id).Debug("Backfill worker received batch")
 			if b.state == batchSidecarSync {
-				w.done <- w.handleBlobs(ctx, b)
+				w.done <- w.handleSidecars(ctx, b)
 			} else {
 				w.done <- w.handleBlocks(ctx, b)
 			}
@@ -80,7 +80,7 @@ func (w *p2pWorker) handleBlocks(ctx context.Context, b batch) batch {
 	return b.withResults(vb, bs)
 }
 
-func (w *p2pWorker) handleBlobs(ctx context.Context, b batch) batch {
+func (w *p2pWorker) handleSidecars(ctx context.Context, b batch) batch {
 	b.blobPid = b.busy
 	start := time.Now()
 	// we don't need to use the response for anything other than metrics, because blobResponseValidation
