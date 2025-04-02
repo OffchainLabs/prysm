@@ -26,6 +26,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/builder"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache/depositsnapshot"
+	lightclient "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/light-client"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/kv"
@@ -122,6 +123,7 @@ type BeaconNode struct {
 	verifyInitWaiter        *verification.InitializerWaiter
 	syncChecker             *initialsync.SyncChecker
 	slasherEnabled          bool
+	lcStore                 *lightclient.Store
 }
 
 // New creates a new node instance, sets up configuration options, and registers
@@ -160,6 +162,7 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 		initialSyncComplete:     make(chan struct{}),
 		syncChecker:             &initialsync.SyncChecker{},
 		slasherEnabled:          cliCtx.Bool(flags.SlasherFlag.Name),
+		lcStore:                 &lightclient.Store{},
 	}
 
 	for _, opt := range opts {
