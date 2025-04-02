@@ -109,9 +109,10 @@ func IsPowerOf2(n uint64) bool {
 // PowerOf2 returns an integer that is the provided
 // exponent of 2. Can only return powers of 2 till 63,
 // after that it overflows
+// This method will panic if `n` is greater than 63.
 func PowerOf2(n uint64) uint64 {
 	if n >= 64 {
-		panic("integer overflow")
+		panic("integer overflow") // lint:nopanic -- Panic is communicated in the godoc commentary.
 	}
 	return 1 << n
 }

@@ -73,6 +73,7 @@ ssz_phase0_objs = [
     "Status",
     "Status",
     "Validator",
+    "ValidatorIdentity",
     "VoluntaryExit",
 ]
 
@@ -124,6 +125,7 @@ ssz_capella_objs = [
     "SignedBeaconBlockCapella",
     "SignedBlindedBeaconBlockCapella",
     "Withdrawal",
+    "SignedBuilderBidCapella",
 ]
 
 ssz_deneb_objs = [
@@ -145,6 +147,7 @@ ssz_deneb_objs = [
     "SignedBeaconBlockContentsDeneb",
     "SignedBeaconBlockDeneb",
     "SignedBlindedBeaconBlockDeneb",
+    "SignedBuilderBidDeneb",
 ]
 
 ssz_electra_objs = [
@@ -175,7 +178,8 @@ ssz_electra_objs = [
     "SignedBeaconBlockElectra",
     "SignedBlindedBeaconBlockElectra",
     "SignedConsolidation",
-    "SingleAttestation"
+    "SingleAttestation",
+    "SignedBuilderBidElectra",
 ]
 
 ssz_fulu_objs = [
@@ -185,7 +189,7 @@ ssz_fulu_objs = [
     "DataColumnSidecar",
     "SignedBeaconBlockContentsFulu",
     "SignedBeaconBlockFulu",
-    "SignedBlindedBeaconBlockFulu"
+    "SignedBlindedBeaconBlockFulu",
 ]
 
 ssz_gen_marshal(
@@ -297,6 +301,7 @@ ssz_gen_marshal(
         "SignedValidatorRegistrationV1",
         "ValidatorRegistrationV1",
         "BuilderBid",
+        "SignedBuilderBid",
         "DepositSnapshot",
     ],
 )
@@ -333,11 +338,12 @@ go_library(
     srcs = [
         "attestation.go",
         "beacon_block.go",
-        "log.go",
         "cloners.go",
         "eip_7521.go",
+        "log.go",
         "sync_committee_mainnet.go",
         "sync_committee_minimal.go",  # keep
+        "validator.go",
         ":ssz_generated_altair",  # keep
         ":ssz_generated_bellatrix",  # keep
         ":ssz_generated_capella",  # keep

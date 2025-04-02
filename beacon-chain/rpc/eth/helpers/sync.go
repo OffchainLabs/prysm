@@ -53,7 +53,7 @@ func IsOptimistic(
 		}
 		return optimisticModeFetcher.IsOptimisticForRoot(ctx, bytesutil.ToBytes32(jcp.Root))
 	default:
-		if len(stateIdString) >= 2 && stateIdString[:2] == "0x" {
+		if bytesutil.IsHex(stateId) {
 			id, err := hexutil.Decode(stateIdString)
 			if err != nil {
 				return false, err

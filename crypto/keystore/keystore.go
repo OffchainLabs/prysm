@@ -130,7 +130,7 @@ func EncryptKey(key *Key, password string, scryptN, scryptP int) ([]byte, error)
 	authArray := []byte(password)
 	salt := make([]byte, 32)
 	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
-		panic("reading from crypto/rand failed: " + err.Error())
+		panic("reading from crypto/rand failed: " + err.Error()) // lint:nopanic -- This should never happen.
 	}
 
 	derivedKey, err := scrypt.Key(authArray, salt, scryptN, scryptR, scryptP, scryptDKLen)

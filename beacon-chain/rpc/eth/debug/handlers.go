@@ -134,7 +134,7 @@ func (s *Server) getBeaconStateSSZV2(ctx context.Context, w http.ResponseWriter,
 		return
 	}
 	w.Header().Set(api.VersionHeader, version.String(st.Version()))
-	httputil.WriteSsz(w, sszState, "beacon_state.ssz")
+	httputil.WriteSsz(w, sszState)
 }
 
 // GetForkChoiceHeadsV2 retrieves the leaves of the current fork choice tree.

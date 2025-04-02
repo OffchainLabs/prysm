@@ -23,18 +23,6 @@ func init() {
 	logrus.SetOutput(io.Discard)
 }
 
-func combineMaps(maps ...map[string][]string) map[string][]string {
-	combinedMap := make(map[string][]string)
-
-	for _, m := range maps {
-		for k, v := range m {
-			combinedMap[k] = v
-		}
-	}
-
-	return combinedMap
-}
-
 func TestLifecycle_OK(t *testing.T) {
 	hook := logTest.NewGlobal()
 	chainService := &mock.ChainService{
