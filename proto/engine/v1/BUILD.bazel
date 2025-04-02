@@ -114,6 +114,7 @@ ssz_proto_files(
         "execution_engine.proto",
         "execution_engine_eip7594.proto",
 	    "electra.proto",
+        "fulu.proto",
     ],
     config = select({
         "//conditions:default": "mainnet",

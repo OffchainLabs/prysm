@@ -3109,9 +3109,9 @@ func (b *BlobsBundleV2) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = ssz.WriteOffset(dst, offset)
 	offset += len(b.KzgCommitments) * 48
 
-	// Offset (1) 'CellProofs'
+	// Offset (1) 'Proofs'
 	dst = ssz.WriteOffset(dst, offset)
-	offset += len(b.CellProofs) * 48
+	offset += len(b.Proofs) * 48
 
 	// Offset (2) 'Blobs'
 	dst = ssz.WriteOffset(dst, offset)
@@ -3130,17 +3130,17 @@ func (b *BlobsBundleV2) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 		dst = append(dst, b.KzgCommitments[ii]...)
 	}
 
-	// Field (1) 'CellProofs'
-	if size := len(b.CellProofs); size > 4096 {
-		err = ssz.ErrListTooBigFn("--.CellProofs", size, 4096)
+	// Field (1) 'Proofs'
+	if size := len(b.Proofs); size > 33554432 {
+		err = ssz.ErrListTooBigFn("--.Proofs", size, 33554432)
 		return
 	}
-	for ii := 0; ii < len(b.CellProofs); ii++ {
-		if size := len(b.CellProofs[ii]); size != 48 {
-			err = ssz.ErrBytesLengthFn("--.CellProofs[ii]", size, 48)
+	for ii := 0; ii < len(b.Proofs); ii++ {
+		if size := len(b.Proofs[ii]); size != 48 {
+			err = ssz.ErrBytesLengthFn("--.Proofs[ii]", size, 48)
 			return
 		}
-		dst = append(dst, b.CellProofs[ii]...)
+		dst = append(dst, b.Proofs[ii]...)
 	}
 
 	// Field (2) 'Blobs'
@@ -3179,7 +3179,7 @@ func (b *BlobsBundleV2) UnmarshalSSZ(buf []byte) error {
 		return ssz.ErrInvalidVariableOffset
 	}
 
-	// Offset (1) 'CellProofs'
+	// Offset (1) 'Proofs'
 	if o1 = ssz.ReadOffset(buf[4:8]); o1 > size || o0 > o1 {
 		return ssz.ErrOffset
 	}
@@ -3205,19 +3205,19 @@ func (b *BlobsBundleV2) UnmarshalSSZ(buf []byte) error {
 		}
 	}
 
-	// Field (1) 'CellProofs'
+	// Field (1) 'Proofs'
 	{
 		buf = tail[o1:o2]
-		num, err := ssz.DivideInt2(len(buf), 48, 4096)
+		num, err := ssz.DivideInt2(len(buf), 48, 33554432)
 		if err != nil {
 			return err
 		}
-		b.CellProofs = make([][]byte, num)
+		b.Proofs = make([][]byte, num)
 		for ii := 0; ii < num; ii++ {
-			if cap(b.CellProofs[ii]) == 0 {
-				b.CellProofs[ii] = make([]byte, 0, len(buf[ii*48:(ii+1)*48]))
+			if cap(b.Proofs[ii]) == 0 {
+				b.Proofs[ii] = make([]byte, 0, len(buf[ii*48:(ii+1)*48]))
 			}
-			b.CellProofs[ii] = append(b.CellProofs[ii], buf[ii*48:(ii+1)*48]...)
+			b.Proofs[ii] = append(b.Proofs[ii], buf[ii*48:(ii+1)*48]...)
 		}
 	}
 
@@ -3246,8 +3246,8 @@ func (b *BlobsBundleV2) SizeSSZ() (size int) {
 	// Field (0) 'KzgCommitments'
 	size += len(b.KzgCommitments) * 48
 
-	// Field (1) 'CellProofs'
-	size += len(b.CellProofs) * 48
+	// Field (1) 'Proofs'
+	size += len(b.Proofs) * 48
 
 	// Field (2) 'Blobs'
 	size += len(b.Blobs) * 131072
@@ -3283,14 +3283,14 @@ func (b *BlobsBundleV2) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 		hh.MerkleizeWithMixin(subIndx, numItems, 4096)
 	}
 
-	// Field (1) 'CellProofs'
+	// Field (1) 'Proofs'
 	{
-		if size := len(b.CellProofs); size > 4096 {
-			err = ssz.ErrListTooBigFn("--.CellProofs", size, 4096)
+		if size := len(b.Proofs); size > 33554432 {
+			err = ssz.ErrListTooBigFn("--.Proofs", size, 33554432)
 			return
 		}
 		subIndx := hh.Index()
-		for _, i := range b.CellProofs {
+		for _, i := range b.Proofs {
 			if len(i) != 48 {
 				err = ssz.ErrBytesLength
 				return
@@ -3298,8 +3298,8 @@ func (b *BlobsBundleV2) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 			hh.PutBytes(i)
 		}
 
-		numItems := uint64(len(b.CellProofs))
-		hh.MerkleizeWithMixin(subIndx, numItems, 4096)
+		numItems := uint64(len(b.Proofs))
+		hh.MerkleizeWithMixin(subIndx, numItems, 33554432)
 	}
 
 	// Field (2) 'Blobs'

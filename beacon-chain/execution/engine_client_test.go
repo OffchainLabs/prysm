@@ -2578,18 +2578,18 @@ func createBlobServerV2(t *testing.T, numBlobs int, blobMasks []bool) *httptest.
 
 		require.Equal(t, len(blobMasks), numBlobs)
 
-		blobAndCellProofs := make([]*pb.BlobAndCellProofJson, numBlobs)
+		blobAndCellProofs := make([]*pb.BlobAndProofV2Json, numBlobs)
 		for i := range blobAndCellProofs {
 			if !blobMasks[i] {
 				continue
 			}
 
-			blobAndCellProofs[i] = &pb.BlobAndCellProofJson{
-				Blob:       []byte("0xblob"),
-				CellProofs: []hexutil.Bytes{},
+			blobAndCellProofs[i] = &pb.BlobAndProofV2Json{
+				Blob:      []byte("0xblob"),
+				KzgProofs: []hexutil.Bytes{},
 			}
 			for j := 0; j < int(params.BeaconConfig().NumberOfColumns); j++ {
-				blobAndCellProofs[i].CellProofs = append(blobAndCellProofs[i].CellProofs, []byte(fmt.Sprintf("0xproof%d", j)))
+				blobAndCellProofs[i].KzgProofs = append(blobAndCellProofs[i].KzgProofs, []byte(fmt.Sprintf("0xproof%d", j)))
 			}
 		}
 

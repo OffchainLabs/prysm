@@ -663,26 +663,26 @@ func (s *Service) ReconstructDataColumnSidecars(ctx context.Context, block inter
 	}
 
 	// Fetch all blobsAndCellsProofs from EL
-	blobsAndCellsProofs, err := s.GetBlobsV2(ctx, kzgHashes)
+	blobAndProofV2s, err := s.GetBlobsV2(ctx, kzgHashes)
 	if err != nil {
 		return nil, wrapWithBlockRoot(err, blockRoot, "get blobs V2")
 	}
 
 	var cellsAndProofs []kzg.CellsAndProofs
-	for _, blobAndCellProofs := range blobsAndCellsProofs {
-		if blobAndCellProofs == nil {
+	for _, blobAndProof := range blobAndProofV2s {
+		if blobAndProof == nil {
 			return nil, wrapWithBlockRoot(errors.New("unable to reconstruct data column sidecars, did not get all blobs from EL"), blockRoot, "")
 		}
 
 		var blob kzg.Blob
-		copy(blob[:], blobAndCellProofs.Blob)
+		copy(blob[:], blobAndProof.Blob)
 		cells, err := kzg.ComputeCells(&blob)
 		if err != nil {
 			return nil, wrapWithBlockRoot(err, blockRoot, "could not compute cells")
 		}
 
-		proofs := make([]kzg.Proof, len(blobAndCellProofs.CellProofs))
-		for i, proof := range blobAndCellProofs.CellProofs {
+		proofs := make([]kzg.Proof, len(blobAndProof.KzgProofs))
+		for i, proof := range blobAndProof.KzgProofs {
 			proofs[i] = kzg.Proof(proof)
 		}
 		cellsAndProofs = append(cellsAndProofs, kzg.CellsAndProofs{
