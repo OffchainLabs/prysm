@@ -34,11 +34,17 @@ func (s *Service) canUpdateAttestedValidator(idx primitives.ValidatorIndex, slot
 
 // attestingIndices returns the indices of validators that participated in the given aggregated attestation.
 func attestingIndices(ctx context.Context, state state.BeaconState, att ethpb.Att) ([]uint64, error) {
-	committee, err := helpers.BeaconCommitteeFromState(ctx, state, att.GetData().Slot, att.GetData().CommitteeIndex)
-	if err != nil {
-		return nil, err
+	committeeBits := att.CommitteeBitsVal().BitIndices()
+	committees := make([][]primitives.ValidatorIndex, len(committeeBits))
+	var err error
+	for i, ci := range committeeBits {
+		committees[i], err = helpers.BeaconCommitteeFromState(ctx, state, att.GetData().Slot, primitives.CommitteeIndex(ci))
+		if err != nil {
+			return nil, err
+		}
 	}
-	return attestation.AttestingIndices(att, committee)
+
+	return attestation.AttestingIndices(att, committees...)
 }
 
 // logMessageTimelyFlagsForIndex returns the log message with performance info for the attestation (head, source, target)
@@ -157,6 +163,23 @@ func (s *Service) processIncludedAttestation(ctx context.Context, state state.Be
 			s.aggregatedPerformance[primitives.ValidatorIndex(idx)] = aggregatedPerf
 			log.WithFields(logFields).Info("Attestation included")
 		}
+	}
+}
+
+// processSingleAttestation logs when the beacon node observes a single attestation from tracked validator.
+func (s *Service) processSingleAttestation(att ethpb.Att) {
+	s.RLock()
+	defer s.RUnlock()
+
+	single, ok := att.(*ethpb.SingleAttestation)
+	if !ok {
+		log.Errorf("Wrong attestation type (expected %T, got %T)", &ethpb.SingleAttestation{}, att)
+		return
+	}
+
+	if s.canUpdateAttestedValidator(single.AttesterIndex, single.GetData().Slot) {
+		logFields := logMessageTimelyFlagsForIndex(single.AttesterIndex, att.GetData())
+		log.WithFields(logFields).Info("Processed unaggregated attestation")
 	}
 }
 

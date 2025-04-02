@@ -27,6 +27,7 @@ import (
 
 	"github.com/prysmaticlabs/prysm/v5/cmd"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
@@ -60,7 +61,6 @@ type Flags struct {
 	// Bug fixes related flags.
 	AttestTimely bool // AttestTimely fixes #8185. It is gated behind a flag to ensure beacon node's fix can safely roll out first. We'll invert this in v1.1.0.
 
-	EnableSlasher                   bool // Enable slasher in the beacon node runtime.
 	EnableSlashingProtectionPruning bool // Enable slashing protection pruning for the validator client.
 	EnableMinimalSlashingProtection bool // Enable minimal slashing protection database for the validator client.
 
@@ -87,6 +87,10 @@ type Flags struct {
 
 	// AggregateIntervals specifies the time durations at which we aggregate attestations preparing for forkchoice.
 	AggregateIntervals [3]time.Duration
+
+	// Feature related flags (alignment forced in the end)
+	ForceHead        string                // ForceHead forces the head block to be a specific block root, the last head block, or the last finalized block.
+	BlacklistedRoots map[[32]byte]struct{} // BlacklistedRoots is a list of roots that are blacklisted from processing.
 }
 
 var featureConfig *Flags
@@ -142,6 +146,12 @@ func configureTestnet(ctx *cli.Context) error {
 		}
 		applyHoleskyFeatureFlags(ctx)
 		params.UseHoleskyNetworkConfig()
+	} else if ctx.Bool(HoodiTestnet.Name) {
+		log.Info("Running on the Hoodi Beacon Chain Testnet")
+		if err := params.SetActive(params.HoodiConfig().Copy()); err != nil {
+			return err
+		}
+		params.UseHoodiNetworkConfig()
 	} else {
 		if ctx.IsSet(cmd.ChainConfigFileFlag.Name) {
 			log.Warn("Running on custom Ethereum network specified in a chain configuration yaml file")
@@ -211,10 +221,6 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 		logDisabled(disableBroadcastSlashingFlag)
 		cfg.DisableBroadcastSlashings = true
 	}
-	if ctx.Bool(enableSlasherFlag.Name) {
-		log.WithField(enableSlasherFlag.Name, enableSlasherFlag.Usage).Warn(enabledFeatureFlag)
-		cfg.EnableSlasher = true
-	}
 	if ctx.Bool(enableHistoricalSpaceRepresentation.Name) {
 		log.WithField(enableHistoricalSpaceRepresentation.Name, enableHistoricalSpaceRepresentation.Usage).Warn(enabledFeatureFlag)
 		cfg.EnableHistoricalSpaceRepresentation = true
@@ -273,10 +279,32 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 		logEnabled(enableExperimentalAttestationPool)
 		cfg.EnableExperimentalAttestationPool = true
 	}
+	if ctx.IsSet(forceHeadFlag.Name) {
+		logEnabled(forceHeadFlag)
+		cfg.ForceHead = ctx.String(forceHeadFlag.Name)
+	}
+
+	if ctx.IsSet(blacklistRoots.Name) {
+		logEnabled(blacklistRoots)
+		cfg.BlacklistedRoots = parseBlacklistedRoots(ctx.StringSlice(blacklistRoots.Name))
+	}
 
 	cfg.AggregateIntervals = [3]time.Duration{aggregateFirstInterval.Value, aggregateSecondInterval.Value, aggregateThirdInterval.Value}
 	Init(cfg)
 	return nil
+}
+
+func parseBlacklistedRoots(blacklistedRoots []string) map[[32]byte]struct{} {
+	roots := make(map[[32]byte]struct{})
+	for _, root := range blacklistedRoots {
+		r, err := bytesutil.DecodeHexWithLength(root, 32)
+		if err != nil {
+			log.WithError(err).WithField("root", root).Warn("Failed to parse blacklisted root")
+			continue
+		}
+		roots[[32]byte(r)] = struct{}{}
+	}
+	return roots
 }
 
 // ConfigureValidator sets the global config based
@@ -389,4 +417,11 @@ func ValidateNetworkFlags(ctx *cli.Context) error {
 		}
 	}
 	return nil
+}
+
+// BlacklistedBlock returns weather the given block root belongs to the list of blacklisted roots.
+func BlacklistedBlock(r [32]byte) bool {
+	blacklisted := Get().BlacklistedRoots
+	_, ok := blacklisted[r]
+	return ok
 }

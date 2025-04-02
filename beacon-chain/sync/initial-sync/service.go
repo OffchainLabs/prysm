@@ -192,7 +192,7 @@ func (s *Service) Start() {
 		if errors.Is(s.ctx.Err(), context.Canceled) {
 			return
 		}
-		panic(err)
+		panic(err) // lint:nopanic -- Unexpected error. This should probably be surfaced with a returned error.
 	}
 	log.WithField("slot", s.cfg.Chain.HeadSlot()).Info("Synced up to")
 	s.markSynced()
@@ -292,13 +292,10 @@ func missingBlobRequest(blk blocks.ROBlock, store *filesystem.BlobStorage) (p2pt
 	if len(cmts) == 0 {
 		return nil, nil
 	}
-	onDisk, err := store.Indices(r, blk.Block().Slot())
-	if err != nil {
-		return nil, errors.Wrapf(err, "error checking existing blobs for checkpoint sync block root %#x", r)
-	}
+	onDisk := store.Summary(r)
 	req := make(p2ptypes.BlobSidecarsByRootReq, 0, len(cmts))
 	for i := range cmts {
-		if onDisk[i] {
+		if onDisk.HasIndex(uint64(i)) {
 			continue
 		}
 		req = append(req, &eth.BlobIdentifier{BlockRoot: r[:], Index: uint64(i)})

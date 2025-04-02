@@ -63,12 +63,30 @@ def _ssz_go_proto_library_impl(ctx):
     if len(ctx.attr.exclude_objs) > 0:
         args.append("--exclude-objs=%s" % ",".join(ctx.attr.exclude_objs))
 
-    ctx.actions.run(
-        executable = ctx.executable.sszgen,
-        progress_message = "Generating ssz marshal and unmarshal functions",
-        inputs = input_files,
-        arguments = args,
+    # golang.org/x/tools requires the go binary to be available in the PATH.
+    # Follows the same pattern as https://github.com/bazel-contrib/rules_go/pull/4173
+    sdk = ctx.toolchains["@io_bazel_rules_go//go:toolchain"].sdk
+    goroot = sdk.root_file.dirname
+    env = {
+        "PATH": "PATH={goroot}/bin:$PATH".format(goroot = goroot),
+        "GOROOT": goroot,
+    }
+    ctx.actions.run_shell(
         outputs = [output],
+        command = """
+      export GOROOT=$(pwd)/{goroot} &&
+      export PATH=$GOROOT/bin:$PATH &&
+      {cmd} {args}""".format(
+            goroot = goroot,
+            cmd = ctx.executable.sszgen.path,
+            args = " ".join(args),
+        ),
+        tools = [
+            ctx.executable.sszgen,
+            sdk.go,
+        ],
+        mnemonic = "SszGen",
+        inputs = input_files,
     )
 
 ssz_gen_marshal = rule(
@@ -86,6 +104,7 @@ ssz_gen_marshal = rule(
         "includes": attr.label_list(providers = [GoLibrary]),
         "out": attr.output(),
     },
+    toolchains = ["@io_bazel_rules_go//go:toolchain"],
 )
 
 SSZ_DEPS = ["@com_github_prysmaticlabs_fastssz//:go_default_library"]

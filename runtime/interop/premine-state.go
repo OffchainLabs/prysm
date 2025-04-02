@@ -23,6 +23,8 @@ import (
 
 var errUnsupportedVersion = errors.New("schema version not supported by PremineGenesisConfig")
 
+const executionAddress = "0x878705ba3f8bc32fcf7f4caa1a35e72af65cf766"
+
 type PremineGenesisConfig struct {
 	GenesisTime     uint64
 	NVals           uint64
@@ -160,7 +162,7 @@ func (s *PremineGenesisConfig) empty() (state.BeaconState, error) {
 			return nil, err
 		}
 	case version.Fulu:
-		e, err = state_native.InitializeFromProtoFulu(&ethpb.BeaconStateFulu{})
+		e, err = state_native.InitializeFromProtoFulu(&ethpb.BeaconStateElectra{})
 		if err != nil {
 			return nil, err
 		}
@@ -571,7 +573,7 @@ func (s *PremineGenesisConfig) setLatestBlockHeader(g state.BeaconState) error {
 			},
 		}
 	case version.Fulu:
-		body = &ethpb.BeaconBlockBodyFulu{
+		body = &ethpb.BeaconBlockBodyElectra{
 			RandaoReveal: make([]byte, 96),
 			Eth1Data: &ethpb.Eth1Data{
 				DepositRoot: make([]byte, 32),

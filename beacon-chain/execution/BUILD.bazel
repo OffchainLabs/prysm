@@ -103,6 +103,7 @@ go_test(
         "//beacon-chain/core/helpers:go_default_library",
         "//beacon-chain/core/signing:go_default_library",
         "//beacon-chain/db:go_default_library",
+        "//beacon-chain/db/filesystem:go_default_library",
         "//beacon-chain/db/testing:go_default_library",
         "//beacon-chain/execution/testing:go_default_library",
         "//beacon-chain/execution/types:go_default_library",

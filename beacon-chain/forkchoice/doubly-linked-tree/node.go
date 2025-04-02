@@ -156,6 +156,10 @@ func (n *Node) nodeTreeDump(ctx context.Context, nodes []*forkchoice2.Node) ([]*
 	if n.parent != nil {
 		parentRoot = n.parent.root
 	}
+	target := [32]byte{}
+	if n.target != nil {
+		target = n.target.root
+	}
 	thisNode := &forkchoice2.Node{
 		Slot:                     n.slot,
 		BlockRoot:                n.root[:],
@@ -169,6 +173,7 @@ func (n *Node) nodeTreeDump(ctx context.Context, nodes []*forkchoice2.Node) ([]*
 		ExecutionOptimistic:      n.optimistic,
 		ExecutionBlockHash:       n.payloadHash[:],
 		Timestamp:                n.timestamp,
+		Target:                   target[:],
 	}
 	if n.optimistic {
 		thisNode.Validity = forkchoice2.Optimistic

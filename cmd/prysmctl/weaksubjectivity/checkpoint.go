@@ -7,6 +7,7 @@ import (
 
 	"github.com/prysmaticlabs/prysm/v5/api/client"
 	"github.com/prysmaticlabs/prysm/v5/api/client/beacon"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/checkpoint"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
@@ -52,7 +53,7 @@ func cliActionCheckpoint(_ *cli.Context) error {
 		return err
 	}
 
-	ws, err := beacon.ComputeWeakSubjectivityCheckpoint(ctx, client)
+	ws, err := checkpoint.ComputeWeakSubjectivityCheckpoint(ctx, client)
 	if err != nil {
 		return err
 	}

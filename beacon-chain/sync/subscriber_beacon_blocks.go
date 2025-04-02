@@ -81,19 +81,20 @@ func (s *Service) reconstructAndBroadcastBlobs(ctx context.Context, block interf
 	if s.cfg.blobStorage == nil {
 		return
 	}
-	indices, err := s.cfg.blobStorage.Indices(blockRoot, block.Block().Slot())
+	summary := s.cfg.blobStorage.Summary(blockRoot)
+	cmts, err := block.Block().Body().BlobKzgCommitments()
 	if err != nil {
-		log.WithError(err).Error("Failed to retrieve indices for block")
+		log.WithError(err).Error("Failed to read commitments from block")
 		return
 	}
-	for _, index := range indices {
-		if index {
+	for i := range cmts {
+		if summary.HasIndex(uint64(i)) {
 			blobExistedInDBTotal.Inc()
 		}
 	}
 
 	// Reconstruct blob sidecars from the EL
-	blobSidecars, err := s.cfg.executionReconstructor.ReconstructBlobSidecars(ctx, block, blockRoot, indices)
+	blobSidecars, err := s.cfg.executionReconstructor.ReconstructBlobSidecars(ctx, block, blockRoot, summary.HasIndex)
 	if err != nil {
 		log.WithError(err).Error("Failed to reconstruct blob sidecars")
 		return
@@ -103,15 +104,12 @@ func (s *Service) reconstructAndBroadcastBlobs(ctx context.Context, block interf
 	}
 
 	// Refresh indices as new blobs may have been added to the db
-	indices, err = s.cfg.blobStorage.Indices(blockRoot, block.Block().Slot())
-	if err != nil {
-		log.WithError(err).Error("Failed to retrieve indices for block")
-		return
-	}
+	summary = s.cfg.blobStorage.Summary(blockRoot)
 
 	// Broadcast blob sidecars first than save them to the db
 	for _, sidecar := range blobSidecars {
-		if sidecar.Index >= uint64(len(indices)) || indices[sidecar.Index] {
+		// Don't broadcast the blob if it has appeared on disk.
+		if summary.HasIndex(sidecar.Index) {
 			continue
 		}
 		if err := s.cfg.p2p.BroadcastBlob(ctx, sidecar.Index, sidecar.BlobSidecar); err != nil {
@@ -120,8 +118,7 @@ func (s *Service) reconstructAndBroadcastBlobs(ctx context.Context, block interf
 	}
 
 	for _, sidecar := range blobSidecars {
-		if sidecar.Index >= uint64(len(indices)) || indices[sidecar.Index] {
-			blobExistedInDBTotal.Inc()
+		if summary.HasIndex(sidecar.Index) {
 			continue
 		}
 		if err := s.subscribeBlob(ctx, sidecar); err != nil {

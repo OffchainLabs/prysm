@@ -60,6 +60,7 @@ func NewTmpDir(prefix string) (string, error) {
 // `@go_sdk//:files` in its `data` -- this will make sure the whole toolchain
 // gets pulled into the sandbox as well. Generally, this function should only
 // be called in init().
+// lint:nopanic -- This method is only used for testing.
 func SetGoEnv() {
 	gobin, err := Runfile("bin/go")
 	if err != nil {

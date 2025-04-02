@@ -3,6 +3,7 @@ package operation
 
 import (
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
@@ -32,6 +33,12 @@ const (
 
 	// AttesterSlashingReceived is sent after an attester slashing is received from gossip or rpc
 	AttesterSlashingReceived = 8
+
+	// SingleAttReceived is sent after a single attestation object is received from gossip or rpc
+	SingleAttReceived = 9
+
+	// BlockGossipReceived is sent after a block has been received from gossip or API that passes validation rules.
+	BlockGossipReceived = 10
 )
 
 // UnAggregatedAttReceivedData is the data sent with UnaggregatedAttReceived events.
@@ -43,7 +50,7 @@ type UnAggregatedAttReceivedData struct {
 // AggregatedAttReceivedData is the data sent with AggregatedAttReceived events.
 type AggregatedAttReceivedData struct {
 	// Attestation is the aggregated attestation object.
-	Attestation *ethpb.AggregateAttestationAndProof
+	Attestation ethpb.AggregateAttAndProof
 }
 
 // ExitReceivedData is the data sent with ExitReceived events.
@@ -76,4 +83,15 @@ type ProposerSlashingReceivedData struct {
 // AttesterSlashingReceivedData is the data sent with AttesterSlashingReceived events.
 type AttesterSlashingReceivedData struct {
 	AttesterSlashing ethpb.AttSlashing
+}
+
+// SingleAttReceivedData is the data sent with SingleAttReceived events.
+type SingleAttReceivedData struct {
+	Attestation ethpb.Att
+}
+
+// BlockGossipReceivedData is the data sent with BlockGossipReceived events.
+type BlockGossipReceivedData struct {
+	// SignedBlock is the block that was received.
+	SignedBlock interfaces.ReadOnlySignedBeaconBlock
 }

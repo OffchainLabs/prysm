@@ -159,6 +159,19 @@ func GethTestnetGenesis(genesisTime uint64, cfg *clparams.BeaconChainConfig) *co
 		ShanghaiTime:            shanghaiTime,
 		CancunTime:              cancunTime,
 		PragueTime:              pragueTime,
+		DepositContractAddress:  common.HexToAddress(cfg.DepositContractAddress),
+		BlobScheduleConfig: &params.BlobScheduleConfig{
+			Cancun: &params.BlobConfig{
+				Target:         3,
+				Max:            6,
+				UpdateFraction: 3338477,
+			},
+			Prague: &params.BlobConfig{
+				Target:         6,
+				Max:            9,
+				UpdateFraction: 5007716,
+			},
+		},
 	}
 	da := defaultDepositContractAllocation(cfg.DepositContractAddress)
 	ma := minerAllocation()
@@ -171,8 +184,10 @@ func GethTestnetGenesis(genesisTime uint64, cfg *clparams.BeaconChainConfig) *co
 		Mixhash:    common.HexToHash(defaultMixhash),
 		Coinbase:   common.HexToAddress(defaultCoinbase),
 		Alloc: types.GenesisAlloc{
-			da.Address: da.Account,
-			ma.Address: ma.Account,
+			da.Address:                       da.Account,
+			ma.Address:                       ma.Account,
+			params.WithdrawalQueueAddress:    {Nonce: 1, Code: params.WithdrawalQueueCode, Balance: common.Big0},
+			params.ConsolidationQueueAddress: {Nonce: 1, Code: params.ConsolidationQueueCode, Balance: common.Big0},
 		},
 		ParentHash: common.HexToHash(defaultParenthash),
 	}
@@ -199,7 +214,7 @@ func defaultDepositContractAllocation(contractAddress string) depositAllocation 
 	}
 	codeBytes, err := hexutil.Decode(DepositContractCode)
 	if err != nil {
-		panic(err)
+		panic(err) // lint:nopanic -- The deposit contract code is hardcoded and checked in tests.
 	}
 	return depositAllocation{
 		Address: common.HexToAddress(contractAddress),

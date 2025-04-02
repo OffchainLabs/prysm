@@ -177,9 +177,9 @@ func TestComputeConsolidationEpochAndUpdateChurn(t *testing.T) {
 				require.NoError(t, err)
 				return s
 			}(t),
-			consolidationBalance:                  helpers.ConsolidationChurnLimit(32000000000000000)+1,
+			consolidationBalance:                  helpers.ConsolidationChurnLimit(32000000000000000) + 1,
 			expectedEpoch:                         18, // Flows into another epoch.
-			expectedConsolidationBalanceToConsume: helpers.ConsolidationChurnLimit(32000000000000000)-1,
+			expectedConsolidationBalanceToConsume: helpers.ConsolidationChurnLimit(32000000000000000) - 1,
 		},
 	}
 

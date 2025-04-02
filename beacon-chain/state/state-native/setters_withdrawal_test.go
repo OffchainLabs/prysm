@@ -68,15 +68,16 @@ func TestDequeuePendingWithdrawals(t *testing.T) {
 	num, err := s.NumPendingPartialWithdrawals()
 	require.NoError(t, err)
 	require.Equal(t, uint64(3), num)
+	s2 := s.Copy()
 	require.NoError(t, s.DequeuePendingPartialWithdrawals(2))
 	num, err = s.NumPendingPartialWithdrawals()
 	require.NoError(t, err)
 	require.Equal(t, uint64(1), num)
+	num, err = s2.NumPendingPartialWithdrawals()
+	require.NoError(t, err)
+	require.Equal(t, uint64(3), num)
 
 	// 2 of 1 exceeds the limit and an error should be returned
-	num, err = s.NumPendingPartialWithdrawals()
-	require.NoError(t, err)
-	require.Equal(t, uint64(1), num)
 	require.ErrorContains(t, "cannot dequeue more withdrawals than are in the queue", s.DequeuePendingPartialWithdrawals(2))
 
 	// Removing all pending partial withdrawals should be OK.
@@ -110,6 +111,19 @@ func TestAppendPendingWithdrawals(t *testing.T) {
 	num, err = s.NumPendingPartialWithdrawals()
 	require.NoError(t, err)
 	require.Equal(t, uint64(4), num)
+
+	require.NoError(t, s.AppendPendingPartialWithdrawal(&eth.PendingPartialWithdrawal{Index: 1}))
+	s2 := s.Copy()
+	require.NoError(t, s2.AppendPendingPartialWithdrawal(&eth.PendingPartialWithdrawal{Index: 3}))
+	require.NoError(t, s.AppendPendingPartialWithdrawal(&eth.PendingPartialWithdrawal{Index: 2}))
+	w, err := s.PendingPartialWithdrawals()
+	require.NoError(t, err)
+	require.Equal(t, primitives.ValidatorIndex(1), w[4].Index)
+	require.Equal(t, primitives.ValidatorIndex(2), w[5].Index)
+	w, err = s2.PendingPartialWithdrawals()
+	require.NoError(t, err)
+	require.Equal(t, primitives.ValidatorIndex(1), w[4].Index)
+	require.Equal(t, primitives.ValidatorIndex(3), w[5].Index)
 
 	require.ErrorContains(t, "cannot append nil pending partial withdrawal", s.AppendPendingPartialWithdrawal(nil))
 

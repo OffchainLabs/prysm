@@ -49,7 +49,12 @@ func (s *Service) beaconBlocksByRangeRPCHandler(ctx context.Context, msg interfa
 	}
 	available := s.validateRangeAvailability(rp)
 	if !available {
-		log.Debug("error in validating range availability")
+		log.WithFields(logrus.Fields{
+			"startSlot": rp.start,
+			"endSlot":   rp.end,
+			"size":      rp.size,
+			"current":   s.cfg.clock.CurrentSlot(),
+		}).Debug("error in validating range availability")
 		s.writeErrorResponseToStream(responseCodeResourceUnavailable, p2ptypes.ErrResourceUnavailable.Error(), stream)
 		tracing.AnnotateError(span, err)
 		return nil

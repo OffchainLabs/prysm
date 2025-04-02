@@ -195,7 +195,7 @@ func (b *SignedBeaconBlock) ToBlinded() (interfaces.ReadOnlySignedBeaconBlock, e
 					ProposerIndex: b.block.proposerIndex,
 					ParentRoot:    b.block.parentRoot[:],
 					StateRoot:     b.block.stateRoot[:],
-					Body: &eth.BlindedBeaconBlockBodyFulu{
+					Body: &eth.BlindedBeaconBlockBodyElectra{
 						RandaoReveal:           b.block.body.randaoReveal[:],
 						Eth1Data:               b.block.body.eth1Data,
 						Graffiti:               b.block.body.graffiti[:],
@@ -490,6 +490,7 @@ func (b *SignedBeaconBlock) MarshalSSZTo(dst []byte) ([]byte, error) {
 // of fastssz's SizeSSZ() interface function to avoid panicking.
 // Changing the signature causes very problematic issues with wealdtech deps.
 // For the time being panicking is preferable.
+// lint:nopanic -- Panic warning is communicated in godoc commentary.
 func (b *SignedBeaconBlock) SizeSSZ() int {
 	pb, err := b.Proto()
 	if err != nil {
@@ -530,7 +531,7 @@ func (b *SignedBeaconBlock) SizeSSZ() int {
 	}
 }
 
-// UnmarshalSSZ unmarshals the signed beacon block from its relevant ssz form.
+// UnmarshalSSZ unmarshals the sitime/slots/slottime.gogned beacon block from its relevant ssz form.
 // nolint:gocognit
 func (b *SignedBeaconBlock) UnmarshalSSZ(buf []byte) error {
 	var newBlock *SignedBeaconBlock
@@ -747,7 +748,7 @@ func (b *BeaconBlock) HashTreeRoot() ([field_params.RootLength]byte, error) {
 		if b.IsBlinded() {
 			return pb.(*eth.BlindedBeaconBlockFulu).HashTreeRoot()
 		}
-		return pb.(*eth.BeaconBlockFulu).HashTreeRoot()
+		return pb.(*eth.BeaconBlockElectra).HashTreeRoot()
 	default:
 		return [field_params.RootLength]byte{}, errIncorrectBlockVersion
 	}
@@ -788,7 +789,7 @@ func (b *BeaconBlock) HashTreeRootWith(h *ssz.Hasher) error {
 		if b.IsBlinded() {
 			return pb.(*eth.BlindedBeaconBlockFulu).HashTreeRootWith(h)
 		}
-		return pb.(*eth.BeaconBlockFulu).HashTreeRootWith(h)
+		return pb.(*eth.BeaconBlockElectra).HashTreeRootWith(h)
 	default:
 		return errIncorrectBlockVersion
 	}
@@ -830,7 +831,7 @@ func (b *BeaconBlock) MarshalSSZ() ([]byte, error) {
 		if b.IsBlinded() {
 			return pb.(*eth.BlindedBeaconBlockFulu).MarshalSSZ()
 		}
-		return pb.(*eth.BeaconBlockFulu).MarshalSSZ()
+		return pb.(*eth.BeaconBlockElectra).MarshalSSZ()
 	default:
 		return []byte{}, errIncorrectBlockVersion
 	}
@@ -872,7 +873,7 @@ func (b *BeaconBlock) MarshalSSZTo(dst []byte) ([]byte, error) {
 		if b.IsBlinded() {
 			return pb.(*eth.BlindedBeaconBlockFulu).MarshalSSZTo(dst)
 		}
-		return pb.(*eth.BeaconBlockFulu).MarshalSSZTo(dst)
+		return pb.(*eth.BeaconBlockElectra).MarshalSSZTo(dst)
 	default:
 		return []byte{}, errIncorrectBlockVersion
 	}
@@ -884,6 +885,7 @@ func (b *BeaconBlock) MarshalSSZTo(dst []byte) ([]byte, error) {
 // of fastssz's SizeSSZ() interface function to avoid panicking.
 // Changing the signature causes very problematic issues with wealdtech deps.
 // For the time being panicking is preferable.
+// lint:nopanic -- Panic is communicated in godoc.
 func (b *BeaconBlock) SizeSSZ() int {
 	pb, err := b.Proto()
 	if err != nil {
@@ -918,7 +920,7 @@ func (b *BeaconBlock) SizeSSZ() int {
 		if b.IsBlinded() {
 			return pb.(*eth.BlindedBeaconBlockFulu).SizeSSZ()
 		}
-		return pb.(*eth.BeaconBlockFulu).SizeSSZ()
+		return pb.(*eth.BeaconBlockElectra).SizeSSZ()
 	default:
 		panic(incorrectBodyVersion)
 	}
@@ -1049,7 +1051,7 @@ func (b *BeaconBlock) UnmarshalSSZ(buf []byte) error {
 				return err
 			}
 		} else {
-			pb := &eth.BeaconBlockFulu{}
+			pb := &eth.BeaconBlockElectra{}
 			if err := pb.UnmarshalSSZ(buf); err != nil {
 				return err
 			}
@@ -1101,7 +1103,7 @@ func (b *BeaconBlock) AsSignRequestObject() (validatorpb.SignRequestObject, erro
 		if b.IsBlinded() {
 			return &validatorpb.SignRequest_BlindedBlockFulu{BlindedBlockFulu: pb.(*eth.BlindedBeaconBlockFulu)}, nil
 		}
-		return &validatorpb.SignRequest_BlockFulu{BlockFulu: pb.(*eth.BeaconBlockFulu)}, nil
+		return &validatorpb.SignRequest_BlockFulu{BlockFulu: pb.(*eth.BeaconBlockElectra)}, nil
 	default:
 		return nil, errIncorrectBlockVersion
 	}
@@ -1275,9 +1277,9 @@ func (b *BeaconBlockBody) HashTreeRoot() ([field_params.RootLength]byte, error) 
 		return pb.(*eth.BeaconBlockBodyElectra).HashTreeRoot()
 	case version.Fulu:
 		if b.IsBlinded() {
-			return pb.(*eth.BlindedBeaconBlockBodyFulu).HashTreeRoot()
+			return pb.(*eth.BlindedBeaconBlockBodyElectra).HashTreeRoot()
 		}
-		return pb.(*eth.BeaconBlockBodyFulu).HashTreeRoot()
+		return pb.(*eth.BeaconBlockBodyElectra).HashTreeRoot()
 	default:
 		return [field_params.RootLength]byte{}, errIncorrectBodyVersion
 	}

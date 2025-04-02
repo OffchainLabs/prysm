@@ -47,10 +47,10 @@ func run(pass *analysis.Pass) (interface{}, error) {
 		case token.EQL, token.NEQ, token.GEQ, token.LEQ, token.GTR, token.LSS:
 			var xBuf, yBuf bytes.Buffer
 			if err := printer.Fprint(&xBuf, pass.Fset, expr.X); err != nil {
-				pass.Reportf(expr.X.Pos(), err.Error())
+				pass.Reportf(expr.X.Pos(), "error=%s", err)
 			}
 			if err := printer.Fprint(&yBuf, pass.Fset, expr.Y); err != nil {
-				pass.Reportf(expr.Y.Pos(), err.Error())
+				pass.Reportf(expr.Y.Pos(), "error=%s", err)
 			}
 			if xBuf.String() == yBuf.String() {
 				switch expr.Op {

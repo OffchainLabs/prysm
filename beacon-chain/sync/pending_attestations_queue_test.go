@@ -1,15 +1,22 @@
 package sync
 
 import (
+	"bytes"
 	"context"
+	"fmt"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/p2p/enr"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	pubsubpb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/prysmaticlabs/go-bitfield"
 	"github.com/prysmaticlabs/prysm/v5/async/abool"
 	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/operation"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
 	dbtest "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
@@ -17,6 +24,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers"
 	p2ptest "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
+	mockSync "github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/initial-sync/testing"
 	lruwrpr "github.com/prysmaticlabs/prysm/v5/cache/lru"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
@@ -105,15 +113,22 @@ func TestProcessPendingAtts_HasBlockSaveUnAggregatedAtt(t *testing.T) {
 			Epoch: 0,
 		},
 	}
+
+	done := make(chan *feed.Event, 1)
+	defer close(done)
+	opn := mock.NewEventFeedWrapper()
+	sub := opn.Subscribe(done)
+	defer sub.Unsubscribe()
 	ctx, cancel := context.WithCancel(context.Background())
 	r := &Service{
 		ctx: ctx,
 		cfg: &config{
-			p2p:      p1,
-			beaconDB: db,
-			chain:    chain,
-			clock:    startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
-			attPool:  attestations.NewPool(),
+			p2p:                 p1,
+			beaconDB:            db,
+			chain:               chain,
+			clock:               startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
+			attPool:             attestations.NewPool(),
+			attestationNotifier: &mock.SimpleNotifier{Feed: opn},
 		},
 		blkRootToPendingAtts:             make(map[[32]byte][]ethpb.SignedAggregateAttAndProof),
 		seenUnAggregatedAttestationCache: lruwrpr.New(10),
@@ -128,12 +143,27 @@ func TestProcessPendingAtts_HasBlockSaveUnAggregatedAtt(t *testing.T) {
 	r.blkRootToPendingAtts[root] = []ethpb.SignedAggregateAttAndProof{&ethpb.SignedAggregateAttestationAndProof{Message: aggregateAndProof}}
 	require.NoError(t, r.processPendingAtts(context.Background()))
 
-	atts, err := r.cfg.attPool.UnaggregatedAttestations()
-	require.NoError(t, err)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case received := <-done:
+				// make sure a single att was sent
+				require.Equal(t, operation.UnaggregatedAttReceived, int(received.Type))
+				return
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	atts := r.cfg.attPool.UnaggregatedAttestations()
 	assert.Equal(t, 1, len(atts), "Did not save unaggregated att")
 	assert.DeepEqual(t, att, atts[0], "Incorrect saved att")
 	assert.Equal(t, 0, len(r.cfg.attPool.AggregatedAttestations()), "Did save aggregated att")
 	require.LogsContain(t, hook, "Verified and saved pending attestations to pool")
+	wg.Wait()
 	cancel()
 }
 
@@ -179,15 +209,21 @@ func TestProcessPendingAtts_HasBlockSaveUnAggregatedAttElectra(t *testing.T) {
 			Epoch: 0,
 		},
 	}
+	done := make(chan *feed.Event, 1)
+	defer close(done)
+	opn := mock.NewEventFeedWrapper()
+	sub := opn.Subscribe(done)
+	defer sub.Unsubscribe()
 	ctx, cancel := context.WithCancel(context.Background())
 	r := &Service{
 		ctx: ctx,
 		cfg: &config{
-			p2p:      p1,
-			beaconDB: db,
-			chain:    chain,
-			clock:    startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
-			attPool:  attestations.NewPool(),
+			p2p:                 p1,
+			beaconDB:            db,
+			chain:               chain,
+			clock:               startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
+			attPool:             attestations.NewPool(),
+			attestationNotifier: &mock.SimpleNotifier{Feed: opn},
 		},
 		blkRootToPendingAtts:             make(map[[32]byte][]ethpb.SignedAggregateAttAndProof),
 		seenUnAggregatedAttestationCache: lruwrpr.New(10),
@@ -201,13 +237,189 @@ func TestProcessPendingAtts_HasBlockSaveUnAggregatedAttElectra(t *testing.T) {
 
 	r.blkRootToPendingAtts[root] = []ethpb.SignedAggregateAttAndProof{&ethpb.SignedAggregateAttestationAndProofSingle{Message: aggregateAndProof}}
 	require.NoError(t, r.processPendingAtts(context.Background()))
-
-	atts, err := r.cfg.attPool.UnaggregatedAttestations()
-	require.NoError(t, err)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case received := <-done:
+				// make sure a single att was sent
+				require.Equal(t, operation.SingleAttReceived, int(received.Type))
+				return
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	atts := r.cfg.attPool.UnaggregatedAttestations()
 	require.Equal(t, 1, len(atts), "Did not save unaggregated att")
 	assert.DeepEqual(t, att.ToAttestationElectra(committee), atts[0], "Incorrect saved att")
 	assert.Equal(t, 0, len(r.cfg.attPool.AggregatedAttestations()), "Did save aggregated att")
 	require.LogsContain(t, hook, "Verified and saved pending attestations to pool")
+	wg.Wait()
+	cancel()
+}
+
+func TestProcessPendingAtts_HasBlockSaveUnAggregatedAttElectra_VerifyAlreadySeen(t *testing.T) {
+	// Setup configuration and fork version schedule.
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	fvs := map[[fieldparams.VersionLength]byte]primitives.Epoch{
+		bytesutil.ToBytes4(cfg.GenesisForkVersion):   1,
+		bytesutil.ToBytes4(cfg.AltairForkVersion):    2,
+		bytesutil.ToBytes4(cfg.BellatrixForkVersion): 3,
+		bytesutil.ToBytes4(cfg.CapellaForkVersion):   4,
+		bytesutil.ToBytes4(cfg.DenebForkVersion):     5,
+		bytesutil.ToBytes4(cfg.FuluForkVersion):      6,
+		bytesutil.ToBytes4(cfg.ElectraForkVersion):   0,
+	}
+	cfg.ForkVersionSchedule = fvs
+	params.OverrideBeaconConfig(cfg)
+
+	// Initialize logging, database, and P2P components.
+	hook := logTest.NewGlobal()
+	db := dbtest.SetupDB(t)
+	p1 := p2ptest.NewTestP2P(t)
+	validators := uint64(256)
+
+	// Create genesis state and associated keys.
+	beaconState, privKeys := util.DeterministicGenesisStateElectra(t, validators)
+	require.NoError(t, beaconState.SetSlot(1))
+
+	// Create and save a new Beacon block.
+	sb := util.NewBeaconBlockElectra()
+	util.SaveBlock(t, context.Background(), db, sb)
+
+	// Save state with block root.
+	root, err := sb.Block.HashTreeRoot()
+	require.NoError(t, err)
+
+	// Build a new attestation and its aggregate proof.
+	att := &ethpb.SingleAttestation{
+		CommitteeId: 8, // choose a non 0
+		Data: &ethpb.AttestationData{
+			Slot:            1,
+			BeaconBlockRoot: root[:],
+			Source:          &ethpb.Checkpoint{Epoch: 0, Root: make([]byte, fieldparams.RootLength)},
+			Target:          &ethpb.Checkpoint{Epoch: 0, Root: root[:]},
+			CommitteeIndex:  0,
+		},
+	}
+	aggregateAndProof := &ethpb.AggregateAttestationAndProofSingle{
+		Aggregate: att,
+	}
+
+	// Retrieve the beacon committee and set the attester index.
+	committee, err := helpers.BeaconCommitteeFromState(context.Background(), beaconState, att.Data.Slot, att.CommitteeId)
+	assert.NoError(t, err)
+	att.AttesterIndex = committee[0]
+
+	// Compute attester domain and signature.
+	attesterDomain, err := signing.Domain(beaconState.Fork(), 0, params.BeaconConfig().DomainBeaconAttester, beaconState.GenesisValidatorsRoot())
+	require.NoError(t, err)
+	hashTreeRoot, err := signing.ComputeSigningRoot(att.Data, attesterDomain)
+	assert.NoError(t, err)
+	att.SetSignature(privKeys[committee[0]].Sign(hashTreeRoot[:]).Marshal())
+
+	// Set the genesis time.
+	require.NoError(t, beaconState.SetGenesisTime(uint64(time.Now().Unix())))
+
+	// Setup the chain service mock.
+	chain := &mock.ChainService{
+		Genesis: time.Now(),
+		State:   beaconState,
+		FinalizedCheckPoint: &ethpb.Checkpoint{
+			Root:  aggregateAndProof.Aggregate.Data.BeaconBlockRoot,
+			Epoch: 0,
+		},
+	}
+
+	// Setup event feed and subscription.
+	done := make(chan *feed.Event, 1)
+	defer close(done)
+	opn := mock.NewEventFeedWrapper()
+	sub := opn.Subscribe(done)
+	defer sub.Unsubscribe()
+
+	// Create context and service configuration.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	r := &Service{
+		ctx: ctx,
+		cfg: &config{
+			initialSync:         &mockSync.Sync{IsSyncing: false},
+			p2p:                 p1,
+			beaconDB:            db,
+			chain:               chain,
+			clock:               startup.NewClock(chain.Genesis.Add(time.Duration(-1*int(params.BeaconConfig().SecondsPerSlot))*time.Second), chain.ValidatorsRoot),
+			attPool:             attestations.NewPool(),
+			attestationNotifier: &mock.SimpleNotifier{Feed: opn},
+		},
+		blkRootToPendingAtts:             make(map[[32]byte][]ethpb.SignedAggregateAttAndProof),
+		seenUnAggregatedAttestationCache: lruwrpr.New(10),
+		signatureChan:                    make(chan *signatureVerifier, verifierLimit),
+	}
+	go r.verifierRoutine()
+
+	// Save a new beacon state and link it with the block root.
+	s, err := util.NewBeaconStateElectra()
+	require.NoError(t, err)
+	require.NoError(t, r.cfg.beaconDB.SaveState(context.Background(), s, root))
+
+	// Add the pending attestation.
+	r.blkRootToPendingAtts[root] = []ethpb.SignedAggregateAttAndProof{
+		&ethpb.SignedAggregateAttestationAndProofSingle{Message: aggregateAndProof},
+	}
+	require.NoError(t, r.processPendingAtts(context.Background()))
+
+	// Verify that the event feed receives the expected attestation.
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case received := <-done:
+				// Ensure a single attestation event was sent.
+				require.Equal(t, operation.SingleAttReceived, int(received.Type))
+				return
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	// Verify unaggregated attestations are saved correctly.
+	atts := r.cfg.attPool.UnaggregatedAttestations()
+	require.Equal(t, 1, len(atts), "Did not save unaggregated att")
+	assert.DeepEqual(t, att.ToAttestationElectra(committee), atts[0], "Incorrect saved att")
+	assert.Equal(t, 0, len(r.cfg.attPool.AggregatedAttestations()), "Did save aggregated att")
+	require.LogsContain(t, hook, "Verified and saved pending attestations to pool")
+
+	// Encode the attestation for pubsub and decode the message.
+	buf := new(bytes.Buffer)
+	_, err = p1.Encoding().EncodeGossip(buf, att)
+	require.NoError(t, err)
+	digest, err := r.currentForkDigest()
+	require.NoError(t, err)
+	topic := fmt.Sprintf("/eth2/%x/beacon_attestation_1", digest)
+	m := &pubsub.Message{
+		Message: &pubsubpb.Message{
+			Data:  buf.Bytes(),
+			Topic: &topic,
+		},
+	}
+	_, err = r.decodePubsubMessage(m)
+	require.NoError(t, err)
+
+	// Validate the pubsub message and ignore it as it should already been seen.
+	res, err := r.validateCommitteeIndexBeaconAttestation(ctx, "", m)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationIgnore, res)
+
+	// Wait for the event to complete.
+	wg.Wait()
 	cancel()
 }
 
@@ -304,11 +516,12 @@ func TestProcessPendingAtts_NoBroadcastWithBadSignature(t *testing.T) {
 	r = &Service{
 		ctx: ctx,
 		cfg: &config{
-			p2p:      p1,
-			beaconDB: db,
-			chain:    chain2,
-			clock:    startup.NewClock(chain2.Genesis, chain2.ValidatorsRoot),
-			attPool:  attestations.NewPool(),
+			p2p:                 p1,
+			beaconDB:            db,
+			chain:               chain2,
+			clock:               startup.NewClock(chain2.Genesis, chain2.ValidatorsRoot),
+			attPool:             attestations.NewPool(),
+			attestationNotifier: &mock.MockOperationNotifier{},
 		},
 		blkRootToPendingAtts:             make(map[[32]byte][]ethpb.SignedAggregateAttAndProof),
 		seenUnAggregatedAttestationCache: lruwrpr.New(10),
@@ -409,8 +622,7 @@ func TestProcessPendingAtts_HasBlockSaveAggregatedAtt(t *testing.T) {
 
 	assert.Equal(t, 1, len(r.cfg.attPool.AggregatedAttestations()), "Did not save aggregated att")
 	assert.DeepEqual(t, att, r.cfg.attPool.AggregatedAttestations()[0], "Incorrect saved att")
-	atts, err := r.cfg.attPool.UnaggregatedAttestations()
-	require.NoError(t, err)
+	atts := r.cfg.attPool.UnaggregatedAttestations()
 	assert.Equal(t, 0, len(atts), "Did save aggregated att")
 	require.LogsContain(t, hook, "Verified and saved pending attestations to pool")
 	cancel()

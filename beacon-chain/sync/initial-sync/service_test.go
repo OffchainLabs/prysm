@@ -464,7 +464,7 @@ func TestMissingBlobRequest(t *testing.T) {
 			setup: func(t *testing.T) (blocks.ROBlock, *filesystem.BlobStorage) {
 				bk, _ := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 0, 2)
 				bm, fs := filesystem.NewEphemeralBlobStorageWithMocker(t)
-				require.NoError(t, bm.CreateFakeIndices(bk.Root(), 1))
+				require.NoError(t, bm.CreateFakeIndices(bk.Root(), bk.Block().Slot(), 1))
 				return bk, fs
 			},
 			nReq: 1,
@@ -474,7 +474,7 @@ func TestMissingBlobRequest(t *testing.T) {
 			setup: func(t *testing.T) (blocks.ROBlock, *filesystem.BlobStorage) {
 				bk, _ := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 0, 2)
 				bm, fs := filesystem.NewEphemeralBlobStorageWithMocker(t)
-				require.NoError(t, bm.CreateFakeIndices(bk.Root(), 0, 1))
+				require.NoError(t, bm.CreateFakeIndices(bk.Root(), bk.Block().Slot(), 0, 1))
 				return bk, fs
 			},
 			nReq: 0,

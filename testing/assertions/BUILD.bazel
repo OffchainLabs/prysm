@@ -8,8 +8,10 @@ go_library(
     deps = [
         "//encoding/ssz/equality:go_default_library",
         "@com_github_d4l3k_messagediff//:go_default_library",
+        "@com_github_google_go_cmp//cmp:go_default_library",
         "@com_github_sirupsen_logrus//hooks/test:go_default_library",
         "@org_golang_google_protobuf//proto:go_default_library",
+        "@org_golang_google_protobuf//testing/protocmp:go_default_library",
     ],
 )
 

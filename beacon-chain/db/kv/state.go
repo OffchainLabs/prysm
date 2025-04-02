@@ -407,7 +407,7 @@ func (s *Store) HasState(ctx context.Context, blockRoot [32]byte) bool {
 		return nil
 	})
 	if err != nil {
-		panic(err)
+		panic(err) // lint:nopanic -- View never returns an error.
 	}
 	return hasState
 }
@@ -518,9 +518,9 @@ func (s *Store) unmarshalState(_ context.Context, enc []byte, validatorEntries [
 
 	switch {
 	case hasFuluKey(enc):
-		protoState := &ethpb.BeaconStateFulu{}
+		protoState := &ethpb.BeaconStateElectra{}
 		if err := protoState.UnmarshalSSZ(enc[len(fuluKey):]); err != nil {
-			return nil, errors.Wrap(err, "failed to unmarshal encoding for Electra")
+			return nil, errors.Wrap(err, "failed to unmarshal encoding for Fulu")
 		}
 		ok, err := s.isStateValidatorMigrationOver()
 		if err != nil {
@@ -690,7 +690,7 @@ func marshalState(ctx context.Context, st state.ReadOnlyBeaconState) ([]byte, er
 		}
 		return snappy.Encode(nil, append(ElectraKey, rawObj...)), nil
 	case version.Fulu:
-		rState, ok := st.ToProtoUnsafe().(*ethpb.BeaconStateFulu)
+		rState, ok := st.ToProtoUnsafe().(*ethpb.BeaconStateElectra)
 		if !ok {
 			return nil, errors.New("non valid inner state")
 		}
@@ -820,30 +820,25 @@ func (s *Store) slotByBlockRoot(ctx context.Context, tx *bolt.Tx, blockRoot []by
 			// no need to construct the validator entries as it is not used here.
 			s, err := s.unmarshalState(ctx, enc, nil)
 			if err != nil {
-				return 0, err
+				return 0, errors.Wrap(err, "could not unmarshal state")
 			}
 			if s == nil || s.IsNil() {
 				return 0, errors.New("state can't be nil")
 			}
 			return s.Slot(), nil
 		}
-		b := &ethpb.SignedBeaconBlock{}
-		err := decode(ctx, enc, b)
+		b, err := unmarshalBlock(ctx, enc)
 		if err != nil {
+			return 0, errors.Wrap(err, "could not unmarshal block")
+		}
+		if err := blocks.BeaconBlockIsNil(b); err != nil {
 			return 0, err
 		}
-		wsb, err := blocks.NewSignedBeaconBlock(b)
-		if err != nil {
-			return 0, err
-		}
-		if err := blocks.BeaconBlockIsNil(wsb); err != nil {
-			return 0, err
-		}
-		return b.Block.Slot, nil
+		return b.Block().Slot(), nil
 	}
 	stateSummary := &ethpb.StateSummary{}
 	if err := decode(ctx, enc, stateSummary); err != nil {
-		return 0, err
+		return 0, errors.Wrap(err, "could not unmarshal state summary")
 	}
 	return stateSummary.Slot, nil
 }
