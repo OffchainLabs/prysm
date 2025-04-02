@@ -2,6 +2,7 @@ package sync
 
 import (
 	"context"
+	goErrors "errors"
 	"fmt"
 	"sort"
 	"time"
@@ -343,8 +344,8 @@ func FetchOrReconstructDataColumnsByRoot(
 			newColumnsVerifier,
 		)
 		if reconstructErr != nil {
-			// Reconstruction also failed. Wrap the original error with the reconstruction error.
-			return nil, errors.Wrapf(err, "failed to fetch (no peers) and reconstruction failed: %v", reconstructErr)
+			joinedErr := goErrors.Join(err, reconstructErr)
+			return nil, errors.Wrap(joinedErr, "failed to fetch (no peers) and reconstruction failed")
 		}
 		// Successfully reconstructed.
 		log.Debug("Successfully reconstructed requested data columns")

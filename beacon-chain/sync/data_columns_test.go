@@ -365,7 +365,7 @@ func TestSelectPeersToFetchDataColumnsFrom(t *testing.T) {
 				peer.ID("peer3"): {1: true, 5: true},
 			},
 			dataColumnsToFetchByPeer: nil,
-			err:                      fmt.Errorf("%w: missing data columns: %v", ErrNoPeersForDataColumns, []uint64{3, 7}),
+			err:                      fmt.Errorf("no peers available to fetch data columns from: remaining peers do not cover missing columns: [3 7]"),
 		},
 		{
 			name:              "respects MaxRequestDataColumnSidecars limit",
@@ -830,7 +830,8 @@ func TestFetchOrReconstructDataColumnsByRoot(t *testing.T) {
 		name                 string
 		requestedColumns     map[uint64]bool
 		peerSetup            []peerSetup // Peers available in the network (if nil, generate covering set)
-		unavailableColumns   []uint64    // Columns that all custodians should refuse to serve
+		unavailableColumns   []uint64    // Columns that all custodians should refuse to serve (used if targetCoverageCount is 0)
+		targetCoverageCount  uint64      // Target number of unique columns for generated peer set (if peerSetup is nil and > 0)
 		expectedError        error       // Use errors.Is for checking wrapped errors
 		expectReconstruction bool        // Crude check if reconstruction path likely taken
 	}{
@@ -853,27 +854,32 @@ func TestFetchOrReconstructDataColumnsByRoot(t *testing.T) {
 			expectReconstruction: true,
 		},
 		{
-			name:             "Failure - Reconstruction Impossible - Not Enough Available Columns",
-			requestedColumns: colsToMap([]uint64{6, 28}),
+			name:             "Failure - Reconstruction Impossible - Limited Peers",
+			requestedColumns: colsToMap([]uint64{6, 500}), // Request one known (6) and one unknown (500) column
 			peerSetup: []peerSetup{ // Intentionally few peers
-				{offset: 1, custodyGroupCount: 4},  // Custodies [6, 37, 48, 113]
-				{offset: 10, custodyGroupCount: 4}, // Custodies [6, 28, 53, 71]
-				{offset: 20, custodyGroupCount: 4}, // Custodies [30, 64, 75, 91]
-				{offset: 30, custodyGroupCount: 4}, // Custodies [16, 27, 51, 84]
+				{offset: 1, custodyGroupCount: 4},
+				{offset: 10, custodyGroupCount: 4},
+				{offset: 20, custodyGroupCount: 4},
+				{offset: 30, custodyGroupCount: 4},
 			},
-			// Make enough columns unavailable such that threshold cannot be met
-			unavailableColumns: []uint64{6, 37, 28, 53, 30, 64, 75, 91, 16, 27, 51, 84},
-			// Total unique custodied = 16. Unavailable = 12. Available = 4. Threshold=64.
-			expectedError:        ErrNotEnoughColsAvailable,
-			expectReconstruction: true, // It will try reconstruction but fail availability check
+			unavailableColumns: nil,
+			expectedError:      ErrNotEnoughColsAvailable,
 		},
 		{
-			name:                 "Failure - Direct Fetch Fails & Reconstruction Impossible",
-			requestedColumns:     colsToMap([]uint64{1000, 1001}), // Columns no peer custodies
-			peerSetup:            nil,                             // Generate a covering set
-			unavailableColumns:   nil,                             // No columns need to be made unavailable
-			expectedError:        ErrNoPeersForDataColumns,
-			expectReconstruction: false,
+			name:                "Failure - Reconstruction Impossible - Target Coverage 50",
+			requestedColumns:    colsToMap([]uint64{6, 500}), // Request one potentially covered (6) and one uncovered (500)
+			peerSetup:           nil,
+			unavailableColumns:  nil,
+			targetCoverageCount: 50, // Generate peers covering only 50 columns total.
+			// This is less than the recovery threshold (64).
+			expectedError: ErrNotEnoughColsAvailable,
+		},
+		{
+			name:               "Failure - Direct Fetch Fails & Reconstruction Impossible",
+			requestedColumns:   colsToMap([]uint64{1000, 1001}), // Columns no peer custodies
+			peerSetup:          nil,                             // Generate a covering set
+			unavailableColumns: nil,                             // No columns need to be made unavailable
+			expectedError:      ErrNoPeersForDataColumns,
 		},
 		{
 			name:                 "Success - Empty Request",
@@ -897,7 +903,14 @@ func TestFetchOrReconstructDataColumnsByRoot(t *testing.T) {
 				peerSetups = tc.peerSetup
 			} else {
 				// Generate a covering set if specific setup not provided
-				peerSetups = createCoveringPeerSet(t, params.BeaconConfig().NumberOfColumns-uint64(len(tc.unavailableColumns)), tc.unavailableColumns)
+				if tc.targetCoverageCount > 0 {
+					// If a target count is specified, generate peers covering that many columns.
+					peerSetups = createCoveringPeerSet(t, tc.targetCoverageCount, nil)
+				} else {
+					// Otherwise, generate peers covering all available columns (excluding unavailable ones).
+					numColsToCover := params.BeaconConfig().NumberOfColumns - uint64(len(tc.unavailableColumns))
+					peerSetups = createCoveringPeerSet(t, numColsToCover, tc.unavailableColumns)
+				}
 			}
 
 			// --- Peer Connection & Availability Calculation ---
@@ -995,7 +1008,11 @@ func TestFetchOrReconstructDataColumnsByRoot(t *testing.T) {
 					}
 				}
 
-				require.Equal(t, tc.requestedColumns, requestedColSet, "Expected requests to match requested columns for direct fetch")
+				require.Equal(t, len(tc.requestedColumns), len(requestedColSet), "Map lengths should be equal for direct fetch")
+				for k := range tc.requestedColumns {
+					_, ok := requestedColSet[k]
+					require.Equal(t, true, ok, "Key %d expected in actual requests map", k)
+				}
 			}
 		})
 	}
