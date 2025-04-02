@@ -108,6 +108,9 @@ func RequestDataColumnSidecarsByRoot(
 	for len(dataColumnsByAdmissiblePeer) > 0 {
 		peersToFetchFrom, err := SelectPeersToFetchDataColumnsFrom(uint64MapToSortedSlice(remainingMissingColumns), dataColumnsByAdmissiblePeer)
 		if err != nil {
+			if errors.Is(err, ErrNoPeersForDataColumns) {
+				return nil, err
+			}
 			return nil, errors.Wrap(err, "select peers to fetch data columns from")
 		}
 
@@ -251,11 +254,11 @@ func ReconstructDataColumnsByRoot(
 	peers := getBestPeers(p2p, chain)
 
 	// Find available columns from peers.
-	allNeededCols := make(map[uint64]bool, numberOfColumns)
+	allCols := make(map[uint64]bool, numberOfColumns)
 	for i := uint64(0); i < numberOfColumns; i++ {
-		allNeededCols[i] = true
+		allCols[i] = true
 	}
-	_, admissiblePeersByDataColumn, _, err := AdmissiblePeersForDataColumns(peers, allNeededCols, p2p)
+	_, admissiblePeersByDataColumn, _, err := AdmissiblePeersForDataColumns(peers, allCols, p2p)
 	if err != nil {
 		return nil, errors.Wrap(err, "couldn't get admissible peers for all data columns")
 	}
@@ -268,6 +271,11 @@ func ReconstructDataColumnsByRoot(
 	if uint64(len(availableColumns)) < recoveryThreshold {
 		return nil, ErrNotEnoughColsAvailable
 	}
+
+	log.WithFields(logrus.Fields{
+		"availableColumns": uint64MapToSortedSlice(availableColumns),
+		"numPeers":         len(peers),
+	}).Debug("Available columns for reconstruction")
 
 	// Fetch the required sidecars for reconstruction.
 	fetchedSidecars, err := fetchAndVerifyRecoveryColumns(
@@ -387,7 +395,10 @@ func fetchAndVerifyRecoveryColumns(
 		otherAvailable = otherAvailable[1:]
 	}
 
-	log.WithField("columnsToFetch", uint64MapToSortedSlice(columnsToFetch)).Debug("Selected columns for fetch for recovery")
+	log.WithFields(logrus.Fields{
+		"columnsToFetch":    uint64MapToSortedSlice(columnsToFetch),
+		"recoveryThreshold": recoveryThreshold,
+	}).Debug("Selected columns for fetch for recovery")
 
 	// Fetch selected columns.
 	fetchedSidecars, err := RequestDataColumnSidecarsByRoot(
@@ -765,39 +776,24 @@ func SelectPeersToFetchDataColumnsFrom(neededDataColumns []uint64, dataColumnsBy
 	}
 
 	dataColumnsFromSelectedPeers := make(map[peer.ID][]uint64)
-
-	// Filter `dataColumnsByPeer` to only contain needed data columns.
-	neededDataColumnsByPeer := make(map[peer.ID]map[uint64]bool, len(dataColumnsByPeer))
-	for pid, dataColumns := range dataColumnsByPeer {
-		// Create a map for the current peer's needed columns
-		currentPeerNeededColumns := make(map[uint64]bool)
-		hasNeeded := false
-		for dataColumn := range dataColumns {
-			if remainingDataColumns[dataColumn] {
-				currentPeerNeededColumns[dataColumn] = true
-				hasNeeded = true
-			}
-		}
-		// Only add the peer if they have at least one needed column
-		if hasNeeded {
-			neededDataColumnsByPeer[pid] = currentPeerNeededColumns
-		}
-	}
-
+	exhaustedPeers := make(map[peer.ID]bool)
 	maxRequestDataColumnSidecars := params.BeaconConfig().MaxRequestDataColumnSidecars
 
 	for len(remainingDataColumns) > 0 {
-		// Check if at least one peer remains. If not, it means that we don't have enough peers to fetch all needed data columns.
-		if len(neededDataColumnsByPeer) == 0 {
-			missingDataColumnsSortedSlice := uint64MapToSortedSlice(remainingDataColumns)
-			return nil, fmt.Errorf("%w: missing data columns: %v", ErrNoPeersForDataColumns, missingDataColumnsSortedSlice)
-		}
-
 		// Select the peer that custody the most needed data columns (greedy selection).
 		var bestPeer peer.ID
-		maxCovered := -1 // Use -1 to handle the first peer correctly
+		maxCovered := 0
 
-		for peer, dataColumns := range neededDataColumnsByPeer {
+		for peer, dataColumns := range dataColumnsByPeer {
+			if _, ok := dataColumnsFromSelectedPeers[peer]; ok {
+				// Skip peers that have already been selected.
+				continue
+			}
+			if _, ok := exhaustedPeers[peer]; ok {
+				// Skip peers that have already been exhausted.
+				continue
+			}
+
 			// Count how many *remaining* data columns this peer covers
 			coveredCount := 0
 			for col := range dataColumns {
@@ -811,17 +807,21 @@ func SelectPeersToFetchDataColumnsFrom(neededDataColumns []uint64, dataColumnsBy
 				maxCovered = coveredCount
 				bestPeer = peer
 			}
+
+			if coveredCount == 0 {
+				exhaustedPeers[peer] = true
+			}
 		}
 
-		// If maxCovered is 0 or less, it means no available peer covers any remaining needed column.
-		if maxCovered <= 0 {
+		// No available peer covers any remaining needed column.
+		if maxCovered == 0 {
 			missingDataColumnsSortedSlice := uint64MapToSortedSlice(remainingDataColumns)
 			return nil, fmt.Errorf("%w: remaining peers do not cover missing columns: %v", ErrNoPeersForDataColumns, missingDataColumnsSortedSlice)
 		}
 
 		// Get the actual columns this best peer provides from the set we still need.
 		columnsProvidedByBestPeer := make([]uint64, 0)
-		for col := range neededDataColumnsByPeer[bestPeer] {
+		for col := range dataColumnsByPeer[bestPeer] {
 			if remainingDataColumns[col] {
 				columnsProvidedByBestPeer = append(columnsProvidedByBestPeer, col)
 			}
@@ -834,9 +834,6 @@ func SelectPeersToFetchDataColumnsFrom(neededDataColumns []uint64, dataColumnsBy
 			columnsProvidedByBestPeer = columnsProvidedByBestPeer[:maxRequestDataColumnSidecars]
 		}
 		dataColumnsFromSelectedPeers[bestPeer] = columnsProvidedByBestPeer
-
-		// Remove the selected peer from the pool for the next iteration.
-		delete(neededDataColumnsByPeer, bestPeer)
 
 		// Remove the columns covered by the selected peer from the remaining set.
 		for _, dataColumn := range columnsProvidedByBestPeer {

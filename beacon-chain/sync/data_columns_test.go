@@ -706,18 +706,23 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 // custody all column indices from 0 to numberOfColumns-1.
 // It returns the peer setups and a map from column index to the list of peer offsets
 // that custody that column.
-func createCoveringPeerSet(t *testing.T, numberOfColumns uint64) ([]peerSetup, map[uint64][]int) {
+func createCoveringPeerSet(t *testing.T, numberOfColumns uint64, unavailableColumns []uint64) []peerSetup {
 	t.Helper()
+
+	if params.BeaconConfig().NumberOfColumns-uint64(len(unavailableColumns)) < numberOfColumns {
+		t.Fatalf("Not enough columns available to cover %d columns", numberOfColumns)
+	}
+
 	peerSetups := make([]peerSetup, 0)
-	columnToPeers := make(map[uint64][]int)
 	coveredColumns := make(map[uint64]bool)
 	offset := 1 // Start peer offsets from 1
 
 	// Keep adding peers until all columns are covered
 	for uint64(len(coveredColumns)) < numberOfColumns {
 		setup := peerSetup{
-			offset:            offset,
-			custodyGroupCount: 4, // Use a common group count for simplicity
+			offset: offset,
+			// Use a high enough group count to cover columns with < 50 peers
+			custodyGroupCount: 8,
 		}
 
 		// Determine custody columns for this potential peer
@@ -729,34 +734,42 @@ func createCoveringPeerSet(t *testing.T, numberOfColumns uint64) ([]peerSetup, m
 		info, _, err := peerdas.Info(enodeID, setup.custodyGroupCount)
 		require.NoError(t, err)
 
-		newlyCovered := false
-		for colIdx := range info.CustodyColumns {
-			columnToPeers[colIdx] = append(columnToPeers[colIdx], setup.offset)
-			if !coveredColumns[colIdx] {
-				coveredColumns[colIdx] = true
-				newlyCovered = true
+		hasUnavailableColumn := false
+		for col := range info.CustodyColumns {
+			for _, unavailableCol := range unavailableColumns {
+				if col == unavailableCol {
+					hasUnavailableColumn = true
+					break
+				}
 			}
 		}
 
-		// Only add the peer if it covers at least one new column to avoid infinite loops
-		// in unlikely scenarios where new peers don't add coverage.
-		if newlyCovered || uint64(len(coveredColumns)) < numberOfColumns {
-			peerSetups = append(peerSetups, setup)
-		} else if len(peerSetups) > int(numberOfColumns)*2 { // Revert safety break limit
-			// Safety break: if we've added many peers but aren't covering all columns, something is wrong.
-			t.Fatalf("Failed to cover all columns after adding %d peers", len(peerSetups))
+		if !hasUnavailableColumn {
+			newlyCovered := false
+			for colIdx := range info.CustodyColumns {
+				if !coveredColumns[colIdx] {
+					coveredColumns[colIdx] = true
+					newlyCovered = true
+				}
+			}
+
+			if newlyCovered {
+				peerSetups = append(peerSetups, setup)
+				if len(peerSetups) > maxPeerRequest {
+					t.Fatalf("Created more peers than will be queried (maxPeerRequest: %d)", maxPeerRequest)
+				}
+			}
 		}
 
 		offset++
 	}
 
 	t.Logf("Created a covering peer set with %d peers. Total unique columns covered: %d", len(peerSetups), len(coveredColumns))
-	return peerSetups, columnToPeers
+	return peerSetups
 }
 
 func TestFetchOrReconstructDataColumnsByRoot(t *testing.T) {
 	const blobsCount = 6
-	const numberOfColumns = 128 // Matches params.BeaconConfig().NumberOfColumns usually
 
 	// Start the trusted setup.
 	err := kzg.Start()
@@ -766,8 +779,7 @@ func TestFetchOrReconstructDataColumnsByRoot(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
 	cfg.FuluForkEpoch = 0
-	// Ensure we have a predictable number of columns for recovery calculations
-	cfg.NumberOfColumns = numberOfColumns
+	cfg.NumberOfColumns = 128
 	params.OverrideBeaconConfig(cfg)
 
 	// Recovery threshold calculation (mirrors logic in ReconstructDataColumnsByRoot)
@@ -812,16 +824,6 @@ func TestFetchOrReconstructDataColumnsByRoot(t *testing.T) {
 			m[col] = true
 		}
 		return m
-	}
-
-	getCustodyColumns := func(setup peerSetup) map[uint64]bool {
-		_, peerID, privKey := createCustodyPeer(t, setup.offset, setup.custodyGroupCount)
-		enodeID, err := p2p.ConvertPeerIDToNodeID(peerID)
-		require.NoError(t, err)
-		_ = privKey // Keep compiler happy
-		info, _, err := peerdas.Info(enodeID, setup.custodyGroupCount)
-		require.NoError(t, err)
-		return info.CustodyColumns
 	}
 
 	testCases := []struct {
@@ -888,51 +890,22 @@ func TestFetchOrReconstructDataColumnsByRoot(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			var initialPeerSetups []peerSetup
+			var peerSetups []peerSetup
 
 			// Determine the peer setup for this test case
 			if tc.peerSetup != nil {
-				initialPeerSetups = tc.peerSetup
+				peerSetups = tc.peerSetup
 			} else {
 				// Generate a covering set if specific setup not provided
-				initialPeerSetups, _ = createCoveringPeerSet(t, numberOfColumns)
+				peerSetups = createCoveringPeerSet(t, params.BeaconConfig().NumberOfColumns-uint64(len(tc.unavailableColumns)), tc.unavailableColumns)
 			}
-
-			finalPeerSetups := make([]peerSetup, 0, len(initialPeerSetups))
-			unavailableColumnsMap := make(map[uint64]bool, len(tc.unavailableColumns))
-			for _, col := range tc.unavailableColumns {
-				unavailableColumnsMap[col] = true
-			}
-			t.Logf("Filtering peers. Excluding any peer custodying columns: %v", tc.unavailableColumns)
-
-			for _, setup := range initialPeerSetups {
-				peerCols := getCustodyColumns(setup)
-				isExcluded := false
-				for col := range peerCols {
-					if unavailableColumnsMap[col] {
-						isExcluded = true
-						break
-					}
-				}
-				if !isExcluded {
-					finalPeerSetups = append(finalPeerSetups, setup)
-				}
-			}
-			t.Logf("Using %d peers for the test after exclusion.", len(finalPeerSetups))
 
 			// --- Peer Connection & Availability Calculation ---
 			hostP2P := p2ptest.NewTestP2P(t)
 			tracker := newRequestTracker()
-			allAvailableColumns := make(map[uint64]bool) // Track columns available from the *final* peer set
 
-			for _, setup := range finalPeerSetups {
+			for _, setup := range peerSetups {
 				createAndConnectCustodyPeer(t, setup, dataColumnSidecars, chainService, hostP2P, tracker, nil)
-
-				// Track available columns from this included peer
-				peerCols := getCustodyColumns(setup)
-				for col := range peerCols {
-					allAvailableColumns[col] = true
-				}
 			}
 
 			ctxMap := map[[4]byte]int{{245, 165, 253, 66}: version.Fulu}
