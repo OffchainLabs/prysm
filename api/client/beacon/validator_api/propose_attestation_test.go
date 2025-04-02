@@ -8,34 +8,34 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/mock"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/validator_api/test_helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/network/httputil"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api/mock"
-	testhelpers "github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api/test-helpers"
 	"go.uber.org/mock/gomock"
 )
 
 func TestProposeAttestation(t *testing.T) {
 	attestation := &ethpb.Attestation{
-		AggregationBits: testhelpers.FillByteSlice(4, 74),
+		AggregationBits: test_helpers.FillByteSlice(4, 74),
 		Data: &ethpb.AttestationData{
 			Slot:            75,
 			CommitteeIndex:  76,
-			BeaconBlockRoot: testhelpers.FillByteSlice(32, 38),
+			BeaconBlockRoot: test_helpers.FillByteSlice(32, 38),
 			Source: &ethpb.Checkpoint{
 				Epoch: 78,
-				Root:  testhelpers.FillByteSlice(32, 79),
+				Root:  test_helpers.FillByteSlice(32, 79),
 			},
 			Target: &ethpb.Checkpoint{
 				Epoch: 80,
-				Root:  testhelpers.FillByteSlice(32, 81),
+				Root:  test_helpers.FillByteSlice(32, 81),
 			},
 		},
-		Signature: testhelpers.FillByteSlice(96, 82),
+		Signature: test_helpers.FillByteSlice(96, 82),
 	}
 
 	tests := []struct {
@@ -57,30 +57,30 @@ func TestProposeAttestation(t *testing.T) {
 		{
 			name: "nil attestation data",
 			attestation: &ethpb.Attestation{
-				AggregationBits: testhelpers.FillByteSlice(4, 74),
-				Signature:       testhelpers.FillByteSlice(96, 82),
+				AggregationBits: test_helpers.FillByteSlice(4, 74),
+				Signature:       test_helpers.FillByteSlice(96, 82),
 			},
 			expectedErrorMessage: "attestation is nil",
 		},
 		{
 			name: "nil source checkpoint",
 			attestation: &ethpb.Attestation{
-				AggregationBits: testhelpers.FillByteSlice(4, 74),
+				AggregationBits: test_helpers.FillByteSlice(4, 74),
 				Data: &ethpb.AttestationData{
 					Target: &ethpb.Checkpoint{},
 				},
-				Signature: testhelpers.FillByteSlice(96, 82),
+				Signature: test_helpers.FillByteSlice(96, 82),
 			},
 			expectedErrorMessage: "attestation's source can't be nil",
 		},
 		{
 			name: "nil target checkpoint",
 			attestation: &ethpb.Attestation{
-				AggregationBits: testhelpers.FillByteSlice(4, 74),
+				AggregationBits: test_helpers.FillByteSlice(4, 74),
 				Data: &ethpb.AttestationData{
 					Source: &ethpb.Checkpoint{},
 				},
-				Signature: testhelpers.FillByteSlice(96, 82),
+				Signature: test_helpers.FillByteSlice(96, 82),
 			},
 			expectedErrorMessage: "attestation's target can't be nil",
 		},
@@ -91,7 +91,7 @@ func TestProposeAttestation(t *testing.T) {
 					Source: &ethpb.Checkpoint{},
 					Target: &ethpb.Checkpoint{},
 				},
-				Signature: testhelpers.FillByteSlice(96, 82),
+				Signature: test_helpers.FillByteSlice(96, 82),
 			},
 			expectedErrorMessage: "attestation's bitfield can't be nil",
 		},
@@ -150,21 +150,21 @@ func TestProposeAttestation(t *testing.T) {
 
 func TestProposeAttestationFallBack(t *testing.T) {
 	attestation := &ethpb.Attestation{
-		AggregationBits: testhelpers.FillByteSlice(4, 74),
+		AggregationBits: test_helpers.FillByteSlice(4, 74),
 		Data: &ethpb.AttestationData{
 			Slot:            75,
 			CommitteeIndex:  76,
-			BeaconBlockRoot: testhelpers.FillByteSlice(32, 38),
+			BeaconBlockRoot: test_helpers.FillByteSlice(32, 38),
 			Source: &ethpb.Checkpoint{
 				Epoch: 78,
-				Root:  testhelpers.FillByteSlice(32, 79),
+				Root:  test_helpers.FillByteSlice(32, 79),
 			},
 			Target: &ethpb.Checkpoint{
 				Epoch: 80,
-				Root:  testhelpers.FillByteSlice(32, 81),
+				Root:  test_helpers.FillByteSlice(32, 81),
 			},
 		},
-		Signature: testhelpers.FillByteSlice(96, 82),
+		Signature: test_helpers.FillByteSlice(96, 82),
 	}
 
 	ctrl := gomock.NewController(t)
@@ -220,17 +220,17 @@ func TestProposeAttestationElectra(t *testing.T) {
 		Data: &ethpb.AttestationData{
 			Slot:            75,
 			CommitteeIndex:  76,
-			BeaconBlockRoot: testhelpers.FillByteSlice(32, 38),
+			BeaconBlockRoot: test_helpers.FillByteSlice(32, 38),
 			Source: &ethpb.Checkpoint{
 				Epoch: 78,
-				Root:  testhelpers.FillByteSlice(32, 79),
+				Root:  test_helpers.FillByteSlice(32, 79),
 			},
 			Target: &ethpb.Checkpoint{
 				Epoch: 80,
-				Root:  testhelpers.FillByteSlice(32, 81),
+				Root:  test_helpers.FillByteSlice(32, 81),
 			},
 		},
-		Signature:   testhelpers.FillByteSlice(96, 82),
+		Signature:   test_helpers.FillByteSlice(96, 82),
 		CommitteeId: 83,
 	}
 
@@ -254,7 +254,7 @@ func TestProposeAttestationElectra(t *testing.T) {
 			name: "nil attestation data",
 			attestation: &ethpb.SingleAttestation{
 				AttesterIndex: 74,
-				Signature:     testhelpers.FillByteSlice(96, 82),
+				Signature:     test_helpers.FillByteSlice(96, 82),
 				CommitteeId:   83,
 			},
 			expectedErrorMessage: "attestation is nil",
@@ -266,7 +266,7 @@ func TestProposeAttestationElectra(t *testing.T) {
 				Data: &ethpb.AttestationData{
 					Target: &ethpb.Checkpoint{},
 				},
-				Signature:   testhelpers.FillByteSlice(96, 82),
+				Signature:   test_helpers.FillByteSlice(96, 82),
 				CommitteeId: 83,
 			},
 			expectedErrorMessage: "attestation's source can't be nil",
@@ -278,7 +278,7 @@ func TestProposeAttestationElectra(t *testing.T) {
 				Data: &ethpb.AttestationData{
 					Source: &ethpb.Checkpoint{},
 				},
-				Signature:   testhelpers.FillByteSlice(96, 82),
+				Signature:   test_helpers.FillByteSlice(96, 82),
 				CommitteeId: 83,
 			},
 			expectedErrorMessage: "attestation's target can't be nil",

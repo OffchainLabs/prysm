@@ -8,13 +8,13 @@ import (
 	grpcopentracing "github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing"
 	grpcprometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/pkg/errors"
+	api_client "github.com/prysmaticlabs/prysm/v5/api/client"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/chain"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/node"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/validator_api"
 	grpcutil "github.com/prysmaticlabs/prysm/v5/api/grpc"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/validator/client"
-	beaconApi "github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api"
-	beaconChainClientFactory "github.com/prysmaticlabs/prysm/v5/validator/client/beacon-chain-client-factory"
-	nodeClientFactory "github.com/prysmaticlabs/prysm/v5/validator/client/node-client-factory"
-	validatorClientFactory "github.com/prysmaticlabs/prysm/v5/validator/client/validator-client-factory"
 	validatorHelpers "github.com/prysmaticlabs/prysm/v5/validator/helpers"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"google.golang.org/grpc"
@@ -55,13 +55,13 @@ func (s *Server) registerBeaconClient() error {
 		s.beaconApiTimeout,
 	)
 
-	restHandler := beaconApi.NewBeaconApiJsonRestHandler(
+	restHandler := api_client.NewBeaconApiJsonRestHandler(
 		http.Client{Timeout: s.beaconApiTimeout, Transport: otelhttp.NewTransport(http.DefaultTransport)},
 		s.beaconApiEndpoint,
 	)
 
-	s.chainClient = beaconChainClientFactory.NewChainClient(conn, restHandler)
-	s.nodeClient = nodeClientFactory.NewNodeClient(conn, restHandler)
-	s.beaconNodeValidatorClient = validatorClientFactory.NewValidatorClient(conn, restHandler)
+	s.chainClient = chain.NewClient(conn, restHandler)
+	s.nodeClient = node.NewClient(conn, restHandler)
+	s.beaconNodeValidatorClient = validator_api.NewClient(conn, restHandler)
 	return nil
 }

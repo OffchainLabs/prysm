@@ -4,13 +4,14 @@ import (
 	"context"
 	"testing"
 
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/mock"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/validator"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"github.com/prysmaticlabs/prysm/v5/testing/util"
-	mock "github.com/prysmaticlabs/prysm/v5/testing/validator-mock"
 	"go.uber.org/mock/gomock"
 )
 
@@ -91,12 +92,12 @@ func TestGRPC_GetValidatorCount(t *testing.T) {
 		name             string
 		statuses         []string
 		currentEpoch     int
-		expectedResponse []ValidatorCount
+		expectedResponse []beacon.ValidatorCount
 	}{
 		{
 			name:     "Head count active validators",
 			statuses: []string{"active"},
-			expectedResponse: []ValidatorCount{
+			expectedResponse: []beacon.ValidatorCount{
 				{
 					Status: "active",
 					Count:  13,
@@ -106,7 +107,7 @@ func TestGRPC_GetValidatorCount(t *testing.T) {
 		{
 			name:     "Head count active ongoing validators",
 			statuses: []string{"active_ongoing"},
-			expectedResponse: []ValidatorCount{
+			expectedResponse: []beacon.ValidatorCount{
 				{
 					Status: "active_ongoing",
 					Count:  11,
@@ -116,7 +117,7 @@ func TestGRPC_GetValidatorCount(t *testing.T) {
 		{
 			name:     "Head count active exiting validators",
 			statuses: []string{"active_exiting"},
-			expectedResponse: []ValidatorCount{
+			expectedResponse: []beacon.ValidatorCount{
 				{
 					Status: "active_exiting",
 					Count:  1,
@@ -126,7 +127,7 @@ func TestGRPC_GetValidatorCount(t *testing.T) {
 		{
 			name:     "Head count active slashed validators",
 			statuses: []string{"active_slashed"},
-			expectedResponse: []ValidatorCount{
+			expectedResponse: []beacon.ValidatorCount{
 				{
 					Status: "active_slashed",
 					Count:  1,
@@ -136,7 +137,7 @@ func TestGRPC_GetValidatorCount(t *testing.T) {
 		{
 			name:     "Head count pending validators",
 			statuses: []string{"pending"},
-			expectedResponse: []ValidatorCount{
+			expectedResponse: []beacon.ValidatorCount{
 				{
 					Status: "pending",
 					Count:  6,
@@ -146,7 +147,7 @@ func TestGRPC_GetValidatorCount(t *testing.T) {
 		{
 			name:     "Head count pending initialized validators",
 			statuses: []string{"pending_initialized"},
-			expectedResponse: []ValidatorCount{
+			expectedResponse: []beacon.ValidatorCount{
 				{
 					Status: "pending_initialized",
 					Count:  1,
@@ -156,7 +157,7 @@ func TestGRPC_GetValidatorCount(t *testing.T) {
 		{
 			name:     "Head count pending queued validators",
 			statuses: []string{"pending_queued"},
-			expectedResponse: []ValidatorCount{
+			expectedResponse: []beacon.ValidatorCount{
 				{
 					Status: "pending_queued",
 					Count:  5,
@@ -167,7 +168,7 @@ func TestGRPC_GetValidatorCount(t *testing.T) {
 			name:         "Head count exited validators",
 			statuses:     []string{"exited"},
 			currentEpoch: 35,
-			expectedResponse: []ValidatorCount{
+			expectedResponse: []beacon.ValidatorCount{
 				{
 					Status: "exited",
 					Count:  6,
@@ -178,7 +179,7 @@ func TestGRPC_GetValidatorCount(t *testing.T) {
 			name:         "Head count exited slashed validators",
 			statuses:     []string{"exited_slashed"},
 			currentEpoch: 35,
-			expectedResponse: []ValidatorCount{
+			expectedResponse: []beacon.ValidatorCount{
 				{
 					Status: "exited_slashed",
 					Count:  2,
@@ -189,7 +190,7 @@ func TestGRPC_GetValidatorCount(t *testing.T) {
 			name:         "Head count exited unslashed validators",
 			statuses:     []string{"exited_unslashed"},
 			currentEpoch: 35,
-			expectedResponse: []ValidatorCount{
+			expectedResponse: []beacon.ValidatorCount{
 				{
 					Status: "exited_unslashed",
 					Count:  4,
@@ -200,7 +201,7 @@ func TestGRPC_GetValidatorCount(t *testing.T) {
 			name:         "Head count withdrawal validators",
 			statuses:     []string{"withdrawal"},
 			currentEpoch: 45,
-			expectedResponse: []ValidatorCount{
+			expectedResponse: []beacon.ValidatorCount{
 				{
 					Status: "withdrawal",
 					Count:  2,
@@ -211,7 +212,7 @@ func TestGRPC_GetValidatorCount(t *testing.T) {
 			name:         "Head count withdrawal possible validators",
 			statuses:     []string{"withdrawal_possible"},
 			currentEpoch: 45,
-			expectedResponse: []ValidatorCount{
+			expectedResponse: []beacon.ValidatorCount{
 				{
 					Status: "withdrawal_possible",
 					Count:  1,
@@ -222,7 +223,7 @@ func TestGRPC_GetValidatorCount(t *testing.T) {
 			name:         "Head count withdrawal done validators",
 			statuses:     []string{"withdrawal_done"},
 			currentEpoch: 45,
-			expectedResponse: []ValidatorCount{
+			expectedResponse: []beacon.ValidatorCount{
 				{
 					Status: "withdrawal_done",
 					Count:  1,
@@ -232,7 +233,7 @@ func TestGRPC_GetValidatorCount(t *testing.T) {
 		{
 			name:     "Head count active and pending validators",
 			statuses: []string{"active", "pending"},
-			expectedResponse: []ValidatorCount{
+			expectedResponse: []beacon.ValidatorCount{
 				{
 					Status: "active",
 					Count:  13,
@@ -245,7 +246,7 @@ func TestGRPC_GetValidatorCount(t *testing.T) {
 		},
 		{
 			name: "Head count of ALL validators",
-			expectedResponse: []ValidatorCount{
+			expectedResponse: []beacon.ValidatorCount{
 				{
 					Status: "active",
 					Count:  13,

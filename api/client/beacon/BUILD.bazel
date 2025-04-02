@@ -6,6 +6,7 @@ go_library(
         "client.go",
         "doc.go",
         "log.go",
+        "structs.go",
         "template.go",
     ],
     importpath = "github.com/prysmaticlabs/prysm/v5/api/client/beacon",

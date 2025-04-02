@@ -9,14 +9,15 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/mock"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/shared_providers"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/validator_api/test_helpers"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/network/httputil"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api/mock"
-	testhelpers "github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api/test-helpers"
 	"go.uber.org/mock/gomock"
 )
 
@@ -40,9 +41,9 @@ func TestSubmitAggregateSelectionProof(t *testing.T) {
 	require.NoError(t, err)
 
 	aggregateAttestation := &ethpb.Attestation{
-		AggregationBits: testhelpers.FillByteSlice(4, 74),
+		AggregationBits: test_helpers.FillByteSlice(4, 74),
 		Data:            attestationDataProto,
-		Signature:       testhelpers.FillByteSlice(96, 82),
+		Signature:       test_helpers.FillByteSlice(96, 82),
 	}
 
 	ctrl := gomock.NewController(t)
@@ -159,13 +160,9 @@ func TestSubmitAggregateSelectionProof(t *testing.T) {
 			}
 
 			validatorClient := &beaconApiValidatorClient{
-				jsonRestHandler: jsonRestHandler,
-				stateValidatorsProvider: beaconApiStateValidatorsProvider{
-					jsonRestHandler: jsonRestHandler,
-				},
-				dutiesProvider: beaconApiDutiesProvider{
-					jsonRestHandler: jsonRestHandler,
-				},
+				jsonRestHandler:         jsonRestHandler,
+				stateValidatorsProvider: shared_providers.NewStateValidators(jsonRestHandler),
+				dutiesProvider:          shared_providers.NewDuties(jsonRestHandler),
 			}
 
 			committees := committeesAtSlot
@@ -209,9 +206,9 @@ func TestSubmitAggregateSelectionProofFallBack(t *testing.T) {
 	require.NoError(t, err)
 
 	aggregateAttestation := &ethpb.Attestation{
-		AggregationBits: testhelpers.FillByteSlice(4, 74),
+		AggregationBits: test_helpers.FillByteSlice(4, 74),
 		Data:            attestationDataProto,
-		Signature:       testhelpers.FillByteSlice(96, 82),
+		Signature:       test_helpers.FillByteSlice(96, 82),
 	}
 
 	ctrl := gomock.NewController(t)
@@ -290,13 +287,9 @@ func TestSubmitAggregateSelectionProofFallBack(t *testing.T) {
 	}
 
 	validatorClient := &beaconApiValidatorClient{
-		jsonRestHandler: jsonRestHandler,
-		stateValidatorsProvider: beaconApiStateValidatorsProvider{
-			jsonRestHandler: jsonRestHandler,
-		},
-		dutiesProvider: beaconApiDutiesProvider{
-			jsonRestHandler: jsonRestHandler,
-		},
+		jsonRestHandler:         jsonRestHandler,
+		stateValidatorsProvider: shared_providers.NewStateValidators(jsonRestHandler),
+		dutiesProvider:          shared_providers.NewDuties(jsonRestHandler),
 	}
 
 	actualResponse, err := validatorClient.submitAggregateSelectionProof(ctx, &ethpb.AggregateSelectionRequest{
@@ -331,10 +324,10 @@ func TestSubmitAggregateSelectionProofElectra(t *testing.T) {
 	require.NoError(t, err)
 
 	aggregateAttestation := &ethpb.AttestationElectra{
-		AggregationBits: testhelpers.FillByteSlice(4, 74),
+		AggregationBits: test_helpers.FillByteSlice(4, 74),
 		Data:            attestationDataProto,
-		Signature:       testhelpers.FillByteSlice(96, 82),
-		CommitteeBits:   testhelpers.FillByteSlice(8, 83),
+		Signature:       test_helpers.FillByteSlice(96, 82),
+		CommitteeBits:   test_helpers.FillByteSlice(8, 83),
 	}
 
 	ctrl := gomock.NewController(t)
@@ -451,13 +444,9 @@ func TestSubmitAggregateSelectionProofElectra(t *testing.T) {
 			}
 
 			validatorClient := &beaconApiValidatorClient{
-				jsonRestHandler: jsonRestHandler,
-				stateValidatorsProvider: beaconApiStateValidatorsProvider{
-					jsonRestHandler: jsonRestHandler,
-				},
-				dutiesProvider: beaconApiDutiesProvider{
-					jsonRestHandler: jsonRestHandler,
-				},
+				jsonRestHandler:         jsonRestHandler,
+				stateValidatorsProvider: shared_providers.NewStateValidators(jsonRestHandler),
+				dutiesProvider:          shared_providers.NewDuties(jsonRestHandler),
 			}
 
 			committees := committeesAtSlot

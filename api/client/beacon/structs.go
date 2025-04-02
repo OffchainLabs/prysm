@@ -1,4 +1,4 @@
-package validator_api
+package beacon
 
 import (
 	"encoding/json"
@@ -7,6 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
 type BeaconCommitteeSelection struct {
@@ -116,10 +117,29 @@ func (s *SyncCommitteeSelection) UnmarshalJSON(input []byte) error {
 	return nil
 }
 
-type aggregatedSelectionResponse struct {
+type AggregatedSelectionResponse struct {
 	Data []BeaconCommitteeSelection `json:"data"`
 }
 
-type aggregatedSyncSelectionResponse struct {
+type AggregatedSyncSelectionResponse struct {
 	Data []SyncCommitteeSelection `json:"data"`
+}
+
+type AttesterDuty struct {
+	CommitteeIndex          primitives.CommitteeIndex
+	Slot                    primitives.Slot
+	CommitteeLength         uint64
+	ValidatorCommitteeIndex uint64
+	CommitteesAtSlot        uint64
+}
+
+type ValidatorForDuty struct {
+	Pubkey []byte
+	Index  primitives.ValidatorIndex
+	Status ethpb.ValidatorStatus
+}
+
+type ValidatorCount struct {
+	Status string
+	Count  uint64
 }

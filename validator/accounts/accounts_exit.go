@@ -10,6 +10,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/node"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/validator_api"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
@@ -17,16 +19,14 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/io/file"
 	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/validator/client"
-	beacon_api "github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
 	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 // PerformExitCfg for account voluntary exits.
 type PerformExitCfg struct {
-	ValidatorClient  iface.ValidatorClient
-	NodeClient       iface.NodeClient
+	ValidatorClient  validator_api.Client
+	NodeClient       node.Client
 	Keymanager       keymanager.IKeymanager
 	RawPubKeys       [][]byte
 	FormattedPubKeys []string
@@ -47,7 +47,7 @@ func (acm *CLIManager) Exit(ctx context.Context) error {
 	if nodeClient == nil {
 		return errors.New("could not prepare beacon node client")
 	}
-	syncStatus, err := (*nodeClient).SyncStatus(ctx, &emptypb.Empty{})
+	syncStatus, err := nodeClient.SyncStatus(ctx, &emptypb.Empty{})
 	if err != nil {
 		return err
 	}
@@ -60,8 +60,8 @@ func (acm *CLIManager) Exit(ctx context.Context) error {
 	}
 
 	cfg := PerformExitCfg{
-		*validatorClient,
-		*nodeClient,
+		validatorClient,
+		nodeClient,
 		acm.keymanager,
 		acm.rawPubKeys,
 		acm.formattedPubKeys,
@@ -189,7 +189,7 @@ func writeSignedVoluntaryExitJSON(sve *eth.SignedVoluntaryExit, outputDirectory 
 		return err
 	}
 
-	jsve := beacon_api.JsonifySignedVoluntaryExits([]*eth.SignedVoluntaryExit{sve})[0]
+	jsve := validator_api.JsonifySignedVoluntaryExits([]*eth.SignedVoluntaryExit{sve})[0]
 	b, err := json.Marshal(jsve)
 	if err != nil {
 		return errors.Wrap(err, "failed to marshal JSON signed voluntary exit")

@@ -7,15 +7,15 @@
 //
 
 // Package validator_mock is a generated GoMock package.
-package validator_mock
+package mock
 
 import (
 	context "context"
 	reflect "reflect"
 
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon"
 	validator "github.com/prysmaticlabs/prysm/v5/consensus-types/validator"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	iface "github.com/prysmaticlabs/prysm/v5/validator/client/iface"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -43,10 +43,10 @@ func (m *MockPrysmChainClient) EXPECT() *MockPrysmChainClientMockRecorder {
 }
 
 // ValidatorCount mocks base method.
-func (m *MockPrysmChainClient) ValidatorCount(arg0 context.Context, arg1 string, arg2 []validator.Status) ([]iface.ValidatorCount, error) {
+func (m *MockPrysmChainClient) ValidatorCount(arg0 context.Context, arg1 string, arg2 []validator.Status) ([]beacon.ValidatorCount, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ValidatorCount", arg0, arg1, arg2)
-	ret0, _ := ret[0].([]iface.ValidatorCount)
+	ret0, _ := ret[0].([]beacon.ValidatorCount)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

@@ -7,12 +7,12 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	validatormock "github.com/prysmaticlabs/prysm/v5/api/client/beacon/mock"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	validatormock "github.com/prysmaticlabs/prysm/v5/testing/validator-mock"
 	walletMock "github.com/prysmaticlabs/prysm/v5/validator/accounts/testing"
 	"github.com/prysmaticlabs/prysm/v5/validator/client/testutil"
 	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/derived"

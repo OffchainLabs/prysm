@@ -16,7 +16,7 @@ var (
 
 type grpcNodeClient struct {
 	nodeClient    ethpb.NodeClient
-	healthTracker health.Tracker
+	healthTracker health.HealthTracker
 }
 
 func (c *grpcNodeClient) SyncStatus(ctx context.Context, in *empty.Empty) (*ethpb.SyncStatus, error) {
@@ -44,7 +44,7 @@ func (c *grpcNodeClient) IsHealthy(ctx context.Context) bool {
 	return true
 }
 
-func (c *grpcNodeClient) HealthTracker() health.Tracker {
+func (c *grpcNodeClient) HealthTracker() health.HealthTracker {
 	return c.healthTracker
 }
 

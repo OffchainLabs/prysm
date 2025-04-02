@@ -16,14 +16,13 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/prysmaticlabs/prysm/v5/api"
+	validatormock "github.com/prysmaticlabs/prysm/v5/api/client/beacon/mock"
 	"github.com/prysmaticlabs/prysm/v5/cmd/validator/flags"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	validatormock "github.com/prysmaticlabs/prysm/v5/testing/validator-mock"
 	"github.com/prysmaticlabs/prysm/v5/validator/accounts"
 	"github.com/prysmaticlabs/prysm/v5/validator/accounts/iface"
-	mock "github.com/prysmaticlabs/prysm/v5/validator/accounts/testing"
 	"github.com/prysmaticlabs/prysm/v5/validator/client"
 	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
 	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/derived"
@@ -55,7 +54,7 @@ func TestServer_ListAccounts(t *testing.T) {
 	require.NoError(t, err)
 	vs, err := client.NewValidatorService(ctx, &client.Config{
 		Wallet: w,
-		Validator: &mock.Validator{
+		Validator: &client.FakeValidator{
 			Km: km,
 		},
 	})
@@ -160,7 +159,7 @@ func TestServer_BackupAccounts(t *testing.T) {
 	require.NoError(t, err)
 	vs, err := client.NewValidatorService(ctx, &client.Config{
 		Wallet: w,
-		Validator: &mock.Validator{
+		Validator: &client.FakeValidator{
 			Km: km,
 		},
 	})
@@ -284,7 +283,7 @@ func TestServer_VoluntaryExit(t *testing.T) {
 	require.NoError(t, err)
 	vs, err := client.NewValidatorService(ctx, &client.Config{
 		Wallet: w,
-		Validator: &mock.Validator{
+		Validator: &client.FakeValidator{
 			Km: km,
 		},
 	})

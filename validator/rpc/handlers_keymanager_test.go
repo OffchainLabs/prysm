@@ -16,6 +16,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	validatormock "github.com/prysmaticlabs/prysm/v5/api/client/beacon/mock"
 	"github.com/prysmaticlabs/prysm/v5/cmd/validator/flags"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
@@ -26,10 +27,8 @@ import (
 	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	validatormock "github.com/prysmaticlabs/prysm/v5/testing/validator-mock"
 	"github.com/prysmaticlabs/prysm/v5/validator/accounts"
 	"github.com/prysmaticlabs/prysm/v5/validator/accounts/iface"
-	mock "github.com/prysmaticlabs/prysm/v5/validator/accounts/testing"
 	"github.com/prysmaticlabs/prysm/v5/validator/accounts/wallet"
 	"github.com/prysmaticlabs/prysm/v5/validator/client"
 	dbCommon "github.com/prysmaticlabs/prysm/v5/validator/db/common"
@@ -51,7 +50,7 @@ import (
 func TestServer_ListKeystores(t *testing.T) {
 	ctx := context.Background()
 	t.Run("wallet not ready", func(t *testing.T) {
-		m := &mock.Validator{}
+		m := &client.FakeValidator{}
 		vs, err := client.NewValidatorService(ctx, &client.Config{
 			Validator: m,
 		})
@@ -83,7 +82,7 @@ func TestServer_ListKeystores(t *testing.T) {
 	require.NoError(t, err)
 	vs, err := client.NewValidatorService(ctx, &client.Config{
 		Wallet: w,
-		Validator: &mock.Validator{
+		Validator: &client.FakeValidator{
 			Km: km,
 		},
 	})
@@ -149,7 +148,7 @@ func TestServer_ImportKeystores(t *testing.T) {
 	require.NoError(t, err)
 	vs, err := client.NewValidatorService(ctx, &client.Config{
 		Wallet: w,
-		Validator: &mock.Validator{
+		Validator: &client.FakeValidator{
 			Km: km,
 		},
 	})
@@ -370,7 +369,7 @@ func TestServer_ImportKeystores_WrongKeymanagerKind(t *testing.T) {
 	require.NoError(t, err)
 	vs, err := client.NewValidatorService(ctx, &client.Config{
 		Wallet: w,
-		Validator: &mock.Validator{
+		Validator: &client.FakeValidator{
 			Km: km,
 		},
 	})
@@ -654,7 +653,7 @@ func TestServer_DeleteKeystores_WrongKeymanagerKind(t *testing.T) {
 	require.NoError(t, err)
 	vs, err := client.NewValidatorService(ctx, &client.Config{
 		Wallet: w,
-		Validator: &mock.Validator{
+		Validator: &client.FakeValidator{
 			Km: km,
 		},
 	})
@@ -697,7 +696,7 @@ func setupServerWithWallet(t testing.TB) *Server {
 	require.NoError(t, err)
 	vs, err := client.NewValidatorService(ctx, &client.Config{
 		Wallet: w,
-		Validator: &mock.Validator{
+		Validator: &client.FakeValidator{
 			Km: km,
 		},
 	})
@@ -729,7 +728,7 @@ func TestServer_SetVoluntaryExit(t *testing.T) {
 	km, err := w.InitializeKeymanager(ctx, iface.InitKeymanagerConfig{ListenForChanges: false})
 	require.NoError(t, err)
 
-	m := &mock.Validator{Km: km}
+	m := &client.FakeValidator{Km: km}
 	vs, err := client.NewValidatorService(ctx, &client.Config{
 		Validator: m,
 	})
@@ -950,7 +949,7 @@ func TestServer_GetGasLimit(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			m := &mock.Validator{}
+			m := &client.FakeValidator{}
 			err := m.SetProposerSettings(ctx, tt.args)
 			require.NoError(t, err)
 			vs, err := client.NewValidatorService(ctx, &client.Config{
@@ -1107,7 +1106,7 @@ func TestServer_SetGasLimit(t *testing.T) {
 	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
 		for _, tt := range tests {
 			t.Run(fmt.Sprintf("%s/isSlashingProtectionMinimal:%v", tt.name, isSlashingProtectionMinimal), func(t *testing.T) {
-				m := &mock.Validator{}
+				m := &client.FakeValidator{}
 				err := m.SetProposerSettings(ctx, tt.proposerSettings)
 				require.NoError(t, err)
 				validatorDB := dbtest.SetupDB(t, [][fieldparams.BLSPubkeyLength]byte{}, isSlashingProtectionMinimal)
@@ -1296,7 +1295,7 @@ func TestServer_DeleteGasLimit(t *testing.T) {
 	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
 		for _, tt := range tests {
 			t.Run(fmt.Sprintf("%s/isSlashingProtectionMinimal:%v", tt.name, isSlashingProtectionMinimal), func(t *testing.T) {
-				m := &mock.Validator{}
+				m := &client.FakeValidator{}
 				err := m.SetProposerSettings(ctx, tt.proposerSettings)
 				require.NoError(t, err)
 				validatorDB := dbtest.SetupDB(t, [][fieldparams.BLSPubkeyLength]byte{}, isSlashingProtectionMinimal)
@@ -1350,7 +1349,7 @@ func TestServer_ListRemoteKeys(t *testing.T) {
 	require.NoError(t, err)
 	vs, err := client.NewValidatorService(ctx, &client.Config{
 		Wallet: w,
-		Validator: &mock.Validator{
+		Validator: &client.FakeValidator{
 			Km: km,
 		},
 		Web3SignerConfig: config,
@@ -1406,7 +1405,7 @@ func TestServer_ImportRemoteKeys(t *testing.T) {
 	require.NoError(t, err)
 	vs, err := client.NewValidatorService(ctx, &client.Config{
 		Wallet: w,
-		Validator: &mock.Validator{
+		Validator: &client.FakeValidator{
 			Km: km,
 		},
 		Web3SignerConfig: config,
@@ -1468,7 +1467,7 @@ func TestServer_DeleteRemoteKeys(t *testing.T) {
 	require.NoError(t, err)
 	vs, err := client.NewValidatorService(ctx, &client.Config{
 		Wallet: w,
-		Validator: &mock.Validator{
+		Validator: &client.FakeValidator{
 			Km: km,
 		},
 		Web3SignerConfig: config,
@@ -1563,7 +1562,7 @@ func TestServer_ListFeeRecipientByPubkey(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			m := &mock.Validator{}
+			m := &client.FakeValidator{}
 			err := m.SetProposerSettings(ctx, tt.args)
 			require.NoError(t, err)
 
@@ -1592,7 +1591,7 @@ func TestServer_ListFeeRecipientByPubKey_NoFeeRecipientSet(t *testing.T) {
 	ctx := context.Background()
 
 	vs, err := client.NewValidatorService(ctx, &client.Config{
-		Validator: &mock.Validator{},
+		Validator: &client.FakeValidator{},
 	})
 	require.NoError(t, err)
 
@@ -1774,7 +1773,7 @@ func TestServer_FeeRecipientByPubkey(t *testing.T) {
 	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
 		for _, tt := range tests {
 			t.Run(fmt.Sprintf("%s/isSlashingProtectionMinimal:%v", tt.name, isSlashingProtectionMinimal), func(t *testing.T) {
-				m := &mock.Validator{}
+				m := &client.FakeValidator{}
 				err := m.SetProposerSettings(ctx, tt.proposerSettings)
 				require.NoError(t, err)
 				validatorDB := dbtest.SetupDB(t, [][fieldparams.BLSPubkeyLength]byte{}, isSlashingProtectionMinimal)
@@ -1886,7 +1885,7 @@ func TestServer_DeleteFeeRecipientByPubkey(t *testing.T) {
 	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
 		for _, tt := range tests {
 			t.Run(fmt.Sprintf("%s/isSlashingProtectionMinimal:%v", tt.name, isSlashingProtectionMinimal), func(t *testing.T) {
-				m := &mock.Validator{}
+				m := &client.FakeValidator{}
 				err := m.SetProposerSettings(ctx, tt.proposerSettings)
 				require.NoError(t, err)
 				validatorDB := dbtest.SetupDB(t, [][fieldparams.BLSPubkeyLength]byte{}, isSlashingProtectionMinimal)
@@ -1939,7 +1938,7 @@ func TestServer_DeleteFeeRecipientByPubkey_InvalidPubKey(t *testing.T) {
 
 func TestServer_Graffiti(t *testing.T) {
 	graffiti := "graffiti"
-	m := &mock.Validator{}
+	m := &client.FakeValidator{}
 	vs, err := client.NewValidatorService(context.Background(), &client.Config{
 		Validator: m,
 	})

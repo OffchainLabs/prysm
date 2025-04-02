@@ -8,6 +8,7 @@ import (
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/api/client"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon"
 	eventClient "github.com/prysmaticlabs/prysm/v5/api/client/event"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
@@ -200,12 +201,12 @@ func (c *grpcValidatorClient) AggregatedSigAndAggregationBits(
 	return c.beaconNodeValidatorClient.AggregatedSigAndAggregationBits(ctx, in)
 }
 
-func (*grpcValidatorClient) AggregatedSelections(context.Context, []BeaconCommitteeSelection) ([]BeaconCommitteeSelection, error) {
-	return nil, api.ErrNotSupported
+func (*grpcValidatorClient) AggregatedSelections(context.Context, []beacon.BeaconCommitteeSelection) ([]beacon.BeaconCommitteeSelection, error) {
+	return nil, client.ErrNotSupported
 }
 
-func (*grpcValidatorClient) AggregatedSyncSelections(context.Context, []SyncCommitteeSelection) ([]SyncCommitteeSelection, error) {
-	return nil, api.ErrNotSupported
+func (*grpcValidatorClient) AggregatedSyncSelections(context.Context, []beacon.SyncCommitteeSelection) ([]beacon.SyncCommitteeSelection, error) {
+	return nil, client.ErrNotSupported
 }
 
 func NewGrpcValidatorClient(cc grpc.ClientConnInterface) Client {
@@ -305,10 +306,10 @@ func (c *grpcValidatorClient) EventStreamIsRunning() bool {
 }
 
 func (*grpcValidatorClient) Host() string {
-	log.Warn(api.ErrNotSupported)
+	log.Warn(client.ErrNotSupported)
 	return ""
 }
 
 func (*grpcValidatorClient) SetHost(_ string) {
-	log.Warn(api.ErrNotSupported)
+	log.Warn(client.ErrNotSupported)
 }

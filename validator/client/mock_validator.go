@@ -1,4 +1,4 @@
-package testutil
+package client
 
 import (
 	"bytes"
@@ -12,14 +12,16 @@ import (
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/proposer"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	prysmTime "github.com/prysmaticlabs/prysm/v5/time"
-	"github.com/prysmaticlabs/prysm/v5/validator/client"
 	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
-	log "github.com/sirupsen/logrus"
 )
 
-var _ client.Validator = (*FakeValidator)(nil)
+// ActiveKey represents a public key whose status is ACTIVE.
+var ActiveKey = bytesutil.ToBytes48([]byte("active"))
+
+var _ Validator = (*FakeValidator)(nil)
 
 // FakeValidator for mocking.
 type FakeValidator struct {
@@ -51,7 +53,7 @@ type FakeValidator struct {
 	PublicKey                         string
 	UpdateDutiesRet                   error
 	ProposerSettingsErr               error
-	RolesAtRet                        []client.ValidatorRole
+	RolesAtRet                        []ValidatorRole
 	Balances                          map[[fieldparams.BLSPubkeyLength]byte]uint64
 	IndexToPubkeyMap                  map[uint64][fieldparams.BLSPubkeyLength]byte
 	PubkeyToIndexMap                  map[[fieldparams.BLSPubkeyLength]byte]uint64
@@ -60,7 +62,7 @@ type FakeValidator struct {
 	ProposerSettingWait               time.Duration
 	Km                                keymanager.IKeymanager
 	graffiti                          string
-	Tracker                           health.Tracker
+	Tracker                           health.HealthTracker
 	AttSubmitted                      chan interface{}
 	BlockProposed                     chan interface{}
 }
@@ -161,10 +163,10 @@ func (fv *FakeValidator) ResetAttesterProtectionData() {
 }
 
 // RolesAt for mocking.
-func (fv *FakeValidator) RolesAt(_ context.Context, slot primitives.Slot) (map[[fieldparams.BLSPubkeyLength]byte][]client.ValidatorRole, error) {
+func (fv *FakeValidator) RolesAt(_ context.Context, slot primitives.Slot) (map[[fieldparams.BLSPubkeyLength]byte][]ValidatorRole, error) {
 	fv.RoleAtCalled = true
 	fv.RoleAtArg1 = uint64(slot)
-	vr := make(map[[fieldparams.BLSPubkeyLength]byte][]client.ValidatorRole)
+	vr := make(map[[fieldparams.BLSPubkeyLength]byte][]ValidatorRole)
 	vr[[fieldparams.BLSPubkeyLength]byte{1}] = fv.RolesAtRet
 	return vr, nil
 }
@@ -276,7 +278,7 @@ func (*FakeValidator) SetPubKeyToValidatorIndexMap(_ context.Context, _ keymanag
 }
 
 // SignValidatorRegistrationRequest for mocking
-func (*FakeValidator) SignValidatorRegistrationRequest(_ context.Context, _ client.SigningFunc, _ *ethpb.ValidatorRegistrationV1) (*ethpb.SignedValidatorRegistrationV1, bool, error) {
+func (*FakeValidator) SignValidatorRegistrationRequest(_ context.Context, _ SigningFunc, _ *ethpb.ValidatorRegistrationV1) (*ethpb.SignedValidatorRegistrationV1, bool, error) {
 	return nil, false, nil
 }
 
@@ -318,7 +320,7 @@ func (*FakeValidator) EventStreamIsRunning() bool {
 	return true
 }
 
-func (fv *FakeValidator) HealthTracker() health.Tracker {
+func (fv *FakeValidator) HealthTracker() health.HealthTracker {
 	return fv.Tracker
 }
 

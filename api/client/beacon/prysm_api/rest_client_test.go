@@ -7,6 +7,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon"
 	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/mock"
 	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/node"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
@@ -27,7 +28,7 @@ func TestGetValidatorCount(t *testing.T) {
 		versionResponse             structs.GetVersionResponse
 		validatorCountResponse      structs.GetValidatorCountResponse
 		validatorCountCalled        int
-		expectedResponse            []ValidatorCount
+		expectedResponse            []beacon.ValidatorCount
 		expectedError               string
 	}{
 		{
@@ -46,7 +47,7 @@ func TestGetValidatorCount(t *testing.T) {
 				},
 			},
 			validatorCountCalled: 1,
-			expectedResponse: []ValidatorCount{
+			expectedResponse: []beacon.ValidatorCount{
 				{
 					Status: "active",
 					Count:  10,

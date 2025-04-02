@@ -6,9 +6,9 @@ import (
 	"math"
 
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/validator_api"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/validator/accounts/wallet"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
 	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
 )
 
@@ -19,7 +19,7 @@ func (acm *CLIManager) List(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		return listValidatorIndices(ctx, acm.keymanager, *client)
+		return listValidatorIndices(ctx, acm.keymanager, client)
 	}
 	return acm.keymanager.ListKeymanagerAccounts(ctx,
 		keymanager.ListKeymanagerAccountConfig{
@@ -29,7 +29,7 @@ func (acm *CLIManager) List(ctx context.Context) error {
 		})
 }
 
-func listValidatorIndices(ctx context.Context, km keymanager.IKeymanager, client iface.ValidatorClient) error {
+func listValidatorIndices(ctx context.Context, km keymanager.IKeymanager, client validator_api.Client) error {
 	pubKeys, err := km.FetchValidatingPublicKeys(ctx)
 	if err != nil {
 		return errors.Wrap(err, "could not get validating public keys")

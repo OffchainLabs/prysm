@@ -7,14 +7,15 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/prysmaticlabs/prysm/v5/api/client/apiutil"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/mock"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/validator_api/test_helpers"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api/mock"
-	testhelpers "github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api/test-helpers"
 	"go.uber.org/mock/gomock"
 )
 
@@ -32,8 +33,8 @@ func TestProposeBeaconBlock_BlindedCapella(t *testing.T) {
 		Signature: hexutil.Encode(blindedCapellaBlock.BlindedCapella.Signature),
 		Message: &structs.BlindedBeaconBlockCapella{
 			ParentRoot:    hexutil.Encode(blindedCapellaBlock.BlindedCapella.Block.ParentRoot),
-			ProposerIndex: uint64ToString(blindedCapellaBlock.BlindedCapella.Block.ProposerIndex),
-			Slot:          uint64ToString(blindedCapellaBlock.BlindedCapella.Block.Slot),
+			ProposerIndex: apiutil.Uint64ToString(blindedCapellaBlock.BlindedCapella.Block.ProposerIndex),
+			Slot:          apiutil.Uint64ToString(blindedCapellaBlock.BlindedCapella.Block.Slot),
 			StateRoot:     hexutil.Encode(blindedCapellaBlock.BlindedCapella.Block.StateRoot),
 			Body: &structs.BlindedBeaconBlockBodyCapella{
 				Attestations:      jsonifyAttestations(blindedCapellaBlock.BlindedCapella.Block.Body.Attestations),
@@ -51,17 +52,17 @@ func TestProposeBeaconBlock_BlindedCapella(t *testing.T) {
 				ExecutionPayloadHeader: &structs.ExecutionPayloadHeaderCapella{
 					BaseFeePerGas:    bytesutil.LittleEndianBytesToBigInt(blindedCapellaBlock.BlindedCapella.Block.Body.ExecutionPayloadHeader.BaseFeePerGas).String(),
 					BlockHash:        hexutil.Encode(blindedCapellaBlock.BlindedCapella.Block.Body.ExecutionPayloadHeader.BlockHash),
-					BlockNumber:      uint64ToString(blindedCapellaBlock.BlindedCapella.Block.Body.ExecutionPayloadHeader.BlockNumber),
+					BlockNumber:      apiutil.Uint64ToString(blindedCapellaBlock.BlindedCapella.Block.Body.ExecutionPayloadHeader.BlockNumber),
 					ExtraData:        hexutil.Encode(blindedCapellaBlock.BlindedCapella.Block.Body.ExecutionPayloadHeader.ExtraData),
 					FeeRecipient:     hexutil.Encode(blindedCapellaBlock.BlindedCapella.Block.Body.ExecutionPayloadHeader.FeeRecipient),
-					GasLimit:         uint64ToString(blindedCapellaBlock.BlindedCapella.Block.Body.ExecutionPayloadHeader.GasLimit),
-					GasUsed:          uint64ToString(blindedCapellaBlock.BlindedCapella.Block.Body.ExecutionPayloadHeader.GasUsed),
+					GasLimit:         apiutil.Uint64ToString(blindedCapellaBlock.BlindedCapella.Block.Body.ExecutionPayloadHeader.GasLimit),
+					GasUsed:          apiutil.Uint64ToString(blindedCapellaBlock.BlindedCapella.Block.Body.ExecutionPayloadHeader.GasUsed),
 					LogsBloom:        hexutil.Encode(blindedCapellaBlock.BlindedCapella.Block.Body.ExecutionPayloadHeader.LogsBloom),
 					ParentHash:       hexutil.Encode(blindedCapellaBlock.BlindedCapella.Block.Body.ExecutionPayloadHeader.ParentHash),
 					PrevRandao:       hexutil.Encode(blindedCapellaBlock.BlindedCapella.Block.Body.ExecutionPayloadHeader.PrevRandao),
 					ReceiptsRoot:     hexutil.Encode(blindedCapellaBlock.BlindedCapella.Block.Body.ExecutionPayloadHeader.ReceiptsRoot),
 					StateRoot:        hexutil.Encode(blindedCapellaBlock.BlindedCapella.Block.Body.ExecutionPayloadHeader.StateRoot),
-					Timestamp:        uint64ToString(blindedCapellaBlock.BlindedCapella.Block.Body.ExecutionPayloadHeader.Timestamp),
+					Timestamp:        apiutil.Uint64ToString(blindedCapellaBlock.BlindedCapella.Block.Body.ExecutionPayloadHeader.Timestamp),
 					TransactionsRoot: hexutil.Encode(blindedCapellaBlock.BlindedCapella.Block.Body.ExecutionPayloadHeader.TransactionsRoot),
 					WithdrawalsRoot:  hexutil.Encode(blindedCapellaBlock.BlindedCapella.Block.Body.ExecutionPayloadHeader.WithdrawalsRoot),
 				},
@@ -103,37 +104,37 @@ func generateSignedBlindedCapellaBlock() *ethpb.GenericSignedBeaconBlock_Blinded
 			Block: &ethpb.BlindedBeaconBlockCapella{
 				Slot:          1,
 				ProposerIndex: 2,
-				ParentRoot:    testhelpers.FillByteSlice(32, 3),
-				StateRoot:     testhelpers.FillByteSlice(32, 4),
+				ParentRoot:    test_helpers.FillByteSlice(32, 3),
+				StateRoot:     test_helpers.FillByteSlice(32, 4),
 				Body: &ethpb.BlindedBeaconBlockBodyCapella{
-					RandaoReveal: testhelpers.FillByteSlice(96, 5),
+					RandaoReveal: test_helpers.FillByteSlice(96, 5),
 					Eth1Data: &ethpb.Eth1Data{
-						DepositRoot:  testhelpers.FillByteSlice(32, 6),
+						DepositRoot:  test_helpers.FillByteSlice(32, 6),
 						DepositCount: 7,
-						BlockHash:    testhelpers.FillByteSlice(32, 8),
+						BlockHash:    test_helpers.FillByteSlice(32, 8),
 					},
-					Graffiti: testhelpers.FillByteSlice(32, 9),
+					Graffiti: test_helpers.FillByteSlice(32, 9),
 					ProposerSlashings: []*ethpb.ProposerSlashing{
 						{
 							Header_1: &ethpb.SignedBeaconBlockHeader{
 								Header: &ethpb.BeaconBlockHeader{
 									Slot:          10,
 									ProposerIndex: 11,
-									ParentRoot:    testhelpers.FillByteSlice(32, 12),
-									StateRoot:     testhelpers.FillByteSlice(32, 13),
-									BodyRoot:      testhelpers.FillByteSlice(32, 14),
+									ParentRoot:    test_helpers.FillByteSlice(32, 12),
+									StateRoot:     test_helpers.FillByteSlice(32, 13),
+									BodyRoot:      test_helpers.FillByteSlice(32, 14),
 								},
-								Signature: testhelpers.FillByteSlice(96, 15),
+								Signature: test_helpers.FillByteSlice(96, 15),
 							},
 							Header_2: &ethpb.SignedBeaconBlockHeader{
 								Header: &ethpb.BeaconBlockHeader{
 									Slot:          16,
 									ProposerIndex: 17,
-									ParentRoot:    testhelpers.FillByteSlice(32, 18),
-									StateRoot:     testhelpers.FillByteSlice(32, 19),
-									BodyRoot:      testhelpers.FillByteSlice(32, 20),
+									ParentRoot:    test_helpers.FillByteSlice(32, 18),
+									StateRoot:     test_helpers.FillByteSlice(32, 19),
+									BodyRoot:      test_helpers.FillByteSlice(32, 20),
 								},
-								Signature: testhelpers.FillByteSlice(96, 21),
+								Signature: test_helpers.FillByteSlice(96, 21),
 							},
 						},
 						{
@@ -141,21 +142,21 @@ func generateSignedBlindedCapellaBlock() *ethpb.GenericSignedBeaconBlock_Blinded
 								Header: &ethpb.BeaconBlockHeader{
 									Slot:          22,
 									ProposerIndex: 23,
-									ParentRoot:    testhelpers.FillByteSlice(32, 24),
-									StateRoot:     testhelpers.FillByteSlice(32, 25),
-									BodyRoot:      testhelpers.FillByteSlice(32, 26),
+									ParentRoot:    test_helpers.FillByteSlice(32, 24),
+									StateRoot:     test_helpers.FillByteSlice(32, 25),
+									BodyRoot:      test_helpers.FillByteSlice(32, 26),
 								},
-								Signature: testhelpers.FillByteSlice(96, 27),
+								Signature: test_helpers.FillByteSlice(96, 27),
 							},
 							Header_2: &ethpb.SignedBeaconBlockHeader{
 								Header: &ethpb.BeaconBlockHeader{
 									Slot:          28,
 									ProposerIndex: 29,
-									ParentRoot:    testhelpers.FillByteSlice(32, 30),
-									StateRoot:     testhelpers.FillByteSlice(32, 31),
-									BodyRoot:      testhelpers.FillByteSlice(32, 32),
+									ParentRoot:    test_helpers.FillByteSlice(32, 30),
+									StateRoot:     test_helpers.FillByteSlice(32, 31),
+									BodyRoot:      test_helpers.FillByteSlice(32, 32),
 								},
-								Signature: testhelpers.FillByteSlice(96, 33),
+								Signature: test_helpers.FillByteSlice(96, 33),
 							},
 						},
 					},
@@ -166,34 +167,34 @@ func generateSignedBlindedCapellaBlock() *ethpb.GenericSignedBeaconBlock_Blinded
 								Data: &ethpb.AttestationData{
 									Slot:            36,
 									CommitteeIndex:  37,
-									BeaconBlockRoot: testhelpers.FillByteSlice(32, 38),
+									BeaconBlockRoot: test_helpers.FillByteSlice(32, 38),
 									Source: &ethpb.Checkpoint{
 										Epoch: 39,
-										Root:  testhelpers.FillByteSlice(32, 40),
+										Root:  test_helpers.FillByteSlice(32, 40),
 									},
 									Target: &ethpb.Checkpoint{
 										Epoch: 41,
-										Root:  testhelpers.FillByteSlice(32, 42),
+										Root:  test_helpers.FillByteSlice(32, 42),
 									},
 								},
-								Signature: testhelpers.FillByteSlice(96, 43),
+								Signature: test_helpers.FillByteSlice(96, 43),
 							},
 							Attestation_2: &ethpb.IndexedAttestation{
 								AttestingIndices: []uint64{44, 45},
 								Data: &ethpb.AttestationData{
 									Slot:            46,
 									CommitteeIndex:  47,
-									BeaconBlockRoot: testhelpers.FillByteSlice(32, 38),
+									BeaconBlockRoot: test_helpers.FillByteSlice(32, 38),
 									Source: &ethpb.Checkpoint{
 										Epoch: 49,
-										Root:  testhelpers.FillByteSlice(32, 50),
+										Root:  test_helpers.FillByteSlice(32, 50),
 									},
 									Target: &ethpb.Checkpoint{
 										Epoch: 51,
-										Root:  testhelpers.FillByteSlice(32, 52),
+										Root:  test_helpers.FillByteSlice(32, 52),
 									},
 								},
-								Signature: testhelpers.FillByteSlice(96, 53),
+								Signature: test_helpers.FillByteSlice(96, 53),
 							},
 						},
 						{
@@ -202,90 +203,90 @@ func generateSignedBlindedCapellaBlock() *ethpb.GenericSignedBeaconBlock_Blinded
 								Data: &ethpb.AttestationData{
 									Slot:            56,
 									CommitteeIndex:  57,
-									BeaconBlockRoot: testhelpers.FillByteSlice(32, 38),
+									BeaconBlockRoot: test_helpers.FillByteSlice(32, 38),
 									Source: &ethpb.Checkpoint{
 										Epoch: 59,
-										Root:  testhelpers.FillByteSlice(32, 60),
+										Root:  test_helpers.FillByteSlice(32, 60),
 									},
 									Target: &ethpb.Checkpoint{
 										Epoch: 61,
-										Root:  testhelpers.FillByteSlice(32, 62),
+										Root:  test_helpers.FillByteSlice(32, 62),
 									},
 								},
-								Signature: testhelpers.FillByteSlice(96, 63),
+								Signature: test_helpers.FillByteSlice(96, 63),
 							},
 							Attestation_2: &ethpb.IndexedAttestation{
 								AttestingIndices: []uint64{64, 65},
 								Data: &ethpb.AttestationData{
 									Slot:            66,
 									CommitteeIndex:  67,
-									BeaconBlockRoot: testhelpers.FillByteSlice(32, 38),
+									BeaconBlockRoot: test_helpers.FillByteSlice(32, 38),
 									Source: &ethpb.Checkpoint{
 										Epoch: 69,
-										Root:  testhelpers.FillByteSlice(32, 70),
+										Root:  test_helpers.FillByteSlice(32, 70),
 									},
 									Target: &ethpb.Checkpoint{
 										Epoch: 71,
-										Root:  testhelpers.FillByteSlice(32, 72),
+										Root:  test_helpers.FillByteSlice(32, 72),
 									},
 								},
-								Signature: testhelpers.FillByteSlice(96, 73),
+								Signature: test_helpers.FillByteSlice(96, 73),
 							},
 						},
 					},
 					Attestations: []*ethpb.Attestation{
 						{
-							AggregationBits: testhelpers.FillByteSlice(4, 74),
+							AggregationBits: test_helpers.FillByteSlice(4, 74),
 							Data: &ethpb.AttestationData{
 								Slot:            75,
 								CommitteeIndex:  76,
-								BeaconBlockRoot: testhelpers.FillByteSlice(32, 38),
+								BeaconBlockRoot: test_helpers.FillByteSlice(32, 38),
 								Source: &ethpb.Checkpoint{
 									Epoch: 78,
-									Root:  testhelpers.FillByteSlice(32, 79),
+									Root:  test_helpers.FillByteSlice(32, 79),
 								},
 								Target: &ethpb.Checkpoint{
 									Epoch: 80,
-									Root:  testhelpers.FillByteSlice(32, 81),
+									Root:  test_helpers.FillByteSlice(32, 81),
 								},
 							},
-							Signature: testhelpers.FillByteSlice(96, 82),
+							Signature: test_helpers.FillByteSlice(96, 82),
 						},
 						{
-							AggregationBits: testhelpers.FillByteSlice(4, 83),
+							AggregationBits: test_helpers.FillByteSlice(4, 83),
 							Data: &ethpb.AttestationData{
 								Slot:            84,
 								CommitteeIndex:  85,
-								BeaconBlockRoot: testhelpers.FillByteSlice(32, 38),
+								BeaconBlockRoot: test_helpers.FillByteSlice(32, 38),
 								Source: &ethpb.Checkpoint{
 									Epoch: 87,
-									Root:  testhelpers.FillByteSlice(32, 88),
+									Root:  test_helpers.FillByteSlice(32, 88),
 								},
 								Target: &ethpb.Checkpoint{
 									Epoch: 89,
-									Root:  testhelpers.FillByteSlice(32, 90),
+									Root:  test_helpers.FillByteSlice(32, 90),
 								},
 							},
-							Signature: testhelpers.FillByteSlice(96, 91),
+							Signature: test_helpers.FillByteSlice(96, 91),
 						},
 					},
 					Deposits: []*ethpb.Deposit{
 						{
-							Proof: testhelpers.FillByteArraySlice(33, testhelpers.FillByteSlice(32, 92)),
+							Proof: test_helpers.FillByteArraySlice(33, test_helpers.FillByteSlice(32, 92)),
 							Data: &ethpb.Deposit_Data{
-								PublicKey:             testhelpers.FillByteSlice(48, 94),
-								WithdrawalCredentials: testhelpers.FillByteSlice(32, 95),
+								PublicKey:             test_helpers.FillByteSlice(48, 94),
+								WithdrawalCredentials: test_helpers.FillByteSlice(32, 95),
 								Amount:                96,
-								Signature:             testhelpers.FillByteSlice(96, 97),
+								Signature:             test_helpers.FillByteSlice(96, 97),
 							},
 						},
 						{
-							Proof: testhelpers.FillByteArraySlice(33, testhelpers.FillByteSlice(32, 98)),
+							Proof: test_helpers.FillByteArraySlice(33, test_helpers.FillByteSlice(32, 98)),
 							Data: &ethpb.Deposit_Data{
-								PublicKey:             testhelpers.FillByteSlice(48, 100),
-								WithdrawalCredentials: testhelpers.FillByteSlice(32, 101),
+								PublicKey:             test_helpers.FillByteSlice(48, 100),
+								WithdrawalCredentials: test_helpers.FillByteSlice(32, 101),
 								Amount:                102,
-								Signature:             testhelpers.FillByteSlice(96, 103),
+								Signature:             test_helpers.FillByteSlice(96, 103),
 							},
 						},
 					},
@@ -295,58 +296,58 @@ func generateSignedBlindedCapellaBlock() *ethpb.GenericSignedBeaconBlock_Blinded
 								Epoch:          104,
 								ValidatorIndex: 105,
 							},
-							Signature: testhelpers.FillByteSlice(96, 106),
+							Signature: test_helpers.FillByteSlice(96, 106),
 						},
 						{
 							Exit: &ethpb.VoluntaryExit{
 								Epoch:          107,
 								ValidatorIndex: 108,
 							},
-							Signature: testhelpers.FillByteSlice(96, 109),
+							Signature: test_helpers.FillByteSlice(96, 109),
 						},
 					},
 					SyncAggregate: &ethpb.SyncAggregate{
-						SyncCommitteeBits:      testhelpers.FillByteSlice(64, 110),
-						SyncCommitteeSignature: testhelpers.FillByteSlice(96, 111),
+						SyncCommitteeBits:      test_helpers.FillByteSlice(64, 110),
+						SyncCommitteeSignature: test_helpers.FillByteSlice(96, 111),
 					},
 					ExecutionPayloadHeader: &enginev1.ExecutionPayloadHeaderCapella{
-						ParentHash:       testhelpers.FillByteSlice(32, 112),
-						FeeRecipient:     testhelpers.FillByteSlice(20, 113),
-						StateRoot:        testhelpers.FillByteSlice(32, 114),
-						ReceiptsRoot:     testhelpers.FillByteSlice(32, 115),
-						LogsBloom:        testhelpers.FillByteSlice(256, 116),
-						PrevRandao:       testhelpers.FillByteSlice(32, 117),
+						ParentHash:       test_helpers.FillByteSlice(32, 112),
+						FeeRecipient:     test_helpers.FillByteSlice(20, 113),
+						StateRoot:        test_helpers.FillByteSlice(32, 114),
+						ReceiptsRoot:     test_helpers.FillByteSlice(32, 115),
+						LogsBloom:        test_helpers.FillByteSlice(256, 116),
+						PrevRandao:       test_helpers.FillByteSlice(32, 117),
 						BlockNumber:      118,
 						GasLimit:         119,
 						GasUsed:          120,
 						Timestamp:        121,
-						ExtraData:        testhelpers.FillByteSlice(32, 122),
-						BaseFeePerGas:    testhelpers.FillByteSlice(32, 123),
-						BlockHash:        testhelpers.FillByteSlice(32, 124),
-						TransactionsRoot: testhelpers.FillByteSlice(32, 125),
-						WithdrawalsRoot:  testhelpers.FillByteSlice(32, 126),
+						ExtraData:        test_helpers.FillByteSlice(32, 122),
+						BaseFeePerGas:    test_helpers.FillByteSlice(32, 123),
+						BlockHash:        test_helpers.FillByteSlice(32, 124),
+						TransactionsRoot: test_helpers.FillByteSlice(32, 125),
+						WithdrawalsRoot:  test_helpers.FillByteSlice(32, 126),
 					},
 					BlsToExecutionChanges: []*ethpb.SignedBLSToExecutionChange{
 						{
 							Message: &ethpb.BLSToExecutionChange{
 								ValidatorIndex:     127,
-								FromBlsPubkey:      testhelpers.FillByteSlice(48, 128),
-								ToExecutionAddress: testhelpers.FillByteSlice(20, 129),
+								FromBlsPubkey:      test_helpers.FillByteSlice(48, 128),
+								ToExecutionAddress: test_helpers.FillByteSlice(20, 129),
 							},
-							Signature: testhelpers.FillByteSlice(96, 130),
+							Signature: test_helpers.FillByteSlice(96, 130),
 						},
 						{
 							Message: &ethpb.BLSToExecutionChange{
 								ValidatorIndex:     131,
-								FromBlsPubkey:      testhelpers.FillByteSlice(48, 132),
-								ToExecutionAddress: testhelpers.FillByteSlice(20, 133),
+								FromBlsPubkey:      test_helpers.FillByteSlice(48, 132),
+								ToExecutionAddress: test_helpers.FillByteSlice(20, 133),
 							},
-							Signature: testhelpers.FillByteSlice(96, 134),
+							Signature: test_helpers.FillByteSlice(96, 134),
 						},
 					},
 				},
 			},
-			Signature: testhelpers.FillByteSlice(96, 135),
+			Signature: test_helpers.FillByteSlice(96, 135),
 		},
 	}
 }

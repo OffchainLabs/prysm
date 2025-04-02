@@ -7,13 +7,13 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prysmaticlabs/prysm/v5/api/client"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
 	"github.com/sirupsen/logrus"
 )
 
@@ -233,7 +233,7 @@ func (v *validator) LogValidatorGainsAndLosses(ctx context.Context, slot primiti
 	}
 	resp, err := v.prysmChainClient.ValidatorPerformance(ctx, req)
 	if err != nil {
-		if errors.Is(err, iface.ErrNotSupported) {
+		if errors.Is(err, client.ErrNotSupported) {
 			log.WithError(err).Debug("Skipping validator performance metric for non-Prysm beacon node")
 			return nil
 		}

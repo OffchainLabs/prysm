@@ -20,7 +20,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"github.com/prysmaticlabs/prysm/v5/validator/accounts"
 	"github.com/prysmaticlabs/prysm/v5/validator/accounts/iface"
-	mock "github.com/prysmaticlabs/prysm/v5/validator/accounts/testing"
 	"github.com/prysmaticlabs/prysm/v5/validator/accounts/wallet"
 	"github.com/prysmaticlabs/prysm/v5/validator/client"
 	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
@@ -48,7 +47,7 @@ func TestServer_CreateWallet_Local(t *testing.T) {
 	require.NoError(t, err)
 	vs, err := client.NewValidatorService(ctx, &client.Config{
 		Wallet: w,
-		Validator: &mock.Validator{
+		Validator: &client.FakeValidator{
 			Km: km,
 		},
 	})
@@ -445,7 +444,7 @@ func TestServer_WalletConfig(t *testing.T) {
 	s.wallet = w
 	vs, err := client.NewValidatorService(ctx, &client.Config{
 		Wallet: w,
-		Validator: &mock.Validator{
+		Validator: &client.FakeValidator{
 			Km: km,
 		},
 	})

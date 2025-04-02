@@ -22,7 +22,6 @@ import (
 	validatorpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/validator-client"
 	prysmTime "github.com/prysmaticlabs/prysm/v5/time"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
 	"github.com/sirupsen/logrus"
 )
 
@@ -40,7 +39,7 @@ func (v *validator) SubmitAttestation(ctx context.Context, slot primitives.Slot,
 	v.waitOneThirdOrValidBlock(ctx, slot)
 
 	var b strings.Builder
-	if err := b.WriteByte(byte(iface.RoleAttester)); err != nil {
+	if err := b.WriteByte(byte(RoleAttester)); err != nil {
 		log.WithError(err).Error("Could not write role byte for lock key")
 		tracing.AnnotateError(span, err)
 		return

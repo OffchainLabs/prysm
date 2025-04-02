@@ -9,13 +9,13 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/mock"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/validator_api/test_helpers"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	rpctesting "github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/shared/testing"
 	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api/mock"
-	testhelpers "github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api/test-helpers"
 	"go.uber.org/mock/gomock"
 )
 
@@ -203,7 +203,7 @@ func TestStreamBlocks_Phase0Valid(t *testing.T) {
 
 			// For the first call, return a block that satisfies the verifiedOnly condition. This block should be returned by the first Recv().
 			// For the second call, return the same block as the previous one. This block shouldn't be returned by the second Recv().
-			phase0BeaconBlock1 := testhelpers.GenerateJsonPhase0BeaconBlock()
+			phase0BeaconBlock1 := test_helpers.GenerateJsonPhase0BeaconBlock()
 			phase0BeaconBlock1.Slot = "1"
 			signedBeaconBlockContainer1 := structs.SignedBeaconBlock{
 				Message:   phase0BeaconBlock1,
@@ -228,7 +228,7 @@ func TestStreamBlocks_Phase0Valid(t *testing.T) {
 				},
 			).Times(2)
 
-			phase0ProtoBeaconBlock1 := testhelpers.GenerateProtoPhase0BeaconBlock()
+			phase0ProtoBeaconBlock1 := test_helpers.GenerateProtoPhase0BeaconBlock()
 			phase0ProtoBeaconBlock1.Slot = 1
 
 			beaconBlockConverter.EXPECT().ConvertRESTPhase0BlockToProto(
@@ -240,7 +240,7 @@ func TestStreamBlocks_Phase0Valid(t *testing.T) {
 
 			// For the third call, return a block with a different slot than the previous one, but with the verifiedOnly condition not satisfied.
 			// If verifiedOnly == false, this block will be returned by the second Recv(); otherwise, another block will be requested.
-			phase0BeaconBlock2 := testhelpers.GenerateJsonPhase0BeaconBlock()
+			phase0BeaconBlock2 := test_helpers.GenerateJsonPhase0BeaconBlock()
 			phase0BeaconBlock2.Slot = "2"
 			signedBeaconBlockContainer2 := structs.SignedBeaconBlock{
 				Message:   phase0BeaconBlock2,
@@ -265,7 +265,7 @@ func TestStreamBlocks_Phase0Valid(t *testing.T) {
 				},
 			).Times(1)
 
-			phase0ProtoBeaconBlock2 := testhelpers.GenerateProtoPhase0BeaconBlock()
+			phase0ProtoBeaconBlock2 := test_helpers.GenerateProtoPhase0BeaconBlock()
 			phase0ProtoBeaconBlock2.Slot = 2
 
 			beaconBlockConverter.EXPECT().ConvertRESTPhase0BlockToProto(
@@ -364,7 +364,7 @@ func TestStreamBlocks_AltairValid(t *testing.T) {
 
 			// For the first call, return a block that satisfies the verifiedOnly condition. This block should be returned by the first Recv().
 			// For the second call, return the same block as the previous one. This block shouldn't be returned by the second Recv().
-			altairBeaconBlock1 := testhelpers.GenerateJsonAltairBeaconBlock()
+			altairBeaconBlock1 := test_helpers.GenerateJsonAltairBeaconBlock()
 			altairBeaconBlock1.Slot = "1"
 			signedBeaconBlockContainer1 := structs.SignedBeaconBlockAltair{
 				Message:   altairBeaconBlock1,
@@ -389,7 +389,7 @@ func TestStreamBlocks_AltairValid(t *testing.T) {
 				},
 			).Times(2)
 
-			altairProtoBeaconBlock1 := testhelpers.GenerateProtoAltairBeaconBlock()
+			altairProtoBeaconBlock1 := test_helpers.GenerateProtoAltairBeaconBlock()
 			altairProtoBeaconBlock1.Slot = 1
 
 			beaconBlockConverter.EXPECT().ConvertRESTAltairBlockToProto(
@@ -401,7 +401,7 @@ func TestStreamBlocks_AltairValid(t *testing.T) {
 
 			// For the third call, return a block with a different slot than the previous one, but with the verifiedOnly condition not satisfied.
 			// If verifiedOnly == false, this block will be returned by the second Recv(); otherwise, another block will be requested.
-			altairBeaconBlock2 := testhelpers.GenerateJsonAltairBeaconBlock()
+			altairBeaconBlock2 := test_helpers.GenerateJsonAltairBeaconBlock()
 			altairBeaconBlock2.Slot = "2"
 			signedBeaconBlockContainer2 := structs.SignedBeaconBlockAltair{
 				Message:   altairBeaconBlock2,
@@ -426,7 +426,7 @@ func TestStreamBlocks_AltairValid(t *testing.T) {
 				},
 			).Times(1)
 
-			altairProtoBeaconBlock2 := testhelpers.GenerateProtoAltairBeaconBlock()
+			altairProtoBeaconBlock2 := test_helpers.GenerateProtoAltairBeaconBlock()
 			altairProtoBeaconBlock2.Slot = 2
 
 			beaconBlockConverter.EXPECT().ConvertRESTAltairBlockToProto(
@@ -525,7 +525,7 @@ func TestStreamBlocks_BellatrixValid(t *testing.T) {
 
 			// For the first call, return a block that satisfies the verifiedOnly condition. This block should be returned by the first Recv().
 			// For the second call, return the same block as the previous one. This block shouldn't be returned by the second Recv().
-			bellatrixBeaconBlock1 := testhelpers.GenerateJsonBellatrixBeaconBlock()
+			bellatrixBeaconBlock1 := test_helpers.GenerateJsonBellatrixBeaconBlock()
 			bellatrixBeaconBlock1.Slot = "1"
 			signedBeaconBlockContainer1 := structs.SignedBeaconBlockBellatrix{
 				Message:   bellatrixBeaconBlock1,
@@ -550,7 +550,7 @@ func TestStreamBlocks_BellatrixValid(t *testing.T) {
 				},
 			).Times(2)
 
-			bellatrixProtoBeaconBlock1 := testhelpers.GenerateProtoBellatrixBeaconBlock()
+			bellatrixProtoBeaconBlock1 := test_helpers.GenerateProtoBellatrixBeaconBlock()
 			bellatrixProtoBeaconBlock1.Slot = 1
 
 			beaconBlockConverter.EXPECT().ConvertRESTBellatrixBlockToProto(
@@ -562,7 +562,7 @@ func TestStreamBlocks_BellatrixValid(t *testing.T) {
 
 			// For the third call, return a block with a different slot than the previous one, but with the verifiedOnly condition not satisfied.
 			// If verifiedOnly == false, this block will be returned by the second Recv(); otherwise, another block will be requested.
-			bellatrixBeaconBlock2 := testhelpers.GenerateJsonBellatrixBeaconBlock()
+			bellatrixBeaconBlock2 := test_helpers.GenerateJsonBellatrixBeaconBlock()
 			bellatrixBeaconBlock2.Slot = "2"
 			signedBeaconBlockContainer2 := structs.SignedBeaconBlockBellatrix{
 				Message:   bellatrixBeaconBlock2,
@@ -587,7 +587,7 @@ func TestStreamBlocks_BellatrixValid(t *testing.T) {
 				},
 			).Times(1)
 
-			bellatrixProtoBeaconBlock2 := testhelpers.GenerateProtoBellatrixBeaconBlock()
+			bellatrixProtoBeaconBlock2 := test_helpers.GenerateProtoBellatrixBeaconBlock()
 			bellatrixProtoBeaconBlock2.Slot = 2
 
 			beaconBlockConverter.EXPECT().ConvertRESTBellatrixBlockToProto(
@@ -686,7 +686,7 @@ func TestStreamBlocks_CapellaValid(t *testing.T) {
 
 			// For the first call, return a block that satisfies the verifiedOnly condition. This block should be returned by the first Recv().
 			// For the second call, return the same block as the previous one. This block shouldn't be returned by the second Recv().
-			capellaBeaconBlock1 := testhelpers.GenerateJsonCapellaBeaconBlock()
+			capellaBeaconBlock1 := test_helpers.GenerateJsonCapellaBeaconBlock()
 			capellaBeaconBlock1.Slot = "1"
 			signedBeaconBlockContainer1 := structs.SignedBeaconBlockCapella{
 				Message:   capellaBeaconBlock1,
@@ -711,7 +711,7 @@ func TestStreamBlocks_CapellaValid(t *testing.T) {
 				},
 			).Times(2)
 
-			capellaProtoBeaconBlock1 := testhelpers.GenerateProtoCapellaBeaconBlock()
+			capellaProtoBeaconBlock1 := test_helpers.GenerateProtoCapellaBeaconBlock()
 			capellaProtoBeaconBlock1.Slot = 1
 
 			beaconBlockConverter.EXPECT().ConvertRESTCapellaBlockToProto(
@@ -723,7 +723,7 @@ func TestStreamBlocks_CapellaValid(t *testing.T) {
 
 			// For the third call, return a block with a different slot than the previous one, but with the verifiedOnly condition not satisfied.
 			// If verifiedOnly == false, this block will be returned by the second Recv(); otherwise, another block will be requested.
-			capellaBeaconBlock2 := testhelpers.GenerateJsonCapellaBeaconBlock()
+			capellaBeaconBlock2 := test_helpers.GenerateJsonCapellaBeaconBlock()
 			capellaBeaconBlock2.Slot = "2"
 			signedBeaconBlockContainer2 := structs.SignedBeaconBlockCapella{
 				Message:   capellaBeaconBlock2,
@@ -748,7 +748,7 @@ func TestStreamBlocks_CapellaValid(t *testing.T) {
 				},
 			).Times(1)
 
-			capellaProtoBeaconBlock2 := testhelpers.GenerateProtoCapellaBeaconBlock()
+			capellaProtoBeaconBlock2 := test_helpers.GenerateProtoCapellaBeaconBlock()
 			capellaProtoBeaconBlock2.Slot = 2
 
 			beaconBlockConverter.EXPECT().ConvertRESTCapellaBlockToProto(

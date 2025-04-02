@@ -7,12 +7,13 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/prysmaticlabs/prysm/v5/api/client/apiutil"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/mock"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/validator_api/test_helpers"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api/mock"
-	testhelpers "github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api/test-helpers"
 	"go.uber.org/mock/gomock"
 )
 
@@ -30,8 +31,8 @@ func TestProposeBeaconBlock_Phase0(t *testing.T) {
 		Signature: hexutil.Encode(phase0Block.Phase0.Signature),
 		Message: &structs.BeaconBlock{
 			ParentRoot:    hexutil.Encode(phase0Block.Phase0.Block.ParentRoot),
-			ProposerIndex: uint64ToString(phase0Block.Phase0.Block.ProposerIndex),
-			Slot:          uint64ToString(phase0Block.Phase0.Block.Slot),
+			ProposerIndex: apiutil.Uint64ToString(phase0Block.Phase0.Block.ProposerIndex),
+			Slot:          apiutil.Uint64ToString(phase0Block.Phase0.Block.Slot),
 			StateRoot:     hexutil.Encode(phase0Block.Phase0.Block.StateRoot),
 			Body: &structs.BeaconBlockBody{
 				Attestations:      jsonifyAttestations(phase0Block.Phase0.Block.Body.Attestations),
@@ -76,8 +77,8 @@ func TestProposeBeaconBlock_Phase0(t *testing.T) {
 func generateSignedPhase0Block() *ethpb.GenericSignedBeaconBlock_Phase0 {
 	return &ethpb.GenericSignedBeaconBlock_Phase0{
 		Phase0: &ethpb.SignedBeaconBlock{
-			Block:     testhelpers.GenerateProtoPhase0BeaconBlock(),
-			Signature: testhelpers.FillByteSlice(96, 110),
+			Block:     test_helpers.GenerateProtoPhase0BeaconBlock(),
+			Signature: test_helpers.FillByteSlice(96, 110),
 		},
 	}
 }

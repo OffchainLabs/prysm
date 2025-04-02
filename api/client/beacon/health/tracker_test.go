@@ -5,8 +5,11 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/health/mock"
 	"go.uber.org/mock/gomock"
+)
+
+var (
+	_ = HealthTracker(&MockHealthClient{})
 )
 
 func TestNodeHealth_IsHealthy(t *testing.T) {
@@ -47,7 +50,7 @@ func TestNodeHealth_UpdateNodeHealth(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
-			client := mock.NewMockHealthClient(ctrl)
+			client := NewMockHealthClient(ctrl)
 			client.EXPECT().IsHealthy(gomock.Any()).Return(tt.newStatus)
 			n := &healthTracker{
 				isHealthy:  &tt.initial,
@@ -80,7 +83,7 @@ func TestNodeHealth_UpdateNodeHealth(t *testing.T) {
 func TestNodeHealth_Concurrency(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	client := mock.NewMockHealthClient(ctrl)
+	client := NewMockHealthClient(ctrl)
 	n := NewTracker(client)
 	var wg sync.WaitGroup
 

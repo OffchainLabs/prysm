@@ -7,14 +7,16 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/prysmaticlabs/prysm/v5/api/client"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/mock"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/node"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/prysm_api"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api/mock"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
 	"go.uber.org/mock/gomock"
 )
 
@@ -54,11 +56,7 @@ func TestValidatorStatus_Nominal(t *testing.T) {
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	validatorClient := beaconApiValidatorClient{
 		stateValidatorsProvider: stateValidatorsProvider,
-		prysmChainClient: prysmChainClient{
-			nodeClient: &beaconApiNodeClient{
-				jsonRestHandler: jsonRestHandler,
-			},
-		},
+		prysmChainClient:        prysm_api.NewPrysmChainRestClient(jsonRestHandler, node.NewNodeClientWithFallback(jsonRestHandler, nil)),
 	}
 
 	// Expect node version endpoint call.
@@ -68,7 +66,7 @@ func TestValidatorStatus_Nominal(t *testing.T) {
 		"/eth/v1/node/version",
 		&nodeVersionResponse,
 	).Return(
-		iface.ErrNotSupported,
+		client.ErrNotSupported,
 	).Times(1)
 
 	actualValidatorStatusResponse, err := validatorClient.ValidatorStatus(
@@ -175,16 +173,12 @@ func TestMultipleValidatorStatus_Nominal(t *testing.T) {
 		"/eth/v1/node/version",
 		&nodeVersionResponse,
 	).Return(
-		iface.ErrNotSupported,
+		client.ErrNotSupported,
 	).Times(1)
 
 	validatorClient := beaconApiValidatorClient{
 		stateValidatorsProvider: stateValidatorsProvider,
-		prysmChainClient: prysmChainClient{
-			nodeClient: &beaconApiNodeClient{
-				jsonRestHandler: jsonRestHandler,
-			},
-		},
+		prysmChainClient:        prysm_api.NewPrysmChainRestClient(jsonRestHandler, node.NewNodeClientWithFallback(jsonRestHandler, nil)),
 	}
 
 	expectedValidatorStatusResponse := ethpb.MultipleValidatorStatusResponse{
@@ -419,12 +413,7 @@ func TestGetValidatorsStatusResponse_Nominal_SomeActiveValidators(t *testing.T) 
 
 	validatorClient := beaconApiValidatorClient{
 		stateValidatorsProvider: stateValidatorsProvider,
-		prysmChainClient: prysmChainClient{
-			nodeClient: &beaconApiNodeClient{
-				jsonRestHandler: jsonRestHandler,
-			},
-			jsonRestHandler: jsonRestHandler,
-		},
+		prysmChainClient:        prysm_api.NewPrysmChainRestClient(jsonRestHandler, node.NewNodeClientWithFallback(jsonRestHandler, nil)),
 	}
 	actualValidatorsPubKey, actualValidatorsIndex, actualValidatorsStatusResponse, err := validatorClient.validatorsStatusResponse(ctx, validatorsPubKey, validatorsIndex)
 
@@ -475,7 +464,7 @@ func TestGetValidatorsStatusResponse_Nominal_NoActiveValidators(t *testing.T) {
 		"/eth/v1/node/version",
 		&nodeVersionResponse,
 	).Return(
-		iface.ErrNotSupported,
+		client.ErrNotSupported,
 	).Times(1)
 
 	wantedValidatorsPubKey := [][]byte{validatorPubKey}
@@ -489,12 +478,7 @@ func TestGetValidatorsStatusResponse_Nominal_NoActiveValidators(t *testing.T) {
 
 	validatorClient := beaconApiValidatorClient{
 		stateValidatorsProvider: stateValidatorsProvider,
-		prysmChainClient: prysmChainClient{
-			nodeClient: &beaconApiNodeClient{
-				jsonRestHandler: jsonRestHandler,
-			},
-			jsonRestHandler: jsonRestHandler,
-		},
+		prysmChainClient:        prysm_api.NewPrysmChainRestClient(jsonRestHandler, node.NewNodeClientWithFallback(jsonRestHandler, nil)),
 	}
 	actualValidatorsPubKey, actualValidatorsIndex, actualValidatorsStatusResponse, err := validatorClient.validatorsStatusResponse(ctx, wantedValidatorsPubKey, nil)
 
@@ -714,17 +698,12 @@ func TestValidatorStatusResponse_InvalidData(t *testing.T) {
 					"/eth/v1/node/version",
 					&nodeVersionResponse,
 				).Return(
-					iface.ErrNotSupported,
+					client.ErrNotSupported,
 				).Times(testCase.validatorCountCalled)
 
 				validatorClient := beaconApiValidatorClient{
 					stateValidatorsProvider: stateValidatorsProvider,
-					prysmChainClient: prysmChainClient{
-						nodeClient: &beaconApiNodeClient{
-							jsonRestHandler: jsonRestHandler,
-						},
-						jsonRestHandler: jsonRestHandler,
-					},
+					prysmChainClient:        prysm_api.NewPrysmChainRestClient(jsonRestHandler, node.NewNodeClientWithFallback(jsonRestHandler, nil)),
 				}
 
 				_, _, _, err := validatorClient.validatorsStatusResponse(

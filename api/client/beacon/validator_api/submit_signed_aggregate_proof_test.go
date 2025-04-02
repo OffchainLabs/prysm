@@ -8,14 +8,14 @@ import (
 	"testing"
 
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/mock"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/validator_api/test_helpers"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	"github.com/prysmaticlabs/prysm/v5/network/httputil"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api/mock"
-	testhelpers "github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api/test-helpers"
 	"go.uber.org/mock/gomock"
 )
 
@@ -188,25 +188,25 @@ func generateSignedAggregateAndProofJson() *ethpb.SignedAggregateAttestationAndP
 		Message: &ethpb.AggregateAttestationAndProof{
 			AggregatorIndex: 72,
 			Aggregate: &ethpb.Attestation{
-				AggregationBits: testhelpers.FillByteSlice(4, 74),
+				AggregationBits: test_helpers.FillByteSlice(4, 74),
 				Data: &ethpb.AttestationData{
 					Slot:            75,
 					CommitteeIndex:  76,
-					BeaconBlockRoot: testhelpers.FillByteSlice(32, 38),
+					BeaconBlockRoot: test_helpers.FillByteSlice(32, 38),
 					Source: &ethpb.Checkpoint{
 						Epoch: 78,
-						Root:  testhelpers.FillByteSlice(32, 79),
+						Root:  test_helpers.FillByteSlice(32, 79),
 					},
 					Target: &ethpb.Checkpoint{
 						Epoch: 80,
-						Root:  testhelpers.FillByteSlice(32, 81),
+						Root:  test_helpers.FillByteSlice(32, 81),
 					},
 				},
-				Signature: testhelpers.FillByteSlice(96, 82),
+				Signature: test_helpers.FillByteSlice(96, 82),
 			},
-			SelectionProof: testhelpers.FillByteSlice(96, 82),
+			SelectionProof: test_helpers.FillByteSlice(96, 82),
 		},
-		Signature: testhelpers.FillByteSlice(96, 82),
+		Signature: test_helpers.FillByteSlice(96, 82),
 	}
 }
 
@@ -215,25 +215,25 @@ func generateSignedAggregateAndProofElectraJson() *ethpb.SignedAggregateAttestat
 		Message: &ethpb.AggregateAttestationAndProofElectra{
 			AggregatorIndex: 72,
 			Aggregate: &ethpb.AttestationElectra{
-				AggregationBits: testhelpers.FillByteSlice(4, 74),
+				AggregationBits: test_helpers.FillByteSlice(4, 74),
 				Data: &ethpb.AttestationData{
 					Slot:            75,
 					CommitteeIndex:  76,
-					BeaconBlockRoot: testhelpers.FillByteSlice(32, 38),
+					BeaconBlockRoot: test_helpers.FillByteSlice(32, 38),
 					Source: &ethpb.Checkpoint{
 						Epoch: 78,
-						Root:  testhelpers.FillByteSlice(32, 79),
+						Root:  test_helpers.FillByteSlice(32, 79),
 					},
 					Target: &ethpb.Checkpoint{
 						Epoch: 80,
-						Root:  testhelpers.FillByteSlice(32, 81),
+						Root:  test_helpers.FillByteSlice(32, 81),
 					},
 				},
-				Signature:     testhelpers.FillByteSlice(96, 82),
-				CommitteeBits: testhelpers.FillByteSlice(8, 83),
+				Signature:     test_helpers.FillByteSlice(96, 82),
+				CommitteeBits: test_helpers.FillByteSlice(8, 83),
 			},
-			SelectionProof: testhelpers.FillByteSlice(96, 84),
+			SelectionProof: test_helpers.FillByteSlice(96, 84),
 		},
-		Signature: testhelpers.FillByteSlice(96, 85),
+		Signature: test_helpers.FillByteSlice(96, 85),
 	}
 }

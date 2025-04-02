@@ -3,11 +3,15 @@ package validator_api
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/mock"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/validator_api/test_helpers"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
@@ -15,8 +19,6 @@ import (
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api/mock"
-	testhelpers "github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api/test-helpers"
 	"go.uber.org/mock/gomock"
 )
 
@@ -236,23 +238,23 @@ func TestBeaconApiValidatorClient_Host(t *testing.T) {
 func TestGetAggregatedSelections(t *testing.T) {
 	testcases := []struct {
 		name                 string
-		req                  []iface.BeaconCommitteeSelection
-		res                  []iface.BeaconCommitteeSelection
+		req                  []beacon.BeaconCommitteeSelection
+		res                  []beacon.BeaconCommitteeSelection
 		endpointError        error
 		expectedErrorMessage string
 	}{
 		{
 			name: "valid",
-			req: []iface.BeaconCommitteeSelection{
+			req: []beacon.BeaconCommitteeSelection{
 				{
-					SelectionProof: testhelpers.FillByteSlice(96, 82),
+					SelectionProof: test_helpers.FillByteSlice(96, 82),
 					Slot:           75,
 					ValidatorIndex: 76,
 				},
 			},
-			res: []iface.BeaconCommitteeSelection{
+			res: []beacon.BeaconCommitteeSelection{
 				{
-					SelectionProof: testhelpers.FillByteSlice(96, 100),
+					SelectionProof: test_helpers.FillByteSlice(96, 100),
 					Slot:           75,
 					ValidatorIndex: 76,
 				},
@@ -260,9 +262,9 @@ func TestGetAggregatedSelections(t *testing.T) {
 		},
 		{
 			name: "endpoint error",
-			req: []iface.BeaconCommitteeSelection{
+			req: []beacon.BeaconCommitteeSelection{
 				{
-					SelectionProof: testhelpers.FillByteSlice(96, 82),
+					SelectionProof: test_helpers.FillByteSlice(96, 82),
 					Slot:           75,
 					ValidatorIndex: 76,
 				},
@@ -272,9 +274,9 @@ func TestGetAggregatedSelections(t *testing.T) {
 		},
 		{
 			name: "no response error",
-			req: []iface.BeaconCommitteeSelection{
+			req: []beacon.BeaconCommitteeSelection{
 				{
-					SelectionProof: testhelpers.FillByteSlice(96, 82),
+					SelectionProof: test_helpers.FillByteSlice(96, 82),
 					Slot:           75,
 					ValidatorIndex: 76,
 				},
@@ -283,21 +285,21 @@ func TestGetAggregatedSelections(t *testing.T) {
 		},
 		{
 			name: "mismatch response",
-			req: []iface.BeaconCommitteeSelection{
+			req: []beacon.BeaconCommitteeSelection{
 				{
-					SelectionProof: testhelpers.FillByteSlice(96, 82),
+					SelectionProof: test_helpers.FillByteSlice(96, 82),
 					Slot:           75,
 					ValidatorIndex: 76,
 				},
 				{
-					SelectionProof: testhelpers.FillByteSlice(96, 102),
+					SelectionProof: test_helpers.FillByteSlice(96, 102),
 					Slot:           75,
 					ValidatorIndex: 79,
 				},
 			},
-			res: []iface.BeaconCommitteeSelection{
+			res: []beacon.BeaconCommitteeSelection{
 				{
-					SelectionProof: testhelpers.FillByteSlice(96, 100),
+					SelectionProof: test_helpers.FillByteSlice(96, 100),
 					Slot:           75,
 					ValidatorIndex: 76,
 				},
@@ -320,10 +322,10 @@ func TestGetAggregatedSelections(t *testing.T) {
 				"/eth/v1/validator/beacon_committee_selections",
 				nil,
 				bytes.NewBuffer(reqBody),
-				&aggregatedSelectionResponse{},
+				&beacon.AggregatedSelectionResponse{},
 			).SetArg(
 				4,
-				aggregatedSelectionResponse{Data: test.res},
+				beacon.AggregatedSelectionResponse{Data: test.res},
 			).Return(
 				test.endpointError,
 			).Times(1)

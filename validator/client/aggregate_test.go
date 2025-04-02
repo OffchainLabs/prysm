@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/prysmaticlabs/go-bitfield"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
@@ -17,7 +18,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/testing/util"
 	"github.com/prysmaticlabs/prysm/v5/time"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"go.uber.org/mock/gomock"
 )
@@ -209,11 +209,11 @@ func TestSubmitAggregateAndProof_Distributed(t *testing.T) {
 			}
 
 			validator.distributed = true
-			validator.attSelections = make(map[attSelectionKey]iface.BeaconCommitteeSelection)
+			validator.attSelections = make(map[attSelectionKey]beacon.BeaconCommitteeSelection)
 			validator.attSelections[attSelectionKey{
 				slot:  slot,
 				index: 123,
-			}] = iface.BeaconCommitteeSelection{
+			}] = beacon.BeaconCommitteeSelection{
 				SelectionProof: make([]byte, 96),
 				Slot:           slot,
 				ValidatorIndex: validatorIdx,

@@ -19,6 +19,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/golang/protobuf/ptypes/empty"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/mock"
 	"github.com/prysmaticlabs/prysm/v5/async/event"
 	"github.com/prysmaticlabs/prysm/v5/cmd/validator/flags"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
@@ -35,9 +37,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"github.com/prysmaticlabs/prysm/v5/testing/util"
-	validatormock "github.com/prysmaticlabs/prysm/v5/testing/validator-mock"
 	"github.com/prysmaticlabs/prysm/v5/validator/accounts/wallet"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
 	dbTest "github.com/prysmaticlabs/prysm/v5/validator/db/testing"
 	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
 	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/local"
@@ -54,7 +54,7 @@ func init() {
 	logrus.SetOutput(io.Discard)
 }
 
-var _ iface.Validator = (*validator)(nil)
+var _ Validator = (*validator)(nil)
 
 const cancelledCtx = "context has been canceled"
 
@@ -162,7 +162,7 @@ func TestWaitForChainStart_SetsGenesisInfo(t *testing.T) {
 		t.Run(fmt.Sprintf("SlashingProtectionMinimal:%v", isSlashingProtectionMinimal), func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
-			client := validatormock.NewMockValidatorClient(ctrl)
+			client := mock.NewMockValidatorClient(ctrl)
 
 			db := dbTest.SetupDB(t, [][fieldparams.BLSPubkeyLength]byte{}, isSlashingProtectionMinimal)
 			v := validator{
@@ -212,7 +212,7 @@ func TestWaitForChainStart_SetsGenesisInfo_IncorrectSecondTry(t *testing.T) {
 		t.Run(fmt.Sprintf("SlashingProtectionMinimal:%v", isSlashingProtectionMinimal), func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
-			client := validatormock.NewMockValidatorClient(ctrl)
+			client := mock.NewMockValidatorClient(ctrl)
 
 			db := dbTest.SetupDB(t, [][fieldparams.BLSPubkeyLength]byte{}, isSlashingProtectionMinimal)
 			v := validator{
@@ -257,7 +257,7 @@ func TestWaitForChainStart_SetsGenesisInfo_IncorrectSecondTry(t *testing.T) {
 func TestWaitForChainStart_ContextCanceled(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	client := validatormock.NewMockValidatorClient(ctrl)
+	client := mock.NewMockValidatorClient(ctrl)
 
 	v := validator{
 		//keyManager:      testKeyManager,
@@ -281,7 +281,7 @@ func TestWaitForChainStart_ContextCanceled(t *testing.T) {
 func TestWaitForChainStart_ReceiveErrorFromStream(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	client := validatormock.NewMockValidatorClient(ctrl)
+	client := mock.NewMockValidatorClient(ctrl)
 
 	v := validator{
 		validatorClient: client,
@@ -298,7 +298,7 @@ func TestWaitForChainStart_ReceiveErrorFromStream(t *testing.T) {
 func TestCanonicalHeadSlot_FailedRPC(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	client := validatormock.NewMockChainClient(ctrl)
+	client := mock.NewMockChainClient(ctrl)
 	v := validator{
 		chainClient: client,
 		genesisTime: 1,
@@ -314,7 +314,7 @@ func TestCanonicalHeadSlot_FailedRPC(t *testing.T) {
 func TestCanonicalHeadSlot_OK(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	client := validatormock.NewMockChainClient(ctrl)
+	client := mock.NewMockChainClient(ctrl)
 	v := validator{
 		chainClient: client,
 	}
@@ -330,7 +330,7 @@ func TestCanonicalHeadSlot_OK(t *testing.T) {
 func TestWaitSync_ContextCanceled(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	n := validatormock.NewMockNodeClient(ctrl)
+	n := mock.NewMockNodeClient(ctrl)
 
 	v := validator{
 		nodeClient: n,
@@ -350,7 +350,7 @@ func TestWaitSync_ContextCanceled(t *testing.T) {
 func TestWaitSync_NotSyncing(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	n := validatormock.NewMockNodeClient(ctrl)
+	n := mock.NewMockNodeClient(ctrl)
 
 	v := validator{
 		nodeClient: n,
@@ -367,7 +367,7 @@ func TestWaitSync_NotSyncing(t *testing.T) {
 func TestWaitSync_Syncing(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	n := validatormock.NewMockNodeClient(ctrl)
+	n := mock.NewMockNodeClient(ctrl)
 
 	v := validator{
 		nodeClient: n,
@@ -389,7 +389,7 @@ func TestWaitSync_Syncing(t *testing.T) {
 func TestUpdateDuties_DoesNothingWhenNotEpochStart_AlreadyExistingAssignments(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	client := validatormock.NewMockValidatorClient(ctrl)
+	client := mock.NewMockValidatorClient(ctrl)
 
 	slot := primitives.Slot(1)
 	v := validator{
@@ -414,7 +414,7 @@ func TestUpdateDuties_DoesNothingWhenNotEpochStart_AlreadyExistingAssignments(t 
 func TestUpdateDuties_ReturnsError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	client := validatormock.NewMockValidatorClient(ctrl)
+	client := mock.NewMockValidatorClient(ctrl)
 
 	v := validator{
 		validatorClient: client,
@@ -442,7 +442,7 @@ func TestUpdateDuties_ReturnsError(t *testing.T) {
 func TestUpdateDuties_OK(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	client := validatormock.NewMockValidatorClient(ctrl)
+	client := mock.NewMockValidatorClient(ctrl)
 
 	slot := params.BeaconConfig().SlotsPerEpoch
 	resp := &ethpb.ValidatorDutiesContainer{
@@ -492,7 +492,7 @@ func TestUpdateDuties_OK_FilterBlacklistedPublicKeys(t *testing.T) {
 	hook := logTest.NewGlobal()
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	client := validatormock.NewMockValidatorClient(ctrl)
+	client := mock.NewMockValidatorClient(ctrl)
 	slot := params.BeaconConfig().SlotsPerEpoch
 
 	numValidators := 10
@@ -538,7 +538,7 @@ func TestUpdateDuties_OK_FilterBlacklistedPublicKeys(t *testing.T) {
 func TestUpdateDuties_AllValidatorsExited(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	client := validatormock.NewMockValidatorClient(ctrl)
+	client := mock.NewMockValidatorClient(ctrl)
 
 	slot := params.BeaconConfig().SlotsPerEpoch
 	resp := &ethpb.ValidatorDutiesContainer{
@@ -580,7 +580,7 @@ func TestUpdateDuties_AllValidatorsExited(t *testing.T) {
 func TestUpdateDuties_Distributed(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	client := validatormock.NewMockValidatorClient(ctrl)
+	client := mock.NewMockValidatorClient(ctrl)
 
 	// Start of third epoch.
 	slot := 2 * params.BeaconConfig().SlotsPerEpoch
@@ -631,7 +631,7 @@ func TestUpdateDuties_Distributed(t *testing.T) {
 		gomock.Any(),
 		gomock.Any(), // fill this properly
 	).Return(
-		[]iface.BeaconCommitteeSelection{
+		[]beacon.BeaconCommitteeSelection{
 			{
 				SelectionProof: make([]byte, 32),
 				Slot:           slot,
@@ -704,9 +704,9 @@ func TestRolesAt_OK(t *testing.T) {
 			roleMap, err := v.RolesAt(context.Background(), 1)
 			require.NoError(t, err)
 
-			assert.Equal(t, iface.RoleAttester, roleMap[bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())][0])
-			assert.Equal(t, iface.RoleAggregator, roleMap[bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())][1])
-			assert.Equal(t, iface.RoleSyncCommittee, roleMap[bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())][2])
+			assert.Equal(t, RoleAttester, roleMap[bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())][0])
+			assert.Equal(t, RoleAggregator, roleMap[bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())][1])
+			assert.Equal(t, RoleSyncCommittee, roleMap[bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())][2])
 
 			// Test sync committee role at epoch boundary.
 			v.duties = &ethpb.ValidatorDutiesContainer{
@@ -738,7 +738,7 @@ func TestRolesAt_OK(t *testing.T) {
 
 			roleMap, err = v.RolesAt(context.Background(), params.BeaconConfig().SlotsPerEpoch-1)
 			require.NoError(t, err)
-			assert.Equal(t, iface.RoleSyncCommittee, roleMap[bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())][0])
+			assert.Equal(t, RoleSyncCommittee, roleMap[bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())][0])
 		})
 	}
 }
@@ -768,7 +768,7 @@ func TestRolesAt_DoesNotAssignProposer_Slot0(t *testing.T) {
 			roleMap, err := v.RolesAt(context.Background(), 0)
 			require.NoError(t, err)
 
-			assert.Equal(t, iface.RoleAttester, roleMap[bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())][0])
+			assert.Equal(t, RoleAttester, roleMap[bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())][0])
 		})
 	}
 }
@@ -861,7 +861,7 @@ func TestCheckAndLogValidatorStatus_OK(t *testing.T) {
 			hook := logTest.NewGlobal()
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
-			client := validatormock.NewMockValidatorClient(ctrl)
+			client := mock.NewMockValidatorClient(ctrl)
 			v := validator{
 				validatorClient: client,
 				duties: &ethpb.ValidatorDutiesContainer{
@@ -917,7 +917,7 @@ func TestValidator_CheckDoppelGanger(t *testing.T) {
 			{
 				name: "no doppelganger",
 				validatorSetter: func(t *testing.T) *validator {
-					client := validatormock.NewMockValidatorClient(ctrl)
+					client := mock.NewMockValidatorClient(ctrl)
 					km := genMockKeymanager(t, 10)
 					keys, err := km.FetchValidatingPublicKeys(context.Background())
 					assert.NoError(t, err)
@@ -951,7 +951,7 @@ func TestValidator_CheckDoppelGanger(t *testing.T) {
 			{
 				name: "multiple doppelganger exists",
 				validatorSetter: func(t *testing.T) *validator {
-					client := validatormock.NewMockValidatorClient(ctrl)
+					client := mock.NewMockValidatorClient(ctrl)
 					km := genMockKeymanager(t, 10)
 					keys, err := km.FetchValidatingPublicKeys(context.Background())
 					assert.NoError(t, err)
@@ -992,7 +992,7 @@ func TestValidator_CheckDoppelGanger(t *testing.T) {
 			{
 				name: "single doppelganger exists",
 				validatorSetter: func(t *testing.T) *validator {
-					client := validatormock.NewMockValidatorClient(ctrl)
+					client := mock.NewMockValidatorClient(ctrl)
 					km := genMockKeymanager(t, 10)
 					keys, err := km.FetchValidatingPublicKeys(context.Background())
 					assert.NoError(t, err)
@@ -1031,7 +1031,7 @@ func TestValidator_CheckDoppelGanger(t *testing.T) {
 			{
 				name: "multiple attestations saved",
 				validatorSetter: func(t *testing.T) *validator {
-					client := validatormock.NewMockValidatorClient(ctrl)
+					client := mock.NewMockValidatorClient(ctrl)
 					km := genMockKeymanager(t, 10)
 					keys, err := km.FetchValidatingPublicKeys(context.Background())
 					assert.NoError(t, err)
@@ -1076,7 +1076,7 @@ func TestValidator_CheckDoppelGanger(t *testing.T) {
 			{
 				name: "no history exists",
 				validatorSetter: func(t *testing.T) *validator {
-					client := validatormock.NewMockValidatorClient(ctrl)
+					client := mock.NewMockValidatorClient(ctrl)
 					// Use only 1 key for deterministic order.
 					km := genMockKeymanager(t, 1)
 					keys, err := km.FetchValidatingPublicKeys(context.Background())
@@ -1275,7 +1275,7 @@ func TestIsSyncCommitteeAggregator_Distributed_OK(t *testing.T) {
 			sig, err := v.signSyncSelectionData(context.Background(), bytesutil.ToBytes48(pubKey), 0, slot)
 			require.NoError(t, err)
 
-			selection := iface.SyncCommitteeSelection{
+			selection := beacon.SyncCommitteeSelection{
 				SelectionProof:    sig,
 				Slot:              1,
 				ValidatorIndex:    123,
@@ -1283,8 +1283,8 @@ func TestIsSyncCommitteeAggregator_Distributed_OK(t *testing.T) {
 			}
 			m.validatorClient.EXPECT().AggregatedSyncSelections(
 				gomock.Any(), // ctx
-				[]iface.SyncCommitteeSelection{selection},
-			).Return([]iface.SyncCommitteeSelection{selection}, nil)
+				[]beacon.SyncCommitteeSelection{selection},
+			).Return([]beacon.SyncCommitteeSelection{selection}, nil)
 
 			aggregator, err = v.isSyncCommitteeAggregator(context.Background(), slot, map[primitives.ValidatorIndex][fieldparams.BLSPubkeyLength]byte{
 				123: bytesutil.ToBytes48(pubKey),
@@ -1427,8 +1427,8 @@ func TestValidator_PushSettings(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		ctx := context.Background()
 		db := dbTest.SetupDB(t, [][fieldparams.BLSPubkeyLength]byte{}, isSlashingProtectionMinimal)
-		client := validatormock.NewMockValidatorClient(ctrl)
-		nodeClient := validatormock.NewMockNodeClient(ctrl)
+		client := mock.NewMockValidatorClient(ctrl)
+		nodeClient := mock.NewMockNodeClient(ctrl)
 		defaultFeeHex := "0x046Fb65722E7b2455043BFEBf6177F1D2e9738D9"
 		byteValueAddress, err := hexutil.Decode("0x046Fb65722E7b2455043BFEBf6177F1D2e9738D9")
 		require.NoError(t, err)
@@ -2109,7 +2109,7 @@ func TestValidator_buildPrepProposerReqs_WithoutDefaultConfig(t *testing.T) {
 	defer ctrl.Finish()
 
 	ctx := context.Background()
-	client := validatormock.NewMockValidatorClient(ctrl)
+	client := mock.NewMockValidatorClient(ctrl)
 
 	client.EXPECT().MultipleValidatorStatus(
 		gomock.Any(),
@@ -2198,7 +2198,7 @@ func TestValidator_filterAndCacheActiveKeys(t *testing.T) {
 		defer ctrl.Finish()
 
 		ctx := context.Background()
-		client := validatormock.NewMockValidatorClient(ctrl)
+		client := mock.NewMockValidatorClient(ctrl)
 
 		client.EXPECT().MultipleValidatorStatus(
 			gomock.Any(),
@@ -2222,7 +2222,7 @@ func TestValidator_filterAndCacheActiveKeys(t *testing.T) {
 		defer ctrl.Finish()
 
 		ctx := context.Background()
-		client := validatormock.NewMockValidatorClient(ctrl)
+		client := mock.NewMockValidatorClient(ctrl)
 
 		client.EXPECT().MultipleValidatorStatus(
 			gomock.Any(),
@@ -2351,7 +2351,7 @@ func TestValidator_buildPrepProposerReqs_WithDefaultConfig(t *testing.T) {
 	defer ctrl.Finish()
 
 	ctx := context.Background()
-	client := validatormock.NewMockValidatorClient(ctrl)
+	client := mock.NewMockValidatorClient(ctrl)
 
 	client.EXPECT().MultipleValidatorStatus(
 		gomock.Any(),
@@ -2508,7 +2508,7 @@ func TestValidator_buildSignedRegReqs_DefaultConfigDisabled(t *testing.T) {
 	defer ctrl.Finish()
 
 	ctx := context.Background()
-	client := validatormock.NewMockValidatorClient(ctrl)
+	client := mock.NewMockValidatorClient(ctrl)
 
 	signature := blsmock.NewMockSignature(ctrl)
 	signature.EXPECT().Marshal().Return([]byte{})
@@ -2608,7 +2608,7 @@ func TestValidator_buildSignedRegReqs_DefaultConfigEnabled(t *testing.T) {
 	defer ctrl.Finish()
 
 	ctx := context.Background()
-	client := validatormock.NewMockValidatorClient(ctrl)
+	client := mock.NewMockValidatorClient(ctrl)
 
 	signature := blsmock.NewMockSignature(ctrl)
 	signature.EXPECT().Marshal().Return([]byte{}).AnyTimes()
@@ -2720,7 +2720,7 @@ func TestValidator_buildSignedRegReqs_SignerOnError(t *testing.T) {
 	defer ctrl.Finish()
 
 	ctx := context.Background()
-	client := validatormock.NewMockValidatorClient(ctrl)
+	client := mock.NewMockValidatorClient(ctrl)
 
 	v := validator{
 		signedValidatorRegistrations: map[[48]byte]*ethpb.SignedValidatorRegistrationV1{},
@@ -2761,7 +2761,7 @@ func TestValidator_buildSignedRegReqs_TimestampBeforeGenesis(t *testing.T) {
 	defer ctrl.Finish()
 
 	ctx := context.Background()
-	client := validatormock.NewMockValidatorClient(ctrl)
+	client := mock.NewMockValidatorClient(ctrl)
 
 	signature := blsmock.NewMockSignature(ctrl)
 
@@ -2812,7 +2812,7 @@ func TestValidator_Host(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	client := validatormock.NewMockValidatorClient(ctrl)
+	client := mock.NewMockValidatorClient(ctrl)
 	v := validator{
 		validatorClient: client,
 	}
@@ -2825,7 +2825,7 @@ func TestValidator_ChangeHost(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	client := validatormock.NewMockValidatorClient(ctrl)
+	client := mock.NewMockValidatorClient(ctrl)
 	v := validator{
 		validatorClient:  client,
 		beaconNodeHosts:  []string{"http://localhost:8080", "http://localhost:8081"},
@@ -2853,7 +2853,7 @@ func TestUpdateValidatorStatusCache(t *testing.T) {
 		pubkeys[1][:],
 	}
 
-	client := validatormock.NewMockValidatorClient(ctrl)
+	client := mock.NewMockValidatorClient(ctrl)
 	mockResponse := &ethpb.MultipleValidatorStatusResponse{
 		PublicKeys: statusRequestKeys,
 		Statuses: []*ethpb.ValidatorStatusResponse{

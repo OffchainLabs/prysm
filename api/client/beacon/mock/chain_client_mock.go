@@ -7,7 +7,7 @@
 //
 
 // Package validator_mock is a generated GoMock package.
-package validator_mock
+package mock
 
 import (
 	context "context"

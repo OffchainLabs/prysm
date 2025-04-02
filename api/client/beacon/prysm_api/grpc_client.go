@@ -7,6 +7,7 @@ import (
 
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon"
 	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/chain"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/helpers"
 	statenative "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
@@ -20,7 +21,7 @@ type grpcPrysmChainClient struct {
 	chainClient chain.Client
 }
 
-func (g grpcPrysmChainClient) ValidatorCount(ctx context.Context, _ string, statuses []validator.Status) ([]ValidatorCount, error) {
+func (g grpcPrysmChainClient) ValidatorCount(ctx context.Context, _ string, statuses []validator.Status) ([]beacon.ValidatorCount, error) {
 	resp, err := g.chainClient.Validators(ctx, &ethpb.ListValidatorsRequest{PageSize: 0})
 	if err != nil {
 		return nil, errors.Wrap(err, "list validators failed")
@@ -51,7 +52,7 @@ func (g grpcPrysmChainClient) ValidatorCount(ctx context.Context, _ string, stat
 }
 
 // validatorCountByStatus returns a slice of validator count for each status in the given epoch.
-func validatorCountByStatus(validators []*ethpb.Validator, statuses []validator.Status, epoch primitives.Epoch) ([]ValidatorCount, error) {
+func validatorCountByStatus(validators []*ethpb.Validator, statuses []validator.Status, epoch primitives.Epoch) ([]beacon.ValidatorCount, error) {
 	countByStatus := make(map[validator.Status]uint64)
 	for _, val := range validators {
 		readOnlyVal, err := statenative.NewValidator(val)
@@ -74,9 +75,9 @@ func validatorCountByStatus(validators []*ethpb.Validator, statuses []validator.
 		}
 	}
 
-	var resp []ValidatorCount
+	var resp []beacon.ValidatorCount
 	for status, count := range countByStatus {
-		resp = append(resp, ValidatorCount{
+		resp = append(resp, beacon.ValidatorCount{
 			Status: status.String(),
 			Count:  count,
 		})

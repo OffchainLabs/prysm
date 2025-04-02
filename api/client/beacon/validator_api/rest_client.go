@@ -13,6 +13,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/api/client"
 	"github.com/prysmaticlabs/prysm/v5/api/client/apiutil"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon"
 	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/prysm_api"
 	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/shared_providers"
 	"github.com/prysmaticlabs/prysm/v5/api/client/event"
@@ -327,31 +328,31 @@ func (c *beaconApiValidatorClient) EventStreamIsRunning() bool {
 	return c.isEventStreamRunning
 }
 
-func (c *beaconApiValidatorClient) AggregatedSelections(ctx context.Context, selections []BeaconCommitteeSelection) ([]BeaconCommitteeSelection, error) {
+func (c *beaconApiValidatorClient) AggregatedSelections(ctx context.Context, selections []beacon.BeaconCommitteeSelection) ([]beacon.BeaconCommitteeSelection, error) {
 	ctx, span := trace.StartSpan(ctx, "beacon-api.AggregatedSelections")
 	defer span.End()
 
-	return wrapInMetrics[[]BeaconCommitteeSelection]("AggregatedSelections", func() ([]BeaconCommitteeSelection, error) {
+	return wrapInMetrics[[]beacon.BeaconCommitteeSelection]("AggregatedSelections", func() ([]beacon.BeaconCommitteeSelection, error) {
 		return c.aggregatedSelection(ctx, selections)
 	})
 }
 
-func (c *beaconApiValidatorClient) AggregatedSyncSelections(ctx context.Context, selections []SyncCommitteeSelection) ([]SyncCommitteeSelection, error) {
+func (c *beaconApiValidatorClient) AggregatedSyncSelections(ctx context.Context, selections []beacon.SyncCommitteeSelection) ([]beacon.SyncCommitteeSelection, error) {
 	ctx, span := trace.StartSpan(ctx, "beacon-api.AggregatedSyncSelections")
 	defer span.End()
 
-	return wrapInMetrics[[]SyncCommitteeSelection]("AggregatedSyncSelections", func() ([]SyncCommitteeSelection, error) {
+	return wrapInMetrics[[]beacon.SyncCommitteeSelection]("AggregatedSyncSelections", func() ([]beacon.SyncCommitteeSelection, error) {
 		return c.aggregatedSyncSelections(ctx, selections)
 	})
 }
 
-func (c *beaconApiValidatorClient) aggregatedSelection(ctx context.Context, selections []BeaconCommitteeSelection) ([]BeaconCommitteeSelection, error) {
+func (c *beaconApiValidatorClient) aggregatedSelection(ctx context.Context, selections []beacon.BeaconCommitteeSelection) ([]beacon.BeaconCommitteeSelection, error) {
 	body, err := json.Marshal(selections)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to marshal selections")
 	}
 
-	var resp aggregatedSelectionResponse
+	var resp beacon.AggregatedSelectionResponse
 	err = c.jsonRestHandler.Post(ctx, "/eth/v1/validator/beacon_committee_selections", nil, bytes.NewBuffer(body), &resp)
 	if err != nil {
 		return nil, errors.Wrap(err, "error calling post endpoint")

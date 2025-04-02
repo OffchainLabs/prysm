@@ -7,12 +7,12 @@ go_library(
         "grpc_client.go",
         "interfaces.go",
         "rest_client.go",
-        "structs.go",
     ],
     importpath = "github.com/prysmaticlabs/prysm/v5/api/client/beacon/prysm_api",
     visibility = ["//visibility:public"],
     deps = [
         "//api/client:go_default_library",
+        "//api/client/apiutil:go_default_library",
         "//api/client/beacon:go_default_library",
         "//api/client/beacon/chain:go_default_library",
         "//api/client/beacon/node:go_default_library",
@@ -27,9 +27,6 @@ go_library(
         "//validator/helpers:go_default_library",
         "@com_github_golang_protobuf//ptypes/empty",
         "@com_github_pkg_errors//:go_default_library",
-        "@com_github_prysmaticlabs_prysm_v5//validator/client/beacon-api:go_default_library",
-        "@com_github_prysmaticlabs_prysm_v5//validator/client/iface:go_default_library",
-        "@com_github_prysmaticlabs_prysm_v5//validator/client/node-client-factory:go_default_library",
         "@org_golang_google_grpc//:go_default_library",
     ],
 )
@@ -42,6 +39,9 @@ go_test(
     ],
     embed = [":go_default_library"],
     deps = [
+        "//api/client/beacon:go_default_library",
+        "//api/client/beacon/mock:go_default_library",
+        "//api/client/beacon/node:go_default_library",
         "//api/server/structs:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/primitives:go_default_library",
@@ -50,9 +50,6 @@ go_test(
         "//proto/prysm/v1alpha1:go_default_library",
         "//testing/require:go_default_library",
         "//testing/util:go_default_library",
-        "//testing/validator-mock:go_default_library",
-        "@com_github_prysmaticlabs_prysm_v5//validator/client/beacon-api/mock:go_default_library",
-        "@com_github_prysmaticlabs_prysm_v5//validator/client/iface:go_default_library",
         "@org_uber_go_mock//gomock:go_default_library",
     ],
 )

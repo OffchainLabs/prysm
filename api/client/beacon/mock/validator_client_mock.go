@@ -7,16 +7,16 @@
 //
 
 // Package validator_mock is a generated GoMock package.
-package validator_mock
+package mock
 
 import (
 	context "context"
 	reflect "reflect"
 
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon"
 	event "github.com/prysmaticlabs/prysm/v5/api/client/event"
 	primitives "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	iface "github.com/prysmaticlabs/prysm/v5/validator/client/iface"
 	gomock "go.uber.org/mock/gomock"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
@@ -45,10 +45,10 @@ func (m *MockValidatorClient) EXPECT() *MockValidatorClientMockRecorder {
 }
 
 // AggregatedSelections mocks base method.
-func (m *MockValidatorClient) AggregatedSelections(arg0 context.Context, arg1 []iface.BeaconCommitteeSelection) ([]iface.BeaconCommitteeSelection, error) {
+func (m *MockValidatorClient) AggregatedSelections(arg0 context.Context, arg1 []beacon.BeaconCommitteeSelection) ([]beacon.BeaconCommitteeSelection, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AggregatedSelections", arg0, arg1)
-	ret0, _ := ret[0].([]iface.BeaconCommitteeSelection)
+	ret0, _ := ret[0].([]beacon.BeaconCommitteeSelection)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -60,10 +60,10 @@ func (mr *MockValidatorClientMockRecorder) AggregatedSelections(arg0, arg1 any) 
 }
 
 // AggregatedSyncSelections mocks base method.
-func (m *MockValidatorClient) AggregatedSyncSelections(arg0 context.Context, arg1 []iface.SyncCommitteeSelection) ([]iface.SyncCommitteeSelection, error) {
+func (m *MockValidatorClient) AggregatedSyncSelections(arg0 context.Context, arg1 []beacon.SyncCommitteeSelection) ([]beacon.SyncCommitteeSelection, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AggregatedSyncSelections", arg0, arg1)
-	ret0, _ := ret[0].([]iface.SyncCommitteeSelection)
+	ret0, _ := ret[0].([]beacon.SyncCommitteeSelection)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

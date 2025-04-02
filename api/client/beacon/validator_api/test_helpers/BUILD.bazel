@@ -13,7 +13,7 @@ go_library(
         "test_helpers.go",
     ],
     importpath = "github.com/prysmaticlabs/prysm/v5/api/client/beacon/validator_api/test_helpers",
-    visibility = ["//validator:__subpackages__"],
+    visibility = ["//api/client/beacon/validator_api:__subpackages__"],
     deps = [
         "//api/server/structs:go_default_library",
         "//encoding/bytesutil:go_default_library",

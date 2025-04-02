@@ -9,12 +9,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/mock"
 	"github.com/prysmaticlabs/prysm/v5/build/bazel"
 	"github.com/prysmaticlabs/prysm/v5/io/file"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	validatormock "github.com/prysmaticlabs/prysm/v5/testing/validator-mock"
 	"github.com/prysmaticlabs/prysm/v5/validator/accounts"
 	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
 	"go.uber.org/mock/gomock"
@@ -24,8 +24,8 @@ import (
 func TestExitAccountsCli_OK(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	mockValidatorClient := validatormock.NewMockValidatorClient(ctrl)
-	mockNodeClient := validatormock.NewMockNodeClient(ctrl)
+	mockValidatorClient := mock.NewMockValidatorClient(ctrl)
+	mockNodeClient := mock.NewMockNodeClient(ctrl)
 
 	mockValidatorClient.EXPECT().
 		ValidatorIndex(gomock.Any(), gomock.Any()).
@@ -116,8 +116,8 @@ func TestExitAccountsCli_OK(t *testing.T) {
 func TestExitAccountsCli_OK_AllPublicKeys(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	mockValidatorClient := validatormock.NewMockValidatorClient(ctrl)
-	mockNodeClient := validatormock.NewMockNodeClient(ctrl)
+	mockValidatorClient := mock.NewMockValidatorClient(ctrl)
+	mockNodeClient := mock.NewMockNodeClient(ctrl)
 
 	mockValidatorClient.EXPECT().
 		ValidatorIndex(gomock.Any(), gomock.Any()).
@@ -222,8 +222,8 @@ func TestExitAccountsCli_OK_AllPublicKeys(t *testing.T) {
 func TestExitAccountsCli_OK_ForceExit(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	mockValidatorClient := validatormock.NewMockValidatorClient(ctrl)
-	mockNodeClient := validatormock.NewMockNodeClient(ctrl)
+	mockValidatorClient := mock.NewMockValidatorClient(ctrl)
+	mockNodeClient := mock.NewMockNodeClient(ctrl)
 
 	mockValidatorClient.EXPECT().
 		ValidatorIndex(gomock.Any(), gomock.Any()).
@@ -311,8 +311,8 @@ func TestExitAccountsCli_OK_ForceExit(t *testing.T) {
 func TestExitAccountsCli_WriteJSON_NoBroadcast(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	mockValidatorClient := validatormock.NewMockValidatorClient(ctrl)
-	mockNodeClient := validatormock.NewMockNodeClient(ctrl)
+	mockValidatorClient := mock.NewMockValidatorClient(ctrl)
+	mockNodeClient := mock.NewMockNodeClient(ctrl)
 
 	mockValidatorClient.EXPECT().
 		ValidatorIndex(gomock.Any(), gomock.Any()).

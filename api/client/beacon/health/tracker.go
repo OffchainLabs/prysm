@@ -8,11 +8,11 @@ import (
 type healthTracker struct {
 	isHealthy  *bool
 	healthChan chan bool
-	node       Node
+	node       HealthNode
 	sync.RWMutex
 }
 
-func NewTracker(node Node) Tracker {
+func NewTracker(node HealthNode) HealthTracker {
 	return &healthTracker{
 		node:       node,
 		healthChan: make(chan bool, 1),

@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	emptypb "github.com/golang/protobuf/ptypes/empty"
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/altair"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
@@ -20,7 +21,6 @@ import (
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	validatorpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/validator-client"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
 	"github.com/sirupsen/logrus"
 )
 
@@ -198,7 +198,7 @@ func (v *validator) selectionProofs(ctx context.Context, slot primitives.Slot, p
 	cfg := params.BeaconConfig()
 	size := cfg.SyncCommitteeSize
 	subCount := cfg.SyncCommitteeSubnetCount
-	selections := make([]iface.SyncCommitteeSelection, len(indexRes.Indices))
+	selections := make([]beacon.SyncCommitteeSelection, len(indexRes.Indices))
 	for i, index := range indexRes.Indices {
 		subSize := size / subCount
 		subnet := uint64(index) / subSize
@@ -207,7 +207,7 @@ func (v *validator) selectionProofs(ctx context.Context, slot primitives.Slot, p
 			return nil, err
 		}
 		selectionProofs[i] = selectionProof
-		selections[i] = iface.SyncCommitteeSelection{
+		selections[i] = beacon.SyncCommitteeSelection{
 			SelectionProof:    selectionProof,
 			Slot:              slot,
 			SubcommitteeIndex: primitives.CommitteeIndex(subnet),

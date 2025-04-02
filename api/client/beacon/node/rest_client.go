@@ -23,7 +23,7 @@ type beaconapiNodeClient struct {
 	fallbackClient  Client
 	jsonRestHandler client.JsonRestHandler
 	genesisProvider shared_providers.Genesis
-	healthTracker   health.Tracker
+	healthTracker   health.HealthTracker
 }
 
 func (c *beaconapiNodeClient) SyncStatus(ctx context.Context, _ *empty.Empty) (*ethpb.SyncStatus, error) {
@@ -108,6 +108,6 @@ func (c *beaconapiNodeClient) IsHealthy(ctx context.Context) bool {
 	return c.jsonRestHandler.Get(ctx, "/eth/v1/node/health", nil) == nil
 }
 
-func (c *beaconapiNodeClient) HealthTracker() health.Tracker {
+func (c *beaconapiNodeClient) HealthTracker() health.HealthTracker {
 	return c.healthTracker
 }

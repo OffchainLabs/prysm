@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/golang/protobuf/ptypes/empty"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon"
 	"github.com/prysmaticlabs/prysm/v5/api/client/event"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
@@ -38,8 +39,8 @@ type Client interface {
 	SubmitValidatorRegistrations(ctx context.Context, in *ethpb.SignedValidatorRegistrationsV1) (*empty.Empty, error)
 	StartEventStream(ctx context.Context, topics []string, eventsChannel chan<- *event.Event)
 	EventStreamIsRunning() bool
-	AggregatedSelections(ctx context.Context, selections []BeaconCommitteeSelection) ([]BeaconCommitteeSelection, error)
-	AggregatedSyncSelections(ctx context.Context, selections []SyncCommitteeSelection) ([]SyncCommitteeSelection, error)
+	AggregatedSelections(ctx context.Context, selections []beacon.BeaconCommitteeSelection) ([]beacon.BeaconCommitteeSelection, error)
+	AggregatedSyncSelections(ctx context.Context, selections []beacon.SyncCommitteeSelection) ([]beacon.SyncCommitteeSelection, error)
 	Host() string
 	SetHost(host string)
 }

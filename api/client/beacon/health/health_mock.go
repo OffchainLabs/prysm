@@ -1,16 +1,11 @@
-package mock
+package health
 
 import (
 	"context"
 	"reflect"
 	"sync"
 
-	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/health"
 	"go.uber.org/mock/gomock"
-)
-
-var (
-	_ = health.Tracker(&MockHealthClient{})
 )
 
 // NewMockHealthClient creates a new mock instance.

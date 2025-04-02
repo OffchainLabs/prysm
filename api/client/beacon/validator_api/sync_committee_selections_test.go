@@ -7,34 +7,34 @@ import (
 	"testing"
 
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/mock"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/validator_api/test_helpers"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api/mock"
-	testhelpers "github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api/test-helpers"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
 	"go.uber.org/mock/gomock"
 )
 
 func TestGetAggregatedSyncSelections(t *testing.T) {
 	testcases := []struct {
 		name                 string
-		req                  []iface.SyncCommitteeSelection
-		res                  []iface.SyncCommitteeSelection
+		req                  []beacon.SyncCommitteeSelection
+		res                  []beacon.SyncCommitteeSelection
 		endpointError        error
 		expectedErrorMessage string
 	}{
 		{
 			name: "valid",
-			req: []iface.SyncCommitteeSelection{
+			req: []beacon.SyncCommitteeSelection{
 				{
-					SelectionProof:    testhelpers.FillByteSlice(96, 82),
+					SelectionProof:    test_helpers.FillByteSlice(96, 82),
 					Slot:              75,
 					ValidatorIndex:    76,
 					SubcommitteeIndex: 77,
 				},
 			},
-			res: []iface.SyncCommitteeSelection{
+			res: []beacon.SyncCommitteeSelection{
 				{
-					SelectionProof:    testhelpers.FillByteSlice(96, 100),
+					SelectionProof:    test_helpers.FillByteSlice(96, 100),
 					Slot:              75,
 					ValidatorIndex:    76,
 					SubcommitteeIndex: 77,
@@ -43,9 +43,9 @@ func TestGetAggregatedSyncSelections(t *testing.T) {
 		},
 		{
 			name: "endpoint error",
-			req: []iface.SyncCommitteeSelection{
+			req: []beacon.SyncCommitteeSelection{
 				{
-					SelectionProof:    testhelpers.FillByteSlice(96, 82),
+					SelectionProof:    test_helpers.FillByteSlice(96, 82),
 					Slot:              75,
 					ValidatorIndex:    76,
 					SubcommitteeIndex: 77,
@@ -56,9 +56,9 @@ func TestGetAggregatedSyncSelections(t *testing.T) {
 		},
 		{
 			name: "no response error",
-			req: []iface.SyncCommitteeSelection{
+			req: []beacon.SyncCommitteeSelection{
 				{
-					SelectionProof:    testhelpers.FillByteSlice(96, 82),
+					SelectionProof:    test_helpers.FillByteSlice(96, 82),
 					Slot:              75,
 					ValidatorIndex:    76,
 					SubcommitteeIndex: 77,
@@ -68,23 +68,23 @@ func TestGetAggregatedSyncSelections(t *testing.T) {
 		},
 		{
 			name: "mismatch response",
-			req: []iface.SyncCommitteeSelection{
+			req: []beacon.SyncCommitteeSelection{
 				{
-					SelectionProof:    testhelpers.FillByteSlice(96, 82),
+					SelectionProof:    test_helpers.FillByteSlice(96, 82),
 					Slot:              75,
 					ValidatorIndex:    76,
 					SubcommitteeIndex: 77,
 				},
 				{
-					SelectionProof:    testhelpers.FillByteSlice(96, 100),
+					SelectionProof:    test_helpers.FillByteSlice(96, 100),
 					Slot:              75,
 					ValidatorIndex:    76,
 					SubcommitteeIndex: 78,
 				},
 			},
-			res: []iface.SyncCommitteeSelection{
+			res: []beacon.SyncCommitteeSelection{
 				{
-					SelectionProof:    testhelpers.FillByteSlice(96, 100),
+					SelectionProof:    test_helpers.FillByteSlice(96, 100),
 					Slot:              75,
 					ValidatorIndex:    76,
 					SubcommitteeIndex: 77,
@@ -108,10 +108,10 @@ func TestGetAggregatedSyncSelections(t *testing.T) {
 				"/eth/v1/validator/sync_committee_selections",
 				nil,
 				bytes.NewBuffer(reqBody),
-				&aggregatedSyncSelectionResponse{},
+				&beacon.AggregatedSyncSelectionResponse{},
 			).SetArg(
 				4,
-				aggregatedSyncSelectionResponse{Data: test.res},
+				beacon.AggregatedSyncSelectionResponse{Data: test.res},
 			).Return(
 				test.endpointError,
 			).Times(1)

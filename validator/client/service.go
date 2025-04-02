@@ -13,6 +13,7 @@ import (
 	grpcprometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/api/client"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon"
 	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/chain"
 	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/node"
 	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/prysm_api"
@@ -204,7 +205,7 @@ func (v *ValidatorService) Start() {
 		signedValidatorRegistrations:   make(map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1),
 		validatorsRegBatchSize:         v.validatorsRegBatchSize,
 		interopKeysConfig:              v.interopKeysConfig,
-		attSelections:                  make(map[attSelectionKey]validator_api.BeaconCommitteeSelection),
+		attSelections:                  make(map[attSelectionKey]beacon.BeaconCommitteeSelection),
 		aggregatedSlotCommitteeIDCache: aggregatedSlotCommitteeIDCache,
 		domainDataCache:                cache,
 		voteStats:                      voteStats{startEpoch: primitives.Epoch(^uint64(0))},

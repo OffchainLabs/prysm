@@ -12,6 +12,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/api/client"
 	"github.com/prysmaticlabs/prysm/v5/api/client/apiutil"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon"
 	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/node"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	validator2 "github.com/prysmaticlabs/prysm/v5/consensus-types/validator"
@@ -23,7 +24,7 @@ type prysmChainClient struct {
 	nodeClient      node.Client
 }
 
-func (c prysmChainClient) ValidatorCount(ctx context.Context, stateID string, statuses []validator2.Status) ([]ValidatorCount, error) {
+func (c prysmChainClient) ValidatorCount(ctx context.Context, stateID string, statuses []validator2.Status) ([]beacon.ValidatorCount, error) {
 	// Check node version for prysm beacon node as it is a custom endpoint for prysm beacon node.
 	nodeVersion, err := c.nodeClient.Version(ctx, nil)
 	if err != nil {
@@ -54,14 +55,14 @@ func (c prysmChainClient) ValidatorCount(ctx context.Context, stateID string, st
 		return nil, errors.New("mismatch between validator count data and the number of statuses provided")
 	}
 
-	var resp []ValidatorCount
+	var resp []beacon.ValidatorCount
 	for _, vc := range validatorCountResponse.Data {
 		count, err := strconv.ParseUint(vc.Count, 10, 64)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to parse validator count %s", vc.Count)
 		}
 
-		resp = append(resp, ValidatorCount{
+		resp = append(resp, beacon.ValidatorCount{
 			Status: vc.Status,
 			Count:  count,
 		})

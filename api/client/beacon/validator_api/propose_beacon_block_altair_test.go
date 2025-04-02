@@ -7,8 +7,9 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/prysmaticlabs/prysm/v5/api/client/apiutil"
 	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/mock"
-	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/validator/test_helpers"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/validator_api/test_helpers"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
@@ -30,8 +31,8 @@ func TestProposeBeaconBlock_Altair(t *testing.T) {
 		Signature: hexutil.Encode(altairBlock.Altair.Signature),
 		Message: &structs.BeaconBlockAltair{
 			ParentRoot:    hexutil.Encode(altairBlock.Altair.Block.ParentRoot),
-			ProposerIndex: uint64ToString(altairBlock.Altair.Block.ProposerIndex),
-			Slot:          uint64ToString(altairBlock.Altair.Block.Slot),
+			ProposerIndex: apiutil.Uint64ToString(altairBlock.Altair.Block.ProposerIndex),
+			Slot:          apiutil.Uint64ToString(altairBlock.Altair.Block.Slot),
 			StateRoot:     hexutil.Encode(altairBlock.Altair.Block.StateRoot),
 			Body: &structs.BeaconBlockBodyAltair{
 				Attestations:      jsonifyAttestations(altairBlock.Altair.Block.Body.Attestations),

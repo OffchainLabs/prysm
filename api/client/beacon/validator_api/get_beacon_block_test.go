@@ -9,14 +9,14 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/mock"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/validator_api/test_helpers"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/network/httputil"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api/mock"
-	testhelpers "github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api/test-helpers"
 	"go.uber.org/mock/gomock"
 )
 
@@ -149,8 +149,8 @@ func TestGetBeaconBlock_Phase0Valid(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	proto := testhelpers.GenerateProtoPhase0BeaconBlock()
-	block := testhelpers.GenerateJsonPhase0BeaconBlock()
+	proto := test_helpers.GenerateProtoPhase0BeaconBlock()
+	block := test_helpers.GenerateJsonPhase0BeaconBlock()
 	bytes, err := json.Marshal(block)
 	require.NoError(t, err)
 
@@ -191,8 +191,8 @@ func TestGetBeaconBlock_AltairValid(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	proto := testhelpers.GenerateProtoAltairBeaconBlock()
-	block := testhelpers.GenerateJsonAltairBeaconBlock()
+	proto := test_helpers.GenerateProtoAltairBeaconBlock()
+	block := test_helpers.GenerateJsonAltairBeaconBlock()
 	bytes, err := json.Marshal(block)
 	require.NoError(t, err)
 
@@ -234,8 +234,8 @@ func TestGetBeaconBlock_BellatrixValid(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	proto := testhelpers.GenerateProtoBellatrixBeaconBlock()
-	block := testhelpers.GenerateJsonBellatrixBeaconBlock()
+	proto := test_helpers.GenerateProtoBellatrixBeaconBlock()
+	block := test_helpers.GenerateJsonBellatrixBeaconBlock()
 	bytes, err := json.Marshal(block)
 	require.NoError(t, err)
 
@@ -279,8 +279,8 @@ func TestGetBeaconBlock_BlindedBellatrixValid(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	proto := testhelpers.GenerateProtoBlindedBellatrixBeaconBlock()
-	block := testhelpers.GenerateJsonBlindedBellatrixBeaconBlock()
+	proto := test_helpers.GenerateProtoBlindedBellatrixBeaconBlock()
+	block := test_helpers.GenerateJsonBlindedBellatrixBeaconBlock()
 	bytes, err := json.Marshal(block)
 	require.NoError(t, err)
 
@@ -324,8 +324,8 @@ func TestGetBeaconBlock_CapellaValid(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	proto := testhelpers.GenerateProtoCapellaBeaconBlock()
-	block := testhelpers.GenerateJsonCapellaBeaconBlock()
+	proto := test_helpers.GenerateProtoCapellaBeaconBlock()
+	block := test_helpers.GenerateJsonCapellaBeaconBlock()
 	bytes, err := json.Marshal(block)
 	require.NoError(t, err)
 
@@ -369,8 +369,8 @@ func TestGetBeaconBlock_BlindedCapellaValid(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	proto := testhelpers.GenerateProtoBlindedCapellaBeaconBlock()
-	block := testhelpers.GenerateJsonBlindedCapellaBeaconBlock()
+	proto := test_helpers.GenerateProtoBlindedCapellaBeaconBlock()
+	block := test_helpers.GenerateJsonBlindedCapellaBeaconBlock()
 	bytes, err := json.Marshal(block)
 	require.NoError(t, err)
 
@@ -414,8 +414,8 @@ func TestGetBeaconBlock_DenebValid(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	proto := testhelpers.GenerateProtoDenebBeaconBlockContents()
-	block := testhelpers.GenerateJsonDenebBeaconBlockContents()
+	proto := test_helpers.GenerateProtoDenebBeaconBlockContents()
+	block := test_helpers.GenerateJsonDenebBeaconBlockContents()
 	bytes, err := json.Marshal(block)
 	require.NoError(t, err)
 
@@ -459,8 +459,8 @@ func TestGetBeaconBlock_BlindedDenebValid(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	proto := testhelpers.GenerateProtoBlindedDenebBeaconBlock()
-	block := testhelpers.GenerateJsonBlindedDenebBeaconBlock()
+	proto := test_helpers.GenerateProtoBlindedDenebBeaconBlock()
+	block := test_helpers.GenerateJsonBlindedDenebBeaconBlock()
 	bytes, err := json.Marshal(block)
 	require.NoError(t, err)
 
@@ -504,8 +504,8 @@ func TestGetBeaconBlock_ElectraValid(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	proto := testhelpers.GenerateProtoElectraBeaconBlockContents()
-	block := testhelpers.GenerateJsonElectraBeaconBlockContents()
+	proto := test_helpers.GenerateProtoElectraBeaconBlockContents()
+	block := test_helpers.GenerateJsonElectraBeaconBlockContents()
 	bytes, err := json.Marshal(block)
 	require.NoError(t, err)
 
@@ -549,8 +549,8 @@ func TestGetBeaconBlock_BlindedElectraValid(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	proto := testhelpers.GenerateProtoBlindedElectraBeaconBlock()
-	block := testhelpers.GenerateJsonBlindedElectraBeaconBlock()
+	proto := test_helpers.GenerateProtoBlindedElectraBeaconBlock()
+	block := test_helpers.GenerateJsonBlindedElectraBeaconBlock()
 	bytes, err := json.Marshal(block)
 	require.NoError(t, err)
 
@@ -594,8 +594,8 @@ func TestGetBeaconBlock_FallbackToBlindedBlock(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	proto := testhelpers.GenerateProtoBlindedDenebBeaconBlock()
-	block := testhelpers.GenerateJsonBlindedDenebBeaconBlock()
+	proto := test_helpers.GenerateProtoBlindedDenebBeaconBlock()
+	block := test_helpers.GenerateJsonBlindedDenebBeaconBlock()
 	blockBytes, err := json.Marshal(block)
 	require.NoError(t, err)
 
@@ -645,8 +645,8 @@ func TestGetBeaconBlock_FallbackToFullBlock(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	proto := testhelpers.GenerateProtoDenebBeaconBlockContents()
-	block := testhelpers.GenerateJsonDenebBeaconBlockContents()
+	proto := test_helpers.GenerateProtoDenebBeaconBlockContents()
+	block := test_helpers.GenerateJsonDenebBeaconBlockContents()
 	blockBytes, err := json.Marshal(block)
 	require.NoError(t, err)
 

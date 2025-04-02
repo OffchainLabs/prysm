@@ -21,6 +21,7 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/api/client"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon"
 	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/chain"
 	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/health"
 	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/node"
@@ -96,7 +97,7 @@ type validator struct {
 	signedValidatorRegistrations       map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1
 	validatorsRegBatchSize             int
 	interopKeysConfig                  *local.InteropKeymanagerConfig
-	attSelections                      map[attSelectionKey]validator_api.BeaconCommitteeSelection
+	attSelections                      map[attSelectionKey]beacon.BeaconCommitteeSelection
 	aggregatedSlotCommitteeIDCache     *lru.Cache
 	domainDataCache                    *ristretto.Cache
 	voteStats                          voteStats
@@ -843,7 +844,7 @@ func (v *validator) isSyncCommitteeAggregator(ctx context.Context, slot primitiv
 	defer span.End()
 
 	var (
-		selections []validator_api.SyncCommitteeSelection
+		selections []beacon.SyncCommitteeSelection
 		isAgg      = make(map[primitives.ValidatorIndex]bool)
 	)
 
@@ -865,7 +866,7 @@ func (v *validator) isSyncCommitteeAggregator(ctx context.Context, slot primitiv
 				return nil, errors.Wrap(err, "can't sign selection data")
 			}
 
-			selections = append(selections, validator_api.SyncCommitteeSelection{
+			selections = append(selections, beacon.SyncCommitteeSelection{
 				SelectionProof:    sig,
 				Slot:              slot,
 				SubcommitteeIndex: primitives.CommitteeIndex(subnet),
@@ -1172,7 +1173,7 @@ func (v *validator) EventStreamIsRunning() bool {
 	return v.validatorClient.EventStreamIsRunning()
 }
 
-func (v *validator) HealthTracker() health.Tracker {
+func (v *validator) HealthTracker() health.HealthTracker {
 	return v.nodeClient.HealthTracker()
 }
 
@@ -1402,7 +1403,7 @@ func (v *validator) aggregatedSelectionProofs(ctx context.Context, duties *ethpb
 	// Create new instance of attestation selections map.
 	v.newAttSelections()
 
-	var req []validator_api.BeaconCommitteeSelection
+	var req []beacon.BeaconCommitteeSelection
 	for _, duty := range duties.CurrentEpochDuties {
 		if duty.Status != ethpb.ValidatorStatus_ACTIVE && duty.Status != ethpb.ValidatorStatus_EXITING {
 			continue
@@ -1414,7 +1415,7 @@ func (v *validator) aggregatedSelectionProofs(ctx context.Context, duties *ethpb
 			return err
 		}
 
-		req = append(req, validator_api.BeaconCommitteeSelection{
+		req = append(req, beacon.BeaconCommitteeSelection{
 			SelectionProof: slotSig,
 			Slot:           duty.AttesterSlot,
 			ValidatorIndex: duty.ValidatorIndex,
@@ -1432,7 +1433,7 @@ func (v *validator) aggregatedSelectionProofs(ctx context.Context, duties *ethpb
 			return err
 		}
 
-		req = append(req, validator_api.BeaconCommitteeSelection{
+		req = append(req, beacon.BeaconCommitteeSelection{
 			SelectionProof: slotSig,
 			Slot:           duty.AttesterSlot,
 			ValidatorIndex: duty.ValidatorIndex,
@@ -1450,7 +1451,7 @@ func (v *validator) aggregatedSelectionProofs(ctx context.Context, duties *ethpb
 	return nil
 }
 
-func (v *validator) addAttSelections(selections []validator_api.BeaconCommitteeSelection) {
+func (v *validator) addAttSelections(selections []beacon.BeaconCommitteeSelection) {
 	v.attSelectionLock.Lock()
 	defer v.attSelectionLock.Unlock()
 
@@ -1466,7 +1467,7 @@ func (v *validator) newAttSelections() {
 	v.attSelectionLock.Lock()
 	defer v.attSelectionLock.Unlock()
 
-	v.attSelections = make(map[attSelectionKey]validator_api.BeaconCommitteeSelection)
+	v.attSelections = make(map[attSelectionKey]beacon.BeaconCommitteeSelection)
 }
 
 func (v *validator) attSelection(key attSelectionKey) ([]byte, error) {
