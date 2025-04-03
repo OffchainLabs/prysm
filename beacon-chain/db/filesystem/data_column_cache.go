@@ -52,8 +52,8 @@ func (s DataColumnStorageSummary) AllAvailable(indices map[uint64]bool) bool {
 		return false
 	}
 
-	for indice := range indices {
-		if !s.mask[indice] {
+	for index := range indices {
+		if !s.mask[index] {
 			return false
 		}
 	}
