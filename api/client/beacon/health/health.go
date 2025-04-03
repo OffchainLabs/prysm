@@ -1,20 +1,18 @@
-package beacon
+package health
 
 import (
 	"context"
 	"sync"
-
-	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/iface"
 )
 
 type NodeHealthTracker struct {
 	isHealthy  *bool
 	healthChan chan bool
-	node       iface.HealthNode
+	node       Node
 	sync.RWMutex
 }
 
-func NewNodeHealthTracker(node iface.HealthNode) *NodeHealthTracker {
+func NewTracker(node Node) Tracker {
 	return &NodeHealthTracker{
 		node:       node,
 		healthChan: make(chan bool, 1),
@@ -26,7 +24,7 @@ func (n *NodeHealthTracker) HealthUpdates() <-chan bool {
 	return n.healthChan
 }
 
-func (n *NodeHealthTracker) IsHealthy() bool {
+func (n *NodeHealthTracker) IsHealthy(_ context.Context) bool {
 	n.RLock()
 	defer n.RUnlock()
 	if n.isHealthy == nil {

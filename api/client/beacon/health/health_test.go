@@ -1,12 +1,16 @@
-package beacon
+package health
 
 import (
 	"context"
+	"reflect"
 	"sync"
 	"testing"
 
-	healthTesting "github.com/prysmaticlabs/prysm/v5/api/client/beacon/testing"
 	"go.uber.org/mock/gomock"
+)
+
+var (
+	_ = Node(&MockHealthClient{})
 )
 
 func TestNodeHealth_IsHealthy(t *testing.T) {
@@ -24,7 +28,7 @@ func TestNodeHealth_IsHealthy(t *testing.T) {
 				isHealthy:  &tt.isHealthy,
 				healthChan: make(chan bool, 1),
 			}
-			if got := n.IsHealthy(); got != tt.want {
+			if got := n.IsHealthy(context.Background()); got != tt.want {
 				t.Errorf("IsHealthy() = %v, want %v", got, tt.want)
 			}
 		})
@@ -47,7 +51,7 @@ func TestNodeHealth_UpdateNodeHealth(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
-			client := healthTesting.NewMockHealthClient(ctrl)
+			client := NewMockHealthClient(ctrl)
 			client.EXPECT().IsHealthy(gomock.Any()).Return(tt.newStatus)
 			n := &NodeHealthTracker{
 				isHealthy:  &tt.initial,
@@ -80,8 +84,8 @@ func TestNodeHealth_UpdateNodeHealth(t *testing.T) {
 func TestNodeHealth_Concurrency(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	client := healthTesting.NewMockHealthClient(ctrl)
-	n := NewNodeHealthTracker(client)
+	client := NewMockHealthClient(ctrl)
+	n := NewTracker(client)
 	var wg sync.WaitGroup
 
 	// Number of goroutines to spawn for both reading and writing
@@ -104,9 +108,54 @@ func TestNodeHealth_Concurrency(t *testing.T) {
 	for i := 0; i < numGoroutines; i++ {
 		go func() {
 			defer wg.Done()
-			_ = n.IsHealthy() // Just read the value
+			_ = n.IsHealthy(context.Background()) // Just read the value
 		}()
 	}
 
 	wg.Wait() // Wait for all goroutines to finish
+}
+
+// MockHealthClient is a mock of HealthClient interface.
+type MockHealthClient struct {
+	ctrl     *gomock.Controller
+	recorder *MockHealthClientMockRecorder
+	sync.Mutex
+}
+
+// MockHealthClientMockRecorder is the mock recorder for MockHealthClient.
+type MockHealthClientMockRecorder struct {
+	mock *MockHealthClient
+}
+
+// IsHealthy mocks base method.
+func (m *MockHealthClient) IsHealthy(arg0 context.Context) bool {
+	m.Lock()
+	defer m.Unlock()
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsHealthy", arg0)
+	ret0, ok := ret[0].(bool)
+	if !ok {
+		return false
+	}
+	return ret0
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockHealthClient) EXPECT() *MockHealthClientMockRecorder {
+	return m.recorder
+}
+
+// IsHealthy indicates an expected call of IsHealthy.
+func (mr *MockHealthClientMockRecorder) IsHealthy(arg0 any) *gomock.Call {
+	mr.mock.Lock()
+	defer mr.mock.Unlock()
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsHealthy", reflect.TypeOf((*MockHealthClient)(nil).IsHealthy), arg0)
+}
+
+// NewMockHealthClient creates a new mock instance.
+func NewMockHealthClient(ctrl *gomock.Controller) *MockHealthClient {
+	mock := &MockHealthClient{ctrl: ctrl}
+	mock.recorder = &MockHealthClientMockRecorder{mock}
+	return mock
 }

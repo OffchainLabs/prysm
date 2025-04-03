@@ -13,7 +13,7 @@ import (
 	context "context"
 	reflect "reflect"
 
-	beacon "github.com/prysmaticlabs/prysm/v5/api/client/beacon"
+	beacon "github.com/prysmaticlabs/prysm/v5/api/client/beacon/health"
 	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	gomock "go.uber.org/mock/gomock"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
@@ -60,7 +60,7 @@ func (mr *MockNodeClientMockRecorder) Genesis(arg0, arg1 any) *gomock.Call {
 // HealthTracker mocks base method.
 func (m *MockNodeClient) HealthTracker() *beacon.NodeHealthTracker {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "HealthTracker")
+	ret := m.ctrl.Call(m, "Tracker")
 	ret0, _ := ret[0].(*beacon.NodeHealthTracker)
 	return ret0
 }
@@ -68,7 +68,7 @@ func (m *MockNodeClient) HealthTracker() *beacon.NodeHealthTracker {
 // HealthTracker indicates an expected call of HealthTracker.
 func (mr *MockNodeClientMockRecorder) HealthTracker() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HealthTracker", reflect.TypeOf((*MockNodeClient)(nil).HealthTracker))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Tracker", reflect.TypeOf((*MockNodeClient)(nil).HealthTracker))
 }
 
 // Peers mocks base method.
