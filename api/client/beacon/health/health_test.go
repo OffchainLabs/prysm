@@ -2,7 +2,6 @@ package health
 
 import (
 	"context"
-	"reflect"
 	"sync"
 	"testing"
 
