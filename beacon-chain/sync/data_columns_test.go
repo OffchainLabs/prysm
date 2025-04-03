@@ -827,13 +827,14 @@ func TestFetchOrReconstructDataColumnsByRoot(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name                 string
-		requestedColumns     map[uint64]bool
-		peerSetup            []peerSetup // Peers available in the network (if nil, generate covering set)
-		unavailableColumns   []uint64    // Columns that all custodians should refuse to serve (used if targetCoverageCount is 0)
-		targetCoverageCount  uint64      // Target number of unique columns for generated peer set (if peerSetup is nil and > 0)
-		expectedError        error       // Use errors.Is for checking wrapped errors
-		expectReconstruction bool        // Crude check if reconstruction path likely taken
+		name                   string
+		requestedColumns       map[uint64]bool
+		peerSetup              []peerSetup     // Peers available in the network (if nil, generate covering set)
+		unavailableColumns     []uint64        // Columns that all custodians should refuse to serve (used if targetCoverageCount is 0)
+		skipColumnsDuringFetch map[uint64]bool // Columns that peers should advertise but refuse to serve during fetch
+		targetCoverageCount    uint64          // Target number of unique columns for generated peer set (if peerSetup is nil and > 0)
+		expectedError          error           // Use errors.Is for checking wrapped errors
+		expectReconstruction   bool            // Crude check if reconstruction path likely taken
 	}{
 		{
 			name:             "Success - Direct Fetch",
@@ -879,7 +880,7 @@ func TestFetchOrReconstructDataColumnsByRoot(t *testing.T) {
 			requestedColumns:   colsToMap([]uint64{1000, 1001}), // Columns no peer custodies
 			peerSetup:          nil,                             // Generate a covering set
 			unavailableColumns: nil,                             // No columns need to be made unavailable
-			expectedError:      ErrNoPeersForDataColumns,
+			expectedError:      &UnavailableColumnsError{},
 		},
 		{
 			name:                 "Success - Empty Request",
@@ -888,6 +889,30 @@ func TestFetchOrReconstructDataColumnsByRoot(t *testing.T) {
 			unavailableColumns:   nil,
 			expectedError:        nil,
 			expectReconstruction: false,
+		},
+		{
+			name:                   "Success - Reconstruction Retry Needed - Peer skips advertised column",
+			requestedColumns:       colsToMap([]uint64{6, 37}), // Request columns 6 and 37
+			peerSetup:              nil,                        // Generate a covering set
+			unavailableColumns:     nil,                        // No inherent unavailability
+			skipColumnsDuringFetch: colsToMap([]uint64{6}),     // Make peers that advertise 6 skip it during fetch
+			expectedError:          nil,
+			expectReconstruction:   true, // Expect reconstruction because column 6 will be initially missed
+		},
+		{
+			name:               "Failure - Reconstruction Impossible - Peers skip required columns",
+			requestedColumns:   colsToMap([]uint64{0}), // Request a column that will be skipped
+			peerSetup:          nil,                    // Generate a covering set
+			unavailableColumns: nil,                    // All columns advertised initially
+			skipColumnsDuringFetch: func() map[uint64]bool { // Skip recoveryThreshold+1 columns
+				skipMap := make(map[uint64]bool)
+				for i := uint64(0); i < recoveryThreshold+1; i++ {
+					skipMap[i] = true
+				}
+				return skipMap
+			}(),
+			expectedError:        ErrNotEnoughColsAvailable, // Reconstruction needs 64 columns, but 0-63 are skipped
+			expectReconstruction: true,                      // It will attempt reconstruction before failing
 		},
 	}
 
@@ -918,7 +943,8 @@ func TestFetchOrReconstructDataColumnsByRoot(t *testing.T) {
 			tracker := newRequestTracker()
 
 			for _, setup := range peerSetups {
-				createAndConnectCustodyPeer(t, setup, dataColumnSidecars, chainService, hostP2P, tracker, nil)
+				// Pass the new skipColumnsDuringFetch map here
+				createAndConnectCustodyPeer(t, setup, dataColumnSidecars, chainService, hostP2P, tracker, tc.skipColumnsDuringFetch)
 			}
 
 			ctxMap := map[[4]byte]int{{245, 165, 253, 66}: version.Fulu}

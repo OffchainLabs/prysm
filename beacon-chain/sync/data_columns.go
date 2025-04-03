@@ -43,10 +43,43 @@ import (
 )
 
 var (
-	ErrNoPeersForDataColumns  = errors.New("no peers available to fetch data columns from")
 	ErrNotEnoughColsAvailable = errors.New("not enough columns available across peers for reconstruction")
 	ErrReconstructionFailed   = errors.New("failed to reconstruct data columns")
 )
+
+type UnavailableColumnsError struct {
+	Columns []uint64
+}
+
+func (e *UnavailableColumnsError) Error() string {
+	return fmt.Sprintf("no peers available to fetch data columns from: %v", e.Columns)
+}
+
+func (e *UnavailableColumnsError) Is(target error) bool {
+	_, ok := target.(*UnavailableColumnsError)
+	return ok
+}
+
+func NewUnavailableColumnsError(columns []uint64) *UnavailableColumnsError {
+	return &UnavailableColumnsError{Columns: columns}
+}
+
+type UnavailableColumnsError struct {
+	Columns []uint64
+}
+
+func (e *UnavailableColumnsError) Error() string {
+	return fmt.Sprintf("no peers available to fetch data columns from: %v", e.Columns)
+}
+
+func (e *UnavailableColumnsError) Is(target error) bool {
+	_, ok := target.(*UnavailableColumnsError)
+	return ok
+}
+
+func NewUnavailableColumnsError(columns []uint64) *UnavailableColumnsError {
+	return &UnavailableColumnsError{Columns: columns}
+}
 
 // RequestDataColumnSidecarsByRoot is an opinionated, high level function which, for each data column in `dataColumnsToFetch`:
 //   - Greedily selects, among `peers`, the peers that can provide the requested data columns, to minimize the number of requests.
@@ -89,13 +122,15 @@ func RequestDataColumnSidecarsByRoot(
 	// If the request was non-empty but no peers were found for any needed column,
 	// return the specific error immediately.
 	if len(dataColumns) > 0 && len(dataColumnsByAdmissiblePeer) == 0 {
-		return nil, ErrNoPeersForDataColumns
+		// No peer has any of the requested columns.
+		return nil, NewUnavailableColumnsError(uint64MapToSortedSlice(dataColumns))
 	}
 
 	// If the request was non-empty but no peers were found for any needed column,
 	// return the specific error immediately.
 	if len(dataColumns) > 0 && len(dataColumnsByAdmissiblePeer) == 0 {
-		return nil, ErrNoPeersForDataColumns
+		// No peer has any of the requested columns.
+		return nil, NewUnavailableColumnsError(uint64MapToSortedSlice(dataColumns))
 	}
 
 	verifiedSidecars := make([]blocks.VerifiedRODataColumn, 0, len(dataColumnsToFetch))
@@ -109,7 +144,7 @@ func RequestDataColumnSidecarsByRoot(
 	for len(dataColumnsByAdmissiblePeer) > 0 {
 		peersToFetchFrom, err := SelectPeersToFetchDataColumnsFrom(uint64MapToSortedSlice(remainingMissingColumns), dataColumnsByAdmissiblePeer)
 		if err != nil {
-			if errors.Is(err, ErrNoPeersForDataColumns) {
+			if errors.Is(err, &UnavailableColumnsError{}) {
 				return nil, err
 			}
 			return nil, errors.Wrap(err, "select peers to fetch data columns from")
@@ -292,7 +327,7 @@ func ReconstructDataColumnsByRoot(
 }
 
 // FetchOrReconstructDataColumnsByRoot attempts to fetch the requested data columns from peers.
-// If fetching fails specifically because no peers are available (ErrNoPeersForDataColumns),
+// If fetching fails specifically because no peers are available (UnavailableColumnsError),
 // it attempts to reconstruct the columns using available data from other peers.
 func FetchOrReconstructDataColumnsByRoot(
 	ctx context.Context,
@@ -329,8 +364,8 @@ func FetchOrReconstructDataColumnsByRoot(
 		return sidecars, nil
 	}
 
-	// If the error is specifically ErrNoPeersForDataColumns, attempt reconstruction.
-	if errors.Is(err, ErrNoPeersForDataColumns) {
+	// If the error is specifically UnavailableColumnsError, attempt reconstruction.
+	if errors.Is(err, &UnavailableColumnsError{}) {
 		log.WithError(err).Debug("Fetching failed due to no available peers, attempting reconstruction")
 		reconstructedSidecars, reconstructErr := ReconstructDataColumnsByRoot(
 			ctx,
@@ -371,29 +406,10 @@ func fetchAndVerifyRecoveryColumns(
 	ctxMap ContextByteVersions,
 	newColumnsVerifier verification.NewDataColumnsVerifier,
 ) ([]blocks.RODataColumn, error) {
-	// Select columns to fetch (prioritize requested columns, then fill up to threshold).
-	columnsToFetch := make(map[uint64]bool)
-	for col := range requestedColumns {
-		if availableColumns[col] {
-			columnsToFetch[col] = true
-		}
-	}
-
-	otherAvailable := make([]uint64, 0, len(availableColumns))
-	for col := range availableColumns {
-		if !columnsToFetch[col] { // If not already added
-			otherAvailable = append(otherAvailable, col)
-		}
-	}
-	sort.Slice(otherAvailable, func(i, j int) bool { return otherAvailable[i] < otherAvailable[j] })
-
-	for uint64(len(columnsToFetch)) < recoveryThreshold {
-		if len(otherAvailable) == 0 {
-			// This state should be unreachable since we already checked that the available columns meet the recovery threshold.
-			return nil, errors.New("internal error: not enough fetchable columns available to reach recovery threshold during selection")
-		}
-		columnsToFetch[otherAvailable[0]] = true
-		otherAvailable = otherAvailable[1:]
+	// Select columns to fetch using the helper function.
+	columnsToFetch, err := selectRecoveryColumnsToFetch(requestedColumns, availableColumns, recoveryThreshold)
+	if err != nil {
+		return nil, err // Propagate the error if selection failed.
 	}
 
 	log.WithFields(logrus.Fields{
@@ -401,20 +417,39 @@ func fetchAndVerifyRecoveryColumns(
 		"recoveryThreshold": recoveryThreshold,
 	}).Debug("Selected columns for fetch for recovery")
 
-	// Fetch selected columns.
-	fetchedSidecars, err := RequestDataColumnSidecarsByRoot(
-		ctx,
-		columnsToFetch,
-		block,
-		blkRoot,
-		clock,
-		p2p,
-		chain,
-		ctxMap,
-		newColumnsVerifier,
-	)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to request data columns for recovery")
+	var fetchedSidecars []blocks.RODataColumn
+	for {
+		// Fetch selected columns.
+		fetchedSidecars, err = RequestDataColumnSidecarsByRoot(
+			ctx,
+			columnsToFetch,
+			block,
+			blkRoot,
+			clock,
+			p2p,
+			chain,
+			ctxMap,
+			newColumnsVerifier,
+		)
+		if err == nil {
+			// Successfully fetched data columns.
+			break
+		}
+
+		ucErr := &UnavailableColumnsError{}
+		if errors.As(err, &ucErr) {
+			// If some of the columns for reconstruction are unavailable, try again with those columns removed from the available columns.
+			for _, unavailableCol := range ucErr.Columns {
+				delete(availableColumns, unavailableCol)
+			}
+			columnsToFetch, err = selectRecoveryColumnsToFetch(requestedColumns, availableColumns, recoveryThreshold)
+			if err != nil {
+				return nil, errors.Wrap(err, "failed to select columns for recovery")
+			}
+		} else {
+			// If the error is not an UnavailableColumnsError, return the error directly.
+			return nil, errors.Wrap(err, "failed to request data columns for recovery")
+		}
 	}
 
 	// Check if we actually got enough sidecars after the request.
@@ -424,6 +459,46 @@ func fetchAndVerifyRecoveryColumns(
 
 	log.WithField("fetchedCount", len(fetchedSidecars)).Debug("Successfully fetched required data columns")
 	return fetchedSidecars, nil
+}
+
+// selectRecoveryColumnsToFetch determines the set of columns to fetch for recovery.
+// It prioritizes columns that were originally requested and are available,
+// then fills the remaining slots up to the recoveryThreshold with other available columns,
+// sorted by index.
+func selectRecoveryColumnsToFetch(
+	requestedColumns map[uint64]bool,
+	availableColumns map[uint64]bool,
+	recoveryThreshold uint64,
+) (map[uint64]bool, error) {
+	if uint64(len(availableColumns)) < recoveryThreshold {
+		return nil, ErrNotEnoughColsAvailable
+	}
+
+	columnsToFetch := make(map[uint64]bool)
+
+	// Add requested and available columns first.
+	for col := range requestedColumns {
+		if availableColumns[col] {
+			columnsToFetch[col] = true
+		}
+	}
+
+	// Prepare a sorted list of other available columns not yet selected.
+	otherAvailable := make([]uint64, 0, len(availableColumns))
+	for col := range availableColumns {
+		if !columnsToFetch[col] { // If not already added
+			otherAvailable = append(otherAvailable, col)
+		}
+	}
+	sort.Slice(otherAvailable, func(i, j int) bool { return otherAvailable[i] < otherAvailable[j] })
+
+	// Fill up to the recovery threshold.
+	for uint64(len(columnsToFetch)) < recoveryThreshold {
+		columnsToFetch[otherAvailable[0]] = true
+		otherAvailable = otherAvailable[1:]
+	}
+
+	return columnsToFetch, nil
 }
 
 // reconstructAndFilterColumns takes successfully fetched sidecars and performs the erasure coding
@@ -817,7 +892,8 @@ func SelectPeersToFetchDataColumnsFrom(neededDataColumns []uint64, dataColumnsBy
 		// No available peer covers any remaining needed column.
 		if maxCovered == 0 {
 			missingDataColumnsSortedSlice := uint64MapToSortedSlice(remainingDataColumns)
-			return nil, fmt.Errorf("%w: remaining peers do not cover missing columns: %v", ErrNoPeersForDataColumns, missingDataColumnsSortedSlice)
+			// Return an instance of the specific error type, not wrapped.
+			return nil, NewUnavailableColumnsError(missingDataColumnsSortedSlice)
 		}
 
 		// Get the actual columns this best peer provides from the set we still need.
