@@ -148,8 +148,9 @@ func TestBlobByRangeOK(t *testing.T) {
 			total: func() *int { x := int(params.BeaconConfig().MaxRequestBlobSidecars); return &x }(),
 		},
 		{
-			name: "missing blob sidecars for block with KZG commitments",
+			name:    "missing blob sidecars for block with KZG commitments",
 			nblocks: 1,
+			missing: map[int]bool{0: true}, // Skip the first blob index to simulate missing sidecars
 			requestFromSidecars: func(scs []blocks.ROBlob) interface{} {
 				return &ethpb.BlobSidecarsByRangeRequest{
 					StartSlot: scs[0].Slot(),
@@ -157,12 +158,15 @@ func TestBlobByRangeOK(t *testing.T) {
 				}
 			},
 			defineExpected: func(t *testing.T, scs []blocks.ROBlob, req interface{}) []*expectedBlobChunk {
-				return []*expectedBlobChunk{
+				// Include sidecar in expected results, but the "missing" map will filter out index 0
+				// This ensures the block has KZG commitments but is missing some sidecar
+				result := []*expectedBlobChunk{
 					{
 						code:    responseCodeServerError,
 						message: errMissingBlobsForBlockCommitments.Error(),
 					},
 				}
+				return result
 			},
 		},
 	}
