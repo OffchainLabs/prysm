@@ -11,6 +11,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
+	httputil2 "github.com/prysmaticlabs/prysm/v5/api/httputil"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/shared"
@@ -21,7 +22,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/validator"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
 	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
@@ -33,7 +33,7 @@ func (s *Server) GetValidators(w http.ResponseWriter, r *http.Request) {
 
 	stateId := r.PathValue("state_id")
 	if stateId == "" {
-		httputil.HandleError(w, "state_id is required in URL params", http.StatusBadRequest)
+		httputil2.HandleError(w, "state_id is required in URL params", http.StatusBadRequest)
 		return
 	}
 	st, err := s.Stater.State(ctx, []byte(stateId))
@@ -44,12 +44,12 @@ func (s *Server) GetValidators(w http.ResponseWriter, r *http.Request) {
 
 	isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
 	if err != nil {
-		httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
 	if err != nil {
-		httputil.HandleError(w, "Could not calculate root of latest block header: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not calculate root of latest block header: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	isFinalized := s.FinalizationFetcher.IsFinalized(ctx, blockRoot)
@@ -59,10 +59,10 @@ func (s *Server) GetValidators(w http.ResponseWriter, r *http.Request) {
 		err = json.NewDecoder(r.Body).Decode(&req)
 		switch {
 		case errors.Is(err, io.EOF):
-			httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+			httputil2.HandleError(w, "No data submitted", http.StatusBadRequest)
 			return
 		case err != nil:
-			httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+			httputil2.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
 			return
 		}
 	}
@@ -91,7 +91,7 @@ func (s *Server) GetValidators(w http.ResponseWriter, r *http.Request) {
 			ExecutionOptimistic: isOptimistic,
 			Finalized:           isFinalized,
 		}
-		httputil.WriteJson(w, resp)
+		httputil2.WriteJson(w, resp)
 		return
 	}
 
@@ -107,7 +107,7 @@ func (s *Server) GetValidators(w http.ResponseWriter, r *http.Request) {
 		for i, val := range readOnlyVals {
 			valStatus, err := helpers.ValidatorSubStatus(val, epoch)
 			if err != nil {
-				httputil.HandleError(w, "Could not get validator status: "+err.Error(), http.StatusInternalServerError)
+				httputil2.HandleError(w, "Could not get validator status: "+err.Error(), http.StatusInternalServerError)
 				return
 			}
 			id := primitives.ValidatorIndex(i)
@@ -116,7 +116,7 @@ func (s *Server) GetValidators(w http.ResponseWriter, r *http.Request) {
 			}
 			balance, err := st.BalanceAtIndex(id)
 			if err != nil {
-				httputil.HandleError(w, "Could not get validator balance: "+err.Error(), http.StatusInternalServerError)
+				httputil2.HandleError(w, "Could not get validator balance: "+err.Error(), http.StatusInternalServerError)
 				return
 			}
 			containers[i] = valContainerFromReadOnlyVal(val, id, balance, valStatus)
@@ -126,7 +126,7 @@ func (s *Server) GetValidators(w http.ResponseWriter, r *http.Request) {
 			ExecutionOptimistic: isOptimistic,
 			Finalized:           isFinalized,
 		}
-		httputil.WriteJson(w, resp)
+		httputil2.WriteJson(w, resp)
 		return
 	}
 
@@ -134,7 +134,7 @@ func (s *Server) GetValidators(w http.ResponseWriter, r *http.Request) {
 	for _, ss := range statuses {
 		ok, vs := validator.StatusFromString(ss)
 		if !ok {
-			httputil.HandleError(w, "Invalid status "+ss, http.StatusBadRequest)
+			httputil2.HandleError(w, "Invalid status "+ss, http.StatusBadRequest)
 			return
 		}
 		filteredStatuses[vs] = true
@@ -143,12 +143,12 @@ func (s *Server) GetValidators(w http.ResponseWriter, r *http.Request) {
 	for i, val := range readOnlyVals {
 		valStatus, err := helpers.ValidatorStatus(val, epoch)
 		if err != nil {
-			httputil.HandleError(w, "Could not get validator status: "+err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, "Could not get validator status: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		valSubStatus, err := helpers.ValidatorSubStatus(val, epoch)
 		if err != nil {
-			httputil.HandleError(w, "Could not get validator status: "+err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, "Could not get validator status: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		if filteredStatuses[valStatus] || filteredStatuses[valSubStatus] {
@@ -159,7 +159,7 @@ func (s *Server) GetValidators(w http.ResponseWriter, r *http.Request) {
 			}
 			balance, err := st.BalanceAtIndex(id)
 			if err != nil {
-				httputil.HandleError(w, "Could not get validator balance: "+err.Error(), http.StatusInternalServerError)
+				httputil2.HandleError(w, "Could not get validator balance: "+err.Error(), http.StatusInternalServerError)
 				return
 			}
 			container = valContainerFromReadOnlyVal(val, id, balance, valSubStatus)
@@ -172,7 +172,7 @@ func (s *Server) GetValidators(w http.ResponseWriter, r *http.Request) {
 		ExecutionOptimistic: isOptimistic,
 		Finalized:           isFinalized,
 	}
-	httputil.WriteJson(w, resp)
+	httputil2.WriteJson(w, resp)
 }
 
 // GetValidator returns a validator specified by state and id or public key along with status and balance.
@@ -182,12 +182,12 @@ func (s *Server) GetValidator(w http.ResponseWriter, r *http.Request) {
 
 	stateId := r.PathValue("state_id")
 	if stateId == "" {
-		httputil.HandleError(w, "state_id is required in URL params", http.StatusBadRequest)
+		httputil2.HandleError(w, "state_id is required in URL params", http.StatusBadRequest)
 		return
 	}
 	valId := r.PathValue("validator_id")
 	if valId == "" {
-		httputil.HandleError(w, "validator_id is required in URL params", http.StatusBadRequest)
+		httputil2.HandleError(w, "validator_id is required in URL params", http.StatusBadRequest)
 		return
 	}
 
@@ -205,29 +205,29 @@ func (s *Server) GetValidator(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(ids) == 0 || len(readOnlyVals) == 0 {
-		httputil.HandleError(w, "No validator returned for the given ID", http.StatusInternalServerError)
+		httputil2.HandleError(w, "No validator returned for the given ID", http.StatusInternalServerError)
 		return
 	}
 	valSubStatus, err := helpers.ValidatorSubStatus(readOnlyVals[0], slots.ToEpoch(st.Slot()))
 	if err != nil {
-		httputil.HandleError(w, "Could not get validator status: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not get validator status: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	bal, err := st.BalanceAtIndex(ids[0])
 	if err != nil {
-		httputil.HandleError(w, "Could not get validator balance: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not get validator balance: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	container := valContainerFromReadOnlyVal(readOnlyVals[0], ids[0], bal, valSubStatus)
 
 	isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
 	if err != nil {
-		httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
 	if err != nil {
-		httputil.HandleError(w, "Could not calculate root of latest block header: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not calculate root of latest block header: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	isFinalized := s.FinalizationFetcher.IsFinalized(ctx, blockRoot)
@@ -237,7 +237,7 @@ func (s *Server) GetValidator(w http.ResponseWriter, r *http.Request) {
 		ExecutionOptimistic: isOptimistic,
 		Finalized:           isFinalized,
 	}
-	httputil.WriteJson(w, resp)
+	httputil2.WriteJson(w, resp)
 }
 
 // GetValidatorBalances returns a filterable list of validator balances.
@@ -247,7 +247,7 @@ func (s *Server) GetValidatorBalances(w http.ResponseWriter, r *http.Request) {
 
 	stateId := r.PathValue("state_id")
 	if stateId == "" {
-		httputil.HandleError(w, "state_id is required in URL params", http.StatusBadRequest)
+		httputil2.HandleError(w, "state_id is required in URL params", http.StatusBadRequest)
 		return
 	}
 	st, err := s.Stater.State(ctx, []byte(stateId))
@@ -258,12 +258,12 @@ func (s *Server) GetValidatorBalances(w http.ResponseWriter, r *http.Request) {
 
 	isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
 	if err != nil {
-		httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
 	if err != nil {
-		httputil.HandleError(w, "Could not calculate root of latest block header: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not calculate root of latest block header: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	isFinalized := s.FinalizationFetcher.IsFinalized(ctx, blockRoot)
@@ -275,10 +275,10 @@ func (s *Server) GetValidatorBalances(w http.ResponseWriter, r *http.Request) {
 		err = json.NewDecoder(r.Body).Decode(&rawIds)
 		switch {
 		case errors.Is(err, io.EOF):
-			httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+			httputil2.HandleError(w, "No data submitted", http.StatusBadRequest)
 			return
 		case err != nil:
-			httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+			httputil2.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
 			return
 		}
 	}
@@ -294,7 +294,7 @@ func (s *Server) GetValidatorBalances(w http.ResponseWriter, r *http.Request) {
 			ExecutionOptimistic: isOptimistic,
 			Finalized:           isFinalized,
 		}
-		httputil.WriteJson(w, resp)
+		httputil2.WriteJson(w, resp)
 		return
 	}
 
@@ -323,7 +323,7 @@ func (s *Server) GetValidatorBalances(w http.ResponseWriter, r *http.Request) {
 		ExecutionOptimistic: isOptimistic,
 		Finalized:           isFinalized,
 	}
-	httputil.WriteJson(w, resp)
+	httputil2.WriteJson(w, resp)
 }
 
 // GetValidatorIdentities returns a filterable list of validators identities.
@@ -333,7 +333,7 @@ func (s *Server) GetValidatorIdentities(w http.ResponseWriter, r *http.Request) 
 
 	stateId := r.PathValue("state_id")
 	if stateId == "" {
-		httputil.HandleError(w, "state_id is required in URL params", http.StatusBadRequest)
+		httputil2.HandleError(w, "state_id is required in URL params", http.StatusBadRequest)
 		return
 	}
 	st, err := s.Stater.State(ctx, []byte(stateId))
@@ -346,10 +346,10 @@ func (s *Server) GetValidatorIdentities(w http.ResponseWriter, r *http.Request) 
 	err = json.NewDecoder(r.Body).Decode(&rawIds)
 	switch {
 	case errors.Is(err, io.EOF):
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		httputil2.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	case err != nil:
-		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -358,7 +358,7 @@ func (s *Server) GetValidatorIdentities(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if httputil.RespondWithSsz(r) {
+	if httputil2.RespondWithSsz(r) {
 		s.getValidatorIdentitiesSSZ(w, st, rawIds, ids)
 	} else {
 		s.getValidatorIdentitiesJSON(r.Context(), w, st, stateId, rawIds, ids)
@@ -368,7 +368,7 @@ func (s *Server) GetValidatorIdentities(w http.ResponseWriter, r *http.Request) 
 func (s *Server) getValidatorIdentitiesSSZ(w http.ResponseWriter, st state.BeaconState, rawIds []string, ids []primitives.ValidatorIndex) {
 	// return no data if all IDs are ignored
 	if len(rawIds) > 0 && len(ids) == 0 {
-		httputil.WriteSsz(w, []byte{})
+		httputil2.WriteSsz(w, []byte{})
 		return
 	}
 
@@ -401,12 +401,12 @@ func (s *Server) getValidatorIdentitiesSSZ(w http.ResponseWriter, st state.Beaco
 	for i, vi := range identities {
 		ssz, err := vi.MarshalSSZ()
 		if err != nil {
-			httputil.HandleError(w, "Could not marshal validator identity to SSZ: "+err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, "Could not marshal validator identity to SSZ: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		copy(resp[i*sszLen:(i+1)*sszLen], ssz)
 	}
-	httputil.WriteSsz(w, resp)
+	httputil2.WriteSsz(w, resp)
 }
 
 func (s *Server) getValidatorIdentitiesJSON(
@@ -419,12 +419,12 @@ func (s *Server) getValidatorIdentitiesJSON(
 ) {
 	isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
 	if err != nil {
-		httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
 	if err != nil {
-		httputil.HandleError(w, "Could not calculate root of latest block header: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not calculate root of latest block header: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	isFinalized := s.FinalizationFetcher.IsFinalized(ctx, blockRoot)
@@ -436,7 +436,7 @@ func (s *Server) getValidatorIdentitiesJSON(
 			ExecutionOptimistic: isOptimistic,
 			Finalized:           isFinalized,
 		}
-		httputil.WriteJson(w, resp)
+		httputil2.WriteJson(w, resp)
 		return
 	}
 
@@ -469,7 +469,7 @@ func (s *Server) getValidatorIdentitiesJSON(
 		ExecutionOptimistic: isOptimistic,
 		Finalized:           isFinalized,
 	}
-	httputil.WriteJson(w, resp)
+	httputil2.WriteJson(w, resp)
 }
 
 // decodeIds takes in a list of validator ID strings (as either a pubkey or a validator index)
@@ -481,7 +481,7 @@ func decodeIds(w http.ResponseWriter, st state.BeaconState, rawIds []string, ign
 		pubkey, err := hexutil.Decode(rawId)
 		if err == nil {
 			if len(pubkey) != fieldparams.BLSPubkeyLength {
-				httputil.HandleError(w, fmt.Sprintf("Pubkey length is %d instead of %d", len(pubkey), fieldparams.BLSPubkeyLength), http.StatusBadRequest)
+				httputil2.HandleError(w, fmt.Sprintf("Pubkey length is %d instead of %d", len(pubkey), fieldparams.BLSPubkeyLength), http.StatusBadRequest)
 				return nil, false
 			}
 			valIndex, ok := st.ValidatorIndexByPubkey(bytesutil.ToBytes48(pubkey))
@@ -489,7 +489,7 @@ func decodeIds(w http.ResponseWriter, st state.BeaconState, rawIds []string, ign
 				if ignoreUnknown {
 					continue
 				}
-				httputil.HandleError(w, fmt.Sprintf("Unknown validator: %s", hexutil.Encode(pubkey)), http.StatusNotFound)
+				httputil2.HandleError(w, fmt.Sprintf("Unknown validator: %s", hexutil.Encode(pubkey)), http.StatusNotFound)
 				return nil, false
 			}
 			ids = append(ids, valIndex)
@@ -498,14 +498,14 @@ func decodeIds(w http.ResponseWriter, st state.BeaconState, rawIds []string, ign
 
 		index, err := strconv.ParseUint(rawId, 10, 64)
 		if err != nil {
-			httputil.HandleError(w, fmt.Sprintf("Invalid validator index %s", rawId), http.StatusBadRequest)
+			httputil2.HandleError(w, fmt.Sprintf("Invalid validator index %s", rawId), http.StatusBadRequest)
 			return nil, false
 		}
 		if index >= numVals {
 			if ignoreUnknown {
 				continue
 			}
-			httputil.HandleError(w, fmt.Sprintf("Invalid validator index %d", index), http.StatusBadRequest)
+			httputil2.HandleError(w, fmt.Sprintf("Invalid validator index %d", index), http.StatusBadRequest)
 			return nil, false
 		}
 		ids = append(ids, primitives.ValidatorIndex(index))
@@ -523,13 +523,13 @@ func valsFromIds(w http.ResponseWriter, st state.BeaconState, ids []primitives.V
 		for _, id := range ids {
 			val, err := st.ValidatorAtIndex(id)
 			if err != nil {
-				httputil.HandleError(w, fmt.Sprintf("Could not get validator at index %d: %s", id, err.Error()), http.StatusInternalServerError)
+				httputil2.HandleError(w, fmt.Sprintf("Could not get validator at index %d: %s", id, err.Error()), http.StatusInternalServerError)
 				return nil, false
 			}
 
 			readOnlyVal, err := statenative.NewValidator(val)
 			if err != nil {
-				httputil.HandleError(w, "Could not convert validator: "+err.Error(), http.StatusInternalServerError)
+				httputil2.HandleError(w, "Could not convert validator: "+err.Error(), http.StatusInternalServerError)
 				return nil, false
 			}
 			vals = append(vals, readOnlyVal)

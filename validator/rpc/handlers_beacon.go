@@ -10,11 +10,11 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
+	httputil2 "github.com/prysmaticlabs/prysm/v5/api/httputil"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/shared"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
@@ -28,7 +28,7 @@ func (s *Server) GetBeaconStatus(w http.ResponseWriter, r *http.Request) {
 	syncStatus, err := s.nodeClient.SyncStatus(ctx, &emptypb.Empty{})
 	if err != nil {
 		log.WithError(err).Error("beacon node call to get sync status failed")
-		httputil.WriteJson(w, &BeaconStatusResponse{
+		httputil2.WriteJson(w, &BeaconStatusResponse{
 			BeaconNodeEndpoint: s.beaconNodeEndpoint,
 			Connected:          false,
 			Syncing:            false,
@@ -37,7 +37,7 @@ func (s *Server) GetBeaconStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	genesis, err := s.nodeClient.Genesis(ctx, &emptypb.Empty{})
 	if err != nil {
-		httputil.HandleError(w, errors.Wrap(err, "Genesis call failed").Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, errors.Wrap(err, "Genesis call failed").Error(), http.StatusInternalServerError)
 		return
 	}
 	genesisTime := uint64(time.Unix(genesis.GenesisTime.Seconds, 0).Unix())
@@ -45,10 +45,10 @@ func (s *Server) GetBeaconStatus(w http.ResponseWriter, r *http.Request) {
 
 	chainHead, err := s.chainClient.ChainHead(ctx, &emptypb.Empty{})
 	if err != nil {
-		httputil.HandleError(w, errors.Wrap(err, "ChainHead").Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, errors.Wrap(err, "ChainHead").Error(), http.StatusInternalServerError)
 		return
 	}
-	httputil.WriteJson(w, &BeaconStatusResponse{
+	httputil2.WriteJson(w, &BeaconStatusResponse{
 		BeaconNodeEndpoint:     s.beaconNodeEndpoint,
 		Connected:              true,
 		Syncing:                syncStatus.Syncing,
@@ -75,7 +75,7 @@ func (s *Server) GetValidatorPerformance(w http.ResponseWriter, r *http.Request)
 		} else {
 			data, err := base64.StdEncoding.DecodeString(key)
 			if err != nil {
-				httputil.HandleError(w, errors.Wrap(err, "Failed to decode base64").Error(), http.StatusBadRequest)
+				httputil2.HandleError(w, errors.Wrap(err, "Failed to decode base64").Error(), http.StatusBadRequest)
 				return
 			}
 			pk = bytesutil.SafeCopyBytes(data)
@@ -88,10 +88,10 @@ func (s *Server) GetValidatorPerformance(w http.ResponseWriter, r *http.Request)
 	}
 	validatorPerformance, err := s.chainClient.ValidatorPerformance(ctx, req)
 	if err != nil {
-		httputil.HandleError(w, errors.Wrap(err, "ValidatorPerformance call failed").Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, errors.Wrap(err, "ValidatorPerformance call failed").Error(), http.StatusInternalServerError)
 		return
 	}
-	httputil.WriteJson(w, ValidatorPerformanceResponseFromConsensus(validatorPerformance))
+	httputil2.WriteJson(w, ValidatorPerformanceResponseFromConsensus(validatorPerformance))
 }
 
 // GetValidatorBalances is a wrapper around the /eth/v1alpha1 endpoint of the same name.
@@ -103,7 +103,7 @@ func (s *Server) GetValidatorBalances(w http.ResponseWriter, r *http.Request) {
 	if pageSize != "" {
 		psi, err := strconv.ParseInt(pageSize, 10, 32)
 		if err != nil {
-			httputil.HandleError(w, errors.Wrap(err, "Failed to parse page_size").Error(), http.StatusBadRequest)
+			httputil2.HandleError(w, errors.Wrap(err, "Failed to parse page_size").Error(), http.StatusBadRequest)
 			return
 		}
 		ps = psi
@@ -122,7 +122,7 @@ func (s *Server) GetValidatorBalances(w http.ResponseWriter, r *http.Request) {
 		} else {
 			data, err := base64.StdEncoding.DecodeString(key)
 			if err != nil {
-				httputil.HandleError(w, errors.Wrap(err, "Failed to decode base64").Error(), http.StatusBadRequest)
+				httputil2.HandleError(w, errors.Wrap(err, "Failed to decode base64").Error(), http.StatusBadRequest)
 				return
 			}
 			pk = bytesutil.SafeCopyBytes(data)
@@ -136,15 +136,15 @@ func (s *Server) GetValidatorBalances(w http.ResponseWriter, r *http.Request) {
 	}
 	listValidatorBalances, err := s.chainClient.ValidatorBalances(ctx, req)
 	if err != nil {
-		httputil.HandleError(w, errors.Wrap(err, "ValidatorBalances call failed").Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, errors.Wrap(err, "ValidatorBalances call failed").Error(), http.StatusInternalServerError)
 		return
 	}
 	response, err := ValidatorBalancesResponseFromConsensus(listValidatorBalances)
 	if err != nil {
-		httputil.HandleError(w, errors.Wrap(err, "Failed to convert to json").Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, errors.Wrap(err, "Failed to convert to json").Error(), http.StatusInternalServerError)
 		return
 	}
-	httputil.WriteJson(w, response)
+	httputil2.WriteJson(w, response)
 }
 
 // GetValidators is a wrapper around the /eth/v1alpha1 endpoint of the same name.
@@ -154,7 +154,7 @@ func (s *Server) GetValidators(w http.ResponseWriter, r *http.Request) {
 	pageSize := r.URL.Query().Get("page_size")
 	ps, err := strconv.ParseInt(pageSize, 10, 32)
 	if err != nil {
-		httputil.HandleError(w, errors.Wrap(err, "Failed to parse page_size").Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, errors.Wrap(err, "Failed to parse page_size").Error(), http.StatusBadRequest)
 		return
 	}
 	pageToken := r.URL.Query().Get("page_token")
@@ -173,14 +173,14 @@ func (s *Server) GetValidators(w http.ResponseWriter, r *http.Request) {
 		} else {
 			data, err := base64.StdEncoding.DecodeString(key)
 			if err != nil {
-				httputil.HandleError(w, errors.Wrap(err, "Failed to decode base64").Error(), http.StatusBadRequest)
+				httputil2.HandleError(w, errors.Wrap(err, "Failed to decode base64").Error(), http.StatusBadRequest)
 				return
 			}
 			pubkeys = append(pubkeys, bytesutil.SafeCopyBytes(data))
 		}
 	}
 	if len(pubkeys) == 0 {
-		httputil.HandleError(w, "no pubkeys provided", http.StatusBadRequest)
+		httputil2.HandleError(w, "no pubkeys provided", http.StatusBadRequest)
 		return
 	}
 	req := &ethpb.ListValidatorsRequest{
@@ -190,15 +190,15 @@ func (s *Server) GetValidators(w http.ResponseWriter, r *http.Request) {
 	}
 	validators, err := s.chainClient.Validators(ctx, req)
 	if err != nil {
-		httputil.HandleError(w, errors.Wrap(err, "Validators call failed").Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, errors.Wrap(err, "Validators call failed").Error(), http.StatusInternalServerError)
 		return
 	}
 	response, err := ValidatorsResponseFromConsensus(validators)
 	if err != nil {
-		httputil.HandleError(w, errors.Wrap(err, "Failed to convert to json").Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, errors.Wrap(err, "Failed to convert to json").Error(), http.StatusInternalServerError)
 		return
 	}
-	httputil.WriteJson(w, response)
+	httputil2.WriteJson(w, response)
 }
 
 // GetPeers is a wrapper around the /eth/v1alpha1 endpoint of the same name.
@@ -207,8 +207,8 @@ func (s *Server) GetPeers(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	peers, err := s.nodeClient.Peers(ctx, &emptypb.Empty{})
 	if err != nil {
-		httputil.HandleError(w, errors.Wrap(err, "Peers call failed").Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, errors.Wrap(err, "Peers call failed").Error(), http.StatusInternalServerError)
 		return
 	}
-	httputil.WriteJson(w, peers)
+	httputil2.WriteJson(w, peers)
 }

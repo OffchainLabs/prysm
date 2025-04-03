@@ -4,7 +4,7 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/api"
+	"github.com/prysmaticlabs/prysm/v5/api/httputil"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
@@ -18,17 +18,17 @@ func TestParseNodeVersion(t *testing.T) {
 		{
 			name: "empty string",
 			v:    "",
-			err:  api.ErrInvalidNodeVersion,
+			err:  httputil.ErrInvalidNodeVersion,
 		},
 		{
 			name: "Prysm as the version string",
 			v:    "Prysm",
-			err:  api.ErrInvalidNodeVersion,
+			err:  httputil.ErrInvalidNodeVersion,
 		},
 		{
 			name: "semver only",
 			v:    "v2.0.6",
-			err:  api.ErrInvalidNodeVersion,
+			err:  httputil.ErrInvalidNodeVersion,
 		},
 		{
 			name: "complete version",
@@ -92,7 +92,7 @@ func TestValidHostname(t *testing.T) {
 		{
 			name:    "hostname without port",
 			hostArg: "mydomain.org",
-			err:     api.ErrMalformedHostname,
+			err:     httputil.ErrMalformedHostname,
 		},
 		{
 			name:    "hostname with port",

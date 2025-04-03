@@ -7,8 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/api"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
+	"github.com/prysmaticlabs/prysm/v5/api/httputil"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
@@ -109,14 +108,14 @@ func TestServer_AuthTokenHandler(t *testing.T) {
 	})
 	t.Run("initialize does not need auth", func(t *testing.T) {
 		rr := httptest.NewRecorder()
-		req, err := http.NewRequest(http.MethodGet, api.WebUrlPrefix+"initialize", http.NoBody)
+		req, err := http.NewRequest(http.MethodGet, httputil.WebUrlPrefix+"initialize", http.NoBody)
 		require.NoError(t, err)
 		testHandler.ServeHTTP(rr, req)
 		require.Equal(t, http.StatusOK, rr.Code)
 	})
 	t.Run("health does not need auth", func(t *testing.T) {
 		rr := httptest.NewRecorder()
-		req, err := http.NewRequest(http.MethodGet, api.WebUrlPrefix+"health/logs", http.NoBody)
+		req, err := http.NewRequest(http.MethodGet, httputil.WebUrlPrefix+"health/logs", http.NoBody)
 		require.NoError(t, err)
 		testHandler.ServeHTTP(rr, req)
 		require.Equal(t, http.StatusOK, rr.Code)

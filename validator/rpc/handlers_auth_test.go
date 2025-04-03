@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/api"
+	"github.com/prysmaticlabs/prysm/v5/api/httputil"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"github.com/prysmaticlabs/prysm/v5/validator/accounts"
 	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
@@ -20,7 +20,7 @@ func TestInitialize(t *testing.T) {
 	localWalletDir := setupWalletDir(t)
 
 	// Step 2: Optionally create a temporary 'auth-token' file
-	authTokenPath := filepath.Join(localWalletDir, api.AuthTokenFileName)
+	authTokenPath := filepath.Join(localWalletDir, httputil.AuthTokenFileName)
 	_, err := os.Create(authTokenPath)
 	require.NoError(t, err)
 

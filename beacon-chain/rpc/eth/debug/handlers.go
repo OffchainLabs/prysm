@@ -7,12 +7,11 @@ import (
 	"net/http"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/prysmaticlabs/prysm/v5/api"
+	httputil2 "github.com/prysmaticlabs/prysm/v5/api/httputil"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/shared"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 )
 
@@ -25,11 +24,11 @@ func (s *Server) GetBeaconStateV2(w http.ResponseWriter, r *http.Request) {
 
 	stateId := r.PathValue("state_id")
 	if stateId == "" {
-		httputil.HandleError(w, "state_id is required in URL params", http.StatusBadRequest)
+		httputil2.HandleError(w, "state_id is required in URL params", http.StatusBadRequest)
 		return
 	}
 
-	if httputil.RespondWithSsz(r) {
+	if httputil2.RespondWithSsz(r) {
 		s.getBeaconStateSSZV2(ctx, w, []byte(stateId))
 	} else {
 		s.getBeaconStateV2(ctx, w, []byte(stateId))
@@ -46,12 +45,12 @@ func (s *Server) getBeaconStateV2(ctx context.Context, w http.ResponseWriter, id
 
 	isOptimistic, err := helpers.IsOptimistic(ctx, id, s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
 	if err != nil {
-		httputil.HandleError(w, "Could not check if state is optimistic: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not check if state is optimistic: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
 	if err != nil {
-		httputil.HandleError(w, "Could not calculate root of latest block header: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not calculate root of latest block header: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	isFinalized := s.FinalizationFetcher.IsFinalized(ctx, blockRoot)
@@ -61,53 +60,53 @@ func (s *Server) getBeaconStateV2(ctx context.Context, w http.ResponseWriter, id
 	case version.Phase0:
 		respSt, err = structs.BeaconStateFromConsensus(st)
 		if err != nil {
-			httputil.HandleError(w, errMsgStateFromConsensus+": "+err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, errMsgStateFromConsensus+": "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 	case version.Altair:
 		respSt, err = structs.BeaconStateAltairFromConsensus(st)
 		if err != nil {
-			httputil.HandleError(w, errMsgStateFromConsensus+": "+err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, errMsgStateFromConsensus+": "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 	case version.Bellatrix:
 		respSt, err = structs.BeaconStateBellatrixFromConsensus(st)
 		if err != nil {
-			httputil.HandleError(w, errMsgStateFromConsensus+": "+err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, errMsgStateFromConsensus+": "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 	case version.Capella:
 		respSt, err = structs.BeaconStateCapellaFromConsensus(st)
 		if err != nil {
-			httputil.HandleError(w, errMsgStateFromConsensus+": "+err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, errMsgStateFromConsensus+": "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 	case version.Deneb:
 		respSt, err = structs.BeaconStateDenebFromConsensus(st)
 		if err != nil {
-			httputil.HandleError(w, errMsgStateFromConsensus+": "+err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, errMsgStateFromConsensus+": "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 	case version.Electra:
 		respSt, err = structs.BeaconStateElectraFromConsensus(st)
 		if err != nil {
-			httputil.HandleError(w, errMsgStateFromConsensus+": "+err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, errMsgStateFromConsensus+": "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 	case version.Fulu:
 		respSt, err = structs.BeaconStateFuluFromConsensus(st)
 		if err != nil {
-			httputil.HandleError(w, errMsgStateFromConsensus+": "+err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, errMsgStateFromConsensus+": "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 	default:
-		httputil.HandleError(w, "Unsupported state version", http.StatusInternalServerError)
+		httputil2.HandleError(w, "Unsupported state version", http.StatusInternalServerError)
 		return
 	}
 
 	jsonBytes, err := json.Marshal(respSt)
 	if err != nil {
-		httputil.HandleError(w, "Could not marshal state into JSON: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not marshal state into JSON: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	ver := version.String(st.Version())
@@ -117,8 +116,8 @@ func (s *Server) getBeaconStateV2(ctx context.Context, w http.ResponseWriter, id
 		Finalized:           isFinalized,
 		Data:                jsonBytes,
 	}
-	w.Header().Set(api.VersionHeader, ver)
-	httputil.WriteJson(w, resp)
+	w.Header().Set(httputil2.VersionHeader, ver)
+	httputil2.WriteJson(w, resp)
 }
 
 // getBeaconStateSSZV2 returns the SSZ-serialized version of the full beacon state object for given state ID.
@@ -130,11 +129,11 @@ func (s *Server) getBeaconStateSSZV2(ctx context.Context, w http.ResponseWriter,
 	}
 	sszState, err := st.MarshalSSZ()
 	if err != nil {
-		httputil.HandleError(w, "Could not marshal state into SSZ: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not marshal state into SSZ: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set(api.VersionHeader, version.String(st.Version()))
-	httputil.WriteSsz(w, sszState)
+	w.Header().Set(httputil2.VersionHeader, version.String(st.Version()))
+	httputil2.WriteSsz(w, sszState)
 }
 
 // GetForkChoiceHeadsV2 retrieves the leaves of the current fork choice tree.
@@ -149,7 +148,7 @@ func (s *Server) GetForkChoiceHeadsV2(w http.ResponseWriter, r *http.Request) {
 	for i := range headRoots {
 		isOptimistic, err := s.OptimisticModeFetcher.IsOptimisticForRoot(ctx, headRoots[i])
 		if err != nil {
-			httputil.HandleError(w, "Could not check if head is optimistic: "+err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, "Could not check if head is optimistic: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		resp.Data[i] = &structs.ForkChoiceHead{
@@ -159,7 +158,7 @@ func (s *Server) GetForkChoiceHeadsV2(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	httputil.WriteJson(w, resp)
+	httputil2.WriteJson(w, resp)
 }
 
 // GetForkChoice returns a dump fork choice store.
@@ -169,7 +168,7 @@ func (s *Server) GetForkChoice(w http.ResponseWriter, r *http.Request) {
 
 	dump, err := s.ForkchoiceFetcher.ForkChoiceDump(ctx)
 	if err != nil {
-		httputil.HandleError(w, "Could not get forkchoice dump: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not get forkchoice dump: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -206,5 +205,5 @@ func (s *Server) GetForkChoice(w http.ResponseWriter, r *http.Request) {
 			HeadRoot:                      hexutil.Encode(dump.HeadRoot),
 		},
 	}
-	httputil.WriteJson(w, resp)
+	httputil2.WriteJson(w, resp)
 }

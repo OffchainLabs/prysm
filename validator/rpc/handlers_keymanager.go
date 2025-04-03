@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
+	httputil2 "github.com/prysmaticlabs/prysm/v5/api/httputil"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/shared"
 	"github.com/prysmaticlabs/prysm/v5/cmd/validator/flags"
@@ -22,7 +23,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/validator"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
 	"github.com/prysmaticlabs/prysm/v5/validator/client"
 	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
 	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/derived"
@@ -37,16 +37,16 @@ func (s *Server) ListKeystores(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 
 	if s.validatorService == nil {
-		httputil.HandleError(w, "Validator service not ready.", http.StatusServiceUnavailable)
+		httputil2.HandleError(w, "Validator service not ready.", http.StatusServiceUnavailable)
 		return
 	}
 	if !s.walletInitialized {
-		httputil.HandleError(w, "Prysm Wallet not initialized. Please create a new wallet.", http.StatusServiceUnavailable)
+		httputil2.HandleError(w, "Prysm Wallet not initialized. Please create a new wallet.", http.StatusServiceUnavailable)
 		return
 	}
 	km, err := s.validatorService.Keymanager()
 	if err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if s.wallet.KeymanagerKind() != keymanager.Derived && s.wallet.KeymanagerKind() != keymanager.Local {
@@ -54,12 +54,12 @@ func (s *Server) ListKeystores(w http.ResponseWriter, r *http.Request) {
 		response := &ListKeystoresResponse{
 			Data: make([]*Keystore, 0),
 		}
-		httputil.WriteJson(w, response)
+		httputil2.WriteJson(w, response)
 		return
 	}
 	pubKeys, err := km.FetchValidatingPublicKeys(ctx)
 	if err != nil {
-		httputil.HandleError(w, errors.Wrap(err, "Could not retrieve keystores").Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, errors.Wrap(err, "Could not retrieve keystores").Error(), http.StatusInternalServerError)
 		return
 	}
 	keystoreResponse := make([]*Keystore, len(pubKeys))
@@ -74,7 +74,7 @@ func (s *Server) ListKeystores(w http.ResponseWriter, r *http.Request) {
 	response := &ListKeystoresResponse{
 		Data: keystoreResponse,
 	}
-	httputil.WriteJson(w, response)
+	httputil2.WriteJson(w, response)
 }
 
 // ImportKeystores allows for importing keystores into Prysm with their slashing protection history.
@@ -83,16 +83,16 @@ func (s *Server) ImportKeystores(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 
 	if s.validatorService == nil {
-		httputil.HandleError(w, "Validator service not ready.", http.StatusServiceUnavailable)
+		httputil2.HandleError(w, "Validator service not ready.", http.StatusServiceUnavailable)
 		return
 	}
 	if !s.walletInitialized {
-		httputil.HandleError(w, "Prysm Wallet not initialized. Please create a new wallet.", http.StatusServiceUnavailable)
+		httputil2.HandleError(w, "Prysm Wallet not initialized. Please create a new wallet.", http.StatusServiceUnavailable)
 		return
 	}
 	km, err := s.validatorService.Keymanager()
 	if err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -100,10 +100,10 @@ func (s *Server) ImportKeystores(w http.ResponseWriter, r *http.Request) {
 	err = json.NewDecoder(r.Body).Decode(&req)
 	switch {
 	case errors.Is(err, io.EOF):
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		httputil2.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	case err != nil:
-		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -116,11 +116,11 @@ func (s *Server) ImportKeystores(w http.ResponseWriter, r *http.Request) {
 				Message: fmt.Sprintf("Keymanager kind %T cannot import local keys", km),
 			}
 		}
-		httputil.WriteJson(w, &ImportKeystoresResponse{Data: statuses})
+		httputil2.WriteJson(w, &ImportKeystoresResponse{Data: statuses})
 		return
 	}
 	if len(req.Keystores) == 0 {
-		httputil.WriteJson(w, &ImportKeystoresResponse{})
+		httputil2.WriteJson(w, &ImportKeystoresResponse{})
 		return
 	}
 	keystores := make([]*keymanager.Keystore, len(req.Keystores))
@@ -145,7 +145,7 @@ func (s *Server) ImportKeystores(w http.ResponseWriter, r *http.Request) {
 					Message: fmt.Sprintf("could not import slashing protection: %v", err),
 				}
 			}
-			httputil.WriteJson(w, &ImportKeystoresResponse{Data: statuses})
+			httputil2.WriteJson(w, &ImportKeystoresResponse{Data: statuses})
 			return
 		}
 	}
@@ -164,13 +164,13 @@ func (s *Server) ImportKeystores(w http.ResponseWriter, r *http.Request) {
 
 	statuses, err := importer.ImportKeystores(ctx, keystores, req.Passwords)
 	if err != nil {
-		httputil.HandleError(w, errors.Wrap(err, "Could not import keystores").Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, errors.Wrap(err, "Could not import keystores").Error(), http.StatusInternalServerError)
 		return
 	}
 
 	// If any of the keys imported had a slashing protection history before, we
 	// stop marking them as deleted from our validator database.
-	httputil.WriteJson(w, &ImportKeystoresResponse{Data: statuses})
+	httputil2.WriteJson(w, &ImportKeystoresResponse{Data: statuses})
 }
 
 // DeleteKeystores allows for deleting specified public keys from Prysm.
@@ -179,31 +179,31 @@ func (s *Server) DeleteKeystores(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 
 	if s.validatorService == nil {
-		httputil.HandleError(w, "Validator service not ready.", http.StatusServiceUnavailable)
+		httputil2.HandleError(w, "Validator service not ready.", http.StatusServiceUnavailable)
 		return
 	}
 	if !s.walletInitialized {
-		httputil.HandleError(w, "Prysm Wallet not initialized. Please create a new wallet.", http.StatusServiceUnavailable)
+		httputil2.HandleError(w, "Prysm Wallet not initialized. Please create a new wallet.", http.StatusServiceUnavailable)
 		return
 	}
 	km, err := s.validatorService.Keymanager()
 	if err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	var req DeleteKeystoresRequest
 	err = json.NewDecoder(r.Body).Decode(&req)
 	switch {
 	case errors.Is(err, io.EOF):
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		httputil2.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	case err != nil:
-		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	if len(req.Pubkeys) == 0 {
-		httputil.WriteJson(w, &DeleteKeystoresResponse{Data: make([]*keymanager.KeyStatus, 0)})
+		httputil2.WriteJson(w, &DeleteKeystoresResponse{Data: make([]*keymanager.KeyStatus, 0)})
 		return
 	}
 	deleter, ok := km.(keymanager.Deleter)
@@ -215,7 +215,7 @@ func (s *Server) DeleteKeystores(w http.ResponseWriter, r *http.Request) {
 				Message: fmt.Sprintf("Keymanager kind %T cannot delete local keys", km),
 			}
 		}
-		httputil.WriteJson(w, &DeleteKeystoresResponse{Data: sts})
+		httputil2.WriteJson(w, &DeleteKeystoresResponse{Data: sts})
 		return
 	}
 	bytePubKeys := make([][]byte, len(req.Pubkeys))
@@ -228,13 +228,13 @@ func (s *Server) DeleteKeystores(w http.ResponseWriter, r *http.Request) {
 	}
 	statuses, err := deleter.DeleteKeystores(ctx, bytePubKeys)
 	if err != nil {
-		httputil.HandleError(w, errors.Wrap(err, "Could not delete keys").Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, errors.Wrap(err, "Could not delete keys").Error(), http.StatusInternalServerError)
 		return
 	}
 
 	statuses, err = s.transformDeletedKeysStatuses(ctx, bytePubKeys, statuses)
 	if err != nil {
-		httputil.HandleError(w, errors.Wrap(err, "Could not transform deleted keys statuses").Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, errors.Wrap(err, "Could not transform deleted keys statuses").Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -248,12 +248,12 @@ func (s *Server) DeleteKeystores(w http.ResponseWriter, r *http.Request) {
 				Message: "Could not export slashing protection history as existing non duplicate keys were deleted",
 			}
 		}
-		httputil.WriteJson(w, &DeleteKeystoresResponse{Data: sts})
+		httputil2.WriteJson(w, &DeleteKeystoresResponse{Data: sts})
 		return
 	}
 	jsonHist, err := json.Marshal(exportedHistory)
 	if err != nil {
-		httputil.HandleError(w, errors.Wrap(err, "Could not JSON marshal slashing protection history").Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, errors.Wrap(err, "Could not JSON marshal slashing protection history").Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -261,7 +261,7 @@ func (s *Server) DeleteKeystores(w http.ResponseWriter, r *http.Request) {
 		Data:               statuses,
 		SlashingProtection: string(jsonHist),
 	}
-	httputil.WriteJson(w, response)
+	httputil2.WriteJson(w, response)
 }
 
 // For a list of deleted keystore statuses, we check if any NOT_FOUND status actually
@@ -326,18 +326,18 @@ func (s *Server) SetVoluntaryExit(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 
 	if s.validatorService == nil {
-		httputil.HandleError(w, "Validator service not ready", http.StatusServiceUnavailable)
+		httputil2.HandleError(w, "Validator service not ready", http.StatusServiceUnavailable)
 		return
 	}
 
 	if !s.walletInitialized {
-		httputil.HandleError(w, "No wallet found", http.StatusServiceUnavailable)
+		httputil2.HandleError(w, "No wallet found", http.StatusServiceUnavailable)
 		return
 	}
 
 	km, err := s.validatorService.Keymanager()
 	if err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	_, pubkey, ok := shared.HexFromRoute(w, r, "pubkey", fieldparams.BLSPubkeyLength)
@@ -353,12 +353,12 @@ func (s *Server) SetVoluntaryExit(w http.ResponseWriter, r *http.Request) {
 	if rawEpoch == "" {
 		genesisResponse, err := s.nodeClient.Genesis(ctx, &emptypb.Empty{})
 		if err != nil {
-			httputil.HandleError(w, errors.Wrap(err, "Failed to get genesis time").Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, errors.Wrap(err, "Failed to get genesis time").Error(), http.StatusInternalServerError)
 			return
 		}
 		currentEpoch, err := client.CurrentEpoch(genesisResponse.GenesisTime)
 		if err != nil {
-			httputil.HandleError(w, errors.Wrap(err, "Failed to get current epoch").Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, errors.Wrap(err, "Failed to get current epoch").Error(), http.StatusInternalServerError)
 			return
 		}
 		epoch = currentEpoch
@@ -371,7 +371,7 @@ func (s *Server) SetVoluntaryExit(w http.ResponseWriter, r *http.Request) {
 		epoch,
 	)
 	if err != nil {
-		httputil.HandleError(w, errors.Wrap(err, "Could not create voluntary exit").Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, errors.Wrap(err, "Could not create voluntary exit").Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -384,7 +384,7 @@ func (s *Server) SetVoluntaryExit(w http.ResponseWriter, r *http.Request) {
 			Signature: hexutil.Encode(sve.Signature),
 		},
 	}
-	httputil.WriteJson(w, response)
+	httputil2.WriteJson(w, response)
 }
 
 // ListRemoteKeys returns a list of all public keys defined for web3signer keymanager type.
@@ -393,16 +393,16 @@ func (s *Server) ListRemoteKeys(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 
 	if s.validatorService == nil {
-		httputil.HandleError(w, "Validator service not ready.", http.StatusServiceUnavailable)
+		httputil2.HandleError(w, "Validator service not ready.", http.StatusServiceUnavailable)
 		return
 	}
 	if !s.walletInitialized {
-		httputil.HandleError(w, "Prysm Wallet not initialized. Please create a new wallet.", http.StatusServiceUnavailable)
+		httputil2.HandleError(w, "Prysm Wallet not initialized. Please create a new wallet.", http.StatusServiceUnavailable)
 		return
 	}
 	km, err := s.validatorService.Keymanager()
 	if err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if s.wallet.KeymanagerKind() != keymanager.Web3Signer {
@@ -410,12 +410,12 @@ func (s *Server) ListRemoteKeys(w http.ResponseWriter, r *http.Request) {
 		response := &ListKeystoresResponse{
 			Data: make([]*Keystore, 0),
 		}
-		httputil.WriteJson(w, response)
+		httputil2.WriteJson(w, response)
 		return
 	}
 	pubKeys, err := km.FetchValidatingPublicKeys(ctx)
 	if err != nil {
-		httputil.HandleError(w, errors.Errorf("Could not retrieve public keys: %v", err).Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, errors.Errorf("Could not retrieve public keys: %v", err).Error(), http.StatusInternalServerError)
 		return
 	}
 	keystoreResponse := make([]*RemoteKey, len(pubKeys))
@@ -430,7 +430,7 @@ func (s *Server) ListRemoteKeys(w http.ResponseWriter, r *http.Request) {
 	response := &ListRemoteKeysResponse{
 		Data: keystoreResponse,
 	}
-	httputil.WriteJson(w, response)
+	httputil2.WriteJson(w, response)
 }
 
 // ImportRemoteKeys imports a list of public keys defined for web3signer keymanager type.
@@ -439,20 +439,20 @@ func (s *Server) ImportRemoteKeys(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 
 	if s.validatorService == nil {
-		httputil.HandleError(w, "Validator service not ready.", http.StatusServiceUnavailable)
+		httputil2.HandleError(w, "Validator service not ready.", http.StatusServiceUnavailable)
 		return
 	}
 	if !s.walletInitialized {
-		httputil.HandleError(w, "Prysm Wallet not initialized. Please create a new wallet.", http.StatusServiceUnavailable)
+		httputil2.HandleError(w, "Prysm Wallet not initialized. Please create a new wallet.", http.StatusServiceUnavailable)
 		return
 	}
 	km, err := s.validatorService.Keymanager()
 	if err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if s.wallet.KeymanagerKind() != keymanager.Web3Signer {
-		httputil.HandleError(w, "Prysm Wallet is not of type Web3Signer. Please execute validator client with web3signer flags.", http.StatusInternalServerError)
+		httputil2.HandleError(w, "Prysm Wallet is not of type Web3Signer. Please execute validator client with web3signer flags.", http.StatusInternalServerError)
 		return
 	}
 
@@ -460,10 +460,10 @@ func (s *Server) ImportRemoteKeys(w http.ResponseWriter, r *http.Request) {
 	err = json.NewDecoder(r.Body).Decode(&req)
 	switch {
 	case errors.Is(err, io.EOF):
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		httputil2.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	case err != nil:
-		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -476,7 +476,7 @@ func (s *Server) ImportRemoteKeys(w http.ResponseWriter, r *http.Request) {
 				Message: "Keymanager kind cannot import public keys for web3signer keymanager type.",
 			}
 		}
-		httputil.WriteJson(w, &RemoteKeysResponse{Data: statuses})
+		httputil2.WriteJson(w, &RemoteKeysResponse{Data: statuses})
 		return
 	}
 
@@ -494,10 +494,10 @@ func (s *Server) ImportRemoteKeys(w http.ResponseWriter, r *http.Request) {
 
 	ks, err := adder.AddPublicKeys(remoteKeys)
 	if err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	httputil.WriteJson(w, &RemoteKeysResponse{Data: ks})
+	httputil2.WriteJson(w, &RemoteKeysResponse{Data: ks})
 }
 
 // DeleteRemoteKeys deletes a list of public keys defined for web3signer keymanager type.
@@ -506,20 +506,20 @@ func (s *Server) DeleteRemoteKeys(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 
 	if s.validatorService == nil {
-		httputil.HandleError(w, "Validator service not ready.", http.StatusServiceUnavailable)
+		httputil2.HandleError(w, "Validator service not ready.", http.StatusServiceUnavailable)
 		return
 	}
 	if !s.walletInitialized {
-		httputil.HandleError(w, "Prysm Wallet not initialized. Please create a new wallet.", http.StatusServiceUnavailable)
+		httputil2.HandleError(w, "Prysm Wallet not initialized. Please create a new wallet.", http.StatusServiceUnavailable)
 		return
 	}
 	km, err := s.validatorService.Keymanager()
 	if err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if s.wallet.KeymanagerKind() != keymanager.Web3Signer {
-		httputil.HandleError(w, "Prysm Wallet is not of type Web3Signer. Please execute validator client with web3signer flags.", http.StatusInternalServerError)
+		httputil2.HandleError(w, "Prysm Wallet is not of type Web3Signer. Please execute validator client with web3signer flags.", http.StatusInternalServerError)
 		return
 	}
 
@@ -527,10 +527,10 @@ func (s *Server) DeleteRemoteKeys(w http.ResponseWriter, r *http.Request) {
 	err = json.NewDecoder(r.Body).Decode(&req)
 	switch {
 	case errors.Is(err, io.EOF):
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		httputil2.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	case err != nil:
-		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -543,15 +543,15 @@ func (s *Server) DeleteRemoteKeys(w http.ResponseWriter, r *http.Request) {
 				Message: "Keymanager kind cannot delete public keys for web3signer keymanager type.",
 			}
 		}
-		httputil.WriteJson(w, &RemoteKeysResponse{Data: statuses})
+		httputil2.WriteJson(w, &RemoteKeysResponse{Data: statuses})
 		return
 	}
 	data, err := deleter.DeletePublicKeys(req.Pubkeys)
 	if err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	httputil.WriteJson(w, RemoteKeysResponse{Data: data})
+	httputil2.WriteJson(w, RemoteKeysResponse{Data: data})
 }
 
 // ListFeeRecipientByPubkey returns the public key to eth address mapping object to the end user.
@@ -560,7 +560,7 @@ func (s *Server) ListFeeRecipientByPubkey(w http.ResponseWriter, r *http.Request
 	defer span.End()
 
 	if s.validatorService == nil {
-		httputil.HandleError(w, "Validator service not ready.", http.StatusServiceUnavailable)
+		httputil2.HandleError(w, "Validator service not ready.", http.StatusServiceUnavailable)
 		return
 	}
 	rawPubkey, pubkey, ok := shared.HexFromRoute(w, r, "pubkey", fieldparams.BLSPubkeyLength)
@@ -581,7 +581,7 @@ func (s *Server) ListFeeRecipientByPubkey(w http.ResponseWriter, r *http.Request
 
 		if found && proposerOption.FeeRecipientConfig != nil {
 			finalResp.Data.Ethaddress = proposerOption.FeeRecipientConfig.FeeRecipient.String()
-			httputil.WriteJson(w, finalResp)
+			httputil2.WriteJson(w, finalResp)
 			return
 		}
 	}
@@ -589,11 +589,11 @@ func (s *Server) ListFeeRecipientByPubkey(w http.ResponseWriter, r *http.Request
 	// If fee recipient is defined in default configuration, use it
 	if proposerSettings != nil && proposerSettings.DefaultConfig != nil && proposerSettings.DefaultConfig.FeeRecipientConfig != nil {
 		finalResp.Data.Ethaddress = proposerSettings.DefaultConfig.FeeRecipientConfig.FeeRecipient.String()
-		httputil.WriteJson(w, finalResp)
+		httputil2.WriteJson(w, finalResp)
 		return
 	}
 
-	httputil.HandleError(w, "No fee recipient set", http.StatusBadRequest)
+	httputil2.HandleError(w, "No fee recipient set", http.StatusBadRequest)
 }
 
 // SetFeeRecipientByPubkey updates the eth address mapped to the public key.
@@ -602,7 +602,7 @@ func (s *Server) SetFeeRecipientByPubkey(w http.ResponseWriter, r *http.Request)
 	defer span.End()
 
 	if s.validatorService == nil {
-		httputil.HandleError(w, "Validator service not ready.", http.StatusServiceUnavailable)
+		httputil2.HandleError(w, "Validator service not ready.", http.StatusServiceUnavailable)
 		return
 	}
 	_, pubkey, ok := shared.HexFromRoute(w, r, "pubkey", fieldparams.BLSPubkeyLength)
@@ -614,10 +614,10 @@ func (s *Server) SetFeeRecipientByPubkey(w http.ResponseWriter, r *http.Request)
 	err := json.NewDecoder(r.Body).Decode(&req)
 	switch {
 	case errors.Is(err, io.EOF):
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		httputil2.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	case err != nil:
-		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 	ethAddress, valid := shared.ValidateHex(w, "ethaddress", req.Ethaddress, fieldparams.FeeRecipientLength)
@@ -673,7 +673,7 @@ func (s *Server) SetFeeRecipientByPubkey(w http.ResponseWriter, r *http.Request)
 	}
 	// save the settings
 	if err := s.validatorService.SetProposerSettings(ctx, settings); err != nil {
-		httputil.HandleError(w, "Could not set proposer settings: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not set proposer settings: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	// override the 200 success with 202 according to the specs
@@ -686,7 +686,7 @@ func (s *Server) DeleteFeeRecipientByPubkey(w http.ResponseWriter, r *http.Reque
 	defer span.End()
 
 	if s.validatorService == nil {
-		httputil.HandleError(w, "Validator service not ready.", http.StatusServiceUnavailable)
+		httputil2.HandleError(w, "Validator service not ready.", http.StatusServiceUnavailable)
 		return
 	}
 	_, pubkey, ok := shared.HexFromRoute(w, r, "pubkey", fieldparams.BLSPubkeyLength)
@@ -704,7 +704,7 @@ func (s *Server) DeleteFeeRecipientByPubkey(w http.ResponseWriter, r *http.Reque
 
 	// save the settings
 	if err := s.validatorService.SetProposerSettings(ctx, settings); err != nil {
-		httputil.HandleError(w, "Could not set proposer settings: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not set proposer settings: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -718,7 +718,7 @@ func (s *Server) GetGasLimit(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 
 	if s.validatorService == nil {
-		httputil.HandleError(w, "Validator service not ready", http.StatusServiceUnavailable)
+		httputil2.HandleError(w, "Validator service not ready", http.StatusServiceUnavailable)
 		return
 	}
 
@@ -744,7 +744,7 @@ func (s *Server) GetGasLimit(w http.ResponseWriter, r *http.Request) {
 			resp.Data.GasLimit = fmt.Sprintf("%d", s.validatorService.ProposerSettings().DefaultConfig.BuilderConfig.GasLimit)
 		}
 	}
-	httputil.WriteJson(w, resp)
+	httputil2.WriteJson(w, resp)
 }
 
 // SetGasLimit updates the gas limit by public key
@@ -753,7 +753,7 @@ func (s *Server) SetGasLimit(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 
 	if s.validatorService == nil {
-		httputil.HandleError(w, "Validator service not ready", http.StatusServiceUnavailable)
+		httputil2.HandleError(w, "Validator service not ready", http.StatusServiceUnavailable)
 		return
 	}
 	_, pubkey, ok := shared.HexFromRoute(w, r, "pubkey", fieldparams.BLSPubkeyLength)
@@ -765,10 +765,10 @@ func (s *Server) SetGasLimit(w http.ResponseWriter, r *http.Request) {
 	err := json.NewDecoder(r.Body).Decode(&req)
 	switch {
 	case errors.Is(err, io.EOF):
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		httputil2.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	case err != nil:
-		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -779,11 +779,11 @@ func (s *Server) SetGasLimit(w http.ResponseWriter, r *http.Request) {
 
 	settings := s.validatorService.ProposerSettings()
 	if settings == nil {
-		httputil.HandleError(w, "No proposer settings were found to update", http.StatusInternalServerError)
+		httputil2.HandleError(w, "No proposer settings were found to update", http.StatusInternalServerError)
 		return
 	} else if settings.ProposeConfig == nil {
 		if settings.DefaultConfig == nil || settings.DefaultConfig.BuilderConfig == nil || !settings.DefaultConfig.BuilderConfig.Enabled {
-			httputil.HandleError(w, "Gas limit changes only apply when builder is enabled", http.StatusInternalServerError)
+			httputil2.HandleError(w, "Gas limit changes only apply when builder is enabled", http.StatusInternalServerError)
 			return
 		}
 		settings.ProposeConfig = make(map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option)
@@ -794,14 +794,14 @@ func (s *Server) SetGasLimit(w http.ResponseWriter, r *http.Request) {
 		proposerOption, found := settings.ProposeConfig[bytesutil.ToBytes48(pubkey)]
 		if found {
 			if proposerOption.BuilderConfig == nil || !proposerOption.BuilderConfig.Enabled {
-				httputil.HandleError(w, "Gas limit changes only apply when builder is enabled", http.StatusInternalServerError)
+				httputil2.HandleError(w, "Gas limit changes only apply when builder is enabled", http.StatusInternalServerError)
 				return
 			} else {
 				proposerOption.BuilderConfig.GasLimit = validator.Uint64(gasLimit)
 			}
 		} else {
 			if settings.DefaultConfig == nil {
-				httputil.HandleError(w, "Gas limit changes only apply when builder is enabled", http.StatusInternalServerError)
+				httputil2.HandleError(w, "Gas limit changes only apply when builder is enabled", http.StatusInternalServerError)
 				return
 			}
 			option := settings.DefaultConfig.Clone()
@@ -811,7 +811,7 @@ func (s *Server) SetGasLimit(w http.ResponseWriter, r *http.Request) {
 	}
 	// save the settings
 	if err := s.validatorService.SetProposerSettings(ctx, settings); err != nil {
-		httputil.HandleError(w, "Could not set proposer settings: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not set proposer settings: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusAccepted)
@@ -823,7 +823,7 @@ func (s *Server) DeleteGasLimit(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 
 	if s.validatorService == nil {
-		httputil.HandleError(w, "Validator service not ready", http.StatusServiceUnavailable)
+		httputil2.HandleError(w, "Validator service not ready", http.StatusServiceUnavailable)
 		return
 	}
 	rawPubkey, pubkey, ok := shared.HexFromRoute(w, r, "pubkey", fieldparams.BLSPubkeyLength)
@@ -844,7 +844,7 @@ func (s *Server) DeleteGasLimit(w http.ResponseWriter, r *http.Request) {
 			}
 			// save the settings
 			if err := s.validatorService.SetProposerSettings(ctx, proposerSettings); err != nil {
-				httputil.HandleError(w, "Could not set proposer settings: "+err.Error(), http.StatusBadRequest)
+				httputil2.HandleError(w, "Could not set proposer settings: "+err.Error(), http.StatusBadRequest)
 				return
 			}
 			// Successfully deleted gas limit (reset to proposer config default or global default).
@@ -855,7 +855,7 @@ func (s *Server) DeleteGasLimit(w http.ResponseWriter, r *http.Request) {
 	}
 	// Otherwise, either no proposerOption is found for the pubkey or proposerOption.BuilderConfig is not enabled at all,
 	// we respond "not found".
-	httputil.HandleError(w, fmt.Sprintf("No gas limit found for pubkey %q", rawPubkey), http.StatusNotFound)
+	httputil2.HandleError(w, fmt.Sprintf("No gas limit found for pubkey %q", rawPubkey), http.StatusNotFound)
 }
 
 func (s *Server) GetGraffiti(w http.ResponseWriter, r *http.Request) {
@@ -863,7 +863,7 @@ func (s *Server) GetGraffiti(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 
 	if s.validatorService == nil {
-		httputil.HandleError(w, "Validator service not ready.", http.StatusServiceUnavailable)
+		httputil2.HandleError(w, "Validator service not ready.", http.StatusServiceUnavailable)
 		return
 	}
 	rawPubkey, pubkey, ok := shared.HexFromRoute(w, r, "pubkey", fieldparams.BLSPubkeyLength)
@@ -874,14 +874,14 @@ func (s *Server) GetGraffiti(w http.ResponseWriter, r *http.Request) {
 	graffiti, err := s.validatorService.Graffiti(ctx, bytesutil.ToBytes48(pubkey))
 	if err != nil {
 		if strings.Contains(err.Error(), "unavailable") {
-			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		httputil.HandleError(w, err.Error(), http.StatusNotFound)
+		httputil2.HandleError(w, err.Error(), http.StatusNotFound)
 		return
 	}
 
-	httputil.WriteJson(w, &GetGraffitiResponse{
+	httputil2.WriteJson(w, &GetGraffitiResponse{
 		Data: &GraffitiData{
 			Pubkey:   rawPubkey,
 			Graffiti: string(graffiti),
@@ -894,7 +894,7 @@ func (s *Server) SetGraffiti(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 
 	if s.validatorService == nil {
-		httputil.HandleError(w, "Validator service not ready.", http.StatusServiceUnavailable)
+		httputil2.HandleError(w, "Validator service not ready.", http.StatusServiceUnavailable)
 		return
 	}
 	_, pubkey, ok := shared.HexFromRoute(w, r, "pubkey", fieldparams.BLSPubkeyLength)
@@ -908,15 +908,15 @@ func (s *Server) SetGraffiti(w http.ResponseWriter, r *http.Request) {
 	err := json.NewDecoder(r.Body).Decode(&req)
 	switch {
 	case errors.Is(err, io.EOF):
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		httputil2.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	case err != nil:
-		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	if err := s.validatorService.SetGraffiti(ctx, bytesutil.ToBytes48(pubkey), []byte(req.Graffiti)); err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 }
@@ -926,7 +926,7 @@ func (s *Server) DeleteGraffiti(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 
 	if s.validatorService == nil {
-		httputil.HandleError(w, "Validator service not ready.", http.StatusServiceUnavailable)
+		httputil2.HandleError(w, "Validator service not ready.", http.StatusServiceUnavailable)
 		return
 	}
 
@@ -936,7 +936,7 @@ func (s *Server) DeleteGraffiti(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.validatorService.DeleteGraffiti(ctx, bytesutil.ToBytes48(pubkey)); err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusNotFound)
+		httputil2.HandleError(w, err.Error(), http.StatusNotFound)
 		return
 	}
 }

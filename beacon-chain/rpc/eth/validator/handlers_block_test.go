@@ -10,13 +10,12 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/prysmaticlabs/prysm/v5/api"
+	"github.com/prysmaticlabs/prysm/v5/api/httputil"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	blockchainTesting "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
 	rewardtesting "github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/rewards/testing"
 	rpctesting "github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/shared/testing"
 	mockSync "github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/initial-sync/testing"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
 	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 	mock2 "github.com/prysmaticlabs/prysm/v5/testing/mock"
@@ -66,7 +65,7 @@ func TestProduceBlockV2(t *testing.T) {
 		want := fmt.Sprintf(`{"version":"phase0","execution_payload_blinded":false,"execution_payload_value":"","consensus_block_value":"","data":%s}`, string(jsonBytes))
 		body := strings.ReplaceAll(writer.Body.String(), "\n", "")
 		require.Equal(t, want, body)
-		require.Equal(t, "phase0", writer.Header().Get(api.VersionHeader))
+		require.Equal(t, "phase0", writer.Header().Get(httputil.VersionHeader))
 	})
 	t.Run("Altair", func(t *testing.T) {
 		var block *structs.SignedBeaconBlockAltair
@@ -99,7 +98,7 @@ func TestProduceBlockV2(t *testing.T) {
 		want := fmt.Sprintf(`{"version":"altair","execution_payload_blinded":false,"execution_payload_value":"","consensus_block_value":"10000000000","data":%s}`, string(jsonBytes))
 		body := strings.ReplaceAll(writer.Body.String(), "\n", "")
 		require.Equal(t, want, body)
-		require.Equal(t, "altair", writer.Header().Get(api.VersionHeader))
+		require.Equal(t, "altair", writer.Header().Get(httputil.VersionHeader))
 	})
 	t.Run("Bellatrix", func(t *testing.T) {
 		var block *structs.SignedBeaconBlockBellatrix
@@ -136,7 +135,7 @@ func TestProduceBlockV2(t *testing.T) {
 		want := fmt.Sprintf(`{"version":"bellatrix","execution_payload_blinded":false,"execution_payload_value":"2000","consensus_block_value":"10000000000","data":%s}`, string(jsonBytes))
 		body := strings.ReplaceAll(writer.Body.String(), "\n", "")
 		require.Equal(t, want, body)
-		require.Equal(t, "bellatrix", writer.Header().Get(api.VersionHeader))
+		require.Equal(t, "bellatrix", writer.Header().Get(httputil.VersionHeader))
 	})
 	t.Run("BlindedBellatrix", func(t *testing.T) {
 		var block *structs.SignedBlindedBeaconBlockBellatrix
@@ -205,7 +204,7 @@ func TestProduceBlockV2(t *testing.T) {
 		want := fmt.Sprintf(`{"version":"capella","execution_payload_blinded":false,"execution_payload_value":"2000","consensus_block_value":"10000000000","data":%s}`, string(jsonBytes))
 		body := strings.ReplaceAll(writer.Body.String(), "\n", "")
 		require.Equal(t, want, body)
-		require.Equal(t, "capella", writer.Header().Get(api.VersionHeader))
+		require.Equal(t, "capella", writer.Header().Get(httputil.VersionHeader))
 	})
 	t.Run("Blinded Capella", func(t *testing.T) {
 		var block *structs.SignedBlindedBeaconBlockCapella
@@ -274,7 +273,7 @@ func TestProduceBlockV2(t *testing.T) {
 		want := fmt.Sprintf(`{"version":"deneb","execution_payload_blinded":false,"execution_payload_value":"2000","consensus_block_value":"10000000000","data":%s}`, string(jsonBytes))
 		body := strings.ReplaceAll(writer.Body.String(), "\n", "")
 		require.Equal(t, want, body)
-		require.Equal(t, "deneb", writer.Header().Get(api.VersionHeader))
+		require.Equal(t, "deneb", writer.Header().Get(httputil.VersionHeader))
 	})
 	t.Run("Blinded Deneb", func(t *testing.T) {
 		var block *structs.SignedBlindedBeaconBlockDeneb
@@ -343,7 +342,7 @@ func TestProduceBlockV2(t *testing.T) {
 		want := fmt.Sprintf(`{"version":"electra","execution_payload_blinded":false,"execution_payload_value":"2000","consensus_block_value":"10000000000","data":%s}`, string(jsonBytes))
 		body := strings.ReplaceAll(writer.Body.String(), "\n", "")
 		require.Equal(t, want, body)
-		require.Equal(t, "electra", writer.Header().Get(api.VersionHeader))
+		require.Equal(t, "electra", writer.Header().Get(httputil.VersionHeader))
 	})
 	t.Run("Blinded Electra", func(t *testing.T) {
 		var block *structs.SignedBlindedBeaconBlockElectra
@@ -466,7 +465,7 @@ func TestProduceBlockV2SSZ(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v2/validator/blocks/1?randao_reveal=%s&graffiti=%s", randao, graffiti), nil)
-		request.Header.Set("Accept", api.OctetStreamMediaType)
+		request.Header.Set("Accept", httputil.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.ProduceBlockV2(writer, request)
@@ -478,7 +477,7 @@ func TestProduceBlockV2SSZ(t *testing.T) {
 		ssz, err := bl.Phase0.Block.MarshalSSZ()
 		require.NoError(t, err)
 		require.Equal(t, string(ssz), writer.Body.String())
-		require.Equal(t, "phase0", writer.Header().Get(api.VersionHeader))
+		require.Equal(t, "phase0", writer.Header().Get(httputil.VersionHeader))
 	})
 	t.Run("Altair", func(t *testing.T) {
 		var block *structs.SignedBeaconBlockAltair
@@ -503,7 +502,7 @@ func TestProduceBlockV2SSZ(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v2/validator/blocks/1?randao_reveal=%s&graffiti=%s", randao, graffiti), nil)
-		request.Header.Set("Accept", api.OctetStreamMediaType)
+		request.Header.Set("Accept", httputil.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.ProduceBlockV2(writer, request)
@@ -515,7 +514,7 @@ func TestProduceBlockV2SSZ(t *testing.T) {
 		ssz, err := bl.Altair.Block.MarshalSSZ()
 		require.NoError(t, err)
 		require.Equal(t, string(ssz), writer.Body.String())
-		require.Equal(t, "altair", writer.Header().Get(api.VersionHeader))
+		require.Equal(t, "altair", writer.Header().Get(httputil.VersionHeader))
 	})
 	t.Run("Bellatrix", func(t *testing.T) {
 		var block *structs.SignedBeaconBlockBellatrix
@@ -540,7 +539,7 @@ func TestProduceBlockV2SSZ(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v2/validator/blocks/1?randao_reveal=%s&graffiti=%s", randao, graffiti), nil)
-		request.Header.Set("Accept", api.OctetStreamMediaType)
+		request.Header.Set("Accept", httputil.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.ProduceBlockV2(writer, request)
@@ -552,7 +551,7 @@ func TestProduceBlockV2SSZ(t *testing.T) {
 		ssz, err := bl.Bellatrix.Block.MarshalSSZ()
 		require.NoError(t, err)
 		require.Equal(t, string(ssz), writer.Body.String())
-		require.Equal(t, "bellatrix", writer.Header().Get(api.VersionHeader))
+		require.Equal(t, "bellatrix", writer.Header().Get(httputil.VersionHeader))
 	})
 	t.Run("BlindedBellatrix", func(t *testing.T) {
 		var block *structs.SignedBlindedBeaconBlockBellatrix
@@ -577,7 +576,7 @@ func TestProduceBlockV2SSZ(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v2/validator/blocks/1?randao_reveal=%s&graffiti=%s", randao, graffiti), nil)
-		request.Header.Set("Accept", api.OctetStreamMediaType)
+		request.Header.Set("Accept", httputil.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.ProduceBlockV2(writer, request)
@@ -610,7 +609,7 @@ func TestProduceBlockV2SSZ(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v2/validator/blocks/1?randao_reveal=%s&graffiti=%s", randao, graffiti), nil)
-		request.Header.Set("Accept", api.OctetStreamMediaType)
+		request.Header.Set("Accept", httputil.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.ProduceBlockV2(writer, request)
@@ -622,7 +621,7 @@ func TestProduceBlockV2SSZ(t *testing.T) {
 		ssz, err := bl.Capella.Block.MarshalSSZ()
 		require.NoError(t, err)
 		require.Equal(t, string(ssz), writer.Body.String())
-		require.Equal(t, "capella", writer.Header().Get(api.VersionHeader))
+		require.Equal(t, "capella", writer.Header().Get(httputil.VersionHeader))
 	})
 	t.Run("Blinded Capella", func(t *testing.T) {
 		var block *structs.SignedBlindedBeaconBlockCapella
@@ -650,7 +649,7 @@ func TestProduceBlockV2SSZ(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v2/validator/blocks/1?randao_reveal=%s&graffiti=%s", randao, graffiti), nil)
-		request.Header.Set("Accept", api.OctetStreamMediaType)
+		request.Header.Set("Accept", httputil.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.ProduceBlockV2(writer, request)
@@ -683,7 +682,7 @@ func TestProduceBlockV2SSZ(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v2/validator/blocks/1?randao_reveal=%s&graffiti=%s", randao, graffiti), nil)
-		request.Header.Set("Accept", api.OctetStreamMediaType)
+		request.Header.Set("Accept", httputil.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.ProduceBlockV2(writer, request)
@@ -695,7 +694,7 @@ func TestProduceBlockV2SSZ(t *testing.T) {
 		ssz, err := bl.Deneb.MarshalSSZ()
 		require.NoError(t, err)
 		require.Equal(t, string(ssz), writer.Body.String())
-		require.Equal(t, "deneb", writer.Header().Get(api.VersionHeader))
+		require.Equal(t, "deneb", writer.Header().Get(httputil.VersionHeader))
 	})
 	t.Run("Blinded Deneb", func(t *testing.T) {
 		var block *structs.SignedBlindedBeaconBlockDeneb
@@ -720,7 +719,7 @@ func TestProduceBlockV2SSZ(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v2/validator/blocks/1?randao_reveal=%s&graffiti=%s", randao, graffiti), nil)
-		request.Header.Set("Accept", api.OctetStreamMediaType)
+		request.Header.Set("Accept", httputil.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.ProduceBlockV2(writer, request)
@@ -753,7 +752,7 @@ func TestProduceBlockV2SSZ(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v2/validator/blocks/1?randao_reveal=%s&graffiti=%s", randao, graffiti), nil)
-		request.Header.Set("Accept", api.OctetStreamMediaType)
+		request.Header.Set("Accept", httputil.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.ProduceBlockV2(writer, request)
@@ -765,7 +764,7 @@ func TestProduceBlockV2SSZ(t *testing.T) {
 		ssz, err := bl.Electra.MarshalSSZ()
 		require.NoError(t, err)
 		require.Equal(t, string(ssz), writer.Body.String())
-		require.Equal(t, "electra", writer.Header().Get(api.VersionHeader))
+		require.Equal(t, "electra", writer.Header().Get(httputil.VersionHeader))
 	})
 	t.Run("Blinded Electra", func(t *testing.T) {
 		var block *structs.SignedBlindedBeaconBlockElectra
@@ -790,7 +789,7 @@ func TestProduceBlockV2SSZ(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v2/validator/blocks/1?randao_reveal=%s&graffiti=%s", randao, graffiti), nil)
-		request.Header.Set("Accept", api.OctetStreamMediaType)
+		request.Header.Set("Accept", httputil.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.ProduceBlockV2(writer, request)
@@ -943,7 +942,7 @@ func TestProduceBlindedBlock(t *testing.T) {
 		want := fmt.Sprintf(`{"version":"bellatrix","execution_payload_blinded":true,"execution_payload_value":"2000","consensus_block_value":"10000000000","data":%s}`, string(jsonBytes))
 		body := strings.ReplaceAll(writer.Body.String(), "\n", "")
 		require.Equal(t, want, body)
-		require.Equal(t, "bellatrix", writer.Header().Get(api.VersionHeader))
+		require.Equal(t, "bellatrix", writer.Header().Get(httputil.VersionHeader))
 	})
 	t.Run("Capella", func(t *testing.T) {
 		var block *structs.SignedBeaconBlockCapella
@@ -1012,7 +1011,7 @@ func TestProduceBlindedBlock(t *testing.T) {
 		want := fmt.Sprintf(`{"version":"capella","execution_payload_blinded":true,"execution_payload_value":"2000","consensus_block_value":"10000000000","data":%s}`, string(jsonBytes))
 		body := strings.ReplaceAll(writer.Body.String(), "\n", "")
 		require.Equal(t, want, body)
-		require.Equal(t, "capella", writer.Header().Get(api.VersionHeader))
+		require.Equal(t, "capella", writer.Header().Get(httputil.VersionHeader))
 	})
 	t.Run("Deneb", func(t *testing.T) {
 		var block *structs.SignedBeaconBlockContentsDeneb
@@ -1081,7 +1080,7 @@ func TestProduceBlindedBlock(t *testing.T) {
 		want := fmt.Sprintf(`{"version":"deneb","execution_payload_blinded":true,"execution_payload_value":"2000","consensus_block_value":"10000000000","data":%s}`, string(jsonBytes))
 		body := strings.ReplaceAll(writer.Body.String(), "\n", "")
 		require.Equal(t, want, body)
-		require.Equal(t, "deneb", writer.Header().Get(api.VersionHeader))
+		require.Equal(t, "deneb", writer.Header().Get(httputil.VersionHeader))
 	})
 	t.Run("Electra", func(t *testing.T) {
 		var block *structs.SignedBeaconBlockContentsElectra
@@ -1150,7 +1149,7 @@ func TestProduceBlindedBlock(t *testing.T) {
 		want := fmt.Sprintf(`{"version":"electra","execution_payload_blinded":true,"execution_payload_value":"2000","consensus_block_value":"10000000000","data":%s}`, string(jsonBytes))
 		body := strings.ReplaceAll(writer.Body.String(), "\n", "")
 		require.Equal(t, want, body)
-		require.Equal(t, "electra", writer.Header().Get(api.VersionHeader))
+		require.Equal(t, "electra", writer.Header().Get(httputil.VersionHeader))
 	})
 	t.Run("invalid query parameter slot empty", func(t *testing.T) {
 		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
@@ -1248,10 +1247,10 @@ func TestProduceBlockV3(t *testing.T) {
 		want := fmt.Sprintf(`{"version":"phase0","execution_payload_blinded":false,"execution_payload_value":"","consensus_block_value":"","data":%s}`, string(jsonBytes))
 		body := strings.ReplaceAll(writer.Body.String(), "\n", "")
 		require.Equal(t, want, body)
-		require.Equal(t, "false", writer.Header().Get(api.ExecutionPayloadBlindedHeader))
-		require.Equal(t, "", writer.Header().Get(api.ExecutionPayloadValueHeader))
-		require.Equal(t, "phase0", writer.Header().Get(api.VersionHeader))
-		require.Equal(t, "", writer.Header().Get(api.ConsensusBlockValueHeader))
+		require.Equal(t, "false", writer.Header().Get(httputil.ExecutionPayloadBlindedHeader))
+		require.Equal(t, "", writer.Header().Get(httputil.ExecutionPayloadValueHeader))
+		require.Equal(t, "phase0", writer.Header().Get(httputil.VersionHeader))
+		require.Equal(t, "", writer.Header().Get(httputil.ConsensusBlockValueHeader))
 	})
 	t.Run("Altair", func(t *testing.T) {
 		var block *structs.SignedBeaconBlockAltair
@@ -1284,10 +1283,10 @@ func TestProduceBlockV3(t *testing.T) {
 		want := fmt.Sprintf(`{"version":"altair","execution_payload_blinded":false,"execution_payload_value":"","consensus_block_value":"10000000000","data":%s}`, string(jsonBytes))
 		body := strings.ReplaceAll(writer.Body.String(), "\n", "")
 		require.Equal(t, want, body)
-		require.Equal(t, "false", writer.Header().Get(api.ExecutionPayloadBlindedHeader))
-		require.Equal(t, "", writer.Header().Get(api.ExecutionPayloadValueHeader))
-		require.Equal(t, "altair", writer.Header().Get(api.VersionHeader))
-		require.Equal(t, "10000000000", writer.Header().Get(api.ConsensusBlockValueHeader))
+		require.Equal(t, "false", writer.Header().Get(httputil.ExecutionPayloadBlindedHeader))
+		require.Equal(t, "", writer.Header().Get(httputil.ExecutionPayloadValueHeader))
+		require.Equal(t, "altair", writer.Header().Get(httputil.VersionHeader))
+		require.Equal(t, "10000000000", writer.Header().Get(httputil.ConsensusBlockValueHeader))
 	})
 	t.Run("Bellatrix", func(t *testing.T) {
 		var block *structs.SignedBeaconBlockBellatrix
@@ -1322,10 +1321,10 @@ func TestProduceBlockV3(t *testing.T) {
 		want := fmt.Sprintf(`{"version":"bellatrix","execution_payload_blinded":false,"execution_payload_value":"2000","consensus_block_value":"10000000000","data":%s}`, string(jsonBytes))
 		body := strings.ReplaceAll(writer.Body.String(), "\n", "")
 		require.Equal(t, want, body)
-		require.Equal(t, "false", writer.Header().Get(api.ExecutionPayloadBlindedHeader))
-		require.Equal(t, "2000", writer.Header().Get(api.ExecutionPayloadValueHeader))
-		require.Equal(t, "bellatrix", writer.Header().Get(api.VersionHeader))
-		require.Equal(t, "10000000000", writer.Header().Get(api.ConsensusBlockValueHeader))
+		require.Equal(t, "false", writer.Header().Get(httputil.ExecutionPayloadBlindedHeader))
+		require.Equal(t, "2000", writer.Header().Get(httputil.ExecutionPayloadValueHeader))
+		require.Equal(t, "bellatrix", writer.Header().Get(httputil.VersionHeader))
+		require.Equal(t, "10000000000", writer.Header().Get(httputil.ConsensusBlockValueHeader))
 	})
 	t.Run("BlindedBellatrix", func(t *testing.T) {
 		var block *structs.SignedBlindedBeaconBlockBellatrix
@@ -1360,10 +1359,10 @@ func TestProduceBlockV3(t *testing.T) {
 		want := fmt.Sprintf(`{"version":"bellatrix","execution_payload_blinded":true,"execution_payload_value":"2000","consensus_block_value":"10000000000","data":%s}`, string(jsonBytes))
 		body := strings.ReplaceAll(writer.Body.String(), "\n", "")
 		require.Equal(t, want, body)
-		require.Equal(t, "true", writer.Header().Get(api.ExecutionPayloadBlindedHeader))
-		require.Equal(t, "2000", writer.Header().Get(api.ExecutionPayloadValueHeader))
-		require.Equal(t, "bellatrix", writer.Header().Get(api.VersionHeader))
-		require.Equal(t, "10000000000", writer.Header().Get(api.ConsensusBlockValueHeader))
+		require.Equal(t, "true", writer.Header().Get(httputil.ExecutionPayloadBlindedHeader))
+		require.Equal(t, "2000", writer.Header().Get(httputil.ExecutionPayloadValueHeader))
+		require.Equal(t, "bellatrix", writer.Header().Get(httputil.VersionHeader))
+		require.Equal(t, "10000000000", writer.Header().Get(httputil.ConsensusBlockValueHeader))
 	})
 	t.Run("Capella", func(t *testing.T) {
 		var block *structs.SignedBeaconBlockCapella
@@ -1398,10 +1397,10 @@ func TestProduceBlockV3(t *testing.T) {
 		want := fmt.Sprintf(`{"version":"capella","execution_payload_blinded":false,"execution_payload_value":"2000","consensus_block_value":"10000000000","data":%s}`, string(jsonBytes))
 		body := strings.ReplaceAll(writer.Body.String(), "\n", "")
 		require.Equal(t, want, body)
-		require.Equal(t, "false", writer.Header().Get(api.ExecutionPayloadBlindedHeader))
-		require.Equal(t, "2000", writer.Header().Get(api.ExecutionPayloadValueHeader))
-		require.Equal(t, "capella", writer.Header().Get(api.VersionHeader))
-		require.Equal(t, "10000000000", writer.Header().Get(api.ConsensusBlockValueHeader))
+		require.Equal(t, "false", writer.Header().Get(httputil.ExecutionPayloadBlindedHeader))
+		require.Equal(t, "2000", writer.Header().Get(httputil.ExecutionPayloadValueHeader))
+		require.Equal(t, "capella", writer.Header().Get(httputil.VersionHeader))
+		require.Equal(t, "10000000000", writer.Header().Get(httputil.ConsensusBlockValueHeader))
 	})
 	t.Run("Blinded Capella", func(t *testing.T) {
 		var block *structs.SignedBlindedBeaconBlockCapella
@@ -1436,10 +1435,10 @@ func TestProduceBlockV3(t *testing.T) {
 		want := fmt.Sprintf(`{"version":"capella","execution_payload_blinded":true,"execution_payload_value":"2000","consensus_block_value":"10000000000","data":%s}`, string(jsonBytes))
 		body := strings.ReplaceAll(writer.Body.String(), "\n", "")
 		require.Equal(t, want, body)
-		require.Equal(t, "true", writer.Header().Get(api.ExecutionPayloadBlindedHeader))
-		require.Equal(t, "2000", writer.Header().Get(api.ExecutionPayloadValueHeader))
-		require.Equal(t, "capella", writer.Header().Get(api.VersionHeader))
-		require.Equal(t, "10000000000", writer.Header().Get(api.ConsensusBlockValueHeader))
+		require.Equal(t, "true", writer.Header().Get(httputil.ExecutionPayloadBlindedHeader))
+		require.Equal(t, "2000", writer.Header().Get(httputil.ExecutionPayloadValueHeader))
+		require.Equal(t, "capella", writer.Header().Get(httputil.VersionHeader))
+		require.Equal(t, "10000000000", writer.Header().Get(httputil.ConsensusBlockValueHeader))
 	})
 	t.Run("Deneb", func(t *testing.T) {
 		var block *structs.SignedBeaconBlockContentsDeneb
@@ -1474,10 +1473,10 @@ func TestProduceBlockV3(t *testing.T) {
 		want := fmt.Sprintf(`{"version":"deneb","execution_payload_blinded":false,"execution_payload_value":"2000","consensus_block_value":"10000000000","data":%s}`, string(jsonBytes))
 		body := strings.ReplaceAll(writer.Body.String(), "\n", "")
 		require.Equal(t, want, body)
-		require.Equal(t, "false", writer.Header().Get(api.ExecutionPayloadBlindedHeader))
-		require.Equal(t, "2000", writer.Header().Get(api.ExecutionPayloadValueHeader))
-		require.Equal(t, "deneb", writer.Header().Get(api.VersionHeader))
-		require.Equal(t, "10000000000", writer.Header().Get(api.ConsensusBlockValueHeader))
+		require.Equal(t, "false", writer.Header().Get(httputil.ExecutionPayloadBlindedHeader))
+		require.Equal(t, "2000", writer.Header().Get(httputil.ExecutionPayloadValueHeader))
+		require.Equal(t, "deneb", writer.Header().Get(httputil.VersionHeader))
+		require.Equal(t, "10000000000", writer.Header().Get(httputil.ConsensusBlockValueHeader))
 	})
 	t.Run("Blinded Deneb", func(t *testing.T) {
 		var block *structs.SignedBlindedBeaconBlockDeneb
@@ -1512,10 +1511,10 @@ func TestProduceBlockV3(t *testing.T) {
 		want := fmt.Sprintf(`{"version":"deneb","execution_payload_blinded":true,"execution_payload_value":"2000","consensus_block_value":"10000000000","data":%s}`, string(jsonBytes))
 		body := strings.ReplaceAll(writer.Body.String(), "\n", "")
 		require.Equal(t, want, body)
-		require.Equal(t, "true", writer.Header().Get(api.ExecutionPayloadBlindedHeader))
-		require.Equal(t, "2000", writer.Header().Get(api.ExecutionPayloadValueHeader))
-		require.Equal(t, "deneb", writer.Header().Get(api.VersionHeader))
-		require.Equal(t, "10000000000", writer.Header().Get(api.ConsensusBlockValueHeader))
+		require.Equal(t, "true", writer.Header().Get(httputil.ExecutionPayloadBlindedHeader))
+		require.Equal(t, "2000", writer.Header().Get(httputil.ExecutionPayloadValueHeader))
+		require.Equal(t, "deneb", writer.Header().Get(httputil.VersionHeader))
+		require.Equal(t, "10000000000", writer.Header().Get(httputil.ConsensusBlockValueHeader))
 	})
 	t.Run("Electra", func(t *testing.T) {
 		var block *structs.SignedBeaconBlockContentsElectra
@@ -1550,10 +1549,10 @@ func TestProduceBlockV3(t *testing.T) {
 		want := fmt.Sprintf(`{"version":"electra","execution_payload_blinded":false,"execution_payload_value":"2000","consensus_block_value":"10000000000","data":%s}`, string(jsonBytes))
 		body := strings.ReplaceAll(writer.Body.String(), "\n", "")
 		require.Equal(t, want, body)
-		require.Equal(t, "false", writer.Header().Get(api.ExecutionPayloadBlindedHeader))
-		require.Equal(t, "2000", writer.Header().Get(api.ExecutionPayloadValueHeader))
-		require.Equal(t, "electra", writer.Header().Get(api.VersionHeader))
-		require.Equal(t, "10000000000", writer.Header().Get(api.ConsensusBlockValueHeader))
+		require.Equal(t, "false", writer.Header().Get(httputil.ExecutionPayloadBlindedHeader))
+		require.Equal(t, "2000", writer.Header().Get(httputil.ExecutionPayloadValueHeader))
+		require.Equal(t, "electra", writer.Header().Get(httputil.VersionHeader))
+		require.Equal(t, "10000000000", writer.Header().Get(httputil.ConsensusBlockValueHeader))
 	})
 	t.Run("Blinded Electra", func(t *testing.T) {
 		var block *structs.SignedBlindedBeaconBlockElectra
@@ -1588,10 +1587,10 @@ func TestProduceBlockV3(t *testing.T) {
 		want := fmt.Sprintf(`{"version":"electra","execution_payload_blinded":true,"execution_payload_value":"2000","consensus_block_value":"10000000000","data":%s}`, string(jsonBytes))
 		body := strings.ReplaceAll(writer.Body.String(), "\n", "")
 		require.Equal(t, want, body)
-		require.Equal(t, "true", writer.Header().Get(api.ExecutionPayloadBlindedHeader))
-		require.Equal(t, "2000", writer.Header().Get(api.ExecutionPayloadValueHeader))
-		require.Equal(t, "electra", writer.Header().Get(api.VersionHeader))
-		require.Equal(t, "10000000000", writer.Header().Get(api.ConsensusBlockValueHeader))
+		require.Equal(t, "true", writer.Header().Get(httputil.ExecutionPayloadBlindedHeader))
+		require.Equal(t, "2000", writer.Header().Get(httputil.ExecutionPayloadValueHeader))
+		require.Equal(t, "electra", writer.Header().Get(httputil.VersionHeader))
+		require.Equal(t, "10000000000", writer.Header().Get(httputil.ConsensusBlockValueHeader))
 	})
 	t.Run("invalid query parameter slot empty", func(t *testing.T) {
 		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
@@ -1679,7 +1678,7 @@ func TestProduceBlockV3SSZ(t *testing.T) {
 			SyncChecker:    syncChecker,
 		}
 		request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v3/validator/blocks/1?randao_reveal=%s&graffiti=%s", randao, graffiti), nil)
-		request.Header.Set("Accept", api.OctetStreamMediaType)
+		request.Header.Set("Accept", httputil.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.ProduceBlockV3(writer, request)
@@ -1691,10 +1690,10 @@ func TestProduceBlockV3SSZ(t *testing.T) {
 		ssz, err := bl.Phase0.Block.MarshalSSZ()
 		require.NoError(t, err)
 		require.Equal(t, string(ssz), writer.Body.String())
-		require.Equal(t, "false", writer.Header().Get(api.ExecutionPayloadBlindedHeader))
-		require.Equal(t, "", writer.Header().Get(api.ExecutionPayloadValueHeader))
-		require.Equal(t, "phase0", writer.Header().Get(api.VersionHeader))
-		require.Equal(t, "", writer.Header().Get(api.ConsensusBlockValueHeader))
+		require.Equal(t, "false", writer.Header().Get(httputil.ExecutionPayloadBlindedHeader))
+		require.Equal(t, "", writer.Header().Get(httputil.ExecutionPayloadValueHeader))
+		require.Equal(t, "phase0", writer.Header().Get(httputil.VersionHeader))
+		require.Equal(t, "", writer.Header().Get(httputil.ConsensusBlockValueHeader))
 	})
 	t.Run("Altair", func(t *testing.T) {
 		var block *structs.SignedBeaconBlockAltair
@@ -1717,7 +1716,7 @@ func TestProduceBlockV3SSZ(t *testing.T) {
 			BlockRewardFetcher: rewardFetcher,
 		}
 		request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v3/validator/blocks/1?randao_reveal=%s&graffiti=%s", randao, graffiti), nil)
-		request.Header.Set("Accept", api.OctetStreamMediaType)
+		request.Header.Set("Accept", httputil.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.ProduceBlockV3(writer, request)
@@ -1729,10 +1728,10 @@ func TestProduceBlockV3SSZ(t *testing.T) {
 		ssz, err := bl.Altair.Block.MarshalSSZ()
 		require.NoError(t, err)
 		require.Equal(t, string(ssz), writer.Body.String())
-		require.Equal(t, "false", writer.Header().Get(api.ExecutionPayloadBlindedHeader))
-		require.Equal(t, "", writer.Header().Get(api.ExecutionPayloadValueHeader))
-		require.Equal(t, "altair", writer.Header().Get(api.VersionHeader))
-		require.Equal(t, "10000000000", writer.Header().Get(api.ConsensusBlockValueHeader))
+		require.Equal(t, "false", writer.Header().Get(httputil.ExecutionPayloadBlindedHeader))
+		require.Equal(t, "", writer.Header().Get(httputil.ExecutionPayloadValueHeader))
+		require.Equal(t, "altair", writer.Header().Get(httputil.VersionHeader))
+		require.Equal(t, "10000000000", writer.Header().Get(httputil.ConsensusBlockValueHeader))
 	})
 	t.Run("Bellatrix", func(t *testing.T) {
 		var block *structs.SignedBeaconBlockBellatrix
@@ -1759,7 +1758,7 @@ func TestProduceBlockV3SSZ(t *testing.T) {
 			BlockRewardFetcher:    rewardFetcher,
 		}
 		request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v3/validator/blocks/1?randao_reveal=%s&graffiti=%s", randao, graffiti), nil)
-		request.Header.Set("Accept", api.OctetStreamMediaType)
+		request.Header.Set("Accept", httputil.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.ProduceBlockV3(writer, request)
@@ -1771,10 +1770,10 @@ func TestProduceBlockV3SSZ(t *testing.T) {
 		ssz, err := bl.Bellatrix.Block.MarshalSSZ()
 		require.NoError(t, err)
 		require.Equal(t, string(ssz), writer.Body.String())
-		require.Equal(t, "false", writer.Header().Get(api.ExecutionPayloadBlindedHeader))
-		require.Equal(t, "2000", writer.Header().Get(api.ExecutionPayloadValueHeader))
-		require.Equal(t, "bellatrix", writer.Header().Get(api.VersionHeader))
-		require.Equal(t, "10000000000", writer.Header().Get(api.ConsensusBlockValueHeader))
+		require.Equal(t, "false", writer.Header().Get(httputil.ExecutionPayloadBlindedHeader))
+		require.Equal(t, "2000", writer.Header().Get(httputil.ExecutionPayloadValueHeader))
+		require.Equal(t, "bellatrix", writer.Header().Get(httputil.VersionHeader))
+		require.Equal(t, "10000000000", writer.Header().Get(httputil.ConsensusBlockValueHeader))
 	})
 	t.Run("BlindedBellatrix", func(t *testing.T) {
 		var block *structs.SignedBlindedBeaconBlockBellatrix
@@ -1800,7 +1799,7 @@ func TestProduceBlockV3SSZ(t *testing.T) {
 			BlockRewardFetcher:    rewardFetcher,
 		}
 		request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v3/validator/blocks/1?randao_reveal=%s&graffiti=%s", randao, graffiti), nil)
-		request.Header.Set("Accept", api.OctetStreamMediaType)
+		request.Header.Set("Accept", httputil.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.ProduceBlockV3(writer, request)
@@ -1812,10 +1811,10 @@ func TestProduceBlockV3SSZ(t *testing.T) {
 		ssz, err := bl.BlindedBellatrix.Block.MarshalSSZ()
 		require.NoError(t, err)
 		require.Equal(t, string(ssz), writer.Body.String())
-		require.Equal(t, "true", writer.Header().Get(api.ExecutionPayloadBlindedHeader))
-		require.Equal(t, "2000", writer.Header().Get(api.ExecutionPayloadValueHeader))
-		require.Equal(t, "bellatrix", writer.Header().Get(api.VersionHeader))
-		require.Equal(t, "10000000000", writer.Header().Get(api.ConsensusBlockValueHeader))
+		require.Equal(t, "true", writer.Header().Get(httputil.ExecutionPayloadBlindedHeader))
+		require.Equal(t, "2000", writer.Header().Get(httputil.ExecutionPayloadValueHeader))
+		require.Equal(t, "bellatrix", writer.Header().Get(httputil.VersionHeader))
+		require.Equal(t, "10000000000", writer.Header().Get(httputil.ConsensusBlockValueHeader))
 	})
 	t.Run("Capella", func(t *testing.T) {
 		var block *structs.SignedBeaconBlockCapella
@@ -1841,7 +1840,7 @@ func TestProduceBlockV3SSZ(t *testing.T) {
 			BlockRewardFetcher:    rewardFetcher,
 		}
 		request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v3/validator/blocks/1?randao_reveal=%s&graffiti=%s", randao, graffiti), nil)
-		request.Header.Set("Accept", api.OctetStreamMediaType)
+		request.Header.Set("Accept", httputil.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.ProduceBlockV3(writer, request)
@@ -1853,10 +1852,10 @@ func TestProduceBlockV3SSZ(t *testing.T) {
 		ssz, err := bl.Capella.Block.MarshalSSZ()
 		require.NoError(t, err)
 		require.Equal(t, string(ssz), writer.Body.String())
-		require.Equal(t, "false", writer.Header().Get(api.ExecutionPayloadBlindedHeader))
-		require.Equal(t, "2000", writer.Header().Get(api.ExecutionPayloadValueHeader))
-		require.Equal(t, "capella", writer.Header().Get(api.VersionHeader))
-		require.Equal(t, "10000000000", writer.Header().Get(api.ConsensusBlockValueHeader))
+		require.Equal(t, "false", writer.Header().Get(httputil.ExecutionPayloadBlindedHeader))
+		require.Equal(t, "2000", writer.Header().Get(httputil.ExecutionPayloadValueHeader))
+		require.Equal(t, "capella", writer.Header().Get(httputil.VersionHeader))
+		require.Equal(t, "10000000000", writer.Header().Get(httputil.ConsensusBlockValueHeader))
 	})
 	t.Run("Blinded Capella", func(t *testing.T) {
 		var block *structs.SignedBlindedBeaconBlockCapella
@@ -1882,7 +1881,7 @@ func TestProduceBlockV3SSZ(t *testing.T) {
 			BlockRewardFetcher:    rewardFetcher,
 		}
 		request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v3/validator/blocks/1?randao_reveal=%s&graffiti=%s", randao, graffiti), nil)
-		request.Header.Set("Accept", api.OctetStreamMediaType)
+		request.Header.Set("Accept", httputil.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.ProduceBlockV3(writer, request)
@@ -1894,10 +1893,10 @@ func TestProduceBlockV3SSZ(t *testing.T) {
 		ssz, err := bl.BlindedCapella.Block.MarshalSSZ()
 		require.NoError(t, err)
 		require.Equal(t, string(ssz), writer.Body.String())
-		require.Equal(t, "true", writer.Header().Get(api.ExecutionPayloadBlindedHeader))
-		require.Equal(t, "2000", writer.Header().Get(api.ExecutionPayloadValueHeader))
-		require.Equal(t, "capella", writer.Header().Get(api.VersionHeader))
-		require.Equal(t, "10000000000", writer.Header().Get(api.ConsensusBlockValueHeader))
+		require.Equal(t, "true", writer.Header().Get(httputil.ExecutionPayloadBlindedHeader))
+		require.Equal(t, "2000", writer.Header().Get(httputil.ExecutionPayloadValueHeader))
+		require.Equal(t, "capella", writer.Header().Get(httputil.VersionHeader))
+		require.Equal(t, "10000000000", writer.Header().Get(httputil.ConsensusBlockValueHeader))
 	})
 	t.Run("Deneb", func(t *testing.T) {
 		var block *structs.SignedBeaconBlockContentsDeneb
@@ -1923,7 +1922,7 @@ func TestProduceBlockV3SSZ(t *testing.T) {
 			BlockRewardFetcher:    rewardFetcher,
 		}
 		request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v3/validator/blocks/1?randao_reveal=%s&graffiti=%s", randao, graffiti), nil)
-		request.Header.Set("Accept", api.OctetStreamMediaType)
+		request.Header.Set("Accept", httputil.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.ProduceBlockV3(writer, request)
@@ -1935,10 +1934,10 @@ func TestProduceBlockV3SSZ(t *testing.T) {
 		ssz, err := bl.Deneb.MarshalSSZ()
 		require.NoError(t, err)
 		require.Equal(t, string(ssz), writer.Body.String())
-		require.Equal(t, "false", writer.Header().Get(api.ExecutionPayloadBlindedHeader))
-		require.Equal(t, "2000", writer.Header().Get(api.ExecutionPayloadValueHeader))
-		require.Equal(t, "deneb", writer.Header().Get(api.VersionHeader))
-		require.Equal(t, "10000000000", writer.Header().Get(api.ConsensusBlockValueHeader))
+		require.Equal(t, "false", writer.Header().Get(httputil.ExecutionPayloadBlindedHeader))
+		require.Equal(t, "2000", writer.Header().Get(httputil.ExecutionPayloadValueHeader))
+		require.Equal(t, "deneb", writer.Header().Get(httputil.VersionHeader))
+		require.Equal(t, "10000000000", writer.Header().Get(httputil.ConsensusBlockValueHeader))
 	})
 	t.Run("Blinded Deneb", func(t *testing.T) {
 		var block *structs.SignedBlindedBeaconBlockDeneb
@@ -1964,7 +1963,7 @@ func TestProduceBlockV3SSZ(t *testing.T) {
 			BlockRewardFetcher:    rewardFetcher,
 		}
 		request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v3/validator/blocks/1?randao_reveal=%s&graffiti=%s", randao, graffiti), nil)
-		request.Header.Set("Accept", api.OctetStreamMediaType)
+		request.Header.Set("Accept", httputil.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.ProduceBlockV3(writer, request)
@@ -1976,10 +1975,10 @@ func TestProduceBlockV3SSZ(t *testing.T) {
 		ssz, err := bl.BlindedDeneb.MarshalSSZ()
 		require.NoError(t, err)
 		require.Equal(t, string(ssz), writer.Body.String())
-		require.Equal(t, "true", writer.Header().Get(api.ExecutionPayloadBlindedHeader))
-		require.Equal(t, "2000", writer.Header().Get(api.ExecutionPayloadValueHeader))
-		require.Equal(t, "deneb", writer.Header().Get(api.VersionHeader))
-		require.Equal(t, "10000000000", writer.Header().Get(api.ConsensusBlockValueHeader))
+		require.Equal(t, "true", writer.Header().Get(httputil.ExecutionPayloadBlindedHeader))
+		require.Equal(t, "2000", writer.Header().Get(httputil.ExecutionPayloadValueHeader))
+		require.Equal(t, "deneb", writer.Header().Get(httputil.VersionHeader))
+		require.Equal(t, "10000000000", writer.Header().Get(httputil.ConsensusBlockValueHeader))
 	})
 	t.Run("Electra", func(t *testing.T) {
 		var block *structs.SignedBeaconBlockContentsElectra
@@ -2005,7 +2004,7 @@ func TestProduceBlockV3SSZ(t *testing.T) {
 			BlockRewardFetcher:    rewardFetcher,
 		}
 		request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v3/validator/blocks/1?randao_reveal=%s&graffiti=%s", randao, graffiti), nil)
-		request.Header.Set("Accept", api.OctetStreamMediaType)
+		request.Header.Set("Accept", httputil.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.ProduceBlockV3(writer, request)
@@ -2017,10 +2016,10 @@ func TestProduceBlockV3SSZ(t *testing.T) {
 		ssz, err := bl.Electra.MarshalSSZ()
 		require.NoError(t, err)
 		require.Equal(t, string(ssz), writer.Body.String())
-		require.Equal(t, "false", writer.Header().Get(api.ExecutionPayloadBlindedHeader))
-		require.Equal(t, "2000", writer.Header().Get(api.ExecutionPayloadValueHeader))
-		require.Equal(t, "electra", writer.Header().Get(api.VersionHeader))
-		require.Equal(t, "10000000000", writer.Header().Get(api.ConsensusBlockValueHeader))
+		require.Equal(t, "false", writer.Header().Get(httputil.ExecutionPayloadBlindedHeader))
+		require.Equal(t, "2000", writer.Header().Get(httputil.ExecutionPayloadValueHeader))
+		require.Equal(t, "electra", writer.Header().Get(httputil.VersionHeader))
+		require.Equal(t, "10000000000", writer.Header().Get(httputil.ConsensusBlockValueHeader))
 	})
 	t.Run("Blinded Electra", func(t *testing.T) {
 		var block *structs.SignedBlindedBeaconBlockElectra
@@ -2046,7 +2045,7 @@ func TestProduceBlockV3SSZ(t *testing.T) {
 			BlockRewardFetcher:    rewardFetcher,
 		}
 		request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v3/validator/blocks/1?randao_reveal=%s&graffiti=%s", randao, graffiti), nil)
-		request.Header.Set("Accept", api.OctetStreamMediaType)
+		request.Header.Set("Accept", httputil.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.ProduceBlockV3(writer, request)
@@ -2058,10 +2057,10 @@ func TestProduceBlockV3SSZ(t *testing.T) {
 		ssz, err := bl.BlindedElectra.MarshalSSZ()
 		require.NoError(t, err)
 		require.Equal(t, string(ssz), writer.Body.String())
-		require.Equal(t, "true", writer.Header().Get(api.ExecutionPayloadBlindedHeader))
-		require.Equal(t, "2000", writer.Header().Get(api.ExecutionPayloadValueHeader))
-		require.Equal(t, "electra", writer.Header().Get(api.VersionHeader))
-		require.Equal(t, "10000000000", writer.Header().Get(api.ConsensusBlockValueHeader))
+		require.Equal(t, "true", writer.Header().Get(httputil.ExecutionPayloadBlindedHeader))
+		require.Equal(t, "2000", writer.Header().Get(httputil.ExecutionPayloadValueHeader))
+		require.Equal(t, "electra", writer.Header().Get(httputil.VersionHeader))
+		require.Equal(t, "10000000000", writer.Header().Get(httputil.ConsensusBlockValueHeader))
 	})
 	t.Run("Fulu", func(t *testing.T) {
 		var block *structs.SignedBeaconBlockContentsFulu
@@ -2087,7 +2086,7 @@ func TestProduceBlockV3SSZ(t *testing.T) {
 			BlockRewardFetcher:    rewardFetcher,
 		}
 		request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v3/validator/blocks/1?randao_reveal=%s&graffiti=%s", randao, graffiti), nil)
-		request.Header.Set("Accept", api.OctetStreamMediaType)
+		request.Header.Set("Accept", httputil.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.ProduceBlockV3(writer, request)
@@ -2099,10 +2098,10 @@ func TestProduceBlockV3SSZ(t *testing.T) {
 		ssz, err := bl.Fulu.MarshalSSZ()
 		require.NoError(t, err)
 		require.Equal(t, string(ssz), writer.Body.String())
-		require.Equal(t, "false", writer.Header().Get(api.ExecutionPayloadBlindedHeader))
-		require.Equal(t, "2000", writer.Header().Get(api.ExecutionPayloadValueHeader))
-		require.Equal(t, "fulu", writer.Header().Get(api.VersionHeader))
-		require.Equal(t, "10000000000", writer.Header().Get(api.ConsensusBlockValueHeader))
+		require.Equal(t, "false", writer.Header().Get(httputil.ExecutionPayloadBlindedHeader))
+		require.Equal(t, "2000", writer.Header().Get(httputil.ExecutionPayloadValueHeader))
+		require.Equal(t, "fulu", writer.Header().Get(httputil.VersionHeader))
+		require.Equal(t, "10000000000", writer.Header().Get(httputil.ConsensusBlockValueHeader))
 	})
 	t.Run("Blinded Fulu", func(t *testing.T) {
 		var block *structs.SignedBlindedBeaconBlockFulu
@@ -2128,7 +2127,7 @@ func TestProduceBlockV3SSZ(t *testing.T) {
 			BlockRewardFetcher:    rewardFetcher,
 		}
 		request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v3/validator/blocks/1?randao_reveal=%s&graffiti=%s", randao, graffiti), nil)
-		request.Header.Set("Accept", api.OctetStreamMediaType)
+		request.Header.Set("Accept", httputil.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.ProduceBlockV3(writer, request)
@@ -2140,9 +2139,9 @@ func TestProduceBlockV3SSZ(t *testing.T) {
 		ssz, err := bl.BlindedFulu.MarshalSSZ()
 		require.NoError(t, err)
 		require.Equal(t, string(ssz), writer.Body.String())
-		require.Equal(t, "true", writer.Header().Get(api.ExecutionPayloadBlindedHeader))
-		require.Equal(t, "2000", writer.Header().Get(api.ExecutionPayloadValueHeader))
-		require.Equal(t, "fulu", writer.Header().Get(api.VersionHeader))
-		require.Equal(t, "10000000000", writer.Header().Get(api.ConsensusBlockValueHeader))
+		require.Equal(t, "true", writer.Header().Get(httputil.ExecutionPayloadBlindedHeader))
+		require.Equal(t, "2000", writer.Header().Get(httputil.ExecutionPayloadValueHeader))
+		require.Equal(t, "fulu", writer.Header().Get(httputil.VersionHeader))
+		require.Equal(t, "10000000000", writer.Header().Get(httputil.ConsensusBlockValueHeader))
 	})
 }

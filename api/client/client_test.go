@@ -4,7 +4,7 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/api"
+	"github.com/prysmaticlabs/prysm/v5/api/httputil"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
@@ -19,7 +19,7 @@ func TestValidHostname(t *testing.T) {
 		{
 			name:    "hostname without port",
 			hostArg: "mydomain.org",
-			err:     api.ErrMalformedHostname,
+			err:     httputil.ErrMalformedHostname,
 		},
 	}
 	for _, c := range cases {

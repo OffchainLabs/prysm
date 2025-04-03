@@ -6,7 +6,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api"
+	"github.com/prysmaticlabs/prysm/v5/api/httputil"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
@@ -84,7 +84,7 @@ func (c *beaconApiValidatorClient) validatorsStatusResponse(ctx context.Context,
 
 	// TODO: we should remove this API call
 	validatorsCountResponse, err := c.prysmChainClient.ValidatorCount(ctx, "head", nil)
-	if err != nil && !errors.Is(err, api.ErrNotSupported) {
+	if err != nil && !errors.Is(err, httputil.ErrNotSupported) {
 		return nil, nil, nil, errors.Wrap(err, "failed to get total validator count")
 	}
 

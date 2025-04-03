@@ -15,7 +15,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	"github.com/prysmaticlabs/prysm/v5/api"
+	"github.com/prysmaticlabs/prysm/v5/api/httputil"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/operation"
@@ -28,7 +28,6 @@ import (
 	payloadattribute "github.com/prysmaticlabs/prysm/v5/consensus-types/payload-attribute"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
 	engine "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/eth/v1"
 	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
@@ -193,7 +192,7 @@ func (s *Server) StreamEvents(w http.ResponseWriter, r *http.Request) {
 		buffSize = DefaultEventFeedDepth
 	}
 
-	api.SetSSEHeaders(w)
+	httputil.SetSSEHeaders(w)
 	sw := newStreamingResponseController(w, timeout)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()

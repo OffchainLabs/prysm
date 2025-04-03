@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/prysmaticlabs/prysm/v5/api"
+	"github.com/prysmaticlabs/prysm/v5/api/httputil"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	blockchainmock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
 	dbtest "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
@@ -311,13 +311,13 @@ func TestGetBeaconStateSSZV2(t *testing.T) {
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v2/debug/beacon/states/{state_id}", nil)
 		request.SetPathValue("state_id", "head")
-		request.Header.Set("Accept", api.OctetStreamMediaType)
+		request.Header.Set("Accept", httputil.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
 		s.GetBeaconStateV2(writer, request)
 		require.Equal(t, http.StatusOK, writer.Code)
-		assert.Equal(t, version.String(version.Phase0), writer.Header().Get(api.VersionHeader))
+		assert.Equal(t, version.String(version.Phase0), writer.Header().Get(httputil.VersionHeader))
 		sszExpected, err := fakeState.MarshalSSZ()
 		require.NoError(t, err)
 		assert.DeepEqual(t, sszExpected, writer.Body.Bytes())
@@ -335,13 +335,13 @@ func TestGetBeaconStateSSZV2(t *testing.T) {
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v2/debug/beacon/states/{state_id}", nil)
 		request.SetPathValue("state_id", "head")
-		request.Header.Set("Accept", api.OctetStreamMediaType)
+		request.Header.Set("Accept", httputil.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
 		s.GetBeaconStateV2(writer, request)
 		require.Equal(t, http.StatusOK, writer.Code)
-		assert.Equal(t, version.String(version.Altair), writer.Header().Get(api.VersionHeader))
+		assert.Equal(t, version.String(version.Altair), writer.Header().Get(httputil.VersionHeader))
 		sszExpected, err := fakeState.MarshalSSZ()
 		require.NoError(t, err)
 		assert.DeepEqual(t, sszExpected, writer.Body.Bytes())
@@ -359,13 +359,13 @@ func TestGetBeaconStateSSZV2(t *testing.T) {
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v2/debug/beacon/states/{state_id}", nil)
 		request.SetPathValue("state_id", "head")
-		request.Header.Set("Accept", api.OctetStreamMediaType)
+		request.Header.Set("Accept", httputil.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
 		s.GetBeaconStateV2(writer, request)
 		require.Equal(t, http.StatusOK, writer.Code)
-		assert.Equal(t, version.String(version.Bellatrix), writer.Header().Get(api.VersionHeader))
+		assert.Equal(t, version.String(version.Bellatrix), writer.Header().Get(httputil.VersionHeader))
 		sszExpected, err := fakeState.MarshalSSZ()
 		require.NoError(t, err)
 		assert.DeepEqual(t, sszExpected, writer.Body.Bytes())
@@ -383,13 +383,13 @@ func TestGetBeaconStateSSZV2(t *testing.T) {
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v2/debug/beacon/states/{state_id}", nil)
 		request.SetPathValue("state_id", "head")
-		request.Header.Set("Accept", api.OctetStreamMediaType)
+		request.Header.Set("Accept", httputil.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
 		s.GetBeaconStateV2(writer, request)
 		require.Equal(t, http.StatusOK, writer.Code)
-		assert.Equal(t, version.String(version.Capella), writer.Header().Get(api.VersionHeader))
+		assert.Equal(t, version.String(version.Capella), writer.Header().Get(httputil.VersionHeader))
 		sszExpected, err := fakeState.MarshalSSZ()
 		require.NoError(t, err)
 		assert.DeepEqual(t, sszExpected, writer.Body.Bytes())
@@ -407,13 +407,13 @@ func TestGetBeaconStateSSZV2(t *testing.T) {
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v2/debug/beacon/states/{state_id}", nil)
 		request.SetPathValue("state_id", "head")
-		request.Header.Set("Accept", api.OctetStreamMediaType)
+		request.Header.Set("Accept", httputil.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
 		s.GetBeaconStateV2(writer, request)
 		require.Equal(t, http.StatusOK, writer.Code)
-		assert.Equal(t, version.String(version.Deneb), writer.Header().Get(api.VersionHeader))
+		assert.Equal(t, version.String(version.Deneb), writer.Header().Get(httputil.VersionHeader))
 		sszExpected, err := fakeState.MarshalSSZ()
 		require.NoError(t, err)
 		assert.DeepEqual(t, sszExpected, writer.Body.Bytes())

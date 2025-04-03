@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/api"
+	"github.com/prysmaticlabs/prysm/v5/api/httputil"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
@@ -55,7 +55,7 @@ func TestNormalizeQueryValuesHandler(t *testing.T) {
 }
 
 func TestContentTypeHandler(t *testing.T) {
-	acceptedMediaTypes := []string{api.JsonMediaType, api.OctetStreamMediaType}
+	acceptedMediaTypes := []string{httputil.JsonMediaType, httputil.OctetStreamMediaType}
 
 	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, err := w.Write([]byte("next handler"))
@@ -72,12 +72,12 @@ func TestContentTypeHandler(t *testing.T) {
 	}{
 		{
 			name:               "Accepted Content-Type - application/json",
-			contentType:        api.JsonMediaType,
+			contentType:        httputil.JsonMediaType,
 			expectedStatusCode: http.StatusOK,
 		},
 		{
 			name:               "Accepted Content-Type - ssz format",
-			contentType:        api.OctetStreamMediaType,
+			contentType:        httputil.OctetStreamMediaType,
 			expectedStatusCode: http.StatusOK,
 		},
 		{

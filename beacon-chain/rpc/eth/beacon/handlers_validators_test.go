@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/prysmaticlabs/prysm/v5/api"
+	"github.com/prysmaticlabs/prysm/v5/api/httputil"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	chainMock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/lookup"
@@ -20,7 +20,6 @@ import (
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
 	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
@@ -1442,7 +1441,7 @@ func TestGetValidatorIdentities(t *testing.T) {
 			_, err := body.WriteString("[]")
 			require.NoError(t, err)
 			request := httptest.NewRequest(http.MethodPost, "http://example.com/eth/v1/beacon/states/{state_id}/validator_identities", &body)
-			request.Header.Set("Accept", api.OctetStreamMediaType)
+			request.Header.Set("Accept", httputil.OctetStreamMediaType)
 			request.SetPathValue("state_id", "head")
 			writer := httptest.NewRecorder()
 			writer.Body = &bytes.Buffer{}
@@ -1466,7 +1465,7 @@ func TestGetValidatorIdentities(t *testing.T) {
 			_, err := body.WriteString("[\"0\",\"1\"]")
 			require.NoError(t, err)
 			request := httptest.NewRequest(http.MethodPost, "http://example.com/eth/v1/beacon/states/{state_id}/validator_identities", &body)
-			request.Header.Set("Accept", api.OctetStreamMediaType)
+			request.Header.Set("Accept", httputil.OctetStreamMediaType)
 			request.SetPathValue("state_id", "head")
 			writer := httptest.NewRecorder()
 			writer.Body = &bytes.Buffer{}
@@ -1494,7 +1493,7 @@ func TestGetValidatorIdentities(t *testing.T) {
 			_, err := body.WriteString(fmt.Sprintf("[\"%s\",\"%s\"]", hexPubkey1, hexPubkey2))
 			require.NoError(t, err)
 			request := httptest.NewRequest(http.MethodPost, "http://example.com/eth/v1/beacon/states/{state_id}/validator_identities", &body)
-			request.Header.Set("Accept", api.OctetStreamMediaType)
+			request.Header.Set("Accept", httputil.OctetStreamMediaType)
 			request.SetPathValue("state_id", "head")
 			writer := httptest.NewRecorder()
 			writer.Body = &bytes.Buffer{}
@@ -1521,7 +1520,7 @@ func TestGetValidatorIdentities(t *testing.T) {
 			_, err := body.WriteString(fmt.Sprintf("[\"%s\",\"1\"]", hexPubkey))
 			require.NoError(t, err)
 			request := httptest.NewRequest(http.MethodPost, "http://example.com/eth/v1/beacon/states/{state_id}/validator_identities", &body)
-			request.Header.Set("Accept", api.OctetStreamMediaType)
+			request.Header.Set("Accept", httputil.OctetStreamMediaType)
 			request.SetPathValue("state_id", "head")
 			writer := httptest.NewRecorder()
 			writer.Body = &bytes.Buffer{}
@@ -1548,7 +1547,7 @@ func TestGetValidatorIdentities(t *testing.T) {
 			_, err := body.WriteString(fmt.Sprintf("[\"%s\",\"%s\"]", hexPubkey, hexutil.Encode([]byte(strings.Repeat("x", fieldparams.BLSPubkeyLength)))))
 			require.NoError(t, err)
 			request := httptest.NewRequest(http.MethodPost, "http://example.com/eth/v1/beacon/states/{state_id}/validator_identities", &body)
-			request.Header.Set("Accept", api.OctetStreamMediaType)
+			request.Header.Set("Accept", httputil.OctetStreamMediaType)
 			request.SetPathValue("state_id", "head")
 			writer := httptest.NewRecorder()
 			writer.Body = &bytes.Buffer{}
@@ -1572,7 +1571,7 @@ func TestGetValidatorIdentities(t *testing.T) {
 			_, err := body.WriteString("[\"1\",\"99999\"]")
 			require.NoError(t, err)
 			request := httptest.NewRequest(http.MethodPost, "http://example.com/eth/v1/beacon/states/{state_id}/validator_identities", &body)
-			request.Header.Set("Accept", api.OctetStreamMediaType)
+			request.Header.Set("Accept", httputil.OctetStreamMediaType)
 			request.SetPathValue("state_id", "head")
 			writer := httptest.NewRecorder()
 			writer.Body = &bytes.Buffer{}

@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/prysmaticlabs/prysm/v5/api/client/Mock"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
+	"github.com/prysmaticlabs/prysm/v5/api/httputil"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 	"go.uber.org/mock/gomock"

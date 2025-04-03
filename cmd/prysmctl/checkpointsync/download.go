@@ -7,6 +7,7 @@ import (
 
 	"github.com/prysmaticlabs/prysm/v5/api/client"
 	"github.com/prysmaticlabs/prysm/v5/api/client/beacon"
+	"github.com/prysmaticlabs/prysm/v5/api/httputil"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/checkpoint"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
@@ -47,7 +48,7 @@ func cliActionDownload(_ *cli.Context) error {
 	ctx := context.Background()
 	f := downloadFlags
 
-	opts := []client.ClientOpt{client.WithTimeout(f.Timeout), client.WithMaxBodySize(client.MaxBodySizeState)}
+	opts := []client.ClientOpt{client.WithTimeout(f.Timeout), client.WithMaxBodySize(httputil.MaxBodySizeState)}
 	client, err := beacon.NewClient(downloadFlags.BeaconNodeHost, opts...)
 	if err != nil {
 		return err

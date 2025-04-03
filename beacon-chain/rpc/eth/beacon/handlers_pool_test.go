@@ -13,7 +13,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/prysmaticlabs/go-bitfield"
-	"github.com/prysmaticlabs/prysm/v5/api"
+	"github.com/prysmaticlabs/prysm/v5/api/httputil"
 	"github.com/prysmaticlabs/prysm/v5/api/server"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	blockchainmock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
@@ -36,7 +36,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/crypto/hash"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/v5/encoding/ssz"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
 	ethpbv1alpha1 "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
@@ -632,7 +631,7 @@ func TestSubmitAttestations(t *testing.T) {
 				_, err := body.WriteString(singleAtt)
 				require.NoError(t, err)
 				request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
-				request.Header.Set(api.VersionHeader, version.String(version.Phase0))
+				request.Header.Set(httputil.VersionHeader, version.String(version.Phase0))
 				writer := httptest.NewRecorder()
 				writer.Body = &bytes.Buffer{}
 
@@ -661,7 +660,7 @@ func TestSubmitAttestations(t *testing.T) {
 				_, err := body.WriteString(multipleAtts)
 				require.NoError(t, err)
 				request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
-				request.Header.Set(api.VersionHeader, version.String(version.Phase0))
+				request.Header.Set(httputil.VersionHeader, version.String(version.Phase0))
 				writer := httptest.NewRecorder()
 				writer.Body = &bytes.Buffer{}
 
@@ -673,7 +672,7 @@ func TestSubmitAttestations(t *testing.T) {
 			})
 			t.Run("no body", func(t *testing.T) {
 				request := httptest.NewRequest(http.MethodPost, "http://example.com", nil)
-				request.Header.Set(api.VersionHeader, version.String(version.Phase0))
+				request.Header.Set(httputil.VersionHeader, version.String(version.Phase0))
 				writer := httptest.NewRecorder()
 				writer.Body = &bytes.Buffer{}
 
@@ -689,7 +688,7 @@ func TestSubmitAttestations(t *testing.T) {
 				_, err := body.WriteString("[]")
 				require.NoError(t, err)
 				request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
-				request.Header.Set(api.VersionHeader, version.String(version.Phase0))
+				request.Header.Set(httputil.VersionHeader, version.String(version.Phase0))
 				writer := httptest.NewRecorder()
 				writer.Body = &bytes.Buffer{}
 
@@ -705,7 +704,7 @@ func TestSubmitAttestations(t *testing.T) {
 				_, err := body.WriteString(invalidAtt)
 				require.NoError(t, err)
 				request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
-				request.Header.Set(api.VersionHeader, version.String(version.Phase0))
+				request.Header.Set(httputil.VersionHeader, version.String(version.Phase0))
 				writer := httptest.NewRecorder()
 				writer.Body = &bytes.Buffer{}
 
@@ -728,7 +727,7 @@ func TestSubmitAttestations(t *testing.T) {
 				_, err := body.WriteString(singleAttElectra)
 				require.NoError(t, err)
 				request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
-				request.Header.Set(api.VersionHeader, version.String(version.Electra))
+				request.Header.Set(httputil.VersionHeader, version.String(version.Electra))
 				writer := httptest.NewRecorder()
 				writer.Body = &bytes.Buffer{}
 
@@ -757,7 +756,7 @@ func TestSubmitAttestations(t *testing.T) {
 				_, err := body.WriteString(multipleAttsElectra)
 				require.NoError(t, err)
 				request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
-				request.Header.Set(api.VersionHeader, version.String(version.Electra))
+				request.Header.Set(httputil.VersionHeader, version.String(version.Electra))
 				writer := httptest.NewRecorder()
 				writer.Body = &bytes.Buffer{}
 
@@ -769,7 +768,7 @@ func TestSubmitAttestations(t *testing.T) {
 			})
 			t.Run("no body", func(t *testing.T) {
 				request := httptest.NewRequest(http.MethodPost, "http://example.com", nil)
-				request.Header.Set(api.VersionHeader, version.String(version.Electra))
+				request.Header.Set(httputil.VersionHeader, version.String(version.Electra))
 				writer := httptest.NewRecorder()
 				writer.Body = &bytes.Buffer{}
 
@@ -785,7 +784,7 @@ func TestSubmitAttestations(t *testing.T) {
 				_, err := body.WriteString("[]")
 				require.NoError(t, err)
 				request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
-				request.Header.Set(api.VersionHeader, version.String(version.Electra))
+				request.Header.Set(httputil.VersionHeader, version.String(version.Electra))
 				writer := httptest.NewRecorder()
 				writer.Body = &bytes.Buffer{}
 
@@ -801,7 +800,7 @@ func TestSubmitAttestations(t *testing.T) {
 				_, err := body.WriteString(invalidAttElectra)
 				require.NoError(t, err)
 				request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
-				request.Header.Set(api.VersionHeader, version.String(version.Electra))
+				request.Header.Set(httputil.VersionHeader, version.String(version.Electra))
 				writer := httptest.NewRecorder()
 				writer.Body = &bytes.Buffer{}
 
@@ -2100,7 +2099,7 @@ func TestSubmitAttesterSlashings(t *testing.T) {
 			_, err = body.Write(b)
 			require.NoError(t, err)
 			request := httptest.NewRequest(http.MethodPost, "http://example.com/beacon/pool/attester_electras", &body)
-			request.Header.Set(api.VersionHeader, version.String(version.Electra))
+			request.Header.Set(httputil.VersionHeader, version.String(version.Electra))
 			writer := httptest.NewRecorder()
 			writer.Body = &bytes.Buffer{}
 
@@ -2164,7 +2163,7 @@ func TestSubmitAttesterSlashings(t *testing.T) {
 			_, err = body.Write(b)
 			require.NoError(t, err)
 			request := httptest.NewRequest(http.MethodPost, "http://example.com/beacon/pool/attester_slashings", &body)
-			request.Header.Set(api.VersionHeader, version.String(version.Electra))
+			request.Header.Set(httputil.VersionHeader, version.String(version.Electra))
 			writer := httptest.NewRecorder()
 			writer.Body = &bytes.Buffer{}
 
@@ -2194,7 +2193,7 @@ func TestSubmitAttesterSlashings(t *testing.T) {
 		_, err = body.WriteString(invalidAttesterSlashing)
 		require.NoError(t, err)
 		request := httptest.NewRequest(http.MethodPost, "http://example.com/beacon/pool/attester_slashings", &body)
-		request.Header.Set(api.VersionHeader, version.String(version.Electra))
+		request.Header.Set(httputil.VersionHeader, version.String(version.Electra))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 

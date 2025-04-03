@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/prysmaticlabs/prysm/v5/api"
+	"github.com/prysmaticlabs/prysm/v5/api/httputil"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	mockChain "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
@@ -24,7 +24,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
 	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
@@ -223,7 +222,7 @@ func TestBlobs(t *testing.T) {
 		}
 		s.Blobs(writer, request)
 
-		assert.Equal(t, version.String(version.Deneb), writer.Header().Get(api.VersionHeader))
+		assert.Equal(t, version.String(version.Deneb), writer.Header().Get(httputil.VersionHeader))
 		assert.Equal(t, http.StatusOK, writer.Code)
 		resp := &structs.SidecarsResponse{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
@@ -377,7 +376,7 @@ func TestBlobs(t *testing.T) {
 			BlobStorage: bs,
 		}
 		s.Blobs(writer, request)
-		assert.Equal(t, version.String(version.Deneb), writer.Header().Get(api.VersionHeader))
+		assert.Equal(t, version.String(version.Deneb), writer.Header().Get(httputil.VersionHeader))
 		assert.Equal(t, http.StatusOK, writer.Code)
 		require.Equal(t, len(writer.Body.Bytes()), fieldparams.BlobSidecarSize) // size of each sidecar
 		// can directly unmarshal to sidecar since there's only 1
@@ -446,7 +445,7 @@ func TestBlobs_Electra(t *testing.T) {
 		}
 		s.Blobs(writer, request)
 
-		assert.Equal(t, version.String(version.Electra), writer.Header().Get(api.VersionHeader))
+		assert.Equal(t, version.String(version.Electra), writer.Header().Get(httputil.VersionHeader))
 		assert.Equal(t, http.StatusOK, writer.Code)
 		resp := &structs.SidecarsResponse{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
@@ -478,7 +477,7 @@ func TestBlobs_Electra(t *testing.T) {
 		}
 		s.Blobs(writer, request)
 
-		assert.Equal(t, version.String(version.Electra), writer.Header().Get(api.VersionHeader))
+		assert.Equal(t, version.String(version.Electra), writer.Header().Get(httputil.VersionHeader))
 		assert.Equal(t, http.StatusOK, writer.Code)
 		resp := &structs.SidecarsResponse{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))

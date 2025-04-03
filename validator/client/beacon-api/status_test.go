@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/prysmaticlabs/prysm/v5/api"
 	mock2 "github.com/prysmaticlabs/prysm/v5/api/client/Mock"
+	"github.com/prysmaticlabs/prysm/v5/api/httputil"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
@@ -69,7 +69,7 @@ func TestValidatorStatus_Nominal(t *testing.T) {
 		"/eth/v1/node/version",
 		&nodeVersionResponse,
 	).Return(
-		api.ErrNotSupported,
+		httputil.ErrNotSupported,
 	).Times(1)
 
 	actualValidatorStatusResponse, err := validatorClient.ValidatorStatus(
@@ -176,7 +176,7 @@ func TestMultipleValidatorStatus_Nominal(t *testing.T) {
 		"/eth/v1/node/version",
 		&nodeVersionResponse,
 	).Return(
-		api.ErrNotSupported,
+		httputil.ErrNotSupported,
 	).Times(1)
 
 	validatorClient := beaconApiValidatorClient{
@@ -476,7 +476,7 @@ func TestGetValidatorsStatusResponse_Nominal_NoActiveValidators(t *testing.T) {
 		"/eth/v1/node/version",
 		&nodeVersionResponse,
 	).Return(
-		api.ErrNotSupported,
+		httputil.ErrNotSupported,
 	).Times(1)
 
 	wantedValidatorsPubKey := [][]byte{validatorPubKey}
@@ -715,7 +715,7 @@ func TestValidatorStatusResponse_InvalidData(t *testing.T) {
 					"/eth/v1/node/version",
 					&nodeVersionResponse,
 				).Return(
-					api.ErrNotSupported,
+					httputil.ErrNotSupported,
 				).Times(testCase.validatorCountCalled)
 
 				validatorClient := beaconApiValidatorClient{

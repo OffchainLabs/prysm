@@ -13,7 +13,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/golang-jwt/jwt/v4"
-	"github.com/prysmaticlabs/prysm/v5/api"
+	"github.com/prysmaticlabs/prysm/v5/api/httputil"
 	"github.com/prysmaticlabs/prysm/v5/io/file"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	logTest "github.com/sirupsen/logrus/hooks/test"
@@ -31,7 +31,7 @@ func TestServer_AuthenticateUsingExistingToken(t *testing.T) {
 	// Initializing for the first time, there is no auth token file in
 	// the wallet directory, so we generate a jwt token and secret from scratch.
 	walletDir := setupWalletDir(t)
-	authTokenPath := filepath.Join(walletDir, api.AuthTokenFileName)
+	authTokenPath := filepath.Join(walletDir, httputil.AuthTokenFileName)
 	srv := &Server{
 		authTokenPath: authTokenPath,
 	}
@@ -68,7 +68,7 @@ func TestServer_RefreshAuthTokenOnFileChange(t *testing.T) {
 	// Initializing for the first time, there is no auth token file in
 	// the wallet directory, so we generate a jwt token and secret from scratch.
 	walletDir := setupWalletDir(t)
-	authTokenPath := filepath.Join(walletDir, api.AuthTokenFileName)
+	authTokenPath := filepath.Join(walletDir, httputil.AuthTokenFileName)
 	srv := &Server{
 		authTokenPath: authTokenPath,
 	}
@@ -101,7 +101,7 @@ func TestServer_LegacyTokensStillWork(t *testing.T) {
 	// Initializing for the first time, there is no auth token file in
 	// the wallet directory, so we generate a jwt token and secret from scratch.
 	walletDir := setupWalletDir(t)
-	authTokenPath := filepath.Join(walletDir, api.AuthTokenFileName)
+	authTokenPath := filepath.Join(walletDir, httputil.AuthTokenFileName)
 
 	bytesBuf := new(bytes.Buffer)
 	_, err := bytesBuf.WriteString("b5bbbaf533b625a93741978857f13d7adeca58445a1fb00ecf3373420b92776c")
@@ -158,7 +158,7 @@ func TestServer_LegacyTokensBadSecret(t *testing.T) {
 	// Initializing for the first time, there is no auth token file in
 	// the wallet directory, so we generate a jwt token and secret from scratch.
 	walletDir := setupWalletDir(t)
-	authTokenPath := filepath.Join(walletDir, api.AuthTokenFileName)
+	authTokenPath := filepath.Join(walletDir, httputil.AuthTokenFileName)
 
 	bytesBuf := new(bytes.Buffer)
 	_, err := bytesBuf.WriteString("----------------")
@@ -187,7 +187,7 @@ func Test_initializeAuthToken(t *testing.T) {
 	// Initializing for the first time, there is no auth token file in
 	// the wallet directory, so we generate a jwt token and secret from scratch.
 	walletDir := setupWalletDir(t)
-	authTokenPath := filepath.Join(walletDir, api.AuthTokenFileName)
+	authTokenPath := filepath.Join(walletDir, httputil.AuthTokenFileName)
 	srv := &Server{
 		authTokenPath: authTokenPath,
 	}
@@ -205,7 +205,7 @@ func Test_initializeAuthToken(t *testing.T) {
 	// Deleting the auth token and re-initializing means we create a jwt token
 	// and secret from scratch again.
 	walletDir = setupWalletDir(t)
-	authTokenPath = filepath.Join(walletDir, api.AuthTokenFileName)
+	authTokenPath = filepath.Join(walletDir, httputil.AuthTokenFileName)
 	srv3 := &Server{
 		authTokenPath: authTokenPath,
 	}

@@ -8,11 +8,11 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	httputil2 "github.com/prysmaticlabs/prysm/v5/api/httputil"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	"github.com/prysmaticlabs/prysm/v5/network/forks"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
 )
 
 // GetDepositContract retrieves deposit contract address and genesis fork version.
@@ -20,7 +20,7 @@ func GetDepositContract(w http.ResponseWriter, r *http.Request) {
 	_, span := trace.StartSpan(r.Context(), "config.GetDepositContract")
 	defer span.End()
 
-	httputil.WriteJson(w, &structs.GetDepositContractResponse{
+	httputil2.WriteJson(w, &structs.GetDepositContractResponse{
 		Data: &structs.DepositContractData{
 			ChainId: strconv.FormatUint(params.BeaconConfig().DepositChainID, 10),
 			Address: params.BeaconConfig().DepositContractAddress,
@@ -35,7 +35,7 @@ func GetForkSchedule(w http.ResponseWriter, r *http.Request) {
 
 	schedule := params.BeaconConfig().ForkVersionSchedule
 	if len(schedule) == 0 {
-		httputil.WriteJson(w, &structs.GetForkScheduleResponse{
+		httputil2.WriteJson(w, &structs.GetForkScheduleResponse{
 			Data: make([]*structs.Fork, 0),
 		})
 		return
@@ -59,7 +59,7 @@ func GetForkSchedule(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	httputil.WriteJson(w, &structs.GetForkScheduleResponse{
+	httputil2.WriteJson(w, &structs.GetForkScheduleResponse{
 		Data: chainForks,
 	})
 }
@@ -74,10 +74,10 @@ func GetSpec(w http.ResponseWriter, r *http.Request) {
 
 	data, err := prepareConfigSpec()
 	if err != nil {
-		httputil.HandleError(w, "Could not prepare config spec: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not prepare config spec: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	httputil.WriteJson(w, &structs.GetSpecResponse{Data: data})
+	httputil2.WriteJson(w, &structs.GetSpecResponse{Data: data})
 }
 
 func prepareConfigSpec() (map[string]string, error) {

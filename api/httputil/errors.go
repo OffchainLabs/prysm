@@ -1,4 +1,4 @@
-package api
+package httputil
 
 import (
 	"fmt"
@@ -6,8 +6,15 @@ import (
 	"net/http"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api/client"
 )
+
+func HandleError(w http.ResponseWriter, message string, code int) {
+	errJson := &DefaultJsonError{
+		Message: message,
+		Code:    code,
+	}
+	WriteError(w, errJson)
+}
 
 // ErrMalformedHostname is used to indicate if a host name's format is incorrect.
 var ErrMalformedHostname = errors.New("hostname must include port, separated by one colon, like example.com:3500")
@@ -30,7 +37,7 @@ var ErrNotSupported = errors.New("endpoint not supported")
 
 // Non200Err is a function that parses an HTTP response to handle responses that are not 200 with a formatted error.
 func Non200Err(r *http.Response) error {
-	b, err := io.ReadAll(io.LimitReader(r.Body, client.MaxErrBodySize))
+	b, err := io.ReadAll(io.LimitReader(r.Body, MaxErrBodySize))
 	var body string
 	if err != nil {
 		body = "(Unable to read response body.)"

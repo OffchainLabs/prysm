@@ -10,6 +10,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
+	httputil2 "github.com/prysmaticlabs/prysm/v5/api/httputil"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/core"
@@ -19,7 +20,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
@@ -36,27 +36,27 @@ func (s *Server) GetWeakSubjectivity(w http.ResponseWriter, r *http.Request) {
 
 	hs, err := s.HeadFetcher.HeadStateReadOnly(ctx)
 	if err != nil {
-		httputil.HandleError(w, "Could not get head state: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not get head state: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	wsEpoch, err := helpers.LatestWeakSubjectivityEpoch(ctx, hs, params.BeaconConfig())
 	if err != nil {
-		httputil.HandleError(w, "Could not get weak subjectivity epoch: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not get weak subjectivity epoch: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	wsSlot, err := slots.EpochStart(wsEpoch)
 	if err != nil {
-		httputil.HandleError(w, "Could not get weak subjectivity slot: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not get weak subjectivity slot: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	cbr, err := s.CanonicalHistory.BlockRootForSlot(ctx, wsSlot)
 	if err != nil {
-		httputil.HandleError(w, fmt.Sprintf("Could not find highest block below slot %d: %s", wsSlot, err.Error()), http.StatusInternalServerError)
+		httputil2.HandleError(w, fmt.Sprintf("Could not find highest block below slot %d: %s", wsSlot, err.Error()), http.StatusInternalServerError)
 		return
 	}
 	cb, err := s.BeaconDB.Block(ctx, cbr)
 	if err != nil {
-		httputil.HandleError(
+		httputil2.HandleError(
 			w,
 			fmt.Sprintf("Block with root %#x from slot index %d not found in db: %s", cbr, wsSlot, err.Error()),
 			http.StatusInternalServerError,
@@ -75,7 +75,7 @@ func (s *Server) GetWeakSubjectivity(w http.ResponseWriter, r *http.Request) {
 			StateRoot: hexutil.Encode(stateRoot[:]),
 		},
 	}
-	httputil.WriteJson(w, resp)
+	httputil2.WriteJson(w, resp)
 }
 
 // GetIndividualVotes returns a list of validators individual vote status of a given epoch.
@@ -87,10 +87,10 @@ func (s *Server) GetIndividualVotes(w http.ResponseWriter, r *http.Request) {
 	err := json.NewDecoder(r.Body).Decode(&req)
 	switch {
 	case errors.Is(err, io.EOF):
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		httputil2.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	case err != nil:
-		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -98,21 +98,21 @@ func (s *Server) GetIndividualVotes(w http.ResponseWriter, r *http.Request) {
 	for i, s := range req.PublicKeys {
 		bs, err := hexutil.Decode(s)
 		if err != nil {
-			httputil.HandleError(w, "could not decode public keys: "+err.Error(), http.StatusBadRequest)
+			httputil2.HandleError(w, "could not decode public keys: "+err.Error(), http.StatusBadRequest)
 			return
 		}
 		publicKeyBytes[i] = bs
 	}
 	epoch, err := strconv.ParseUint(req.Epoch, 10, 64)
 	if err != nil {
-		httputil.HandleError(w, "invalid epoch: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "invalid epoch: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 	var indices []primitives.ValidatorIndex
 	for _, i := range req.Indices {
 		u, err := strconv.ParseUint(i, 10, 64)
 		if err != nil {
-			httputil.HandleError(w, "invalid indices: "+err.Error(), http.StatusBadRequest)
+			httputil2.HandleError(w, "invalid indices: "+err.Error(), http.StatusBadRequest)
 			return
 		}
 		indices = append(indices, primitives.ValidatorIndex(u))
@@ -127,7 +127,7 @@ func (s *Server) GetIndividualVotes(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if rpcError != nil {
-		httputil.HandleError(w, rpcError.Err.Error(), core.ErrorReasonToHTTP(rpcError.Reason))
+		httputil2.HandleError(w, rpcError.Err.Error(), core.ErrorReasonToHTTP(rpcError.Reason))
 		return
 	}
 	v := make([]*structs.IndividualVote, 0, len(votes.IndividualVotes))
@@ -154,7 +154,7 @@ func (s *Server) GetIndividualVotes(w http.ResponseWriter, r *http.Request) {
 	response := &structs.GetIndividualVotesResponse{
 		IndividualVotes: v,
 	}
-	httputil.WriteJson(w, response)
+	httputil2.WriteJson(w, response)
 }
 
 // GetChainHead retrieves information about the head of the beacon chain from
@@ -165,7 +165,7 @@ func (s *Server) GetChainHead(w http.ResponseWriter, r *http.Request) {
 
 	ch, rpcError := s.CoreService.ChainHead(ctx)
 	if rpcError != nil {
-		httputil.HandleError(w, rpcError.Err.Error(), core.ErrorReasonToHTTP(rpcError.Reason))
+		httputil2.HandleError(w, rpcError.Err.Error(), core.ErrorReasonToHTTP(rpcError.Reason))
 		return
 	}
 	response := &structs.ChainHead{
@@ -183,7 +183,7 @@ func (s *Server) GetChainHead(w http.ResponseWriter, r *http.Request) {
 		PreviousJustifiedBlockRoot: hexutil.Encode(ch.PreviousJustifiedBlockRoot),
 		OptimisticStatus:           ch.OptimisticStatus,
 	}
-	httputil.WriteJson(w, response)
+	httputil2.WriteJson(w, response)
 }
 
 func (s *Server) PublishBlobs(w http.ResponseWriter, r *http.Request) {
@@ -195,41 +195,41 @@ func (s *Server) PublishBlobs(w http.ResponseWriter, r *http.Request) {
 
 	var req structs.PublishBlobsRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httputil.HandleError(w, "Could not decode JSON request body", http.StatusBadRequest)
+		httputil2.HandleError(w, "Could not decode JSON request body", http.StatusBadRequest)
 		return
 	}
 	if req.BlobSidecars == nil {
-		httputil.HandleError(w, "Missing blob sidecars", http.StatusBadRequest)
+		httputil2.HandleError(w, "Missing blob sidecars", http.StatusBadRequest)
 		return
 	}
 
 	root, err := bytesutil.DecodeHexWithLength(req.BlockRoot, 32)
 	if err != nil {
-		httputil.HandleError(w, "Could not decode block root: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "Could not decode block root: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	for _, blobSidecar := range req.BlobSidecars.Sidecars {
 		sc, err := blobSidecar.ToConsensus()
 		if err != nil {
-			httputil.HandleError(w, "Could not decode blob sidecar: "+err.Error(), http.StatusBadRequest)
+			httputil2.HandleError(w, "Could not decode blob sidecar: "+err.Error(), http.StatusBadRequest)
 			return
 		}
 
 		readOnlySc, err := blocks.NewROBlobWithRoot(sc, bytesutil.ToBytes32(root))
 		if err != nil {
-			httputil.HandleError(w, "Could not create read-only blob: "+err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, "Could not create read-only blob: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 
 		verifiedBlob := blocks.NewVerifiedROBlob(readOnlySc)
 		if err := s.BlobReceiver.ReceiveBlob(ctx, verifiedBlob); err != nil {
-			httputil.HandleError(w, "Could not receive blob: "+err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, "Could not receive blob: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 
 		if err := s.Broadcaster.BroadcastBlob(ctx, sc.Index, sc); err != nil {
-			httputil.HandleError(w, "Failed to broadcast blob: "+err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, "Failed to broadcast blob: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 	}

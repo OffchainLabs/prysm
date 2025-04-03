@@ -10,8 +10,8 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api"
 	"github.com/prysmaticlabs/prysm/v5/api/client"
+	"github.com/prysmaticlabs/prysm/v5/api/httputil"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	validator2 "github.com/prysmaticlabs/prysm/v5/consensus-types/validator"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
@@ -39,7 +39,7 @@ func (c prysmChainClient) ValidatorCount(ctx context.Context, stateID string, st
 	}
 
 	if !strings.Contains(strings.ToLower(nodeVersion.Version), "prysm") {
-		return nil, api.ErrNotSupported
+		return nil, httputil.ErrNotSupported
 	}
 
 	queryParams := neturl.Values{}
@@ -86,7 +86,7 @@ func (c prysmChainClient) ValidatorPerformance(ctx context.Context, in *ethpb.Va
 	}
 
 	if !strings.Contains(strings.ToLower(nodeVersion.Version), "prysm") {
-		return nil, api.ErrNotSupported
+		return nil, httputil.ErrNotSupported
 	}
 
 	request, err := json.Marshal(structs.GetValidatorPerformanceRequest{

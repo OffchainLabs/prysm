@@ -15,7 +15,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api"
+	httputil2 "github.com/prysmaticlabs/prysm/v5/api/httputil"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/builder"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
@@ -33,7 +33,6 @@ import (
 	validator2 "github.com/prysmaticlabs/prysm/v5/consensus-types/validator"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
 	ethpbalpha "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/attestation/aggregation/attestations"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
@@ -64,15 +63,15 @@ func (s *Server) GetAggregateAttestation(w http.ResponseWriter, r *http.Request)
 	}
 	typedAgg, ok := agg.(*ethpbalpha.Attestation)
 	if !ok {
-		httputil.HandleError(w, fmt.Sprintf("Attestation is not of type %T", &ethpbalpha.Attestation{}), http.StatusInternalServerError)
+		httputil2.HandleError(w, fmt.Sprintf("Attestation is not of type %T", &ethpbalpha.Attestation{}), http.StatusInternalServerError)
 		return
 	}
 	data, err := json.Marshal(structs.AttFromConsensus(typedAgg))
 	if err != nil {
-		httputil.HandleError(w, "Could not marshal attestation: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not marshal attestation: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	httputil.WriteJson(w, &structs.AggregateAttestationResponse{Data: data})
+	httputil2.WriteJson(w, &structs.AggregateAttestationResponse{Data: data})
 }
 
 // GetAggregateAttestationV2 aggregates all attestations matching the given attestation data root and slot, returning the aggregated result.
@@ -104,30 +103,30 @@ func (s *Server) GetAggregateAttestationV2(w http.ResponseWriter, r *http.Reques
 	if v >= version.Electra {
 		typedAgg, ok := agg.(*ethpbalpha.AttestationElectra)
 		if !ok {
-			httputil.HandleError(w, fmt.Sprintf("Attestation is not of type %T", &ethpbalpha.AttestationElectra{}), http.StatusInternalServerError)
+			httputil2.HandleError(w, fmt.Sprintf("Attestation is not of type %T", &ethpbalpha.AttestationElectra{}), http.StatusInternalServerError)
 			return
 		}
 		data, err := json.Marshal(structs.AttElectraFromConsensus(typedAgg))
 		if err != nil {
-			httputil.HandleError(w, "Could not marshal attestation: "+err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, "Could not marshal attestation: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		resp.Data = data
 	} else {
 		typedAgg, ok := agg.(*ethpbalpha.Attestation)
 		if !ok {
-			httputil.HandleError(w, fmt.Sprintf("Attestation is not of type %T", &ethpbalpha.Attestation{}), http.StatusInternalServerError)
+			httputil2.HandleError(w, fmt.Sprintf("Attestation is not of type %T", &ethpbalpha.Attestation{}), http.StatusInternalServerError)
 			return
 		}
 		data, err := json.Marshal(structs.AttFromConsensus(typedAgg))
 		if err != nil {
-			httputil.HandleError(w, "Could not marshal attestation: "+err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, "Could not marshal attestation: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		resp.Data = data
 	}
-	w.Header().Set(api.VersionHeader, version.String(v))
-	httputil.WriteJson(w, resp)
+	w.Header().Set(httputil2.VersionHeader, version.String(v))
+	httputil2.WriteJson(w, resp)
 }
 
 func (s *Server) aggregatedAttestation(w http.ResponseWriter, slot primitives.Slot, attDataRoot []byte, index primitives.CommitteeIndex) ethpbalpha.Att {
@@ -137,13 +136,13 @@ func (s *Server) aggregatedAttestation(w http.ResponseWriter, slot primitives.Sl
 	if features.Get().EnableExperimentalAttestationPool {
 		match, err = matchingAtts(s.AttestationCache.GetAll(), slot, attDataRoot, index)
 		if err != nil {
-			httputil.HandleError(w, "Could not get matching attestations: "+err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, "Could not get matching attestations: "+err.Error(), http.StatusInternalServerError)
 			return nil
 		}
 	} else {
 		match, err = matchingAtts(s.AttestationsPool.AggregatedAttestations(), slot, attDataRoot, index)
 		if err != nil {
-			httputil.HandleError(w, "Could not get matching attestations: "+err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, "Could not get matching attestations: "+err.Error(), http.StatusInternalServerError)
 			return nil
 		}
 	}
@@ -165,16 +164,16 @@ func (s *Server) aggregatedAttestation(w http.ResponseWriter, slot primitives.Sl
 	atts := s.AttestationsPool.UnaggregatedAttestations()
 	match, err = matchingAtts(atts, slot, attDataRoot, index)
 	if err != nil {
-		httputil.HandleError(w, "Could not get matching attestations: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not get matching attestations: "+err.Error(), http.StatusInternalServerError)
 		return nil
 	}
 	if len(match) == 0 {
-		httputil.HandleError(w, "No matching attestations found", http.StatusNotFound)
+		httputil2.HandleError(w, "No matching attestations found", http.StatusNotFound)
 		return nil
 	}
 	agg, err := attestations.Aggregate(match)
 	if err != nil {
-		httputil.HandleError(w, "Could not aggregate unaggregated attestations: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not aggregate unaggregated attestations: "+err.Error(), http.StatusInternalServerError)
 		return nil
 	}
 
@@ -224,30 +223,30 @@ func (s *Server) SubmitContributionAndProofs(w http.ResponseWriter, r *http.Requ
 	var reqData []json.RawMessage
 	if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
 		if errors.Is(err, io.EOF) {
-			httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+			httputil2.HandleError(w, "No data submitted", http.StatusBadRequest)
 		} else {
-			httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+			httputil2.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
 		}
 		return
 	}
 	if len(reqData) == 0 {
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		httputil2.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	}
 
 	for _, item := range reqData {
 		var contribution structs.SignedContributionAndProof
 		if err := json.Unmarshal(item, &contribution); err != nil {
-			httputil.HandleError(w, "Could not decode item: "+err.Error(), http.StatusBadRequest)
+			httputil2.HandleError(w, "Could not decode item: "+err.Error(), http.StatusBadRequest)
 			return
 		}
 		consensusItem, err := contribution.ToConsensus()
 		if err != nil {
-			httputil.HandleError(w, "Could not convert contribution to consensus format: "+err.Error(), http.StatusBadRequest)
+			httputil2.HandleError(w, "Could not convert contribution to consensus format: "+err.Error(), http.StatusBadRequest)
 			return
 		}
 		if rpcError := s.CoreService.SubmitSignedContributionAndProof(ctx, consensusItem); rpcError != nil {
-			httputil.HandleError(w, rpcError.Err.Error(), core.ErrorReasonToHTTP(rpcError.Reason))
+			httputil2.HandleError(w, rpcError.Err.Error(), core.ErrorReasonToHTTP(rpcError.Reason))
 			return
 		}
 	}
@@ -263,14 +262,14 @@ func (s *Server) SubmitAggregateAndProofs(w http.ResponseWriter, r *http.Request
 	err := json.NewDecoder(r.Body).Decode(&req.Data)
 	switch {
 	case errors.Is(err, io.EOF):
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		httputil2.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	case err != nil:
-		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 	if len(req.Data) == 0 {
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		httputil2.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	}
 
@@ -279,12 +278,12 @@ func (s *Server) SubmitAggregateAndProofs(w http.ResponseWriter, r *http.Request
 		var signedAggregate structs.SignedAggregateAttestationAndProof
 		err := json.Unmarshal(item, &signedAggregate)
 		if err != nil {
-			httputil.HandleError(w, "Could not decode item: "+err.Error(), http.StatusBadRequest)
+			httputil2.HandleError(w, "Could not decode item: "+err.Error(), http.StatusBadRequest)
 			return
 		}
 		consensusItem, err := signedAggregate.ToConsensus()
 		if err != nil {
-			httputil.HandleError(w, "Could not convert request aggregate to consensus aggregate: "+err.Error(), http.StatusBadRequest)
+			httputil2.HandleError(w, "Could not convert request aggregate to consensus aggregate: "+err.Error(), http.StatusBadRequest)
 			return
 		}
 		rpcError := s.CoreService.SubmitSignedAggregateSelectionProof(ctx, consensusItem)
@@ -294,14 +293,14 @@ func (s *Server) SubmitAggregateAndProofs(w http.ResponseWriter, r *http.Request
 			if ok {
 				broadcastFailed = true
 			} else {
-				httputil.HandleError(w, rpcError.Err.Error(), core.ErrorReasonToHTTP(rpcError.Reason))
+				httputil2.HandleError(w, rpcError.Err.Error(), core.ErrorReasonToHTTP(rpcError.Reason))
 				return
 			}
 		}
 	}
 
 	if broadcastFailed {
-		httputil.HandleError(w, "Could not broadcast one or more signed aggregated attestations", http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not broadcast one or more signed aggregated attestations", http.StatusInternalServerError)
 	}
 }
 
@@ -313,24 +312,24 @@ func (s *Server) SubmitAggregateAndProofsV2(w http.ResponseWriter, r *http.Reque
 	var reqData []json.RawMessage
 	if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
 		if errors.Is(err, io.EOF) {
-			httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+			httputil2.HandleError(w, "No data submitted", http.StatusBadRequest)
 		} else {
-			httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+			httputil2.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
 		}
 		return
 	}
 	if len(reqData) == 0 {
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		httputil2.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	}
 
-	versionHeader := r.Header.Get(api.VersionHeader)
+	versionHeader := r.Header.Get(httputil2.VersionHeader)
 	if versionHeader == "" {
-		httputil.HandleError(w, api.VersionHeader+" header is required", http.StatusBadRequest)
+		httputil2.HandleError(w, httputil2.VersionHeader+" header is required", http.StatusBadRequest)
 	}
 	v, err := version.FromString(versionHeader)
 	if err != nil {
-		httputil.HandleError(w, "Invalid version: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "Invalid version: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -341,12 +340,12 @@ func (s *Server) SubmitAggregateAndProofsV2(w http.ResponseWriter, r *http.Reque
 			var signedAggregate structs.SignedAggregateAttestationAndProofElectra
 			err = json.Unmarshal(raw, &signedAggregate)
 			if err != nil {
-				httputil.HandleError(w, "Failed to parse aggregate attestation and proof: "+err.Error(), http.StatusBadRequest)
+				httputil2.HandleError(w, "Failed to parse aggregate attestation and proof: "+err.Error(), http.StatusBadRequest)
 				return
 			}
 			consensusItem, err := signedAggregate.ToConsensus()
 			if err != nil {
-				httputil.HandleError(w, "Could not convert request aggregate to consensus aggregate: "+err.Error(), http.StatusBadRequest)
+				httputil2.HandleError(w, "Could not convert request aggregate to consensus aggregate: "+err.Error(), http.StatusBadRequest)
 				return
 			}
 			rpcError = s.CoreService.SubmitSignedAggregateSelectionProof(ctx, consensusItem)
@@ -354,12 +353,12 @@ func (s *Server) SubmitAggregateAndProofsV2(w http.ResponseWriter, r *http.Reque
 			var signedAggregate structs.SignedAggregateAttestationAndProof
 			err = json.Unmarshal(raw, &signedAggregate)
 			if err != nil {
-				httputil.HandleError(w, "Failed to parse aggregate attestation and proof: "+err.Error(), http.StatusBadRequest)
+				httputil2.HandleError(w, "Failed to parse aggregate attestation and proof: "+err.Error(), http.StatusBadRequest)
 				return
 			}
 			consensusItem, err := signedAggregate.ToConsensus()
 			if err != nil {
-				httputil.HandleError(w, "Could not convert request aggregate to consensus aggregate: "+err.Error(), http.StatusBadRequest)
+				httputil2.HandleError(w, "Could not convert request aggregate to consensus aggregate: "+err.Error(), http.StatusBadRequest)
 				return
 			}
 			rpcError = s.CoreService.SubmitSignedAggregateSelectionProof(ctx, consensusItem)
@@ -370,13 +369,13 @@ func (s *Server) SubmitAggregateAndProofsV2(w http.ResponseWriter, r *http.Reque
 			if errors.As(rpcError.Err, &aggregateBroadcastFailedError) {
 				broadcastFailed = true
 			} else {
-				httputil.HandleError(w, rpcError.Err.Error(), core.ErrorReasonToHTTP(rpcError.Reason))
+				httputil2.HandleError(w, rpcError.Err.Error(), core.ErrorReasonToHTTP(rpcError.Reason))
 				return
 			}
 		}
 	}
 	if broadcastFailed {
-		httputil.HandleError(w, "Could not broadcast one or more signed aggregated attestations", http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not broadcast one or more signed aggregated attestations", http.StatusInternalServerError)
 	}
 }
 
@@ -397,20 +396,20 @@ func (s *Server) SubmitSyncCommitteeSubscription(w http.ResponseWriter, r *http.
 	err := json.NewDecoder(r.Body).Decode(&req.Data)
 	switch {
 	case errors.Is(err, io.EOF):
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		httputil2.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	case err != nil:
-		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 	if len(req.Data) == 0 {
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		httputil2.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	}
 
 	st, err := s.HeadFetcher.HeadStateReadOnly(ctx)
 	if err != nil {
-		httputil.HandleError(w, "Could not get head state: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not get head state: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	currEpoch := slots.ToEpoch(st.Slot())
@@ -419,13 +418,13 @@ func (s *Server) SubmitSyncCommitteeSubscription(w http.ResponseWriter, r *http.
 	for i, item := range req.Data {
 		consensusItem, err := item.ToConsensus()
 		if err != nil {
-			httputil.HandleError(w, "Could not convert request subscription to consensus subscription: "+err.Error(), http.StatusBadRequest)
+			httputil2.HandleError(w, "Could not convert request subscription to consensus subscription: "+err.Error(), http.StatusBadRequest)
 			return
 		}
 		subscriptions[i] = consensusItem
 		val, err := st.ValidatorAtIndexReadOnly(consensusItem.ValidatorIndex)
 		if err != nil {
-			httputil.HandleError(
+			httputil2.HandleError(
 				w,
 				fmt.Sprintf("Could not get validator at index %d: %s", consensusItem.ValidatorIndex, err.Error()),
 				http.StatusInternalServerError,
@@ -434,7 +433,7 @@ func (s *Server) SubmitSyncCommitteeSubscription(w http.ResponseWriter, r *http.
 		}
 		valStatus, err := rpchelpers.ValidatorSubStatus(val, currEpoch)
 		if err != nil {
-			httputil.HandleError(
+			httputil2.HandleError(
 				w,
 				fmt.Sprintf("Could not get validator status at index %d: %s", consensusItem.ValidatorIndex, err.Error()),
 				http.StatusInternalServerError,
@@ -442,7 +441,7 @@ func (s *Server) SubmitSyncCommitteeSubscription(w http.ResponseWriter, r *http.
 			return
 		}
 		if valStatus != validator2.ActiveOngoing && valStatus != validator2.ActiveExiting {
-			httputil.HandleError(
+			httputil2.HandleError(
 				w,
 				fmt.Sprintf("Validator at index %d is not active or exiting", consensusItem.ValidatorIndex),
 				http.StatusBadRequest,
@@ -454,13 +453,13 @@ func (s *Server) SubmitSyncCommitteeSubscription(w http.ResponseWriter, r *http.
 
 	startEpoch, err := slots.SyncCommitteePeriodStartEpoch(currEpoch)
 	if err != nil {
-		httputil.HandleError(w, "Could not get sync committee period start epoch: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not get sync committee period start epoch: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	for i, sub := range subscriptions {
 		if sub.UntilEpoch <= currEpoch {
-			httputil.HandleError(
+			httputil2.HandleError(
 				w,
 				fmt.Sprintf("Epoch for subscription at index %d is in the past. It must be at least %d", i, currEpoch+1),
 				http.StatusBadRequest,
@@ -469,7 +468,7 @@ func (s *Server) SubmitSyncCommitteeSubscription(w http.ResponseWriter, r *http.
 		}
 		maxValidUntilEpoch := startEpoch + params.BeaconConfig().EpochsPerSyncCommitteePeriod*2
 		if sub.UntilEpoch > maxValidUntilEpoch {
-			httputil.HandleError(
+			httputil2.HandleError(
 				w,
 				fmt.Sprintf("Epoch for subscription at index %d is too far in the future. It can be at most %d", i, maxValidUntilEpoch),
 				http.StatusBadRequest,
@@ -507,20 +506,20 @@ func (s *Server) SubmitBeaconCommitteeSubscription(w http.ResponseWriter, r *htt
 	err := json.NewDecoder(r.Body).Decode(&req.Data)
 	switch {
 	case errors.Is(err, io.EOF):
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		httputil2.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	case err != nil:
-		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 	if len(req.Data) == 0 {
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		httputil2.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	}
 
 	st, err := s.HeadFetcher.HeadStateReadOnly(ctx)
 	if err != nil {
-		httputil.HandleError(w, "Could not get head state: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not get head state: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -530,17 +529,17 @@ func (s *Server) SubmitBeaconCommitteeSubscription(w http.ResponseWriter, r *htt
 	for i, item := range req.Data {
 		consensusItem, err := item.ToConsensus()
 		if err != nil {
-			httputil.HandleError(w, "Could not convert request subscription to consensus subscription: "+err.Error(), http.StatusBadRequest)
+			httputil2.HandleError(w, "Could not convert request subscription to consensus subscription: "+err.Error(), http.StatusBadRequest)
 			return
 		}
 		subscriptions[i] = consensusItem
 		val, err := st.ValidatorAtIndexReadOnly(consensusItem.ValidatorIndex)
 		if err != nil {
 			if errors.Is(err, consensus_types.ErrOutOfBounds) {
-				httputil.HandleError(w, "Could not get validator: "+err.Error(), http.StatusBadRequest)
+				httputil2.HandleError(w, "Could not get validator: "+err.Error(), http.StatusBadRequest)
 				return
 			}
-			httputil.HandleError(w, "Could not get validator: "+err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, "Could not get validator: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		validators[i] = val
@@ -558,7 +557,7 @@ func (s *Server) SubmitBeaconCommitteeSubscription(w http.ResponseWriter, r *htt
 	// Request the head validator indices of epoch represented by the first requested slot.
 	currValsLen, err := fetchValsLen(subscriptions[0].Slot)
 	if err != nil {
-		httputil.HandleError(w, "Could not retrieve head validator length: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not retrieve head validator length: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	currEpoch := slots.ToEpoch(subscriptions[0].Slot)
@@ -567,7 +566,7 @@ func (s *Server) SubmitBeaconCommitteeSubscription(w http.ResponseWriter, r *htt
 		if currEpoch != slots.ToEpoch(sub.Slot) {
 			currValsLen, err = fetchValsLen(sub.Slot)
 			if err != nil {
-				httputil.HandleError(w, "Could not retrieve head validator length: "+err.Error(), http.StatusInternalServerError)
+				httputil2.HandleError(w, "Could not retrieve head validator length: "+err.Error(), http.StatusInternalServerError)
 				return
 			}
 			currEpoch = slots.ToEpoch(sub.Slot)
@@ -605,7 +604,7 @@ func (s *Server) GetAttestationData(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if rpcError != nil {
-		httputil.HandleError(w, rpcError.Err.Error(), core.ErrorReasonToHTTP(rpcError.Reason))
+		httputil2.HandleError(w, rpcError.Err.Error(), core.ErrorReasonToHTTP(rpcError.Reason))
 		return
 	}
 
@@ -624,7 +623,7 @@ func (s *Server) GetAttestationData(w http.ResponseWriter, r *http.Request) {
 			},
 		},
 	}
-	httputil.WriteJson(w, response)
+	httputil2.WriteJson(w, response)
 }
 
 // ProduceSyncCommitteeContribution requests that the beacon node produce a sync committee contribution.
@@ -634,11 +633,11 @@ func (s *Server) ProduceSyncCommitteeContribution(w http.ResponseWriter, r *http
 
 	isOptimistic, err := s.OptimisticModeFetcher.IsOptimistic(ctx)
 	if err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if isOptimistic {
-		httputil.HandleError(w, "Beacon node is currently syncing and not serving request on that endpoint", http.StatusServiceUnavailable)
+		httputil2.HandleError(w, "Beacon node is currently syncing and not serving request on that endpoint", http.StatusServiceUnavailable)
 		return
 	}
 
@@ -653,7 +652,7 @@ func (s *Server) ProduceSyncCommitteeContribution(w http.ResponseWriter, r *http
 	rawBlockRoot := r.URL.Query().Get("beacon_block_root")
 	blockRoot, err := hexutil.Decode(rawBlockRoot)
 	if err != nil {
-		httputil.HandleError(w, "Invalid Beacon Block Root: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "Invalid Beacon Block Root: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 	contribution, ok := s.produceSyncCommitteeContribution(ctx, w, primitives.Slot(slot), index, blockRoot)
@@ -663,7 +662,7 @@ func (s *Server) ProduceSyncCommitteeContribution(w http.ResponseWriter, r *http
 	response := &structs.ProduceSyncCommitteeContributionResponse{
 		Data: contribution,
 	}
-	httputil.WriteJson(w, response)
+	httputil2.WriteJson(w, response)
 }
 
 // ProduceSyncCommitteeContribution requests that the beacon node produce a sync committee contribution.
@@ -676,11 +675,11 @@ func (s *Server) produceSyncCommitteeContribution(
 ) (*structs.SyncCommitteeContribution, bool) {
 	msgs, err := s.SyncCommitteePool.SyncCommitteeMessages(slot)
 	if err != nil {
-		httputil.HandleError(w, "Could not get sync subcommittee messages: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not get sync subcommittee messages: "+err.Error(), http.StatusInternalServerError)
 		return nil, false
 	}
 	if len(msgs) == 0 {
-		httputil.HandleError(w, "No subcommittee messages found", http.StatusNotFound)
+		httputil2.HandleError(w, "No subcommittee messages found", http.StatusNotFound)
 		return nil, false
 	}
 	sig, aggregatedBits, err := s.CoreService.AggregatedSigAndAggregationBits(
@@ -693,7 +692,7 @@ func (s *Server) produceSyncCommitteeContribution(
 		},
 	)
 	if err != nil {
-		httputil.HandleError(w, "Could not get contribution data: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not get contribution data: "+err.Error(), http.StatusInternalServerError)
 		return nil, false
 	}
 
@@ -712,7 +711,7 @@ func (s *Server) RegisterValidator(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 
 	if s.BlockBuilder == nil || !s.BlockBuilder.Configured() {
-		httputil.HandleError(w, fmt.Sprintf("Could not register block builder: %v", builder.ErrNoBuilder), http.StatusBadRequest)
+		httputil2.HandleError(w, fmt.Sprintf("Could not register block builder: %v", builder.ErrNoBuilder), http.StatusBadRequest)
 		return
 	}
 
@@ -720,10 +719,10 @@ func (s *Server) RegisterValidator(w http.ResponseWriter, r *http.Request) {
 	err := json.NewDecoder(r.Body).Decode(&jsonRegistrations)
 	switch {
 	case errors.Is(err, io.EOF):
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		httputil2.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	case err != nil:
-		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -731,18 +730,18 @@ func (s *Server) RegisterValidator(w http.ResponseWriter, r *http.Request) {
 	for i, registration := range jsonRegistrations {
 		reg, err := registration.ToConsensus()
 		if err != nil {
-			httputil.HandleError(w, err.Error(), http.StatusBadRequest)
+			httputil2.HandleError(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
 		registrations[i] = reg
 	}
 	if len(registrations) == 0 {
-		httputil.HandleError(w, "Validator registration request is empty", http.StatusBadRequest)
+		httputil2.HandleError(w, "Validator registration request is empty", http.StatusBadRequest)
 		return
 	}
 	if err := s.BlockBuilder.RegisterValidator(ctx, registrations); err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 }
@@ -753,10 +752,10 @@ func (s *Server) PrepareBeaconProposer(w http.ResponseWriter, r *http.Request) {
 	err := json.NewDecoder(r.Body).Decode(&jsonFeeRecipients)
 	switch {
 	case errors.Is(err, io.EOF):
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		httputil2.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	case err != nil:
-		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 	var validatorIndices []primitives.ValidatorIndex
@@ -813,14 +812,14 @@ func (s *Server) GetAttesterDuties(w http.ResponseWriter, r *http.Request) {
 	err := json.NewDecoder(r.Body).Decode(&indices)
 	switch {
 	case errors.Is(err, io.EOF):
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		httputil2.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	case err != nil:
-		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 	if len(indices) == 0 {
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		httputil2.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	}
 	requestedValIndices := make([]primitives.ValidatorIndex, len(indices))
@@ -836,7 +835,7 @@ func (s *Server) GetAttesterDuties(w http.ResponseWriter, r *http.Request) {
 	currentEpoch := slots.ToEpoch(cs)
 	nextEpoch := currentEpoch + 1
 	if requestedEpoch > nextEpoch {
-		httputil.HandleError(
+		httputil2.HandleError(
 			w,
 			fmt.Sprintf("Request epoch %d can not be greater than next epoch %d", requestedEpoch, nextEpoch),
 			http.StatusBadRequest,
@@ -851,24 +850,24 @@ func (s *Server) GetAttesterDuties(w http.ResponseWriter, r *http.Request) {
 		startSlot, err = slots.EpochStart(requestedEpoch)
 	}
 	if err != nil {
-		httputil.HandleError(w, fmt.Sprintf("Could not get start slot from epoch %d: %v", requestedEpoch, err), http.StatusInternalServerError)
+		httputil2.HandleError(w, fmt.Sprintf("Could not get start slot from epoch %d: %v", requestedEpoch, err), http.StatusInternalServerError)
 		return
 	}
 
 	st, err := s.Stater.StateBySlot(ctx, startSlot)
 	if err != nil {
-		httputil.HandleError(w, "Could not get state: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not get state: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	assignments, err := helpers.CommitteeAssignments(ctx, st, requestedEpoch, requestedValIndices)
 	if err != nil {
-		httputil.HandleError(w, "Could not compute committee assignments: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not compute committee assignments: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	activeValidatorCount, err := helpers.ActiveValidatorCount(ctx, st, requestedEpoch)
 	if err != nil {
-		httputil.HandleError(w, "Could not get active validator count: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not get active validator count: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	committeesAtSlot := helpers.SlotCommitteeCount(activeValidatorCount)
@@ -878,7 +877,7 @@ func (s *Server) GetAttesterDuties(w http.ResponseWriter, r *http.Request) {
 		pubkey := st.PubkeyAtIndex(index)
 		var zeroPubkey [fieldparams.BLSPubkeyLength]byte
 		if bytes.Equal(pubkey[:], zeroPubkey[:]) {
-			httputil.HandleError(w, fmt.Sprintf("Invalid validator index %d", index), http.StatusBadRequest)
+			httputil2.HandleError(w, fmt.Sprintf("Invalid validator index %d", index), http.StatusBadRequest)
 			return
 		}
 		committee := assignments[index]
@@ -909,20 +908,20 @@ func (s *Server) GetAttesterDuties(w http.ResponseWriter, r *http.Request) {
 	if requestedEpoch <= 1 {
 		r, err := s.BeaconDB.GenesisBlockRoot(ctx)
 		if err != nil {
-			httputil.HandleError(w, "Could not get genesis block root: "+err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, "Could not get genesis block root: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		dependentRoot = r[:]
 	} else {
 		dependentRoot, err = attestationDependentRoot(st, requestedEpoch)
 		if err != nil {
-			httputil.HandleError(w, "Could not get dependent root: "+err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, "Could not get dependent root: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 	}
 	isOptimistic, err := s.OptimisticModeFetcher.IsOptimistic(ctx)
 	if err != nil {
-		httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -931,7 +930,7 @@ func (s *Server) GetAttesterDuties(w http.ResponseWriter, r *http.Request) {
 		Data:                duties,
 		ExecutionOptimistic: isOptimistic,
 	}
-	httputil.WriteJson(w, response)
+	httputil2.WriteJson(w, response)
 }
 
 // GetProposerDuties requests beacon node to provide all validators that are scheduled to propose a block in the given epoch.
@@ -954,7 +953,7 @@ func (s *Server) GetProposerDuties(w http.ResponseWriter, r *http.Request) {
 	nextEpoch := currentEpoch + 1
 	var nextEpochLookahead bool
 	if requestedEpoch > nextEpoch {
-		httputil.HandleError(
+		httputil2.HandleError(
 			w,
 			fmt.Sprintf("Request epoch %d can not be greater than next epoch %d", requestedEpoch, currentEpoch+1),
 			http.StatusBadRequest,
@@ -968,7 +967,7 @@ func (s *Server) GetProposerDuties(w http.ResponseWriter, r *http.Request) {
 
 	epochStartSlot, err := slots.EpochStart(requestedEpoch)
 	if err != nil {
-		httputil.HandleError(w, fmt.Sprintf("Could not get start slot of epoch %d: %v", requestedEpoch, err), http.StatusInternalServerError)
+		httputil2.HandleError(w, fmt.Sprintf("Could not get start slot of epoch %d: %v", requestedEpoch, err), http.StatusInternalServerError)
 		return
 	}
 	var st state.BeaconState
@@ -976,25 +975,25 @@ func (s *Server) GetProposerDuties(w http.ResponseWriter, r *http.Request) {
 	if requestedEpoch < currentEpoch {
 		st, err = s.Stater.StateBySlot(ctx, epochStartSlot)
 		if err != nil {
-			httputil.HandleError(w, fmt.Sprintf("Could not get state for slot %d: %v ", epochStartSlot, err), http.StatusInternalServerError)
+			httputil2.HandleError(w, fmt.Sprintf("Could not get state for slot %d: %v ", epochStartSlot, err), http.StatusInternalServerError)
 			return
 		}
 	} else {
 		st, err = s.HeadFetcher.HeadState(ctx)
 		if err != nil {
-			httputil.HandleError(w, fmt.Sprintf("Could not get head state: %v ", err), http.StatusInternalServerError)
+			httputil2.HandleError(w, fmt.Sprintf("Could not get head state: %v ", err), http.StatusInternalServerError)
 			return
 		}
 		// Advance state with empty transitions up to the requested epoch start slot.
 		if st.Slot() < epochStartSlot {
 			headRoot, err := s.HeadFetcher.HeadRoot(ctx)
 			if err != nil {
-				httputil.HandleError(w, fmt.Sprintf("Could not get head root: %v ", err), http.StatusInternalServerError)
+				httputil2.HandleError(w, fmt.Sprintf("Could not get head root: %v ", err), http.StatusInternalServerError)
 				return
 			}
 			st, err = transition.ProcessSlotsUsingNextSlotCache(ctx, st, headRoot, epochStartSlot)
 			if err != nil {
-				httputil.HandleError(w, fmt.Sprintf("Could not process slots up to %d: %v ", epochStartSlot, err), http.StatusInternalServerError)
+				httputil2.HandleError(w, fmt.Sprintf("Could not process slots up to %d: %v ", epochStartSlot, err), http.StatusInternalServerError)
 				return
 			}
 		}
@@ -1007,7 +1006,7 @@ func (s *Server) GetProposerDuties(w http.ResponseWriter, r *http.Request) {
 		assignments, err = helpers.ProposerAssignments(ctx, st, requestedEpoch)
 	}
 	if err != nil {
-		httputil.HandleError(w, "Could not compute committee assignments: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not compute committee assignments: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -1015,7 +1014,7 @@ func (s *Server) GetProposerDuties(w http.ResponseWriter, r *http.Request) {
 	for index, proposalSlots := range assignments {
 		val, err := st.ValidatorAtIndexReadOnly(index)
 		if err != nil {
-			httputil.HandleError(w, fmt.Sprintf("Could not get validator at index %d: %v", index, err), http.StatusInternalServerError)
+			httputil2.HandleError(w, fmt.Sprintf("Could not get validator at index %d: %v", index, err), http.StatusInternalServerError)
 			return
 		}
 		pubkey48 := val.PublicKey()
@@ -1033,20 +1032,20 @@ func (s *Server) GetProposerDuties(w http.ResponseWriter, r *http.Request) {
 	if requestedEpoch == 0 {
 		r, err := s.BeaconDB.GenesisBlockRoot(ctx)
 		if err != nil {
-			httputil.HandleError(w, "Could not get genesis block root: "+err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, "Could not get genesis block root: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		dependentRoot = r[:]
 	} else {
 		dependentRoot, err = proposalDependentRoot(st, requestedEpoch)
 		if err != nil {
-			httputil.HandleError(w, "Could not get dependent root: "+err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, "Could not get dependent root: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 	}
 	isOptimistic, err := s.OptimisticModeFetcher.IsOptimistic(ctx)
 	if err != nil {
-		httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if !sortProposerDuties(w, duties) {
@@ -1058,7 +1057,7 @@ func (s *Server) GetProposerDuties(w http.ResponseWriter, r *http.Request) {
 		Data:                duties,
 		ExecutionOptimistic: isOptimistic,
 	}
-	httputil.WriteJson(w, resp)
+	httputil2.WriteJson(w, resp)
 }
 
 // GetSyncCommitteeDuties provides a set of sync committee duties for a particular epoch.
@@ -1086,21 +1085,21 @@ func (s *Server) GetSyncCommitteeDuties(w http.ResponseWriter, r *http.Request) 
 	}
 	requestedEpoch := primitives.Epoch(requestedEpochUint)
 	if requestedEpoch < params.BeaconConfig().AltairForkEpoch {
-		httputil.HandleError(w, "Sync committees are not supported for Phase0", http.StatusBadRequest)
+		httputil2.HandleError(w, "Sync committees are not supported for Phase0", http.StatusBadRequest)
 		return
 	}
 	var indices []string
 	err := json.NewDecoder(r.Body).Decode(&indices)
 	switch {
 	case errors.Is(err, io.EOF):
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		httputil2.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	case err != nil:
-		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 	if len(indices) == 0 {
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		httputil2.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	}
 	requestedValIndices := make([]primitives.ValidatorIndex, len(indices))
@@ -1115,7 +1114,7 @@ func (s *Server) GetSyncCommitteeDuties(w http.ResponseWriter, r *http.Request) 
 	currentEpoch := slots.ToEpoch(s.TimeFetcher.CurrentSlot())
 	lastValidEpoch := syncCommitteeDutiesLastValidEpoch(currentEpoch)
 	if requestedEpoch > lastValidEpoch {
-		httputil.HandleError(w, fmt.Sprintf("Epoch is too far in the future, maximum valid epoch is %d", lastValidEpoch), http.StatusBadRequest)
+		httputil2.HandleError(w, fmt.Sprintf("Epoch is too far in the future, maximum valid epoch is %d", lastValidEpoch), http.StatusBadRequest)
 		return
 	}
 
@@ -1125,18 +1124,18 @@ func (s *Server) GetSyncCommitteeDuties(w http.ResponseWriter, r *http.Request) 
 	}
 	slot, err := slots.EpochStart(startingEpoch)
 	if err != nil {
-		httputil.HandleError(w, "Could not get sync committee slot: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not get sync committee slot: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	st, err := s.Stater.State(ctx, []byte(strconv.FormatUint(uint64(slot), 10)))
 	if err != nil {
-		httputil.HandleError(w, "Could not get sync committee state: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not get sync committee state: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	currentSyncCommitteeFirstEpoch, err := slots.SyncCommitteePeriodStartEpoch(startingEpoch)
 	if err != nil {
-		httputil.HandleError(w, "Could not get sync committee period start epoch: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not get sync committee period start epoch: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	nextSyncCommitteeFirstEpoch := currentSyncCommitteeFirstEpoch + params.BeaconConfig().EpochsPerSyncCommitteePeriod
@@ -1145,13 +1144,13 @@ func (s *Server) GetSyncCommitteeDuties(w http.ResponseWriter, r *http.Request) 
 	if isCurrentCommitteeRequested {
 		committee, err = st.CurrentSyncCommittee()
 		if err != nil {
-			httputil.HandleError(w, "Could not get sync committee: "+err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, "Could not get sync committee: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 	} else {
 		committee, err = st.NextSyncCommittee()
 		if err != nil {
-			httputil.HandleError(w, "Could not get sync committee: "+err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, "Could not get sync committee: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 	}
@@ -1162,7 +1161,7 @@ func (s *Server) GetSyncCommitteeDuties(w http.ResponseWriter, r *http.Request) 
 	}
 	duties, vals, err := syncCommitteeDutiesAndVals(st, requestedValIndices, committeePubkeys)
 	if err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -1176,18 +1175,18 @@ func (s *Server) GetSyncCommitteeDuties(w http.ResponseWriter, r *http.Request) 
 		pk := v.PublicKey()
 		valStatus, err := rpchelpers.ValidatorStatus(v, requestedEpoch)
 		if err != nil {
-			httputil.HandleError(w, "Could not get validator status: "+err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, "Could not get validator status: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		if err := registerSyncSubnet(st, requestedEpoch, pk[:], valStatus); err != nil {
-			httputil.HandleError(w, fmt.Sprintf("Could not register sync subnet for pubkey %#x", pk), http.StatusInternalServerError)
+			httputil2.HandleError(w, fmt.Sprintf("Could not register sync subnet for pubkey %#x", pk), http.StatusInternalServerError)
 			return
 		}
 	}
 
 	isOptimistic, err := s.OptimisticModeFetcher.IsOptimistic(ctx)
 	if err != nil {
-		httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -1195,7 +1194,7 @@ func (s *Server) GetSyncCommitteeDuties(w http.ResponseWriter, r *http.Request) 
 		Data:                duties,
 		ExecutionOptimistic: isOptimistic,
 	}
-	httputil.WriteJson(w, resp)
+	httputil2.WriteJson(w, resp)
 }
 
 // GetLiveness requests the beacon node to indicate if a validator has been observed to be live in a given epoch.
@@ -1218,14 +1217,14 @@ func (s *Server) GetLiveness(w http.ResponseWriter, r *http.Request) {
 	err := json.NewDecoder(r.Body).Decode(&indices)
 	switch {
 	case errors.Is(err, io.EOF):
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		httputil2.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	case err != nil:
-		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 	if len(indices) == 0 {
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		httputil2.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	}
 	requestedValIndices := make([]primitives.ValidatorIndex, len(indices))
@@ -1243,12 +1242,12 @@ func (s *Server) GetLiveness(w http.ResponseWriter, r *http.Request) {
 	// We can also use the head state to get participation info for the previous epoch.
 	headSt, err := s.HeadFetcher.HeadState(ctx)
 	if err != nil {
-		httputil.HandleError(w, "Could not get head state: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not get head state: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	currEpoch := slots.ToEpoch(headSt.Slot())
 	if requestedEpoch > currEpoch {
-		httputil.HandleError(w, "Requested epoch cannot be in the future", http.StatusBadRequest)
+		httputil2.HandleError(w, "Requested epoch cannot be in the future", http.StatusBadRequest)
 		return
 	}
 
@@ -1258,30 +1257,30 @@ func (s *Server) GetLiveness(w http.ResponseWriter, r *http.Request) {
 		st = headSt
 		participation, err = st.CurrentEpochParticipation()
 		if err != nil {
-			httputil.HandleError(w, "Could not get current epoch participation: "+err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, "Could not get current epoch participation: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 	} else if requestedEpoch == currEpoch-1 {
 		st = headSt
 		participation, err = st.PreviousEpochParticipation()
 		if err != nil {
-			httputil.HandleError(w, "Could not get previous epoch participation: "+err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, "Could not get previous epoch participation: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 	} else {
 		epochEnd, err := slots.EpochEnd(requestedEpoch)
 		if err != nil {
-			httputil.HandleError(w, "Could not get requested epoch's end slot: "+err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, "Could not get requested epoch's end slot: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		st, err = s.Stater.StateBySlot(ctx, epochEnd)
 		if err != nil {
-			httputil.HandleError(w, "Could not get slot for requested epoch: "+err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, "Could not get slot for requested epoch: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		participation, err = st.CurrentEpochParticipation()
 		if err != nil {
-			httputil.HandleError(w, "Could not get current epoch participation: "+err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, "Could not get current epoch participation: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 	}
@@ -1291,7 +1290,7 @@ func (s *Server) GetLiveness(w http.ResponseWriter, r *http.Request) {
 	}
 	for i, vi := range requestedValIndices {
 		if vi >= primitives.ValidatorIndex(len(participation)) {
-			httputil.HandleError(w, fmt.Sprintf("Validator index %d is invalid", vi), http.StatusBadRequest)
+			httputil2.HandleError(w, fmt.Sprintf("Validator index %d is invalid", vi), http.StatusBadRequest)
 			return
 		}
 		resp.Data[i] = &structs.Liveness{
@@ -1300,19 +1299,19 @@ func (s *Server) GetLiveness(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	httputil.WriteJson(w, resp)
+	httputil2.WriteJson(w, resp)
 }
 
 // BeaconCommitteeSelections responds with appropriate message and status code according the spec:
 // https://ethereum.github.io/beacon-APIs/#/Validator/submitBeaconCommitteeSelections.
 func (s *Server) BeaconCommitteeSelections(w http.ResponseWriter, _ *http.Request) {
-	httputil.HandleError(w, "Endpoint not implemented", 501)
+	httputil2.HandleError(w, "Endpoint not implemented", 501)
 }
 
 // SyncCommitteeSelections responds with appropriate message and status code according the spec:
 // https://ethereum.github.io/beacon-APIs/#/Validator/submitSyncCommitteeSelections.
 func (s *Server) SyncCommitteeSelections(w http.ResponseWriter, _ *http.Request) {
-	httputil.HandleError(w, "Endpoint not implemented", 501)
+	httputil2.HandleError(w, "Endpoint not implemented", 501)
 }
 
 // attestationDependentRoot is get_block_root_at_slot(state, compute_start_slot_at_epoch(epoch - 1) - 1)
@@ -1401,13 +1400,13 @@ func sortProposerDuties(w http.ResponseWriter, duties []*structs.ProposerDuty) b
 	sort.Slice(duties, func(i, j int) bool {
 		si, err := strconv.ParseUint(duties[i].Slot, 10, 64)
 		if err != nil {
-			httputil.HandleError(w, "Could not parse slot: "+err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, "Could not parse slot: "+err.Error(), http.StatusInternalServerError)
 			ok = false
 			return false
 		}
 		sj, err := strconv.ParseUint(duties[j].Slot, 10, 64)
 		if err != nil {
-			httputil.HandleError(w, "Could not parse slot: "+err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, "Could not parse slot: "+err.Error(), http.StatusInternalServerError)
 			ok = false
 			return false
 		}
