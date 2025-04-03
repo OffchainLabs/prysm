@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/api/apiutil"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
@@ -175,7 +176,7 @@ func TestGetStateValidators_Nominal_GET(t *testing.T) {
 		queryParams.Add("status", st)
 	}
 
-	query := buildURL("/eth/v1/beacon/states/head/validators", queryParams)
+	query := apiutil.BuildURL("/eth/v1/beacon/states/head/validators", queryParams)
 
 	jsonRestHandler.EXPECT().Get(
 		gomock.Any(),
@@ -244,7 +245,7 @@ func TestGetStateValidators_GetRestJsonResponseOnError(t *testing.T) {
 		queryParams.Add("status", st)
 	}
 
-	query := buildURL("/eth/v1/beacon/states/head/validators", queryParams)
+	query := apiutil.BuildURL("/eth/v1/beacon/states/head/validators", queryParams)
 
 	jsonRestHandler.EXPECT().Get(
 		gomock.Any(),
@@ -338,7 +339,7 @@ func TestGetStateValidators_DataIsNil_GET(t *testing.T) {
 		queryParams.Add("status", st)
 	}
 
-	query := buildURL("/eth/v1/beacon/states/head/validators", queryParams)
+	query := apiutil.BuildURL("/eth/v1/beacon/states/head/validators", queryParams)
 
 	jsonRestHandler.EXPECT().Get(
 		gomock.Any(),

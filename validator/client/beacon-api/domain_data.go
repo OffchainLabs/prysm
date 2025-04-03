@@ -7,6 +7,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/v5/network/forks"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
@@ -24,13 +25,13 @@ func (c *beaconApiValidatorClient) domainData(ctx context.Context, epoch primiti
 		return nil, errors.Wrapf(err, "failed to get genesis info")
 	}
 
-	if !validRoot(genesis.GenesisValidatorsRoot) {
-		return nil, errors.Errorf("invalid genesis validators root: %s", genesis.GenesisValidatorsRoot)
-	}
-
 	genesisValidatorRoot, err := hexutil.Decode(genesis.GenesisValidatorsRoot)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to decode genesis validators root")
+	}
+
+	if !bytesutil.IsValidRoot(genesisValidatorRoot) {
+		return nil, errors.Errorf("invalid genesis validators root: %s", genesis.GenesisValidatorsRoot)
 	}
 
 	signatureDomain, err := signing.Domain(fork, epoch, domainType, genesisValidatorRoot)
