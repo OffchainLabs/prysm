@@ -332,10 +332,6 @@ func (dcs *DataColumnStorage) Save(dataColumnSidecars []blocks.VerifiedRODataCol
 func (dcs *DataColumnStorage) saveFilesystem(root [fieldparams.RootLength]byte, epoch primitives.Epoch, dataColumnSidecars []blocks.VerifiedRODataColumn) error {
 	// Compute the file path.
 	filePath := filePath(root, epoch)
-	exists, err := afero.Exists(dcs.fs, filePath)
-	if err != nil {
-		return errors.Wrap(err, "afero exists")
-	}
 
 	dcs.pruneMu.RLock()
 	defer dcs.pruneMu.RUnlock()
@@ -345,6 +341,12 @@ func (dcs *DataColumnStorage) saveFilesystem(root [fieldparams.RootLength]byte, 
 
 	fileMu.Lock()
 	defer fileMu.Unlock()
+
+	// Check if the file exists.
+	exists, err := afero.Exists(dcs.fs, filePath)
+	if err != nil {
+		return errors.Wrap(err, "afero exists")
+	}
 
 	if exists {
 		if err := dcs.saveDataColumnSidecarsExistingFile(filePath, toStore); err != nil {
