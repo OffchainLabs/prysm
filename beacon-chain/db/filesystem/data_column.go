@@ -821,7 +821,8 @@ func (dcs *DataColumnStorage) metadata(file afero.File) (*metadata, error) {
 		return nil, ErrWrongVersion
 	}
 
-	// Read the SSZ encoded data column sidecar size.
+	// DataColumnSidecar is a variable sized ssz object, but all data columns for a block will be the same size.
+	// Saving the size of the sidecars for the block at bytes [1:5] allows us to represent offsets as multiples of this value, for compactness.
 	var encodedSszEncodedDataColumnSidecarSize [encodedSszEncodedDataColumnSidecarSizeSize]byte
 	countRead, err = file.Read(encodedSszEncodedDataColumnSidecarSize[:])
 	if err != nil {
