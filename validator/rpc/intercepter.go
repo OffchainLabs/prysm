@@ -5,8 +5,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/prysmaticlabs/prysm/v5/api"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
+	"github.com/prysmaticlabs/prysm/v5/api/httputil"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -38,7 +37,7 @@ func (s *Server) AuthTokenInterceptor() grpc.UnaryServerInterceptor {
 func (s *Server) AuthTokenHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// if it's not initialize or has a web prefix
-		if (strings.Contains(r.URL.Path, api.WebApiUrlPrefix) || strings.Contains(r.URL.Path, api.KeymanagerApiPrefix)) && !strings.Contains(r.URL.Path, api.SystemLogsPrefix) {
+		if (strings.Contains(r.URL.Path, httputil.WebApiUrlPrefix) || strings.Contains(r.URL.Path, httputil.KeymanagerApiPrefix)) && !strings.Contains(r.URL.Path, httputil.SystemLogsPrefix) {
 			// ignore some routes
 			reqToken := r.Header.Get("Authorization")
 			if reqToken == "" {

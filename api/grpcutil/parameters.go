@@ -1,4 +1,4 @@
-package grpc
+package grpcutil
 
 // CustomErrorMetadataKey is the name of the metadata key storing additional error information.
 // Metadata value is expected to be a byte-encoded JSON object.

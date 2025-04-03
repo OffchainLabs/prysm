@@ -8,7 +8,7 @@ import (
 	"net/http"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api"
+	"github.com/prysmaticlabs/prysm/v5/api/httputil"
 	"github.com/prysmaticlabs/prysm/v5/testing/endtoend/params"
 	log "github.com/sirupsen/logrus"
 )
@@ -50,7 +50,7 @@ func doJSONGetRequest(template, requestPath string, beaconNodeIdx int, resp inte
 
 	var body interface{}
 	if httpResp.StatusCode != http.StatusOK {
-		if httpResp.Header.Get("Content-Type") == api.JsonMediaType {
+		if httpResp.Header.Get("Content-Type") == httputil.JsonMediaType {
 			if err = json.NewDecoder(httpResp.Body).Decode(&body); err != nil {
 				return err
 			}
@@ -139,7 +139,7 @@ func doJSONPostRequest(template, requestPath string, beaconNodeIdx int, postObj,
 
 	var body interface{}
 	if httpResp.StatusCode != http.StatusOK {
-		if httpResp.Header.Get("Content-Type") == api.JsonMediaType {
+		if httpResp.Header.Get("Content-Type") == httputil.JsonMediaType {
 			if err = json.NewDecoder(httpResp.Body).Decode(&body); err != nil {
 				return err
 			}

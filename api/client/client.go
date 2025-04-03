@@ -8,12 +8,7 @@ import (
 	"net/url"
 
 	"github.com/pkg/errors"
-)
-
-const (
-	MaxBodySize      int64 = 1 << 23 // 8MB default, WithMaxBodySize can override
-	MaxBodySizeState int64 = 1 << 29 // 512MB
-	MaxErrBodySize   int64 = 1 << 17 // 128KB
+	"github.com/prysmaticlabs/prysm/v5/api/httputil"
 )
 
 // Client is a wrapper object around the HTTP client.
@@ -35,7 +30,7 @@ func NewClient(host string, opts ...ClientOpt) (*Client, error) {
 	c := &Client{
 		hc:          &http.Client{},
 		baseURL:     u,
-		maxBodySize: MaxBodySize,
+		maxBodySize: httputil.MaxBodySize,
 	}
 	for _, o := range opts {
 		o(c)
@@ -67,7 +62,7 @@ func urlForHost(h string) (*url.URL, error) {
 	// try to parse as host:port
 	host, port, err := net.SplitHostPort(h)
 	if err != nil {
-		return nil, ErrMalformedHostname
+		return nil, httputil.ErrMalformedHostname
 	}
 	return &url.URL{Host: net.JoinHostPort(host, port), Scheme: "http"}, nil
 }
@@ -95,7 +90,7 @@ func (c *Client) Get(ctx context.Context, path string, opts ...ReqOption) ([]byt
 		err = r.Body.Close()
 	}()
 	if r.StatusCode != http.StatusOK {
-		return nil, Non200Err(r)
+		return nil, httputil.Non200Err(r)
 	}
 	b, err := io.ReadAll(io.LimitReader(r.Body, c.maxBodySize))
 	if err != nil {

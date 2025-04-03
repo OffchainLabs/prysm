@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	httputil2 "github.com/prysmaticlabs/prysm/v5/api/httputil"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/altair"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/epoch/precompute"
@@ -17,7 +18,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/wealdtech/go-bytesutil"
@@ -36,28 +36,28 @@ func (s *Server) BlockRewards(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := blocks.BeaconBlockIsNil(blk); err != nil {
-		httputil.HandleError(w, fmt.Sprintf("block id %s was not found", blockId), http.StatusNotFound)
+		httputil2.HandleError(w, fmt.Sprintf("block id %s was not found", blockId), http.StatusNotFound)
 		return
 	}
 
 	if blk.Version() == version.Phase0 {
-		httputil.HandleError(w, "Block rewards are not supported for Phase 0 blocks", http.StatusBadRequest)
+		httputil2.HandleError(w, "Block rewards are not supported for Phase 0 blocks", http.StatusBadRequest)
 		return
 	}
 
 	optimistic, err := s.OptimisticModeFetcher.IsOptimistic(r.Context())
 	if err != nil {
-		httputil.HandleError(w, "Could not get optimistic mode info: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not get optimistic mode info: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	blkRoot, err := blk.Block().HashTreeRoot()
 	if err != nil {
-		httputil.HandleError(w, "Could not get block root: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not get block root: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	blockRewards, httpError := s.BlockRewardFetcher.GetBlockRewardsData(ctx, blk.Block())
 	if httpError != nil {
-		httputil.WriteError(w, httpError)
+		httputil2.WriteError(w, httpError)
 		return
 	}
 	response := &structs.BlockRewardsResponse{
@@ -65,7 +65,7 @@ func (s *Server) BlockRewards(w http.ResponseWriter, r *http.Request) {
 		ExecutionOptimistic: optimistic,
 		Finalized:           s.FinalizationFetcher.IsFinalized(ctx, blkRoot),
 	}
-	httputil.WriteJson(w, response)
+	httputil2.WriteJson(w, response)
 }
 
 // AttestationRewards retrieves attestation reward info for validators specified by array of public keys or validator index.
@@ -90,12 +90,12 @@ func (s *Server) AttestationRewards(w http.ResponseWriter, r *http.Request) {
 
 	optimistic, err := s.OptimisticModeFetcher.IsOptimistic(r.Context())
 	if err != nil {
-		httputil.HandleError(w, "Could not get optimistic mode info: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not get optimistic mode info: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	blkRoot, err := st.LatestBlockHeader().HashTreeRoot()
 	if err != nil {
-		httputil.HandleError(w, "Could not get block root: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not get block root: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -107,7 +107,7 @@ func (s *Server) AttestationRewards(w http.ResponseWriter, r *http.Request) {
 		ExecutionOptimistic: optimistic,
 		Finalized:           s.FinalizationFetcher.IsFinalized(r.Context(), blkRoot),
 	}
-	httputil.WriteJson(w, resp)
+	httputil2.WriteJson(w, resp)
 }
 
 // SyncCommitteeRewards retrieves rewards info for sync committee members specified by array of public keys or validator index.
@@ -123,18 +123,18 @@ func (s *Server) SyncCommitteeRewards(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if blk.Version() == version.Phase0 {
-		httputil.HandleError(w, "Sync committee rewards are not supported for Phase 0", http.StatusBadRequest)
+		httputil2.HandleError(w, "Sync committee rewards are not supported for Phase 0", http.StatusBadRequest)
 		return
 	}
 
 	st, httpErr := s.BlockRewardFetcher.GetStateForRewards(ctx, blk.Block())
 	if httpErr != nil {
-		httputil.WriteError(w, httpErr)
+		httputil2.WriteError(w, httpErr)
 		return
 	}
 	sa, err := blk.Block().Body().SyncAggregate()
 	if err != nil {
-		httputil.HandleError(w, "Could not get sync aggregate: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not get sync aggregate: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -146,14 +146,14 @@ func (s *Server) SyncCommitteeRewards(w http.ResponseWriter, r *http.Request) {
 	for i, valIdx := range valIndices {
 		preProcessBals[i], err = st.BalanceAtIndex(valIdx)
 		if err != nil {
-			httputil.HandleError(w, "Could not get validator's balance: "+err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, "Could not get validator's balance: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 	}
 
 	_, proposerReward, err := altair.ProcessSyncAggregate(r.Context(), st, sa)
 	if err != nil {
-		httputil.HandleError(w, "Could not get sync aggregate rewards: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not get sync aggregate rewards: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -162,7 +162,7 @@ func (s *Server) SyncCommitteeRewards(w http.ResponseWriter, r *http.Request) {
 	for i, valIdx := range valIndices {
 		bal, err := st.BalanceAtIndex(valIdx)
 		if err != nil {
-			httputil.HandleError(w, "Could not get validator's balance: "+err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, "Could not get validator's balance: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		rewards[i] = int(bal - preProcessBals[i]) // lint:ignore uintcast
@@ -173,12 +173,12 @@ func (s *Server) SyncCommitteeRewards(w http.ResponseWriter, r *http.Request) {
 
 	optimistic, err := s.OptimisticModeFetcher.IsOptimistic(r.Context())
 	if err != nil {
-		httputil.HandleError(w, "Could not get optimistic mode info: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not get optimistic mode info: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	blkRoot, err := blk.Block().HashTreeRoot()
 	if err != nil {
-		httputil.HandleError(w, "Could not get block root: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not get block root: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -194,35 +194,35 @@ func (s *Server) SyncCommitteeRewards(w http.ResponseWriter, r *http.Request) {
 		ExecutionOptimistic: optimistic,
 		Finalized:           s.FinalizationFetcher.IsFinalized(r.Context(), blkRoot),
 	}
-	httputil.WriteJson(w, response)
+	httputil2.WriteJson(w, response)
 }
 
 func (s *Server) attRewardsState(w http.ResponseWriter, r *http.Request) (state.BeaconState, bool) {
 	segments := strings.Split(r.URL.Path, "/")
 	requestedEpoch, err := strconv.ParseUint(segments[len(segments)-1], 10, 64)
 	if err != nil {
-		httputil.HandleError(w, "Could not decode epoch: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "Could not decode epoch: "+err.Error(), http.StatusBadRequest)
 		return nil, false
 	}
 	if primitives.Epoch(requestedEpoch) < params.BeaconConfig().AltairForkEpoch {
-		httputil.HandleError(w, "Attestation rewards are not supported for Phase 0", http.StatusNotFound)
+		httputil2.HandleError(w, "Attestation rewards are not supported for Phase 0", http.StatusNotFound)
 		return nil, false
 	}
 	currentEpoch := uint64(slots.ToEpoch(s.TimeFetcher.CurrentSlot()))
 	if requestedEpoch+1 >= currentEpoch {
-		httputil.HandleError(w,
+		httputil2.HandleError(w,
 			"Attestation rewards are available after two epoch transitions to ensure all attestations have a chance of inclusion",
 			http.StatusNotFound)
 		return nil, false
 	}
 	nextEpochEnd, err := slots.EpochEnd(primitives.Epoch(requestedEpoch + 1))
 	if err != nil {
-		httputil.HandleError(w, "Could not get next epoch's ending slot: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not get next epoch's ending slot: "+err.Error(), http.StatusInternalServerError)
 		return nil, false
 	}
 	st, err := s.Stater.StateBySlot(r.Context(), nextEpochEnd)
 	if err != nil {
-		httputil.HandleError(w, "Could not get state for epoch's starting slot: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not get state for epoch's starting slot: "+err.Error(), http.StatusInternalServerError)
 		return nil, false
 	}
 	return st, true
@@ -235,12 +235,12 @@ func attRewardsBalancesAndVals(
 ) (*precompute.Balance, []*precompute.Validator, []primitives.ValidatorIndex, bool) {
 	allVals, bal, err := altair.InitializePrecomputeValidators(r.Context(), st)
 	if err != nil {
-		httputil.HandleError(w, "Could not initialize precompute validators: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "Could not initialize precompute validators: "+err.Error(), http.StatusBadRequest)
 		return nil, nil, nil, false
 	}
 	allVals, bal, err = altair.ProcessEpochParticipation(r.Context(), st, bal, allVals)
 	if err != nil {
-		httputil.HandleError(w, "Could not process epoch participation: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "Could not process epoch participation: "+err.Error(), http.StatusBadRequest)
 		return nil, nil, nil, false
 	}
 	valIndices, ok := requestedValIndices(w, r, st, allVals)
@@ -294,7 +294,7 @@ func idealAttRewards(
 	}
 	deltas, err := altair.AttestationsDelta(st, bal, idealVals)
 	if err != nil {
-		httputil.HandleError(w, "Could not get attestations delta: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not get attestations delta: "+err.Error(), http.StatusInternalServerError)
 		return nil, false
 	}
 	for i, d := range deltas {
@@ -331,7 +331,7 @@ func totalAttRewards(
 	}
 	deltas, err := altair.AttestationsDelta(st, bal, vals)
 	if err != nil {
-		httputil.HandleError(w, "Could not get attestations delta: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not get attestations delta: "+err.Error(), http.StatusInternalServerError)
 		return nil, false
 	}
 	for i, d := range deltas {
@@ -362,7 +362,7 @@ func syncRewardsVals(
 ) ([]*precompute.Validator, []primitives.ValidatorIndex, bool) {
 	allVals, _, err := altair.InitializePrecomputeValidators(r.Context(), st)
 	if err != nil {
-		httputil.HandleError(w, "Could not initialize precompute validators: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "Could not initialize precompute validators: "+err.Error(), http.StatusBadRequest)
 		return nil, nil, false
 	}
 	valIndices, ok := requestedValIndices(w, r, st, allVals)
@@ -372,14 +372,14 @@ func syncRewardsVals(
 
 	sc, err := st.CurrentSyncCommittee()
 	if err != nil {
-		httputil.HandleError(w, "Could not get current sync committee: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "Could not get current sync committee: "+err.Error(), http.StatusBadRequest)
 		return nil, nil, false
 	}
 	allScIndices := make([]primitives.ValidatorIndex, len(sc.Pubkeys))
 	for i, pk := range sc.Pubkeys {
 		valIdx, ok := st.ValidatorIndexByPubkey(bytesutil.ToBytes48(pk))
 		if !ok {
-			httputil.HandleError(w, fmt.Sprintf("No validator index found for pubkey %#x", pk), http.StatusBadRequest)
+			httputil2.HandleError(w, fmt.Sprintf("No validator index found for pubkey %#x", pk), http.StatusBadRequest)
 			return nil, nil, false
 		}
 		allScIndices[i] = valIdx
@@ -404,7 +404,7 @@ func requestedValIndices(w http.ResponseWriter, r *http.Request, st state.Beacon
 	var rawValIds []string
 	if r.Body != http.NoBody {
 		if err := json.NewDecoder(r.Body).Decode(&rawValIds); err != nil {
-			httputil.HandleError(w, "Could not decode validators: "+err.Error(), http.StatusBadRequest)
+			httputil2.HandleError(w, "Could not decode validators: "+err.Error(), http.StatusBadRequest)
 			return nil, false
 		}
 	}
@@ -414,18 +414,18 @@ func requestedValIndices(w http.ResponseWriter, r *http.Request, st state.Beacon
 		if err != nil {
 			pubkey, err := bytesutil.FromHexString(v)
 			if err != nil || len(pubkey) != fieldparams.BLSPubkeyLength {
-				httputil.HandleError(w, fmt.Sprintf("%s is not a validator index or pubkey", v), http.StatusBadRequest)
+				httputil2.HandleError(w, fmt.Sprintf("%s is not a validator index or pubkey", v), http.StatusBadRequest)
 				return nil, false
 			}
 			var ok bool
 			valIndices[i], ok = st.ValidatorIndexByPubkey(bytesutil.ToBytes48(pubkey))
 			if !ok {
-				httputil.HandleError(w, fmt.Sprintf("No validator index found for pubkey %#x", pubkey), http.StatusBadRequest)
+				httputil2.HandleError(w, fmt.Sprintf("No validator index found for pubkey %#x", pubkey), http.StatusBadRequest)
 				return nil, false
 			}
 		} else {
 			if index >= uint64(st.NumValidators()) {
-				httputil.HandleError(w, fmt.Sprintf("Validator index %d is too large. Maximum allowed index is %d", index, st.NumValidators()-1), http.StatusBadRequest)
+				httputil2.HandleError(w, fmt.Sprintf("Validator index %d is too large. Maximum allowed index is %d", index, st.NumValidators()-1), http.StatusBadRequest)
 				return nil, false
 			}
 			valIndices[i] = primitives.ValidatorIndex(index)

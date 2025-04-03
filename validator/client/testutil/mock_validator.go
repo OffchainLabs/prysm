@@ -6,9 +6,9 @@ import (
 	"errors"
 	"time"
 
-	api "github.com/prysmaticlabs/prysm/v5/api/client"
 	"github.com/prysmaticlabs/prysm/v5/api/client/beacon"
 	"github.com/prysmaticlabs/prysm/v5/api/client/event"
+	"github.com/prysmaticlabs/prysm/v5/api/httputil"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/proposer"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
@@ -83,7 +83,7 @@ func (fv *FakeValidator) LogSubmittedSyncCommitteeMessages() {}
 func (fv *FakeValidator) WaitForChainStart(_ context.Context) error {
 	fv.WaitForChainStartCalled++
 	if fv.RetryTillSuccess >= fv.WaitForChainStartCalled {
-		return api.ErrConnectionIssue
+		return httputil.ErrConnectionIssue
 	}
 	return nil
 }
@@ -95,7 +95,7 @@ func (fv *FakeValidator) WaitForActivation(_ context.Context, accountChan chan [
 		return nil
 	}
 	if fv.RetryTillSuccess >= fv.WaitForActivationCalled {
-		return api.ErrConnectionIssue
+		return httputil.ErrConnectionIssue
 	}
 	return nil
 }
@@ -104,7 +104,7 @@ func (fv *FakeValidator) WaitForActivation(_ context.Context, accountChan chan [
 func (fv *FakeValidator) WaitForSync(_ context.Context) error {
 	fv.WaitForSyncCalled++
 	if fv.RetryTillSuccess >= fv.WaitForSyncCalled {
-		return api.ErrConnectionIssue
+		return httputil.ErrConnectionIssue
 	}
 	return nil
 }
@@ -119,7 +119,7 @@ func (fv *FakeValidator) SlasherReady(_ context.Context) error {
 func (fv *FakeValidator) CanonicalHeadSlot(_ context.Context) (primitives.Slot, error) {
 	fv.CanonicalHeadSlotCalled++
 	if fv.RetryTillSuccess > fv.CanonicalHeadSlotCalled {
-		return 0, api.ErrConnectionIssue
+		return 0, httputil.ErrConnectionIssue
 	}
 	return 0, nil
 }

@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api"
+	"github.com/prysmaticlabs/prysm/v5/api/httputil"
 	"github.com/prysmaticlabs/prysm/v5/api/server/httprest"
 	"github.com/prysmaticlabs/prysm/v5/api/server/middleware"
 	"github.com/prysmaticlabs/prysm/v5/async/event"
@@ -111,7 +111,7 @@ func NewServer(ctx context.Context, cfg *Config) *Server {
 
 	if server.authTokenPath == "" && server.walletDir != "" {
 		// if a wallet dir is passed without an auth token then override the default with the wallet dir
-		server.authTokenPath = filepath.Join(server.walletDir, api.AuthTokenFileName)
+		server.authTokenPath = filepath.Join(server.walletDir, httputil.AuthTokenFileName)
 	}
 
 	if server.authTokenPath != "" {
@@ -199,29 +199,29 @@ func (s *Server) InitializeRoutes() error {
 	s.router.HandleFunc("DELETE /eth/v1/validator/{pubkey}/graffiti", s.DeleteGraffiti)
 
 	// auth endpoint
-	s.router.HandleFunc("GET "+api.WebUrlPrefix+"initialize", s.Initialize)
+	s.router.HandleFunc("GET "+httputil.WebUrlPrefix+"initialize", s.Initialize)
 	// accounts endpoints
-	s.router.HandleFunc("GET "+api.WebUrlPrefix+"accounts", s.ListAccounts)
-	s.router.HandleFunc("POST "+api.WebUrlPrefix+"accounts/backup", s.BackupAccounts)
-	s.router.HandleFunc("POST "+api.WebUrlPrefix+"accounts/voluntary-exit", s.VoluntaryExit)
+	s.router.HandleFunc("GET "+httputil.WebUrlPrefix+"accounts", s.ListAccounts)
+	s.router.HandleFunc("POST "+httputil.WebUrlPrefix+"accounts/backup", s.BackupAccounts)
+	s.router.HandleFunc("POST "+httputil.WebUrlPrefix+"accounts/voluntary-exit", s.VoluntaryExit)
 	// web health endpoints
-	s.router.HandleFunc("GET "+api.WebUrlPrefix+"health/version", s.GetVersion)
-	s.router.HandleFunc("GET "+api.WebUrlPrefix+"health/logs/validator/stream", s.StreamValidatorLogs)
-	s.router.HandleFunc("GET "+api.WebUrlPrefix+"health/logs/beacon/stream", s.StreamBeaconLogs)
+	s.router.HandleFunc("GET "+httputil.WebUrlPrefix+"health/version", s.GetVersion)
+	s.router.HandleFunc("GET "+httputil.WebUrlPrefix+"health/logs/validator/stream", s.StreamValidatorLogs)
+	s.router.HandleFunc("GET "+httputil.WebUrlPrefix+"health/logs/beacon/stream", s.StreamBeaconLogs)
 	// Beacon calls
-	s.router.HandleFunc("GET "+api.WebUrlPrefix+"beacon/status", s.GetBeaconStatus)
-	s.router.HandleFunc("GET "+api.WebUrlPrefix+"beacon/summary", s.GetValidatorPerformance)
-	s.router.HandleFunc("GET "+api.WebUrlPrefix+"beacon/validators", s.GetValidators)
-	s.router.HandleFunc("GET "+api.WebUrlPrefix+"beacon/balances", s.GetValidatorBalances)
-	s.router.HandleFunc("GET "+api.WebUrlPrefix+"beacon/peers", s.GetPeers)
+	s.router.HandleFunc("GET "+httputil.WebUrlPrefix+"beacon/status", s.GetBeaconStatus)
+	s.router.HandleFunc("GET "+httputil.WebUrlPrefix+"beacon/summary", s.GetValidatorPerformance)
+	s.router.HandleFunc("GET "+httputil.WebUrlPrefix+"beacon/validators", s.GetValidators)
+	s.router.HandleFunc("GET "+httputil.WebUrlPrefix+"beacon/balances", s.GetValidatorBalances)
+	s.router.HandleFunc("GET "+httputil.WebUrlPrefix+"beacon/peers", s.GetPeers)
 	// web wallet endpoints
-	s.router.HandleFunc("GET "+api.WebUrlPrefix+"wallet", s.WalletConfig)
-	s.router.HandleFunc("POST "+api.WebUrlPrefix+"wallet/create", s.CreateWallet)
-	s.router.HandleFunc("POST "+api.WebUrlPrefix+"wallet/keystores/validate", s.ValidateKeystores)
-	s.router.HandleFunc("POST "+api.WebUrlPrefix+"wallet/recover", s.RecoverWallet)
+	s.router.HandleFunc("GET "+httputil.WebUrlPrefix+"wallet", s.WalletConfig)
+	s.router.HandleFunc("POST "+httputil.WebUrlPrefix+"wallet/create", s.CreateWallet)
+	s.router.HandleFunc("POST "+httputil.WebUrlPrefix+"wallet/keystores/validate", s.ValidateKeystores)
+	s.router.HandleFunc("POST "+httputil.WebUrlPrefix+"wallet/recover", s.RecoverWallet)
 	// slashing protection endpoints
-	s.router.HandleFunc("GET "+api.WebUrlPrefix+"slashing-protection/export", s.ExportSlashingProtection)
-	s.router.HandleFunc("POST "+api.WebUrlPrefix+"slashing-protection/import", s.ImportSlashingProtection)
+	s.router.HandleFunc("GET "+httputil.WebUrlPrefix+"slashing-protection/export", s.ExportSlashingProtection)
+	s.router.HandleFunc("POST "+httputil.WebUrlPrefix+"slashing-protection/import", s.ImportSlashingProtection)
 
 	log.Info("Initialized REST API routes")
 	return nil

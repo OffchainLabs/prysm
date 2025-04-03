@@ -10,6 +10,7 @@ go_library(
     importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/prysm/validator",
     visibility = ["//visibility:public"],
     deps = [
+        "//api/httputil:go_default_library",
         "//api/server/structs:go_default_library",
         "//beacon-chain/blockchain:go_default_library",
         "//beacon-chain/db:go_default_library",
@@ -18,7 +19,6 @@ go_library(
         "//beacon-chain/rpc/lookup:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//monitoring/tracing/trace:go_default_library",
-        "//network/httputil:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "//time/slots:go_default_library",
         "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",

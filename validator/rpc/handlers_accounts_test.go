@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/prysmaticlabs/prysm/v5/api"
+	"github.com/prysmaticlabs/prysm/v5/api/httputil"
 	"github.com/prysmaticlabs/prysm/v5/cmd/validator/flags"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
@@ -70,7 +70,7 @@ func TestServer_ListAccounts(t *testing.T) {
 	require.Equal(t, true, ok)
 	err = dr.RecoverAccountsFromMnemonic(ctx, constant.TestMnemonic, derived.DefaultMnemonicLanguage, "", numAccounts)
 	require.NoError(t, err)
-	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf(api.WebUrlPrefix+"accounts?page_size=%d", int32(numAccounts)), nil)
+	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf(httputil.WebUrlPrefix+"accounts?page_size=%d", int32(numAccounts)), nil)
 	wr := httptest.NewRecorder()
 	wr.Body = &bytes.Buffer{}
 	s.ListAccounts(wr, req)
@@ -115,7 +115,7 @@ func TestServer_ListAccounts(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		url := api.WebUrlPrefix + "accounts"
+		url := httputil.WebUrlPrefix + "accounts"
 		if test.PageSize != 0 || test.PageToken != "" || test.All {
 			url = url + "?"
 		}
@@ -195,7 +195,7 @@ func TestServer_BackupAccounts(t *testing.T) {
 	var buf bytes.Buffer
 	err = json.NewEncoder(&buf).Encode(request)
 	require.NoError(t, err)
-	req = httptest.NewRequest(http.MethodPost, api.WebUrlPrefix+"accounts/backup", &buf)
+	req = httptest.NewRequest(http.MethodPost, httputil.WebUrlPrefix+"accounts/backup", &buf)
 	wr = httptest.NewRecorder()
 	wr.Body = &bytes.Buffer{}
 	// We now attempt to backup all public keys from the wallet.
@@ -314,7 +314,7 @@ func TestServer_VoluntaryExit(t *testing.T) {
 	var buf bytes.Buffer
 	err = json.NewEncoder(&buf).Encode(request)
 	require.NoError(t, err)
-	req := httptest.NewRequest(http.MethodPost, api.WebUrlPrefix+"accounts/voluntary-exit", &buf)
+	req := httptest.NewRequest(http.MethodPost, httputil.WebUrlPrefix+"accounts/voluntary-exit", &buf)
 	wr := httptest.NewRecorder()
 	wr.Body = &bytes.Buffer{}
 	s.VoluntaryExit(wr, req)

@@ -4,9 +4,9 @@ import (
 	"net/http"
 
 	"github.com/pkg/errors"
+	httputil2 "github.com/prysmaticlabs/prysm/v5/api/httputil"
 	"github.com/prysmaticlabs/prysm/v5/io/file"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
 	"github.com/prysmaticlabs/prysm/v5/validator/accounts/wallet"
 )
 
@@ -16,15 +16,15 @@ func (s *Server) Initialize(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	walletExists, err := wallet.Exists(s.walletDir)
 	if err != nil {
-		httputil.HandleError(w, errors.Wrap(err, "Could not check if wallet exists").Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, errors.Wrap(err, "Could not check if wallet exists").Error(), http.StatusInternalServerError)
 		return
 	}
 	exists, err := file.Exists(s.authTokenPath, file.Regular)
 	if err != nil {
-		httputil.HandleError(w, errors.Wrap(err, "Could not check if auth token exists").Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, errors.Wrap(err, "Could not check if auth token exists").Error(), http.StatusInternalServerError)
 		return
 	}
-	httputil.WriteJson(w, &InitializeAuthResponse{
+	httputil2.WriteJson(w, &InitializeAuthResponse{
 		HasSignedUp: exists,
 		HasWallet:   walletExists,
 	})

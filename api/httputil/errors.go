@@ -1,4 +1,4 @@
-package client
+package httputil
 
 import (
 	"fmt"
@@ -7,6 +7,14 @@ import (
 
 	"github.com/pkg/errors"
 )
+
+func HandleError(w http.ResponseWriter, message string, code int) {
+	errJson := &DefaultJsonError{
+		Message: message,
+		Code:    code,
+	}
+	WriteError(w, errJson)
+}
 
 // ErrMalformedHostname is used to indicate if a host name's format is incorrect.
 var ErrMalformedHostname = errors.New("hostname must include port, separated by one colon, like example.com:3500")

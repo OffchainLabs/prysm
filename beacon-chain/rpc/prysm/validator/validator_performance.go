@@ -6,10 +6,10 @@ import (
 	"net/http"
 
 	"github.com/pkg/errors"
+	httputil2 "github.com/prysmaticlabs/prysm/v5/api/httputil"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/core"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
@@ -23,10 +23,10 @@ func (s *Server) GetPerformance(w http.ResponseWriter, r *http.Request) {
 	err := json.NewDecoder(r.Body).Decode(&req)
 	switch {
 	case errors.Is(err, io.EOF):
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		httputil2.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	case err != nil:
-		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -52,13 +52,13 @@ func (s *Server) GetPerformance(w http.ResponseWriter, r *http.Request) {
 		MissingValidators:             computed.MissingValidators,
 		InactivityScores:              computed.InactivityScores, // Only populated in Altair
 	}
-	httputil.WriteJson(w, response)
+	httputil2.WriteJson(w, response)
 }
 
 func handleHTTPError(w http.ResponseWriter, message string, code int) {
-	errJson := &httputil.DefaultJsonError{
+	errJson := &httputil2.DefaultJsonError{
 		Message: message,
 		Code:    code,
 	}
-	httputil.WriteError(w, errJson)
+	httputil2.WriteError(w, errJson)
 }

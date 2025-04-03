@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api/client"
 	"github.com/prysmaticlabs/prysm/v5/api/client/event"
+	"github.com/prysmaticlabs/prysm/v5/api/httputil"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
@@ -278,7 +278,7 @@ func performRoles(slotCtx context.Context, allRoles map[[48]byte][]iface.Validat
 }
 
 func isConnectionError(err error) bool {
-	return err != nil && errors.Is(err, client.ErrConnectionIssue)
+	return err != nil && errors.Is(err, httputil.ErrConnectionIssue)
 }
 
 func handleAssignmentError(err error, slot primitives.Slot) {

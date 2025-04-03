@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/prysmaticlabs/prysm/v5/api"
+	"github.com/prysmaticlabs/prysm/v5/api/httputil"
 	"github.com/prysmaticlabs/prysm/v5/cmd"
 	"github.com/prysmaticlabs/prysm/v5/cmd/validator/flags"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
@@ -46,7 +46,7 @@ var Commands = &cli.Command{
 				host := cliCtx.String(flags.HTTPServerHost.Name)
 				port := cliCtx.Int(flags.HTTPServerPort.Name)
 				validatorWebAddr := fmt.Sprintf("%s:%d", host, port)
-				authTokenPath := filepath.Join(walletDirPath, api.AuthTokenFileName)
+				authTokenPath := filepath.Join(walletDirPath, httputil.AuthTokenFileName)
 				tempAuthTokenPath := cliCtx.String(flags.AuthTokenPathFlag.Name)
 				if tempAuthTokenPath != "" {
 					authTokenPath = tempAuthTokenPath

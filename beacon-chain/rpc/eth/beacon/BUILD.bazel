@@ -13,7 +13,7 @@ go_library(
     importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/beacon",
     visibility = ["//visibility:public"],
     deps = [
-        "//api:go_default_library",
+        "//api/httputil:go_default_library",
         "//api/server:go_default_library",
         "//api/server/structs:go_default_library",
         "//beacon-chain/blockchain:go_default_library",
@@ -54,7 +54,6 @@ go_library(
         "//crypto/bls:go_default_library",
         "//encoding/bytesutil:go_default_library",
         "//monitoring/tracing/trace:go_default_library",
-        "//network/httputil:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "//runtime/version:go_default_library",
         "//time/slots:go_default_library",
@@ -77,7 +76,7 @@ go_test(
     ],
     embed = [":go_default_library"],
     deps = [
-        "//api:go_default_library",
+        "//api/httputil:go_default_library",
         "//api/server:go_default_library",
         "//api/server/structs:go_default_library",
         "//beacon-chain/blockchain/testing:go_default_library",
@@ -112,7 +111,6 @@ go_test(
         "//crypto/hash:go_default_library",
         "//encoding/bytesutil:go_default_library",
         "//encoding/ssz:go_default_library",
-        "//network/httputil:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "//runtime/version:go_default_library",
         "//testing/assert:go_default_library",

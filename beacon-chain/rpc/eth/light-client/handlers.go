@@ -9,7 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
-	"github.com/prysmaticlabs/prysm/v5/api"
+	httputil2 "github.com/prysmaticlabs/prysm/v5/api/httputil"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	lightclient "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/light-client"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
@@ -20,7 +20,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	"github.com/prysmaticlabs/prysm/v5/network/forks"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
@@ -28,7 +27,7 @@ import (
 // GetLightClientBootstrap - implements https://github.com/ethereum/beacon-APIs/blob/263f4ed6c263c967f13279c7a9f5629b51c5fc55/apis/beacon/light_client/bootstrap.yaml
 func (s *Server) GetLightClientBootstrap(w http.ResponseWriter, req *http.Request) {
 	if !features.Get().EnableLightClient {
-		httputil.HandleError(w, "Light client feature flag is not enabled", http.StatusNotFound)
+		httputil2.HandleError(w, "Light client feature flag is not enabled", http.StatusNotFound)
 		return
 	}
 
@@ -39,48 +38,48 @@ func (s *Server) GetLightClientBootstrap(w http.ResponseWriter, req *http.Reques
 	// Get the block
 	blockRootParam, err := hexutil.Decode(req.PathValue("block_root"))
 	if err != nil {
-		httputil.HandleError(w, "Invalid block root: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "Invalid block root: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	blockRoot := bytesutil.ToBytes32(blockRootParam)
 	bootstrap, err := s.BeaconDB.LightClientBootstrap(ctx, blockRoot[:])
 	if err != nil {
-		httputil.HandleError(w, "Could not get light client bootstrap: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not get light client bootstrap: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if bootstrap == nil {
-		httputil.HandleError(w, "Light client bootstrap not found", http.StatusNotFound)
+		httputil2.HandleError(w, "Light client bootstrap not found", http.StatusNotFound)
 		return
 	}
 
-	w.Header().Set(api.VersionHeader, version.String(bootstrap.Version()))
+	w.Header().Set(httputil2.VersionHeader, version.String(bootstrap.Version()))
 
-	if httputil.RespondWithSsz(req) {
+	if httputil2.RespondWithSsz(req) {
 		ssz, err := bootstrap.MarshalSSZ()
 		if err != nil {
-			httputil.HandleError(w, "Could not marshal bootstrap to SSZ: "+err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, "Could not marshal bootstrap to SSZ: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
-		httputil.WriteSsz(w, ssz)
+		httputil2.WriteSsz(w, ssz)
 	} else {
 		data, err := structs.LightClientBootstrapFromConsensus(bootstrap)
 		if err != nil {
-			httputil.HandleError(w, "Could not marshal bootstrap to JSON: "+err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, "Could not marshal bootstrap to JSON: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		response := &structs.LightClientBootstrapResponse{
 			Version: version.String(bootstrap.Version()),
 			Data:    data,
 		}
-		httputil.WriteJson(w, response)
+		httputil2.WriteJson(w, response)
 	}
 }
 
 // GetLightClientUpdatesByRange - implements https://github.com/ethereum/beacon-APIs/blob/263f4ed6c263c967f13279c7a9f5629b51c5fc55/apis/beacon/light_client/updates.yaml
 func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.Request) {
 	if !features.Get().EnableLightClient {
-		httputil.HandleError(w, "Light client feature flag is not enabled", http.StatusNotFound)
+		httputil2.HandleError(w, "Light client feature flag is not enabled", http.StatusNotFound)
 		return
 	}
 
@@ -93,7 +92,7 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 	if !gotCount {
 		return
 	} else if count == 0 {
-		httputil.HandleError(w, fmt.Sprintf("Got invalid 'count' query variable '%d': count must be greater than 0", count), http.StatusBadRequest)
+		httputil2.HandleError(w, fmt.Sprintf("Got invalid 'count' query variable '%d': count must be greater than 0", count), http.StatusBadRequest)
 		return
 	}
 
@@ -111,16 +110,16 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 	// get updates
 	updatesMap, err := s.BeaconDB.LightClientUpdates(ctx, startPeriod, endPeriod)
 	if err != nil {
-		httputil.HandleError(w, "Could not get light client updates from DB: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not get light client updates from DB: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	if httputil.RespondWithSsz(req) {
+	if httputil2.RespondWithSsz(req) {
 		w.Header().Set("Content-Type", "application/octet-stream")
 
 		for i := startPeriod; i <= endPeriod; i++ {
 			if ctx.Err() != nil {
-				httputil.HandleError(w, "Context error: "+ctx.Err().Error(), http.StatusInternalServerError)
+				httputil2.HandleError(w, "Context error: "+ctx.Err().Error(), http.StatusInternalServerError)
 			}
 
 			update, ok := updatesMap[i]
@@ -133,31 +132,31 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 			updateEpoch := slots.ToEpoch(updateSlot)
 			updateFork, err := forks.Fork(updateEpoch)
 			if err != nil {
-				httputil.HandleError(w, "Could not get fork Version: "+err.Error(), http.StatusInternalServerError)
+				httputil2.HandleError(w, "Could not get fork Version: "+err.Error(), http.StatusInternalServerError)
 				return
 			}
 
 			forkDigest, err := signing.ComputeForkDigest(updateFork.CurrentVersion, params.BeaconConfig().GenesisValidatorsRoot[:])
 			if err != nil {
-				httputil.HandleError(w, "Could not compute fork digest: "+err.Error(), http.StatusInternalServerError)
+				httputil2.HandleError(w, "Could not compute fork digest: "+err.Error(), http.StatusInternalServerError)
 				return
 			}
 			updateSSZ, err := update.MarshalSSZ()
 			if err != nil {
-				httputil.HandleError(w, "Could not marshal update to SSZ: "+err.Error(), http.StatusInternalServerError)
+				httputil2.HandleError(w, "Could not marshal update to SSZ: "+err.Error(), http.StatusInternalServerError)
 				return
 			}
 
 			var chunkLength []byte
 			chunkLength = ssz.MarshalUint64(chunkLength, uint64(len(updateSSZ)+4))
 			if _, err := w.Write(chunkLength); err != nil {
-				httputil.HandleError(w, "Could not write chunk length: "+err.Error(), http.StatusInternalServerError)
+				httputil2.HandleError(w, "Could not write chunk length: "+err.Error(), http.StatusInternalServerError)
 			}
 			if _, err := w.Write(forkDigest[:]); err != nil {
-				httputil.HandleError(w, "Could not write fork digest: "+err.Error(), http.StatusInternalServerError)
+				httputil2.HandleError(w, "Could not write fork digest: "+err.Error(), http.StatusInternalServerError)
 			}
 			if _, err := w.Write(updateSSZ); err != nil {
-				httputil.HandleError(w, "Could not write update SSZ: "+err.Error(), http.StatusInternalServerError)
+				httputil2.HandleError(w, "Could not write update SSZ: "+err.Error(), http.StatusInternalServerError)
 			}
 		}
 	} else {
@@ -165,7 +164,7 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 
 		for i := startPeriod; i <= endPeriod; i++ {
 			if ctx.Err() != nil {
-				httputil.HandleError(w, "Context error: "+ctx.Err().Error(), http.StatusInternalServerError)
+				httputil2.HandleError(w, "Context error: "+ctx.Err().Error(), http.StatusInternalServerError)
 			}
 
 			update, ok := updatesMap[i]
@@ -176,7 +175,7 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 
 			updateJson, err := structs.LightClientUpdateFromConsensus(update)
 			if err != nil {
-				httputil.HandleError(w, "Could not convert light client update: "+err.Error(), http.StatusInternalServerError)
+				httputil2.HandleError(w, "Could not convert light client update: "+err.Error(), http.StatusInternalServerError)
 				return
 			}
 			updateResponse := &structs.LightClientUpdateResponse{
@@ -186,14 +185,14 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 			updates = append(updates, updateResponse)
 		}
 
-		httputil.WriteJson(w, updates)
+		httputil2.WriteJson(w, updates)
 	}
 }
 
 // GetLightClientFinalityUpdate - implements https://github.com/ethereum/beacon-APIs/blob/263f4ed6c263c967f13279c7a9f5629b51c5fc55/apis/beacon/light_client/finality_update.yaml
 func (s *Server) GetLightClientFinalityUpdate(w http.ResponseWriter, req *http.Request) {
 	if !features.Get().EnableLightClient {
-		httputil.HandleError(w, "Light client feature flag is not enabled", http.StatusNotFound)
+		httputil2.HandleError(w, "Light client feature flag is not enabled", http.StatusNotFound)
 		return
 	}
 
@@ -211,7 +210,7 @@ func (s *Server) GetLightClientFinalityUpdate(w http.ResponseWriter, req *http.R
 
 	st, err := s.Stater.StateBySlot(ctx, block.Block().Slot())
 	if err != nil {
-		httputil.HandleError(w, "Could not get state: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not get state: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -223,14 +222,14 @@ func (s *Server) GetLightClientFinalityUpdate(w http.ResponseWriter, req *http.R
 	attestedSlot := attestedBlock.Block().Slot()
 	attestedState, err := s.Stater.StateBySlot(ctx, attestedSlot)
 	if err != nil {
-		httputil.HandleError(w, "Could not get attested state: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not get attested state: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	var finalizedBlock interfaces.ReadOnlySignedBeaconBlock
 	finalizedCheckpoint := attestedState.FinalizedCheckpoint()
 	if finalizedCheckpoint == nil {
-		httputil.HandleError(w, "Attested state does not have a finalized checkpoint", http.StatusInternalServerError)
+		httputil2.HandleError(w, "Attested state does not have a finalized checkpoint", http.StatusInternalServerError)
 		return
 	}
 	finalizedRoot := bytesutil.ToBytes32(finalizedCheckpoint.Root)
@@ -241,35 +240,35 @@ func (s *Server) GetLightClientFinalityUpdate(w http.ResponseWriter, req *http.R
 
 	update, err := lightclient.NewLightClientFinalityUpdateFromBeaconState(ctx, s.ChainInfoFetcher.CurrentSlot(), st, block, attestedState, attestedBlock, finalizedBlock)
 	if err != nil {
-		httputil.HandleError(w, "Could not get light client finality update: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not get light client finality update: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	if httputil.RespondWithSsz(req) {
+	if httputil2.RespondWithSsz(req) {
 		ssz, err := update.MarshalSSZ()
 		if err != nil {
-			httputil.HandleError(w, "Could not marshal finality update to SSZ: "+err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, "Could not marshal finality update to SSZ: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
-		httputil.WriteSsz(w, ssz)
+		httputil2.WriteSsz(w, ssz)
 	} else {
 		updateStruct, err := structs.LightClientFinalityUpdateFromConsensus(update)
 		if err != nil {
-			httputil.HandleError(w, "Could not convert light client finality update to API struct: "+err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, "Could not convert light client finality update to API struct: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		response := &structs.LightClientFinalityUpdateResponse{
 			Version: version.String(attestedState.Version()),
 			Data:    updateStruct,
 		}
-		httputil.WriteJson(w, response)
+		httputil2.WriteJson(w, response)
 	}
 }
 
 // GetLightClientOptimisticUpdate - implements https://github.com/ethereum/beacon-APIs/blob/263f4ed6c263c967f13279c7a9f5629b51c5fc55/apis/beacon/light_client/optimistic_update.yaml
 func (s *Server) GetLightClientOptimisticUpdate(w http.ResponseWriter, req *http.Request) {
 	if !features.Get().EnableLightClient {
-		httputil.HandleError(w, "Light client feature flag is not enabled", http.StatusNotFound)
+		httputil2.HandleError(w, "Light client feature flag is not enabled", http.StatusNotFound)
 		return
 	}
 
@@ -282,50 +281,50 @@ func (s *Server) GetLightClientOptimisticUpdate(w http.ResponseWriter, req *http
 	}
 	st, err := s.Stater.StateBySlot(ctx, block.Block().Slot())
 	if err != nil {
-		httputil.HandleError(w, "could not get state: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "could not get state: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	attestedRoot := block.Block().ParentRoot()
 	attestedBlock, err := s.Blocker.Block(ctx, attestedRoot[:])
 	if err != nil {
-		httputil.HandleError(w, "Could not get attested block: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not get attested block: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if attestedBlock == nil {
-		httputil.HandleError(w, "Attested block is nil", http.StatusInternalServerError)
+		httputil2.HandleError(w, "Attested block is nil", http.StatusInternalServerError)
 		return
 	}
 	attestedSlot := attestedBlock.Block().Slot()
 	attestedState, err := s.Stater.StateBySlot(ctx, attestedSlot)
 	if err != nil {
-		httputil.HandleError(w, "Could not get attested state: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not get attested state: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	update, err := lightclient.NewLightClientOptimisticUpdateFromBeaconState(ctx, s.ChainInfoFetcher.CurrentSlot(), st, block, attestedState, attestedBlock)
 	if err != nil {
-		httputil.HandleError(w, "Could not get light client optimistic update: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not get light client optimistic update: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	if httputil.RespondWithSsz(req) {
+	if httputil2.RespondWithSsz(req) {
 		ssz, err := update.MarshalSSZ()
 		if err != nil {
-			httputil.HandleError(w, "Could not marshal optimistic update to SSZ: "+err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, "Could not marshal optimistic update to SSZ: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
-		httputil.WriteSsz(w, ssz)
+		httputil2.WriteSsz(w, ssz)
 	} else {
 		updateStruct, err := structs.LightClientOptimisticUpdateFromConsensus(update)
 		if err != nil {
-			httputil.HandleError(w, "Could not convert light client optimistic update to API struct: "+err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, "Could not convert light client optimistic update to API struct: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		response := &structs.LightClientOptimisticUpdateResponse{
 			Version: version.String(attestedState.Version()),
 			Data:    updateStruct,
 		}
-		httputil.WriteJson(w, response)
+		httputil2.WriteJson(w, response)
 	}
 }
 

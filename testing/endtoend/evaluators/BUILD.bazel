@@ -22,6 +22,7 @@ go_library(
     visibility = ["//testing/endtoend:__subpackages__"],
     deps = [
         "//api/client/beacon:go_default_library",
+        "//api/httputil:go_default_library",
         "//api/server/structs:go_default_library",
         "//beacon-chain/core/altair:go_default_library",
         "//beacon-chain/core/helpers:go_default_library",
@@ -39,7 +40,6 @@ go_library(
         "//encoding/ssz:go_default_library",
         "//encoding/ssz/detect:go_default_library",
         "//network/forks:go_default_library",
-        "//network/httputil:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "//runtime/interop:go_default_library",
         "//runtime/version:go_default_library",

@@ -11,7 +11,7 @@ go_library(
     importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc",
     visibility = ["//beacon-chain:__subpackages__"],
     deps = [
-        "//api:go_default_library",
+        "//api/httputil:go_default_library",
         "//api/server/middleware:go_default_library",
         "//beacon-chain/blockchain:go_default_library",
         "//beacon-chain/builder:go_default_library",

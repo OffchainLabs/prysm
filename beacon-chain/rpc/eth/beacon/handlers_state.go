@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	httputil2 "github.com/prysmaticlabs/prysm/v5/api/httputil"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/altair"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/helpers"
@@ -18,7 +19,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
 	ethpbalpha "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
@@ -35,7 +35,7 @@ func (s *Server) GetStateRoot(w http.ResponseWriter, r *http.Request) {
 
 	stateId := r.PathValue("state_id")
 	if stateId == "" {
-		httputil.HandleError(w, "state_id is required in URL params", http.StatusBadRequest)
+		httputil2.HandleError(w, "state_id is required in URL params", http.StatusBadRequest)
 		return
 	}
 
@@ -43,10 +43,10 @@ func (s *Server) GetStateRoot(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		var rootNotFoundErr *lookup.StateRootNotFoundError
 		if errors.As(err, &rootNotFoundErr) {
-			httputil.HandleError(w, "State root not found: "+rootNotFoundErr.Error(), http.StatusNotFound)
+			httputil2.HandleError(w, "State root not found: "+rootNotFoundErr.Error(), http.StatusNotFound)
 			return
 		}
-		httputil.HandleError(w, "Could not get state root: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not get state root: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	st, err := s.Stater.State(ctx, []byte(stateId))
@@ -56,12 +56,12 @@ func (s *Server) GetStateRoot(w http.ResponseWriter, r *http.Request) {
 	}
 	isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
 	if err != nil {
-		httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
 	if err != nil {
-		httputil.HandleError(w, "Could not calculate root of latest block header: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not calculate root of latest block header: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	isFinalized := s.FinalizationFetcher.IsFinalized(ctx, blockRoot)
@@ -73,7 +73,7 @@ func (s *Server) GetStateRoot(w http.ResponseWriter, r *http.Request) {
 		ExecutionOptimistic: isOptimistic,
 		Finalized:           isFinalized,
 	}
-	httputil.WriteJson(w, resp)
+	httputil2.WriteJson(w, resp)
 }
 
 // GetRandao fetches the RANDAO mix for the requested epoch from the state identified by state_id.
@@ -86,7 +86,7 @@ func (s *Server) GetRandao(w http.ResponseWriter, r *http.Request) {
 
 	stateId := r.PathValue("state_id")
 	if stateId == "" {
-		httputil.HandleError(w, "state_id is required in URL params", http.StatusBadRequest)
+		httputil2.HandleError(w, "state_id is required in URL params", http.StatusBadRequest)
 		return
 	}
 	rawEpoch, e, ok := shared.UintFromQuery(w, r, "epoch", false)
@@ -113,25 +113,25 @@ func (s *Server) GetRandao(w http.ResponseWriter, r *http.Request) {
 		randaoEpochLowerBound = uint64(stEpoch) - uint64(st.RandaoMixesLength())
 	}
 	if epoch > stEpoch || uint64(epoch) < randaoEpochLowerBound+1 {
-		httputil.HandleError(w, "Epoch is out of range for the randao mixes of the state", http.StatusBadRequest)
+		httputil2.HandleError(w, "Epoch is out of range for the randao mixes of the state", http.StatusBadRequest)
 		return
 	}
 	idx := epoch % params.BeaconConfig().EpochsPerHistoricalVector
 	randao, err := st.RandaoMixAtIndex(uint64(idx))
 	if err != nil {
-		httputil.HandleError(w, fmt.Sprintf("Could not get randao mix at index %d: %v", idx, err), http.StatusInternalServerError)
+		httputil2.HandleError(w, fmt.Sprintf("Could not get randao mix at index %d: %v", idx, err), http.StatusInternalServerError)
 		return
 	}
 
 	isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
 	if err != nil {
-		httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
 	if err != nil {
-		httputil.HandleError(w, "Could not calculate root of latest block header: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not calculate root of latest block header: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	isFinalized := s.FinalizationFetcher.IsFinalized(ctx, blockRoot)
@@ -141,7 +141,7 @@ func (s *Server) GetRandao(w http.ResponseWriter, r *http.Request) {
 		ExecutionOptimistic: isOptimistic,
 		Finalized:           isFinalized,
 	}
-	httputil.WriteJson(w, resp)
+	httputil2.WriteJson(w, resp)
 }
 
 // GetSyncCommittees retrieves the sync committees for the given epoch.
@@ -152,7 +152,7 @@ func (s *Server) GetSyncCommittees(w http.ResponseWriter, r *http.Request) {
 
 	stateId := r.PathValue("state_id")
 	if stateId == "" {
-		httputil.HandleError(w, "state_id is required in URL params", http.StatusBadRequest)
+		httputil2.HandleError(w, "state_id is required in URL params", http.StatusBadRequest)
 		return
 	}
 	rawEpoch, e, ok := shared.UintFromQuery(w, r, "epoch", false)
@@ -165,7 +165,7 @@ func (s *Server) GetSyncCommittees(w http.ResponseWriter, r *http.Request) {
 	currentEpoch := slots.ToEpoch(currentSlot)
 	currentPeriodStartEpoch, err := slots.SyncCommitteePeriodStartEpoch(currentEpoch)
 	if err != nil {
-		httputil.HandleError(w, fmt.Sprintf("Could not calculate start period for slot %d: %v", currentSlot, err), http.StatusInternalServerError)
+		httputil2.HandleError(w, fmt.Sprintf("Could not calculate start period for slot %d: %v", currentSlot, err), http.StatusInternalServerError)
 		return
 	}
 
@@ -173,11 +173,11 @@ func (s *Server) GetSyncCommittees(w http.ResponseWriter, r *http.Request) {
 	if rawEpoch != "" {
 		reqPeriodStartEpoch, err := slots.SyncCommitteePeriodStartEpoch(epoch)
 		if err != nil {
-			httputil.HandleError(w, fmt.Sprintf("Could not calculate start period for epoch %d: %v", e, err), http.StatusInternalServerError)
+			httputil2.HandleError(w, fmt.Sprintf("Could not calculate start period for epoch %d: %v", e, err), http.StatusInternalServerError)
 			return
 		}
 		if reqPeriodStartEpoch > currentPeriodStartEpoch+params.BeaconConfig().EpochsPerSyncCommitteePeriod {
-			httputil.HandleError(
+			httputil2.HandleError(
 				w,
 				fmt.Sprintf("Could not fetch sync committee too far in the future (requested epoch %d, current epoch %d)", e, currentEpoch),
 				http.StatusBadRequest,
@@ -208,32 +208,32 @@ func (s *Server) GetSyncCommittees(w http.ResponseWriter, r *http.Request) {
 		// Get the next sync committee and sync committee indices from the state.
 		committeeIndices, committee, err = nextCommitteeIndicesFromState(st)
 		if err != nil {
-			httputil.HandleError(w, "Could not get next sync committee indices: "+err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, "Could not get next sync committee indices: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 	} else {
 		// Get the current sync committee and sync committee indices from the state.
 		committeeIndices, committee, err = currentCommitteeIndicesFromState(st)
 		if err != nil {
-			httputil.HandleError(w, "Could not get current sync committee indices: "+err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, "Could not get current sync committee indices: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 	}
 	subcommittees, err := extractSyncSubcommittees(st, committee)
 	if err != nil {
-		httputil.HandleError(w, "Could not extract sync subcommittees: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not extract sync subcommittees: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
 	if err != nil {
-		httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
 	if err != nil {
-		httputil.HandleError(w, "Could not calculate root of latest block header: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not calculate root of latest block header: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	isFinalized := s.FinalizationFetcher.IsFinalized(ctx, blockRoot)
@@ -246,7 +246,7 @@ func (s *Server) GetSyncCommittees(w http.ResponseWriter, r *http.Request) {
 		ExecutionOptimistic: isOptimistic,
 		Finalized:           isFinalized,
 	}
-	httputil.WriteJson(w, resp)
+	httputil2.WriteJson(w, resp)
 }
 
 func committeeIndicesFromState(st state.BeaconState, committee *ethpbalpha.SyncCommittee) ([]string, *ethpbalpha.SyncCommittee, error) {
@@ -316,7 +316,7 @@ func (s *Server) stateForSyncCommittee(ctx context.Context, w http.ResponseWrite
 	if req.epoch != nil {
 		slot, err := slots.EpochStart(*req.epoch)
 		if err != nil {
-			httputil.HandleError(w, fmt.Sprintf("Could not calculate start slot for epoch %d: %v", *req.epoch, err), http.StatusInternalServerError)
+			httputil2.HandleError(w, fmt.Sprintf("Could not calculate start slot for epoch %d: %v", *req.epoch, err), http.StatusInternalServerError)
 			return nil, false
 		}
 		st, err := s.Stater.State(ctx, []byte(strconv.FormatUint(uint64(slot), 10)))

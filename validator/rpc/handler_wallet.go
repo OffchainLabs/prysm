@@ -10,11 +10,11 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
+	httputil2 "github.com/prysmaticlabs/prysm/v5/api/httputil"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/prysmaticlabs/prysm/v5/io/file"
 	"github.com/prysmaticlabs/prysm/v5/io/prompt"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
 	"github.com/prysmaticlabs/prysm/v5/validator/accounts"
 	"github.com/prysmaticlabs/prysm/v5/validator/accounts/wallet"
 	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
@@ -32,17 +32,17 @@ func (s *Server) CreateWallet(w http.ResponseWriter, r *http.Request) {
 	err := json.NewDecoder(r.Body).Decode(&req)
 	switch {
 	case errors.Is(err, io.EOF):
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		httputil2.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	case err != nil:
-		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	walletDir := s.walletDir
 	exists, err := wallet.Exists(walletDir)
 	if err != nil {
-		httputil.HandleError(w, "Could not check for existing wallet: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not check for existing wallet: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if exists {
@@ -50,7 +50,7 @@ func (s *Server) CreateWallet(w http.ResponseWriter, r *http.Request) {
 			WalletDir:      walletDir,
 			WalletPassword: req.WalletPassword,
 		}); err != nil {
-			httputil.HandleError(w, "Could not initialize wallet: "+err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, "Could not initialize wallet: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		keymanagerKind := importedKeymanagerKind
@@ -66,11 +66,11 @@ func (s *Server) CreateWallet(w http.ResponseWriter, r *http.Request) {
 				KeymanagerKind: keymanagerKind,
 			},
 		}
-		httputil.WriteJson(w, response)
+		httputil2.WriteJson(w, response)
 		return
 	}
 	if err := prompt.ValidatePasswordInput(req.WalletPassword); err != nil {
-		httputil.HandleError(w, "Password too weak: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "Password too weak: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 	if req.Keymanager == importedKeymanagerKind {
@@ -82,12 +82,12 @@ func (s *Server) CreateWallet(w http.ResponseWriter, r *http.Request) {
 		}
 		acc, err := accounts.NewCLIManager(opts...)
 		if err != nil {
-			httputil.HandleError(w, "Could not create CLI Manager: "+err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, "Could not create CLI Manager: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		_, err = acc.WalletCreate(ctx)
 		if err != nil {
-			httputil.HandleError(w, "Could not create wallet: "+err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, "Could not create wallet: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		if err := s.initializeWallet(ctx, &wallet.Config{
@@ -95,11 +95,11 @@ func (s *Server) CreateWallet(w http.ResponseWriter, r *http.Request) {
 			KeymanagerKind: keymanager.Local,
 			WalletPassword: req.WalletPassword,
 		}); err != nil {
-			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		if err := writeWalletPasswordToDisk(walletDir, req.WalletPassword); err != nil {
-			httputil.HandleError(w, "Could not write wallet password to disk: "+err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, "Could not write wallet password to disk: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		response := &CreateWalletResponse{
@@ -108,10 +108,10 @@ func (s *Server) CreateWallet(w http.ResponseWriter, r *http.Request) {
 				KeymanagerKind: importedKeymanagerKind,
 			},
 		}
-		httputil.WriteJson(w, response)
+		httputil2.WriteJson(w, response)
 		return
 	}
-	httputil.HandleError(w, fmt.Sprintf("Keymanager type %s create wallet not supported through web", req.Keymanager), http.StatusBadRequest)
+	httputil2.HandleError(w, fmt.Sprintf("Keymanager type %s create wallet not supported through web", req.Keymanager), http.StatusBadRequest)
 }
 
 // WalletConfig returns the wallet's configuration. If no wallet exists, we return an empty response.
@@ -121,31 +121,31 @@ func (s *Server) WalletConfig(w http.ResponseWriter, r *http.Request) {
 
 	exists, err := wallet.Exists(s.walletDir)
 	if err != nil {
-		httputil.HandleError(w, wallet.CheckExistsErrMsg+": "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, wallet.CheckExistsErrMsg+": "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if !exists {
 		// If no wallet is found, we simply return an empty response.
-		httputil.WriteJson(w, &WalletResponse{})
+		httputil2.WriteJson(w, &WalletResponse{})
 		return
 	}
 	valid, err := wallet.IsValid(s.walletDir)
 	if errors.Is(err, wallet.ErrNoWalletFound) {
-		httputil.WriteJson(w, &WalletResponse{})
+		httputil2.WriteJson(w, &WalletResponse{})
 		return
 	}
 	if err != nil {
-		httputil.HandleError(w, wallet.CheckValidityErrMsg+": "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, wallet.CheckValidityErrMsg+": "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if !valid {
-		httputil.HandleError(w, wallet.InvalidWalletErrMsg, http.StatusInternalServerError)
+		httputil2.HandleError(w, wallet.InvalidWalletErrMsg, http.StatusInternalServerError)
 		return
 	}
 
 	if s.wallet == nil || s.validatorService == nil {
 		// If no wallet is found, we simply return an empty response.
-		httputil.WriteJson(w, &WalletResponse{})
+		httputil2.WriteJson(w, &WalletResponse{})
 		return
 	}
 	var keymanagerKind KeymanagerKind
@@ -157,7 +157,7 @@ func (s *Server) WalletConfig(w http.ResponseWriter, r *http.Request) {
 	case keymanager.Web3Signer:
 		keymanagerKind = web3signerKeymanagerKind
 	}
-	httputil.WriteJson(w, &WalletResponse{
+	httputil2.WriteJson(w, &WalletResponse{
 		WalletPath:     s.walletDir,
 		KeymanagerKind: keymanagerKind,
 	})
@@ -177,16 +177,16 @@ func (s *Server) RecoverWallet(w http.ResponseWriter, r *http.Request) {
 	err := json.NewDecoder(r.Body).Decode(&req)
 	switch {
 	case errors.Is(err, io.EOF):
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		httputil2.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	case err != nil:
-		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	numAccounts := int(req.NumAccounts)
 	if numAccounts == 0 {
-		httputil.HandleError(w, "Must create at least 1 validator account", http.StatusBadRequest)
+		httputil2.HandleError(w, "Must create at least 1 validator account", http.StatusBadRequest)
 		return
 	}
 
@@ -204,19 +204,19 @@ func (s *Server) RecoverWallet(w http.ResponseWriter, r *http.Request) {
 		"spanish":             wordlists.Spanish,
 	}
 	if _, ok := allowedLanguages[language]; !ok {
-		httputil.HandleError(w, "input not in the list of supported languages", http.StatusBadRequest)
+		httputil2.HandleError(w, "input not in the list of supported languages", http.StatusBadRequest)
 		return
 	}
 	bip39.SetWordList(allowedLanguages[language])
 	mnemonic := req.Mnemonic
 	if err := accounts.ValidateMnemonic(mnemonic); err != nil {
-		httputil.HandleError(w, "invalid mnemonic in request: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "invalid mnemonic in request: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	// Check it is not whitespace-only (empty is valid)
 	if req.Mnemonic25ThWord != "" && strings.TrimSpace(req.Mnemonic25ThWord) == "" {
-		httputil.HandleError(w, "mnemonic 25th word cannot be empty", http.StatusBadRequest)
+		httputil2.HandleError(w, "mnemonic 25th word cannot be empty", http.StatusBadRequest)
 		return
 	}
 
@@ -227,7 +227,7 @@ func (s *Server) RecoverWallet(w http.ResponseWriter, r *http.Request) {
 	// Web UI should check the new and confirmed password are equal.
 	walletPassword := req.WalletPassword
 	if err := prompt.ValidatePasswordInput(walletPassword); err != nil {
-		httputil.HandleError(w, "password did not pass validation: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "password did not pass validation: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -240,11 +240,11 @@ func (s *Server) RecoverWallet(w http.ResponseWriter, r *http.Request) {
 	}
 	acc, err := accounts.NewCLIManager(opts...)
 	if err != nil {
-		httputil.HandleError(w, "Could not create CLI Manager: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not create CLI Manager: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if _, err := acc.WalletRecover(ctx); err != nil {
-		httputil.HandleError(w, "Failed to recover wallet: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Failed to recover wallet: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if err := s.initializeWallet(ctx, &wallet.Config{
@@ -252,14 +252,14 @@ func (s *Server) RecoverWallet(w http.ResponseWriter, r *http.Request) {
 		KeymanagerKind: keymanager.Derived,
 		WalletPassword: walletPassword,
 	}); err != nil {
-		httputil.HandleError(w, "Failed to initialize wallet: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Failed to initialize wallet: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if err := writeWalletPasswordToDisk(walletDir, walletPassword); err != nil {
-		httputil.HandleError(w, "Could not write wallet password to disk: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not write wallet password to disk: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	httputil.WriteJson(w, &CreateWalletResponse{
+	httputil2.WriteJson(w, &CreateWalletResponse{
 		Wallet: &WalletResponse{
 			WalletPath:     walletDir,
 			KeymanagerKind: derivedKeymanagerKind,
@@ -279,20 +279,20 @@ func (*Server) ValidateKeystores(w http.ResponseWriter, r *http.Request) {
 	err := json.NewDecoder(r.Body).Decode(&req)
 	switch {
 	case errors.Is(err, io.EOF):
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		httputil2.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	case err != nil:
-		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	if req.KeystoresPassword == "" {
-		httputil.HandleError(w, "Password required for keystores", http.StatusBadRequest)
+		httputil2.HandleError(w, "Password required for keystores", http.StatusBadRequest)
 		return
 	}
 	// Needs to unmarshal the keystores from the requests.
 	if len(req.Keystores) < 1 {
-		httputil.HandleError(w, "No keystores included in request", http.StatusBadRequest)
+		httputil2.HandleError(w, "No keystores included in request", http.StatusBadRequest)
 		return
 	}
 	decryptor := keystorev4.New()
@@ -300,7 +300,7 @@ func (*Server) ValidateKeystores(w http.ResponseWriter, r *http.Request) {
 		encoded := req.Keystores[i]
 		keystore := &keymanager.Keystore{}
 		if err := json.Unmarshal([]byte(encoded), &keystore); err != nil {
-			httputil.HandleError(w, "Not a valid EIP-2335 keystore JSON file: "+err.Error(), http.StatusBadRequest)
+			httputil2.HandleError(w, "Not a valid EIP-2335 keystore JSON file: "+err.Error(), http.StatusBadRequest)
 			return
 		}
 		if keystore.Description == "" && keystore.Name != "" {
@@ -309,12 +309,12 @@ func (*Server) ValidateKeystores(w http.ResponseWriter, r *http.Request) {
 		if _, err := decryptor.Decrypt(keystore.Crypto, req.KeystoresPassword); err != nil {
 			doesNotDecrypt := strings.Contains(err.Error(), keymanager.IncorrectPasswordErrMsg)
 			if doesNotDecrypt {
-				httputil.HandleError(w, fmt.Sprintf("Password for keystore with public key %s is incorrect. "+
+				httputil2.HandleError(w, fmt.Sprintf("Password for keystore with public key %s is incorrect. "+
 					"Prysm web only supports importing batches of keystores with the same password for all of them",
 					keystore.Pubkey), http.StatusBadRequest)
 				return
 			} else {
-				httputil.HandleError(w, "Unexpected error decrypting keystore: "+err.Error(), http.StatusInternalServerError)
+				httputil2.HandleError(w, "Unexpected error decrypting keystore: "+err.Error(), http.StatusInternalServerError)
 				return
 			}
 		}

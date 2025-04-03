@@ -11,8 +11,7 @@ go_library(
     importpath = "github.com/prysmaticlabs/prysm/v5/api/client/builder",
     visibility = ["//visibility:public"],
     deps = [
-        "//api:go_default_library",
-        "//api/client:go_default_library",
+        "//api/httputil:go_default_library",
         "//api/server:go_default_library",
         "//api/server/structs:go_default_library",
         "//config/fieldparams:go_default_library",
@@ -47,7 +46,7 @@ go_test(
     data = glob(["testdata/**"]),
     embed = [":go_default_library"],
     deps = [
-        "//api:go_default_library",
+        "//api/httputil:go_default_library",
         "//api/server/structs:go_default_library",
         "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",

@@ -12,6 +12,7 @@ go_library(
     deps = [
         "//api/client:go_default_library",
         "//api/client/beacon:go_default_library",
+        "//api/httputil:go_default_library",
         "//beacon-chain/db:go_default_library",
         "//crypto/hash:go_default_library",
         "//io/file:go_default_library",

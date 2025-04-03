@@ -12,7 +12,7 @@ go_library(
     importpath = "github.com/prysmaticlabs/prysm/v5/testing/endtoend/evaluators/beaconapi",
     visibility = ["//testing/endtoend:__subpackages__"],
     deps = [
-        "//api:go_default_library",
+        "//api/httputil:go_default_library",
         "//api/server/structs:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/primitives:go_default_library",

@@ -15,7 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/go-bitfield"
-	"github.com/prysmaticlabs/prysm/v5/api"
+	"github.com/prysmaticlabs/prysm/v5/api/httputil"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	mockChain "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
 	builderTest "github.com/prysmaticlabs/prysm/v5/beacon-chain/builder/testing"
@@ -38,7 +38,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
 	"github.com/prysmaticlabs/prysm/v5/crypto/bls/common"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
 	ethpbalpha "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
@@ -687,7 +686,7 @@ func TestSubmitAggregateAndProofs(t *testing.T) {
 			_, err := body.WriteString(singleAggregateElectra)
 			require.NoError(t, err)
 			request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
-			request.Header.Set(api.VersionHeader, version.String(version.Electra))
+			request.Header.Set(httputil.VersionHeader, version.String(version.Electra))
 			writer := httptest.NewRecorder()
 			writer.Body = &bytes.Buffer{}
 
@@ -703,7 +702,7 @@ func TestSubmitAggregateAndProofs(t *testing.T) {
 			_, err := body.WriteString(singleAggregate)
 			require.NoError(t, err)
 			request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
-			request.Header.Set(api.VersionHeader, version.String(version.Phase0))
+			request.Header.Set(httputil.VersionHeader, version.String(version.Phase0))
 			writer := httptest.NewRecorder()
 			writer.Body = &bytes.Buffer{}
 
@@ -720,7 +719,7 @@ func TestSubmitAggregateAndProofs(t *testing.T) {
 			_, err := body.WriteString(multipleAggregatesElectra)
 			require.NoError(t, err)
 			request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
-			request.Header.Set(api.VersionHeader, version.String(version.Electra))
+			request.Header.Set(httputil.VersionHeader, version.String(version.Electra))
 			writer := httptest.NewRecorder()
 			writer.Body = &bytes.Buffer{}
 
@@ -737,7 +736,7 @@ func TestSubmitAggregateAndProofs(t *testing.T) {
 			_, err := body.WriteString(multipleAggregates)
 			require.NoError(t, err)
 			request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
-			request.Header.Set(api.VersionHeader, version.String(version.Phase0))
+			request.Header.Set(httputil.VersionHeader, version.String(version.Phase0))
 			writer := httptest.NewRecorder()
 			writer.Body = &bytes.Buffer{}
 
@@ -747,7 +746,7 @@ func TestSubmitAggregateAndProofs(t *testing.T) {
 		})
 		t.Run("no body", func(t *testing.T) {
 			request := httptest.NewRequest(http.MethodPost, "http://example.com", nil)
-			request.Header.Set(api.VersionHeader, version.String(version.Electra))
+			request.Header.Set(httputil.VersionHeader, version.String(version.Electra))
 			writer := httptest.NewRecorder()
 			writer.Body = &bytes.Buffer{}
 
@@ -760,7 +759,7 @@ func TestSubmitAggregateAndProofs(t *testing.T) {
 		})
 		t.Run("no body-pre-electra", func(t *testing.T) {
 			request := httptest.NewRequest(http.MethodPost, "http://example.com", nil)
-			request.Header.Set(api.VersionHeader, version.String(version.Bellatrix))
+			request.Header.Set(httputil.VersionHeader, version.String(version.Bellatrix))
 			writer := httptest.NewRecorder()
 			writer.Body = &bytes.Buffer{}
 
@@ -776,7 +775,7 @@ func TestSubmitAggregateAndProofs(t *testing.T) {
 			_, err := body.WriteString("[]")
 			require.NoError(t, err)
 			request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
-			request.Header.Set(api.VersionHeader, version.String(version.Electra))
+			request.Header.Set(httputil.VersionHeader, version.String(version.Electra))
 			writer := httptest.NewRecorder()
 			writer.Body = &bytes.Buffer{}
 
@@ -792,7 +791,7 @@ func TestSubmitAggregateAndProofs(t *testing.T) {
 			_, err := body.WriteString("[]")
 			require.NoError(t, err)
 			request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
-			request.Header.Set(api.VersionHeader, version.String(version.Altair))
+			request.Header.Set(httputil.VersionHeader, version.String(version.Altair))
 			writer := httptest.NewRecorder()
 			writer.Body = &bytes.Buffer{}
 
@@ -808,7 +807,7 @@ func TestSubmitAggregateAndProofs(t *testing.T) {
 			_, err := body.WriteString(invalidAggregateElectra)
 			require.NoError(t, err)
 			request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
-			request.Header.Set(api.VersionHeader, version.String(version.Electra))
+			request.Header.Set(httputil.VersionHeader, version.String(version.Electra))
 			writer := httptest.NewRecorder()
 			writer.Body = &bytes.Buffer{}
 
@@ -823,7 +822,7 @@ func TestSubmitAggregateAndProofs(t *testing.T) {
 			_, err := body.WriteString(invalidAggregate)
 			require.NoError(t, err)
 			request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
-			request.Header.Set(api.VersionHeader, version.String(version.Deneb))
+			request.Header.Set(httputil.VersionHeader, version.String(version.Deneb))
 			writer := httptest.NewRecorder()
 			writer.Body = &bytes.Buffer{}
 

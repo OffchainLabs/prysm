@@ -11,9 +11,8 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api"
+	"github.com/prysmaticlabs/prysm/v5/api/httputil"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
@@ -33,7 +32,7 @@ func TestGet(t *testing.T) {
 		marshalledJson, err := json.Marshal(genesisJson)
 		require.NoError(t, err)
 
-		w.Header().Set("Content-Type", api.JsonMediaType)
+		w.Header().Set("Content-Type", httputil.JsonMediaType)
 		_, err = w.Write(marshalledJson)
 		require.NoError(t, err)
 	})
@@ -67,7 +66,7 @@ func TestPost(t *testing.T) {
 	mux.HandleFunc(endpoint, func(w http.ResponseWriter, r *http.Request) {
 		// Make sure the request headers have been set
 		assert.Equal(t, "bar", r.Header.Get("foo"))
-		assert.Equal(t, api.JsonMediaType, r.Header.Get("Content-Type"))
+		assert.Equal(t, httputil.JsonMediaType, r.Header.Get("Content-Type"))
 
 		// Make sure the data matches
 		receivedBytes := make([]byte, len(dataBytes))
@@ -79,7 +78,7 @@ func TestPost(t *testing.T) {
 		marshalledJson, err := json.Marshal(genesisJson)
 		require.NoError(t, err)
 
-		w.Header().Set("Content-Type", api.JsonMediaType)
+		w.Header().Set("Content-Type", httputil.JsonMediaType)
 		_, err = w.Write(marshalledJson)
 		require.NoError(t, err)
 	})
@@ -115,7 +114,7 @@ func Test_decodeResp(t *testing.T) {
 			Status:     "200",
 			StatusCode: http.StatusOK,
 			Body:       io.NopCloser(&body),
-			Header:     map[string][]string{"Content-Type": {api.OctetStreamMediaType}},
+			Header:     map[string][]string{"Content-Type": {httputil.OctetStreamMediaType}},
 		}
 		require.NoError(t, decodeResp(r, nil))
 	})
@@ -125,7 +124,7 @@ func Test_decodeResp(t *testing.T) {
 			Status:     "204",
 			StatusCode: http.StatusNoContent,
 			Body:       io.NopCloser(&body),
-			Header:     map[string][]string{"Content-Type": {api.OctetStreamMediaType}},
+			Header:     map[string][]string{"Content-Type": {httputil.OctetStreamMediaType}},
 		}
 		require.NoError(t, decodeResp(r, nil))
 	})
@@ -137,7 +136,7 @@ func Test_decodeResp(t *testing.T) {
 			Status:     "500",
 			StatusCode: http.StatusInternalServerError,
 			Body:       io.NopCloser(&body),
-			Header:     map[string][]string{"Content-Type": {api.OctetStreamMediaType}},
+			Header:     map[string][]string{"Content-Type": {httputil.OctetStreamMediaType}},
 		}
 		err = decodeResp(r, nil)
 		errJson := &httputil.DefaultJsonError{}
@@ -154,7 +153,7 @@ func Test_decodeResp(t *testing.T) {
 			Status:     "200",
 			StatusCode: http.StatusOK,
 			Body:       io.NopCloser(&body),
-			Header:     map[string][]string{"Content-Type": {api.JsonMediaType}},
+			Header:     map[string][]string{"Content-Type": {httputil.JsonMediaType}},
 		}
 		resp := &j{}
 		require.NoError(t, decodeResp(r, resp))
@@ -166,7 +165,7 @@ func Test_decodeResp(t *testing.T) {
 			Status:     "200",
 			StatusCode: http.StatusOK,
 			Body:       io.NopCloser(&body),
-			Header:     map[string][]string{"Content-Type": {api.JsonMediaType}},
+			Header:     map[string][]string{"Content-Type": {httputil.JsonMediaType}},
 		}
 		require.NoError(t, decodeResp(r, nil))
 	})
@@ -176,7 +175,7 @@ func Test_decodeResp(t *testing.T) {
 			Status:     "204",
 			StatusCode: http.StatusNoContent,
 			Body:       io.NopCloser(&body),
-			Header:     map[string][]string{"Content-Type": {api.JsonMediaType}},
+			Header:     map[string][]string{"Content-Type": {httputil.JsonMediaType}},
 		}
 		require.NoError(t, decodeResp(r, nil))
 	})
@@ -189,7 +188,7 @@ func Test_decodeResp(t *testing.T) {
 			Status:     "500",
 			StatusCode: http.StatusInternalServerError,
 			Body:       io.NopCloser(&body),
-			Header:     map[string][]string{"Content-Type": {api.JsonMediaType}},
+			Header:     map[string][]string{"Content-Type": {httputil.JsonMediaType}},
 		}
 		err = decodeResp(r, nil)
 		errJson := &httputil.DefaultJsonError{}
@@ -205,7 +204,7 @@ func Test_decodeResp(t *testing.T) {
 			Status:     "200",
 			StatusCode: http.StatusOK,
 			Body:       io.NopCloser(&body),
-			Header:     map[string][]string{"Content-Type": {api.JsonMediaType}},
+			Header:     map[string][]string{"Content-Type": {httputil.JsonMediaType}},
 			Request:    &http.Request{},
 		}
 		resp := &j{}
@@ -220,7 +219,7 @@ func Test_decodeResp(t *testing.T) {
 			Status:     "500",
 			StatusCode: http.StatusInternalServerError,
 			Body:       io.NopCloser(&body),
-			Header:     map[string][]string{"Content-Type": {api.JsonMediaType}},
+			Header:     map[string][]string{"Content-Type": {httputil.JsonMediaType}},
 			Request:    &http.Request{},
 		}
 		err = decodeResp(r, nil)

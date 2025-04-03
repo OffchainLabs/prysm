@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api"
+	httputil2 "github.com/prysmaticlabs/prysm/v5/api/httputil"
 	"github.com/prysmaticlabs/prysm/v5/api/server"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
@@ -26,7 +26,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
 	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
@@ -64,7 +63,7 @@ func (s *Server) ListAttestations(w http.ResponseWriter, r *http.Request) {
 		var includeAttestation bool
 		att, ok := a.(*eth.Attestation)
 		if !ok {
-			httputil.HandleError(w, fmt.Sprintf("Unable to convert attestation of type %T", a), http.StatusInternalServerError)
+			httputil2.HandleError(w, fmt.Sprintf("Unable to convert attestation of type %T", a), http.StatusInternalServerError)
 			return
 		}
 
@@ -77,11 +76,11 @@ func (s *Server) ListAttestations(w http.ResponseWriter, r *http.Request) {
 
 	attsData, err := json.Marshal(filteredAtts)
 	if err != nil {
-		httputil.HandleError(w, "Could not marshal attestations: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not marshal attestations: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	httputil.WriteJson(w, &structs.ListAttestationsResponse{
+	httputil2.WriteJson(w, &structs.ListAttestationsResponse{
 		Data: attsData,
 	})
 }
@@ -120,7 +119,7 @@ func (s *Server) ListAttestationsV2(w http.ResponseWriter, r *http.Request) {
 		if v >= version.Electra && att.Version() >= version.Electra {
 			attElectra, ok := att.(*eth.AttestationElectra)
 			if !ok {
-				httputil.HandleError(w, fmt.Sprintf("Unable to convert attestation of type %T", att), http.StatusInternalServerError)
+				httputil2.HandleError(w, fmt.Sprintf("Unable to convert attestation of type %T", att), http.StatusInternalServerError)
 				return
 			}
 
@@ -132,7 +131,7 @@ func (s *Server) ListAttestationsV2(w http.ResponseWriter, r *http.Request) {
 		} else if v < version.Electra && att.Version() < version.Electra {
 			attOld, ok := att.(*eth.Attestation)
 			if !ok {
-				httputil.HandleError(w, fmt.Sprintf("Unable to convert attestation of type %T", att), http.StatusInternalServerError)
+				httputil2.HandleError(w, fmt.Sprintf("Unable to convert attestation of type %T", att), http.StatusInternalServerError)
 				return
 			}
 
@@ -146,12 +145,12 @@ func (s *Server) ListAttestationsV2(w http.ResponseWriter, r *http.Request) {
 
 	attsData, err := json.Marshal(filteredAtts)
 	if err != nil {
-		httputil.HandleError(w, "Could not marshal attestations: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not marshal attestations: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	w.Header().Set(api.VersionHeader, version.String(v))
-	httputil.WriteJson(w, &structs.ListAttestationsResponse{
+	w.Header().Set(httputil2.VersionHeader, version.String(v))
+	httputil2.WriteJson(w, &structs.ListAttestationsResponse{
 		Version: version.String(v),
 		Data:    attsData,
 	})
@@ -186,21 +185,21 @@ func (s *Server) SubmitAttestations(w http.ResponseWriter, r *http.Request) {
 	err := json.NewDecoder(r.Body).Decode(&req.Data)
 	switch {
 	case errors.Is(err, io.EOF):
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		httputil2.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	case err != nil:
-		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	attFailures, failedBroadcasts, err := s.handleAttestations(ctx, req.Data)
 	if err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	if len(failedBroadcasts) > 0 {
-		httputil.HandleError(
+		httputil2.HandleError(
 			w,
 			fmt.Sprintf("Attestations at index %s could not be broadcasted", strings.Join(failedBroadcasts, ", ")),
 			http.StatusInternalServerError,
@@ -214,7 +213,7 @@ func (s *Server) SubmitAttestations(w http.ResponseWriter, r *http.Request) {
 			Message:  "One or more attestations failed validation",
 			Failures: attFailures,
 		}
-		httputil.WriteError(w, failuresErr)
+		httputil2.WriteError(w, failuresErr)
 	}
 }
 
@@ -224,14 +223,14 @@ func (s *Server) SubmitAttestationsV2(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "beacon.SubmitAttestationsV2")
 	defer span.End()
 
-	versionHeader := r.Header.Get(api.VersionHeader)
+	versionHeader := r.Header.Get(httputil2.VersionHeader)
 	if versionHeader == "" {
-		httputil.HandleError(w, api.VersionHeader+" header is required", http.StatusBadRequest)
+		httputil2.HandleError(w, httputil2.VersionHeader+" header is required", http.StatusBadRequest)
 		return
 	}
 	v, err := version.FromString(versionHeader)
 	if err != nil {
-		httputil.HandleError(w, "Invalid version: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "Invalid version: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -239,10 +238,10 @@ func (s *Server) SubmitAttestationsV2(w http.ResponseWriter, r *http.Request) {
 	err = json.NewDecoder(r.Body).Decode(&req.Data)
 	switch {
 	case errors.Is(err, io.EOF):
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		httputil2.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	case err != nil:
-		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -255,12 +254,12 @@ func (s *Server) SubmitAttestationsV2(w http.ResponseWriter, r *http.Request) {
 		attFailures, failedBroadcasts, err = s.handleAttestations(ctx, req.Data)
 	}
 	if err != nil {
-		httputil.HandleError(w, fmt.Sprintf("Failed to handle attestations: %v", err), http.StatusBadRequest)
+		httputil2.HandleError(w, fmt.Sprintf("Failed to handle attestations: %v", err), http.StatusBadRequest)
 		return
 	}
 
 	if len(failedBroadcasts) > 0 {
-		httputil.HandleError(
+		httputil2.HandleError(
 			w,
 			fmt.Sprintf("Attestations at index %s could not be broadcasted", strings.Join(failedBroadcasts, ", ")),
 			http.StatusInternalServerError,
@@ -274,7 +273,7 @@ func (s *Server) SubmitAttestationsV2(w http.ResponseWriter, r *http.Request) {
 			Message:  "One or more attestations failed validation",
 			Failures: attFailures,
 		}
-		httputil.WriteError(w, failuresErr)
+		httputil2.WriteError(w, failuresErr)
 	}
 }
 
@@ -441,7 +440,7 @@ func (s *Server) ListVoluntaryExits(w http.ResponseWriter, r *http.Request) {
 
 	sourceExits, err := s.VoluntaryExitsPool.PendingExits()
 	if err != nil {
-		httputil.HandleError(w, "Could not get exits from the pool: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not get exits from the pool: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	exits := make([]*structs.SignedVoluntaryExit, len(sourceExits))
@@ -449,7 +448,7 @@ func (s *Server) ListVoluntaryExits(w http.ResponseWriter, r *http.Request) {
 		exits[i] = structs.SignedExitFromConsensus(e)
 	}
 
-	httputil.WriteJson(w, &structs.ListVoluntaryExitsResponse{Data: exits})
+	httputil2.WriteJson(w, &structs.ListVoluntaryExitsResponse{Data: exits})
 }
 
 // SubmitVoluntaryExit submits a SignedVoluntaryExit object to node's pool
@@ -462,51 +461,51 @@ func (s *Server) SubmitVoluntaryExit(w http.ResponseWriter, r *http.Request) {
 	err := json.NewDecoder(r.Body).Decode(&req)
 	switch {
 	case errors.Is(err, io.EOF):
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		httputil2.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	case err != nil:
-		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	exit, err := req.ToConsensus()
 	if err != nil {
-		httputil.HandleError(w, "Could not convert request exit to consensus exit: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "Could not convert request exit to consensus exit: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	headState, err := s.ChainInfoFetcher.HeadState(ctx)
 	if err != nil {
-		httputil.HandleError(w, "Could not get head state: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not get head state: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	epochStart, err := slots.EpochStart(exit.Exit.Epoch)
 	if err != nil {
-		httputil.HandleError(w, "Could not get epoch start: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not get epoch start: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	headState, err = transition.ProcessSlotsIfPossible(ctx, headState, epochStart)
 	if err != nil {
-		httputil.HandleError(w, "Could not process slots: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not process slots: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	val, err := headState.ValidatorAtIndexReadOnly(exit.Exit.ValidatorIndex)
 	if err != nil {
 		if errors.Is(err, consensus_types.ErrOutOfBounds) {
-			httputil.HandleError(w, "Could not get validator: "+err.Error(), http.StatusBadRequest)
+			httputil2.HandleError(w, "Could not get validator: "+err.Error(), http.StatusBadRequest)
 			return
 		}
-		httputil.HandleError(w, "Could not get validator: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not get validator: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if err = blocks.VerifyExitAndSignature(val, headState, exit); err != nil {
-		httputil.HandleError(w, "Invalid exit: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "Invalid exit: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	s.VoluntaryExitsPool.InsertVoluntaryExit(exit)
 	if err = s.Broadcaster.Broadcast(ctx, exit); err != nil {
-		httputil.HandleError(w, "Could not broadcast exit: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not broadcast exit: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 }
@@ -520,14 +519,14 @@ func (s *Server) SubmitSyncCommitteeSignatures(w http.ResponseWriter, r *http.Re
 	err := json.NewDecoder(r.Body).Decode(&req.Data)
 	switch {
 	case errors.Is(err, io.EOF):
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		httputil2.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	case err != nil:
-		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 	if len(req.Data) == 0 {
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		httputil2.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	}
 
@@ -547,7 +546,7 @@ func (s *Server) SubmitSyncCommitteeSignatures(w http.ResponseWriter, r *http.Re
 
 	for _, msg := range validMessages {
 		if rpcerr := s.CoreService.SubmitSyncMessage(ctx, msg); rpcerr != nil {
-			httputil.HandleError(w, "Could not submit message: "+rpcerr.Err.Error(), core.ErrorReasonToHTTP(rpcerr.Reason))
+			httputil2.HandleError(w, "Could not submit message: "+rpcerr.Err.Error(), core.ErrorReasonToHTTP(rpcerr.Reason))
 			return
 		}
 	}
@@ -558,7 +557,7 @@ func (s *Server) SubmitSyncCommitteeSignatures(w http.ResponseWriter, r *http.Re
 			Message:  "One or more messages failed validation",
 			Failures: msgFailures,
 		}
-		httputil.WriteError(w, failuresErr)
+		httputil2.WriteError(w, failuresErr)
 	}
 }
 
@@ -569,7 +568,7 @@ func (s *Server) SubmitBLSToExecutionChanges(w http.ResponseWriter, r *http.Requ
 	defer span.End()
 	st, err := s.ChainInfoFetcher.HeadStateReadOnly(ctx)
 	if err != nil {
-		httputil.HandleError(w, fmt.Sprintf("Could not get head state: %v", err), http.StatusInternalServerError)
+		httputil2.HandleError(w, fmt.Sprintf("Could not get head state: %v", err), http.StatusInternalServerError)
 		return
 	}
 	var failures []*server.IndexedVerificationFailure
@@ -579,14 +578,14 @@ func (s *Server) SubmitBLSToExecutionChanges(w http.ResponseWriter, r *http.Requ
 	err = json.NewDecoder(r.Body).Decode(&req)
 	switch {
 	case errors.Is(err, io.EOF):
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		httputil2.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	case err != nil:
-		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 	if len(req) == 0 {
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		httputil2.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	}
 
@@ -632,7 +631,7 @@ func (s *Server) SubmitBLSToExecutionChanges(w http.ResponseWriter, r *http.Requ
 			Message:  "One or more BLSToExecutionChange failed validation",
 			Failures: failures,
 		}
-		httputil.WriteError(w, failuresErr)
+		httputil2.WriteError(w, failuresErr)
 	}
 }
 
@@ -691,11 +690,11 @@ func (s *Server) ListBLSToExecutionChanges(w http.ResponseWriter, r *http.Reques
 
 	sourceChanges, err := s.BLSChangesPool.PendingBLSToExecChanges()
 	if err != nil {
-		httputil.HandleError(w, fmt.Sprintf("Could not get BLS to execution changes: %v", err), http.StatusInternalServerError)
+		httputil2.HandleError(w, fmt.Sprintf("Could not get BLS to execution changes: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	httputil.WriteJson(w, &structs.BLSToExecutionChangesPoolResponse{
+	httputil2.WriteJson(w, &structs.BLSToExecutionChangesPoolResponse{
 		Data: structs.SignedBLSChangesFromConsensus(sourceChanges),
 	})
 }
@@ -709,7 +708,7 @@ func (s *Server) GetAttesterSlashings(w http.ResponseWriter, r *http.Request) {
 
 	headState, err := s.ChainInfoFetcher.HeadStateReadOnly(ctx)
 	if err != nil {
-		httputil.HandleError(w, "Could not get head state: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not get head state: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	sourceSlashings := s.SlashingsPool.PendingAttesterSlashings(ctx, headState, true /* return unlimited slashings */)
@@ -717,17 +716,17 @@ func (s *Server) GetAttesterSlashings(w http.ResponseWriter, r *http.Request) {
 	for i, slashing := range sourceSlashings {
 		as, ok := slashing.(*eth.AttesterSlashing)
 		if !ok {
-			httputil.HandleError(w, fmt.Sprintf("Unable to convert slashing of type %T", slashing), http.StatusInternalServerError)
+			httputil2.HandleError(w, fmt.Sprintf("Unable to convert slashing of type %T", slashing), http.StatusInternalServerError)
 			return
 		}
 		slashings[i] = structs.AttesterSlashingFromConsensus(as)
 	}
 	attBytes, err := json.Marshal(slashings)
 	if err != nil {
-		httputil.HandleError(w, fmt.Sprintf("Failed to marshal slashings: %v", err), http.StatusInternalServerError)
+		httputil2.HandleError(w, fmt.Sprintf("Failed to marshal slashings: %v", err), http.StatusInternalServerError)
 		return
 	}
-	httputil.WriteJson(w, &structs.GetAttesterSlashingsResponse{Data: attBytes})
+	httputil2.WriteJson(w, &structs.GetAttesterSlashingsResponse{Data: attBytes})
 }
 
 // GetAttesterSlashingsV2 retrieves attester slashings known by the node but
@@ -739,7 +738,7 @@ func (s *Server) GetAttesterSlashingsV2(w http.ResponseWriter, r *http.Request) 
 	v := slots.ToForkVersion(s.TimeFetcher.CurrentSlot())
 	headState, err := s.ChainInfoFetcher.HeadStateReadOnly(ctx)
 	if err != nil {
-		httputil.HandleError(w, "Could not get head state: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not get head state: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	var attStructs []interface{}
@@ -750,14 +749,14 @@ func (s *Server) GetAttesterSlashingsV2(w http.ResponseWriter, r *http.Request) 
 		if v >= version.Electra && slashing.Version() >= version.Electra {
 			a, ok := slashing.(*eth.AttesterSlashingElectra)
 			if !ok {
-				httputil.HandleError(w, fmt.Sprintf("Unable to convert slashing of type %T to an Electra slashing", slashing), http.StatusInternalServerError)
+				httputil2.HandleError(w, fmt.Sprintf("Unable to convert slashing of type %T to an Electra slashing", slashing), http.StatusInternalServerError)
 				return
 			}
 			attStruct = structs.AttesterSlashingElectraFromConsensus(a)
 		} else if v < version.Electra && slashing.Version() < version.Electra {
 			a, ok := slashing.(*eth.AttesterSlashing)
 			if !ok {
-				httputil.HandleError(w, fmt.Sprintf("Unable to convert slashing of type %T to a Phase0 slashing", slashing), http.StatusInternalServerError)
+				httputil2.HandleError(w, fmt.Sprintf("Unable to convert slashing of type %T to a Phase0 slashing", slashing), http.StatusInternalServerError)
 				return
 			}
 			attStruct = structs.AttesterSlashingFromConsensus(a)
@@ -769,7 +768,7 @@ func (s *Server) GetAttesterSlashingsV2(w http.ResponseWriter, r *http.Request) 
 
 	attBytes, err := json.Marshal(attStructs)
 	if err != nil {
-		httputil.HandleError(w, fmt.Sprintf("Failed to marshal slashing: %v", err), http.StatusInternalServerError)
+		httputil2.HandleError(w, fmt.Sprintf("Failed to marshal slashing: %v", err), http.StatusInternalServerError)
 		return
 	}
 
@@ -777,8 +776,8 @@ func (s *Server) GetAttesterSlashingsV2(w http.ResponseWriter, r *http.Request) 
 		Version: version.String(v),
 		Data:    attBytes,
 	}
-	w.Header().Set(api.VersionHeader, version.String(v))
-	httputil.WriteJson(w, resp)
+	w.Header().Set(httputil2.VersionHeader, version.String(v))
+	httputil2.WriteJson(w, resp)
 }
 
 // SubmitAttesterSlashings submits an attester slashing object to node's pool and
@@ -791,16 +790,16 @@ func (s *Server) SubmitAttesterSlashings(w http.ResponseWriter, r *http.Request)
 	err := json.NewDecoder(r.Body).Decode(&req)
 	switch {
 	case errors.Is(err, io.EOF):
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		httputil2.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	case err != nil:
-		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	slashing, err := req.ToConsensus()
 	if err != nil {
-		httputil.HandleError(w, "Could not convert request slashing to consensus slashing: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "Could not convert request slashing to consensus slashing: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 	s.submitAttesterSlashing(w, ctx, slashing)
@@ -812,13 +811,13 @@ func (s *Server) SubmitAttesterSlashingsV2(w http.ResponseWriter, r *http.Reques
 	ctx, span := trace.StartSpan(r.Context(), "beacon.SubmitAttesterSlashingsV2")
 	defer span.End()
 
-	versionHeader := r.Header.Get(api.VersionHeader)
+	versionHeader := r.Header.Get(httputil2.VersionHeader)
 	if versionHeader == "" {
-		httputil.HandleError(w, api.VersionHeader+" header is required", http.StatusBadRequest)
+		httputil2.HandleError(w, httputil2.VersionHeader+" header is required", http.StatusBadRequest)
 	}
 	v, err := version.FromString(versionHeader)
 	if err != nil {
-		httputil.HandleError(w, "Invalid version: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "Invalid version: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -827,16 +826,16 @@ func (s *Server) SubmitAttesterSlashingsV2(w http.ResponseWriter, r *http.Reques
 		err := json.NewDecoder(r.Body).Decode(&req)
 		switch {
 		case errors.Is(err, io.EOF):
-			httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+			httputil2.HandleError(w, "No data submitted", http.StatusBadRequest)
 			return
 		case err != nil:
-			httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+			httputil2.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
 			return
 		}
 
 		slashing, err := req.ToConsensus()
 		if err != nil {
-			httputil.HandleError(w, "Could not convert request slashing to consensus slashing: "+err.Error(), http.StatusBadRequest)
+			httputil2.HandleError(w, "Could not convert request slashing to consensus slashing: "+err.Error(), http.StatusBadRequest)
 			return
 		}
 		s.submitAttesterSlashing(w, ctx, slashing)
@@ -845,16 +844,16 @@ func (s *Server) SubmitAttesterSlashingsV2(w http.ResponseWriter, r *http.Reques
 		err := json.NewDecoder(r.Body).Decode(&req)
 		switch {
 		case errors.Is(err, io.EOF):
-			httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+			httputil2.HandleError(w, "No data submitted", http.StatusBadRequest)
 			return
 		case err != nil:
-			httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+			httputil2.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
 			return
 		}
 
 		slashing, err := req.ToConsensus()
 		if err != nil {
-			httputil.HandleError(w, "Could not convert request slashing to consensus slashing: "+err.Error(), http.StatusBadRequest)
+			httputil2.HandleError(w, "Could not convert request slashing to consensus slashing: "+err.Error(), http.StatusBadRequest)
 			return
 		}
 		s.submitAttesterSlashing(w, ctx, slashing)
@@ -868,23 +867,23 @@ func (s *Server) submitAttesterSlashing(
 ) {
 	headState, err := s.ChainInfoFetcher.HeadState(ctx)
 	if err != nil {
-		httputil.HandleError(w, "Could not get head state: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not get head state: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	headState, err = transition.ProcessSlotsIfPossible(ctx, headState, slashing.FirstAttestation().GetData().Slot)
 	if err != nil {
-		httputil.HandleError(w, "Could not process slots: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not process slots: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	err = blocks.VerifyAttesterSlashing(ctx, headState, slashing)
 	if err != nil {
-		httputil.HandleError(w, "Invalid attester slashing: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "Invalid attester slashing: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 	err = s.SlashingsPool.InsertAttesterSlashing(ctx, headState, slashing)
 	if err != nil {
-		httputil.HandleError(w, "Could not insert attester slashing into pool: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not insert attester slashing into pool: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	// notify events
@@ -896,7 +895,7 @@ func (s *Server) submitAttesterSlashing(
 	})
 	if !features.Get().DisableBroadcastSlashings {
 		if err = s.Broadcaster.Broadcast(ctx, slashing); err != nil {
-			httputil.HandleError(w, "Could not broadcast slashing object: "+err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, "Could not broadcast slashing object: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 	}
@@ -910,13 +909,13 @@ func (s *Server) GetProposerSlashings(w http.ResponseWriter, r *http.Request) {
 
 	headState, err := s.ChainInfoFetcher.HeadStateReadOnly(ctx)
 	if err != nil {
-		httputil.HandleError(w, "Could not get head state: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not get head state: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	sourceSlashings := s.SlashingsPool.PendingProposerSlashings(ctx, headState, true /* return unlimited slashings */)
 	slashings := structs.ProposerSlashingsFromConsensus(sourceSlashings)
 
-	httputil.WriteJson(w, &structs.GetProposerSlashingsResponse{Data: slashings})
+	httputil2.WriteJson(w, &structs.GetProposerSlashingsResponse{Data: slashings})
 }
 
 // SubmitProposerSlashing submits a proposer slashing object to node's pool and if
@@ -929,37 +928,37 @@ func (s *Server) SubmitProposerSlashing(w http.ResponseWriter, r *http.Request) 
 	err := json.NewDecoder(r.Body).Decode(&req)
 	switch {
 	case errors.Is(err, io.EOF):
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		httputil2.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	case err != nil:
-		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	slashing, err := req.ToConsensus()
 	if err != nil {
-		httputil.HandleError(w, "Could not convert request slashing to consensus slashing: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "Could not convert request slashing to consensus slashing: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 	headState, err := s.ChainInfoFetcher.HeadState(ctx)
 	if err != nil {
-		httputil.HandleError(w, "Could not get head state: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not get head state: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	headState, err = transition.ProcessSlotsIfPossible(ctx, headState, slashing.Header_1.Header.Slot)
 	if err != nil {
-		httputil.HandleError(w, "Could not process slots: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not process slots: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	err = blocks.VerifyProposerSlashing(headState, slashing)
 	if err != nil {
-		httputil.HandleError(w, "Invalid proposer slashing: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "Invalid proposer slashing: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	err = s.SlashingsPool.InsertProposerSlashing(ctx, headState, slashing)
 	if err != nil {
-		httputil.HandleError(w, "Could not insert proposer slashing into pool: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not insert proposer slashing into pool: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -973,7 +972,7 @@ func (s *Server) SubmitProposerSlashing(w http.ResponseWriter, r *http.Request) 
 
 	if !features.Get().DisableBroadcastSlashings {
 		if err = s.Broadcaster.Broadcast(ctx, slashing); err != nil {
-			httputil.HandleError(w, "Could not broadcast slashing object: "+err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, "Could not broadcast slashing object: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 	}

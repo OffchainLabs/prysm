@@ -7,11 +7,11 @@ import (
 	"strconv"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	httputil2 "github.com/prysmaticlabs/prysm/v5/api/httputil"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/shared"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/eth/v1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 )
@@ -33,7 +33,7 @@ func (s *Server) GetSyncStatus(w http.ResponseWriter, r *http.Request) {
 
 	isOptimistic, err := s.OptimisticModeFetcher.IsOptimistic(ctx)
 	if err != nil {
-		httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -47,7 +47,7 @@ func (s *Server) GetSyncStatus(w http.ResponseWriter, r *http.Request) {
 			ElOffline:    !s.ExecutionChainInfoFetcher.ExecutionClientConnected(),
 		},
 	}
-	httputil.WriteJson(w, response)
+	httputil2.WriteJson(w, response)
 }
 
 // GetIdentity retrieves data about the node's network presence.
@@ -63,7 +63,7 @@ func (s *Server) GetIdentity(w http.ResponseWriter, r *http.Request) {
 	}
 	sourceDisc, err := s.PeerManager.DiscoveryAddresses()
 	if err != nil {
-		httputil.HandleError(w, "Could not obtain discovery address: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not obtain discovery address: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	discoveryAddresses := make([]string, len(sourceDisc))
@@ -72,7 +72,7 @@ func (s *Server) GetIdentity(w http.ResponseWriter, r *http.Request) {
 	}
 	serializedEnr, err := p2p.SerializeENR(s.PeerManager.ENR())
 	if err != nil {
-		httputil.HandleError(w, "Could not obtain enr: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not obtain enr: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -88,7 +88,7 @@ func (s *Server) GetIdentity(w http.ResponseWriter, r *http.Request) {
 			},
 		},
 	}
-	httputil.WriteJson(w, resp)
+	httputil2.WriteJson(w, resp)
 }
 
 // GetVersion requests that the beacon node identify information about its implementation in a
@@ -103,7 +103,7 @@ func (*Server) GetVersion(w http.ResponseWriter, r *http.Request) {
 			Version: v,
 		},
 	}
-	httputil.WriteJson(w, resp)
+	httputil2.WriteJson(w, resp)
 }
 
 // GetHealth returns node health status in http status codes. Useful for load balancers.
@@ -115,13 +115,13 @@ func (s *Server) GetHealth(w http.ResponseWriter, r *http.Request) {
 	// lint:ignore uintcast -- custom syncing status being outside of range is harmless
 	intSyncingStatus := int(syncingStatus)
 	if !ok || (rawSyncingStatus != "" && http.StatusText(intSyncingStatus) == "") {
-		httputil.HandleError(w, "syncing_status is not a valid HTTP status code", http.StatusBadRequest)
+		httputil2.HandleError(w, "syncing_status is not a valid HTTP status code", http.StatusBadRequest)
 		return
 	}
 
 	optimistic, err := s.OptimisticModeFetcher.IsOptimistic(ctx)
 	if err != nil {
-		httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
 	}
 	if s.SyncChecker.Synced() && !optimistic {
 		return

@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	"github.com/prysmaticlabs/go-bitfield"
-	"github.com/prysmaticlabs/prysm/v5/api"
+	"github.com/prysmaticlabs/prysm/v5/api/httputil"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
@@ -90,8 +90,8 @@ func TestClient_RegisterValidator(t *testing.T) {
 	t.Run("JSON success", func(t *testing.T) {
 		hc := &http.Client{
 			Transport: roundtrip(func(r *http.Request) (*http.Response, error) {
-				require.Equal(t, api.JsonMediaType, r.Header.Get("Content-Type"))
-				require.Equal(t, api.JsonMediaType, r.Header.Get("Accept"))
+				require.Equal(t, httputil.JsonMediaType, r.Header.Get("Content-Type"))
+				require.Equal(t, httputil.JsonMediaType, r.Header.Get("Accept"))
 				body, err := io.ReadAll(r.Body)
 				defer func() {
 					require.NoError(t, r.Body.Close())
@@ -125,8 +125,8 @@ func TestClient_RegisterValidator(t *testing.T) {
 	t.Run("SSZ success", func(t *testing.T) {
 		hc := &http.Client{
 			Transport: roundtrip(func(r *http.Request) (*http.Response, error) {
-				require.Equal(t, api.OctetStreamMediaType, r.Header.Get("Content-Type"))
-				require.Equal(t, api.OctetStreamMediaType, r.Header.Get("Accept"))
+				require.Equal(t, httputil.OctetStreamMediaType, r.Header.Get("Content-Type"))
+				require.Equal(t, httputil.OctetStreamMediaType, r.Header.Get("Accept"))
 				body, err := io.ReadAll(r.Body)
 				defer func() {
 					require.NoError(t, r.Body.Close())
@@ -220,7 +220,7 @@ func TestClient_GetHeader(t *testing.T) {
 		hc := &http.Client{
 			Transport: roundtrip(func(r *http.Request) (*http.Response, error) {
 				require.Equal(t, expectedPath, r.URL.Path)
-				require.Equal(t, api.JsonMediaType, r.Header.Get("Accept"))
+				require.Equal(t, httputil.JsonMediaType, r.Header.Get("Accept"))
 				return &http.Response{
 					StatusCode: http.StatusOK,
 					Body:       io.NopCloser(bytes.NewBufferString(testExampleHeaderResponse)),
@@ -255,7 +255,7 @@ func TestClient_GetHeader(t *testing.T) {
 	t.Run("bellatrix ssz", func(t *testing.T) {
 		hc := &http.Client{
 			Transport: roundtrip(func(r *http.Request) (*http.Response, error) {
-				require.Equal(t, api.OctetStreamMediaType, r.Header.Get("Accept"))
+				require.Equal(t, httputil.OctetStreamMediaType, r.Header.Get("Accept"))
 				require.Equal(t, expectedPath, r.URL.Path)
 				epr := &ExecHeaderResponse{}
 				require.NoError(t, json.Unmarshal([]byte(testExampleHeaderResponse), epr))
@@ -264,7 +264,7 @@ func TestClient_GetHeader(t *testing.T) {
 				ssz, err := pro.MarshalSSZ()
 				require.NoError(t, err)
 				header := http.Header{}
-				header.Set(api.VersionHeader, "bellatrix")
+				header.Set(httputil.VersionHeader, "bellatrix")
 				return &http.Response{
 					StatusCode: http.StatusOK,
 					Header:     header,
@@ -301,7 +301,7 @@ func TestClient_GetHeader(t *testing.T) {
 	t.Run("capella", func(t *testing.T) {
 		hc := &http.Client{
 			Transport: roundtrip(func(r *http.Request) (*http.Response, error) {
-				require.Equal(t, api.JsonMediaType, r.Header.Get("Accept"))
+				require.Equal(t, httputil.JsonMediaType, r.Header.Get("Accept"))
 				require.Equal(t, expectedPath, r.URL.Path)
 				return &http.Response{
 					StatusCode: http.StatusOK,
@@ -333,7 +333,7 @@ func TestClient_GetHeader(t *testing.T) {
 	t.Run("capella ssz", func(t *testing.T) {
 		hc := &http.Client{
 			Transport: roundtrip(func(r *http.Request) (*http.Response, error) {
-				require.Equal(t, api.OctetStreamMediaType, r.Header.Get("Accept"))
+				require.Equal(t, httputil.OctetStreamMediaType, r.Header.Get("Accept"))
 				require.Equal(t, expectedPath, r.URL.Path)
 				epr := &ExecHeaderResponseCapella{}
 				require.NoError(t, json.Unmarshal([]byte(testExampleHeaderResponseCapella), epr))
@@ -342,7 +342,7 @@ func TestClient_GetHeader(t *testing.T) {
 				ssz, err := pro.MarshalSSZ()
 				require.NoError(t, err)
 				header := http.Header{}
-				header.Set(api.VersionHeader, "capella")
+				header.Set(httputil.VersionHeader, "capella")
 				return &http.Response{
 					StatusCode: http.StatusOK,
 					Header:     header,
@@ -375,7 +375,7 @@ func TestClient_GetHeader(t *testing.T) {
 	t.Run("deneb", func(t *testing.T) {
 		hc := &http.Client{
 			Transport: roundtrip(func(r *http.Request) (*http.Response, error) {
-				require.Equal(t, api.JsonMediaType, r.Header.Get("Accept"))
+				require.Equal(t, httputil.JsonMediaType, r.Header.Get("Accept"))
 				require.Equal(t, expectedPath, r.URL.Path)
 				return &http.Response{
 					StatusCode: http.StatusOK,
@@ -415,7 +415,7 @@ func TestClient_GetHeader(t *testing.T) {
 	t.Run("deneb ssz", func(t *testing.T) {
 		hc := &http.Client{
 			Transport: roundtrip(func(r *http.Request) (*http.Response, error) {
-				require.Equal(t, api.OctetStreamMediaType, r.Header.Get("Accept"))
+				require.Equal(t, httputil.OctetStreamMediaType, r.Header.Get("Accept"))
 				require.Equal(t, expectedPath, r.URL.Path)
 				epr := &ExecHeaderResponseDeneb{}
 				require.NoError(t, json.Unmarshal([]byte(testExampleHeaderResponseDeneb), epr))
@@ -424,7 +424,7 @@ func TestClient_GetHeader(t *testing.T) {
 				ssz, err := pro.MarshalSSZ()
 				require.NoError(t, err)
 				header := http.Header{}
-				header.Set(api.VersionHeader, "deneb")
+				header.Set(httputil.VersionHeader, "deneb")
 				return &http.Response{
 					StatusCode: http.StatusOK,
 					Header:     header,
@@ -483,7 +483,7 @@ func TestClient_GetHeader(t *testing.T) {
 	t.Run("electra", func(t *testing.T) {
 		hc := &http.Client{
 			Transport: roundtrip(func(r *http.Request) (*http.Response, error) {
-				require.Equal(t, api.JsonMediaType, r.Header.Get("Accept"))
+				require.Equal(t, httputil.JsonMediaType, r.Header.Get("Accept"))
 				require.Equal(t, expectedPath, r.URL.Path)
 				return &http.Response{
 					StatusCode: http.StatusOK,
@@ -528,7 +528,7 @@ func TestClient_GetHeader(t *testing.T) {
 	t.Run("electra ssz", func(t *testing.T) {
 		hc := &http.Client{
 			Transport: roundtrip(func(r *http.Request) (*http.Response, error) {
-				require.Equal(t, api.OctetStreamMediaType, r.Header.Get("Accept"))
+				require.Equal(t, httputil.OctetStreamMediaType, r.Header.Get("Accept"))
 				require.Equal(t, expectedPath, r.URL.Path)
 				epr := &ExecHeaderResponseElectra{}
 				require.NoError(t, json.Unmarshal([]byte(testExampleHeaderResponseElectra), epr))
@@ -537,7 +537,7 @@ func TestClient_GetHeader(t *testing.T) {
 				ssz, err := pro.MarshalSSZ()
 				require.NoError(t, err)
 				header := http.Header{}
-				header.Set(api.VersionHeader, "electra")
+				header.Set(httputil.VersionHeader, "electra")
 				return &http.Response{
 					StatusCode: http.StatusOK,
 					Header:     header,
@@ -608,8 +608,8 @@ func TestSubmitBlindedBlock(t *testing.T) {
 			Transport: roundtrip(func(r *http.Request) (*http.Response, error) {
 				require.Equal(t, postBlindedBeaconBlockPath, r.URL.Path)
 				require.Equal(t, "bellatrix", r.Header.Get("Eth-Consensus-Version"))
-				require.Equal(t, api.JsonMediaType, r.Header.Get("Content-Type"))
-				require.Equal(t, api.JsonMediaType, r.Header.Get("Accept"))
+				require.Equal(t, httputil.JsonMediaType, r.Header.Get("Content-Type"))
+				require.Equal(t, httputil.JsonMediaType, r.Header.Get("Accept"))
 				return &http.Response{
 					StatusCode: http.StatusOK,
 					Body:       io.NopCloser(bytes.NewBufferString(testExampleExecutionPayload)),
@@ -635,9 +635,9 @@ func TestSubmitBlindedBlock(t *testing.T) {
 		hc := &http.Client{
 			Transport: roundtrip(func(r *http.Request) (*http.Response, error) {
 				require.Equal(t, postBlindedBeaconBlockPath, r.URL.Path)
-				require.Equal(t, "bellatrix", r.Header.Get(api.VersionHeader))
-				require.Equal(t, api.OctetStreamMediaType, r.Header.Get("Content-Type"))
-				require.Equal(t, api.OctetStreamMediaType, r.Header.Get("Accept"))
+				require.Equal(t, "bellatrix", r.Header.Get(httputil.VersionHeader))
+				require.Equal(t, httputil.OctetStreamMediaType, r.Header.Get("Content-Type"))
+				require.Equal(t, httputil.OctetStreamMediaType, r.Header.Get("Accept"))
 				epr := &ExecutionPayloadResponse{}
 				require.NoError(t, json.Unmarshal([]byte(testExampleExecutionPayload), epr))
 				ep := &ExecutionPayload{}
@@ -647,7 +647,7 @@ func TestSubmitBlindedBlock(t *testing.T) {
 				ssz, err := pro.MarshalSSZ()
 				require.NoError(t, err)
 				header := http.Header{}
-				header.Set(api.VersionHeader, "bellatrix")
+				header.Set(httputil.VersionHeader, "bellatrix")
 				return &http.Response{
 					StatusCode: http.StatusOK,
 					Header:     header,
@@ -675,9 +675,9 @@ func TestSubmitBlindedBlock(t *testing.T) {
 		hc := &http.Client{
 			Transport: roundtrip(func(r *http.Request) (*http.Response, error) {
 				require.Equal(t, postBlindedBeaconBlockPath, r.URL.Path)
-				require.Equal(t, "capella", r.Header.Get(api.VersionHeader))
-				require.Equal(t, api.JsonMediaType, r.Header.Get("Content-Type"))
-				require.Equal(t, api.JsonMediaType, r.Header.Get("Accept"))
+				require.Equal(t, "capella", r.Header.Get(httputil.VersionHeader))
+				require.Equal(t, httputil.JsonMediaType, r.Header.Get("Content-Type"))
+				require.Equal(t, httputil.JsonMediaType, r.Header.Get("Accept"))
 				return &http.Response{
 					StatusCode: http.StatusOK,
 					Body:       io.NopCloser(bytes.NewBufferString(testExampleExecutionPayloadCapella)),
@@ -705,9 +705,9 @@ func TestSubmitBlindedBlock(t *testing.T) {
 		hc := &http.Client{
 			Transport: roundtrip(func(r *http.Request) (*http.Response, error) {
 				require.Equal(t, postBlindedBeaconBlockPath, r.URL.Path)
-				require.Equal(t, "capella", r.Header.Get(api.VersionHeader))
-				require.Equal(t, api.OctetStreamMediaType, r.Header.Get("Content-Type"))
-				require.Equal(t, api.OctetStreamMediaType, r.Header.Get("Accept"))
+				require.Equal(t, "capella", r.Header.Get(httputil.VersionHeader))
+				require.Equal(t, httputil.OctetStreamMediaType, r.Header.Get("Content-Type"))
+				require.Equal(t, httputil.OctetStreamMediaType, r.Header.Get("Accept"))
 				epr := &ExecutionPayloadResponse{}
 				require.NoError(t, json.Unmarshal([]byte(testExampleExecutionPayloadCapella), epr))
 				ep := &ExecutionPayloadCapella{}
@@ -717,7 +717,7 @@ func TestSubmitBlindedBlock(t *testing.T) {
 				ssz, err := pro.MarshalSSZ()
 				require.NoError(t, err)
 				header := http.Header{}
-				header.Set(api.VersionHeader, "capella")
+				header.Set(httputil.VersionHeader, "capella")
 				return &http.Response{
 					StatusCode: http.StatusOK,
 					Header:     header,
@@ -748,9 +748,9 @@ func TestSubmitBlindedBlock(t *testing.T) {
 		hc := &http.Client{
 			Transport: roundtrip(func(r *http.Request) (*http.Response, error) {
 				require.Equal(t, postBlindedBeaconBlockPath, r.URL.Path)
-				require.Equal(t, "deneb", r.Header.Get(api.VersionHeader))
-				require.Equal(t, api.JsonMediaType, r.Header.Get("Content-Type"))
-				require.Equal(t, api.JsonMediaType, r.Header.Get("Accept"))
+				require.Equal(t, "deneb", r.Header.Get(httputil.VersionHeader))
+				require.Equal(t, httputil.JsonMediaType, r.Header.Get("Content-Type"))
+				require.Equal(t, httputil.JsonMediaType, r.Header.Get("Accept"))
 				var req structs.SignedBlindedBeaconBlockDeneb
 				err := json.NewDecoder(r.Body).Decode(&req)
 				require.NoError(t, err)
@@ -788,9 +788,9 @@ func TestSubmitBlindedBlock(t *testing.T) {
 		hc := &http.Client{
 			Transport: roundtrip(func(r *http.Request) (*http.Response, error) {
 				require.Equal(t, postBlindedBeaconBlockPath, r.URL.Path)
-				require.Equal(t, "deneb", r.Header.Get(api.VersionHeader))
-				require.Equal(t, api.OctetStreamMediaType, r.Header.Get("Content-Type"))
-				require.Equal(t, api.OctetStreamMediaType, r.Header.Get("Accept"))
+				require.Equal(t, "deneb", r.Header.Get(httputil.VersionHeader))
+				require.Equal(t, httputil.OctetStreamMediaType, r.Header.Get("Content-Type"))
+				require.Equal(t, httputil.OctetStreamMediaType, r.Header.Get("Accept"))
 				epr := &ExecPayloadResponseDeneb{}
 				require.NoError(t, json.Unmarshal([]byte(testExampleExecutionPayloadDeneb), epr))
 				pro, blob, err := epr.ToProto()
@@ -802,7 +802,7 @@ func TestSubmitBlindedBlock(t *testing.T) {
 				ssz, err := combined.MarshalSSZ()
 				require.NoError(t, err)
 				header := http.Header{}
-				header.Set(api.VersionHeader, "deneb")
+				header.Set(httputil.VersionHeader, "deneb")
 				return &http.Response{
 					StatusCode: http.StatusOK,
 					Header:     header,
@@ -835,9 +835,9 @@ func TestSubmitBlindedBlock(t *testing.T) {
 		hc := &http.Client{
 			Transport: roundtrip(func(r *http.Request) (*http.Response, error) {
 				require.Equal(t, postBlindedBeaconBlockPath, r.URL.Path)
-				require.Equal(t, "electra", r.Header.Get(api.VersionHeader))
-				require.Equal(t, api.JsonMediaType, r.Header.Get("Content-Type"))
-				require.Equal(t, api.JsonMediaType, r.Header.Get("Accept"))
+				require.Equal(t, "electra", r.Header.Get(httputil.VersionHeader))
+				require.Equal(t, httputil.JsonMediaType, r.Header.Get("Content-Type"))
+				require.Equal(t, httputil.JsonMediaType, r.Header.Get("Accept"))
 				var req structs.SignedBlindedBeaconBlockElectra
 				err := json.NewDecoder(r.Body).Decode(&req)
 				require.NoError(t, err)
@@ -875,9 +875,9 @@ func TestSubmitBlindedBlock(t *testing.T) {
 		hc := &http.Client{
 			Transport: roundtrip(func(r *http.Request) (*http.Response, error) {
 				require.Equal(t, postBlindedBeaconBlockPath, r.URL.Path)
-				require.Equal(t, "electra", r.Header.Get(api.VersionHeader))
-				require.Equal(t, api.OctetStreamMediaType, r.Header.Get("Content-Type"))
-				require.Equal(t, api.OctetStreamMediaType, r.Header.Get("Accept"))
+				require.Equal(t, "electra", r.Header.Get(httputil.VersionHeader))
+				require.Equal(t, httputil.OctetStreamMediaType, r.Header.Get("Content-Type"))
+				require.Equal(t, httputil.OctetStreamMediaType, r.Header.Get("Accept"))
 				epr := &ExecPayloadResponseDeneb{}
 				require.NoError(t, json.Unmarshal([]byte(testExampleExecutionPayloadDeneb), epr))
 				pro, blob, err := epr.ToProto()
@@ -889,7 +889,7 @@ func TestSubmitBlindedBlock(t *testing.T) {
 				ssz, err := combined.MarshalSSZ()
 				require.NoError(t, err)
 				header := http.Header{}
-				header.Set(api.VersionHeader, "electra")
+				header.Set(httputil.VersionHeader, "electra")
 				return &http.Response{
 					StatusCode: http.StatusOK,
 					Header:     header,

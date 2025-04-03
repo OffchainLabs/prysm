@@ -8,8 +8,7 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api"
-	"github.com/prysmaticlabs/prysm/v5/api/client"
+	"github.com/prysmaticlabs/prysm/v5/api/httputil"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -85,13 +84,13 @@ func (h *EventStream) Subscribe(eventsChannel chan<- *Event) {
 			Data:      []byte(errors.Wrap(err, "failed to create HTTP request").Error()),
 		}
 	}
-	req.Header.Set("Accept", api.EventStreamMediaType)
-	req.Header.Set("Connection", api.KeepAlive)
+	req.Header.Set("Accept", httputil.EventStreamMediaType)
+	req.Header.Set("Connection", httputil.KeepAlive)
 	resp, err := h.httpClient.Do(req)
 	if err != nil {
 		eventsChannel <- &Event{
 			EventType: EventConnectionError,
-			Data:      []byte(errors.Wrap(err, client.ErrConnectionIssue.Error()).Error()),
+			Data:      []byte(errors.Wrap(err, httputil.ErrConnectionIssue.Error()).Error()),
 		}
 		return
 	}
@@ -145,7 +144,7 @@ func (h *EventStream) Subscribe(eventsChannel chan<- *Event) {
 	if err := scanner.Err(); err != nil {
 		eventsChannel <- &Event{
 			EventType: EventConnectionError,
-			Data:      []byte(errors.Wrap(err, errors.Wrap(client.ErrConnectionIssue, "scanner failed").Error()).Error()),
+			Data:      []byte(errors.Wrap(err, errors.Wrap(httputil.ErrConnectionIssue, "scanner failed").Error()).Error()),
 		}
 	}
 }

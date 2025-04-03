@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/ptypes/empty"
-	"github.com/prysmaticlabs/prysm/v5/api"
+	"github.com/prysmaticlabs/prysm/v5/api/httputil"
 	"github.com/prysmaticlabs/prysm/v5/io/logs/mock"
 	pb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
@@ -92,10 +92,10 @@ func TestStreamBeaconLogs(t *testing.T) {
 	}
 	ct, ok := resp.Header["Content-Type"]
 	require.Equal(t, ok, true)
-	require.Equal(t, ct[0], api.EventStreamMediaType)
+	require.Equal(t, ct[0], httputil.EventStreamMediaType)
 	cn, ok := resp.Header["Connection"]
 	require.Equal(t, ok, true)
-	require.Equal(t, cn[0], api.KeepAlive)
+	require.Equal(t, cn[0], httputil.KeepAlive)
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.NotNil(t, body)
@@ -143,10 +143,10 @@ func TestStreamValidatorLogs(t *testing.T) {
 	}
 	ct, ok := resp.Header["Content-Type"]
 	require.Equal(t, ok, true)
-	require.Equal(t, ct[0], api.EventStreamMediaType)
+	require.Equal(t, ct[0], httputil.EventStreamMediaType)
 	cn, ok := resp.Header["Connection"]
 	require.Equal(t, ok, true)
-	require.Equal(t, cn[0], api.KeepAlive)
+	require.Equal(t, cn[0], httputil.KeepAlive)
 	// Check if data was written
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)

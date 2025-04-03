@@ -12,7 +12,7 @@ import (
 	grpcopentracing "github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing"
 	grpcprometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/pkg/errors"
-	grpcutil "github.com/prysmaticlabs/prysm/v5/api/grpc"
+	grpcutil "github.com/prysmaticlabs/prysm/v5/api/grpcutil"
 	"github.com/prysmaticlabs/prysm/v5/async/event"
 	lruwrpr "github.com/prysmaticlabs/prysm/v5/cache/lru"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"

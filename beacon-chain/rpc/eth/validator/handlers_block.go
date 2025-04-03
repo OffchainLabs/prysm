@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api"
+	httputil2 "github.com/prysmaticlabs/prysm/v5/api/httputil"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/rewards"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/shared"
@@ -19,7 +19,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/crypto/bls/common"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
 	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"google.golang.org/protobuf/types/known/wrapperspb"
@@ -62,7 +61,7 @@ func (s *Server) ProduceBlockV2(w http.ResponseWriter, r *http.Request) {
 	} else {
 		rr, err := bytesutil.DecodeHexWithLength(rawRandaoReveal, fieldparams.BLSSignatureLength)
 		if err != nil {
-			httputil.HandleError(w, errors.Wrap(err, "Unable to decode randao reveal").Error(), http.StatusBadRequest)
+			httputil2.HandleError(w, errors.Wrap(err, "Unable to decode randao reveal").Error(), http.StatusBadRequest)
 			return
 		}
 		randaoReveal = rr
@@ -71,7 +70,7 @@ func (s *Server) ProduceBlockV2(w http.ResponseWriter, r *http.Request) {
 	if rawGraffiti != "" {
 		g, err := bytesutil.DecodeHexWithLength(rawGraffiti, 32)
 		if err != nil {
-			httputil.HandleError(w, errors.Wrap(err, "Unable to decode graffiti").Error(), http.StatusBadRequest)
+			httputil2.HandleError(w, errors.Wrap(err, "Unable to decode graffiti").Error(), http.StatusBadRequest)
 			return
 		}
 		graffiti = g
@@ -114,7 +113,7 @@ func (s *Server) ProduceBlindedBlock(w http.ResponseWriter, r *http.Request) {
 	} else {
 		rr, err := bytesutil.DecodeHexWithLength(rawRandaoReveal, fieldparams.BLSSignatureLength)
 		if err != nil {
-			httputil.HandleError(w, errors.Wrap(err, "Unable to decode randao reveal").Error(), http.StatusBadRequest)
+			httputil2.HandleError(w, errors.Wrap(err, "Unable to decode randao reveal").Error(), http.StatusBadRequest)
 			return
 		}
 		randaoReveal = rr
@@ -123,7 +122,7 @@ func (s *Server) ProduceBlindedBlock(w http.ResponseWriter, r *http.Request) {
 	if rawGraffiti != "" {
 		g, err := bytesutil.DecodeHexWithLength(rawGraffiti, 32)
 		if err != nil {
-			httputil.HandleError(w, errors.Wrap(err, "Unable to decode graffiti").Error(), http.StatusBadRequest)
+			httputil2.HandleError(w, errors.Wrap(err, "Unable to decode graffiti").Error(), http.StatusBadRequest)
 			return
 		}
 		graffiti = g
@@ -179,7 +178,7 @@ func (s *Server) ProduceBlockV3(w http.ResponseWriter, r *http.Request) {
 	} else {
 		rr, err := bytesutil.DecodeHexWithLength(rawRandaoReveal, fieldparams.BLSSignatureLength)
 		if err != nil {
-			httputil.HandleError(w, errors.Wrap(err, "Unable to decode randao reveal").Error(), http.StatusBadRequest)
+			httputil2.HandleError(w, errors.Wrap(err, "Unable to decode randao reveal").Error(), http.StatusBadRequest)
 			return
 		}
 		randaoReveal = rr
@@ -188,7 +187,7 @@ func (s *Server) ProduceBlockV3(w http.ResponseWriter, r *http.Request) {
 	if rawGraffiti != "" {
 		g, err := bytesutil.DecodeHexWithLength(rawGraffiti, 32)
 		if err != nil {
-			httputil.HandleError(w, errors.Wrap(err, "Unable to decode graffiti").Error(), http.StatusBadRequest)
+			httputil2.HandleError(w, errors.Wrap(err, "Unable to decode graffiti").Error(), http.StatusBadRequest)
 			return
 		}
 		graffiti = g
@@ -204,18 +203,18 @@ func (s *Server) ProduceBlockV3(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) produceBlockV3(ctx context.Context, w http.ResponseWriter, r *http.Request, v1alpha1req *eth.BlockRequest, requiredType blockType) {
-	isSSZ := httputil.RespondWithSsz(r)
+	isSSZ := httputil2.RespondWithSsz(r)
 	v1alpha1resp, err := s.V1Alpha1Server.GetBeaconBlock(ctx, v1alpha1req)
 	if err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	if requiredType == blinded && !v1alpha1resp.IsBlinded {
-		httputil.HandleError(w, "Prepared block is not blinded", http.StatusInternalServerError)
+		httputil2.HandleError(w, "Prepared block is not blinded", http.StatusInternalServerError)
 		return
 	} else if requiredType == full && v1alpha1resp.IsBlinded {
-		httputil.HandleError(w, "Prepared block is blinded", http.StatusInternalServerError)
+		httputil2.HandleError(w, "Prepared block is blinded", http.StatusInternalServerError)
 		return
 	}
 
@@ -226,98 +225,98 @@ func (s *Server) produceBlockV3(ctx context.Context, w http.ResponseWriter, r *h
 		consensusBlockValue = ""
 	}
 
-	w.Header().Set(api.ExecutionPayloadBlindedHeader, fmt.Sprintf("%v", v1alpha1resp.IsBlinded))
-	w.Header().Set(api.ExecutionPayloadValueHeader, v1alpha1resp.PayloadValue)
-	w.Header().Set(api.ConsensusBlockValueHeader, consensusBlockValue)
+	w.Header().Set(httputil2.ExecutionPayloadBlindedHeader, fmt.Sprintf("%v", v1alpha1resp.IsBlinded))
+	w.Header().Set(httputil2.ExecutionPayloadValueHeader, v1alpha1resp.PayloadValue)
+	w.Header().Set(httputil2.ConsensusBlockValueHeader, consensusBlockValue)
 
 	phase0Block, ok := v1alpha1resp.Block.(*eth.GenericBeaconBlock_Phase0)
 	if ok {
-		w.Header().Set(api.VersionHeader, version.String(version.Phase0))
+		w.Header().Set(httputil2.VersionHeader, version.String(version.Phase0))
 		// rewards aren't used in phase 0
 		handleProducePhase0V3(w, isSSZ, phase0Block, v1alpha1resp.PayloadValue)
 		return
 	}
 	altairBlock, ok := v1alpha1resp.Block.(*eth.GenericBeaconBlock_Altair)
 	if ok {
-		w.Header().Set(api.VersionHeader, version.String(version.Altair))
+		w.Header().Set(httputil2.VersionHeader, version.String(version.Altair))
 		handleProduceAltairV3(w, isSSZ, altairBlock, v1alpha1resp.PayloadValue, consensusBlockValue)
 		return
 	}
 	optimistic, err := s.OptimisticModeFetcher.IsOptimistic(ctx)
 	if err != nil {
-		httputil.HandleError(w, errors.Wrap(err, "Could not determine if the node is a optimistic node").Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, errors.Wrap(err, "Could not determine if the node is a optimistic node").Error(), http.StatusInternalServerError)
 		return
 	}
 	if optimistic {
-		httputil.HandleError(w, "The node is currently optimistic and cannot serve validators", http.StatusServiceUnavailable)
+		httputil2.HandleError(w, "The node is currently optimistic and cannot serve validators", http.StatusServiceUnavailable)
 		return
 	}
 	blindedBellatrixBlock, ok := v1alpha1resp.Block.(*eth.GenericBeaconBlock_BlindedBellatrix)
 	if ok {
-		w.Header().Set(api.VersionHeader, version.String(version.Bellatrix))
+		w.Header().Set(httputil2.VersionHeader, version.String(version.Bellatrix))
 		handleProduceBlindedBellatrixV3(w, isSSZ, blindedBellatrixBlock, v1alpha1resp.PayloadValue, consensusBlockValue)
 		return
 	}
 	bellatrixBlock, ok := v1alpha1resp.Block.(*eth.GenericBeaconBlock_Bellatrix)
 	if ok {
-		w.Header().Set(api.VersionHeader, version.String(version.Bellatrix))
+		w.Header().Set(httputil2.VersionHeader, version.String(version.Bellatrix))
 		handleProduceBellatrixV3(w, isSSZ, bellatrixBlock, v1alpha1resp.PayloadValue, consensusBlockValue)
 		return
 	}
 	blindedCapellaBlock, ok := v1alpha1resp.Block.(*eth.GenericBeaconBlock_BlindedCapella)
 	if ok {
-		w.Header().Set(api.VersionHeader, version.String(version.Capella))
+		w.Header().Set(httputil2.VersionHeader, version.String(version.Capella))
 		handleProduceBlindedCapellaV3(w, isSSZ, blindedCapellaBlock, v1alpha1resp.PayloadValue, consensusBlockValue)
 		return
 	}
 	capellaBlock, ok := v1alpha1resp.Block.(*eth.GenericBeaconBlock_Capella)
 	if ok {
-		w.Header().Set(api.VersionHeader, version.String(version.Capella))
+		w.Header().Set(httputil2.VersionHeader, version.String(version.Capella))
 		handleProduceCapellaV3(w, isSSZ, capellaBlock, v1alpha1resp.PayloadValue, consensusBlockValue)
 		return
 	}
 	blindedDenebBlockContents, ok := v1alpha1resp.Block.(*eth.GenericBeaconBlock_BlindedDeneb)
 	if ok {
-		w.Header().Set(api.VersionHeader, version.String(version.Deneb))
+		w.Header().Set(httputil2.VersionHeader, version.String(version.Deneb))
 		handleProduceBlindedDenebV3(w, isSSZ, blindedDenebBlockContents, v1alpha1resp.PayloadValue, consensusBlockValue)
 		return
 	}
 	denebBlockContents, ok := v1alpha1resp.Block.(*eth.GenericBeaconBlock_Deneb)
 	if ok {
-		w.Header().Set(api.VersionHeader, version.String(version.Deneb))
+		w.Header().Set(httputil2.VersionHeader, version.String(version.Deneb))
 		handleProduceDenebV3(w, isSSZ, denebBlockContents, v1alpha1resp.PayloadValue, consensusBlockValue)
 		return
 	}
 	blindedElectraBlockContents, ok := v1alpha1resp.Block.(*eth.GenericBeaconBlock_BlindedElectra)
 	if ok {
-		w.Header().Set(api.VersionHeader, version.String(version.Electra))
+		w.Header().Set(httputil2.VersionHeader, version.String(version.Electra))
 		handleProduceBlindedElectraV3(w, isSSZ, blindedElectraBlockContents, v1alpha1resp.PayloadValue, consensusBlockValue)
 		return
 	}
 	electraBlockContents, ok := v1alpha1resp.Block.(*eth.GenericBeaconBlock_Electra)
 	if ok {
-		w.Header().Set(api.VersionHeader, version.String(version.Electra))
+		w.Header().Set(httputil2.VersionHeader, version.String(version.Electra))
 		handleProduceElectraV3(w, isSSZ, electraBlockContents, v1alpha1resp.PayloadValue, consensusBlockValue)
 		return
 	}
 	blindedFuluBlockContents, ok := v1alpha1resp.Block.(*eth.GenericBeaconBlock_BlindedFulu)
 	if ok {
-		w.Header().Set(api.VersionHeader, version.String(version.Fulu))
+		w.Header().Set(httputil2.VersionHeader, version.String(version.Fulu))
 		handleProduceBlindedFuluV3(w, isSSZ, blindedFuluBlockContents, v1alpha1resp.PayloadValue, consensusBlockValue)
 		return
 	}
 	fuluBlockContents, ok := v1alpha1resp.Block.(*eth.GenericBeaconBlock_Fulu)
 	if ok {
-		w.Header().Set(api.VersionHeader, version.String(version.Fulu))
+		w.Header().Set(httputil2.VersionHeader, version.String(version.Fulu))
 		handleProduceFuluV3(w, isSSZ, fuluBlockContents, v1alpha1resp.PayloadValue, consensusBlockValue)
 		return
 	}
 }
 
-func getConsensusBlockValue(ctx context.Context, blockRewardsFetcher rewards.BlockRewardsFetcher, i interface{} /* block as argument */) (string, *httputil.DefaultJsonError) {
+func getConsensusBlockValue(ctx context.Context, blockRewardsFetcher rewards.BlockRewardsFetcher, i interface{} /* block as argument */) (string, *httputil2.DefaultJsonError) {
 	bb, err := blocks.NewBeaconBlock(i)
 	if err != nil {
-		return "", &httputil.DefaultJsonError{
+		return "", &httputil2.DefaultJsonError{
 			Message: err.Error(),
 			Code:    http.StatusInternalServerError,
 		}
@@ -334,7 +333,7 @@ func getConsensusBlockValue(ctx context.Context, blockRewardsFetcher rewards.Blo
 	}
 	gwei, ok := big.NewInt(0).SetString(blockRewards.Total, 10)
 	if !ok {
-		return "", &httputil.DefaultJsonError{
+		return "", &httputil2.DefaultJsonError{
 			Message: "Could not parse consensus block value",
 			Code:    http.StatusInternalServerError,
 		}
@@ -352,18 +351,18 @@ func handleProducePhase0V3(
 	if isSSZ {
 		sszResp, err := blk.Phase0.MarshalSSZ()
 		if err != nil {
-			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		httputil.WriteSsz(w, sszResp)
+		httputil2.WriteSsz(w, sszResp)
 		return
 	}
 	jsonBytes, err := json.Marshal(structs.BeaconBlockFromConsensus(blk.Phase0))
 	if err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	httputil.WriteJson(w, &structs.ProduceBlockV3Response{
+	httputil2.WriteJson(w, &structs.ProduceBlockV3Response{
 		Version:                 version.String(version.Phase0),
 		ExecutionPayloadBlinded: false,
 		ExecutionPayloadValue:   payloadValue, // mev not available at this point
@@ -382,18 +381,18 @@ func handleProduceAltairV3(
 	if isSSZ {
 		sszResp, err := blk.Altair.MarshalSSZ()
 		if err != nil {
-			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		httputil.WriteSsz(w, sszResp)
+		httputil2.WriteSsz(w, sszResp)
 		return
 	}
 	jsonBytes, err := json.Marshal(structs.BeaconBlockAltairFromConsensus(blk.Altair))
 	if err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	httputil.WriteJson(w, &structs.ProduceBlockV3Response{
+	httputil2.WriteJson(w, &structs.ProduceBlockV3Response{
 		Version:                 version.String(version.Altair),
 		ExecutionPayloadBlinded: false,
 		ExecutionPayloadValue:   executionPayloadValue, // mev not available at this point
@@ -412,23 +411,23 @@ func handleProduceBellatrixV3(
 	if isSSZ {
 		sszResp, err := blk.Bellatrix.MarshalSSZ()
 		if err != nil {
-			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		httputil.WriteSsz(w, sszResp)
+		httputil2.WriteSsz(w, sszResp)
 		return
 	}
 	block, err := structs.BeaconBlockBellatrixFromConsensus(blk.Bellatrix)
 	if err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	jsonBytes, err := json.Marshal(block)
 	if err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	httputil.WriteJson(w, &structs.ProduceBlockV3Response{
+	httputil2.WriteJson(w, &structs.ProduceBlockV3Response{
 		Version:                 version.String(version.Bellatrix),
 		ExecutionPayloadBlinded: false,
 		ExecutionPayloadValue:   executionPayloadValue, // mev not available at this point
@@ -447,23 +446,23 @@ func handleProduceBlindedBellatrixV3(
 	if isSSZ {
 		sszResp, err := blk.BlindedBellatrix.MarshalSSZ()
 		if err != nil {
-			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		httputil.WriteSsz(w, sszResp)
+		httputil2.WriteSsz(w, sszResp)
 		return
 	}
 	block, err := structs.BlindedBeaconBlockBellatrixFromConsensus(blk.BlindedBellatrix)
 	if err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	jsonBytes, err := json.Marshal(block)
 	if err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	httputil.WriteJson(w, &structs.ProduceBlockV3Response{
+	httputil2.WriteJson(w, &structs.ProduceBlockV3Response{
 		Version:                 version.String(version.Bellatrix),
 		ExecutionPayloadBlinded: true,
 		ExecutionPayloadValue:   executionPayloadValue,
@@ -482,23 +481,23 @@ func handleProduceBlindedCapellaV3(
 	if isSSZ {
 		sszResp, err := blk.BlindedCapella.MarshalSSZ()
 		if err != nil {
-			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		httputil.WriteSsz(w, sszResp)
+		httputil2.WriteSsz(w, sszResp)
 		return
 	}
 	block, err := structs.BlindedBeaconBlockCapellaFromConsensus(blk.BlindedCapella)
 	if err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	jsonBytes, err := json.Marshal(block)
 	if err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	httputil.WriteJson(w, &structs.ProduceBlockV3Response{
+	httputil2.WriteJson(w, &structs.ProduceBlockV3Response{
 		Version:                 version.String(version.Capella),
 		ExecutionPayloadBlinded: true,
 		ExecutionPayloadValue:   executionPayloadValue,
@@ -517,23 +516,23 @@ func handleProduceCapellaV3(
 	if isSSZ {
 		sszResp, err := blk.Capella.MarshalSSZ()
 		if err != nil {
-			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		httputil.WriteSsz(w, sszResp)
+		httputil2.WriteSsz(w, sszResp)
 		return
 	}
 	block, err := structs.BeaconBlockCapellaFromConsensus(blk.Capella)
 	if err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	jsonBytes, err := json.Marshal(block)
 	if err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	httputil.WriteJson(w, &structs.ProduceBlockV3Response{
+	httputil2.WriteJson(w, &structs.ProduceBlockV3Response{
 		Version:                 version.String(version.Capella),
 		ExecutionPayloadBlinded: false,
 		ExecutionPayloadValue:   executionPayloadValue, // mev not available at this point
@@ -552,23 +551,23 @@ func handleProduceBlindedDenebV3(
 	if isSSZ {
 		sszResp, err := blk.BlindedDeneb.MarshalSSZ()
 		if err != nil {
-			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		httputil.WriteSsz(w, sszResp)
+		httputil2.WriteSsz(w, sszResp)
 		return
 	}
 	blindedBlock, err := structs.BlindedBeaconBlockDenebFromConsensus(blk.BlindedDeneb)
 	if err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	jsonBytes, err := json.Marshal(blindedBlock)
 	if err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	httputil.WriteJson(w, &structs.ProduceBlockV3Response{
+	httputil2.WriteJson(w, &structs.ProduceBlockV3Response{
 		Version:                 version.String(version.Deneb),
 		ExecutionPayloadBlinded: true,
 		ExecutionPayloadValue:   executionPayloadValue,
@@ -587,24 +586,24 @@ func handleProduceDenebV3(
 	if isSSZ {
 		sszResp, err := blk.Deneb.MarshalSSZ()
 		if err != nil {
-			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		httputil.WriteSsz(w, sszResp)
+		httputil2.WriteSsz(w, sszResp)
 		return
 	}
 
 	blockContents, err := structs.BeaconBlockContentsDenebFromConsensus(blk.Deneb)
 	if err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	jsonBytes, err := json.Marshal(blockContents)
 	if err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	httputil.WriteJson(w, &structs.ProduceBlockV3Response{
+	httputil2.WriteJson(w, &structs.ProduceBlockV3Response{
 		Version:                 version.String(version.Deneb),
 		ExecutionPayloadBlinded: false,
 		ExecutionPayloadValue:   executionPayloadValue, // mev not available at this point
@@ -623,23 +622,23 @@ func handleProduceBlindedElectraV3(
 	if isSSZ {
 		sszResp, err := blk.BlindedElectra.MarshalSSZ()
 		if err != nil {
-			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		httputil.WriteSsz(w, sszResp)
+		httputil2.WriteSsz(w, sszResp)
 		return
 	}
 	blindedBlock, err := structs.BlindedBeaconBlockElectraFromConsensus(blk.BlindedElectra)
 	if err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	jsonBytes, err := json.Marshal(blindedBlock)
 	if err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	httputil.WriteJson(w, &structs.ProduceBlockV3Response{
+	httputil2.WriteJson(w, &structs.ProduceBlockV3Response{
 		Version:                 version.String(version.Electra),
 		ExecutionPayloadBlinded: true,
 		ExecutionPayloadValue:   executionPayloadValue,
@@ -658,24 +657,24 @@ func handleProduceElectraV3(
 	if isSSZ {
 		sszResp, err := blk.Electra.MarshalSSZ()
 		if err != nil {
-			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		httputil.WriteSsz(w, sszResp)
+		httputil2.WriteSsz(w, sszResp)
 		return
 	}
 
 	blockContents, err := structs.BeaconBlockContentsElectraFromConsensus(blk.Electra)
 	if err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	jsonBytes, err := json.Marshal(blockContents)
 	if err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	httputil.WriteJson(w, &structs.ProduceBlockV3Response{
+	httputil2.WriteJson(w, &structs.ProduceBlockV3Response{
 		Version:                 version.String(version.Electra),
 		ExecutionPayloadBlinded: false,
 		ExecutionPayloadValue:   executionPayloadValue, // mev not available at this point
@@ -694,23 +693,23 @@ func handleProduceBlindedFuluV3(
 	if isSSZ {
 		sszResp, err := blk.BlindedFulu.MarshalSSZ()
 		if err != nil {
-			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		httputil.WriteSsz(w, sszResp)
+		httputil2.WriteSsz(w, sszResp)
 		return
 	}
 	blindedBlock, err := structs.BlindedBeaconBlockFuluFromConsensus(blk.BlindedFulu)
 	if err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	jsonBytes, err := json.Marshal(blindedBlock)
 	if err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	httputil.WriteJson(w, &structs.ProduceBlockV3Response{
+	httputil2.WriteJson(w, &structs.ProduceBlockV3Response{
 		Version:                 version.String(version.Fulu),
 		ExecutionPayloadBlinded: true,
 		ExecutionPayloadValue:   executionPayloadValue,
@@ -729,24 +728,24 @@ func handleProduceFuluV3(
 	if isSSZ {
 		sszResp, err := blk.Fulu.MarshalSSZ()
 		if err != nil {
-			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		httputil.WriteSsz(w, sszResp)
+		httputil2.WriteSsz(w, sszResp)
 		return
 	}
 
 	blockContents, err := structs.BeaconBlockContentsFuluFromConsensus(blk.Fulu)
 	if err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	jsonBytes, err := json.Marshal(blockContents)
 	if err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	httputil.WriteJson(w, &structs.ProduceBlockV3Response{
+	httputil2.WriteJson(w, &structs.ProduceBlockV3Response{
 		Version:                 version.String(version.Fulu),
 		ExecutionPayloadBlinded: false,
 		ExecutionPayloadValue:   executionPayloadValue, // mev not available at this point

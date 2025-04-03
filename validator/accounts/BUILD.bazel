@@ -24,7 +24,7 @@ go_library(
         "//validator:__subpackages__",
     ],
     deps = [
-        "//api/grpc:go_default_library",
+        "//api/grpcutil:go_default_library",
         "//beacon-chain/core/blocks:go_default_library",
         "//cmd/validator/flags:go_default_library",
         "//config/fieldparams:go_default_library",

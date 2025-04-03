@@ -6,7 +6,7 @@ import (
 	"strconv"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api/apiutil"
+	"github.com/prysmaticlabs/prysm/v5/api/httputil"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
@@ -23,7 +23,7 @@ func (c *beaconApiValidatorClient) attestationData(
 	params.Add("slot", strconv.FormatUint(uint64(reqSlot), 10))
 	params.Add("committee_index", strconv.FormatUint(uint64(reqCommitteeIndex), 10))
 
-	query := apiutil.BuildURL("/eth/v1/validator/attestation_data", params)
+	query := httputil.BuildURL("/eth/v1/validator/attestation_data", params)
 	produceAttestationDataResponseJson := structs.GetAttestationDataResponse{}
 
 	if err := c.jsonRestHandler.Get(ctx, query, &produceAttestationDataResponseJson); err != nil {

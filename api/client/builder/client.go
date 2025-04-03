@@ -13,8 +13,7 @@ import (
 	"text/template"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api"
-	"github.com/prysmaticlabs/prysm/v5/api/client"
+	"github.com/prysmaticlabs/prysm/v5/api/httputil"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
@@ -191,7 +190,7 @@ func (c *Client) do(ctx context.Context, method string, path string, body io.Rea
 		err = non200Err(r)
 		return
 	}
-	res, err = io.ReadAll(io.LimitReader(r.Body, client.MaxBodySize))
+	res, err = io.ReadAll(io.LimitReader(r.Body, httputil.MaxBodySize))
 	if err != nil {
 		err = errors.Wrap(err, "error reading http response body from builder server")
 		return
@@ -229,11 +228,11 @@ func (c *Client) GetHeader(ctx context.Context, slot primitives.Slot, parentHash
 	var getOpts reqOption
 	if c.sszEnabled {
 		getOpts = func(r *http.Request) {
-			r.Header.Set("Accept", api.OctetStreamMediaType)
+			r.Header.Set("Accept", httputil.OctetStreamMediaType)
 		}
 	} else {
 		getOpts = func(r *http.Request) {
-			r.Header.Set("Accept", api.JsonMediaType)
+			r.Header.Set("Accept", httputil.JsonMediaType)
 		}
 	}
 	data, header, err := c.do(ctx, http.MethodGet, path, nil, getOpts)
@@ -256,8 +255,8 @@ func (c *Client) GetHeader(ctx context.Context, slot primitives.Slot, parentHash
 
 func (c *Client) parseHeaderResponse(data []byte, header http.Header) (SignedBid, error) {
 	var versionHeader string
-	if c.sszEnabled || header.Get(api.VersionHeader) != "" {
-		versionHeader = header.Get(api.VersionHeader)
+	if c.sszEnabled || header.Get(httputil.VersionHeader) != "" {
+		versionHeader = header.Get(httputil.VersionHeader)
 	} else {
 		// If we don't have a version header, attempt to parse JSON for version
 		v := &VersionResponse{}
@@ -387,8 +386,8 @@ func (c *Client) RegisterValidator(ctx context.Context, svr []*ethpb.SignedValid
 	)
 	if c.sszEnabled {
 		postOpts = func(r *http.Request) {
-			r.Header.Set("Content-Type", api.OctetStreamMediaType)
-			r.Header.Set("Accept", api.OctetStreamMediaType)
+			r.Header.Set("Content-Type", httputil.OctetStreamMediaType)
+			r.Header.Set("Accept", httputil.OctetStreamMediaType)
 		}
 		body, err = sszValidatorRegisterRequest(svr)
 		if err != nil {
@@ -398,8 +397,8 @@ func (c *Client) RegisterValidator(ctx context.Context, svr []*ethpb.SignedValid
 		}
 	} else {
 		postOpts = func(r *http.Request) {
-			r.Header.Set("Content-Type", api.JsonMediaType)
-			r.Header.Set("Accept", api.JsonMediaType)
+			r.Header.Set("Content-Type", httputil.JsonMediaType)
+			r.Header.Set("Accept", httputil.JsonMediaType)
 		}
 		body, err = jsonValidatorRegisterRequest(svr)
 		if err != nil {
@@ -443,7 +442,7 @@ func sszValidatorRegisterRequest(svr []*ethpb.SignedValidatorRegistrationV1) ([]
 	return ssz, nil
 }
 
-var errResponseVersionMismatch = errors.New("builder API response uses a different version than requested in " + api.VersionHeader + " header")
+var errResponseVersionMismatch = errors.New("builder API response uses a different version than requested in " + httputil.VersionHeader + " header")
 
 func getVersionsBlockToPayload(blockVersion int) (int, error) {
 	if blockVersion >= version.Deneb {
@@ -501,7 +500,7 @@ func (c *Client) SubmitBlindedBlock(ctx context.Context, sb interfaces.ReadOnlyS
 func (c *Client) checkBlockVersion(respBytes []byte, header http.Header) (int, error) {
 	var versionHeader string
 	if c.sszEnabled {
-		versionHeader = strings.ToLower(header.Get(api.VersionHeader))
+		versionHeader = strings.ToLower(header.Get(httputil.VersionHeader))
 	} else {
 		// fallback to JSON-based version extraction
 		v := &VersionResponse{}
@@ -531,9 +530,9 @@ func (c *Client) buildBlindedBlockRequest(sb interfaces.ReadOnlySignedBeaconBloc
 			return nil, nil, errors.Wrap(err, "could not marshal SSZ for blinded block")
 		}
 		opt := func(r *http.Request) {
-			r.Header.Set(api.VersionHeader, version.String(sb.Version()))
-			r.Header.Set("Content-Type", api.OctetStreamMediaType)
-			r.Header.Set("Accept", api.OctetStreamMediaType)
+			r.Header.Set(httputil.VersionHeader, version.String(sb.Version()))
+			r.Header.Set("Content-Type", httputil.OctetStreamMediaType)
+			r.Header.Set("Accept", httputil.OctetStreamMediaType)
 		}
 		return body, opt, nil
 	}
@@ -547,9 +546,9 @@ func (c *Client) buildBlindedBlockRequest(sb interfaces.ReadOnlySignedBeaconBloc
 		return nil, nil, errors.Wrap(err, "error marshaling blinded block to JSON")
 	}
 	opt := func(r *http.Request) {
-		r.Header.Set(api.VersionHeader, version.String(sb.Version()))
-		r.Header.Set("Content-Type", api.JsonMediaType)
-		r.Header.Set("Accept", api.JsonMediaType)
+		r.Header.Set(httputil.VersionHeader, version.String(sb.Version()))
+		r.Header.Set("Content-Type", httputil.JsonMediaType)
+		r.Header.Set("Accept", httputil.JsonMediaType)
 	}
 	return body, opt, nil
 }
@@ -642,14 +641,14 @@ func (c *Client) parseBlindedBlockResponseJSON(
 // happy path, and an error with information about the server response body for a non-200 response.
 func (c *Client) Status(ctx context.Context) error {
 	getOpts := func(r *http.Request) {
-		r.Header.Set("Accept", api.JsonMediaType)
+		r.Header.Set("Accept", httputil.JsonMediaType)
 	}
 	_, _, err := c.do(ctx, http.MethodGet, getStatus, nil, getOpts)
 	return err
 }
 
 func non200Err(response *http.Response) error {
-	bodyBytes, err := io.ReadAll(io.LimitReader(response.Body, client.MaxErrBodySize))
+	bodyBytes, err := io.ReadAll(io.LimitReader(response.Body, httputil.MaxErrBodySize))
 	var errMessage ErrorMessage
 	var body string
 	if err != nil {

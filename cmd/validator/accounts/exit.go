@@ -6,7 +6,7 @@ import (
 
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/pkg/errors"
-	grpcutil "github.com/prysmaticlabs/prysm/v5/api/grpc"
+	grpcutil "github.com/prysmaticlabs/prysm/v5/api/grpcutil"
 	"github.com/prysmaticlabs/prysm/v5/cmd"
 	"github.com/prysmaticlabs/prysm/v5/cmd/validator/flags"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"

@@ -5,12 +5,12 @@ import (
 	"net/http"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	httputil2 "github.com/prysmaticlabs/prysm/v5/api/httputil"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/core"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/shared"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
@@ -23,7 +23,7 @@ func (s *Server) GetParticipation(w http.ResponseWriter, r *http.Request) {
 
 	stateId := r.PathValue("state_id")
 	if stateId == "" {
-		httputil.HandleError(w, "state_id is required in URL params", http.StatusBadRequest)
+		httputil2.HandleError(w, "state_id is required in URL params", http.StatusBadRequest)
 		return
 	}
 
@@ -35,7 +35,7 @@ func (s *Server) GetParticipation(w http.ResponseWriter, r *http.Request) {
 	stEpoch := slots.ToEpoch(st.Slot())
 	vp, rpcError := s.CoreService.ValidatorParticipation(ctx, stEpoch)
 	if rpcError != nil {
-		httputil.HandleError(w, rpcError.Err.Error(), core.ErrorReasonToHTTP(rpcError.Reason))
+		httputil2.HandleError(w, rpcError.Err.Error(), core.ErrorReasonToHTTP(rpcError.Reason))
 		return
 	}
 
@@ -55,7 +55,7 @@ func (s *Server) GetParticipation(w http.ResponseWriter, r *http.Request) {
 			PreviousEpochHeadAttestingGwei:   fmt.Sprintf("%d", vp.Participation.PreviousEpochHeadAttestingGwei),
 		},
 	}
-	httputil.WriteJson(w, response)
+	httputil2.WriteJson(w, response)
 }
 
 // GetActiveSetChanges retrieves the active set changes for a given epoch.
@@ -68,7 +68,7 @@ func (s *Server) GetActiveSetChanges(w http.ResponseWriter, r *http.Request) {
 
 	stateId := r.PathValue("state_id")
 	if stateId == "" {
-		httputil.HandleError(w, "state_id is required in URL params", http.StatusBadRequest)
+		httputil2.HandleError(w, "state_id is required in URL params", http.StatusBadRequest)
 		return
 	}
 
@@ -81,7 +81,7 @@ func (s *Server) GetActiveSetChanges(w http.ResponseWriter, r *http.Request) {
 
 	as, rpcError := s.CoreService.ValidatorActiveSetChanges(ctx, stEpoch)
 	if rpcError != nil {
-		httputil.HandleError(w, rpcError.Err.Error(), core.ErrorReasonToHTTP(rpcError.Reason))
+		httputil2.HandleError(w, rpcError.Err.Error(), core.ErrorReasonToHTTP(rpcError.Reason))
 		return
 	}
 
@@ -96,7 +96,7 @@ func (s *Server) GetActiveSetChanges(w http.ResponseWriter, r *http.Request) {
 		EjectedPublicKeys:   byteSlice2dToStringSlice(as.EjectedPublicKeys),
 		EjectedIndices:      uint64SliceToStringSlice(as.EjectedIndices),
 	}
-	httputil.WriteJson(w, response)
+	httputil2.WriteJson(w, response)
 }
 
 func byteSlice2dToStringSlice(byteArrays [][]byte) []string {

@@ -2,11 +2,7 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
-    srcs = [
-        "constants.go",
-        "headers.go",
-        "jwt.go",
-    ],
+    srcs = ["jwt.go"],
     importpath = "github.com/prysmaticlabs/prysm/v5/api",
     visibility = ["//visibility:public"],
     deps = [

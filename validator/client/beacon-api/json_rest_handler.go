@@ -9,8 +9,7 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
+	"github.com/prysmaticlabs/prysm/v5/api/httputil"
 )
 
 type JsonRestHandler interface {
@@ -88,7 +87,7 @@ func (c *BeaconApiJsonRestHandler) Post(
 	for headerKey, headerValue := range headers {
 		req.Header.Set(headerKey, headerValue)
 	}
-	req.Header.Set("Content-Type", api.JsonMediaType)
+	req.Header.Set("Content-Type", httputil.JsonMediaType)
 
 	httpResp, err := c.client.Do(req)
 	if err != nil {
@@ -109,7 +108,7 @@ func decodeResp(httpResp *http.Response, resp interface{}) error {
 		return errors.Wrapf(err, "failed to read response body for %s", httpResp.Request.URL)
 	}
 
-	if !strings.Contains(httpResp.Header.Get("Content-Type"), api.JsonMediaType) {
+	if !strings.Contains(httpResp.Header.Get("Content-Type"), httputil.JsonMediaType) {
 		// 2XX codes are a success
 		if strings.HasPrefix(httpResp.Status, "2") {
 			return nil

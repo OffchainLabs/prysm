@@ -12,6 +12,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
+	httputil2 "github.com/prysmaticlabs/prysm/v5/api/httputil"
 	"github.com/prysmaticlabs/prysm/v5/api/pagination"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/shared"
 	"github.com/prysmaticlabs/prysm/v5/cmd"
@@ -19,7 +20,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
 	"github.com/prysmaticlabs/prysm/v5/validator/accounts"
 	"github.com/prysmaticlabs/prysm/v5/validator/accounts/petnames"
 	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
@@ -33,11 +33,11 @@ func (s *Server) ListAccounts(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "validator.web.accounts.ListAccounts")
 	defer span.End()
 	if s.validatorService == nil {
-		httputil.HandleError(w, "Validator service not ready.", http.StatusServiceUnavailable)
+		httputil2.HandleError(w, "Validator service not ready.", http.StatusServiceUnavailable)
 		return
 	}
 	if !s.walletInitialized {
-		httputil.HandleError(w, "Prysm Wallet not initialized. Please create a new wallet.", http.StatusServiceUnavailable)
+		httputil2.HandleError(w, "Prysm Wallet not initialized. Please create a new wallet.", http.StatusServiceUnavailable)
 		return
 	}
 	pageSize := r.URL.Query().Get("page_size")
@@ -45,7 +45,7 @@ func (s *Server) ListAccounts(w http.ResponseWriter, r *http.Request) {
 	if pageSize != "" {
 		psi, err := strconv.ParseInt(pageSize, 10, 32)
 		if err != nil {
-			httputil.HandleError(w, errors.Wrap(err, "Failed to parse page_size").Error(), http.StatusBadRequest)
+			httputil2.HandleError(w, errors.Wrap(err, "Failed to parse page_size").Error(), http.StatusBadRequest)
 			return
 		}
 		ps = psi
@@ -61,18 +61,18 @@ func (s *Server) ListAccounts(w http.ResponseWriter, r *http.Request) {
 		pubkeys[i] = bytesutil.SafeCopyBytes(k)
 	}
 	if int(ps) > cmd.Get().MaxRPCPageSize {
-		httputil.HandleError(w, fmt.Sprintf("Requested page size %d can not be greater than max size %d",
+		httputil2.HandleError(w, fmt.Sprintf("Requested page size %d can not be greater than max size %d",
 			ps, cmd.Get().MaxRPCPageSize), http.StatusBadRequest)
 		return
 	}
 	km, err := s.validatorService.Keymanager()
 	if err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	keys, err := km.FetchValidatingPublicKeys(ctx)
 	if err != nil {
-		httputil.HandleError(w, errors.Errorf("Could not retrieve public keys: %v", err).Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, errors.Errorf("Could not retrieve public keys: %v", err).Error(), http.StatusInternalServerError)
 		return
 	}
 	accs := make([]*Account, len(keys))
@@ -86,7 +86,7 @@ func (s *Server) ListAccounts(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if r.URL.Query().Get("all") == "true" {
-		httputil.WriteJson(w, &ListAccountsResponse{
+		httputil2.WriteJson(w, &ListAccountsResponse{
 			Accounts:      accs,
 			TotalSize:     int32(len(keys)),
 			NextPageToken: "",
@@ -95,11 +95,11 @@ func (s *Server) ListAccounts(w http.ResponseWriter, r *http.Request) {
 	}
 	start, end, nextPageToken, err := pagination.StartAndEndPage(pageToken, int(ps), len(keys))
 	if err != nil {
-		httputil.HandleError(w, fmt.Errorf("Could not paginate results: %w",
+		httputil2.HandleError(w, fmt.Errorf("Could not paginate results: %w",
 			err).Error(), http.StatusInternalServerError)
 		return
 	}
-	httputil.WriteJson(w, &ListAccountsResponse{
+	httputil2.WriteJson(w, &ListAccountsResponse{
 		Accounts:      accs[start:end],
 		TotalSize:     int32(len(keys)),
 		NextPageToken: nextPageToken,
@@ -112,11 +112,11 @@ func (s *Server) BackupAccounts(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "validator.web.accounts.ListAccounts")
 	defer span.End()
 	if s.validatorService == nil {
-		httputil.HandleError(w, "Validator service not ready.", http.StatusServiceUnavailable)
+		httputil2.HandleError(w, "Validator service not ready.", http.StatusServiceUnavailable)
 		return
 	}
 	if !s.walletInitialized {
-		httputil.HandleError(w, "Prysm Wallet not initialized. Please create a new wallet.", http.StatusServiceUnavailable)
+		httputil2.HandleError(w, "Prysm Wallet not initialized. Please create a new wallet.", http.StatusServiceUnavailable)
 		return
 	}
 
@@ -124,25 +124,25 @@ func (s *Server) BackupAccounts(w http.ResponseWriter, r *http.Request) {
 	err := json.NewDecoder(r.Body).Decode(&req)
 	switch {
 	case errors.Is(err, io.EOF):
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		httputil2.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	case err != nil:
-		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	if len(req.PublicKeys) < 1 {
-		httputil.HandleError(w, "No public keys specified to backup", http.StatusBadRequest)
+		httputil2.HandleError(w, "No public keys specified to backup", http.StatusBadRequest)
 		return
 	}
 	if req.BackupPassword == "" {
-		httputil.HandleError(w, "Backup password cannot be empty", http.StatusBadRequest)
+		httputil2.HandleError(w, "Backup password cannot be empty", http.StatusBadRequest)
 		return
 	}
 
 	km, err := s.validatorService.Keymanager()
 	if err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	pubKeys := make([]bls.PublicKey, len(req.PublicKeys))
@@ -153,7 +153,7 @@ func (s *Server) BackupAccounts(w http.ResponseWriter, r *http.Request) {
 		}
 		pubKey, err := bls.PublicKeyFromBytes(byteskey)
 		if err != nil {
-			httputil.HandleError(w, errors.Wrap(err, fmt.Sprintf("%s Not a valid BLS public key", key)).Error(), http.StatusBadRequest)
+			httputil2.HandleError(w, errors.Wrap(err, fmt.Sprintf("%s Not a valid BLS public key", key)).Error(), http.StatusBadRequest)
 			return
 		}
 		pubKeys[i] = pubKey
@@ -164,21 +164,21 @@ func (s *Server) BackupAccounts(w http.ResponseWriter, r *http.Request) {
 	case *local.Keymanager:
 		keystoresToBackup, err = km.ExtractKeystores(ctx, pubKeys, req.BackupPassword)
 		if err != nil {
-			httputil.HandleError(w, errors.Wrap(err, "Could not backup accounts for local keymanager").Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, errors.Wrap(err, "Could not backup accounts for local keymanager").Error(), http.StatusInternalServerError)
 			return
 		}
 	case *derived.Keymanager:
 		keystoresToBackup, err = km.ExtractKeystores(ctx, pubKeys, req.BackupPassword)
 		if err != nil {
-			httputil.HandleError(w, errors.Wrap(err, "Could not backup accounts for derived keymanager").Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, errors.Wrap(err, "Could not backup accounts for derived keymanager").Error(), http.StatusInternalServerError)
 			return
 		}
 	default:
-		httputil.HandleError(w, "Only HD or IMPORTED wallets can backup accounts", http.StatusBadRequest)
+		httputil2.HandleError(w, "Only HD or IMPORTED wallets can backup accounts", http.StatusBadRequest)
 		return
 	}
 	if len(keystoresToBackup) == 0 {
-		httputil.HandleError(w, "No keystores to backup", http.StatusBadRequest)
+		httputil2.HandleError(w, "No keystores to backup", http.StatusBadRequest)
 		return
 	}
 
@@ -190,7 +190,7 @@ func (s *Server) BackupAccounts(w http.ResponseWriter, r *http.Request) {
 			if err := writer.Close(); err != nil {
 				log.WithError(err).Error("Could not close zip file after writing")
 			}
-			httputil.HandleError(w, "could not marshal keystore to JSON file", http.StatusInternalServerError)
+			httputil2.HandleError(w, "could not marshal keystore to JSON file", http.StatusInternalServerError)
 			return
 		}
 		f, err := writer.Create(fmt.Sprintf("keystore-%d.json", i))
@@ -198,21 +198,21 @@ func (s *Server) BackupAccounts(w http.ResponseWriter, r *http.Request) {
 			if err := writer.Close(); err != nil {
 				log.WithError(err).Error("Could not close zip file after writing")
 			}
-			httputil.HandleError(w, "Could not write keystore file to zip", http.StatusInternalServerError)
+			httputil2.HandleError(w, "Could not write keystore file to zip", http.StatusInternalServerError)
 			return
 		}
 		if _, err = f.Write(encodedFile); err != nil {
 			if err := writer.Close(); err != nil {
 				log.WithError(err).Error("Could not close zip file after writing")
 			}
-			httputil.HandleError(w, "Could not write keystore file contents", http.StatusBadRequest)
+			httputil2.HandleError(w, "Could not write keystore file contents", http.StatusBadRequest)
 			return
 		}
 	}
 	if err := writer.Close(); err != nil {
 		log.WithError(err).Error("Could not close zip file after writing")
 	}
-	httputil.WriteJson(w, &BackupAccountsResponse{
+	httputil2.WriteJson(w, &BackupAccountsResponse{
 		ZipFile: base64.StdEncoding.EncodeToString(buf.Bytes()), // convert to base64 string for processing
 	})
 }
@@ -222,30 +222,30 @@ func (s *Server) VoluntaryExit(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "validator.web.accounts.VoluntaryExit")
 	defer span.End()
 	if s.validatorService == nil {
-		httputil.HandleError(w, "Validator service not ready.", http.StatusServiceUnavailable)
+		httputil2.HandleError(w, "Validator service not ready.", http.StatusServiceUnavailable)
 		return
 	}
 	if !s.walletInitialized {
-		httputil.HandleError(w, "Prysm Wallet not initialized. Please create a new wallet.", http.StatusServiceUnavailable)
+		httputil2.HandleError(w, "Prysm Wallet not initialized. Please create a new wallet.", http.StatusServiceUnavailable)
 		return
 	}
 	var req VoluntaryExitRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
 	switch {
 	case errors.Is(err, io.EOF):
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		httputil2.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	case err != nil:
-		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 	if len(req.PublicKeys) == 0 {
-		httputil.HandleError(w, "No public keys specified to delete", http.StatusBadRequest)
+		httputil2.HandleError(w, "No public keys specified to delete", http.StatusBadRequest)
 		return
 	}
 	km, err := s.validatorService.Keymanager()
 	if err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	pubKeys := make([][]byte, len(req.PublicKeys))
@@ -265,10 +265,10 @@ func (s *Server) VoluntaryExit(w http.ResponseWriter, r *http.Request) {
 	}
 	rawExitedKeys, _, err := accounts.PerformVoluntaryExit(ctx, cfg)
 	if err != nil {
-		httputil.HandleError(w, errors.Wrap(err, "Could not perform voluntary exit").Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, errors.Wrap(err, "Could not perform voluntary exit").Error(), http.StatusInternalServerError)
 		return
 	}
-	httputil.WriteJson(w, &VoluntaryExitResponse{
+	httputil2.WriteJson(w, &VoluntaryExitResponse{
 		ExitedKeys: rawExitedKeys,
 	})
 }

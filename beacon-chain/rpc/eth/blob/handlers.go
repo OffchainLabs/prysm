@@ -9,7 +9,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api"
+	httputil2 "github.com/prysmaticlabs/prysm/v5/api/httputil"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/core"
 	field_params "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
@@ -17,7 +17,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 )
 
@@ -28,7 +27,7 @@ func (s *Server) Blobs(w http.ResponseWriter, r *http.Request) {
 
 	indices, err := parseIndices(r.URL, s.TimeFetcher.CurrentSlot())
 	if err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
+		httputil2.HandleError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	segments := strings.Split(r.URL.Path, "/")
@@ -39,49 +38,49 @@ func (s *Server) Blobs(w http.ResponseWriter, r *http.Request) {
 		code := core.ErrorReasonToHTTP(rpcErr.Reason)
 		switch code {
 		case http.StatusBadRequest:
-			httputil.HandleError(w, "Invalid block ID: "+rpcErr.Err.Error(), code)
+			httputil2.HandleError(w, "Invalid block ID: "+rpcErr.Err.Error(), code)
 			return
 		case http.StatusNotFound:
-			httputil.HandleError(w, "Block not found: "+rpcErr.Err.Error(), code)
+			httputil2.HandleError(w, "Block not found: "+rpcErr.Err.Error(), code)
 			return
 		case http.StatusInternalServerError:
-			httputil.HandleError(w, "Internal server error: "+rpcErr.Err.Error(), code)
+			httputil2.HandleError(w, "Internal server error: "+rpcErr.Err.Error(), code)
 			return
 		default:
-			httputil.HandleError(w, rpcErr.Err.Error(), code)
+			httputil2.HandleError(w, rpcErr.Err.Error(), code)
 			return
 		}
 	}
 
 	blk, err := s.Blocker.Block(ctx, []byte(blockId))
 	if err != nil {
-		httputil.HandleError(w, "Could not fetch block: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not fetch block: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if blk == nil {
-		httputil.HandleError(w, "Block not found", http.StatusNotFound)
+		httputil2.HandleError(w, "Block not found", http.StatusNotFound)
 		return
 	}
 
-	if httputil.RespondWithSsz(r) {
+	if httputil2.RespondWithSsz(r) {
 		sszResp, err := buildSidecarsSSZResponse(verifiedBlobs)
 		if err != nil {
-			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+			httputil2.HandleError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		w.Header().Set(api.VersionHeader, version.String(blk.Version()))
-		httputil.WriteSsz(w, sszResp)
+		w.Header().Set(httputil2.VersionHeader, version.String(blk.Version()))
+		httputil2.WriteSsz(w, sszResp)
 		return
 	}
 
 	blkRoot, err := blk.Block().HashTreeRoot()
 	if err != nil {
-		httputil.HandleError(w, "Could not hash block: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not hash block: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	isOptimistic, err := s.OptimisticModeFetcher.IsOptimisticForRoot(ctx, blkRoot)
 	if err != nil {
-		httputil.HandleError(w, "Could not check if block is optimistic: "+err.Error(), http.StatusInternalServerError)
+		httputil2.HandleError(w, "Could not check if block is optimistic: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -92,8 +91,8 @@ func (s *Server) Blobs(w http.ResponseWriter, r *http.Request) {
 		ExecutionOptimistic: isOptimistic,
 		Finalized:           s.FinalizationFetcher.IsFinalized(ctx, blkRoot),
 	}
-	w.Header().Set(api.VersionHeader, version.String(blk.Version()))
-	httputil.WriteJson(w, resp)
+	w.Header().Set(httputil2.VersionHeader, version.String(blk.Version()))
+	httputil2.WriteJson(w, resp)
 }
 
 // parseIndices filters out invalid and duplicate blob indices

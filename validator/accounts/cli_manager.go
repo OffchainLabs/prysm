@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	grpcutil "github.com/prysmaticlabs/prysm/v5/api/grpc"
+	"github.com/prysmaticlabs/prysm/v5/api/grpcutil"
 	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
 	"github.com/prysmaticlabs/prysm/v5/validator/accounts/wallet"
 	beaconApi "github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api"

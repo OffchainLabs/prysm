@@ -6,9 +6,9 @@ go_library(
     importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/rewards/testing",
     visibility = ["//visibility:public"],
     deps = [
+        "//api/httputil:go_default_library",
         "//api/server/structs:go_default_library",
         "//beacon-chain/state:go_default_library",
         "//consensus-types/interfaces:go_default_library",
-        "//network/httputil:go_default_library",
     ],
 )
