@@ -532,45 +532,45 @@ func (dcs *DataColumnStorage) prune() {
 			continue
 		}
 
-		if period > highestPeriodToPrune {
-			// Nothing to prune.
+		if period < highestPeriodToPrune {
+			// Remove everything lower thant highest period to prune.
+			if err := dcs.fs.RemoveAll(periodStr); err != nil {
+				log.WithError(err).Error("Error encountered while removing period directory")
+			}
+
 			continue
 		}
 
-		if period == highestPeriodToPrune {
-			epochFileInfos, err := afero.ReadDir(dcs.fs, periodStr)
+		if period > highestPeriodToPrune {
+			// Do not remove anything higher than highest period to prune.
+			continue
+		}
+
+		// if period == highestPeriodToPrune
+		epochFileInfos, err := afero.ReadDir(dcs.fs, periodStr)
+		if err != nil {
+			log.WithError(err).Error("Error encountered while reading epoch directory")
+			continue
+		}
+
+		for _, epochFileInfo := range epochFileInfos {
+			epochStr := epochFileInfo.Name()
+			epochDir := path.Join(periodStr, epochStr)
+
+			epoch, err := strconv.ParseUint(epochStr, 10, 64)
 			if err != nil {
-				log.WithError(err).Error("Error encountered while reading epoch directory")
+				log.WithError(err).Errorf("Error encountered while parsing epoch %s", epochStr)
 				continue
 			}
 
-			for _, epochFileInfo := range epochFileInfos {
-				epochStr := epochFileInfo.Name()
-				epochDir := path.Join(periodStr, epochStr)
-
-				epoch, err := strconv.ParseUint(epochStr, 10, 64)
-				if err != nil {
-					log.WithError(err).Errorf("Error encountered while parsing epoch %s", epochStr)
-					continue
-				}
-
-				if primitives.Epoch(epoch) > highestEpochToPrune {
-					continue
-				}
-
-				if err := dcs.fs.RemoveAll(epochDir); err != nil {
-					log.WithError(err).Error("Error encountered while removing epoch directory")
-					continue
-				}
+			if primitives.Epoch(epoch) > highestEpochToPrune {
+				continue
 			}
 
-			continue
-		}
-
-		// period < lowestPeriodToPrune
-		if err := dcs.fs.RemoveAll(periodStr); err != nil {
-			log.WithError(err).Error("Error encountered while removing period directory")
-			continue
+			if err := dcs.fs.RemoveAll(epochDir); err != nil {
+				log.WithError(err).Error("Error encountered while removing epoch directory")
+				continue
+			}
 		}
 	}
 
