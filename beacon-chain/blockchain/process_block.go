@@ -614,7 +614,7 @@ func (s *Service) areDataColumnsAvailable(ctx context.Context, root [fieldparams
 		return errors.Wrap(err, "peer info")
 	}
 
-	// Subscribe to newsly data columns stored in the database.
+	// Subscribe to newly data columns stored in the database.
 	identsChan := make(chan filesystem.DataColumnsIdent)
 	subscription := s.dataColumnStorage.DataColumnFeed.Subscribe(identsChan)
 	defer subscription.Unsubscribe()
