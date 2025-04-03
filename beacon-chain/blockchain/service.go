@@ -16,6 +16,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
 	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
+	lightclient "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/light-client"
 	coreTime "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
@@ -64,6 +65,7 @@ type Service struct {
 	blockBeingSynced     *currentlySyncingBlock
 	blobStorage          *filesystem.BlobStorage
 	slasherEnabled       bool
+	lcStore              *lightclient.Store
 }
 
 // config options for the service.

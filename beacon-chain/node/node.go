@@ -779,6 +779,7 @@ func (b *BeaconNode) registerBlockchainService(fc forkchoice.ForkChoicer, gs *st
 		blockchain.WithPayloadIDCache(b.payloadIDCache),
 		blockchain.WithSyncChecker(b.syncChecker),
 		blockchain.WithSlasherEnabled(b.slasherEnabled),
+		blockchain.WithLightClientStore(b.lcStore),
 	)
 
 	blockchainService, err := blockchain.NewService(b.ctx, opts...)
