@@ -331,6 +331,18 @@ func (s *Service) processLightClientOptimisticUpdate(ctx context.Context, signed
 		return errors.Wrap(err, "could not create light client optimistic update")
 	}
 
+	lastUpdate := s.lcStore.GetLastLCOptimisticUpdate()
+	if lastUpdate != nil {
+		// The attested_header.beacon.slot is greater than that of all previously forwarded optimistic updates
+		if update.AttestedHeader().Beacon().Slot <= lastUpdate.AttestedHeader().Beacon().Slot {
+			log.Debug("Skip saving light client optimistic update: Older than local update")
+			return nil
+		}
+	}
+
+	log.Debug("Saving new light client optimistic update")
+	s.lcStore.SetLastLCOptimisticUpdate(update)
+
 	s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
 		Type: statefeed.LightClientOptimisticUpdate,
 		Data: update,
