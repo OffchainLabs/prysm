@@ -9,30 +9,30 @@ import (
 type Store struct {
 	mu sync.RWMutex
 
-	lastLCFinalityUpdate   interfaces.LightClientFinalityUpdate
-	lastLCOptimisticUpdate interfaces.LightClientOptimisticUpdate
+	lastFinalityUpdate   interfaces.LightClientFinalityUpdate
+	lastOptimisticUpdate interfaces.LightClientOptimisticUpdate
 }
 
-func (s *Store) SetLastLCFinalityUpdate(update interfaces.LightClientFinalityUpdate) {
+func (s *Store) SetLastFinalityUpdate(update interfaces.LightClientFinalityUpdate) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.lastLCFinalityUpdate = update
+	s.lastFinalityUpdate = update
 }
 
-func (s *Store) GetLastLCFinalityUpdate() interfaces.LightClientFinalityUpdate {
+func (s *Store) GetLastFinalityUpdate() interfaces.LightClientFinalityUpdate {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.lastLCFinalityUpdate
+	return s.lastFinalityUpdate
 }
 
-func (s *Store) SetLastLCOptimisticUpdate(update interfaces.LightClientOptimisticUpdate) {
+func (s *Store) SetLastOptimisticUpdate(update interfaces.LightClientOptimisticUpdate) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.lastLCOptimisticUpdate = update
+	s.lastOptimisticUpdate = update
 }
 
-func (s *Store) GetLastLCOptimisticUpdate() interfaces.LightClientOptimisticUpdate {
+func (s *Store) GetLastOptimisticUpdate() interfaces.LightClientOptimisticUpdate {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.lastLCOptimisticUpdate
+	return s.lastOptimisticUpdate
 }

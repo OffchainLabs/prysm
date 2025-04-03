@@ -30,7 +30,10 @@ go_library(
 
 go_test(
     name = "go_default_test",
-    srcs = ["lightclient_test.go"],
+    srcs = [
+        "lightclient_test.go",
+        "store_test.go",
+    ],
     deps = [
         ":go_default_library",
         "//config/fieldparams:go_default_library",
