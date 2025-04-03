@@ -268,7 +268,7 @@ func (s *Service) processLightClientFinalityUpdate(
 		return errors.Wrap(err, "could not create light client finality update")
 	}
 
-	lastUpdate := s.lcStore.GetLastLCFinalityUpdate()
+	lastUpdate := s.lcStore.GetLastFinalityUpdate()
 	if lastUpdate != nil {
 		// The finalized_header.beacon.lastUpdateSlot is greater than that of all previously forwarded finality_updates,
 		// or it matches the highest previously forwarded lastUpdateSlot and also has a sync_aggregate indicating supermajority (> 2/3)
@@ -293,7 +293,7 @@ func (s *Service) processLightClientFinalityUpdate(
 		}
 	}
 	log.Debug("Saving new light client finality update")
-	s.lcStore.SetLastLCFinalityUpdate(update)
+	s.lcStore.SetLastFinalityUpdate(update)
 
 	s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
 		Type: statefeed.LightClientFinalityUpdate,
@@ -331,7 +331,7 @@ func (s *Service) processLightClientOptimisticUpdate(ctx context.Context, signed
 		return errors.Wrap(err, "could not create light client optimistic update")
 	}
 
-	lastUpdate := s.lcStore.GetLastLCOptimisticUpdate()
+	lastUpdate := s.lcStore.GetLastOptimisticUpdate()
 	if lastUpdate != nil {
 		// The attested_header.beacon.slot is greater than that of all previously forwarded optimistic updates
 		if update.AttestedHeader().Beacon().Slot <= lastUpdate.AttestedHeader().Beacon().Slot {
@@ -341,7 +341,7 @@ func (s *Service) processLightClientOptimisticUpdate(ctx context.Context, signed
 	}
 
 	log.Debug("Saving new light client optimistic update")
-	s.lcStore.SetLastLCOptimisticUpdate(update)
+	s.lcStore.SetLastOptimisticUpdate(update)
 
 	s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
 		Type: statefeed.LightClientOptimisticUpdate,
