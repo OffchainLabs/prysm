@@ -157,7 +157,7 @@ func SaveDataColumns(sidecars []blocks.RODataColumn, dataColumnStorage *filesyst
 		verifiedRODataColumns = append(verifiedRODataColumns, verifiedRODataColumn)
 	}
 
-	if err := dataColumnStorage.Store(verifiedRODataColumns); err != nil {
+	if err := dataColumnStorage.Save(verifiedRODataColumns); err != nil {
 		return errors.Wrap(err, "save data column sidecars")
 	}
 

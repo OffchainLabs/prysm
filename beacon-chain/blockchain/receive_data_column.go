@@ -7,7 +7,7 @@ import (
 
 // ReceiveDataColumns receives a batch of data columns.
 func (s *Service) ReceiveDataColumns(dataColumnSidecars []blocks.VerifiedRODataColumn) error {
-	if err := s.dataColumnStorage.Store(dataColumnSidecars); err != nil {
+	if err := s.dataColumnStorage.Save(dataColumnSidecars); err != nil {
 		return errors.Wrap(err, "save data column sidecars")
 	}
 
@@ -17,7 +17,7 @@ func (s *Service) ReceiveDataColumns(dataColumnSidecars []blocks.VerifiedRODataC
 // ReceiveDataColumn receives a single data column.
 // (It is only a wrapper around ReceiveDataColumns.)
 func (s *Service) ReceiveDataColumn(dataColumnSidecar blocks.VerifiedRODataColumn) error {
-	if err := s.dataColumnStorage.Store([]blocks.VerifiedRODataColumn{dataColumnSidecar}); err != nil {
+	if err := s.dataColumnStorage.Save([]blocks.VerifiedRODataColumn{dataColumnSidecar}); err != nil {
 		return errors.Wrap(err, "save data column sidecars")
 	}
 

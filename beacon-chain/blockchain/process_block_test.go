@@ -3188,7 +3188,7 @@ func testIsAvailableSetup(t *testing.T, params testIsAvailableParams) (context.C
 	dataColumnParamsByBlockRoot := verification.DataColumnsParamsByRoot{root: dataColumnsParams}
 	_, verifiedRODataColumns := verification.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnParamsByBlockRoot)
 
-	err = dataColumnStorage.Store(verifiedRODataColumns)
+	err = dataColumnStorage.Save(verifiedRODataColumns)
 	require.NoError(t, err)
 
 	signed, err := consensusblocks.NewSignedBeaconBlock(signedBeaconBlock)

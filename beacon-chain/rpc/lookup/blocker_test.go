@@ -373,7 +373,7 @@ func TestBlobsFromStoredDataColumns(t *testing.T) {
 				verifiedRoDataColumnsToSave = append(verifiedRoDataColumnsToSave, verifiedRoDataColumn)
 			}
 
-			err := dataColumnStorage.Store(verifiedRoDataColumnsToSave)
+			err := dataColumnStorage.Save(verifiedRoDataColumnsToSave)
 			require.NoError(t, err)
 
 			// Define the blocker.

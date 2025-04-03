@@ -255,9 +255,9 @@ func (dcs *DataColumnStorage) Summary(root [fieldparams.RootLength]byte) DataCol
 	return dcs.cache.Summary(root)
 }
 
-// Store stores data column sidecars into the database and asynchronously performs pruning.
+// Save saves data column sidecars into the database and asynchronously performs pruning.
 // The returned chanel is closed when the pruning is complete.
-func (dcs *DataColumnStorage) Store(dataColumnSidecars []blocks.VerifiedRODataColumn) error {
+func (dcs *DataColumnStorage) Save(dataColumnSidecars []blocks.VerifiedRODataColumn) error {
 	startTime := time.Now()
 
 	if len(dataColumnSidecars) == 0 {

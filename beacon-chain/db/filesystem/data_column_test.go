@@ -70,7 +70,7 @@ func TestWarmCache(t *testing.T) {
 		},
 	)
 
-	err = storage.Store(verifiedRoDataColumnSidecars)
+	err = storage.Save(verifiedRoDataColumnSidecars)
 	require.NoError(t, err)
 
 	storage.retentionEpochs = 4_096
@@ -119,7 +119,7 @@ func TestSaveDataColumnsSidecars(t *testing.T) {
 		)
 
 		_, dataColumnStorage := NewEphemeralDataColumnStorageAndFs(t)
-		err := dataColumnStorage.Store(verifiedRoDataColumnSidecars)
+		err := dataColumnStorage.Save(verifiedRoDataColumnSidecars)
 		require.ErrorIs(t, err, ErrWrongNumberOfColumns)
 	})
 
@@ -130,7 +130,7 @@ func TestSaveDataColumnsSidecars(t *testing.T) {
 		)
 
 		_, dataColumnStorage := NewEphemeralDataColumnStorageAndFs(t)
-		err := dataColumnStorage.Store(verifiedRoDataColumnSidecars)
+		err := dataColumnStorage.Save(verifiedRoDataColumnSidecars)
 		require.ErrorIs(t, err, ErrDataColumnIndexTooLarge)
 	})
 
@@ -146,7 +146,7 @@ func TestSaveDataColumnsSidecars(t *testing.T) {
 		)
 
 		_, dataColumnStorage := NewEphemeralDataColumnStorageAndFs(t)
-		err := dataColumnStorage.Store(verifiedRoDataColumnSidecars)
+		err := dataColumnStorage.Save(verifiedRoDataColumnSidecars)
 		require.ErrorIs(t, err, ErrDataColumnSidecarsFromDifferentSlots)
 	})
 
@@ -157,7 +157,7 @@ func TestSaveDataColumnsSidecars(t *testing.T) {
 		)
 
 		_, dataColumnStorage := NewEphemeralDataColumnStorageAndFs(t)
-		err := dataColumnStorage.Store(verifiedRoDataColumnSidecars)
+		err := dataColumnStorage.Save(verifiedRoDataColumnSidecars)
 		require.NoError(t, err)
 	})
 
@@ -173,7 +173,7 @@ func TestSaveDataColumnsSidecars(t *testing.T) {
 		)
 
 		_, dataColumnStorage := NewEphemeralDataColumnStorageAndFs(t)
-		err := dataColumnStorage.Store(verifiedRoDataColumnSidecars)
+		err := dataColumnStorage.Save(verifiedRoDataColumnSidecars)
 		require.ErrorIs(t, err, ErrWrongSszEncodedDataColumnSidecarSize)
 	})
 
@@ -185,7 +185,7 @@ func TestSaveDataColumnsSidecars(t *testing.T) {
 
 		// Save data columns into a file.
 		_, dataColumnStorage := NewEphemeralDataColumnStorageAndFs(t)
-		err := dataColumnStorage.Store(verifiedRoDataColumnSidecars)
+		err := dataColumnStorage.Save(verifiedRoDataColumnSidecars)
 		require.NoError(t, err)
 
 		// Build a data column sidecar for the same block but with a different
@@ -196,7 +196,7 @@ func TestSaveDataColumnsSidecars(t *testing.T) {
 		)
 
 		// Try to rewrite the file.
-		err = dataColumnStorage.Store(verifiedRoDataColumnSidecars)
+		err = dataColumnStorage.Save(verifiedRoDataColumnSidecars)
 		require.ErrorIs(t, err, ErrWrongSszEncodedDataColumnSidecarSize)
 	})
 
@@ -218,7 +218,7 @@ func TestSaveDataColumnsSidecars(t *testing.T) {
 		)
 
 		_, dataColumnStorage := NewEphemeralDataColumnStorageAndFs(t)
-		err := dataColumnStorage.Store(inputVerifiedRoDataColumnSidecars)
+		err := dataColumnStorage.Save(inputVerifiedRoDataColumnSidecars)
 		require.NoError(t, err)
 
 		_, inputVerifiedRoDataColumnSidecars = verification.CreateTestVerifiedRoDataColumnSidecars(
@@ -236,7 +236,7 @@ func TestSaveDataColumnsSidecars(t *testing.T) {
 			},
 		)
 
-		err = dataColumnStorage.Store(inputVerifiedRoDataColumnSidecars)
+		err = dataColumnStorage.Save(inputVerifiedRoDataColumnSidecars)
 		require.NoError(t, err)
 
 		type fixture struct {
@@ -378,7 +378,7 @@ func TestGetDataColumnSidecars(t *testing.T) {
 		)
 
 		_, dataColumnStorage := NewEphemeralDataColumnStorageAndFs(t)
-		err := dataColumnStorage.Store(expectedVerifiedRoDataColumnSidecars)
+		err := dataColumnStorage.Save(expectedVerifiedRoDataColumnSidecars)
 		require.NoError(t, err)
 
 		verifiedRODataColumnSidecars, err := dataColumnStorage.Get([fieldparams.RootLength]byte{1}, nil)
@@ -414,7 +414,7 @@ func TestRemove(t *testing.T) {
 		)
 
 		_, dataColumnStorage := NewEphemeralDataColumnStorageAndFs(t)
-		err := dataColumnStorage.Store(inputVerifiedRoDataColumnSidecars)
+		err := dataColumnStorage.Save(inputVerifiedRoDataColumnSidecars)
 		require.NoError(t, err)
 
 		err = dataColumnStorage.Remove([fieldparams.RootLength]byte{1})
@@ -448,7 +448,7 @@ func TestClear(t *testing.T) {
 	)
 
 	_, dataColumnStorage := NewEphemeralDataColumnStorageAndFs(t)
-	err := dataColumnStorage.Store(inputVerifiedRoDataColumnSidecars)
+	err := dataColumnStorage.Save(inputVerifiedRoDataColumnSidecars)
 	require.NoError(t, err)
 
 	filePaths := []string{
@@ -486,7 +486,7 @@ func TestMetadata(t *testing.T) {
 
 		// Save data columns into a file.
 		_, dataColumnStorage := NewEphemeralDataColumnStorageAndFs(t)
-		err := dataColumnStorage.Store(verifiedRoDataColumnSidecars)
+		err := dataColumnStorage.Save(verifiedRoDataColumnSidecars)
 		require.NoError(t, err)
 
 		// Alter the version.
@@ -516,7 +516,7 @@ func TestMetadata(t *testing.T) {
 
 		// Save data columns into a file.
 		_, dataColumnStorage := NewEphemeralDataColumnStorageAndFs(t)
-		err := dataColumnStorage.Store(verifiedRoDataColumnSidecars)
+		err := dataColumnStorage.Save(verifiedRoDataColumnSidecars)
 		require.NoError(t, err)
 
 		// Append an extra byte to the file.
@@ -598,7 +598,7 @@ func TestPrune(t *testing.T) {
 		dataColumnStorage, err := NewDataColumnStorage(context.Background(), WithDataColumnBasePath(dir), WithDataColumnRetentionEpochs(10_000))
 		require.NoError(t, err)
 
-		err = dataColumnStorage.Store(verifiedRoDataColumnSidecars)
+		err = dataColumnStorage.Save(verifiedRoDataColumnSidecars)
 		require.NoError(t, err)
 
 		dirs, err := listDir(dataColumnStorage.fs, ".")
@@ -647,7 +647,7 @@ func TestPrune(t *testing.T) {
 			},
 		)
 
-		err = dataColumnStorage.Store(verifiedRoDataColumnSidecars)
+		err = dataColumnStorage.Save(verifiedRoDataColumnSidecars)
 		require.NoError(t, err)
 
 		// dataColumnStorage.prune(14_098)

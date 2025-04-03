@@ -109,7 +109,7 @@ func (s *Service) reconstructDataColumns(ctx context.Context, verifiedRODataColu
 	}
 
 	// Save the data columns sidecars in the database.
-	if err := s.cfg.dataColumnStorage.Store(verifiedRODataColumns); err != nil {
+	if err := s.cfg.dataColumnStorage.Save(verifiedRODataColumns); err != nil {
 		return errors.Wrap(err, "save data column sidecars")
 	}
 

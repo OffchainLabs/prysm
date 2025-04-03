@@ -124,7 +124,7 @@ func (s *LazilyPersistentStoreColumn) IsDataAvailable(
 	}
 
 	// Ensure that column sidecars are written to disk.
-	if err := s.store.Store(verifiedRODataColumns); err != nil {
+	if err := s.store.Save(verifiedRODataColumns); err != nil {
 		return errors.Wrapf(err, "save data column sidecars")
 	}
 
