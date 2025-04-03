@@ -704,8 +704,6 @@ func (dcs *DataColumnStorage) saveDataColumnSidecarsNewFile(filePath string, inp
 	// Initialize the count of the saved SSZ encoded data column sidecar.
 	storedCount := 0
 
-	log.Error("AAAA")
-
 	for {
 		dataColumnSidecars := pullChan(inputDataColumnSidecars)
 		if len(dataColumnSidecars) == 0 {
