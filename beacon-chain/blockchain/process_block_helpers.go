@@ -268,6 +268,33 @@ func (s *Service) processLightClientFinalityUpdate(
 		return errors.Wrap(err, "could not create light client finality update")
 	}
 
+	lastUpdate := s.lcStore.GetLastLCFinalityUpdate()
+	if lastUpdate != nil {
+		// The finalized_header.beacon.lastUpdateSlot is greater than that of all previously forwarded finality_updates,
+		// or it matches the highest previously forwarded lastUpdateSlot and also has a sync_aggregate indicating supermajority (> 2/3)
+		// sync committee participation while the previously forwarded finality_update for that lastUpdateSlot did not indicate supermajority
+		newUpdateSlot := update.FinalizedHeader().Beacon().Slot
+		newMaxActiveParticipants := update.SyncAggregate().SyncCommitteeBits.Len()
+		newNumActiveParticipants := update.SyncAggregate().SyncCommitteeBits.Count()
+		newHasSupermajority := newNumActiveParticipants*3 >= newMaxActiveParticipants*2
+
+		lastUpdateSlot := lastUpdate.FinalizedHeader().Beacon().Slot
+		lastMaxActiveParticipants := lastUpdate.SyncAggregate().SyncCommitteeBits.Len()
+		lastNumActiveParticipants := lastUpdate.SyncAggregate().SyncCommitteeBits.Count()
+		lastHasSupermajority := lastNumActiveParticipants*3 >= lastMaxActiveParticipants*2
+
+		if newUpdateSlot < lastUpdateSlot {
+			log.Debug("Skip saving light client finality update: Older than local update")
+			return nil
+		}
+		if newUpdateSlot == lastUpdateSlot && (lastHasSupermajority || !newHasSupermajority) {
+			log.Debug("Skip saving light client finality update: No supermajority advantage")
+			return nil
+		}
+	}
+	log.Debug("Saving new light client finality update")
+	s.lcStore.SetLastLCFinalityUpdate(update)
+
 	s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
 		Type: statefeed.LightClientFinalityUpdate,
 		Data: update,
