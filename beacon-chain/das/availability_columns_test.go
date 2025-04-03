@@ -7,6 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
 	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
@@ -18,8 +19,8 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
-func roSidecarsFromDataColumnParamsByBlockRoot(t *testing.T, dataColumnParamsByBlockRoot filesystem.DataColumnsParamsByRoot) ([]blocks.ROSidecar, []blocks.RODataColumn) {
-	roDataColumns, _ := filesystem.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnParamsByBlockRoot)
+func roSidecarsFromDataColumnParamsByBlockRoot(t *testing.T, dataColumnParamsByBlockRoot verification.DataColumnsParamsByRoot) ([]blocks.ROSidecar, []blocks.RODataColumn) {
+	roDataColumns, _ := verification.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnParamsByBlockRoot)
 
 	roSidecars := make([]blocks.ROSidecar, 0, len(roDataColumns))
 	for _, roDataColumn := range roDataColumns {
@@ -58,9 +59,9 @@ func TestPersist(t *testing.T) {
 	t.Run("mixed roots", func(t *testing.T) {
 		dataColumnStorage := filesystem.NewEphemeralDataColumnStorage(t)
 
-		dataColumnParamsByBlockRoot := map[[fieldparams.RootLength]byte][]filesystem.DataColumnParams{
-			{1}: []filesystem.DataColumnParams{{ColumnIndex: 1}},
-			{2}: []filesystem.DataColumnParams{{ColumnIndex: 2}},
+		dataColumnParamsByBlockRoot := map[[fieldparams.RootLength]byte][]verification.DataColumnParams{
+			{1}: {{ColumnIndex: 1}},
+			{2}: {{ColumnIndex: 2}},
 		}
 
 		roSidecars, _ := roSidecarsFromDataColumnParamsByBlockRoot(t, dataColumnParamsByBlockRoot)
@@ -74,8 +75,8 @@ func TestPersist(t *testing.T) {
 	t.Run("outside DA period", func(t *testing.T) {
 		dataColumnStorage := filesystem.NewEphemeralDataColumnStorage(t)
 
-		dataColumnParamsByBlockRoot := map[[fieldparams.RootLength]byte][]filesystem.DataColumnParams{
-			{1}: []filesystem.DataColumnParams{{ColumnIndex: 1}},
+		dataColumnParamsByBlockRoot := map[[fieldparams.RootLength]byte][]verification.DataColumnParams{
+			{1}: {{ColumnIndex: 1}},
 		}
 
 		roSidecars, _ := roSidecarsFromDataColumnParamsByBlockRoot(t, dataColumnParamsByBlockRoot)
@@ -89,8 +90,8 @@ func TestPersist(t *testing.T) {
 	t.Run("nominal", func(t *testing.T) {
 		dataColumnStorage := filesystem.NewEphemeralDataColumnStorage(t)
 
-		dataColumnParamsByBlockRoot := map[[fieldparams.RootLength]byte][]filesystem.DataColumnParams{
-			{}: []filesystem.DataColumnParams{{ColumnIndex: 1}, {ColumnIndex: 5}},
+		dataColumnParamsByBlockRoot := map[[fieldparams.RootLength]byte][]verification.DataColumnParams{
+			{}: {{ColumnIndex: 1}, {ColumnIndex: 5}},
 		}
 
 		roSidecars, roDataColumns := roSidecarsFromDataColumnParamsByBlockRoot(t, dataColumnParamsByBlockRoot)
@@ -155,9 +156,9 @@ func TestIsDataAvailable(t *testing.T) {
 		lazilyPersistentStoreColumns := NewLazilyPersistentStoreColumn(dataColumnStorage, enode.ID{}, &peerdas.CustodyInfo{})
 
 		indices := [...]uint64{1, 17, 87, 102}
-		dataColumnsParams := make([]filesystem.DataColumnParams, 0, len(indices))
+		dataColumnsParams := make([]verification.DataColumnParams, 0, len(indices))
 		for _, index := range indices {
-			dataColumnParams := filesystem.DataColumnParams{
+			dataColumnParams := verification.DataColumnParams{
 				ColumnIndex:    index,
 				KzgCommitments: commitments,
 			}
@@ -165,8 +166,8 @@ func TestIsDataAvailable(t *testing.T) {
 			dataColumnsParams = append(dataColumnsParams, dataColumnParams)
 		}
 
-		dataColumnsParamsByBlockRoot := filesystem.DataColumnsParamsByRoot{root: dataColumnsParams}
-		_, verifiedRoDataColumns := filesystem.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnsParamsByBlockRoot)
+		dataColumnsParamsByBlockRoot := verification.DataColumnsParamsByRoot{root: dataColumnsParams}
+		_, verifiedRoDataColumns := verification.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnsParamsByBlockRoot)
 
 		key := dataColumnCacheKey{root: root}
 		entry := lazilyPersistentStoreColumns.cache.ensure(key)

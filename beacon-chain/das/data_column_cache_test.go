@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
@@ -27,8 +28,8 @@ func TestEnsureDeleteSetDiskSummary(t *testing.T) {
 
 func TestStash(t *testing.T) {
 	t.Run("Index too high", func(t *testing.T) {
-		dataColumnParamsByBlockRoot := filesystem.DataColumnsParamsByRoot{{1}: {{ColumnIndex: 10_000}}}
-		roDataColumns, _ := filesystem.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnParamsByBlockRoot)
+		dataColumnParamsByBlockRoot := verification.DataColumnsParamsByRoot{{1}: {{ColumnIndex: 10_000}}}
+		roDataColumns, _ := verification.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnParamsByBlockRoot)
 
 		var entry dataColumnCacheEntry
 		err := entry.stash(&roDataColumns[0])
@@ -36,8 +37,8 @@ func TestStash(t *testing.T) {
 	})
 
 	t.Run("Nominal and already existing", func(t *testing.T) {
-		dataColumnParamsByBlockRoot := filesystem.DataColumnsParamsByRoot{{1}: {{ColumnIndex: 1}}}
-		roDataColumns, _ := filesystem.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnParamsByBlockRoot)
+		dataColumnParamsByBlockRoot := verification.DataColumnsParamsByRoot{{1}: {{ColumnIndex: 1}}}
+		roDataColumns, _ := verification.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnParamsByBlockRoot)
 
 		var entry dataColumnCacheEntry
 		err := entry.stash(&roDataColumns[0])
@@ -78,8 +79,8 @@ func TestFilterDataColumns(t *testing.T) {
 		root := [fieldparams.RootLength]byte{}
 		commitmentsArray := safeCommitmentsArray{nil, [][]byte{[]byte{1}}}
 
-		dataColumnParamsByBlockRoot := filesystem.DataColumnsParamsByRoot{root: {{ColumnIndex: 1}}}
-		roDataColumns, _ := filesystem.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnParamsByBlockRoot)
+		dataColumnParamsByBlockRoot := verification.DataColumnsParamsByRoot{root: {{ColumnIndex: 1}}}
+		roDataColumns, _ := verification.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnParamsByBlockRoot)
 
 		var scs [fieldparams.NumberOfColumns]*blocks.RODataColumn
 		scs[1] = &roDataColumns[0]
@@ -96,8 +97,8 @@ func TestFilterDataColumns(t *testing.T) {
 
 		diskSummary := filesystem.NewDataColumnStorageSummary(42, [fieldparams.NumberOfColumns]bool{false, true})
 
-		dataColumnParamsByBlockRoot := filesystem.DataColumnsParamsByRoot{root: {{ColumnIndex: 3, KzgCommitments: [][]byte{[]byte{3}}}}}
-		expected, _ := filesystem.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnParamsByBlockRoot)
+		dataColumnParamsByBlockRoot := verification.DataColumnsParamsByRoot{root: {{ColumnIndex: 3, KzgCommitments: [][]byte{[]byte{3}}}}}
+		expected, _ := verification.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnParamsByBlockRoot)
 
 		var scs [fieldparams.NumberOfColumns]*blocks.RODataColumn
 		scs[3] = &expected[0]

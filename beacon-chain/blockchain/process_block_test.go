@@ -28,6 +28,7 @@ import (
 	doublylinkedtree "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/doubly-linked-tree"
 	forkchoicetypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/types"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
@@ -3178,14 +3179,14 @@ func testIsAvailableSetup(t *testing.T, params testIsAvailableParams) (context.C
 	root, err := signedBeaconBlock.Block.HashTreeRoot()
 	require.NoError(t, err)
 
-	dataColumnsParams := make([]filesystem.DataColumnParams, 0, len(params.columnsToSave))
+	dataColumnsParams := make([]verification.DataColumnParams, 0, len(params.columnsToSave))
 	for _, i := range params.columnsToSave {
-		dataColumnParam := filesystem.DataColumnParams{ColumnIndex: i}
+		dataColumnParam := verification.DataColumnParams{ColumnIndex: i}
 		dataColumnsParams = append(dataColumnsParams, dataColumnParam)
 	}
 
-	dataColumnParamsByBlockRoot := filesystem.DataColumnsParamsByRoot{root: dataColumnsParams}
-	_, verifiedRODataColumns := filesystem.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnParamsByBlockRoot)
+	dataColumnParamsByBlockRoot := verification.DataColumnsParamsByRoot{root: dataColumnsParams}
+	_, verifiedRODataColumns := verification.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnParamsByBlockRoot)
 
 	err = dataColumnStorage.Store(verifiedRODataColumns)
 	require.NoError(t, err)
