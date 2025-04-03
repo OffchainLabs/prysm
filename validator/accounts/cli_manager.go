@@ -9,7 +9,7 @@ import (
 
 	"github.com/pkg/errors"
 	beaconApi "github.com/prysmaticlabs/prysm/v5/api/client"
-	grpcutil "github.com/prysmaticlabs/prysm/v5/api/grpc"
+	"github.com/prysmaticlabs/prysm/v5/api/grpcutil"
 	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
 	"github.com/prysmaticlabs/prysm/v5/validator/accounts/wallet"
 	iface "github.com/prysmaticlabs/prysm/v5/validator/client/iface"
