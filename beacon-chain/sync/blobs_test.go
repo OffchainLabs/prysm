@@ -246,6 +246,11 @@ func (c *blobsTestCase) run(t *testing.T) {
 		// This can happen in particular when there are no expected results, because the nth part of the
 		// response is an error (or none at all when the whole request is invalid).
 		if sc.sidecar != nil {
+			// Check if this sidecar index is in the missing map
+			if c.missing != nil && c.missing[int(sc.sidecar.Index)] {
+				// Skip saving this sidecar if it's marked as missing
+				continue
+			}
 			m[sc.sidecar.Slot()] = append(m[sc.sidecar.Slot()], *sc.sidecar)
 		}
 	}
