@@ -92,5 +92,5 @@ func TestGetDomainData_InvalidGenesisRoot(t *testing.T) {
 
 	validatorClient := &beaconApiValidatorClient{genesisProvider: genesisProvider}
 	_, err := validatorClient.domainData(ctx, epoch, domainType)
-	assert.ErrorContains(t, "invalid genesis validators root: foo", err)
+	assert.ErrorContains(t, "failed to decode genesis validators root: foo", err)
 }
