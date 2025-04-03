@@ -108,7 +108,7 @@ func TestGetAttestationData_InvalidData(t *testing.T) {
 				attestation.Data.BeaconBlockRoot = "foo"
 				return attestation
 			},
-			expectedErrorMessage: "invalid beacon block root: foo",
+			expectedErrorMessage: "failed to decode beacon block root: foo",
 		},
 		{
 			name: "invalid slot",
@@ -144,7 +144,7 @@ func TestGetAttestationData_InvalidData(t *testing.T) {
 				attestation.Data.Source.Root = "foo"
 				return attestation
 			},
-			expectedErrorMessage: "invalid attestation source root: foo",
+			expectedErrorMessage: "failed to decode attestation source root: foo",
 		},
 		{
 			name: "nil target",
@@ -171,7 +171,7 @@ func TestGetAttestationData_InvalidData(t *testing.T) {
 				attestation.Data.Target.Root = "foo"
 				return attestation
 			},
-			expectedErrorMessage: "invalid attestation target root: foo",
+			expectedErrorMessage: "failed to decode attestation target root: foo",
 		},
 	}
 

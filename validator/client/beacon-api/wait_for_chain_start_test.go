@@ -78,7 +78,7 @@ func TestWaitForChainStart_BadGenesis(t *testing.T) {
 				GenesisTime:           "1234",
 				GenesisValidatorsRoot: "0xzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
 			},
-			errorMessage: "invalid genesis validators root: ",
+			errorMessage: "failed to decode genesis validators root: ",
 		},
 	}
 
