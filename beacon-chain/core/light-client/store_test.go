@@ -23,7 +23,7 @@ func TestLightClientStore(t *testing.T) {
 	lcStore := &lightClient.Store{}
 
 	// Create test light client updates for Capella and Deneb
-	lCapella := util.NewTestLightClient(t).SetupTestCapella(false)
+	lCapella := util.NewTestLightClient(t).SetupTestCapella(false, 0, true)
 	opUpdateCapella, err := lightClient.NewLightClientOptimisticUpdateFromBeaconState(lCapella.Ctx, lCapella.State.Slot(), lCapella.State, lCapella.Block, lCapella.AttestedState, lCapella.AttestedBlock)
 	require.NoError(t, err)
 	require.NotNil(t, opUpdateCapella, "OptimisticUpdateCapella is nil")
@@ -31,7 +31,7 @@ func TestLightClientStore(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, finUpdateCapella, "FinalityUpdateCapella is nil")
 
-	lDeneb := util.NewTestLightClient(t).SetupTestDeneb(false)
+	lDeneb := util.NewTestLightClient(t).SetupTestDeneb(false, 0, true)
 	opUpdateDeneb, err := lightClient.NewLightClientOptimisticUpdateFromBeaconState(lDeneb.Ctx, lDeneb.State.Slot(), lDeneb.State, lDeneb.Block, lDeneb.AttestedState, lDeneb.AttestedBlock)
 	require.NoError(t, err)
 	require.NotNil(t, opUpdateDeneb, "OptimisticUpdateDeneb is nil")

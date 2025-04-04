@@ -33,10 +33,13 @@ func NewTestLightClient(t *testing.T) *TestLightClient {
 	return &TestLightClient{T: t}
 }
 
-func (l *TestLightClient) SetupTestCapella(blinded bool) *TestLightClient {
+func (l *TestLightClient) SetupTestCapella(blinded bool, increaseAttestedSlotBy int, supermajority bool) *TestLightClient {
 	ctx := context.Background()
 
 	slot := primitives.Slot(params.BeaconConfig().CapellaForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
+	if increaseAttestedSlotBy > 0 {
+		slot = slot.Add(uint64(increaseAttestedSlotBy))
+	}
 
 	attestedState, err := NewBeaconStateCapella()
 	require.NoError(l.T, err)
@@ -91,7 +94,7 @@ func (l *TestLightClient) SetupTestCapella(blinded bool) *TestLightClient {
 		block.Block.ParentRoot = parentRoot[:]
 
 		for i := uint64(0); i < params.BeaconConfig().MinSyncCommitteeParticipants; i++ {
-			block.Block.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, true)
+			block.Block.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, supermajority)
 		}
 
 		signedBlock, err = blocks.NewSignedBeaconBlock(block)
@@ -257,10 +260,13 @@ func (l *TestLightClient) SetupTestCapellaFinalizedBlockAltair(blinded bool) *Te
 	return l
 }
 
-func (l *TestLightClient) SetupTestAltair() *TestLightClient {
+func (l *TestLightClient) SetupTestAltair(increaseAttestedSlotBy int, supermajority bool) *TestLightClient {
 	ctx := context.Background()
 
 	slot := primitives.Slot(uint64(params.BeaconConfig().AltairForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch)).Add(1)
+	if increaseAttestedSlotBy > 0 {
+		slot = slot.Add(uint64(increaseAttestedSlotBy))
+	}
 
 	attestedState, err := NewBeaconStateAltair()
 	require.NoError(l.T, err)
@@ -321,7 +327,7 @@ func (l *TestLightClient) SetupTestAltair() *TestLightClient {
 	block.Block.ParentRoot = parentRoot[:]
 
 	for i := uint64(0); i < params.BeaconConfig().MinSyncCommitteeParticipants; i++ {
-		block.Block.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, true)
+		block.Block.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, supermajority)
 	}
 
 	signedBlock, err := blocks.NewSignedBeaconBlock(block)
@@ -350,10 +356,13 @@ func (l *TestLightClient) SetupTestAltair() *TestLightClient {
 	return l
 }
 
-func (l *TestLightClient) SetupTestBellatrix() *TestLightClient {
+func (l *TestLightClient) SetupTestBellatrix(increaseAttestedSlotBy int, supermajority bool) *TestLightClient {
 	ctx := context.Background()
 
 	slot := primitives.Slot(params.BeaconConfig().BellatrixForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
+	if increaseAttestedSlotBy > 0 {
+		slot = slot.Add(uint64(increaseAttestedSlotBy))
+	}
 
 	attestedState, err := NewBeaconStateBellatrix()
 	require.NoError(l.T, err)
@@ -406,7 +415,7 @@ func (l *TestLightClient) SetupTestBellatrix() *TestLightClient {
 	block.Block.ParentRoot = parentRoot[:]
 
 	for i := uint64(0); i < params.BeaconConfig().MinSyncCommitteeParticipants; i++ {
-		block.Block.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, true)
+		block.Block.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, supermajority)
 	}
 
 	signedBlock, err := blocks.NewSignedBeaconBlock(block)
@@ -435,10 +444,13 @@ func (l *TestLightClient) SetupTestBellatrix() *TestLightClient {
 	return l
 }
 
-func (l *TestLightClient) SetupTestDeneb(blinded bool) *TestLightClient {
+func (l *TestLightClient) SetupTestDeneb(blinded bool, increaseAttestedSlotBy int, supermajority bool) *TestLightClient {
 	ctx := context.Background()
 
 	slot := primitives.Slot(params.BeaconConfig().DenebForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
+	if increaseAttestedSlotBy > 0 {
+		slot = slot.Add(uint64(increaseAttestedSlotBy))
+	}
 
 	attestedState, err := NewBeaconStateDeneb()
 	require.NoError(l.T, err)
@@ -493,7 +505,7 @@ func (l *TestLightClient) SetupTestDeneb(blinded bool) *TestLightClient {
 		block.Message.ParentRoot = parentRoot[:]
 
 		for i := uint64(0); i < params.BeaconConfig().MinSyncCommitteeParticipants; i++ {
-			block.Message.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, true)
+			block.Message.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, supermajority)
 		}
 
 		signedBlock, err = blocks.NewSignedBeaconBlock(block)
@@ -517,7 +529,7 @@ func (l *TestLightClient) SetupTestDeneb(blinded bool) *TestLightClient {
 		block.Block.ParentRoot = parentRoot[:]
 
 		for i := uint64(0); i < params.BeaconConfig().MinSyncCommitteeParticipants; i++ {
-			block.Block.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, true)
+			block.Block.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, supermajority)
 		}
 
 		signedBlock, err = blocks.NewSignedBeaconBlock(block)
@@ -547,10 +559,13 @@ func (l *TestLightClient) SetupTestDeneb(blinded bool) *TestLightClient {
 	return l
 }
 
-func (l *TestLightClient) SetupTestElectra(blinded bool) *TestLightClient {
+func (l *TestLightClient) SetupTestElectra(blinded bool, increaseAttestedSlotBy int, supermajority bool) *TestLightClient {
 	ctx := context.Background()
 
 	slot := primitives.Slot(params.BeaconConfig().ElectraForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
+	if increaseAttestedSlotBy > 0 {
+		slot = slot.Add(uint64(increaseAttestedSlotBy))
+	}
 	finalizedBlockSlot := primitives.Slot(params.BeaconConfig().ElectraForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch))
 
 	attestedState, err := NewBeaconStateElectra()
@@ -606,7 +621,7 @@ func (l *TestLightClient) SetupTestElectra(blinded bool) *TestLightClient {
 		block.Message.ParentRoot = parentRoot[:]
 
 		for i := uint64(0); i < params.BeaconConfig().MinSyncCommitteeParticipants; i++ {
-			block.Message.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, true)
+			block.Message.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, supermajority)
 		}
 
 		signedBlock, err = blocks.NewSignedBeaconBlock(block)
@@ -630,7 +645,7 @@ func (l *TestLightClient) SetupTestElectra(blinded bool) *TestLightClient {
 		block.Block.ParentRoot = parentRoot[:]
 
 		for i := uint64(0); i < params.BeaconConfig().MinSyncCommitteeParticipants; i++ {
-			block.Block.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, true)
+			block.Block.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, supermajority)
 		}
 
 		signedBlock, err = blocks.NewSignedBeaconBlock(block)
@@ -660,10 +675,13 @@ func (l *TestLightClient) SetupTestElectra(blinded bool) *TestLightClient {
 	return l
 }
 
-func (l *TestLightClient) SetupTestFulu(blinded bool) *TestLightClient {
+func (l *TestLightClient) SetupTestFulu(blinded bool, increaseAttestedSlotBy int, supermajority bool) *TestLightClient {
 	ctx := context.Background()
 
 	slot := primitives.Slot(params.BeaconConfig().FuluForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
+	if increaseAttestedSlotBy > 0 {
+		slot = slot.Add(uint64(increaseAttestedSlotBy))
+	}
 
 	attestedState, err := NewBeaconStateFulu()
 	require.NoError(l.T, err)
@@ -718,7 +736,7 @@ func (l *TestLightClient) SetupTestFulu(blinded bool) *TestLightClient {
 		block.Message.ParentRoot = parentRoot[:]
 
 		for i := uint64(0); i < params.BeaconConfig().MinSyncCommitteeParticipants; i++ {
-			block.Message.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, true)
+			block.Message.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, supermajority)
 		}
 
 		signedBlock, err = blocks.NewSignedBeaconBlock(block)
@@ -742,7 +760,7 @@ func (l *TestLightClient) SetupTestFulu(blinded bool) *TestLightClient {
 		block.Block.ParentRoot = parentRoot[:]
 
 		for i := uint64(0); i < params.BeaconConfig().MinSyncCommitteeParticipants; i++ {
-			block.Block.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, true)
+			block.Block.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, supermajority)
 		}
 
 		signedBlock, err = blocks.NewSignedBeaconBlock(block)
