@@ -3,9 +3,11 @@ package params_test
 import (
 	"bytes"
 	"math"
+	"path"
 	"sync"
 	"testing"
 
+	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/genesis"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
@@ -155,4 +157,22 @@ func TestMaxBlobsPerBlockByVersion(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestMainnetConfigMatchesUpstreamYaml(t *testing.T) {
+	presetFPs := presetsFilePath(t, "mainnet")
+	mn, err := params.ByName(params.MainnetName)
+	require.NoError(t, err)
+	cfg := mn.Copy()
+	for _, fp := range presetFPs {
+		cfg, err = params.UnmarshalConfigFile(fp, cfg)
+		require.NoError(t, err)
+	}
+	fPath, err := bazel.Runfile("external/mainnet")
+	require.NoError(t, err)
+	configFP := path.Join(fPath, "metadata", "config.yaml")
+	pcfg, err := params.UnmarshalConfigFile(configFP, nil)
+	require.NoError(t, err)
+	fields := fieldsFromYamls(t, append(presetFPs, configFP))
+	assertYamlFieldsMatch(t, "mainnet", fields, pcfg, params.BeaconConfig())
 }

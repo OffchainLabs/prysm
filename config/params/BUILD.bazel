@@ -62,6 +62,7 @@ go_test(
         "@holesky_testnet//:configs",
         "@hoodi_testnet//:configs",
         "@sepolia_testnet//:configs",
+        "@mainnet//:configs",
     ],
     embed = [":go_default_library"],
     gotags = ["develop"],
