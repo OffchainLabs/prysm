@@ -10,6 +10,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache/depositsnapshot"
 	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
+	lightclient "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/light-client"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
 	testDB "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
@@ -122,6 +123,7 @@ func minimalTestService(t *testing.T, opts ...Option) (*Service, *testServiceReq
 		WithBlobStorage(filesystem.NewEphemeralBlobStorage(t)),
 		WithSyncChecker(mock.MockChecker{}),
 		WithExecutionEngineCaller(&mockExecution.EngineClient{}),
+		WithLightClientStore(&lightclient.Store{}),
 	}
 	// append the variadic opts so they override the defaults by being processed afterwards
 	opts = append(defOpts, opts...)
