@@ -19,7 +19,7 @@ func (s *Store) SetLastFinalityUpdate(update interfaces.LightClientFinalityUpdat
 	s.lastFinalityUpdate = update
 }
 
-func (s *Store) GetLastFinalityUpdate() interfaces.LightClientFinalityUpdate {
+func (s *Store) LastFinalityUpdate() interfaces.LightClientFinalityUpdate {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.lastFinalityUpdate
@@ -31,7 +31,7 @@ func (s *Store) SetLastOptimisticUpdate(update interfaces.LightClientOptimisticU
 	s.lastOptimisticUpdate = update
 }
 
-func (s *Store) GetLastOptimisticUpdate() interfaces.LightClientOptimisticUpdate {
+func (s *Store) LastOptimisticUpdate() interfaces.LightClientOptimisticUpdate {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.lastOptimisticUpdate

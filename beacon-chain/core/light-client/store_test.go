@@ -40,28 +40,28 @@ func TestLightClientStore(t *testing.T) {
 	require.NotNil(t, finUpdateDeneb, "FinalityUpdateDeneb is nil")
 
 	// Initially the store should have nil values for both updates
-	require.IsNil(t, lcStore.GetLastFinalityUpdate(), "lastFinalityUpdate should be nil")
-	require.IsNil(t, lcStore.GetLastOptimisticUpdate(), "lastOptimisticUpdate should be nil")
+	require.IsNil(t, lcStore.LastFinalityUpdate(), "lastFinalityUpdate should be nil")
+	require.IsNil(t, lcStore.LastOptimisticUpdate(), "lastOptimisticUpdate should be nil")
 
 	// Set and get finality with Capella update. Optimistic update should be nil
 	lcStore.SetLastFinalityUpdate(finUpdateCapella)
-	require.Equal(t, finUpdateCapella, lcStore.GetLastFinalityUpdate(), "lastFinalityUpdate is wrong")
-	require.IsNil(t, lcStore.GetLastOptimisticUpdate(), "lastOptimisticUpdate should be nil")
+	require.Equal(t, finUpdateCapella, lcStore.LastFinalityUpdate(), "lastFinalityUpdate is wrong")
+	require.IsNil(t, lcStore.LastOptimisticUpdate(), "lastOptimisticUpdate should be nil")
 
 	// Set and get optimistic with Capella update. Finality update should be Capella
 	lcStore.SetLastOptimisticUpdate(opUpdateCapella)
-	require.Equal(t, opUpdateCapella, lcStore.GetLastOptimisticUpdate(), "lastOptimisticUpdate is wrong")
-	require.Equal(t, finUpdateCapella, lcStore.GetLastFinalityUpdate(), "lastFinalityUpdate is wrong")
+	require.Equal(t, opUpdateCapella, lcStore.LastOptimisticUpdate(), "lastOptimisticUpdate is wrong")
+	require.Equal(t, finUpdateCapella, lcStore.LastFinalityUpdate(), "lastFinalityUpdate is wrong")
 
 	// Set and get finality and optimistic with Deneb update
 	lcStore.SetLastFinalityUpdate(finUpdateDeneb)
 	lcStore.SetLastOptimisticUpdate(opUpdateDeneb)
-	require.Equal(t, finUpdateDeneb, lcStore.GetLastFinalityUpdate(), "lastFinalityUpdate is wrong")
-	require.Equal(t, opUpdateDeneb, lcStore.GetLastOptimisticUpdate(), "lastOptimisticUpdate is wrong")
+	require.Equal(t, finUpdateDeneb, lcStore.LastFinalityUpdate(), "lastFinalityUpdate is wrong")
+	require.Equal(t, opUpdateDeneb, lcStore.LastOptimisticUpdate(), "lastOptimisticUpdate is wrong")
 
 	// Set and get finality and optimistic with nil update
 	lcStore.SetLastFinalityUpdate(nil)
 	lcStore.SetLastOptimisticUpdate(nil)
-	require.IsNil(t, lcStore.GetLastFinalityUpdate(), "lastFinalityUpdate should be nil")
-	require.IsNil(t, lcStore.GetLastOptimisticUpdate(), "lastOptimisticUpdate should be nil")
+	require.IsNil(t, lcStore.LastFinalityUpdate(), "lastFinalityUpdate should be nil")
+	require.IsNil(t, lcStore.LastOptimisticUpdate(), "lastOptimisticUpdate should be nil")
 }
