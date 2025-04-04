@@ -93,8 +93,17 @@ func (l *TestLightClient) SetupTestCapella(blinded bool, increaseAttestedSlotBy 
 		block.Block.Slot = slot
 		block.Block.ParentRoot = parentRoot[:]
 
-		for i := uint64(0); i < params.BeaconConfig().MinSyncCommitteeParticipants; i++ {
-			block.Block.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, supermajority)
+		// The mainnet config for MinSyncCommitteeParticipants is 1.
+		// This means that you MUST mock the MinSyncCommitteeParticipants to something larger if you want to test with no supermajority.
+		// Otherwise, no updates will be created.
+		var trueBitNum uint64
+		if supermajority {
+			trueBitNum = params.BeaconConfig().MinSyncCommitteeParticipants
+		} else {
+			trueBitNum = params.BeaconConfig().MinSyncCommitteeParticipants - 1
+		}
+		for i := uint64(0); i < trueBitNum; i++ {
+			block.Block.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, true)
 		}
 
 		signedBlock, err = blocks.NewSignedBeaconBlock(block)
@@ -117,7 +126,16 @@ func (l *TestLightClient) SetupTestCapella(blinded bool, increaseAttestedSlotBy 
 		block.Block.Slot = slot
 		block.Block.ParentRoot = parentRoot[:]
 
-		for i := uint64(0); i < params.BeaconConfig().MinSyncCommitteeParticipants; i++ {
+		// The mainnet config for MinSyncCommitteeParticipants is 1.
+		// This means that you MUST mock the MinSyncCommitteeParticipants to something larger if you want to test with no supermajority.
+		// Otherwise, no updates will be created.
+		var trueBitNum uint64
+		if supermajority {
+			trueBitNum = params.BeaconConfig().MinSyncCommitteeParticipants
+		} else {
+			trueBitNum = params.BeaconConfig().MinSyncCommitteeParticipants - 1
+		}
+		for i := uint64(0); i < trueBitNum; i++ {
 			block.Block.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, true)
 		}
 
@@ -326,8 +344,17 @@ func (l *TestLightClient) SetupTestAltair(increaseAttestedSlotBy int, supermajor
 	block.Block.Slot = slot
 	block.Block.ParentRoot = parentRoot[:]
 
-	for i := uint64(0); i < params.BeaconConfig().MinSyncCommitteeParticipants; i++ {
-		block.Block.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, supermajority)
+	// The mainnet config for MinSyncCommitteeParticipants is 1.
+	// This means that you MUST mock the MinSyncCommitteeParticipants to something larger if you want to test with no supermajority.
+	// Otherwise, no updates will be created.
+	var trueBitNum uint64
+	if supermajority {
+		trueBitNum = params.BeaconConfig().MinSyncCommitteeParticipants
+	} else {
+		trueBitNum = params.BeaconConfig().MinSyncCommitteeParticipants - 1
+	}
+	for i := uint64(0); i < trueBitNum; i++ {
+		block.Block.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, true)
 	}
 
 	signedBlock, err := blocks.NewSignedBeaconBlock(block)
@@ -414,8 +441,17 @@ func (l *TestLightClient) SetupTestBellatrix(increaseAttestedSlotBy int, superma
 	block.Block.Slot = slot
 	block.Block.ParentRoot = parentRoot[:]
 
-	for i := uint64(0); i < params.BeaconConfig().MinSyncCommitteeParticipants; i++ {
-		block.Block.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, supermajority)
+	// The mainnet config for MinSyncCommitteeParticipants is 1.
+	// This means that you MUST mock the MinSyncCommitteeParticipants to something larger if you want to test with no supermajority.
+	// Otherwise, no updates will be created.
+	var trueBitNum uint64
+	if supermajority {
+		trueBitNum = params.BeaconConfig().MinSyncCommitteeParticipants
+	} else {
+		trueBitNum = params.BeaconConfig().MinSyncCommitteeParticipants - 1
+	}
+	for i := uint64(0); i < trueBitNum; i++ {
+		block.Block.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, true)
 	}
 
 	signedBlock, err := blocks.NewSignedBeaconBlock(block)
@@ -504,8 +540,17 @@ func (l *TestLightClient) SetupTestDeneb(blinded bool, increaseAttestedSlotBy in
 		block.Message.Slot = slot
 		block.Message.ParentRoot = parentRoot[:]
 
-		for i := uint64(0); i < params.BeaconConfig().MinSyncCommitteeParticipants; i++ {
-			block.Message.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, supermajority)
+		// The mainnet config for MinSyncCommitteeParticipants is 1.
+		// This means that you MUST mock the MinSyncCommitteeParticipants to something larger if you want to test with no supermajority.
+		// Otherwise, no updates will be created.
+		var trueBitNum uint64
+		if supermajority {
+			trueBitNum = params.BeaconConfig().MinSyncCommitteeParticipants
+		} else {
+			trueBitNum = params.BeaconConfig().MinSyncCommitteeParticipants - 1
+		}
+		for i := uint64(0); i < trueBitNum; i++ {
+			block.Message.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, true)
 		}
 
 		signedBlock, err = blocks.NewSignedBeaconBlock(block)
@@ -528,8 +573,17 @@ func (l *TestLightClient) SetupTestDeneb(blinded bool, increaseAttestedSlotBy in
 		block.Block.Slot = slot
 		block.Block.ParentRoot = parentRoot[:]
 
-		for i := uint64(0); i < params.BeaconConfig().MinSyncCommitteeParticipants; i++ {
-			block.Block.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, supermajority)
+		// The mainnet config for MinSyncCommitteeParticipants is 1.
+		// This means that you MUST mock the MinSyncCommitteeParticipants to something larger if you want to test with no supermajority.
+		// Otherwise, no updates will be created.
+		var trueBitNum uint64
+		if supermajority {
+			trueBitNum = params.BeaconConfig().MinSyncCommitteeParticipants
+		} else {
+			trueBitNum = params.BeaconConfig().MinSyncCommitteeParticipants - 1
+		}
+		for i := uint64(0); i < trueBitNum; i++ {
+			block.Block.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, true)
 		}
 
 		signedBlock, err = blocks.NewSignedBeaconBlock(block)
@@ -620,8 +674,17 @@ func (l *TestLightClient) SetupTestElectra(blinded bool, increaseAttestedSlotBy 
 		block.Message.Slot = slot
 		block.Message.ParentRoot = parentRoot[:]
 
-		for i := uint64(0); i < params.BeaconConfig().MinSyncCommitteeParticipants; i++ {
-			block.Message.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, supermajority)
+		// The mainnet config for MinSyncCommitteeParticipants is 1.
+		// This means that you MUST mock the MinSyncCommitteeParticipants to something larger if you want to test with no supermajority.
+		// Otherwise, no updates will be created.
+		var trueBitNum uint64
+		if supermajority {
+			trueBitNum = params.BeaconConfig().MinSyncCommitteeParticipants
+		} else {
+			trueBitNum = params.BeaconConfig().MinSyncCommitteeParticipants - 1
+		}
+		for i := uint64(0); i < trueBitNum; i++ {
+			block.Message.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, true)
 		}
 
 		signedBlock, err = blocks.NewSignedBeaconBlock(block)
@@ -644,8 +707,17 @@ func (l *TestLightClient) SetupTestElectra(blinded bool, increaseAttestedSlotBy 
 		block.Block.Slot = slot
 		block.Block.ParentRoot = parentRoot[:]
 
-		for i := uint64(0); i < params.BeaconConfig().MinSyncCommitteeParticipants; i++ {
-			block.Block.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, supermajority)
+		// The mainnet config for MinSyncCommitteeParticipants is 1.
+		// This means that you MUST mock the MinSyncCommitteeParticipants to something larger if you want to test with no supermajority.
+		// Otherwise, no updates will be created.
+		var trueBitNum uint64
+		if supermajority {
+			trueBitNum = params.BeaconConfig().MinSyncCommitteeParticipants
+		} else {
+			trueBitNum = params.BeaconConfig().MinSyncCommitteeParticipants - 1
+		}
+		for i := uint64(0); i < trueBitNum; i++ {
+			block.Block.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, true)
 		}
 
 		signedBlock, err = blocks.NewSignedBeaconBlock(block)
@@ -735,8 +807,17 @@ func (l *TestLightClient) SetupTestFulu(blinded bool, increaseAttestedSlotBy int
 		block.Message.Slot = slot
 		block.Message.ParentRoot = parentRoot[:]
 
-		for i := uint64(0); i < params.BeaconConfig().MinSyncCommitteeParticipants; i++ {
-			block.Message.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, supermajority)
+		// The mainnet config for MinSyncCommitteeParticipants is 1.
+		// This means that you MUST mock the MinSyncCommitteeParticipants to something larger if you want to test with no supermajority.
+		// Otherwise, no updates will be created.
+		var trueBitNum uint64
+		if supermajority {
+			trueBitNum = params.BeaconConfig().MinSyncCommitteeParticipants
+		} else {
+			trueBitNum = params.BeaconConfig().MinSyncCommitteeParticipants - 1
+		}
+		for i := uint64(0); i < trueBitNum; i++ {
+			block.Message.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, true)
 		}
 
 		signedBlock, err = blocks.NewSignedBeaconBlock(block)
@@ -759,8 +840,17 @@ func (l *TestLightClient) SetupTestFulu(blinded bool, increaseAttestedSlotBy int
 		block.Block.Slot = slot
 		block.Block.ParentRoot = parentRoot[:]
 
-		for i := uint64(0); i < params.BeaconConfig().MinSyncCommitteeParticipants; i++ {
-			block.Block.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, supermajority)
+		// The mainnet config for MinSyncCommitteeParticipants is 1.
+		// This means that you MUST mock the MinSyncCommitteeParticipants to something larger if you want to test with no supermajority.
+		// Otherwise, no updates will be created.
+		var trueBitNum uint64
+		if supermajority {
+			trueBitNum = params.BeaconConfig().MinSyncCommitteeParticipants
+		} else {
+			trueBitNum = params.BeaconConfig().MinSyncCommitteeParticipants - 1
+		}
+		for i := uint64(0); i < trueBitNum; i++ {
+			block.Block.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, true)
 		}
 
 		signedBlock, err = blocks.NewSignedBeaconBlock(block)
