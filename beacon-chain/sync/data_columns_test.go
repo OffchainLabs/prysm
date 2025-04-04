@@ -365,7 +365,7 @@ func TestSelectPeersToFetchDataColumnsFrom(t *testing.T) {
 				peer.ID("peer3"): {1: true, 5: true},
 			},
 			dataColumnsToFetchByPeer: nil,
-			err:                      fmt.Errorf("no peers available to fetch data columns from: remaining peers do not cover missing columns: [3 7]"),
+			err:                      fmt.Errorf("no peers available to fetch data columns from: [3 7]"),
 		},
 		{
 			name:              "respects MaxRequestDataColumnSidecars limit",
