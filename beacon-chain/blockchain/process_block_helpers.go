@@ -314,7 +314,7 @@ func (s *Service) processLightClientOptimisticUpdate(ctx context.Context, signed
 		return errors.Wrapf(err, "could not get attested state for root %#x", attestedRoot)
 	}
 
-	update, err := lightclient.NewLightClientOptimisticUpdateFromBeaconState(
+	newUpdate, err := lightclient.NewLightClientOptimisticUpdateFromBeaconState(
 		ctx,
 		postState.Slot(),
 		postState,
@@ -334,18 +334,18 @@ func (s *Service) processLightClientOptimisticUpdate(ctx context.Context, signed
 	lastUpdate := s.lcStore.LastOptimisticUpdate()
 	if lastUpdate != nil {
 		// The attested_header.beacon.slot is greater than that of all previously forwarded optimistic updates
-		if update.AttestedHeader().Beacon().Slot <= lastUpdate.AttestedHeader().Beacon().Slot {
+		if newUpdate.AttestedHeader().Beacon().Slot <= lastUpdate.AttestedHeader().Beacon().Slot {
 			log.Debug("Skip saving light client optimistic update: Older than local update")
 			return nil
 		}
 	}
 
 	log.Debug("Saving new light client optimistic update")
-	s.lcStore.SetLastOptimisticUpdate(update)
+	s.lcStore.SetLastOptimisticUpdate(newUpdate)
 
 	s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
 		Type: statefeed.LightClientOptimisticUpdate,
-		Data: update,
+		Data: newUpdate,
 	})
 
 	return nil
