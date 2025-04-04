@@ -33,12 +33,12 @@ func NewTestLightClient(t *testing.T) *TestLightClient {
 	return &TestLightClient{T: t}
 }
 
-func (l *TestLightClient) SetupTestCapella(blinded bool, newerSlotBy int, supermajority bool) *TestLightClient {
+func (l *TestLightClient) SetupTestCapella(blinded bool, increaseAttestedSlotBy int, supermajority bool) *TestLightClient {
 	ctx := context.Background()
 
 	slot := primitives.Slot(params.BeaconConfig().CapellaForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
-	if newerSlotBy > 0 {
-		slot = slot.Add(uint64(newerSlotBy))
+	if increaseAttestedSlotBy > 0 {
+		slot = slot.Add(uint64(increaseAttestedSlotBy))
 	}
 
 	attestedState, err := NewBeaconStateCapella()
@@ -260,12 +260,12 @@ func (l *TestLightClient) SetupTestCapellaFinalizedBlockAltair(blinded bool) *Te
 	return l
 }
 
-func (l *TestLightClient) SetupTestAltair(newerSlotBy int, supermajority bool) *TestLightClient {
+func (l *TestLightClient) SetupTestAltair(increaseAttestedSlotBy int, supermajority bool) *TestLightClient {
 	ctx := context.Background()
 
 	slot := primitives.Slot(uint64(params.BeaconConfig().AltairForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch)).Add(1)
-	if newerSlotBy > 0 {
-		slot = slot.Add(uint64(newerSlotBy))
+	if increaseAttestedSlotBy > 0 {
+		slot = slot.Add(uint64(increaseAttestedSlotBy))
 	}
 
 	attestedState, err := NewBeaconStateAltair()
@@ -356,12 +356,12 @@ func (l *TestLightClient) SetupTestAltair(newerSlotBy int, supermajority bool) *
 	return l
 }
 
-func (l *TestLightClient) SetupTestBellatrix(newerSlotBy int, supermajority bool) *TestLightClient {
+func (l *TestLightClient) SetupTestBellatrix(increaseAttestedSlotBy int, supermajority bool) *TestLightClient {
 	ctx := context.Background()
 
 	slot := primitives.Slot(params.BeaconConfig().BellatrixForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
-	if newerSlotBy > 0 {
-		slot = slot.Add(uint64(newerSlotBy))
+	if increaseAttestedSlotBy > 0 {
+		slot = slot.Add(uint64(increaseAttestedSlotBy))
 	}
 
 	attestedState, err := NewBeaconStateBellatrix()
@@ -444,12 +444,12 @@ func (l *TestLightClient) SetupTestBellatrix(newerSlotBy int, supermajority bool
 	return l
 }
 
-func (l *TestLightClient) SetupTestDeneb(blinded bool, newerSlotBy int, supermajority bool) *TestLightClient {
+func (l *TestLightClient) SetupTestDeneb(blinded bool, increaseAttestedSlotBy int, supermajority bool) *TestLightClient {
 	ctx := context.Background()
 
 	slot := primitives.Slot(params.BeaconConfig().DenebForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
-	if newerSlotBy > 0 {
-		slot = slot.Add(uint64(newerSlotBy))
+	if increaseAttestedSlotBy > 0 {
+		slot = slot.Add(uint64(increaseAttestedSlotBy))
 	}
 
 	attestedState, err := NewBeaconStateDeneb()
@@ -559,12 +559,12 @@ func (l *TestLightClient) SetupTestDeneb(blinded bool, newerSlotBy int, supermaj
 	return l
 }
 
-func (l *TestLightClient) SetupTestElectra(blinded bool, newerSlotBy int, supermajority bool) *TestLightClient {
+func (l *TestLightClient) SetupTestElectra(blinded bool, increaseAttestedSlotBy int, supermajority bool) *TestLightClient {
 	ctx := context.Background()
 
 	slot := primitives.Slot(params.BeaconConfig().ElectraForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
-	if newerSlotBy > 0 {
-		slot = slot.Add(uint64(newerSlotBy))
+	if increaseAttestedSlotBy > 0 {
+		slot = slot.Add(uint64(increaseAttestedSlotBy))
 	}
 	finalizedBlockSlot := primitives.Slot(params.BeaconConfig().ElectraForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch))
 
@@ -675,12 +675,12 @@ func (l *TestLightClient) SetupTestElectra(blinded bool, newerSlotBy int, superm
 	return l
 }
 
-func (l *TestLightClient) SetupTestFulu(blinded bool, newerSlotBy int, supermajority bool) *TestLightClient {
+func (l *TestLightClient) SetupTestFulu(blinded bool, increaseAttestedSlotBy int, supermajority bool) *TestLightClient {
 	ctx := context.Background()
 
 	slot := primitives.Slot(params.BeaconConfig().FuluForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
-	if newerSlotBy > 0 {
-		slot = slot.Add(uint64(newerSlotBy))
+	if increaseAttestedSlotBy > 0 {
+		slot = slot.Add(uint64(increaseAttestedSlotBy))
 	}
 
 	attestedState, err := NewBeaconStateFulu()
