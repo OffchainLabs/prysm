@@ -121,6 +121,10 @@ func TestHasPendingBalanceToWithdraw(t *testing.T) {
 				Amount: 300,
 				Index:  3,
 			},
+			{
+				Amount: 0,
+				Index:  4,
+			},
 		},
 	}
 	state, err := statenative.InitializeFromProtoUnsafeElectra(pb)
@@ -131,6 +135,11 @@ func TestHasPendingBalanceToWithdraw(t *testing.T) {
 	require.Equal(t, true, ok)
 
 	ok, err = state.HasPendingBalanceToWithdraw(5)
+	require.NoError(t, err)
+	require.Equal(t, false, ok)
+
+	// Handle 0 amount case.
+	ok, err = state.HasPendingBalanceToWithdraw(4)
 	require.NoError(t, err)
 	require.Equal(t, false, ok)
 }

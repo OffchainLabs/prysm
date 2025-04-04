@@ -41,11 +41,13 @@ go_library(
     visibility = ["//validator:__subpackages__"],
     deps = [
         "//api:go_default_library",
+        "//api/apiutil:go_default_library",
         "//api/client/beacon:go_default_library",
         "//api/client/event:go_default_library",
         "//api/server/structs:go_default_library",
         "//beacon-chain/core/helpers:go_default_library",
         "//beacon-chain/core/signing:go_default_library",
+        "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//consensus-types/validator:go_default_library",
@@ -122,6 +124,7 @@ go_test(
     embed = [":go_default_library"],
     deps = [
         "//api:go_default_library",
+        "//api/apiutil:go_default_library",
         "//api/server/structs:go_default_library",
         "//beacon-chain/core/helpers:go_default_library",
         "//beacon-chain/rpc/eth/shared/testing:go_default_library",
