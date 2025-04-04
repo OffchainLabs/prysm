@@ -1,13 +1,13 @@
-package iface
+package health
 
 import "context"
 
-type HealthTracker interface {
+type Tracker interface {
 	HealthUpdates() <-chan bool
-	IsHealthy() bool
 	CheckHealth(ctx context.Context) bool
+	Node
 }
 
-type HealthNode interface {
+type Node interface {
 	IsHealthy(ctx context.Context) bool
 }

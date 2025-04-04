@@ -2751,7 +2751,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 		})
 
 		t.Run("Old update is better", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestAltair(0, true)
+			l := util.NewTestLightClient(t).SetupTestAltair(0, false)
 
 			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().AltairForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
 
@@ -2909,7 +2909,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 		})
 
 		t.Run("Old update is better", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestCapella(false, 0, true)
+			l := util.NewTestLightClient(t).SetupTestCapella(false, 0, false)
 
 			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().CapellaForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
 
@@ -3067,7 +3067,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 		})
 
 		t.Run("Old update is better", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestDeneb(false, 0, true)
+			l := util.NewTestLightClient(t).SetupTestDeneb(false, 0, false)
 
 			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().DenebForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
 
