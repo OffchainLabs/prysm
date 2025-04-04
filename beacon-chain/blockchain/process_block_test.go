@@ -3256,8 +3256,11 @@ func setupLightClientTestRequirements(ctx context.Context, t *testing.T, s *Serv
 		l = util.NewTestLightClient(t).SetupTestCapella(false, increaseAttestedSlotBy, supermajority)
 	case version.Deneb:
 		l = util.NewTestLightClient(t).SetupTestDeneb(false, increaseAttestedSlotBy, supermajority)
+	case version.Electra:
+		l = util.NewTestLightClient(t).SetupTestElectra(false, increaseAttestedSlotBy, supermajority)
 	default:
 		t.Error("Invalid fork version")
+		return nil, nil
 	}
 
 	err := s.cfg.BeaconDB.SaveBlock(ctx, l.AttestedBlock)
@@ -3294,535 +3297,163 @@ func TestProcessLightClientOptimisticUpdate(t *testing.T) {
 	featCfg := &features.Flags{}
 	featCfg.EnableLightClient = true
 	reset := features.InitWithReset(featCfg)
+	defer reset()
+
+	beaconCfg := params.BeaconConfig()
+	beaconCfg.AltairForkEpoch = 1
+	beaconCfg.BellatrixForkEpoch = 2
+	beaconCfg.CapellaForkEpoch = 3
+	beaconCfg.DenebForkEpoch = 4
+	beaconCfg.ElectraForkEpoch = 5
+	params.OverrideBeaconConfig(beaconCfg)
 
 	s, tr := minimalTestService(t)
 	ctx := tr.ctx
 
-	t.Run("Altair", func(t *testing.T) {
-		t.Run("No old update", func(t *testing.T) {
-			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().AltairForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
-			l, cfg := setupLightClientTestRequirements(ctx, t, s, version.Altair, 0, true)
+	type updateConfig struct {
+		increaseAttestedSlotBy int
+		superMajority          bool
+	}
 
-			err := s.processLightClientOptimisticUpdate(cfg.ctx, cfg.roblock, cfg.postState)
-			require.NoError(t, err)
+	testCases := []struct {
+		name string
+		// config for old update
+		oldCfg *updateConfig
+		// config for new update
+		newCfg        *updateConfig
+		expectReplace bool
+	}{
+		{
+			name:   "No old update",
+			oldCfg: nil,
+			newCfg: &updateConfig{
+				increaseAttestedSlotBy: 0,
+				superMajority:          true,
+			},
+			expectReplace: true,
+		},
+		{
+			name: "Old update is better - age",
+			oldCfg: &updateConfig{
+				increaseAttestedSlotBy: 1,
+				superMajority:          true,
+			},
+			newCfg: &updateConfig{
+				increaseAttestedSlotBy: 0,
+				superMajority:          true,
+			},
+			expectReplace: false,
+		},
+		{
+			name: "Old update is better - supermajority",
+			oldCfg: &updateConfig{
+				increaseAttestedSlotBy: 0,
+				superMajority:          true,
+			},
+			newCfg: &updateConfig{
+				increaseAttestedSlotBy: 0,
+				superMajority:          false,
+			},
+			expectReplace: false,
+		},
+		{
+			name: "New update is better - age",
+			oldCfg: &updateConfig{
+				increaseAttestedSlotBy: 0,
+				superMajority:          true,
+			},
+			newCfg: &updateConfig{
+				increaseAttestedSlotBy: 1,
+				superMajority:          true,
+			},
+			expectReplace: true,
+		},
+		{
+			name: "New update is better - supermajority",
+			oldCfg: &updateConfig{
+				increaseAttestedSlotBy: 0,
+				superMajority:          false,
+			},
+			newCfg: &updateConfig{
+				increaseAttestedSlotBy: 0,
+				superMajority:          true,
+			},
+			expectReplace: true,
+		},
+	}
 
-			u := s.lcStore.LastOptimisticUpdate()
-			require.NotNil(t, u)
-			attestedStateRoot, err := l.AttestedState.HashTreeRoot(ctx)
-			require.NoError(t, err)
-			require.Equal(t, attestedStateRoot, [32]byte(u.AttestedHeader().Beacon().StateRoot))
-			require.Equal(t, u.Version(), version.Altair)
+	for _, tc := range testCases {
+		for i := 1; i < 6; i++ { // test all forks
+			var forkEpoch uint64
+			var testVersion int
+			var expectedVersion int
 
-			// set last optimistic update to nil for next test
-			s.lcStore.SetLastOptimisticUpdate(nil)
-		})
-
-		t.Run("New update is better - age", func(t *testing.T) {
-			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().AltairForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
-			// config for old update
-			l1, cfg1 := setupLightClientTestRequirements(ctx, t, s, version.Altair, 0, true)
-
-			// create and save old update
-			err := s.processLightClientOptimisticUpdate(cfg1.ctx, cfg1.roblock, cfg1.postState)
-			require.NoError(t, err)
-
-			// check that the old update is saved
-			u := s.lcStore.LastOptimisticUpdate()
-			require.NotNil(t, u)
-			attestedStateRoot, err := l1.AttestedState.HashTreeRoot(ctx)
-			require.NoError(t, err)
-			require.Equal(t, attestedStateRoot, [32]byte(u.AttestedHeader().Beacon().StateRoot))
-			require.Equal(t, u.Version(), version.Altair)
-
-			// config for new update
-			l2, cfg2 := setupLightClientTestRequirements(ctx, t, s, version.Altair, 1, true)
-
-			// process new update
-			err = s.processLightClientOptimisticUpdate(cfg2.ctx, cfg2.roblock, cfg2.postState)
-			require.NoError(t, err)
-
-			// check that the new update is saved
-			u = s.lcStore.LastOptimisticUpdate()
-			require.NotNil(t, u)
-			attestedStateRoot, err = l2.AttestedState.HashTreeRoot(ctx)
-			require.NoError(t, err)
-			require.Equal(t, attestedStateRoot, [32]byte(u.AttestedHeader().Beacon().StateRoot))
-			require.Equal(t, u.Version(), version.Altair)
-
-			// set last optimistic update to nil for next test
-			s.lcStore.SetLastOptimisticUpdate(nil)
-		})
-
-		t.Run("New update is better - supermajority", func(t *testing.T) {
-			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().AltairForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
-			// config for old update
-			l1, cfg1 := setupLightClientTestRequirements(ctx, t, s, version.Altair, 0, false)
-
-			// create and save old update
-			err := s.processLightClientOptimisticUpdate(cfg1.ctx, cfg1.roblock, cfg1.postState)
-			require.NoError(t, err)
-
-			// check that the old update is saved
-			u := s.lcStore.LastOptimisticUpdate()
-			require.NotNil(t, u)
-			attestedStateRoot, err := l1.AttestedState.HashTreeRoot(ctx)
-			require.NoError(t, err)
-			require.Equal(t, attestedStateRoot, [32]byte(u.AttestedHeader().Beacon().StateRoot))
-			require.Equal(t, u.Version(), version.Altair)
-
-			// config for new update
-			l2, cfg2 := setupLightClientTestRequirements(ctx, t, s, version.Altair, 0, true)
-
-			// process new update
-			err = s.processLightClientOptimisticUpdate(cfg2.ctx, cfg2.roblock, cfg2.postState)
-			require.NoError(t, err)
-
-			// check that the new update is saved
-			u = s.lcStore.LastOptimisticUpdate()
-			require.NotNil(t, u)
-			attestedStateRoot, err = l2.AttestedState.HashTreeRoot(ctx)
-			require.NoError(t, err)
-			require.Equal(t, attestedStateRoot, [32]byte(u.AttestedHeader().Beacon().StateRoot))
-			require.Equal(t, u.Version(), version.Altair)
-
-			// set last optimistic update to nil for next test
-			s.lcStore.SetLastOptimisticUpdate(nil)
-		})
-
-		//t.Run("Old update is better - age", func(t *testing.T) {
-		//	l := util.NewTestLightClient(t).SetupTestAltair()
-		//
-		//	s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().AltairForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
-		//
-		//	err := s.cfg.BeaconDB.SaveBlock(ctx, l.AttestedBlock)
-		//	require.NoError(t, err)
-		//	attestedBlockRoot, err := l.AttestedBlock.Block().HashTreeRoot()
-		//	require.NoError(t, err)
-		//	err = s.cfg.BeaconDB.SaveState(ctx, l.AttestedState, attestedBlockRoot)
-		//	require.NoError(t, err)
-		//
-		//	currentBlockRoot, err := l.Block.Block().HashTreeRoot()
-		//	require.NoError(t, err)
-		//	roblock, err := consensusblocks.NewROBlockWithRoot(l.Block, currentBlockRoot)
-		//	require.NoError(t, err)
-		//
-		//	err = s.cfg.BeaconDB.SaveBlock(ctx, roblock)
-		//	require.NoError(t, err)
-		//	err = s.cfg.BeaconDB.SaveState(ctx, l.State, currentBlockRoot)
-		//	require.NoError(t, err)
-		//
-		//	err = s.cfg.BeaconDB.SaveBlock(ctx, l.FinalizedBlock)
-		//	require.NoError(t, err)
-		//
-		//	cfg := &postBlockProcessConfig{
-		//		ctx:            ctx,
-		//		roblock:        roblock,
-		//		postState:      l.State,
-		//		isValidPayload: true,
-		//	}
-		//
-		//	period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedState.Slot()))
-		//
-		//	// create and save old update
-		//	oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(s.CurrentSlot(), l.AttestedState)
-		//	require.NoError(t, err)
-		//
-		//	scb := make([]byte, 64)
-		//	for i := 0; i < 5; i++ {
-		//		scb[i] = 0x01
-		//	}
-		//	oldUpdate.SetSyncAggregate(&ethpb.SyncAggregate{
-		//		SyncCommitteeBits:      scb,
-		//		SyncCommitteeSignature: make([]byte, 96),
-		//	})
-		//
-		//	err = s.cfg.BeaconDB.SaveLightClientUpdate(ctx, period, oldUpdate)
-		//	require.NoError(t, err)
-		//
-		//	s.saveLightClientUpdate(cfg)
-		//
-		//	u, err := s.cfg.BeaconDB.LightClientUpdate(ctx, period)
-		//	require.NoError(t, err)
-		//	require.NotNil(t, u)
-		//	require.DeepEqual(t, oldUpdate, u)
-		//	require.Equal(t, u.Version(), version.Altair)
-		//})
-		//
-		//t.Run("Old update is better - supermajority", func(t *testing.T) {
-		//	l := util.NewTestLightClient(t).SetupTestAltair()
-		//
-		//	s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().AltairForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
-		//
-		//	err := s.cfg.BeaconDB.SaveBlock(ctx, l.AttestedBlock)
-		//	require.NoError(t, err)
-		//	attestedBlockRoot, err := l.AttestedBlock.Block().HashTreeRoot()
-		//	require.NoError(t, err)
-		//	err = s.cfg.BeaconDB.SaveState(ctx, l.AttestedState, attestedBlockRoot)
-		//	require.NoError(t, err)
-		//
-		//	currentBlockRoot, err := l.Block.Block().HashTreeRoot()
-		//	require.NoError(t, err)
-		//	roblock, err := consensusblocks.NewROBlockWithRoot(l.Block, currentBlockRoot)
-		//	require.NoError(t, err)
-		//
-		//	err = s.cfg.BeaconDB.SaveBlock(ctx, roblock)
-		//	require.NoError(t, err)
-		//	err = s.cfg.BeaconDB.SaveState(ctx, l.State, currentBlockRoot)
-		//	require.NoError(t, err)
-		//
-		//	err = s.cfg.BeaconDB.SaveBlock(ctx, l.FinalizedBlock)
-		//	require.NoError(t, err)
-		//
-		//	cfg := &postBlockProcessConfig{
-		//		ctx:            ctx,
-		//		roblock:        roblock,
-		//		postState:      l.State,
-		//		isValidPayload: true,
-		//	}
-		//
-		//	period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedState.Slot()))
-		//
-		//	// create and save old update
-		//	oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(s.CurrentSlot(), l.AttestedState)
-		//	require.NoError(t, err)
-		//
-		//	scb := make([]byte, 64)
-		//	for i := 0; i < 5; i++ {
-		//		scb[i] = 0x01
-		//	}
-		//	oldUpdate.SetSyncAggregate(&ethpb.SyncAggregate{
-		//		SyncCommitteeBits:      scb,
-		//		SyncCommitteeSignature: make([]byte, 96),
-		//	})
-		//
-		//	err = s.cfg.BeaconDB.SaveLightClientUpdate(ctx, period, oldUpdate)
-		//	require.NoError(t, err)
-		//
-		//	s.saveLightClientUpdate(cfg)
-		//
-		//	u, err := s.cfg.BeaconDB.LightClientUpdate(ctx, period)
-		//	require.NoError(t, err)
-		//	require.NotNil(t, u)
-		//	require.DeepEqual(t, oldUpdate, u)
-		//	require.Equal(t, u.Version(), version.Altair)
-		//})
-	})
-
-	t.Run("Capella", func(t *testing.T) {
-		t.Run("No old update", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestCapella(false, 0, true)
-
-			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().CapellaForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
-
-			err := s.cfg.BeaconDB.SaveBlock(ctx, l.AttestedBlock)
-			require.NoError(t, err)
-			attestedBlockRoot, err := l.AttestedBlock.Block().HashTreeRoot()
-			require.NoError(t, err)
-			err = s.cfg.BeaconDB.SaveState(ctx, l.AttestedState, attestedBlockRoot)
-			require.NoError(t, err)
-
-			currentBlockRoot, err := l.Block.Block().HashTreeRoot()
-			require.NoError(t, err)
-			roblock, err := consensusblocks.NewROBlockWithRoot(l.Block, currentBlockRoot)
-			require.NoError(t, err)
-
-			err = s.cfg.BeaconDB.SaveBlock(ctx, roblock)
-			require.NoError(t, err)
-			err = s.cfg.BeaconDB.SaveState(ctx, l.State, currentBlockRoot)
-			require.NoError(t, err)
-
-			err = s.cfg.BeaconDB.SaveBlock(ctx, l.FinalizedBlock)
-			require.NoError(t, err)
-
-			cfg := &postBlockProcessConfig{
-				ctx:            ctx,
-				roblock:        roblock,
-				postState:      l.State,
-				isValidPayload: true,
+			switch i {
+			case 1:
+				forkEpoch = uint64(params.BeaconConfig().AltairForkEpoch)
+				testVersion = version.Altair
+				expectedVersion = version.Altair
+			case 2:
+				forkEpoch = uint64(params.BeaconConfig().BellatrixForkEpoch)
+				testVersion = version.Bellatrix
+				expectedVersion = version.Altair
+			case 3:
+				forkEpoch = uint64(params.BeaconConfig().CapellaForkEpoch)
+				testVersion = version.Capella
+				expectedVersion = version.Capella
+			case 4:
+				forkEpoch = uint64(params.BeaconConfig().DenebForkEpoch)
+				testVersion = version.Deneb
+				expectedVersion = version.Deneb
+			case 5:
+				forkEpoch = uint64(params.BeaconConfig().ElectraForkEpoch)
+				testVersion = version.Electra
+				expectedVersion = version.Deneb
+			default:
+				t.Error("Invalid fork testVersion")
 			}
 
-			s.saveLightClientUpdate(cfg)
+			t.Run(version.String(testVersion)+"_"+tc.name, func(t *testing.T) {
+				s.genesisTime = time.Unix(time.Now().Unix()-(int64(forkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
 
-			// Check that the light client update is saved
-			period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedState.Slot()))
-			u, err := s.cfg.BeaconDB.LightClientUpdate(ctx, period)
-			require.NoError(t, err)
-			require.NotNil(t, u)
-			attestedStateRoot, err := l.AttestedState.HashTreeRoot(ctx)
-			require.NoError(t, err)
-			require.Equal(t, attestedStateRoot, [32]byte(u.AttestedHeader().Beacon().StateRoot))
-			require.Equal(t, u.Version(), version.Capella)
-		})
+				var oldAttestedStateRoot, newAttestedStateRoot [32]byte
+				var err error
 
-		t.Run("New update is better", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestCapella(false, 0, true)
+				if tc.oldCfg != nil {
+					// config for old update
+					lOld, cfgOld := setupLightClientTestRequirements(ctx, t, s, testVersion, tc.oldCfg.increaseAttestedSlotBy, tc.oldCfg.superMajority)
+					require.NoError(t, s.processLightClientOptimisticUpdate(cfgOld.ctx, cfgOld.roblock, cfgOld.postState))
+					oldAttestedStateRoot, err = lOld.AttestedState.HashTreeRoot(ctx)
 
-			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().CapellaForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
+					// check that the old update is saved
+					oldUpdate := s.lcStore.LastOptimisticUpdate()
+					require.NotNil(t, oldUpdate)
+					require.Equal(t, oldAttestedStateRoot, [32]byte(oldUpdate.AttestedHeader().Beacon().StateRoot))
+					require.Equal(t, expectedVersion, oldUpdate.Version())
+				}
 
-			err := s.cfg.BeaconDB.SaveBlock(ctx, l.AttestedBlock)
-			require.NoError(t, err)
-			attestedBlockRoot, err := l.AttestedBlock.Block().HashTreeRoot()
-			require.NoError(t, err)
-			err = s.cfg.BeaconDB.SaveState(ctx, l.AttestedState, attestedBlockRoot)
-			require.NoError(t, err)
+				// config for new update
+				lNew, cfgNew := setupLightClientTestRequirements(ctx, t, s, testVersion, tc.newCfg.increaseAttestedSlotBy, tc.newCfg.superMajority)
+				require.NoError(t, s.processLightClientOptimisticUpdate(cfgNew.ctx, cfgNew.roblock, cfgNew.postState))
+				newAttestedStateRoot, err = lNew.AttestedState.HashTreeRoot(ctx)
+				require.NoError(t, err)
 
-			currentBlockRoot, err := l.Block.Block().HashTreeRoot()
-			require.NoError(t, err)
-			roblock, err := consensusblocks.NewROBlockWithRoot(l.Block, currentBlockRoot)
-			require.NoError(t, err)
+				// check that the new update is saved or skipped
+				newUpdate := s.lcStore.LastOptimisticUpdate()
+				require.NotNil(t, newUpdate)
 
-			err = s.cfg.BeaconDB.SaveBlock(ctx, roblock)
-			require.NoError(t, err)
-			err = s.cfg.BeaconDB.SaveState(ctx, l.State, currentBlockRoot)
-			require.NoError(t, err)
+				if tc.expectReplace {
+					require.Equal(t, newAttestedStateRoot, [32]byte(newUpdate.AttestedHeader().Beacon().StateRoot))
+					require.Equal(t, expectedVersion, newUpdate.Version())
+				} else {
+					require.Equal(t, oldAttestedStateRoot, [32]byte(newUpdate.AttestedHeader().Beacon().StateRoot))
+					require.Equal(t, expectedVersion, newUpdate.Version())
+				}
 
-			err = s.cfg.BeaconDB.SaveBlock(ctx, l.FinalizedBlock)
-			require.NoError(t, err)
-
-			cfg := &postBlockProcessConfig{
-				ctx:            ctx,
-				roblock:        roblock,
-				postState:      l.State,
-				isValidPayload: true,
-			}
-
-			period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedState.Slot()))
-
-			// create and save old update
-			oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(s.CurrentSlot(), l.AttestedState)
-			require.NoError(t, err)
-
-			err = s.cfg.BeaconDB.SaveLightClientUpdate(ctx, period, oldUpdate)
-			require.NoError(t, err)
-
-			s.saveLightClientUpdate(cfg)
-
-			u, err := s.cfg.BeaconDB.LightClientUpdate(ctx, period)
-			require.NoError(t, err)
-			require.NotNil(t, u)
-			attestedStateRoot, err := l.AttestedState.HashTreeRoot(ctx)
-			require.NoError(t, err)
-			require.Equal(t, attestedStateRoot, [32]byte(u.AttestedHeader().Beacon().StateRoot))
-			require.Equal(t, u.Version(), version.Capella)
-		})
-
-		t.Run("Old update is better", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestCapella(false, 0, true)
-
-			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().CapellaForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
-
-			err := s.cfg.BeaconDB.SaveBlock(ctx, l.AttestedBlock)
-			require.NoError(t, err)
-			attestedBlockRoot, err := l.AttestedBlock.Block().HashTreeRoot()
-			require.NoError(t, err)
-			err = s.cfg.BeaconDB.SaveState(ctx, l.AttestedState, attestedBlockRoot)
-			require.NoError(t, err)
-
-			currentBlockRoot, err := l.Block.Block().HashTreeRoot()
-			require.NoError(t, err)
-			roblock, err := consensusblocks.NewROBlockWithRoot(l.Block, currentBlockRoot)
-			require.NoError(t, err)
-
-			err = s.cfg.BeaconDB.SaveBlock(ctx, roblock)
-			require.NoError(t, err)
-			err = s.cfg.BeaconDB.SaveState(ctx, l.State, currentBlockRoot)
-			require.NoError(t, err)
-
-			err = s.cfg.BeaconDB.SaveBlock(ctx, l.FinalizedBlock)
-			require.NoError(t, err)
-
-			cfg := &postBlockProcessConfig{
-				ctx:            ctx,
-				roblock:        roblock,
-				postState:      l.State,
-				isValidPayload: true,
-			}
-
-			period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedState.Slot()))
-
-			// create and save old update
-			oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(s.CurrentSlot(), l.AttestedState)
-			require.NoError(t, err)
-
-			scb := make([]byte, 64)
-			for i := 0; i < 5; i++ {
-				scb[i] = 0x01
-			}
-			oldUpdate.SetSyncAggregate(&ethpb.SyncAggregate{
-				SyncCommitteeBits:      scb,
-				SyncCommitteeSignature: make([]byte, 96),
+				// set last optimistic update to nil for next test
+				s.lcStore.SetLastOptimisticUpdate(nil)
 			})
+		}
 
-			err = s.cfg.BeaconDB.SaveLightClientUpdate(ctx, period, oldUpdate)
-			require.NoError(t, err)
-
-			s.saveLightClientUpdate(cfg)
-
-			u, err := s.cfg.BeaconDB.LightClientUpdate(ctx, period)
-			require.NoError(t, err)
-			require.NotNil(t, u)
-			require.DeepEqual(t, oldUpdate, u)
-			require.Equal(t, u.Version(), version.Capella)
-		})
-	})
-
-	t.Run("Deneb", func(t *testing.T) {
-		t.Run("No old update", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestDeneb(false, 0, true)
-
-			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().DenebForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
-
-			err := s.cfg.BeaconDB.SaveBlock(ctx, l.AttestedBlock)
-			require.NoError(t, err)
-			attestedBlockRoot, err := l.AttestedBlock.Block().HashTreeRoot()
-			require.NoError(t, err)
-			err = s.cfg.BeaconDB.SaveState(ctx, l.AttestedState, attestedBlockRoot)
-			require.NoError(t, err)
-
-			currentBlockRoot, err := l.Block.Block().HashTreeRoot()
-			require.NoError(t, err)
-			roblock, err := consensusblocks.NewROBlockWithRoot(l.Block, currentBlockRoot)
-			require.NoError(t, err)
-
-			err = s.cfg.BeaconDB.SaveBlock(ctx, roblock)
-			require.NoError(t, err)
-			err = s.cfg.BeaconDB.SaveState(ctx, l.State, currentBlockRoot)
-			require.NoError(t, err)
-
-			err = s.cfg.BeaconDB.SaveBlock(ctx, l.FinalizedBlock)
-			require.NoError(t, err)
-
-			cfg := &postBlockProcessConfig{
-				ctx:            ctx,
-				roblock:        roblock,
-				postState:      l.State,
-				isValidPayload: true,
-			}
-
-			s.saveLightClientUpdate(cfg)
-
-			// Check that the light client update is saved
-			period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedState.Slot()))
-			u, err := s.cfg.BeaconDB.LightClientUpdate(ctx, period)
-			require.NoError(t, err)
-			require.NotNil(t, u)
-			attestedStateRoot, err := l.AttestedState.HashTreeRoot(ctx)
-			require.NoError(t, err)
-			require.Equal(t, attestedStateRoot, [32]byte(u.AttestedHeader().Beacon().StateRoot))
-			require.Equal(t, u.Version(), version.Deneb)
-		})
-
-		t.Run("New update is better", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestDeneb(false, 0, true)
-
-			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().DenebForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
-
-			err := s.cfg.BeaconDB.SaveBlock(ctx, l.AttestedBlock)
-			require.NoError(t, err)
-			attestedBlockRoot, err := l.AttestedBlock.Block().HashTreeRoot()
-			require.NoError(t, err)
-			err = s.cfg.BeaconDB.SaveState(ctx, l.AttestedState, attestedBlockRoot)
-			require.NoError(t, err)
-
-			currentBlockRoot, err := l.Block.Block().HashTreeRoot()
-			require.NoError(t, err)
-			roblock, err := consensusblocks.NewROBlockWithRoot(l.Block, currentBlockRoot)
-			require.NoError(t, err)
-
-			err = s.cfg.BeaconDB.SaveBlock(ctx, roblock)
-			require.NoError(t, err)
-			err = s.cfg.BeaconDB.SaveState(ctx, l.State, currentBlockRoot)
-			require.NoError(t, err)
-
-			err = s.cfg.BeaconDB.SaveBlock(ctx, l.FinalizedBlock)
-			require.NoError(t, err)
-
-			cfg := &postBlockProcessConfig{
-				ctx:            ctx,
-				roblock:        roblock,
-				postState:      l.State,
-				isValidPayload: true,
-			}
-
-			period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedState.Slot()))
-
-			// create and save old update
-			oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(s.CurrentSlot(), l.AttestedState)
-			require.NoError(t, err)
-
-			err = s.cfg.BeaconDB.SaveLightClientUpdate(ctx, period, oldUpdate)
-			require.NoError(t, err)
-
-			s.saveLightClientUpdate(cfg)
-
-			u, err := s.cfg.BeaconDB.LightClientUpdate(ctx, period)
-			require.NoError(t, err)
-			require.NotNil(t, u)
-			attestedStateRoot, err := l.AttestedState.HashTreeRoot(ctx)
-			require.NoError(t, err)
-			require.Equal(t, attestedStateRoot, [32]byte(u.AttestedHeader().Beacon().StateRoot))
-			require.Equal(t, u.Version(), version.Deneb)
-		})
-
-		t.Run("Old update is better", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestDeneb(false, 0, true)
-
-			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().DenebForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
-
-			err := s.cfg.BeaconDB.SaveBlock(ctx, l.AttestedBlock)
-			require.NoError(t, err)
-			attestedBlockRoot, err := l.AttestedBlock.Block().HashTreeRoot()
-			require.NoError(t, err)
-			err = s.cfg.BeaconDB.SaveState(ctx, l.AttestedState, attestedBlockRoot)
-			require.NoError(t, err)
-
-			currentBlockRoot, err := l.Block.Block().HashTreeRoot()
-			require.NoError(t, err)
-			roblock, err := consensusblocks.NewROBlockWithRoot(l.Block, currentBlockRoot)
-			require.NoError(t, err)
-
-			err = s.cfg.BeaconDB.SaveBlock(ctx, roblock)
-			require.NoError(t, err)
-			err = s.cfg.BeaconDB.SaveState(ctx, l.State, currentBlockRoot)
-			require.NoError(t, err)
-
-			err = s.cfg.BeaconDB.SaveBlock(ctx, l.FinalizedBlock)
-			require.NoError(t, err)
-
-			cfg := &postBlockProcessConfig{
-				ctx:            ctx,
-				roblock:        roblock,
-				postState:      l.State,
-				isValidPayload: true,
-			}
-
-			period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedState.Slot()))
-
-			// create and save old update
-			oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(s.CurrentSlot(), l.AttestedState)
-			require.NoError(t, err)
-
-			scb := make([]byte, 64)
-			for i := 0; i < 5; i++ {
-				scb[i] = 0x01
-			}
-			oldUpdate.SetSyncAggregate(&ethpb.SyncAggregate{
-				SyncCommitteeBits:      scb,
-				SyncCommitteeSignature: make([]byte, 96),
-			})
-
-			err = s.cfg.BeaconDB.SaveLightClientUpdate(ctx, period, oldUpdate)
-			require.NoError(t, err)
-
-			s.saveLightClientUpdate(cfg)
-
-			u, err := s.cfg.BeaconDB.LightClientUpdate(ctx, period)
-			require.NoError(t, err)
-			require.NotNil(t, u)
-			require.DeepEqual(t, oldUpdate, u)
-			require.Equal(t, u.Version(), version.Deneb)
-		})
-	})
-
-	reset()
+	}
 }
