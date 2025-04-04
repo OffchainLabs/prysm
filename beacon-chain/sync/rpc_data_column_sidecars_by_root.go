@@ -66,7 +66,7 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 	for _, columnIdent := range requestedColumnIdents {
 		var root [fieldparams.RootLength]byte
 		copy(root[:], columnIdent.BlockRoot)
-		requestedColumnsByRoot[root] = append(requestedColumnsByRoot[root], columnIdent.ColumnIndex)
+		requestedColumnsByRoot[root] = append(requestedColumnsByRoot[root], columnIdent.Index)
 	}
 
 	// Sort by column index for each root.

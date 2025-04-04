@@ -72,7 +72,7 @@ func TestDataColumnsIndexInBounds(t *testing.T) {
 
 			columns := GenerateTestDataColumns(t, parentRoot, columnSlot, blobCount)
 			for _, column := range columns {
-				column.ColumnIndex = tc.columnsIndex
+				column.Index = tc.columnsIndex
 			}
 
 			verifier := initializer.NewDataColumnsVerifier(columns, GossipColumnSidecarRequirements)

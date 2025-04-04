@@ -34,7 +34,7 @@ func VerifyDataColumnsSidecarKZGProofs(sidecars []blocks.RODataColumn) (bool, er
 	// Compute the total count.
 	count := 0
 	for _, sidecar := range sidecars {
-		count += len(sidecar.DataColumn)
+		count += len(sidecar.Column)
 	}
 
 	commitments := make([]kzg.Bytes48, 0, count)
@@ -44,25 +44,25 @@ func VerifyDataColumnsSidecarKZGProofs(sidecars []blocks.RODataColumn) (bool, er
 
 	for _, sidecar := range sidecars {
 		// Check if the columns index is not too large
-		if sidecar.ColumnIndex >= numberOfColumns {
+		if sidecar.Index >= numberOfColumns {
 			return false, errIndexTooLarge
 		}
 
 		// Check if the KZG commitments size and data column size match.
-		if len(sidecar.DataColumn) != len(sidecar.KzgCommitments) {
+		if len(sidecar.Column) != len(sidecar.KzgCommitments) {
 			return false, errMismatchLength
 		}
 
 		// Check if the KZG proofs size and data column size match.
-		if len(sidecar.DataColumn) != len(sidecar.KzgProof) {
+		if len(sidecar.Column) != len(sidecar.KzgProofs) {
 			return false, errMismatchLength
 		}
 
-		for i := range sidecar.DataColumn {
+		for i := range sidecar.Column {
 			commitments = append(commitments, kzg.Bytes48(sidecar.KzgCommitments[i]))
-			indices = append(indices, sidecar.ColumnIndex)
-			cells = append(cells, kzg.Cell(sidecar.DataColumn[i]))
-			proofs = append(proofs, kzg.Bytes48(sidecar.KzgProof[i]))
+			indices = append(indices, sidecar.Index)
+			cells = append(cells, kzg.Cell(sidecar.Column[i]))
+			proofs = append(proofs, kzg.Bytes48(sidecar.KzgProofs[i]))
 		}
 	}
 

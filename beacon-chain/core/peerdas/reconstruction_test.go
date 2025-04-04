@@ -114,8 +114,8 @@ func TestReconstructionRoundTrip(t *testing.T) {
 
 	var noDataColumns []*ethpb.DataColumnSidecar
 	dataColumnsWithDifferentLengths := []*ethpb.DataColumnSidecar{
-		{DataColumn: [][]byte{{}, {}}},
-		{DataColumn: [][]byte{{}}},
+		{Column: [][]byte{{}, {}}},
+		{Column: [][]byte{{}}},
 	}
 	notEnoughDataColumns := dataColumnSidecars[:numberOfColumns/2-1]
 	originalDataColumns := dataColumnSidecars[:numberOfColumns/2]

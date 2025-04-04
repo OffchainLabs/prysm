@@ -493,18 +493,18 @@ func (vs *Server) broadcastAndReceiveDataColumns(
 		// See https://golang.org/doc/faq#closures_and_goroutines for more details.
 		sidecar := sd
 		eg.Go(func() error {
-			if sidecar.ColumnIndex < dataColumnsWithholdCount {
+			if sidecar.Index < dataColumnsWithholdCount {
 				log.WithFields(logrus.Fields{
-					"root":            fmt.Sprintf("%#x", root),
-					"slot":            slot,
-					"dataColumnIndex": sidecar.ColumnIndex,
+					"root":  fmt.Sprintf("%#x", root),
+					"slot":  slot,
+					"index": sidecar.Index,
 				}).Warning("Withholding data column")
 
 				return nil
 			}
 
 			// Compute the subnet index based on the column index.
-			subnet := peerdas.ComputeSubnetForDataColumnSidecar(sidecar.ColumnIndex)
+			subnet := peerdas.ComputeSubnetForDataColumnSidecar(sidecar.Index)
 
 			if err := vs.P2P.BroadcastDataColumn(ctx, root, subnet, sidecar); err != nil {
 				return errors.Wrap(err, "broadcast data column")

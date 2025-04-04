@@ -317,7 +317,7 @@ func dataColumnIndexValidatorFromRangeReq(req *ethpb.DataColumnSidecarsByRangeRe
 	}
 
 	return func(sc blocks.RODataColumn) bool {
-		columnIndex := sc.ColumnIndex
+		columnIndex := sc.Index
 
 		valid := columnIds[columnIndex]
 
@@ -599,7 +599,7 @@ func dataColumnValidatorFromRootReq(req *p2ptypes.DataColumnSidecarsByRootReq) D
 			columnsIndexFromRoot[blockRoot] = make(map[uint64]bool)
 		}
 
-		columnsIndexFromRoot[blockRoot][sc.ColumnIndex] = true
+		columnsIndexFromRoot[blockRoot][sc.Index] = true
 	}
 
 	return func(sc blocks.RODataColumn) bool {
@@ -611,7 +611,7 @@ func dataColumnValidatorFromRootReq(req *p2ptypes.DataColumnSidecarsByRootReq) D
 			return false
 		}
 
-		if !columnsIndex[sc.ColumnIndex] {
+		if !columnsIndex[sc.Index] {
 			columnsIndexSlice := make([]uint64, 0, len(columnsIndex))
 
 			for index := range columnsIndex {
@@ -624,7 +624,7 @@ func dataColumnValidatorFromRootReq(req *p2ptypes.DataColumnSidecarsByRootReq) D
 
 			log.WithFields(logrus.Fields{
 				"root":              fmt.Sprintf("%#x", root),
-				"column":            sc.ColumnIndex,
+				"column":            sc.Index,
 				"reaquestedColumns": columnsIndexSlice,
 			}).Debug("Data column sidecar column index not requested")
 

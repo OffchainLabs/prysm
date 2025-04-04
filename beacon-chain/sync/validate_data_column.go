@@ -69,7 +69,7 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 	if dataColumnsIgnoreSlotMultiple != 0 && blockSlot%dataColumnsIgnoreSlotMultiple == 0 {
 		log.WithFields(logrus.Fields{
 			"slot":        blockSlot,
-			"columnIndex": roDataColumn.ColumnIndex,
+			"columnIndex": roDataColumn.Index,
 			"blockRoot":   fmt.Sprintf("%#x", roDataColumn.BlockRoot()),
 		}).Warning("Voluntary ignore data column sidecar gossip")
 
@@ -85,7 +85,7 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 	}
 
 	// [REJECT] The sidecar is for the correct subnet -- i.e. compute_subnet_for_data_column_sidecar(sidecar.index) == subnet_id.
-	want := fmt.Sprintf("data_column_sidecar_%d", peerdas.ComputeSubnetForDataColumnSidecar(roDataColumn.ColumnIndex))
+	want := fmt.Sprintf("data_column_sidecar_%d", peerdas.ComputeSubnetForDataColumnSidecar(roDataColumn.Index))
 	if !strings.Contains(*msg.Topic, want) {
 		log.Debug("Column Sidecar index does not match topic")
 		return pubsub.ValidationReject, fmt.Errorf("wrong topic name: %s", *msg.Topic)
@@ -96,7 +96,7 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 	}
 
 	// [IGNORE] The sidecar is the first sidecar for the tuple (block_header.slot, block_header.proposer_index, sidecar.index) with valid header signature, sidecar inclusion proof, and kzg proof.
-	if s.hasSeenDataColumnIndex(roDataColumn.Slot(), roDataColumn.ProposerIndex(), roDataColumn.DataColumnSidecar.ColumnIndex) {
+	if s.hasSeenDataColumnIndex(roDataColumn.Slot(), roDataColumn.ProposerIndex(), roDataColumn.DataColumnSidecar.Index) {
 		return pubsub.ValidationIgnore, nil
 	}
 

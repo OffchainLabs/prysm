@@ -1089,7 +1089,7 @@ func (f *blocksFetcher) fetchDataColumnsFromPeers(
 func sortBwbsByColumnIndex(bwbs []blocks.BlockWithROBlobs) {
 	for _, bwb := range bwbs {
 		sort.Slice(bwb.Columns, func(i, j int) bool {
-			return bwb.Columns[i].ColumnIndex < bwb.Columns[j].ColumnIndex
+			return bwb.Columns[i].Index < bwb.Columns[j].Index
 		})
 	}
 }
@@ -1280,7 +1280,7 @@ func (f *blocksFetcher) processDataColumns(
 			bwbs[index].Columns = append(bwbs[index].Columns, dataColumn)
 		}
 		// Remove the column from the missing columns.
-		delete(missingColumnsByRoot[blockRoot], dataColumn.ColumnIndex)
+		delete(missingColumnsByRoot[blockRoot], dataColumn.Index)
 		if len(missingColumnsByRoot[blockRoot]) == 0 {
 			delete(missingColumnsByRoot, blockRoot)
 		}

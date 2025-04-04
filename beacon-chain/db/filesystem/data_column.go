@@ -272,7 +272,7 @@ func (dcs *DataColumnStorage) Save(dataColumnSidecars []blocks.VerifiedRODataCol
 	// Group data column sidecars by root.
 	for _, dataColumnSidecar := range dataColumnSidecars {
 		// Check if the data column index is too large.
-		if dataColumnSidecar.ColumnIndex >= mandatoryNumberOfColumns {
+		if dataColumnSidecar.Index >= mandatoryNumberOfColumns {
 			return errDataColumnIndexTooLarge
 		}
 
@@ -302,7 +302,7 @@ func (dcs *DataColumnStorage) Save(dataColumnSidecars []blocks.VerifiedRODataCol
 		// Get all indices.
 		indices := make([]uint64, 0, len(dataColumnSidecars))
 		for _, dataColumnSidecar := range dataColumnSidecars {
-			indices = append(indices, dataColumnSidecar.ColumnIndex)
+			indices = append(indices, dataColumnSidecar.Index)
 		}
 
 		// Compute the data columns ident.
@@ -605,7 +605,7 @@ func (dcs *DataColumnStorage) saveDataColumnSidecarsExistingFile(filePath string
 
 		for _, dataColumnSidecar := range dataColumnSidecars {
 			// Extract the data columns index.
-			dataColumnIndex := dataColumnSidecar.ColumnIndex
+			dataColumnIndex := dataColumnSidecar.Index
 
 			ok, _, err := metadata.indices.get(dataColumnIndex)
 			if err != nil {
@@ -694,7 +694,7 @@ func (dcs *DataColumnStorage) saveDataColumnSidecarsNewFile(filePath string, inp
 
 		for _, dataColumnSidecar := range dataColumnSidecars {
 			// Extract the data column index.
-			dataColumnIndex := dataColumnSidecar.ColumnIndex
+			dataColumnIndex := dataColumnSidecar.Index
 
 			// Skip if the data column is already stored.
 			ok, _, err := indices.get(dataColumnIndex)

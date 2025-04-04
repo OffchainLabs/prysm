@@ -29,7 +29,7 @@ func TestBlobs(t *testing.T) {
 	almostAllColumns := make([]*ethpb.DataColumnSidecar, 0, fieldparams.NumberOfColumns/2)
 	for i := 2; i < fieldparams.NumberOfColumns/2+2; i++ {
 		almostAllColumns = append(almostAllColumns, &ethpb.DataColumnSidecar{
-			ColumnIndex: uint64(i),
+			Index: uint64(i),
 		})
 	}
 

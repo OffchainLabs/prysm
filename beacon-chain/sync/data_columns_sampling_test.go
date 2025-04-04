@@ -95,12 +95,12 @@ func createAndConnectPeer(
 
 		for _, identifier := range *req {
 			// Filter out the columns not to respond.
-			if columnsNotToRespond[identifier.ColumnIndex] {
+			if columnsNotToRespond[identifier.Index] {
 				continue
 			}
 
 			// Create the response.
-			resp := dataColumnSidecars[identifier.ColumnIndex]
+			resp := dataColumnSidecars[identifier.Index]
 
 			// Send the response.
 			err := WriteDataColumnSidecarChunk(stream, chainService, p2pService.Encoding(), resp)

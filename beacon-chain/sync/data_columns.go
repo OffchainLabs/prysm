@@ -85,17 +85,17 @@ func RequestDataColumnSidecarsByRoot(
 
 			// Mark columns as successful
 			for _, sidecar := range peerSidecars {
-				colIndex := sidecar.ColumnIndex
-				successfulColumns[colIndex] = true
+				index := sidecar.Index
+				successfulColumns[index] = true
 			}
 
-			for _, colIndex := range dataColumns {
-				if !successfulColumns[colIndex] {
+			for _, index := range dataColumns {
+				if !successfulColumns[index] {
 					// Remove this peer if any requested column wasn't successful
 					delete(dataColumnsByAdmissiblePeer, peer)
 					log.WithFields(logrus.Fields{
 						"peer":          peer.String(),
-						"missingColumn": colIndex,
+						"missingColumn": index,
 					}).Debug("Peer failed to return requested data column")
 					break
 				}
@@ -226,8 +226,8 @@ func RequestsForDataColumnsByRoot(
 	req := make(types.DataColumnSidecarsByRootReq, 0, len(missingColumns))
 	for _, column := range missingColumns {
 		req = append(req, &eth.DataColumnIdentifier{
-			BlockRoot:   root[:],
-			ColumnIndex: column,
+			BlockRoot: root[:],
+			Index:     column,
 		})
 	}
 

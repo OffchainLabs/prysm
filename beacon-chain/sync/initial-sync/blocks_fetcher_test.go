@@ -1435,11 +1435,11 @@ func createAndConnectPeer(
 			dataColumn := dataColumnsSidecar[responseParams.columnIndex]
 
 			// Alter the data column if needed.
-			initialValue0, initialValue1 := dataColumn.DataColumn[0][0], dataColumn.DataColumn[0][1]
+			initialValue0, initialValue1 := dataColumn.Column[0][0], dataColumn.Column[0][1]
 
 			if responseParams.alterate {
-				dataColumn.DataColumn[0][0] = 0
-				dataColumn.DataColumn[0][1] = 0
+				dataColumn.Column[0][0] = 0
+				dataColumn.Column[0][1] = 0
 			}
 
 			// Send the response.
@@ -1448,8 +1448,8 @@ func createAndConnectPeer(
 
 			if responseParams.alterate {
 				// Restore the data column.
-				dataColumn.DataColumn[0][0] = initialValue0
-				dataColumn.DataColumn[0][1] = initialValue1
+				dataColumn.Column[0][0] = initialValue0
+				dataColumn.Column[0][1] = initialValue1
 			}
 		}
 

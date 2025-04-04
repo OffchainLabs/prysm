@@ -121,7 +121,7 @@ func (dv *RODataColumnsVerifier) DataColumnsIndexInBounds() (err error) {
 	defer dv.recordResult(RequireDataColumnIndexInBounds, &err)
 
 	for _, dataColumn := range dv.dataColumns {
-		if dataColumn.ColumnIndex >= fieldparams.NumberOfColumns {
+		if dataColumn.Index >= fieldparams.NumberOfColumns {
 			fields := logging.DataColumnFields(dataColumn)
 			log.WithFields(fields).Debug("Sidecar index >= NUMBER_OF_COLUMNS")
 			return columnErrBuilder(ErrColumnIndexInvalid)

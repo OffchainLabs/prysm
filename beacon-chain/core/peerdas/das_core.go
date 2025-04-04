@@ -186,10 +186,10 @@ func DataColumnSidecars(signedBlock interfaces.ReadOnlySignedBeaconBlock, blobs 
 		}
 
 		sidecar := &ethpb.DataColumnSidecar{
-			ColumnIndex:                  columnIndex,
-			DataColumn:                   columnBytes,
+			Index:                        columnIndex,
+			Column:                       columnBytes,
 			KzgCommitments:               blobKzgCommitments,
-			KzgProof:                     kzgProofOfColumnBytes,
+			KzgProofs:                    kzgProofOfColumnBytes,
 			SignedBlockHeader:            signedBlockHeader,
 			KzgCommitmentsInclusionProof: kzgCommitmentsInclusionProof,
 		}
@@ -275,10 +275,10 @@ func Blobs(indices map[uint64]bool, dataColumnsSidecar []*ethpb.DataColumnSideca
 	sliceIndexFromColumnIndex := make(map[uint64]int, len(dataColumnsSidecar))
 	for i := range dataColumnsSidecar {
 		dataColumnSideCar := dataColumnsSidecar[i]
-		columnIndex := dataColumnSideCar.ColumnIndex
+		index := dataColumnSideCar.Index
 
-		if columnIndex < uint64(neededColumnCount) {
-			sliceIndexFromColumnIndex[columnIndex] = i
+		if index < uint64(neededColumnCount) {
+			sliceIndexFromColumnIndex[index] = i
 		}
 	}
 
@@ -305,12 +305,12 @@ func Blobs(indices map[uint64]bool, dataColumnsSidecar []*ethpb.DataColumnSideca
 	// It is safe to retrieve the first column since we already checked that `dataColumnsSidecar` is not empty.
 	firstDataColumnSidecar := dataColumnsSidecar[0]
 
-	blobCount := uint64(len(firstDataColumnSidecar.DataColumn))
+	blobCount := uint64(len(firstDataColumnSidecar.Column))
 
 	// Check all colums have te same length.
 	for i := range dataColumnsSidecar {
-		if uint64(len(dataColumnsSidecar[i].DataColumn)) != blobCount {
-			return nil, errors.Errorf("mismatch in the length of the data columns, expected %d, got %d", blobCount, len(dataColumnsSidecar[i].DataColumn))
+		if uint64(len(dataColumnsSidecar[i].Column)) != blobCount {
+			return nil, errors.Errorf("mismatch in the length of the data columns, expected %d, got %d", blobCount, len(dataColumnsSidecar[i].Column))
 		}
 	}
 
@@ -331,7 +331,7 @@ func Blobs(indices map[uint64]bool, dataColumnsSidecar []*ethpb.DataColumnSideca
 			}
 
 			dataColumnSideCar := dataColumnsSidecar[sliceIndex]
-			cell := dataColumnSideCar.DataColumn[blobIndex]
+			cell := dataColumnSideCar.Column[blobIndex]
 
 			for i := 0; i < len(cell); i++ {
 				blob[columnIndex*kzg.BytesPerCell+i] = cell[i]

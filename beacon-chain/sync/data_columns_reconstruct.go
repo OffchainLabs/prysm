@@ -93,7 +93,7 @@ func (s *Service) reconstructDataColumns(ctx context.Context, verifiedRODataColu
 	// Build verified read only data columns to save.
 	verifiedRODataColumns := make([]blocks.VerifiedRODataColumn, 0, len(localNodeInfo.CustodyColumns))
 	for _, dataColumnSidecar := range dataColumnSidecars {
-		shouldSave := localNodeInfo.CustodyColumns[dataColumnSidecar.ColumnIndex]
+		shouldSave := localNodeInfo.CustodyColumns[dataColumnSidecar.Index]
 		if !shouldSave {
 			// We do not custody this column, so we dot not need to save it.
 			continue
@@ -208,7 +208,7 @@ func (s *Service) scheduleReconstructedDataColumnsBroadcast(
 
 		for _, verifiedRODataColumn := range verifiedRODataColumnSidecars {
 			// Compute the subnet for this column.
-			subnet := peerdas.ComputeSubnetForDataColumnSidecar(verifiedRODataColumn.ColumnIndex)
+			subnet := peerdas.ComputeSubnetForDataColumnSidecar(verifiedRODataColumn.Index)
 
 			// Broadcast the missing data column.
 			if err := s.cfg.p2p.BroadcastDataColumn(ctx, root, subnet, verifiedRODataColumn.DataColumnSidecar); err != nil {

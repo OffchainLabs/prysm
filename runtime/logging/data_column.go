@@ -18,7 +18,7 @@ func DataColumnFields(column blocks.RODataColumn) logrus.Fields {
 		"blockRoot":          fmt.Sprintf("%#x", column.BlockRoot())[:8],
 		"parentRoot":         fmt.Sprintf("%#x", column.ParentRoot())[:8],
 		"kzgCommitmentCount": kzgCommitmentCount,
-		"colIdx":             column.ColumnIndex,
+		"colIdx":             column.Index,
 	}
 }
 

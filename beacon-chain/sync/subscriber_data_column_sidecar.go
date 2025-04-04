@@ -32,7 +32,7 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 func (s *Service) receiveDataColumn(ctx context.Context, dc blocks.VerifiedRODataColumn) error {
 	slot := dc.SignedBlockHeader.Header.Slot
 	proposerIndex := dc.SignedBlockHeader.Header.ProposerIndex
-	columnIndex := dc.ColumnIndex
+	columnIndex := dc.Index
 
 	s.setSeenDataColumnIndex(slot, proposerIndex, columnIndex)
 

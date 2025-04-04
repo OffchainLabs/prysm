@@ -203,8 +203,8 @@ func generateDataColumnIdentifiers(n int) []*eth.DataColumnIdentifier {
 	r := make([]*eth.DataColumnIdentifier, n)
 	for i := 0; i < n; i++ {
 		r[i] = &eth.DataColumnIdentifier{
-			BlockRoot:   bytesutil.PadTo([]byte{byte(i)}, 32),
-			ColumnIndex: uint64(i),
+			BlockRoot: bytesutil.PadTo([]byte{byte(i)}, 32),
+			Index:     uint64(i),
 		}
 	}
 	return r
@@ -292,24 +292,24 @@ func TestDataColumnSidecarsByRootReq_MarshalUnmarshal(t *testing.T) {
 func TestDataColumnSidecarsByRootReq_Sort(t *testing.T) {
 	ids := []*eth.DataColumnIdentifier{
 		{
-			BlockRoot:   bytesutil.PadTo([]byte{3}, 32),
-			ColumnIndex: 0,
+			BlockRoot: bytesutil.PadTo([]byte{3}, 32),
+			Index:     0,
 		},
 		{
-			BlockRoot:   bytesutil.PadTo([]byte{2}, 32),
-			ColumnIndex: 2,
+			BlockRoot: bytesutil.PadTo([]byte{2}, 32),
+			Index:     2,
 		},
 		{
-			BlockRoot:   bytesutil.PadTo([]byte{2}, 32),
-			ColumnIndex: 1,
+			BlockRoot: bytesutil.PadTo([]byte{2}, 32),
+			Index:     1,
 		},
 		{
-			BlockRoot:   bytesutil.PadTo([]byte{1}, 32),
-			ColumnIndex: 2,
+			BlockRoot: bytesutil.PadTo([]byte{1}, 32),
+			Index:     2,
 		},
 		{
-			BlockRoot:   bytesutil.PadTo([]byte{0}, 32),
-			ColumnIndex: 3,
+			BlockRoot: bytesutil.PadTo([]byte{0}, 32),
+			Index:     3,
 		},
 	}
 	req := DataColumnSidecarsByRootReq(ids)
@@ -321,8 +321,8 @@ func TestDataColumnSidecarsByRootReq_Sort(t *testing.T) {
 
 	ids = []*eth.DataColumnIdentifier{
 		{
-			BlockRoot:   bytesutil.PadTo([]byte{0}, 32),
-			ColumnIndex: 3,
+			BlockRoot: bytesutil.PadTo([]byte{0}, 32),
+			Index:     3,
 		},
 	}
 	req = DataColumnSidecarsByRootReq(ids)

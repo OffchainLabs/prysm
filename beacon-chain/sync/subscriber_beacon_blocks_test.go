@@ -231,7 +231,7 @@ func TestReconstructAndBroadcastBlobs(t *testing.T) {
 						},
 						Signature: []byte("signature"),
 					},
-					ColumnIndex: uint64(i),
+					Index: uint64(i),
 				})
 			require.NoError(t, err)
 			allColumns[i] = blocks.VerifiedRODataColumn{RODataColumn: rod}

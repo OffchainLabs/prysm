@@ -118,12 +118,12 @@ func (s *Service) reconstructAndBroadcastBlobsInDataColumn(ctx context.Context, 
 
 	// Broadcast data column and then save to db (if needs to be in custody)
 	for _, sidecar := range sidecars {
-		if !info.CustodyColumns[sidecar.ColumnIndex] {
+		if !info.CustodyColumns[sidecar.Index] {
 			continue
 		}
 
 		// first broadcast the data column
-		if err := s.cfg.p2p.BroadcastDataColumn(ctx, blockRoot, sidecar.ColumnIndex, sidecar.DataColumnSidecar); err != nil {
+		if err := s.cfg.p2p.BroadcastDataColumn(ctx, blockRoot, sidecar.Index, sidecar.DataColumnSidecar); err != nil {
 			log.WithFields(dataColumnFields(sidecar.RODataColumn)).WithError(err).Error("Failed to broadcast data column")
 		}
 

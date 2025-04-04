@@ -93,9 +93,9 @@ func CreateTestVerifiedRoDataColumnSidecars(t *testing.T, dataColumnParamsByBloc
 			}
 
 			dataColumnSidecar := &ethpb.DataColumnSidecar{
-				ColumnIndex:                  param.ColumnIndex,
+				Index:                        param.ColumnIndex,
 				KzgCommitments:               param.KzgCommitments,
-				DataColumn:                   dataColumn,
+				Column:                       dataColumn,
 				KzgCommitmentsInclusionProof: kzgCommitmentsInclusionProof,
 				SignedBlockHeader: &ethpb.SignedBeaconBlockHeader{
 					Header: &ethpb.BeaconBlockHeader{
