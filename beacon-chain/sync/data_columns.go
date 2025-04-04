@@ -34,9 +34,11 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/verify"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/sirupsen/logrus"
@@ -417,6 +419,11 @@ func fetchAndVerifyRecoveryColumns(
 		"recoveryThreshold": recoveryThreshold,
 	}).Debug("Selected columns for fetch for recovery")
 
+	localAvailableColumns := make(map[uint64]bool, len(availableColumns))
+	for k, v := range availableColumns {
+		localAvailableColumns[k] = v
+	}
+
 	var fetchedSidecars []blocks.RODataColumn
 	for {
 		// Fetch selected columns.
@@ -440,9 +447,9 @@ func fetchAndVerifyRecoveryColumns(
 		if errors.As(err, &ucErr) {
 			// If some of the columns for reconstruction are unavailable, try again with those columns removed from the available columns.
 			for _, unavailableCol := range ucErr.Columns {
-				delete(availableColumns, unavailableCol)
+				delete(localAvailableColumns, unavailableCol)
 			}
-			columnsToFetch, err = selectRecoveryColumnsToFetch(requestedColumns, availableColumns, recoveryThreshold)
+			columnsToFetch, err = selectRecoveryColumnsToFetch(requestedColumns, localAvailableColumns, recoveryThreshold)
 			if err != nil {
 				return nil, errors.Wrap(err, "failed to select columns for recovery")
 			}
