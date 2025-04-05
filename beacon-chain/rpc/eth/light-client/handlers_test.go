@@ -51,7 +51,7 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 	params.OverrideBeaconConfig(cfg)
 
 	t.Run("altair", func(t *testing.T) {
-		l := util.NewTestLightClient(t).SetupTestAltair()
+		l := util.NewTestLightClient(t).SetupTestAltair(0, true)
 
 		slot := primitives.Slot(params.BeaconConfig().AltairForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
 		blockRoot, err := l.Block.Block().HashTreeRoot()
@@ -93,7 +93,7 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 		require.NotNil(t, resp.Data.CurrentSyncCommitteeBranch)
 	})
 	t.Run("altairSSZ", func(t *testing.T) {
-		l := util.NewTestLightClient(t).SetupTestAltair()
+		l := util.NewTestLightClient(t).SetupTestAltair(0, true)
 
 		slot := primitives.Slot(params.BeaconConfig().AltairForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
 		blockRoot, err := l.Block.Block().HashTreeRoot()
@@ -127,7 +127,7 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 		require.NotNil(t, resp.CurrentSyncCommitteeBranch)
 	})
 	t.Run("altair - no bootstrap found", func(t *testing.T) {
-		l := util.NewTestLightClient(t).SetupTestAltair()
+		l := util.NewTestLightClient(t).SetupTestAltair(0, true)
 
 		slot := primitives.Slot(params.BeaconConfig().AltairForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
 		blockRoot, err := l.Block.Block().HashTreeRoot()
@@ -153,7 +153,7 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 		require.Equal(t, http.StatusNotFound, writer.Code)
 	})
 	t.Run("bellatrix", func(t *testing.T) {
-		l := util.NewTestLightClient(t).SetupTestBellatrix()
+		l := util.NewTestLightClient(t).SetupTestBellatrix(0, true)
 
 		slot := primitives.Slot(params.BeaconConfig().BellatrixForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
 		blockRoot, err := l.Block.Block().HashTreeRoot()
@@ -194,7 +194,7 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 		require.NotNil(t, resp.Data.CurrentSyncCommitteeBranch)
 	})
 	t.Run("bellatrixSSZ", func(t *testing.T) {
-		l := util.NewTestLightClient(t).SetupTestBellatrix()
+		l := util.NewTestLightClient(t).SetupTestBellatrix(0, true)
 
 		slot := primitives.Slot(params.BeaconConfig().BellatrixForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
 		blockRoot, err := l.Block.Block().HashTreeRoot()
@@ -228,7 +228,7 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 		require.NotNil(t, resp.CurrentSyncCommitteeBranch)
 	})
 	t.Run("capella", func(t *testing.T) {
-		l := util.NewTestLightClient(t).SetupTestCapella(false) // result is same for true and false
+		l := util.NewTestLightClient(t).SetupTestCapella(false, 0, true) // result is same for true and false
 
 		slot := primitives.Slot(params.BeaconConfig().CapellaForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
 		blockRoot, err := l.Block.Block().HashTreeRoot()
@@ -269,7 +269,7 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 		require.NotNil(t, resp.Data.CurrentSyncCommitteeBranch)
 	})
 	t.Run("capellaSSZ", func(t *testing.T) {
-		l := util.NewTestLightClient(t).SetupTestCapella(false) // result is same for true and false
+		l := util.NewTestLightClient(t).SetupTestCapella(false, 0, true) // result is same for true and false
 
 		slot := primitives.Slot(params.BeaconConfig().CapellaForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
 		blockRoot, err := l.Block.Block().HashTreeRoot()
@@ -303,7 +303,7 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 		require.NotNil(t, resp.CurrentSyncCommitteeBranch)
 	})
 	t.Run("deneb", func(t *testing.T) {
-		l := util.NewTestLightClient(t).SetupTestDeneb(false) // result is same for true and false
+		l := util.NewTestLightClient(t).SetupTestDeneb(false, 0, true) // result is same for true and false
 
 		slot := primitives.Slot(params.BeaconConfig().DenebForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
 		blockRoot, err := l.Block.Block().HashTreeRoot()
@@ -344,7 +344,7 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 		require.NotNil(t, resp.Data.CurrentSyncCommitteeBranch)
 	})
 	t.Run("denebSSZ", func(t *testing.T) {
-		l := util.NewTestLightClient(t).SetupTestDeneb(false) // result is same for true and false
+		l := util.NewTestLightClient(t).SetupTestDeneb(false, 0, true) // result is same for true and false
 
 		slot := primitives.Slot(params.BeaconConfig().DenebForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
 		blockRoot, err := l.Block.Block().HashTreeRoot()
@@ -378,7 +378,7 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 		require.NotNil(t, resp.CurrentSyncCommitteeBranch)
 	})
 	t.Run("electra", func(t *testing.T) {
-		l := util.NewTestLightClient(t).SetupTestElectra(false) // result is same for true and false
+		l := util.NewTestLightClient(t).SetupTestElectra(false, 0, true) // result is same for true and false
 
 		slot := primitives.Slot(params.BeaconConfig().ElectraForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
 		blockRoot, err := l.Block.Block().HashTreeRoot()
@@ -419,7 +419,7 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 		require.NotNil(t, resp.Data.CurrentSyncCommitteeBranch)
 	})
 	t.Run("electraSSZ", func(t *testing.T) {
-		l := util.NewTestLightClient(t).SetupTestElectra(false) // result is same for true and false
+		l := util.NewTestLightClient(t).SetupTestElectra(false, 0, true) // result is same for true and false
 
 		slot := primitives.Slot(params.BeaconConfig().ElectraForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
 		blockRoot, err := l.Block.Block().HashTreeRoot()

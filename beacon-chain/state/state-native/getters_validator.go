@@ -486,7 +486,7 @@ func (b *BeaconState) HasPendingBalanceToWithdraw(idx primitives.ValidatorIndex)
 	// MAX_WITHDRAWAL_REQUESTS_PER_PAYLOAD per slot. A more optimized storage indexing such as a
 	// lookup map could be used to reduce the complexity marginally.
 	for _, w := range b.pendingPartialWithdrawals {
-		if w.Index == idx {
+		if w.Index == idx && w.Amount > 0 {
 			return true, nil
 		}
 	}

@@ -1,11 +1,10 @@
-package beacon
+package health
 
 import (
 	"context"
 	"sync"
 	"testing"
 
-	healthTesting "github.com/prysmaticlabs/prysm/v5/api/client/beacon/testing"
 	"go.uber.org/mock/gomock"
 )
 
@@ -24,7 +23,7 @@ func TestNodeHealth_IsHealthy(t *testing.T) {
 				isHealthy:  &tt.isHealthy,
 				healthChan: make(chan bool, 1),
 			}
-			if got := n.IsHealthy(); got != tt.want {
+			if got := n.IsHealthy(context.Background()); got != tt.want {
 				t.Errorf("IsHealthy() = %v, want %v", got, tt.want)
 			}
 		})
@@ -47,7 +46,7 @@ func TestNodeHealth_UpdateNodeHealth(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
-			client := healthTesting.NewMockHealthClient(ctrl)
+			client := NewMockHealthClient(ctrl)
 			client.EXPECT().IsHealthy(gomock.Any()).Return(tt.newStatus)
 			n := &NodeHealthTracker{
 				isHealthy:  &tt.initial,
@@ -80,8 +79,8 @@ func TestNodeHealth_UpdateNodeHealth(t *testing.T) {
 func TestNodeHealth_Concurrency(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	client := healthTesting.NewMockHealthClient(ctrl)
-	n := NewNodeHealthTracker(client)
+	client := NewMockHealthClient(ctrl)
+	n := NewTracker(client)
 	var wg sync.WaitGroup
 
 	// Number of goroutines to spawn for both reading and writing
@@ -104,7 +103,7 @@ func TestNodeHealth_Concurrency(t *testing.T) {
 	for i := 0; i < numGoroutines; i++ {
 		go func() {
 			defer wg.Done()
-			_ = n.IsHealthy() // Just read the value
+			_ = n.IsHealthy(context.Background()) // Just read the value
 		}()
 	}
 
