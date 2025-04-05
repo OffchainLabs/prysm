@@ -22,8 +22,8 @@ func TestWeakSubjectivity_ComputeWeakSubjectivityPeriod(t *testing.T) {
 		avgBalance uint64
 		want       primitives.Epoch
 	}{
-		// Asserting that we get the same numbers as defined in the reference table:
-		// https://github.com/ethereum/consensus-specs/blob/master/specs/phase0/weak-subjectivity.md#calculating-the-weak-subjectivity-period
+		// Asserting that we get the same numbers as defined in the reference table for Electra:
+		// https://github.com/ethereum/consensus-specs/blob/dev/specs/electra/weak-subjectivity.md#calculating-the-weak-subjectivity-period
 		{valCount: 32768, avgBalance: 28, want: 504},
 		{valCount: 65536, avgBalance: 28, want: 752},
 		{valCount: 131072, avgBalance: 28, want: 1248},
@@ -36,13 +36,17 @@ func TestWeakSubjectivity_ComputeWeakSubjectivityPeriod(t *testing.T) {
 		{valCount: 262144, avgBalance: 32, want: 3532},
 		{valCount: 524288, avgBalance: 32, want: 3532},
 		{valCount: 1048576, avgBalance: 32, want: 3532},
-		// Additional test vectors, to check case when T*(200+3*D) >= t*(200+12*D)
+		// Additional test vectors for Electra, to check case when T*(200+3*D) >= t*(200+12*D)
 		{valCount: 32768, avgBalance: 22, want: 277},
 		{valCount: 65536, avgBalance: 22, want: 298},
 		{valCount: 131072, avgBalance: 22, want: 340},
 		{valCount: 262144, avgBalance: 22, want: 424},
 		{valCount: 524288, avgBalance: 22, want: 593},
 		{valCount: 1048576, avgBalance: 22, want: 931},
+		// Edge cases for Electra
+		{valCount: 16384, avgBalance: 32, want: 460}, // Minimum validator set
+		{valCount: 2097152, avgBalance: 32, want: 3532}, // Maximum validator set
+		{valCount: 32768, avgBalance: 40, want: 826}, // Higher average balance
 	}
 	for _, tt := range tests {
 		t.Run(fmt.Sprintf("valCount: %d, avgBalance: %d", tt.valCount, tt.avgBalance), func(t *testing.T) {
