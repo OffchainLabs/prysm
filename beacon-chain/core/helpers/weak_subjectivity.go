@@ -22,7 +22,7 @@ import (
 // ComputeWeakSubjectivityPeriod returns weak subjectivity period for the active validator count and finalized epoch.
 //
 // Reference spec implementation:
-// https://github.com/ethereum/consensus-specs/blob/master/specs/phase0/weak-subjectivity.md#calculating-the-weak-subjectivity-period
+// https://github.com/ethereum/consensus-specs/blob/master/specs/electra/weak-subjectivity.md#calculating-the-weak-subjectivity-period
 //
 // def compute_weak_subjectivity_period(state: BeaconState) -> uint64:
 //
@@ -49,21 +49,18 @@ import (
 //	    epochs_for_balance_top_ups = (
 //	        N * (200 + 3 * D) // (600 * Delta)
 //	    )
-//	    ws_period += max(epochs_for_validator_set_churn, epochs_for_balance_top_ups)
+//	    ws_period = max(epochs_for_validator_set_churn, epochs_for_balance_top_ups)
 //	else:
-//	    ws_period += (
+//	    ws_period = (
 //	        3 * N * D * t // (200 * Delta * (T - t))
 //	    )
 //
 //	return ws_period
 func ComputeWeakSubjectivityPeriod(ctx context.Context, st state.ReadOnlyBeaconState, cfg *params.BeaconChainConfig) (primitives.Epoch, error) {
-	// Weak subjectivity period cannot be smaller than withdrawal delay.
-	wsp := uint64(cfg.MinValidatorWithdrawabilityDelay)
-
 	// Cardinality of active validator set.
 	N, err := ActiveValidatorCount(ctx, st, time.CurrentEpoch(st))
 	if err != nil {
-		return 0, fmt.Errorf("cannot obtain active valiadtor count: %w", err)
+		return 0, fmt.Errorf("cannot obtain active validator count: %w", err)
 	}
 	if N == 0 {
 		return 0, errors.New("no active validators found")
@@ -92,15 +89,17 @@ func ComputeWeakSubjectivityPeriod(ctx context.Context, st state.ReadOnlyBeaconS
 	// Safety decay, maximum tolerable loss of safety margin of FFG finality.
 	D := cfg.SafetyDecay
 
+	var wsp uint64
 	if T*(200+3*D) < t*(200+12*D) {
 		epochsForValidatorSetChurn := N * (t*(200+12*D) - T*(200+3*D)) / (600 * delta * (2*t + T))
 		epochsForBalanceTopUps := N * (200 + 3*D) / (600 * Delta)
-		wsp += math.Max(epochsForValidatorSetChurn, epochsForBalanceTopUps)
+		wsp = math.Max(epochsForValidatorSetChurn, epochsForBalanceTopUps)
 	} else {
-		wsp += 3 * N * D * t / (200 * Delta * (T - t))
+		wsp = 3 * N * D * t / (200 * Delta * (T - t))
 	}
 
-	return primitives.Epoch(wsp), nil
+	// Add MinValidatorWithdrawabilityDelay to the computed period
+	return primitives.Epoch(wsp + uint64(cfg.MinValidatorWithdrawabilityDelay)), nil
 }
 
 // IsWithinWeakSubjectivityPeriod verifies if a given weak subjectivity checkpoint is not stale i.e.
