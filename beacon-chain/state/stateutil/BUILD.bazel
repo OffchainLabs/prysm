@@ -23,7 +23,7 @@ go_library(
         "validator_reader.go",
         "validator_root.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stateutil",
+    importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/state/stateutil",
     visibility = ["//visibility:public"],
     deps = [
         "//beacon-chain/core/transition/stateutils:go_default_library",

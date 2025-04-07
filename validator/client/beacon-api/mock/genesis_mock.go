@@ -13,7 +13,7 @@ import (
 	context "context"
 	reflect "reflect"
 
-	structs "github.com/prysmaticlabs/prysm/v5/api/server/structs"
+	structs "github.com/OffchainLabs/prysm/v6/api/server/structs"
 	gomock "go.uber.org/mock/gomock"
 )
 

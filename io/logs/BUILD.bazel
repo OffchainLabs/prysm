@@ -6,7 +6,7 @@ go_library(
         "logutil.go",
         "stream.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/io/logs",
+    importpath = "github.com/OffchainLabs/prysm/v6/io/logs",
     visibility = ["//visibility:public"],
     deps = [
         "//async/event:go_default_library",

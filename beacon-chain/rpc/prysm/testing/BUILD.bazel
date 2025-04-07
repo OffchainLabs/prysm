@@ -4,6 +4,6 @@ go_library(
     name = "go_default_library",
     testonly = True,
     srcs = ["json.go"],
-    importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/prysm/testing",
+    importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/prysm/testing",
     visibility = ["//visibility:public"],
 )

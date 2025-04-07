@@ -12,7 +12,7 @@ package mock
 import (
 	reflect "reflect"
 
-	common "github.com/prysmaticlabs/prysm/v5/crypto/bls/common"
+	common "github.com/OffchainLabs/prysm/v6/crypto/bls/common"
 	gomock "go.uber.org/mock/gomock"
 )
 

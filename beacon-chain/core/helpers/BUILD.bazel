@@ -17,7 +17,7 @@ go_library(
         "validators.go",
         "weak_subjectivity.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers",
+    importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers",
     visibility = ["//visibility:public"],
     deps = [
         "//beacon-chain/cache:go_default_library",

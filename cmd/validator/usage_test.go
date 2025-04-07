@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/config/features"
+	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/urfave/cli/v2"
 )
 

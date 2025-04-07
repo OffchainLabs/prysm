@@ -32,9 +32,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/OffchainLabs/prysm/v6/crypto/bls"
 	"github.com/minio/sha256-simd"
 	"github.com/pborman/uuid"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/crypto/pbkdf2"
 	"golang.org/x/crypto/scrypt"

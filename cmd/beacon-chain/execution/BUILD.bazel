@@ -6,7 +6,7 @@ go_library(
         "log.go",
         "options.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/execution",
+    importpath = "github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/execution",
     visibility = [
         "//beacon-chain:__subpackages__",
         "//cmd:__subpackages__",
