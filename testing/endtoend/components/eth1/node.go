@@ -110,6 +110,7 @@ func (node *Node) Start(ctx context.Context) error {
 		"--ipcdisable",
 		"--verbosity=4",
 		"--syncmode=full",
+		fmt.Sprintf("--miner.gaslimit=%d", params.BeaconConfig().DefaultBuilderGasLimit),
 		fmt.Sprintf("--txpool.locals=%s", EthAddress),
 	}
 

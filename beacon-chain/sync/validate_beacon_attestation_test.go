@@ -23,6 +23,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"github.com/prysmaticlabs/prysm/v5/testing/util"
 )
@@ -465,25 +466,130 @@ func TestService_validateCommitteeIndexBeaconAttestationElectra(t *testing.T) {
 	}
 }
 
-func TestService_setSeenCommitteeIndicesSlot(t *testing.T) {
+func TestService_setSeenUnaggregatedAtt(t *testing.T) {
 	s := NewService(context.Background(), WithP2P(p2ptest.NewTestP2P(t)))
-	s.initCaches()
 
-	// Empty cache
-	b0 := []byte{9} // 1001
-	require.Equal(t, false, s.hasSeenCommitteeIndicesSlot(0, 0, b0))
+	t.Run("phase0", func(t *testing.T) {
+		s.initCaches()
 
-	// Cache some entries but same key
-	s.setSeenCommitteeIndicesSlot(0, 0, b0)
-	require.Equal(t, true, s.hasSeenCommitteeIndicesSlot(0, 0, b0))
-	b1 := []byte{14} // 1110
-	s.setSeenCommitteeIndicesSlot(0, 0, b1)
-	require.Equal(t, true, s.hasSeenCommitteeIndicesSlot(0, 0, b0))
-	require.Equal(t, true, s.hasSeenCommitteeIndicesSlot(0, 0, b1))
+		s0c0a0 := &ethpb.Attestation{
+			Data:            &ethpb.AttestationData{Slot: 0, CommitteeIndex: 0},
+			AggregationBits: bitfield.Bitlist{0b1001},
+		}
+		s0c0a1 := &ethpb.Attestation{
+			Data:            &ethpb.AttestationData{Slot: 0, CommitteeIndex: 0},
+			AggregationBits: bitfield.Bitlist{0b1010},
+		}
+		s0c0a2 := &ethpb.Attestation{
+			Data:            &ethpb.AttestationData{Slot: 0, CommitteeIndex: 0},
+			AggregationBits: bitfield.Bitlist{0b1100},
+		}
+		s0c1a0 := &ethpb.Attestation{
+			Data:            &ethpb.AttestationData{Slot: 0, CommitteeIndex: 1},
+			AggregationBits: bitfield.Bitlist{0b1001},
+		}
+		s0c2a0 := &ethpb.Attestation{
+			Data:            &ethpb.AttestationData{Slot: 0, CommitteeIndex: 2},
+			AggregationBits: bitfield.Bitlist{0b1001},
+		}
+		s1c0a0 := &ethpb.Attestation{
+			Data:            &ethpb.AttestationData{Slot: 1, CommitteeIndex: 0},
+			AggregationBits: bitfield.Bitlist{0b1001},
+		}
+		s2c0a0 := &ethpb.Attestation{
+			Data:            &ethpb.AttestationData{Slot: 2, CommitteeIndex: 0},
+			AggregationBits: bitfield.Bitlist{0b1001},
+		}
 
-	// Cache some entries with diff keys
-	s.setSeenCommitteeIndicesSlot(1, 2, b1)
-	require.Equal(t, false, s.hasSeenCommitteeIndicesSlot(1, 0, b1))
-	require.Equal(t, false, s.hasSeenCommitteeIndicesSlot(0, 2, b1))
-	require.Equal(t, true, s.hasSeenCommitteeIndicesSlot(1, 2, b1))
+		t.Run("empty cache", func(t *testing.T) {
+			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(s0c0a0))
+		})
+		t.Run("ok", func(t *testing.T) {
+			s.setSeenUnaggregatedAtt(s0c0a0)
+			assert.Equal(t, true, s.hasSeenUnaggregatedAtt(s0c0a0))
+		})
+		t.Run("different slot", func(t *testing.T) {
+			s.setSeenUnaggregatedAtt(s1c0a0)
+			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(s2c0a0))
+		})
+		t.Run("different committee index", func(t *testing.T) {
+			s.setSeenUnaggregatedAtt(s0c1a0)
+			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(s0c2a0))
+		})
+		t.Run("different bit", func(t *testing.T) {
+			s.setSeenUnaggregatedAtt(s0c0a1)
+			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(s0c0a2))
+		})
+		t.Run("0 bits set is considered not seen", func(t *testing.T) {
+			a := &ethpb.Attestation{AggregationBits: bitfield.Bitlist{0b1000}}
+			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(a))
+		})
+		t.Run("multiple bits set is considered not seen", func(t *testing.T) {
+			a := &ethpb.Attestation{AggregationBits: bitfield.Bitlist{0b1111}}
+			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(a))
+		})
+	})
+	t.Run("electra", func(t *testing.T) {
+		s.initCaches()
+
+		s0c0a0 := &ethpb.SingleAttestation{
+			Data:          &ethpb.AttestationData{Slot: 0},
+			CommitteeId:   0,
+			AttesterIndex: 0,
+		}
+		s0c0a1 := &ethpb.SingleAttestation{
+			Data:          &ethpb.AttestationData{Slot: 0},
+			CommitteeId:   0,
+			AttesterIndex: 1,
+		}
+		s0c0a2 := &ethpb.SingleAttestation{
+			Data:          &ethpb.AttestationData{Slot: 0},
+			CommitteeId:   0,
+			AttesterIndex: 2,
+		}
+		s0c1a0 := &ethpb.SingleAttestation{
+			Data:          &ethpb.AttestationData{Slot: 0},
+			CommitteeId:   1,
+			AttesterIndex: 0,
+		}
+		s0c2a0 := &ethpb.SingleAttestation{
+			Data:          &ethpb.AttestationData{Slot: 0},
+			CommitteeId:   2,
+			AttesterIndex: 0,
+		}
+		s1c0a0 := &ethpb.SingleAttestation{
+			Data:          &ethpb.AttestationData{Slot: 1},
+			CommitteeId:   0,
+			AttesterIndex: 0,
+		}
+		s2c0a0 := &ethpb.SingleAttestation{
+			Data:          &ethpb.AttestationData{Slot: 2},
+			CommitteeId:   0,
+			AttesterIndex: 0,
+		}
+
+		t.Run("empty cache", func(t *testing.T) {
+			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(s0c0a0))
+		})
+		t.Run("ok", func(t *testing.T) {
+			s.setSeenUnaggregatedAtt(s0c0a0)
+			assert.Equal(t, true, s.hasSeenUnaggregatedAtt(s0c0a0))
+		})
+		t.Run("different slot", func(t *testing.T) {
+			s.setSeenUnaggregatedAtt(s1c0a0)
+			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(s2c0a0))
+		})
+		t.Run("different committee index", func(t *testing.T) {
+			s.setSeenUnaggregatedAtt(s0c1a0)
+			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(s0c2a0))
+		})
+		t.Run("different attester", func(t *testing.T) {
+			s.setSeenUnaggregatedAtt(s0c0a1)
+			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(s0c0a2))
+		})
+		t.Run("single attestation is considered not seen", func(t *testing.T) {
+			a := &ethpb.AttestationElectra{}
+			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(a))
+		})
+	})
 }

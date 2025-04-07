@@ -65,6 +65,10 @@ type SlashingReceiver interface {
 func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte, avs das.AvailabilityStore) error {
 	ctx, span := trace.StartSpan(ctx, "blockChain.ReceiveBlock")
 	defer span.End()
+	// Return early if the block is blacklisted
+	if features.BlacklistedBlock(blockRoot) {
+		return errBlacklistedRoot
+	}
 	// Return early if the block has been synced
 	if s.InForkchoice(blockRoot) {
 		log.WithField("blockRoot", fmt.Sprintf("%#x", blockRoot)).Debug("Ignoring already synced block")
@@ -121,7 +125,7 @@ func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySig
 		return err
 	}
 	// If slasher is configured, forward the attestations in the block via an event feed for processing.
-	if features.Get().EnableSlasher {
+	if s.slasherEnabled {
 		go s.sendBlockAttestationsToSlasher(blockCopy, preState)
 	}
 
@@ -548,7 +552,7 @@ func (s *Service) sendBlockAttestationsToSlasher(signed interfaces.ReadOnlySigne
 	// is done in the background to avoid adding more load to this critical code path.
 	ctx := context.TODO()
 	for _, att := range signed.Block().Body().Attestations() {
-		committees, err := helpers.AttestationCommittees(ctx, preState, att)
+		committees, err := helpers.AttestationCommitteesFromState(ctx, preState, att)
 		if err != nil {
 			log.WithError(err).Error("Could not get attestation committees")
 			return

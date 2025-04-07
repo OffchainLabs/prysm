@@ -5,10 +5,12 @@ import (
 	"net/url"
 	"strconv"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/api/apiutil"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
@@ -21,7 +23,7 @@ func (c *beaconApiValidatorClient) attestationData(
 	params.Add("slot", strconv.FormatUint(uint64(reqSlot), 10))
 	params.Add("committee_index", strconv.FormatUint(uint64(reqCommitteeIndex), 10))
 
-	query := buildURL("/eth/v1/validator/attestation_data", params)
+	query := apiutil.BuildURL("/eth/v1/validator/attestation_data", params)
 	produceAttestationDataResponseJson := structs.GetAttestationDataResponse{}
 
 	if err := c.jsonRestHandler.Get(ctx, query, &produceAttestationDataResponseJson); err != nil {
@@ -38,11 +40,7 @@ func (c *beaconApiValidatorClient) attestationData(
 		return nil, errors.Wrapf(err, "failed to parse attestation committee index: %s", attestationData.CommitteeIndex)
 	}
 
-	if !validRoot(attestationData.BeaconBlockRoot) {
-		return nil, errors.Errorf("invalid beacon block root: %s", attestationData.BeaconBlockRoot)
-	}
-
-	beaconBlockRoot, err := hexutil.Decode(attestationData.BeaconBlockRoot)
+	beaconBlockRoot, err := bytesutil.DecodeHexWithLength(attestationData.BeaconBlockRoot, fieldparams.RootLength)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to decode beacon block root: %s", attestationData.BeaconBlockRoot)
 	}
@@ -61,11 +59,7 @@ func (c *beaconApiValidatorClient) attestationData(
 		return nil, errors.Wrapf(err, "failed to parse attestation source epoch: %s", attestationData.Source.Epoch)
 	}
 
-	if !validRoot(attestationData.Source.Root) {
-		return nil, errors.Errorf("invalid attestation source root: %s", attestationData.Source.Root)
-	}
-
-	sourceRoot, err := hexutil.Decode(attestationData.Source.Root)
+	sourceRoot, err := bytesutil.DecodeHexWithLength(attestationData.Source.Root, fieldparams.RootLength)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to decode attestation source root: %s", attestationData.Source.Root)
 	}
@@ -79,11 +73,7 @@ func (c *beaconApiValidatorClient) attestationData(
 		return nil, errors.Wrapf(err, "failed to parse attestation target epoch: %s", attestationData.Target.Epoch)
 	}
 
-	if !validRoot(attestationData.Target.Root) {
-		return nil, errors.Errorf("invalid attestation target root: %s", attestationData.Target.Root)
-	}
-
-	targetRoot, err := hexutil.Decode(attestationData.Target.Root)
+	targetRoot, err := bytesutil.DecodeHexWithLength(attestationData.Target.Root, fieldparams.RootLength)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to decode attestation target root: %s", attestationData.Target.Root)
 	}

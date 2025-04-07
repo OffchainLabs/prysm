@@ -106,6 +106,10 @@ func cliActionRequestBlocks(cliCtx *cli.Context) error {
 		if err := params.SetActive(params.HoleskyConfig()); err != nil {
 			log.Fatal(err)
 		}
+	case params.HoodiName:
+		if err := params.SetActive(params.HoodiConfig()); err != nil {
+			log.Fatal(err)
+		}
 	case params.MainnetName:
 		// Do nothing
 	default:

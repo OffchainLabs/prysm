@@ -875,46 +875,26 @@ message ValidatorParticipation {
   uint64 previous_epoch_head_attesting_gwei = 10;
 }
 
-// ValidatorInfo gives information about the state of a validator at a certain
+// ValidatorIdentity gives information about the state of a validator at a certain
 // epoch.
-message ValidatorInfo {
-  // The validator's 48 byte BLS public key.
-  bytes public_key = 1;
-
+message ValidatorIdentity {
   // The validator's index in the beacon state.
-  uint64 index = 2 [ (ethereum.eth.ext.cast_type) =
-                         "github.com/prysmaticlabs/prysm/v5/consensus-types/"
-                         "primitives.ValidatorIndex" ];
+  uint64 index = 1 [ (ethereum.eth.ext.cast_type) =
+  "github.com/prysmaticlabs/prysm/v5/consensus-types/"
+      "primitives.ValidatorIndex" ];
 
-  // The epoch for which the information pertains.
-  uint64 epoch = 3 [
+  // The validator's 48 byte BLS public key.
+  bytes pubkey = 2 [
+    (ethereum.eth.ext.ssz_size) = "48"
+  ];
+
+  // Epoch when the validator was activated. This field may be zero if the
+  // validator was present in the Ethereum proof of stake genesis. This field is
+  // FAR_FUTURE_EPOCH if the validator has not been activated.
+  uint64 activation_epoch = 3 [
     (ethereum.eth.ext.cast_type) =
         "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Epoch"
   ];
-
-  // The validator's current status.
-  ValidatorStatus status = 4;
-
-  // The unix timestamp when the validator enters the next state.
-  // This could be in the past.  Some values depend on chain operation and so
-  // will vary from epoch to epoch. Specific times for each state are as
-  // follows:
-  // - state == DEPOSITED: time at which Ethereum 1 deposit will be stored
-  // on-chain by Ethereum (variable, can be 0).
-  // - state == PENDING: time at which validator will be activated (variable).
-  // - state == ACTIVE: no value (next transition depends on user and network
-  // actions).
-  // - state == EXITING: time at which validator will exit.
-  // - state == SLASHING: time at which validator will exit.
-  // - state == EXITED: time at which validator funds will be withdrawable.
-  uint64 transition_timestamp = 5;
-
-  // The validator's current balance in GWei.
-  uint64 balance = 6;
-
-  // The validator's current effective balance in GWei.
-  // Only valid for states ACTIVE, EXITING, SLASHING.
-  uint64 effective_balance = 7;
 }
 
 // DoppelGangerRequest represents the request sent by the validator in order to

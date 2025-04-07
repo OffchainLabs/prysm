@@ -20,7 +20,7 @@ func (s *Store) DepositContractAddress(ctx context.Context) ([]byte, error) {
 		addr = chainInfo.Get(depositContractAddressKey)
 		return nil
 	}); err != nil { // This view never returns an error, but we'll handle anyway for sanity.
-		panic(err)
+		panic(err) // lint:nopanic -- View never returns an error.
 	}
 	return addr, nil
 }

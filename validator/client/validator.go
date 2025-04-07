@@ -21,7 +21,7 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/api/client"
-	"github.com/prysmaticlabs/prysm/v5/api/client/beacon"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/health"
 	eventClient "github.com/prysmaticlabs/prysm/v5/api/client/event"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	"github.com/prysmaticlabs/prysm/v5/async/event"
@@ -65,7 +65,7 @@ var (
 )
 
 type validator struct {
-	duties                             *ethpb.DutiesResponse
+	duties                             *ethpb.ValidatorDutiesContainer
 	ticker                             slots.Ticker
 	genesisTime                        uint64
 	highestValidSlot                   primitives.Slot
@@ -102,7 +102,7 @@ type validator struct {
 	submittedAggregates                map[submittedAttKey]*submittedAtt
 	logValidatorPerformance            bool
 	emitAccountMetrics                 bool
-	useWeb                             bool
+	enableAPI                          bool
 	distributed                        bool
 	domainDataLock                     sync.RWMutex
 	attLogsLock                        sync.Mutex
@@ -140,33 +140,33 @@ func (v *validator) WaitForKeymanagerInitialization(ctx context.Context) error {
 		return errors.Wrap(err, "unable to retrieve valid genesis validators root while initializing key manager")
 	}
 
-	if v.useWeb && v.wallet == nil {
-		log.Info("Waiting for keymanager to initialize validator client with web UI")
-		// if wallet is not set, wait for it to be set through the UI
+	switch {
+	case v.wallet != nil:
+		if v.web3SignerConfig != nil {
+			v.web3SignerConfig.GenesisValidatorsRoot = genesisRoot
+		}
+		keyManager, err := v.wallet.InitializeKeymanager(ctx, accountsiface.InitKeymanagerConfig{ListenForChanges: true, Web3SignerConfig: v.web3SignerConfig})
+		if err != nil {
+			return errors.Wrap(err, "could not initialize key manager")
+		}
+		v.km = keyManager
+	case v.interopKeysConfig != nil:
+		keyManager, err := local.NewInteropKeymanager(ctx, v.interopKeysConfig.Offset, v.interopKeysConfig.NumValidatorKeys)
+		if err != nil {
+			return errors.Wrap(err, "could not generate interop keys for key manager")
+		}
+		v.km = keyManager
+	case v.enableAPI:
 		km, err := waitForWebWalletInitialization(ctx, v.walletInitializedFeed, v.walletInitializedChan)
 		if err != nil {
 			return err
 		}
 		v.km = km
-	} else {
-		if v.interopKeysConfig != nil {
-			keyManager, err := local.NewInteropKeymanager(ctx, v.interopKeysConfig.Offset, v.interopKeysConfig.NumValidatorKeys)
-			if err != nil {
-				return errors.Wrap(err, "could not generate interop keys for key manager")
-			}
-			v.km = keyManager
-		} else if v.wallet == nil {
-			return errors.New("wallet not set")
-		} else {
-			if v.web3SignerConfig != nil {
-				v.web3SignerConfig.GenesisValidatorsRoot = genesisRoot
-			}
-			keyManager, err := v.wallet.InitializeKeymanager(ctx, accountsiface.InitKeymanagerConfig{ListenForChanges: true, Web3SignerConfig: v.web3SignerConfig})
-			if err != nil {
-				return errors.Wrap(err, "could not initialize key manager")
-			}
-			v.km = keyManager
-		}
+	default:
+		return wallet.ErrNoWalletFound
+	}
+	if v.km == nil {
+		return errors.New("key manager not set")
 	}
 	recheckKeys(ctx, v.db, v.km)
 	return nil
@@ -181,6 +181,7 @@ func waitForWebWalletInitialization(
 	ctx, span := trace.StartSpan(ctx, "validator.waitForWebWalletInitialization")
 	defer span.End()
 
+	log.Info("Waiting for keymanager to initialize validator client with web UI or /v2/validator/wallet/create REST api")
 	sub := walletInitializedEvent.Subscribe(walletChan)
 	defer sub.Unsubscribe()
 	for {
@@ -595,14 +596,14 @@ func (v *validator) UpdateDuties(ctx context.Context, slot primitives.Slot) erro
 
 // subscribeToSubnets iterates through each validator duty, signs each slot, and asks beacon node
 // to eagerly subscribe to subnets so that the aggregator has attestations to aggregate.
-func (v *validator) subscribeToSubnets(ctx context.Context, duties *ethpb.DutiesResponse) error {
+func (v *validator) subscribeToSubnets(ctx context.Context, duties *ethpb.ValidatorDutiesContainer) error {
 	ctx, span := trace.StartSpan(ctx, "validator.subscribeToSubnets")
 	defer span.End()
 
 	subscribeSlots := make([]primitives.Slot, 0, len(duties.CurrentEpochDuties)+len(duties.NextEpochDuties))
 	subscribeCommitteeIndices := make([]primitives.CommitteeIndex, 0, len(duties.CurrentEpochDuties)+len(duties.NextEpochDuties))
 	subscribeIsAggregator := make([]bool, 0, len(duties.CurrentEpochDuties)+len(duties.NextEpochDuties))
-	activeDuties := make([]*ethpb.DutiesResponse_Duty, 0, len(duties.CurrentEpochDuties)+len(duties.NextEpochDuties))
+	activeDuties := make([]*ethpb.ValidatorDuty, 0, len(duties.CurrentEpochDuties)+len(duties.NextEpochDuties))
 	alreadySubscribed := make(map[[64]byte]bool)
 
 	if v.distributed {
@@ -624,7 +625,7 @@ func (v *validator) subscribeToSubnets(ctx context.Context, duties *ethpb.Duties
 				continue
 			}
 
-			aggregator, err := v.isAggregator(ctx, duty.Committee, attesterSlot, pk, validatorIndex)
+			aggregator, err := v.isAggregator(ctx, duty.CommitteeLength, attesterSlot, pk, validatorIndex)
 			if err != nil {
 				return errors.Wrap(err, "could not check if a validator is an aggregator")
 			}
@@ -650,7 +651,7 @@ func (v *validator) subscribeToSubnets(ctx context.Context, duties *ethpb.Duties
 				continue
 			}
 
-			aggregator, err := v.isAggregator(ctx, duty.Committee, attesterSlot, bytesutil.ToBytes48(duty.PublicKey), validatorIndex)
+			aggregator, err := v.isAggregator(ctx, duty.CommitteeLength, attesterSlot, bytesutil.ToBytes48(duty.PublicKey), validatorIndex)
 			if err != nil {
 				return errors.Wrap(err, "could not check if a validator is an aggregator")
 			}
@@ -713,7 +714,7 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 		if duty.AttesterSlot == slot {
 			roles = append(roles, iface.RoleAttester)
 
-			aggregator, err := v.isAggregator(ctx, duty.Committee, slot, bytesutil.ToBytes48(duty.PublicKey), duty.ValidatorIndex)
+			aggregator, err := v.isAggregator(ctx, duty.CommitteeLength, slot, bytesutil.ToBytes48(duty.PublicKey), duty.ValidatorIndex)
 			if err != nil {
 				aggregator = false
 				log.WithError(err).Errorf("Could not check if validator %#x is an aggregator", bytesutil.Trunc(duty.PublicKey))
@@ -792,7 +793,7 @@ func (v *validator) Keymanager() (keymanager.IKeymanager, error) {
 // it uses a modulo calculated by validator count in committee and samples randomness around it.
 func (v *validator) isAggregator(
 	ctx context.Context,
-	committeeIndex []primitives.ValidatorIndex,
+	committeeLength uint64,
 	slot primitives.Slot,
 	pubKey [fieldparams.BLSPubkeyLength]byte,
 	validatorIndex primitives.ValidatorIndex,
@@ -801,8 +802,8 @@ func (v *validator) isAggregator(
 	defer span.End()
 
 	modulo := uint64(1)
-	if len(committeeIndex)/int(params.BeaconConfig().TargetAggregatorsPerCommittee) > 1 {
-		modulo = uint64(len(committeeIndex)) / params.BeaconConfig().TargetAggregatorsPerCommittee
+	if committeeLength/params.BeaconConfig().TargetAggregatorsPerCommittee > 1 {
+		modulo = committeeLength / params.BeaconConfig().TargetAggregatorsPerCommittee
 	}
 
 	var (
@@ -955,7 +956,7 @@ func (v *validator) domainData(ctx context.Context, epoch primitives.Epoch, doma
 	return res, nil
 }
 
-func (v *validator) logDuties(slot primitives.Slot, currentEpochDuties []*ethpb.DutiesResponse_Duty, nextEpochDuties []*ethpb.DutiesResponse_Duty) {
+func (v *validator) logDuties(slot primitives.Slot, currentEpochDuties []*ethpb.ValidatorDuty, nextEpochDuties []*ethpb.ValidatorDuty) {
 	attesterKeys := make([][]string, params.BeaconConfig().SlotsPerEpoch)
 	for i := range attesterKeys {
 		attesterKeys[i] = make([]string, 0)
@@ -1168,7 +1169,7 @@ func (v *validator) EventStreamIsRunning() bool {
 	return v.validatorClient.EventStreamIsRunning()
 }
 
-func (v *validator) HealthTracker() *beacon.NodeHealthTracker {
+func (v *validator) HealthTracker() health.Tracker {
 	return v.nodeClient.HealthTracker()
 }
 
@@ -1391,7 +1392,7 @@ func (v *validator) buildSignedRegReqs(
 	return signedValRegRequests
 }
 
-func (v *validator) aggregatedSelectionProofs(ctx context.Context, duties *ethpb.DutiesResponse) error {
+func (v *validator) aggregatedSelectionProofs(ctx context.Context, duties *ethpb.ValidatorDutiesContainer) error {
 	ctx, span := trace.StartSpan(ctx, "validator.aggregatedSelectionProofs")
 	defer span.End()
 

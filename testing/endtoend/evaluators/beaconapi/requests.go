@@ -80,8 +80,8 @@ var getRequests = map[string]endpoint{
 		withParams(func(_ primitives.Epoch) []string {
 			return []string{"head"}
 		})),
-	"/beacon/blocks/{param1}/attestations": newMetadata[structs.GetBlockAttestationsResponse](
-		v1PathTemplate,
+	"/beacon/blocks/{param1}/attestations": newMetadata[structs.GetBlockAttestationsV2Response](
+		v2PathTemplate,
 		withParams(func(_ primitives.Epoch) []string {
 			return []string{"head"}
 		})),
@@ -99,7 +99,7 @@ var getRequests = map[string]endpoint{
 			return []string{"head"}
 		})),
 	"/beacon/pool/attestations": newMetadata[structs.ListAttestationsResponse](
-		v1PathTemplate,
+		v2PathTemplate,
 		withSanityCheckOnly()),
 	"/beacon/pool/attester_slashings": newMetadata[structs.GetAttesterSlashingsResponse](
 		v1PathTemplate,

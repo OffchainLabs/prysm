@@ -622,6 +622,25 @@ func (f *ForkChoice) Slot(root [32]byte) (primitives.Slot, error) {
 	return n.slot, nil
 }
 
+// DependentRoot returns the last root of the epoch prior to the requested ecoch in the canonical chain.
+func (f *ForkChoice) DependentRoot(epoch primitives.Epoch) ([32]byte, error) {
+	tr, err := f.TargetRootForEpoch(f.CachedHeadRoot(), epoch)
+	if err != nil {
+		return [32]byte{}, err
+	}
+	if tr == [32]byte{} {
+		return [32]byte{}, nil
+	}
+	n, ok := f.store.nodeByRoot[tr]
+	if !ok || n == nil {
+		return [32]byte{}, ErrNilNode
+	}
+	if slots.ToEpoch(n.slot) == epoch && n.parent != nil {
+		n = n.parent
+	}
+	return n.root, nil
+}
+
 // TargetRootForEpoch returns the root of the target block for a given epoch.
 // The epoch parameter is crucial to identify the correct target root. For example:
 // When inserting a block at slot 63 with block root 0xA and target root 0xB (pointing to the block at slot 32),

@@ -65,6 +65,7 @@ type FastGetter interface {
 	FinalizedPayloadBlockHash() [32]byte
 	HasNode([32]byte) bool
 	HighestReceivedBlockSlot() primitives.Slot
+	HighestReceivedBlockRoot() [32]byte
 	HighestReceivedBlockDelay() primitives.Slot
 	IsCanonical(root [32]byte) bool
 	IsOptimistic(root [32]byte) (bool, error)
@@ -78,6 +79,7 @@ type FastGetter interface {
 	ReceivedBlocksLastEpoch() (uint64, error)
 	ShouldOverrideFCU() bool
 	Slot([32]byte) (primitives.Slot, error)
+	DependentRoot(primitives.Epoch) ([32]byte, error)
 	TargetRootForEpoch([32]byte, primitives.Epoch) ([32]byte, error)
 	UnrealizedJustifiedPayloadBlockHash() [32]byte
 	Weight(root [32]byte) (uint64, error)

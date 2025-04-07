@@ -219,7 +219,7 @@ func (s *Server) getBlockV2Ssz(w http.ResponseWriter, blk interfaces.ReadOnlySig
 		return
 	}
 	w.Header().Set(api.VersionHeader, version.String(blk.Version()))
-	httputil.WriteSsz(w, result, "beacon_block.ssz")
+	httputil.WriteSsz(w, result)
 }
 
 func (*Server) getBlockResponseBodySsz(blk interfaces.ReadOnlySignedBeaconBlock) ([]byte, error) {
@@ -292,6 +292,7 @@ func (s *Server) getBlockResponseBodyJson(ctx context.Context, blk interfaces.Re
 	}, nil
 }
 
+// Deprecated: use GetBlockAttestationsV2 instead
 // GetBlockAttestations retrieves attestation included in requested block.
 func (s *Server) GetBlockAttestations(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "beacon.GetBlockAttestations")
@@ -394,6 +395,7 @@ func (s *Server) blockData(ctx context.Context, w http.ResponseWriter, r *http.R
 	return blk, isOptimistic, root
 }
 
+// Deprecated: use PublishBlindedBlockV2 instead
 // PublishBlindedBlock instructs the beacon node to use the components of the `SignedBlindedBeaconBlock` to construct
 // and publish a SignedBeaconBlock by swapping out the transactions_root for the corresponding full list of `transactions`.
 // The beacon node should broadcast a newly constructed SignedBeaconBlock to the beacon network, to be included in the
@@ -624,6 +626,7 @@ func decodeBlindedBellatrixJSON(body []byte) (*eth.GenericSignedBeaconBlock, err
 	)
 }
 
+// Deprecated: use PublishBlockV2 instead
 // PublishBlock instructs the beacon node to broadcast a newly signed beacon block to the beacon network,
 // to be included in the beacon chain. A success response (20x) indicates that the block
 // passed gossip validation and was successfully broadcast onto the network.
@@ -1534,6 +1537,7 @@ func (s *Server) GetGenesis(w http.ResponseWriter, r *http.Request) {
 	httputil.WriteJson(w, resp)
 }
 
+// Deprecated: no longer needed post Electra
 // GetDepositSnapshot retrieves the EIP-4881 Deposit Tree Snapshot. Either a JSON or,
 // if the Accept header was added, bytes serialized by SSZ will be returned.
 func (s *Server) GetDepositSnapshot(w http.ResponseWriter, r *http.Request) {
@@ -1564,7 +1568,7 @@ func (s *Server) GetDepositSnapshot(w http.ResponseWriter, r *http.Request) {
 			httputil.HandleError(w, "Could not marshal deposit snapshot into SSZ: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
-		httputil.WriteSsz(w, sszData, "deposit_snapshot.ssz")
+		httputil.WriteSsz(w, sszData)
 		return
 	}
 	httputil.WriteJson(
@@ -1607,4 +1611,130 @@ func (s *Server) broadcastSeenBlockSidecars(
 		}).Info("Broadcasted blob sidecar for already seen block")
 	}
 	return nil
+}
+
+// GetPendingDeposits returns pending deposits for state with given 'stateId'.
+// Should return 400 if the state retrieved is prior to Electra.
+// Supports both JSON and SSZ responses based on Accept header.
+func (s *Server) GetPendingDeposits(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "beacon.GetPendingDeposits")
+	defer span.End()
+
+	stateId := r.PathValue("state_id")
+	if stateId == "" {
+		httputil.HandleError(w, "state_id is required in URL params", http.StatusBadRequest)
+		return
+	}
+	st, err := s.Stater.State(ctx, []byte(stateId))
+	if err != nil {
+		shared.WriteStateFetchError(w, err)
+		return
+	}
+	if st.Version() < version.Electra {
+		httputil.HandleError(w, "state_id is prior to electra", http.StatusBadRequest)
+		return
+	}
+	pd, err := st.PendingDeposits()
+	if err != nil {
+		httputil.HandleError(w, "Could not get pending deposits: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set(api.VersionHeader, version.String(st.Version()))
+	if httputil.RespondWithSsz(r) {
+		sszData, err := serializeItems(pd)
+		if err != nil {
+			httputil.HandleError(w, "Failed to serialize pending deposits: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		httputil.WriteSsz(w, sszData)
+	} else {
+		isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
+		if err != nil {
+			httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
+		if err != nil {
+			httputil.HandleError(w, "Could not calculate root of latest block header: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		isFinalized := s.FinalizationFetcher.IsFinalized(ctx, blockRoot)
+		resp := structs.GetPendingDepositsResponse{
+			Version:             version.String(st.Version()),
+			ExecutionOptimistic: isOptimistic,
+			Finalized:           isFinalized,
+			Data:                structs.PendingDepositsFromConsensus(pd),
+		}
+		httputil.WriteJson(w, resp)
+	}
+}
+
+// GetPendingPartialWithdrawals returns pending partial withdrawals for state with given 'stateId'.
+// Should return 400 if the state retrieved is prior to Electra.
+// Supports both JSON and SSZ responses based on Accept header.
+func (s *Server) GetPendingPartialWithdrawals(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "beacon.GetPendingPartialWithdrawals")
+	defer span.End()
+
+	stateId := r.PathValue("state_id")
+	if stateId == "" {
+		httputil.HandleError(w, "state_id is required in URL params", http.StatusBadRequest)
+		return
+	}
+	st, err := s.Stater.State(ctx, []byte(stateId))
+	if err != nil {
+		shared.WriteStateFetchError(w, err)
+		return
+	}
+	if st.Version() < version.Electra {
+		httputil.HandleError(w, "state_id is prior to electra", http.StatusBadRequest)
+		return
+	}
+	ppw, err := st.PendingPartialWithdrawals()
+	if err != nil {
+		httputil.HandleError(w, "Could not get pending partial withdrawals: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set(api.VersionHeader, version.String(st.Version()))
+	if httputil.RespondWithSsz(r) {
+		sszData, err := serializeItems(ppw)
+		if err != nil {
+			httputil.HandleError(w, "Failed to serialize pending partial withdrawals: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		httputil.WriteSsz(w, sszData)
+	} else {
+		isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
+		if err != nil {
+			httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
+		if err != nil {
+			httputil.HandleError(w, "Could not calculate root of latest block header: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		isFinalized := s.FinalizationFetcher.IsFinalized(ctx, blockRoot)
+		resp := structs.GetPendingPartialWithdrawalsResponse{
+			Version:             version.String(st.Version()),
+			ExecutionOptimistic: isOptimistic,
+			Finalized:           isFinalized,
+			Data:                structs.PendingPartialWithdrawalsFromConsensus(ppw),
+		}
+		httputil.WriteJson(w, resp)
+	}
+}
+
+// SerializeItems serializes a slice of items, each of which implements the MarshalSSZ method,
+// into a single byte array.
+func serializeItems[T interface{ MarshalSSZ() ([]byte, error) }](items []T) ([]byte, error) {
+	var result []byte
+	for _, item := range items {
+		b, err := item.MarshalSSZ()
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, b...)
+	}
+	return result, nil
 }

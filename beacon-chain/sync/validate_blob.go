@@ -92,11 +92,11 @@ func (s *Service) validateBlob(ctx context.Context, pid peer.ID, msg *pubsub.Mes
 		return pubsub.ValidationIgnore, err
 	}
 
-	if err := vf.ValidProposerSignature(ctx); err != nil {
+	if err := vf.SidecarParentValid(s.hasBadBlock); err != nil {
 		return pubsub.ValidationReject, err
 	}
 
-	if err := vf.SidecarParentValid(s.hasBadBlock); err != nil {
+	if err := vf.ValidProposerSignature(ctx); err != nil {
 		return pubsub.ValidationReject, err
 	}
 

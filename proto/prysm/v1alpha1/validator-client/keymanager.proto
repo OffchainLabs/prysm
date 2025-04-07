@@ -77,7 +77,7 @@ message SignRequest {
         aggregate_attestation_and_proof_electra = 120;
 
     // Fulu objects.
-    ethereum.eth.v1alpha1.BeaconBlockFulu block_fulu = 121;
+    ethereum.eth.v1alpha1.BeaconBlockElectra block_fulu = 121;
     ethereum.eth.v1alpha1.BlindedBeaconBlockFulu blinded_block_fulu = 122;
   }
 

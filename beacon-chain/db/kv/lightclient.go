@@ -215,7 +215,7 @@ func (s *Store) LightClientUpdates(ctx context.Context, startPeriod, endPeriod u
 	if err != nil {
 		return nil, err
 	}
-	return updates, err
+	return updates, nil
 }
 
 func (s *Store) LightClientUpdate(ctx context.Context, period uint64) (interfaces.LightClientUpdate, error) {

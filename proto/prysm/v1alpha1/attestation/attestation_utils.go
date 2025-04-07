@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"runtime/debug"
 	"slices"
 	"sort"
 
@@ -99,6 +100,10 @@ func AttestingIndices(att ethpb.Att, committees ...[]primitives.ValidatorIndex) 
 	committeesLen := 0
 	for _, c := range committees {
 		committeesLen += len(c)
+	}
+	if aggBits.Len() == 0 {
+		fmt.Printf("committee_bits: %v, aggregation_bits: %v, slot: %d", att.CommitteeBitsVal(), att.GetAggregationBits(), att.GetData().Slot)
+		debug.PrintStack()
 	}
 	if aggBits.Len() != uint64(committeesLen) {
 		return nil, fmt.Errorf("bitfield length %d is not equal to committee length %d", aggBits.Len(), committeesLen)

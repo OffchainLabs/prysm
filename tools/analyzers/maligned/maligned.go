@@ -147,10 +147,7 @@ func (s *gcSizes) Alignof(T types.Type) int64 {
 	if a < 1 {
 		return 1
 	}
-	if a > s.MaxAlign {
-		return s.MaxAlign
-	}
-	return a
+	return min(a, s.MaxAlign)
 }
 
 var basicSizes = [...]byte{

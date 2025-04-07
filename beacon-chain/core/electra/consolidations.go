@@ -211,7 +211,7 @@ func ProcessConsolidationRequests(ctx context.Context, st state.BeaconState, req
 		if npc, err := st.NumPendingConsolidations(); err != nil {
 			return fmt.Errorf("failed to fetch number of pending consolidations: %w", err) // This should never happen.
 		} else if npc >= pcLimit {
-			return nil
+			continue
 		}
 
 		activeBal, err := helpers.TotalActiveBalance(st)
@@ -220,7 +220,7 @@ func ProcessConsolidationRequests(ctx context.Context, st state.BeaconState, req
 		}
 		churnLimit := helpers.ConsolidationChurnLimit(primitives.Gwei(activeBal))
 		if churnLimit <= primitives.Gwei(params.BeaconConfig().MinActivationBalance) {
-			return nil
+			continue
 		}
 
 		srcIdx, ok := st.ValidatorIndexByPubkey(sourcePubkey)

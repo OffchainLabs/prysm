@@ -114,6 +114,13 @@ func (ro *ROForkChoice) HighestReceivedBlockSlot() primitives.Slot {
 	return ro.getter.HighestReceivedBlockSlot()
 }
 
+// HighestReceivedBlockRoot delegates to the underlying forkchoice call, under a lock.
+func (ro *ROForkChoice) HighestReceivedBlockRoot() [32]byte {
+	ro.l.RLock()
+	defer ro.l.RUnlock()
+	return ro.getter.HighestReceivedBlockRoot()
+}
+
 // HighestReceivedBlockDelay delegates to the underlying forkchoice call, under a lock.
 func (ro *ROForkChoice) HighestReceivedBlockDelay() primitives.Slot {
 	ro.l.RLock()
@@ -161,6 +168,13 @@ func (ro *ROForkChoice) LastRoot(e primitives.Epoch) [32]byte {
 	ro.l.RLock()
 	defer ro.l.RUnlock()
 	return ro.getter.LastRoot(e)
+}
+
+// DependentRoot delegates to the underlying forkchoice call, under a lock.
+func (ro *ROForkChoice) DependentRoot(epoch primitives.Epoch) ([32]byte, error) {
+	ro.l.RLock()
+	defer ro.l.RUnlock()
+	return ro.getter.DependentRoot(epoch)
 }
 
 // TargetRootForEpoch delegates to the underlying forkchoice call, under a lock.

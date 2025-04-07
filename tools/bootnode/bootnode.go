@@ -7,6 +7,7 @@
  *
  * Usage: Run bootnode --help for flag options.
  */
+// lint:nopanic -- This tool is OK to panic.
 package main
 
 import (

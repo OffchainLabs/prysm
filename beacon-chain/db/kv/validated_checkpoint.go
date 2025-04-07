@@ -1,8 +1,10 @@
 package kv
 
 import (
+	"bytes"
 	"context"
 
+	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	bolt "go.etcd.io/bbolt"
@@ -19,7 +21,17 @@ func (s *Store) LastValidatedCheckpoint(ctx context.Context) (*ethpb.Checkpoint,
 		if enc == nil {
 			var finErr error
 			checkpoint, finErr = s.FinalizedCheckpoint(ctx)
-			return finErr
+			if finErr != nil {
+				return finErr
+			}
+			if bytes.Equal(checkpoint.Root, params.BeaconConfig().ZeroHash[:]) {
+				bkt = tx.Bucket(blocksBucket)
+				r := bkt.Get(genesisBlockRootKey)
+				if r != nil {
+					checkpoint.Root = r
+				}
+			}
+			return nil
 		}
 		checkpoint = &ethpb.Checkpoint{}
 		return decode(ctx, enc, checkpoint)

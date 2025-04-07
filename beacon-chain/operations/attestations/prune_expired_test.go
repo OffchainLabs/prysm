@@ -54,9 +54,7 @@ func TestPruneExpired_Ticker(t *testing.T) {
 
 	done := make(chan struct{}, 1)
 	async.RunEvery(ctx, 500*time.Millisecond, func() {
-		atts, err := s.cfg.Pool.UnaggregatedAttestations()
-		require.NoError(t, err)
-		for _, attestation := range atts {
+		for _, attestation := range s.cfg.Pool.UnaggregatedAttestations() {
 			if attestation.GetData().Slot == 0 {
 				return
 			}

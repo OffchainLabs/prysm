@@ -26,7 +26,7 @@ type Pool interface {
 	// For unaggregated attestations.
 	SaveUnaggregatedAttestation(att ethpb.Att) error
 	SaveUnaggregatedAttestations(atts []ethpb.Att) error
-	UnaggregatedAttestations() ([]ethpb.Att, error)
+	UnaggregatedAttestations() []ethpb.Att
 	UnaggregatedAttestationsBySlotIndex(ctx context.Context, slot primitives.Slot, committeeIndex primitives.CommitteeIndex) []*ethpb.Attestation
 	UnaggregatedAttestationsBySlotIndexElectra(ctx context.Context, slot primitives.Slot, committeeIndex primitives.CommitteeIndex) []*ethpb.AttestationElectra
 	DeleteUnaggregatedAttestation(att ethpb.Att) error
