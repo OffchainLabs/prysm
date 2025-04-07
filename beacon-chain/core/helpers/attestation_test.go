@@ -89,6 +89,24 @@ func TestAttestation_ComputeSubnetForAttestation(t *testing.T) {
 		sub := helpers.ComputeSubnetForAttestation(valCount, att)
 		assert.Equal(t, uint64(6), sub, "Did not get correct subnet for attestation")
 	})
+	
+	t.Run("Phase 0 with backward compatibility", func(t *testing.T) {
+		// The mock attestation from the original phase 0
+		mockPhase0Att := &ethpb.AttestationElectra{
+			AggregationBits: []byte{'A'},
+			CommitteeBits:   primitives.NewAttestationCommitteeBits(),
+			Data: &ethpb.AttestationData{
+				Slot:            34,
+				BeaconBlockRoot: []byte{'C'},
+			},
+			Signature: []byte{'B'},
+		}
+		mockPhase0Att.CommitteeBits.SetBitAt(4, true) // Committee index 4
+		
+		sub := helpers.ComputeSubnetForAttestation(valCount, mockPhase0Att)
+		assert.Equal(t, uint64(6), sub, "Did not get correct subnet for phase 0 attestation")
+	})
+	
 	t.Run("Electra", func(t *testing.T) {
 		cb := primitives.NewAttestationCommitteeBits()
 		cb.SetBitAt(4, true)
