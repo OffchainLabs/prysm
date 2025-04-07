@@ -85,6 +85,19 @@ func IsAggregator(committeeCount uint64, slotSig []byte) (bool, error) {
 //
 //	return uint64((committees_since_epoch_start + committee_index) % ATTESTATION_SUBNET_COUNT)
 func ComputeSubnetForAttestation(activeValCount uint64, att ethpb.Att) uint64 {
+	// Maintain backward compatibility for phase 0
+	// The att.Version() will return version.Phase0 (which is 0) for phase 0 attestations
+	if att.Version() == 0 {
+		return computeSubnetForAttestationPhase0(activeValCount, att)
+	}
+	return ComputeSubnetFromCommitteeAndSlot(activeValCount, att.GetCommitteeIndex(), att.GetData().Slot)
+}
+
+// computeSubnetForAttestationPhase0 is the original implementation of ComputeSubnetForAttestation used in phase 0.
+// This maintains backward compatibility while the newer implementation is introduced.
+// Both functions currently have the same behavior, but this separation allows for independent evolution
+// of the implementation for phase 0 and newer attestation types.
+func computeSubnetForAttestationPhase0(activeValCount uint64, att ethpb.Att) uint64 {
 	return ComputeSubnetFromCommitteeAndSlot(activeValCount, att.GetCommitteeIndex(), att.GetData().Slot)
 }
 
