@@ -17,6 +17,7 @@ import (
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
 type TestLightClient struct {
@@ -33,12 +34,16 @@ func NewTestLightClient(t *testing.T) *TestLightClient {
 	return &TestLightClient{T: t}
 }
 
-func (l *TestLightClient) SetupTestCapella(blinded bool, increaseAttestedSlotBy int, supermajority bool) *TestLightClient {
+func (l *TestLightClient) SetupTestCapella(blinded bool, increaseAttestedSlotBy int, increaseFinalizedSlotBy int, supermajority bool) *TestLightClient {
 	ctx := context.Background()
-
-	slot := primitives.Slot(params.BeaconConfig().CapellaForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
+	finalizedSlot := primitives.Slot(params.BeaconConfig().CapellaForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch))
+	slot := finalizedSlot.Add(1)
 	if increaseAttestedSlotBy > 0 {
 		slot = slot.Add(uint64(increaseAttestedSlotBy))
+	}
+	if increaseFinalizedSlotBy > 0 {
+		finalizedSlot = finalizedSlot.Add(uint64(increaseFinalizedSlotBy))
+		slot = slot.Add(uint64(increaseFinalizedSlotBy))
 	}
 
 	attestedState, err := NewBeaconStateCapella()
@@ -48,14 +53,14 @@ func (l *TestLightClient) SetupTestCapella(blinded bool, increaseAttestedSlotBy 
 
 	finalizedBlock, err := blocks.NewSignedBeaconBlock(NewBeaconBlockCapella())
 	require.NoError(l.T, err)
-	finalizedBlock.SetSlot(primitives.Slot(params.BeaconConfig().CapellaForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)))
+	finalizedBlock.SetSlot(finalizedSlot)
 	finalizedHeader, err := finalizedBlock.Header()
 	require.NoError(l.T, err)
 	finalizedRoot, err := finalizedHeader.Header.HashTreeRoot()
 	require.NoError(l.T, err)
 
 	require.NoError(l.T, attestedState.SetFinalizedCheckpoint(&ethpb.Checkpoint{
-		Epoch: params.BeaconConfig().CapellaForkEpoch,
+		Epoch: slots.ToEpoch(finalizedSlot),
 		Root:  finalizedRoot[:],
 	}))
 
@@ -95,7 +100,7 @@ func (l *TestLightClient) SetupTestCapella(blinded bool, increaseAttestedSlotBy 
 
 		var trueBitNum uint64
 		if supermajority {
-			trueBitNum = (params.BeaconConfig().SyncCommitteeSize / 3 * 2) + 1
+			trueBitNum = uint64((float64(params.BeaconConfig().SyncCommitteeSize) / 3 * 2) + 1)
 		} else {
 			trueBitNum = params.BeaconConfig().MinSyncCommitteeParticipants
 		}
@@ -125,7 +130,7 @@ func (l *TestLightClient) SetupTestCapella(blinded bool, increaseAttestedSlotBy 
 
 		var trueBitNum uint64
 		if supermajority {
-			trueBitNum = (params.BeaconConfig().SyncCommitteeSize / 3 * 2) + 1
+			trueBitNum = uint64((float64(params.BeaconConfig().SyncCommitteeSize) / 3 * 2) + 1)
 		} else {
 			trueBitNum = params.BeaconConfig().MinSyncCommitteeParticipants
 		}
@@ -272,12 +277,17 @@ func (l *TestLightClient) SetupTestCapellaFinalizedBlockAltair(blinded bool) *Te
 	return l
 }
 
-func (l *TestLightClient) SetupTestAltair(increaseAttestedSlotBy int, supermajority bool) *TestLightClient {
+func (l *TestLightClient) SetupTestAltair(increaseAttestedSlotBy int, increaseFinalizedSlotBy int, supermajority bool) *TestLightClient {
 	ctx := context.Background()
 
-	slot := primitives.Slot(uint64(params.BeaconConfig().AltairForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch)).Add(1)
+	finalizedSlot := primitives.Slot(params.BeaconConfig().AltairForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch))
+	slot := finalizedSlot.Add(1)
 	if increaseAttestedSlotBy > 0 {
 		slot = slot.Add(uint64(increaseAttestedSlotBy))
+	}
+	if increaseFinalizedSlotBy > 0 {
+		finalizedSlot = finalizedSlot.Add(uint64(increaseFinalizedSlotBy))
+		slot = slot.Add(uint64(increaseFinalizedSlotBy))
 	}
 
 	attestedState, err := NewBeaconStateAltair()
@@ -287,13 +297,13 @@ func (l *TestLightClient) SetupTestAltair(increaseAttestedSlotBy int, supermajor
 
 	finalizedState, err := NewBeaconStateAltair()
 	require.NoError(l.T, err)
-	err = finalizedState.SetSlot(1)
+	err = finalizedState.SetSlot(finalizedSlot)
 	require.NoError(l.T, err)
 	finalizedStateRoot, err := finalizedState.HashTreeRoot(ctx)
 	require.NoError(l.T, err)
 	SignedFinalizedBlock, err := blocks.NewSignedBeaconBlock(NewBeaconBlockAltair())
 	require.NoError(l.T, err)
-	SignedFinalizedBlock.SetSlot(1)
+	SignedFinalizedBlock.SetSlot(finalizedSlot)
 	SignedFinalizedBlock.SetStateRoot(finalizedStateRoot[:])
 	finalizedHeader, err := SignedFinalizedBlock.Header()
 	require.NoError(l.T, err)
@@ -301,7 +311,7 @@ func (l *TestLightClient) SetupTestAltair(increaseAttestedSlotBy int, supermajor
 	require.NoError(l.T, err)
 
 	finalizedCheckpoint := &ethpb.Checkpoint{
-		Epoch: params.BeaconConfig().AltairForkEpoch - 10,
+		Epoch: slots.ToEpoch(finalizedSlot),
 		Root:  finalizedRoot[:],
 	}
 	require.NoError(l.T, attestedState.SetFinalizedCheckpoint(finalizedCheckpoint))
@@ -340,7 +350,7 @@ func (l *TestLightClient) SetupTestAltair(increaseAttestedSlotBy int, supermajor
 
 	var trueBitNum uint64
 	if supermajority {
-		trueBitNum = (params.BeaconConfig().SyncCommitteeSize / 3 * 2) + 1
+		trueBitNum = uint64((float64(params.BeaconConfig().SyncCommitteeSize) / 3 * 2) + 1)
 	} else {
 		trueBitNum = params.BeaconConfig().MinSyncCommitteeParticipants
 	}
@@ -374,12 +384,17 @@ func (l *TestLightClient) SetupTestAltair(increaseAttestedSlotBy int, supermajor
 	return l
 }
 
-func (l *TestLightClient) SetupTestBellatrix(increaseAttestedSlotBy int, supermajority bool) *TestLightClient {
+func (l *TestLightClient) SetupTestBellatrix(increaseAttestedSlotBy int, increaseFinalizedSlotBy int, supermajority bool) *TestLightClient {
 	ctx := context.Background()
 
-	slot := primitives.Slot(params.BeaconConfig().BellatrixForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
+	finalizedSlot := primitives.Slot(params.BeaconConfig().BellatrixForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch))
+	slot := finalizedSlot.Add(1)
 	if increaseAttestedSlotBy > 0 {
 		slot = slot.Add(uint64(increaseAttestedSlotBy))
+	}
+	if increaseFinalizedSlotBy > 0 {
+		finalizedSlot = finalizedSlot.Add(uint64(increaseFinalizedSlotBy))
+		slot = slot.Add(uint64(increaseFinalizedSlotBy))
 	}
 
 	attestedState, err := NewBeaconStateBellatrix()
@@ -389,14 +404,14 @@ func (l *TestLightClient) SetupTestBellatrix(increaseAttestedSlotBy int, superma
 
 	finalizedBlock, err := blocks.NewSignedBeaconBlock(NewBeaconBlockBellatrix())
 	require.NoError(l.T, err)
-	finalizedBlock.SetSlot(1)
+	finalizedBlock.SetSlot(finalizedSlot)
 	finalizedHeader, err := finalizedBlock.Header()
 	require.NoError(l.T, err)
 	finalizedRoot, err := finalizedHeader.Header.HashTreeRoot()
 	require.NoError(l.T, err)
 
 	require.NoError(l.T, attestedState.SetFinalizedCheckpoint(&ethpb.Checkpoint{
-		Epoch: params.BeaconConfig().BellatrixForkEpoch - 10,
+		Epoch: slots.ToEpoch(finalizedSlot),
 		Root:  finalizedRoot[:],
 	}))
 
@@ -434,7 +449,7 @@ func (l *TestLightClient) SetupTestBellatrix(increaseAttestedSlotBy int, superma
 
 	var trueBitNum uint64
 	if supermajority {
-		trueBitNum = (params.BeaconConfig().SyncCommitteeSize / 3 * 2) + 1
+		trueBitNum = uint64((float64(params.BeaconConfig().SyncCommitteeSize) * 2.0 / 3.0) + 1)
 	} else {
 		trueBitNum = params.BeaconConfig().MinSyncCommitteeParticipants
 	}
@@ -468,12 +483,17 @@ func (l *TestLightClient) SetupTestBellatrix(increaseAttestedSlotBy int, superma
 	return l
 }
 
-func (l *TestLightClient) SetupTestDeneb(blinded bool, increaseAttestedSlotBy int, supermajority bool) *TestLightClient {
+func (l *TestLightClient) SetupTestDeneb(blinded bool, increaseAttestedSlotBy int, increaseFinalizedSlotBy int, supermajority bool) *TestLightClient {
 	ctx := context.Background()
 
-	slot := primitives.Slot(params.BeaconConfig().DenebForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
+	finalizedSlot := primitives.Slot(params.BeaconConfig().DenebForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch))
+	slot := finalizedSlot.Add(1)
 	if increaseAttestedSlotBy > 0 {
 		slot = slot.Add(uint64(increaseAttestedSlotBy))
+	}
+	if increaseFinalizedSlotBy > 0 {
+		finalizedSlot = finalizedSlot.Add(uint64(increaseFinalizedSlotBy))
+		slot = slot.Add(uint64(increaseFinalizedSlotBy))
 	}
 
 	attestedState, err := NewBeaconStateDeneb()
@@ -483,14 +503,14 @@ func (l *TestLightClient) SetupTestDeneb(blinded bool, increaseAttestedSlotBy in
 
 	finalizedBlock, err := blocks.NewSignedBeaconBlock(NewBeaconBlockDeneb())
 	require.NoError(l.T, err)
-	finalizedBlock.SetSlot(primitives.Slot(params.BeaconConfig().DenebForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)))
+	finalizedBlock.SetSlot(finalizedSlot)
 	finalizedHeader, err := finalizedBlock.Header()
 	require.NoError(l.T, err)
 	finalizedRoot, err := finalizedHeader.Header.HashTreeRoot()
 	require.NoError(l.T, err)
 
 	require.NoError(l.T, attestedState.SetFinalizedCheckpoint(&ethpb.Checkpoint{
-		Epoch: params.BeaconConfig().DenebForkEpoch,
+		Epoch: slots.ToEpoch(finalizedSlot),
 		Root:  finalizedRoot[:],
 	}))
 
@@ -530,7 +550,7 @@ func (l *TestLightClient) SetupTestDeneb(blinded bool, increaseAttestedSlotBy in
 
 		var trueBitNum uint64
 		if supermajority {
-			trueBitNum = (params.BeaconConfig().SyncCommitteeSize / 3 * 2) + 1
+			trueBitNum = uint64((float64(params.BeaconConfig().SyncCommitteeSize) * 2.0 / 3.0) + 1)
 		} else {
 			trueBitNum = params.BeaconConfig().MinSyncCommitteeParticipants
 		}
@@ -560,7 +580,7 @@ func (l *TestLightClient) SetupTestDeneb(blinded bool, increaseAttestedSlotBy in
 
 		var trueBitNum uint64
 		if supermajority {
-			trueBitNum = (params.BeaconConfig().SyncCommitteeSize / 3 * 2) + 1
+			trueBitNum = uint64((float64(params.BeaconConfig().SyncCommitteeSize) * 2.0 / 3.0) + 1)
 		} else {
 			trueBitNum = params.BeaconConfig().MinSyncCommitteeParticipants
 		}
@@ -595,14 +615,18 @@ func (l *TestLightClient) SetupTestDeneb(blinded bool, increaseAttestedSlotBy in
 	return l
 }
 
-func (l *TestLightClient) SetupTestElectra(blinded bool, increaseAttestedSlotBy int, supermajority bool) *TestLightClient {
+func (l *TestLightClient) SetupTestElectra(blinded bool, increaseAttestedSlotBy int, increaseFinalizedSlotBy int, supermajority bool) *TestLightClient {
 	ctx := context.Background()
 
-	slot := primitives.Slot(params.BeaconConfig().ElectraForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
+	finalizedSlot := primitives.Slot(params.BeaconConfig().ElectraForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch))
+	slot := finalizedSlot.Add(1)
 	if increaseAttestedSlotBy > 0 {
 		slot = slot.Add(uint64(increaseAttestedSlotBy))
 	}
-	finalizedBlockSlot := primitives.Slot(params.BeaconConfig().ElectraForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch))
+	if increaseFinalizedSlotBy > 0 {
+		finalizedSlot = finalizedSlot.Add(uint64(increaseFinalizedSlotBy))
+		slot = slot.Add(uint64(increaseFinalizedSlotBy))
+	}
 
 	attestedState, err := NewBeaconStateElectra()
 	require.NoError(l.T, err)
@@ -611,14 +635,14 @@ func (l *TestLightClient) SetupTestElectra(blinded bool, increaseAttestedSlotBy 
 
 	finalizedBlock, err := blocks.NewSignedBeaconBlock(NewBeaconBlockDeneb())
 	require.NoError(l.T, err)
-	finalizedBlock.SetSlot(finalizedBlockSlot)
+	finalizedBlock.SetSlot(finalizedSlot)
 	finalizedHeader, err := finalizedBlock.Header()
 	require.NoError(l.T, err)
 	finalizedRoot, err := finalizedHeader.Header.HashTreeRoot()
 	require.NoError(l.T, err)
 
 	require.NoError(l.T, attestedState.SetFinalizedCheckpoint(&ethpb.Checkpoint{
-		Epoch: params.BeaconConfig().ElectraForkEpoch,
+		Epoch: slots.ToEpoch(finalizedSlot),
 		Root:  finalizedRoot[:],
 	}))
 
@@ -658,7 +682,7 @@ func (l *TestLightClient) SetupTestElectra(blinded bool, increaseAttestedSlotBy 
 
 		var trueBitNum uint64
 		if supermajority {
-			trueBitNum = (params.BeaconConfig().SyncCommitteeSize / 3 * 2) + 1
+			trueBitNum = uint64((float64(params.BeaconConfig().SyncCommitteeSize) * 2.0 / 3.0) + 1)
 		} else {
 			trueBitNum = params.BeaconConfig().MinSyncCommitteeParticipants
 		}
@@ -688,7 +712,7 @@ func (l *TestLightClient) SetupTestElectra(blinded bool, increaseAttestedSlotBy 
 
 		var trueBitNum uint64
 		if supermajority {
-			trueBitNum = (params.BeaconConfig().SyncCommitteeSize / 3 * 2) + 1
+			trueBitNum = uint64((float64(params.BeaconConfig().SyncCommitteeSize) * 2.0 / 3.0) + 1)
 		} else {
 			trueBitNum = params.BeaconConfig().MinSyncCommitteeParticipants
 		}
@@ -723,12 +747,17 @@ func (l *TestLightClient) SetupTestElectra(blinded bool, increaseAttestedSlotBy 
 	return l
 }
 
-func (l *TestLightClient) SetupTestFulu(blinded bool, increaseAttestedSlotBy int, supermajority bool) *TestLightClient {
+func (l *TestLightClient) SetupTestFulu(blinded bool, increaseAttestedSlotBy int, increaseFinalizedSlotBy int, supermajority bool) *TestLightClient {
 	ctx := context.Background()
 
-	slot := primitives.Slot(params.BeaconConfig().FuluForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
+	finalizedSlot := primitives.Slot(params.BeaconConfig().FuluForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch))
+	slot := finalizedSlot.Add(1)
 	if increaseAttestedSlotBy > 0 {
 		slot = slot.Add(uint64(increaseAttestedSlotBy))
+	}
+	if increaseFinalizedSlotBy > 0 {
+		finalizedSlot = finalizedSlot.Add(uint64(increaseFinalizedSlotBy))
+		slot = slot.Add(uint64(increaseFinalizedSlotBy))
 	}
 
 	attestedState, err := NewBeaconStateFulu()
@@ -738,14 +767,14 @@ func (l *TestLightClient) SetupTestFulu(blinded bool, increaseAttestedSlotBy int
 
 	finalizedBlock, err := blocks.NewSignedBeaconBlock(NewBeaconBlockFulu())
 	require.NoError(l.T, err)
-	finalizedBlock.SetSlot(1)
+	finalizedBlock.SetSlot(finalizedSlot)
 	finalizedHeader, err := finalizedBlock.Header()
 	require.NoError(l.T, err)
 	finalizedRoot, err := finalizedHeader.Header.HashTreeRoot()
 	require.NoError(l.T, err)
 
 	require.NoError(l.T, attestedState.SetFinalizedCheckpoint(&ethpb.Checkpoint{
-		Epoch: params.BeaconConfig().FuluForkEpoch - 10,
+		Epoch: slots.ToEpoch(finalizedSlot),
 		Root:  finalizedRoot[:],
 	}))
 
@@ -785,7 +814,7 @@ func (l *TestLightClient) SetupTestFulu(blinded bool, increaseAttestedSlotBy int
 
 		var trueBitNum uint64
 		if supermajority {
-			trueBitNum = (params.BeaconConfig().SyncCommitteeSize / 3 * 2) + 1
+			trueBitNum = uint64((float64(params.BeaconConfig().SyncCommitteeSize) * 2.0 / 3.0) + 1)
 		} else {
 			trueBitNum = params.BeaconConfig().MinSyncCommitteeParticipants
 		}
@@ -815,7 +844,7 @@ func (l *TestLightClient) SetupTestFulu(blinded bool, increaseAttestedSlotBy int
 
 		var trueBitNum uint64
 		if supermajority {
-			trueBitNum = (params.BeaconConfig().SyncCommitteeSize / 3 * 2) + 1
+			trueBitNum = uint64((float64(params.BeaconConfig().SyncCommitteeSize) * 2.0 / 3.0) + 1)
 		} else {
 			trueBitNum = params.BeaconConfig().MinSyncCommitteeParticipants
 		}
