@@ -24,9 +24,11 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+type testNewBlockFunc func(primitives.Slot, []byte) (interfaces.ReadOnlySignedBeaconBlock, error)
+
 var blockTests = []struct {
 	name     string
-	newBlock func(primitives.Slot, []byte) (interfaces.ReadOnlySignedBeaconBlock, error)
+	newBlock testNewBlockFunc
 }{
 	{
 		name: "phase0",
@@ -738,6 +740,120 @@ func TestStore_Blocks_FiltersCorrectly(t *testing.T) {
 				require.NoError(t, err)
 				assert.Equal(t, tt2.expectedNumBlocks, len(retrievedBlocks), "Unexpected number of blocks")
 			}
+		})
+	}
+}
+
+func testBlockChain(t *testing.T, nb testNewBlockFunc, slots []primitives.Slot, parent []byte) []interfaces.ReadOnlySignedBeaconBlock {
+	if len(parent) < 32 {
+		var zero [32]byte
+		copy(parent, zero[:])
+	}
+	chain := make([]interfaces.ReadOnlySignedBeaconBlock, 0, len(slots))
+	for _, slot := range slots {
+		pr := make([]byte, 32)
+		copy(pr, parent)
+		b, err := nb(slot, pr)
+		require.NoError(t, err)
+		chain = append(chain, b)
+		npr, err := b.Block().HashTreeRoot()
+		parent = npr[:]
+		require.NoError(t, err)
+	}
+	return chain
+}
+
+func testSlotSlice(start, end primitives.Slot) []primitives.Slot {
+	end += 1 // add 1 to make the range inclusive
+	slots := make([]primitives.Slot, 0, end-start)
+	for ; start < end; start++ {
+		slots = append(slots, start)
+	}
+	return slots
+}
+
+func TestCleanupMissingBlockIndices(t *testing.T) {
+	for _, tt := range blockTests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			db := setupDB(t)
+			chain := testBlockChain(t, tt.newBlock, testSlotSlice(1, 10), nil)
+			require.NoError(t, db.SaveBlocks(ctx, chain))
+			corrupt, err := blocks.NewROBlock(chain[5])
+			require.NoError(t, err)
+			cr := corrupt.Root()
+			require.NoError(t, db.db.Update(func(tx *bolt.Tx) error {
+				return tx.Bucket(blocksBucket).Delete(cr[:])
+			}))
+			// Need to also delete it from the cache!!
+			db.blockCache.Del(string(cr[:]))
+			res, roots, err := db.Blocks(ctx, filters.NewFilter().SetEndSlot(10).SetStartSlot(1))
+			require.NoError(t, err)
+			require.Equal(t, 9, len(roots))
+			require.Equal(t, len(res), len(roots))
+			require.NoError(t, db.db.View(func(tx *bolt.Tx) error {
+				encSlot := bytesutil.SlotToBytesBigEndian(corrupt.Block().Slot())
+				// make sure slot->root index is cleaned up
+				require.Equal(t, 0, len(tx.Bucket(blockSlotIndicesBucket).Get(encSlot)))
+				require.Equal(t, 0, len(tx.Bucket(blockParentRootIndicesBucket).Get(cr[:])))
+				return nil
+			}))
+		})
+	}
+}
+
+func TestCleanupMissingForkedBlockIndices(t *testing.T) {
+	for _, tt := range blockTests[0:1] {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			db := setupDB(t)
+
+			chain := testBlockChain(t, tt.newBlock, testSlotSlice(1, 10), nil)
+			require.NoError(t, db.SaveBlocks(ctx, chain))
+
+			// forkChain should skip the slot at skipBlock, and have the same parent
+			skipBlockParent := chain[4].Block().ParentRoot()
+			// It should start at the same slot as missingBlock, which comes one slot after the skip slot,
+			// so there are 2 blocks in that slot
+			missingBlock, err := blocks.NewROBlock(chain[5])
+			require.NoError(t, err)
+			// missingBlock will be deleted in the main chain, but there will be a block at that slot in the fork chain
+			forkChain := testBlockChain(t, tt.newBlock, testSlotSlice(missingBlock.Block().Slot(), 10), skipBlockParent[:])
+			require.NoError(t, db.SaveBlocks(ctx, forkChain))
+			forkChainStart, err := blocks.NewROBlock(forkChain[0])
+			require.NoError(t, err)
+
+			encMissingSlot := bytesutil.SlotToBytesBigEndian(missingBlock.Block().Slot())
+			require.NoError(t, db.db.View(func(tx *bolt.Tx) error {
+				require.Equal(t, 32, len(tx.Bucket(blockParentRootIndicesBucket).Get(missingBlock.RootSlice())))
+				// There are 2 block roots packed in this slot, so it is 64 bytes long
+				require.Equal(t, 64, len(tx.Bucket(blockSlotIndicesBucket).Get(encMissingSlot)))
+				// skipBlockParent should also have 2 entries and be 64 bytes, since the forkChain is based on the same parent as the skip block
+				childRoots := tx.Bucket(blockParentRootIndicesBucket).Get(skipBlockParent[:])
+				require.Equal(t, 64, len(childRoots))
+				return nil
+			}))
+
+			require.NoError(t, db.db.Update(func(tx *bolt.Tx) error {
+				return tx.Bucket(blocksBucket).Delete(missingBlock.RootSlice())
+			}))
+			// Need to also delete it from the cache!!
+			db.blockCache.Del(string(missingBlock.RootSlice()))
+
+			// Blocks should give us blocks from all chains.
+			res, roots, err := db.Blocks(ctx, filters.NewFilter().SetEndSlot(10).SetStartSlot(1))
+			require.NoError(t, err)
+			require.Equal(t, (len(chain)-1)+len(forkChain), len(roots))
+			require.Equal(t, len(res), len(roots))
+			require.NoError(t, db.db.View(func(tx *bolt.Tx) error {
+				// There should now be 32 bytes in this index - one root from the forked chain
+				slotIdxVal := tx.Bucket(blockSlotIndicesBucket).Get(encMissingSlot)
+				require.Equal(t, forkChainStart.Root(), [32]byte(slotIdxVal))
+				require.Equal(t, 0, len(tx.Bucket(blockParentRootIndicesBucket).Get(missingBlock.RootSlice())))
+				forkChildRoot := tx.Bucket(blockParentRootIndicesBucket).Get(skipBlockParent[:])
+				require.Equal(t, 64, len(forkChildRoot))
+				return nil
+			}))
 		})
 	}
 }

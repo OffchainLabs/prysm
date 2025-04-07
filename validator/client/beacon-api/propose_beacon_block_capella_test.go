@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/prysmaticlabs/prysm/v5/api/apiutil"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
@@ -31,8 +32,8 @@ func TestProposeBeaconBlock_Capella(t *testing.T) {
 		Signature: hexutil.Encode(capellaBlock.Capella.Signature),
 		Message: &structs.BeaconBlockCapella{
 			ParentRoot:    hexutil.Encode(capellaBlock.Capella.Block.ParentRoot),
-			ProposerIndex: uint64ToString(capellaBlock.Capella.Block.ProposerIndex),
-			Slot:          uint64ToString(capellaBlock.Capella.Block.Slot),
+			ProposerIndex: apiutil.Uint64ToString(capellaBlock.Capella.Block.ProposerIndex),
+			Slot:          apiutil.Uint64ToString(capellaBlock.Capella.Block.Slot),
 			StateRoot:     hexutil.Encode(capellaBlock.Capella.Block.StateRoot),
 			Body: &structs.BeaconBlockBodyCapella{
 				Attestations:      jsonifyAttestations(capellaBlock.Capella.Block.Body.Attestations),
@@ -50,17 +51,17 @@ func TestProposeBeaconBlock_Capella(t *testing.T) {
 				ExecutionPayload: &structs.ExecutionPayloadCapella{
 					BaseFeePerGas: bytesutil.LittleEndianBytesToBigInt(capellaBlock.Capella.Block.Body.ExecutionPayload.BaseFeePerGas).String(),
 					BlockHash:     hexutil.Encode(capellaBlock.Capella.Block.Body.ExecutionPayload.BlockHash),
-					BlockNumber:   uint64ToString(capellaBlock.Capella.Block.Body.ExecutionPayload.BlockNumber),
+					BlockNumber:   apiutil.Uint64ToString(capellaBlock.Capella.Block.Body.ExecutionPayload.BlockNumber),
 					ExtraData:     hexutil.Encode(capellaBlock.Capella.Block.Body.ExecutionPayload.ExtraData),
 					FeeRecipient:  hexutil.Encode(capellaBlock.Capella.Block.Body.ExecutionPayload.FeeRecipient),
-					GasLimit:      uint64ToString(capellaBlock.Capella.Block.Body.ExecutionPayload.GasLimit),
-					GasUsed:       uint64ToString(capellaBlock.Capella.Block.Body.ExecutionPayload.GasUsed),
+					GasLimit:      apiutil.Uint64ToString(capellaBlock.Capella.Block.Body.ExecutionPayload.GasLimit),
+					GasUsed:       apiutil.Uint64ToString(capellaBlock.Capella.Block.Body.ExecutionPayload.GasUsed),
 					LogsBloom:     hexutil.Encode(capellaBlock.Capella.Block.Body.ExecutionPayload.LogsBloom),
 					ParentHash:    hexutil.Encode(capellaBlock.Capella.Block.Body.ExecutionPayload.ParentHash),
 					PrevRandao:    hexutil.Encode(capellaBlock.Capella.Block.Body.ExecutionPayload.PrevRandao),
 					ReceiptsRoot:  hexutil.Encode(capellaBlock.Capella.Block.Body.ExecutionPayload.ReceiptsRoot),
 					StateRoot:     hexutil.Encode(capellaBlock.Capella.Block.Body.ExecutionPayload.StateRoot),
-					Timestamp:     uint64ToString(capellaBlock.Capella.Block.Body.ExecutionPayload.Timestamp),
+					Timestamp:     apiutil.Uint64ToString(capellaBlock.Capella.Block.Body.ExecutionPayload.Timestamp),
 					Transactions:  jsonifyTransactions(capellaBlock.Capella.Block.Body.ExecutionPayload.Transactions),
 					Withdrawals:   jsonifyWithdrawals(capellaBlock.Capella.Block.Body.ExecutionPayload.Withdrawals),
 				},

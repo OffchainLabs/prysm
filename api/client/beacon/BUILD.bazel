@@ -5,7 +5,6 @@ go_library(
     srcs = [
         "client.go",
         "doc.go",
-        "health.go",
         "log.go",
         "template.go",
     ],
@@ -13,7 +12,6 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//api/client:go_default_library",
-        "//api/client/beacon/iface:go_default_library",
         "//api/server:go_default_library",
         "//api/server/structs:go_default_library",
         "//consensus-types/primitives:go_default_library",
@@ -28,15 +26,10 @@ go_library(
 
 go_test(
     name = "go_default_test",
-    srcs = [
-        "client_test.go",
-        "health_test.go",
-    ],
+    srcs = ["client_test.go"],
     embed = [":go_default_library"],
     deps = [
         "//api/client:go_default_library",
-        "//api/client/beacon/testing:go_default_library",
         "//testing/require:go_default_library",
-        "@org_uber_go_mock//gomock:go_default_library",
     ],
 )

@@ -1,16 +1,15 @@
-package testing
+package health
 
 import (
 	"context"
 	"reflect"
 	"sync"
 
-	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/iface"
 	"go.uber.org/mock/gomock"
 )
 
 var (
-	_ = iface.HealthNode(&MockHealthClient{})
+	_ = Node(&MockHealthClient{})
 )
 
 // MockHealthClient is a mock of HealthClient interface.

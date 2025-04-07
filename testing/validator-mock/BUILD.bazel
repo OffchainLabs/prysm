@@ -13,7 +13,7 @@ go_library(
     importpath = "github.com/prysmaticlabs/prysm/v5/testing/validator-mock",
     visibility = ["//visibility:public"],
     deps = [
-        "//api/client/beacon:go_default_library",
+        "//api/client/beacon/health:go_default_library",
         "//api/client/event:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//consensus-types/validator:go_default_library",

@@ -7,7 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api/client/beacon"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/health"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
@@ -22,7 +22,7 @@ type beaconApiNodeClient struct {
 	fallbackClient  iface.NodeClient
 	jsonRestHandler JsonRestHandler
 	genesisProvider GenesisProvider
-	healthTracker   *beacon.NodeHealthTracker
+	healthTracker   health.Tracker
 }
 
 func (c *beaconApiNodeClient) SyncStatus(ctx context.Context, _ *empty.Empty) (*ethpb.SyncStatus, error) {
@@ -107,7 +107,7 @@ func (c *beaconApiNodeClient) IsHealthy(ctx context.Context) bool {
 	return c.jsonRestHandler.Get(ctx, "/eth/v1/node/health", nil) == nil
 }
 
-func (c *beaconApiNodeClient) HealthTracker() *beacon.NodeHealthTracker {
+func (c *beaconApiNodeClient) HealthTracker() health.Tracker {
 	return c.healthTracker
 }
 
@@ -117,6 +117,6 @@ func NewNodeClientWithFallback(jsonRestHandler JsonRestHandler, fallbackClient i
 		fallbackClient:  fallbackClient,
 		genesisProvider: &beaconApiGenesisProvider{jsonRestHandler: jsonRestHandler},
 	}
-	b.healthTracker = beacon.NewNodeHealthTracker(b)
+	b.healthTracker = health.NewTracker(b)
 	return b
 }

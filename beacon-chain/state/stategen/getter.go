@@ -121,6 +121,11 @@ func (s *State) StateByRootInitialSync(ctx context.Context, blockRoot [32]byte) 
 		return cachedInfo.state, nil
 	}
 
+	if s.beaconDB.HasState(ctx, blockRoot) {
+		s, err := s.beaconDB.State(ctx, blockRoot)
+		return s, errors.Wrap(err, "failed to retrieve init-sync state from db")
+	}
+
 	startState, err := s.latestAncestor(ctx, blockRoot)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get ancestor state")

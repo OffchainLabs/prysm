@@ -44,16 +44,6 @@ func (v *validator) SubmitAggregateAndProof(ctx context.Context, slot primitives
 		return
 	}
 
-	// Avoid sending beacon node duplicated aggregation requests.
-	k := validatorSubnetSubscriptionKey(slot, duty.CommitteeIndex)
-	v.aggregatedSlotCommitteeIDCacheLock.Lock()
-	if v.aggregatedSlotCommitteeIDCache.Contains(k) {
-		v.aggregatedSlotCommitteeIDCacheLock.Unlock()
-		return
-	}
-	v.aggregatedSlotCommitteeIDCache.Add(k, true)
-	v.aggregatedSlotCommitteeIDCacheLock.Unlock()
-
 	var slotSig []byte
 	if v.distributed {
 		slotSig, err = v.attSelection(attSelectionKey{slot: slot, index: duty.ValidatorIndex})
@@ -65,6 +55,16 @@ func (v *validator) SubmitAggregateAndProof(ctx context.Context, slot primitives
 			return
 		}
 	} else {
+		// Avoid sending beacon node duplicated aggregation requests.
+		k := validatorSubnetSubscriptionKey(slot, duty.CommitteeIndex)
+		v.aggregatedSlotCommitteeIDCacheLock.Lock()
+		if v.aggregatedSlotCommitteeIDCache.Contains(k) {
+			v.aggregatedSlotCommitteeIDCacheLock.Unlock()
+			return
+		}
+		v.aggregatedSlotCommitteeIDCache.Add(k, true)
+		v.aggregatedSlotCommitteeIDCacheLock.Unlock()
+
 		slotSig, err = v.signSlotWithSelectionProof(ctx, pubKey, slot)
 		if err != nil {
 			log.WithError(err).Error("Could not sign slot")

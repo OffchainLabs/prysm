@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/api/apiutil"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	validator2 "github.com/prysmaticlabs/prysm/v5/consensus-types/validator"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
@@ -45,7 +46,7 @@ func (c prysmChainClient) ValidatorCount(ctx context.Context, stateID string, st
 		queryParams.Add("status", status.String())
 	}
 
-	queryUrl := buildURL(fmt.Sprintf("/eth/v1/beacon/states/%s/validator_count", stateID), queryParams)
+	queryUrl := apiutil.BuildURL(fmt.Sprintf("/eth/v1/beacon/states/%s/validator_count", stateID), queryParams)
 
 	var validatorCountResponse structs.GetValidatorCountResponse
 	if err = c.jsonRestHandler.Get(ctx, queryUrl, &validatorCountResponse); err != nil {
