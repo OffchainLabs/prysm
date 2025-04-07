@@ -54,7 +54,7 @@ const blockBuilderTimeout = 1 * time.Second
 const gasLimitAdjustmentFactor = 1024
 
 // Sets the execution data for the block. Execution data can come from local EL client or remote builder depends on validator registration and circuit breaker conditions.
-func setExecutionData(ctx context.Context, blk interfaces.SignedBeaconBlock, local *blocks.GetPayloadResponse, bid builder.Bid, builderBoostFactor primitives.Gwei) (primitives.Wei, *enginev1.BlobsBundle, error) {
+func setExecutionData(ctx context.Context, blk interfaces.SignedBeaconBlock, local *blocks.GetPayloadResponse, bid builder.Bid, builderBoostFactor primitives.Gwei) (primitives.Wei, blocks.BlobsBundle, error) {
 	_, span := trace.StartSpan(ctx, "ProposerServer.setExecutionData")
 	defer span.End()
 
@@ -376,7 +376,7 @@ func matchingWithdrawalsRoot(local, builder interfaces.ExecutionData) (bool, err
 func setLocalExecution(blk interfaces.SignedBeaconBlock, local *blocks.GetPayloadResponse) error {
 	var kzgCommitments [][]byte
 	if local.BlobsBundle != nil {
-		kzgCommitments = local.BlobsBundle.KzgCommitments
+		kzgCommitments = local.BlobsBundle.GetKzgCommitments()
 	}
 	if local.ExecutionRequests != nil {
 		if err := blk.SetExecutionRequests(local.ExecutionRequests); err != nil {

@@ -4,14 +4,21 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	pb "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
+	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 )
+
+type BlobsBundle interface {
+	GetKzgCommitments() [][]byte
+	GetProofs() [][]byte
+	GetBlobs() [][]byte
+}
 
 // GetPayloadResponse represents the result of unmarshaling an execution engine
 // GetPayloadResponseV(1|2|3|4) value.
 type GetPayloadResponse struct {
 	ExecutionData   interfaces.ExecutionData
-	BlobsBundle     *pb.BlobsBundle
+	BlobsBundle     BlobsBundle
 	OverrideBuilder bool
 	// todo: should we convert this to Gwei up front?
 	Bid               primitives.Wei
@@ -21,6 +28,10 @@ type GetPayloadResponse struct {
 // bundleGetter is an interface satisfied by get payload responses that have a blobs bundle.
 type bundleGetter interface {
 	GetBlobsBundle() *pb.BlobsBundle
+}
+
+type bundleGetterV2 interface {
+	GetBlobsBundle() *pb.BlobsBundleV2
 }
 
 // bidValueGetter is an interface satisfied by get payload responses that have a bid value.
@@ -38,9 +49,13 @@ type executionRequestsGetter interface {
 
 func NewGetPayloadResponse(msg proto.Message) (*GetPayloadResponse, error) {
 	r := &GetPayloadResponse{}
-	bundleGetter, hasBundle := msg.(bundleGetter)
-	if hasBundle {
-		r.BlobsBundle = bundleGetter.GetBlobsBundle()
+	switch bundle := msg.(type) {
+	case bundleGetterV2:
+		r.BlobsBundle = bundle.GetBlobsBundle()
+		log.Debug("Using blobs bundle v2")
+	case bundleGetter:
+		r.BlobsBundle = bundle.GetBlobsBundle()
+		log.Debug("Using blobs bundle v1")
 	}
 	bidValueGetter, hasBid := msg.(bidValueGetter)
 	executionRequestsGetter, hasExecutionRequests := msg.(executionRequestsGetter)

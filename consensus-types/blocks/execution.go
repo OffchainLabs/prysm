@@ -12,6 +12,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/v5/encoding/ssz"
 	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
+	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -42,6 +43,7 @@ func NewWrappedExecutionData(v proto.Message) (interfaces.ExecutionData, error) 
 		// note: no payload changes in electra so using deneb
 		return WrappedExecutionPayloadDeneb(pbStruct.Payload)
 	case *enginev1.ExecutionBundleFulu:
+		log.Debug("execution bundle fulu", pbStruct)
 		return WrappedExecutionPayloadDeneb(pbStruct.Payload)
 	default:
 		// return nil, errors.Wrapf(ErrUnsupportedVersion, "type %T", pbStruct)

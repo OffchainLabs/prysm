@@ -309,6 +309,7 @@ func (s *Service) GetPayload(ctx context.Context, payloadId [8]byte, slot primit
 	}
 	res, err := blocks.NewGetPayloadResponse(result)
 	if err != nil {
+		log.Debug("err unmarshaling get payload response", "err", err)
 		return nil, err
 	}
 	return res, nil
