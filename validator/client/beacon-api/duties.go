@@ -10,6 +10,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/api/apiutil"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
@@ -260,7 +261,7 @@ func (c *beaconApiValidatorClient) validatorsForDuties(ctx context.Context, pubk
 func (c beaconApiDutiesProvider) Committees(ctx context.Context, epoch primitives.Epoch) ([]*structs.Committee, error) {
 	committeeParams := url.Values{}
 	committeeParams.Add("epoch", strconv.FormatUint(uint64(epoch), 10))
-	committeesRequest := buildURL("/eth/v1/beacon/states/head/committees", committeeParams)
+	committeesRequest := apiutil.BuildURL("/eth/v1/beacon/states/head/committees", committeeParams)
 
 	var stateCommittees structs.GetCommitteesResponse
 	if err := c.jsonRestHandler.Get(ctx, committeesRequest, &stateCommittees); err != nil {

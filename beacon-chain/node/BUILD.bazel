@@ -22,6 +22,7 @@ go_library(
         "//beacon-chain/builder:go_default_library",
         "//beacon-chain/cache:go_default_library",
         "//beacon-chain/cache/depositsnapshot:go_default_library",
+        "//beacon-chain/core/light-client:go_default_library",
         "//beacon-chain/db:go_default_library",
         "//beacon-chain/db/filesystem:go_default_library",
         "//beacon-chain/db/kv:go_default_library",

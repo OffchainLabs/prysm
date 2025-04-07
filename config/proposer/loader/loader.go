@@ -329,6 +329,17 @@ func reviewGasLimit(gasLimit validator.Uint64) validator.Uint64 {
 	if gasLimit == 0 {
 		return validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit)
 	}
-	// TODO(10810): add in warning for ranges
+
+	// Warning for ranges that might be problematic
+	defaultGasLimit := params.BeaconConfig().DefaultBuilderGasLimit
+	// If gas limit is very low (below 10% of default), warn about potential issues
+	if gasLimit <= validator.Uint64(defaultGasLimit/10) {
+		log.Warnf("Gas limit %d is very low compared to default %d, which may cause transactions to fail", gasLimit, defaultGasLimit)
+	}
+	// If gas limit is very high (above 150% of default), warn about potential block propagation issues
+	if gasLimit > validator.Uint64(defaultGasLimit*3/2) {
+		log.Warnf("Gas limit %d is very high compared to default %d", gasLimit, defaultGasLimit)
+	}
+
 	return gasLimit
 }

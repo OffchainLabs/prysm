@@ -126,3 +126,10 @@ func (s *Service) hashForGenesisBlock(ctx context.Context, root [32]byte) ([]byt
 	}
 	return bytesutil.SafeCopyBytes(header.BlockHash()), nil
 }
+
+// DependentRoot wraps the corresponding method in forkchoice
+func (s *Service) DependentRoot(epoch primitives.Epoch) ([32]byte, error) {
+	s.cfg.ForkChoiceStore.RLock()
+	defer s.cfg.ForkChoiceStore.RUnlock()
+	return s.cfg.ForkChoiceStore.DependentRoot(epoch)
+}

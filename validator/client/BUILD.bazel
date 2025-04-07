@@ -24,7 +24,7 @@ go_library(
     ],
     deps = [
         "//api/client:go_default_library",
-        "//api/client/beacon:go_default_library",
+        "//api/client/beacon/health:go_default_library",
         "//api/client/event:go_default_library",
         "//api/grpc:go_default_library",
         "//api/server/structs:go_default_library",
@@ -121,8 +121,7 @@ go_test(
     ],
     embed = [":go_default_library"],
     deps = [
-        "//api/client/beacon:go_default_library",
-        "//api/client/beacon/testing:go_default_library",
+        "//api/client/beacon/health:go_default_library",
         "//async/event:go_default_library",
         "//beacon-chain/core/signing:go_default_library",
         "//cache/lru:go_default_library",

@@ -12,7 +12,7 @@ go_library(
     visibility = ["//validator:__subpackages__"],
     deps = [
         "//api/client:go_default_library",
-        "//api/client/beacon:go_default_library",
+        "//api/client/beacon/health:go_default_library",
         "//api/client/event:go_default_library",
         "//api/server/structs:go_default_library",
         "//beacon-chain/rpc/eth/helpers:go_default_library",
