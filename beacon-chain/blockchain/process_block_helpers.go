@@ -277,11 +277,15 @@ func (s *Service) processLightClientFinalityUpdate(
 		newMaxActiveParticipants := update.SyncAggregate().SyncCommitteeBits.Len()
 		newNumActiveParticipants := update.SyncAggregate().SyncCommitteeBits.Count()
 		newHasSupermajority := newNumActiveParticipants*3 >= newMaxActiveParticipants*2
+		fmt.Println("newHasSupermajority", newHasSupermajority, newNumActiveParticipants, newMaxActiveParticipants)
+		fmt.Println("newUpdateSlot", newUpdateSlot)
 
 		lastUpdateSlot := lastUpdate.FinalizedHeader().Beacon().Slot
 		lastMaxActiveParticipants := lastUpdate.SyncAggregate().SyncCommitteeBits.Len()
 		lastNumActiveParticipants := lastUpdate.SyncAggregate().SyncCommitteeBits.Count()
 		lastHasSupermajority := lastNumActiveParticipants*3 >= lastMaxActiveParticipants*2
+		fmt.Println("lastHasSupermajority", lastHasSupermajority, lastNumActiveParticipants, lastMaxActiveParticipants)
+		fmt.Println("lastUpdateSlot", lastUpdateSlot)
 
 		if newUpdateSlot < lastUpdateSlot {
 			log.Debug("Skip saving light client finality update: Older than local update")

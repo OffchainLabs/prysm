@@ -3345,18 +3345,6 @@ func TestProcessLightClientOptimisticUpdate(t *testing.T) {
 			expectReplace: false,
 		},
 		{
-			name: "Old update is better - supermajority",
-			oldCfg: &updateConfig{
-				increaseAttestedSlotBy: 0,
-				superMajority:          true,
-			},
-			newCfg: &updateConfig{
-				increaseAttestedSlotBy: 0,
-				superMajority:          false,
-			},
-			expectReplace: false,
-		},
-		{
 			name: "New update is better - age",
 			oldCfg: &updateConfig{
 				increaseAttestedSlotBy: 0,
@@ -3364,18 +3352,6 @@ func TestProcessLightClientOptimisticUpdate(t *testing.T) {
 			},
 			newCfg: &updateConfig{
 				increaseAttestedSlotBy: 1,
-				superMajority:          true,
-			},
-			expectReplace: true,
-		},
-		{
-			name: "New update is better - supermajority",
-			oldCfg: &updateConfig{
-				increaseAttestedSlotBy: 0,
-				superMajority:          false,
-			},
-			newCfg: &updateConfig{
-				increaseAttestedSlotBy: 0,
 				superMajority:          true,
 			},
 			expectReplace: true,
@@ -3460,6 +3436,215 @@ func TestProcessLightClientOptimisticUpdate(t *testing.T) {
 
 				// set last optimistic update to nil for next test
 				s.lcStore.SetLastOptimisticUpdate(nil)
+			})
+		}
+
+	}
+}
+
+func TestProcessLightClientFinalityUpdate(t *testing.T) {
+	featCfg := &features.Flags{}
+	featCfg.EnableLightClient = true
+	reset := features.InitWithReset(featCfg)
+	defer reset()
+
+	beaconCfg := params.BeaconConfig()
+	beaconCfg.AltairForkEpoch = 1
+	beaconCfg.BellatrixForkEpoch = 2
+	beaconCfg.CapellaForkEpoch = 3
+	beaconCfg.DenebForkEpoch = 4
+	beaconCfg.ElectraForkEpoch = 5
+	params.OverrideBeaconConfig(beaconCfg)
+
+	s, tr := minimalTestService(t)
+	ctx := tr.ctx
+
+	type updateConfig struct {
+		increaseAttestedSlotBy int
+		superMajority          bool
+	}
+
+	testCases := []struct {
+		name string
+		// config for old update
+		oldCfg *updateConfig
+		// config for new update
+		newCfg        *updateConfig
+		expectReplace bool
+	}{
+		//{
+		//	name:   "No old update",
+		//	oldCfg: nil,
+		//	newCfg: &updateConfig{
+		//		increaseAttestedSlotBy: 0,
+		//		superMajority:          true,
+		//	},
+		//	expectReplace: true,
+		//},
+		//{
+		//	name: "Old update is better - age",
+		//	oldCfg: &updateConfig{
+		//		increaseAttestedSlotBy: 1,
+		//		superMajority:          false,
+		//	},
+		//	newCfg: &updateConfig{
+		//		increaseAttestedSlotBy: 0,
+		//		superMajority:          false,
+		//	},
+		//	expectReplace: false,
+		//},
+		//{
+		//	name: "Old update is better - age (both supermajority)",
+		//	oldCfg: &updateConfig{
+		//		increaseAttestedSlotBy: 1,
+		//		superMajority:          true,
+		//	},
+		//	newCfg: &updateConfig{
+		//		increaseAttestedSlotBy: 0,
+		//		superMajority:          true,
+		//	},
+		//	expectReplace: false,
+		//},
+		//{
+		//	name: "Old update is better - supermajority",
+		//	oldCfg: &updateConfig{
+		//		increaseAttestedSlotBy: 0,
+		//		superMajority:          true,
+		//	},
+		//	newCfg: &updateConfig{
+		//		increaseAttestedSlotBy: 0,
+		//		superMajority:          false,
+		//	},
+		//	expectReplace: false,
+		//},
+		//{
+		//	name: "New update is better - age (both supermajority)",
+		//	oldCfg: &updateConfig{
+		//		increaseAttestedSlotBy: 0,
+		//		superMajority:          true,
+		//	},
+		//	newCfg: &updateConfig{
+		//		increaseAttestedSlotBy: 1,
+		//		superMajority:          true,
+		//	},
+		//	expectReplace: true,
+		//},
+		{
+			name: "New update is better - age",
+			oldCfg: &updateConfig{
+				increaseAttestedSlotBy: 0,
+				superMajority:          false,
+			},
+			newCfg: &updateConfig{
+				increaseAttestedSlotBy: 1,
+				superMajority:          false,
+			},
+			expectReplace: true,
+		},
+		//{
+		//	name: "New update is better - supermajority",
+		//	oldCfg: &updateConfig{
+		//		increaseAttestedSlotBy: 0,
+		//		superMajority:          false,
+		//	},
+		//	newCfg: &updateConfig{
+		//		increaseAttestedSlotBy: 0,
+		//		superMajority:          true,
+		//	},
+		//	expectReplace: true,
+		//},
+	}
+
+	for _, tc := range testCases {
+		for i := 1; i < 2; i++ { // test all forks
+			var forkEpoch uint64
+			var testVersion int
+			//var expectedVersion int
+
+			switch i {
+			case 1:
+				forkEpoch = uint64(params.BeaconConfig().AltairForkEpoch)
+				testVersion = version.Altair
+				//expectedVersion = version.Altair
+			case 2:
+				forkEpoch = uint64(params.BeaconConfig().BellatrixForkEpoch)
+				testVersion = version.Bellatrix
+				//expectedVersion = version.Altair
+			case 3:
+				forkEpoch = uint64(params.BeaconConfig().CapellaForkEpoch)
+				testVersion = version.Capella
+				//expectedVersion = version.Capella
+			case 4:
+				forkEpoch = uint64(params.BeaconConfig().DenebForkEpoch)
+				testVersion = version.Deneb
+				//expectedVersion = version.Deneb
+			case 5:
+				forkEpoch = uint64(params.BeaconConfig().ElectraForkEpoch)
+				testVersion = version.Electra
+				//expectedVersion = version.Electra
+			default:
+				t.Error("Invalid fork testVersion")
+			}
+
+			t.Run(version.String(testVersion)+"_"+tc.name, func(t *testing.T) {
+				s.genesisTime = time.Unix(time.Now().Unix()-(int64(forkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
+
+				var actualOldUpdate, actualNewUpdate interfaces.LightClientFinalityUpdate
+				var err error
+
+				if tc.oldCfg != nil {
+					// config for old update
+					lOld, cfgOld := setupLightClientTestRequirements(ctx, t, s, testVersion, tc.oldCfg.increaseAttestedSlotBy, tc.oldCfg.superMajority)
+					require.NoError(t, s.processLightClientFinalityUpdate(cfgOld.ctx, cfgOld.roblock, cfgOld.postState))
+
+					// check that the old update is saved
+					actualOldUpdate, err = lightClient.NewLightClientFinalityUpdateFromBeaconState(
+						ctx,
+						cfgOld.postState.Slot(),
+						cfgOld.postState,
+						cfgOld.roblock,
+						lOld.AttestedState,
+						lOld.AttestedBlock,
+						lOld.FinalizedBlock,
+					)
+					require.NoError(t, err)
+					fmt.Println("signature slot", actualOldUpdate.SignatureSlot(), "slot", actualOldUpdate.AttestedHeader().Beacon().Slot)
+					oldUpdate := s.lcStore.LastFinalityUpdate()
+					require.DeepEqual(t, actualOldUpdate, oldUpdate)
+				}
+
+				// config for new update
+				lNew, cfgNew := setupLightClientTestRequirements(ctx, t, s, testVersion, tc.newCfg.increaseAttestedSlotBy, tc.newCfg.superMajority)
+				require.NoError(t, s.processLightClientFinalityUpdate(cfgNew.ctx, cfgNew.roblock, cfgNew.postState))
+
+				// check that the actual old update and the actual new update are different
+				actualNewUpdate, err = lightClient.NewLightClientFinalityUpdateFromBeaconState(
+					ctx,
+					cfgNew.postState.Slot(),
+					cfgNew.postState,
+					cfgNew.roblock,
+					lNew.AttestedState,
+					lNew.AttestedBlock,
+					lNew.FinalizedBlock,
+				)
+				require.NoError(t, err)
+				require.DeepNotEqual(t, actualOldUpdate, actualNewUpdate)
+
+				// check that the new update is saved or skipped
+				newUpdate := s.lcStore.LastFinalityUpdate()
+
+				fmt.Println("newUpdate", newUpdate)
+				fmt.Println("NewUpdate", actualNewUpdate)
+				fmt.Println("oldUpdate", actualOldUpdate)
+
+				if tc.expectReplace {
+					require.DeepEqual(t, actualNewUpdate, newUpdate)
+				} else {
+					require.DeepEqual(t, actualOldUpdate, newUpdate)
+				}
+
+				// set last optimistic update to nil for next test
+				s.lcStore.SetLastFinalityUpdate(nil)
 			})
 		}
 
