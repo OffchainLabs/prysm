@@ -635,10 +635,8 @@ func (f *ForkChoice) DependentRoot(epoch primitives.Epoch) ([32]byte, error) {
 	if !ok || n == nil {
 		return [32]byte{}, ErrNilNode
 	}
-	if slots.ToEpoch(n.slot) == epoch {
-		if n.parent != nil {
-			n = n.parent
-		}
+	if slots.ToEpoch(n.slot) == epoch && n.parent != nil {
+		n = n.parent
 	}
 	return n.root, nil
 }
