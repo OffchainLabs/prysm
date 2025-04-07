@@ -39,6 +39,7 @@ const (
 	lastRootCalled
 	targetRootForEpochCalled
 	parentRootCalled
+	dependentRootCalled
 )
 
 func _discard(t *testing.T, e error) {
@@ -155,6 +156,11 @@ func TestROLocking(t *testing.T) {
 			name: "targetRootForEpochCalled",
 			call: targetRootForEpochCalled,
 			cb:   func(g FastGetter) { _, err := g.TargetRootForEpoch([32]byte{}, 0); _discard(t, err) },
+		},
+		{
+			name: "dependentRootCalled",
+			call: dependentRootCalled,
+			cb:   func(g FastGetter) { _, err := g.DependentRoot(0); _discard(t, err) },
 		},
 	}
 	for _, c := range cases {
@@ -291,6 +297,12 @@ func (ro *mockROForkchoice) Slot(_ [32]byte) (primitives.Slot, error) {
 func (ro *mockROForkchoice) LastRoot(_ primitives.Epoch) [32]byte {
 	ro.calls = append(ro.calls, lastRootCalled)
 	return [32]byte{}
+}
+
+// DependentRoot impoements FastGetter.
+func (ro *mockROForkchoice) DependentRoot(_ primitives.Epoch) ([32]byte, error) {
+	ro.calls = append(ro.calls, dependentRootCalled)
+	return [32]byte{}, nil
 }
 
 // TargetRootForEpoch implements FastGetter.

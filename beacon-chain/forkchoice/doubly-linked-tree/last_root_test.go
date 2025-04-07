@@ -30,7 +30,7 @@ func TestLastRoot(t *testing.T) {
 	st, root, err = prepareForkchoiceState(ctx, 34, [32]byte{'6'}, [32]byte{'5'}, [32]byte{'6'}, 0, 0)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, st, root))
-	headNode, _ := f.store.nodeByRoot[[32]byte{'6'}]
+	headNode := f.store.nodeByRoot[[32]byte{'6'}]
 	f.store.headNode = headNode
 	require.Equal(t, [32]byte{'6'}, f.store.headNode.root)
 	require.Equal(t, [32]byte{'2'}, f.LastRoot(0))
