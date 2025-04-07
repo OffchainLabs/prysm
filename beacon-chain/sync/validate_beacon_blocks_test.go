@@ -714,8 +714,21 @@ func TestValidateBeaconBlockPubSub_SeenProposerSlot(t *testing.T) {
 	msg.Signature, err = signing.ComputeDomainAndSign(beaconState, 0, msg.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[proposerIdx])
 	require.NoError(t, err)
 
-	chainService := &mock.ChainService{Genesis: time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot), 0),
-		State: beaconState,
+	// Create a clone of the same block (same signature, not an equivocation)
+	msgClone := util.NewBeaconBlock()
+	msgClone.Block.Slot = 1
+	msgClone.Block.ProposerIndex = proposerIdx
+	msgClone.Block.ParentRoot = bRoot[:]
+	msgClone.Signature = msg.Signature // Use the same signature
+
+	signedBlock, err := blocks.NewSignedBeaconBlock(msg)
+	require.NoError(t, err)
+
+	slashingPool := &slashingsmock.PoolMock{}
+	chainService := &mock.ChainService{
+		Genesis: time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot), 0),
+		State:   beaconState,
+		Block:   signedBlock, // Set the first block as the head block
 		FinalizedCheckPoint: &ethpb.Checkpoint{
 			Epoch: 0,
 			Root:  make([]byte, 32),
@@ -729,6 +742,7 @@ func TestValidateBeaconBlockPubSub_SeenProposerSlot(t *testing.T) {
 			chain:         chainService,
 			clock:         startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot),
 			blockNotifier: chainService.BlockNotifier(),
+			slashingPool:  slashingPool,
 		},
 		seenBlockCache:      lruwrpr.New(10),
 		badBlockCache:       lruwrpr.New(10),
@@ -736,10 +750,15 @@ func TestValidateBeaconBlockPubSub_SeenProposerSlot(t *testing.T) {
 		seenPendingBlocks:   make(map[[32]byte]bool),
 	}
 
+	// Mark the proposer/slot as seen
+	r.setSeenBlockIndexSlot(msg.Block.Slot, msg.Block.ProposerIndex)
+	time.Sleep(10 * time.Millisecond) // Wait for cached value to pass through buffers
+
+	// Prepare and validate the second message (clone)
 	buf := new(bytes.Buffer)
-	_, err = p.Encoding().EncodeGossip(buf, msg)
+	_, err = p.Encoding().EncodeGossip(buf, msgClone)
 	require.NoError(t, err)
-	topic := p2p.GossipTypeMapping[reflect.TypeOf(msg)]
+	topic := p2p.GossipTypeMapping[reflect.TypeOf(msgClone)]
 	digest, err := r.currentForkDigest()
 	assert.NoError(t, err)
 	topic = r.addDigestToTopic(topic, digest)
@@ -749,11 +768,14 @@ func TestValidateBeaconBlockPubSub_SeenProposerSlot(t *testing.T) {
 			Topic: &topic,
 		},
 	}
-	r.setSeenBlockIndexSlot(msg.Block.Slot, msg.Block.ProposerIndex)
-	time.Sleep(10 * time.Millisecond) // Wait for cached value to pass through buffers.
+
+	// Since this is not an equivocation (same signature), it should be ignored
 	res, err := r.validateBeaconBlockPubSub(ctx, "", m)
 	assert.NoError(t, err)
-	assert.Equal(t, res, pubsub.ValidationIgnore, "seen proposer block should be ignored")
+	assert.Equal(t, pubsub.ValidationIgnore, res, "block with same signature should be ignored")
+
+	// Verify no slashings were created
+	assert.Equal(t, 0, len(slashingPool.PendingPropSlashings), "Expected no slashings for same signature")
 }
 
 func TestValidateBeaconBlockPubSub_FilterByFinalizedEpoch(t *testing.T) {
