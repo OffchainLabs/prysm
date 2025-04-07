@@ -664,8 +664,9 @@ func TestGetDutiesForEpoch_Error(t *testing.T) {
 			}
 
 			validatorClient := &beaconApiValidatorClient{dutiesProvider: dutiesProvider}
-			_, err := validatorClient.dutiesForEpoch(
+			err := validatorClient.dutiesForEpoch(
 				ctx,
+				&ethpb.ValidatorDutiesContainer{},
 				epoch,
 				vals,
 				true,
@@ -882,13 +883,16 @@ func TestGetDutiesForEpoch_Valid(t *testing.T) {
 					status: ethpb.ValidatorStatus_ACTIVE,
 				}
 			}
-			duties, err := validatorClient.dutiesForEpoch(
+			dutiesContainer := &ethpb.ValidatorDutiesContainer{}
+			err := validatorClient.dutiesForEpoch(
 				ctx,
+				dutiesContainer,
 				epoch,
 				vals,
 				testCase.fetchSyncDuties,
 			)
 			require.NoError(t, err)
+			duties := dutiesContainer.CurrentEpochDuties
 			require.Equal(t, len(expectedDuties), len(duties))
 			for i, duty := range expectedDuties {
 				assert.Equal(t, duty.CommitteeIndex, duties[i].CommitteeIndex)
@@ -1116,22 +1120,28 @@ func TestGetDuties_Valid(t *testing.T) {
 				stateValidatorsProvider: stateValidatorsProvider,
 			}
 
-			expectedCurrentEpochDuties, err := validatorClient.dutiesForEpoch(
+			expectedContainer := &ethpb.ValidatorDutiesContainer{}
+			err := validatorClient.dutiesForEpoch(
 				ctx,
+				expectedContainer,
 				testCase.epoch,
 				vals,
 				fetchSyncDuties,
 			)
 			require.NoError(t, err)
 
-			expectedNextEpochDuties, err := validatorClient.dutiesForEpoch(
+			expectedCurrentEpochDuties := expectedContainer.CurrentEpochDuties
+			expectedNextContainer := &ethpb.ValidatorDutiesContainer{}
+			err = validatorClient.dutiesForEpoch(
 				ctx,
+				expectedNextContainer,
 				testCase.epoch+1,
 				vals,
 				fetchSyncDuties,
 			)
 			require.NoError(t, err)
 
+			expectedNextEpochDuties := expectedNextContainer.CurrentEpochDuties
 			expectedDuties := &ethpb.ValidatorDutiesContainer{
 				CurrentEpochDuties: expectedCurrentEpochDuties,
 				NextEpochDuties:    expectedNextEpochDuties,

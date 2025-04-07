@@ -1139,7 +1139,38 @@ func (v *validator) StartEventStream(ctx context.Context, topics []string, event
 	v.validatorClient.StartEventStream(ctx, topics, eventsChannel)
 }
 
-func (v *validator) ProcessEvent(event *eventClient.Event) {
+func (v *validator) checkDependentRoots(ctx context.Context, head *structs.HeadEvent, slot primitives.Slot) error {
+	if head == nil {
+		return errors.New("received empty head event")
+	}
+	prevDepedentRoot, err := bytesutil.DecodeHexWithLength(head.PreviousDutyDependentRoot, fieldparams.RootLength)
+	if err != nil {
+		return errors.Wrap(err, "failed to decode previous duty dependent root")
+	}
+	currEpochStart, err := slots.EpochStart(slots.ToEpoch(slot))
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(prevDepedentRoot, v.duties.PrevDependentRoot) {
+		if err := v.UpdateDuties(ctx, currEpochStart); err != nil {
+			return errors.Wrap(err, "failed to update duties")
+		}
+		return nil
+	}
+	currDepedentRoot, err := bytesutil.DecodeHexWithLength(head.CurrentDutyDependentRoot, fieldparams.RootLength)
+	if err != nil {
+		return errors.Wrap(err, "failed to decode previous duty dependent root")
+	}
+	if !bytes.Equal(currDepedentRoot, v.duties.CurrDependentRoot) {
+		if err := v.UpdateDuties(ctx, currEpochStart); err != nil {
+			return errors.Wrap(err, "failed to update duties")
+		}
+		return nil
+	}
+	return nil
+}
+
+func (v *validator) ProcessEvent(ctx context.Context, event *eventClient.Event) {
 	if event == nil || event.Data == nil {
 		log.Warn("Received empty event")
 	}
@@ -1159,6 +1190,9 @@ func (v *validator) ProcessEvent(event *eventClient.Event) {
 			log.WithError(err).Error("Failed to parse slot")
 		}
 		v.setHighestSlot(primitives.Slot(uintSlot))
+		if err := v.checkDependentRoots(ctx, head, primitives.Slot(uintSlot)); err != nil {
+			log.WithError(err).Error("Failed to check dependent roots")
+		}
 	default:
 		// just keep going and log the error
 		log.WithField("type", event.EventType).WithField("data", string(event.Data)).Warn("Received an unknown event")

@@ -448,6 +448,11 @@ func (s *ChainService) IsCanonical(_ context.Context, r [32]byte) (bool, error) 
 	return true, nil
 }
 
+// DependentRoot mocks the base method in the chain service.
+func (*ChainService) DependentRoot(_ primitives.Epoch) ([32]byte, error) {
+	return [32]byte{}, nil
+}
+
 // HasBlock mocks the same method in the chain service.
 func (s *ChainService) HasBlock(ctx context.Context, rt [32]byte) bool {
 	if s.DB == nil {

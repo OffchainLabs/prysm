@@ -20,8 +20,8 @@ import (
 )
 
 type dutiesProvider interface {
-	AttesterDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) ([]*structs.AttesterDuty, error)
-	ProposerDuties(ctx context.Context, epoch primitives.Epoch) ([]*structs.ProposerDuty, error)
+	AttesterDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*structs.GetAttesterDutiesResponse, error)
+	ProposerDuties(ctx context.Context, epoch primitives.Epoch) (*structs.GetProposerDutiesResponse, error)
 	SyncDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) ([]*structs.SyncCommitteeDuty, error)
 	Committees(ctx context.Context, epoch primitives.Epoch) ([]*structs.Committee, error)
 }
@@ -55,18 +55,17 @@ func (c *beaconApiValidatorClient) duties(ctx context.Context, in *ethpb.DutiesR
 
 	errCh := make(chan error, 1)
 
-	var currentEpochDuties []*ethpb.ValidatorDuty
+	currentEpochDuties := &ethpb.ValidatorDutiesContainer{}
 	go func() {
-		currentEpochDuties, err = c.dutiesForEpoch(ctx, in.Epoch, vals, fetchSyncDuties)
-		if err != nil {
+		if err := c.dutiesForEpoch(ctx, currentEpochDuties, in.Epoch, vals, fetchSyncDuties); err != nil {
 			errCh <- errors.Wrapf(err, "failed to get duties for current epoch `%d`", in.Epoch)
 			return
 		}
 		errCh <- nil
 	}()
 
-	nextEpochDuties, err := c.dutiesForEpoch(ctx, in.Epoch+1, vals, fetchSyncDuties)
-	if err != nil {
+	nextEpochDuties := &ethpb.ValidatorDutiesContainer{}
+	if err := c.dutiesForEpoch(ctx, nextEpochDuties, in.Epoch+1, vals, fetchSyncDuties); err != nil {
 		return nil, errors.Wrapf(err, "failed to get duties for next epoch `%d`", in.Epoch+1)
 	}
 
@@ -75,17 +74,20 @@ func (c *beaconApiValidatorClient) duties(ctx context.Context, in *ethpb.DutiesR
 	}
 
 	return &ethpb.ValidatorDutiesContainer{
-		CurrentEpochDuties: currentEpochDuties,
-		NextEpochDuties:    nextEpochDuties,
+		PrevDependentRoot:  currentEpochDuties.PrevDependentRoot,
+		CurrDependentRoot:  currentEpochDuties.CurrDependentRoot,
+		CurrentEpochDuties: currentEpochDuties.CurrentEpochDuties,
+		NextEpochDuties:    nextEpochDuties.CurrentEpochDuties,
 	}, nil
 }
 
 func (c *beaconApiValidatorClient) dutiesForEpoch(
 	ctx context.Context,
+	dutiesContainer *ethpb.ValidatorDutiesContainer,
 	epoch primitives.Epoch,
 	vals []validatorForDuty,
 	fetchSyncDuties bool,
-) ([]*ethpb.ValidatorDuty, error) {
+) error {
 	indices := make([]primitives.ValidatorIndex, len(vals))
 	for i, v := range vals {
 		indices[i] = v.index
@@ -104,13 +106,15 @@ func (c *beaconApiValidatorClient) dutiesForEpoch(
 
 	var wg errgroup.Group
 
+	var attesterDutiesContainer *structs.GetAttesterDutiesResponse
+	var err error
 	wg.Go(func() error {
-		attesterDuties, err := c.dutiesProvider.AttesterDuties(ctx, epoch, indices)
+		attesterDutiesContainer, err = c.dutiesProvider.AttesterDuties(ctx, epoch, indices)
 		if err != nil {
 			return errors.Wrapf(err, "failed to get attester duties for epoch `%d`", epoch)
 		}
 
-		for _, duty := range attesterDuties {
+		for _, duty := range attesterDutiesContainer.Data {
 			validatorIndex, err := strconv.ParseUint(duty.ValidatorIndex, 10, 64)
 			if err != nil {
 				return errors.Wrapf(err, "failed to parse attester validator index `%s`", duty.ValidatorIndex)
@@ -163,13 +167,14 @@ func (c *beaconApiValidatorClient) dutiesForEpoch(
 		})
 	}
 
+	var proposerDutiesContainer *structs.GetProposerDutiesResponse
 	wg.Go(func() error {
-		proposerDuties, err := c.dutiesProvider.ProposerDuties(ctx, epoch)
+		proposerDutiesContainer, err = c.dutiesProvider.ProposerDuties(ctx, epoch)
 		if err != nil {
 			return errors.Wrapf(err, "failed to get proposer duties for epoch `%d`", epoch)
 		}
 
-		for _, proposerDuty := range proposerDuties {
+		for _, proposerDuty := range proposerDutiesContainer.Data {
 			validatorIndex, err := strconv.ParseUint(proposerDuty.ValidatorIndex, 10, 64)
 			if err != nil {
 				return errors.Wrapf(err, "failed to parse proposer validator index `%s`", proposerDuty.ValidatorIndex)
@@ -185,7 +190,7 @@ func (c *beaconApiValidatorClient) dutiesForEpoch(
 	})
 
 	if err := wg.Wait(); err != nil {
-		return nil, err
+		return err
 	}
 
 	duties := make([]*ethpb.ValidatorDuty, len(vals))
@@ -209,7 +214,16 @@ func (c *beaconApiValidatorClient) dutiesForEpoch(
 		}
 	}
 
-	return duties, nil
+	dutiesContainer.CurrentEpochDuties = duties
+	dutiesContainer.CurrDependentRoot, err = hexutil.Decode(proposerDutiesContainer.DependentRoot)
+	if err != nil {
+		return errors.Wrap(err, "failed to decode current dependent root")
+	}
+	dutiesContainer.PrevDependentRoot, err = hexutil.Decode(attesterDutiesContainer.DependentRoot)
+	if err != nil {
+		return errors.Wrap(err, "failed to decode previous dependent root")
+	}
+	return nil
 }
 
 func (c *beaconApiValidatorClient) validatorsForDuties(ctx context.Context, pubkeys [][]byte) ([]validatorForDuty, error) {
@@ -282,7 +296,7 @@ func (c beaconApiDutiesProvider) Committees(ctx context.Context, epoch primitive
 }
 
 // AttesterDuties retrieves the attester duties for the given epoch and validatorIndices
-func (c beaconApiDutiesProvider) AttesterDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) ([]*structs.AttesterDuty, error) {
+func (c beaconApiDutiesProvider) AttesterDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*structs.GetAttesterDutiesResponse, error) {
 	jsonValidatorIndices := make([]string, len(validatorIndices))
 	for index, validatorIndex := range validatorIndices {
 		jsonValidatorIndices[index] = strconv.FormatUint(uint64(validatorIndex), 10)
@@ -310,13 +324,13 @@ func (c beaconApiDutiesProvider) AttesterDuties(ctx context.Context, epoch primi
 		}
 	}
 
-	return attesterDuties.Data, nil
+	return attesterDuties, nil
 }
 
 // ProposerDuties retrieves the proposer duties for the given epoch
-func (c beaconApiDutiesProvider) ProposerDuties(ctx context.Context, epoch primitives.Epoch) ([]*structs.ProposerDuty, error) {
-	proposerDuties := structs.GetProposerDutiesResponse{}
-	if err := c.jsonRestHandler.Get(ctx, fmt.Sprintf("/eth/v1/validator/duties/proposer/%d", epoch), &proposerDuties); err != nil {
+func (c beaconApiDutiesProvider) ProposerDuties(ctx context.Context, epoch primitives.Epoch) (*structs.GetProposerDutiesResponse, error) {
+	proposerDuties := &structs.GetProposerDutiesResponse{}
+	if err := c.jsonRestHandler.Get(ctx, fmt.Sprintf("/eth/v1/validator/duties/proposer/%d", epoch), proposerDuties); err != nil {
 		return nil, err
 	}
 
@@ -330,7 +344,7 @@ func (c beaconApiDutiesProvider) ProposerDuties(ctx context.Context, epoch primi
 		}
 	}
 
-	return proposerDuties.Data, nil
+	return proposerDuties, nil
 }
 
 // SyncDuties retrieves the sync committee duties for the given epoch and validatorIndices

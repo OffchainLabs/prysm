@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strconv"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/api/client"
@@ -224,7 +225,7 @@ func (c *grpcValidatorClient) StartEventStream(ctx context.Context, topics []str
 		}
 		return
 	}
-	// TODO(13563): ONLY WORKS WITH HEAD TOPIC RIGHT NOW/ONLY PROVIDES THE SLOT
+	// TODO(13563): ONLY WORKS WITH HEAD TOPIC.
 	containsHead := false
 	for i := range topics {
 		if topics[i] == eventClient.EventHead {
@@ -286,7 +287,9 @@ func (c *grpcValidatorClient) StartEventStream(ctx context.Context, topics []str
 				continue
 			}
 			b, err := json.Marshal(structs.HeadEvent{
-				Slot: strconv.FormatUint(uint64(res.Slot), 10),
+				Slot:                      strconv.FormatUint(uint64(res.Slot), 10),
+				PreviousDutyDependentRoot: hexutil.Encode(res.PreviousDutyDependentRoot),
+				CurrentDutyDependentRoot:  hexutil.Encode(res.CurrentDutyDependentRoot),
 			})
 			if err != nil {
 				eventsChannel <- &eventClient.Event{

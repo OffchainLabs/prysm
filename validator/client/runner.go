@@ -131,7 +131,7 @@ func run(ctx context.Context, v iface.Validator) {
 				}
 			}
 		case e := <-eventsChan:
-			v.ProcessEvent(e)
+			v.ProcessEvent(ctx, e)
 		case currentKeys := <-accountsChangedChan: // should be less of a priority than next slot
 			onAccountsChanged(ctx, v, currentKeys, accountsChangedChan)
 		}
