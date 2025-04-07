@@ -1,218 +1,417 @@
-package helpers
+package util
 
 import (
-	"encoding/binary"
-	"errors"
+	"context"
 	"fmt"
-	"time"
+	"math"
 
+	"github.com/prysmaticlabs/go-bitfield"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/crypto/hash"
+	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
+	"github.com/prysmaticlabs/prysm/v5/crypto/rand"
+	attv1 "github.com/prysmaticlabs/prysm/v5/proto/eth/v1"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	prysmTime "github.com/prysmaticlabs/prysm/v5/time"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
+	log "github.com/sirupsen/logrus"
 )
 
-var (
-	ErrTooLate = errors.New("attestation is too late")
-)
-
-// ValidateNilAttestation checks if any composite field of input attestation is nil.
-// Access to these nil fields will result in run time panic,
-// it is recommended to run these checks as first line of defense.
-func ValidateNilAttestation(attestation ethpb.Att) error {
-	if attestation == nil || attestation.IsNil() {
-		return errors.New("attestation is nil")
+// NewAttestation creates a block attestation with minimum marshalable fields.
+func NewAttestation() *ethpb.Attestation {
+	return &ethpb.Attestation{
+		AggregationBits: bitfield.Bitlist{0b1101},
+		Data: &ethpb.AttestationData{
+			BeaconBlockRoot: make([]byte, fieldparams.RootLength),
+			Source: &ethpb.Checkpoint{
+				Root: make([]byte, fieldparams.RootLength),
+			},
+			Target: &ethpb.Checkpoint{
+				Root: make([]byte, fieldparams.RootLength),
+			},
+		},
+		Signature: make([]byte, 96),
 	}
-	if attestation.GetData().Source == nil {
-		return errors.New("attestation's source can't be nil")
-	}
-	if attestation.GetData().Target == nil {
-		return errors.New("attestation's target can't be nil")
-	}
-	if attestation.IsSingle() {
-		return nil
-	}
-	if attestation.GetAggregationBits() == nil {
-		return errors.New("attestation's bitfield can't be nil")
-	}
-	return nil
 }
 
-// ValidateSlotTargetEpoch checks if attestation data's epoch matches target checkpoint's epoch.
-// It is recommended to run `ValidateNilAttestation` first to ensure `data.Target` can't be nil.
-func ValidateSlotTargetEpoch(data *ethpb.AttestationData) error {
-	if slots.ToEpoch(data.Slot) != data.Target.Epoch {
-		return fmt.Errorf("slot %d does not match target epoch %d", data.Slot, data.Target.Epoch)
+// NewAttestationElectra creates a block attestation with minimum marshalable fields.
+func NewAttestationElectra() *ethpb.AttestationElectra {
+	cb := primitives.NewAttestationCommitteeBits()
+	cb.SetBitAt(0, true)
+	return &ethpb.AttestationElectra{
+		AggregationBits: bitfield.Bitlist{0b1101},
+		CommitteeBits:   cb,
+		Data: &ethpb.AttestationData{
+			BeaconBlockRoot: make([]byte, fieldparams.RootLength),
+			Source: &ethpb.Checkpoint{
+				Root: make([]byte, fieldparams.RootLength),
+			},
+			Target: &ethpb.Checkpoint{
+				Root: make([]byte, fieldparams.RootLength),
+			},
+		},
+		Signature: make([]byte, 96),
 	}
-	return nil
 }
 
-// IsAggregator returns true if the signature is from the input validator. The committee
-// count is provided as an argument rather than imported implementation from spec. Having
-// committee count as an argument allows cheaper computation at run time.
+// GenerateAttestations creates attestations that are entirely valid, for all
+// the committees of the current state slot. This function expects attestations
+// requested to be cleanly divisible by committees per slot. If there is 1 committee
+// in the slot, and numToGen is set to 4, then it will return 4 attestations
+// for the same data with their aggregation bits split uniformly.
 //
-// Spec pseudocode definition:
-//
-//	def is_aggregator(state: BeaconState, slot: Slot, index: CommitteeIndex, slot_signature: BLSSignature) -> bool:
-//	 committee = get_beacon_committee(state, slot, index)
-//	 modulo = max(1, len(committee) // TARGET_AGGREGATORS_PER_COMMITTEE)
-//	 return bytes_to_uint64(hash(slot_signature)[0:8]) % modulo == 0
-func IsAggregator(committeeCount uint64, slotSig []byte) (bool, error) {
-	modulo := uint64(1)
-	if committeeCount/params.BeaconConfig().TargetAggregatorsPerCommittee > 1 {
-		modulo = committeeCount / params.BeaconConfig().TargetAggregatorsPerCommittee
+// If you request 4 attestations, but there are 8 committees, you will get 4 fully aggregated attestations.
+func GenerateAttestations(bState state.BeaconState, privs []bls.SecretKey, numToGen uint64, slot primitives.Slot, randomRoot bool) ([]ethpb.Att, error) { // nolint:gocognit
+	var attestations []ethpb.Att
+	generateHeadState := false
+	bState = bState.Copy()
+	if slot > bState.Slot() {
+		// Going back a slot here so there's no inclusion delay issues.
+		slot--
+		generateHeadState = true
 	}
+	currentEpoch := slots.ToEpoch(slot)
 
-	b := hash.Hash(slotSig)
-	return binary.LittleEndian.Uint64(b[:8])%modulo == 0, nil
-}
-
-// ComputeSubnetForAttestation returns the subnet for which the provided attestation will be broadcasted to.
-// This differs from the spec definition by instead passing in the active validators indices in the attestation's
-// given epoch.
-//
-// Spec pseudocode definition:
-// def compute_subnet_for_attestation(committees_per_slot: uint64, slot: Slot, committee_index: CommitteeIndex) -> uint64:
-//
-//	"""
-//	Compute the correct subnet for an attestation for Phase 0.
-//	Note, this mimics expected future behavior where attestations will be mapped to their shard subnet.
-//	"""
-//	slots_since_epoch_start = uint64(slot % SLOTS_PER_EPOCH)
-//	committees_since_epoch_start = committees_per_slot * slots_since_epoch_start
-//
-//	return uint64((committees_since_epoch_start + committee_index) % ATTESTATION_SUBNET_COUNT)
-func ComputeSubnetForAttestation(activeValCount uint64, att ethpb.Att) uint64 {
-	// Maintain backward compatibility for phase 0
-	// The att.Version() will return version.Phase0 (which is 0) for phase 0 attestations
-	if att.Version() == 0 {
-		return computeSubnetForAttestationPhase0(activeValCount, att)
-	}
-	return ComputeSubnetFromCommitteeAndSlot(activeValCount, att.GetCommitteeIndex(), att.GetData().Slot)
-}
-
-// computeSubnetForAttestationPhase0 is the original implementation of ComputeSubnetForAttestation used in phase 0.
-// This maintains backward compatibility while the newer implementation is introduced.
-// Both functions currently have the same behavior, but this separation allows for independent evolution
-// of the implementation for phase 0 and newer attestation types.
-func computeSubnetForAttestationPhase0(activeValCount uint64, att ethpb.Att) uint64 {
-	return ComputeSubnetFromCommitteeAndSlot(activeValCount, att.GetCommitteeIndex(), att.GetData().Slot)
-}
-
-// ComputeSubnetFromCommitteeAndSlot is a flattened version of ComputeSubnetForAttestation where we only pass in
-// the relevant fields from the attestation as function arguments.
-//
-// Spec pseudocode definition:
-// def compute_subnet_for_attestation(committees_per_slot: uint64, slot: Slot, committee_index: CommitteeIndex) -> uint64:
-//
-//	"""
-//	Compute the correct subnet for an attestation for Phase 0.
-//	Note, this mimics expected future behavior where attestations will be mapped to their shard subnet.
-//	"""
-//	slots_since_epoch_start = uint64(slot % SLOTS_PER_EPOCH)
-//	committees_since_epoch_start = committees_per_slot * slots_since_epoch_start
-//
-//	return uint64((committees_since_epoch_start + committee_index) % ATTESTATION_SUBNET_COUNT)
-func ComputeSubnetFromCommitteeAndSlot(activeValCount uint64, comIdx primitives.CommitteeIndex, attSlot primitives.Slot) uint64 {
-	slotSinceStart := slots.SinceEpochStarts(attSlot)
-	comCount := SlotCommitteeCount(activeValCount)
-	commsSinceStart := uint64(slotSinceStart.Mul(comCount))
-	computedSubnet := (commsSinceStart + uint64(comIdx)) % params.BeaconConfig().AttestationSubnetCount
-	return computedSubnet
-}
-
-// ValidateAttestationTime Validates that the incoming attestation is in the desired time range.
-// An attestation is valid only if received within the last ATTESTATION_PROPAGATION_SLOT_RANGE
-// slots.
-//
-// Example:
-//
-//	ATTESTATION_PROPAGATION_SLOT_RANGE = 5
-//	clockDisparity = 24 seconds
-//	current_slot = 100
-//	invalid_attestation_slot = 92
-//	invalid_attestation_slot = 103
-//	valid_attestation_slot = 98
-//	valid_attestation_slot = 101
-//
-// In the attestation must be within the range of 95 to 102 in the example above.
-func ValidateAttestationTime(attSlot primitives.Slot, genesisTime time.Time, clockDisparity time.Duration) error {
-	attTime, err := slots.ToTime(uint64(genesisTime.Unix()), attSlot)
-	if err != nil {
-		return err
-	}
-	currentSlot := slots.Since(genesisTime)
-
-	// When receiving an attestation, it can be from the future.
-	// so the upper bounds is set to now + clockDisparity(SECONDS_PER_SLOT * 2).
-	// But when sending an attestation, it should not be in future slot.
-	// so the upper bounds is set to now + clockDisparity(MAXIMUM_GOSSIP_CLOCK_DISPARITY).
-	upperBounds := prysmTime.Now().Add(clockDisparity)
-
-	// An attestation cannot be older than the current slot - attestation propagation slot range
-	// with a minor tolerance for peer clock disparity.
-	lowerBoundsSlot := primitives.Slot(0)
-	if currentSlot > params.BeaconConfig().AttestationPropagationSlotRange {
-		lowerBoundsSlot = currentSlot - params.BeaconConfig().AttestationPropagationSlotRange
-	}
-	lowerTime, err := slots.ToTime(uint64(genesisTime.Unix()), lowerBoundsSlot)
-	if err != nil {
-		return err
-	}
-	lowerBounds := lowerTime.Add(-clockDisparity)
-
-	// Verify attestation slot within the time range.
-	attError := fmt.Errorf(
-		"attestation slot %d not within attestation propagation range of %d to %d (current slot)",
-		attSlot,
-		lowerBoundsSlot,
-		currentSlot,
-	)
-	if attTime.After(upperBounds) {
-		attReceivedTooEarlyCount.Inc()
-		return attError
-	}
-
-	attEpoch := slots.ToEpoch(attSlot)
-	if attEpoch < params.BeaconConfig().DenebForkEpoch {
-		if attTime.Before(lowerBounds) {
-			attReceivedTooLateCount.Inc()
-			return errors.Join(ErrTooLate, attError)
+	targetRoot := make([]byte, fieldparams.RootLength)
+	var headRoot []byte
+	var err error
+	// Only calculate head state if its an attestation for the current slot or future slot.
+	if generateHeadState || slot == bState.Slot() {
+		var headState state.BeaconState
+		switch bState.Version() {
+		case version.Phase0:
+			pbState, err := state_native.ProtobufBeaconStatePhase0(bState.ToProto())
+			if err != nil {
+				return nil, err
+			}
+			genState, err := state_native.InitializeFromProtoUnsafePhase0(pbState)
+			if err != nil {
+				return nil, err
+			}
+			headState = genState
+		case version.Altair:
+			pbState, err := state_native.ProtobufBeaconStateAltair(bState.ToProto())
+			if err != nil {
+				return nil, err
+			}
+			genState, err := state_native.InitializeFromProtoUnsafeAltair(pbState)
+			if err != nil {
+				return nil, err
+			}
+			headState = genState
+		case version.Bellatrix:
+			pbState, err := state_native.ProtobufBeaconStateBellatrix(bState.ToProto())
+			if err != nil {
+				return nil, err
+			}
+			genState, err := state_native.InitializeFromProtoUnsafeBellatrix(pbState)
+			if err != nil {
+				return nil, err
+			}
+			headState = genState
+		case version.Capella:
+			pbState, err := state_native.ProtobufBeaconStateCapella(bState.ToProto())
+			if err != nil {
+				return nil, err
+			}
+			genState, err := state_native.InitializeFromProtoUnsafeCapella(pbState)
+			if err != nil {
+				return nil, err
+			}
+			headState = genState
+		case version.Deneb:
+			pbState, err := state_native.ProtobufBeaconStateDeneb(bState.ToProto())
+			if err != nil {
+				return nil, err
+			}
+			genState, err := state_native.InitializeFromProtoUnsafeDeneb(pbState)
+			if err != nil {
+				return nil, err
+			}
+			headState = genState
+		case version.Electra:
+			pbState, err := state_native.ProtobufBeaconStateElectra(bState.ToProto())
+			if err != nil {
+				return nil, err
+			}
+			genState, err := state_native.InitializeFromProtoUnsafeElectra(pbState)
+			if err != nil {
+				return nil, err
+			}
+			headState = genState
+		case version.Fulu:
+			pbState, err := state_native.ProtobufBeaconStateFulu(bState.ToProto())
+			if err != nil {
+				return nil, err
+			}
+			genState, err := state_native.InitializeFromProtoUnsafeFulu(pbState)
+			if err != nil {
+				return nil, err
+			}
+			headState = genState
+		default:
+			return nil, fmt.Errorf("state version %s isn't supported", version.String(bState.Version()))
 		}
-		return nil
+
+		headState, err = transition.ProcessSlots(context.Background(), headState, slot+1)
+		if err != nil {
+			return nil, err
+		}
+		headRoot, err = helpers.BlockRootAtSlot(headState, slot)
+		if err != nil {
+			return nil, err
+		}
+		targetRoot, err = helpers.BlockRoot(headState, currentEpoch)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		headRoot, err = helpers.BlockRootAtSlot(bState, slot)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if randomRoot {
+		randGen := rand.NewDeterministicGenerator()
+		b := make([]byte, fieldparams.RootLength)
+		_, err := randGen.Read(b)
+		if err != nil {
+			return nil, err
+		}
+		headRoot = b
 	}
 
-	// EIP-7045: Starting in Deneb, allow any attestations from the current or previous epoch.
-	currentEpoch := slots.ToEpoch(currentSlot)
-	if attEpoch+1 < currentEpoch {
-		attError = fmt.Errorf(
-			"attestation epoch %d not within current epoch %d or previous epoch",
-			attEpoch,
-			currentEpoch,
-		)
-		return errors.Join(ErrTooLate, attError)
+	activeValidatorCount, err := helpers.ActiveValidatorCount(context.Background(), bState, currentEpoch)
+	if err != nil {
+		return nil, err
 	}
-	return nil
+	committeesPerSlot := helpers.SlotCommitteeCount(activeValidatorCount)
+
+	if numToGen < committeesPerSlot {
+		log.Printf(
+			"Warning: %d attestations requested is less than %d committees in current slot, not all validators will be attesting.",
+			numToGen,
+			committeesPerSlot,
+		)
+	} else if numToGen > committeesPerSlot {
+		log.Printf(
+			"Warning: %d attestations requested are more than %d committees in current slot, attestations will not be perfectly efficient.",
+			numToGen,
+			committeesPerSlot,
+		)
+	}
+
+	attsPerCommittee := math.Max(float64(numToGen/committeesPerSlot), 1)
+	if math.Trunc(attsPerCommittee) != attsPerCommittee {
+		return nil, fmt.Errorf(
+			"requested attestations %d must be easily divisible by committees in slot %d, calculated %f",
+			numToGen,
+			committeesPerSlot,
+			attsPerCommittee,
+		)
+	}
+
+	domain, err := signing.Domain(bState.Fork(), currentEpoch, params.BeaconConfig().DomainBeaconAttester, bState.GenesisValidatorsRoot())
+	if err != nil {
+		return nil, err
+	}
+	for c := primitives.CommitteeIndex(0); uint64(c) < committeesPerSlot && uint64(c) < numToGen; c++ {
+		committee, err := helpers.BeaconCommitteeFromState(context.Background(), bState, slot, c)
+		if err != nil {
+			return nil, err
+		}
+
+		ci := c
+		if bState.Version() >= version.Electra {
+			// committee index must be 0 post-Electra
+			ci = 0
+		}
+		attData := &ethpb.AttestationData{
+			Slot:            slot,
+			CommitteeIndex:  ci,
+			BeaconBlockRoot: headRoot,
+			Source:          bState.CurrentJustifiedCheckpoint(),
+			Target: &ethpb.Checkpoint{
+				Epoch: currentEpoch,
+				Root:  targetRoot,
+			},
+		}
+
+		dataRoot, err := signing.ComputeSigningRoot(attData, domain)
+		if err != nil {
+			return nil, err
+		}
+
+		committeeSize := uint64(len(committee))
+		bitsPerAtt := committeeSize / uint64(attsPerCommittee)
+		for i := uint64(0); i < committeeSize; i += bitsPerAtt {
+			aggregationBits := bitfield.NewBitlist(committeeSize)
+			var sigs []bls.Signature
+			for b := i; b < i+bitsPerAtt; b++ {
+				aggregationBits.SetBitAt(b, true)
+				sigs = append(sigs, privs[committee[b]].Sign(dataRoot[:]))
+			}
+
+			// bls.AggregateSignatures will return nil if sigs is 0.
+			if len(sigs) == 0 {
+				continue
+			}
+
+			var att ethpb.Att
+			if bState.Version() >= version.Electra {
+				cb := primitives.NewAttestationCommitteeBits()
+				cb.SetBitAt(uint64(c), true)
+				att = &ethpb.AttestationElectra{
+					Data:            attData,
+					CommitteeBits:   cb,
+					AggregationBits: aggregationBits,
+					Signature:       bls.AggregateSignatures(sigs).Marshal(),
+				}
+			} else {
+				att = &ethpb.Attestation{
+					Data:            attData,
+					AggregationBits: aggregationBits,
+					Signature:       bls.AggregateSignatures(sigs).Marshal(),
+				}
+			}
+			attestations = append(attestations, att)
+		}
+	}
+	return attestations, nil
 }
 
-// VerifyCheckpointEpoch is within current epoch and previous epoch
-// with respect to current time. Returns true if it's within, false if it's not.
-func VerifyCheckpointEpoch(c *ethpb.Checkpoint, genesis time.Time) bool {
-	now := uint64(prysmTime.Now().Unix())
-	genesisTime := uint64(genesis.Unix())
-	currentSlot := primitives.Slot((now - genesisTime) / params.BeaconConfig().SecondsPerSlot)
-	currentEpoch := slots.ToEpoch(currentSlot)
-
-	var prevEpoch primitives.Epoch
-	if currentEpoch > 1 {
-		prevEpoch = currentEpoch - 1
+// HydrateAttestation hydrates an attestation object with correct field length sizes
+// to comply with fssz marshalling and unmarshalling rules.
+func HydrateAttestation(a *ethpb.Attestation) *ethpb.Attestation {
+	if a.Signature == nil {
+		a.Signature = make([]byte, 96)
 	}
-
-	if c.Epoch != prevEpoch && c.Epoch != currentEpoch {
-		return false
+	if a.AggregationBits == nil {
+		a.AggregationBits = make([]byte, 1)
 	}
+	if a.Data == nil {
+		a.Data = &ethpb.AttestationData{}
+	}
+	a.Data = HydrateAttestationData(a.Data)
+	return a
+}
 
-	return true
+// HydrateAttestationElectra hydrates an attestation object with correct field length sizes
+// to comply with fssz marshalling and unmarshalling rules.
+func HydrateAttestationElectra(a *ethpb.AttestationElectra) *ethpb.AttestationElectra {
+	if a.Signature == nil {
+		a.Signature = make([]byte, 96)
+	}
+	if a.AggregationBits == nil {
+		a.AggregationBits = make([]byte, 1)
+	}
+	if a.CommitteeBits == nil {
+		a.CommitteeBits = primitives.NewAttestationCommitteeBits()
+	}
+	if a.Data == nil {
+		a.Data = &ethpb.AttestationData{}
+	}
+	a.Data = HydrateAttestationData(a.Data)
+	return a
+}
+
+func HydrateSingleAttestation(a *ethpb.SingleAttestation) *ethpb.SingleAttestation {
+	if a.Signature == nil {
+		a.Signature = make([]byte, 96)
+	}
+	if a.Data == nil {
+		a.Data = &ethpb.AttestationData{}
+	}
+	a.Data = HydrateAttestationData(a.Data)
+	return a
+}
+
+// HydrateV1Attestation hydrates a v1 attestation object with correct field length sizes
+// to comply with fssz marshalling and unmarshalling rules.
+func HydrateV1Attestation(a *attv1.Attestation) *attv1.Attestation {
+	if a.Signature == nil {
+		a.Signature = make([]byte, 96)
+	}
+	if a.AggregationBits == nil {
+		a.AggregationBits = make([]byte, 1)
+	}
+	if a.Data == nil {
+		a.Data = &attv1.AttestationData{}
+	}
+	a.Data = HydrateV1AttestationData(a.Data)
+	return a
+}
+
+// HydrateAttestationData hydrates an attestation data object with correct field length sizes
+// to comply with fssz marshalling and unmarshalling rules.
+func HydrateAttestationData(d *ethpb.AttestationData) *ethpb.AttestationData {
+	if d.BeaconBlockRoot == nil {
+		d.BeaconBlockRoot = make([]byte, fieldparams.RootLength)
+	}
+	if d.Target == nil {
+		d.Target = &ethpb.Checkpoint{}
+	}
+	if d.Target.Root == nil {
+		d.Target.Root = make([]byte, fieldparams.RootLength)
+	}
+	if d.Source == nil {
+		d.Source = &ethpb.Checkpoint{}
+	}
+	if d.Source.Root == nil {
+		d.Source.Root = make([]byte, fieldparams.RootLength)
+	}
+	return d
+}
+
+// HydrateV1AttestationData hydrates a v1 attestation data object with correct field length sizes
+// to comply with fssz marshalling and unmarshalling rules.
+func HydrateV1AttestationData(d *attv1.AttestationData) *attv1.AttestationData {
+	if d.BeaconBlockRoot == nil {
+		d.BeaconBlockRoot = make([]byte, fieldparams.RootLength)
+	}
+	if d.Target == nil {
+		d.Target = &attv1.Checkpoint{}
+	}
+	if d.Target.Root == nil {
+		d.Target.Root = make([]byte, fieldparams.RootLength)
+	}
+	if d.Source == nil {
+		d.Source = &attv1.Checkpoint{}
+	}
+	if d.Source.Root == nil {
+		d.Source.Root = make([]byte, fieldparams.RootLength)
+	}
+	return d
+}
+
+// HydrateIndexedAttestation hydrates an indexed attestation with correct field length sizes
+// to comply with fssz marshalling and unmarshalling rules.
+func HydrateIndexedAttestation(a *ethpb.IndexedAttestation) *ethpb.IndexedAttestation {
+	if a.Signature == nil {
+		a.Signature = make([]byte, 96)
+	}
+	if a.Data == nil {
+		a.Data = &ethpb.AttestationData{}
+	}
+	a.Data = HydrateAttestationData(a.Data)
+	return a
+}
+
+// HydrateIndexedAttestationElectra hydrates an indexed attestation with correct field length sizes
+// to comply with fssz marshalling and unmarshalling rules.
+func HydrateIndexedAttestationElectra(a *ethpb.IndexedAttestationElectra) *ethpb.IndexedAttestationElectra {
+	if a.Signature == nil {
+		a.Signature = make([]byte, 96)
+	}
+	if a.Data == nil {
+		a.Data = &ethpb.AttestationData{}
+	}
+	a.Data = HydrateAttestationData(a.Data)
+	return a
 }
