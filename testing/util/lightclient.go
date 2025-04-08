@@ -37,29 +37,29 @@ type TestLightClient struct {
 }
 type LightClientOption func(l *TestLightClient)
 
-//func NewTestLightClient2(t *testing.T, forkVersion int, options ...LightClientOption) *TestLightClient {
-//	l := &TestLightClient{T: t, version: forkVersion}
-//
-//	for _, option := range options {
-//		option(l)
-//	}
-//
-//	switch l.version {
-//	case version.Altair:
-//		return l.SetupTestAltair()
-//	case version.Bellatrix:
-//		return l.SetupTestBellatrix()
-//	case version.Capella:
-//		return l.SetupTestCapella()
-//	case version.Deneb:
-//		return l.SetupTestDeneb()
-//	case version.Electra:
-//		return l.SetupTestElectra()
-//	default:
-//		l.T.Fatalf("unknown version %d", l.version)
-//		return nil
-//	}
-//}
+func NewTestLightClient(t *testing.T, forkVersion int, options ...LightClientOption) *TestLightClient {
+	l := &TestLightClient{T: t, version: forkVersion}
+
+	for _, option := range options {
+		option(l)
+	}
+
+	switch l.version {
+	case version.Altair:
+		return l.setupTestAltair()
+	case version.Bellatrix:
+		return l.setupTestBellatrix()
+	case version.Capella:
+		return l.setupTestCapella()
+	case version.Deneb:
+		return l.setupTestDeneb()
+	case version.Electra:
+		return l.setupTestElectra()
+	default:
+		l.T.Fatalf("unknown version %d", l.version)
+		return nil
+	}
+}
 
 // WithBlinded Specifies whether the signature block is blinded or not
 func WithBlinded(blinded bool) func(l *TestLightClient) {
@@ -89,11 +89,11 @@ func WithIncreasedFinalizedSlot(increaseFinalizedSlotBy int) LightClientOption {
 	}
 }
 
-func NewTestLightClient(t *testing.T) *TestLightClient {
+func NewTestLightClient2(t *testing.T) *TestLightClient {
 	return &TestLightClient{T: t}
 }
 
-func (l *TestLightClient) SetupTestAltair() *TestLightClient {
+func (l *TestLightClient) setupTestAltair() *TestLightClient {
 	ctx := context.Background()
 
 	attestedSlot := primitives.Slot(uint64(params.BeaconConfig().AltairForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch)).Add(1)
@@ -197,7 +197,7 @@ func (l *TestLightClient) SetupTestAltair() *TestLightClient {
 	return l
 }
 
-func (l *TestLightClient) SetupTestBellatrix() *TestLightClient {
+func (l *TestLightClient) setupTestBellatrix() *TestLightClient {
 	ctx := context.Background()
 
 	attestedSlot := primitives.Slot(uint64(params.BeaconConfig().BellatrixForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch)).Add(1)
@@ -301,7 +301,7 @@ func (l *TestLightClient) SetupTestBellatrix() *TestLightClient {
 	return l
 }
 
-func (l *TestLightClient) SetupTestCapella() *TestLightClient {
+func (l *TestLightClient) setupTestCapella() *TestLightClient {
 	ctx := context.Background()
 
 	attestedSlot := primitives.Slot(uint64(params.BeaconConfig().CapellaForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch)).Add(1)
@@ -442,7 +442,7 @@ func (l *TestLightClient) SetupTestCapella() *TestLightClient {
 	return l
 }
 
-func (l *TestLightClient) SetupTestDeneb() *TestLightClient {
+func (l *TestLightClient) setupTestDeneb() *TestLightClient {
 	ctx := context.Background()
 
 	attestedSlot := primitives.Slot(uint64(params.BeaconConfig().DenebForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch)).Add(1)
@@ -583,7 +583,7 @@ func (l *TestLightClient) SetupTestDeneb() *TestLightClient {
 	return l
 }
 
-func (l *TestLightClient) SetupTestElectra() *TestLightClient {
+func (l *TestLightClient) setupTestElectra() *TestLightClient {
 	ctx := context.Background()
 
 	attestedSlot := primitives.Slot(uint64(params.BeaconConfig().ElectraForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch)).Add(1)
@@ -724,7 +724,7 @@ func (l *TestLightClient) SetupTestElectra() *TestLightClient {
 	return l
 }
 
-func (l *TestLightClient) SetupTestFulu() *TestLightClient {
+func (l *TestLightClient) setupTestFulu() *TestLightClient {
 	ctx := context.Background()
 
 	attestedSlot := primitives.Slot(uint64(params.BeaconConfig().FuluForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch)).Add(1)
