@@ -225,7 +225,9 @@ func (s *Service) RefreshPersistentSubnets() {
 	// Compare current epoch with the Fulu fork epoch.
 	fuluForkEpoch := params.BeaconConfig().FuluForkEpoch
 
-	if currentEpoch < fuluForkEpoch {
+	// TODO: Clarify this hack.
+	// This `-1` is needed to expose cgc via ENR/metadata at least one epoch before the fulu fork.
+	if currentEpoch < fuluForkEpoch-1 {
 		// Altair behaviour.
 		if metadataVersion == version.Altair && isBitVUpToDate && isBitSUpToDate {
 			// Nothing to do, return early.

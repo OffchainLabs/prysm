@@ -252,7 +252,7 @@ func TestReconstructAndBroadcastBlobs(t *testing.T) {
 				name:                    "Constructed 128 data columns with all blobs",
 				blobCount:               1,
 				dataColumnSidecars:      allColumns,
-				expectedDataColumnCount: 8, // default is 8
+				expectedDataColumnCount: 4, // default is 4
 			},
 		}
 
