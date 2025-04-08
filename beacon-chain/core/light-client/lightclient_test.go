@@ -651,7 +651,7 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 		})
 
 		t.Run("Blinded Beacon Block", func(t *testing.T) {
-			l := util.NewTestLightClient(t, version.Capella)
+			l := util.NewTestLightClient(t, version.Capella, util.WithBlinded())
 
 			header, err := lightClient.BlockToLightClientHeader(
 				l.Ctx,
@@ -783,7 +783,7 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 		})
 
 		t.Run("Blinded Beacon Block", func(t *testing.T) {
-			l := util.NewTestLightClient(t, version.Deneb)
+			l := util.NewTestLightClient(t, version.Deneb, util.WithBlinded())
 
 			header, err := lightClient.BlockToLightClientHeader(
 				l.Ctx,
@@ -919,7 +919,7 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 		})
 
 		t.Run("Blinded Beacon Block", func(t *testing.T) {
-			l := util.NewTestLightClient(t, version.Electra)
+			l := util.NewTestLightClient(t, version.Electra, util.WithBlinded())
 
 			header, err := lightClient.BlockToLightClientHeader(l.Ctx, l.State.Slot(), l.Block)
 			require.NoError(t, err)
@@ -1090,7 +1090,7 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 		})
 
 		t.Run("Blinded Beacon Block", func(t *testing.T) {
-			l := util.NewTestLightClient(t, version.Capella)
+			l := util.NewTestLightClient(t, version.Capella, util.WithBlinded())
 
 			header, err := lightClient.BlockToLightClientHeader(
 				l.Ctx,

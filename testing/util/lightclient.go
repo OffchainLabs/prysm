@@ -62,9 +62,9 @@ func NewTestLightClient(t *testing.T, forkVersion int, options ...LightClientOpt
 }
 
 // WithBlinded Specifies whether the signature block is blinded or not
-func WithBlinded(blinded bool) func(l *TestLightClient) {
+func WithBlinded() func(l *TestLightClient) {
 	return func(l *TestLightClient) {
-		l.blinded = blinded
+		l.blinded = true
 	}
 }
 
