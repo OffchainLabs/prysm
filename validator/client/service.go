@@ -26,7 +26,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/validator/keymanager"
 	"github.com/OffchainLabs/prysm/v6/validator/keymanager/local"
 	remoteweb3signer "github.com/OffchainLabs/prysm/v6/validator/keymanager/remote-web3signer"
-	"github.com/dgraph-io/ristretto"
+	"github.com/dgraph-io/ristretto/v2"
 	middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpcretry "github.com/grpc-ecosystem/go-grpc-middleware/retry"
 	grpcopentracing "github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing"
@@ -36,6 +36,7 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/protobuf/proto"
 )
 
 // ValidatorService represents a service to manage the validator client
@@ -143,7 +144,7 @@ func NewValidatorService(ctx context.Context, cfg *Config) (*ValidatorService, e
 // Start the validator service. Launches the main go routine for the validator
 // client.
 func (v *ValidatorService) Start() {
-	cache, err := ristretto.NewCache(&ristretto.Config{
+	cache, err := ristretto.NewCache(&ristretto.Config[string, proto.Message]{
 		NumCounters: 1920, // number of keys to track.
 		MaxCost:     192,  // maximum cost of cache, 1 item = 1 cost.
 		BufferItems: 64,   // number of keys per Get buffer.

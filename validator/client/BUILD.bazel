@@ -69,7 +69,7 @@ go_library(
         "//validator/keymanager:go_default_library",
         "//validator/keymanager/local:go_default_library",
         "//validator/keymanager/remote-web3signer:go_default_library",
-        "@com_github_dgraph_io_ristretto//:go_default_library",
+        "@com_github_dgraph_io_ristretto_v2//:go_default_library",
         "@com_github_ethereum_go_ethereum//common:go_default_library",
         "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",
         "@com_github_golang_protobuf//ptypes/empty",

@@ -41,7 +41,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/validator/keymanager"
 	"github.com/OffchainLabs/prysm/v6/validator/keymanager/local"
 	remoteweb3signer "github.com/OffchainLabs/prysm/v6/validator/keymanager/remote-web3signer"
-	"github.com/dgraph-io/ristretto"
+	"github.com/dgraph-io/ristretto/v2"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	lru "github.com/hashicorp/golang-lru"
@@ -95,7 +95,7 @@ type validator struct {
 	interopKeysConfig                  *local.InteropKeymanagerConfig
 	attSelections                      map[attSelectionKey]iface.BeaconCommitteeSelection
 	aggregatedSlotCommitteeIDCache     *lru.Cache
-	domainDataCache                    *ristretto.Cache
+	domainDataCache                    *ristretto.Cache[string, proto.Message]
 	voteStats                          voteStats
 	syncCommitteeStats                 syncCommitteeStats
 	submittedAtts                      map[submittedAttKey]*submittedAtt

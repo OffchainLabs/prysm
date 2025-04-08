@@ -637,10 +637,10 @@ def prysm_deps():
         version = "v1.6.2",
     )
     go_repository(
-        name = "com_github_dgraph_io_ristretto",
-        importpath = "github.com/dgraph-io/ristretto",
-        sum = "h1:cNcG4c2n5xanQzp2hMyxDxPYVQmZ91y4WN6fJFlndLo=",
-        version = "v0.0.4-0.20210318174700-74754f61e018",
+        name = "com_github_dgraph_io_ristretto_v2",
+        importpath = "github.com/dgraph-io/ristretto/v2",
+        sum = "h1:bkY3XzJcXoMuELV8F+vS8kzNgicwQFAaGINAEJdWGOM=",
+        version = "v2.2.0",
     )
     go_repository(
         name = "com_github_dgrijalva_jwt_go",

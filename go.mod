@@ -11,8 +11,8 @@ require (
 	github.com/consensys/gnark-crypto v0.14.0
 	github.com/crate-crypto/go-kzg-4844 v1.1.0
 	github.com/d4l3k/messagediff v1.2.1
-	github.com/dgraph-io/ristretto v0.0.4-0.20210318174700-74754f61e018
-	github.com/dustin/go-humanize v1.0.0
+	github.com/dgraph-io/ristretto/v2 v2.2.0
+	github.com/dustin/go-humanize v1.0.1
 	github.com/emicklei/dot v0.11.0
 	github.com/ethereum/go-ethereum v1.15.0
 	github.com/fsnotify/fsnotify v1.6.0
@@ -112,7 +112,6 @@ require (
 	github.com/bits-and-blooms/bitset v1.17.0 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cespare/cp v1.1.1 // indirect
-	github.com/cespare/xxhash v1.1.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/chzyer/readline v1.5.1 // indirect
 	github.com/cockroachdb/errors v1.11.3 // indirect
@@ -284,7 +283,7 @@ require (
 	github.com/go-playground/validator/v10 v10.13.0
 	github.com/peterh/liner v1.2.0 // indirect
 	github.com/prysmaticlabs/gohashtree v0.0.4-beta.0.20240624100937-73632381301b
-	golang.org/x/sys v0.30.0 // indirect
+	golang.org/x/sys v0.31.0 // indirect
 	k8s.io/klog/v2 v2.120.1 // indirect
 	k8s.io/utils v0.0.0-20230726121419-3b25d923346b // indirect
 )
