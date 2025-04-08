@@ -43,7 +43,9 @@ func NewWrappedExecutionData(v proto.Message) (interfaces.ExecutionData, error) 
 		// note: no payload changes in electra so using deneb
 		return WrappedExecutionPayloadDeneb(pbStruct.Payload)
 	case *enginev1.ExecutionBundleFulu:
-		log.Debug("execution bundle fulu", pbStruct)
+		log.Debug("execution bundle fulu payload", pbStruct.Payload)
+		log.Debug("execution bundle fulu value", pbStruct.Value)
+		log.Debug("execution bundle fulu blobs bundle", pbStruct.BlobsBundle)
 		return WrappedExecutionPayloadDeneb(pbStruct.Payload)
 	default:
 		// return nil, errors.Wrapf(ErrUnsupportedVersion, "type %T", pbStruct)
