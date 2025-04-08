@@ -254,7 +254,19 @@ func (s *Service) validateCommitteeIndexAndCount(
 		return 0, 0, pubsub.ValidationIgnore, err
 	}
 	count := helpers.SlotCommitteeCount(valCount)
-	ci := a.GetCommitteeIndex()
+	var ci primitives.CommitteeIndex
+	if a.Version() >= version.Electra && !a.IsSingle() {
+		bitCount := a.CommitteeBitsVal().Count()
+		if bitCount == 0 {
+			return 0, 0, pubsub.ValidationReject, fmt.Errorf("committee bits have no bit set")
+		}
+		if bitCount != 1 {
+			return 0, 0, pubsub.ValidationReject, fmt.Errorf("expected 1 committee bit indice got %d", bitCount)
+		}
+		ci = primitives.CommitteeIndex(a.CommitteeBitsVal().BitIndices()[0])
+	} else {
+		ci = a.GetCommitteeIndex()
+	}
 	if uint64(ci) > count {
 		return 0, 0, pubsub.ValidationReject, fmt.Errorf("committee index %d > %d", ci, count)
 	}
