@@ -69,7 +69,7 @@ function get_realpath() {
 if [ "$#" -lt 1 ]; then
     color "31" "Usage: ./prysm.sh PROCESS FLAGS."
     color "31" "       ./prysm.sh PROCESS --download-only."
-    color "31" "PROCESS can be beacon-chain, validator, or client-stats."
+    color "31" "PROCESS can be beacon-chain, validator, client-stats or prysmctl."
     exit 1
 fi
 
@@ -178,6 +178,8 @@ else
 fi
 VALIDATOR_REAL="${wrapper_dir}/validator-${prysm_version}-${system}-${arch}"
 CLIENT_STATS_REAL="${wrapper_dir}/client-stats-${prysm_version}-${system}-${arch}"
+PRYSMCTL_REAL="${wrapper_dir}/prysmctl-${prysm_version}-${system}-${arch}"
+
 
 if [[ $1 == beacon-chain ]]; then
     if [[ ! -x $BEACON_CHAIN_REAL ]]; then
@@ -236,6 +238,25 @@ if [[ $1 == client-stats ]]; then
     fi
 fi
 
+
+if [[ $1 == prysmctl ]]; then
+    if [[ ! -x $PRYSMCTL_REAL ]]; then
+        color "34" "Downloading prysmctl@${prysm_version} to ${PRYSMCTL_REAL} (${reason})"
+
+        file=prysmctl-${prysm_version}-${system}-${arch}
+        res=$(curl -w '%{http_code}\n' -f -L "https://prysmaticlabs.com/releases/${file}" -o "$PRYSMCTL_REAL" | ( grep 404 || true ) )
+        if [[ $res == 404 ]];then
+            echo "No prysm prysmctl found for ${prysm_version}, (${file}) exit"
+            exit 1
+        fi
+        curl --silent -L "https://prysmaticlabs.com/releases/${file}.sha256" -o "${wrapper_dir}/${file}.sha256"
+        curl --silent -L "https://prysmaticlabs.com/releases/${file}.sig" -o "${wrapper_dir}/${file}.sig"
+        chmod +x "$PRYSMCTL_REAL"
+    else
+        color "37" "Prysmctl is up to date."
+    fi
+fi
+
 if [[ $1 == slasher ]]; then
     color "41" "The slasher binary is no longer available. Please use the --slasher flag with your beacon node. See: https://docs.prylabs.network/docs/prysm-usage/slasher/"
     exit 1
@@ -254,11 +275,15 @@ client-stats)
     readonly process=$CLIENT_STATS_REAL
     ;;
 
+prysmctl)
+    readonly process=$PRYSMCTL_REAL
+    ;;
+
 *)
     color "31" "Process '$1' is not found!"
     color "31" "Usage: ./prysm.sh PROCESS FLAGS."
     color "31" "       ./prysm.sh PROCESS --download-only."
-    color "31" "PROCESS can be beacon-chain, validator, or client-stats."
+    color "31" "PROCESS can be beacon-chain, validator, client-stats or prysmctl."
     exit 1
     ;;
 esac
