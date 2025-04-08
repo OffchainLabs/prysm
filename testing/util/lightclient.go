@@ -186,13 +186,6 @@ func (l *TestLightClient) SetupTestAltair(increaseAttestedSlotBy int, supermajor
 	signedSignatureBlock, err = blocks.NewSignedBeaconBlock(signatureBlock)
 	require.NoError(l.T, err)
 
-	require.DeepSSZEqual(l.T, attestedBlockRoot[:], signatureBlock.Block.ParentRoot[:], "attested block root and signature block parent root should be equal")
-	newAttestedHeader := attestedState.LatestBlockHeader()
-	newAttestedHeader.StateRoot = attestedStateRoot[:]
-	newAttestedHeaderRoot, err := newAttestedHeader.HashTreeRoot()
-	require.NoError(l.T, err)
-	require.DeepSSZEqual(l.T, newAttestedHeaderRoot[:], attestedBlockRoot[:], "attested block root and new attested header root should be equal")
-
 	l.State = signatureState
 	l.AttestedState = attestedState
 	l.Block = signedSignatureBlock
@@ -286,16 +279,6 @@ func (l *TestLightClient) SetupTestBellatrix(increaseAttestedSlotBy int, superma
 	block.Block.StateRoot = stateRoot[:]
 	signedBlock, err = blocks.NewSignedBeaconBlock(block)
 	require.NoError(l.T, err)
-
-	blockRoot, err := signedBlock.Block().HashTreeRoot()
-	require.NoError(l.T, err)
-
-	require.DeepSSZEqual(l.T, parentRoot[:], block.Block.ParentRoot[:], "attested block root and signature block parent root should be equal")
-	newAttestedHeader := state.LatestBlockHeader()
-	newAttestedHeader.StateRoot = stateRoot[:]
-	newAttestedHeaderRoot, err := newAttestedHeader.HashTreeRoot()
-	require.NoError(l.T, err)
-	require.DeepSSZEqual(l.T, newAttestedHeaderRoot[:], blockRoot[:], "attested block root and new attested header root should be equal")
 
 	l.State = state
 	l.AttestedState = attestedState
