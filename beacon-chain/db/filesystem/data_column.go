@@ -669,6 +669,10 @@ func (dcs *DataColumnStorage) saveDataColumnSidecarsExistingFile(filePath string
 		return errWrongBytesWritten
 	}
 
+	if err := file.Sync(); err != nil {
+		return errors.Wrap(err, "sync")
+	}
+
 	return nil
 }
 
@@ -779,6 +783,10 @@ func (dcs *DataColumnStorage) saveDataColumnSidecarsNewFile(filePath string, inp
 	}
 	if countWritten != countToWrite {
 		return errWrongBytesWritten
+	}
+
+	if err := file.Sync(); err != nil {
+		return errors.Wrap(err, "sync")
 	}
 
 	return nil
