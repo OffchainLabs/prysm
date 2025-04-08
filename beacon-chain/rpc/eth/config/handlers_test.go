@@ -198,7 +198,7 @@ func TestGetSpec(t *testing.T) {
 	data, ok := resp.Data.(map[string]interface{})
 	require.Equal(t, true, ok)
 
-	assert.Equal(t, 173, len(data))
+	assert.Equal(t, 174, len(data))
 	for k, v := range data {
 		t.Run(k, func(t *testing.T) {
 			switch k {
@@ -571,6 +571,8 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "100", v)
 			case "KZG_COMMITMENT_INCLUSION_PROOF_DEPTH":
 				assert.Equal(t, "101", v)
+			case "MAX_BLOBS_PER_BLOCK_FULU":
+				assert.Equal(t, "12", v)
 			default:
 				t.Errorf("Incorrect key: %s", k)
 			}

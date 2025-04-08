@@ -31,7 +31,6 @@ var placeholderFields = []string{
 	"EIP7002_FORK_VERSION",
 	"EIP7732_FORK_EPOCH",
 	"EIP7732_FORK_VERSION",
-	"MAX_BLOBS_PER_BLOCK_FULU",
 	"MAX_PAYLOAD_SIZE",
 	"MAX_REQUEST_BLOB_SIDECARS_FULU",
 	"MAX_REQUEST_PAYLOADS", // Compile time constant on BeaconBlockBody.ExecutionRequests

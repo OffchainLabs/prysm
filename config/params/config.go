@@ -308,6 +308,10 @@ type BeaconChainConfig struct {
 	// DeprecatedTargetBlobsPerBlockElectra defines the target number of blobs per block post Electra hard fork.
 	// Deprecated: This field is no longer supported. Avoid using it.
 	DeprecatedTargetBlobsPerBlockElectra int `yaml:"TARGET_BLOBS_PER_BLOCK_ELECTRA" spec:"true"`
+
+	// DeprecatedMaxBlobsPerBlockFulu defines the max blobs that could exist in a block post Fulu hard fork.
+	// Deprecated: This field is no longer supported. Avoid using it.
+	DeprecatedMaxBlobsPerBlockFulu int `yaml:"MAX_BLOBS_PER_BLOCK_FULU" spec:"true"`
 }
 
 // InitializeForkSchedule initializes the schedules forks baked into the config.
@@ -399,23 +403,39 @@ func (b *BeaconChainConfig) TargetBlobsPerBlock(slot primitives.Slot) int {
 
 // MaxBlobsPerBlock returns the maximum number of blobs per block for the given slot.
 func (b *BeaconChainConfig) MaxBlobsPerBlock(slot primitives.Slot) int {
-	if primitives.Epoch(slot.DivSlot(b.SlotsPerEpoch)) >= b.ElectraForkEpoch {
+	epoch := primitives.Epoch(slot.DivSlot(b.SlotsPerEpoch))
+
+	if epoch >= b.FuluForkEpoch {
+		return b.DeprecatedMaxBlobsPerBlockFulu
+	}
+
+	if epoch >= b.ElectraForkEpoch {
 		return b.DeprecatedMaxBlobsPerBlockElectra
 	}
+
 	return b.DeprecatedMaxBlobsPerBlock
 }
 
 // MaxBlobsPerBlockByVersion returns the maximum number of blobs per block for the given fork version
 func (b *BeaconChainConfig) MaxBlobsPerBlockByVersion(v int) int {
+	if v >= version.Fulu {
+		return b.DeprecatedMaxBlobsPerBlockFulu
+	}
+
 	if v >= version.Electra {
 		return b.DeprecatedMaxBlobsPerBlockElectra
 	}
+
 	return b.DeprecatedMaxBlobsPerBlock
 }
 
 // MaxBlobsPerBlockByEpoch returns the maximum number of blobs per block for the given epoch,
 // adjusting for the Electra fork.
 func (b *BeaconChainConfig) MaxBlobsPerBlockAtEpoch(epoch primitives.Epoch) int {
+	if epoch >= b.FuluForkEpoch {
+		return b.DeprecatedMaxBlobsPerBlockFulu
+	}
+
 	if epoch >= b.ElectraForkEpoch {
 		return b.DeprecatedMaxBlobsPerBlockElectra
 	}
