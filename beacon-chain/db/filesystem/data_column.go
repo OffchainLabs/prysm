@@ -79,11 +79,11 @@ type (
 
 	storageIndices struct {
 		indices [mandatoryNumberOfColumns]byte
+		count   int64
 	}
 
 	metadata struct {
 		indices                         *storageIndices
-		savedDataColumnSidecarCount     int64
 		sszEncodedDataColumnSidecarSize uint32
 		fileSize                        int64
 	}
@@ -620,7 +620,7 @@ func (dcs *DataColumnStorage) saveDataColumnSidecarsExistingFile(filePath string
 			// Check if the number of saved data columns is too large.
 			// This is impossible to happen in practice is this function is called
 			// by SaveDataColumnSidecars.
-			if metadata.savedDataColumnSidecarCount >= mandatoryNumberOfColumns {
+			if metadata.indices.len() >= mandatoryNumberOfColumns {
 				return errTooManyDataColumns
 			}
 
@@ -639,11 +639,9 @@ func (dcs *DataColumnStorage) saveDataColumnSidecarsExistingFile(filePath string
 			}
 
 			// Alter indices to mark the data column as saved.
-			if err := metadata.indices.set(dataColumnIndex, uint8(metadata.savedDataColumnSidecarCount)); err != nil {
+			if err := metadata.indices.set(dataColumnIndex, uint8(metadata.indices.len())); err != nil {
 				return errors.Wrap(err, "set index")
 			}
-
-			metadata.savedDataColumnSidecarCount++
 
 			// Append the SSZ encoded data column sidecar to the SSZ encoded data column sidecars.
 			sszEncodedDataColumnSidecars = append(sszEncodedDataColumnSidecars, sszEncodedDataColumnSidecar...)
@@ -828,7 +826,7 @@ func (dcs *DataColumnStorage) metadata(file afero.File) (*metadata, error) {
 	}
 
 	// Compute the saved columns count.
-	savedDataColumnSidecarCount := int64(indices.len())
+	savedDataColumnSidecarCount := indices.len()
 
 	// Compute the size of the file.
 	// It is safe to cast the SSZ encoded data column sidecar size to int64 since it is less than 2**63.
@@ -836,7 +834,6 @@ func (dcs *DataColumnStorage) metadata(file afero.File) (*metadata, error) {
 
 	metadata := &metadata{
 		indices:                         indices,
-		savedDataColumnSidecarCount:     savedDataColumnSidecarCount,
 		sszEncodedDataColumnSidecarSize: sszEncodedDataColumnSidecarSize,
 		fileSize:                        fileSize,
 	}
@@ -862,13 +859,25 @@ func (dcs *DataColumnStorage) fileMutex(root [fieldparams.RootLength]byte) (*syn
 	return mc.mu, mc.toStore
 }
 
-func newStorageIndices(indices []byte) (*storageIndices, error) {
-	if len(indices) != mandatoryNumberOfColumns {
+func newStorageIndices(originalIndices []byte) (*storageIndices, error) {
+	if len(originalIndices) != mandatoryNumberOfColumns {
 		return nil, errWrongNumberOfColumns
 	}
 
-	var storageIndices storageIndices
-	copy(storageIndices.indices[:], indices)
+	count := int64(0)
+	for _, i := range originalIndices {
+		if i >= nonZeroOffset {
+			count++
+		}
+	}
+
+	var indices [mandatoryNumberOfColumns]byte
+	copy(indices[:], originalIndices)
+
+	storageIndices := storageIndices{
+		indices: indices,
+		count:   count,
+	}
 
 	return &storageIndices, nil
 }
@@ -887,17 +896,8 @@ func (si *storageIndices) get(dataColumnIndex uint64) (bool, int64, error) {
 	return true, int64(si.indices[dataColumnIndex] - nonZeroOffset), nil
 }
 
-// len returns the number of saved data column sidecars.
-func (si *storageIndices) len() int {
-	count := 0
-
-	for _, i := range si.indices {
-		if i >= nonZeroOffset {
-			count++
-		}
-	}
-
-	return count
+func (si *storageIndices) len() int64 {
+	return si.count
 }
 
 // all returns all saved data column sidecars.
@@ -925,6 +925,11 @@ func (si *storageIndices) raw() [mandatoryNumberOfColumns]byte {
 func (si *storageIndices) set(dataColumnIndex uint64, position uint8) error {
 	if dataColumnIndex >= mandatoryNumberOfColumns || position >= mandatoryNumberOfColumns {
 		return errDataColumnIndexTooLarge
+	}
+
+	existing := si.indices[dataColumnIndex] >= nonZeroOffset
+	if !existing {
+		si.count++
 	}
 
 	si.indices[dataColumnIndex] = nonZeroOffset + position

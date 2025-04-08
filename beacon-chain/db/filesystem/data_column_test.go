@@ -547,10 +547,10 @@ func TestStorageIndicesGet(t *testing.T) {
 }
 
 func TestStorageIndicesLen(t *testing.T) {
-	const expectedLen = 2
-	indices := storageIndices{indices: [mandatoryNumberOfColumns]byte{0, 131, 0, 128}}
-	actualLen := indices.len()
-	require.Equal(t, expectedLen, actualLen)
+	const expected = int64(2)
+	indices := storageIndices{count: 2}
+	actual := indices.len()
+	require.Equal(t, expected, actual)
 }
 
 func TestStorageIndicesAll(t *testing.T) {
@@ -575,15 +575,23 @@ func TestStorageIndicesSet(t *testing.T) {
 
 	t.Run("nominal", func(t *testing.T) {
 		expected := [mandatoryNumberOfColumns]byte{0, 0, 128, 0, 131}
-		var indices storageIndices
+		var storageIndices storageIndices
+		require.Equal(t, int64(0), storageIndices.len())
 
-		err := indices.set(2, 0)
+		err := storageIndices.set(2, 1)
 		require.NoError(t, err)
+		require.Equal(t, int64(1), storageIndices.len())
 
-		err = indices.set(4, 3)
+		err = storageIndices.set(4, 3)
 		require.NoError(t, err)
+		require.Equal(t, int64(2), storageIndices.len())
 
-		require.Equal(t, expected, indices.indices)
+		err = storageIndices.set(2, 0)
+		require.NoError(t, err)
+		require.Equal(t, int64(2), storageIndices.len())
+
+		actual := storageIndices.indices
+		require.Equal(t, expected, actual)
 	})
 }
 
