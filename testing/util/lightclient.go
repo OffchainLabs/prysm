@@ -27,10 +27,284 @@ type TestLightClient struct {
 	AttestedState  state.BeaconState
 	AttestedBlock  interfaces.ReadOnlySignedBeaconBlock
 	FinalizedBlock interfaces.ReadOnlySignedBeaconBlock
+
+	version                 int
+	supermajority           bool
+	blinded                 bool
+	increaseAttestedSlotBy  int
+	increaseFinalizedSlotBy int
+}
+type LightClientOption func(l *TestLightClient)
+
+//func NewTestLightClient2(t *testing.T, forkVersion int, options ...LightClientOption) *TestLightClient {
+//	l := &TestLightClient{T: t, version: forkVersion}
+//
+//	for _, option := range options {
+//		option(l)
+//	}
+//
+//	switch l.version {
+//	case version.Altair:
+//		return l.SetupTestAltair()
+//	case version.Bellatrix:
+//		return l.SetupTestBellatrix()
+//	case version.Capella:
+//		return l.SetupTestCapella()
+//	case version.Deneb:
+//		return l.SetupTestDeneb()
+//	case version.Electra:
+//		return l.SetupTestElectra()
+//	default:
+//		l.T.Fatalf("unknown version %d", l.version)
+//		return nil
+//	}
+//}
+
+// WithBlinded Specifies whether the signature block is blinded or not
+func WithBlinded(blinded bool) func(l *TestLightClient) {
+	return func(l *TestLightClient) {
+		l.blinded = blinded
+	}
+}
+
+// WithSupermajority Specifies whether the sync committee bits have supermajority or not
+func WithSupermajority(supermajority bool) LightClientOption {
+	return func(l *TestLightClient) {
+		l.supermajority = supermajority
+	}
+}
+
+// WithIncreasedAttestedSlot Specifies the number of slots to increase the attested slot by. This does not affect the finalized block's slot if there is any.
+func WithIncreasedAttestedSlot(increaseAttestedSlotBy int) LightClientOption {
+	return func(l *TestLightClient) {
+		l.increaseAttestedSlotBy = increaseAttestedSlotBy
+	}
+}
+
+// WithIncreasedFinalizedSlot Specifies the number of slots to increase the finalized slot by. This DOES NOT affect the attested block's slot. That should be handled separately using WithIncreasedAttestedSlot.
+func WithIncreasedFinalizedSlot(increaseFinalizedSlotBy int) LightClientOption {
+	return func(l *TestLightClient) {
+		l.increaseFinalizedSlotBy = increaseFinalizedSlotBy
+	}
 }
 
 func NewTestLightClient(t *testing.T) *TestLightClient {
 	return &TestLightClient{T: t}
+}
+
+func (l *TestLightClient) SetupTestAltair(increaseAttestedSlotBy int, supermajority bool) *TestLightClient {
+	ctx := context.Background()
+
+	attestedSlot := primitives.Slot(uint64(params.BeaconConfig().AltairForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch)).Add(1)
+	if l.increaseAttestedSlotBy > 0 {
+		attestedSlot = attestedSlot.Add(uint64(l.increaseAttestedSlotBy))
+	}
+
+	finalizedSlot := primitives.Slot(uint64(params.BeaconConfig().AltairForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch))
+	if l.increaseFinalizedSlotBy > 0 {
+		finalizedSlot = finalizedSlot.Add(uint64(l.increaseFinalizedSlotBy))
+	}
+
+	signatureSlot := attestedSlot.Add(1)
+
+	// Finalized State & Block
+	finalizedState, err := NewBeaconStateAltair()
+	require.NoError(l.T, err)
+	require.NoError(l.T, finalizedState.SetSlot(finalizedSlot))
+
+	finalizedBlock := NewBeaconBlockAltair()
+	require.NoError(l.T, err)
+	finalizedBlock.Block.Slot = finalizedSlot
+	signedFinalizedBlock, err := blocks.NewSignedBeaconBlock(finalizedBlock)
+	require.NoError(l.T, err)
+	finalizedHeader, err := signedFinalizedBlock.Header()
+	require.NoError(l.T, err)
+	require.NoError(l.T, finalizedState.SetLatestBlockHeader(finalizedHeader.Header))
+	finalizedStateRoot, err := finalizedState.HashTreeRoot(ctx)
+	require.NoError(l.T, err)
+	finalizedBlock.Block.StateRoot = finalizedStateRoot[:]
+	signedFinalizedBlock, err = blocks.NewSignedBeaconBlock(finalizedBlock)
+	require.NoError(l.T, err)
+
+	// Attested State & Block
+	attestedState, err := NewBeaconStateAltair()
+	require.NoError(l.T, err)
+	require.NoError(l.T, attestedState.SetSlot(attestedSlot))
+
+	// Set the finalized checkpoint
+	finalizedBlockRoot, err := signedFinalizedBlock.Block().HashTreeRoot()
+	require.NoError(l.T, err)
+	finalizedCheckpoint := &ethpb.Checkpoint{
+		Epoch: params.BeaconConfig().AltairForkEpoch - 10,
+		Root:  finalizedBlockRoot[:],
+	}
+	require.NoError(l.T, attestedState.SetFinalizedCheckpoint(finalizedCheckpoint))
+
+	attestedBlock := NewBeaconBlockAltair()
+	attestedBlock.Block.Slot = attestedSlot
+	signedAttestedBlock, err := blocks.NewSignedBeaconBlock(attestedBlock)
+	require.NoError(l.T, err)
+	attestedBlockHeader, err := signedAttestedBlock.Header()
+	require.NoError(l.T, err)
+	require.NoError(l.T, attestedState.SetLatestBlockHeader(attestedBlockHeader.Header))
+	attestedStateRoot, err := attestedState.HashTreeRoot(ctx)
+	require.NoError(l.T, err)
+	attestedBlock.Block.StateRoot = attestedStateRoot[:]
+	signedAttestedBlock, err = blocks.NewSignedBeaconBlock(attestedBlock)
+	require.NoError(l.T, err)
+
+	// Signature State & Block
+	signatureState, err := NewBeaconStateAltair()
+	require.NoError(l.T, err)
+	require.NoError(l.T, signatureState.SetSlot(signatureSlot))
+
+	signatureBlock := NewBeaconBlockAltair()
+	signatureBlock.Block.Slot = signatureSlot
+	attestedBlockRoot, err := signedAttestedBlock.Block().HashTreeRoot()
+	require.NoError(l.T, err)
+	signatureBlock.Block.ParentRoot = attestedBlockRoot[:]
+
+	var trueBitNum uint64
+	if l.supermajority {
+		trueBitNum = uint64((float64(params.BeaconConfig().SyncCommitteeSize) * 2.0 / 3.0) + 1)
+	} else {
+		trueBitNum = params.BeaconConfig().MinSyncCommitteeParticipants
+	}
+	for i := uint64(0); i < trueBitNum; i++ {
+		signatureBlock.Block.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, true)
+	}
+
+	signedSignatureBlock, err := blocks.NewSignedBeaconBlock(signatureBlock)
+	require.NoError(l.T, err)
+	signatureBlockHeader, err := signedSignatureBlock.Header()
+	require.NoError(l.T, err)
+	err = signatureState.SetLatestBlockHeader(signatureBlockHeader.Header)
+	require.NoError(l.T, err)
+	signatureStateRoot, err := signatureState.HashTreeRoot(ctx)
+	require.NoError(l.T, err)
+	signatureBlock.Block.StateRoot = signatureStateRoot[:]
+	signedSignatureBlock, err = blocks.NewSignedBeaconBlock(signatureBlock)
+	require.NoError(l.T, err)
+
+	require.DeepSSZEqual(l.T, attestedBlockRoot[:], signatureBlock.Block.ParentRoot[:], "attested block root and signature block parent root should be equal")
+	newAttestedHeader := attestedState.LatestBlockHeader()
+	newAttestedHeader.StateRoot = attestedStateRoot[:]
+	newAttestedHeaderRoot, err := newAttestedHeader.HashTreeRoot()
+	require.NoError(l.T, err)
+	require.DeepSSZEqual(l.T, newAttestedHeaderRoot[:], attestedBlockRoot[:], "attested block root and new attested header root should be equal")
+
+	l.State = signatureState
+	l.AttestedState = attestedState
+	l.Block = signedSignatureBlock
+	l.Ctx = ctx
+	l.FinalizedBlock = signedFinalizedBlock
+	l.AttestedBlock = signedAttestedBlock
+
+	return l
+}
+
+func (l *TestLightClient) SetupTestBellatrix(increaseAttestedSlotBy int, supermajority bool) *TestLightClient {
+	ctx := context.Background()
+
+	slot := primitives.Slot(params.BeaconConfig().BellatrixForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
+	if increaseAttestedSlotBy > 0 {
+		slot = slot.Add(uint64(increaseAttestedSlotBy))
+	}
+
+	attestedState, err := NewBeaconStateBellatrix()
+	require.NoError(l.T, err)
+	err = attestedState.SetSlot(slot)
+	require.NoError(l.T, err)
+
+	finalizedBlock, err := blocks.NewSignedBeaconBlock(NewBeaconBlockBellatrix())
+	require.NoError(l.T, err)
+	finalizedBlock.SetSlot(1)
+	finalizedHeader, err := finalizedBlock.Header()
+	require.NoError(l.T, err)
+	finalizedRoot, err := finalizedHeader.Header.HashTreeRoot()
+	require.NoError(l.T, err)
+
+	require.NoError(l.T, attestedState.SetFinalizedCheckpoint(&ethpb.Checkpoint{
+		Epoch: params.BeaconConfig().BellatrixForkEpoch - 10,
+		Root:  finalizedRoot[:],
+	}))
+
+	parent := NewBeaconBlockBellatrix()
+	parent.Block.Slot = slot
+
+	signedParent, err := blocks.NewSignedBeaconBlock(parent)
+	require.NoError(l.T, err)
+
+	parentHeader, err := signedParent.Header()
+	require.NoError(l.T, err)
+	attestedHeader := parentHeader.Header
+
+	err = attestedState.SetLatestBlockHeader(attestedHeader)
+	require.NoError(l.T, err)
+	attestedStateRoot, err := attestedState.HashTreeRoot(ctx)
+	require.NoError(l.T, err)
+
+	// get a new signed block so the root is updated with the new state root
+	parent.Block.StateRoot = attestedStateRoot[:]
+	signedParent, err = blocks.NewSignedBeaconBlock(parent)
+	require.NoError(l.T, err)
+
+	state, err := NewBeaconStateBellatrix()
+	require.NoError(l.T, err)
+	err = state.SetSlot(slot)
+	require.NoError(l.T, err)
+
+	parentRoot, err := signedParent.Block().HashTreeRoot()
+	require.NoError(l.T, err)
+
+	block := NewBeaconBlockBellatrix()
+	block.Block.Slot = slot
+	block.Block.ParentRoot = parentRoot[:]
+
+	var trueBitNum uint64
+	if supermajority {
+		trueBitNum = (params.BeaconConfig().SyncCommitteeSize / 3 * 2) + 1
+	} else {
+		trueBitNum = params.BeaconConfig().MinSyncCommitteeParticipants
+	}
+	for i := uint64(0); i < trueBitNum; i++ {
+		block.Block.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, true)
+	}
+
+	signedBlock, err := blocks.NewSignedBeaconBlock(block)
+	require.NoError(l.T, err)
+
+	h, err := signedBlock.Header()
+	require.NoError(l.T, err)
+
+	err = state.SetLatestBlockHeader(h.Header)
+	require.NoError(l.T, err)
+	stateRoot, err := state.HashTreeRoot(ctx)
+	require.NoError(l.T, err)
+
+	// get a new signed block so the root is updated with the new state root
+	block.Block.StateRoot = stateRoot[:]
+	signedBlock, err = blocks.NewSignedBeaconBlock(block)
+	require.NoError(l.T, err)
+
+	blockRoot, err := signedBlock.Block().HashTreeRoot()
+	require.NoError(l.T, err)
+
+	require.DeepSSZEqual(l.T, parentRoot[:], block.Block.ParentRoot[:], "attested block root and signature block parent root should be equal")
+	newAttestedHeader := state.LatestBlockHeader()
+	newAttestedHeader.StateRoot = stateRoot[:]
+	newAttestedHeaderRoot, err := newAttestedHeader.HashTreeRoot()
+	require.NoError(l.T, err)
+	require.DeepSSZEqual(l.T, newAttestedHeaderRoot[:], blockRoot[:], "attested block root and new attested header root should be equal")
+
+	l.State = state
+	l.AttestedState = attestedState
+	l.Block = signedBlock
+	l.Ctx = ctx
+	l.FinalizedBlock = finalizedBlock
+	l.AttestedBlock = signedParent
+
+	return l
 }
 
 func (l *TestLightClient) SetupTestCapella(blinded bool, increaseAttestedSlotBy int, supermajority bool) *TestLightClient {
@@ -156,314 +430,6 @@ func (l *TestLightClient) SetupTestCapella(blinded bool, increaseAttestedSlotBy 
 	l.Block = signedBlock
 	l.Ctx = ctx
 	l.FinalizedBlock = finalizedBlock
-
-	return l
-}
-
-func (l *TestLightClient) SetupTestCapellaFinalizedBlockAltair(blinded bool) *TestLightClient {
-	ctx := context.Background()
-
-	slot := primitives.Slot(params.BeaconConfig().CapellaForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
-
-	attestedState, err := NewBeaconStateCapella()
-	require.NoError(l.T, err)
-	err = attestedState.SetSlot(slot)
-	require.NoError(l.T, err)
-
-	finalizedBlock, err := blocks.NewSignedBeaconBlock(NewBeaconBlockAltair())
-	require.NoError(l.T, err)
-	finalizedBlock.SetSlot(1)
-	finalizedHeader, err := finalizedBlock.Header()
-	require.NoError(l.T, err)
-	finalizedRoot, err := finalizedHeader.Header.HashTreeRoot()
-	require.NoError(l.T, err)
-
-	require.NoError(l.T, attestedState.SetFinalizedCheckpoint(&ethpb.Checkpoint{
-		Epoch: params.BeaconConfig().AltairForkEpoch - 10,
-		Root:  finalizedRoot[:],
-	}))
-
-	parent := NewBeaconBlockCapella()
-	parent.Block.Slot = slot
-
-	signedParent, err := blocks.NewSignedBeaconBlock(parent)
-	require.NoError(l.T, err)
-
-	parentHeader, err := signedParent.Header()
-	require.NoError(l.T, err)
-	attestedHeader := parentHeader.Header
-
-	err = attestedState.SetLatestBlockHeader(attestedHeader)
-	require.NoError(l.T, err)
-	attestedStateRoot, err := attestedState.HashTreeRoot(ctx)
-	require.NoError(l.T, err)
-
-	// get a new signed block so the root is updated with the new state root
-	parent.Block.StateRoot = attestedStateRoot[:]
-	signedParent, err = blocks.NewSignedBeaconBlock(parent)
-	require.NoError(l.T, err)
-
-	state, err := NewBeaconStateCapella()
-	require.NoError(l.T, err)
-	err = state.SetSlot(slot)
-	require.NoError(l.T, err)
-
-	parentRoot, err := signedParent.Block().HashTreeRoot()
-	require.NoError(l.T, err)
-
-	var signedBlock interfaces.SignedBeaconBlock
-	if blinded {
-		block := NewBlindedBeaconBlockCapella()
-		block.Block.Slot = slot
-		block.Block.ParentRoot = parentRoot[:]
-
-		for i := uint64(0); i < params.BeaconConfig().MinSyncCommitteeParticipants; i++ {
-			block.Block.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, true)
-		}
-
-		signedBlock, err = blocks.NewSignedBeaconBlock(block)
-		require.NoError(l.T, err)
-
-		h, err := signedBlock.Header()
-		require.NoError(l.T, err)
-
-		err = state.SetLatestBlockHeader(h.Header)
-		require.NoError(l.T, err)
-		stateRoot, err := state.HashTreeRoot(ctx)
-		require.NoError(l.T, err)
-
-		// get a new signed block so the root is updated with the new state root
-		block.Block.StateRoot = stateRoot[:]
-		signedBlock, err = blocks.NewSignedBeaconBlock(block)
-		require.NoError(l.T, err)
-	} else {
-		block := NewBeaconBlockCapella()
-		block.Block.Slot = slot
-		block.Block.ParentRoot = parentRoot[:]
-
-		for i := uint64(0); i < params.BeaconConfig().MinSyncCommitteeParticipants; i++ {
-			block.Block.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, true)
-		}
-
-		signedBlock, err = blocks.NewSignedBeaconBlock(block)
-		require.NoError(l.T, err)
-
-		h, err := signedBlock.Header()
-		require.NoError(l.T, err)
-
-		err = state.SetLatestBlockHeader(h.Header)
-		require.NoError(l.T, err)
-		stateRoot, err := state.HashTreeRoot(ctx)
-		require.NoError(l.T, err)
-
-		// get a new signed block so the root is updated with the new state root
-		block.Block.StateRoot = stateRoot[:]
-		signedBlock, err = blocks.NewSignedBeaconBlock(block)
-		require.NoError(l.T, err)
-	}
-
-	l.State = state
-	l.AttestedState = attestedState
-	l.AttestedBlock = signedParent
-	l.Block = signedBlock
-	l.Ctx = ctx
-	l.FinalizedBlock = finalizedBlock
-
-	return l
-}
-
-func (l *TestLightClient) SetupTestAltair(increaseAttestedSlotBy int, supermajority bool) *TestLightClient {
-	ctx := context.Background()
-
-	slot := primitives.Slot(uint64(params.BeaconConfig().AltairForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch)).Add(1)
-	if increaseAttestedSlotBy > 0 {
-		slot = slot.Add(uint64(increaseAttestedSlotBy))
-	}
-
-	attestedState, err := NewBeaconStateAltair()
-	require.NoError(l.T, err)
-	err = attestedState.SetSlot(slot)
-	require.NoError(l.T, err)
-
-	finalizedState, err := NewBeaconStateAltair()
-	require.NoError(l.T, err)
-	err = finalizedState.SetSlot(1)
-	require.NoError(l.T, err)
-	finalizedStateRoot, err := finalizedState.HashTreeRoot(ctx)
-	require.NoError(l.T, err)
-	SignedFinalizedBlock, err := blocks.NewSignedBeaconBlock(NewBeaconBlockAltair())
-	require.NoError(l.T, err)
-	SignedFinalizedBlock.SetSlot(1)
-	SignedFinalizedBlock.SetStateRoot(finalizedStateRoot[:])
-	finalizedHeader, err := SignedFinalizedBlock.Header()
-	require.NoError(l.T, err)
-	finalizedRoot, err := finalizedHeader.Header.HashTreeRoot()
-	require.NoError(l.T, err)
-
-	finalizedCheckpoint := &ethpb.Checkpoint{
-		Epoch: params.BeaconConfig().AltairForkEpoch - 10,
-		Root:  finalizedRoot[:],
-	}
-	require.NoError(l.T, attestedState.SetFinalizedCheckpoint(finalizedCheckpoint))
-
-	parent := NewBeaconBlockAltair()
-	parent.Block.Slot = slot
-
-	signedParent, err := blocks.NewSignedBeaconBlock(parent)
-	require.NoError(l.T, err)
-
-	parentHeader, err := signedParent.Header()
-	require.NoError(l.T, err)
-	attestedHeader := parentHeader.Header
-
-	err = attestedState.SetLatestBlockHeader(attestedHeader)
-	require.NoError(l.T, err)
-	attestedStateRoot, err := attestedState.HashTreeRoot(ctx)
-	require.NoError(l.T, err)
-
-	// get a new signed block so the root is updated with the new state root
-	parent.Block.StateRoot = attestedStateRoot[:]
-	signedParent, err = blocks.NewSignedBeaconBlock(parent)
-	require.NoError(l.T, err)
-
-	state, err := NewBeaconStateAltair()
-	require.NoError(l.T, err)
-	err = state.SetSlot(slot)
-	require.NoError(l.T, err)
-
-	parentRoot, err := signedParent.Block().HashTreeRoot()
-	require.NoError(l.T, err)
-
-	block := NewBeaconBlockAltair()
-	block.Block.Slot = slot
-	block.Block.ParentRoot = parentRoot[:]
-
-	var trueBitNum uint64
-	if supermajority {
-		trueBitNum = (params.BeaconConfig().SyncCommitteeSize / 3 * 2) + 1
-	} else {
-		trueBitNum = params.BeaconConfig().MinSyncCommitteeParticipants
-	}
-	for i := uint64(0); i < trueBitNum; i++ {
-		block.Block.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, true)
-	}
-
-	signedBlock, err := blocks.NewSignedBeaconBlock(block)
-	require.NoError(l.T, err)
-
-	h, err := signedBlock.Header()
-	require.NoError(l.T, err)
-
-	err = state.SetLatestBlockHeader(h.Header)
-	require.NoError(l.T, err)
-	stateRoot, err := state.HashTreeRoot(ctx)
-	require.NoError(l.T, err)
-
-	// get a new signed block so the root is updated with the new state root
-	block.Block.StateRoot = stateRoot[:]
-	signedBlock, err = blocks.NewSignedBeaconBlock(block)
-	require.NoError(l.T, err)
-
-	l.State = state
-	l.AttestedState = attestedState
-	l.Block = signedBlock
-	l.Ctx = ctx
-	l.FinalizedBlock = SignedFinalizedBlock
-	l.AttestedBlock = signedParent
-
-	return l
-}
-
-func (l *TestLightClient) SetupTestBellatrix(increaseAttestedSlotBy int, supermajority bool) *TestLightClient {
-	ctx := context.Background()
-
-	slot := primitives.Slot(params.BeaconConfig().BellatrixForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
-	if increaseAttestedSlotBy > 0 {
-		slot = slot.Add(uint64(increaseAttestedSlotBy))
-	}
-
-	attestedState, err := NewBeaconStateBellatrix()
-	require.NoError(l.T, err)
-	err = attestedState.SetSlot(slot)
-	require.NoError(l.T, err)
-
-	finalizedBlock, err := blocks.NewSignedBeaconBlock(NewBeaconBlockBellatrix())
-	require.NoError(l.T, err)
-	finalizedBlock.SetSlot(1)
-	finalizedHeader, err := finalizedBlock.Header()
-	require.NoError(l.T, err)
-	finalizedRoot, err := finalizedHeader.Header.HashTreeRoot()
-	require.NoError(l.T, err)
-
-	require.NoError(l.T, attestedState.SetFinalizedCheckpoint(&ethpb.Checkpoint{
-		Epoch: params.BeaconConfig().BellatrixForkEpoch - 10,
-		Root:  finalizedRoot[:],
-	}))
-
-	parent := NewBeaconBlockBellatrix()
-	parent.Block.Slot = slot
-
-	signedParent, err := blocks.NewSignedBeaconBlock(parent)
-	require.NoError(l.T, err)
-
-	parentHeader, err := signedParent.Header()
-	require.NoError(l.T, err)
-	attestedHeader := parentHeader.Header
-
-	err = attestedState.SetLatestBlockHeader(attestedHeader)
-	require.NoError(l.T, err)
-	attestedStateRoot, err := attestedState.HashTreeRoot(ctx)
-	require.NoError(l.T, err)
-
-	// get a new signed block so the root is updated with the new state root
-	parent.Block.StateRoot = attestedStateRoot[:]
-	signedParent, err = blocks.NewSignedBeaconBlock(parent)
-	require.NoError(l.T, err)
-
-	state, err := NewBeaconStateBellatrix()
-	require.NoError(l.T, err)
-	err = state.SetSlot(slot)
-	require.NoError(l.T, err)
-
-	parentRoot, err := signedParent.Block().HashTreeRoot()
-	require.NoError(l.T, err)
-
-	block := NewBeaconBlockBellatrix()
-	block.Block.Slot = slot
-	block.Block.ParentRoot = parentRoot[:]
-
-	var trueBitNum uint64
-	if supermajority {
-		trueBitNum = (params.BeaconConfig().SyncCommitteeSize / 3 * 2) + 1
-	} else {
-		trueBitNum = params.BeaconConfig().MinSyncCommitteeParticipants
-	}
-	for i := uint64(0); i < trueBitNum; i++ {
-		block.Block.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, true)
-	}
-
-	signedBlock, err := blocks.NewSignedBeaconBlock(block)
-	require.NoError(l.T, err)
-
-	h, err := signedBlock.Header()
-	require.NoError(l.T, err)
-
-	err = state.SetLatestBlockHeader(h.Header)
-	require.NoError(l.T, err)
-	stateRoot, err := state.HashTreeRoot(ctx)
-	require.NoError(l.T, err)
-
-	// get a new signed block so the root is updated with the new state root
-	block.Block.StateRoot = stateRoot[:]
-	signedBlock, err = blocks.NewSignedBeaconBlock(block)
-	require.NoError(l.T, err)
-
-	l.State = state
-	l.AttestedState = attestedState
-	l.Block = signedBlock
-	l.Ctx = ctx
-	l.FinalizedBlock = finalizedBlock
-	l.AttestedBlock = signedParent
 
 	return l
 }
@@ -820,6 +786,118 @@ func (l *TestLightClient) SetupTestFulu(blinded bool, increaseAttestedSlotBy int
 			trueBitNum = params.BeaconConfig().MinSyncCommitteeParticipants
 		}
 		for i := uint64(0); i < trueBitNum; i++ {
+			block.Block.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, true)
+		}
+
+		signedBlock, err = blocks.NewSignedBeaconBlock(block)
+		require.NoError(l.T, err)
+
+		h, err := signedBlock.Header()
+		require.NoError(l.T, err)
+
+		err = state.SetLatestBlockHeader(h.Header)
+		require.NoError(l.T, err)
+		stateRoot, err := state.HashTreeRoot(ctx)
+		require.NoError(l.T, err)
+
+		// get a new signed block so the root is updated with the new state root
+		block.Block.StateRoot = stateRoot[:]
+		signedBlock, err = blocks.NewSignedBeaconBlock(block)
+		require.NoError(l.T, err)
+	}
+
+	l.State = state
+	l.AttestedState = attestedState
+	l.AttestedBlock = signedParent
+	l.Block = signedBlock
+	l.Ctx = ctx
+	l.FinalizedBlock = finalizedBlock
+
+	return l
+}
+
+func (l *TestLightClient) SetupTestCapellaFinalizedBlockAltair(blinded bool) *TestLightClient {
+	ctx := context.Background()
+
+	slot := primitives.Slot(params.BeaconConfig().CapellaForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
+
+	attestedState, err := NewBeaconStateCapella()
+	require.NoError(l.T, err)
+	err = attestedState.SetSlot(slot)
+	require.NoError(l.T, err)
+
+	finalizedBlock, err := blocks.NewSignedBeaconBlock(NewBeaconBlockAltair())
+	require.NoError(l.T, err)
+	finalizedBlock.SetSlot(1)
+	finalizedHeader, err := finalizedBlock.Header()
+	require.NoError(l.T, err)
+	finalizedRoot, err := finalizedHeader.Header.HashTreeRoot()
+	require.NoError(l.T, err)
+
+	require.NoError(l.T, attestedState.SetFinalizedCheckpoint(&ethpb.Checkpoint{
+		Epoch: params.BeaconConfig().AltairForkEpoch - 10,
+		Root:  finalizedRoot[:],
+	}))
+
+	parent := NewBeaconBlockCapella()
+	parent.Block.Slot = slot
+
+	signedParent, err := blocks.NewSignedBeaconBlock(parent)
+	require.NoError(l.T, err)
+
+	parentHeader, err := signedParent.Header()
+	require.NoError(l.T, err)
+	attestedHeader := parentHeader.Header
+
+	err = attestedState.SetLatestBlockHeader(attestedHeader)
+	require.NoError(l.T, err)
+	attestedStateRoot, err := attestedState.HashTreeRoot(ctx)
+	require.NoError(l.T, err)
+
+	// get a new signed block so the root is updated with the new state root
+	parent.Block.StateRoot = attestedStateRoot[:]
+	signedParent, err = blocks.NewSignedBeaconBlock(parent)
+	require.NoError(l.T, err)
+
+	state, err := NewBeaconStateCapella()
+	require.NoError(l.T, err)
+	err = state.SetSlot(slot)
+	require.NoError(l.T, err)
+
+	parentRoot, err := signedParent.Block().HashTreeRoot()
+	require.NoError(l.T, err)
+
+	var signedBlock interfaces.SignedBeaconBlock
+	if blinded {
+		block := NewBlindedBeaconBlockCapella()
+		block.Block.Slot = slot
+		block.Block.ParentRoot = parentRoot[:]
+
+		for i := uint64(0); i < params.BeaconConfig().MinSyncCommitteeParticipants; i++ {
+			block.Block.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, true)
+		}
+
+		signedBlock, err = blocks.NewSignedBeaconBlock(block)
+		require.NoError(l.T, err)
+
+		h, err := signedBlock.Header()
+		require.NoError(l.T, err)
+
+		err = state.SetLatestBlockHeader(h.Header)
+		require.NoError(l.T, err)
+		stateRoot, err := state.HashTreeRoot(ctx)
+		require.NoError(l.T, err)
+
+		// get a new signed block so the root is updated with the new state root
+		block.Block.StateRoot = stateRoot[:]
+		signedBlock, err = blocks.NewSignedBeaconBlock(block)
+		require.NoError(l.T, err)
+	} else {
+		block := NewBeaconBlockCapella()
+		block.Block.Slot = slot
+		block.Block.ParentRoot = parentRoot[:]
+
+		for i := uint64(0); i < params.BeaconConfig().MinSyncCommitteeParticipants; i++ {
 			block.Block.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, true)
 		}
 
