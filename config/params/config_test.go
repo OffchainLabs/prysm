@@ -141,9 +141,14 @@ func TestMaxBlobsPerBlockByVersion(t *testing.T) {
 			want: params.BeaconConfig().DeprecatedMaxBlobsPerBlockElectra,
 		},
 		{
-			name: "Version above Electra",
-			v:    version.Electra + 1,
-			want: params.BeaconConfig().DeprecatedMaxBlobsPerBlockElectra,
+			name: "Version equal to Fulu",
+			v:    version.Fulu,
+			want: params.BeaconConfig().DeprecatedMaxBlobsPerBlockFulu,
+		},
+		{
+			name: "Version above Fulu",
+			v:    version.Fulu + 1,
+			want: params.BeaconConfig().DeprecatedMaxBlobsPerBlockFulu,
 		},
 	}
 
