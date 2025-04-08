@@ -58,6 +58,7 @@ type ValidatorService struct {
 	emitAccountMetrics      bool
 	logValidatorPerformance bool
 	distributed             bool
+	disableDutiesPolling    bool
 }
 
 // Config for the validator service.
@@ -84,6 +85,7 @@ type Config struct {
 	LogValidatorPerformance bool
 	EmitAccountMetrics      bool
 	Distributed             bool
+	DisableDutiesPolling    bool
 }
 
 // NewValidatorService creates a new validator service for the service
@@ -107,6 +109,7 @@ func NewValidatorService(ctx context.Context, cfg *Config) (*ValidatorService, e
 		emitAccountMetrics:      cfg.EmitAccountMetrics,
 		logValidatorPerformance: cfg.LogValidatorPerformance,
 		distributed:             cfg.Distributed,
+		disableDutiesPolling:    cfg.DisableDutiesPolling,
 	}
 
 	dialOpts := ConstructDialOptions(
@@ -217,6 +220,7 @@ func (v *ValidatorService) Start() {
 		emitAccountMetrics:             v.emitAccountMetrics,
 		enableAPI:                      v.enableAPI,
 		distributed:                    v.distributed,
+		disableDutiesPolling:           v.disableDutiesPolling,
 	}
 
 	v.validator = valStruct

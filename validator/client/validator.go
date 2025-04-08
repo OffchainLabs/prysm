@@ -112,6 +112,7 @@ type validator struct {
 	blacklistedPubkeysLock             sync.RWMutex
 	attSelectionLock                   sync.Mutex
 	dutiesLock                         sync.RWMutex
+	disableDutiesPolling               bool
 }
 
 type validatorStatus struct {
@@ -1190,8 +1191,10 @@ func (v *validator) ProcessEvent(ctx context.Context, event *eventClient.Event) 
 			log.WithError(err).Error("Failed to parse slot")
 		}
 		v.setHighestSlot(primitives.Slot(uintSlot))
-		if err := v.checkDependentRoots(ctx, head, primitives.Slot(uintSlot)); err != nil {
-			log.WithError(err).Error("Failed to check dependent roots")
+		if !v.disableDutiesPolling {
+			if err := v.checkDependentRoots(ctx, head, primitives.Slot(uintSlot)); err != nil {
+				log.WithError(err).Error("Failed to check dependent roots")
+			}
 		}
 	default:
 		// just keep going and log the error

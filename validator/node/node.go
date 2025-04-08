@@ -452,6 +452,7 @@ func (c *ValidatorClient) registerValidatorService(cliCtx *cli.Context) error {
 		LogValidatorPerformance: !cliCtx.Bool(flags.DisablePenaltyRewardLogFlag.Name),
 		EmitAccountMetrics:      !cliCtx.Bool(flags.DisableAccountMetricsFlag.Name),
 		Distributed:             cliCtx.Bool(flags.EnableDistributed.Name),
+		DisableDutiesPolling:    cliCtx.Bool(flags.DisableDutiesPolling.Name),
 	})
 	if err != nil {
 		return errors.Wrap(err, "could not initialize validator service")
