@@ -53,26 +53,26 @@ type Config struct {
 
 // Server defining a HTTP server for the remote signer API and registering clients
 type Server struct {
-	serveWebUI                bool
-	walletInitialized         bool
-	logStreamerBufferSize     int
+	serveWebUI            bool
+	walletInitialized     bool
+	logStreamerBufferSize int
 	// Deprecated: gRPC API is being deprecated in favour of REST API.
-	grpcMaxCallRecvMsgSize    int
-	walletInitializedFeed     *event.Feed
-	beaconApiTimeout          time.Duration
-	wallet                    *wallet.Wallet
-	validatorService          *client.ValidatorService
-	httpPort                  int
-	cancel                    context.CancelFunc
+	grpcMaxCallRecvMsgSize int
+	walletInitializedFeed  *event.Feed
+	beaconApiTimeout       time.Duration
+	wallet                 *wallet.Wallet
+	validatorService       *client.ValidatorService
+	httpPort               int
+	cancel                 context.CancelFunc
 	// Deprecated: gRPC API is being deprecated in favour of REST API.
-	grpcRetries               uint
+	grpcRetries uint
 	// Deprecated: gRPC API is being deprecated in favour of REST API.
-	grpcRetryDelay            time.Duration
-	server                    *httprest.Server
-	router                    *http.ServeMux
-	authTokenPath             string
-	beaconNodeCert            string
-	beaconApiEndpoint         string
+	grpcRetryDelay    time.Duration
+	server            *httprest.Server
+	router            *http.ServeMux
+	authTokenPath     string
+	beaconNodeCert    string
+	beaconApiEndpoint string
 	// Deprecated: gRPC API is being deprecated in favour of REST API.
 	beaconNodeEndpoint        string
 	healthClient              ethpb.HealthClient
@@ -88,7 +88,7 @@ type Server struct {
 	walletDir                 string
 	jwtSecret                 []byte
 	// Deprecated: gRPC API is being deprecated in favour of REST API.
-	grpcHeaders               []string
+	grpcHeaders []string
 }
 
 // NewServer instantiates a new HTTP server.
