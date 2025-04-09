@@ -9,10 +9,8 @@ go_library(
     importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/verify",
     visibility = ["//visibility:public"],
     deps = [
-        "//beacon-chain/verification:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/blocks:go_default_library",
-        "//consensus-types/interfaces:go_default_library",
         "//encoding/bytesutil:go_default_library",
         "//runtime/version:go_default_library",
         "@com_github_pkg_errors//:go_default_library",
@@ -21,9 +19,15 @@ go_library(
 
 go_test(
     name = "go_default_test",
-    srcs = ["blob_test.go"],
+    srcs = [
+        "blob_test.go",
+        "data_column_test.go",
+    ],
     embed = [":go_default_library"],
     deps = [
+        "//beacon-chain/blockchain/kzg:go_default_library",
+        "//config/fieldparams:go_default_library",
+        "//config/params:go_default_library",
         "//consensus-types/blocks:go_default_library",
         "//encoding/bytesutil:go_default_library",
         "//testing/require:go_default_library",

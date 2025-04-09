@@ -104,6 +104,8 @@ func (s *Service) reconstructDataColumns(ctx context.Context, verifiedRODataColu
 			return errors.Wrap(err, "new read-only data column with root")
 		}
 
+		// We reconstructed missing data columns base on verified read only data column sidecars,
+		// so we can upgrade the reconstructed sidecars into verified read only data column sidecars.
 		verifiedRoDataColumn := blocks.NewVerifiedRODataColumn(roDataColumn)
 		verifiedRODataColumns = append(verifiedRODataColumns, verifiedRoDataColumn)
 	}

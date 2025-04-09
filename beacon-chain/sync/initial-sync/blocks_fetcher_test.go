@@ -1374,7 +1374,6 @@ type (
 	responseParams struct {
 		slot        primitives.Slot
 		columnIndex uint64
-		alterate    bool
 	}
 
 	peerParams struct {
@@ -1434,23 +1433,9 @@ func createAndConnectPeer(
 			// Get the data column sidecar.
 			dataColumn := dataColumnsSidecar[responseParams.columnIndex]
 
-			// Alter the data column if needed.
-			initialValue0, initialValue1 := dataColumn.Column[0][0], dataColumn.Column[0][1]
-
-			if responseParams.alterate {
-				dataColumn.Column[0][0] = 0
-				dataColumn.Column[0][1] = 0
-			}
-
 			// Send the response.
 			err := beaconsync.WriteDataColumnSidecarChunk(stream, chainService, p2pService.Encoding(), dataColumn)
 			require.NoError(t, err)
-
-			if responseParams.alterate {
-				// Restore the data column.
-				dataColumn.Column[0][0] = initialValue0
-				dataColumn.Column[0][1] = initialValue1
-			}
 		}
 
 		// Close the stream.
@@ -2009,39 +1994,6 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 				nil,       // Slot 35
 				{70, 102}, // Slot 36
 			},
-		},
-		{
-			name:          "Some blocks with blobs with missing data columns - first response is invalid",
-			fuluForkEpoch: 1,
-			currentSlot:   40,
-			blocksParams: []blockParams{
-				{slot: 38, hasBlobs: true},
-			},
-			storedDataColumns: []map[uint64]bool{{38: true, 102: true}},
-			peersParams: []peerParams{
-				{
-					cgc: 128,
-					toRespond: map[string][][]responseParams{
-						(&ethpb.DataColumnSidecarsByRangeRequest{
-							StartSlot: 38,
-							Count:     1,
-							Columns:   []uint64{6, 70},
-						}).String(): {
-							{
-								{slot: 38, columnIndex: 6, alterate: true},
-								{slot: 38, columnIndex: 70},
-							},
-							{
-								{slot: 38, columnIndex: 6},
-								{slot: 38, columnIndex: 70},
-							},
-						},
-					},
-				},
-			},
-			batchSize:          32,
-			addedRODataColumns: [][]int{{6, 70}},
-			isError:            false,
 		},
 		{
 			name:              "Some blocks with blobs with missing data columns - first response is empty",

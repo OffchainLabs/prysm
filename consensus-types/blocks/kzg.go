@@ -47,35 +47,6 @@ func VerifyKZGInclusionProof(blob ROBlob) error {
 	return nil
 }
 
-// VerifyKZGInclusionProofColumn verifies the Merkle proof in a data column sidecar against
-// the beacon block body root.
-func VerifyKZGInclusionProofColumn(sc RODataColumn) error {
-	if sc.SignedBlockHeader == nil {
-		return errNilBlockHeader
-	}
-	if sc.SignedBlockHeader.Header == nil {
-		return errNilBlockHeader
-	}
-	root := sc.SignedBlockHeader.Header.BodyRoot
-	if len(root) != field_params.RootLength {
-		return errInvalidBodyRoot
-	}
-	leaves := leavesFromCommitments(sc.KzgCommitments)
-	sparse, err := trie.GenerateTrieFromItems(leaves, field_params.LogMaxBlobCommitments)
-	if err != nil {
-		return err
-	}
-	rt, err := sparse.HashTreeRoot()
-	if err != nil {
-		return err
-	}
-	verified := trie.VerifyMerkleProof(root, rt[:], kzgPosition, sc.KzgCommitmentsInclusionProof)
-	if !verified {
-		return errInvalidInclusionProof
-	}
-	return nil
-}
-
 // MerkleProofKZGCommitment constructs a Merkle proof of inclusion of the KZG
 // commitment of index `index` into the Beacon Block with the given `body`
 func MerkleProofKZGCommitment(body interfaces.ReadOnlyBeaconBlockBody, index int) ([][]byte, error) {
@@ -138,8 +109,8 @@ func MerkleProofKZGCommitments(body interfaces.ReadOnlyBeaconBlockBody) ([][]byt
 	return proof, nil
 }
 
-// leavesFromCommitments hashes each commitment to construct a slice of roots
-func leavesFromCommitments(commitments [][]byte) [][]byte {
+// LeavesFromCommitments hashes each commitment to construct a slice of roots
+func LeavesFromCommitments(commitments [][]byte) [][]byte {
 	leaves := make([][]byte, len(commitments))
 	for i, kzg := range commitments {
 		chunk := makeChunk(kzg)
@@ -163,7 +134,7 @@ func bodyProof(commitments [][]byte, index int) ([][]byte, error) {
 	if index < 0 || index >= len(commitments) {
 		return nil, errInvalidIndex
 	}
-	leaves := leavesFromCommitments(commitments)
+	leaves := LeavesFromCommitments(commitments)
 	sparse, err := trie.GenerateTrieFromItems(leaves, field_params.LogMaxBlobCommitments)
 	if err != nil {
 		return nil, err

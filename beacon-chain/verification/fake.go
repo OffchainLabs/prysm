@@ -53,13 +53,15 @@ func FakeVerifyDataColumnForTest(t *testing.T, b blocks.RODataColumn) blocks.Ver
 
 // FakeVerifyDataColumnSliceForTest can be used by tests that need a []VerifiedRODataColumn but don't want to do all the
 // expensive set up to perform full validation.
-func FakeVerifyDataColumnSliceForTest(t *testing.T, b []blocks.RODataColumn) []blocks.VerifiedRODataColumn {
-	// log so that t is truly required
+func FakeVerifyDataColumnSliceForTest(t *testing.T, dcs []blocks.RODataColumn) []blocks.VerifiedRODataColumn {
+	// Log so that `t`` is truly required.
 	t.Log("producing fake []VerifiedRODataColumn for a test")
-	vcs := make([]blocks.VerifiedRODataColumn, len(b))
-	for i := range b {
-		vcs[i] = blocks.NewVerifiedRODataColumn(b[i])
+
+	vcs := make([]blocks.VerifiedRODataColumn, 0, len(dcs))
+	for _, dc := range dcs {
+		vcs = append(vcs, blocks.NewVerifiedRODataColumn(dc))
 	}
+
 	return vcs
 }
 

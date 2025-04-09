@@ -134,11 +134,11 @@ func DataColumnSidecars(signedBlock interfaces.ReadOnlySignedBeaconBlock, cellsA
 
 	blobsCount := len(cellsAndProofs)
 	sidecars := make([]*ethpb.DataColumnSidecar, 0, fieldparams.NumberOfColumns)
-	for columnIndex := uint64(0); columnIndex < fieldparams.NumberOfColumns; columnIndex++ {
+	for columnIndex := range uint64(fieldparams.NumberOfColumns) {
 		column := make([]kzg.Cell, 0, blobsCount)
 		kzgProofOfColumn := make([]kzg.Proof, 0, blobsCount)
 
-		for rowIndex := 0; rowIndex < blobsCount; rowIndex++ {
+		for rowIndex := range blobsCount {
 			cellsForRow := cellsAndProofs[rowIndex].Cells
 			proofsForRow := cellsAndProofs[rowIndex].Proofs
 

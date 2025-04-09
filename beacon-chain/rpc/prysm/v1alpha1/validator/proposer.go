@@ -475,6 +475,7 @@ func (vs *Server) broadcastAndReceiveDataColumns(
 			return errors.Wrap(err, "new read-only data column with root")
 		}
 
+		// We build this block ourselves, so we can upgrade the read only data column sidecar into a verified one.
 		verifiedRODataColumn := blocks.NewVerifiedRODataColumn(roDataColumn)
 		verifiedRODataColumns = append(verifiedRODataColumns, verifiedRODataColumn)
 

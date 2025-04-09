@@ -157,8 +157,7 @@ func (s *Service) processFetchedData(
 }
 
 // processFetchedDataRegSync processes data received from queue.
-func (s *Service) processFetchedDataRegSync(
-	ctx context.Context, genesis time.Time, startSlot primitives.Slot, data *blocksQueueFetchedData) {
+func (s *Service) processFetchedDataRegSync(ctx context.Context, genesis time.Time, startSlot primitives.Slot, data *blocksQueueFetchedData) {
 	defer s.updatePeerScorerStats(data.pid, startSlot)
 
 	bwb, err := validUnprocessed(ctx, data.bwb, s.cfg.Chain.HeadSlot(), s.isProcessedBlock)
@@ -188,7 +187,8 @@ func (s *Service) processFetchedDataRegSync(
 
 	blobBatchVerifier := verification.NewBlobBatchVerifier(s.newBlobVerifier, verification.InitsyncBlobSidecarRequirements)
 	lazilyPersistentStore := das.NewLazilyPersistentStore(s.cfg.BlobStorage, blobBatchVerifier)
-	lazilyPersistentStoreColumn := das.NewLazilyPersistentStoreColumn(s.cfg.DataColumnStorage, s.cfg.P2P.NodeID(), s.cfg.CustodyInfo)
+
+	lazilyPersistentStoreColumn := das.NewLazilyPersistentStoreColumn(s.cfg.DataColumnStorage, s.cfg.P2P.NodeID(), s.newDataColumnsVerifier, s.cfg.CustodyInfo)
 
 	log := log.WithField("firstSlot", data.bwb[0].Block.Block().Slot())
 
@@ -418,7 +418,7 @@ func (s *Service) processPostFuluBatchedBlocks(
 		return nil
 	}
 
-	persistentStoreColumn := das.NewLazilyPersistentStoreColumn(s.cfg.DataColumnStorage, s.cfg.P2P.NodeID(), s.cfg.CustodyInfo)
+	persistentStoreColumn := das.NewLazilyPersistentStoreColumn(s.cfg.DataColumnStorage, s.cfg.P2P.NodeID(), s.newDataColumnsVerifier, s.cfg.CustodyInfo)
 	s.logBatchSyncStatus(genesis, firstBlock, bwbCount)
 	for _, bwb := range bwbs {
 		if len(bwb.Columns) == 0 {

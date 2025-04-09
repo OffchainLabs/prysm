@@ -414,12 +414,11 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 	signedBlock, err := blocks.NewSignedBeaconBlock(pbSignedBeaconBlock)
 	require.NoError(t, err)
 
-	cellsAndProofs := util.GenerateCellsAndProofs(t, blobs)
-	dataColumnSidecars, err := peerdas.DataColumnSidecars(signedBlock, cellsAndProofs)
+	roBlock, err := blocks.NewROBlock(signedBlock)
 	require.NoError(t, err)
 
-	// Calculate block root
-	blockRoot, err := signedBlock.Block().HashTreeRoot()
+	cellsAndProofs := util.GenerateCellsAndProofs(t, blobs)
+	dataColumnSidecars, err := peerdas.DataColumnSidecars(signedBlock, cellsAndProofs)
 	require.NoError(t, err)
 
 	testCases := []struct {
@@ -587,8 +586,7 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 			responseCols, err := RequestDataColumnSidecarsByRoot(
 				context.Background(),
 				tc.dataColumns,
-				signedBlock,
-				blockRoot,
+				roBlock,
 				peerIDs,
 				clock,
 				hostP2P,
@@ -647,7 +645,7 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 // It then sets up the peer to respond with data columns it custodies.
 func createAndConnectCustodyPeer(t *testing.T, setup peerSetup, dataColumnSidecars []*pb.DataColumnSidecar, chainService *mock.ChainService, hostP2P *p2ptest.TestP2P, tracker *requestTracker, skipColumns map[uint64]bool) *p2ptest.TestP2P {
 	privateKeyBytes := make([]byte, 32)
-	for i := 0; i < 32; i++ {
+	for i := range 32 {
 		privateKeyBytes[i] = byte(setup.offset + i)
 	}
 

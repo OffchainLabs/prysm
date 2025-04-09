@@ -18,7 +18,6 @@ import (
 	blockfeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/block"
 	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
-	coreTime "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/das"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
@@ -180,28 +179,24 @@ func (s *Service) Start() {
 	}
 	s.chainStarted.Set()
 	log.Info("Starting initial chain sync...")
+
 	// Are we already in sync, or close to it?
 	if slots.ToEpoch(s.cfg.Chain.HeadSlot()) == slots.ToEpoch(currentSlot) {
 		log.Info("Already synced to the current chain head")
 		s.markSynced()
 		return
 	}
+
 	peers, err := s.waitForMinimumPeers()
 	if err != nil {
 		log.WithError(err).Error("Error waiting for minimum number of peers")
 		return
 	}
-	if coreTime.PeerDASIsActive(s.cfg.Chain.HeadSlot()) {
-		if err := s.fetchOriginColumns(peers); err != nil {
-			log.WithError(err).Error("Failed to fetch missing columns for checkpoint origin")
-			return
-		}
-	} else {
-		if err := s.fetchOriginBlobs(peers); err != nil {
-			log.WithError(err).Error("Failed to fetch missing blobs for checkpoint origin")
-			return
-		}
+
+	if err := s.fetchOriginSidecars(peers); err != nil {
+		log.WithError(err).Error("Error fetching origin sidecars")
 	}
+
 	if err := s.roundRobinSync(gt); err != nil {
 		if errors.Is(s.ctx.Err(), context.Canceled) {
 			return
@@ -210,6 +205,26 @@ func (s *Service) Start() {
 	}
 	log.WithField("slot", s.cfg.Chain.HeadSlot()).Info("Synced up to")
 	s.markSynced()
+}
+
+// fetchOriginSidecars fetches origin sidecars
+func (s *Service) fetchOriginSidecars(peers []peer.ID) error {
+	headSlot := s.cfg.Chain.HeadSlot()
+	headEpoch := slots.ToEpoch(headSlot)
+
+	if headEpoch >= params.BeaconConfig().FuluForkEpoch {
+		if err := s.fetchOriginColumns(peers); err != nil {
+			return errors.Wrap(err, "fetch origin columns")
+		}
+	}
+
+	if headEpoch >= params.BeaconConfig().DenebForkEpoch {
+		if err := s.fetchOriginBlobs(peers); err != nil {
+			return errors.Wrap(err, "fetch origin blobs")
+		}
+	}
+
+	return nil
 }
 
 // Stop initial sync.
@@ -372,59 +387,47 @@ func (s *Service) fetchOriginBlobs(pids []peer.ID) error {
 }
 
 func (s *Service) fetchOriginColumns(pids []peer.ID) error {
-	r, err := s.cfg.DB.OriginCheckpointBlockRoot(s.ctx)
+	blockRoot, err := s.cfg.DB.OriginCheckpointBlockRoot(s.ctx)
 	if errors.Is(err, db.ErrNotFoundOriginBlockRoot) {
 		return nil
 	}
-	blk, err := s.cfg.DB.Block(s.ctx, r)
+
+	block, err := s.cfg.DB.Block(s.ctx, blockRoot)
 	if err != nil {
-		log.WithField("root", fmt.Sprintf("%#x", r)).Error("Block for checkpoint sync origin root not found in db")
-		return err
+		return errors.Wrap(err, "block")
 	}
-	if !params.WithinDAPeriod(slots.ToEpoch(blk.Block().Slot()), slots.ToEpoch(s.clock.CurrentSlot())) {
+
+	currentSlot, blockSlot := s.clock.CurrentSlot(), block.Block().Slot()
+	currentEpoch, blockEpoch := slots.ToEpoch(currentSlot), slots.ToEpoch(blockSlot)
+
+	if !params.WithinDAPeriod(blockEpoch, currentEpoch) {
 		return nil
 	}
-	rob, err := blocks.NewROBlockWithRoot(blk, r)
+
+	roBlock, err := blocks.NewROBlockWithRoot(block, blockRoot)
 	if err != nil {
 		return err
 	}
 
-	custodyGroupCount := s.cfg.CustodyInfo.ActualGroupCount()
+	actualSamplingSize := s.cfg.CustodyInfo.CustodyGroupSamplingSize(peerdas.Actual)
+	nodeID := s.cfg.P2P.NodeID()
+	storage := s.cfg.DataColumnStorage
 
-	missingColumns, err := sync.FindMissingDataColumns(
-		r,
-		rob,
-		s.cfg.P2P.NodeID(),
-		custodyGroupCount,
-		s.cfg.DataColumnStorage,
-	)
+	missingColumns, err := sync.MissingDataColumns(roBlock, nodeID, actualSamplingSize, storage)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "missing data columns")
 	}
-	if len(missingColumns) == 0 {
-		log.WithField("root", fmt.Sprintf("%#x", r)).Debug("All columns for checkpoint block are present")
-		return nil
-	}
-	dataColumnSidecars, err := sync.RequestDataColumnSidecarsByRoot(s.ctx, missingColumns, rob, r, pids, s.clock, s.cfg.P2P, s.ctxMap, s.newDataColumnsVerifier)
+
+	sidecars, err := sync.RequestDataColumnSidecarsByRoot(s.ctx, missingColumns, roBlock, pids, s.clock, s.cfg.P2P, s.ctxMap, s.newDataColumnsVerifier)
 	if err != nil {
-		return errors.Wrap(err, "request data column sidecars by root")
+		return errors.Wrap(err, "request data column sidecars")
 	}
 
-	sidecars := blocks.NewSidecarsFromDataColumnSidecars(dataColumnSidecars)
+	log.WithFields(logrus.Fields{
+		"blockRoot":   fmt.Sprintf("%#x", blockRoot),
+		"columnCount": len(sidecars),
+	}).Info("Successfully downloaded data columns for checkpoint sync block")
 
-	// FIXME: It's not clear that the caching layer is doing anything here or in
-	// fetchOriginBlobs, which is presumably where this logic was derived from.
-	avs := das.NewLazilyPersistentStoreColumn(s.cfg.DataColumnStorage, s.cfg.P2P.NodeID(), s.cfg.CustodyInfo)
-	current := s.clock.CurrentSlot()
-	if err := avs.Persist(current, sidecars...); err != nil {
-		return err
-	}
-
-	if err := avs.IsDataAvailable(s.ctx, current, rob); err != nil {
-		return fmt.Errorf("couldn't assemble the required columns from peers for checkpoint sync block %#x", r)
-	}
-
-	log.WithField("nColumns", len(sidecars)).WithField("root", fmt.Sprintf("%#x", r)).Info("Successfully downloaded data columns for checkpoint sync block")
 	return nil
 }
 

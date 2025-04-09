@@ -7,6 +7,7 @@ import (
 	errors "github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
@@ -18,18 +19,30 @@ import (
 // This implementation will hold any data columns passed to Persist until the IsDataAvailable is called for their
 // block, at which time they will undergo full verification and be saved to the disk.
 type LazilyPersistentStoreColumn struct {
-	store       *filesystem.DataColumnStorage
-	nodeID      enode.ID
-	cache       *dataColumnCache
-	custodyInfo *peerdas.CustodyInfo
+	store                  *filesystem.DataColumnStorage
+	nodeID                 enode.ID
+	cache                  *dataColumnCache
+	custodyInfo            *peerdas.CustodyInfo
+	newDataColumnsVerifier verification.NewDataColumnsVerifier
 }
 
-func NewLazilyPersistentStoreColumn(store *filesystem.DataColumnStorage, nodeID enode.ID, custodyInfo *peerdas.CustodyInfo) *LazilyPersistentStoreColumn {
+var _ AvailabilityStore = &LazilyPersistentStoreColumn{}
+
+// DataColumnsVerifier enables LazilyPersistentStoreColumn to manage the verification process
+// going from RODataColumn->VerifiedRODataColumn, while avoiding the decision of which individual verifications
+// to run and in what order. Since LazilyPersistentStoreColumn always tries to verify and save data columns only when
+// they are all available, the interface takes a slice of data column sidecars.
+type DataColumnsVerifier interface {
+	VerifiedRODataColumns(ctx context.Context, blk blocks.ROBlock, scs []blocks.RODataColumn) ([]blocks.VerifiedRODataColumn, error)
+}
+
+func NewLazilyPersistentStoreColumn(store *filesystem.DataColumnStorage, nodeID enode.ID, newDataColumnsVerifier verification.NewDataColumnsVerifier, custodyInfo *peerdas.CustodyInfo) *LazilyPersistentStoreColumn {
 	return &LazilyPersistentStoreColumn{
-		store:       store,
-		nodeID:      nodeID,
-		cache:       newDataColumnCache(),
-		custodyInfo: custodyInfo,
+		store:                  store,
+		nodeID:                 nodeID,
+		cache:                  newDataColumnCache(),
+		custodyInfo:            custodyInfo,
+		newDataColumnsVerifier: newDataColumnsVerifier,
 	}
 }
 
@@ -77,11 +90,7 @@ func (s *LazilyPersistentStoreColumn) Persist(current primitives.Slot, sidecars 
 
 // IsDataAvailable returns nil if all the commitments in the given block are persisted to the db and have been verified.
 // DataColumnsSidecars already in the db are assumed to have been previously verified against the block.
-func (s *LazilyPersistentStoreColumn) IsDataAvailable(
-	ctx context.Context,
-	currentSlot primitives.Slot,
-	block blocks.ROBlock,
-) error {
+func (s *LazilyPersistentStoreColumn) IsDataAvailable(ctx context.Context, currentSlot primitives.Slot, block blocks.ROBlock) error {
 	blockCommitments, err := s.fullCommitmentsToCheck(s.nodeID, block, currentSlot)
 	if err != nil {
 		return errors.Wrapf(err, "full commitments to check with block root `%#x` and current slot `%d`", block.Root(), currentSlot)
@@ -112,23 +121,33 @@ func (s *LazilyPersistentStoreColumn) IsDataAvailable(
 	// ignore their response and decrease their peer score.
 	roDataColumns, err := entry.filter(blockRoot, blockCommitments)
 	if err != nil {
-		return errors.Wrap(err, "incomplete DataColumnSidecar batch")
+		return errors.Wrap(err, "filter")
 	}
 
-	// Create verified RO data columns from RO data columns.
-	verifiedRODataColumns := make([]blocks.VerifiedRODataColumn, 0, len(roDataColumns))
+	// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/p2p-interface.md#datacolumnsidecarsbyrange-v1
+	verifier := s.newDataColumnsVerifier(roDataColumns, verification.ByRangeRequestDataColumnSidecarRequirements)
 
-	for _, roDataColumn := range roDataColumns {
-		verifiedRODataColumn := blocks.NewVerifiedRODataColumn(roDataColumn)
-		verifiedRODataColumns = append(verifiedRODataColumns, verifiedRODataColumn)
+	if err := verifier.Valid(); err != nil {
+		return errors.Wrap(err, "valid")
 	}
 
-	// Ensure that column sidecars are written to disk.
-	if err := s.store.Save(verifiedRODataColumns); err != nil {
-		return errors.Wrapf(err, "save data column sidecars")
+	if err := verifier.SidecarInclusionProven(); err != nil {
+		return errors.Wrap(err, "sidecar inclusion proven")
 	}
 
-	// All ColumnSidecars are persisted - data availability check succeeds.
+	if err := verifier.SidecarKzgProofVerified(); err != nil {
+		return errors.Wrap(err, "sidecar KZG proof verified")
+	}
+
+	verifiedRoDataColumns, err := verifier.VerifiedRODataColumns()
+	if err != nil {
+		return errors.Wrap(err, "verified RO data columns - should never happen")
+	}
+
+	if err := s.store.Save(verifiedRoDataColumns); err != nil {
+		return errors.Wrap(err, "save data column sidecars")
+	}
+
 	return nil
 }
 
