@@ -811,6 +811,7 @@ func (v *validator) isAggregator(
 		err     error
 	)
 	if v.distributed {
+		// This call is blocking. It is awaitng for selection proof response from DV to be written in memory.
 		slotSig, err = v.attSelection(attSelectionKey{slot: slot, index: validatorIndex})
 		if err != nil {
 			return false, err
@@ -1396,29 +1397,15 @@ func (v *validator) aggregatedSelectionProofs(ctx context.Context, duties *ethpb
 	ctx, span := trace.StartSpan(ctx, "validator.aggregatedSelectionProofs")
 	defer span.End()
 
+	// Lock the selection proofs until we receive response from DV.
+	v.attSelectionLock.Lock()
+	defer v.attSelectionLock.Unlock()
+
 	// Create new instance of attestation selections map.
-	v.newAttSelections()
+	v.attSelections = make(map[attSelectionKey]iface.BeaconCommitteeSelection)
 
 	var req []iface.BeaconCommitteeSelection
 	for _, duty := range duties.CurrentEpochDuties {
-		if duty.Status != ethpb.ValidatorStatus_ACTIVE && duty.Status != ethpb.ValidatorStatus_EXITING {
-			continue
-		}
-
-		pk := bytesutil.ToBytes48(duty.PublicKey)
-		slotSig, err := v.signSlotWithSelectionProof(ctx, pk, duty.AttesterSlot)
-		if err != nil {
-			return err
-		}
-
-		req = append(req, iface.BeaconCommitteeSelection{
-			SelectionProof: slotSig,
-			Slot:           duty.AttesterSlot,
-			ValidatorIndex: duty.ValidatorIndex,
-		})
-	}
-
-	for _, duty := range duties.NextEpochDuties {
 		if duty.Status != ethpb.ValidatorStatus_ACTIVE && duty.Status != ethpb.ValidatorStatus_EXITING {
 			continue
 		}
@@ -1442,28 +1429,14 @@ func (v *validator) aggregatedSelectionProofs(ctx context.Context, duties *ethpb
 	}
 
 	// Store aggregated selection proofs in state.
-	v.addAttSelections(resp)
-
-	return nil
-}
-
-func (v *validator) addAttSelections(selections []iface.BeaconCommitteeSelection) {
-	v.attSelectionLock.Lock()
-	defer v.attSelectionLock.Unlock()
-
-	for _, s := range selections {
+	for _, s := range resp {
 		v.attSelections[attSelectionKey{
 			slot:  s.Slot,
 			index: s.ValidatorIndex,
 		}] = s
 	}
-}
 
-func (v *validator) newAttSelections() {
-	v.attSelectionLock.Lock()
-	defer v.attSelectionLock.Unlock()
-
-	v.attSelections = make(map[attSelectionKey]iface.BeaconCommitteeSelection)
+	return nil
 }
 
 func (v *validator) attSelection(key attSelectionKey) ([]byte, error) {
