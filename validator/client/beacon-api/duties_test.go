@@ -78,7 +78,7 @@ func TestGetAttesterDuties_Valid(t *testing.T) {
 	dutiesProvider := &beaconApiDutiesProvider{jsonRestHandler: jsonRestHandler}
 	attesterDuties, err := dutiesProvider.AttesterDuties(ctx, epoch, validatorIndices)
 	require.NoError(t, err)
-	assert.DeepEqual(t, expectedAttesterDuties.Data, attesterDuties)
+	assert.DeepEqual(t, expectedAttesterDuties.Data, attesterDuties.Data)
 }
 
 func TestGetAttesterDuties_HttpError(t *testing.T) {
