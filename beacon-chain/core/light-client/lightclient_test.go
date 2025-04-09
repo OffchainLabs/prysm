@@ -206,7 +206,7 @@ func TestLightClient_NewLightClientFinalityUpdateFromBeaconState(t *testing.T) {
 		})
 
 		t.Run("FinalizedBlock In Previous Fork", func(t *testing.T) {
-			l := util.NewTestLightClient2(t).SetupTestCapellaFinalizedBlockAltair(false)
+			l := util.NewTestLightClient(t, version.Capella, util.WithFinalizedCheckpointInPrevFork())
 			update, err := lightClient.NewLightClientFinalityUpdateFromBeaconState(l.Ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
 			require.NoError(t, err)
 			require.NotNil(t, update, "update is nil")
@@ -314,7 +314,7 @@ func TestLightClient_NewLightClientFinalityUpdateFromBeaconState(t *testing.T) {
 		})
 
 		t.Run("FinalizedBlock In Previous Fork", func(t *testing.T) {
-			l := util.NewTestLightClient2(t).SetupTestDenebFinalizedBlockCapella(false)
+			l := util.NewTestLightClient(t, version.Deneb, util.WithFinalizedCheckpointInPrevFork())
 
 			update, err := lightClient.NewLightClientFinalityUpdateFromBeaconState(l.Ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
 			require.NoError(t, err)
@@ -466,7 +466,7 @@ func TestLightClient_NewLightClientFinalityUpdateFromBeaconState(t *testing.T) {
 		})
 
 		t.Run("FinalizedBlock In Previous Fork", func(t *testing.T) {
-			l := util.NewTestLightClient2(t).SetupTestElectraFinalizedBlockDeneb(false)
+			l := util.NewTestLightClient(t, version.Electra, util.WithFinalizedCheckpointInPrevFork())
 
 			update, err := lightClient.NewLightClientFinalityUpdateFromBeaconState(l.Ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
 			require.NoError(t, err)
