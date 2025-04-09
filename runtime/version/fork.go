@@ -1,6 +1,8 @@
 package version
 
 import (
+	"sort"
+
 	"github.com/pkg/errors"
 )
 
@@ -63,4 +65,5 @@ func init() {
 		stringToVersion[s] = v
 		i++
 	}
+	sort.Ints(allVersions)
 }
