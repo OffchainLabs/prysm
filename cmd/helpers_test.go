@@ -105,9 +105,9 @@ func TestExpandSingleEndpointIfFile(t *testing.T) {
 	require.Equal(t, usr.HomeDir+"/relative/path.ipc", context.String(ExecutionEndpointFlag.Name))
 
 	// current dir path
-	curentdir, err := os.Getwd()
+	currentDir, err := os.Getwd()
 	require.NoError(t, err)
 	require.NoError(t, context.Set(ExecutionEndpointFlag.Name, "./path.ipc"))
 	require.NoError(t, ExpandSingleEndpointIfFile(context, ExecutionEndpointFlag))
-	require.Equal(t, curentdir+"/path.ipc", context.String(ExecutionEndpointFlag.Name))
+	require.Equal(t, currentDir+"/path.ipc", context.String(ExecutionEndpointFlag.Name))
 }
