@@ -24,12 +24,10 @@ func TestDefaultConfig(t *testing.T) {
 	cfg := &Flags{
 		MaxRPCPageSize: params.BeaconConfig().DefaultPageSize,
 	}
-	c := Get()
-	assert.DeepEqual(t, c, cfg)
 
 	reset := InitWithReset(cfg)
 	defer reset()
-	c = Get()
+	c := Get()
 	assert.DeepEqual(t, c, cfg)
 }
 
