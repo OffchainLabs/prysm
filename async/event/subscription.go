@@ -154,7 +154,7 @@ retry:
 				continue retry
 			}
 			if sub == nil {
-				panic("event: ResubscribeFunc returned nil subscription and no error")
+				panic("event: ResubscribeFunc returned nil subscription and no error") // lint:nopanic -- This should never happen.
 			}
 			return sub
 		case <-s.unsub:

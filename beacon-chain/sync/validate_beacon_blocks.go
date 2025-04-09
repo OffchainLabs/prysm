@@ -16,6 +16,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	consensusblocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
@@ -409,6 +410,9 @@ func (s *Service) setSeenBlockIndexSlot(slot primitives.Slot, proposerIdx primit
 
 // Returns true if the block is marked as a bad block.
 func (s *Service) hasBadBlock(root [32]byte) bool {
+	if features.BlacklistedBlock(root) {
+		return true
+	}
 	s.badBlockLock.RLock()
 	defer s.badBlockLock.RUnlock()
 	_, seen := s.badBlockCache.Get(string(root[:]))

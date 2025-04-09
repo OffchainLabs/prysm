@@ -13,7 +13,7 @@ import (
 	context "context"
 	reflect "reflect"
 
-	beacon "github.com/prysmaticlabs/prysm/v5/api/client/beacon"
+	health "github.com/prysmaticlabs/prysm/v5/api/client/beacon/health"
 	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	gomock "go.uber.org/mock/gomock"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
@@ -58,10 +58,10 @@ func (mr *MockNodeClientMockRecorder) Genesis(arg0, arg1 any) *gomock.Call {
 }
 
 // HealthTracker mocks base method.
-func (m *MockNodeClient) HealthTracker() *beacon.NodeHealthTracker {
+func (m *MockNodeClient) HealthTracker() health.Tracker {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "HealthTracker")
-	ret0, _ := ret[0].(*beacon.NodeHealthTracker)
+	ret0, _ := ret[0].(health.Tracker)
 	return ret0
 }
 

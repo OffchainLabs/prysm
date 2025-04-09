@@ -73,7 +73,7 @@ func run(ctx context.Context, v iface.Validator) {
 			close(accountsChangedChan)
 			return // Exit if context is canceled.
 		case slot := <-v.NextSlot():
-			if !healthTracker.IsHealthy() {
+			if !healthTracker.IsHealthy(ctx) {
 				continue
 			}
 

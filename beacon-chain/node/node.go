@@ -26,6 +26,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/builder"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache/depositsnapshot"
+	lightclient "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/light-client"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/kv"
@@ -64,7 +65,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/prometheus"
 	"github.com/prysmaticlabs/prysm/v5/runtime"
-	"github.com/prysmaticlabs/prysm/v5/runtime/debug"
 	"github.com/prysmaticlabs/prysm/v5/runtime/prereqs"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/sirupsen/logrus"
@@ -123,6 +123,7 @@ type BeaconNode struct {
 	verifyInitWaiter        *verification.InitializerWaiter
 	syncChecker             *initialsync.SyncChecker
 	slasherEnabled          bool
+	lcStore                 *lightclient.Store
 }
 
 // New creates a new node instance, sets up configuration options, and registers
@@ -161,6 +162,7 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 		initialSyncComplete:     make(chan struct{}),
 		syncChecker:             &initialsync.SyncChecker{},
 		slasherEnabled:          cliCtx.Bool(flags.SlasherFlag.Name),
+		lcStore:                 &lightclient.Store{},
 	}
 
 	for _, opt := range opts {
@@ -432,7 +434,6 @@ func (b *BeaconNode) Start() {
 		defer signal.Stop(sigc)
 		<-sigc
 		log.Info("Got interrupt, shutting down...")
-		debug.Exit(b.cliCtx) // Ensure trace and CPU profile data are flushed.
 		go b.Close()
 		for i := 10; i > 0; i-- {
 			<-sigc
@@ -440,7 +441,7 @@ func (b *BeaconNode) Start() {
 				log.WithField("times", i-1).Info("Already shutting down, interrupt more to panic")
 			}
 		}
-		panic("Panic closing the beacon node")
+		panic("Panic closing the beacon node") // lint:nopanic -- Panic is requested by user.
 	}()
 
 	// Wait for stop channel to be closed.
@@ -706,7 +707,7 @@ func (b *BeaconNode) registerP2P(cliCtx *cli.Context) error {
 func (b *BeaconNode) fetchP2P() p2p.P2P {
 	var p *p2p.Service
 	if err := b.services.FetchService(&p); err != nil {
-		panic(err)
+		panic(err) // lint:nopanic -- This could panic application start if the services are misconfigured.
 	}
 	return p
 }
@@ -714,7 +715,7 @@ func (b *BeaconNode) fetchP2P() p2p.P2P {
 func (b *BeaconNode) fetchBuilderService() *builder.Service {
 	var s *builder.Service
 	if err := b.services.FetchService(&s); err != nil {
-		panic(err)
+		panic(err) // lint:nopanic -- This could panic application start if the services are misconfigured.
 	}
 	return s
 }
@@ -1018,13 +1019,13 @@ func (b *BeaconNode) registerPrometheusService(_ *cli.Context) error {
 	var additionalHandlers []prometheus.Handler
 	var p *p2p.Service
 	if err := b.services.FetchService(&p); err != nil {
-		panic(err)
+		panic(err) // lint:nopanic -- This could panic application start if the services are misconfigured.
 	}
 	additionalHandlers = append(additionalHandlers, prometheus.Handler{Path: "/p2p", Handler: p.InfoHandler})
 
 	var c *blockchain.Service
 	if err := b.services.FetchService(&c); err != nil {
-		panic(err)
+		panic(err) // lint:nopanic -- This could panic application start if the services are misconfigured.
 	}
 
 	service := prometheus.NewService(

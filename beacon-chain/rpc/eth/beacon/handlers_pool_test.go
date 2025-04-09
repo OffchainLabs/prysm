@@ -310,13 +310,16 @@ func TestListAttestations(t *testing.T) {
 			})
 		})
 		t.Run("Post-Electra", func(t *testing.T) {
-			cb := primitives.NewAttestationCommitteeBits()
-			cb.SetBitAt(1, true)
+			cb1 := primitives.NewAttestationCommitteeBits()
+			cb1.SetBitAt(1, true)
+			cb2 := primitives.NewAttestationCommitteeBits()
+			cb2.SetBitAt(2, true)
+
 			attElectra1 := &ethpbv1alpha1.AttestationElectra{
 				AggregationBits: []byte{1, 10},
 				Data: &ethpbv1alpha1.AttestationData{
 					Slot:            1,
-					CommitteeIndex:  1,
+					CommitteeIndex:  0,
 					BeaconBlockRoot: bytesutil.PadTo([]byte("blockroot1"), 32),
 					Source: &ethpbv1alpha1.Checkpoint{
 						Epoch: 1,
@@ -327,14 +330,14 @@ func TestListAttestations(t *testing.T) {
 						Root:  bytesutil.PadTo([]byte("targetroot1"), 32),
 					},
 				},
-				CommitteeBits: cb,
+				CommitteeBits: cb1,
 				Signature:     bytesutil.PadTo([]byte("signature1"), 96),
 			}
 			attElectra2 := &ethpbv1alpha1.AttestationElectra{
 				AggregationBits: []byte{1, 10},
 				Data: &ethpbv1alpha1.AttestationData{
 					Slot:            1,
-					CommitteeIndex:  4,
+					CommitteeIndex:  0,
 					BeaconBlockRoot: bytesutil.PadTo([]byte("blockroot2"), 32),
 					Source: &ethpbv1alpha1.Checkpoint{
 						Epoch: 1,
@@ -345,14 +348,14 @@ func TestListAttestations(t *testing.T) {
 						Root:  bytesutil.PadTo([]byte("targetroot2"), 32),
 					},
 				},
-				CommitteeBits: cb,
+				CommitteeBits: cb2,
 				Signature:     bytesutil.PadTo([]byte("signature2"), 96),
 			}
 			attElectra3 := &ethpbv1alpha1.AttestationElectra{
 				AggregationBits: bitfield.NewBitlist(8),
 				Data: &ethpbv1alpha1.AttestationData{
 					Slot:            2,
-					CommitteeIndex:  2,
+					CommitteeIndex:  0,
 					BeaconBlockRoot: bytesutil.PadTo([]byte("blockroot3"), 32),
 					Source: &ethpbv1alpha1.Checkpoint{
 						Epoch: 1,
@@ -363,14 +366,14 @@ func TestListAttestations(t *testing.T) {
 						Root:  bytesutil.PadTo([]byte("targetroot3"), 32),
 					},
 				},
-				CommitteeBits: cb,
+				CommitteeBits: cb1,
 				Signature:     bytesutil.PadTo([]byte("signature3"), 96),
 			}
 			attElectra4 := &ethpbv1alpha1.AttestationElectra{
 				AggregationBits: bitfield.NewBitlist(8),
 				Data: &ethpbv1alpha1.AttestationData{
 					Slot:            2,
-					CommitteeIndex:  4,
+					CommitteeIndex:  0,
 					BeaconBlockRoot: bytesutil.PadTo([]byte("blockroot4"), 32),
 					Source: &ethpbv1alpha1.Checkpoint{
 						Epoch: 1,
@@ -381,7 +384,7 @@ func TestListAttestations(t *testing.T) {
 						Root:  bytesutil.PadTo([]byte("targetroot4"), 32),
 					},
 				},
-				CommitteeBits: cb,
+				CommitteeBits: cb2,
 				Signature:     bytesutil.PadTo([]byte("signature4"), 96),
 			}
 			bs, err := util.NewBeaconStateElectra()
@@ -442,7 +445,7 @@ func TestListAttestations(t *testing.T) {
 				}
 			})
 			t.Run("index request", func(t *testing.T) {
-				url := "http://example.com?committee_index=4"
+				url := "http://example.com?committee_index=2"
 				request := httptest.NewRequest(http.MethodGet, url, nil)
 				writer := httptest.NewRecorder()
 				writer.Body = &bytes.Buffer{}
@@ -459,11 +462,11 @@ func TestListAttestations(t *testing.T) {
 				assert.Equal(t, 2, len(atts))
 				assert.Equal(t, "electra", resp.Version)
 				for _, a := range atts {
-					assert.Equal(t, "4", a.Data.CommitteeIndex)
+					assert.Equal(t, "0x0400000000000000", a.CommitteeBits)
 				}
 			})
 			t.Run("both slot + index request", func(t *testing.T) {
-				url := "http://example.com?slot=2&committee_index=4"
+				url := "http://example.com?slot=2&committee_index=2"
 				request := httptest.NewRequest(http.MethodGet, url, nil)
 				writer := httptest.NewRecorder()
 				writer.Body = &bytes.Buffer{}
@@ -481,7 +484,7 @@ func TestListAttestations(t *testing.T) {
 				assert.Equal(t, "electra", resp.Version)
 				for _, a := range atts {
 					assert.Equal(t, "2", a.Data.Slot)
-					assert.Equal(t, "4", a.Data.CommitteeIndex)
+					assert.Equal(t, "0x0400000000000000", a.CommitteeBits)
 				}
 			})
 		})

@@ -54,7 +54,7 @@ type ValidatorService struct {
 	web3SignerConfig        *remoteweb3signer.SetupConfig
 	proposerSettings        *proposer.Settings
 	validatorsRegBatchSize  int
-	useWeb                  bool
+	enableAPI               bool
 	emitAccountMetrics      bool
 	logValidatorPerformance bool
 	distributed             bool
@@ -85,7 +85,7 @@ type Config struct {
 	Web3SignerConfig        *remoteweb3signer.SetupConfig
 	ProposerSettings        *proposer.Settings
 	ValidatorsRegBatchSize  int
-	UseWeb                  bool
+	EnableAPI               bool
 	LogValidatorPerformance bool
 	EmitAccountMetrics      bool
 	Distributed             bool
@@ -108,7 +108,7 @@ func NewValidatorService(ctx context.Context, cfg *Config) (*ValidatorService, e
 		web3SignerConfig:        cfg.Web3SignerConfig,
 		proposerSettings:        cfg.ProposerSettings,
 		validatorsRegBatchSize:  cfg.ValidatorsRegBatchSize,
-		useWeb:                  cfg.UseWeb,
+		enableAPI:               cfg.EnableAPI,
 		emitAccountMetrics:      cfg.EmitAccountMetrics,
 		logValidatorPerformance: cfg.LogValidatorPerformance,
 		distributed:             cfg.Distributed,
@@ -151,7 +151,7 @@ func (v *ValidatorService) Start() {
 		BufferItems: 64,   // number of keys per Get buffer.
 	})
 	if err != nil {
-		panic(err)
+		panic(err) // lint:nopanic -- Only errors on misconfiguration of config values.
 	}
 
 	aggregatedSlotCommitteeIDCache := lruwrpr.New(int(params.BeaconConfig().MaxCommitteesPerSlot))
@@ -178,6 +178,7 @@ func (v *ValidatorService) Start() {
 		log.WithError(err).Error("No API hosts provided")
 		return
 	}
+
 	restHandler := beaconApi.NewBeaconApiJsonRestHandler(
 		http.Client{Timeout: v.conn.GetBeaconApiTimeout(), Transport: otelhttp.NewTransport(http.DefaultTransport)},
 		hosts[0],
@@ -219,7 +220,7 @@ func (v *ValidatorService) Start() {
 		submittedAggregates:            make(map[submittedAttKey]*submittedAtt),
 		logValidatorPerformance:        v.logValidatorPerformance,
 		emitAccountMetrics:             v.emitAccountMetrics,
-		useWeb:                         v.useWeb,
+		enableAPI:                      v.enableAPI,
 		distributed:                    v.distributed,
 	}
 

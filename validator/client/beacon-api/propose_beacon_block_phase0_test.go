@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/prysmaticlabs/prysm/v5/api/apiutil"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/testing/assert"
@@ -30,8 +31,8 @@ func TestProposeBeaconBlock_Phase0(t *testing.T) {
 		Signature: hexutil.Encode(phase0Block.Phase0.Signature),
 		Message: &structs.BeaconBlock{
 			ParentRoot:    hexutil.Encode(phase0Block.Phase0.Block.ParentRoot),
-			ProposerIndex: uint64ToString(phase0Block.Phase0.Block.ProposerIndex),
-			Slot:          uint64ToString(phase0Block.Phase0.Block.Slot),
+			ProposerIndex: apiutil.Uint64ToString(phase0Block.Phase0.Block.ProposerIndex),
+			Slot:          apiutil.Uint64ToString(phase0Block.Phase0.Block.Slot),
 			StateRoot:     hexutil.Encode(phase0Block.Phase0.Block.StateRoot),
 			Body: &structs.BeaconBlockBody{
 				Attestations:      jsonifyAttestations(phase0Block.Phase0.Block.Body.Attestations),

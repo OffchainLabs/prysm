@@ -23,7 +23,7 @@ func OverrideBeaconConfig(c *BeaconChainConfig) {
 func (b *BeaconChainConfig) Copy() *BeaconChainConfig {
 	config, ok := deepcopy.Copy(*b).(BeaconChainConfig)
 	if !ok {
-		panic("somehow deepcopy produced a BeaconChainConfig that is not of the same type as the original")
+		panic("somehow deepcopy produced a BeaconChainConfig that is not of the same type as the original") // lint:nopanic -- This would only panic with an application misconfiguration and it should fail right away.
 	}
 	return &config
 }

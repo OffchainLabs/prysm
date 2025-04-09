@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/golang/protobuf/ptypes/empty"
-	"github.com/prysmaticlabs/prysm/v5/api/client/beacon"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/health"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
 	log "github.com/sirupsen/logrus"
@@ -18,7 +18,7 @@ var (
 // Deprecated: gRPC API is being deprecated in favour of REST API.
 type grpcNodeClient struct {
 	nodeClient    ethpb.NodeClient
-	healthTracker *beacon.NodeHealthTracker
+	healthTracker health.Tracker
 }
 
 // Deprecated: gRPC API is being deprecated in favour of REST API.
@@ -52,13 +52,13 @@ func (c *grpcNodeClient) IsHealthy(ctx context.Context) bool {
 }
 
 // Deprecated: gRPC API is being deprecated in favour of REST API.
-func (c *grpcNodeClient) HealthTracker() *beacon.NodeHealthTracker {
+func (c *grpcNodeClient) HealthTracker() health.Tracker {
 	return c.healthTracker
 }
 
 // Deprecated: gRPC API is being deprecated in favour of REST API.
 func NewNodeClient(cc grpc.ClientConnInterface) iface.NodeClient {
 	g := &grpcNodeClient{nodeClient: ethpb.NewNodeClient(cc)}
-	g.healthTracker = beacon.NewNodeHealthTracker(g)
+	g.healthTracker = health.NewTracker(g)
 	return g
 }
