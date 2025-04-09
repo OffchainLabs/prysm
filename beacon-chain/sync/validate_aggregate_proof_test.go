@@ -100,6 +100,64 @@ func TestVerifyIndexInCommittee_ExistsInBeaconCommittee(t *testing.T) {
 	assert.Equal(t, pubsub.ValidationReject, result)
 }
 
+func TestVerifyIndexInCommittee_ExistsInBeaconCommittee_Electra(t *testing.T) {
+	ctx := context.Background()
+	params.SetupTestConfigCleanup(t)
+	params.OverrideBeaconConfig(params.MinimalSpecConfig())
+
+	validators := uint64(64)
+	s, _ := util.DeterministicGenesisState(t, validators)
+	require.NoError(t, s.SetSlot(params.BeaconConfig().SlotsPerEpoch))
+
+	att := &ethpb.AttestationElectra{Data: &ethpb.AttestationData{}}
+
+	committee, err := helpers.BeaconCommitteeFromState(context.Background(), s, att.Data.Slot, att.Data.CommitteeIndex)
+	require.NoError(t, err)
+
+	bl := bitfield.NewBitlist(uint64(len(committee)))
+	att.AggregationBits = bl
+	att.CommitteeBits = primitives.NewAttestationCommitteeBits()
+
+	service := &Service{}
+
+	att.Data.CommitteeIndex = 1
+	_, _, result, err := service.validateCommitteeIndexAndCount(ctx, att, s)
+	require.ErrorContains(t, "attestation data's committee index must be 0", err)
+	assert.Equal(t, pubsub.ValidationReject, result)
+
+	att.Data.CommitteeIndex = 0
+	_, _, result, err = service.validateCommitteeIndexAndCount(ctx, att, s)
+	require.ErrorContains(t, "committee bits have no bit set", err)
+	assert.Equal(t, pubsub.ValidationReject, result)
+
+	att.CommitteeBits.SetBitAt(0, true)
+	att.CommitteeBits.SetBitAt(1, true)
+
+	_, _, result, err = service.validateCommitteeIndexAndCount(ctx, att, s)
+	require.ErrorContains(t, "expected 1 committee bit indice got 2", err)
+	assert.Equal(t, pubsub.ValidationReject, result)
+
+	// Unset committee index 0
+	att.CommitteeBits.SetBitAt(0, false)
+	ci, _, result, err := service.validateCommitteeIndexAndCount(ctx, att, s)
+	require.NoError(t, err)
+	assert.Equal(t, pubsub.ValidationAccept, result)
+	assert.Equal(t, ci, primitives.CommitteeIndex(1))
+
+	newAtt := &ethpb.SingleAttestation{Data: &ethpb.AttestationData{}, CommitteeId: 1}
+
+	newAtt.Data.CommitteeIndex = 1
+	_, _, result, err = service.validateCommitteeIndexAndCount(ctx, newAtt, s)
+	require.ErrorContains(t, "attestation data's committee index must be 0", err)
+	assert.Equal(t, pubsub.ValidationReject, result)
+
+	newAtt.Data.CommitteeIndex = 0
+	ci, _, result, err = service.validateCommitteeIndexAndCount(ctx, newAtt, s)
+	require.NoError(t, err)
+	assert.Equal(t, pubsub.ValidationAccept, result)
+	assert.Equal(t, ci, primitives.CommitteeIndex(1))
+}
+
 func TestVerifyIndexInCommittee_Electra(t *testing.T) {
 	ctx := context.Background()
 	s, _ := util.DeterministicGenesisStateElectra(t, 64)
