@@ -172,7 +172,7 @@ func TestGetProposerDuties_Valid(t *testing.T) {
 	dutiesProvider := &beaconApiDutiesProvider{jsonRestHandler: jsonRestHandler}
 	proposerDuties, err := dutiesProvider.ProposerDuties(ctx, epoch)
 	require.NoError(t, err)
-	assert.DeepEqual(t, expectedProposerDuties.Data, proposerDuties)
+	assert.DeepEqual(t, expectedProposerDuties.Data, proposerDuties.Data)
 }
 
 func TestGetProposerDuties_HttpError(t *testing.T) {
@@ -633,7 +633,7 @@ func TestGetDutiesForEpoch_Error(t *testing.T) {
 				epoch,
 				gomock.Any(),
 			).Return(
-				attesterDuties,
+				&structs.GetAttesterDutiesResponse{Data: attesterDuties},
 				testCase.fetchAttesterDutiesError,
 			).AnyTimes()
 
@@ -641,7 +641,7 @@ func TestGetDutiesForEpoch_Error(t *testing.T) {
 				ctx,
 				epoch,
 			).Return(
-				proposerDuties,
+				&structs.GetProposerDutiesResponse{Data: proposerDuties},
 				testCase.fetchProposerDutiesError,
 			).AnyTimes()
 
@@ -712,7 +712,9 @@ func TestGetDutiesForEpoch_Valid(t *testing.T) {
 				epoch,
 				validatorIndices,
 			).Return(
-				generateValidAttesterDuties(pubkeys, validatorIndices, committeeIndices, committeeSlots),
+				&structs.GetAttesterDutiesResponse{
+					Data: generateValidAttesterDuties(pubkeys, validatorIndices, committeeIndices, committeeSlots),
+				},
 				nil,
 			).Times(1)
 
@@ -720,7 +722,9 @@ func TestGetDutiesForEpoch_Valid(t *testing.T) {
 				ctx,
 				epoch,
 			).Return(
-				generateValidProposerDuties(pubkeys, validatorIndices, proposerSlots),
+				&structs.GetProposerDutiesResponse{
+					Data: generateValidProposerDuties(pubkeys, validatorIndices, proposerSlots),
+				},
 				nil,
 			).Times(1)
 
@@ -952,7 +956,9 @@ func TestGetDuties_Valid(t *testing.T) {
 				testCase.epoch,
 				validatorIndices,
 			).Return(
-				generateValidAttesterDuties(pubkeys, validatorIndices, committeeIndices, committeeSlots),
+				&structs.GetAttesterDutiesResponse{
+					Data: generateValidAttesterDuties(pubkeys, validatorIndices, committeeIndices, committeeSlots),
+				},
 				nil,
 			).Times(2)
 
@@ -960,7 +966,9 @@ func TestGetDuties_Valid(t *testing.T) {
 				ctx,
 				testCase.epoch,
 			).Return(
-				generateValidProposerDuties(pubkeys, validatorIndices, proposerSlots),
+				&structs.GetProposerDutiesResponse{
+					Data: generateValidProposerDuties(pubkeys, validatorIndices, proposerSlots),
+				},
 				nil,
 			).Times(2)
 
@@ -981,7 +989,9 @@ func TestGetDuties_Valid(t *testing.T) {
 				testCase.epoch+1,
 				validatorIndices,
 			).Return(
-				reverseSlice(generateValidAttesterDuties(pubkeys, validatorIndices, committeeIndices, committeeSlots)),
+				&structs.GetAttesterDutiesResponse{
+					Data: reverseSlice(generateValidAttesterDuties(pubkeys, validatorIndices, committeeIndices, committeeSlots)),
+				},
 				nil,
 			).Times(2)
 
@@ -989,7 +999,9 @@ func TestGetDuties_Valid(t *testing.T) {
 				ctx,
 				testCase.epoch+1,
 			).Return(
-				generateValidProposerDuties(pubkeys, validatorIndices, proposerSlots),
+				&structs.GetProposerDutiesResponse{
+					Data: generateValidProposerDuties(pubkeys, validatorIndices, proposerSlots),
+				},
 				nil,
 			).Times(2)
 
