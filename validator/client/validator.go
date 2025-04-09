@@ -1156,6 +1156,7 @@ func (v *validator) checkDependentRoots(ctx context.Context, head *structs.HeadE
 		if err := v.UpdateDuties(ctx, currEpochStart); err != nil {
 			return errors.Wrap(err, "failed to update duties")
 		}
+		log.Info("Updated duties due to previous dependent root change")
 		return nil
 	}
 	currDepedentRoot, err := bytesutil.DecodeHexWithLength(head.CurrentDutyDependentRoot, fieldparams.RootLength)
@@ -1166,6 +1167,7 @@ func (v *validator) checkDependentRoots(ctx context.Context, head *structs.HeadE
 		if err := v.UpdateDuties(ctx, currEpochStart); err != nil {
 			return errors.Wrap(err, "failed to update duties")
 		}
+		log.Info("Updated duties due to current dependent root change")
 		return nil
 	}
 	return nil
