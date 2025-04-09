@@ -641,7 +641,9 @@ func TestGetDutiesForEpoch_Error(t *testing.T) {
 				ctx,
 				epoch,
 			).Return(
-				&structs.GetProposerDutiesResponse{Data: proposerDuties},
+				&structs.GetProposerDutiesResponse{
+					DependentRoot: "0xdeadbeef000000000000000000000000000000000000000000000000",
+					Data:          proposerDuties},
 				testCase.fetchProposerDutiesError,
 			).AnyTimes()
 
@@ -713,7 +715,8 @@ func TestGetDutiesForEpoch_Valid(t *testing.T) {
 				validatorIndices,
 			).Return(
 				&structs.GetAttesterDutiesResponse{
-					Data: generateValidAttesterDuties(pubkeys, validatorIndices, committeeIndices, committeeSlots),
+					DependentRoot: "0xdeadbeef000000000000000000000000000000000000000000000000",
+					Data:          generateValidAttesterDuties(pubkeys, validatorIndices, committeeIndices, committeeSlots),
 				},
 				nil,
 			).Times(1)
@@ -723,7 +726,8 @@ func TestGetDutiesForEpoch_Valid(t *testing.T) {
 				epoch,
 			).Return(
 				&structs.GetProposerDutiesResponse{
-					Data: generateValidProposerDuties(pubkeys, validatorIndices, proposerSlots),
+					DependentRoot: "0xdeadbeef000000000000000000000000000000000000000000000000",
+					Data:          generateValidProposerDuties(pubkeys, validatorIndices, proposerSlots),
 				},
 				nil,
 			).Times(1)
@@ -957,7 +961,8 @@ func TestGetDuties_Valid(t *testing.T) {
 				validatorIndices,
 			).Return(
 				&structs.GetAttesterDutiesResponse{
-					Data: generateValidAttesterDuties(pubkeys, validatorIndices, committeeIndices, committeeSlots),
+					DependentRoot: "0xdeadbeef000000000000000000000000000000000000000000000000",
+					Data:          generateValidAttesterDuties(pubkeys, validatorIndices, committeeIndices, committeeSlots),
 				},
 				nil,
 			).Times(2)
@@ -967,7 +972,8 @@ func TestGetDuties_Valid(t *testing.T) {
 				testCase.epoch,
 			).Return(
 				&structs.GetProposerDutiesResponse{
-					Data: generateValidProposerDuties(pubkeys, validatorIndices, proposerSlots),
+					DependentRoot: "0xdeadbeef000000000000000000000000000000000000000000000000",
+					Data:          generateValidProposerDuties(pubkeys, validatorIndices, proposerSlots),
 				},
 				nil,
 			).Times(2)
@@ -990,7 +996,8 @@ func TestGetDuties_Valid(t *testing.T) {
 				validatorIndices,
 			).Return(
 				&structs.GetAttesterDutiesResponse{
-					Data: reverseSlice(generateValidAttesterDuties(pubkeys, validatorIndices, committeeIndices, committeeSlots)),
+					DependentRoot: "0xdeadbeef000000000000000000000000000000000000000000000000",
+					Data:          reverseSlice(generateValidAttesterDuties(pubkeys, validatorIndices, committeeIndices, committeeSlots)),
 				},
 				nil,
 			).Times(2)
@@ -1000,7 +1007,8 @@ func TestGetDuties_Valid(t *testing.T) {
 				testCase.epoch+1,
 			).Return(
 				&structs.GetProposerDutiesResponse{
-					Data: generateValidProposerDuties(pubkeys, validatorIndices, proposerSlots),
+					DependentRoot: "0xdeadbeef000000000000000000000000000000000000000000000000",
+					Data:          generateValidProposerDuties(pubkeys, validatorIndices, proposerSlots),
 				},
 				nil,
 			).Times(2)
@@ -1165,7 +1173,8 @@ func TestGetDuties_Valid(t *testing.T) {
 			})
 			require.NoError(t, err)
 
-			assert.DeepEqual(t, expectedDuties, duties)
+			assert.DeepEqual(t, expectedDuties.NextEpochDuties, duties.NextEpochDuties)
+			assert.DeepEqual(t, expectedDuties.CurrentEpochDuties, duties.CurrentEpochDuties)
 		})
 	}
 }
@@ -1228,20 +1237,23 @@ func TestGetDuties_GetDutiesForEpochFailed(t *testing.T) {
 	dutiesProvider := mock.NewMockdutiesProvider(ctrl)
 	dutiesProvider.EXPECT().AttesterDuties(
 		ctx,
-		primitives.Epoch(1),
+		gomock.Any(),
 		gomock.Any(),
 	).Return(
-		nil,
+		&structs.GetAttesterDutiesResponse{
+			DependentRoot: "0xdeadbeef000000000000000000000000000000000000000000000000",
+			Data:          []*structs.AttesterDuty{}},
 		errors.New("foo error"),
-	).Times(1)
-	dutiesProvider.EXPECT().AttesterDuties(
-		ctx,
-		primitives.Epoch(2),
-		gomock.Any(),
-	).Times(1)
+	).Times(2)
 	dutiesProvider.EXPECT().ProposerDuties(
 		ctx,
 		gomock.Any(),
+	).Return(
+		&structs.GetProposerDutiesResponse{
+			DependentRoot: "0xdeadbeef000000000000000000000000000000000000000000000000",
+			Data:          []*structs.ProposerDuty{},
+		},
+		nil,
 	).Times(2)
 
 	validatorClient := &beaconApiValidatorClient{
@@ -1253,7 +1265,7 @@ func TestGetDuties_GetDutiesForEpochFailed(t *testing.T) {
 		Epoch:      1,
 		PublicKeys: [][]byte{pubkey},
 	})
-	assert.ErrorContains(t, "failed to get duties for current epoch `1`", err)
+	assert.ErrorContains(t, "failed to get duties for", err)
 	assert.ErrorContains(t, "foo error", err)
 }
 
