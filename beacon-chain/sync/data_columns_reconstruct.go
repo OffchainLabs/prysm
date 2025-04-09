@@ -109,6 +109,8 @@ func (s *Service) reconstructDataColumns(ctx context.Context, verifiedRODataColu
 	}
 
 	// Save the data columns sidecars in the database.
+	// Note: We do not call `receiveDataColumn`, because it will ignore
+	// incoming data columns via gossip while we did not broadcast (yet) the reconstructed data columns.
 	if err := s.cfg.dataColumnStorage.Save(verifiedRODataColumns); err != nil {
 		return errors.Wrap(err, "save data column sidecars")
 	}
@@ -214,6 +216,9 @@ func (s *Service) scheduleReconstructedDataColumnsBroadcast(
 			if err := s.cfg.p2p.BroadcastDataColumn(ctx, root, subnet, verifiedRODataColumn.DataColumnSidecar); err != nil {
 				log.WithError(err).Error("Broadcast data column")
 			}
+
+			// Now, we can set the data column as seen.
+			s.setSeenDataColumnIndex(slot, proposerIndex, verifiedRODataColumn.Index)
 		}
 
 		// Sort the missing data columns.
