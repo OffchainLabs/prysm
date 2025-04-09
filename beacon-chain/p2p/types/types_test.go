@@ -5,12 +5,12 @@ import (
 	"testing"
 
 	ssz "github.com/prysmaticlabs/fastssz"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	eth "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func generateBlobIdentifiers(n int) []*eth.BlobIdentifier {
@@ -82,7 +82,7 @@ func TestBlobSidecarsByRootReq_MarshalSSZ(t *testing.T) {
 
 func TestBeaconBlockByRootsReq_Limit(t *testing.T) {
 	fixedRoots := make([][32]byte, 0)
-	for i := uint64(0); i < params.BeaconNetworkConfig().MaxRequestBlocks+100; i++ {
+	for i := uint64(0); i < params.BeaconConfig().MaxRequestBlocks+100; i++ {
 		fixedRoots = append(fixedRoots, [32]byte{byte(i)})
 	}
 	req := BeaconBlockByRootsReq(fixedRoots)

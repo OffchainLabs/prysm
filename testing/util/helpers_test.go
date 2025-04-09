@@ -6,15 +6,15 @@ import (
 	"encoding/binary"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/signing"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/time"
-	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/time/slots"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
 func TestBlockSignature(t *testing.T) {
@@ -26,7 +26,7 @@ func TestBlockSignature(t *testing.T) {
 	proposerIdx, err := helpers.BeaconProposerIndex(context.Background(), beaconState)
 	assert.NoError(t, err)
 
-	assert.NoError(t, beaconState.SetSlot(beaconState.Slot()-1))
+	assert.NoError(t, beaconState.SetSlot(slots.PrevSlot(beaconState.Slot())))
 	epoch := slots.ToEpoch(block.Block.Slot)
 	blockSig, err := signing.ComputeDomainAndSign(beaconState, epoch, block.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[proposerIdx])
 	require.NoError(t, err)

@@ -7,25 +7,25 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/peer"
-	mock "github.com/prysmaticlabs/prysm/v4/beacon-chain/blockchain/testing"
-	dbtest "github.com/prysmaticlabs/prysm/v4/beacon-chain/db/testing"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p/peers"
-	p2pt "github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p/testing"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/startup"
-	beaconsync "github.com/prysmaticlabs/prysm/v4/beacon-chain/sync"
-	"github.com/prysmaticlabs/prysm/v4/cmd/beacon-chain/flags"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	leakybucket "github.com/prysmaticlabs/prysm/v4/container/leaky-bucket"
-	"github.com/prysmaticlabs/prysm/v4/container/slice"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	eth "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/testing/util"
-	prysmTime "github.com/prysmaticlabs/prysm/v4/time"
-	"github.com/prysmaticlabs/prysm/v4/time/slots"
+	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
+	dbtest "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers"
+	p2pt "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
+	beaconsync "github.com/prysmaticlabs/prysm/v5/beacon-chain/sync"
+	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	leakybucket "github.com/prysmaticlabs/prysm/v5/container/leaky-bucket"
+	"github.com/prysmaticlabs/prysm/v5/container/slice"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/util"
+	prysmTime "github.com/prysmaticlabs/prysm/v5/time"
+	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
@@ -263,7 +263,7 @@ func TestBlocksQueue_Loop(t *testing.T) {
 				highestExpectedSlot: tt.highestExpectedSlot,
 			})
 			assert.NoError(t, queue.start())
-			processBlock := func(b blocks.BlockWithVerifiedBlobs) error {
+			processBlock := func(b blocks.BlockWithROBlobs) error {
 				block := b.Block
 				if !beaconDB.HasBlock(ctx, block.Block().ParentRoot()) {
 					return fmt.Errorf("%w: %#x", errParentDoesNotExist, block.Block().ParentRoot())
@@ -272,10 +272,10 @@ func TestBlocksQueue_Loop(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				return mc.ReceiveBlock(ctx, block, root)
+				return mc.ReceiveBlock(ctx, block, root, nil)
 			}
 
-			var blocks []blocks.BlockWithVerifiedBlobs
+			var blocks []blocks.BlockWithROBlobs
 			for data := range queue.fetchedData {
 				for _, b := range data.bwb {
 					if err := processBlock(b); err != nil {
@@ -538,7 +538,7 @@ func TestBlocksQueue_onDataReceivedEvent(t *testing.T) {
 		require.NoError(t, err)
 		response := &fetchRequestResponse{
 			pid: "abc",
-			bwb: []blocks.BlockWithVerifiedBlobs{
+			bwb: []blocks.BlockWithROBlobs{
 				{Block: blocks.ROBlock{ReadOnlySignedBeaconBlock: wsb}},
 				{Block: blocks.ROBlock{ReadOnlySignedBeaconBlock: wsbCopy}},
 			},
@@ -638,7 +638,7 @@ func TestBlocksQueue_onReadyToSendEvent(t *testing.T) {
 		queue.smm.machines[256].pid = pidDataParsed
 		rwsb, err := blocks.NewROBlock(wsb)
 		require.NoError(t, err)
-		queue.smm.machines[256].bwb = []blocks.BlockWithVerifiedBlobs{
+		queue.smm.machines[256].bwb = []blocks.BlockWithROBlobs{
 			{Block: rwsb},
 		}
 
@@ -672,7 +672,7 @@ func TestBlocksQueue_onReadyToSendEvent(t *testing.T) {
 		queue.smm.machines[320].pid = pidDataParsed
 		rwsb, err := blocks.NewROBlock(wsb)
 		require.NoError(t, err)
-		queue.smm.machines[320].bwb = []blocks.BlockWithVerifiedBlobs{
+		queue.smm.machines[320].bwb = []blocks.BlockWithROBlobs{
 			{Block: rwsb},
 		}
 
@@ -703,7 +703,7 @@ func TestBlocksQueue_onReadyToSendEvent(t *testing.T) {
 		queue.smm.machines[320].pid = pidDataParsed
 		rwsb, err := blocks.NewROBlock(wsb)
 		require.NoError(t, err)
-		queue.smm.machines[320].bwb = []blocks.BlockWithVerifiedBlobs{
+		queue.smm.machines[320].bwb = []blocks.BlockWithROBlobs{
 			{Block: rwsb},
 		}
 
@@ -874,7 +874,7 @@ func TestBlocksQueue_onProcessSkippedEvent(t *testing.T) {
 	t.Run("ready to update machines - constrained mode", func(t *testing.T) {
 		p := p2pt.NewTestP2P(t)
 		connectPeers(t, p, []*peerData{
-			{blocks: makeSequence(500, 628), finalizedEpoch: 16, headSlot: 600},
+			{blocks: makeSequence(200, 320), finalizedEpoch: 8, headSlot: 300},
 		}, p.Peers())
 		fetcher := newBlocksFetcher(ctx, &blocksFetcherConfig{
 			chain: mc,
@@ -924,7 +924,7 @@ func TestBlocksQueue_onProcessSkippedEvent(t *testing.T) {
 	t.Run("ready to update machines - unconstrained mode", func(t *testing.T) {
 		p := p2pt.NewTestP2P(t)
 		connectPeers(t, p, []*peerData{
-			{blocks: makeSequence(500, 628), finalizedEpoch: 16, headSlot: 600},
+			{blocks: makeSequence(200, 320), finalizedEpoch: 8, headSlot: 320},
 		}, p.Peers())
 		fetcher := newBlocksFetcher(ctx, &blocksFetcherConfig{
 			chain: mc,
@@ -971,24 +971,12 @@ func TestBlocksQueue_onProcessSkippedEvent(t *testing.T) {
 }
 
 func TestBlocksQueue_onCheckStaleEvent(t *testing.T) {
-	blockBatchLimit := flags.Get().BlockBatchLimit
-	mc, p2p, _ := initializeTestServices(t, []primitives.Slot{}, []*peerData{})
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	fetcher := newBlocksFetcher(ctx, &blocksFetcherConfig{
-		chain: mc,
-		p2p:   p2p,
-	})
 
 	t.Run("expired context", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(ctx)
-		queue := newBlocksQueue(ctx, &blocksQueueConfig{
-			blocksFetcher:       fetcher,
-			chain:               mc,
-			highestExpectedSlot: primitives.Slot(blockBatchLimit),
-		})
-		handlerFn := queue.onCheckStaleEvent(ctx)
+		handlerFn := onCheckStaleEvent(ctx)
 		cancel()
 		updatedState, err := handlerFn(&stateMachine{
 			state: stateSkipped,
@@ -998,16 +986,10 @@ func TestBlocksQueue_onCheckStaleEvent(t *testing.T) {
 	})
 
 	t.Run("invalid input state", func(t *testing.T) {
-		queue := newBlocksQueue(ctx, &blocksQueueConfig{
-			blocksFetcher:       fetcher,
-			chain:               mc,
-			highestExpectedSlot: primitives.Slot(blockBatchLimit),
-		})
-
 		invalidStates := []stateID{stateNew, stateScheduled, stateDataParsed, stateSkipped}
 		for _, state := range invalidStates {
 			t.Run(state.String(), func(t *testing.T) {
-				handlerFn := queue.onCheckStaleEvent(ctx)
+				handlerFn := onCheckStaleEvent(ctx)
 				updatedState, err := handlerFn(&stateMachine{
 					state: state,
 				}, nil)
@@ -1018,12 +1000,7 @@ func TestBlocksQueue_onCheckStaleEvent(t *testing.T) {
 	})
 
 	t.Run("process non stale machine", func(t *testing.T) {
-		queue := newBlocksQueue(ctx, &blocksQueueConfig{
-			blocksFetcher:       fetcher,
-			chain:               mc,
-			highestExpectedSlot: primitives.Slot(blockBatchLimit),
-		})
-		handlerFn := queue.onCheckStaleEvent(ctx)
+		handlerFn := onCheckStaleEvent(ctx)
 		updatedState, err := handlerFn(&stateMachine{
 			state:   stateSent,
 			updated: prysmTime.Now().Add(-staleEpochTimeout / 2),
@@ -1034,12 +1011,7 @@ func TestBlocksQueue_onCheckStaleEvent(t *testing.T) {
 	})
 
 	t.Run("process stale machine", func(t *testing.T) {
-		queue := newBlocksQueue(ctx, &blocksQueueConfig{
-			blocksFetcher:       fetcher,
-			chain:               mc,
-			highestExpectedSlot: primitives.Slot(blockBatchLimit),
-		})
-		handlerFn := queue.onCheckStaleEvent(ctx)
+		handlerFn := onCheckStaleEvent(ctx)
 		updatedState, err := handlerFn(&stateMachine{
 			state:   stateSent,
 			updated: prysmTime.Now().Add(-staleEpochTimeout),
@@ -1122,7 +1094,7 @@ func TestBlocksQueue_stuckInUnfavourableFork(t *testing.T) {
 		// its claims with actual blocks.
 		emptyPeer := connectPeerHavingBlocks(t, p2p, chain1, finalizedSlot, p2p.Peers())
 		defer func() {
-			p2p.Peers().SetConnectionState(emptyPeer, peers.PeerDisconnected)
+			p2p.Peers().SetConnectionState(emptyPeer, peers.Disconnected)
 		}()
 		chainState, err := p2p.Peers().ChainState(emptyPeer)
 		require.NoError(t, err)
@@ -1319,7 +1291,7 @@ func TestBlocksQueue_stuckWhenHeadIsSetToOrphanedBlock(t *testing.T) {
 	// Connect peer that has all the blocks available.
 	allBlocksPeer := connectPeerHavingBlocks(t, p2p, chain, finalizedSlot, p2p.Peers())
 	defer func() {
-		p2p.Peers().SetConnectionState(allBlocksPeer, peers.PeerDisconnected)
+		p2p.Peers().SetConnectionState(allBlocksPeer, peers.Disconnected)
 	}()
 
 	// Queue should be able to fetch whole chain (including slot which comes before the currently set head).

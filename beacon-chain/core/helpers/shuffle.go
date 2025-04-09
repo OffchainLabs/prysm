@@ -4,11 +4,11 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/container/slice"
-	"github.com/prysmaticlabs/prysm/v4/crypto/hash"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/container/slice"
+	"github.com/prysmaticlabs/prysm/v5/crypto/hash"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 )
 
 const seedSize = int8(32)

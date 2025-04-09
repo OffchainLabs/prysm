@@ -8,7 +8,7 @@ go_library(
         "keystore.go",
         "utils.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v4/crypto/keystore",
+    importpath = "github.com/prysmaticlabs/prysm/v5/crypto/keystore",
     visibility = ["//visibility:public"],
     deps = [
         "//crypto/bls:go_default_library",

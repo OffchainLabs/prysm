@@ -1,3 +1,4 @@
+// lint:nopanic -- Test tooling / code.
 package components
 
 import (
@@ -18,12 +19,12 @@ import (
 	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v4/io/file"
-	"github.com/prysmaticlabs/prysm/v4/runtime/interop"
-	e2e "github.com/prysmaticlabs/prysm/v4/testing/endtoend/params"
-	e2etypes "github.com/prysmaticlabs/prysm/v4/testing/endtoend/types"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
+	"github.com/prysmaticlabs/prysm/v5/io/file"
+	"github.com/prysmaticlabs/prysm/v5/runtime/interop"
+	e2e "github.com/prysmaticlabs/prysm/v5/testing/endtoend/params"
+	e2etypes "github.com/prysmaticlabs/prysm/v5/testing/endtoend/types"
 	"gopkg.in/yaml.v2"
 )
 
@@ -142,13 +143,13 @@ func (w *Web3RemoteSigner) Stop() error {
 func (w *Web3RemoteSigner) monitorStart() {
 	client := &http.Client{}
 	for {
-		req, err := http.NewRequestWithContext(w.ctx, "GET", fmt.Sprintf("http://localhost:%d/upcheck", Web3RemoteSignerPort), nil)
+		req, err := http.NewRequestWithContext(w.ctx, http.MethodGet, fmt.Sprintf("http://localhost:%d/upcheck", Web3RemoteSignerPort), nil)
 		if err != nil {
 			panic(err)
 		}
 		res, err := client.Do(req)
 		_ = err
-		if res != nil && res.StatusCode == 200 {
+		if res != nil && res.StatusCode == http.StatusOK {
 			close(w.started)
 			return
 		}
@@ -172,7 +173,7 @@ func (w *Web3RemoteSigner) PublicKeys(ctx context.Context) ([]bls.PublicKey, err
 	w.wait(ctx)
 
 	client := &http.Client{}
-	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("http://localhost:%d/api/v1/eth2/publicKeys", Web3RemoteSignerPort), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("http://localhost:%d/api/v1/eth2/publicKeys", Web3RemoteSignerPort), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -180,7 +181,7 @@ func (w *Web3RemoteSigner) PublicKeys(ctx context.Context) ([]bls.PublicKey, err
 	if err != nil {
 		return nil, err
 	}
-	if res.StatusCode != 200 {
+	if res.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("returned status code %d", res.StatusCode)
 	}
 	b, err := io.ReadAll(res.Body)
@@ -260,13 +261,6 @@ func createTestnetDir() (string, error) {
 	// Add in deposit contract in yaml
 	depContractStr := fmt.Sprintf("\nDEPOSIT_CONTRACT_ADDRESS: %s\n", params.BeaconConfig().DepositContractAddress)
 	rawYaml = append(rawYaml, []byte(depContractStr)...)
-	rawYaml = append(rawYaml, params.NetworkConfigToYaml(params.BeaconNetworkConfig())...)
-
-	rawYaml = append(rawYaml, []byte("\nEPOCHS_PER_SUBNET_SUBSCRIPTION: 256\n")...)
-	rawYaml = append(rawYaml, []byte("\nMIN_EPOCHS_FOR_BLOCK_REQUESTS: 33024\n")...)
-	rawYaml = append(rawYaml, []byte("\nSUBNETS_PER_NODE: 2\n")...)
-	rawYaml = append(rawYaml, []byte("\nATTESTATION_SUBNET_EXTRA_BITS: 0\n")...)
-	rawYaml = append(rawYaml, []byte("\nATTESTATION_SUBNET_PREFIX_BITS: 6\n")...)
 
 	if err := file.MkdirAll(testNetDir); err != nil {
 		return "", err

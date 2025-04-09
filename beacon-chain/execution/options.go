@@ -2,13 +2,14 @@ package execution
 
 import (
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/cache"
-	statefeed "github.com/prysmaticlabs/prysm/v4/beacon-chain/core/feed/state"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/db"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state/stategen"
-	"github.com/prysmaticlabs/prysm/v4/network"
-	"github.com/prysmaticlabs/prysm/v4/network/authorization"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
+	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stategen"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
+	"github.com/prysmaticlabs/prysm/v5/network"
+	"github.com/prysmaticlabs/prysm/v5/network/authorization"
 )
 
 type Option func(s *Service) error
@@ -105,6 +106,21 @@ func WithBeaconNodeStatsUpdater(updater BeaconNodeStatsUpdater) Option {
 func WithFinalizedStateAtStartup(st state.BeaconState) Option {
 	return func(s *Service) error {
 		s.cfg.finalizedStateAtStartup = st
+		return nil
+	}
+}
+
+func WithJwtId(jwtId string) Option {
+	return func(s *Service) error {
+		s.cfg.jwtId = jwtId
+		return nil
+	}
+}
+
+// WithVerifierWaiter gives the sync package direct access to the verifier waiter.
+func WithVerifierWaiter(v *verification.InitializerWaiter) Option {
+	return func(s *Service) error {
+		s.verifierWaiter = v
 		return nil
 	}
 }

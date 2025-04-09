@@ -12,7 +12,7 @@ extend google.protobuf.FieldOptions {
 
 message TestMessage {
   string foo = 1;
-  string bar = 2 [(ssz_size) = "32", (spec_name) = "foo"];
+  string bar = 2 [ (ssz_size) = "32", (spec_name) = "foo" ];
 }
 
 message TestNestedMessage {
@@ -46,9 +46,7 @@ message Person {
 }
 
 // Our address book file is just one of these.
-message AddressBook {
-  repeated Person people = 1;
-}
+message AddressBook { repeated Person people = 1; }
 
 message TestSimpleMessage {
   bytes foo = 1;

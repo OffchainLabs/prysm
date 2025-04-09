@@ -10,7 +10,7 @@ go_library(
         "metric.go",
         "pool.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v4/beacon-chain/operations/synccommittee",
+    importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/synccommittee",
     visibility = ["//beacon-chain:__subpackages__"],
     deps = [
         "//consensus-types/primitives:go_default_library",

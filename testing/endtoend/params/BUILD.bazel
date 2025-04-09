@@ -7,7 +7,7 @@ go_library(
         "const.go",
         "params.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v4/testing/endtoend/params",
+    importpath = "github.com/prysmaticlabs/prysm/v5/testing/endtoend/params",
     visibility = ["//visibility:public"],
     deps = [
         "//io/file:go_default_library",

@@ -3,13 +3,13 @@ package altair
 import (
 	"context"
 
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/time"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
-	state_native "github.com/prysmaticlabs/prysm/v4/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1/attestation"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/attestation"
 )
 
 // UpgradeToAltair updates input state to return the version Altair state.
@@ -154,11 +154,11 @@ func TranslateParticipation(ctx context.Context, state state.BeaconState, atts [
 		if err != nil {
 			return nil, err
 		}
-		committee, err := helpers.BeaconCommitteeFromState(ctx, state, att.Data.Slot, att.Data.CommitteeIndex)
+		committee, err := helpers.BeaconCommitteeFromState(ctx, state, att.GetData().Slot, att.GetData().CommitteeIndex)
 		if err != nil {
 			return nil, err
 		}
-		indices, err := attestation.AttestingIndices(att.AggregationBits, committee)
+		indices, err := attestation.AttestingIndices(att, committee)
 		if err != nil {
 			return nil, err
 		}

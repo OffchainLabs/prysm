@@ -3,7 +3,7 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 go_library(
     name = "go_default_library",
     srcs = ["slot_epoch.go"],
-    importpath = "github.com/prysmaticlabs/prysm/v4/beacon-chain/core/time",
+    importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time",
     visibility = ["//visibility:public"],
     deps = [
         "//beacon-chain/state:go_default_library",

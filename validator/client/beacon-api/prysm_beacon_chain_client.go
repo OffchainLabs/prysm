@@ -1,41 +1,38 @@
 package beacon_api
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
-	"net/http"
 	neturl "net/url"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/prysm/validator"
-	validator2 "github.com/prysmaticlabs/prysm/v4/consensus-types/validator"
-	"github.com/prysmaticlabs/prysm/v4/validator/client/iface"
+	"github.com/prysmaticlabs/prysm/v5/api/apiutil"
+	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
+	validator2 "github.com/prysmaticlabs/prysm/v5/consensus-types/validator"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
 )
 
-// NewPrysmBeaconChainClient returns implementation of iface.PrysmBeaconChainClient.
-func NewPrysmBeaconChainClient(host string, timeout time.Duration, nodeClient iface.NodeClient) iface.PrysmBeaconChainClient {
-	jsonRestHandler := beaconApiJsonRestHandler{
-		httpClient: http.Client{Timeout: timeout},
-		host:       host,
-	}
-
-	return prysmBeaconChainClient{
+// NewPrysmChainClient returns implementation of iface.PrysmChainClient.
+func NewPrysmChainClient(jsonRestHandler JsonRestHandler, nodeClient iface.NodeClient) iface.PrysmChainClient {
+	return prysmChainClient{
 		jsonRestHandler: jsonRestHandler,
 		nodeClient:      nodeClient,
 	}
 }
 
-type prysmBeaconChainClient struct {
-	jsonRestHandler jsonRestHandler
+type prysmChainClient struct {
+	jsonRestHandler JsonRestHandler
 	nodeClient      iface.NodeClient
 }
 
-func (c prysmBeaconChainClient) GetValidatorCount(ctx context.Context, stateID string, statuses []validator2.ValidatorStatus) ([]iface.ValidatorCount, error) {
+func (c prysmChainClient) ValidatorCount(ctx context.Context, stateID string, statuses []validator2.Status) ([]iface.ValidatorCount, error) {
 	// Check node version for prysm beacon node as it is a custom endpoint for prysm beacon node.
-	nodeVersion, err := c.nodeClient.GetVersion(ctx, nil)
+	nodeVersion, err := c.nodeClient.Version(ctx, nil)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get node version")
 	}
@@ -49,11 +46,11 @@ func (c prysmBeaconChainClient) GetValidatorCount(ctx context.Context, stateID s
 		queryParams.Add("status", status.String())
 	}
 
-	queryUrl := buildURL(fmt.Sprintf("/eth/v1/beacon/states/%s/validator_count", stateID), queryParams)
+	queryUrl := apiutil.BuildURL(fmt.Sprintf("/eth/v1/beacon/states/%s/validator_count", stateID), queryParams)
 
-	var validatorCountResponse validator.ValidatorCountResponse
-	if _, err := c.jsonRestHandler.GetRestJsonResponse(ctx, queryUrl, &validatorCountResponse); err != nil {
-		return nil, errors.Wrap(err, "failed to query GET REST endpoint")
+	var validatorCountResponse structs.GetValidatorCountResponse
+	if err = c.jsonRestHandler.Get(ctx, queryUrl, &validatorCountResponse); err != nil {
+		return nil, err
 	}
 
 	if validatorCountResponse.Data == nil {
@@ -78,4 +75,40 @@ func (c prysmBeaconChainClient) GetValidatorCount(ctx context.Context, stateID s
 	}
 
 	return resp, nil
+}
+
+func (c prysmChainClient) ValidatorPerformance(ctx context.Context, in *ethpb.ValidatorPerformanceRequest) (*ethpb.ValidatorPerformanceResponse, error) {
+	// Check node version for prysm beacon node as it is a custom endpoint for prysm beacon node.
+	nodeVersion, err := c.nodeClient.Version(ctx, nil)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get node version")
+	}
+
+	if !strings.Contains(strings.ToLower(nodeVersion.Version), "prysm") {
+		return nil, iface.ErrNotSupported
+	}
+
+	request, err := json.Marshal(structs.GetValidatorPerformanceRequest{
+		PublicKeys: in.PublicKeys,
+		Indices:    in.Indices,
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to marshal request")
+	}
+	resp := &structs.GetValidatorPerformanceResponse{}
+	if err = c.jsonRestHandler.Post(ctx, "/prysm/validators/performance", nil, bytes.NewBuffer(request), resp); err != nil {
+		return nil, err
+	}
+
+	return &ethpb.ValidatorPerformanceResponse{
+		CurrentEffectiveBalances:      resp.CurrentEffectiveBalances,
+		CorrectlyVotedSource:          resp.CorrectlyVotedSource,
+		CorrectlyVotedTarget:          resp.CorrectlyVotedTarget,
+		CorrectlyVotedHead:            resp.CorrectlyVotedHead,
+		BalancesBeforeEpochTransition: resp.BalancesBeforeEpochTransition,
+		BalancesAfterEpochTransition:  resp.BalancesAfterEpochTransition,
+		MissingValidators:             resp.MissingValidators,
+		PublicKeys:                    resp.PublicKeys,
+		InactivityScores:              resp.InactivityScores,
+	}, nil
 }

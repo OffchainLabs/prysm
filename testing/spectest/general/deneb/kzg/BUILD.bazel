@@ -10,6 +10,7 @@ go_test(
     tags = ["spectest"],
     deps = [
         "//beacon-chain/blockchain/kzg:go_default_library",
+        "//consensus-types/blocks:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "//testing/require:go_default_library",
         "//testing/spectest/utils:go_default_library",

@@ -7,14 +7,18 @@ import (
 
 	"github.com/golang/snappy"
 	fastssz "github.com/prysmaticlabs/fastssz"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"go.opencensus.io/trace"
+	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"google.golang.org/protobuf/proto"
 )
 
 func decode(ctx context.Context, data []byte, dst proto.Message) error {
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.decode")
 	defer span.End()
+
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
 
 	data, err := snappy.Decode(nil, data)
 	if err != nil {
@@ -29,6 +33,10 @@ func decode(ctx context.Context, data []byte, dst proto.Message) error {
 func encode(ctx context.Context, msg proto.Message) ([]byte, error) {
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.encode")
 	defer span.End()
+
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 
 	if msg == nil || reflect.ValueOf(msg).IsNil() {
 		return nil, errors.New("cannot encode nil message")
@@ -60,11 +68,11 @@ func isSSZStorageFormat(obj interface{}) bool {
 		return true
 	case *ethpb.BeaconBlock:
 		return true
-	case *ethpb.Attestation:
+	case *ethpb.Attestation, *ethpb.AttestationElectra:
 		return true
 	case *ethpb.Deposit:
 		return true
-	case *ethpb.AttesterSlashing:
+	case *ethpb.AttesterSlashing, *ethpb.AttesterSlashingElectra:
 		return true
 	case *ethpb.ProposerSlashing:
 		return true

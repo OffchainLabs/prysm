@@ -1,33 +1,48 @@
 package remote_web3signer
 
 import (
-	"bytes"
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
+	"os"
 	"path/filepath"
+	"slices"
+	"strings"
+	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/fsnotify/fsnotify"
 	"github.com/go-playground/validator/v10"
 	"github.com/logrusorgru/aurora"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/async/event"
-	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v4/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	ethpbservice "github.com/prysmaticlabs/prysm/v4/proto/eth/service"
-	validatorpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1/validator-client"
-	"github.com/prysmaticlabs/prysm/v4/validator/accounts/petnames"
-	"github.com/prysmaticlabs/prysm/v4/validator/keymanager"
-	"github.com/prysmaticlabs/prysm/v4/validator/keymanager/remote-web3signer/internal"
-	web3signerv1 "github.com/prysmaticlabs/prysm/v4/validator/keymanager/remote-web3signer/v1"
-	log "github.com/sirupsen/logrus"
+	"github.com/prysmaticlabs/prysm/v5/async/event"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/io/file"
+	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
+	validatorpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/validator-client"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
+	"github.com/prysmaticlabs/prysm/v5/validator/accounts/petnames"
+	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
+	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/remote-web3signer/internal"
+	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/remote-web3signer/types"
+	"github.com/sirupsen/logrus"
+)
+
+const (
+	maxRetries = 60
+	retryDelay = 10 * time.Second
 )
 
 // SetupConfig includes configuration values for initializing.
 // a keymanager, such as passwords, the wallet, and more.
 // Web3Signer contains one public keys option. Either through a URL or a static key list.
 type SetupConfig struct {
+	KeyFilePath           string
 	BaseEndpoint          string
 	GenesisValidatorsRoot []byte
 
@@ -39,22 +54,26 @@ type SetupConfig struct {
 	// Either URL or keylist must be set.
 	// a static list of public keys to be passed by the user to determine what accounts should sign.
 	// This will provide a layer of safety against slashing if the web3signer is shared across validators.
-	ProvidedPublicKeys [][48]byte
+	ProvidedPublicKeys []string
 }
 
 // Keymanager defines the web3signer keymanager.
 type Keymanager struct {
 	client                internal.HttpSignerClient
 	genesisValidatorsRoot []byte
-	publicKeysURL         string
-	providedPublicKeys    [][48]byte
+	providedPublicKeys    [][48]byte          // (source of truth) flag loaded + file loaded + api loaded keys
+	flagLoadedKeysMap     map[string][48]byte // stores what was provided from flag ( as opposed to from file )
 	accountsChangedFeed   *event.Feed
 	validator             *validator.Validate
-	publicKeysUrlCalled   bool
+	retriesRemaining      int
+	keyFilePath           string
+	lock                  sync.RWMutex
 }
 
 // NewKeymanager instantiates a new web3signer key manager.
-func NewKeymanager(_ context.Context, cfg *SetupConfig) (*Keymanager, error) {
+func NewKeymanager(ctx context.Context, cfg *SetupConfig) (*Keymanager, error) {
+	ctx, span := trace.StartSpan(ctx, "remote-keymanager.NewKeymanager")
+	defer span.End()
 	if cfg.BaseEndpoint == "" || !bytesutil.IsValidRoot(cfg.GenesisValidatorsRoot) {
 		return nil, fmt.Errorf("invalid setup config, one or more configs are empty: BaseEndpoint: %v, GenesisValidatorsRoot: %#x", cfg.BaseEndpoint, cfg.GenesisValidatorsRoot)
 	}
@@ -62,31 +81,297 @@ func NewKeymanager(_ context.Context, cfg *SetupConfig) (*Keymanager, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "could not create apiClient")
 	}
-	return &Keymanager{
+
+	km := &Keymanager{
 		client:                internal.HttpSignerClient(client),
 		genesisValidatorsRoot: cfg.GenesisValidatorsRoot,
 		accountsChangedFeed:   new(event.Feed),
-		publicKeysURL:         cfg.PublicKeysURL,
-		providedPublicKeys:    cfg.ProvidedPublicKeys,
 		validator:             validator.New(),
-		publicKeysUrlCalled:   false,
-	}, nil
+		retriesRemaining:      maxRetries,
+		keyFilePath:           cfg.KeyFilePath,
+	}
+
+	keyFileExists := false
+	if km.keyFilePath != "" {
+		keyFileExists, err = file.Exists(km.keyFilePath, file.Regular)
+		if err != nil {
+			return nil, errors.Wrapf(err, "could not check if remote signer persistent keys exist in %s", km.keyFilePath)
+		}
+		if !keyFileExists {
+			return nil, fmt.Errorf("no file exists in remote signer key file path %s", km.keyFilePath)
+		}
+	}
+
+	var ppk []string
+	// load key values
+	if cfg.PublicKeysURL != "" {
+		providedPublicKeys, err := km.client.GetPublicKeys(ctx, cfg.PublicKeysURL)
+		if err != nil {
+			erroredResponsesTotal.Inc()
+			return nil, errors.Wrapf(err, "could not get public keys from remote server URL %v", cfg.PublicKeysURL)
+		}
+		ppk = providedPublicKeys
+	} else if len(cfg.ProvidedPublicKeys) != 0 {
+		ppk = cfg.ProvidedPublicKeys
+	}
+
+	// use a map to remove duplicates
+	flagLoadedKeys := make(map[string][48]byte)
+
+	// Populate the map with existing keys
+	for _, key := range ppk {
+		decodedKey, err := hexutil.Decode(key)
+		if err != nil {
+			return nil, errors.Wrapf(err, "could not decode public key %s", key)
+		}
+		if len(decodedKey) != fieldparams.BLSPubkeyLength {
+			return nil, fmt.Errorf("public key %s has invalid length (expected %d, got %d)", decodedKey, fieldparams.BLSPubkeyLength, len(decodedKey))
+		}
+		flagLoadedKeys[key] = bytesutil.ToBytes48(decodedKey)
+	}
+	km.flagLoadedKeysMap = flagLoadedKeys
+
+	// load from file
+	if keyFileExists {
+		log.WithField("file", km.keyFilePath).Info("Loading keys from file")
+		_, fileKeys, err := km.readKeyFile()
+		if err != nil {
+			return nil, errors.Wrap(err, "could not read key file")
+		}
+		if len(flagLoadedKeys) != 0 {
+			log.WithField("flagLoadedKeyCount", len(flagLoadedKeys)).WithField("fileLoadedKeyCount", len(fileKeys)).Info("Combining flag loaded keys and file loaded keys.")
+			maps.Copy(fileKeys, flagLoadedKeys)
+			if err = km.savePublicKeysToFile(fileKeys); err != nil {
+				return nil, errors.Wrap(err, "could not save public keys to file")
+			}
+		}
+		km.lock.Lock()
+		km.providedPublicKeys = slices.Collect(maps.Values(fileKeys))
+		km.lock.Unlock()
+		// create a file watcher
+		go func() {
+			err = km.refreshRemoteKeysFromFileChangesWithRetry(ctx, retryDelay)
+			if err != nil {
+				log.WithError(err).Error("Could not refresh remote keys from file changes")
+			}
+		}()
+	} else {
+		km.lock.Lock()
+		km.providedPublicKeys = slices.Collect(maps.Values(flagLoadedKeys))
+		km.lock.Unlock()
+	}
+
+	return km, nil
+}
+
+func (km *Keymanager) refreshRemoteKeysFromFileChangesWithRetry(ctx context.Context, retryDelay time.Duration) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	if km.retriesRemaining == 0 {
+		return errors.New("file check retries remaining exceeded")
+	}
+	err := km.refreshRemoteKeysFromFileChanges(ctx)
+	if err != nil {
+		km.updatePublicKeys(slices.Collect(maps.Values(km.flagLoadedKeysMap))) // update the keys to flag provided defaults
+		km.retriesRemaining--
+		log.WithError(err).Debug("Error occurred on key refresh")
+		log.WithFields(logrus.Fields{"path": km.keyFilePath, "retriesRemaining": km.retriesRemaining, "retryDelay": retryDelay}).Warnf("Could not refresh keys. Retrying...")
+		time.Sleep(retryDelay)
+		return km.refreshRemoteKeysFromFileChangesWithRetry(ctx, retryDelay)
+	}
+	return nil
+}
+
+func (km *Keymanager) readKeyFile() ([][48]byte, map[string][48]byte, error) {
+	km.lock.RLock()
+	defer km.lock.RUnlock()
+
+	if km.keyFilePath == "" {
+		return nil, nil, errors.New("no key file path provided")
+	}
+	f, err := os.Open(filepath.Clean(km.keyFilePath))
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "could not open remote signer public key file")
+	}
+	defer func() {
+		if err := f.Close(); err != nil {
+			log.WithError(err).Error("Could not close remote signer public key file")
+		}
+	}()
+	// Use a map to track and skip duplicate lines
+	seenKeys := make(map[string][48]byte)
+	scanner := bufio.NewScanner(f)
+	var keys [][48]byte
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		pubkeyLength := (fieldparams.BLSPubkeyLength * 2) + 2
+		if line == "" {
+			// skip empty line
+			continue
+		}
+		// allow for pubkeys without the 0x
+		if len(line) == pubkeyLength-2 && !strings.HasPrefix(line, "0x") {
+			line = "0x" + line
+		}
+		if len(line) != pubkeyLength {
+			log.WithFields(logrus.Fields{
+				"filepath": km.keyFilePath,
+				"key":      line,
+			}).Error("Invalid public key in remote signer key file")
+			continue
+		}
+		if _, found := seenKeys[line]; !found {
+			// If it's a new line, mark it as seen and process it
+			pubkey, err := hexutil.Decode(line)
+			if err != nil {
+				return nil, nil, errors.Wrapf(err, "could not decode public key %s in remote signer key file", line)
+			}
+			bPubkey := bytesutil.ToBytes48(pubkey)
+			seenKeys[line] = bPubkey
+			keys = append(keys, bPubkey)
+		}
+	}
+	// Check for scanning errors
+	if err := scanner.Err(); err != nil {
+		return nil, nil, errors.Wrap(err, "could not scan remote signer public key file")
+	}
+	if len(keys) == 0 {
+		log.Warn("Remote signer key file: no valid public keys found. Defaulting to flag provided keys if any exist.")
+	}
+	return keys, seenKeys, nil
+}
+
+func (km *Keymanager) savePublicKeysToFile(providedPublicKeys map[string][48]byte) error {
+	if km.keyFilePath == "" {
+		return errors.New("no key file provided")
+	}
+	pubkeys := make([][48]byte, 0)
+	// Open the file with write and truncate permissions
+	f, err := os.OpenFile(km.keyFilePath, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0600)
+	if err != nil {
+		return fmt.Errorf("failed to open file: %w", err)
+	}
+	defer func(f *os.File) {
+		err := f.Close()
+		if err != nil {
+			log.WithError(err).Error("Could not close file, proceeding without closing the file")
+		}
+	}(f)
+
+	// Iterate through all lines in the slice and write them to the file
+	for key, value := range providedPublicKeys {
+		if _, err := f.WriteString(key + "\n"); err != nil {
+			return fmt.Errorf("error writing key %s to file: %w", value, err)
+		}
+		pubkeys = append(pubkeys, value)
+	}
+	km.updatePublicKeys(pubkeys)
+	return nil
+}
+
+func (km *Keymanager) arePublicKeysEmpty() bool {
+	km.lock.RLock()
+	defer km.lock.RUnlock()
+	return len(km.providedPublicKeys) == 0
+}
+
+func (km *Keymanager) refreshRemoteKeysFromFileChanges(ctx context.Context) error {
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return errors.Wrap(err, "could not initialize file watcher")
+	}
+	defer func() {
+		if err := watcher.Close(); err != nil {
+			log.WithError(err).Error("Could not close file watcher")
+		}
+	}()
+	initialFileInfo, err := os.Stat(km.keyFilePath)
+	if err != nil {
+		return errors.Wrap(err, "could not stat remote signer public key file")
+	}
+	initialFileSize := initialFileInfo.Size()
+	if err := watcher.Add(km.keyFilePath); err != nil {
+		return errors.Wrap(err, "could not add file to file watcher")
+	}
+	log.WithField("path", km.keyFilePath).Info("Successfully initialized file watcher")
+	km.retriesRemaining = maxRetries // reset retries to default
+	// reinitialize keys if watcher reinitialized
+	if km.arePublicKeysEmpty() {
+		_, fk, err := km.readKeyFile()
+		if err != nil {
+			return errors.Wrap(err, "could not read key file")
+		}
+		maps.Copy(fk, km.flagLoadedKeysMap)
+		if err = km.savePublicKeysToFile(fk); err != nil {
+			return errors.Wrap(err, "could not save public keys to file")
+		}
+		km.updatePublicKeys(slices.Collect(maps.Values(fk)))
+	}
+	for {
+		select {
+		case e, ok := <-watcher.Events:
+			if !ok { // Channel was closed (i.e. Watcher.Close() was called).
+				log.Info("Closing file watcher")
+				return nil
+			}
+			log.WithFields(logrus.Fields{
+				"event": e.Name,
+				"op":    e.Op.String(),
+			}).Debug("Remote signer key file event triggered")
+			if e.Has(fsnotify.Remove) {
+				return errors.New("remote signer key file was removed")
+			}
+			currentFileInfo, err := os.Stat(km.keyFilePath)
+			if err != nil {
+				return errors.Wrap(err, "could not stat remote signer public key file")
+			}
+			if currentFileInfo.Size() != initialFileSize {
+				log.Info("Remote signer key file updated")
+				fileKeys, _, err := km.readKeyFile()
+				if err != nil {
+					return errors.New("could not read key file")
+				}
+				// prioritize file keys over flag keys
+				if len(fileKeys) == 0 {
+					log.Warnln("Remote signer key file no longer has keys, defaulting to flag provided keys")
+					fileKeys = slices.Collect(maps.Values(km.flagLoadedKeysMap))
+				}
+				currentKeys, err := km.FetchValidatingPublicKeys(ctx)
+				if err != nil {
+					return errors.Wrap(err, "could not fetch current keys")
+				}
+				if !slices.Equal(currentKeys, fileKeys) {
+					km.updatePublicKeys(fileKeys)
+				}
+				initialFileSize = currentFileInfo.Size()
+			}
+		case err, ok := <-watcher.Errors:
+			if !ok { // Channel was closed (i.e. Watcher.Close() was called).
+				log.Info("Closing file watcher")
+				return nil
+			}
+			return errors.Wrap(err, "could not watch for file changes")
+		case <-ctx.Done():
+			log.Info("Closing file watcher")
+			return nil
+		}
+	}
+}
+
+func (km *Keymanager) updatePublicKeys(keys [][48]byte) {
+	km.lock.Lock()
+	defer km.lock.Unlock()
+	km.providedPublicKeys = keys
+	km.accountsChangedFeed.Send(keys)
+	log.WithField("count", len(km.providedPublicKeys)).Debug("Updated public keys")
 }
 
 // FetchValidatingPublicKeys fetches the validating public keys
-// from the remote server or from the provided keys if there are no existing public keys set
-// or provides the existing keys in the keymanager.
-func (km *Keymanager) FetchValidatingPublicKeys(ctx context.Context) ([][fieldparams.BLSPubkeyLength]byte, error) {
-	if km.publicKeysURL != "" && !km.publicKeysUrlCalled {
-		providedPublicKeys, err := km.client.GetPublicKeys(ctx, km.publicKeysURL)
-		if err != nil {
-			erroredResponsesTotal.Inc()
-			return nil, errors.Wrap(err, fmt.Sprintf("could not get public keys from remote server url: %v", km.publicKeysURL))
-		}
-		// makes sure that if the public keys are deleted the validator does not call URL again.
-		km.publicKeysUrlCalled = true
-		km.providedPublicKeys = providedPublicKeys
-	}
+func (km *Keymanager) FetchValidatingPublicKeys(_ context.Context) ([][fieldparams.BLSPubkeyLength]byte, error) {
+	km.lock.RLock()
+	defer km.lock.RUnlock()
+	log.WithField("count", len(km.providedPublicKeys)).Debug("Fetched validating public keys")
 	return km.providedPublicKeys, nil
 }
 
@@ -97,10 +382,14 @@ func (km *Keymanager) Sign(ctx context.Context, request *validatorpb.SignRequest
 		erroredResponsesTotal.Inc()
 		return nil, err
 	}
-
+	signature, err := km.client.Sign(ctx, hexutil.Encode(request.PublicKey), signRequest)
+	if err != nil {
+		erroredResponsesTotal.Inc()
+		return nil, errors.Wrap(err, "failed to sign the request")
+	}
+	log.WithField("publicKey", request.PublicKey).Debug("Successfully signed the request")
 	signRequestsTotal.Inc()
-
-	return km.client.Sign(ctx, hexutil.Encode(request.PublicKey), signRequest)
+	return signature, nil
 }
 
 // getSignRequestJson returns a json request based on the SignRequest type.
@@ -117,7 +406,10 @@ func getSignRequestJson(ctx context.Context, validator *validator.Validate, requ
 	case *validatorpb.SignRequest_AttestationData:
 		return handleAttestationData(ctx, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_AggregateAttestationAndProof:
+		// TODO: update to V2 sometime after release
 		return handleAggregateAttestationAndProof(ctx, validator, request, genesisValidatorsRoot)
+	case *validatorpb.SignRequest_AggregateAttestationAndProofElectra:
+		return handleAggregateAttestationAndProofV2(ctx, version.Electra, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_Slot:
 		return handleAggregationSlot(ctx, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_BlockAltair:
@@ -134,6 +426,10 @@ func getSignRequestJson(ctx context.Context, validator *validator.Validate, requ
 		return handleBlockDeneb(ctx, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_BlindedBlockDeneb:
 		return handleBlindedBlockDeneb(ctx, validator, request, genesisValidatorsRoot)
+	case *validatorpb.SignRequest_BlockElectra:
+		return handleBlockElectra(ctx, validator, request, genesisValidatorsRoot)
+	case *validatorpb.SignRequest_BlindedBlockElectra:
+		return handleBlindedBlockElectra(ctx, validator, request, genesisValidatorsRoot)
 	// We do not support "DEPOSIT" type.
 	/*
 		case *validatorpb.:
@@ -153,29 +449,25 @@ func getSignRequestJson(ctx context.Context, validator *validator.Validate, requ
 		return handleContributionAndProof(ctx, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_Registration:
 		return handleRegistration(ctx, validator, request)
-	case *validatorpb.SignRequest_Blob:
-		return handleBlob(ctx, validator, request, genesisValidatorsRoot)
-	case *validatorpb.SignRequest_BlindedBlob:
-		return handleBlindedBlob(ctx, validator, request, genesisValidatorsRoot)
 	default:
 		return nil, fmt.Errorf("web3signer sign request type %T not supported", request.Object)
 	}
 }
 
 func handleBlock(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	bockSignRequest, err := web3signerv1.GetBlockSignRequest(request, genesisValidatorsRoot)
+	bockSignRequest, err := types.GetBlockSignRequest(request, genesisValidatorsRoot)
 	if err != nil {
 		return nil, err
 	}
 	if err = validator.StructCtx(ctx, bockSignRequest); err != nil {
 		return nil, err
 	}
-	blockSignRequestsTotal.Inc()
+	remoteBlockSignRequestsTotal.WithLabelValues("phase0", "false").Inc()
 	return json.Marshal(bockSignRequest)
 }
 
 func handleAttestationData(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	attestationSignRequest, err := web3signerv1.GetAttestationSignRequest(request, genesisValidatorsRoot)
+	attestationSignRequest, err := types.GetAttestationSignRequest(request, genesisValidatorsRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -187,7 +479,7 @@ func handleAttestationData(ctx context.Context, validator *validator.Validate, r
 }
 
 func handleAggregateAttestationAndProof(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	aggregateAndProofSignRequest, err := web3signerv1.GetAggregateAndProofSignRequest(request, genesisValidatorsRoot)
+	aggregateAndProofSignRequest, err := types.GetAggregateAndProofSignRequest(request, genesisValidatorsRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -198,8 +490,20 @@ func handleAggregateAttestationAndProof(ctx context.Context, validator *validato
 	return json.Marshal(aggregateAndProofSignRequest)
 }
 
+func handleAggregateAttestationAndProofV2(ctx context.Context, fork int, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
+	aggregateAndProofSignRequestV2, err := types.GetAggregateAndProofV2SignRequest(fork, request, genesisValidatorsRoot)
+	if err != nil {
+		return nil, err
+	}
+	if err = validator.StructCtx(ctx, aggregateAndProofSignRequestV2); err != nil {
+		return nil, err
+	}
+	aggregateAndProofSignRequestsTotal.Inc()
+	return json.Marshal(aggregateAndProofSignRequestV2)
+}
+
 func handleAggregationSlot(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	aggregationSlotSignRequest, err := web3signerv1.GetAggregationSlotSignRequest(request, genesisValidatorsRoot)
+	aggregationSlotSignRequest, err := types.GetAggregationSlotSignRequest(request, genesisValidatorsRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -211,91 +515,115 @@ func handleAggregationSlot(ctx context.Context, validator *validator.Validate, r
 }
 
 func handleBlockAltair(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	blockv2AltairSignRequest, err := web3signerv1.GetBlockAltairSignRequest(request, genesisValidatorsRoot)
+	blockv2AltairSignRequest, err := types.GetBlockAltairSignRequest(request, genesisValidatorsRoot)
 	if err != nil {
 		return nil, err
 	}
 	if err = validator.StructCtx(ctx, blockv2AltairSignRequest); err != nil {
 		return nil, err
 	}
-	blockAltairSignRequestsTotal.Inc()
+	remoteBlockSignRequestsTotal.WithLabelValues("altair", "false").Inc()
 	return json.Marshal(blockv2AltairSignRequest)
 }
 
 func handleBlockBellatrix(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	blockv2BellatrixSignRequest, err := web3signerv1.GetBlockV2BlindedSignRequest(request, genesisValidatorsRoot)
+	blockv2BellatrixSignRequest, err := types.GetBlockV2BlindedSignRequest(request, genesisValidatorsRoot)
 	if err != nil {
 		return nil, err
 	}
 	if err = validator.StructCtx(ctx, blockv2BellatrixSignRequest); err != nil {
 		return nil, err
 	}
-	blockBellatrixSignRequestsTotal.Inc()
+	remoteBlockSignRequestsTotal.WithLabelValues("bellatrix", "false").Inc()
 	return json.Marshal(blockv2BellatrixSignRequest)
 }
 
 func handleBlindedBlockBellatrix(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	blindedBlockv2SignRequest, err := web3signerv1.GetBlockV2BlindedSignRequest(request, genesisValidatorsRoot)
+	blindedBlockv2SignRequest, err := types.GetBlockV2BlindedSignRequest(request, genesisValidatorsRoot)
 	if err != nil {
 		return nil, err
 	}
 	if err = validator.StructCtx(ctx, blindedBlockv2SignRequest); err != nil {
 		return nil, err
 	}
-	blindedBlockBellatrixSignRequestsTotal.Inc()
+	remoteBlockSignRequestsTotal.WithLabelValues("bellatrix", "true").Inc()
 	return json.Marshal(blindedBlockv2SignRequest)
 }
 
 func handleBlockCapella(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	blockv2CapellaSignRequest, err := web3signerv1.GetBlockV2BlindedSignRequest(request, genesisValidatorsRoot)
+	blockv2CapellaSignRequest, err := types.GetBlockV2BlindedSignRequest(request, genesisValidatorsRoot)
 	if err != nil {
 		return nil, err
 	}
 	if err = validator.StructCtx(ctx, blockv2CapellaSignRequest); err != nil {
 		return nil, err
 	}
-	blockCapellaSignRequestsTotal.Inc()
+	remoteBlockSignRequestsTotal.WithLabelValues("capella", "false").Inc()
 	return json.Marshal(blockv2CapellaSignRequest)
 }
 
 func handleBlindedBlockCapella(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	blindedBlockv2CapellaSignRequest, err := web3signerv1.GetBlockV2BlindedSignRequest(request, genesisValidatorsRoot)
+	blindedBlockv2CapellaSignRequest, err := types.GetBlockV2BlindedSignRequest(request, genesisValidatorsRoot)
 	if err != nil {
 		return nil, err
 	}
 	if err = validator.StructCtx(ctx, blindedBlockv2CapellaSignRequest); err != nil {
 		return nil, err
 	}
-	blindedBlockCapellaSignRequestsTotal.Inc()
+	remoteBlockSignRequestsTotal.WithLabelValues("capella", "true").Inc()
 	return json.Marshal(blindedBlockv2CapellaSignRequest)
 }
 
 func handleBlockDeneb(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	blockv2DenebSignRequest, err := web3signerv1.GetBlockV2BlindedSignRequest(request, genesisValidatorsRoot)
+	blockv2DenebSignRequest, err := types.GetBlockV2BlindedSignRequest(request, genesisValidatorsRoot)
 	if err != nil {
 		return nil, err
 	}
 	if err = validator.StructCtx(ctx, blockv2DenebSignRequest); err != nil {
 		return nil, err
 	}
-	blockDenebSignRequestsTotal.Inc()
+	remoteBlockSignRequestsTotal.WithLabelValues("deneb", "false").Inc()
 	return json.Marshal(blockv2DenebSignRequest)
 }
 
 func handleBlindedBlockDeneb(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	blindedBlockv2DenebSignRequest, err := web3signerv1.GetBlockV2BlindedSignRequest(request, genesisValidatorsRoot)
+	blindedBlockv2DenebSignRequest, err := types.GetBlockV2BlindedSignRequest(request, genesisValidatorsRoot)
 	if err != nil {
 		return nil, err
 	}
 	if err = validator.StructCtx(ctx, blindedBlockv2DenebSignRequest); err != nil {
 		return nil, err
 	}
-	blindedBlockDenebSignRequestsTotal.Inc()
+	remoteBlockSignRequestsTotal.WithLabelValues("deneb", "true").Inc()
 	return json.Marshal(blindedBlockv2DenebSignRequest)
 }
 
+func handleBlockElectra(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
+	blockv2ElectraSignRequest, err := types.GetBlockV2BlindedSignRequest(request, genesisValidatorsRoot)
+	if err != nil {
+		return nil, err
+	}
+	if err = validator.StructCtx(ctx, blockv2ElectraSignRequest); err != nil {
+		return nil, err
+	}
+	remoteBlockSignRequestsTotal.WithLabelValues("electra", "false").Inc()
+	return json.Marshal(blockv2ElectraSignRequest)
+}
+
+func handleBlindedBlockElectra(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
+	blindedBlockv2ElectraSignRequest, err := types.GetBlockV2BlindedSignRequest(request, genesisValidatorsRoot)
+	if err != nil {
+		return nil, err
+	}
+	if err = validator.StructCtx(ctx, blindedBlockv2ElectraSignRequest); err != nil {
+		return nil, err
+	}
+	remoteBlockSignRequestsTotal.WithLabelValues("electra", "true").Inc()
+	return json.Marshal(blindedBlockv2ElectraSignRequest)
+}
+
 func handleRandaoReveal(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	randaoRevealSignRequest, err := web3signerv1.GetRandaoRevealSignRequest(request, genesisValidatorsRoot)
+	randaoRevealSignRequest, err := types.GetRandaoRevealSignRequest(request, genesisValidatorsRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -307,7 +635,7 @@ func handleRandaoReveal(ctx context.Context, validator *validator.Validate, requ
 }
 
 func handleVoluntaryExit(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	voluntaryExitRequest, err := web3signerv1.GetVoluntaryExitSignRequest(request, genesisValidatorsRoot)
+	voluntaryExitRequest, err := types.GetVoluntaryExitSignRequest(request, genesisValidatorsRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -319,7 +647,7 @@ func handleVoluntaryExit(ctx context.Context, validator *validator.Validate, req
 }
 
 func handleSyncMessageBlockRoot(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	syncCommitteeMessageRequest, err := web3signerv1.GetSyncCommitteeMessageSignRequest(request, genesisValidatorsRoot)
+	syncCommitteeMessageRequest, err := types.GetSyncCommitteeMessageSignRequest(request, genesisValidatorsRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -331,7 +659,7 @@ func handleSyncMessageBlockRoot(ctx context.Context, validator *validator.Valida
 }
 
 func handleSyncAggregatorSelectionData(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	syncCommitteeSelectionProofRequest, err := web3signerv1.GetSyncCommitteeSelectionProofSignRequest(request, genesisValidatorsRoot)
+	syncCommitteeSelectionProofRequest, err := types.GetSyncCommitteeSelectionProofSignRequest(request, genesisValidatorsRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -343,7 +671,7 @@ func handleSyncAggregatorSelectionData(ctx context.Context, validator *validator
 }
 
 func handleContributionAndProof(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	contributionAndProofRequest, err := web3signerv1.GetSyncCommitteeContributionAndProofSignRequest(request, genesisValidatorsRoot)
+	contributionAndProofRequest, err := types.GetSyncCommitteeContributionAndProofSignRequest(request, genesisValidatorsRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -355,7 +683,7 @@ func handleContributionAndProof(ctx context.Context, validator *validator.Valida
 }
 
 func handleRegistration(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest) ([]byte, error) {
-	validatorRegistrationRequest, err := web3signerv1.GetValidatorRegistrationSignRequest(request)
+	validatorRegistrationRequest, err := types.GetValidatorRegistrationSignRequest(request)
 	if err != nil {
 		return nil, err
 	}
@@ -364,30 +692,6 @@ func handleRegistration(ctx context.Context, validator *validator.Validate, requ
 	}
 	validatorRegistrationSignRequestsTotal.Inc()
 	return json.Marshal(validatorRegistrationRequest)
-}
-
-func handleBlob(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	blobRequest, err := web3signerv1.GetBlobSignRequest(request, genesisValidatorsRoot)
-	if err != nil {
-		return nil, err
-	}
-	if err = validator.StructCtx(ctx, blobRequest); err != nil {
-		return nil, err
-	}
-	blobSignRequestsTotal.Inc()
-	return json.Marshal(blobRequest)
-}
-
-func handleBlindedBlob(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	blindedBlobRequest, err := web3signerv1.GetBlobSignRequest(request, genesisValidatorsRoot)
-	if err != nil {
-		return nil, err
-	}
-	if err = validator.StructCtx(ctx, blindedBlobRequest); err != nil {
-		return nil, err
-	}
-	blindedBlobSignRequestsTotal.Inc()
-	return json.Marshal(blindedBlobRequest)
 }
 
 // SubscribeAccountChanges returns the event subscription for changes to public keys.
@@ -403,7 +707,7 @@ func (*Keymanager) ExtractKeystores(
 }
 
 // DeleteKeystores is not supported for the remote-web3signer keymanager type.
-func (km *Keymanager) DeleteKeystores(context.Context, [][]byte) ([]*ethpbservice.DeletedKeystoreStatus, error) {
+func (km *Keymanager) DeleteKeystores(context.Context, [][]byte) ([]*keymanager.KeyStatus, error) {
 	return nil, errors.New("Wrong wallet type: web3-signer. Only Imported or Derived wallets can delete accounts")
 }
 
@@ -449,71 +753,133 @@ func DisplayRemotePublicKeys(validatingPubKeys [][48]byte) {
 }
 
 // AddPublicKeys imports a list of public keys into the keymanager for web3signer use. Returns status with message.
-func (km *Keymanager) AddPublicKeys(ctx context.Context, pubKeys [][fieldparams.BLSPubkeyLength]byte) ([]*ethpbservice.ImportedRemoteKeysStatus, error) {
-	if ctx == nil {
-		return nil, errors.New("context is nil")
+func (km *Keymanager) AddPublicKeys(pubKeys []string) ([]*keymanager.KeyStatus, error) {
+	importedRemoteKeysStatuses := make([]*keymanager.KeyStatus, len(pubKeys))
+	// Using a map to track both existing and new public keys efficiently
+	combinedKeys := make(map[string][48]byte)
+
+	// Populate the map with existing keys
+	km.lock.RLock()
+	originalKeysLen := len(km.providedPublicKeys)
+	for _, key := range km.providedPublicKeys {
+		encodedKey := hexutil.Encode(key[:])
+		combinedKeys[encodedKey] = key
 	}
-	importedRemoteKeysStatuses := make([]*ethpbservice.ImportedRemoteKeysStatus, len(pubKeys))
-	for i, pubKey := range pubKeys {
-		found := false
-		for _, key := range km.providedPublicKeys {
-			if bytes.Equal(key[:], pubKey[:]) {
-				found = true
-				break
-			}
-		}
-		if found {
-			importedRemoteKeysStatuses[i] = &ethpbservice.ImportedRemoteKeysStatus{
-				Status:  ethpbservice.ImportedRemoteKeysStatus_DUPLICATE,
-				Message: fmt.Sprintf("Duplicate pubkey: %v, already in use", hexutil.Encode(pubKey[:])),
+	km.lock.RUnlock()
+
+	for i, pubkey := range pubKeys {
+		pubkeyBytes, err := hexutil.Decode(pubkey)
+		if err != nil {
+			importedRemoteKeysStatuses[i] = &keymanager.KeyStatus{
+				Status:  keymanager.StatusError,
+				Message: err.Error(),
 			}
 			continue
 		}
-		km.providedPublicKeys = append(km.providedPublicKeys, pubKey)
-		importedRemoteKeysStatuses[i] = &ethpbservice.ImportedRemoteKeysStatus{
-			Status:  ethpbservice.ImportedRemoteKeysStatus_IMPORTED,
-			Message: fmt.Sprintf("Successfully added pubkey: %v", hexutil.Encode(pubKey[:])),
+		if len(pubkeyBytes) != fieldparams.BLSPubkeyLength {
+			importedRemoteKeysStatuses[i] = &keymanager.KeyStatus{
+				Status:  keymanager.StatusError,
+				Message: fmt.Sprintf("pubkey byte length (%d) did not match bls pubkey byte length (%d)", len(pubkeyBytes), fieldparams.BLSPubkeyLength),
+			}
+			continue
 		}
-		log.Debug("Added pubkey to keymanager for web3signer", "pubkey", hexutil.Encode(pubKey[:]))
+
+		encodedPubkey := hexutil.Encode(pubkeyBytes)
+		if _, exists := combinedKeys[encodedPubkey]; exists {
+			importedRemoteKeysStatuses[i] = &keymanager.KeyStatus{
+				Status:  keymanager.StatusDuplicate,
+				Message: fmt.Sprintf("Duplicate pubkey: %v, already in use", pubkey),
+			}
+			continue
+		}
+
+		// Add the new key to the map
+		combinedKeys[encodedPubkey] = bytesutil.ToBytes48(pubkeyBytes)
+		importedRemoteKeysStatuses[i] = &keymanager.KeyStatus{
+			Status:  keymanager.StatusImported,
+			Message: fmt.Sprintf("Successfully added pubkey: %v", pubkey),
+		}
+		log.Debug("Added pubkey to keymanager for web3signer", "pubkey", pubkey)
 	}
-	km.accountsChangedFeed.Send(km.providedPublicKeys)
+
+	if originalKeysLen != len(combinedKeys) {
+		if km.keyFilePath != "" {
+			if err := km.savePublicKeysToFile(combinedKeys); err != nil {
+				return nil, err
+			}
+		} else {
+			km.updatePublicKeys(slices.Collect(maps.Values(combinedKeys)))
+		}
+	}
+
 	return importedRemoteKeysStatuses, nil
 }
 
 // DeletePublicKeys removes a list of public keys from the keymanager for web3signer use. Returns status with message.
-func (km *Keymanager) DeletePublicKeys(ctx context.Context, pubKeys [][fieldparams.BLSPubkeyLength]byte) ([]*ethpbservice.DeletedRemoteKeysStatus, error) {
-	if ctx == nil {
-		return nil, errors.New("context is nil")
-	}
-	deletedRemoteKeysStatuses := make([]*ethpbservice.DeletedRemoteKeysStatus, len(pubKeys))
-	if len(km.providedPublicKeys) == 0 {
+func (km *Keymanager) DeletePublicKeys(publicKeys []string) ([]*keymanager.KeyStatus, error) {
+	deletedRemoteKeysStatuses := make([]*keymanager.KeyStatus, len(publicKeys))
+	// Using a map to track both existing and new public keys efficiently
+	combinedKeys := make(map[string][48]byte)
+	km.lock.RLock()
+	originalKeysLen := len(km.providedPublicKeys)
+	if originalKeysLen == 0 {
 		for i := range deletedRemoteKeysStatuses {
-			deletedRemoteKeysStatuses[i] = &ethpbservice.DeletedRemoteKeysStatus{
-				Status:  ethpbservice.DeletedRemoteKeysStatus_NOT_FOUND,
+			deletedRemoteKeysStatuses[i] = &keymanager.KeyStatus{
+				Status:  keymanager.StatusNotFound,
 				Message: "No pubkeys are set in validator",
 			}
 		}
 		return deletedRemoteKeysStatuses, nil
 	}
-	for i, pubkey := range pubKeys {
-		for in, key := range km.providedPublicKeys {
-			if bytes.Equal(key[:], pubkey[:]) {
-				km.providedPublicKeys = append(km.providedPublicKeys[:in], km.providedPublicKeys[in+1:]...)
-				deletedRemoteKeysStatuses[i] = &ethpbservice.DeletedRemoteKeysStatus{
-					Status:  ethpbservice.DeletedRemoteKeysStatus_DELETED,
-					Message: fmt.Sprintf("Successfully deleted pubkey: %v", hexutil.Encode(pubkey[:])),
-				}
-				log.Debug("Deleted pubkey from keymanager for web3signer", "pubkey", hexutil.Encode(pubkey[:]))
-				break
+
+	// Populate the map with existing keys
+	for _, key := range km.providedPublicKeys {
+		encodedKey := hexutil.Encode(key[:])
+		combinedKeys[encodedKey] = key
+	}
+	km.lock.RUnlock()
+
+	for i, pubkey := range publicKeys {
+		pubkeyBytes, err := hexutil.Decode(pubkey)
+		if err != nil {
+			deletedRemoteKeysStatuses[i] = &keymanager.KeyStatus{
+				Status:  keymanager.StatusError,
+				Message: err.Error(),
 			}
+			continue
 		}
-		if deletedRemoteKeysStatuses[i] == nil {
-			deletedRemoteKeysStatuses[i] = &ethpbservice.DeletedRemoteKeysStatus{
-				Status:  ethpbservice.DeletedRemoteKeysStatus_NOT_FOUND,
-				Message: fmt.Sprintf("Pubkey: %v not found", hexutil.Encode(pubkey[:])),
+		if len(pubkeyBytes) != fieldparams.BLSPubkeyLength {
+			deletedRemoteKeysStatuses[i] = &keymanager.KeyStatus{
+				Status:  keymanager.StatusError,
+				Message: fmt.Sprintf("pubkey byte length (%d) did not match bls pubkey byte length (%d)", len(pubkeyBytes), fieldparams.BLSPubkeyLength),
 			}
+			continue
+		}
+		_, exists := combinedKeys[pubkey]
+		if !exists {
+			deletedRemoteKeysStatuses[i] = &keymanager.KeyStatus{
+				Status:  keymanager.StatusNotFound,
+				Message: fmt.Sprintf("Pubkey: %v not found", pubkey),
+			}
+			continue
+		}
+		delete(combinedKeys, pubkey)
+		deletedRemoteKeysStatuses[i] = &keymanager.KeyStatus{
+			Status:  keymanager.StatusDeleted,
+			Message: fmt.Sprintf("Successfully deleted pubkey: %v", pubkey),
+		}
+		log.WithField("pubkey", pubkey).Debug("Deleted pubkey from keymanager for remote signer")
+	}
+
+	if originalKeysLen != len(combinedKeys) {
+		if km.keyFilePath != "" {
+			if err := km.savePublicKeysToFile(combinedKeys); err != nil {
+				return nil, err
+			}
+		} else {
+			km.updatePublicKeys(slices.Collect(maps.Values(combinedKeys)))
 		}
 	}
-	km.accountsChangedFeed.Send(km.providedPublicKeys)
+
 	return deletedRemoteKeysStatuses, nil
 }

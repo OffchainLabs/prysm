@@ -6,16 +6,16 @@ import (
 
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
-	p2pTypes "github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p/types"
-	"github.com/prysmaticlabs/prysm/v4/cmd/beacon-chain/flags"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	p2ppb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/time/slots"
+	p2pTypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
+	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
+	p2ppb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/sirupsen/logrus"
-	"go.opencensus.io/trace"
 )
 
 // forkData represents alternative chain path supported by a given peer.
@@ -23,7 +23,7 @@ import (
 // either in DB or initial sync cache.
 type forkData struct {
 	peer peer.ID
-	bwb  []blocks.BlockWithVerifiedBlobs
+	bwb  []blocks.BlockWithROBlobs
 }
 
 // nonSkippedSlotAfter checks slots after the given one in an attempt to find a non-empty future slot.
@@ -280,7 +280,7 @@ func (f *blocksFetcher) findForkWithPeer(ctx context.Context, pid peer.ID, slot 
 		}
 		// We need to fetch the blobs for the given alt-chain if any exist, so that we can try to verify and import
 		// the blocks.
-		bwb, err := f.fetchBlobsFromPeer(ctx, altBlocks, pid)
+		bwb, err := f.fetchBlobsFromPeer(ctx, altBlocks, pid, []peer.ID{pid})
 		if err != nil {
 			return nil, errors.Wrap(err, "unable to retrieve blobs for blocks found in findForkWithPeer")
 		}
@@ -302,7 +302,7 @@ func (f *blocksFetcher) findAncestor(ctx context.Context, pid peer.ID, b interfa
 			if err != nil {
 				return nil, errors.Wrap(err, "received invalid blocks in findAncestor")
 			}
-			bwb, err = f.fetchBlobsFromPeer(ctx, bwb, pid)
+			bwb, err = f.fetchBlobsFromPeer(ctx, bwb, pid, []peer.ID{pid})
 			if err != nil {
 				return nil, errors.Wrap(err, "unable to retrieve blobs for blocks found in findAncestor")
 			}

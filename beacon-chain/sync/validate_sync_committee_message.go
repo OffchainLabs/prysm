@@ -9,17 +9,17 @@ import (
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/altair"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/signing"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p"
-	p2ptypes "github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p/types"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v4/monitoring/tracing"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"go.opencensus.io/trace"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/altair"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
+	p2ptypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
+	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
 // Sync committee subnets are used to propagate unaggregated sync committee messages to subsections of the network.
@@ -73,7 +73,7 @@ func (s *Service) validateSyncCommitteeMessage(
 	if err := altair.ValidateSyncMessageTime(
 		m.Slot,
 		s.cfg.clock.GenesisTime(),
-		params.BeaconNetworkConfig().MaximumGossipClockDisparity,
+		params.BeaconConfig().MaximumGossipClockDisparityDuration(),
 	); err != nil {
 		tracing.AnnotateError(span, err)
 		return pubsub.ValidationIgnore, err
@@ -176,7 +176,7 @@ func (s *Service) rejectIncorrectSyncCommittee(
 	committeeIndices []primitives.CommitteeIndex, topic string,
 ) validationFn {
 	return func(ctx context.Context) (pubsub.ValidationResult, error) {
-		ctx, span := trace.StartSpan(ctx, "sync.rejectIncorrectSyncCommittee")
+		_, span := trace.StartSpan(ctx, "sync.rejectIncorrectSyncCommittee")
 		defer span.End()
 		isValid := false
 		digest, err := s.currentForkDigest()

@@ -5,7 +5,7 @@ import (
 
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"go.opencensus.io/trace"
+	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 )
 
 // MakePeer from multiaddress string.

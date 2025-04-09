@@ -7,9 +7,9 @@ import (
 
 	"github.com/pkg/errors"
 	fssz "github.com/prysmaticlabs/fastssz"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/encoding/ssz"
-	pb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/encoding/ssz"
+	pb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
 func FuzzUint64Root(f *testing.F) {

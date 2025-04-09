@@ -4,21 +4,21 @@ import (
 	"context"
 	"testing"
 
-	"github.com/golang/mock/gomock"
-	mockChain "github.com/prysmaticlabs/prysm/v4/beacon-chain/blockchain/testing"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/cache/depositcache"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/signing"
-	mockExecution "github.com/prysmaticlabs/prysm/v4/beacon-chain/execution/testing"
-	state_native "github.com/prysmaticlabs/prysm/v4/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/container/trie"
-	"github.com/prysmaticlabs/prysm/v4/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/mock"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/testing/util"
+	mockChain "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache/depositsnapshot"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
+	mockExecution "github.com/prysmaticlabs/prysm/v5/beacon-chain/execution/testing"
+	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/container/trie"
+	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/mock"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/util"
+	"go.uber.org/mock/gomock"
 )
 
 func TestWaitForActivation_ValidatorOriginallyExists(t *testing.T) {
@@ -65,7 +65,7 @@ func TestWaitForActivation_ValidatorOriginallyExists(t *testing.T) {
 	}
 	depositTrie, err := trie.NewTrie(params.BeaconConfig().DepositContractTreeDepth)
 	require.NoError(t, err, "Could not setup deposit trie")
-	depositCache, err := depositcache.New()
+	depositCache, err := depositsnapshot.New()
 	require.NoError(t, err)
 
 	root, err := depositTrie.HashTreeRoot()

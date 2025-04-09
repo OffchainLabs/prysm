@@ -3,28 +3,28 @@ package sync
 import (
 	"bytes"
 	"context"
-	"math/rand"
+	"crypto/rand"
 	"reflect"
 	"testing"
 	"time"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pubsubpb "github.com/libp2p/go-libp2p-pubsub/pb"
-	mock "github.com/prysmaticlabs/prysm/v4/beacon-chain/blockchain/testing"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/signing"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p"
-	p2ptest "github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p/testing"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/startup"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
-	mockSync "github.com/prysmaticlabs/prysm/v4/beacon-chain/sync/initial-sync/testing"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/container/slice"
-	"github.com/prysmaticlabs/prysm/v4/crypto/bls"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/testing/util"
+	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
+	p2ptest "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	mockSync "github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/initial-sync/testing"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/container/slice"
+	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/util"
 )
 
 func setupValidAttesterSlashing(t *testing.T) (*ethpb.AttesterSlashing, state.BeaconState) {
@@ -84,10 +84,11 @@ func TestValidateAttesterSlashing_ValidSlashing(t *testing.T) {
 	chain := &mock.ChainService{State: s, Genesis: time.Now()}
 	r := &Service{
 		cfg: &config{
-			p2p:         p,
-			chain:       chain,
-			clock:       startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
-			initialSync: &mockSync.Sync{IsSyncing: false},
+			p2p:               p,
+			chain:             chain,
+			clock:             startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
+			initialSync:       &mockSync.Sync{IsSyncing: false},
+			operationNotifier: chain.OperationNotifier(),
 		},
 		seenAttesterSlashingCache: make(map[uint64]bool),
 		subHandler:                newSubTopicHandler(),
@@ -115,6 +116,50 @@ func TestValidateAttesterSlashing_ValidSlashing(t *testing.T) {
 	assert.NotNil(t, msg.ValidatorData, "Decoded message was not set on the message validator data")
 }
 
+func TestValidateAttesterSlashing_ValidOldSlashing(t *testing.T) {
+	p := p2ptest.NewTestP2P(t)
+	ctx := context.Background()
+
+	slashing, s := setupValidAttesterSlashing(t)
+	vals := s.Validators()
+	for _, v := range vals {
+		v.Slashed = true
+	}
+	require.NoError(t, s.SetValidators(vals))
+	chain := &mock.ChainService{State: s, Genesis: time.Now()}
+	r := &Service{
+		cfg: &config{
+			p2p:               p,
+			chain:             chain,
+			clock:             startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
+			initialSync:       &mockSync.Sync{IsSyncing: false},
+			operationNotifier: chain.OperationNotifier(),
+		},
+		seenAttesterSlashingCache: make(map[uint64]bool),
+		subHandler:                newSubTopicHandler(),
+	}
+
+	buf := new(bytes.Buffer)
+	_, err := p.Encoding().EncodeGossip(buf, slashing)
+	require.NoError(t, err)
+
+	topic := p2p.GossipTypeMapping[reflect.TypeOf(slashing)]
+	d, err := r.currentForkDigest()
+	assert.NoError(t, err)
+	topic = r.addDigestToTopic(topic, d)
+	msg := &pubsub.Message{
+		Message: &pubsubpb.Message{
+			Data:  buf.Bytes(),
+			Topic: &topic,
+		},
+	}
+	res, err := r.validateAttesterSlashing(ctx, "foobar", msg)
+	assert.ErrorContains(t, "validators were previously slashed", err)
+	valid := res == pubsub.ValidationIgnore
+
+	assert.Equal(t, true, valid, "Incorrect Validation")
+}
+
 func TestValidateAttesterSlashing_InvalidSlashing_WithdrawableEpoch(t *testing.T) {
 	p := p2ptest.NewTestP2P(t)
 	ctx := context.Background()
@@ -129,10 +174,11 @@ func TestValidateAttesterSlashing_InvalidSlashing_WithdrawableEpoch(t *testing.T
 	chain := &mock.ChainService{State: s, Genesis: time.Now()}
 	r := &Service{
 		cfg: &config{
-			p2p:         p,
-			chain:       chain,
-			clock:       startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
-			initialSync: &mockSync.Sync{IsSyncing: false},
+			p2p:               p,
+			chain:             chain,
+			clock:             startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
+			initialSync:       &mockSync.Sync{IsSyncing: false},
+			operationNotifier: chain.OperationNotifier(),
 		},
 		seenAttesterSlashingCache: make(map[uint64]bool),
 		subHandler:                newSubTopicHandler(),

@@ -10,8 +10,9 @@ import (
 	"strings"
 
 	gethRPC "github.com/ethereum/go-ethereum/rpc"
-	"github.com/prysmaticlabs/prysm/v4/network/authorization"
+	"github.com/prysmaticlabs/prysm/v5/network/authorization"
 	log "github.com/sirupsen/logrus"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 // Endpoint is an endpoint with authorization data.
@@ -22,8 +23,9 @@ type Endpoint struct {
 
 // AuthorizationData holds all information necessary to authorize with HTTP.
 type AuthorizationData struct {
-	Method authorization.AuthorizationMethod
+	Method authorization.Method
 	Value  string
+	JwtId  string
 }
 
 // Equals compares two endpoints for equality.
@@ -31,13 +33,13 @@ func (e Endpoint) Equals(other Endpoint) bool {
 	return e.Url == other.Url && e.Auth.Equals(other.Auth)
 }
 
-// HttpClient creates a http client object dependant
+// HttpClient creates a http client object dependent
 // on the properties of the network endpoint.
 func (e Endpoint) HttpClient() *http.Client {
 	if e.Auth.Method != authorization.Bearer {
-		return http.DefaultClient
+		return &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)}
 	}
-	return NewHttpClientWithSecret(e.Auth.Value)
+	return NewHttpClientWithSecret(e.Auth.Value, e.Auth.JwtId)
 }
 
 // Equals compares two authorization data objects for equality.
@@ -100,7 +102,7 @@ func HttpEndpoint(eth1Provider string) Endpoint {
 }
 
 // Method returns the authorizationmethod.AuthorizationMethod corresponding with the parameter value.
-func Method(auth string) authorization.AuthorizationMethod {
+func Method(auth string) authorization.Method {
 	if strings.HasPrefix(strings.ToLower(auth), "basic") {
 		return authorization.Basic
 	}
@@ -112,14 +114,15 @@ func Method(auth string) authorization.AuthorizationMethod {
 
 // NewHttpClientWithSecret returns a http client that utilizes
 // jwt authentication.
-func NewHttpClientWithSecret(secret string) *http.Client {
+func NewHttpClientWithSecret(secret, id string) *http.Client {
 	authTransport := &jwtTransport{
 		underlyingTransport: http.DefaultTransport,
 		jwtSecret:           []byte(secret),
+		jwtId:               id,
 	}
 	return &http.Client{
 		Timeout:   DefaultRPCHTTPTimeout,
-		Transport: authTransport,
+		Transport: otelhttp.NewTransport(authTransport),
 	}
 }
 

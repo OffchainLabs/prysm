@@ -6,11 +6,11 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 )
 
 // TestCleanup ensures that the cleanup function unregisters the prometheus.Collection
-// also tests the interchangability of the explicit prometheus Register/Unregister
+// also tests the interchangeability of the explicit prometheus Register/Unregister
 // and the implicit methods within the collector implementation
 func TestCleanup(t *testing.T) {
 	ctx := context.Background()
@@ -32,11 +32,11 @@ func TestCleanup(t *testing.T) {
 	assert.Equal(t, true, unregistered, "prometheus.Unregister failed to unregister PowchainCollector on final cleanup")
 }
 
-// TestCancelation tests that canceling the context passed into
+// TestCancellation tests that canceling the context passed into
 // NewPowchainCollector cleans everything up as expected. This
 // does come at the cost of an extra channel cluttering up
 // PowchainCollector, just for this test.
-func TestCancelation(t *testing.T) {
+func TestCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	pc, err := NewPowchainCollector(ctx)
 	assert.NoError(t, err, "Unexpected error calling NewPowchainCollector")

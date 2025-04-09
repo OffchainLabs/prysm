@@ -1,12 +1,12 @@
 package deneb
 
 import (
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/time"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
-	state_native "github.com/prysmaticlabs/prysm/v4/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	enginev1 "github.com/prysmaticlabs/prysm/v4/proto/engine/v1"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
 // UpgradeToDeneb updates inputs a generic state to return the version Deneb state.
@@ -57,6 +57,10 @@ func UpgradeToDeneb(state state.BeaconState) (state.BeaconState, error) {
 	if err != nil {
 		return nil, err
 	}
+	historicalRoots, err := state.HistoricalRoots()
+	if err != nil {
+		return nil, err
+	}
 
 	s := &ethpb.BeaconStateDeneb{
 		GenesisTime:           state.GenesisTime(),
@@ -70,7 +74,7 @@ func UpgradeToDeneb(state state.BeaconState) (state.BeaconState, error) {
 		LatestBlockHeader:           state.LatestBlockHeader(),
 		BlockRoots:                  state.BlockRoots(),
 		StateRoots:                  state.StateRoots(),
-		HistoricalRoots:             [][]byte{},
+		HistoricalRoots:             historicalRoots,
 		Eth1Data:                    state.Eth1Data(),
 		Eth1DataVotes:               state.Eth1DataVotes(),
 		Eth1DepositIndex:            state.Eth1DepositIndex(),
@@ -101,10 +105,10 @@ func UpgradeToDeneb(state state.BeaconState) (state.BeaconState, error) {
 			ExtraData:        payloadHeader.ExtraData(),
 			BaseFeePerGas:    payloadHeader.BaseFeePerGas(),
 			BlockHash:        payloadHeader.BlockHash(),
-			ExcessBlobGas:    0,
-			BlobGasUsed:      0,
 			TransactionsRoot: txRoot,
 			WithdrawalsRoot:  wdRoot,
+			ExcessBlobGas:    0,
+			BlobGasUsed:      0,
 		},
 		NextWithdrawalIndex:          wi,
 		NextWithdrawalValidatorIndex: vi,

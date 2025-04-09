@@ -6,23 +6,23 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/feed"
-	statefeed "github.com/prysmaticlabs/prysm/v4/beacon-chain/core/feed/state"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/forkchoice"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
-	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v4/math"
-	ethpbv1 "github.com/prysmaticlabs/prysm/v4/proto/eth/v1"
-	"github.com/prysmaticlabs/prysm/v4/runtime/version"
-	"github.com/prysmaticlabs/prysm/v4/time/slots"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
+	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v5/config/features"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/math"
+	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
+	ethpbv1 "github.com/prysmaticlabs/prysm/v5/proto/eth/v1"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
+	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/sirupsen/logrus"
-	"go.opencensus.io/trace"
 )
 
 // UpdateAndSaveHeadWithBalances updates the beacon state head after getting justified balanced from cache.
@@ -276,7 +276,7 @@ func (s *Service) headBlock() (interfaces.ReadOnlySignedBeaconBlock, error) {
 // It does a full copy on head state for immutability.
 // This is a lock free version.
 func (s *Service) headState(ctx context.Context) state.BeaconState {
-	ctx, span := trace.StartSpan(ctx, "blockChain.headState")
+	_, span := trace.StartSpan(ctx, "blockChain.headState")
 	defer span.End()
 
 	return s.head.state.Copy()
@@ -286,7 +286,7 @@ func (s *Service) headState(ctx context.Context) state.BeaconState {
 // It does not perform a copy of the head state.
 // This is a lock free version.
 func (s *Service) headStateReadOnly(ctx context.Context) state.ReadOnlyBeaconState {
-	ctx, span := trace.StartSpan(ctx, "blockChain.headStateReadOnly")
+	_, span := trace.StartSpan(ctx, "blockChain.headStateReadOnly")
 	defer span.End()
 
 	return s.head.state
@@ -327,34 +327,22 @@ func (s *Service) notifyNewHeadEvent(
 	newHeadStateRoot,
 	newHeadRoot []byte,
 ) error {
-	previousDutyDependentRoot := s.originBlockRoot[:]
-	currentDutyDependentRoot := s.originBlockRoot[:]
+	currEpoch := slots.ToEpoch(newHeadSlot)
+	currentDutyDependentRoot, err := s.DependentRoot(currEpoch)
+	if err != nil {
+		return errors.Wrap(err, "could not get duty dependent root")
+	}
+	if currentDutyDependentRoot == [32]byte{} {
+		currentDutyDependentRoot = s.originBlockRoot
+	}
+	previousDutyDependentRoot := currentDutyDependentRoot
+	if currEpoch > 0 {
+		previousDutyDependentRoot, err = s.DependentRoot(currEpoch.Sub(1))
+		if err != nil {
+			return errors.Wrap(err, "could not get duty dependent root")
+		}
+	}
 
-	var previousDutyEpoch primitives.Epoch
-	currentDutyEpoch := slots.ToEpoch(newHeadSlot)
-	if currentDutyEpoch > 0 {
-		previousDutyEpoch = currentDutyEpoch.Sub(1)
-	}
-	currentDutySlot, err := slots.EpochStart(currentDutyEpoch)
-	if err != nil {
-		return errors.Wrap(err, "could not get duty slot")
-	}
-	previousDutySlot, err := slots.EpochStart(previousDutyEpoch)
-	if err != nil {
-		return errors.Wrap(err, "could not get duty slot")
-	}
-	if currentDutySlot > 0 {
-		currentDutyDependentRoot, err = helpers.BlockRootAtSlot(newHeadState, currentDutySlot-1)
-		if err != nil {
-			return errors.Wrap(err, "could not get duty dependent root")
-		}
-	}
-	if previousDutySlot > 0 {
-		previousDutyDependentRoot, err = helpers.BlockRootAtSlot(newHeadState, previousDutySlot-1)
-		if err != nil {
-			return errors.Wrap(err, "could not get duty dependent root")
-		}
-	}
 	isOptimistic, err := s.IsOptimistic(ctx)
 	if err != nil {
 		return errors.Wrap(err, "could not check if node is optimistically synced")
@@ -366,8 +354,8 @@ func (s *Service) notifyNewHeadEvent(
 			Block:                     newHeadRoot,
 			State:                     newHeadStateRoot,
 			EpochTransition:           slots.IsEpochStart(newHeadSlot),
-			PreviousDutyDependentRoot: previousDutyDependentRoot,
-			CurrentDutyDependentRoot:  currentDutyDependentRoot,
+			PreviousDutyDependentRoot: previousDutyDependentRoot[:],
+			CurrentDutyDependentRoot:  currentDutyDependentRoot[:],
 			ExecutionOptimistic:       isOptimistic,
 		},
 	})
@@ -401,16 +389,26 @@ func (s *Service) saveOrphanedOperations(ctx context.Context, orphanedRoot [32]b
 		}
 		for _, a := range orphanedBlk.Block().Body().Attestations() {
 			// if the attestation is one epoch older, it wouldn't been useful to save it.
-			if a.Data.Slot+params.BeaconConfig().SlotsPerEpoch < s.CurrentSlot() {
+			if a.GetData().Slot+params.BeaconConfig().SlotsPerEpoch < s.CurrentSlot() {
 				continue
 			}
-			if helpers.IsAggregated(a) {
-				if err := s.cfg.AttPool.SaveAggregatedAttestation(a); err != nil {
+			if features.Get().EnableExperimentalAttestationPool {
+				if err = s.cfg.AttestationCache.Add(a); err != nil {
 					return err
 				}
 			} else {
-				if err := s.cfg.AttPool.SaveUnaggregatedAttestation(a); err != nil {
-					return err
+				if orphanedBlk.Version() >= version.Electra {
+					if err = s.cfg.AttPool.SaveBlockAttestation(a); err != nil {
+						return err
+					}
+				} else if a.IsAggregated() {
+					if err = s.cfg.AttPool.SaveAggregatedAttestation(a); err != nil {
+						return err
+					}
+				} else {
+					if err = s.cfg.AttPool.SaveUnaggregatedAttestation(a); err != nil {
+						return err
+					}
 				}
 			}
 			saveOrphanedAttCount.Inc()

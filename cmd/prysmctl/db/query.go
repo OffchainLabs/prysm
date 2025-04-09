@@ -7,7 +7,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 	bolt "go.etcd.io/bbolt"

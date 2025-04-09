@@ -6,7 +6,7 @@ go_library(
         "//config:mainnet": ["mainnet.go"],
         "//config:minimal": ["minimal.go"],
     }),
-    importpath = "github.com/prysmaticlabs/prysm/v4/config/fieldparams",
+    importpath = "github.com/prysmaticlabs/prysm/v5/config/fieldparams",
     visibility = ["//visibility:public"],
 )
 

@@ -6,20 +6,20 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/golang/mock/gomock"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/eth/shared"
-	rpctesting "github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/eth/shared/testing"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/validator/client/beacon-api/mock"
+	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
+	rpctesting "github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/shared/testing"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api/mock"
+	"go.uber.org/mock/gomock"
 )
 
 func TestProposeBeaconBlock_Deneb(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	jsonRestHandler := mock.NewMockjsonRestHandler(ctrl)
+	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 
-	var blockContents shared.SignedBeaconBlockContentsDeneb
+	var blockContents structs.SignedBeaconBlockContentsDeneb
 	err := json.Unmarshal([]byte(rpctesting.DenebBlockContents), &blockContents)
 	require.NoError(t, err)
 	genericSignedBlock, err := blockContents.ToGeneric()
@@ -29,9 +29,9 @@ func TestProposeBeaconBlock_Deneb(t *testing.T) {
 	require.NoError(t, err)
 	// Make sure that what we send in the POST body is the marshalled version of the protobuf block
 	headers := map[string]string{"Eth-Consensus-Version": "deneb"}
-	jsonRestHandler.EXPECT().PostRestJson(
-		context.Background(),
-		"/eth/v1/beacon/blocks",
+	jsonRestHandler.EXPECT().Post(
+		gomock.Any(),
+		"/eth/v2/beacon/blocks",
 		headers,
 		bytes.NewBuffer(denebBytes),
 		nil,

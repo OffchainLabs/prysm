@@ -5,17 +5,17 @@ import (
 	"encoding/binary"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/signing"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v4/network/forks"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1/attestation"
-	"github.com/prysmaticlabs/prysm/v4/time/slots"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
+	"github.com/prysmaticlabs/prysm/v5/network/forks"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/attestation"
+	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
 // retrieves the signature batch from the raw data, public key,signature and domain provided.
@@ -99,7 +99,7 @@ func VerifyBlockHeaderSignature(beaconState state.BeaconState, header *ethpb.Sig
 // VerifyBlockSignatureUsingCurrentFork verifies the proposer signature of a beacon block. This differs
 // from the above method by not using fork data from the state and instead retrieving it
 // via the respective epoch.
-func VerifyBlockSignatureUsingCurrentFork(beaconState state.ReadOnlyBeaconState, blk interfaces.ReadOnlySignedBeaconBlock) error {
+func VerifyBlockSignatureUsingCurrentFork(beaconState state.ReadOnlyBeaconState, blk interfaces.ReadOnlySignedBeaconBlock, blkRoot [32]byte) error {
 	currentEpoch := slots.ToEpoch(blk.Block().Slot())
 	fork, err := forks.Fork(currentEpoch)
 	if err != nil {
@@ -115,7 +115,9 @@ func VerifyBlockSignatureUsingCurrentFork(beaconState state.ReadOnlyBeaconState,
 	}
 	proposerPubKey := proposer.PublicKey
 	sig := blk.Signature()
-	return signing.VerifyBlockSigningRoot(proposerPubKey, sig[:], domain, blk.Block().HashTreeRoot)
+	return signing.VerifyBlockSigningRoot(proposerPubKey, sig[:], domain, func() ([32]byte, error) {
+		return blkRoot, nil
+	})
 }
 
 // BlockSignatureBatch retrieves the block signature batch from the provided block and its corresponding state.
@@ -177,7 +179,7 @@ func randaoSigningData(ctx context.Context, beaconState state.ReadOnlyBeaconStat
 func createAttestationSignatureBatch(
 	ctx context.Context,
 	beaconState state.ReadOnlyBeaconState,
-	atts []*ethpb.Attestation,
+	atts []ethpb.Att,
 	domain []byte,
 ) (*bls.SignatureBatch, error) {
 	if len(atts) == 0 {
@@ -189,31 +191,26 @@ func createAttestationSignatureBatch(
 	msgs := make([][32]byte, len(atts))
 	descs := make([]string, len(atts))
 	for i, a := range atts {
-		sigs[i] = a.Signature
-		c, err := helpers.BeaconCommitteeFromState(ctx, beaconState, a.Data.Slot, a.Data.CommitteeIndex)
+		sigs[i] = a.GetSignature()
+		committees, err := helpers.AttestationCommitteesFromState(ctx, beaconState, a)
 		if err != nil {
 			return nil, err
 		}
-		ia, err := attestation.ConvertToIndexed(ctx, a, c)
+		ia, err := attestation.ConvertToIndexed(ctx, a, committees...)
 		if err != nil {
 			return nil, err
 		}
 		if err := attestation.IsValidAttestationIndices(ctx, ia); err != nil {
 			return nil, err
 		}
-		indices := ia.AttestingIndices
-		pubkeys := make([][]byte, len(indices))
-		for i := 0; i < len(indices); i++ {
-			pubkeyAtIdx := beaconState.PubkeyAtIndex(primitives.ValidatorIndex(indices[i]))
-			pubkeys[i] = pubkeyAtIdx[:]
-		}
-		aggP, err := bls.AggregatePublicKeys(pubkeys)
+		indices := ia.GetAttestingIndices()
+		aggP, err := beaconState.AggregateKeyFromIndices(indices)
 		if err != nil {
 			return nil, err
 		}
 		pks[i] = aggP
 
-		root, err := signing.ComputeSigningRoot(ia.Data, domain)
+		root, err := signing.ComputeSigningRoot(ia.GetData(), domain)
 		if err != nil {
 			return nil, errors.Wrap(err, "could not get signing root of object")
 		}
@@ -231,7 +228,7 @@ func createAttestationSignatureBatch(
 
 // AttestationSignatureBatch retrieves all the related attestation signature data such as the relevant public keys,
 // signatures and attestation signing data and collate it into a signature batch object.
-func AttestationSignatureBatch(ctx context.Context, beaconState state.ReadOnlyBeaconState, atts []*ethpb.Attestation) (*bls.SignatureBatch, error) {
+func AttestationSignatureBatch(ctx context.Context, beaconState state.ReadOnlyBeaconState, atts []ethpb.Att) (*bls.SignatureBatch, error) {
 	if len(atts) == 0 {
 		return bls.NewSet(), nil
 	}
@@ -241,10 +238,10 @@ func AttestationSignatureBatch(ctx context.Context, beaconState state.ReadOnlyBe
 	dt := params.BeaconConfig().DomainBeaconAttester
 
 	// Split attestations by fork. Note: the signature domain will differ based on the fork.
-	var preForkAtts []*ethpb.Attestation
-	var postForkAtts []*ethpb.Attestation
+	var preForkAtts []ethpb.Att
+	var postForkAtts []ethpb.Att
 	for _, a := range atts {
-		if slots.ToEpoch(a.Data.Slot) < fork.Epoch {
+		if slots.ToEpoch(a.GetData().Slot) < fork.Epoch {
 			preForkAtts = append(preForkAtts, a)
 		} else {
 			postForkAtts = append(postForkAtts, a)

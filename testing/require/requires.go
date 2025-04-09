@@ -1,7 +1,7 @@
 package require
 
 import (
-	"github.com/prysmaticlabs/prysm/v4/testing/assertions"
+	"github.com/prysmaticlabs/prysm/v5/testing/assertions"
 	"github.com/sirupsen/logrus/hooks/test"
 )
 
@@ -49,6 +49,11 @@ func NoError(tb assertions.AssertionTestingTB, err error, msg ...interface{}) {
 // ErrorContains asserts that actual error contains wanted message.
 func ErrorContains(tb assertions.AssertionTestingTB, want string, err error, msg ...interface{}) {
 	assertions.ErrorContains(tb.Fatalf, want, err, msg...)
+}
+
+// IsNil asserts that the observed value is nil.
+func IsNil(tb assertions.AssertionTestingTB, got interface{}, msg ...interface{}) {
+	assertions.IsNil(tb.Fatalf, got, msg...)
 }
 
 // NotNil asserts that passed value is not nil.

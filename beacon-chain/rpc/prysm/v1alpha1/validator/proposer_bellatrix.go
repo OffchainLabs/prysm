@@ -4,33 +4,45 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"math/big"
 	"strings"
 	"time"
 
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	"github.com/prysmaticlabs/prysm/v4/api/client/builder"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/signing"
-	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v4/encoding/ssz"
-	"github.com/prysmaticlabs/prysm/v4/monitoring/tracing"
-	"github.com/prysmaticlabs/prysm/v4/network/forks"
-	"github.com/prysmaticlabs/prysm/v4/runtime/version"
-	"github.com/prysmaticlabs/prysm/v4/time/slots"
+	"github.com/prysmaticlabs/prysm/v5/api/client/builder"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/encoding/ssz"
+	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
+	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
+	"github.com/prysmaticlabs/prysm/v5/network/forks"
+	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
+	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/sirupsen/logrus"
-	"go.opencensus.io/trace"
 )
 
-// builderGetPayloadMissCount tracks the number of misses when validator tries to get a payload from builder
-var builderGetPayloadMissCount = promauto.NewCounter(prometheus.CounterOpts{
-	Name: "builder_get_payload_miss_count",
-	Help: "The number of get payload misses for validator requests to builder",
-})
+var (
+	builderValueGweiGauge = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "builder_value_gwei",
+		Help: "Builder payload value in gwei",
+	})
+	localValueGweiGauge = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "local_value_gwei",
+		Help: "Local payload value in gwei",
+	})
+	builderGetPayloadMissCount = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "builder_get_payload_miss_count",
+		Help: "The number of get payload misses for validator requests to builder",
+	})
+)
 
 // emptyTransactionsRoot represents the returned value of ssz.TransactionsRoot([][]byte{}) and
 // can be used as a constant to avoid recomputing this value in every call.
@@ -39,60 +51,109 @@ var emptyTransactionsRoot = [32]byte{127, 254, 36, 30, 166, 1, 135, 253, 176, 24
 // blockBuilderTimeout is the maximum amount of time allowed for a block builder to respond to a
 // block request. This value is known as `BUILDER_PROPOSAL_DELAY_TOLERANCE` in builder spec.
 const blockBuilderTimeout = 1 * time.Second
+const gasLimitAdjustmentFactor = 1024
 
 // Sets the execution data for the block. Execution data can come from local EL client or remote builder depends on validator registration and circuit breaker conditions.
-func setExecutionData(ctx context.Context, blk interfaces.SignedBeaconBlock, localPayload, builderPayload interfaces.ExecutionData) error {
+func setExecutionData(ctx context.Context, blk interfaces.SignedBeaconBlock, local *blocks.GetPayloadResponse, bid builder.Bid, builderBoostFactor primitives.Gwei) (primitives.Wei, *enginev1.BlobsBundle, error) {
 	_, span := trace.StartSpan(ctx, "ProposerServer.setExecutionData")
 	defer span.End()
 
 	slot := blk.Block().Slot()
 	if slots.ToEpoch(slot) < params.BeaconConfig().BellatrixForkEpoch {
-		return nil
+		return primitives.ZeroWei(), nil, nil
 	}
 
-	if localPayload == nil {
-		return errors.New("local payload is nil")
+	if local == nil {
+		return primitives.ZeroWei(), nil, errors.New("local payload is nil")
 	}
 
 	// Use local payload if builder payload is nil.
-	if builderPayload == nil {
-		return setLocalExecution(blk, localPayload)
+	if bid == nil {
+		return local.Bid, local.BlobsBundle, setLocalExecution(blk, local)
+	}
+
+	builderPayload, err := bid.Header()
+	if err != nil {
+		log.WithError(err).Warn("Proposer: failed to retrieve header from BuilderBid")
+		return local.Bid, local.BlobsBundle, setLocalExecution(blk, local)
 	}
 
 	switch {
 	case blk.Version() >= version.Capella:
-		// Compare payload values between local and builder. Default to the local value if it is higher.
-		localValueGwei, err := localPayload.ValueInGwei()
-		if err != nil {
-			return errors.Wrap(err, "failed to get local payload value")
-		}
-		builderValueGwei, err := builderPayload.ValueInGwei()
-		if err != nil {
-			log.WithError(err).Warn("Proposer: failed to get builder payload value") // Default to local if can't get builder value.
-			return setLocalExecution(blk, localPayload)
-		}
-
-		withdrawalsMatched, err := matchingWithdrawalsRoot(localPayload, builderPayload)
+		withdrawalsMatched, err := matchingWithdrawalsRoot(local.ExecutionData, builderPayload)
 		if err != nil {
 			tracing.AnnotateError(span, err)
 			log.WithError(err).Warn("Proposer: failed to match withdrawals root")
-			return setLocalExecution(blk, localPayload)
+			return local.Bid, local.BlobsBundle, setLocalExecution(blk, local)
+		}
+
+		// Compare payload values between local and builder. Default to the local value if it is higher.
+		localValueGwei := primitives.WeiToGwei(local.Bid)
+		builderValueGwei := primitives.WeiToGwei(bid.Value())
+		minBid := primitives.Gwei(params.BeaconConfig().MinBuilderBid)
+		// Use local block if min bid is not attained
+		if builderValueGwei < minBid {
+			log.WithFields(logrus.Fields{
+				"minBuilderBid":    minBid,
+				"builderGweiValue": builderValueGwei,
+			}).Warn("Proposer: using local execution payload because min bid not attained")
+			return local.Bid, local.BlobsBundle, setLocalExecution(blk, local)
+		}
+
+		// Use local block if min difference is not attained
+		minDiff := localValueGwei + primitives.Gwei(params.BeaconConfig().MinBuilderDiff)
+		if builderValueGwei < minDiff {
+			log.WithFields(logrus.Fields{
+				"localGweiValue":   localValueGwei,
+				"minBidDiff":       minDiff,
+				"builderGweiValue": builderValueGwei,
+			}).Warn("Proposer: using local execution payload because min difference with local value was not attained")
+			return local.Bid, local.BlobsBundle, setLocalExecution(blk, local)
 		}
 
 		// Use builder payload if the following in true:
-		// builder_bid_value * 100 > local_block_value * (local-block-value-boost + 100)
-		boost := params.BeaconConfig().LocalBlockValueBoost
-		higherValueBuilder := builderValueGwei*100 > localValueGwei*(100+boost)
+		// builder_bid_value * builderBoostFactor(default 100) > local_block_value * (local-block-value-boost + 100)
+		boost := primitives.Gwei(params.BeaconConfig().LocalBlockValueBoost)
+		higherValueBuilder := builderValueGwei*builderBoostFactor > localValueGwei*(100+boost)
+		if boost > 0 && builderBoostFactor != defaultBuilderBoostFactor {
+			log.WithFields(logrus.Fields{
+				"localGweiValue":       localValueGwei,
+				"localBoostPercentage": boost,
+				"builderGweiValue":     builderValueGwei,
+				"builderBoostFactor":   builderBoostFactor,
+			}).Warn("Proposer: both local boost and builder boost are using non default values")
+		}
+		builderValueGweiGauge.Set(float64(builderValueGwei))
+		localValueGweiGauge.Set(float64(localValueGwei))
 
 		// If we can't get the builder value, just use local block.
 		if higherValueBuilder && withdrawalsMatched { // Builder value is higher and withdrawals match.
-			blk.SetBlinded(true)
-			if err := setBuilderExecution(blk, builderPayload); err != nil {
+			var builderKzgCommitments [][]byte
+			if bid.Version() >= version.Deneb {
+				bidDeneb, ok := bid.(builder.BidDeneb)
+				if !ok {
+					log.Warnf("bid type %T does not implement builder.BidDeneb", bid)
+					return local.Bid, local.BlobsBundle, setLocalExecution(blk, local)
+				} else {
+					builderKzgCommitments = bidDeneb.BlobKzgCommitments()
+				}
+			}
+
+			var executionRequests *enginev1.ExecutionRequests
+			if bid.Version() >= version.Electra {
+				bidElectra, ok := bid.(builder.BidElectra)
+				if !ok {
+					log.Warnf("bid type %T does not implement builder.BidElectra", bid)
+					return local.Bid, local.BlobsBundle, setLocalExecution(blk, local)
+				} else {
+					executionRequests = bidElectra.ExecutionRequests()
+				}
+			}
+			if err := setBuilderExecution(blk, builderPayload, builderKzgCommitments, executionRequests); err != nil {
 				log.WithError(err).Warn("Proposer: failed to set builder payload")
-				blk.SetBlinded(false)
-				return setLocalExecution(blk, localPayload)
+				return local.Bid, local.BlobsBundle, setLocalExecution(blk, local)
 			} else {
-				return nil
+				return bid.Value(), nil, nil
 			}
 		}
 		if !higherValueBuilder {
@@ -100,30 +161,34 @@ func setExecutionData(ctx context.Context, blk interfaces.SignedBeaconBlock, loc
 				"localGweiValue":       localValueGwei,
 				"localBoostPercentage": boost,
 				"builderGweiValue":     builderValueGwei,
+				"builderBoostFactor":   builderBoostFactor,
 			}).Warn("Proposer: using local execution payload because higher value")
 		}
-		span.AddAttributes(
+		span.SetAttributes(
 			trace.BoolAttribute("higherValueBuilder", higherValueBuilder),
-			trace.Int64Attribute("localGweiValue", int64(localValueGwei)),     // lint:ignore uintcast -- This is OK for tracing.
-			trace.Int64Attribute("localBoostPercentage", int64(boost)),        // lint:ignore uintcast -- This is OK for tracing.
-			trace.Int64Attribute("builderGweiValue", int64(builderValueGwei)), // lint:ignore uintcast -- This is OK for tracing.
+			trace.Int64Attribute("localGweiValue", int64(localValueGwei)),         // lint:ignore uintcast -- This is OK for tracing.
+			trace.Int64Attribute("localBoostPercentage", int64(boost)),            // lint:ignore uintcast -- This is OK for tracing.
+			trace.Int64Attribute("builderGweiValue", int64(builderValueGwei)),     // lint:ignore uintcast -- This is OK for tracing.
+			trace.Int64Attribute("builderBoostFactor", int64(builderBoostFactor)), // lint:ignore uintcast -- This is OK for tracing.
 		)
-		return setLocalExecution(blk, localPayload)
+		return local.Bid, local.BlobsBundle, setLocalExecution(blk, local)
 	default: // Bellatrix case.
-		blk.SetBlinded(true)
-		if err := setBuilderExecution(blk, builderPayload); err != nil {
+		if err := setBuilderExecution(blk, builderPayload, nil, nil); err != nil {
 			log.WithError(err).Warn("Proposer: failed to set builder payload")
-			blk.SetBlinded(false)
-			return setLocalExecution(blk, localPayload)
+			return local.Bid, local.BlobsBundle, setLocalExecution(blk, local)
 		} else {
-			return nil
+			return bid.Value(), nil, nil
 		}
 	}
 }
 
-// This function retrieves the payload header given the slot number and the validator index.
+// This function retrieves the payload header and kzg commitments given the slot number and the validator index.
 // It's a no-op if the latest head block is not versioned bellatrix.
-func (vs *Server) getPayloadHeaderFromBuilder(ctx context.Context, slot primitives.Slot, idx primitives.ValidatorIndex) (interfaces.ExecutionData, error) {
+func (vs *Server) getPayloadHeaderFromBuilder(
+	ctx context.Context,
+	slot primitives.Slot,
+	idx primitives.ValidatorIndex,
+	parentGasLimit uint64) (builder.Bid, error) {
 	ctx, span := trace.StartSpan(ctx, "ProposerServer.getPayloadHeaderFromBuilder")
 	defer span.End()
 
@@ -152,7 +217,7 @@ func (vs *Server) getPayloadHeaderFromBuilder(ctx context.Context, slot primitiv
 	if err != nil {
 		return nil, err
 	}
-	if signedBid.IsNil() {
+	if signedBid == nil || signedBid.IsNil() {
 		return nil, errors.New("builder returned nil bid")
 	}
 	fork, err := forks.Fork(slots.ToEpoch(slot))
@@ -171,12 +236,12 @@ func (vs *Server) getPayloadHeaderFromBuilder(ctx context.Context, slot primitiv
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get bid")
 	}
-	if bid.IsNil() {
+	if bid == nil || bid.IsNil() {
 		return nil, errors.New("builder returned nil bid")
 	}
 
-	v := bytesutil.LittleEndianBytesToBigInt(bid.Value())
-	if v.String() == "0" {
+	v := bid.Value()
+	if big.NewInt(0).Cmp(v) == 0 {
 		return nil, errors.New("builder returned header with 0 bid amount")
 	}
 
@@ -196,6 +261,16 @@ func (vs *Server) getPayloadHeaderFromBuilder(ctx context.Context, slot primitiv
 		return nil, fmt.Errorf("incorrect parent hash %#x != %#x", header.ParentHash(), h.BlockHash())
 	}
 
+	reg, err := vs.BlockBuilder.RegistrationByValidatorID(ctx, idx)
+	if err != nil {
+		log.WithError(err).Warn("Proposer: failed to get registration by validator ID, could not check gas limit")
+	} else {
+		gasLimit := expectedGasLimit(parentGasLimit, reg.GasLimit)
+		if gasLimit != header.GasLimit() {
+			return nil, fmt.Errorf("incorrect header gas limit %d != %d", gasLimit, header.GasLimit())
+		}
+	}
+
 	t, err := slots.ToTime(uint64(vs.TimeFetcher.GenesisTime().Unix()), slot)
 	if err != nil {
 		return nil, err
@@ -208,32 +283,47 @@ func (vs *Server) getPayloadHeaderFromBuilder(ctx context.Context, slot primitiv
 		return nil, errors.Wrap(err, "could not validate builder signature")
 	}
 
+	var kzgCommitments [][]byte
 	if bid.Version() >= version.Deneb {
-		blindBlobsBundle, err = bid.BlindedBlobsBundle()
-		if err != nil {
-			return nil, errors.Wrap(err, "could not get blinded blobs bundle")
+		dBid, ok := bid.(builder.BidDeneb)
+		if !ok {
+			return nil, fmt.Errorf("bid type %T does not implement builder.BidDeneb", dBid)
 		}
-		if blindBlobsBundle != nil {
-			log.WithField("blindBlobCount", len(blindBlobsBundle.BlobRoots))
-		}
+		kzgCommitments = dBid.BlobKzgCommitments()
 	}
-
-	log.WithFields(logrus.Fields{
-		"value":              v.String(),
+	var executionRequests *enginev1.ExecutionRequests
+	if bid.Version() >= version.Electra {
+		eBid, ok := bid.(builder.BidElectra)
+		if !ok {
+			return nil, fmt.Errorf("bid type %T does not implement builder.BidElectra", eBid)
+		}
+		executionRequests = eBid.ExecutionRequests()
+	}
+	l := log.WithFields(logrus.Fields{
+		"gweiValue":          primitives.WeiToGwei(v),
 		"builderPubKey":      fmt.Sprintf("%#x", bid.Pubkey()),
 		"blockHash":          fmt.Sprintf("%#x", header.BlockHash()),
 		"slot":               slot,
 		"validator":          idx,
 		"sinceSlotStartTime": time.Since(t),
-	}).Info("Received header with bid")
+	})
+	if len(kzgCommitments) > 0 {
+		l = l.WithField("kzgCommitmentCount", len(kzgCommitments))
+	}
+	if executionRequests != nil {
+		l = l.WithField("depositRequestCount", len(executionRequests.Deposits))
+		l = l.WithField("withdrawalRequestCount", len(executionRequests.Withdrawals))
+		l = l.WithField("consolidationRequestCount", len(executionRequests.Consolidations))
+	}
+	l.Info("Received header with bid")
 
-	span.AddAttributes(
-		trace.StringAttribute("value", v.String()),
+	span.SetAttributes(
+		trace.StringAttribute("value", primitives.WeiToBigInt(v).String()),
 		trace.StringAttribute("builderPubKey", fmt.Sprintf("%#x", bid.Pubkey())),
 		trace.StringAttribute("blockHash", fmt.Sprintf("%#x", header.BlockHash())),
 	)
 
-	return header, nil
+	return bid, nil
 }
 
 // Validates builder signature and returns an error if the signature is invalid.
@@ -244,14 +334,14 @@ func validateBuilderSignature(signedBid builder.SignedBid) error {
 	if err != nil {
 		return err
 	}
-	if signedBid.IsNil() {
+	if signedBid == nil || signedBid.IsNil() {
 		return errors.New("nil builder bid")
 	}
 	bid, err := signedBid.Message()
 	if err != nil {
 		return errors.Wrap(err, "could not get bid")
 	}
-	if bid.IsNil() {
+	if bid == nil || bid.IsNil() {
 		return errors.New("builder returned nil bid")
 	}
 	return signing.VerifySigningRoot(bid, bid.Pubkey(), signedBid.Signature(), d)
@@ -283,33 +373,31 @@ func matchingWithdrawalsRoot(local, builder interfaces.ExecutionData) (bool, err
 
 // setLocalExecution sets the execution context for a local beacon block.
 // It delegates to setExecution for the actual work.
-func setLocalExecution(blk interfaces.SignedBeaconBlock, execution interfaces.ExecutionData) error {
+func setLocalExecution(blk interfaces.SignedBeaconBlock, local *blocks.GetPayloadResponse) error {
 	var kzgCommitments [][]byte
-	if fullBlobsBundle != nil {
-		kzgCommitments = fullBlobsBundle.KzgCommitments
+	if local.BlobsBundle != nil {
+		kzgCommitments = local.BlobsBundle.KzgCommitments
 	}
-	return setExecution(blk, execution, false, kzgCommitments)
+	if local.ExecutionRequests != nil {
+		if err := blk.SetExecutionRequests(local.ExecutionRequests); err != nil {
+			return errors.Wrap(err, "could not set execution requests")
+		}
+	}
+	return setExecution(blk, local.ExecutionData, false, kzgCommitments, local.ExecutionRequests)
 }
 
 // setBuilderExecution sets the execution context for a builder's beacon block.
 // It delegates to setExecution for the actual work.
-func setBuilderExecution(blk interfaces.SignedBeaconBlock, execution interfaces.ExecutionData) error {
-	var kzgCommitments [][]byte
-	if blindBlobsBundle != nil {
-		kzgCommitments = blindBlobsBundle.KzgCommitments
-	}
-	return setExecution(blk, execution, true, kzgCommitments)
+func setBuilderExecution(blk interfaces.SignedBeaconBlock, execution interfaces.ExecutionData, builderKzgCommitments [][]byte, requests *enginev1.ExecutionRequests) error {
+	return setExecution(blk, execution, true, builderKzgCommitments, requests)
 }
 
 // setExecution sets the execution context for a beacon block. It also sets KZG commitments based on the block version.
 // The function is designed to be flexible and handle both local and builder executions.
-func setExecution(blk interfaces.SignedBeaconBlock, execution interfaces.ExecutionData, isBlinded bool, kzgCommitments [][]byte) error {
+func setExecution(blk interfaces.SignedBeaconBlock, execution interfaces.ExecutionData, isBlinded bool, kzgCommitments [][]byte, requests *enginev1.ExecutionRequests) error {
 	if execution == nil {
 		return errors.New("execution is nil")
 	}
-
-	// Set the blinded status of the block
-	blk.SetBlinded(isBlinded)
 
 	// Set the execution data for the block
 	errMessage := "failed to set local execution"
@@ -326,13 +414,55 @@ func setExecution(blk interfaces.SignedBeaconBlock, execution interfaces.Executi
 	}
 
 	// Set the KZG commitments for the block
-	errMessage = "failed to set local kzg commitments"
+	kzgErr := "failed to set local kzg commitments"
 	if isBlinded {
-		errMessage = "failed to set builder kzg commitments"
+		kzgErr = "failed to set builder kzg commitments"
 	}
 	if err := blk.SetBlobKzgCommitments(kzgCommitments); err != nil {
-		return errors.Wrap(err, errMessage)
+		return errors.Wrap(err, kzgErr)
 	}
 
+	// If the block version is below Electra, no further actions are needed
+	if blk.Version() < version.Electra {
+		return nil
+	}
+
+	// Set the execution requests
+	requestsErr := "failed to set local execution requests"
+	if isBlinded {
+		requestsErr = "failed to set builder execution requests"
+	}
+	if err := blk.SetExecutionRequests(requests); err != nil {
+		return errors.Wrap(err, requestsErr)
+	}
 	return nil
+}
+
+// Calculates expected gas limit based on parent gas limit and target gas limit.
+// Spec code:
+//
+//	def expected_gas_limit(parent_gas_limit, target_gas_limit, adjustment_factor):
+//	 max_gas_limit_difference = (parent_gas_limit // adjustment_factor) - 1
+//	 if target_gas_limit > parent_gas_limit:
+//	     gas_diff = target_gas_limit - parent_gas_limit
+//	     return parent_gas_limit + min(gas_diff, max_gas_limit_difference)
+//	 else:
+//	     gas_diff = parent_gas_limit - target_gas_limit
+//	     return parent_gas_limit - min(gas_diff, max_gas_limit_difference)
+func expectedGasLimit(parentGasLimit, proposerGasLimit uint64) uint64 {
+	maxGasLimitDiff := uint64(0)
+	if parentGasLimit > gasLimitAdjustmentFactor {
+		maxGasLimitDiff = parentGasLimit/gasLimitAdjustmentFactor - 1
+	}
+	if proposerGasLimit > parentGasLimit {
+		if proposerGasLimit-parentGasLimit > maxGasLimitDiff {
+			return parentGasLimit + maxGasLimitDiff
+		}
+		return proposerGasLimit
+	}
+
+	if parentGasLimit-proposerGasLimit > maxGasLimitDiff {
+		return parentGasLimit - maxGasLimitDiff
+	}
+	return proposerGasLimit
 }

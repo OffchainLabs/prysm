@@ -16,7 +16,7 @@ go_library(
         "data/ssz/merkle-proofs.md",
         "data/extra.md",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v4/tools/specs-checker",
+    importpath = "github.com/prysmaticlabs/prysm/v5/tools/specs-checker",
     visibility = ["//visibility:public"],
     deps = [
         "//config/params:go_default_library",

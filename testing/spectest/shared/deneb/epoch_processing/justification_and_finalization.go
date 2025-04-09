@@ -5,11 +5,11 @@ import (
 	"path"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/altair"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/epoch/precompute"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/testing/spectest/utils"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/altair"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/epoch/precompute"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/spectest/utils"
 )
 
 // RunJustificationAndFinalizationTests executes "epoch_processing/justification_and_finalization" tests.
@@ -32,7 +32,11 @@ func processJustificationAndFinalizationPrecomputeWrapper(t *testing.T, st state
 	require.NoError(t, err)
 	_, bp, err = altair.ProcessEpochParticipation(ctx, st, bp, vp)
 	require.NoError(t, err)
-
+	activeBal, targetPrevious, targetCurrent, err := st.UnrealizedCheckpointBalances()
+	require.NoError(t, err)
+	require.Equal(t, bp.ActiveCurrentEpoch, activeBal)
+	require.Equal(t, bp.CurrentEpochTargetAttested, targetCurrent)
+	require.Equal(t, bp.PrevEpochTargetAttested, targetPrevious)
 	st, err = precompute.ProcessJustificationAndFinalizationPreCompute(st, bp)
 	require.NoError(t, err, "Could not process justification")
 

@@ -1,11 +1,10 @@
 package testing
 
 import (
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	eth "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/runtime/version"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
 type blockMutator struct {
@@ -16,38 +15,23 @@ type blockMutator struct {
 }
 
 func (m blockMutator) apply(b interfaces.SignedBeaconBlock) (interfaces.SignedBeaconBlock, error) {
-	switch b.Version() {
-	case version.Phase0:
-		bb, err := b.PbPhase0Block()
-		if err != nil {
-			return nil, err
-		}
-		m.Phase0(bb)
-		return blocks.NewSignedBeaconBlock(bb)
-	case version.Altair:
-		bb, err := b.PbAltairBlock()
-		if err != nil {
-			return nil, err
-		}
-		m.Altair(bb)
-		return blocks.NewSignedBeaconBlock(bb)
-	case version.Bellatrix:
-		bb, err := b.PbBellatrixBlock()
-		if err != nil {
-			return nil, err
-		}
-		m.Bellatrix(bb)
-		return blocks.NewSignedBeaconBlock(bb)
-	case version.Capella:
-		bb, err := b.PbCapellaBlock()
-		if err != nil {
-			return nil, err
-		}
-		m.Capella(bb)
-		return blocks.NewSignedBeaconBlock(bb)
+	pb, err := b.Proto()
+	if err != nil {
+		return nil, err
+	}
+	switch pbStruct := pb.(type) {
+	case *eth.SignedBeaconBlock:
+		m.Phase0(pbStruct)
+	case *eth.SignedBeaconBlockAltair:
+		m.Altair(pbStruct)
+	case *eth.SignedBeaconBlockBellatrix:
+		m.Bellatrix(pbStruct)
+	case *eth.SignedBeaconBlockCapella:
+		m.Capella(pbStruct)
 	default:
 		return nil, blocks.ErrUnsupportedSignedBeaconBlock
 	}
+	return blocks.NewSignedBeaconBlock(pb)
 }
 
 // SetBlockStateRoot modifies the block's state root.

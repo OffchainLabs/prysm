@@ -3,10 +3,10 @@ package doublylinkedtree
 import (
 	"sync"
 
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/forkchoice"
-	forkchoicetypes "github.com/prysmaticlabs/prysm/v4/beacon-chain/forkchoice/types"
-	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice"
+	forkchoicetypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/types"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 )
 
 // ForkChoice defines the overall fork choice store which includes all block nodes, validator's latest votes and balances.
@@ -50,6 +50,7 @@ type Node struct {
 	root                     [fieldparams.RootLength]byte // root of the block converted to the node.
 	payloadHash              [fieldparams.RootLength]byte // payloadHash of the block converted to the node.
 	parent                   *Node                        // parent index of this node.
+	target                   *Node                        // target checkpoint for
 	children                 []*Node                      // the list of direct children of this Node
 	justifiedEpoch           primitives.Epoch             // justifiedEpoch of this node.
 	unrealizedJustifiedEpoch primitives.Epoch             // the epoch that would be justified if the block would be advanced to the next epoch.

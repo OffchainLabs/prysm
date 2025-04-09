@@ -3,11 +3,12 @@ package forkchoice
 import (
 	"context"
 
-	forkchoicetypes "github.com/prysmaticlabs/prysm/v4/beacon-chain/forkchoice/types"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
-	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	v1 "github.com/prysmaticlabs/prysm/v4/proto/eth/v1"
+	forkchoicetypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/types"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	consensus_blocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	forkchoice2 "github.com/prysmaticlabs/prysm/v5/consensus-types/forkchoice"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 )
 
 // BalancesByRooter is a handler to obtain the effective balances of the state
@@ -16,15 +17,20 @@ type BalancesByRooter func(context.Context, [32]byte) ([]uint64, error)
 
 // ForkChoicer represents the full fork choice interface composed of all the sub-interfaces.
 type ForkChoicer interface {
+	RLocker // separate interface isolates  read locking for ROForkChoice.
 	Lock()
 	Unlock()
-	RLock()
-	RUnlock()
 	HeadRetriever        // to compute head.
 	BlockProcessor       // to track new block for fork choice.
 	AttestationProcessor // to track new attestation for fork choice.
 	Getter               // to retrieve fork choice information.
 	Setter               // to set fork choice information.
+}
+
+// RLocker represents forkchoice's internal RWMutex read-only lock/unlock methods.
+type RLocker interface {
+	RLock()
+	RUnlock()
 }
 
 // HeadRetriever retrieves head root and optimistic info of the current chain.
@@ -36,7 +42,7 @@ type HeadRetriever interface {
 
 // BlockProcessor processes the block that's used for accounting fork choice.
 type BlockProcessor interface {
-	InsertNode(context.Context, state.BeaconState, [32]byte) error
+	InsertNode(context.Context, state.BeaconState, consensus_blocks.ROBlock) error
 	InsertChain(context.Context, []*forkchoicetypes.BlockAndCheckpoints) error
 }
 
@@ -47,28 +53,37 @@ type AttestationProcessor interface {
 
 // Getter returns fork choice related information.
 type Getter interface {
-	HasNode([32]byte) bool
-	ProposerBoost() [fieldparams.RootLength]byte
+	FastGetter
 	AncestorRoot(ctx context.Context, root [32]byte, slot primitives.Slot) ([32]byte, error)
 	CommonAncestor(ctx context.Context, root1 [32]byte, root2 [32]byte) ([32]byte, primitives.Slot, error)
-	IsCanonical(root [32]byte) bool
-	FinalizedCheckpoint() *forkchoicetypes.Checkpoint
-	IsViableForCheckpoint(*forkchoicetypes.Checkpoint) (bool, error)
-	FinalizedPayloadBlockHash() [32]byte
-	JustifiedCheckpoint() *forkchoicetypes.Checkpoint
-	PreviousJustifiedCheckpoint() *forkchoicetypes.Checkpoint
-	JustifiedPayloadBlockHash() [32]byte
-	UnrealizedJustifiedPayloadBlockHash() [32]byte
-	NodeCount() int
-	HighestReceivedBlockSlot() primitives.Slot
-	ReceivedBlocksLastEpoch() (uint64, error)
-	ForkChoiceDump(context.Context) (*v1.ForkChoiceDump, error)
-	Weight(root [32]byte) (uint64, error)
+	ForkChoiceDump(context.Context) (*forkchoice2.Dump, error)
 	Tips() ([][32]byte, []primitives.Slot)
+}
+
+type FastGetter interface {
+	FinalizedCheckpoint() *forkchoicetypes.Checkpoint
+	FinalizedPayloadBlockHash() [32]byte
+	HasNode([32]byte) bool
+	HighestReceivedBlockSlot() primitives.Slot
+	HighestReceivedBlockRoot() [32]byte
+	HighestReceivedBlockDelay() primitives.Slot
+	IsCanonical(root [32]byte) bool
 	IsOptimistic(root [32]byte) (bool, error)
+	IsViableForCheckpoint(*forkchoicetypes.Checkpoint) (bool, error)
+	JustifiedCheckpoint() *forkchoicetypes.Checkpoint
+	JustifiedPayloadBlockHash() [32]byte
+	LastRoot(primitives.Epoch) [32]byte
+	NodeCount() int
+	PreviousJustifiedCheckpoint() *forkchoicetypes.Checkpoint
+	ProposerBoost() [fieldparams.RootLength]byte
+	ReceivedBlocksLastEpoch() (uint64, error)
 	ShouldOverrideFCU() bool
 	Slot([32]byte) (primitives.Slot, error)
-	LastRoot(primitives.Epoch) [32]byte
+	DependentRoot(primitives.Epoch) ([32]byte, error)
+	TargetRootForEpoch([32]byte, primitives.Epoch) ([32]byte, error)
+	UnrealizedJustifiedPayloadBlockHash() [32]byte
+	Weight(root [32]byte) (uint64, error)
+	ParentRoot(root [32]byte) ([32]byte, error)
 }
 
 // Setter allows to set forkchoice information

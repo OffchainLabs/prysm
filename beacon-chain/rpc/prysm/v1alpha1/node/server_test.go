@@ -9,18 +9,18 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	mock "github.com/prysmaticlabs/prysm/v4/beacon-chain/blockchain/testing"
-	dbutil "github.com/prysmaticlabs/prysm/v4/beacon-chain/db/testing"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p"
-	mockP2p "github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p/testing"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/testutil"
-	mockSync "github.com/prysmaticlabs/prysm/v4/beacon-chain/sync/initial-sync/testing"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/runtime/version"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/testing/util"
+	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
+	dbutil "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
+	mockP2p "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/testutil"
+	mockSync "github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/initial-sync/testing"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/util"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -89,8 +89,9 @@ func TestNodeServer_GetImplementedServices(t *testing.T) {
 
 	res, err := ns.ListImplementedServices(context.Background(), &emptypb.Empty{})
 	require.NoError(t, err)
-	// We verify the services include the node service + the registered reflection service.
-	assert.Equal(t, 2, len(res.Services))
+	// Expecting node service and Server reflect. As of grpc, v1.65.0, there are two version of server reflection
+	// Services: [ethereum.eth.v1alpha1.Node grpc.reflection.v1.ServerReflection grpc.reflection.v1alpha.ServerReflection]
+	assert.Equal(t, 3, len(res.Services))
 }
 
 func TestNodeServer_GetHost(t *testing.T) {
@@ -125,13 +126,12 @@ func TestNodeServer_GetPeer(t *testing.T) {
 	}
 	ethpb.RegisterNodeServer(server, ns)
 	reflection.Register(server)
-	firstPeer := peersProvider.Peers().All()[0]
 
-	res, err := ns.GetPeer(context.Background(), &ethpb.PeerRequest{PeerId: firstPeer.String()})
+	res, err := ns.GetPeer(context.Background(), &ethpb.PeerRequest{PeerId: mockP2p.MockRawPeerId0})
 	require.NoError(t, err)
-	assert.Equal(t, firstPeer.String(), res.PeerId, "Unexpected peer ID")
+	assert.Equal(t, "16Uiu2HAkyWZ4Ni1TpvDS8dPxsozmHY85KaiFjodQuV6Tz5tkHVeR" /* first peer's raw id */, res.PeerId, "Unexpected peer ID")
 	assert.Equal(t, int(ethpb.PeerDirection_INBOUND), int(res.Direction), "Expected 1st peer to be an inbound connection")
-	assert.Equal(t, ethpb.ConnectionState_CONNECTED, res.ConnectionState, "Expected peer to be connected")
+	assert.Equal(t, int(ethpb.ConnectionState_CONNECTED), int(res.ConnectionState), "Expected peer to be connected")
 }
 
 func TestNodeServer_ListPeers(t *testing.T) {
@@ -146,8 +146,25 @@ func TestNodeServer_ListPeers(t *testing.T) {
 	res, err := ns.ListPeers(context.Background(), &emptypb.Empty{})
 	require.NoError(t, err)
 	assert.Equal(t, 2, len(res.Peers))
-	assert.Equal(t, int(ethpb.PeerDirection_INBOUND), int(res.Peers[0].Direction))
-	assert.Equal(t, ethpb.PeerDirection_OUTBOUND, res.Peers[1].Direction)
+
+	var (
+		firstPeer  *ethpb.Peer
+		secondPeer *ethpb.Peer
+	)
+
+	for _, p := range res.Peers {
+		if p.PeerId == mockP2p.MockRawPeerId0 {
+			firstPeer = p
+		}
+		if p.PeerId == mockP2p.MockRawPeerId1 {
+			secondPeer = p
+		}
+	}
+
+	assert.NotNil(t, firstPeer)
+	assert.NotNil(t, secondPeer)
+	assert.Equal(t, int(ethpb.PeerDirection_INBOUND), int(firstPeer.Direction))
+	assert.Equal(t, int(ethpb.PeerDirection_OUTBOUND), int(secondPeer.Direction))
 }
 
 func TestNodeServer_GetETH1ConnectionStatus(t *testing.T) {
@@ -169,4 +186,39 @@ func TestNodeServer_GetETH1ConnectionStatus(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, ep, res.CurrentAddress)
 	assert.Equal(t, errStr, res.CurrentConnectionError)
+}
+
+func TestNodeServer_GetHealth(t *testing.T) {
+	tests := []struct {
+		name         string
+		input        *mockSync.Sync
+		customStatus uint64
+		wantedErr    string
+	}{
+		{
+			name:  "happy path",
+			input: &mockSync.Sync{IsSyncing: false, IsSynced: true},
+		},
+		{
+			name:      "syncing",
+			input:     &mockSync.Sync{IsSyncing: false},
+			wantedErr: "service unavailable",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := grpc.NewServer()
+			ns := &Server{
+				SyncChecker: tt.input,
+			}
+			ethpb.RegisterNodeServer(server, ns)
+			reflection.Register(server)
+			_, err := ns.GetHealth(context.Background(), &ethpb.HealthRequest{SyncingStatus: tt.customStatus})
+			if tt.wantedErr == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorContains(t, tt.wantedErr, err)
+		})
+	}
 }

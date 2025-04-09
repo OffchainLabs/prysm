@@ -5,15 +5,15 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/signing"
-	v "github.com/prysmaticlabs/prysm/v4/beacon-chain/core/validators"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/runtime/version"
-	"github.com/prysmaticlabs/prysm/v4/time/slots"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
+	v "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/validators"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
+	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
 // ValidatorAlreadyExitedMsg defines a message saying that a validator has already exited.
@@ -55,7 +55,7 @@ func ProcessVoluntaryExits(
 	if len(exits) == 0 {
 		return beaconState, nil
 	}
-	maxExitEpoch, churn := v.ValidatorsMaxExitEpochAndChurn(beaconState)
+	maxExitEpoch, churn := v.MaxExitEpochAndChurn(beaconState)
 	var exitEpoch primitives.Epoch
 	for idx, exit := range exits {
 		if exit == nil || exit.Exit == nil {
@@ -76,7 +76,7 @@ func ProcessVoluntaryExits(
 			} else if exitEpoch == maxExitEpoch {
 				churn++
 			}
-		} else if !errors.Is(err, v.ValidatorAlreadyExitedErr) {
+		} else if !errors.Is(err, v.ErrValidatorAlreadyExited) {
 			return nil, err
 		}
 	}
@@ -98,6 +98,8 @@ func ProcessVoluntaryExits(
 //	 assert get_current_epoch(state) >= voluntary_exit.epoch
 //	 # Verify the validator has been active long enough
 //	 assert get_current_epoch(state) >= validator.activation_epoch + SHARD_COMMITTEE_PERIOD
+//	 # Only exit validator if it has no pending withdrawals in the queue
+//	 assert get_pending_balance_to_withdraw(state, voluntary_exit.validator_index) == 0  # [New in Electra:EIP7251]
 //	 # Verify signature
 //	 domain = get_domain(state, DOMAIN_VOLUNTARY_EXIT, voluntary_exit.epoch)
 //	 signing_root = compute_signing_root(voluntary_exit, domain)
@@ -113,7 +115,6 @@ func VerifyExitAndSignature(
 		return errors.New("nil exit")
 	}
 
-	currentSlot := state.Slot()
 	fork := state.Fork()
 	genesisRoot := state.GenesisValidatorsRoot()
 
@@ -128,7 +129,7 @@ func VerifyExitAndSignature(
 	}
 
 	exit := signed.Exit
-	if err := verifyExitConditions(validator, currentSlot, exit); err != nil {
+	if err := verifyExitConditions(state, validator, exit); err != nil {
 		return err
 	}
 	domain, err := signing.Domain(fork, exit.Epoch, params.BeaconConfig().DomainVoluntaryExit, genesisRoot)
@@ -157,14 +158,16 @@ func VerifyExitAndSignature(
 //	 assert get_current_epoch(state) >= voluntary_exit.epoch
 //	 # Verify the validator has been active long enough
 //	 assert get_current_epoch(state) >= validator.activation_epoch + SHARD_COMMITTEE_PERIOD
+//	 # Only exit validator if it has no pending withdrawals in the queue
+//	 assert get_pending_balance_to_withdraw(state, voluntary_exit.validator_index) == 0  # [New in Electra:EIP7251]
 //	 # Verify signature
 //	 domain = get_domain(state, DOMAIN_VOLUNTARY_EXIT, voluntary_exit.epoch)
 //	 signing_root = compute_signing_root(voluntary_exit, domain)
 //	 assert bls.Verify(validator.pubkey, signing_root, signed_voluntary_exit.signature)
 //	 # Initiate exit
 //	 initiate_validator_exit(state, voluntary_exit.validator_index)
-func verifyExitConditions(validator state.ReadOnlyValidator, currentSlot primitives.Slot, exit *ethpb.VoluntaryExit) error {
-	currentEpoch := slots.ToEpoch(currentSlot)
+func verifyExitConditions(st state.ReadOnlyBeaconState, validator state.ReadOnlyValidator, exit *ethpb.VoluntaryExit) error {
+	currentEpoch := slots.ToEpoch(st.Slot())
 	// Verify the validator is active.
 	if !helpers.IsActiveValidatorUsingTrie(validator, currentEpoch) {
 		return errors.New("non-active validator cannot exit")
@@ -187,5 +190,17 @@ func verifyExitConditions(validator state.ReadOnlyValidator, currentSlot primiti
 			validator.ActivationEpoch()+params.BeaconConfig().ShardCommitteePeriod,
 		)
 	}
+
+	if st.Version() >= version.Electra {
+		// Only exit validator if it has no pending withdrawals in the queue.
+		ok, err := st.HasPendingBalanceToWithdraw(exit.ValidatorIndex)
+		if err != nil {
+			return fmt.Errorf("unable to retrieve pending balance to withdraw for validator %d: %w", exit.ValidatorIndex, err)
+		}
+		if ok {
+			return fmt.Errorf("validator %d must have no pending balance to withdraw", exit.ValidatorIndex)
+		}
+	}
+
 	return nil
 }

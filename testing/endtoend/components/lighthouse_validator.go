@@ -14,32 +14,31 @@ import (
 	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/io/file"
-	"github.com/prysmaticlabs/prysm/v4/runtime/interop"
-	"github.com/prysmaticlabs/prysm/v4/testing/endtoend/helpers"
-	e2e "github.com/prysmaticlabs/prysm/v4/testing/endtoend/params"
-	"github.com/prysmaticlabs/prysm/v4/testing/endtoend/types"
-	e2etypes "github.com/prysmaticlabs/prysm/v4/testing/endtoend/types"
-	"github.com/prysmaticlabs/prysm/v4/validator/keymanager"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/io/file"
+	"github.com/prysmaticlabs/prysm/v5/runtime/interop"
+	"github.com/prysmaticlabs/prysm/v5/testing/endtoend/helpers"
+	e2e "github.com/prysmaticlabs/prysm/v5/testing/endtoend/params"
+	"github.com/prysmaticlabs/prysm/v5/testing/endtoend/types"
+	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
 	keystorev4 "github.com/wealdtech/go-eth2-wallet-encryptor-keystorev4"
 	"golang.org/x/sync/errgroup"
 )
 
-var _ e2etypes.ComponentRunner = (*LighthouseValidatorNode)(nil)
-var _ e2etypes.ComponentRunner = (*LighthouseValidatorNodeSet)(nil)
-var _ e2etypes.MultipleComponentRunners = (*LighthouseValidatorNodeSet)(nil)
+var _ types.ComponentRunner = (*LighthouseValidatorNode)(nil)
+var _ types.ComponentRunner = (*LighthouseValidatorNodeSet)(nil)
+var _ types.MultipleComponentRunners = (*LighthouseValidatorNodeSet)(nil)
 
 // LighthouseValidatorNodeSet represents set of lighthouse validator nodes.
 type LighthouseValidatorNodeSet struct {
-	e2etypes.ComponentRunner
-	config  *e2etypes.E2EConfig
+	types.ComponentRunner
+	config  *types.E2EConfig
 	started chan struct{}
-	nodes   []e2etypes.ComponentRunner
+	nodes   []types.ComponentRunner
 }
 
 // NewLighthouseValidatorNodeSet creates and returns a set of lighthouse validator nodes.
-func NewLighthouseValidatorNodeSet(config *e2etypes.E2EConfig) *LighthouseValidatorNodeSet {
+func NewLighthouseValidatorNodeSet(config *types.E2EConfig) *LighthouseValidatorNodeSet {
 	return &LighthouseValidatorNodeSet{
 		config:  config,
 		started: make(chan struct{}, 1),
@@ -59,7 +58,7 @@ func (s *LighthouseValidatorNodeSet) Start(ctx context.Context) error {
 	validatorsPerNode := validatorNum / beaconNodeNum
 
 	// Create validator nodes.
-	nodes := make([]e2etypes.ComponentRunner, lighthouseBeaconNum)
+	nodes := make([]types.ComponentRunner, lighthouseBeaconNum)
 	for i := 0; i < lighthouseBeaconNum; i++ {
 		offsetIdx := i + prysmBeaconNum
 		nodes[i] = NewLighthouseValidatorNode(s.config, validatorsPerNode, i, validatorsPerNode*offsetIdx)
@@ -134,7 +133,7 @@ func (s *LighthouseValidatorNodeSet) StopAtIndex(i int) error {
 }
 
 // ComponentAtIndex returns the component at the provided index.
-func (s *LighthouseValidatorNodeSet) ComponentAtIndex(i int) (e2etypes.ComponentRunner, error) {
+func (s *LighthouseValidatorNodeSet) ComponentAtIndex(i int) (types.ComponentRunner, error) {
 	if i >= len(s.nodes) {
 		return nil, errors.Errorf("provided index exceeds slice size: %d >= %d", i, len(s.nodes))
 	}
@@ -143,8 +142,8 @@ func (s *LighthouseValidatorNodeSet) ComponentAtIndex(i int) (e2etypes.Component
 
 // LighthouseValidatorNode represents a lighthouse validator node.
 type LighthouseValidatorNode struct {
-	e2etypes.ComponentRunner
-	config       *e2etypes.E2EConfig
+	types.ComponentRunner
+	config       *types.E2EConfig
 	started      chan struct{}
 	validatorNum int
 	index        int
@@ -153,7 +152,7 @@ type LighthouseValidatorNode struct {
 }
 
 // NewLighthouseValidatorNode creates and returns a lighthouse validator node.
-func NewLighthouseValidatorNode(config *e2etypes.E2EConfig, validatorNum, index, offset int) *LighthouseValidatorNode {
+func NewLighthouseValidatorNode(config *types.E2EConfig, validatorNum, index, offset int) *LighthouseValidatorNode {
 	return &LighthouseValidatorNode{
 		config:       config,
 		validatorNum: validatorNum,
@@ -179,7 +178,7 @@ func (v *LighthouseValidatorNode) Start(ctx context.Context) error {
 	// beacon node, we split half the validators to run with
 	// lighthouse and the other half with prysm.
 	if v.config.UseValidatorCrossClient && index%2 == 0 {
-		httpPort = e2e.TestParams.Ports.PrysmBeaconNodeGatewayPort
+		httpPort = e2e.TestParams.Ports.PrysmBeaconNodeHTTPPort
 	}
 	args := []string{
 		"validator_client",
@@ -189,6 +188,10 @@ func (v *LighthouseValidatorNode) Start(ctx context.Context) error {
 		fmt.Sprintf("--testnet-dir=%s", testNetDir),
 		fmt.Sprintf("--beacon-nodes=http://localhost:%d", httpPort+index),
 		"--suggested-fee-recipient=0x878705ba3f8bc32fcf7f4caa1a35e72af65cf766",
+	}
+
+	if v.config.UseBuilder {
+		args = append(args, "--builder-proposals")
 	}
 
 	cmd := exec.CommandContext(ctx, binaryPath, args...) // #nosec G204 -- Safe

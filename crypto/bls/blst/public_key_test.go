@@ -8,10 +8,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v4/crypto/bls/blst"
-	"github.com/prysmaticlabs/prysm/v4/crypto/bls/common"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/crypto/bls/blst"
+	"github.com/prysmaticlabs/prysm/v5/crypto/bls/common"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func TestPublicKeyFromBytes(t *testing.T) {
@@ -94,7 +94,7 @@ func TestPublicKey_Aggregate(t *testing.T) {
 }
 
 func TestPublicKey_Aggregation_NoCorruption(t *testing.T) {
-	pubkeys := []common.PublicKey{}
+	var pubkeys []common.PublicKey
 	for i := 0; i < 100; i++ {
 		priv, err := blst.RandKey()
 		require.NoError(t, err)
@@ -102,7 +102,7 @@ func TestPublicKey_Aggregation_NoCorruption(t *testing.T) {
 		pubkeys = append(pubkeys, pubkey)
 	}
 
-	compressedKeys := [][]byte{}
+	var compressedKeys [][]byte
 	// Fill up the cache
 	for _, pkey := range pubkeys {
 		_, err := blst.PublicKeyFromBytes(pkey.Marshal())

@@ -5,11 +5,11 @@ go_library(
     srcs = [
         "handlers.go",
         "server.go",
-        "structs.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/prysm/node",
+    importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/prysm/node",
     visibility = ["//beacon-chain:__subpackages__"],
     deps = [
+        "//api/server/structs:go_default_library",
         "//beacon-chain/blockchain:go_default_library",
         "//beacon-chain/db:go_default_library",
         "//beacon-chain/execution:go_default_library",
@@ -17,7 +17,8 @@ go_library(
         "//beacon-chain/p2p/peers:go_default_library",
         "//beacon-chain/p2p/peers/peerdata:go_default_library",
         "//beacon-chain/sync:go_default_library",
-        "//network/http:go_default_library",
+        "//monitoring/tracing/trace:go_default_library",
+        "//network/httputil:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "@com_github_libp2p_go_libp2p//core/network:go_default_library",
         "@com_github_libp2p_go_libp2p//core/peer:go_default_library",
@@ -27,16 +28,14 @@ go_library(
 
 go_test(
     name = "go_default_test",
-    srcs = [
-        "handlers_test.go",
-        "server_test.go",
-    ],
+    srcs = ["handlers_test.go"],
     embed = [":go_default_library"],
     deps = [
+        "//api/server/structs:go_default_library",
         "//beacon-chain/p2p:go_default_library",
         "//beacon-chain/p2p/peers:go_default_library",
         "//beacon-chain/p2p/testing:go_default_library",
-        "//network/http:go_default_library",
+        "//network/httputil:go_default_library",
         "//testing/assert:go_default_library",
         "//testing/require:go_default_library",
         "@com_github_ethereum_go_ethereum//p2p/enode:go_default_library",

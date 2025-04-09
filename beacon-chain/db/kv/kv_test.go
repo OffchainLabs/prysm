@@ -1,15 +1,16 @@
 package kv
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v4/config/features"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/blocks"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/testing/util"
+	"github.com/prysmaticlabs/prysm/v5/config/features"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/util"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -116,13 +117,25 @@ func Test_setupBlockStorageType(t *testing.T) {
 		root, err = wrappedBlock.Block().HashTreeRoot()
 		require.NoError(t, err)
 		require.NoError(t, store.SaveBlock(ctx, wrappedBlock))
-		retrievedBlk, err = store.Block(ctx, root)
-		require.NoError(t, err)
-
-		require.Equal(t, true, retrievedBlk.IsBlinded())
 		wrappedBlinded, err := wrappedBlock.ToBlinded()
 		require.NoError(t, err)
-		require.DeepEqual(t, wrappedBlinded, retrievedBlk)
+
+		retrievedBlk, err = store.Block(ctx, root)
+		require.NoError(t, err)
+		require.Equal(t, true, retrievedBlk.IsBlinded())
+
+		// Compare retrieved value by root, and marshaled bytes.
+		mSrc, err := wrappedBlinded.MarshalSSZ()
+		require.NoError(t, err)
+		mTgt, err := retrievedBlk.MarshalSSZ()
+		require.NoError(t, err)
+		require.Equal(t, true, bytes.Equal(mSrc, mTgt))
+
+		rSrc, err := wrappedBlinded.Block().HashTreeRoot()
+		require.NoError(t, err)
+		rTgt, err := retrievedBlk.Block().HashTreeRoot()
+		require.NoError(t, err)
+		require.Equal(t, rSrc, rTgt)
 	})
 	t.Run("existing database with full blocks type should continue storing full blocks", func(t *testing.T) {
 		store := setupDB(t)
@@ -155,10 +168,21 @@ func Test_setupBlockStorageType(t *testing.T) {
 		root, err = wrappedBlock.Block().HashTreeRoot()
 		require.NoError(t, err)
 		require.NoError(t, store.SaveBlock(ctx, wrappedBlock))
+
 		retrievedBlk, err = store.Block(ctx, root)
 		require.NoError(t, err)
 		require.Equal(t, false, retrievedBlk.IsBlinded())
-		require.DeepEqual(t, wrappedBlock, retrievedBlk)
+
+		// Compare retrieved value by root, and marshaled bytes.
+		mSrc, err := wrappedBlock.MarshalSSZ()
+		require.NoError(t, err)
+		mTgt, err := retrievedBlk.MarshalSSZ()
+		require.NoError(t, err)
+		require.Equal(t, true, bytes.Equal(mSrc, mTgt))
+
+		rTgt, err := retrievedBlk.Block().HashTreeRoot()
+		require.NoError(t, err)
+		require.Equal(t, root, rTgt)
 	})
 	t.Run("existing database with blinded blocks type should error if user enables full blocks feature flag", func(t *testing.T) {
 		store := setupDB(t)

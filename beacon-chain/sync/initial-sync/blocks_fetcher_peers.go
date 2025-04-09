@@ -7,14 +7,14 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p/peers/scorers"
-	"github.com/prysmaticlabs/prysm/v4/cmd/beacon-chain/flags"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	mathutil "github.com/prysmaticlabs/prysm/v4/math"
-	prysmTime "github.com/prysmaticlabs/prysm/v4/time"
-	"github.com/prysmaticlabs/prysm/v4/time/slots"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers/scorers"
+	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	mathutil "github.com/prysmaticlabs/prysm/v5/math"
+	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
+	prysmTime "github.com/prysmaticlabs/prysm/v5/time"
+	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/sirupsen/logrus"
-	"go.opencensus.io/trace"
 )
 
 // peerLock returns peer lock for a given peer. If lock is not found, it is created.
@@ -93,7 +93,7 @@ func (f *blocksFetcher) waitForMinimumPeers(ctx context.Context) ([]peer.ID, err
 // filterPeers returns transformed list of peers, weight sorted by scores and capacity remaining.
 // List can be further constrained using peersPercentage, where only percentage of peers are returned.
 func (f *blocksFetcher) filterPeers(ctx context.Context, peers []peer.ID, peersPercentage float64) []peer.ID {
-	ctx, span := trace.StartSpan(ctx, "initialsync.filterPeers")
+	_, span := trace.StartSpan(ctx, "initialsync.filterPeers")
 	defer span.End()
 
 	if len(peers) == 0 {

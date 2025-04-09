@@ -1,13 +1,11 @@
 load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 load("@io_bazel_rules_go//go:def.bzl", "go_binary")
-load("@io_bazel_rules_docker//go:image.bzl", "go_image")
-load("@io_bazel_rules_docker//container:container.bzl", "container_bundle")
-load("@io_bazel_rules_docker//contrib:push-all.bzl", "docker_push")
+load("//tools:prysm_image.bzl", "prysm_image_upload")
 
 go_library(
     name = "go_default_library",
     srcs = ["main.go"],
-    importpath = "github.com/prysmaticlabs/prysm/v4/tools/http-request-sink",
+    importpath = "github.com/prysmaticlabs/prysm/v5/tools/http-request-sink",
     visibility = ["//visibility:private"],
     deps = ["//config/params:go_default_library"],
 )
@@ -18,33 +16,6 @@ go_binary(
     visibility = ["//visibility:public"],
 )
 
-go_image(
-    name = "image",
-    base = select({
-        "//tools:base_image_alpine": "//tools:alpine_cc_image",
-        "//tools:base_image_cc": "//tools:cc_image",
-        "//conditions:default": "//tools:cc_image",
-    }),
-    binary = ":http-request-sink",
-    tags = ["manual"],
-    visibility = ["//visibility:private"],
-)
-
-container_bundle(
-    name = "image_bundle",
-    images = {
-        "gcr.io/prysmaticlabs/prysm/http-request-sink:latest": ":image",
-        "gcr.io/prysmaticlabs/prysm/http-request-sink:{DOCKER_TAG}": ":image",
-    },
-    tags = ["manual"],
-)
-
-docker_push(
-    name = "push_images",
-    bundle = ":image_bundle",
-    tags = ["manual"],
-)
-
 go_test(
     name = "go_default_test",
     srcs = ["main_test.go"],
@@ -53,4 +24,16 @@ go_test(
         "//config/params:go_default_library",
         "//testing/require:go_default_library",
     ],
+)
+
+prysm_image_upload(
+    name = "push_images",
+    binary = ":http-request-sink",
+    entrypoint = ["/http-request-sink"],
+    repository = "gcr.io/prysmaticlabs/prysm/http-request-sink",
+    symlinks = {
+        # Backwards compatibility for images that depended on the old filepath.
+        "/app/tools/http-request-sink/http-request-sink": "/http-request-sink",
+    },
+    tags = ["manual"],
 )

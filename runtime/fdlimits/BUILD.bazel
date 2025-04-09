@@ -3,7 +3,7 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 go_library(
     name = "go_default_library",
     srcs = ["fdlimits.go"],
-    importpath = "github.com/prysmaticlabs/prysm/v4/runtime/fdlimits",
+    importpath = "github.com/prysmaticlabs/prysm/v5/runtime/fdlimits",
     visibility = ["//visibility:public"],
     deps = [
         "@com_github_ethereum_go_ethereum//common/fdlimit:go_default_library",

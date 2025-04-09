@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 

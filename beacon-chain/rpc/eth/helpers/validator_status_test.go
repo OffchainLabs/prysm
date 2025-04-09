@@ -4,14 +4,14 @@ import (
 	"strconv"
 	"testing"
 
-	state_native "github.com/prysmaticlabs/prysm/v4/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/validator"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/eth/v1"
-	"github.com/prysmaticlabs/prysm/v4/proto/migration"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
+	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/validator"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/eth/v1"
+	"github.com/prysmaticlabs/prysm/v5/proto/migration"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func Test_ValidatorStatus(t *testing.T) {
@@ -24,7 +24,7 @@ func Test_ValidatorStatus(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    args
-		want    validator.ValidatorStatus
+		want    validator.Status
 		wantErr bool
 	}{
 		{
@@ -162,7 +162,7 @@ func Test_ValidatorSubStatus(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    args
-		want    validator.ValidatorStatus
+		want    validator.Status
 		wantErr bool
 	}{
 		{

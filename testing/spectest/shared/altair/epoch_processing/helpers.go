@@ -8,13 +8,14 @@ import (
 
 	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/golang/snappy"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
-	state_native "github.com/prysmaticlabs/prysm/v4/beacon-chain/state/state-native"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/testing/util"
+	"github.com/google/go-cmp/cmp"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/util"
 	"google.golang.org/protobuf/proto"
-	"gopkg.in/d4l3k/messagediff.v1"
+	"google.golang.org/protobuf/testing/protocmp"
 )
 
 type epochOperation func(*testing.T, state.BeaconState) (state.BeaconState, error)
@@ -62,8 +63,7 @@ func RunEpochOperationTest(
 		pbState, err := state_native.ProtobufBeaconStateAltair(beaconState.ToProtoUnsafe())
 		require.NoError(t, err)
 		if !proto.Equal(pbState, postBeaconState) {
-			diff, _ := messagediff.PrettyDiff(beaconState.ToProtoUnsafe(), postBeaconState)
-			t.Log(diff)
+			t.Log(cmp.Diff(postBeaconState, pbState, protocmp.Transform()))
 			t.Fatal("Post state does not match expected")
 		}
 	} else {

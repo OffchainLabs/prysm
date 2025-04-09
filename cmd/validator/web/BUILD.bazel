@@ -6,9 +6,10 @@ go_library(
         "log.go",
         "web.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v4/cmd/validator/web",
+    importpath = "github.com/prysmaticlabs/prysm/v5/cmd/validator/web",
     visibility = ["//visibility:public"],
     deps = [
+        "//api:go_default_library",
         "//cmd:go_default_library",
         "//cmd/validator/flags:go_default_library",
         "//config/features:go_default_library",

@@ -6,9 +6,9 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
-	params "github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/encoding/ssz"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	params "github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/encoding/ssz"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
 // RootsArrayHashTreeRoot computes the Merkle root of arrays of 32-byte hashes, such as [64][32]byte
@@ -18,7 +18,7 @@ func RootsArrayHashTreeRoot(vals [][]byte, length uint64) ([32]byte, error) {
 }
 
 func EpochAttestationsRoot(atts []*ethpb.PendingAttestation) ([32]byte, error) {
-	max := uint64(params.BeaconConfig().CurrentEpochAttestationsLength())
+	max := params.BeaconConfig().CurrentEpochAttestationsLength()
 	if uint64(len(atts)) > max {
 		return [32]byte{}, fmt.Errorf("epoch attestation exceeds max length %d", max)
 	}

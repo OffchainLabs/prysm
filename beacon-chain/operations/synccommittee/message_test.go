@@ -3,8 +3,8 @@ package synccommittee
 import (
 	"testing"
 
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func TestSyncCommitteeSignatureCache_Nil(t *testing.T) {

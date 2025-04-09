@@ -4,18 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
-	neturl "net/url"
-	"regexp"
 	"strconv"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/eth/beacon"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/eth/node"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/eth/validator"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
 var beaconAPITogRPCValidatorStatus = map[string]ethpb.ValidatorStatus{
@@ -30,94 +24,62 @@ var beaconAPITogRPCValidatorStatus = map[string]ethpb.ValidatorStatus{
 	"withdrawal_done":     ethpb.ValidatorStatus_EXITED,
 }
 
-func validRoot(root string) bool {
-	matchesRegex, err := regexp.MatchString("^0x[a-fA-F0-9]{64}$", root)
-	if err != nil {
-		return false
-	}
-	return matchesRegex
-}
-
-func uint64ToString[T uint64 | primitives.Slot | primitives.ValidatorIndex | primitives.CommitteeIndex | primitives.Epoch](val T) string {
-	return strconv.FormatUint(uint64(val), 10)
-}
-
-func buildURL(path string, queryParams ...neturl.Values) string {
-	if len(queryParams) == 0 {
-		return path
-	}
-
-	return fmt.Sprintf("%s?%s", path, queryParams[0].Encode())
-}
-
-func (c *beaconApiValidatorClient) getFork(ctx context.Context) (*beacon.GetStateForkResponse, error) {
+func (c *beaconApiValidatorClient) fork(ctx context.Context) (*structs.GetStateForkResponse, error) {
 	const endpoint = "/eth/v1/beacon/states/head/fork"
 
-	stateForkResponseJson := &beacon.GetStateForkResponse{}
+	stateForkResponseJson := &structs.GetStateForkResponse{}
 
-	if _, err := c.jsonRestHandler.GetRestJsonResponse(
-		ctx,
-		endpoint,
-		stateForkResponseJson,
-	); err != nil {
-		return nil, errors.Wrapf(err, "failed to get json response from `%s` REST endpoint", endpoint)
+	if err := c.jsonRestHandler.Get(ctx, endpoint, stateForkResponseJson); err != nil {
+		return nil, err
 	}
 
 	return stateForkResponseJson, nil
 }
 
-func (c *beaconApiValidatorClient) getHeaders(ctx context.Context) (*beacon.GetBlockHeadersResponse, error) {
+func (c *beaconApiValidatorClient) headers(ctx context.Context) (*structs.GetBlockHeadersResponse, error) {
 	const endpoint = "/eth/v1/beacon/headers"
 
-	blockHeadersResponseJson := &beacon.GetBlockHeadersResponse{}
+	blockHeadersResponseJson := &structs.GetBlockHeadersResponse{}
 
-	if _, err := c.jsonRestHandler.GetRestJsonResponse(
-		ctx,
-		endpoint,
-		blockHeadersResponseJson,
-	); err != nil {
-		return nil, errors.Wrapf(err, "failed to get json response from `%s` REST endpoint", endpoint)
+	if err := c.jsonRestHandler.Get(ctx, endpoint, blockHeadersResponseJson); err != nil {
+		return nil, err
 	}
 
 	return blockHeadersResponseJson, nil
 }
 
-func (c *beaconApiValidatorClient) getLiveness(ctx context.Context, epoch primitives.Epoch, validatorIndexes []string) (*validator.GetLivenessResponse, error) {
+func (c *beaconApiValidatorClient) liveness(ctx context.Context, epoch primitives.Epoch, validatorIndexes []string) (*structs.GetLivenessResponse, error) {
 	const endpoint = "/eth/v1/validator/liveness/"
 	url := endpoint + strconv.FormatUint(uint64(epoch), 10)
 
-	livenessResponseJson := &validator.GetLivenessResponse{}
+	livenessResponseJson := &structs.GetLivenessResponse{}
 
 	marshalledJsonValidatorIndexes, err := json.Marshal(validatorIndexes)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to marshal validator indexes")
 	}
 
-	if _, err := c.jsonRestHandler.PostRestJson(ctx, url, nil, bytes.NewBuffer(marshalledJsonValidatorIndexes), livenessResponseJson); err != nil {
-		return nil, errors.Wrapf(err, "failed to send POST data to `%s` REST URL", url)
+	if err = c.jsonRestHandler.Post(ctx, url, nil, bytes.NewBuffer(marshalledJsonValidatorIndexes), livenessResponseJson); err != nil {
+		return nil, err
 	}
 
 	return livenessResponseJson, nil
 }
 
-func (c *beaconApiValidatorClient) getSyncing(ctx context.Context) (*node.SyncStatusResponse, error) {
+func (c *beaconApiValidatorClient) syncing(ctx context.Context) (*structs.SyncStatusResponse, error) {
 	const endpoint = "/eth/v1/node/syncing"
 
-	syncingResponseJson := &node.SyncStatusResponse{}
+	syncingResponseJson := &structs.SyncStatusResponse{}
 
-	if _, err := c.jsonRestHandler.GetRestJsonResponse(
-		ctx,
-		endpoint,
-		syncingResponseJson,
-	); err != nil {
-		return nil, errors.Wrapf(err, "failed to get json response from `%s` REST endpoint", endpoint)
+	if err := c.jsonRestHandler.Get(ctx, endpoint, syncingResponseJson); err != nil {
+		return nil, err
 	}
 
 	return syncingResponseJson, nil
 }
 
 func (c *beaconApiValidatorClient) isSyncing(ctx context.Context) (bool, error) {
-	response, err := c.getSyncing(ctx)
+	response, err := c.syncing(ctx)
 	if err != nil || response == nil || response.Data == nil {
 		return true, errors.Wrapf(err, "failed to get syncing status")
 	}
@@ -126,7 +88,7 @@ func (c *beaconApiValidatorClient) isSyncing(ctx context.Context) (bool, error) 
 }
 
 func (c *beaconApiValidatorClient) isOptimistic(ctx context.Context) (bool, error) {
-	response, err := c.getSyncing(ctx)
+	response, err := c.syncing(ctx)
 	if err != nil || response == nil || response.Data == nil {
 		return true, errors.Wrapf(err, "failed to get syncing status")
 	}

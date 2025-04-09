@@ -43,7 +43,7 @@ func (gw *httpPoster) Update(r io.Reader) error {
 		buf := new(bytes.Buffer)
 		_, err = io.Copy(buf, resp.Body)
 		if err != nil {
-			return fmt.Errorf("error reading response body for non-200 response status code (%d), err=%s", resp.StatusCode, err)
+			return fmt.Errorf("error reading response body for non-200 response status code (%d), err=%w", resp.StatusCode, err)
 		}
 		return fmt.Errorf("non-200 response status code (%d). response body=%s", resp.StatusCode, buf.String())
 	}

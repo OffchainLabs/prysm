@@ -8,207 +8,264 @@ import (
 	"net/url"
 	"strconv"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/eth/beacon"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/eth/shared"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/eth/validator"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/api/apiutil"
+	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/validator"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"golang.org/x/sync/errgroup"
 )
 
 type dutiesProvider interface {
-	GetAttesterDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) ([]*validator.AttesterDuty, error)
-	GetProposerDuties(ctx context.Context, epoch primitives.Epoch) ([]*validator.ProposerDuty, error)
-	GetSyncDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) ([]*validator.SyncCommitteeDuty, error)
-	GetCommittees(ctx context.Context, epoch primitives.Epoch) ([]*shared.Committee, error)
+	AttesterDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) ([]*structs.AttesterDuty, error)
+	ProposerDuties(ctx context.Context, epoch primitives.Epoch) ([]*structs.ProposerDuty, error)
+	SyncDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) ([]*structs.SyncCommitteeDuty, error)
+	Committees(ctx context.Context, epoch primitives.Epoch) ([]*structs.Committee, error)
 }
 
 type beaconApiDutiesProvider struct {
-	jsonRestHandler jsonRestHandler
+	jsonRestHandler JsonRestHandler
 }
 
-type committeeIndexSlotPair struct {
-	committeeIndex primitives.CommitteeIndex
-	slot           primitives.Slot
+type attesterDuty struct {
+	committeeIndex          primitives.CommitteeIndex
+	slot                    primitives.Slot
+	committeeLength         uint64
+	validatorCommitteeIndex uint64
+	committeesAtSlot        uint64
 }
 
-func (c beaconApiValidatorClient) getDuties(ctx context.Context, in *ethpb.DutiesRequest) (*ethpb.DutiesResponse, error) {
-	multipleValidatorStatus, err := c.multipleValidatorStatus(ctx, &ethpb.MultipleValidatorStatusRequest{PublicKeys: in.PublicKeys})
+type validatorForDuty struct {
+	pubkey []byte
+	index  primitives.ValidatorIndex
+	status ethpb.ValidatorStatus
+}
+
+func (c *beaconApiValidatorClient) duties(ctx context.Context, in *ethpb.DutiesRequest) (*ethpb.ValidatorDutiesContainer, error) {
+	vals, err := c.validatorsForDuties(ctx, in.PublicKeys)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to get validator status")
+		return nil, errors.Wrap(err, "failed to get validators for duties")
 	}
 
 	// Sync committees are an Altair feature
 	fetchSyncDuties := in.Epoch >= params.BeaconConfig().AltairForkEpoch
 
-	currentEpochDuties, err := c.getDutiesForEpoch(ctx, in.Epoch, multipleValidatorStatus, fetchSyncDuties)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to get duties for current epoch `%d`", in.Epoch)
-	}
+	errCh := make(chan error, 1)
 
-	nextEpochDuties, err := c.getDutiesForEpoch(ctx, in.Epoch+1, multipleValidatorStatus, fetchSyncDuties)
+	var currentEpochDuties []*ethpb.ValidatorDuty
+	go func() {
+		currentEpochDuties, err = c.dutiesForEpoch(ctx, in.Epoch, vals, fetchSyncDuties)
+		if err != nil {
+			errCh <- errors.Wrapf(err, "failed to get duties for current epoch `%d`", in.Epoch)
+			return
+		}
+		errCh <- nil
+	}()
+
+	nextEpochDuties, err := c.dutiesForEpoch(ctx, in.Epoch+1, vals, fetchSyncDuties)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to get duties for next epoch `%d`", in.Epoch+1)
 	}
 
-	return &ethpb.DutiesResponse{
-		Duties:             currentEpochDuties,
+	if err = <-errCh; err != nil {
+		return nil, err
+	}
+
+	return &ethpb.ValidatorDutiesContainer{
 		CurrentEpochDuties: currentEpochDuties,
 		NextEpochDuties:    nextEpochDuties,
 	}, nil
 }
 
-func (c beaconApiValidatorClient) getDutiesForEpoch(
+func (c *beaconApiValidatorClient) dutiesForEpoch(
 	ctx context.Context,
 	epoch primitives.Epoch,
-	multipleValidatorStatus *ethpb.MultipleValidatorStatusResponse,
+	vals []validatorForDuty,
 	fetchSyncDuties bool,
-) ([]*ethpb.DutiesResponse_Duty, error) {
-	attesterDuties, err := c.dutiesProvider.GetAttesterDuties(ctx, epoch, multipleValidatorStatus.Indices)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to get attester duties for epoch `%d`", epoch)
+) ([]*ethpb.ValidatorDuty, error) {
+	indices := make([]primitives.ValidatorIndex, len(vals))
+	for i, v := range vals {
+		indices[i] = v.index
 	}
 
-	var syncDuties []*validator.SyncCommitteeDuty
-	if fetchSyncDuties {
-		if syncDuties, err = c.dutiesProvider.GetSyncDuties(ctx, epoch, multipleValidatorStatus.Indices); err != nil {
-			return nil, errors.Wrapf(err, "failed to get sync duties for epoch `%d`", epoch)
-		}
-	}
-
-	var proposerDuties []*validator.ProposerDuty
-	if proposerDuties, err = c.dutiesProvider.GetProposerDuties(ctx, epoch); err != nil {
-		return nil, errors.Wrapf(err, "failed to get proposer duties for epoch `%d`", epoch)
-	}
-
-	committees, err := c.dutiesProvider.GetCommittees(ctx, epoch)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to get committees for epoch `%d`", epoch)
-	}
+	// Below variables MUST NOT be used in the main function before wg.Wait().
+	// This is because they are populated in goroutines and wg.Wait()
+	// will return only once all goroutines finish their execution.
 
 	// Mapping from a validator index to its attesting committee's index and slot
-	attesterDutiesMapping := make(map[primitives.ValidatorIndex]committeeIndexSlotPair)
-	for _, attesterDuty := range attesterDuties {
-		validatorIndex, err := strconv.ParseUint(attesterDuty.ValidatorIndex, 10, 64)
-		if err != nil {
-			return nil, errors.Wrapf(err, "failed to parse attester validator index `%s`", attesterDuty.ValidatorIndex)
-		}
-
-		slot, err := strconv.ParseUint(attesterDuty.Slot, 10, 64)
-		if err != nil {
-			return nil, errors.Wrapf(err, "failed to parse attester slot `%s`", attesterDuty.Slot)
-		}
-
-		committeeIndex, err := strconv.ParseUint(attesterDuty.CommitteeIndex, 10, 64)
-		if err != nil {
-			return nil, errors.Wrapf(err, "failed to parse attester committee index `%s`", attesterDuty.CommitteeIndex)
-		}
-
-		attesterDutiesMapping[primitives.ValidatorIndex(validatorIndex)] = committeeIndexSlotPair{
-			slot:           primitives.Slot(slot),
-			committeeIndex: primitives.CommitteeIndex(committeeIndex),
-		}
-	}
-
-	// Mapping from a validator index to its proposal slot
-	proposerDutySlots := make(map[primitives.ValidatorIndex][]primitives.Slot)
-	for _, proposerDuty := range proposerDuties {
-		validatorIndex, err := strconv.ParseUint(proposerDuty.ValidatorIndex, 10, 64)
-		if err != nil {
-			return nil, errors.Wrapf(err, "failed to parse proposer validator index `%s`", proposerDuty.ValidatorIndex)
-		}
-
-		slot, err := strconv.ParseUint(proposerDuty.Slot, 10, 64)
-		if err != nil {
-			return nil, errors.Wrapf(err, "failed to parse proposer slot `%s`", proposerDuty.Slot)
-		}
-
-		proposerDutySlots[primitives.ValidatorIndex(validatorIndex)] = append(proposerDutySlots[primitives.ValidatorIndex(validatorIndex)], primitives.Slot(slot))
-	}
-
+	attesterDutiesMapping := make(map[primitives.ValidatorIndex]attesterDuty)
 	// Set containing all validator indices that are part of a sync committee for this epoch
 	syncDutiesMapping := make(map[primitives.ValidatorIndex]bool)
-	for _, syncDuty := range syncDuties {
-		validatorIndex, err := strconv.ParseUint(syncDuty.ValidatorIndex, 10, 64)
+	// Mapping from a validator index to its proposal slot
+	proposerDutySlots := make(map[primitives.ValidatorIndex][]primitives.Slot)
+
+	var wg errgroup.Group
+
+	wg.Go(func() error {
+		attesterDuties, err := c.dutiesProvider.AttesterDuties(ctx, epoch, indices)
 		if err != nil {
-			return nil, errors.Wrapf(err, "failed to parse sync validator index `%s`", syncDuty.ValidatorIndex)
+			return errors.Wrapf(err, "failed to get attester duties for epoch `%d`", epoch)
 		}
 
-		syncDutiesMapping[primitives.ValidatorIndex(validatorIndex)] = true
-	}
-
-	// Mapping from the {committeeIndex, slot} to each of the committee's validator indices
-	committeeMapping := make(map[committeeIndexSlotPair][]primitives.ValidatorIndex)
-	for _, committee := range committees {
-		committeeIndex, err := strconv.ParseUint(committee.Index, 10, 64)
-		if err != nil {
-			return nil, errors.Wrapf(err, "failed to parse committee index `%s`", committee.Index)
-		}
-
-		slot, err := strconv.ParseUint(committee.Slot, 10, 64)
-		if err != nil {
-			return nil, errors.Wrapf(err, "failed to parse slot `%s`", committee.Slot)
-		}
-
-		validatorIndices := make([]primitives.ValidatorIndex, len(committee.Validators))
-		for index, validatorIndexString := range committee.Validators {
-			validatorIndex, err := strconv.ParseUint(validatorIndexString, 10, 64)
+		for _, duty := range attesterDuties {
+			validatorIndex, err := strconv.ParseUint(duty.ValidatorIndex, 10, 64)
 			if err != nil {
-				return nil, errors.Wrapf(err, "failed to parse committee validator index `%s`", validatorIndexString)
+				return errors.Wrapf(err, "failed to parse attester validator index `%s`", duty.ValidatorIndex)
 			}
-			validatorIndices[index] = primitives.ValidatorIndex(validatorIndex)
+			slot, err := strconv.ParseUint(duty.Slot, 10, 64)
+			if err != nil {
+				return errors.Wrapf(err, "failed to parse attester slot `%s`", duty.Slot)
+			}
+			committeeIndex, err := strconv.ParseUint(duty.CommitteeIndex, 10, 64)
+			if err != nil {
+				return errors.Wrapf(err, "failed to parse attester committee index `%s`", duty.CommitteeIndex)
+			}
+			committeeLength, err := strconv.ParseUint(duty.CommitteeLength, 10, 64)
+			if err != nil {
+				return errors.Wrapf(err, "failed to parse attester committee length `%s`", duty.CommitteeLength)
+			}
+			validatorCommitteeIndex, err := strconv.ParseUint(duty.ValidatorCommitteeIndex, 10, 64)
+			if err != nil {
+				return errors.Wrapf(err, "failed to parse attester validator committee index `%s`", duty.ValidatorCommitteeIndex)
+			}
+			committeesAtSlot, err := strconv.ParseUint(duty.CommitteesAtSlot, 10, 64)
+			if err != nil {
+				return errors.Wrapf(err, "failed to parse attester committees at slot `%s`", duty.CommitteesAtSlot)
+			}
+			attesterDutiesMapping[primitives.ValidatorIndex(validatorIndex)] = attesterDuty{
+				slot:                    primitives.Slot(slot),
+				committeeIndex:          primitives.CommitteeIndex(committeeIndex),
+				committeeLength:         committeeLength,
+				validatorCommitteeIndex: validatorCommitteeIndex,
+				committeesAtSlot:        committeesAtSlot,
+			}
 		}
+		return nil
+	})
 
-		key := committeeIndexSlotPair{
-			committeeIndex: primitives.CommitteeIndex(committeeIndex),
-			slot:           primitives.Slot(slot),
-		}
-		committeeMapping[key] = validatorIndices
+	if fetchSyncDuties {
+		wg.Go(func() error {
+			syncDuties, err := c.dutiesProvider.SyncDuties(ctx, epoch, indices)
+			if err != nil {
+				return errors.Wrapf(err, "failed to get sync duties for epoch `%d`", epoch)
+			}
+			for _, syncDuty := range syncDuties {
+				validatorIndex, err := strconv.ParseUint(syncDuty.ValidatorIndex, 10, 64)
+				if err != nil {
+					return errors.Wrapf(err, "failed to parse sync validator index `%s`", syncDuty.ValidatorIndex)
+				}
+				syncDutiesMapping[primitives.ValidatorIndex(validatorIndex)] = true
+			}
+			return nil
+		})
 	}
 
-	duties := make([]*ethpb.DutiesResponse_Duty, len(multipleValidatorStatus.Statuses))
-	for index, validatorStatus := range multipleValidatorStatus.Statuses {
-		validatorIndex := multipleValidatorStatus.Indices[index]
-		pubkey := multipleValidatorStatus.PublicKeys[index]
-
-		var attesterSlot primitives.Slot
-		var committeeIndex primitives.CommitteeIndex
-		var committeeValidatorIndices []primitives.ValidatorIndex
-
-		if committeeMappingKey, ok := attesterDutiesMapping[validatorIndex]; ok {
-			committeeIndex = committeeMappingKey.committeeIndex
-			attesterSlot = committeeMappingKey.slot
-
-			if committeeValidatorIndices, ok = committeeMapping[committeeMappingKey]; !ok {
-				return nil, errors.Errorf("failed to find validators for committee index `%d` and slot `%d`", committeeIndex, attesterSlot)
-			}
+	wg.Go(func() error {
+		proposerDuties, err := c.dutiesProvider.ProposerDuties(ctx, epoch)
+		if err != nil {
+			return errors.Wrapf(err, "failed to get proposer duties for epoch `%d`", epoch)
 		}
 
-		duties[index] = &ethpb.DutiesResponse_Duty{
-			Committee:       committeeValidatorIndices,
-			CommitteeIndex:  committeeIndex,
-			AttesterSlot:    attesterSlot,
-			ProposerSlots:   proposerDutySlots[validatorIndex],
-			PublicKey:       pubkey,
-			Status:          validatorStatus.Status,
-			ValidatorIndex:  validatorIndex,
-			IsSyncCommittee: syncDutiesMapping[validatorIndex],
+		for _, proposerDuty := range proposerDuties {
+			validatorIndex, err := strconv.ParseUint(proposerDuty.ValidatorIndex, 10, 64)
+			if err != nil {
+				return errors.Wrapf(err, "failed to parse proposer validator index `%s`", proposerDuty.ValidatorIndex)
+			}
+			slot, err := strconv.ParseUint(proposerDuty.Slot, 10, 64)
+			if err != nil {
+				return errors.Wrapf(err, "failed to parse proposer slot `%s`", proposerDuty.Slot)
+			}
+			proposerDutySlots[primitives.ValidatorIndex(validatorIndex)] =
+				append(proposerDutySlots[primitives.ValidatorIndex(validatorIndex)], primitives.Slot(slot))
+		}
+		return nil
+	})
+
+	if err := wg.Wait(); err != nil {
+		return nil, err
+	}
+
+	duties := make([]*ethpb.ValidatorDuty, len(vals))
+	for i, v := range vals {
+		att, ok := attesterDutiesMapping[v.index]
+		if !ok {
+			log.Debugf("failed to find attester duty for validator `%d`", v.index)
+		}
+
+		duties[i] = &ethpb.ValidatorDuty{
+			ValidatorCommitteeIndex: att.validatorCommitteeIndex,
+			CommitteeLength:         att.committeeLength,
+			CommitteeIndex:          att.committeeIndex,
+			AttesterSlot:            att.slot,
+			CommitteesAtSlot:        att.committeesAtSlot,
+			ProposerSlots:           proposerDutySlots[v.index],
+			PublicKey:               v.pubkey,
+			Status:                  v.status,
+			ValidatorIndex:          v.index,
+			IsSyncCommittee:         syncDutiesMapping[v.index],
 		}
 	}
 
 	return duties, nil
 }
 
-// GetCommittees retrieves the committees for the given epoch
-func (c beaconApiDutiesProvider) GetCommittees(ctx context.Context, epoch primitives.Epoch) ([]*shared.Committee, error) {
+func (c *beaconApiValidatorClient) validatorsForDuties(ctx context.Context, pubkeys [][]byte) ([]validatorForDuty, error) {
+	vals := make([]validatorForDuty, 0, len(pubkeys))
+	stringPubkeysToPubkeys := make(map[string][]byte, len(pubkeys))
+	stringPubkeys := make([]string, len(pubkeys))
+
+	for i, pk := range pubkeys {
+		stringPk := hexutil.Encode(pk)
+		stringPubkeysToPubkeys[stringPk] = pk
+		stringPubkeys[i] = stringPk
+	}
+
+	statusesWithDuties := []string{validator.ActiveOngoing.String(), validator.ActiveExiting.String()}
+	stateValidatorsResponse, err := c.stateValidatorsProvider.StateValidators(ctx, stringPubkeys, nil, statusesWithDuties)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get state validators")
+	}
+
+	for _, validatorContainer := range stateValidatorsResponse.Data {
+		val := validatorForDuty{}
+
+		validatorIndex, err := strconv.ParseUint(validatorContainer.Index, 10, 64)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to parse validator index %s", validatorContainer.Index)
+		}
+		val.index = primitives.ValidatorIndex(validatorIndex)
+
+		stringPubkey := validatorContainer.Validator.Pubkey
+		pubkey, ok := stringPubkeysToPubkeys[stringPubkey]
+		if !ok {
+			return nil, errors.Wrapf(err, "returned public key %s not requested", stringPubkey)
+		}
+		val.pubkey = pubkey
+
+		status, ok := beaconAPITogRPCValidatorStatus[validatorContainer.Status]
+		if !ok {
+			return nil, errors.New("invalid validator status " + validatorContainer.Status)
+		}
+		val.status = status
+
+		vals = append(vals, val)
+	}
+
+	return vals, nil
+}
+
+// Committees retrieves the committees for the given epoch
+func (c beaconApiDutiesProvider) Committees(ctx context.Context, epoch primitives.Epoch) ([]*structs.Committee, error) {
 	committeeParams := url.Values{}
 	committeeParams.Add("epoch", strconv.FormatUint(uint64(epoch), 10))
-	committeesRequest := buildURL("/eth/v1/beacon/states/head/committees", committeeParams)
+	committeesRequest := apiutil.BuildURL("/eth/v1/beacon/states/head/committees", committeeParams)
 
-	var stateCommittees beacon.GetCommitteesResponse
-	if _, err := c.jsonRestHandler.GetRestJsonResponse(ctx, committeesRequest, &stateCommittees); err != nil {
-		return nil, errors.Wrapf(err, "failed to query committees for epoch `%d`", epoch)
+	var stateCommittees structs.GetCommitteesResponse
+	if err := c.jsonRestHandler.Get(ctx, committeesRequest, &stateCommittees); err != nil {
+		return nil, err
 	}
 
 	if stateCommittees.Data == nil {
@@ -224,8 +281,8 @@ func (c beaconApiDutiesProvider) GetCommittees(ctx context.Context, epoch primit
 	return stateCommittees.Data, nil
 }
 
-// GetAttesterDuties retrieves the attester duties for the given epoch and validatorIndices
-func (c beaconApiDutiesProvider) GetAttesterDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) ([]*validator.AttesterDuty, error) {
+// AttesterDuties retrieves the attester duties for the given epoch and validatorIndices
+func (c beaconApiDutiesProvider) AttesterDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) ([]*structs.AttesterDuty, error) {
 	jsonValidatorIndices := make([]string, len(validatorIndices))
 	for index, validatorIndex := range validatorIndices {
 		jsonValidatorIndices[index] = strconv.FormatUint(uint64(validatorIndex), 10)
@@ -236,9 +293,15 @@ func (c beaconApiDutiesProvider) GetAttesterDuties(ctx context.Context, epoch pr
 		return nil, errors.Wrap(err, "failed to marshal validator indices")
 	}
 
-	attesterDuties := &validator.GetAttesterDutiesResponse{}
-	if _, err := c.jsonRestHandler.PostRestJson(ctx, fmt.Sprintf("/eth/v1/validator/duties/attester/%d", epoch), nil, bytes.NewBuffer(validatorIndicesBytes), attesterDuties); err != nil {
-		return nil, errors.Wrap(err, "failed to send POST data to REST endpoint")
+	attesterDuties := &structs.GetAttesterDutiesResponse{}
+	if err = c.jsonRestHandler.Post(
+		ctx,
+		fmt.Sprintf("/eth/v1/validator/duties/attester/%d", epoch),
+		nil,
+		bytes.NewBuffer(validatorIndicesBytes),
+		attesterDuties,
+	); err != nil {
+		return nil, err
 	}
 
 	for index, attesterDuty := range attesterDuties.Data {
@@ -250,11 +313,11 @@ func (c beaconApiDutiesProvider) GetAttesterDuties(ctx context.Context, epoch pr
 	return attesterDuties.Data, nil
 }
 
-// GetProposerDuties retrieves the proposer duties for the given epoch
-func (c beaconApiDutiesProvider) GetProposerDuties(ctx context.Context, epoch primitives.Epoch) ([]*validator.ProposerDuty, error) {
-	proposerDuties := validator.GetProposerDutiesResponse{}
-	if _, err := c.jsonRestHandler.GetRestJsonResponse(ctx, fmt.Sprintf("/eth/v1/validator/duties/proposer/%d", epoch), &proposerDuties); err != nil {
-		return nil, errors.Wrapf(err, "failed to query proposer duties for epoch `%d`", epoch)
+// ProposerDuties retrieves the proposer duties for the given epoch
+func (c beaconApiDutiesProvider) ProposerDuties(ctx context.Context, epoch primitives.Epoch) ([]*structs.ProposerDuty, error) {
+	proposerDuties := structs.GetProposerDutiesResponse{}
+	if err := c.jsonRestHandler.Get(ctx, fmt.Sprintf("/eth/v1/validator/duties/proposer/%d", epoch), &proposerDuties); err != nil {
+		return nil, err
 	}
 
 	if proposerDuties.Data == nil {
@@ -270,8 +333,8 @@ func (c beaconApiDutiesProvider) GetProposerDuties(ctx context.Context, epoch pr
 	return proposerDuties.Data, nil
 }
 
-// GetSyncDuties retrieves the sync committee duties for the given epoch and validatorIndices
-func (c beaconApiDutiesProvider) GetSyncDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) ([]*validator.SyncCommitteeDuty, error) {
+// SyncDuties retrieves the sync committee duties for the given epoch and validatorIndices
+func (c beaconApiDutiesProvider) SyncDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) ([]*structs.SyncCommitteeDuty, error) {
 	jsonValidatorIndices := make([]string, len(validatorIndices))
 	for index, validatorIndex := range validatorIndices {
 		jsonValidatorIndices[index] = strconv.FormatUint(uint64(validatorIndex), 10)
@@ -282,9 +345,15 @@ func (c beaconApiDutiesProvider) GetSyncDuties(ctx context.Context, epoch primit
 		return nil, errors.Wrap(err, "failed to marshal validator indices")
 	}
 
-	syncDuties := validator.GetSyncCommitteeDutiesResponse{}
-	if _, err := c.jsonRestHandler.PostRestJson(ctx, fmt.Sprintf("/eth/v1/validator/duties/sync/%d", epoch), nil, bytes.NewBuffer(validatorIndicesBytes), &syncDuties); err != nil {
-		return nil, errors.Wrap(err, "failed to send POST data to REST endpoint")
+	syncDuties := structs.GetSyncCommitteeDutiesResponse{}
+	if err = c.jsonRestHandler.Post(
+		ctx,
+		fmt.Sprintf("/eth/v1/validator/duties/sync/%d", epoch),
+		nil,
+		bytes.NewBuffer(validatorIndicesBytes),
+		&syncDuties,
+	); err != nil {
+		return nil, err
 	}
 
 	if syncDuties.Data == nil {

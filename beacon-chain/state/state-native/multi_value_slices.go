@@ -5,35 +5,38 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
-	multi_value_slice "github.com/prysmaticlabs/prysm/v4/container/multi-value-slice"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native/types"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	multi_value_slice "github.com/prysmaticlabs/prysm/v5/container/multi-value-slice"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
 var (
-	multiValueRandaoMixesCountGauge = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "multi_value_randao_mixes_count",
-	})
-	multiValueBlockRootsCountGauge = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "multi_value_block_roots_count",
-	})
-	multiValueStateRootsCountGauge = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "multi_value_state_roots_count",
-	})
-	multiValueBalancesCountGauge = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "multi_value_balances_count",
-	})
-	multiValueValidatorsCountGauge = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "multi_value_validators_count",
-	})
-	multiValueInactivityScoresCountGauge = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "multi_value_inactivity_scores_count",
-	})
+	multiValueCountGauge = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "multi_value_object_count",
+		Help: "The number of instances that exist for the multivalue slice for a particular field.",
+	}, []string{"field"})
+	multiValueIndividualElementsCountGauge = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "multi_value_individual_elements_count",
+		Help: "The number of individual elements that exist for the multivalue slice object.",
+	}, []string{"field"})
+	multiValueIndividualElementReferencesCountGauge = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "multi_value_individual_element_references_count",
+		Help: "The number of individual element references that exist for the multivalue slice object.",
+	}, []string{"field"})
+	multiValueAppendedElementsCountGauge = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "multi_value_appended_elements_count",
+		Help: "The number of appended elements that exist for the multivalue slice object.",
+	}, []string{"field"})
+	multiValueAppendedElementReferencesCountGauge = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "multi_value_appended_element_references_count",
+		Help: "The number of appended element references that exist for the multivalue slice object.",
+	}, []string{"field"})
 )
 
 // MultiValueRandaoMixes is a multi-value slice of randao mixes.
-type MultiValueRandaoMixes = multi_value_slice.Slice[[32]byte, *BeaconState]
+type MultiValueRandaoMixes = multi_value_slice.Slice[[32]byte]
 
 // NewMultiValueRandaoMixes creates a new slice whose shared items will be populated with copies of input values.
 func NewMultiValueRandaoMixes(mixes [][]byte) *MultiValueRandaoMixes {
@@ -43,13 +46,13 @@ func NewMultiValueRandaoMixes(mixes [][]byte) *MultiValueRandaoMixes {
 	}
 	mv := &MultiValueRandaoMixes{}
 	mv.Init(items)
-	multiValueRandaoMixesCountGauge.Inc()
+	multiValueCountGauge.WithLabelValues(types.RandaoMixes.String()).Inc()
 	runtime.SetFinalizer(mv, randaoMixesFinalizer)
 	return mv
 }
 
 // MultiValueBlockRoots is a multi-value slice of block roots.
-type MultiValueBlockRoots = multi_value_slice.Slice[[32]byte, *BeaconState]
+type MultiValueBlockRoots = multi_value_slice.Slice[[32]byte]
 
 // NewMultiValueBlockRoots creates a new slice whose shared items will be populated with copies of input values.
 func NewMultiValueBlockRoots(roots [][]byte) *MultiValueBlockRoots {
@@ -59,13 +62,13 @@ func NewMultiValueBlockRoots(roots [][]byte) *MultiValueBlockRoots {
 	}
 	mv := &MultiValueBlockRoots{}
 	mv.Init(items)
-	multiValueBlockRootsCountGauge.Inc()
+	multiValueCountGauge.WithLabelValues(types.BlockRoots.String()).Inc()
 	runtime.SetFinalizer(mv, blockRootsFinalizer)
 	return mv
 }
 
 // MultiValueStateRoots is a multi-value slice of state roots.
-type MultiValueStateRoots = multi_value_slice.Slice[[32]byte, *BeaconState]
+type MultiValueStateRoots = multi_value_slice.Slice[[32]byte]
 
 // NewMultiValueStateRoots creates a new slice whose shared items will be populated with copies of input values.
 func NewMultiValueStateRoots(roots [][]byte) *MultiValueStateRoots {
@@ -75,13 +78,13 @@ func NewMultiValueStateRoots(roots [][]byte) *MultiValueStateRoots {
 	}
 	mv := &MultiValueStateRoots{}
 	mv.Init(items)
-	multiValueStateRootsCountGauge.Inc()
+	multiValueCountGauge.WithLabelValues(types.StateRoots.String()).Inc()
 	runtime.SetFinalizer(mv, stateRootsFinalizer)
 	return mv
 }
 
 // MultiValueBalances is a multi-value slice of balances.
-type MultiValueBalances = multi_value_slice.Slice[uint64, *BeaconState]
+type MultiValueBalances = multi_value_slice.Slice[uint64]
 
 // NewMultiValueBalances creates a new slice whose shared items will be populated with copies of input values.
 func NewMultiValueBalances(balances []uint64) *MultiValueBalances {
@@ -89,13 +92,13 @@ func NewMultiValueBalances(balances []uint64) *MultiValueBalances {
 	copy(items, balances)
 	mv := &MultiValueBalances{}
 	mv.Init(items)
-	multiValueBalancesCountGauge.Inc()
+	multiValueCountGauge.WithLabelValues(types.Balances.String()).Inc()
 	runtime.SetFinalizer(mv, balancesFinalizer)
 	return mv
 }
 
 // MultiValueInactivityScores is a multi-value slice of inactivity scores.
-type MultiValueInactivityScores = multi_value_slice.Slice[uint64, *BeaconState]
+type MultiValueInactivityScores = multi_value_slice.Slice[uint64]
 
 // NewMultiValueInactivityScores creates a new slice whose shared items will be populated with copies of input values.
 func NewMultiValueInactivityScores(scores []uint64) *MultiValueInactivityScores {
@@ -103,43 +106,92 @@ func NewMultiValueInactivityScores(scores []uint64) *MultiValueInactivityScores 
 	copy(items, scores)
 	mv := &MultiValueInactivityScores{}
 	mv.Init(items)
-	multiValueInactivityScoresCountGauge.Inc()
+	multiValueCountGauge.WithLabelValues(types.InactivityScores.String()).Inc()
 	runtime.SetFinalizer(mv, inactivityScoresFinalizer)
 	return mv
 }
 
 // MultiValueValidators is a multi-value slice of validator references.
-type MultiValueValidators = multi_value_slice.Slice[*ethpb.Validator, *BeaconState]
+type MultiValueValidators = multi_value_slice.Slice[*ethpb.Validator]
 
 // NewMultiValueValidators creates a new slice whose shared items will be populated with input values.
 func NewMultiValueValidators(vals []*ethpb.Validator) *MultiValueValidators {
 	mv := &MultiValueValidators{}
 	mv.Init(vals)
-	multiValueValidatorsCountGauge.Inc()
+	multiValueCountGauge.WithLabelValues(types.Validators.String()).Inc()
 	runtime.SetFinalizer(mv, validatorsFinalizer)
 	return mv
 }
 
+// Defragment checks whether each individual multi-value field in our state is fragmented
+// and if it is, it will 'reset' the field to create a new multivalue object.
+func (b *BeaconState) Defragment() {
+	b.lock.Lock()
+	defer b.lock.Unlock()
+	if b.blockRootsMultiValue != nil && b.blockRootsMultiValue.IsFragmented() {
+		initialMVslice := b.blockRootsMultiValue
+		b.blockRootsMultiValue = b.blockRootsMultiValue.Reset(b)
+		initialMVslice.Detach(b)
+		multiValueCountGauge.WithLabelValues(types.BlockRoots.String()).Inc()
+		runtime.SetFinalizer(b.blockRootsMultiValue, blockRootsFinalizer)
+	}
+	if b.stateRootsMultiValue != nil && b.stateRootsMultiValue.IsFragmented() {
+		initialMVslice := b.stateRootsMultiValue
+		b.stateRootsMultiValue = b.stateRootsMultiValue.Reset(b)
+		initialMVslice.Detach(b)
+		multiValueCountGauge.WithLabelValues(types.StateRoots.String()).Inc()
+		runtime.SetFinalizer(b.stateRootsMultiValue, stateRootsFinalizer)
+	}
+	if b.randaoMixesMultiValue != nil && b.randaoMixesMultiValue.IsFragmented() {
+		initialMVslice := b.randaoMixesMultiValue
+		b.randaoMixesMultiValue = b.randaoMixesMultiValue.Reset(b)
+		initialMVslice.Detach(b)
+		multiValueCountGauge.WithLabelValues(types.RandaoMixes.String()).Inc()
+		runtime.SetFinalizer(b.randaoMixesMultiValue, randaoMixesFinalizer)
+	}
+	if b.balancesMultiValue != nil && b.balancesMultiValue.IsFragmented() {
+		initialMVslice := b.balancesMultiValue
+		b.balancesMultiValue = b.balancesMultiValue.Reset(b)
+		initialMVslice.Detach(b)
+		multiValueCountGauge.WithLabelValues(types.Balances.String()).Inc()
+		runtime.SetFinalizer(b.balancesMultiValue, balancesFinalizer)
+	}
+	if b.validatorsMultiValue != nil && b.validatorsMultiValue.IsFragmented() {
+		initialMVslice := b.validatorsMultiValue
+		b.validatorsMultiValue = b.validatorsMultiValue.Reset(b)
+		initialMVslice.Detach(b)
+		multiValueCountGauge.WithLabelValues(types.Validators.String()).Inc()
+		runtime.SetFinalizer(b.validatorsMultiValue, validatorsFinalizer)
+	}
+	if b.inactivityScoresMultiValue != nil && b.inactivityScoresMultiValue.IsFragmented() {
+		initialMVslice := b.inactivityScoresMultiValue
+		b.inactivityScoresMultiValue = b.inactivityScoresMultiValue.Reset(b)
+		initialMVslice.Detach(b)
+		multiValueCountGauge.WithLabelValues(types.InactivityScores.String()).Inc()
+		runtime.SetFinalizer(b.inactivityScoresMultiValue, inactivityScoresFinalizer)
+	}
+}
+
 func randaoMixesFinalizer(m *MultiValueRandaoMixes) {
-	multiValueRandaoMixesCountGauge.Dec()
+	multiValueCountGauge.WithLabelValues(types.RandaoMixes.String()).Dec()
 }
 
 func blockRootsFinalizer(m *MultiValueBlockRoots) {
-	multiValueBlockRootsCountGauge.Dec()
+	multiValueCountGauge.WithLabelValues(types.BlockRoots.String()).Dec()
 }
 
 func stateRootsFinalizer(m *MultiValueStateRoots) {
-	multiValueStateRootsCountGauge.Dec()
+	multiValueCountGauge.WithLabelValues(types.StateRoots.String()).Dec()
 }
 
 func balancesFinalizer(m *MultiValueBalances) {
-	multiValueBalancesCountGauge.Dec()
+	multiValueCountGauge.WithLabelValues(types.Balances.String()).Dec()
 }
 
 func validatorsFinalizer(m *MultiValueValidators) {
-	multiValueValidatorsCountGauge.Dec()
+	multiValueCountGauge.WithLabelValues(types.Validators.String()).Dec()
 }
 
 func inactivityScoresFinalizer(m *MultiValueInactivityScores) {
-	multiValueInactivityScoresCountGauge.Dec()
+	multiValueCountGauge.WithLabelValues(types.InactivityScores.String()).Dec()
 }

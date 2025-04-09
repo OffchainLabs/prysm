@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/io/file"
+	"github.com/prysmaticlabs/prysm/v5/io/file"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )

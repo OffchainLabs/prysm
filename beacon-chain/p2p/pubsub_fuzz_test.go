@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p/encoder"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/encoder"
 )
 
 func FuzzMsgID(f *testing.F) {

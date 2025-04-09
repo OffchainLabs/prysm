@@ -26,7 +26,6 @@ approval_rules:
       only_changed_files:
         paths:
           - "*pb.go"
-          - "*pb.gw.go"
           - "*.bazel"
     options:
       ignore_commits_by:
@@ -69,7 +68,6 @@ approval_rules:
       changed_files:
         ignore:
           - "*pb.go"
-          - "*pb.gw.go"
           - "*.bazel"
     options:
       ignore_commits_by:

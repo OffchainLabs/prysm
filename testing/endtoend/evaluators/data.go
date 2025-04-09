@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	eth "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	e2etypes "github.com/prysmaticlabs/prysm/v4/testing/endtoend/types"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	e2etypes "github.com/prysmaticlabs/prysm/v5/testing/endtoend/types"
 	"google.golang.org/grpc"
 )
 

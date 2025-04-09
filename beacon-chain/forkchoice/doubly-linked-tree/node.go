@@ -5,15 +5,11 @@ import (
 	"context"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	v1 "github.com/prysmaticlabs/prysm/v4/proto/eth/v1"
-	"github.com/prysmaticlabs/prysm/v4/time/slots"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	forkchoice2 "github.com/prysmaticlabs/prysm/v5/consensus-types/forkchoice"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
-
-// orphanLateBlockFirstThreshold is the number of seconds after which we
-// consider a block to be late, and thus a candidate to being reorged.
-const orphanLateBlockFirstThreshold = 4
 
 // ProcessAttestationsThreshold  is the number of seconds after which we
 // process attestations for the current slot
@@ -97,13 +93,13 @@ func (n *Node) updateBestDescendant(ctx context.Context, justifiedEpoch, finaliz
 // Any node with different finalized or justified epoch than
 // the ones in fork choice store should not be viable to head.
 func (n *Node) viableForHead(justifiedEpoch, currentEpoch primitives.Epoch) bool {
-	justified := justifiedEpoch == n.justifiedEpoch || justifiedEpoch == 0
-	if !justified && justifiedEpoch+1 == currentEpoch {
-		if n.unrealizedJustifiedEpoch+1 >= currentEpoch && n.justifiedEpoch+2 >= currentEpoch {
-			justified = true
-		}
+	if justifiedEpoch == 0 {
+		return true
 	}
-	return justified
+	// We use n.justifiedEpoch as the voting source because:
+	//   1. if this node is from current epoch, n.justifiedEpoch is the realized justification epoch.
+	//   2. if this node is from a previous epoch, n.justifiedEpoch has already been updated to the unrealized justification epoch.
+	return n.justifiedEpoch == justifiedEpoch || n.justifiedEpoch+2 >= currentEpoch
 }
 
 func (n *Node) leadsToViableHead(justifiedEpoch, currentEpoch primitives.Epoch) bool {
@@ -137,7 +133,8 @@ func (n *Node) setNodeAndParentValidated(ctx context.Context) error {
 // slot will have secs = 3 below.
 func (n *Node) arrivedEarly(genesisTime uint64) (bool, error) {
 	secs, err := slots.SecondsSinceSlotStart(n.slot, genesisTime, n.timestamp)
-	return secs < orphanLateBlockFirstThreshold, err
+	votingWindow := params.BeaconConfig().SecondsPerSlot / params.BeaconConfig().IntervalsPerSlot
+	return secs < votingWindow, err
 }
 
 // arrivedAfterOrphanCheck returns whether this block was inserted after the
@@ -151,7 +148,7 @@ func (n *Node) arrivedAfterOrphanCheck(genesisTime uint64) (bool, error) {
 }
 
 // nodeTreeDump appends to the given list all the nodes descending from this one
-func (n *Node) nodeTreeDump(ctx context.Context, nodes []*v1.ForkChoiceNode) ([]*v1.ForkChoiceNode, error) {
+func (n *Node) nodeTreeDump(ctx context.Context, nodes []*forkchoice2.Node) ([]*forkchoice2.Node, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
@@ -159,7 +156,11 @@ func (n *Node) nodeTreeDump(ctx context.Context, nodes []*v1.ForkChoiceNode) ([]
 	if n.parent != nil {
 		parentRoot = n.parent.root
 	}
-	thisNode := &v1.ForkChoiceNode{
+	target := [32]byte{}
+	if n.target != nil {
+		target = n.target.root
+	}
+	thisNode := &forkchoice2.Node{
 		Slot:                     n.slot,
 		BlockRoot:                n.root[:],
 		ParentRoot:               parentRoot[:],
@@ -172,11 +173,12 @@ func (n *Node) nodeTreeDump(ctx context.Context, nodes []*v1.ForkChoiceNode) ([]
 		ExecutionOptimistic:      n.optimistic,
 		ExecutionBlockHash:       n.payloadHash[:],
 		Timestamp:                n.timestamp,
+		Target:                   target[:],
 	}
 	if n.optimistic {
-		thisNode.Validity = v1.ForkChoiceNodeValidity_OPTIMISTIC
+		thisNode.Validity = forkchoice2.Optimistic
 	} else {
-		thisNode.Validity = v1.ForkChoiceNodeValidity_VALID
+		thisNode.Validity = forkchoice2.Valid
 	}
 
 	nodes = append(nodes, thisNode)

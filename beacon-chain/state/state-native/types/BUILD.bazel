@@ -3,7 +3,7 @@ load("@prysm//tools/go:def.bzl", "go_library")
 go_library(
     name = "go_default_library",
     srcs = ["types.go"],
-    importpath = "github.com/prysmaticlabs/prysm/v4/beacon-chain/state/state-native/types",
+    importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native/types",
     visibility = ["//visibility:public"],
     deps = [
         "//consensus-types:go_default_library",

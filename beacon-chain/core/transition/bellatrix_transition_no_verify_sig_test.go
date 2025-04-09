@@ -6,23 +6,24 @@ import (
 	"testing"
 
 	"github.com/prysmaticlabs/go-bitfield"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/altair"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/signing"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/time"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/transition"
-	p2pType "github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p/types"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
-	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v4/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	enginev1 "github.com/prysmaticlabs/prysm/v4/proto/engine/v1"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/testing/util"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/altair"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
+	p2pType "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/util"
+	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
 func TestExecuteBellatrixStateTransitionNoVerify_FullProcess(t *testing.T) {
@@ -50,7 +51,7 @@ func TestExecuteBellatrixStateTransitionNoVerify_FullProcess(t *testing.T) {
 	epoch := time.CurrentEpoch(beaconState)
 	randaoReveal, err := util.RandaoReveal(beaconState, epoch, privKeys)
 	require.NoError(t, err)
-	require.NoError(t, beaconState.SetSlot(beaconState.Slot()-1))
+	require.NoError(t, beaconState.SetSlot(slots.PrevSlot(beaconState.Slot())))
 
 	nextSlotState, err := transition.ProcessSlots(context.Background(), beaconState.Copy(), beaconState.Slot()+1)
 	require.NoError(t, err)
@@ -71,7 +72,7 @@ func TestExecuteBellatrixStateTransitionNoVerify_FullProcess(t *testing.T) {
 	}
 	indices, err := altair.NextSyncCommitteeIndices(context.Background(), beaconState)
 	require.NoError(t, err)
-	h := ethpb.CopyBeaconBlockHeader(beaconState.LatestBlockHeader())
+	h := beaconState.LatestBlockHeader().Copy()
 	prevStateRoot, err := beaconState.HashTreeRoot(context.Background())
 	require.NoError(t, err)
 	h.StateRoot = prevStateRoot[:]
@@ -124,7 +125,7 @@ func TestExecuteBellatrixStateTransitionNoVerifySignature_CouldNotVerifyStateRoo
 		DepositRoot:  bytesutil.PadTo([]byte{2}, 32),
 		BlockHash:    make([]byte, 32),
 	}
-	require.NoError(t, beaconState.SetSlot(params.BeaconConfig().SlotsPerEpoch-1))
+	require.NoError(t, beaconState.SetSlot(slots.PrevSlot(params.BeaconConfig().SlotsPerEpoch)))
 	e := beaconState.Eth1Data()
 	e.DepositCount = 100
 	require.NoError(t, beaconState.SetEth1Data(e))
@@ -137,7 +138,7 @@ func TestExecuteBellatrixStateTransitionNoVerifySignature_CouldNotVerifyStateRoo
 	epoch := time.CurrentEpoch(beaconState)
 	randaoReveal, err := util.RandaoReveal(beaconState, epoch, privKeys)
 	require.NoError(t, err)
-	require.NoError(t, beaconState.SetSlot(beaconState.Slot()-1))
+	require.NoError(t, beaconState.SetSlot(slots.PrevSlot(beaconState.Slot())))
 
 	nextSlotState, err := transition.ProcessSlots(context.Background(), beaconState.Copy(), beaconState.Slot()+1)
 	require.NoError(t, err)
@@ -158,7 +159,7 @@ func TestExecuteBellatrixStateTransitionNoVerifySignature_CouldNotVerifyStateRoo
 	}
 	indices, err := altair.NextSyncCommitteeIndices(context.Background(), beaconState)
 	require.NoError(t, err)
-	h := ethpb.CopyBeaconBlockHeader(beaconState.LatestBlockHeader())
+	h := beaconState.LatestBlockHeader().Copy()
 	prevStateRoot, err := beaconState.HashTreeRoot(context.Background())
 	require.NoError(t, err)
 	h.StateRoot = prevStateRoot[:]
@@ -215,7 +216,7 @@ func TestProcessEpoch_BadBalanceBellatrix(t *testing.T) {
 	epochParticipation[0] = participation
 	assert.NoError(t, s.SetCurrentParticipationBits(epochParticipation))
 	assert.NoError(t, s.SetPreviousParticipationBits(epochParticipation))
-	_, err = altair.ProcessEpoch(context.Background(), s)
+	err = altair.ProcessEpoch(context.Background(), s)
 	assert.ErrorContains(t, "addition overflows", err)
 }
 
@@ -245,10 +246,10 @@ func createFullBellatrixBlockWithOperations(t *testing.T) (state.BeaconState,
 					ReceiptsRoot:  make([]byte, fieldparams.RootLength),
 					LogsBloom:     make([]byte, fieldparams.LogsBloomLength),
 					PrevRandao:    make([]byte, fieldparams.RootLength),
+					ExtraData:     make([]byte, 0),
 					BaseFeePerGas: bytesutil.PadTo([]byte{1, 2, 3, 4}, fieldparams.RootLength),
 					BlockHash:     make([]byte, fieldparams.RootLength),
 					Transactions:  make([][]byte, 0),
-					ExtraData:     make([]byte, 0),
 				},
 			},
 		},
@@ -284,11 +285,11 @@ func createFullCapellaBlockWithOperations(t *testing.T) (state.BeaconState,
 					ReceiptsRoot:  make([]byte, fieldparams.RootLength),
 					LogsBloom:     make([]byte, fieldparams.LogsBloomLength),
 					PrevRandao:    make([]byte, fieldparams.RootLength),
+					ExtraData:     make([]byte, 0),
 					BaseFeePerGas: bytesutil.PadTo([]byte{1, 2, 3, 4}, fieldparams.RootLength),
 					BlockHash:     make([]byte, fieldparams.RootLength),
 					Transactions:  make([][]byte, 0),
 					Withdrawals:   make([]*enginev1.Withdrawal, 0),
-					ExtraData:     make([]byte, 0),
 				},
 			},
 		},

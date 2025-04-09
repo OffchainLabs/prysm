@@ -4,15 +4,15 @@ import (
 	"context"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/transition"
-	state_native "github.com/prysmaticlabs/prysm/v4/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/crypto/hash"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/testing/util"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
+	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/crypto/hash"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/util"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -103,8 +103,8 @@ func TestGenesisState_HashEquality(t *testing.T) {
 	pbstate, err := state_native.ProtobufBeaconStatePhase0(state.ToProto())
 	require.NoError(t, err)
 
-	root1, err1 := hash.HashProto(pbState1)
-	root2, err2 := hash.HashProto(pbstate)
+	root1, err1 := hash.Proto(pbState1)
+	root2, err2 := hash.Proto(pbstate)
 
 	if err1 != nil || err2 != nil {
 		t.Fatalf("Failed to marshal state to bytes: %v %v", err1, err2)

@@ -3,7 +3,7 @@ package cache
 import (
 	"errors"
 
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 )
 
 // ErrNotCommittee will be returned when a cache object is not a pointer to

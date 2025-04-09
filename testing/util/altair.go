@@ -7,22 +7,22 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/go-bitfield"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/altair"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/blocks"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/signing"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/time"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/transition"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
-	state_native "github.com/prysmaticlabs/prysm/v4/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state/stateutil"
-	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	consensusblocks "github.com/prysmaticlabs/prysm/v4/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/altair"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stateutil"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	consensusblocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
 // DeterministicGenesisStateAltair returns a genesis state in hard fork 1 format made using the deterministic deposits.
@@ -345,18 +345,34 @@ func GenerateFullBlockAltair(
 	numToGen = conf.NumAttesterSlashings
 	var aSlashings []*ethpb.AttesterSlashing
 	if numToGen > 0 {
-		aSlashings, err = generateAttesterSlashings(bState, privs, numToGen)
+		generated, err := generateAttesterSlashings(bState, privs, numToGen)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed generating %d attester slashings:", numToGen)
+		}
+		aSlashings = make([]*ethpb.AttesterSlashing, len(generated))
+		var ok bool
+		for i, s := range generated {
+			aSlashings[i], ok = s.(*ethpb.AttesterSlashing)
+			if !ok {
+				return nil, fmt.Errorf("attester slashing has wrong type (expected %T, got %T)", &ethpb.AttesterSlashing{}, s)
+			}
 		}
 	}
 
 	numToGen = conf.NumAttestations
 	var atts []*ethpb.Attestation
 	if numToGen > 0 {
-		atts, err = GenerateAttestations(bState, privs, numToGen, slot, false)
+		generatedAtts, err := GenerateAttestations(bState, privs, numToGen, slot, false)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed generating %d attestations:", numToGen)
+		}
+		atts = make([]*ethpb.Attestation, len(generatedAtts))
+		var ok bool
+		for i, a := range generatedAtts {
+			atts[i], ok = a.(*ethpb.Attestation)
+			if !ok {
+				return nil, fmt.Errorf("attestation has the wrong type (expected %T, got %T)", &ethpb.Attestation{}, a)
+			}
 		}
 	}
 

@@ -11,7 +11,7 @@ go_library(
         "process_sync_committee.go",
         "service.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v4/beacon-chain/monitor",
+    importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/monitor",
     visibility = ["//beacon-chain:__subpackages__"],
     deps = [
         "//async/event:go_default_library",

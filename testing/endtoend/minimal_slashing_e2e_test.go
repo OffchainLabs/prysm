@@ -4,15 +4,14 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	ev "github.com/prysmaticlabs/prysm/v4/testing/endtoend/evaluators"
-	e2eParams "github.com/prysmaticlabs/prysm/v4/testing/endtoend/params"
-	"github.com/prysmaticlabs/prysm/v4/testing/endtoend/types"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	ev "github.com/prysmaticlabs/prysm/v5/testing/endtoend/evaluators"
+	e2eParams "github.com/prysmaticlabs/prysm/v5/testing/endtoend/params"
+	"github.com/prysmaticlabs/prysm/v5/testing/endtoend/types"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func TestEndToEnd_Slasher_MinimalConfig(t *testing.T) {
-	t.Skip("E2E run appears broken, evaluators need to be rewritten most likely")
 	params.SetupTestConfigCleanup(t)
 	params.OverrideBeaconConfig(params.E2ETestConfig().Copy())
 	require.NoError(t, e2eParams.Init(t, e2eParams.StandardBeaconCount))

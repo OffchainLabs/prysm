@@ -5,12 +5,12 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1/attestation"
-	"github.com/prysmaticlabs/prysm/v4/time/slots"
-	"go.opencensus.io/trace"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/attestation"
+	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
 // OnAttestation is called whenever an attestation is received, verifies the attestation is valid and saves
@@ -36,17 +36,17 @@ import (
 //
 //	 # Update latest messages for attesting indices
 //	 update_latest_messages(store, indexed_attestation.attesting_indices, attestation)
-func (s *Service) OnAttestation(ctx context.Context, a *ethpb.Attestation, disparity time.Duration) error {
+func (s *Service) OnAttestation(ctx context.Context, a ethpb.Att, disparity time.Duration) error {
 	ctx, span := trace.StartSpan(ctx, "blockChain.onAttestation")
 	defer span.End()
 
 	if err := helpers.ValidateNilAttestation(a); err != nil {
 		return err
 	}
-	if err := helpers.ValidateSlotTargetEpoch(a.Data); err != nil {
+	if err := helpers.ValidateSlotTargetEpoch(a.GetData()); err != nil {
 		return err
 	}
-	tgt := ethpb.CopyCheckpoint(a.Data.Target)
+	tgt := a.GetData().Target.Copy()
 
 	// Note that target root check is ignored here because it was performed in sync's validation pipeline:
 	// validate_aggregate_proof.go and validate_beacon_attestation.go
@@ -67,7 +67,7 @@ func (s *Service) OnAttestation(ctx context.Context, a *ethpb.Attestation, dispa
 	}
 
 	// Verify attestation beacon block is known and not from the future.
-	if err := s.verifyBeaconBlock(ctx, a.Data); err != nil {
+	if err := s.verifyBeaconBlock(ctx, a.GetData()); err != nil {
 		return errors.Wrap(err, "could not verify attestation beacon block")
 	}
 
@@ -75,16 +75,16 @@ func (s *Service) OnAttestation(ctx context.Context, a *ethpb.Attestation, dispa
 	// validate_aggregate_proof.go and validate_beacon_attestation.go
 
 	// Verify attestations can only affect the fork choice of subsequent slots.
-	if err := slots.VerifyTime(genesisTime, a.Data.Slot+1, disparity); err != nil {
+	if err := slots.VerifyTime(genesisTime, a.GetData().Slot+1, disparity); err != nil {
 		return err
 	}
 
 	// Use the target state to verify attesting indices are valid.
-	committee, err := helpers.BeaconCommitteeFromState(ctx, baseState, a.Data.Slot, a.Data.CommitteeIndex)
+	committees, err := helpers.AttestationCommitteesFromState(ctx, baseState, a)
 	if err != nil {
 		return err
 	}
-	indexedAtt, err := attestation.ConvertToIndexed(ctx, a, committee)
+	indexedAtt, err := attestation.ConvertToIndexed(ctx, a, committees...)
 	if err != nil {
 		return err
 	}
@@ -97,7 +97,7 @@ func (s *Service) OnAttestation(ctx context.Context, a *ethpb.Attestation, dispa
 	// We assume trusted attestation in this function has verified signature.
 
 	// Update forkchoice store with the new attestation for updating weight.
-	s.cfg.ForkChoiceStore.ProcessAttestation(ctx, indexedAtt.AttestingIndices, bytesutil.ToBytes32(a.Data.BeaconBlockRoot), a.Data.Target.Epoch)
+	s.cfg.ForkChoiceStore.ProcessAttestation(ctx, indexedAtt.GetAttestingIndices(), bytesutil.ToBytes32(a.GetData().BeaconBlockRoot), a.GetData().Target.Epoch)
 
 	return nil
 }

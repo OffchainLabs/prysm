@@ -5,12 +5,12 @@ import (
 	"testing"
 
 	fuzz "github.com/google/gofuzz"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/time"
-	state_native "github.com/prysmaticlabs/prysm/v4/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
+	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func TestFuzzExecuteStateTransition_1000(t *testing.T) {
@@ -103,18 +103,18 @@ func TestFuzzprocessOperationsNoVerify_1000(t *testing.T) {
 	ctx := context.Background()
 	state, err := state_native.InitializeFromProtoUnsafePhase0(&ethpb.BeaconState{})
 	require.NoError(t, err)
-	bb := &ethpb.SignedBeaconBlock{}
+	bb := &ethpb.BeaconBlock{}
 	fuzzer := fuzz.NewWithSeed(0)
 	fuzzer.NilChance(0.1)
 	for i := 0; i < 1000; i++ {
 		fuzzer.Fuzz(state)
 		fuzzer.Fuzz(bb)
-		if bb.Block == nil || bb.Block.Body == nil {
+		if bb.Body == nil {
 			continue
 		}
-		wsb, err := blocks.NewSignedBeaconBlock(bb)
+		wb, err := blocks.NewBeaconBlock(bb)
 		require.NoError(t, err)
-		s, err := ProcessOperationsNoVerifyAttsSigs(ctx, state, wsb)
+		s, err := ProcessOperationsNoVerifyAttsSigs(ctx, state, wb)
 		if err != nil && s != nil {
 			t.Fatalf("state should be nil on err. found: %v on error: %v for block body: %v", s, err, bb)
 		}
@@ -126,18 +126,18 @@ func TestFuzzverifyOperationLengths_10000(t *testing.T) {
 	defer SkipSlotCache.Enable()
 	state, err := state_native.InitializeFromProtoUnsafePhase0(&ethpb.BeaconState{})
 	require.NoError(t, err)
-	bb := &ethpb.SignedBeaconBlock{}
+	bb := &ethpb.BeaconBlock{}
 	fuzzer := fuzz.NewWithSeed(0)
 	fuzzer.NilChance(0.1)
 	for i := 0; i < 10000; i++ {
 		fuzzer.Fuzz(state)
 		fuzzer.Fuzz(bb)
-		if bb.Block == nil || bb.Block.Body == nil {
+		if bb.Body == nil {
 			continue
 		}
-		wsb, err := blocks.NewSignedBeaconBlock(bb)
+		wb, err := blocks.NewBeaconBlock(bb)
 		require.NoError(t, err)
-		_, err = VerifyOperationLengths(context.Background(), state, wsb)
+		_, err = VerifyOperationLengths(context.Background(), state, wb)
 		_ = err
 	}
 }

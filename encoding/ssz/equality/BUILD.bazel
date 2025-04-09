@@ -3,7 +3,7 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 go_library(
     name = "go_default_library",
     srcs = ["deep_equal.go"],
-    importpath = "github.com/prysmaticlabs/prysm/v4/encoding/ssz/equality",
+    importpath = "github.com/prysmaticlabs/prysm/v5/encoding/ssz/equality",
     visibility = ["//visibility:public"],
     deps = [
         "//consensus-types/primitives:go_default_library",

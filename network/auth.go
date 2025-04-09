@@ -24,6 +24,7 @@ const DefaultRPCHTTPTimeout = time.Second * 30
 type jwtTransport struct {
 	underlyingTransport http.RoundTripper
 	jwtSecret           []byte
+	jwtId               string
 }
 
 // RoundTrip ensures our transport implements http.RoundTripper interface from the
@@ -32,12 +33,16 @@ type jwtTransport struct {
 // an JWT bearer token in the Authorization request header of every outgoing request
 // our HTTP client makes.
 func (t *jwtTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+	claims := jwt.MapClaims{
 		// Required claim for engine API auth. "iat" stands for issued at
 		// and it must be a unix timestamp that is +/- 5 seconds from the current
 		// timestamp at the moment the server verifies this value.
 		"iat": time.Now().Unix(),
-	})
+	}
+	if len(t.jwtId) > 0 {
+		claims["id"] = t.jwtId
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, err := token.SignedString(t.jwtSecret)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not produce signed JWT token")

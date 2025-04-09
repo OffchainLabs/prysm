@@ -7,20 +7,20 @@ package kv
 // it easy to scan for keys that have a certain shard number as a prefix and return those
 // corresponding attestations.
 var (
-	attestationsBucket      = []byte("attestations")
-	blobsBucket             = []byte("blobs")
-	blocksBucket            = []byte("blocks")
-	stateBucket             = []byte("state")
-	stateSummaryBucket      = []byte("state-summary")
-	proposerSlashingsBucket = []byte("proposer-slashings")
-	attesterSlashingsBucket = []byte("attester-slashings")
-	voluntaryExitsBucket    = []byte("voluntary-exits")
-	chainMetadataBucket     = []byte("chain-metadata")
-	checkpointBucket        = []byte("check-point")
-	powchainBucket          = []byte("powchain")
-	stateValidatorsBucket   = []byte("state-validators")
-	feeRecipientBucket      = []byte("fee-recipient")
-	registrationBucket      = []byte("registration")
+	blocksBucket          = []byte("blocks")
+	stateBucket           = []byte("state")
+	stateSummaryBucket    = []byte("state-summary")
+	chainMetadataBucket   = []byte("chain-metadata")
+	checkpointBucket      = []byte("check-point")
+	powchainBucket        = []byte("powchain")
+	stateValidatorsBucket = []byte("state-validators")
+	feeRecipientBucket    = []byte("fee-recipient")
+	registrationBucket    = []byte("registration")
+
+	// Light Client Updates Bucket
+	lightClientUpdatesBucket       = []byte("light-client-updates")
+	lightClientBootstrapBucket     = []byte("light-client-bootstrap")
+	lightClientSyncCommitteeBucket = []byte("light-client-sync-committee")
 
 	// Deprecated: This bucket was migrated in PR 6461. Do not use, except for migrations.
 	slotsHasObjectBucket = []byte("slots-has-objects")
@@ -28,16 +28,11 @@ var (
 	archivedRootBucket = []byte("archived-index-root")
 
 	// Key indices buckets.
-	blockParentRootIndicesBucket        = []byte("block-parent-root-indices")
-	blockSlotIndicesBucket              = []byte("block-slot-indices")
-	stateSlotIndicesBucket              = []byte("state-slot-indices")
-	attestationHeadBlockRootBucket      = []byte("attestation-head-block-root-indices")
-	attestationSourceRootIndicesBucket  = []byte("attestation-source-root-indices")
-	attestationSourceEpochIndicesBucket = []byte("attestation-source-epoch-indices")
-	attestationTargetRootIndicesBucket  = []byte("attestation-target-root-indices")
-	attestationTargetEpochIndicesBucket = []byte("attestation-target-epoch-indices")
-	finalizedBlockRootsIndexBucket      = []byte("finalized-block-roots-index")
-	blockRootValidatorHashesBucket      = []byte("block-root-validator-hashes")
+	blockParentRootIndicesBucket   = []byte("block-parent-root-indices")
+	blockSlotIndicesBucket         = []byte("block-slot-indices")
+	stateSlotIndicesBucket         = []byte("state-slot-indices")
+	finalizedBlockRootsIndexBucket = []byte("finalized-block-roots-index")
+	blockRootValidatorHashesBucket = []byte("block-root-validator-hashes")
 
 	// Specific item keys.
 	headBlockRootKey           = []byte("head-root")
@@ -47,10 +42,6 @@ var (
 	finalizedCheckpointKey     = []byte("finalized-checkpoint")
 	powchainDataKey            = []byte("powchain-data")
 	lastValidatedCheckpointKey = []byte("last-validated-checkpoint")
-	// blobRetentionEpochsKey determines the size of the blob circular buffer and how the keys in that buffer are
-	// determined. If this value changes, the existing data is invalidated, so storing it in the db
-	// allows us to assert at runtime that the db state is still consistent with the runtime state.
-	blobRetentionEpochsKey = []byte("blob-retention-epochs")
 
 	// Below keys are used to identify objects are to be fork compatible.
 	// Objects that are only compatible with specific forks should be prefixed with such keys.
@@ -62,19 +53,20 @@ var (
 	saveBlindedBeaconBlocksKey = []byte("save-blinded-beacon-blocks")
 	denebKey                   = []byte("deneb")
 	denebBlindKey              = []byte("blind-deneb")
+	ElectraKey                 = []byte("electra")
+	electraBlindKey            = []byte("blind-electra")
+	fuluKey                    = []byte("fulu")
+	fuluBlindKey               = []byte("blind-fulu")
 
 	// block root included in the beacon state used by weak subjectivity initial sync
 	originCheckpointBlockRootKey = []byte("origin-checkpoint-block-root")
-	// block root tracking the progress of backfill, or pointing at genesis if backfill has not been initiated
-	backfillBlockRootKey = []byte("backfill-block-root")
+	// tracking data about an ongoing backfill
+	backfillStatusKey = []byte("backfill-status")
 
 	// Deprecated: This index key was migrated in PR 6461. Do not use, except for migrations.
 	lastArchivedIndexKey = []byte("last-archived")
 	// Deprecated: This index key was migrated in PR 6461. Do not use, except for migrations.
 	savedStateSlotsKey = []byte("saved-state-slots")
-
-	// New state management service compatibility bucket.
-	newStateServiceCompatibleBucket = []byte("new-state-compatible")
 
 	// Migrations
 	migrationsBucket = []byte("migrations")

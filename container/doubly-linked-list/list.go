@@ -24,7 +24,7 @@ type Node[T any] struct {
 	next  *Node[T]
 }
 
-// Copy returns a copy of the origina list.
+// Copy returns a copy of the original list.
 func (l *List[T]) Copy() *List[T] {
 	if l == nil {
 		return nil
@@ -94,7 +94,6 @@ func (l *List[T]) Remove(n *Node[T]) {
 			n.next.prev = n.prev
 		}
 	}
-	n = nil
 	l.len--
 }
 

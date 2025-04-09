@@ -4,9 +4,11 @@ package cmd
 import (
 	"fmt"
 	"math"
+	"slices"
 	"strings"
+	"time"
 
-	"github.com/prysmaticlabs/prysm/v4/config/params"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/urfave/cli/v2"
 	"github.com/urfave/cli/v2/altsrc"
 )
@@ -15,12 +17,12 @@ var (
 	// MinimalConfigFlag declares to use the minimal config for running Ethereum consensus.
 	MinimalConfigFlag = &cli.BoolFlag{
 		Name:  "minimal-config",
-		Usage: "Use minimal config with parameters as defined in the spec.",
+		Usage: "Uses minimal config with parameters as defined in the spec.",
 	}
 	// E2EConfigFlag declares to use a testing specific config for running Ethereum consensus in end-to-end testing.
 	E2EConfigFlag = &cli.BoolFlag{
 		Name:  "e2e-config",
-		Usage: "Use the E2E testing config, only for use within end-to-end testing.",
+		Usage: "Enables the E2E testing config, only for use within end-to-end testing.",
 	}
 	// RPCMaxPageSizeFlag defines the maximum numbers per page returned in RPC responses from this
 	// beacon node (default: 500).
@@ -31,34 +33,35 @@ var (
 	// VerbosityFlag defines the logrus configuration.
 	VerbosityFlag = &cli.StringFlag{
 		Name:  "verbosity",
-		Usage: "Logging verbosity (trace, debug, info=default, warn, error, fatal, panic)",
+		Usage: "Logging verbosity. (trace, debug, info, warn, error, fatal, panic)",
 		Value: "info",
 	}
 	// DataDirFlag defines a path on disk where Prysm databases are stored.
 	DataDirFlag = &cli.StringFlag{
 		Name:  "datadir",
-		Usage: "Data directory for the databases",
+		Usage: "Data directory for the databases.",
 		Value: DefaultDataDir(),
 	}
 	// EnableBackupWebhookFlag for users to trigger db backups via an HTTP webhook.
 	EnableBackupWebhookFlag = &cli.BoolFlag{
-		Name:  "enable-db-backup-webhook",
-		Usage: "Serve HTTP handler to initiate database backups. The handler is served on the monitoring port at path /db/backup.",
+		Name: "enable-db-backup-webhook",
+		Usage: `Serves HTTP handler to initiate database backups.
+		The handler is served on the monitoring port at path /db/backup.`,
 	}
 	// BackupWebhookOutputDir to customize the output directory for db backups.
 	BackupWebhookOutputDir = &cli.StringFlag{
 		Name:  "db-backup-output-dir",
-		Usage: "Output directory for db backups",
+		Usage: "Output directory for db backups.",
 	}
 	// EnableTracingFlag defines a flag to enable p2p message tracing.
 	EnableTracingFlag = &cli.BoolFlag{
 		Name:  "enable-tracing",
-		Usage: "Enable request tracing.",
+		Usage: "Enables request tracing.",
 	}
 	// TracingProcessNameFlag defines a flag to specify a process name.
 	TracingProcessNameFlag = &cli.StringFlag{
 		Name:  "tracing-process-name",
-		Usage: "The name to apply to tracing tag \"process_name\"",
+		Usage: "Name to apply to tracing tag `process_name`.",
 	}
 	// TracingEndpointFlag flag defines the http endpoint for serving traces to Jaeger.
 	TracingEndpointFlag = &cli.StringFlag{
@@ -70,7 +73,7 @@ var (
 	// messages are sampled for tracing.
 	TraceSampleFractionFlag = &cli.Float64Flag{
 		Name:  "trace-sample-fraction",
-		Usage: "Indicate what fraction of p2p messages are sampled for tracing.",
+		Usage: "Indicates what fraction of p2p messages are sampled for tracing.",
 		Value: 0.20,
 	}
 	// MonitoringHostFlag defines the host used to serve prometheus metrics.
@@ -82,23 +85,28 @@ var (
 	// DisableMonitoringFlag defines a flag to disable the metrics collection.
 	DisableMonitoringFlag = &cli.BoolFlag{
 		Name:  "disable-monitoring",
-		Usage: "Disable monitoring service.",
+		Usage: "Disables monitoring service.",
 	}
 	// NoDiscovery specifies whether we are running a local network and have no need for connecting
 	// to the bootstrap nodes in the cloud
 	NoDiscovery = &cli.BoolFlag{
 		Name:  "no-discovery",
-		Usage: "Enable only local network p2p and do not connect to cloud bootstrap nodes.",
+		Usage: "Enable only local network p2p and do not connect to cloud bootstrap nodes",
 	}
-	// StaticPeers specifies a set of peers to connect to explicitly.
+	// StaticPeers specifies a set of peers to connect to explicitly, accepting following format of addresses:
+	// enode, multiaddr, enr.
 	StaticPeers = &cli.StringSliceFlag{
-		Name:  "peer",
-		Usage: "Connect with this peer, this flag may be used multiple times. This peer is recognized as a trusted peer.",
+		Name: "peer",
+		Usage: "Connect with this peer, this flag may be used multiple times. " +
+			"This peer is recognized as a trusted peer." +
+			"Accepts enode, multiaddr, and enr formats.",
 	}
 	// BootstrapNode tells the beacon node which bootstrap node to connect to
 	BootstrapNode = &cli.StringSliceFlag{
-		Name:  "bootstrap-node",
-		Usage: "The address of bootstrap node. Beacon node will connect for peer discovery via DHT.  Multiple nodes can be passed by using the flag multiple times but not comma-separated. You can also pass YAML files containing multiple nodes.",
+		Name: "bootstrap-node",
+		Usage: "The enr/enode address of bootstrap node. Beacon node will connect for peer discovery via DHT. " +
+			"Multiple nodes can be passed by using the flag multiple times but not comma-separated. " +
+			"You can also pass YAML files containing multiple nodes.",
 		Value: cli.NewStringSlice(params.BeaconNetworkConfig().BootstrapNodes...),
 	}
 	// RelayNode tells the beacon node which relay node to connect to.
@@ -111,13 +119,19 @@ var (
 	// P2PUDPPort defines the port to be used by discv5.
 	P2PUDPPort = &cli.IntFlag{
 		Name:  "p2p-udp-port",
-		Usage: "The port used by discv5.",
+		Usage: "The UDP port used by the discovery service discv5.",
 		Value: 12000,
 	}
-	// P2PTCPPort defines the port to be used by libp2p.
+	// P2PQUICPort defines the QUIC port to be used by libp2p.
+	P2PQUICPort = &cli.IntFlag{
+		Name:  "p2p-quic-port",
+		Usage: "The QUIC port used by libp2p.",
+		Value: 13000,
+	}
+	// P2PTCPPort defines the TCP port to be used by libp2p.
 	P2PTCPPort = &cli.IntFlag{
 		Name:  "p2p-tcp-port",
-		Usage: "The port used by libp2p.",
+		Usage: "The TCP port used by libp2p.",
 		Value: 13000,
 	}
 	// P2PIP defines the local IP to be used by libp2p.
@@ -159,7 +173,7 @@ var (
 	P2PMaxPeers = &cli.IntFlag{
 		Name:  "p2p-max-peers",
 		Usage: "The max number of p2p peers to maintain.",
-		Value: 45,
+		Value: 70,
 	}
 	// P2PAllowList defines a CIDR subnet to exclusively allow connections.
 	P2PAllowList = &cli.StringFlag{
@@ -177,20 +191,25 @@ var (
 			"192.168.0.0/16 would deny connections from peers on your local network only. The " +
 			"default is to accept all connections.",
 	}
+	PubsubQueueSize = &cli.IntFlag{
+		Name:  "pubsub-queue-size",
+		Usage: "The size of the pubsub validation and outbound queue for the node.",
+		Value: 1000,
+	}
 	// ForceClearDB removes any previously stored data at the data directory.
 	ForceClearDB = &cli.BoolFlag{
 		Name:  "force-clear-db",
-		Usage: "Clear any previously stored data at the data directory",
+		Usage: "Clears any previously stored data at the data directory.",
 	}
 	// ClearDB prompts user to see if they want to remove any previously stored data at the data directory.
 	ClearDB = &cli.BoolFlag{
 		Name:  "clear-db",
-		Usage: "Prompt for clearing any previously stored data at the data directory",
+		Usage: "Prompt for clearing any previously stored data at the data directory.",
 	}
 	// LogFormat specifies the log output format.
 	LogFormat = &cli.StringFlag{
 		Name:  "log-format",
-		Usage: "Specify log formatting. Supports: text, json, fluentd, journald.",
+		Usage: "Specifies log formatting. Supports: text, json, fluentd, journald.",
 		Value: "text",
 	}
 	// MaxGoroutines specifies the maximum amount of goroutines tolerated, before a status check fails.
@@ -202,7 +221,7 @@ var (
 	// LogFileName specifies the log output file name.
 	LogFileName = &cli.StringFlag{
 		Name:  "log-file",
-		Usage: "Specify log file name, relative or absolute",
+		Usage: "Specifies log file name, relative or absolute.",
 	}
 	// EnableUPnPFlag specifies if UPnP should be enabled or not. The default value is false.
 	EnableUPnPFlag = &cli.BoolFlag{
@@ -212,27 +231,27 @@ var (
 	// ConfigFileFlag specifies the filepath to load flag values.
 	ConfigFileFlag = &cli.StringFlag{
 		Name:  "config-file",
-		Usage: "The filepath to a yaml file with flag values",
+		Usage: "Filepath to a yaml file with flag values.",
 	}
 	// ChainConfigFileFlag specifies the filepath to load flag values.
 	ChainConfigFileFlag = &cli.StringFlag{
 		Name:  "chain-config-file",
-		Usage: "The path to a YAML file with chain config values",
+		Usage: "Path to a YAML file with chain config values.",
 	}
 	// GrpcMaxCallRecvMsgSizeFlag defines the max call message size for GRPC
 	GrpcMaxCallRecvMsgSizeFlag = &cli.IntFlag{
 		Name: "grpc-max-msg-size",
-		Usage: "Integer to define max receive message call size. If serving a public gRPC server, " +
-			"set this to a more reasonable size to avoid resource exhaustion from large messages. " +
-			"Validators with as many as 10000 keys can be run with a max message size of less than " +
-			"50Mb. The default here is set to a very high value for local users. " +
-			"(default: 2147483647 (2Gi)).",
+		Usage: `Integer to define max receive message call size (in bytes).
+		If serving a public gRPC server, set this to a more reasonable size to avoid
+		resource exhaustion from large messages. 
+		Validators with as many as 10000 keys can be run with a max message size of less than 
+		50Mb. The default here is set to a very high value for local users.`,
 		Value: math.MaxInt32,
 	}
 	// AcceptTosFlag specifies user acceptance of ToS for non-interactive environments.
 	AcceptTosFlag = &cli.BoolFlag{
 		Name:  "accept-terms-of-use",
-		Usage: "Accept Terms and Conditions (for non-interactive environments)",
+		Usage: "Accepts Terms and Conditions (for non-interactive environments).",
 	}
 	// ValidatorMonitorIndicesFlag specifies a list of validator indices to
 	// track for performance updates
@@ -254,10 +273,10 @@ var (
 		Value: DefaultDataDir(),
 	}
 	// ApiTimeoutFlag specifies the timeout value for API requests in seconds. A timeout of zero means no timeout.
-	ApiTimeoutFlag = &cli.IntFlag{
+	ApiTimeoutFlag = &cli.DurationFlag{
 		Name:  "api-timeout",
-		Usage: "Specifies the timeout value for API requests in seconds",
-		Value: 120,
+		Usage: "Specifies the timeout value for API requests in seconds.",
+		Value: 10 * time.Second,
 	}
 	// JwtOutputFileFlag specifies the JWT file path that gets generated into when invoked by generate-jwt-secret.
 	JwtOutputFileFlag = &cli.StringFlag{
@@ -317,10 +336,10 @@ func ValidateNoArgs(ctx *cli.Context) error {
 
 // verifies that the provided command is in the command list.
 func checkCommandList(commands []*cli.Command, name string) *cli.Command {
-	for _, c := range commands {
-		if c.Name == name {
-			return c
-		}
+	if i := slices.IndexFunc(commands, func(c *cli.Command) bool {
+		return c.Name == name
+	}); i >= 0 {
+		return commands[i]
 	}
 	return nil
 }

@@ -7,7 +7,7 @@ go_library(
         "heap.go",
         "leakybucket.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v4/container/leaky-bucket",
+    importpath = "github.com/prysmaticlabs/prysm/v5/container/leaky-bucket",
     visibility = ["//visibility:public"],
 )
 

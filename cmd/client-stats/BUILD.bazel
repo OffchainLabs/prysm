@@ -8,7 +8,7 @@ go_library(
         "main.go",
         "usage.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v4/cmd/client-stats",
+    importpath = "github.com/prysmaticlabs/prysm/v5/cmd/client-stats",
     visibility = ["//visibility:private"],
     deps = [
         "//cmd:go_default_library",

@@ -7,14 +7,14 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/golang/mock/gomock"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/eth/shared"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/validator/client/beacon-api/mock"
+	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api/mock"
+	"go.uber.org/mock/gomock"
 )
 
 func TestRegistration_Valid(t *testing.T) {
@@ -33,9 +33,9 @@ func TestRegistration_Valid(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	jsonRegistrations := []*shared.SignedValidatorRegistration{
+	jsonRegistrations := []*structs.SignedValidatorRegistration{
 		{
-			Message: &shared.ValidatorRegistration{
+			Message: &structs.ValidatorRegistration{
 				FeeRecipient: feeRecipient1,
 				GasLimit:     "100",
 				Timestamp:    "1000",
@@ -44,7 +44,7 @@ func TestRegistration_Valid(t *testing.T) {
 			Signature: signature1,
 		},
 		{
-			Message: &shared.ValidatorRegistration{
+			Message: &structs.ValidatorRegistration{
 				FeeRecipient: feeRecipient2,
 				GasLimit:     "200",
 				Timestamp:    "2000",
@@ -53,7 +53,7 @@ func TestRegistration_Valid(t *testing.T) {
 			Signature: signature2,
 		},
 		{
-			Message: &shared.ValidatorRegistration{
+			Message: &structs.ValidatorRegistration{
 				FeeRecipient: feeRecipient3,
 				GasLimit:     "300",
 				Timestamp:    "3000",
@@ -66,15 +66,14 @@ func TestRegistration_Valid(t *testing.T) {
 	marshalledJsonRegistrations, err := json.Marshal(jsonRegistrations)
 	require.NoError(t, err)
 
-	jsonRestHandler := mock.NewMockjsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().PostRestJson(
-		context.Background(),
+	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+	jsonRestHandler.EXPECT().Post(
+		gomock.Any(),
 		"/eth/v1/validator/register_validator",
 		nil,
 		bytes.NewBuffer(marshalledJsonRegistrations),
 		nil,
 	).Return(
-		nil,
 		nil,
 	).Times(1)
 
@@ -142,20 +141,18 @@ func TestRegistration_BadRequest(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	jsonRestHandler := mock.NewMockjsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().PostRestJson(
-		context.Background(),
+	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+	jsonRestHandler.EXPECT().Post(
+		gomock.Any(),
 		"/eth/v1/validator/register_validator",
 		nil,
 		gomock.Any(),
 		nil,
 	).Return(
-		nil,
 		errors.New("foo error"),
 	).Times(1)
 
 	validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
 	_, err := validatorClient.SubmitValidatorRegistrations(context.Background(), &ethpb.SignedValidatorRegistrationsV1{})
-	assert.ErrorContains(t, "failed to send POST data to `/eth/v1/validator/register_validator` REST endpoint", err)
 	assert.ErrorContains(t, "foo error", err)
 }

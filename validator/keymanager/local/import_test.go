@@ -8,13 +8,12 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/google/uuid"
-	"github.com/prysmaticlabs/prysm/v4/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	ethpbservice "github.com/prysmaticlabs/prysm/v4/proto/eth/service"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	mock "github.com/prysmaticlabs/prysm/v4/validator/accounts/testing"
-	"github.com/prysmaticlabs/prysm/v4/validator/keymanager"
+	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	mock "github.com/prysmaticlabs/prysm/v5/validator/accounts/testing"
+	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	keystorev4 "github.com/wealdtech/go-eth2-wallet-encryptor-keystorev4"
 )
@@ -125,7 +124,7 @@ func TestLocalKeymanager_ImportKeystores(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, numKeystores, len(statuses))
 		for _, status := range statuses {
-			require.Equal(t, ethpbservice.ImportedKeystoreStatus_IMPORTED, status.Status)
+			require.Equal(t, keymanager.StatusImported, status.Status)
 		}
 		require.LogsContain(t, hook, "Successfully imported validator key(s)")
 	})
@@ -146,7 +145,7 @@ func TestLocalKeymanager_ImportKeystores(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, numKeystores, len(statuses))
 		for _, status := range statuses {
-			require.Equal(t, ethpbservice.ImportedKeystoreStatus_IMPORTED, status.Status)
+			require.Equal(t, keymanager.StatusImported, status.Status)
 		}
 		require.LogsContain(t, hook, "Successfully imported validator key(s)")
 	})
@@ -177,17 +176,17 @@ func TestLocalKeymanager_ImportKeystores(t *testing.T) {
 		require.Equal(t, len(keystores), len(statuses))
 		require.Equal(
 			t,
-			ethpbservice.ImportedKeystoreStatus_IMPORTED,
+			keymanager.StatusImported,
 			statuses[0].Status,
 		)
 		require.Equal(
 			t,
-			ethpbservice.ImportedKeystoreStatus_DUPLICATE,
+			keymanager.StatusDuplicate,
 			statuses[1].Status,
 		)
 		require.Equal(
 			t,
-			ethpbservice.ImportedKeystoreStatus_ERROR,
+			keymanager.StatusError,
 			statuses[2].Status,
 		)
 		require.Equal(
@@ -232,12 +231,12 @@ func TestLocalKeymanager_ImportKeystores(t *testing.T) {
 		require.Equal(t, len(keystores), len(statuses))
 		require.Equal(
 			t,
-			ethpbservice.ImportedKeystoreStatus_DUPLICATE,
+			keymanager.StatusDuplicate,
 			statuses[0].Status,
 		)
 		require.Equal(
 			t,
-			ethpbservice.ImportedKeystoreStatus_ERROR,
+			keymanager.StatusError,
 			statuses[1].Status,
 		)
 		require.Equal(

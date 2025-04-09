@@ -4,10 +4,10 @@ import (
 	"path"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/epoch"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/testing/spectest/utils"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/epoch"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/spectest/utils"
 )
 
 // RunEth1DataResetTests executes "epoch_processing/eth1_data_reset" tests.

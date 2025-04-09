@@ -10,9 +10,11 @@ import (
 	"strings"
 
 	"github.com/d4l3k/messagediff"
-	"github.com/prysmaticlabs/prysm/v4/encoding/ssz/equality"
+	"github.com/google/go-cmp/cmp"
+	"github.com/prysmaticlabs/prysm/v5/encoding/ssz/equality"
 	"github.com/sirupsen/logrus/hooks/test"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/testing/protocmp"
 )
 
 // AssertionTestingTB exposes enough testing.TB methods for assertions.
@@ -52,13 +54,12 @@ func DeepEqual(loggerFn assertionLoggerFn, expected, actual interface{}, msg ...
 	if !isDeepEqual(expected, actual) {
 		errMsg := parseMsg("Values are not equal", msg...)
 		_, file, line, _ := runtime.Caller(2)
-		diff := ""
+		opts := cmp.Options{cmp.AllowUnexported(expected), cmp.AllowUnexported(actual)}
 		if _, isProto := expected.(proto.Message); isProto {
-			diff = ProtobufPrettyDiff(expected, actual)
-		} else {
-			diff, _ = messagediff.PrettyDiff(expected, actual)
+			opts = append(opts, protocmp.Transform())
 		}
-		loggerFn("%s:%d %s, want: %#v, got: %#v, diff: %s", filepath.Base(file), line, errMsg, expected, actual, diff)
+		diff := cmp.Diff(expected, actual, opts...)
+		loggerFn("%s:%d %s, expected != actual, diff: %s", filepath.Base(file), line, errMsg, diff)
 	}
 }
 
@@ -137,7 +138,8 @@ func StringContains(loggerFn assertionLoggerFn, expected, actual string, flag bo
 
 // NoError asserts that error is nil.
 func NoError(loggerFn assertionLoggerFn, err error, msg ...interface{}) {
-	if err != nil {
+	// reflect.ValueOf is needed for nil instances of custom types implementing Error
+	if err != nil && !reflect.ValueOf(err).IsNil() {
 		errMsg := parseMsg("Unexpected error", msg...)
 		_, file, line, _ := runtime.Caller(2)
 		loggerFn("%s:%d %s: %v", filepath.Base(file), line, errMsg, err)
@@ -168,19 +170,28 @@ func ErrorContains(loggerFn assertionLoggerFn, want string, err error, msg ...in
 
 // NotNil asserts that passed value is not nil.
 func NotNil(loggerFn assertionLoggerFn, obj interface{}, msg ...interface{}) {
-	if isNil(obj) {
+	if deepNil(obj) {
 		errMsg := parseMsg("Unexpected nil value", msg...)
 		_, file, line, _ := runtime.Caller(2)
 		loggerFn("%s:%d %s", filepath.Base(file), line, errMsg)
 	}
 }
 
-// isNil checks that underlying value of obj is nil.
-func isNil(obj interface{}) bool {
-	if obj == nil {
+// IsNil asserts that observed value is nil.
+func IsNil(loggerFn assertionLoggerFn, got interface{}, msg ...interface{}) {
+	if !deepNil(got) {
+		errMsg := parseMsg("Value is unexpectedly not nil", msg...)
+		_, file, line, _ := runtime.Caller(2)
+		loggerFn("%s:%d %s", filepath.Base(file), line, errMsg)
+	}
+}
+
+// deepNil checks that underlying value of obj is nil.
+func deepNil(got interface{}) bool {
+	if got == nil {
 		return true
 	}
-	value := reflect.ValueOf(obj)
+	value := reflect.ValueOf(got)
 	switch value.Kind() {
 	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Ptr, reflect.Slice, reflect.UnsafePointer:
 		return value.IsNil()

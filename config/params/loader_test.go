@@ -7,15 +7,16 @@ import (
 	"path"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
 
 	"github.com/bazelbuild/rules_go/go/tools/bazel"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/io/file"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/io/file"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"gopkg.in/yaml.v2"
 )
 
@@ -23,30 +24,28 @@ import (
 // These are variables that we don't use in Prysm. (i.e. future hardfork, light client... etc)
 // IMPORTANT: Use one field per line and sort these alphabetically to reduce conflicts.
 var placeholderFields = []string{
-	"ATTESTATION_PROPAGATION_SLOT_RANGE",
-	"ATTESTATION_SUBNET_COUNT",
-	"ATTESTATION_SUBNET_EXTRA_BITS",
-	"ATTESTATION_SUBNET_PREFIX_BITS",
+	"ATTESTATION_DEADLINE",
+	"BALANCE_PER_ADDITIONAL_CUSTODY_GROUP",
+	"BLOB_SIDECAR_SUBNET_COUNT_FULU",
 	"EIP6110_FORK_EPOCH",
 	"EIP6110_FORK_VERSION",
 	"EIP7002_FORK_EPOCH",
 	"EIP7002_FORK_VERSION",
-	"EPOCHS_PER_SUBNET_SUBSCRIPTION",
-	"GOSSIP_MAX_SIZE",
-	"MAXIMUM_GOSSIP_CLOCK_DISPARITY",
-	"MAX_BLOBS_PER_BLOCK",
-	"MAX_CHUNK_SIZE",
-	"MAX_REQUEST_BLOB_SIDECARS",
-	"MAX_REQUEST_BLOCKS",
-	"MAX_REQUEST_BLOCKS_DENEB",
-	"MESSAGE_DOMAIN_INVALID_SNAPPY",
-	"MESSAGE_DOMAIN_VALID_SNAPPY",
-	"MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUESTS",
-	"MIN_EPOCHS_FOR_BLOCK_REQUESTS",
-	"RESP_TIMEOUT",
-	"SUBNETS_PER_NODE",
-	"TTFB_TIMEOUT",
+	"EIP7441_FORK_EPOCH",
+	"EIP7441_FORK_VERSION",
+	"EIP7732_FORK_EPOCH",
+	"EIP7732_FORK_VERSION",
+	"EPOCHS_PER_SHUFFLING_PHASE",
+	"MAX_BLOBS_PER_BLOCK_FULU",
+	"MAX_REQUEST_BLOB_SIDECARS_FULU",
+	"MAX_REQUEST_PAYLOADS", // Compile time constant on BeaconBlockBody.ExecutionRequests
+	"NUMBER_OF_CUSTODY_GROUPS",
+	"PROPOSER_INCLUSION_LIST_CUT_OFF",
+	"PROPOSER_SELECTION_GAP",
+	"TARGET_NUMBER_OF_PEERS",
 	"UPDATE_TIMEOUT",
+	"VALIDATOR_CUSTODY_REQUIREMENT",
+	"VIEW_FREEZE_DEADLINE",
 	"WHISK_EPOCHS_PER_SHUFFLING_PHASE",
 	"WHISK_FORK_EPOCH",
 	"WHISK_FORK_VERSION",
@@ -79,9 +78,6 @@ func assertEqualConfigs(t *testing.T, name string, fields []string, expected, ac
 	assert.Equal(t, expected.HysteresisQuotient, actual.HysteresisQuotient, "%s: HysteresisQuotient", name)
 	assert.Equal(t, expected.HysteresisDownwardMultiplier, actual.HysteresisDownwardMultiplier, "%s: HysteresisDownwardMultiplier", name)
 	assert.Equal(t, expected.HysteresisUpwardMultiplier, actual.HysteresisUpwardMultiplier, "%s: HysteresisUpwardMultiplier", name)
-
-	// Fork Choice params.
-	assert.Equal(t, expected.DeprecatedSafeSlotsToUpdateJustified, actual.DeprecatedSafeSlotsToUpdateJustified, "%s: SafeSlotsToUpdateJustified", name)
 
 	// Validator params.
 	assert.Equal(t, expected.Eth1FollowDistance, actual.Eth1FollowDistance, "%s: Eth1FollowDistance", name)
@@ -139,6 +135,7 @@ func assertEqualConfigs(t *testing.T, name string, fields []string, expected, ac
 	// Max operations per block.
 	assert.Equal(t, expected.MaxProposerSlashings, actual.MaxProposerSlashings, "%s: MaxProposerSlashings", name)
 	assert.Equal(t, expected.MaxAttesterSlashings, actual.MaxAttesterSlashings, "%s: MaxAttesterSlashings", name)
+	assert.Equal(t, expected.MaxAttesterSlashingsElectra, actual.MaxAttesterSlashingsElectra, "%s: MaxAttesterSlashingsElectra", name)
 	assert.Equal(t, expected.MaxAttestations, actual.MaxAttestations, "%s: MaxAttestations", name)
 	assert.Equal(t, expected.MaxDeposits, actual.MaxDeposits, "%s: MaxDeposits", name)
 	assert.Equal(t, expected.MaxVoluntaryExits, actual.MaxVoluntaryExits, "%s: MaxVoluntaryExits", name)
@@ -156,12 +153,16 @@ func assertEqualConfigs(t *testing.T, name string, fields []string, expected, ac
 	assert.Equal(t, expected.BellatrixForkEpoch, actual.BellatrixForkEpoch, "%s: BellatrixForkEpoch", name)
 	assert.Equal(t, expected.CapellaForkEpoch, actual.CapellaForkEpoch, "%s: CapellaForkEpoch", name)
 	assert.Equal(t, expected.DenebForkEpoch, actual.DenebForkEpoch, "%s: DenebForkEpoch", name)
+	assert.Equal(t, expected.ElectraForkEpoch, actual.ElectraForkEpoch, "%s: ElectraForkEpoch", name)
+	assert.Equal(t, expected.FuluForkEpoch, actual.FuluForkEpoch, "%s: FuluForkEpoch", name)
 	assert.Equal(t, expected.SqrRootSlotsPerEpoch, actual.SqrRootSlotsPerEpoch, "%s: SqrRootSlotsPerEpoch", name)
 	assert.DeepEqual(t, expected.GenesisForkVersion, actual.GenesisForkVersion, "%s: GenesisForkVersion", name)
 	assert.DeepEqual(t, expected.AltairForkVersion, actual.AltairForkVersion, "%s: AltairForkVersion", name)
 	assert.DeepEqual(t, expected.BellatrixForkVersion, actual.BellatrixForkVersion, "%s: BellatrixForkVersion", name)
 	assert.DeepEqual(t, expected.CapellaForkVersion, actual.CapellaForkVersion, "%s: CapellaForkVersion", name)
 	assert.DeepEqual(t, expected.DenebForkVersion, actual.DenebForkVersion, "%s: DenebForkVersion", name)
+	assert.DeepEqual(t, expected.ElectraForkVersion, actual.ElectraForkVersion, "%s: ElectraForkVersion", name)
+	assert.DeepEqual(t, expected.FuluForkVersion, actual.FuluForkVersion, "%s: FuluForkVersion", name)
 
 	assertYamlFieldsMatch(t, name, fields, expected, actual)
 }
@@ -359,9 +360,14 @@ func configFilePath(t *testing.T, config string) string {
 func presetsFilePath(t *testing.T, config string) []string {
 	fPath, err := bazel.Runfile("external/consensus_spec")
 	require.NoError(t, err)
+
 	return []string{
 		path.Join(fPath, "presets", config, "phase0.yaml"),
 		path.Join(fPath, "presets", config, "altair.yaml"),
+		path.Join(fPath, "presets", config, "bellatrix.yaml"),
+		path.Join(fPath, "presets", config, "capella.yaml"),
+		path.Join(fPath, "presets", config, "deneb.yaml"),
+		path.Join(fPath, "presets", config, "electra.yaml"),
 	}
 }
 
@@ -419,10 +425,5 @@ func assertYamlFieldsMatch(t *testing.T, name string, fields []string, c1, c2 *p
 }
 
 func isPlaceholderField(field string) bool {
-	for _, f := range placeholderFields {
-		if f == field {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(placeholderFields, field)
 }

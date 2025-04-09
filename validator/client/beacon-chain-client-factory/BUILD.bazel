@@ -3,7 +3,7 @@ load("@prysm//tools/go:def.bzl", "go_library")
 go_library(
     name = "go_default_library",
     srcs = ["beacon_chain_client_factory.go"],
-    importpath = "github.com/prysmaticlabs/prysm/v4/validator/client/beacon-chain-client-factory",
+    importpath = "github.com/prysmaticlabs/prysm/v5/validator/client/beacon-chain-client-factory",
     visibility = ["//visibility:public"],
     deps = [
         "//config/features:go_default_library",

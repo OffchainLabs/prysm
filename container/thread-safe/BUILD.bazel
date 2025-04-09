@@ -3,7 +3,7 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 go_library(
     name = "go_default_library",
     srcs = ["map.go"],
-    importpath = "github.com/prysmaticlabs/prysm/v4/container/thread-safe",
+    importpath = "github.com/prysmaticlabs/prysm/v5/container/thread-safe",
     visibility = ["//visibility:public"],
 )
 

@@ -7,12 +7,14 @@ import (
 	"sync"
 	"testing"
 
-	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/validator/db/common"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	bolt "go.etcd.io/bbolt"
 )
@@ -23,7 +25,7 @@ func TestPendingAttestationRecords_Flush(t *testing.T) {
 	// Add 5 atts
 	num := 5
 	for i := 0; i < num; i++ {
-		queue.Append(&AttestationRecord{
+		queue.Append(&common.AttestationRecord{
 			Target: primitives.Epoch(i),
 		})
 	}
@@ -36,7 +38,7 @@ func TestPendingAttestationRecords_Flush(t *testing.T) {
 func TestPendingAttestationRecords_Len(t *testing.T) {
 	queue := NewQueuedAttestationRecords()
 	assert.Equal(t, queue.Len(), 0)
-	queue.Append(&AttestationRecord{})
+	queue.Append(&common.AttestationRecord{})
 	assert.Equal(t, queue.Len(), 1)
 	queue.Flush()
 	assert.Equal(t, queue.Len(), 0)
@@ -100,7 +102,7 @@ func TestStore_CheckSlashableAttestation_DoubleVote(t *testing.T) {
 			slashingKind, err := validatorDB.CheckSlashableAttestation(
 				ctx,
 				pubKeys[0],
-				tt.incomingSigningRoot,
+				tt.incomingSigningRoot[:],
 				tt.incomingAttestation,
 			)
 			if tt.want {
@@ -133,7 +135,7 @@ func TestStore_CheckSlashableAttestation_SurroundVote_MultipleTargetsPerSource(t
 	// our first attestation. Given there can be multiple attested target epochs per
 	// source epoch, we expect our logic to be able to catch this slashable offense.
 	evilAtt := createAttestation(firstAtt.Data.Source.Epoch-1, firstAtt.Data.Target.Epoch+1)
-	slashable, err := validatorDB.CheckSlashableAttestation(ctx, pubKeys[0], [32]byte{2}, evilAtt)
+	slashable, err := validatorDB.CheckSlashableAttestation(ctx, pubKeys[0], []byte{2}, evilAtt)
 	require.NotNil(t, err)
 	assert.Equal(t, SurroundingVote, slashable)
 }
@@ -171,31 +173,31 @@ func TestStore_CheckSlashableAttestation_SurroundVote_54kEpochs(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		signingRoot [32]byte
+		signingRoot []byte
 		attestation *ethpb.IndexedAttestation
 		want        SlashingKind
 	}{
 		{
 			name:        "surround vote at half of the weak subjectivity period",
-			signingRoot: [32]byte{},
+			signingRoot: []byte{},
 			attestation: createAttestation(numEpochs/2, numEpochs),
 			want:        SurroundingVote,
 		},
 		{
 			name:        "spanning genesis to weak subjectivity period surround vote",
-			signingRoot: [32]byte{},
+			signingRoot: []byte{},
 			attestation: createAttestation(0, numEpochs),
 			want:        SurroundingVote,
 		},
 		{
 			name:        "simple surround vote at end of weak subjectivity period",
-			signingRoot: [32]byte{},
+			signingRoot: []byte{},
 			attestation: createAttestation(numEpochs-3, numEpochs),
 			want:        SurroundingVote,
 		},
 		{
 			name:        "non-slashable vote",
-			signingRoot: [32]byte{},
+			signingRoot: []byte{},
 			attestation: createAttestation(numEpochs, numEpochs+1),
 			want:        NotSlashable,
 		},
@@ -335,11 +337,11 @@ func TestStore_SaveAttestationsForPubKey(t *testing.T) {
 	pubKeys := make([][fieldparams.BLSPubkeyLength]byte, numValidators)
 	validatorDB := setupDB(t, pubKeys)
 	atts := make([]*ethpb.IndexedAttestation, 0)
-	signingRoots := make([][32]byte, 0)
+	signingRoots := make([][]byte, 0)
 	for i := primitives.Epoch(1); i < 10; i++ {
 		atts = append(atts, createAttestation(i-1, i))
-		var sr [32]byte
-		copy(sr[:], fmt.Sprintf("%d", i))
+		var sr []byte
+		copy(sr, fmt.Sprintf("%d", i))
 		signingRoots = append(signingRoots, sr)
 	}
 	err := validatorDB.SaveAttestationsForPubKey(
@@ -361,7 +363,7 @@ func TestStore_SaveAttestationsForPubKey(t *testing.T) {
 		slashingKind, err := validatorDB.CheckSlashableAttestation(
 			ctx,
 			pubKeys[0],
-			[32]byte{},
+			[]byte{},
 			att,
 		)
 		require.NotNil(t, err)
@@ -544,7 +546,7 @@ func benchCheckSurroundVote(
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		for _, pubKey := range pubKeys {
-			slashingKind, err := validatorDB.CheckSlashableAttestation(ctx, pubKey, [32]byte{}, surroundingVote)
+			slashingKind, err := validatorDB.CheckSlashableAttestation(ctx, pubKey, []byte{}, surroundingVote)
 			if shouldSurround {
 				require.NotNil(b, err)
 				assert.Equal(b, SurroundingVote, slashingKind)
@@ -555,19 +557,6 @@ func benchCheckSurroundVote(
 	}
 }
 
-func createAttestation(source, target primitives.Epoch) *ethpb.IndexedAttestation {
-	return &ethpb.IndexedAttestation{
-		Data: &ethpb.AttestationData{
-			Source: &ethpb.Checkpoint{
-				Epoch: source,
-			},
-			Target: &ethpb.Checkpoint{
-				Epoch: target,
-			},
-		},
-	}
-}
-
 func TestStore_flushAttestationRecords_InProgress(t *testing.T) {
 	s := &Store{}
 	s.batchedAttestationsFlushInProgress.Set()
@@ -575,4 +564,56 @@ func TestStore_flushAttestationRecords_InProgress(t *testing.T) {
 	hook := logTest.NewGlobal()
 	s.flushAttestationRecords(context.Background(), nil)
 	assert.LogsContain(t, hook, "Attempted to flush attestation records when already in progress")
+}
+
+func BenchmarkStore_SaveAttestationForPubKey(b *testing.B) {
+	var wg sync.WaitGroup
+	ctx := context.Background()
+
+	// Create pubkeys
+	pubkeys := make([][fieldparams.BLSPubkeyLength]byte, 10)
+	for i := range pubkeys {
+		validatorKey, err := bls.RandKey()
+		require.NoError(b, err, "RandKey should not return an error")
+
+		copy(pubkeys[i][:], validatorKey.PublicKey().Marshal())
+	}
+
+	signingRoot := [32]byte{1}
+	attestation := &ethpb.IndexedAttestation{
+		Data: &ethpb.AttestationData{
+			Source: &ethpb.Checkpoint{
+				Epoch: 42,
+			},
+			Target: &ethpb.Checkpoint{
+				Epoch: 43,
+			},
+		},
+	}
+
+	validatorDB, err := NewKVStore(ctx, b.TempDir(), &Config{PubKeys: pubkeys})
+	require.NoError(b, err)
+
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		err := validatorDB.ClearDB()
+		require.NoError(b, err)
+
+		for _, pubkey := range pubkeys {
+			wg.Add(1)
+
+			go func(pk [fieldparams.BLSPubkeyLength]byte) {
+				defer wg.Done()
+
+				err := validatorDB.SaveAttestationForPubKey(ctx, pk, signingRoot, attestation)
+				require.NoError(b, err)
+			}(pubkey)
+		}
+
+		b.StartTimer()
+		wg.Wait()
+	}
+
+	err = validatorDB.Close()
+	require.NoError(b, err)
 }

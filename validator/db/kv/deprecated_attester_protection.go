@@ -3,10 +3,10 @@ package kv
 import (
 	"fmt"
 
-	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 )
 
 const (
@@ -31,7 +31,7 @@ type deprecatedHistoryData struct {
 type deprecatedEncodedAttestingHistory []byte
 
 func (dh deprecatedEncodedAttestingHistory) assertSize() error {
-	if dh == nil || len(dh) < minimalSize {
+	if len(dh) < minimalSize {
 		return fmt.Errorf("encapsulated data size: %d is smaller then minimal size: %d", len(dh), minimalSize)
 	}
 	if (len(dh)-minimalSize)%historySize != 0 {

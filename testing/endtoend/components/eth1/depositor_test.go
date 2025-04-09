@@ -5,9 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func TestComputeDeposits(t *testing.T) {

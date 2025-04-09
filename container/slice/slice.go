@@ -1,9 +1,11 @@
 package slice
 
 import (
+	"fmt"
+	"slices"
 	"strings"
 
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 )
 
 // SubsetUint64 returns true if the first array is
@@ -77,10 +79,10 @@ func UnionUint64(s ...[]uint64) []uint64 {
 	for i := 1; i < len(s); i++ {
 		a := s[i-1]
 		b := s[i]
-		for j := 0; j < len(a); j++ {
+		for j := range a {
 			m[a[j]] = true
 		}
-		for j := 0; j < len(b); j++ {
+		for j := range b {
 			if _, found := m[b[j]]; !found {
 				set = append(set, b[j])
 			}
@@ -93,7 +95,7 @@ func UnionUint64(s ...[]uint64) []uint64 {
 // values from the provided list of indices.
 func SetUint64(a []uint64) []uint64 {
 	// Remove duplicates indices.
-	intMap := map[uint64]bool{}
+	intMap := make(map[uint64]bool, len(a))
 	cleanedIndices := make([]uint64, 0, len(a))
 	for _, idx := range a {
 		if intMap[idx] {
@@ -126,10 +128,10 @@ func NotUint64(a, b []uint64) []uint64 {
 	set := make([]uint64, 0)
 	m := make(map[uint64]bool)
 
-	for i := 0; i < len(a); i++ {
+	for i := range a {
 		m[a[i]] = true
 	}
-	for i := 0; i < len(b); i++ {
+	for i := range b {
 		if _, found := m[b[i]]; !found {
 			set = append(set, b[i])
 		}
@@ -139,12 +141,7 @@ func NotUint64(a, b []uint64) []uint64 {
 
 // IsInUint64 returns true if a is in b and False otherwise.
 func IsInUint64(a uint64, b []uint64) bool {
-	for _, v := range b {
-		if a == v {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(b, a)
 }
 
 // IntersectionInt64 of any number of int64 slices with time
@@ -192,10 +189,10 @@ func UnionInt64(s ...[]int64) []int64 {
 	for i := 1; i < len(s); i++ {
 		a := s[i-1]
 		b := s[i]
-		for j := 0; j < len(a); j++ {
+		for j := range a {
 			m[a[j]] = true
 		}
-		for j := 0; j < len(b); j++ {
+		for j := range b {
 			if _, found := m[b[j]]; !found {
 				set = append(set, b[j])
 			}
@@ -212,10 +209,10 @@ func NotInt64(a, b []int64) []int64 {
 	set := make([]int64, 0)
 	m := make(map[int64]bool)
 
-	for i := 0; i < len(a); i++ {
+	for i := range a {
 		m[a[i]] = true
 	}
-	for i := 0; i < len(b); i++ {
+	for i := range b {
 		if _, found := m[b[i]]; !found {
 			set = append(set, b[i])
 		}
@@ -225,12 +222,7 @@ func NotInt64(a, b []int64) []int64 {
 
 // IsInInt64 returns true if a is in b and False otherwise.
 func IsInInt64(a int64, b []int64) bool {
-	for _, v := range b {
-		if a == v {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(b, a)
 }
 
 // UnionByteSlices returns the all elements between sets of byte slices.
@@ -244,10 +236,10 @@ func UnionByteSlices(s ...[][]byte) [][]byte {
 	set := s[0]
 	m := make(map[string]bool)
 	for i := 1; i < len(s); i++ {
-		for j := 0; j < len(s[i-1]); j++ {
+		for j := range s[i-1] {
 			m[string(s[i-1][j])] = true
 		}
-		for j := 0; j < len(s[i]); j++ {
+		for j := range s[i] {
 			if _, found := m[string(s[i][j])]; !found {
 				set = append(set, s[i][j])
 			}
@@ -344,10 +336,10 @@ func NotSlot(a, b []primitives.Slot) []primitives.Slot {
 	set := make([]primitives.Slot, 0)
 	m := make(map[primitives.Slot]bool)
 
-	for i := 0; i < len(a); i++ {
+	for i := range a {
 		m[a[i]] = true
 	}
-	for i := 0; i < len(b); i++ {
+	for i := range b {
 		if _, found := m[b[i]]; !found {
 			set = append(set, b[i])
 		}
@@ -357,23 +349,18 @@ func NotSlot(a, b []primitives.Slot) []primitives.Slot {
 
 // IsInSlots returns true if a is in b and False otherwise.
 func IsInSlots(a primitives.Slot, b []primitives.Slot) bool {
-	for _, v := range b {
-		if a == v {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(b, a)
 }
 
 // Unique returns an array with duplicates filtered based on the type given
 func Unique[T comparable](a []T) []T {
-	if a == nil || len(a) <= 1 {
+	if len(a) <= 1 {
 		return a
 	}
 	found := map[T]bool{}
 	result := make([]T, len(a))
 	end := 0
-	for i := 0; i < len(a); i++ {
+	for i := range a {
 		if !found[a[i]] {
 			found[a[i]] = true
 			result[end] = a[i]
@@ -390,4 +377,13 @@ func Reverse[E any](s []E) []E {
 		s[i], s[j] = s[j], s[i]
 	}
 	return s
+}
+
+// VerifyMaxLength takes a slice and a maximum length and validates the length.
+func VerifyMaxLength[T any](v []T, max uint64) error {
+	l := uint64(len(v))
+	if l > max {
+		return fmt.Errorf("length of %d exceeds max of %d", l, max)
+	}
+	return nil
 }

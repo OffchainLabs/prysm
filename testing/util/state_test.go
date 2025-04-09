@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func TestNewBeaconState(t *testing.T) {
@@ -59,6 +59,16 @@ func TestNewBeaconStateDeneb(t *testing.T) {
 	assert.DeepEqual(t, st.ToProtoUnsafe(), got)
 }
 
+func TestNewBeaconStateElectra(t *testing.T) {
+	st, err := NewBeaconStateElectra()
+	require.NoError(t, err)
+	b, err := st.MarshalSSZ()
+	require.NoError(t, err)
+	got := &ethpb.BeaconStateElectra{}
+	require.NoError(t, got.UnmarshalSSZ(b))
+	assert.DeepEqual(t, st.ToProtoUnsafe(), got)
+}
+
 func TestNewBeaconState_HashTreeRoot(t *testing.T) {
 	st, err := NewBeaconState()
 	require.NoError(t, err)
@@ -73,6 +83,14 @@ func TestNewBeaconState_HashTreeRoot(t *testing.T) {
 	_, err = st.HashTreeRoot(context.Background())
 	require.NoError(t, err)
 	st, err = NewBeaconStateCapella()
+	require.NoError(t, err)
+	_, err = st.HashTreeRoot(context.Background())
+	require.NoError(t, err)
+	st, err = NewBeaconStateDeneb()
+	require.NoError(t, err)
+	_, err = st.HashTreeRoot(context.Background())
+	require.NoError(t, err)
+	st, err = NewBeaconStateElectra()
 	require.NoError(t, err)
 	_, err = st.HashTreeRoot(context.Background())
 	require.NoError(t, err)

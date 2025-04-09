@@ -4,27 +4,28 @@ import (
 	"context"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/epoch/precompute"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/time"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/math"
-	"go.opencensus.io/trace"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/epoch/precompute"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/math"
+	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 )
 
 // AttDelta contains rewards and penalties for a single attestation.
 type AttDelta struct {
-	HeadReward    uint64
-	SourceReward  uint64
-	SourcePenalty uint64
-	TargetReward  uint64
-	TargetPenalty uint64
+	HeadReward        uint64
+	SourceReward      uint64
+	SourcePenalty     uint64
+	TargetReward      uint64
+	TargetPenalty     uint64
+	InactivityPenalty uint64
 }
 
 // InitializePrecomputeValidators precomputes individual validator for its attested balances and the total sum of validators attested balances of the epoch.
 func InitializePrecomputeValidators(ctx context.Context, beaconState state.BeaconState) ([]*precompute.Validator, *precompute.Balance, error) {
-	ctx, span := trace.StartSpan(ctx, "altair.InitializePrecomputeValidators")
+	_, span := trace.StartSpan(ctx, "altair.InitializePrecomputeValidators")
 	defer span.End()
 	vals := make([]*precompute.Validator, beaconState.NumValidators())
 	bal := &precompute.Balance{}
@@ -86,7 +87,7 @@ func ProcessInactivityScores(
 	beaconState state.BeaconState,
 	vals []*precompute.Validator,
 ) (state.BeaconState, []*precompute.Validator, error) {
-	ctx, span := trace.StartSpan(ctx, "altair.ProcessInactivityScores")
+	_, span := trace.StartSpan(ctx, "altair.ProcessInactivityScores")
 	defer span.End()
 
 	cfg := params.BeaconConfig()
@@ -155,7 +156,7 @@ func ProcessEpochParticipation(
 	bal *precompute.Balance,
 	vals []*precompute.Validator,
 ) ([]*precompute.Validator, *precompute.Balance, error) {
-	ctx, span := trace.StartSpan(ctx, "altair.ProcessEpochParticipation")
+	_, span := trace.StartSpan(ctx, "altair.ProcessEpochParticipation")
 	defer span.End()
 
 	cp, err := beaconState.CurrentEpochParticipation()
@@ -251,7 +252,7 @@ func ProcessRewardsAndPenaltiesPrecompute(
 		if err != nil {
 			return nil, err
 		}
-		balances[i] = helpers.DecreaseBalanceWithVal(balances[i], delta.SourcePenalty+delta.TargetPenalty)
+		balances[i] = helpers.DecreaseBalanceWithVal(balances[i], delta.SourcePenalty+delta.TargetPenalty+delta.InactivityPenalty)
 
 		vals[i].AfterEpochTransitionBalance = balances[i]
 	}
@@ -351,7 +352,7 @@ func attestationDelta(
 		if err != nil {
 			return &AttDelta{}, err
 		}
-		attDelta.TargetPenalty += n / inactivityDenominator
+		attDelta.InactivityPenalty = n / inactivityDenominator
 	}
 
 	return attDelta, nil

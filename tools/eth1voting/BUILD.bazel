@@ -7,7 +7,7 @@ go_library(
         "main.go",
         "votes.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v4/tools/eth1voting",
+    importpath = "github.com/prysmaticlabs/prysm/v5/tools/eth1voting",
     visibility = ["//visibility:private"],
     deps = [
         "//config/params:go_default_library",

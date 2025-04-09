@@ -4,7 +4,7 @@ go_library(
     name = "go_default_library",
     srcs = ["pregen.go"],
     data = ["//testing/benchmark/benchmark_files:benchmark_data"],
-    importpath = "github.com/prysmaticlabs/prysm/v4/testing/benchmark",
+    importpath = "github.com/prysmaticlabs/prysm/v5/testing/benchmark",
     visibility = ["//visibility:public"],
     deps = [
         "//beacon-chain/state:go_default_library",

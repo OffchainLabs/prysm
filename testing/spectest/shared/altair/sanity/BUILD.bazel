@@ -8,7 +8,7 @@ go_library(
         "block_processing.yaml.go",
         "slot_processing.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v4/testing/spectest/shared/altair/sanity",
+    importpath = "github.com/prysmaticlabs/prysm/v5/testing/spectest/shared/altair/sanity",
     visibility = ["//testing/spectest:__subpackages__"],
     deps = [
         "//beacon-chain/core/helpers:go_default_library",
@@ -20,10 +20,10 @@ go_library(
         "//testing/require:go_default_library",
         "//testing/spectest/utils:go_default_library",
         "//testing/util:go_default_library",
-        "@com_github_d4l3k_messagediff//:go_default_library",
         "@com_github_golang_snappy//:go_default_library",
-        "@in_gopkg_d4l3k_messagediff_v1//:go_default_library",
+        "@com_github_google_go_cmp//cmp:go_default_library",
         "@io_bazel_rules_go//go/tools/bazel:go_default_library",
         "@org_golang_google_protobuf//proto:go_default_library",
+        "@org_golang_google_protobuf//testing/protocmp:go_default_library",
     ],
 )

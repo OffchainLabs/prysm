@@ -13,11 +13,11 @@ import (
 
 	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/io/file"
-	"github.com/prysmaticlabs/prysm/v4/testing/endtoend/helpers"
-	e2e "github.com/prysmaticlabs/prysm/v4/testing/endtoend/params"
-	e2etypes "github.com/prysmaticlabs/prysm/v4/testing/endtoend/types"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/io/file"
+	"github.com/prysmaticlabs/prysm/v5/testing/endtoend/helpers"
+	e2e "github.com/prysmaticlabs/prysm/v5/testing/endtoend/params"
+	e2etypes "github.com/prysmaticlabs/prysm/v5/testing/endtoend/types"
 )
 
 var _ e2etypes.ComponentRunner = (*LighthouseBeaconNode)(nil)
@@ -178,28 +178,28 @@ func (node *LighthouseBeaconNode) Start(ctx context.Context) error {
 		fmt.Sprintf("--testnet-dir=%s", testDir),
 		"--staking",
 		"--enr-address=127.0.0.1",
-		fmt.Sprintf("--enr-udp-port=%d", e2e.TestParams.Ports.LighthouseBeaconNodeP2PPort+index),
-		fmt.Sprintf("--enr-tcp-port=%d", e2e.TestParams.Ports.LighthouseBeaconNodeP2PPort+index),
-		fmt.Sprintf("--port=%d", e2e.TestParams.Ports.LighthouseBeaconNodeP2PPort+index),
+		fmt.Sprintf("--enr-udp-port=%d", e2e.TestParams.Ports.LighthouseBeaconNodeP2PPort+index*2), // multiply by 2 because LH adds 1 for quic4 port
+		fmt.Sprintf("--enr-tcp-port=%d", e2e.TestParams.Ports.LighthouseBeaconNodeP2PPort+index*2), // multiply by 2 because LH adds 1 for quic4 port
+		fmt.Sprintf("--port=%d", e2e.TestParams.Ports.LighthouseBeaconNodeP2PPort+index*2),         // multiply by 2 because LH adds 1 for quic4 port
 		fmt.Sprintf("--http-port=%d", e2e.TestParams.Ports.LighthouseBeaconNodeHTTPPort+index),
 		fmt.Sprintf("--target-peers=%d", 10),
-		fmt.Sprintf("--eth1-endpoints=http://127.0.0.1:%d", e2e.TestParams.Ports.Eth1RPCPort+prysmNodeCount+index),
 		fmt.Sprintf("--execution-endpoint=http://127.0.0.1:%d", e2e.TestParams.Ports.Eth1ProxyPort+prysmNodeCount+index),
 		fmt.Sprintf("--jwt-secrets=%s", jwtPath),
 		fmt.Sprintf("--boot-nodes=%s", node.enr),
 		fmt.Sprintf("--metrics-port=%d", e2e.TestParams.Ports.LighthouseBeaconNodeMetricsPort+index),
 		"--metrics",
 		"--http",
-		"--http-allow-sync-stalled",
 		"--enable-private-discovery",
 		"--debug-level=debug",
-		"--merge",
 		"--suggested-fee-recipient=0x878705ba3f8bc32fcf7f4caa1a35e72af65cf766",
 	}
 	if node.config.UseFixedPeerIDs {
 		flagVal := strings.Join(node.config.PeerIDs, ",")
 		args = append(args,
 			fmt.Sprintf("--trusted-peers=%s", flagVal))
+	}
+	if node.config.UseBuilder {
+		args = append(args, fmt.Sprintf("--builder=%s:%d", "http://127.0.0.1", e2e.TestParams.Ports.Eth1ProxyPort+prysmNodeCount+index))
 	}
 	cmd := exec.CommandContext(ctx, binaryPath, args...) /* #nosec G204 */
 	// Write stderr to log files.
@@ -265,7 +265,7 @@ func (node *LighthouseBeaconNode) createTestnetDir(ctx context.Context, index in
 	if err := file.WriteFile(bootPath, enrYaml); err != nil {
 		return "", err
 	}
-	deployPath := filepath.Join(testNetDir, "deploy_block.txt")
+	deployPath := filepath.Join(testNetDir, "deposit_contract_block.txt")
 	deployYaml := []byte("0")
 	if err := file.WriteFile(deployPath, deployYaml); err != nil {
 		return "", err
@@ -289,9 +289,9 @@ func (node *LighthouseBeaconNode) saveGenesis(ctx context.Context, testNetDir st
 	if err != nil {
 		return err
 	}
-	log.WithField("fork_version", g.Fork().CurrentVersion).
-		WithField("latest_block_header.root", fmt.Sprintf("%#x", lbhr)).
-		WithField("state_root", fmt.Sprintf("%#x", root)).
+	log.WithField("forkVersion", g.Fork().CurrentVersion).
+		WithField("latestBlockHeaderRoot", fmt.Sprintf("%#x", lbhr)).
+		WithField("stateRoot", fmt.Sprintf("%#x", root)).
 		Infof("BeaconState info")
 
 	genesisBytes, err := g.MarshalSSZ()

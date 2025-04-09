@@ -4,7 +4,8 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p/peers/peerdata"
+	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers/peerdata"
 )
 
 var _ Scorer = (*BadResponsesScorer)(nil)
@@ -56,12 +57,12 @@ func newBadResponsesScorer(store *peerdata.Store, config *BadResponsesScorerConf
 func (s *BadResponsesScorer) Score(pid peer.ID) float64 {
 	s.store.RLock()
 	defer s.store.RUnlock()
-	return s.score(pid)
+	return s.scoreNoLock(pid)
 }
 
-// score is a lock-free version of Score.
-func (s *BadResponsesScorer) score(pid peer.ID) float64 {
-	if s.isBadPeer(pid) {
+// scoreNoLock is a lock-free version of Score.
+func (s *BadResponsesScorer) scoreNoLock(pid peer.ID) float64 {
+	if s.isBadPeerNoLock(pid) != nil {
 		return BadPeerScore
 	}
 	score := float64(0)
@@ -87,11 +88,11 @@ func (s *BadResponsesScorer) Params() *BadResponsesScorerConfig {
 func (s *BadResponsesScorer) Count(pid peer.ID) (int, error) {
 	s.store.RLock()
 	defer s.store.RUnlock()
-	return s.count(pid)
+	return s.countNoLock(pid)
 }
 
-// count is a lock-free version of Count.
-func (s *BadResponsesScorer) count(pid peer.ID) (int, error) {
+// countNoLock is a lock-free version of Count.
+func (s *BadResponsesScorer) countNoLock(pid peer.ID) (int, error) {
 	if peerData, ok := s.store.PeerData(pid); ok {
 		return peerData.BadResponses, nil
 	}
@@ -116,18 +117,24 @@ func (s *BadResponsesScorer) Increment(pid peer.ID) {
 
 // IsBadPeer states if the peer is to be considered bad.
 // If the peer is unknown this will return `false`, which makes using this function easier than returning an error.
-func (s *BadResponsesScorer) IsBadPeer(pid peer.ID) bool {
+func (s *BadResponsesScorer) IsBadPeer(pid peer.ID) error {
 	s.store.RLock()
 	defer s.store.RUnlock()
-	return s.isBadPeer(pid)
+
+	return s.isBadPeerNoLock(pid)
 }
 
-// isBadPeer is lock-free version of IsBadPeer.
-func (s *BadResponsesScorer) isBadPeer(pid peer.ID) bool {
+// isBadPeerNoLock is lock-free version of IsBadPeer.
+func (s *BadResponsesScorer) isBadPeerNoLock(pid peer.ID) error {
 	if peerData, ok := s.store.PeerData(pid); ok {
-		return peerData.BadResponses >= s.config.Threshold
+		if peerData.BadResponses >= s.config.Threshold {
+			return errors.Errorf("peer exceeded bad responses threshold: got %d, threshold %d", peerData.BadResponses, s.config.Threshold)
+		}
+
+		return nil
 	}
-	return false
+
+	return nil
 }
 
 // BadPeers returns the peers that are considered bad.
@@ -137,7 +144,7 @@ func (s *BadResponsesScorer) BadPeers() []peer.ID {
 
 	badPeers := make([]peer.ID, 0)
 	for pid := range s.store.Peers() {
-		if s.isBadPeer(pid) {
+		if s.isBadPeerNoLock(pid) != nil {
 			badPeers = append(badPeers, pid)
 		}
 	}

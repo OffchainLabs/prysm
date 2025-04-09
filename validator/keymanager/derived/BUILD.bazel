@@ -7,7 +7,7 @@ go_library(
         "log.go",
         "mnemonic.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v4/validator/keymanager/derived",
+    importpath = "github.com/prysmaticlabs/prysm/v5/validator/keymanager/derived",
     visibility = [
         "//cmd/validator:__subpackages__",
         "//tools:__subpackages__",
@@ -19,7 +19,6 @@ go_library(
         "//crypto/bls:go_default_library",
         "//crypto/rand:go_default_library",
         "//io/prompt:go_default_library",
-        "//proto/eth/service:go_default_library",
         "//proto/prysm/v1alpha1/validator-client:go_default_library",
         "//validator/accounts/iface:go_default_library",
         "//validator/keymanager:go_default_library",

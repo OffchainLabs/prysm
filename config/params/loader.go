@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/math"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/math"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 )
@@ -53,7 +53,8 @@ func UnmarshalConfig(yamlFile []byte, conf *BeaconChainConfig) (*BeaconChainConf
 	}
 	yamlFile = []byte(strings.Join(lines, "\n"))
 	if err := yaml.UnmarshalStrict(yamlFile, conf); err != nil {
-		if _, ok := err.(*yaml.TypeError); !ok {
+		var typeError *yaml.TypeError
+		if !errors.As(err, &typeError) {
 			return nil, errors.Wrap(err, "Failed to parse chain config yaml file.")
 		} else {
 			log.WithError(err).Error("There were some issues parsing the config from a yaml file")
@@ -64,6 +65,8 @@ func UnmarshalConfig(yamlFile []byte, conf *BeaconChainConfig) (*BeaconChainConf
 	}
 	// recompute SqrRootSlotsPerEpoch constant to handle non-standard values of SlotsPerEpoch
 	conf.SqrRootSlotsPerEpoch = primitives.Slot(math.IntegerSquareRoot(uint64(conf.SlotsPerEpoch)))
+	// Recompute the fork schedule
+	conf.InitializeForkSchedule()
 	log.Debugf("Config file values: %+v", conf)
 	return conf, nil
 }
@@ -207,33 +210,37 @@ func ConfigToYaml(cfg *BeaconChainConfig) []byte {
 		fmt.Sprintf("TERMINAL_BLOCK_HASH: %#x", cfg.TerminalBlockHash),
 		fmt.Sprintf("TERMINAL_BLOCK_HASH_ACTIVATION_EPOCH: %d", cfg.TerminalBlockHashActivationEpoch),
 		fmt.Sprintf("DEPOSIT_CONTRACT_ADDRESS: %s", cfg.DepositContractAddress),
+		fmt.Sprintf("MAX_PER_EPOCH_ACTIVATION_CHURN_LIMIT: %d", cfg.MaxPerEpochActivationChurnLimit),
+		fmt.Sprintf("MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUESTS: %d", cfg.MinEpochsForBlobsSidecarsRequest),
+		fmt.Sprintf("MAX_REQUEST_BLOCKS_DENEB: %d", cfg.MaxRequestBlocksDeneb),
+		fmt.Sprintf("MAX_REQUEST_BLOB_SIDECARS: %d", cfg.MaxRequestBlobSidecars),
+		fmt.Sprintf("MAX_REQUEST_BLOB_SIDECARS_ELECTRA: %d", cfg.MaxRequestBlobSidecarsElectra),
+		fmt.Sprintf("BLOB_SIDECAR_SUBNET_COUNT: %d", cfg.BlobsidecarSubnetCount),
+		fmt.Sprintf("BLOB_SIDECAR_SUBNET_COUNT_ELECTRA: %d", cfg.BlobsidecarSubnetCountElectra),
 		fmt.Sprintf("DENEB_FORK_EPOCH: %d", cfg.DenebForkEpoch),
 		fmt.Sprintf("DENEB_FORK_VERSION: %#x", cfg.DenebForkVersion),
-	}
-
-	yamlFile := []byte(strings.Join(lines, "\n"))
-	return yamlFile
-}
-
-// NetworkConfigToYaml takes a provided network config and outputs its contents
-// in yaml. This allows prysm's network configs to be read by other clients.
-func NetworkConfigToYaml(cfg *NetworkConfig) []byte {
-	lines := []string{
-		fmt.Sprintf("GOSSIP_MAX_SIZE: %d", cfg.GossipMaxSize),
-		fmt.Sprintf("GOSSIP_MAX_SIZE_BELLATRIX: %d", cfg.GossipMaxSizeBellatrix),
-		fmt.Sprintf("MAX_CHUNK_SIZE: %d", cfg.MaxChunkSize),
-		fmt.Sprintf("MAX_CHUNK_SIZE_BELLATRIX: %d", cfg.MaxChunkSizeBellatrix),
+		fmt.Sprintf("ELECTRA_FORK_EPOCH: %d", cfg.ElectraForkEpoch),
+		fmt.Sprintf("ELECTRA_FORK_VERSION: %#x", cfg.ElectraForkVersion),
+		fmt.Sprintf("FULU_FORK_EPOCH: %d", cfg.FuluForkEpoch),
+		fmt.Sprintf("FULU_FORK_VERSION: %#x", cfg.FuluForkVersion),
+		fmt.Sprintf("EPOCHS_PER_SUBNET_SUBSCRIPTION: %d", cfg.EpochsPerSubnetSubscription),
+		fmt.Sprintf("ATTESTATION_SUBNET_EXTRA_BITS: %d", cfg.AttestationSubnetExtraBits),
+		fmt.Sprintf("ATTESTATION_SUBNET_PREFIX_BITS: %d", cfg.AttestationSubnetPrefixBits),
+		fmt.Sprintf("SUBNETS_PER_NODE: %d", cfg.SubnetsPerNode),
+		fmt.Sprintf("NODE_ID_BITS: %d", cfg.NodeIdBits),
+		fmt.Sprintf("MAX_PAYLOAD_SIZE: %d", cfg.MaxPayloadSize),
 		fmt.Sprintf("ATTESTATION_SUBNET_COUNT: %d", cfg.AttestationSubnetCount),
 		fmt.Sprintf("ATTESTATION_PROPAGATION_SLOT_RANGE: %d", cfg.AttestationPropagationSlotRange),
 		fmt.Sprintf("MAX_REQUEST_BLOCKS: %d", cfg.MaxRequestBlocks),
-		fmt.Sprintf("TTFB_TIMEOUT: %d", int(cfg.TtfbTimeout.Seconds())),
-		fmt.Sprintf("RESP_TIMEOUT: %d", int(cfg.RespTimeout.Seconds())),
-		fmt.Sprintf("MAXIMUM_GOSSIP_CLOCK_DISPARITY: %d", int(cfg.MaximumGossipClockDisparity.Seconds())),
+		fmt.Sprintf("TTFB_TIMEOUT: %d", int(cfg.TtfbTimeout)),
+		fmt.Sprintf("RESP_TIMEOUT: %d", int(cfg.RespTimeout)),
+		fmt.Sprintf("MAXIMUM_GOSSIP_CLOCK_DISPARITY: %d", int(cfg.MaximumGossipClockDisparity)),
 		fmt.Sprintf("MESSAGE_DOMAIN_INVALID_SNAPPY:  %#x", cfg.MessageDomainInvalidSnappy),
 		fmt.Sprintf("MESSAGE_DOMAIN_VALID_SNAPPY: %#x", cfg.MessageDomainValidSnappy),
-		fmt.Sprintf("MIN_EPOCHS_FOR_BLOBS_SIDECARS_REQUEST: %d", cfg.MinEpochsForBlobsSidecarsRequest),
-		fmt.Sprintf("MAX_REQUEST_BLOB_SIDECARS: %d", cfg.MaxRequestBlobSidecars),
-		fmt.Sprintf("MAX_REQUEST_BLOCKS_DENEB: %d", cfg.MaxRequestBlocksDeneb),
+		fmt.Sprintf("MIN_EPOCHS_FOR_BLOCK_REQUESTS: %d", int(cfg.MinEpochsForBlockRequests)),
+		fmt.Sprintf("MIN_PER_EPOCH_CHURN_LIMIT_ELECTRA: %d", cfg.MinPerEpochChurnLimitElectra),
+		fmt.Sprintf("MAX_BLOBS_PER_BLOCK: %d", cfg.DeprecatedMaxBlobsPerBlock),
+		fmt.Sprintf("MAX_BLOBS_PER_BLOCK_ELECTRA: %d", cfg.DeprecatedMaxBlobsPerBlockElectra),
 	}
 
 	yamlFile := []byte(strings.Join(lines, "\n"))

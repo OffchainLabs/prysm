@@ -6,7 +6,7 @@ go_library(
         "custom_types.go",
         "types.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v4/consensus-types/validator",
+    importpath = "github.com/prysmaticlabs/prysm/v5/consensus-types/validator",
     visibility = ["//visibility:public"],
     deps = ["//consensus-types/primitives:go_default_library"],
 )

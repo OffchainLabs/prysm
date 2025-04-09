@@ -17,6 +17,7 @@ echo "GIT_TREE_STATUS $git_tree_status"
 latest_version_tag=$(./hack/latest_version_tag.sh)
 echo "STABLE_VERSION_TAG $latest_version_tag"
 echo "STABLE_COMMIT_SHA $commit_sha"
+echo "STABLE_GIT_COMMIT $commit_sha"
 echo "STABLE_GIT_TAG $latest_version_tag"
 
 echo DOCKER_TAG "$(git rev-parse --abbrev-ref HEAD)-$(git rev-parse --short=6 HEAD)"                                                                                                                         

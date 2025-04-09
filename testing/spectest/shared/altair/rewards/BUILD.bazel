@@ -4,7 +4,7 @@ go_library(
     name = "go_default_library",
     testonly = True,
     srcs = ["rewards_penalties.go"],
-    importpath = "github.com/prysmaticlabs/prysm/v4/testing/spectest/shared/altair/rewards",
+    importpath = "github.com/prysmaticlabs/prysm/v5/testing/spectest/shared/altair/rewards",
     visibility = ["//testing/spectest:__subpackages__"],
     deps = [
         "//beacon-chain/core/altair:go_default_library",

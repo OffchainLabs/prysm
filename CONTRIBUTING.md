@@ -6,6 +6,9 @@ Excited by our work and want to get involved in building out our sharding releas
 
 You can explore our [Open Issues](https://github.com/prysmaticlabs/prysm/issues) in-the works for our different releases. Feel free to fork our repo and start creating PR’s after assigning yourself to an issue of interest. We are always chatting on [Discord](https://discord.gg/CTYGPUJ) drop us a line there if you want to get more involved or have any questions on our implementation!
 
+> [!IMPORTANT] 
+> Please, **do not send pull requests for trivial changes**, such as typos, these will be rejected. These types of pull requests incur a cost to reviewers and do not provide much value to the project. If you are unsure, please open an issue first to discuss the change.
+
 ## Contribution Steps
 
 **1. Set up Prysm following the instructions in README.md.**
@@ -120,15 +123,19 @@ $ git push myrepo feature-in-progress-branch
 
 Navigate to your fork of the repo on GitHub. On the upper left where the current branch is listed, change the branch to your feature-in-progress-branch. Open the files that you have worked on and check to make sure they include your changes.
 
-**16. Create a pull request.**
+**16. Add an entry to CHANGELOG.md.**
 
-Navigate your browser to https://github.com/prysmaticlabs/prysm and click on the new pull request button. In the “base” box on the left, leave the default selection “base master”, the branch that you want your changes to be applied to. In the “compare” box on the right, select feature-in-progress-branch, the branch containing the changes you want to apply. You will then be asked to answer a few questions about your pull request. After you complete the questionnaire, the pull request will appear in the list of pull requests at https://github.com/prysmaticlabs/prysm/pulls.
+All PRs must must include a changelog fragment file in the `changelog` directory. If your change is not user-facing or should not be mentioned in the changelog for some other reason, you may use the `Ignored` changelog section in your fragment's header to satisfy this requirement without altering the final release changelog. See the [Maintaining CHANGELOG.md](#maintaining-changelogmd) section for more information.
 
-**17. Respond to comments by Core Contributors.**
+**17. Create a pull request.**
+
+Navigate your browser to https://github.com/prysmaticlabs/prysm and click on the new pull request button. In the “base” box on the left, leave the default selection “base develop”, the branch that you want your changes to be applied to. In the “compare” box on the right, select feature-in-progress-branch, the branch containing the changes you want to apply. You will then be asked to answer a few questions about your pull request. After you complete the questionnaire, the pull request will appear in the list of pull requests at https://github.com/prysmaticlabs/prysm/pulls. Ensure that you have added an entry to CHANGELOG.md if your PR is a user-facing change. See the [Maintaining CHANGELOG.md](#maintaining-changelogmd) section for more information.
+
+**18. Respond to comments by Core Contributors.**
 
 Core Contributors may ask questions and request that you make edits. If you set notifications at the top of the page to “not watching,” you will still be notified by email whenever someone comments on the page of a pull request you have created. If you are asked to modify your pull request, repeat steps 8 through 15, then leave a comment to notify the Core Contributors that the pull request is ready for further review.
 
-**18. If the number of commits becomes excessive, you may be asked to squash your commits.**
+**19. If the number of commits becomes excessive, you may be asked to squash your commits.**
 
  You can do this with an interactive rebase. Start by running the following command to determine the commit that is the base of your branch...
 
@@ -136,7 +143,7 @@ Core Contributors may ask questions and request that you make edits. If you set 
 $ git merge-base feature-in-progress-branch prysm/master
 ```
 
-**19. The previous command will return a commit-hash that you should use in the following command.**
+**20. The previous command will return a commit-hash that you should use in the following command.**
 
 ```
 $ git rebase -i commit-hash
@@ -160,13 +167,24 @@ squash  hash 	add a feature
 
 Save and close the file, then a commit command will appear in the terminal that squashes the smaller commits into one. Check to be sure the commit message accurately reflects your changes and then hit enter to execute it.
 
-**20. Update your pull request with the following command.**
+**21. Update your pull request with the following command.**
 
 ```
 $ git push myrepo feature-in-progress-branch -f
 ```
 
-**21.  Finally, again leave a comment to the Core Contributors on the pull request to let them know that the pull request has been updated.**
+**22.  Finally, again leave a comment to the Core Contributors on the pull request to let them know that the pull request has been updated.**
+
+## Maintaining CHANGELOG.md
+
+This project follows the changelog guidelines from [keepachangelog.com](https://keepachangelog.com/en/1.1.0/). In order to minimize conflicts and workflow headaches, we chose to implement a changelog management
+strategy that uses changelog "fragment" files, managed by our changelog management tool called `unclog`. Each PR must include a new changelog fragment file in the `changelog` directory, as specified by unclog's
+[README.md](https://github.com/OffchainLabs/unclog?tab=readme-ov-file#what-is-a-changelog-fragment). As the `unclog` README suggests in the [Best Practices](https://github.com/OffchainLabs/unclog?tab=readme-ov-file#best-practices) section, 
+the standard naming convention for your PR's fragment file, to avoid conflicting with another fragment file, is `changelog/<github user name>_<PR branch name>.md`.
+
+### Releasing
+
+When a new release is made, the "Unreleased" section should be moved to a new section with the release version and the current date. Then a new "Unreleased" section is made at the top of the file with the categories listed above.
 
 ## Contributor Responsibilities
 

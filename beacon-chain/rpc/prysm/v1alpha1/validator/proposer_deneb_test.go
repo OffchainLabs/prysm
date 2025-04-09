@@ -3,73 +3,34 @@ package validator
 import (
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	enginev1 "github.com/prysmaticlabs/prysm/v4/proto/engine/v1"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/testing/util"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/util"
 )
 
-func Test_blobsBundleToSidecars(t *testing.T) {
-	b, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlockDeneb())
+func TestServer_buildBlobSidecars(t *testing.T) {
+	kzgCommitments := [][]byte{bytesutil.PadTo([]byte{'a'}, 48), bytesutil.PadTo([]byte{'b'}, 48)}
+	blk, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlockDeneb())
 	require.NoError(t, err)
-
-	b.SetSlot(1)
-	b.SetProposerIndex(2)
-	b.SetParentRoot(bytesutil.PadTo([]byte("parentRoot"), 32))
-
-	kcs := [][]byte{[]byte("kzg"), []byte("kzg1"), []byte("kzg2")}
-	proofs := [][]byte{[]byte("proof"), []byte("proof1"), []byte("proof2")}
-	blobs := [][]byte{[]byte("blob"), []byte("blob1"), []byte("blob2")}
-	bundle := &enginev1.BlobsBundle{KzgCommitments: kcs, Proofs: proofs, Blobs: blobs}
-
-	sidecars, err := blobsBundleToSidecars(bundle, b.Block())
+	require.NoError(t, blk.SetBlobKzgCommitments(kzgCommitments))
+	proof, err := hexutil.Decode("0xb4021b0de10f743893d4f71e1bf830c019e832958efd6795baf2f83b8699a9eccc5dc99015d8d4d8ec370d0cc333c06a")
 	require.NoError(t, err)
-
-	r, err := b.Block().HashTreeRoot()
+	scs, err := BuildBlobSidecars(blk, [][]byte{
+		make([]byte, fieldparams.BlobLength), make([]byte, fieldparams.BlobLength),
+	}, [][]byte{
+		proof, proof,
+	})
 	require.NoError(t, err)
-	require.Equal(t, len(sidecars), 3)
-	for i := 0; i < len(sidecars); i++ {
-		require.DeepEqual(t, sidecars[i].BlockRoot, r[:])
-		require.Equal(t, sidecars[i].Index, uint64(i))
-		require.Equal(t, sidecars[i].Slot, b.Block().Slot())
-		pr := b.Block().ParentRoot()
-		require.DeepEqual(t, sidecars[i].BlockParentRoot, pr[:])
-		require.Equal(t, sidecars[i].ProposerIndex, b.Block().ProposerIndex())
-		require.DeepEqual(t, sidecars[i].Blob, blobs[i])
-		require.DeepEqual(t, sidecars[i].KzgProof, proofs[i])
-		require.DeepEqual(t, sidecars[i].KzgCommitment, kcs[i])
-	}
-}
+	require.Equal(t, 2, len(scs))
 
-func Test_blindBlobsBundleToSidecars(t *testing.T) {
-	b, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlockDeneb())
+	inclusionProof0, err := blocks.MerkleProofKZGCommitment(blk.Block().Body(), 0)
 	require.NoError(t, err)
+	require.DeepEqual(t, inclusionProof0, scs[0].CommitmentInclusionProof)
 
-	b.SetSlot(1)
-	b.SetProposerIndex(2)
-	b.SetParentRoot(bytesutil.PadTo([]byte("parentRoot"), 32))
-
-	kcs := [][]byte{[]byte("kzg"), []byte("kzg1"), []byte("kzg2")}
-	proofs := [][]byte{[]byte("proof"), []byte("proof1"), []byte("proof2")}
-	blobRoots := [][]byte{[]byte("blob"), []byte("blob1"), []byte("blob2")}
-	bundle := &enginev1.BlindedBlobsBundle{KzgCommitments: kcs, Proofs: proofs, BlobRoots: blobRoots}
-
-	sidecars, err := blindBlobsBundleToSidecars(bundle, b.Block())
+	inclusionProof1, err := blocks.MerkleProofKZGCommitment(blk.Block().Body(), 1)
 	require.NoError(t, err)
-
-	r, err := b.Block().HashTreeRoot()
-	require.NoError(t, err)
-	require.Equal(t, len(sidecars), 3)
-	for i := 0; i < len(sidecars); i++ {
-		require.DeepEqual(t, sidecars[i].BlockRoot, r[:])
-		require.Equal(t, sidecars[i].Index, uint64(i))
-		require.Equal(t, sidecars[i].Slot, b.Block().Slot())
-		pr := b.Block().ParentRoot()
-		require.DeepEqual(t, sidecars[i].BlockParentRoot, pr[:])
-		require.Equal(t, sidecars[i].ProposerIndex, b.Block().ProposerIndex())
-		require.DeepEqual(t, sidecars[i].BlobRoot, blobRoots[i])
-		require.DeepEqual(t, sidecars[i].KzgProof, proofs[i])
-		require.DeepEqual(t, sidecars[i].KzgCommitment, kcs[i])
-	}
+	require.DeepEqual(t, inclusionProof1, scs[1].CommitmentInclusionProof)
 }

@@ -3,6 +3,7 @@ package p2p
 import (
 	"context"
 	"encoding/hex"
+	"fmt"
 	"strings"
 	"time"
 
@@ -10,10 +11,12 @@ import (
 	pubsubpb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/cmd/beacon-chain/flags"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	pbrpc "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/encoder"
+	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	mathutil "github.com/prysmaticlabs/prysm/v5/math"
+	pbrpc "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
 const (
@@ -25,7 +28,7 @@ const (
 	// gossip parameters
 	gossipSubMcacheLen    = 6   // number of windows to retain full messages in cache for `IWANT` responses
 	gossipSubMcacheGossip = 3   // number of windows to gossip about
-	gossipSubSeenTTL      = 550 // number of heartbeat intervals to retain message IDs
+	gossipSubSeenTTL      = 768 // number of seconds to retain message IDs ( 2 epochs)
 
 	// fanout ttl
 	gossipSubFanoutTTL = 60000000000 // TTL for fanout maps for topics we are not subscribed to but have published to, in nano seconds
@@ -130,7 +133,7 @@ func (s *Service) peerInspector(peerMap map[peer.ID]*pubsub.PeerScoreSnapshot) {
 	}
 }
 
-// Creates a list of pubsub options to configure out router with.
+// pubsubOptions creates a list of options to configure our router with.
 func (s *Service) pubsubOptions() []pubsub.Option {
 	psOpts := []pubsub.Option{
 		pubsub.WithMessageSignaturePolicy(pubsub.StrictNoSign),
@@ -139,15 +142,41 @@ func (s *Service) pubsubOptions() []pubsub.Option {
 			return MsgID(s.genesisValidatorsRoot, pmsg)
 		}),
 		pubsub.WithSubscriptionFilter(s),
-		pubsub.WithPeerOutboundQueueSize(pubsubQueueSize),
-		pubsub.WithMaxMessageSize(int(params.BeaconNetworkConfig().GossipMaxSizeBellatrix)),
-		pubsub.WithValidateQueueSize(pubsubQueueSize),
+		pubsub.WithPeerOutboundQueueSize(int(s.cfg.QueueSize)),
+		pubsub.WithMaxMessageSize(int(MaxMessageSize())), // lint:ignore uintcast -- Max Message Size is a config value and is naturally bounded by networking limitations.
+		pubsub.WithValidateQueueSize(int(s.cfg.QueueSize)),
 		pubsub.WithPeerScore(peerScoringParams()),
 		pubsub.WithPeerScoreInspect(s.peerInspector, time.Minute),
 		pubsub.WithGossipSubParams(pubsubGossipParam()),
 		pubsub.WithRawTracer(gossipTracer{host: s.host}),
 	}
+
+	if len(s.cfg.StaticPeers) > 0 {
+		directPeersAddrInfos, err := parsePeersEnr(s.cfg.StaticPeers)
+		if err != nil {
+			log.WithError(err).Error("Could not add direct peer option")
+			return psOpts
+		}
+		psOpts = append(psOpts, pubsub.WithDirectPeers(directPeersAddrInfos))
+	}
+
 	return psOpts
+}
+
+// parsePeersEnr takes a list of raw ENRs and converts them into a list of AddrInfos.
+func parsePeersEnr(peers []string) ([]peer.AddrInfo, error) {
+	addrs, err := PeersFromStringAddrs(peers)
+	if err != nil {
+		return nil, fmt.Errorf("cannot convert peers raw ENRs into multiaddresses: %w", err)
+	}
+	if len(addrs) == 0 {
+		return nil, fmt.Errorf("converting peers raw ENRs into multiaddresses resulted in an empty list")
+	}
+	directAddrInfos, err := peer.AddrInfosFromP2pAddrs(addrs...)
+	if err != nil {
+		return nil, fmt.Errorf("cannot convert peers multiaddresses into AddrInfos: %w", err)
+	}
+	return directAddrInfos, nil
 }
 
 // creates a custom gossipsub parameter set.
@@ -155,6 +184,7 @@ func pubsubGossipParam() pubsub.GossipSubParams {
 	gParams := pubsub.DefaultGossipSubParams()
 	gParams.Dlo = gossipSubDlo
 	gParams.D = gossipSubD
+	gParams.Dhi = gossipSubDhi
 	gParams.HeartbeatInterval = gossipSubHeartbeatInterval
 	gParams.HistoryLength = gossipSubMcacheLen
 	gParams.HistoryGossip = gossipSubMcacheGossip
@@ -165,7 +195,8 @@ func pubsubGossipParam() pubsub.GossipSubParams {
 // to configure our message id time-cache rather than instantiating
 // it with a router instance.
 func setPubSubParameters() {
-	pubsub.TimeCacheDuration = 550 * gossipSubHeartbeatInterval
+	seenTtl := 2 * time.Second * time.Duration(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot))
+	pubsub.TimeCacheDuration = seenTtl
 }
 
 // convert from libp2p's internal schema to a compatible prysm protobuf format.
@@ -205,4 +236,15 @@ func ExtractGossipDigest(topic string) ([4]byte, error) {
 		return [4]byte{}, errors.Errorf("invalid digest length wanted %d but got %d", digestLength, len(digest))
 	}
 	return bytesutil.ToBytes4(digest), nil
+}
+
+// MaxMessageSize returns the maximum allowed compressed message size.
+//
+// Spec pseudocode definition:
+// def max_message_size() -> uint64:
+//
+//	# Allow 1024 bytes for framing and encoding overhead but at least 1MiB in case MAX_PAYLOAD_SIZE is small.
+//	return max(max_compressed_len(MAX_PAYLOAD_SIZE) + 1024, 1024 * 1024)
+func MaxMessageSize() uint64 {
+	return mathutil.Max(encoder.MaxCompressedLen(params.BeaconConfig().MaxPayloadSize)+1024, 1024*1024)
 }

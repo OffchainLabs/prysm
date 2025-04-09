@@ -6,7 +6,7 @@ go_library(
         "prompt.go",
         "validate.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v4/io/prompt",
+    importpath = "github.com/prysmaticlabs/prysm/v5/io/prompt",
     visibility = ["//visibility:public"],
     deps = [
         "//io/file:go_default_library",

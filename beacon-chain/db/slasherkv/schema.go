@@ -7,10 +7,21 @@ package slasherkv
 // it easy to scan for keys that have a certain shard number as a prefix and return those
 // corresponding attestations.
 var (
-	// Slasher buckets.
-	attestedEpochsByValidator  = []byte("attested-epochs-by-validator")
-	attestationRecordsBucket   = []byte("attestation-records")
+
+	// key: (encoded) ValidatorIndex
+	// value: (encoded) Epoch
+	attestedEpochsByValidator = []byte("attested-epochs-by-validator")
+
+	// key: attestation SigningRoot
+	// value: (encoded + compressed) IndexedAttestation
+	attestationRecordsBucket = []byte("attestation-records")
+
+	// key: (encoded) Target Epoch + (encoded) ValidatorIndex
+	// value: attestation SigningRoot
 	attestationDataRootsBucket = []byte("attestation-data-roots")
-	proposalRecordsBucket      = []byte("proposal-records")
-	slasherChunksBucket        = []byte("slasher-chunks")
+
+	// key: Slot+ValidatorIndex
+	// value: (encoded) SignedBlockHeaderWrapper
+	proposalRecordsBucket = []byte("proposal-records")
+	slasherChunksBucket   = []byte("slasher-chunks")
 )

@@ -1,6 +1,7 @@
 package p2p
 
 import (
+	"net"
 	"strconv"
 	"strings"
 
@@ -12,32 +13,32 @@ import (
 var log = logrus.WithField("prefix", "p2p")
 
 func logIPAddr(id peer.ID, addrs ...ma.Multiaddr) {
-	var correctAddr ma.Multiaddr
 	for _, addr := range addrs {
-		if strings.Contains(addr.String(), "/ip4/") || strings.Contains(addr.String(), "/ip6/") {
-			correctAddr = addr
-			break
+		if !(strings.Contains(addr.String(), "/ip4/") || strings.Contains(addr.String(), "/ip6/")) {
+			continue
 		}
-	}
-	if correctAddr != nil {
+
 		log.WithField(
 			"multiAddr",
-			correctAddr.String()+"/p2p/"+id.String(),
+			addr.String()+"/p2p/"+id.String(),
 		).Info("Node started p2p server")
 	}
 }
 
-func logExternalIPAddr(id peer.ID, addr string, port uint) {
+func logExternalIPAddr(id peer.ID, addr string, tcpPort, quicPort uint) {
 	if addr != "" {
-		multiAddr, err := MultiAddressBuilder(addr, port)
+		multiAddrs, err := MultiAddressBuilder(net.ParseIP(addr), tcpPort, quicPort)
 		if err != nil {
 			log.WithError(err).Error("Could not create multiaddress")
 			return
 		}
-		log.WithField(
-			"multiAddr",
-			multiAddr.String()+"/p2p/"+id.String(),
-		).Info("Node started external p2p server")
+
+		for _, multiAddr := range multiAddrs {
+			log.WithField(
+				"multiAddr",
+				multiAddr.String()+"/p2p/"+id.String(),
+			).Info("Node started external p2p server")
+		}
 	}
 }
 

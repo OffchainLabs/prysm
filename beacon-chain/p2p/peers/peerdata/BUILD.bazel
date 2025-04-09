@@ -3,7 +3,7 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 go_library(
     name = "go_default_library",
     srcs = ["store.go"],
-    importpath = "github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p/peers/peerdata",
+    importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers/peerdata",
     visibility = ["//beacon-chain:__subpackages__"],
     deps = [
         "//proto/prysm/v1alpha1:go_default_library",

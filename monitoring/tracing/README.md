@@ -35,7 +35,7 @@ $ go tool trace trace.out
 #### How to collect additional traces
 
 We use the OpenCensus library to create traces. To trace the execution of a p2p
-message through the system, we must define [spans](https://godoc.org/go.opencensus.io/trace#Span) around the code that handles the message. To correlate the trace with other spans defined for the same message, use the context passed inside the [Message](https://godoc.org/github.com/prysmaticlabs/prysm/shared/deprecated-p2p#Message) struct to create a span:
+message through the system, we must define [spans](https://godoc.org/go.opencensus.io/trace#Span) around the code that handles the message. To correlate the trace with other spans defined for the same message, use the context passed inside the Message struct to create a span:
 
 ```go
 var msg p2p.Message

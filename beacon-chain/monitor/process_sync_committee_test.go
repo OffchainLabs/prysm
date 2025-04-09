@@ -4,10 +4,10 @@ import (
 	"testing"
 
 	"github.com/prysmaticlabs/go-bitfield"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/blocks"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/testing/util"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/util"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
@@ -22,8 +22,8 @@ func TestProcessSyncCommitteeContribution(t *testing.T) {
 	}
 
 	s.processSyncCommitteeContribution(contrib)
-	require.LogsContain(t, hook, "\"Sync committee aggregation processed\" ValidatorIndex=1")
-	require.LogsDoNotContain(t, hook, "ValidatorIndex=2")
+	require.LogsContain(t, hook, "\"Sync committee aggregation processed\" prefix=monitor validatorIndex=1")
+	require.LogsDoNotContain(t, hook, "validatorIndex=2")
 }
 
 func TestProcessSyncAggregate(t *testing.T) {
@@ -53,7 +53,7 @@ func TestProcessSyncAggregate(t *testing.T) {
 	require.NoError(t, err)
 
 	s.processSyncAggregate(beaconState, wrappedBlock)
-	require.LogsContain(t, hook, "\"Sync committee contribution included\" BalanceChange=0 ContribCount=1 ExpectedContribCount=4 NewBalance=32000000000 ValidatorIndex=1 prefix=monitor")
-	require.LogsContain(t, hook, "\"Sync committee contribution included\" BalanceChange=100000000 ContribCount=2 ExpectedContribCount=2 NewBalance=32000000000 ValidatorIndex=12 prefix=monitor")
-	require.LogsDoNotContain(t, hook, "ValidatorIndex=2")
+	require.LogsContain(t, hook, "\"Sync committee contribution included\" balanceChange=0 contribCount=1 expectedContribCount=4 newBalance=32000000000 prefix=monitor validatorIndex=1")
+	require.LogsContain(t, hook, "\"Sync committee contribution included\" balanceChange=100000000 contribCount=2 expectedContribCount=2 newBalance=32000000000 prefix=monitor validatorIndex=12")
+	require.LogsDoNotContain(t, hook, "validatorIndex=2")
 }

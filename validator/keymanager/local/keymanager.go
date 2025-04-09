@@ -4,23 +4,24 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"sync"
 
 	"github.com/google/uuid"
 	"github.com/logrusorgru/aurora"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/async/event"
-	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v4/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	validatorpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1/validator-client"
-	"github.com/prysmaticlabs/prysm/v4/runtime/interop"
-	"github.com/prysmaticlabs/prysm/v4/validator/accounts/iface"
-	"github.com/prysmaticlabs/prysm/v4/validator/accounts/petnames"
-	"github.com/prysmaticlabs/prysm/v4/validator/keymanager"
+	"github.com/prysmaticlabs/prysm/v5/async/event"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
+	validatorpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/validator-client"
+	"github.com/prysmaticlabs/prysm/v5/runtime/interop"
+	"github.com/prysmaticlabs/prysm/v5/validator/accounts/iface"
+	"github.com/prysmaticlabs/prysm/v5/validator/accounts/petnames"
+	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
 	keystorev4 "github.com/wealdtech/go-eth2-wallet-encryptor-keystorev4"
-	"go.opencensus.io/trace"
 )
 
 var (
@@ -176,7 +177,7 @@ func (km *Keymanager) initializeKeysCachesFromKeystore() error {
 
 // FetchValidatingPublicKeys fetches the list of active public keys from the local account keystores.
 func (_ *Keymanager) FetchValidatingPublicKeys(ctx context.Context) ([][fieldparams.BLSPubkeyLength]byte, error) {
-	ctx, span := trace.StartSpan(ctx, "keymanager.FetchValidatingPublicKeys")
+	_, span := trace.StartSpan(ctx, "keymanager.FetchValidatingPublicKeys")
 	defer span.End()
 
 	lock.RLock()
@@ -282,18 +283,29 @@ func (km *Keymanager) SaveStoreAndReInitialize(ctx context.Context, store *accou
 	if err != nil {
 		return err
 	}
-	if err := km.wallet.WriteFileAtPath(ctx, AccountsPath, AccountsKeystoreFileName, encodedAccounts); err != nil {
+
+	existedPreviously, err := km.wallet.WriteFileAtPath(ctx, AccountsPath, AccountsKeystoreFileName, encodedAccounts)
+	if err != nil {
 		return err
 	}
 
-	// Reinitialize account store and cache
-	// This will update the in-memory information instead of reading from the file itself for safety concerns
-	km.accountsStore = store
-	err = km.initializeKeysCachesFromKeystore()
-	if err != nil {
-		return errors.Wrap(err, "failed to initialize keys caches")
+	if existedPreviously {
+		// Reinitialize account store and cache
+		// This will update the in-memory information instead of reading from the file itself for safety concerns
+		km.accountsStore = store
+		err = km.initializeKeysCachesFromKeystore()
+		if err != nil {
+			return errors.Wrap(err, "failed to initialize keys caches")
+		}
+
+		return nil
 	}
-	return err
+
+	// manually reload the account from the keystore the first time
+	km.reloadAccountsFromKeystoreFile(filepath.Join(km.wallet.AccountsDir(), AccountsPath, AccountsKeystoreFileName))
+	// listen to account changes of the new file
+	go km.listenForAccountChanges(ctx)
+	return nil
 }
 
 // CreateAccountsKeystoreRepresentation is a pure function that takes an accountStore and wallet password and returns the encrypted formatted json version for local writing.
@@ -321,6 +333,13 @@ func CreateAccountsKeystoreRepresentation(
 		Version: encryptor.Version(),
 		Name:    encryptor.Name(),
 	}, nil
+}
+
+// CreateEmptyKeyStoreRepresentationForNewWallet creates a placeholder accounts keystore for a new Prysm Local Wallet.
+func CreateEmptyKeyStoreRepresentationForNewWallet(ctx context.Context, walletPassword string) (*AccountsKeystoreRepresentation, error) {
+	// make sure everything is clean when creating this.
+	ResetCaches()
+	return CreateAccountsKeystoreRepresentation(ctx, &accountStore{}, walletPassword)
 }
 
 // CreateOrUpdateInMemoryAccountsStore will set or update the local accounts store and update the local cache.
@@ -408,15 +427,6 @@ func (km *Keymanager) ListKeymanagerAccounts(ctx context.Context, cfg keymanager
 				fmt.Printf("%s %#x\n", au.BrightRed("[validating private key]").Bold(), privateKeys[i])
 			}
 		}
-		if !cfg.ShowDepositData {
-			continue
-		}
-		fmt.Printf(
-			"%s\n",
-			au.BrightRed("If you imported your account coming from the eth2 launchpad, you will find your "+
-				"deposit_data.json in the eth2.0-deposit-cli's validator_keys folder"),
-		)
-		fmt.Println("")
 	}
 	fmt.Println("")
 	return nil
@@ -425,13 +435,10 @@ func (km *Keymanager) ListKeymanagerAccounts(ctx context.Context, cfg keymanager
 func CreatePrintoutOfKeys(keys [][]byte) string {
 	var keysStr string
 	for i, k := range keys {
-		if i == 0 {
-			keysStr += fmt.Sprintf("%#x", bytesutil.Trunc(k))
-		} else if i == len(keys)-1 {
-			keysStr += fmt.Sprintf("%#x", bytesutil.Trunc(k))
-		} else {
-			keysStr += fmt.Sprintf(",%#x", bytesutil.Trunc(k))
+		if i != 0 {
+			keysStr += "," // Add a comma before each key except the first one
 		}
+		keysStr += fmt.Sprintf("%#x", bytesutil.Trunc(k))
 	}
 	return keysStr
 }

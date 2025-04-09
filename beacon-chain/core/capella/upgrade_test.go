@@ -3,14 +3,14 @@ package capella_test
 import (
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/capella"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/time"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	enginev1 "github.com/prysmaticlabs/prysm/v4/proto/engine/v1"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/testing/util"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/capella"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/util"
 )
 
 func TestUpgradeToCapella(t *testing.T) {
@@ -84,6 +84,7 @@ func TestUpgradeToCapella(t *testing.T) {
 		GasLimit:         prevHeader.GasLimit(),
 		GasUsed:          prevHeader.GasUsed(),
 		Timestamp:        prevHeader.Timestamp(),
+		ExtraData:        prevHeader.ExtraData(),
 		BaseFeePerGas:    prevHeader.BaseFeePerGas(),
 		BlockHash:        prevHeader.BlockHash(),
 		TransactionsRoot: txRoot,

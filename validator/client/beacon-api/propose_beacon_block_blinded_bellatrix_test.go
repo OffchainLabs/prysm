@@ -7,35 +7,36 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/golang/mock/gomock"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/apimiddleware"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	enginev1 "github.com/prysmaticlabs/prysm/v4/proto/engine/v1"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/validator/client/beacon-api/mock"
-	test_helpers "github.com/prysmaticlabs/prysm/v4/validator/client/beacon-api/test-helpers"
+	"github.com/prysmaticlabs/prysm/v5/api/apiutil"
+	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api/mock"
+	testhelpers "github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api/test-helpers"
+	"go.uber.org/mock/gomock"
 )
 
 func TestProposeBeaconBlock_BlindedBellatrix(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	jsonRestHandler := mock.NewMockjsonRestHandler(ctrl)
+	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 
 	blindedBellatrixBlock := generateSignedBlindedBellatrixBlock()
 
 	genericSignedBlock := &ethpb.GenericSignedBeaconBlock{}
 	genericSignedBlock.Block = blindedBellatrixBlock
 
-	jsonBlindedBellatrixBlock := &apimiddleware.SignedBlindedBeaconBlockBellatrixJson{
+	jsonBlindedBellatrixBlock := &structs.SignedBlindedBeaconBlockBellatrix{
 		Signature: hexutil.Encode(blindedBellatrixBlock.BlindedBellatrix.Signature),
-		Message: &apimiddleware.BlindedBeaconBlockBellatrixJson{
+		Message: &structs.BlindedBeaconBlockBellatrix{
 			ParentRoot:    hexutil.Encode(blindedBellatrixBlock.BlindedBellatrix.Block.ParentRoot),
-			ProposerIndex: uint64ToString(blindedBellatrixBlock.BlindedBellatrix.Block.ProposerIndex),
-			Slot:          uint64ToString(blindedBellatrixBlock.BlindedBellatrix.Block.Slot),
+			ProposerIndex: apiutil.Uint64ToString(blindedBellatrixBlock.BlindedBellatrix.Block.ProposerIndex),
+			Slot:          apiutil.Uint64ToString(blindedBellatrixBlock.BlindedBellatrix.Block.Slot),
 			StateRoot:     hexutil.Encode(blindedBellatrixBlock.BlindedBellatrix.Block.StateRoot),
-			Body: &apimiddleware.BlindedBeaconBlockBodyBellatrixJson{
+			Body: &structs.BlindedBeaconBlockBodyBellatrix{
 				Attestations:      jsonifyAttestations(blindedBellatrixBlock.BlindedBellatrix.Block.Body.Attestations),
 				AttesterSlashings: jsonifyAttesterSlashings(blindedBellatrixBlock.BlindedBellatrix.Block.Body.AttesterSlashings),
 				Deposits:          jsonifyDeposits(blindedBellatrixBlock.BlindedBellatrix.Block.Body.Deposits),
@@ -44,24 +45,24 @@ func TestProposeBeaconBlock_BlindedBellatrix(t *testing.T) {
 				ProposerSlashings: jsonifyProposerSlashings(blindedBellatrixBlock.BlindedBellatrix.Block.Body.ProposerSlashings),
 				RandaoReveal:      hexutil.Encode(blindedBellatrixBlock.BlindedBellatrix.Block.Body.RandaoReveal),
 				VoluntaryExits:    JsonifySignedVoluntaryExits(blindedBellatrixBlock.BlindedBellatrix.Block.Body.VoluntaryExits),
-				SyncAggregate: &apimiddleware.SyncAggregateJson{
+				SyncAggregate: &structs.SyncAggregate{
 					SyncCommitteeBits:      hexutil.Encode(blindedBellatrixBlock.BlindedBellatrix.Block.Body.SyncAggregate.SyncCommitteeBits),
 					SyncCommitteeSignature: hexutil.Encode(blindedBellatrixBlock.BlindedBellatrix.Block.Body.SyncAggregate.SyncCommitteeSignature),
 				},
-				ExecutionPayloadHeader: &apimiddleware.ExecutionPayloadHeaderJson{
+				ExecutionPayloadHeader: &structs.ExecutionPayloadHeader{
 					BaseFeePerGas:    bytesutil.LittleEndianBytesToBigInt(blindedBellatrixBlock.BlindedBellatrix.Block.Body.ExecutionPayloadHeader.BaseFeePerGas).String(),
 					BlockHash:        hexutil.Encode(blindedBellatrixBlock.BlindedBellatrix.Block.Body.ExecutionPayloadHeader.BlockHash),
-					BlockNumber:      uint64ToString(blindedBellatrixBlock.BlindedBellatrix.Block.Body.ExecutionPayloadHeader.BlockNumber),
+					BlockNumber:      apiutil.Uint64ToString(blindedBellatrixBlock.BlindedBellatrix.Block.Body.ExecutionPayloadHeader.BlockNumber),
 					ExtraData:        hexutil.Encode(blindedBellatrixBlock.BlindedBellatrix.Block.Body.ExecutionPayloadHeader.ExtraData),
 					FeeRecipient:     hexutil.Encode(blindedBellatrixBlock.BlindedBellatrix.Block.Body.ExecutionPayloadHeader.FeeRecipient),
-					GasLimit:         uint64ToString(blindedBellatrixBlock.BlindedBellatrix.Block.Body.ExecutionPayloadHeader.GasLimit),
-					GasUsed:          uint64ToString(blindedBellatrixBlock.BlindedBellatrix.Block.Body.ExecutionPayloadHeader.GasUsed),
+					GasLimit:         apiutil.Uint64ToString(blindedBellatrixBlock.BlindedBellatrix.Block.Body.ExecutionPayloadHeader.GasLimit),
+					GasUsed:          apiutil.Uint64ToString(blindedBellatrixBlock.BlindedBellatrix.Block.Body.ExecutionPayloadHeader.GasUsed),
 					LogsBloom:        hexutil.Encode(blindedBellatrixBlock.BlindedBellatrix.Block.Body.ExecutionPayloadHeader.LogsBloom),
 					ParentHash:       hexutil.Encode(blindedBellatrixBlock.BlindedBellatrix.Block.Body.ExecutionPayloadHeader.ParentHash),
 					PrevRandao:       hexutil.Encode(blindedBellatrixBlock.BlindedBellatrix.Block.Body.ExecutionPayloadHeader.PrevRandao),
 					ReceiptsRoot:     hexutil.Encode(blindedBellatrixBlock.BlindedBellatrix.Block.Body.ExecutionPayloadHeader.ReceiptsRoot),
 					StateRoot:        hexutil.Encode(blindedBellatrixBlock.BlindedBellatrix.Block.Body.ExecutionPayloadHeader.StateRoot),
-					TimeStamp:        uint64ToString(blindedBellatrixBlock.BlindedBellatrix.Block.Body.ExecutionPayloadHeader.Timestamp),
+					Timestamp:        apiutil.Uint64ToString(blindedBellatrixBlock.BlindedBellatrix.Block.Body.ExecutionPayloadHeader.Timestamp),
 					TransactionsRoot: hexutil.Encode(blindedBellatrixBlock.BlindedBellatrix.Block.Body.ExecutionPayloadHeader.TransactionsRoot),
 				},
 			},
@@ -75,9 +76,9 @@ func TestProposeBeaconBlock_BlindedBellatrix(t *testing.T) {
 
 	// Make sure that what we send in the POST body is the marshalled version of the protobuf block
 	headers := map[string]string{"Eth-Consensus-Version": "bellatrix"}
-	jsonRestHandler.EXPECT().PostRestJson(
-		ctx,
-		"/eth/v1/beacon/blinded_blocks",
+	jsonRestHandler.EXPECT().Post(
+		gomock.Any(),
+		"/eth/v2/beacon/blinded_blocks",
 		headers,
 		bytes.NewBuffer(marshalledBlock),
 		nil,
@@ -101,37 +102,37 @@ func generateSignedBlindedBellatrixBlock() *ethpb.GenericSignedBeaconBlock_Blind
 			Block: &ethpb.BlindedBeaconBlockBellatrix{
 				Slot:          1,
 				ProposerIndex: 2,
-				ParentRoot:    test_helpers.FillByteSlice(32, 3),
-				StateRoot:     test_helpers.FillByteSlice(32, 4),
+				ParentRoot:    testhelpers.FillByteSlice(32, 3),
+				StateRoot:     testhelpers.FillByteSlice(32, 4),
 				Body: &ethpb.BlindedBeaconBlockBodyBellatrix{
-					RandaoReveal: test_helpers.FillByteSlice(96, 5),
+					RandaoReveal: testhelpers.FillByteSlice(96, 5),
 					Eth1Data: &ethpb.Eth1Data{
-						DepositRoot:  test_helpers.FillByteSlice(32, 6),
+						DepositRoot:  testhelpers.FillByteSlice(32, 6),
 						DepositCount: 7,
-						BlockHash:    test_helpers.FillByteSlice(32, 8),
+						BlockHash:    testhelpers.FillByteSlice(32, 8),
 					},
-					Graffiti: test_helpers.FillByteSlice(32, 9),
+					Graffiti: testhelpers.FillByteSlice(32, 9),
 					ProposerSlashings: []*ethpb.ProposerSlashing{
 						{
 							Header_1: &ethpb.SignedBeaconBlockHeader{
 								Header: &ethpb.BeaconBlockHeader{
 									Slot:          10,
 									ProposerIndex: 11,
-									ParentRoot:    test_helpers.FillByteSlice(32, 12),
-									StateRoot:     test_helpers.FillByteSlice(32, 13),
-									BodyRoot:      test_helpers.FillByteSlice(32, 14),
+									ParentRoot:    testhelpers.FillByteSlice(32, 12),
+									StateRoot:     testhelpers.FillByteSlice(32, 13),
+									BodyRoot:      testhelpers.FillByteSlice(32, 14),
 								},
-								Signature: test_helpers.FillByteSlice(96, 15),
+								Signature: testhelpers.FillByteSlice(96, 15),
 							},
 							Header_2: &ethpb.SignedBeaconBlockHeader{
 								Header: &ethpb.BeaconBlockHeader{
 									Slot:          16,
 									ProposerIndex: 17,
-									ParentRoot:    test_helpers.FillByteSlice(32, 18),
-									StateRoot:     test_helpers.FillByteSlice(32, 19),
-									BodyRoot:      test_helpers.FillByteSlice(32, 20),
+									ParentRoot:    testhelpers.FillByteSlice(32, 18),
+									StateRoot:     testhelpers.FillByteSlice(32, 19),
+									BodyRoot:      testhelpers.FillByteSlice(32, 20),
 								},
-								Signature: test_helpers.FillByteSlice(96, 21),
+								Signature: testhelpers.FillByteSlice(96, 21),
 							},
 						},
 						{
@@ -139,21 +140,21 @@ func generateSignedBlindedBellatrixBlock() *ethpb.GenericSignedBeaconBlock_Blind
 								Header: &ethpb.BeaconBlockHeader{
 									Slot:          22,
 									ProposerIndex: 23,
-									ParentRoot:    test_helpers.FillByteSlice(32, 24),
-									StateRoot:     test_helpers.FillByteSlice(32, 25),
-									BodyRoot:      test_helpers.FillByteSlice(32, 26),
+									ParentRoot:    testhelpers.FillByteSlice(32, 24),
+									StateRoot:     testhelpers.FillByteSlice(32, 25),
+									BodyRoot:      testhelpers.FillByteSlice(32, 26),
 								},
-								Signature: test_helpers.FillByteSlice(96, 27),
+								Signature: testhelpers.FillByteSlice(96, 27),
 							},
 							Header_2: &ethpb.SignedBeaconBlockHeader{
 								Header: &ethpb.BeaconBlockHeader{
 									Slot:          28,
 									ProposerIndex: 29,
-									ParentRoot:    test_helpers.FillByteSlice(32, 30),
-									StateRoot:     test_helpers.FillByteSlice(32, 31),
-									BodyRoot:      test_helpers.FillByteSlice(32, 32),
+									ParentRoot:    testhelpers.FillByteSlice(32, 30),
+									StateRoot:     testhelpers.FillByteSlice(32, 31),
+									BodyRoot:      testhelpers.FillByteSlice(32, 32),
 								},
-								Signature: test_helpers.FillByteSlice(96, 33),
+								Signature: testhelpers.FillByteSlice(96, 33),
 							},
 						},
 					},
@@ -164,34 +165,34 @@ func generateSignedBlindedBellatrixBlock() *ethpb.GenericSignedBeaconBlock_Blind
 								Data: &ethpb.AttestationData{
 									Slot:            36,
 									CommitteeIndex:  37,
-									BeaconBlockRoot: test_helpers.FillByteSlice(32, 38),
+									BeaconBlockRoot: testhelpers.FillByteSlice(32, 38),
 									Source: &ethpb.Checkpoint{
 										Epoch: 39,
-										Root:  test_helpers.FillByteSlice(32, 40),
+										Root:  testhelpers.FillByteSlice(32, 40),
 									},
 									Target: &ethpb.Checkpoint{
 										Epoch: 41,
-										Root:  test_helpers.FillByteSlice(32, 42),
+										Root:  testhelpers.FillByteSlice(32, 42),
 									},
 								},
-								Signature: test_helpers.FillByteSlice(96, 43),
+								Signature: testhelpers.FillByteSlice(96, 43),
 							},
 							Attestation_2: &ethpb.IndexedAttestation{
 								AttestingIndices: []uint64{44, 45},
 								Data: &ethpb.AttestationData{
 									Slot:            46,
 									CommitteeIndex:  47,
-									BeaconBlockRoot: test_helpers.FillByteSlice(32, 38),
+									BeaconBlockRoot: testhelpers.FillByteSlice(32, 38),
 									Source: &ethpb.Checkpoint{
 										Epoch: 49,
-										Root:  test_helpers.FillByteSlice(32, 50),
+										Root:  testhelpers.FillByteSlice(32, 50),
 									},
 									Target: &ethpb.Checkpoint{
 										Epoch: 51,
-										Root:  test_helpers.FillByteSlice(32, 52),
+										Root:  testhelpers.FillByteSlice(32, 52),
 									},
 								},
-								Signature: test_helpers.FillByteSlice(96, 53),
+								Signature: testhelpers.FillByteSlice(96, 53),
 							},
 						},
 						{
@@ -200,90 +201,90 @@ func generateSignedBlindedBellatrixBlock() *ethpb.GenericSignedBeaconBlock_Blind
 								Data: &ethpb.AttestationData{
 									Slot:            56,
 									CommitteeIndex:  57,
-									BeaconBlockRoot: test_helpers.FillByteSlice(32, 38),
+									BeaconBlockRoot: testhelpers.FillByteSlice(32, 38),
 									Source: &ethpb.Checkpoint{
 										Epoch: 59,
-										Root:  test_helpers.FillByteSlice(32, 60),
+										Root:  testhelpers.FillByteSlice(32, 60),
 									},
 									Target: &ethpb.Checkpoint{
 										Epoch: 61,
-										Root:  test_helpers.FillByteSlice(32, 62),
+										Root:  testhelpers.FillByteSlice(32, 62),
 									},
 								},
-								Signature: test_helpers.FillByteSlice(96, 63),
+								Signature: testhelpers.FillByteSlice(96, 63),
 							},
 							Attestation_2: &ethpb.IndexedAttestation{
 								AttestingIndices: []uint64{64, 65},
 								Data: &ethpb.AttestationData{
 									Slot:            66,
 									CommitteeIndex:  67,
-									BeaconBlockRoot: test_helpers.FillByteSlice(32, 38),
+									BeaconBlockRoot: testhelpers.FillByteSlice(32, 38),
 									Source: &ethpb.Checkpoint{
 										Epoch: 69,
-										Root:  test_helpers.FillByteSlice(32, 70),
+										Root:  testhelpers.FillByteSlice(32, 70),
 									},
 									Target: &ethpb.Checkpoint{
 										Epoch: 71,
-										Root:  test_helpers.FillByteSlice(32, 72),
+										Root:  testhelpers.FillByteSlice(32, 72),
 									},
 								},
-								Signature: test_helpers.FillByteSlice(96, 73),
+								Signature: testhelpers.FillByteSlice(96, 73),
 							},
 						},
 					},
 					Attestations: []*ethpb.Attestation{
 						{
-							AggregationBits: test_helpers.FillByteSlice(4, 74),
+							AggregationBits: testhelpers.FillByteSlice(4, 74),
 							Data: &ethpb.AttestationData{
 								Slot:            75,
 								CommitteeIndex:  76,
-								BeaconBlockRoot: test_helpers.FillByteSlice(32, 38),
+								BeaconBlockRoot: testhelpers.FillByteSlice(32, 38),
 								Source: &ethpb.Checkpoint{
 									Epoch: 78,
-									Root:  test_helpers.FillByteSlice(32, 79),
+									Root:  testhelpers.FillByteSlice(32, 79),
 								},
 								Target: &ethpb.Checkpoint{
 									Epoch: 80,
-									Root:  test_helpers.FillByteSlice(32, 81),
+									Root:  testhelpers.FillByteSlice(32, 81),
 								},
 							},
-							Signature: test_helpers.FillByteSlice(96, 82),
+							Signature: testhelpers.FillByteSlice(96, 82),
 						},
 						{
-							AggregationBits: test_helpers.FillByteSlice(4, 83),
+							AggregationBits: testhelpers.FillByteSlice(4, 83),
 							Data: &ethpb.AttestationData{
 								Slot:            84,
 								CommitteeIndex:  85,
-								BeaconBlockRoot: test_helpers.FillByteSlice(32, 38),
+								BeaconBlockRoot: testhelpers.FillByteSlice(32, 38),
 								Source: &ethpb.Checkpoint{
 									Epoch: 87,
-									Root:  test_helpers.FillByteSlice(32, 88),
+									Root:  testhelpers.FillByteSlice(32, 88),
 								},
 								Target: &ethpb.Checkpoint{
 									Epoch: 89,
-									Root:  test_helpers.FillByteSlice(32, 90),
+									Root:  testhelpers.FillByteSlice(32, 90),
 								},
 							},
-							Signature: test_helpers.FillByteSlice(96, 91),
+							Signature: testhelpers.FillByteSlice(96, 91),
 						},
 					},
 					Deposits: []*ethpb.Deposit{
 						{
-							Proof: test_helpers.FillByteArraySlice(33, test_helpers.FillByteSlice(32, 92)),
+							Proof: testhelpers.FillByteArraySlice(33, testhelpers.FillByteSlice(32, 92)),
 							Data: &ethpb.Deposit_Data{
-								PublicKey:             test_helpers.FillByteSlice(48, 94),
-								WithdrawalCredentials: test_helpers.FillByteSlice(32, 95),
+								PublicKey:             testhelpers.FillByteSlice(48, 94),
+								WithdrawalCredentials: testhelpers.FillByteSlice(32, 95),
 								Amount:                96,
-								Signature:             test_helpers.FillByteSlice(96, 97),
+								Signature:             testhelpers.FillByteSlice(96, 97),
 							},
 						},
 						{
-							Proof: test_helpers.FillByteArraySlice(33, test_helpers.FillByteSlice(32, 98)),
+							Proof: testhelpers.FillByteArraySlice(33, testhelpers.FillByteSlice(32, 98)),
 							Data: &ethpb.Deposit_Data{
-								PublicKey:             test_helpers.FillByteSlice(48, 100),
-								WithdrawalCredentials: test_helpers.FillByteSlice(32, 101),
+								PublicKey:             testhelpers.FillByteSlice(48, 100),
+								WithdrawalCredentials: testhelpers.FillByteSlice(32, 101),
 								Amount:                102,
-								Signature:             test_helpers.FillByteSlice(96, 103),
+								Signature:             testhelpers.FillByteSlice(96, 103),
 							},
 						},
 					},
@@ -293,39 +294,39 @@ func generateSignedBlindedBellatrixBlock() *ethpb.GenericSignedBeaconBlock_Blind
 								Epoch:          104,
 								ValidatorIndex: 105,
 							},
-							Signature: test_helpers.FillByteSlice(96, 106),
+							Signature: testhelpers.FillByteSlice(96, 106),
 						},
 						{
 							Exit: &ethpb.VoluntaryExit{
 								Epoch:          107,
 								ValidatorIndex: 108,
 							},
-							Signature: test_helpers.FillByteSlice(96, 109),
+							Signature: testhelpers.FillByteSlice(96, 109),
 						},
 					},
 					SyncAggregate: &ethpb.SyncAggregate{
-						SyncCommitteeBits:      test_helpers.FillByteSlice(64, 110),
-						SyncCommitteeSignature: test_helpers.FillByteSlice(96, 111),
+						SyncCommitteeBits:      testhelpers.FillByteSlice(64, 110),
+						SyncCommitteeSignature: testhelpers.FillByteSlice(96, 111),
 					},
 					ExecutionPayloadHeader: &enginev1.ExecutionPayloadHeader{
-						ParentHash:       test_helpers.FillByteSlice(32, 112),
-						FeeRecipient:     test_helpers.FillByteSlice(20, 113),
-						StateRoot:        test_helpers.FillByteSlice(32, 114),
-						ReceiptsRoot:     test_helpers.FillByteSlice(32, 115),
-						LogsBloom:        test_helpers.FillByteSlice(256, 116),
-						PrevRandao:       test_helpers.FillByteSlice(32, 117),
+						ParentHash:       testhelpers.FillByteSlice(32, 112),
+						FeeRecipient:     testhelpers.FillByteSlice(20, 113),
+						StateRoot:        testhelpers.FillByteSlice(32, 114),
+						ReceiptsRoot:     testhelpers.FillByteSlice(32, 115),
+						LogsBloom:        testhelpers.FillByteSlice(256, 116),
+						PrevRandao:       testhelpers.FillByteSlice(32, 117),
 						BlockNumber:      118,
 						GasLimit:         119,
 						GasUsed:          120,
 						Timestamp:        121,
-						ExtraData:        test_helpers.FillByteSlice(32, 122),
-						BaseFeePerGas:    test_helpers.FillByteSlice(32, 123),
-						BlockHash:        test_helpers.FillByteSlice(32, 124),
-						TransactionsRoot: test_helpers.FillByteSlice(32, 125),
+						ExtraData:        testhelpers.FillByteSlice(32, 122),
+						BaseFeePerGas:    testhelpers.FillByteSlice(32, 123),
+						BlockHash:        testhelpers.FillByteSlice(32, 124),
+						TransactionsRoot: testhelpers.FillByteSlice(32, 125),
 					},
 				},
 			},
-			Signature: test_helpers.FillByteSlice(96, 126),
+			Signature: testhelpers.FillByteSlice(96, 126),
 		},
 	}
 }

@@ -20,26 +20,24 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	eth "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	e2e "github.com/prysmaticlabs/prysm/v4/testing/endtoend/params"
-	e2etypes "github.com/prysmaticlabs/prysm/v4/testing/endtoend/types"
-	"github.com/prysmaticlabs/prysm/v4/time/slots"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	e2e "github.com/prysmaticlabs/prysm/v5/testing/endtoend/params"
+	e2etypes "github.com/prysmaticlabs/prysm/v5/testing/endtoend/types"
+	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 )
 
 const (
-	maxPollingWaitTime    = 60 * time.Second // A minute so timing out doesn't take very long.
-	filePollingInterval   = 500 * time.Millisecond
-	memoryHeapFileName    = "node_heap_%d.pb.gz"
-	cpuProfileFileName    = "node_cpu_profile_%d.pb.gz"
-	fileBufferSize        = 64 * 1024
-	maxFileBufferSize     = 1024 * 1024
-	AltairE2EForkEpoch    = params.AltairE2EForkEpoch
-	BellatrixE2EForkEpoch = params.BellatrixE2EForkEpoch
-	CapellaE2EForkEpoch   = params.CapellaE2EForkEpoch
+	maxPollingWaitTime     = 60 * time.Second // A minute so timing out doesn't take very long.
+	filePollingInterval    = 500 * time.Millisecond
+	memoryHeapFileName     = "node_heap_%d.pb.gz"
+	cpuProfileFileName     = "node_cpu_profile_%d.pb.gz"
+	goroutineTraceFileName = "node_goroutine_trace_%d.log"
+	fileBufferSize         = 64 * 1024
+	maxFileBufferSize      = 1024 * 1024
 )
 
 // Graffiti is a list of sample graffiti strings.
@@ -134,7 +132,7 @@ func WaitForTextInFile(src *os.File, match string) error {
 
 	select {
 	case <-ctx.Done():
-		return fmt.Errorf("could not find requested text \"%s\" in %s before deadline:\n", match, f.Name())
+		return fmt.Errorf("could not find requested text \"%s\" in %s before deadline", match, f.Name())
 	case <-foundChan:
 		return nil
 	case err = <-errChan:
@@ -198,7 +196,7 @@ random:
   - "Takoyaki"
 `)
 	f := filepath.Join(testDir, "graffiti.yaml")
-	if err := os.WriteFile(f, b, os.ModePerm); err != nil {
+	if err := os.WriteFile(f, b, 0600); err != nil {
 		return "", err
 	}
 	return f, nil
@@ -254,6 +252,11 @@ func WritePprofFiles(testDir string, index int) error {
 	}
 	url = fmt.Sprintf("http://127.0.0.1:%d/debug/pprof/profile", e2e.TestParams.Ports.PrysmBeaconNodePprofPort+index)
 	filePath = filepath.Join(testDir, fmt.Sprintf(cpuProfileFileName, index))
+	if err := writeURLRespAtPath(url, filePath); err != nil {
+		return err
+	}
+	url = fmt.Sprintf("http://127.0.0.1:%d/debug/pprof/goroutine?debug=1", e2e.TestParams.Ports.PrysmBeaconNodePprofPort+index)
+	filePath = filepath.Join(testDir, fmt.Sprintf(goroutineTraceFileName, index))
 	return writeURLRespAtPath(url, filePath)
 }
 
@@ -320,7 +323,7 @@ func NewLocalConnections(ctx context.Context, numConns int) ([]*grpc.ClientConn,
 func BeaconAPIHostnames(numConns int) []string {
 	hostnames := make([]string, 0)
 	for i := 0; i < numConns; i++ {
-		port := e2e.TestParams.Ports.PrysmBeaconNodeGatewayPort + i
+		port := e2e.TestParams.Ports.PrysmBeaconNodeHTTPPort + i
 		hostnames = append(hostnames, net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
 	}
 	return hostnames
@@ -355,7 +358,6 @@ func WaitOnNodes(ctx context.Context, nodes []e2etypes.ComponentRunner, nodesSta
 	// Start nodes.
 	g, ctx := errgroup.WithContext(ctx)
 	for _, node := range nodes {
-		node := node
 		g.Go(func() error {
 			return node.Start(ctx)
 		})

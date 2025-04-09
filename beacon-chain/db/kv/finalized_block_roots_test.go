@@ -1,19 +1,21 @@
 package kv
 
 import (
+	"bytes"
 	"context"
 	"testing"
 
-	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	consensusblocks "github.com/prysmaticlabs/prysm/v4/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/testing/util"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	consensusblocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/util"
+	bolt "go.etcd.io/bbolt"
 )
 
 var genesisBlockRoot = bytesutil.ToBytes32([]byte{'G', 'E', 'N', 'E', 'S', 'I', 'S'})
@@ -233,4 +235,109 @@ func makeBlocksAltair(t *testing.T, startIdx, num uint64, previousRoot [32]byte)
 		require.NoError(t, err)
 	}
 	return ifaceBlocks
+}
+
+func TestStore_BackfillFinalizedIndexSingle(t *testing.T) {
+	db := setupDB(t)
+	ctx := context.Background()
+	// we're making 4 blocks so we can test an element without a valid child at the end
+	blks, err := consensusblocks.NewROBlockSlice(makeBlocks(t, 0, 4, [32]byte{}))
+	require.NoError(t, err)
+
+	// existing is the child that we'll set up in the index by hand to seed the index.
+	existing := blks[3]
+
+	// toUpdate is a single item update, emulating a backfill batch size of 1. it is the parent of `existing`.
+	toUpdate := blks[2]
+
+	// set up existing finalized block
+	ebpr := existing.Block().ParentRoot()
+	ebr := existing.Root()
+	ebf := &ethpb.FinalizedBlockRootContainer{
+		ParentRoot: ebpr[:],
+		ChildRoot:  make([]byte, 32), // we're bypassing validation to seed the db, so we don't need a valid child.
+	}
+	enc, err := encode(ctx, ebf)
+	require.NoError(t, err)
+	// writing this to the index outside of the validating function to seed the test.
+	err = db.db.Update(func(tx *bolt.Tx) error {
+		bkt := tx.Bucket(finalizedBlockRootsIndexBucket)
+		return bkt.Put(ebr[:], enc)
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, db.BackfillFinalizedIndex(ctx, []consensusblocks.ROBlock{toUpdate}, ebr))
+
+	// make sure that we still correctly validate descendents in the single item case.
+	noChild := blks[0] // will fail to update because we don't have blks[1] in the db.
+	// test wrong child param
+	require.ErrorIs(t, db.BackfillFinalizedIndex(ctx, []consensusblocks.ROBlock{noChild}, ebr), errNotConnectedToFinalized)
+	// test parent of child that isn't finalized
+	require.ErrorIs(t, db.BackfillFinalizedIndex(ctx, []consensusblocks.ROBlock{noChild}, blks[1].Root()), errFinalizedChildNotFound)
+
+	// now make it work by writing the missing block
+	require.NoError(t, db.BackfillFinalizedIndex(ctx, []consensusblocks.ROBlock{blks[1]}, blks[2].Root()))
+	// since blks[1] is now in the index, we should be able to update blks[0]
+	require.NoError(t, db.BackfillFinalizedIndex(ctx, []consensusblocks.ROBlock{blks[0]}, blks[1].Root()))
+}
+
+func TestStore_BackfillFinalizedIndex(t *testing.T) {
+	db := setupDB(t)
+	ctx := context.Background()
+	require.ErrorIs(t, db.BackfillFinalizedIndex(ctx, []consensusblocks.ROBlock{}, [32]byte{}), errEmptyBlockSlice)
+	blks, err := consensusblocks.NewROBlockSlice(makeBlocks(t, 0, 66, [32]byte{}))
+	require.NoError(t, err)
+
+	// set up existing finalized block
+	ebpr := blks[64].Block().ParentRoot()
+	ebr := blks[64].Root()
+	chldr := blks[65].Root()
+	ebf := &ethpb.FinalizedBlockRootContainer{
+		ParentRoot: ebpr[:],
+		ChildRoot:  chldr[:],
+	}
+	enc, err := encode(ctx, ebf)
+	require.NoError(t, err)
+	err = db.db.Update(func(tx *bolt.Tx) error {
+		bkt := tx.Bucket(finalizedBlockRootsIndexBucket)
+		return bkt.Put(ebr[:], enc)
+	})
+	require.NoError(t, err)
+
+	// reslice to remove the existing blocks
+	blks = blks[0:64]
+	// check the other error conditions with a descendent root that really doesn't exist
+
+	disjoint := []consensusblocks.ROBlock{
+		blks[0],
+		blks[2],
+	}
+	require.ErrorIs(t, db.BackfillFinalizedIndex(ctx, disjoint, [32]byte{}), errIncorrectBlockParent)
+	require.ErrorIs(t, errFinalizedChildNotFound, db.BackfillFinalizedIndex(ctx, blks, [32]byte{}))
+
+	// use the real root so that it succeeds
+	require.NoError(t, db.BackfillFinalizedIndex(ctx, blks, ebr))
+	for i := range blks {
+		require.NoError(t, db.db.View(func(tx *bolt.Tx) error {
+			bkt := tx.Bucket(finalizedBlockRootsIndexBucket)
+			encfr := bkt.Get(blks[i].RootSlice())
+			require.Equal(t, true, len(encfr) > 0)
+			fr := &ethpb.FinalizedBlockRootContainer{}
+			require.NoError(t, decode(ctx, encfr, fr))
+			require.Equal(t, 32, len(fr.ParentRoot))
+			require.Equal(t, 32, len(fr.ChildRoot))
+			pr := blks[i].Block().ParentRoot()
+			require.Equal(t, true, bytes.Equal(fr.ParentRoot, pr[:]))
+			if i > 0 {
+				require.Equal(t, true, bytes.Equal(fr.ParentRoot, blks[i-1].RootSlice()))
+			}
+			if i < len(blks)-1 {
+				require.DeepEqual(t, fr.ChildRoot, blks[i+1].RootSlice())
+			}
+			if i == len(blks)-1 {
+				require.DeepEqual(t, fr.ChildRoot, ebr[:])
+			}
+			return nil
+		}))
+	}
 }

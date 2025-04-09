@@ -5,26 +5,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/cache"
-	testDB "github.com/prysmaticlabs/prysm/v4/beacon-chain/db/testing"
-	mockExecution "github.com/prysmaticlabs/prysm/v4/beacon-chain/execution/testing"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/testing/util"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
+	testDB "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
+	mockExecution "github.com/prysmaticlabs/prysm/v5/beacon-chain/execution/testing"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/util"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
-
-func TestService_isNewProposer(t *testing.T) {
-	beaconDB := testDB.SetupDB(t)
-	service := setupBeaconChain(t, beaconDB)
-	require.Equal(t, false, service.isNewProposer(service.CurrentSlot()+1))
-
-	service.cfg.ProposerSlotIndexCache.SetProposerAndPayloadIDs(service.CurrentSlot()+1, 0, [8]byte{}, [32]byte{} /* root */)
-	require.Equal(t, true, service.isNewProposer(service.CurrentSlot()+1))
-}
 
 func TestService_isNewHead(t *testing.T) {
 	beaconDB := testDB.SetupDB(t)
@@ -67,33 +58,14 @@ func TestService_getHeadStateAndBlock(t *testing.T) {
 }
 
 func TestService_forkchoiceUpdateWithExecution_exceptionalCases(t *testing.T) {
-	hook := logTest.NewGlobal()
 	ctx := context.Background()
 	opts := testServiceOptsWithDB(t)
 
 	service, err := NewService(ctx, opts...)
 	require.NoError(t, err)
-	service.cfg.ProposerSlotIndexCache = cache.NewProposerPayloadIDsCache()
-	_, err = service.forkchoiceUpdateWithExecution(ctx, service.headRoot(), service.CurrentSlot()+1)
-	require.NoError(t, err)
-	hookErr := "could not notify forkchoice update"
-	invalidStateErr := "could not get state summary: could not find block in DB"
-	require.LogsDoNotContain(t, hook, invalidStateErr)
-	require.LogsDoNotContain(t, hook, hookErr)
-	gb, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlock())
-	require.NoError(t, err)
-	require.NoError(t, service.saveInitSyncBlock(ctx, [32]byte{'a'}, gb))
-	_, err = service.forkchoiceUpdateWithExecution(ctx, [32]byte{'a'}, service.CurrentSlot()+1)
-	require.NoError(t, err)
-	require.LogsContain(t, hook, invalidStateErr)
+	service.cfg.PayloadIDCache = cache.NewPayloadIDCache()
+	service.cfg.TrackedValidatorsCache = cache.NewTrackedValidatorsCache()
 
-	hook.Reset()
-	service.head = &head{
-		root:  [32]byte{'a'},
-		block: nil, /* should not panic if notify head uses correct head */
-	}
-
-	// Block in Cache
 	b := util.NewBeaconBlock()
 	b.Block.Slot = 2
 	wsb, err := blocks.NewSignedBeaconBlock(b)
@@ -107,13 +79,7 @@ func TestService_forkchoiceUpdateWithExecution_exceptionalCases(t *testing.T) {
 		block: wsb,
 		state: st,
 	}
-	service.cfg.ProposerSlotIndexCache.SetProposerAndPayloadIDs(2, 1, [8]byte{1}, [32]byte{2})
-	_, err = service.forkchoiceUpdateWithExecution(ctx, r1, service.CurrentSlot())
-	require.NoError(t, err)
-	require.LogsDoNotContain(t, hook, invalidStateErr)
-	require.LogsDoNotContain(t, hook, hookErr)
-
-	// Block in DB
+	service.cfg.PayloadIDCache.Set(2, [32]byte{2}, [8]byte{1})
 	b = util.NewBeaconBlock()
 	b.Block.Slot = 3
 	util.SaveBlock(t, ctx, service.cfg.BeaconDB, b)
@@ -125,25 +91,22 @@ func TestService_forkchoiceUpdateWithExecution_exceptionalCases(t *testing.T) {
 		block: wsb,
 		state: st,
 	}
-	service.cfg.ProposerSlotIndexCache.SetProposerAndPayloadIDs(2, 1, [8]byte{1}, [32]byte{2})
-	_, err = service.forkchoiceUpdateWithExecution(ctx, r1, service.CurrentSlot()+1)
-	require.NoError(t, err)
-	require.LogsDoNotContain(t, hook, invalidStateErr)
-	require.LogsDoNotContain(t, hook, hookErr)
-	vId, payloadID, has := service.cfg.ProposerSlotIndexCache.GetProposerPayloadIDs(2, [32]byte{2})
-	require.Equal(t, true, has)
-	require.Equal(t, primitives.ValidatorIndex(1), vId)
-	require.Equal(t, [8]byte{1}, payloadID)
+	service.cfg.PayloadIDCache.Set(2, [32]byte{2}, [8]byte{1})
+	args := &fcuConfig{
+		headState:     st,
+		headRoot:      r1,
+		headBlock:     wsb,
+		proposingSlot: service.CurrentSlot() + 1,
+	}
+	require.NoError(t, service.forkchoiceUpdateWithExecution(ctx, args))
 
-	// Test zero headRoot returns immediately.
-	headRoot := service.headRoot()
-	_, err = service.forkchoiceUpdateWithExecution(ctx, [32]byte{}, service.CurrentSlot()+1)
-	require.NoError(t, err)
-	require.Equal(t, service.headRoot(), headRoot)
+	payloadID, has := service.cfg.PayloadIDCache.PayloadID(2, [32]byte{2})
+	require.Equal(t, true, has)
+	require.Equal(t, primitives.PayloadID{1}, payloadID)
 }
 
 func TestService_forkchoiceUpdateWithExecution_SameHeadRootNewProposer(t *testing.T) {
-	service, tr := minimalTestService(t)
+	service, tr := minimalTestService(t, WithPayloadIDCache(cache.NewPayloadIDCache()))
 	ctx, beaconDB, fcs := tr.ctx, tr.db, tr.fcs
 
 	altairBlk := util.SaveBlock(t, ctx, beaconDB, util.NewBeaconBlockAltair())
@@ -182,10 +145,14 @@ func TestService_forkchoiceUpdateWithExecution_SameHeadRootNewProposer(t *testin
 	service.head.root = r
 	service.head.block = sb
 	service.head.state = st
-	service.cfg.ProposerSlotIndexCache.SetProposerAndPayloadIDs(service.CurrentSlot()+1, 0, [8]byte{}, [32]byte{} /* root */)
-	_, err = service.forkchoiceUpdateWithExecution(ctx, r, service.CurrentSlot()+1)
-	require.NoError(t, err)
-
+	service.cfg.PayloadIDCache.Set(service.CurrentSlot()+1, [32]byte{} /* root */, [8]byte{})
+	args := &fcuConfig{
+		headState:     st,
+		headBlock:     sb,
+		headRoot:      r,
+		proposingSlot: service.CurrentSlot() + 1,
+	}
+	require.NoError(t, service.forkchoiceUpdateWithExecution(ctx, args))
 }
 
 func TestShouldOverrideFCU(t *testing.T) {

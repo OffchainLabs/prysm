@@ -1,15 +1,15 @@
 package ssz
 
 import (
-	"github.com/prysmaticlabs/prysm/v4/container/trie"
-	"github.com/prysmaticlabs/prysm/v4/crypto/hash/htr"
+	"encoding/binary"
+
+	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/gohashtree"
+	"github.com/prysmaticlabs/prysm/v5/container/trie"
+	"github.com/prysmaticlabs/prysm/v5/crypto/hash/htr"
 )
 
-// Merkleize.go is mostly a directly copy of the same filename from
-// https://github.com/protolambda/zssz/blob/master/merkle/merkleize.go.
-// The reason the method is copied instead of imported is due to us using a
-// custom hasher interface for a reduced memory footprint when using
-// 'Merkleize'.
+var errInvalidNilSlice = errors.New("invalid empty slice")
 
 const (
 	mask0 = ^uint64((1 << (1 << iota)) - 1)
@@ -68,9 +68,10 @@ func Depth(v uint64) (out uint8) {
 }
 
 // Merkleize with log(N) space allocation
+// This method will panic when count > limit.
 func Merkleize(hasher Hasher, count, limit uint64, leaf func(i uint64) []byte) (out [32]byte) {
 	if count > limit {
-		panic("merkleizing list that is too large, over limit")
+		panic("merkleizing list that is too large, over limit") // lint:nopanic -- Panic is communicated in godoc commentary.
 	}
 	if limit == 0 {
 		return
@@ -132,72 +133,6 @@ func Merkleize(hasher Hasher, count, limit uint64, leaf func(i uint64) []byte) (
 	return tmp[limitDepth]
 }
 
-// ConstructProof builds a merkle-branch of the given depth, at the given index (at that depth),
-// for a list of leafs of a balanced binary tree.
-func ConstructProof(hasher Hasher, count, limit uint64, leaf func(i uint64) []byte, index uint64) (branch [][32]byte) {
-	if count > limit {
-		panic("merkleizing list that is too large, over limit")
-	}
-	if index >= limit {
-		panic("index out of range, over limit")
-	}
-	if limit <= 1 {
-		return
-	}
-	depth := Depth(count)
-	limitDepth := Depth(limit)
-	branch = append(branch, trie.ZeroHashes[:limitDepth]...)
-
-	tmp := make([][32]byte, limitDepth+1)
-
-	j := uint8(0)
-	var hArr [32]byte
-	h := hArr[:]
-
-	merge := func(i uint64) {
-		// merge back up from bottom to top, as far as we can
-		for j = 0; ; j++ {
-			// if i is a sibling of index at the given depth,
-			// and i is the last index of the subtree to that depth,
-			// then put h into the branch
-			if (i>>j)^1 == (index>>j) && (((1<<j)-1)&i) == ((1<<j)-1) {
-				// insert sibling into the proof
-				branch[j] = hArr
-			}
-			// stop merging when we are in the left side of the next combi
-			if i&(uint64(1)<<j) == 0 {
-				// if we are at the count, we want to merge in zero-hashes for padding
-				if i == count && j < depth {
-					v := hasher.Combi(hArr, trie.ZeroHashes[j])
-					copy(h, v[:])
-				} else {
-					break
-				}
-			} else {
-				// keep merging up if we are the right side
-				v := hasher.Combi(tmp[j], hArr)
-				copy(h, v[:])
-			}
-		}
-		// store the merge result (may be no merge, i.e. bottom leaf node)
-		copy(tmp[j][:], h)
-	}
-
-	// merge in leaf by leaf.
-	for i := uint64(0); i < count; i++ {
-		copy(h, leaf(i))
-		merge(i)
-	}
-
-	// complement with 0 if empty, or if not the right power of 2
-	if (uint64(1) << depth) != count {
-		copy(h, trie.ZeroHashes[0][:])
-		merge(count)
-	}
-
-	return
-}
-
 // MerkleizeVector uses our optimized routine to hash a list of 32-byte
 // elements.
 func MerkleizeVector(elements [][32]byte, length uint64) [32]byte {
@@ -216,4 +151,53 @@ func MerkleizeVector(elements [][32]byte, length uint64) [32]byte {
 		elements = htr.VectorizedSha256(elements)
 	}
 	return elements[0]
+}
+
+// Hashable is an interface representing objects that implement HashTreeRoot()
+type Hashable interface {
+	HashTreeRoot() ([32]byte, error)
+}
+
+// MerkleizeVectorSSZ hashes each element in the list and then returns the HTR
+// of the corresponding list of roots
+func MerkleizeVectorSSZ[T Hashable](elements []T, length uint64) ([32]byte, error) {
+	roots := make([][32]byte, len(elements))
+	var err error
+	for i, el := range elements {
+		roots[i], err = el.HashTreeRoot()
+		if err != nil {
+			return [32]byte{}, err
+		}
+	}
+	return MerkleizeVector(roots, length), nil
+}
+
+// MerkleizeListSSZ hashes each element in the list and then returns the HTR of
+// the list of corresponding roots, with the length mixed in.
+func MerkleizeListSSZ[T Hashable](elements []T, limit uint64) ([32]byte, error) {
+	body, err := MerkleizeVectorSSZ(elements, limit)
+	if err != nil {
+		return [32]byte{}, err
+	}
+	chunks := make([][32]byte, 2)
+	chunks[0] = body
+	binary.LittleEndian.PutUint64(chunks[1][:], uint64(len(elements)))
+	if err := gohashtree.Hash(chunks, chunks); err != nil {
+		return [32]byte{}, err
+	}
+	return chunks[0], err
+}
+
+// MerkleizeByteSliceSSZ hashes a byteslice by chunkifying it and returning the
+// corresponding HTR as if it were a fixed vector of bytes of the given length.
+func MerkleizeByteSliceSSZ(input []byte) ([32]byte, error) {
+	numChunks := (len(input) + 31) / 32
+	if numChunks == 0 {
+		return [32]byte{}, errInvalidNilSlice
+	}
+	chunks := make([][32]byte, numChunks)
+	for i := range chunks {
+		copy(chunks[i][:], input[32*i:])
+	}
+	return MerkleizeVector(chunks, uint64(numChunks)), nil
 }

@@ -1,9 +1,9 @@
 package mock
 
 import (
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	eth "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
 // PoolMock is a fake implementation of PoolManager.
@@ -28,5 +28,5 @@ func (m *PoolMock) InsertVoluntaryExit(exit *eth.SignedVoluntaryExit) {
 
 // MarkIncluded --
 func (*PoolMock) MarkIncluded(_ *eth.SignedVoluntaryExit) {
-	panic("implement me")
+	panic("implement me") // lint:nopanic -- Mock / test code.
 }

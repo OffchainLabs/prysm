@@ -34,19 +34,19 @@ def cc_autoconf_toolchains_impl(repository_ctx):
     else:
         repository_ctx.file("BUILD", "# C++ toolchain autoconfiguration was disabled by BAZEL_DO_NOT_DETECT_CPP_TOOLCHAIN env variable.")
 
-def cc_autoconf_impl(repository_ctx, overriden_tools = dict()):
+def cc_autoconf_impl(repository_ctx, overridden_tools = dict()):
     """Generate BUILD file with 'cc_toolchain' targets for the local host C++ toolchain.
 
     Args:
        repository_ctx: repository context
-       overriden_tools: dict of tool paths to use instead of autoconfigured tools
+       overridden_tools: dict of tool paths to use instead of autoconfigured tools
     """
     cpu_value = get_cpu_value(repository_ctx)
 
     if cpu_value.startswith("darwin"):
         print("Configuring local C++ toolchain for Darwin. This is non-hermetic and builds may " +
               "not be reproducible. Consider building on linux for a hermetic build.")
-        configure_unix_toolchain(repository_ctx, cpu_value, overriden_tools)
+        configure_unix_toolchain(repository_ctx, cpu_value, overridden_tools)
     else:
         paths = resolve_labels(repository_ctx, [
             "@bazel_tools//tools/cpp:BUILD.empty.tpl",

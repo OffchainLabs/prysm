@@ -12,19 +12,19 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/gorilla/mux"
-	chainMock "github.com/prysmaticlabs/prysm/v4/beacon-chain/blockchain/testing"
-	dbTest "github.com/prysmaticlabs/prysm/v4/beacon-chain/db/testing"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/testutil"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	http2 "github.com/prysmaticlabs/prysm/v4/network/http"
-	ethpbalpha "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/testing/util"
+	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
+	chainMock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
+	dbTest "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/testutil"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/network/httputil"
+	ethpbalpha "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/util"
 )
 
 func TestGetStateRoot(t *testing.T) {
@@ -55,13 +55,13 @@ func TestGetStateRoot(t *testing.T) {
 	}
 
 	request := httptest.NewRequest(http.MethodGet, "http://example.com//eth/v1/beacon/states/{state_id}/root", nil)
-	request = mux.SetURLVars(request, map[string]string{"state_id": "head"})
+	request.SetPathValue("state_id", "head")
 	writer := httptest.NewRecorder()
 	writer.Body = &bytes.Buffer{}
 
 	s.GetStateRoot(writer, request)
 	require.Equal(t, http.StatusOK, writer.Code)
-	resp := &GetStateRootResponse{}
+	resp := &structs.GetStateRootResponse{}
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
 	assert.Equal(t, hexutil.Encode(stateRoot[:]), resp.Data.Root)
 
@@ -79,13 +79,13 @@ func TestGetStateRoot(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com//eth/v1/beacon/states/{state_id}/root", nil)
-		request = mux.SetURLVars(request, map[string]string{"state_id": "head"})
+		request.SetPathValue("state_id", "head")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
 		s.GetStateRoot(writer, request)
 		require.Equal(t, http.StatusOK, writer.Code)
-		resp := &GetStateRootResponse{}
+		resp := &structs.GetStateRootResponse{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
 		assert.DeepEqual(t, true, resp.ExecutionOptimistic)
 	})
@@ -110,13 +110,13 @@ func TestGetStateRoot(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com//eth/v1/beacon/states/{state_id}/root", nil)
-		request = mux.SetURLVars(request, map[string]string{"state_id": "head"})
+		request.SetPathValue("state_id", "head")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
 		s.GetStateRoot(writer, request)
 		require.Equal(t, http.StatusOK, writer.Code)
-		resp := &GetStateRootResponse{}
+		resp := &structs.GetStateRootResponse{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
 		assert.DeepEqual(t, true, resp.Finalized)
 	})
@@ -157,37 +157,37 @@ func TestGetRandao(t *testing.T) {
 
 	t.Run("no epoch requested", func(t *testing.T) {
 		request := httptest.NewRequest(http.MethodGet, "http://example.com//eth/v1/beacon/states/{state_id}/randao", nil)
-		request = mux.SetURLVars(request, map[string]string{"state_id": "head"})
+		request.SetPathValue("state_id", "head")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
 		s.GetRandao(writer, request)
 		require.Equal(t, http.StatusOK, writer.Code)
-		resp := &GetRandaoResponse{}
+		resp := &structs.GetRandaoResponse{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
 		assert.Equal(t, hexutil.Encode(mixCurrent[:]), resp.Data.Randao)
 	})
 	t.Run("current epoch requested", func(t *testing.T) {
 		request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://example.com//eth/v1/beacon/states/{state_id}/randao?epoch=%d", epochCurrent), nil)
-		request = mux.SetURLVars(request, map[string]string{"state_id": "head"})
+		request.SetPathValue("state_id", "head")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
 		s.GetRandao(writer, request)
 		require.Equal(t, http.StatusOK, writer.Code)
-		resp := &GetRandaoResponse{}
+		resp := &structs.GetRandaoResponse{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
 		assert.Equal(t, hexutil.Encode(mixCurrent[:]), resp.Data.Randao)
 	})
 	t.Run("old epoch requested", func(t *testing.T) {
 		request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://example.com//eth/v1/beacon/states/{state_id}/randao?epoch=%d", epochOld), nil)
-		request = mux.SetURLVars(request, map[string]string{"state_id": "head"})
+		request.SetPathValue("state_id", "head")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
 		s.GetRandao(writer, request)
 		require.Equal(t, http.StatusOK, writer.Code)
-		resp := &GetRandaoResponse{}
+		resp := &structs.GetRandaoResponse{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
 		assert.Equal(t, hexutil.Encode(mixOld[:]), resp.Data.Randao)
 	})
@@ -197,26 +197,26 @@ func TestGetRandao(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com//eth/v1/beacon/states/{state_id}/randao", nil)
-		request = mux.SetURLVars(request, map[string]string{"state_id": "head"})
+		request.SetPathValue("state_id", "head")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
 		s.GetRandao(writer, request)
 		require.Equal(t, http.StatusOK, writer.Code)
-		resp := &GetRandaoResponse{}
+		resp := &structs.GetRandaoResponse{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
 		assert.Equal(t, hexutil.Encode(headRandao[:]), resp.Data.Randao)
 	})
 	t.Run("epoch too old", func(t *testing.T) {
 		epochTooOld := primitives.Epoch(100000 - st.RandaoMixesLength())
 		request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://example.com//eth/v1/beacon/states/{state_id}/randao?epoch=%d", epochTooOld), nil)
-		request = mux.SetURLVars(request, map[string]string{"state_id": "head"})
+		request.SetPathValue("state_id", "head")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
 		s.GetRandao(writer, request)
 		require.Equal(t, http.StatusBadRequest, writer.Code)
-		e := &http2.DefaultErrorJson{}
+		e := &httputil.DefaultJsonError{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
 		assert.Equal(t, http.StatusBadRequest, e.Code)
 		require.StringContains(t, "Epoch is out of range for the randao mixes of the state", e.Message)
@@ -224,13 +224,13 @@ func TestGetRandao(t *testing.T) {
 	t.Run("epoch in the future", func(t *testing.T) {
 		futureEpoch := primitives.Epoch(100000 + 1)
 		request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://example.com//eth/v1/beacon/states/{state_id}/randao?epoch=%d", futureEpoch), nil)
-		request = mux.SetURLVars(request, map[string]string{"state_id": "head"})
+		request.SetPathValue("state_id", "head")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
 		s.GetRandao(writer, request)
 		require.Equal(t, http.StatusBadRequest, writer.Code)
-		e := &http2.DefaultErrorJson{}
+		e := &httputil.DefaultJsonError{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
 		assert.Equal(t, http.StatusBadRequest, e.Code)
 		require.StringContains(t, "Epoch is out of range for the randao mixes of the state", e.Message)
@@ -256,13 +256,13 @@ func TestGetRandao(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com//eth/v1/beacon/states/{state_id}/randao", nil)
-		request = mux.SetURLVars(request, map[string]string{"state_id": "head"})
+		request.SetPathValue("state_id", "head")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
 		s.GetRandao(writer, request)
 		require.Equal(t, http.StatusOK, writer.Code)
-		resp := &GetRandaoResponse{}
+		resp := &structs.GetRandaoResponse{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
 		assert.DeepEqual(t, true, resp.ExecutionOptimistic)
 	})
@@ -293,13 +293,13 @@ func TestGetRandao(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com//eth/v1/beacon/states/{state_id}/randao", nil)
-		request = mux.SetURLVars(request, map[string]string{"state_id": "head"})
+		request.SetPathValue("state_id", "head")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
 		s.GetRandao(writer, request)
 		require.Equal(t, http.StatusOK, writer.Code)
-		resp := &GetRandaoResponse{}
+		resp := &structs.GetRandaoResponse{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
 		assert.DeepEqual(t, true, resp.Finalized)
 	})
@@ -452,13 +452,13 @@ func TestGetSyncCommittees(t *testing.T) {
 	}
 
 	request := httptest.NewRequest(http.MethodGet, "http://example.com//eth/v1/beacon/states/{state_id}/sync_committees", nil)
-	request = mux.SetURLVars(request, map[string]string{"state_id": hexutil.Encode(stRoot[:])})
+	request.SetPathValue("state_id", hexutil.Encode(stRoot[:]))
 	writer := httptest.NewRecorder()
 	writer.Body = &bytes.Buffer{}
 
 	s.GetSyncCommittees(writer, request)
 	require.Equal(t, http.StatusOK, writer.Code)
-	resp := &GetSyncCommitteeResponse{}
+	resp := &structs.GetSyncCommitteeResponse{}
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
 	committeeVals := resp.Data.Validators
 	require.Equal(t, params.BeaconConfig().SyncCommitteeSize, uint64(len(committeeVals)))
@@ -502,13 +502,13 @@ func TestGetSyncCommittees(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com//eth/v1/beacon/states/{state_id}/sync_committees", nil)
-		request = mux.SetURLVars(request, map[string]string{"state_id": hexutil.Encode(stRoot[:])})
+		request.SetPathValue("state_id", hexutil.Encode(stRoot[:]))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
 		s.GetSyncCommittees(writer, request)
 		require.Equal(t, http.StatusOK, writer.Code)
-		resp := &GetSyncCommitteeResponse{}
+		resp := &structs.GetSyncCommitteeResponse{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
 		assert.Equal(t, true, resp.ExecutionOptimistic)
 	})
@@ -546,13 +546,13 @@ func TestGetSyncCommittees(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com//eth/v1/beacon/states/{state_id}/sync_committees", nil)
-		request = mux.SetURLVars(request, map[string]string{"state_id": hexutil.Encode(stRoot[:])})
+		request.SetPathValue("state_id", hexutil.Encode(stRoot[:]))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
 		s.GetSyncCommittees(writer, request)
 		require.Equal(t, http.StatusOK, writer.Code)
-		resp := &GetSyncCommitteeResponse{}
+		resp := &structs.GetSyncCommitteeResponse{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
 		assert.Equal(t, true, resp.Finalized)
 	})
@@ -612,24 +612,24 @@ func TestGetSyncCommittees_Future(t *testing.T) {
 
 	epoch := 2 * params.BeaconConfig().EpochsPerSyncCommitteePeriod
 	request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://example.com//eth/v1/beacon/states/{state_id}/sync_committees?epoch=%d", epoch), nil)
-	request = mux.SetURLVars(request, map[string]string{"state_id": "head"})
+	request.SetPathValue("state_id", "head")
 	writer := httptest.NewRecorder()
 	writer.Body = &bytes.Buffer{}
 	s.GetSyncCommittees(writer, request)
 	require.Equal(t, http.StatusBadRequest, writer.Code)
-	e := &http2.DefaultErrorJson{}
+	e := &httputil.DefaultJsonError{}
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
 	assert.Equal(t, http.StatusBadRequest, e.Code)
 	assert.StringContains(t, "Could not fetch sync committee too far in the future", e.Message)
 
 	epoch = 2*params.BeaconConfig().EpochsPerSyncCommitteePeriod - 1
 	request = httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://example.com//eth/v1/beacon/states/{state_id}/sync_committees?epoch=%d", epoch), nil)
-	request = mux.SetURLVars(request, map[string]string{"state_id": "head"})
+	request.SetPathValue("state_id", "head")
 	writer = httptest.NewRecorder()
 	writer.Body = &bytes.Buffer{}
 	s.GetSyncCommittees(writer, request)
 	require.Equal(t, http.StatusOK, writer.Code)
-	resp := &GetSyncCommitteeResponse{}
+	resp := &structs.GetSyncCommitteeResponse{}
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
 	committeeVals := resp.Data.Validators
 	require.Equal(t, params.BeaconConfig().SyncCommitteeSize, uint64(len(committeeVals)))

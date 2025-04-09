@@ -4,8 +4,7 @@ import (
 	"bytes"
 	"sort"
 
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/interfaces"
-	eth "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 )
 
 // ROBlock is a value that embeds a ReadOnlySignedBeaconBlock along with its block root ([32]byte).
@@ -19,6 +18,14 @@ type ROBlock struct {
 // Root returns the block hash_tree_root for the embedded ReadOnlySignedBeaconBlock.Block().
 func (b ROBlock) Root() [32]byte {
 	return b.root
+}
+
+// RootSlice returns a slice of the value returned by Root(). This is convenient because slicing the result of a func
+// is not allowed, so only offering a fixed-length array version results in boilerplate code to
+func (b ROBlock) RootSlice() []byte {
+	r := make([]byte, 32)
+	copy(r, b.root[:])
+	return r
 }
 
 // NewROBlockWithRoot creates an ROBlock embedding the given block with its root. It accepts the root as parameter rather than
@@ -41,6 +48,20 @@ func NewROBlock(b interfaces.ReadOnlySignedBeaconBlock) (ROBlock, error) {
 		return ROBlock{}, err
 	}
 	return ROBlock{ReadOnlySignedBeaconBlock: b, root: root}, nil
+}
+
+// NewROBlockSlice is a helper method for converting a slice of the ReadOnlySignedBeaconBlock interface
+// to a slice of ROBlock.
+func NewROBlockSlice(blks []interfaces.ReadOnlySignedBeaconBlock) ([]ROBlock, error) {
+	robs := make([]ROBlock, len(blks))
+	var err error
+	for i := range blks {
+		robs[i], err = NewROBlock(blks[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return robs, nil
 }
 
 // ROBlockSlice implements sort.Interface so that slices of ROBlocks can be easily sorted.
@@ -75,14 +96,18 @@ func (s ROBlockSlice) Len() int {
 	return len(s)
 }
 
-type BlockWithVerifiedBlobs struct {
+// BlockWithROBlobs is a wrapper that collects the block and blob values together.
+// This is helpful because these values are collated from separate RPC requests.
+type BlockWithROBlobs struct {
 	Block ROBlock
-	Blobs []*eth.BlobSidecar
+	Blobs []ROBlob
 }
 
-type BlockWithVerifiedBlobsSlice []BlockWithVerifiedBlobs
+// BlockWithROBlobsSlice gives convenient access to getting a slice of just the ROBlocks,
+// and defines sorting helpers.
+type BlockWithROBlobsSlice []BlockWithROBlobs
 
-func (s BlockWithVerifiedBlobsSlice) ROBlocks() []ROBlock {
+func (s BlockWithROBlobsSlice) ROBlocks() []ROBlock {
 	r := make([]ROBlock, len(s))
 	for i := range s {
 		r[i] = s[i].Block
@@ -93,7 +118,7 @@ func (s BlockWithVerifiedBlobsSlice) ROBlocks() []ROBlock {
 // Less reports whether the element with index i must sort before the element with index j.
 // ROBlocks are ordered first by their slot,
 // with a lexicographic sort of roots breaking ties for slots with duplicate blocks.
-func (s BlockWithVerifiedBlobsSlice) Less(i, j int) bool {
+func (s BlockWithROBlobsSlice) Less(i, j int) bool {
 	si, sj := s[i].Block.Block().Slot(), s[j].Block.Block().Slot()
 
 	// lower slot wins
@@ -107,11 +132,11 @@ func (s BlockWithVerifiedBlobsSlice) Less(i, j int) bool {
 }
 
 // Swap swaps the elements with indexes i and j.
-func (s BlockWithVerifiedBlobsSlice) Swap(i, j int) {
+func (s BlockWithROBlobsSlice) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
 }
 
 // Len is the number of elements in the collection.
-func (s BlockWithVerifiedBlobsSlice) Len() int {
+func (s BlockWithROBlobsSlice) Len() int {
 	return len(s)
 }

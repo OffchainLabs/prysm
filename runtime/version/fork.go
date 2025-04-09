@@ -1,6 +1,8 @@
 package version
 
-import "github.com/pkg/errors"
+import (
+	"github.com/pkg/errors"
+)
 
 const (
 	Phase0 = iota
@@ -8,6 +10,8 @@ const (
 	Bellatrix
 	Capella
 	Deneb
+	Electra
+	Fulu
 )
 
 var versionToString = map[int]string{
@@ -16,11 +20,13 @@ var versionToString = map[int]string{
 	Bellatrix: "bellatrix",
 	Capella:   "capella",
 	Deneb:     "deneb",
+	Electra:   "electra",
+	Fulu:      "fulu",
 }
 
 // stringToVersion and allVersions are populated in init()
 var stringToVersion = map[string]int{}
-var allVersions = []int{}
+var allVersions []int
 
 // ErrUnrecognizedVersionName means a string does not match the list of canonical version names.
 var ErrUnrecognizedVersionName = errors.New("version name doesn't map to a known value in the enum")

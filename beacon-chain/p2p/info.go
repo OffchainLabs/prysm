@@ -20,7 +20,7 @@ self=%s
 %d peers
 %v
 `,
-		s.cfg.BootstrapNodeAddr,
+		s.cfg.Discv5BootStrapAddrs,
 		s.selfAddresses(),
 		len(s.host.Network().Peers()),
 		formatPeers(s.host), // Must be last. Writes one entry per row.
@@ -42,7 +42,7 @@ func (s *Service) selfAddresses() string {
 		addresses = append(addresses, s.dv5Listener.Self().String())
 	}
 	for _, addr := range s.host.Addrs() {
-		addresses = append(addresses, addr.String()+"/p2p/"+s.host.ID().Pretty())
+		addresses = append(addresses, addr.String()+"/p2p/"+s.host.ID().String())
 	}
 	return strings.Join(addresses, ",")
 }
@@ -61,7 +61,7 @@ func formatPeers(h host.Host) string {
 func formatPeer(pid peer.ID, ma []ma.Multiaddr) string {
 	var addresses []string
 	for _, a := range ma {
-		addresses = append(addresses, a.String()+"/p2p/"+pid.Pretty())
+		addresses = append(addresses, a.String()+"/p2p/"+pid.String())
 	}
 	return strings.Join(addresses, ",")
 }

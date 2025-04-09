@@ -6,15 +6,15 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/altair"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/epoch/precompute"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/runtime/version"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/altair"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/epoch/precompute"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 )
 
 var (
@@ -181,6 +181,10 @@ var (
 	chainServiceProcessingTime = promauto.NewSummary(prometheus.SummaryOpts{
 		Name: "chain_service_processing_milliseconds",
 		Help: "Total time to call a chain service in ReceiveBlock()",
+	})
+	dataAvailWaitedTime = promauto.NewSummary(prometheus.SummaryOpts{
+		Name: "da_waited_time_milliseconds",
+		Help: "Total time spent waiting for a data availability check in ReceiveBlock()",
 	})
 	processAttsElapsedTime = promauto.NewHistogram(
 		prometheus.HistogramOpts{
@@ -358,12 +362,13 @@ func reportEpochMetrics(ctx context.Context, postState, headState state.BeaconSt
 	for name, val := range refMap {
 		stateTrieReferences.WithLabelValues(name).Set(float64(val))
 	}
+	postState.RecordStateMetrics()
 
 	return nil
 }
 
 func reportAttestationInclusion(blk interfaces.ReadOnlyBeaconBlock) {
 	for _, att := range blk.Body().Attestations() {
-		attestationInclusionDelay.Observe(float64(blk.Slot() - att.Data.Slot))
+		attestationInclusionDelay.Observe(float64(blk.Slot() - att.GetData().Slot))
 	}
 }

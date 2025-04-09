@@ -3,10 +3,10 @@ package monitor
 import (
 	"fmt"
 
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/interfaces"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/runtime/version"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/sirupsen/logrus"
 )
 
@@ -21,7 +21,7 @@ func (s *Service) processSyncCommitteeContribution(contribution *ethpb.SignedCon
 		aggPerf.totalSyncCommitteeAggregations++
 		s.aggregatedPerformance[idx] = aggPerf
 
-		log.WithField("ValidatorIndex", contribution.Message.AggregatorIndex).Info("Sync committee aggregation processed")
+		log.WithField("validatorIndex", contribution.Message.AggregatorIndex).Info("Sync committee aggregation processed")
 	}
 }
 
@@ -69,11 +69,11 @@ func (s *Service) processSyncAggregate(state state.BeaconState, blk interfaces.R
 				fmt.Sprintf("%d", validatorIdx)).Add(float64(contrib))
 
 			log.WithFields(logrus.Fields{
-				"ValidatorIndex":       validatorIdx,
-				"ExpectedContribCount": len(committeeIndices),
-				"ContribCount":         contrib,
-				"NewBalance":           balance,
-				"BalanceChange":        balanceChg,
+				"validatorIndex":       validatorIdx,
+				"expectedContribCount": len(committeeIndices),
+				"contribCount":         contrib,
+				"newBalance":           balance,
+				"balanceChange":        balanceChg,
 			}).Info("Sync committee contribution included")
 		}
 	}

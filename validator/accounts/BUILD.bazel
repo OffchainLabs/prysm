@@ -17,7 +17,7 @@ go_library(
         "wallet_create.go",
         "wallet_recover.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v4/validator/accounts",
+    importpath = "github.com/prysmaticlabs/prysm/v5/validator/accounts",
     visibility = [
         "//cmd/validator:__subpackages__",
         "//validator:__pkg__",
@@ -33,9 +33,7 @@ go_library(
         "//encoding/bytesutil:go_default_library",
         "//io/file:go_default_library",
         "//io/prompt:go_default_library",
-        "//proto/eth/service:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
-        "//validator/accounts/iface:go_default_library",
         "//validator/accounts/petnames:go_default_library",
         "//validator/accounts/userprompt:go_default_library",
         "//validator/accounts/wallet:go_default_library",
@@ -64,6 +62,7 @@ go_library(
 go_test(
     name = "go_default_test",
     srcs = [
+        "accounts_delete_test.go",
         "accounts_exit_test.go",
         "accounts_import_test.go",
         "accounts_list_test.go",
@@ -73,7 +72,7 @@ go_test(
     data = glob(["testdata/**"]),
     embed = [":go_default_library"],
     deps = [
-        "//beacon-chain/rpc/apimiddleware:go_default_library",
+        "//api/server/structs:go_default_library",
         "//build/bazel:go_default_library",
         "//cmd/validator/flags:go_default_library",
         "//config/fieldparams:go_default_library",
@@ -82,7 +81,6 @@ go_test(
         "//crypto/bls:go_default_library",
         "//encoding/bytesutil:go_default_library",
         "//io/file:go_default_library",
-        "//proto/eth/service:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "//testing/assert:go_default_library",
         "//testing/require:go_default_library",
@@ -92,11 +90,12 @@ go_test(
         "//validator/keymanager/derived:go_default_library",
         "//validator/keymanager/local:go_default_library",
         "//validator/testing:go_default_library",
-        "@com_github_golang_mock//gomock:go_default_library",
+        "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",
         "@com_github_google_uuid//:go_default_library",
         "@com_github_pkg_errors//:go_default_library",
         "@com_github_sirupsen_logrus//hooks/test:go_default_library",
         "@com_github_urfave_cli_v2//:go_default_library",
         "@com_github_wealdtech_go_eth2_wallet_encryptor_keystorev4//:go_default_library",
+        "@org_uber_go_mock//gomock:go_default_library",
     ],
 )

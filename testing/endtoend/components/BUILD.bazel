@@ -18,7 +18,7 @@ go_library(
         "//testing/endtoend/static-files/eth1:eth1data",
         "@lighthouse//:lighthouse_bin",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v4/testing/endtoend/components",
+    importpath = "github.com/prysmaticlabs/prysm/v5/testing/endtoend/components",
     visibility = ["//testing/endtoend:__subpackages__"],
     deps = [
         "//beacon-chain/state:go_default_library",

@@ -4,12 +4,12 @@ import (
 	"context"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/operations/slashings"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/testing/util"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/slashings"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/util"
 )
 
 func TestServer_getSlashings(t *testing.T) {
@@ -28,7 +28,7 @@ func TestServer_getSlashings(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	attSlashings := make([]*ethpb.AttesterSlashing, params.BeaconConfig().MaxAttesterSlashings)
+	attSlashings := make([]ethpb.AttSlashing, params.BeaconConfig().MaxAttesterSlashings)
 	for i := uint64(0); i < params.BeaconConfig().MaxAttesterSlashings; i++ {
 		attesterSlashing, err := util.GenerateAttesterSlashingForValidator(
 			beaconState,

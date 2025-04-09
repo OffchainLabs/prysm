@@ -9,7 +9,7 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
 	gcache "github.com/patrickmn/go-cache"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -22,7 +22,7 @@ func NewRegularSyncFuzz(opts ...Option) *Service {
 		cancel:               cancel,
 		slotToPendingBlocks:  gcache.New(time.Second, 2*time.Second),
 		seenPendingBlocks:    make(map[[32]byte]bool),
-		blkRootToPendingAtts: make(map[[32]byte][]*ethpb.SignedAggregateAttestationAndProof),
+		blkRootToPendingAtts: make(map[[32]byte][]ethpb.SignedAggregateAttAndProof),
 	}
 	r.rateLimiter = newRateLimiter(r.cfg.p2p)
 

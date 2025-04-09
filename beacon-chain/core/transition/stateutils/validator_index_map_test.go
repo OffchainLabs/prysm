@@ -3,14 +3,14 @@ package stateutils_test
 import (
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/transition/stateutils"
-	state_native "github.com/prysmaticlabs/prysm/v4/beacon-chain/state/state-native"
-	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition/stateutils"
+	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func TestValidatorIndexMap_OK(t *testing.T) {

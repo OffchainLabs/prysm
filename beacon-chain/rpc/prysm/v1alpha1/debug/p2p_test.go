@@ -5,10 +5,10 @@ import (
 	"testing"
 
 	"github.com/golang/protobuf/ptypes/empty"
-	mockP2p "github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p/testing"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
+	mockP2p "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func TestDebugServer_GetPeer(t *testing.T) {

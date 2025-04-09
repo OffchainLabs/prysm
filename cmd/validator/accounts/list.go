@@ -3,10 +3,10 @@ package accounts
 import (
 	"strings"
 
-	"github.com/prysmaticlabs/prysm/v4/cmd"
-	"github.com/prysmaticlabs/prysm/v4/cmd/validator/flags"
-	"github.com/prysmaticlabs/prysm/v4/validator/accounts"
-	"github.com/prysmaticlabs/prysm/v4/validator/client"
+	"github.com/prysmaticlabs/prysm/v5/cmd"
+	"github.com/prysmaticlabs/prysm/v5/cmd/validator/flags"
+	"github.com/prysmaticlabs/prysm/v5/validator/accounts"
+	"github.com/prysmaticlabs/prysm/v5/validator/client"
 	"github.com/urfave/cli/v2"
 )
 
@@ -18,10 +18,10 @@ func accountsList(c *cli.Context) error {
 	dialOpts := client.ConstructDialOptions(
 		c.Int(cmd.GrpcMaxCallRecvMsgSizeFlag.Name),
 		c.String(flags.CertFlag.Name),
-		c.Uint(flags.GrpcRetriesFlag.Name),
-		c.Duration(flags.GrpcRetryDelayFlag.Name),
+		c.Uint(flags.GRPCRetriesFlag.Name),
+		c.Duration(flags.GRPCRetryDelayFlag.Name),
 	)
-	grpcHeaders := strings.Split(c.String(flags.GrpcHeadersFlag.Name), ",")
+	grpcHeaders := strings.Split(c.String(flags.GRPCHeadersFlag.Name), ",")
 
 	opts := []accounts.Option{
 		accounts.WithWallet(w),
@@ -30,9 +30,6 @@ func accountsList(c *cli.Context) error {
 		accounts.WithBeaconRPCProvider(c.String(flags.BeaconRPCProviderFlag.Name)),
 		accounts.WithBeaconRESTApiProvider(c.String(flags.BeaconRESTApiProviderFlag.Name)),
 		accounts.WithGRPCHeaders(grpcHeaders),
-	}
-	if c.IsSet(flags.ShowDepositDataFlag.Name) {
-		opts = append(opts, accounts.WithShowDepositData())
 	}
 	if c.IsSet(flags.ShowPrivateKeysFlag.Name) {
 		opts = append(opts, accounts.WithShowPrivateKeys())

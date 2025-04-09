@@ -8,15 +8,15 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/time"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
-	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v4/math"
-	v1alpha1 "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/time/slots"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/math"
+	v1alpha1 "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
 // ComputeWeakSubjectivityPeriod returns weak subjectivity period for the active validator count and finalized epoch.
@@ -201,4 +201,15 @@ func ParseWeakSubjectivityInputString(wsCheckpointString string) (*v1alpha1.Chec
 		Epoch: primitives.Epoch(epoch),
 		Root:  bRoot,
 	}, nil
+}
+
+// MinEpochsForBlockRequests computes the number of epochs of block history that we need to maintain,
+// relative to the current epoch, per the p2p specs. This is used to compute the slot where backfill is complete.
+// value defined:
+// https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/p2p-interface.md#configuration
+// MIN_VALIDATOR_WITHDRAWABILITY_DELAY + CHURN_LIMIT_QUOTIENT // 2 (= 33024, ~5 months)
+// detailed rationale: https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/p2p-interface.md#why-are-blocksbyrange-requests-only-required-to-be-served-for-the-latest-min_epochs_for_block_requests-epochs
+func MinEpochsForBlockRequests() primitives.Epoch {
+	return params.BeaconConfig().MinValidatorWithdrawabilityDelay +
+		primitives.Epoch(params.BeaconConfig().ChurnLimitQuotient/2)
 }

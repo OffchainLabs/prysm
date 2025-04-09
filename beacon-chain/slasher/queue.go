@@ -3,7 +3,7 @@ package slasher
 import (
 	"sync"
 
-	slashertypes "github.com/prysmaticlabs/prysm/v4/beacon-chain/slasher/types"
+	slashertypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/slasher/types"
 )
 
 // Struct for handling a thread-safe list of indexed attestation wrappers.

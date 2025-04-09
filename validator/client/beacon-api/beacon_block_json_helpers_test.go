@@ -4,12 +4,10 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/apimiddleware"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/eth/shared"
-	enginev1 "github.com/prysmaticlabs/prysm/v4/proto/engine/v1"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
+	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 )
 
 func TestBeaconBlockJsonHelpers_JsonifyTransactions(t *testing.T) {
@@ -46,9 +44,9 @@ func TestBeaconBlockJsonHelpers_JsonifyBlsToExecutionChanges(t *testing.T) {
 		},
 	}
 
-	expectedResult := []*shared.SignedBLSToExecutionChange{
+	expectedResult := []*structs.SignedBLSToExecutionChange{
 		{
-			Message: &shared.BLSToExecutionChange{
+			Message: &structs.BLSToExecutionChange{
 				ValidatorIndex:     "1",
 				FromBLSPubkey:      hexutil.Encode([]byte{2}),
 				ToExecutionAddress: hexutil.Encode([]byte{3}),
@@ -56,7 +54,7 @@ func TestBeaconBlockJsonHelpers_JsonifyBlsToExecutionChanges(t *testing.T) {
 			Signature: hexutil.Encode([]byte{7}),
 		},
 		{
-			Message: &shared.BLSToExecutionChange{
+			Message: &structs.BLSToExecutionChange{
 				ValidatorIndex:     "4",
 				FromBLSPubkey:      hexutil.Encode([]byte{5}),
 				ToExecutionAddress: hexutil.Encode([]byte{6}),
@@ -65,9 +63,7 @@ func TestBeaconBlockJsonHelpers_JsonifyBlsToExecutionChanges(t *testing.T) {
 		},
 	}
 
-	result, err := shared.SignedBlsToExecutionChangesFromConsensus(input)
-	require.NoError(t, err)
-	assert.DeepEqual(t, expectedResult, result)
+	assert.DeepEqual(t, expectedResult, structs.SignedBLSChangesFromConsensus(input))
 }
 
 func TestBeaconBlockJsonHelpers_JsonifyEth1Data(t *testing.T) {
@@ -77,7 +73,7 @@ func TestBeaconBlockJsonHelpers_JsonifyEth1Data(t *testing.T) {
 		BlockHash:    []byte{3},
 	}
 
-	expectedResult := &apimiddleware.Eth1DataJson{
+	expectedResult := &structs.Eth1Data{
 		DepositRoot:  hexutil.Encode([]byte{1}),
 		DepositCount: "2",
 		BlockHash:    hexutil.Encode([]byte{3}),
@@ -125,18 +121,18 @@ func TestBeaconBlockJsonHelpers_JsonifyAttestations(t *testing.T) {
 		},
 	}
 
-	expectedResult := []*apimiddleware.AttestationJson{
+	expectedResult := []*structs.Attestation{
 		{
 			AggregationBits: hexutil.Encode([]byte{1}),
-			Data: &apimiddleware.AttestationDataJson{
+			Data: &structs.AttestationData{
 				Slot:            "2",
 				CommitteeIndex:  "3",
 				BeaconBlockRoot: hexutil.Encode([]byte{4}),
-				Source: &apimiddleware.CheckpointJson{
+				Source: &structs.Checkpoint{
 					Epoch: "5",
 					Root:  hexutil.Encode([]byte{6}),
 				},
-				Target: &apimiddleware.CheckpointJson{
+				Target: &structs.Checkpoint{
 					Epoch: "7",
 					Root:  hexutil.Encode([]byte{8}),
 				},
@@ -145,15 +141,15 @@ func TestBeaconBlockJsonHelpers_JsonifyAttestations(t *testing.T) {
 		},
 		{
 			AggregationBits: hexutil.Encode([]byte{10}),
-			Data: &apimiddleware.AttestationDataJson{
+			Data: &structs.AttestationData{
 				Slot:            "11",
 				CommitteeIndex:  "12",
 				BeaconBlockRoot: hexutil.Encode([]byte{13}),
-				Source: &apimiddleware.CheckpointJson{
+				Source: &structs.Checkpoint{
 					Epoch: "14",
 					Root:  hexutil.Encode([]byte{15}),
 				},
-				Target: &apimiddleware.CheckpointJson{
+				Target: &structs.Checkpoint{
 					Epoch: "16",
 					Root:  hexutil.Encode([]byte{17}),
 				},
@@ -242,36 +238,36 @@ func TestBeaconBlockJsonHelpers_JsonifyAttesterSlashings(t *testing.T) {
 		},
 	}
 
-	expectedResult := []*apimiddleware.AttesterSlashingJson{
+	expectedResult := []*structs.AttesterSlashing{
 		{
-			Attestation_1: &apimiddleware.IndexedAttestationJson{
+			Attestation1: &structs.IndexedAttestation{
 				AttestingIndices: []string{"1", "2"},
-				Data: &apimiddleware.AttestationDataJson{
+				Data: &structs.AttestationData{
 					Slot:            "3",
 					CommitteeIndex:  "4",
 					BeaconBlockRoot: hexutil.Encode([]byte{5}),
-					Source: &apimiddleware.CheckpointJson{
+					Source: &structs.Checkpoint{
 						Epoch: "6",
 						Root:  hexutil.Encode([]byte{7}),
 					},
-					Target: &apimiddleware.CheckpointJson{
+					Target: &structs.Checkpoint{
 						Epoch: "8",
 						Root:  hexutil.Encode([]byte{9}),
 					},
 				},
 				Signature: hexutil.Encode([]byte{10}),
 			},
-			Attestation_2: &apimiddleware.IndexedAttestationJson{
+			Attestation2: &structs.IndexedAttestation{
 				AttestingIndices: []string{"11", "12"},
-				Data: &apimiddleware.AttestationDataJson{
+				Data: &structs.AttestationData{
 					Slot:            "13",
 					CommitteeIndex:  "14",
 					BeaconBlockRoot: hexutil.Encode([]byte{15}),
-					Source: &apimiddleware.CheckpointJson{
+					Source: &structs.Checkpoint{
 						Epoch: "16",
 						Root:  hexutil.Encode([]byte{17}),
 					},
-					Target: &apimiddleware.CheckpointJson{
+					Target: &structs.Checkpoint{
 						Epoch: "18",
 						Root:  hexutil.Encode([]byte{19}),
 					},
@@ -280,34 +276,34 @@ func TestBeaconBlockJsonHelpers_JsonifyAttesterSlashings(t *testing.T) {
 			},
 		},
 		{
-			Attestation_1: &apimiddleware.IndexedAttestationJson{
+			Attestation1: &structs.IndexedAttestation{
 				AttestingIndices: []string{"21", "22"},
-				Data: &apimiddleware.AttestationDataJson{
+				Data: &structs.AttestationData{
 					Slot:            "23",
 					CommitteeIndex:  "24",
 					BeaconBlockRoot: hexutil.Encode([]byte{25}),
-					Source: &apimiddleware.CheckpointJson{
+					Source: &structs.Checkpoint{
 						Epoch: "26",
 						Root:  hexutil.Encode([]byte{27}),
 					},
-					Target: &apimiddleware.CheckpointJson{
+					Target: &structs.Checkpoint{
 						Epoch: "28",
 						Root:  hexutil.Encode([]byte{29}),
 					},
 				},
 				Signature: hexutil.Encode([]byte{30}),
 			},
-			Attestation_2: &apimiddleware.IndexedAttestationJson{
+			Attestation2: &structs.IndexedAttestation{
 				AttestingIndices: []string{"31", "32"},
-				Data: &apimiddleware.AttestationDataJson{
+				Data: &structs.AttestationData{
 					Slot:            "33",
 					CommitteeIndex:  "34",
 					BeaconBlockRoot: hexutil.Encode([]byte{35}),
-					Source: &apimiddleware.CheckpointJson{
+					Source: &structs.Checkpoint{
 						Epoch: "36",
 						Root:  hexutil.Encode([]byte{37}),
 					},
-					Target: &apimiddleware.CheckpointJson{
+					Target: &structs.Checkpoint{
 						Epoch: "38",
 						Root:  hexutil.Encode([]byte{39}),
 					},
@@ -346,14 +342,14 @@ func TestBeaconBlockJsonHelpers_JsonifyDeposits(t *testing.T) {
 		},
 	}
 
-	expectedResult := []*apimiddleware.DepositJson{
+	expectedResult := []*structs.Deposit{
 		{
 			Proof: []string{
 				hexutil.Encode([]byte{1}),
 				hexutil.Encode([]byte{2}),
 			},
-			Data: &apimiddleware.Deposit_DataJson{
-				PublicKey:             hexutil.Encode([]byte{3}),
+			Data: &structs.DepositData{
+				Pubkey:                hexutil.Encode([]byte{3}),
 				WithdrawalCredentials: hexutil.Encode([]byte{4}),
 				Amount:                "5",
 				Signature:             hexutil.Encode([]byte{6}),
@@ -364,8 +360,8 @@ func TestBeaconBlockJsonHelpers_JsonifyDeposits(t *testing.T) {
 				hexutil.Encode([]byte{7}),
 				hexutil.Encode([]byte{8}),
 			},
-			Data: &apimiddleware.Deposit_DataJson{
-				PublicKey:             hexutil.Encode([]byte{9}),
+			Data: &structs.DepositData{
+				Pubkey:                hexutil.Encode([]byte{9}),
 				WithdrawalCredentials: hexutil.Encode([]byte{10}),
 				Amount:                "11",
 				Signature:             hexutil.Encode([]byte{12}),
@@ -425,10 +421,10 @@ func TestBeaconBlockJsonHelpers_JsonifyProposerSlashings(t *testing.T) {
 		},
 	}
 
-	expectedResult := []*apimiddleware.ProposerSlashingJson{
+	expectedResult := []*structs.ProposerSlashing{
 		{
-			Header_1: &apimiddleware.SignedBeaconBlockHeaderJson{
-				Header: &apimiddleware.BeaconBlockHeaderJson{
+			SignedHeader1: &structs.SignedBeaconBlockHeader{
+				Message: &structs.BeaconBlockHeader{
 					Slot:          "1",
 					ProposerIndex: "2",
 					ParentRoot:    hexutil.Encode([]byte{3}),
@@ -437,8 +433,8 @@ func TestBeaconBlockJsonHelpers_JsonifyProposerSlashings(t *testing.T) {
 				},
 				Signature: hexutil.Encode([]byte{6}),
 			},
-			Header_2: &apimiddleware.SignedBeaconBlockHeaderJson{
-				Header: &apimiddleware.BeaconBlockHeaderJson{
+			SignedHeader2: &structs.SignedBeaconBlockHeader{
+				Message: &structs.BeaconBlockHeader{
 					Slot:          "7",
 					ProposerIndex: "8",
 					ParentRoot:    hexutil.Encode([]byte{9}),
@@ -449,8 +445,8 @@ func TestBeaconBlockJsonHelpers_JsonifyProposerSlashings(t *testing.T) {
 			},
 		},
 		{
-			Header_1: &apimiddleware.SignedBeaconBlockHeaderJson{
-				Header: &apimiddleware.BeaconBlockHeaderJson{
+			SignedHeader1: &structs.SignedBeaconBlockHeader{
+				Message: &structs.BeaconBlockHeader{
 					Slot:          "13",
 					ProposerIndex: "14",
 					ParentRoot:    hexutil.Encode([]byte{15}),
@@ -459,8 +455,8 @@ func TestBeaconBlockJsonHelpers_JsonifyProposerSlashings(t *testing.T) {
 				},
 				Signature: hexutil.Encode([]byte{18}),
 			},
-			Header_2: &apimiddleware.SignedBeaconBlockHeaderJson{
-				Header: &apimiddleware.BeaconBlockHeaderJson{
+			SignedHeader2: &structs.SignedBeaconBlockHeader{
+				Message: &structs.BeaconBlockHeader{
 					Slot:          "19",
 					ProposerIndex: "20",
 					ParentRoot:    hexutil.Encode([]byte{21}),
@@ -494,16 +490,16 @@ func TestBeaconBlockJsonHelpers_JsonifySignedVoluntaryExits(t *testing.T) {
 		},
 	}
 
-	expectedResult := []*apimiddleware.SignedVoluntaryExitJson{
+	expectedResult := []*structs.SignedVoluntaryExit{
 		{
-			Exit: &apimiddleware.VoluntaryExitJson{
+			Message: &structs.VoluntaryExit{
 				Epoch:          "1",
 				ValidatorIndex: "2",
 			},
 			Signature: hexutil.Encode([]byte{3}),
 		},
 		{
-			Exit: &apimiddleware.VoluntaryExitJson{
+			Message: &structs.VoluntaryExit{
 				Epoch:          "4",
 				ValidatorIndex: "5",
 			},
@@ -527,8 +523,8 @@ func TestBeaconBlockJsonHelpers_JsonifySignedBeaconBlockHeader(t *testing.T) {
 		Signature: []byte{6},
 	}
 
-	expectedResult := &apimiddleware.SignedBeaconBlockHeaderJson{
-		Header: &apimiddleware.BeaconBlockHeaderJson{
+	expectedResult := &structs.SignedBeaconBlockHeader{
+		Message: &structs.BeaconBlockHeader{
 			Slot:          "1",
 			ProposerIndex: "2",
 			ParentRoot:    hexutil.Encode([]byte{3}),
@@ -561,17 +557,17 @@ func TestBeaconBlockJsonHelpers_JsonifyIndexedAttestation(t *testing.T) {
 		Signature: []byte{10},
 	}
 
-	expectedResult := &apimiddleware.IndexedAttestationJson{
+	expectedResult := &structs.IndexedAttestation{
 		AttestingIndices: []string{"1", "2"},
-		Data: &apimiddleware.AttestationDataJson{
+		Data: &structs.AttestationData{
 			Slot:            "3",
 			CommitteeIndex:  "4",
 			BeaconBlockRoot: hexutil.Encode([]byte{5}),
-			Source: &apimiddleware.CheckpointJson{
+			Source: &structs.Checkpoint{
 				Epoch: "6",
 				Root:  hexutil.Encode([]byte{7}),
 			},
-			Target: &apimiddleware.CheckpointJson{
+			Target: &structs.Checkpoint{
 				Epoch: "8",
 				Root:  hexutil.Encode([]byte{9}),
 			},
@@ -598,15 +594,15 @@ func TestBeaconBlockJsonHelpers_JsonifyAttestationData(t *testing.T) {
 		},
 	}
 
-	expectedResult := &apimiddleware.AttestationDataJson{
+	expectedResult := &structs.AttestationData{
 		Slot:            "1",
 		CommitteeIndex:  "2",
 		BeaconBlockRoot: hexutil.Encode([]byte{3}),
-		Source: &apimiddleware.CheckpointJson{
+		Source: &structs.Checkpoint{
 			Epoch: "4",
 			Root:  hexutil.Encode([]byte{5}),
 		},
-		Target: &apimiddleware.CheckpointJson{
+		Target: &structs.Checkpoint{
 			Epoch: "6",
 			Root:  hexutil.Encode([]byte{7}),
 		},
@@ -632,7 +628,7 @@ func TestBeaconBlockJsonHelpers_JsonifyWithdrawals(t *testing.T) {
 		},
 	}
 
-	expectedResult := []*apimiddleware.WithdrawalJson{
+	expectedResult := []*structs.Withdrawal{
 		{
 			WithdrawalIndex:  "1",
 			ValidatorIndex:   "2",

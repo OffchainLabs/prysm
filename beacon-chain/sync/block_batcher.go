@@ -8,10 +8,10 @@ import (
 
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/db"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/db/filters"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filters"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 )
 
 // blockRangeBatcher encapsulates the logic for splitting up a block range request into fixed-size batches of
@@ -151,14 +151,14 @@ func newBlockBatch(start, reqEnd primitives.Slot, size uint64) (blockBatch, bool
 	return nb, true
 }
 
-func (bat blockBatch) next(reqEnd primitives.Slot, size uint64) (blockBatch, bool) {
-	if bat.error() != nil {
-		return bat, false
+func (bb blockBatch) next(reqEnd primitives.Slot, size uint64) (blockBatch, bool) {
+	if bb.error() != nil {
+		return bb, false
 	}
-	if bat.nonLinear() {
+	if bb.nonLinear() {
 		return blockBatch{}, false
 	}
-	return newBlockBatch(bat.end.Add(1), reqEnd, size)
+	return newBlockBatch(bb.end.Add(1), reqEnd, size)
 }
 
 // blocks returns the list of linear, canonical blocks read from the db.

@@ -3,7 +3,7 @@ package sanity
 import (
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v4/testing/spectest/shared/deneb/sanity"
+	"github.com/prysmaticlabs/prysm/v5/testing/spectest/shared/deneb/sanity"
 )
 
 func TestMainnet_Deneb_Sanity_Blocks(t *testing.T) {

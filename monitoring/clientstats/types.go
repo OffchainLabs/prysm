@@ -20,7 +20,7 @@ type APIMessage struct {
 
 // CommonStats represent generic metrics that are expected on both
 // beaconnode and validator metric types. This type is used for
-// marshaling metrics to the POST body sent to the metrics collcetor.
+// marshaling metrics to the POST body sent to the metrics collector.
 // Note that some metrics are labeled NA because they are expected
 // to be present with their zero-value when not supported by a client.
 type CommonStats struct {
@@ -42,7 +42,7 @@ type CommonStats struct {
 
 // BeaconNodeStats embeds CommonStats and represents metrics specific to
 // the beacon-node process. This type is used to marshal metrics data
-// to the POST body sent to the metrics collcetor. To make the connection
+// to the POST body sent to the metrics collector. To make the connection
 // to client-stats clear, BeaconNodeStats is also used by prometheus
 // collection code introduced to support client-stats.
 // Note that some metrics are labeled NA because they are expected
@@ -66,7 +66,7 @@ type BeaconNodeStats struct {
 
 // ValidatorStats embeds CommonStats and represents metrics specific to
 // the validator process. This type is used to marshal metrics data
-// to the POST body sent to the metrics collcetor.
+// to the POST body sent to the metrics collector.
 // Note that some metrics are labeled NA because they are expected
 // to be present with their zero-value when not supported by a client.
 type ValidatorStats struct {

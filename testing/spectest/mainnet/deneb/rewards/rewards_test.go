@@ -3,7 +3,7 @@ package rewards
 import (
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v4/testing/spectest/shared/deneb/rewards"
+	"github.com/prysmaticlabs/prysm/v5/testing/spectest/shared/deneb/rewards"
 )
 
 func TestMainnet_Deneb_Rewards(t *testing.T) {

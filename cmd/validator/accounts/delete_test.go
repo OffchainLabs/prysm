@@ -13,16 +13,16 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/prysmaticlabs/prysm/v4/cmd/validator/flags"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	prysmTime "github.com/prysmaticlabs/prysm/v4/time"
-	"github.com/prysmaticlabs/prysm/v4/validator/accounts"
-	"github.com/prysmaticlabs/prysm/v4/validator/keymanager"
-	"github.com/prysmaticlabs/prysm/v4/validator/keymanager/local"
+	"github.com/prysmaticlabs/prysm/v5/cmd/validator/flags"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	prysmTime "github.com/prysmaticlabs/prysm/v5/time"
+	"github.com/prysmaticlabs/prysm/v5/validator/accounts"
+	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
+	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/local"
 	"github.com/urfave/cli/v2"
 	keystorev4 "github.com/wealdtech/go-eth2-wallet-encryptor-keystorev4"
 )
@@ -98,7 +98,7 @@ func setupWalletCtx(
 	set.String(flags.DeletePublicKeysFlag.Name, cfg.deletePublicKeys, "")
 	set.String(flags.VoluntaryExitPublicKeysFlag.Name, cfg.voluntaryExitPublicKeys, "")
 	set.String(flags.BackupDirFlag.Name, cfg.backupDir, "")
-	set.String(flags.BackupPasswordFile.Name, cfg.backupPasswordFile, "")
+	set.String(flags.BackupPasswordFileFlag.Name, cfg.backupPasswordFile, "")
 	set.String(flags.BackupPublicKeysFlag.Name, cfg.backupPublicKeys, "")
 	set.String(flags.WalletPasswordFileFlag.Name, cfg.walletPasswordFile, "")
 	set.String(flags.AccountPasswordFileFlag.Name, cfg.accountPasswordFile, "")
@@ -106,7 +106,7 @@ func setupWalletCtx(
 	set.Bool(flags.SkipDepositConfirmationFlag.Name, cfg.skipDepositConfirm, "")
 	set.Bool(flags.SkipMnemonic25thWordCheckFlag.Name, true, "")
 	set.Bool(flags.ExitAllFlag.Name, cfg.exitAll, "")
-	set.String(flags.GrpcHeadersFlag.Name, cfg.grpcHeaders, "")
+	set.String(flags.GRPCHeadersFlag.Name, cfg.grpcHeaders, "")
 
 	if cfg.privateKeyFile != "" {
 		set.String(flags.ImportPrivateKeyFileFlag.Name, cfg.privateKeyFile, "")
@@ -120,13 +120,13 @@ func setupWalletCtx(
 	assert.NoError(tb, set.Set(flags.VoluntaryExitPublicKeysFlag.Name, cfg.voluntaryExitPublicKeys))
 	assert.NoError(tb, set.Set(flags.BackupDirFlag.Name, cfg.backupDir))
 	assert.NoError(tb, set.Set(flags.BackupPublicKeysFlag.Name, cfg.backupPublicKeys))
-	assert.NoError(tb, set.Set(flags.BackupPasswordFile.Name, cfg.backupPasswordFile))
+	assert.NoError(tb, set.Set(flags.BackupPasswordFileFlag.Name, cfg.backupPasswordFile))
 	assert.NoError(tb, set.Set(flags.WalletPasswordFileFlag.Name, cfg.walletPasswordFile))
 	assert.NoError(tb, set.Set(flags.AccountPasswordFileFlag.Name, cfg.accountPasswordFile))
 	assert.NoError(tb, set.Set(flags.NumAccountsFlag.Name, strconv.Itoa(int(cfg.numAccounts))))
 	assert.NoError(tb, set.Set(flags.SkipDepositConfirmationFlag.Name, strconv.FormatBool(cfg.skipDepositConfirm)))
 	assert.NoError(tb, set.Set(flags.ExitAllFlag.Name, strconv.FormatBool(cfg.exitAll)))
-	assert.NoError(tb, set.Set(flags.GrpcHeadersFlag.Name, cfg.grpcHeaders))
+	assert.NoError(tb, set.Set(flags.GRPCHeadersFlag.Name, cfg.grpcHeaders))
 	return cli.NewContext(&app, set, nil)
 }
 

@@ -1,21 +1,22 @@
-package cache
+package cache_test
 
 import (
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
-	state_native "github.com/prysmaticlabs/prysm/v4/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"google.golang.org/protobuf/proto"
 )
 
 func TestCheckpointStateCache_StateByCheckpoint(t *testing.T) {
-	cache := NewCheckpointStateCache()
+	cache := cache.NewCheckpointStateCache()
 
 	cp1 := &ethpb.Checkpoint{Epoch: 1, Root: bytesutil.PadTo([]byte{'A'}, 32)}
 	st, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
@@ -58,16 +59,16 @@ func TestCheckpointStateCache_StateByCheckpoint(t *testing.T) {
 }
 
 func TestCheckpointStateCache_MaxSize(t *testing.T) {
-	c := NewCheckpointStateCache()
+	c := cache.NewCheckpointStateCache()
 	st, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
 		Slot: 0,
 	})
 	require.NoError(t, err)
 
-	for i := uint64(0); i < uint64(maxCheckpointStateSize+100); i++ {
+	for i := uint64(0); i < uint64(cache.MaxCheckpointStateSize()+100); i++ {
 		require.NoError(t, st.SetSlot(primitives.Slot(i)))
 		require.NoError(t, c.AddCheckpointState(&ethpb.Checkpoint{Epoch: primitives.Epoch(i), Root: make([]byte, 32)}, st))
 	}
 
-	assert.Equal(t, maxCheckpointStateSize, len(c.cache.Keys()))
+	assert.Equal(t, cache.MaxCheckpointStateSize(), len(c.Cache().Keys()))
 }

@@ -5,11 +5,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/prysmaticlabs/prysm/v4/async/event"
-	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v4/crypto/bls"
-	ethpbservice "github.com/prysmaticlabs/prysm/v4/proto/eth/service"
-	validatorpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1/validator-client"
+	"github.com/prysmaticlabs/prysm/v5/async/event"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
+	validatorpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/validator-client"
 )
 
 // IKeymanager defines a general keymanager interface for Prysm wallets.
@@ -42,12 +41,12 @@ type Signer interface {
 type Importer interface {
 	ImportKeystores(
 		ctx context.Context, keystores []*Keystore, passwords []string,
-	) ([]*ethpbservice.ImportedKeystoreStatus, error)
+	) ([]*KeyStatus, error)
 }
 
 // Deleter can delete keystores from the keymanager.
 type Deleter interface {
-	DeleteKeystores(ctx context.Context, publicKeys [][]byte) ([]*ethpbservice.DeletedKeystoreStatus, error)
+	DeleteKeystores(ctx context.Context, publicKeys [][]byte) ([]*KeyStatus, error)
 }
 
 // KeyChangeSubscriber allows subscribing to changes made to the underlying keys.
@@ -62,16 +61,34 @@ type KeyStoreExtractor interface {
 
 // PublicKeyAdder allows adding public keys to the keymanager.
 type PublicKeyAdder interface {
-	AddPublicKeys(ctx context.Context, publicKeys [][fieldparams.BLSPubkeyLength]byte) ([]*ethpbservice.ImportedRemoteKeysStatus, error)
+	AddPublicKeys(publicKeys []string) ([]*KeyStatus, error)
 }
+
+// KeyStatus is a json representation of the status fields for the keymanager apis
+type KeyStatus struct {
+	Status  KeyStatusType `json:"status"`
+	Message string        `json:"message"`
+}
+
+// KeyStatusType is a category of key status
+type KeyStatusType string
+
+const (
+	StatusImported  KeyStatusType = "imported"
+	StatusError     KeyStatusType = "error"
+	StatusDuplicate KeyStatusType = "duplicate"
+	StatusUnknown   KeyStatusType = "unknown"
+	StatusNotFound  KeyStatusType = "not_found"
+	StatusDeleted   KeyStatusType = "deleted"
+	StatusNotActive KeyStatusType = "not_active"
+)
 
 // PublicKeyDeleter allows deleting public keys set in keymanager.
 type PublicKeyDeleter interface {
-	DeletePublicKeys(ctx context.Context, publicKeys [][fieldparams.BLSPubkeyLength]byte) ([]*ethpbservice.DeletedRemoteKeysStatus, error)
+	DeletePublicKeys(publicKeys []string) ([]*KeyStatus, error)
 }
 
 type ListKeymanagerAccountConfig struct {
-	ShowDepositData          bool
 	ShowPrivateKeys          bool
 	WalletAccountsDir        string
 	KeymanagerConfigFileName string

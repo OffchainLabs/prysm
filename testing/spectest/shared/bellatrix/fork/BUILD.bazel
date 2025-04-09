@@ -7,7 +7,7 @@ go_library(
         "transition.go",
         "upgrade_to_bellatrix.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v4/testing/spectest/shared/bellatrix/fork",
+    importpath = "github.com/prysmaticlabs/prysm/v5/testing/spectest/shared/bellatrix/fork",
     visibility = ["//visibility:public"],
     deps = [
         "//beacon-chain/core/execution:go_default_library",

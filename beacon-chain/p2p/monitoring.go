@@ -113,7 +113,7 @@ var (
 		Name: "p2p_pubsub_reject_total",
 		Help: "The number of messages rejected of a particular topic",
 	},
-		[]string{"topic"})
+		[]string{"topic", "reason"})
 	pubsubPeerThrottle = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "p2p_pubsub_throttle_total",
 		Help: "The number of times a peer has been throttled for a particular topic",
@@ -121,31 +121,46 @@ var (
 		[]string{"topic"})
 	pubsubRPCRecv = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "p2p_pubsub_rpc_recv_total",
-		Help: "The number of messages received via rpc for a particular topic",
+		Help: "The number of messages received via rpc for a particular control message",
 	},
 		[]string{"control_message"})
 	pubsubRPCSubRecv = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "p2p_pubsub_rpc_recv_sub_total",
 		Help: "The number of subscription messages received via rpc",
 	})
+	pubsubRPCPubRecv = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "p2p_pubsub_rpc_recv_pub_total",
+		Help: "The number of publish messages received via rpc for a particular topic",
+	},
+		[]string{"topic"})
 	pubsubRPCDrop = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "p2p_pubsub_rpc_drop_total",
-		Help: "The number of messages dropped via rpc for a particular topic",
+		Help: "The number of messages dropped via rpc for a particular control message",
 	},
 		[]string{"control_message"})
 	pubsubRPCSubDrop = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "p2p_pubsub_rpc_drop_sub_total",
 		Help: "The number of subscription messages dropped via rpc",
 	})
+	pubsubRPCPubDrop = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "p2p_pubsub_rpc_drop_pub_total",
+		Help: "The number of publish messages dropped via rpc for a particular topic",
+	},
+		[]string{"topic"})
 	pubsubRPCSent = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "p2p_pubsub_rpc_sent_total",
-		Help: "The number of messages sent via rpc for a particular topic",
+		Help: "The number of messages sent via rpc for a particular control message",
 	},
 		[]string{"control_message"})
 	pubsubRPCSubSent = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "p2p_pubsub_rpc_sent_sub_total",
 		Help: "The number of subscription messages sent via rpc",
 	})
+	pubsubRPCPubSent = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "p2p_pubsub_rpc_sent_pub_total",
+		Help: "The number of publish messages sent via rpc for a particular topic",
+	},
+		[]string{"topic"})
 )
 
 func (s *Service) updateMetrics() {

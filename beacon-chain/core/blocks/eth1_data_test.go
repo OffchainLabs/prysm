@@ -5,16 +5,16 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/blocks"
-	state_native "github.com/prysmaticlabs/prysm/v4/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/runtime/version"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/testing/util"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
+	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/util"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -186,7 +186,7 @@ func TestProcessEth1Data_SetsCorrectly(t *testing.T) {
 	if len(newETH1DataVotes) <= 1 {
 		t.Error("Expected new ETH1 data votes to have length > 1")
 	}
-	if !proto.Equal(beaconState.Eth1Data(), ethpb.CopyETH1Data(b.Block.Body.Eth1Data)) {
+	if !proto.Equal(beaconState.Eth1Data(), b.Block.Body.Eth1Data.Copy()) {
 		t.Errorf(
 			"Expected latest eth1 data to have been set to %v, received %v",
 			b.Block.Body.Eth1Data,

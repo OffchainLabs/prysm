@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func TestSynchronizerErrOnSecondSet(t *testing.T) {

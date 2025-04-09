@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/golang/snappy"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 )
 
 func TestSszNetworkEncoder_BufferedReader(t *testing.T) {

@@ -36,7 +36,7 @@ func NewWaiter() *Waiter {
 }
 
 // Done is used with RequireDoneAfter and RequireDoneBefore to make assertions
-// that certain test code is reached before a timeout or context cancelation.
+// that certain test code is reached before a timeout or context cancellation.
 func (w *Waiter) Done() {
 	close(w.c)
 }

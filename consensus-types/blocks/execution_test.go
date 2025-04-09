@@ -3,13 +3,13 @@ package blocks_test
 import (
 	"testing"
 
-	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
-	consensus_types "github.com/prysmaticlabs/prysm/v4/consensus-types"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/interfaces"
-	enginev1 "github.com/prysmaticlabs/prysm/v4/proto/engine/v1"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	consensus_types "github.com/prysmaticlabs/prysm/v5/consensus-types"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
+	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func TestWrapExecutionPayload(t *testing.T) {
@@ -105,11 +105,8 @@ func TestWrapExecutionPayloadCapella(t *testing.T) {
 			Amount:         77,
 		}},
 	}
-	payload, err := blocks.WrappedExecutionPayloadCapella(data, 10)
+	payload, err := blocks.WrappedExecutionPayloadCapella(data)
 	require.NoError(t, err)
-	v, err := payload.ValueInGwei()
-	require.NoError(t, err)
-	assert.Equal(t, uint64(10), v)
 
 	assert.DeepEqual(t, data, payload.Proto())
 }
@@ -132,12 +129,8 @@ func TestWrapExecutionPayloadHeaderCapella(t *testing.T) {
 		TransactionsRoot: []byte("transactionsroot"),
 		WithdrawalsRoot:  []byte("withdrawalsroot"),
 	}
-	payload, err := blocks.WrappedExecutionPayloadHeaderCapella(data, 10)
+	payload, err := blocks.WrappedExecutionPayloadHeaderCapella(data)
 	require.NoError(t, err)
-
-	v, err := payload.ValueInGwei()
-	require.NoError(t, err)
-	assert.Equal(t, uint64(10), v)
 
 	assert.DeepEqual(t, data, payload.Proto())
 
@@ -151,22 +144,22 @@ func TestWrapExecutionPayloadHeaderCapella(t *testing.T) {
 }
 
 func TestWrapExecutionPayloadCapella_IsNil(t *testing.T) {
-	_, err := blocks.WrappedExecutionPayloadCapella(nil, 0)
+	_, err := blocks.WrappedExecutionPayloadCapella(nil)
 	require.Equal(t, consensus_types.ErrNilObjectWrapped, err)
 
 	data := &enginev1.ExecutionPayloadCapella{GasUsed: 54}
-	payload, err := blocks.WrappedExecutionPayloadCapella(data, 0)
+	payload, err := blocks.WrappedExecutionPayloadCapella(data)
 	require.NoError(t, err)
 
 	assert.Equal(t, false, payload.IsNil())
 }
 
 func TestWrapExecutionPayloadHeaderCapella_IsNil(t *testing.T) {
-	_, err := blocks.WrappedExecutionPayloadHeaderCapella(nil, 0)
+	_, err := blocks.WrappedExecutionPayloadHeaderCapella(nil)
 	require.Equal(t, consensus_types.ErrNilObjectWrapped, err)
 
 	data := &enginev1.ExecutionPayloadHeaderCapella{GasUsed: 54}
-	payload, err := blocks.WrappedExecutionPayloadHeaderCapella(data, 0)
+	payload, err := blocks.WrappedExecutionPayloadHeaderCapella(data)
 	require.NoError(t, err)
 
 	assert.Equal(t, false, payload.IsNil())
@@ -204,44 +197,6 @@ func TestWrapExecutionPayloadHeaderCapella_SSZ(t *testing.T) {
 	assert.NoError(t, payload.UnmarshalSSZ(encoded))
 }
 
-func Test_executionPayload_Pb(t *testing.T) {
-	payload := createWrappedPayload(t)
-	pb, err := payload.PbBellatrix()
-	require.NoError(t, err)
-	assert.DeepEqual(t, payload.Proto(), pb)
-
-	_, err = payload.PbCapella()
-	require.ErrorIs(t, err, consensus_types.ErrUnsupportedField)
-}
-
-func Test_executionPayloadHeader_Pb(t *testing.T) {
-	payload := createWrappedPayloadHeader(t)
-	_, err := payload.PbBellatrix()
-	require.ErrorIs(t, err, consensus_types.ErrUnsupportedField)
-
-	_, err = payload.PbCapella()
-	require.ErrorIs(t, err, consensus_types.ErrUnsupportedField)
-}
-
-func Test_executionPayloadCapella_Pb(t *testing.T) {
-	payload := createWrappedPayloadCapella(t)
-	pb, err := payload.PbCapella()
-	require.NoError(t, err)
-	assert.DeepEqual(t, payload.Proto(), pb)
-
-	_, err = payload.PbBellatrix()
-	require.ErrorIs(t, err, consensus_types.ErrUnsupportedField)
-}
-
-func Test_executionPayloadHeaderCapella_Pb(t *testing.T) {
-	payload := createWrappedPayloadHeaderCapella(t)
-	_, err := payload.PbBellatrix()
-	require.ErrorIs(t, err, consensus_types.ErrUnsupportedField)
-
-	_, err = payload.PbCapella()
-	require.ErrorIs(t, err, consensus_types.ErrUnsupportedField)
-}
-
 func TestWrapExecutionPayloadDeneb(t *testing.T) {
 	data := &enginev1.ExecutionPayloadDeneb{
 		ParentHash:    []byte("parenthash"),
@@ -267,11 +222,8 @@ func TestWrapExecutionPayloadDeneb(t *testing.T) {
 		BlobGasUsed:   88,
 		ExcessBlobGas: 99,
 	}
-	payload, err := blocks.WrappedExecutionPayloadDeneb(data, 420)
+	payload, err := blocks.WrappedExecutionPayloadDeneb(data)
 	require.NoError(t, err)
-	v, err := payload.ValueInGwei()
-	require.NoError(t, err)
-	assert.Equal(t, uint64(420), v)
 
 	g, err := payload.BlobGasUsed()
 	require.NoError(t, err)
@@ -302,12 +254,8 @@ func TestWrapExecutionPayloadHeaderDeneb(t *testing.T) {
 		BlobGasUsed:      88,
 		ExcessBlobGas:    99,
 	}
-	payload, err := blocks.WrappedExecutionPayloadHeaderDeneb(data, 10)
+	payload, err := blocks.WrappedExecutionPayloadHeaderDeneb(data)
 	require.NoError(t, err)
-
-	v, err := payload.ValueInGwei()
-	require.NoError(t, err)
-	assert.Equal(t, uint64(10), v)
 
 	g, err := payload.BlobGasUsed()
 	require.NoError(t, err)
@@ -409,7 +357,7 @@ func createWrappedPayloadCapella(t testing.TB) interfaces.ExecutionData {
 		BlockHash:     make([]byte, fieldparams.RootLength),
 		Transactions:  make([][]byte, 0),
 		Withdrawals:   make([]*enginev1.Withdrawal, 0),
-	}, 0)
+	})
 	require.NoError(t, err)
 	return payload
 }
@@ -431,7 +379,7 @@ func createWrappedPayloadHeaderCapella(t testing.TB) interfaces.ExecutionData {
 		BlockHash:        make([]byte, fieldparams.RootLength),
 		TransactionsRoot: make([]byte, fieldparams.RootLength),
 		WithdrawalsRoot:  make([]byte, fieldparams.RootLength),
-	}, 0)
+	})
 	require.NoError(t, err)
 	return payload
 }
@@ -455,7 +403,7 @@ func createWrappedPayloadDeneb(t testing.TB) interfaces.ExecutionData {
 		Withdrawals:   make([]*enginev1.Withdrawal, 0),
 		BlobGasUsed:   0,
 		ExcessBlobGas: 0,
-	}, 0)
+	})
 	require.NoError(t, err)
 	return payload
 }
@@ -479,7 +427,7 @@ func createWrappedPayloadHeaderDeneb(t testing.TB) interfaces.ExecutionData {
 		WithdrawalsRoot:  make([]byte, fieldparams.RootLength),
 		BlobGasUsed:      0,
 		ExcessBlobGas:    0,
-	}, 0)
+	})
 	require.NoError(t, err)
 	return payload
 }

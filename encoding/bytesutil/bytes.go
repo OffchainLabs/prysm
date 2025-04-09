@@ -3,6 +3,7 @@ package bytesutil
 
 import (
 	"fmt"
+	"unsafe"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
@@ -136,7 +137,7 @@ func PadTo(b []byte, size int) []byte {
 }
 
 // ReverseByteOrder Switch the endianness of a byte slice by reversing its order.
-// this function does not modify the actual input bytes.
+// This function does not modify the actual input bytes.
 func ReverseByteOrder(input []byte) []byte {
 	b := make([]byte, len(input))
 	copy(b, input)
@@ -144,4 +145,11 @@ func ReverseByteOrder(input []byte) []byte {
 		b[i], b[len(b)-i-1] = b[len(b)-i-1], b[i]
 	}
 	return b
+}
+
+// UnsafeCastToString casts a byte slice to a string object without performing a copy. Changes
+// to byteSlice will also modify the contents of the string, so it is the caller's responsibility
+// to ensure that the byte slice will not modified after the string is created.
+func UnsafeCastToString(byteSlice []byte) string {
+	return *(*string)(unsafe.Pointer(&byteSlice)) // #nosec G103
 }

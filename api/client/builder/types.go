@@ -5,15 +5,22 @@ import (
 	"fmt"
 	"math/big"
 	"strconv"
+	"strings"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
-	types "github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v4/math"
-	v1 "github.com/prysmaticlabs/prysm/v4/proto/engine/v1"
-	eth "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/api/server"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	consensusblocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	types "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/math"
+	v1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
+	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
+	"google.golang.org/protobuf/proto"
 )
 
 var errInvalidUint256 = errors.New("invalid Uint256")
@@ -44,6 +51,9 @@ func sszBytesToUint256(b []byte) (Uint256, error) {
 
 // SSZBytes creates an ssz-style (little-endian byte slice) representation of the Uint256.
 func (s Uint256) SSZBytes() []byte {
+	if s.Int == nil {
+		s.Int = big.NewInt(0)
+	}
 	if !math.IsValidUint256(s.Int) {
 		return []byte{}
 	}
@@ -91,6 +101,9 @@ func (s Uint256) MarshalJSON() ([]byte, error) {
 
 // MarshalText returns a text byte representation of Uint256.
 func (s Uint256) MarshalText() ([]byte, error) {
+	if s.Int == nil {
+		s.Int = big.NewInt(0)
+	}
 	if !math.IsValidUint256(s.Int) {
 		return nil, errors.Wrapf(errInvalidUint256, "value=%s", s.Int)
 	}
@@ -117,7 +130,7 @@ type VersionResponse struct {
 	Version string `json:"version"`
 }
 
-// ExecHeaderResponse is a JSON representation of  the builder API header response for Bellatrix.
+// ExecHeaderResponse is a JSON representation of the builder API header response for Bellatrix.
 type ExecHeaderResponse struct {
 	Version string `json:"version"`
 	Data    struct {
@@ -146,6 +159,8 @@ func (bb *BuilderBid) ToProto() (*eth.BuilderBid, error) {
 	}
 	return &eth.BuilderBid{
 		Header: header,
+		// Note that SSZBytes() reverses byte order for the little-endian representation.
+		// Uint256.Bytes() is big-endian, SSZBytes takes this value and reverses it.
 		Value:  bb.Value.SSZBytes(),
 		Pubkey: bb.Pubkey,
 	}, nil
@@ -265,6 +280,11 @@ func (r *ExecPayloadResponse) ToProto() (*v1.ExecutionPayload, error) {
 	return r.Data.ToProto()
 }
 
+func (r *ExecutionPayload) PayloadProto() (proto.Message, error) {
+	pb, err := r.ToProto()
+	return pb, err
+}
+
 // ToProto returns a ExecutionPayload Proto
 func (p *ExecutionPayload) ToProto() (*v1.ExecutionPayload, error) {
 	txs := make([][]byte, len(p.Transactions))
@@ -357,9 +377,49 @@ func FromProtoCapella(payload *v1.ExecutionPayloadCapella) (ExecutionPayloadCape
 	}, nil
 }
 
+func FromProtoDeneb(payload *v1.ExecutionPayloadDeneb) (ExecutionPayloadDeneb, error) {
+	bFee, err := sszBytesToUint256(payload.BaseFeePerGas)
+	if err != nil {
+		return ExecutionPayloadDeneb{}, err
+	}
+	txs := make([]hexutil.Bytes, len(payload.Transactions))
+	for i := range payload.Transactions {
+		txs[i] = bytesutil.SafeCopyBytes(payload.Transactions[i])
+	}
+	withdrawals := make([]Withdrawal, len(payload.Withdrawals))
+	for i, w := range payload.Withdrawals {
+		withdrawals[i] = Withdrawal{
+			Index:          Uint256{Int: big.NewInt(0).SetUint64(w.Index)},
+			ValidatorIndex: Uint256{Int: big.NewInt(0).SetUint64(uint64(w.ValidatorIndex))},
+			Address:        bytesutil.SafeCopyBytes(w.Address),
+			Amount:         Uint256{Int: big.NewInt(0).SetUint64(w.Amount)},
+		}
+	}
+	return ExecutionPayloadDeneb{
+		ParentHash:    bytesutil.SafeCopyBytes(payload.ParentHash),
+		FeeRecipient:  bytesutil.SafeCopyBytes(payload.FeeRecipient),
+		StateRoot:     bytesutil.SafeCopyBytes(payload.StateRoot),
+		ReceiptsRoot:  bytesutil.SafeCopyBytes(payload.ReceiptsRoot),
+		LogsBloom:     bytesutil.SafeCopyBytes(payload.LogsBloom),
+		PrevRandao:    bytesutil.SafeCopyBytes(payload.PrevRandao),
+		BlockNumber:   Uint64String(payload.BlockNumber),
+		GasLimit:      Uint64String(payload.GasLimit),
+		GasUsed:       Uint64String(payload.GasUsed),
+		Timestamp:     Uint64String(payload.Timestamp),
+		ExtraData:     bytesutil.SafeCopyBytes(payload.ExtraData),
+		BaseFeePerGas: bFee,
+		BlockHash:     bytesutil.SafeCopyBytes(payload.BlockHash),
+		Transactions:  txs,
+		Withdrawals:   withdrawals,
+		BlobGasUsed:   Uint64String(payload.BlobGasUsed),
+		ExcessBlobGas: Uint64String(payload.ExcessBlobGas),
+	}, nil
+}
+
 // ExecHeaderResponseCapella is the response of builder API /eth/v1/builder/header/{slot}/{parent_hash}/{pubkey} for Capella.
 type ExecHeaderResponseCapella struct {
-	Data struct {
+	Version string `json:"version"`
+	Data    struct {
 		Signature hexutil.Bytes      `json:"signature"`
 		Message   *BuilderBidCapella `json:"message"`
 	} `json:"data"`
@@ -385,6 +445,8 @@ func (bb *BuilderBidCapella) ToProto() (*eth.BuilderBidCapella, error) {
 	}
 	return &eth.BuilderBidCapella{
 		Header: header,
+		// Note that SSZBytes() reverses byte order for the little-endian representation.
+		// Uint256.Bytes() is big-endian, SSZBytes takes this value and reverses it.
 		Value:  bytesutil.SafeCopyBytes(bb.Value.SSZBytes()),
 		Pubkey: bytesutil.SafeCopyBytes(bb.Pubkey),
 	}, nil
@@ -484,6 +546,50 @@ type ExecPayloadResponseCapella struct {
 	Data    ExecutionPayloadCapella `json:"data"`
 }
 
+// ExecutionPayloadResponse allows for unmarshaling just the Version field of the payload.
+// This allows it to return different ExecutionPayload types based on the version field.
+type ExecutionPayloadResponse struct {
+	Version string          `json:"version"`
+	Data    json.RawMessage `json:"data"`
+}
+
+// ParsedPayload can retrieve the underlying protobuf message for the given execution payload response.
+type ParsedPayload interface {
+	PayloadProto() (proto.Message, error)
+}
+
+// BlobBundler can retrieve the underlying blob bundle protobuf message for the given execution payload response.
+type BlobBundler interface {
+	BundleProto() (*v1.BlobsBundle, error)
+}
+
+// ParsedExecutionRequests can retrieve the underlying execution requests for the given execution payload response.
+type ParsedExecutionRequests interface {
+	ExecutionRequestsProto() (*v1.ExecutionRequests, error)
+}
+
+func (r *ExecutionPayloadResponse) ParsePayload() (ParsedPayload, error) {
+	var toProto ParsedPayload
+	v, err := version.FromString(strings.ToLower(r.Version))
+	if err != nil {
+		return nil, errors.Wrap(err, fmt.Sprintf("unsupported version %s", strings.ToLower(r.Version)))
+	}
+	if v >= version.Deneb {
+		toProto = &ExecutionPayloadDenebAndBlobsBundle{}
+	} else if v >= version.Capella {
+		toProto = &ExecutionPayloadCapella{}
+	} else if v >= version.Bellatrix {
+		toProto = &ExecutionPayload{}
+	} else {
+		return nil, fmt.Errorf("unsupported version %s", strings.ToLower(r.Version))
+	}
+
+	if err := json.Unmarshal(r.Data, toProto); err != nil {
+		return nil, errors.Wrap(err, "failed to unmarshal the response .Data field with the stated version schema")
+	}
+	return toProto, nil
+}
+
 // ExecutionPayloadCapella is a field of ExecPayloadResponseCapella.
 type ExecutionPayloadCapella struct {
 	ParentHash    hexutil.Bytes   `json:"parent_hash"`
@@ -506,6 +612,11 @@ type ExecutionPayloadCapella struct {
 // ToProto returns a ExecutionPayloadCapella Proto.
 func (r *ExecPayloadResponseCapella) ToProto() (*v1.ExecutionPayloadCapella, error) {
 	return r.Data.ToProto()
+}
+
+func (p *ExecutionPayloadCapella) PayloadProto() (proto.Message, error) {
+	pb, err := p.ToProto()
+	return pb, err
 }
 
 // ToProto returns a ExecutionPayloadCapella Proto.
@@ -845,7 +956,8 @@ func (ch *BLSToExecutionChange) MarshalJSON() ([]byte, error) {
 
 // ExecHeaderResponseDeneb is the header response for builder API /eth/v1/builder/header/{slot}/{parent_hash}/{pubkey}.
 type ExecHeaderResponseDeneb struct {
-	Data struct {
+	Version string `json:"version"`
+	Data    struct {
 		Signature hexutil.Bytes    `json:"signature"`
 		Message   *BuilderBidDeneb `json:"message"`
 	} `json:"data"`
@@ -869,58 +981,32 @@ func (bb *BuilderBidDeneb) ToProto() (*eth.BuilderBidDeneb, error) {
 	if err != nil {
 		return nil, err
 	}
-	var bundle *v1.BlindedBlobsBundle
-	if bb.BlindedBlobsBundle != nil {
-		bundle, err = bb.BlindedBlobsBundle.ToProto()
-		if err != nil {
-			return nil, err
+	if len(bb.BlobKzgCommitments) > params.BeaconConfig().DeprecatedMaxBlobsPerBlock {
+		return nil, fmt.Errorf("too many blob commitments: %d", len(bb.BlobKzgCommitments))
+	}
+	kzgCommitments := make([][]byte, len(bb.BlobKzgCommitments))
+	for i, commit := range bb.BlobKzgCommitments {
+		if len(commit) != fieldparams.BLSPubkeyLength {
+			return nil, fmt.Errorf("commitment length %d is not %d", len(commit), fieldparams.BLSPubkeyLength)
 		}
+		kzgCommitments[i] = bytesutil.SafeCopyBytes(commit)
 	}
 	return &eth.BuilderBidDeneb{
 		Header:             header,
-		BlindedBlobsBundle: bundle,
-		Value:              bytesutil.SafeCopyBytes(bb.Value.SSZBytes()),
-		Pubkey:             bytesutil.SafeCopyBytes(bb.Pubkey),
+		BlobKzgCommitments: kzgCommitments,
+		// Note that SSZBytes() reverses byte order for the little-endian representation.
+		// Uint256.Bytes() is big-endian, SSZBytes takes this value and reverses it.
+		Value:  bytesutil.SafeCopyBytes(bb.Value.SSZBytes()),
+		Pubkey: bytesutil.SafeCopyBytes(bb.Pubkey),
 	}, nil
 }
 
 // BuilderBidDeneb is a field of ExecHeaderResponseDeneb.
 type BuilderBidDeneb struct {
 	Header             *ExecutionPayloadHeaderDeneb `json:"header"`
-	BlindedBlobsBundle *BlindedBlobsBundle          `json:"blinded_blobs_bundle"`
+	BlobKzgCommitments []hexutil.Bytes              `json:"blob_kzg_commitments"`
 	Value              Uint256                      `json:"value"`
 	Pubkey             hexutil.Bytes                `json:"pubkey"`
-}
-
-// BlindedBlobsBundle is a field of BuilderBidDeneb and represents the blinded blobs of the associated header.
-type BlindedBlobsBundle struct {
-	KzgCommitments []hexutil.Bytes `json:"commitments"`
-	Proofs         []hexutil.Bytes `json:"proofs"`
-	BlobRoots      []hexutil.Bytes `json:"blob_roots"`
-}
-
-// ToProto creates a BlindedBlobsBundle Proto from BlindedBlobsBundle.
-func (r *BlindedBlobsBundle) ToProto() (*v1.BlindedBlobsBundle, error) {
-	kzg := make([][]byte, len(r.KzgCommitments))
-	for i := range kzg {
-		kzg[i] = bytesutil.SafeCopyBytes(r.KzgCommitments[i])
-	}
-
-	proofs := make([][]byte, len(r.Proofs))
-	for i := range proofs {
-		proofs[i] = bytesutil.SafeCopyBytes(r.Proofs[i])
-	}
-
-	blobRoots := make([][]byte, len(r.BlobRoots))
-	for i := range blobRoots {
-		blobRoots[i] = bytesutil.SafeCopyBytes(r.BlobRoots[i])
-	}
-
-	return &v1.BlindedBlobsBundle{
-		KzgCommitments: kzg,
-		Proofs:         proofs,
-		BlobRoots:      blobRoots,
-	}, nil
 }
 
 // ExecutionPayloadHeaderDeneb a field part of the BuilderBidDeneb.
@@ -1052,6 +1138,16 @@ type BlobsBundle struct {
 
 // ToProto returns a BlobsBundle Proto.
 func (b BlobsBundle) ToProto() (*v1.BlobsBundle, error) {
+	if len(b.Blobs) > fieldparams.MaxBlobCommitmentsPerBlock {
+		return nil, fmt.Errorf("blobs length %d is more than max %d", len(b.Blobs), fieldparams.MaxBlobCommitmentsPerBlock)
+	}
+	if len(b.Commitments) != len(b.Blobs) {
+		return nil, fmt.Errorf("commitments length %d does not equal blobs length %d", len(b.Commitments), len(b.Blobs))
+	}
+	if len(b.Proofs) != len(b.Blobs) {
+		return nil, fmt.Errorf("proofs length %d does not equal blobs length %d", len(b.Proofs), len(b.Blobs))
+	}
+
 	commitments := make([][]byte, len(b.Commitments))
 	for i := range b.Commitments {
 		if len(b.Commitments[i]) != fieldparams.BLSPubkeyLength {
@@ -1065,9 +1161,6 @@ func (b BlobsBundle) ToProto() (*v1.BlobsBundle, error) {
 			return nil, fmt.Errorf("proof length %d is not %d", len(b.Proofs[i]), fieldparams.BLSPubkeyLength)
 		}
 		proofs[i] = bytesutil.SafeCopyBytes(b.Proofs[i])
-	}
-	if len(b.Blobs) > fieldparams.MaxBlobsPerBlock {
-		return nil, fmt.Errorf("blobs length %d is more than max %d", len(b.Blobs), fieldparams.MaxBlobsPerBlock)
 	}
 	blobs := make([][]byte, len(b.Blobs))
 	for i := range b.Blobs {
@@ -1083,10 +1176,38 @@ func (b BlobsBundle) ToProto() (*v1.BlobsBundle, error) {
 	}, nil
 }
 
+// FromBundleProto converts the proto bundle type to the builder
+// type.
+func FromBundleProto(bundle *v1.BlobsBundle) *BlobsBundle {
+	commitments := make([]hexutil.Bytes, len(bundle.KzgCommitments))
+	for i := range bundle.KzgCommitments {
+		commitments[i] = bytesutil.SafeCopyBytes(bundle.KzgCommitments[i])
+	}
+	proofs := make([]hexutil.Bytes, len(bundle.Proofs))
+	for i := range bundle.Proofs {
+		proofs[i] = bytesutil.SafeCopyBytes(bundle.Proofs[i])
+	}
+	blobs := make([]hexutil.Bytes, len(bundle.Blobs))
+	for i := range bundle.Blobs {
+		blobs[i] = bytesutil.SafeCopyBytes(bundle.Blobs[i])
+	}
+	return &BlobsBundle{
+		Commitments: commitments,
+		Proofs:      proofs,
+		Blobs:       blobs,
+	}
+}
+
 // ToProto returns ExecutionPayloadDeneb Proto and BlobsBundle Proto separately.
 func (r *ExecPayloadResponseDeneb) ToProto() (*v1.ExecutionPayloadDeneb, *v1.BlobsBundle, error) {
 	if r.Data == nil {
 		return nil, nil, errors.New("data field in response is empty")
+	}
+	if r.Data.ExecutionPayload == nil {
+		return nil, nil, errors.Wrap(consensusblocks.ErrNilObject, "nil execution payload")
+	}
+	if r.Data.BlobsBundle == nil {
+		return nil, nil, errors.Wrap(consensusblocks.ErrNilObject, "nil blobs bundle")
 	}
 	payload, err := r.Data.ExecutionPayload.ToProto()
 	if err != nil {
@@ -1099,8 +1220,26 @@ func (r *ExecPayloadResponseDeneb) ToProto() (*v1.ExecutionPayloadDeneb, *v1.Blo
 	return payload, bundle, nil
 }
 
+func (r *ExecutionPayloadDenebAndBlobsBundle) PayloadProto() (proto.Message, error) {
+	if r.ExecutionPayload == nil {
+		return nil, errors.Wrap(consensusblocks.ErrNilObject, "nil execution payload in combined deneb payload")
+	}
+	pb, err := r.ExecutionPayload.ToProto()
+	return pb, err
+}
+
+func (r *ExecutionPayloadDenebAndBlobsBundle) BundleProto() (*v1.BlobsBundle, error) {
+	if r.BlobsBundle == nil {
+		return nil, errors.Wrap(consensusblocks.ErrNilObject, "nil blobs bundle")
+	}
+	return r.BlobsBundle.ToProto()
+}
+
 // ToProto returns the ExecutionPayloadDeneb Proto.
 func (p *ExecutionPayloadDeneb) ToProto() (*v1.ExecutionPayloadDeneb, error) {
+	if p == nil {
+		return nil, errors.Wrap(consensusblocks.ErrNilObject, "nil execution payload")
+	}
 	txs := make([][]byte, len(p.Transactions))
 	for i := range p.Transactions {
 		txs[i] = bytesutil.SafeCopyBytes(p.Transactions[i])
@@ -1132,6 +1271,208 @@ func (p *ExecutionPayloadDeneb) ToProto() (*v1.ExecutionPayloadDeneb, error) {
 		Withdrawals:   withdrawals,
 		BlobGasUsed:   uint64(p.BlobGasUsed),
 		ExcessBlobGas: uint64(p.ExcessBlobGas),
+	}, nil
+}
+
+// ExecHeaderResponseElectra is the header response for builder API /eth/v1/builder/header/{slot}/{parent_hash}/{pubkey}.
+type ExecHeaderResponseElectra struct {
+	Version string `json:"version"`
+	Data    struct {
+		Signature hexutil.Bytes      `json:"signature"`
+		Message   *BuilderBidElectra `json:"message"`
+	} `json:"data"`
+}
+
+// ToProto creates a SignedBuilderBidElectra Proto from ExecHeaderResponseElectra.
+func (ehr *ExecHeaderResponseElectra) ToProto() (*eth.SignedBuilderBidElectra, error) {
+	bb, err := ehr.Data.Message.ToProto()
+	if err != nil {
+		return nil, err
+	}
+	return &eth.SignedBuilderBidElectra{
+		Message:   bb,
+		Signature: bytesutil.SafeCopyBytes(ehr.Data.Signature),
+	}, nil
+}
+
+// ToProto creates a BuilderBidElectra Proto from BuilderBidElectra.
+func (bb *BuilderBidElectra) ToProto() (*eth.BuilderBidElectra, error) {
+	header, err := bb.Header.ToProto()
+	if err != nil {
+		return nil, err
+	}
+	if len(bb.BlobKzgCommitments) > params.BeaconConfig().MaxBlobsPerBlockByVersion(version.Electra) {
+		return nil, fmt.Errorf("blob commitment count %d exceeds the maximum %d", len(bb.BlobKzgCommitments), params.BeaconConfig().MaxBlobsPerBlockByVersion(version.Electra))
+	}
+	kzgCommitments := make([][]byte, len(bb.BlobKzgCommitments))
+	for i, commit := range bb.BlobKzgCommitments {
+		if len(commit) != fieldparams.BLSPubkeyLength {
+			return nil, fmt.Errorf("commitment length %d is not %d", len(commit), fieldparams.BLSPubkeyLength)
+		}
+		kzgCommitments[i] = bytesutil.SafeCopyBytes(commit)
+	}
+	// post electra execution requests should not be nil, if no requests exist use an empty request
+	if bb.ExecutionRequests == nil {
+		return nil, errors.New("bid contains nil execution requests")
+	}
+	executionRequests, err := bb.ExecutionRequests.ToProto()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to convert ExecutionRequests")
+	}
+	return &eth.BuilderBidElectra{
+		Header:             header,
+		BlobKzgCommitments: kzgCommitments,
+		ExecutionRequests:  executionRequests,
+		// Note that SSZBytes() reverses byte order for the little-endian representation.
+		// Uint256.Bytes() is big-endian, SSZBytes takes this value and reverses it.
+		Value:  bytesutil.SafeCopyBytes(bb.Value.SSZBytes()),
+		Pubkey: bytesutil.SafeCopyBytes(bb.Pubkey),
+	}, nil
+}
+
+// ExecutionRequestsV1 is a wrapper for different execution requests
+type ExecutionRequestsV1 struct {
+	Deposits       []*DepositRequestV1       `json:"deposits"`
+	Withdrawals    []*WithdrawalRequestV1    `json:"withdrawals"`
+	Consolidations []*ConsolidationRequestV1 `json:"consolidations"`
+}
+
+func (er *ExecutionRequestsV1) ToProto() (*v1.ExecutionRequests, error) {
+	if uint64(len(er.Deposits)) > params.BeaconConfig().MaxDepositRequestsPerPayload {
+		return nil, fmt.Errorf("deposit requests count %d exceeds the maximum %d", len(er.Deposits), params.BeaconConfig().MaxDepositRequestsPerPayload)
+	}
+	deposits := make([]*v1.DepositRequest, len(er.Deposits))
+	for i, dep := range er.Deposits {
+		d, err := dep.ToProto()
+		if err != nil {
+			return nil, err
+		}
+		deposits[i] = d
+	}
+	if uint64(len(er.Withdrawals)) > params.BeaconConfig().MaxWithdrawalRequestsPerPayload {
+		return nil, fmt.Errorf("withdrawal requests count %d exceeds the maximum %d", len(er.Withdrawals), params.BeaconConfig().MaxWithdrawalRequestsPerPayload)
+	}
+	withdrawals := make([]*v1.WithdrawalRequest, len(er.Withdrawals))
+	for i, wr := range er.Withdrawals {
+		w, err := wr.ToProto()
+		if err != nil {
+			return nil, err
+		}
+		withdrawals[i] = w
+	}
+	if uint64(len(er.Consolidations)) > params.BeaconConfig().MaxConsolidationsRequestsPerPayload {
+		return nil, fmt.Errorf("consolidation requests count %d exceeds the maximum %d", len(er.Consolidations), params.BeaconConfig().MaxConsolidationsRequestsPerPayload)
+	}
+	consolidations := make([]*v1.ConsolidationRequest, len(er.Consolidations))
+	for i, con := range er.Consolidations {
+		c, err := con.ToProto()
+		if err != nil {
+			return nil, err
+		}
+		consolidations[i] = c
+	}
+	return &v1.ExecutionRequests{
+		Deposits:       deposits,
+		Withdrawals:    withdrawals,
+		Consolidations: consolidations,
+	}, nil
+}
+
+// BuilderBidElectra is a field of ExecHeaderResponseElectra.
+type BuilderBidElectra struct {
+	Header             *ExecutionPayloadHeaderDeneb `json:"header"`
+	BlobKzgCommitments []hexutil.Bytes              `json:"blob_kzg_commitments"`
+	ExecutionRequests  *ExecutionRequestsV1         `json:"execution_requests"`
+	Value              Uint256                      `json:"value"`
+	Pubkey             hexutil.Bytes                `json:"pubkey"`
+}
+
+// WithdrawalRequestV1 is a field of ExecutionRequestsV1.
+type WithdrawalRequestV1 struct {
+	SourceAddress   hexutil.Bytes `json:"source_address"`
+	ValidatorPubkey hexutil.Bytes `json:"validator_pubkey"`
+	Amount          Uint256       `json:"amount"`
+}
+
+func (wr *WithdrawalRequestV1) ToProto() (*v1.WithdrawalRequest, error) {
+	srcAddress, err := bytesutil.DecodeHexWithLength(wr.SourceAddress.String(), common.AddressLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "source_address")
+	}
+	pubkey, err := bytesutil.DecodeHexWithLength(wr.ValidatorPubkey.String(), fieldparams.BLSPubkeyLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "validator_pubkey")
+	}
+
+	return &v1.WithdrawalRequest{
+		SourceAddress:   srcAddress,
+		ValidatorPubkey: pubkey,
+		Amount:          wr.Amount.Uint64(),
+	}, nil
+}
+
+// DepositRequestV1 is a field of ExecutionRequestsV1.
+type DepositRequestV1 struct {
+	PubKey hexutil.Bytes `json:"pubkey"`
+	// withdrawalCredentials: DATA, 32 Bytes
+	WithdrawalCredentials hexutil.Bytes `json:"withdrawal_credentials"`
+	// amount: QUANTITY, 64 Bits
+	Amount Uint256 `json:"amount"`
+	// signature: DATA, 96 Bytes
+	Signature hexutil.Bytes `json:"signature"`
+	// index: QUANTITY, 64 Bits
+	Index Uint256 `json:"index"`
+}
+
+func (dr *DepositRequestV1) ToProto() (*v1.DepositRequest, error) {
+	pubkey, err := bytesutil.DecodeHexWithLength(dr.PubKey.String(), fieldparams.BLSPubkeyLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "pubkey")
+	}
+	wc, err := bytesutil.DecodeHexWithLength(dr.WithdrawalCredentials.String(), fieldparams.RootLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "withdrawal_credentials")
+	}
+	sig, err := bytesutil.DecodeHexWithLength(dr.Signature.String(), fieldparams.BLSSignatureLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "signature")
+	}
+	return &v1.DepositRequest{
+		Pubkey:                pubkey,
+		WithdrawalCredentials: wc,
+		Amount:                dr.Amount.Uint64(),
+		Signature:             sig,
+		Index:                 dr.Index.Uint64(),
+	}, nil
+}
+
+// ConsolidationRequestV1 is a field of ExecutionRequestsV1.
+type ConsolidationRequestV1 struct {
+	// sourceAddress: DATA, 20 Bytes
+	SourceAddress hexutil.Bytes `json:"source_address"`
+	// sourcePubkey: DATA, 48 Bytes
+	SourcePubkey hexutil.Bytes `json:"source_pubkey"`
+	// targetPubkey: DATA, 48 Bytes
+	TargetPubkey hexutil.Bytes `json:"target_pubkey"`
+}
+
+func (cr *ConsolidationRequestV1) ToProto() (*v1.ConsolidationRequest, error) {
+	srcAddress, err := bytesutil.DecodeHexWithLength(cr.SourceAddress.String(), common.AddressLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "source_address")
+	}
+	sourcePubkey, err := bytesutil.DecodeHexWithLength(cr.SourcePubkey.String(), fieldparams.BLSPubkeyLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "source_pubkey")
+	}
+	targetPubkey, err := bytesutil.DecodeHexWithLength(cr.TargetPubkey.String(), fieldparams.BLSPubkeyLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "target_pubkey")
+	}
+	return &v1.ConsolidationRequest{
+		SourceAddress: srcAddress,
+		SourcePubkey:  sourcePubkey,
+		TargetPubkey:  targetPubkey,
 	}, nil
 }
 

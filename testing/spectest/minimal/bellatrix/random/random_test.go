@@ -3,7 +3,7 @@ package random
 import (
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v4/testing/spectest/shared/bellatrix/sanity"
+	"github.com/prysmaticlabs/prysm/v5/testing/spectest/shared/bellatrix/sanity"
 )
 
 func TestMinimal_Bellatrix_Random(t *testing.T) {

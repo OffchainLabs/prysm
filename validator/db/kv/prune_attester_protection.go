@@ -3,11 +3,11 @@ package kv
 import (
 	"context"
 
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	bolt "go.etcd.io/bbolt"
-	"go.opencensus.io/trace"
 )
 
 // PruneAttestations loops through every public key in the public keys bucket
@@ -15,7 +15,7 @@ import (
 // target epoch minus some constant of how many epochs we keep track of for slashing
 // protection. This routine is meant to run on startup.
 func (s *Store) PruneAttestations(ctx context.Context) error {
-	ctx, span := trace.StartSpan(ctx, "Validator.PruneAttestations")
+	_, span := trace.StartSpan(ctx, "Validator.PruneAttestations")
 	defer span.End()
 	var pubkeys [][]byte
 	err := s.view(func(tx *bolt.Tx) error {

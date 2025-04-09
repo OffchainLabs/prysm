@@ -4,9 +4,9 @@ import (
 	"context"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/core"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/core"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -36,7 +36,7 @@ func (vs *Server) GetSyncMessageBlockRoot(
 // It also saves the sync committee message into the pending pool for block inclusion.
 func (vs *Server) SubmitSyncMessage(ctx context.Context, msg *ethpb.SyncCommitteeMessage) (*emptypb.Empty, error) {
 	if err := vs.CoreService.SubmitSyncMessage(ctx, msg); err != nil {
-		return &emptypb.Empty{}, status.Errorf(core.ErrorReasonToGRPC(err.Reason), err.Err.Error())
+		return &emptypb.Empty{}, status.Errorf(core.ErrorReasonToGRPC(err.Reason), "error=%s", err.Err)
 	}
 	return &emptypb.Empty{}, nil
 }
@@ -105,7 +105,7 @@ func (vs *Server) SubmitSignedContributionAndProof(
 ) (*emptypb.Empty, error) {
 	err := vs.CoreService.SubmitSignedContributionAndProof(ctx, s)
 	if err != nil {
-		return &emptypb.Empty{}, status.Errorf(core.ErrorReasonToGRPC(err.Reason), err.Err.Error())
+		return &emptypb.Empty{}, status.Errorf(core.ErrorReasonToGRPC(err.Reason), "error=%s", err.Err)
 	}
 	return &emptypb.Empty{}, nil
 }

@@ -11,7 +11,7 @@ import (
 
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/prom2json"
-	eth "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -91,7 +91,7 @@ func scrapeProm(url string, tripper http.RoundTripper) (map[string]*dto.MetricFa
 	for {
 		select {
 		case fam, chanOpen := <-mfChan:
-			// FetchMetricFamiles will close the channel when done
+			// FetchMetricFamilies will close the channel when done
 			// at which point we want to stop the goroutine
 			if fam == nil && !chanOpen {
 				return result, nil

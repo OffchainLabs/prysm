@@ -4,15 +4,17 @@ import (
 	"context"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	synccontribution "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1/attestation/aggregation/sync_contribution"
-	"github.com/prysmaticlabs/prysm/v4/runtime/version"
-	"go.opencensus.io/trace"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
+	"github.com/prysmaticlabs/prysm/v5/crypto/bls/common"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	synccontribution "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/attestation/aggregation/sync_contribution"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
+	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
 func (vs *Server) setSyncAggregate(ctx context.Context, blk interfaces.SignedBeaconBlock) {
@@ -20,7 +22,7 @@ func (vs *Server) setSyncAggregate(ctx context.Context, blk interfaces.SignedBea
 		return
 	}
 
-	syncAggregate, err := vs.getSyncAggregate(ctx, blk.Block().Slot()-1, blk.Block().ParentRoot())
+	syncAggregate, err := vs.getSyncAggregate(ctx, slots.PrevSlot(blk.Block().Slot()), blk.Block().ParentRoot())
 	if err != nil {
 		log.WithError(err).Error("Could not get sync aggregate")
 		emptySig := [96]byte{0xC0}
@@ -43,7 +45,7 @@ func (vs *Server) setSyncAggregate(ctx context.Context, blk interfaces.SignedBea
 // getSyncAggregate retrieves the sync contributions from the pool to construct the sync aggregate object.
 // The contributions are filtered based on matching of the input root and slot then profitability.
 func (vs *Server) getSyncAggregate(ctx context.Context, slot primitives.Slot, root [32]byte) (*ethpb.SyncAggregate, error) {
-	ctx, span := trace.StartSpan(ctx, "ProposerServer.getSyncAggregate")
+	_, span := trace.StartSpan(ctx, "ProposerServer.getSyncAggregate")
 	defer span.End()
 
 	if vs.SyncCommitteePool == nil {
@@ -95,7 +97,7 @@ func (vs *Server) getSyncAggregate(ctx context.Context, slot primitives.Slot, ro
 	syncSig := bls.AggregateSignatures(sigsHolder)
 	var syncSigBytes [96]byte
 	if syncSig == nil {
-		syncSigBytes = [96]byte{0xC0} // Infinity signature if itself is nil.
+		syncSigBytes = common.InfiniteSignature // Infinity signature if itself is nil.
 	} else {
 		syncSigBytes = bytesutil.ToBytes96(syncSig.Marshal())
 	}

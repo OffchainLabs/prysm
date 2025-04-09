@@ -182,7 +182,7 @@ set "processargs=!processargs:*%1=!" & REM remove process from the list of argum
         echo PRYSM_autorestart is set, restarting
         GOTO autorestart
     ) else (
-        echo an error has occured, set PRYSM_AUTORESTART=1 to automatically restart
+        echo an error has occurred, set PRYSM_AUTORESTART=1 to automatically restart
     )
 
 :end

@@ -6,11 +6,12 @@ import (
 	"testing"
 
 	"github.com/ghodss/yaml"
-	kzgPrysm "github.com/prysmaticlabs/prysm/v4/beacon-chain/blockchain/kzg"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/testing/spectest/utils"
-	"github.com/prysmaticlabs/prysm/v4/testing/util"
+	kzgPrysm "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/kzg"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/spectest/utils"
+	"github.com/prysmaticlabs/prysm/v5/testing/util"
 )
 
 type KZGTestDataInput struct {
@@ -36,37 +37,40 @@ func TestVerifyBlobKZGProofBatch(t *testing.T) {
 			require.NoError(t, err)
 			test := &KZGTestData{}
 			require.NoError(t, yaml.Unmarshal(file, test))
-			var sidecars []*ethpb.BlobSidecar
+			var sidecars []blocks.ROBlob
 			blobs := test.Input.Blobs
-			commitments := test.Input.Commitments
 			proofs := test.Input.Proofs
+			kzgs := test.Input.Commitments
 			if len(proofs) != len(blobs) {
 				require.Equal(t, false, test.Output)
 				return
 			}
-			var kzgs [][]byte
-			// Need separate loops to test length checks in
-			// `IsDataAvailable`
+			if len(kzgs) != len(blobs) {
+				require.Equal(t, false, test.Output)
+				return
+			}
+
 			for i, blob := range blobs {
 				blobBytes, err := hex.DecodeString(blob[2:])
 				require.NoError(t, err)
 				proofBytes, err := hex.DecodeString(proofs[i][2:])
 				require.NoError(t, err)
-				sidecar := &ethpb.BlobSidecar{
-					Blob:     blobBytes,
-					KzgProof: proofBytes,
-				}
-				sidecars = append(sidecars, sidecar)
-			}
-			for _, commitment := range commitments {
-				commitmentBytes, err := hex.DecodeString(commitment[2:])
+				kzgBytes, err := hex.DecodeString(kzgs[i][2:])
 				require.NoError(t, err)
-				kzgs = append(kzgs, commitmentBytes)
+				sidecar := &ethpb.BlobSidecar{
+					Blob:          blobBytes,
+					KzgProof:      proofBytes,
+					KzgCommitment: kzgBytes,
+				}
+				sidecar.SignedBlockHeader = util.HydrateSignedBeaconHeader(&ethpb.SignedBeaconBlockHeader{})
+				sc, err := blocks.NewROBlob(sidecar)
+				require.NoError(t, err)
+				sidecars = append(sidecars, sc)
 			}
 			if test.Output {
-				require.NoError(t, kzgPrysm.IsDataAvailable(kzgs, sidecars))
+				require.NoError(t, kzgPrysm.Verify(sidecars...))
 			} else {
-				require.NotNil(t, kzgPrysm.IsDataAvailable(kzgs, sidecars))
+				require.NotNil(t, kzgPrysm.Verify(sidecars...))
 			}
 		})
 	}

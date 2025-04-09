@@ -7,21 +7,20 @@ import (
 	"testing"
 	"time"
 
-	statenative "github.com/prysmaticlabs/prysm/v4/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state/stategen"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/blocks"
-
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	chainMock "github.com/prysmaticlabs/prysm/v4/beacon-chain/blockchain/testing"
-	testDB "github.com/prysmaticlabs/prysm/v4/beacon-chain/db/testing"
-	mockstategen "github.com/prysmaticlabs/prysm/v4/beacon-chain/state/stategen/mock"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/testing/util"
+	chainMock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
+	testDB "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
+	statenative "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stategen"
+	mockstategen "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stategen/mock"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/util"
 )
 
 func TestGetState(t *testing.T) {
@@ -74,8 +73,8 @@ func TestGetState(t *testing.T) {
 		require.NoError(t, db.SaveGenesisBlockRoot(ctx, r))
 		require.NoError(t, db.SaveState(ctx, bs, r))
 
-		cc := &mockstategen.MockCanonicalChecker{Is: true}
-		cs := &mockstategen.MockCurrentSlotter{Slot: bs.Slot() + 1}
+		cc := &mockstategen.CanonicalChecker{Is: true}
+		cs := &mockstategen.CurrentSlotter{Slot: bs.Slot() + 1}
 		ch := stategen.NewCanonicalHistory(db, cc, cs)
 		currentSlot := primitives.Slot(0)
 		p := BeaconDbStater{
@@ -93,8 +92,8 @@ func TestGetState(t *testing.T) {
 	})
 
 	t.Run("finalized", func(t *testing.T) {
-		stateGen := mockstategen.NewMockService()
-		replayer := mockstategen.NewMockReplayerBuilder()
+		stateGen := mockstategen.NewService()
+		replayer := mockstategen.NewReplayerBuilder()
 		replayer.SetMockStateForSlot(newBeaconState, params.BeaconConfig().SlotsPerEpoch*10)
 		stateGen.StatesByRoot[stateRoot] = newBeaconState
 
@@ -117,8 +116,8 @@ func TestGetState(t *testing.T) {
 	})
 
 	t.Run("justified", func(t *testing.T) {
-		stateGen := mockstategen.NewMockService()
-		replayer := mockstategen.NewMockReplayerBuilder()
+		stateGen := mockstategen.NewService()
+		replayer := mockstategen.NewReplayerBuilder()
 		replayer.SetMockStateForSlot(newBeaconState, params.BeaconConfig().SlotsPerEpoch*10)
 		stateGen.StatesByRoot[stateRoot] = newBeaconState
 
@@ -144,7 +143,7 @@ func TestGetState(t *testing.T) {
 		hex := "0x" + strings.Repeat("0", 63) + "1"
 		root, err := hexutil.Decode(hex)
 		require.NoError(t, err)
-		stateGen := mockstategen.NewMockService()
+		stateGen := mockstategen.NewService()
 		stateGen.StatesByRoot[bytesutil.ToBytes32(root)] = newBeaconState
 
 		p := BeaconDbStater{
@@ -162,7 +161,7 @@ func TestGetState(t *testing.T) {
 	t.Run("root", func(t *testing.T) {
 		stateId, err := hexutil.Decode("0x" + strings.Repeat("0", 63) + "1")
 		require.NoError(t, err)
-		stateGen := mockstategen.NewMockService()
+		stateGen := mockstategen.NewService()
 		stateGen.StatesByRoot[bytesutil.ToBytes32(stateId)] = newBeaconState
 
 		p := BeaconDbStater{
@@ -196,7 +195,7 @@ func TestGetState(t *testing.T) {
 				},
 				State: newBeaconState,
 			},
-			ReplayerBuilder: mockstategen.NewMockReplayerBuilder(mockstategen.WithMockState(newBeaconState)),
+			ReplayerBuilder: mockstategen.NewReplayerBuilder(mockstategen.WithMockState(newBeaconState)),
 		}
 
 		s, err := p.State(ctx, []byte(strconv.FormatUint(uint64(headSlot), 10)))
@@ -242,7 +241,6 @@ func TestGetStateRoot(t *testing.T) {
 		require.NoError(t, err)
 		assert.DeepEqual(t, stateRoot[:], s)
 	})
-
 	t.Run("genesis", func(t *testing.T) {
 		db := testDB.SetupDB(t)
 		b := util.NewBeaconBlock()
@@ -271,7 +269,6 @@ func TestGetStateRoot(t *testing.T) {
 		sr := genesisBlock.Block().StateRoot()
 		assert.DeepEqual(t, sr[:], s)
 	})
-
 	t.Run("finalized", func(t *testing.T) {
 		db := testDB.SetupDB(t)
 		genesis := bytesutil.ToBytes32([]byte("genesis"))
@@ -302,7 +299,6 @@ func TestGetStateRoot(t *testing.T) {
 		require.NoError(t, err)
 		assert.DeepEqual(t, blk.Block.StateRoot, s)
 	})
-
 	t.Run("justified", func(t *testing.T) {
 		db := testDB.SetupDB(t)
 		genesis := bytesutil.ToBytes32([]byte("genesis"))
@@ -333,30 +329,52 @@ func TestGetStateRoot(t *testing.T) {
 		require.NoError(t, err)
 		assert.DeepEqual(t, blk.Block.StateRoot, s)
 	})
-
-	t.Run("hex_root", func(t *testing.T) {
-		stateId, err := hexutil.Decode("0x" + strings.Repeat("0", 63) + "1")
-		require.NoError(t, err)
+	t.Run("hex", func(t *testing.T) {
+		hex := "0x" + strings.Repeat("0", 63) + "1"
 
 		p := BeaconDbStater{
 			ChainInfoFetcher: &chainMock.ChainService{State: newBeaconState},
 		}
 
-		s, err := p.StateRoot(ctx, stateId)
+		s, err := p.StateRoot(ctx, []byte(hex))
 		require.NoError(t, err)
-		assert.DeepEqual(t, stateId, s)
+		expected, err := hexutil.Decode(hex)
+		require.NoError(t, err)
+		assert.DeepEqual(t, expected, s)
 	})
+	t.Run("hex not found", func(t *testing.T) {
+		hex := "0x" + strings.Repeat("f", 64)
 
-	t.Run("hex_root_not_found", func(t *testing.T) {
 		p := BeaconDbStater{
 			ChainInfoFetcher: &chainMock.ChainService{State: newBeaconState},
 		}
-		stateId, err := hexutil.Decode("0x" + strings.Repeat("f", 64))
-		require.NoError(t, err)
-		_, err = p.StateRoot(ctx, stateId)
+
+		_, err = p.StateRoot(ctx, []byte(hex))
 		require.ErrorContains(t, "state root not found in the last 8192 state roots", err)
 	})
+	t.Run("bytes", func(t *testing.T) {
+		root, err := hexutil.Decode("0x" + strings.Repeat("0", 63) + "1")
+		require.NoError(t, err)
 
+		p := BeaconDbStater{
+			ChainInfoFetcher: &chainMock.ChainService{State: newBeaconState},
+		}
+
+		s, err := p.StateRoot(ctx, root)
+		require.NoError(t, err)
+		assert.DeepEqual(t, root, s)
+	})
+	t.Run("bytes not found", func(t *testing.T) {
+		root, err := hexutil.Decode("0x" + strings.Repeat("f", 64))
+		require.NoError(t, err)
+
+		p := BeaconDbStater{
+			ChainInfoFetcher: &chainMock.ChainService{State: newBeaconState},
+		}
+
+		_, err = p.StateRoot(ctx, root)
+		require.ErrorContains(t, "state root not found in the last 8192 state roots", err)
+	})
 	t.Run("slot", func(t *testing.T) {
 		db := testDB.SetupDB(t)
 		genesis := bytesutil.ToBytes32([]byte("genesis"))
@@ -383,8 +401,7 @@ func TestGetStateRoot(t *testing.T) {
 		require.NoError(t, err)
 		assert.DeepEqual(t, blk.Block.StateRoot, s)
 	})
-
-	t.Run("slot_too_big", func(t *testing.T) {
+	t.Run("slot too big", func(t *testing.T) {
 		p := BeaconDbStater{
 			GenesisTimeFetcher: &chainMock.ChainService{
 				Genesis: time.Now(),
@@ -394,7 +411,7 @@ func TestGetStateRoot(t *testing.T) {
 		assert.ErrorContains(t, "slot cannot be in the future", err)
 	})
 
-	t.Run("invalid_state", func(t *testing.T) {
+	t.Run("invalid state", func(t *testing.T) {
 		p := BeaconDbStater{}
 		_, err := p.StateRoot(ctx, []byte("foo"))
 		require.ErrorContains(t, "could not parse state ID", err)
@@ -420,7 +437,7 @@ func TestStateBySlot_AfterHeadSlot(t *testing.T) {
 	require.NoError(t, err)
 	currentSlot := primitives.Slot(102)
 	mock := &chainMock.ChainService{State: headSt, Slot: &currentSlot}
-	mockReplayer := mockstategen.NewMockReplayerBuilder()
+	mockReplayer := mockstategen.NewReplayerBuilder()
 	mockReplayer.SetMockStateForSlot(slotSt, 101)
 	p := BeaconDbStater{ChainInfoFetcher: mock, GenesisTimeFetcher: mock, ReplayerBuilder: mockReplayer}
 	st, err := p.StateBySlot(context.Background(), 101)

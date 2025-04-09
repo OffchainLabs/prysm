@@ -2,8 +2,11 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
-    srcs = ["options.go"],
-    importpath = "github.com/prysmaticlabs/prysm/v4/cmd/beacon-chain/execution",
+    srcs = [
+        "log.go",
+        "options.go",
+    ],
+    importpath = "github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/execution",
     visibility = [
         "//beacon-chain:__subpackages__",
         "//cmd:__subpackages__",

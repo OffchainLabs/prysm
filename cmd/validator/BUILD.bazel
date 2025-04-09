@@ -1,19 +1,14 @@
 load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 load("@io_bazel_rules_go//go:def.bzl", "go_binary")
-load("@io_bazel_rules_docker//go:image.bzl", "go_image")
-load("@io_bazel_rules_docker//container:container.bzl", "container_bundle", "container_image")
-load("//tools:go_image.bzl", "go_image_debug")
-load("@io_bazel_rules_docker//contrib:push-all.bzl", "docker_push")
 load("//tools:prysm_image.bzl", "prysm_image_upload")
 
 go_library(
     name = "go_default_library",
     srcs = [
-        "log.go",
         "main.go",
         "usage.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v4/cmd/validator",
+    importpath = "github.com/prysmaticlabs/prysm/v5/cmd/validator",
     visibility = ["//validator:__subpackages__"],
     deps = [
         "//cmd:go_default_library",
@@ -34,72 +29,10 @@ go_library(
         "//runtime/version:go_default_library",
         "//validator/node:go_default_library",
         "@com_github_joonix_log//:go_default_library",
+        "@com_github_pkg_errors//:go_default_library",
         "@com_github_sirupsen_logrus//:go_default_library",
         "@com_github_urfave_cli_v2//:go_default_library",
     ],
-)
-
-go_image(
-    name = "image",
-    base = select({
-        "//tools:base_image_cc": "//tools:cc_image",
-        "//conditions:default": "//tools:cc_image",
-    }),
-    binary = ":validator",
-    tags = ["manual"],
-    visibility = ["//validator:__pkg__"],
-)
-
-container_image(
-    name = "image_with_creation_time",
-    base = "image",
-    tags = ["manual"],
-    visibility = ["//validator:__pkg__"],
-)
-
-container_bundle(
-    name = "image_bundle",
-    images = {
-        "gcr.io/prysmaticlabs/prysm/validator:latest": ":image_with_creation_time",
-        "gcr.io/prysmaticlabs/prysm/validator:{DOCKER_TAG}": ":image_with_creation_time",
-        "index.docker.io/prysmaticlabs/prysm-validator:latest": ":image_with_creation_time",
-        "index.docker.io/prysmaticlabs/prysm-validator:{DOCKER_TAG}": ":image_with_creation_time",
-    },
-    tags = ["manual"],
-    visibility = ["//validator:__pkg__"],
-)
-
-go_image_debug(
-    name = "image_debug",
-    image = ":image",
-    tags = ["manual"],
-    visibility = ["//validator:__pkg__"],
-)
-
-container_bundle(
-    name = "image_bundle_debug",
-    images = {
-        "gcr.io/prysmaticlabs/prysm/validator:latest-debug": ":image_debug",
-        "gcr.io/prysmaticlabs/prysm/validator:{DOCKER_TAG}-debug": ":image_debug",
-        "index.docker.io/prysmaticlabs/prysm-validator:latest-debug": ":image_debug",
-        "index.docker.io/prysmaticlabs/prysm-validator:{DOCKER_TAG}-debug": ":image_debug",
-    },
-    tags = ["manual"],
-    visibility = ["//validator:__pkg__"],
-)
-
-docker_push(
-    name = "push_images",
-    bundle = ":image_bundle",
-    tags = ["manual"],
-    visibility = ["//validator:__pkg__"],
-)
-
-docker_push(
-    name = "push_images_debug",
-    bundle = ":image_bundle_debug",
-    tags = ["manual"],
-    visibility = ["//validator:__pkg__"],
 )
 
 go_binary(
@@ -124,12 +57,12 @@ go_test(
 )
 
 prysm_image_upload(
-    name = "push_oci_image",
+    name = "push_images",
     binary = ":validator",
     entrypoint = ["/validator"],
-    repository = "gcr.io/prylabs-dev/prysm/validator",
+    repository = "gcr.io/prysmaticlabs/prysm/validator",
     symlinks = {
-        # Backwards compatiability for images that depended on the old filepath.
+        # Backwards compatibility for images that depended on the old filepath.
         "/app/cmd/validator/validator": "/validator",
     },
     tags = ["manual"],

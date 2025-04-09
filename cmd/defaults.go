@@ -22,7 +22,7 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/prysmaticlabs/prysm/v4/io/file"
+	"github.com/prysmaticlabs/prysm/v5/io/file"
 )
 
 // DefaultDataDir is the default data directory to use for the databases and other
@@ -31,11 +31,12 @@ func DefaultDataDir() string {
 	// Try to place the data folder in the user's home dir
 	home := file.HomeDir()
 	if home != "" {
-		if runtime.GOOS == "darwin" {
+		switch runtime.GOOS {
+		case "darwin":
 			return filepath.Join(home, "Library", "Eth2")
-		} else if runtime.GOOS == "windows" {
+		case "windows":
 			return filepath.Join(home, "AppData", "Local", "Eth2")
-		} else {
+		default:
 			return filepath.Join(home, ".eth2")
 		}
 	}

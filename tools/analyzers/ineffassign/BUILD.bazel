@@ -6,7 +6,7 @@ go_library(
         "analyzer.go",
         "ineffassign.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v4/tools/analyzers/ineffassign",
+    importpath = "github.com/prysmaticlabs/prysm/v5/tools/analyzers/ineffassign",
     visibility = ["//visibility:public"],
     deps = [
         "@org_golang_x_tools//go/analysis:go_default_library",

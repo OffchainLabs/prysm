@@ -3,10 +3,8 @@ package cache
 import (
 	"testing"
 
-	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 )
 
 func TestSubnetIDsCache_RoundTrip(t *testing.T) {
@@ -46,21 +44,8 @@ func TestSubnetIDsCache_RoundTrip(t *testing.T) {
 func TestSubnetIDsCache_PersistentCommitteeRoundtrip(t *testing.T) {
 	c := newSubnetIDs()
 
-	for i := 0; i < 20; i++ {
-		pubkey := [fieldparams.BLSPubkeyLength]byte{byte(i)}
-		c.AddPersistentCommittee(pubkey[:], []uint64{uint64(i)}, 0)
-	}
+	c.AddPersistentCommittee([]uint64{0, 1, 2, 7, 8}, 0)
 
-	for i := uint64(0); i < 20; i++ {
-		pubkey := [fieldparams.BLSPubkeyLength]byte{byte(i)}
-
-		idxs, ok, _ := c.GetPersistentSubnets(pubkey[:])
-		if !ok {
-			t.Errorf("Couldn't find entry in cache for pubkey %#x", pubkey)
-			continue
-		}
-		require.Equal(t, i, idxs[0])
-	}
 	coms := c.GetAllSubnets()
-	assert.Equal(t, 20, len(coms))
+	assert.Equal(t, 5, len(coms))
 }

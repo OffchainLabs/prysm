@@ -6,10 +6,6 @@ import (
 )
 
 var (
-	totalTerminalDifficulty = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "total_terminal_difficulty",
-		Help: "The total terminal difficulty of the execution chain before merge",
-	})
 	newPayloadLatency = promauto.NewHistogram(
 		prometheus.HistogramOpts{
 			Name:    "new_payload_v1_latency_milliseconds",

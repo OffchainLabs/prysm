@@ -3,7 +3,7 @@ package rewards
 import (
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v4/testing/spectest/shared/capella/rewards"
+	"github.com/prysmaticlabs/prysm/v5/testing/spectest/shared/capella/rewards"
 )
 
 func TestMinimal_Capella_Rewards(t *testing.T) {

@@ -6,148 +6,22 @@ import (
 	"math"
 	"testing"
 
-	"github.com/prysmaticlabs/go-bitfield"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/epoch"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/time"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/transition"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
-	state_native "github.com/prysmaticlabs/prysm/v4/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state/stateutil"
-	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/testing/util"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/epoch"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stateutil"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/util"
 	"google.golang.org/protobuf/proto"
 )
-
-func TestUnslashedAttestingIndices_CanSortAndFilter(t *testing.T) {
-	// Generate 2 attestations.
-	atts := make([]*ethpb.PendingAttestation, 2)
-	for i := 0; i < len(atts); i++ {
-		atts[i] = &ethpb.PendingAttestation{
-			Data: &ethpb.AttestationData{Source: &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
-				Target: &ethpb.Checkpoint{Epoch: 0, Root: make([]byte, fieldparams.RootLength)},
-			},
-			AggregationBits: bitfield.Bitlist{0x00, 0xFF, 0xFF, 0xFF},
-		}
-	}
-
-	// Generate validators and state for the 2 attestations.
-	validatorCount := 1000
-	validators := make([]*ethpb.Validator, validatorCount)
-	for i := 0; i < len(validators); i++ {
-		validators[i] = &ethpb.Validator{
-			ExitEpoch: params.BeaconConfig().FarFutureEpoch,
-		}
-	}
-	base := &ethpb.BeaconState{
-		Validators:  validators,
-		RandaoMixes: make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
-	}
-	beaconState, err := state_native.InitializeFromProtoPhase0(base)
-	require.NoError(t, err)
-
-	indices, err := epoch.UnslashedAttestingIndices(context.Background(), beaconState, atts)
-	require.NoError(t, err)
-	for i := 0; i < len(indices)-1; i++ {
-		if indices[i] >= indices[i+1] {
-			t.Error("sorted indices not sorted or duplicated")
-		}
-	}
-
-	// Verify the slashed validator is filtered.
-	slashedValidator := indices[0]
-	validators = beaconState.Validators()
-	validators[slashedValidator].Slashed = true
-	require.NoError(t, beaconState.SetValidators(validators))
-	indices, err = epoch.UnslashedAttestingIndices(context.Background(), beaconState, atts)
-	require.NoError(t, err)
-	for i := 0; i < len(indices); i++ {
-		assert.NotEqual(t, slashedValidator, indices[i], "Slashed validator %d is not filtered", slashedValidator)
-	}
-}
-
-func TestUnslashedAttestingIndices_DuplicatedAttestations(t *testing.T) {
-	// Generate 5 of the same attestations.
-	atts := make([]*ethpb.PendingAttestation, 5)
-	for i := 0; i < len(atts); i++ {
-		atts[i] = &ethpb.PendingAttestation{
-			Data: &ethpb.AttestationData{Source: &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
-				Target: &ethpb.Checkpoint{Epoch: 0}},
-			AggregationBits: bitfield.Bitlist{0x00, 0xFF, 0xFF, 0xFF},
-		}
-	}
-
-	// Generate validators and state for the 5 attestations.
-	validatorCount := 1000
-	validators := make([]*ethpb.Validator, validatorCount)
-	for i := 0; i < len(validators); i++ {
-		validators[i] = &ethpb.Validator{
-			ExitEpoch: params.BeaconConfig().FarFutureEpoch,
-		}
-	}
-	base := &ethpb.BeaconState{
-		Validators:  validators,
-		RandaoMixes: make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
-	}
-	beaconState, err := state_native.InitializeFromProtoPhase0(base)
-	require.NoError(t, err)
-
-	indices, err := epoch.UnslashedAttestingIndices(context.Background(), beaconState, atts)
-	require.NoError(t, err)
-
-	for i := 0; i < len(indices)-1; i++ {
-		if indices[i] >= indices[i+1] {
-			t.Error("sorted indices not sorted or duplicated")
-		}
-	}
-}
-
-func TestAttestingBalance_CorrectBalance(t *testing.T) {
-	helpers.ClearCache()
-	// Generate 2 attestations.
-	atts := make([]*ethpb.PendingAttestation, 2)
-	for i := 0; i < len(atts); i++ {
-		atts[i] = &ethpb.PendingAttestation{
-			Data: &ethpb.AttestationData{
-				Target: &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
-				Source: &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
-				Slot:   primitives.Slot(i),
-			},
-			AggregationBits: bitfield.Bitlist{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-				0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x01},
-		}
-	}
-
-	// Generate validators with balances and state for the 2 attestations.
-	validators := make([]*ethpb.Validator, params.BeaconConfig().MinGenesisActiveValidatorCount)
-	balances := make([]uint64, params.BeaconConfig().MinGenesisActiveValidatorCount)
-	for i := 0; i < len(validators); i++ {
-		validators[i] = &ethpb.Validator{
-			ExitEpoch:        params.BeaconConfig().FarFutureEpoch,
-			EffectiveBalance: params.BeaconConfig().MaxEffectiveBalance,
-		}
-		balances[i] = params.BeaconConfig().MaxEffectiveBalance
-	}
-	base := &ethpb.BeaconState{
-		Slot:        2,
-		RandaoMixes: make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
-
-		Validators: validators,
-		Balances:   balances,
-	}
-	beaconState, err := state_native.InitializeFromProtoPhase0(base)
-	require.NoError(t, err)
-
-	balance, err := epoch.AttestingBalance(context.Background(), beaconState, atts)
-	require.NoError(t, err)
-	wanted := 256 * params.BeaconConfig().MaxEffectiveBalance
-	assert.Equal(t, wanted, balance)
-}
 
 func TestProcessSlashings_NotSlashed(t *testing.T) {
 	base := &ethpb.BeaconState{
@@ -158,10 +32,9 @@ func TestProcessSlashings_NotSlashed(t *testing.T) {
 	}
 	s, err := state_native.InitializeFromProtoPhase0(base)
 	require.NoError(t, err)
-	newState, err := epoch.ProcessSlashings(s, params.BeaconConfig().ProportionalSlashingMultiplier)
-	require.NoError(t, err)
+	require.NoError(t, epoch.ProcessSlashings(s))
 	wanted := params.BeaconConfig().MaxEffectiveBalance
-	assert.Equal(t, wanted, newState.Balances()[0], "Unexpected slashed balance")
+	assert.Equal(t, wanted, s.Balances()[0], "Unexpected slashed balance")
 }
 
 func TestProcessSlashings_SlashedLess(t *testing.T) {
@@ -237,9 +110,8 @@ func TestProcessSlashings_SlashedLess(t *testing.T) {
 			s, err := state_native.InitializeFromProtoPhase0(tt.state)
 			require.NoError(t, err)
 			helpers.ClearCache()
-			newState, err := epoch.ProcessSlashings(s, params.BeaconConfig().ProportionalSlashingMultiplier)
-			require.NoError(t, err)
-			assert.Equal(t, tt.want, newState.Balances()[0], "ProcessSlashings({%v}) = newState; newState.Balances[0] = %d", original, newState.Balances()[0])
+			require.NoError(t, epoch.ProcessSlashings(s))
+			assert.Equal(t, tt.want, s.Balances()[0], "ProcessSlashings({%v}) = newState; newState.Balances[0] = %d", original, s.Balances()[0])
 		})
 	}
 }
@@ -307,14 +179,15 @@ func TestProcessRegistryUpdates_NoRotation(t *testing.T) {
 }
 
 func TestProcessRegistryUpdates_EligibleToActivate(t *testing.T) {
+	finalizedEpoch := primitives.Epoch(4)
 	base := &ethpb.BeaconState{
 		Slot:                5 * params.BeaconConfig().SlotsPerEpoch,
-		FinalizedCheckpoint: &ethpb.Checkpoint{Epoch: 6, Root: make([]byte, fieldparams.RootLength)},
+		FinalizedCheckpoint: &ethpb.Checkpoint{Epoch: finalizedEpoch, Root: make([]byte, fieldparams.RootLength)},
 	}
 	limit := helpers.ValidatorActivationChurnLimit(0)
 	for i := uint64(0); i < limit+10; i++ {
 		base.Validators = append(base.Validators, &ethpb.Validator{
-			ActivationEligibilityEpoch: params.BeaconConfig().FarFutureEpoch,
+			ActivationEligibilityEpoch: finalizedEpoch,
 			EffectiveBalance:           params.BeaconConfig().MaxEffectiveBalance,
 			ActivationEpoch:            params.BeaconConfig().FarFutureEpoch,
 		})
@@ -325,7 +198,6 @@ func TestProcessRegistryUpdates_EligibleToActivate(t *testing.T) {
 	newState, err := epoch.ProcessRegistryUpdates(context.Background(), beaconState)
 	require.NoError(t, err)
 	for i, validator := range newState.Validators() {
-		assert.Equal(t, currentEpoch+1, validator.ActivationEligibilityEpoch, "Could not update registry %d, unexpected activation eligibility epoch", i)
 		if uint64(i) < limit && validator.ActivationEpoch != helpers.ActivationExitEpoch(currentEpoch) {
 			t.Errorf("Could not update registry %d, validators failed to activate: wanted activation epoch %d, got %d",
 				i, helpers.ActivationExitEpoch(currentEpoch), validator.ActivationEpoch)
@@ -338,9 +210,10 @@ func TestProcessRegistryUpdates_EligibleToActivate(t *testing.T) {
 }
 
 func TestProcessRegistryUpdates_EligibleToActivate_Cancun(t *testing.T) {
+	finalizedEpoch := primitives.Epoch(4)
 	base := &ethpb.BeaconStateDeneb{
 		Slot:                5 * params.BeaconConfig().SlotsPerEpoch,
-		FinalizedCheckpoint: &ethpb.Checkpoint{Epoch: 6, Root: make([]byte, fieldparams.RootLength)},
+		FinalizedCheckpoint: &ethpb.Checkpoint{Epoch: finalizedEpoch, Root: make([]byte, fieldparams.RootLength)},
 	}
 	cfg := params.BeaconConfig()
 	cfg.MinPerEpochChurnLimit = 10
@@ -349,7 +222,7 @@ func TestProcessRegistryUpdates_EligibleToActivate_Cancun(t *testing.T) {
 
 	for i := uint64(0); i < 10; i++ {
 		base.Validators = append(base.Validators, &ethpb.Validator{
-			ActivationEligibilityEpoch: params.BeaconConfig().FarFutureEpoch,
+			ActivationEligibilityEpoch: finalizedEpoch,
 			EffectiveBalance:           params.BeaconConfig().MaxEffectiveBalance,
 			ActivationEpoch:            params.BeaconConfig().FarFutureEpoch,
 		})
@@ -360,7 +233,6 @@ func TestProcessRegistryUpdates_EligibleToActivate_Cancun(t *testing.T) {
 	newState, err := epoch.ProcessRegistryUpdates(context.Background(), beaconState)
 	require.NoError(t, err)
 	for i, validator := range newState.Validators() {
-		assert.Equal(t, currentEpoch+1, validator.ActivationEligibilityEpoch, "Could not update registry %d, unexpected activation eligibility epoch", i)
 		// Note: In Deneb, only validators indices before `MaxPerEpochActivationChurnLimit` should be activated.
 		if uint64(i) < params.BeaconConfig().MaxPerEpochActivationChurnLimit && validator.ActivationEpoch != helpers.ActivationExitEpoch(currentEpoch) {
 			t.Errorf("Could not update registry %d, validators failed to activate: wanted activation epoch %d, got %d",
@@ -491,8 +363,7 @@ func TestProcessSlashings_BadValue(t *testing.T) {
 	}
 	s, err := state_native.InitializeFromProtoPhase0(base)
 	require.NoError(t, err)
-	_, err = epoch.ProcessSlashings(s, params.BeaconConfig().ProportionalSlashingMultiplier)
-	require.ErrorContains(t, "addition overflows", err)
+	require.ErrorContains(t, "addition overflows", epoch.ProcessSlashings(s))
 }
 
 func TestProcessHistoricalDataUpdate(t *testing.T) {
@@ -571,6 +442,77 @@ func TestProcessHistoricalDataUpdate(t *testing.T) {
 			got, err := epoch.ProcessHistoricalDataUpdate(tt.st())
 			require.NoError(t, err)
 			tt.verifier(got)
+		})
+	}
+}
+
+func TestProcessSlashings_SlashedElectra(t *testing.T) {
+	tests := []struct {
+		state *ethpb.BeaconStateElectra
+		want  uint64
+	}{
+		{
+			state: &ethpb.BeaconStateElectra{
+				Validators: []*ethpb.Validator{
+					{Slashed: true,
+						WithdrawableEpoch: params.BeaconConfig().EpochsPerSlashingsVector / 2,
+						EffectiveBalance:  params.BeaconConfig().MaxEffectiveBalance},
+					{ExitEpoch: params.BeaconConfig().FarFutureEpoch, EffectiveBalance: params.BeaconConfig().MaxEffectiveBalance}},
+				Balances:  []uint64{params.BeaconConfig().MaxEffectiveBalance, params.BeaconConfig().MaxEffectiveBalance},
+				Slashings: []uint64{0, 1e9},
+			},
+			want: uint64(29000000000),
+		},
+		{
+			state: &ethpb.BeaconStateElectra{
+				Validators: []*ethpb.Validator{
+					{Slashed: true,
+						WithdrawableEpoch: params.BeaconConfig().EpochsPerSlashingsVector / 2,
+						EffectiveBalance:  params.BeaconConfig().MaxEffectiveBalance},
+					{ExitEpoch: params.BeaconConfig().FarFutureEpoch, EffectiveBalance: params.BeaconConfig().MaxEffectiveBalance},
+					{ExitEpoch: params.BeaconConfig().FarFutureEpoch, EffectiveBalance: params.BeaconConfig().MaxEffectiveBalance},
+				},
+				Balances:  []uint64{params.BeaconConfig().MaxEffectiveBalance, params.BeaconConfig().MaxEffectiveBalance},
+				Slashings: []uint64{0, 1e9},
+			},
+			want: uint64(30500000000),
+		},
+		{
+			state: &ethpb.BeaconStateElectra{
+				Validators: []*ethpb.Validator{
+					{Slashed: true,
+						WithdrawableEpoch: params.BeaconConfig().EpochsPerSlashingsVector / 2,
+						EffectiveBalance:  params.BeaconConfig().MaxEffectiveBalanceElectra},
+					{ExitEpoch: params.BeaconConfig().FarFutureEpoch, EffectiveBalance: params.BeaconConfig().MaxEffectiveBalanceElectra},
+					{ExitEpoch: params.BeaconConfig().FarFutureEpoch, EffectiveBalance: params.BeaconConfig().MaxEffectiveBalanceElectra},
+				},
+				Balances:  []uint64{params.BeaconConfig().MaxEffectiveBalance * 10, params.BeaconConfig().MaxEffectiveBalance * 20},
+				Slashings: []uint64{0, 2 * 1e9},
+			},
+			want: uint64(317000001536),
+		},
+		{
+			state: &ethpb.BeaconStateElectra{
+				Validators: []*ethpb.Validator{
+					{Slashed: true,
+						WithdrawableEpoch: params.BeaconConfig().EpochsPerSlashingsVector / 2,
+						EffectiveBalance:  params.BeaconConfig().MaxEffectiveBalanceElectra - params.BeaconConfig().EffectiveBalanceIncrement},
+					{ExitEpoch: params.BeaconConfig().FarFutureEpoch, EffectiveBalance: params.BeaconConfig().MaxEffectiveBalanceElectra - params.BeaconConfig().EffectiveBalanceIncrement}},
+				Balances:  []uint64{params.BeaconConfig().MaxEffectiveBalanceElectra - params.BeaconConfig().EffectiveBalanceIncrement, params.BeaconConfig().MaxEffectiveBalanceElectra - params.BeaconConfig().EffectiveBalanceIncrement},
+				Slashings: []uint64{0, 1e9},
+			},
+			want: uint64(2044000000727),
+		},
+	}
+
+	for i, tt := range tests {
+		t.Run(fmt.Sprint(i), func(t *testing.T) {
+			original := proto.Clone(tt.state)
+			s, err := state_native.InitializeFromProtoElectra(tt.state)
+			require.NoError(t, err)
+			helpers.ClearCache()
+			require.NoError(t, epoch.ProcessSlashings(s))
+			assert.Equal(t, tt.want, s.Balances()[0], "ProcessSlashings({%v}); s.Balances[0] = %d", original, s.Balances()[0])
 		})
 	}
 }

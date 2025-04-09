@@ -4,7 +4,7 @@ go_library(
     name = "go_default_library",
     testonly = True,
     srcs = ["utils.go"],
-    importpath = "github.com/prysmaticlabs/prysm/v4/testing/bls/utils",
+    importpath = "github.com/prysmaticlabs/prysm/v5/testing/bls/utils",
     visibility = ["//testing/bls:__subpackages__"],
     deps = [
         "//io/file:go_default_library",

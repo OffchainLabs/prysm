@@ -6,25 +6,25 @@ import (
 	"io"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/prysmaticlabs/prysm/v4/api/client"
-	"github.com/prysmaticlabs/prysm/v4/api/client/validator"
-	"github.com/prysmaticlabs/prysm/v4/cmd/validator/flags"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	validatorType "github.com/prysmaticlabs/prysm/v4/consensus-types/validator"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v4/io/file"
-	"github.com/prysmaticlabs/prysm/v4/io/prompt"
-	validatorpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1/validator-client"
+	"github.com/prysmaticlabs/prysm/v5/api/client"
+	"github.com/prysmaticlabs/prysm/v5/api/client/validator"
+	"github.com/prysmaticlabs/prysm/v5/cmd/validator/flags"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	validatorType "github.com/prysmaticlabs/prysm/v5/consensus-types/validator"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/io/file"
+	"github.com/prysmaticlabs/prysm/v5/io/prompt"
+	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
+	validatorpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/validator-client"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
-	"go.opencensus.io/trace"
 )
 
 func getProposerSettings(c *cli.Context, r io.Reader) error {
 	ctx, span := trace.StartSpan(c.Context, "prysmctl.getProposerSettings")
 	defer span.End()
-	if !c.IsSet(ValidatorHostFlag.Name) {
-		return errNoFlag(ValidatorHostFlag.Name)
+	if !c.IsSet(HostFlag.Name) {
+		return errNoFlag(HostFlag.Name)
 	}
 	if !c.IsSet(TokenFlag.Name) {
 		return errNoFlag(TokenFlag.Name)
@@ -47,7 +47,7 @@ func getProposerSettings(c *cli.Context, r io.Reader) error {
 		}
 	}
 
-	cl, err := validator.NewClient(c.String(ValidatorHostFlag.Name), client.WithAuthenticationToken(c.String(TokenFlag.Name)))
+	cl, err := validator.NewClient(c.String(HostFlag.Name), client.WithAuthenticationToken(c.String(TokenFlag.Name)))
 	if err != nil {
 		return err
 	}

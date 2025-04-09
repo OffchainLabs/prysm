@@ -1,0 +1,31 @@
+load("@prysm//tools/go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "log.go",
+        "options.go",
+        "server.go",
+    ],
+    importpath = "github.com/prysmaticlabs/prysm/v5/api/server/httprest",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//api/server/middleware:go_default_library",
+        "//runtime:go_default_library",
+        "@com_github_pkg_errors//:go_default_library",
+        "@com_github_sirupsen_logrus//:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["server_test.go"],
+    embed = [":go_default_library"],
+    deps = [
+        "//cmd/beacon-chain/flags:go_default_library",
+        "//testing/assert:go_default_library",
+        "//testing/require:go_default_library",
+        "@com_github_sirupsen_logrus//hooks/test:go_default_library",
+        "@com_github_urfave_cli_v2//:go_default_library",
+    ],
+)

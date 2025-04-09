@@ -1,7 +1,7 @@
 # How to monitor with prometheus
 
 ## Prerequisites:
- - [Prometheus](https://prometheus.io/docs/prometheus/latest/getting_started/) (Instal to scrap metrics and start to monitor)
+ - [Prometheus](https://prometheus.io/docs/prometheus/latest/getting_started/) (Install to scrap metrics and start to monitor)
  - (optional) [Grafana](https://grafana.com/grafana/download) (For better graphs)
  - (optional) [Setup prometheus+grafana](https://prometheus.io/docs/visualization/grafana/)
 

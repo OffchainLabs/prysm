@@ -2,19 +2,18 @@ package client
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/prysmaticlabs/prysm/v4/runtime"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/runtime"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"google.golang.org/grpc/metadata"
 )
 
 var _ runtime.Service = (*ValidatorService)(nil)
-var _ GenesisFetcher = (*ValidatorService)(nil)
-var _ SyncChecker = (*ValidatorService)(nil)
 
 func TestStop_CancelsContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -59,7 +58,7 @@ func TestStart_GrpcHeaders(t *testing.T) {
 			"Authorization", "this is a valid value",
 		},
 	} {
-		cfg := &Config{GrpcHeadersFlag: input}
+		cfg := &Config{GRPCHeaders: strings.Split(input, ",")}
 		validatorService, err := NewValidatorService(ctx, cfg)
 		require.NoError(t, err)
 		md, _ := metadata.FromOutgoingContext(validatorService.ctx)

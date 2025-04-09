@@ -5,9 +5,9 @@ import (
 	"context"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	bolt "go.etcd.io/bbolt"
-	"go.opencensus.io/trace"
 )
 
 // lookupValuesForIndices takes in a list of indices and looks up
@@ -18,7 +18,7 @@ import (
 // we might find roots `0x23` and `0x45` stored under that index. We can then
 // do a batch read for attestations corresponding to those roots.
 func lookupValuesForIndices(ctx context.Context, indicesByBucket map[string][]byte, tx *bolt.Tx) [][][]byte {
-	ctx, span := trace.StartSpan(ctx, "BeaconDB.lookupValuesForIndices")
+	_, span := trace.StartSpan(ctx, "BeaconDB.lookupValuesForIndices")
 	defer span.End()
 	values := make([][][]byte, 0, len(indicesByBucket))
 	for k, v := range indicesByBucket {
@@ -37,7 +37,7 @@ func lookupValuesForIndices(ctx context.Context, indicesByBucket map[string][]by
 // values stored at said index. Typically, indices are roots of data that can then
 // be used for reads or batch reads from the DB.
 func updateValueForIndices(ctx context.Context, indicesByBucket map[string][]byte, root []byte, tx *bolt.Tx) error {
-	ctx, span := trace.StartSpan(ctx, "BeaconDB.updateValueForIndices")
+	_, span := trace.StartSpan(ctx, "BeaconDB.updateValueForIndices")
 	defer span.End()
 	for k, idx := range indicesByBucket {
 		bkt := tx.Bucket([]byte(k))
@@ -63,7 +63,7 @@ func updateValueForIndices(ctx context.Context, indicesByBucket map[string][]byt
 
 // deleteValueForIndices clears a root stored at each index.
 func deleteValueForIndices(ctx context.Context, indicesByBucket map[string][]byte, root []byte, tx *bolt.Tx) error {
-	ctx, span := trace.StartSpan(ctx, "BeaconDB.deleteValueForIndices")
+	_, span := trace.StartSpan(ctx, "BeaconDB.deleteValueForIndices")
 	defer span.End()
 	for k, idx := range indicesByBucket {
 		bkt := tx.Bucket([]byte(k))
@@ -113,4 +113,28 @@ func splitRoots(b []byte) ([][32]byte, error) {
 		rl = append(rl, bytesutil.ToBytes32(b[s:f]))
 	}
 	return rl, nil
+}
+
+func removeRoot(roots []byte, root [32]byte) ([]byte, error) {
+	if len(roots) == 0 {
+		return []byte{}, nil
+	}
+	if len(roots) == 32 && bytes.Equal(roots, root[:]) {
+		return []byte{}, nil
+	}
+	if len(roots)%32 != 0 {
+		return nil, errors.Wrapf(errMisalignedRootList, "root list len=%d", len(roots))
+	}
+
+	search := root[:]
+	for i := 0; i <= len(roots)-32; i += 32 {
+		if bytes.Equal(roots[i:i+32], search) {
+			result := make([]byte, len(roots)-32)
+			copy(result, roots[:i])
+			copy(result[i:], roots[i+32:])
+			return result, nil
+		}
+	}
+
+	return roots, nil
 }

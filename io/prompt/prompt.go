@@ -9,7 +9,7 @@ import (
 
 	"github.com/logrusorgru/aurora"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/io/file"
+	"github.com/prysmaticlabs/prysm/v5/io/file"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 	"golang.org/x/crypto/ssh/terminal"

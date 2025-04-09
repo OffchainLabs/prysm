@@ -3,9 +3,9 @@ package state_native
 import (
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
-	testtmpl "github.com/prysmaticlabs/prysm/v4/beacon-chain/state/testing"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	testtmpl "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/testing"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
 func TestBeaconState_LatestBlockHeader_Phase0(t *testing.T) {

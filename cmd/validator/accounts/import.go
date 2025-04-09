@@ -4,15 +4,13 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/cmd"
-	"github.com/prysmaticlabs/prysm/v4/cmd/validator/flags"
-	"github.com/prysmaticlabs/prysm/v4/io/prompt"
-	"github.com/prysmaticlabs/prysm/v4/validator/accounts"
-	"github.com/prysmaticlabs/prysm/v4/validator/accounts/iface"
-	"github.com/prysmaticlabs/prysm/v4/validator/accounts/userprompt"
-	"github.com/prysmaticlabs/prysm/v4/validator/accounts/wallet"
-	"github.com/prysmaticlabs/prysm/v4/validator/client"
-	"github.com/prysmaticlabs/prysm/v4/validator/keymanager"
+	"github.com/prysmaticlabs/prysm/v5/cmd"
+	"github.com/prysmaticlabs/prysm/v5/cmd/validator/flags"
+	"github.com/prysmaticlabs/prysm/v5/validator/accounts"
+	"github.com/prysmaticlabs/prysm/v5/validator/accounts/iface"
+	"github.com/prysmaticlabs/prysm/v5/validator/accounts/userprompt"
+	"github.com/prysmaticlabs/prysm/v5/validator/accounts/wallet"
+	"github.com/prysmaticlabs/prysm/v5/validator/client"
 	"github.com/urfave/cli/v2"
 )
 
@@ -29,10 +27,10 @@ func accountsImport(c *cli.Context) error {
 	dialOpts := client.ConstructDialOptions(
 		c.Int(cmd.GrpcMaxCallRecvMsgSizeFlag.Name),
 		c.String(flags.CertFlag.Name),
-		c.Uint(flags.GrpcRetriesFlag.Name),
-		c.Duration(flags.GrpcRetryDelayFlag.Name),
+		c.Uint(flags.GRPCRetriesFlag.Name),
+		c.Duration(flags.GRPCRetryDelayFlag.Name),
 	)
-	grpcHeaders := strings.Split(c.String(flags.GrpcHeadersFlag.Name), ",")
+	grpcHeaders := strings.Split(c.String(flags.GRPCHeadersFlag.Name), ",")
 
 	opts := []accounts.Option{
 		accounts.WithWallet(w),
@@ -62,84 +60,5 @@ func accountsImport(c *cli.Context) error {
 }
 
 func walletImport(c *cli.Context) (*wallet.Wallet, error) {
-	return wallet.OpenWalletOrElseCli(c, func(cliCtx *cli.Context) (*wallet.Wallet, error) {
-		walletDir, err := userprompt.InputDirectory(cliCtx, userprompt.WalletDirPromptText, flags.WalletDirFlag)
-		if err != nil {
-			return nil, err
-		}
-		exists, err := wallet.Exists(walletDir)
-		if err != nil {
-			return nil, errors.Wrap(err, wallet.CheckExistsErrMsg)
-		}
-		if exists {
-			isValid, err := wallet.IsValid(walletDir)
-			if err != nil {
-				return nil, errors.Wrap(err, wallet.CheckValidityErrMsg)
-			}
-			if !isValid {
-				return nil, errors.New(wallet.InvalidWalletErrMsg)
-			}
-			walletPassword, err := wallet.InputPassword(
-				cliCtx,
-				flags.WalletPasswordFileFlag,
-				wallet.PasswordPromptText,
-				false, /* Do not confirm password */
-				wallet.ValidateExistingPass,
-			)
-			if err != nil {
-				return nil, err
-			}
-			return wallet.OpenWallet(cliCtx.Context, &wallet.Config{
-				WalletDir:      walletDir,
-				WalletPassword: walletPassword,
-			})
-		}
-
-		wCfg, err := ExtractWalletDirPassword(cliCtx)
-		if err != nil {
-			return nil, err
-		}
-		w := wallet.New(&wallet.Config{
-			KeymanagerKind: keymanager.Local,
-			WalletDir:      wCfg.Dir,
-			WalletPassword: wCfg.Password,
-		})
-		if err = accounts.CreateLocalKeymanagerWallet(cliCtx.Context, w); err != nil {
-			return nil, errors.Wrap(err, "could not create keymanager")
-		}
-		log.WithField("wallet-path", wCfg.Dir).Info(
-			"Successfully created new wallet",
-		)
-		return w, nil
-	})
-}
-
-// WalletDirPassword holds the directory and password of a wallet.
-type WalletDirPassword struct {
-	Dir      string
-	Password string
-}
-
-// ExtractWalletDirPassword prompts the user for wallet directory and password.
-func ExtractWalletDirPassword(cliCtx *cli.Context) (WalletDirPassword, error) {
-	// Get wallet dir and check that no wallet exists at the location.
-	walletDir, err := userprompt.InputDirectory(cliCtx, userprompt.WalletDirPromptText, flags.WalletDirFlag)
-	if err != nil {
-		return WalletDirPassword{}, err
-	}
-	walletPassword, err := prompt.InputPassword(
-		cliCtx,
-		flags.WalletPasswordFileFlag,
-		wallet.NewWalletPasswordPromptText,
-		wallet.ConfirmPasswordPromptText,
-		true, /* Should confirm password */
-		prompt.ValidatePasswordInput,
-	)
-	if err != nil {
-		return WalletDirPassword{}, err
-	}
-	return WalletDirPassword{
-		Dir:      walletDir,
-		Password: walletPassword,
-	}, nil
+	return wallet.OpenWalletOrElseCli(c, wallet.OpenOrCreateNewWallet)
 }

@@ -1,13 +1,11 @@
 load("@prysm//tools/go:def.bzl", "go_library")
 load("@io_bazel_rules_go//go:def.bzl", "go_binary")
-load("@io_bazel_rules_docker//go:image.bzl", "go_image")
-load("@io_bazel_rules_docker//container:container.bzl", "container_bundle")
-load("@io_bazel_rules_docker//contrib:push-all.bzl", "docker_push")
+load("//tools:prysm_image.bzl", "prysm_image_upload")
 
 go_library(
     name = "go_default_library",
     srcs = ["main.go"],
-    importpath = "github.com/prysmaticlabs/prysm/v4/tools/eth1exporter",
+    importpath = "github.com/prysmaticlabs/prysm/v5/tools/eth1exporter",
     visibility = ["//visibility:private"],
     deps = [
         "//runtime/maxprocs:go_default_library",
@@ -24,25 +22,14 @@ go_binary(
     visibility = ["//visibility:public"],
 )
 
-go_image(
-    name = "image",
-    base = "//tools:go_image",
-    binary = ":eth1exporter",
-    tags = ["manual"],
-    visibility = ["//visibility:private"],
-)
-
-container_bundle(
-    name = "image_bundle",
-    images = {
-        "gcr.io/prysmaticlabs/prysm/eth1monitor:latest": ":image",
-        "gcr.io/prysmaticlabs/prysm/eth1monitor:{DOCKER_TAG}": ":image",
-    },
-    tags = ["manual"],
-)
-
-docker_push(
+prysm_image_upload(
     name = "push_images",
-    bundle = ":image_bundle",
+    binary = ":eth1exporter",
+    entrypoint = ["/eth1exporter"],
+    repository = "gcr.io/prysmaticlabs/prysm/eth1monitor",
+    symlinks = {
+        # Backwards compatibility for images that depended on the old filepath.
+        "/app/tools/eth1exporter/eth1exporter": "/eth1exporter",
+    },
     tags = ["manual"],
 )

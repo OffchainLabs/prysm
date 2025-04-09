@@ -9,10 +9,10 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/sirupsen/logrus"
-	"go.opencensus.io/trace"
 )
 
 var (
@@ -28,12 +28,15 @@ var (
 func (c *Cache) InsertDeposit(ctx context.Context, d *ethpb.Deposit, blockNum uint64, index int64, depositRoot [32]byte) error {
 	ctx, span := trace.StartSpan(ctx, "Cache.InsertDeposit")
 	defer span.End()
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
 	if d == nil {
 		log.WithFields(logrus.Fields{
-			"block":        blockNum,
-			"deposit":      d,
-			"index":        index,
-			"deposit root": hex.EncodeToString(depositRoot[:]),
+			"block":       blockNum,
+			"deposit":     d,
+			"index":       index,
+			"depositRoot": hex.EncodeToString(depositRoot[:]),
 		}).Warn("Ignoring nil deposit insertion")
 		return errors.New("nil deposit inserted into the cache")
 	}
@@ -60,7 +63,7 @@ func (c *Cache) InsertDeposit(ctx context.Context, d *ethpb.Deposit, blockNum ui
 
 // InsertDepositContainers inserts a set of deposit containers into our deposit cache.
 func (c *Cache) InsertDepositContainers(ctx context.Context, ctrs []*ethpb.DepositContainer) {
-	ctx, span := trace.StartSpan(ctx, "Cache.InsertDepositContainers")
+	_, span := trace.StartSpan(ctx, "Cache.InsertDepositContainers")
 	defer span.End()
 	c.depositsLock.Lock()
 	defer c.depositsLock.Unlock()
@@ -88,6 +91,10 @@ func (c *Cache) InsertFinalizedDeposits(ctx context.Context, eth1DepositIndex in
 	defer span.End()
 	c.depositsLock.Lock()
 	defer c.depositsLock.Unlock()
+
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
 
 	depositTrie := c.finalizedDeposits.depositTree
 	insertIndex := int(c.finalizedDeposits.MerkleTrieIndex() + 1)

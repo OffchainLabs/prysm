@@ -6,29 +6,23 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/golang/mock/gomock"
-	chainMock "github.com/prysmaticlabs/prysm/v4/beacon-chain/blockchain/testing"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/feed"
-	blockfeed "github.com/prysmaticlabs/prysm/v4/beacon-chain/core/feed/block"
-	statefeed "github.com/prysmaticlabs/prysm/v4/beacon-chain/core/feed/state"
-	dbTest "github.com/prysmaticlabs/prysm/v4/beacon-chain/db/testing"
-	state_native "github.com/prysmaticlabs/prysm/v4/beacon-chain/state/state-native"
-	mockSync "github.com/prysmaticlabs/prysm/v4/beacon-chain/sync/initial-sync/testing"
-	"github.com/prysmaticlabs/prysm/v4/config/features"
-	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/mock"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/testing/util"
-	"github.com/prysmaticlabs/prysm/v4/time/slots"
+	chainMock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
+	dbTest "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/core"
+	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
+	"github.com/prysmaticlabs/prysm/v5/config/features"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/util"
+	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 // ensures that if any of the checkpoints are zero-valued, an error will be generated without genesis being present
@@ -75,16 +69,19 @@ func TestServer_GetChainHead_NoGenesis(t *testing.T) {
 		wsb, err := blocks.NewSignedBeaconBlock(genBlock)
 		require.NoError(t, err)
 		bs := &Server{
-			BeaconDB:    db,
-			HeadFetcher: &chainMock.ChainService{Block: wsb, State: s},
-			FinalizationFetcher: &chainMock.ChainService{
-				FinalizedCheckPoint:         s.FinalizedCheckpoint(),
-				CurrentJustifiedCheckPoint:  s.CurrentJustifiedCheckpoint(),
-				PreviousJustifiedCheckPoint: s.PreviousJustifiedCheckpoint()},
-			OptimisticModeFetcher: &chainMock.ChainService{},
+			CoreService: &core.Service{
+				BeaconDB:    db,
+				HeadFetcher: &chainMock.ChainService{Block: wsb, State: s},
+				FinalizedFetcher: &chainMock.ChainService{
+					FinalizedCheckPoint:         s.FinalizedCheckpoint(),
+					CurrentJustifiedCheckPoint:  s.CurrentJustifiedCheckpoint(),
+					PreviousJustifiedCheckPoint: s.PreviousJustifiedCheckpoint(),
+				},
+				OptimisticModeFetcher: &chainMock.ChainService{},
+			},
 		}
 		_, err = bs.GetChainHead(context.Background(), nil)
-		require.ErrorContains(t, "Could not get genesis block", err)
+		require.ErrorContains(t, "could not get genesis block", err)
 	}
 }
 
@@ -109,26 +106,30 @@ func TestServer_GetChainHead_NoFinalizedBlock(t *testing.T) {
 	require.NoError(t, err)
 
 	bs := &Server{
-		BeaconDB:    db,
-		HeadFetcher: &chainMock.ChainService{Block: wsb, State: s},
-		FinalizationFetcher: &chainMock.ChainService{
-			FinalizedCheckPoint:         s.FinalizedCheckpoint(),
-			CurrentJustifiedCheckPoint:  s.CurrentJustifiedCheckpoint(),
-			PreviousJustifiedCheckPoint: s.PreviousJustifiedCheckpoint()},
-		OptimisticModeFetcher: &chainMock.ChainService{},
+		CoreService: &core.Service{
+			BeaconDB:    db,
+			HeadFetcher: &chainMock.ChainService{Block: wsb, State: s},
+			FinalizedFetcher: &chainMock.ChainService{
+				FinalizedCheckPoint:         s.FinalizedCheckpoint(),
+				CurrentJustifiedCheckPoint:  s.CurrentJustifiedCheckpoint(),
+				PreviousJustifiedCheckPoint: s.PreviousJustifiedCheckpoint()},
+			OptimisticModeFetcher: &chainMock.ChainService{},
+		},
 	}
 
 	_, err = bs.GetChainHead(context.Background(), nil)
-	require.ErrorContains(t, "Could not get finalized block", err)
+	require.ErrorContains(t, "could not get finalized block", err)
 }
 
 func TestServer_GetChainHead_NoHeadBlock(t *testing.T) {
 	bs := &Server{
-		HeadFetcher:           &chainMock.ChainService{Block: nil},
-		OptimisticModeFetcher: &chainMock.ChainService{},
+		CoreService: &core.Service{
+			HeadFetcher:           &chainMock.ChainService{Block: nil},
+			OptimisticModeFetcher: &chainMock.ChainService{},
+		},
 	}
 	_, err := bs.GetChainHead(context.Background(), nil)
-	assert.ErrorContains(t, "Head block of chain was nil", err)
+	assert.ErrorContains(t, "head block of chain was nil", err)
 }
 
 func TestServer_GetChainHead(t *testing.T) {
@@ -179,13 +180,15 @@ func TestServer_GetChainHead(t *testing.T) {
 	wsb, err := blocks.NewSignedBeaconBlock(b)
 	require.NoError(t, err)
 	bs := &Server{
-		BeaconDB:              db,
-		HeadFetcher:           &chainMock.ChainService{Block: wsb, State: s},
-		OptimisticModeFetcher: &chainMock.ChainService{},
-		FinalizationFetcher: &chainMock.ChainService{
-			FinalizedCheckPoint:         s.FinalizedCheckpoint(),
-			CurrentJustifiedCheckPoint:  s.CurrentJustifiedCheckpoint(),
-			PreviousJustifiedCheckPoint: s.PreviousJustifiedCheckpoint()},
+		CoreService: &core.Service{
+			BeaconDB:              db,
+			HeadFetcher:           &chainMock.ChainService{Block: wsb, State: s},
+			OptimisticModeFetcher: &chainMock.ChainService{},
+			FinalizedFetcher: &chainMock.ChainService{
+				FinalizedCheckPoint:         s.FinalizedCheckpoint(),
+				CurrentJustifiedCheckPoint:  s.CurrentJustifiedCheckpoint(),
+				PreviousJustifiedCheckPoint: s.PreviousJustifiedCheckpoint()},
+		},
 	}
 
 	head, err := bs.GetChainHead(context.Background(), nil)
@@ -200,271 +203,6 @@ func TestServer_GetChainHead(t *testing.T) {
 	assert.DeepEqual(t, jRoot[:], head.JustifiedBlockRoot, "Unexpected JustifiedBlockRoot")
 	assert.DeepEqual(t, fRoot[:], head.FinalizedBlockRoot, "Unexpected FinalizedBlockRoot")
 	assert.Equal(t, false, head.OptimisticStatus)
-}
-
-func TestServer_StreamChainHead_ContextCanceled(t *testing.T) {
-	db := dbTest.SetupDB(t)
-	ctx := context.Background()
-
-	ctx, cancel := context.WithCancel(ctx)
-	chainService := &chainMock.ChainService{}
-	server := &Server{
-		Ctx:           ctx,
-		StateNotifier: chainService.StateNotifier(),
-		BeaconDB:      db,
-	}
-
-	exitRoutine := make(chan bool)
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mockStream := mock.NewMockBeaconChain_StreamChainHeadServer(ctrl)
-	mockStream.EXPECT().Context().Return(ctx)
-	go func(tt *testing.T) {
-		assert.ErrorContains(tt, "Context canceled", server.StreamChainHead(&emptypb.Empty{}, mockStream))
-		<-exitRoutine
-	}(t)
-	cancel()
-	exitRoutine <- true
-}
-
-func TestServer_StreamChainHead_OnHeadUpdated(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	params.OverrideBeaconConfig(params.MainnetConfig())
-	db := dbTest.SetupDB(t)
-	genBlock := util.NewBeaconBlock()
-	genBlock.Block.ParentRoot = bytesutil.PadTo([]byte{'G'}, fieldparams.RootLength)
-	util.SaveBlock(t, context.Background(), db, genBlock)
-	gRoot, err := genBlock.Block.HashTreeRoot()
-	require.NoError(t, err)
-	require.NoError(t, db.SaveGenesisBlockRoot(context.Background(), gRoot))
-
-	finalizedBlock := util.NewBeaconBlock()
-	finalizedBlock.Block.Slot = 32
-	finalizedBlock.Block.ParentRoot = bytesutil.PadTo([]byte{'A'}, fieldparams.RootLength)
-	util.SaveBlock(t, context.Background(), db, finalizedBlock)
-	fRoot, err := finalizedBlock.Block.HashTreeRoot()
-	require.NoError(t, err)
-
-	justifiedBlock := util.NewBeaconBlock()
-	justifiedBlock.Block.Slot = 64
-	justifiedBlock.Block.ParentRoot = bytesutil.PadTo([]byte{'B'}, fieldparams.RootLength)
-	util.SaveBlock(t, context.Background(), db, justifiedBlock)
-	jRoot, err := justifiedBlock.Block.HashTreeRoot()
-	require.NoError(t, err)
-
-	prevJustifiedBlock := util.NewBeaconBlock()
-	prevJustifiedBlock.Block.Slot = 96
-	prevJustifiedBlock.Block.ParentRoot = bytesutil.PadTo([]byte{'C'}, fieldparams.RootLength)
-	util.SaveBlock(t, context.Background(), db, prevJustifiedBlock)
-	pjRoot, err := prevJustifiedBlock.Block.HashTreeRoot()
-	require.NoError(t, err)
-
-	s, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
-		Slot:                        1,
-		PreviousJustifiedCheckpoint: &ethpb.Checkpoint{Epoch: 3, Root: pjRoot[:]},
-		CurrentJustifiedCheckpoint:  &ethpb.Checkpoint{Epoch: 2, Root: jRoot[:]},
-		FinalizedCheckpoint:         &ethpb.Checkpoint{Epoch: 1, Root: fRoot[:]},
-	})
-	require.NoError(t, err)
-
-	b := util.NewBeaconBlock()
-	b.Block.Slot, err = slots.EpochStart(s.PreviousJustifiedCheckpoint().Epoch)
-	require.NoError(t, err)
-
-	hRoot, err := b.Block.HashTreeRoot()
-	require.NoError(t, err)
-
-	chainService := &chainMock.ChainService{}
-	ctx := context.Background()
-	wsb, err := blocks.NewSignedBeaconBlock(b)
-	require.NoError(t, err)
-	server := &Server{
-		Ctx:           ctx,
-		HeadFetcher:   &chainMock.ChainService{Block: wsb, State: s},
-		BeaconDB:      db,
-		StateNotifier: chainService.StateNotifier(),
-		FinalizationFetcher: &chainMock.ChainService{
-			FinalizedCheckPoint:         s.FinalizedCheckpoint(),
-			CurrentJustifiedCheckPoint:  s.CurrentJustifiedCheckpoint(),
-			PreviousJustifiedCheckPoint: s.PreviousJustifiedCheckpoint()},
-		OptimisticModeFetcher: &chainMock.ChainService{},
-		SyncChecker:           &mockSync.Sync{IsSyncing: false},
-	}
-	exitRoutine := make(chan bool)
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mockStream := mock.NewMockBeaconChain_StreamChainHeadServer(ctrl)
-	mockStream.EXPECT().Send(
-		&ethpb.ChainHead{
-			HeadSlot:                   b.Block.Slot,
-			HeadEpoch:                  slots.ToEpoch(b.Block.Slot),
-			HeadBlockRoot:              hRoot[:],
-			FinalizedSlot:              32,
-			FinalizedEpoch:             1,
-			FinalizedBlockRoot:         fRoot[:],
-			JustifiedSlot:              64,
-			JustifiedEpoch:             2,
-			JustifiedBlockRoot:         jRoot[:],
-			PreviousJustifiedSlot:      96,
-			PreviousJustifiedEpoch:     3,
-			PreviousJustifiedBlockRoot: pjRoot[:],
-		},
-	).Do(func(arg0 interface{}) {
-		exitRoutine <- true
-	})
-	mockStream.EXPECT().Context().Return(ctx).AnyTimes()
-
-	go func(tt *testing.T) {
-		assert.NoError(tt, server.StreamChainHead(&emptypb.Empty{}, mockStream), "Could not call RPC method")
-	}(t)
-
-	// Send in a loop to ensure it is delivered (busy wait for the service to subscribe to the state feed).
-	for sent := 0; sent == 0; {
-		sent = server.StateNotifier.StateFeed().Send(&feed.Event{
-			Type: statefeed.BlockProcessed,
-			Data: &statefeed.BlockProcessedData{},
-		})
-	}
-	<-exitRoutine
-}
-
-func TestServer_StreamBlocksVerified_ContextCanceled(t *testing.T) {
-	db := dbTest.SetupDB(t)
-	ctx := context.Background()
-
-	chainService := &chainMock.ChainService{}
-	ctx, cancel := context.WithCancel(ctx)
-	server := &Server{
-		Ctx:           ctx,
-		StateNotifier: chainService.StateNotifier(),
-		HeadFetcher:   chainService,
-		BeaconDB:      db,
-	}
-
-	exitRoutine := make(chan bool)
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mockStream := mock.NewMockBeaconChain_StreamBlocksServer(ctrl)
-	mockStream.EXPECT().Context().Return(ctx)
-	go func(tt *testing.T) {
-		assert.ErrorContains(tt, "Context canceled", server.StreamBlocks(&ethpb.StreamBlocksRequest{
-			VerifiedOnly: true,
-		}, mockStream))
-		<-exitRoutine
-	}(t)
-	cancel()
-	exitRoutine <- true
-}
-
-func TestServer_StreamBlocks_ContextCanceled(t *testing.T) {
-	db := dbTest.SetupDB(t)
-	ctx := context.Background()
-
-	chainService := &chainMock.ChainService{}
-	ctx, cancel := context.WithCancel(ctx)
-	server := &Server{
-		Ctx:           ctx,
-		BlockNotifier: chainService.BlockNotifier(),
-		HeadFetcher:   chainService,
-		BeaconDB:      db,
-	}
-
-	exitRoutine := make(chan bool)
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mockStream := mock.NewMockBeaconChain_StreamBlocksServer(ctrl)
-	mockStream.EXPECT().Context().Return(ctx)
-	go func(tt *testing.T) {
-		assert.ErrorContains(tt, "Context canceled", server.StreamBlocks(&ethpb.StreamBlocksRequest{}, mockStream))
-		<-exitRoutine
-	}(t)
-	cancel()
-	exitRoutine <- true
-}
-
-func TestServer_StreamBlocks_OnHeadUpdated(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	params.OverrideBeaconConfig(params.BeaconConfig())
-
-	ctx := context.Background()
-	beaconState, privs := util.DeterministicGenesisState(t, 32)
-	b, err := util.GenerateFullBlock(beaconState, privs, util.DefaultBlockGenConfig(), 1)
-	require.NoError(t, err)
-	chainService := &chainMock.ChainService{State: beaconState}
-	server := &Server{
-		Ctx:           ctx,
-		BlockNotifier: chainService.BlockNotifier(),
-		HeadFetcher:   chainService,
-	}
-	exitRoutine := make(chan bool)
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mockStream := mock.NewMockBeaconChain_StreamBlocksServer(ctrl)
-	mockStream.EXPECT().Send(b).Do(func(arg0 interface{}) {
-		exitRoutine <- true
-	})
-	mockStream.EXPECT().Context().Return(ctx).AnyTimes()
-
-	go func(tt *testing.T) {
-		assert.NoError(tt, server.StreamBlocks(&ethpb.StreamBlocksRequest{}, mockStream), "Could not call RPC method")
-	}(t)
-
-	// Send in a loop to ensure it is delivered (busy wait for the service to subscribe to the state feed).
-	for sent := 0; sent == 0; {
-		wsb, err := blocks.NewSignedBeaconBlock(b)
-		require.NoError(t, err)
-		sent = server.BlockNotifier.BlockFeed().Send(&feed.Event{
-			Type: blockfeed.ReceivedBlock,
-			Data: &blockfeed.ReceivedBlockData{SignedBlock: wsb},
-		})
-	}
-	<-exitRoutine
-}
-
-func TestServer_StreamBlocksVerified_OnHeadUpdated(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	params.OverrideBeaconConfig(params.BeaconConfig())
-
-	db := dbTest.SetupDB(t)
-	ctx := context.Background()
-	beaconState, privs := util.DeterministicGenesisState(t, 32)
-	b, err := util.GenerateFullBlock(beaconState, privs, util.DefaultBlockGenConfig(), 1)
-	require.NoError(t, err)
-	r, err := b.Block.HashTreeRoot()
-	require.NoError(t, err)
-	util.SaveBlock(t, ctx, db, b)
-	chainService := &chainMock.ChainService{State: beaconState}
-	server := &Server{
-		Ctx:           ctx,
-		StateNotifier: chainService.StateNotifier(),
-		HeadFetcher:   chainService,
-		BeaconDB:      db,
-	}
-	exitRoutine := make(chan bool)
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mockStream := mock.NewMockBeaconChain_StreamBlocksServer(ctrl)
-	mockStream.EXPECT().Send(b).Do(func(arg0 interface{}) {
-		exitRoutine <- true
-	})
-	mockStream.EXPECT().Context().Return(ctx).AnyTimes()
-
-	go func(tt *testing.T) {
-		assert.NoError(tt, server.StreamBlocks(&ethpb.StreamBlocksRequest{
-			VerifiedOnly: true,
-		}, mockStream), "Could not call RPC method")
-	}(t)
-
-	// Send in a loop to ensure it is delivered (busy wait for the service to subscribe to the state feed).
-	for sent := 0; sent == 0; {
-		wsb, err := blocks.NewSignedBeaconBlock(b)
-		require.NoError(t, err)
-		sent = server.StateNotifier.StateFeed().Send(&feed.Event{
-			Type: statefeed.BlockProcessed,
-			Data: &statefeed.BlockProcessedData{Slot: b.Block.Slot, BlockRoot: r, SignedBlock: wsb},
-		})
-	}
-	<-exitRoutine
 }
 
 func TestServer_ListBeaconBlocks_NoResults(t *testing.T) {
@@ -537,8 +275,10 @@ func TestServer_ListBeaconBlocks_Genesis(t *testing.T) {
 		assert.NoError(t, err)
 		blinded, err := wrapped.ToBlinded()
 		assert.NoError(t, err)
-		blindedProto, err := blinded.PbBlindedBellatrixBlock()
+		pb, err := blinded.Proto()
 		assert.NoError(t, err)
+		blindedProto, ok := pb.(*ethpb.SignedBlindedBeaconBlockBellatrix)
+		require.Equal(t, true, ok)
 		blkContainer := &ethpb.BeaconBlockContainer{
 			Block: &ethpb.BeaconBlockContainer_BlindedBellatrixBlock{BlindedBellatrixBlock: blindedProto}}
 		runListBlocksGenesis(t, wrapped, blkContainer)
@@ -551,7 +291,10 @@ func TestServer_ListBeaconBlocks_Genesis(t *testing.T) {
 		assert.NoError(t, err)
 		blinded, err := wrapped.ToBlinded()
 		assert.NoError(t, err)
-		blindedProto, err := blinded.PbBlindedCapellaBlock()
+		pb, err := blinded.Proto()
+		assert.NoError(t, err)
+		blindedProto, ok := pb.(*ethpb.SignedBlindedBeaconBlockCapella)
+		require.Equal(t, true, ok)
 		assert.NoError(t, err)
 		blkContainer := &ethpb.BeaconBlockContainer{
 			Block: &ethpb.BeaconBlockContainer_BlindedCapellaBlock{BlindedCapellaBlock: blindedProto}}

@@ -7,7 +7,7 @@ go_library(
         "transition.go",
         "upgrade_to_altair.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v4/testing/spectest/shared/altair/fork",
+    importpath = "github.com/prysmaticlabs/prysm/v5/testing/spectest/shared/altair/fork",
     visibility = ["//visibility:public"],
     deps = [
         "//beacon-chain/core/altair:go_default_library",

@@ -5,10 +5,10 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	"github.com/sirupsen/logrus"
-	"go.opencensus.io/trace"
 )
 
 // MigrateToCold advances the finalized info in between the cold and hot state sections.

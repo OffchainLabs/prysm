@@ -6,7 +6,7 @@ go_library(
         "list.go",
         "lru.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v4/cache/nonblocking",
+    importpath = "github.com/prysmaticlabs/prysm/v5/cache/nonblocking",
     visibility = ["//visibility:public"],
 )
 

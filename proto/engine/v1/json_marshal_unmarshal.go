@@ -10,13 +10,54 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	gethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/pkg/errors"
-	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v4/runtime/version"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 )
 
-var errExecutionUnmarshal = errors.New("unable to unmarshal execution engine data")
+const (
+	BlsPubKeyLen = 48
+	BlsSignLen   = 96
+)
+
+var errJsonNilField = errors.New("nil field in JSON value")
+
+// BlsPubkey represents a 48 byte BLS public key.
+type BlsPubkey [BlsPubKeyLen]byte
+
+// MarshalText returns the hex representation of a.
+func (v BlsPubkey) MarshalText() ([]byte, error) {
+	return hexutil.Bytes(v[:]).MarshalText()
+}
+
+// UnmarshalText parses a hash in hex syntax.
+func (v *BlsPubkey) UnmarshalText(input []byte) error {
+	return hexutil.UnmarshalFixedText("BlsPubkey", input, v[:])
+}
+
+// Bytes is a convenient way to get the byte slice for a BlsPubkey.
+func (v BlsPubkey) Bytes() []byte {
+	return v[:]
+}
+
+// BlsSig represents a 96 byte BLS signature.
+type BlsSig [BlsSignLen]byte
+
+// MarshalText returns the hex representation of a BlsSig.
+func (v BlsSig) MarshalText() ([]byte, error) {
+	return hexutil.Bytes(v[:]).MarshalText()
+}
+
+// UnmarshalText parses a BlsSig in hex encoding.
+func (v *BlsSig) UnmarshalText(input []byte) error {
+	return hexutil.UnmarshalFixedText("BlsSig", input, v[:])
+}
+
+// Bytes is a convenient way to get the byte slice for a BlsSig.
+func (v BlsSig) Bytes() []byte {
+	return v[:]
+}
 
 // PayloadIDBytes defines a custom type for Payload IDs used by the engine API
 // client with proper JSON Marshal and Unmarshal methods to hex.
@@ -256,6 +297,23 @@ type GetPayloadV3ResponseJson struct {
 	ShouldOverrideBuilder bool                       `json:"shouldOverrideBuilder"`
 }
 
+type GetPayloadV4ResponseJson struct {
+	ExecutionPayload      *ExecutionPayloadDenebJSON `json:"executionPayload"`
+	BlockValue            string                     `json:"blockValue"`
+	BlobsBundle           *BlobBundleJSON            `json:"blobsBundle"`
+	ShouldOverrideBuilder bool                       `json:"shouldOverrideBuilder"`
+	ExecutionRequests     []hexutil.Bytes            `json:"executionRequests"`
+}
+
+// ExecutionPayloadBody represents the engine API ExecutionPayloadV1 or ExecutionPayloadV2 type.
+type ExecutionPayloadBody struct {
+	Transactions          []hexutil.Bytes          `json:"transactions"`
+	Withdrawals           []*Withdrawal            `json:"withdrawals"`
+	WithdrawalRequests    []WithdrawalRequestV1    `json:"withdrawalRequests"`
+	DepositRequests       []DepositRequestV1       `json:"depositRequests"`
+	ConsolidationRequests []ConsolidationRequestV1 `json:"consolidationRequests"`
+}
+
 type ExecutionPayloadDenebJSON struct {
 	ParentHash    *common.Hash    `json:"parentHash"`
 	FeeRecipient  *common.Address `json:"feeRecipient"`
@@ -274,6 +332,85 @@ type ExecutionPayloadDenebJSON struct {
 	BlockHash     *common.Hash    `json:"blockHash"`
 	Transactions  []hexutil.Bytes `json:"transactions"`
 	Withdrawals   []*Withdrawal   `json:"withdrawals"`
+}
+
+// WithdrawalRequestV1 represents an execution engine WithdrawalRequestV1 value
+// https://github.com/ethereum/execution-apis/blob/main/src/engine/prague.md#withdrawalrequestv1
+type WithdrawalRequestV1 struct {
+	SourceAddress   *common.Address `json:"sourceAddress"`
+	ValidatorPubkey *BlsPubkey      `json:"validatorPubkey"`
+	Amount          *hexutil.Uint64 `json:"amount"`
+}
+
+func (r WithdrawalRequestV1) Validate() error {
+	if r.SourceAddress == nil {
+		return errors.Wrap(errJsonNilField, "missing required field 'sourceAddress' for WithdrawalRequestV1")
+	}
+	if r.ValidatorPubkey == nil {
+		return errors.Wrap(errJsonNilField, "missing required field 'validatorPubkey' for WithdrawalRequestV1")
+	}
+	if r.Amount == nil {
+		return errors.Wrap(errJsonNilField, "missing required field 'amount' for WithdrawalRequestV1")
+	}
+	return nil
+}
+
+// DepositRequestV1 represents an execution engine DepositRequestV1 value
+// https://github.com/ethereum/execution-apis/blob/main/src/engine/prague.md#depositrequestv1
+type DepositRequestV1 struct {
+	// pubkey: DATA, 48 Bytes
+	PubKey *BlsPubkey `json:"pubkey"`
+	// withdrawalCredentials: DATA, 32 Bytes
+	WithdrawalCredentials *common.Hash `json:"withdrawalCredentials"`
+	// amount: QUANTITY, 64 Bits
+	Amount *hexutil.Uint64 `json:"amount"`
+	// signature: DATA, 96 Bytes
+	Signature *BlsSig `json:"signature"`
+	// index: QUANTITY, 64 Bits
+	Index *hexutil.Uint64 `json:"index"`
+}
+
+func (r DepositRequestV1) Validate() error {
+	if r.PubKey == nil {
+		return errors.Wrap(errJsonNilField, "missing required field 'pubkey' for DepositRequestV1")
+	}
+	if r.WithdrawalCredentials == nil {
+		return errors.Wrap(errJsonNilField, "missing required field 'withdrawalCredentials' for DepositRequestV1")
+	}
+	if r.Amount == nil {
+		return errors.Wrap(errJsonNilField, "missing required field 'amount' for DepositRequestV1")
+	}
+	if r.Signature == nil {
+		return errors.Wrap(errJsonNilField, "missing required field 'signature' for DepositRequestV1")
+	}
+	if r.Index == nil {
+		return errors.Wrap(errJsonNilField, "missing required field 'index' for DepositRequestV1")
+	}
+	return nil
+}
+
+// ConsolidationRequestV1 represents an execution engine ConsolidationRequestV1 value
+// https://github.com/ethereum/execution-apis/blob/main/src/engine/prague.md#consolidationrequestv1
+type ConsolidationRequestV1 struct {
+	// sourceAddress: DATA, 20 Bytes
+	SourceAddress *common.Address `json:"sourceAddress"`
+	// sourcePubkey: DATA, 48 Bytes
+	SourcePubkey *BlsPubkey `json:"sourcePubkey"`
+	// targetPubkey: DATA, 48 Bytes
+	TargetPubkey *BlsPubkey `json:"targetPubkey"`
+}
+
+func (r ConsolidationRequestV1) Validate() error {
+	if r.SourceAddress == nil {
+		return errors.Wrap(errJsonNilField, "missing required field 'sourceAddress' for ConsolidationRequestV1")
+	}
+	if r.SourcePubkey == nil {
+		return errors.Wrap(errJsonNilField, "missing required field 'sourcePubkey' for ConsolidationRequestV1")
+	}
+	if r.TargetPubkey == nil {
+		return errors.Wrap(errJsonNilField, "missing required field 'targetPubkey' for ConsolidationRequestV1")
+	}
+	return nil
 }
 
 // MarshalJSON --
@@ -332,8 +469,9 @@ func (e *ExecutionPayloadCapella) MarshalJSON() ([]byte, error) {
 	timeStamp := hexutil.Uint64(e.Timestamp)
 	recipient := common.BytesToAddress(e.FeeRecipient)
 	logsBloom := hexutil.Bytes(e.LogsBloom)
-	if e.Withdrawals == nil {
-		e.Withdrawals = make([]*Withdrawal, 0)
+	withdrawals := e.Withdrawals
+	if withdrawals == nil {
+		withdrawals = make([]*Withdrawal, 0)
 	}
 	return json.Marshal(ExecutionPayloadCapellaJSON{
 		ParentHash:    &pHash,
@@ -350,7 +488,7 @@ func (e *ExecutionPayloadCapella) MarshalJSON() ([]byte, error) {
 		BaseFeePerGas: baseFeeHex,
 		BlockHash:     &bHash,
 		Transactions:  transactions,
-		Withdrawals:   e.Withdrawals,
+		Withdrawals:   withdrawals,
 	})
 }
 
@@ -658,50 +796,6 @@ func (p *PayloadStatus) UnmarshalJSON(enc []byte) error {
 	return nil
 }
 
-type transitionConfigurationJSON struct {
-	TerminalTotalDifficulty *hexutil.Big   `json:"terminalTotalDifficulty"`
-	TerminalBlockHash       common.Hash    `json:"terminalBlockHash"`
-	TerminalBlockNumber     hexutil.Uint64 `json:"terminalBlockNumber"`
-}
-
-// MarshalJSON --
-func (t *TransitionConfiguration) MarshalJSON() ([]byte, error) {
-	num := new(big.Int).SetBytes(t.TerminalBlockNumber)
-	var hexNum *hexutil.Big
-	if t.TerminalTotalDifficulty != "" {
-		ttdNum, err := hexutil.DecodeBig(t.TerminalTotalDifficulty)
-		if err != nil {
-			return nil, err
-		}
-		bHex := hexutil.Big(*ttdNum)
-		hexNum = &bHex
-	}
-	if len(t.TerminalBlockHash) != fieldparams.RootLength {
-		return nil, errors.Errorf("terminal block hash is of the wrong length: %d", len(t.TerminalBlockHash))
-	}
-	return json.Marshal(transitionConfigurationJSON{
-		TerminalTotalDifficulty: hexNum,
-		TerminalBlockHash:       *(*[32]byte)(t.TerminalBlockHash),
-		TerminalBlockNumber:     hexutil.Uint64(num.Uint64()),
-	})
-}
-
-// UnmarshalJSON --
-func (t *TransitionConfiguration) UnmarshalJSON(enc []byte) error {
-	dec := transitionConfigurationJSON{}
-	if err := json.Unmarshal(enc, &dec); err != nil {
-		return err
-	}
-	*t = TransitionConfiguration{}
-	num := big.NewInt(int64(dec.TerminalBlockNumber))
-	if dec.TerminalTotalDifficulty != nil {
-		t.TerminalTotalDifficulty = dec.TerminalTotalDifficulty.String()
-	}
-	t.TerminalBlockHash = dec.TerminalBlockHash[:]
-	t.TerminalBlockNumber = num.Bytes()
-	return nil
-}
-
 type forkchoiceStateJSON struct {
 	HeadBlockHash      hexutil.Bytes `json:"headBlockHash"`
 	SafeBlockHash      hexutil.Bytes `json:"safeBlockHash"`
@@ -744,6 +838,11 @@ func (b BlobBundleJSON) ToProto() *BlobsBundle {
 	}
 }
 
+type BlobAndProofJson struct {
+	Blob     hexutil.Bytes `json:"blob"`
+	KzgProof hexutil.Bytes `json:"proof"`
+}
+
 // MarshalJSON --
 func (e *ExecutionPayloadDeneb) MarshalJSON() ([]byte, error) {
 	transactions := make([]hexutil.Bytes, len(e.Transactions))
@@ -763,8 +862,9 @@ func (e *ExecutionPayloadDeneb) MarshalJSON() ([]byte, error) {
 	timeStamp := hexutil.Uint64(e.Timestamp)
 	recipient := common.BytesToAddress(e.FeeRecipient)
 	logsBloom := hexutil.Bytes(e.LogsBloom)
-	if e.Withdrawals == nil {
-		e.Withdrawals = make([]*Withdrawal, 0)
+	withdrawals := e.Withdrawals
+	if withdrawals == nil {
+		withdrawals = make([]*Withdrawal, 0)
 	}
 	blobGasUsed := hexutil.Uint64(e.BlobGasUsed)
 	excessBlobGas := hexutil.Uint64(e.ExcessBlobGas)
@@ -784,10 +884,123 @@ func (e *ExecutionPayloadDeneb) MarshalJSON() ([]byte, error) {
 		BaseFeePerGas: baseFeeHex,
 		BlockHash:     &bHash,
 		Transactions:  transactions,
-		Withdrawals:   e.Withdrawals,
+		Withdrawals:   withdrawals,
 		BlobGasUsed:   &blobGasUsed,
 		ExcessBlobGas: &excessBlobGas,
 	})
+}
+
+func JsonDepositRequestsToProto(j []DepositRequestV1) ([]*DepositRequest, error) {
+	reqs := make([]*DepositRequest, len(j))
+
+	for i := range j {
+		req := j[i]
+		if err := req.Validate(); err != nil {
+			return nil, err
+		}
+		reqs[i] = &DepositRequest{
+			Pubkey:                req.PubKey.Bytes(),
+			WithdrawalCredentials: req.WithdrawalCredentials.Bytes(),
+			Amount:                uint64(*req.Amount),
+			Signature:             req.Signature.Bytes(),
+			Index:                 uint64(*req.Index),
+		}
+	}
+
+	return reqs, nil
+}
+
+func ProtoDepositRequestsToJson(reqs []*DepositRequest) []DepositRequestV1 {
+	j := make([]DepositRequestV1, len(reqs))
+	for i := range reqs {
+		r := reqs[i]
+		pk := BlsPubkey{}
+		copy(pk[:], r.Pubkey)
+		creds := common.BytesToHash(r.WithdrawalCredentials)
+		amt := hexutil.Uint64(r.Amount)
+		sig := BlsSig{}
+		copy(sig[:], r.Signature)
+		idx := hexutil.Uint64(r.Index)
+		j[i] = DepositRequestV1{
+			PubKey:                &pk,
+			WithdrawalCredentials: &creds,
+			Amount:                &amt,
+			Signature:             &sig,
+			Index:                 &idx,
+		}
+	}
+	return j
+}
+
+func JsonWithdrawalRequestsToProto(j []WithdrawalRequestV1) ([]*WithdrawalRequest, error) {
+	reqs := make([]*WithdrawalRequest, len(j))
+
+	for i := range j {
+		req := j[i]
+		if err := req.Validate(); err != nil {
+			return nil, err
+		}
+		reqs[i] = &WithdrawalRequest{
+			SourceAddress:   req.SourceAddress.Bytes(),
+			ValidatorPubkey: req.ValidatorPubkey.Bytes(),
+			Amount:          uint64(*req.Amount),
+		}
+	}
+
+	return reqs, nil
+}
+
+func ProtoWithdrawalRequestsToJson(reqs []*WithdrawalRequest) []WithdrawalRequestV1 {
+	j := make([]WithdrawalRequestV1, len(reqs))
+	for i := range reqs {
+		r := reqs[i]
+		pk := BlsPubkey{}
+		amt := hexutil.Uint64(r.Amount)
+		copy(pk[:], r.ValidatorPubkey)
+		address := common.BytesToAddress(r.SourceAddress)
+		j[i] = WithdrawalRequestV1{
+			SourceAddress:   &address,
+			ValidatorPubkey: &pk,
+			Amount:          &amt,
+		}
+	}
+	return j
+}
+
+func JsonConsolidationRequestsToProto(j []ConsolidationRequestV1) ([]*ConsolidationRequest, error) {
+	reqs := make([]*ConsolidationRequest, len(j))
+
+	for i := range j {
+		req := j[i]
+		if err := req.Validate(); err != nil {
+			return nil, err
+		}
+		reqs[i] = &ConsolidationRequest{
+			SourceAddress: req.SourceAddress.Bytes(),
+			SourcePubkey:  req.SourcePubkey.Bytes(),
+			TargetPubkey:  req.TargetPubkey.Bytes(),
+		}
+	}
+
+	return reqs, nil
+}
+
+func ProtoConsolidationRequestsToJson(reqs []*ConsolidationRequest) []ConsolidationRequestV1 {
+	j := make([]ConsolidationRequestV1, len(reqs))
+	for i := range reqs {
+		r := reqs[i]
+		spk := BlsPubkey{}
+		copy(spk[:], r.SourcePubkey)
+		tpk := BlsPubkey{}
+		copy(tpk[:], r.TargetPubkey)
+		address := common.BytesToAddress(r.SourceAddress)
+		j[i] = ConsolidationRequestV1{
+			SourceAddress: &address,
+			SourcePubkey:  &spk,
+			TargetPubkey:  &tpk,
+		}
+	}
+	return j
 }
 
 func (e *ExecutionPayloadDenebWithValueAndBlobsBundle) UnmarshalJSON(enc []byte) error {
@@ -912,42 +1125,160 @@ func (e *ExecutionPayloadDenebWithValueAndBlobsBundle) UnmarshalJSON(enc []byte)
 	return nil
 }
 
-type executionPayloadBodyV1JSON struct {
-	Transactions []hexutil.Bytes `json:"transactions"`
-	Withdrawals  []*Withdrawal   `json:"withdrawals"`
-}
-
-func (b *ExecutionPayloadBodyV1) MarshalJSON() ([]byte, error) {
-	transactions := make([]hexutil.Bytes, len(b.Transactions))
-	for i, tx := range b.Transactions {
-		transactions[i] = tx
+func (e *ExecutionBundleElectra) UnmarshalJSON(enc []byte) error {
+	dec := GetPayloadV4ResponseJson{}
+	if err := json.Unmarshal(enc, &dec); err != nil {
+		return err
 	}
-	if len(b.Withdrawals) == 0 {
-		b.Withdrawals = make([]*Withdrawal, 0)
-	}
-	return json.Marshal(executionPayloadBodyV1JSON{
-		Transactions: transactions,
-		Withdrawals:  b.Withdrawals,
-	})
-}
 
-func (b *ExecutionPayloadBodyV1) UnmarshalJSON(enc []byte) error {
-	var decoded *executionPayloadBodyV1JSON
-	err := json.Unmarshal(enc, &decoded)
+	if dec.ExecutionPayload.ParentHash == nil {
+		return errors.New("missing required field 'parentHash' for ExecutionPayload")
+	}
+	if dec.ExecutionPayload.FeeRecipient == nil {
+		return errors.New("missing required field 'feeRecipient' for ExecutionPayload")
+	}
+	if dec.ExecutionPayload.StateRoot == nil {
+		return errors.New("missing required field 'stateRoot' for ExecutionPayload")
+	}
+	if dec.ExecutionPayload.ReceiptsRoot == nil {
+		return errors.New("missing required field 'receiptsRoot' for ExecutableDataV1")
+	}
+	if dec.ExecutionPayload.LogsBloom == nil {
+		return errors.New("missing required field 'logsBloom' for ExecutionPayload")
+	}
+	if dec.ExecutionPayload.PrevRandao == nil {
+		return errors.New("missing required field 'prevRandao' for ExecutionPayload")
+	}
+	if dec.ExecutionPayload.ExtraData == nil {
+		return errors.New("missing required field 'extraData' for ExecutionPayload")
+	}
+	if dec.ExecutionPayload.BlockHash == nil {
+		return errors.New("missing required field 'blockHash' for ExecutionPayload")
+	}
+	if dec.ExecutionPayload.Transactions == nil {
+		return errors.New("missing required field 'transactions' for ExecutionPayload")
+	}
+	if dec.ExecutionPayload.BlockNumber == nil {
+		return errors.New("missing required field 'blockNumber' for ExecutionPayload")
+	}
+	if dec.ExecutionPayload.Timestamp == nil {
+		return errors.New("missing required field 'timestamp' for ExecutionPayload")
+	}
+	if dec.ExecutionPayload.GasUsed == nil {
+		return errors.New("missing required field 'gasUsed' for ExecutionPayload")
+	}
+	if dec.ExecutionPayload.GasLimit == nil {
+		return errors.New("missing required field 'gasLimit' for ExecutionPayload")
+	}
+	if dec.ExecutionPayload.BlobGasUsed == nil {
+		return errors.New("missing required field 'blobGasUsed' for ExecutionPayload")
+	}
+	if dec.ExecutionPayload.ExcessBlobGas == nil {
+		return errors.New("missing required field 'excessBlobGas' for ExecutionPayload")
+	}
+
+	*e = ExecutionBundleElectra{Payload: &ExecutionPayloadDeneb{}}
+	e.Payload.ParentHash = dec.ExecutionPayload.ParentHash.Bytes()
+	e.Payload.FeeRecipient = dec.ExecutionPayload.FeeRecipient.Bytes()
+	e.Payload.StateRoot = dec.ExecutionPayload.StateRoot.Bytes()
+	e.Payload.ReceiptsRoot = dec.ExecutionPayload.ReceiptsRoot.Bytes()
+	e.Payload.LogsBloom = *dec.ExecutionPayload.LogsBloom
+	e.Payload.PrevRandao = dec.ExecutionPayload.PrevRandao.Bytes()
+	e.Payload.BlockNumber = uint64(*dec.ExecutionPayload.BlockNumber)
+	e.Payload.GasLimit = uint64(*dec.ExecutionPayload.GasLimit)
+	e.Payload.GasUsed = uint64(*dec.ExecutionPayload.GasUsed)
+	e.Payload.Timestamp = uint64(*dec.ExecutionPayload.Timestamp)
+	e.Payload.ExtraData = dec.ExecutionPayload.ExtraData
+	baseFee, err := hexutil.DecodeBig(dec.ExecutionPayload.BaseFeePerGas)
 	if err != nil {
 		return err
 	}
-	if len(decoded.Transactions) == 0 {
-		b.Transactions = make([][]byte, 0)
-	}
-	if len(decoded.Withdrawals) == 0 {
-		b.Withdrawals = make([]*Withdrawal, 0)
-	}
-	transactions := make([][]byte, len(decoded.Transactions))
-	for i, tx := range decoded.Transactions {
+	e.Payload.BaseFeePerGas = bytesutil.PadTo(bytesutil.ReverseByteOrder(baseFee.Bytes()), fieldparams.RootLength)
+
+	e.Payload.ExcessBlobGas = uint64(*dec.ExecutionPayload.ExcessBlobGas)
+	e.Payload.BlobGasUsed = uint64(*dec.ExecutionPayload.BlobGasUsed)
+
+	e.Payload.BlockHash = dec.ExecutionPayload.BlockHash.Bytes()
+	transactions := make([][]byte, len(dec.ExecutionPayload.Transactions))
+	for i, tx := range dec.ExecutionPayload.Transactions {
 		transactions[i] = tx
 	}
-	b.Transactions = transactions
-	b.Withdrawals = decoded.Withdrawals
+	e.Payload.Transactions = transactions
+	if dec.ExecutionPayload.Withdrawals == nil {
+		dec.ExecutionPayload.Withdrawals = make([]*Withdrawal, 0)
+	}
+	e.Payload.Withdrawals = dec.ExecutionPayload.Withdrawals
+
+	v, err := hexutil.DecodeBig(dec.BlockValue)
+	if err != nil {
+		return err
+	}
+	e.Value = bytesutil.PadTo(bytesutil.ReverseByteOrder(v.Bytes()), fieldparams.RootLength)
+
+	if dec.BlobsBundle == nil {
+		return nil
+	}
+	e.BlobsBundle = &BlobsBundle{}
+
+	commitments := make([][]byte, len(dec.BlobsBundle.Commitments))
+	for i, kzg := range dec.BlobsBundle.Commitments {
+		k := kzg
+		commitments[i] = bytesutil.PadTo(k[:], fieldparams.BLSPubkeyLength)
+	}
+	e.BlobsBundle.KzgCommitments = commitments
+
+	proofs := make([][]byte, len(dec.BlobsBundle.Proofs))
+	for i, proof := range dec.BlobsBundle.Proofs {
+		p := proof
+		proofs[i] = bytesutil.PadTo(p[:], fieldparams.BLSPubkeyLength)
+	}
+	e.BlobsBundle.Proofs = proofs
+
+	blobs := make([][]byte, len(dec.BlobsBundle.Blobs))
+	for i, blob := range dec.BlobsBundle.Blobs {
+		b := make([]byte, fieldparams.BlobLength)
+		copy(b, blob)
+		blobs[i] = b
+	}
+	e.BlobsBundle.Blobs = blobs
+
+	e.ShouldOverrideBuilder = dec.ShouldOverrideBuilder
+
+	requests := make([][]byte, len(dec.ExecutionRequests))
+	for i, request := range dec.ExecutionRequests {
+		r := make([]byte, len(request))
+		copy(r, request)
+		requests[i] = r
+	}
+
+	e.ExecutionRequests = requests
+
+	return nil
+}
+
+// RecastHexutilByteSlice converts a []hexutil.Bytes to a [][]byte
+func RecastHexutilByteSlice(h []hexutil.Bytes) [][]byte {
+	r := make([][]byte, len(h))
+	for i := range h {
+		r[i] = h[i]
+	}
+	return r
+}
+
+// UnmarshalJSON implements the json unmarshaler interface for BlobAndProof.
+func (b *BlobAndProof) UnmarshalJSON(enc []byte) error {
+	var dec *BlobAndProofJson
+	if err := json.Unmarshal(enc, &dec); err != nil {
+		return err
+	}
+
+	blob := make([]byte, fieldparams.BlobLength)
+	copy(blob, dec.Blob)
+	b.Blob = blob
+
+	proof := make([]byte, fieldparams.BLSPubkeyLength)
+	copy(proof, dec.KzgProof)
+	b.KzgProof = proof
+
 	return nil
 }

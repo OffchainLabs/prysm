@@ -17,13 +17,8 @@ package ethereum.eth.v1;
 
 import "google/protobuf/descriptor.proto";
 
-import "proto/eth/ext/options.proto";
-import "proto/eth/v1/attestation.proto";
-import "proto/eth/v1/beacon_block.proto";
-import "proto/eth/v1/beacon_state.proto";
-
 option csharp_namespace = "Ethereum.Eth.V1";
-option go_package = "github.com/prysmaticlabs/prysm/v4/proto/eth/v1";
+option go_package = "github.com/prysmaticlabs/prysm/v5/proto/eth/v1";
 option java_multiple_files = true;
 option java_outer_classname = "BeaconChainProto";
 option java_package = "org.ethereum.eth.v1";
@@ -32,142 +27,8 @@ option php_namespace = "Ethereum\\Eth\\v1";
 // Beacon State API related messages.
 
 message StateRequest {
-    // The state id which can be any of: "head" (canonical head in node's view),
-    // "genesis", "finalized", "justified", <slot>, <hex encoded stateRoot with 0x prefix>.
-    bytes state_id = 1;
-}
-
-// Beacon Block API related messages.
-
-message BlockAttestationsResponse {
-    repeated ethereum.eth.v1.Attestation data = 1;
-    bool execution_optimistic = 2;
-    bool finalized  = 3;
-}
-
-message BlockRequest {
-    // The block identifier. Can be one of: "head" (canonical head in node's view), "genesis",
-    // "finalized", <slot>, <hex encoded blockRoot with 0x prefix>.
-    bytes block_id = 1;
-}
-
-message BlockResponse {
-    BeaconBlockContainer data = 1;
-}
-
-message BlockSSZResponse {
-    bytes data = 1;
-}
-
-message BeaconBlockContainer {
-    BeaconBlock message = 1;
-
-    // 96 byte BLS signature from the validator that produced this block.
-    bytes signature = 2 [(ethereum.eth.ext.ssz_size) = "96"];
-}
-
-// Beacon Pool related API service.
-
-message AttesterSlashingsPoolResponse {
-    repeated AttesterSlashing data = 1;
-}
-
-message ProposerSlashingPoolResponse {
-    repeated ProposerSlashing data = 1;
-}
-
-// Beacon Config API related messages.
-
-message ForkScheduleResponse {
-    // The fork data used for beacon chain versioning.
-    repeated Fork data = 1;
-}
-
-// Spec response is a generic flat map of key values.
-// Values are returned with following format:
-// - any value starting with 0x in the spec is returned as a hex string
-// - all other values are returned as string-number
-message SpecResponse {
-    map<string, string> data = 1;
-}
-
-message DepositContractResponse {
-    DepositContract data = 1;
-}
-
-message DepositContract {
-    // The chain_id of the network.
-    uint64 chain_id = 1;
-
-    // The address of the deployed deposit contract in use.
-    string address = 2;
-}
-
-// DEPRECATED: GetWeakSubjectivity endpoint is no longer be supported
-message WeakSubjectivityResponse {
-    option deprecated = true;
-	WeakSubjectivityData data = 1;
-}
-
-// DEPRECATED: GetWeakSubjectivity endpoint is no longer be supported
-message WeakSubjectivityData {
-    option deprecated = true;
-    ethereum.eth.v1.Checkpoint ws_checkpoint = 1;
-    bytes state_root = 2;
-}
-
-message ForkChoiceDump {
-    reserved 3;
-    // Latest justified checkpoint in forkchoice store.
-    Checkpoint justified_checkpoint = 1;
-    // Latest finalized checkpoint in forkchoice store.
-    Checkpoint finalized_checkpoint = 2;
-    // Unrealized justified checkpoint in forkchoice store.
-    Checkpoint unrealized_justified_checkpoint = 4;
-    // Unrealized finalized checkpoint in forkchoice store.
-    Checkpoint unrealized_finalized_checkpoint = 5;
-    // Proposer Boost Root in forkchoice store.
-    bytes proposer_boost_root = 6 [(ethereum.eth.ext.ssz_size) = "32"];
-    // Previous proposer Boost Root in forkchoice store.
-    bytes previous_proposer_boost_root = 7 [(ethereum.eth.ext.ssz_size) = "32"];
-    // Head root in forkchoice store.
-    bytes head_root = 8 [(ethereum.eth.ext.ssz_size) = "32"];
-
-    // The list of the forkchoice nodes in store.
-    repeated ForkChoiceNode fork_choice_nodes = 9;
-}
-
-message ForkChoiceNode {
-    // Slot of the forkchoice node.
-    uint64 slot = 1 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v4/consensus-types/primitives.Slot"];
-    // Root of the forkchoice node.
-    bytes block_root = 2 [(ethereum.eth.ext.ssz_size) = "32"];
-    // Parent root of the forkchoice node.
-    bytes parent_root = 3 [(ethereum.eth.ext.ssz_size) = "32"];
-    // Justified epoch of the current forkchoice node.
-    uint64 justified_epoch = 4 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v4/consensus-types/primitives.Epoch"];
-    // finalized epoch of the current forkchoice node.
-    uint64 finalized_epoch = 5 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v4/consensus-types/primitives.Epoch"];
-    // Unrealized justified epoch of the current forkchoice node.
-    uint64 unrealized_justified_epoch = 6 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v4/consensus-types/primitives.Epoch"];
-    // Unrealized finalized epoch of the current forkchoice node.
-    uint64 unrealized_finalized_epoch = 7 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v4/consensus-types/primitives.Epoch"];
-    // Current balance of the current forkchoice node.
-    uint64 balance = 8;
-    // Current weight of the current forkchoice node.
-    uint64 weight = 9;
-    // Optimistic status of the current forkchoice node.
-    bool execution_optimistic = 10;
-    // Execution payload block hash of the current forkchoice node.
-    bytes execution_block_hash = 11 [(ethereum.eth.ext.ssz_size) = "32"];
-    // Timestamp when the node was inserted
-    uint64 timestamp = 12;
-    // Validity status of the node.
-    ForkChoiceNodeValidity validity = 13;
-}
-
-enum ForkChoiceNodeValidity {
-    VALID = 0;
-    INVALID = 1;
-    OPTIMISTIC = 2;
+  // The state id which can be any of: "head" (canonical head in node's view),
+  // "genesis", "finalized", "justified", <slot>, <hex encoded stateRoot with 0x
+  // prefix>.
+  bytes state_id = 1;
 }

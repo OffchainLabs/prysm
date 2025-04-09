@@ -9,9 +9,10 @@ import (
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	corenet "github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/protocol"
+	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p"
-	p2ptypes "github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p/types"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
+	p2ptypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
 )
 
 type rpcHandler func(context.Context, interface{}, libp2pcore.Stream) error
@@ -36,7 +37,7 @@ func (c *client) registerRPCHandler(baseTopic string, handle rpcHandler) {
 			_ = _err
 		}()
 
-		log.WithField("peer", stream.Conn().RemotePeer().Pretty()).WithField("topic", string(stream.Protocol()))
+		log.WithField("peer", stream.Conn().RemotePeer().String()).WithField("topic", string(stream.Protocol()))
 
 		base, ok := p2p.RPCTopicMappings[baseTopic]
 		if !ok {
@@ -51,7 +52,7 @@ func (c *client) registerRPCHandler(baseTopic string, handle rpcHandler) {
 		// do not decode anything.
 		if baseTopic == p2p.RPCMetaDataTopicV1 || baseTopic == p2p.RPCMetaDataTopicV2 {
 			if err := handle(context.Background(), base, stream); err != nil {
-				if err != p2ptypes.ErrWrongForkDigestVersion {
+				if !errors.Is(err, p2ptypes.ErrWrongForkDigestVersion) {
 					log.WithError(err).Debug("Could not handle p2p RPC")
 				}
 			}
@@ -68,16 +69,12 @@ func (c *client) registerRPCHandler(baseTopic string, handle rpcHandler) {
 				return
 			}
 			if err := c.Encoding().DecodeWithMaxLength(stream, msg); err != nil {
-				// Debug logs for goodbye/status errors
-				if strings.Contains(topic, p2p.RPCGoodByeTopicV1) || strings.Contains(topic, p2p.RPCStatusTopicV1) {
-					log.WithError(err).Debug("Could not decode goodbye stream message")
-					return
-				}
-				log.WithError(err).Debug("Could not decode stream message")
+				// Trace logs for goodbye errors
+				logStreamErrors(err, topic)
 				return
 			}
 			if err := handle(context.Background(), msg, stream); err != nil {
-				if err != p2ptypes.ErrWrongForkDigestVersion {
+				if !errors.Is(err, p2ptypes.ErrWrongForkDigestVersion) {
 					log.WithError(err).Debug("Could not handle p2p RPC")
 				}
 			}
@@ -89,14 +86,22 @@ func (c *client) registerRPCHandler(baseTopic string, handle rpcHandler) {
 				return
 			}
 			if err := c.Encoding().DecodeWithMaxLength(stream, msg); err != nil {
-				log.WithError(err).Debug("Could not decode stream message")
+				logStreamErrors(err, topic)
 				return
 			}
 			if err := handle(context.Background(), nTyp.Elem().Interface(), stream); err != nil {
-				if err != p2ptypes.ErrWrongForkDigestVersion {
+				if !errors.Is(err, p2ptypes.ErrWrongForkDigestVersion) {
 					log.WithError(err).Debug("Could not handle p2p RPC")
 				}
 			}
 		}
 	})
+}
+
+func logStreamErrors(err error, topic string) {
+	if strings.Contains(topic, p2p.RPCGoodByeTopicV1) {
+		log.WithError(err).Trace("Could not decode goodbye stream message")
+		return
+	}
+	log.WithError(err).Debug("Could not decode stream message")
 }

@@ -6,31 +6,39 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/golang/mock/gomock"
-	"github.com/prysmaticlabs/prysm/v4/api/gateway/apimiddleware"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/validator/client/beacon-api/mock"
+	"github.com/prysmaticlabs/prysm/v5/network/httputil"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api/mock"
+	"go.uber.org/mock/gomock"
 )
 
 func TestProposeBeaconBlock_Error(t *testing.T) {
 	testSuites := []struct {
 		name                 string
+		returnedError        error
 		expectedErrorMessage string
-		expectedHttpError    *apimiddleware.DefaultErrorJson
 	}{
 		{
 			name:                 "error 202",
-			expectedErrorMessage: "block was successfully broadcasted but failed validation",
-			expectedHttpError: &apimiddleware.DefaultErrorJson{
+			expectedErrorMessage: "block was successfully broadcast but failed validation",
+			returnedError: &httputil.DefaultJsonError{
 				Code:    http.StatusAccepted,
 				Message: "202 error",
 			},
 		},
 		{
-			name:                 "request failed",
-			expectedErrorMessage: "failed to send POST data to REST endpoint",
-			expectedHttpError:    nil,
+			name:                 "error 500",
+			expectedErrorMessage: "HTTP request unsuccessful (500: foo error)",
+			returnedError: &httputil.DefaultJsonError{
+				Code:    http.StatusInternalServerError,
+				Message: "foo error",
+			},
+		},
+		{
+			name:                 "other error",
+			expectedErrorMessage: "foo error",
+			returnedError:        errors.New("foo error"),
 		},
 	}
 
@@ -43,7 +51,7 @@ func TestProposeBeaconBlock_Error(t *testing.T) {
 		{
 			name:             "phase0",
 			consensusVersion: "phase0",
-			endpoint:         "/eth/v1/beacon/blocks",
+			endpoint:         "/eth/v2/beacon/blocks",
 			block: &ethpb.GenericSignedBeaconBlock{
 				Block: generateSignedPhase0Block(),
 			},
@@ -51,7 +59,7 @@ func TestProposeBeaconBlock_Error(t *testing.T) {
 		{
 			name:             "altair",
 			consensusVersion: "altair",
-			endpoint:         "/eth/v1/beacon/blocks",
+			endpoint:         "/eth/v2/beacon/blocks",
 			block: &ethpb.GenericSignedBeaconBlock{
 				Block: generateSignedAltairBlock(),
 			},
@@ -59,7 +67,7 @@ func TestProposeBeaconBlock_Error(t *testing.T) {
 		{
 			name:             "bellatrix",
 			consensusVersion: "bellatrix",
-			endpoint:         "/eth/v1/beacon/blocks",
+			endpoint:         "/eth/v2/beacon/blocks",
 			block: &ethpb.GenericSignedBeaconBlock{
 				Block: generateSignedBellatrixBlock(),
 			},
@@ -67,15 +75,23 @@ func TestProposeBeaconBlock_Error(t *testing.T) {
 		{
 			name:             "blinded bellatrix",
 			consensusVersion: "bellatrix",
-			endpoint:         "/eth/v1/beacon/blinded_blocks",
+			endpoint:         "/eth/v2/beacon/blinded_blocks",
 			block: &ethpb.GenericSignedBeaconBlock{
 				Block: generateSignedBlindedBellatrixBlock(),
 			},
 		},
 		{
+			name:             "capella",
+			consensusVersion: "capella",
+			endpoint:         "/eth/v2/beacon/blocks",
+			block: &ethpb.GenericSignedBeaconBlock{
+				Block: generateSignedCapellaBlock(),
+			},
+		},
+		{
 			name:             "blinded capella",
 			consensusVersion: "capella",
-			endpoint:         "/eth/v1/beacon/blinded_blocks",
+			endpoint:         "/eth/v2/beacon/blinded_blocks",
 			block: &ethpb.GenericSignedBeaconBlock{
 				Block: generateSignedBlindedCapellaBlock(),
 			},
@@ -89,24 +105,22 @@ func TestProposeBeaconBlock_Error(t *testing.T) {
 				defer ctrl.Finish()
 
 				ctx := context.Background()
-				jsonRestHandler := mock.NewMockjsonRestHandler(ctrl)
+				jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 
 				headers := map[string]string{"Eth-Consensus-Version": testCase.consensusVersion}
-				jsonRestHandler.EXPECT().PostRestJson(
-					ctx,
+				jsonRestHandler.EXPECT().Post(
+					gomock.Any(),
 					testCase.endpoint,
 					headers,
 					gomock.Any(),
 					nil,
 				).Return(
-					testSuite.expectedHttpError,
-					errors.New("foo error"),
+					testSuite.returnedError,
 				).Times(1)
 
 				validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
 				_, err := validatorClient.proposeBeaconBlock(ctx, testCase.block)
 				assert.ErrorContains(t, testSuite.expectedErrorMessage, err)
-				assert.ErrorContains(t, "foo error", err)
 			})
 		}
 	}

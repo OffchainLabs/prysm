@@ -9,8 +9,8 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2"
 	gcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/libp2p/go-libp2p/core/crypto"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func TestConvertToInterfacePubkey(t *testing.T) {

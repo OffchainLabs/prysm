@@ -6,7 +6,7 @@ import (
 	"strconv"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
 )
 
 // StartAndEndPage takes in the requested page token, wanted page size, total page size.

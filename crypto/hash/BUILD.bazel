@@ -3,7 +3,7 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 go_library(
     name = "go_default_library",
     srcs = ["hash.go"],
-    importpath = "github.com/prysmaticlabs/prysm/v4/crypto/hash",
+    importpath = "github.com/prysmaticlabs/prysm/v5/crypto/hash",
     visibility = ["//visibility:public"],
     deps = [
         "//encoding/bytesutil:go_default_library",

@@ -5,17 +5,26 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	slashertypes "github.com/prysmaticlabs/prysm/v4/beacon-chain/slasher/types"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/time/slots"
+	slashertypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/slasher/types"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/sirupsen/logrus"
+)
+
+const (
+	couldNotSaveAttRecord            = "Could not save attestation records to DB"
+	couldNotCheckSlashableAtt        = "Could not check slashable attestations"
+	couldNotProcessAttesterSlashings = "Could not process attester slashings"
 )
 
 // Receive indexed attestations from some source event feed,
 // validating their integrity before appending them to an attestation queue
 // for batch processing in a separate routine.
-func (s *Service) receiveAttestations(ctx context.Context, indexedAttsChan chan *ethpb.IndexedAttestation) {
+func (s *Service) receiveAttestations(ctx context.Context, indexedAttsChan chan *slashertypes.WrappedIndexedAtt) {
+	defer s.wg.Done()
+
 	sub := s.serviceCfg.IndexedAttestationsFeed.Subscribe(indexedAttsChan)
 	defer sub.Unsubscribe()
 	for {
@@ -24,14 +33,14 @@ func (s *Service) receiveAttestations(ctx context.Context, indexedAttsChan chan 
 			if !validateAttestationIntegrity(att) {
 				continue
 			}
-			signingRoot, err := att.Data.HashTreeRoot()
+			dataRoot, err := att.GetData().HashTreeRoot()
 			if err != nil {
 				log.WithError(err).Error("Could not get hash tree root of attestation")
 				continue
 			}
 			attWrapper := &slashertypes.IndexedAttestationWrapper{
-				IndexedAttestation: att,
-				SigningRoot:        signingRoot,
+				IndexedAttestation: att.IndexedAtt,
+				DataRoot:           dataRoot,
 			}
 			s.attsQueue.push(attWrapper)
 		case err := <-sub.Err():
@@ -45,6 +54,8 @@ func (s *Service) receiveAttestations(ctx context.Context, indexedAttsChan chan 
 
 // Receive beacon blocks from some source event feed,
 func (s *Service) receiveBlocks(ctx context.Context, beaconBlockHeadersChan chan *ethpb.SignedBeaconBlockHeader) {
+	defer s.wg.Done()
+
 	sub := s.serviceCfg.BeaconBlockHeadersFeed.Subscribe(beaconBlockHeadersChan)
 	defer sub.Unsubscribe()
 	for {
@@ -53,14 +64,14 @@ func (s *Service) receiveBlocks(ctx context.Context, beaconBlockHeadersChan chan
 			if !validateBlockHeaderIntegrity(blockHeader) {
 				continue
 			}
-			signingRoot, err := blockHeader.Header.HashTreeRoot()
+			headerRoot, err := blockHeader.Header.HashTreeRoot()
 			if err != nil {
 				log.WithError(err).Error("Could not get hash tree root of signed block header")
 				continue
 			}
 			wrappedProposal := &slashertypes.SignedBlockHeaderWrapper{
 				SignedBeaconBlockHeader: blockHeader,
-				SigningRoot:             signingRoot,
+				HeaderRoot:              headerRoot,
 			}
 			s.blksQueue.push(wrappedProposal)
 		case err := <-sub.Err():
@@ -77,61 +88,89 @@ func (s *Service) receiveBlocks(ctx context.Context, beaconBlockHeadersChan chan
 // This grouping will allow us to perform detection on batches of attestations
 // per validator chunk index which can be done concurrently.
 func (s *Service) processQueuedAttestations(ctx context.Context, slotTicker <-chan primitives.Slot) {
+	defer s.wg.Done()
+
 	for {
 		select {
 		case currentSlot := <-slotTicker:
+			// Retrieve all attestations from the queue.
 			attestations := s.attsQueue.dequeue()
-			currentEpoch := slots.ToEpoch(currentSlot)
-			// We take all the attestations in the queue and filter out
-			// those which are valid now and valid in the future.
-			validAtts, validInFuture, numDropped := s.filterAttestations(attestations, currentEpoch)
 
-			deferredAttestationsTotal.Add(float64(len(validInFuture)))
-			droppedAttestationsTotal.Add(float64(numDropped))
-
-			// We add back those attestations that are valid in the future to the queue.
-			s.attsQueue.extend(validInFuture)
-
-			log.WithFields(logrus.Fields{
-				"currentSlot":     currentSlot,
-				"currentEpoch":    currentEpoch,
-				"numValidAtts":    len(validAtts),
-				"numDeferredAtts": len(validInFuture),
-				"numDroppedAtts":  numDropped,
-			}).Info("Processing queued attestations for slashing detection")
-
-			// Save the attestation records to our database.
-			if err := s.serviceCfg.Database.SaveAttestationRecordsForValidators(
-				ctx, validAtts,
-			); err != nil {
-				log.WithError(err).Error("Could not save attestation records to DB")
-				continue
-			}
-
-			// Check for slashings.
-			slashings, err := s.checkSlashableAttestations(ctx, currentEpoch, validAtts)
-			if err != nil {
-				log.WithError(err).Error("Could not check slashable attestations")
-				continue
-			}
-
-			// Process attester slashings by verifying their signatures, submitting
-			// to the beacon node's operations pool, and logging them.
-			if err := s.processAttesterSlashings(ctx, slashings); err != nil {
-				log.WithError(err).Error("Could not process attester slashings")
-				continue
-			}
-
-			processedAttestationsTotal.Add(float64(len(validAtts)))
+			// Process the retrieved attestations.
+			s.processAttestations(ctx, attestations, currentSlot)
 		case <-ctx.Done():
 			return
 		}
 	}
 }
 
+func (s *Service) processAttestations(
+	ctx context.Context,
+	attestations []*slashertypes.IndexedAttestationWrapper,
+	currentSlot primitives.Slot,
+) map[[fieldparams.RootLength]byte]ethpb.AttSlashing {
+	// Get the current epoch from the current slot.
+	currentEpoch := slots.ToEpoch(currentSlot)
+
+	// Take all the attestations in the queue and filter out
+	// those which are valid now and valid in the future.
+	validAttestations, validInFutureAttestations, numDropped := s.filterAttestations(attestations, currentEpoch)
+
+	// Increase corresponding prometheus metrics.
+	deferredAttestationsTotal.Add(float64(len(validInFutureAttestations)))
+	droppedAttestationsTotal.Add(float64(numDropped))
+	processedAttestationsTotal.Add(float64(len(validAttestations)))
+
+	// We add back those attestations that are valid in the future to the queue.
+	s.attsQueue.extend(validInFutureAttestations)
+
+	// Compute some counts.
+	queuedAttestationsCount := s.attsQueue.size()
+	validAttestationsCount := len(validAttestations)
+	validInFutureAttestationsCount := len(validInFutureAttestations)
+
+	// Log useful information.
+	log.WithFields(logrus.Fields{
+		"currentSlot":     currentSlot,
+		"currentEpoch":    currentEpoch,
+		"numValidAtts":    validAttestationsCount,
+		"numDeferredAtts": validInFutureAttestationsCount,
+		"numDroppedAtts":  numDropped,
+		"attsQueueSize":   queuedAttestationsCount,
+	}).Info("Start processing queued attestations")
+
+	start := time.Now()
+
+	// Check for attestations slashings (double, surrounding, surrounded votes).
+	slashings, err := s.checkSlashableAttestations(ctx, currentEpoch, validAttestations)
+	if err != nil {
+		log.WithError(err).Error(couldNotCheckSlashableAtt)
+		return nil
+	}
+
+	// Process attester slashings by verifying their signatures, submitting
+	// to the beacon node's operations pool, and logging them.
+	processedAttesterSlashings, err := s.processAttesterSlashings(ctx, slashings)
+	if err != nil {
+		log.WithError(err).Error(couldNotProcessAttesterSlashings)
+		return nil
+	}
+
+	end := time.Since(start)
+	log.WithField("elapsed", end).Info("Done processing queued attestations")
+
+	if len(slashings) > 0 {
+		log.WithField("numSlashings", len(slashings)).Warn("Slashable attestation offenses found")
+	}
+
+	return processedAttesterSlashings
+}
+
 // Process queued blocks every time an epoch ticker fires. We retrieve
 // these blocks from a queue, then perform double proposal detection.
 func (s *Service) processQueuedBlocks(ctx context.Context, slotTicker <-chan primitives.Slot) {
+	defer s.wg.Done()
+
 	for {
 		select {
 		case currentSlot := <-slotTicker:
@@ -172,6 +211,8 @@ func (s *Service) processQueuedBlocks(ctx context.Context, slotTicker <-chan pri
 
 // Prunes slasher data on each slot tick to prevent unnecessary build-up of disk space usage.
 func (s *Service) pruneSlasherData(ctx context.Context, slotTicker <-chan primitives.Slot) {
+	defer s.wg.Done()
+
 	for {
 		select {
 		case <-slotTicker:

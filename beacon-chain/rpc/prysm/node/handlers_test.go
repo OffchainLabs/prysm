@@ -14,18 +14,19 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	libp2ptest "github.com/libp2p/go-libp2p/p2p/host/peerstore/test"
 	ma "github.com/multiformats/go-multiaddr"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p/peers"
-	mockp2p "github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p/testing"
-	http2 "github.com/prysmaticlabs/prysm/v4/network/http"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers"
+	mockp2p "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
+	"github.com/prysmaticlabs/prysm/v5/network/httputil"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 type testIdentity enode.ID
 
-func (_ testIdentity) Verify(_ *enr.Record, _ []byte) error { return nil }
-func (id testIdentity) NodeAddr(_ *enr.Record) []byte       { return id[:] }
+func (testIdentity) Verify(*enr.Record, []byte) error { return nil }
+func (id testIdentity) NodeAddr(*enr.Record) []byte   { return id[:] }
 
 func TestListTrustedPeer(t *testing.T) {
 	ids := libp2ptest.GeneratePeerIDs(9)
@@ -61,13 +62,13 @@ func TestListTrustedPeer(t *testing.T) {
 
 		switch i {
 		case 0, 1:
-			peerStatus.SetConnectionState(id, peers.PeerConnecting)
+			peerStatus.SetConnectionState(id, peers.Connecting)
 		case 2, 3:
-			peerStatus.SetConnectionState(id, peers.PeerConnected)
+			peerStatus.SetConnectionState(id, peers.Connected)
 		case 4, 5:
-			peerStatus.SetConnectionState(id, peers.PeerDisconnecting)
+			peerStatus.SetConnectionState(id, peers.Disconnecting)
 		case 6, 7:
-			peerStatus.SetConnectionState(id, peers.PeerDisconnected)
+			peerStatus.SetConnectionState(id, peers.Disconnected)
 		default:
 			t.Fatalf("Failed to set connection state for peer")
 		}
@@ -84,14 +85,14 @@ func TestListTrustedPeer(t *testing.T) {
 		writer.Body = &bytes.Buffer{}
 		s.ListTrustedPeer(writer, request)
 		assert.Equal(t, http.StatusOK, writer.Code)
-		resp := &PeersResponse{}
+		resp := &structs.PeersResponse{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
 		peers := resp.Peers
 		// assert number of trusted peer is right
 		assert.Equal(t, 9, len(peers))
 
 		for i := 0; i < 9; i++ {
-			pid, err := peer.Decode(peers[i].PeerID)
+			pid, err := peer.Decode(peers[i].PeerId)
 			require.NoError(t, err)
 			if pid == ids[8] {
 				assert.Equal(t, "", peers[i].Enr)
@@ -151,7 +152,7 @@ func TestListTrustedPeers_NoPeersReturnsEmptyArray(t *testing.T) {
 	writer.Body = &bytes.Buffer{}
 	s.ListTrustedPeer(writer, request)
 	assert.Equal(t, http.StatusOK, writer.Code)
-	resp := &PeersResponse{}
+	resp := &structs.PeersResponse{}
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
 	peers := resp.Peers
 	assert.Equal(t, 0, len(peers))
@@ -163,7 +164,7 @@ func TestAddTrustedPeer(t *testing.T) {
 	s := Server{PeersFetcher: peerFetcher}
 
 	url := "http://anything.is.fine"
-	addr := &AddrRequest{
+	addr := &structs.AddrRequest{
 		Addr: "/ip4/127.0.0.1/tcp/30303/p2p/16Uiu2HAm1n583t4huDMMqEUUBuQs6bLts21mxCfX3tiqu9JfHvRJ",
 	}
 	addrJson, err := json.Marshal(addr)
@@ -188,7 +189,7 @@ func TestAddTrustedPeer_EmptyBody(t *testing.T) {
 	writer := httptest.NewRecorder()
 	writer.Body = &bytes.Buffer{}
 	s.AddTrustedPeer(writer, request)
-	e := &http2.DefaultErrorJson{}
+	e := &httputil.DefaultJsonError{}
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
 	assert.Equal(t, http.StatusBadRequest, writer.Code)
 	assert.Equal(t, "Could not decode request body into peer address: unexpected end of JSON input", e.Message)
@@ -201,7 +202,7 @@ func TestAddTrustedPeer_BadAddress(t *testing.T) {
 	s := Server{PeersFetcher: peerFetcher}
 
 	url := "http://anything.is.fine"
-	addr := &AddrRequest{
+	addr := &structs.AddrRequest{
 		Addr: "anything/but/not/an/address",
 	}
 	addrJson, err := json.Marshal(addr)
@@ -213,7 +214,7 @@ func TestAddTrustedPeer_BadAddress(t *testing.T) {
 	writer := httptest.NewRecorder()
 	writer.Body = &bytes.Buffer{}
 	s.AddTrustedPeer(writer, request)
-	e := &http2.DefaultErrorJson{}
+	e := &httputil.DefaultJsonError{}
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
 	assert.Equal(t, http.StatusBadRequest, writer.Code)
 	assert.StringContains(t, "Could not derive peer info from multiaddress", e.Message)
@@ -243,7 +244,7 @@ func TestRemoveTrustedPeer_EmptyParameter(t *testing.T) {
 	writer := httptest.NewRecorder()
 	writer.Body = &bytes.Buffer{}
 	s.RemoveTrustedPeer(writer, request)
-	e := &http2.DefaultErrorJson{}
+	e := &httputil.DefaultJsonError{}
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
 	assert.Equal(t, http.StatusBadRequest, writer.Code)
 	assert.Equal(t, "Could not decode peer id: failed to parse peer ID: invalid cid: cid too short", e.Message)

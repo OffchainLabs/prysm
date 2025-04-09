@@ -7,12 +7,12 @@ import (
 
 	"github.com/manifoldco/promptui"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/cmd/validator/flags"
-	"github.com/prysmaticlabs/prysm/v4/io/prompt"
-	"github.com/prysmaticlabs/prysm/v4/validator/accounts"
-	"github.com/prysmaticlabs/prysm/v4/validator/accounts/userprompt"
-	"github.com/prysmaticlabs/prysm/v4/validator/accounts/wallet"
-	"github.com/prysmaticlabs/prysm/v4/validator/keymanager"
+	"github.com/prysmaticlabs/prysm/v5/cmd/validator/flags"
+	"github.com/prysmaticlabs/prysm/v5/io/prompt"
+	"github.com/prysmaticlabs/prysm/v5/validator/accounts"
+	"github.com/prysmaticlabs/prysm/v5/validator/accounts/userprompt"
+	"github.com/prysmaticlabs/prysm/v5/validator/accounts/wallet"
+	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
 	"github.com/urfave/cli/v2"
 )
 
@@ -47,7 +47,7 @@ func walletCreate(c *cli.Context) error {
 
 // ConstructCLIManagerOpts prompts the user for wallet creation input.
 func ConstructCLIManagerOpts(cliCtx *cli.Context, keymanagerKind keymanager.Kind) ([]accounts.Option, error) {
-	cliOpts := []accounts.Option{}
+	var cliOpts []accounts.Option
 	// Get wallet dir and check that no wallet exists at the location.
 	walletDir, err := userprompt.InputDirectory(cliCtx, userprompt.WalletDirPromptText, flags.WalletDirFlag)
 	if err != nil {

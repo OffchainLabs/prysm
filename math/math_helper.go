@@ -109,9 +109,10 @@ func IsPowerOf2(n uint64) bool {
 // PowerOf2 returns an integer that is the provided
 // exponent of 2. Can only return powers of 2 till 63,
 // after that it overflows
+// This method will panic if `n` is greater than 63.
 func PowerOf2(n uint64) uint64 {
 	if n >= 64 {
-		panic("integer overflow")
+		panic("integer overflow") // lint:nopanic -- Panic is communicated in the godoc commentary.
 	}
 	return 1 << n
 }
@@ -211,24 +212,6 @@ func AddInt(i ...int) (int, error) {
 		sum += ii
 	}
 	return sum, nil
-}
-
-// Wei is the smallest unit of Ether, represented as a pointer to a bigInt.
-type Wei *big.Int
-
-// Gwei is a denomination of 1e9 Wei represented as an uint64.
-type Gwei uint64
-
-// WeiToGwei converts big int wei to uint64 gwei.
-// The input `v` is copied before being modified.
-func WeiToGwei(v Wei) Gwei {
-	if v == nil {
-		return 0
-	}
-	gweiPerEth := big.NewInt(1e9)
-	copied := big.NewInt(0).Set(v)
-	copied.Div(copied, gweiPerEth)
-	return Gwei(copied.Uint64())
 }
 
 // IsValidUint256 given a bigint checks if the value is a valid Uint256

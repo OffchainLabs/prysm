@@ -1,0 +1,21 @@
+name: Protobuf Format
+
+on: 
+  push:
+    branches: [ '*' ]
+  pull_request:
+    branches: [ '*' ]
+  merge_group:
+    types: [checks_requested]
+
+jobs:
+  clang-format-checking:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      # Is this step failing for you? 
+      # Run: clang-format -i proto/**/*.proto
+      # See: https://clang.llvm.org/docs/ClangFormat.html
+      - uses: RafikFarhad/clang-format-github-action@v3
+        with:
+          sources: "proto/**/*.proto"

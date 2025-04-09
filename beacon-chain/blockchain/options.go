@@ -1,21 +1,22 @@
 package blockchain
 
 import (
-	"github.com/prysmaticlabs/prysm/v4/async/event"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/cache"
-	statefeed "github.com/prysmaticlabs/prysm/v4/beacon-chain/core/feed/state"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/db"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/execution"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/forkchoice"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/operations/attestations"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/operations/blstoexec"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/operations/slashings"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/operations/voluntaryexits"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/startup"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state/stategen"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/async/event"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
+	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/execution"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/attestations"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/blstoexec"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/slashings"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/voluntaryexits"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stategen"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
 type Option func(s *Service) error
@@ -68,10 +69,26 @@ func WithDepositCache(c cache.DepositCache) Option {
 	}
 }
 
-// WithProposerIdsCache for proposer id cache.
-func WithProposerIdsCache(c *cache.ProposerPayloadIDsCache) Option {
+// WithPayloadIDCache for payload ID cache.
+func WithPayloadIDCache(c *cache.PayloadIDCache) Option {
 	return func(s *Service) error {
-		s.cfg.ProposerSlotIndexCache = c
+		s.cfg.PayloadIDCache = c
+		return nil
+	}
+}
+
+// WithTrackedValidatorsCache for tracked validators cache.
+func WithTrackedValidatorsCache(c *cache.TrackedValidatorsCache) Option {
+	return func(s *Service) error {
+		s.cfg.TrackedValidatorsCache = c
+		return nil
+	}
+}
+
+// WithAttestationCache for attestation lifecycle after chain inclusion.
+func WithAttestationCache(c *cache.AttestationCache) Option {
+	return func(s *Service) error {
+		s.cfg.AttestationCache = c
 		return nil
 	}
 }
@@ -164,6 +181,8 @@ func WithFinalizedStateAtStartUp(st state.BeaconState) Option {
 	}
 }
 
+// WithClockSynchronizer sets the ClockSetter/ClockWaiter values to be used by services that need to block until
+// the genesis timestamp is known (ClockWaiter) or which determine the genesis timestamp (ClockSetter).
 func WithClockSynchronizer(gs *startup.ClockSynchronizer) Option {
 	return func(s *Service) error {
 		s.clockSetter = gs
@@ -172,9 +191,32 @@ func WithClockSynchronizer(gs *startup.ClockSynchronizer) Option {
 	}
 }
 
+// WithSyncComplete sets a channel that is used to notify blockchain service that the node has synced to head.
 func WithSyncComplete(c chan struct{}) Option {
 	return func(s *Service) error {
 		s.syncComplete = c
+		return nil
+	}
+}
+
+// WithBlobStorage sets the blob storage backend for the blockchain service.
+func WithBlobStorage(b *filesystem.BlobStorage) Option {
+	return func(s *Service) error {
+		s.blobStorage = b
+		return nil
+	}
+}
+
+func WithSyncChecker(checker Checker) Option {
+	return func(s *Service) error {
+		s.cfg.SyncChecker = checker
+		return nil
+	}
+}
+
+func WithSlasherEnabled(enabled bool) Option {
+	return func(s *Service) error {
+		s.slasherEnabled = enabled
 		return nil
 	}
 }

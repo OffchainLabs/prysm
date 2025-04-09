@@ -1,4 +1,4 @@
-package validator_helpers
+package helpers
 
 import (
 	"time"

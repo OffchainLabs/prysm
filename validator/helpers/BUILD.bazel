@@ -1,11 +1,41 @@
-load("@prysm//tools/go:def.bzl", "go_library")
+load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
-    srcs = ["node_connection.go"],
-    importpath = "github.com/prysmaticlabs/prysm/v4/validator/helpers",
+    srcs = [
+        "converts.go",
+        "metadata.go",
+        "node_connection.go",
+    ],
+    importpath = "github.com/prysmaticlabs/prysm/v5/validator/helpers",
     visibility = ["//visibility:public"],
     deps = [
+        "//config/fieldparams:go_default_library",
+        "//consensus-types/primitives:go_default_library",
+        "//validator/db/iface:go_default_library",
+        "//validator/slashing-protection-history/format:go_default_library",
+        "@com_github_pkg_errors//:go_default_library",
         "@org_golang_google_grpc//:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = [
+        "converts_test.go",
+        "metadata_test.go",
+    ],
+    embed = [":go_default_library"],
+    deps = [
+        "//config/fieldparams:go_default_library",
+        "//config/proposer:go_default_library",
+        "//consensus-types/interfaces:go_default_library",
+        "//consensus-types/primitives:go_default_library",
+        "//proto/prysm/v1alpha1:go_default_library",
+        "//testing/require:go_default_library",
+        "//validator/db/common:go_default_library",
+        "//validator/db/iface:go_default_library",
+        "//validator/slashing-protection-history/format:go_default_library",
+        "@com_github_prometheus_client_golang//prometheus:go_default_library",
     ],
 )

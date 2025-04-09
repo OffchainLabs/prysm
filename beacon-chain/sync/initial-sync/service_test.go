@@ -6,20 +6,25 @@ import (
 	"testing"
 	"time"
 
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/paulbellamy/ratecounter"
-	"github.com/prysmaticlabs/prysm/v4/async/abool"
-	mock "github.com/prysmaticlabs/prysm/v4/beacon-chain/blockchain/testing"
-	dbtest "github.com/prysmaticlabs/prysm/v4/beacon-chain/db/testing"
-	p2pt "github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p/testing"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/startup"
-	"github.com/prysmaticlabs/prysm/v4/cmd/beacon-chain/flags"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	eth "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/testing/util"
-	"github.com/prysmaticlabs/prysm/v4/time/slots"
+	"github.com/prysmaticlabs/prysm/v5/async/abool"
+	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/kv"
+	dbtest "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
+	p2pt "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
+	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/util"
+	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
@@ -157,6 +162,7 @@ func TestService_InitStartStop(t *testing.T) {
 				StateNotifier:       &mock.MockStateNotifier{},
 				InitialSyncComplete: make(chan struct{}),
 			})
+			s.verifierWaiter = verification.NewInitializerWaiter(gs, nil, nil)
 			time.Sleep(500 * time.Millisecond)
 			assert.NotNil(t, s)
 			if tt.setGenesis != nil {
@@ -199,6 +205,7 @@ func TestService_waitForStateInitialization(t *testing.T) {
 			counter:      ratecounter.NewRateCounter(counterSeconds * time.Second),
 			genesisChan:  make(chan time.Time),
 		}
+		s.verifierWaiter = verification.NewInitializerWaiter(cs, nil, nil)
 		return s, cs
 	}
 
@@ -382,6 +389,7 @@ func TestService_Resync(t *testing.T) {
 				P2P:           p,
 				Chain:         mc,
 				StateNotifier: mc.StateNotifier(),
+				BlobStorage:   filesystem.NewEphemeralBlobStorage(t),
 			})
 			assert.NotNil(t, s)
 			assert.Equal(t, primitives.Slot(0), s.cfg.Chain.HeadSlot())
@@ -414,4 +422,92 @@ func TestService_Synced(t *testing.T) {
 	assert.Equal(t, false, s.Synced())
 	s.synced.Set()
 	assert.Equal(t, true, s.Synced())
+}
+
+func TestMissingBlobRequest(t *testing.T) {
+	cases := []struct {
+		name  string
+		setup func(t *testing.T) (blocks.ROBlock, *filesystem.BlobStorage)
+		nReq  int
+		err   error
+	}{
+		{
+			name: "pre-deneb",
+			setup: func(t *testing.T) (blocks.ROBlock, *filesystem.BlobStorage) {
+				cb, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlockCapella())
+				require.NoError(t, err)
+				rob, err := blocks.NewROBlockWithRoot(cb, [32]byte{})
+				require.NoError(t, err)
+				return rob, nil
+			},
+			nReq: 0,
+		},
+		{
+			name: "deneb zero commitments",
+			setup: func(t *testing.T) (blocks.ROBlock, *filesystem.BlobStorage) {
+				bk, _ := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 0, 0)
+				return bk, nil
+			},
+			nReq: 0,
+		},
+		{
+			name: "2 commitments, all missing",
+			setup: func(t *testing.T) (blocks.ROBlock, *filesystem.BlobStorage) {
+				bk, _ := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 0, 2)
+				fs := filesystem.NewEphemeralBlobStorage(t)
+				return bk, fs
+			},
+			nReq: 2,
+		},
+		{
+			name: "2 commitments, 1 missing",
+			setup: func(t *testing.T) (blocks.ROBlock, *filesystem.BlobStorage) {
+				bk, _ := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 0, 2)
+				bm, fs := filesystem.NewEphemeralBlobStorageWithMocker(t)
+				require.NoError(t, bm.CreateFakeIndices(bk.Root(), bk.Block().Slot(), 1))
+				return bk, fs
+			},
+			nReq: 1,
+		},
+		{
+			name: "2 commitments, 0 missing",
+			setup: func(t *testing.T) (blocks.ROBlock, *filesystem.BlobStorage) {
+				bk, _ := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 0, 2)
+				bm, fs := filesystem.NewEphemeralBlobStorageWithMocker(t)
+				require.NoError(t, bm.CreateFakeIndices(bk.Root(), bk.Block().Slot(), 0, 1))
+				return bk, fs
+			},
+			nReq: 0,
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			blk, store := c.setup(t)
+			req, err := missingBlobRequest(blk, store)
+			require.NoError(t, err)
+			require.Equal(t, c.nReq, len(req))
+		})
+	}
+}
+
+func TestOriginOutsideRetention(t *testing.T) {
+	ctx := context.Background()
+	bdb := dbtest.SetupDB(t)
+	genesis := time.Unix(0, 0)
+	secsPerEpoch := params.BeaconConfig().SecondsPerSlot * uint64(params.BeaconConfig().SlotsPerEpoch)
+	retentionPeriod := time.Second * time.Duration(uint64(params.BeaconConfig().MinEpochsForBlobsSidecarsRequest+1)*secsPerEpoch)
+	outsideRetention := genesis.Add(retentionPeriod)
+	now := func() time.Time {
+		return outsideRetention
+	}
+	clock := startup.NewClock(genesis, [32]byte{}, startup.WithNower(now))
+	s := &Service{ctx: ctx, cfg: &Config{DB: bdb}, clock: clock}
+	blk, _ := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 0, 1)
+	require.NoError(t, bdb.SaveBlock(ctx, blk))
+	concreteDB, ok := bdb.(*kv.Store)
+	require.Equal(t, true, ok)
+	require.NoError(t, concreteDB.SaveOriginCheckpointBlockRoot(ctx, blk.Root()))
+	// This would break due to missing service dependencies, but will return nil fast due to being outside retention.
+	require.Equal(t, false, params.WithinDAPeriod(slots.ToEpoch(blk.Block().Slot()), slots.ToEpoch(clock.CurrentSlot())))
+	require.NoError(t, s.fetchOriginBlobs([]peer.ID{}))
 }

@@ -3,14 +3,16 @@ package endtoend
 import (
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/runtime/version"
-	"github.com/prysmaticlabs/prysm/v4/testing/endtoend/types"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
+	"github.com/prysmaticlabs/prysm/v5/testing/endtoend/types"
 )
 
 func TestEndToEnd_MultiScenarioRun_Multiclient(t *testing.T) {
-	runner := e2eMainnet(t, false, true, types.StartAt(version.Phase0, params.E2EMainnetTestConfig()), types.WithEpochs(22))
-	runner.config.Evaluators = scenarioEvalsMulti()
+	cfg := types.InitForkCfg(version.Bellatrix, version.Electra, params.E2EMainnetTestConfig())
+	runner := e2eMainnet(t, false, true, cfg, types.WithEpochs(26))
+	// override for scenario tests
+	runner.config.Evaluators = scenarioEvalsMulti(cfg)
 	runner.config.EvalInterceptor = runner.multiScenarioMulticlient
 	runner.scenarioRunner()
 }

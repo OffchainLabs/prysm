@@ -6,7 +6,7 @@ import "google/api/annotations.proto";
 import "google/protobuf/empty.proto";
 
 option csharp_namespace = "Ethereum.Eth.V1alpha1";
-option go_package = "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1;eth";
+option go_package = "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1;eth";
 option java_multiple_files = true;
 option java_outer_classname = "HealthProto";
 option java_package = "org.ethereum.eth.v1alpha1";
@@ -16,18 +16,12 @@ option php_namespace = "Ethereum\\Eth\\v1alpha1";
 //
 // The health service is able to return important metadata about a beacon node
 // such being able to stream logs via gRPC.
-// DEPRECATED: This endpoint doesn't appear to be used and have been marked for deprecation.
 service Health {
-    rpc StreamBeaconLogs(google.protobuf.Empty) returns (stream LogsResponse) {
-        option deprecated = true;
-        option (google.api.http) = {
-            get: "/eth/v1alpha1/health/logs/stream"
-        };
-    }
+  rpc StreamBeaconLogs(google.protobuf.Empty) returns (stream LogsResponse) {
+    option (google.api.http) = {
+      get : "/eth/v1alpha1/health/logs/stream"
+    };
+  }
 }
 
-// DEPRECATED: StreamBeaconLogs endpoint doesn't appear to be used and have been marked for deprecation.
-message LogsResponse {
-  option deprecated = true;
-  repeated string logs = 1;
-}
+message LogsResponse { repeated string logs = 1; }

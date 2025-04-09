@@ -3,21 +3,21 @@ package client
 import (
 	"testing"
 
-	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/time/slots"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
 func TestUpdateLogAggregateStats(t *testing.T) {
 	v := &validator{
-		logValidatorBalances: true,
-		startBalances:        make(map[[fieldparams.BLSPubkeyLength]byte]uint64),
-		prevBalance:          make(map[[fieldparams.BLSPubkeyLength]byte]uint64),
+		logValidatorPerformance: true,
+		startBalances:           make(map[[fieldparams.BLSPubkeyLength]byte]uint64),
+		prevEpochBalances:       make(map[[fieldparams.BLSPubkeyLength]byte]uint64),
 		voteStats: voteStats{
 			startEpoch: 0, // this would otherwise have been previously set in LogValidatorGainsAndLosses()
 		},
@@ -66,9 +66,9 @@ func TestUpdateLogAggregateStats(t *testing.T) {
 		},
 	}
 
-	v.prevBalance[pubKeyBytes[0]] = uint64(33200000000)
-	v.prevBalance[pubKeyBytes[1]] = uint64(33300000000)
-	v.prevBalance[pubKeyBytes[2]] = uint64(31000000000)
+	v.prevEpochBalances[pubKeyBytes[0]] = uint64(33200000000)
+	v.prevEpochBalances[pubKeyBytes[1]] = uint64(33300000000)
+	v.prevEpochBalances[pubKeyBytes[2]] = uint64(31000000000)
 
 	var hook *logTest.Hook
 
@@ -89,9 +89,9 @@ func TestUpdateLogAggregateStats(t *testing.T) {
 
 func TestUpdateLogAltairAggregateStats(t *testing.T) {
 	v := &validator{
-		logValidatorBalances: true,
-		startBalances:        make(map[[fieldparams.BLSPubkeyLength]byte]uint64),
-		prevBalance:          make(map[[fieldparams.BLSPubkeyLength]byte]uint64),
+		logValidatorPerformance: true,
+		startBalances:           make(map[[fieldparams.BLSPubkeyLength]byte]uint64),
+		prevEpochBalances:       make(map[[fieldparams.BLSPubkeyLength]byte]uint64),
 		voteStats: voteStats{
 			startEpoch: params.BeaconConfig().AltairForkEpoch, // this would otherwise have been previously set in LogValidatorGainsAndLosses()
 		},
@@ -141,9 +141,9 @@ func TestUpdateLogAltairAggregateStats(t *testing.T) {
 		},
 	}
 
-	v.prevBalance[pubKeyBytes[0]] = uint64(33200000000)
-	v.prevBalance[pubKeyBytes[1]] = uint64(33300000000)
-	v.prevBalance[pubKeyBytes[2]] = uint64(31000000000)
+	v.prevEpochBalances[pubKeyBytes[0]] = uint64(33200000000)
+	v.prevEpochBalances[pubKeyBytes[1]] = uint64(33300000000)
+	v.prevEpochBalances[pubKeyBytes[2]] = uint64(31000000000)
 
 	var hook *logTest.Hook
 

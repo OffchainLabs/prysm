@@ -6,19 +6,14 @@ go_library(
         "constants.go",
         "types.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v4/validator/keymanager",
+    importpath = "github.com/prysmaticlabs/prysm/v5/validator/keymanager",
     visibility = [
-        "//cmd:__subpackages__",
-        "//testing/endtoend/components:__subpackages__",
-        "//tools:__subpackages__",
-        "//validator:__pkg__",
-        "//validator:__subpackages__",
+        "//visibility:public",
     ],
     deps = [
         "//async/event:go_default_library",
         "//config/fieldparams:go_default_library",
         "//crypto/bls:go_default_library",
-        "//proto/eth/service:go_default_library",
         "//proto/prysm/v1alpha1/validator-client:go_default_library",
     ],
 )

@@ -7,12 +7,13 @@ import (
 	"testing"
 
 	"github.com/prysmaticlabs/go-bitfield"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state/state-native/types"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native/types"
+	"github.com/prysmaticlabs/prysm/v5/config/features"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func TestStateReferenceSharing_Finalizer_Phase0(t *testing.T) {
@@ -788,7 +789,7 @@ func TestStateReferenceCopy_NoUnexpectedAttestationsMutation(t *testing.T) {
 		currEpochAtts, err = state.CurrentEpochAttestations()
 		require.NoError(t, err)
 		for i := range currEpochAtts {
-			att := ethpb.CopyPendingAttestation(currEpochAtts[i])
+			att := currEpochAtts[i].Copy()
 			att.AggregationBits = bitfield.NewBitlist(3)
 			currEpochAtts[i] = att
 		}
@@ -802,7 +803,7 @@ func TestStateReferenceCopy_NoUnexpectedAttestationsMutation(t *testing.T) {
 		prevEpochAtts, err = state.PreviousEpochAttestations()
 		require.NoError(t, err)
 		for i := range prevEpochAtts {
-			att := ethpb.CopyPendingAttestation(prevEpochAtts[i])
+			att := prevEpochAtts[i].Copy()
 			att.AggregationBits = bitfield.NewBitlist(3)
 			prevEpochAtts[i] = att
 		}
@@ -864,8 +865,8 @@ func TestValidatorReferences_RemainsConsistent_Phase0(t *testing.T) {
 
 	assert.DeepNotEqual(t, a.Validators()[0], b.Validators()[0], "validators are equal when they are supposed to be different")
 	// Modify all validators from copied state.
-	assert.NoError(t, b.ApplyToEveryValidator(func(idx int, val *ethpb.Validator) (bool, *ethpb.Validator, error) {
-		return true, &ethpb.Validator{PublicKey: []byte{'V'}}, nil
+	assert.NoError(t, b.ApplyToEveryValidator(func(idx int, val state.ReadOnlyValidator) (*ethpb.Validator, error) {
+		return &ethpb.Validator{PublicKey: []byte{'V'}}, nil
 	}))
 
 	// Ensure reference is properly accounted for.
@@ -899,8 +900,8 @@ func TestValidatorReferences_RemainsConsistent_Altair(t *testing.T) {
 
 	assert.DeepNotEqual(t, a.Validators()[0], b.Validators()[0], "validators are equal when they are supposed to be different")
 	// Modify all validators from copied state.
-	assert.NoError(t, b.ApplyToEveryValidator(func(idx int, val *ethpb.Validator) (bool, *ethpb.Validator, error) {
-		return true, &ethpb.Validator{PublicKey: []byte{'V'}}, nil
+	assert.NoError(t, b.ApplyToEveryValidator(func(idx int, val state.ReadOnlyValidator) (*ethpb.Validator, error) {
+		return &ethpb.Validator{PublicKey: []byte{'V'}}, nil
 	}))
 
 	// Ensure reference is properly accounted for.
@@ -934,8 +935,8 @@ func TestValidatorReferences_RemainsConsistent_Capella(t *testing.T) {
 
 	assert.DeepNotEqual(t, a.Validators()[0], b.Validators()[0], "validators are equal when they are supposed to be different")
 	// Modify all validators from copied state.
-	assert.NoError(t, b.ApplyToEveryValidator(func(idx int, val *ethpb.Validator) (bool, *ethpb.Validator, error) {
-		return true, &ethpb.Validator{PublicKey: []byte{'V'}}, nil
+	assert.NoError(t, b.ApplyToEveryValidator(func(idx int, val state.ReadOnlyValidator) (*ethpb.Validator, error) {
+		return &ethpb.Validator{PublicKey: []byte{'V'}}, nil
 	}))
 
 	// Ensure reference is properly accounted for.
@@ -969,8 +970,8 @@ func TestValidatorReferences_RemainsConsistent_Deneb(t *testing.T) {
 
 	assert.DeepNotEqual(t, a.Validators()[0], b.Validators()[0], "validators are equal when they are supposed to be different")
 	// Modify all validators from copied state.
-	assert.NoError(t, b.ApplyToEveryValidator(func(idx int, val *ethpb.Validator) (bool, *ethpb.Validator, error) {
-		return true, &ethpb.Validator{PublicKey: []byte{'V'}}, nil
+	assert.NoError(t, b.ApplyToEveryValidator(func(idx int, val state.ReadOnlyValidator) (*ethpb.Validator, error) {
+		return &ethpb.Validator{PublicKey: []byte{'V'}}, nil
 	}))
 
 	// Ensure reference is properly accounted for.
@@ -1004,14 +1005,50 @@ func TestValidatorReferences_RemainsConsistent_Bellatrix(t *testing.T) {
 
 	assert.DeepNotEqual(t, a.Validators()[0], b.Validators()[0], "validators are equal when they are supposed to be different")
 	// Modify all validators from copied state.
-	assert.NoError(t, b.ApplyToEveryValidator(func(idx int, val *ethpb.Validator) (bool, *ethpb.Validator, error) {
-		return true, &ethpb.Validator{PublicKey: []byte{'V'}}, nil
+	assert.NoError(t, b.ApplyToEveryValidator(func(idx int, val state.ReadOnlyValidator) (*ethpb.Validator, error) {
+		return &ethpb.Validator{PublicKey: []byte{'V'}}, nil
 	}))
 
 	// Ensure reference is properly accounted for.
 	assert.NoError(t, a.ReadFromEveryValidator(func(idx int, val state.ReadOnlyValidator) error {
 		assert.NotEqual(t, bytesutil.ToBytes48([]byte{'V'}), val.PublicKey())
 		return nil
+	}))
+}
+
+func TestValidatorReferences_ApplyValidator_BalancesRead(t *testing.T) {
+	resetCfg := features.InitWithReset(&features.Flags{
+		EnableExperimentalState: true,
+	})
+	defer resetCfg()
+	s, err := InitializeFromProtoUnsafeAltair(&ethpb.BeaconStateAltair{
+		Validators: []*ethpb.Validator{
+			{PublicKey: []byte{'A'}},
+			{PublicKey: []byte{'B'}},
+			{PublicKey: []byte{'C'}},
+			{PublicKey: []byte{'D'}},
+			{PublicKey: []byte{'E'}},
+		},
+		Balances: []uint64{0, 0, 0, 0, 0},
+	})
+	require.NoError(t, err)
+	a, ok := s.(*BeaconState)
+	require.Equal(t, true, ok)
+
+	// Create a second state.
+	copied := a.Copy()
+	b, ok := copied.(*BeaconState)
+	require.Equal(t, true, ok)
+
+	// Modify all validators from copied state, it should not deadlock.
+	assert.NoError(t, b.ApplyToEveryValidator(func(idx int, val state.ReadOnlyValidator) (*ethpb.Validator, error) {
+		b, err := b.BalanceAtIndex(0)
+		if err != nil {
+			return nil, err
+		}
+		newVal := val.Copy()
+		newVal.EffectiveBalance += b
+		return newVal, nil
 	}))
 }
 

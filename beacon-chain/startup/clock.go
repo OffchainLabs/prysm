@@ -3,8 +3,8 @@ package startup
 import (
 	"time"
 
-	types "github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/time/slots"
+	types "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
 // Nower is a function that can return the current time.
@@ -39,6 +39,11 @@ func (g *Clock) GenesisValidatorsRoot() [32]byte {
 func (g *Clock) CurrentSlot() types.Slot {
 	now := g.now()
 	return slots.Duration(g.t, now)
+}
+
+// SlotStart computes the time the given slot begins.
+func (g *Clock) SlotStart(slot types.Slot) time.Time {
+	return slots.BeginsAt(slot, g.t)
 }
 
 // Now provides a value for time.Now() that can be overridden in tests.

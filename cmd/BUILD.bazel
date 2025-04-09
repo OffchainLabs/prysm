@@ -10,7 +10,7 @@ go_library(
         "password_reader.go",
         "wrap_flags.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v4/cmd",
+    importpath = "github.com/prysmaticlabs/prysm/v5/cmd",
     visibility = ["//visibility:public"],
     deps = [
         "//config/fieldparams:go_default_library",
@@ -38,8 +38,8 @@ go_test(
         "//config/params:go_default_library",
         "//testing/assert:go_default_library",
         "//testing/require:go_default_library",
-        "@com_github_golang_mock//gomock:go_default_library",
         "@com_github_pkg_errors//:go_default_library",
         "@com_github_urfave_cli_v2//:go_default_library",
+        "@org_uber_go_mock//gomock:go_default_library",
     ],
 )

@@ -8,9 +8,8 @@ import (
 
 	"github.com/k0kubun/go-ansi"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/crypto/bls"
-	ethpbservice "github.com/prysmaticlabs/prysm/v4/proto/eth/service"
-	"github.com/prysmaticlabs/prysm/v4/validator/keymanager"
+	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
+	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
 	"github.com/schollz/progressbar/v3"
 	"github.com/sirupsen/logrus"
 	keystorev4 "github.com/wealdtech/go-eth2-wallet-encryptor-keystorev4"
@@ -26,7 +25,7 @@ func (km *Keymanager) ImportKeystores(
 	ctx context.Context,
 	keystores []*keymanager.Keystore,
 	passwords []string,
-) ([]*ethpbservice.ImportedKeystoreStatus, error) {
+) ([]*keymanager.KeyStatus, error) {
 	if len(passwords) == 0 {
 		return nil, ErrNoPasswords
 	}
@@ -36,7 +35,7 @@ func (km *Keymanager) ImportKeystores(
 	decryptor := keystorev4.New()
 	bar := initializeProgressBar(len(keystores), "Importing accounts...")
 	keys := map[string]string{}
-	statuses := make([]*ethpbservice.ImportedKeystoreStatus, len(keystores))
+	statuses := make([]*keymanager.KeyStatus, len(keystores))
 	var err error
 	// 1) Copy the in memory keystore
 	storeCopy := km.accountsStore.Copy()
@@ -50,8 +49,8 @@ func (km *Keymanager) ImportKeystores(
 		var pubKeyBytes []byte
 		privKeyBytes, pubKeyBytes, _, err = km.attemptDecryptKeystore(decryptor, keystores[i], passwords[i])
 		if err != nil {
-			statuses[i] = &ethpbservice.ImportedKeystoreStatus{
-				Status:  ethpbservice.ImportedKeystoreStatus_ERROR,
+			statuses[i] = &keymanager.KeyStatus{
+				Status:  keymanager.StatusError,
 				Message: err.Error(),
 			}
 			continue
@@ -64,16 +63,16 @@ func (km *Keymanager) ImportKeystores(
 		_, isDuplicateInExisting := existingPubKeys[string(pubKeyBytes)]
 		if isDuplicateInArray || isDuplicateInExisting {
 			log.Warnf("Duplicate key in import will be ignored: %#x", pubKeyBytes)
-			statuses[i] = &ethpbservice.ImportedKeystoreStatus{
-				Status: ethpbservice.ImportedKeystoreStatus_DUPLICATE,
+			statuses[i] = &keymanager.KeyStatus{
+				Status: keymanager.StatusDuplicate,
 			}
 			continue
 		}
 
 		keys[string(pubKeyBytes)] = string(privKeyBytes)
 		importedKeys = append(importedKeys, pubKeyBytes)
-		statuses[i] = &ethpbservice.ImportedKeystoreStatus{
-			Status: ethpbservice.ImportedKeystoreStatus_IMPORTED,
+		statuses[i] = &keymanager.KeyStatus{
+			Status: keymanager.StatusImported,
 		}
 	}
 	if len(importedKeys) == 0 {
@@ -86,13 +85,13 @@ func (km *Keymanager) ImportKeystores(
 		storeCopy.PublicKeys = append(storeCopy.PublicKeys, []byte(pubKey))
 		storeCopy.PrivateKeys = append(storeCopy.PrivateKeys, []byte(privKey))
 	}
-	//3 & 4) save to disk and re-initializes keystore
+	// 3) & 4) save to disk and re-initializes keystore
 	if err := km.SaveStoreAndReInitialize(ctx, storeCopy); err != nil {
 		return nil, err
 	}
 
 	log.WithFields(logrus.Fields{
-		"publicKeys": CreatePrintoutOfKeys(importedKeys),
+		"pubkeys": CreatePrintoutOfKeys(importedKeys),
 	}).Info("Successfully imported validator key(s)")
 
 	// 5) Return Statuses
@@ -112,10 +111,11 @@ func (km *Keymanager) ImportKeypairs(ctx context.Context, privKeys, pubKeys [][]
 	// 2) Update store and remove duplicates
 	updateAccountsStoreKeys(storeCopy, privKeys, pubKeys)
 
-	// 3 & 4) save to disk and re-initializes keystore
+	// 3) & 4) save to disk and re-initializes keystore
 	if err := km.SaveStoreAndReInitialize(ctx, storeCopy); err != nil {
 		return err
 	}
+
 	// 5) verify if store was not updated
 	if len(km.accountsStore.PublicKeys) < len(storeCopy.PublicKeys) {
 		return fmt.Errorf("keys were not imported successfully, expected %d got %d", len(storeCopy.PublicKeys), len(km.accountsStore.PublicKeys))
@@ -126,7 +126,7 @@ func (km *Keymanager) ImportKeypairs(ctx context.Context, privKeys, pubKeys [][]
 // Retrieves the private key and public key from an EIP-2335 keystore file
 // by decrypting using a specified password. If the password fails,
 // it prompts the user for the correct password until it confirms.
-func (_ *Keymanager) attemptDecryptKeystore(
+func (*Keymanager) attemptDecryptKeystore(
 	enc *keystorev4.Encryptor, keystore *keymanager.Keystore, password string,
 ) ([]byte, []byte, string, error) {
 	// Attempt to decrypt the keystore with the specifies password.

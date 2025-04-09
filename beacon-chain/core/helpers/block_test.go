@@ -5,13 +5,13 @@ import (
 	"math"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/helpers"
-	state_native "github.com/prysmaticlabs/prysm/v4/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
+	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func TestBlockRootAtSlot_CorrectBlockRoot(t *testing.T) {
@@ -60,6 +60,8 @@ func TestBlockRootAtSlot_CorrectBlockRoot(t *testing.T) {
 	}
 	for i, tt := range tests {
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+			helpers.ClearCache()
+
 			s.Slot = tt.stateSlot
 			state, err := state_native.InitializeFromProtoPhase0(s)
 			require.NoError(t, err)
@@ -110,6 +112,8 @@ func TestBlockRootAtSlot_OutOfBounds(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
+		helpers.ClearCache()
+
 		state.Slot = tt.stateSlot
 		s, err := state_native.InitializeFromProtoPhase0(state)
 		require.NoError(t, err)

@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	fssz "github.com/prysmaticlabs/fastssz"
-	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 )
 
 var _ fssz.HashRoot = (StateRoots)([][32]byte{})

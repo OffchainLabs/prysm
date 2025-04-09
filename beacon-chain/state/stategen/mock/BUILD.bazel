@@ -7,7 +7,7 @@ go_library(
         "mock.go",
         "replayer.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v4/beacon-chain/state/stategen/mock",
+    importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stategen/mock",
     visibility = ["//visibility:public"],
     deps = [
         "//beacon-chain/state:go_default_library",

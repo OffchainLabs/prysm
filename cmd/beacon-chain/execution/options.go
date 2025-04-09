@@ -6,10 +6,9 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/execution"
-	"github.com/prysmaticlabs/prysm/v4/cmd/beacon-chain/flags"
-	"github.com/prysmaticlabs/prysm/v4/io/file"
-	log "github.com/sirupsen/logrus"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/execution"
+	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
+	"github.com/prysmaticlabs/prysm/v5/io/file"
 	"github.com/urfave/cli/v2"
 )
 
@@ -53,7 +52,7 @@ func parseJWTSecretFromFile(c *cli.Context) ([]byte, error) {
 		return nil, err
 	}
 	strData := strings.TrimSpace(string(enc))
-	if len(strData) == 0 {
+	if strData == "" {
 		return nil, fmt.Errorf("provided JWT secret in file %s cannot be empty", jwtSecretFile)
 	}
 	secret, err := hex.DecodeString(strings.TrimPrefix(strData, "0x"))

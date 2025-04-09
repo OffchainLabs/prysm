@@ -1,18 +1,17 @@
 package util
 
 import (
-	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
 // HydrateBlobSidecar hydrates a blob sidecar with correct field length sizes
 // to comply with SSZ marshalling and unmarshalling rules.
 func HydrateBlobSidecar(b *ethpb.BlobSidecar) *ethpb.BlobSidecar {
-	if b.BlockRoot == nil {
-		b.BlockRoot = make([]byte, fieldparams.RootLength)
-	}
-	if b.BlockParentRoot == nil {
-		b.BlockParentRoot = make([]byte, fieldparams.RootLength)
+	if b.SignedBlockHeader == nil {
+		b.SignedBlockHeader = HydrateSignedBeaconHeader(&ethpb.SignedBeaconBlockHeader{
+			Header: &ethpb.BeaconBlockHeader{},
+		})
 	}
 	if b.Blob == nil {
 		b.Blob = make([]byte, fieldparams.BlobLength)
@@ -23,36 +22,18 @@ func HydrateBlobSidecar(b *ethpb.BlobSidecar) *ethpb.BlobSidecar {
 	if b.KzgProof == nil {
 		b.KzgProof = make([]byte, fieldparams.BLSPubkeyLength)
 	}
+
+	if b.CommitmentInclusionProof == nil {
+		b.CommitmentInclusionProof = HydrateCommitmentInclusionProofs()
+	}
 	return b
 }
 
-// HydrateSignedBlindedBlobSidecar hydrates a signed blinded blob sidecar with correct field length sizes
-// to comply with SSZ marshalling and unmarshalling rules.
-func HydrateSignedBlindedBlobSidecar(b *ethpb.SignedBlindedBlobSidecar) *ethpb.SignedBlindedBlobSidecar {
-	if b.Signature == nil {
-		b.Signature = make([]byte, fieldparams.BLSSignatureLength)
+// HydrateCommitmentInclusionProofs returns 2d byte slice of Commitment Inclusion Proofs
+func HydrateCommitmentInclusionProofs() [][]byte {
+	r := make([][]byte, fieldparams.KzgCommitmentInclusionProofDepth)
+	for i := range r {
+		r[i] = make([]byte, fieldparams.RootLength)
 	}
-	b.Message = HydrateBlindedBlobSidecar(b.Message)
-	return b
-}
-
-// HydrateBlindedBlobSidecar hydrates a blinded blob sidecar with correct field length sizes
-// to comply with SSZ marshalling and unmarshalling rules.
-func HydrateBlindedBlobSidecar(b *ethpb.BlindedBlobSidecar) *ethpb.BlindedBlobSidecar {
-	if b.BlockRoot == nil {
-		b.BlockRoot = make([]byte, fieldparams.RootLength)
-	}
-	if b.BlockParentRoot == nil {
-		b.BlockParentRoot = make([]byte, fieldparams.RootLength)
-	}
-	if b.KzgCommitment == nil {
-		b.KzgCommitment = make([]byte, fieldparams.BLSPubkeyLength)
-	}
-	if b.KzgProof == nil {
-		b.KzgProof = make([]byte, fieldparams.BLSPubkeyLength)
-	}
-	if b.BlobRoot == nil {
-		b.BlobRoot = make([]byte, fieldparams.RootLength)
-	}
-	return b
+	return r
 }

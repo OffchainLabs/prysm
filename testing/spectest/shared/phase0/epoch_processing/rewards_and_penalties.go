@@ -5,11 +5,11 @@ import (
 	"path"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/epoch/precompute"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/testing/spectest/utils"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/epoch/precompute"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/spectest/utils"
 )
 
 // RunRewardsAndPenaltiesTests executes "epoch_processing/rewards_and_penalties" tests.

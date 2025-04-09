@@ -11,13 +11,13 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p"
-	"github.com/prysmaticlabs/prysm/v4/network/forks"
-	eth "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	e2e "github.com/prysmaticlabs/prysm/v4/testing/endtoend/params"
-	"github.com/prysmaticlabs/prysm/v4/testing/endtoend/policies"
-	"github.com/prysmaticlabs/prysm/v4/testing/endtoend/types"
-	"github.com/prysmaticlabs/prysm/v4/time/slots"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
+	"github.com/prysmaticlabs/prysm/v5/network/forks"
+	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	e2e "github.com/prysmaticlabs/prysm/v5/testing/endtoend/params"
+	"github.com/prysmaticlabs/prysm/v5/testing/endtoend/policies"
+	"github.com/prysmaticlabs/prysm/v5/testing/endtoend/types"
+	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
@@ -207,7 +207,7 @@ func valueOfTopic(pageContent, topic string) (int, error) {
 	}
 	var result float64
 	for i, stringIndex := range indexesFound {
-		// Only performing every third result found since theres 2 comments above every metric.
+		// Only performing every third result found since there are 2 comments above every metric.
 		if i == 0 || i%2 != 0 {
 			continue
 		}

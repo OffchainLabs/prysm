@@ -6,7 +6,7 @@ go_library(
         "clock.go",
         "synchronizer.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v4/beacon-chain/startup",
+    importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/startup",
     visibility = ["//visibility:public"],
     deps = [
         "//consensus-types/primitives:go_default_library",

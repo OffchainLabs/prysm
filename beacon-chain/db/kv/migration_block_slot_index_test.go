@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 	"go.etcd.io/bbolt"
 )
 

@@ -11,22 +11,22 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
-	"github.com/prysmaticlabs/prysm/v4/cmd/validator/flags"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	types "github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/crypto/bls"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	validatormock "github.com/prysmaticlabs/prysm/v4/testing/validator-mock"
-	"github.com/prysmaticlabs/prysm/v4/validator/keymanager"
-	"github.com/prysmaticlabs/prysm/v4/validator/keymanager/derived"
-	"github.com/prysmaticlabs/prysm/v4/validator/keymanager/local"
-	constant "github.com/prysmaticlabs/prysm/v4/validator/testing"
+	"github.com/prysmaticlabs/prysm/v5/cmd/validator/flags"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	types "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	validatormock "github.com/prysmaticlabs/prysm/v5/testing/validator-mock"
+	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
+	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/derived"
+	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/local"
+	constant "github.com/prysmaticlabs/prysm/v5/validator/testing"
 	"github.com/urfave/cli/v2"
 	keystorev4 "github.com/wealdtech/go-eth2-wallet-encryptor-keystorev4"
+	"go.uber.org/mock/gomock"
 )
 
 const (
@@ -65,7 +65,7 @@ func setupWalletCtx(
 	set.String(flags.DeletePublicKeysFlag.Name, cfg.deletePublicKeys, "")
 	set.String(flags.VoluntaryExitPublicKeysFlag.Name, cfg.voluntaryExitPublicKeys, "")
 	set.String(flags.BackupDirFlag.Name, cfg.backupDir, "")
-	set.String(flags.BackupPasswordFile.Name, cfg.backupPasswordFile, "")
+	set.String(flags.BackupPasswordFileFlag.Name, cfg.backupPasswordFile, "")
 	set.String(flags.BackupPublicKeysFlag.Name, cfg.backupPublicKeys, "")
 	set.String(flags.WalletPasswordFileFlag.Name, cfg.walletPasswordFile, "")
 	set.String(flags.AccountPasswordFileFlag.Name, cfg.accountPasswordFile, "")
@@ -73,7 +73,7 @@ func setupWalletCtx(
 	set.Bool(flags.SkipDepositConfirmationFlag.Name, cfg.skipDepositConfirm, "")
 	set.Bool(flags.SkipMnemonic25thWordCheckFlag.Name, true, "")
 	set.Bool(flags.ExitAllFlag.Name, cfg.exitAll, "")
-	set.String(flags.GrpcHeadersFlag.Name, cfg.grpcHeaders, "")
+	set.String(flags.GRPCHeadersFlag.Name, cfg.grpcHeaders, "")
 
 	if cfg.privateKeyFile != "" {
 		set.String(flags.ImportPrivateKeyFileFlag.Name, cfg.privateKeyFile, "")
@@ -87,13 +87,13 @@ func setupWalletCtx(
 	assert.NoError(tb, set.Set(flags.VoluntaryExitPublicKeysFlag.Name, cfg.voluntaryExitPublicKeys))
 	assert.NoError(tb, set.Set(flags.BackupDirFlag.Name, cfg.backupDir))
 	assert.NoError(tb, set.Set(flags.BackupPublicKeysFlag.Name, cfg.backupPublicKeys))
-	assert.NoError(tb, set.Set(flags.BackupPasswordFile.Name, cfg.backupPasswordFile))
+	assert.NoError(tb, set.Set(flags.BackupPasswordFileFlag.Name, cfg.backupPasswordFile))
 	assert.NoError(tb, set.Set(flags.WalletPasswordFileFlag.Name, cfg.walletPasswordFile))
 	assert.NoError(tb, set.Set(flags.AccountPasswordFileFlag.Name, cfg.accountPasswordFile))
 	assert.NoError(tb, set.Set(flags.NumAccountsFlag.Name, strconv.Itoa(int(cfg.numAccounts))))
 	assert.NoError(tb, set.Set(flags.SkipDepositConfirmationFlag.Name, strconv.FormatBool(cfg.skipDepositConfirm)))
 	assert.NoError(tb, set.Set(flags.ExitAllFlag.Name, strconv.FormatBool(cfg.exitAll)))
-	assert.NoError(tb, set.Set(flags.GrpcHeadersFlag.Name, cfg.grpcHeaders))
+	assert.NoError(tb, set.Set(flags.GRPCHeadersFlag.Name, cfg.grpcHeaders))
 	return cli.NewContext(&app, set, nil)
 }
 
@@ -171,7 +171,6 @@ func TestListAccounts_LocalKeymanager(t *testing.T) {
 		t,
 		km.ListKeymanagerAccounts(cliCtx.Context,
 			keymanager.ListKeymanagerAccountConfig{
-				ShowDepositData: true,
 				ShowPrivateKeys: true,
 			}),
 	)
@@ -190,36 +189,30 @@ func TestListAccounts_LocalKeymanager(t *testing.T) {
 		(keymanager kind) local wallet
 
 		Showing 5 validator accounts
-		View the eth1 deposit transaction data for your accounts by running `validator accounts list --show-deposit-data
 
 		Account 0 | fully-evolving-fawn
 		[validating public key] 0xa6669aa0381c06470b9a6faf8abf4194ad5148a62e461cbef5a6bc4d292026f58b992c4cf40e50552d301cef19da75b9
 		[validating private key] 0x50cabc13435fcbde9d240fe720aff84f8557a6c1c445211b904f1a9620668241
-		If you imported your account coming from the Ethereum launchpad, you will find your deposit_data.json in the eth2.0-deposit-cli's validator_keys folder
 
 
 		Account 1 | preferably-mighty-heron
 		[validating public key] 0xa7ea37fa2e2272762ffed8486f09b13cd56d76cf03a2a3e75bc36bd1719add84c20597671750be5bc1ccd3dadfebc30f
 		[validating private key] 0x44563da0d11bc6a7219d18217cce8cdd064de3ebee5cdcf8d901c2fae7545116
-		If you imported your account coming from the Ethereum eth2 launchpad, you will find your deposit_data.json in the eth2.0-deposit-cli's validator_keys folder
 
 
 		Account 2 | conversely-good-monitor
 		[validating public key] 0xa4c63619fb8cb87f6dd1686c9255f99c68066797bf284488ecbab64b1926d33eefdf96d1ee89ae4a89e84e7fb019d5e5
 		[validating private key] 0x4448d0ab17ecd73bbb636ddbfc89b181731f6cd88c33f2cecc0d04cba1a18447
-		If you imported your account coming from the Ethereum eth2 launchpad, you will find your deposit_data.json in the eth2.0-deposit-cli's validator_keys folder
 
 
 		Account 3 | rarely-joint-mako
 		[validating public key] 0x91dd8d5bfc22aea398740ebcea66ced159df8d3f1a066d7aba9f0bef4ed6d9687fc1fd1c87bd2b6d12b0788dfb6a7d20
 		[validating private key] 0x4d1944bd7375185f70b3e70c68d9e6307f2009de3a4cf47ca5217443ddf81fc9
-		If you imported your account coming from the Ethereum eth2 launchpad, you will find your deposit_data.json in the eth2.0-deposit-cli's validator_keys folder
 
 
 		Account 4 | mainly-useful-catfish
 		[validating public key] 0x83c4d722a98b599e2666bbe35146ff44800256190bc662f2dd5efbc0c4c0d57e5d297487a4f9c21a932d3b1b40e8379f
 		[validating private key] 0x284cd65030496bf82ee2d52963cd540a1abb2cc738b8164901bbe7e2df4d57bd
-		If you imported your account coming from the Ethereum eth2 launchpad, you will find your deposit_data.json in the eth2.0-deposit-cli's validator_keys folder
 
 
 
@@ -227,7 +220,7 @@ func TestListAccounts_LocalKeymanager(t *testing.T) {
 
 	// Expected output format definition
 	const prologLength = 4
-	const accountLength = 6
+	const accountLength = 4
 	const epilogLength = 2
 	const nameOffset = 1
 	const keyOffset = 2

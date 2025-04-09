@@ -6,19 +6,20 @@ import (
 	"time"
 
 	"github.com/paulbellamy/ratecounter"
-	"github.com/prysmaticlabs/prysm/v4/async/abool"
-	mock "github.com/prysmaticlabs/prysm/v4/beacon-chain/blockchain/testing"
-	dbtest "github.com/prysmaticlabs/prysm/v4/beacon-chain/db/testing"
-	p2pt "github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p/testing"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/startup"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/container/slice"
-	eth "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/testing/util"
+	"github.com/prysmaticlabs/prysm/v5/async/abool"
+	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/das"
+	dbtest "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
+	p2pt "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/container/slice"
+	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/util"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
@@ -371,11 +372,11 @@ func TestService_processBlock(t *testing.T) {
 		require.NoError(t, err)
 		rowsb, err := blocks.NewROBlock(wsb)
 		require.NoError(t, err)
-		err = s.processBlock(ctx, genesis, blocks.BlockWithVerifiedBlobs{Block: rowsb}, func(
-			ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte) error {
-			assert.NoError(t, s.cfg.Chain.ReceiveBlock(ctx, block, blockRoot))
+		err = s.processBlock(ctx, genesis, blocks.BlockWithROBlobs{Block: rowsb}, func(
+			ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte, _ das.AvailabilityStore) error {
+			assert.NoError(t, s.cfg.Chain.ReceiveBlock(ctx, block, blockRoot, nil))
 			return nil
-		})
+		}, nil)
 		assert.NoError(t, err)
 
 		// Duplicate processing should trigger error.
@@ -383,10 +384,10 @@ func TestService_processBlock(t *testing.T) {
 		require.NoError(t, err)
 		rowsb, err = blocks.NewROBlock(wsb)
 		require.NoError(t, err)
-		err = s.processBlock(ctx, genesis, blocks.BlockWithVerifiedBlobs{Block: rowsb}, func(
-			ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte) error {
+		err = s.processBlock(ctx, genesis, blocks.BlockWithROBlobs{Block: rowsb}, func(
+			ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte, _ das.AvailabilityStore) error {
 			return nil
-		})
+		}, nil)
 		assert.ErrorContains(t, errBlockAlreadyProcessed.Error(), err)
 
 		// Continue normal processing, should proceed w/o errors.
@@ -394,11 +395,11 @@ func TestService_processBlock(t *testing.T) {
 		require.NoError(t, err)
 		rowsb, err = blocks.NewROBlock(wsb)
 		require.NoError(t, err)
-		err = s.processBlock(ctx, genesis, blocks.BlockWithVerifiedBlobs{Block: rowsb}, func(
-			ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte) error {
-			assert.NoError(t, s.cfg.Chain.ReceiveBlock(ctx, block, blockRoot))
+		err = s.processBlock(ctx, genesis, blocks.BlockWithROBlobs{Block: rowsb}, func(
+			ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte, _ das.AvailabilityStore) error {
+			assert.NoError(t, s.cfg.Chain.ReceiveBlock(ctx, block, blockRoot, nil))
 			return nil
-		})
+		}, nil)
 		assert.NoError(t, err)
 		assert.Equal(t, primitives.Slot(2), s.cfg.Chain.HeadSlot(), "Unexpected head slot")
 	})
@@ -429,7 +430,7 @@ func TestService_processBlockBatch(t *testing.T) {
 	genesis := makeGenesisTime(32)
 
 	t.Run("process non-linear batch", func(t *testing.T) {
-		var batch []blocks.BlockWithVerifiedBlobs
+		var batch []blocks.BlockWithROBlobs
 		currBlockRoot := genesisBlkRoot
 		for i := primitives.Slot(1); i < 10; i++ {
 			parentRoot := currBlockRoot
@@ -443,11 +444,11 @@ func TestService_processBlockBatch(t *testing.T) {
 			require.NoError(t, err)
 			rowsb, err := blocks.NewROBlock(wsb)
 			require.NoError(t, err)
-			batch = append(batch, blocks.BlockWithVerifiedBlobs{Block: rowsb})
+			batch = append(batch, blocks.BlockWithROBlobs{Block: rowsb})
 			currBlockRoot = blk1Root
 		}
 
-		var batch2 []blocks.BlockWithVerifiedBlobs
+		var batch2 []blocks.BlockWithROBlobs
 		for i := primitives.Slot(10); i < 20; i++ {
 			parentRoot := currBlockRoot
 			blk1 := util.NewBeaconBlock()
@@ -460,19 +461,19 @@ func TestService_processBlockBatch(t *testing.T) {
 			require.NoError(t, err)
 			rowsb, err := blocks.NewROBlock(wsb)
 			require.NoError(t, err)
-			batch2 = append(batch2, blocks.BlockWithVerifiedBlobs{Block: rowsb})
+			batch2 = append(batch2, blocks.BlockWithROBlobs{Block: rowsb})
 			currBlockRoot = blk1Root
 		}
 
-		cbnormal := func(ctx context.Context, blks []blocks.ROBlock) error {
-			assert.NoError(t, s.cfg.Chain.ReceiveBlockBatch(ctx, blks))
+		cbnormal := func(ctx context.Context, blks []blocks.ROBlock, avs das.AvailabilityStore) error {
+			assert.NoError(t, s.cfg.Chain.ReceiveBlockBatch(ctx, blks, avs))
 			return nil
 		}
 		// Process block normally.
 		err = s.processBatchedBlocks(ctx, genesis, batch, cbnormal)
 		assert.NoError(t, err)
 
-		cbnil := func(ctx context.Context, blocks []blocks.ROBlock) error {
+		cbnil := func(ctx context.Context, blocks []blocks.ROBlock, _ das.AvailabilityStore) error {
 			return nil
 		}
 
@@ -480,7 +481,7 @@ func TestService_processBlockBatch(t *testing.T) {
 		err = s.processBatchedBlocks(ctx, genesis, batch, cbnil)
 		assert.ErrorContains(t, "block is already processed", err)
 
-		var badBatch2 []blocks.BlockWithVerifiedBlobs
+		var badBatch2 []blocks.BlockWithROBlobs
 		for i, b := range batch2 {
 			// create a non-linear batch
 			if i%3 == 0 && i != 0 {
@@ -675,7 +676,7 @@ func TestService_ValidUnprocessed(t *testing.T) {
 	require.NoError(t, err)
 	util.SaveBlock(t, context.Background(), beaconDB, genesisBlk)
 
-	var batch []blocks.BlockWithVerifiedBlobs
+	var batch []blocks.BlockWithROBlobs
 	currBlockRoot := genesisBlkRoot
 	for i := primitives.Slot(1); i < 10; i++ {
 		parentRoot := currBlockRoot
@@ -689,7 +690,7 @@ func TestService_ValidUnprocessed(t *testing.T) {
 		require.NoError(t, err)
 		rowsb, err := blocks.NewROBlock(wsb)
 		require.NoError(t, err)
-		batch = append(batch, blocks.BlockWithVerifiedBlobs{Block: rowsb})
+		batch = append(batch, blocks.BlockWithROBlobs{Block: rowsb})
 		currBlockRoot = blk1Root
 	}
 

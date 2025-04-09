@@ -1,9 +1,8 @@
 package p2p
 
 import (
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p/encoder"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/time/slots"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
 // A background routine which listens for new and upcoming forks and
@@ -18,7 +17,9 @@ func (s *Service) forkWatcher() {
 			if currEpoch == params.BeaconConfig().AltairForkEpoch ||
 				currEpoch == params.BeaconConfig().BellatrixForkEpoch ||
 				currEpoch == params.BeaconConfig().CapellaForkEpoch ||
-				currEpoch == params.BeaconConfig().DenebForkEpoch {
+				currEpoch == params.BeaconConfig().DenebForkEpoch ||
+				currEpoch == params.BeaconConfig().ElectraForkEpoch ||
+				currEpoch == params.BeaconConfig().FuluForkEpoch {
 				// If we are in the fork epoch, we update our enr with
 				// the updated fork digest. These repeatedly does
 				// this over the epoch, which might be slightly wasteful
@@ -28,12 +29,6 @@ func (s *Service) forkWatcher() {
 					if err != nil {
 						log.WithError(err).Error("Could not add fork entry")
 					}
-				}
-
-				// from Bellatrix Epoch, the MaxGossipSize and the MaxChunkSize is changed to 10Mb.
-				if currEpoch == params.BeaconConfig().BellatrixForkEpoch {
-					encoder.SetMaxGossipSizeForBellatrix()
-					encoder.SetMaxChunkSizeForBellatrix()
 				}
 			}
 		case <-s.ctx.Done():

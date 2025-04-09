@@ -4,11 +4,11 @@ load("@io_bazel_rules_go//go:def.bzl", "go_binary")
 go_library(
     name = "go_default_library",
     srcs = ["main.go"],
-    importpath = "github.com/prysmaticlabs/prysm/v4/tools/blocktree",
+    importpath = "github.com/prysmaticlabs/prysm/v5/tools/blocktree",
     visibility = ["//visibility:private"],
     deps = [
-        "//beacon-chain/db:go_default_library",
         "//beacon-chain/db/filters:go_default_library",
+        "//beacon-chain/db/kv:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "@com_github_emicklei_dot//:go_default_library",
     ],

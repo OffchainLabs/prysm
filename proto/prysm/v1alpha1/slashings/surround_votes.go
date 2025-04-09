@@ -1,6 +1,6 @@
 package slashings
 
-import ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+import ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 
 // IsSurround checks if an attestation, a, is surrounding
 // another one, b, based on the Ethereum slashing conditions specified
@@ -10,6 +10,6 @@ import ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
 //	t: target
 //
 //	a surrounds b if: s_a < s_b and t_b < t_a
-func IsSurround(a, b *ethpb.IndexedAttestation) bool {
-	return a.Data.Source.Epoch < b.Data.Source.Epoch && b.Data.Target.Epoch < a.Data.Target.Epoch
+func IsSurround(a, b ethpb.IndexedAtt) bool {
+	return a.GetData().Source.Epoch < b.GetData().Source.Epoch && b.GetData().Target.Epoch < a.GetData().Target.Epoch
 }

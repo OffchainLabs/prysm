@@ -4,7 +4,7 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 go_library(
     name = "go_default_library",
     srcs = ["main.go"],
-    importpath = "github.com/prysmaticlabs/prysm/v4/tools/keystores",
+    importpath = "github.com/prysmaticlabs/prysm/v5/tools/keystores",
     visibility = ["//visibility:private"],
     deps = [
         "//crypto/bls:go_default_library",

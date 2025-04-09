@@ -21,11 +21,11 @@ const (
 
 	// High watermark buffer signifies the buffer till which
 	// we will handle inbound requests.
-	highWatermarkBuffer = 10
+	highWatermarkBuffer = 20
 )
 
 // InterceptPeerDial tests whether we're permitted to Dial the specified peer.
-func (_ *Service) InterceptPeerDial(_ peer.ID) (allow bool) {
+func (*Service) InterceptPeerDial(_ peer.ID) (allow bool) {
 	return true
 }
 
@@ -33,7 +33,7 @@ func (_ *Service) InterceptPeerDial(_ peer.ID) (allow bool) {
 // multiaddr for the given peer.
 func (s *Service) InterceptAddrDial(pid peer.ID, m multiaddr.Multiaddr) (allow bool) {
 	// Disallow bad peers from dialing in.
-	if s.peers.IsBad(pid) {
+	if s.peers.IsBad(pid) != nil {
 		return false
 	}
 	return filterConnections(s.addrFilter, m)
@@ -63,12 +63,12 @@ func (s *Service) InterceptAccept(n network.ConnMultiaddrs) (allow bool) {
 
 // InterceptSecured tests whether a given connection, now authenticated,
 // is allowed.
-func (_ *Service) InterceptSecured(_ network.Direction, _ peer.ID, _ network.ConnMultiaddrs) (allow bool) {
+func (*Service) InterceptSecured(_ network.Direction, _ peer.ID, _ network.ConnMultiaddrs) (allow bool) {
 	return true
 }
 
 // InterceptUpgraded tests whether a fully capable connection is allowed.
-func (_ *Service) InterceptUpgraded(_ network.Conn) (allow bool, reason control.DisconnectReason) {
+func (*Service) InterceptUpgraded(_ network.Conn) (allow bool, reason control.DisconnectReason) {
 	return true, 0
 }
 

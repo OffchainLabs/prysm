@@ -12,30 +12,30 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pubsubpb "github.com/libp2p/go-libp2p-pubsub/pb"
 	gcache "github.com/patrickmn/go-cache"
-	"github.com/prysmaticlabs/prysm/v4/async/abool"
-	mock "github.com/prysmaticlabs/prysm/v4/beacon-chain/blockchain/testing"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/signing"
-	coreTime "github.com/prysmaticlabs/prysm/v4/beacon-chain/core/time"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/transition"
-	dbtest "github.com/prysmaticlabs/prysm/v4/beacon-chain/db/testing"
-	doublylinkedtree "github.com/prysmaticlabs/prysm/v4/beacon-chain/forkchoice/doubly-linked-tree"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/operations/attestations"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p"
-	p2ptest "github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p/testing"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/startup"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state/stategen"
-	mockSync "github.com/prysmaticlabs/prysm/v4/beacon-chain/sync/initial-sync/testing"
-	lruwrpr "github.com/prysmaticlabs/prysm/v4/cache/lru"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/testing/util"
+	"github.com/prysmaticlabs/prysm/v5/async/abool"
+	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
+	coreTime "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
+	dbtest "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
+	doublylinkedtree "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/doubly-linked-tree"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/attestations"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
+	p2ptest "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stategen"
+	mockSync "github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/initial-sync/testing"
+	lruwrpr "github.com/prysmaticlabs/prysm/v5/cache/lru"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/util"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
@@ -554,7 +554,8 @@ func TestValidateBeaconBlockPubSub_IgnoreAndQueueBlocksFromNearFuture(t *testing
 		FinalizedCheckPoint: &ethpb.Checkpoint{
 			Epoch: 0,
 			Root:  make([]byte, 32),
-		}}
+		},
+		State: beaconState}
 	r := &Service{
 		cfg: &config{
 			p2p:           p,
@@ -950,8 +951,8 @@ func TestValidateBeaconBlockPubSub_InvalidParentBlock(t *testing.T) {
 		},
 	}
 	res, err := r.validateBeaconBlockPubSub(ctx, "", m)
-	require.ErrorContains(t, "unknown parent for block", err)
-	assert.Equal(t, res, pubsub.ValidationIgnore, "block with invalid parent should be ignored")
+	require.ErrorContains(t, "could not unmarshal bytes into signature", err)
+	assert.Equal(t, res, pubsub.ValidationReject, "block with invalid signature should be rejected")
 
 	require.NoError(t, copied.SetSlot(2))
 	proposerIdx, err = helpers.BeaconProposerIndex(ctx, copied)
@@ -961,6 +962,8 @@ func TestValidateBeaconBlockPubSub_InvalidParentBlock(t *testing.T) {
 	msg.Block.Slot = 2
 	msg.Block.ProposerIndex = proposerIdx
 	msg.Block.ParentRoot = currBlockRoot[:]
+	msg.Signature, err = signing.ComputeDomainAndSign(beaconState, 0, msg.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[proposerIdx])
+	require.NoError(t, err)
 
 	buf = new(bytes.Buffer)
 	_, err = p.Encoding().EncodeGossip(buf, msg)
@@ -980,9 +983,73 @@ func TestValidateBeaconBlockPubSub_InvalidParentBlock(t *testing.T) {
 	r.cfg.clock = startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot)
 
 	res, err = r.validateBeaconBlockPubSub(ctx, "", m)
-	require.ErrorContains(t, "unknown parent for block", err)
+	require.ErrorContains(t, "has an invalid parent", err)
 	// Expect block with bad parent to fail too
-	assert.Equal(t, res, pubsub.ValidationIgnore, "block with invalid parent should be ignored")
+	assert.Equal(t, res, pubsub.ValidationReject, "block with invalid parent should be ignored")
+}
+
+func TestValidateBeaconBlockPubSub_InsertValidPendingBlock(t *testing.T) {
+	db := dbtest.SetupDB(t)
+	p := p2ptest.NewTestP2P(t)
+	ctx := context.Background()
+	beaconState, privKeys := util.DeterministicGenesisState(t, 100)
+	parentBlock := util.NewBeaconBlock()
+	util.SaveBlock(t, ctx, db, parentBlock)
+	bRoot, err := parentBlock.Block.HashTreeRoot()
+	require.NoError(t, err)
+	require.NoError(t, db.SaveState(ctx, beaconState, bRoot))
+	require.NoError(t, db.SaveStateSummary(ctx, &ethpb.StateSummary{Root: bRoot[:]}))
+	copied := beaconState.Copy()
+	require.NoError(t, copied.SetSlot(1))
+	proposerIdx, err := helpers.BeaconProposerIndex(ctx, copied)
+	require.NoError(t, err)
+	msg := util.NewBeaconBlock()
+	msg.Block.ProposerIndex = proposerIdx
+	msg.Block.Slot = 1
+	msg.Block.ParentRoot = bRoot[:]
+	msg.Signature, err = signing.ComputeDomainAndSign(beaconState, 0, msg.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[proposerIdx])
+	require.NoError(t, err)
+
+	stateGen := stategen.New(db, doublylinkedtree.New())
+	chainService := &mock.ChainService{Genesis: time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot), 0),
+		State: beaconState,
+		FinalizedCheckPoint: &ethpb.Checkpoint{
+			Epoch: 0,
+		}}
+	r := &Service{
+		cfg: &config{
+			beaconDB:      db,
+			p2p:           p,
+			initialSync:   &mockSync.Sync{IsSyncing: false},
+			chain:         chainService,
+			clock:         startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot),
+			blockNotifier: chainService.BlockNotifier(),
+			stateGen:      stateGen,
+		},
+		seenBlockCache:      lruwrpr.New(10),
+		badBlockCache:       lruwrpr.New(10),
+		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
+		seenPendingBlocks:   make(map[[32]byte]bool),
+	}
+	buf := new(bytes.Buffer)
+	_, err = p.Encoding().EncodeGossip(buf, msg)
+	require.NoError(t, err)
+	topic := p2p.GossipTypeMapping[reflect.TypeOf(msg)]
+	digest, err := r.currentForkDigest()
+	assert.NoError(t, err)
+	topic = r.addDigestToTopic(topic, digest)
+	m := &pubsub.Message{
+		Message: &pubsubpb.Message{
+			Data:  buf.Bytes(),
+			Topic: &topic,
+		},
+	}
+	res, err := r.validateBeaconBlockPubSub(ctx, "", m)
+	require.ErrorContains(t, "unknown parent for block", err)
+	assert.Equal(t, res, pubsub.ValidationIgnore, "block with unknown parent should be ignored")
+	bRoot, err = msg.Block.HashTreeRoot()
+	assert.NoError(t, err)
+	assert.Equal(t, true, r.seenPendingBlocks[bRoot])
 }
 
 func TestValidateBeaconBlockPubSub_RejectBlocksFromBadParent(t *testing.T) {

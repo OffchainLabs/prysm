@@ -6,20 +6,20 @@ import (
 	"time"
 
 	gcache "github.com/patrickmn/go-cache"
-	"github.com/prysmaticlabs/prysm/v4/async/abool"
-	mockChain "github.com/prysmaticlabs/prysm/v4/beacon-chain/blockchain/testing"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/feed"
-	dbTest "github.com/prysmaticlabs/prysm/v4/beacon-chain/db/testing"
-	p2ptest "github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p/testing"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/startup"
-	state_native "github.com/prysmaticlabs/prysm/v4/beacon-chain/state/state-native"
-	mockSync "github.com/prysmaticlabs/prysm/v4/beacon-chain/sync/initial-sync/testing"
-	"github.com/prysmaticlabs/prysm/v4/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/testing/util"
+	"github.com/prysmaticlabs/prysm/v5/async/abool"
+	mockChain "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
+	dbTest "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
+	p2ptest "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
+	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
+	mockSync "github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/initial-sync/testing"
+	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/util"
 )
 
 func TestService_StatusZeroEpoch(t *testing.T) {
@@ -62,7 +62,7 @@ func TestSyncHandlers_WaitToSync(t *testing.T) {
 	}
 
 	topic := "/eth2/%x/beacon_block"
-	go r.registerHandlers()
+	go r.startTasksPostInitialSync()
 	time.Sleep(100 * time.Millisecond)
 
 	var vr [32]byte
@@ -143,7 +143,7 @@ func TestSyncHandlers_WaitTillSynced(t *testing.T) {
 
 	syncCompleteCh := make(chan bool)
 	go func() {
-		r.registerHandlers()
+		r.startTasksPostInitialSync()
 		syncCompleteCh <- true
 	}()
 
@@ -200,7 +200,7 @@ func TestSyncService_StopCleanly(t *testing.T) {
 		initialSyncComplete: make(chan struct{}),
 	}
 
-	go r.registerHandlers()
+	go r.startTasksPostInitialSync()
 	var vr [32]byte
 	require.NoError(t, gs.SetClock(startup.NewClock(time.Now(), vr)))
 	r.waitForChainStart()
@@ -219,7 +219,7 @@ func TestSyncService_StopCleanly(t *testing.T) {
 	require.NotEqual(t, 0, len(r.cfg.p2p.PubSub().GetTopics()))
 	require.NotEqual(t, 0, len(r.cfg.p2p.Host().Mux().Protocols()))
 
-	// Both pubsub and rpc topcis should be unsubscribed.
+	// Both pubsub and rpc topics should be unsubscribed.
 	require.NoError(t, r.Stop())
 
 	// Sleep to allow pubsub topics to be deregistered.

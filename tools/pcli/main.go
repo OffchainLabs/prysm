@@ -11,28 +11,299 @@ import (
 	"time"
 
 	"github.com/kr/pretty"
+	"github.com/pkg/errors"
 	fssz "github.com/prysmaticlabs/fastssz"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/transition"
-	state_native "github.com/prysmaticlabs/prysm/v4/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v4/encoding/ssz/equality"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	prefixed "github.com/prysmaticlabs/prysm/v4/runtime/logging/logrus-prefixed-formatter"
-	"github.com/prysmaticlabs/prysm/v4/runtime/version"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/epoch/precompute"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
+	"github.com/prysmaticlabs/prysm/v5/encoding/ssz/detect"
+	"github.com/prysmaticlabs/prysm/v5/encoding/ssz/equality"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	prefixed "github.com/prysmaticlabs/prysm/v5/runtime/logging/logrus-prefixed-formatter"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 	"gopkg.in/d4l3k/messagediff.v1"
 )
 
-func main() {
-	var blockPath string
-	var preStatePath string
-	var expectedPostStatePath string
-	var sszPath string
-	var sszType string
+var blockPath string
+var preStatePath string
+var expectedPostStatePath string
+var network string
+var sszPath string
+var sszType string
+var prettyCommand = &cli.Command{
+	Name:    "pretty",
+	Aliases: []string{"p"},
+	Usage:   "pretty-print SSZ data",
+	Flags: []cli.Flag{
+		&cli.StringFlag{
+			Name:        "ssz-path",
+			Usage:       "Path to file(ssz)",
+			Required:    true,
+			Destination: &sszPath,
+		},
+		&cli.StringFlag{
+			Name: "data-type",
+			Usage: "ssz file data type: " +
+				"block|" +
+				"blinded_block|" +
+				"signed_block|" +
+				"attestation|" +
+				"block_header|" +
+				"deposit|" +
+				"proposer_slashing|" +
+				"signed_block_header|" +
+				"signed_voluntary_exit|" +
+				"voluntary_exit|" +
+				"state_capella",
+			Required:    true,
+			Destination: &sszType,
+		},
+	},
+	Action: func(c *cli.Context) error {
+		var data fssz.Unmarshaler
+		switch sszType {
+		case "block":
+			data = &ethpb.BeaconBlock{}
+		case "signed_block":
+			data = &ethpb.SignedBeaconBlock{}
+		case "blinded_block":
+			data = &ethpb.BlindedBeaconBlockBellatrix{}
+		case "attestation":
+			data = &ethpb.Attestation{}
+		case "block_header":
+			data = &ethpb.BeaconBlockHeader{}
+		case "deposit":
+			data = &ethpb.Deposit{}
+		case "deposit_message":
+			data = &ethpb.DepositMessage{}
+		case "proposer_slashing":
+			data = &ethpb.ProposerSlashing{}
+		case "signed_block_header":
+			data = &ethpb.SignedBeaconBlockHeader{}
+		case "signed_voluntary_exit":
+			data = &ethpb.SignedVoluntaryExit{}
+		case "voluntary_exit":
+			data = &ethpb.VoluntaryExit{}
+		case "state_capella":
+			data = &ethpb.BeaconStateCapella{}
+		default:
+			log.Fatal("Invalid type")
+		}
+		prettyPrint(sszPath, data)
+		return nil
+	},
+}
 
+var benchmarkHashCommand = &cli.Command{
+	Name:    "benchmark-hash",
+	Aliases: []string{"b"},
+	Usage:   "benchmark-hash SSZ data",
+	Flags: []cli.Flag{
+		&cli.StringFlag{
+			Name:        "ssz-path",
+			Usage:       "Path to file(ssz)",
+			Required:    true,
+			Destination: &sszPath,
+		},
+		&cli.StringFlag{
+			Name: "data-type",
+			Usage: "ssz file data type: " +
+				"block_capella|" +
+				"blinded_block_capella|" +
+				"signed_block_capella|" +
+				"attestation|" +
+				"block_header|" +
+				"deposit|" +
+				"proposer_slashing|" +
+				"signed_block_header|" +
+				"signed_voluntary_exit|" +
+				"voluntary_exit|" +
+				"state_capella",
+			Required:    true,
+			Destination: &sszType,
+		},
+	},
+	Action: func(c *cli.Context) error {
+		benchmarkHash(sszPath, sszType)
+		return nil
+	},
+}
+
+var unrealizedCheckpointsCommand = &cli.Command{
+	Name:     "unrealized-checkpoints",
+	Category: "state-computations",
+	Usage:    "Subcommand to compute manually the unrealized checkpoints",
+	Flags: []cli.Flag{
+		&cli.StringFlag{
+			Name:        "state-path",
+			Usage:       "Path to state file(ssz)",
+			Destination: &preStatePath,
+		},
+	},
+	Action: func(c *cli.Context) error {
+		if preStatePath == "" {
+			log.Info("State path not provided, please provide path")
+			reader := bufio.NewReader(os.Stdin)
+			text, err := reader.ReadString('\n')
+			if err != nil {
+				log.Fatal(err)
+			}
+			if text = strings.ReplaceAll(text, "\n", ""); text == "" {
+				log.Fatal("Empty state path given")
+			}
+			preStatePath = text
+		}
+		stateObj, err := detectState(preStatePath)
+		if err != nil {
+			log.Fatal(err)
+		}
+		preStateRoot, err := stateObj.HashTreeRoot(context.Background())
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Infof(
+			"Computing unrealized justification for state at slot %d and root %#x",
+			stateObj.Slot(),
+			preStateRoot,
+		)
+		uj, uf, err := precompute.UnrealizedCheckpoints(stateObj)
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Infof("Computed:\nUnrealized Justified: (Root: %#x, Epoch: %d)\nUnrealized Finalized: (Root: %#x, Epoch: %d).", uj.Root, uj.Epoch, uf.Root, uf.Epoch)
+		return nil
+	},
+}
+
+var stateTransitionCommand = &cli.Command{
+	Name:     "state-transition",
+	Category: "state-computations",
+	Usage:    "Subcommand to run manual state transitions",
+	Flags: []cli.Flag{
+		&cli.StringFlag{
+			Name:        "block-path",
+			Usage:       "Path to block file(ssz)",
+			Destination: &blockPath,
+		},
+		&cli.StringFlag{
+			Name:        "pre-state-path",
+			Usage:       "Path to pre state file(ssz)",
+			Destination: &preStatePath,
+		},
+		&cli.StringFlag{
+			Name:        "expected-post-state-path",
+			Usage:       "Path to expected post state file(ssz)",
+			Destination: &expectedPostStatePath,
+		},
+		&cli.StringFlag{
+			Name:        "network",
+			Usage:       "Network to run the state transition in",
+			Destination: &network,
+		},
+	},
+	Action: func(c *cli.Context) error {
+		if network != "" {
+			switch network {
+			case params.SepoliaName:
+				if err := params.SetActive(params.SepoliaConfig()); err != nil {
+					log.Fatal(err)
+				}
+			case params.HoleskyName:
+				if err := params.SetActive(params.HoleskyConfig()); err != nil {
+					log.Fatal(err)
+				}
+			case params.HoodiName:
+				if err := params.SetActive(params.HoodiConfig()); err != nil {
+					log.Fatal(err)
+				}
+			default:
+				log.Fatalf("Unknown network provided: %s", network)
+			}
+		}
+
+		if blockPath == "" {
+			log.Info("Block path not provided for state transition. " +
+				"Please provide path")
+			reader := bufio.NewReader(os.Stdin)
+			text, err := reader.ReadString('\n')
+			if err != nil {
+				log.Fatal(err)
+			}
+			if text = strings.ReplaceAll(text, "\n", ""); text == "" {
+				log.Fatal("Empty block path given")
+			}
+			blockPath = text
+		}
+		block, err := detectBlock(blockPath)
+		if err != nil {
+			log.Fatal(err)
+		}
+		blkRoot, err := block.Block().HashTreeRoot()
+		if err != nil {
+			log.Fatal(err)
+		}
+		if preStatePath == "" {
+			log.Info("Pre State path not provided for state transition. " +
+				"Please provide path")
+			reader := bufio.NewReader(os.Stdin)
+			text, err := reader.ReadString('\n')
+			if err != nil {
+				log.Fatal(err)
+			}
+			if text = strings.ReplaceAll(text, "\n", ""); text == "" {
+				log.Fatal("Empty state path given")
+			}
+			preStatePath = text
+		}
+		stateObj, err := detectState(preStatePath)
+		if err != nil {
+			log.Fatal(err)
+		}
+		preStateRoot, err := stateObj.HashTreeRoot(context.Background())
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.WithFields(log.Fields{
+			"blockSlot":    fmt.Sprintf("%d", block.Block().Slot()),
+			"preStateSlot": fmt.Sprintf("%d", stateObj.Slot()),
+		}).Infof(
+			"Performing state transition with a block root of %#x and pre state root of %#x",
+			blkRoot,
+			preStateRoot,
+		)
+		postState, err := debugStateTransition(context.Background(), stateObj, block)
+		if err != nil {
+			log.Fatal(err)
+		}
+		postRoot, err := postState.HashTreeRoot(context.Background())
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Infof("Finished state transition with post state root of %#x", postRoot)
+
+		// Diff the state if a post state is provided.
+		if expectedPostStatePath != "" {
+			expectedState, err := detectState(expectedPostStatePath)
+			if err != nil {
+				log.Fatal(err)
+			}
+			if !equality.DeepEqual(expectedState.ToProtoUnsafe(), postState.ToProtoUnsafe()) {
+				diff, _ := messagediff.PrettyDiff(expectedState.ToProtoUnsafe(), postState.ToProtoUnsafe())
+				log.Errorf("Derived state differs from provided post state: %s", diff)
+			}
+		}
+		return nil
+	},
+}
+
+func main() {
 	customFormatter := new(prefixed.TextFormatter)
-	customFormatter.TimestampFormat = "2006-01-02 15:04:05"
+	customFormatter.TimestampFormat = time.DateTime
 	customFormatter.FullTimestamp = true
 	log.SetFormatter(customFormatter)
 	app := cli.App{}
@@ -40,207 +311,10 @@ func main() {
 	app.Usage = "A command line utility to run Ethereum consensus specific commands"
 	app.Version = version.Version()
 	app.Commands = []*cli.Command{
-		{
-			Name:    "pretty",
-			Aliases: []string{"p"},
-			Usage:   "pretty-print SSZ data",
-			Flags: []cli.Flag{
-				&cli.StringFlag{
-					Name:        "ssz-path",
-					Usage:       "Path to file(ssz)",
-					Required:    true,
-					Destination: &sszPath,
-				},
-				&cli.StringFlag{
-					Name: "data-type",
-					Usage: "ssz file data type: " +
-						"block|" +
-						"blinded_block|" +
-						"signed_block|" +
-						"attestation|" +
-						"block_header|" +
-						"deposit|" +
-						"proposer_slashing|" +
-						"signed_block_header|" +
-						"signed_voluntary_exit|" +
-						"voluntary_exit|" +
-						"state_capella",
-					Required:    true,
-					Destination: &sszType,
-				},
-			},
-			Action: func(c *cli.Context) error {
-				var data fssz.Unmarshaler
-				switch sszType {
-				case "block":
-					data = &ethpb.BeaconBlock{}
-				case "signed_block":
-					data = &ethpb.SignedBeaconBlock{}
-				case "blinded_block":
-					data = &ethpb.BlindedBeaconBlockBellatrix{}
-				case "attestation":
-					data = &ethpb.Attestation{}
-				case "block_header":
-					data = &ethpb.BeaconBlockHeader{}
-				case "deposit":
-					data = &ethpb.Deposit{}
-				case "deposit_message":
-					data = &ethpb.DepositMessage{}
-				case "proposer_slashing":
-					data = &ethpb.ProposerSlashing{}
-				case "signed_block_header":
-					data = &ethpb.SignedBeaconBlockHeader{}
-				case "signed_voluntary_exit":
-					data = &ethpb.SignedVoluntaryExit{}
-				case "voluntary_exit":
-					data = &ethpb.VoluntaryExit{}
-				case "state_capella":
-					data = &ethpb.BeaconStateCapella{}
-				default:
-					log.Fatal("Invalid type")
-				}
-				prettyPrint(sszPath, data)
-				return nil
-			},
-		},
-		{
-			Name:    "benchmark-hash",
-			Aliases: []string{"b"},
-			Usage:   "benchmark-hash SSZ data",
-			Flags: []cli.Flag{
-				&cli.StringFlag{
-					Name:        "ssz-path",
-					Usage:       "Path to file(ssz)",
-					Required:    true,
-					Destination: &sszPath,
-				},
-				&cli.StringFlag{
-					Name: "data-type",
-					Usage: "ssz file data type: " +
-						"block_capella|" +
-						"blinded_block_capella|" +
-						"signed_block_capella|" +
-						"attestation|" +
-						"block_header|" +
-						"deposit|" +
-						"proposer_slashing|" +
-						"signed_block_header|" +
-						"signed_voluntary_exit|" +
-						"voluntary_exit|" +
-						"state_capella",
-					Required:    true,
-					Destination: &sszType,
-				},
-			},
-			Action: func(c *cli.Context) error {
-				benchmarkHash(sszPath, sszType)
-				return nil
-			},
-		},
-		{
-			Name:     "state-transition",
-			Category: "state-transition",
-			Usage:    "Subcommand to run manual state transitions",
-			Flags: []cli.Flag{
-				&cli.StringFlag{
-					Name:        "block-path",
-					Usage:       "Path to block file(ssz)",
-					Destination: &blockPath,
-				},
-				&cli.StringFlag{
-					Name:        "pre-state-path",
-					Usage:       "Path to pre state file(ssz)",
-					Destination: &preStatePath,
-				},
-				&cli.StringFlag{
-					Name:        "expected-post-state-path",
-					Usage:       "Path to expected post state file(ssz)",
-					Destination: &expectedPostStatePath,
-				},
-			},
-			Action: func(c *cli.Context) error {
-				if blockPath == "" {
-					log.Info("Block path not provided for state transition. " +
-						"Please provide path")
-					reader := bufio.NewReader(os.Stdin)
-					text, err := reader.ReadString('\n')
-					if err != nil {
-						log.Fatal(err)
-					}
-					if text = strings.ReplaceAll(text, "\n", ""); text == "" {
-						log.Fatal("Empty block path given")
-					}
-					blockPath = text
-				}
-				block := &ethpb.SignedBeaconBlock{}
-				if err := dataFetcher(blockPath, block); err != nil {
-					log.Fatal(err)
-				}
-				blkRoot, err := block.Block.HashTreeRoot()
-				if err != nil {
-					log.Fatal(err)
-				}
-				if preStatePath == "" {
-					log.Info("Pre State path not provided for state transition. " +
-						"Please provide path")
-					reader := bufio.NewReader(os.Stdin)
-					text, err := reader.ReadString('\n')
-					if err != nil {
-						log.Fatal(err)
-					}
-					if text = strings.ReplaceAll(text, "\n", ""); text == "" {
-						log.Fatal("Empty state path given")
-					}
-					preStatePath = text
-				}
-				preState := &ethpb.BeaconState{}
-				if err := dataFetcher(preStatePath, preState); err != nil {
-					log.Fatal(err)
-				}
-				stateObj, err := state_native.InitializeFromProtoPhase0(preState)
-				if err != nil {
-					log.Fatal(err)
-				}
-				preStateRoot, err := stateObj.HashTreeRoot(context.Background())
-				if err != nil {
-					log.Fatal(err)
-				}
-				log.WithFields(log.Fields{
-					"blockSlot":    fmt.Sprintf("%d", block.Block.Slot),
-					"preStateSlot": fmt.Sprintf("%d", stateObj.Slot()),
-				}).Infof(
-					"Performing state transition with a block root of %#x and pre state root of %#x",
-					blkRoot,
-					preStateRoot,
-				)
-				wsb, err := blocks.NewSignedBeaconBlock(block)
-				if err != nil {
-					log.Fatal(err)
-				}
-				postState, err := transition.ExecuteStateTransition(context.Background(), stateObj, wsb)
-				if err != nil {
-					log.Fatal(err)
-				}
-				postRoot, err := postState.HashTreeRoot(context.Background())
-				if err != nil {
-					log.Fatal(err)
-				}
-				log.Infof("Finished state transition with post state root of %#x", postRoot)
-
-				// Diff the state if a post state is provided.
-				if expectedPostStatePath != "" {
-					expectedState := &ethpb.BeaconState{}
-					if err := dataFetcher(expectedPostStatePath, expectedState); err != nil {
-						log.Fatal(err)
-					}
-					if !equality.DeepEqual(expectedState, postState.ToProtoUnsafe()) {
-						diff, _ := messagediff.PrettyDiff(expectedState, postState.ToProtoUnsafe())
-						log.Errorf("Derived state differs from provided post state: %s", diff)
-					}
-				}
-				return nil
-			},
-		},
+		prettyCommand,
+		benchmarkHashCommand,
+		unrealizedCheckpointsCommand,
+		stateTransitionCommand,
 	}
 	if err := app.Run(os.Args); err != nil {
 		log.Error(err.Error())
@@ -255,6 +329,34 @@ func dataFetcher(fPath string, data fssz.Unmarshaler) error {
 		return err
 	}
 	return data.UnmarshalSSZ(rawFile)
+}
+
+func detectState(fPath string) (state.BeaconState, error) {
+	rawFile, err := os.ReadFile(fPath) // #nosec G304
+	if err != nil {
+		return nil, err
+	}
+	vu, err := detect.FromState(rawFile)
+	if err != nil {
+		return nil, errors.Wrap(err, "error detecting state from file")
+	}
+	s, err := vu.UnmarshalBeaconState(rawFile)
+	if err != nil {
+		return nil, errors.Wrap(err, "error unmarshalling state")
+	}
+	return s, nil
+}
+
+func detectBlock(fPath string) (interfaces.SignedBeaconBlock, error) {
+	rawFile, err := os.ReadFile(fPath) // #nosec G304
+	if err != nil {
+		return nil, err
+	}
+	vu, err := detect.FromBlock(rawFile)
+	if err != nil {
+		return nil, err
+	}
+	return vu.UnmarshalBeaconBlock(rawFile)
 }
 
 func prettyPrint(sszPath string, data fssz.Unmarshaler) {
@@ -301,4 +403,33 @@ func benchmarkHash(sszPath string, sszType string) {
 	default:
 		log.Fatal("Invalid type")
 	}
+}
+
+func debugStateTransition(
+	ctx context.Context,
+	st state.BeaconState,
+	signed interfaces.ReadOnlySignedBeaconBlock,
+) (state.BeaconState, error) {
+	var err error
+
+	parentRoot := signed.Block().ParentRoot()
+	st, err = transition.ProcessSlotsUsingNextSlotCache(ctx, st, parentRoot[:], signed.Block().Slot())
+	if err != nil {
+		return st, errors.Wrap(err, "could not process slots")
+	}
+
+	// Execute per block transition.
+	set, st, err := transition.ProcessBlockNoVerifyAnySig(ctx, st, signed)
+	if err != nil {
+		return st, errors.Wrap(err, "could not process block")
+	}
+	var valid bool
+	valid, err = set.VerifyVerbosely()
+	if err != nil {
+		return st, errors.Wrap(err, "could not batch verify signature")
+	}
+	if !valid {
+		return st, errors.New("signature in block failed to verify")
+	}
+	return st, nil
 }

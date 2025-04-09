@@ -14,7 +14,7 @@ go_library(
         "signature.go",
         "stub.go",  # keep
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v4/crypto/bls/blst",
+    importpath = "github.com/prysmaticlabs/prysm/v5/crypto/bls/blst",
     visibility = ["//visibility:public"],
     deps = select({
         "@io_bazel_rules_go//go/platform:android_amd64": [

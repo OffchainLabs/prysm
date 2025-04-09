@@ -9,7 +9,7 @@ go_library(
         "log.go",
         "restore.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v4/beacon-chain/db",
+    importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/db",
     visibility = [
         "//beacon-chain:__subpackages__",
         "//cmd/beacon-chain:__subpackages__",

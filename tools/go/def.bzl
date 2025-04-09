@@ -8,13 +8,13 @@ def _go_test_transition_impl(settings, attr):
 
     if attr.eth_network == "minimal":
         settings["//proto:network"] = "minimal"
-        settings["@io_bazel_rules_go//go/config:tags"] += ["minimal"]
+        settings["@io_bazel_rules_go//go/config:tags"] = ["minimal"] + settings["@io_bazel_rules_go//go/config:tags"] 
     elif attr.eth_network == "mainnet":  # Default / optional
         settings["//proto:network"] = "mainnet"
-        settings["@io_bazel_rules_go//go/config:tags"] += ["mainnet"]
+        settings["@io_bazel_rules_go//go/config:tags"] = ["mainnet"] + settings["@io_bazel_rules_go//go/config:tags"] 
 
     if attr.gotags:
-        settings["@io_bazel_rules_go//go/config:tags"] += attr.gotags
+        settings["@io_bazel_rules_go//go/config:tags"] = attr.gotags + settings["@io_bazel_rules_go//go/config:tags"]
 
     if str(settings["//command_line_option:compilation_mode"]) == "dbg":
         settings["@io_bazel_rules_go//go/config:debug"] = True
@@ -42,9 +42,6 @@ def _go_test_transition_rule(**kwargs):
     attrs = dict(kwargs["attrs"])
     attrs.update({
         "eth_network": attr.string(values = ["mainnet", "minimal"]),
-        "_whitelist_function_transition": attr.label(
-            default = "@bazel_tools//tools/whitelists/function_transition_whitelist",
-        ),
     })
     kwargs["attrs"] = attrs
     kwargs["cfg"] = go_test_transition

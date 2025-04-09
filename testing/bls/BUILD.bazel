@@ -46,6 +46,6 @@ go_library(
         "sign_test.yaml.go",
         "verify_test.yaml.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v4/testing/bls",
+    importpath = "github.com/prysmaticlabs/prysm/v5/testing/bls",
     visibility = ["//visibility:public"],
 )

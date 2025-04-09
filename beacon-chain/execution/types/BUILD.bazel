@@ -3,7 +3,7 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 go_library(
     name = "go_default_library",
     srcs = ["eth1_types.go"],
-    importpath = "github.com/prysmaticlabs/prysm/v4/beacon-chain/execution/types",
+    importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/execution/types",
     visibility = ["//beacon-chain:__subpackages__"],
     deps = [
         "//encoding/bytesutil:go_default_library",

@@ -3,17 +3,18 @@ package deneb_test
 import (
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/deneb"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/time"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	enginev1 "github.com/prysmaticlabs/prysm/v4/proto/engine/v1"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/testing/util"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/deneb"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/util"
 )
 
 func TestUpgradeToDeneb(t *testing.T) {
 	st, _ := util.DeterministicGenesisStateCapella(t, params.BeaconConfig().MaxValidatorsPerCommittee)
+	require.NoError(t, st.SetHistoricalRoots([][]byte{{1}}))
 	preForkState := st.Copy()
 	mSt, err := deneb.UpgradeToDeneb(st)
 	require.NoError(t, err)
@@ -45,6 +46,12 @@ func TestUpgradeToDeneb(t *testing.T) {
 	s, err := mSt.InactivityScores()
 	require.NoError(t, err)
 	require.DeepSSZEqual(t, make([]uint64, numValidators), s)
+
+	hr1, err := preForkState.HistoricalRoots()
+	require.NoError(t, err)
+	hr2, err := mSt.HistoricalRoots()
+	require.NoError(t, err)
+	require.DeepEqual(t, hr1, hr2)
 
 	f := mSt.Fork()
 	require.DeepSSZEqual(t, &ethpb.Fork{
@@ -85,6 +92,7 @@ func TestUpgradeToDeneb(t *testing.T) {
 		GasLimit:         prevHeader.GasLimit(),
 		GasUsed:          prevHeader.GasUsed(),
 		Timestamp:        prevHeader.Timestamp(),
+		ExtraData:        prevHeader.ExtraData(),
 		BaseFeePerGas:    prevHeader.BaseFeePerGas(),
 		BlockHash:        prevHeader.BlockHash(),
 		TransactionsRoot: txRoot,

@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -25,13 +25,13 @@ func (s *Service) voluntaryExitSubscriber(_ context.Context, msg proto.Message) 
 }
 
 func (s *Service) attesterSlashingSubscriber(ctx context.Context, msg proto.Message) error {
-	aSlashing, ok := msg.(*ethpb.AttesterSlashing)
+	aSlashing, ok := msg.(ethpb.AttSlashing)
 	if !ok {
 		return fmt.Errorf("wrong type, expected: *ethpb.AttesterSlashing got: %T", msg)
 	}
 	// Do some nil checks to prevent easy DoS'ing of this handler.
-	aSlashing1IsNil := aSlashing == nil || aSlashing.Attestation_1 == nil || aSlashing.Attestation_1.AttestingIndices == nil
-	aSlashing2IsNil := aSlashing == nil || aSlashing.Attestation_2 == nil || aSlashing.Attestation_2.AttestingIndices == nil
+	aSlashing1IsNil := aSlashing == nil || aSlashing.FirstAttestation() == nil || aSlashing.FirstAttestation().GetAttestingIndices() == nil
+	aSlashing2IsNil := aSlashing == nil || aSlashing.SecondAttestation() == nil || aSlashing.SecondAttestation().GetAttestingIndices() == nil
 	if !aSlashing1IsNil && !aSlashing2IsNil {
 		headState, err := s.cfg.chain.HeadState(ctx)
 		if err != nil {
@@ -40,7 +40,7 @@ func (s *Service) attesterSlashingSubscriber(ctx context.Context, msg proto.Mess
 		if err := s.cfg.slashingPool.InsertAttesterSlashing(ctx, headState, aSlashing); err != nil {
 			return errors.Wrap(err, "could not insert attester slashing into pool")
 		}
-		s.setAttesterSlashingIndicesSeen(aSlashing.Attestation_1.AttestingIndices, aSlashing.Attestation_2.AttestingIndices)
+		s.setAttesterSlashingIndicesSeen(aSlashing.FirstAttestation().GetAttestingIndices(), aSlashing.SecondAttestation().GetAttestingIndices())
 	}
 	return nil
 }

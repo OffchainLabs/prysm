@@ -7,11 +7,11 @@ import (
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
-	depositcontract "github.com/prysmaticlabs/prysm/v4/contracts/deposit"
-	"github.com/prysmaticlabs/prysm/v4/contracts/deposit/mock"
-	"github.com/prysmaticlabs/prysm/v4/runtime/interop"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
+	depositcontract "github.com/prysmaticlabs/prysm/v5/contracts/deposit"
+	"github.com/prysmaticlabs/prysm/v5/contracts/deposit/mock"
+	"github.com/prysmaticlabs/prysm/v5/runtime/interop"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func TestSetupRegistrationContract_OK(t *testing.T) {
@@ -67,7 +67,7 @@ func TestValidatorRegister_OK(t *testing.T) {
 		},
 	}
 
-	logs, err := testAccount.Backend.FilterLogs(context.Background(), query)
+	logs, err := testAccount.Backend.Client().FilterLogs(context.Background(), query)
 	assert.NoError(t, err, "Unable to get logs of deposit contract")
 
 	merkleTreeIndex := make([]uint64, 5)

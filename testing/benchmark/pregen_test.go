@@ -3,7 +3,7 @@ package benchmark
 import (
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func TestPreGenFullBlock(t *testing.T) {
@@ -12,11 +12,11 @@ func TestPreGenFullBlock(t *testing.T) {
 }
 
 func TestPreGenState1Epoch(t *testing.T) {
-	_, err := PreGenFullBlock()
+	_, err := PreGenState1Epoch()
 	require.NoError(t, err)
 }
 
 func TestPreGenstateFullEpochs(t *testing.T) {
-	_, err := PreGenFullBlock()
+	_, err := PreGenstateFullEpochs()
 	require.NoError(t, err)
 }

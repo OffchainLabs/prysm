@@ -3,15 +3,15 @@ package kv
 import (
 	"context"
 
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	bolt "go.etcd.io/bbolt"
-	"go.opencensus.io/trace"
 )
 
 // LastArchivedSlot from the db.
 func (s *Store) LastArchivedSlot(ctx context.Context) (primitives.Slot, error) {
-	ctx, span := trace.StartSpan(ctx, "BeaconDB.LastArchivedSlot")
+	_, span := trace.StartSpan(ctx, "BeaconDB.LastArchivedSlot")
 	defer span.End()
 	var index primitives.Slot
 	err := s.db.View(func(tx *bolt.Tx) error {
@@ -26,7 +26,7 @@ func (s *Store) LastArchivedSlot(ctx context.Context) (primitives.Slot, error) {
 
 // LastArchivedRoot from the db.
 func (s *Store) LastArchivedRoot(ctx context.Context) [32]byte {
-	ctx, span := trace.StartSpan(ctx, "BeaconDB.LastArchivedRoot")
+	_, span := trace.StartSpan(ctx, "BeaconDB.LastArchivedRoot")
 	defer span.End()
 
 	var blockRoot []byte
@@ -35,7 +35,7 @@ func (s *Store) LastArchivedRoot(ctx context.Context) [32]byte {
 		_, blockRoot = bkt.Cursor().Last()
 		return nil
 	}); err != nil { // This view never returns an error, but we'll handle anyway for sanity.
-		panic(err)
+		panic(err) // lint:nopanic -- View never returns an error.
 	}
 
 	return bytesutil.ToBytes32(blockRoot)
@@ -44,7 +44,7 @@ func (s *Store) LastArchivedRoot(ctx context.Context) [32]byte {
 // ArchivedPointRoot returns the block root of an archived point from the DB.
 // This is essential for cold state management and to restore a cold state.
 func (s *Store) ArchivedPointRoot(ctx context.Context, slot primitives.Slot) [32]byte {
-	ctx, span := trace.StartSpan(ctx, "BeaconDB.ArchivedPointRoot")
+	_, span := trace.StartSpan(ctx, "BeaconDB.ArchivedPointRoot")
 	defer span.End()
 
 	var blockRoot []byte
@@ -53,7 +53,7 @@ func (s *Store) ArchivedPointRoot(ctx context.Context, slot primitives.Slot) [32
 		blockRoot = bucket.Get(bytesutil.SlotToBytesBigEndian(slot))
 		return nil
 	}); err != nil { // This view never returns an error, but we'll handle anyway for sanity.
-		panic(err)
+		panic(err) // lint:nopanic -- View never returns an error.
 	}
 
 	return bytesutil.ToBytes32(blockRoot)
@@ -61,7 +61,7 @@ func (s *Store) ArchivedPointRoot(ctx context.Context, slot primitives.Slot) [32
 
 // HasArchivedPoint returns true if an archived point exists in DB.
 func (s *Store) HasArchivedPoint(ctx context.Context, slot primitives.Slot) bool {
-	ctx, span := trace.StartSpan(ctx, "BeaconDB.HasArchivedPoint")
+	_, span := trace.StartSpan(ctx, "BeaconDB.HasArchivedPoint")
 	defer span.End()
 	var exists bool
 	if err := s.db.View(func(tx *bolt.Tx) error {
@@ -69,7 +69,7 @@ func (s *Store) HasArchivedPoint(ctx context.Context, slot primitives.Slot) bool
 		exists = iBucket.Get(bytesutil.SlotToBytesBigEndian(slot)) != nil
 		return nil
 	}); err != nil { // This view never returns an error, but we'll handle anyway for sanity.
-		panic(err)
+		panic(err) // lint:nopanic -- View never returns an error.
 	}
 	return exists
 }

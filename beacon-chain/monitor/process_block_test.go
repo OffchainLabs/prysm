@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/altair"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/testing/util"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/altair"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/util"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
@@ -44,7 +44,7 @@ func TestProcessSlashings(t *testing.T) {
 					},
 				},
 			},
-			wantedErr: "\"Proposer slashing was included\" BodyRoot1= BodyRoot2= ProposerIndex=2",
+			wantedErr: "\"Proposer slashing was included\" bodyRoot1= bodyRoot2= prefix=monitor proposerIndex=2",
 		},
 		{
 			name: "Proposer slashing an untracked index",
@@ -89,8 +89,8 @@ func TestProcessSlashings(t *testing.T) {
 					},
 				},
 			},
-			wantedErr: "\"Attester slashing was included\" AttestationSlot1=0 AttestationSlot2=0 AttesterIndex=1 " +
-				"BeaconBlockRoot1=0x000000000000 BeaconBlockRoot2=0x000000000000 BlockInclusionSlot=0 SourceEpoch1=1 SourceEpoch2=0 TargetEpoch1=0 TargetEpoch2=0",
+			wantedErr: "\"Attester slashing was included\" attestationSlot1=0 attestationSlot2=0 attesterIndex=1 " +
+				"beaconBlockRoot1=0x000000000000 beaconBlockRoot2=0x000000000000 blockInclusionSlot=0 prefix=monitor sourceEpoch1=1 sourceEpoch2=0 targetEpoch1=0 targetEpoch2=0",
 		},
 		{
 			name: "Attester slashing untracked index",
@@ -150,7 +150,7 @@ func TestProcessProposedBlock(t *testing.T) {
 				StateRoot:     bytesutil.PadTo([]byte("state-world"), 32),
 				Body:          &ethpb.BeaconBlockBody{},
 			},
-			wantedErr: "\"Proposed beacon block was included\" BalanceChange=100000000 BlockRoot=0x68656c6c6f2d NewBalance=32000000000 ParentRoot=0x68656c6c6f2d ProposerIndex=12 Slot=6 Version=0 prefix=monitor",
+			wantedErr: "\"Proposed beacon block was included\" balanceChange=100000000 blockRoot=0x68656c6c6f2d newBalance=32000000000 parentRoot=0x68656c6c6f2d prefix=monitor proposerIndex=12 slot=6 version=0",
 		},
 		{
 			name: "Block proposed by untracked validator",
@@ -225,10 +225,10 @@ func TestProcessBlock_AllEventsTrackedVals(t *testing.T) {
 	root, err := b.GetBlock().HashTreeRoot()
 	require.NoError(t, err)
 	require.NoError(t, s.config.StateGen.SaveState(ctx, root, genesis))
-	wanted1 := fmt.Sprintf("\"Proposed beacon block was included\" BalanceChange=100000000 BlockRoot=%#x NewBalance=32000000000 ParentRoot=0xf732eaeb7fae ProposerIndex=15 Slot=1 Version=1 prefix=monitor", bytesutil.Trunc(root[:]))
-	wanted2 := fmt.Sprintf("\"Proposer slashing was included\" BodyRoot1=0x000100000000 BodyRoot2=0x000200000000 ProposerIndex=%d SlashingSlot=0 Slot=1 prefix=monitor", idx)
-	wanted3 := "\"Sync committee contribution included\" BalanceChange=0 ContribCount=3 ExpectedContribCount=3 NewBalance=32000000000 ValidatorIndex=1 prefix=monitor"
-	wanted4 := "\"Sync committee contribution included\" BalanceChange=0 ContribCount=1 ExpectedContribCount=1 NewBalance=32000000000 ValidatorIndex=2 prefix=monitor"
+	wanted1 := fmt.Sprintf("\"Proposed beacon block was included\" balanceChange=100000000 blockRoot=%#x newBalance=32000000000 parentRoot=0xf732eaeb7fae prefix=monitor proposerIndex=15 slot=1 version=1", bytesutil.Trunc(root[:]))
+	wanted2 := fmt.Sprintf("\"Proposer slashing was included\" bodyRoot1=0x000100000000 bodyRoot2=0x000200000000 prefix=monitor proposerIndex=%d slashingSlot=0 slot=1", idx)
+	wanted3 := "\"Sync committee contribution included\" balanceChange=0 contribCount=3 expectedContribCount=3 newBalance=32000000000 prefix=monitor validatorIndex=1"
+	wanted4 := "\"Sync committee contribution included\" balanceChange=0 contribCount=1 expectedContribCount=1 newBalance=32000000000 prefix=monitor validatorIndex=2"
 	wrapped, err := blocks.NewSignedBeaconBlock(b)
 	require.NoError(t, err)
 	s.processBlock(ctx, wrapped)
@@ -278,10 +278,10 @@ func TestLogAggregatedPerformance(t *testing.T) {
 	}
 
 	s.logAggregatedPerformance()
-	wanted := "\"Aggregated performance since launch\" AttestationInclusion=\"80.00%\"" +
-		" AverageInclusionDistance=1.2 BalanceChangePct=\"0.95%\" CorrectlyVotedHeadPct=\"66.67%\" " +
-		"CorrectlyVotedSourcePct=\"91.67%\" CorrectlyVotedTargetPct=\"100.00%\" StartBalance=31700000000 " +
-		"StartEpoch=0 TotalAggregations=0 TotalProposedBlocks=1 TotalRequested=15 TotalSyncContributions=0 " +
-		"ValidatorIndex=1 prefix=monitor"
+	wanted := "\"Aggregated performance since launch\" attestationInclusion=\"80.00%\"" +
+		" averageInclusionDistance=1.2 balanceChangePct=\"0.95%\" correctlyVotedHeadPct=\"66.67%\" " +
+		"correctlyVotedSourcePct=\"91.67%\" correctlyVotedTargetPct=\"100.00%\" prefix=monitor startBalance=31700000000 " +
+		"startEpoch=0 totalAggregations=0 totalProposedBlocks=1 totalRequested=15 totalSyncContributions=0 " +
+		"validatorIndex=1"
 	require.LogsContain(t, hook, wanted)
 }

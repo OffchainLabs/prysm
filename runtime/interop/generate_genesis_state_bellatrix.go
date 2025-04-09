@@ -6,13 +6,13 @@ import (
 	"context"
 
 	"github.com/pkg/errors"
-	coreState "github.com/prysmaticlabs/prysm/v4/beacon-chain/core/transition"
-	statenative "github.com/prysmaticlabs/prysm/v4/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/container/trie"
-	enginev1 "github.com/prysmaticlabs/prysm/v4/proto/engine/v1"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/time"
+	coreState "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
+	statenative "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/container/trie"
+	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/time"
 )
 
 // GenerateGenesisStateBellatrix deterministically given a genesis time and number of validators.

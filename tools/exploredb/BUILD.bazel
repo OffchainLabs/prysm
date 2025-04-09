@@ -4,7 +4,7 @@ load("@prysm//tools/go:def.bzl", "go_library")
 go_library(
     name = "go_default_library",
     srcs = ["main.go"],
-    importpath = "github.com/prysmaticlabs/prysm/v4/tools/exploredb",
+    importpath = "github.com/prysmaticlabs/prysm/v5/tools/exploredb",
     visibility = ["//visibility:private"],
     deps = [
         "//beacon-chain/db/kv:go_default_library",

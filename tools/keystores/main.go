@@ -16,10 +16,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/logrusorgru/aurora"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v4/io/file"
-	"github.com/prysmaticlabs/prysm/v4/io/prompt"
-	"github.com/prysmaticlabs/prysm/v4/validator/keymanager"
+	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
+	"github.com/prysmaticlabs/prysm/v5/io/file"
+	"github.com/prysmaticlabs/prysm/v5/io/prompt"
+	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
 	"github.com/urfave/cli/v2"
 	keystorev4 "github.com/wealdtech/go-eth2-wallet-encryptor-keystorev4"
 )
@@ -156,7 +156,13 @@ func encrypt(cliCtx *cli.Context) error {
 	if err != nil {
 		return errors.Wrapf(err, "could not expand path: %s", outputPath)
 	}
-	if file.FileExists(fullPath) {
+
+	exists, err := file.Exists(fullPath, file.Regular)
+	if err != nil {
+		return errors.Wrapf(err, "could not check if file exists: %s", fullPath)
+	}
+
+	if exists {
 		response, err := prompt.ValidatePrompt(
 			os.Stdin,
 			fmt.Sprintf("file at path %s already exists, are you sure you want to overwrite it? [y/n]", fullPath),

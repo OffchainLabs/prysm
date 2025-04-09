@@ -3,7 +3,7 @@ load("@prysm//tools/go:def.bzl", "go_library")
 go_library(
     name = "go_default_library",
     srcs = ["db.go"],
-    importpath = "github.com/prysmaticlabs/prysm/v4/cmd/validator/db",
+    importpath = "github.com/prysmaticlabs/prysm/v5/cmd/validator/db",
     visibility = ["//visibility:public"],
     deps = [
         "//cmd:go_default_library",

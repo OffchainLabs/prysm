@@ -8,13 +8,13 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// BackupExporter defines a backup exporter methods.
-type BackupExporter interface {
+// Exporter defines a backup exporter methods.
+type Exporter interface {
 	Backup(ctx context.Context, outputPath string, permissionOverride bool) error
 }
 
-// BackupHandler for accepting requests to initiate a new database backup.
-func BackupHandler(bk BackupExporter, outputDir string) func(http.ResponseWriter, *http.Request) {
+// Handler for accepting requests to initiate a new database backup.
+func Handler(bk Exporter, outputDir string) func(http.ResponseWriter, *http.Request) {
 	log := logrus.WithField("prefix", "db")
 
 	return func(w http.ResponseWriter, r *http.Request) {

@@ -3,7 +3,7 @@
 package blst
 
 import (
-	"github.com/prysmaticlabs/prysm/v4/crypto/bls/common"
+	"github.com/prysmaticlabs/prysm/v5/crypto/bls/common"
 )
 
 // This stub file exists until build issues can be resolved for libfuzz.
@@ -130,6 +130,11 @@ func AggregateMultiplePubkeys(pubs []common.PublicKey) common.PublicKey {
 
 // AggregateCompressedSignatures -- stub
 func AggregateCompressedSignatures(multiSigs [][]byte) (common.Signature, error) {
+	panic(err)
+}
+
+// VerifySignature -- stub
+func VerifySignature(_ []byte, _ [32]byte, _ common.PublicKey) (bool, error) {
 	panic(err)
 }
 

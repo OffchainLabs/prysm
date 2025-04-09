@@ -10,17 +10,18 @@ import (
 
 	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/golang/snappy"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/transition"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
-	state_native "github.com/prysmaticlabs/prysm/v4/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/blocks"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/testing/spectest/utils"
-	"github.com/prysmaticlabs/prysm/v4/testing/util"
+	"github.com/google/go-cmp/cmp"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/spectest/utils"
+	"github.com/prysmaticlabs/prysm/v5/testing/util"
 	"google.golang.org/protobuf/proto"
-	"gopkg.in/d4l3k/messagediff.v1"
+	"google.golang.org/protobuf/testing/protocmp"
 )
 
 func init() {
@@ -50,7 +51,7 @@ func RunBlockProcessingTest(t *testing.T, config, folderPath string) {
 			file, err := util.BazelFileBytes(testsFolderPath, folder.Name(), "meta.yaml")
 			require.NoError(t, err)
 
-			metaYaml := &SanityConfig{}
+			metaYaml := &Config{}
 			require.NoError(t, utils.UnmarshalYaml(file, metaYaml), "Failed to Unmarshal")
 
 			var transitionError error
@@ -98,8 +99,7 @@ func RunBlockProcessingTest(t *testing.T, config, folderPath string) {
 				pbState, err := state_native.ProtobufBeaconStateCapella(beaconState.ToProtoUnsafe())
 				require.NoError(t, err)
 				if !proto.Equal(pbState, postBeaconState) {
-					diff, _ := messagediff.PrettyDiff(beaconState.ToProtoUnsafe(), postBeaconState)
-					t.Log(diff)
+					t.Log(cmp.Diff(pbState, postBeaconState, protocmp.Transform()))
 					t.Fatal("Post state does not match expected")
 				}
 			} else {

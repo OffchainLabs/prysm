@@ -4,7 +4,7 @@ go_library(
     name = "go_default_library",
     testonly = True,
     srcs = ["assertions.go"],
-    importpath = "github.com/prysmaticlabs/prysm/v4/testing/assert",
+    importpath = "github.com/prysmaticlabs/prysm/v5/testing/assert",
     visibility = ["//visibility:public"],
     deps = [
         "//testing/assertions:go_default_library",

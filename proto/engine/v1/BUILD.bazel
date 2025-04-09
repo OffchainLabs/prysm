@@ -31,6 +31,7 @@ proto_library(
 ssz_gen_marshal(
     name = "ssz_generated_files",
     go_proto = ":go_proto",
+    out = "engine.ssz.go",
     includes = [
         "//consensus-types/primitives:go_default_library",
     ],
@@ -41,9 +42,14 @@ ssz_gen_marshal(
         "ExecutionPayloadHeaderCapella",
         "ExecutionPayloadHeaderDeneb",
         "ExecutionPayloadDeneb",
+        'ExecutionPayloadDenebAndBlobsBundle',
         "BlindedBlobsBundle",
         "BlobsBundle",
         "Withdrawal",
+        "WithdrawalRequest",
+        "DepositRequest",
+        "ConsolidationRequest",
+        "ExecutionRequests",
     ],
 )
 
@@ -52,7 +58,7 @@ go_proto_library(
     compilers = [
         "@com_github_prysmaticlabs_protoc_gen_go_cast//:go_cast_grpc",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v4/proto/engine/v1",
+    importpath = "github.com/prysmaticlabs/prysm/v5/proto/engine/v1",
     proto = ":proto",
     visibility = ["//visibility:public"],
     deps = [
@@ -69,13 +75,15 @@ go_proto_library(
 go_library(
     name = "go_default_library",
     srcs = [
+        "electra.go",
+        "execution_engine.go",
         "json_marshal_unmarshal.go",
         ":ssz_generated_files",  # keep
     ],
     embed = [
         ":go_proto",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v4/proto/engine/v1",
+    importpath = "github.com/prysmaticlabs/prysm/v5/proto/engine/v1",
     visibility = ["//visibility:public"],
     deps = [
         "//config/fieldparams:go_default_library",
@@ -104,6 +112,7 @@ ssz_proto_files(
     name = "ssz_proto_files",
     srcs = [
         "execution_engine.proto",
+	"electra.proto",
     ],
     config = select({
         "//conditions:default": "mainnet",
@@ -115,15 +124,18 @@ ssz_proto_files(
 go_test(
     name = "go_default_test",
     srcs = [
+        "export_test.go",
+        "execution_engine_fuzz_test.go",
         "json_marshal_unmarshal_test.go",
     ],
+    embed = [":go_default_library"],
     deps = [
-        ":go_default_library",
         "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//encoding/bytesutil:go_default_library",
         "//testing/require:go_default_library",
+        "@com_github_google_gofuzz//:go_default_library",
         "@com_github_ethereum_go_ethereum//common:go_default_library",
         "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",
         "@com_github_ethereum_go_ethereum//core/types:go_default_library",

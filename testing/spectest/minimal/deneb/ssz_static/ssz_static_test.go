@@ -3,7 +3,7 @@ package ssz_static
 import (
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v4/testing/spectest/shared/deneb/ssz_static"
+	"github.com/prysmaticlabs/prysm/v5/testing/spectest/shared/deneb/ssz_static"
 )
 
 func TestMinimal_Deneb_SSZStatic(t *testing.T) {

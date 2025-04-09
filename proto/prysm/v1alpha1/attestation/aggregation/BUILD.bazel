@@ -6,7 +6,7 @@ go_library(
         "aggregation.go",
         "maxcover.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1/attestation/aggregation",
+    importpath = "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/attestation/aggregation",
     visibility = ["//visibility:public"],
     deps = [
         "@com_github_pkg_errors//:go_default_library",

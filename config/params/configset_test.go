@@ -3,8 +3,8 @@ package params
 import (
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func TestConfigset_Add(t *testing.T) {
@@ -112,7 +112,6 @@ func compareConfigs(t *testing.T, expected, actual *BeaconChainConfig) {
 	require.DeepEqual(t, expected.ShardCommitteePeriod, actual.ShardCommitteePeriod)
 	require.DeepEqual(t, expected.MinEpochsToInactivityPenalty, actual.MinEpochsToInactivityPenalty)
 	require.DeepEqual(t, expected.Eth1FollowDistance, actual.Eth1FollowDistance)
-	require.DeepEqual(t, expected.DeprecatedSafeSlotsToUpdateJustified, actual.DeprecatedSafeSlotsToUpdateJustified)
 	require.DeepEqual(t, expected.SecondsPerETH1Block, actual.SecondsPerETH1Block)
 	require.DeepEqual(t, expected.ProposerScoreBoost, actual.ProposerScoreBoost)
 	require.DeepEqual(t, expected.IntervalsPerSlot, actual.IntervalsPerSlot)
@@ -133,6 +132,7 @@ func compareConfigs(t *testing.T, expected, actual *BeaconChainConfig) {
 	require.DeepEqual(t, expected.ProportionalSlashingMultiplier, actual.ProportionalSlashingMultiplier)
 	require.DeepEqual(t, expected.MaxProposerSlashings, actual.MaxProposerSlashings)
 	require.DeepEqual(t, expected.MaxAttesterSlashings, actual.MaxAttesterSlashings)
+	require.DeepEqual(t, expected.MaxAttesterSlashingsElectra, actual.MaxAttesterSlashingsElectra)
 	require.DeepEqual(t, expected.MaxAttestations, actual.MaxAttestations)
 	require.DeepEqual(t, expected.MaxDeposits, actual.MaxDeposits)
 	require.DeepEqual(t, expected.MaxVoluntaryExits, actual.MaxVoluntaryExits)

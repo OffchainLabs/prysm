@@ -5,9 +5,9 @@ import (
 	"testing"
 
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p/peers/peerdata"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers/peerdata"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func TestStore_GetSetDelete(t *testing.T) {
@@ -107,5 +107,4 @@ func TestStore_TrustedPeers(t *testing.T) {
 	assert.Equal(t, false, store.IsTrustedPeer(pid1))
 	assert.Equal(t, false, store.IsTrustedPeer(pid2))
 	assert.Equal(t, false, store.IsTrustedPeer(pid3))
-
 }

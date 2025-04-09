@@ -6,18 +6,18 @@ import (
 	"strconv"
 	"testing"
 
-	mock "github.com/prysmaticlabs/prysm/v4/beacon-chain/blockchain/testing"
-	dbtest "github.com/prysmaticlabs/prysm/v4/beacon-chain/db/testing"
-	mockslashings "github.com/prysmaticlabs/prysm/v4/beacon-chain/operations/slashings/mock"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/startup"
-	mockstategen "github.com/prysmaticlabs/prysm/v4/beacon-chain/state/stategen/mock"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/crypto/bls"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	slashersimulator "github.com/prysmaticlabs/prysm/v4/testing/slasher/simulator"
-	"github.com/prysmaticlabs/prysm/v4/testing/util"
+	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
+	dbtest "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
+	mockslashings "github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/slashings/mock"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
+	mockstategen "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stategen/mock"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	slashersimulator "github.com/prysmaticlabs/prysm/v5/testing/slasher/simulator"
+	"github.com/prysmaticlabs/prysm/v5/testing/util"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
@@ -85,7 +85,7 @@ func TestEndToEnd_SlasherSimulator(t *testing.T) {
 	require.NoError(t, err)
 
 	mockChain := &mock.ChainService{State: beaconState}
-	gen := mockstategen.NewMockService()
+	gen := mockstategen.NewService()
 	gen.AddStateForRoot(beaconState, [32]byte{})
 
 	gs := startup.NewClockSynchronizer()

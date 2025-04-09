@@ -8,12 +8,12 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/cache"
-	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/sirupsen/logrus"
 	"github.com/wealdtech/go-bytesutil"
-	"go.opencensus.io/trace"
 )
 
 var (
@@ -76,7 +76,7 @@ func (c *Cache) allDeposits(untilBlk *big.Int) []*ethpb.Deposit {
 
 // AllDepositContainers returns all historical deposit containers.
 func (c *Cache) AllDepositContainers(ctx context.Context) []*ethpb.DepositContainer {
-	ctx, span := trace.StartSpan(ctx, "Cache.AllDepositContainers")
+	_, span := trace.StartSpan(ctx, "Cache.AllDepositContainers")
 	defer span.End()
 	c.depositsLock.RLock()
 	defer c.depositsLock.RUnlock()
@@ -101,7 +101,7 @@ func (c *Cache) AllDepositContainers(ctx context.Context) []*ethpb.DepositContai
 // DepositByPubkey looks through historical deposits and finds one which contains
 // a certain public key within its deposit data.
 func (c *Cache) DepositByPubkey(ctx context.Context, pubKey []byte) (*ethpb.Deposit, *big.Int) {
-	ctx, span := trace.StartSpan(ctx, "Cache.DepositByPubkey")
+	_, span := trace.StartSpan(ctx, "Cache.DepositByPubkey")
 	defer span.End()
 	c.depositsLock.RLock()
 	defer c.depositsLock.RUnlock()
@@ -123,7 +123,7 @@ func (c *Cache) DepositByPubkey(ctx context.Context, pubKey []byte) (*ethpb.Depo
 // DepositsNumberAndRootAtHeight returns number of deposits made up to blockheight and the
 // root that corresponds to the latest deposit at that blockheight.
 func (c *Cache) DepositsNumberAndRootAtHeight(ctx context.Context, blockHeight *big.Int) (uint64, [32]byte) {
-	ctx, span := trace.StartSpan(ctx, "Cache.DepositsNumberAndRootAtHeight")
+	_, span := trace.StartSpan(ctx, "Cache.DepositsNumberAndRootAtHeight")
 	defer span.End()
 	c.depositsLock.RLock()
 	defer c.depositsLock.RUnlock()
@@ -141,7 +141,7 @@ func (c *Cache) DepositsNumberAndRootAtHeight(ctx context.Context, blockHeight *
 
 // FinalizedDeposits returns the finalized deposits trie.
 func (c *Cache) FinalizedDeposits(ctx context.Context) (cache.FinalizedDeposits, error) {
-	ctx, span := trace.StartSpan(ctx, "Cache.FinalizedDeposits")
+	_, span := trace.StartSpan(ctx, "Cache.FinalizedDeposits")
 	defer span.End()
 	c.depositsLock.RLock()
 	defer c.depositsLock.RUnlock()
@@ -159,7 +159,7 @@ func (c *Cache) FinalizedDeposits(ctx context.Context) (cache.FinalizedDeposits,
 // NonFinalizedDeposits returns the list of non-finalized deposits until the given block number (inclusive).
 // If no block is specified then this method returns all non-finalized deposits.
 func (c *Cache) NonFinalizedDeposits(ctx context.Context, lastFinalizedIndex int64, untilBlk *big.Int) []*ethpb.Deposit {
-	ctx, span := trace.StartSpan(ctx, "Cache.NonFinalizedDeposits")
+	_, span := trace.StartSpan(ctx, "Cache.NonFinalizedDeposits")
 	defer span.End()
 	c.depositsLock.RLock()
 	defer c.depositsLock.RUnlock()
@@ -178,56 +178,10 @@ func (c *Cache) NonFinalizedDeposits(ctx context.Context, lastFinalizedIndex int
 	return deposits
 }
 
-// PruneProofs removes proofs from all deposits whose index is equal or less than untilDepositIndex.
-func (c *Cache) PruneProofs(ctx context.Context, untilDepositIndex int64) error {
-	ctx, span := trace.StartSpan(ctx, "Cache.PruneProofs")
-	defer span.End()
-	c.depositsLock.Lock()
-	defer c.depositsLock.Unlock()
-
-	if untilDepositIndex >= int64(len(c.deposits)) {
-		untilDepositIndex = int64(len(c.deposits) - 1)
-	}
-
-	for i := untilDepositIndex; i >= 0; i-- {
-		// Finding a nil proof means that all proofs up to this deposit have been already pruned.
-		if c.deposits[i].Deposit.Proof == nil {
-			break
-		}
-		c.deposits[i].Deposit.Proof = nil
-	}
-
-	return nil
-}
-
-// PrunePendingDeposits removes any deposit which is older than the given deposit merkle tree index.
-func (c *Cache) PrunePendingDeposits(ctx context.Context, merkleTreeIndex int64) {
-	ctx, span := trace.StartSpan(ctx, "Cache.PrunePendingDeposits")
-	defer span.End()
-
-	if merkleTreeIndex == 0 {
-		log.Debug("Ignoring 0 deposit removal")
-		return
-	}
-
-	c.depositsLock.Lock()
-	defer c.depositsLock.Unlock()
-
-	cleanDeposits := make([]*ethpb.DepositContainer, 0, len(c.pendingDeposits))
-	for _, dp := range c.pendingDeposits {
-		if dp.Index >= merkleTreeIndex {
-			cleanDeposits = append(cleanDeposits, dp)
-		}
-	}
-
-	c.pendingDeposits = cleanDeposits
-	pendingDepositsCount.Set(float64(len(c.pendingDeposits)))
-}
-
 // InsertPendingDeposit into the database. If deposit or block number are nil
 // then this method does nothing.
 func (c *Cache) InsertPendingDeposit(ctx context.Context, d *ethpb.Deposit, blockNum uint64, index int64, depositRoot [32]byte) {
-	ctx, span := trace.StartSpan(ctx, "Cache.InsertPendingDeposit")
+	_, span := trace.StartSpan(ctx, "Cache.InsertPendingDeposit")
 	defer span.End()
 	if d == nil {
 		log.WithFields(logrus.Fields{
@@ -241,7 +195,7 @@ func (c *Cache) InsertPendingDeposit(ctx context.Context, d *ethpb.Deposit, bloc
 	c.pendingDeposits = append(c.pendingDeposits,
 		&ethpb.DepositContainer{Deposit: d, Eth1BlockHeight: blockNum, Index: index, DepositRoot: depositRoot[:]})
 	pendingDepositsCount.Set(float64(len(c.pendingDeposits)))
-	span.AddAttributes(trace.Int64Attribute("count", int64(len(c.pendingDeposits))))
+	span.SetAttributes(trace.Int64Attribute("count", int64(len(c.pendingDeposits))))
 }
 
 // Deposits returns the cached internal deposit tree.
@@ -260,6 +214,12 @@ func toFinalizedDepositsContainer(deposits *DepositTree, index int64) finalizedD
 		depositTree:     deposits,
 		merkleTrieIndex: index,
 	}
+}
+
+// PendingDepositsFetcher specifically outlines a struct that can retrieve deposits
+// which have not yet been included in the chain.
+type PendingDepositsFetcher interface {
+	PendingContainers(ctx context.Context, untilBlk *big.Int) []*ethpb.DepositContainer
 }
 
 // PendingDeposits returns a list of deposits until the given block number
@@ -282,7 +242,7 @@ func (c *Cache) PendingDeposits(ctx context.Context, untilBlk *big.Int) []*ethpb
 // PendingContainers returns a list of deposit containers until the given block number
 // (inclusive).
 func (c *Cache) PendingContainers(ctx context.Context, untilBlk *big.Int) []*ethpb.DepositContainer {
-	ctx, span := trace.StartSpan(ctx, "Cache.PendingContainers")
+	_, span := trace.StartSpan(ctx, "Cache.PendingContainers")
 	defer span.End()
 	c.depositsLock.RLock()
 	defer c.depositsLock.RUnlock()
@@ -298,7 +258,7 @@ func (c *Cache) PendingContainers(ctx context.Context, untilBlk *big.Int) []*eth
 		return depositCntrs[i].Index < depositCntrs[j].Index
 	})
 
-	span.AddAttributes(trace.Int64Attribute("count", int64(len(depositCntrs))))
+	span.SetAttributes(trace.Int64Attribute("count", int64(len(depositCntrs))))
 
 	return depositCntrs
 }

@@ -4,15 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/big"
 	"net"
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/beacon/engine"
@@ -21,40 +20,45 @@ import (
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
 	gethRPC "github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
-	gMux "github.com/gorilla/mux"
-	builderAPI "github.com/prysmaticlabs/prysm/v4/api/client/builder"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/signing"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/eth/shared"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/interfaces"
-	types "github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-
-	"github.com/prysmaticlabs/prysm/v4/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v4/math"
-	"github.com/prysmaticlabs/prysm/v4/network"
-	"github.com/prysmaticlabs/prysm/v4/network/authorization"
-	v1 "github.com/prysmaticlabs/prysm/v4/proto/engine/v1"
-	eth "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	"github.com/pkg/errors"
+	builderAPI "github.com/prysmaticlabs/prysm/v5/api/client/builder"
+	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
+	types "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/network"
+	"github.com/prysmaticlabs/prysm/v5/network/authorization"
+	v1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
+	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/sirupsen/logrus"
 )
 
 const (
-	statusPath   = "/eth/v1/builder/status"
-	registerPath = "/eth/v1/builder/validators"
-	headerPath   = "/eth/v1/builder/header/{slot:[0-9]+}/{parent_hash:0x[a-fA-F0-9]+}/{pubkey:0x[a-fA-F0-9]+}"
-	blindedPath  = "/eth/v1/builder/blinded_blocks"
+	statusPath   = "GET /eth/v1/builder/status"
+	registerPath = "POST /eth/v1/builder/validators"
+	headerPath   = "GET /eth/v1/builder/header/{slot}/{parent_hash}/{pubkey}"
+	blindedPath  = "POST /eth/v1/builder/blinded_blocks"
 
 	// ForkchoiceUpdatedMethod v1 request string for JSON-RPC.
 	ForkchoiceUpdatedMethod = "engine_forkchoiceUpdatedV1"
 	// ForkchoiceUpdatedMethodV2 v2 request string for JSON-RPC.
 	ForkchoiceUpdatedMethodV2 = "engine_forkchoiceUpdatedV2"
+	// ForkchoiceUpdatedMethodV3 v3 request string for JSON-RPC.
+	ForkchoiceUpdatedMethodV3 = "engine_forkchoiceUpdatedV3"
 	// GetPayloadMethod v1 request string for JSON-RPC.
 	GetPayloadMethod = "engine_getPayloadV1"
 	// GetPayloadMethodV2 v2 request string for JSON-RPC.
 	GetPayloadMethodV2 = "engine_getPayloadV2"
-	// ExchangeTransitionConfigurationMethod v1 request string for JSON-RPC.
+	// GetPayloadMethodV3 v3 request string for JSON-RPC.
+	GetPayloadMethodV3 = "engine_getPayloadV3"
+	// GetPayloadMethodV4 v4 request string for JSON-RPC.
+	GetPayloadMethodV4 = "engine_getPayloadV4"
 )
 
 var (
@@ -85,24 +89,19 @@ type ExecPayloadResponse struct {
 	Version string               `json:"version"`
 	Data    *v1.ExecutionPayload `json:"data"`
 }
-
-type ExecHeaderResponseCapella struct {
-	Version string `json:"version"`
-	Data    struct {
-		Signature hexutil.Bytes                 `json:"signature"`
-		Message   *builderAPI.BuilderBidCapella `json:"message"`
-	} `json:"data"`
-}
-
 type Builder struct {
-	cfg          *config
-	address      string
-	execClient   *gethRPC.Client
-	currId       *v1.PayloadIDBytes
-	currPayload  interfaces.ExecutionData
-	mux          *gMux.Router
-	validatorMap map[string]*eth.ValidatorRegistrationV1
-	srv          *http.Server
+	cfg            *config
+	address        string
+	execClient     *gethRPC.Client
+	currId         *v1.PayloadIDBytes
+	prevBeaconRoot []byte
+	currVersion    int
+	currPayload    interfaces.ExecutionData
+	blobBundle     *v1.BlobsBundle
+	mux            *http.ServeMux
+	validatorMap   map[string]*eth.ValidatorRegistrationV1
+	valLock        sync.RWMutex
+	srv            *http.Server
 }
 
 // New creates a proxy server forwarding requests from a consensus client to an execution client.
@@ -129,25 +128,26 @@ func New(opts ...Option) (*Builder, error) {
 	if err != nil {
 		return nil, err
 	}
-	mux := http.NewServeMux()
-	mux.Handle("/", p)
-	router := gMux.NewRouter()
+	router := http.NewServeMux()
+	router.Handle("/", p)
 	router.HandleFunc(statusPath, func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusOK)
 	})
 	router.HandleFunc(registerPath, p.registerValidators)
 	router.HandleFunc(headerPath, p.handleHeaderRequest)
 	router.HandleFunc(blindedPath, p.handleBlindedBlock)
-	addr := fmt.Sprintf("%s:%d", p.cfg.builderHost, p.cfg.builderPort)
+	addr := net.JoinHostPort(p.cfg.builderHost, strconv.Itoa(p.cfg.builderPort))
 	srv := &http.Server{
-		Handler:           mux,
+		Handler:           router,
 		Addr:              addr,
 		ReadHeaderTimeout: time.Second,
 	}
 	p.address = addr
 	p.srv = srv
 	p.execClient = execClient
+	p.valLock.Lock()
 	p.validatorMap = map[string]*eth.ValidatorRegistrationV1{}
+	p.valLock.Unlock()
 	p.mux = router
 	return p, nil
 }
@@ -227,24 +227,49 @@ func (p *Builder) handleEngineCalls(req, resp []byte) {
 	}
 	p.cfg.logger.Infof("Received engine call %s", rpcObj.Method)
 	switch rpcObj.Method {
-	case ForkchoiceUpdatedMethod, ForkchoiceUpdatedMethodV2:
+	case ForkchoiceUpdatedMethod, ForkchoiceUpdatedMethodV2, ForkchoiceUpdatedMethodV3:
 		result := &ForkchoiceUpdatedResponse{}
 		err = json.Unmarshal(resp, result)
 		if err != nil {
 			p.cfg.logger.Errorf("Could not unmarshal fcu: %v", err)
 			return
 		}
-		p.currId = result.Result.PayloadId
-		p.cfg.logger.Infof("Received payload id of %#x", result.Result.PayloadId)
+		if result.Result.PayloadId != nil && *result.Result.PayloadId != [8]byte{} {
+			p.currId = result.Result.PayloadId
+		}
+		if rpcObj.Method == ForkchoiceUpdatedMethodV3 {
+			attr := &v1.PayloadAttributesV3{}
+			obj, err := json.Marshal(rpcObj.Params[1])
+			if err != nil {
+				p.cfg.logger.Errorf("Could not marshal attr: %v", err)
+				return
+			}
+			if err := json.Unmarshal(obj, attr); err != nil {
+				p.cfg.logger.Errorf("Could not unmarshal attr: %v", err)
+				return
+			}
+			p.prevBeaconRoot = attr.ParentBeaconBlockRoot
+		}
+		payloadID := [8]byte{}
+		status := ""
+		var lastValHash []byte
+		if result.Result.PayloadId != nil {
+			payloadID = *result.Result.PayloadId
+		}
+		if result.Result.Status != nil {
+			status = result.Result.Status.Status.String()
+			lastValHash = result.Result.Status.LatestValidHash
+		}
+		p.cfg.logger.Infof("Received payload id of %#x and status of %s along with a valid hash of %#x", payloadID, status, lastValHash)
 	}
 }
 
-func (p *Builder) isBuilderCall(req *http.Request) bool {
+func (*Builder) isBuilderCall(req *http.Request) bool {
 	return strings.Contains(req.URL.Path, "/eth/v1/builder/")
 }
 
 func (p *Builder) registerValidators(w http.ResponseWriter, req *http.Request) {
-	registrations := []shared.SignedValidatorRegistration{}
+	var registrations []structs.SignedValidatorRegistration
 	if err := json.NewDecoder(req.Body).Decode(&registrations); err != nil {
 		http.Error(w, "invalid request", http.StatusBadRequest)
 		return
@@ -255,20 +280,26 @@ func (p *Builder) registerValidators(w http.ResponseWriter, req *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		p.validatorMap[string(r.Message.Pubkey)] = msg
+		p.valLock.Lock()
+		p.validatorMap[r.Message.Pubkey] = msg
+		p.valLock.Unlock()
 	}
 	// TODO: Verify Signatures from validators
 	w.WriteHeader(http.StatusOK)
 }
 
 func (p *Builder) handleHeaderRequest(w http.ResponseWriter, req *http.Request) {
-	urlParams := gMux.Vars(req)
-	pHash := urlParams["parent_hash"]
+	pHash := req.PathValue("parent_hash")
 	if pHash == "" {
 		http.Error(w, "no valid parent hash", http.StatusBadRequest)
 		return
 	}
-	reqSlot := urlParams["slot"]
+	_, err := bytesutil.DecodeHexWithLength(pHash, common.HashLength)
+	if err != nil {
+		http.Error(w, "invalid parent hash", http.StatusBadRequest)
+		return
+	}
+	reqSlot := req.PathValue("slot")
 	if reqSlot == "" {
 		http.Error(w, "no valid slot provided", http.StatusBadRequest)
 		return
@@ -278,8 +309,28 @@ func (p *Builder) handleHeaderRequest(w http.ResponseWriter, req *http.Request) 
 		http.Error(w, "invalid slot provided", http.StatusBadRequest)
 		return
 	}
+	reqPubkey := req.PathValue("pubkey")
+	if reqPubkey == "" {
+		http.Error(w, "no valid pubkey provided", http.StatusBadRequest)
+		return
+	}
+	_, err = bytesutil.DecodeHexWithLength(reqPubkey, fieldparams.BLSPubkeyLength)
+	if err != nil {
+		http.Error(w, "invalid pubkey", http.StatusBadRequest)
+		return
+	}
 	ax := types.Slot(slot)
 	currEpoch := types.Epoch(ax / params.BeaconConfig().SlotsPerEpoch)
+	if currEpoch >= params.BeaconConfig().ElectraForkEpoch {
+		p.handleHeaderRequestElectra(w)
+		return
+	}
+
+	if currEpoch >= params.BeaconConfig().DenebForkEpoch {
+		p.handleHeaderRequestDeneb(w)
+		return
+	}
+
 	if currEpoch >= params.BeaconConfig().CapellaForkEpoch {
 		p.handleHeaderRequestCapella(w)
 		return
@@ -348,15 +399,15 @@ func (p *Builder) handleHeaderRequest(w http.ResponseWriter, req *http.Request) 
 			Message:   bid,
 		},
 	}
-
+	w.WriteHeader(http.StatusOK)
 	err = json.NewEncoder(w).Encode(hdrResp)
 	if err != nil {
 		p.cfg.logger.WithError(err).Error("Could not encode response")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	p.currVersion = version.Bellatrix
 	p.currPayload = wObj
-	w.WriteHeader(http.StatusOK)
 }
 
 func (p *Builder) handleHeaderRequestCapella(w http.ResponseWriter) {
@@ -376,11 +427,7 @@ func (p *Builder) handleHeaderRequestCapella(w http.ResponseWriter) {
 	v := big.NewInt(0).SetBytes(bytesutil.ReverseByteOrder(b.Value))
 	// we set the payload value as twice its actual one so that it always chooses builder payloads vs local payloads
 	v = v.Mul(v, big.NewInt(2))
-	// Is used as the helper modifies the big.Int
-	weiVal := big.NewInt(0).SetBytes(bytesutil.ReverseByteOrder(b.Value))
-	// we set the payload value as twice its actual one so that it always chooses builder payloads vs local payloads
-	weiVal = weiVal.Mul(weiVal, big.NewInt(2))
-	wObj, err := blocks.WrappedExecutionPayloadCapella(b.Payload, math.WeiToGwei(weiVal))
+	wObj, err := blocks.WrappedExecutionPayloadCapella(b.Payload)
 	if err != nil {
 		p.cfg.logger.WithError(err).Error("Could not wrap execution payload")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -419,7 +466,7 @@ func (p *Builder) handleHeaderRequestCapella(w http.ResponseWriter) {
 		return
 	}
 	sig := secKey.Sign(rt[:])
-	hdrResp := &ExecHeaderResponseCapella{
+	hdrResp := &builderAPI.ExecHeaderResponseCapella{
 		Version: "capella",
 		Data: struct {
 			Signature hexutil.Bytes                 `json:"signature"`
@@ -429,18 +476,238 @@ func (p *Builder) handleHeaderRequestCapella(w http.ResponseWriter) {
 			Message:   bid,
 		},
 	}
-
+	w.WriteHeader(http.StatusOK)
 	err = json.NewEncoder(w).Encode(hdrResp)
 	if err != nil {
 		p.cfg.logger.WithError(err).Error("Could not encode response")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	p.currVersion = version.Capella
 	p.currPayload = wObj
+}
+
+func (p *Builder) handleHeaderRequestDeneb(w http.ResponseWriter) {
+	b, err := p.retrievePendingBlockDeneb()
+	if err != nil {
+		p.cfg.logger.WithError(err).Error("Could not retrieve pending block")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	secKey, err := bls.RandKey()
+	if err != nil {
+		p.cfg.logger.WithError(err).Error("Could not retrieve secret key")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	v := big.NewInt(0).SetBytes(bytesutil.ReverseByteOrder(b.Value))
+	// we set the payload value as twice its actual one so that it always chooses builder payloads vs local payloads
+	v = v.Mul(v, big.NewInt(2))
+	wObj, err := blocks.WrappedExecutionPayloadDeneb(b.Payload)
+	if err != nil {
+		p.cfg.logger.WithError(err).Error("Could not wrap execution payload")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	hdr, err := blocks.PayloadToHeaderDeneb(wObj)
+	if err != nil {
+		p.cfg.logger.WithError(err).Error("Could not make payload into header")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	val := builderAPI.Uint256{Int: v}
+	var commitments []hexutil.Bytes
+	for _, c := range b.BlobsBundle.KzgCommitments {
+		copiedC := c
+		commitments = append(commitments, copiedC)
+	}
+	wrappedHdr := &builderAPI.ExecutionPayloadHeaderDeneb{ExecutionPayloadHeaderDeneb: hdr}
+	bid := &builderAPI.BuilderBidDeneb{
+		Header:             wrappedHdr,
+		BlobKzgCommitments: commitments,
+		Value:              val,
+		Pubkey:             secKey.PublicKey().Marshal(),
+	}
+	sszBid := &eth.BuilderBidDeneb{
+		Header:             hdr,
+		BlobKzgCommitments: b.BlobsBundle.KzgCommitments,
+		Value:              val.SSZBytes(),
+		Pubkey:             secKey.PublicKey().Marshal(),
+	}
+	d, err := signing.ComputeDomain(params.BeaconConfig().DomainApplicationBuilder,
+		nil, /* fork version */
+		nil /* genesis val root */)
+	if err != nil {
+		p.cfg.logger.WithError(err).Error("Could not compute the domain")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	rt, err := signing.ComputeSigningRoot(sszBid, d)
+	if err != nil {
+		p.cfg.logger.WithError(err).Error("Could not compute the signing root")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	sig := secKey.Sign(rt[:])
+	hdrResp := &builderAPI.ExecHeaderResponseDeneb{
+		Version: "deneb",
+		Data: struct {
+			Signature hexutil.Bytes               `json:"signature"`
+			Message   *builderAPI.BuilderBidDeneb `json:"message"`
+		}{
+			Signature: sig.Marshal(),
+			Message:   bid,
+		},
+	}
 	w.WriteHeader(http.StatusOK)
+	err = json.NewEncoder(w).Encode(hdrResp)
+	if err != nil {
+		p.cfg.logger.WithError(err).Error("Could not encode response")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	p.currVersion = version.Deneb
+	p.currPayload = wObj
+	p.blobBundle = b.BlobsBundle
+}
+
+func (p *Builder) handleHeaderRequestElectra(w http.ResponseWriter) {
+	b, err := p.retrievePendingBlockElectra()
+	if err != nil {
+		p.cfg.logger.WithError(err).Error("Could not retrieve pending block")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	secKey, err := bls.RandKey()
+	if err != nil {
+		p.cfg.logger.WithError(err).Error("Could not retrieve secret key")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	v := big.NewInt(0).SetBytes(bytesutil.ReverseByteOrder(b.Value))
+	// we set the payload value as twice its actual one so that it always chooses builder payloads vs local payloads
+	v = v.Mul(v, big.NewInt(2))
+	wObj, err := blocks.WrappedExecutionPayloadDeneb(b.Payload)
+	if err != nil {
+		p.cfg.logger.WithError(err).Error("Could not wrap execution payload")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	hdr, err := blocks.PayloadToHeaderElectra(wObj)
+	if err != nil {
+		p.cfg.logger.WithError(err).Error("Could not make payload into header")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	val := builderAPI.Uint256{Int: v}
+	var commitments []hexutil.Bytes
+	for _, c := range b.BlobsBundle.KzgCommitments {
+		copiedC := c
+		commitments = append(commitments, copiedC)
+	}
+	wrappedHdr := &builderAPI.ExecutionPayloadHeaderDeneb{ExecutionPayloadHeaderDeneb: hdr}
+	requests, err := b.GetDecodedExecutionRequests()
+	if err != nil {
+		p.cfg.logger.WithError(err).Error("Could not get decoded execution requests")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	rv1 := &builderAPI.ExecutionRequestsV1{
+		Deposits:       make([]*builderAPI.DepositRequestV1, len(requests.Deposits)),
+		Withdrawals:    make([]*builderAPI.WithdrawalRequestV1, len(requests.Withdrawals)),
+		Consolidations: make([]*builderAPI.ConsolidationRequestV1, len(requests.Consolidations)),
+	}
+
+	for i, d := range requests.Deposits {
+		amount := new(big.Int).SetUint64(d.Amount)
+		index := new(big.Int).SetUint64(d.Index)
+		dr := &builderAPI.DepositRequestV1{
+			PubKey:                d.Pubkey,
+			WithdrawalCredentials: d.WithdrawalCredentials,
+			Amount:                builderAPI.Uint256{Int: amount},
+			Signature:             d.Signature,
+			Index:                 builderAPI.Uint256{Int: index},
+		}
+		rv1.Deposits[i] = dr
+	}
+
+	for i, w := range requests.Withdrawals {
+		bi := new(big.Int).SetUint64(w.Amount)
+		wr := &builderAPI.WithdrawalRequestV1{
+			SourceAddress:   w.SourceAddress,
+			ValidatorPubkey: w.ValidatorPubkey,
+			Amount:          builderAPI.Uint256{Int: bi},
+		}
+		rv1.Withdrawals[i] = wr
+	}
+
+	for i, c := range requests.Consolidations {
+		cr := &builderAPI.ConsolidationRequestV1{
+			SourceAddress: c.SourceAddress,
+			SourcePubkey:  c.SourcePubkey,
+			TargetPubkey:  c.TargetPubkey,
+		}
+		rv1.Consolidations[i] = cr
+	}
+
+	bid := &builderAPI.BuilderBidElectra{
+		Header:             wrappedHdr,
+		BlobKzgCommitments: commitments,
+		Value:              val,
+		Pubkey:             secKey.PublicKey().Marshal(),
+		ExecutionRequests:  rv1,
+	}
+
+	sszBid := &eth.BuilderBidElectra{
+		Header:             hdr,
+		BlobKzgCommitments: b.BlobsBundle.KzgCommitments,
+		Value:              val.SSZBytes(),
+		Pubkey:             secKey.PublicKey().Marshal(),
+		ExecutionRequests:  requests,
+	}
+	d, err := signing.ComputeDomain(params.BeaconConfig().DomainApplicationBuilder,
+		nil, /* fork version */
+		nil /* genesis val root */)
+	if err != nil {
+		p.cfg.logger.WithError(err).Error("Could not compute the domain")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	rt, err := signing.ComputeSigningRoot(sszBid, d)
+	if err != nil {
+		p.cfg.logger.WithError(err).Error("Could not compute the signing root")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	sig := secKey.Sign(rt[:])
+	hdrResp := &builderAPI.ExecHeaderResponseElectra{
+		Version: "electra",
+		Data: struct {
+			Signature hexutil.Bytes                 `json:"signature"`
+			Message   *builderAPI.BuilderBidElectra `json:"message"`
+		}{
+			Signature: sig.Marshal(),
+			Message:   bid,
+		},
+	}
+	w.WriteHeader(http.StatusOK)
+	err = json.NewEncoder(w).Encode(hdrResp)
+	if err != nil {
+		p.cfg.logger.WithError(err).Error("Could not encode response")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	p.currVersion = version.Electra
+	p.currPayload = wObj
+	p.blobBundle = b.BlobsBundle
 }
 
 func (p *Builder) handleBlindedBlock(w http.ResponseWriter, req *http.Request) {
+	// TODO update for fork specific
 	sb := &builderAPI.SignedBlindedBeaconBlockBellatrix{
 		SignedBlindedBeaconBlockBellatrix: &eth.SignedBlindedBeaconBlockBellatrix{},
 	}
@@ -454,49 +721,62 @@ func (p *Builder) handleBlindedBlock(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, "payload not found", http.StatusInternalServerError)
 		return
 	}
-	if payload, err := p.currPayload.PbCapella(); err == nil {
-		convertedPayload, err := builderAPI.FromProtoCapella(payload)
-		if err != nil {
-			p.cfg.logger.WithError(err).Error("Could not convert the payload")
-			http.Error(w, "payload not found", http.StatusInternalServerError)
-			return
-		}
-		execResp := &builderAPI.ExecPayloadResponseCapella{
-			Version: "capella",
-			Data:    convertedPayload,
-		}
-		err = json.NewEncoder(w).Encode(execResp)
-		if err != nil {
-			p.cfg.logger.WithError(err).Error("Could not encode full payload response")
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-	bellPayload, err := p.currPayload.PbBellatrix()
-	if err != nil {
-		p.cfg.logger.WithError(err).Error("Could not retrieve the payload")
-		http.Error(w, "payload not found", http.StatusInternalServerError)
-		return
-	}
-	convertedPayload, err := builderAPI.FromProto(bellPayload)
+
+	resp, err := ExecutionPayloadResponseFromData(p.currVersion, p.currPayload, p.blobBundle)
 	if err != nil {
 		p.cfg.logger.WithError(err).Error("Could not convert the payload")
-		http.Error(w, "payload not found", http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	execResp := &builderAPI.ExecPayloadResponse{
-		Version: "bellatrix",
-		Data:    convertedPayload,
-	}
-	err = json.NewEncoder(w).Encode(execResp)
+	w.WriteHeader(http.StatusOK)
+	err = json.NewEncoder(w).Encode(resp)
 	if err != nil {
 		p.cfg.logger.WithError(err).Error("Could not encode full payload response")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	w.WriteHeader(http.StatusOK)
+}
+
+var errInvalidTypeConversion = errors.New("unable to translate between api and foreign type")
+
+// ExecutionPayloadResponseFromData converts an ExecutionData interface value to a payload response.
+// This involves serializing the execution payload value so that the abstract payload envelope can be used.
+func ExecutionPayloadResponseFromData(v int, ed interfaces.ExecutionData, bundle *v1.BlobsBundle) (*builderAPI.ExecutionPayloadResponse, error) {
+	pb := ed.Proto()
+	var data interface{}
+	var err error
+	ver := version.String(v)
+	switch pbStruct := pb.(type) {
+	case *v1.ExecutionPayloadDeneb:
+		payloadStruct, err := builderAPI.FromProtoDeneb(pbStruct)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to convert a Deneb ExecutionPayload to an API response")
+		}
+		data = &builderAPI.ExecutionPayloadDenebAndBlobsBundle{
+			ExecutionPayload: &payloadStruct,
+			BlobsBundle:      builderAPI.FromBundleProto(bundle),
+		}
+	case *v1.ExecutionPayloadCapella:
+		data, err = builderAPI.FromProtoCapella(pbStruct)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to convert a Capella ExecutionPayload to an API response")
+		}
+	case *v1.ExecutionPayload:
+		data, err = builderAPI.FromProto(pbStruct)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to convert a Bellatrix ExecutionPayload to an API response")
+		}
+	default:
+		return nil, errInvalidTypeConversion
+	}
+	encoded, err := json.Marshal(data)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to marshal execution payload version=%s", ver)
+	}
+	return &builderAPI.ExecutionPayloadResponse{
+		Version: ver,
+		Data:    encoded,
+	}, nil
 }
 
 func (p *Builder) retrievePendingBlock() (*v1.ExecutionPayload, error) {
@@ -508,7 +788,7 @@ func (p *Builder) retrievePendingBlock() (*v1.ExecutionPayload, error) {
 	if err != nil {
 		return nil, err
 	}
-	payloadEnv, err := modifyExecutionPayload(*result, big.NewInt(0))
+	payloadEnv, err := modifyExecutionPayload(*result, big.NewInt(0), nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -520,6 +800,7 @@ func (p *Builder) retrievePendingBlock() (*v1.ExecutionPayload, error) {
 	if err = json.Unmarshal(marshalledOutput, bellatrixPayload); err != nil {
 		return nil, err
 	}
+	p.currId = nil
 	return bellatrixPayload, nil
 }
 
@@ -532,7 +813,7 @@ func (p *Builder) retrievePendingBlockCapella() (*v1.ExecutionPayloadCapellaWith
 	if err != nil {
 		return nil, err
 	}
-	payloadEnv, err := modifyExecutionPayload(*result.ExecutionPayload, result.BlockValue)
+	payloadEnv, err := modifyExecutionPayload(*result.ExecutionPayload, result.BlockValue, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -544,7 +825,67 @@ func (p *Builder) retrievePendingBlockCapella() (*v1.ExecutionPayloadCapellaWith
 	if err = json.Unmarshal(marshalledOutput, capellaPayload); err != nil {
 		return nil, err
 	}
+	p.currId = nil
 	return capellaPayload, nil
+}
+
+func (p *Builder) retrievePendingBlockDeneb() (*v1.ExecutionPayloadDenebWithValueAndBlobsBundle, error) {
+	result := &engine.ExecutionPayloadEnvelope{}
+	if p.currId == nil {
+		return nil, errors.New("no payload id is cached")
+	}
+	err := p.execClient.CallContext(context.Background(), result, GetPayloadMethodV3, *p.currId)
+	if err != nil {
+		return nil, err
+	}
+	if p.prevBeaconRoot == nil {
+		p.cfg.logger.Errorf("previous root is nil")
+	}
+	payloadEnv, err := modifyExecutionPayload(*result.ExecutionPayload, result.BlockValue, p.prevBeaconRoot, nil)
+	if err != nil {
+		return nil, err
+	}
+	payloadEnv.BlobsBundle = result.BlobsBundle
+	marshalledOutput, err := payloadEnv.MarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+	denebPayload := &v1.ExecutionPayloadDenebWithValueAndBlobsBundle{}
+	if err = json.Unmarshal(marshalledOutput, denebPayload); err != nil {
+		return nil, err
+	}
+	p.currId = nil
+	return denebPayload, nil
+}
+
+func (p *Builder) retrievePendingBlockElectra() (*v1.ExecutionBundleElectra, error) {
+	result := &engine.ExecutionPayloadEnvelope{}
+	if p.currId == nil {
+		return nil, errors.New("no payload id is cached")
+	}
+	err := p.execClient.CallContext(context.Background(), result, GetPayloadMethodV4, *p.currId)
+	if err != nil {
+		return nil, err
+	}
+	if p.prevBeaconRoot == nil {
+		p.cfg.logger.Errorf("previous root is nil")
+	}
+
+	payloadEnv, err := modifyExecutionPayload(*result.ExecutionPayload, result.BlockValue, p.prevBeaconRoot, result.Requests)
+	if err != nil {
+		return nil, err
+	}
+	payloadEnv.BlobsBundle = result.BlobsBundle
+	marshalledOutput, err := payloadEnv.MarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+	electraPayload := &v1.ExecutionBundleElectra{}
+	if err = json.Unmarshal(marshalledOutput, electraPayload); err != nil {
+		return nil, err
+	}
+	p.currId = nil
+	return electraPayload, nil
 }
 
 func (p *Builder) sendHttpRequest(req *http.Request, requestBytes []byte) (*http.Response, error) {
@@ -555,7 +896,7 @@ func (p *Builder) sendHttpRequest(req *http.Request, requestBytes []byte) (*http
 	}
 
 	// Set the modified request as the proxy request body.
-	proxyReq.Body = ioutil.NopCloser(bytes.NewBuffer(requestBytes))
+	proxyReq.Body = io.NopCloser(bytes.NewBuffer(requestBytes))
 
 	// Required proxy headers for forwarding JSON-RPC requests to the execution client.
 	proxyReq.Header.Set("Host", req.Host)
@@ -564,7 +905,7 @@ func (p *Builder) sendHttpRequest(req *http.Request, requestBytes []byte) (*http
 
 	client := &http.Client{}
 	if p.cfg.secret != "" {
-		client = network.NewHttpClientWithSecret(p.cfg.secret)
+		client = network.NewHttpClientWithSecret(p.cfg.secret, "")
 	}
 	proxyRes, err := client.Do(proxyReq)
 	if err != nil {
@@ -576,14 +917,14 @@ func (p *Builder) sendHttpRequest(req *http.Request, requestBytes []byte) (*http
 
 // Peek into the bytes of an HTTP request's body.
 func parseRequestBytes(req *http.Request) ([]byte, error) {
-	requestBytes, err := ioutil.ReadAll(req.Body)
+	requestBytes, err := io.ReadAll(req.Body)
 	if err != nil {
 		return nil, err
 	}
 	if err = req.Body.Close(); err != nil {
 		return nil, err
 	}
-	req.Body = ioutil.NopCloser(bytes.NewBuffer(requestBytes))
+	req.Body = io.NopCloser(bytes.NewBuffer(requestBytes))
 	return requestBytes, nil
 }
 
@@ -609,16 +950,16 @@ func unmarshalRPCObject(b []byte) (*jsonRPCObject, error) {
 	return r, nil
 }
 
-func modifyExecutionPayload(execPayload engine.ExecutableData, fees *big.Int) (*engine.ExecutionPayloadEnvelope, error) {
-	modifiedBlock, err := executableDataToBlock(execPayload)
+func modifyExecutionPayload(execPayload engine.ExecutableData, fees *big.Int, prevBeaconRoot []byte, requests [][]byte) (*engine.ExecutionPayloadEnvelope, error) {
+	modifiedBlock, err := executableDataToBlock(execPayload, prevBeaconRoot, requests)
 	if err != nil {
 		return &engine.ExecutionPayloadEnvelope{}, err
 	}
-	return engine.BlockToExecutableData(modifiedBlock, fees, nil /*blobs*/), nil
+	return engine.BlockToExecutableData(modifiedBlock, fees, nil /*blobs*/, requests /*requests*/), nil
 }
 
 // This modifies the provided payload to imprint the builder's extra data
-func executableDataToBlock(params engine.ExecutableData) (*gethTypes.Block, error) {
+func executableDataToBlock(params engine.ExecutableData, prevBeaconRoot []byte, requests [][]byte) (*gethTypes.Block, error) {
 	txs, err := decodeTransactions(params.Transactions)
 	if err != nil {
 		return nil, err
@@ -631,6 +972,13 @@ func executableDataToBlock(params engine.ExecutableData) (*gethTypes.Block, erro
 		h := gethTypes.DeriveSha(gethTypes.Withdrawals(params.Withdrawals), trie.NewStackTrie(nil))
 		withdrawalsRoot = &h
 	}
+
+	var requestsHash *common.Hash
+	if requests != nil {
+		h := gethTypes.CalcRequestsHash(requests)
+		requestsHash = &h
+	}
+
 	header := &gethTypes.Header{
 		ParentHash:      params.ParentHash,
 		UncleHash:       gethTypes.EmptyUncleHash,
@@ -648,8 +996,22 @@ func executableDataToBlock(params engine.ExecutableData) (*gethTypes.Block, erro
 		Extra:           []byte("prysm-builder"), // add in extra data
 		MixDigest:       params.Random,
 		WithdrawalsHash: withdrawalsRoot,
+		BlobGasUsed:     params.BlobGasUsed,
+		ExcessBlobGas:   params.ExcessBlobGas,
+		RequestsHash:    requestsHash,
 	}
-	block := gethTypes.NewBlockWithHeader(header).WithBody(txs, nil /* uncles */).WithWithdrawals(params.Withdrawals)
+
+	if prevBeaconRoot != nil {
+		pRoot := common.Hash(prevBeaconRoot)
+		header.ParentBeaconRoot = &pRoot
+	}
+
+	body := gethTypes.Body{
+		Transactions: txs,
+		Uncles:       nil,
+		Withdrawals:  params.Withdrawals,
+	}
+	block := gethTypes.NewBlockWithHeader(header).WithBody(body)
 	return block, nil
 }
 
@@ -658,7 +1020,7 @@ func decodeTransactions(enc [][]byte) ([]*gethTypes.Transaction, error) {
 	for i, encTx := range enc {
 		var tx gethTypes.Transaction
 		if err := tx.UnmarshalBinary(encTx); err != nil {
-			return nil, fmt.Errorf("invalid transaction %d: %v", i, err)
+			return nil, fmt.Errorf("invalid transaction %d: %w", i, err)
 		}
 		txs[i] = &tx
 	}

@@ -5,14 +5,18 @@ import (
 	"context"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
-	statenative "github.com/prysmaticlabs/prysm/v4/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/testing/util"
+	"github.com/golang/snappy"
+	"github.com/google/go-cmp/cmp"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	statenative "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
+	"github.com/prysmaticlabs/prysm/v5/config/features"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/util"
+	"google.golang.org/protobuf/testing/protocmp"
 )
 
 func TestInitializeFromProto_Phase0(t *testing.T) {
@@ -202,6 +206,42 @@ func TestInitializeFromProto_Deneb(t *testing.T) {
 	}
 }
 
+func TestInitializeFromProto_Electra(t *testing.T) {
+	type test struct {
+		name  string
+		state *ethpb.BeaconStateElectra
+		error string
+	}
+	initTests := []test{
+		{
+			name:  "nil state",
+			state: nil,
+			error: "received nil state",
+		},
+		{
+			name: "nil validators",
+			state: &ethpb.BeaconStateElectra{
+				Slot:       4,
+				Validators: nil,
+			},
+		},
+		{
+			name:  "empty state",
+			state: &ethpb.BeaconStateElectra{},
+		},
+	}
+	for _, tt := range initTests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := statenative.InitializeFromProtoElectra(tt.state)
+			if tt.error != "" {
+				require.ErrorContains(t, tt.error, err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
 func TestInitializeFromProtoUnsafe_Phase0(t *testing.T) {
 	testState, _ := util.DeterministicGenesisState(t, 64)
 	pbState, err := statenative.ProtobufBeaconStatePhase0(testState.ToProtoUnsafe())
@@ -355,6 +395,37 @@ func TestInitializeFromProtoUnsafe_Deneb(t *testing.T) {
 	for _, tt := range initTests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := statenative.InitializeFromProtoUnsafeDeneb(tt.state)
+			if tt.error != "" {
+				assert.ErrorContains(t, tt.error, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestInitializeFromProtoUnsafe_Electra(t *testing.T) {
+	type test struct {
+		name  string
+		state *ethpb.BeaconStateElectra
+		error string
+	}
+	initTests := []test{
+		{
+			name: "nil validators",
+			state: &ethpb.BeaconStateElectra{
+				Slot:       4,
+				Validators: nil,
+			},
+		},
+		{
+			name:  "empty state",
+			state: &ethpb.BeaconStateElectra{},
+		},
+	}
+	for _, tt := range initTests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := statenative.InitializeFromProtoUnsafeElectra(tt.state)
 			if tt.error != "" {
 				assert.ErrorContains(t, tt.error, err)
 			} else {
@@ -732,4 +803,68 @@ func TestBeaconState_ValidatorMutation_Bellatrix(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, rt, rt2)
+}
+
+func TestBeaconState_InitializeInactivityScoresCorrectly_Deneb(t *testing.T) {
+	resetCfg := features.InitWithReset(&features.Flags{
+		EnableExperimentalState: true,
+	})
+	defer resetCfg()
+	st, _ := util.DeterministicGenesisStateDeneb(t, 200)
+	_, err := st.HashTreeRoot(context.Background())
+	require.NoError(t, err)
+	ic, err := st.InactivityScores()
+	require.NoError(t, err)
+	ic[10] = 10000
+	ic[100] = 1000
+
+	err = st.SetInactivityScores(ic)
+	require.NoError(t, err)
+
+	_, err = st.HashTreeRoot(context.Background())
+	require.NoError(t, err)
+
+	ic[150] = 2390239
+	err = st.SetInactivityScores(ic)
+	require.NoError(t, err)
+	rt, err := st.HashTreeRoot(context.Background())
+	require.NoError(t, err)
+
+	copiedSt, ok := st.ToProtoUnsafe().(*ethpb.BeaconStateDeneb)
+	if !ok {
+		t.Error("not ok")
+	}
+	newSt, err := statenative.InitializeFromProtoUnsafeDeneb(copiedSt)
+	require.NoError(t, err)
+
+	newRt, err := newSt.HashTreeRoot(context.Background())
+	require.NoError(t, err)
+
+	require.DeepSSZEqual(t, rt, newRt)
+}
+
+func TestBeaconChainCopy_Electra(t *testing.T) {
+	// Load a serialized Electra state from disk.
+	// This is a fully hydrated random test case from spectests.
+	serializedBytes, err := util.BazelFileBytes("tests/mainnet/electra/ssz_static/BeaconState/ssz_random/case_0/serialized.ssz_snappy")
+	require.NoError(t, err)
+	serializedSSZ, err := snappy.Decode(nil /* dst */, serializedBytes)
+	require.NoError(t, err)
+	pb := &ethpb.BeaconStateElectra{}
+	require.NoError(t, pb.UnmarshalSSZ(serializedSSZ))
+	st, err := statenative.InitializeFromProtoElectra(pb)
+	require.NoError(t, err)
+
+	// Sanity check that InitializeFromProtoElectra and ToProto works
+	if !cmp.Equal(st.ToProto(), pb, protocmp.Transform()) {
+		t.Log(cmp.Diff(st.ToProto(), pb, protocmp.Transform()))
+		t.Fatal("InitializeFromProtoElectra does not match input proto")
+	}
+
+	// Perform the copy and check that the copied state matches the original state.
+	st2 := st.Copy()
+	if !cmp.Equal(st.ToProto(), st2.ToProto(), protocmp.Transform()) {
+		t.Log(cmp.Diff(st.ToProto(), st2.ToProto(), protocmp.Transform()))
+		t.Fatal("Copied state does not match original state")
+	}
 }

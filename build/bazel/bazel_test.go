@@ -3,7 +3,7 @@ package bazel_test
 import (
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v4/build/bazel"
+	"github.com/prysmaticlabs/prysm/v5/build/bazel"
 )
 
 func TestBuildWithBazel(t *testing.T) {

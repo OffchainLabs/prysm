@@ -6,12 +6,9 @@ go_library(
         "double_votes.go",
         "surround_votes.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1/slashings",
+    importpath = "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/slashings",
     visibility = ["//visibility:public"],
-    deps = [
-        "//config/params:go_default_library",
-        "//proto/prysm/v1alpha1:go_default_library",
-    ],
+    deps = ["//proto/prysm/v1alpha1:go_default_library"],
 )
 
 go_test(
@@ -22,7 +19,6 @@ go_test(
     ],
     embed = [":go_default_library"],
     deps = [
-        "//config/params:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
     ],

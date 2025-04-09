@@ -4,17 +4,16 @@ import (
 	"context"
 	"strconv"
 
-	"github.com/prysmaticlabs/prysm/v4/validator/client/iface"
-
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
 )
 
 func (c *beaconApiValidatorClient) validatorStatus(ctx context.Context, in *ethpb.ValidatorStatusRequest) (*ethpb.ValidatorStatusResponse, error) {
-	_, _, validatorsStatusResponse, err := c.getValidatorsStatusResponse(ctx, [][]byte{in.PublicKey}, nil)
+	_, _, validatorsStatusResponse, err := c.validatorsStatusResponse(ctx, [][]byte{in.PublicKey}, nil)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get validator status response")
 	}
@@ -29,7 +28,11 @@ func (c *beaconApiValidatorClient) validatorStatus(ctx context.Context, in *ethp
 }
 
 func (c *beaconApiValidatorClient) multipleValidatorStatus(ctx context.Context, in *ethpb.MultipleValidatorStatusRequest) (*ethpb.MultipleValidatorStatusResponse, error) {
-	publicKeys, indices, statuses, err := c.getValidatorsStatusResponse(ctx, in.PublicKeys, in.Indices)
+	indices := make([]primitives.ValidatorIndex, len(in.Indices))
+	for i, ix := range in.Indices {
+		indices[i] = primitives.ValidatorIndex(ix)
+	}
+	publicKeys, indices, statuses, err := c.validatorsStatusResponse(ctx, in.PublicKeys, indices)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get validators status response")
 	}
@@ -41,12 +44,16 @@ func (c *beaconApiValidatorClient) multipleValidatorStatus(ctx context.Context, 
 	}, nil
 }
 
-func (c *beaconApiValidatorClient) getValidatorsStatusResponse(ctx context.Context, inPubKeys [][]byte, inIndexes []int64) (
+func (c *beaconApiValidatorClient) validatorsStatusResponse(ctx context.Context, inPubKeys [][]byte, inIndexes []primitives.ValidatorIndex) (
 	[][]byte,
 	[]primitives.ValidatorIndex,
 	[]*ethpb.ValidatorStatusResponse,
 	error,
 ) {
+	// if no parameters are provided we should just return an empty response
+	if len(inPubKeys) == 0 && len(inIndexes) == 0 {
+		return [][]byte{}, []primitives.ValidatorIndex{}, []*ethpb.ValidatorStatusResponse{}, nil
+	}
 	// Represents the target set of keys
 	stringTargetPubKeysToPubKeys := make(map[string][]byte, len(inPubKeys))
 	stringTargetPubKeys := make([]string, len(inPubKeys))
@@ -55,7 +62,7 @@ func (c *beaconApiValidatorClient) getValidatorsStatusResponse(ctx context.Conte
 	stringRetrievedPubKeys := make(map[string]struct{})
 
 	// Contains all keys in targetPubKeys but not in retrievedPubKeys
-	missingPubKeys := [][]byte{}
+	var missingPubKeys [][]byte
 
 	totalLen := len(inPubKeys) + len(inIndexes)
 
@@ -70,12 +77,13 @@ func (c *beaconApiValidatorClient) getValidatorsStatusResponse(ctx context.Conte
 	}
 
 	// Get state for the current validator
-	stateValidatorsResponse, err := c.stateValidatorsProvider.GetStateValidators(ctx, stringTargetPubKeys, inIndexes, nil)
+	stateValidatorsResponse, err := c.stateValidatorsProvider.StateValidators(ctx, stringTargetPubKeys, inIndexes, nil)
 	if err != nil {
 		return nil, nil, nil, errors.Wrap(err, "failed to get state validators")
 	}
 
-	validatorsCountResponse, err := c.prysmBeaconChainCLient.GetValidatorCount(ctx, "head", nil)
+	// TODO: we should remove this API call
+	validatorsCountResponse, err := c.prysmChainClient.ValidatorCount(ctx, "head", nil)
 	if err != nil && !errors.Is(err, iface.ErrNotSupported) {
 		return nil, nil, nil, errors.Wrap(err, "failed to get total validator count")
 	}

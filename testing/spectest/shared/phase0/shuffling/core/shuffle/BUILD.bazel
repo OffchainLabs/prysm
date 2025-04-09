@@ -7,7 +7,7 @@ go_library(
         "shuffle.go",
         "shuffle_test_format.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v4/testing/spectest/shared/phase0/shuffling/core/shuffle",
+    importpath = "github.com/prysmaticlabs/prysm/v5/testing/spectest/shared/phase0/shuffling/core/shuffle",
     visibility = ["//testing/spectest:__subpackages__"],
     deps = [
         "//beacon-chain/core/helpers:go_default_library",

@@ -4,14 +4,14 @@
 package bls
 
 import (
-	"github.com/prysmaticlabs/prysm/v4/crypto/bls/blst"
-	"github.com/prysmaticlabs/prysm/v4/crypto/bls/common"
-	"github.com/prysmaticlabs/prysm/v4/crypto/bls/herumi"
+	"github.com/prysmaticlabs/prysm/v5/crypto/bls/blst"
+	"github.com/prysmaticlabs/prysm/v5/crypto/bls/common"
+	"github.com/prysmaticlabs/prysm/v5/crypto/bls/herumi"
 )
 
 // Initialize herumi temporarily while we transition to blst for ethdo.
 func init() {
-	herumi.HerumiInit()
+	herumi.Init()
 }
 
 // SecretKeyFromBytes creates a BLS private key from a BigEndian byte slice.

@@ -5,14 +5,14 @@ import (
 	"math"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/epoch/precompute"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
-	state_native "github.com/prysmaticlabs/prysm/v4/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/epoch/precompute"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func TestInitializeEpochValidators_Ok(t *testing.T) {
@@ -220,7 +220,7 @@ func TestAttestationsDelta(t *testing.T) {
 	penalties := make([]uint64, len(deltas))
 	for i, d := range deltas {
 		rewards[i] = d.HeadReward + d.SourceReward + d.TargetReward
-		penalties[i] = d.SourcePenalty + d.TargetPenalty
+		penalties[i] = d.SourcePenalty + d.TargetPenalty + d.InactivityPenalty
 	}
 
 	// Reward amount should increase as validator index increases due to setup.
@@ -258,7 +258,7 @@ func TestAttestationsDeltaBellatrix(t *testing.T) {
 	penalties := make([]uint64, len(deltas))
 	for i, d := range deltas {
 		rewards[i] = d.HeadReward + d.SourceReward + d.TargetReward
-		penalties[i] = d.SourcePenalty + d.TargetPenalty
+		penalties[i] = d.SourcePenalty + d.TargetPenalty + d.InactivityPenalty
 	}
 
 	// Reward amount should increase as validator index increases due to setup.
@@ -306,7 +306,7 @@ func TestProcessRewardsAndPenaltiesPrecompute_Ok(t *testing.T) {
 	penalties := make([]uint64, len(deltas))
 	for i, d := range deltas {
 		rewards[i] = d.HeadReward + d.SourceReward + d.TargetReward
-		penalties[i] = d.SourcePenalty + d.TargetPenalty
+		penalties[i] = d.SourcePenalty + d.TargetPenalty + d.InactivityPenalty
 	}
 	for i := range rewards {
 		wanted[i] += rewards[i]

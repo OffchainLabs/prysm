@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 )
 
 type fieldType int
@@ -35,7 +35,7 @@ func (f fieldType) Size() int {
 	case typeBytes4:
 		return 4
 	default:
-		panic("can't determine size for unrecognizedtype ")
+		panic("can't determine size for unrecognizedtype ") // lint:nopanic -- Impossible field type.
 	}
 }
 

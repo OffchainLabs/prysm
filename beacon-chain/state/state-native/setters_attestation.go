@@ -3,11 +3,11 @@ package state_native
 import (
 	"fmt"
 
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state/state-native/types"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state/stateutil"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/runtime/version"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native/types"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stateutil"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 )
 
 // RotateAttestations sets the previous epoch attestations to the current epoch attestations and
@@ -54,7 +54,7 @@ func (b *BeaconState) AppendCurrentEpochAttestations(val *ethpb.PendingAttestati
 	}
 
 	atts := b.currentEpochAttestations
-	max := uint64(params.BeaconConfig().CurrentEpochAttestationsLength())
+	max := params.BeaconConfig().CurrentEpochAttestationsLength()
 	if uint64(len(atts)) >= max {
 		return fmt.Errorf("current pending attestation exceeds max length %d", max)
 	}
@@ -84,7 +84,7 @@ func (b *BeaconState) AppendPreviousEpochAttestations(val *ethpb.PendingAttestat
 	}
 
 	atts := b.previousEpochAttestations
-	max := uint64(params.BeaconConfig().PreviousEpochAttestationsLength())
+	max := params.BeaconConfig().PreviousEpochAttestationsLength()
 	if uint64(len(atts)) >= max {
 		return fmt.Errorf("previous pending attestation exceeds max length %d", max)
 	}

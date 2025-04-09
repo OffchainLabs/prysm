@@ -21,18 +21,21 @@ var ErrNotFound = errors.Wrap(ErrNotOK, "recv 404 NotFound response from API")
 // ErrInvalidNodeVersion indicates that the /eth/v1/node/version API response format was not recognized.
 var ErrInvalidNodeVersion = errors.New("invalid node version response")
 
+// ErrConnectionIssue represents a connection problem.
+var ErrConnectionIssue = errors.New("could not connect")
+
 // Non200Err is a function that parses an HTTP response to handle responses that are not 200 with a formatted error.
-func Non200Err(response *http.Response) error {
-	bodyBytes, err := io.ReadAll(response.Body)
+func Non200Err(r *http.Response) error {
+	b, err := io.ReadAll(io.LimitReader(r.Body, MaxErrBodySize))
 	var body string
 	if err != nil {
 		body = "(Unable to read response body.)"
 	} else {
-		body = "response body:\n" + string(bodyBytes)
+		body = "response body:\n" + string(b)
 	}
-	msg := fmt.Sprintf("code=%d, url=%s, body=%s", response.StatusCode, response.Request.URL, body)
-	switch response.StatusCode {
-	case 404:
+	msg := fmt.Sprintf("code=%d, url=%s, body=%s", r.StatusCode, r.Request.URL, body)
+	switch r.StatusCode {
+	case http.StatusNotFound:
 		return errors.Wrap(ErrNotFound, msg)
 	default:
 		return errors.Wrap(ErrNotOK, msg)

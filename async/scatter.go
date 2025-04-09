@@ -63,7 +63,7 @@ func Scatter(inputLen int, sFunc func(int, int, *sync.RWMutex) (interface{}, err
 	return results, nil
 }
 
-// calculateChunkSize calculates a suitable chunk size for the purposes of parallelisation.
+// calculateChunkSize calculates a suitable chunk size for the purposes of parallelization.
 func calculateChunkSize(items int) int {
 	// Start with a simple even split
 	chunkSize := items / runtime.GOMAXPROCS(0)

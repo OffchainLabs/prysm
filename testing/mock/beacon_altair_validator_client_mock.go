@@ -8,36 +8,36 @@ import (
 	context "context"
 	reflect "reflect"
 
-	gomock "github.com/golang/mock/gomock"
-	v2 "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	v2 "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	gomock "go.uber.org/mock/gomock"
 	metadata "google.golang.org/grpc/metadata"
 )
 
-// MockBeaconNodeValidatorAltair_StreamBlocksClient is a mock of BeaconNodeValidatorAltair_StreamBlocksClient interface
-type MockBeaconNodeValidatorAltair_StreamBlocksClient struct {
+// BeaconNodeValidatorAltair_StreamBlocksClient is a mock of BeaconNodeValidatorAltair_StreamBlocksClient interface
+type BeaconNodeValidatorAltair_StreamBlocksClient struct {
 	ctrl     *gomock.Controller
-	recorder *MockBeaconNodeValidatorAltair_StreamBlocksClientMockRecorder
+	recorder *BeaconNodeValidatorAltair_StreamBlocksClientMockRecorder
 }
 
-// MockBeaconNodeValidatorAltair_StreamBlocksClientMockRecorder is the mock recorder for MockBeaconNodeValidatorAltair_StreamBlocksClient
-type MockBeaconNodeValidatorAltair_StreamBlocksClientMockRecorder struct {
-	mock *MockBeaconNodeValidatorAltair_StreamBlocksClient
+// BeaconNodeValidatorAltair_StreamBlocksClientMockRecorder is the mock recorder for MockBeaconNodeValidatorAltair_StreamBlocksClient
+type BeaconNodeValidatorAltair_StreamBlocksClientMockRecorder struct {
+	mock *BeaconNodeValidatorAltair_StreamBlocksClient
 }
 
 // NewMockBeaconNodeValidatorAltair_StreamBlocksClient creates a new mock instance
-func NewMockBeaconNodeValidatorAltair_StreamBlocksClient(ctrl *gomock.Controller) *MockBeaconNodeValidatorAltair_StreamBlocksClient {
-	mock := &MockBeaconNodeValidatorAltair_StreamBlocksClient{ctrl: ctrl}
-	mock.recorder = &MockBeaconNodeValidatorAltair_StreamBlocksClientMockRecorder{mock}
+func NewMockBeaconNodeValidatorAltair_StreamBlocksClient(ctrl *gomock.Controller) *BeaconNodeValidatorAltair_StreamBlocksClient {
+	mock := &BeaconNodeValidatorAltair_StreamBlocksClient{ctrl: ctrl}
+	mock.recorder = &BeaconNodeValidatorAltair_StreamBlocksClientMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use
-func (m *MockBeaconNodeValidatorAltair_StreamBlocksClient) EXPECT() *MockBeaconNodeValidatorAltair_StreamBlocksClientMockRecorder {
+func (m *BeaconNodeValidatorAltair_StreamBlocksClient) EXPECT() *BeaconNodeValidatorAltair_StreamBlocksClientMockRecorder {
 	return m.recorder
 }
 
 // CloseSend mocks base method
-func (m *MockBeaconNodeValidatorAltair_StreamBlocksClient) CloseSend() error {
+func (m *BeaconNodeValidatorAltair_StreamBlocksClient) CloseSend() error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CloseSend")
 	ret0, _ := ret[0].(error)
@@ -45,13 +45,13 @@ func (m *MockBeaconNodeValidatorAltair_StreamBlocksClient) CloseSend() error {
 }
 
 // CloseSend indicates an expected call of CloseSend
-func (mr *MockBeaconNodeValidatorAltair_StreamBlocksClientMockRecorder) CloseSend() *gomock.Call {
+func (mr *BeaconNodeValidatorAltair_StreamBlocksClientMockRecorder) CloseSend() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CloseSend", reflect.TypeOf((*MockBeaconNodeValidatorAltair_StreamBlocksClient)(nil).CloseSend))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CloseSend", reflect.TypeOf((*BeaconNodeValidatorAltair_StreamBlocksClient)(nil).CloseSend))
 }
 
 // Context mocks base method
-func (m *MockBeaconNodeValidatorAltair_StreamBlocksClient) Context() context.Context {
+func (m *BeaconNodeValidatorAltair_StreamBlocksClient) Context() context.Context {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Context")
 	ret0, _ := ret[0].(context.Context)
@@ -59,13 +59,13 @@ func (m *MockBeaconNodeValidatorAltair_StreamBlocksClient) Context() context.Con
 }
 
 // Context indicates an expected call of Context
-func (mr *MockBeaconNodeValidatorAltair_StreamBlocksClientMockRecorder) Context() *gomock.Call {
+func (mr *BeaconNodeValidatorAltair_StreamBlocksClientMockRecorder) Context() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Context", reflect.TypeOf((*MockBeaconNodeValidatorAltair_StreamBlocksClient)(nil).Context))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Context", reflect.TypeOf((*BeaconNodeValidatorAltair_StreamBlocksClient)(nil).Context))
 }
 
 // Header mocks base method
-func (m *MockBeaconNodeValidatorAltair_StreamBlocksClient) Header() (metadata.MD, error) {
+func (m *BeaconNodeValidatorAltair_StreamBlocksClient) Header() (metadata.MD, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Header")
 	ret0, _ := ret[0].(metadata.MD)
@@ -74,13 +74,13 @@ func (m *MockBeaconNodeValidatorAltair_StreamBlocksClient) Header() (metadata.MD
 }
 
 // Header indicates an expected call of Header
-func (mr *MockBeaconNodeValidatorAltair_StreamBlocksClientMockRecorder) Header() *gomock.Call {
+func (mr *BeaconNodeValidatorAltair_StreamBlocksClientMockRecorder) Header() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Header", reflect.TypeOf((*MockBeaconNodeValidatorAltair_StreamBlocksClient)(nil).Header))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Header", reflect.TypeOf((*BeaconNodeValidatorAltair_StreamBlocksClient)(nil).Header))
 }
 
 // Recv mocks base method
-func (m *MockBeaconNodeValidatorAltair_StreamBlocksClient) Recv() (*v2.StreamBlocksResponse, error) {
+func (m *BeaconNodeValidatorAltair_StreamBlocksClient) Recv() (*v2.StreamBlocksResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Recv")
 	ret0, _ := ret[0].(*v2.StreamBlocksResponse)
@@ -89,13 +89,13 @@ func (m *MockBeaconNodeValidatorAltair_StreamBlocksClient) Recv() (*v2.StreamBlo
 }
 
 // Recv indicates an expected call of Recv
-func (mr *MockBeaconNodeValidatorAltair_StreamBlocksClientMockRecorder) Recv() *gomock.Call {
+func (mr *BeaconNodeValidatorAltair_StreamBlocksClientMockRecorder) Recv() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Recv", reflect.TypeOf((*MockBeaconNodeValidatorAltair_StreamBlocksClient)(nil).Recv))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Recv", reflect.TypeOf((*BeaconNodeValidatorAltair_StreamBlocksClient)(nil).Recv))
 }
 
 // RecvMsg mocks base method
-func (m *MockBeaconNodeValidatorAltair_StreamBlocksClient) RecvMsg(arg0 interface{}) error {
+func (m *BeaconNodeValidatorAltair_StreamBlocksClient) RecvMsg(arg0 interface{}) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "RecvMsg", arg0)
 	ret0, _ := ret[0].(error)
@@ -103,13 +103,13 @@ func (m *MockBeaconNodeValidatorAltair_StreamBlocksClient) RecvMsg(arg0 interfac
 }
 
 // RecvMsg indicates an expected call of RecvMsg
-func (mr *MockBeaconNodeValidatorAltair_StreamBlocksClientMockRecorder) RecvMsg(arg0 interface{}) *gomock.Call {
+func (mr *BeaconNodeValidatorAltair_StreamBlocksClientMockRecorder) RecvMsg(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RecvMsg", reflect.TypeOf((*MockBeaconNodeValidatorAltair_StreamBlocksClient)(nil).RecvMsg), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RecvMsg", reflect.TypeOf((*BeaconNodeValidatorAltair_StreamBlocksClient)(nil).RecvMsg), arg0)
 }
 
 // SendMsg mocks base method
-func (m *MockBeaconNodeValidatorAltair_StreamBlocksClient) SendMsg(arg0 interface{}) error {
+func (m *BeaconNodeValidatorAltair_StreamBlocksClient) SendMsg(arg0 interface{}) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SendMsg", arg0)
 	ret0, _ := ret[0].(error)
@@ -117,13 +117,13 @@ func (m *MockBeaconNodeValidatorAltair_StreamBlocksClient) SendMsg(arg0 interfac
 }
 
 // SendMsg indicates an expected call of SendMsg
-func (mr *MockBeaconNodeValidatorAltair_StreamBlocksClientMockRecorder) SendMsg(arg0 interface{}) *gomock.Call {
+func (mr *BeaconNodeValidatorAltair_StreamBlocksClientMockRecorder) SendMsg(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendMsg", reflect.TypeOf((*MockBeaconNodeValidatorAltair_StreamBlocksClient)(nil).SendMsg), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendMsg", reflect.TypeOf((*BeaconNodeValidatorAltair_StreamBlocksClient)(nil).SendMsg), arg0)
 }
 
 // Trailer mocks base method
-func (m *MockBeaconNodeValidatorAltair_StreamBlocksClient) Trailer() metadata.MD {
+func (m *BeaconNodeValidatorAltair_StreamBlocksClient) Trailer() metadata.MD {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Trailer")
 	ret0, _ := ret[0].(metadata.MD)
@@ -131,7 +131,7 @@ func (m *MockBeaconNodeValidatorAltair_StreamBlocksClient) Trailer() metadata.MD
 }
 
 // Trailer indicates an expected call of Trailer
-func (mr *MockBeaconNodeValidatorAltair_StreamBlocksClientMockRecorder) Trailer() *gomock.Call {
+func (mr *BeaconNodeValidatorAltair_StreamBlocksClientMockRecorder) Trailer() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Trailer", reflect.TypeOf((*MockBeaconNodeValidatorAltair_StreamBlocksClient)(nil).Trailer))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Trailer", reflect.TypeOf((*BeaconNodeValidatorAltair_StreamBlocksClient)(nil).Trailer))
 }

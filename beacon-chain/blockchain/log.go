@@ -6,15 +6,15 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/blocks"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	consensus_types "github.com/prysmaticlabs/prysm/v4/consensus-types"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/runtime/version"
-	prysmTime "github.com/prysmaticlabs/prysm/v4/time"
-	"github.com/prysmaticlabs/prysm/v4/time/slots"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	consensus_types "github.com/prysmaticlabs/prysm/v5/consensus-types"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
+	prysmTime "github.com/prysmaticlabs/prysm/v5/time"
+	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/sirupsen/logrus"
 )
 
@@ -69,11 +69,27 @@ func logStateTransitionData(b interfaces.ReadOnlyBeaconBlock) error {
 			log = log.WithField("kzgCommitmentCount", len(kzgs))
 		}
 	}
+	if b.Version() >= version.Electra {
+		eReqs, err := b.Body().ExecutionRequests()
+		if err != nil {
+			log.WithError(err).Error("Failed to get execution requests")
+		} else {
+			if len(eReqs.Deposits) > 0 {
+				log = log.WithField("depositRequestCount", len(eReqs.Deposits))
+			}
+			if len(eReqs.Consolidations) > 0 {
+				log = log.WithField("consolidationRequestCount", len(eReqs.Consolidations))
+			}
+			if len(eReqs.Withdrawals) > 0 {
+				log = log.WithField("withdrawalRequestCount", len(eReqs.Withdrawals))
+			}
+		}
+	}
 	log.Info("Finished applying state transition")
 	return nil
 }
 
-func logBlockSyncStatus(block interfaces.ReadOnlyBeaconBlock, blockRoot [32]byte, justified, finalized *ethpb.Checkpoint, receivedTime time.Time, genesisTime uint64) error {
+func logBlockSyncStatus(block interfaces.ReadOnlyBeaconBlock, blockRoot [32]byte, justified, finalized *ethpb.Checkpoint, receivedTime time.Time, genesisTime uint64, daWaitedTime time.Duration) error {
 	startTime, err := slots.ToTime(genesisTime, block.Slot())
 	if err != nil {
 		return err
@@ -82,19 +98,20 @@ func logBlockSyncStatus(block interfaces.ReadOnlyBeaconBlock, blockRoot [32]byte
 	if level >= logrus.DebugLevel {
 		parentRoot := block.ParentRoot()
 		lf := logrus.Fields{
-			"slot":                      block.Slot(),
-			"slotInEpoch":               block.Slot() % params.BeaconConfig().SlotsPerEpoch,
-			"block":                     fmt.Sprintf("0x%s...", hex.EncodeToString(blockRoot[:])[:8]),
-			"epoch":                     slots.ToEpoch(block.Slot()),
-			"justifiedEpoch":            justified.Epoch,
-			"justifiedRoot":             fmt.Sprintf("0x%s...", hex.EncodeToString(justified.Root)[:8]),
-			"finalizedEpoch":            finalized.Epoch,
-			"finalizedRoot":             fmt.Sprintf("0x%s...", hex.EncodeToString(finalized.Root)[:8]),
-			"parentRoot":                fmt.Sprintf("0x%s...", hex.EncodeToString(parentRoot[:])[:8]),
-			"version":                   version.String(block.Version()),
-			"sinceSlotStartTime":        prysmTime.Now().Sub(startTime),
-			"chainServiceProcessedTime": prysmTime.Now().Sub(receivedTime),
-			"deposits":                  len(block.Body().Deposits()),
+			"slot":                       block.Slot(),
+			"slotInEpoch":                block.Slot() % params.BeaconConfig().SlotsPerEpoch,
+			"block":                      fmt.Sprintf("0x%s...", hex.EncodeToString(blockRoot[:])[:8]),
+			"epoch":                      slots.ToEpoch(block.Slot()),
+			"justifiedEpoch":             justified.Epoch,
+			"justifiedRoot":              fmt.Sprintf("0x%s...", hex.EncodeToString(justified.Root)[:8]),
+			"finalizedEpoch":             finalized.Epoch,
+			"finalizedRoot":              fmt.Sprintf("0x%s...", hex.EncodeToString(finalized.Root)[:8]),
+			"parentRoot":                 fmt.Sprintf("0x%s...", hex.EncodeToString(parentRoot[:])[:8]),
+			"version":                    version.String(block.Version()),
+			"sinceSlotStartTime":         prysmTime.Now().Sub(startTime),
+			"chainServiceProcessedTime":  prysmTime.Now().Sub(receivedTime) - daWaitedTime,
+			"dataAvailabilityWaitedTime": daWaitedTime,
+			"deposits":                   len(block.Body().Deposits()),
 		}
 		log.WithFields(lf).Debug("Synced new block")
 	} else {
@@ -146,16 +163,4 @@ func logPayload(block interfaces.ReadOnlyBeaconBlock) error {
 	}
 	log.WithFields(fields).Debug("Synced new payload")
 	return nil
-}
-
-func logBlobSidecar(scs []*ethpb.BlobSidecar, startTime time.Time) {
-	if len(scs) == 0 {
-		return
-	}
-	log.WithFields(logrus.Fields{
-		"count":          len(scs),
-		"slot":           scs[0].Slot,
-		"block":          hex.EncodeToString(scs[0].BlockRoot),
-		"validationTime": time.Since(startTime),
-	}).Debug("Synced new blob sidecars")
 }

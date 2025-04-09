@@ -5,15 +5,14 @@ import (
 	"encoding/json"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/validator/accounts/iface"
-	"github.com/prysmaticlabs/prysm/v4/validator/accounts/wallet"
-	"github.com/prysmaticlabs/prysm/v4/validator/keymanager"
-	"github.com/prysmaticlabs/prysm/v4/validator/keymanager/derived"
-	"github.com/prysmaticlabs/prysm/v4/validator/keymanager/local"
+	"github.com/prysmaticlabs/prysm/v5/validator/accounts/wallet"
+	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
+	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/derived"
+	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/local"
 )
 
 // WalletCreate creates wallet specified by configuration options.
-func (acm *AccountsCLIManager) WalletCreate(ctx context.Context) (*wallet.Wallet, error) {
+func (acm *CLIManager) WalletCreate(ctx context.Context) (*wallet.Wallet, error) {
 	w := wallet.New(&wallet.Config{
 		WalletDir:      acm.walletDir,
 		KeymanagerKind: acm.keymanagerKind,
@@ -22,19 +21,10 @@ func (acm *AccountsCLIManager) WalletCreate(ctx context.Context) (*wallet.Wallet
 	var err error
 	switch w.KeymanagerKind() {
 	case keymanager.Local:
-		if err = CreateLocalKeymanagerWallet(ctx, w); err != nil {
-			return nil, errors.Wrap(err, "could not initialize wallet")
+		if err := w.SaveWallet(); err != nil {
+			return nil, errors.Wrap(err, "could not initialize wallet: could not save wallet to disk")
 		}
-		// TODO(#9883) - Remove this when we have a better way to handle this. should be safe to use for now.
-		km, err := w.InitializeKeymanager(ctx, iface.InitKeymanagerConfig{ListenForChanges: false})
-		if err != nil {
-			return nil, errors.Wrap(err, ErrCouldNotInitializeKeymanager)
-		}
-		localKm, ok := km.(*local.Keymanager)
-		if !ok {
-			return nil, errors.Wrap(err, ErrCouldNotInitializeKeymanager)
-		}
-		accountsKeystore, err := localKm.CreateAccountsKeystore(ctx, make([][]byte, 0), make([][]byte, 0))
+		accountsKeystore, err := local.CreateEmptyKeyStoreRepresentationForNewWallet(ctx, w.Password())
 		if err != nil {
 			return nil, err
 		}
@@ -42,11 +32,11 @@ func (acm *AccountsCLIManager) WalletCreate(ctx context.Context) (*wallet.Wallet
 		if err != nil {
 			return nil, err
 		}
-		if err = w.WriteFileAtPath(ctx, local.AccountsPath, local.AccountsKeystoreFileName, encodedAccounts); err != nil {
+		_, err = w.WriteFileAtPath(ctx, local.AccountsPath, local.AccountsKeystoreFileName, encodedAccounts)
+		if err != nil {
 			return nil, err
 		}
-
-		log.WithField("--wallet-dir", acm.walletDir).Info(
+		log.WithField("walletDir", acm.walletDir).Info(
 			"Successfully created wallet with ability to import keystores",
 		)
 	case keymanager.Derived:
@@ -60,7 +50,7 @@ func (acm *AccountsCLIManager) WalletCreate(ctx context.Context) (*wallet.Wallet
 		); err != nil {
 			return nil, errors.Wrap(err, "could not initialize wallet")
 		}
-		log.WithField("--wallet-dir", acm.walletDir).Info(
+		log.WithField("walletDir", acm.walletDir).Info(
 			"Successfully created HD wallet from mnemonic and regenerated accounts",
 		)
 	case keymanager.Web3Signer:
@@ -69,16 +59,6 @@ func (acm *AccountsCLIManager) WalletCreate(ctx context.Context) (*wallet.Wallet
 		return nil, errors.Wrapf(err, errKeymanagerNotSupported, w.KeymanagerKind())
 	}
 	return w, nil
-}
-
-func CreateLocalKeymanagerWallet(_ context.Context, wallet *wallet.Wallet) error {
-	if wallet == nil {
-		return errors.New("nil wallet")
-	}
-	if err := wallet.SaveWallet(); err != nil {
-		return errors.Wrap(err, "could not save wallet to disk")
-	}
-	return nil
 }
 
 func createDerivedKeymanagerWallet(

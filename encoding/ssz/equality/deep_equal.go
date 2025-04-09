@@ -4,13 +4,13 @@ import (
 	"reflect"
 	"unsafe"
 
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"google.golang.org/protobuf/proto"
 )
 
 // During deepValueEqual, must keep track of checks that are
 // in progress. The comparison algorithm assumes that all
-// checks in progress are true when it reencounters them.
+// checks in progress are true when it re-encounters them.
 // Visited comparisons are stored in a map indexed by visit.
 type visit struct {
 	a1  unsafe.Pointer // #nosec G103 -- Test use only
@@ -27,7 +27,7 @@ type visit struct {
 // intricacies when determining equality of empty values.
 //
 // Tests for deep equality using reflected types. The map argument tracks
-// comparisons that have already been seen, which allows short circuiting on
+// comparisons that have already been seen, which allows short-circuiting on
 // recursive types.
 func deepValueEqual(v1, v2 reflect.Value, visited map[visit]bool, depth int) bool {
 	if !v1.IsValid() || !v2.IsValid() {
@@ -230,6 +230,8 @@ func deepValueBaseTypeEqual(v1, v2 reflect.Value) bool {
 			return v1.Interface().(primitives.ValidatorIndex) == v2.Interface().(primitives.ValidatorIndex)
 		case "CommitteeIndex":
 			return v1.Interface().(primitives.CommitteeIndex) == v2.Interface().(primitives.CommitteeIndex)
+		case "Gwei":
+			return v1.Interface().(primitives.Gwei) == v2.Interface().(primitives.Gwei)
 		}
 		return v1.Interface().(uint64) == v2.Interface().(uint64)
 	case reflect.Uint32:
@@ -273,7 +275,7 @@ func deepValueBaseTypeEqual(v1, v2 reflect.Value) bool {
 // In general DeepEqual is a recursive relaxation of Go's == operator.
 // However, this idea is impossible to implement without some inconsistency.
 // Specifically, it is possible for a value to be unequal to itself,
-// either because it is of func type (uncomparable in general)
+// either because it is of func type (incomparable in general)
 // or because it is a floating-point NaN value (not equal to itself in floating-point comparison),
 // or because it is an array, struct, or interface containing
 // such a value.

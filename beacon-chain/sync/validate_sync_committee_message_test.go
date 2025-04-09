@@ -11,25 +11,26 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pubsubpb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/libp2p/go-libp2p/core/peer"
-	mockChain "github.com/prysmaticlabs/prysm/v4/beacon-chain/blockchain/testing"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/signing"
-	testingdb "github.com/prysmaticlabs/prysm/v4/beacon-chain/db/testing"
-	doublylinkedtree "github.com/prysmaticlabs/prysm/v4/beacon-chain/forkchoice/doubly-linked-tree"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p/encoder"
-	mockp2p "github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p/testing"
-	p2ptypes "github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p/types"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/startup"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state/stategen"
-	mockSync "github.com/prysmaticlabs/prysm/v4/beacon-chain/sync/initial-sync/testing"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v4/network/forks"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/time/slots"
+	mockChain "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
+	testingdb "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
+	doublylinkedtree "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/doubly-linked-tree"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/encoder"
+	mockp2p "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
+	p2ptypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stategen"
+	mockSync "github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/initial-sync/testing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/network/forks"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
 func TestService_ValidateSyncCommitteeMessage(t *testing.T) {
@@ -220,7 +221,7 @@ func TestService_ValidateSyncCommitteeMessage(t *testing.T) {
 				msg.ValidatorIndex = primitives.ValidatorIndex(chosenVal)
 				msg.Slot = slots.PrevSlot(hState.Slot())
 
-				gt := time.Now().Add(-time.Second * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Duration(hState.Slot()-1))
+				gt := time.Now().Add(-time.Second * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Duration(slots.PrevSlot(hState.Slot())))
 				vr := [32]byte{'A'}
 				clock := startup.NewClock(gt, vr)
 				digest, err := forks.CreateForkDigest(gt, vr[:])
@@ -267,7 +268,7 @@ func TestService_ValidateSyncCommitteeMessage(t *testing.T) {
 				msg.ValidatorIndex = primitives.ValidatorIndex(chosenVal)
 				msg.Slot = slots.PrevSlot(hState.Slot())
 
-				gt := time.Now().Add(-time.Second * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Duration(hState.Slot()-1))
+				gt := time.Now().Add(-time.Second * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Duration(slots.PrevSlot(hState.Slot())))
 				vr := [32]byte{'A'}
 				digest, err := forks.CreateForkDigest(gt, vr[:])
 				assert.NoError(t, err)
@@ -321,7 +322,7 @@ func TestService_ValidateSyncCommitteeMessage(t *testing.T) {
 				}
 
 				// Set Topic and Subnet
-				gt := time.Now().Add(-time.Second * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Duration(hState.Slot()-1))
+				gt := time.Now().Add(-time.Second * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Duration(slots.PrevSlot(hState.Slot())))
 				vr := [32]byte{'A'}
 				digest, err := forks.CreateForkDigest(gt, vr[:])
 				assert.NoError(t, err)
@@ -379,7 +380,7 @@ func TestService_ValidateSyncCommitteeMessage(t *testing.T) {
 				msg.Slot = slots.PrevSlot(hState.Slot())
 
 				// Set Topic and Subnet
-				gt := time.Now().Add(-time.Second * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Duration(hState.Slot()-1))
+				gt := time.Now().Add(-time.Second * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Duration(slots.PrevSlot(hState.Slot())))
 				vr := [32]byte{'A'}
 				digest, err := forks.CreateForkDigest(gt, vr[:])
 				assert.NoError(t, err)
@@ -412,6 +413,7 @@ func TestService_ValidateSyncCommitteeMessage(t *testing.T) {
 			svc, tt.args.topic, clock = tt.setupSvc(svc, tt.args.msg, tt.args.topic)
 			go svc.Start()
 			require.NoError(t, cw.SetClock(clock))
+			svc.verifierWaiter = verification.NewInitializerWaiter(cw, chainService.ForkChoiceStore, svc.cfg.stateGen)
 
 			marshalledObj, err := tt.args.msg.MarshalSSZ()
 			assert.NoError(t, err)

@@ -5,9 +5,9 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v4/network"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/network"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func TestExternalIPv4(t *testing.T) {

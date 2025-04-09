@@ -152,7 +152,7 @@
       "external/.*": "Third party code",
       "rules_go_work-.*": "Third party code",
       ".*\\.pb.*.go": "Generated code is ok",
-      ".*generated\\.ssz\\.go": "Generated code is ok"
+      ".*\\.ssz\\.go": "Generated code is ok"
     }
   },
   "properpermissions": {
@@ -164,7 +164,8 @@
     },
     "exclude_files": {
       ".*_test\\.go": "Tests are ok",
-      "io/file/fileutil.go": "Package which defines the proper rules"
+      "io/file/fileutil.go": "Package which defines the proper rules",
+      "validator/web/site_data.go": "Generated web ui assets"
     }
   },
   "uintcast": {
@@ -179,7 +180,7 @@
       "external/.*": "Third party code",
       "rules_go_work-.*": "Third party code",
       ".*\\.pb.*.go": "Generated code is ok",
-      ".*generated\\.ssz\\.go": "Generated code is ok",
+      ".*\\.ssz\\.go": "Generated code is ok",
       ".*_test\\.go": "Tests are ok (for now)",
       "tools/analyzers/ineffassign/ineffassign\\.go": "3rd party code with a massive switch statement"
     }
@@ -188,6 +189,38 @@
     "exclude_files": {
       "external/.*": "Third party code",
       "rules_go_work-.*": "Third party code"
+    }
+  },
+  "reflectvaluecompare": {
+    "exclude_files": {
+      "external/.*": "Third party code",
+      "rules_go_work-.*": "Third party code"
+    }
+  },
+  "unusedwrite": {
+    "exclude_files": {
+      "external/.*": "Third party code",
+      "rules_go_work-.*": "Third party code"
+    }
+  },
+  "stringintconv": {
+    "exclude_files": {
+      "external/.*": "Third party code",
+      "rules_go_work-.*": "Third party code"
+    }
+  },
+  "loopclosure": {
+    "exclude_files": {
+      "external/com_github_ethereum_go_ethereum/.*": "Unsafe third party code",
+      "rules_go_work-.*": "Third party code"
+    }
+  }, 
+  "nopanic": {
+    "exclude_files": {
+      "validator/web/site_data.go": "generated code",
+      ".*/.*_test\\.go": "Tests are OK",
+      ".*/main\\.go": "main methods are OK",
+      "external/.*": "Third party code"
     }
   }
 }

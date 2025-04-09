@@ -4,33 +4,54 @@ import (
 	"context"
 	"testing"
 
-	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/util"
+	"github.com/prysmaticlabs/prysm/v5/validator/db/common"
 )
+
+func TestNewProposalHistoryForSlot_ReturnsNilIfNoHistory(t *testing.T) {
+	valPubkey := [fieldparams.BLSPubkeyLength]byte{1, 2, 3}
+	db := setupDB(t, [][fieldparams.BLSPubkeyLength]byte{})
+
+	_, proposalExists, signingRootExists, err := db.ProposalHistoryForSlot(context.Background(), valPubkey, 0)
+	require.NoError(t, err)
+	assert.Equal(t, false, proposalExists)
+	assert.Equal(t, false, signingRootExists)
+}
 
 func TestProposalHistoryForSlot_InitializesNewPubKeys(t *testing.T) {
 	pubkeys := [][fieldparams.BLSPubkeyLength]byte{{30}, {25}, {20}}
 	db := setupDB(t, pubkeys)
 
 	for _, pub := range pubkeys {
-		signingRoot, _, err := db.ProposalHistoryForSlot(context.Background(), pub, 0)
+		_, proposalExists, signingRootExists, err := db.ProposalHistoryForSlot(context.Background(), pub, 0)
 		require.NoError(t, err)
-		expected := bytesutil.PadTo([]byte{}, 32)
-		require.DeepEqual(t, expected, signingRoot[:], "Expected proposal history slot signing root to be empty")
+		assert.Equal(t, false, proposalExists)
+		assert.Equal(t, false, signingRootExists)
 	}
 }
 
-func TestNewProposalHistoryForSlot_ReturnsNilIfNoHistory(t *testing.T) {
-	valPubkey := [fieldparams.BLSPubkeyLength]byte{1, 2, 3}
+func TestNewProposalHistoryForSlot_SigningRootNil(t *testing.T) {
+	pubkey := [fieldparams.BLSPubkeyLength]byte{1, 2, 3}
+	slot := primitives.Slot(2)
+
 	db := setupDB(t, [][fieldparams.BLSPubkeyLength]byte{})
 
-	_, proposalExists, err := db.ProposalHistoryForSlot(context.Background(), valPubkey, 0)
+	err := db.SaveProposalHistoryForSlot(context.Background(), pubkey, slot, nil)
+	require.NoError(t, err, "Saving proposal history failed: %v")
+
+	_, proposalExists, signingRootExists, err := db.ProposalHistoryForSlot(context.Background(), pubkey, slot)
 	require.NoError(t, err)
-	assert.Equal(t, false, proposalExists)
+	assert.Equal(t, true, proposalExists)
+	assert.Equal(t, false, signingRootExists)
 }
 
 func TestSaveProposalHistoryForSlot_OK(t *testing.T) {
@@ -41,8 +62,10 @@ func TestSaveProposalHistoryForSlot_OK(t *testing.T) {
 
 	err := db.SaveProposalHistoryForSlot(context.Background(), pubkey, slot, []byte{1})
 	require.NoError(t, err, "Saving proposal history failed: %v")
-	signingRoot, _, err := db.ProposalHistoryForSlot(context.Background(), pubkey, slot)
+	signingRoot, proposalExists, signingRootExists, err := db.ProposalHistoryForSlot(context.Background(), pubkey, slot)
 	require.NoError(t, err, "Failed to get proposal history")
+	assert.Equal(t, true, proposalExists)
+	assert.Equal(t, true, signingRootExists)
 
 	require.NotNil(t, signingRoot)
 	require.DeepEqual(t, bytesutil.PadTo([]byte{1}, 32), signingRoot[:], "Expected DB to keep object the same")
@@ -54,7 +77,7 @@ func TestNewProposalHistoryForPubKey_ReturnsEmptyIfNoHistory(t *testing.T) {
 
 	proposalHistory, err := db.ProposalHistoryForPubKey(context.Background(), valPubkey)
 	require.NoError(t, err)
-	assert.DeepEqual(t, make([]*Proposal, 0), proposalHistory)
+	assert.DeepEqual(t, make([]*common.Proposal, 0), proposalHistory)
 }
 
 func TestSaveProposalHistoryForPubKey_OK(t *testing.T) {
@@ -70,7 +93,7 @@ func TestSaveProposalHistoryForPubKey_OK(t *testing.T) {
 	require.NoError(t, err, "Failed to get proposal history")
 
 	require.NotNil(t, proposalHistory)
-	want := []*Proposal{
+	want := []*common.Proposal{
 		{
 			Slot:        slot,
 			SigningRoot: root[:],
@@ -281,4 +304,152 @@ func TestStore_HighestSignedProposal(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, true, exists)
 	assert.Equal(t, primitives.Slot(3), slot)
+}
+
+func Test_slashableProposalCheck_PreventsLowerThanMinProposal(t *testing.T) {
+	ctx := context.Background()
+	lowestSignedSlot := primitives.Slot(10)
+
+	var pubkey [fieldparams.BLSPubkeyLength]byte
+	pubkeyBytes, err := hexutil.Decode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
+	require.NoError(t, err, "Failed to decode pubkey")
+	copy(pubkey[:], pubkeyBytes)
+
+	db := setupDB(t, [][fieldparams.BLSPubkeyLength]byte{pubkey})
+	require.NoError(t, err)
+
+	// We save a proposal at the lowest signed slot in the DB.
+	err = db.SaveProposalHistoryForSlot(ctx, pubkey, lowestSignedSlot, []byte{1})
+	require.NoError(t, err)
+
+	// We expect the same block with a slot lower than the lowest
+	// signed slot to fail validation.
+	blk := &ethpb.SignedBeaconBlock{
+		Block: &ethpb.BeaconBlock{
+			Slot:          lowestSignedSlot - 1,
+			ProposerIndex: 0,
+			Body:          &ethpb.BeaconBlockBody{},
+		},
+		Signature: params.BeaconConfig().EmptySignature[:],
+	}
+	wsb, err := blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+	err = db.SlashableProposalCheck(context.Background(), pubkey, wsb, [32]byte{4}, false, nil)
+	require.ErrorContains(t, "could not sign block with slot < lowest signed", err)
+
+	// We expect the same block with a slot equal to the lowest
+	// signed slot to pass validation if signing roots are equal.
+	blk = &ethpb.SignedBeaconBlock{
+		Block: &ethpb.BeaconBlock{
+			Slot:          lowestSignedSlot,
+			ProposerIndex: 0,
+			Body:          &ethpb.BeaconBlockBody{},
+		},
+		Signature: params.BeaconConfig().EmptySignature[:],
+	}
+	wsb, err = blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+	err = db.SlashableProposalCheck(ctx, pubkey, wsb, [32]byte{1}, false, nil)
+	require.NoError(t, err)
+
+	// We expect the same block with a slot equal to the lowest
+	// signed slot to fail validation if signing roots are different.
+	wsb, err = blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+	err = db.SlashableProposalCheck(ctx, pubkey, wsb, [32]byte{4}, false, nil)
+	require.ErrorContains(t, "could not sign block with slot == lowest signed", err)
+
+	// We expect the same block with a slot > than the lowest
+	// signed slot to pass validation.
+	blk = &ethpb.SignedBeaconBlock{
+		Block: &ethpb.BeaconBlock{
+			Slot:          lowestSignedSlot + 1,
+			ProposerIndex: 0,
+			Body:          &ethpb.BeaconBlockBody{},
+		},
+		Signature: params.BeaconConfig().EmptySignature[:],
+	}
+
+	wsb, err = blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+	err = db.SlashableProposalCheck(ctx, pubkey, wsb, [32]byte{3}, false, nil)
+	require.NoError(t, err)
+}
+
+func Test_slashableProposalCheck(t *testing.T) {
+	ctx := context.Background()
+
+	var pubkey [fieldparams.BLSPubkeyLength]byte
+	pubkeyBytes, err := hexutil.Decode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
+	require.NoError(t, err, "Failed to decode pubkey")
+	copy(pubkey[:], pubkeyBytes)
+
+	db := setupDB(t, [][fieldparams.BLSPubkeyLength]byte{pubkey})
+	require.NoError(t, err)
+
+	blk := util.HydrateSignedBeaconBlock(&ethpb.SignedBeaconBlock{
+		Block: &ethpb.BeaconBlock{
+			Slot:          10,
+			ProposerIndex: 0,
+			Body:          &ethpb.BeaconBlockBody{},
+		},
+		Signature: params.BeaconConfig().EmptySignature[:],
+	})
+
+	// We save a proposal at slot 1 as our lowest proposal.
+	err = db.SaveProposalHistoryForSlot(ctx, pubkey, 1, []byte{1})
+	require.NoError(t, err)
+
+	// We save a proposal at slot 10 with a dummy signing root.
+	dummySigningRoot := [32]byte{1}
+	err = db.SaveProposalHistoryForSlot(ctx, pubkey, 10, dummySigningRoot[:])
+	require.NoError(t, err)
+	sBlock, err := blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+
+	err = db.SlashableProposalCheck(ctx, pubkey, sBlock, dummySigningRoot, false, nil)
+	// We expect the same block sent out with the same root should not be slasahble.
+	require.NoError(t, err)
+
+	// We expect the same block sent out with a different signing root should be slashable.
+	err = db.SlashableProposalCheck(ctx, pubkey, sBlock, [32]byte{2}, false, nil)
+	require.ErrorContains(t, common.FailedBlockSignLocalErr, err)
+
+	// We save a proposal at slot 11 with a nil signing root.
+	blk.Block.Slot = 11
+	sBlock, err = blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+	err = db.SaveProposalHistoryForSlot(ctx, pubkey, blk.Block.Slot, nil)
+	require.NoError(t, err)
+
+	// We expect the same block sent out should return slashable error even
+	// if we had a nil signing root stored in the database.
+	err = db.SlashableProposalCheck(ctx, pubkey, sBlock, [32]byte{2}, false, nil)
+	require.ErrorContains(t, common.FailedBlockSignLocalErr, err)
+
+	// A block with a different slot for which we do not have a proposing history
+	// should not be failing validation.
+	blk.Block.Slot = 9
+	sBlock, err = blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+	err = db.SlashableProposalCheck(ctx, pubkey, sBlock, [32]byte{3}, false, nil)
+	require.NoError(t, err, "Expected allowed block not to throw error")
+}
+
+func Test_slashableProposalCheck_RemoteProtection(t *testing.T) {
+	var pubkey [fieldparams.BLSPubkeyLength]byte
+	pubkeyBytes, err := hexutil.Decode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
+	require.NoError(t, err, "Failed to decode pubkey")
+	copy(pubkey[:], pubkeyBytes)
+
+	db := setupDB(t, [][fieldparams.BLSPubkeyLength]byte{pubkey})
+	require.NoError(t, err)
+
+	blk := util.NewBeaconBlock()
+	blk.Block.Slot = 10
+	sBlock, err := blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+
+	err = db.SlashableProposalCheck(context.Background(), pubkey, sBlock, [32]byte{2}, false, nil)
+	require.NoError(t, err, "Expected allowed block not to throw error")
 }

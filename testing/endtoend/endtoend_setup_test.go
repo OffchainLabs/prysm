@@ -6,22 +6,23 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	ev "github.com/prysmaticlabs/prysm/v4/testing/endtoend/evaluators"
-	"github.com/prysmaticlabs/prysm/v4/testing/endtoend/evaluators/beaconapi_evaluators"
-	e2eParams "github.com/prysmaticlabs/prysm/v4/testing/endtoend/params"
-	"github.com/prysmaticlabs/prysm/v4/testing/endtoend/types"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	ev "github.com/prysmaticlabs/prysm/v5/testing/endtoend/evaluators"
+	"github.com/prysmaticlabs/prysm/v5/testing/endtoend/evaluators/beaconapi"
+	e2eParams "github.com/prysmaticlabs/prysm/v5/testing/endtoend/params"
+	"github.com/prysmaticlabs/prysm/v5/testing/endtoend/types"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
-func e2eMinimal(t *testing.T, v int, cfgo ...types.E2EConfigOpt) *testRunner {
+func e2eMinimal(t *testing.T, cfg *params.BeaconChainConfig, cfgo ...types.E2EConfigOpt) *testRunner {
 	params.SetupTestConfigCleanup(t)
-	require.NoError(t, params.SetActive(types.StartAt(v, params.E2ETestConfig())))
+	require.NoError(t, params.SetActive(cfg))
 	require.NoError(t, e2eParams.Init(t, e2eParams.StandardBeaconCount))
 
 	// Run for 12 epochs if not in long-running to confirm long-running has no issues.
 	var err error
-	epochsToRun := 12
+	epochsToRun := 16
 	epochStr, longRunning := os.LookupEnv("E2E_EPOCHS")
 	if longRunning {
 		epochsToRun, err = strconv.Atoi(epochStr)
@@ -53,17 +54,18 @@ func e2eMinimal(t *testing.T, v int, cfgo ...types.E2EConfigOpt) *testRunner {
 		ev.DepositedValidatorsAreActive,
 		ev.ValidatorsVoteWithTheMajority,
 		ev.ColdStateCheckpoint,
-		ev.AltairForkTransition,
-		ev.BellatrixForkTransition,
-		ev.CapellaForkTransition,
-		// ev.DenebForkTransition, // TODO(12750): Enable this when geth main branch's engine API support.
-		ev.APIGatewayV1Alpha1VerifyIntegrity,
 		ev.FinishedSyncing,
 		ev.AllNodesHaveSameHead,
 		ev.ValidatorSyncParticipation,
 		ev.FeeRecipientIsPresent,
 		//ev.TransactionsPresent, TODO: Re-enable Transaction evaluator once it tx pool issues are fixed.
 	}
+	evals = addIfForkSet(evals, cfg.AltairForkEpoch, ev.AltairForkTransition)
+	evals = addIfForkSet(evals, cfg.BellatrixForkEpoch, ev.BellatrixForkTransition)
+	evals = addIfForkSet(evals, cfg.CapellaForkEpoch, ev.CapellaForkTransition)
+	evals = addIfForkSet(evals, cfg.DenebForkEpoch, ev.DenebForkTransition)
+	evals = addIfForkSet(evals, cfg.ElectraForkEpoch, ev.ElectraForkTransition)
+
 	testConfig := &types.E2EConfig{
 		BeaconFlags: []string{
 			fmt.Sprintf("--slots-per-archive-point=%d", params.BeaconConfig().SlotsPerEpoch*16),
@@ -77,7 +79,7 @@ func e2eMinimal(t *testing.T, v int, cfgo ...types.E2EConfigOpt) *testRunner {
 		TestFeature:         true,
 		TestDeposits:        true,
 		UsePrysmShValidator: false,
-		UsePprof:            !longRunning,
+		UsePprof:            true,
 		TracingSinkEndpoint: tracingEndpoint,
 		Evaluators:          evals,
 		EvalInterceptor:     defaultInterceptor,
@@ -103,7 +105,7 @@ func e2eMainnet(t *testing.T, usePrysmSh, useMultiClient bool, cfg *params.Beaco
 	}
 	// Run for 10 epochs if not in long-running to confirm long-running has no issues.
 	var err error
-	epochsToRun := 12
+	epochsToRun := 16
 	epochStr, longRunning := os.LookupEnv("E2E_EPOCHS")
 	if longRunning {
 		epochsToRun, err = strconv.Atoi(epochStr)
@@ -129,16 +131,17 @@ func e2eMainnet(t *testing.T, usePrysmSh, useMultiClient bool, cfg *params.Beaco
 		ev.ValidatorsHaveWithdrawn,
 		ev.DepositedValidatorsAreActive,
 		ev.ColdStateCheckpoint,
-		ev.AltairForkTransition,
-		ev.BellatrixForkTransition,
-		ev.CapellaForkTransition,
-		// ev.DenebForkTransition, // TODO(12750): Enable this when geth main branch's engine API support.
-		ev.APIGatewayV1Alpha1VerifyIntegrity,
 		ev.FinishedSyncing,
 		ev.AllNodesHaveSameHead,
 		ev.FeeRecipientIsPresent,
 		//ev.TransactionsPresent, TODO: Re-enable Transaction evaluator once it tx pool issues are fixed.
 	}
+	evals = addIfForkSet(evals, cfg.AltairForkEpoch, ev.AltairForkTransition)
+	evals = addIfForkSet(evals, cfg.BellatrixForkEpoch, ev.BellatrixForkTransition)
+	evals = addIfForkSet(evals, cfg.CapellaForkEpoch, ev.CapellaForkTransition)
+	evals = addIfForkSet(evals, cfg.DenebForkEpoch, ev.DenebForkTransition)
+	evals = addIfForkSet(evals, cfg.ElectraForkEpoch, ev.ElectraForkTransition)
+
 	testConfig := &types.E2EConfig{
 		BeaconFlags: []string{
 			fmt.Sprintf("--slots-per-archive-point=%d", params.BeaconConfig().SlotsPerEpoch*16),
@@ -153,7 +156,7 @@ func e2eMainnet(t *testing.T, usePrysmSh, useMultiClient bool, cfg *params.Beaco
 		TestDeposits:        true,
 		UseFixedPeerIDs:     true,
 		UsePrysmShValidator: usePrysmSh,
-		UsePprof:            !longRunning,
+		UsePprof:            true,
 		TracingSinkEndpoint: tracingEndpoint,
 		Evaluators:          evals,
 		EvalInterceptor:     defaultInterceptor,
@@ -166,7 +169,7 @@ func e2eMainnet(t *testing.T, usePrysmSh, useMultiClient bool, cfg *params.Beaco
 	// In the event we use the cross-client e2e option, we add in an additional
 	// evaluator for multiclient runs to verify the beacon api conformance.
 	if testConfig.UseValidatorCrossClient {
-		testConfig.Evaluators = append(testConfig.Evaluators, beaconapi_evaluators.BeaconAPIMultiClientVerifyIntegrity)
+		testConfig.Evaluators = append(testConfig.Evaluators, beaconapi.MultiClientVerifyIntegrity)
 	}
 	if testConfig.UseBuilder {
 		testConfig.Evaluators = append(testConfig.Evaluators, ev.BuilderIsActive)
@@ -174,8 +177,20 @@ func e2eMainnet(t *testing.T, usePrysmSh, useMultiClient bool, cfg *params.Beaco
 	return newTestRunner(t, testConfig)
 }
 
-func scenarioEvals() []types.Evaluator {
-	return []types.Evaluator{
+// addIfForkSet appends the specified transition if epoch is valid.
+func addIfForkSet(
+	evals []types.Evaluator,
+	fork primitives.Epoch,
+	transition types.Evaluator,
+) []types.Evaluator {
+	if fork != 0 && fork != params.BeaconConfig().FarFutureEpoch {
+		evals = append(evals, transition)
+	}
+	return evals
+}
+
+func scenarioEvals(cfg *params.BeaconChainConfig) []types.Evaluator {
+	evals := []types.Evaluator{
 		ev.PeersConnect,
 		ev.HealthzCheck,
 		ev.MetricsCheck,
@@ -185,19 +200,20 @@ func scenarioEvals() []types.Evaluator {
 		ev.ProposeVoluntaryExit,
 		ev.ValidatorsHaveExited,
 		ev.ColdStateCheckpoint,
-		ev.AltairForkTransition,
-		ev.BellatrixForkTransition,
-		ev.CapellaForkTransition,
-		// ev.DenebForkTransition, // TODO(12750): Enable this when geth main branch's engine API support.
-		ev.APIGatewayV1Alpha1VerifyIntegrity,
 		ev.FinishedSyncing,
 		ev.AllNodesHaveSameHead,
 		ev.ValidatorSyncParticipation,
 	}
+	evals = addIfForkSet(evals, cfg.AltairForkEpoch, ev.AltairForkTransition)
+	evals = addIfForkSet(evals, cfg.BellatrixForkEpoch, ev.BellatrixForkTransition)
+	evals = addIfForkSet(evals, cfg.CapellaForkEpoch, ev.CapellaForkTransition)
+	evals = addIfForkSet(evals, cfg.DenebForkEpoch, ev.DenebForkTransition)
+	evals = addIfForkSet(evals, cfg.ElectraForkEpoch, ev.ElectraForkTransition)
+	return evals
 }
 
-func scenarioEvalsMulti() []types.Evaluator {
-	return []types.Evaluator{
+func scenarioEvalsMulti(cfg *params.BeaconChainConfig) []types.Evaluator {
+	evals := []types.Evaluator{
 		ev.PeersConnect,
 		ev.HealthzCheck,
 		ev.MetricsCheck,
@@ -206,12 +222,13 @@ func scenarioEvalsMulti() []types.Evaluator {
 		ev.ProposeVoluntaryExit,
 		ev.ValidatorsHaveExited,
 		ev.ColdStateCheckpoint,
-		ev.AltairForkTransition,
-		ev.BellatrixForkTransition,
-		ev.CapellaForkTransition,
-		// ev.DenebForkTransition, // TODO(12750): Enable this when geth main branch's engine API support.
-		ev.APIGatewayV1Alpha1VerifyIntegrity,
 		ev.FinishedSyncing,
 		ev.AllNodesHaveSameHead,
 	}
+	evals = addIfForkSet(evals, cfg.AltairForkEpoch, ev.AltairForkTransition)
+	evals = addIfForkSet(evals, cfg.BellatrixForkEpoch, ev.BellatrixForkTransition)
+	evals = addIfForkSet(evals, cfg.CapellaForkEpoch, ev.CapellaForkTransition)
+	evals = addIfForkSet(evals, cfg.DenebForkEpoch, ev.DenebForkTransition)
+	evals = addIfForkSet(evals, cfg.ElectraForkEpoch, ev.ElectraForkTransition)
+	return evals
 }

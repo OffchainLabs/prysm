@@ -4,8 +4,8 @@ import (
 	"reflect"
 	"testing"
 
-	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 )
 
 func TestStateRoots_UnmarshalSSZ(t *testing.T) {

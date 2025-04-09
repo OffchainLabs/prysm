@@ -24,7 +24,7 @@ go_proto_library(
     compilers = [
         "@com_github_prysmaticlabs_protoc_gen_go_cast//:go_cast",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v4/proto/eth/ext",
+    importpath = "github.com/prysmaticlabs/prysm/v5/proto/eth/ext",
     proto = ":proto",
     visibility = ["//visibility:public"],
     deps = [
@@ -40,7 +40,7 @@ go_proto_library(
 go_library(
     name = "go_default_library",
     embed = [":ext_go_proto"],
-    importpath = "github.com/prysmaticlabs/prysm/v4/proto/eth/ext",
+    importpath = "github.com/prysmaticlabs/prysm/v5/proto/eth/ext",
     visibility = ["//visibility:public"],
     deps = SSZ_DEPS + [
         "@com_github_golang_protobuf//proto:go_default_library",
@@ -53,7 +53,7 @@ go_library(
 
 go_proto_library(
     name = "ext_go_proto",
-    importpath = "github.com/prysmaticlabs/prysm/v4/proto/eth/ext",
+    importpath = "github.com/prysmaticlabs/prysm/v5/proto/eth/ext",
     proto = ":proto",
     visibility = ["//visibility:public"],
 )

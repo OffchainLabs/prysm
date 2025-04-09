@@ -5,15 +5,15 @@ import (
 	stderrors "errors"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/time"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"go.opencensus.io/trace"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
 var ErrNoDataForSlot = errors.New("cannot retrieve data for slot")
@@ -119,6 +119,11 @@ func (s *State) StateByRootInitialSync(ctx context.Context, blockRoot [32]byte) 
 	}
 	if ok {
 		return cachedInfo.state, nil
+	}
+
+	if s.beaconDB.HasState(ctx, blockRoot) {
+		s, err := s.beaconDB.State(ctx, blockRoot)
+		return s, errors.Wrap(err, "failed to retrieve init-sync state from db")
 	}
 
 	startState, err := s.latestAncestor(ctx, blockRoot)
@@ -332,9 +337,8 @@ func (s *State) CombinedCache() *CombinedCache {
 }
 
 func (s *State) slotAvailable(slot primitives.Slot) bool {
-	// default to assuming node was initialized from genesis - backfill only needs to be specified for checkpoint sync
-	if s.backfillStatus == nil {
+	if s.avb == nil {
 		return true
 	}
-	return s.backfillStatus.SlotCovered(slot)
+	return s.avb.AvailableBlock(slot)
 }

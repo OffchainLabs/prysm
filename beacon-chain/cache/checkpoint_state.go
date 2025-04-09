@@ -4,10 +4,10 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
-	lruwrpr "github.com/prysmaticlabs/prysm/v4/cache/lru"
-	"github.com/prysmaticlabs/prysm/v4/crypto/hash"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	lruwrpr "github.com/prysmaticlabs/prysm/v5/cache/lru"
+	"github.com/prysmaticlabs/prysm/v5/crypto/hash"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
 var (
@@ -42,7 +42,7 @@ func NewCheckpointStateCache() *CheckpointStateCache {
 // StateByCheckpoint fetches state by checkpoint. Returns true with a
 // reference to the CheckpointState info, if exists. Otherwise returns false, nil.
 func (c *CheckpointStateCache) StateByCheckpoint(cp *ethpb.Checkpoint) (state.BeaconState, error) {
-	h, err := hash.HashProto(cp)
+	h, err := hash.Proto(cp)
 	if err != nil {
 		return nil, err
 	}
@@ -62,7 +62,7 @@ func (c *CheckpointStateCache) StateByCheckpoint(cp *ethpb.Checkpoint) (state.Be
 // AddCheckpointState adds CheckpointState object to the cache. This method also trims the least
 // recently added CheckpointState object if the cache size has ready the max cache size limit.
 func (c *CheckpointStateCache) AddCheckpointState(cp *ethpb.Checkpoint, s state.ReadOnlyBeaconState) error {
-	h, err := hash.HashProto(cp)
+	h, err := hash.Proto(cp)
 	if err != nil {
 		return err
 	}

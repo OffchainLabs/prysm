@@ -7,20 +7,20 @@ import (
 	"path"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/signing"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/time"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/transition"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
-	state_native "github.com/prysmaticlabs/prysm/v4/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/io/file"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/runtime/interop"
-	"github.com/prysmaticlabs/prysm/v4/testing/benchmark"
-	"github.com/prysmaticlabs/prysm/v4/testing/util"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/io/file"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/runtime/interop"
+	"github.com/prysmaticlabs/prysm/v5/testing/benchmark"
+	"github.com/prysmaticlabs/prysm/v5/testing/util"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -122,9 +122,17 @@ func generateMarshalledFullStateAndBlock() error {
 
 	var atts []*ethpb.Attestation
 	for i := slotOffset + 1; i < slotsPerEpoch+slotOffset; i++ {
-		attsForSlot, err := util.GenerateAttestations(beaconState, privs, attConfig.NumAttestations, i, false)
+		generatedAttsForSlot, err := util.GenerateAttestations(beaconState, privs, attConfig.NumAttestations, i, false)
 		if err != nil {
 			return err
+		}
+		attsForSlot := make([]*ethpb.Attestation, len(generatedAttsForSlot))
+		for j, att := range generatedAttsForSlot {
+			a, ok := att.(*ethpb.Attestation)
+			if !ok {
+				return errors.New("attestation is not of type *ethpb.Attestation")
+			}
+			attsForSlot[j] = a
 		}
 		atts = append(atts, attsForSlot...)
 	}

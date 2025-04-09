@@ -1,10 +1,11 @@
 package state_native
 
 import (
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/time"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state/stateutil"
-	"github.com/prysmaticlabs/prysm/v4/config/features"
-	"github.com/prysmaticlabs/prysm/v4/runtime/version"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
+	customtypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native/custom-types"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stateutil"
+	"github.com/prysmaticlabs/prysm/v5/config/features"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 )
 
 // CurrentEpochParticipation corresponding to participation bits on the beacon chain.
@@ -39,6 +40,30 @@ func (b *BeaconState) PreviousEpochParticipation() ([]byte, error) {
 	return b.previousEpochParticipationVal(), nil
 }
 
+// CurrentEpochParticipationReadOnly corresponding to participation bits on the beacon chain without copying the data.
+func (b *BeaconState) CurrentEpochParticipationReadOnly() (customtypes.ReadOnlyParticipation, error) {
+	if b.version == version.Phase0 {
+		return customtypes.ReadOnlyParticipation{}, errNotSupported("CurrentEpochParticipation", b.version)
+	}
+
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+
+	return customtypes.NewReadOnlyParticipation(b.currentEpochParticipation), nil
+}
+
+// PreviousEpochParticipationReadOnly corresponding to participation bits on the beacon chain without copying the data.
+func (b *BeaconState) PreviousEpochParticipationReadOnly() (customtypes.ReadOnlyParticipation, error) {
+	if b.version == version.Phase0 {
+		return customtypes.ReadOnlyParticipation{}, errNotSupported("PreviousEpochParticipation", b.version)
+	}
+
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+
+	return customtypes.NewReadOnlyParticipation(b.previousEpochParticipation), nil
+}
+
 // UnrealizedCheckpointBalances returns the total balances: active, target attested in
 // current epoch and target attested in previous epoch. This function is used to
 // compute the "unrealized justification" that a synced Beacon Block will have.
@@ -58,9 +83,9 @@ func (b *BeaconState) UnrealizedCheckpointBalances() (uint64, uint64, uint64, er
 	}
 
 	if features.Get().EnableExperimentalState {
-		return stateutil.UnrealizedCheckpointBalances(cp, pp, b.validatorsVal(), currentEpoch)
+		return stateutil.UnrealizedCheckpointBalances(cp, pp, stateutil.NewValMultiValueSliceReader(b.validatorsMultiValue, b), currentEpoch)
 	} else {
-		return stateutil.UnrealizedCheckpointBalances(cp, pp, b.validators, currentEpoch)
+		return stateutil.UnrealizedCheckpointBalances(cp, pp, stateutil.NewValSliceReader(b.validators), currentEpoch)
 	}
 }
 

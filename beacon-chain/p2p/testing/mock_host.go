@@ -18,12 +18,12 @@ type MockHost struct {
 }
 
 // ID --
-func (_ *MockHost) ID() peer.ID {
+func (*MockHost) ID() peer.ID {
 	return ""
 }
 
 // Peerstore --
-func (_ *MockHost) Peerstore() peerstore.Peerstore {
+func (*MockHost) Peerstore() peerstore.Peerstore {
 	return nil
 }
 
@@ -33,46 +33,46 @@ func (m *MockHost) Addrs() []ma.Multiaddr {
 }
 
 // Network --
-func (_ *MockHost) Network() network.Network {
+func (*MockHost) Network() network.Network {
 	return nil
 }
 
 // Mux --
-func (_ *MockHost) Mux() protocol.Switch {
+func (*MockHost) Mux() protocol.Switch {
 	return nil
 }
 
 // Connect --
-func (_ *MockHost) Connect(_ context.Context, _ peer.AddrInfo) error {
+func (*MockHost) Connect(_ context.Context, _ peer.AddrInfo) error {
 	return nil
 }
 
 // SetStreamHandler --
-func (_ *MockHost) SetStreamHandler(_ protocol.ID, _ network.StreamHandler) {}
+func (*MockHost) SetStreamHandler(_ protocol.ID, _ network.StreamHandler) {}
 
 // SetStreamHandlerMatch --
-func (_ *MockHost) SetStreamHandlerMatch(protocol.ID, func(id protocol.ID) bool, network.StreamHandler) {
+func (*MockHost) SetStreamHandlerMatch(protocol.ID, func(id protocol.ID) bool, network.StreamHandler) {
 }
 
 // RemoveStreamHandler --
-func (_ *MockHost) RemoveStreamHandler(_ protocol.ID) {}
+func (*MockHost) RemoveStreamHandler(_ protocol.ID) {}
 
 // NewStream --
-func (_ *MockHost) NewStream(_ context.Context, _ peer.ID, _ ...protocol.ID) (network.Stream, error) {
+func (*MockHost) NewStream(_ context.Context, _ peer.ID, _ ...protocol.ID) (network.Stream, error) {
 	return nil, nil
 }
 
 // Close --
-func (_ *MockHost) Close() error {
+func (*MockHost) Close() error {
 	return nil
 }
 
 // ConnManager --
-func (_ *MockHost) ConnManager() connmgr.ConnManager {
+func (*MockHost) ConnManager() connmgr.ConnManager {
 	return nil
 }
 
 // EventBus --
-func (_ *MockHost) EventBus() event.Bus {
+func (*MockHost) EventBus() event.Bus {
 	return nil
 }

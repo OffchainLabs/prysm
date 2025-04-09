@@ -6,9 +6,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/validator/db/common"
 )
 
 func TestStore_Backup(t *testing.T) {
@@ -88,22 +89,24 @@ func TestStore_NestedBackup(t *testing.T) {
 	require.NoError(t, err)
 	require.DeepEqual(t, root[:], genesisRoot)
 
+	signingRoot32 := [32]byte{'C'}
+
 	hist, err := backedDB.AttestationHistoryForPubKey(context.Background(), keys[0])
 	require.NoError(t, err)
-	require.DeepEqual(t, &AttestationRecord{
+	require.DeepEqual(t, &common.AttestationRecord{
 		PubKey:      keys[0],
 		Source:      10,
 		Target:      0,
-		SigningRoot: [32]byte{'C'},
+		SigningRoot: signingRoot32[:],
 	}, hist[0])
 
 	hist, err = backedDB.AttestationHistoryForPubKey(context.Background(), keys[1])
 	require.NoError(t, err)
-	require.DeepEqual(t, &AttestationRecord{
+	require.DeepEqual(t, &common.AttestationRecord{
 		PubKey:      keys[1],
 		Source:      10,
 		Target:      0,
-		SigningRoot: [32]byte{'C'},
+		SigningRoot: signingRoot32[:],
 	}, hist[0])
 
 	ep, exists, err := backedDB.LowestSignedSourceEpoch(context.Background(), keys[0])

@@ -7,10 +7,10 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/execution/types"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/monitoring/tracing"
-	"go.opencensus.io/trace"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/execution/types"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
+	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 )
 
 // searchThreshold to apply for when searching for blocks of a particular time. If the buffer
@@ -31,10 +31,10 @@ func (s *Service) BlockExists(ctx context.Context, hash common.Hash) (bool, *big
 		if err != nil {
 			return false, nil, err
 		}
-		span.AddAttributes(trace.BoolAttribute("blockCacheHit", true))
+		span.SetAttributes(trace.BoolAttribute("blockCacheHit", true))
 		return true, hdrInfo.Number, nil
 	}
-	span.AddAttributes(trace.BoolAttribute("blockCacheHit", false))
+	span.SetAttributes(trace.BoolAttribute("blockCacheHit", false))
 	header, err := s.HeaderByHash(ctx, hash)
 	if err != nil {
 		return false, big.NewInt(0), errors.Wrap(err, "could not query block with given hash")
@@ -56,10 +56,10 @@ func (s *Service) BlockHashByHeight(ctx context.Context, height *big.Int) (commo
 		if err != nil {
 			return [32]byte{}, err
 		}
-		span.AddAttributes(trace.BoolAttribute("headerCacheHit", true))
+		span.SetAttributes(trace.BoolAttribute("headerCacheHit", true))
 		return hInfo.Hash, nil
 	}
-	span.AddAttributes(trace.BoolAttribute("headerCacheHit", false))
+	span.SetAttributes(trace.BoolAttribute("headerCacheHit", false))
 
 	if s.rpcClient == nil {
 		err := errors.New("nil rpc client")
@@ -110,10 +110,10 @@ func (s *Service) BlockByTimestamp(ctx context.Context, time uint64) (*types.Hea
 		return nil, errors.Wrap(errBlockTimeTooLate, fmt.Sprintf("(%d > %d)", time, latestBlkTime))
 	}
 	// Initialize a pointer to eth1 chain's history to start our search from.
-	cursorNum := big.NewInt(0).SetUint64(latestBlkHeight)
+	cursorNum := new(big.Int).SetUint64(latestBlkHeight)
 	cursorTime := latestBlkTime
 
-	numOfBlocks := uint64(0)
+	var numOfBlocks uint64
 	estimatedBlk := cursorNum.Uint64()
 	maxTimeBuffer := searchThreshold * params.BeaconConfig().SecondsPerETH1Block
 	// Terminate if we can't find an acceptable block after
@@ -156,15 +156,15 @@ func (s *Service) BlockByTimestamp(ctx context.Context, time uint64) (*types.Hea
 		return s.retrieveHeaderInfo(ctx, cursorNum.Uint64())
 	}
 	if cursorTime > time {
-		return s.findMaxTargetEth1Block(ctx, big.NewInt(0).SetUint64(estimatedBlk), time)
+		return s.findMaxTargetEth1Block(ctx, new(big.Int).SetUint64(estimatedBlk), time)
 	}
-	return s.findMinTargetEth1Block(ctx, big.NewInt(0).SetUint64(estimatedBlk), time)
+	return s.findMinTargetEth1Block(ctx, new(big.Int).SetUint64(estimatedBlk), time)
 }
 
 // Performs a search to find a target eth1 block which is earlier than or equal to the
 // target time. This method is used when head.time > targetTime
 func (s *Service) findMaxTargetEth1Block(ctx context.Context, upperBoundBlk *big.Int, targetTime uint64) (*types.HeaderInfo, error) {
-	for bn := upperBoundBlk; ; bn = big.NewInt(0).Sub(bn, big.NewInt(1)) {
+	for bn := upperBoundBlk; ; bn = new(big.Int).Sub(bn, big.NewInt(1)) {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
@@ -181,7 +181,7 @@ func (s *Service) findMaxTargetEth1Block(ctx context.Context, upperBoundBlk *big
 // Performs a search to find a target eth1 block which is just earlier than or equal to the
 // target time. This method is used when head.time < targetTime
 func (s *Service) findMinTargetEth1Block(ctx context.Context, lowerBoundBlk *big.Int, targetTime uint64) (*types.HeaderInfo, error) {
-	for bn := lowerBoundBlk; ; bn = big.NewInt(0).Add(bn, big.NewInt(1)) {
+	for bn := lowerBoundBlk; ; bn = new(big.Int).Add(bn, big.NewInt(1)) {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
@@ -201,7 +201,7 @@ func (s *Service) findMinTargetEth1Block(ctx context.Context, lowerBoundBlk *big
 }
 
 func (s *Service) retrieveHeaderInfo(ctx context.Context, bNum uint64) (*types.HeaderInfo, error) {
-	bn := big.NewInt(0).SetUint64(bNum)
+	bn := new(big.Int).SetUint64(bNum)
 	exists, info, err := s.headerCache.HeaderInfoByHeight(bn)
 	if err != nil {
 		return nil, err

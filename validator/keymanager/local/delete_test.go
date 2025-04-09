@@ -7,12 +7,11 @@ import (
 	"strings"
 	"testing"
 
-	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	ethpbservice "github.com/prysmaticlabs/prysm/v4/proto/eth/service"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	mock "github.com/prysmaticlabs/prysm/v4/validator/accounts/testing"
-	"github.com/prysmaticlabs/prysm/v4/validator/keymanager"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	mock "github.com/prysmaticlabs/prysm/v5/validator/accounts/testing"
+	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	keystorev4 "github.com/wealdtech/go-eth2-wallet-encryptor-keystorev4"
 )
@@ -47,8 +46,8 @@ func TestLocalKeymanager_DeleteKeystores(t *testing.T) {
 		statuses, err := dr.DeleteKeystores(ctx, [][]byte{notFoundPubKey[:], notFoundPubKey2[:]})
 		require.NoError(t, err)
 		require.Equal(t, 2, len(statuses))
-		require.Equal(t, ethpbservice.DeletedKeystoreStatus_NOT_FOUND, statuses[0].Status)
-		require.Equal(t, ethpbservice.DeletedKeystoreStatus_NOT_FOUND, statuses[1].Status)
+		require.Equal(t, keymanager.StatusNotFound, statuses[0].Status)
+		require.Equal(t, keymanager.StatusNotFound, statuses[1].Status)
 	})
 	t.Run("file write errors should not lead to updated local keystore or cache", func(t *testing.T) {
 		wallet.HasWriteFileError = true
@@ -68,7 +67,7 @@ func TestLocalKeymanager_DeleteKeystores(t *testing.T) {
 		require.NoError(t, err)
 
 		require.Equal(t, 1, len(statuses))
-		require.Equal(t, ethpbservice.DeletedKeystoreStatus_DELETED, statuses[0].Status)
+		require.Equal(t, keymanager.StatusDeleted, statuses[0].Status)
 
 		// Ensure the keystore file was written to the wallet
 		// and ensure we can decrypt it using the EIP-2335 standard.
@@ -109,9 +108,9 @@ func TestLocalKeymanager_DeleteKeystores(t *testing.T) {
 		require.Equal(t, 4, len(statuses))
 		for i, st := range statuses {
 			if i == 0 {
-				require.Equal(t, ethpbservice.DeletedKeystoreStatus_DELETED, st.Status)
+				require.Equal(t, keymanager.StatusDeleted, st.Status)
 			} else {
-				require.Equal(t, ethpbservice.DeletedKeystoreStatus_NOT_ACTIVE, st.Status)
+				require.Equal(t, keymanager.StatusNotActive, st.Status)
 			}
 		}
 

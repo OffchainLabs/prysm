@@ -8,7 +8,7 @@ go_library(
         "block_processing.yaml.go",
         "slot_processing.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v4/testing/spectest/shared/deneb/sanity",
+    importpath = "github.com/prysmaticlabs/prysm/v5/testing/spectest/shared/deneb/sanity",
     visibility = ["//testing/spectest:__subpackages__"],
     deps = [
         "//beacon-chain/core/helpers:go_default_library",

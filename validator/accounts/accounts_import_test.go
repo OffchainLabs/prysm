@@ -9,15 +9,14 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	ethpbservice "github.com/prysmaticlabs/prysm/v4/proto/eth/service"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/validator/accounts/iface"
-	"github.com/prysmaticlabs/prysm/v4/validator/keymanager"
-	"github.com/prysmaticlabs/prysm/v4/validator/keymanager/local"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/validator/accounts/iface"
+	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
+	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/local"
 )
 
 func TestImportAccounts_NoPassword(t *testing.T) {
@@ -54,7 +53,7 @@ func TestImportAccounts_NoPassword(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, 1, len(resp))
-	require.Equal(t, resp[0].Status, ethpbservice.ImportedKeystoreStatus_ERROR)
+	require.Equal(t, resp[0].Status, keymanager.StatusError)
 }
 
 func TestImport_SortByDerivationPath(t *testing.T) {

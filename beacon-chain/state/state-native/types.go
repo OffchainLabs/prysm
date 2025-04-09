@@ -3,9 +3,9 @@ package state_native
 import (
 	"fmt"
 
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state/state-native/types"
-	"github.com/prysmaticlabs/prysm/v4/runtime/version"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native/types"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 )
 
 // Ensure type BeaconState below implements BeaconState interface.

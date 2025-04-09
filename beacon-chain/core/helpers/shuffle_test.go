@@ -5,14 +5,16 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/container/slice"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/container/slice"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func TestShuffleList_InvalidValidatorCount(t *testing.T) {
+	ClearCache()
+
 	maxShuffleListSize = 20
 	list := make([]primitives.ValidatorIndex, 21)
 	if _, err := ShuffleList(list, [32]byte{123, 125}); err == nil {
@@ -23,6 +25,8 @@ func TestShuffleList_InvalidValidatorCount(t *testing.T) {
 }
 
 func TestShuffleList_OK(t *testing.T) {
+	ClearCache()
+
 	var list1 []primitives.ValidatorIndex
 	seed1 := [32]byte{1, 128, 12}
 	seed2 := [32]byte{2, 128, 12}
@@ -47,6 +51,8 @@ func TestShuffleList_OK(t *testing.T) {
 }
 
 func TestSplitIndices_OK(t *testing.T) {
+	ClearCache()
+
 	var l []uint64
 	numValidators := uint64(64000)
 	for i := uint64(0); i < numValidators; i++ {
@@ -61,6 +67,8 @@ func TestSplitIndices_OK(t *testing.T) {
 }
 
 func TestShuffleList_Vs_ShuffleIndex(t *testing.T) {
+	ClearCache()
+
 	var list []primitives.ValidatorIndex
 	listSize := uint64(1000)
 	seed := [32]byte{123, 42}
@@ -125,6 +133,8 @@ func BenchmarkShuffleList(b *testing.B) {
 }
 
 func TestShuffledIndex(t *testing.T) {
+	ClearCache()
+
 	var list []primitives.ValidatorIndex
 	listSize := uint64(399)
 	for i := primitives.ValidatorIndex(0); uint64(i) < listSize; i++ {
@@ -147,6 +157,8 @@ func TestShuffledIndex(t *testing.T) {
 }
 
 func TestSplitIndicesAndOffset_OK(t *testing.T) {
+	ClearCache()
+
 	var l []uint64
 	validators := uint64(64000)
 	for i := uint64(0); i < validators; i++ {

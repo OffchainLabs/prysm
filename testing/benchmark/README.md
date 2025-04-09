@@ -10,6 +10,7 @@ The following configs are in `config.go`:
 Due to the sheer size of the benchmarking configurations (16384 validators), the files used for benchmarking are pregenerated so there's no wasted computations on generating a genesis state with 16384 validators. This should only be needed if there is a breaking spec change and the tests fail from SSZ issues.
 
 To generate new files to use for benchmarking, run the below command in the root of Prysm.
+
 ```
 bazel run //tools/benchmark-files-gen -- --output-dir $PRYSMPATH/testing/benchmark/benchmark_files/ --overwrite
 ```

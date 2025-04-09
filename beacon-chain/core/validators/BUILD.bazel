@@ -2,8 +2,11 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
-    srcs = ["validator.go"],
-    importpath = "github.com/prysmaticlabs/prysm/v4/beacon-chain/core/validators",
+    srcs = [
+        "slashing.go",
+        "validator.go",
+    ],
+    importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/validators",
     visibility = [
         "//beacon-chain:__subpackages__",
         "//testing/endtoend:__subpackages__",
@@ -15,7 +18,9 @@ go_library(
         "//beacon-chain/state:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/primitives:go_default_library",
+        "//math:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
+        "//runtime/version:go_default_library",
         "//time/slots:go_default_library",
         "@com_github_pkg_errors//:go_default_library",
     ],
@@ -24,9 +29,12 @@ go_library(
 go_test(
     name = "go_default_test",
     size = "small",
-    srcs = ["validator_test.go"],
-    embed = [":go_default_library"],
+    srcs = [
+        "slashing_test.go",
+        "validator_test.go",
+    ],
     deps = [
+        ":go_default_library",
         "//beacon-chain/core/helpers:go_default_library",
         "//beacon-chain/core/time:go_default_library",
         "//beacon-chain/state/state-native:go_default_library",
@@ -36,5 +44,6 @@ go_test(
         "//runtime/version:go_default_library",
         "//testing/assert:go_default_library",
         "//testing/require:go_default_library",
+        "//time/slots:go_default_library",
     ],
 )

@@ -8,7 +8,7 @@ go_library(
         "helper.go",
         "logs.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v4/contracts/deposit",
+    importpath = "github.com/prysmaticlabs/prysm/v5/contracts/deposit",
     visibility = ["//visibility:public"],
     deps = [
         "//beacon-chain/core/signing:go_default_library",

@@ -5,15 +5,14 @@ import (
 
 	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
-	field_params "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
-	consensus_types "github.com/prysmaticlabs/prysm/v4/consensus-types"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	enginev1 "github.com/prysmaticlabs/prysm/v4/proto/engine/v1"
-	eth "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	validatorpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1/validator-client"
-	"github.com/prysmaticlabs/prysm/v4/runtime/version"
-	log "github.com/sirupsen/logrus"
+	field_params "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	consensus_types "github.com/prysmaticlabs/prysm/v5/consensus-types"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
+	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	validatorpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/validator-client"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 )
 
 // BeaconBlockIsNil checks if any composite field of input signed beacon block is nil.
@@ -42,7 +41,7 @@ func (b *SignedBeaconBlock) IsNil() bool {
 }
 
 // Copy performs a deep copy of the signed beacon block object.
-func (b *SignedBeaconBlock) Copy() (interfaces.ReadOnlySignedBeaconBlock, error) {
+func (b *SignedBeaconBlock) Copy() (interfaces.SignedBeaconBlock, error) {
 	if b == nil {
 		return nil, nil
 	}
@@ -53,32 +52,34 @@ func (b *SignedBeaconBlock) Copy() (interfaces.ReadOnlySignedBeaconBlock, error)
 	}
 	switch b.version {
 	case version.Phase0:
-		cp := eth.CopySignedBeaconBlock(pb.(*eth.SignedBeaconBlock))
-		return initSignedBlockFromProtoPhase0(cp)
+		return initSignedBlockFromProtoPhase0(pb.(*eth.SignedBeaconBlock).Copy())
 	case version.Altair:
-		cp := eth.CopySignedBeaconBlockAltair(pb.(*eth.SignedBeaconBlockAltair))
-		return initSignedBlockFromProtoAltair(cp)
+		return initSignedBlockFromProtoAltair(pb.(*eth.SignedBeaconBlockAltair).Copy())
 	case version.Bellatrix:
 		if b.IsBlinded() {
-			cp := eth.CopySignedBlindedBeaconBlockBellatrix(pb.(*eth.SignedBlindedBeaconBlockBellatrix))
-			return initBlindedSignedBlockFromProtoBellatrix(cp)
+			return initBlindedSignedBlockFromProtoBellatrix(pb.(*eth.SignedBlindedBeaconBlockBellatrix).Copy())
 		}
-		cp := eth.CopySignedBeaconBlockBellatrix(pb.(*eth.SignedBeaconBlockBellatrix))
-		return initSignedBlockFromProtoBellatrix(cp)
+		return initSignedBlockFromProtoBellatrix(pb.(*eth.SignedBeaconBlockBellatrix).Copy())
 	case version.Capella:
 		if b.IsBlinded() {
-			cp := eth.CopySignedBlindedBeaconBlockCapella(pb.(*eth.SignedBlindedBeaconBlockCapella))
-			return initBlindedSignedBlockFromProtoCapella(cp)
+			return initBlindedSignedBlockFromProtoCapella(pb.(*eth.SignedBlindedBeaconBlockCapella).Copy())
 		}
-		cp := eth.CopySignedBeaconBlockCapella(pb.(*eth.SignedBeaconBlockCapella))
-		return initSignedBlockFromProtoCapella(cp)
+		return initSignedBlockFromProtoCapella(pb.(*eth.SignedBeaconBlockCapella).Copy())
 	case version.Deneb:
 		if b.IsBlinded() {
-			cp := eth.CopySignedBlindedBeaconBlockDeneb(pb.(*eth.SignedBlindedBeaconBlockDeneb))
-			return initBlindedSignedBlockFromProtoDeneb(cp)
+			return initBlindedSignedBlockFromProtoDeneb(pb.(*eth.SignedBlindedBeaconBlockDeneb).Copy())
 		}
-		cp := eth.CopySignedBeaconBlockDeneb(pb.(*eth.SignedBeaconBlockDeneb))
-		return initSignedBlockFromProtoDeneb(cp)
+		return initSignedBlockFromProtoDeneb(pb.(*eth.SignedBeaconBlockDeneb).Copy())
+	case version.Electra:
+		if b.IsBlinded() {
+			return initBlindedSignedBlockFromProtoElectra(pb.(*eth.SignedBlindedBeaconBlockElectra).Copy())
+		}
+		return initSignedBlockFromProtoElectra(pb.(*eth.SignedBeaconBlockElectra).Copy())
+	case version.Fulu:
+		if b.IsBlinded() {
+			return initBlindedSignedBlockFromProtoFulu(pb.(*eth.SignedBlindedBeaconBlockFulu).Copy())
+		}
+		return initSignedBlockFromProtoFulu(pb.(*eth.SignedBeaconBlockFulu).Copy())
 	default:
 		return nil, errIncorrectBlockVersion
 	}
@@ -120,115 +121,45 @@ func (b *SignedBeaconBlock) PbGenericBlock() (*eth.GenericSignedBeaconBlock, err
 	case version.Deneb:
 		if b.IsBlinded() {
 			return &eth.GenericSignedBeaconBlock{
-				Block: &eth.GenericSignedBeaconBlock_BlindedDeneb{BlindedDeneb: &eth.SignedBlindedBeaconBlockAndBlobsDeneb{
-					SignedBlindedBlock: pb.(*eth.SignedBlindedBeaconBlockDeneb),
-				}},
+				Block: &eth.GenericSignedBeaconBlock_BlindedDeneb{BlindedDeneb: pb.(*eth.SignedBlindedBeaconBlockDeneb)},
 			}, nil
 		}
+		bc, ok := pb.(*eth.SignedBeaconBlockContentsDeneb)
+		if !ok {
+			return nil, fmt.Errorf("PbGenericBlock() only supports block content type but got %T", pb)
+		}
 		return &eth.GenericSignedBeaconBlock{
-			Block: &eth.GenericSignedBeaconBlock_Deneb{Deneb: &eth.SignedBeaconBlockAndBlobsDeneb{
-				Block: pb.(*eth.SignedBeaconBlockDeneb),
-			}},
+			Block: &eth.GenericSignedBeaconBlock_Deneb{Deneb: bc},
+		}, nil
+	case version.Electra:
+		if b.IsBlinded() {
+			return &eth.GenericSignedBeaconBlock{
+				Block: &eth.GenericSignedBeaconBlock_BlindedElectra{BlindedElectra: pb.(*eth.SignedBlindedBeaconBlockElectra)},
+			}, nil
+		}
+		bc, ok := pb.(*eth.SignedBeaconBlockContentsElectra)
+		if !ok {
+			return nil, fmt.Errorf("PbGenericBlock() only supports block content type but got %T", pb)
+		}
+		return &eth.GenericSignedBeaconBlock{
+			Block: &eth.GenericSignedBeaconBlock_Electra{Electra: bc},
+		}, nil
+	case version.Fulu:
+		if b.IsBlinded() {
+			return &eth.GenericSignedBeaconBlock{
+				Block: &eth.GenericSignedBeaconBlock_BlindedFulu{BlindedFulu: pb.(*eth.SignedBlindedBeaconBlockFulu)},
+			}, nil
+		}
+		bc, ok := pb.(*eth.SignedBeaconBlockContentsFulu)
+		if !ok {
+			return nil, fmt.Errorf("PbGenericBlock() only supports block content type but got %T", pb)
+		}
+		return &eth.GenericSignedBeaconBlock{
+			Block: &eth.GenericSignedBeaconBlock_Fulu{Fulu: bc},
 		}, nil
 	default:
 		return nil, errIncorrectBlockVersion
 	}
-}
-
-// PbPhase0Block returns the underlying protobuf object.
-func (b *SignedBeaconBlock) PbPhase0Block() (*eth.SignedBeaconBlock, error) {
-	if b.version != version.Phase0 {
-		return nil, consensus_types.ErrNotSupported("PbPhase0Block", b.version)
-	}
-	pb, err := b.Proto()
-	if err != nil {
-		return nil, err
-	}
-	return pb.(*eth.SignedBeaconBlock), nil
-}
-
-// PbAltairBlock returns the underlying protobuf object.
-func (b *SignedBeaconBlock) PbAltairBlock() (*eth.SignedBeaconBlockAltair, error) {
-	if b.version != version.Altair {
-		return nil, consensus_types.ErrNotSupported("PbAltairBlock", b.version)
-	}
-	pb, err := b.Proto()
-	if err != nil {
-		return nil, err
-	}
-	return pb.(*eth.SignedBeaconBlockAltair), nil
-}
-
-// PbBellatrixBlock returns the underlying protobuf object.
-func (b *SignedBeaconBlock) PbBellatrixBlock() (*eth.SignedBeaconBlockBellatrix, error) {
-	if b.version != version.Bellatrix || b.IsBlinded() {
-		return nil, consensus_types.ErrNotSupported("PbBellatrixBlock", b.version)
-	}
-	pb, err := b.Proto()
-	if err != nil {
-		return nil, err
-	}
-	return pb.(*eth.SignedBeaconBlockBellatrix), nil
-}
-
-// PbBlindedBellatrixBlock returns the underlying protobuf object.
-func (b *SignedBeaconBlock) PbBlindedBellatrixBlock() (*eth.SignedBlindedBeaconBlockBellatrix, error) {
-	if b.version != version.Bellatrix || !b.IsBlinded() {
-		return nil, consensus_types.ErrNotSupported("PbBlindedBellatrixBlock", b.version)
-	}
-	pb, err := b.Proto()
-	if err != nil {
-		return nil, err
-	}
-	return pb.(*eth.SignedBlindedBeaconBlockBellatrix), nil
-}
-
-// PbCapellaBlock returns the underlying protobuf object.
-func (b *SignedBeaconBlock) PbCapellaBlock() (*eth.SignedBeaconBlockCapella, error) {
-	if b.version != version.Capella || b.IsBlinded() {
-		return nil, consensus_types.ErrNotSupported("PbCapellaBlock", b.version)
-	}
-	pb, err := b.Proto()
-	if err != nil {
-		return nil, err
-	}
-	return pb.(*eth.SignedBeaconBlockCapella), nil
-}
-
-// PbBlindedCapellaBlock returns the underlying protobuf object.
-func (b *SignedBeaconBlock) PbBlindedCapellaBlock() (*eth.SignedBlindedBeaconBlockCapella, error) {
-	if b.version != version.Capella || !b.IsBlinded() {
-		return nil, consensus_types.ErrNotSupported("PbBlindedCapellaBlock", b.version)
-	}
-	pb, err := b.Proto()
-	if err != nil {
-		return nil, err
-	}
-	return pb.(*eth.SignedBlindedBeaconBlockCapella), nil
-}
-
-// PbDenebBlock returns the underlying protobuf object.
-func (b *SignedBeaconBlock) PbDenebBlock() (*eth.SignedBeaconBlockDeneb, error) {
-	if b.version != version.Deneb || b.IsBlinded() {
-		return nil, consensus_types.ErrNotSupported("PbDenebBlock", b.version)
-	}
-	pb, err := b.Proto()
-	if err != nil {
-		return nil, err
-	}
-	return pb.(*eth.SignedBeaconBlockDeneb), nil
-}
-
-// PbBlindedDenebBlock returns the underlying protobuf object.
-func (b *SignedBeaconBlock) PbBlindedDenebBlock() (*eth.SignedBlindedBeaconBlockDeneb, error) {
-	if b.version != version.Deneb || !b.IsBlinded() {
-		return nil, consensus_types.ErrNotSupported("PbBlindedDenebBlock", b.version)
-	}
-	pb, err := b.Proto()
-	if err != nil {
-		return nil, err
-	}
-	return pb.(*eth.SignedBlindedBeaconBlockDeneb), nil
 }
 
 // ToBlinded converts a non-blinded block to its blinded equivalent.
@@ -247,11 +178,84 @@ func (b *SignedBeaconBlock) ToBlinded() (interfaces.ReadOnlySignedBeaconBlock, e
 		return nil, err
 	}
 
+	if b.version >= version.Fulu {
+		p, ok := payload.Proto().(*enginev1.ExecutionPayloadDeneb)
+		if !ok {
+			return nil, fmt.Errorf("%T is not an execution payload header of Deneb version", p)
+		}
+		header, err := PayloadToHeaderFulu(payload)
+		if err != nil {
+			return nil, errors.Wrap(err, "payload to header fulu")
+		}
+
+		return initBlindedSignedBlockFromProtoFulu(
+			&eth.SignedBlindedBeaconBlockFulu{
+				Message: &eth.BlindedBeaconBlockFulu{
+					Slot:          b.block.slot,
+					ProposerIndex: b.block.proposerIndex,
+					ParentRoot:    b.block.parentRoot[:],
+					StateRoot:     b.block.stateRoot[:],
+					Body: &eth.BlindedBeaconBlockBodyElectra{
+						RandaoReveal:           b.block.body.randaoReveal[:],
+						Eth1Data:               b.block.body.eth1Data,
+						Graffiti:               b.block.body.graffiti[:],
+						ProposerSlashings:      b.block.body.proposerSlashings,
+						AttesterSlashings:      b.block.body.attesterSlashingsElectra,
+						Attestations:           b.block.body.attestationsElectra,
+						Deposits:               b.block.body.deposits,
+						VoluntaryExits:         b.block.body.voluntaryExits,
+						SyncAggregate:          b.block.body.syncAggregate,
+						ExecutionPayloadHeader: header,
+						BlsToExecutionChanges:  b.block.body.blsToExecutionChanges,
+						BlobKzgCommitments:     b.block.body.blobKzgCommitments,
+						ExecutionRequests:      b.block.body.executionRequests,
+					},
+				},
+				Signature: b.signature[:],
+			})
+	}
+
+	if b.version >= version.Electra {
+		p, ok := payload.Proto().(*enginev1.ExecutionPayloadDeneb)
+		if !ok {
+			return nil, fmt.Errorf("%T is not an execution payload header of Deneb version", p)
+		}
+		header, err := PayloadToHeaderElectra(payload)
+		if err != nil {
+			return nil, errors.Wrap(err, "payload to header electra")
+		}
+		return initBlindedSignedBlockFromProtoElectra(
+			&eth.SignedBlindedBeaconBlockElectra{
+				Message: &eth.BlindedBeaconBlockElectra{
+					Slot:          b.block.slot,
+					ProposerIndex: b.block.proposerIndex,
+					ParentRoot:    b.block.parentRoot[:],
+					StateRoot:     b.block.stateRoot[:],
+					Body: &eth.BlindedBeaconBlockBodyElectra{
+						RandaoReveal:           b.block.body.randaoReveal[:],
+						Eth1Data:               b.block.body.eth1Data,
+						Graffiti:               b.block.body.graffiti[:],
+						ProposerSlashings:      b.block.body.proposerSlashings,
+						AttesterSlashings:      b.block.body.attesterSlashingsElectra,
+						Attestations:           b.block.body.attestationsElectra,
+						Deposits:               b.block.body.deposits,
+						VoluntaryExits:         b.block.body.voluntaryExits,
+						SyncAggregate:          b.block.body.syncAggregate,
+						ExecutionPayloadHeader: header,
+						BlsToExecutionChanges:  b.block.body.blsToExecutionChanges,
+						BlobKzgCommitments:     b.block.body.blobKzgCommitments,
+						ExecutionRequests:      b.block.body.executionRequests,
+					},
+				},
+				Signature: b.signature[:],
+			})
+	}
+
 	switch p := payload.Proto().(type) {
 	case *enginev1.ExecutionPayload:
 		header, err := PayloadToHeader(payload)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "payload to header")
 		}
 		return initBlindedSignedBlockFromProtoBellatrix(
 			&eth.SignedBlindedBeaconBlockBellatrix{
@@ -306,7 +310,7 @@ func (b *SignedBeaconBlock) ToBlinded() (interfaces.ReadOnlySignedBeaconBlock, e
 	case *enginev1.ExecutionPayloadDeneb:
 		header, err := PayloadToHeaderDeneb(payload)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "payload to header deneb")
 		}
 		return initBlindedSignedBlockFromProtoDeneb(
 			&eth.SignedBlindedBeaconBlockDeneb{
@@ -337,6 +341,34 @@ func (b *SignedBeaconBlock) ToBlinded() (interfaces.ReadOnlySignedBeaconBlock, e
 	}
 }
 
+func (b *SignedBeaconBlock) Unblind(e interfaces.ExecutionData) error {
+	if e == nil || e.IsNil() {
+		return errors.New("cannot unblind with nil execution data")
+	}
+	if !b.IsBlinded() {
+		return errors.New("cannot unblind if the block is already unblinded")
+	}
+	payloadRoot, err := e.HashTreeRoot()
+	if err != nil {
+		return err
+	}
+	header, err := b.Block().Body().Execution()
+	if err != nil {
+		return err
+	}
+	headerRoot, err := header.HashTreeRoot()
+	if err != nil {
+		return err
+	}
+	if payloadRoot != headerRoot {
+		return errors.New("cannot unblind with different execution data")
+	}
+	if err := b.SetExecution(e); err != nil {
+		return err
+	}
+	return nil
+}
+
 // Version of the underlying protobuf object.
 func (b *SignedBeaconBlock) Version() int {
 	return b.version
@@ -344,22 +376,7 @@ func (b *SignedBeaconBlock) Version() int {
 
 // IsBlinded metadata on whether a block is blinded
 func (b *SignedBeaconBlock) IsBlinded() bool {
-	return b.block.body.isBlinded
-}
-
-// ValueInGwei metadata on the payload value returned by the builder. Value is 0 by default if local.
-func (b *SignedBeaconBlock) ValueInGwei() uint64 {
-	exec, err := b.block.body.Execution()
-	if err != nil {
-		log.WithError(err).Warn("failed to retrieve execution payload")
-		return 0
-	}
-	val, err := exec.ValueInGwei()
-	if err != nil {
-		log.WithError(err).Warn("failed to retrieve value in gwei")
-		return 0
-	}
-	return val
+	return b.version >= version.Bellatrix && b.block.body.executionPayload == nil
 }
 
 // Header converts the underlying protobuf object from blinded block to header format.
@@ -410,6 +427,16 @@ func (b *SignedBeaconBlock) MarshalSSZ() ([]byte, error) {
 			return pb.(*eth.SignedBlindedBeaconBlockDeneb).MarshalSSZ()
 		}
 		return pb.(*eth.SignedBeaconBlockDeneb).MarshalSSZ()
+	case version.Electra:
+		if b.IsBlinded() {
+			return pb.(*eth.SignedBlindedBeaconBlockElectra).MarshalSSZ()
+		}
+		return pb.(*eth.SignedBeaconBlockElectra).MarshalSSZ()
+	case version.Fulu:
+		if b.IsBlinded() {
+			return pb.(*eth.SignedBlindedBeaconBlockFulu).MarshalSSZ()
+		}
+		return pb.(*eth.SignedBeaconBlockFulu).MarshalSSZ()
 	default:
 		return []byte{}, errIncorrectBlockVersion
 	}
@@ -442,6 +469,16 @@ func (b *SignedBeaconBlock) MarshalSSZTo(dst []byte) ([]byte, error) {
 			return pb.(*eth.SignedBlindedBeaconBlockDeneb).MarshalSSZTo(dst)
 		}
 		return pb.(*eth.SignedBeaconBlockDeneb).MarshalSSZTo(dst)
+	case version.Electra:
+		if b.IsBlinded() {
+			return pb.(*eth.SignedBlindedBeaconBlockElectra).MarshalSSZTo(dst)
+		}
+		return pb.(*eth.SignedBeaconBlockElectra).MarshalSSZTo(dst)
+	case version.Fulu:
+		if b.IsBlinded() {
+			return pb.(*eth.SignedBlindedBeaconBlockFulu).MarshalSSZTo(dst)
+		}
+		return pb.(*eth.SignedBeaconBlockFulu).MarshalSSZTo(dst)
 	default:
 		return []byte{}, errIncorrectBlockVersion
 	}
@@ -453,6 +490,7 @@ func (b *SignedBeaconBlock) MarshalSSZTo(dst []byte) ([]byte, error) {
 // of fastssz's SizeSSZ() interface function to avoid panicking.
 // Changing the signature causes very problematic issues with wealdtech deps.
 // For the time being panicking is preferable.
+// lint:nopanic -- Panic warning is communicated in godoc commentary.
 func (b *SignedBeaconBlock) SizeSSZ() int {
 	pb, err := b.Proto()
 	if err != nil {
@@ -478,12 +516,23 @@ func (b *SignedBeaconBlock) SizeSSZ() int {
 			return pb.(*eth.SignedBlindedBeaconBlockDeneb).SizeSSZ()
 		}
 		return pb.(*eth.SignedBeaconBlockDeneb).SizeSSZ()
+	case version.Electra:
+		if b.IsBlinded() {
+			return pb.(*eth.SignedBlindedBeaconBlockElectra).SizeSSZ()
+		}
+		return pb.(*eth.SignedBeaconBlockElectra).SizeSSZ()
+	case version.Fulu:
+		if b.IsBlinded() {
+			return pb.(*eth.SignedBlindedBeaconBlockFulu).SizeSSZ()
+		}
+		return pb.(*eth.SignedBeaconBlockFulu).SizeSSZ()
 	default:
 		panic(incorrectBlockVersion)
 	}
 }
 
-// UnmarshalSSZ unmarshals the signed beacon block from its relevant ssz form.
+// UnmarshalSSZ unmarshals the sitime/slots/slottime.gogned beacon block from its relevant ssz form.
+// nolint:gocognit
 func (b *SignedBeaconBlock) UnmarshalSSZ(buf []byte) error {
 	var newBlock *SignedBeaconBlock
 	switch b.version {
@@ -573,6 +622,50 @@ func (b *SignedBeaconBlock) UnmarshalSSZ(buf []byte) error {
 				return err
 			}
 		}
+	case version.Electra:
+		if b.IsBlinded() {
+			pb := &eth.SignedBlindedBeaconBlockElectra{}
+			if err := pb.UnmarshalSSZ(buf); err != nil {
+				return err
+			}
+			var err error
+			newBlock, err = initBlindedSignedBlockFromProtoElectra(pb)
+			if err != nil {
+				return err
+			}
+		} else {
+			pb := &eth.SignedBeaconBlockElectra{}
+			if err := pb.UnmarshalSSZ(buf); err != nil {
+				return err
+			}
+			var err error
+			newBlock, err = initSignedBlockFromProtoElectra(pb)
+			if err != nil {
+				return err
+			}
+		}
+	case version.Fulu:
+		if b.IsBlinded() {
+			pb := &eth.SignedBlindedBeaconBlockFulu{}
+			if err := pb.UnmarshalSSZ(buf); err != nil {
+				return err
+			}
+			var err error
+			newBlock, err = initBlindedSignedBlockFromProtoFulu(pb)
+			if err != nil {
+				return err
+			}
+		} else {
+			pb := &eth.SignedBeaconBlockFulu{}
+			if err := pb.UnmarshalSSZ(buf); err != nil {
+				return err
+			}
+			var err error
+			newBlock, err = initSignedBlockFromProtoFulu(pb)
+			if err != nil {
+				return err
+			}
+		}
 	default:
 		return errIncorrectBlockVersion
 	}
@@ -612,7 +705,7 @@ func (b *BeaconBlock) IsNil() bool {
 
 // IsBlinded checks if the beacon block is a blinded block.
 func (b *BeaconBlock) IsBlinded() bool {
-	return b.body.isBlinded
+	return b.version >= version.Bellatrix && b.body.executionPayload == nil
 }
 
 // Version of the underlying protobuf object.
@@ -646,6 +739,16 @@ func (b *BeaconBlock) HashTreeRoot() ([field_params.RootLength]byte, error) {
 			return pb.(*eth.BlindedBeaconBlockDeneb).HashTreeRoot()
 		}
 		return pb.(*eth.BeaconBlockDeneb).HashTreeRoot()
+	case version.Electra:
+		if b.IsBlinded() {
+			return pb.(*eth.BlindedBeaconBlockElectra).HashTreeRoot()
+		}
+		return pb.(*eth.BeaconBlockElectra).HashTreeRoot()
+	case version.Fulu:
+		if b.IsBlinded() {
+			return pb.(*eth.BlindedBeaconBlockFulu).HashTreeRoot()
+		}
+		return pb.(*eth.BeaconBlockElectra).HashTreeRoot()
 	default:
 		return [field_params.RootLength]byte{}, errIncorrectBlockVersion
 	}
@@ -677,6 +780,16 @@ func (b *BeaconBlock) HashTreeRootWith(h *ssz.Hasher) error {
 			return pb.(*eth.BlindedBeaconBlockDeneb).HashTreeRootWith(h)
 		}
 		return pb.(*eth.BeaconBlockDeneb).HashTreeRootWith(h)
+	case version.Electra:
+		if b.IsBlinded() {
+			return pb.(*eth.BlindedBeaconBlockElectra).HashTreeRootWith(h)
+		}
+		return pb.(*eth.BeaconBlockElectra).HashTreeRootWith(h)
+	case version.Fulu:
+		if b.IsBlinded() {
+			return pb.(*eth.BlindedBeaconBlockFulu).HashTreeRootWith(h)
+		}
+		return pb.(*eth.BeaconBlockElectra).HashTreeRootWith(h)
 	default:
 		return errIncorrectBlockVersion
 	}
@@ -709,6 +822,16 @@ func (b *BeaconBlock) MarshalSSZ() ([]byte, error) {
 			return pb.(*eth.BlindedBeaconBlockDeneb).MarshalSSZ()
 		}
 		return pb.(*eth.BeaconBlockDeneb).MarshalSSZ()
+	case version.Electra:
+		if b.IsBlinded() {
+			return pb.(*eth.BlindedBeaconBlockElectra).MarshalSSZ()
+		}
+		return pb.(*eth.BeaconBlockElectra).MarshalSSZ()
+	case version.Fulu:
+		if b.IsBlinded() {
+			return pb.(*eth.BlindedBeaconBlockFulu).MarshalSSZ()
+		}
+		return pb.(*eth.BeaconBlockElectra).MarshalSSZ()
 	default:
 		return []byte{}, errIncorrectBlockVersion
 	}
@@ -741,6 +864,16 @@ func (b *BeaconBlock) MarshalSSZTo(dst []byte) ([]byte, error) {
 			return pb.(*eth.BlindedBeaconBlockDeneb).MarshalSSZTo(dst)
 		}
 		return pb.(*eth.BeaconBlockDeneb).MarshalSSZTo(dst)
+	case version.Electra:
+		if b.IsBlinded() {
+			return pb.(*eth.BlindedBeaconBlockElectra).MarshalSSZTo(dst)
+		}
+		return pb.(*eth.BeaconBlockElectra).MarshalSSZTo(dst)
+	case version.Fulu:
+		if b.IsBlinded() {
+			return pb.(*eth.BlindedBeaconBlockFulu).MarshalSSZTo(dst)
+		}
+		return pb.(*eth.BeaconBlockElectra).MarshalSSZTo(dst)
 	default:
 		return []byte{}, errIncorrectBlockVersion
 	}
@@ -752,6 +885,7 @@ func (b *BeaconBlock) MarshalSSZTo(dst []byte) ([]byte, error) {
 // of fastssz's SizeSSZ() interface function to avoid panicking.
 // Changing the signature causes very problematic issues with wealdtech deps.
 // For the time being panicking is preferable.
+// lint:nopanic -- Panic is communicated in godoc.
 func (b *BeaconBlock) SizeSSZ() int {
 	pb, err := b.Proto()
 	if err != nil {
@@ -777,12 +911,23 @@ func (b *BeaconBlock) SizeSSZ() int {
 			return pb.(*eth.BlindedBeaconBlockDeneb).SizeSSZ()
 		}
 		return pb.(*eth.BeaconBlockDeneb).SizeSSZ()
+	case version.Electra:
+		if b.IsBlinded() {
+			return pb.(*eth.BlindedBeaconBlockElectra).SizeSSZ()
+		}
+		return pb.(*eth.BeaconBlockElectra).SizeSSZ()
+	case version.Fulu:
+		if b.IsBlinded() {
+			return pb.(*eth.BlindedBeaconBlockFulu).SizeSSZ()
+		}
+		return pb.(*eth.BeaconBlockElectra).SizeSSZ()
 	default:
 		panic(incorrectBodyVersion)
 	}
 }
 
 // UnmarshalSSZ unmarshals the beacon block from its relevant ssz form.
+// nolint:gocognit
 func (b *BeaconBlock) UnmarshalSSZ(buf []byte) error {
 	var newBlock *BeaconBlock
 	switch b.version {
@@ -872,6 +1017,50 @@ func (b *BeaconBlock) UnmarshalSSZ(buf []byte) error {
 				return err
 			}
 		}
+	case version.Electra:
+		if b.IsBlinded() {
+			pb := &eth.BlindedBeaconBlockElectra{}
+			if err := pb.UnmarshalSSZ(buf); err != nil {
+				return err
+			}
+			var err error
+			newBlock, err = initBlindedBlockFromProtoElectra(pb)
+			if err != nil {
+				return err
+			}
+		} else {
+			pb := &eth.BeaconBlockElectra{}
+			if err := pb.UnmarshalSSZ(buf); err != nil {
+				return err
+			}
+			var err error
+			newBlock, err = initBlockFromProtoElectra(pb)
+			if err != nil {
+				return err
+			}
+		}
+	case version.Fulu:
+		if b.IsBlinded() {
+			pb := &eth.BlindedBeaconBlockFulu{}
+			if err := pb.UnmarshalSSZ(buf); err != nil {
+				return err
+			}
+			var err error
+			newBlock, err = initBlindedBlockFromProtoFulu(pb)
+			if err != nil {
+				return err
+			}
+		} else {
+			pb := &eth.BeaconBlockElectra{}
+			if err := pb.UnmarshalSSZ(buf); err != nil {
+				return err
+			}
+			var err error
+			newBlock, err = initBlockFromProtoFulu(pb)
+			if err != nil {
+				return err
+			}
+		}
 	default:
 		return errIncorrectBlockVersion
 	}
@@ -905,48 +1094,16 @@ func (b *BeaconBlock) AsSignRequestObject() (validatorpb.SignRequestObject, erro
 			return &validatorpb.SignRequest_BlindedBlockDeneb{BlindedBlockDeneb: pb.(*eth.BlindedBeaconBlockDeneb)}, nil
 		}
 		return &validatorpb.SignRequest_BlockDeneb{BlockDeneb: pb.(*eth.BeaconBlockDeneb)}, nil
-	default:
-		return nil, errIncorrectBlockVersion
-	}
-}
-
-func (b *BeaconBlock) Copy() (interfaces.ReadOnlyBeaconBlock, error) {
-	if b == nil {
-		return nil, nil
-	}
-
-	pb, err := b.Proto()
-	if err != nil {
-		return nil, err
-	}
-	switch b.version {
-	case version.Phase0:
-		cp := eth.CopyBeaconBlock(pb.(*eth.BeaconBlock))
-		return initBlockFromProtoPhase0(cp)
-	case version.Altair:
-		cp := eth.CopyBeaconBlockAltair(pb.(*eth.BeaconBlockAltair))
-		return initBlockFromProtoAltair(cp)
-	case version.Bellatrix:
+	case version.Electra:
 		if b.IsBlinded() {
-			cp := eth.CopyBlindedBeaconBlockBellatrix(pb.(*eth.BlindedBeaconBlockBellatrix))
-			return initBlindedBlockFromProtoBellatrix(cp)
+			return &validatorpb.SignRequest_BlindedBlockElectra{BlindedBlockElectra: pb.(*eth.BlindedBeaconBlockElectra)}, nil
 		}
-		cp := eth.CopyBeaconBlockBellatrix(pb.(*eth.BeaconBlockBellatrix))
-		return initBlockFromProtoBellatrix(cp)
-	case version.Capella:
+		return &validatorpb.SignRequest_BlockElectra{BlockElectra: pb.(*eth.BeaconBlockElectra)}, nil
+	case version.Fulu:
 		if b.IsBlinded() {
-			cp := eth.CopyBlindedBeaconBlockCapella(pb.(*eth.BlindedBeaconBlockCapella))
-			return initBlindedBlockFromProtoCapella(cp)
+			return &validatorpb.SignRequest_BlindedBlockFulu{BlindedBlockFulu: pb.(*eth.BlindedBeaconBlockFulu)}, nil
 		}
-		cp := eth.CopyBeaconBlockCapella(pb.(*eth.BeaconBlockCapella))
-		return initBlockFromProtoCapella(cp)
-	case version.Deneb:
-		if b.IsBlinded() {
-			cp := eth.CopyBlindedBeaconBlockDeneb(pb.(*eth.BlindedBeaconBlockDeneb))
-			return initBlindedBlockFromProtoDeneb(cp)
-		}
-		cp := eth.CopyBeaconBlockDeneb(pb.(*eth.BeaconBlockDeneb))
-		return initBlockFromProtoDeneb(cp)
+		return &validatorpb.SignRequest_BlockFulu{BlockFulu: pb.(*eth.BeaconBlockElectra)}, nil
 	default:
 		return nil, errIncorrectBlockVersion
 	}
@@ -978,13 +1135,49 @@ func (b *BeaconBlockBody) ProposerSlashings() []*eth.ProposerSlashing {
 }
 
 // AttesterSlashings returns the attester slashings in the block.
-func (b *BeaconBlockBody) AttesterSlashings() []*eth.AttesterSlashing {
-	return b.attesterSlashings
+func (b *BeaconBlockBody) AttesterSlashings() []eth.AttSlashing {
+	var slashings []eth.AttSlashing
+	if b.version < version.Electra {
+		if b.attesterSlashings == nil {
+			return nil
+		}
+		slashings = make([]eth.AttSlashing, len(b.attesterSlashings))
+		for i, s := range b.attesterSlashings {
+			slashings[i] = s
+		}
+	} else {
+		if b.attesterSlashingsElectra == nil {
+			return nil
+		}
+		slashings = make([]eth.AttSlashing, len(b.attesterSlashingsElectra))
+		for i, s := range b.attesterSlashingsElectra {
+			slashings[i] = s
+		}
+	}
+	return slashings
 }
 
 // Attestations returns the stored attestations in the block.
-func (b *BeaconBlockBody) Attestations() []*eth.Attestation {
-	return b.attestations
+func (b *BeaconBlockBody) Attestations() []eth.Att {
+	var atts []eth.Att
+	if b.version < version.Electra {
+		if b.attestations == nil {
+			return nil
+		}
+		atts = make([]eth.Att, len(b.attestations))
+		for i, a := range b.attestations {
+			atts[i] = a
+		}
+	} else {
+		if b.attestationsElectra == nil {
+			return nil
+		}
+		atts = make([]eth.Att, len(b.attestationsElectra))
+		for i, a := range b.attestationsElectra {
+			atts[i] = a
+		}
+	}
+	return atts
 }
 
 // Deposits returns the stored deposits in the block.
@@ -1010,71 +1203,11 @@ func (b *BeaconBlockBody) Execution() (interfaces.ExecutionData, error) {
 	switch b.version {
 	case version.Phase0, version.Altair:
 		return nil, consensus_types.ErrNotSupported("Execution", b.version)
-	case version.Bellatrix:
-		if b.isBlinded {
-			var ph *enginev1.ExecutionPayloadHeader
-			var ok bool
-			if b.executionPayloadHeader != nil {
-				ph, ok = b.executionPayloadHeader.Proto().(*enginev1.ExecutionPayloadHeader)
-				if !ok {
-					return nil, errPayloadHeaderWrongType
-				}
-			}
-			return WrappedExecutionPayloadHeader(ph)
-		}
-		var p *enginev1.ExecutionPayload
-		var ok bool
-		if b.executionPayload != nil {
-			p, ok = b.executionPayload.Proto().(*enginev1.ExecutionPayload)
-			if !ok {
-				return nil, errPayloadWrongType
-			}
-		}
-		return WrappedExecutionPayload(p)
-	case version.Capella:
-		if b.isBlinded {
-			var ph *enginev1.ExecutionPayloadHeaderCapella
-			var ok bool
-			if b.executionPayloadHeader != nil {
-				ph, ok = b.executionPayloadHeader.Proto().(*enginev1.ExecutionPayloadHeaderCapella)
-				if !ok {
-					return nil, errPayloadHeaderWrongType
-				}
-				return WrappedExecutionPayloadHeaderCapella(ph, 0)
-			}
-		}
-		var p *enginev1.ExecutionPayloadCapella
-		var ok bool
-		if b.executionPayload != nil {
-			p, ok = b.executionPayload.Proto().(*enginev1.ExecutionPayloadCapella)
-			if !ok {
-				return nil, errPayloadWrongType
-			}
-		}
-		return WrappedExecutionPayloadCapella(p, 0)
-	case version.Deneb:
-		if b.isBlinded {
-			var ph *enginev1.ExecutionPayloadHeaderDeneb
-			var ok bool
-			if b.executionPayloadHeader != nil {
-				ph, ok = b.executionPayloadHeader.Proto().(*enginev1.ExecutionPayloadHeaderDeneb)
-				if !ok {
-					return nil, errPayloadHeaderWrongType
-				}
-				return WrappedExecutionPayloadHeaderDeneb(ph, 0)
-			}
-		}
-		var p *enginev1.ExecutionPayloadDeneb
-		var ok bool
-		if b.executionPayload != nil {
-			p, ok = b.executionPayload.Proto().(*enginev1.ExecutionPayloadDeneb)
-			if !ok {
-				return nil, errPayloadWrongType
-			}
-		}
-		return WrappedExecutionPayloadDeneb(p, 0)
 	default:
-		return nil, errIncorrectBlockVersion
+		if b.IsBlinded() {
+			return b.executionPayloadHeader, nil
+		}
+		return b.executionPayload, nil
 	}
 }
 
@@ -1087,14 +1220,28 @@ func (b *BeaconBlockBody) BLSToExecutionChanges() ([]*eth.SignedBLSToExecutionCh
 
 // BlobKzgCommitments returns the blob kzg commitments in the block.
 func (b *BeaconBlockBody) BlobKzgCommitments() ([][]byte, error) {
-	switch b.version {
-	case version.Phase0, version.Altair, version.Bellatrix, version.Capella:
-		return nil, consensus_types.ErrNotSupported("BlobKzgCommitments", b.version)
-	case version.Deneb:
+	if b.version >= version.Deneb {
 		return b.blobKzgCommitments, nil
-	default:
-		return nil, errIncorrectBlockVersion
 	}
+
+	if b.version >= version.Phase0 {
+		return nil, consensus_types.ErrNotSupported("BlobKzgCommitments", b.version)
+	}
+
+	return nil, errIncorrectBlockVersion
+}
+
+// ExecutionRequests returns the execution requests
+func (b *BeaconBlockBody) ExecutionRequests() (*enginev1.ExecutionRequests, error) {
+	if b.version < version.Electra {
+		return nil, consensus_types.ErrNotSupported("ExecutionRequests", b.version)
+	}
+	return b.executionRequests, nil
+}
+
+// Version returns the version of the beacon block body
+func (b *BeaconBlockBody) Version() int {
+	return b.version
 }
 
 // HashTreeRoot returns the ssz root of the block body.
@@ -1109,21 +1256,36 @@ func (b *BeaconBlockBody) HashTreeRoot() ([field_params.RootLength]byte, error) 
 	case version.Altair:
 		return pb.(*eth.BeaconBlockBodyAltair).HashTreeRoot()
 	case version.Bellatrix:
-		if b.isBlinded {
+		if b.IsBlinded() {
 			return pb.(*eth.BlindedBeaconBlockBodyBellatrix).HashTreeRoot()
 		}
 		return pb.(*eth.BeaconBlockBodyBellatrix).HashTreeRoot()
 	case version.Capella:
-		if b.isBlinded {
+		if b.IsBlinded() {
 			return pb.(*eth.BlindedBeaconBlockBodyCapella).HashTreeRoot()
 		}
 		return pb.(*eth.BeaconBlockBodyCapella).HashTreeRoot()
 	case version.Deneb:
-		if b.isBlinded {
+		if b.IsBlinded() {
 			return pb.(*eth.BlindedBeaconBlockBodyDeneb).HashTreeRoot()
 		}
 		return pb.(*eth.BeaconBlockBodyDeneb).HashTreeRoot()
+	case version.Electra:
+		if b.IsBlinded() {
+			return pb.(*eth.BlindedBeaconBlockBodyElectra).HashTreeRoot()
+		}
+		return pb.(*eth.BeaconBlockBodyElectra).HashTreeRoot()
+	case version.Fulu:
+		if b.IsBlinded() {
+			return pb.(*eth.BlindedBeaconBlockBodyElectra).HashTreeRoot()
+		}
+		return pb.(*eth.BeaconBlockBodyElectra).HashTreeRoot()
 	default:
 		return [field_params.RootLength]byte{}, errIncorrectBodyVersion
 	}
+}
+
+// IsBlinded checks if the beacon block body is a blinded block body.
+func (b *BeaconBlockBody) IsBlinded() bool {
+	return b.version >= version.Bellatrix && b.executionPayload == nil
 }

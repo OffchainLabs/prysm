@@ -8,19 +8,17 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v4/io/file"
-	"github.com/prysmaticlabs/prysm/v4/io/prompt"
-	ethpbservice "github.com/prysmaticlabs/prysm/v4/proto/eth/service"
-	"github.com/prysmaticlabs/prysm/v4/validator/accounts/wallet"
-	"github.com/prysmaticlabs/prysm/v4/validator/keymanager"
+	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/io/file"
+	"github.com/prysmaticlabs/prysm/v5/io/prompt"
+	"github.com/prysmaticlabs/prysm/v5/validator/accounts/wallet"
+	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
 	keystorev4 "github.com/wealdtech/go-eth2-wallet-encryptor-keystorev4"
 )
 
@@ -77,57 +75,21 @@ type ImportAccountsConfig struct {
 // Import can import external, EIP-2335 compliant keystore.json files as
 // new accounts into the Prysm validator wallet. This uses the CLI to extract
 // values necessary to run the function.
-func (acm *AccountsCLIManager) Import(ctx context.Context) error {
+func (acm *CLIManager) Import(ctx context.Context) error {
 	k, ok := acm.keymanager.(keymanager.Importer)
 	if !ok {
 		return errors.New("keymanager cannot import keystores")
 	}
-
+	log.Info("importing validator keystores...")
 	// Check if the user wishes to import a one-off, private key directly
 	// as an account into the Prysm validator.
 	if acm.importPrivateKeys {
 		return importPrivateKeyAsAccount(ctx, acm.wallet, k, acm.privateKeyFile)
 	}
 
-	// Consider that the keysDir might be a path to a specific file and handle accordingly.
-	isDir, err := file.HasDir(acm.keysDir)
+	keystoresImported, err := processDirectory(ctx, acm.keysDir, 0)
 	if err != nil {
-		return errors.Wrap(err, "could not determine if path is a directory")
-	}
-	keystoresImported := make([]*keymanager.Keystore, 0)
-	if isDir {
-		files, err := os.ReadDir(acm.keysDir)
-		if err != nil {
-			return errors.Wrap(err, "could not read dir")
-		}
-		if len(files) == 0 {
-			return fmt.Errorf("directory %s has no files, cannot import from it", acm.keysDir)
-		}
-		filesInDir := make([]string, 0)
-		for i := 0; i < len(files); i++ {
-			if files[i].IsDir() {
-				continue
-			}
-			filesInDir = append(filesInDir, files[i].Name())
-		}
-		// Sort the imported keystores by derivation path if they
-		// specify this value in their filename.
-		sort.Sort(byDerivationPath(filesInDir))
-		for _, name := range filesInDir {
-			keystore, err := readKeystoreFile(ctx, filepath.Join(acm.keysDir, name))
-			if err != nil && strings.Contains(err.Error(), "could not decode keystore json") {
-				continue
-			} else if err != nil {
-				return errors.Wrapf(err, "could not import keystore at path: %s", name)
-			}
-			keystoresImported = append(keystoresImported, keystore)
-		}
-	} else {
-		keystore, err := readKeystoreFile(ctx, acm.keysDir)
-		if err != nil {
-			return errors.Wrap(err, "could not import keystore")
-		}
-		keystoresImported = append(keystoresImported, keystore)
+		return errors.Wrap(err, "unable to process directory and import keys")
 	}
 
 	var accountsPassword string
@@ -157,11 +119,11 @@ func (acm *AccountsCLIManager) Import(ctx context.Context) error {
 	var successfullyImportedAccounts []string
 	for i, status := range statuses {
 		switch status.Status {
-		case ethpbservice.ImportedKeystoreStatus_IMPORTED:
+		case keymanager.StatusImported:
 			successfullyImportedAccounts = append(successfullyImportedAccounts, keystoresImported[i].Pubkey)
-		case ethpbservice.ImportedKeystoreStatus_DUPLICATE:
+		case keymanager.StatusDuplicate:
 			log.Warnf("Duplicate key %s found in import request, skipped", keystoresImported[i].Pubkey)
-		case ethpbservice.ImportedKeystoreStatus_ERROR:
+		case keymanager.StatusError:
 			log.Warnf("Could not import keystore for %s: %s", keystoresImported[i].Pubkey, status.Message)
 		}
 	}
@@ -177,14 +139,67 @@ func (acm *AccountsCLIManager) Import(ctx context.Context) error {
 	return nil
 }
 
+// Recursive function to process directories and files.
+func processDirectory(ctx context.Context, dir string, depth int) ([]*keymanager.Keystore, error) {
+	maxdepth := 2
+	if depth > maxdepth {
+		log.Infof("stopped checking folders for keystores after max depth of %d was reached", maxdepth)
+		return nil, nil // Stop recursion after two levels.
+	}
+	log.Infof("checking directory for keystores: %s", dir)
+	isDir, err := file.HasDir(dir)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not determine if path is a directory")
+	}
+
+	keystoresImported := make([]*keymanager.Keystore, 0)
+
+	if isDir {
+		files, err := os.ReadDir(dir)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not read dir")
+		}
+		if len(files) == 0 {
+			return nil, fmt.Errorf("directory %s has no files, cannot import from it", dir)
+		}
+		for _, f := range files {
+			fullPath := filepath.Join(dir, f.Name())
+			if f.IsDir() {
+				subKeystores, err := processDirectory(ctx, fullPath, depth+1)
+				if err != nil {
+					return nil, err
+				}
+				keystoresImported = append(keystoresImported, subKeystores...)
+			} else {
+				keystore, err := readKeystoreFile(ctx, fullPath)
+				if err != nil {
+					if strings.Contains(err.Error(), "could not decode keystore json") {
+						continue
+					}
+					return nil, errors.Wrapf(err, "could not import keystore at path: %s", fullPath)
+				}
+				keystoresImported = append(keystoresImported, keystore)
+			}
+		}
+	} else {
+		keystore, err := readKeystoreFile(ctx, dir)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not import keystore")
+		}
+		keystoresImported = append(keystoresImported, keystore)
+	}
+
+	return keystoresImported, nil
+}
+
 // ImportAccounts can import external, EIP-2335 compliant keystore.json files as
 // new accounts into the Prysm validator wallet.
-func ImportAccounts(ctx context.Context, cfg *ImportAccountsConfig) ([]*ethpbservice.ImportedKeystoreStatus, error) {
+func ImportAccounts(ctx context.Context, cfg *ImportAccountsConfig) ([]*keymanager.KeyStatus, error) {
 	if cfg.AccountPassword == "" {
-		statuses := make([]*ethpbservice.ImportedKeystoreStatus, len(cfg.Keystores))
+		statuses := make([]*keymanager.KeyStatus, len(cfg.Keystores))
 		for i, keystore := range cfg.Keystores {
-			statuses[i] = &ethpbservice.ImportedKeystoreStatus{
-				Status: ethpbservice.ImportedKeystoreStatus_ERROR,
+			statuses[i] = &keymanager.KeyStatus{
+				Status: keymanager.StatusError,
 				Message: fmt.Sprintf(
 					"account password is required to import keystore %s",
 					keystore.Pubkey,
@@ -211,7 +226,13 @@ func importPrivateKeyAsAccount(ctx context.Context, wallet *wallet.Wallet, impor
 	if err != nil {
 		return errors.Wrapf(err, "could not expand file path for %s", privKeyFile)
 	}
-	if !file.FileExists(fullPath) {
+
+	exists, err := file.Exists(fullPath, file.Regular)
+	if err != nil {
+		return errors.Wrapf(err, "could not check if file exists: %s", fullPath)
+	}
+
+	if !exists {
 		return fmt.Errorf("file %s does not exist", fullPath)
 	}
 	privKeyHex, err := os.ReadFile(fullPath) // #nosec G304
@@ -249,16 +270,16 @@ func importPrivateKeyAsAccount(ctx context.Context, wallet *wallet.Wallet, impor
 	}
 	for _, status := range statuses {
 		switch status.Status {
-		case ethpbservice.ImportedKeystoreStatus_IMPORTED:
+		case keymanager.StatusImported:
 			fmt.Printf(
 				"Imported account with public key %#x, view all accounts by running `accounts list`\n",
 				au.BrightMagenta(bytesutil.Trunc(privKey.PublicKey().Marshal())),
 			)
 			return nil
-		case ethpbservice.ImportedKeystoreStatus_ERROR:
-			return fmt.Errorf("Could not import keystore for %s: %s", keystore.Pubkey, status.Message)
-		case ethpbservice.ImportedKeystoreStatus_DUPLICATE:
-			return fmt.Errorf("Duplicate key %s skipped", keystore.Pubkey)
+		case keymanager.StatusError:
+			return fmt.Errorf("could not import keystore for %s: %s", keystore.Pubkey, status.Message)
+		case keymanager.StatusDuplicate:
+			return fmt.Errorf("duplicate key %s skipped", keystore.Pubkey)
 		}
 	}
 

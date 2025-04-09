@@ -4,9 +4,11 @@ import (
 	"context"
 	"strconv"
 
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/core"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 )
 
 // MockBlocker is a fake implementation of lookup.Blocker.
@@ -31,4 +33,9 @@ func (m *MockBlocker) Block(_ context.Context, b []byte) (interfaces.ReadOnlySig
 		return m.RootBlockMap[bytesutil.ToBytes32(b)], nil
 	}
 	return m.SlotBlockMap[primitives.Slot(slotNumber)], nil
+}
+
+// Blobs --
+func (m *MockBlocker) Blobs(_ context.Context, _ string, _ []uint64) ([]*blocks.VerifiedROBlob, *core.RpcError) {
+	panic("implement me") // lint:nopanic -- Test code.
 }

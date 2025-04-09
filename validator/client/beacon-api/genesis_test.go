@@ -4,13 +4,12 @@ import (
 	"context"
 	"testing"
 
-	"github.com/golang/mock/gomock"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/api/gateway/apimiddleware"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/eth/beacon"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/validator/client/beacon-api/mock"
+	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api/mock"
+	"go.uber.org/mock/gomock"
 )
 
 func TestGetGenesis_ValidGenesis(t *testing.T) {
@@ -19,19 +18,18 @@ func TestGetGenesis_ValidGenesis(t *testing.T) {
 
 	ctx := context.Background()
 
-	genesisResponseJson := beacon.GetGenesisResponse{}
-	jsonRestHandler := mock.NewMockjsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().GetRestJsonResponse(
-		ctx,
+	genesisResponseJson := structs.GetGenesisResponse{}
+	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+	jsonRestHandler.EXPECT().Get(
+		gomock.Any(),
 		"/eth/v1/beacon/genesis",
 		&genesisResponseJson,
 	).Return(
 		nil,
-		nil,
 	).SetArg(
 		2,
-		beacon.GetGenesisResponse{
-			Data: &beacon.Genesis{
+		structs.GetGenesisResponse{
+			Data: &structs.Genesis{
 				GenesisTime:           "1234",
 				GenesisValidatorsRoot: "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
 			},
@@ -39,9 +37,8 @@ func TestGetGenesis_ValidGenesis(t *testing.T) {
 	).Times(1)
 
 	genesisProvider := &beaconApiGenesisProvider{jsonRestHandler: jsonRestHandler}
-	resp, httpError, err := genesisProvider.GetGenesis(ctx)
+	resp, err := genesisProvider.Genesis(ctx)
 	assert.NoError(t, err)
-	assert.Equal(t, (*apimiddleware.DefaultErrorJson)(nil), httpError)
 	require.NotNil(t, resp)
 	assert.Equal(t, "1234", resp.GenesisTime)
 	assert.Equal(t, "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2", resp.GenesisValidatorsRoot)
@@ -53,51 +50,95 @@ func TestGetGenesis_NilData(t *testing.T) {
 
 	ctx := context.Background()
 
-	genesisResponseJson := beacon.GetGenesisResponse{}
-	jsonRestHandler := mock.NewMockjsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().GetRestJsonResponse(
-		ctx,
+	genesisResponseJson := structs.GetGenesisResponse{}
+	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+	jsonRestHandler.EXPECT().Get(
+		gomock.Any(),
 		"/eth/v1/beacon/genesis",
 		&genesisResponseJson,
 	).Return(
 		nil,
-		nil,
 	).SetArg(
 		2,
-		beacon.GetGenesisResponse{Data: nil},
+		structs.GetGenesisResponse{Data: nil},
 	).Times(1)
 
 	genesisProvider := &beaconApiGenesisProvider{jsonRestHandler: jsonRestHandler}
-	_, httpError, err := genesisProvider.GetGenesis(ctx)
-	assert.Equal(t, (*apimiddleware.DefaultErrorJson)(nil), httpError)
+	_, err := genesisProvider.Genesis(ctx)
 	assert.ErrorContains(t, "genesis data is nil", err)
 }
 
-func TestGetGenesis_JsonResponseError(t *testing.T) {
+func TestGetGenesis_EndpointCalledOnlyOnce(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	ctx := context.Background()
 
-	expectedHttpErrorJson := &apimiddleware.DefaultErrorJson{
-		Message: "http error message",
-		Code:    999,
-	}
-
-	genesisResponseJson := beacon.GetGenesisResponse{}
-	jsonRestHandler := mock.NewMockjsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().GetRestJsonResponse(
-		ctx,
+	genesisResponseJson := structs.GetGenesisResponse{}
+	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+	jsonRestHandler.EXPECT().Get(
+		gomock.Any(),
 		"/eth/v1/beacon/genesis",
 		&genesisResponseJson,
 	).Return(
-		expectedHttpErrorJson,
-		errors.New("some specific json response error"),
+		nil,
+	).SetArg(
+		2,
+		structs.GetGenesisResponse{
+			Data: &structs.Genesis{
+				GenesisTime:           "1234",
+				GenesisValidatorsRoot: "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
+			},
+		},
 	).Times(1)
 
 	genesisProvider := &beaconApiGenesisProvider{jsonRestHandler: jsonRestHandler}
-	_, httpError, err := genesisProvider.GetGenesis(ctx)
-	assert.ErrorContains(t, "failed to get json response", err)
-	assert.ErrorContains(t, "some specific json response error", err)
-	assert.DeepEqual(t, expectedHttpErrorJson, httpError)
+	_, err := genesisProvider.Genesis(ctx)
+	assert.NoError(t, err)
+	resp, err := genesisProvider.Genesis(ctx)
+	assert.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, "1234", resp.GenesisTime)
+	assert.Equal(t, "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2", resp.GenesisValidatorsRoot)
+}
+
+func TestGetGenesis_EndpointCanBeCalledAgainAfterError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx := context.Background()
+
+	genesisResponseJson := structs.GetGenesisResponse{}
+	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+	jsonRestHandler.EXPECT().Get(
+		gomock.Any(),
+		"/eth/v1/beacon/genesis",
+		&genesisResponseJson,
+	).Return(
+		errors.New("foo"),
+	).Times(1)
+	jsonRestHandler.EXPECT().Get(
+		gomock.Any(),
+		"/eth/v1/beacon/genesis",
+		&genesisResponseJson,
+	).Return(
+		nil,
+	).SetArg(
+		2,
+		structs.GetGenesisResponse{
+			Data: &structs.Genesis{
+				GenesisTime:           "1234",
+				GenesisValidatorsRoot: "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
+			},
+		},
+	).Times(1)
+
+	genesisProvider := &beaconApiGenesisProvider{jsonRestHandler: jsonRestHandler}
+	_, err := genesisProvider.Genesis(ctx)
+	require.ErrorContains(t, "foo", err)
+	resp, err := genesisProvider.Genesis(ctx)
+	assert.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, "1234", resp.GenesisTime)
+	assert.Equal(t, "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2", resp.GenesisValidatorsRoot)
 }

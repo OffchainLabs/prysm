@@ -2,17 +2,15 @@
 package tracing
 
 import (
-	"go.opencensus.io/trace"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // AnnotateError on span. This should be used any time a particular span experiences an error.
-func AnnotateError(span *trace.Span, err error) {
+func AnnotateError(span trace.Span, err error) {
 	if err == nil {
 		return
 	}
-	span.AddAttributes(trace.BoolAttribute("error", true))
-	span.SetStatus(trace.Status{
-		Code:    trace.StatusCodeUnknown,
-		Message: err.Error(),
-	})
+	span.RecordError(err)
+	span.SetStatus(codes.Error, err.Error())
 }

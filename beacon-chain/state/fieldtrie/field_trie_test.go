@@ -3,27 +3,53 @@ package fieldtrie_test
 import (
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state/fieldtrie"
-	customtypes "github.com/prysmaticlabs/prysm/v4/beacon-chain/state/state-native/custom-types"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state/state-native/types"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state/stateutil"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/testing/util"
+	. "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/fieldtrie"
+	customtypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native/custom-types"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native/types"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stateutil"
+	"github.com/prysmaticlabs/prysm/v5/config/features"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	mvslice "github.com/prysmaticlabs/prysm/v5/container/multi-value-slice"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/util"
 )
 
 func TestFieldTrie_NewTrie(t *testing.T) {
+	t.Run("native state", func(t *testing.T) {
+		runNewTrie(t)
+	})
+	t.Run("native state with multivalue slice", func(t *testing.T) {
+		cfg := &features.Flags{}
+		cfg.EnableExperimentalState = true
+		reset := features.InitWithReset(cfg)
+		runNewTrie(t)
+
+		reset()
+	})
+}
+
+func runNewTrie(t *testing.T) {
 	newState, _ := util.DeterministicGenesisState(t, 40)
 	roots := newState.BlockRoots()
+	var elements interface{}
 	blockRoots := make([][32]byte, len(roots))
 	for i, r := range roots {
 		blockRoots[i] = [32]byte(r)
 	}
+	elements = customtypes.BlockRoots(blockRoots)
 
-	trie, err := fieldtrie.NewFieldTrie(types.BlockRoots, types.BasicArray, customtypes.BlockRoots(blockRoots), uint64(params.BeaconConfig().SlotsPerHistoricalRoot))
+	if features.Get().EnableExperimentalState {
+		mvRoots := buildTestCompositeSlice[[32]byte](blockRoots)
+		elements = mvslice.MultiValueSliceComposite[[32]byte]{
+			Identifiable:    mockIdentifier{},
+			MultiValueSlice: mvRoots,
+		}
+	}
+
+	trie, err := NewFieldTrie(types.BlockRoots, types.BasicArray, elements, uint64(params.BeaconConfig().SlotsPerHistoricalRoot))
 	require.NoError(t, err)
 	root, err := stateutil.RootsArrayHashTreeRoot(newState.BlockRoots(), uint64(params.BeaconConfig().SlotsPerHistoricalRoot))
 	require.NoError(t, err)
@@ -33,15 +59,40 @@ func TestFieldTrie_NewTrie(t *testing.T) {
 }
 
 func TestFieldTrie_NewTrie_NilElements(t *testing.T) {
-	trie, err := fieldtrie.NewFieldTrie(types.BlockRoots, types.BasicArray, nil, 8234)
+	trie, err := NewFieldTrie(types.BlockRoots, types.BasicArray, nil, 8234)
 	require.NoError(t, err)
 	_, err = trie.TrieRoot()
-	require.ErrorIs(t, err, fieldtrie.ErrEmptyFieldTrie)
+	require.ErrorIs(t, err, ErrEmptyFieldTrie)
 }
 
 func TestFieldTrie_RecomputeTrie(t *testing.T) {
+	t.Run("native state", func(t *testing.T) {
+		runRecomputeTrie(t)
+	})
+	t.Run("native state with multivalue slice", func(t *testing.T) {
+		cfg := &features.Flags{}
+		cfg.EnableExperimentalState = true
+		reset := features.InitWithReset(cfg)
+		runRecomputeTrie(t)
+
+		reset()
+	})
+}
+
+func runRecomputeTrie(t *testing.T) {
 	newState, _ := util.DeterministicGenesisState(t, 32)
-	trie, err := fieldtrie.NewFieldTrie(types.Validators, types.CompositeArray, newState.Validators(), params.BeaconConfig().ValidatorRegistryLimit)
+
+	var elements interface{}
+	elements = newState.Validators()
+	if features.Get().EnableExperimentalState {
+		mvRoots := buildTestCompositeSlice[*ethpb.Validator](newState.Validators())
+		elements = mvslice.MultiValueSliceComposite[*ethpb.Validator]{
+			Identifiable:    mockIdentifier{},
+			MultiValueSlice: mvRoots,
+		}
+	}
+
+	trie, err := NewFieldTrie(types.Validators, types.CompositeArray, elements, params.BeaconConfig().ValidatorRegistryLimit)
 	require.NoError(t, err)
 
 	oldroot, err := trie.TrieRoot()
@@ -71,8 +122,32 @@ func TestFieldTrie_RecomputeTrie(t *testing.T) {
 }
 
 func TestFieldTrie_RecomputeTrie_CompressedArray(t *testing.T) {
+	t.Run("native state", func(t *testing.T) {
+		runRecomputeTrie_CompressedArray(t)
+	})
+	t.Run("native state with multivalue slice", func(t *testing.T) {
+		cfg := &features.Flags{}
+		cfg.EnableExperimentalState = true
+		reset := features.InitWithReset(cfg)
+		runRecomputeTrie_CompressedArray(t)
+
+		reset()
+	})
+}
+
+func runRecomputeTrie_CompressedArray(t *testing.T) {
 	newState, _ := util.DeterministicGenesisState(t, 32)
-	trie, err := fieldtrie.NewFieldTrie(types.Balances, types.CompressedArray, newState.Balances(), stateutil.ValidatorLimitForBalancesChunks())
+	var elements interface{}
+	elements = newState.Balances()
+	if features.Get().EnableExperimentalState {
+		mvBals := buildTestCompositeSlice(newState.Balances())
+		elements = mvslice.MultiValueSliceComposite[uint64]{
+			Identifiable:    mockIdentifier{},
+			MultiValueSlice: mvBals,
+		}
+	}
+
+	trie, err := NewFieldTrie(types.Balances, types.CompressedArray, elements, stateutil.ValidatorLimitForBalancesChunks())
 	require.NoError(t, err)
 	require.Equal(t, trie.Length(), stateutil.ValidatorLimitForBalancesChunks())
 	changedIdx := []uint64{4, 8}
@@ -89,7 +164,7 @@ func TestFieldTrie_RecomputeTrie_CompressedArray(t *testing.T) {
 
 func TestNewFieldTrie_UnknownType(t *testing.T) {
 	newState, _ := util.DeterministicGenesisState(t, 32)
-	_, err := fieldtrie.NewFieldTrie(types.Balances, 4, newState.Balances(), 32)
+	_, err := NewFieldTrie(types.Balances, 4, newState.Balances(), 32)
 	require.ErrorContains(t, "unrecognized data type", err)
 }
 
@@ -101,7 +176,7 @@ func TestFieldTrie_CopyTrieImmutable(t *testing.T) {
 		randaoMixes[i] = [32]byte(r)
 	}
 
-	trie, err := fieldtrie.NewFieldTrie(types.RandaoMixes, types.BasicArray, customtypes.RandaoMixes(randaoMixes), uint64(params.BeaconConfig().EpochsPerHistoricalVector))
+	trie, err := NewFieldTrie(types.RandaoMixes, types.BasicArray, customtypes.RandaoMixes(randaoMixes), uint64(params.BeaconConfig().EpochsPerHistoricalVector))
 	require.NoError(t, err)
 
 	newTrie := trie.CopyTrie()
@@ -127,7 +202,7 @@ func TestFieldTrie_CopyTrieImmutable(t *testing.T) {
 }
 
 func TestFieldTrie_CopyAndTransferEmpty(t *testing.T) {
-	trie, err := fieldtrie.NewFieldTrie(types.RandaoMixes, types.BasicArray, nil, uint64(params.BeaconConfig().EpochsPerHistoricalVector))
+	trie, err := NewFieldTrie(types.RandaoMixes, types.BasicArray, nil, uint64(params.BeaconConfig().EpochsPerHistoricalVector))
 	require.NoError(t, err)
 
 	require.DeepEqual(t, trie, trie.CopyTrie())
@@ -137,14 +212,14 @@ func TestFieldTrie_CopyAndTransferEmpty(t *testing.T) {
 func TestFieldTrie_TransferTrie(t *testing.T) {
 	newState, _ := util.DeterministicGenesisState(t, 32)
 	maxLength := (params.BeaconConfig().ValidatorRegistryLimit*8 + 31) / 32
-	trie, err := fieldtrie.NewFieldTrie(types.Balances, types.CompressedArray, newState.Balances(), maxLength)
+	trie, err := NewFieldTrie(types.Balances, types.CompressedArray, newState.Balances(), maxLength)
 	require.NoError(t, err)
 	oldRoot, err := trie.TrieRoot()
 	require.NoError(t, err)
 
 	newTrie := trie.TransferTrie()
 	root, err := trie.TrieRoot()
-	require.ErrorIs(t, err, fieldtrie.ErrEmptyFieldTrie)
+	require.ErrorIs(t, err, ErrEmptyFieldTrie)
 	require.Equal(t, root, [32]byte{})
 	require.NotNil(t, newTrie)
 	newRoot, err := newTrie.TrieRoot()
@@ -165,7 +240,7 @@ func FuzzFieldTrie(f *testing.F) {
 		for i := 32; i < len(data); i += 32 {
 			roots = append(roots, data[i-32:i])
 		}
-		trie, err := fieldtrie.NewFieldTrie(types.FieldIndex(idx), types.DataType(typ), roots, slotsPerHistRoot)
+		trie, err := NewFieldTrie(types.FieldIndex(idx), types.DataType(typ), roots, slotsPerHistRoot)
 		if err != nil {
 			return // invalid inputs
 		}
@@ -174,4 +249,19 @@ func FuzzFieldTrie(f *testing.F) {
 			return
 		}
 	})
+}
+
+func buildTestCompositeSlice[V comparable](values []V) mvslice.MultiValueSliceComposite[V] {
+	obj := &mvslice.Slice[V]{}
+	obj.Init(values)
+	return mvslice.MultiValueSliceComposite[V]{
+		Identifiable:    nil,
+		MultiValueSlice: obj,
+	}
+}
+
+type mockIdentifier struct{}
+
+func (_ mockIdentifier) Id() mvslice.Id {
+	return 0
 }

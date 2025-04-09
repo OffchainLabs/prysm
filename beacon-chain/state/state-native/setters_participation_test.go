@@ -3,9 +3,9 @@ package state_native_test
 import (
 	"testing"
 
-	state_native "github.com/prysmaticlabs/prysm/v4/beacon-chain/state/state-native"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
+	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func BenchmarkParticipationBits(b *testing.B) {

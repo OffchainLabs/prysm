@@ -9,22 +9,22 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/api/client/beacon"
-	corehelpers "github.com/prysmaticlabs/prysm/v4/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/signing"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/eth/shared"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v4/encoding/ssz/detect"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/endtoend/helpers"
-	e2e "github.com/prysmaticlabs/prysm/v4/testing/endtoend/params"
-	"github.com/prysmaticlabs/prysm/v4/testing/endtoend/policies"
-	e2etypes "github.com/prysmaticlabs/prysm/v4/testing/endtoend/types"
-	"github.com/prysmaticlabs/prysm/v4/testing/util"
+	"github.com/prysmaticlabs/prysm/v5/api/client/beacon"
+	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
+	corehelpers "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/encoding/ssz/detect"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/endtoend/helpers"
+	e2e "github.com/prysmaticlabs/prysm/v5/testing/endtoend/params"
+	"github.com/prysmaticlabs/prysm/v5/testing/endtoend/policies"
+	e2etypes "github.com/prysmaticlabs/prysm/v5/testing/endtoend/types"
+	"github.com/prysmaticlabs/prysm/v5/testing/util"
 	"golang.org/x/exp/rand"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -85,8 +85,11 @@ var ValidatorsHaveExited = e2etypes.Evaluator{
 
 // SubmitWithdrawal sends a withdrawal from a previously exited validator.
 var SubmitWithdrawal = e2etypes.Evaluator{
-	Name:       "submit_withdrawal_epoch_%d",
-	Policy:     policies.BetweenEpochs(helpers.CapellaE2EForkEpoch-2, helpers.CapellaE2EForkEpoch+1),
+	Name: "submit_withdrawal_epoch_%d",
+	Policy: func(currentEpoch primitives.Epoch) bool {
+		fEpoch := params.BeaconConfig().CapellaForkEpoch
+		return policies.BetweenEpochs(fEpoch-2, fEpoch+1)(currentEpoch)
+	},
 	Evaluation: submitWithdrawal,
 }
 
@@ -94,14 +97,13 @@ var SubmitWithdrawal = e2etypes.Evaluator{
 var ValidatorsHaveWithdrawn = e2etypes.Evaluator{
 	Name: "validator_has_withdrawn_%d",
 	Policy: func(currentEpoch primitives.Epoch) bool {
-		// Determine the withdrawal epoch by using the max seed lookahead. This value
-		// differs for our minimal and mainnet config which is why we calculate it
-		// each time the policy is executed.
-		validWithdrawnEpoch := exitSubmissionEpoch + 1 + params.BeaconConfig().MaxSeedLookahead
-		// Only run this for minimal setups after capella
-		if params.BeaconConfig().ConfigName == params.EndToEndName {
-			validWithdrawnEpoch = helpers.CapellaE2EForkEpoch + 1
+		// TODO: Fix this for mainnet configs.
+		if params.BeaconConfig().ConfigName != params.EndToEndName {
+			return false
 		}
+		// Only run this for minimal setups after capella
+		validWithdrawnEpoch := params.BeaconConfig().CapellaForkEpoch + 1
+
 		requiredPolicy := policies.OnEpoch(validWithdrawnEpoch)
 		return requiredPolicy(currentEpoch)
 	},
@@ -153,7 +155,7 @@ func processesDepositsInBlocks(ec *e2etypes.EvaluationContext, conns ...*grpc.Cl
 			observed[k] = v + d.Data.Amount
 		}
 	}
-	mismatches := []string{}
+	var mismatches []string
 	for k, ev := range expected {
 		ov := observed[k]
 		if ev != ov {
@@ -228,10 +230,16 @@ func activatesDepositedValidators(ec *e2etypes.EvaluationContext, conns ...*grpc
 			continue
 		}
 		delete(expected, key)
-		if v.ActivationEpoch != epoch {
+		// Validator can't be activated yet .
+		if v.ActivationEligibilityEpoch > chainHead.FinalizedEpoch {
 			continue
 		}
-		deposits++
+		if v.ActivationEpoch < epoch {
+			continue
+		}
+		if v.ActivationEpoch == epoch {
+			deposits++
+		}
 		if v.EffectiveBalance < params.BeaconConfig().MaxEffectiveBalance {
 			lowBalance++
 		}
@@ -243,12 +251,12 @@ func activatesDepositedValidators(ec *e2etypes.EvaluationContext, conns ...*grpc
 		}
 	}
 
-	// Make sure every post-genesis deposit has been proecssed, resulting in a validator.
+	// Make sure every post-genesis deposit has been processed, resulting in a validator.
 	if len(expected) > 0 {
 		return fmt.Errorf("missing %d validators for post-genesis deposits", len(expected))
 	}
 
-	if uint64(deposits) != params.BeaconConfig().MinPerEpochChurnLimit {
+	if deposits > 0 && uint64(deposits) != params.BeaconConfig().MinPerEpochChurnLimit {
 		return fmt.Errorf("expected %d deposits to be processed in epoch %d, received %d", params.BeaconConfig().MinPerEpochChurnLimit, epoch, deposits)
 	}
 
@@ -316,6 +324,15 @@ func depositedValidatorsAreActive(ec *e2etypes.EvaluationContext, conns ...*grpc
 			delete(expected, key)
 			continue
 		}
+		// This is to handle the changed validator activation procedure post-electra.
+		if v.ActivationEligibilityEpoch != math.MaxUint64 && v.ActivationEligibilityEpoch > chainHead.FinalizedEpoch {
+			delete(expected, key)
+			continue
+		}
+		if v.ActivationEpoch != math.MaxUint64 && v.ActivationEpoch > chainHead.HeadEpoch {
+			delete(expected, key)
+			continue
+		}
 		if !corehelpers.IsActiveValidator(v, chainHead.HeadEpoch) {
 			inactive++
 		}
@@ -361,9 +378,9 @@ func proposeVoluntaryExit(ec *e2etypes.EvaluationContext, conns ...*grpc.ClientC
 	if err != nil {
 		return errors.Wrap(err, "could not get state")
 	}
-	execIndices := []int{}
+	var execIndices []int
 	err = st.ReadFromEveryValidator(func(idx int, val state.ReadOnlyValidator) error {
-		if val.WithdrawalCredentials()[0] == params.BeaconConfig().ETH1AddressWithdrawalPrefixByte {
+		if val.GetWithdrawalCredentials()[0] == params.BeaconConfig().ETH1AddressWithdrawalPrefixByte {
 			execIndices = append(execIndices, idx)
 		}
 		return nil
@@ -509,8 +526,16 @@ func validatorsVoteWithTheMajority(ec *e2etypes.EvaluationContext, conns ...*grp
 			b := blk.GetBlindedDenebBlock().Message
 			slot = b.Slot
 			vote = b.Body.Eth1Data.BlockHash
+		case *ethpb.BeaconBlockContainer_ElectraBlock:
+			b := blk.GetElectraBlock().Block
+			slot = b.Slot
+			vote = b.Body.Eth1Data.BlockHash
+		case *ethpb.BeaconBlockContainer_BlindedElectraBlock:
+			b := blk.GetBlindedElectraBlock().Message
+			slot = b.Slot
+			vote = b.Body.Eth1Data.BlockHash
 		default:
-			return errors.New("block neither phase0,altair or bellatrix")
+			return fmt.Errorf("block of type %T is unknown", blk.Block)
 		}
 		ec.SeenVotes[slot] = vote
 
@@ -584,7 +609,7 @@ func submitWithdrawal(ec *e2etypes.EvaluationContext, conns ...*grpc.ClientConn)
 	if err != nil {
 		return err
 	}
-	changes := make([]*shared.SignedBLSToExecutionChange, 0)
+	changes := make([]*structs.SignedBLSToExecutionChange, 0)
 	// Only send half the number of changes each time, to allow us to test
 	// at the fork boundary.
 	wantedChanges := numOfExits / 2
@@ -617,18 +642,14 @@ func submitWithdrawal(ec *e2etypes.EvaluationContext, conns ...*grpc.ClientConn)
 			return err
 		}
 		signature := privKeys[idx].Sign(sigRoot[:]).Marshal()
-		change, err := shared.BlsToExecutionChangeFromConsensus(message)
-		if err != nil {
-			return err
-		}
 
-		changes = append(changes, &shared.SignedBLSToExecutionChange{
-			Message:   change,
+		changes = append(changes, &structs.SignedBLSToExecutionChange{
+			Message:   structs.BLSChangeFromConsensus(message),
 			Signature: hexutil.Encode(signature),
 		})
 	}
 
-	beaconAPIClient, err := beacon.NewClient(fmt.Sprintf("http://localhost:%d/eth/v1", e2e.TestParams.Ports.PrysmBeaconNodeGatewayPort)) // only uses the first node so no updates to port
+	beaconAPIClient, err := beacon.NewClient(fmt.Sprintf("http://localhost:%d/eth/v1", e2e.TestParams.Ports.PrysmBeaconNodeHTTPPort)) // only uses the first node so no updates to port
 	if err != nil {
 		return err
 	}

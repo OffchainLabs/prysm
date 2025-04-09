@@ -8,7 +8,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// UnencryptedKeysContainer defines the structure of the unecrypted key JSON file.
+// UnencryptedKeysContainer defines the structure of the unencrypted key JSON file.
 type UnencryptedKeysContainer struct {
 	Keys []*UnencryptedKeys `json:"keys"`
 }

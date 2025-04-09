@@ -4,10 +4,11 @@ import (
 	"context"
 	"testing"
 
-	forkchoicetypes "github.com/prysmaticlabs/prysm/v4/beacon-chain/forkchoice/types"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
+	forkchoicetypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/types"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
 func TestStore_SetUnrealizedEpochs(t *testing.T) {
@@ -63,14 +64,14 @@ func TestStore_UpdateUnrealizedCheckpoints(t *testing.T) {
 func TestStore_LongFork(t *testing.T) {
 	f := setup(1, 1)
 	ctx := context.Background()
-	state, blkRoot, err := prepareForkchoiceState(ctx, 100, [32]byte{'a'}, params.BeaconConfig().ZeroHash, [32]byte{'A'}, 1, 1)
+	state, blkRoot, err := prepareForkchoiceState(ctx, 75, [32]byte{'a'}, params.BeaconConfig().ZeroHash, [32]byte{'A'}, 1, 1)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blkRoot))
-	state, blkRoot, err = prepareForkchoiceState(ctx, 101, [32]byte{'b'}, [32]byte{'a'}, [32]byte{'B'}, 1, 1)
+	state, blkRoot, err = prepareForkchoiceState(ctx, 80, [32]byte{'b'}, [32]byte{'a'}, [32]byte{'B'}, 1, 1)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blkRoot))
 	require.NoError(t, f.store.setUnrealizedJustifiedEpoch([32]byte{'b'}, 2))
-	state, blkRoot, err = prepareForkchoiceState(ctx, 102, [32]byte{'c'}, [32]byte{'b'}, [32]byte{'C'}, 1, 1)
+	state, blkRoot, err = prepareForkchoiceState(ctx, 95, [32]byte{'c'}, [32]byte{'b'}, [32]byte{'C'}, 1, 1)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blkRoot))
 	require.NoError(t, f.store.setUnrealizedJustifiedEpoch([32]byte{'c'}, 2))
@@ -78,27 +79,28 @@ func TestStore_LongFork(t *testing.T) {
 	// Add an attestation to c, it is head
 	f.ProcessAttestation(ctx, []uint64{0}, [32]byte{'c'}, 1)
 	f.justifiedBalances = []uint64{100}
+	c := f.store.nodeByRoot[[32]byte{'c'}]
+	require.Equal(t, primitives.Epoch(2), slots.ToEpoch(c.slot))
+	driftGenesisTime(f, c.slot, 0)
 	headRoot, err := f.Head(ctx)
 	require.NoError(t, err)
 	require.Equal(t, [32]byte{'c'}, headRoot)
 
-	// D is head even though its weight is lower.
+	// c remains the head even if a block d with higher realized justification is seen
 	ha := [32]byte{'a'}
 	state, blkRoot, err = prepareForkchoiceState(ctx, 103, [32]byte{'d'}, [32]byte{'b'}, [32]byte{'D'}, 2, 1)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blkRoot))
 	require.NoError(t, f.UpdateJustifiedCheckpoint(ctx, &forkchoicetypes.Checkpoint{Epoch: 2, Root: ha}))
-	headRoot, err = f.Head(ctx)
-	require.NoError(t, err)
-	require.Equal(t, [32]byte{'d'}, headRoot)
-	require.Equal(t, uint64(0), f.store.nodeByRoot[[32]byte{'d'}].weight)
-	require.Equal(t, uint64(100), f.store.nodeByRoot[[32]byte{'c'}].weight)
-
-	// Update unrealized justification, c becomes head
-	require.NoError(t, f.updateUnrealizedCheckpoints(ctx))
+	d := f.store.nodeByRoot[[32]byte{'d'}]
+	require.Equal(t, primitives.Epoch(3), slots.ToEpoch(d.slot))
+	driftGenesisTime(f, d.slot, 0)
+	require.Equal(t, true, d.viableForHead(f.store.justifiedCheckpoint.Epoch, slots.ToEpoch(d.slot)))
 	headRoot, err = f.Head(ctx)
 	require.NoError(t, err)
 	require.Equal(t, [32]byte{'c'}, headRoot)
+	require.Equal(t, uint64(0), f.store.nodeByRoot[[32]byte{'d'}].weight)
+	require.Equal(t, uint64(100), f.store.nodeByRoot[[32]byte{'c'}].weight)
 }
 
 //	Epoch 1                Epoch 2               Epoch 3
@@ -298,7 +300,7 @@ func TestStore_PullTips_Heuristics(t *testing.T) {
 		require.NoError(tt, err)
 		require.NoError(tt, f.InsertNode(ctx, st, root))
 		// Check that the justification point is not the parent's.
-		// This tests that the heuristics in pullTips did not apply and
+		// This test checks that the heuristics in pullTips did not apply and
 		// the test continues to compute a bogus unrealized
 		// justification
 		require.Equal(tt, primitives.Epoch(1), f.store.nodeByRoot[[32]byte{'h'}].unrealizedJustifiedEpoch)
@@ -315,7 +317,7 @@ func TestStore_PullTips_Heuristics(t *testing.T) {
 		require.NoError(tt, err)
 		require.NoError(tt, f.InsertNode(ctx, st, root))
 		// Check that the justification point is not the parent's.
-		// This tests that the heuristics in pullTips did not apply and
+		// This test checks that the heuristics in pullTips did not apply and
 		// the test continues to compute a bogus unrealized
 		// justification
 		require.Equal(tt, primitives.Epoch(1), f.store.nodeByRoot[[32]byte{'h'}].unrealizedJustifiedEpoch)
@@ -331,7 +333,7 @@ func TestStore_PullTips_Heuristics(t *testing.T) {
 		require.NoError(tt, err)
 		require.NoError(tt, f.InsertNode(ctx, st, root))
 		// Check that the justification point is not the parent's.
-		// This tests that the heuristics in pullTips did not apply and
+		// This test checks that the heuristics in pullTips did not apply and
 		// the test continues to compute a bogus unrealized
 		// justification
 		require.Equal(tt, primitives.Epoch(2), f.store.nodeByRoot[[32]byte{'h'}].unrealizedJustifiedEpoch)

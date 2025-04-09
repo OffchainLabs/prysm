@@ -1,23 +1,15 @@
 package params_test
 
 import (
-	"path"
 	"path/filepath"
 	"testing"
 
 	"github.com/bazelbuild/rules_go/go/tools/bazel"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/io/file"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/io/file"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
-
-func testnetConfigFilePath(t *testing.T, network string) string {
-	fPath, err := bazel.Runfile("external/eth2_networks")
-	require.NoError(t, err)
-	configFilePath := path.Join(fPath, "shared", network, "config.yaml")
-	return configFilePath
-}
 
 func TestE2EConfigParity(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
@@ -76,7 +68,6 @@ func compareConfigs(t *testing.T, expected, actual *params.BeaconChainConfig) {
 	require.DeepEqual(t, expected.ShardCommitteePeriod, actual.ShardCommitteePeriod)
 	require.DeepEqual(t, expected.MinEpochsToInactivityPenalty, actual.MinEpochsToInactivityPenalty)
 	require.DeepEqual(t, expected.Eth1FollowDistance, actual.Eth1FollowDistance)
-	require.DeepEqual(t, expected.DeprecatedSafeSlotsToUpdateJustified, actual.DeprecatedSafeSlotsToUpdateJustified)
 	require.DeepEqual(t, expected.SecondsPerETH1Block, actual.SecondsPerETH1Block)
 	require.DeepEqual(t, expected.ProposerScoreBoost, actual.ProposerScoreBoost)
 	require.DeepEqual(t, expected.IntervalsPerSlot, actual.IntervalsPerSlot)
@@ -97,6 +88,7 @@ func compareConfigs(t *testing.T, expected, actual *params.BeaconChainConfig) {
 	require.DeepEqual(t, expected.ProportionalSlashingMultiplier, actual.ProportionalSlashingMultiplier)
 	require.DeepEqual(t, expected.MaxProposerSlashings, actual.MaxProposerSlashings)
 	require.DeepEqual(t, expected.MaxAttesterSlashings, actual.MaxAttesterSlashings)
+	require.DeepEqual(t, expected.MaxAttesterSlashingsElectra, actual.MaxAttesterSlashingsElectra)
 	require.DeepEqual(t, expected.MaxAttestations, actual.MaxAttestations)
 	require.DeepEqual(t, expected.MaxDeposits, actual.MaxDeposits)
 	require.DeepEqual(t, expected.MaxVoluntaryExits, actual.MaxVoluntaryExits)

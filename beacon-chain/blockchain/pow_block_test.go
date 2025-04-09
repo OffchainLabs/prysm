@@ -7,14 +7,14 @@ import (
 
 	gethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/holiman/uint256"
-	mocks "github.com/prysmaticlabs/prysm/v4/beacon-chain/execution/testing"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	enginev1 "github.com/prysmaticlabs/prysm/v4/proto/engine/v1"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/testing/util"
+	mocks "github.com/prysmaticlabs/prysm/v5/beacon-chain/execution/testing"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/util"
 )
 
 func Test_validTerminalPowBlock(t *testing.T) {
@@ -163,7 +163,7 @@ func Test_getBlkParentHashAndTD(t *testing.T) {
 	parentHash, totalDifficulty, err := service.getBlkParentHashAndTD(ctx, h[:])
 	require.NoError(t, err)
 	require.Equal(t, p, bytesutil.ToBytes32(parentHash))
-	require.Equal(t, td, totalDifficulty.String())
+	require.Equal(t, td, totalDifficulty.Hex())
 
 	_, _, err = service.getBlkParentHashAndTD(ctx, []byte{'c'})
 	require.ErrorContains(t, "could not get pow block: block not found", err)

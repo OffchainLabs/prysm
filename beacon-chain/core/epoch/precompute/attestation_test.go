@@ -5,15 +5,15 @@ import (
 	"testing"
 
 	"github.com/prysmaticlabs/go-bitfield"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/epoch/precompute"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1/attestation"
-	"github.com/prysmaticlabs/prysm/v4/runtime/version"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/testing/util"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/epoch/precompute"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/attestation"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/util"
 )
 
 func TestUpdateValidator_Works(t *testing.T) {
@@ -211,7 +211,7 @@ func TestProcessAttestations(t *testing.T) {
 
 	committee, err := helpers.BeaconCommitteeFromState(context.Background(), beaconState, att1.Data.Slot, att1.Data.CommitteeIndex)
 	require.NoError(t, err)
-	indices, err := attestation.AttestingIndices(att1.AggregationBits, committee)
+	indices, err := attestation.AttestingIndices(att1, committee)
 	require.NoError(t, err)
 	for _, i := range indices {
 		if !pVals[i].IsPrevEpochAttester {
@@ -220,7 +220,7 @@ func TestProcessAttestations(t *testing.T) {
 	}
 	committee, err = helpers.BeaconCommitteeFromState(context.Background(), beaconState, att2.Data.Slot, att2.Data.CommitteeIndex)
 	require.NoError(t, err)
-	indices, err = attestation.AttestingIndices(att2.AggregationBits, committee)
+	indices, err = attestation.AttestingIndices(att2, committee)
 	require.NoError(t, err)
 	for _, i := range indices {
 		assert.Equal(t, true, pVals[i].IsPrevEpochAttester, "Not a prev epoch attester")

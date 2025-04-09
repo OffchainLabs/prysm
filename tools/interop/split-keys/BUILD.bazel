@@ -4,7 +4,7 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 go_library(
     name = "go_default_library",
     srcs = ["main.go"],
-    importpath = "github.com/prysmaticlabs/prysm/v4/tools/interop/split-keys",
+    importpath = "github.com/prysmaticlabs/prysm/v5/tools/interop/split-keys",
     visibility = ["//visibility:private"],
     deps = [
         "//io/file:go_default_library",

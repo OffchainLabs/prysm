@@ -3,13 +3,14 @@ package metadata
 import (
 	ssz "github.com/prysmaticlabs/fastssz"
 	"github.com/prysmaticlabs/go-bitfield"
-	pb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	pb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
 // Metadata returns the interface of a p2p metadata type.
 type Metadata interface {
 	SequenceNumber() uint64
 	AttnetsBitfield() bitfield.Bitvector64
+	SyncnetsBitfield() bitfield.Bitvector4
 	InnerObject() interface{}
 	IsNil() bool
 	Copy() Metadata

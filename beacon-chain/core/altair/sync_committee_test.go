@@ -5,21 +5,22 @@ import (
 	"testing"
 	"time"
 
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/altair"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
-	state_native "github.com/prysmaticlabs/prysm/v4/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/crypto/bls"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	prysmTime "github.com/prysmaticlabs/prysm/v4/time"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/altair"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	prysmTime "github.com/prysmaticlabs/prysm/v5/time"
 )
 
 func TestSyncCommitteeIndices_CanGet(t *testing.T) {
-	getState := func(t *testing.T, count uint64) state.BeaconState {
+	getState := func(t *testing.T, count uint64, vers int) state.BeaconState {
 		validators := make([]*ethpb.Validator, count)
 		for i := 0; i < len(validators); i++ {
 			validators[i] = &ethpb.Validator{
@@ -27,17 +28,28 @@ func TestSyncCommitteeIndices_CanGet(t *testing.T) {
 				EffectiveBalance: params.BeaconConfig().MinDepositAmount,
 			}
 		}
-		st, err := state_native.InitializeFromProtoAltair(&ethpb.BeaconStateAltair{
-			Validators:  validators,
-			RandaoMixes: make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
-		})
+		var st state.BeaconState
+		var err error
+		switch vers {
+		case version.Altair:
+			st, err = state_native.InitializeFromProtoAltair(&ethpb.BeaconStateAltair{
+				RandaoMixes: make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
+			})
+		case version.Electra:
+			st, err = state_native.InitializeFromProtoElectra(&ethpb.BeaconStateElectra{
+				RandaoMixes: make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
+			})
+		default:
+			t.Fatal("Unknown version")
+		}
 		require.NoError(t, err)
+		require.NoError(t, st.SetValidators(validators))
 		return st
 	}
 
 	type args struct {
-		state state.BeaconState
-		epoch primitives.Epoch
+		validatorCount uint64
+		epoch          primitives.Epoch
 	}
 	tests := []struct {
 		name      string
@@ -48,37 +60,51 @@ func TestSyncCommitteeIndices_CanGet(t *testing.T) {
 		{
 			name: "genesis validator count, epoch 0",
 			args: args{
-				state: getState(t, params.BeaconConfig().MinGenesisActiveValidatorCount),
-				epoch: 0,
+				validatorCount: params.BeaconConfig().MinGenesisActiveValidatorCount,
+				epoch:          0,
 			},
 			wantErr: false,
 		},
 		{
 			name: "genesis validator count, epoch 100",
 			args: args{
-				state: getState(t, params.BeaconConfig().MinGenesisActiveValidatorCount),
-				epoch: 100,
+				validatorCount: params.BeaconConfig().MinGenesisActiveValidatorCount,
+				epoch:          100,
 			},
 			wantErr: false,
 		},
 		{
 			name: "less than optimal validator count, epoch 100",
 			args: args{
-				state: getState(t, params.BeaconConfig().MaxValidatorsPerCommittee),
-				epoch: 100,
+				validatorCount: params.BeaconConfig().MaxValidatorsPerCommittee,
+				epoch:          100,
 			},
 			wantErr: false,
+		},
+		{
+			name: "no active validators, epoch 100",
+			args: args{
+				validatorCount: 0, // Regression test for divide by zero. Issue #13051.
+				epoch:          100,
+			},
+			wantErr:   true,
+			errString: "no active validator indices",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			helpers.ClearCache()
-			got, err := altair.NextSyncCommitteeIndices(context.Background(), tt.args.state)
-			if tt.wantErr {
-				require.ErrorContains(t, tt.errString, err)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, int(params.BeaconConfig().SyncCommitteeSize), len(got))
+			for _, v := range []int{version.Altair, version.Electra} {
+				t.Run(version.String(v), func(t *testing.T) {
+					helpers.ClearCache()
+					st := getState(t, tt.args.validatorCount, v)
+					got, err := altair.NextSyncCommitteeIndices(context.Background(), st)
+					if tt.wantErr {
+						require.ErrorContains(t, tt.errString, err)
+					} else {
+						require.NoError(t, err)
+						require.Equal(t, int(params.BeaconConfig().SyncCommitteeSize), len(got))
+					}
+				})
 			}
 		})
 	}
@@ -267,7 +293,7 @@ func TestSyncSubCommitteePubkeys_CanGet(t *testing.T) {
 }
 
 func Test_ValidateSyncMessageTime(t *testing.T) {
-	if params.BeaconNetworkConfig().MaximumGossipClockDisparity < 200*time.Millisecond {
+	if params.BeaconConfig().MaximumGossipClockDisparityDuration() < 200*time.Millisecond {
 		t.Fatal("This test expects the maximum clock disparity to be at least 200ms")
 	}
 
@@ -317,7 +343,7 @@ func Test_ValidateSyncMessageTime(t *testing.T) {
 			name: "sync_message.slot == current_slot+CLOCK_DISPARITY",
 			args: args{
 				syncMessageSlot: 100,
-				genesisTime:     prysmTime.Now().Add(-(100*time.Duration(params.BeaconConfig().SecondsPerSlot)*time.Second - params.BeaconNetworkConfig().MaximumGossipClockDisparity)),
+				genesisTime:     prysmTime.Now().Add(-(100*time.Duration(params.BeaconConfig().SecondsPerSlot)*time.Second - params.BeaconConfig().MaximumGossipClockDisparityDuration())),
 			},
 			wantedErr: "",
 		},
@@ -325,7 +351,7 @@ func Test_ValidateSyncMessageTime(t *testing.T) {
 			name: "sync_message.slot == current_slot+CLOCK_DISPARITY-1000ms",
 			args: args{
 				syncMessageSlot: 100,
-				genesisTime:     prysmTime.Now().Add(-(100 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second) + params.BeaconNetworkConfig().MaximumGossipClockDisparity + 1000*time.Millisecond),
+				genesisTime:     prysmTime.Now().Add(-(100 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second) + params.BeaconConfig().MaximumGossipClockDisparityDuration() + 1000*time.Millisecond),
 			},
 			wantedErr: "(message slot 100) not within allowable range of",
 		},
@@ -333,7 +359,7 @@ func Test_ValidateSyncMessageTime(t *testing.T) {
 			name: "sync_message.slot == current_slot-CLOCK_DISPARITY",
 			args: args{
 				syncMessageSlot: 100,
-				genesisTime:     prysmTime.Now().Add(-(100*time.Duration(params.BeaconConfig().SecondsPerSlot)*time.Second + params.BeaconNetworkConfig().MaximumGossipClockDisparity)),
+				genesisTime:     prysmTime.Now().Add(-(100*time.Duration(params.BeaconConfig().SecondsPerSlot)*time.Second + params.BeaconConfig().MaximumGossipClockDisparityDuration())),
 			},
 			wantedErr: "",
 		},
@@ -341,7 +367,7 @@ func Test_ValidateSyncMessageTime(t *testing.T) {
 			name: "sync_message.slot > current_slot+CLOCK_DISPARITY",
 			args: args{
 				syncMessageSlot: 101,
-				genesisTime:     prysmTime.Now().Add(-(100*time.Duration(params.BeaconConfig().SecondsPerSlot)*time.Second + params.BeaconNetworkConfig().MaximumGossipClockDisparity)),
+				genesisTime:     prysmTime.Now().Add(-(100*time.Duration(params.BeaconConfig().SecondsPerSlot)*time.Second + params.BeaconConfig().MaximumGossipClockDisparityDuration())),
 			},
 			wantedErr: "(message slot 101) not within allowable range of",
 		},
@@ -357,7 +383,7 @@ func Test_ValidateSyncMessageTime(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := altair.ValidateSyncMessageTime(tt.args.syncMessageSlot, tt.args.genesisTime,
-				params.BeaconNetworkConfig().MaximumGossipClockDisparity)
+				params.BeaconConfig().MaximumGossipClockDisparityDuration())
 			if tt.wantedErr != "" {
 				assert.ErrorContains(t, tt.wantedErr, err)
 			} else {

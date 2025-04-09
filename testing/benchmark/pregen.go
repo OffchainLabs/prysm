@@ -7,10 +7,10 @@ import (
 	"os"
 
 	"github.com/bazelbuild/rules_go/go/tools/bazel"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
-	state_native "github.com/prysmaticlabs/prysm/v4/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
 // ValidatorCount is for declaring how many validators the benchmarks will be
@@ -30,7 +30,7 @@ var GenesisFileName = fmt.Sprintf("bStateGenesis-%dAtts-%dVals.ssz", Attestation
 var BState1EpochFileName = fmt.Sprintf("bState1Epoch-%dAtts-%dVals.ssz", AttestationsPerEpoch, ValidatorCount)
 
 // BstateEpochFileName is the generated beacon state after 2 full epochs file name.
-var BstateEpochFileName = fmt.Sprintf("bstateEpochs-%dAtts-%dVals.ssz", AttestationsPerEpoch, ValidatorCount)
+var BstateEpochFileName = fmt.Sprintf("bState2Epochs-%dAtts-%dVals.ssz", AttestationsPerEpoch, ValidatorCount)
 
 // FullBlockFileName is the generated full block file name.
 var FullBlockFileName = fmt.Sprintf("fullBlock-%dAtts-%dVals.ssz", AttestationsPerEpoch, ValidatorCount)
@@ -104,7 +104,7 @@ func SetBenchmarkConfig() (func(), error) {
 	undo, err := params.SetActiveWithUndo(c)
 	return func() {
 		if err := undo(); err != nil {
-			panic(err)
+			panic(err) // lint:nopanic -- Test code / impossible scenario.
 		}
 	}, err
 }

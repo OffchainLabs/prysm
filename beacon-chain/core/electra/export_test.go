@@ -1,0 +1,3 @@
+package electra
+
+var BatchProcessNewPendingDeposits = batchProcessNewPendingDeposits

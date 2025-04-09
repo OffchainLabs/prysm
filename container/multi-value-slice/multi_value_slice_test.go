@@ -4,8 +4,8 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 type testObject struct {
@@ -21,7 +21,7 @@ func (o *testObject) SetId(id uint64) {
 }
 
 func TestLen(t *testing.T) {
-	s := &Slice[int, *testObject]{}
+	s := &Slice[int]{}
 	s.Init([]int{1, 2, 3})
 	s.cachedLengths[1] = 123
 	t.Run("cached", func(t *testing.T) {
@@ -93,7 +93,7 @@ func TestValue(t *testing.T) {
 	assert.Equal(t, 3, v[6])
 	assert.Equal(t, 2, v[7])
 
-	s = &Slice[int, *testObject]{}
+	s = &Slice[int]{}
 	s.Init([]int{1, 2, 3})
 
 	v = s.Value(&testObject{id: 999})
@@ -246,7 +246,7 @@ func TestAppend(t *testing.T) {
 	// - we also want to check that cached length is properly updated after every append
 
 	// we want to start with the simplest slice possible
-	s := &Slice[int, *testObject]{}
+	s := &Slice[int]{}
 	s.Init([]int{0})
 	first := &testObject{id: 1}
 	second := &testObject{id: 2}
@@ -326,6 +326,156 @@ func TestDetach(t *testing.T) {
 	assert.Equal(t, false, ok)
 }
 
+func TestReset(t *testing.T) {
+	s := setup()
+	obj := &testObject{id: 2}
+
+	reset := s.Reset(obj)
+
+	assert.Equal(t, 8, len(reset.sharedItems))
+	assert.Equal(t, 123, reset.sharedItems[0])
+	assert.Equal(t, 2, reset.sharedItems[1])
+	assert.Equal(t, 3, reset.sharedItems[2])
+	assert.Equal(t, 123, reset.sharedItems[3])
+	assert.Equal(t, 2, reset.sharedItems[4])
+	assert.Equal(t, 2, reset.sharedItems[5])
+	assert.Equal(t, 3, reset.sharedItems[6])
+	assert.Equal(t, 2, reset.sharedItems[7])
+	assert.Equal(t, 0, len(reset.individualItems))
+	assert.Equal(t, 0, len(reset.appendedItems))
+}
+
+func TestFragmentation_IndividualReferences(t *testing.T) {
+	s := &Slice[int]{}
+	s.Init([]int{123, 123, 123, 123, 123})
+	s.individualItems[1] = &MultiValueItem[int]{
+		Values: []*Value[int]{
+			{
+				val: 1,
+				ids: []uint64{1},
+			},
+			{
+				val: 2,
+				ids: []uint64{2},
+			},
+		},
+	}
+	s.individualItems[2] = &MultiValueItem[int]{
+		Values: []*Value[int]{
+			{
+				val: 3,
+				ids: []uint64{1, 2},
+			},
+		},
+	}
+
+	numOfRefs := fragmentationLimit / 2
+	for i := 3; i < numOfRefs; i++ {
+		obj := &testObject{id: uint64(i)}
+		s.Copy(&testObject{id: 1}, obj)
+	}
+
+	assert.Equal(t, false, s.IsFragmented())
+
+	// Add more references to hit fragmentation limit. Id 1
+	// has 2 references above.
+	for i := numOfRefs; i < numOfRefs+3; i++ {
+		obj := &testObject{id: uint64(i)}
+		s.Copy(&testObject{id: 1}, obj)
+	}
+	assert.Equal(t, true, s.IsFragmented())
+}
+
+func TestFragmentation_AppendedReferences(t *testing.T) {
+	s := &Slice[int]{}
+	s.Init([]int{123, 123, 123, 123, 123})
+	s.appendedItems = []*MultiValueItem[int]{
+		{
+			Values: []*Value[int]{
+				{
+					val: 1,
+					ids: []uint64{1},
+				},
+				{
+					val: 2,
+					ids: []uint64{2},
+				},
+			},
+		},
+		{
+			Values: []*Value[int]{
+				{
+					val: 3,
+					ids: []uint64{1, 2},
+				},
+			},
+		},
+	}
+	s.cachedLengths[1] = 7
+	s.cachedLengths[2] = 8
+
+	numOfRefs := fragmentationLimit / 2
+	for i := 3; i < numOfRefs; i++ {
+		obj := &testObject{id: uint64(i)}
+		s.Copy(&testObject{id: 1}, obj)
+	}
+
+	assert.Equal(t, false, s.IsFragmented())
+
+	// Add more references to hit fragmentation limit. Id 1
+	// has 2 references above.
+	for i := numOfRefs; i < numOfRefs+3; i++ {
+		obj := &testObject{id: uint64(i)}
+		s.Copy(&testObject{id: 1}, obj)
+	}
+	assert.Equal(t, true, s.IsFragmented())
+}
+
+func TestFragmentation_IndividualAndAppendedReferences(t *testing.T) {
+	s := &Slice[int]{}
+	s.Init([]int{123, 123, 123, 123, 123})
+	s.individualItems[2] = &MultiValueItem[int]{
+		Values: []*Value[int]{
+			{
+				val: 3,
+				ids: []uint64{1, 2},
+			},
+		},
+	}
+	s.appendedItems = []*MultiValueItem[int]{
+		{
+			Values: []*Value[int]{
+				{
+					val: 1,
+					ids: []uint64{1},
+				},
+				{
+					val: 2,
+					ids: []uint64{2},
+				},
+			},
+		},
+	}
+	s.cachedLengths[1] = 7
+	s.cachedLengths[2] = 8
+
+	numOfRefs := fragmentationLimit / 2
+	for i := 3; i < numOfRefs; i++ {
+		obj := &testObject{id: uint64(i)}
+		s.Copy(&testObject{id: 1}, obj)
+	}
+
+	assert.Equal(t, false, s.IsFragmented())
+
+	// Add more references to hit fragmentation limit. Id 1
+	// has 2 references above.
+	for i := numOfRefs; i < numOfRefs+3; i++ {
+		obj := &testObject{id: uint64(i)}
+		s.Copy(&testObject{id: 1}, obj)
+	}
+	assert.Equal(t, true, s.IsFragmented())
+}
+
 // Share the slice between 2 objects.
 // Index 0: Shared value
 // Index 1: Different individual value
@@ -335,8 +485,8 @@ func TestDetach(t *testing.T) {
 // Index 5: Different appended value
 // Index 6: Same appended value
 // Index 7: Appended value ONLY for the second object
-func setup() *Slice[int, *testObject] {
-	s := &Slice[int, *testObject]{}
+func setup() *Slice[int] {
+	s := &Slice[int]{}
 	s.Init([]int{123, 123, 123, 123, 123})
 	s.individualItems[1] = &MultiValueItem[int]{
 		Values: []*Value[int]{
@@ -410,7 +560,7 @@ func setup() *Slice[int, *testObject] {
 	return s
 }
 
-func assertIndividualFound(t *testing.T, slice *Slice[int, *testObject], id uint64, itemIndex uint64, expected int) {
+func assertIndividualFound(t *testing.T, slice *Slice[int], id uint64, itemIndex uint64, expected int) {
 	found := false
 	for _, v := range slice.individualItems[itemIndex].Values {
 		for _, o := range v.ids {
@@ -423,7 +573,7 @@ func assertIndividualFound(t *testing.T, slice *Slice[int, *testObject], id uint
 	assert.Equal(t, true, found)
 }
 
-func assertIndividualNotFound(t *testing.T, slice *Slice[int, *testObject], id uint64, itemIndex uint64) {
+func assertIndividualNotFound(t *testing.T, slice *Slice[int], id uint64, itemIndex uint64) {
 	found := false
 	for _, v := range slice.individualItems[itemIndex].Values {
 		for _, o := range v.ids {
@@ -435,7 +585,7 @@ func assertIndividualNotFound(t *testing.T, slice *Slice[int, *testObject], id u
 	assert.Equal(t, false, found)
 }
 
-func assertAppendedFound(t *testing.T, slice *Slice[int, *testObject], id uint64, itemIndex uint64, expected int) {
+func assertAppendedFound(t *testing.T, slice *Slice[int], id uint64, itemIndex uint64, expected int) {
 	found := false
 	for _, v := range slice.appendedItems[itemIndex].Values {
 		for _, o := range v.ids {
@@ -448,7 +598,7 @@ func assertAppendedFound(t *testing.T, slice *Slice[int, *testObject], id uint64
 	assert.Equal(t, true, found)
 }
 
-func assertAppendedNotFound(t *testing.T, slice *Slice[int, *testObject], id uint64, itemIndex uint64) {
+func assertAppendedNotFound(t *testing.T, slice *Slice[int], id uint64, itemIndex uint64) {
 	found := false
 	for _, v := range slice.appendedItems[itemIndex].Values {
 		for _, o := range v.ids {
@@ -466,14 +616,14 @@ func BenchmarkValue(b *testing.B) {
 	const _10m = 10000000
 
 	b.Run("100,000 shared items", func(b *testing.B) {
-		s := &Slice[int, *testObject]{}
+		s := &Slice[int]{}
 		s.Init(make([]int, _100k))
 		for i := 0; i < b.N; i++ {
 			s.Value(&testObject{})
 		}
 	})
 	b.Run("100,000 equal individual items", func(b *testing.B) {
-		s := &Slice[int, *testObject]{}
+		s := &Slice[int]{}
 		s.Init(make([]int, _100k))
 		s.individualItems[0] = &MultiValueItem[int]{Values: []*Value[int]{{val: 999, ids: []uint64{}}}}
 		objs := make([]*testObject, _100k)
@@ -486,7 +636,7 @@ func BenchmarkValue(b *testing.B) {
 		}
 	})
 	b.Run("100,000 different individual items", func(b *testing.B) {
-		s := &Slice[int, *testObject]{}
+		s := &Slice[int]{}
 		s.Init(make([]int, _100k))
 		objs := make([]*testObject, _100k)
 		for i := 0; i < len(objs); i++ {
@@ -498,7 +648,7 @@ func BenchmarkValue(b *testing.B) {
 		}
 	})
 	b.Run("100,000 shared items and 100,000 equal appended items", func(b *testing.B) {
-		s := &Slice[int, *testObject]{}
+		s := &Slice[int]{}
 		s.Init(make([]int, _100k))
 		s.appendedItems = []*MultiValueItem[int]{{Values: []*Value[int]{{val: 999, ids: []uint64{}}}}}
 		objs := make([]*testObject, _100k)
@@ -511,7 +661,7 @@ func BenchmarkValue(b *testing.B) {
 		}
 	})
 	b.Run("100,000 shared items and 100,000 different appended items", func(b *testing.B) {
-		s := &Slice[int, *testObject]{}
+		s := &Slice[int]{}
 		s.Init(make([]int, _100k))
 		s.appendedItems = []*MultiValueItem[int]{}
 		objs := make([]*testObject, _100k)
@@ -524,14 +674,14 @@ func BenchmarkValue(b *testing.B) {
 		}
 	})
 	b.Run("1,000,000 shared items", func(b *testing.B) {
-		s := &Slice[int, *testObject]{}
+		s := &Slice[int]{}
 		s.Init(make([]int, _1m))
 		for i := 0; i < b.N; i++ {
 			s.Value(&testObject{})
 		}
 	})
 	b.Run("1,000,000 equal individual items", func(b *testing.B) {
-		s := &Slice[int, *testObject]{}
+		s := &Slice[int]{}
 		s.Init(make([]int, _1m))
 		s.individualItems[0] = &MultiValueItem[int]{Values: []*Value[int]{{val: 999, ids: []uint64{}}}}
 		objs := make([]*testObject, _1m)
@@ -544,7 +694,7 @@ func BenchmarkValue(b *testing.B) {
 		}
 	})
 	b.Run("1,000,000 different individual items", func(b *testing.B) {
-		s := &Slice[int, *testObject]{}
+		s := &Slice[int]{}
 		s.Init(make([]int, _1m))
 		objs := make([]*testObject, _1m)
 		for i := 0; i < len(objs); i++ {
@@ -556,7 +706,7 @@ func BenchmarkValue(b *testing.B) {
 		}
 	})
 	b.Run("1,000,000 shared items and 1,000,000 equal appended items", func(b *testing.B) {
-		s := &Slice[int, *testObject]{}
+		s := &Slice[int]{}
 		s.Init(make([]int, _1m))
 		s.appendedItems = []*MultiValueItem[int]{{Values: []*Value[int]{{val: 999, ids: []uint64{}}}}}
 		objs := make([]*testObject, _1m)
@@ -569,7 +719,7 @@ func BenchmarkValue(b *testing.B) {
 		}
 	})
 	b.Run("1,000,000 shared items and 1,000,000 different appended items", func(b *testing.B) {
-		s := &Slice[int, *testObject]{}
+		s := &Slice[int]{}
 		s.Init(make([]int, _1m))
 		s.appendedItems = []*MultiValueItem[int]{}
 		objs := make([]*testObject, _1m)
@@ -582,14 +732,14 @@ func BenchmarkValue(b *testing.B) {
 		}
 	})
 	b.Run("10,000,000 shared items", func(b *testing.B) {
-		s := &Slice[int, *testObject]{}
+		s := &Slice[int]{}
 		s.Init(make([]int, _10m))
 		for i := 0; i < b.N; i++ {
 			s.Value(&testObject{})
 		}
 	})
 	b.Run("10,000,000 equal individual items", func(b *testing.B) {
-		s := &Slice[int, *testObject]{}
+		s := &Slice[int]{}
 		s.Init(make([]int, _10m))
 		s.individualItems[0] = &MultiValueItem[int]{Values: []*Value[int]{{val: 999, ids: []uint64{}}}}
 		objs := make([]*testObject, _10m)
@@ -602,7 +752,7 @@ func BenchmarkValue(b *testing.B) {
 		}
 	})
 	b.Run("10,000,000 different individual items", func(b *testing.B) {
-		s := &Slice[int, *testObject]{}
+		s := &Slice[int]{}
 		s.Init(make([]int, _10m))
 		objs := make([]*testObject, _10m)
 		for i := 0; i < len(objs); i++ {
@@ -614,7 +764,7 @@ func BenchmarkValue(b *testing.B) {
 		}
 	})
 	b.Run("10,000,000 shared items and 10,000,000 equal appended items", func(b *testing.B) {
-		s := &Slice[int, *testObject]{}
+		s := &Slice[int]{}
 		s.Init(make([]int, _10m))
 		s.appendedItems = []*MultiValueItem[int]{{Values: []*Value[int]{{val: 999, ids: []uint64{}}}}}
 		objs := make([]*testObject, _10m)
@@ -627,7 +777,7 @@ func BenchmarkValue(b *testing.B) {
 		}
 	})
 	b.Run("10,000,000 shared items and 10,000,000 different appended items", func(b *testing.B) {
-		s := &Slice[int, *testObject]{}
+		s := &Slice[int]{}
 		s.Init(make([]int, _10m))
 		s.appendedItems = []*MultiValueItem[int]{}
 		objs := make([]*testObject, _10m)

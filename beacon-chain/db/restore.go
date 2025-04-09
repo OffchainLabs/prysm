@@ -6,10 +6,10 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/db/kv"
-	"github.com/prysmaticlabs/prysm/v4/cmd"
-	"github.com/prysmaticlabs/prysm/v4/io/file"
-	"github.com/prysmaticlabs/prysm/v4/io/prompt"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/kv"
+	"github.com/prysmaticlabs/prysm/v5/cmd"
+	"github.com/prysmaticlabs/prysm/v5/io/file"
+	"github.com/prysmaticlabs/prysm/v5/io/prompt"
 	"github.com/urfave/cli/v2"
 )
 
@@ -22,7 +22,14 @@ func Restore(cliCtx *cli.Context) error {
 	targetDir := cliCtx.String(cmd.RestoreTargetDirFlag.Name)
 
 	restoreDir := path.Join(targetDir, kv.BeaconNodeDbDirName)
-	if file.FileExists(path.Join(restoreDir, kv.DatabaseFileName)) {
+	restoreFile := path.Join(restoreDir, kv.DatabaseFileName)
+
+	dbExists, err := file.Exists(restoreFile, file.Regular)
+	if err != nil {
+		return errors.Wrapf(err, "could not check if database exists in %s", restoreFile)
+	}
+
+	if dbExists {
 		resp, err := prompt.ValidatePrompt(
 			os.Stdin, dbExistsYesNoPrompt, prompt.ValidateYesOrNo,
 		)

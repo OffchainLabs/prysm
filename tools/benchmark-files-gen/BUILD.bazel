@@ -5,7 +5,7 @@ go_library(
     name = "go_default_library",
     testonly = True,
     srcs = ["main.go"],
-    importpath = "github.com/prysmaticlabs/prysm/v4/tools/benchmark-files-gen",
+    importpath = "github.com/prysmaticlabs/prysm/v5/tools/benchmark-files-gen",
     visibility = ["//visibility:private"],
     deps = [
         "//beacon-chain/core/helpers:go_default_library",

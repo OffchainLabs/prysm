@@ -1,21 +1,24 @@
 package blocks_test
 
 import (
+	"fmt"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/blocks"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/time"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
-	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
-	consensusblocks "github.com/prysmaticlabs/prysm/v4/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v4/encoding/ssz"
-	enginev1 "github.com/prysmaticlabs/prysm/v4/proto/engine/v1"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/testing/util"
-	"github.com/prysmaticlabs/prysm/v4/time/slots"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	consensusblocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/encoding/ssz"
+	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/util"
+	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
 func Test_IsMergeComplete(t *testing.T) {
@@ -251,7 +254,8 @@ func Test_IsExecutionBlockCapella(t *testing.T) {
 	require.NoError(t, err)
 	got, err := blocks.IsExecutionBlock(wrappedBlock.Body())
 	require.NoError(t, err)
-	require.Equal(t, false, got)
+	// #14614
+	require.Equal(t, true, got)
 }
 
 func Test_IsExecutionEnabled(t *testing.T) {
@@ -581,14 +585,17 @@ func Test_ProcessPayload(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			wrappedPayload, err := consensusblocks.WrappedExecutionPayload(tt.payload)
+			body, err := consensusblocks.NewBeaconBlockBody(&ethpb.BeaconBlockBodyBellatrix{
+				ExecutionPayload: tt.payload,
+			})
 			require.NoError(t, err)
-			st, err := blocks.ProcessPayload(st, wrappedPayload)
-			if err != nil {
+			if err := blocks.ProcessPayload(st, body); err != nil {
 				require.Equal(t, tt.err.Error(), err.Error())
 			} else {
 				require.Equal(t, tt.err, err)
-				want, err := consensusblocks.PayloadToHeader(wrappedPayload)
+				payload, err := body.Execution()
+				require.NoError(t, err)
+				want, err := consensusblocks.PayloadToHeader(payload)
 				require.Equal(t, tt.err, err)
 				h, err := st.LatestExecutionPayloadHeader()
 				require.NoError(t, err)
@@ -609,13 +616,14 @@ func Test_ProcessPayloadCapella(t *testing.T) {
 	random, err := helpers.RandaoMix(st, time.CurrentEpoch(st))
 	require.NoError(t, err)
 	payload.PrevRandao = random
-	wrapped, err := consensusblocks.WrappedExecutionPayloadCapella(payload, 0)
+	body, err := consensusblocks.NewBeaconBlockBody(&ethpb.BeaconBlockBodyCapella{
+		ExecutionPayload: payload,
+	})
 	require.NoError(t, err)
-	_, err = blocks.ProcessPayload(st, wrapped)
-	require.NoError(t, err)
+	require.NoError(t, blocks.ProcessPayload(st, body))
 }
 
-func Test_ProcessPayloadHeader(t *testing.T) {
+func Test_ProcessPayload_Blinded(t *testing.T) {
 	st, _ := util.DeterministicGenesisStateBellatrix(t, 1)
 	random, err := helpers.RandaoMix(st, time.CurrentEpoch(st))
 	require.NoError(t, err)
@@ -663,8 +671,13 @@ func Test_ProcessPayloadHeader(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			st, err := blocks.ProcessPayloadHeader(st, tt.header)
-			if err != nil {
+			p, ok := tt.header.Proto().(*enginev1.ExecutionPayloadHeader)
+			require.Equal(t, true, ok)
+			body, err := consensusblocks.NewBeaconBlockBody(&ethpb.BlindedBeaconBlockBodyBellatrix{
+				ExecutionPayloadHeader: p,
+			})
+			require.NoError(t, err)
+			if err := blocks.ProcessPayload(st, body); err != nil {
 				require.Equal(t, tt.err.Error(), err.Error())
 			} else {
 				require.Equal(t, tt.err, err)
@@ -728,7 +741,7 @@ func Test_ValidatePayloadHeader(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err = blocks.ValidatePayloadHeader(st, tt.header)
+			err = blocks.ValidatePayload(st, tt.header)
 			require.Equal(t, tt.err, err)
 		})
 	}
@@ -785,7 +798,7 @@ func Test_ValidatePayloadHeaderWhenMergeCompletes(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err = blocks.ValidatePayloadHeaderWhenMergeCompletes(tt.state, tt.header)
+			err = blocks.ValidatePayloadWhenMergeCompletes(tt.state, tt.header)
 			require.Equal(t, tt.err, err)
 		})
 	}
@@ -853,10 +866,10 @@ func emptyPayloadHeader() (interfaces.ExecutionData, error) {
 		ReceiptsRoot:     make([]byte, fieldparams.RootLength),
 		LogsBloom:        make([]byte, fieldparams.LogsBloomLength),
 		PrevRandao:       make([]byte, fieldparams.RootLength),
+		ExtraData:        make([]byte, 0),
 		BaseFeePerGas:    make([]byte, fieldparams.RootLength),
 		BlockHash:        make([]byte, fieldparams.RootLength),
 		TransactionsRoot: make([]byte, fieldparams.RootLength),
-		ExtraData:        make([]byte, 0),
 	})
 }
 
@@ -868,12 +881,12 @@ func emptyPayloadHeaderCapella() (interfaces.ExecutionData, error) {
 		ReceiptsRoot:     make([]byte, fieldparams.RootLength),
 		LogsBloom:        make([]byte, fieldparams.LogsBloomLength),
 		PrevRandao:       make([]byte, fieldparams.RootLength),
+		ExtraData:        make([]byte, 0),
 		BaseFeePerGas:    make([]byte, fieldparams.RootLength),
 		BlockHash:        make([]byte, fieldparams.RootLength),
 		TransactionsRoot: make([]byte, fieldparams.RootLength),
 		WithdrawalsRoot:  make([]byte, fieldparams.RootLength),
-		ExtraData:        make([]byte, 0),
-	}, 0)
+	})
 }
 
 func emptyPayload() *enginev1.ExecutionPayload {
@@ -884,10 +897,10 @@ func emptyPayload() *enginev1.ExecutionPayload {
 		ReceiptsRoot:  make([]byte, fieldparams.RootLength),
 		LogsBloom:     make([]byte, fieldparams.LogsBloomLength),
 		PrevRandao:    make([]byte, fieldparams.RootLength),
+		ExtraData:     make([]byte, 0),
 		BaseFeePerGas: make([]byte, fieldparams.RootLength),
 		BlockHash:     make([]byte, fieldparams.RootLength),
 		Transactions:  make([][]byte, 0),
-		ExtraData:     make([]byte, 0),
 	}
 }
 
@@ -899,10 +912,22 @@ func emptyPayloadCapella() *enginev1.ExecutionPayloadCapella {
 		ReceiptsRoot:  make([]byte, fieldparams.RootLength),
 		LogsBloom:     make([]byte, fieldparams.LogsBloomLength),
 		PrevRandao:    make([]byte, fieldparams.RootLength),
+		ExtraData:     make([]byte, 0),
 		BaseFeePerGas: make([]byte, fieldparams.RootLength),
 		BlockHash:     make([]byte, fieldparams.RootLength),
 		Transactions:  make([][]byte, 0),
 		Withdrawals:   make([]*enginev1.Withdrawal, 0),
-		ExtraData:     make([]byte, 0),
 	}
+}
+
+func TestVerifyBlobCommitmentCount(t *testing.T) {
+	b := &ethpb.BeaconBlockDeneb{Body: &ethpb.BeaconBlockBodyDeneb{}}
+	rb, err := consensusblocks.NewBeaconBlock(b)
+	require.NoError(t, err)
+	require.NoError(t, blocks.VerifyBlobCommitmentCount(rb.Slot(), rb.Body()))
+
+	b = &ethpb.BeaconBlockDeneb{Body: &ethpb.BeaconBlockBodyDeneb{BlobKzgCommitments: make([][]byte, params.BeaconConfig().MaxBlobsPerBlock(rb.Slot())+1)}}
+	rb, err = consensusblocks.NewBeaconBlock(b)
+	require.NoError(t, err)
+	require.ErrorContains(t, fmt.Sprintf("too many kzg commitments in block: %d", params.BeaconConfig().MaxBlobsPerBlock(rb.Slot())+1), blocks.VerifyBlobCommitmentCount(rb.Slot(), rb.Body()))
 }

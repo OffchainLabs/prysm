@@ -51,7 +51,7 @@ func (bc *bcnodeCollector) Collect(ch chan<- prometheus.Metric) {
 func (bc *bcnodeCollector) getCurrentDbBytes() (float64, error) {
 	fs, err := os.Stat(bc.dbPath)
 	if err != nil {
-		return 0, fmt.Errorf("could not collect database file size for prometheus, path=%s, err=%s", bc.dbPath, err)
+		return 0, fmt.Errorf("could not collect database file size for prometheus, path=%s, err=%w", bc.dbPath, err)
 	}
 	return float64(fs.Size()), nil
 }

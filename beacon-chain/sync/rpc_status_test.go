@@ -9,30 +9,31 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/protocol"
-	"github.com/prysmaticlabs/prysm/v4/async/abool"
-	mock "github.com/prysmaticlabs/prysm/v4/beacon-chain/blockchain/testing"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/transition"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/db/kv"
-	testingDB "github.com/prysmaticlabs/prysm/v4/beacon-chain/db/testing"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p/peers"
-	p2ptest "github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p/testing"
-	p2ptypes "github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p/types"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/startup"
-	state_native "github.com/prysmaticlabs/prysm/v4/beacon-chain/state/state-native"
-	mockSync "github.com/prysmaticlabs/prysm/v4/beacon-chain/sync/initial-sync/testing"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	consensusblocks "github.com/prysmaticlabs/prysm/v4/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/wrapper"
-	leakybucket "github.com/prysmaticlabs/prysm/v4/container/leaky-bucket"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/testing/util"
-	prysmTime "github.com/prysmaticlabs/prysm/v4/time"
+	"github.com/prysmaticlabs/prysm/v5/async/abool"
+	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/kv"
+	testingDB "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers"
+	p2ptest "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
+	p2ptypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
+	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
+	mockSync "github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/initial-sync/testing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	consensusblocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/wrapper"
+	leakybucket "github.com/prysmaticlabs/prysm/v5/container/leaky-bucket"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/util"
+	prysmTime "github.com/prysmaticlabs/prysm/v5/time"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -318,6 +319,9 @@ func TestHandshakeHandlers_Roundtrip(t *testing.T) {
 		clockWaiter:  cw,
 		chainStarted: abool.New(),
 	}
+	clock := startup.NewClockSynchronizer()
+	require.NoError(t, clock.SetClock(startup.NewClock(time.Now(), [32]byte{})))
+	r.verifierWaiter = verification.NewInitializerWaiter(clock, chain.ForkChoiceStore, r.cfg.stateGen)
 	p1.Digest, err = r.currentForkDigest()
 	require.NoError(t, err)
 
@@ -334,6 +338,10 @@ func TestHandshakeHandlers_Roundtrip(t *testing.T) {
 		},
 		rateLimiter: newRateLimiter(p2),
 	}
+	clock = startup.NewClockSynchronizer()
+	require.NoError(t, clock.SetClock(startup.NewClock(time.Now(), [32]byte{})))
+	r2.verifierWaiter = verification.NewInitializerWaiter(clock, chain2.ForkChoiceStore, r2.cfg.stateGen)
+
 	p2.Digest, err = r.currentForkDigest()
 	require.NoError(t, err)
 
@@ -405,7 +413,7 @@ func TestHandshakeHandlers_Roundtrip(t *testing.T) {
 	assert.Equal(t, numActive1+1, numActive2, "Number of active peers unexpected")
 
 	require.NoError(t, p2.Disconnect(p1.PeerID()))
-	p1.Peers().SetConnectionState(p2.PeerID(), peers.PeerDisconnected)
+	p1.Peers().SetConnectionState(p2.PeerID(), peers.Disconnected)
 
 	// Wait for disconnect event to trigger.
 	time.Sleep(200 * time.Millisecond)
@@ -837,6 +845,9 @@ func TestStatusRPCRequest_BadPeerHandshake(t *testing.T) {
 		clockWaiter:  cw,
 		chainStarted: abool.New(),
 	}
+	clock := startup.NewClockSynchronizer()
+	require.NoError(t, clock.SetClock(startup.NewClock(time.Now(), [32]byte{})))
+	r.verifierWaiter = verification.NewInitializerWaiter(clock, chain.ForkChoiceStore, r.cfg.stateGen)
 
 	go r.Start()
 
@@ -866,7 +877,7 @@ func TestStatusRPCRequest_BadPeerHandshake(t *testing.T) {
 
 	require.NoError(t, cw.SetClock(startup.NewClock(chain.Genesis, chain.ValidatorsRoot)))
 
-	assert.Equal(t, false, p1.Peers().Scorers().IsBadPeer(p2.PeerID()), "Peer is marked as bad")
+	assert.NoError(t, p1.Peers().Scorers().IsBadPeer(p2.PeerID()), "Peer is marked as bad")
 	p1.Connect(p2)
 
 	if util.WaitTimeout(&wg, time.Second) {
@@ -876,9 +887,9 @@ func TestStatusRPCRequest_BadPeerHandshake(t *testing.T) {
 
 	connectionState, err := p1.Peers().ConnectionState(p2.PeerID())
 	require.NoError(t, err, "Could not obtain peer connection state")
-	assert.Equal(t, peers.PeerDisconnected, connectionState, "Expected peer to be disconnected")
+	assert.Equal(t, peers.Disconnected, connectionState, "Expected peer to be disconnected")
 
-	assert.Equal(t, true, p1.Peers().Scorers().IsBadPeer(p2.PeerID()), "Peer is not marked as bad")
+	assert.NotNil(t, p1.Peers().Scorers().IsBadPeer(p2.PeerID()), "Peer is not marked as bad")
 }
 
 func TestStatusRPC_ValidGenesisMessage(t *testing.T) {

@@ -1,5 +1,7 @@
 // This binary is a simple rest API endpoint to calculate
 // the ENR value of a node given its private key,ip address and port.
+//
+// lint:nopanic -- Tooling allowed to panic.
 package main
 
 import (
@@ -10,9 +12,9 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/libp2p/go-libp2p/core/crypto"
-	ecdsaprysm "github.com/prysmaticlabs/prysm/v4/crypto/ecdsa"
-	"github.com/prysmaticlabs/prysm/v4/io/file"
-	_ "github.com/prysmaticlabs/prysm/v4/runtime/maxprocs"
+	ecdsaprysm "github.com/prysmaticlabs/prysm/v5/crypto/ecdsa"
+	"github.com/prysmaticlabs/prysm/v5/io/file"
+	_ "github.com/prysmaticlabs/prysm/v5/runtime/maxprocs"
 	log "github.com/sirupsen/logrus"
 )
 

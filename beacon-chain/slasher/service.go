@@ -6,20 +6,22 @@ package slasher
 
 import (
 	"context"
+	"sync"
 	"time"
 
-	"github.com/prysmaticlabs/prysm/v4/async/event"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/blockchain"
-	statefeed "github.com/prysmaticlabs/prysm/v4/beacon-chain/core/feed/state"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/db"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/operations/slashings"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/startup"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state/stategen"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/sync"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/time/slots"
+	"github.com/prysmaticlabs/prysm/v5/async/event"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
+	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/slashings"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/slasher/types"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stategen"
+	beaconChainSync "github.com/prysmaticlabs/prysm/v5/beacon-chain/sync"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
 const (
@@ -38,17 +40,8 @@ type ServiceConfig struct {
 	StateGen                stategen.StateManager
 	SlashingPoolInserter    slashings.PoolInserter
 	HeadStateFetcher        blockchain.HeadFetcher
-	SyncChecker             sync.Checker
+	SyncChecker             beaconChainSync.Checker
 	ClockWaiter             startup.ClockWaiter
-}
-
-// SlashingChecker is an interface for defining services that the beacon node may interact with to provide slashing data.
-type SlashingChecker interface {
-	IsSlashableBlock(ctx context.Context, proposal *ethpb.SignedBeaconBlockHeader) (*ethpb.ProposerSlashing, error)
-	IsSlashableAttestation(ctx context.Context, attestation *ethpb.IndexedAttestation) ([]*ethpb.AttesterSlashing, error)
-	HighestAttestations(
-		ctx context.Context, indices []primitives.ValidatorIndex,
-	) ([]*ethpb.HighestAttestation, error)
 }
 
 // Service defining a slasher implementation as part of
@@ -56,7 +49,7 @@ type SlashingChecker interface {
 type Service struct {
 	params                         *Parameters
 	serviceCfg                     *ServiceConfig
-	indexedAttsChan                chan *ethpb.IndexedAttestation
+	indexedAttsChan                chan ethpb.IndexedAtt
 	beaconBlockHeadersChan         chan *ethpb.SignedBeaconBlockHeader
 	attsQueue                      *attestationsQueue
 	blksQueue                      *blocksQueue
@@ -66,7 +59,8 @@ type Service struct {
 	attsSlotTicker                 *slots.SlotTicker
 	blocksSlotTicker               *slots.SlotTicker
 	pruningSlotTicker              *slots.SlotTicker
-	latestEpochWrittenForValidator map[primitives.ValidatorIndex]primitives.Epoch
+	latestEpochUpdatedForValidator map[primitives.ValidatorIndex]primitives.Epoch
+	wg                             sync.WaitGroup
 }
 
 // New instantiates a new slasher from configuration values.
@@ -75,13 +69,13 @@ func New(ctx context.Context, srvCfg *ServiceConfig) (*Service, error) {
 	return &Service{
 		params:                         DefaultParams(),
 		serviceCfg:                     srvCfg,
-		indexedAttsChan:                make(chan *ethpb.IndexedAttestation, 1),
+		indexedAttsChan:                make(chan ethpb.IndexedAtt, 1),
 		beaconBlockHeadersChan:         make(chan *ethpb.SignedBeaconBlockHeader, 1),
 		attsQueue:                      newAttestationsQueue(),
 		blksQueue:                      newBlocksQueue(),
 		ctx:                            ctx,
 		cancel:                         cancel,
-		latestEpochWrittenForValidator: make(map[primitives.ValidatorIndex]primitives.Epoch),
+		latestEpochUpdatedForValidator: make(map[primitives.ValidatorIndex]primitives.Epoch),
 	}, nil
 }
 
@@ -118,29 +112,61 @@ func (s *Service) run() {
 		return
 	}
 	for _, item := range epochsByValidator {
-		s.latestEpochWrittenForValidator[item.ValidatorIndex] = item.Epoch
+		s.latestEpochUpdatedForValidator[item.ValidatorIndex] = item.Epoch
 	}
 	log.WithField("elapsed", time.Since(start)).Info(
 		"Finished retrieving last epoch written per validator",
 	)
 
-	indexedAttsChan := make(chan *ethpb.IndexedAttestation, 1)
+	indexedAttsChan := make(chan *types.WrappedIndexedAtt, 1)
 	beaconBlockHeadersChan := make(chan *ethpb.SignedBeaconBlockHeader, 1)
+
+	// This section can be totally removed once Electra is on mainnet.
+	headSlot := s.serviceCfg.HeadStateFetcher.HeadSlot()
+	headEpoch := slots.ToEpoch(headSlot)
+
+	maxPruningEpoch := primitives.Epoch(0)
+	if headEpoch >= s.params.historyLength {
+		maxPruningEpoch = headEpoch - s.params.historyLength
+	}
+
+	// For database performance reasons, database read/write operations
+	// are chunked into batches of maximum `batchSize` elements.
+	const migrationBatchSize = 100_000
+
+	err = s.serviceCfg.Database.Migrate(s.ctx, headEpoch, maxPruningEpoch, migrationBatchSize)
+	if err != nil {
+		log.WithError(err).Error("Failed to migrate slasher database")
+		return
+	}
+	// End of section that can be removed once Electra is on mainnet.
+
+	s.wg.Add(1)
 	go s.receiveAttestations(s.ctx, indexedAttsChan)
+
+	s.wg.Add(1)
 	go s.receiveBlocks(s.ctx, beaconBlockHeadersChan)
 
 	secondsPerSlot := params.BeaconConfig().SecondsPerSlot
 	s.attsSlotTicker = slots.NewSlotTicker(s.genesisTime, secondsPerSlot)
 	s.blocksSlotTicker = slots.NewSlotTicker(s.genesisTime, secondsPerSlot)
 	s.pruningSlotTicker = slots.NewSlotTicker(s.genesisTime, secondsPerSlot)
+
+	s.wg.Add(1)
 	go s.processQueuedAttestations(s.ctx, s.attsSlotTicker.C())
+
+	s.wg.Add(1)
 	go s.processQueuedBlocks(s.ctx, s.blocksSlotTicker.C())
+
+	s.wg.Add(1)
 	go s.pruneSlasherData(s.ctx, s.pruningSlotTicker.C())
 }
 
 // Stop the slasher service.
 func (s *Service) Stop() error {
 	s.cancel()
+	s.wg.Wait()
+
 	if s.attsSlotTicker != nil {
 		s.attsSlotTicker.Done()
 	}
@@ -156,8 +182,8 @@ func (s *Service) Stop() error {
 	ctx, innerCancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer innerCancel()
 	log.Info("Flushing last epoch written for each validator to disk, please wait")
-	if err := s.serviceCfg.Database.SaveLastEpochsWrittenForValidators(
-		ctx, s.latestEpochWrittenForValidator,
+	if err := s.serviceCfg.Database.SaveLastEpochWrittenForValidators(
+		ctx, s.latestEpochUpdatedForValidator,
 	); err != nil {
 		log.Error(err)
 	}

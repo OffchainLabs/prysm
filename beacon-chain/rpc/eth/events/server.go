@@ -4,19 +4,23 @@
 package events
 
 import (
-	"context"
+	"time"
 
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/blockchain"
-	opfeed "github.com/prysmaticlabs/prysm/v4/beacon-chain/core/feed/operation"
-	statefeed "github.com/prysmaticlabs/prysm/v4/beacon-chain/core/feed/state"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
+	opfeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/operation"
+	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
 )
 
-// Server defines a server implementation of the gRPC events service,
+// Server defines a server implementation of the http events service,
 // providing RPC endpoints to subscribe to events from the beacon node.
 type Server struct {
-	Ctx               context.Context
-	StateNotifier     statefeed.Notifier
-	OperationNotifier opfeed.Notifier
-	HeadFetcher       blockchain.HeadFetcher
-	ChainInfoFetcher  blockchain.ChainInfoFetcher
+	StateNotifier          statefeed.Notifier
+	OperationNotifier      opfeed.Notifier
+	HeadFetcher            blockchain.HeadFetcher
+	ChainInfoFetcher       blockchain.ChainInfoFetcher
+	TrackedValidatorsCache *cache.TrackedValidatorsCache
+	KeepAliveInterval      time.Duration
+	EventFeedDepth         int
+	EventWriteTimeout      time.Duration
 }

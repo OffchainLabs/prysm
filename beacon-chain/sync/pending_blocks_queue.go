@@ -10,21 +10,22 @@ import (
 
 	"github.com/libp2p/go-libp2p/core"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/async"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/blockchain"
-	p2ptypes "github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p/types"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/crypto/rand"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v4/encoding/ssz/equality"
-	"github.com/prysmaticlabs/prysm/v4/monitoring/tracing"
-	"github.com/prysmaticlabs/prysm/v4/time/slots"
+	"github.com/prysmaticlabs/prysm/v5/async"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
+	p2ptypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/crypto/rand"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/encoding/ssz/equality"
+	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
+	prysmTrace "github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
+	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/sirupsen/logrus"
 	"github.com/trailofbits/go-mutexasserts"
-	"go.opencensus.io/trace"
+	"go.opentelemetry.io/otel/trace"
 )
 
 var processPendingBlocksPeriod = slots.DivideSlotBy(3 /* times per slot */)
@@ -52,8 +53,11 @@ func (s *Service) processPendingBlocksQueue() {
 
 // processPendingBlocks validates, processes, and broadcasts pending blocks.
 func (s *Service) processPendingBlocks(ctx context.Context) error {
-	ctx, span := trace.StartSpan(ctx, "processPendingBlocks")
+	ctx, span := prysmTrace.StartSpan(ctx, "processPendingBlocks")
 	defer span.End()
+
+	// Remove old blocks from our expiration cache.
+	s.deleteExpiredBlocksFromCache()
 
 	// Validate pending slots before processing.
 	if err := s.validatePendingSlots(); err != nil {
@@ -63,7 +67,7 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 	// Sort slots for ordered processing.
 	sortedSlots := s.sortedPendingSlots()
 
-	span.AddAttributes(trace.Int64Attribute("numSlots", int64(len(sortedSlots))), trace.Int64Attribute("numPeers", int64(len(s.cfg.p2p.Peers().Connected()))))
+	span.SetAttributes(prysmTrace.Int64Attribute("numSlots", int64(len(sortedSlots))), prysmTrace.Int64Attribute("numPeers", int64(len(s.cfg.p2p.Peers().Connected()))))
 
 	randGen := rand.NewGenerator()
 	var parentRoots [][32]byte
@@ -96,7 +100,7 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 
 			// Skip blocks that are already being processed.
 			if s.cfg.chain.BlockBeingSynced(blkRoot) {
-				log.WithField("BlockRoot", fmt.Sprintf("%#x", blkRoot)).Info("Skipping pending block already being processed")
+				log.WithField("blockRoot", fmt.Sprintf("%#x", blkRoot)).Info("Skipping pending block already being processed")
 				continue
 			}
 
@@ -123,7 +127,6 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 			// Request parent block if not in the pending queue and not in the database.
 			isParentBlockInDB := s.cfg.beaconDB.HasBlock(ctx, parentRoot)
 			if !inPendingQueue && !isParentBlockInDB && s.hasPeer() {
-				log.WithFields(logrus.Fields{"currentSlot": b.Block().Slot(), "parentRoot": hex.EncodeToString(parentRoot[:])}).Debug("Requesting parent block")
 				parentRoots = append(parentRoots, parentRoot)
 				continue
 			}
@@ -131,11 +134,17 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 				continue
 			}
 
+			// Calculate the deadline time by adding three slots duration to the current time
+			secondsPerSlot := params.BeaconConfig().SecondsPerSlot
+			threeSlotDuration := 3 * time.Duration(secondsPerSlot) * time.Second
+			ctxWithTimeout, cancelFunction := context.WithTimeout(ctx, threeSlotDuration)
 			// Process and broadcast the block.
-			if err := s.processAndBroadcastBlock(ctx, b, blkRoot); err != nil {
-				s.handleBlockProcessingError(ctx, err, b, blkRoot)
+			if err := s.processAndBroadcastBlock(ctxWithTimeout, b, blkRoot); err != nil {
+				s.handleBlockProcessingError(ctxWithTimeout, err, b, blkRoot)
+				cancelFunction()
 				continue
 			}
+			cancelFunction()
 
 			// Remove the processed block from the queue.
 			if err := s.removeBlockFromQueue(b, blkRoot); err != nil {
@@ -149,9 +158,9 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 }
 
 // startInnerSpan starts a new tracing span for an inner loop and returns the new context and span.
-func startInnerSpan(ctx context.Context, slot primitives.Slot) (context.Context, *trace.Span) {
-	ctx, span := trace.StartSpan(ctx, "processPendingBlocks.InnerLoop")
-	span.AddAttributes(trace.Int64Attribute("slot", int64(slot))) // lint:ignore uintcast -- This conversion is OK for tracing.
+func startInnerSpan(ctx context.Context, slot primitives.Slot) (context.Context, trace.Span) {
+	ctx, span := prysmTrace.StartSpan(ctx, "processPendingBlocks.InnerLoop")
+	span.SetAttributes(prysmTrace.Int64Attribute("slot", int64(slot))) // lint:ignore uintcast -- This conversion is OK for tracing.
 	return ctx, span
 }
 
@@ -184,6 +193,8 @@ func (s *Service) hasPeer() bool {
 	return len(s.cfg.p2p.Peers().Connected()) > 0
 }
 
+var errNoPeersForPending = errors.New("no suitable peers to process pending block queue, delaying")
+
 // processAndBroadcastBlock validates, processes, and broadcasts a block.
 // part of the function is to request missing blobs from peers if the block contains kzg commitments.
 func (s *Service) processAndBroadcastBlock(ctx context.Context, b interfaces.ReadOnlySignedBeaconBlock, blkRoot [32]byte) error {
@@ -194,15 +205,22 @@ func (s *Service) processAndBroadcastBlock(ctx context.Context, b interfaces.Rea
 		}
 	}
 
-	peers := s.getBestPeers()
-	peerCount := len(peers)
-	if peerCount > 0 {
-		if err := s.requestPendingBlobs(ctx, b.Block(), blkRoot, peers[rand.NewGenerator().Int()%peerCount]); err != nil {
+	request, err := s.pendingBlobsRequestForBlock(blkRoot, b)
+	if err != nil {
+		return err
+	}
+	if len(request) > 0 {
+		peers := s.getBestPeers()
+		peerCount := len(peers)
+		if peerCount == 0 {
+			return errors.Wrapf(errNoPeersForPending, "block root=%#x", blkRoot)
+		}
+		if err := s.sendAndSaveBlobSidecars(ctx, request, peers[rand.NewGenerator().Int()%peerCount], b); err != nil {
 			return err
 		}
 	}
 
-	if err := s.cfg.chain.ReceiveBlock(ctx, b, blkRoot); err != nil {
+	if err := s.cfg.chain.ReceiveBlock(ctx, b, blkRoot, nil); err != nil {
 		return err
 	}
 
@@ -237,7 +255,7 @@ func (s *Service) getBestPeers() []core.PeerID {
 
 func (s *Service) checkIfBlockIsBad(
 	ctx context.Context,
-	span *trace.Span,
+	span trace.Span,
 	slot primitives.Slot,
 	b interfaces.ReadOnlySignedBeaconBlock,
 	blkRoot [32]byte,
@@ -265,7 +283,7 @@ func (s *Service) checkIfBlockIsBad(
 }
 
 func (s *Service) sendBatchRootRequest(ctx context.Context, roots [][32]byte, randGen *rand.Rand) error {
-	ctx, span := trace.StartSpan(ctx, "sendBatchRootRequest")
+	ctx, span := prysmTrace.StartSpan(ctx, "sendBatchRootRequest")
 	defer span.End()
 
 	roots = dedupRoots(roots)
@@ -274,6 +292,8 @@ func (s *Service) sendBatchRootRequest(ctx context.Context, roots [][32]byte, ra
 		r := roots[i]
 		if s.seenPendingBlocks[r] || s.cfg.chain.BlockBeingSynced(r) {
 			roots = append(roots[:i], roots[i+1:]...)
+		} else {
+			log.WithField("blockRoot", fmt.Sprintf("%#x", r)).Debug("Requesting block by root")
 		}
 	}
 	s.pendingQueueLock.RUnlock()
@@ -290,10 +310,12 @@ func (s *Service) sendBatchRootRequest(ctx context.Context, roots [][32]byte, ra
 	pid := bestPeers[randGen.Int()%len(bestPeers)]
 	for i := 0; i < numOfTries; i++ {
 		req := p2ptypes.BeaconBlockByRootsReq(roots)
-		if len(roots) > int(params.BeaconNetworkConfig().MaxRequestBlocks) {
-			req = roots[:params.BeaconNetworkConfig().MaxRequestBlocks]
+		currentEpoch := slots.ToEpoch(s.cfg.clock.CurrentSlot())
+		maxReqBlock := params.MaxRequestBlock(currentEpoch)
+		if uint64(len(roots)) > maxReqBlock {
+			req = roots[:maxReqBlock]
 		}
-		if err := s.sendRecentBeaconBlocksRequest(ctx, &req, pid); err != nil {
+		if err := s.sendBeaconBlocksRequest(ctx, &req, pid); err != nil {
 			tracing.AnnotateError(span, err)
 			log.WithError(err).Debug("Could not send recent block request")
 		}
@@ -430,6 +452,15 @@ func (s *Service) deleteBlockFromPendingQueue(slot primitives.Slot, b interfaces
 	}
 	delete(s.seenPendingBlocks, r)
 	return nil
+}
+
+// This method manually clears our cache so that all expired
+// entries are correctly removed.
+func (s *Service) deleteExpiredBlocksFromCache() {
+	s.pendingQueueLock.Lock()
+	defer s.pendingQueueLock.Unlock()
+
+	s.slotToPendingBlocks.DeleteExpired()
 }
 
 // Insert block to the list in the pending queue using the slot as key.

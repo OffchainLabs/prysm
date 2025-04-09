@@ -6,19 +6,16 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/eth/node"
-	validator2 "github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/prysm/validator"
-	"github.com/prysmaticlabs/prysm/v4/validator/client/iface"
-
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/golang/mock/gomock"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/eth/beacon"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/validator/client/beacon-api/mock"
+	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api/mock"
+	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
+	"go.uber.org/mock/gomock"
 )
 
 func TestValidatorStatus_Nominal(t *testing.T) {
@@ -31,20 +28,20 @@ func TestValidatorStatus_Nominal(t *testing.T) {
 
 	ctx := context.Background()
 
-	stateValidatorsProvider := mock.NewMockstateValidatorsProvider(ctrl)
+	stateValidatorsProvider := mock.NewMockStateValidatorsProvider(ctrl)
 
-	stateValidatorsProvider.EXPECT().GetStateValidators(
-		ctx,
+	stateValidatorsProvider.EXPECT().StateValidators(
+		gomock.Any(),
 		[]string{stringValidatorPubKey},
 		nil,
 		nil,
 	).Return(
-		&beacon.GetValidatorsResponse{
-			Data: []*beacon.ValidatorContainer{
+		&structs.GetValidatorsResponse{
+			Data: []*structs.ValidatorContainer{
 				{
 					Index:  "35000",
 					Status: "active_ongoing",
-					Validator: &beacon.Validator{
+					Validator: &structs.Validator{
 						Pubkey:          stringValidatorPubKey,
 						ActivationEpoch: "56",
 					},
@@ -54,10 +51,10 @@ func TestValidatorStatus_Nominal(t *testing.T) {
 		nil,
 	).Times(1)
 
-	jsonRestHandler := mock.NewMockjsonRestHandler(ctrl)
+	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	validatorClient := beaconApiValidatorClient{
 		stateValidatorsProvider: stateValidatorsProvider,
-		prysmBeaconChainCLient: prysmBeaconChainClient{
+		prysmChainClient: prysmChainClient{
 			nodeClient: &beaconApiNodeClient{
 				jsonRestHandler: jsonRestHandler,
 			},
@@ -65,13 +62,12 @@ func TestValidatorStatus_Nominal(t *testing.T) {
 	}
 
 	// Expect node version endpoint call.
-	var nodeVersionResponse node.GetVersionResponse
-	jsonRestHandler.EXPECT().GetRestJsonResponse(
-		ctx,
+	var nodeVersionResponse structs.GetVersionResponse
+	jsonRestHandler.EXPECT().Get(
+		gomock.Any(),
 		"/eth/v1/node/version",
 		&nodeVersionResponse,
 	).Return(
-		nil,
 		iface.ErrNotSupported,
 	).Times(1)
 
@@ -97,15 +93,15 @@ func TestValidatorStatus_Error(t *testing.T) {
 
 	ctx := context.Background()
 
-	stateValidatorsProvider := mock.NewMockstateValidatorsProvider(ctrl)
+	stateValidatorsProvider := mock.NewMockStateValidatorsProvider(ctrl)
 
-	stateValidatorsProvider.EXPECT().GetStateValidators(
-		ctx,
+	stateValidatorsProvider.EXPECT().StateValidators(
+		gomock.Any(),
 		gomock.Any(),
 		nil,
 		nil,
 	).Return(
-		&beacon.GetValidatorsResponse{},
+		&structs.GetValidatorsResponse{},
 		errors.New("a specific error"),
 	).Times(1)
 
@@ -139,20 +135,20 @@ func TestMultipleValidatorStatus_Nominal(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	stateValidatorsProvider := mock.NewMockstateValidatorsProvider(ctrl)
+	stateValidatorsProvider := mock.NewMockStateValidatorsProvider(ctrl)
 
-	stateValidatorsProvider.EXPECT().GetStateValidators(
-		ctx,
+	stateValidatorsProvider.EXPECT().StateValidators(
+		gomock.Any(),
 		stringValidatorsPubKey,
-		nil,
+		[]primitives.ValidatorIndex{},
 		nil,
 	).Return(
-		&beacon.GetValidatorsResponse{
-			Data: []*beacon.ValidatorContainer{
+		&structs.GetValidatorsResponse{
+			Data: []*structs.ValidatorContainer{
 				{
 					Index:  "11111",
 					Status: "active_ongoing",
-					Validator: &beacon.Validator{
+					Validator: &structs.Validator{
 						Pubkey:          "0x8000091c2ae64ee414a54c1cc1fc67dec663408bc636cb86756e0200e41a75c8f86603f104f02c856983d2783116be13",
 						ActivationEpoch: "12",
 					},
@@ -160,7 +156,7 @@ func TestMultipleValidatorStatus_Nominal(t *testing.T) {
 				{
 					Index:  "22222",
 					Status: "active_ongoing",
-					Validator: &beacon.Validator{
+					Validator: &structs.Validator{
 						Pubkey:          "0x8000a6c975761b488bdb0dfba4ed37c0d97d6e6b968562ef5c84aa9a5dfb92d8e309195004e97709077723739bf04463",
 						ActivationEpoch: "34",
 					},
@@ -170,22 +166,21 @@ func TestMultipleValidatorStatus_Nominal(t *testing.T) {
 		nil,
 	).Times(1)
 
-	jsonRestHandler := mock.NewMockjsonRestHandler(ctrl)
+	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 
 	// Expect node version endpoint call.
-	var nodeVersionResponse node.GetVersionResponse
-	jsonRestHandler.EXPECT().GetRestJsonResponse(
-		ctx,
+	var nodeVersionResponse structs.GetVersionResponse
+	jsonRestHandler.EXPECT().Get(
+		gomock.Any(),
 		"/eth/v1/node/version",
 		&nodeVersionResponse,
 	).Return(
-		nil,
 		iface.ErrNotSupported,
 	).Times(1)
 
 	validatorClient := beaconApiValidatorClient{
 		stateValidatorsProvider: stateValidatorsProvider,
-		prysmBeaconChainCLient: prysmBeaconChainClient{
+		prysmChainClient: prysmChainClient{
 			nodeClient: &beaconApiNodeClient{
 				jsonRestHandler: jsonRestHandler,
 			},
@@ -220,32 +215,23 @@ func TestMultipleValidatorStatus_Nominal(t *testing.T) {
 	assert.DeepEqual(t, &expectedValidatorStatusResponse, actualValidatorStatusResponse)
 }
 
-func TestMultipleValidatorStatus_Error(t *testing.T) {
+func TestMultipleValidatorStatus_No_Keys(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	ctx := context.Background()
-	stateValidatorsProvider := mock.NewMockstateValidatorsProvider(ctrl)
-
-	stateValidatorsProvider.EXPECT().GetStateValidators(
-		ctx,
-		gomock.Any(),
-		nil,
-		nil,
-	).Return(
-		&beacon.GetValidatorsResponse{},
-		errors.New("a specific error"),
-	).Times(1)
+	stateValidatorsProvider := mock.NewMockStateValidatorsProvider(ctrl)
 
 	validatorClient := beaconApiValidatorClient{stateValidatorsProvider: stateValidatorsProvider}
 
-	_, err := validatorClient.MultipleValidatorStatus(
+	resp, err := validatorClient.MultipleValidatorStatus(
 		ctx,
 		&ethpb.MultipleValidatorStatusRequest{
 			PublicKeys: [][]byte{},
 		},
 	)
-	require.ErrorContains(t, "failed to get validators status response", err)
+	require.NoError(t, err)
+	require.DeepEqual(t, &ethpb.MultipleValidatorStatusResponse{}, resp)
 }
 
 func TestGetValidatorsStatusResponse_Nominal_SomeActiveValidators(t *testing.T) {
@@ -270,27 +256,27 @@ func TestGetValidatorsStatusResponse_Nominal_SomeActiveValidators(t *testing.T) 
 		validatorsPubKey[i] = validatorPubKey
 	}
 
-	validatorsIndex := []int64{
+	validatorsIndex := []primitives.ValidatorIndex{
 		12345, // NOT existing
 		33333, // existing
 	}
 
 	extraStringValidatorKey := "0x80003eb1e78ffdea6c878026b7074f84aaa16536c8e1960a652e817c848e7ccb051087f837b7d2bb6773cd9705601ede"
 
-	stateValidatorsProvider := mock.NewMockstateValidatorsProvider(ctrl)
+	stateValidatorsProvider := mock.NewMockStateValidatorsProvider(ctrl)
 
-	stateValidatorsProvider.EXPECT().GetStateValidators(
-		ctx,
+	stateValidatorsProvider.EXPECT().StateValidators(
+		gomock.Any(),
 		stringValidatorsPubKey,
 		validatorsIndex,
 		nil,
 	).Return(
-		&beacon.GetValidatorsResponse{
-			Data: []*beacon.ValidatorContainer{
+		&structs.GetValidatorsResponse{
+			Data: []*structs.ValidatorContainer{
 				{
 					Index:  "11111",
 					Status: "active_ongoing",
-					Validator: &beacon.Validator{
+					Validator: &structs.Validator{
 						Pubkey:          "0x8000091c2ae64ee414a54c1cc1fc67dec663408bc636cb86756e0200e41a75c8f86603f104f02c856983d2783116be13",
 						ActivationEpoch: "12",
 					},
@@ -298,7 +284,7 @@ func TestGetValidatorsStatusResponse_Nominal_SomeActiveValidators(t *testing.T) 
 				{
 					Index:  "22222",
 					Status: "active_exiting",
-					Validator: &beacon.Validator{
+					Validator: &structs.Validator{
 						Pubkey:          "0x800010c20716ef4264a6d93b3873a008ece58fb9312ac2cc3b0ccc40aedb050f2038281e6a92242a35476af9903c7919",
 						ActivationEpoch: "34",
 					},
@@ -306,7 +292,7 @@ func TestGetValidatorsStatusResponse_Nominal_SomeActiveValidators(t *testing.T) 
 				{
 					Index:  "33333",
 					Status: "active_ongoing",
-					Validator: &beacon.Validator{
+					Validator: &structs.Validator{
 						Pubkey:          extraStringValidatorKey,
 						ActivationEpoch: "56",
 					},
@@ -314,7 +300,7 @@ func TestGetValidatorsStatusResponse_Nominal_SomeActiveValidators(t *testing.T) 
 				{
 					Index:  "40000",
 					Status: "pending_queued",
-					Validator: &beacon.Validator{
+					Validator: &structs.Validator{
 						Pubkey:          "0x8000a6c975761b488bdb0dfba4ed37c0d97d6e6b968562ef5c84aa9a5dfb92d8e309195004e97709077723739bf04463",
 						ActivationEpoch: fmt.Sprintf("%d", params.BeaconConfig().FarFutureEpoch),
 					},
@@ -322,7 +308,7 @@ func TestGetValidatorsStatusResponse_Nominal_SomeActiveValidators(t *testing.T) 
 				{
 					Index:  "50000",
 					Status: "pending_queued",
-					Validator: &beacon.Validator{
+					Validator: &structs.Validator{
 						Pubkey:          "0x8000ab56b051f9d8f31c687528c6e91c9b98e4c3a241e752f9ccfbea7c5a7fbbd272bdf2c0a7e52ce7e0b57693df364c",
 						ActivationEpoch: fmt.Sprintf("%d", params.BeaconConfig().FarFutureEpoch),
 					},
@@ -332,34 +318,32 @@ func TestGetValidatorsStatusResponse_Nominal_SomeActiveValidators(t *testing.T) 
 		nil,
 	).Times(1)
 
-	jsonRestHandler := mock.NewMockjsonRestHandler(ctrl)
+	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 
 	// Expect node version endpoint call.
-	var nodeVersionResponse node.GetVersionResponse
-	jsonRestHandler.EXPECT().GetRestJsonResponse(
-		ctx,
+	var nodeVersionResponse structs.GetVersionResponse
+	jsonRestHandler.EXPECT().Get(
+		gomock.Any(),
 		"/eth/v1/node/version",
 		&nodeVersionResponse,
 	).Return(
 		nil,
-		nil,
 	).SetArg(
 		2,
-		node.GetVersionResponse{Data: &node.Version{Version: "prysm/v0.0.1"}},
+		structs.GetVersionResponse{Data: &structs.Version{Version: "prysm/v0.0.1"}},
 	).Times(1)
 
-	var validatorCountResponse validator2.ValidatorCountResponse
-	jsonRestHandler.EXPECT().GetRestJsonResponse(
-		ctx,
+	var validatorCountResponse structs.GetValidatorCountResponse
+	jsonRestHandler.EXPECT().Get(
+		gomock.Any(),
 		"/eth/v1/beacon/states/head/validator_count?",
 		&validatorCountResponse,
 	).Return(
 		nil,
-		nil,
 	).SetArg(
 		2,
-		validator2.ValidatorCountResponse{
-			Data: []*validator2.ValidatorCount{
+		structs.GetValidatorCountResponse{
+			Data: []*structs.ValidatorCount{
 				{
 					Status: "active",
 					Count:  "50001",
@@ -435,14 +419,14 @@ func TestGetValidatorsStatusResponse_Nominal_SomeActiveValidators(t *testing.T) 
 
 	validatorClient := beaconApiValidatorClient{
 		stateValidatorsProvider: stateValidatorsProvider,
-		prysmBeaconChainCLient: prysmBeaconChainClient{
+		prysmChainClient: prysmChainClient{
 			nodeClient: &beaconApiNodeClient{
 				jsonRestHandler: jsonRestHandler,
 			},
 			jsonRestHandler: jsonRestHandler,
 		},
 	}
-	actualValidatorsPubKey, actualValidatorsIndex, actualValidatorsStatusResponse, err := validatorClient.getValidatorsStatusResponse(ctx, validatorsPubKey, validatorsIndex)
+	actualValidatorsPubKey, actualValidatorsIndex, actualValidatorsStatusResponse, err := validatorClient.validatorsStatusResponse(ctx, validatorsPubKey, validatorsIndex)
 
 	require.NoError(t, err)
 	assert.DeepEqual(t, wantedValidatorsPubKey, actualValidatorsPubKey)
@@ -459,20 +443,20 @@ func TestGetValidatorsStatusResponse_Nominal_NoActiveValidators(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	stateValidatorsProvider := mock.NewMockstateValidatorsProvider(ctrl)
+	stateValidatorsProvider := mock.NewMockStateValidatorsProvider(ctrl)
 
-	stateValidatorsProvider.EXPECT().GetStateValidators(
-		ctx,
+	stateValidatorsProvider.EXPECT().StateValidators(
+		gomock.Any(),
 		[]string{stringValidatorPubKey},
 		nil,
 		nil,
 	).Return(
-		&beacon.GetValidatorsResponse{
-			Data: []*beacon.ValidatorContainer{
+		&structs.GetValidatorsResponse{
+			Data: []*structs.ValidatorContainer{
 				{
 					Index:  "40000",
 					Status: "pending_queued",
-					Validator: &beacon.Validator{
+					Validator: &structs.Validator{
 						Pubkey:          "0x8000a6c975761b488bdb0dfba4ed37c0d97d6e6b968562ef5c84aa9a5dfb92d8e309195004e97709077723739bf04463",
 						ActivationEpoch: fmt.Sprintf("%d", params.BeaconConfig().FarFutureEpoch),
 					},
@@ -482,16 +466,15 @@ func TestGetValidatorsStatusResponse_Nominal_NoActiveValidators(t *testing.T) {
 		nil,
 	).Times(1)
 
-	jsonRestHandler := mock.NewMockjsonRestHandler(ctrl)
+	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 
 	// Expect node version endpoint call.
-	var nodeVersionResponse node.GetVersionResponse
-	jsonRestHandler.EXPECT().GetRestJsonResponse(
-		ctx,
+	var nodeVersionResponse structs.GetVersionResponse
+	jsonRestHandler.EXPECT().Get(
+		gomock.Any(),
 		"/eth/v1/node/version",
 		&nodeVersionResponse,
 	).Return(
-		nil,
 		iface.ErrNotSupported,
 	).Times(1)
 
@@ -506,14 +489,14 @@ func TestGetValidatorsStatusResponse_Nominal_NoActiveValidators(t *testing.T) {
 
 	validatorClient := beaconApiValidatorClient{
 		stateValidatorsProvider: stateValidatorsProvider,
-		prysmBeaconChainCLient: prysmBeaconChainClient{
+		prysmChainClient: prysmChainClient{
 			nodeClient: &beaconApiNodeClient{
 				jsonRestHandler: jsonRestHandler,
 			},
 			jsonRestHandler: jsonRestHandler,
 		},
 	}
-	actualValidatorsPubKey, actualValidatorsIndex, actualValidatorsStatusResponse, err := validatorClient.getValidatorsStatusResponse(ctx, wantedValidatorsPubKey, nil)
+	actualValidatorsPubKey, actualValidatorsIndex, actualValidatorsStatusResponse, err := validatorClient.validatorsStatusResponse(ctx, wantedValidatorsPubKey, nil)
 
 	require.NoError(t, err)
 	require.NoError(t, err)
@@ -525,11 +508,11 @@ func TestGetValidatorsStatusResponse_Nominal_NoActiveValidators(t *testing.T) {
 type getStateValidatorsInterface struct {
 	// Inputs
 	inputStringPubKeys []string
-	inputIndexes       []int64
+	inputIndexes       []primitives.ValidatorIndex
 	inputStatuses      []string
 
 	// Outputs
-	outputStateValidatorsResponseJson *beacon.GetValidatorsResponse
+	outputStateValidatorsResponseJson *structs.GetValidatorsResponse
 	outputErr                         error
 }
 
@@ -543,7 +526,7 @@ func TestValidatorStatusResponse_InvalidData(t *testing.T) {
 
 		// Inputs
 		inputPubKeys                     [][]byte
-		inputIndexes                     []int64
+		inputIndexes                     []primitives.ValidatorIndex
 		inputGetStateValidatorsInterface getStateValidatorsInterface
 		validatorCountCalled             int
 
@@ -556,7 +539,7 @@ func TestValidatorStatusResponse_InvalidData(t *testing.T) {
 			inputIndexes: nil,
 			inputGetStateValidatorsInterface: getStateValidatorsInterface{
 				inputStringPubKeys:                []string{stringPubKey},
-				outputStateValidatorsResponseJson: &beacon.GetValidatorsResponse{},
+				outputStateValidatorsResponseJson: &structs.GetValidatorsResponse{},
 				outputErr:                         errors.New("a specific error"),
 			},
 			outputErrMessage: "failed to get state validators",
@@ -571,11 +554,11 @@ func TestValidatorStatusResponse_InvalidData(t *testing.T) {
 				inputIndexes:       nil,
 				inputStatuses:      nil,
 
-				outputStateValidatorsResponseJson: &beacon.GetValidatorsResponse{
-					Data: []*beacon.ValidatorContainer{
+				outputStateValidatorsResponseJson: &structs.GetValidatorsResponse{
+					Data: []*structs.ValidatorContainer{
 						{
 							Index: "0",
-							Validator: &beacon.Validator{
+							Validator: &structs.Validator{
 								Pubkey: "NotAPublicKey",
 							},
 						},
@@ -597,11 +580,11 @@ func TestValidatorStatusResponse_InvalidData(t *testing.T) {
 				inputIndexes:       nil,
 				inputStatuses:      nil,
 
-				outputStateValidatorsResponseJson: &beacon.GetValidatorsResponse{
-					Data: []*beacon.ValidatorContainer{
+				outputStateValidatorsResponseJson: &structs.GetValidatorsResponse{
+					Data: []*structs.ValidatorContainer{
 						{
 							Index: "NotAnIndex",
-							Validator: &beacon.Validator{
+							Validator: &structs.Validator{
 								Pubkey: stringPubKey,
 							},
 						},
@@ -622,12 +605,12 @@ func TestValidatorStatusResponse_InvalidData(t *testing.T) {
 				inputIndexes:       nil,
 				inputStatuses:      nil,
 
-				outputStateValidatorsResponseJson: &beacon.GetValidatorsResponse{
-					Data: []*beacon.ValidatorContainer{
+				outputStateValidatorsResponseJson: &structs.GetValidatorsResponse{
+					Data: []*structs.ValidatorContainer{
 						{
 							Index:  "12345",
 							Status: "NotAStatus",
-							Validator: &beacon.Validator{
+							Validator: &structs.Validator{
 								Pubkey: stringPubKey,
 							},
 						},
@@ -648,12 +631,12 @@ func TestValidatorStatusResponse_InvalidData(t *testing.T) {
 				inputIndexes:       nil,
 				inputStatuses:      nil,
 
-				outputStateValidatorsResponseJson: &beacon.GetValidatorsResponse{
-					Data: []*beacon.ValidatorContainer{
+				outputStateValidatorsResponseJson: &structs.GetValidatorsResponse{
+					Data: []*structs.ValidatorContainer{
 						{
 							Index:  "12345",
 							Status: "active_ongoing",
-							Validator: &beacon.Validator{
+							Validator: &structs.Validator{
 								Pubkey:          stringPubKey,
 								ActivationEpoch: "NotAnEpoch",
 							},
@@ -690,8 +673,8 @@ func TestValidatorStatusResponse_InvalidData(t *testing.T) {
 				inputIndexes:       nil,
 				inputStatuses:      nil,
 
-				outputStateValidatorsResponseJson: &beacon.GetValidatorsResponse{
-					Data: []*beacon.ValidatorContainer{
+				outputStateValidatorsResponseJson: &structs.GetValidatorsResponse{
+					Data: []*structs.ValidatorContainer{
 						{
 							Index: "NotAnIndex",
 						},
@@ -711,9 +694,9 @@ func TestValidatorStatusResponse_InvalidData(t *testing.T) {
 				defer ctrl.Finish()
 
 				ctx := context.Background()
-				stateValidatorsProvider := mock.NewMockstateValidatorsProvider(ctrl)
-				stateValidatorsProvider.EXPECT().GetStateValidators(
-					ctx,
+				stateValidatorsProvider := mock.NewMockStateValidatorsProvider(ctrl)
+				stateValidatorsProvider.EXPECT().StateValidators(
+					gomock.Any(),
 					testCase.inputGetStateValidatorsInterface.inputStringPubKeys,
 					testCase.inputGetStateValidatorsInterface.inputIndexes,
 					testCase.inputGetStateValidatorsInterface.inputStatuses,
@@ -722,22 +705,21 @@ func TestValidatorStatusResponse_InvalidData(t *testing.T) {
 					testCase.inputGetStateValidatorsInterface.outputErr,
 				).Times(1)
 
-				jsonRestHandler := mock.NewMockjsonRestHandler(ctrl)
+				jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 
 				// Expect node version endpoint call.
-				var nodeVersionResponse node.GetVersionResponse
-				jsonRestHandler.EXPECT().GetRestJsonResponse(
-					ctx,
+				var nodeVersionResponse structs.GetVersionResponse
+				jsonRestHandler.EXPECT().Get(
+					gomock.Any(),
 					"/eth/v1/node/version",
 					&nodeVersionResponse,
 				).Return(
-					nil,
 					iface.ErrNotSupported,
 				).Times(testCase.validatorCountCalled)
 
 				validatorClient := beaconApiValidatorClient{
 					stateValidatorsProvider: stateValidatorsProvider,
-					prysmBeaconChainCLient: prysmBeaconChainClient{
+					prysmChainClient: prysmChainClient{
 						nodeClient: &beaconApiNodeClient{
 							jsonRestHandler: jsonRestHandler,
 						},
@@ -745,7 +727,7 @@ func TestValidatorStatusResponse_InvalidData(t *testing.T) {
 					},
 				}
 
-				_, _, _, err := validatorClient.getValidatorsStatusResponse(
+				_, _, _, err := validatorClient.validatorsStatusResponse(
 					ctx,
 					testCase.inputPubKeys,
 					testCase.inputIndexes,

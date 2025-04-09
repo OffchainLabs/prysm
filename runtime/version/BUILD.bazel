@@ -7,7 +7,7 @@ go_library(
         "metrics.go",
         "version.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v4/runtime/version",
+    importpath = "github.com/prysmaticlabs/prysm/v5/runtime/version",
     visibility = ["//visibility:public"],
     x_defs = {
         "gitCommit": "{STABLE_GIT_COMMIT}",

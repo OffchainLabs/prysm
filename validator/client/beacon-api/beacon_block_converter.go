@@ -6,24 +6,24 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/apimiddleware"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	enginev1 "github.com/prysmaticlabs/prysm/v4/proto/engine/v1"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
-type beaconBlockConverter interface {
-	ConvertRESTPhase0BlockToProto(block *apimiddleware.BeaconBlockJson) (*ethpb.BeaconBlock, error)
-	ConvertRESTAltairBlockToProto(block *apimiddleware.BeaconBlockAltairJson) (*ethpb.BeaconBlockAltair, error)
-	ConvertRESTBellatrixBlockToProto(block *apimiddleware.BeaconBlockBellatrixJson) (*ethpb.BeaconBlockBellatrix, error)
-	ConvertRESTCapellaBlockToProto(block *apimiddleware.BeaconBlockCapellaJson) (*ethpb.BeaconBlockCapella, error)
+type BeaconBlockConverter interface {
+	ConvertRESTPhase0BlockToProto(block *structs.BeaconBlock) (*ethpb.BeaconBlock, error)
+	ConvertRESTAltairBlockToProto(block *structs.BeaconBlockAltair) (*ethpb.BeaconBlockAltair, error)
+	ConvertRESTBellatrixBlockToProto(block *structs.BeaconBlockBellatrix) (*ethpb.BeaconBlockBellatrix, error)
+	ConvertRESTCapellaBlockToProto(block *structs.BeaconBlockCapella) (*ethpb.BeaconBlockCapella, error)
 }
 
 type beaconApiBeaconBlockConverter struct{}
 
 // ConvertRESTPhase0BlockToProto converts a Phase0 JSON beacon block to its protobuf equivalent
-func (c beaconApiBeaconBlockConverter) ConvertRESTPhase0BlockToProto(block *apimiddleware.BeaconBlockJson) (*ethpb.BeaconBlock, error) {
+func (c beaconApiBeaconBlockConverter) ConvertRESTPhase0BlockToProto(block *structs.BeaconBlock) (*ethpb.BeaconBlock, error) {
 	blockSlot, err := strconv.ParseUint(block.Slot, 10, 64)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to parse slot `%s`", block.Slot)
@@ -125,19 +125,19 @@ func (c beaconApiBeaconBlockConverter) ConvertRESTPhase0BlockToProto(block *apim
 }
 
 // ConvertRESTAltairBlockToProto converts an Altair JSON beacon block to its protobuf equivalent
-func (c beaconApiBeaconBlockConverter) ConvertRESTAltairBlockToProto(block *apimiddleware.BeaconBlockAltairJson) (*ethpb.BeaconBlockAltair, error) {
+func (c beaconApiBeaconBlockConverter) ConvertRESTAltairBlockToProto(block *structs.BeaconBlockAltair) (*ethpb.BeaconBlockAltair, error) {
 	if block.Body == nil {
 		return nil, errors.New("block body is nil")
 	}
 
 	// Call convertRESTPhase0BlockToProto to set the phase0 fields because all the error handling and the heavy lifting
 	// has already been done
-	phase0Block, err := c.ConvertRESTPhase0BlockToProto(&apimiddleware.BeaconBlockJson{
+	phase0Block, err := c.ConvertRESTPhase0BlockToProto(&structs.BeaconBlock{
 		Slot:          block.Slot,
 		ProposerIndex: block.ProposerIndex,
 		ParentRoot:    block.ParentRoot,
 		StateRoot:     block.StateRoot,
-		Body: &apimiddleware.BeaconBlockBodyJson{
+		Body: &structs.BeaconBlockBody{
 			RandaoReveal:      block.Body.RandaoReveal,
 			Eth1Data:          block.Body.Eth1Data,
 			Graffiti:          block.Body.Graffiti,
@@ -189,19 +189,19 @@ func (c beaconApiBeaconBlockConverter) ConvertRESTAltairBlockToProto(block *apim
 }
 
 // ConvertRESTBellatrixBlockToProto converts a Bellatrix JSON beacon block to its protobuf equivalent
-func (c beaconApiBeaconBlockConverter) ConvertRESTBellatrixBlockToProto(block *apimiddleware.BeaconBlockBellatrixJson) (*ethpb.BeaconBlockBellatrix, error) {
+func (c beaconApiBeaconBlockConverter) ConvertRESTBellatrixBlockToProto(block *structs.BeaconBlockBellatrix) (*ethpb.BeaconBlockBellatrix, error) {
 	if block.Body == nil {
 		return nil, errors.New("block body is nil")
 	}
 
 	// Call convertRESTAltairBlockToProto to set the altair fields because all the error handling and the heavy lifting
 	// has already been done
-	altairBlock, err := c.ConvertRESTAltairBlockToProto(&apimiddleware.BeaconBlockAltairJson{
+	altairBlock, err := c.ConvertRESTAltairBlockToProto(&structs.BeaconBlockAltair{
 		Slot:          block.Slot,
 		ProposerIndex: block.ProposerIndex,
 		ParentRoot:    block.ParentRoot,
 		StateRoot:     block.StateRoot,
-		Body: &apimiddleware.BeaconBlockBodyAltairJson{
+		Body: &structs.BeaconBlockBodyAltair{
 			RandaoReveal:      block.Body.RandaoReveal,
 			Eth1Data:          block.Body.Eth1Data,
 			Graffiti:          block.Body.Graffiti,
@@ -266,9 +266,9 @@ func (c beaconApiBeaconBlockConverter) ConvertRESTBellatrixBlockToProto(block *a
 		return nil, errors.Wrapf(err, "failed to parse execution payload gas used `%s`", block.Body.ExecutionPayload.GasUsed)
 	}
 
-	timestamp, err := strconv.ParseUint(block.Body.ExecutionPayload.TimeStamp, 10, 64)
+	timestamp, err := strconv.ParseUint(block.Body.ExecutionPayload.Timestamp, 10, 64)
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to parse execution payload timestamp `%s`", block.Body.ExecutionPayload.TimeStamp)
+		return nil, errors.Wrapf(err, "failed to parse execution payload timestamp `%s`", block.Body.ExecutionPayload.Timestamp)
 	}
 
 	extraData, err := hexutil.Decode(block.Body.ExecutionPayload.ExtraData)
@@ -327,7 +327,7 @@ func (c beaconApiBeaconBlockConverter) ConvertRESTBellatrixBlockToProto(block *a
 }
 
 // ConvertRESTCapellaBlockToProto converts a Capella JSON beacon block to its protobuf equivalent
-func (c beaconApiBeaconBlockConverter) ConvertRESTCapellaBlockToProto(block *apimiddleware.BeaconBlockCapellaJson) (*ethpb.BeaconBlockCapella, error) {
+func (c beaconApiBeaconBlockConverter) ConvertRESTCapellaBlockToProto(block *structs.BeaconBlockCapella) (*ethpb.BeaconBlockCapella, error) {
 	if block.Body == nil {
 		return nil, errors.New("block body is nil")
 	}
@@ -338,12 +338,12 @@ func (c beaconApiBeaconBlockConverter) ConvertRESTCapellaBlockToProto(block *api
 
 	// Call convertRESTBellatrixBlockToProto to set the bellatrix fields because all the error handling and the heavy
 	// lifting has already been done
-	bellatrixBlock, err := c.ConvertRESTBellatrixBlockToProto(&apimiddleware.BeaconBlockBellatrixJson{
+	bellatrixBlock, err := c.ConvertRESTBellatrixBlockToProto(&structs.BeaconBlockBellatrix{
 		Slot:          block.Slot,
 		ProposerIndex: block.ProposerIndex,
 		ParentRoot:    block.ParentRoot,
 		StateRoot:     block.StateRoot,
-		Body: &apimiddleware.BeaconBlockBodyBellatrixJson{
+		Body: &structs.BeaconBlockBodyBellatrix{
 			RandaoReveal:      block.Body.RandaoReveal,
 			Eth1Data:          block.Body.Eth1Data,
 			Graffiti:          block.Body.Graffiti,
@@ -353,7 +353,7 @@ func (c beaconApiBeaconBlockConverter) ConvertRESTCapellaBlockToProto(block *api
 			Deposits:          block.Body.Deposits,
 			VoluntaryExits:    block.Body.VoluntaryExits,
 			SyncAggregate:     block.Body.SyncAggregate,
-			ExecutionPayload: &apimiddleware.ExecutionPayloadJson{
+			ExecutionPayload: &structs.ExecutionPayload{
 				ParentHash:    block.Body.ExecutionPayload.ParentHash,
 				FeeRecipient:  block.Body.ExecutionPayload.FeeRecipient,
 				StateRoot:     block.Body.ExecutionPayload.StateRoot,
@@ -363,7 +363,7 @@ func (c beaconApiBeaconBlockConverter) ConvertRESTCapellaBlockToProto(block *api
 				BlockNumber:   block.Body.ExecutionPayload.BlockNumber,
 				GasLimit:      block.Body.ExecutionPayload.GasLimit,
 				GasUsed:       block.Body.ExecutionPayload.GasUsed,
-				TimeStamp:     block.Body.ExecutionPayload.TimeStamp,
+				Timestamp:     block.Body.ExecutionPayload.Timestamp,
 				ExtraData:     block.Body.ExecutionPayload.ExtraData,
 				BaseFeePerGas: block.Body.ExecutionPayload.BaseFeePerGas,
 				BlockHash:     block.Body.ExecutionPayload.BlockHash,

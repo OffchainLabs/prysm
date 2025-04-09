@@ -15,7 +15,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 // TestDataPath returns a path to an asset in the testdata directory. It knows

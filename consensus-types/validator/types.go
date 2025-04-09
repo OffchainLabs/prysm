@@ -1,13 +1,13 @@
 package validator
 
 import (
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 )
 
-type ValidatorStatus int8
+type Status int8
 
 const (
-	PendingInitialized ValidatorStatus = iota
+	PendingInitialized Status = iota
 	PendingQueued
 	ActiveOngoing
 	ActiveExiting
@@ -22,7 +22,7 @@ const (
 	Withdrawal
 )
 
-func (s ValidatorStatus) String() string {
+func (s Status) String() string {
 	switch s {
 	case PendingInitialized:
 		return "pending_initialized"
@@ -55,7 +55,7 @@ func (s ValidatorStatus) String() string {
 	}
 }
 
-func ValidatorStatusFromString(s string) (bool, ValidatorStatus) {
+func StatusFromString(s string) (bool, Status) {
 	switch s {
 	case "pending_initialized":
 		return true, PendingInitialized

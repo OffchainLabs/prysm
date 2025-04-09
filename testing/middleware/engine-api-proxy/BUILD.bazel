@@ -6,7 +6,7 @@ go_library(
         "options.go",
         "proxy.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v4/testing/middleware/engine-api-proxy",
+    importpath = "github.com/prysmaticlabs/prysm/v5/testing/middleware/engine-api-proxy",
     visibility = ["//visibility:public"],
     deps = [
         "//network:go_default_library",

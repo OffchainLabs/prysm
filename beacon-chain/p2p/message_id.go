@@ -2,13 +2,13 @@ package p2p
 
 import (
 	pubsubpb "github.com/libp2p/go-libp2p-pubsub/pb"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p/encoder"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/crypto/hash"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v4/math"
-	"github.com/prysmaticlabs/prysm/v4/network/forks"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/encoder"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/crypto/hash"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/math"
+	"github.com/prysmaticlabs/prysm/v5/network/forks"
 )
 
 // MsgID is a content addressable ID function.
@@ -29,7 +29,7 @@ func MsgID(genesisValidatorsRoot []byte, pmsg *pubsubpb.Message) string {
 		// never be hit.
 		msg := make([]byte, 20)
 		copy(msg, "invalid")
-		return string(msg)
+		return bytesutil.UnsafeCastToString(msg)
 	}
 	digest, err := ExtractGossipDigest(*pmsg.Topic)
 	if err != nil {
@@ -37,7 +37,7 @@ func MsgID(genesisValidatorsRoot []byte, pmsg *pubsubpb.Message) string {
 		// never be hit.
 		msg := make([]byte, 20)
 		copy(msg, "invalid")
-		return string(msg)
+		return bytesutil.UnsafeCastToString(msg)
 	}
 	_, fEpoch, err := forks.RetrieveForkDataFromDigest(digest, genesisValidatorsRoot)
 	if err != nil {
@@ -45,20 +45,20 @@ func MsgID(genesisValidatorsRoot []byte, pmsg *pubsubpb.Message) string {
 		// never be hit.
 		msg := make([]byte, 20)
 		copy(msg, "invalid")
-		return string(msg)
+		return bytesutil.UnsafeCastToString(msg)
 	}
 	if fEpoch >= params.BeaconConfig().AltairForkEpoch {
 		return postAltairMsgID(pmsg, fEpoch)
 	}
-	decodedData, err := encoder.DecodeSnappy(pmsg.Data, params.BeaconNetworkConfig().GossipMaxSize)
+	decodedData, err := encoder.DecodeSnappy(pmsg.Data, params.BeaconConfig().MaxPayloadSize)
 	if err != nil {
-		combinedData := append(params.BeaconNetworkConfig().MessageDomainInvalidSnappy[:], pmsg.Data...)
+		combinedData := append(params.BeaconConfig().MessageDomainInvalidSnappy[:], pmsg.Data...)
 		h := hash.Hash(combinedData)
-		return string(h[:20])
+		return bytesutil.UnsafeCastToString(h[:20])
 	}
-	combinedData := append(params.BeaconNetworkConfig().MessageDomainValidSnappy[:], decodedData...)
+	combinedData := append(params.BeaconConfig().MessageDomainValidSnappy[:], decodedData...)
 	h := hash.Hash(combinedData)
-	return string(h[:20])
+	return bytesutil.UnsafeCastToString(h[:20])
 }
 
 // Spec:
@@ -77,16 +77,12 @@ func postAltairMsgID(pmsg *pubsubpb.Message, fEpoch primitives.Epoch) string {
 	topicLen := len(topic)
 	topicLenBytes := bytesutil.Uint64ToBytesLittleEndian(uint64(topicLen)) // topicLen cannot be negative
 
-	// beyond Bellatrix epoch, allow 10 Mib gossip data size
-	gossipPubSubSize := params.BeaconNetworkConfig().GossipMaxSize
-	if fEpoch >= params.BeaconConfig().BellatrixForkEpoch {
-		gossipPubSubSize = params.BeaconNetworkConfig().GossipMaxSizeBellatrix
-	}
+	gossipPayloadSize := params.BeaconConfig().MaxPayloadSize
 
-	decodedData, err := encoder.DecodeSnappy(pmsg.Data, gossipPubSubSize)
+	decodedData, err := encoder.DecodeSnappy(pmsg.Data, gossipPayloadSize)
 	if err != nil {
 		totalLength, err := math.AddInt(
-			len(params.BeaconNetworkConfig().MessageDomainValidSnappy),
+			len(params.BeaconConfig().MessageDomainInvalidSnappy),
 			len(topicLenBytes),
 			topicLen,
 			len(pmsg.Data),
@@ -96,24 +92,24 @@ func postAltairMsgID(pmsg *pubsubpb.Message, fEpoch primitives.Epoch) string {
 			// should never happen
 			msg := make([]byte, 20)
 			copy(msg, "invalid")
-			return string(msg)
+			return bytesutil.UnsafeCastToString(msg)
 		}
-		if uint64(totalLength) > gossipPubSubSize {
+		if uint64(totalLength) > gossipPayloadSize {
 			// this should never happen
 			msg := make([]byte, 20)
 			copy(msg, "invalid")
-			return string(msg)
+			return bytesutil.UnsafeCastToString(msg)
 		}
 		combinedData := make([]byte, 0, totalLength)
-		combinedData = append(combinedData, params.BeaconNetworkConfig().MessageDomainInvalidSnappy[:]...)
+		combinedData = append(combinedData, params.BeaconConfig().MessageDomainInvalidSnappy[:]...)
 		combinedData = append(combinedData, topicLenBytes...)
 		combinedData = append(combinedData, topic...)
 		combinedData = append(combinedData, pmsg.Data...)
 		h := hash.Hash(combinedData)
-		return string(h[:20])
+		return bytesutil.UnsafeCastToString(h[:20])
 	}
 	totalLength, err := math.AddInt(
-		len(params.BeaconNetworkConfig().MessageDomainValidSnappy),
+		len(params.BeaconConfig().MessageDomainValidSnappy),
 		len(topicLenBytes),
 		topicLen,
 		len(decodedData),
@@ -123,13 +119,13 @@ func postAltairMsgID(pmsg *pubsubpb.Message, fEpoch primitives.Epoch) string {
 		// should never happen
 		msg := make([]byte, 20)
 		copy(msg, "invalid")
-		return string(msg)
+		return bytesutil.UnsafeCastToString(msg)
 	}
 	combinedData := make([]byte, 0, totalLength)
-	combinedData = append(combinedData, params.BeaconNetworkConfig().MessageDomainValidSnappy[:]...)
+	combinedData = append(combinedData, params.BeaconConfig().MessageDomainValidSnappy[:]...)
 	combinedData = append(combinedData, topicLenBytes...)
 	combinedData = append(combinedData, topic...)
 	combinedData = append(combinedData, decodedData...)
 	h := hash.Hash(combinedData)
-	return string(h[:20])
+	return bytesutil.UnsafeCastToString(h[:20])
 }

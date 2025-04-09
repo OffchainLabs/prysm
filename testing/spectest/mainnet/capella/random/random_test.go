@@ -3,7 +3,7 @@ package random
 import (
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v4/testing/spectest/shared/capella/sanity"
+	"github.com/prysmaticlabs/prysm/v5/testing/spectest/shared/capella/sanity"
 )
 
 func TestMainnet_Capella_Random(t *testing.T) {

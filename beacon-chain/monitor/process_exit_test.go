@@ -3,10 +3,10 @@ package monitor
 import (
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
@@ -43,7 +43,7 @@ func TestProcessExitsFromBlockTrackedIndices(t *testing.T) {
 	wb, err := blocks.NewBeaconBlock(block)
 	require.NoError(t, err)
 	s.processExitsFromBlock(wb)
-	require.LogsContain(t, hook, "\"Voluntary exit was included\" Slot=0 ValidatorIndex=2")
+	require.LogsContain(t, hook, "\"Voluntary exit was included\" prefix=monitor slot=0 validatorIndex=2")
 }
 
 func TestProcessExitsFromBlockUntrackedIndices(t *testing.T) {
@@ -99,7 +99,7 @@ func TestProcessExitP2PTrackedIndices(t *testing.T) {
 		Signature: make([]byte, 96),
 	}
 	s.processExit(exit)
-	require.LogsContain(t, hook, "\"Voluntary exit was processed\" ValidatorIndex=1")
+	require.LogsContain(t, hook, "\"Voluntary exit was processed\" prefix=monitor validatorIndex=1")
 }
 
 func TestProcessExitP2PUntrackedIndices(t *testing.T) {

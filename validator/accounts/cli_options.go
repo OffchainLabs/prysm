@@ -1,20 +1,21 @@
 package accounts
 
 import (
+	"io"
 	"time"
 
-	"github.com/prysmaticlabs/prysm/v4/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v4/validator/accounts/wallet"
-	"github.com/prysmaticlabs/prysm/v4/validator/keymanager"
+	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
+	"github.com/prysmaticlabs/prysm/v5/validator/accounts/wallet"
+	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
 	"google.golang.org/grpc"
 )
 
 // Option type for configuring the accounts cli manager.
-type Option func(acc *AccountsCLIManager) error
+type Option func(acc *CLIManager) error
 
 // WithWallet provides a wallet to the accounts cli manager.
 func WithWallet(wallet *wallet.Wallet) Option {
-	return func(acc *AccountsCLIManager) error {
+	return func(acc *CLIManager) error {
 		acc.wallet = wallet
 		return nil
 	}
@@ -22,7 +23,7 @@ func WithWallet(wallet *wallet.Wallet) Option {
 
 // WithKeymanager provides a keymanager to the accounts cli manager.
 func WithKeymanager(km keymanager.IKeymanager) Option {
-	return func(acc *AccountsCLIManager) error {
+	return func(acc *CLIManager) error {
 		acc.keymanager = km
 		return nil
 	}
@@ -30,23 +31,15 @@ func WithKeymanager(km keymanager.IKeymanager) Option {
 
 // WithKeymanagerType provides a keymanager to the accounts cli manager.
 func WithKeymanagerType(k keymanager.Kind) Option {
-	return func(acc *AccountsCLIManager) error {
+	return func(acc *CLIManager) error {
 		acc.keymanagerKind = k
-		return nil
-	}
-}
-
-// WithShowDepositData enables displaying deposit data in the accounts cli manager.
-func WithShowDepositData() Option {
-	return func(acc *AccountsCLIManager) error {
-		acc.showDepositData = true
 		return nil
 	}
 }
 
 // WithShowPrivateKeys enables displaying private keys in the accounts cli manager.
 func WithShowPrivateKeys() Option {
-	return func(acc *AccountsCLIManager) error {
+	return func(acc *CLIManager) error {
 		acc.showPrivateKeys = true
 		return nil
 	}
@@ -54,7 +47,7 @@ func WithShowPrivateKeys() Option {
 
 // WithListValidatorIndices enables displaying validator indices in the accounts cli manager.
 func WithListValidatorIndices() Option {
-	return func(acc *AccountsCLIManager) error {
+	return func(acc *CLIManager) error {
 		acc.listValidatorIndices = true
 		return nil
 	}
@@ -62,7 +55,7 @@ func WithListValidatorIndices() Option {
 
 // WithGRPCDialOpts adds grpc opts needed to connect to beacon nodes in the accounts cli manager.
 func WithGRPCDialOpts(opts []grpc.DialOption) Option {
-	return func(acc *AccountsCLIManager) error {
+	return func(acc *CLIManager) error {
 		acc.dialOpts = opts
 		return nil
 	}
@@ -70,7 +63,7 @@ func WithGRPCDialOpts(opts []grpc.DialOption) Option {
 
 // WithGRPCHeaders adds grpc headers used when connecting to beacon nodes in the accounts cli manager.
 func WithGRPCHeaders(headers []string) Option {
-	return func(acc *AccountsCLIManager) error {
+	return func(acc *CLIManager) error {
 		acc.grpcHeaders = headers
 		return nil
 	}
@@ -78,7 +71,7 @@ func WithGRPCHeaders(headers []string) Option {
 
 // WithBeaconRPCProvider provides a beacon node endpoint to the accounts cli manager.
 func WithBeaconRPCProvider(provider string) Option {
-	return func(acc *AccountsCLIManager) error {
+	return func(acc *CLIManager) error {
 		acc.beaconRPCProvider = provider
 		return nil
 	}
@@ -86,7 +79,7 @@ func WithBeaconRPCProvider(provider string) Option {
 
 // WithBeaconRESTApiProvider provides a beacon node REST API endpoint to the accounts cli manager.
 func WithBeaconRESTApiProvider(beaconApiEndpoint string) Option {
-	return func(acc *AccountsCLIManager) error {
+	return func(acc *CLIManager) error {
 		acc.beaconApiEndpoint = beaconApiEndpoint
 		acc.beaconApiTimeout = time.Second * 30
 		return nil
@@ -95,7 +88,7 @@ func WithBeaconRESTApiProvider(beaconApiEndpoint string) Option {
 
 // WithWalletKeyCount tracks the number of keys in a wallet.
 func WithWalletKeyCount(walletKeyCount int) Option {
-	return func(acc *AccountsCLIManager) error {
+	return func(acc *CLIManager) error {
 		acc.walletKeyCount = walletKeyCount
 		return nil
 	}
@@ -103,7 +96,7 @@ func WithWalletKeyCount(walletKeyCount int) Option {
 
 // WithDeletePublicKeys indicates whether to delete the public keys.
 func WithDeletePublicKeys(deletePublicKeys bool) Option {
-	return func(acc *AccountsCLIManager) error {
+	return func(acc *CLIManager) error {
 		acc.deletePublicKeys = deletePublicKeys
 		return nil
 	}
@@ -111,7 +104,7 @@ func WithDeletePublicKeys(deletePublicKeys bool) Option {
 
 // WithReadPasswordFile indicates whether to read the password from a file.
 func WithReadPasswordFile(readPasswordFile bool) Option {
-	return func(acc *AccountsCLIManager) error {
+	return func(acc *CLIManager) error {
 		acc.readPasswordFile = readPasswordFile
 		return nil
 	}
@@ -119,7 +112,7 @@ func WithReadPasswordFile(readPasswordFile bool) Option {
 
 // WithImportPrivateKeys indicates whether to import private keys as accounts.
 func WithImportPrivateKeys(importPrivateKeys bool) Option {
-	return func(acc *AccountsCLIManager) error {
+	return func(acc *CLIManager) error {
 		acc.importPrivateKeys = importPrivateKeys
 		return nil
 	}
@@ -127,7 +120,7 @@ func WithImportPrivateKeys(importPrivateKeys bool) Option {
 
 // WithSkipMnemonicConfirm indicates whether to skip the mnemonic confirmation.
 func WithSkipMnemonicConfirm(s bool) Option {
-	return func(acc *AccountsCLIManager) error {
+	return func(acc *CLIManager) error {
 		acc.skipMnemonicConfirm = s
 		return nil
 	}
@@ -135,7 +128,7 @@ func WithSkipMnemonicConfirm(s bool) Option {
 
 // WithMnemonicLanguage specifies the language used for the mnemonic passphrase.
 func WithMnemonicLanguage(mnemonicLanguage string) Option {
-	return func(acc *AccountsCLIManager) error {
+	return func(acc *CLIManager) error {
 		acc.mnemonicLanguage = mnemonicLanguage
 		return nil
 	}
@@ -143,7 +136,7 @@ func WithMnemonicLanguage(mnemonicLanguage string) Option {
 
 // WithPrivateKeyFile specifies the private key path.
 func WithPrivateKeyFile(privateKeyFile string) Option {
-	return func(acc *AccountsCLIManager) error {
+	return func(acc *CLIManager) error {
 		acc.privateKeyFile = privateKeyFile
 		return nil
 	}
@@ -151,7 +144,7 @@ func WithPrivateKeyFile(privateKeyFile string) Option {
 
 // WithKeysDir specifies the directory keys are read from.
 func WithKeysDir(keysDir string) Option {
-	return func(acc *AccountsCLIManager) error {
+	return func(acc *CLIManager) error {
 		acc.keysDir = keysDir
 		return nil
 	}
@@ -159,7 +152,7 @@ func WithKeysDir(keysDir string) Option {
 
 // WithPasswordFilePath specifies where the password is stored.
 func WithPasswordFilePath(passwordFilePath string) Option {
-	return func(acc *AccountsCLIManager) error {
+	return func(acc *CLIManager) error {
 		acc.passwordFilePath = passwordFilePath
 		return nil
 	}
@@ -167,7 +160,7 @@ func WithPasswordFilePath(passwordFilePath string) Option {
 
 // WithBackupsDir specifies the directory backups are written to.
 func WithBackupsDir(backupsDir string) Option {
-	return func(acc *AccountsCLIManager) error {
+	return func(acc *CLIManager) error {
 		acc.backupsDir = backupsDir
 		return nil
 	}
@@ -175,7 +168,7 @@ func WithBackupsDir(backupsDir string) Option {
 
 // WithBackupsPassword specifies the password for backups.
 func WithBackupsPassword(backupsPassword string) Option {
-	return func(acc *AccountsCLIManager) error {
+	return func(acc *CLIManager) error {
 		acc.backupsPassword = backupsPassword
 		return nil
 	}
@@ -183,7 +176,7 @@ func WithBackupsPassword(backupsPassword string) Option {
 
 // WithFilteredPubKeys adds public key strings parsed from CLI.
 func WithFilteredPubKeys(filteredPubKeys []bls.PublicKey) Option {
-	return func(acc *AccountsCLIManager) error {
+	return func(acc *CLIManager) error {
 		acc.filteredPubKeys = filteredPubKeys
 		return nil
 	}
@@ -191,7 +184,7 @@ func WithFilteredPubKeys(filteredPubKeys []bls.PublicKey) Option {
 
 // WithRawPubKeys adds raw public key bytes parsed from CLI.
 func WithRawPubKeys(rawPubKeys [][]byte) Option {
-	return func(acc *AccountsCLIManager) error {
+	return func(acc *CLIManager) error {
 		acc.rawPubKeys = rawPubKeys
 		return nil
 	}
@@ -199,14 +192,14 @@ func WithRawPubKeys(rawPubKeys [][]byte) Option {
 
 // WithFormattedPubKeys adds formatted public key strings parsed from CLI.
 func WithFormattedPubKeys(formattedPubKeys []string) Option {
-	return func(acc *AccountsCLIManager) error {
+	return func(acc *CLIManager) error {
 		acc.formattedPubKeys = formattedPubKeys
 		return nil
 	}
 }
 
 func WithExitJSONOutputPath(outputPath string) Option {
-	return func(acc *AccountsCLIManager) error {
+	return func(acc *CLIManager) error {
 		acc.exitJSONOutputPath = outputPath
 		return nil
 	}
@@ -214,7 +207,7 @@ func WithExitJSONOutputPath(outputPath string) Option {
 
 // WithWalletDir specifies the password for backups.
 func WithWalletDir(walletDir string) Option {
-	return func(acc *AccountsCLIManager) error {
+	return func(acc *CLIManager) error {
 		acc.walletDir = walletDir
 		return nil
 	}
@@ -222,7 +215,7 @@ func WithWalletDir(walletDir string) Option {
 
 // WithWalletPassword specifies the password for backups.
 func WithWalletPassword(walletPassword string) Option {
-	return func(acc *AccountsCLIManager) error {
+	return func(acc *CLIManager) error {
 		acc.walletPassword = walletPassword
 		return nil
 	}
@@ -230,7 +223,7 @@ func WithWalletPassword(walletPassword string) Option {
 
 // WithMnemonic specifies the password for backups.
 func WithMnemonic(mnemonic string) Option {
-	return func(acc *AccountsCLIManager) error {
+	return func(acc *CLIManager) error {
 		acc.mnemonic = mnemonic
 		return nil
 	}
@@ -238,7 +231,7 @@ func WithMnemonic(mnemonic string) Option {
 
 // WithMnemonic25thWord specifies the password for backups.
 func WithMnemonic25thWord(mnemonic25thWord string) Option {
-	return func(acc *AccountsCLIManager) error {
+	return func(acc *CLIManager) error {
 		acc.mnemonic25thWord = mnemonic25thWord
 		return nil
 	}
@@ -246,8 +239,16 @@ func WithMnemonic25thWord(mnemonic25thWord string) Option {
 
 // WithNumAccounts specifies the number of accounts.
 func WithNumAccounts(numAccounts int) Option {
-	return func(acc *AccountsCLIManager) error {
+	return func(acc *CLIManager) error {
 		acc.numAccounts = numAccounts
+		return nil
+	}
+}
+
+// WithCustomReader changes the default reader
+func WithCustomReader(reader io.Reader) Option {
+	return func(acc *CLIManager) error {
+		acc.inputReader = reader
 		return nil
 	}
 }

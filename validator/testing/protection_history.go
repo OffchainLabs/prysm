@@ -3,22 +3,22 @@ package testing
 import (
 	"fmt"
 
-	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v4/crypto/rand"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v4/validator/db/kv"
-	"github.com/prysmaticlabs/prysm/v4/validator/slashing-protection-history/format"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
+	"github.com/prysmaticlabs/prysm/v5/crypto/rand"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/validator/db/common"
+	"github.com/prysmaticlabs/prysm/v5/validator/slashing-protection-history/format"
 )
 
 // MockSlashingProtectionJSON creates a mock, full slashing protection JSON struct
 // using attesting and proposing histories provided.
 func MockSlashingProtectionJSON(
 	publicKeys [][fieldparams.BLSPubkeyLength]byte,
-	attestingHistories [][]*kv.AttestationRecord,
-	proposalHistories []kv.ProposalHistoryForPubkey,
+	attestingHistories [][]*common.AttestationRecord,
+	proposalHistories []common.ProposalHistoryForPubkey,
 ) (*format.EIPSlashingProtectionFormat, error) {
 	standardProtectionFormat := &format.EIPSlashingProtectionFormat{}
 	standardProtectionFormat.Metadata.GenesisValidatorsRoot = fmt.Sprintf("%#x", bytesutil.PadTo([]byte{32}, 32))
@@ -52,29 +52,29 @@ func MockSlashingProtectionJSON(
 
 // MockAttestingAndProposalHistories given a number of validators, creates mock attesting
 // and proposing histories within WEAK_SUBJECTIVITY_PERIOD bounds.
-func MockAttestingAndProposalHistories(pubkeys [][fieldparams.BLSPubkeyLength]byte) ([][]*kv.AttestationRecord, []kv.ProposalHistoryForPubkey) {
+func MockAttestingAndProposalHistories(pubkeys [][fieldparams.BLSPubkeyLength]byte) ([][]*common.AttestationRecord, []common.ProposalHistoryForPubkey) {
 	// deduplicate and transform them into our internal format.
 	numValidators := len(pubkeys)
-	attData := make([][]*kv.AttestationRecord, numValidators)
-	proposalData := make([]kv.ProposalHistoryForPubkey, numValidators)
+	attData := make([][]*common.AttestationRecord, numValidators)
+	proposalData := make([]common.ProposalHistoryForPubkey, numValidators)
 	gen := rand.NewGenerator()
 	for v := 0; v < numValidators; v++ {
 		latestTarget := primitives.Epoch(gen.Intn(int(params.BeaconConfig().WeakSubjectivityPeriod) / 1000))
-		// If 0, we change the value to 1 as the we compute source by doing (target-1)
+		// If 0, we change the value to 1 as we compute source by doing (target-1)
 		// to prevent any underflows in this setup helper.
 		if latestTarget == 0 {
 			latestTarget = 1
 		}
-		historicalAtts := make([]*kv.AttestationRecord, 0)
-		proposals := make([]kv.Proposal, 0)
+		historicalAtts := make([]*common.AttestationRecord, 0)
+		proposals := make([]common.Proposal, 0)
 		for i := primitives.Epoch(1); i < latestTarget; i++ {
 			var signingRoot [32]byte
 			signingRootStr := fmt.Sprintf("%d", i)
 			copy(signingRoot[:], signingRootStr)
-			historicalAtts = append(historicalAtts, &kv.AttestationRecord{
+			historicalAtts = append(historicalAtts, &common.AttestationRecord{
 				Source:      i - 1,
 				Target:      i,
-				SigningRoot: signingRoot,
+				SigningRoot: signingRoot[:],
 				PubKey:      pubkeys[v],
 			})
 		}
@@ -82,12 +82,12 @@ func MockAttestingAndProposalHistories(pubkeys [][fieldparams.BLSPubkeyLength]by
 			var signingRoot [32]byte
 			signingRootStr := fmt.Sprintf("%d", i)
 			copy(signingRoot[:], signingRootStr)
-			proposals = append(proposals, kv.Proposal{
+			proposals = append(proposals, common.Proposal{
 				Slot:        primitives.Slot(i),
 				SigningRoot: signingRoot[:],
 			})
 		}
-		proposalData[v] = kv.ProposalHistoryForPubkey{Proposals: proposals}
+		proposalData[v] = common.ProposalHistoryForPubkey{Proposals: proposals}
 		attData[v] = historicalAtts
 	}
 	return attData, proposalData

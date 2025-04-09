@@ -8,7 +8,7 @@ go_library(
         "fork.go",
         "types.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v4/testing/endtoend/types",
+    importpath = "github.com/prysmaticlabs/prysm/v5/testing/endtoend/types",
     visibility = ["//testing/endtoend:__subpackages__"],
     deps = [
         "//config/params:go_default_library",

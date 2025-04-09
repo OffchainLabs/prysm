@@ -4,14 +4,14 @@ import (
 	"context"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/cache"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/signing"
-	dbTest "github.com/prysmaticlabs/prysm/v4/beacon-chain/db/testing"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/testing/util"
-	"github.com/prysmaticlabs/prysm/v4/time/slots"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
+	dbTest "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/util"
+	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
 func TestService_HeadSyncCommitteeIndices(t *testing.T) {
@@ -61,7 +61,7 @@ func TestService_headNextSyncCommitteeIndices(t *testing.T) {
 	indices, err := c.headNextSyncCommitteeIndices(context.Background(), 0, primitives.Slot(slot))
 	require.NoError(t, err)
 
-	// NextSyncCommittee should be be empty after `ProcessSyncCommitteeUpdates`. Validator should get indices.
+	// NextSyncCommittee should be empty after `ProcessSyncCommitteeUpdates`. Validator should get indices.
 	require.NotEqual(t, 0, len(indices))
 }
 

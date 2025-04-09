@@ -4,25 +4,25 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/apimiddleware"
-	enginev1 "github.com/prysmaticlabs/prysm/v4/proto/engine/v1"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
+	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func TestBeaconBlockProtoHelpers_ConvertProposerSlashingsToProto(t *testing.T) {
 	testCases := []struct {
 		name                 string
-		generateInput        func() []*apimiddleware.ProposerSlashingJson
+		generateInput        func() []*structs.ProposerSlashing
 		expectedResult       []*ethpb.ProposerSlashing
 		expectedErrorMessage string
 	}{
 		{
 			name:                 "nil proposer slashing",
 			expectedErrorMessage: "proposer slashing at index `0` is nil",
-			generateInput: func() []*apimiddleware.ProposerSlashingJson {
-				return []*apimiddleware.ProposerSlashingJson{
+			generateInput: func() []*structs.ProposerSlashing {
+				return []*structs.ProposerSlashing{
 					nil,
 				}
 			},
@@ -30,21 +30,18 @@ func TestBeaconBlockProtoHelpers_ConvertProposerSlashingsToProto(t *testing.T) {
 		{
 			name:                 "bad header 1",
 			expectedErrorMessage: "failed to get proposer header 1",
-			generateInput: func() []*apimiddleware.ProposerSlashingJson {
-				return []*apimiddleware.ProposerSlashingJson{
-					{
-						Header_1: nil,
-						Header_2: nil,
-					},
-				}
+			generateInput: func() []*structs.ProposerSlashing {
+				input := generateProposerSlashings()
+				input[0].SignedHeader1 = nil
+				return input
 			},
 		},
 		{
 			name:                 "bad header 2",
 			expectedErrorMessage: "failed to get proposer header 2",
-			generateInput: func() []*apimiddleware.ProposerSlashingJson {
+			generateInput: func() []*structs.ProposerSlashing {
 				input := generateProposerSlashings()
-				input[0].Header_2 = nil
+				input[0].SignedHeader2 = nil
 				return input
 			},
 		},
@@ -117,73 +114,73 @@ func TestBeaconBlockProtoHelpers_ConvertProposerSlashingsToProto(t *testing.T) {
 func TestBeaconBlockProtoHelpers_ConvertProposerSlashingSignedHeaderToProto(t *testing.T) {
 	testCases := []struct {
 		name                 string
-		generateInput        func() *apimiddleware.SignedBeaconBlockHeaderJson
+		generateInput        func() *structs.SignedBeaconBlockHeader
 		expectedResult       *ethpb.SignedBeaconBlockHeader
 		expectedErrorMessage string
 	}{
 		{
 			name:                 "nil signed header",
 			expectedErrorMessage: "signed header is nil",
-			generateInput:        func() *apimiddleware.SignedBeaconBlockHeaderJson { return nil },
+			generateInput:        func() *structs.SignedBeaconBlockHeader { return nil },
 		},
 		{
 			name:                 "nil header",
 			expectedErrorMessage: "header is nil",
-			generateInput: func() *apimiddleware.SignedBeaconBlockHeaderJson {
+			generateInput: func() *structs.SignedBeaconBlockHeader {
 				input := generateSignedBeaconBlockHeader()
-				input.Header = nil
+				input.Message = nil
 				return input
 			},
 		},
 		{
 			name:                 "bad slot",
 			expectedErrorMessage: "failed to parse header slot `foo`",
-			generateInput: func() *apimiddleware.SignedBeaconBlockHeaderJson {
+			generateInput: func() *structs.SignedBeaconBlockHeader {
 				input := generateSignedBeaconBlockHeader()
-				input.Header.Slot = "foo"
+				input.Message.Slot = "foo"
 				return input
 			},
 		},
 		{
 			name:                 "bad proposer index",
 			expectedErrorMessage: "failed to parse header proposer index `bar`",
-			generateInput: func() *apimiddleware.SignedBeaconBlockHeaderJson {
+			generateInput: func() *structs.SignedBeaconBlockHeader {
 				input := generateSignedBeaconBlockHeader()
-				input.Header.ProposerIndex = "bar"
+				input.Message.ProposerIndex = "bar"
 				return input
 			},
 		},
 		{
 			name:                 "bad parent root",
 			expectedErrorMessage: "failed to decode header parent root `foo`",
-			generateInput: func() *apimiddleware.SignedBeaconBlockHeaderJson {
+			generateInput: func() *structs.SignedBeaconBlockHeader {
 				input := generateSignedBeaconBlockHeader()
-				input.Header.ParentRoot = "foo"
+				input.Message.ParentRoot = "foo"
 				return input
 			},
 		},
 		{
 			name:                 "bad state root",
 			expectedErrorMessage: "failed to decode header state root `bar`",
-			generateInput: func() *apimiddleware.SignedBeaconBlockHeaderJson {
+			generateInput: func() *structs.SignedBeaconBlockHeader {
 				input := generateSignedBeaconBlockHeader()
-				input.Header.StateRoot = "bar"
+				input.Message.StateRoot = "bar"
 				return input
 			},
 		},
 		{
 			name:                 "bad body root",
 			expectedErrorMessage: "failed to decode header body root `foo`",
-			generateInput: func() *apimiddleware.SignedBeaconBlockHeaderJson {
+			generateInput: func() *structs.SignedBeaconBlockHeader {
 				input := generateSignedBeaconBlockHeader()
-				input.Header.BodyRoot = "foo"
+				input.Message.BodyRoot = "foo"
 				return input
 			},
 		},
 		{
 			name:                 "bad parent root",
 			expectedErrorMessage: "failed to decode signature `bar`",
-			generateInput: func() *apimiddleware.SignedBeaconBlockHeaderJson {
+			generateInput: func() *structs.SignedBeaconBlockHeader {
 				input := generateSignedBeaconBlockHeader()
 				input.Signature = "bar"
 				return input
@@ -222,15 +219,15 @@ func TestBeaconBlockProtoHelpers_ConvertProposerSlashingSignedHeaderToProto(t *t
 func TestBeaconBlockProtoHelpers_ConvertAttesterSlashingsToProto(t *testing.T) {
 	testCases := []struct {
 		name                 string
-		generateInput        func() []*apimiddleware.AttesterSlashingJson
+		generateInput        func() []*structs.AttesterSlashing
 		expectedResult       []*ethpb.AttesterSlashing
 		expectedErrorMessage string
 	}{
 		{
 			name:                 "nil attester slashing",
 			expectedErrorMessage: "attester slashing at index `0` is nil",
-			generateInput: func() []*apimiddleware.AttesterSlashingJson {
-				return []*apimiddleware.AttesterSlashingJson{
+			generateInput: func() []*structs.AttesterSlashing {
+				return []*structs.AttesterSlashing{
 					nil,
 				}
 			},
@@ -238,11 +235,11 @@ func TestBeaconBlockProtoHelpers_ConvertAttesterSlashingsToProto(t *testing.T) {
 		{
 			name:                 "bad attestation 1",
 			expectedErrorMessage: "failed to get attestation 1",
-			generateInput: func() []*apimiddleware.AttesterSlashingJson {
-				return []*apimiddleware.AttesterSlashingJson{
+			generateInput: func() []*structs.AttesterSlashing {
+				return []*structs.AttesterSlashing{
 					{
-						Attestation_1: nil,
-						Attestation_2: nil,
+						Attestation1: nil,
+						Attestation2: nil,
 					},
 				}
 			},
@@ -250,9 +247,9 @@ func TestBeaconBlockProtoHelpers_ConvertAttesterSlashingsToProto(t *testing.T) {
 		{
 			name:                 "bad attestation 2",
 			expectedErrorMessage: "failed to get attestation 2",
-			generateInput: func() []*apimiddleware.AttesterSlashingJson {
+			generateInput: func() []*structs.AttesterSlashing {
 				input := generateAttesterSlashings()
-				input[0].Attestation_2 = nil
+				input[0].Attestation2 = nil
 				return input
 			},
 		},
@@ -353,19 +350,19 @@ func TestBeaconBlockProtoHelpers_ConvertAttesterSlashingsToProto(t *testing.T) {
 func TestBeaconBlockProtoHelpers_ConvertAttestationToProto(t *testing.T) {
 	testCases := []struct {
 		name                 string
-		generateInput        func() *apimiddleware.IndexedAttestationJson
+		generateInput        func() *structs.IndexedAttestation
 		expectedResult       *ethpb.IndexedAttestation
 		expectedErrorMessage string
 	}{
 		{
 			name:                 "nil indexed attestation",
 			expectedErrorMessage: "indexed attestation is nil",
-			generateInput:        func() *apimiddleware.IndexedAttestationJson { return nil },
+			generateInput:        func() *structs.IndexedAttestation { return nil },
 		},
 		{
 			name:                 "bad attesting index",
 			expectedErrorMessage: "failed to parse attesting index `foo`",
-			generateInput: func() *apimiddleware.IndexedAttestationJson {
+			generateInput: func() *structs.IndexedAttestation {
 				input := generateIndexedAttestation()
 				input.AttestingIndices[0] = "foo"
 				return input
@@ -374,7 +371,7 @@ func TestBeaconBlockProtoHelpers_ConvertAttestationToProto(t *testing.T) {
 		{
 			name:                 "bad signature",
 			expectedErrorMessage: "failed to decode attestation signature `bar`",
-			generateInput: func() *apimiddleware.IndexedAttestationJson {
+			generateInput: func() *structs.IndexedAttestation {
 				input := generateIndexedAttestation()
 				input.Signature = "bar"
 				return input
@@ -383,7 +380,7 @@ func TestBeaconBlockProtoHelpers_ConvertAttestationToProto(t *testing.T) {
 		{
 			name:                 "bad data",
 			expectedErrorMessage: "failed to get attestation data",
-			generateInput: func() *apimiddleware.IndexedAttestationJson {
+			generateInput: func() *structs.IndexedAttestation {
 				input := generateIndexedAttestation()
 				input.Data = nil
 				return input
@@ -429,19 +426,19 @@ func TestBeaconBlockProtoHelpers_ConvertAttestationToProto(t *testing.T) {
 func TestBeaconBlockProtoHelpers_ConvertCheckpointToProto(t *testing.T) {
 	testCases := []struct {
 		name                 string
-		generateInput        func() *apimiddleware.CheckpointJson
+		generateInput        func() *structs.Checkpoint
 		expectedResult       *ethpb.Checkpoint
 		expectedErrorMessage string
 	}{
 		{
 			name:                 "nil checkpoint",
 			expectedErrorMessage: "checkpoint is nil",
-			generateInput:        func() *apimiddleware.CheckpointJson { return nil },
+			generateInput:        func() *structs.Checkpoint { return nil },
 		},
 		{
 			name:                 "bad epoch",
 			expectedErrorMessage: "failed to parse checkpoint epoch `foo`",
-			generateInput: func() *apimiddleware.CheckpointJson {
+			generateInput: func() *structs.Checkpoint {
 				input := generateCheckpoint()
 				input.Epoch = "foo"
 				return input
@@ -450,7 +447,7 @@ func TestBeaconBlockProtoHelpers_ConvertCheckpointToProto(t *testing.T) {
 		{
 			name:                 "bad root",
 			expectedErrorMessage: "failed to decode checkpoint root `bar`",
-			generateInput: func() *apimiddleware.CheckpointJson {
+			generateInput: func() *structs.Checkpoint {
 				input := generateCheckpoint()
 				input.Root = "bar"
 				return input
@@ -483,15 +480,15 @@ func TestBeaconBlockProtoHelpers_ConvertCheckpointToProto(t *testing.T) {
 func TestBeaconBlockProtoHelpers_ConvertAttestationsToProto(t *testing.T) {
 	testCases := []struct {
 		name                 string
-		generateInput        func() []*apimiddleware.AttestationJson
+		generateInput        func() []*structs.Attestation
 		expectedResult       []*ethpb.Attestation
 		expectedErrorMessage string
 	}{
 		{
 			name:                 "nil attestation",
 			expectedErrorMessage: "attestation at index `0` is nil",
-			generateInput: func() []*apimiddleware.AttestationJson {
-				return []*apimiddleware.AttestationJson{
+			generateInput: func() []*structs.Attestation {
+				return []*structs.Attestation{
 					nil,
 				}
 			},
@@ -499,7 +496,7 @@ func TestBeaconBlockProtoHelpers_ConvertAttestationsToProto(t *testing.T) {
 		{
 			name:                 "bad aggregation bits",
 			expectedErrorMessage: "failed to decode aggregation bits `foo`",
-			generateInput: func() []*apimiddleware.AttestationJson {
+			generateInput: func() []*structs.Attestation {
 				input := generateAttestations()
 				input[0].AggregationBits = "foo"
 				return input
@@ -508,7 +505,7 @@ func TestBeaconBlockProtoHelpers_ConvertAttestationsToProto(t *testing.T) {
 		{
 			name:                 "bad data",
 			expectedErrorMessage: "failed to get attestation data",
-			generateInput: func() []*apimiddleware.AttestationJson {
+			generateInput: func() []*structs.Attestation {
 				input := generateAttestations()
 				input[0].Data = nil
 				return input
@@ -517,7 +514,7 @@ func TestBeaconBlockProtoHelpers_ConvertAttestationsToProto(t *testing.T) {
 		{
 			name:                 "bad signature",
 			expectedErrorMessage: "failed to decode attestation signature `bar`",
-			generateInput: func() []*apimiddleware.AttestationJson {
+			generateInput: func() []*structs.Attestation {
 				input := generateAttestations()
 				input[0].Signature = "bar"
 				return input
@@ -582,19 +579,19 @@ func TestBeaconBlockProtoHelpers_ConvertAttestationsToProto(t *testing.T) {
 func TestBeaconBlockProtoHelpers_ConvertAttestationDataToProto(t *testing.T) {
 	testCases := []struct {
 		name                 string
-		generateInput        func() *apimiddleware.AttestationDataJson
+		generateInput        func() *structs.AttestationData
 		expectedResult       *ethpb.AttestationData
 		expectedErrorMessage string
 	}{
 		{
 			name:                 "nil attestation data",
 			expectedErrorMessage: "attestation data is nil",
-			generateInput:        func() *apimiddleware.AttestationDataJson { return nil },
+			generateInput:        func() *structs.AttestationData { return nil },
 		},
 		{
 			name:                 "bad slot",
 			expectedErrorMessage: "failed to parse attestation slot `foo`",
-			generateInput: func() *apimiddleware.AttestationDataJson {
+			generateInput: func() *structs.AttestationData {
 				input := generateAttestationData()
 				input.Slot = "foo"
 				return input
@@ -603,7 +600,7 @@ func TestBeaconBlockProtoHelpers_ConvertAttestationDataToProto(t *testing.T) {
 		{
 			name:                 "bad committee index",
 			expectedErrorMessage: "failed to parse attestation committee index `bar`",
-			generateInput: func() *apimiddleware.AttestationDataJson {
+			generateInput: func() *structs.AttestationData {
 				input := generateAttestationData()
 				input.CommitteeIndex = "bar"
 				return input
@@ -612,7 +609,7 @@ func TestBeaconBlockProtoHelpers_ConvertAttestationDataToProto(t *testing.T) {
 		{
 			name:                 "bad beacon block root",
 			expectedErrorMessage: "failed to decode attestation beacon block root `foo`",
-			generateInput: func() *apimiddleware.AttestationDataJson {
+			generateInput: func() *structs.AttestationData {
 				input := generateAttestationData()
 				input.BeaconBlockRoot = "foo"
 				return input
@@ -621,7 +618,7 @@ func TestBeaconBlockProtoHelpers_ConvertAttestationDataToProto(t *testing.T) {
 		{
 			name:                 "bad source checkpoint",
 			expectedErrorMessage: "failed to get attestation source checkpoint",
-			generateInput: func() *apimiddleware.AttestationDataJson {
+			generateInput: func() *structs.AttestationData {
 				input := generateAttestationData()
 				input.Source = nil
 				return input
@@ -630,7 +627,7 @@ func TestBeaconBlockProtoHelpers_ConvertAttestationDataToProto(t *testing.T) {
 		{
 			name:                 "bad target checkpoint",
 			expectedErrorMessage: "failed to get attestation target checkpoint",
-			generateInput: func() *apimiddleware.AttestationDataJson {
+			generateInput: func() *structs.AttestationData {
 				input := generateAttestationData()
 				input.Target = nil
 				return input
@@ -672,15 +669,15 @@ func TestBeaconBlockProtoHelpers_ConvertAttestationDataToProto(t *testing.T) {
 func TestBeaconBlockProtoHelpers_ConvertDepositsToProto(t *testing.T) {
 	testCases := []struct {
 		name                 string
-		generateInput        func() []*apimiddleware.DepositJson
+		generateInput        func() []*structs.Deposit
 		expectedResult       []*ethpb.Deposit
 		expectedErrorMessage string
 	}{
 		{
 			name:                 "nil deposit",
 			expectedErrorMessage: "deposit at index `0` is nil",
-			generateInput: func() []*apimiddleware.DepositJson {
-				return []*apimiddleware.DepositJson{
+			generateInput: func() []*structs.Deposit {
+				return []*structs.Deposit{
 					nil,
 				}
 			},
@@ -688,7 +685,7 @@ func TestBeaconBlockProtoHelpers_ConvertDepositsToProto(t *testing.T) {
 		{
 			name:                 "bad proof",
 			expectedErrorMessage: "failed to decode deposit proof `foo`",
-			generateInput: func() []*apimiddleware.DepositJson {
+			generateInput: func() []*structs.Deposit {
 				input := generateDeposits()
 				input[0].Proof[0] = "foo"
 				return input
@@ -697,7 +694,7 @@ func TestBeaconBlockProtoHelpers_ConvertDepositsToProto(t *testing.T) {
 		{
 			name:                 "nil data",
 			expectedErrorMessage: "deposit data at index `0` is nil",
-			generateInput: func() []*apimiddleware.DepositJson {
+			generateInput: func() []*structs.Deposit {
 				input := generateDeposits()
 				input[0].Data = nil
 				return input
@@ -706,16 +703,16 @@ func TestBeaconBlockProtoHelpers_ConvertDepositsToProto(t *testing.T) {
 		{
 			name:                 "bad public key",
 			expectedErrorMessage: "failed to decode deposit public key `bar`",
-			generateInput: func() []*apimiddleware.DepositJson {
+			generateInput: func() []*structs.Deposit {
 				input := generateDeposits()
-				input[0].Data.PublicKey = "bar"
+				input[0].Data.Pubkey = "bar"
 				return input
 			},
 		},
 		{
 			name:                 "bad withdrawal credentials",
 			expectedErrorMessage: "failed to decode deposit withdrawal credentials `foo`",
-			generateInput: func() []*apimiddleware.DepositJson {
+			generateInput: func() []*structs.Deposit {
 				input := generateDeposits()
 				input[0].Data.WithdrawalCredentials = "foo"
 				return input
@@ -724,7 +721,7 @@ func TestBeaconBlockProtoHelpers_ConvertDepositsToProto(t *testing.T) {
 		{
 			name:                 "bad amount",
 			expectedErrorMessage: "failed to parse deposit amount `bar`",
-			generateInput: func() []*apimiddleware.DepositJson {
+			generateInput: func() []*structs.Deposit {
 				input := generateDeposits()
 				input[0].Data.Amount = "bar"
 				return input
@@ -733,7 +730,7 @@ func TestBeaconBlockProtoHelpers_ConvertDepositsToProto(t *testing.T) {
 		{
 			name:                 "bad signature",
 			expectedErrorMessage: "failed to decode signature `foo`",
-			generateInput: func() []*apimiddleware.DepositJson {
+			generateInput: func() []*structs.Deposit {
 				input := generateDeposits()
 				input[0].Data.Signature = "foo"
 				return input
@@ -788,15 +785,15 @@ func TestBeaconBlockProtoHelpers_ConvertDepositsToProto(t *testing.T) {
 func TestBeaconBlockProtoHelpers_ConvertVoluntaryExitsToProto(t *testing.T) {
 	testCases := []struct {
 		name                 string
-		generateInput        func() []*apimiddleware.SignedVoluntaryExitJson
+		generateInput        func() []*structs.SignedVoluntaryExit
 		expectedResult       []*ethpb.SignedVoluntaryExit
 		expectedErrorMessage string
 	}{
 		{
 			name:                 "nil voluntary exit",
 			expectedErrorMessage: "signed voluntary exit at index `0` is nil",
-			generateInput: func() []*apimiddleware.SignedVoluntaryExitJson {
-				return []*apimiddleware.SignedVoluntaryExitJson{
+			generateInput: func() []*structs.SignedVoluntaryExit {
+				return []*structs.SignedVoluntaryExit{
 					nil,
 				}
 			},
@@ -804,34 +801,34 @@ func TestBeaconBlockProtoHelpers_ConvertVoluntaryExitsToProto(t *testing.T) {
 		{
 			name:                 "nil data",
 			expectedErrorMessage: "voluntary exit at index `0` is nil",
-			generateInput: func() []*apimiddleware.SignedVoluntaryExitJson {
+			generateInput: func() []*structs.SignedVoluntaryExit {
 				input := generateSignedVoluntaryExits()
-				input[0].Exit = nil
+				input[0].Message = nil
 				return input
 			},
 		},
 		{
 			name:                 "bad epoch",
 			expectedErrorMessage: "failed to parse voluntary exit epoch `foo`",
-			generateInput: func() []*apimiddleware.SignedVoluntaryExitJson {
+			generateInput: func() []*structs.SignedVoluntaryExit {
 				input := generateSignedVoluntaryExits()
-				input[0].Exit.Epoch = "foo"
+				input[0].Message.Epoch = "foo"
 				return input
 			},
 		},
 		{
 			name:                 "bad validator index",
 			expectedErrorMessage: "failed to parse voluntary exit validator index `bar`",
-			generateInput: func() []*apimiddleware.SignedVoluntaryExitJson {
+			generateInput: func() []*structs.SignedVoluntaryExit {
 				input := generateSignedVoluntaryExits()
-				input[0].Exit.ValidatorIndex = "bar"
+				input[0].Message.ValidatorIndex = "bar"
 				return input
 			},
 		},
 		{
 			name:                 "bad signature",
 			expectedErrorMessage: "failed to decode signature `foo`",
-			generateInput: func() []*apimiddleware.SignedVoluntaryExitJson {
+			generateInput: func() []*structs.SignedVoluntaryExit {
 				input := generateSignedVoluntaryExits()
 				input[0].Signature = "foo"
 				return input
@@ -921,14 +918,14 @@ func TestBeaconBlockProtoHelpers_ConvertTransactionsToProto(t *testing.T) {
 func TestBeaconBlockProtoHelpers_ConvertWithdrawalsToProto(t *testing.T) {
 	testCases := []struct {
 		name                 string
-		generateInput        func() []*apimiddleware.WithdrawalJson
+		generateInput        func() []*structs.Withdrawal
 		expectedResult       []*enginev1.Withdrawal
 		expectedErrorMessage string
 	}{
 		{
 			name:                 "nil withdrawal",
 			expectedErrorMessage: "withdrawal at index `0` is nil",
-			generateInput: func() []*apimiddleware.WithdrawalJson {
+			generateInput: func() []*structs.Withdrawal {
 				input := generateWithdrawals()
 				input[0] = nil
 				return input
@@ -937,7 +934,7 @@ func TestBeaconBlockProtoHelpers_ConvertWithdrawalsToProto(t *testing.T) {
 		{
 			name:                 "bad withdrawal index",
 			expectedErrorMessage: "failed to parse withdrawal index `foo`",
-			generateInput: func() []*apimiddleware.WithdrawalJson {
+			generateInput: func() []*structs.Withdrawal {
 				input := generateWithdrawals()
 				input[0].WithdrawalIndex = "foo"
 				return input
@@ -946,7 +943,7 @@ func TestBeaconBlockProtoHelpers_ConvertWithdrawalsToProto(t *testing.T) {
 		{
 			name:                 "bad validator index",
 			expectedErrorMessage: "failed to parse validator index `bar`",
-			generateInput: func() []*apimiddleware.WithdrawalJson {
+			generateInput: func() []*structs.Withdrawal {
 				input := generateWithdrawals()
 				input[0].ValidatorIndex = "bar"
 				return input
@@ -955,7 +952,7 @@ func TestBeaconBlockProtoHelpers_ConvertWithdrawalsToProto(t *testing.T) {
 		{
 			name:                 "bad execution address",
 			expectedErrorMessage: "failed to decode execution address `foo`",
-			generateInput: func() []*apimiddleware.WithdrawalJson {
+			generateInput: func() []*structs.Withdrawal {
 				input := generateWithdrawals()
 				input[0].ExecutionAddress = "foo"
 				return input
@@ -964,7 +961,7 @@ func TestBeaconBlockProtoHelpers_ConvertWithdrawalsToProto(t *testing.T) {
 		{
 			name:                 "bad amount",
 			expectedErrorMessage: "failed to parse withdrawal amount `bar`",
-			generateInput: func() []*apimiddleware.WithdrawalJson {
+			generateInput: func() []*structs.Withdrawal {
 				input := generateWithdrawals()
 				input[0].Amount = "bar"
 				return input
@@ -1007,14 +1004,14 @@ func TestBeaconBlockProtoHelpers_ConvertWithdrawalsToProto(t *testing.T) {
 func TestBeaconBlockProtoHelpers_ConvertBlsToExecutionChangesToProto(t *testing.T) {
 	testCases := []struct {
 		name                 string
-		generateInput        func() []*apimiddleware.SignedBLSToExecutionChangeJson
+		generateInput        func() []*structs.SignedBLSToExecutionChange
 		expectedResult       []*ethpb.SignedBLSToExecutionChange
 		expectedErrorMessage string
 	}{
 		{
 			name:                 "nil bls to execution change",
 			expectedErrorMessage: "bls to execution change at index `0` is nil",
-			generateInput: func() []*apimiddleware.SignedBLSToExecutionChangeJson {
+			generateInput: func() []*structs.SignedBLSToExecutionChange {
 				input := generateBlsToExecutionChanges()
 				input[0] = nil
 				return input
@@ -1023,7 +1020,7 @@ func TestBeaconBlockProtoHelpers_ConvertBlsToExecutionChangesToProto(t *testing.
 		{
 			name:                 "nil bls to execution change message",
 			expectedErrorMessage: "bls to execution change message at index `0` is nil",
-			generateInput: func() []*apimiddleware.SignedBLSToExecutionChangeJson {
+			generateInput: func() []*structs.SignedBLSToExecutionChange {
 				input := generateBlsToExecutionChanges()
 				input[0].Message = nil
 				return input
@@ -1032,7 +1029,7 @@ func TestBeaconBlockProtoHelpers_ConvertBlsToExecutionChangesToProto(t *testing.
 		{
 			name:                 "bad validator index",
 			expectedErrorMessage: "failed to decode validator index `foo`",
-			generateInput: func() []*apimiddleware.SignedBLSToExecutionChangeJson {
+			generateInput: func() []*structs.SignedBLSToExecutionChange {
 				input := generateBlsToExecutionChanges()
 				input[0].Message.ValidatorIndex = "foo"
 				return input
@@ -1041,7 +1038,7 @@ func TestBeaconBlockProtoHelpers_ConvertBlsToExecutionChangesToProto(t *testing.
 		{
 			name:                 "bad from bls pubkey",
 			expectedErrorMessage: "failed to decode bls pubkey `bar`",
-			generateInput: func() []*apimiddleware.SignedBLSToExecutionChangeJson {
+			generateInput: func() []*structs.SignedBLSToExecutionChange {
 				input := generateBlsToExecutionChanges()
 				input[0].Message.FromBLSPubkey = "bar"
 				return input
@@ -1050,7 +1047,7 @@ func TestBeaconBlockProtoHelpers_ConvertBlsToExecutionChangesToProto(t *testing.
 		{
 			name:                 "bad to execution address",
 			expectedErrorMessage: "failed to decode execution address `foo`",
-			generateInput: func() []*apimiddleware.SignedBLSToExecutionChangeJson {
+			generateInput: func() []*structs.SignedBLSToExecutionChange {
 				input := generateBlsToExecutionChanges()
 				input[0].Message.ToExecutionAddress = "foo"
 				return input
@@ -1059,7 +1056,7 @@ func TestBeaconBlockProtoHelpers_ConvertBlsToExecutionChangesToProto(t *testing.
 		{
 			name:                 "bad signature",
 			expectedErrorMessage: "failed to decode signature `bar`",
-			generateInput: func() []*apimiddleware.SignedBLSToExecutionChangeJson {
+			generateInput: func() []*structs.SignedBLSToExecutionChange {
 				input := generateBlsToExecutionChanges()
 				input[0].Signature = "bar"
 				return input
@@ -1081,11 +1078,11 @@ func TestBeaconBlockProtoHelpers_ConvertBlsToExecutionChangesToProto(t *testing.
 	}
 }
 
-func generateProposerSlashings() []*apimiddleware.ProposerSlashingJson {
-	return []*apimiddleware.ProposerSlashingJson{
+func generateProposerSlashings() []*structs.ProposerSlashing {
+	return []*structs.ProposerSlashing{
 		{
-			Header_1: &apimiddleware.SignedBeaconBlockHeaderJson{
-				Header: &apimiddleware.BeaconBlockHeaderJson{
+			SignedHeader1: &structs.SignedBeaconBlockHeader{
+				Message: &structs.BeaconBlockHeader{
 					Slot:          "1",
 					ProposerIndex: "2",
 					ParentRoot:    hexutil.Encode([]byte{3}),
@@ -1094,8 +1091,8 @@ func generateProposerSlashings() []*apimiddleware.ProposerSlashingJson {
 				},
 				Signature: hexutil.Encode([]byte{6}),
 			},
-			Header_2: &apimiddleware.SignedBeaconBlockHeaderJson{
-				Header: &apimiddleware.BeaconBlockHeaderJson{
+			SignedHeader2: &structs.SignedBeaconBlockHeader{
+				Message: &structs.BeaconBlockHeader{
 					Slot:          "7",
 					ProposerIndex: "8",
 					ParentRoot:    hexutil.Encode([]byte{9}),
@@ -1106,8 +1103,8 @@ func generateProposerSlashings() []*apimiddleware.ProposerSlashingJson {
 			},
 		},
 		{
-			Header_1: &apimiddleware.SignedBeaconBlockHeaderJson{
-				Header: &apimiddleware.BeaconBlockHeaderJson{
+			SignedHeader1: &structs.SignedBeaconBlockHeader{
+				Message: &structs.BeaconBlockHeader{
 					Slot:          "13",
 					ProposerIndex: "14",
 					ParentRoot:    hexutil.Encode([]byte{15}),
@@ -1116,8 +1113,8 @@ func generateProposerSlashings() []*apimiddleware.ProposerSlashingJson {
 				},
 				Signature: hexutil.Encode([]byte{18}),
 			},
-			Header_2: &apimiddleware.SignedBeaconBlockHeaderJson{
-				Header: &apimiddleware.BeaconBlockHeaderJson{
+			SignedHeader2: &structs.SignedBeaconBlockHeader{
+				Message: &structs.BeaconBlockHeader{
 					Slot:          "19",
 					ProposerIndex: "20",
 					ParentRoot:    hexutil.Encode([]byte{21}),
@@ -1130,9 +1127,9 @@ func generateProposerSlashings() []*apimiddleware.ProposerSlashingJson {
 	}
 }
 
-func generateSignedBeaconBlockHeader() *apimiddleware.SignedBeaconBlockHeaderJson {
-	return &apimiddleware.SignedBeaconBlockHeaderJson{
-		Header: &apimiddleware.BeaconBlockHeaderJson{
+func generateSignedBeaconBlockHeader() *structs.SignedBeaconBlockHeader {
+	return &structs.SignedBeaconBlockHeader{
+		Message: &structs.BeaconBlockHeader{
 			Slot:          "1",
 			ProposerIndex: "2",
 			ParentRoot:    hexutil.Encode([]byte{3}),
@@ -1143,37 +1140,37 @@ func generateSignedBeaconBlockHeader() *apimiddleware.SignedBeaconBlockHeaderJso
 	}
 }
 
-func generateAttesterSlashings() []*apimiddleware.AttesterSlashingJson {
-	return []*apimiddleware.AttesterSlashingJson{
+func generateAttesterSlashings() []*structs.AttesterSlashing {
+	return []*structs.AttesterSlashing{
 		{
-			Attestation_1: &apimiddleware.IndexedAttestationJson{
+			Attestation1: &structs.IndexedAttestation{
 				AttestingIndices: []string{"1", "2"},
-				Data: &apimiddleware.AttestationDataJson{
+				Data: &structs.AttestationData{
 					Slot:            "3",
 					CommitteeIndex:  "4",
 					BeaconBlockRoot: hexutil.Encode([]byte{5}),
-					Source: &apimiddleware.CheckpointJson{
+					Source: &structs.Checkpoint{
 						Epoch: "6",
 						Root:  hexutil.Encode([]byte{7}),
 					},
-					Target: &apimiddleware.CheckpointJson{
+					Target: &structs.Checkpoint{
 						Epoch: "8",
 						Root:  hexutil.Encode([]byte{9}),
 					},
 				},
 				Signature: hexutil.Encode([]byte{10}),
 			},
-			Attestation_2: &apimiddleware.IndexedAttestationJson{
+			Attestation2: &structs.IndexedAttestation{
 				AttestingIndices: []string{"11", "12"},
-				Data: &apimiddleware.AttestationDataJson{
+				Data: &structs.AttestationData{
 					Slot:            "13",
 					CommitteeIndex:  "14",
 					BeaconBlockRoot: hexutil.Encode([]byte{15}),
-					Source: &apimiddleware.CheckpointJson{
+					Source: &structs.Checkpoint{
 						Epoch: "16",
 						Root:  hexutil.Encode([]byte{17}),
 					},
-					Target: &apimiddleware.CheckpointJson{
+					Target: &structs.Checkpoint{
 						Epoch: "18",
 						Root:  hexutil.Encode([]byte{19}),
 					},
@@ -1182,34 +1179,34 @@ func generateAttesterSlashings() []*apimiddleware.AttesterSlashingJson {
 			},
 		},
 		{
-			Attestation_1: &apimiddleware.IndexedAttestationJson{
+			Attestation1: &structs.IndexedAttestation{
 				AttestingIndices: []string{"21", "22"},
-				Data: &apimiddleware.AttestationDataJson{
+				Data: &structs.AttestationData{
 					Slot:            "23",
 					CommitteeIndex:  "24",
 					BeaconBlockRoot: hexutil.Encode([]byte{25}),
-					Source: &apimiddleware.CheckpointJson{
+					Source: &structs.Checkpoint{
 						Epoch: "26",
 						Root:  hexutil.Encode([]byte{27}),
 					},
-					Target: &apimiddleware.CheckpointJson{
+					Target: &structs.Checkpoint{
 						Epoch: "28",
 						Root:  hexutil.Encode([]byte{29}),
 					},
 				},
 				Signature: hexutil.Encode([]byte{30}),
 			},
-			Attestation_2: &apimiddleware.IndexedAttestationJson{
+			Attestation2: &structs.IndexedAttestation{
 				AttestingIndices: []string{"31", "32"},
-				Data: &apimiddleware.AttestationDataJson{
+				Data: &structs.AttestationData{
 					Slot:            "33",
 					CommitteeIndex:  "34",
 					BeaconBlockRoot: hexutil.Encode([]byte{35}),
-					Source: &apimiddleware.CheckpointJson{
+					Source: &structs.Checkpoint{
 						Epoch: "36",
 						Root:  hexutil.Encode([]byte{37}),
 					},
-					Target: &apimiddleware.CheckpointJson{
+					Target: &structs.Checkpoint{
 						Epoch: "38",
 						Root:  hexutil.Encode([]byte{39}),
 					},
@@ -1220,18 +1217,18 @@ func generateAttesterSlashings() []*apimiddleware.AttesterSlashingJson {
 	}
 }
 
-func generateIndexedAttestation() *apimiddleware.IndexedAttestationJson {
-	return &apimiddleware.IndexedAttestationJson{
+func generateIndexedAttestation() *structs.IndexedAttestation {
+	return &structs.IndexedAttestation{
 		AttestingIndices: []string{"1", "2"},
-		Data: &apimiddleware.AttestationDataJson{
+		Data: &structs.AttestationData{
 			Slot:            "3",
 			CommitteeIndex:  "4",
 			BeaconBlockRoot: hexutil.Encode([]byte{5}),
-			Source: &apimiddleware.CheckpointJson{
+			Source: &structs.Checkpoint{
 				Epoch: "6",
 				Root:  hexutil.Encode([]byte{7}),
 			},
-			Target: &apimiddleware.CheckpointJson{
+			Target: &structs.Checkpoint{
 				Epoch: "8",
 				Root:  hexutil.Encode([]byte{9}),
 			},
@@ -1240,26 +1237,26 @@ func generateIndexedAttestation() *apimiddleware.IndexedAttestationJson {
 	}
 }
 
-func generateCheckpoint() *apimiddleware.CheckpointJson {
-	return &apimiddleware.CheckpointJson{
+func generateCheckpoint() *structs.Checkpoint {
+	return &structs.Checkpoint{
 		Epoch: "1",
 		Root:  hexutil.Encode([]byte{2}),
 	}
 }
 
-func generateAttestations() []*apimiddleware.AttestationJson {
-	return []*apimiddleware.AttestationJson{
+func generateAttestations() []*structs.Attestation {
+	return []*structs.Attestation{
 		{
 			AggregationBits: hexutil.Encode([]byte{1}),
-			Data: &apimiddleware.AttestationDataJson{
+			Data: &structs.AttestationData{
 				Slot:            "2",
 				CommitteeIndex:  "3",
 				BeaconBlockRoot: hexutil.Encode([]byte{4}),
-				Source: &apimiddleware.CheckpointJson{
+				Source: &structs.Checkpoint{
 					Epoch: "5",
 					Root:  hexutil.Encode([]byte{6}),
 				},
-				Target: &apimiddleware.CheckpointJson{
+				Target: &structs.Checkpoint{
 					Epoch: "7",
 					Root:  hexutil.Encode([]byte{8}),
 				},
@@ -1268,15 +1265,15 @@ func generateAttestations() []*apimiddleware.AttestationJson {
 		},
 		{
 			AggregationBits: hexutil.Encode([]byte{10}),
-			Data: &apimiddleware.AttestationDataJson{
+			Data: &structs.AttestationData{
 				Slot:            "11",
 				CommitteeIndex:  "12",
 				BeaconBlockRoot: hexutil.Encode([]byte{13}),
-				Source: &apimiddleware.CheckpointJson{
+				Source: &structs.Checkpoint{
 					Epoch: "14",
 					Root:  hexutil.Encode([]byte{15}),
 				},
-				Target: &apimiddleware.CheckpointJson{
+				Target: &structs.Checkpoint{
 					Epoch: "16",
 					Root:  hexutil.Encode([]byte{17}),
 				},
@@ -1286,31 +1283,31 @@ func generateAttestations() []*apimiddleware.AttestationJson {
 	}
 }
 
-func generateAttestationData() *apimiddleware.AttestationDataJson {
-	return &apimiddleware.AttestationDataJson{
+func generateAttestationData() *structs.AttestationData {
+	return &structs.AttestationData{
 		Slot:            "1",
 		CommitteeIndex:  "2",
 		BeaconBlockRoot: hexutil.Encode([]byte{3}),
-		Source: &apimiddleware.CheckpointJson{
+		Source: &structs.Checkpoint{
 			Epoch: "4",
 			Root:  hexutil.Encode([]byte{5}),
 		},
-		Target: &apimiddleware.CheckpointJson{
+		Target: &structs.Checkpoint{
 			Epoch: "6",
 			Root:  hexutil.Encode([]byte{7}),
 		},
 	}
 }
 
-func generateDeposits() []*apimiddleware.DepositJson {
-	return []*apimiddleware.DepositJson{
+func generateDeposits() []*structs.Deposit {
+	return []*structs.Deposit{
 		{
 			Proof: []string{
 				hexutil.Encode([]byte{1}),
 				hexutil.Encode([]byte{2}),
 			},
-			Data: &apimiddleware.Deposit_DataJson{
-				PublicKey:             hexutil.Encode([]byte{3}),
+			Data: &structs.DepositData{
+				Pubkey:                hexutil.Encode([]byte{3}),
 				WithdrawalCredentials: hexutil.Encode([]byte{4}),
 				Amount:                "5",
 				Signature:             hexutil.Encode([]byte{6}),
@@ -1321,8 +1318,8 @@ func generateDeposits() []*apimiddleware.DepositJson {
 				hexutil.Encode([]byte{7}),
 				hexutil.Encode([]byte{8}),
 			},
-			Data: &apimiddleware.Deposit_DataJson{
-				PublicKey:             hexutil.Encode([]byte{9}),
+			Data: &structs.DepositData{
+				Pubkey:                hexutil.Encode([]byte{9}),
 				WithdrawalCredentials: hexutil.Encode([]byte{10}),
 				Amount:                "11",
 				Signature:             hexutil.Encode([]byte{12}),
@@ -1331,17 +1328,17 @@ func generateDeposits() []*apimiddleware.DepositJson {
 	}
 }
 
-func generateSignedVoluntaryExits() []*apimiddleware.SignedVoluntaryExitJson {
-	return []*apimiddleware.SignedVoluntaryExitJson{
+func generateSignedVoluntaryExits() []*structs.SignedVoluntaryExit {
+	return []*structs.SignedVoluntaryExit{
 		{
-			Exit: &apimiddleware.VoluntaryExitJson{
+			Message: &structs.VoluntaryExit{
 				Epoch:          "1",
 				ValidatorIndex: "2",
 			},
 			Signature: hexutil.Encode([]byte{3}),
 		},
 		{
-			Exit: &apimiddleware.VoluntaryExitJson{
+			Message: &structs.VoluntaryExit{
 				Epoch:          "4",
 				ValidatorIndex: "5",
 			},
@@ -1350,8 +1347,8 @@ func generateSignedVoluntaryExits() []*apimiddleware.SignedVoluntaryExitJson {
 	}
 }
 
-func generateWithdrawals() []*apimiddleware.WithdrawalJson {
-	return []*apimiddleware.WithdrawalJson{
+func generateWithdrawals() []*structs.Withdrawal {
+	return []*structs.Withdrawal{
 		{
 			WithdrawalIndex:  "1",
 			ValidatorIndex:   "2",
@@ -1367,10 +1364,10 @@ func generateWithdrawals() []*apimiddleware.WithdrawalJson {
 	}
 }
 
-func generateBlsToExecutionChanges() []*apimiddleware.SignedBLSToExecutionChangeJson {
-	return []*apimiddleware.SignedBLSToExecutionChangeJson{
+func generateBlsToExecutionChanges() []*structs.SignedBLSToExecutionChange {
+	return []*structs.SignedBLSToExecutionChange{
 		{
-			Message: &apimiddleware.BLSToExecutionChangeJson{
+			Message: &structs.BLSToExecutionChange{
 				ValidatorIndex:     "1",
 				FromBLSPubkey:      hexutil.Encode([]byte{2}),
 				ToExecutionAddress: hexutil.Encode([]byte{3}),
@@ -1378,7 +1375,7 @@ func generateBlsToExecutionChanges() []*apimiddleware.SignedBLSToExecutionChange
 			Signature: hexutil.Encode([]byte{4}),
 		},
 		{
-			Message: &apimiddleware.BLSToExecutionChangeJson{
+			Message: &structs.BLSToExecutionChange{
 				ValidatorIndex:     "5",
 				FromBLSPubkey:      hexutil.Encode([]byte{6}),
 				ToExecutionAddress: hexutil.Encode([]byte{7}),

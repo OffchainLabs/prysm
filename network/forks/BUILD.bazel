@@ -7,7 +7,7 @@ go_library(
         "fork.go",
         "ordered.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v4/network/forks",
+    importpath = "github.com/prysmaticlabs/prysm/v5/network/forks",
     visibility = ["//visibility:public"],
     deps = [
         "//beacon-chain/core/signing:go_default_library",

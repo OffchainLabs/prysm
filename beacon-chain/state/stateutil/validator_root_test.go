@@ -3,7 +3,7 @@ package stateutil_test
 import (
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state/stateutil"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stateutil"
 )
 
 func BenchmarkUint64ListRootWithRegistryLimit(b *testing.B) {

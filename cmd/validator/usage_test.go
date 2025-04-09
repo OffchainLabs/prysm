@@ -1,15 +1,16 @@
 package main
 
 import (
+	"slices"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v4/config/features"
+	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/urfave/cli/v2"
 )
 
 func TestAllFlagsExistInHelp(t *testing.T) {
 	// If this test is failing, it is because you've recently added/removed a
-	// flag in beacon chain main.go, but did not add/remove it to the usage.go
+	// flag in main.go, but did not add/remove it to the usage.go
 	// flag grouping (appHelpFlagGroups).
 
 	var helpFlags []cli.Flag
@@ -34,10 +35,7 @@ func TestAllFlagsExistInHelp(t *testing.T) {
 }
 
 func doesFlagExist(flag cli.Flag, flags []cli.Flag) bool {
-	for _, f := range flags {
-		if f.String() == flag.String() {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(flags, func(f cli.Flag) bool {
+		return f.String() == flag.String()
+	})
 }

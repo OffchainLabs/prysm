@@ -9,15 +9,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/mock/gomock"
-	"github.com/prysmaticlabs/prysm/v4/build/bazel"
-	"github.com/prysmaticlabs/prysm/v4/io/file"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	validatormock "github.com/prysmaticlabs/prysm/v4/testing/validator-mock"
-	"github.com/prysmaticlabs/prysm/v4/validator/accounts"
-	"github.com/prysmaticlabs/prysm/v4/validator/keymanager"
+	"github.com/prysmaticlabs/prysm/v5/build/bazel"
+	"github.com/prysmaticlabs/prysm/v5/io/file"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	validatormock "github.com/prysmaticlabs/prysm/v5/testing/validator-mock"
+	"github.com/prysmaticlabs/prysm/v5/validator/accounts"
+	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
+	"go.uber.org/mock/gomock"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -37,7 +37,7 @@ func TestExitAccountsCli_OK(t *testing.T) {
 	}
 
 	mockNodeClient.EXPECT().
-		GetGenesis(gomock.Any(), gomock.Any()).
+		Genesis(gomock.Any(), gomock.Any()).
 		Return(&ethpb.Genesis{GenesisTime: genesisTime}, nil)
 
 	mockValidatorClient.EXPECT().
@@ -90,7 +90,7 @@ func TestExitAccountsCli_OK(t *testing.T) {
 
 	// Prepare user input for final confirmation step
 	var stdin bytes.Buffer
-	stdin.Write([]byte(accounts.ExitPassphrase))
+	stdin.Write([]byte("Y"))
 	rawPubKeys, formattedPubKeys, err := accounts.FilterExitAccountsFromUserInput(
 		cliCtx, &stdin, validatingPublicKeys, false,
 	)
@@ -133,7 +133,7 @@ func TestExitAccountsCli_OK_AllPublicKeys(t *testing.T) {
 	}
 
 	mockNodeClient.EXPECT().
-		GetGenesis(gomock.Any(), gomock.Any()).
+		Genesis(gomock.Any(), gomock.Any()).
 		Return(&ethpb.Genesis{GenesisTime: genesisTime}, nil)
 
 	mockValidatorClient.EXPECT().
@@ -190,7 +190,7 @@ func TestExitAccountsCli_OK_AllPublicKeys(t *testing.T) {
 
 	// Prepare user input for final confirmation step
 	var stdin bytes.Buffer
-	stdin.Write([]byte(accounts.ExitPassphrase))
+	stdin.Write([]byte("Y"))
 	rawPubKeys, formattedPubKeys, err := accounts.FilterExitAccountsFromUserInput(
 		cliCtx, &stdin, validatingPublicKeys, false,
 	)
@@ -235,7 +235,7 @@ func TestExitAccountsCli_OK_ForceExit(t *testing.T) {
 	}
 
 	mockNodeClient.EXPECT().
-		GetGenesis(gomock.Any(), gomock.Any()).
+		Genesis(gomock.Any(), gomock.Any()).
 		Return(&ethpb.Genesis{GenesisTime: genesisTime}, nil)
 
 	mockValidatorClient.EXPECT().
@@ -324,7 +324,7 @@ func TestExitAccountsCli_WriteJSON_NoBroadcast(t *testing.T) {
 	}
 
 	mockNodeClient.EXPECT().
-		GetGenesis(gomock.Any(), gomock.Any()).
+		Genesis(gomock.Any(), gomock.Any()).
 		Return(&ethpb.Genesis{GenesisTime: genesisTime}, nil)
 
 	mockValidatorClient.EXPECT().
@@ -395,5 +395,7 @@ func TestExitAccountsCli_WriteJSON_NoBroadcast(t *testing.T) {
 	require.Equal(t, 1, len(formattedExitedKeys))
 	assert.Equal(t, "0x"+keystore.Pubkey[:12], formattedExitedKeys[0])
 
-	require.Equal(t, true, file.FileExists(path.Join(out, "validator-exit-1.json")), "Expected file to exist")
+	exists, err := file.Exists(path.Join(out, "validator-exit-1.json"), file.Regular)
+	require.NoError(t, err, "could not check if exit file exists")
+	require.Equal(t, true, exists, "Expected file to exist")
 }

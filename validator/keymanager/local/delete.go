@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"context"
 
-	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	ethpbservice "github.com/prysmaticlabs/prysm/v4/proto/eth/service"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
 	"github.com/sirupsen/logrus"
 )
 
@@ -20,18 +20,18 @@ import (
 // 5) Return API response
 func (km *Keymanager) DeleteKeystores(
 	ctx context.Context, publicKeys [][]byte,
-) ([]*ethpbservice.DeletedKeystoreStatus, error) {
+) ([]*keymanager.KeyStatus, error) {
 	// Check for duplicate keys and filter them out.
 	trackedPublicKeys := make(map[[fieldparams.BLSPubkeyLength]byte]bool)
-	statuses := make([]*ethpbservice.DeletedKeystoreStatus, 0, len(publicKeys))
+	statuses := make([]*keymanager.KeyStatus, 0, len(publicKeys))
 	deletedKeys := make([][]byte, 0, len(publicKeys))
 	// 1) Copy the in memory keystore
 	storeCopy := km.accountsStore.Copy()
 	for _, publicKey := range publicKeys {
 		// Check if the key in the request is a duplicate or not found
 		if _, ok := trackedPublicKeys[bytesutil.ToBytes48(publicKey)]; ok {
-			statuses = append(statuses, &ethpbservice.DeletedKeystoreStatus{
-				Status: ethpbservice.DeletedKeystoreStatus_NOT_ACTIVE,
+			statuses = append(statuses, &keymanager.KeyStatus{
+				Status: keymanager.StatusNotActive,
 			})
 			continue
 		}
@@ -45,8 +45,8 @@ func (km *Keymanager) DeleteKeystores(
 			}
 		}
 		if !found {
-			statuses = append(statuses, &ethpbservice.DeletedKeystoreStatus{
-				Status: ethpbservice.DeletedKeystoreStatus_NOT_FOUND,
+			statuses = append(statuses, &keymanager.KeyStatus{
+				Status: keymanager.StatusNotFound,
 			})
 			continue
 		}
@@ -55,8 +55,8 @@ func (km *Keymanager) DeleteKeystores(
 		deletedKeys = append(deletedKeys, deletedPublicKey)
 		storeCopy.PrivateKeys = append(storeCopy.PrivateKeys[:index], storeCopy.PrivateKeys[index+1:]...)
 		storeCopy.PublicKeys = append(storeCopy.PublicKeys[:index], storeCopy.PublicKeys[index+1:]...)
-		statuses = append(statuses, &ethpbservice.DeletedKeystoreStatus{
-			Status: ethpbservice.DeletedKeystoreStatus_DELETED,
+		statuses = append(statuses, &keymanager.KeyStatus{
+			Status: keymanager.StatusDeleted,
 		})
 		trackedPublicKeys[bytesutil.ToBytes48(publicKey)] = true
 	}

@@ -6,16 +6,16 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/prysmaticlabs/prysm/v4/async/event"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/blockchain"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/feed"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/feed/operation"
-	statefeed "github.com/prysmaticlabs/prysm/v4/beacon-chain/core/feed/state"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state/stategen"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/time/slots"
+	"github.com/prysmaticlabs/prysm/v5/async/event"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/operation"
+	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stategen"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/sirupsen/logrus"
 )
 
@@ -111,7 +111,7 @@ func (s *Service) Start() {
 	sort.Slice(tracked, func(i, j int) bool { return tracked[i] < tracked[j] })
 
 	log.WithFields(logrus.Fields{
-		"ValidatorIndices": tracked,
+		"validatorIndices": tracked,
 	}).Info("Starting service")
 
 	go s.run()
@@ -134,7 +134,7 @@ func (s *Service) run() {
 	}
 
 	epoch := slots.ToEpoch(st.Slot())
-	log.WithField("Epoch", epoch).Info("Synced to head epoch, starting reporting performance")
+	log.WithField("epoch", epoch).Info("Synced to head epoch, starting reporting performance")
 
 	s.Lock()
 	s.initializePerformanceStructures(st, epoch)
@@ -157,7 +157,7 @@ func (s *Service) initializePerformanceStructures(state state.BeaconState, epoch
 	for idx := range s.TrackedValidators {
 		balance, err := state.BalanceAtIndex(idx)
 		if err != nil {
-			log.WithError(err).WithField("ValidatorIndex", idx).Error(
+			log.WithError(err).WithField("validatorIndex", idx).Error(
 				"Could not fetch starting balance, skipping aggregated logs.")
 			balance = 0
 		}
@@ -236,6 +236,13 @@ func (s *Service) monitorRoutine(stateChannel chan *feed.Event, stateSub event.S
 				} else {
 					s.processAggregatedAttestation(s.ctx, data.Attestation)
 				}
+			case operation.SingleAttReceived:
+				data, ok := e.Data.(*operation.SingleAttReceivedData)
+				if !ok {
+					log.Error("Event feed data is not of type *operation.SingleAttReceivedData")
+				} else {
+					s.processSingleAttestation(data.Attestation)
+				}
 			case operation.ExitReceived:
 				data, ok := e.Data.(*operation.ExitReceivedData)
 				if !ok {
@@ -276,7 +283,7 @@ func (s *Service) updateSyncCommitteeTrackedVals(state state.BeaconState) {
 	for idx := range s.TrackedValidators {
 		syncIdx, err := helpers.CurrentPeriodSyncSubcommitteeIndices(state, idx)
 		if err != nil {
-			log.WithError(err).WithField("ValidatorIndex", idx).Error(
+			log.WithError(err).WithField("validatorIndex", idx).Error(
 				"Sync committee assignments will not be reported")
 			delete(s.trackedSyncCommitteeIndices, idx)
 		} else if len(syncIdx) == 0 {

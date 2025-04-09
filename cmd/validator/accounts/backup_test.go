@@ -12,15 +12,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/io/file"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/validator/accounts"
-	"github.com/prysmaticlabs/prysm/v4/validator/accounts/iface"
-	"github.com/prysmaticlabs/prysm/v4/validator/keymanager"
-	"github.com/prysmaticlabs/prysm/v4/validator/keymanager/derived"
-	constant "github.com/prysmaticlabs/prysm/v4/validator/testing"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/io/file"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/validator/accounts"
+	"github.com/prysmaticlabs/prysm/v5/validator/accounts/iface"
+	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
+	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/derived"
+	constant "github.com/prysmaticlabs/prysm/v5/validator/testing"
 )
 
 func TestBackupAccounts_Noninteractive_Derived(t *testing.T) {
@@ -98,7 +98,9 @@ func TestBackupAccounts_Noninteractive_Derived(t *testing.T) {
 
 	// We check a backup.zip file was created at the output path.
 	zipFilePath := filepath.Join(backupDir, accounts.ArchiveFilename)
-	assert.DeepEqual(t, true, file.FileExists(zipFilePath))
+	fileExists, err := file.Exists(zipFilePath, file.Regular)
+	require.NoError(t, err, "could not check if backup file exists")
+	assert.Equal(t, true, fileExists, "backup file does not exist")
 
 	// We attempt to unzip the file and verify the keystores do match our accounts.
 	f, err := os.Open(zipFilePath)
@@ -189,7 +191,9 @@ func TestBackupAccounts_Noninteractive_Imported(t *testing.T) {
 
 	// We check a backup.zip file was created at the output path.
 	zipFilePath := filepath.Join(backupDir, accounts.ArchiveFilename)
-	assert.DeepEqual(t, true, file.FileExists(zipFilePath))
+	exists, err := file.Exists(zipFilePath, file.Regular)
+	require.NoError(t, err, "could not check if backup file exists")
+	assert.Equal(t, true, exists, "backup file does not exist")
 
 	// We attempt to unzip the file and verify the keystores do match our accounts.
 	f, err := os.Open(zipFilePath)

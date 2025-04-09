@@ -4,7 +4,7 @@ go_library(
     name = "go_default_library",
     testonly = True,
     srcs = ["runner.go"],
-    importpath = "github.com/prysmaticlabs/prysm/v4/testing/spectest/shared/phase0/finality",
+    importpath = "github.com/prysmaticlabs/prysm/v5/testing/spectest/shared/phase0/finality",
     visibility = ["//visibility:public"],
     deps = [
         "//beacon-chain/core/helpers:go_default_library",
@@ -17,7 +17,8 @@ go_library(
         "//testing/spectest/utils:go_default_library",
         "//testing/util:go_default_library",
         "@com_github_golang_snappy//:go_default_library",
-        "@in_gopkg_d4l3k_messagediff_v1//:go_default_library",
+        "@com_github_google_go_cmp//cmp:go_default_library",
         "@org_golang_google_protobuf//proto:go_default_library",
+        "@org_golang_google_protobuf//testing/protocmp:go_default_library",
     ],
 )

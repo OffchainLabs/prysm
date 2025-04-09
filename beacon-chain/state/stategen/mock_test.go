@@ -7,17 +7,17 @@ import (
 	"testing"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/blocks"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/transition"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/db"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
-	consensusblocks "github.com/prysmaticlabs/prysm/v4/consensus-types/blocks"
-	blocktest "github.com/prysmaticlabs/prysm/v4/consensus-types/blocks/testing"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/testing/util"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	consensusblocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	blocktest "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks/testing"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/util"
 )
 
 func TestMockHistoryStates(t *testing.T) {
@@ -250,9 +250,11 @@ func newMockHistory(t *testing.T, hist []mockHistorySpec, current primitives.Slo
 		b, err = blocktest.SetBlockParentRoot(b, pr)
 		require.NoError(t, err)
 
-		// now do process_block
-		s, err = transition.ProcessBlockForStateRoot(ctx, s, b)
-		require.NoError(t, err)
+		// now do process_block only if block slot is greater than latest header slot
+		if b.Block().Slot() > s.LatestBlockHeader().Slot {
+			s, err = transition.ProcessBlockForStateRoot(ctx, s, b)
+			require.NoError(t, err)
+		}
 
 		sr, err := s.HashTreeRoot(ctx)
 		require.NoError(t, err)

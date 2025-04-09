@@ -7,22 +7,16 @@ import (
 	"testing"
 
 	"github.com/prysmaticlabs/go-bitfield"
-	"github.com/prysmaticlabs/prysm/v4/config/features"
-	"github.com/prysmaticlabs/prysm/v4/crypto/bls"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	attaggregation "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1/attestation/aggregation/attestations"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/testing/util"
+	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	attaggregation "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/attestation/aggregation/attestations"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/util"
 	"google.golang.org/protobuf/proto"
 )
 
 func TestBatchAttestations_Multiple(t *testing.T) {
-	resetFn := features.InitWithReset(&features.Flags{
-		AggregateParallel: true,
-	})
-	defer resetFn()
-
 	s, err := NewService(context.Background(), &Config{Pool: NewPool()})
 	require.NoError(t, err)
 
@@ -31,35 +25,35 @@ func TestBatchAttestations_Multiple(t *testing.T) {
 	sig := priv.Sign([]byte("dummy_test_data"))
 	var mockRoot [32]byte
 
-	unaggregatedAtts := []*ethpb.Attestation{
-		{Data: &ethpb.AttestationData{
+	unaggregatedAtts := []ethpb.Att{
+		&ethpb.Attestation{Data: &ethpb.AttestationData{
 			Slot:            2,
 			BeaconBlockRoot: mockRoot[:],
 			Source:          &ethpb.Checkpoint{Root: mockRoot[:]},
 			Target:          &ethpb.Checkpoint{Root: mockRoot[:]}}, AggregationBits: bitfield.Bitlist{0b100100}, Signature: sig.Marshal()},
-		{Data: &ethpb.AttestationData{
+		&ethpb.Attestation{Data: &ethpb.AttestationData{
 			Slot:            1,
 			BeaconBlockRoot: mockRoot[:],
 			Source:          &ethpb.Checkpoint{Root: mockRoot[:]},
 			Target:          &ethpb.Checkpoint{Root: mockRoot[:]}}, AggregationBits: bitfield.Bitlist{0b101000}, Signature: sig.Marshal()},
-		{Data: &ethpb.AttestationData{
+		&ethpb.Attestation{Data: &ethpb.AttestationData{
 			Slot:            0,
 			BeaconBlockRoot: mockRoot[:],
 			Source:          &ethpb.Checkpoint{Root: mockRoot[:]},
 			Target:          &ethpb.Checkpoint{Root: mockRoot[:]}}, AggregationBits: bitfield.Bitlist{0b100010}, Signature: sig.Marshal()},
 	}
-	aggregatedAtts := []*ethpb.Attestation{
-		{Data: &ethpb.AttestationData{
+	aggregatedAtts := []ethpb.Att{
+		&ethpb.Attestation{Data: &ethpb.AttestationData{
 			Slot:            2,
 			BeaconBlockRoot: mockRoot[:],
 			Source:          &ethpb.Checkpoint{Root: mockRoot[:]},
 			Target:          &ethpb.Checkpoint{Root: mockRoot[:]}}, AggregationBits: bitfield.Bitlist{0b111000}, Signature: sig.Marshal()},
-		{Data: &ethpb.AttestationData{
+		&ethpb.Attestation{Data: &ethpb.AttestationData{
 			Slot:            1,
 			BeaconBlockRoot: mockRoot[:],
 			Source:          &ethpb.Checkpoint{Root: mockRoot[:]},
 			Target:          &ethpb.Checkpoint{Root: mockRoot[:]}}, AggregationBits: bitfield.Bitlist{0b100011}, Signature: sig.Marshal()},
-		{Data: &ethpb.AttestationData{
+		&ethpb.Attestation{Data: &ethpb.AttestationData{
 			Slot:            0,
 			BeaconBlockRoot: mockRoot[:],
 			Source:          &ethpb.Checkpoint{Root: mockRoot[:]},
@@ -99,12 +93,12 @@ func TestBatchAttestations_Multiple(t *testing.T) {
 	}
 	require.NoError(t, s.batchForkChoiceAtts(context.Background()))
 
-	wanted, err := attaggregation.Aggregate([]*ethpb.Attestation{aggregatedAtts[0], blockAtts[0]})
+	wanted, err := attaggregation.Aggregate([]ethpb.Att{aggregatedAtts[0], blockAtts[0]})
 	require.NoError(t, err)
-	aggregated, err := attaggregation.Aggregate([]*ethpb.Attestation{aggregatedAtts[1], blockAtts[1]})
+	aggregated, err := attaggregation.Aggregate([]ethpb.Att{aggregatedAtts[1], blockAtts[1]})
 	require.NoError(t, err)
 	wanted = append(wanted, aggregated...)
-	aggregated, err = attaggregation.Aggregate([]*ethpb.Attestation{aggregatedAtts[2], blockAtts[2]})
+	aggregated, err = attaggregation.Aggregate([]ethpb.Att{aggregatedAtts[2], blockAtts[2]})
 	require.NoError(t, err)
 
 	wanted = append(wanted, aggregated...)
@@ -112,10 +106,10 @@ func TestBatchAttestations_Multiple(t *testing.T) {
 	received := s.cfg.Pool.ForkchoiceAttestations()
 
 	sort.Slice(received, func(i, j int) bool {
-		return received[i].Data.Slot < received[j].Data.Slot
+		return received[i].GetData().Slot < received[j].GetData().Slot
 	})
 	sort.Slice(wanted, func(i, j int) bool {
-		return wanted[i].Data.Slot < wanted[j].Data.Slot
+		return wanted[i].GetData().Slot < wanted[j].GetData().Slot
 	})
 
 	assert.DeepSSZEqual(t, wanted, received)
@@ -135,18 +129,18 @@ func TestBatchAttestations_Single(t *testing.T) {
 		Target:          &ethpb.Checkpoint{Root: mockRoot[:]},
 	}
 
-	unaggregatedAtts := []*ethpb.Attestation{
-		{Data: d, AggregationBits: bitfield.Bitlist{0b101000}, Signature: sig.Marshal()},
-		{Data: d, AggregationBits: bitfield.Bitlist{0b100100}, Signature: sig.Marshal()},
+	unaggregatedAtts := []ethpb.Att{
+		&ethpb.Attestation{Data: d, AggregationBits: bitfield.Bitlist{0b101000}, Signature: sig.Marshal()},
+		&ethpb.Attestation{Data: d, AggregationBits: bitfield.Bitlist{0b100100}, Signature: sig.Marshal()},
 	}
-	aggregatedAtts := []*ethpb.Attestation{
-		{Data: d, AggregationBits: bitfield.Bitlist{0b101100}, Signature: sig.Marshal()},
-		{Data: d, AggregationBits: bitfield.Bitlist{0b110010}, Signature: sig.Marshal()},
+	aggregatedAtts := []ethpb.Att{
+		&ethpb.Attestation{Data: d, AggregationBits: bitfield.Bitlist{0b101100}, Signature: sig.Marshal()},
+		&ethpb.Attestation{Data: d, AggregationBits: bitfield.Bitlist{0b110010}, Signature: sig.Marshal()},
 	}
-	blockAtts := []*ethpb.Attestation{
-		{Data: d, AggregationBits: bitfield.Bitlist{0b110010}, Signature: sig.Marshal()},
-		{Data: d, AggregationBits: bitfield.Bitlist{0b100010}, Signature: sig.Marshal()},
-		{Data: d, AggregationBits: bitfield.Bitlist{0b110010}, Signature: sig.Marshal()}, // Duplicated
+	blockAtts := []ethpb.Att{
+		&ethpb.Attestation{Data: d, AggregationBits: bitfield.Bitlist{0b110010}, Signature: sig.Marshal()},
+		&ethpb.Attestation{Data: d, AggregationBits: bitfield.Bitlist{0b100010}, Signature: sig.Marshal()},
+		&ethpb.Attestation{Data: d, AggregationBits: bitfield.Bitlist{0b110010}, Signature: sig.Marshal()}, // Duplicated
 	}
 	require.NoError(t, s.cfg.Pool.SaveUnaggregatedAttestations(unaggregatedAtts))
 	require.NoError(t, s.cfg.Pool.SaveAggregatedAttestations(aggregatedAtts))
@@ -180,9 +174,9 @@ func TestAggregateAndSaveForkChoiceAtts_Single(t *testing.T) {
 		Target:          &ethpb.Checkpoint{Root: mockRoot[:]},
 	}
 
-	atts := []*ethpb.Attestation{
-		{Data: d, AggregationBits: bitfield.Bitlist{0b101}, Signature: sig.Marshal()},
-		{Data: d, AggregationBits: bitfield.Bitlist{0b110}, Signature: sig.Marshal()}}
+	atts := []ethpb.Att{
+		&ethpb.Attestation{Data: d, AggregationBits: bitfield.Bitlist{0b101}, Signature: sig.Marshal()},
+		&ethpb.Attestation{Data: d, AggregationBits: bitfield.Bitlist{0b110}, Signature: sig.Marshal()}}
 	require.NoError(t, s.aggregateAndSaveForkChoiceAtts(atts))
 
 	wanted, err := attaggregation.Aggregate(atts)
@@ -210,19 +204,19 @@ func TestAggregateAndSaveForkChoiceAtts_Multiple(t *testing.T) {
 	require.Equal(t, true, ok, "Entity is not of type *ethpb.AttestationData")
 	d2.Slot = 2
 
-	atts1 := []*ethpb.Attestation{
-		{Data: d, AggregationBits: bitfield.Bitlist{0b101}, Signature: sig.Marshal()},
-		{Data: d, AggregationBits: bitfield.Bitlist{0b110}, Signature: sig.Marshal()},
+	atts1 := []ethpb.Att{
+		&ethpb.Attestation{Data: d, AggregationBits: bitfield.Bitlist{0b101}, Signature: sig.Marshal()},
+		&ethpb.Attestation{Data: d, AggregationBits: bitfield.Bitlist{0b110}, Signature: sig.Marshal()},
 	}
 	require.NoError(t, s.aggregateAndSaveForkChoiceAtts(atts1))
-	atts2 := []*ethpb.Attestation{
-		{Data: d1, AggregationBits: bitfield.Bitlist{0b10110}, Signature: sig.Marshal()},
-		{Data: d1, AggregationBits: bitfield.Bitlist{0b11100}, Signature: sig.Marshal()},
-		{Data: d1, AggregationBits: bitfield.Bitlist{0b11000}, Signature: sig.Marshal()},
+	atts2 := []ethpb.Att{
+		&ethpb.Attestation{Data: d1, AggregationBits: bitfield.Bitlist{0b10110}, Signature: sig.Marshal()},
+		&ethpb.Attestation{Data: d1, AggregationBits: bitfield.Bitlist{0b11100}, Signature: sig.Marshal()},
+		&ethpb.Attestation{Data: d1, AggregationBits: bitfield.Bitlist{0b11000}, Signature: sig.Marshal()},
 	}
 	require.NoError(t, s.aggregateAndSaveForkChoiceAtts(atts2))
-	att3 := []*ethpb.Attestation{
-		{Data: d2, AggregationBits: bitfield.Bitlist{0b1100}, Signature: sig.Marshal()},
+	att3 := []ethpb.Att{
+		&ethpb.Attestation{Data: d2, AggregationBits: bitfield.Bitlist{0b1100}, Signature: sig.Marshal()},
 	}
 	require.NoError(t, s.aggregateAndSaveForkChoiceAtts(att3))
 
@@ -236,7 +230,7 @@ func TestAggregateAndSaveForkChoiceAtts_Multiple(t *testing.T) {
 
 	received := s.cfg.Pool.ForkchoiceAttestations()
 	sort.Slice(received, func(i, j int) bool {
-		return received[i].Data.Slot < received[j].Data.Slot
+		return received[i].GetData().Slot < received[j].GetData().Slot
 	})
 	for i, a := range wanted {
 		assert.Equal(t, true, proto.Equal(a, received[i]))

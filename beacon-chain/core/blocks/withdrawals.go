@@ -5,19 +5,19 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/signing"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
-	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v4/crypto/hash"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v4/encoding/ssz"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/runtime/version"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
+	"github.com/prysmaticlabs/prysm/v5/crypto/hash"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/encoding/ssz"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 )
 
 const executionToBLSPadding = 12
@@ -28,11 +28,11 @@ const executionToBLSPadding = 12
 // signature set.
 func ProcessBLSToExecutionChanges(
 	st state.BeaconState,
-	signed interfaces.ReadOnlySignedBeaconBlock) (state.BeaconState, error) {
-	if signed.Version() < version.Capella {
+	b interfaces.ReadOnlyBeaconBlock) (state.BeaconState, error) {
+	if b.Version() < version.Capella {
 		return st, nil
 	}
-	changes, err := signed.Block().Body().BLSToExecutionChanges()
+	changes, err := b.Body().BLSToExecutionChanges()
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get BLSToExecutionChanges")
 	}
@@ -100,8 +100,11 @@ func ValidateBLSToExecutionChange(st state.ReadOnlyBeaconState, signed *ethpb.Si
 	if err != nil {
 		return nil, err
 	}
+	if val == nil {
+		return nil, errors.Wrap(errInvalidWithdrawalCredentials, "validator is nil") // This should not be possible.
+	}
 	cred := val.WithdrawalCredentials
-	if cred[0] != params.BeaconConfig().BLSWithdrawalPrefixByte {
+	if len(cred) < 2 || cred[0] != params.BeaconConfig().BLSWithdrawalPrefixByte {
 		return nil, errInvalidBLSPrefix
 	}
 
@@ -122,12 +125,16 @@ func ValidateBLSToExecutionChange(st state.ReadOnlyBeaconState, signed *ethpb.Si
 //
 // def process_withdrawals(state: BeaconState, payload: ExecutionPayload) -> None:
 //
-//	expected_withdrawals = get_expected_withdrawals(state)
+//	expected_withdrawals, processed_partial_withdrawals_count = get_expected_withdrawals(state) # [Modified in Electra:EIP7251]
+//
 //	assert len(payload.withdrawals) == len(expected_withdrawals)
 //
 //	for expected_withdrawal, withdrawal in zip(expected_withdrawals, payload.withdrawals):
-//	    assert withdrawal == expected_withdrawal
-//	    decrease_balance(state, withdrawal.validator_index, withdrawal.amount)
+//	     assert withdrawal == expected_withdrawal
+//	     decrease_balance(state, withdrawal.validator_index, withdrawal.amount)
+//
+//	# Update pending partial withdrawals [New in Electra:EIP7251]
+//	state.pending_partial_withdrawals = state.pending_partial_withdrawals[processed_partial_withdrawals_count:]
 //
 //	# Update the next withdrawal index if this block contained withdrawals
 //	if len(expected_withdrawals) != 0:
@@ -145,7 +152,7 @@ func ValidateBLSToExecutionChange(st state.ReadOnlyBeaconState, signed *ethpb.Si
 //	    next_validator_index = ValidatorIndex(next_index % len(state.validators))
 //	    state.next_withdrawal_validator_index = next_validator_index
 func ProcessWithdrawals(st state.BeaconState, executionData interfaces.ExecutionData) (state.BeaconState, error) {
-	expectedWithdrawals, err := st.ExpectedWithdrawals()
+	expectedWithdrawals, processedPartialWithdrawalsCount, err := st.ExpectedWithdrawals()
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get expected withdrawals")
 	}
@@ -162,6 +169,11 @@ func ProcessWithdrawals(st state.BeaconState, executionData interfaces.Execution
 		if err != nil {
 			return nil, errors.Wrap(err, "could not get withdrawals")
 		}
+
+		if len(wds) != len(expectedWithdrawals) {
+			return nil, fmt.Errorf("execution payload header has %d withdrawals when %d were expected", len(wds), len(expectedWithdrawals))
+		}
+
 		wdRoot, err = ssz.WithdrawalSliceRoot(wds, fieldparams.MaxWithdrawalsPerPayload)
 		if err != nil {
 			return nil, errors.Wrap(err, "could not get withdrawals root")
@@ -182,6 +194,13 @@ func ProcessWithdrawals(st state.BeaconState, executionData interfaces.Execution
 			return nil, errors.Wrap(err, "could not decrease balance")
 		}
 	}
+
+	if st.Version() >= version.Electra {
+		if err := st.DequeuePendingPartialWithdrawals(processedPartialWithdrawalsCount); err != nil {
+			return nil, fmt.Errorf("unable to dequeue partial withdrawals from state: %w", err)
+		}
+	}
+
 	if len(expectedWithdrawals) > 0 {
 		if err := st.SetNextWithdrawalIndex(expectedWithdrawals[len(expectedWithdrawals)-1].Index + 1); err != nil {
 			return nil, errors.Wrap(err, "could not set next withdrawal index")
@@ -235,7 +254,7 @@ func BLSChangesSignatureBatch(
 			return nil, errors.Wrap(err, "could not convert bytes to public key")
 		}
 		batch.PublicKeys[i] = publicKey
-		htr, err := signing.SigningData(change.Message.HashTreeRoot, domain)
+		htr, err := signing.Data(change.Message.HashTreeRoot, domain)
 		if err != nil {
 			return nil, errors.Wrap(err, "could not compute BLSToExecutionChange signing data")
 		}

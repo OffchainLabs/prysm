@@ -4,10 +4,10 @@ import (
 	"reflect"
 
 	"github.com/pkg/errors"
-	p2ptypes "github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p/types"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	pb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	p2ptypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	pb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
 // SchemaVersionV1 specifies the schema version for our rpc protocol ID.

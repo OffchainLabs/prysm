@@ -7,23 +7,23 @@ import (
 	"testing"
 	"time"
 
-	mock "github.com/prysmaticlabs/prysm/v4/beacon-chain/blockchain/testing"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/helpers"
-	dbTest "github.com/prysmaticlabs/prysm/v4/beacon-chain/db/testing"
-	doublylinkedtree "github.com/prysmaticlabs/prysm/v4/beacon-chain/forkchoice/doubly-linked-tree"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state/stategen"
-	mockstategen "github.com/prysmaticlabs/prysm/v4/beacon-chain/state/stategen/mock"
-	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/blocks"
-	blocktest "github.com/prysmaticlabs/prysm/v4/consensus-types/blocks/testing"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/testing/util"
-	prysmTime "github.com/prysmaticlabs/prysm/v4/time"
-	"github.com/prysmaticlabs/prysm/v4/time/slots"
+	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
+	dbTest "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
+	doublylinkedtree "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/doubly-linked-tree"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stategen"
+	mockstategen "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stategen/mock"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	blocktest "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks/testing"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/util"
+	prysmTime "github.com/prysmaticlabs/prysm/v5/time"
+	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"google.golang.org/protobuf/proto"
 	"gopkg.in/d4l3k/messagediff.v1"
 )
@@ -52,7 +52,7 @@ func TestServer_ListBeaconCommittees_CurrentEpoch(t *testing.T) {
 	require.NoError(t, db.SaveGenesisBlockRoot(ctx, gRoot))
 	require.NoError(t, db.SaveState(ctx, headState, gRoot))
 
-	bs.ReplayerBuilder = mockstategen.NewMockReplayerBuilder(mockstategen.WithMockState(headState))
+	bs.ReplayerBuilder = mockstategen.NewReplayerBuilder(mockstategen.WithMockState(headState))
 
 	activeIndices, err := helpers.ActiveValidatorIndices(ctx, headState, 0)
 	require.NoError(t, err)
@@ -76,9 +76,12 @@ func TestServer_ListBeaconCommittees_CurrentEpoch(t *testing.T) {
 }
 
 func addDefaultReplayerBuilder(s *Server, h stategen.HistoryAccessor) {
-	cc := &mockstategen.MockCanonicalChecker{Is: true, Err: nil}
-	cs := &mockstategen.MockCurrentSlotter{Slot: math.MaxUint64 - 1}
+	cc := &mockstategen.CanonicalChecker{Is: true, Err: nil}
+	cs := &mockstategen.CurrentSlotter{Slot: math.MaxUint64 - 1}
 	s.ReplayerBuilder = stategen.NewCanonicalHistory(h, cc, cs)
+	if s.CoreService != nil {
+		s.CoreService.ReplayerBuilder = stategen.NewCanonicalHistory(h, cc, cs)
+	}
 }
 
 func TestServer_ListBeaconCommittees_PreviousEpoch(t *testing.T) {

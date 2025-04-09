@@ -3,72 +3,103 @@
 package cache
 
 import (
-	"strconv"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
+	forkchoicetypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/types"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
-func TestProposerKeyFn_OK(t *testing.T) {
-	item := &ProposerIndices{
-		BlockRoot:       [32]byte{'A'},
-		ProposerIndices: []primitives.ValidatorIndex{1, 2, 3, 4, 5},
-	}
-
-	k, err := proposerIndicesKeyFn(item)
-	require.NoError(t, err)
-	assert.Equal(t, key(item.BlockRoot), k)
-}
-
-func TestProposerKeyFn_InvalidObj(t *testing.T) {
-	_, err := proposerIndicesKeyFn("bad")
-	assert.Equal(t, ErrNotProposerIndices, err)
-}
-
-func TestProposerCache_AddProposerIndicesList(t *testing.T) {
+func TestProposerCache_Set(t *testing.T) {
 	cache := NewProposerIndicesCache()
 	bRoot := [32]byte{'A'}
-	indices, err := cache.ProposerIndices(bRoot)
-	require.NoError(t, err)
-	if indices != nil {
-		t.Error("Expected committee count not to exist in empty cache")
-	}
-	has, err := cache.HasProposerIndices(bRoot)
-	require.NoError(t, err)
-	assert.Equal(t, false, has)
-	require.NoError(t, cache.AddProposerIndices(&ProposerIndices{
-		ProposerIndices: indices,
-		BlockRoot:       bRoot,
-	}))
+	indices, ok := cache.ProposerIndices(0, bRoot)
+	require.Equal(t, false, ok)
+	emptyIndices := [fieldparams.SlotsPerEpoch]primitives.ValidatorIndex{}
+	require.Equal(t, indices, emptyIndices, "Expected committee count not to exist in empty cache")
+	emptyIndices[0] = 1
+	cache.Set(0, bRoot, emptyIndices)
 
-	received, err := cache.ProposerIndices(bRoot)
-	require.NoError(t, err)
-	assert.DeepEqual(t, received, indices)
-	has, err = cache.HasProposerIndices(bRoot)
-	require.NoError(t, err)
-	assert.Equal(t, true, has)
+	received, ok := cache.ProposerIndices(0, bRoot)
+	require.Equal(t, true, ok)
+	require.Equal(t, received, emptyIndices)
 
-	item := &ProposerIndices{BlockRoot: [32]byte{'B'}, ProposerIndices: []primitives.ValidatorIndex{1, 2, 3, 4, 5, 6}}
-	require.NoError(t, cache.AddProposerIndices(item))
+	newRoot := [32]byte{'B'}
+	copy(emptyIndices[3:], []primitives.ValidatorIndex{1, 2, 3, 4, 5, 6})
+	cache.Set(0, newRoot, emptyIndices)
 
-	received, err = cache.ProposerIndices(item.BlockRoot)
-	require.NoError(t, err)
-	assert.DeepEqual(t, item.ProposerIndices, received)
-	has, err = cache.HasProposerIndices(bRoot)
-	require.NoError(t, err)
-	assert.Equal(t, true, has)
-
+	received, ok = cache.ProposerIndices(0, newRoot)
+	require.Equal(t, true, ok)
+	require.Equal(t, emptyIndices, received)
 }
 
-func TestProposerCache_CanRotate(t *testing.T) {
+func TestProposerCache_CheckpointAndPrune(t *testing.T) {
 	cache := NewProposerIndicesCache()
-	for i := 0; i < int(maxProposerIndicesCacheSize)+1; i++ {
-		s := []byte(strconv.Itoa(i))
-		item := &ProposerIndices{BlockRoot: bytesutil.ToBytes32(s)}
-		require.NoError(t, cache.AddProposerIndices(item))
+	indices := [fieldparams.SlotsPerEpoch]primitives.ValidatorIndex{}
+	copy(indices[3:], []primitives.ValidatorIndex{1, 2, 3, 4, 5, 6})
+	for i := 1; i < 10; i++ {
+		root := [32]byte{byte(i)}
+		cache.Set(primitives.Epoch(i), root, indices)
+		cpRoot := [32]byte{byte(i - 1)}
+		cache.SetCheckpoint(forkchoicetypes.Checkpoint{Epoch: primitives.Epoch(i - 1), Root: cpRoot}, root)
 	}
-	assert.Equal(t, int(maxProposerIndicesCacheSize), cache.Len())
+	received, ok := cache.ProposerIndices(1, [32]byte{1})
+	require.Equal(t, true, ok)
+	require.Equal(t, indices, received)
+
+	received, ok = cache.ProposerIndices(4, [32]byte{4})
+	require.Equal(t, true, ok)
+	require.Equal(t, indices, received)
+
+	received, ok = cache.ProposerIndices(9, [32]byte{9})
+	require.Equal(t, true, ok)
+	require.Equal(t, indices, received)
+
+	received, ok = cache.IndicesFromCheckpoint(forkchoicetypes.Checkpoint{})
+	require.Equal(t, true, ok)
+	require.Equal(t, indices, received)
+
+	received, ok = cache.IndicesFromCheckpoint(forkchoicetypes.Checkpoint{Epoch: 3, Root: [32]byte{3}})
+	require.Equal(t, true, ok)
+	require.Equal(t, indices, received)
+
+	received, ok = cache.IndicesFromCheckpoint(forkchoicetypes.Checkpoint{Epoch: 4, Root: [32]byte{4}})
+	require.Equal(t, true, ok)
+	require.Equal(t, indices, received)
+
+	received, ok = cache.IndicesFromCheckpoint(forkchoicetypes.Checkpoint{Epoch: 8, Root: [32]byte{8}})
+	require.Equal(t, true, ok)
+	require.Equal(t, indices, received)
+
+	cache.Prune(5)
+
+	emptyIndices := [fieldparams.SlotsPerEpoch]primitives.ValidatorIndex{}
+	received, ok = cache.ProposerIndices(1, [32]byte{1})
+	require.Equal(t, false, ok)
+	require.Equal(t, emptyIndices, received)
+
+	received, ok = cache.ProposerIndices(4, [32]byte{4})
+	require.Equal(t, false, ok)
+	require.Equal(t, emptyIndices, received)
+
+	received, ok = cache.ProposerIndices(9, [32]byte{9})
+	require.Equal(t, true, ok)
+	require.Equal(t, indices, received)
+
+	received, ok = cache.IndicesFromCheckpoint(forkchoicetypes.Checkpoint{Epoch: 0, Root: [32]byte{0}})
+	require.Equal(t, false, ok)
+	require.Equal(t, emptyIndices, received)
+
+	received, ok = cache.IndicesFromCheckpoint(forkchoicetypes.Checkpoint{Epoch: 3, Root: [32]byte{3}})
+	require.Equal(t, false, ok)
+	require.Equal(t, emptyIndices, received)
+
+	received, ok = cache.IndicesFromCheckpoint(forkchoicetypes.Checkpoint{Epoch: 4, Root: [32]byte{4}})
+	require.Equal(t, true, ok)
+	require.Equal(t, indices, received)
+
+	received, ok = cache.IndicesFromCheckpoint(forkchoicetypes.Checkpoint{Epoch: 8, Root: [32]byte{8}})
+	require.Equal(t, true, ok)
+	require.Equal(t, indices, received)
 }

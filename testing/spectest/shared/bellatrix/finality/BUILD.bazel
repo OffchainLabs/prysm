@@ -4,7 +4,7 @@ go_library(
     name = "go_default_library",
     testonly = True,
     srcs = ["finality.go"],
-    importpath = "github.com/prysmaticlabs/prysm/v4/testing/spectest/shared/bellatrix/finality",
+    importpath = "github.com/prysmaticlabs/prysm/v5/testing/spectest/shared/bellatrix/finality",
     visibility = ["//visibility:public"],
     deps = [
         "//beacon-chain/core/helpers:go_default_library",

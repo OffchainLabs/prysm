@@ -6,7 +6,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	ma "github.com/multiformats/go-multiaddr"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p/peers"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers"
 )
 
 // ensurePeerConnections will attempt to reestablish connection to the peers
@@ -50,7 +50,7 @@ func ensurePeerConnections(ctx context.Context, h host.Host, peers *peers.Status
 		c := h.Network().ConnsToPeer(p.ID)
 		if len(c) == 0 {
 			if err := connectWithTimeout(ctx, h, p); err != nil {
-				log.WithField("peer", p.ID).WithField("addrs", p.Addrs).WithError(err).Errorf("Failed to reconnect to peer")
+				log.WithField("peer", p.ID).WithField("addrs", p.Addrs).WithError(err).Errorf("failed to reconnect to peer")
 				continue
 			}
 		}

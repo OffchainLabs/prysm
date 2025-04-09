@@ -3,7 +3,7 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 go_library(
     name = "go_default_library",
     srcs = ["utils.go"],
-    importpath = "github.com/prysmaticlabs/prysm/v4/crypto/ecdsa",
+    importpath = "github.com/prysmaticlabs/prysm/v5/crypto/ecdsa",
     visibility = ["//visibility:public"],
     deps = [
         "@com_github_btcsuite_btcd_btcec_v2//:go_default_library",

@@ -3,10 +3,10 @@ package stateutil
 import (
 	"sync"
 
-	coreutils "github.com/prysmaticlabs/prysm/v4/beacon-chain/core/transition/stateutils"
-	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	coreutils "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition/stateutils"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
 // ValidatorMapHandler is a container to hold the map and a reference tracker for how many
@@ -34,24 +34,6 @@ func (v *ValidatorMapHandler) AddRef() {
 // IsNil returns true if the underlying validator index map is nil.
 func (v *ValidatorMapHandler) IsNil() bool {
 	return v.mapRef == nil || v.valIdxMap == nil
-}
-
-// Copy the whole map and returns a map handler with the copied map.
-func (v *ValidatorMapHandler) Copy() *ValidatorMapHandler {
-	if v == nil || v.valIdxMap == nil {
-		return &ValidatorMapHandler{valIdxMap: map[[fieldparams.BLSPubkeyLength]byte]primitives.ValidatorIndex{}, mapRef: new(Reference), RWMutex: new(sync.RWMutex)}
-	}
-	v.RLock()
-	defer v.RUnlock()
-	m := make(map[[fieldparams.BLSPubkeyLength]byte]primitives.ValidatorIndex, len(v.valIdxMap))
-	for k, v := range v.valIdxMap {
-		m[k] = v
-	}
-	return &ValidatorMapHandler{
-		valIdxMap: m,
-		mapRef:    &Reference{refs: 1},
-		RWMutex:   new(sync.RWMutex),
-	}
 }
 
 // Get the validator index using the corresponding public key.

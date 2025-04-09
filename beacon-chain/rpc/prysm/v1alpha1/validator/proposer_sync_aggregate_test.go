@@ -5,9 +5,9 @@ import (
 	"sort"
 	"testing"
 
-	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
-	v2 "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	v2 "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 )
 
 func TestProposerSyncContributions_FilterByBlockRoot(t *testing.T) {

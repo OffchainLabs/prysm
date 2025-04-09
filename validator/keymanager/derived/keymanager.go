@@ -6,14 +6,13 @@ import (
 
 	"github.com/logrusorgru/aurora"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/async/event"
-	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v4/crypto/bls"
-	ethpbservice "github.com/prysmaticlabs/prysm/v4/proto/eth/service"
-	validatorpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1/validator-client"
-	"github.com/prysmaticlabs/prysm/v4/validator/accounts/iface"
-	"github.com/prysmaticlabs/prysm/v4/validator/keymanager"
-	"github.com/prysmaticlabs/prysm/v4/validator/keymanager/local"
+	"github.com/prysmaticlabs/prysm/v5/async/event"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
+	validatorpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/validator-client"
+	"github.com/prysmaticlabs/prysm/v5/validator/accounts/iface"
+	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
+	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/local"
 	util "github.com/wealdtech/go-eth2-util"
 )
 
@@ -112,14 +111,14 @@ func (km *Keymanager) FetchValidatingPrivateKeys(ctx context.Context) ([][32]byt
 // ImportKeystores for a derived keymanager.
 func (km *Keymanager) ImportKeystores(
 	ctx context.Context, keystores []*keymanager.Keystore, passwords []string,
-) ([]*ethpbservice.ImportedKeystoreStatus, error) {
+) ([]*keymanager.KeyStatus, error) {
 	return km.localKM.ImportKeystores(ctx, keystores, passwords)
 }
 
 // DeleteKeystores for a derived keymanager.
 func (km *Keymanager) DeleteKeystores(
 	ctx context.Context, publicKeys [][]byte,
-) ([]*ethpbservice.DeletedKeystoreStatus, error) {
+) ([]*keymanager.KeyStatus, error) {
 	return km.localKM.DeleteKeystores(ctx, publicKeys)
 }
 

@@ -9,13 +9,13 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/prysmaticlabs/prysm/v4/cmd/validator/flags"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/validator/accounts"
-	"github.com/prysmaticlabs/prysm/v4/validator/keymanager"
-	"github.com/prysmaticlabs/prysm/v4/validator/keymanager/local"
-	"github.com/prysmaticlabs/prysm/v4/validator/node"
+	"github.com/prysmaticlabs/prysm/v5/cmd/validator/flags"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/validator/accounts"
+	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
+	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/local"
+	"github.com/prysmaticlabs/prysm/v5/validator/node"
 	"github.com/sirupsen/logrus/hooks/test"
 	"github.com/urfave/cli/v2"
 )
@@ -70,9 +70,10 @@ func TestWalletWithKeymanager(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, len(keys), 2)
 	require.Equal(t, w.KeymanagerKind(), keymanager.Local)
-	hexKeys := []string{hexutil.Encode(keys[0][:])[2:], hexutil.Encode(keys[1][:])[2:]} // imported keystores don't include the 0x in name
 
-	assert.LogsContain(t, logHook, fmt.Sprintf("Imported accounts %v,", hexKeys))
+	assert.LogsContain(t, logHook, fmt.Sprintf("Imported accounts"))
+	assert.LogsContain(t, logHook, hexutil.Encode(keys[0][:])[2:])
+	assert.LogsContain(t, logHook, hexutil.Encode(keys[1][:])[2:])
 }
 
 func TestWalletWithKeymanager_web3signer(t *testing.T) {

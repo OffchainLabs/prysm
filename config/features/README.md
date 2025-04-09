@@ -29,7 +29,7 @@ Examples of when not to use a feature flag:
 Once it has been decided that you should use a feature flag. Follow these steps to safely
 releasing your feature. In general, try to create a single PR for each step of this process.
 
-1. Add your feature flag to shared/featureconfig/flags.go, use the flag to toggle a boolean in the
+1. Add your feature flag to `shared/featureconfig/flags.go`, use the flag to toggle a boolean in the
 feature config in shared/featureconfig/config.go. It is a good idea to use the `enable` prefix for
 your flag since you're going to invert the flag in a later step. i.e you will use `disable` prefix
 later. For example, `--enable-my-feature`. Additionally, [create a feature flag tracking issue](https://github.com/prysmaticlabs/prysm/issues/new?template=feature_flag.md) 
@@ -48,7 +48,7 @@ func someExistingMethod(ctx context.Context) error {
 3. Add the flag to the end to end tests. This set of flags can also be found in shared/featureconfig/flags.go. 
 4. Test the functionality locally and safely in production. Once you have enough confidence that
 your new function works and is safe to release then move onto the next step.
-5. Move your existing flag to the deprecated section of shared/featureconfig/flags.go. It is
+5. Move your existing flag to the deprecated section of `shared/featureconfig/flags.go`. It is
 important NOT to delete your existing flag outright. Deleting a flag can be extremely frustrating
 to users as it may break their existing workflow! Marking a flag as deprecated gives users time to
 adjust their start scripts and workflow. Add another feature flag to represent the inverse of your

@@ -6,18 +6,18 @@ import (
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/altair"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/feed"
-	opfeed "github.com/prysmaticlabs/prysm/v4/beacon-chain/core/feed/operation"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/signing"
-	p2ptypes "github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p/types"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v4/monitoring/tracing"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"go.opencensus.io/trace"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/altair"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
+	opfeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/operation"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
+	p2ptypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
+	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
 // validateSyncContributionAndProof verifies the aggregated signature and the selection proof is valid before forwarding to the
@@ -59,7 +59,7 @@ func (s *Service) validateSyncContributionAndProof(ctx context.Context, pid peer
 	}
 
 	// The contribution's slot is for the current slot (with a `MAXIMUM_GOSSIP_CLOCK_DISPARITY` allowance).
-	if err := altair.ValidateSyncMessageTime(m.Message.Contribution.Slot, s.cfg.clock.GenesisTime(), params.BeaconNetworkConfig().MaximumGossipClockDisparity); err != nil {
+	if err := altair.ValidateSyncMessageTime(m.Message.Contribution.Slot, s.cfg.clock.GenesisTime(), params.BeaconConfig().MaximumGossipClockDisparityDuration()); err != nil {
 		tracing.AnnotateError(span, err)
 		return pubsub.ValidationIgnore, err
 	}
@@ -118,7 +118,7 @@ func rejectIncorrectSubcommitteeIndex(
 	m *ethpb.SignedContributionAndProof,
 ) validationFn {
 	return func(ctx context.Context) (pubsub.ValidationResult, error) {
-		ctx, span := trace.StartSpan(ctx, "sync.rejectIncorrectSubcommitteeIndex")
+		_, span := trace.StartSpan(ctx, "sync.rejectIncorrectSubcommitteeIndex")
 		defer span.End()
 		// The subcommittee index is in the allowed range, i.e. `contribution.subcommittee_index < SYNC_COMMITTEE_SUBNET_COUNT`.
 		if m.Message.Contribution.SubcommitteeIndex >= params.BeaconConfig().SyncCommitteeSubnetCount {

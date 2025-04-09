@@ -3,6 +3,6 @@ load("@prysm//tools/go:def.bzl", "go_library")
 go_library(
     name = "go_default_library",
     srcs = ["format.go"],
-    importpath = "github.com/prysmaticlabs/prysm/v4/validator/slashing-protection-history/format",
+    importpath = "github.com/prysmaticlabs/prysm/v5/validator/slashing-protection-history/format",
     visibility = ["//visibility:public"],
 )

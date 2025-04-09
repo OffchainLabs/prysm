@@ -6,14 +6,15 @@ import (
 	"testing"
 
 	"github.com/golang/snappy"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/transition"
-	state_native "github.com/prysmaticlabs/prysm/v4/beacon-chain/state/state-native"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/testing/spectest/utils"
-	"github.com/prysmaticlabs/prysm/v4/testing/util"
+	"github.com/google/go-cmp/cmp"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
+	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/spectest/utils"
+	"github.com/prysmaticlabs/prysm/v5/testing/util"
 	"google.golang.org/protobuf/proto"
-	"gopkg.in/d4l3k/messagediff.v1"
+	"google.golang.org/protobuf/testing/protocmp"
 )
 
 func init() {
@@ -57,8 +58,8 @@ func RunSlotProcessingTests(t *testing.T, config string) {
 			pbState, err := state_native.ProtobufBeaconStateBellatrix(postState.ToProto())
 			require.NoError(t, err)
 			if !proto.Equal(pbState, postBeaconState) {
-				diff, _ := messagediff.PrettyDiff(beaconState, postBeaconState)
-				t.Fatalf("Post state does not match expected. Diff between states %s", diff)
+				t.Log(cmp.Diff(postBeaconState, pbState, protocmp.Transform()))
+				t.Fatal("Post state does not match expected. Diff between states")
 			}
 		})
 	}

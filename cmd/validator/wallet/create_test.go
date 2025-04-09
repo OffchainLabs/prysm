@@ -8,16 +8,13 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/pkg/errors"
-	cmdacc "github.com/prysmaticlabs/prysm/v4/cmd/validator/accounts"
-	"github.com/prysmaticlabs/prysm/v4/cmd/validator/flags"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/validator/accounts"
-	"github.com/prysmaticlabs/prysm/v4/validator/accounts/wallet"
-	"github.com/prysmaticlabs/prysm/v4/validator/keymanager"
-	"github.com/prysmaticlabs/prysm/v4/validator/keymanager/local"
+	"github.com/prysmaticlabs/prysm/v5/cmd/validator/flags"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/validator/accounts/wallet"
+	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
+	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/local"
 	"github.com/sirupsen/logrus"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"github.com/urfave/cli/v2"
@@ -30,7 +27,7 @@ const (
 
 // `cmd/validator/accounts/delete_test.go`. https://pastebin.com/2n2VB7Ez is
 // the error I couldn't get around.
-func setupWalletAndPasswordsDir(t testing.TB) (string, string, string) {
+func SetupWalletAndPasswordsDir(t testing.TB) (string, string, string) {
 	walletDir := filepath.Join(t.TempDir(), "wallet")
 	passwordsDir := filepath.Join(t.TempDir(), "passwords")
 	passwordFileDir := filepath.Join(t.TempDir(), "passwordFile")
@@ -40,7 +37,7 @@ func setupWalletAndPasswordsDir(t testing.TB) (string, string, string) {
 	return walletDir, passwordsDir, passwordFilePath
 }
 
-type testWalletConfig struct {
+type TestWalletConfig struct {
 	exitAll                 bool
 	skipDepositConfirm      bool
 	keymanagerKind          keymanager.Kind
@@ -59,9 +56,9 @@ type testWalletConfig struct {
 	passwordsDir            string
 }
 
-func setupWalletCtx(
+func SetupWalletCtx(
 	tb testing.TB,
-	cfg *testWalletConfig,
+	cfg *TestWalletConfig,
 ) *cli.Context {
 	app := cli.App{}
 	set := flag.NewFlagSet("test", 0)
@@ -71,7 +68,7 @@ func setupWalletCtx(
 	set.String(flags.DeletePublicKeysFlag.Name, cfg.deletePublicKeys, "")
 	set.String(flags.VoluntaryExitPublicKeysFlag.Name, cfg.voluntaryExitPublicKeys, "")
 	set.String(flags.BackupDirFlag.Name, cfg.backupDir, "")
-	set.String(flags.BackupPasswordFile.Name, cfg.backupPasswordFile, "")
+	set.String(flags.BackupPasswordFileFlag.Name, cfg.backupPasswordFile, "")
 	set.String(flags.BackupPublicKeysFlag.Name, cfg.backupPublicKeys, "")
 	set.String(flags.WalletPasswordFileFlag.Name, cfg.walletPasswordFile, "")
 	set.String(flags.AccountPasswordFileFlag.Name, cfg.accountPasswordFile, "")
@@ -79,7 +76,7 @@ func setupWalletCtx(
 	set.Bool(flags.SkipDepositConfirmationFlag.Name, cfg.skipDepositConfirm, "")
 	set.Bool(flags.SkipMnemonic25thWordCheckFlag.Name, true, "")
 	set.Bool(flags.ExitAllFlag.Name, cfg.exitAll, "")
-	set.String(flags.GrpcHeadersFlag.Name, cfg.grpcHeaders, "")
+	set.String(flags.GRPCHeadersFlag.Name, cfg.grpcHeaders, "")
 
 	if cfg.privateKeyFile != "" {
 		set.String(flags.ImportPrivateKeyFileFlag.Name, cfg.privateKeyFile, "")
@@ -93,13 +90,13 @@ func setupWalletCtx(
 	assert.NoError(tb, set.Set(flags.VoluntaryExitPublicKeysFlag.Name, cfg.voluntaryExitPublicKeys))
 	assert.NoError(tb, set.Set(flags.BackupDirFlag.Name, cfg.backupDir))
 	assert.NoError(tb, set.Set(flags.BackupPublicKeysFlag.Name, cfg.backupPublicKeys))
-	assert.NoError(tb, set.Set(flags.BackupPasswordFile.Name, cfg.backupPasswordFile))
+	assert.NoError(tb, set.Set(flags.BackupPasswordFileFlag.Name, cfg.backupPasswordFile))
 	assert.NoError(tb, set.Set(flags.WalletPasswordFileFlag.Name, cfg.walletPasswordFile))
 	assert.NoError(tb, set.Set(flags.AccountPasswordFileFlag.Name, cfg.accountPasswordFile))
 	assert.NoError(tb, set.Set(flags.NumAccountsFlag.Name, strconv.Itoa(int(cfg.numAccounts))))
 	assert.NoError(tb, set.Set(flags.SkipDepositConfirmationFlag.Name, strconv.FormatBool(cfg.skipDepositConfirm)))
 	assert.NoError(tb, set.Set(flags.ExitAllFlag.Name, strconv.FormatBool(cfg.exitAll)))
-	assert.NoError(tb, set.Set(flags.GrpcHeadersFlag.Name, cfg.grpcHeaders))
+	assert.NoError(tb, set.Set(flags.GRPCHeadersFlag.Name, cfg.grpcHeaders))
 	return cli.NewContext(&app, set, nil)
 }
 
@@ -110,44 +107,27 @@ func init() {
 
 func TestCreateOrOpenWallet(t *testing.T) {
 	hook := logTest.NewGlobal()
-	walletDir, passwordsDir, walletPasswordFile := setupWalletAndPasswordsDir(t)
-	cliCtx := setupWalletCtx(t, &testWalletConfig{
+	walletDir, passwordsDir, walletPasswordFile := SetupWalletAndPasswordsDir(t)
+	cliCtx := SetupWalletCtx(t, &TestWalletConfig{
 		walletDir:          walletDir,
 		passwordsDir:       passwordsDir,
 		keymanagerKind:     keymanager.Local,
 		walletPasswordFile: walletPasswordFile,
 	})
-	createLocalWallet := func(cliCtx *cli.Context) (*wallet.Wallet, error) {
-		cfg, err := cmdacc.ExtractWalletDirPassword(cliCtx)
-		if err != nil {
-			return nil, err
-		}
-		w := wallet.New(&wallet.Config{
-			KeymanagerKind: keymanager.Local,
-			WalletDir:      cfg.Dir,
-			WalletPassword: cfg.Password,
-		})
-		if err = accounts.CreateLocalKeymanagerWallet(cliCtx.Context, w); err != nil {
-			return nil, errors.Wrap(err, "could not create keymanager")
-		}
-		log.WithField("wallet-path", cfg.Dir).Info(
-			"Successfully created new wallet",
-		)
-		return w, nil
-	}
-	createdWallet, err := wallet.OpenWalletOrElseCli(cliCtx, createLocalWallet)
+
+	createdWallet, err := wallet.OpenWalletOrElseCli(cliCtx, wallet.OpenOrCreateNewWallet)
 	require.NoError(t, err)
 	require.LogsContain(t, hook, "Successfully created new wallet")
 
-	openedWallet, err := wallet.OpenWalletOrElseCli(cliCtx, createLocalWallet)
+	openedWallet, err := wallet.OpenWalletOrElseCli(cliCtx, wallet.OpenOrCreateNewWallet)
 	require.NoError(t, err)
 	assert.Equal(t, createdWallet.KeymanagerKind(), openedWallet.KeymanagerKind())
 	assert.Equal(t, createdWallet.AccountsDir(), openedWallet.AccountsDir())
 }
 
 func TestCreateWallet_Local(t *testing.T) {
-	walletDir, passwordsDir, walletPasswordFile := setupWalletAndPasswordsDir(t)
-	cliCtx := setupWalletCtx(t, &testWalletConfig{
+	walletDir, passwordsDir, walletPasswordFile := SetupWalletAndPasswordsDir(t)
+	cliCtx := SetupWalletCtx(t, &TestWalletConfig{
 		walletDir:          walletDir,
 		passwordsDir:       passwordsDir,
 		keymanagerKind:     keymanager.Local,
@@ -168,8 +148,8 @@ func TestCreateWallet_Local(t *testing.T) {
 }
 
 func TestCreateWallet_Derived(t *testing.T) {
-	walletDir, passwordsDir, passwordFile := setupWalletAndPasswordsDir(t)
-	cliCtx := setupWalletCtx(t, &testWalletConfig{
+	walletDir, passwordsDir, passwordFile := SetupWalletAndPasswordsDir(t)
+	cliCtx := SetupWalletCtx(t, &TestWalletConfig{
 		walletDir:          walletDir,
 		passwordsDir:       passwordsDir,
 		walletPasswordFile: passwordFile,
@@ -190,8 +170,8 @@ func TestCreateWallet_Derived(t *testing.T) {
 
 // TestCreateWallet_WalletAlreadyExists checks for expected error if trying to create a wallet when there is one already.
 func TestCreateWallet_WalletAlreadyExists(t *testing.T) {
-	walletDir, passwordsDir, passwordFile := setupWalletAndPasswordsDir(t)
-	cliCtx := setupWalletCtx(t, &testWalletConfig{
+	walletDir, passwordsDir, passwordFile := SetupWalletAndPasswordsDir(t)
+	cliCtx := SetupWalletCtx(t, &TestWalletConfig{
 		walletDir:          walletDir,
 		passwordsDir:       passwordsDir,
 		walletPasswordFile: passwordFile,
@@ -207,7 +187,7 @@ func TestCreateWallet_WalletAlreadyExists(t *testing.T) {
 	_, err = CreateAndSaveWalletCli(cliCtx)
 	require.ErrorContains(t, "already exists", err)
 
-	cliCtx = setupWalletCtx(t, &testWalletConfig{
+	cliCtx = SetupWalletCtx(t, &TestWalletConfig{
 		walletDir:          walletDir,
 		passwordsDir:       passwordsDir,
 		walletPasswordFile: passwordFile,

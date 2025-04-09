@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"github.com/prysmaticlabs/go-bitfield"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	aggtesting "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1/attestation/aggregation/testing"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	aggtesting "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/attestation/aggregation/testing"
 )
 
 func BenchmarkMaxCoverProblem_MaxCover(b *testing.B) {

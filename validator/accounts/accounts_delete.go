@@ -3,17 +3,16 @@ package accounts
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v4/io/prompt"
-	ethpbservice "github.com/prysmaticlabs/prysm/v4/proto/eth/service"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/io/prompt"
+	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
 )
 
 // Delete the accounts that the user requests to be deleted from the wallet.
-func (acm *AccountsCLIManager) Delete(ctx context.Context) error {
+func (acm *CLIManager) Delete(ctx context.Context) error {
 	rawPublicKeys := make([][]byte, len(acm.filteredPubKeys))
 	formattedPubKeys := make([]string, len(acm.filteredPubKeys))
 	for i, pk := range acm.filteredPubKeys {
@@ -26,7 +25,7 @@ func (acm *AccountsCLIManager) Delete(ctx context.Context) error {
 		if len(acm.filteredPubKeys) == 1 {
 			promptText := "Are you sure you want to delete 1 account? (%s) Y/N"
 			resp, err := prompt.ValidatePrompt(
-				os.Stdin, fmt.Sprintf(promptText, au.BrightGreen(formattedPubKeys[0])), prompt.ValidateYesOrNo,
+				acm.inputReader, fmt.Sprintf(promptText, au.BrightGreen(formattedPubKeys[0])), prompt.ValidateYesOrNo,
 			)
 			if err != nil {
 				return err
@@ -41,7 +40,7 @@ func (acm *AccountsCLIManager) Delete(ctx context.Context) error {
 			} else {
 				promptText = fmt.Sprintf(promptText, len(acm.filteredPubKeys), au.BrightGreen(allAccountStr))
 			}
-			resp, err := prompt.ValidatePrompt(os.Stdin, promptText, prompt.ValidateYesOrNo)
+			resp, err := prompt.ValidatePrompt(acm.inputReader, promptText, prompt.ValidateYesOrNo)
 			if err != nil {
 				return err
 			}
@@ -56,7 +55,7 @@ func (acm *AccountsCLIManager) Delete(ctx context.Context) error {
 	}); err != nil {
 		return err
 	}
-	log.WithField("publicKeys", allAccountStr).Warn(
+	log.WithField("pubkeys", allAccountStr).Warn(
 		"Attempted to delete accounts. IMPORTANT: please run `validator accounts list` to ensure " +
 			"the public keys are indeed deleted. If they are still there, please file an issue at " +
 			"https://github.com/prysmaticlabs/prysm/issues/new")
@@ -76,11 +75,11 @@ func DeleteAccount(ctx context.Context, cfg *DeleteConfig) error {
 	}
 	for i, status := range statuses {
 		switch status.Status {
-		case ethpbservice.DeletedKeystoreStatus_ERROR:
+		case keymanager.StatusError:
 			log.Errorf("Error deleting key %#x: %s", bytesutil.Trunc(cfg.DeletePublicKeys[i]), status.Message)
-		case ethpbservice.DeletedKeystoreStatus_NOT_ACTIVE:
+		case keymanager.StatusNotActive:
 			log.Warnf("Duplicate key %#x found in delete request", bytesutil.Trunc(cfg.DeletePublicKeys[i]))
-		case ethpbservice.DeletedKeystoreStatus_NOT_FOUND:
+		case keymanager.StatusNotFound:
 			log.Warnf("Could not find keystore for %#x", bytesutil.Trunc(cfg.DeletePublicKeys[i]))
 		}
 	}

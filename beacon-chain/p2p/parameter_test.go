@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 )
 
 func TestOverlayParameters(t *testing.T) {
@@ -22,7 +22,7 @@ func TestGossipParameters(t *testing.T) {
 	pms := pubsubGossipParam()
 	assert.Equal(t, gossipSubMcacheLen, pms.HistoryLength, "gossipSubMcacheLen")
 	assert.Equal(t, gossipSubMcacheGossip, pms.HistoryGossip, "gossipSubMcacheGossip")
-	assert.Equal(t, gossipSubSeenTTL, int(pubsub.TimeCacheDuration.Milliseconds()/pms.HeartbeatInterval.Milliseconds()), "gossipSubSeenTtl")
+	assert.Equal(t, gossipSubSeenTTL, int(pubsub.TimeCacheDuration.Seconds()), "gossipSubSeenTtl")
 }
 
 func TestFanoutParameters(t *testing.T) {

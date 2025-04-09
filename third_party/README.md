@@ -16,8 +16,6 @@ unless really needed**
 
 - [Prerequisites](#prerequisites)
 - [Creating a Patch](#creating-a-patch)
-- [Ethereum APIs Patch](#ethereum-apis-patch)
-- [Updating Patches](#updating-patches)
 
 ## Prerequisites
 

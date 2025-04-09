@@ -6,23 +6,27 @@ package node
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/blockchain"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/db"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/execution"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/sync"
-	"github.com/prysmaticlabs/prysm/v4/io/logs"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/runtime/version"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/execution"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync"
+	"github.com/prysmaticlabs/prysm/v5/io/logs"
+	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -43,6 +47,35 @@ type Server struct {
 	POWChainInfoFetcher  execution.ChainInfoFetcher
 	BeaconMonitoringHost string
 	BeaconMonitoringPort int
+}
+
+// GetHealth checks the health of the node
+func (ns *Server) GetHealth(ctx context.Context, request *ethpb.HealthRequest) (*empty.Empty, error) {
+	ctx, span := trace.StartSpan(ctx, "node.GetHealth")
+	defer span.End()
+
+	// Set a timeout for the health check operation
+	timeoutDuration := 10 * time.Second
+	ctx, cancel := context.WithTimeout(ctx, timeoutDuration)
+	defer cancel() // Important to avoid a context leak
+
+	if ns.SyncChecker.Synced() {
+		return &empty.Empty{}, nil
+	}
+	if ns.SyncChecker.Syncing() || ns.SyncChecker.Initialized() {
+		if request.SyncingStatus != 0 {
+			// override the 200 success with the provided request status
+			if err := grpc.SetHeader(ctx, metadata.Pairs("x-http-code", strconv.FormatUint(request.SyncingStatus, 10))); err != nil {
+				return &empty.Empty{}, status.Errorf(codes.Internal, "Could not set custom success code header: %v", err)
+			}
+			return &empty.Empty{}, nil
+		}
+		if err := grpc.SetHeader(ctx, metadata.Pairs("x-http-code", strconv.FormatUint(http.StatusPartialContent, 10))); err != nil {
+			return &empty.Empty{}, status.Errorf(codes.Internal, "Could not set custom success code header: %v", err)
+		}
+		return &empty.Empty{}, nil
+	}
+	return &empty.Empty{}, status.Errorf(codes.Unavailable, "service unavailable")
 }
 
 // GetSyncStatus checks the current network sync status of the node.
@@ -199,7 +232,7 @@ func (ns *Server) ListPeers(ctx context.Context, _ *empty.Empty) (*ethpb.Peers, 
 		if multiaddr != nil {
 			multiAddrStr = multiaddr.String()
 		}
-		address := fmt.Sprintf("%s/p2p/%s", multiAddrStr, pid.Pretty())
+		address := fmt.Sprintf("%s/p2p/%s", multiAddrStr, pid.String())
 		pbDirection := ethpb.PeerDirection_UNKNOWN
 		switch direction {
 		case network.DirInbound:

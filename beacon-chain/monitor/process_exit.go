@@ -1,8 +1,8 @@
 package monitor
 
 import (
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/interfaces"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/sirupsen/logrus"
 )
 
@@ -14,8 +14,8 @@ func (s *Service) processExitsFromBlock(blk interfaces.ReadOnlyBeaconBlock) {
 		idx := exit.Exit.ValidatorIndex
 		if s.trackedIndex(idx) {
 			log.WithFields(logrus.Fields{
-				"ValidatorIndex": idx,
-				"Slot":           blk.Slot(),
+				"validatorIndex": idx,
+				"slot":           blk.Slot(),
 			}).Info("Voluntary exit was included")
 		}
 	}
@@ -28,7 +28,7 @@ func (s *Service) processExit(exit *ethpb.SignedVoluntaryExit) {
 	defer s.RUnlock()
 	if s.trackedIndex(idx) {
 		log.WithFields(logrus.Fields{
-			"ValidatorIndex": idx,
+			"validatorIndex": idx,
 		}).Info("Voluntary exit was processed")
 	}
 }

@@ -5,12 +5,14 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/cmd"
-	"github.com/prysmaticlabs/prysm/v4/cmd/validator/flags"
-	"github.com/prysmaticlabs/prysm/v4/io/file"
-	"github.com/prysmaticlabs/prysm/v4/validator/accounts/userprompt"
-	"github.com/prysmaticlabs/prysm/v4/validator/db/kv"
-	slashingprotection "github.com/prysmaticlabs/prysm/v4/validator/slashing-protection-history"
+	"github.com/prysmaticlabs/prysm/v5/cmd"
+	"github.com/prysmaticlabs/prysm/v5/cmd/validator/flags"
+	"github.com/prysmaticlabs/prysm/v5/config/features"
+	"github.com/prysmaticlabs/prysm/v5/io/file"
+	"github.com/prysmaticlabs/prysm/v5/validator/accounts/userprompt"
+	"github.com/prysmaticlabs/prysm/v5/validator/db/filesystem"
+	"github.com/prysmaticlabs/prysm/v5/validator/db/iface"
+	"github.com/prysmaticlabs/prysm/v5/validator/db/kv"
 	"github.com/urfave/cli/v2"
 )
 
@@ -24,7 +26,16 @@ import (
 // 4. Call the function which actually imports the data from
 // the standard slashing protection JSON file into our database.
 func importSlashingProtectionJSON(cliCtx *cli.Context) error {
-	var err error
+	var (
+		valDB iface.ValidatorDB
+		found bool
+		err   error
+	)
+
+	// Check if a minimal database is requested
+	isDatabaseMinimal := cliCtx.Bool(features.EnableMinimalSlashingProtection.Name)
+
+	// Get the data directory from the CLI context.
 	dataDir := cliCtx.String(cmd.DataDirFlag.Name)
 	if !cliCtx.IsSet(cmd.DataDirFlag.Name) {
 		dataDir, err = userprompt.InputDirectory(cliCtx, userprompt.DataDirDirPromptText, cmd.DataDirFlag)
@@ -32,28 +43,44 @@ func importSlashingProtectionJSON(cliCtx *cli.Context) error {
 			return errors.Wrapf(err, "could not read directory value from input")
 		}
 	}
-	// ensure that the validator.db is found under the specified dir or its subdirectories
-	found, _, err := file.RecursiveFileFind(kv.ProtectionDbFileName, dataDir)
+
+	// Ensure that the database is found under the specified directory or its subdirectories
+	if isDatabaseMinimal {
+		found, _, err = file.RecursiveDirFind(filesystem.DatabaseDirName, dataDir)
+	} else {
+		found, _, err = file.RecursiveFileFind(kv.ProtectionDbFileName, dataDir)
+	}
+
 	if err != nil {
 		return errors.Wrapf(err, "error finding validator database at path %s", dataDir)
 	}
+
+	message := "Found existing database inside of %s"
 	if !found {
-		log.Infof(
-			"Did not find existing validator.db inside of %s, creating a new one",
-			dataDir,
-		)
-	} else {
-		log.Infof("Found existing validator.db inside of %s", dataDir)
+		message = "Did not find existing database inside of %s, creating a new one"
 	}
-	valDB, err := kv.NewKVStore(cliCtx.Context, dataDir, &kv.Config{})
+
+	log.Infof(message, dataDir)
+
+	// Open the validator database.
+	if isDatabaseMinimal {
+		valDB, err = filesystem.NewStore(dataDir, nil)
+	} else {
+		valDB, err = kv.NewKVStore(cliCtx.Context, dataDir, nil)
+	}
+
 	if err != nil {
 		return errors.Wrapf(err, "could not access validator database at path: %s", dataDir)
 	}
+
+	// Close the database when we're done.
 	defer func() {
 		if err := valDB.Close(); err != nil {
 			log.WithError(err).Errorf("Could not close validator DB")
 		}
 	}()
+
+	// Get the path to the slashing protection JSON file from the CLI context.
 	protectionFilePath, err := userprompt.InputDirectory(cliCtx, userprompt.SlashingProtectionJSONPromptText, flags.SlashingProtectionJSONFileFlag)
 	if err != nil {
 		return errors.Wrap(err, "could not get slashing protection json file")
@@ -65,17 +92,22 @@ func importSlashingProtectionJSON(cliCtx *cli.Context) error {
 			flags.SlashingProtectionJSONFileFlag.Name,
 		)
 	}
+
+	// Read the JSON file from user input.
 	enc, err := file.ReadFileAsBytes(protectionFilePath)
 	if err != nil {
 		return err
 	}
+
+	// Import the data from the standard slashing protection JSON file into our database.
 	log.Infof("Starting import of slashing protection file %s", protectionFilePath)
 	buf := bytes.NewBuffer(enc)
-	if err := slashingprotection.ImportStandardProtectionJSON(
-		cliCtx.Context, valDB, buf,
-	); err != nil {
-		return err
+
+	if err := valDB.ImportStandardProtectionJSON(cliCtx.Context, buf); err != nil {
+		return errors.Wrapf(err, "could not import slashing protection JSON file %s", protectionFilePath)
 	}
+
 	log.Infof("Slashing protection JSON successfully imported into %s", dataDir)
+
 	return nil
 }

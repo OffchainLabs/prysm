@@ -12,22 +12,26 @@ import (
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/protocol"
-	mock "github.com/prysmaticlabs/prysm/v4/beacon-chain/blockchain/testing"
-	db "github.com/prysmaticlabs/prysm/v4/beacon-chain/db/testing"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p"
-	p2ptest "github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p/testing"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/startup"
-	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	types "github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	leakybucket "github.com/prysmaticlabs/prysm/v4/container/leaky-bucket"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v4/network/forks"
-	enginev1 "github.com/prysmaticlabs/prysm/v4/proto/engine/v1"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/testing/util"
-	"github.com/prysmaticlabs/prysm/v4/time/slots"
+	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
+	db "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
+	p2ptest "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
+	types "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	leakybucket "github.com/prysmaticlabs/prysm/v5/container/leaky-bucket"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/network/forks"
+	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/util"
+	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
 type blobsTestCase struct {
@@ -48,12 +52,12 @@ type blobsTestCase struct {
 }
 
 type testHandler func(s *Service) rpcHandler
-type expectedDefiner func(t *testing.T, scs []*ethpb.BlobSidecar, req interface{}) []*expectedBlobChunk
-type requestFromSidecars func([]*ethpb.BlobSidecar) interface{}
+type expectedDefiner func(t *testing.T, scs []blocks.ROBlob, req interface{}) []*expectedBlobChunk
+type requestFromSidecars func([]blocks.ROBlob) interface{}
 type oldestSlotCallback func(t *testing.T) types.Slot
 type expectedRequirer func(*testing.T, *Service, []*expectedBlobChunk) func(network.Stream)
 
-func generateTestBlockWithSidecars(t *testing.T, parent [32]byte, slot types.Slot, nblobs int) (*ethpb.SignedBeaconBlockDeneb, []*ethpb.BlobSidecar) {
+func generateTestBlockWithSidecars(t *testing.T, parent [32]byte, slot types.Slot, nblobs int) (*ethpb.SignedBeaconBlockDeneb, []blocks.ROBlob) {
 	// Start service with 160 as allowed blocks capacity (and almost zero capacity recovery).
 	stateRoot := bytesutil.PadTo([]byte("stateRoot"), fieldparams.RootLength)
 	receiptsRoot := bytesutil.PadTo([]byte("receiptsRoot"), fieldparams.RootLength)
@@ -103,32 +107,41 @@ func generateTestBlockWithSidecars(t *testing.T, parent [32]byte, slot types.Slo
 	root, err := block.Block.HashTreeRoot()
 	require.NoError(t, err)
 
-	sidecars := make([]*ethpb.BlobSidecar, len(commitments))
+	sbb, err := blocks.NewSignedBeaconBlock(block)
+	require.NoError(t, err)
+	sidecars := make([]blocks.ROBlob, len(commitments))
 	for i, c := range block.Block.Body.BlobKzgCommitments {
-		sidecars[i] = generateTestSidecar(root, block, i, c)
+		sidecars[i] = generateTestSidecar(t, root, sbb, i, c)
 	}
 	return block, sidecars
 }
 
-func generateTestSidecar(root [32]byte, block *ethpb.SignedBeaconBlockDeneb, index int, commitment []byte) *ethpb.BlobSidecar {
+func generateTestSidecar(t *testing.T, root [32]byte, block interfaces.ReadOnlySignedBeaconBlock, index int, commitment []byte) blocks.ROBlob {
+	header, err := block.Header()
+	require.NoError(t, err)
 	blob := make([]byte, fieldparams.BlobSize)
 	binary.LittleEndian.PutUint64(blob, uint64(index))
-	sc := &ethpb.BlobSidecar{
-		BlockRoot:       root[:],
-		Index:           uint64(index),
-		Slot:            block.Block.Slot,
-		BlockParentRoot: block.Block.ParentRoot,
-		ProposerIndex:   block.Block.ProposerIndex,
-		Blob:            blob,
-		KzgCommitment:   commitment,
-		KzgProof:        commitment,
+	pb := &ethpb.BlobSidecar{
+		Index:             uint64(index),
+		Blob:              blob,
+		KzgCommitment:     commitment,
+		KzgProof:          commitment,
+		SignedBlockHeader: header,
 	}
+	pb.CommitmentInclusionProof = fakeEmptyProof(t, block, pb)
+
+	sc, err := blocks.NewROBlobWithRoot(pb, root)
+	require.NoError(t, err)
 	return sc
+}
+
+func fakeEmptyProof(_ *testing.T, _ interfaces.ReadOnlySignedBeaconBlock, _ *ethpb.BlobSidecar) [][]byte {
+	return util.HydrateCommitmentInclusionProofs()
 }
 
 type expectedBlobChunk struct {
 	code    uint8
-	sidecar *ethpb.BlobSidecar
+	sidecar *blocks.ROBlob
 	message string
 }
 
@@ -146,25 +159,28 @@ func (r *expectedBlobChunk) requireExpected(t *testing.T, s *Service, stream net
 	require.NoError(t, err)
 
 	valRoot := s.cfg.chain.GenesisValidatorsRoot()
-	ctxBytes, err := forks.ForkDigestFromEpoch(slots.ToEpoch(r.sidecar.GetSlot()), valRoot[:])
+	ctxBytes, err := forks.ForkDigestFromEpoch(slots.ToEpoch(r.sidecar.Slot()), valRoot[:])
 	require.NoError(t, err)
 	require.Equal(t, ctxBytes, bytesutil.ToBytes4(c))
 
 	sc := &ethpb.BlobSidecar{}
 	require.NoError(t, encoding.DecodeWithMaxLength(stream, sc))
-	require.Equal(t, bytesutil.ToBytes32(sc.BlockRoot), bytesutil.ToBytes32(r.sidecar.BlockRoot))
-	require.Equal(t, sc.Index, r.sidecar.Index)
+	rob, err := blocks.NewROBlob(sc)
+	require.NoError(t, err)
+	require.Equal(t, rob.BlockRoot(), r.sidecar.BlockRoot())
+	require.Equal(t, rob.Index, r.sidecar.Index)
 }
 
-func (c *blobsTestCase) setup(t *testing.T) (*Service, []*ethpb.BlobSidecar, func()) {
+func (c *blobsTestCase) setup(t *testing.T) (*Service, []blocks.ROBlob, func()) {
 	cfg := params.BeaconConfig()
-	repositionFutureEpochs(cfg)
-	undo, err := params.SetActiveWithUndo(cfg)
-	require.NoError(t, err)
+	copiedCfg := cfg.Copy()
+	repositionFutureEpochs(copiedCfg)
+	copiedCfg.InitializeForkSchedule()
+	params.OverrideBeaconConfig(copiedCfg)
 	cleanup := func() {
-		require.NoError(t, undo())
+		params.OverrideBeaconConfig(cfg)
 	}
-	maxBlobs := fieldparams.MaxBlobsPerBlock
+	maxBlobs := int(params.BeaconConfig().MaxBlobsPerBlock(0))
 	chain, clock := defaultMockChain(t)
 	if c.chain == nil {
 		c.chain = chain
@@ -174,7 +190,7 @@ func (c *blobsTestCase) setup(t *testing.T) (*Service, []*ethpb.BlobSidecar, fun
 	}
 	d := db.SetupDB(t)
 
-	sidecars := make([]*ethpb.BlobSidecar, 0)
+	sidecars := make([]blocks.ROBlob, 0)
 	oldest := c.oldestSlot(t)
 	var parentRoot [32]byte
 	for i := 0; i < c.nblocks; i++ {
@@ -198,12 +214,12 @@ func (c *blobsTestCase) setup(t *testing.T) (*Service, []*ethpb.BlobSidecar, fun
 
 	client := p2ptest.NewTestP2P(t)
 	s := &Service{
-		cfg:         &config{p2p: client, chain: c.chain, clock: clock, beaconDB: d},
+		cfg:         &config{p2p: client, chain: c.chain, clock: clock, beaconDB: d, blobStorage: filesystem.NewEphemeralBlobStorage(t)},
 		rateLimiter: newRateLimiter(client),
 	}
 
-	byRootRate := params.BeaconNetworkConfig().MaxRequestBlobSidecars * fieldparams.MaxBlobsPerBlock
-	byRangeRate := params.BeaconNetworkConfig().MaxRequestBlobSidecars * fieldparams.MaxBlobsPerBlock
+	byRootRate := params.BeaconConfig().MaxRequestBlobSidecars * uint64(params.BeaconConfig().MaxBlobsPerBlock(0))
+	byRangeRate := params.BeaconConfig().MaxRequestBlobSidecars * uint64(params.BeaconConfig().MaxBlobsPerBlock(0))
 	s.setRateCollector(p2p.RPCBlobSidecarsByRootTopicV1, leakybucket.NewCollector(0.000001, int64(byRootRate), time.Second, false))
 	s.setRateCollector(p2p.RPCBlobSidecarsByRangeTopicV1, leakybucket.NewCollector(0.000001, int64(byRangeRate), time.Second, false))
 
@@ -223,17 +239,21 @@ func (c *blobsTestCase) run(t *testing.T) {
 	defer cleanup()
 	req := c.requestFromSidecars(sidecars)
 	expect := c.defineExpected(t, sidecars, req)
-	m := map[types.Slot][]*ethpb.BlobSidecar{}
-	for _, sc := range expect {
+	m := map[types.Slot][]blocks.ROBlob{}
+	for i := range expect {
+		sc := expect[i]
 		// If define expected omits a sidecar from an expected result, we don't need to save it.
 		// This can happen in particular when there are no expected results, because the nth part of the
 		// response is an error (or none at all when the whole request is invalid).
 		if sc.sidecar != nil {
-			m[sc.sidecar.Slot] = append(m[sc.sidecar.Slot], sc.sidecar)
+			m[sc.sidecar.Slot()] = append(m[sc.sidecar.Slot()], *sc.sidecar)
 		}
 	}
 	for _, blobSidecars := range m {
-		require.NoError(t, s.cfg.beaconDB.SaveBlobSidecar(context.Background(), blobSidecars))
+		v := verification.FakeVerifySliceForTest(t, blobSidecars)
+		for i := range v {
+			require.NoError(t, s.cfg.blobStorage.Save(v[i]))
+		}
 	}
 	if c.total != nil {
 		require.Equal(t, *c.total, len(expect))
@@ -263,7 +283,7 @@ func defaultMockChain(t *testing.T) (*mock.ChainService, *startup.Clock) {
 	de := params.BeaconConfig().DenebForkEpoch
 	df, err := forks.Fork(de)
 	require.NoError(t, err)
-	denebBuffer := params.BeaconNetworkConfig().MinEpochsForBlobsSidecarsRequest + 1000
+	denebBuffer := params.BeaconConfig().MinEpochsForBlobsSidecarsRequest + 1000
 	ce := de + denebBuffer
 	fe := ce - 2
 	cs, err := slots.EpochStart(ce)
@@ -289,11 +309,11 @@ func TestTestcaseSetup_BlocksAndBlobs(t *testing.T) {
 	req := blobRootRequestFromSidecars(sidecars)
 	expect := c.filterExpectedByRoot(t, sidecars, req)
 	defer cleanup()
-	maxed := nblocks * fieldparams.MaxBlobsPerBlock
+	maxed := nblocks * params.BeaconConfig().MaxBlobsPerBlock(0)
 	require.Equal(t, maxed, len(sidecars))
 	require.Equal(t, maxed, len(expect))
 	for _, sc := range sidecars {
-		blk, err := s.cfg.beaconDB.Block(ctx, bytesutil.ToBytes32(sc.BlockRoot))
+		blk, err := s.cfg.beaconDB.Block(ctx, sc.BlockRoot())
 		require.NoError(t, err)
 		var found *int
 		comms, err := blk.Block().Body().BlobKzgCommitments()
@@ -304,42 +324,5 @@ func TestTestcaseSetup_BlocksAndBlobs(t *testing.T) {
 			}
 		}
 		require.Equal(t, true, found != nil)
-	}
-}
-
-func TestRoundTripDenebSave(t *testing.T) {
-	ctx := context.Background()
-	cfg := params.BeaconConfig()
-	repositionFutureEpochs(cfg)
-	undo, err := params.SetActiveWithUndo(cfg)
-	require.NoError(t, err)
-	defer func() {
-		require.NoError(t, undo())
-	}()
-	parentRoot := [32]byte{}
-	c := blobsTestCase{nblocks: 10}
-	chain, clock := defaultMockChain(t)
-	c.chain = chain
-	c.clock = clock
-	oldest, err := slots.EpochStart(blobMinReqEpoch(c.chain.FinalizedCheckPoint.Epoch, slots.ToEpoch(c.clock.CurrentSlot())))
-	require.NoError(t, err)
-	maxBlobs := fieldparams.MaxBlobsPerBlock
-	block, bsc := generateTestBlockWithSidecars(t, parentRoot, oldest, maxBlobs)
-	require.Equal(t, len(block.Block.Body.BlobKzgCommitments), len(bsc))
-	require.Equal(t, maxBlobs, len(bsc))
-	for i := range bsc {
-		require.DeepEqual(t, block.Block.Body.BlobKzgCommitments[i], bsc[i].KzgCommitment)
-	}
-	d := db.SetupDB(t)
-	util.SaveBlock(t, ctx, d, block)
-	root, err := block.Block.HashTreeRoot()
-	require.NoError(t, err)
-	dbBlock, err := d.Block(ctx, root)
-	require.NoError(t, err)
-	comms, err := dbBlock.Block().Body().BlobKzgCommitments()
-	require.NoError(t, err)
-	require.Equal(t, maxBlobs, len(comms))
-	for i := range bsc {
-		require.DeepEqual(t, comms[i], bsc[i].KzgCommitment)
 	}
 }

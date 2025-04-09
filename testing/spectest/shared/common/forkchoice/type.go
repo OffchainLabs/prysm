@@ -14,13 +14,15 @@ type Step struct {
 }
 
 type Check struct {
-	Time                    *int       `json:"time"`
-	GenesisTime             int        `json:"genesis_time"`
-	ProposerBoostRoot       *string    `json:"proposer_boost_root"`
-	Head                    *SlotRoot  `json:"head"`
-	JustifiedCheckPoint     *EpochRoot `json:"justified_checkpoint"`
-	BestJustifiedCheckPoint *EpochRoot `json:"best_justified_checkpoint"`
-	FinalizedCheckPoint     *EpochRoot `json:"finalized_checkpoint"`
+	Time                    *int            `json:"time"`
+	GenesisTime             int             `json:"genesis_time"`
+	ProposerBoostRoot       *string         `json:"proposer_boost_root"`
+	Head                    *SlotRoot       `json:"head"`
+	JustifiedCheckPoint     *EpochRoot      `json:"justified_checkpoint"`
+	BestJustifiedCheckPoint *EpochRoot      `json:"best_justified_checkpoint"`
+	FinalizedCheckPoint     *EpochRoot      `json:"finalized_checkpoint"`
+	GetProposerHead         *string         `json:"get_proposer_head"`
+	ShouldOverrideFCU       *ShouldOverride `json:"should_override_forkchoice_update"`
 }
 
 type SlotRoot struct {
@@ -37,4 +39,9 @@ type MockEngineResp struct {
 	Status          *string `json:"status"`
 	LatestValidHash *string `json:"latest_valid_hash"`
 	ValidationError *string `json:"validation_error"`
+}
+
+type ShouldOverride struct {
+	ValidatorConnected bool `json:"validator_is_connected"`
+	Result             bool `json:"result"`
 }

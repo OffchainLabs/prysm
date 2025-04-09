@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"fmt"
 	"os"
 	"path"
 	"testing"
@@ -8,7 +9,8 @@ import (
 	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/ghodss/yaml"
 	jsoniter "github.com/json-iterator/go"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/io/file"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 var json = jsoniter.Config{
@@ -33,15 +35,27 @@ func UnmarshalYaml(y []byte, dest interface{}) error {
 func TestFolders(t testing.TB, config, forkOrPhase, folderPath string) ([]os.DirEntry, string) {
 	testsFolderPath := path.Join("tests", config, forkOrPhase, folderPath)
 	filepath, err := bazel.Runfile(testsFolderPath)
-	if err != nil {
-		return nil, ""
-	}
+	require.NoError(t, err)
 	testFolders, err := os.ReadDir(filepath)
 	require.NoError(t, err)
 
 	if len(testFolders) == 0 {
 		t.Fatalf("No test folders found at %s", testsFolderPath)
 	}
-
+	err = saveSpecTest(testsFolderPath)
+	require.NoError(t, err)
 	return testFolders, testsFolderPath
+}
+
+func saveSpecTest(testFolder string) error {
+	baseDir := os.Getenv("SPEC_TEST_REPORT_OUTPUT_DIR")
+	if baseDir == "" {
+		return nil // Do nothing if spec test report not requested.
+	}
+	fullPath := path.Join(baseDir, fmt.Sprintf("%x_tests.txt", testFolder))
+	err := file.WriteFile(fullPath, []byte(testFolder))
+	if err != nil {
+		return err
+	}
+	return nil
 }

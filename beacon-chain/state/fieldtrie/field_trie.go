@@ -5,15 +5,24 @@ import (
 	"sync"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state/state-native/types"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state/stateutil"
-	pmath "github.com/prysmaticlabs/prysm/v4/math"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native/types"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stateutil"
+	multi_value_slice "github.com/prysmaticlabs/prysm/v5/container/multi-value-slice"
+	pmath "github.com/prysmaticlabs/prysm/v5/math"
 )
 
 var (
 	ErrInvalidFieldTrie = errors.New("invalid field trie")
 	ErrEmptyFieldTrie   = errors.New("empty field trie")
 )
+
+// sliceAccessor describes an interface for a multivalue slice
+// object that returns information about the multivalue slice along with the
+// particular state instance we are referencing.
+type sliceAccessor interface {
+	Len(obj multi_value_slice.Identifiable) int
+	State() multi_value_slice.Identifiable
+}
 
 // FieldTrie is the representation of the representative
 // trie of the particular field.
@@ -51,6 +60,12 @@ func NewFieldTrie(field types.FieldIndex, fieldInfo types.DataType, elements int
 	if err := validateElements(field, fieldInfo, elements, length); err != nil {
 		return nil, err
 	}
+	var numOfElems int
+	if val, ok := elements.(sliceAccessor); ok {
+		numOfElems = val.Len(val.State())
+	} else {
+		numOfElems = reflect.Indirect(reflect.ValueOf(elements)).Len()
+	}
 	switch fieldInfo {
 	case types.BasicArray:
 		fl, err := stateutil.ReturnTrieLayer(fieldRoots, length)
@@ -64,7 +79,7 @@ func NewFieldTrie(field types.FieldIndex, fieldInfo types.DataType, elements int
 			reference:   stateutil.NewRef(1),
 			RWMutex:     new(sync.RWMutex),
 			length:      length,
-			numOfElems:  reflect.Indirect(reflect.ValueOf(elements)).Len(),
+			numOfElems:  numOfElems,
 		}, nil
 	case types.CompositeArray, types.CompressedArray:
 		return &FieldTrie{
@@ -74,7 +89,7 @@ func NewFieldTrie(field types.FieldIndex, fieldInfo types.DataType, elements int
 			reference:   stateutil.NewRef(1),
 			RWMutex:     new(sync.RWMutex),
 			length:      length,
-			numOfElems:  reflect.Indirect(reflect.ValueOf(elements)).Len(),
+			numOfElems:  numOfElems,
 		}, nil
 	default:
 		return nil, errors.Errorf("unrecognized data type in field map: %v", reflect.TypeOf(fieldInfo).Name())
@@ -100,20 +115,23 @@ func (f *FieldTrie) RecomputeTrie(indices []uint64, elements interface{}) ([32]b
 	if err := f.validateIndices(indices); err != nil {
 		return [32]byte{}, err
 	}
+	if val, ok := elements.(sliceAccessor); ok {
+		f.numOfElems = val.Len(val.State())
+	} else {
+		f.numOfElems = reflect.Indirect(reflect.ValueOf(elements)).Len()
+	}
 	switch f.dataType {
 	case types.BasicArray:
 		fieldRoot, f.fieldLayers, err = stateutil.RecomputeFromLayer(fieldRoots, indices, f.fieldLayers)
 		if err != nil {
 			return [32]byte{}, err
 		}
-		f.numOfElems = reflect.Indirect(reflect.ValueOf(elements)).Len()
 		return fieldRoot, nil
 	case types.CompositeArray:
 		fieldRoot, f.fieldLayers, err = stateutil.RecomputeFromLayerVariable(fieldRoots, indices, f.fieldLayers)
 		if err != nil {
 			return [32]byte{}, err
 		}
-		f.numOfElems = reflect.Indirect(reflect.ValueOf(elements)).Len()
 		return stateutil.AddInMixin(fieldRoot, uint64(len(f.fieldLayers[0])))
 	case types.CompressedArray:
 		numOfElems, err := f.field.ElemsInChunk()
@@ -142,7 +160,6 @@ func (f *FieldTrie) RecomputeTrie(indices []uint64, elements interface{}) ([32]b
 		if err != nil {
 			return [32]byte{}, err
 		}
-		f.numOfElems = reflect.Indirect(reflect.ValueOf(elements)).Len()
 		return stateutil.AddInMixin(fieldRoot, uint64(f.numOfElems))
 	default:
 		return [32]byte{}, errors.Errorf("unrecognized data type in field map: %v", reflect.TypeOf(f.dataType).Name())
@@ -168,13 +185,14 @@ func (f *FieldTrie) CopyTrie() *FieldTrie {
 		copy(dstFieldTrie[i], layer)
 	}
 	return &FieldTrie{
-		fieldLayers: dstFieldTrie,
-		field:       f.field,
-		dataType:    f.dataType,
-		reference:   stateutil.NewRef(1),
-		RWMutex:     new(sync.RWMutex),
-		length:      f.length,
-		numOfElems:  f.numOfElems,
+		fieldLayers:   dstFieldTrie,
+		field:         f.field,
+		dataType:      f.dataType,
+		reference:     stateutil.NewRef(1),
+		RWMutex:       new(sync.RWMutex),
+		length:        f.length,
+		numOfElems:    f.numOfElems,
+		isTransferred: f.isTransferred,
 	}
 }
 

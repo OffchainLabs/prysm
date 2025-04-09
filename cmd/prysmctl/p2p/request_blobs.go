@@ -8,25 +8,26 @@ import (
 
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p"
-	p2ptypes "github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p/types"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/sync"
-	"github.com/prysmaticlabs/prysm/v4/cmd"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	pb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/time/slots"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
+	p2ptypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync"
+	"github.com/prysmaticlabs/prysm/v5/cmd"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	pb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 var requestBlobsFlags = struct {
-	Peers        string
-	ClientPort   uint
-	APIEndpoints string
-	StartSlot    uint64
-	Count        uint64
+	Peers          string
+	ClientPortTCP  uint
+	ClientPortQUIC uint
+	APIEndpoints   string
+	StartSlot      uint64
+	Count          uint64
 }{}
 
 var requestBlobsCmd = &cli.Command{
@@ -47,9 +48,16 @@ var requestBlobsCmd = &cli.Command{
 			Value:       "",
 		},
 		&cli.UintFlag{
-			Name:        "client-port",
-			Usage:       "port to use for the client as a libp2p host",
-			Destination: &requestBlobsFlags.ClientPort,
+			Name:        "client-port-tcp",
+			Aliases:     []string{"client-port"},
+			Usage:       "TCP port to use for the client as a libp2p host",
+			Destination: &requestBlobsFlags.ClientPortTCP,
+			Value:       13001,
+		},
+		&cli.UintFlag{
+			Name:        "client-port-quic",
+			Usage:       "QUIC port to use for the client as a libp2p host",
+			Destination: &requestBlobsFlags.ClientPortQUIC,
 			Value:       13001,
 		},
 		&cli.StringFlag{
@@ -60,13 +68,13 @@ var requestBlobsCmd = &cli.Command{
 		},
 		&cli.Uint64Flag{
 			Name:        "start-slot",
-			Usage:       "start slot for blocks by range request. If unset, will use start_slot(current_epoch-1)",
+			Usage:       "start slot for blobs by range request. If unset, will use start_slot(current_epoch-1)",
 			Destination: &requestBlobsFlags.StartSlot,
 			Value:       0,
 		},
 		&cli.Uint64Flag{
 			Name:        "count",
-			Usage:       "number of blocks to request, (default 32)",
+			Usage:       "number of blobs to request, (default 32)",
 			Destination: &requestBlobsFlags.Count,
 			Value:       32,
 		},
@@ -90,7 +98,7 @@ func cliActionRequestBlobs(cliCtx *cli.Context) error {
 		allAPIEndpoints = strings.Split(requestBlobsFlags.APIEndpoints, ",")
 	}
 	var err error
-	c, err := newClient(allAPIEndpoints, requestBlobsFlags.ClientPort)
+	c, err := newClient(allAPIEndpoints, requestBlobsFlags.ClientPortTCP, requestBlobsFlags.ClientPortQUIC)
 	if err != nil {
 		return err
 	}

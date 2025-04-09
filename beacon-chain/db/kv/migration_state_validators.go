@@ -7,10 +7,10 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/golang/snappy"
-	"github.com/prysmaticlabs/prysm/v4/config/features"
-	"github.com/prysmaticlabs/prysm/v4/encoding/ssz/detect"
-	"github.com/prysmaticlabs/prysm/v4/monitoring/progress"
-	v1alpha1 "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/config/features"
+	"github.com/prysmaticlabs/prysm/v5/encoding/ssz/detect"
+	"github.com/prysmaticlabs/prysm/v5/monitoring/progress"
+	v1alpha1 "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/schollz/progressbar/v3"
 	bolt "go.etcd.io/bbolt"
 )

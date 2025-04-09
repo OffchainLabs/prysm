@@ -1,20 +1,36 @@
 package db
 
 import (
-	"github.com/prysmaticlabs/prysm/v4/cmd"
-	"github.com/prysmaticlabs/prysm/v4/runtime/tos"
-	validatordb "github.com/prysmaticlabs/prysm/v4/validator/db"
+	"github.com/prysmaticlabs/prysm/v5/cmd"
+	"github.com/prysmaticlabs/prysm/v5/runtime/tos"
+	validatordb "github.com/prysmaticlabs/prysm/v5/validator/db"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
 
 var log = logrus.WithField("prefix", "db")
 
+var (
+	// SourceDataDirFlag defines a path on disk where source Prysm databases are stored. Used for conversion.
+	SourceDataDirFlag = &cli.StringFlag{
+		Name:     "source-data-dir",
+		Usage:    "Source data directory",
+		Required: true,
+	}
+
+	// SourceDataDirFlag defines a path on disk where source Prysm databases are stored. Used for conversion.
+	TargetDataDirFlag = &cli.StringFlag{
+		Name:     "target-data-dir",
+		Usage:    "Target data directory",
+		Required: true,
+	}
+)
+
 // Commands for interacting with the Prysm validator database.
 var Commands = &cli.Command{
 	Name:     "db",
 	Category: "db",
-	Usage:    "defines commands for interacting with the Prysm validator database",
+	Usage:    "Defines commands for interacting with the Prysm validator database.",
 	Subcommands: []*cli.Command{
 		{
 			Name:        "restore",
@@ -64,6 +80,30 @@ var Commands = &cli.Command{
 						return nil
 					},
 				},
+			},
+		},
+		{
+			Name:     "convert-complete-to-minimal",
+			Category: "db",
+			Usage:    "Convert a complete EIP-3076 slashing protection to a minimal one",
+			Flags: []cli.Flag{
+				SourceDataDirFlag,
+				TargetDataDirFlag,
+			},
+			Before: func(cliCtx *cli.Context) error {
+				return cmd.LoadFlagsFromConfig(cliCtx, cliCtx.Command.Flags)
+			},
+			Action: func(cliCtx *cli.Context) error {
+				sourcedDatabasePath := cliCtx.String(SourceDataDirFlag.Name)
+				targetDatabasePath := cliCtx.String(TargetDataDirFlag.Name)
+
+				// Convert the database
+				err := validatordb.ConvertDatabase(cliCtx.Context, sourcedDatabasePath, targetDatabasePath, false)
+				if err != nil {
+					log.WithError(err).Fatal("Could not convert database")
+				}
+
+				return nil
 			},
 		},
 	},

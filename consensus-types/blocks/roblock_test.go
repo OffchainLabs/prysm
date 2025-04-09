@@ -4,10 +4,12 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	eth "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func TestROBlockSorting(t *testing.T) {
@@ -86,5 +88,105 @@ func testROBlock(t *testing.T, slot primitives.Slot, root [32]byte) ROBlock {
 	return ROBlock{
 		ReadOnlySignedBeaconBlock: b,
 		root:                      root,
+	}
+}
+
+func TestROBlockNilChecks(t *testing.T) {
+	cases := []struct {
+		name  string
+		bfunc func(t *testing.T) interfaces.SignedBeaconBlock
+		err   error
+		root  []byte
+	}{
+		{
+			name: "happy path",
+			bfunc: func(t *testing.T) interfaces.SignedBeaconBlock {
+				b, err := NewSignedBeaconBlock(hydrateSignedBeaconBlock())
+				require.NoError(t, err)
+				return b
+			},
+		},
+		{
+			name: "happy path - with root",
+			bfunc: func(t *testing.T) interfaces.SignedBeaconBlock {
+				b, err := NewSignedBeaconBlock(hydrateSignedBeaconBlock())
+				require.NoError(t, err)
+				return b
+			},
+			root: bytesutil.PadTo([]byte("sup"), 32),
+		},
+		{
+			name: "nil signed block",
+			bfunc: func(t *testing.T) interfaces.SignedBeaconBlock {
+				return nil
+			},
+			err: ErrNilSignedBeaconBlock,
+		},
+		{
+			name: "nil signed block - with root",
+			bfunc: func(t *testing.T) interfaces.SignedBeaconBlock {
+				return nil
+			},
+			err:  ErrNilSignedBeaconBlock,
+			root: bytesutil.PadTo([]byte("sup"), 32),
+		},
+		{
+			name: "nil inner block",
+			bfunc: func(t *testing.T) interfaces.SignedBeaconBlock {
+				return &SignedBeaconBlock{
+					version:   version.Deneb,
+					block:     nil,
+					signature: bytesutil.ToBytes96(nil),
+				}
+			},
+			err: ErrNilSignedBeaconBlock,
+		},
+		{
+			name: "nil inner block",
+			bfunc: func(t *testing.T) interfaces.SignedBeaconBlock {
+				return &SignedBeaconBlock{
+					version:   version.Deneb,
+					block:     nil,
+					signature: bytesutil.ToBytes96(nil),
+				}
+			},
+			err: ErrNilSignedBeaconBlock,
+		},
+		{
+			name: "nil block body",
+			bfunc: func(t *testing.T) interfaces.SignedBeaconBlock {
+				bb := &BeaconBlock{
+					version:       version.Deneb,
+					slot:          0,
+					proposerIndex: 0,
+					parentRoot:    bytesutil.ToBytes32(nil),
+					stateRoot:     bytesutil.ToBytes32(nil),
+					body:          nil,
+				}
+				return &SignedBeaconBlock{
+					version:   version.Deneb,
+					block:     bb,
+					signature: bytesutil.ToBytes96(nil),
+				}
+			},
+			err: ErrNilSignedBeaconBlock,
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			b := c.bfunc(t)
+			var err error
+			if len(c.root) == 0 {
+				_, err = NewROBlock(b)
+			} else {
+				_, err = NewROBlockWithRoot(b, bytesutil.ToBytes32(c.root))
+			}
+			if c.err != nil {
+				require.ErrorIs(t, err, c.err)
+				return
+			} else {
+				require.NoError(t, err)
+			}
+		})
 	}
 }

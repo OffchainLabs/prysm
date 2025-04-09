@@ -3,17 +3,13 @@
 package cache
 
 import (
-	"encoding/binary"
 	"sync"
 
 	lru "github.com/hashicorp/golang-lru"
-	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
-	lruwrpr "github.com/prysmaticlabs/prysm/v4/cache/lru"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	lruwrpr "github.com/prysmaticlabs/prysm/v5/cache/lru"
 )
 
 const (
@@ -85,37 +81,4 @@ func (c *BalanceCache) Get(st state.ReadOnlyBeaconState) (uint64, error) {
 	}
 	balanceCacheHit.Inc()
 	return value.(uint64), nil
-}
-
-// Given input state `st`, balance key is constructed as:
-// (block_root in `st` at epoch_start_slot - 1) + current_epoch + validator_count
-func balanceCacheKey(st state.ReadOnlyBeaconState) (string, error) {
-	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
-	currentEpoch := st.Slot().DivSlot(slotsPerEpoch)
-	epochStartSlot, err := slotsPerEpoch.SafeMul(uint64(currentEpoch))
-	if err != nil {
-		// impossible condition due to early division
-		return "", errors.Errorf("start slot calculation overflows: %v", err)
-	}
-	prevSlot := primitives.Slot(0)
-	if epochStartSlot > 1 {
-		prevSlot = epochStartSlot - 1
-	}
-	r, err := st.BlockRootAtIndex(uint64(prevSlot % params.BeaconConfig().SlotsPerHistoricalRoot))
-	if err != nil {
-		// impossible condition because index is always constrained within state
-		return "", err
-	}
-
-	// Mix in current epoch
-	b := make([]byte, 8)
-	binary.LittleEndian.PutUint64(b, uint64(currentEpoch))
-	key := append(r, b...)
-
-	// Mix in validator count
-	b = make([]byte, 8)
-	binary.LittleEndian.PutUint64(b, uint64(st.NumValidators()))
-	key = append(key, b...)
-
-	return string(key), nil
 }

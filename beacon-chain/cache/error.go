@@ -14,4 +14,9 @@ var (
 	errNotSyncCommitteeIndexPosition = errors.New("not syncCommitteeIndexPosition struct")
 	// ErrNotFoundRegistration when validator registration does not exist in cache.
 	ErrNotFoundRegistration = errors.Wrap(ErrNotFound, "no validator registered")
+
+	// ErrAlreadyInProgress appears when attempting to mark a cache as in progress while it is
+	// already in progress. The client should handle this error and wait for the in progress
+	// data to resolve via Get.
+	ErrAlreadyInProgress = errors.New("already in progress")
 )

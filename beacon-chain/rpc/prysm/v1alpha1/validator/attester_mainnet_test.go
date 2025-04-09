@@ -5,16 +5,16 @@ import (
 	"testing"
 	"time"
 
-	mock "github.com/prysmaticlabs/prysm/v4/beacon-chain/blockchain/testing"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/cache"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/core"
-	mockSync "github.com/prysmaticlabs/prysm/v4/beacon-chain/sync/initial-sync/testing"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/testing/util"
-	"github.com/prysmaticlabs/prysm/v4/time/slots"
+	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/core"
+	mockSync "github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/initial-sync/testing"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/util"
+	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -48,32 +48,28 @@ func TestAttestationDataAtSlot_HandlesFarAwayJustifiedEpoch(t *testing.T) {
 	require.NoError(t, err, "Could not hash beacon block")
 	justifiedBlockRoot, err := justifiedBlock.Block.HashTreeRoot()
 	require.NoError(t, err, "Could not hash justified block")
-	epochBoundaryRoot, err := epochBoundaryBlock.Block.HashTreeRoot()
-	require.NoError(t, err, "Could not hash justified block")
-	slot := primitives.Slot(10000)
 
+	slot := primitives.Slot(10000)
 	beaconState, err := util.NewBeaconState()
 	require.NoError(t, err)
 	require.NoError(t, beaconState.SetSlot(slot))
-	err = beaconState.SetCurrentJustifiedCheckpoint(&ethpb.Checkpoint{
+	justifiedCheckpoint := &ethpb.Checkpoint{
 		Epoch: slots.ToEpoch(1500),
 		Root:  justifiedBlockRoot[:],
-	})
-	require.NoError(t, err)
-	blockRoots := beaconState.BlockRoots()
-	blockRoots[1] = blockRoot[:]
-	blockRoots[1*params.BeaconConfig().SlotsPerEpoch] = epochBoundaryRoot[:]
-	blockRoots[2*params.BeaconConfig().SlotsPerEpoch] = justifiedBlockRoot[:]
-	require.NoError(t, beaconState.SetBlockRoots(blockRoots))
+	}
+	require.NoError(t, beaconState.SetCurrentJustifiedCheckpoint(justifiedCheckpoint))
+
 	offset := int64(slot.Mul(params.BeaconConfig().SecondsPerSlot))
 	attesterServer := &Server{
 		SyncChecker:           &mockSync.Sync{IsSyncing: false},
 		OptimisticModeFetcher: &mock.ChainService{Optimistic: false},
 		TimeFetcher:           &mock.ChainService{Genesis: time.Now().Add(time.Duration(-1*offset) * time.Second)},
 		CoreService: &core.Service{
-			AttestationCache:   cache.NewAttestationCache(),
-			HeadFetcher:        &mock.ChainService{State: beaconState, Root: blockRoot[:]},
-			GenesisTimeFetcher: &mock.ChainService{Genesis: time.Now().Add(time.Duration(-1*offset) * time.Second)},
+			AttestationCache:      cache.NewAttestationDataCache(),
+			HeadFetcher:           &mock.ChainService{TargetRoot: blockRoot, Root: blockRoot[:], State: beaconState},
+			GenesisTimeFetcher:    &mock.ChainService{Genesis: time.Now().Add(time.Duration(-1*offset) * time.Second)},
+			FinalizedFetcher:      &mock.ChainService{CurrentJustifiedCheckPoint: justifiedCheckpoint},
+			OptimisticModeFetcher: &mock.ChainService{Optimistic: false},
 		},
 	}
 

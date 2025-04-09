@@ -6,13 +6,13 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/golang/mock/gomock"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/eth/beacon"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/assert"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/validator/client/beacon-api/mock"
+	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api/mock"
+	"go.uber.org/mock/gomock"
 )
 
 func TestGetDomainData_ValidDomainData(t *testing.T) {
@@ -35,16 +35,15 @@ func TestGetDomainData_ValidDomainData(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Make sure that GetGenesis() is called exactly once
-	genesisProvider := mock.NewMockgenesisProvider(ctrl)
-	genesisProvider.EXPECT().GetGenesis(ctx).Return(
-		&beacon.Genesis{GenesisValidatorsRoot: genesisValidatorRoot},
-		nil,
+	// Make sure that Genesis() is called exactly once
+	genesisProvider := mock.NewMockGenesisProvider(ctrl)
+	genesisProvider.EXPECT().Genesis(gomock.Any()).Return(
+		&structs.Genesis{GenesisValidatorsRoot: genesisValidatorRoot},
 		nil,
 	).Times(1)
 
 	validatorClient := &beaconApiValidatorClient{genesisProvider: genesisProvider}
-	resp, err := validatorClient.getDomainData(ctx, epoch, domainType)
+	resp, err := validatorClient.domainData(ctx, epoch, domainType)
 	assert.NoError(t, err)
 	require.NotNil(t, resp)
 
@@ -65,12 +64,12 @@ func TestGetDomainData_GenesisError(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Make sure that GetGenesis() is called exactly once
-	genesisProvider := mock.NewMockgenesisProvider(ctrl)
-	genesisProvider.EXPECT().GetGenesis(ctx).Return(nil, nil, errors.New("foo error")).Times(1)
+	// Make sure that Genesis() is called exactly once
+	genesisProvider := mock.NewMockGenesisProvider(ctrl)
+	genesisProvider.EXPECT().Genesis(gomock.Any()).Return(nil, errors.New("foo error")).Times(1)
 
 	validatorClient := &beaconApiValidatorClient{genesisProvider: genesisProvider}
-	_, err := validatorClient.getDomainData(ctx, epoch, domainType)
+	_, err := validatorClient.domainData(ctx, epoch, domainType)
 	assert.ErrorContains(t, "failed to get genesis info", err)
 	assert.ErrorContains(t, "foo error", err)
 }
@@ -84,15 +83,14 @@ func TestGetDomainData_InvalidGenesisRoot(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Make sure that GetGenesis() is called exactly once
-	genesisProvider := mock.NewMockgenesisProvider(ctrl)
-	genesisProvider.EXPECT().GetGenesis(ctx).Return(
-		&beacon.Genesis{GenesisValidatorsRoot: "foo"},
-		nil,
+	// Make sure that Genesis() is called exactly once
+	genesisProvider := mock.NewMockGenesisProvider(ctrl)
+	genesisProvider.EXPECT().Genesis(gomock.Any()).Return(
+		&structs.Genesis{GenesisValidatorsRoot: "foo"},
 		nil,
 	).Times(1)
 
 	validatorClient := &beaconApiValidatorClient{genesisProvider: genesisProvider}
-	_, err := validatorClient.getDomainData(ctx, epoch, domainType)
-	assert.ErrorContains(t, "invalid genesis validators root: foo", err)
+	_, err := validatorClient.domainData(ctx, epoch, domainType)
+	assert.ErrorContains(t, "failed to decode genesis validators root: foo", err)
 }

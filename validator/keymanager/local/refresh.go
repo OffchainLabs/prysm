@@ -8,13 +8,13 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/async"
-	"github.com/prysmaticlabs/prysm/v4/config/features"
-	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v4/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v4/io/file"
-	"github.com/prysmaticlabs/prysm/v4/validator/keymanager"
+	"github.com/prysmaticlabs/prysm/v5/async"
+	"github.com/prysmaticlabs/prysm/v5/config/features"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/io/file"
+	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
 	keystorev4 "github.com/wealdtech/go-eth2-wallet-encryptor-keystorev4"
 )
 
@@ -25,9 +25,18 @@ import (
 func (km *Keymanager) listenForAccountChanges(ctx context.Context) {
 	debounceFileChangesInterval := features.Get().KeystoreImportDebounceInterval
 	accountsFilePath := filepath.Join(km.wallet.AccountsDir(), AccountsPath, AccountsKeystoreFileName)
-	if !file.FileExists(accountsFilePath) {
+	exists, err := file.Exists(accountsFilePath, file.Regular)
+
+	if err != nil {
+		log.WithError(err).Errorf("Could not check if file exists: %s", accountsFilePath)
 		return
 	}
+
+	if !exists {
+		log.Warnf("Starting without accounts located in wallet at %s", accountsFilePath)
+		return
+	}
+
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		log.WithError(err).Error("Could not initialize file watcher")
@@ -56,27 +65,7 @@ func (km *Keymanager) listenForAccountChanges(ctx context.Context) {
 			log.Errorf("Type %T is not a valid file system event", event)
 			return
 		}
-		fileBytes, err := os.ReadFile(ev.Name)
-		if err != nil {
-			log.WithError(err).Errorf("Could not read file at path: %s", ev.Name)
-			return
-		}
-		if fileBytes == nil {
-			log.WithError(err).Errorf("Loaded in an empty file: %s", ev.Name)
-			return
-		}
-		accountsKeystore := &AccountsKeystoreRepresentation{}
-		if err := json.Unmarshal(fileBytes, accountsKeystore); err != nil {
-			log.WithError(
-				err,
-			).Errorf("Could not read valid, EIP-2335 keystore json file at path: %s", ev.Name)
-			return
-		}
-		if err := km.reloadAccountsFromKeystore(accountsKeystore); err != nil {
-			log.WithError(
-				err,
-			).Error("Could not replace the accounts store from keystore file")
-		}
+		km.reloadAccountsFromKeystoreFile(ev.Name)
 	})
 	for {
 		select {
@@ -89,6 +78,34 @@ func (km *Keymanager) listenForAccountChanges(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		}
+	}
+}
+
+func (km *Keymanager) reloadAccountsFromKeystoreFile(accountsFilePath string) {
+	if km.wallet == nil {
+		log.Error("Could not reload accounts because wallet was undefined")
+		return
+	}
+	fileBytes, err := os.ReadFile(filepath.Clean(accountsFilePath))
+	if err != nil {
+		log.WithError(err).Errorf("Could not read file at path: %s", accountsFilePath)
+		return
+	}
+	if fileBytes == nil {
+		log.WithError(err).Errorf("Loaded in an empty file: %s", accountsFilePath)
+		return
+	}
+	accountsKeystore := &AccountsKeystoreRepresentation{}
+	if err := json.Unmarshal(fileBytes, accountsKeystore); err != nil {
+		log.WithError(
+			err,
+		).Errorf("Could not read valid, EIP-2335 keystore json file at path: %s", accountsFilePath)
+		return
+	}
+	if err := km.reloadAccountsFromKeystore(accountsKeystore); err != nil {
+		log.WithError(
+			err,
+		).Error("Could not replace the accounts store from keystore file")
 	}
 }
 
@@ -107,6 +124,7 @@ func (km *Keymanager) reloadAccountsFromKeystore(keystore *AccountsKeystoreRepre
 	if len(newAccountsStore.PublicKeys) != len(newAccountsStore.PrivateKeys) {
 		return errors.New("number of public and private keys in keystore do not match")
 	}
+
 	pubKeys := make([][fieldparams.BLSPubkeyLength]byte, len(newAccountsStore.PublicKeys))
 	for i := 0; i < len(newAccountsStore.PrivateKeys); i++ {
 		privKey, err := bls.SecretKeyFromBytes(newAccountsStore.PrivateKeys[i])

@@ -6,11 +6,11 @@ import (
 	"testing"
 
 	fssz "github.com/prysmaticlabs/fastssz"
-	state_native "github.com/prysmaticlabs/prysm/v4/beacon-chain/state/state-native"
-	enginev1 "github.com/prysmaticlabs/prysm/v4/proto/engine/v1"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	common "github.com/prysmaticlabs/prysm/v4/testing/spectest/shared/common/ssz_static"
+	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
+	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	common "github.com/prysmaticlabs/prysm/v5/testing/spectest/shared/common/ssz_static"
 )
 
 // RunSSZStaticTests executes "ssz_static" tests.
@@ -76,8 +76,7 @@ func unmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (i
 	case "IndexedAttestation":
 		obj = &ethpb.IndexedAttestation{}
 	case "LightClientHeader":
-		t.Skip("not a beacon node type, this is a light node type")
-		return nil, nil
+		obj = &ethpb.LightClientHeaderCapella{}
 	case "PendingAttestation":
 		obj = &ethpb.PendingAttestation{}
 	case "ProposerSlashing":
@@ -113,20 +112,13 @@ func unmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (i
 	case "HistoricalSummary":
 		obj = &ethpb.HistoricalSummary{}
 	case "LightClientOptimisticUpdate":
-		t.Skip("not a beacon node type, this is a light node type")
-		return nil, nil
+		obj = &ethpb.LightClientOptimisticUpdateCapella{}
 	case "LightClientFinalityUpdate":
-		t.Skip("not a beacon node type, this is a light node type")
-		return nil, nil
+		obj = &ethpb.LightClientFinalityUpdateCapella{}
 	case "LightClientBootstrap":
-		t.Skip("not a beacon node type, this is a light node type")
-		return nil, nil
-	case "LightClientSnapshot":
-		t.Skip("not a beacon node type, this is a light node type")
-		return nil, nil
+		obj = &ethpb.LightClientBootstrapCapella{}
 	case "LightClientUpdate":
-		t.Skip("not a beacon node type, this is a light node type")
-		return nil, nil
+		obj = &ethpb.LightClientUpdateCapella{}
 	case "PowBlock":
 		obj = &ethpb.PowBlock{}
 	case "Withdrawal":

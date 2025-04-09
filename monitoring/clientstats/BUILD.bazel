@@ -8,7 +8,7 @@ go_library(
         "types.go",
         "updaters.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v4/monitoring/clientstats",
+    importpath = "github.com/prysmaticlabs/prysm/v5/monitoring/clientstats",
     visibility = ["//visibility:public"],
     deps = [
         "//proto/prysm/v1alpha1:go_default_library",

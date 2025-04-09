@@ -7,7 +7,7 @@ go_library(
         "ssz_static.go",
         "types.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v4/testing/spectest/shared/common/ssz_static",
+    importpath = "github.com/prysmaticlabs/prysm/v5/testing/spectest/shared/common/ssz_static",
     visibility = ["//testing/spectest:__subpackages__"],
     deps = [
         "//testing/require:go_default_library",

@@ -6,8 +6,8 @@ package state
 import (
 	"time"
 
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 )
 
 const (
@@ -27,6 +27,12 @@ const (
 	NewHead
 	// MissedSlot is sent when we need to notify users that a slot was missed.
 	MissedSlot
+	// LightClientFinalityUpdate event
+	LightClientFinalityUpdate
+	// LightClientOptimisticUpdate event
+	LightClientOptimisticUpdate
+	// PayloadAttributes events are fired upon a missed slot or new head.
+	PayloadAttributes
 )
 
 // BlockProcessedData is the data sent with BlockProcessed events.

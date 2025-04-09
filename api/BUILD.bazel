@@ -1,8 +1,24 @@
-load("@prysm//tools/go:def.bzl", "go_library")
+load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
-    srcs = ["headers.go"],
-    importpath = "github.com/prysmaticlabs/prysm/v4/api",
+    srcs = [
+        "constants.go",
+        "headers.go",
+        "jwt.go",
+    ],
+    importpath = "github.com/prysmaticlabs/prysm/v5/api",
     visibility = ["//visibility:public"],
+    deps = [
+        "//crypto/rand:go_default_library",
+        "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",
+        "@com_github_pkg_errors//:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["jwt_test.go"],
+    embed = [":go_default_library"],
+    deps = ["//testing/require:go_default_library"],
 )

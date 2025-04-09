@@ -6,10 +6,10 @@ import (
 
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/patrickmn/go-cache"
-	lruwrpr "github.com/prysmaticlabs/prysm/v4/cache/lru"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v4/container/slice"
+	lruwrpr "github.com/prysmaticlabs/prysm/v5/cache/lru"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/container/slice"
 )
 
 type subnetIDs struct {
@@ -23,6 +23,8 @@ type subnetIDs struct {
 
 // SubnetIDs for attester and aggregator.
 var SubnetIDs = newSubnetIDs()
+
+var subnetKey = "persistent-subnets"
 
 func newSubnetIDs() *subnetIDs {
 	// Given a node can calculate committee assignments of current epoch and next epoch.
@@ -91,11 +93,11 @@ func (s *subnetIDs) GetAggregatorSubnetIDs(slot primitives.Slot) []uint64 {
 
 // GetPersistentSubnets retrieves the persistent subnet and expiration time of that validator's
 // subscription.
-func (s *subnetIDs) GetPersistentSubnets(pubkey []byte) ([]uint64, bool, time.Time) {
+func (s *subnetIDs) GetPersistentSubnets() ([]uint64, bool, time.Time) {
 	s.subnetsLock.RLock()
 	defer s.subnetsLock.RUnlock()
 
-	id, duration, ok := s.persistentSubnets.GetWithExpiration(string(pubkey))
+	id, duration, ok := s.persistentSubnets.GetWithExpiration(subnetKey)
 	if !ok {
 		return []uint64{}, ok, time.Time{}
 	}
@@ -122,11 +124,11 @@ func (s *subnetIDs) GetAllSubnets() []uint64 {
 
 // AddPersistentCommittee adds the relevant committee for that particular validator along with its
 // expiration period.
-func (s *subnetIDs) AddPersistentCommittee(pubkey []byte, comIndex []uint64, duration time.Duration) {
+func (s *subnetIDs) AddPersistentCommittee(comIndex []uint64, duration time.Duration) {
 	s.subnetsLock.Lock()
 	defer s.subnetsLock.Unlock()
 
-	s.persistentSubnets.Set(string(pubkey), comIndex, duration)
+	s.persistentSubnets.Set(subnetKey, comIndex, duration)
 }
 
 // EmptyAllCaches empties out all the related caches and flushes any stored

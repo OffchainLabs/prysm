@@ -6,14 +6,14 @@ import (
 	"context"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
-	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
-	enginev1 "github.com/prysmaticlabs/prysm/v4/proto/engine/v1"
-	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
+	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
 // NewGenesisBlock returns the canonical, genesis block for the beacon chain protocol.
@@ -105,6 +105,7 @@ func NewGenesisBlockForState(ctx context.Context, st state.BeaconState) (interfa
 						ReceiptsRoot:  make([]byte, 32),
 						LogsBloom:     make([]byte, 256),
 						PrevRandao:    make([]byte, 32),
+						ExtraData:     make([]byte, 0),
 						BaseFeePerGas: make([]byte, 32),
 						BlockHash:     make([]byte, 32),
 						Transactions:  make([][]byte, 0),
@@ -136,6 +137,7 @@ func NewGenesisBlockForState(ctx context.Context, st state.BeaconState) (interfa
 						ReceiptsRoot:  make([]byte, 32),
 						LogsBloom:     make([]byte, 256),
 						PrevRandao:    make([]byte, 32),
+						ExtraData:     make([]byte, 0),
 						BaseFeePerGas: make([]byte, 32),
 						BlockHash:     make([]byte, 32),
 						Transactions:  make([][]byte, 0),
@@ -161,13 +163,14 @@ func NewGenesisBlockForState(ctx context.Context, st state.BeaconState) (interfa
 						SyncCommitteeBits:      make([]byte, fieldparams.SyncCommitteeLength/8),
 						SyncCommitteeSignature: make([]byte, fieldparams.BLSSignatureLength),
 					},
-					ExecutionPayload: &enginev1.ExecutionPayloadDeneb{ // Deneb difference.
+					ExecutionPayload: &enginev1.ExecutionPayloadDeneb{
 						ParentHash:    make([]byte, 32),
 						FeeRecipient:  make([]byte, 20),
 						StateRoot:     make([]byte, 32),
 						ReceiptsRoot:  make([]byte, 32),
 						LogsBloom:     make([]byte, 256),
 						PrevRandao:    make([]byte, 32),
+						ExtraData:     make([]byte, 0),
 						BaseFeePerGas: make([]byte, 32),
 						BlockHash:     make([]byte, 32),
 						Transactions:  make([][]byte, 0),
@@ -175,6 +178,46 @@ func NewGenesisBlockForState(ctx context.Context, st state.BeaconState) (interfa
 					},
 					BlsToExecutionChanges: make([]*ethpb.SignedBLSToExecutionChange, 0),
 					BlobKzgCommitments:    make([][]byte, 0),
+				},
+			},
+			Signature: params.BeaconConfig().EmptySignature[:],
+		})
+	case *ethpb.BeaconStateElectra:
+		return blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockElectra{
+			Block: &ethpb.BeaconBlockElectra{
+				ParentRoot: params.BeaconConfig().ZeroHash[:],
+				StateRoot:  root[:],
+				Body: &ethpb.BeaconBlockBodyElectra{
+					RandaoReveal: make([]byte, 96),
+					Eth1Data: &ethpb.Eth1Data{
+						DepositRoot: make([]byte, 32),
+						BlockHash:   make([]byte, 32),
+					},
+					Graffiti: make([]byte, 32),
+					SyncAggregate: &ethpb.SyncAggregate{
+						SyncCommitteeBits:      make([]byte, fieldparams.SyncCommitteeLength/8),
+						SyncCommitteeSignature: make([]byte, fieldparams.BLSSignatureLength),
+					},
+					ExecutionPayload: &enginev1.ExecutionPayloadDeneb{
+						ParentHash:    make([]byte, 32),
+						FeeRecipient:  make([]byte, 20),
+						StateRoot:     make([]byte, 32),
+						ReceiptsRoot:  make([]byte, 32),
+						LogsBloom:     make([]byte, 256),
+						PrevRandao:    make([]byte, 32),
+						ExtraData:     make([]byte, 0),
+						BaseFeePerGas: make([]byte, 32),
+						BlockHash:     make([]byte, 32),
+						Transactions:  make([][]byte, 0),
+						Withdrawals:   make([]*enginev1.Withdrawal, 0),
+					},
+					BlsToExecutionChanges: make([]*ethpb.SignedBLSToExecutionChange, 0),
+					BlobKzgCommitments:    make([][]byte, 0),
+					ExecutionRequests: &enginev1.ExecutionRequests{
+						Withdrawals:    make([]*enginev1.WithdrawalRequest, 0),
+						Deposits:       make([]*enginev1.DepositRequest, 0),
+						Consolidations: make([]*enginev1.ConsolidationRequest, 0),
+					},
 				},
 			},
 			Signature: params.BeaconConfig().EmptySignature[:],

@@ -9,11 +9,10 @@ import (
 
 	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	eth "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
-
-const rootLength = 32
 
 const maxErrorLength = 256
 
@@ -34,7 +33,7 @@ func (b *SSZBytes) HashTreeRootWith(hh *ssz.Hasher) error {
 }
 
 // BeaconBlockByRootsReq specifies the block by roots request type.
-type BeaconBlockByRootsReq [][rootLength]byte
+type BeaconBlockByRootsReq [][fieldparams.RootLength]byte
 
 // MarshalSSZTo marshals the block by roots request with the provided byte slice.
 func (r *BeaconBlockByRootsReq) MarshalSSZTo(dst []byte) ([]byte, error) {
@@ -47,8 +46,8 @@ func (r *BeaconBlockByRootsReq) MarshalSSZTo(dst []byte) ([]byte, error) {
 
 // MarshalSSZ Marshals the block by roots request type into the serialized object.
 func (r *BeaconBlockByRootsReq) MarshalSSZ() ([]byte, error) {
-	if len(*r) > int(params.BeaconNetworkConfig().MaxRequestBlocks) {
-		return nil, errors.Errorf("beacon block by roots request exceeds max size: %d > %d", len(*r), params.BeaconNetworkConfig().MaxRequestBlocks)
+	if len(*r) > int(params.BeaconConfig().MaxRequestBlocks) {
+		return nil, errors.Errorf("beacon block by roots request exceeds max size: %d > %d", len(*r), params.BeaconConfig().MaxRequestBlocks)
 	}
 	buf := make([]byte, 0, r.SizeSSZ())
 	for _, r := range *r {
@@ -59,25 +58,25 @@ func (r *BeaconBlockByRootsReq) MarshalSSZ() ([]byte, error) {
 
 // SizeSSZ returns the size of the serialized representation.
 func (r *BeaconBlockByRootsReq) SizeSSZ() int {
-	return len(*r) * rootLength
+	return len(*r) * fieldparams.RootLength
 }
 
 // UnmarshalSSZ unmarshals the provided bytes buffer into the
 // block by roots request object.
 func (r *BeaconBlockByRootsReq) UnmarshalSSZ(buf []byte) error {
 	bufLen := len(buf)
-	maxLength := int(params.BeaconNetworkConfig().MaxRequestBlocks * rootLength)
+	maxLength := int(params.BeaconConfig().MaxRequestBlocks * fieldparams.RootLength)
 	if bufLen > maxLength {
 		return errors.Errorf("expected buffer with length of up to %d but received length %d", maxLength, bufLen)
 	}
-	if bufLen%rootLength != 0 {
+	if bufLen%fieldparams.RootLength != 0 {
 		return ssz.ErrIncorrectByteSize
 	}
-	numOfRoots := bufLen / rootLength
-	roots := make([][rootLength]byte, 0, numOfRoots)
+	numOfRoots := bufLen / fieldparams.RootLength
+	roots := make([][fieldparams.RootLength]byte, 0, numOfRoots)
 	for i := 0; i < numOfRoots; i++ {
-		var rt [rootLength]byte
-		copy(rt[:], buf[i*rootLength:(i+1)*rootLength])
+		var rt [fieldparams.RootLength]byte
+		copy(rt[:], buf[i*fieldparams.RootLength:(i+1)*fieldparams.RootLength])
 		roots = append(roots, rt)
 	}
 	*r = roots
@@ -163,7 +162,7 @@ func (b *BlobSidecarsByRootReq) MarshalSSZ() ([]byte, error) {
 // BlobSidecarsByRootReq value.
 func (b *BlobSidecarsByRootReq) UnmarshalSSZ(buf []byte) error {
 	bufLen := len(buf)
-	maxLength := int(params.BeaconNetworkConfig().MaxRequestBlobSidecars) * blobIdSize
+	maxLength := int(params.BeaconConfig().MaxRequestBlobSidecars) * blobIdSize
 	if bufLen > maxLength {
 		return errors.Errorf("expected buffer with length of up to %d but received length %d", maxLength, bufLen)
 	}

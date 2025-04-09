@@ -3,7 +3,7 @@ load("@prysm//tools/go:def.bzl", "go_library")
 go_library(
     name = "go_default_library",
     srcs = ["node_client_factory.go"],
-    importpath = "github.com/prysmaticlabs/prysm/v4/validator/client/node-client-factory",
+    importpath = "github.com/prysmaticlabs/prysm/v5/validator/client/node-client-factory",
     visibility = ["//visibility:public"],
     deps = [
         "//config/features:go_default_library",

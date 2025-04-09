@@ -16,6 +16,7 @@ import (
 	"os"
 	"path"
 
+	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -42,7 +43,7 @@ func main() {
 	lr := bufio.NewReader(f)
 	for {
 		line, err := lr.ReadBytes([]byte("\n")[0])
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			os.Exit(0)
 		}
 		if err != nil {

@@ -7,9 +7,9 @@ import (
 
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/protocol"
-	p2ptest "github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p/testing"
-	"github.com/prysmaticlabs/prysm/v4/testing/require"
-	"github.com/prysmaticlabs/prysm/v4/testing/util"
+	p2ptest "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
+	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/prysmaticlabs/prysm/v5/testing/util"
 )
 
 type rpcHandlerTest struct {
@@ -41,8 +41,8 @@ func (rt *rpcHandlerTest) testHandler(nh network.StreamHandler, rh rpcHandler, r
 		defer w.Done()
 		nh(stream)
 	}
-	server.BHost.SetStreamHandler(protocol.ID(rt.topic), h)
-	stream, err := client.BHost.NewStream(ctx, server.BHost.ID(), protocol.ID(rt.topic))
+	server.BHost.SetStreamHandler(rt.topic, h)
+	stream, err := client.BHost.NewStream(ctx, server.BHost.ID(), rt.topic)
 	require.NoError(rt.t, err)
 
 	err = rh(ctx, rhi, stream)

@@ -7,18 +7,18 @@ import (
 	"context"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/time"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"go.opencensus.io/trace"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 )
 
 // New gets called at the beginning of process epoch cycle to return
 // pre computed instances of validators attesting records and total
 // balances attested in an epoch.
 func New(ctx context.Context, s state.BeaconState) ([]*Validator, *Balance, error) {
-	ctx, span := trace.StartSpan(ctx, "precomputeEpoch.New")
+	_, span := trace.StartSpan(ctx, "precomputeEpoch.New")
 	defer span.End()
 
 	pValidators := make([]*Validator, s.NumValidators())

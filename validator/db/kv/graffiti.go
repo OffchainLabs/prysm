@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 
-	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -36,4 +36,33 @@ func (s *Store) GraffitiOrderedIndex(_ context.Context, fileHash [32]byte) (uint
 		return nil
 	})
 	return orderedIndex, err
+}
+
+// GraffitiFileHash fetches the graffiti file hash.
+func (s *Store) GraffitiFileHash() ([32]byte, bool, error) {
+	// Define a default file hash.
+	var fileHash [32]byte
+
+	exists := false
+
+	err := s.db.View(func(tx *bolt.Tx) error {
+		// Get the graffiti bucket.
+		bkt := tx.Bucket(graffitiBucket)
+
+		// Get the file hash.
+		dbFileHash := bkt.Get(graffitiFileHashKey)
+
+		if dbFileHash == nil {
+			// If the file hash is nil, return early.
+			return nil
+		}
+
+		// A DB file hash exists.
+		exists = true
+		copy(fileHash[:], dbFileHash)
+		return nil
+	})
+
+	// Return the file hash.
+	return fileHash, exists, err
 }

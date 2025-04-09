@@ -9,11 +9,10 @@
 #build:remote-cache --strategy=Genrule=standalone
 
 # Prysm specific remote-cache properties.
-#build:remote-cache --disk_cache=
-build:remote-cache --remote_download_toplevel
+build:remote-cache --remote_download_minimal
+build:remote-cache --remote_build_event_upload=minimal
 build:remote-cache --remote_cache=grpc://bazel-remote-cache:9092
-# Does not work with rules_oci. See https://github.com/bazel-contrib/rules_oci/issues/292
-#build:remote-cache --experimental_remote_downloader=grpc://bazel-remote-cache:9092
+build:remote-cache --experimental_remote_downloader=grpc://bazel-remote-cache:9092
 build:remote-cache --remote_local_fallback
 build:remote-cache --experimental_remote_cache_async
 build:remote-cache --experimental_remote_merkle_tree_cache
@@ -29,7 +28,10 @@ build --experimental_use_hermetic_linux_sandbox
 # Import workspace options.
 import %workspace%/.bazelrc
 
-startup --host_jvm_args=-Xmx4g --host_jvm_args=-Xms2g
+# Enable blake3 once it is supported in remote cache. See: https://github.com/buchgr/bazel-remote/issues/710
+# startup --digest_function=blake3
+
+startup --host_jvm_args=-Xmx8g --host_jvm_args=-Xms4g
 build --experimental_strict_action_env
 build --sandbox_tmpfs_path=/tmp
 build --verbose_failures
@@ -39,6 +41,7 @@ build --curses=no --color=no
 build --keep_going
 build --test_output=errors
 build --flaky_test_attempts=5
+build --build_runfile_links=false # Only build runfile symlink forest when required by local action, test, or run command.
 # Disabled race detection due to unstable test results under constrained environment build kite
 # build --features=race
 

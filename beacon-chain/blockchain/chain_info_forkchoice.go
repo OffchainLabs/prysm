@@ -3,9 +3,13 @@ package blockchain
 import (
 	"context"
 
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
-	ethpbv1 "github.com/prysmaticlabs/prysm/v4/proto/eth/v1"
+	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	consensus_blocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/forkchoice"
+	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 )
 
 // CachedHeadRoot returns the corresponding value from Forkchoice
@@ -44,14 +48,14 @@ func (s *Service) ReceivedBlocksLastEpoch() (uint64, error) {
 }
 
 // InsertNode is a wrapper for node insertion which is self locked
-func (s *Service) InsertNode(ctx context.Context, st state.BeaconState, root [32]byte) error {
+func (s *Service) InsertNode(ctx context.Context, st state.BeaconState, block consensus_blocks.ROBlock) error {
 	s.cfg.ForkChoiceStore.Lock()
 	defer s.cfg.ForkChoiceStore.Unlock()
-	return s.cfg.ForkChoiceStore.InsertNode(ctx, st, root)
+	return s.cfg.ForkChoiceStore.InsertNode(ctx, st, block)
 }
 
 // ForkChoiceDump returns the corresponding value from forkchoice
-func (s *Service) ForkChoiceDump(ctx context.Context) (*ethpbv1.ForkChoiceDump, error) {
+func (s *Service) ForkChoiceDump(ctx context.Context) (*forkchoice.Dump, error) {
 	s.cfg.ForkChoiceStore.RLock()
 	defer s.cfg.ForkChoiceStore.RUnlock()
 	return s.cfg.ForkChoiceStore.ForkChoiceDump(ctx)
@@ -91,4 +95,41 @@ func (s *Service) FinalizedBlockHash() [32]byte {
 	s.cfg.ForkChoiceStore.RLock()
 	defer s.cfg.ForkChoiceStore.RUnlock()
 	return s.cfg.ForkChoiceStore.FinalizedPayloadBlockHash()
+}
+
+// ParentRoot wraps a call to the corresponding method in forkchoice
+func (s *Service) ParentRoot(root [32]byte) ([32]byte, error) {
+	s.cfg.ForkChoiceStore.RLock()
+	defer s.cfg.ForkChoiceStore.RUnlock()
+	return s.cfg.ForkChoiceStore.ParentRoot(root)
+}
+
+// hashForGenesisBlock returns the right hash for the genesis block
+func (s *Service) hashForGenesisBlock(ctx context.Context, root [32]byte) ([]byte, error) {
+	genRoot, err := s.cfg.BeaconDB.GenesisBlockRoot(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get genesis block root")
+	}
+	if root != genRoot {
+		return nil, errNotGenesisRoot
+	}
+	st, err := s.cfg.BeaconDB.GenesisState(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get genesis state")
+	}
+	if st.Version() < version.Bellatrix {
+		return nil, nil
+	}
+	header, err := st.LatestExecutionPayloadHeader()
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get latest execution payload header")
+	}
+	return bytesutil.SafeCopyBytes(header.BlockHash()), nil
+}
+
+// DependentRoot wraps the corresponding method in forkchoice
+func (s *Service) DependentRoot(epoch primitives.Epoch) ([32]byte, error) {
+	s.cfg.ForkChoiceStore.RLock()
+	defer s.cfg.ForkChoiceStore.RUnlock()
+	return s.cfg.ForkChoiceStore.DependentRoot(epoch)
 }
