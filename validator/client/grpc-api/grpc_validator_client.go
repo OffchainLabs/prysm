@@ -51,6 +51,8 @@ func toValidatorDutiesContainer(dutiesResponse *ethpb.DutiesResponse) (*ethpb.Va
 		nextDuties[i] = duty
 	}
 	return &ethpb.ValidatorDutiesContainer{
+		PrevDependentRoot:  dutiesResponse.PreviousDutyDependentRoot,
+		CurrDependentRoot:  dutiesResponse.CurrentDutyDependentRoot,
 		CurrentEpochDuties: currentDuties,
 		NextEpochDuties:    nextDuties,
 	}, nil
