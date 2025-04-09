@@ -19,6 +19,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/golang/protobuf/ptypes/empty"
+	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
 	"github.com/prysmaticlabs/prysm/v5/async/event"
 	"github.com/prysmaticlabs/prysm/v5/cmd/validator/flags"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
@@ -2903,4 +2904,94 @@ func TestUpdateValidatorStatusCache(t *testing.T) {
 	assert.NoError(t, err)
 	// make sure the value is 0
 	assert.Equal(t, 0, len(v.pubkeyToStatus))
+}
+
+func TestValidator_CheckDependentRoots(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx := context.Background()
+	client := validatormock.NewMockValidatorClient(ctrl)
+
+	v := &validator{
+		km:              newMockKeymanager(t, randKeypair(t)),
+		validatorClient: client,
+		duties: &ethpb.ValidatorDutiesContainer{
+			PrevDependentRoot: bytesutil.PadTo([]byte{0x01, 0x02, 0x03}, fieldparams.RootLength),
+			CurrDependentRoot: bytesutil.PadTo([]byte{0x04, 0x05, 0x06}, fieldparams.RootLength),
+			CurrentEpochDuties: []*ethpb.ValidatorDuty{
+				{
+					AttesterSlot:    params.BeaconConfig().SlotsPerEpoch,
+					ValidatorIndex:  200,
+					CommitteeIndex:  100,
+					CommitteeLength: 4,
+					PublicKey:       []byte("testPubKey_1"),
+					ProposerSlots:   []primitives.Slot{params.BeaconConfig().SlotsPerEpoch + 1},
+				},
+			},
+		},
+	}
+
+	t.Run("nil head event", func(t *testing.T) {
+		err := v.checkDependentRoots(ctx, nil, 0)
+		require.ErrorContains(t, "received empty head event", err)
+	})
+
+	t.Run("invalid previous duty dependent root", func(t *testing.T) {
+		head := &structs.HeadEvent{
+			PreviousDutyDependentRoot: "invalid_hex",
+		}
+		err := v.checkDependentRoots(ctx, head, 0)
+		require.ErrorContains(t, "failed to decode previous duty dependent root", err)
+	})
+
+	t.Run("invalid current duty dependent root", func(t *testing.T) {
+		head := &structs.HeadEvent{
+			PreviousDutyDependentRoot: "0x0102030000000000000000000000000000000000000000000000000000000000",
+			CurrentDutyDependentRoot:  "invalid_hex",
+		}
+		err := v.checkDependentRoots(ctx, head, 0)
+		require.ErrorContains(t, "failed to decode current duty dependent root", err)
+	})
+
+	t.Run("update duties for previous root mismatch", func(t *testing.T) {
+		head := &structs.HeadEvent{
+			PreviousDutyDependentRoot: "0xe3f7a1b2c489d56f03a6b8d9c7e1fa2456bb09f3de42a67c8910fc3e7a5d4b12",
+			CurrentDutyDependentRoot:  "0xe3f7a1b2c489d56f03a6b8d9c7e1fa2456bb09f3de42a67c8910fc3e7a5d4b12",
+		}
+		client.EXPECT().Duties(gomock.Any(), gomock.Any()).Return(v.duties, nil)
+		err := v.checkDependentRoots(ctx, head, 1)
+		require.NoError(t, err)
+	})
+
+	t.Run("update duties for current root mismatch", func(t *testing.T) {
+		head := &structs.HeadEvent{
+			PreviousDutyDependentRoot: "0x0102030000000000000000000000000000000000000000000000000000000000",
+			CurrentDutyDependentRoot:  "0xe3f7a1b2c489d56f03a6b8d9c7e1fa2456bb09f3de42a67c8910fc3e7a5d4b12",
+		}
+		client.EXPECT().Duties(gomock.Any(), gomock.Any()).Return(v.duties, nil)
+		var wg sync.WaitGroup
+		wg.Add(1)
+
+		client.EXPECT().SubscribeCommitteeSubnets(
+			gomock.Any(),
+			gomock.Any(),
+			gomock.Any(),
+		).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.ValidatorDuty) (*emptypb.Empty, error) {
+			wg.Done()
+			return nil, nil
+		})
+		err := v.checkDependentRoots(ctx, head, 1)
+		require.NoError(t, err)
+	})
+	t.Run("no updates needed", func(t *testing.T) {
+		head := &structs.HeadEvent{
+			PreviousDutyDependentRoot: "0x0102030000000000000000000000000000000000000000000000000000000000",
+			CurrentDutyDependentRoot:  "0x0405060000000000000000000000000000000000000000000000000000000000",
+		}
+		curr, err := bytesutil.DecodeHexWithLength(head.CurrentDutyDependentRoot, fieldparams.RootLength)
+		require.NoError(t, err)
+		require.DeepEqual(t, curr, v.duties.CurrDependentRoot)
+		require.NoError(t, v.checkDependentRoots(ctx, head, 0))
+	})
 }

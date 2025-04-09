@@ -1160,7 +1160,7 @@ func (v *validator) checkDependentRoots(ctx context.Context, head *structs.HeadE
 	}
 	currDepedentRoot, err := bytesutil.DecodeHexWithLength(head.CurrentDutyDependentRoot, fieldparams.RootLength)
 	if err != nil {
-		return errors.Wrap(err, "failed to decode previous duty dependent root")
+		return errors.Wrap(err, "failed to decode current duty dependent root")
 	}
 	if !bytes.Equal(currDepedentRoot, v.duties.CurrDependentRoot) {
 		if err := v.UpdateDuties(ctx, currEpochStart); err != nil {
