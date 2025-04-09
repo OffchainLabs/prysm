@@ -107,6 +107,7 @@ go_test(
         "//encoding/ssz:go_default_library",
         "//proto/eth/v1:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
+        "//runtime/version:go_default_library",
         "//testing/assert:go_default_library",
         "//testing/require:go_default_library",
         "//time/slots:go_default_library",
