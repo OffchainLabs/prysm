@@ -91,9 +91,9 @@ func WithFinalizedCheckpointInPrevFork() LightClientOption {
 }
 
 // WithSupermajority Specifies whether the sync committee bits have supermajority or not
-func WithSupermajority(supermajority bool) LightClientOption {
+func WithSupermajority() LightClientOption {
 	return func(l *TestLightClient) {
-		l.supermajority = supermajority
+		l.supermajority = true
 	}
 }
 
@@ -109,10 +109,6 @@ func WithIncreasedFinalizedSlot(increaseFinalizedSlotBy int) LightClientOption {
 	return func(l *TestLightClient) {
 		l.increaseFinalizedSlotBy = increaseFinalizedSlotBy
 	}
-}
-
-func NewTestLightClient2(t *testing.T) *TestLightClient {
-	return &TestLightClient{T: t}
 }
 
 func (l *TestLightClient) setupTestAltair() *TestLightClient {
