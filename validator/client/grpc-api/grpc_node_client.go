@@ -15,33 +15,33 @@ var (
 	_ = iface.NodeClient(&grpcNodeClient{})
 )
 
-// Deprecated: gRPC API is being deprecated in favour of REST API.
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 type grpcNodeClient struct {
 	nodeClient    ethpb.NodeClient
 	healthTracker health.Tracker
 }
 
-// Deprecated: gRPC API is being deprecated in favour of REST API.
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 func (c *grpcNodeClient) SyncStatus(ctx context.Context, in *empty.Empty) (*ethpb.SyncStatus, error) {
 	return c.nodeClient.GetSyncStatus(ctx, in)
 }
 
-// Deprecated: gRPC API is being deprecated in favour of REST API.
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 func (c *grpcNodeClient) Genesis(ctx context.Context, in *empty.Empty) (*ethpb.Genesis, error) {
 	return c.nodeClient.GetGenesis(ctx, in)
 }
 
-// Deprecated: gRPC API is being deprecated in favour of REST API.
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 func (c *grpcNodeClient) Version(ctx context.Context, in *empty.Empty) (*ethpb.Version, error) {
 	return c.nodeClient.GetVersion(ctx, in)
 }
 
-// Deprecated: gRPC API is being deprecated in favour of REST API.
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 func (c *grpcNodeClient) Peers(ctx context.Context, in *empty.Empty) (*ethpb.Peers, error) {
 	return c.nodeClient.ListPeers(ctx, in)
 }
 
-// Deprecated: gRPC API is being deprecated in favour of REST API.
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 func (c *grpcNodeClient) IsHealthy(ctx context.Context) bool {
 	_, err := c.nodeClient.GetHealth(ctx, &ethpb.HealthRequest{})
 	if err != nil {
@@ -51,12 +51,12 @@ func (c *grpcNodeClient) IsHealthy(ctx context.Context) bool {
 	return true
 }
 
-// Deprecated: gRPC API is being deprecated in favour of REST API.
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 func (c *grpcNodeClient) HealthTracker() health.Tracker {
 	return c.healthTracker
 }
 
-// Deprecated: gRPC API is being deprecated in favour of REST API.
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 func NewNodeClient(cc grpc.ClientConnInterface) iface.NodeClient {
 	g := &grpcNodeClient{nodeClient: ethpb.NewNodeClient(cc)}
 	g.healthTracker = health.NewTracker(g)

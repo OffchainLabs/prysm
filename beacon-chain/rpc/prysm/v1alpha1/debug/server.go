@@ -20,7 +20,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// Deprecated: gRPC API is being deprecated in favour of REST API.
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 //
 // Server defines a server implementation of the gRPC Debug service,
 // providing RPC endpoints for runtime debugging of a node, this server is
@@ -35,7 +35,7 @@ type Server struct {
 	ReplayerBuilder    stategen.ReplayerBuilder
 }
 
-// Deprecated: gRPC API is being deprecated in favour of REST API.
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 //
 // SetLoggingLevel of a beacon node according to a request type,
 // either INFO, DEBUG, or TRACE.

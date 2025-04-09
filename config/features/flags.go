@@ -51,7 +51,7 @@ var (
 	}
 	disableGRPCConnectionLogging = &cli.BoolFlag{
 		Name: "disable-grpc-connection-logging",
-		Usage: `WARNING: gRPC API is being deprecated in favour of REST API.
+		Usage: `WARNING: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 		Disables displaying logs for newly connected grpc clients.`,
 	}
 	disablePeerScorer = &cli.BoolFlag{

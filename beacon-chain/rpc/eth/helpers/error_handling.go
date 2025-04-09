@@ -11,7 +11,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// Deprecated: gRPC API is being deprecated in favour of REST API.
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 //
 // PrepareStateFetchGRPCError returns an appropriate gRPC error based on the supplied argument.
 // The argument error should be a result of fetching state.

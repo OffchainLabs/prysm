@@ -53,7 +53,7 @@ func WithListValidatorIndices() Option {
 	}
 }
 
-// Deprecated: gRPC API is being deprecated in favour of REST API.
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 //
 // WithGRPCDialOpts adds grpc opts needed to connect to beacon nodes in the accounts cli manager.
 func WithGRPCDialOpts(opts []grpc.DialOption) Option {
@@ -63,7 +63,7 @@ func WithGRPCDialOpts(opts []grpc.DialOption) Option {
 	}
 }
 
-// Deprecated: gRPC API is being deprecated in favour of REST API.
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 //
 // WithGRPCHeaders adds grpc headers used when connecting to beacon nodes in the accounts cli manager.
 func WithGRPCHeaders(headers []string) Option {
@@ -73,7 +73,7 @@ func WithGRPCHeaders(headers []string) Option {
 	}
 }
 
-// Deprecated: gRPC API is being deprecated in favour of REST API.
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 //
 // WithBeaconRPCProvider provides a beacon node endpoint to the accounts cli manager.
 func WithBeaconRPCProvider(provider string) Option {

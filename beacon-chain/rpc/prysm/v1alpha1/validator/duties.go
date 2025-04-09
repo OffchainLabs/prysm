@@ -16,7 +16,7 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-// Deprecated: gRPC API is being deprecated in favour of REST API.
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 //
 // GetDuties returns the duties assigned to a list of validators specified
 // in the request object.
@@ -165,7 +165,7 @@ func (vs *Server) duties(ctx context.Context, req *ethpb.DutiesRequest) (*ethpb.
 	}, nil
 }
 
-// Deprecated: gRPC API is being deprecated in favour of REST API.
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 //
 // AssignValidatorToSubnet checks the status and pubkey of a particular validator
 // to discern whether persistent subnets need to be registered for them.

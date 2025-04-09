@@ -6,7 +6,7 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
-// Deprecated: gRPC API is being deprecated in favour of REST API.
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 //
 // Modification of a default grpc passthrough resolver (google.golang.org/grpc/resolver/passthrough) allowing to use multiple addresses
 // in grpc endpoint. Example:
@@ -16,7 +16,7 @@ import (
 // grpc.WithDefaultServiceConfig("{\"loadBalancingConfig\":[{\"round_robin\":{}}]}")
 type multipleEndpointsGrpcResolverBuilder struct{}
 
-// Deprecated: gRPC API is being deprecated in favour of REST API.
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 //
 // Build creates and starts multiple endpoints resolver.
 func (*multipleEndpointsGrpcResolverBuilder) Build(target resolver.Target, cc resolver.ClientConn, _ resolver.BuildOptions) (resolver.Resolver, error) {
@@ -28,20 +28,20 @@ func (*multipleEndpointsGrpcResolverBuilder) Build(target resolver.Target, cc re
 	return r, nil
 }
 
-// Deprecated: gRPC API is being deprecated in favour of REST API.
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 //
 // Scheme returns default scheme.
 func (*multipleEndpointsGrpcResolverBuilder) Scheme() string {
 	return resolver.GetDefaultScheme()
 }
 
-// Deprecated: gRPC API is being deprecated in favour of REST API.
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 type multipleEndpointsGrpcResolver struct {
 	target resolver.Target
 	cc     resolver.ClientConn
 }
 
-// Deprecated: gRPC API is being deprecated in favour of REST API.
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 func (r *multipleEndpointsGrpcResolver) start() {
 	ep := r.target.Endpoint()
 	endpoints := strings.Split(ep, ",")
@@ -54,12 +54,12 @@ func (r *multipleEndpointsGrpcResolver) start() {
 	}
 }
 
-// Deprecated: gRPC API is being deprecated in favour of REST API.
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 //
 // ResolveNow --
 func (*multipleEndpointsGrpcResolver) ResolveNow(_ resolver.ResolveNowOptions) {}
 
-// Deprecated: gRPC API is being deprecated in favour of REST API.
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 //
 // Close --
 func (*multipleEndpointsGrpcResolver) Close() {}

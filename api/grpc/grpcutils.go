@@ -10,7 +10,7 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-// Deprecated: gRPC API is being deprecated in favour of REST API.
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 //
 // LogRequests logs the gRPC backend as well as request duration when the log level is set to debug
 // or higher.
@@ -40,7 +40,7 @@ func LogRequests(
 	return err
 }
 
-// Deprecated: gRPC API is being deprecated in favour of REST API.
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 //
 // LogStream prints the method at DEBUG level at the start of the stream.
 func LogStream(
@@ -68,7 +68,7 @@ func LogStream(
 	return strm, err
 }
 
-// Deprecated: gRPC API is being deprecated in favour of REST API.
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 //
 // AppendHeaders parses the provided GRPC headers
 // and attaches them to the provided context.

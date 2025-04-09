@@ -61,15 +61,15 @@ type Service struct {
 	ctx      context.Context
 	cancel   context.CancelFunc
 	listener net.Listener
-	// Deprecated: gRPC API is being deprecated in favour of REST API.
+	// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 	grpcServer          *grpc.Server
 	incomingAttestation chan *ethpbv1alpha1.Attestation
 	credentialError     error
-	// Deprecated: gRPC API is being deprecated in favour of REST API.
+	// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 	connectedRPCClients map[net.Addr]bool
-	// Deprecated: gRPC API is being deprecated in favour of REST API.
+	// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 	clientConnectionLock sync.Mutex
-	// Deprecated: gRPC API is being deprecated in favour of REST API.
+	// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 	validatorServer *validatorv1alpha1.Server
 }
 
@@ -116,7 +116,7 @@ type Config struct {
 	BlockNotifier             blockfeed.Notifier
 	OperationNotifier         opfeed.Notifier
 	StateGen                  *stategen.State
-	// Deprecated: gRPC API is being deprecated in favour of REST API.
+	// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 	MaxMsgSize             int
 	ExecutionEngineCaller  execution.EngineCaller
 	OptimisticModeFetcher  blockchain.OptimisticModeFetcher
@@ -374,7 +374,7 @@ func (s *Service) Status() error {
 	return nil
 }
 
-// Deprecated: gRPC API is being deprecated in favour of REST API.
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 //
 // Stream interceptor for new validator client connections to the beacon node.
 func (s *Service) validatorStreamConnectionInterceptor(
@@ -387,7 +387,7 @@ func (s *Service) validatorStreamConnectionInterceptor(
 	return handler(srv, ss)
 }
 
-// Deprecated: gRPC API is being deprecated in favour of REST API.
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 //
 // Unary interceptor for new validator client connections to the beacon node.
 func (s *Service) validatorUnaryConnectionInterceptor(
@@ -400,7 +400,7 @@ func (s *Service) validatorUnaryConnectionInterceptor(
 	return handler(ctx, req)
 }
 
-// Deprecated: gRPC API is being deprecated in favour of REST API.
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 func (s *Service) logNewClientConnection(ctx context.Context) {
 	if features.Get().DisableGRPCConnectionLogs {
 		return

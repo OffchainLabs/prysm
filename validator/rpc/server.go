@@ -27,15 +27,15 @@ import (
 type Config struct {
 	HTTPHost string
 	HTTPPort int
-	// Deprecated: gRPC API is being deprecated in favour of REST API.
+	// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 	GRPCMaxCallRecvMsgSize int
-	// Deprecated: gRPC API is being deprecated in favour of REST API.
+	// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 	GRPCRetries uint
-	// Deprecated: gRPC API is being deprecated in favour of REST API.
+	// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 	GRPCRetryDelay time.Duration
-	// Deprecated: gRPC API is being deprecated in favour of REST API.
+	// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 	GRPCHeaders []string
-	// Deprecated: gRPC API is being deprecated in favour of REST API.
+	// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 	BeaconNodeGRPCEndpoint string
 	BeaconApiEndpoint      string
 	BeaconApiTimeout       time.Duration
@@ -56,7 +56,7 @@ type Server struct {
 	serveWebUI            bool
 	walletInitialized     bool
 	logStreamerBufferSize int
-	// Deprecated: gRPC API is being deprecated in favour of REST API.
+	// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 	grpcMaxCallRecvMsgSize int
 	walletInitializedFeed  *event.Feed
 	beaconApiTimeout       time.Duration
@@ -64,16 +64,16 @@ type Server struct {
 	validatorService       *client.ValidatorService
 	httpPort               int
 	cancel                 context.CancelFunc
-	// Deprecated: gRPC API is being deprecated in favour of REST API.
+	// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 	grpcRetries uint
-	// Deprecated: gRPC API is being deprecated in favour of REST API.
+	// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 	grpcRetryDelay    time.Duration
 	server            *httprest.Server
 	router            *http.ServeMux
 	authTokenPath     string
 	beaconNodeCert    string
 	beaconApiEndpoint string
-	// Deprecated: gRPC API is being deprecated in favour of REST API.
+	// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 	beaconNodeEndpoint        string
 	healthClient              ethpb.HealthClient
 	nodeClient                iface.NodeClient
@@ -87,7 +87,7 @@ type Server struct {
 	ctx                       context.Context
 	walletDir                 string
 	jwtSecret                 []byte
-	// Deprecated: gRPC API is being deprecated in favour of REST API.
+	// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 	grpcHeaders []string
 }
 

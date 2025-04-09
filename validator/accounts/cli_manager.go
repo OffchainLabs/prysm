@@ -47,11 +47,11 @@ type CLIManager struct {
 	importPrivateKeys    bool
 	readPasswordFile     bool
 	skipMnemonicConfirm  bool
-	// Deprecated: gRPC API is being deprecated in favour of REST API.
+	// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 	dialOpts []grpc.DialOption
-	// Deprecated: gRPC API is being deprecated in favour of REST API.
+	// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 	grpcHeaders []string
-	// Deprecated: gRPC API is being deprecated in favour of REST API.
+	// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 	beaconRPCProvider  string
 	walletKeyCount     int
 	privateKeyFile     string

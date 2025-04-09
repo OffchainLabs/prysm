@@ -54,7 +54,7 @@ type Flags struct {
 
 	// Logging related toggles.
 
-	// Deprecated: gRPC API is being deprecated in favour of REST API.
+	// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 	DisableGRPCConnectionLogs bool // Disables logging when a new grpc client has connected.
 	EnableFullSSZDataLogging  bool // Enables logging for full ssz data on rejected gossip messages
 

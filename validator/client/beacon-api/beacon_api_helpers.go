@@ -12,7 +12,7 @@ import (
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
-// Deprecated: gRPC API is being deprecated in favour of REST API.
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 var beaconAPITogRPCValidatorStatus = map[string]ethpb.ValidatorStatus{
 	"pending_initialized": ethpb.ValidatorStatus_DEPOSITED,
 	"pending_queued":      ethpb.ValidatorStatus_PENDING,
