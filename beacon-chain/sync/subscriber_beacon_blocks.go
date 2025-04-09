@@ -118,11 +118,14 @@ func (s *Service) reconstructAndBroadcastDataColumnSidecars(ctx context.Context,
 		return
 	}
 
-	// Broadcast data column and then save to db (if needs to be in custody)
-	for _, sidecar := range sidecars {
-		if !info.CustodyColumns[sidecar.Index] {
+	sidecarCount := uint64(len(sidecars))
+	for index := range info.CustodyColumns {
+		if index >= sidecarCount {
+			log.WithField("index", index).Error("Sidecar index out of range - should never happen")
 			continue
 		}
+
+		sidecar := sidecars[index]
 
 		if err := s.cfg.p2p.BroadcastDataColumn(ctx, blockRoot, sidecar.Index, sidecar.DataColumnSidecar); err != nil {
 			log.WithFields(dataColumnFields(sidecar.RODataColumn)).WithError(err).Error("Failed to broadcast data column")
