@@ -68,7 +68,7 @@ func (s *Server) ListAttestations(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		includeAttestation = shouldIncludeAttestation(att.GetData(), rawSlot, slot, rawCommitteeIndex, committeeIndex)
+		includeAttestation = shouldIncludeAttestation(att, rawSlot, slot, rawCommitteeIndex, committeeIndex)
 		if includeAttestation {
 			attStruct := structs.AttFromConsensus(att)
 			filteredAtts = append(filteredAtts, attStruct)
@@ -124,21 +124,21 @@ func (s *Server) ListAttestationsV2(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			includeAttestation = shouldIncludeAttestation(attElectra.GetData(), rawSlot, slot, rawCommitteeIndex, committeeIndex)
+			includeAttestation = shouldIncludeAttestation(attElectra, rawSlot, slot, rawCommitteeIndex, committeeIndex)
 			if includeAttestation {
 				attStruct := structs.AttElectraFromConsensus(attElectra)
 				filteredAtts = append(filteredAtts, attStruct)
 			}
 		} else if v < version.Electra && att.Version() < version.Electra {
-			attOld, ok := att.(*eth.Attestation)
+			attPhase0, ok := att.(*eth.Attestation)
 			if !ok {
 				httputil.HandleError(w, fmt.Sprintf("Unable to convert attestation of type %T", att), http.StatusInternalServerError)
 				return
 			}
 
-			includeAttestation = shouldIncludeAttestation(attOld.GetData(), rawSlot, slot, rawCommitteeIndex, committeeIndex)
+			includeAttestation = shouldIncludeAttestation(attPhase0, rawSlot, slot, rawCommitteeIndex, committeeIndex)
 			if includeAttestation {
-				attStruct := structs.AttFromConsensus(attOld)
+				attStruct := structs.AttFromConsensus(attPhase0)
 				filteredAtts = append(filteredAtts, attStruct)
 			}
 		}
@@ -159,7 +159,7 @@ func (s *Server) ListAttestationsV2(w http.ResponseWriter, r *http.Request) {
 
 // Helper function to determine if an attestation should be included
 func shouldIncludeAttestation(
-	data *eth.AttestationData,
+	att eth.Att,
 	rawSlot string,
 	slot uint64,
 	rawCommitteeIndex string,
@@ -167,10 +167,10 @@ func shouldIncludeAttestation(
 ) bool {
 	committeeIndexMatch := true
 	slotMatch := true
-	if rawCommitteeIndex != "" && data.CommitteeIndex != primitives.CommitteeIndex(committeeIndex) {
+	if rawCommitteeIndex != "" && att.GetCommitteeIndex() != primitives.CommitteeIndex(committeeIndex) {
 		committeeIndexMatch = false
 	}
-	if rawSlot != "" && data.Slot != primitives.Slot(slot) {
+	if rawSlot != "" && att.GetData().Slot != primitives.Slot(slot) {
 		slotMatch = false
 	}
 	return committeeIndexMatch && slotMatch
