@@ -2983,6 +2983,7 @@ func TestValidator_CheckDependentRoots(t *testing.T) {
 		})
 		err := v.checkDependentRoots(ctx, head, 1)
 		require.NoError(t, err)
+		util.WaitTimeout(&wg, 2*time.Second)
 	})
 	t.Run("no updates needed", func(t *testing.T) {
 		head := &structs.HeadEvent{
