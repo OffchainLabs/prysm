@@ -186,7 +186,7 @@ var (
 	// P2PDenyList defines a list of CIDR subnets to disallow connections from them.
 	P2PDenyList = &cli.StringSliceFlag{
 		Name: "p2p-denylist",
-		Usage: "The CIDR subnets for denying certainty peer connections. " +
+		Usage: "The CIDR subnets for denying certain peer connections. " +
 			"Using \"private\" would deny all private subnets. Example: " +
 			"192.168.0.0/16 would deny connections from peers on your local network only. The " +
 			"default is to accept all connections.",
@@ -296,7 +296,7 @@ func LoadFlagsFromConfig(cliCtx *cli.Context, flags []cli.Flag) error {
 	return nil
 }
 
-// ValidateNoArgs insures that the application is not run with erroneous arguments or flags.
+// ValidateNoArgs ensures that the application is not run with erroneous arguments or flags.
 // This function should be used in the app.Before, whenever the application supports a default command.
 func ValidateNoArgs(ctx *cli.Context) error {
 	commandList := ctx.App.Commands
