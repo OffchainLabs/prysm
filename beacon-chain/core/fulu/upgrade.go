@@ -69,6 +69,10 @@ func UpgradeToFulu(beaconState state.BeaconState) (state.BeaconState, error) {
 	if err != nil {
 		return nil, err
 	}
+	depostiRequestsStartIndex, err := beaconState.DepositRequestsStartIndex()
+	if err != nil {
+		return nil, err
+	}
 	depositBalanceToConsume, err := beaconState.DepositBalanceToConsume()
 	if err != nil {
 		return nil, err
@@ -154,7 +158,7 @@ func UpgradeToFulu(beaconState state.BeaconState) (state.BeaconState, error) {
 		NextWithdrawalValidatorIndex: vi,
 		HistoricalSummaries:          summaries,
 
-		DepositRequestsStartIndex:     params.BeaconConfig().UnsetDepositRequestsStartIndex,
+		DepositRequestsStartIndex:     depostiRequestsStartIndex,
 		DepositBalanceToConsume:       depositBalanceToConsume,
 		ExitBalanceToConsume:          exitBalanceToConsume,
 		EarliestExitEpoch:             earliestExitEpoch,

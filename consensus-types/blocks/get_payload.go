@@ -1,6 +1,7 @@
 package blocks
 
 import (
+	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	pb "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
@@ -59,13 +60,13 @@ func NewGetPayloadResponse(msg proto.Message) (*GetPayloadResponse, error) {
 	}
 	ed, err := NewWrappedExecutionData(msg)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "new wrapped execution data")
 	}
 	r.ExecutionData = ed
 	if hasExecutionRequests {
 		requests, err := executionRequestsGetter.GetDecodedExecutionRequests()
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "get decoded execution requests")
 		}
 		r.ExecutionRequests = requests
 	}

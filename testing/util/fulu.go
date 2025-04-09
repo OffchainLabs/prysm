@@ -155,7 +155,8 @@ func GenerateTestFuluBlockWithSidecar(
 		blobs[i] = kzg.Blob(GenerateTestDenebBlobSidecar(t, root, sh, i, comt, inclusion[i]).Blob)
 	}
 	sidecars := make([]blocks.RODataColumn, params.BeaconConfig().NumberOfColumns)
-	dataColumns, err := peerdas.DataColumnSidecars(sbb, blobs)
+	cellsAndProofs := GenerateCellsAndProofs(t, blobs)
+	dataColumns, err := peerdas.DataColumnSidecars(sbb, cellsAndProofs)
 	require.NoError(t, err)
 	for i, dc := range dataColumns {
 		sidecars[i], err = blocks.NewRODataColumnWithRoot(dc, root)
@@ -166,4 +167,14 @@ func GenerateTestFuluBlockWithSidecar(
 	require.NoError(t, err)
 
 	return rob, sidecars
+}
+
+func GenerateCellsAndProofs(t *testing.T, blobs []kzg.Blob) []kzg.CellsAndProofs {
+	cellsAndProofs := make([]kzg.CellsAndProofs, len(blobs))
+	for i := range blobs {
+		cp, err := kzg.ComputeCellsAndKZGProofs(&blobs[i])
+		require.NoError(t, err)
+		cellsAndProofs[i] = cp
+	}
+	return cellsAndProofs
 }

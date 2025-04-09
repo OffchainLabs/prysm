@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 
+	errs "github.com/pkg/errors"
 	fastssz "github.com/prysmaticlabs/fastssz"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	consensus_types "github.com/prysmaticlabs/prysm/v5/consensus-types"
@@ -41,7 +42,8 @@ func NewWrappedExecutionData(v proto.Message) (interfaces.ExecutionData, error) 
 		// note: no payload changes in electra so using deneb
 		return WrappedExecutionPayloadDeneb(pbStruct.Payload)
 	default:
-		return nil, ErrUnsupportedVersion
+		// return nil, errors.Wrapf(ErrUnsupportedVersion, "type %T", pbStruct)
+		return nil, errs.Wrapf(ErrUnsupportedVersion, "type %T", pbStruct)
 	}
 }
 

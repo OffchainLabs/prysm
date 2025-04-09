@@ -340,6 +340,8 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	DeprecatedMaxBlobsPerBlockElectra:    9,
 	DeprecatedTargetBlobsPerBlockElectra: 6,
 	MaxRequestBlobSidecarsElectra:        1152,
+
+	DeprecatedMaxBlobsPerBlockFulu: 12,
 }
 
 // MainnetTestConfig provides a version of the mainnet config that has a different name

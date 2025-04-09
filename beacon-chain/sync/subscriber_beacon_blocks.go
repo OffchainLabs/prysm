@@ -36,8 +36,7 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 		return err
 	}
 
-	// TODO: do we only do this for super nodes?
-	go s.reconstructAndBroadcastBlobs(ctx, signed)
+	go s.reconstructAndBroadcastSidecars(ctx, signed)
 
 	if err := s.cfg.chain.ReceiveBlock(ctx, signed, root, nil); err != nil {
 		if blockchain.IsInvalidBlock(err) {
@@ -61,10 +60,10 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 	return err
 }
 
-// reconstructAndBroadcastBlobs processes and broadcasts blob sidecars for a given beacon block.
-func (s *Service) reconstructAndBroadcastBlobs(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) {
+// reconstructAndBroadcastSidecars processes and broadcasts sidecars for a given beacon block.
+func (s *Service) reconstructAndBroadcastSidecars(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) {
 	if block.Version() >= version.Fulu {
-		s.reconstructAndBroadcastBlobsInDataColumn(ctx, block)
+		s.reconstructAndBroadcastDataColumnSidecars(ctx, block)
 		return
 	}
 
@@ -74,8 +73,9 @@ func (s *Service) reconstructAndBroadcastBlobs(ctx context.Context, block interf
 	}
 }
 
-// reconstructAndBroadcastBlobsInDataColumn reconstructs and broadcasts blobs in data column format for a given beacon block, it also saves data column sidecars into the blob storage.
-func (s *Service) reconstructAndBroadcastBlobsInDataColumn(ctx context.Context, roSignedBlock interfaces.ReadOnlySignedBeaconBlock) {
+// reconstructAndBroadcastDataColumnSidecars reconstructs and broadcasts data column sidecars for a given beacon block.
+// It also saves data column sidecars into the storage.
+func (s *Service) reconstructAndBroadcastDataColumnSidecars(ctx context.Context, roSignedBlock interfaces.ReadOnlySignedBeaconBlock) {
 	block := roSignedBlock.Block()
 
 	kzgCommitments, err := block.Body().BlobKzgCommitments()
@@ -107,10 +107,12 @@ func (s *Service) reconstructAndBroadcastBlobsInDataColumn(ctx context.Context, 
 	}
 
 	nodeID := s.cfg.p2p.NodeID()
+
 	s.cfg.custodyInfo.Mut.RLock()
 	defer s.cfg.custodyInfo.Mut.RUnlock()
-	samplingSize := s.cfg.custodyInfo.CustodyGroupSamplingSize(peerdas.Actual)
-	info, _, err := peerdas.Info(nodeID, samplingSize)
+
+	groupCount := s.cfg.custodyInfo.ActualGroupCount()
+	info, _, err := peerdas.Info(nodeID, groupCount)
 	if err != nil {
 		log.WithError(err).Error("Failed to get peer info")
 		return
@@ -122,7 +124,6 @@ func (s *Service) reconstructAndBroadcastBlobsInDataColumn(ctx context.Context, 
 			continue
 		}
 
-		// first broadcast the data column
 		if err := s.cfg.p2p.BroadcastDataColumn(ctx, blockRoot, sidecar.Index, sidecar.DataColumnSidecar); err != nil {
 			log.WithFields(dataColumnFields(sidecar.RODataColumn)).WithError(err).Error("Failed to broadcast data column")
 		}
