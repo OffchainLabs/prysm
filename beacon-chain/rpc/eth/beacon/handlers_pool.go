@@ -286,7 +286,7 @@ func (s *Server) handleAttestationsElectra(
 	var sourceAttestations []*structs.SingleAttestation
 	currentEpoch := slots.ToEpoch(s.TimeFetcher.CurrentSlot())
 	if currentEpoch < params.BeaconConfig().ElectraForkEpoch {
-		return nil, nil, errors.Errorf("Electra attestations have not been enabled, current epoch %d enabled epoch %d", currentEpoch, params.BeaconConfig().ElectraForkEpoch)
+		return nil, nil, errors.Errorf("electra attestations have not been enabled, current epoch %d enabled epoch %d", currentEpoch, params.BeaconConfig().ElectraForkEpoch)
 	}
 
 	if err = json.Unmarshal(data, &sourceAttestations); err != nil {
