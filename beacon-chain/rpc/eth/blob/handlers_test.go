@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -36,6 +37,7 @@ func TestBlobs(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
 	cfg.DenebForkEpoch = 1
+	cfg.ElectraForkEpoch = math.MaxUint64
 	params.OverrideBeaconConfig(cfg)
 
 	db := testDB.SetupDB(t)
