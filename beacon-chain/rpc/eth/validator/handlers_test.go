@@ -644,7 +644,6 @@ func TestSubmitAggregateAndProofs(t *testing.T) {
 			config.ElectraForkEpoch = 0
 			params.OverrideBeaconConfig(config)
 			defer params.SetupTestConfigCleanup(t)
-
 			var body bytes.Buffer
 			_, err := body.WriteString(singleAggregate)
 			require.NoError(t, err)
@@ -656,7 +655,7 @@ func TestSubmitAggregateAndProofs(t *testing.T) {
 			e := &httputil.DefaultJsonError{}
 			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
 			assert.Equal(t, http.StatusBadRequest, e.Code)
-			assert.ErrorContains(t, "old aggregate attestation and proof", errors.New(e.Message))
+			assert.ErrorContains(t, "old aggregate and proof", errors.New(e.Message))
 		})
 		t.Run("no body", func(t *testing.T) {
 			request := httptest.NewRequest(http.MethodPost, "http://example.com", nil)
@@ -702,6 +701,11 @@ func TestSubmitAggregateAndProofs(t *testing.T) {
 	})
 	t.Run("V2", func(t *testing.T) {
 		t.Run("single", func(t *testing.T) {
+			params.SetupTestConfigCleanup(t)
+			config := params.BeaconConfig()
+			config.ElectraForkEpoch = 0
+			params.OverrideBeaconConfig(config)
+			defer params.SetupTestConfigCleanup(t)
 			broadcaster := &p2pmock.MockBroadcaster{}
 			s.CoreService.Broadcaster = broadcaster
 
@@ -734,6 +738,11 @@ func TestSubmitAggregateAndProofs(t *testing.T) {
 			assert.Equal(t, 1, len(broadcaster.BroadcastMessages))
 		})
 		t.Run("multiple", func(t *testing.T) {
+			params.SetupTestConfigCleanup(t)
+			config := params.BeaconConfig()
+			config.ElectraForkEpoch = 0
+			params.OverrideBeaconConfig(config)
+			defer params.SetupTestConfigCleanup(t)
 			broadcaster := &p2pmock.MockBroadcaster{}
 			s.CoreService.Broadcaster = broadcaster
 			s.CoreService.SyncCommitteePool = synccommittee.NewStore()
@@ -773,7 +782,6 @@ func TestSubmitAggregateAndProofs(t *testing.T) {
 			config.ElectraForkEpoch = 0
 			params.OverrideBeaconConfig(config)
 			defer params.SetupTestConfigCleanup(t)
-
 			var body bytes.Buffer
 			_, err := body.WriteString(singleAggregate)
 			require.NoError(t, err)
@@ -786,9 +794,10 @@ func TestSubmitAggregateAndProofs(t *testing.T) {
 			e := &httputil.DefaultJsonError{}
 			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
 			assert.Equal(t, http.StatusBadRequest, e.Code)
-			assert.ErrorContains(t, "old aggregate attestation and proof", errors.New(e.Message))
+			assert.ErrorContains(t, "old aggregate and proof", errors.New(e.Message))
 		})
 		t.Run("electra agg pre electra", func(t *testing.T) {
+			defer params.SetupTestConfigCleanup(t)
 			var body bytes.Buffer
 			_, err := body.WriteString(singleAggregateElectra)
 			require.NoError(t, err)

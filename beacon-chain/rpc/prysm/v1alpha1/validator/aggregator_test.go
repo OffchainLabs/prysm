@@ -400,7 +400,9 @@ func TestSubmitAggregateAndProof_SelectsMostBitsWhenOwnAttestationNotPresent(t *
 
 func TestSubmitSignedAggregateSelectionProof_ZeroHashesSignatures(t *testing.T) {
 	aggregatorServer := &Server{
-		TimeFetcher: &mock.ChainService{Genesis: time.Now()},
+		CoreService: &core.Service{
+			GenesisTimeFetcher: &mock.ChainService{Genesis: time.Now()},
+		},
 	}
 	req := &ethpb.SignedAggregateSubmitRequest{
 		SignedAggregateAndProof: &ethpb.SignedAggregateAttestationAndProof{
