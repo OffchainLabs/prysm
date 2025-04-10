@@ -58,7 +58,7 @@ func NewTestLightClient(t *testing.T, forkVersion int, options ...LightClientOpt
 	case version.Electra:
 		return l.setupTestElectra()
 	default:
-		l.T.Fatalf("unknown version %d", l.version)
+		l.T.Fatalf("Unsupported version %s", version.String(l.version))
 		return nil
 	}
 }
