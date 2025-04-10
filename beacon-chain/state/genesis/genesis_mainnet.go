@@ -6,7 +6,7 @@ package genesis
 import (
 	_ "embed"
 
-	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 )
 
 var (

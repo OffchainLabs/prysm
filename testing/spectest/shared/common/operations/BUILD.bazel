@@ -20,7 +20,7 @@ go_library(
         "withdrawal_request.go",
         "withdrawals.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/testing/spectest/shared/common/operations",
+    importpath = "github.com/OffchainLabs/prysm/v6/testing/spectest/shared/common/operations",
     visibility = ["//visibility:public"],
     deps = [
         "//beacon-chain/core/altair:go_default_library",

@@ -22,7 +22,7 @@ go_library(
         "testutils_develop.go",  # keep
         "values.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/config/params",
+    importpath = "github.com/OffchainLabs/prysm/v6/config/params",
     visibility = ["//visibility:public"],
     deps = [
         "//config/fieldparams:go_default_library",

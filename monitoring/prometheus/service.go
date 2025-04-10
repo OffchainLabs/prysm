@@ -12,9 +12,9 @@ import (
 	"runtime/pprof"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/runtime"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/prysmaticlabs/prysm/v5/runtime"
 	"github.com/sirupsen/logrus"
 )
 

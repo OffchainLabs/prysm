@@ -1,7 +1,7 @@
 package eth
 
 import (
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 )
 
 // ValidatorDutiesContainer is a wrapper that can be both used for the gRPC DutiesResponse and Rest API response structs for attestation, proposer, and sync duties.

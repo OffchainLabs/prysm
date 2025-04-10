@@ -3,8 +3,8 @@ package blockchain
 import (
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func TestIsInvalidBlock(t *testing.T) {

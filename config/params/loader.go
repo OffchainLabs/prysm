@@ -6,9 +6,9 @@ import (
 	"os"
 	"strings"
 
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/math"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/math"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 )

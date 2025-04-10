@@ -58,7 +58,7 @@ go_proto_library(
     compilers = [
         "@com_github_prysmaticlabs_protoc_gen_go_cast//:go_cast_grpc",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/proto/engine/v1",
+    importpath = "github.com/OffchainLabs/prysm/v6/proto/engine/v1",
     proto = ":proto",
     visibility = ["//visibility:public"],
     deps = [
@@ -83,7 +83,7 @@ go_library(
     embed = [
         ":go_proto",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/proto/engine/v1",
+    importpath = "github.com/OffchainLabs/prysm/v6/proto/engine/v1",
     visibility = ["//visibility:public"],
     deps = [
         "//config/fieldparams:go_default_library",

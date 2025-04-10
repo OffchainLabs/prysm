@@ -18,7 +18,7 @@ package ethereum.eth.v1alpha1;
 import "proto/eth/ext/options.proto";
 
 option csharp_namespace = "Ethereum.Eth.v1alpha1";
-option go_package = "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1;eth";
+option go_package = "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1;eth";
 option java_multiple_files = true;
 option java_outer_classname = "EIP7251Proto";
 option java_package = "org.ethereum.eth.v1alpha1";
@@ -40,14 +40,14 @@ message PendingDeposit {
   bytes signature = 4 [ (ethereum.eth.ext.ssz_size) = "96" ];
   uint64 slot = 5 [
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"
   ];
 }
 
 message PendingPartialWithdrawal {
   // Validator index for the withdrawal.
   uint64 index = 1 [ (ethereum.eth.ext.cast_type) =
-                         "github.com/prysmaticlabs/prysm/v5/consensus-types/"
+                         "github.com/OffchainLabs/prysm/v6/consensus-types/"
                          "primitives.ValidatorIndex" ];
 
   // The amount of the withdrawal (gwei).
@@ -56,17 +56,17 @@ message PendingPartialWithdrawal {
   // A partial withdrawal is valid at this epoch or later.
   uint64 withdrawable_epoch = 3 [
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Epoch"
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"
   ];
 }
 
 message PendingConsolidation {
   // Validator from which the funds will be moved.
   uint64 source_index = 1 [ (ethereum.eth.ext.cast_type) =
-                                "github.com/prysmaticlabs/prysm/v5/"
+                                "github.com/OffchainLabs/prysm/v6/"
                                 "consensus-types/primitives.ValidatorIndex" ];
   // Validator to which the funds will be moved.
   uint64 target_index = 2 [ (ethereum.eth.ext.cast_type) =
-                                "github.com/prysmaticlabs/prysm/v5/"
+                                "github.com/OffchainLabs/prysm/v6/"
                                 "consensus-types/primitives.ValidatorIndex" ];
 }
