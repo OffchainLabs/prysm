@@ -161,7 +161,7 @@ func configureTestnet(ctx *cli.Context) error {
 		} else {
 			log.Info("Running on Ethereum Mainnet")
 		}
-		if err := params.SetActive(params.MainnetConfig().Copy()); err != nil {
+		if err := params.SetActive(params.MainnetConfig()); err != nil {
 			return err
 		}
 	}

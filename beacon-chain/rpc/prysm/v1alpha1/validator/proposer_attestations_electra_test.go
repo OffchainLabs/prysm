@@ -16,7 +16,7 @@ import (
 
 func Test_computeOnChainAggregate(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	cfg := params.MainnetConfig().Copy()
+	cfg := params.MainnetConfig()
 	cfg.MaxCommitteesPerSlot = 64
 	params.OverrideBeaconConfig(cfg)
 

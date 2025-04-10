@@ -145,7 +145,7 @@ func TestLoadGenesisFromFile_mismatchedForkVersion(t *testing.T) {
 func TestEnsureEmbeddedGenesis(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	// Embedded Genesis works with Mainnet config
-	cfg := params.MainnetConfig().Copy()
+	cfg := params.MainnetConfig()
 	cfg.SecondsPerSlot = 1
 	undo, err := params.SetActiveWithUndo(cfg)
 	require.NoError(t, err)
