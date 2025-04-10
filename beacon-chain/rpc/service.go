@@ -112,16 +112,15 @@ type Config struct {
 	BlockNotifier             blockfeed.Notifier
 	OperationNotifier         opfeed.Notifier
 	StateGen                  *stategen.State
-	// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
-	MaxMsgSize             int
-	ExecutionEngineCaller  execution.EngineCaller
-	OptimisticModeFetcher  blockchain.OptimisticModeFetcher
-	BlockBuilder           builder.BlockBuilder
-	Router                 *http.ServeMux
-	ClockWaiter            startup.ClockWaiter
-	BlobStorage            *filesystem.BlobStorage
-	TrackedValidatorsCache *cache.TrackedValidatorsCache
-	PayloadIDCache         *cache.PayloadIDCache
+	MaxMsgSize                int
+	ExecutionEngineCaller     execution.EngineCaller
+	OptimisticModeFetcher     blockchain.OptimisticModeFetcher
+	BlockBuilder              builder.BlockBuilder
+	Router                    *http.ServeMux
+	ClockWaiter               startup.ClockWaiter
+	BlobStorage               *filesystem.BlobStorage
+	TrackedValidatorsCache    *cache.TrackedValidatorsCache
+	PayloadIDCache            *cache.PayloadIDCache
 }
 
 // NewService instantiates a new RPC service instance that will
@@ -370,8 +369,6 @@ func (s *Service) Status() error {
 	return nil
 }
 
-// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
-//
 // Stream interceptor for new validator client connections to the beacon node.
 func (s *Service) validatorStreamConnectionInterceptor(
 	srv interface{},
@@ -383,8 +380,6 @@ func (s *Service) validatorStreamConnectionInterceptor(
 	return handler(srv, ss)
 }
 
-// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
-//
 // Unary interceptor for new validator client connections to the beacon node.
 func (s *Service) validatorUnaryConnectionInterceptor(
 	ctx context.Context,
@@ -396,7 +391,6 @@ func (s *Service) validatorUnaryConnectionInterceptor(
 	return handler(ctx, req)
 }
 
-// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 func (s *Service) logNewClientConnection(ctx context.Context) {
 	if features.Get().DisableGRPCConnectionLogs {
 		return

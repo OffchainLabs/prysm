@@ -31,8 +31,6 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
-//
 // Server defines a server implementation of the gRPC Node service,
 // providing RPC endpoints for verifying a beacon node's sync status, genesis and
 // version information, and services the node implements and runs.
@@ -40,7 +38,6 @@ type Server struct {
 	LogsStreamer         logs.Streamer
 	StreamLogsBufferSize int
 	SyncChecker          sync.Checker
-	// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 	Server               *grpc.Server
 	BeaconDB             db.ReadOnlyDatabase
 	PeersFetcher         p2p.PeersProvider

@@ -62,19 +62,14 @@ type ValidatorService struct {
 
 // Config for the validator service.
 type Config struct {
-	Validator             iface.Validator
-	DB                    db.Database
-	Wallet                *wallet.Wallet
-	WalletInitializedFeed *event.Feed
-	// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
-	GRPCMaxCallRecvMsgSize int
-	// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
-	GRPCRetries uint
-	// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
-	GRPCRetryDelay time.Duration
-	// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
-	GRPCHeaders []string
-	// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+	Validator               iface.Validator
+	DB                      db.Database
+	Wallet                  *wallet.Wallet
+	WalletInitializedFeed   *event.Feed
+	GRPCMaxCallRecvMsgSize  int
+	GRPCRetries             uint
+	GRPCRetryDelay          time.Duration
+	GRPCHeaders             []string
 	BeaconNodeGRPCEndpoint  string
 	BeaconNodeCert          string
 	BeaconApiEndpoint       string
@@ -281,8 +276,6 @@ func (v *ValidatorService) SetProposerSettings(ctx context.Context, settings *pr
 	return v.validator.SetProposerSettings(ctx, settings)
 }
 
-// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
-//
 // ConstructDialOptions constructs a list of grpc dial options
 func ConstructDialOptions(
 	maxCallRecvMsgSize int,

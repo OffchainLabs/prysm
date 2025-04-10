@@ -25,17 +25,12 @@ import (
 
 // Config options for the HTTP server.
 type Config struct {
-	HTTPHost string
-	HTTPPort int
-	// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+	HTTPHost               string
+	HTTPPort               int
 	GRPCMaxCallRecvMsgSize int
-	// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
-	GRPCRetries uint
-	// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
-	GRPCRetryDelay time.Duration
-	// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
-	GRPCHeaders []string
-	// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+	GRPCRetries            uint
+	GRPCRetryDelay         time.Duration
+	GRPCHeaders            []string
 	BeaconNodeGRPCEndpoint string
 	BeaconApiEndpoint      string
 	BeaconApiTimeout       time.Duration
