@@ -24,30 +24,35 @@ option php_namespace = "Ethereum\\Eth\\v1alpha1";
 service Debug {
   // Returns a beacon state by filter criteria from the beacon node.
   rpc GetBeaconState(BeaconStateRequest) returns (SSZResponse) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/debug/state"
     };
   }
   // Returns a beacon state by filter criteria from the beacon node.
   rpc GetBlock(BlockRequestByRoot) returns (SSZResponse) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/debug/block"
     };
   }
   // SetLoggingLevel sets the log-level of the beacon node programmatically.
   rpc SetLoggingLevel(LoggingLevelRequest) returns (google.protobuf.Empty) {
+    option deprecated = true;
     option (google.api.http) = {
       post : "/eth/v1alpha1/debug/logging"
     };
   }
   // Returns all the related data for every peer tracked by the host node.
   rpc ListPeers(google.protobuf.Empty) returns (DebugPeerResponses) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/debug/peers"
     };
   }
   // Returns requested peer with specified peer id if it exists.
   rpc GetPeer(ethereum.eth.v1alpha1.PeerRequest) returns (DebugPeerResponse) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/debug/peer"
     };
@@ -70,6 +75,8 @@ message InclusionSlotResponse {
 }
 
 message BeaconStateRequest {
+  option deprecated = true;
+
   oneof query_filter {
     // The slot corresponding to a desired beacon state.
     uint64 slot = 1 [
@@ -82,14 +89,22 @@ message BeaconStateRequest {
   }
 }
 
-message BlockRequestByRoot { bytes block_root = 1; }
+message BlockRequestByRoot {
+  option deprecated = true;
+
+  bytes block_root = 1;
+}
 
 message SSZResponse {
+  option deprecated = true;
+
   // Returns an ssz-encoded byte slice as a response.
   bytes encoded = 1;
 }
 
 message LoggingLevelRequest {
+  option deprecated = true;
+
   // The logging levels available in Prysm as an enum.
   enum Level {
     INFO = 0;
@@ -99,9 +114,15 @@ message LoggingLevelRequest {
   Level level = 1;
 }
 
-message DebugPeerResponses { repeated DebugPeerResponse responses = 1; }
+message DebugPeerResponses {
+  option deprecated = true;
+
+  repeated DebugPeerResponse responses = 1;
+}
 
 message DebugPeerResponse {
+  option deprecated = true;
+
   // Peer related metadata that is useful for debugging.
   message PeerInfo {
     // Metadata of the peer, containing their bitfield

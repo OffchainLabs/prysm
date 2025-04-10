@@ -11,6 +11,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+//
 // SubmitProposerSlashing receives a proposer slashing object via
 // RPC and injects it into the beacon node's operations pool.
 // Submission into this pool does not guarantee inclusion into a beacon block.
@@ -36,10 +38,13 @@ func (bs *Server) SubmitProposerSlashing(
 	}, nil
 }
 
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 func (bs *Server) SubmitAttesterSlashing(ctx context.Context, req *ethpb.AttesterSlashing) (*ethpb.SubmitSlashingResponse, error) {
 	return bs.submitAttesterSlashing(ctx, req)
 }
 
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+//
 // SubmitAttesterSlashingElectra receives an attester slashing object via
 // RPC and injects it into the beacon node's operations pool.
 // Submission into this pool does not guarantee inclusion into a beacon block.

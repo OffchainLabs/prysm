@@ -35,6 +35,7 @@ option php_namespace = "Ethereum\\Eth\\v1alpha1";
 service Node {
   // Retrieve the current network sync status of the node.
   rpc GetSyncStatus(google.protobuf.Empty) returns (SyncStatus) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/node/syncing"
     };
@@ -42,6 +43,7 @@ service Node {
 
   // Retrieve information about the genesis of Ethereum proof of stake.
   rpc GetGenesis(google.protobuf.Empty) returns (Genesis) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/node/genesis"
     };
@@ -49,6 +51,7 @@ service Node {
 
   // Retrieve information about the running Ethereum Beacon Node.
   rpc GetVersion(google.protobuf.Empty) returns (Version) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/node/version"
     };
@@ -56,6 +59,7 @@ service Node {
 
   // Retrieve the current health of the node.
   rpc GetHealth(HealthRequest) returns (google.protobuf.Empty) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/node/health"
     };
@@ -68,6 +72,7 @@ service Node {
   // reflection.
   rpc ListImplementedServices(google.protobuf.Empty)
       returns (ImplementedServices) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/node/services"
     };
@@ -75,6 +80,7 @@ service Node {
 
   // Retrieves the peer data of the local peer.
   rpc GetHost(google.protobuf.Empty) returns (HostData) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/node/p2p"
     };
@@ -82,6 +88,7 @@ service Node {
 
   // Retrieve the peer corresponding to the provided peer id.
   rpc GetPeer(PeerRequest) returns (Peer) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/node/peer"
     };
@@ -89,6 +96,7 @@ service Node {
 
   // Retrieve the list of peers currently connected to this node.
   rpc ListPeers(google.protobuf.Empty) returns (Peers) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/node/peers"
     };
@@ -97,22 +105,31 @@ service Node {
   // // Retrieve the status of the ETH1 connections.
   rpc GetETH1ConnectionStatus(google.protobuf.Empty)
       returns (ETH1ConnectionStatus) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/node/eth1/connections"
     };
   }
 }
 
-message HealthRequest { uint64 syncing_status = 1; }
+message HealthRequest {
+  option deprecated = true;
+
+  uint64 syncing_status = 1;
+}
 
 // Information about the current network sync status of the node.
 message SyncStatus {
+  option deprecated = true;
+
   // Whether or not the node is currently syncing.
   bool syncing = 1;
 }
 
 // Information about the genesis of Ethereum proof of stake.
 message Genesis {
+  option deprecated = true;
+
   // UTC time specified in the chain start event in the deposit contract.
   google.protobuf.Timestamp genesis_time = 1;
 
@@ -126,6 +143,8 @@ message Genesis {
 
 // Information about the node version.
 message Version {
+  option deprecated = true;
+
   // A string that uniquely identifies the node and its version.
   string version = 1;
 
@@ -134,18 +153,30 @@ message Version {
   string metadata = 2;
 }
 
-message ImplementedServices { repeated string services = 1; }
+message ImplementedServices {
+  option deprecated = true;
+
+  repeated string services = 1;
+}
 
 message PeerRequest {
+  option deprecated = true;
+
   // Peer id of the peer requested.
   string peer_id = 1;
 }
 
 // Peers is a list of peer messages.
-message Peers { repeated Peer peers = 1; }
+message Peers {
+  option deprecated = true;
+
+  repeated Peer peers = 1;
+}
 
 // Peer provides details of a peer on the network.
 message Peer {
+  option deprecated = true;
+
   // The address of the peer, as a full multiaddr, for example:
   // /ip4/37.221.192.134/tcp/13000/p2p/16Uiu2HAm8maLMjag1TAUM52zPfmLbVMGFdwUAWgoHu1HDQLR6e17
   string address = 1;
@@ -162,6 +193,8 @@ message Peer {
 
 // P2P Data on the local host.
 message HostData {
+  option deprecated = true;
+
   // All the  multiaddress of the peer, specified as a full multiaddr, for
   // example:
   // /ip4/37.221.192.134/tcp/13000/p2p/16Uiu2HAm8maLMjag1TAUM52zPfmLbVMGFdwUAWgoHu1HDQLR6e17
@@ -190,6 +223,8 @@ enum ConnectionState {
 // ETH1ConnectionStatus states the current address and error of the ETH1 API
 // endpoint. It also provides the addresses and errors for any fallback URLs.
 message ETH1ConnectionStatus {
+  option deprecated = true;
+
   // Current ETH1 HTTP endpoint.
   string current_address = 1;
 

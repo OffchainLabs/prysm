@@ -18,10 +18,15 @@ option php_namespace = "Ethereum\\Eth\\v1alpha1";
 // such being able to stream logs via gRPC.
 service Health {
   rpc StreamBeaconLogs(google.protobuf.Empty) returns (stream LogsResponse) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/health/logs/stream"
     };
   }
 }
 
-message LogsResponse { repeated string logs = 1; }
+message LogsResponse {
+  option deprecated = true;
+
+  repeated string logs = 1;
+}
