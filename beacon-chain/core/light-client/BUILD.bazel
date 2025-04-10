@@ -45,6 +45,7 @@ go_test(
         "//encoding/ssz:go_default_library",
         "//proto/engine/v1:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
+        "//runtime/version:go_default_library",
         "//testing/require:go_default_library",
         "//testing/util:go_default_library",
         "@com_github_pkg_errors//:go_default_library",
