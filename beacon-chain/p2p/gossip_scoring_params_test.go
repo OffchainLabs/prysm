@@ -15,7 +15,7 @@ import (
 
 func TestCorrect_ActiveValidatorsCount(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	cfg := params.MainnetConfig().Copy()
+	cfg := params.MainnetConfig()
 	cfg.ConfigName = "test"
 
 	params.OverrideBeaconConfig(cfg)

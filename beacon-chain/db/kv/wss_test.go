@@ -14,7 +14,7 @@ import (
 func TestSaveOrigin(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	// Embedded Genesis works with Mainnet config
-	params.OverrideBeaconConfig(params.MainnetConfig().Copy())
+	params.OverrideBeaconConfig(params.MainnetConfig())
 
 	ctx := context.Background()
 	db := setupDB(t)
