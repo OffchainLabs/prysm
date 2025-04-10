@@ -50,6 +50,7 @@ func TestBlobs(t *testing.T) {
 
 	mockChainService := &mockChain.ChainService{
 		FinalizedRoots: map[[32]byte]bool{},
+		Genesis:        time.Now().Add(-time.Duration(uint64(params.BeaconConfig().SlotsPerEpoch)*uint64(params.BeaconConfig().DenebForkEpoch)*params.BeaconConfig().SecondsPerSlot) * time.Second),
 	}
 	s := &Server{
 		OptimisticModeFetcher: mockChainService,
@@ -270,9 +271,6 @@ func TestBlobs(t *testing.T) {
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		s.Blocker = &lookup.BeaconDbBlocker{}
-		s.TimeFetcher = &testutil.MockGenesisTimeFetcher{
-			Genesis: time.Now().Add(-time.Duration(uint64(params.BeaconConfig().SlotsPerEpoch)*uint64(params.BeaconConfig().DenebForkEpoch)*params.BeaconConfig().SecondsPerSlot) * time.Second),
-		}
 		s.Blobs(writer, request)
 
 		assert.Equal(t, http.StatusBadRequest, writer.Code)
