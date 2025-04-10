@@ -14,7 +14,7 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
-	testhelpers "github.com/OffchainLabs/prysm/v6/validator/client/beacon-api/test-helpers"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
 func TestRegisterSyncSubnetProto(t *testing.T) {
@@ -79,30 +79,32 @@ func TestService_SubmitSignedAggregateSelectionProof(t *testing.T) {
 		params.OverrideBeaconConfig(config)
 		broadcaster := &p2pmock.MockBroadcaster{}
 		s.Broadcaster = broadcaster
+		fakeSig, err := hexutil.Decode("0x1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505cc411d61252fb6cb3fa0017b679f8bb2305b26a285fa2737f175668d0dff91cc1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505")
+		require.NoError(t, err)
 		agg := &ethpb.SignedAggregateAttestationAndProofElectra{
 			Message: &ethpb.AggregateAttestationAndProofElectra{
 				AggregatorIndex: 72,
 				Aggregate: &ethpb.AttestationElectra{
-					AggregationBits: testhelpers.FillByteSlice(4, 74),
+					AggregationBits: make([]byte, 4),
 					Data: &ethpb.AttestationData{
 						Slot:            75,
 						CommitteeIndex:  76,
-						BeaconBlockRoot: testhelpers.FillByteSlice(32, 38),
+						BeaconBlockRoot: make([]byte, 32),
 						Source: &ethpb.Checkpoint{
 							Epoch: 78,
-							Root:  testhelpers.FillByteSlice(32, 79),
+							Root:  make([]byte, 32),
 						},
 						Target: &ethpb.Checkpoint{
 							Epoch: 80,
-							Root:  testhelpers.FillByteSlice(32, 81),
+							Root:  make([]byte, 32),
 						},
 					},
-					Signature:     testhelpers.FillByteSlice(96, 82),
-					CommitteeBits: testhelpers.FillByteSlice(8, 83),
+					Signature:     fakeSig,
+					CommitteeBits: make([]byte, 8),
 				},
-				SelectionProof: testhelpers.FillByteSlice(96, 84),
+				SelectionProof: fakeSig,
 			},
-			Signature: testhelpers.FillByteSlice(96, 85),
+			Signature: fakeSig,
 		}
 		rpcError := s.SubmitSignedAggregateSelectionProof(context.Background(), agg)
 		assert.Equal(t, true, rpcError == nil)
