@@ -1140,7 +1140,7 @@ func (v *validator) StartEventStream(ctx context.Context, topics []string, event
 	v.validatorClient.StartEventStream(ctx, topics, eventsChannel)
 }
 
-func (v *validator) checkDependentRoots(ctx context.Context, head *structs.HeadEvent, slot primitives.Slot) error {
+func (v *validator) checkDependentRoots(ctx context.Context, head *structs.HeadEvent) error {
 	if head == nil {
 		return errors.New("received empty head event")
 	}
@@ -1148,7 +1148,12 @@ func (v *validator) checkDependentRoots(ctx context.Context, head *structs.HeadE
 	if err != nil {
 		return errors.Wrap(err, "failed to decode previous duty dependent root")
 	}
-	currEpochStart, err := slots.EpochStart(slots.ToEpoch(slot))
+	uintSlot, err := strconv.ParseUint(head.Slot, 10, 64)
+	if err != nil {
+		return errors.Wrap(err, "Failed to parse slot")
+	}
+
+	currEpochStart, err := slots.EpochStart(slots.ToEpoch(primitives.Slot(uintSlot)))
 	if err != nil {
 		return err
 	}
@@ -1191,10 +1196,11 @@ func (v *validator) ProcessEvent(ctx context.Context, event *eventClient.Event) 
 		uintSlot, err := strconv.ParseUint(head.Slot, 10, 64)
 		if err != nil {
 			log.WithError(err).Error("Failed to parse slot")
+			return
 		}
 		v.setHighestSlot(primitives.Slot(uintSlot))
 		if !v.disableDutiesPolling {
-			if err := v.checkDependentRoots(ctx, head, primitives.Slot(uintSlot)); err != nil {
+			if err := v.checkDependentRoots(ctx, head); err != nil {
 				log.WithError(err).Error("Failed to check dependent roots")
 			}
 		}
