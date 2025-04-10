@@ -3,15 +3,15 @@ package state_native_test
 import (
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	statenative "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
+	testtmpl "github.com/OffchainLabs/prysm/v6/beacon-chain/state/testing"
+	"github.com/OffchainLabs/prysm/v6/crypto/bls"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	statenative "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
-	testtmpl "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/testing"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
 )
 
 func TestBeaconState_ValidatorAtIndexReadOnly_HandlesNilSlice_Phase0(t *testing.T) {

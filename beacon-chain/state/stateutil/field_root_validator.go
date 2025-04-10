@@ -6,11 +6,11 @@ import (
 	"runtime"
 	"sync"
 
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/crypto/hash/htr"
+	"github.com/OffchainLabs/prysm/v6/encoding/ssz"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/crypto/hash/htr"
-	"github.com/prysmaticlabs/prysm/v5/encoding/ssz"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/sirupsen/logrus"
 )
 

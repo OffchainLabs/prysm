@@ -6,14 +6,14 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/OffchainLabs/prysm/v6/api"
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v6/network/httputil"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/prysmaticlabs/prysm/v5/api"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/helpers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/shared"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 )
 
 const errMsgStateFromConsensus = "Could not convert consensus state to response"

@@ -8,7 +8,7 @@ go_library(
         "query.go",
         "span.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/cmd/prysmctl/db",
+    importpath = "github.com/OffchainLabs/prysm/v6/cmd/prysmctl/db",
     visibility = ["//visibility:public"],
     deps = [
         "//beacon-chain/db/kv:go_default_library",

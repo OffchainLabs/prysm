@@ -3,9 +3,9 @@ package payloadattribute
 import (
 	"testing"
 
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 )
 
 func TestPayloadAttributeGetters(t *testing.T) {

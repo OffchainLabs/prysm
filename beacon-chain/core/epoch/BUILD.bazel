@@ -6,7 +6,7 @@ go_library(
         "epoch_processing.go",
         "sortable_indices.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/epoch",
+    importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/core/epoch",
     visibility = [
         "//beacon-chain:__subpackages__",
         "//testing/spectest:__subpackages__",

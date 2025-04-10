@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filters"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filters"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	"github.com/sirupsen/logrus"
 )
 

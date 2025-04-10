@@ -11,7 +11,7 @@ go_library(
         "list.go",
         "wallet_utils.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/cmd/validator/accounts",
+    importpath = "github.com/OffchainLabs/prysm/v6/cmd/validator/accounts",
     visibility = ["//visibility:public"],
     deps = [
         "//api/grpc:go_default_library",

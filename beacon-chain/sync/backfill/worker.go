@@ -4,12 +4,12 @@ import (
 	"context"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
 )
 
 type workerId int

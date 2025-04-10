@@ -20,7 +20,7 @@ go_library(
         "slashings_reset.go",
         "sync_committee_updates.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/testing/spectest/shared/electra/epoch_processing",
+    importpath = "github.com/OffchainLabs/prysm/v6/testing/spectest/shared/electra/epoch_processing",
     visibility = ["//visibility:public"],
     deps = [
         "//beacon-chain/core/electra:go_default_library",

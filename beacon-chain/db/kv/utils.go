@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"context"
 
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	bolt "go.etcd.io/bbolt"
 )
 

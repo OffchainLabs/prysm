@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/network/forks"
+	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	prysmTime "github.com/OffchainLabs/prysm/v6/time"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/network/forks"
-	pb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	prysmTime "github.com/prysmaticlabs/prysm/v5/time"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/sirupsen/logrus"
 )
 

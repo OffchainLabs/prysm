@@ -1,11 +1,11 @@
 package state_native
 
 import (
+	customtypes "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native/custom-types"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	consensus_types "github.com/OffchainLabs/prysm/v6/consensus-types"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
-	customtypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native/custom-types"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	consensus_types "github.com/prysmaticlabs/prysm/v5/consensus-types"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
 // LatestBlockHeader stored within the beacon state.

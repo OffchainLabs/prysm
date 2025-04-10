@@ -1,8 +1,8 @@
 package stateutil
 
 import (
+	"github.com/OffchainLabs/prysm/v6/encoding/ssz"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/encoding/ssz"
 )
 
 func ArraysRoot(input [][]byte, length uint64) ([32]byte, error) {

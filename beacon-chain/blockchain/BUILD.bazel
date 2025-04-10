@@ -30,7 +30,7 @@ go_library(
         "tracked_proposer.go",
         "weak_subjectivity_checks.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain",
+    importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain",
     visibility = [
         "//beacon-chain:__subpackages__",
         "//cmd/beacon-chain:__subpackages__",

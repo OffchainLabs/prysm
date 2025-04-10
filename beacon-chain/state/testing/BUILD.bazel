@@ -10,7 +10,7 @@ go_library(
         "getters_checkpoint.go",
         "getters_validator.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/testing",
+    importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/state/testing",
     visibility = [
         "//beacon-chain/core:__subpackages__",
         "//beacon-chain/state:__subpackages__",

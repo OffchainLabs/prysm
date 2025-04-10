@@ -32,7 +32,7 @@ go_library(
         "utils.go",
         "watch_peers.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p",
+    importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p",
     visibility = [
         "//beacon-chain:__subpackages__",
         "//cmd:__subpackages__",

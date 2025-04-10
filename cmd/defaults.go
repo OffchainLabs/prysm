@@ -22,7 +22,7 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/prysmaticlabs/prysm/v5/io/file"
+	"github.com/OffchainLabs/prysm/v6/io/file"
 )
 
 // DefaultDataDir is the default data directory to use for the databases and other

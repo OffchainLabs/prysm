@@ -9,7 +9,7 @@ go_library(
         "log.go",
         "site_data.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/validator/web",
+    importpath = "github.com/OffchainLabs/prysm/v6/validator/web",
     visibility = [
         "//validator:__subpackages__",
     ],

@@ -9,7 +9,7 @@ go_library(
         "merkleize.go",
         "slice_root.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/encoding/ssz",
+    importpath = "github.com/OffchainLabs/prysm/v6/encoding/ssz",
     visibility = ["//visibility:public"],
     deps = [
         "//config/fieldparams:go_default_library",

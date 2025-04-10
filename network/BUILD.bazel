@@ -7,7 +7,7 @@ go_library(
         "endpoint.go",
         "external_ip.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/network",
+    importpath = "github.com/OffchainLabs/prysm/v6/network",
     visibility = ["//visibility:public"],
     deps = [
         "//network/authorization:go_default_library",

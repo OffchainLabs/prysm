@@ -4,8 +4,8 @@ import (
 	"math"
 	"time"
 
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 )
 
 // MainnetConfig returns the configuration to be used in the main network.
@@ -13,7 +13,7 @@ func MainnetConfig() *BeaconChainConfig {
 	if mainnetBeaconConfig.ForkVersionSchedule == nil {
 		mainnetBeaconConfig.InitializeForkSchedule()
 	}
-	return mainnetBeaconConfig
+	return mainnetBeaconConfig.Copy()
 }
 
 const (
@@ -341,7 +341,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 // and a different fork choice schedule. This can be used in cases where we want to use config values
 // that are consistent with mainnet, but won't conflict or cause the hard-coded genesis to be loaded.
 func MainnetTestConfig() *BeaconChainConfig {
-	mn := MainnetConfig().Copy()
+	mn := MainnetConfig()
 	mn.ConfigName = MainnetTestName
 	FillTestVersions(mn, 128)
 	return mn

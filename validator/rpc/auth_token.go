@@ -12,12 +12,12 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/OffchainLabs/prysm/v6/api"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/io/file"
 	"github.com/fsnotify/fsnotify"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/io/file"
 )
 
 // CreateAuthToken generates a new jwt key, token and writes them

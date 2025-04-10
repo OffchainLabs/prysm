@@ -6,11 +6,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/io/file"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/validator/db/filesystem"
-	"github.com/prysmaticlabs/prysm/v5/validator/db/iface"
-	"github.com/prysmaticlabs/prysm/v5/validator/db/kv"
+	"github.com/OffchainLabs/prysm/v6/io/file"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/validator/db/filesystem"
+	"github.com/OffchainLabs/prysm/v6/validator/db/iface"
+	"github.com/OffchainLabs/prysm/v6/validator/db/kv"
 )
 
 func TestClearDB(t *testing.T) {
