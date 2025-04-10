@@ -33,6 +33,7 @@ import (
 )
 
 const broadcastBLSChangesRateLimit = 128
+const voluntaryExitEpochValidationBuffer = 5
 
 // Deprecated: use ListAttestationsV2 instead
 // ListAttestations retrieves attestations known by the node but
@@ -483,6 +484,11 @@ func (s *Server) SubmitVoluntaryExit(w http.ResponseWriter, r *http.Request) {
 	epochStart, err := slots.EpochStart(exit.Exit.Epoch)
 	if err != nil {
 		httputil.HandleError(w, "Could not get epoch start: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	currentWallEpoch := slots.ToEpoch(s.GenesisTimeFetcher.CurrentSlot())
+	if currentWallEpoch+voluntaryExitEpochValidationBuffer < exit.Exit.Epoch {
+		httputil.HandleError(w, "Exit epoch is in the future", http.StatusBadRequest)
 		return
 	}
 	headState, err = transition.ProcessSlotsIfPossible(ctx, headState, epochStart)
