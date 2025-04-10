@@ -797,7 +797,6 @@ func TestSubmitAggregateAndProofs(t *testing.T) {
 			assert.ErrorContains(t, "old aggregate and proof", errors.New(e.Message))
 		})
 		t.Run("electra agg pre electra", func(t *testing.T) {
-
 			var body bytes.Buffer
 			_, err := body.WriteString(singleAggregateElectra)
 			require.NoError(t, err)
