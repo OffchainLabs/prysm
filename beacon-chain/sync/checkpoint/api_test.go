@@ -22,7 +22,7 @@ import (
 
 func TestDownloadFinalizedData(t *testing.T) {
 	ctx := context.Background()
-	cfg := params.MainnetConfig().Copy()
+	cfg := params.MainnetConfig()
 
 	// avoid the altair zone because genesis tests are easier to set up
 	epoch := cfg.AltairForkEpoch - 1

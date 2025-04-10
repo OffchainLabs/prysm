@@ -76,7 +76,7 @@ func TestFname(t *testing.T) {
 
 func TestDownloadWeakSubjectivityCheckpoint(t *testing.T) {
 	ctx := context.Background()
-	cfg := params.MainnetConfig().Copy()
+	cfg := params.MainnetConfig()
 
 	epoch := cfg.AltairForkEpoch - 1
 	// set up checkpoint state, using the epoch that will be computed as the ws checkpoint state based on the head state

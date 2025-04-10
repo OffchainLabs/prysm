@@ -35,7 +35,7 @@ func UnmarshalConfig(yamlFile []byte, conf *BeaconChainConfig) (*BeaconChainConf
 			conf = MinimalSpecConfig().Copy()
 		} else {
 			// Default to using mainnet.
-			conf = MainnetConfig().Copy()
+			conf = MainnetConfig()
 		}
 	}
 	for i, line := range lines {
