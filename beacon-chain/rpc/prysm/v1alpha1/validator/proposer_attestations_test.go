@@ -844,7 +844,7 @@ func Benchmark_packAttestations_Electra(b *testing.B) {
 	ctx := context.Background()
 
 	params.SetupTestConfigCleanup(b)
-	cfg := params.MainnetConfig().Copy()
+	cfg := params.MainnetConfig()
 	cfg.ElectraForkEpoch = 1
 	params.OverrideBeaconConfig(cfg)
 

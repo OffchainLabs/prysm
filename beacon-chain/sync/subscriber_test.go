@@ -123,7 +123,7 @@ func TestSubscribe_UnsubscribeTopic(t *testing.T) {
 
 func TestSubscribe_ReceivesAttesterSlashing(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	cfg := params.MainnetConfig().Copy()
+	cfg := params.MainnetConfig()
 	cfg.SecondsPerSlot = 1
 	params.OverrideBeaconConfig(cfg)
 
@@ -428,7 +428,7 @@ func Test_wrapAndReportValidation(t *testing.T) {
 
 func TestFilterSubnetPeers(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	cfg := params.MainnetConfig().Copy()
+	cfg := params.MainnetConfig()
 	cfg.SecondsPerSlot = 1
 	params.OverrideBeaconConfig(cfg)
 
@@ -510,7 +510,7 @@ func TestFilterSubnetPeers(t *testing.T) {
 
 func TestSubscribeWithSyncSubnets_DynamicOK(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	cfg := params.MainnetConfig().Copy()
+	cfg := params.MainnetConfig()
 	cfg.SecondsPerSlot = 1
 	params.OverrideBeaconConfig(cfg)
 

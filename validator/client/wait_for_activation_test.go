@@ -52,7 +52,7 @@ func TestWaitActivation_Exiting_OK(t *testing.T) {
 
 func TestWaitForActivation_RefetchKeys(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	cfg := params.MainnetConfig().Copy()
+	cfg := params.MainnetConfig()
 	cfg.ConfigName = "test"
 	cfg.SecondsPerSlot = 1
 	params.OverrideBeaconConfig(cfg)
@@ -235,7 +235,7 @@ func TestWaitForActivation_AccountsChanged(t *testing.T) {
 
 func TestWaitForActivation_AttemptsReconnectionOnFailure(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	cfg := params.MainnetConfig().Copy()
+	cfg := params.MainnetConfig()
 	cfg.ConfigName = "test"
 	cfg.SecondsPerSlot = 1
 	params.OverrideBeaconConfig(cfg)
