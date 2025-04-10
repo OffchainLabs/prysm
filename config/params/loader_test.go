@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
@@ -167,6 +168,28 @@ func assertEqualConfigs(t *testing.T, name string, fields []string, expected, ac
 	assertYamlFieldsMatch(t, name, fields, expected, actual)
 }
 
+func assertEqualNetworkConfigs(t *testing.T, name string, expected, actual *params.NetworkConfig) {
+	// Networking params
+	assert.Equal(t, expected.GossipMaxSizeBellatrix, actual.GossipMaxSize, "%s: GossipMaxSize", name)
+	// NO GOSSIP_MAX_SIZE_BELLATRIX in spec docs
+	assert.Equal(t, expected.MaxChunkSizeBellatrix, actual.MaxChunkSize, "%s: MaxChunkSize", name)
+	// NO MAX_CHUNK_SIZE_BELLATRIX in spec docs
+	assert.Equal(t, expected.AttestationSubnetCount, actual.AttestationSubnetCount, "%s: AttestationSubnetCount", name)
+	// BLOBSIDECAR_SUBNET_COUNT
+	assert.Equal(t, expected.AttestationPropagationSlotRange, actual.AttestationPropagationSlotRange, "%s: AttestationPropagationSlotRange", name)
+	assert.Equal(t, expected.MaxRequestBlocks, actual.MaxRequestBlocks, "%s: MaxRequestBlocks", name)
+	assert.DeepEqual(t, expected.TtfbTimeout, actual.TtfbTimeout*time.Second, "%s: TtfbTimeout", name)
+	assert.DeepEqual(t, expected.RespTimeout, actual.RespTimeout*time.Second, "%s: RespTimeout", name)
+	assert.DeepEqual(t, expected.MaximumGossipClockDisparity, actual.MaximumGossipClockDisparity*time.Millisecond, "%s: MaximumGossipClockDisparity", name)
+	assert.Equal(t, expected.MessageDomainInvalidSnappy, actual.MessageDomainInvalidSnappy, "%s: MessageDomainInvalidSnappy", name)
+	assert.Equal(t, expected.MessageDomainValidSnappy, actual.MessageDomainValidSnappy, "%s: MessageDomainValidSnappy", name)
+	// NO MIN_EPOCHS_FOR_BLOBS_SIDECARS_REQUEST in spec docs
+
+	// Deneb params
+	assert.Equal(t, expected.MaxRequestBlobSidecars, actual.MaxRequestBlobSidecars, "%s: MessageDomainValidSnappy", name)
+	assert.Equal(t, expected.MaxRequestBlocksDeneb, actual.MaxRequestBlocksDeneb, "%s: MaxRequestBlocksDeneb", name)
+}
+
 func TestModifiedE2E(t *testing.T) {
 	c := params.E2ETestConfig().Copy()
 	c.DepositContractAddress = "0x4242424242424242424242424242424242424242"
@@ -198,6 +221,12 @@ func TestLoadConfigFile(t *testing.T) {
 		require.NoError(t, err)
 		fields := fieldsFromYamls(t, append(mainnetPresetsFiles, mainnetConfigFile))
 		assertEqualConfigs(t, "mainnet", fields, mn, mnf)
+
+		mainnet_network := params.BeaconNetworkConfig().Copy()
+		network_spec, err := params.UnmarshalNetConfigFile(mainnetConfigFile, nil)
+		require.NoError(t, err)
+		assertEqualNetworkConfigs(t, "mainnet", mainnet_network, network_spec)
+
 	})
 
 	t.Run("minimal", func(t *testing.T) {
@@ -216,6 +245,12 @@ func TestLoadConfigFile(t *testing.T) {
 		require.NoError(t, err)
 		fields := fieldsFromYamls(t, append(minimalPresetsFiles, minimalConfigFile))
 		assertEqualConfigs(t, "minimal", fields, min, minf)
+
+		minimal_network := params.MinimalNetSpecConfig().Copy()
+		min_network_spec, err := params.UnmarshalNetConfigFile(minimalConfigFile, nil)
+		require.NoError(t, err)
+		assertEqualNetworkConfigs(t, "minimal", minimal_network, min_network_spec)
+
 	})
 
 	t.Run("e2e", func(t *testing.T) {

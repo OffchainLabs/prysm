@@ -25,19 +25,8 @@ func isMinimal(lines []string) bool {
 	return false
 }
 
-func UnmarshalConfig(yamlFile []byte, conf *BeaconChainConfig) (*BeaconChainConfig, error) {
-	// To track if config name is defined inside config file.
+func ConvertHexStringWithYamlFile(lines []string) bool {
 	hasConfigName := false
-	// Convert 0x hex inputs to fixed bytes arrays
-	lines := strings.Split(string(yamlFile), "\n")
-	if conf == nil {
-		if isMinimal(lines) {
-			conf = MinimalSpecConfig().Copy()
-		} else {
-			// Default to using mainnet.
-			conf = MainnetConfig().Copy()
-		}
-	}
 	for i, line := range lines {
 		// No need to convert the deposit contract address to byte array (as config expects a string).
 		if strings.HasPrefix(line, "DEPOSIT_CONTRACT_ADDRESS") {
@@ -51,6 +40,24 @@ func UnmarshalConfig(yamlFile []byte, conf *BeaconChainConfig) (*BeaconChainConf
 			lines[i] = strings.Join(parts, "\n")
 		}
 	}
+	return hasConfigName
+}
+
+func UnmarshalConfig(yamlFile []byte, conf *BeaconChainConfig) (*BeaconChainConfig, error) {
+	// To track if config name is defined inside config file.
+	hasConfigName := false
+	// Convert 0x hex inputs to fixed bytes arrays
+	lines := strings.Split(string(yamlFile), "\n")
+	if conf == nil {
+		if isMinimal(lines) {
+			conf = MinimalSpecConfig().Copy()
+		} else {
+			// Default to using mainnet.
+			conf = MainnetConfig().Copy()
+		}
+	}
+	hasConfigName = ConvertHexStringWithYamlFile(lines)
+
 	yamlFile = []byte(strings.Join(lines, "\n"))
 	if err := yaml.UnmarshalStrict(yamlFile, conf); err != nil {
 		var typeError *yaml.TypeError
@@ -71,12 +78,45 @@ func UnmarshalConfig(yamlFile []byte, conf *BeaconChainConfig) (*BeaconChainConf
 	return conf, nil
 }
 
+func UnmarshalNetConfig(yamlFile []byte, conf *NetworkConfig) (*NetworkConfig, error) {
+	// Convert 0x hex inputs to fixed bytes arrays
+	lines := strings.Split(string(yamlFile), "\n")
+	if conf == nil {
+		if isMinimal(lines) {
+			conf = MinimalNetSpecConfig().Copy()
+		} else {
+			// Default to using mainnet.
+			conf = BeaconNetworkConfig().Copy()
+		}
+	}
+	_ = ConvertHexStringWithYamlFile(lines)
+
+	yamlFile = []byte(strings.Join(lines, "\n"))
+	if err := yaml.UnmarshalStrict(yamlFile, conf); err != nil {
+		if _, ok := err.(*yaml.TypeError); !ok {
+			return nil, errors.Wrap(err, "Failed to parse chain config yaml file.")
+		} else {
+			log.WithError(err).Error("There were some issues parsing the config from a yaml file")
+		}
+	}
+	log.Debugf("Config file values: %+v", conf)
+	return conf, nil
+}
+
 func UnmarshalConfigFile(path string, conf *BeaconChainConfig) (*BeaconChainConfig, error) {
 	yamlFile, err := os.ReadFile(path) // #nosec G304
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to read chain config file.")
 	}
 	return UnmarshalConfig(yamlFile, conf)
+}
+
+func UnmarshalNetConfigFile(path string, conf *NetworkConfig) (*NetworkConfig, error) {
+	yamlFile, err := os.ReadFile(path) // #nosec G304
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to read network config file.")
+	}
+	return UnmarshalNetConfig(yamlFile, conf)
 }
 
 // LoadChainConfigFile load, convert hex values into valid param yaml format,
@@ -92,85 +132,63 @@ func LoadChainConfigFile(path string, conf *BeaconChainConfig) error {
 // ReplaceHexStringWithYAMLFormat will replace hex strings that the yaml parser will understand.
 func ReplaceHexStringWithYAMLFormat(line string) []string {
 	parts := strings.Split(line, "0x")
+	var fixedByte []byte
+	var err error
 	decoded, err := hex.DecodeString(parts[1])
 	if err != nil {
 		log.WithError(err).Error("Failed to decode hex string.")
 	}
 	switch l := len(decoded); {
+	case l < 1:
+		// if l < 1 fall in this case, so the othercase don't need to point out the lower limit
+		log.WithError(err).Error("decode string output illegal")
 	case l == 1:
 		var b byte
 		b = decoded[0]
-		fixedByte, err := yaml.Marshal(b)
+		fixedByte, err = yaml.Marshal(b)
 		if err != nil {
 			log.WithError(err).Error("Failed to marshal config file.")
 		}
 		parts[0] += string(fixedByte)
 		parts = parts[:1]
-	case l > 1 && l <= 4:
+		return parts
+	case l <= 4:
 		var arr [4]byte
 		copy(arr[:], decoded)
-		fixedByte, err := yaml.Marshal(arr)
-		if err != nil {
-			log.WithError(err).Error("Failed to marshal config file.")
-		}
-		parts[1] = string(fixedByte)
-	case l > 4 && l <= 8:
+		fixedByte, err = yaml.Marshal(arr)
+	case l <= 8:
 		var arr [8]byte
 		copy(arr[:], decoded)
-		fixedByte, err := yaml.Marshal(arr)
-		if err != nil {
-			log.WithError(err).Error("Failed to marshal config file.")
-		}
-		parts[1] = string(fixedByte)
-	case l > 8 && l <= 16:
+		fixedByte, err = yaml.Marshal(arr)
+	case l <= 16:
 		var arr [16]byte
 		copy(arr[:], decoded)
-		fixedByte, err := yaml.Marshal(arr)
-		if err != nil {
-			log.WithError(err).Error("Failed to marshal config file.")
-		}
-		parts[1] = string(fixedByte)
-	case l > 16 && l <= 20:
+		fixedByte, err = yaml.Marshal(arr)
+	case l <= 20:
 		var arr [20]byte
 		copy(arr[:], decoded)
-		fixedByte, err := yaml.Marshal(arr)
-		if err != nil {
-			log.WithError(err).Error("Failed to marshal config file.")
-		}
-		parts[1] = string(fixedByte)
-	case l > 20 && l <= 32:
+		fixedByte, err = yaml.Marshal(arr)
+	case l <= 32:
 		var arr [32]byte
 		copy(arr[:], decoded)
-		fixedByte, err := yaml.Marshal(arr)
-		if err != nil {
-			log.WithError(err).Error("Failed to marshal config file.")
-		}
-		parts[1] = string(fixedByte)
-	case l > 32 && l <= 48:
+		fixedByte, err = yaml.Marshal(arr)
+	case l <= 48:
 		var arr [48]byte
 		copy(arr[:], decoded)
-		fixedByte, err := yaml.Marshal(arr)
-		if err != nil {
-			log.WithError(err).Error("Failed to marshal config file.")
-		}
-		parts[1] = string(fixedByte)
-	case l > 48 && l <= 64:
+		fixedByte, err = yaml.Marshal(arr)
+	case l <= 64:
 		var arr [64]byte
 		copy(arr[:], decoded)
-		fixedByte, err := yaml.Marshal(arr)
-		if err != nil {
-			log.WithError(err).Error("Failed to marshal config file.")
-		}
-		parts[1] = string(fixedByte)
-	case l > 64 && l <= 96:
+		fixedByte, err = yaml.Marshal(arr)
+	case l <= 96:
 		var arr [96]byte
 		copy(arr[:], decoded)
-		fixedByte, err := yaml.Marshal(arr)
-		if err != nil {
-			log.WithError(err).Error("Failed to marshal config file.")
-		}
-		parts[1] = string(fixedByte)
+		fixedByte, err = yaml.Marshal(arr)
 	}
+	if err != nil {
+		log.WithError(err).Error("Failed to marshal config file.")
+	}
+	parts[1] = string(fixedByte)
 	return parts
 }
 

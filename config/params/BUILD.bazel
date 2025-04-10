@@ -13,6 +13,7 @@ go_library(
         "loader.go",
         "mainnet_config.go",
         "minimal_config.go",
+        "minimal_network_config.go",
         "network_config.go",
         "testnet_e2e_config.go",
         "testnet_holesky_config.go",
