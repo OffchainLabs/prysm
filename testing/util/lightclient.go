@@ -97,7 +97,7 @@ func WithSupermajority() LightClientOption {
 	}
 }
 
-// WithIncreasedAttestedSlot Specifies the number of slots to increase the attested slot by. This does not affect the finalized block's slot if there is any.
+// WithIncreasedAttestedSlot specifies the number of slots to increase the attested slot by. This does not affect the finalized block's slot if there is any.
 func WithIncreasedAttestedSlot(increaseAttestedSlotBy int) LightClientOption {
 	return func(l *TestLightClient) {
 		l.increaseAttestedSlotBy = increaseAttestedSlotBy
