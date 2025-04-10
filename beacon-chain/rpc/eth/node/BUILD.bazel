@@ -7,7 +7,7 @@ go_library(
         "handlers_peers.go",
         "server.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/node",
+    importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/node",
     visibility = ["//visibility:public"],
     deps = [
         "//api/server/structs:go_default_library",

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 )
 
 // Ensure we satisfy the heap.Interface

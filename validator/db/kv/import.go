@@ -7,16 +7,16 @@ import (
 	"fmt"
 	"io"
 
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/slashings"
+	"github.com/OffchainLabs/prysm/v6/validator/db/common"
+	"github.com/OffchainLabs/prysm/v6/validator/db/iface"
+	"github.com/OffchainLabs/prysm/v6/validator/helpers"
+	"github.com/OffchainLabs/prysm/v6/validator/slashing-protection-history/format"
 	"github.com/pkg/errors"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/slashings"
-	"github.com/prysmaticlabs/prysm/v5/validator/db/common"
-	"github.com/prysmaticlabs/prysm/v5/validator/db/iface"
-	"github.com/prysmaticlabs/prysm/v5/validator/helpers"
-	"github.com/prysmaticlabs/prysm/v5/validator/slashing-protection-history/format"
 )
 
 // ImportStandardProtection takes in EIP-3076 compliant JSON file used for slashing protection

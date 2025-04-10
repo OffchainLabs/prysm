@@ -3,7 +3,7 @@ package fork
 import (
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/testing/spectest/shared/capella/fork"
+	"github.com/OffchainLabs/prysm/v6/testing/spectest/shared/capella/fork"
 )
 
 func TestMinimal_Capella_UpgradeToCapella(t *testing.T) {

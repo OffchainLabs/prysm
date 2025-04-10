@@ -10,7 +10,7 @@ This README details how to setup Prysm for interop testing for usage with other 
 ## Installation & Setup
 
 1. Install [Bazel](https://docs.bazel.build/versions/master/install.html) **(Recommended)**
-2. `git clone https://github.com/prysmaticlabs/prysm && cd prysm`
+2. `git clone https://github.com/OffchainLabs/prysm && cd prysm`
 3. `bazel build //cmd/...`
 
 ## Starting from Genesis

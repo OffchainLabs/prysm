@@ -16,7 +16,7 @@ go_library(
         "mock.go",
         "result.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/verification",
+    importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/verification",
     visibility = ["//visibility:public"],
     deps = [
         "//beacon-chain/blockchain/kzg:go_default_library",

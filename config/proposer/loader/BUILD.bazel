@@ -27,7 +27,7 @@ go_test(
 go_library(
     name = "go_default_library",
     srcs = ["loader.go"],
-    importpath = "github.com/prysmaticlabs/prysm/v5/config/proposer/loader",
+    importpath = "github.com/OffchainLabs/prysm/v6/config/proposer/loader",
     visibility = ["//visibility:public"],
     deps = [
         "//cmd/validator/flags:go_default_library",

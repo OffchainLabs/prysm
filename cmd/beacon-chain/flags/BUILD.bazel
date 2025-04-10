@@ -9,7 +9,7 @@ go_library(
         "interop.go",
         "log.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags",
+    importpath = "github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags",
     visibility = [
         "//api:__subpackages__",
         "//beacon-chain:__subpackages__",

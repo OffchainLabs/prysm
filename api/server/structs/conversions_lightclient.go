@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 )
 
 func LightClientUpdateFromConsensus(update interfaces.LightClientUpdate) (*LightClientUpdate, error) {

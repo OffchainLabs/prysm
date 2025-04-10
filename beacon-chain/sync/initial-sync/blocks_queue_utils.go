@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 )
 
 // resetWithBlocks removes all state machines, then re-adds enough machines to contain all provided

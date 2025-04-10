@@ -12,7 +12,7 @@ go_library(
         "proxy.go",
         "transactions.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/testing/endtoend/components/eth1",
+    importpath = "github.com/OffchainLabs/prysm/v6/testing/endtoend/components/eth1",
     visibility = ["//testing/endtoend:__subpackages__"],
     deps = [
         "//config/fieldparams:go_default_library",

@@ -15,8 +15,8 @@
 package filters
 
 import (
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 )
 
 // FilterType defines an enum which is used as the keys in a map that tracks
