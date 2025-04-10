@@ -35,11 +35,10 @@ const (
 )
 
 type testWalletConfig struct {
-	exitAll            bool
-	skipDepositConfirm bool
-	keymanagerKind     keymanager.Kind
-	numAccounts        int64
-	// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+	exitAll                 bool
+	skipDepositConfirm      bool
+	keymanagerKind          keymanager.Kind
+	numAccounts             int64
 	grpcHeaders             string
 	privateKeyFile          string
 	accountPasswordFile     string

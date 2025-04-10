@@ -57,20 +57,16 @@ const attestationBufferSize = 100
 
 // Service defining an RPC server for a beacon node.
 type Service struct {
-	cfg      *Config
-	ctx      context.Context
-	cancel   context.CancelFunc
-	listener net.Listener
-	// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
-	grpcServer          *grpc.Server
-	incomingAttestation chan *ethpbv1alpha1.Attestation
-	credentialError     error
-	// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
-	connectedRPCClients map[net.Addr]bool
-	// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+	cfg                  *Config
+	ctx                  context.Context
+	cancel               context.CancelFunc
+	listener             net.Listener
+	grpcServer           *grpc.Server
+	incomingAttestation  chan *ethpbv1alpha1.Attestation
+	credentialError      error
+	connectedRPCClients  map[net.Addr]bool
 	clientConnectionLock sync.Mutex
-	// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
-	validatorServer *validatorv1alpha1.Server
+	validatorServer      *validatorv1alpha1.Server
 }
 
 // Config options for the beacon node RPC server.

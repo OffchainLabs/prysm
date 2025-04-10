@@ -53,27 +53,23 @@ type Config struct {
 
 // Server defining a HTTP server for the remote signer API and registering clients
 type Server struct {
-	serveWebUI            bool
-	walletInitialized     bool
-	logStreamerBufferSize int
-	// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
-	grpcMaxCallRecvMsgSize int
-	walletInitializedFeed  *event.Feed
-	beaconApiTimeout       time.Duration
-	wallet                 *wallet.Wallet
-	validatorService       *client.ValidatorService
-	httpPort               int
-	cancel                 context.CancelFunc
-	// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
-	grpcRetries uint
-	// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
-	grpcRetryDelay    time.Duration
-	server            *httprest.Server
-	router            *http.ServeMux
-	authTokenPath     string
-	beaconNodeCert    string
-	beaconApiEndpoint string
-	// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+	serveWebUI                bool
+	walletInitialized         bool
+	logStreamerBufferSize     int
+	grpcMaxCallRecvMsgSize    int
+	walletInitializedFeed     *event.Feed
+	beaconApiTimeout          time.Duration
+	wallet                    *wallet.Wallet
+	validatorService          *client.ValidatorService
+	httpPort                  int
+	cancel                    context.CancelFunc
+	grpcRetries               uint
+	grpcRetryDelay            time.Duration
+	server                    *httprest.Server
+	router                    *http.ServeMux
+	authTokenPath             string
+	beaconNodeCert            string
+	beaconApiEndpoint         string
 	beaconNodeEndpoint        string
 	healthClient              ethpb.HealthClient
 	nodeClient                iface.NodeClient
@@ -87,8 +83,7 @@ type Server struct {
 	ctx                       context.Context
 	walletDir                 string
 	jwtSecret                 []byte
-	// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
-	grpcHeaders []string
+	grpcHeaders               []string
 }
 
 // NewServer instantiates a new HTTP server.
