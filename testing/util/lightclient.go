@@ -66,8 +66,8 @@ func NewTestLightClient(t *testing.T, forkVersion int, options ...LightClientOpt
 // WithBlinded specifies whether the signature block is blinded or not
 func WithBlinded() LightClientOption {
 	return func(l *TestLightClient) {
-		if l.version == version.Altair || l.version == version.Bellatrix {
-			l.T.Fatalf("Blinded blocks are not supported in Altair or Bellatrix")
+		if l.version == version.Altair {
+			l.T.Fatalf("Blinded blocks are not supported in Altair")
 		}
 		l.blinded = true
 	}
