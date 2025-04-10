@@ -2,6 +2,7 @@ package validator
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
@@ -9,6 +10,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/core"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
@@ -44,10 +46,12 @@ func (vs *Server) GetAttestationData(ctx context.Context, req *ethpb.Attestation
 func (vs *Server) ProposeAttestation(ctx context.Context, att *ethpb.Attestation) (*ethpb.AttestResponse, error) {
 	ctx, span := trace.StartSpan(ctx, "AttesterServer.ProposeAttestation")
 	defer span.End()
-
+	if slots.ToEpoch(vs.TimeFetcher.CurrentSlot()) >= params.BeaconConfig().ElectraForkEpoch {
+		return nil, status.Error(codes.InvalidArgument, "old attestation format, ProposeAttestationElectra should be called post Electra")
+	}
 	resp, err := vs.proposeAtt(ctx, att, att.GetData().CommitteeIndex)
 	if err != nil {
-		return nil, err
+		return nil, status.Error(codes.Internal, err.Error())
 	}
 
 	if features.Get().EnableExperimentalAttestationPool {
@@ -72,6 +76,10 @@ func (vs *Server) ProposeAttestation(ctx context.Context, att *ethpb.Attestation
 func (vs *Server) ProposeAttestationElectra(ctx context.Context, singleAtt *ethpb.SingleAttestation) (*ethpb.AttestResponse, error) {
 	ctx, span := trace.StartSpan(ctx, "AttesterServer.ProposeAttestationElectra")
 	defer span.End()
+
+	if slots.ToEpoch(vs.TimeFetcher.CurrentSlot()) < params.BeaconConfig().ElectraForkEpoch {
+		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("ProposeAttestationElectra not supported yet. The current epoch is %d supported starting epoch is %d", slots.ToEpoch(vs.TimeFetcher.CurrentSlot()), params.BeaconConfig().ElectraForkEpoch))
+	}
 
 	resp, err := vs.proposeAtt(ctx, singleAtt, singleAtt.GetCommitteeIndex())
 	if err != nil {

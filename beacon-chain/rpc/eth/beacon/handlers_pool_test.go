@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/go-bitfield"
 	"github.com/prysmaticlabs/prysm/v5/api"
 	"github.com/prysmaticlabs/prysm/v5/api/server"
@@ -530,6 +531,7 @@ func TestSubmitAttestations(t *testing.T) {
 	s := &Server{
 		HeadFetcher:             chainService,
 		ChainInfoFetcher:        chainService,
+		TimeFetcher:             chainService,
 		OperationNotifier:       &blockchainmock.MockOperationNotifier{},
 		AttestationStateFetcher: chainService,
 	}
@@ -579,6 +581,26 @@ func TestSubmitAttestations(t *testing.T) {
 			assert.Equal(t, true, broadcaster.BroadcastCalled.Load())
 			assert.Equal(t, 2, broadcaster.NumAttestations())
 			assert.Equal(t, 2, s.AttestationsPool.UnaggregatedAttestationCount())
+		})
+		t.Run("wrong fork", func(t *testing.T) {
+			params.SetupTestConfigCleanup(t)
+			config := params.BeaconConfig()
+			config.ElectraForkEpoch = 0
+			params.OverrideBeaconConfig(config)
+			defer params.SetupTestConfigCleanup(t)
+			var body bytes.Buffer
+			_, err := body.WriteString(singleAtt)
+			require.NoError(t, err)
+			request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.SubmitAttestations(writer, request)
+			assert.Equal(t, http.StatusBadRequest, writer.Code)
+			e := &httputil.DefaultJsonError{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+			assert.Equal(t, http.StatusBadRequest, e.Code)
+			assert.ErrorContains(t, "Post Electra fork", errors.New(e.Message))
 		})
 		t.Run("no body", func(t *testing.T) {
 			request := httptest.NewRequest(http.MethodPost, "http://example.com", nil)
@@ -674,6 +696,43 @@ func TestSubmitAttestations(t *testing.T) {
 				assert.Equal(t, 2, broadcaster.NumAttestations())
 				assert.Equal(t, 2, s.AttestationsPool.UnaggregatedAttestationCount())
 			})
+			t.Run("phase0 att post electra", func(t *testing.T) {
+				params.SetupTestConfigCleanup(t)
+				config := params.BeaconConfig()
+				config.ElectraForkEpoch = 0
+				params.OverrideBeaconConfig(config)
+				defer params.SetupTestConfigCleanup(t)
+				var body bytes.Buffer
+				_, err := body.WriteString(singleAtt)
+				require.NoError(t, err)
+				request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
+				request.Header.Set(api.VersionHeader, version.String(version.Phase0))
+				writer := httptest.NewRecorder()
+				writer.Body = &bytes.Buffer{}
+
+				s.SubmitAttestationsV2(writer, request)
+				assert.Equal(t, http.StatusBadRequest, writer.Code)
+				e := &httputil.DefaultJsonError{}
+				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+				assert.Equal(t, http.StatusBadRequest, e.Code)
+				assert.ErrorContains(t, "Post Electra fork", errors.New(e.Message))
+			})
+			t.Run("electra att before electra", func(t *testing.T) {
+				var body bytes.Buffer
+				_, err := body.WriteString(singleAttElectra)
+				require.NoError(t, err)
+				request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
+				request.Header.Set(api.VersionHeader, version.String(version.Electra))
+				writer := httptest.NewRecorder()
+				writer.Body = &bytes.Buffer{}
+
+				s.SubmitAttestationsV2(writer, request)
+				assert.Equal(t, http.StatusBadRequest, writer.Code)
+				e := &httputil.DefaultJsonError{}
+				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+				assert.Equal(t, http.StatusBadRequest, e.Code)
+				assert.ErrorContains(t, "Electra attestations have not been enabled", errors.New(e.Message))
+			})
 			t.Run("no body", func(t *testing.T) {
 				request := httptest.NewRequest(http.MethodPost, "http://example.com", nil)
 				request.Header.Set(api.VersionHeader, version.String(version.Phase0))
@@ -722,6 +781,11 @@ func TestSubmitAttestations(t *testing.T) {
 			})
 		})
 		t.Run("post-electra", func(t *testing.T) {
+			params.SetupTestConfigCleanup(t)
+			config := params.BeaconConfig()
+			config.ElectraForkEpoch = 0
+			params.OverrideBeaconConfig(config)
+			defer params.SetupTestConfigCleanup(t)
 			t.Run("single", func(t *testing.T) {
 				broadcaster := &p2pMock.MockBroadcaster{}
 				s.Broadcaster = broadcaster

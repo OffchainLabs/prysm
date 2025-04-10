@@ -22,6 +22,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/core"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/shared"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
 	consensus_types "github.com/prysmaticlabs/prysm/v5/consensus-types"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
@@ -182,6 +183,11 @@ func (s *Server) SubmitAttestations(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "beacon.SubmitAttestations")
 	defer span.End()
 
+	if slots.ToEpoch(s.TimeFetcher.CurrentSlot()) >= params.BeaconConfig().ElectraForkEpoch {
+		httputil.HandleError(w, "Post Electra fork, /eth/v2/beacon/pool/attestations should be used instead", http.StatusBadRequest)
+		return
+	}
+
 	var req structs.SubmitAttestationsRequest
 	err := json.NewDecoder(r.Body).Decode(&req.Data)
 	switch {
@@ -248,10 +254,18 @@ func (s *Server) SubmitAttestationsV2(w http.ResponseWriter, r *http.Request) {
 
 	var attFailures []*server.IndexedVerificationFailure
 	var failedBroadcasts []string
-
+	currentEpoch := slots.ToEpoch(s.TimeFetcher.CurrentSlot())
 	if v >= version.Electra {
+		if currentEpoch < params.BeaconConfig().ElectraForkEpoch {
+			httputil.HandleError(w, fmt.Sprintf("Electra attestations have not been enabled, current epoch %d enabled epoch %d", slots.ToEpoch(s.TimeFetcher.CurrentSlot()), params.BeaconConfig().ElectraForkEpoch), http.StatusBadRequest)
+			return
+		}
 		attFailures, failedBroadcasts, err = s.handleAttestationsElectra(ctx, req.Data)
 	} else {
+		if currentEpoch >= params.BeaconConfig().ElectraForkEpoch {
+			httputil.HandleError(w, "Post Electra fork, /eth/v2/beacon/pool/attestations should be used instead", http.StatusBadRequest)
+			return
+		}
 		attFailures, failedBroadcasts, err = s.handleAttestations(ctx, req.Data)
 	}
 	if err != nil {
