@@ -3245,19 +3245,19 @@ func TestSaveLightClientBootstrap(t *testing.T) {
 	reset()
 }
 
-func setupLightClientTestRequirements(ctx context.Context, t *testing.T, s *Service, v int, increaseAttestedSlotBy int, supermajority bool) (*util.TestLightClient, *postBlockProcessConfig) {
+func setupLightClientTestRequirements(ctx context.Context, t *testing.T, s *Service, v int, options ...util.LightClientOption) (*util.TestLightClient, *postBlockProcessConfig) {
 	var l *util.TestLightClient
 	switch v {
 	case version.Altair:
-		l = util.NewTestLightClient(t).SetupTestAltair(increaseAttestedSlotBy, supermajority)
+		l = util.NewTestLightClient(t, version.Altair, options...)
 	case version.Bellatrix:
-		l = util.NewTestLightClient(t).SetupTestBellatrix(increaseAttestedSlotBy, supermajority)
+		l = util.NewTestLightClient(t, version.Bellatrix, options...)
 	case version.Capella:
-		l = util.NewTestLightClient(t).SetupTestCapella(false, increaseAttestedSlotBy, supermajority)
+		l = util.NewTestLightClient(t, version.Capella, options...)
 	case version.Deneb:
-		l = util.NewTestLightClient(t).SetupTestDeneb(false, increaseAttestedSlotBy, supermajority)
+		l = util.NewTestLightClient(t, version.Deneb, options...)
 	case version.Electra:
-		l = util.NewTestLightClient(t).SetupTestElectra(false, increaseAttestedSlotBy, supermajority)
+		l = util.NewTestLightClient(t, version.Electra, options...)
 	default:
 		t.Error("Invalid fork version")
 		return nil, nil
@@ -3310,50 +3310,28 @@ func TestProcessLightClientOptimisticUpdate(t *testing.T) {
 	s, tr := minimalTestService(t)
 	ctx := tr.ctx
 
-	type updateConfig struct {
-		increaseAttestedSlotBy int
-		superMajority          bool
-	}
-
 	testCases := []struct {
-		name string
-		// config for old update
-		oldCfg *updateConfig
-		// config for new update
-		newCfg        *updateConfig
+		name          string
+		oldOptions    []util.LightClientOption
+		newOptions    []util.LightClientOption
 		expectReplace bool
 	}{
 		{
-			name:   "No old update",
-			oldCfg: nil,
-			newCfg: &updateConfig{
-				increaseAttestedSlotBy: 0,
-				superMajority:          true,
-			},
+			name:          "No old update",
+			oldOptions:    nil,
+			newOptions:    []util.LightClientOption{util.WithSupermajority()},
 			expectReplace: true,
 		},
 		{
-			name: "Old update is better - age",
-			oldCfg: &updateConfig{
-				increaseAttestedSlotBy: 1,
-				superMajority:          true,
-			},
-			newCfg: &updateConfig{
-				increaseAttestedSlotBy: 0,
-				superMajority:          true,
-			},
+			name:          "Old update is better - age",
+			oldOptions:    []util.LightClientOption{util.WithIncreasedAttestedSlot(1), util.WithSupermajority()},
+			newOptions:    []util.LightClientOption{util.WithSupermajority()},
 			expectReplace: false,
 		},
 		{
-			name: "New update is better - age",
-			oldCfg: &updateConfig{
-				increaseAttestedSlotBy: 0,
-				superMajority:          true,
-			},
-			newCfg: &updateConfig{
-				increaseAttestedSlotBy: 1,
-				superMajority:          true,
-			},
+			name:          "New update is better - age",
+			oldOptions:    []util.LightClientOption{util.WithSupermajority()},
+			newOptions:    []util.LightClientOption{util.WithIncreasedAttestedSlot(1), util.WithSupermajority()},
 			expectReplace: true,
 		},
 	}
@@ -3396,9 +3374,9 @@ func TestProcessLightClientOptimisticUpdate(t *testing.T) {
 				var oldAttestedBlockRoot, newAttestedBlockRoot [32]byte
 				var err error
 
-				if tc.oldCfg != nil {
+				if tc.oldOptions != nil {
 					// config for old update
-					lOld, cfgOld := setupLightClientTestRequirements(ctx, t, s, testVersion, tc.oldCfg.increaseAttestedSlotBy, tc.oldCfg.superMajority)
+					lOld, cfgOld := setupLightClientTestRequirements(ctx, t, s, testVersion, tc.oldOptions...)
 					require.NoError(t, s.processLightClientOptimisticUpdate(cfgOld.ctx, cfgOld.roblock, cfgOld.postState))
 					//oldAttestedStateRoot, err = lOld.AttestedState.HashTreeRoot(ctx)
 					//require.NoError(t, err)
@@ -3413,7 +3391,7 @@ func TestProcessLightClientOptimisticUpdate(t *testing.T) {
 				}
 
 				// config for new update
-				lNew, cfgNew := setupLightClientTestRequirements(ctx, t, s, testVersion, tc.newCfg.increaseAttestedSlotBy, tc.newCfg.superMajority)
+				lNew, cfgNew := setupLightClientTestRequirements(ctx, t, s, testVersion, tc.newOptions...)
 				require.NoError(t, s.processLightClientOptimisticUpdate(cfgNew.ctx, cfgNew.roblock, cfgNew.postState))
 				//newAttestedStateRoot, err = lNew.AttestedState.HashTreeRoot(ctx)
 				//require.NoError(t, err)
@@ -3459,104 +3437,58 @@ func TestProcessLightClientFinalityUpdate(t *testing.T) {
 	s, tr := minimalTestService(t)
 	ctx := tr.ctx
 
-	type updateConfig struct {
-		increaseAttestedSlotBy int
-		superMajority          bool
-	}
-
 	testCases := []struct {
-		name string
-		// config for old update
-		oldCfg *updateConfig
-		// config for new update
-		newCfg        *updateConfig
+		name          string
+		oldOptions    []util.LightClientOption
+		newOptions    []util.LightClientOption
 		expectReplace bool
 	}{
-		//{
-		//	name:   "No old update",
-		//	oldCfg: nil,
-		//	newCfg: &updateConfig{
-		//		increaseAttestedSlotBy: 0,
-		//		superMajority:          true,
-		//	},
-		//	expectReplace: true,
-		//},
-		//{
-		//	name: "Old update is better - age",
-		//	oldCfg: &updateConfig{
-		//		increaseAttestedSlotBy: 1,
-		//		superMajority:          false,
-		//	},
-		//	newCfg: &updateConfig{
-		//		increaseAttestedSlotBy: 0,
-		//		superMajority:          false,
-		//	},
-		//	expectReplace: false,
-		//},
-		//{
-		//	name: "Old update is better - age (both supermajority)",
-		//	oldCfg: &updateConfig{
-		//		increaseAttestedSlotBy: 1,
-		//		superMajority:          true,
-		//	},
-		//	newCfg: &updateConfig{
-		//		increaseAttestedSlotBy: 0,
-		//		superMajority:          true,
-		//	},
-		//	expectReplace: false,
-		//},
-		//{
-		//	name: "Old update is better - supermajority",
-		//	oldCfg: &updateConfig{
-		//		increaseAttestedSlotBy: 0,
-		//		superMajority:          true,
-		//	},
-		//	newCfg: &updateConfig{
-		//		increaseAttestedSlotBy: 0,
-		//		superMajority:          false,
-		//	},
-		//	expectReplace: false,
-		//},
-		//{
-		//	name: "New update is better - age (both supermajority)",
-		//	oldCfg: &updateConfig{
-		//		increaseAttestedSlotBy: 0,
-		//		superMajority:          true,
-		//	},
-		//	newCfg: &updateConfig{
-		//		increaseAttestedSlotBy: 1,
-		//		superMajority:          true,
-		//	},
-		//	expectReplace: true,
-		//},
 		{
-			name: "New update is better - age",
-			oldCfg: &updateConfig{
-				increaseAttestedSlotBy: 0,
-				superMajority:          false,
-			},
-			newCfg: &updateConfig{
-				increaseAttestedSlotBy: 1,
-				superMajority:          false,
-			},
+			name:          "No old update",
+			oldOptions:    nil,
+			newOptions:    []util.LightClientOption{},
 			expectReplace: true,
 		},
-		//{
-		//	name: "New update is better - supermajority",
-		//	oldCfg: &updateConfig{
-		//		increaseAttestedSlotBy: 0,
-		//		superMajority:          false,
-		//	},
-		//	newCfg: &updateConfig{
-		//		increaseAttestedSlotBy: 0,
-		//		superMajority:          true,
-		//	},
-		//	expectReplace: true,
-		//},
+		{
+			name:          "Old update is better - age - no supermajority",
+			oldOptions:    []util.LightClientOption{util.WithIncreasedFinalizedSlot(1)},
+			newOptions:    []util.LightClientOption{},
+			expectReplace: false,
+		},
+		{
+			name:          "Old update is better - age - both supermajority",
+			oldOptions:    []util.LightClientOption{util.WithIncreasedFinalizedSlot(1), util.WithSupermajority()},
+			newOptions:    []util.LightClientOption{util.WithSupermajority()},
+			expectReplace: false,
+		},
+		{
+			name:          "Old update is better - supermajority",
+			oldOptions:    []util.LightClientOption{util.WithSupermajority()},
+			newOptions:    []util.LightClientOption{},
+			expectReplace: false,
+		},
+		{
+			name:          "New update is better - age - both supermajority",
+			oldOptions:    []util.LightClientOption{util.WithSupermajority()},
+			newOptions:    []util.LightClientOption{util.WithIncreasedFinalizedSlot(1), util.WithSupermajority()},
+			expectReplace: true,
+		},
+		{
+			name:          "New update is better - age - no supermajority",
+			oldOptions:    []util.LightClientOption{},
+			newOptions:    []util.LightClientOption{util.WithIncreasedFinalizedSlot(1)},
+			expectReplace: true,
+		},
+		{
+			name:          "New update is better - supermajority",
+			oldOptions:    []util.LightClientOption{},
+			newOptions:    []util.LightClientOption{util.WithSupermajority()},
+			expectReplace: true,
+		},
 	}
 
 	for _, tc := range testCases {
-		for i := 1; i < 2; i++ { // test all forks
+		for i := 1; i < 6; i++ { // test all forks
 			var forkEpoch uint64
 			var testVersion int
 			//var expectedVersion int
@@ -3592,9 +3524,9 @@ func TestProcessLightClientFinalityUpdate(t *testing.T) {
 				var actualOldUpdate, actualNewUpdate interfaces.LightClientFinalityUpdate
 				var err error
 
-				if tc.oldCfg != nil {
+				if tc.oldOptions != nil {
 					// config for old update
-					lOld, cfgOld := setupLightClientTestRequirements(ctx, t, s, testVersion, tc.oldCfg.increaseAttestedSlotBy, tc.oldCfg.superMajority)
+					lOld, cfgOld := setupLightClientTestRequirements(ctx, t, s, testVersion, tc.oldOptions...)
 					require.NoError(t, s.processLightClientFinalityUpdate(cfgOld.ctx, cfgOld.roblock, cfgOld.postState))
 
 					// check that the old update is saved
@@ -3608,13 +3540,12 @@ func TestProcessLightClientFinalityUpdate(t *testing.T) {
 						lOld.FinalizedBlock,
 					)
 					require.NoError(t, err)
-					fmt.Println("signature slot", actualOldUpdate.SignatureSlot(), "slot", actualOldUpdate.AttestedHeader().Beacon().Slot)
 					oldUpdate := s.lcStore.LastFinalityUpdate()
 					require.DeepEqual(t, actualOldUpdate, oldUpdate)
 				}
 
 				// config for new update
-				lNew, cfgNew := setupLightClientTestRequirements(ctx, t, s, testVersion, tc.newCfg.increaseAttestedSlotBy, tc.newCfg.superMajority)
+				lNew, cfgNew := setupLightClientTestRequirements(ctx, t, s, testVersion, tc.newOptions...)
 				require.NoError(t, s.processLightClientFinalityUpdate(cfgNew.ctx, cfgNew.roblock, cfgNew.postState))
 
 				// check that the actual old update and the actual new update are different
@@ -3633,9 +3564,9 @@ func TestProcessLightClientFinalityUpdate(t *testing.T) {
 				// check that the new update is saved or skipped
 				newUpdate := s.lcStore.LastFinalityUpdate()
 
-				fmt.Println("newUpdate", newUpdate)
-				fmt.Println("NewUpdate", actualNewUpdate)
-				fmt.Println("oldUpdate", actualOldUpdate)
+				//fmt.Println("newUpdate", newUpdate)
+				//fmt.Println("NewUpdate", actualNewUpdate)
+				//fmt.Println("oldUpdate", actualOldUpdate)
 
 				if tc.expectReplace {
 					require.DeepEqual(t, actualNewUpdate, newUpdate)
