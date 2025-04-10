@@ -101,6 +101,11 @@ func TestProposeAttestation(t *testing.T) {
 		assert.ErrorContains(t, "old attestation format", err)
 	})
 	t.Run("Electra", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		config := params.BeaconConfig()
+		config.ElectraForkEpoch = 0
+		params.OverrideBeaconConfig(config)
+		defer params.SetupTestConfigCleanup(t)
 		state, err := util.NewBeaconStateElectra()
 		require.NoError(t, err)
 		require.NoError(t, state.SetSlot(params.BeaconConfig().SlotsPerEpoch+1))

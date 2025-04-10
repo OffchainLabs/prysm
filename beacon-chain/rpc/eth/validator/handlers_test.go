@@ -601,8 +601,10 @@ func TestSubmitContributionAndProofs(t *testing.T) {
 }
 
 func TestSubmitAggregateAndProofs(t *testing.T) {
+	mock := &mockChain.ChainService{}
 	s := &Server{
-		CoreService: &core.Service{GenesisTimeFetcher: &mockChain.ChainService{}},
+		CoreService: &core.Service{GenesisTimeFetcher: mock},
+		TimeFetcher: mock,
 	}
 	t.Run("V1", func(t *testing.T) {
 		t.Run("single", func(t *testing.T) {
@@ -635,6 +637,26 @@ func TestSubmitAggregateAndProofs(t *testing.T) {
 			s.SubmitAggregateAndProofs(writer, request)
 			assert.Equal(t, http.StatusOK, writer.Code)
 			assert.Equal(t, 2, len(broadcaster.BroadcastMessages))
+		})
+		t.Run("Phase 0 post electra", func(t *testing.T) {
+			params.SetupTestConfigCleanup(t)
+			config := params.BeaconConfig()
+			config.ElectraForkEpoch = 0
+			params.OverrideBeaconConfig(config)
+			defer params.SetupTestConfigCleanup(t)
+
+			var body bytes.Buffer
+			_, err := body.WriteString(singleAggregate)
+			require.NoError(t, err)
+			request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.SubmitAggregateAndProofs(writer, request)
+			e := &httputil.DefaultJsonError{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+			assert.Equal(t, http.StatusBadRequest, e.Code)
+			assert.ErrorContains(t, "old aggregate attestation and proof", errors.New(e.Message))
 		})
 		t.Run("no body", func(t *testing.T) {
 			request := httptest.NewRequest(http.MethodPost, "http://example.com", nil)
@@ -744,6 +766,42 @@ func TestSubmitAggregateAndProofs(t *testing.T) {
 			s.SubmitAggregateAndProofsV2(writer, request)
 			assert.Equal(t, http.StatusOK, writer.Code)
 			assert.Equal(t, 2, len(broadcaster.BroadcastMessages))
+		})
+		t.Run("Phase 0 post electra", func(t *testing.T) {
+			params.SetupTestConfigCleanup(t)
+			config := params.BeaconConfig()
+			config.ElectraForkEpoch = 0
+			params.OverrideBeaconConfig(config)
+			defer params.SetupTestConfigCleanup(t)
+
+			var body bytes.Buffer
+			_, err := body.WriteString(singleAggregate)
+			require.NoError(t, err)
+			request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
+			request.Header.Set(api.VersionHeader, version.String(version.Phase0))
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.SubmitAggregateAndProofsV2(writer, request)
+			e := &httputil.DefaultJsonError{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+			assert.Equal(t, http.StatusBadRequest, e.Code)
+			assert.ErrorContains(t, "old aggregate attestation and proof", errors.New(e.Message))
+		})
+		t.Run("electra agg pre electra", func(t *testing.T) {
+			var body bytes.Buffer
+			_, err := body.WriteString(singleAggregateElectra)
+			require.NoError(t, err)
+			request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
+			request.Header.Set(api.VersionHeader, version.String(version.Electra))
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.SubmitAggregateAndProofsV2(writer, request)
+			e := &httputil.DefaultJsonError{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+			assert.Equal(t, http.StatusBadRequest, e.Code)
+			assert.ErrorContains(t, "electra aggregate and proof not supported yet", errors.New(e.Message))
 		})
 		t.Run("no body", func(t *testing.T) {
 			request := httptest.NewRequest(http.MethodPost, "http://example.com", nil)

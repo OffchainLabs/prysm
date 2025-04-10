@@ -21,6 +21,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared"
 	"github.com/OffchainLabs/prysm/v6/config/features"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	consensus_types "github.com/OffchainLabs/prysm/v6/consensus-types"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/crypto/bls"
@@ -182,11 +183,6 @@ func (s *Server) SubmitAttestations(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "beacon.SubmitAttestations")
 	defer span.End()
 
-	if slots.ToEpoch(s.TimeFetcher.CurrentSlot()) >= params.BeaconConfig().ElectraForkEpoch {
-		httputil.HandleError(w, "Post Electra fork, /eth/v2/beacon/pool/attestations should be used instead", http.StatusBadRequest)
-		return
-	}
-
 	var req structs.SubmitAttestationsRequest
 	err := json.NewDecoder(r.Body).Decode(&req.Data)
 	switch {
@@ -253,18 +249,10 @@ func (s *Server) SubmitAttestationsV2(w http.ResponseWriter, r *http.Request) {
 
 	var attFailures []*server.IndexedVerificationFailure
 	var failedBroadcasts []string
-	currentEpoch := slots.ToEpoch(s.TimeFetcher.CurrentSlot())
+
 	if v >= version.Electra {
-		if currentEpoch < params.BeaconConfig().ElectraForkEpoch {
-			httputil.HandleError(w, fmt.Sprintf("Electra attestations have not been enabled, current epoch %d enabled epoch %d", slots.ToEpoch(s.TimeFetcher.CurrentSlot()), params.BeaconConfig().ElectraForkEpoch), http.StatusBadRequest)
-			return
-		}
 		attFailures, failedBroadcasts, err = s.handleAttestationsElectra(ctx, req.Data)
 	} else {
-		if currentEpoch >= params.BeaconConfig().ElectraForkEpoch {
-			httputil.HandleError(w, "Post Electra fork, /eth/v2/beacon/pool/attestations should be used instead", http.StatusBadRequest)
-			return
-		}
 		attFailures, failedBroadcasts, err = s.handleAttestations(ctx, req.Data)
 	}
 	if err != nil {
@@ -296,6 +284,10 @@ func (s *Server) handleAttestationsElectra(
 	data json.RawMessage,
 ) (attFailures []*server.IndexedVerificationFailure, failedBroadcasts []string, err error) {
 	var sourceAttestations []*structs.SingleAttestation
+	currentEpoch := slots.ToEpoch(s.TimeFetcher.CurrentSlot())
+	if currentEpoch < params.BeaconConfig().ElectraForkEpoch {
+		return nil, nil, errors.Errorf("Electra attestations have not been enabled, current epoch %d enabled epoch %d", currentEpoch, params.BeaconConfig().ElectraForkEpoch)
+	}
 
 	if err = json.Unmarshal(data, &sourceAttestations); err != nil {
 		return nil, nil, errors.Wrap(err, "failed to unmarshal attestation")
@@ -372,6 +364,10 @@ func (s *Server) handleAttestationsElectra(
 
 func (s *Server) handleAttestations(ctx context.Context, data json.RawMessage) (attFailures []*server.IndexedVerificationFailure, failedBroadcasts []string, err error) {
 	var sourceAttestations []*structs.Attestation
+
+	if slots.ToEpoch(s.TimeFetcher.CurrentSlot()) >= params.BeaconConfig().ElectraForkEpoch {
+		return nil, nil, errors.New("old attestation format, only electra attestations should be sent")
+	}
 
 	if err = json.Unmarshal(data, &sourceAttestations); err != nil {
 		return nil, nil, errors.Wrap(err, "failed to unmarshal attestation")

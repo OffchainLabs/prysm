@@ -600,7 +600,7 @@ func TestSubmitAttestations(t *testing.T) {
 			e := &httputil.DefaultJsonError{}
 			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
 			assert.Equal(t, http.StatusBadRequest, e.Code)
-			assert.ErrorContains(t, "Post Electra fork", errors.New(e.Message))
+			assert.ErrorContains(t, "old attestation format", errors.New(e.Message))
 		})
 		t.Run("no body", func(t *testing.T) {
 			request := httptest.NewRequest(http.MethodPost, "http://example.com", nil)
@@ -715,7 +715,7 @@ func TestSubmitAttestations(t *testing.T) {
 				e := &httputil.DefaultJsonError{}
 				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
 				assert.Equal(t, http.StatusBadRequest, e.Code)
-				assert.ErrorContains(t, "Post Electra fork", errors.New(e.Message))
+				assert.ErrorContains(t, "old attestation format", errors.New(e.Message))
 			})
 			t.Run("electra att before electra", func(t *testing.T) {
 				var body bytes.Buffer
