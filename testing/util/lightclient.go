@@ -26,8 +26,8 @@ type TestLightClient struct {
 	supermajority                 bool
 	noFinalizedCheckpoint         bool
 	version                       int
-	increaseAttestedSlotBy        int
-	increaseFinalizedSlotBy       int
+	increaseAttestedSlotBy        uint64
+	increaseFinalizedSlotBy       uint64
 
 	T              *testing.T
 	Ctx            context.Context
@@ -63,7 +63,7 @@ func NewTestLightClient(t *testing.T, forkVersion int, options ...LightClientOpt
 	}
 }
 
-// WithBlinded Specifies whether the signature block is blinded or not
+// WithBlinded specifies whether the signature block is blinded or not
 func WithBlinded() LightClientOption {
 	return func(l *TestLightClient) {
 		if l.version == version.Altair || l.version == version.Bellatrix {
@@ -98,16 +98,16 @@ func WithSupermajority() LightClientOption {
 }
 
 // WithIncreasedAttestedSlot specifies the number of slots to increase the attested slot by. This does not affect the finalized block's slot if there is any.
-func WithIncreasedAttestedSlot(increaseAttestedSlotBy int) LightClientOption {
+func WithIncreasedAttestedSlot(increaseBy uint64) LightClientOption {
 	return func(l *TestLightClient) {
-		l.increaseAttestedSlotBy = increaseAttestedSlotBy
+		l.increaseAttestedSlotBy = increaseBy
 	}
 }
 
-// WithIncreasedFinalizedSlot Specifies the number of slots to increase the finalized slot by. This DOES NOT affect the attested block's slot. That should be handled separately using WithIncreasedAttestedSlot.
-func WithIncreasedFinalizedSlot(increaseFinalizedSlotBy int) LightClientOption {
+// WithIncreasedFinalizedSlot specifies the number of slots to increase the finalized slot by. This DOES NOT affect the attested block's slot. That should be handled separately using WithIncreasedAttestedSlot.
+func WithIncreasedFinalizedSlot(increaseBy uint64) LightClientOption {
 	return func(l *TestLightClient) {
-		l.increaseFinalizedSlotBy = increaseFinalizedSlotBy
+		l.increaseFinalizedSlotBy = increaseBy
 	}
 }
 
@@ -116,7 +116,7 @@ func (l *TestLightClient) setupTestAltair() *TestLightClient {
 
 	attestedSlot := primitives.Slot(uint64(params.BeaconConfig().AltairForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch)).Add(1)
 	if l.increaseAttestedSlotBy > 0 {
-		attestedSlot = attestedSlot.Add(uint64(l.increaseAttestedSlotBy))
+		attestedSlot = attestedSlot.Add(l.increaseAttestedSlotBy)
 	}
 
 	signatureSlot := attestedSlot.Add(1)
@@ -131,7 +131,7 @@ func (l *TestLightClient) setupTestAltair() *TestLightClient {
 	if !l.noFinalizedCheckpoint {
 		finalizedSlot := primitives.Slot(uint64(params.BeaconConfig().AltairForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch))
 		if l.increaseFinalizedSlotBy > 0 {
-			finalizedSlot = finalizedSlot.Add(uint64(l.increaseFinalizedSlotBy))
+			finalizedSlot = finalizedSlot.Add(l.increaseFinalizedSlotBy)
 		}
 		// Finalized State & Block
 		finalizedState, err := NewBeaconStateAltair()
@@ -225,7 +225,7 @@ func (l *TestLightClient) setupTestBellatrix() *TestLightClient {
 
 	attestedSlot := primitives.Slot(uint64(params.BeaconConfig().BellatrixForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch)).Add(1)
 	if l.increaseAttestedSlotBy > 0 {
-		attestedSlot = attestedSlot.Add(uint64(l.increaseAttestedSlotBy))
+		attestedSlot = attestedSlot.Add(l.increaseAttestedSlotBy)
 	}
 
 	signatureSlot := attestedSlot.Add(1)
@@ -242,7 +242,7 @@ func (l *TestLightClient) setupTestBellatrix() *TestLightClient {
 		if l.finalizedCheckpointInPrevFork {
 			finalizedSlot = primitives.Slot(uint64(params.BeaconConfig().AltairForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch))
 			if l.increaseFinalizedSlotBy > 0 {
-				finalizedSlot = finalizedSlot.Add(uint64(l.increaseFinalizedSlotBy))
+				finalizedSlot = finalizedSlot.Add(l.increaseFinalizedSlotBy)
 			}
 
 			finalizedState, err := NewBeaconStateAltair()
@@ -265,7 +265,7 @@ func (l *TestLightClient) setupTestBellatrix() *TestLightClient {
 		} else {
 			finalizedSlot = primitives.Slot(uint64(params.BeaconConfig().BellatrixForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch))
 			if l.increaseFinalizedSlotBy > 0 {
-				finalizedSlot = finalizedSlot.Add(uint64(l.increaseFinalizedSlotBy))
+				finalizedSlot = finalizedSlot.Add(l.increaseFinalizedSlotBy)
 			}
 
 			finalizedState, err := NewBeaconStateBellatrix()
@@ -358,7 +358,7 @@ func (l *TestLightClient) setupTestCapella() *TestLightClient {
 
 	attestedSlot := primitives.Slot(uint64(params.BeaconConfig().CapellaForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch)).Add(1)
 	if l.increaseAttestedSlotBy > 0 {
-		attestedSlot = attestedSlot.Add(uint64(l.increaseAttestedSlotBy))
+		attestedSlot = attestedSlot.Add(l.increaseAttestedSlotBy)
 	}
 
 	signatureSlot := attestedSlot.Add(1)
@@ -375,7 +375,7 @@ func (l *TestLightClient) setupTestCapella() *TestLightClient {
 		if l.finalizedCheckpointInPrevFork {
 			finalizedSlot = primitives.Slot(uint64(params.BeaconConfig().BellatrixForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch))
 			if l.increaseFinalizedSlotBy > 0 {
-				finalizedSlot = finalizedSlot.Add(uint64(l.increaseFinalizedSlotBy))
+				finalizedSlot = finalizedSlot.Add(l.increaseFinalizedSlotBy)
 			}
 
 			finalizedState, err := NewBeaconStateBellatrix()
@@ -398,7 +398,7 @@ func (l *TestLightClient) setupTestCapella() *TestLightClient {
 		} else {
 			finalizedSlot = primitives.Slot(uint64(params.BeaconConfig().CapellaForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch))
 			if l.increaseFinalizedSlotBy > 0 {
-				finalizedSlot = finalizedSlot.Add(uint64(l.increaseFinalizedSlotBy))
+				finalizedSlot = finalizedSlot.Add(l.increaseFinalizedSlotBy)
 			}
 
 			finalizedState, err := NewBeaconStateCapella()
@@ -529,7 +529,7 @@ func (l *TestLightClient) setupTestDeneb() *TestLightClient {
 
 	attestedSlot := primitives.Slot(uint64(params.BeaconConfig().DenebForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch)).Add(1)
 	if l.increaseAttestedSlotBy > 0 {
-		attestedSlot = attestedSlot.Add(uint64(l.increaseAttestedSlotBy))
+		attestedSlot = attestedSlot.Add(l.increaseAttestedSlotBy)
 	}
 
 	signatureSlot := attestedSlot.Add(1)
@@ -547,7 +547,7 @@ func (l *TestLightClient) setupTestDeneb() *TestLightClient {
 		if l.finalizedCheckpointInPrevFork {
 			finalizedSlot = primitives.Slot(uint64(params.BeaconConfig().CapellaForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch))
 			if l.increaseFinalizedSlotBy > 0 {
-				finalizedSlot = finalizedSlot.Add(uint64(l.increaseFinalizedSlotBy))
+				finalizedSlot = finalizedSlot.Add(l.increaseFinalizedSlotBy)
 			}
 
 			finalizedState, err := NewBeaconStateCapella()
@@ -570,7 +570,7 @@ func (l *TestLightClient) setupTestDeneb() *TestLightClient {
 		} else {
 			finalizedSlot = primitives.Slot(uint64(params.BeaconConfig().DenebForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch))
 			if l.increaseFinalizedSlotBy > 0 {
-				finalizedSlot = finalizedSlot.Add(uint64(l.increaseFinalizedSlotBy))
+				finalizedSlot = finalizedSlot.Add(l.increaseFinalizedSlotBy)
 			}
 
 			finalizedState, err := NewBeaconStateDeneb()
@@ -701,7 +701,7 @@ func (l *TestLightClient) setupTestElectra() *TestLightClient {
 
 	attestedSlot := primitives.Slot(uint64(params.BeaconConfig().ElectraForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch)).Add(1)
 	if l.increaseAttestedSlotBy > 0 {
-		attestedSlot = attestedSlot.Add(uint64(l.increaseAttestedSlotBy))
+		attestedSlot = attestedSlot.Add(l.increaseAttestedSlotBy)
 	}
 
 	signatureSlot := attestedSlot.Add(1)
@@ -719,7 +719,7 @@ func (l *TestLightClient) setupTestElectra() *TestLightClient {
 		if l.finalizedCheckpointInPrevFork {
 			finalizedSlot = primitives.Slot(uint64(params.BeaconConfig().DenebForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch))
 			if l.increaseFinalizedSlotBy > 0 {
-				finalizedSlot = finalizedSlot.Add(uint64(l.increaseFinalizedSlotBy))
+				finalizedSlot = finalizedSlot.Add(l.increaseFinalizedSlotBy)
 			}
 
 			finalizedState, err := NewBeaconStateDeneb()
@@ -742,7 +742,7 @@ func (l *TestLightClient) setupTestElectra() *TestLightClient {
 		} else {
 			finalizedSlot = primitives.Slot(uint64(params.BeaconConfig().ElectraForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch))
 			if l.increaseFinalizedSlotBy > 0 {
-				finalizedSlot = finalizedSlot.Add(uint64(l.increaseFinalizedSlotBy))
+				finalizedSlot = finalizedSlot.Add(l.increaseFinalizedSlotBy)
 			}
 
 			finalizedState, err := NewBeaconStateElectra()
