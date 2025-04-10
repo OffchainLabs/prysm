@@ -277,7 +277,7 @@ func TestAddForkEntry_Genesis(t *testing.T) {
 	db, err := enode.OpenDB("")
 	require.NoError(t, err)
 
-	bCfg := params.MainnetConfig().Copy()
+	bCfg := params.MainnetConfig()
 	bCfg.ForkVersionSchedule = map[[4]byte]primitives.Epoch{}
 	bCfg.ForkVersionSchedule[bytesutil.ToBytes4(params.BeaconConfig().GenesisForkVersion)] = bCfg.GenesisEpoch
 	params.OverrideBeaconConfig(bCfg)

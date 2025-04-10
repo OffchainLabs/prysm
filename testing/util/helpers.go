@@ -160,7 +160,7 @@ func Random32Bytes(t *testing.T) []byte {
 // to multiplication overflow.
 // Monkey patching tests with this function is the simplest workaround in these cases.
 func HackForksMaxuint(t *testing.T, forksVersion []int) func() {
-	bc := params.MainnetConfig().Copy()
+	bc := params.MainnetConfig()
 	for _, forkVersion := range forksVersion {
 		switch forkVersion {
 		case version.Electra:

@@ -17,6 +17,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+//
 // SubmitAggregateSelectionProof is called by a validator when its assigned to be an aggregator.
 // The aggregator submits the selection proof to obtain the aggregated attestation
 // object to sign over.
@@ -53,6 +55,8 @@ func (vs *Server) SubmitAggregateSelectionProof(ctx context.Context, req *ethpb.
 	return &ethpb.AggregateSelectionResponse{AggregateAndProof: attAndProof}, nil
 }
 
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+//
 // SubmitAggregateSelectionProofElectra is called by a validator when its assigned to be an aggregator.
 // The aggregator submits the selection proof to obtain the aggregated attestation
 // object to sign over.
@@ -145,6 +149,8 @@ func (vs *Server) processAggregateSelection(ctx context.Context, req *ethpb.Aggr
 	return indexInCommittee, validatorIndex, nil
 }
 
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+//
 // SubmitSignedAggregateSelectionProof is called by a validator to broadcast a signed
 // aggregated and proof object.
 func (vs *Server) SubmitSignedAggregateSelectionProof(
@@ -157,6 +163,8 @@ func (vs *Server) SubmitSignedAggregateSelectionProof(
 	return &ethpb.SignedAggregateSubmitResponse{}, nil
 }
 
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+//
 // SubmitSignedAggregateSelectionProofElectra is called by a validator to broadcast a signed
 // aggregated and proof object.
 func (vs *Server) SubmitSignedAggregateSelectionProofElectra(

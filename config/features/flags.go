@@ -50,8 +50,9 @@ var (
 		Usage: "Writes invalid blobs to temp directory.",
 	}
 	disableGRPCConnectionLogging = &cli.BoolFlag{
-		Name:  "disable-grpc-connection-logging",
-		Usage: "Disables displaying logs for newly connected grpc clients.",
+		Name: "disable-grpc-connection-logging",
+		Usage: `WARNING: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+		Disables displaying logs for newly connected grpc clients.`,
 	}
 	disablePeerScorer = &cli.BoolFlag{
 		Name:  "disable-peer-scorer",

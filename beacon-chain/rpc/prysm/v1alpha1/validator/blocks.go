@@ -14,6 +14,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+//
 // StreamBlocksAltair to clients every single time a block is received by the beacon node.
 func (vs *Server) StreamBlocksAltair(req *ethpb.StreamBlocksRequest, stream ethpb.BeaconNodeValidator_StreamBlocksAltairServer) error {
 	blocksChannel := make(chan *feed.Event, 1)
@@ -47,6 +49,8 @@ func (vs *Server) StreamBlocksAltair(req *ethpb.StreamBlocksRequest, stream ethp
 	}
 }
 
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+//
 // StreamSlots sends a block's slot to clients every single time a block is received by the beacon node.
 func (vs *Server) StreamSlots(req *ethpb.StreamSlotsRequest, stream ethpb.BeaconNodeValidator_StreamSlotsServer) error {
 	ch := make(chan *feed.Event, 1)

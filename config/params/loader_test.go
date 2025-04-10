@@ -183,7 +183,7 @@ func TestModifiedE2E(t *testing.T) {
 
 func TestLoadConfigFile(t *testing.T) {
 	t.Run("mainnet", func(t *testing.T) {
-		mn := params.MainnetConfig().Copy()
+		mn := params.MainnetConfig()
 		mainnetPresetsFiles := presetsFilePath(t, "mainnet")
 		var err error
 		for _, fp := range mainnetPresetsFiles {

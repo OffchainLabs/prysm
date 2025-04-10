@@ -52,6 +52,7 @@ service BeaconNodeValidator {
   // recommended to poll at every slot to ensure validator is fully aware of any
   // sudden chain reorg.
   rpc GetDuties(DutiesRequest) returns (DutiesResponse) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/validator/duties"
     };
@@ -61,6 +62,7 @@ service BeaconNodeValidator {
   // from the running beacon node's state. This information is used when
   // validators sign blocks and attestations appropriately based on their duty.
   rpc DomainData(DomainRequest) returns (DomainResponse) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/validator/domain"
     };
@@ -90,10 +92,10 @@ service BeaconNodeValidator {
   // validator to those keys is activated.
   rpc WaitForActivation(ValidatorActivationRequest)
       returns (stream ValidatorActivationResponse) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/validator/activation/stream"
     };
-    option deprecated = true;
   }
 
   // ValidatorIndex retrieves a validator's index location in the beacon state's
@@ -101,6 +103,7 @@ service BeaconNodeValidator {
   // public key. This method returns NOT_FOUND if no index is found for the
   // public key specified in the request.
   rpc ValidatorIndex(ValidatorIndexRequest) returns (ValidatorIndexResponse) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/validator/index"
     };
@@ -119,6 +122,7 @@ service BeaconNodeValidator {
   //validator does not have a known status in the network.
   rpc ValidatorStatus(ValidatorStatusRequest)
       returns (ValidatorStatusResponse) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/validator/status"
     };
@@ -130,6 +134,7 @@ service BeaconNodeValidator {
   // Returns a list of ValidatorStatusResponses.
   rpc MultipleValidatorStatus(MultipleValidatorStatusRequest)
       returns (MultipleValidatorStatusResponse) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/validator/statuses"
     };
@@ -141,6 +146,7 @@ service BeaconNodeValidator {
   // be proposed on the beacon chain. The block should be filled with all the
   // necessary data for proposer to sign.
   rpc GetBeaconBlock(BlockRequest) returns (GenericBeaconBlock) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha2/validator/block"
     };
@@ -152,6 +158,7 @@ service BeaconNodeValidator {
   // beacon block can be included in the beacon chain. The beacon node is
   // expected to validate and process the beacon block into its state.
   rpc ProposeBeaconBlock(GenericSignedBeaconBlock) returns (ProposeResponse) {
+    option deprecated = true;
     option (google.api.http) = {
       post : "/eth/v1alpha2/validator/block"
       body : "*"
@@ -162,6 +169,7 @@ service BeaconNodeValidator {
   // preparing block proposal execution payloads.
   rpc PrepareBeaconProposer(PrepareBeaconProposerRequest)
       returns (google.protobuf.Empty) {
+    option deprecated = true;
     option (google.api.http) = {
       post : "/eth/v1alpha1/validator/prepare_beacon_proposer"
       body : "*"
@@ -172,6 +180,7 @@ service BeaconNodeValidator {
   // settings or db based on a given public key
   rpc GetFeeRecipientByPubKey(FeeRecipientByPubKeyRequest)
       returns (FeeRecipientByPubKeyResponse) {
+    option deprecated = true;
     option (google.api.http) = {
       post : "/eth/v1alpha1/validator/fee_recipient_by_pub_key"
       body : "*"
@@ -184,6 +193,7 @@ service BeaconNodeValidator {
   // The server returns the latest valid data which represents the correct vote
   // for the head of the beacon chain.
   rpc GetAttestationData(AttestationDataRequest) returns (AttestationData) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/validator/attestation"
     };
@@ -195,6 +205,7 @@ service BeaconNodeValidator {
   // attestation to be included in the beacon chain. The beacon node is expected
   // to validate and publish attestation on appropriate committee subnet.
   rpc ProposeAttestation(Attestation) returns (AttestResponse) {
+    option deprecated = true;
     option (google.api.http) = {
       post : "/eth/v1alpha1/validator/attestation"
       body : "*"
@@ -207,6 +218,7 @@ service BeaconNodeValidator {
   // attestation to be included in the beacon chain. The beacon node is expected
   // to validate and publish attestation on appropriate committee subnet.
   rpc ProposeAttestationElectra(SingleAttestation) returns (AttestResponse) {
+    option deprecated = true;
     option (google.api.http) = {
       post : "/eth/v1alpha1/validator/attestation_electra"
       body : "*"
@@ -218,6 +230,7 @@ service BeaconNodeValidator {
   // aggregate and proof object back to validator to sign over.
   rpc SubmitAggregateSelectionProof(AggregateSelectionRequest)
       returns (AggregateSelectionResponse) {
+    option deprecated = true;
     option (google.api.http) = {
       post : "/eth/v1alpha1/validator/aggregate"
       body : "*"
@@ -229,6 +242,7 @@ service BeaconNodeValidator {
   // aggregate and proof object back to validator to sign over.
   rpc SubmitAggregateSelectionProofElectra(AggregateSelectionRequest)
       returns (AggregateSelectionElectraResponse) {
+    option deprecated = true;
     option (google.api.http) = {
       post : "/eth/v1alpha1/validator/aggregate_electra"
       body : "*"
@@ -239,6 +253,7 @@ service BeaconNodeValidator {
   // the signed aggregated attestation and proof object.
   rpc SubmitSignedAggregateSelectionProof(SignedAggregateSubmitRequest)
       returns (SignedAggregateSubmitResponse) {
+    option deprecated = true;
     option (google.api.http) = {
       post : "/eth/v1alpha1/validator/aggregate"
       body : "*"
@@ -250,6 +265,7 @@ service BeaconNodeValidator {
   rpc SubmitSignedAggregateSelectionProofElectra(
       SignedAggregateSubmitElectraRequest)
       returns (SignedAggregateSubmitResponse) {
+    option deprecated = true;
     option (google.api.http) = {
       post : "/eth/v1alpha1/validator/aggregate_electra"
       body : "*"
@@ -261,6 +277,7 @@ service BeaconNodeValidator {
   // The beacon node is expected to validate the request and make it available
   // for inclusion in the next proposed block.
   rpc ProposeExit(SignedVoluntaryExit) returns (ProposeExitResponse) {
+    option deprecated = true;
     option (google.api.http) = {
       post : "/eth/v1alpha1/validator/exit"
       body : "*"
@@ -275,6 +292,7 @@ service BeaconNodeValidator {
   // serving aggregator can join the subnet.
   rpc SubscribeCommitteeSubnets(CommitteeSubnetsSubscribeRequest)
       returns (google.protobuf.Empty) {
+    option deprecated = true;
     option (google.api.http) = {
       post : "/eth/v1alpha1/validator/subnet/subscribe"
       body : "*"
@@ -284,6 +302,7 @@ service BeaconNodeValidator {
   // Checks the beacon node if another instance of the provided validator keys
   // have been attesting/proposing for you.
   rpc CheckDoppelGanger(DoppelGangerRequest) returns (DoppelGangerResponse) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/validator/doppelganger"
     };
@@ -293,6 +312,7 @@ service BeaconNodeValidator {
   // sync committee duty.
   rpc GetSyncMessageBlockRoot(google.protobuf.Empty)
       returns (SyncMessageBlockRootResponse) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/validator/sync_message_block_root"
     };
@@ -301,6 +321,7 @@ service BeaconNodeValidator {
   // Submits a sync committee message to be broadcasted over network. This is
   // part of sync committee duty.
   rpc SubmitSyncMessage(SyncCommitteeMessage) returns (google.protobuf.Empty) {
+    option deprecated = true;
     option (google.api.http) = {
       post : "/eth/v1alpha1/validator/sync_message"
       body : "*"
@@ -315,6 +336,7 @@ service BeaconNodeValidator {
   // sync committee message.
   rpc GetSyncSubcommitteeIndex(SyncSubcommitteeIndexRequest)
       returns (SyncSubcommitteeIndexResponse) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/sync_subcommittee_index"
     };
@@ -326,6 +348,7 @@ service BeaconNodeValidator {
   // to sign over.
   rpc GetSyncCommitteeContribution(SyncCommitteeContributionRequest)
       returns (SyncCommitteeContribution) {
+    option deprecated = true;
     option (google.api.http) = {
       post : "/eth/v1alpha1/validator/contribution_and_proof"
       body : "*"
@@ -336,6 +359,7 @@ service BeaconNodeValidator {
   // node will broadcast the signed contribution and proof object.
   rpc SubmitSignedContributionAndProof(SignedContributionAndProof)
       returns (google.protobuf.Empty) {
+    option deprecated = true;
     option (google.api.http) = {
       post : "/eth/v1alpha1/validator/signed_contribution_and_proof"
       body : "*"
@@ -347,10 +371,10 @@ service BeaconNodeValidator {
   // DEPRECATED: This endpoint is superseded by the /eth/v1/events Beacon API
   // endpoint
   rpc StreamSlots(StreamSlotsRequest) returns (stream StreamSlotsResponse) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/validator/blocks/stream_slots"
     };
-    option deprecated = true;
   }
 
   // Server-side stream of all signed blocks as they are received by
@@ -359,14 +383,15 @@ service BeaconNodeValidator {
   // endpoint
   rpc StreamBlocksAltair(StreamBlocksRequest)
       returns (stream StreamBlocksResponse) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/validator/blocks/stream"
     };
-    option deprecated = true;
   }
 
   rpc SubmitValidatorRegistrations(SignedValidatorRegistrationsV1)
       returns (google.protobuf.Empty) {
+    option deprecated = true;
     option (google.api.http) = {
       post : "/eth/v1alpha1/validator/registration"
       body : "*"
@@ -375,6 +400,7 @@ service BeaconNodeValidator {
 
   rpc AssignValidatorToSubnet(AssignValidatorToSubnetRequest)
       returns (google.protobuf.Empty) {
+    option deprecated = true;
     option (google.api.http) = {
       post : "/eth/v1alpha1/validator/blocks/assign_validator_to_subnet"
       body : "*"
@@ -383,6 +409,7 @@ service BeaconNodeValidator {
 
   rpc AggregatedSigAndAggregationBits(AggregatedSigAndAggregationBitsRequest)
       returns (AggregatedSigAndAggregationBitsResponse) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/validator/blocks/aggregated_sig_and_aggregation_bits"
     };
@@ -393,6 +420,8 @@ service BeaconNodeValidator {
 // to sign over the block root as part of sync committee duty to facilitate
 // light client.
 message SyncMessageBlockRootResponse {
+  option deprecated = true;
+
   // The block root of the head block.
   bytes root = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
 }
@@ -400,6 +429,8 @@ message SyncMessageBlockRootResponse {
 // SyncSubcommitteeIndexRequest requests sync subcommittee index given the
 // validator public key.
 message SyncSubcommitteeIndexRequest {
+  option deprecated = true;
+
   // The validator's public key.
   bytes public_key = 1 [ (ethereum.eth.ext.ssz_size) = "48" ];
   // The slot of validator's assignment.
@@ -410,6 +441,8 @@ message SyncSubcommitteeIndexRequest {
 }
 
 message SyncCommitteeContributionRequest {
+  option deprecated = true;
+
   // Slot for which the aggregation request applies.
   uint64 slot = 1 [
     (ethereum.eth.ext.cast_type) =
@@ -427,6 +460,8 @@ message SyncCommitteeContributionRequest {
 // SyncSubcommitteeIndexResponse responds index of the sync subcommittee of a
 // given validator.
 message SyncSubcommitteeIndexResponse {
+  option deprecated = true;
+
   // The subcommittee index itself.
   // If the total validator count is not sufficient, there could be more than
   // one index.
@@ -440,6 +475,7 @@ message SyncSubcommitteeIndexResponse {
 // Beacon API endpoint
 message StreamSlotsResponse {
   option deprecated = true;
+
   uint64 slot = 1 [
     (ethereum.eth.ext.cast_type) =
         "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"
@@ -450,6 +486,7 @@ message StreamSlotsResponse {
 // Beacon API endpoint
 message StreamBlocksResponse {
   option deprecated = true;
+
   oneof block {
     // Representing a phase 0 block.
     SignedBeaconBlock phase0_block = 1;
@@ -475,6 +512,8 @@ message StreamBlocksResponse {
 }
 
 message DomainRequest {
+  option deprecated = true;
+
   // The epoch for which the domain is being requested.
   uint64 epoch = 1 [
     (ethereum.eth.ext.cast_type) =
@@ -486,17 +525,23 @@ message DomainRequest {
 }
 
 message DomainResponse {
+  option deprecated = true;
+
   // The signature domain is a byte array used by validators when
   // signing data related to block proposals and attestations.
   bytes signature_domain = 1;
 }
 
 message ValidatorActivationRequest {
+  option deprecated = true;
+
   // A list of 48 byte validator public keys.
   repeated bytes public_keys = 1 [ (ethereum.eth.ext.ssz_size) = "?,48" ];
 }
 
 message ValidatorActivationResponse {
+  option deprecated = true;
+
   message Status {
     // A 48 byte validator public key.
     bytes public_key = 1;
@@ -515,6 +560,8 @@ message ValidatorActivationResponse {
 }
 
 message ChainStartResponse {
+  option deprecated = true;
+
   // A boolean specifying whether or not the chain has started.
   bool started = 1;
 
@@ -535,11 +582,15 @@ message SyncedResponse {
 }
 
 message ValidatorIndexRequest {
+  option deprecated = true;
+
   // A 48 byte validator public key.
   bytes public_key = 1 [ (ethereum.eth.ext.ssz_size) = "48" ];
 }
 
 message ValidatorIndexResponse {
+  option deprecated = true;
+
   // The validator's index in the beacon chain state's validator registry.
   uint64 index = 1 [ (ethereum.eth.ext.cast_type) =
                          "github.com/prysmaticlabs/prysm/v5/consensus-types/"
@@ -547,6 +598,8 @@ message ValidatorIndexResponse {
 }
 
 message ValidatorStatusRequest {
+  option deprecated = true;
+
   // A 48 byte validator public key.
   bytes public_key = 1 [ (ethereum.eth.ext.ssz_size) = "48" ];
 }
@@ -564,6 +617,8 @@ enum ValidatorStatus {
 }
 
 message ValidatorStatusResponse {
+  option deprecated = true;
+
   // The corresponding validator status.
   ValidatorStatus status = 1;
 
@@ -590,6 +645,8 @@ message ValidatorStatusResponse {
 }
 
 message MultipleValidatorStatusRequest {
+  option deprecated = true;
+
   // A list of 48 byte validator public keys.
   repeated bytes public_keys = 1 [ (ethereum.eth.ext.ssz_size) = "?,48" ];
   // A list of validator indices.
@@ -597,6 +654,8 @@ message MultipleValidatorStatusRequest {
 }
 
 message MultipleValidatorStatusResponse {
+  option deprecated = true;
+
   // A list of 48 byte validator public keys.
   repeated bytes public_keys = 1 [ (ethereum.eth.ext.ssz_size) = "?,48" ];
   // A list of ValidatorStatusResponses mapped 1-to-1 with the public keys.
@@ -609,6 +668,8 @@ message MultipleValidatorStatusResponse {
 }
 
 message DutiesRequest {
+  option deprecated = true;
+
   // Epoch at which validators should perform their duties.
   uint64 epoch = 1 [
     (ethereum.eth.ext.cast_type) =
@@ -620,6 +681,8 @@ message DutiesRequest {
 }
 
 message DutiesResponse {
+  option deprecated = true;
+
   reserved 1; // Deprecated fields
 
   repeated Duty current_epoch_duties = 2;
@@ -674,6 +737,8 @@ message DutiesResponse {
 }
 
 message BlockRequest {
+  option deprecated = true;
+
   // Slot for which the block should be proposed.
   uint64 slot = 1 [
     (ethereum.eth.ext.cast_type) =
@@ -696,16 +761,22 @@ message BlockRequest {
 }
 
 message ProposeResponse {
+  option deprecated = true;
+
   // The block root of the successfully proposed beacon block.
   bytes block_root = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
 }
 
 message ProposeExitResponse {
+  option deprecated = true;
+
   // The root of the successfully proposed voluntary exit.
   bytes exit_root = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
 }
 
 message AttestationDataRequest {
+  option deprecated = true;
+
   // Slot for which the attestation should be created.
   uint64 slot = 1 [
     (ethereum.eth.ext.cast_type) =
@@ -720,11 +791,15 @@ message AttestationDataRequest {
 }
 
 message AttestResponse {
+  option deprecated = true;
+
   // The root of the attestation data successfully submitted to the beacon node.
   bytes attestation_data_root = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
 }
 
 message AggregateSelectionRequest {
+  option deprecated = true;
+
   // Slot for which the aggregation request applies.
   uint64 slot = 1 [
     (ethereum.eth.ext.cast_type) =
@@ -746,31 +821,43 @@ message AggregateSelectionRequest {
 }
 
 message AggregateSelectionResponse {
+  option deprecated = true;
+
   // The aggregate and proof message without the signature.
   AggregateAttestationAndProof aggregate_and_proof = 1;
 }
 
 message AggregateSelectionElectraResponse {
+  option deprecated = true;
+
   // The aggregate and proof message without the signature.
   AggregateAttestationAndProofElectra aggregate_and_proof = 1;
 }
 
 message SignedAggregateSubmitRequest {
+  option deprecated = true;
+
   // The signed aggregate and proof message with the signature.
   SignedAggregateAttestationAndProof signed_aggregate_and_proof = 1;
 }
 
 message SignedAggregateSubmitElectraRequest {
+  option deprecated = true;
+
   // The signed aggregate and proof message with the signature.
   SignedAggregateAttestationAndProofElectra signed_aggregate_and_proof = 1;
 }
 
 message SignedAggregateSubmitResponse {
+  option deprecated = true;
+
   // The 32 byte hash tree root of the aggregated attestation data.
   bytes attestation_data_root = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
 }
 
 message CommitteeSubnetsSubscribeRequest {
+  option deprecated = true;
+
   // A list of intended slots to subscribe.
   repeated uint64 slots = 1 [
     (ethereum.eth.ext.cast_type) =
@@ -900,6 +987,8 @@ message ValidatorIdentity {
 // DoppelGangerRequest represents the request sent by the validator in order to
 // determine if there is any duplicate instance of it running in the network.
 message DoppelGangerRequest {
+  option deprecated = true;
+
   repeated ValidatorRequest validator_requests = 1;
 
   // ValidatorRequest data type which represents a request for each validator.
@@ -922,6 +1011,8 @@ message DoppelGangerRequest {
 // DoppelGangerResponse is the response payload sent by the beacon node
 // after it has checked for all duplicate keys in the network.
 message DoppelGangerResponse {
+  option deprecated = true;
+
   message ValidatorResponse {
     // The validator's 48 byte BLS public key.
     bytes public_key = 1 [
@@ -939,6 +1030,7 @@ message DoppelGangerResponse {
 // /eth/v1/events Beacon API endpoint.
 message StreamSlotsRequest {
   option deprecated = true;
+
   bool verified_only = 1;
 }
 
@@ -947,10 +1039,13 @@ message StreamSlotsRequest {
 // Beacon API endpoint
 message StreamBlocksRequest {
   option deprecated = true;
+
   bool verified_only = 1;
 }
 
 message PrepareBeaconProposerRequest {
+  option deprecated = true;
+
   message FeeRecipientContainer {
     // The address of the fee recipient.
     bytes fee_recipient = 1 [ (ethereum.eth.ext.ssz_size) = "20" ];
@@ -965,6 +1060,8 @@ message PrepareBeaconProposerRequest {
 }
 
 message FeeRecipientByPubKeyRequest {
+  option deprecated = true;
+
   bytes public_key = 1 [
     (ethereum.eth.ext.ssz_size) = "48",
     (ethereum.eth.ext.spec_name) = "pubkey"
@@ -972,10 +1069,14 @@ message FeeRecipientByPubKeyRequest {
 }
 
 message FeeRecipientByPubKeyResponse {
+  option deprecated = true;
+
   bytes fee_recipient = 1 [ (ethereum.eth.ext.ssz_size) = "20" ];
 }
 
 message AssignValidatorToSubnetRequest {
+  option deprecated = true;
+
   bytes public_key = 1 [
     (ethereum.eth.ext.ssz_size) = "48",
     (ethereum.eth.ext.spec_name) = "pubkey"
@@ -984,6 +1085,8 @@ message AssignValidatorToSubnetRequest {
 }
 
 message AggregatedSigAndAggregationBitsRequest {
+  option deprecated = true;
+
   repeated SyncCommitteeMessage msgs = 1;
   uint64 slot = 2 [
     (ethereum.eth.ext.cast_type) =
@@ -994,6 +1097,8 @@ message AggregatedSigAndAggregationBitsRequest {
 }
 
 message AggregatedSigAndAggregationBitsResponse {
+  option deprecated = true;
+
   bytes aggregated_sig = 1;
   bytes bits = 2;
 }

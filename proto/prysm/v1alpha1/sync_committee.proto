@@ -26,6 +26,8 @@ option php_namespace = "Ethereum\\Eth\\v1alpha1";
 
 // Sync committee object to support light client.
 message SyncCommitteeMessage {
+  option deprecated = true;
+
   // Slot to which this contribution pertains.
   uint64 slot = 1 [
     (ethereum.eth.ext.cast_type) =

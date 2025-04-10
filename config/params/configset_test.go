@@ -22,7 +22,7 @@ func TestConfigset_Add(t *testing.T) {
 
 func TestConfigsetReplaceMainnet(t *testing.T) {
 	r := newConfigset()
-	mainnet := MainnetConfig().Copy()
+	mainnet := MainnetConfig()
 	require.NoError(t, r.setActive(mainnet))
 	FillTestVersions(mainnet, 128)
 	require.NoError(t, r.replace(mainnet))
@@ -30,7 +30,7 @@ func TestConfigsetReplaceMainnet(t *testing.T) {
 
 func TestConfigset_Replace(t *testing.T) {
 	r := newConfigset()
-	mainnet := MainnetConfig().Copy()
+	mainnet := MainnetConfig()
 	require.NoError(t, r.add(mainnet))
 	require.NoError(t, r.setActive(mainnet))
 	require.ErrorIs(t, r.add(mainnet), errCollisionName)
@@ -66,7 +66,7 @@ func TestConfigset_Replace(t *testing.T) {
 }
 
 func testConfig(name string) *BeaconChainConfig {
-	c := MainnetConfig().Copy()
+	c := MainnetConfig()
 	FillTestVersions(c, 127)
 	c.ConfigName = name
 	return c

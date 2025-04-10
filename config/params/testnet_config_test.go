@@ -20,7 +20,7 @@ func TestE2EConfigParity(t *testing.T) {
 	yamlObj := params.ConfigToYaml(params.E2EMainnetTestConfig())
 	assert.NoError(t, file.WriteFile(yamlDir, yamlObj))
 
-	require.NoError(t, params.LoadChainConfigFile(yamlDir, params.MainnetConfig().Copy()))
+	require.NoError(t, params.LoadChainConfigFile(yamlDir, params.MainnetConfig()))
 
 	// compareConfigs makes it easier to figure out exactly what changed
 	compareConfigs(t, params.BeaconConfig(), testCfg)
