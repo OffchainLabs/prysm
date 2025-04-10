@@ -315,33 +315,70 @@ func (l *TestLightClient) setupTestBellatrix() *TestLightClient {
 	require.NoError(l.T, err)
 	require.NoError(l.T, signatureState.SetSlot(signatureSlot))
 
-	signatureBlock := NewBeaconBlockBellatrix()
-	signatureBlock.Block.Slot = signatureSlot
-	attestedBlockRoot, err := signedAttestedBlock.Block().HashTreeRoot()
-	require.NoError(l.T, err)
-	signatureBlock.Block.ParentRoot = attestedBlockRoot[:]
+	var signedSignatureBlock interfaces.SignedBeaconBlock
+	if l.blinded {
+		signatureBlock := NewBlindedBeaconBlockBellatrix()
+		signatureBlock.Block.Slot = signatureSlot
+		attestedBlockRoot, err := signedAttestedBlock.Block().HashTreeRoot()
+		require.NoError(l.T, err)
+		signatureBlock.Block.ParentRoot = attestedBlockRoot[:]
 
-	var trueBitNum uint64
-	if l.supermajority {
-		trueBitNum = uint64((float64(params.BeaconConfig().SyncCommitteeSize) * 2.0 / 3.0) + 1)
+		var trueBitNum uint64
+		if l.supermajority {
+			trueBitNum = uint64((float64(params.BeaconConfig().SyncCommitteeSize) * 2.0 / 3.0) + 1)
+		} else {
+			trueBitNum = params.BeaconConfig().MinSyncCommitteeParticipants
+		}
+		for i := uint64(0); i < trueBitNum; i++ {
+			signatureBlock.Block.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, true)
+		}
+
+		signedSignatureBlock, err = blocks.NewSignedBeaconBlock(signatureBlock)
+		require.NoError(l.T, err)
+
+		signatureBlockHeader, err := signedSignatureBlock.Header()
+		require.NoError(l.T, err)
+
+		err = signatureState.SetLatestBlockHeader(signatureBlockHeader.Header)
+		require.NoError(l.T, err)
+		stateRoot, err := signatureState.HashTreeRoot(ctx)
+		require.NoError(l.T, err)
+
+		signatureBlock.Block.StateRoot = stateRoot[:]
+		signedSignatureBlock, err = blocks.NewSignedBeaconBlock(signatureBlock)
+		require.NoError(l.T, err)
 	} else {
-		trueBitNum = params.BeaconConfig().MinSyncCommitteeParticipants
-	}
-	for i := uint64(0); i < trueBitNum; i++ {
-		signatureBlock.Block.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, true)
-	}
+		signatureBlock := NewBeaconBlockBellatrix()
+		signatureBlock.Block.Slot = signatureSlot
+		attestedBlockRoot, err := signedAttestedBlock.Block().HashTreeRoot()
+		require.NoError(l.T, err)
+		signatureBlock.Block.ParentRoot = attestedBlockRoot[:]
 
-	signedSignatureBlock, err := blocks.NewSignedBeaconBlock(signatureBlock)
-	require.NoError(l.T, err)
-	signatureBlockHeader, err := signedSignatureBlock.Header()
-	require.NoError(l.T, err)
-	err = signatureState.SetLatestBlockHeader(signatureBlockHeader.Header)
-	require.NoError(l.T, err)
-	signatureStateRoot, err := signatureState.HashTreeRoot(ctx)
-	require.NoError(l.T, err)
-	signatureBlock.Block.StateRoot = signatureStateRoot[:]
-	signedSignatureBlock, err = blocks.NewSignedBeaconBlock(signatureBlock)
-	require.NoError(l.T, err)
+		var trueBitNum uint64
+		if l.supermajority {
+			trueBitNum = uint64((float64(params.BeaconConfig().SyncCommitteeSize) * 2.0 / 3.0) + 1)
+		} else {
+			trueBitNum = params.BeaconConfig().MinSyncCommitteeParticipants
+		}
+		for i := uint64(0); i < trueBitNum; i++ {
+			signatureBlock.Block.Body.SyncAggregate.SyncCommitteeBits.SetBitAt(i, true)
+		}
+
+		signedSignatureBlock, err = blocks.NewSignedBeaconBlock(signatureBlock)
+		require.NoError(l.T, err)
+
+		signatureBlockHeader, err := signedSignatureBlock.Header()
+		require.NoError(l.T, err)
+
+		err = signatureState.SetLatestBlockHeader(signatureBlockHeader.Header)
+		require.NoError(l.T, err)
+		signatureStateRoot, err := signatureState.HashTreeRoot(ctx)
+		require.NoError(l.T, err)
+
+		signatureBlock.Block.StateRoot = signatureStateRoot[:]
+		signedSignatureBlock, err = blocks.NewSignedBeaconBlock(signatureBlock)
+		require.NoError(l.T, err)
+	}
 
 	l.State = signatureState
 	l.AttestedState = attestedState
