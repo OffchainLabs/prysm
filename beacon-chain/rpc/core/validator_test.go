@@ -8,11 +8,13 @@ import (
 
 	mockChain "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
+	p2pmock "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/validator"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
+	testhelpers "github.com/OffchainLabs/prysm/v6/validator/client/beacon-api/test-helpers"
 )
 
 func TestRegisterSyncSubnetProto(t *testing.T) {
@@ -69,6 +71,42 @@ func pubKey(i uint64) []byte {
 func TestService_SubmitSignedAggregateSelectionProof(t *testing.T) {
 	mock := &mockChain.ChainService{}
 	s := &Service{GenesisTimeFetcher: mock}
+
+	t.Run("Happy path electra", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		config := params.BeaconConfig()
+		config.ElectraForkEpoch = 0
+		params.OverrideBeaconConfig(config)
+		broadcaster := &p2pmock.MockBroadcaster{}
+		s.Broadcaster = broadcaster
+		agg := &ethpb.SignedAggregateAttestationAndProofElectra{
+			Message: &ethpb.AggregateAttestationAndProofElectra{
+				AggregatorIndex: 72,
+				Aggregate: &ethpb.AttestationElectra{
+					AggregationBits: testhelpers.FillByteSlice(4, 74),
+					Data: &ethpb.AttestationData{
+						Slot:            75,
+						CommitteeIndex:  76,
+						BeaconBlockRoot: testhelpers.FillByteSlice(32, 38),
+						Source: &ethpb.Checkpoint{
+							Epoch: 78,
+							Root:  testhelpers.FillByteSlice(32, 79),
+						},
+						Target: &ethpb.Checkpoint{
+							Epoch: 80,
+							Root:  testhelpers.FillByteSlice(32, 81),
+						},
+					},
+					Signature:     testhelpers.FillByteSlice(96, 82),
+					CommitteeBits: testhelpers.FillByteSlice(8, 83),
+				},
+				SelectionProof: testhelpers.FillByteSlice(96, 84),
+			},
+			Signature: testhelpers.FillByteSlice(96, 85),
+		}
+		rpcError := s.SubmitSignedAggregateSelectionProof(context.Background(), agg)
+		assert.Equal(t, true, rpcError == nil)
+	})
 
 	t.Run("Phase 0 post electra", func(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
