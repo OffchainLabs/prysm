@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -37,7 +36,6 @@ func TestBlobs(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
 	cfg.DenebForkEpoch = 1
-	cfg.ElectraForkEpoch = math.MaxUint64
 	params.OverrideBeaconConfig(cfg)
 
 	db := testDB.SetupDB(t)
@@ -272,6 +270,9 @@ func TestBlobs(t *testing.T) {
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		s.Blocker = &lookup.BeaconDbBlocker{}
+		s.TimeFetcher = &testutil.MockGenesisTimeFetcher{
+			Genesis: time.Now().Add(-time.Duration(uint64(params.BeaconConfig().SlotsPerEpoch)*uint64(params.BeaconConfig().DenebForkEpoch)*params.BeaconConfig().SecondsPerSlot) * time.Second),
+		}
 		s.Blobs(writer, request)
 
 		assert.Equal(t, http.StatusBadRequest, writer.Code)
