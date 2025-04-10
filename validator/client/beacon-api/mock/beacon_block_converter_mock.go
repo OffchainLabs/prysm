@@ -21,6 +21,7 @@ import (
 type MockBeaconBlockConverter struct {
 	ctrl     *gomock.Controller
 	recorder *MockBeaconBlockConverterMockRecorder
+	isgomock struct{}
 }
 
 // MockBeaconBlockConverterMockRecorder is the mock recorder for MockBeaconBlockConverter.
