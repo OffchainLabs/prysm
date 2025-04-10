@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -212,8 +211,8 @@ func TestListAttestations(t *testing.T) {
 		t.Run("Pre-Electra", func(t *testing.T) {
 			bs, err := util.NewBeaconState()
 			require.NoError(t, err)
-
-			chainService := &blockchainmock.ChainService{State: bs}
+			slot := primitives.Slot(0)
+			chainService := &blockchainmock.ChainService{State: bs, Slot: &slot}
 			s := &Server{
 				ChainInfoFetcher: chainService,
 				TimeFetcher:      chainService,
@@ -223,7 +222,6 @@ func TestListAttestations(t *testing.T) {
 			params.SetupTestConfigCleanup(t)
 			config := params.BeaconConfig()
 			config.DenebForkEpoch = 0
-			config.ElectraForkEpoch = math.MaxUint64
 			params.OverrideBeaconConfig(config)
 
 			require.NoError(t, s.AttestationsPool.SaveAggregatedAttestations([]ethpbv1alpha1.Att{att1, att2}))
@@ -1736,12 +1734,8 @@ func TestGetAttesterSlashings(t *testing.T) {
 		t.Run("pre-electra-ok", func(t *testing.T) {
 			bs, err := util.NewBeaconState()
 			require.NoError(t, err)
-			chainService := &blockchainmock.ChainService{State: bs}
-
-			params.SetupTestConfigCleanup(t)
-			config := params.BeaconConfig()
-			config.ElectraForkEpoch = math.MaxUint64
-			params.OverrideBeaconConfig(config)
+			slot := primitives.Slot(0)
+			chainService := &blockchainmock.ChainService{State: bs, Slot: &slot}
 
 			s := &Server{
 				ChainInfoFetcher: chainService,
