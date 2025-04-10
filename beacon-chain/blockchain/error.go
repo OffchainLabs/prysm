@@ -3,8 +3,8 @@ package blockchain
 import (
 	stderrors "errors"
 
-	"github.com/pkg/errors"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
+	"github.com/pkg/errors"
 )
 
 var (

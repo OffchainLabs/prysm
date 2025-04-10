@@ -3,9 +3,9 @@ package blockchain
 import (
 	"testing"
 
-	"github.com/pkg/errors"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/pkg/errors"
 )
 
 func TestIsInvalidBlock(t *testing.T) {
