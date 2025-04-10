@@ -459,7 +459,7 @@ func TestSubmitSignedAggregateSelectionProofElectra_ZeroHashesSignatures(t *test
 	config := params.BeaconConfig()
 	config.ElectraForkEpoch = 0
 	params.OverrideBeaconConfig(config)
-	defer params.SetupTestConfigCleanup(t)
+
 	aggregatorServer := &Server{
 		CoreService: &core.Service{
 			GenesisTimeFetcher: &mock.ChainService{Genesis: time.Now()},
@@ -498,7 +498,7 @@ func TestSubmitSignedAggregateSelectionProofElectra_InvalidSlot(t *testing.T) {
 	config := params.BeaconConfig()
 	config.ElectraForkEpoch = 0
 	params.OverrideBeaconConfig(config)
-	defer params.SetupTestConfigCleanup(t)
+
 	c := &mock.ChainService{Genesis: time.Now()}
 	aggregatorServer := &Server{
 		CoreService: &core.Service{

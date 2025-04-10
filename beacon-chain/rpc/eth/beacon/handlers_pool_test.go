@@ -587,7 +587,7 @@ func TestSubmitAttestations(t *testing.T) {
 			config := params.BeaconConfig()
 			config.ElectraForkEpoch = 0
 			params.OverrideBeaconConfig(config)
-			defer params.SetupTestConfigCleanup(t)
+
 			var body bytes.Buffer
 			_, err := body.WriteString(singleAtt)
 			require.NoError(t, err)
@@ -701,7 +701,7 @@ func TestSubmitAttestations(t *testing.T) {
 				config := params.BeaconConfig()
 				config.ElectraForkEpoch = 0
 				params.OverrideBeaconConfig(config)
-				defer params.SetupTestConfigCleanup(t)
+
 				var body bytes.Buffer
 				_, err := body.WriteString(singleAtt)
 				require.NoError(t, err)
@@ -785,7 +785,7 @@ func TestSubmitAttestations(t *testing.T) {
 			config := params.BeaconConfig()
 			config.ElectraForkEpoch = 0
 			params.OverrideBeaconConfig(config)
-			defer params.SetupTestConfigCleanup(t)
+
 			t.Run("single", func(t *testing.T) {
 				broadcaster := &p2pMock.MockBroadcaster{}
 				s.Broadcaster = broadcaster

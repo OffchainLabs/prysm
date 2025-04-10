@@ -643,7 +643,7 @@ func TestSubmitAggregateAndProofs(t *testing.T) {
 			config := params.BeaconConfig()
 			config.ElectraForkEpoch = 0
 			params.OverrideBeaconConfig(config)
-			defer params.SetupTestConfigCleanup(t)
+
 			var body bytes.Buffer
 			_, err := body.WriteString(singleAggregate)
 			require.NoError(t, err)
@@ -705,7 +705,7 @@ func TestSubmitAggregateAndProofs(t *testing.T) {
 			config := params.BeaconConfig()
 			config.ElectraForkEpoch = 0
 			params.OverrideBeaconConfig(config)
-			defer params.SetupTestConfigCleanup(t)
+
 			broadcaster := &p2pmock.MockBroadcaster{}
 			s.CoreService.Broadcaster = broadcaster
 
@@ -742,7 +742,7 @@ func TestSubmitAggregateAndProofs(t *testing.T) {
 			config := params.BeaconConfig()
 			config.ElectraForkEpoch = 0
 			params.OverrideBeaconConfig(config)
-			defer params.SetupTestConfigCleanup(t)
+
 			broadcaster := &p2pmock.MockBroadcaster{}
 			s.CoreService.Broadcaster = broadcaster
 			s.CoreService.SyncCommitteePool = synccommittee.NewStore()
@@ -781,7 +781,7 @@ func TestSubmitAggregateAndProofs(t *testing.T) {
 			config := params.BeaconConfig()
 			config.ElectraForkEpoch = 0
 			params.OverrideBeaconConfig(config)
-			defer params.SetupTestConfigCleanup(t)
+
 			var body bytes.Buffer
 			_, err := body.WriteString(singleAggregate)
 			require.NoError(t, err)
@@ -797,7 +797,7 @@ func TestSubmitAggregateAndProofs(t *testing.T) {
 			assert.ErrorContains(t, "old aggregate and proof", errors.New(e.Message))
 		})
 		t.Run("electra agg pre electra", func(t *testing.T) {
-			defer params.SetupTestConfigCleanup(t)
+
 			var body bytes.Buffer
 			_, err := body.WriteString(singleAggregateElectra)
 			require.NoError(t, err)
