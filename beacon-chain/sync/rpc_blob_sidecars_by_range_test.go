@@ -158,15 +158,12 @@ func TestBlobByRangeOK(t *testing.T) {
 				}
 			},
 			defineExpected: func(t *testing.T, scs []blocks.ROBlob, req interface{}) []*expectedBlobChunk {
-				// Include sidecar in expected results, but the "missing" map will filter out index 0
-				// This ensures the block has KZG commitments but is missing some sidecar
-				result := []*expectedBlobChunk{
+				return []*expectedBlobChunk{
 					{
 						code:    responseCodeServerError,
 						message: errMissingBlobsForBlockCommitments.Error(),
 					},
 				}
-				return result
 			},
 		},
 	}
