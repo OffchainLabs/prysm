@@ -43,7 +43,6 @@ func (s *Service) streamBlobBatch(ctx context.Context, batch blockBatch, wQuota 
 		if kzgCommitmentsCount > 0 {
 			// Count available blob sidecars
 			availableSidecars := 0
-
 			for i := 0; i < kzgCommitmentsCount; i++ {
 				if blobSummary.HasIndex(uint64(i)) {
 					availableSidecars++
@@ -58,6 +57,7 @@ func (s *Service) streamBlobBatch(ctx context.Context, batch blockBatch, wQuota 
 			}
 		}
 
+		// Only proceed with sending blobs if we have all required sidecars
 		for i := range blobSummary.MaxBlobsForEpoch() {
 			// index not available, skip
 			if !blobSummary.HasIndex(uint64(i)) {
