@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"time"
 
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/altair"
@@ -27,7 +28,7 @@ var ErrMessageNotMapped = errors.New("message type is not mapped to a PubSub top
 
 // Broadcast a message to the p2p network, the message is assumed to be
 // broadcasted to the current fork.
-func (s *Service) Broadcast(ctx context.Context, msg proto.Message) error {
+func (s *Service) Broadcast(ctx context.Context, msg proto.Message, pubOpts ...pubsub.PubOpt) error {
 	ctx, span := trace.StartSpan(ctx, "p2p.Broadcast")
 	defer span.End()
 
@@ -51,7 +52,7 @@ func (s *Service) Broadcast(ctx context.Context, msg proto.Message) error {
 	if !ok {
 		return errors.Errorf("message of %T does not support marshaller interface", msg)
 	}
-	return s.broadcastObject(ctx, castMsg, fmt.Sprintf(topic, forkDigest))
+	return s.broadcastObject(ctx, castMsg, fmt.Sprintf(topic, forkDigest), pubOpts...)
 }
 
 // BroadcastAttestation broadcasts an attestation to the p2p network, the message is assumed to be
@@ -209,7 +210,7 @@ func (s *Service) broadcastSyncCommittee(ctx context.Context, subnet uint64, sMs
 
 // BroadcastBlob broadcasts a blob to the p2p network, the message is assumed to be
 // broadcasted to the current fork and to the input subnet.
-func (s *Service) BroadcastBlob(ctx context.Context, subnet uint64, blob *ethpb.BlobSidecar) error {
+func (s *Service) BroadcastBlob(ctx context.Context, subnet uint64, blob *ethpb.BlobSidecar, pubOpts ...pubsub.PubOpt) error {
 	ctx, span := trace.StartSpan(ctx, "p2p.BroadcastBlob")
 	defer span.End()
 	if blob == nil {
@@ -223,12 +224,12 @@ func (s *Service) BroadcastBlob(ctx context.Context, subnet uint64, blob *ethpb.
 	}
 
 	// Non-blocking broadcast, with attempts to discover a subnet peer if none available.
-	go s.internalBroadcastBlob(ctx, subnet, blob, forkDigest)
+	go s.internalBroadcastBlob(ctx, subnet, blob, forkDigest, pubOpts...)
 
 	return nil
 }
 
-func (s *Service) internalBroadcastBlob(ctx context.Context, subnet uint64, blobSidecar *ethpb.BlobSidecar, forkDigest [4]byte) {
+func (s *Service) internalBroadcastBlob(ctx context.Context, subnet uint64, blobSidecar *ethpb.BlobSidecar, forkDigest [4]byte, pubOpts ...pubsub.PubOpt) {
 	_, span := trace.StartSpan(ctx, "p2p.internalBroadcastBlob")
 	defer span.End()
 	ctx = trace.NewContext(context.Background(), span) // clear parent context / deadline.
@@ -262,14 +263,14 @@ func (s *Service) internalBroadcastBlob(ctx context.Context, subnet uint64, blob
 		}
 	}
 
-	if err := s.broadcastObject(ctx, blobSidecar, blobSubnetToTopic(subnet, forkDigest)); err != nil {
+	if err := s.broadcastObject(ctx, blobSidecar, blobSubnetToTopic(subnet, forkDigest), pubOpts...); err != nil {
 		log.WithError(err).Error("Failed to broadcast blob sidecar")
 		tracing.AnnotateError(span, err)
 	}
 }
 
 // method to broadcast messages to other peers in our gossip mesh.
-func (s *Service) broadcastObject(ctx context.Context, obj ssz.Marshaler, topic string) error {
+func (s *Service) broadcastObject(ctx context.Context, obj ssz.Marshaler, topic string, pubOpts ...pubsub.PubOpt) error {
 	ctx, span := trace.StartSpan(ctx, "p2p.broadcastObject")
 	defer span.End()
 
@@ -289,7 +290,7 @@ func (s *Service) broadcastObject(ctx context.Context, obj ssz.Marshaler, topic 
 		iid := int64(id)
 		span = trace.AddMessageSendEvent(span, iid, messageLen /*uncompressed*/, messageLen /*compressed*/)
 	}
-	if err := s.PublishToTopic(ctx, topic+s.Encoding().ProtocolSuffix(), buf.Bytes()); err != nil {
+	if err := s.PublishToTopic(ctx, topic+s.Encoding().ProtocolSuffix(), buf.Bytes(), pubOpts...); err != nil {
 		err := errors.Wrap(err, "could not publish message")
 		tracing.AnnotateError(span, err)
 		return err

@@ -1,6 +1,7 @@
 package validator
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"strings"
@@ -10,7 +11,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	emptypb "github.com/golang/protobuf/ptypes/empty"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	pubsub_pb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/pkg/errors"
+	ssz "github.com/prysmaticlabs/fastssz"
 	builderapi "github.com/prysmaticlabs/prysm/v5/api/client/builder"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/builder"
@@ -21,12 +25,15 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/kv"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/encoder"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
+	"github.com/prysmaticlabs/prysm/v5/network/forks"
 	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
@@ -297,21 +304,24 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not hash tree root: %v", err)
 	}
-
+	bOpt, err := vs.createBatchOption(block, sidecars)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not create option: %v", err)
+	}
 	var wg sync.WaitGroup
 	errChan := make(chan error, 1)
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if err := vs.broadcastReceiveBlock(ctx, block, root); err != nil {
+		if err := vs.broadcastReceiveBlock(ctx, block, root, bOpt); err != nil {
 			errChan <- errors.Wrap(err, "broadcast/receive block failed")
 			return
 		}
 		errChan <- nil
 	}()
 
-	if err := vs.broadcastAndReceiveBlobs(ctx, sidecars, root); err != nil {
+	if err := vs.broadcastAndReceiveBlobs(ctx, sidecars, root, bOpt); err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not broadcast/receive blobs: %v", err)
 	}
 
@@ -321,6 +331,39 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 	}
 
 	return &ethpb.ProposeResponse{BlockRoot: root[:]}, nil
+}
+
+func (vs *Server) createBatchOption(block interfaces.SignedBeaconBlock, blobs []*ethpb.BlobSidecar) (pubsub.PubOpt, error) {
+	sszEnc := &encoder.SszNetworkEncoder{}
+	pblk, err := block.Proto()
+	if err != nil {
+		return nil, err
+	}
+	buf := bytes.NewBuffer([]byte{})
+	if _, err := sszEnc.EncodeGossip(buf, pblk.(ssz.Marshaler)); err != nil {
+		return nil, err
+	}
+	genValRoot := vs.GenesisFetcher.GenesisValidatorsRoot()
+	currDigest, err := forks.CreateForkDigest(vs.TimeFetcher.GenesisTime(), genValRoot[:])
+	if err != nil {
+		return nil, err
+	}
+
+	topicStr := fmt.Sprintf(p2p.BlockSubnetTopicFormat, currDigest) + sszEnc.ProtocolSuffix()
+	blockID := p2p.MsgID(genValRoot[:], &pubsub_pb.Message{Data: buf.Bytes(), Topic: &topicStr})
+	bm := pubsub.NewBatchMessage()
+	bm.AddMessage(blockID)
+	for i, b := range blobs {
+		blobTopicStr := fmt.Sprintf(p2p.BlobSubnetTopicFormat, currDigest, i) + sszEnc.ProtocolSuffix()
+		buf = bytes.NewBuffer([]byte{})
+		if _, err := sszEnc.EncodeGossip(buf, b); err != nil {
+			return nil, err
+		}
+		blobID := p2p.MsgID(genValRoot[:], &pubsub_pb.Message{Data: buf.Bytes(), Topic: &blobTopicStr})
+		bm.AddMessage(blobID)
+	}
+	return pubsub.WithBatchPublishing(bm), nil
+
 }
 
 // handleBlindedBlock processes blinded beacon blocks.
@@ -363,12 +406,12 @@ func (vs *Server) blobSidecarsFromUnblindedBlock(block interfaces.SignedBeaconBl
 }
 
 // broadcastReceiveBlock broadcasts a block and handles its reception.
-func (vs *Server) broadcastReceiveBlock(ctx context.Context, block interfaces.SignedBeaconBlock, root [32]byte) error {
+func (vs *Server) broadcastReceiveBlock(ctx context.Context, block interfaces.SignedBeaconBlock, root [32]byte, pubOpts ...pubsub.PubOpt) error {
 	protoBlock, err := block.Proto()
 	if err != nil {
 		return errors.Wrap(err, "protobuf conversion failed")
 	}
-	if err := vs.P2P.Broadcast(ctx, protoBlock); err != nil {
+	if err := vs.P2P.Broadcast(ctx, protoBlock, pubOpts...); err != nil {
 		return errors.Wrap(err, "broadcast failed")
 	}
 	vs.BlockNotifier.BlockFeed().Send(&feed.Event{
@@ -379,7 +422,7 @@ func (vs *Server) broadcastReceiveBlock(ctx context.Context, block interfaces.Si
 }
 
 // broadcastAndReceiveBlobs handles the broadcasting and reception of blob sidecars.
-func (vs *Server) broadcastAndReceiveBlobs(ctx context.Context, sidecars []*ethpb.BlobSidecar, root [32]byte) error {
+func (vs *Server) broadcastAndReceiveBlobs(ctx context.Context, sidecars []*ethpb.BlobSidecar, root [32]byte, pubOpts ...pubsub.PubOpt) error {
 	eg, eCtx := errgroup.WithContext(ctx)
 	for i, sc := range sidecars {
 		// Copy the iteration instance to a local variable to give each go-routine its own copy to play with.
@@ -387,7 +430,7 @@ func (vs *Server) broadcastAndReceiveBlobs(ctx context.Context, sidecars []*ethp
 		subIdx := i
 		sCar := sc
 		eg.Go(func() error {
-			if err := vs.P2P.BroadcastBlob(eCtx, uint64(subIdx), sCar); err != nil {
+			if err := vs.P2P.BroadcastBlob(eCtx, uint64(subIdx), sCar, pubOpts...); err != nil {
 				return errors.Wrap(err, "broadcast blob failed")
 			}
 			readOnlySc, err := blocks.NewROBlobWithRoot(sCar, root)
