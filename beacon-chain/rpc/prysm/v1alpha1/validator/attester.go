@@ -54,7 +54,7 @@ func (vs *Server) ProposeAttestation(ctx context.Context, att *ethpb.Attestation
 
 	resp, err := vs.proposeAtt(ctx, att, att.GetData().CommitteeIndex)
 	if err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
+		return nil, err
 	}
 
 	if features.Get().EnableExperimentalAttestationPool {
