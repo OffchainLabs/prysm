@@ -47,6 +47,7 @@ go_test(
         "config_test.go",
         "configset_test.go",
         "loader_test.go",
+        "mainnet_config_export_test.go",
         "mainnet_config_test.go",
         "testnet_config_test.go",
         "testnet_holesky_config_test.go",
