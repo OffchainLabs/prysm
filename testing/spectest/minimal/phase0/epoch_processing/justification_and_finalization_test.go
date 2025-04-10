@@ -3,7 +3,7 @@ package epoch_processing
 import (
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/testing/spectest/shared/phase0/epoch_processing"
+	"github.com/OffchainLabs/prysm/v6/testing/spectest/shared/phase0/epoch_processing"
 )
 
 func TestMinimal_Phase0_EpochProcessing_JustificationAndFinalization(t *testing.T) {

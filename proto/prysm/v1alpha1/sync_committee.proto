@@ -18,7 +18,7 @@ package ethereum.eth.v1alpha1;
 import "proto/eth/ext/options.proto";
 
 option csharp_namespace = "Ethereum.Eth.V1";
-option go_package = "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1;eth";
+option go_package = "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1;eth";
 option java_multiple_files = true;
 option java_outer_classname = "SyncCommitteeProto";
 option java_package = "org.ethereum.eth.v1alpha1";
@@ -31,7 +31,7 @@ message SyncCommitteeMessage {
   // Slot to which this contribution pertains.
   uint64 slot = 1 [
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"
   ];
 
   // 32 byte block root for this signature.
@@ -40,7 +40,7 @@ message SyncCommitteeMessage {
   // Index of the validator that produced this signature.
   uint64 validator_index = 3
       [ (ethereum.eth.ext.cast_type) =
-            "github.com/prysmaticlabs/prysm/v5/consensus-types/"
+            "github.com/OffchainLabs/prysm/v6/consensus-types/"
             "primitives.ValidatorIndex" ];
 
   // Signature by the validator over the block root of `slot`.
@@ -62,7 +62,7 @@ message ContributionAndProof {
   // Index of the aggregator that produced this proof.
   uint64 aggregator_index = 1
       [ (ethereum.eth.ext.cast_type) =
-            "github.com/prysmaticlabs/prysm/v5/consensus-types/"
+            "github.com/OffchainLabs/prysm/v6/consensus-types/"
             "primitives.ValidatorIndex" ];
 
   SyncCommitteeContribution contribution = 2;
@@ -76,7 +76,7 @@ message SyncCommitteeContribution {
   // Slot to which this contribution pertains.
   uint64 slot = 1 [
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"
   ];
 
   // 32 byte block root for this signature.

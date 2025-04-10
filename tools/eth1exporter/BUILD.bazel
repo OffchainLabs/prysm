@@ -5,7 +5,7 @@ load("//tools:prysm_image.bzl", "prysm_image_upload")
 go_library(
     name = "go_default_library",
     srcs = ["main.go"],
-    importpath = "github.com/prysmaticlabs/prysm/v5/tools/eth1exporter",
+    importpath = "github.com/OffchainLabs/prysm/v6/tools/eth1exporter",
     visibility = ["//visibility:private"],
     deps = [
         "//runtime/maxprocs:go_default_library",

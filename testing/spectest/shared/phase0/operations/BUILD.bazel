@@ -12,7 +12,7 @@ go_library(
         "proposer_slashing.go",
         "voluntary_exit.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/testing/spectest/shared/phase0/operations",
+    importpath = "github.com/OffchainLabs/prysm/v6/testing/spectest/shared/phase0/operations",
     visibility = ["//testing/spectest:__subpackages__"],
     deps = [
         "//beacon-chain/core/altair:go_default_library",

@@ -1,12 +1,12 @@
 package state_native
 
 import (
+	customtypes "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native/custom-types"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	consensus_types "github.com/OffchainLabs/prysm/v6/consensus-types"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/pkg/errors"
-	customtypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native/custom-types"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	consensus_types "github.com/prysmaticlabs/prysm/v5/consensus-types"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 )
 
 // ToProtoUnsafe returns the pointer value of the underlying

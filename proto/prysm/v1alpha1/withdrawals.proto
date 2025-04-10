@@ -18,7 +18,7 @@ package ethereum.eth.v1alpha1;
 import "proto/eth/ext/options.proto";
 
 option csharp_namespace = "Ethereum.Eth.v1alpha1";
-option go_package = "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1;eth";
+option go_package = "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1;eth";
 option java_multiple_files = true;
 option java_outer_classname = "WithdrawalsProto";
 option java_package = "org.ethereum.eth.v1alpha1";
@@ -38,7 +38,7 @@ message BLSToExecutionChange {
   // The validator index requesting the change
   uint64 validator_index = 1
       [ (ethereum.eth.ext.cast_type) =
-            "github.com/prysmaticlabs/prysm/v5/consensus-types/"
+            "github.com/OffchainLabs/prysm/v6/consensus-types/"
             "primitives.ValidatorIndex" ];
 
   // The public key of the BLS address requesting the change

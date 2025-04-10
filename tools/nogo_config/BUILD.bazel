@@ -10,7 +10,7 @@ go_library(
         "config_exclusion.go",
         "main.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/tools/nogo_config",
+    importpath = "github.com/OffchainLabs/prysm/v6/tools/nogo_config",
     visibility = ["//visibility:private"],
 )
 

@@ -6,7 +6,7 @@ go_library(
         "errors.go",
         "filter.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filters",
+    importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/db/filters",
     visibility = [
         "//beacon-chain:__subpackages__",
         "//tools:__subpackages__",
