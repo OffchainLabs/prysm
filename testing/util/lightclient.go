@@ -90,7 +90,7 @@ func WithFinalizedCheckpointInPrevFork() LightClientOption {
 	}
 }
 
-// WithSupermajority Specifies whether the sync committee bits have supermajority or not
+// WithSupermajority specifies whether the sync committee bits have supermajority or not
 func WithSupermajority() LightClientOption {
 	return func(l *TestLightClient) {
 		l.supermajority = true
