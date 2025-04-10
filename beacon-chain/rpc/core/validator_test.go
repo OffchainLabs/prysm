@@ -1,10 +1,12 @@
 package core
 
 import (
+	"context"
 	"encoding/binary"
 	"testing"
 	"time"
 
+	mockChain "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/validator"
@@ -62,4 +64,40 @@ func pubKey(i uint64) []byte {
 	pubKey := make([]byte, params.BeaconConfig().BLSPubkeyLength)
 	binary.LittleEndian.PutUint64(pubKey, i)
 	return pubKey
+}
+
+func TestService_SubmitSignedAggregateSelectionProof(t *testing.T) {
+	mock := &mockChain.ChainService{}
+	s := &Service{GenesisTimeFetcher: mock}
+
+	t.Run("Phase 0 post electra", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		config := params.BeaconConfig()
+		config.ElectraForkEpoch = 0
+		params.OverrideBeaconConfig(config)
+
+		agg := &ethpb.SignedAggregateAttestationAndProof{
+			Message: &ethpb.AggregateAttestationAndProof{
+				Aggregate: &ethpb.Attestation{
+					Data: &ethpb.AttestationData{},
+				},
+			},
+			Signature: make([]byte, 96),
+		}
+		rpcError := s.SubmitSignedAggregateSelectionProof(context.Background(), agg)
+		assert.ErrorContains(t, "old aggregate and proof", rpcError.Err)
+	})
+
+	t.Run("electra agg pre electra", func(t *testing.T) {
+		agg := &ethpb.SignedAggregateAttestationAndProofElectra{
+			Message: &ethpb.AggregateAttestationAndProofElectra{
+				Aggregate: &ethpb.AttestationElectra{
+					Data: &ethpb.AttestationData{},
+				},
+			},
+			Signature: make([]byte, 96),
+		}
+		rpcError := s.SubmitSignedAggregateSelectionProof(context.Background(), agg)
+		assert.ErrorContains(t, "electra aggregate and proof not supported yet", rpcError.Err)
+	})
 }

@@ -731,7 +731,7 @@ func TestSubmitAttestations(t *testing.T) {
 				e := &httputil.DefaultJsonError{}
 				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
 				assert.Equal(t, http.StatusBadRequest, e.Code)
-				assert.ErrorContains(t, "Electra attestations have not been enabled", errors.New(e.Message))
+				assert.ErrorContains(t, "electra attestations have not been enabled", errors.New(e.Message))
 			})
 			t.Run("no body", func(t *testing.T) {
 				request := httptest.NewRequest(http.MethodPost, "http://example.com", nil)
