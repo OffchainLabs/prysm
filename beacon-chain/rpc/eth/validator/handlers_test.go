@@ -1481,7 +1481,7 @@ func TestGetAttestationData(t *testing.T) {
 
 		// Ensure HistoricalRootsLimit matches scenario
 		params.SetupTestConfigCleanup(t)
-		cfg := params.MainnetConfig().Copy()
+		cfg := params.MainnetConfig()
 		cfg.HistoricalRootsLimit = 8192
 		params.OverrideBeaconConfig(cfg)
 

@@ -21,7 +21,7 @@ func UseHoodiNetworkConfig() {
 
 // HoodiConfig defines the config for the Hoodi beacon chain testnet.
 func HoodiConfig() *BeaconChainConfig {
-	cfg := MainnetConfig().Copy()
+	cfg := MainnetConfig()
 	cfg.MinGenesisTime = 1742212800
 	cfg.GenesisDelay = 600
 	cfg.ConfigName = HoodiName

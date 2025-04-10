@@ -65,7 +65,7 @@ func E2ETestConfig() *BeaconChainConfig {
 }
 
 func E2EMainnetTestConfig() *BeaconChainConfig {
-	e2eConfig := MainnetConfig().Copy()
+	e2eConfig := MainnetConfig()
 	e2eConfig.DepositContractAddress = "0x4242424242424242424242424242424242424242"
 	e2eConfig.Eth1FollowDistance = 8
 
