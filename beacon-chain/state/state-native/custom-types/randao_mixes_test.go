@@ -4,8 +4,8 @@ import (
 	"reflect"
 	"testing"
 
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
 )
 
 func TestRandaoMixes_UnmarshalSSZ(t *testing.T) {

@@ -10,7 +10,7 @@ go_library(
         "password_reader.go",
         "wrap_flags.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/cmd",
+    importpath = "github.com/OffchainLabs/prysm/v6/cmd",
     visibility = ["//visibility:public"],
     deps = [
         "//config/fieldparams:go_default_library",

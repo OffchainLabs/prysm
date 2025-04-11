@@ -5,12 +5,12 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/validators"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/validators"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 )
 
 // ProcessRegistryUpdates processes all validators eligible for the activation queue, all validators

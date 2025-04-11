@@ -5,17 +5,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/prysmaticlabs/prysm/v5/async/abool"
-	mockChain "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
-	p2ptest "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
-	mockSync "github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/initial-sync/testing"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/network/forks"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/async/abool"
+	mockChain "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
+	mockSync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync/initial-sync/testing"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/network/forks"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
 )
 
 func TestService_CheckForNextEpochFork(t *testing.T) {

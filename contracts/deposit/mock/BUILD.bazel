@@ -4,7 +4,7 @@ go_library(
     name = "go_default_library",
     testonly = True,
     srcs = ["mock.go"],
-    importpath = "github.com/prysmaticlabs/prysm/v5/contracts/deposit/mock",
+    importpath = "github.com/OffchainLabs/prysm/v6/contracts/deposit/mock",
     visibility = ["//visibility:public"],
     deps = [
         "//contracts/deposit:go_default_library",

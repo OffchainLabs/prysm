@@ -9,16 +9,16 @@ import (
 	"path"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/iface"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/io/file"
 	"github.com/dgraph-io/ristretto"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	prombolt "github.com/prysmaticlabs/prombbolt"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/iface"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/io/file"
 	bolt "go.etcd.io/bbolt"
 )
 

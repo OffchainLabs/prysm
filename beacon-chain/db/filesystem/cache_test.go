@@ -3,9 +3,9 @@ package filesystem
 import (
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 )
 
 func TestSlotByRoot_Summary(t *testing.T) {

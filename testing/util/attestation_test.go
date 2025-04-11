@@ -3,11 +3,11 @@ package util
 import (
 	"testing"
 
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	v1 "github.com/prysmaticlabs/prysm/v5/proto/eth/v1"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	v1 "github.com/OffchainLabs/prysm/v6/proto/eth/v1"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 )
 
 func TestHydrateAttestation(t *testing.T) {

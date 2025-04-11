@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/prysmaticlabs/prysm/v5/runtime"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/OffchainLabs/prysm/v6/runtime"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"google.golang.org/grpc/metadata"
 )

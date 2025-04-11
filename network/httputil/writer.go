@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/prysmaticlabs/prysm/v5/api"
+	"github.com/OffchainLabs/prysm/v6/api"
 	log "github.com/sirupsen/logrus"
 )
 

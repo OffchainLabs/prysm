@@ -5,16 +5,16 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/network/httputil"
+	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
 // Deprecated: use SSE from events for `payload attributes` instead

@@ -22,6 +22,7 @@ import (
 type MockJsonRestHandler struct {
 	ctrl     *gomock.Controller
 	recorder *MockJsonRestHandlerMockRecorder
+	isgomock struct{}
 }
 
 // MockJsonRestHandlerMockRecorder is the mock recorder for MockJsonRestHandler.

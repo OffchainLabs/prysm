@@ -5,7 +5,7 @@ load("//tools:prysm_image.bzl", "prysm_image_upload")
 go_library(
     name = "go_default_library",
     srcs = ["bootnode.go"],
-    importpath = "github.com/prysmaticlabs/prysm/v5/tools/bootnode",
+    importpath = "github.com/OffchainLabs/prysm/v6/tools/bootnode",
     visibility = ["//visibility:private"],
     deps = [
         "//async:go_default_library",

@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/gogo/protobuf/proto"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func TestReadVarint(t *testing.T) {

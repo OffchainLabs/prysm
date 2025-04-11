@@ -5,7 +5,7 @@ load("//tools:prysm_image.bzl", "prysm_image_upload")
 go_library(
     name = "go_default_library",
     srcs = ["main.go"],
-    importpath = "github.com/prysmaticlabs/prysm/v5/cmd/prysmctl",
+    importpath = "github.com/OffchainLabs/prysm/v6/cmd/prysmctl",
     visibility = ["//visibility:private"],
     deps = [
         "//cmd/prysmctl/checkpointsync:go_default_library",

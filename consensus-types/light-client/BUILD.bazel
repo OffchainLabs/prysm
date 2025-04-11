@@ -10,7 +10,7 @@ go_library(
         "optimistic_update.go",
         "update.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/consensus-types/light-client",
+    importpath = "github.com/OffchainLabs/prysm/v6/consensus-types/light-client",
     visibility = ["//visibility:public"],
     deps = [
         "//config/fieldparams:go_default_library",

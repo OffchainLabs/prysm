@@ -12,11 +12,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/io/file"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/bazelbuild/rules_go/go/tools/bazel"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/io/file"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"gopkg.in/yaml.v2"
 )
 
@@ -35,6 +35,8 @@ var placeholderFields = []string{
 	"EIP7441_FORK_VERSION",
 	"EIP7732_FORK_EPOCH",
 	"EIP7732_FORK_VERSION",
+	"EIP7805_FORK_EPOCH",
+	"EIP7805_FORK_VERSION",
 	"EPOCHS_PER_SHUFFLING_PHASE",
 	"MAX_BLOBS_PER_BLOCK_FULU",
 	"MAX_REQUEST_BLOB_SIDECARS_FULU",

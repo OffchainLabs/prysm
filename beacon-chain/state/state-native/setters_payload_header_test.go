@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"testing"
 
-	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
+	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 )
 
 func TestSetLatestExecutionPayloadHeader(t *testing.T) {

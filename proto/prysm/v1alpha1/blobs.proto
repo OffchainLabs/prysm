@@ -18,7 +18,7 @@ package ethereum.eth.v1alpha1;
 import "proto/eth/ext/options.proto";
 
 option csharp_namespace = "Ethereum.Eth.v1alpha1";
-option go_package = "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1;eth";
+option go_package = "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1;eth";
 option java_multiple_files = true;
 option java_outer_classname = "BlobsProto";
 option java_package = "org.ethereum.eth.v1alpha1";
@@ -39,11 +39,11 @@ message BlindedBlobSidecar {
   uint64 index = 2;
   uint64 slot = 3 [
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"
   ];
   bytes block_parent_root = 4 [ (ethereum.eth.ext.ssz_size) = "32" ];
   uint64 proposer_index = 5 [ (ethereum.eth.ext.cast_type) =
-                                  "github.com/prysmaticlabs/prysm/v5/"
+                                  "github.com/OffchainLabs/prysm/v6/"
                                   "consensus-types/primitives.ValidatorIndex" ];
   bytes blob_root = 6 [ (ethereum.eth.ext.ssz_size) = "32" ];
   bytes kzg_commitment = 7 [ (ethereum.eth.ext.ssz_size) = "48" ];
