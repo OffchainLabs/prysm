@@ -297,8 +297,9 @@ func TestServer_StreamSlots_OnHeadUpdated(t *testing.T) {
 
 	chainService := &chainMock.ChainService{}
 	server := &Server{
-		Ctx:           ctx,
-		BlockNotifier: chainService.BlockNotifier(),
+		Ctx:               ctx,
+		ForkchoiceFetcher: chainService,
+		BlockNotifier:     chainService.BlockNotifier(),
 	}
 	exitRoutine := make(chan bool)
 	ctrl := gomock.NewController(t)
