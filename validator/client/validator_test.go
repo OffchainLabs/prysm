@@ -2962,6 +2962,13 @@ func TestValidator_CheckDependentRoots(t *testing.T) {
 			PreviousDutyDependentRoot: "0xe3f7a1b2c489d56f03a6b8d9c7e1fa2456bb09f3de42a67c8910fc3e7a5d4b12",
 			CurrentDutyDependentRoot:  "0xe3f7a1b2c489d56f03a6b8d9c7e1fa2456bb09f3de42a67c8910fc3e7a5d4b12",
 		}
+		client.EXPECT().SubscribeCommitteeSubnets(
+			gomock.Any(),
+			gomock.Any(),
+			gomock.Any(),
+		).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.ValidatorDuty) (*emptypb.Empty, error) {
+			return nil, nil
+		}).AnyTimes()
 		client.EXPECT().Duties(gomock.Any(), gomock.Any()).Return(v.duties, nil)
 		err := v.checkDependentRoots(ctx, head)
 		require.NoError(t, err)
@@ -2984,7 +2991,7 @@ func TestValidator_CheckDependentRoots(t *testing.T) {
 		).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.ValidatorDuty) (*emptypb.Empty, error) {
 			wg.Done()
 			return nil, nil
-		})
+		}).AnyTimes()
 		err := v.checkDependentRoots(ctx, head)
 		require.NoError(t, err)
 		util.WaitTimeout(&wg, 2*time.Second)
