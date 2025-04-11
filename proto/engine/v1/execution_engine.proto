@@ -18,7 +18,7 @@ package ethereum.engine.v1;
 import "proto/eth/ext/options.proto";
 
 option csharp_namespace = "Ethereum.Engine.V1";
-option go_package = "github.com/prysmaticlabs/prysm/v5/proto/engine/v1;enginev1";
+option go_package = "github.com/OffchainLabs/prysm/v6/proto/engine/v1;enginev1";
 option java_multiple_files = true;
 option java_outer_classname = "ExecutionEngineProto";
 option java_package = "org.ethereum.engine.v1";
@@ -216,7 +216,7 @@ message Withdrawal {
   // Validator index for the withdrawal
   uint64 validator_index = 2
       [ (ethereum.eth.ext.cast_type) =
-            "github.com/prysmaticlabs/prysm/v5/consensus-types/"
+            "github.com/OffchainLabs/prysm/v6/consensus-types/"
             "primitives.ValidatorIndex" ];
 
   // The execution address receiving the funds

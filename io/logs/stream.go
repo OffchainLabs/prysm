@@ -3,10 +3,10 @@ package logs
 import (
 	"io"
 
+	"github.com/OffchainLabs/prysm/v6/async/event"
+	lruwrpr "github.com/OffchainLabs/prysm/v6/cache/lru"
+	"github.com/OffchainLabs/prysm/v6/crypto/rand"
 	lru "github.com/hashicorp/golang-lru"
-	"github.com/prysmaticlabs/prysm/v5/async/event"
-	lruwrpr "github.com/prysmaticlabs/prysm/v5/cache/lru"
-	"github.com/prysmaticlabs/prysm/v5/crypto/rand"
 )
 
 const (

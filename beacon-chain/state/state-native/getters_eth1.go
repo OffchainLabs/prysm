@@ -1,7 +1,7 @@
 package state_native
 
 import (
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 )
 
 // Eth1Data corresponding to the proof-of-work chain information stored in the beacon state.

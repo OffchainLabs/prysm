@@ -25,9 +25,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/prysmaticlabs/prysm/v5/cmd"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/cmd"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
@@ -49,7 +49,6 @@ type Flags struct {
 	EnableDoppelGanger                  bool // EnableDoppelGanger enables doppelganger protection on startup for the validator.
 	EnableHistoricalSpaceRepresentation bool // EnableHistoricalSpaceRepresentation enables the saving of registry validators in separate buckets to save space
 	EnableBeaconRESTApi                 bool // EnableBeaconRESTApi enables experimental usage of the beacon REST API by the validator when querying a beacon node
-	DisableCommitteeAwarePacking        bool // DisableCommitteeAwarePacking changes the attestation packing algorithm to one that is not aware of attesting committees.
 	EnableExperimentalAttestationPool   bool // EnableExperimentalAttestationPool enables an experimental attestation pool design.
 	// Logging related toggles.
 	DisableGRPCConnectionLogs bool // Disables logging when a new grpc client has connected.
@@ -158,7 +157,7 @@ func configureTestnet(ctx *cli.Context) error {
 		} else {
 			log.Info("Running on Ethereum Mainnet")
 		}
-		if err := params.SetActive(params.MainnetConfig().Copy()); err != nil {
+		if err := params.SetActive(params.MainnetConfig()); err != nil {
 			return err
 		}
 	}
@@ -266,10 +265,6 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 	if ctx.IsSet(DisableQUIC.Name) {
 		logDisabled(DisableQUIC)
 		cfg.EnableQUIC = false
-	}
-	if ctx.IsSet(DisableCommitteeAwarePacking.Name) {
-		logEnabled(DisableCommitteeAwarePacking)
-		cfg.DisableCommitteeAwarePacking = true
 	}
 	if ctx.IsSet(EnableDiscoveryReboot.Name) {
 		logEnabled(EnableDiscoveryReboot)

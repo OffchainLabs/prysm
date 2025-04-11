@@ -3,7 +3,7 @@ package features
 import (
 	"time"
 
-	backfill "github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/sync/backfill/flags"
+	backfill "github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/sync/backfill/flags"
 	"github.com/urfave/cli/v2"
 )
 
@@ -50,8 +50,9 @@ var (
 		Usage: "Writes invalid blobs to temp directory.",
 	}
 	disableGRPCConnectionLogging = &cli.BoolFlag{
-		Name:  "disable-grpc-connection-logging",
-		Usage: "Disables displaying logs for newly connected grpc clients.",
+		Name: "disable-grpc-connection-logging",
+		Usage: `WARNING: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+		Disables displaying logs for newly connected grpc clients.`,
 	}
 	disablePeerScorer = &cli.BoolFlag{
 		Name:  "disable-peer-scorer",
@@ -167,10 +168,6 @@ var (
 		Name:  "disable-quic",
 		Usage: "Disables connecting using the QUIC protocol with peers.",
 	}
-	DisableCommitteeAwarePacking = &cli.BoolFlag{
-		Name:  "disable-committee-aware-packing",
-		Usage: "Changes the attestation packing algorithm to one that is not aware of attesting committees.",
-	}
 	EnableDiscoveryReboot = &cli.BoolFlag{
 		Name:  "enable-discovery-reboot",
 		Usage: "Experimental: Enables the discovery listener to rebooted in the event of connectivity issues.",
@@ -246,7 +243,6 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	EnableLightClient,
 	BlobSaveFsync,
 	DisableQUIC,
-	DisableCommitteeAwarePacking,
 	EnableDiscoveryReboot,
 	enableExperimentalAttestationPool,
 	forceHeadFlag,

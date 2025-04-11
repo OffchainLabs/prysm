@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/api/server/middleware"
+	"github.com/OffchainLabs/prysm/v6/runtime"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api/server/middleware"
-	"github.com/prysmaticlabs/prysm/v5/runtime"
 )
 
 var _ runtime.Service = (*Server)(nil)

@@ -1,6 +1,6 @@
 package enginev1
 
-import "github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+import "github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 
 type copier[T any] interface {
 	Copy() T

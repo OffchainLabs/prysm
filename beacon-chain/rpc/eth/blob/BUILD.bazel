@@ -6,7 +6,7 @@ go_library(
         "handlers.go",
         "server.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/blob",
+    importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/blob",
     visibility = ["//visibility:public"],
     deps = [
         "//api:go_default_library",
