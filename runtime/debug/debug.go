@@ -78,18 +78,6 @@ var (
 		Name:  "blockprofilerate",
 		Usage: "Turns on block profiling with the given rate.",
 	}
-	// deprecated: CPUProfileFlag
-	CPUProfileFlag = &cli.StringFlag{
-		Name:   "cpuprofile",
-		Hidden: true,
-		Usage:  "Do not use, deprecated",
-	}
-	// deprecated: TraceFlag
-	TraceFlag = &cli.StringFlag{
-		Name:   "trace",
-		Hidden: true,
-		Usage:  "Do not use, deprecated",
-	}
 )
 
 // HandlerT implements the debugging API.
