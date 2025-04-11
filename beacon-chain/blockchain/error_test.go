@@ -3,6 +3,7 @@ package blockchain
 import (
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/pkg/errors"
 )
@@ -41,4 +42,9 @@ func TestInvalidRoots(t *testing.T) {
 	require.Equal(t, true, IsInvalidBlock(err))
 	require.Equal(t, [32]byte{'a'}, InvalidBlockRoot(newErr))
 	require.DeepEqual(t, roots, InvalidAncestorRoots(newErr))
+}
+
+func TestInvalidRecognition(t *testing.T) {
+	err := invalidBlock{error: errors.New("test"), root: [32]byte{}}
+	require.Equal(t, true, errors.Is(err, verification.ErrInvalid))
 }
