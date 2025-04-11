@@ -526,8 +526,8 @@ func TestSubmitAttestations(t *testing.T) {
 	require.NoError(t, err)
 	b := bitfield.NewBitlist(1)
 	b.SetBitAt(0, true)
-
-	chainService := &blockchainmock.ChainService{State: bs}
+	slot := primitives.Slot(0)
+	chainService := &blockchainmock.ChainService{State: bs, Slot: &slot}
 	s := &Server{
 		HeadFetcher:             chainService,
 		ChainInfoFetcher:        chainService,

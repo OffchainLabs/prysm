@@ -601,7 +601,8 @@ func TestSubmitContributionAndProofs(t *testing.T) {
 }
 
 func TestSubmitAggregateAndProofs(t *testing.T) {
-	mock := &mockChain.ChainService{}
+	slot := primitives.Slot(0)
+	mock := &mockChain.ChainService{Slot: &slot}
 	s := &Server{
 		CoreService: &core.Service{GenesisTimeFetcher: mock},
 		TimeFetcher: mock,

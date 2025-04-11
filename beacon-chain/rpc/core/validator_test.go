@@ -10,10 +10,12 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
 	p2pmock "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/validator"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
@@ -69,14 +71,13 @@ func pubKey(i uint64) []byte {
 }
 
 func TestService_SubmitSignedAggregateSelectionProof(t *testing.T) {
-	mock := &mockChain.ChainService{}
+	slot := primitives.Slot(0)
+	mock := &mockChain.ChainService{Slot: &slot}
 	s := &Service{GenesisTimeFetcher: mock}
-
+	var err error
 	t.Run("Happy path electra", func(t *testing.T) {
-		params.SetupTestConfigCleanup(t)
-		config := params.BeaconConfig()
-		config.ElectraForkEpoch = 0
-		params.OverrideBeaconConfig(config)
+		slot, err = slots.EpochEnd(params.BeaconConfig().ElectraForkEpoch)
+		require.NoError(t, err)
 		broadcaster := &p2pmock.MockBroadcaster{}
 		s.Broadcaster = broadcaster
 		fakeSig, err := hexutil.Decode("0x1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505cc411d61252fb6cb3fa0017b679f8bb2305b26a285fa2737f175668d0dff91cc1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505")
@@ -111,11 +112,8 @@ func TestService_SubmitSignedAggregateSelectionProof(t *testing.T) {
 	})
 
 	t.Run("Phase 0 post electra", func(t *testing.T) {
-		params.SetupTestConfigCleanup(t)
-		config := params.BeaconConfig()
-		config.ElectraForkEpoch = 0
-		params.OverrideBeaconConfig(config)
-
+		slot, err = slots.EpochEnd(params.BeaconConfig().ElectraForkEpoch)
+		require.NoError(t, err)
 		agg := &ethpb.SignedAggregateAttestationAndProof{
 			Message: &ethpb.AggregateAttestationAndProof{
 				Aggregate: &ethpb.Attestation{
@@ -129,6 +127,7 @@ func TestService_SubmitSignedAggregateSelectionProof(t *testing.T) {
 	})
 
 	t.Run("electra agg pre electra", func(t *testing.T) {
+		slot = primitives.Slot(0)
 		agg := &ethpb.SignedAggregateAttestationAndProofElectra{
 			Message: &ethpb.AggregateAttestationAndProofElectra{
 				Aggregate: &ethpb.AttestationElectra{
