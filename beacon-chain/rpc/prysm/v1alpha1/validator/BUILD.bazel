@@ -30,7 +30,7 @@ go_library(
         "sync_committee.go",
         "unblinder.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/prysm/v1alpha1/validator",
+    importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/prysm/v1alpha1/validator",
     visibility = ["//beacon-chain:__subpackages__"],
     deps = [
         "//api/client/builder:go_default_library",

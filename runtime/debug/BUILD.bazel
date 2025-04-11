@@ -15,7 +15,7 @@ go_library(
         ":use_cgosymbolizer": ["cgo_symbolizer.go"],
         "//conditions:default": [],
     }),
-    importpath = "github.com/prysmaticlabs/prysm/v5/runtime/debug",
+    importpath = "github.com/OffchainLabs/prysm/v6/runtime/debug",
     visibility = ["//visibility:public"],
     deps = [
         "@com_github_prometheus_client_golang//prometheus:go_default_library",

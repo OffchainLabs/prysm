@@ -5,20 +5,20 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	light_client "github.com/prysmaticlabs/prysm/v5/consensus-types/light-client"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	light_client "github.com/OffchainLabs/prysm/v6/consensus-types/light-client"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 
+	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	consensustypes "github.com/OffchainLabs/prysm/v6/consensus-types"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/encoding/ssz"
+	v11 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/pkg/errors"
-	lightClient "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/light-client"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	consensustypes "github.com/prysmaticlabs/prysm/v5/consensus-types"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/encoding/ssz"
-	v11 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	pb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
 )
 
 func TestLightClient_NewLightClientOptimisticUpdateFromBeaconState(t *testing.T) {

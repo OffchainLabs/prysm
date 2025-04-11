@@ -1,7 +1,7 @@
 package payloadattribute
 
 import (
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
+	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
 )
 
 type Attributer interface {

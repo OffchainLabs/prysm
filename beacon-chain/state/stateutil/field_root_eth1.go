@@ -1,8 +1,8 @@
 package stateutil
 
 import (
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
 // Eth1Root computes the HashTreeRoot Merkleization of

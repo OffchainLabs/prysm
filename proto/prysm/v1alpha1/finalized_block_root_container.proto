@@ -3,7 +3,7 @@ syntax = "proto3";
 package ethereum.eth.v1alpha1;
 
 option csharp_namespace = "Ethereum.Eth.v1alpha1";
-option go_package = "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1;eth";
+option go_package = "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1;eth";
 option java_multiple_files = true;
 option java_outer_classname = "FinalizedBlockRootContainerProto";
 option java_package = "org.ethereum.eth.v1alpha1";

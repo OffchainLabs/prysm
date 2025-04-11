@@ -6,10 +6,10 @@ import (
 	"os/user"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/cmd/mock"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/cmd/mock"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"github.com/urfave/cli/v2"
 	"go.uber.org/mock/gomock"
 )

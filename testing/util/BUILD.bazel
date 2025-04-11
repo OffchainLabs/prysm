@@ -28,7 +28,7 @@ go_library(
         "sync_committee.go",
         "wait_timeout.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/testing/util",
+    importpath = "github.com/OffchainLabs/prysm/v6/testing/util",
     visibility = ["//visibility:public"],
     deps = [
         "//beacon-chain/core/altair:go_default_library",
