@@ -212,8 +212,8 @@ func TestListAttestations(t *testing.T) {
 		t.Run("Pre-Electra", func(t *testing.T) {
 			bs, err := util.NewBeaconState()
 			require.NoError(t, err)
-
-			chainService := &blockchainmock.ChainService{State: bs}
+			slot := primitives.Slot(0)
+			chainService := &blockchainmock.ChainService{State: bs, Slot: &slot}
 			s := &Server{
 				ChainInfoFetcher: chainService,
 				TimeFetcher:      chainService,
@@ -1798,7 +1798,8 @@ func TestGetAttesterSlashings(t *testing.T) {
 		t.Run("pre-electra-ok", func(t *testing.T) {
 			bs, err := util.NewBeaconState()
 			require.NoError(t, err)
-			chainService := &blockchainmock.ChainService{State: bs}
+			slot := primitives.Slot(0)
+			chainService := &blockchainmock.ChainService{State: bs, Slot: &slot}
 
 			s := &Server{
 				ChainInfoFetcher: chainService,

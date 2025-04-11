@@ -6,16 +6,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/pkg/errors"
-)
-
-var (
-	// ErrBatchSignatureMismatch is returned by VerifiedROBlobs when any of the blobs in the batch have a signature
-	// which does not match the signature for the block with a corresponding root.
-	ErrBatchSignatureMismatch = errors.New("Sidecar block header signature does not match signed block")
-	// ErrBatchBlockRootMismatch is returned by VerifiedROBlobs in the scenario where the root of the given signed block
-	// does not match the block header in one of the corresponding sidecars.
-	ErrBatchBlockRootMismatch = errors.New("Sidecar block header root does not match signed block")
 )
 
 // NewBlobBatchVerifier initializes a blob batch verifier. It requires the caller to correctly specify
