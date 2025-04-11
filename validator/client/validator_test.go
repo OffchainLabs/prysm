@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
 	"github.com/OffchainLabs/prysm/v6/async/event"
 	"github.com/OffchainLabs/prysm/v6/cmd/validator/flags"
 	"github.com/OffchainLabs/prysm/v6/config/features"
