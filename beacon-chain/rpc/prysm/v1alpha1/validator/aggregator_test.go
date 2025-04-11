@@ -400,7 +400,9 @@ func TestSubmitAggregateAndProof_SelectsMostBitsWhenOwnAttestationNotPresent(t *
 
 func TestSubmitSignedAggregateSelectionProof_ZeroHashesSignatures(t *testing.T) {
 	aggregatorServer := &Server{
-		TimeFetcher: &mock.ChainService{Genesis: time.Now()},
+		CoreService: &core.Service{
+			GenesisTimeFetcher: &mock.ChainService{Genesis: time.Now()},
+		},
 	}
 	req := &ethpb.SignedAggregateSubmitRequest{
 		SignedAggregateAndProof: &ethpb.SignedAggregateAttestationAndProof{
@@ -453,8 +455,15 @@ func TestSubmitSignedAggregateSelectionProof_InvalidSlot(t *testing.T) {
 }
 
 func TestSubmitSignedAggregateSelectionProofElectra_ZeroHashesSignatures(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	config := params.BeaconConfig()
+	config.ElectraForkEpoch = 0
+	params.OverrideBeaconConfig(config)
+
 	aggregatorServer := &Server{
-		TimeFetcher: &mock.ChainService{Genesis: time.Now()},
+		CoreService: &core.Service{
+			GenesisTimeFetcher: &mock.ChainService{Genesis: time.Now()},
+		},
 	}
 	req := &ethpb.SignedAggregateSubmitElectraRequest{
 		SignedAggregateAndProof: &ethpb.SignedAggregateAttestationAndProofElectra{
@@ -485,6 +494,11 @@ func TestSubmitSignedAggregateSelectionProofElectra_ZeroHashesSignatures(t *test
 }
 
 func TestSubmitSignedAggregateSelectionProofElectra_InvalidSlot(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	config := params.BeaconConfig()
+	config.ElectraForkEpoch = 0
+	params.OverrideBeaconConfig(config)
+
 	c := &mock.ChainService{Genesis: time.Now()}
 	aggregatorServer := &Server{
 		CoreService: &core.Service{
