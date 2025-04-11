@@ -4,7 +4,6 @@ import (
 	"context"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/das"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
@@ -89,11 +88,8 @@ func (s *Store) fillBack(ctx context.Context, current primitives.Slot, blocks []
 			status.LowParentRoot, highest.Root(), status.LowSlot, highest.Block().Slot())
 	}
 
-	// TODO: Use the real node ID when backfill is implemented for data columns.
-	emptyNodeID := enode.ID{}
-
 	for i := range blocks {
-		if err := store.IsDataAvailable(ctx, emptyNodeID, current, blocks[i]); err != nil {
+		if err := store.IsDataAvailable(ctx, current, blocks[i]); err != nil {
 			return nil, err
 		}
 	}

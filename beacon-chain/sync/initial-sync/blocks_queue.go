@@ -73,6 +73,7 @@ type blocksQueueConfig struct {
 	db                  db.ReadOnlyDatabase
 	mode                syncMode
 	bs                  filesystem.BlobStorageSummarizer
+	dcs                 filesystem.DataColumnStorageSummarizer
 	bv                  verification.NewBlobVerifier
 	cv                  verification.NewDataColumnsVerifier
 	custodyInfo         *peerdas.CustodyInfo
@@ -118,6 +119,7 @@ func newBlocksQueue(ctx context.Context, cfg *blocksQueueConfig) *blocksQueue {
 			db:          cfg.db,
 			clock:       cfg.clock,
 			bs:          cfg.bs,
+			dcs:         cfg.dcs,
 			bv:          cfg.bv,
 			cv:          cfg.cv,
 			custodyInfo: cfg.custodyInfo,

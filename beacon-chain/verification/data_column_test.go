@@ -29,7 +29,8 @@ func GenerateTestDataColumns(t *testing.T, parent [fieldparams.RootLength]byte, 
 		blobs = append(blobs, kzg.Blob(roBlobs[i].Blob))
 	}
 
-	dataColumnSidecars, err := peerdas.DataColumnSidecars(roBlock, blobs)
+	cellsAndProofs := util.GenerateCellsAndProofs(t, blobs)
+	dataColumnSidecars, err := peerdas.DataColumnSidecars(roBlock, cellsAndProofs)
 	require.NoError(t, err)
 
 	roDataColumns := make([]blocks.RODataColumn, 0, len(dataColumnSidecars))
@@ -72,7 +73,7 @@ func TestDataColumnsIndexInBounds(t *testing.T) {
 
 			columns := GenerateTestDataColumns(t, parentRoot, columnSlot, blobCount)
 			for _, column := range columns {
-				column.ColumnIndex = tc.columnsIndex
+				column.Index = tc.columnsIndex
 			}
 
 			verifier := initializer.NewDataColumnsVerifier(columns, GossipColumnSidecarRequirements)

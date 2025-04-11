@@ -85,17 +85,17 @@ func RequestDataColumnSidecarsByRoot(
 
 			// Mark columns as successful
 			for _, sidecar := range peerSidecars {
-				colIndex := sidecar.ColumnIndex
-				successfulColumns[colIndex] = true
+				index := sidecar.Index
+				successfulColumns[index] = true
 			}
 
-			for _, colIndex := range dataColumns {
-				if !successfulColumns[colIndex] {
+			for _, index := range dataColumns {
+				if !successfulColumns[index] {
 					// Remove this peer if any requested column wasn't successful
 					delete(dataColumnsByAdmissiblePeer, peer)
 					log.WithFields(logrus.Fields{
 						"peer":          peer.String(),
-						"missingColumn": colIndex,
+						"missingColumn": index,
 					}).Debug("Peer failed to return requested data column")
 					break
 				}
@@ -150,12 +150,15 @@ func RequestDataColumnSidecarsByRoot(
 // NOTE: During the initial sync, LazilyPersistentStoreColumn caches sidecars
 // and saves them to disk within IsDataAvailable. SaveDataColumns is intended
 // for use when no caching is done (e.g. in the pending blocks queue).
-func SaveDataColumns(sidecars []blocks.RODataColumn, blobStorage *filesystem.BlobStorage) error {
-	for i := range sidecars {
-		verfiedCol := blocks.NewVerifiedRODataColumn(sidecars[i])
-		if err := blobStorage.SaveDataColumn(verfiedCol); err != nil {
-			return err
-		}
+func SaveDataColumns(sidecars []blocks.RODataColumn, dataColumnStorage *filesystem.DataColumnStorage) error {
+	verifiedRODataColumns := make([]blocks.VerifiedRODataColumn, 0, len(sidecars))
+	for _, sidecar := range sidecars {
+		verifiedRODataColumn := blocks.NewVerifiedRODataColumn(sidecar)
+		verifiedRODataColumns = append(verifiedRODataColumns, verifiedRODataColumn)
+	}
+
+	if err := dataColumnStorage.Save(verifiedRODataColumns); err != nil {
+		return errors.Wrap(err, "save data column sidecars")
 	}
 
 	return nil
@@ -168,7 +171,7 @@ func FindMissingDataColumns(
 	block interfaces.ReadOnlySignedBeaconBlock,
 	nodeID enode.ID,
 	custodyGroupCount uint64,
-	blobStorage *filesystem.BlobStorage,
+	dataColumnStorage *filesystem.DataColumnStorage,
 ) (map[uint64]bool, error) {
 	// Blocks before Fulu have no data columns.
 	if block.Version() < version.Fulu {
@@ -188,11 +191,11 @@ func FindMissingDataColumns(
 
 	// Retrieve the columns we store for the root.
 	numberOfColumns := params.BeaconConfig().NumberOfColumns
-	summary := blobStorage.Summary(root)
+	summary := dataColumnStorage.Summary(root)
 
 	storedColumns := make(map[uint64]bool, numberOfColumns)
 	for i := range numberOfColumns {
-		if summary.HasDataColumnIndex(i) {
+		if summary.HasIndex(i) {
 			storedColumns[i] = true
 		}
 	}
@@ -223,8 +226,8 @@ func RequestsForDataColumnsByRoot(
 	req := make(types.DataColumnSidecarsByRootReq, 0, len(missingColumns))
 	for _, column := range missingColumns {
 		req = append(req, &eth.DataColumnIdentifier{
-			BlockRoot:   root[:],
-			ColumnIndex: column,
+			BlockRoot: root[:],
+			Index:     column,
 		})
 	}
 

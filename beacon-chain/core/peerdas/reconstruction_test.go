@@ -95,7 +95,8 @@ func TestReconstructionRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 
 	// Convert data columns sidecars from signed block and blobs.
-	dataColumnSidecars, err := peerdas.DataColumnSidecars(signedBeaconBlock, blobs)
+	cellsAndProofs := util.GenerateCellsAndProofs(t, blobs)
+	dataColumnSidecars, err := peerdas.DataColumnSidecars(signedBeaconBlock, cellsAndProofs)
 	require.NoError(t, err)
 
 	// Create verified RO data columns.
@@ -114,8 +115,8 @@ func TestReconstructionRoundTrip(t *testing.T) {
 
 	var noDataColumns []*ethpb.DataColumnSidecar
 	dataColumnsWithDifferentLengths := []*ethpb.DataColumnSidecar{
-		{DataColumn: [][]byte{{}, {}}},
-		{DataColumn: [][]byte{{}}},
+		{Column: [][]byte{{}, {}}},
+		{Column: [][]byte{{}}},
 	}
 	notEnoughDataColumns := dataColumnSidecars[:numberOfColumns/2-1]
 	originalDataColumns := dataColumnSidecars[:numberOfColumns/2]

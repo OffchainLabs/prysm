@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	gcache "github.com/patrickmn/go-cache"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/go-bitfield"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
@@ -194,7 +193,7 @@ func TestReconstructAndBroadcastBlobs(t *testing.T) {
 					},
 					seenBlobCache: lruwrpr.New(1),
 				}
-				s.reconstructAndBroadcastBlobs(context.Background(), sb)
+				s.reconstructAndBroadcastSidecars(context.Background(), sb)
 				require.Equal(t, tt.expectedBlobCount, len(chainService.Blobs))
 			})
 		}
@@ -232,7 +231,7 @@ func TestReconstructAndBroadcastBlobs(t *testing.T) {
 						},
 						Signature: []byte("signature"),
 					},
-					ColumnIndex: uint64(i),
+					Index: uint64(i),
 				})
 			require.NoError(t, err)
 			allColumns[i] = blocks.VerifiedRODataColumn{RODataColumn: rod}
@@ -253,7 +252,7 @@ func TestReconstructAndBroadcastBlobs(t *testing.T) {
 				name:                    "Constructed 128 data columns with all blobs",
 				blobCount:               1,
 				dataColumnSidecars:      allColumns,
-				expectedDataColumnCount: 8, // default is 8
+				expectedDataColumnCount: 4, // default is 4
 			},
 		}
 
@@ -271,9 +270,7 @@ func TestReconstructAndBroadcastBlobs(t *testing.T) {
 						operationNotifier: &chainMock.MockOperationNotifier{},
 						custodyInfo:       &peerdas.CustodyInfo{},
 					},
-					seenDataColumnCache:         lruwrpr.New(1),
-					receivedDataColumnsFromRoot: gcache.New(1*time.Minute, 2*time.Minute),
-					storedDataColumnsFromRoot:   gcache.New(1*time.Minute, 2*time.Minute),
+					seenDataColumnCache: lruwrpr.New(1),
 				}
 
 				kzgCommitments := make([][]byte, 0, tt.blobCount)
@@ -288,7 +285,7 @@ func TestReconstructAndBroadcastBlobs(t *testing.T) {
 				sb, err := blocks.NewSignedBeaconBlock(b)
 				require.NoError(t, err)
 
-				s.reconstructAndBroadcastBlobs(context.Background(), sb)
+				s.reconstructAndBroadcastSidecars(context.Background(), sb)
 				require.Equal(t, tt.expectedDataColumnCount, len(chainService.DataColumns))
 			})
 		}

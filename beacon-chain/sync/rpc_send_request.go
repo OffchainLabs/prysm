@@ -26,9 +26,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var errBlobChunkedReadFailure = errors.New("failed to read stream of chunk-encoded blobs")
-var errBlobUnmarshal = errors.New("Could not unmarshal chunk-encoded blob")
-
 // Any error from the following declaration block should result in peer downscoring.
 var (
 	// ErrInvalidFetchedData is used to signal that an error occurred which should result in peer downscoring.
@@ -41,6 +38,9 @@ var (
 	errBlobResponseOutOfBounds        = errors.Wrap(ErrInvalidFetchedData, "received BlobSidecar with slot outside BlobSidecarsByRangeRequest bounds")
 	errChunkResponseBlockMismatch     = errors.Wrap(ErrInvalidFetchedData, "blob block details do not match")
 	errChunkResponseParentMismatch    = errors.Wrap(ErrInvalidFetchedData, "parent root for response element doesn't match previous element root")
+	errBlobChunkedReadFailure         = errors.New("failed to read stream of chunk-encoded blobs")
+	errBlobUnmarshal                  = errors.New("Could not unmarshal chunk-encoded blob")
+	errDataColumnChunkedReadFailure   = errors.New("failed to read stream of chunk-encoded data columns")
 )
 
 // BeaconBlockProcessor defines a block processing function, which allows to start utilizing
@@ -317,7 +317,7 @@ func dataColumnIndexValidatorFromRangeReq(req *ethpb.DataColumnSidecarsByRangeRe
 	}
 
 	return func(sc blocks.RODataColumn) bool {
-		columnIndex := sc.ColumnIndex
+		columnIndex := sc.Index
 
 		valid := columnIds[columnIndex]
 
@@ -441,7 +441,7 @@ func readChunkedDataColumnSideCar(
 	}
 
 	if statusCode != 0 {
-		return nil, errors.Wrap(errBlobChunkedReadFailure, errMessage)
+		return nil, errors.Wrap(errDataColumnChunkedReadFailure, errMessage)
 	}
 	// Retrieve the fork digest.
 	ctxBytes, err := readContextFromStream(stream)
@@ -599,7 +599,7 @@ func dataColumnValidatorFromRootReq(req *p2ptypes.DataColumnSidecarsByRootReq) D
 			columnsIndexFromRoot[blockRoot] = make(map[uint64]bool)
 		}
 
-		columnsIndexFromRoot[blockRoot][sc.ColumnIndex] = true
+		columnsIndexFromRoot[blockRoot][sc.Index] = true
 	}
 
 	return func(sc blocks.RODataColumn) bool {
@@ -611,7 +611,7 @@ func dataColumnValidatorFromRootReq(req *p2ptypes.DataColumnSidecarsByRootReq) D
 			return false
 		}
 
-		if !columnsIndex[sc.ColumnIndex] {
+		if !columnsIndex[sc.Index] {
 			columnsIndexSlice := make([]uint64, 0, len(columnsIndex))
 
 			for index := range columnsIndex {
@@ -624,7 +624,7 @@ func dataColumnValidatorFromRootReq(req *p2ptypes.DataColumnSidecarsByRootReq) D
 
 			log.WithFields(logrus.Fields{
 				"root":              fmt.Sprintf("%#x", root),
-				"column":            sc.ColumnIndex,
+				"column":            sc.Index,
 				"reaquestedColumns": columnsIndexSlice,
 			}).Debug("Data column sidecar column index not requested")
 

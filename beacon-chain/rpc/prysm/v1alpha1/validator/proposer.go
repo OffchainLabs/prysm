@@ -13,7 +13,6 @@ import (
 	"github.com/pkg/errors"
 	builderapi "github.com/prysmaticlabs/prysm/v5/api/client/builder"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/kzg"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/builder"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
@@ -370,9 +369,9 @@ func (vs *Server) handleBlindedBlock(ctx context.Context, block interfaces.Signe
 	}
 
 	if isPeerDASEnabled {
-		dataColumnSideCars, err := unblindDataColumnsSidecars(copiedBlock, bundle)
+		dataColumnSideCars, err := peerdas.ConstructDataColumnSidecars(block, bundle.Blobs, bundle.Proofs)
 		if err != nil {
-			return nil, nil, nil, errors.Wrap(err, "unblind data columns sidecars")
+			return nil, nil, nil, errors.Wrap(err, "construct data column sidecars")
 		}
 
 		return copiedBlock, nil, dataColumnSideCars, nil
@@ -397,19 +396,9 @@ func (vs *Server) handleUnblindedBlock(
 	}
 
 	if isPeerDASEnabled {
-		// Convert blobs from slices to array.
-		blobs := make([]kzg.Blob, 0, len(rawBlobs))
-		for _, blob := range rawBlobs {
-			if len(blob) != kzg.BytesPerBlob {
-				return nil, nil, errors.Errorf("invalid blob size. expected %d bytes, got %d bytes", kzg.BytesPerBlob, len(blob))
-			}
-
-			blobs = append(blobs, kzg.Blob(blob))
-		}
-
-		dataColumnSideCars, err := peerdas.DataColumnSidecars(block, blobs)
+		dataColumnSideCars, err := peerdas.ConstructDataColumnSidecars(block, rawBlobs, proofs)
 		if err != nil {
-			return nil, nil, errors.Wrap(err, "data column sidecars")
+			return nil, nil, errors.Wrap(err, "construct data column sidecars")
 		}
 
 		return nil, dataColumnSideCars, nil
@@ -476,48 +465,59 @@ func (vs *Server) broadcastAndReceiveDataColumns(
 	root [fieldparams.RootLength]byte,
 	slot primitives.Slot,
 ) error {
-	eg, _ := errgroup.WithContext(ctx)
 	dataColumnsWithholdCount := features.Get().DataColumnsWithholdCount
+	verifiedRODataColumns := make([]blocks.VerifiedRODataColumn, 0, len(sidecars))
 
+	eg, _ := errgroup.WithContext(ctx)
 	for _, sd := range sidecars {
+		roDataColumn, err := blocks.NewRODataColumnWithRoot(sd, root)
+		if err != nil {
+			return errors.Wrap(err, "new read-only data column with root")
+		}
+
+		verifiedRODataColumn := blocks.NewVerifiedRODataColumn(roDataColumn)
+		verifiedRODataColumns = append(verifiedRODataColumns, verifiedRODataColumn)
+
 		// Copy the iteration instance to a local variable to give each go-routine its own copy to play with.
 		// See https://golang.org/doc/faq#closures_and_goroutines for more details.
 		sidecar := sd
-
 		eg.Go(func() error {
-			// Compute the subnet index based on the column index.
-			subnet := sidecar.ColumnIndex % params.BeaconConfig().DataColumnSidecarSubnetCount
-
-			if sidecar.ColumnIndex < dataColumnsWithholdCount {
+			if sidecar.Index < dataColumnsWithholdCount {
 				log.WithFields(logrus.Fields{
-					"root":            fmt.Sprintf("%#x", root),
-					"slot":            slot,
-					"dataColumnIndex": sidecar.ColumnIndex,
+					"root":  fmt.Sprintf("%#x", root),
+					"slot":  slot,
+					"index": sidecar.Index,
 				}).Warning("Withholding data column")
-			} else {
-				if err := vs.P2P.BroadcastDataColumn(ctx, root, subnet, sidecar); err != nil {
-					return errors.Wrap(err, "broadcast data column")
-				}
+
+				return nil
 			}
 
-			roDataColumn, err := blocks.NewRODataColumnWithRoot(sidecar, root)
-			if err != nil {
-				return errors.Wrap(err, "new read-only data column with root")
+			// Compute the subnet index based on the column index.
+			subnet := peerdas.ComputeSubnetForDataColumnSidecar(sidecar.Index)
+
+			if err := vs.P2P.BroadcastDataColumn(ctx, root, subnet, sidecar); err != nil {
+				return errors.Wrap(err, "broadcast data column")
 			}
 
-			verifiedRODataColumn := blocks.NewVerifiedRODataColumn(roDataColumn)
-			if err := vs.DataColumnReceiver.ReceiveDataColumn(verifiedRODataColumn); err != nil {
-				return errors.Wrap(err, "receive data column")
-			}
-
-			vs.OperationNotifier.OperationFeed().Send(&feed.Event{
-				Type: operation.DataColumnSidecarReceived,
-				Data: &operation.DataColumnSidecarReceivedData{DataColumn: &verifiedRODataColumn},
-			})
 			return nil
 		})
 	}
-	return eg.Wait()
+
+	if err := eg.Wait(); err != nil {
+		return errors.Wrap(err, "wait for data columns to be broadcasted")
+	}
+
+	if err := vs.DataColumnReceiver.ReceiveDataColumns(verifiedRODataColumns); err != nil {
+		return errors.Wrap(err, "receive data column")
+	}
+
+	for _, verifiedRODataColumn := range verifiedRODataColumns {
+		vs.OperationNotifier.OperationFeed().Send(&feed.Event{
+			Type: operation.DataColumnSidecarReceived,
+			Data: &operation.DataColumnSidecarReceivedData{DataColumn: &verifiedRODataColumn}, // #nosec G601
+		})
+	}
+	return nil
 }
 
 // PrepareBeaconProposer caches and updates the fee recipient for the given proposer.

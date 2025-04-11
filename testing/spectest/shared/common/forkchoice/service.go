@@ -78,6 +78,7 @@ func startChainService(t testing.TB,
 		blockchain.WithBlobStorage(filesystem.NewEphemeralBlobStorage(t)),
 		blockchain.WithSyncChecker(mock.MockChecker{}),
 		blockchain.WithBlobStorage(filesystem.NewEphemeralBlobStorage(t)),
+		blockchain.WithDataColumnStorage(filesystem.NewEphemeralDataColumnStorage(t)),
 	)
 	service, err := blockchain.NewService(context.Background(), opts...)
 	require.NoError(t, err)

@@ -2,7 +2,10 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
-    srcs = ["blob.go"],
+    srcs = [
+        "blob.go",
+        "data_columns.go",
+    ],
     importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/verify",
     visibility = ["//visibility:public"],
     deps = [

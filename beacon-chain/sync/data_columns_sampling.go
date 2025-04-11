@@ -464,8 +464,8 @@ func (d *dataColumnSampler1D) sampleDataColumnsFromPeer(
 	req := make(types.DataColumnSidecarsByRootReq, 0)
 	for col := range requestedColumns {
 		req = append(req, &eth.DataColumnIdentifier{
-			BlockRoot:   blockProcessedData.BlockRoot[:],
-			ColumnIndex: col,
+			BlockRoot: blockProcessedData.BlockRoot[:],
+			Index:     col,
 		})
 	}
 
@@ -479,7 +479,7 @@ func (d *dataColumnSampler1D) sampleDataColumnsFromPeer(
 	// TODO: Once peer sampling is used, we should verify all sampled data columns in a single batch instead of looping over columns.
 	for _, roDataColumn := range roDataColumns {
 		if verifyColumn(roDataColumn, blockProcessedData, pid, requestedColumns, d.columnVerifier) {
-			retrievedColumns[roDataColumn.ColumnIndex] = true
+			retrievedColumns[roDataColumn.Index] = true
 		}
 	}
 
@@ -578,7 +578,7 @@ func verifyColumn(
 	requestedColumns map[uint64]bool,
 	dataColumnsVerifier verification.NewDataColumnsVerifier,
 ) bool {
-	retrievedColumn := roDataColumn.ColumnIndex
+	retrievedColumn := roDataColumn.Index
 
 	// Filter out columns with incorrect root.
 	columnRoot := roDataColumn.BlockRoot()

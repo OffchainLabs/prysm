@@ -414,7 +414,8 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 	signedBlock, err := blocks.NewSignedBeaconBlock(pbSignedBeaconBlock)
 	require.NoError(t, err)
 
-	dataColumnSidecars, err := peerdas.DataColumnSidecars(signedBlock, blobs)
+	cellsAndProofs := util.GenerateCellsAndProofs(t, blobs)
+	dataColumnSidecars, err := peerdas.DataColumnSidecars(signedBlock, cellsAndProofs)
 	require.NoError(t, err)
 
 	// Calculate block root
@@ -613,11 +614,11 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 				return expectedColumns[i] < expectedColumns[j]
 			})
 			sort.Slice(responseCols, func(i, j int) bool {
-				return responseCols[i].DataColumnSidecar.ColumnIndex < responseCols[j].DataColumnSidecar.ColumnIndex
+				return responseCols[i].DataColumnSidecar.Index < responseCols[j].DataColumnSidecar.Index
 			})
 
 			for i := range responseCols {
-				require.Equal(t, expectedColumns[i], responseCols[i].DataColumnSidecar.ColumnIndex)
+				require.Equal(t, expectedColumns[i], responseCols[i].DataColumnSidecar.Index)
 			}
 
 			// Verify peer request optimization
@@ -670,7 +671,7 @@ func createAndConnectCustodyPeer(t *testing.T, setup peerSetup, dataColumnSideca
 		if tracker != nil {
 			requestedColumns := make([]uint64, 0, len(*req))
 			for _, identifier := range *req {
-				requestedColumns = append(requestedColumns, identifier.ColumnIndex)
+				requestedColumns = append(requestedColumns, identifier.Index)
 			}
 			tracker.trackRequest(setup.offset, requestedColumns)
 		}
@@ -692,14 +693,14 @@ func createAndConnectCustodyPeer(t *testing.T, setup peerSetup, dataColumnSideca
 
 		for _, identifier := range *req {
 			// Check if this column should be skipped using direct map lookup
-			if skipColumns[identifier.ColumnIndex] {
+			if skipColumns[identifier.Index] {
 				continue
 			}
 
-			if !peerInfo.CustodyColumns[identifier.ColumnIndex] {
+			if !peerInfo.CustodyColumns[identifier.Index] {
 				continue
 			}
-			col := dataColumnSidecars[identifier.ColumnIndex]
+			col := dataColumnSidecars[identifier.Index]
 			if err := WriteDataColumnSidecarChunk(stream, chainService, peerP2P.Encoding(), col); err != nil {
 				log.WithError(err).Error("Failed to write data column sidecar chunk")
 				closeStream(stream, log)

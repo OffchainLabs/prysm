@@ -146,6 +146,7 @@ var appHelpFlagGroups = []flagGroup{
 			storage.BlobStoragePathFlag,
 			storage.BlobRetentionEpochFlag,
 			storage.BlobStorageLayout,
+			storage.DataColumnStoragePathFlag,
 			backfill.EnableExperimentalBackfill,
 			backfill.BackfillWorkerCount,
 			backfill.BackfillBatchSize,

@@ -81,6 +81,7 @@ type blocksFetcherConfig struct {
 	peerFilterCapacityWeight float64
 	mode                     syncMode
 	bs                       filesystem.BlobStorageSummarizer
+	dcs                      filesystem.DataColumnStorageSummarizer
 	bv                       verification.NewBlobVerifier
 	cv                       verification.NewDataColumnsVerifier
 	custodyInfo              *peerdas.CustodyInfo
@@ -100,6 +101,7 @@ type blocksFetcher struct {
 	p2p             p2p.P2P
 	db              db.ReadOnlyDatabase
 	bs              filesystem.BlobStorageSummarizer
+	dcs             filesystem.DataColumnStorageSummarizer
 	bv              verification.NewBlobVerifier
 	cv              verification.NewDataColumnsVerifier
 	blocksPerPeriod uint64
@@ -162,6 +164,7 @@ func newBlocksFetcher(ctx context.Context, cfg *blocksFetcherConfig) *blocksFetc
 		p2p:             cfg.p2p,
 		db:              cfg.db,
 		bs:              cfg.bs,
+		dcs:             cfg.dcs,
 		bv:              cfg.bv,
 		cv:              cfg.cv,
 		blocksPerPeriod: uint64(blocksPerPeriod),
@@ -824,11 +827,11 @@ func (f *blocksFetcher) missingColumnsFromRoot(
 		root := roblock.Root()
 
 		// Retrieve the summary for the root.
-		summary := f.bs.Summary(root)
+		summary := f.dcs.Summary(root)
 
 		// Compute the set of missing columns.
 		for column := range custodyColumns {
-			if !summary.HasDataColumnIndex(column) {
+			if !summary.HasIndex(column) {
 				if _, ok := missingColumnsByRoot[root]; !ok {
 					missingColumnsByRoot[root] = make(map[uint64]bool)
 				}
@@ -1086,7 +1089,7 @@ func (f *blocksFetcher) fetchDataColumnsFromPeers(
 func sortBwbsByColumnIndex(bwbs []blocks.BlockWithROBlobs) {
 	for _, bwb := range bwbs {
 		sort.Slice(bwb.Columns, func(i, j int) bool {
-			return bwb.Columns[i].ColumnIndex < bwb.Columns[j].ColumnIndex
+			return bwb.Columns[i].Index < bwb.Columns[j].Index
 		})
 	}
 }
@@ -1277,7 +1280,7 @@ func (f *blocksFetcher) processDataColumns(
 			bwbs[index].Columns = append(bwbs[index].Columns, dataColumn)
 		}
 		// Remove the column from the missing columns.
-		delete(missingColumnsByRoot[blockRoot], dataColumn.ColumnIndex)
+		delete(missingColumnsByRoot[blockRoot], dataColumn.Index)
 		if len(missingColumnsByRoot[blockRoot]) == 0 {
 			delete(missingColumnsByRoot, blockRoot)
 		}

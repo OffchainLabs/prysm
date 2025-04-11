@@ -87,43 +87,45 @@ type serviceFlagOpts struct {
 // full PoS node. It handles the lifecycle of the entire system and registers
 // services to a service registry.
 type BeaconNode struct {
-	cliCtx                  *cli.Context
-	ctx                     context.Context
-	cancel                  context.CancelFunc
-	services                *runtime.ServiceRegistry
-	lock                    sync.RWMutex
-	stop                    chan struct{} // Channel to wait for termination notifications.
-	db                      db.Database
-	slasherDB               db.SlasherDatabase
-	attestationCache        *cache.AttestationCache
-	attestationPool         attestations.Pool
-	exitPool                voluntaryexits.PoolManager
-	slashingsPool           slashings.PoolManager
-	syncCommitteePool       synccommittee.Pool
-	blsToExecPool           blstoexec.PoolManager
-	depositCache            cache.DepositCache
-	trackedValidatorsCache  *cache.TrackedValidatorsCache
-	payloadIDCache          *cache.PayloadIDCache
-	stateFeed               *event.Feed
-	blockFeed               *event.Feed
-	opFeed                  *event.Feed
-	stateGen                *stategen.State
-	collector               *bcnodeCollector
-	slasherBlockHeadersFeed *event.Feed
-	slasherAttestationsFeed *event.Feed
-	finalizedStateAtStartUp state.BeaconState
-	serviceFlagOpts         *serviceFlagOpts
-	GenesisInitializer      genesis.Initializer
-	CheckpointInitializer   checkpoint.Initializer
-	forkChoicer             forkchoice.ForkChoicer
-	clockWaiter             startup.ClockWaiter
-	BackfillOpts            []backfill.ServiceOption
-	initialSyncComplete     chan struct{}
-	BlobStorage             *filesystem.BlobStorage
-	BlobStorageOptions      []filesystem.BlobStorageOption
-	verifyInitWaiter        *verification.InitializerWaiter
-	syncChecker             *initialsync.SyncChecker
-	custodyInfo             *peerdas.CustodyInfo
+	cliCtx                   *cli.Context
+	ctx                      context.Context
+	cancel                   context.CancelFunc
+	services                 *runtime.ServiceRegistry
+	lock                     sync.RWMutex
+	stop                     chan struct{} // Channel to wait for termination notifications.
+	db                       db.Database
+	slasherDB                db.SlasherDatabase
+	attestationCache         *cache.AttestationCache
+	attestationPool          attestations.Pool
+	exitPool                 voluntaryexits.PoolManager
+	slashingsPool            slashings.PoolManager
+	syncCommitteePool        synccommittee.Pool
+	blsToExecPool            blstoexec.PoolManager
+	depositCache             cache.DepositCache
+	trackedValidatorsCache   *cache.TrackedValidatorsCache
+	payloadIDCache           *cache.PayloadIDCache
+	stateFeed                *event.Feed
+	blockFeed                *event.Feed
+	opFeed                   *event.Feed
+	stateGen                 *stategen.State
+	collector                *bcnodeCollector
+	slasherBlockHeadersFeed  *event.Feed
+	slasherAttestationsFeed  *event.Feed
+	finalizedStateAtStartUp  state.BeaconState
+	serviceFlagOpts          *serviceFlagOpts
+	GenesisInitializer       genesis.Initializer
+	CheckpointInitializer    checkpoint.Initializer
+	forkChoicer              forkchoice.ForkChoicer
+	clockWaiter              startup.ClockWaiter
+	BackfillOpts             []backfill.ServiceOption
+	initialSyncComplete      chan struct{}
+	BlobStorage              *filesystem.BlobStorage
+	BlobStorageOptions       []filesystem.BlobStorageOption
+	DataColumnStorage        *filesystem.DataColumnStorage
+	DataColumnStorageOptions []filesystem.DataColumnStorageOption
+	verifyInitWaiter         *verification.InitializerWaiter
+	syncChecker              *initialsync.SyncChecker
+	custodyInfo              *peerdas.CustodyInfo
 }
 
 // New creates a new node instance, sets up configuration options, and registers
@@ -187,6 +189,15 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 			return nil, err
 		}
 		beacon.BlobStorage = blobs
+	}
+
+	if beacon.DataColumnStorage == nil {
+		dataColumnStorage, err := filesystem.NewDataColumnStorage(cliCtx.Context, beacon.DataColumnStorageOptions...)
+		if err != nil {
+			return nil, errors.Wrap(err, "new data column storage")
+		}
+
+		beacon.DataColumnStorage = dataColumnStorage
 	}
 
 	bfs, err := startBaseServices(cliCtx, beacon, depositAddress)
@@ -279,7 +290,9 @@ func startBaseServices(cliCtx *cli.Context, beacon *BeaconNode, depositAddress s
 	if err := beacon.startDB(cliCtx, depositAddress); err != nil {
 		return nil, errors.Wrap(err, "could not start DB")
 	}
+
 	beacon.BlobStorage.WarmCache()
+	beacon.DataColumnStorage.WarmCache()
 
 	log.Debugln("Starting Slashing DB")
 	if err := beacon.startSlasherDB(cliCtx); err != nil {
@@ -489,6 +502,10 @@ func (b *BeaconNode) clearDB(clearDB, forceClearDB bool, d *kv.Store, dbPath str
 
 		if err := b.BlobStorage.Clear(); err != nil {
 			return nil, errors.Wrap(err, "could not clear blob storage")
+		}
+
+		if err := b.DataColumnStorage.Clear(); err != nil {
+			return nil, errors.Wrap(err, "could not clear data column storage")
 		}
 
 		d, err = kv.NewKVStore(b.ctx, dbPath)
@@ -776,6 +793,7 @@ func (b *BeaconNode) registerBlockchainService(fc forkchoice.ForkChoicer, gs *st
 		blockchain.WithClockSynchronizer(gs),
 		blockchain.WithSyncComplete(syncComplete),
 		blockchain.WithBlobStorage(b.BlobStorage),
+		blockchain.WithDataColumnStorage(b.DataColumnStorage),
 		blockchain.WithTrackedValidatorsCache(b.trackedValidatorsCache),
 		blockchain.WithPayloadIDCache(b.payloadIDCache),
 		blockchain.WithSyncChecker(b.syncChecker),
@@ -862,6 +880,7 @@ func (b *BeaconNode) registerSyncService(initialSyncComplete chan struct{}, bFil
 		regularsync.WithInitialSyncComplete(initialSyncComplete),
 		regularsync.WithStateNotifier(b),
 		regularsync.WithBlobStorage(b.BlobStorage),
+		regularsync.WithDataColumnStorage(b.DataColumnStorage),
 		regularsync.WithVerifierWaiter(b.verifyInitWaiter),
 		regularsync.WithAvailableBlocker(bFillStore),
 		regularsync.WithTrackedValidatorsCache(b.trackedValidatorsCache),
@@ -889,6 +908,7 @@ func (b *BeaconNode) registerInitialSyncService(complete chan struct{}) error {
 		ClockWaiter:         b.clockWaiter,
 		InitialSyncComplete: complete,
 		BlobStorage:         b.BlobStorage,
+		DataColumnStorage:   b.DataColumnStorage,
 		CustodyInfo:         b.custodyInfo,
 	}, opts...)
 	return b.services.RegisterService(is)
@@ -1012,6 +1032,7 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		Router:                    router,
 		ClockWaiter:               b.clockWaiter,
 		BlobStorage:               b.BlobStorage,
+		DataColumnStorage:         b.DataColumnStorage,
 		TrackedValidatorsCache:    b.trackedValidatorsCache,
 		PayloadIDCache:            b.payloadIDCache,
 	})
@@ -1151,6 +1172,7 @@ func (b *BeaconNode) registerPrunerService(cliCtx *cli.Context) error {
 
 func (b *BeaconNode) RegisterBackfillService(cliCtx *cli.Context, bfs *backfill.Store) error {
 	pa := peers.NewAssigner(b.fetchP2P().Peers(), b.forkChoicer)
+	// TODO: Add backfill for data column storage
 	bf, err := backfill.NewService(cliCtx.Context, bfs, b.BlobStorage, b.clockWaiter, b.fetchP2P(), pa, b.BackfillOpts...)
 	if err != nil {
 		return errors.Wrap(err, "error initializing backfill service")

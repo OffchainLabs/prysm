@@ -149,6 +149,7 @@ var appFlags = []cli.Flag{
 	storage.BlobStoragePathFlag,
 	storage.BlobRetentionEpochFlag,
 	storage.BlobStorageLayout,
+	storage.DataColumnStoragePathFlag,
 	bflags.EnableExperimentalBackfill,
 	bflags.BackfillBatchSize,
 	bflags.BackfillWorkerCount,

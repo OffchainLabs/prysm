@@ -174,7 +174,7 @@ func dataColumnFields(b blocks.RODataColumn) logrus.Fields {
 		"slot":          b.Slot(),
 		"proposerIndex": b.ProposerIndex(),
 		"blockRoot":     fmt.Sprintf("%#x", b.BlockRoot()),
-		"columnIndex":   b.ColumnIndex,
+		"columnIndex":   b.Index,
 	}
 }
 

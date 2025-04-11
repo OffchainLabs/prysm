@@ -83,7 +83,7 @@ func (s *Service) sendBeaconBlocksRequest(
 				blk,
 				s.cfg.p2p.NodeID(),
 				s.cfg.custodyInfo.CustodyGroupSamplingSize(peerdas.Actual),
-				s.cfg.blobStorage,
+				s.cfg.dataColumnStorage,
 			)
 			if err != nil {
 				return errors.Wrap(err, "find missing data columns")
@@ -242,7 +242,7 @@ func (s *Service) requestAndSaveDataColumnSidecars(
 		return errors.Wrap(err, "request data column sidecars")
 	}
 
-	if err := SaveDataColumns(sidecars, s.cfg.blobStorage); err != nil {
+	if err := SaveDataColumns(sidecars, s.cfg.dataColumnStorage); err != nil {
 		return errors.Wrap(err, "save data column")
 	}
 

@@ -284,7 +284,7 @@ func (d *DataColumnSidecarsByRootReq) Less(i, j int) bool {
 		return rootCmp < 0
 	}
 
-	return (*d)[i].ColumnIndex < (*d)[j].ColumnIndex
+	return (*d)[i].Index < (*d)[j].Index
 }
 
 // Swap implements sort.Interface. It swaps the elements with indexes i and j.

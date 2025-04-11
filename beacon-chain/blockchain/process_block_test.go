@@ -2,6 +2,7 @@ package blockchain
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
 	"math/big"
 	"strconv"
@@ -15,6 +16,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
 	lightClient "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/light-client"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/das"
@@ -26,6 +28,7 @@ import (
 	doublylinkedtree "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/doubly-linked-tree"
 	forkchoicetypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/types"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
@@ -3147,4 +3150,152 @@ func TestSaveLightClientBootstrap(t *testing.T) {
 	})
 
 	reset()
+}
+
+type testIsAvailableParams struct {
+	options                 []Option
+	blobKzgCommitmentsCount uint64
+	columnsToSave           []uint64
+}
+
+func testIsAvailableSetup(t *testing.T, params testIsAvailableParams) (context.Context, context.CancelFunc, *Service, [fieldparams.RootLength]byte, interfaces.SignedBeaconBlock) {
+	ctx, cancel := context.WithCancel(context.Background())
+	dataColumnStorage := filesystem.NewEphemeralDataColumnStorage(t)
+
+	options := append(params.options, WithDataColumnStorage(dataColumnStorage))
+	service, _ := minimalTestService(t, options...)
+
+	genesisState, secretKeys := util.DeterministicGenesisStateElectra(t, 32 /*validator count*/)
+
+	err := service.saveGenesisData(ctx, genesisState)
+	require.NoError(t, err)
+
+	conf := util.DefaultBlockGenConfig()
+	conf.NumBlobKzgCommitments = params.blobKzgCommitmentsCount
+
+	signedBeaconBlock, err := util.GenerateFullBlockFulu(genesisState, secretKeys, conf, 10 /*block slot*/)
+	require.NoError(t, err)
+
+	root, err := signedBeaconBlock.Block.HashTreeRoot()
+	require.NoError(t, err)
+
+	dataColumnsParams := make([]verification.DataColumnParams, 0, len(params.columnsToSave))
+	for _, i := range params.columnsToSave {
+		dataColumnParam := verification.DataColumnParams{ColumnIndex: i}
+		dataColumnsParams = append(dataColumnsParams, dataColumnParam)
+	}
+
+	dataColumnParamsByBlockRoot := verification.DataColumnsParamsByRoot{root: dataColumnsParams}
+	_, verifiedRODataColumns := verification.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnParamsByBlockRoot)
+
+	err = dataColumnStorage.Save(verifiedRODataColumns)
+	require.NoError(t, err)
+
+	signed, err := consensusblocks.NewSignedBeaconBlock(signedBeaconBlock)
+	require.NoError(t, err)
+
+	return ctx, cancel, service, root, signed
+}
+
+func TestIsDataAvailable(t *testing.T) {
+	t.Run("Fulu - out of retention window", func(t *testing.T) {
+		params := testIsAvailableParams{options: []Option{WithGenesisTime(time.Unix(0, 0))}}
+		ctx, _, service, root, signed := testIsAvailableSetup(t, params)
+
+		err := service.isDataAvailable(ctx, root, signed)
+		require.NoError(t, err)
+	})
+
+	t.Run("Fulu - no commitment in blocks", func(t *testing.T) {
+		ctx, _, service, root, signed := testIsAvailableSetup(t, testIsAvailableParams{})
+
+		err := service.isDataAvailable(ctx, root, signed)
+		require.NoError(t, err)
+	})
+
+	t.Run("Fulu - more than half of the columns in custody", func(t *testing.T) {
+		halfNumberOfColumns := params.BeaconConfig().NumberOfColumns / 2
+		indices := make([]uint64, 0, halfNumberOfColumns)
+		for i := range halfNumberOfColumns {
+			indices = append(indices, i)
+		}
+
+		params := testIsAvailableParams{
+			options:                 []Option{WithCustodyInfo(&peerdas.CustodyInfo{})},
+			columnsToSave:           indices,
+			blobKzgCommitmentsCount: 3,
+		}
+
+		ctx, _, service, root, signed := testIsAvailableSetup(t, params)
+
+		err := service.isDataAvailable(ctx, root, signed)
+		require.NoError(t, err)
+	})
+
+	t.Run("Fulu - no missing data columns", func(t *testing.T) {
+		params := testIsAvailableParams{
+			options:                 []Option{WithCustodyInfo(&peerdas.CustodyInfo{})},
+			columnsToSave:           []uint64{1, 17, 19, 42, 75, 87, 102, 117, 119}, // 119 is not needed
+			blobKzgCommitmentsCount: 3,
+		}
+
+		ctx, _, service, root, signed := testIsAvailableSetup(t, params)
+
+		err := service.isDataAvailable(ctx, root, signed)
+		require.NoError(t, err)
+	})
+
+	t.Run("Fulu - some initially missing data columns (no reconstruction)", func(t *testing.T) {
+		var custodyInfo peerdas.CustodyInfo
+		custodyInfo.TargetGroupCount.SetValidatorsCustodyRequirement(128)
+		custodyInfo.ToAdvertiseGroupCount.Set(128)
+
+		testParams := testIsAvailableParams{
+			options:                 []Option{WithCustodyInfo(&custodyInfo)},
+			blobKzgCommitmentsCount: 3,
+		}
+
+		ctx, _, service, root, signed := testIsAvailableSetup(t, testParams)
+
+		// If needed, generate a random root that is different from the block root.
+		var randomRoot [fieldparams.RootLength]byte
+		for randomRoot == root {
+			randomRootSlice := make([]byte, fieldparams.RootLength)
+			_, err := rand.Read(randomRootSlice)
+			require.NoError(t, err)
+			copy(randomRoot[:], randomRootSlice)
+		}
+
+		// TODO: Achieve the same result without using time.AfterFunc.
+		time.AfterFunc(10*time.Millisecond, func() {
+			halfNumberOfColumns := params.BeaconConfig().NumberOfColumns / 2
+			indices := make([]uint64, 0, halfNumberOfColumns)
+			for i := range halfNumberOfColumns {
+				indices = append(indices, i)
+			}
+
+			withSomeRequiredColumns := filesystem.DataColumnsIdent{Root: root, Indices: indices}
+			service.dataColumnStorage.DataColumnFeed.Send(withSomeRequiredColumns)
+		})
+
+		err := service.isDataAvailable(ctx, root, signed)
+		require.NoError(t, err)
+	})
+
+	t.Run("Fulu - some columns are definitively missing", func(t *testing.T) {
+		params := testIsAvailableParams{
+			options:                 []Option{WithCustodyInfo(&peerdas.CustodyInfo{})},
+			blobKzgCommitmentsCount: 3,
+		}
+
+		ctx, cancel, service, root, signed := testIsAvailableSetup(t, params)
+
+		// TODO: Achieve the same result without using time.AfterFunc.
+		time.AfterFunc(10*time.Millisecond, func() {
+			cancel()
+		})
+
+		err := service.isDataAvailable(ctx, root, signed)
+		require.NotNil(t, err)
+	})
 }

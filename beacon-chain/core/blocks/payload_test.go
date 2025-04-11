@@ -926,8 +926,10 @@ func TestVerifyBlobCommitmentCount(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, blocks.VerifyBlobCommitmentCount(rb.Slot(), rb.Body()))
 
-	b = &ethpb.BeaconBlockDeneb{Body: &ethpb.BeaconBlockBodyDeneb{BlobKzgCommitments: make([][]byte, params.BeaconConfig().MaxBlobsPerBlock(rb.Slot())+1)}}
+	maxCommitmentsPerBlock := params.BeaconConfig().MaxBlobsPerBlock(rb.Slot())
+
+	b = &ethpb.BeaconBlockDeneb{Body: &ethpb.BeaconBlockBodyDeneb{BlobKzgCommitments: make([][]byte, maxCommitmentsPerBlock+1)}}
 	rb, err = consensusblocks.NewBeaconBlock(b)
 	require.NoError(t, err)
-	require.ErrorContains(t, fmt.Sprintf("too many kzg commitments in block: %d", params.BeaconConfig().MaxBlobsPerBlock(rb.Slot())+1), blocks.VerifyBlobCommitmentCount(rb.Slot(), rb.Body()))
+	require.ErrorContains(t, fmt.Sprintf("too many kzg commitments in block: actual count %d - max allowed %d", maxCommitmentsPerBlock+1, maxCommitmentsPerBlock), blocks.VerifyBlobCommitmentCount(rb.Slot(), rb.Body()))
 }

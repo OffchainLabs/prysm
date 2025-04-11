@@ -2,22 +2,15 @@ package das
 
 import (
 	"bytes"
-	"reflect"
 
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 )
 
-var (
-	ErrDuplicateSidecar   = errors.New("duplicate sidecar stashed in AvailabilityStore")
-	errIndexOutOfBounds   = errors.New("sidecar.index > MAX_BLOBS_PER_BLOCK")
-	errCommitmentMismatch = errors.New("KzgCommitment of sidecar in cache did not match block commitment")
-	errMissingSidecar     = errors.New("no sidecar in cache for block commitment")
-)
+var errIndexOutOfBounds = errors.New("sidecar.index > MAX_BLOBS_PER_BLOCK")
 
 // cacheKey includes the slot so that we can easily iterate through the cache and compare
 // slots for eviction purposes. Whether the input is the block or the sidecar, we always have
@@ -37,10 +30,6 @@ func newCache() *cache {
 
 // keyFromSidecar is a convenience method for constructing a cacheKey from a BlobSidecar value.
 func keyFromSidecar(sc blocks.ROBlob) cacheKey {
-	return cacheKey{slot: sc.Slot(), root: sc.BlockRoot()}
-}
-
-func keyFromColumn(sc blocks.RODataColumn) cacheKey {
 	return cacheKey{slot: sc.Slot(), root: sc.BlockRoot()}
 }
 
@@ -67,7 +56,6 @@ func (c *cache) delete(key cacheKey) {
 // cacheEntry holds a fixed-length cache of BlobSidecars.
 type cacheEntry struct {
 	scs         []*blocks.ROBlob
-	colScs      [fieldparams.NumberOfColumns]*blocks.RODataColumn
 	diskSummary filesystem.BlobStorageSummary
 }
 
@@ -90,17 +78,6 @@ func (e *cacheEntry) stash(sc *blocks.ROBlob) error {
 		return errors.Wrapf(ErrDuplicateSidecar, "root=%#x, index=%d, commitment=%#x", sc.BlockRoot(), sc.Index, sc.KzgCommitment)
 	}
 	e.scs[sc.Index] = sc
-	return nil
-}
-
-func (e *cacheEntry) stashColumns(sc *blocks.RODataColumn) error {
-	if sc.ColumnIndex >= fieldparams.NumberOfColumns {
-		return errors.Wrapf(errIndexOutOfBounds, "index=%d", sc.ColumnIndex)
-	}
-	if e.colScs[sc.ColumnIndex] != nil {
-		return errors.Wrapf(ErrDuplicateSidecar, "root=%#x, index=%d, commitment=%#x", sc.BlockRoot(), sc.ColumnIndex, sc.KzgCommitments)
-	}
-	e.colScs[sc.ColumnIndex] = sc
 	return nil
 }
 
@@ -138,67 +115,4 @@ func (e *cacheEntry) filter(root [32]byte, kc [][]byte, slot primitives.Slot) ([
 	}
 
 	return scs, nil
-}
-
-func (e *cacheEntry) filterColumns(root [32]byte, commitmentsArray *safeCommitmentsArray) ([]blocks.RODataColumn, error) {
-	nonEmptyIndices := commitmentsArray.nonEmptyIndices()
-	if e.diskSummary.AllDataColumnsAvailable(nonEmptyIndices) {
-		return nil, nil
-	}
-
-	commitmentsCount := commitmentsArray.count()
-	sidecars := make([]blocks.RODataColumn, 0, commitmentsCount)
-
-	for i := range uint64(fieldparams.NumberOfColumns) {
-		// Skip if we already store this data column.
-		if e.diskSummary.HasIndex(i) {
-			continue
-		}
-
-		if commitmentsArray[i] == nil {
-			continue
-		}
-
-		if e.colScs[i] == nil {
-			return nil, errors.Wrapf(errMissingSidecar, "root=%#x, index=%#x", root, i)
-		}
-
-		if !reflect.DeepEqual(commitmentsArray[i], e.colScs[i].KzgCommitments) {
-			return nil, errors.Wrapf(errCommitmentMismatch, "root=%#x, index=%#x, commitment=%#x, block commitment=%#x", root, i, e.colScs[i].KzgCommitments, commitmentsArray[i])
-		}
-
-		sidecars = append(sidecars, *e.colScs[i])
-	}
-
-	return sidecars, nil
-}
-
-// safeCommitmentsArray is a fixed size array of commitments.
-// This is helpful for avoiding gratuitous bounds checks.
-type safeCommitmentsArray [fieldparams.NumberOfColumns][][]byte
-
-// count returns the number of commitments in the array.
-func (s *safeCommitmentsArray) count() int {
-	count := 0
-
-	for i := range s {
-		if s[i] != nil {
-			count++
-		}
-	}
-
-	return count
-}
-
-// nonEmptyIndices returns a map of indices that are non-nil in the array.
-func (s *safeCommitmentsArray) nonEmptyIndices() map[uint64]bool {
-	columns := make(map[uint64]bool)
-
-	for i := range s {
-		if s[i] != nil {
-			columns[uint64(i)] = true
-		}
-	}
-
-	return columns
 }

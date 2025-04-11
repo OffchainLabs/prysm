@@ -8,10 +8,10 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/crypto/rand"
@@ -69,7 +69,7 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 	if dataColumnsIgnoreSlotMultiple != 0 && blockSlot%dataColumnsIgnoreSlotMultiple == 0 {
 		log.WithFields(logrus.Fields{
 			"slot":        blockSlot,
-			"columnIndex": roDataColumn.ColumnIndex,
+			"columnIndex": roDataColumn.Index,
 			"blockRoot":   fmt.Sprintf("%#x", roDataColumn.BlockRoot()),
 		}).Warning("Voluntary ignore data column sidecar gossip")
 
@@ -85,7 +85,7 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 	}
 
 	// [REJECT] The sidecar is for the correct subnet -- i.e. compute_subnet_for_data_column_sidecar(sidecar.index) == subnet_id.
-	want := fmt.Sprintf("data_column_sidecar_%d", computeSubnetForColumnSidecar(roDataColumn.ColumnIndex))
+	want := fmt.Sprintf("data_column_sidecar_%d", peerdas.ComputeSubnetForDataColumnSidecar(roDataColumn.Index))
 	if !strings.Contains(*msg.Topic, want) {
 		log.Debug("Column Sidecar index does not match topic")
 		return pubsub.ValidationReject, fmt.Errorf("wrong topic name: %s", *msg.Topic)
@@ -96,7 +96,7 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 	}
 
 	// [IGNORE] The sidecar is the first sidecar for the tuple (block_header.slot, block_header.proposer_index, sidecar.index) with valid header signature, sidecar inclusion proof, and kzg proof.
-	if s.hasSeenDataColumnIndex(roDataColumn.Slot(), roDataColumn.ProposerIndex(), roDataColumn.DataColumnSidecar.ColumnIndex) {
+	if s.hasSeenDataColumnIndex(roDataColumn.Slot(), roDataColumn.ProposerIndex(), roDataColumn.DataColumnSidecar.Index) {
 		return pubsub.ValidationIgnore, nil
 	}
 
@@ -189,8 +189,6 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 
 // Returns true if the column with the same slot, proposer index, and column index has been seen before.
 func (s *Service) hasSeenDataColumnIndex(slot primitives.Slot, proposerIndex primitives.ValidatorIndex, index uint64) bool {
-	s.seenDataColumnLock.RLock()
-	defer s.seenDataColumnLock.RUnlock()
 	b := append(bytesutil.Bytes32(uint64(slot)), bytesutil.Bytes32(uint64(proposerIndex))...)
 	b = append(b, bytesutil.Bytes32(index)...)
 	_, seen := s.seenDataColumnCache.Get(string(b))
@@ -199,14 +197,7 @@ func (s *Service) hasSeenDataColumnIndex(slot primitives.Slot, proposerIndex pri
 
 // Sets the data column with the same slot, proposer index, and data column index as seen.
 func (s *Service) setSeenDataColumnIndex(slot primitives.Slot, proposerIndex primitives.ValidatorIndex, index uint64) {
-	s.seenDataColumnLock.Lock()
-	defer s.seenDataColumnLock.Unlock()
-
 	b := append(bytesutil.Bytes32(uint64(slot)), bytesutil.Bytes32(uint64(proposerIndex))...)
 	b = append(b, bytesutil.Bytes32(index)...)
 	s.seenDataColumnCache.Add(string(b), true)
-}
-
-func computeSubnetForColumnSidecar(colIdx uint64) uint64 {
-	return colIdx % params.BeaconConfig().DataColumnSidecarSubnetCount
 }

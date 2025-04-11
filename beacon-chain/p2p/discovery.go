@@ -187,7 +187,8 @@ func (s *Service) RefreshPersistentSubnets() {
 	// Compare current epoch with Altair fork epoch
 	altairForkEpoch := params.BeaconConfig().AltairForkEpoch
 
-	if currentEpoch < altairForkEpoch {
+	// We add `1` to the current epoch because we want to prepare one epoch before the Altair fork.
+	if currentEpoch+1 < altairForkEpoch {
 		// Phase 0 behaviour.
 		if isBitVUpToDate {
 			// Return early if bitfield hasn't changed.
@@ -225,7 +226,8 @@ func (s *Service) RefreshPersistentSubnets() {
 	// Compare current epoch with the Fulu fork epoch.
 	fuluForkEpoch := params.BeaconConfig().FuluForkEpoch
 
-	if currentEpoch < fuluForkEpoch {
+	// We add `1` to the current epoch because we want to prepare one epoch before the Fulu fork.
+	if currentEpoch+1 < fuluForkEpoch {
 		// Altair behaviour.
 		if metadataVersion == version.Altair && isBitVUpToDate && isBitSUpToDate {
 			// Nothing to do, return early.

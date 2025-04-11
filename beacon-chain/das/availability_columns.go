@@ -15,53 +15,63 @@ import (
 )
 
 // LazilyPersistentStoreColumn is an implementation of AvailabilityStore to be used when batch syncing data columns.
-// This implementation will hold any blobs passed to Persist until the IsDataAvailable is called for their
+// This implementation will hold any data columns passed to Persist until the IsDataAvailable is called for their
 // block, at which time they will undergo full verification and be saved to the disk.
 type LazilyPersistentStoreColumn struct {
-	store       *filesystem.BlobStorage
-	cache       *cache
+	store       *filesystem.DataColumnStorage
+	nodeID      enode.ID
+	cache       *dataColumnCache
 	custodyInfo *peerdas.CustodyInfo
 }
 
-func NewLazilyPersistentStoreColumn(store *filesystem.BlobStorage, custodyInfo *peerdas.CustodyInfo) *LazilyPersistentStoreColumn {
+func NewLazilyPersistentStoreColumn(store *filesystem.DataColumnStorage, nodeID enode.ID, custodyInfo *peerdas.CustodyInfo) *LazilyPersistentStoreColumn {
 	return &LazilyPersistentStoreColumn{
 		store:       store,
-		cache:       newCache(),
+		nodeID:      nodeID,
+		cache:       newDataColumnCache(),
 		custodyInfo: custodyInfo,
 	}
 }
 
-// Persist do nothing at the moment.
-// TODO: Very Ugly, change interface to allow for columns and blobs
-func (*LazilyPersistentStoreColumn) Persist(_ primitives.Slot, _ ...blocks.ROBlob) error {
-	return nil
-}
-
-// PersistColumns adds columns to the working column cache. columns stored in this cache will be persisted
-// for at least as long as the node is running. Once IsDataAvailable succeeds, all blobs referenced
+// PersistColumns adds columns to the working column cache. Columns stored in this cache will be persisted
+// for at least as long as the node is running. Once IsDataAvailable succeeds, all columns referenced
 // by the given block are guaranteed to be persisted for the remainder of the retention period.
-func (s *LazilyPersistentStoreColumn) PersistColumns(current primitives.Slot, sc ...blocks.RODataColumn) error {
-	if len(sc) == 0 {
+func (s *LazilyPersistentStoreColumn) Persist(current primitives.Slot, sidecars ...blocks.ROSidecar) error {
+	if len(sidecars) == 0 {
 		return nil
 	}
-	if len(sc) > 1 {
-		first := sc[0].BlockRoot()
-		for i := 1; i < len(sc); i++ {
-			if first != sc[i].BlockRoot() {
+
+	dataColumnSidecars, err := blocks.DataColumnSidecarsFromSidecars(sidecars)
+	if err != nil {
+		return errors.Wrap(err, "blob sidecars from sidecars")
+	}
+
+	// It is safe to retrieve the first sidecar.
+	firstSidecar := dataColumnSidecars[0]
+
+	if len(sidecars) > 1 {
+		firstRoot := firstSidecar.BlockRoot()
+		for _, sidecar := range dataColumnSidecars[1:] {
+			if sidecar.BlockRoot() != firstRoot {
 				return errMixedRoots
 			}
 		}
 	}
-	if !params.WithinDAPeriod(slots.ToEpoch(sc[0].Slot()), slots.ToEpoch(current)) {
+
+	firstSidecarEpoch, currentEpoch := slots.ToEpoch(firstSidecar.Slot()), slots.ToEpoch(current)
+	if !params.WithinDAPeriod(firstSidecarEpoch, currentEpoch) {
 		return nil
 	}
-	key := keyFromColumn(sc[0])
+
+	key := dataColumnCacheKey{slot: firstSidecar.Slot(), root: firstSidecar.BlockRoot()}
 	entry := s.cache.ensure(key)
-	for i := range sc {
-		if err := entry.stashColumns(&sc[i]); err != nil {
-			return err
+
+	for i := range sidecars {
+		if err := entry.stash(&dataColumnSidecars[i]); err != nil {
+			return errors.Wrap(err, "stash DataColumnSidecar")
 		}
 	}
+
 	return nil
 }
 
@@ -69,11 +79,10 @@ func (s *LazilyPersistentStoreColumn) PersistColumns(current primitives.Slot, sc
 // DataColumnsSidecars already in the db are assumed to have been previously verified against the block.
 func (s *LazilyPersistentStoreColumn) IsDataAvailable(
 	ctx context.Context,
-	nodeID enode.ID,
 	currentSlot primitives.Slot,
 	block blocks.ROBlock,
 ) error {
-	blockCommitments, err := s.fullCommitmentsToCheck(nodeID, block, currentSlot)
+	blockCommitments, err := s.fullCommitmentsToCheck(s.nodeID, block, currentSlot)
 	if err != nil {
 		return errors.Wrapf(err, "full commitments to check with block root `%#x` and current slot `%d`", block.Root(), currentSlot)
 	}
@@ -83,8 +92,11 @@ func (s *LazilyPersistentStoreColumn) IsDataAvailable(
 		return nil
 	}
 
+	// Get the root of the block.
+	blockRoot := block.Root()
+
 	// Build the cache key for the block.
-	key := keyFromBlock(block)
+	key := dataColumnCacheKey{slot: block.Block().Slot(), root: blockRoot}
 
 	// Retrieve the cache entry for the block, or create an empty one if it doesn't exist.
 	entry := s.cache.ensure(key)
@@ -92,16 +104,13 @@ func (s *LazilyPersistentStoreColumn) IsDataAvailable(
 	// Delete the cache entry for the block at the end.
 	defer s.cache.delete(key)
 
-	// Get the root of the block.
-	blockRoot := block.Root()
-
 	// Set the disk summary for the block in the cache entry.
 	entry.setDiskSummary(s.store.Summary(blockRoot))
 
 	// Verify we have all the expected sidecars, and fail fast if any are missing or inconsistent.
 	// We don't try to salvage problematic batches because this indicates a misbehaving peer and we'd rather
 	// ignore their response and decrease their peer score.
-	roDataColumns, err := entry.filterColumns(blockRoot, blockCommitments)
+	roDataColumns, err := entry.filter(blockRoot, blockCommitments)
 	if err != nil {
 		return errors.Wrap(err, "incomplete DataColumnSidecar batch")
 	}
@@ -114,11 +123,9 @@ func (s *LazilyPersistentStoreColumn) IsDataAvailable(
 		verifiedRODataColumns = append(verifiedRODataColumns, verifiedRODataColumn)
 	}
 
-	// Ensure that each column sidecar is written to disk.
-	for _, verifiedRODataColumn := range verifiedRODataColumns {
-		if err := s.store.SaveDataColumn(verifiedRODataColumn); err != nil {
-			return errors.Wrapf(err, "save data columns for index `%d` for block `%#x`", verifiedRODataColumn.ColumnIndex, blockRoot)
-		}
+	// Ensure that column sidecars are written to disk.
+	if err := s.store.Save(verifiedRODataColumns); err != nil {
+		return errors.Wrapf(err, "save data column sidecars")
 	}
 
 	// All ColumnSidecars are persisted - data availability check succeeds.
@@ -163,6 +170,7 @@ func (s *LazilyPersistentStoreColumn) fullCommitmentsToCheck(nodeID enode.ID, bl
 	if err != nil {
 		return nil, errors.Wrap(err, "peer info")
 	}
+
 	// Create a safe commitments array for the custody columns.
 	commitmentsArray := &safeCommitmentsArray{}
 	for column := range peerInfo.CustodyColumns {

@@ -1,11 +1,15 @@
 package das
 
 import (
+	"context"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
 	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
@@ -15,82 +19,235 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
+func roSidecarsFromDataColumnParamsByBlockRoot(t *testing.T, dataColumnParamsByBlockRoot verification.DataColumnsParamsByRoot) ([]blocks.ROSidecar, []blocks.RODataColumn) {
+	roDataColumns, _ := verification.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnParamsByBlockRoot)
+
+	roSidecars := make([]blocks.ROSidecar, 0, len(roDataColumns))
+	for _, roDataColumn := range roDataColumns {
+		roSidecars = append(roSidecars, blocks.NewSidecarFromDataColumnSidecar(roDataColumn))
+	}
+
+	return roSidecars, roDataColumns
+}
+
+func newSignedRoBlock(t *testing.T, signedBeaconBlock interface{}) blocks.ROBlock {
+	sb, err := blocks.NewSignedBeaconBlock(signedBeaconBlock)
+	require.NoError(t, err)
+
+	rb, err := blocks.NewROBlock(sb)
+	require.NoError(t, err)
+
+	return rb
+}
+
+var commitments = [][]byte{
+	bytesutil.PadTo([]byte("a"), 48),
+	bytesutil.PadTo([]byte("b"), 48),
+	bytesutil.PadTo([]byte("c"), 48),
+	bytesutil.PadTo([]byte("d"), 48),
+}
+
+func TestPersist(t *testing.T) {
+	t.Run("no sidecars", func(t *testing.T) {
+		dataColumnStorage := filesystem.NewEphemeralDataColumnStorage(t)
+		lazilyPersistentStoreColumns := NewLazilyPersistentStoreColumn(dataColumnStorage, enode.ID{}, &peerdas.CustodyInfo{})
+		err := lazilyPersistentStoreColumns.Persist(0)
+		require.NoError(t, err)
+		require.Equal(t, 0, len(lazilyPersistentStoreColumns.cache.entries))
+	})
+
+	t.Run("mixed roots", func(t *testing.T) {
+		dataColumnStorage := filesystem.NewEphemeralDataColumnStorage(t)
+
+		dataColumnParamsByBlockRoot := map[[fieldparams.RootLength]byte][]verification.DataColumnParams{
+			{1}: {{ColumnIndex: 1}},
+			{2}: {{ColumnIndex: 2}},
+		}
+
+		roSidecars, _ := roSidecarsFromDataColumnParamsByBlockRoot(t, dataColumnParamsByBlockRoot)
+		lazilyPersistentStoreColumns := NewLazilyPersistentStoreColumn(dataColumnStorage, enode.ID{}, &peerdas.CustodyInfo{})
+
+		err := lazilyPersistentStoreColumns.Persist(0, roSidecars...)
+		require.ErrorIs(t, err, errMixedRoots)
+		require.Equal(t, 0, len(lazilyPersistentStoreColumns.cache.entries))
+	})
+
+	t.Run("outside DA period", func(t *testing.T) {
+		dataColumnStorage := filesystem.NewEphemeralDataColumnStorage(t)
+
+		dataColumnParamsByBlockRoot := map[[fieldparams.RootLength]byte][]verification.DataColumnParams{
+			{1}: {{ColumnIndex: 1}},
+		}
+
+		roSidecars, _ := roSidecarsFromDataColumnParamsByBlockRoot(t, dataColumnParamsByBlockRoot)
+		lazilyPersistentStoreColumns := NewLazilyPersistentStoreColumn(dataColumnStorage, enode.ID{}, &peerdas.CustodyInfo{})
+
+		err := lazilyPersistentStoreColumns.Persist(1_000_000, roSidecars...)
+		require.NoError(t, err)
+		require.Equal(t, 0, len(lazilyPersistentStoreColumns.cache.entries))
+	})
+
+	t.Run("nominal", func(t *testing.T) {
+		dataColumnStorage := filesystem.NewEphemeralDataColumnStorage(t)
+
+		dataColumnParamsByBlockRoot := map[[fieldparams.RootLength]byte][]verification.DataColumnParams{
+			{}: {{ColumnIndex: 1}, {ColumnIndex: 5}},
+		}
+
+		roSidecars, roDataColumns := roSidecarsFromDataColumnParamsByBlockRoot(t, dataColumnParamsByBlockRoot)
+		lazilyPersistentStoreColumns := NewLazilyPersistentStoreColumn(dataColumnStorage, enode.ID{}, &peerdas.CustodyInfo{})
+
+		err := lazilyPersistentStoreColumns.Persist(0, roSidecars...)
+		require.NoError(t, err)
+		require.Equal(t, 1, len(lazilyPersistentStoreColumns.cache.entries))
+
+		key := dataColumnCacheKey{slot: 0, root: [32]byte{}}
+		entry := lazilyPersistentStoreColumns.cache.entries[key]
+
+		// A call to Persist does NOT save the sidecars to disk.
+		require.Equal(t, uint64(0), entry.diskSummary.Count())
+
+		require.DeepSSZEqual(t, roDataColumns[0], *entry.scs[1])
+		require.DeepSSZEqual(t, roDataColumns[1], *entry.scs[5])
+
+		for i, roDataColumn := range entry.scs {
+			if map[int]bool{1: true, 5: true}[i] {
+				continue
+			}
+
+			require.IsNil(t, roDataColumn)
+		}
+	})
+}
+
+func TestIsDataAvailable(t *testing.T) {
+	t.Run("No commitments", func(t *testing.T) {
+		ctx := context.Background()
+		signedBeaconBlockFulu := util.NewBeaconBlockFulu()
+		signedRoBlock := newSignedRoBlock(t, signedBeaconBlockFulu)
+
+		dataColumnStorage := filesystem.NewEphemeralDataColumnStorage(t)
+		lazilyPersistentStoreColumns := NewLazilyPersistentStoreColumn(dataColumnStorage, enode.ID{}, &peerdas.CustodyInfo{})
+
+		err := lazilyPersistentStoreColumns.IsDataAvailable(ctx, 0 /*current slot*/, signedRoBlock)
+		require.NoError(t, err)
+	})
+
+	t.Run("Some sidecars are not available", func(t *testing.T) {
+		ctx := context.Background()
+		signedBeaconBlockFulu := util.NewBeaconBlockFulu()
+		signedBeaconBlockFulu.Block.Body.BlobKzgCommitments = commitments
+		signedRoBlock := newSignedRoBlock(t, signedBeaconBlockFulu)
+
+		dataColumnStorage := filesystem.NewEphemeralDataColumnStorage(t)
+		lazilyPersistentStoreColumns := NewLazilyPersistentStoreColumn(dataColumnStorage, enode.ID{}, &peerdas.CustodyInfo{})
+		err := lazilyPersistentStoreColumns.IsDataAvailable(ctx, 0 /*current slot*/, signedRoBlock)
+		require.NotNil(t, err)
+	})
+
+	t.Run("All sidecars are available", func(t *testing.T) {
+		ctx := context.Background()
+		signedBeaconBlockFulu := util.NewBeaconBlockFulu()
+		signedBeaconBlockFulu.Block.Body.BlobKzgCommitments = commitments
+		signedRoBlock := newSignedRoBlock(t, signedBeaconBlockFulu)
+		root := signedRoBlock.Root()
+
+		dataColumnStorage := filesystem.NewEphemeralDataColumnStorage(t)
+		lazilyPersistentStoreColumns := NewLazilyPersistentStoreColumn(dataColumnStorage, enode.ID{}, &peerdas.CustodyInfo{})
+
+		indices := [...]uint64{1, 17, 87, 102}
+		dataColumnsParams := make([]verification.DataColumnParams, 0, len(indices))
+		for _, index := range indices {
+			dataColumnParams := verification.DataColumnParams{
+				ColumnIndex:    index,
+				KzgCommitments: commitments,
+			}
+
+			dataColumnsParams = append(dataColumnsParams, dataColumnParams)
+		}
+
+		dataColumnsParamsByBlockRoot := verification.DataColumnsParamsByRoot{root: dataColumnsParams}
+		_, verifiedRoDataColumns := verification.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnsParamsByBlockRoot)
+
+		key := dataColumnCacheKey{root: root}
+		entry := lazilyPersistentStoreColumns.cache.ensure(key)
+		defer lazilyPersistentStoreColumns.cache.delete(key)
+
+		for _, verifiedRoDataColumn := range verifiedRoDataColumns {
+			err := entry.stash(&verifiedRoDataColumn.RODataColumn)
+			require.NoError(t, err)
+		}
+
+		err := lazilyPersistentStoreColumns.IsDataAvailable(ctx, 0 /*current slot*/, signedRoBlock)
+		require.NoError(t, err)
+
+		actual, err := dataColumnStorage.Get(root, indices[:])
+		require.NoError(t, err)
+
+		summary := dataColumnStorage.Summary(root)
+		require.Equal(t, uint64(len(indices)), summary.Count())
+		require.DeepSSZEqual(t, verifiedRoDataColumns, actual)
+	})
+}
+
 func TestFullCommitmentsToCheck(t *testing.T) {
 	windowSlots, err := slots.EpochEnd(params.BeaconConfig().MinEpochsForDataColumnSidecarsRequest)
 	require.NoError(t, err)
-	commits := [][]byte{
-		bytesutil.PadTo([]byte("a"), 48),
-		bytesutil.PadTo([]byte("b"), 48),
-		bytesutil.PadTo([]byte("c"), 48),
-		bytesutil.PadTo([]byte("d"), 48),
-	}
-	cases := []struct {
-		name    string
-		commits [][]byte
-		block   func(*testing.T) blocks.ROBlock
-		slot    primitives.Slot
-		err     error
+
+	testCases := []struct {
+		name        string
+		commitments [][]byte
+		block       func(*testing.T) blocks.ROBlock
+		slot        primitives.Slot
 	}{
 		{
-			name: "pre fulu",
+			name: "Pre-Fulu block",
 			block: func(t *testing.T) blocks.ROBlock {
-				bb := util.NewBeaconBlockElectra()
-				sb, err := blocks.NewSignedBeaconBlock(bb)
-				require.NoError(t, err)
-				rb, err := blocks.NewROBlock(sb)
-				require.NoError(t, err)
-				return rb
+				return newSignedRoBlock(t, util.NewBeaconBlockElectra())
 			},
 		},
 		{
-			name: "commitments within da",
+			name: "Commitments outside data availability window",
 			block: func(t *testing.T) blocks.ROBlock {
-				d := util.NewBeaconBlockFulu()
-				d.Block.Body.BlobKzgCommitments = commits
-				d.Block.Slot = 100
-				sb, err := blocks.NewSignedBeaconBlock(d)
-				require.NoError(t, err)
-				rb, err := blocks.NewROBlock(sb)
-				require.NoError(t, err)
-				return rb
-			},
-			commits: commits,
-			slot:    100,
-		},
-		{
-			name: "commitments outside da",
-			block: func(t *testing.T) blocks.ROBlock {
-				d := util.NewBeaconBlockElectra()
-				// block is from slot 0, "current slot" is window size +1 (so outside the window)
-				d.Block.Body.BlobKzgCommitments = commits
-				sb, err := blocks.NewSignedBeaconBlock(d)
-				require.NoError(t, err)
-				rb, err := blocks.NewROBlock(sb)
-				require.NoError(t, err)
-				return rb
+				beaconBlockElectra := util.NewBeaconBlockElectra()
+
+				// Block is from slot 0, "current slot" is window size +1 (so outside the window)
+				beaconBlockElectra.Block.Body.BlobKzgCommitments = commitments
+
+				return newSignedRoBlock(t, beaconBlockElectra)
 			},
 			slot: windowSlots + 1,
 		},
+		{
+			name: "Commitments within data availability window",
+			block: func(t *testing.T) blocks.ROBlock {
+				signedBeaconBlockFulu := util.NewBeaconBlockFulu()
+				signedBeaconBlockFulu.Block.Body.BlobKzgCommitments = commitments
+				signedBeaconBlockFulu.Block.Slot = 100
+
+				return newSignedRoBlock(t, signedBeaconBlockFulu)
+			},
+			commitments: commitments,
+			slot:        100,
+		},
 	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
 			resetFlags := flags.Get()
 			gFlags := new(flags.GlobalFlags)
 			gFlags.SubscribeToAllSubnets = true
 			flags.Init(gFlags)
 			defer flags.Init(resetFlags)
 
-			b := c.block(t)
-			s := NewLazilyPersistentStoreColumn(nil, &peerdas.CustodyInfo{})
+			b := tc.block(t)
+			s := NewLazilyPersistentStoreColumn(nil, enode.ID{}, &peerdas.CustodyInfo{})
 
-			co, err := s.fullCommitmentsToCheck(enode.ID{}, b, c.slot)
-			if c.err != nil {
-				require.ErrorIs(t, err, c.err)
-			} else {
-				require.NoError(t, err)
-			}
-			for i := 0; i < len(co); i++ {
-				require.DeepEqual(t, c.commits, co[i])
+			commitmentsArray, err := s.fullCommitmentsToCheck(enode.ID{}, b, tc.slot)
+			require.NoError(t, err)
+
+			for _, commitments := range commitmentsArray {
+				require.DeepEqual(t, tc.commitments, commitments)
 			}
 		})
 	}

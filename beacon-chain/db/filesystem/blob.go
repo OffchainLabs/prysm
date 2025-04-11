@@ -8,9 +8,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/async/event"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
@@ -30,15 +28,8 @@ var (
 	errNoBasePath          = errors.New("BlobStorage base path not specified in init")
 )
 
-type (
-	// BlobStorageOption is a functional option for configuring a BlobStorage.
-	BlobStorageOption func(*BlobStorage) error
-
-	RootIndexPair struct {
-		Root  [fieldparams.RootLength]byte
-		Index uint64
-	}
-)
+// BlobStorageOption is a functional option for configuring a BlobStorage.
+type BlobStorageOption func(*BlobStorage) error
 
 // WithBasePath is a required option that sets the base path of blob storage.
 func WithBasePath(base string) BlobStorageOption {
@@ -85,10 +76,7 @@ func WithLayout(name string) BlobStorageOption {
 // attempt to hold a file lock to guarantee exclusive control of the blob storage directory, so this should only be
 // initialized once per beacon node.
 func NewBlobStorage(opts ...BlobStorageOption) (*BlobStorage, error) {
-	b := &BlobStorage{
-		DataColumnFeed: new(event.Feed),
-	}
-
+	b := &BlobStorage{}
 	for _, o := range opts {
 		if err := o(b); err != nil {
 			return nil, errors.Wrap(err, "failed to create blob storage")
@@ -127,7 +115,6 @@ type BlobStorage struct {
 	fs              afero.Fs
 	layout          fsLayout
 	cache           *blobStorageSummaryCache
-	DataColumnFeed  *event.Feed
 }
 
 // WarmCache runs the prune routine with an expiration of slot of 0, so nothing will be pruned, but the pruner's cache
@@ -171,51 +158,6 @@ func (bs *BlobStorage) migrateLayouts() error {
 
 func (bs *BlobStorage) writePart(sidecar blocks.VerifiedROBlob) (ppath string, err error) {
 	ident := identForSidecar(sidecar)
-	sidecarData, err := sidecar.MarshalSSZ()
-	if err != nil {
-		return "", errors.Wrap(err, "failed to serialize sidecar data")
-	}
-	if len(sidecarData) == 0 {
-		return "", errSidecarEmptySSZData
-	}
-
-	if err := bs.fs.MkdirAll(bs.layout.dir(ident), directoryPermissions()); err != nil {
-		return "", err
-	}
-	ppath = bs.layout.partPath(ident, fmt.Sprintf("%p", sidecarData))
-
-	// Create a partial file and write the serialized data to it.
-	partialFile, err := bs.fs.Create(ppath)
-	if err != nil {
-		return "", errors.Wrap(err, "failed to create partial file")
-	}
-	defer func() {
-		cerr := partialFile.Close()
-		// The close error is probably less important than any existing error, so only overwrite nil err.
-		if cerr != nil && err == nil {
-			err = cerr
-		}
-	}()
-
-	n, err := partialFile.Write(sidecarData)
-	if err != nil {
-		return ppath, errors.Wrap(err, "failed to write to partial file")
-	}
-	if bs.fsync {
-		if err := partialFile.Sync(); err != nil {
-			return ppath, err
-		}
-	}
-
-	if n != len(sidecarData) {
-		return ppath, fmt.Errorf("failed to write the full bytes of sidecarData, wrote only %d of %d bytes", n, len(sidecarData))
-	}
-
-	return ppath, nil
-}
-
-func (bs *BlobStorage) writeDataColumnPart(sidecar blocks.VerifiedRODataColumn) (ppath string, err error) {
-	ident := identForDataColumnSidecar(sidecar)
 	sidecarData, err := sidecar.MarshalSSZ()
 	if err != nil {
 		return "", errors.Wrap(err, "failed to serialize sidecar data")
@@ -309,65 +251,6 @@ func (bs *BlobStorage) Save(sidecar blocks.VerifiedROBlob) error {
 	return nil
 }
 
-// SaveDataColumn saves dataColumns given a list of sidecars.
-func (bs *BlobStorage) SaveDataColumn(verifiedRODataColumns blocks.VerifiedRODataColumn) error {
-	startTime := time.Now()
-
-	ident := identForDataColumnSidecar(verifiedRODataColumns)
-	sszPath := bs.layout.sszPath(ident)
-	exists, err := afero.Exists(bs.fs, sszPath)
-	if err != nil {
-		return errors.Wrap(err, "afero exists")
-	}
-
-	if exists {
-		return nil
-	}
-
-	partialMoved := false
-	partPath, err := bs.writeDataColumnPart(verifiedRODataColumns)
-
-	// Ensure the partial file is deleted.
-	defer func() {
-		if partialMoved || partPath == "" {
-			return
-		}
-
-		// It's expected to error if the save is successful.
-		if err := bs.fs.Remove(partPath); err == nil {
-			log.WithField("partPath", partPath).Debug("Removed partial file")
-		}
-	}()
-
-	if err != nil {
-		return err
-	}
-
-	// Atomically rename the partial file to its final name.
-	err = bs.fs.Rename(partPath, sszPath)
-	if err != nil {
-		return errors.Wrap(err, "rename")
-	}
-	partialMoved = true
-
-	if err := bs.layout.notify(ident); err != nil {
-		return errors.Wrapf(err, "problem maintaining pruning cache/metrics for sidecar with root=%#x", verifiedRODataColumns.BlockRoot())
-	}
-
-	// Notify the data column notifier that a new data column has been saved.
-	if bs.DataColumnFeed != nil {
-		bs.DataColumnFeed.Send(RootIndexPair{
-			Root:  verifiedRODataColumns.BlockRoot(),
-			Index: verifiedRODataColumns.ColumnIndex,
-		})
-	}
-
-	blobsWrittenCounter.Inc()
-	blobSaveLatency.Observe(float64(time.Since(startTime).Milliseconds()))
-
-	return nil
-}
-
 // Get retrieves a single BlobSidecar by its root and index.
 // Since BlobStorage only writes blobs that have undergone full verification, the return
 // value is always a VerifiedROBlob.
@@ -383,25 +266,7 @@ func (bs *BlobStorage) Get(root [32]byte, idx uint64) (blocks.VerifiedROBlob, er
 	return verification.VerifiedROBlobFromDisk(bs.fs, root, bs.layout.sszPath(ident))
 }
 
-// GetColumn retrieves a single DataColumnSidecar by its root and index.
-// Since BlobStorage only writes blobs that have undergone full verification, the return
-// value is always a VerifiedRODataColumn.
-func (bs *BlobStorage) GetColumn(root [32]byte, idx uint64) (blocks.VerifiedRODataColumn, error) {
-	startTime := time.Now()
-
-	ident, err := bs.layout.ident(root, idx)
-	if err != nil {
-		return verification.VerifiedRODataColumnError(err)
-	}
-
-	defer func() {
-		blobFetchLatency.Observe(float64(time.Since(startTime).Milliseconds()))
-	}()
-
-	return verification.VerifiedRODataColumnFromDisk(bs.fs, root, bs.layout.sszPath(ident))
-}
-
-// Remove removes all blobs or data columns for a given root.
+// Remove removes all blobs for a given root.
 func (bs *BlobStorage) Remove(root [32]byte) error {
 	dirIdent, err := bs.layout.dirIdent(root)
 	if err != nil {

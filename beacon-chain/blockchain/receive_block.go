@@ -56,6 +56,7 @@ type BlobReceiver interface {
 // data columns
 type DataColumnReceiver interface {
 	ReceiveDataColumn(blocks.VerifiedRODataColumn) error
+	ReceiveDataColumns([]blocks.VerifiedRODataColumn) error
 }
 
 // SlashingReceiver interface defines the methods of chain service for receiving validated slashing over the wire.
@@ -235,26 +236,32 @@ func (s *Service) handleDA(
 	block interfaces.SignedBeaconBlock,
 	blockRoot [32]byte,
 	avs das.AvailabilityStore,
-) (time.Duration, error) {
-	daStartTime := time.Now()
-	if avs != nil {
-		rob, err := blocks.NewROBlockWithRoot(block, blockRoot)
-		if err != nil {
-			return 0, err
+) (elapsed time.Duration, err error) {
+	defer func(start time.Time) {
+		elapsed := time.Since(start)
+
+		if err == nil {
+			dataAvailWaitedTime.Observe(float64(elapsed.Milliseconds()))
+		}
+	}(time.Now())
+
+	if avs == nil {
+		if err = s.isDataAvailable(ctx, blockRoot, block); err != nil {
+			return
 		}
 
-		nodeID := s.cfg.P2P.NodeID()
-		if err := avs.IsDataAvailable(ctx, nodeID, s.CurrentSlot(), rob); err != nil {
-			return 0, errors.Wrap(err, "could not validate blob data availability (AvailabilityStore.IsDataAvailable)")
-		}
-	} else {
-		if err := s.isDataAvailable(ctx, blockRoot, block); err != nil {
-			return 0, errors.Wrap(err, "is data available")
-		}
+		return
 	}
-	daWaitedTime := time.Since(daStartTime)
-	dataAvailWaitedTime.Observe(float64(daWaitedTime.Milliseconds()))
-	return daWaitedTime, nil
+
+	var rob blocks.ROBlock
+	rob, err = blocks.NewROBlockWithRoot(block, blockRoot)
+	if err != nil {
+		return
+	}
+
+	err = avs.IsDataAvailable(ctx, s.CurrentSlot(), rob)
+
+	return
 }
 
 func (s *Service) reportPostBlockProcessing(

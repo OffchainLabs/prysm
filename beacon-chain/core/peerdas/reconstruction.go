@@ -32,9 +32,9 @@ func RecoverCellsAndProofs(
 	}
 
 	// Check if all columns have the same length.
-	blobCount := len(dataColumnSideCars[0].DataColumn)
+	blobCount := len(dataColumnSideCars[0].Column)
 	for _, sidecar := range dataColumnSideCars {
-		length := len(sidecar.DataColumn)
+		length := len(sidecar.Column)
 
 		if length != blobCount {
 			return nil, errors.New("columns do not have the same length")
@@ -52,10 +52,10 @@ func RecoverCellsAndProofs(
 
 			for _, sidecar := range dataColumnSideCars {
 				// Build the cell indices.
-				cellsIndices = append(cellsIndices, sidecar.ColumnIndex)
+				cellsIndices = append(cellsIndices, sidecar.Index)
 
 				// Get the cell.
-				column := sidecar.DataColumn
+				column := sidecar.Column
 				cell := column[bIndex]
 
 				cells = append(cells, kzg.Cell(cell))
@@ -132,10 +132,10 @@ func DataColumnSidecarsForReconstruct(
 		}
 
 		sidecar := &ethpb.DataColumnSidecar{
-			ColumnIndex:                  uint64(columnIndex),
-			DataColumn:                   columnBytes,
+			Index:                        uint64(columnIndex),
+			Column:                       columnBytes,
 			KzgCommitments:               blobKzgCommitments,
-			KzgProof:                     kzgProofOfColumnBytes,
+			KzgProofs:                    kzgProofOfColumnBytes,
 			SignedBlockHeader:            signedBlockHeader,
 			KzgCommitmentsInclusionProof: kzgCommitmentsInclusionProof,
 		}

@@ -5,7 +5,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/p2p/enode"
 	errors "github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
@@ -117,46 +116,53 @@ func TestLazilyPersistent_Missing(t *testing.T) {
 	ctx := context.Background()
 	store := filesystem.NewEphemeralBlobStorage(t)
 
-	blk, scs := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 1, 3)
+	blk, blobSidecars := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 1, 3)
 
-	mbv := &mockBlobBatchVerifier{t: t, scs: scs}
+	scs := blocks.NewSidecarsFromBlobSidecars(blobSidecars)
+
+	mbv := &mockBlobBatchVerifier{t: t, scs: blobSidecars}
 	as := NewLazilyPersistentStore(store, mbv)
 
 	// Only one commitment persisted, should return error with other indices
 	require.NoError(t, as.Persist(1, scs[2]))
-	err := as.IsDataAvailable(ctx, enode.ID{}, 1, blk)
+	err := as.IsDataAvailable(ctx, 1, blk)
 	require.ErrorIs(t, err, errMissingSidecar)
 
 	// All but one persisted, return missing idx
 	require.NoError(t, as.Persist(1, scs[0]))
-	err = as.IsDataAvailable(ctx, enode.ID{}, 1, blk)
+	err = as.IsDataAvailable(ctx, 1, blk)
 	require.ErrorIs(t, err, errMissingSidecar)
 
 	// All persisted, return nil
 	require.NoError(t, as.Persist(1, scs...))
 
-	require.NoError(t, as.IsDataAvailable(ctx, enode.ID{}, 1, blk))
+	require.NoError(t, as.IsDataAvailable(ctx, 1, blk))
 }
 
 func TestLazilyPersistent_Mismatch(t *testing.T) {
 	ctx := context.Background()
 	store := filesystem.NewEphemeralBlobStorage(t)
 
-	blk, scs := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 1, 3)
+	blk, blobSidecars := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 1, 3)
 
 	mbv := &mockBlobBatchVerifier{t: t, err: errors.New("kzg check should not run")}
-	scs[0].KzgCommitment = bytesutil.PadTo([]byte("nope"), 48)
+	blobSidecars[0].KzgCommitment = bytesutil.PadTo([]byte("nope"), 48)
 	as := NewLazilyPersistentStore(store, mbv)
+
+	scs := blocks.NewSidecarsFromBlobSidecars(blobSidecars)
 
 	// Only one commitment persisted, should return error with other indices
 	require.NoError(t, as.Persist(1, scs[0]))
-	err := as.IsDataAvailable(ctx, enode.ID{}, 1, blk)
+	err := as.IsDataAvailable(ctx, 1, blk)
 	require.NotNil(t, err)
 	require.ErrorIs(t, err, errCommitmentMismatch)
 }
 
 func TestLazyPersistOnceCommitted(t *testing.T) {
-	_, scs := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 1, 6)
+	_, blobSidecars := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 1, 6)
+
+	scs := blocks.NewSidecarsFromBlobSidecars(blobSidecars)
+
 	as := NewLazilyPersistentStore(filesystem.NewEphemeralBlobStorage(t), &mockBlobBatchVerifier{})
 	// stashes as expected
 	require.NoError(t, as.Persist(1, scs...))
@@ -164,10 +170,13 @@ func TestLazyPersistOnceCommitted(t *testing.T) {
 	require.ErrorIs(t, as.Persist(1, scs...), ErrDuplicateSidecar)
 
 	// ignores index out of bound
-	scs[0].Index = 6
-	require.ErrorIs(t, as.Persist(1, scs[0]), errIndexOutOfBounds)
+	blobSidecars[0].Index = 6
+	require.ErrorIs(t, as.Persist(1, blocks.NewSidecarFromBlobSidecar(blobSidecars[0])), errIndexOutOfBounds)
 
-	_, more := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 1, 4)
+	_, moreBlobSidecars := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 1, 4)
+
+	more := blocks.NewSidecarsFromBlobSidecars(moreBlobSidecars)
+
 	// ignores sidecars before the retention period
 	slotOOB, err := slots.EpochStart(params.BeaconConfig().MinEpochsForBlobsSidecarsRequest)
 	require.NoError(t, err)
