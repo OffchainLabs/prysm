@@ -16,11 +16,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-type abstractProduceBlockResponseJson struct {
-	Version string          `json:"version"`
-	Data    json.RawMessage `json:"data"`
-}
-
 func (c *beaconApiValidatorClient) beaconBlock(ctx context.Context, slot primitives.Slot, randaoReveal, graffiti []byte) (*ethpb.GenericBeaconBlock, error) {
 	queryParams := neturl.Values{}
 	queryParams.Add("randao_reveal", hexutil.Encode(randaoReveal))
