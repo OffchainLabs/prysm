@@ -7,7 +7,7 @@ go_library(
         "recovery_interceptor_option.go",
         "tracer.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/monitoring/tracing",
+    importpath = "github.com/OffchainLabs/prysm/v6/monitoring/tracing",
     visibility = ["//visibility:public"],
     deps = [
         "//monitoring/tracing/trace:go_default_library",

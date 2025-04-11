@@ -3,10 +3,10 @@ package state_native_test
 import (
 	"testing"
 
-	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
+	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 )
 
 func TestSetDepositRequestsStartIndex(t *testing.T) {

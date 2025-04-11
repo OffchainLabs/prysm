@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 )
 
 // Uint64FromString converts a string into a uint64 representation.

@@ -7,7 +7,7 @@ go_library(
         "server.go",
         "validator_count.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/prysm/beacon",
+    importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/prysm/beacon",
     visibility = ["//visibility:public"],
     deps = [
         "//api/server/structs:go_default_library",

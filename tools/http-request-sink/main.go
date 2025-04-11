@@ -15,7 +15,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 )
 
 func main() {

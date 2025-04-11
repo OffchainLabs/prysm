@@ -4,12 +4,12 @@ import (
 	"context"
 	"time"
 
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	types "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/crypto/rand"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	types "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/crypto/rand"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 )
 
 const broadcastBLSChangesRateLimit = 128

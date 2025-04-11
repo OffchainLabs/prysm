@@ -9,9 +9,9 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/OffchainLabs/prysm/v6/encoding/ssz/equality"
 	"github.com/d4l3k/messagediff"
 	"github.com/google/go-cmp/cmp"
-	"github.com/prysmaticlabs/prysm/v5/encoding/ssz/equality"
 	"github.com/sirupsen/logrus/hooks/test"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/testing/protocmp"

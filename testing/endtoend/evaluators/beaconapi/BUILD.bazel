@@ -9,7 +9,7 @@ go_library(
         "util.go",
         "verify.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/testing/endtoend/evaluators/beaconapi",
+    importpath = "github.com/OffchainLabs/prysm/v6/testing/endtoend/evaluators/beaconapi",
     visibility = ["//testing/endtoend:__subpackages__"],
     deps = [
         "//api:go_default_library",

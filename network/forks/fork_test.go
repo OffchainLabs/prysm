@@ -6,11 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
 )
 
 func TestFork(t *testing.T) {

@@ -7,29 +7,29 @@ import (
 	"testing"
 	"time"
 
+	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
+	dbtest "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/attestations"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
+	mockSync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync/initial-sync/testing"
+	lruwrpr "github.com/OffchainLabs/prysm/v6/cache/lru"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/crypto/bls"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pubsubpb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/prysmaticlabs/go-bitfield"
-	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
-	dbtest "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/attestations"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
-	p2ptest "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
-	mockSync "github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/initial-sync/testing"
-	lruwrpr "github.com/prysmaticlabs/prysm/v5/cache/lru"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/attestation"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
 )
 
 func TestVerifyIndexInCommittee_CanVerify(t *testing.T) {
@@ -98,6 +98,64 @@ func TestVerifyIndexInCommittee_ExistsInBeaconCommittee(t *testing.T) {
 	_, _, result, err = service.validateCommitteeIndexAndCount(ctx, att, s)
 	require.ErrorContains(t, "committee index 10000 > 2", err)
 	assert.Equal(t, pubsub.ValidationReject, result)
+}
+
+func TestVerifyIndexInCommittee_ExistsInBeaconCommittee_Electra(t *testing.T) {
+	ctx := context.Background()
+	params.SetupTestConfigCleanup(t)
+	params.OverrideBeaconConfig(params.MinimalSpecConfig())
+
+	validators := uint64(64)
+	s, _ := util.DeterministicGenesisState(t, validators)
+	require.NoError(t, s.SetSlot(params.BeaconConfig().SlotsPerEpoch))
+
+	att := &ethpb.AttestationElectra{Data: &ethpb.AttestationData{}}
+
+	committee, err := helpers.BeaconCommitteeFromState(context.Background(), s, att.Data.Slot, att.Data.CommitteeIndex)
+	require.NoError(t, err)
+
+	bl := bitfield.NewBitlist(uint64(len(committee)))
+	att.AggregationBits = bl
+	att.CommitteeBits = primitives.NewAttestationCommitteeBits()
+
+	service := &Service{}
+
+	att.Data.CommitteeIndex = 1
+	_, _, result, err := service.validateCommitteeIndexAndCount(ctx, att, s)
+	require.ErrorContains(t, "attestation data's committee index must be 0", err)
+	assert.Equal(t, pubsub.ValidationReject, result)
+
+	att.Data.CommitteeIndex = 0
+	_, _, result, err = service.validateCommitteeIndexAndCount(ctx, att, s)
+	require.ErrorContains(t, "committee bits have no bit set", err)
+	assert.Equal(t, pubsub.ValidationReject, result)
+
+	att.CommitteeBits.SetBitAt(0, true)
+	att.CommitteeBits.SetBitAt(1, true)
+
+	_, _, result, err = service.validateCommitteeIndexAndCount(ctx, att, s)
+	require.ErrorContains(t, "expected 1 committee bit indice got 2", err)
+	assert.Equal(t, pubsub.ValidationReject, result)
+
+	// Unset committee index 0
+	att.CommitteeBits.SetBitAt(0, false)
+	ci, _, result, err := service.validateCommitteeIndexAndCount(ctx, att, s)
+	require.NoError(t, err)
+	assert.Equal(t, pubsub.ValidationAccept, result)
+	assert.Equal(t, ci, primitives.CommitteeIndex(1))
+
+	newAtt := &ethpb.SingleAttestation{Data: &ethpb.AttestationData{}, CommitteeId: 1}
+
+	newAtt.Data.CommitteeIndex = 1
+	_, _, result, err = service.validateCommitteeIndexAndCount(ctx, newAtt, s)
+	require.ErrorContains(t, "attestation data's committee index must be 0", err)
+	assert.Equal(t, pubsub.ValidationReject, result)
+
+	newAtt.Data.CommitteeIndex = 0
+	ci, _, result, err = service.validateCommitteeIndexAndCount(ctx, newAtt, s)
+	require.NoError(t, err)
+	assert.Equal(t, pubsub.ValidationAccept, result)
+	assert.Equal(t, ci, primitives.CommitteeIndex(1))
 }
 
 func TestVerifyIndexInCommittee_Electra(t *testing.T) {

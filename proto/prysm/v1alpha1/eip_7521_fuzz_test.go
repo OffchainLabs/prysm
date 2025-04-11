@@ -3,7 +3,7 @@ package eth_test
 import (
 	"testing"
 
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 )
 
 func TestCopyEip7521Types_Fuzz(t *testing.T) {

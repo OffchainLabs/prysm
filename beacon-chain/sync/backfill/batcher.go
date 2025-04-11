@@ -1,8 +1,8 @@
 package backfill
 
 import (
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 )
 
 var errMaxBatches = errors.New("backfill batch requested in excess of max outstanding batches")

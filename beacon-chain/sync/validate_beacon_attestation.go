@@ -7,25 +7,25 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/slasher/types"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/operation"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/slasher/types"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/attestation"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
 // Validation
@@ -254,7 +254,19 @@ func (s *Service) validateCommitteeIndexAndCount(
 		return 0, 0, pubsub.ValidationIgnore, err
 	}
 	count := helpers.SlotCommitteeCount(valCount)
-	ci := a.GetCommitteeIndex()
+	var ci primitives.CommitteeIndex
+	if a.Version() >= version.Electra && !a.IsSingle() {
+		bitCount := a.CommitteeBitsVal().Count()
+		if bitCount == 0 {
+			return 0, 0, pubsub.ValidationReject, fmt.Errorf("committee bits have no bit set")
+		}
+		if bitCount != 1 {
+			return 0, 0, pubsub.ValidationReject, fmt.Errorf("expected 1 committee bit indice got %d", bitCount)
+		}
+		ci = primitives.CommitteeIndex(a.CommitteeBitsVal().BitIndices()[0])
+	} else {
+		ci = a.GetCommitteeIndex()
+	}
 	if uint64(ci) > count {
 		return 0, 0, pubsub.ValidationReject, fmt.Errorf("committee index %d > %d", ci, count)
 	}

@@ -12,7 +12,7 @@ package mock
 import (
 	reflect "reflect"
 
-	common "github.com/prysmaticlabs/prysm/v5/crypto/bls/common"
+	common "github.com/OffchainLabs/prysm/v6/crypto/bls/common"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -20,6 +20,7 @@ import (
 type MockSecretKey struct {
 	ctrl     *gomock.Controller
 	recorder *MockSecretKeyMockRecorder
+	isgomock struct{}
 }
 
 // MockSecretKeyMockRecorder is the mock recorder for MockSecretKey.
@@ -85,6 +86,7 @@ func (mr *MockSecretKeyMockRecorder) Sign(msg any) *gomock.Call {
 type MockPublicKey struct {
 	ctrl     *gomock.Controller
 	recorder *MockPublicKeyMockRecorder
+	isgomock struct{}
 }
 
 // MockPublicKeyMockRecorder is the mock recorder for MockPublicKey.
@@ -178,6 +180,7 @@ func (mr *MockPublicKeyMockRecorder) Marshal() *gomock.Call {
 type MockSignature struct {
 	ctrl     *gomock.Controller
 	recorder *MockSignatureMockRecorder
+	isgomock struct{}
 }
 
 // MockSignatureMockRecorder is the mock recorder for MockSignature.

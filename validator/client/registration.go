@@ -4,16 +4,16 @@ import (
 	"context"
 	"strings"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/builder"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	validatorpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/validator-client"
+	"github.com/OffchainLabs/prysm/v6/validator/client/iface"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/builder"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	validatorpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/validator-client"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
 )
 
 // SubmitValidatorRegistrations signs validator registration objects and submits it to the beacon node by batch of validatorRegsBatchSize size maximum.

@@ -1,11 +1,11 @@
 package depositsnapshot
 
 import (
+	"github.com/OffchainLabs/prysm/v6/container/slice"
+	"github.com/OffchainLabs/prysm/v6/container/trie"
+	"github.com/OffchainLabs/prysm/v6/crypto/hash"
+	"github.com/OffchainLabs/prysm/v6/math"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/container/slice"
-	"github.com/prysmaticlabs/prysm/v5/container/trie"
-	"github.com/prysmaticlabs/prysm/v5/crypto/hash"
-	"github.com/prysmaticlabs/prysm/v5/math"
 )
 
 const (

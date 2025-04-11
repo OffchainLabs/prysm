@@ -4,11 +4,11 @@ import (
 	"reflect"
 	"sync"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native/types"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stateutil"
+	multi_value_slice "github.com/OffchainLabs/prysm/v6/container/multi-value-slice"
+	pmath "github.com/OffchainLabs/prysm/v6/math"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native/types"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stateutil"
-	multi_value_slice "github.com/prysmaticlabs/prysm/v5/container/multi-value-slice"
-	pmath "github.com/prysmaticlabs/prysm/v5/math"
 )
 
 var (
