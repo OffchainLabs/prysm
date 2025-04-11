@@ -42,7 +42,6 @@ go_library(
         "//config/proposer:go_default_library",
         "//config/proposer/loader:go_default_library",
         "//io/file:go_default_library",
-        "//monitoring/backup:go_default_library",
         "//monitoring/prometheus:go_default_library",
         "//monitoring/tracing:go_default_library",
         "//runtime:go_default_library",
