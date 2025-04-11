@@ -1,0 +1,3 @@
+### Removed
+
+- Remove deprecated flags.
