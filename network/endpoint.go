@@ -9,8 +9,8 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/OffchainLabs/prysm/v6/network/authorization"
 	gethRPC "github.com/ethereum/go-ethereum/rpc"
-	"github.com/prysmaticlabs/prysm/v5/network/authorization"
 	log "github.com/sirupsen/logrus"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )

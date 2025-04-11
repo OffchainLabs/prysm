@@ -6,10 +6,10 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v6/network/httputil"
+	slashing "github.com/OffchainLabs/prysm/v6/validator/slashing-protection-history"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
-	slashing "github.com/prysmaticlabs/prysm/v5/validator/slashing-protection-history"
 )
 
 // ExportSlashingProtection handles the rpc call returning the json slashing history.

@@ -9,7 +9,7 @@ go_library(
         "options.go",
         "prometheus.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/node",
+    importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/node",
     visibility = [
         "//beacon-chain:__subpackages__",
         "//cmd/beacon-chain:__subpackages__",

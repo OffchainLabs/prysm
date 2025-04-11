@@ -6,7 +6,7 @@ go_library(
         "doc.go",
         "export.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/validator/slashing-protection-history",
+    importpath = "github.com/OffchainLabs/prysm/v6/validator/slashing-protection-history",
     visibility = [
         "//cmd:__subpackages__",
         "//validator:__subpackages__",

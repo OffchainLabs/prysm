@@ -9,7 +9,7 @@ go_library(
         "migrate.go",
         "restore.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/validator/db",
+    importpath = "github.com/OffchainLabs/prysm/v6/validator/db",
     visibility = [
         "//cmd/validator:__subpackages__",
         "//validator:__subpackages__",

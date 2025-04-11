@@ -17,7 +17,7 @@ go_library(
         "validator.go",
         "wei.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives",
+    importpath = "github.com/OffchainLabs/prysm/v6/consensus-types/primitives",
     visibility = ["//visibility:public"],
     deps = [
         "//math:go_default_library",

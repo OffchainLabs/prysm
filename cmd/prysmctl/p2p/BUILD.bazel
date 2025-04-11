@@ -13,7 +13,7 @@ go_library(
         "request_blobs.go",
         "request_blocks.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/cmd/prysmctl/p2p",
+    importpath = "github.com/OffchainLabs/prysm/v6/cmd/prysmctl/p2p",
     visibility = ["//visibility:public"],
     deps = [
         "//beacon-chain/forkchoice:go_default_library",
