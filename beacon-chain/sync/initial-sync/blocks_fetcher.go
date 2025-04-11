@@ -134,7 +134,7 @@ type fetchRequestResponse struct {
 	pid   peer.ID
 	start primitives.Slot
 	count uint64
-	bwb   []blocks.BlockWithROBlobs
+	bwb   []blocks.BlockWithROSidecars
 	err   error
 }
 
@@ -309,7 +309,7 @@ func (f *blocksFetcher) handleRequest(ctx context.Context, start primitives.Slot
 	response := &fetchRequestResponse{
 		start: start,
 		count: count,
-		bwb:   []blocks.BlockWithROBlobs{},
+		bwb:   []blocks.BlockWithROSidecars{},
 		err:   nil,
 	}
 
@@ -374,7 +374,7 @@ func (f *blocksFetcher) fetchBlocksFromPeer(
 	ctx context.Context,
 	start primitives.Slot, count uint64,
 	peers []peer.ID,
-) ([]blocks.BlockWithROBlobs, peer.ID, error) {
+) ([]blocks.BlockWithROSidecars, peer.ID, error) {
 	ctx, span := trace.StartSpan(ctx, "initialsync.fetchBlocksFromPeer")
 	defer span.End()
 
@@ -406,14 +406,14 @@ func (f *blocksFetcher) fetchBlocksFromPeer(
 	return nil, "", errNoPeersAvailable
 }
 
-func sortedBlockWithVerifiedBlobSlice(blks []interfaces.ReadOnlySignedBeaconBlock) ([]blocks.BlockWithROBlobs, error) {
-	rb := make([]blocks.BlockWithROBlobs, len(blks))
+func sortedBlockWithVerifiedBlobSlice(blks []interfaces.ReadOnlySignedBeaconBlock) ([]blocks.BlockWithROSidecars, error) {
+	rb := make([]blocks.BlockWithROSidecars, len(blks))
 	for i, b := range blks {
 		ro, err := blocks.NewROBlock(b)
 		if err != nil {
 			return nil, err
 		}
-		rb[i] = blocks.BlockWithROBlobs{Block: ro}
+		rb[i] = blocks.BlockWithROSidecars{Block: ro}
 	}
 	sort.Sort(blocks.BlockWithROBlobsSlice(rb))
 	return rb, nil
@@ -429,7 +429,7 @@ type commitmentCountList []commitmentCount
 
 // countCommitments makes a list of all blocks that have commitments that need to be satisfied.
 // This gives us a representation to finish building the request that is lightweight and readable for testing.
-func countCommitments(bwb []blocks.BlockWithROBlobs, retentionStart primitives.Slot) commitmentCountList {
+func countCommitments(bwb []blocks.BlockWithROSidecars, retentionStart primitives.Slot) commitmentCountList {
 	if len(bwb) == 0 {
 		return nil
 	}
@@ -513,7 +513,7 @@ var errMissingBlobsForBlockCommitments = errors.Wrap(errBlobVerification, "blobs
 
 // verifyAndPopulateBlobs mutate the input `bwb` argument by adding verified blobs.
 // This function mutates the input `bwb` argument.
-func verifyAndPopulateBlobs(bwb []blocks.BlockWithROBlobs, blobs []blocks.ROBlob, req *p2ppb.BlobSidecarsByRangeRequest, bss filesystem.BlobStorageSummarizer) error {
+func verifyAndPopulateBlobs(bwb []blocks.BlockWithROSidecars, blobs []blocks.ROBlob, req *p2ppb.BlobSidecarsByRangeRequest, bss filesystem.BlobStorageSummarizer) error {
 	blobsByRoot := make(map[[32]byte][]blocks.ROBlob)
 	for i := range blobs {
 		if blobs[i].Slot() < req.StartSlot {
@@ -538,7 +538,7 @@ var errDidntPopulate = errors.New("skipping population of block")
 
 // populateBlock verifies and populates blobs for a block.
 // This function mutates the input `bw` argument.
-func populateBlock(bw *blocks.BlockWithROBlobs, blobs []blocks.ROBlob, req *p2ppb.BlobSidecarsByRangeRequest, bss filesystem.BlobStorageSummarizer) error {
+func populateBlock(bw *blocks.BlockWithROSidecars, blobs []blocks.ROBlob, req *p2ppb.BlobSidecarsByRangeRequest, bss filesystem.BlobStorageSummarizer) error {
 	blk := bw.Block
 	if blk.Version() < version.Deneb || blk.Block().Slot() < req.StartSlot {
 		return errDidntPopulate
@@ -583,7 +583,7 @@ func missingCommitError(root [32]byte, slot primitives.Slot, missing [][]byte) e
 
 // fetchBlobsFromPeer fetches blocks from a single randomly selected peer.
 // This function mutates the input `bwb` argument.
-func (f *blocksFetcher) fetchBlobsFromPeer(ctx context.Context, bwb []blocks.BlockWithROBlobs, pid peer.ID, peers []peer.ID) error {
+func (f *blocksFetcher) fetchBlobsFromPeer(ctx context.Context, bwb []blocks.BlockWithROSidecars, pid peer.ID, peers []peer.ID) error {
 	if len(bwb) == 0 {
 		return nil
 	}
@@ -794,7 +794,7 @@ func (f *blocksFetcher) custodyColumns() (map[uint64]bool, error) {
 func (f *blocksFetcher) missingColumnsFromRoot(
 	custodyColumns map[uint64]bool,
 	minSlot primitives.Slot,
-	bwbs []blocks.BlockWithROBlobs,
+	bwbs []blocks.BlockWithROSidecars,
 ) (map[[fieldparams.RootLength]byte]map[uint64]bool, error) {
 	missingColumnsByRoot := make(map[[fieldparams.RootLength]byte]map[uint64]bool)
 	for _, bwb := range bwbs {
@@ -844,7 +844,7 @@ func (f *blocksFetcher) missingColumnsFromRoot(
 }
 
 // indicesFromRoot returns the indices indexed by root.
-func indicesFromRoot(bwbs []blocks.BlockWithROBlobs) map[[fieldparams.RootLength]byte][]int {
+func indicesFromRoot(bwbs []blocks.BlockWithROSidecars) map[[fieldparams.RootLength]byte][]int {
 	result := make(map[[fieldparams.RootLength]byte][]int, len(bwbs))
 	for i := 0; i < len(bwbs); i++ {
 		root := bwbs[i].Block.Root()
@@ -855,7 +855,7 @@ func indicesFromRoot(bwbs []blocks.BlockWithROBlobs) map[[fieldparams.RootLength
 }
 
 // blockFromRoot returns the block indexed by root.
-func blockFromRoot(bwb []blocks.BlockWithROBlobs) map[[fieldparams.RootLength]byte]blocks.ROBlock {
+func blockFromRoot(bwb []blocks.BlockWithROSidecars) map[[fieldparams.RootLength]byte]blocks.ROBlock {
 	result := make(map[[fieldparams.RootLength]byte]blocks.ROBlock, len(bwb))
 	for i := 0; i < len(bwb); i++ {
 		root := bwb[i].Block.Root()
@@ -955,7 +955,7 @@ func (f *blocksFetcher) fetchBwbSliceFromPeers(
 type bwbsMissingColumns struct {
 	mu sync.RWMutex
 
-	bwbs                 []blocks.BlockWithROBlobs
+	bwbs                 []blocks.BlockWithROSidecars
 	missingColumnsByRoot map[[fieldparams.RootLength]byte]map[uint64]bool
 }
 
@@ -966,7 +966,7 @@ type bwbsMissingColumns struct {
 // Prerequisite: `bwbs“ is sorted by slot.
 func (f *blocksFetcher) fetchDataColumnsFromPeers(
 	ctx context.Context,
-	bwbs []blocks.BlockWithROBlobs,
+	bwbs []blocks.BlockWithROSidecars,
 	peers []peer.ID,
 	delay time.Duration,
 	batchSize int,
@@ -1086,7 +1086,7 @@ func (f *blocksFetcher) fetchDataColumnsFromPeers(
 }
 
 // sortBwbsByColumnIndex sorts `bwbs` by column index.
-func sortBwbsByColumnIndex(bwbs []blocks.BlockWithROBlobs) {
+func sortBwbsByColumnIndex(bwbs []blocks.BlockWithROSidecars) {
 	for _, bwb := range bwbs {
 		sort.Slice(bwb.Columns, func(i, j int) bool {
 			return bwb.Columns[i].Index < bwb.Columns[j].Index

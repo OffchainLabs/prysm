@@ -96,10 +96,10 @@ func (s ROBlockSlice) Len() int {
 	return len(s)
 }
 
-// BlockWithROBlobs is a wrapper that collects the block and blob values together.
+// BlockWithROSidecars is a wrapper that collects the block and blob values together.
 // This is helpful because these values are collated from separate RPC requests.
 // TODO: Use a more generic name
-type BlockWithROBlobs struct {
+type BlockWithROSidecars struct {
 	Block   ROBlock
 	Blobs   []ROBlob
 	Columns []RODataColumn
@@ -107,7 +107,7 @@ type BlockWithROBlobs struct {
 
 // BlockWithROBlobsSlice gives convenient access to getting a slice of just the ROBlocks,
 // and defines sorting helpers.
-type BlockWithROBlobsSlice []BlockWithROBlobs
+type BlockWithROBlobsSlice []BlockWithROSidecars
 
 func (s BlockWithROBlobsSlice) ROBlocks() []ROBlock {
 	r := make([]ROBlock, len(s))
