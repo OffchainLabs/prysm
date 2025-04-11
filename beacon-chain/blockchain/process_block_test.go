@@ -3370,45 +3370,56 @@ func TestProcessLightClientOptimisticUpdate(t *testing.T) {
 			t.Run(version.String(testVersion)+"_"+tc.name, func(t *testing.T) {
 				s.genesisTime = time.Unix(time.Now().Unix()-(int64(forkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
 
-				//var oldAttestedStateRoot, newAttestedStateRoot [32]byte
-				var oldAttestedBlockRoot, newAttestedBlockRoot [32]byte
+				var oldActualUpdate interfaces.LightClientOptimisticUpdate
 				var err error
-
 				if tc.oldOptions != nil {
 					// config for old update
 					lOld, cfgOld := setupLightClientTestRequirements(ctx, t, s, testVersion, tc.oldOptions...)
 					require.NoError(t, s.processLightClientOptimisticUpdate(cfgOld.ctx, cfgOld.roblock, cfgOld.postState))
-					//oldAttestedStateRoot, err = lOld.AttestedState.HashTreeRoot(ctx)
-					//require.NoError(t, err)
+
+					oldActualUpdate, err = lightClient.NewLightClientOptimisticUpdateFromBeaconState(
+						lOld.Ctx,
+						lOld.State.Slot(),
+						lOld.State,
+						lOld.Block,
+						lOld.AttestedState,
+						lOld.AttestedBlock,
+					)
+					require.NoError(t, err)
 
 					// check that the old update is saved
 					oldUpdate := s.lcStore.LastOptimisticUpdate()
 					require.NotNil(t, oldUpdate)
-					//require.Equal(t, oldAttestedStateRoot, [32]byte(oldUpdate.AttestedHeader().Beacon().StateRoot))
-					require.Equal(t, expectedVersion, oldUpdate.Version())
-					oldAttestedBlockRoot, err = lOld.AttestedBlock.Block().HashTreeRoot()
-					require.NoError(t, err)
+
+					require.DeepEqual(t, oldUpdate, oldActualUpdate, "old update should be saved")
+
 				}
 
 				// config for new update
 				lNew, cfgNew := setupLightClientTestRequirements(ctx, t, s, testVersion, tc.newOptions...)
 				require.NoError(t, s.processLightClientOptimisticUpdate(cfgNew.ctx, cfgNew.roblock, cfgNew.postState))
-				//newAttestedStateRoot, err = lNew.AttestedState.HashTreeRoot(ctx)
-				//require.NoError(t, err)
-				newAttestedBlockRoot, err = lNew.AttestedBlock.Block().HashTreeRoot()
+
+				newActualUpdate, err := lightClient.NewLightClientOptimisticUpdateFromBeaconState(
+					lNew.Ctx,
+					lNew.State.Slot(),
+					lNew.State,
+					lNew.Block,
+					lNew.AttestedState,
+					lNew.AttestedBlock,
+				)
 				require.NoError(t, err)
 
-				require.NotEqual(t, oldAttestedBlockRoot, newAttestedBlockRoot)
+				require.DeepNotEqual(t, newActualUpdate, oldActualUpdate, "new update should not be equal to old update")
 
 				// check that the new update is saved or skipped
 				newUpdate := s.lcStore.LastOptimisticUpdate()
 				require.NotNil(t, newUpdate)
 
 				if tc.expectReplace {
-					//require.Equal(t, newAttestedStateRoot, [32]byte(newUpdate.AttestedHeader().Beacon().StateRoot))
+					require.DeepEqual(t, newActualUpdate, newUpdate)
 					require.Equal(t, expectedVersion, newUpdate.Version())
 				} else {
-					//require.Equal(t, oldAttestedStateRoot, [32]byte(newUpdate.AttestedHeader().Beacon().StateRoot))
+					require.DeepEqual(t, oldActualUpdate, newUpdate)
 					require.Equal(t, expectedVersion, newUpdate.Version())
 				}
 
@@ -3563,10 +3574,6 @@ func TestProcessLightClientFinalityUpdate(t *testing.T) {
 
 				// check that the new update is saved or skipped
 				newUpdate := s.lcStore.LastFinalityUpdate()
-
-				//fmt.Println("newUpdate", newUpdate)
-				//fmt.Println("NewUpdate", actualNewUpdate)
-				//fmt.Println("oldUpdate", actualOldUpdate)
 
 				if tc.expectReplace {
 					require.DeepEqual(t, actualNewUpdate, newUpdate)
