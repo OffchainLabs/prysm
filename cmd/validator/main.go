@@ -89,7 +89,6 @@ var appFlags = []cli.Flag{
 	////////////////////
 	cmd.DisableMonitoringFlag,
 	cmd.MonitoringHostFlag,
-	cmd.BackupWebhookOutputDir,
 	cmd.EnableBackupWebhookFlag,
 	cmd.MinimalConfigFlag,
 	cmd.E2EConfigFlag,
@@ -111,8 +110,6 @@ var appFlags = []cli.Flag{
 	debug.PProfAddrFlag,
 	debug.PProfPortFlag,
 	debug.MemProfileRateFlag,
-	debug.CPUProfileFlag,
-	debug.TraceFlag,
 	debug.BlockProfileRateFlag,
 	debug.MutexProfileFractionFlag,
 	cmd.AcceptTosFlag,
