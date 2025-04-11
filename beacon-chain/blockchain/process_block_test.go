@@ -3299,6 +3299,7 @@ func TestProcessLightClientOptimisticUpdate(t *testing.T) {
 	reset := features.InitWithReset(featCfg)
 	defer reset()
 
+	params.SetupTestConfigCleanup(t)
 	beaconCfg := params.BeaconConfig()
 	beaconCfg.AltairForkEpoch = 1
 	beaconCfg.BellatrixForkEpoch = 2
@@ -3437,6 +3438,7 @@ func TestProcessLightClientFinalityUpdate(t *testing.T) {
 	reset := features.InitWithReset(featCfg)
 	defer reset()
 
+	params.SetupTestConfigCleanup(t)
 	beaconCfg := params.BeaconConfig()
 	beaconCfg.AltairForkEpoch = 1
 	beaconCfg.BellatrixForkEpoch = 2
