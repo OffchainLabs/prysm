@@ -514,5 +514,6 @@ func TestOriginOutsideRetention(t *testing.T) {
 	require.NoError(t, concreteDB.SaveOriginCheckpointBlockRoot(ctx, blk.Root()))
 	// This would break due to missing service dependencies, but will return nil fast due to being outside retention.
 	require.Equal(t, false, params.WithinDAPeriod(slots.ToEpoch(blk.Block().Slot()), slots.ToEpoch(clock.CurrentSlot())))
-	require.NoError(t, s.fetchOriginBlobs([]peer.ID{}))
+
+	require.NoError(t, s.fetchOriginSidecars([]peer.ID{}))
 }

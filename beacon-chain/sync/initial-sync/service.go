@@ -209,17 +209,38 @@ func (s *Service) Start() {
 
 // fetchOriginSidecars fetches origin sidecars
 func (s *Service) fetchOriginSidecars(peers []peer.ID) error {
-	headSlot := s.cfg.Chain.HeadSlot()
-	headEpoch := slots.ToEpoch(headSlot)
+	blockRoot, err := s.cfg.DB.OriginCheckpointBlockRoot(s.ctx)
+	if errors.Is(err, db.ErrNotFoundOriginBlockRoot) {
+		return nil
+	}
 
-	if headEpoch >= params.BeaconConfig().FuluForkEpoch {
-		if err := s.fetchOriginColumns(peers); err != nil {
+	block, err := s.cfg.DB.Block(s.ctx, blockRoot)
+	if err != nil {
+		return errors.Wrap(err, "block")
+	}
+
+	currentSlot, blockSlot := s.clock.CurrentSlot(), block.Block().Slot()
+	currentEpoch, blockEpoch := slots.ToEpoch(currentSlot), slots.ToEpoch(blockSlot)
+
+	if !params.WithinDAPeriod(blockEpoch, currentEpoch) {
+		return nil
+	}
+
+	roBlock, err := blocks.NewROBlockWithRoot(block, blockRoot)
+	if err != nil {
+		return errors.Wrap(err, "new ro block with root")
+	}
+
+	beaconConfig := params.BeaconConfig()
+
+	if blockEpoch >= beaconConfig.FuluForkEpoch {
+		if err := s.fetchOriginColumns(peers, roBlock); err != nil {
 			return errors.Wrap(err, "fetch origin columns")
 		}
 	}
 
-	if headEpoch >= params.BeaconConfig().DenebForkEpoch {
-		if err := s.fetchOriginBlobs(peers); err != nil {
+	if blockEpoch >= beaconConfig.DenebForkEpoch {
+		if err := s.fetchOriginBlobs(peers, roBlock); err != nil {
 			return errors.Wrap(err, "fetch origin blobs")
 		}
 	}
@@ -332,23 +353,9 @@ func missingBlobRequest(blk blocks.ROBlock, store *filesystem.BlobStorage) (p2pt
 	return req, nil
 }
 
-func (s *Service) fetchOriginBlobs(pids []peer.ID) error {
-	r, err := s.cfg.DB.OriginCheckpointBlockRoot(s.ctx)
-	if errors.Is(err, db.ErrNotFoundOriginBlockRoot) {
-		return nil
-	}
-	blk, err := s.cfg.DB.Block(s.ctx, r)
-	if err != nil {
-		log.WithField("root", fmt.Sprintf("%#x", r)).Error("Block for checkpoint sync origin root not found in db")
-		return err
-	}
-	if !params.WithinDAPeriod(slots.ToEpoch(blk.Block().Slot()), slots.ToEpoch(s.clock.CurrentSlot())) {
-		return nil
-	}
-	rob, err := blocks.NewROBlockWithRoot(blk, r)
-	if err != nil {
-		return err
-	}
+func (s *Service) fetchOriginBlobs(pids []peer.ID, rob blocks.ROBlock) error {
+	r := rob.Root()
+
 	req, err := missingBlobRequest(rob, s.cfg.BlobStorage)
 	if err != nil {
 		return err
@@ -386,29 +393,7 @@ func (s *Service) fetchOriginBlobs(pids []peer.ID) error {
 	return fmt.Errorf("no connected peer able to provide blobs for checkpoint sync block %#x", r)
 }
 
-func (s *Service) fetchOriginColumns(pids []peer.ID) error {
-	blockRoot, err := s.cfg.DB.OriginCheckpointBlockRoot(s.ctx)
-	if errors.Is(err, db.ErrNotFoundOriginBlockRoot) {
-		return nil
-	}
-
-	block, err := s.cfg.DB.Block(s.ctx, blockRoot)
-	if err != nil {
-		return errors.Wrap(err, "block")
-	}
-
-	currentSlot, blockSlot := s.clock.CurrentSlot(), block.Block().Slot()
-	currentEpoch, blockEpoch := slots.ToEpoch(currentSlot), slots.ToEpoch(blockSlot)
-
-	if !params.WithinDAPeriod(blockEpoch, currentEpoch) {
-		return nil
-	}
-
-	roBlock, err := blocks.NewROBlockWithRoot(block, blockRoot)
-	if err != nil {
-		return err
-	}
-
+func (s *Service) fetchOriginColumns(pids []peer.ID, roBlock blocks.ROBlock) error {
 	actualSamplingSize := s.cfg.CustodyInfo.CustodyGroupSamplingSize(peerdas.Actual)
 	nodeID := s.cfg.P2P.NodeID()
 	storage := s.cfg.DataColumnStorage
@@ -424,7 +409,7 @@ func (s *Service) fetchOriginColumns(pids []peer.ID) error {
 	}
 
 	log.WithFields(logrus.Fields{
-		"blockRoot":   fmt.Sprintf("%#x", blockRoot),
+		"blockRoot":   fmt.Sprintf("%#x", roBlock.Root()),
 		"columnCount": len(sidecars),
 	}).Info("Successfully downloaded data columns for checkpoint sync block")
 
