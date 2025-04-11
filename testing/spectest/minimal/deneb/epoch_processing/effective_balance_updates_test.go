@@ -3,7 +3,7 @@ package epoch_processing
 import (
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/testing/spectest/shared/deneb/epoch_processing"
+	"github.com/OffchainLabs/prysm/v6/testing/spectest/shared/deneb/epoch_processing"
 )
 
 func TestMinimal_Deneb_EpochProcessing_EffectiveBalanceUpdates(t *testing.T) {

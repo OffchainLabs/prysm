@@ -3,9 +3,9 @@ package enginev1
 import (
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
 )
 
 var (

@@ -4,7 +4,7 @@ go_library(
     name = "go_default_library",
     testonly = True,
     srcs = ["single_merkle_proof.go"],
-    importpath = "github.com/prysmaticlabs/prysm/v5/testing/spectest/shared/common/merkle_proof",
+    importpath = "github.com/OffchainLabs/prysm/v6/testing/spectest/shared/common/merkle_proof",
     visibility = ["//visibility:public"],
     deps = [
         "//config/params:go_default_library",

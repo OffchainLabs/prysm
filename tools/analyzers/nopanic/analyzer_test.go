@@ -3,7 +3,7 @@ package nopanic
 import (
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/build/bazel"
+	"github.com/OffchainLabs/prysm/v6/build/bazel"
 	"golang.org/x/tools/go/analysis/analysistest"
 )
 

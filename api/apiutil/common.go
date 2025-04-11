@@ -5,7 +5,7 @@ import (
 	neturl "net/url"
 	"strconv"
 
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 )
 
 // Uint64ToString is a util function that will convert uints to string

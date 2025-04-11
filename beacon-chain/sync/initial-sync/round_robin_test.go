@@ -5,21 +5,21 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/async/abool"
+	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/das"
+	dbtest "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
+	p2pt "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/container/slice"
+	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/paulbellamy/ratecounter"
-	"github.com/prysmaticlabs/prysm/v5/async/abool"
-	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/das"
-	dbtest "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
-	p2pt "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/container/slice"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
@@ -314,7 +314,8 @@ func TestService_roundRobinSync(t *testing.T) {
 				chainStarted: abool.NewBool(true),
 				clock:        clock,
 			}
-			assert.NoError(t, s.roundRobinSync(makeGenesisTime(tt.currentSlot)))
+			s.genesisTime = makeGenesisTime(tt.currentSlot)
+			assert.NoError(t, s.roundRobinSync())
 			if s.cfg.Chain.HeadSlot() < tt.currentSlot {
 				t.Errorf("Head slot (%d) is less than expected currentSlot (%d)", s.cfg.Chain.HeadSlot(), tt.currentSlot)
 			}
@@ -428,6 +429,7 @@ func TestService_processBlockBatch(t *testing.T) {
 	})
 	ctx := context.Background()
 	genesis := makeGenesisTime(32)
+	s.genesisTime = genesis
 
 	t.Run("process non-linear batch", func(t *testing.T) {
 		var batch []blocks.BlockWithROBlobs
@@ -470,16 +472,18 @@ func TestService_processBlockBatch(t *testing.T) {
 			return nil
 		}
 		// Process block normally.
-		err = s.processBatchedBlocks(ctx, genesis, batch, cbnormal)
+		count, err := s.processBatchedBlocks(ctx, batch, cbnormal)
 		assert.NoError(t, err)
+		require.Equal(t, uint64(len(batch)), count)
 
 		cbnil := func(ctx context.Context, blocks []blocks.ROBlock, _ das.AvailabilityStore) error {
 			return nil
 		}
 
 		// Duplicate processing should trigger error.
-		err = s.processBatchedBlocks(ctx, genesis, batch, cbnil)
+		count, err = s.processBatchedBlocks(ctx, batch, cbnil)
 		assert.ErrorContains(t, "block is already processed", err)
+		require.Equal(t, uint64(0), count)
 
 		var badBatch2 []blocks.BlockWithROBlobs
 		for i, b := range batch2 {
@@ -491,14 +495,16 @@ func TestService_processBlockBatch(t *testing.T) {
 		}
 
 		// Bad batch should fail because it is non linear
-		err = s.processBatchedBlocks(ctx, genesis, badBatch2, cbnil)
+		count, err = s.processBatchedBlocks(ctx, badBatch2, cbnil)
 		expectedSubErr := "expected linear block list"
 		assert.ErrorContains(t, expectedSubErr, err)
+		require.Equal(t, uint64(0), count)
 
 		// Continue normal processing, should proceed w/o errors.
-		err = s.processBatchedBlocks(ctx, genesis, batch2, cbnormal)
+		count, err = s.processBatchedBlocks(ctx, batch2, cbnormal)
 		assert.NoError(t, err)
 		assert.Equal(t, primitives.Slot(19), s.cfg.Chain.HeadSlot(), "Unexpected head slot")
+		require.Equal(t, uint64(len(batch2)), count)
 	})
 }
 
@@ -576,7 +582,8 @@ func TestService_blockProviderScoring(t *testing.T) {
 	assert.Equal(t, scorer.MaxScore(), scorer.Score(peer2))
 	assert.Equal(t, scorer.MaxScore(), scorer.Score(peer3))
 
-	assert.NoError(t, s.roundRobinSync(makeGenesisTime(currentSlot)))
+	s.genesisTime = makeGenesisTime(currentSlot)
+	assert.NoError(t, s.roundRobinSync())
 	if s.cfg.Chain.HeadSlot() < currentSlot {
 		t.Errorf("Head slot (%d) is less than expected currentSlot (%d)", s.cfg.Chain.HeadSlot(), currentSlot)
 	}
@@ -648,7 +655,8 @@ func TestService_syncToFinalizedEpoch(t *testing.T) {
 		headSlot:       195,
 	}, p.Peers())
 	genesis := makeGenesisTime(currentSlot)
-	assert.NoError(t, s.syncToFinalizedEpoch(context.Background(), genesis))
+	s.genesisTime = genesis
+	assert.NoError(t, s.syncToFinalizedEpoch(context.Background()))
 	if s.cfg.Chain.HeadSlot() < currentSlot {
 		t.Errorf("Head slot (%d) is less than expected currentSlot (%d)", s.cfg.Chain.HeadSlot(), currentSlot)
 	}
@@ -665,7 +673,8 @@ func TestService_syncToFinalizedEpoch(t *testing.T) {
 
 	// Try to re-sync, should be exited immediately (node is already synced to finalized epoch).
 	hook.Reset()
-	assert.NoError(t, s.syncToFinalizedEpoch(context.Background(), genesis))
+	s.genesisTime = genesis
+	assert.NoError(t, s.syncToFinalizedEpoch(context.Background()))
 	assert.LogsContain(t, hook, "Already synced to finalized epoch")
 }
 

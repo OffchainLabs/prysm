@@ -3,7 +3,7 @@ package merkle_proof
 import (
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/testing/spectest/shared/electra/merkle_proof"
+	"github.com/OffchainLabs/prysm/v6/testing/spectest/shared/electra/merkle_proof"
 )
 
 func TestMainnet_Electra_MerkleProof(t *testing.T) {
