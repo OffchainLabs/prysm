@@ -9,7 +9,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/kzg"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
@@ -120,7 +119,7 @@ func (s *Service) reconstructDataColumns(ctx context.Context, verifiedRODataColu
 
 	// Update reconstruction metrics
 	dataColumnReconstructionHistogram.Observe(float64(time.Since(startTime).Milliseconds()))
-	dataColumnReconstructionCounter.Add(float64(cellsCount(recoveredCellsAndProofs)))
+	dataColumnReconstructionCounter.Add(float64(len(verifiedRODataColumns)))
 
 	// Schedule the broadcast.
 	if err := s.scheduleReconstructedDataColumnsBroadcast(ctx, verifiedRODataColumn); err != nil {
