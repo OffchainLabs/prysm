@@ -1,3 +1,3 @@
 ### Removed
 
-- Remove deprecated flags.
+- Remove deprecated flags for the major release.
