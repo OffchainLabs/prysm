@@ -6,7 +6,7 @@ go_library(
         "attestations.go",
         "maxcover.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/attestation/aggregation/attestations",
+    importpath = "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation/aggregation/attestations",
     visibility = ["//visibility:public"],
     deps = [
         "//crypto/bls:go_default_library",

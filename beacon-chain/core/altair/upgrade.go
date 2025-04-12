@@ -3,13 +3,13 @@ package altair
 import (
 	"context"
 
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/attestation"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation"
 )
 
 // UpgradeToAltair updates input state to return the version Altair state.

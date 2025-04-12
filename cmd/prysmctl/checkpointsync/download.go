@@ -5,9 +5,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/prysmaticlabs/prysm/v5/api/client"
-	"github.com/prysmaticlabs/prysm/v5/api/client/beacon"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/checkpoint"
+	"github.com/OffchainLabs/prysm/v6/api/client"
+	"github.com/OffchainLabs/prysm/v6/api/client/beacon"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync/checkpoint"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )

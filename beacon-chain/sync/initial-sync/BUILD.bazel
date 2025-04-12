@@ -13,7 +13,7 @@ go_library(
         "round_robin.go",
         "service.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/initial-sync",
+    importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/sync/initial-sync",
     visibility = ["//beacon-chain:__subpackages__"],
     deps = [
         "//async/abool:go_default_library",

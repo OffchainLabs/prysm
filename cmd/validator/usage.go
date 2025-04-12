@@ -5,10 +5,10 @@ import (
 	"io"
 	"sort"
 
-	"github.com/prysmaticlabs/prysm/v5/cmd"
-	"github.com/prysmaticlabs/prysm/v5/cmd/validator/flags"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	"github.com/prysmaticlabs/prysm/v5/runtime/debug"
+	"github.com/OffchainLabs/prysm/v6/cmd"
+	"github.com/OffchainLabs/prysm/v6/cmd/validator/flags"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	"github.com/OffchainLabs/prysm/v6/runtime/debug"
 	"github.com/urfave/cli/v2"
 )
 
@@ -61,7 +61,6 @@ var appHelpFlagGroups = []flagGroup{
 			cmd.ClearDB,
 			cmd.ForceClearDB,
 			cmd.EnableBackupWebhookFlag,
-			cmd.BackupWebhookOutputDir,
 			cmd.EnableTracingFlag,
 			cmd.TracingProcessNameFlag,
 			cmd.TracingEndpointFlag,
@@ -142,6 +141,7 @@ var appHelpFlagGroups = []flagGroup{
 			flags.DisableAccountMetricsFlag,
 			flags.EnableDistributed,
 			flags.AuthTokenPathFlag,
+			flags.DisableDutiesPolling,
 		},
 	},
 	{
@@ -156,11 +156,8 @@ var appHelpFlagGroups = []flagGroup{
 		},
 	},
 	{
-		Name: "deprecated",
-		Flags: []cli.Flag{
-			debug.CPUProfileFlag,
-			debug.TraceFlag,
-		},
+		Name:  "deprecated",
+		Flags: []cli.Flag{},
 	},
 }
 

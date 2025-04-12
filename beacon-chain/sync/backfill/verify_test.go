@@ -4,23 +4,23 @@ import (
 	"math"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/crypto/bls"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/network/forks"
+	"github.com/OffchainLabs/prysm/v6/runtime/interop"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/network/forks"
-	"github.com/prysmaticlabs/prysm/v5/runtime/interop"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
 )
 
 func TestDomainCache(t *testing.T) {
-	cfg := params.MainnetConfig().Copy()
+	cfg := params.MainnetConfig()
 	// This hack is needed not to have both Electra and Fulu fork epoch both set to the future max epoch.
 	// It can be removed once the Electra fork version has been set to a real value.
 	for version := range cfg.ForkVersionSchedule {

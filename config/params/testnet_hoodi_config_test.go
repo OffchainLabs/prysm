@@ -4,9 +4,9 @@ import (
 	"path"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/bazelbuild/rules_go/go/tools/bazel"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func TestHoodiConfigMatchesUpstreamYaml(t *testing.T) {

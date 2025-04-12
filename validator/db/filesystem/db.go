@@ -10,12 +10,12 @@ import (
 	"sync"
 	"time"
 
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/io/file"
+	validatorpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/validator-client"
+	"github.com/OffchainLabs/prysm/v6/validator/db/iface"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/io/file"
-	validatorpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/validator-client"
-	"github.com/prysmaticlabs/prysm/v5/validator/db/iface"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v3"
 )

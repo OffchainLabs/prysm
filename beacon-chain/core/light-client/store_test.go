@@ -3,10 +3,10 @@ package light_client_test
 import (
 	"testing"
 
-	lightClient "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/light-client"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
+	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 )
 
 func TestLightClientStore(t *testing.T) {

@@ -3,7 +3,7 @@ package light_client
 import (
 	"sync"
 
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 )
 
 type Store struct {

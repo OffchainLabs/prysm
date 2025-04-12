@@ -5,12 +5,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers/scorers"
-	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 )
 
 func TestScorers_Service_Init(t *testing.T) {

@@ -6,11 +6,11 @@ import (
 	"path"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/spectest/utils"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/golang/snappy"
 	fssz "github.com/prysmaticlabs/fastssz"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/spectest/utils"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
 )
 
 // RunSSZStaticTests executes "ssz_static" tests for the given fork of phase using the provided

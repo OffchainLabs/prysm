@@ -3,7 +3,7 @@ package params
 import (
 	"math"
 
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 )
 
 // MinimalSpecConfig retrieves the minimal config used in spec tests.

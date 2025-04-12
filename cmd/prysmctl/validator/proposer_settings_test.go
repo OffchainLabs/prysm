@@ -11,9 +11,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/validator/rpc"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/validator/rpc"
 	logtest "github.com/sirupsen/logrus/hooks/test"
 	"github.com/urfave/cli/v2"
 )

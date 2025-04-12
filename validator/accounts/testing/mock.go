@@ -9,8 +9,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/prysmaticlabs/prysm/v5/validator/accounts/iface"
-	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
+	"github.com/OffchainLabs/prysm/v6/validator/accounts/iface"
+	"github.com/OffchainLabs/prysm/v6/validator/keymanager"
 )
 
 // Wallet contains an in-memory, simulated wallet implementation.

@@ -12,39 +12,39 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/api"
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	mockChain "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
+	builderTest "github.com/OffchainLabs/prysm/v6/beacon-chain/builder/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
+	dbutil "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
+	doublylinkedtree "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/doubly-linked-tree"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/attestations"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/synccommittee"
+	p2pmock "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/testutil"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
+	mockSync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync/initial-sync/testing"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/crypto/bls"
+	"github.com/OffchainLabs/prysm/v6/crypto/bls/common"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/network/httputil"
+	ethpbalpha "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/go-bitfield"
-	"github.com/prysmaticlabs/prysm/v5/api"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	mockChain "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
-	builderTest "github.com/prysmaticlabs/prysm/v5/beacon-chain/builder/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
-	dbutil "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
-	doublylinkedtree "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/doubly-linked-tree"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/attestations"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/synccommittee"
-	p2pmock "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/core"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/testutil"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stategen"
-	mockSync "github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/initial-sync/testing"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls/common"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
-	ethpbalpha "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
@@ -601,8 +601,11 @@ func TestSubmitContributionAndProofs(t *testing.T) {
 }
 
 func TestSubmitAggregateAndProofs(t *testing.T) {
+	slot := primitives.Slot(0)
+	mock := &mockChain.ChainService{Slot: &slot}
 	s := &Server{
-		CoreService: &core.Service{GenesisTimeFetcher: &mockChain.ChainService{}},
+		CoreService: &core.Service{GenesisTimeFetcher: mock},
+		TimeFetcher: mock,
 	}
 	t.Run("V1", func(t *testing.T) {
 		t.Run("single", func(t *testing.T) {
@@ -635,6 +638,25 @@ func TestSubmitAggregateAndProofs(t *testing.T) {
 			s.SubmitAggregateAndProofs(writer, request)
 			assert.Equal(t, http.StatusOK, writer.Code)
 			assert.Equal(t, 2, len(broadcaster.BroadcastMessages))
+		})
+		t.Run("Phase 0 post electra", func(t *testing.T) {
+			params.SetupTestConfigCleanup(t)
+			config := params.BeaconConfig()
+			config.ElectraForkEpoch = 0
+			params.OverrideBeaconConfig(config)
+
+			var body bytes.Buffer
+			_, err := body.WriteString(singleAggregate)
+			require.NoError(t, err)
+			request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.SubmitAggregateAndProofs(writer, request)
+			e := &httputil.DefaultJsonError{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+			assert.Equal(t, http.StatusBadRequest, e.Code)
+			assert.ErrorContains(t, "old aggregate and proof", errors.New(e.Message))
 		})
 		t.Run("no body", func(t *testing.T) {
 			request := httptest.NewRequest(http.MethodPost, "http://example.com", nil)
@@ -680,6 +702,11 @@ func TestSubmitAggregateAndProofs(t *testing.T) {
 	})
 	t.Run("V2", func(t *testing.T) {
 		t.Run("single", func(t *testing.T) {
+			params.SetupTestConfigCleanup(t)
+			config := params.BeaconConfig()
+			config.ElectraForkEpoch = 0
+			params.OverrideBeaconConfig(config)
+
 			broadcaster := &p2pmock.MockBroadcaster{}
 			s.CoreService.Broadcaster = broadcaster
 
@@ -712,6 +739,11 @@ func TestSubmitAggregateAndProofs(t *testing.T) {
 			assert.Equal(t, 1, len(broadcaster.BroadcastMessages))
 		})
 		t.Run("multiple", func(t *testing.T) {
+			params.SetupTestConfigCleanup(t)
+			config := params.BeaconConfig()
+			config.ElectraForkEpoch = 0
+			params.OverrideBeaconConfig(config)
+
 			broadcaster := &p2pmock.MockBroadcaster{}
 			s.CoreService.Broadcaster = broadcaster
 			s.CoreService.SyncCommitteePool = synccommittee.NewStore()
@@ -744,6 +776,41 @@ func TestSubmitAggregateAndProofs(t *testing.T) {
 			s.SubmitAggregateAndProofsV2(writer, request)
 			assert.Equal(t, http.StatusOK, writer.Code)
 			assert.Equal(t, 2, len(broadcaster.BroadcastMessages))
+		})
+		t.Run("Phase 0 post electra", func(t *testing.T) {
+			params.SetupTestConfigCleanup(t)
+			config := params.BeaconConfig()
+			config.ElectraForkEpoch = 0
+			params.OverrideBeaconConfig(config)
+
+			var body bytes.Buffer
+			_, err := body.WriteString(singleAggregate)
+			require.NoError(t, err)
+			request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
+			request.Header.Set(api.VersionHeader, version.String(version.Phase0))
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.SubmitAggregateAndProofsV2(writer, request)
+			e := &httputil.DefaultJsonError{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+			assert.Equal(t, http.StatusBadRequest, e.Code)
+			assert.ErrorContains(t, "old aggregate and proof", errors.New(e.Message))
+		})
+		t.Run("electra agg pre electra", func(t *testing.T) {
+			var body bytes.Buffer
+			_, err := body.WriteString(singleAggregateElectra)
+			require.NoError(t, err)
+			request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
+			request.Header.Set(api.VersionHeader, version.String(version.Electra))
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.SubmitAggregateAndProofsV2(writer, request)
+			e := &httputil.DefaultJsonError{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+			assert.Equal(t, http.StatusBadRequest, e.Code)
+			assert.ErrorContains(t, "electra aggregate and proof not supported yet", errors.New(e.Message))
 		})
 		t.Run("no body", func(t *testing.T) {
 			request := httptest.NewRequest(http.MethodPost, "http://example.com", nil)
@@ -1481,7 +1548,7 @@ func TestGetAttestationData(t *testing.T) {
 
 		// Ensure HistoricalRootsLimit matches scenario
 		params.SetupTestConfigCleanup(t)
-		cfg := params.MainnetConfig().Copy()
+		cfg := params.MainnetConfig()
 		cfg.HistoricalRootsLimit = 8192
 		params.OverrideBeaconConfig(cfg)
 

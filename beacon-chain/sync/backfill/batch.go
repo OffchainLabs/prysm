@@ -6,13 +6,13 @@ import (
 	"sort"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/das"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/das"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/sirupsen/logrus"
 )
 

@@ -5,15 +5,15 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/helpers"
+	statenative "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/validator"
+	eth "github.com/OffchainLabs/prysm/v6/proto/eth/v1"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/validator/client/iface"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/helpers"
-	statenative "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/validator"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/eth/v1"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
 	"google.golang.org/grpc"
 )
 

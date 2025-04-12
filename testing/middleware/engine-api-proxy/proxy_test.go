@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/crypto/rand"
+	pb "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/prysmaticlabs/prysm/v5/crypto/rand"
-	pb "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"github.com/sirupsen/logrus"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )

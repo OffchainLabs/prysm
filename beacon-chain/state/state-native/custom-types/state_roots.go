@@ -3,8 +3,8 @@ package customtypes
 import (
 	"fmt"
 
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	fssz "github.com/prysmaticlabs/fastssz"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 )
 
 var _ fssz.HashRoot = (StateRoots)([][32]byte{})

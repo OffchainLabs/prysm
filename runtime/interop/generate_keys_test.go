@@ -5,12 +5,12 @@ import (
 	"os"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/runtime/interop"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/go-yaml/yaml"
-	"github.com/prysmaticlabs/prysm/v5/runtime/interop"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 type TestCase struct {

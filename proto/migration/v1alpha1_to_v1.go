@@ -1,8 +1,8 @@
 package migration
 
 import (
-	ethpbv1 "github.com/prysmaticlabs/prysm/v5/proto/eth/v1"
-	ethpbalpha "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	ethpbv1 "github.com/OffchainLabs/prysm/v6/proto/eth/v1"
+	ethpbalpha "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 )
 
 // V1Alpha1SignedHeaderToV1 converts a v1alpha1 signed beacon block header to v1.

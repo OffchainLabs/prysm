@@ -1,8 +1,8 @@
 package cache
 
 import (
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	lru "github.com/hashicorp/golang-lru"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 )
 
 func BalanceCacheKey(st state.ReadOnlyBeaconState) (string, error) {
