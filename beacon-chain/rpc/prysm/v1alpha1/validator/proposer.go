@@ -238,7 +238,7 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 	}()
 
 	winningBid := primitives.ZeroWei()
-	var bundle *enginev1.BlobsBundle
+	var bundle enginev1.BlobsBundler
 	if sBlk.Version() >= version.Bellatrix {
 		local, err := vs.getLocalPayload(ctx, sBlk.Block(), head)
 		if err != nil {
@@ -369,7 +369,7 @@ func (vs *Server) handleBlindedBlock(ctx context.Context, block interfaces.Signe
 	}
 
 	if isPeerDASEnabled {
-		dataColumnSideCars, err := peerdas.ConstructDataColumnSidecars(block, bundle.Blobs, bundle.Proofs)
+		dataColumnSideCars, err := peerdas.ConstructDataColumnSidecars(block, bundle.GetBlobs(), bundle.GetProofs())
 		if err != nil {
 			return nil, nil, nil, errors.Wrap(err, "construct data column sidecars")
 		}

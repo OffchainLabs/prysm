@@ -275,7 +275,7 @@ func (s *Service) ForkchoiceUpdated(
 func getPayloadMethodAndMessage(slot primitives.Slot) (string, proto.Message) {
 	pe := slots.ToEpoch(slot)
 	if pe >= params.BeaconConfig().FuluForkEpoch {
-		return GetPayloadMethodV5, &pb.ExecutionBundleElectra{}
+		return GetPayloadMethodV5, &pb.ExecutionBundleFulu{}
 	}
 	if pe >= params.BeaconConfig().ElectraForkEpoch {
 		return GetPayloadMethodV4, &pb.ExecutionBundleElectra{}

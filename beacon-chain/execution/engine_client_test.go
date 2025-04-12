@@ -38,6 +38,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/testing/util"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	logTest "github.com/sirupsen/logrus/hooks/test"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 var (
@@ -168,6 +169,7 @@ func TestClient_HTTP(t *testing.T) {
 	cfg.CapellaForkEpoch = 1
 	cfg.DenebForkEpoch = 2
 	cfg.ElectraForkEpoch = 3
+	cfg.FuluForkEpoch = 4
 	params.OverrideBeaconConfig(cfg)
 
 	t.Run(GetPayloadMethod, func(t *testing.T) {
@@ -406,7 +408,48 @@ func TestClient_HTTP(t *testing.T) {
 
 		require.DeepEqual(t, requests, resp.ExecutionRequests)
 	})
+	t.Run(GetPayloadMethodV5, func(t *testing.T) {
+		payloadId := [8]byte{1}
+		want, ok := fix["ExecutionBundleFulu"].(*pb.ExecutionBundleFulu)
+		require.Equal(t, true, ok)
 
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			defer func() {
+				require.NoError(t, r.Body.Close())
+			}()
+			// Read and verify request
+			enc, err := io.ReadAll(r.Body)
+			require.NoError(t, err)
+			jsonRequestString := string(enc)
+			reqArg, err := json.Marshal(pb.PayloadIDBytes(payloadId))
+			require.NoError(t, err)
+			require.Equal(t, strings.Contains(jsonRequestString, string(reqArg)), true)
+
+			// Use protojson to marshal the result correctly
+			marshaled, err := protojson.Marshal(want)
+			require.NoError(t, err)
+
+			response := `{"jsonrpc":"2.0","id":1,"result":` + string(marshaled) + `}`
+			_, err = w.Write([]byte(response))
+			require.NoError(t, err)
+		}))
+		defer srv.Close()
+
+		rpcClient, err := rpc.DialHTTP(srv.URL)
+		require.NoError(t, err)
+		defer rpcClient.Close()
+
+		client := &Service{rpcClient: rpcClient}
+		resp, err := client.GetPayload(ctx, payloadId, 4*params.BeaconConfig().SlotsPerEpoch)
+		require.NoError(t, err)
+
+		_, ok = resp.BlobsBundle.(*pb.BlobsBundleV2)
+		if !ok {
+			t.Logf("resp.BlobsBundle has unexpected type: %T", resp.BlobsBundle)
+		}
+		require.Equal(t, true, ok)
+	})
 	t.Run(ForkchoiceUpdatedMethod+" VALID status", func(t *testing.T) {
 		forkChoiceState := &pb.ForkchoiceState{
 			HeadBlockHash:      []byte("head"),
@@ -1540,6 +1583,7 @@ func fixtures() map[string]interface{} {
 		"ExecutionPayloadCapellaWithValue":  s.ExecutionPayloadWithValueCapella,
 		"ExecutionPayloadDenebWithValue":    s.ExecutionPayloadWithValueDeneb,
 		"ExecutionBundleElectra":            s.ExecutionBundleElectra,
+		"ExecutionBundleFulu":               s.ExecutionBundleFulu,
 		"ValidPayloadStatus":                s.ValidPayloadStatus,
 		"InvalidBlockHashStatus":            s.InvalidBlockHashStatus,
 		"AcceptedStatus":                    s.AcceptedStatus,
@@ -1860,15 +1904,20 @@ func fixturesStruct() *payloadFixtures {
 		LatestValidHash: foo[:],
 	}
 	return &payloadFixtures{
-		ExecutionBlock:                    executionBlock,
-		ExecutionPayloadBody:              executionPayloadBodyFixture,
-		ExecutionPayload:                  executionPayloadFixture,
-		ExecutionPayloadCapella:           executionPayloadFixtureCapella,
-		ExecutionPayloadDeneb:             executionPayloadFixtureDeneb,
-		EmptyExecutionPayloadDeneb:        emptyExecutionPayloadDeneb,
-		ExecutionPayloadWithValueCapella:  executionPayloadWithValueFixtureCapella,
-		ExecutionPayloadWithValueDeneb:    executionPayloadWithValueFixtureDeneb,
-		ExecutionBundleElectra:            executionBundleFixtureElectra,
+		ExecutionBlock:                   executionBlock,
+		ExecutionPayloadBody:             executionPayloadBodyFixture,
+		ExecutionPayload:                 executionPayloadFixture,
+		ExecutionPayloadCapella:          executionPayloadFixtureCapella,
+		ExecutionPayloadDeneb:            executionPayloadFixtureDeneb,
+		EmptyExecutionPayloadDeneb:       emptyExecutionPayloadDeneb,
+		ExecutionPayloadWithValueCapella: executionPayloadWithValueFixtureCapella,
+		ExecutionPayloadWithValueDeneb:   executionPayloadWithValueFixtureDeneb,
+		ExecutionBundleElectra:           executionBundleFixtureElectra,
+		ExecutionBundleFulu: &pb.ExecutionBundleFulu{
+			Payload:           &pb.ExecutionPayloadDeneb{},
+			BlobsBundle:       &pb.BlobsBundleV2{},
+			ExecutionRequests: [][]byte{},
+		},
 		ValidPayloadStatus:                validStatus,
 		InvalidBlockHashStatus:            inValidBlockHashStatus,
 		AcceptedStatus:                    acceptedStatus,
@@ -1893,6 +1942,7 @@ type payloadFixtures struct {
 	ExecutionPayloadWithValueCapella  *pb.GetPayloadV2ResponseJson
 	ExecutionPayloadWithValueDeneb    *pb.GetPayloadV3ResponseJson
 	ExecutionBundleElectra            *pb.GetPayloadV4ResponseJson
+	ExecutionBundleFulu               *pb.ExecutionBundleFulu
 	ValidPayloadStatus                *pb.PayloadStatus
 	InvalidBlockHashStatus            *pb.PayloadStatus
 	AcceptedStatus                    *pb.PayloadStatus

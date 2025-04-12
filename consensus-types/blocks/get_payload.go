@@ -12,7 +12,7 @@ import (
 // GetPayloadResponseV(1|2|3|4) value.
 type GetPayloadResponse struct {
 	ExecutionData   interfaces.ExecutionData
-	BlobsBundle     *pb.BlobsBundle
+	BlobsBundle     pb.BlobsBundler
 	OverrideBuilder bool
 	// todo: should we convert this to Gwei up front?
 	Bid               primitives.Wei
@@ -22,6 +22,10 @@ type GetPayloadResponse struct {
 // bundleGetter is an interface satisfied by get payload responses that have a blobs bundle.
 type bundleGetter interface {
 	GetBlobsBundle() *pb.BlobsBundle
+}
+
+type bundleV2Getter interface {
+	GetBlobsBundle() *pb.BlobsBundleV2
 }
 
 // bidValueGetter is an interface satisfied by get payload responses that have a bid value.
@@ -42,6 +46,10 @@ func NewGetPayloadResponse(msg proto.Message) (*GetPayloadResponse, error) {
 	bundleGetter, hasBundle := msg.(bundleGetter)
 	if hasBundle {
 		r.BlobsBundle = bundleGetter.GetBlobsBundle()
+	}
+	bundleV2Getter, hasBundle := msg.(bundleV2Getter)
+	if hasBundle {
+		r.BlobsBundle = bundleV2Getter.GetBlobsBundle()
 	}
 	bidValueGetter, hasBid := msg.(bidValueGetter)
 	executionRequestsGetter, hasExecutionRequests := msg.(executionRequestsGetter)

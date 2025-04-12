@@ -3,6 +3,7 @@ package validator
 import (
 	"fmt"
 
+	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
@@ -12,9 +13,13 @@ import (
 )
 
 // constructGenericBeaconBlock constructs a `GenericBeaconBlock` based on the block version and other parameters.
-func (vs *Server) constructGenericBeaconBlock(sBlk interfaces.SignedBeaconBlock, blobsBundle *enginev1.BlobsBundle, winningBid primitives.Wei) (*ethpb.GenericBeaconBlock, error) {
+func (vs *Server) constructGenericBeaconBlock(
+	sBlk interfaces.SignedBeaconBlock,
+	blobsBundle enginev1.BlobsBundler,
+	winningBid primitives.Wei,
+) (*ethpb.GenericBeaconBlock, error) {
 	if sBlk == nil || sBlk.Block() == nil {
-		return nil, fmt.Errorf("block cannot be nil")
+		return nil, errors.New("block cannot be nil")
 	}
 
 	blockProto, err := sBlk.Block().Proto()
@@ -34,12 +39,21 @@ func (vs *Server) constructGenericBeaconBlock(sBlk interfaces.SignedBeaconBlock,
 		return vs.constructBellatrixBlock(blockProto, isBlinded, bidStr), nil
 	case version.Capella:
 		return vs.constructCapellaBlock(blockProto, isBlinded, bidStr), nil
-	case version.Deneb:
-		return vs.constructDenebBlock(blockProto, isBlinded, bidStr, blobsBundle), nil
-	case version.Electra:
-		return vs.constructElectraBlock(blockProto, isBlinded, bidStr, blobsBundle), nil
+	case version.Deneb, version.Electra:
+		bundle, ok := blobsBundle.(*enginev1.BlobsBundle)
+		if blobsBundle != nil && !ok {
+			return nil, fmt.Errorf("expected *BlobsBundle, got %T", blobsBundle)
+		}
+		if sBlk.Version() == version.Deneb {
+			return vs.constructDenebBlock(blockProto, isBlinded, bidStr, bundle), nil
+		}
+		return vs.constructElectraBlock(blockProto, isBlinded, bidStr, bundle), nil
 	case version.Fulu:
-		return vs.constructFuluBlock(blockProto, isBlinded, bidStr, blobsBundle), nil
+		bundle, ok := blobsBundle.(*enginev1.BlobsBundleV2)
+		if blobsBundle != nil && !ok {
+			return nil, fmt.Errorf("expected *BlobsBundleV2, got %T", blobsBundle)
+		}
+		return vs.constructFuluBlock(blockProto, isBlinded, bidStr, bundle), nil
 	default:
 		return nil, fmt.Errorf("unknown block version: %d", sBlk.Version())
 	}
@@ -92,7 +106,7 @@ func (vs *Server) constructElectraBlock(blockProto proto.Message, isBlinded bool
 	return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Electra{Electra: electraContents}, IsBlinded: false, PayloadValue: payloadValue}
 }
 
-func (vs *Server) constructFuluBlock(blockProto proto.Message, isBlinded bool, payloadValue string, bundle *enginev1.BlobsBundle) *ethpb.GenericBeaconBlock {
+func (vs *Server) constructFuluBlock(blockProto proto.Message, isBlinded bool, payloadValue string, bundle *enginev1.BlobsBundleV2) *ethpb.GenericBeaconBlock {
 	if isBlinded {
 		return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_BlindedFulu{BlindedFulu: blockProto.(*ethpb.BlindedBeaconBlockFulu)}, IsBlinded: true, PayloadValue: payloadValue}
 	}
