@@ -29,7 +29,7 @@ option php_namespace = "Ethereum\\Engine\\v1";
 // It is introduced in Fulu network upgrade.
 message BlobAndProofV2 {
   bytes blob = 1 [ (ethereum.eth.ext.ssz_size) = "blob.size" ];
-  repeated bytes kzg_proofs = 2 [ 
+  repeated bytes proofs = 2 [
     (ethereum.eth.ext.ssz_size) = "48",
     (ethereum.eth.ext.ssz_max) = "max_cell_proofs_length.size"
   ];

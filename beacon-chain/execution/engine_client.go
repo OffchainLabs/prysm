@@ -687,8 +687,8 @@ func (s *Service) ReconstructDataColumnSidecars(ctx context.Context, block inter
 			return nil, wrapWithBlockRoot(err, blockRoot, "could not compute cells")
 		}
 
-		proofs := make([]kzg.Proof, len(blobAndProof.KzgProofs))
-		for i, proof := range blobAndProof.KzgProofs {
+		proofs := make([]kzg.Proof, len(blobAndProof.Proofs))
+		for i, proof := range blobAndProof.Proofs {
 			proofs[i] = kzg.Proof(proof)
 		}
 		cellsAndProofs = append(cellsAndProofs, kzg.CellsAndProofs{

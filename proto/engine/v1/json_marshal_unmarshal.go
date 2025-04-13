@@ -1303,7 +1303,7 @@ func (b *BlobAndProofV2) UnmarshalJSON(enc []byte) error {
 		p := proof
 		proofs[i] = bytesutil.PadTo(p[:], fieldparams.BLSPubkeyLength)
 	}
-	b.KzgProofs = proofs
+	b.Proofs = proofs
 
 	return nil
 }
