@@ -226,11 +226,17 @@ func TestForkChoice_IsCanonicalReorg(t *testing.T) {
 	require.NoError(t, f.InsertNode(ctx, st, roblock))
 
 	f.store.nodeByRoot[[32]byte{'3'}].balance = 10
-	require.NoError(t, f.store.treeRootNode.applyWeightChanges(ctx, params.BeaconConfig().ZeroHash, 0))
+	require.NoError(t, f.store.treeRootNode.applyWeightChanges(ctx))
 	require.Equal(t, uint64(10), f.store.nodeByRoot[[32]byte{'1'}].weight)
 	require.Equal(t, uint64(0), f.store.nodeByRoot[[32]byte{'2'}].weight)
 
-	require.NoError(t, f.store.treeRootNode.updateBestDescendant(ctx, 1, 1, 6, 0, f.store.committeeWeight))
+	require.NoError(t, f.store.treeRootNode.updateBestDescendant(ctx, &updateDescendantArgs{
+		justifiedEpoch:        1,
+		finalizedEpoch:        1,
+		currentSlot:           6,
+		secondsSinceSlotStart: 0,
+		committeeWeight:       f.store.committeeWeight,
+	}))
 	require.DeepEqual(t, [32]byte{'3'}, f.store.treeRootNode.bestDescendant.root)
 
 	r1 := [32]byte{'1'}
@@ -942,13 +948,14 @@ func TestForkChoiceSafeHead(t *testing.T) {
 	require.Equal(t, primitives.Slot(32), slotsPerEpoch)
 
 	driftGenesisTime(f, primitives.Slot(11), 0)
-	st, blkRoot, err := prepareForkchoiceState(ctx, 1, indexToHash(1), params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 0, 0)
+	st, b, err := prepareForkchoiceState(ctx, 1, indexToHash(1), params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 0, 0)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, blkRoot))
+	require.NoError(t, f.InsertNode(ctx, st, b))
 	for i := 2; i < 10; i++ {
-		st, blkRoot, err = prepareForkchoiceState(ctx, primitives.Slot(i), indexToHash(uint64(i)), indexToHash(uint64(i-1)), params.BeaconConfig().ZeroHash, 0, 0)
+		st, b, err = prepareForkchoiceState(ctx, primitives.Slot(i), indexToHash(uint64(i)), indexToHash(uint64(i-1)), params.BeaconConfig().ZeroHash, 0, 0)
 		require.NoError(t, err)
-		require.NoError(t, f.InsertNode(ctx, st, blkRoot))
+		t.Logf("Inserting node %d", b.Block().Slot())
+		require.NoError(t, f.InsertNode(ctx, st, b))
 	}
 
 	tests := []struct {

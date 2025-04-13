@@ -3,7 +3,6 @@ package doublylinkedtree
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -17,35 +16,36 @@ import (
 // process attestations for the current slot
 const ProcessAttestationsThreshold = 10 * time.Second
 
+type updateDescendantArgs struct {
+	justifiedEpoch        primitives.Epoch
+	finalizedEpoch        primitives.Epoch
+	currentSlot           primitives.Slot
+	secondsSinceSlotStart uint64
+	committeeWeight       uint64
+	pbRoot                [32]byte
+	pbValue               uint64
+}
+
 // applyWeightChanges recursively traverses a tree of nodes to update each node's total weight and
 // weight without proposer boost by summing the balance of the node and its children.
 // If the node matches a specific root (`pbRoot`), it subtracts a given boost value (`pbValue`) from the weight without boost,
 // ensuring the balance is sufficient. It also handles context cancellation and errors during recursion.
-func (n *Node) applyWeightChanges(ctx context.Context, pbRoot [32]byte, pbValue uint64) error {
+func (n *Node) applyWeightChanges(ctx context.Context) error {
 	// Recursively calling the children to sum their weights.
 	childrenWeight := uint64(0)
-	childrenWeightWithoutBoost := uint64(0)
 	for _, child := range n.children {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		if err := child.applyWeightChanges(ctx, pbRoot, pbValue); err != nil {
+		if err := child.applyWeightChanges(ctx); err != nil {
 			return err
 		}
 		childrenWeight += child.weight
-		childrenWeightWithoutBoost += child.weightWithoutBoost
 	}
 	if n.root == params.BeaconConfig().ZeroHash {
 		return nil
 	}
 	n.weight = n.balance + childrenWeight
-	n.weightWithoutBoost = n.balance + childrenWeightWithoutBoost
-	if n.root == pbRoot {
-		if n.balance < pbValue {
-			return fmt.Errorf("node balance %d is less than proposer boost value %d", n.balance, pbValue)
-		}
-		n.weightWithoutBoost -= pbValue
-	}
 	return nil
 }
 
@@ -87,9 +87,7 @@ func (n *Node) maxWeight(endSlot primitives.Slot, committeeWeight uint64) uint64
 
 // updateBestDescendant updates the best descendant of this node and its
 // children.
-func (n *Node) updateBestDescendant(ctx context.Context,
-	justifiedEpoch primitives.Epoch, finalizedEpoch primitives.Epoch,
-	currentSlot primitives.Slot, secondsSinceSlotStart uint64, committeeWeight uint64) error {
+func (n *Node) updateBestDescendant(ctx context.Context, args *updateDescendantArgs) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -106,13 +104,11 @@ func (n *Node) updateBestDescendant(ctx context.Context,
 		if child == nil {
 			return errors.Wrap(ErrNilNode, "could not update best descendant")
 		}
-		if err := child.updateBestDescendant(ctx,
-			justifiedEpoch, finalizedEpoch,
-			currentSlot, secondsSinceSlotStart, committeeWeight); err != nil {
+		if err := child.updateBestDescendant(ctx, args); err != nil {
 			return err
 		}
-		currentEpoch := slots.ToEpoch(currentSlot)
-		childLeadsToViableHead := child.leadsToViableHead(justifiedEpoch, currentEpoch)
+		currentEpoch := slots.ToEpoch(args.currentSlot)
+		childLeadsToViableHead := child.leadsToViableHead(args.justifiedEpoch, currentEpoch)
 		if childLeadsToViableHead && !hasViableDescendant {
 			// The child leads to a viable head, but the current
 			// parent's best child doesn't.
@@ -141,14 +137,14 @@ func (n *Node) updateBestDescendant(ctx context.Context,
 			// The best descendant is more than 1 hop away.
 			n.bestDescendant = bestChild.bestDescendant
 		}
-		// Compute safe head only during the first interval of the slot
-		if secondsSinceSlotStart < params.BeaconConfig().SecondsPerSlot/params.BeaconConfig().IntervalsPerSlot {
+
+		if args.secondsSinceSlotStart < params.BeaconConfig().SecondsPerSlot/params.BeaconConfig().IntervalsPerSlot {
 			prevSlot := primitives.Slot(0)
-			if currentSlot > 1 {
-				prevSlot = currentSlot - 1
+			if args.currentSlot > 1 {
+				prevSlot = args.currentSlot - 1
 			}
 
-			if bestChild.confirmed(prevSlot, committeeWeight) {
+			if bestChild.confirmed(prevSlot, args.committeeWeight, args.pbRoot, args.pbValue) {
 				n.bestConfirmedDescendant = bestChild.bestConfirmedDescendant
 				if n.bestConfirmedDescendant == nil {
 					n.bestConfirmedDescendant = bestChild
@@ -268,7 +264,7 @@ func (n *Node) nodeTreeDump(ctx context.Context, nodes []*forkchoice2.Node) ([]*
 }
 
 // confirmed returns true if the node satisfies the confirmation rule.
-func (n *Node) confirmed(slot primitives.Slot, committeeWeight uint64) bool {
+func (n *Node) confirmed(slot primitives.Slot, committeeWeight uint64, pbRoot [32]byte, pbValue uint64) bool {
 	if n.slot > slot {
 		return false
 	}
@@ -277,5 +273,16 @@ func (n *Node) confirmed(slot primitives.Slot, committeeWeight uint64) bool {
 	maxWeight := n.maxWeight(slot, committeeWeight)
 	threshold := (maxWeight + pbWeight) / 2
 
-	return n.weightWithoutBoost > threshold
+	nodeWeight := n.weight
+	if n.root == pbRoot {
+		nodeWeight -= pbValue
+	}
+	if n.bestDescendant != nil && n.bestDescendant.root == pbRoot {
+		if nodeWeight < pbValue {
+			return false
+		}
+		nodeWeight -= pbValue
+	}
+
+	return nodeWeight > threshold
 }

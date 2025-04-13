@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v6/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	consensus_blocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
@@ -65,7 +66,7 @@ func (f *ForkChoice) Head(
 		return [32]byte{}, errors.Wrap(err, "could not apply proposer boost score")
 	}
 
-	if err := f.store.treeRootNode.applyWeightChanges(ctx, f.store.proposerBoostRoot, f.store.previousProposerBoostScore); err != nil {
+	if err := f.store.treeRootNode.applyWeightChanges(ctx); err != nil {
 		return [32]byte{}, errors.Wrap(err, "could not apply weight changes")
 	}
 
@@ -77,18 +78,31 @@ func (f *ForkChoice) Head(
 	if err != nil {
 		log.WithError(err).Error("could not compute seconds since slot start")
 	}
-	if err := f.store.treeRootNode.updateBestDescendant(ctx, jc.Epoch, fc.Epoch, currentSlot, secondsSinceSlotStart, f.store.committeeWeight); err != nil {
+	if err := f.store.treeRootNode.updateBestDescendant(ctx, &updateDescendantArgs{
+		justifiedEpoch:        jc.Epoch,
+		finalizedEpoch:        fc.Epoch,
+		currentSlot:           currentSlot,
+		secondsSinceSlotStart: secondsSinceSlotStart,
+		committeeWeight:       f.store.committeeWeight,
+		pbRoot:                f.store.proposerBoostRoot,
+		pbValue:               f.store.previousProposerBoostScore,
+	}); err != nil {
 		return [32]byte{}, errors.Wrap(err, "could not update best descendant")
 	}
-	if err := f.UpdateSafeHead(ctx); err != nil {
+	h, err := f.store.head(ctx)
+	if err != nil {
+		return [32]byte{}, errors.Wrap(err, "could not get head")
+	}
+
+	if err := f.updateSafeHead(ctx); err != nil {
 		log.WithError(err).Error("could not update safe head")
 	}
 
-	return f.store.head(ctx)
+	return h, nil
 }
 
-// UpdateSafeHead updates the safe head in the fork choice store.
-func (f *ForkChoice) UpdateSafeHead(
+// updateSafeHead updates the safe head in the fork choice store.
+func (f *ForkChoice) updateSafeHead(
 	ctx context.Context,
 ) error {
 	oldSafeHeadRoot := f.store.safeHeadRoot
@@ -140,9 +154,8 @@ func (f *ForkChoice) logSafeHead(ctx context.Context, newSafeHeadRoot [32]byte, 
 		return
 	}
 
+	// The safe head has reorged. This is bad!
 	if oldSafeHeadRoot != [32]byte{} && commonRoot != oldSafeHeadRoot {
-		// The safe head has reorged.
-		// Calculate reorg metrics.
 		oldSafeHeadNode, ok := f.store.nodeByRoot[oldSafeHeadRoot]
 		if !ok || oldSafeHeadNode == nil {
 			log.WithError(ErrNilNode).Error("could not find old safe head node")
@@ -157,8 +170,8 @@ func (f *ForkChoice) logSafeHead(ctx context.Context, newSafeHeadRoot [32]byte, 
 			"commonAncestorRoot": fmt.Sprintf("%#x", commonRoot),
 			"distance":           dis,
 			"depth":              dep,
-		}).Debug("Safe head reorg occurred")
-		// Update reorg metrics.
+		}).Error("Safe head reorg occurred")
+
 		safeHeadReorgDistance.Observe(float64(dis))
 		safeHeadReorgDepth.Observe(float64(dep))
 		safeHeadReorgCount.Inc()
@@ -625,8 +638,12 @@ func (f *ForkChoice) UnrealizedJustifiedPayloadBlockHash() [32]byte {
 	return node.payloadHash
 }
 
-// SafeHeadPayloadBlockHash returns the hash of the payload at the safe head
-func (f *ForkChoice) SafeHeadPayloadBlockHash() [32]byte {
+// SafeBlockHash returns the hash of the payload at the safe head
+func (f *ForkChoice) SafeBlockHash() [32]byte {
+	if !features.Get().EnableFastConfirmation {
+		return f.UnrealizedJustifiedPayloadBlockHash()
+	}
+
 	safeHeadRoot := f.store.safeHeadRoot
 	node, ok := f.store.nodeByRoot[safeHeadRoot]
 	if !ok || node == nil {

@@ -91,11 +91,10 @@ func (s *Service) UnrealizedJustifiedPayloadBlockHash() [32]byte {
 	return s.cfg.ForkChoiceStore.UnrealizedJustifiedPayloadBlockHash()
 }
 
-// SafeHeadPayloadBlockHash returns safe head payload block hash from forkchoice.
-func (s *Service) SafeHeadPayloadBlockHash() [32]byte {
+func (s *Service) SafeBlockHash() [32]byte {
 	s.cfg.ForkChoiceStore.RLock()
 	defer s.cfg.ForkChoiceStore.RUnlock()
-	return s.cfg.ForkChoiceStore.SafeHeadPayloadBlockHash()
+	return s.cfg.ForkChoiceStore.SafeBlockHash()
 }
 
 // FinalizedBlockHash returns finalized payload block hash from forkchoice.

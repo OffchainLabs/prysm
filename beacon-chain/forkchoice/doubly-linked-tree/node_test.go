@@ -2,7 +2,6 @@ package doublylinkedtree
 
 import (
 	"context"
-	"strings"
 	"testing"
 	"time"
 
@@ -33,14 +32,11 @@ func TestNode_ApplyWeightChanges_PositiveChange(t *testing.T) {
 	s.nodeByRoot[indexToHash(2)].balance = 100
 	s.nodeByRoot[indexToHash(3)].balance = 100
 
-	assert.NoError(t, s.treeRootNode.applyWeightChanges(ctx, params.BeaconConfig().ZeroHash, 0))
+	assert.NoError(t, s.treeRootNode.applyWeightChanges(ctx))
 
 	assert.Equal(t, uint64(300), s.nodeByRoot[indexToHash(1)].weight)
 	assert.Equal(t, uint64(200), s.nodeByRoot[indexToHash(2)].weight)
 	assert.Equal(t, uint64(100), s.nodeByRoot[indexToHash(3)].weight)
-	assert.Equal(t, uint64(300), s.nodeByRoot[indexToHash(1)].weightWithoutBoost)
-	assert.Equal(t, uint64(200), s.nodeByRoot[indexToHash(2)].weightWithoutBoost)
-	assert.Equal(t, uint64(100), s.nodeByRoot[indexToHash(3)].weightWithoutBoost)
 }
 
 func TestNode_ApplyWeightChanges_NegativeChange(t *testing.T) {
@@ -66,108 +62,11 @@ func TestNode_ApplyWeightChanges_NegativeChange(t *testing.T) {
 	s.nodeByRoot[indexToHash(2)].balance = 100
 	s.nodeByRoot[indexToHash(3)].balance = 100
 
-	assert.NoError(t, s.treeRootNode.applyWeightChanges(ctx, params.BeaconConfig().ZeroHash, 0))
+	assert.NoError(t, s.treeRootNode.applyWeightChanges(ctx))
 
 	assert.Equal(t, uint64(300), s.nodeByRoot[indexToHash(1)].weight)
 	assert.Equal(t, uint64(200), s.nodeByRoot[indexToHash(2)].weight)
 	assert.Equal(t, uint64(100), s.nodeByRoot[indexToHash(3)].weight)
-	assert.Equal(t, uint64(300), s.nodeByRoot[indexToHash(1)].weightWithoutBoost)
-	assert.Equal(t, uint64(200), s.nodeByRoot[indexToHash(2)].weightWithoutBoost)
-	assert.Equal(t, uint64(100), s.nodeByRoot[indexToHash(3)].weightWithoutBoost)
-}
-
-func TestNode_applyWeightChanges(t *testing.T) {
-	rootA := [32]byte{0x01}
-	rootB := [32]byte{0x02}
-	rootC := [32]byte{0x03}
-
-	t.Run("proposer boost applied and subtracted from weightWithoutBoost", func(t *testing.T) {
-		nodeC := &Node{
-			root:    rootC,
-			balance: 20,
-		}
-		nodeB := &Node{
-			root:     rootB,
-			balance:  40,
-			children: []*Node{nodeC},
-		}
-		nodeA := &Node{
-			root:     rootA,
-			balance:  100,
-			children: []*Node{nodeB},
-		}
-
-		ctx := context.Background()
-		err := nodeA.applyWeightChanges(ctx, rootC, 10)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-
-		// nodeC has no children: weight = balance = 20
-		if nodeC.weight != 20 || nodeC.weightWithoutBoost != 10 {
-			t.Errorf("nodeC weight = %d, weightWithoutBoost = %d, want both = 20", nodeC.weight, nodeC.weightWithoutBoost)
-		}
-
-		// nodeB has one child (C): weight = 40 + 20 = 60
-		// weightWithoutBoost = 40 + 20 - 10 = 50 (because pbRoot == rootC)
-		if nodeB.weight != 60 {
-			t.Errorf("nodeB weight = %d, want 60", nodeB.weight)
-		}
-		if nodeB.weightWithoutBoost != 50 {
-			t.Errorf("nodeB weightWithoutBoost = %d, want 50", nodeB.weightWithoutBoost)
-		}
-		// nodeA has one child (B): weight = 100 + 60 = 160
-		// weightWithoutBoost = 100 + 60 - 10 = 150 (because pbRoot == rootC)
-		if nodeA.weight != 160 {
-			t.Errorf("nodeA weight = %d, want 160", nodeA.weight)
-		}
-		if nodeA.weightWithoutBoost != 150 {
-			t.Errorf("nodeA weightWithoutBoost = %d, want 150", nodeA.weightWithoutBoost)
-		}
-	})
-
-	t.Run("returns error if proposer boost value exceeds node balance", func(t *testing.T) {
-		node := &Node{
-			root:    rootB,
-			balance: 5,
-		}
-		err := node.applyWeightChanges(context.Background(), rootB, 10)
-		if err == nil || !strings.Contains(err.Error(), "less than proposer boost") {
-			t.Errorf("expected balance error, got: %v", err)
-		}
-	})
-
-	t.Run("skips applying boost if root does not match pbRoot", func(t *testing.T) {
-		node := &Node{
-			root:    rootB,
-			balance: 50,
-		}
-		err := node.applyWeightChanges(context.Background(), rootC, 10)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if node.weight != 50 || node.weightWithoutBoost != 50 {
-			t.Errorf("weight = %d, weightWithoutBoost = %d, want both = 50", node.weight, node.weightWithoutBoost)
-		}
-	})
-
-	t.Run("aborts on context cancel", func(t *testing.T) {
-		child := &Node{
-			root:    rootC,
-			balance: 25,
-		}
-		node := &Node{
-			root:     rootB,
-			balance:  10,
-			children: []*Node{child},
-		}
-		ctx, cancel := context.WithCancel(context.Background())
-		cancel()
-		err := node.applyWeightChanges(ctx, rootC, 5)
-		if err != context.Canceled {
-			t.Errorf("expected context.Canceled error, got: %v", err)
-		}
-	})
 }
 
 func TestNode_UpdateBestDescendant_NonViableChild(t *testing.T) {
@@ -212,7 +111,14 @@ func TestNode_UpdateBestDescendant_HigherWeightChild(t *testing.T) {
 	s := f.store
 	s.nodeByRoot[indexToHash(1)].weight = 100
 	s.nodeByRoot[indexToHash(2)].weight = 200
-	assert.NoError(t, s.treeRootNode.updateBestDescendant(ctx, 1, 1, 2, 0, f.store.committeeWeight))
+
+	assert.NoError(t, s.treeRootNode.updateBestDescendant(ctx, &updateDescendantArgs{
+		justifiedEpoch:        1,
+		finalizedEpoch:        1,
+		currentSlot:           2,
+		secondsSinceSlotStart: 0,
+		committeeWeight:       f.store.committeeWeight,
+	}))
 
 	assert.Equal(t, 2, len(s.treeRootNode.children))
 	assert.Equal(t, s.treeRootNode.children[1], s.treeRootNode.bestDescendant)
@@ -238,11 +144,17 @@ func TestNode_UpdateBestDescendant_BestConfirmedDescendant(t *testing.T) {
 	node1 := s.nodeByRoot[indexToHash(1)]
 	node2 := s.nodeByRoot[indexToHash(2)]
 
-	node1.weightWithoutBoost = 100
-	node2.weightWithoutBoost = 200
+	node1.weight = 100
+	node2.weight = 200
 
 	// Execute update
-	err = s.treeRootNode.updateBestDescendant(ctx, 1, 1, 3, 0, f.store.committeeWeight)
+	assert.NoError(t, s.treeRootNode.updateBestDescendant(ctx, &updateDescendantArgs{
+		justifiedEpoch:        1,
+		finalizedEpoch:        1,
+		currentSlot:           3,
+		secondsSinceSlotStart: 0,
+		committeeWeight:       f.store.committeeWeight,
+	}))
 	require.NoError(t, err)
 
 	// Assert the correct bestConfirmedDescendant is selected
@@ -267,7 +179,13 @@ func TestNode_UpdateBestDescendant_LowerWeightChild(t *testing.T) {
 	s := f.store
 	s.nodeByRoot[indexToHash(1)].weight = 200
 	s.nodeByRoot[indexToHash(2)].weight = 100
-	assert.NoError(t, s.treeRootNode.updateBestDescendant(ctx, 1, 1, 2, 0, f.store.committeeWeight))
+	assert.NoError(t, s.treeRootNode.updateBestDescendant(ctx, &updateDescendantArgs{
+		justifiedEpoch:        1,
+		finalizedEpoch:        1,
+		currentSlot:           2,
+		secondsSinceSlotStart: 0,
+		committeeWeight:       f.store.committeeWeight,
+	}))
 
 	assert.Equal(t, 2, len(s.treeRootNode.children))
 	assert.Equal(t, s.treeRootNode.children[0], s.treeRootNode.bestDescendant)
@@ -563,12 +481,16 @@ func TestNode_maxWeight(t *testing.T) {
 
 func TestNode_confirmed(t *testing.T) {
 	type fields struct {
-		nodeSlot           primitives.Slot
-		weightWithoutBoost uint64
+		nodeSlot       primitives.Slot
+		weight         uint64
+		root           [32]byte
+		bestDescendant *Node
 	}
 	type args struct {
 		slot            primitives.Slot
 		committeeWeight uint64
+		pbRoot          [32]byte
+		pbValue         uint64
 	}
 	tests := []struct {
 		name   string
@@ -589,34 +511,85 @@ func TestNode_confirmed(t *testing.T) {
 		{
 			name: "weight without boost <= threshold returns false",
 			fields: fields{
-				weightWithoutBoost: 1620,
+				weight:         1620,
+				bestDescendant: &Node{},
 			},
 			args: args{
 				slot:            32,
 				committeeWeight: 100,
 			},
-			want: false, // maxWeight = 3200, pbWeight = 40, threshold = 1620
+			want: false,
 		},
 		{
 			name: "weight without boost > threshold returns true",
 			fields: fields{
-				weightWithoutBoost: 1621,
+				weight:         1621,
+				bestDescendant: &Node{},
 			},
 			args: args{
 				slot:            32,
 				committeeWeight: 100,
 			},
-			want: true, // maxWeight = 3200, pbWeight = 40, threshold = 1620
+			want: true,
+		},
+		{
+			name: "node root matches pbRoot but balance < pbValue returns false",
+			fields: fields{
+				weight:         9,
+				bestDescendant: &Node{},
+			},
+			args: args{
+				slot:            32,
+				committeeWeight: 100,
+				pbRoot:          [32]byte{1},
+				pbValue:         10,
+			},
+			want: false,
+		},
+		{
+			name: "node root matches pbRoot, balance >= pbValue, adjusted weight <= threshold returns false",
+			fields: fields{
+				weight: 1630,
+				bestDescendant: &Node{
+					root: [32]byte{1},
+				},
+			},
+			args: args{
+				slot:            32,
+				committeeWeight: 100,
+				pbRoot:          [32]byte{1},
+				pbValue:         20,
+			},
+			want: false, // adjusted weight = 1610
+		},
+		{
+			name: "node root matches pbRoot, balance >= pbValue, adjusted weight > threshold returns true",
+			fields: fields{
+				weight: 1661,
+				root:   [32]byte{1},
+				bestDescendant: &Node{
+					root: [32]byte{1},
+				},
+			},
+			args: args{
+				slot:            32,
+				committeeWeight: 100,
+				pbRoot:          [32]byte{1},
+				pbValue:         20,
+			},
+			want: true, // adjusted weight = 1611
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			n := &Node{
-				slot:               tt.fields.nodeSlot,
-				weightWithoutBoost: tt.fields.weightWithoutBoost,
+				slot:           tt.fields.nodeSlot,
+				weight:         tt.fields.weight,
+				root:           tt.fields.root,
+				bestDescendant: tt.fields.bestDescendant,
 			}
-			if got := n.confirmed(tt.args.slot, tt.args.committeeWeight); got != tt.want {
+			if got := n.confirmed(tt.args.slot, tt.args.committeeWeight, tt.args.pbRoot, tt.args.pbValue); got != tt.want {
 				t.Errorf("confirmed() = %v, want %v", got, tt.want)
 			}
 		})

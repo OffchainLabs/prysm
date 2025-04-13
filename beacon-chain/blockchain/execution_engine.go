@@ -63,12 +63,7 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*
 		return nil, nil
 	}
 	finalizedHash := s.cfg.ForkChoiceStore.FinalizedPayloadBlockHash()
-	safeBlockHash := [32]byte{}
-	if features.Get().SafeHeadFCU {
-		safeBlockHash = s.cfg.ForkChoiceStore.SafeHeadPayloadBlockHash()
-	} else {
-		safeBlockHash = s.cfg.ForkChoiceStore.UnrealizedJustifiedPayloadBlockHash()
-	}
+	safeBlockHash := s.cfg.ForkChoiceStore.SafeBlockHash()
 	fcs := &enginev1.ForkchoiceState{
 		HeadBlockHash:      headPayload.BlockHash(),
 		SafeBlockHash:      safeBlockHash[:],

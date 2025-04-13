@@ -184,7 +184,13 @@ func (s *Store) insert(ctx context.Context,
 			log.WithError(err).Error("could not compute seconds since slot start")
 			secondsSinceSlotStart = 0
 		}
-		if err := s.treeRootNode.updateBestDescendant(ctx, jEpoch, fEpoch, currentSlot, secondsSinceSlotStart, s.committeeWeight); err != nil {
+		if err := s.treeRootNode.updateBestDescendant(ctx, &updateDescendantArgs{
+			justifiedEpoch:        jEpoch,
+			finalizedEpoch:        fEpoch,
+			currentSlot:           currentSlot,
+			secondsSinceSlotStart: secondsSinceSlotStart,
+			committeeWeight:       s.committeeWeight,
+		}); err != nil {
 			_, remErr := s.removeNode(ctx, n)
 			if remErr != nil {
 				log.WithError(remErr).Error("could not remove node")

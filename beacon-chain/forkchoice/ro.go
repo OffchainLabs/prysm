@@ -100,11 +100,11 @@ func (ro *ROForkChoice) UnrealizedJustifiedPayloadBlockHash() [32]byte {
 	return ro.getter.UnrealizedJustifiedPayloadBlockHash()
 }
 
-// SafeHeadPayloadBlockHash delegates to the underlying forkchoice call, under a lock.
-func (ro *ROForkChoice) SafeHeadPayloadBlockHash() [32]byte {
+// SafeBlockHash delegates to the underlying forkchoice call, under a lock.
+func (ro *ROForkChoice) SafeBlockHash() [32]byte {
 	ro.l.RLock()
 	defer ro.l.RUnlock()
-	return ro.getter.SafeHeadPayloadBlockHash()
+	return ro.getter.SafeBlockHash()
 }
 
 // NodeCount delegates to the underlying forkchoice call, under a lock.
