@@ -480,6 +480,14 @@ func TestNode_maxWeight(t *testing.T) {
 }
 
 func TestNode_confirmed(t *testing.T) {
+	cfg := params.BeaconConfig()
+	cfg.FastConfirmationByzantineThreshold = 33
+	undo, err := params.SetActiveWithUndo(cfg)
+	require.NoError(t, err)
+	defer func() {
+		require.NoError(t, undo())
+	}()
+
 	type fields struct {
 		nodeSlot       primitives.Slot
 		weight         uint64
@@ -511,11 +519,11 @@ func TestNode_confirmed(t *testing.T) {
 		{
 			name: "weight without boost <= threshold returns false",
 			fields: fields{
-				weight:         1620,
+				weight:         186, // 200 committee weight, 40 pb weight, 66 byzantine weight
 				bestDescendant: &Node{},
 			},
 			args: args{
-				slot:            32,
+				slot:            1,
 				committeeWeight: 100,
 			},
 			want: false,
@@ -523,11 +531,11 @@ func TestNode_confirmed(t *testing.T) {
 		{
 			name: "weight without boost > threshold returns true",
 			fields: fields{
-				weight:         1621,
+				weight:         187, // 200 committee weight, 40 pb weight, 66 byzantine weight
 				bestDescendant: &Node{},
 			},
 			args: args{
-				slot:            32,
+				slot:            1,
 				committeeWeight: 100,
 			},
 			want: true,
@@ -535,49 +543,63 @@ func TestNode_confirmed(t *testing.T) {
 		{
 			name: "node root matches pbRoot but balance < pbValue returns false",
 			fields: fields{
-				weight:         9,
-				bestDescendant: &Node{},
+				weight: 187, bestDescendant: &Node{
+					root: [32]byte{1},
+				},
 			},
 			args: args{
-				slot:            32,
+				slot:            1,
 				committeeWeight: 100,
 				pbRoot:          [32]byte{1},
-				pbValue:         10,
+				pbValue:         100000000,
 			},
 			want: false,
 		},
 		{
 			name: "node root matches pbRoot, balance >= pbValue, adjusted weight <= threshold returns false",
 			fields: fields{
-				weight: 1630,
+				weight: 187,
 				bestDescendant: &Node{
 					root: [32]byte{1},
 				},
 			},
 			args: args{
-				slot:            32,
+				slot:            1,
 				committeeWeight: 100,
 				pbRoot:          [32]byte{1},
-				pbValue:         20,
+				pbValue:         1,
 			},
-			want: false, // adjusted weight = 1610
+			want: false,
+		},
+		{
+			name: "node root matches pbRoot (self), balance >= pbValue, adjusted weight <= threshold returns false",
+			fields: fields{
+				weight: 187,
+				root:   [32]byte{1},
+			},
+			args: args{
+				slot:            1,
+				committeeWeight: 100,
+				pbRoot:          [32]byte{1},
+				pbValue:         1,
+			},
+			want: false,
 		},
 		{
 			name: "node root matches pbRoot, balance >= pbValue, adjusted weight > threshold returns true",
 			fields: fields{
-				weight: 1661,
-				root:   [32]byte{1},
+				weight: 188,
 				bestDescendant: &Node{
 					root: [32]byte{1},
 				},
 			},
 			args: args{
-				slot:            32,
+				slot:            1,
 				committeeWeight: 100,
 				pbRoot:          [32]byte{1},
-				pbValue:         20,
+				pbValue:         1,
 			},
-			want: true, // adjusted weight = 1611
+			want: true,
 		},
 	}
 

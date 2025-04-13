@@ -44,7 +44,6 @@ type Flags struct {
 	EnablePeerScorer                    bool // EnablePeerScorer enables experimental peer scoring in p2p.
 	EnableLightClient                   bool // EnableLightClient enables light client APIs.
 	EnableQUIC                          bool // EnableQUIC specifies whether to enable QUIC transport for libp2p.
-	EnableFastConfirmation              bool // EnableFastConfirmation enables fast confirmation for the beacon node for safe block hash.
 	WriteWalletPasswordOnWebOnboarding  bool // WriteWalletPasswordOnWebOnboarding writes the password to disk after Prysm web signup.
 	EnableDoppelGanger                  bool // EnableDoppelGanger enables doppelganger protection on startup for the validator.
 	EnableHistoricalSpaceRepresentation bool // EnableHistoricalSpaceRepresentation enables the saving of registry validators in separate buckets to save space
@@ -209,10 +208,6 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 		cfg.DisableGRPCConnectionLogs = true
 	}
 
-	if ctx.Bool(enableFastConfirmation.Name) {
-		log.WithField(enableFastConfirmation.Name, enableFastConfirmation.Usage).Warn(enabledFeatureFlag)
-		cfg.EnableFastConfirmation = true
-	}
 	cfg.EnablePeerScorer = true
 	if ctx.Bool(disablePeerScorer.Name) {
 		logDisabled(disablePeerScorer)

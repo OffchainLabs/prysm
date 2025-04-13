@@ -42,7 +42,6 @@ type ForkchoiceFetcher interface {
 	CachedHeadRoot() [32]byte
 	GetProposerHead() [32]byte
 	SetForkChoiceGenesisTime(time.Time)
-	SafeHeadPayloadBlockHash() [32]byte
 	SafeBlockHash() [32]byte
 	UpdateHead(context.Context, primitives.Slot)
 	HighestReceivedBlockSlot() primitives.Slot

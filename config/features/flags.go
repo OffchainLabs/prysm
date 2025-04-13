@@ -50,10 +50,6 @@ var (
 		Usage: `WARNING: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API..
 		Disables displaying logs for newly connected grpc clients.`,
 	}
-	enableFastConfirmation = &cli.BoolFlag{
-		Name:  "enable-fast-confirmation",
-		Usage: "Enables fast confirmation for safe block hash",
-	}
 	disablePeerScorer = &cli.BoolFlag{
 		Name:  "disable-peer-scorer",
 		Usage: "(Danger): Disables P2P peer scorer. Do NOT use this in production!",
@@ -248,7 +244,6 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	SepoliaTestnet,
 	HoodiTestnet,
 	Mainnet,
-	enableFastConfirmation,
 	disablePeerScorer,
 	disableBroadcastSlashingFlag,
 	disableStakinContractCheck,

@@ -8,7 +8,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	consensus_blocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
@@ -76,7 +75,7 @@ func (f *ForkChoice) Head(
 	currentSlot := slots.CurrentSlot(f.store.genesisTime)
 	secondsSinceSlotStart, err := slots.SinceSlotStart(currentSlot, f.store.genesisTime, time.Now())
 	if err != nil {
-		log.WithError(err).Error("could not compute seconds since slot start")
+		log.WithError(err).Error("Could not compute seconds since slot start")
 	}
 	if err := f.store.treeRootNode.updateBestDescendant(ctx, &updateDescendantArgs{
 		justifiedEpoch:        jc.Epoch,
@@ -87,15 +86,15 @@ func (f *ForkChoice) Head(
 		pbRoot:                f.store.proposerBoostRoot,
 		pbValue:               f.store.previousProposerBoostScore,
 	}); err != nil {
-		return [32]byte{}, errors.Wrap(err, "could not update best descendant")
+		return [32]byte{}, errors.Wrap(err, "Could not update best descendant")
 	}
 	h, err := f.store.head(ctx)
 	if err != nil {
-		return [32]byte{}, errors.Wrap(err, "could not get head")
+		return [32]byte{}, errors.Wrap(err, "Could not get head")
 	}
 
 	if err := f.updateSafeHead(ctx); err != nil {
-		log.WithError(err).Error("could not update safe head")
+		log.WithError(err).Error("Could not update safe head")
 	}
 
 	return h, nil
@@ -108,7 +107,7 @@ func (f *ForkChoice) updateSafeHead(
 	oldSafeHeadRoot := f.store.safeHeadRoot
 	newSafeHeadRoot, err := f.store.safeHead(ctx)
 	if err != nil {
-		return errors.Wrap(err, "could not get safe head")
+		return errors.Wrap(err, "Could not get safe head")
 	}
 
 	// If the safe head has not changed, return early.
@@ -127,14 +126,14 @@ func (f *ForkChoice) updateSafeHead(
 func (f *ForkChoice) logSafeHead(ctx context.Context, newSafeHeadRoot [32]byte, oldSafeHeadRoot [32]byte) {
 	newSafeHeadNode, ok := f.store.nodeByRoot[newSafeHeadRoot]
 	if !ok || newSafeHeadNode == nil {
-		log.WithError(ErrNilNode).Error("could not find new safe head node")
+		log.WithError(ErrNilNode).Error("Could not find new safe head node")
 		return
 	}
 	newSafeHeadSlot := newSafeHeadNode.slot
 	currentSlot := slots.CurrentSlot(f.store.genesisTime)
-	secondsSinceSlotStart, err := slots.SecondsSinceSlotStart(currentSlot, f.store.genesisTime, uint64(time.Now().Unix()))
+	secondsSinceSlotStart, err := slots.SinceSlotStart(currentSlot, f.store.genesisTime, time.Now())
 	if err != nil {
-		log.WithError(err).Error("could not compute seconds since slot start")
+		log.WithError(err).Error("Could not compute seconds since slot start")
 	}
 	log.WithFields(logrus.Fields{
 		"currentSlot":        fmt.Sprintf("%d", currentSlot),
@@ -158,7 +157,7 @@ func (f *ForkChoice) logSafeHead(ctx context.Context, newSafeHeadRoot [32]byte, 
 	if oldSafeHeadRoot != [32]byte{} && commonRoot != oldSafeHeadRoot {
 		oldSafeHeadNode, ok := f.store.nodeByRoot[oldSafeHeadRoot]
 		if !ok || oldSafeHeadNode == nil {
-			log.WithError(ErrNilNode).Error("could not find old safe head node")
+			log.WithError(ErrNilNode).Error("Could not find old safe head node")
 			return
 		}
 		oldSafeHeadSlot := oldSafeHeadNode.slot
@@ -640,17 +639,19 @@ func (f *ForkChoice) UnrealizedJustifiedPayloadBlockHash() [32]byte {
 
 // SafeBlockHash returns the hash of the payload at the safe head
 func (f *ForkChoice) SafeBlockHash() [32]byte {
-	if !features.Get().EnableFastConfirmation {
+	switch params.BeaconConfig().SafeBlockAlgorithm {
+	case "justified":
+		return f.JustifiedPayloadBlockHash()
+	case "fast-confirmation":
+		safeHeadRoot := f.store.safeHeadRoot
+		node, ok := f.store.nodeByRoot[safeHeadRoot]
+		if !ok || node == nil {
+			return [32]byte{}
+		}
+		return node.payloadHash
+	default:
 		return f.UnrealizedJustifiedPayloadBlockHash()
 	}
-
-	safeHeadRoot := f.store.safeHeadRoot
-	node, ok := f.store.nodeByRoot[safeHeadRoot]
-	if !ok || node == nil {
-		// This should not happen
-		return [32]byte{}
-	}
-	return node.payloadHash
 }
 
 // ForkChoiceDump returns a full dump of forkchoice.

@@ -195,3 +195,32 @@ func configureExecutionSetting(cliCtx *cli.Context) error {
 		" Default fee recipient will be used as a fall back", checksumAddress.Hex())
 	return params.SetActive(c)
 }
+
+func configureSafeBlockConfig(cliCtx *cli.Context) error {
+	c := params.BeaconConfig().Copy()
+
+	if cliCtx.IsSet(flags.FastConfirmationByzantineThreshold.Name) {
+		threshold := cliCtx.Uint64(flags.FastConfirmationByzantineThreshold.Name)
+		if threshold > 100 {
+			return fmt.Errorf("fast-confirmation-byzantine-threshold must be between 0 and 100")
+		}
+		c.FastConfirmationByzantineThreshold = cliCtx.Uint64(flags.FastConfirmationByzantineThreshold.Name)
+		if err := params.SetActive(c); err != nil {
+			return err
+		}
+	}
+
+	if cliCtx.IsSet(flags.SafeBlock.Name) {
+		safeBlock := cliCtx.String(flags.SafeBlock.Name)
+		switch safeBlock {
+		case "justified", "unrealized-justified", "fast-confirmation":
+		default:
+			return fmt.Errorf("invalid safe-block option: %s", safeBlock)
+		}
+		c.SafeBlockAlgorithm = safeBlock
+		if err := params.SetActive(c); err != nil {
+			return err
+		}
+	}
+	return nil
+}

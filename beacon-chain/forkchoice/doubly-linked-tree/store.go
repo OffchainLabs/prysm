@@ -179,7 +179,7 @@ func (s *Store) insert(ctx context.Context,
 		// Update best descendants
 		jEpoch := s.justifiedCheckpoint.Epoch
 		fEpoch := s.finalizedCheckpoint.Epoch
-		secondsSinceSlotStart, err := slots.SecondsSinceSlotStart(currentSlot, s.genesisTime, uint64(time.Now().Unix()))
+		secondsSinceSlotStart, err := slots.SinceSlotStart(currentSlot, s.genesisTime, time.Now())
 		if err != nil {
 			log.WithError(err).Error("could not compute seconds since slot start")
 			secondsSinceSlotStart = 0
