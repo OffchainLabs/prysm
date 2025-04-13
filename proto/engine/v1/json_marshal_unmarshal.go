@@ -1284,8 +1284,8 @@ func (b *BlobAndProof) UnmarshalJSON(enc []byte) error {
 }
 
 type BlobAndProofV2Json struct {
-	Blob      hexutil.Bytes   `json:"blob"`
-	KzgProofs []hexutil.Bytes `json:"proofs"`
+	Blob   hexutil.Bytes   `json:"blob"`
+	Proofs []hexutil.Bytes `json:"proofs"`
 }
 
 func (b *BlobAndProofV2) UnmarshalJSON(enc []byte) error {
@@ -1298,8 +1298,8 @@ func (b *BlobAndProofV2) UnmarshalJSON(enc []byte) error {
 	copy(blob, dec.Blob)
 	b.Blob = blob
 
-	proofs := make([][]byte, len(dec.KzgProofs))
-	for i, proof := range dec.KzgProofs {
+	proofs := make([][]byte, len(dec.Proofs))
+	for i, proof := range dec.Proofs {
 		p := proof
 		proofs[i] = bytesutil.PadTo(p[:], fieldparams.BLSPubkeyLength)
 	}
