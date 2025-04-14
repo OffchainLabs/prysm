@@ -3332,12 +3332,12 @@ func TestProcessLightClientOptimisticUpdate(t *testing.T) {
 		{
 			name:          "Old update is better - age",
 			oldOptions:    []util.LightClientOption{util.WithIncreasedAttestedSlot(1)},
-			newOptions:    []util.LightClientOption{util.WithSupermajority()},
+			newOptions:    []util.LightClientOption{},
 			expectReplace: false,
 		},
 		{
 			name:          "New update is better - age",
-			oldOptions:    []util.LightClientOption{util.WithSupermajority()},
+			oldOptions:    []util.LightClientOption{},
 			newOptions:    []util.LightClientOption{util.WithIncreasedAttestedSlot(1)},
 			expectReplace: true,
 		},
