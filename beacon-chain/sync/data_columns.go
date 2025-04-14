@@ -165,7 +165,7 @@ func RequestDataColumnSidecarsByRoot(
 
 // MissingDataColumns looks at the data columns we should store for a given block regarding `custodyGroupCount`,
 // and returns the indices of the missing ones.
-func MissingDataColumns(block blocks.ROBlock, nodeID enode.ID, custodyGroupCount uint64, dataColumnStorage *filesystem.DataColumnStorage) (map[uint64]bool, error) {
+func MissingDataColumns(block blocks.ROBlock, nodeID enode.ID, custodyGroupCount uint64, dataColumnStorage filesystem.DataColumnStorageSummarizer) (map[uint64]bool, error) {
 	// Blocks before Fulu have no data columns.
 	if block.Version() < version.Fulu {
 		return nil, nil
