@@ -254,7 +254,7 @@ func (s *Service) processLightClientFinalityUpdate(
 		return errors.Wrapf(err, "could not get finalized block for root %#x", finalizedRoot)
 	}
 
-	update, err := lightclient.NewLightClientFinalityUpdateFromBeaconState(
+	newUpdate, err := lightclient.NewLightClientFinalityUpdateFromBeaconState(
 		ctx,
 		postState.Slot(),
 		postState,
@@ -273,18 +273,14 @@ func (s *Service) processLightClientFinalityUpdate(
 		// The finalized_header.beacon.lastUpdateSlot is greater than that of all previously forwarded finality_updates,
 		// or it matches the highest previously forwarded lastUpdateSlot and also has a sync_aggregate indicating supermajority (> 2/3)
 		// sync committee participation while the previously forwarded finality_update for that lastUpdateSlot did not indicate supermajority
-		newUpdateSlot := update.FinalizedHeader().Beacon().Slot
-		newMaxActiveParticipants := update.SyncAggregate().SyncCommitteeBits.Len()
-		newNumActiveParticipants := update.SyncAggregate().SyncCommitteeBits.Count()
-		newHasSupermajority := newNumActiveParticipants*3 >= newMaxActiveParticipants*2
+		newUpdateSlot := newUpdate.FinalizedHeader().Beacon().Slot
+		newHasSupermajority := lightclient.UpdateHasSupermajority(newUpdate.SyncAggregate())
 
 		lastUpdateSlot := lastUpdate.FinalizedHeader().Beacon().Slot
-		lastMaxActiveParticipants := lastUpdate.SyncAggregate().SyncCommitteeBits.Len()
-		lastNumActiveParticipants := lastUpdate.SyncAggregate().SyncCommitteeBits.Count()
-		lastHasSupermajority := lastNumActiveParticipants*3 >= lastMaxActiveParticipants*2
+		lastHasSupermajority := lightclient.UpdateHasSupermajority(lastUpdate.SyncAggregate())
 
 		if newUpdateSlot < lastUpdateSlot {
-			log.Debug("Skip saving light client finality update: Older than local update")
+			log.Debug("Skip saving light client finality newUpdate: Older than local newUpdate")
 			return nil
 		}
 		if newUpdateSlot == lastUpdateSlot && (lastHasSupermajority || !newHasSupermajority) {
@@ -293,11 +289,11 @@ func (s *Service) processLightClientFinalityUpdate(
 		}
 	}
 	log.Debug("Saving new light client finality update")
-	s.lcStore.SetLastFinalityUpdate(update)
+	s.lcStore.SetLastFinalityUpdate(newUpdate)
 
 	s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
 		Type: statefeed.LightClientFinalityUpdate,
-		Data: update,
+		Data: newUpdate,
 	})
 	return nil
 }

@@ -3259,7 +3259,7 @@ func setupLightClientTestRequirements(ctx context.Context, t *testing.T, s *Serv
 	case version.Electra:
 		l = util.NewTestLightClient(t, version.Electra, options...)
 	default:
-		t.Error("Invalid fork version")
+		t.Errorf("Unsupported fork version %s", version.String(v))
 		return nil, nil
 	}
 
@@ -3320,56 +3320,57 @@ func TestProcessLightClientOptimisticUpdate(t *testing.T) {
 		{
 			name:          "No old update",
 			oldOptions:    nil,
-			newOptions:    []util.LightClientOption{util.WithSupermajority()},
+			newOptions:    []util.LightClientOption{},
 			expectReplace: true,
 		},
 		{
+			name:          "Same age",
+			oldOptions:    []util.LightClientOption{},
+			newOptions:    []util.LightClientOption{util.WithSupermajority()}, // supermajority does not matter here and is only added to result in two different updates
+			expectReplace: false,
+		},
+		{
 			name:          "Old update is better - age",
-			oldOptions:    []util.LightClientOption{util.WithIncreasedAttestedSlot(1), util.WithSupermajority()},
+			oldOptions:    []util.LightClientOption{util.WithIncreasedAttestedSlot(1)},
 			newOptions:    []util.LightClientOption{util.WithSupermajority()},
 			expectReplace: false,
 		},
 		{
 			name:          "New update is better - age",
 			oldOptions:    []util.LightClientOption{util.WithSupermajority()},
-			newOptions:    []util.LightClientOption{util.WithIncreasedAttestedSlot(1), util.WithSupermajority()},
+			newOptions:    []util.LightClientOption{util.WithIncreasedAttestedSlot(1)},
 			expectReplace: true,
 		},
 	}
 
 	for _, tc := range testCases {
-		for i := 1; i < 6; i++ { // test all forks
+		for testVersion := 1; testVersion < 6; testVersion++ { // test all forks
 			var forkEpoch uint64
-			var testVersion int
 			var expectedVersion int
 
-			switch i {
+			switch testVersion {
 			case 1:
 				forkEpoch = uint64(params.BeaconConfig().AltairForkEpoch)
-				testVersion = version.Altair
 				expectedVersion = version.Altair
 			case 2:
 				forkEpoch = uint64(params.BeaconConfig().BellatrixForkEpoch)
-				testVersion = version.Bellatrix
 				expectedVersion = version.Altair
 			case 3:
 				forkEpoch = uint64(params.BeaconConfig().CapellaForkEpoch)
-				testVersion = version.Capella
 				expectedVersion = version.Capella
 			case 4:
 				forkEpoch = uint64(params.BeaconConfig().DenebForkEpoch)
-				testVersion = version.Deneb
 				expectedVersion = version.Deneb
 			case 5:
 				forkEpoch = uint64(params.BeaconConfig().ElectraForkEpoch)
-				testVersion = version.Electra
 				expectedVersion = version.Deneb
 			default:
-				t.Error("Invalid fork testVersion")
+				t.Errorf("Unsupported fork version %s", version.String(testVersion))
 			}
 
 			t.Run(version.String(testVersion)+"_"+tc.name, func(t *testing.T) {
 				s.genesisTime = time.Unix(time.Now().Unix()-(int64(forkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
+				s.lcStore = &lightClient.Store{}
 
 				var oldActualUpdate interfaces.LightClientOptimisticUpdate
 				var err error
@@ -3393,7 +3394,6 @@ func TestProcessLightClientOptimisticUpdate(t *testing.T) {
 					require.NotNil(t, oldUpdate)
 
 					require.DeepEqual(t, oldUpdate, oldActualUpdate, "old update should be saved")
-
 				}
 
 				// config for new update
@@ -3423,12 +3423,8 @@ func TestProcessLightClientOptimisticUpdate(t *testing.T) {
 					require.DeepEqual(t, oldActualUpdate, newUpdate)
 					require.Equal(t, expectedVersion, newUpdate.Version())
 				}
-
-				// set last optimistic update to nil for next test
-				s.lcStore.SetLastOptimisticUpdate(nil)
 			})
 		}
-
 	}
 }
 
@@ -3501,38 +3497,33 @@ func TestProcessLightClientFinalityUpdate(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		for i := 1; i < 6; i++ { // test all forks
+		for testVersion := 1; testVersion < 6; testVersion++ { // test all forks
 			var forkEpoch uint64
-			var testVersion int
-			//var expectedVersion int
+			var expectedVersion int
 
-			switch i {
+			switch testVersion {
 			case 1:
 				forkEpoch = uint64(params.BeaconConfig().AltairForkEpoch)
-				testVersion = version.Altair
-				//expectedVersion = version.Altair
+				expectedVersion = version.Altair
 			case 2:
 				forkEpoch = uint64(params.BeaconConfig().BellatrixForkEpoch)
-				testVersion = version.Bellatrix
-				//expectedVersion = version.Altair
+				expectedVersion = version.Altair
 			case 3:
 				forkEpoch = uint64(params.BeaconConfig().CapellaForkEpoch)
-				testVersion = version.Capella
-				//expectedVersion = version.Capella
+				expectedVersion = version.Capella
 			case 4:
 				forkEpoch = uint64(params.BeaconConfig().DenebForkEpoch)
-				testVersion = version.Deneb
-				//expectedVersion = version.Deneb
+				expectedVersion = version.Deneb
 			case 5:
 				forkEpoch = uint64(params.BeaconConfig().ElectraForkEpoch)
-				testVersion = version.Electra
-				//expectedVersion = version.Electra
+				expectedVersion = version.Electra
 			default:
-				t.Error("Invalid fork testVersion")
+				t.Errorf("Unsupported fork version %s", version.String(testVersion))
 			}
 
 			t.Run(version.String(testVersion)+"_"+tc.name, func(t *testing.T) {
 				s.genesisTime = time.Unix(time.Now().Unix()-(int64(forkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
+				s.lcStore = &lightClient.Store{}
 
 				var actualOldUpdate, actualNewUpdate interfaces.LightClientFinalityUpdate
 				var err error
@@ -3579,14 +3570,12 @@ func TestProcessLightClientFinalityUpdate(t *testing.T) {
 
 				if tc.expectReplace {
 					require.DeepEqual(t, actualNewUpdate, newUpdate)
+					require.Equal(t, expectedVersion, newUpdate.Version())
 				} else {
 					require.DeepEqual(t, actualOldUpdate, newUpdate)
+					require.Equal(t, expectedVersion, newUpdate.Version())
 				}
-
-				// set last optimistic update to nil for next test
-				s.lcStore.SetLastFinalityUpdate(nil)
 			})
 		}
-
 	}
 }
