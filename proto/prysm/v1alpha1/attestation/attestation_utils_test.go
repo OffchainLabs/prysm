@@ -81,6 +81,14 @@ func TestAttestingIndices(t *testing.T) {
 			},
 			want: []uint64{0, 1},
 		},
+		{
+			name: "Electra - No attester in committee",
+			args: args{
+				att:        &eth.AttestationElectra{AggregationBits: bitfield.Bitlist{0b11100}},
+				committees: [][]primitives.ValidatorIndex{{0, 1}, {0, 1}},
+			},
+			err: "no attesting indices found for committee index 0",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
