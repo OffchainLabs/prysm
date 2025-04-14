@@ -163,19 +163,6 @@ func RequestDataColumnSidecarsByRoot(
 	return nil, errors.Errorf("failed to retrieve all requested data columns after retries for block root=%#x, missing columns=%v", blockRoot, uint64MapToSortedSlice(remainingMissingColumns))
 }
 
-// SaveDataColumns saves the received data columns to disk.
-//
-// NOTE: During the initial sync, LazilyPersistentStoreColumn caches sidecars
-// and saves them to disk within IsDataAvailable. SaveDataColumns is intended
-// for use when no caching is done (e.g. in the pending blocks queue).
-func SaveDataColumns(sidecars []blocks.VerifiedRODataColumn, dataColumnStorage *filesystem.DataColumnStorage) error {
-	if err := dataColumnStorage.Save(sidecars); err != nil {
-		return errors.Wrap(err, "save data column sidecars")
-	}
-
-	return nil
-}
-
 // MissingDataColumns looks at the data columns we should store for a given block regarding `custodyGroupCount`,
 // and returns the indices of the missing ones.
 func MissingDataColumns(block blocks.ROBlock, nodeID enode.ID, custodyGroupCount uint64, dataColumnStorage *filesystem.DataColumnStorage) (map[uint64]bool, error) {
