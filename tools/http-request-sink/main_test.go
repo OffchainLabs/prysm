@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 )
 
 type sampleRPCRequest struct {

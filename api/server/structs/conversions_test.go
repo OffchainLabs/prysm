@@ -4,9 +4,9 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+  "github.com/prysmaticlabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 )
 
 func TestDepositSnapshotFromConsensus(t *testing.T) {

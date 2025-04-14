@@ -7,7 +7,7 @@ go_library(
         "factory.go",
         "mutator.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks/testing",
+    importpath = "github.com/OffchainLabs/prysm/v6/consensus-types/blocks/testing",
     visibility = ["//visibility:public"],
     deps = [
         "//consensus-types/blocks:go_default_library",

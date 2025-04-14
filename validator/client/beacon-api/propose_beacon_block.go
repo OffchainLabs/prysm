@@ -7,9 +7,9 @@ import (
 	"net/http"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	"github.com/OffchainLabs/prysm/v6/network/httputil"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 )
 
 type blockProcessingResult struct {

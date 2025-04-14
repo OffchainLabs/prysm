@@ -6,26 +6,26 @@ import (
 	"testing"
 	"time"
 
+	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/attestations"
+	mockp2p "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
+	mockSync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync/initial-sync/testing"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/crypto/bls"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation"
+	attaggregation "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation/aggregation/attestations"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/prysmaticlabs/go-bitfield"
-	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/attestations"
-	mockp2p "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/core"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
-	mockSync "github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/initial-sync/testing"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/attestation"
-	attaggregation "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/attestation/aggregation/attestations"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
 )
 
 func TestSubmitAggregateAndProof_Syncing(t *testing.T) {
@@ -400,7 +400,9 @@ func TestSubmitAggregateAndProof_SelectsMostBitsWhenOwnAttestationNotPresent(t *
 
 func TestSubmitSignedAggregateSelectionProof_ZeroHashesSignatures(t *testing.T) {
 	aggregatorServer := &Server{
-		TimeFetcher: &mock.ChainService{Genesis: time.Now()},
+		CoreService: &core.Service{
+			GenesisTimeFetcher: &mock.ChainService{Genesis: time.Now()},
+		},
 	}
 	req := &ethpb.SignedAggregateSubmitRequest{
 		SignedAggregateAndProof: &ethpb.SignedAggregateAttestationAndProof{
@@ -453,8 +455,15 @@ func TestSubmitSignedAggregateSelectionProof_InvalidSlot(t *testing.T) {
 }
 
 func TestSubmitSignedAggregateSelectionProofElectra_ZeroHashesSignatures(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	config := params.BeaconConfig()
+	config.ElectraForkEpoch = 0
+	params.OverrideBeaconConfig(config)
+
 	aggregatorServer := &Server{
-		TimeFetcher: &mock.ChainService{Genesis: time.Now()},
+		CoreService: &core.Service{
+			GenesisTimeFetcher: &mock.ChainService{Genesis: time.Now()},
+		},
 	}
 	req := &ethpb.SignedAggregateSubmitElectraRequest{
 		SignedAggregateAndProof: &ethpb.SignedAggregateAttestationAndProofElectra{
@@ -485,6 +494,11 @@ func TestSubmitSignedAggregateSelectionProofElectra_ZeroHashesSignatures(t *test
 }
 
 func TestSubmitSignedAggregateSelectionProofElectra_InvalidSlot(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	config := params.BeaconConfig()
+	config.ElectraForkEpoch = 0
+	params.OverrideBeaconConfig(config)
+
 	c := &mock.ChainService{Genesis: time.Now()}
 	aggregatorServer := &Server{
 		CoreService: &core.Service{

@@ -3,9 +3,9 @@ package structs
 import (
 	"strconv"
 
-	"github.com/prysmaticlabs/prysm/v5/api/server"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/api/server"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 )
 
 func (sc *Sidecar) ToConsensus() (*eth.BlobSidecar, error) {

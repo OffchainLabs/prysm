@@ -11,27 +11,27 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	lightclient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
+	dbtesting "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/testutil"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	light_client "github.com/OffchainLabs/prysm/v6/consensus-types/light-client"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	ssz "github.com/prysmaticlabs/fastssz"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	lightclient "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/light-client"
-	dbtesting "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/testutil"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	light_client "github.com/prysmaticlabs/prysm/v5/consensus-types/light-client"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	pb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
 )
 
 func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
@@ -51,7 +51,7 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 	params.OverrideBeaconConfig(cfg)
 
 	t.Run("altair", func(t *testing.T) {
-		l := util.NewTestLightClient(t).SetupTestAltair(0, true)
+		l := util.NewTestLightClient(t, version.Altair)
 
 		slot := primitives.Slot(params.BeaconConfig().AltairForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
 		blockRoot, err := l.Block.Block().HashTreeRoot()
@@ -93,7 +93,7 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 		require.NotNil(t, resp.Data.CurrentSyncCommitteeBranch)
 	})
 	t.Run("altairSSZ", func(t *testing.T) {
-		l := util.NewTestLightClient(t).SetupTestAltair(0, true)
+		l := util.NewTestLightClient(t, version.Altair)
 
 		slot := primitives.Slot(params.BeaconConfig().AltairForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
 		blockRoot, err := l.Block.Block().HashTreeRoot()
@@ -127,7 +127,7 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 		require.NotNil(t, resp.CurrentSyncCommitteeBranch)
 	})
 	t.Run("altair - no bootstrap found", func(t *testing.T) {
-		l := util.NewTestLightClient(t).SetupTestAltair(0, true)
+		l := util.NewTestLightClient(t, version.Altair)
 
 		slot := primitives.Slot(params.BeaconConfig().AltairForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
 		blockRoot, err := l.Block.Block().HashTreeRoot()
@@ -153,7 +153,7 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 		require.Equal(t, http.StatusNotFound, writer.Code)
 	})
 	t.Run("bellatrix", func(t *testing.T) {
-		l := util.NewTestLightClient(t).SetupTestBellatrix(0, true)
+		l := util.NewTestLightClient(t, version.Bellatrix)
 
 		slot := primitives.Slot(params.BeaconConfig().BellatrixForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
 		blockRoot, err := l.Block.Block().HashTreeRoot()
@@ -194,7 +194,7 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 		require.NotNil(t, resp.Data.CurrentSyncCommitteeBranch)
 	})
 	t.Run("bellatrixSSZ", func(t *testing.T) {
-		l := util.NewTestLightClient(t).SetupTestBellatrix(0, true)
+		l := util.NewTestLightClient(t, version.Bellatrix)
 
 		slot := primitives.Slot(params.BeaconConfig().BellatrixForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
 		blockRoot, err := l.Block.Block().HashTreeRoot()
@@ -228,7 +228,7 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 		require.NotNil(t, resp.CurrentSyncCommitteeBranch)
 	})
 	t.Run("capella", func(t *testing.T) {
-		l := util.NewTestLightClient(t).SetupTestCapella(false, 0, true) // result is same for true and false
+		l := util.NewTestLightClient(t, version.Capella)
 
 		slot := primitives.Slot(params.BeaconConfig().CapellaForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
 		blockRoot, err := l.Block.Block().HashTreeRoot()
@@ -269,7 +269,7 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 		require.NotNil(t, resp.Data.CurrentSyncCommitteeBranch)
 	})
 	t.Run("capellaSSZ", func(t *testing.T) {
-		l := util.NewTestLightClient(t).SetupTestCapella(false, 0, true) // result is same for true and false
+		l := util.NewTestLightClient(t, version.Capella)
 
 		slot := primitives.Slot(params.BeaconConfig().CapellaForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
 		blockRoot, err := l.Block.Block().HashTreeRoot()
@@ -303,7 +303,7 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 		require.NotNil(t, resp.CurrentSyncCommitteeBranch)
 	})
 	t.Run("deneb", func(t *testing.T) {
-		l := util.NewTestLightClient(t).SetupTestDeneb(false, 0, true) // result is same for true and false
+		l := util.NewTestLightClient(t, version.Deneb)
 
 		slot := primitives.Slot(params.BeaconConfig().DenebForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
 		blockRoot, err := l.Block.Block().HashTreeRoot()
@@ -344,7 +344,7 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 		require.NotNil(t, resp.Data.CurrentSyncCommitteeBranch)
 	})
 	t.Run("denebSSZ", func(t *testing.T) {
-		l := util.NewTestLightClient(t).SetupTestDeneb(false, 0, true) // result is same for true and false
+		l := util.NewTestLightClient(t, version.Deneb)
 
 		slot := primitives.Slot(params.BeaconConfig().DenebForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
 		blockRoot, err := l.Block.Block().HashTreeRoot()
@@ -378,7 +378,7 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 		require.NotNil(t, resp.CurrentSyncCommitteeBranch)
 	})
 	t.Run("electra", func(t *testing.T) {
-		l := util.NewTestLightClient(t).SetupTestElectra(false, 0, true) // result is same for true and false
+		l := util.NewTestLightClient(t, version.Electra)
 
 		slot := primitives.Slot(params.BeaconConfig().ElectraForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
 		blockRoot, err := l.Block.Block().HashTreeRoot()
@@ -419,7 +419,7 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 		require.NotNil(t, resp.Data.CurrentSyncCommitteeBranch)
 	})
 	t.Run("electraSSZ", func(t *testing.T) {
-		l := util.NewTestLightClient(t).SetupTestElectra(false, 0, true) // result is same for true and false
+		l := util.NewTestLightClient(t, version.Electra)
 
 		slot := primitives.Slot(params.BeaconConfig().ElectraForkEpoch * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
 		blockRoot, err := l.Block.Block().HashTreeRoot()

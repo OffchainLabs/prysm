@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func TestStore_DepositContract(t *testing.T) {

@@ -4,7 +4,7 @@ go_library(
     name = "go_default_library",
     testonly = True,
     srcs = ["runner.go"],
-    importpath = "github.com/prysmaticlabs/prysm/v5/testing/spectest/shared/phase0/finality",
+    importpath = "github.com/OffchainLabs/prysm/v6/testing/spectest/shared/phase0/finality",
     visibility = ["//visibility:public"],
     deps = [
         "//beacon-chain/core/helpers:go_default_library",

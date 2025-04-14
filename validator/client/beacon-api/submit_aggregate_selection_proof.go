@@ -7,14 +7,14 @@ import (
 	"net/url"
 	"strconv"
 
+	"github.com/OffchainLabs/prysm/v6/api/apiutil"
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/network/httputil"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api/apiutil"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
 func (c *beaconApiValidatorClient) submitAggregateSelectionProof(

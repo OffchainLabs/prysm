@@ -9,7 +9,7 @@ go_library(
         "validator.go",
         "validator_client.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/validator/client/iface",
+    importpath = "github.com/OffchainLabs/prysm/v6/validator/client/iface",
     visibility = ["//visibility:public"],
     deps = [
         "//api/client/beacon/health:go_default_library",

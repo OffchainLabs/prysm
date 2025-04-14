@@ -13,12 +13,12 @@ import (
 	"strings"
 	"time"
 
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/crypto/bls"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	"github.com/sirupsen/logrus"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )

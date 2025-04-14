@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/cmd"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/OffchainLabs/prysm/v6/cmd"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/urfave/cli/v2"
 )
 

@@ -9,42 +9,42 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/das"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
+	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
+	mockExecution "github.com/OffchainLabs/prysm/v6/beacon-chain/execution/testing"
+	doublylinkedtree "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/doubly-linked-tree"
+	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/attestations/kv"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	consensusblocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/crypto/bls"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
+	prysmTime "github.com/OffchainLabs/prysm/v6/time"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/common"
 	gethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/go-bitfield"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	lightClient "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/light-client"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/das"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
-	testDB "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/execution"
-	mockExecution "github.com/prysmaticlabs/prysm/v5/beacon-chain/execution/testing"
-	doublylinkedtree "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/doubly-linked-tree"
-	forkchoicetypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/types"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/attestations/kv"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	consensusblocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
-	prysmTime "github.com/prysmaticlabs/prysm/v5/time"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
@@ -2653,7 +2653,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 
 	t.Run("Altair", func(t *testing.T) {
 		t.Run("No old update", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestAltair(0, true)
+			l := util.NewTestLightClient(t, version.Altair)
 
 			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().AltairForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
 
@@ -2699,7 +2699,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 		})
 
 		t.Run("New update is better", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestAltair(0, true)
+			l := util.NewTestLightClient(t, version.Altair)
 
 			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().AltairForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
 
@@ -2751,7 +2751,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 		})
 
 		t.Run("Old update is better", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestAltair(0, false)
+			l := util.NewTestLightClient(t, version.Altair)
 
 			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().AltairForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
 
@@ -2812,7 +2812,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 
 	t.Run("Capella", func(t *testing.T) {
 		t.Run("No old update", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestCapella(false, 0, true)
+			l := util.NewTestLightClient(t, version.Capella)
 
 			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().CapellaForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
 
@@ -2857,7 +2857,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 		})
 
 		t.Run("New update is better", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestCapella(false, 0, true)
+			l := util.NewTestLightClient(t, version.Capella)
 
 			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().CapellaForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
 
@@ -2909,7 +2909,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 		})
 
 		t.Run("Old update is better", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestCapella(false, 0, false)
+			l := util.NewTestLightClient(t, version.Capella)
 
 			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().CapellaForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
 
@@ -2970,7 +2970,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 
 	t.Run("Deneb", func(t *testing.T) {
 		t.Run("No old update", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestDeneb(false, 0, true)
+			l := util.NewTestLightClient(t, version.Deneb)
 
 			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().DenebForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
 
@@ -3015,7 +3015,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 		})
 
 		t.Run("New update is better", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestDeneb(false, 0, true)
+			l := util.NewTestLightClient(t, version.Deneb)
 
 			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().DenebForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
 
@@ -3067,7 +3067,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 		})
 
 		t.Run("Old update is better", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestDeneb(false, 0, false)
+			l := util.NewTestLightClient(t, version.Deneb)
 
 			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().DenebForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
 
@@ -3138,7 +3138,7 @@ func TestSaveLightClientBootstrap(t *testing.T) {
 	ctx := tr.ctx
 
 	t.Run("Altair", func(t *testing.T) {
-		l := util.NewTestLightClient(t).SetupTestAltair(0, true)
+		l := util.NewTestLightClient(t, version.Altair)
 
 		s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().AltairForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
 
@@ -3173,7 +3173,7 @@ func TestSaveLightClientBootstrap(t *testing.T) {
 	})
 
 	t.Run("Capella", func(t *testing.T) {
-		l := util.NewTestLightClient(t).SetupTestCapella(false, 0, true)
+		l := util.NewTestLightClient(t, version.Capella)
 
 		s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().CapellaForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
 
@@ -3208,7 +3208,7 @@ func TestSaveLightClientBootstrap(t *testing.T) {
 	})
 
 	t.Run("Deneb", func(t *testing.T) {
-		l := util.NewTestLightClient(t).SetupTestDeneb(false, 0, true)
+		l := util.NewTestLightClient(t, version.Deneb)
 
 		s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().DenebForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
 

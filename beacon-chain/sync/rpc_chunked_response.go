@@ -1,18 +1,18 @@
 package sync
 
 import (
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/network/forks"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/encoder"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/network/forks"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
 // chunkBlockWriter writes the given message as a chunked response to the given network

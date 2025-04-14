@@ -4,12 +4,12 @@ import (
 	"context"
 	"time"
 
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/math"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/pkg/errors"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/math"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	octrace "go.opentelemetry.io/otel/trace"
 )
 
