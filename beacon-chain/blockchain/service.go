@@ -40,7 +40,6 @@ import (
 	prysmTime "github.com/OffchainLabs/prysm/v6/time"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/pkg/errors"
-
 	"github.com/sirupsen/logrus"
 )
 
