@@ -1,7 +1,6 @@
 package p2p
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -28,7 +27,7 @@ func TestVerifyConnectivity(t *testing.T) {
 		{"123.123.123.123", 19000, false, "Dialing an unreachable IP: 123.123.123.123:19000"},
 	}
 	for _, tc := range cases {
-		t.Run(fmt.Sprintf(tc.name),
+		t.Run(tc.name,
 			func(t *testing.T) {
 				verifyConnectivity(tc.address, tc.port, "tcp")
 				logMessage := "IP address is not accessible"

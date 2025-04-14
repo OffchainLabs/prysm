@@ -111,7 +111,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 
 	// Fork choice algorithm constants.
 	ProposerScoreBoost:              40,
-	ReorgWeightThreshold:            20,
+	ReorgHeadWeightThreshold:        20,
 	ReorgParentWeightThreshold:      160,
 	ReorgMaxEpochsSinceFinalization: 2,
 	IntervalsPerSlot:                3,
@@ -262,8 +262,12 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	TerminalBlockHashActivationEpoch: 18446744073709551615,
 	TerminalBlockHash:                [32]byte{},
 	TerminalTotalDifficulty:          "58750000000000000000000", // Estimated: Sept 15, 2022
+	MaxBytesPerTransaction:           1073741824,
+	MaxTransactionsPerPayload:        1048576,
+	BytesPerLogsBloom:                256,
+	MaxExtraDataBytes:                32,
 	EthBurnAddressHex:                "0x0000000000000000000000000000000000000000",
-	DefaultBuilderGasLimit:           uint64(30000000),
+	DefaultBuilderGasLimit:           uint64(36000000),
 
 	// Mevboost circuit breaker
 	MaxBuilderConsecutiveMissedSlots: 3,
@@ -279,6 +283,9 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	MinEpochsForBlobsSidecarsRequest: 4096,
 	MaxRequestBlobSidecars:           768,
 	MaxRequestBlocksDeneb:            128,
+	FieldElementsPerBlob:             4096,
+	MaxBlobCommitmentsPerBlock:       4096,
+	KzgCommitmentInclusionProofDepth: 17,
 
 	// Values related to electra
 	MaxRequestDataColumnSidecars:          16384,
@@ -308,8 +315,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	MinEpochsForDataColumnSidecarsRequest: 4096,
 
 	// Values related to networking parameters.
-	GossipMaxSize:                   10 * 1 << 20, // 10 MiB
-	MaxChunkSize:                    10 * 1 << 20, // 10 MiB
+	MaxPayloadSize:                  10 * 1 << 20, // 10 MiB
 	AttestationSubnetCount:          64,
 	AttestationPropagationSlotRange: 32,
 	MaxRequestBlocks:                1 << 10, // 1024

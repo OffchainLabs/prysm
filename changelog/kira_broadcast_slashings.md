@@ -1,5 +1,3 @@
-### Added
-- Added broadcast of slashing events (proposer and attester slashings) upon detection of equivocation.
-
-### Updated
-- Updated attestation pool logic to prioritize slashings over regular attestations during block production.
+### Added 
+- Added immediate broadcasting of proposer slashings when equivocating blocks are detected during block processing.
+- Added 2 new errors: `HeadStateErr` and `ErrCouldNotVerifyBlockHeader`

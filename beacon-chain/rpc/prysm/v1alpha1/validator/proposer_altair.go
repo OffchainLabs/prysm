@@ -8,6 +8,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
+	"github.com/prysmaticlabs/prysm/v5/crypto/bls/common"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
@@ -96,7 +97,7 @@ func (vs *Server) getSyncAggregate(ctx context.Context, slot primitives.Slot, ro
 	syncSig := bls.AggregateSignatures(sigsHolder)
 	var syncSigBytes [96]byte
 	if syncSig == nil {
-		syncSigBytes = [96]byte{0xC0} // Infinity signature if itself is nil.
+		syncSigBytes = common.InfiniteSignature // Infinity signature if itself is nil.
 	} else {
 		syncSigBytes = bytesutil.ToBytes96(syncSig.Marshal())
 	}

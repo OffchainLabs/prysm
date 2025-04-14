@@ -12,8 +12,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	gethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/go-bitfield"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	lightClient "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/light-client"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
@@ -25,6 +27,7 @@ import (
 	mockExecution "github.com/prysmaticlabs/prysm/v5/beacon-chain/execution/testing"
 	doublylinkedtree "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/doubly-linked-tree"
 	forkchoicetypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/types"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/attestations/kv"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	"github.com/prysmaticlabs/prysm/v5/config/features"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
@@ -44,6 +47,94 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
+
+func Test_pruneAttsFromPool_Electra(t *testing.T) {
+	ctx := context.Background()
+	logHook := logTest.NewGlobal()
+
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.TargetCommitteeSize = 8
+	params.OverrideBeaconConfig(cfg)
+
+	s := Service{
+		cfg: &config{
+			AttPool: kv.NewAttCaches(),
+		},
+	}
+
+	data := &ethpb.AttestationData{
+		BeaconBlockRoot: make([]byte, 32),
+		Source:          &ethpb.Checkpoint{Root: make([]byte, 32)},
+		Target:          &ethpb.Checkpoint{Root: make([]byte, 32)},
+	}
+
+	cb := primitives.NewAttestationCommitteeBits()
+	cb.SetBitAt(0, true)
+	att1 := &ethpb.AttestationElectra{
+		AggregationBits: bitfield.Bitlist{0b10000000, 0b00000001},
+		Data:            data,
+		Signature:       make([]byte, 96),
+		CommitteeBits:   cb,
+	}
+
+	cb = primitives.NewAttestationCommitteeBits()
+	cb.SetBitAt(1, true)
+	att2 := &ethpb.AttestationElectra{
+		AggregationBits: bitfield.Bitlist{0b11110111, 0b00000001},
+		Data:            data,
+		Signature:       make([]byte, 96),
+		CommitteeBits:   cb,
+	}
+
+	cb = primitives.NewAttestationCommitteeBits()
+	cb.SetBitAt(3, true)
+	att3 := &ethpb.AttestationElectra{
+		AggregationBits: bitfield.Bitlist{0b11110111, 0b00000001},
+		Data:            data,
+		Signature:       make([]byte, 96),
+		CommitteeBits:   cb,
+	}
+
+	require.NoError(t, s.cfg.AttPool.SaveUnaggregatedAttestation(att1))
+	require.NoError(t, s.cfg.AttPool.SaveAggregatedAttestation(att2))
+	require.NoError(t, s.cfg.AttPool.SaveAggregatedAttestation(att3))
+
+	cb = primitives.NewAttestationCommitteeBits()
+	cb.SetBitAt(0, true)
+	cb.SetBitAt(1, true)
+	onChainAtt := &ethpb.AttestationElectra{
+		AggregationBits: bitfield.Bitlist{0b10000000, 0b11110111, 0b00000001},
+		Data:            data,
+		Signature:       make([]byte, 96),
+		CommitteeBits:   cb,
+	}
+	bl := &ethpb.SignedBeaconBlockElectra{
+		Block: &ethpb.BeaconBlockElectra{
+			Body: &ethpb.BeaconBlockBodyElectra{
+				Attestations: []*ethpb.AttestationElectra{onChainAtt},
+			},
+		},
+		Signature: make([]byte, 96),
+	}
+	rob, err := consensusblocks.NewSignedBeaconBlock(bl)
+	require.NoError(t, err)
+	st, _ := util.DeterministicGenesisStateElectra(t, 1024)
+	committees, err := helpers.BeaconCommittees(ctx, st, 0)
+	require.NoError(t, err)
+	// Sanity check to make sure the on-chain att will be decomposed
+	// into the correct number of aggregates.
+	require.Equal(t, 4, len(committees))
+
+	s.pruneAttsFromPool(ctx, st, rob)
+	require.LogsDoNotContain(t, logHook, "Could not prune attestations")
+
+	attsInPool := s.cfg.AttPool.UnaggregatedAttestations()
+	assert.Equal(t, 0, len(attsInPool))
+	attsInPool = s.cfg.AttPool.AggregatedAttestations()
+	require.Equal(t, 1, len(attsInPool))
+	assert.DeepEqual(t, att3, attsInPool[0])
+}
 
 func TestStore_OnBlockBatch(t *testing.T) {
 	service, tr := minimalTestService(t)
@@ -821,6 +912,8 @@ func TestInsertFinalizedDeposits_MultipleFinalizedRoutines(t *testing.T) {
 }
 
 func TestRemoveBlockAttestationsInPool(t *testing.T) {
+	logHook := logTest.NewGlobal()
+
 	genesis, keys := util.DeterministicGenesisState(t, 64)
 	b, err := util.GenerateFullBlock(genesis, keys, util.DefaultBlockGenConfig(), 1)
 	assert.NoError(t, err)
@@ -840,7 +933,8 @@ func TestRemoveBlockAttestationsInPool(t *testing.T) {
 	require.NoError(t, service.cfg.AttPool.SaveAggregatedAttestations(atts))
 	wsb, err := consensusblocks.NewSignedBeaconBlock(b)
 	require.NoError(t, err)
-	require.NoError(t, service.pruneAttsFromPool(wsb))
+	service.pruneAttsFromPool(context.Background(), nil /* state not needed pre-Electra */, wsb)
+	require.LogsDoNotContain(t, logHook, "Could not prune attestations")
 	require.Equal(t, 0, service.cfg.AttPool.AggregatedAttestationCount())
 }
 
@@ -1896,6 +1990,7 @@ func TestNoViableHead_Reboot(t *testing.T) {
 
 	require.NoError(t, service.cfg.BeaconDB.SaveState(ctx, genesisState, genesisRoot), "Could not save genesis state")
 	require.NoError(t, service.cfg.BeaconDB.SaveHeadBlockRoot(ctx, genesisRoot), "Could not save genesis state")
+	require.NoError(t, service.cfg.BeaconDB.SaveGenesisBlockRoot(ctx, genesisRoot), "Could not save genesis state")
 
 	for i := 1; i < 6; i++ {
 		driftGenesisTime(service, int64(i), 0)
@@ -2030,6 +2125,7 @@ func TestNoViableHead_Reboot(t *testing.T) {
 	require.NoError(t, service.cfg.BeaconDB.SaveState(ctx, genesisState, jroot))
 	service.cfg.ForkChoiceStore.SetBalancesByRooter(service.cfg.StateGen.ActiveNonSlashedBalancesByRoot)
 	require.NoError(t, service.StartFromSavedState(genesisState))
+	require.NoError(t, service.cfg.BeaconDB.SaveGenesisBlockRoot(ctx, genesisRoot))
 
 	// Forkchoice has the genesisRoot loaded at startup
 	require.Equal(t, genesisRoot, service.ensureRootNotZeros(service.cfg.ForkChoiceStore.CachedHeadRoot()))
@@ -2557,7 +2653,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 
 	t.Run("Altair", func(t *testing.T) {
 		t.Run("No old update", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestAltair()
+			l := util.NewTestLightClient(t).SetupTestAltair(0, true)
 
 			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().AltairForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
 
@@ -2603,7 +2699,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 		})
 
 		t.Run("New update is better", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestAltair()
+			l := util.NewTestLightClient(t).SetupTestAltair(0, true)
 
 			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().AltairForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
 
@@ -2655,7 +2751,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 		})
 
 		t.Run("Old update is better", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestAltair()
+			l := util.NewTestLightClient(t).SetupTestAltair(0, false)
 
 			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().AltairForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
 
@@ -2716,7 +2812,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 
 	t.Run("Capella", func(t *testing.T) {
 		t.Run("No old update", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestCapella(false)
+			l := util.NewTestLightClient(t).SetupTestCapella(false, 0, true)
 
 			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().CapellaForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
 
@@ -2761,7 +2857,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 		})
 
 		t.Run("New update is better", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestCapella(false)
+			l := util.NewTestLightClient(t).SetupTestCapella(false, 0, true)
 
 			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().CapellaForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
 
@@ -2813,7 +2909,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 		})
 
 		t.Run("Old update is better", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestCapella(false)
+			l := util.NewTestLightClient(t).SetupTestCapella(false, 0, false)
 
 			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().CapellaForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
 
@@ -2874,7 +2970,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 
 	t.Run("Deneb", func(t *testing.T) {
 		t.Run("No old update", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestDeneb(false)
+			l := util.NewTestLightClient(t).SetupTestDeneb(false, 0, true)
 
 			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().DenebForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
 
@@ -2919,7 +3015,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 		})
 
 		t.Run("New update is better", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestDeneb(false)
+			l := util.NewTestLightClient(t).SetupTestDeneb(false, 0, true)
 
 			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().DenebForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
 
@@ -2971,7 +3067,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 		})
 
 		t.Run("Old update is better", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestDeneb(false)
+			l := util.NewTestLightClient(t).SetupTestDeneb(false, 0, false)
 
 			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().DenebForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
 
@@ -3042,7 +3138,7 @@ func TestSaveLightClientBootstrap(t *testing.T) {
 	ctx := tr.ctx
 
 	t.Run("Altair", func(t *testing.T) {
-		l := util.NewTestLightClient(t).SetupTestAltair()
+		l := util.NewTestLightClient(t).SetupTestAltair(0, true)
 
 		s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().AltairForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
 
@@ -3077,7 +3173,7 @@ func TestSaveLightClientBootstrap(t *testing.T) {
 	})
 
 	t.Run("Capella", func(t *testing.T) {
-		l := util.NewTestLightClient(t).SetupTestCapella(false)
+		l := util.NewTestLightClient(t).SetupTestCapella(false, 0, true)
 
 		s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().CapellaForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
 
@@ -3112,7 +3208,7 @@ func TestSaveLightClientBootstrap(t *testing.T) {
 	})
 
 	t.Run("Deneb", func(t *testing.T) {
-		l := util.NewTestLightClient(t).SetupTestDeneb(false)
+		l := util.NewTestLightClient(t).SetupTestDeneb(false, 0, true)
 
 		s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().DenebForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
 

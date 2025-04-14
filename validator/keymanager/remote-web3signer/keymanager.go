@@ -462,7 +462,7 @@ func handleBlock(ctx context.Context, validator *validator.Validate, request *va
 	if err = validator.StructCtx(ctx, bockSignRequest); err != nil {
 		return nil, err
 	}
-	blockSignRequestsTotal.Inc()
+	remoteBlockSignRequestsTotal.WithLabelValues("phase0", "false").Inc()
 	return json.Marshal(bockSignRequest)
 }
 
@@ -522,7 +522,7 @@ func handleBlockAltair(ctx context.Context, validator *validator.Validate, reque
 	if err = validator.StructCtx(ctx, blockv2AltairSignRequest); err != nil {
 		return nil, err
 	}
-	blockAltairSignRequestsTotal.Inc()
+	remoteBlockSignRequestsTotal.WithLabelValues("altair", "false").Inc()
 	return json.Marshal(blockv2AltairSignRequest)
 }
 
@@ -534,7 +534,7 @@ func handleBlockBellatrix(ctx context.Context, validator *validator.Validate, re
 	if err = validator.StructCtx(ctx, blockv2BellatrixSignRequest); err != nil {
 		return nil, err
 	}
-	blockBellatrixSignRequestsTotal.Inc()
+	remoteBlockSignRequestsTotal.WithLabelValues("bellatrix", "false").Inc()
 	return json.Marshal(blockv2BellatrixSignRequest)
 }
 
@@ -546,7 +546,7 @@ func handleBlindedBlockBellatrix(ctx context.Context, validator *validator.Valid
 	if err = validator.StructCtx(ctx, blindedBlockv2SignRequest); err != nil {
 		return nil, err
 	}
-	blindedBlockBellatrixSignRequestsTotal.Inc()
+	remoteBlockSignRequestsTotal.WithLabelValues("bellatrix", "true").Inc()
 	return json.Marshal(blindedBlockv2SignRequest)
 }
 
@@ -558,7 +558,7 @@ func handleBlockCapella(ctx context.Context, validator *validator.Validate, requ
 	if err = validator.StructCtx(ctx, blockv2CapellaSignRequest); err != nil {
 		return nil, err
 	}
-	blockCapellaSignRequestsTotal.Inc()
+	remoteBlockSignRequestsTotal.WithLabelValues("capella", "false").Inc()
 	return json.Marshal(blockv2CapellaSignRequest)
 }
 
@@ -570,7 +570,7 @@ func handleBlindedBlockCapella(ctx context.Context, validator *validator.Validat
 	if err = validator.StructCtx(ctx, blindedBlockv2CapellaSignRequest); err != nil {
 		return nil, err
 	}
-	blindedBlockCapellaSignRequestsTotal.Inc()
+	remoteBlockSignRequestsTotal.WithLabelValues("capella", "true").Inc()
 	return json.Marshal(blindedBlockv2CapellaSignRequest)
 }
 
@@ -582,7 +582,7 @@ func handleBlockDeneb(ctx context.Context, validator *validator.Validate, reques
 	if err = validator.StructCtx(ctx, blockv2DenebSignRequest); err != nil {
 		return nil, err
 	}
-	blockDenebSignRequestsTotal.Inc()
+	remoteBlockSignRequestsTotal.WithLabelValues("deneb", "false").Inc()
 	return json.Marshal(blockv2DenebSignRequest)
 }
 
@@ -594,7 +594,7 @@ func handleBlindedBlockDeneb(ctx context.Context, validator *validator.Validate,
 	if err = validator.StructCtx(ctx, blindedBlockv2DenebSignRequest); err != nil {
 		return nil, err
 	}
-	blindedBlockDenebSignRequestsTotal.Inc()
+	remoteBlockSignRequestsTotal.WithLabelValues("deneb", "true").Inc()
 	return json.Marshal(blindedBlockv2DenebSignRequest)
 }
 

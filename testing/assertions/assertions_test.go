@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"unicode"
 
 	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	testpb "github.com/prysmaticlabs/prysm/v5/proto/testing"
@@ -188,7 +189,7 @@ func TestAssert_DeepEqual(t *testing.T) {
 				expected: struct{ i int }{42},
 				actual:   struct{ i int }{41},
 			},
-			expectedErr: "Values are not equal, want: struct { i int }{i:42}, got: struct { i int }{i:41}",
+			expectedErr: "Values are not equal, expected != actual, diff:   struct{ i int }{\n- \ti: 42,\n+ \ti: 41,\n  }\n",
 		},
 		{
 			name: "custom error message",
@@ -198,7 +199,7 @@ func TestAssert_DeepEqual(t *testing.T) {
 				actual:   struct{ i int }{41},
 				msgs:     []interface{}{"Custom values are not equal"},
 			},
-			expectedErr: "Custom values are not equal, want: struct { i int }{i:42}, got: struct { i int }{i:41}",
+			expectedErr: "Custom values are not equal, expected != actual, diff:   struct{ i int }{\n- \ti: 42,\n+ \ti: 41,\n  }",
 		},
 		{
 			name: "custom error message with params",
@@ -208,24 +209,39 @@ func TestAssert_DeepEqual(t *testing.T) {
 				actual:   struct{ i int }{41},
 				msgs:     []interface{}{"Custom values are not equal (for slot %d)", 12},
 			},
-			expectedErr: "Custom values are not equal (for slot 12), want: struct { i int }{i:42}, got: struct { i int }{i:41}",
+			expectedErr: "Custom values are not equal (for slot 12), expected != actual, diff:   struct{ i int }{\n- \ti: 42,\n+ \ti: 41,\n  }\n",
 		},
 	}
 	for _, tt := range tests {
-		verify := func() {
-			if tt.expectedErr == "" && tt.args.tb.ErrorfMsg != "" {
-				t.Errorf("Unexpected error: %v", tt.args.tb.ErrorfMsg)
-			} else if !strings.Contains(tt.args.tb.ErrorfMsg, tt.expectedErr) {
+		verify := func(t testing.TB) {
+			// Trim unicode space characters for an easier comparison.
+			got := strings.Map(func(r rune) rune {
+				if unicode.IsSpace(r) {
+					return -1
+				}
+				return r
+			}, tt.args.tb.ErrorfMsg)
+			want := strings.Map(func(r rune) rune {
+				if unicode.IsSpace(r) {
+					return -1
+				}
+				return r
+			}, tt.expectedErr)
+			if want == "" && got != "" {
+				t.Errorf("Unexpected error: %v", got)
+			} else if !strings.Contains(got, want) {
+				t.Logf("got=%q", got)
+				t.Logf("want=%q", want)
 				t.Errorf("got: %q, want: %q", tt.args.tb.ErrorfMsg, tt.expectedErr)
 			}
 		}
 		t.Run(fmt.Sprintf("Assert/%s", tt.name), func(t *testing.T) {
 			assert.DeepEqual(tt.args.tb, tt.args.expected, tt.args.actual, tt.args.msgs...)
-			verify()
+			verify(t)
 		})
 		t.Run(fmt.Sprintf("Require/%s", tt.name), func(t *testing.T) {
 			require.DeepEqual(tt.args.tb, tt.args.expected, tt.args.actual, tt.args.msgs...)
-			verify()
+			verify(t)
 		})
 	}
 }

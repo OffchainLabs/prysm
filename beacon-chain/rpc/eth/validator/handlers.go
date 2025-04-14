@@ -43,6 +43,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// Deprecated: use GetAggregateAttestationV2 instead
 // GetAggregateAttestation aggregates all attestations matching the given attestation data root and slot, returning the aggregated result.
 func (s *Server) GetAggregateAttestation(w http.ResponseWriter, r *http.Request) {
 	_, span := trace.StartSpan(r.Context(), "validator.GetAggregateAttestation")
@@ -161,11 +162,7 @@ func (s *Server) aggregatedAttestation(w http.ResponseWriter, slot primitives.Sl
 		return nil
 	}
 
-	atts, err := s.AttestationsPool.UnaggregatedAttestations()
-	if err != nil {
-		httputil.HandleError(w, "Could not get unaggregated attestations: "+err.Error(), http.StatusInternalServerError)
-		return nil
-	}
+	atts := s.AttestationsPool.UnaggregatedAttestations()
 	match, err = matchingAtts(atts, slot, attDataRoot, index)
 	if err != nil {
 		httputil.HandleError(w, "Could not get matching attestations: "+err.Error(), http.StatusInternalServerError)
@@ -256,6 +253,7 @@ func (s *Server) SubmitContributionAndProofs(w http.ResponseWriter, r *http.Requ
 	}
 }
 
+// Deprecated: use SubmitAggregateAndProofsV2 instead
 // SubmitAggregateAndProofs verifies given aggregate and proofs and publishes them on appropriate gossipsub topic.
 func (s *Server) SubmitAggregateAndProofs(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "validator.SubmitAggregateAndProofs")
@@ -633,6 +631,16 @@ func (s *Server) GetAttestationData(w http.ResponseWriter, r *http.Request) {
 func (s *Server) ProduceSyncCommitteeContribution(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "validator.ProduceSyncCommitteeContribution")
 	defer span.End()
+
+	isOptimistic, err := s.OptimisticModeFetcher.IsOptimistic(ctx)
+	if err != nil {
+		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if isOptimistic {
+		httputil.HandleError(w, "Beacon node is currently syncing and not serving request on that endpoint", http.StatusServiceUnavailable)
+		return
+	}
 
 	_, index, ok := shared.UintFromQuery(w, r, "subcommittee_index", true)
 	if !ok {

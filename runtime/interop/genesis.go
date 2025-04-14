@@ -159,6 +159,19 @@ func GethTestnetGenesis(genesisTime uint64, cfg *clparams.BeaconChainConfig) *co
 		ShanghaiTime:            shanghaiTime,
 		CancunTime:              cancunTime,
 		PragueTime:              pragueTime,
+		DepositContractAddress:  common.HexToAddress(cfg.DepositContractAddress),
+		BlobScheduleConfig: &params.BlobScheduleConfig{
+			Cancun: &params.BlobConfig{
+				Target:         3,
+				Max:            6,
+				UpdateFraction: 3338477,
+			},
+			Prague: &params.BlobConfig{
+				Target:         6,
+				Max:            9,
+				UpdateFraction: 5007716,
+			},
+		},
 	}
 	da := defaultDepositContractAllocation(cfg.DepositContractAddress)
 	ma := minerAllocation()
@@ -199,7 +212,7 @@ func defaultDepositContractAllocation(contractAddress string) depositAllocation 
 	}
 	codeBytes, err := hexutil.Decode(DepositContractCode)
 	if err != nil {
-		panic(err)
+		panic(err) // lint:nopanic -- The deposit contract code is hardcoded and checked in tests.
 	}
 	return depositAllocation{
 		Address: common.HexToAddress(contractAddress),

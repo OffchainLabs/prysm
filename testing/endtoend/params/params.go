@@ -120,6 +120,9 @@ var StandardLighthouseNodeCount = 2
 // DepositCount is the number of deposits the E2E runner should make to evaluate post-genesis deposit processing.
 var DepositCount = uint64(64)
 
+// PostElectraDepositCount is the number of deposits the E2E runner should make to evaluate post-electra deposit processing.
+var PostElectraDepositCount = uint64(32)
+
 // PregenesisExecCreds is the number of withdrawal credentials of genesis validators which use an execution address.
 var PregenesisExecCreds = uint64(8)
 

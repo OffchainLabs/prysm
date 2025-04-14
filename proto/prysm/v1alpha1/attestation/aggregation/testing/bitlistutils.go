@@ -46,11 +46,11 @@ func Bitlists64WithSingleBitSet(n, length uint64) []*bitfield.Bitlist64 {
 func BitlistsWithMultipleBitSet(t testing.TB, n, length, count uint64) []bitfield.Bitlist {
 	seed := time.Now().UnixNano()
 	t.Logf("bitlistsWithMultipleBitSet random seed: %v", seed)
-	rand.Seed(seed)
+	r := rand.New(rand.NewSource(seed)) // #nosec G404
 	lists := make([]bitfield.Bitlist, n)
 	for i := uint64(0); i < n; i++ {
 		b := bitfield.NewBitlist(length)
-		keys := rand.Perm(int(length)) // lint:ignore uintcast -- This is safe in test code.
+		keys := r.Perm(int(length)) // lint:ignore uintcast -- This is safe in test code.
 		for _, key := range keys[:count] {
 			b.SetBitAt(uint64(key), true)
 		}
@@ -63,11 +63,11 @@ func BitlistsWithMultipleBitSet(t testing.TB, n, length, count uint64) []bitfiel
 func Bitlists64WithMultipleBitSet(t testing.TB, n, length, count uint64) []*bitfield.Bitlist64 {
 	seed := time.Now().UnixNano()
 	t.Logf("Bitlists64WithMultipleBitSet random seed: %v", seed)
-	rand.Seed(seed)
+	r := rand.New(rand.NewSource(seed)) // #nosec G404
 	lists := make([]*bitfield.Bitlist64, n)
 	for i := uint64(0); i < n; i++ {
 		b := bitfield.NewBitlist64(length)
-		keys := rand.Perm(int(length)) // lint:ignore uintcast -- This is safe in test code.
+		keys := r.Perm(int(length)) // lint:ignore uintcast -- This is safe in test code.
 		for _, key := range keys[:count] {
 			b.SetBitAt(uint64(key), true)
 		}

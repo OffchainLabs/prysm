@@ -84,6 +84,7 @@ go_test(
         "sync_committee_head_state_test.go",
         "sync_committee_test.go",
         "sync_subnet_ids_test.go",
+        "tracked_validators_test.go",
     ],
     embed = [":go_default_library"],
     deps = [

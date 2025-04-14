@@ -12,7 +12,7 @@ go_library(
     importpath = "github.com/prysmaticlabs/prysm/v5/validator/client/iface",
     visibility = ["//visibility:public"],
     deps = [
-        "//api/client/beacon:go_default_library",
+        "//api/client/beacon/health:go_default_library",
         "//api/client/event:go_default_library",
         "//config/fieldparams:go_default_library",
         "//config/proposer:go_default_library",

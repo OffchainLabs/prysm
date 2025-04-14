@@ -53,7 +53,6 @@ func (b *BeaconState) SetPendingDeposits(val []*ethpb.PendingDeposit) error {
 	b.pendingDeposits = val
 
 	b.markFieldAsDirty(types.PendingDeposits)
-	b.rebuildTrie[types.PendingDeposits] = true
 	return nil
 }
 

@@ -12,6 +12,7 @@ import (
 	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/das"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/voluntaryexits"
+	"github.com/prysmaticlabs/prysm/v5/config/features"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
@@ -40,6 +41,16 @@ func TestService_ReceiveBlock(t *testing.T) {
 	bc := params.BeaconConfig().Copy()
 	bc.ShardCommitteePeriod = 0 // Required for voluntary exits test in reasonable time.
 	params.OverrideBeaconConfig(bc)
+
+	badBlock := genFullBlock(t, util.DefaultBlockGenConfig(), 101)
+	badRoot, err := badBlock.Block.HashTreeRoot()
+	require.NoError(t, err)
+	badRoots := make(map[[32]byte]struct{})
+	badRoots[badRoot] = struct{}{}
+	resetCfg := features.InitWithReset(&features.Flags{
+		BlacklistedRoots: badRoots,
+	})
+	defer resetCfg()
 
 	type args struct {
 		block *ethpb.SignedBeaconBlock
@@ -124,8 +135,14 @@ func TestService_ReceiveBlock(t *testing.T) {
 				}
 			},
 		},
+		{
+			name: "The block is blacklisted",
+			args: args{
+				block: badBlock,
+			},
+			wantedErr: errBlacklistedRoot.Error(),
+		},
 	}
-
 	wg := new(sync.WaitGroup)
 	for _, tt := range tests {
 		wg.Add(1)

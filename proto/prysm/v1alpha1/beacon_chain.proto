@@ -467,6 +467,12 @@ message BeaconBlockContainer {
 
     // Representing a blinded Electra block.
     SignedBlindedBeaconBlockElectra blinded_electra_block = 12;
+
+    // Representing a Fulu block.
+    SignedBeaconBlockFulu fulu_block = 13;
+
+    // Representing a blinded Fulu block.
+    SignedBlindedBeaconBlockFulu blinded_fulu_block = 14;
   }
 }
 

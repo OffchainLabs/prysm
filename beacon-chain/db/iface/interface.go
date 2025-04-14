@@ -101,7 +101,7 @@ type NoHeadAccessDatabase interface {
 	SaveLightClientBootstrap(ctx context.Context, blockRoot []byte, bootstrap interfaces.LightClientBootstrap) error
 
 	CleanUpDirtyStates(ctx context.Context, slotsPerArchivedPoint primitives.Slot) error
-	DeleteHistoricalDataBeforeSlot(ctx context.Context, slot primitives.Slot) error
+	DeleteHistoricalDataBeforeSlot(ctx context.Context, slot primitives.Slot, batchSize int) (int, error)
 }
 
 // HeadAccessDatabase defines a struct with access to reading chain head data.
@@ -110,6 +110,7 @@ type HeadAccessDatabase interface {
 
 	// Block related methods.
 	HeadBlock(ctx context.Context) (interfaces.ReadOnlySignedBeaconBlock, error)
+	HeadBlockRoot() ([32]byte, error)
 	SaveHeadBlockRoot(ctx context.Context, blockRoot [32]byte) error
 
 	// Genesis operations.

@@ -2,6 +2,7 @@
 // merges them into one profile
 //
 // Copied, with minor changes, from https://github.com/wadey/gocovmerge under BSD-2-Clause License
+// lint:nopanic -- Tooling that is allowed to panic.
 package main
 
 import (

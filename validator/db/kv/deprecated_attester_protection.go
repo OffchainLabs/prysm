@@ -31,7 +31,7 @@ type deprecatedHistoryData struct {
 type deprecatedEncodedAttestingHistory []byte
 
 func (dh deprecatedEncodedAttestingHistory) assertSize() error {
-	if dh == nil || len(dh) < minimalSize {
+	if len(dh) < minimalSize {
 		return fmt.Errorf("encapsulated data size: %d is smaller then minimal size: %d", len(dh), minimalSize)
 	}
 	if (len(dh)-minimalSize)%historySize != 0 {

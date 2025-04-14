@@ -4,9 +4,11 @@ go_library(
     name = "go_default_library",
     srcs = [
         "block.go",
+        "block_execution.go",
         "conversions.go",
         "conversions_blob.go",
         "conversions_block.go",
+        "conversions_block_execution.go",
         "conversions_lightclient.go",
         "conversions_state.go",
         "endpoints_beacon.go",
@@ -47,10 +49,16 @@ go_library(
 
 go_test(
     name = "go_default_test",
-    srcs = ["conversions_test.go"],
+    srcs = [
+        "conversions_block_execution_test.go",
+        "conversions_test.go",
+    ],
     embed = [":go_default_library"],
     deps = [
+        "//proto/engine/v1:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "//testing/require:go_default_library",
+        "@com_github_ethereum_go_ethereum//common:go_default_library",
+        "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",
     ],
 )

@@ -69,6 +69,22 @@ func logStateTransitionData(b interfaces.ReadOnlyBeaconBlock) error {
 			log = log.WithField("kzgCommitmentCount", len(kzgs))
 		}
 	}
+	if b.Version() >= version.Electra {
+		eReqs, err := b.Body().ExecutionRequests()
+		if err != nil {
+			log.WithError(err).Error("Failed to get execution requests")
+		} else {
+			if len(eReqs.Deposits) > 0 {
+				log = log.WithField("depositRequestCount", len(eReqs.Deposits))
+			}
+			if len(eReqs.Consolidations) > 0 {
+				log = log.WithField("consolidationRequestCount", len(eReqs.Consolidations))
+			}
+			if len(eReqs.Withdrawals) > 0 {
+				log = log.WithField("withdrawalRequestCount", len(eReqs.Withdrawals))
+			}
+		}
+	}
 	log.Info("Finished applying state transition")
 	return nil
 }

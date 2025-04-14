@@ -17,7 +17,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
 	v1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	log "github.com/sirupsen/logrus"
 )
 
 // ErrNoBuilder is used when builder endpoint is not configured.

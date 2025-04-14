@@ -2455,6 +2455,25 @@ func TestReconstructBlobSidecars(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 3, len(verifiedBlobs))
 	})
+
+	t.Run("recovered 3 missing blobs with mutated blob mask", func(t *testing.T) {
+		exists := []bool{true, false, true, false, true, false}
+		hi := mockSummary(t, exists)
+
+		srv := createBlobServer(t, 3, func() {
+			// Mutate blob mask
+			exists[1] = true
+			exists[3] = true
+		})
+		defer srv.Close()
+
+		rpcClient, client := setupRpcClient(t, srv.URL, client)
+		defer rpcClient.Close()
+
+		verifiedBlobs, err := client.ReconstructBlobSidecars(ctx, sb, r, hi)
+		require.NoError(t, err)
+		require.Equal(t, 3, len(verifiedBlobs))
+	})
 }
 
 func createRandomKzgCommitments(t *testing.T, num int) [][]byte {
@@ -2467,12 +2486,16 @@ func createRandomKzgCommitments(t *testing.T, num int) [][]byte {
 	return kzgCommitments
 }
 
-func createBlobServer(t *testing.T, numBlobs int) *httptest.Server {
+func createBlobServer(t *testing.T, numBlobs int, callbackFuncs ...func()) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		defer func() {
 			require.NoError(t, r.Body.Close())
 		}()
+		// Execute callback functions for each request.
+		for _, f := range callbackFuncs {
+			f()
+		}
 
 		blobs := make([]pb.BlobAndProofJson, numBlobs)
 		for i := range blobs {

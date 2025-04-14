@@ -53,6 +53,7 @@ type ChainService struct {
 	InitSyncBlockRoots          map[[32]byte]bool
 	DB                          db.Database
 	State                       state.BeaconState
+	HeadStateErr                error
 	Block                       interfaces.ReadOnlySignedBeaconBlock
 	VerifyBlkDescendantErr      error
 	stateNotifier               statefeed.Notifier
@@ -75,6 +76,7 @@ type ChainService struct {
 	SyncingRoot                 [32]byte
 	Blobs                       []blocks.VerifiedROBlob
 	TargetRoot                  [32]byte
+	MockHeadSlot                *primitives.Slot
 }
 
 func (s *ChainService) Ancestor(ctx context.Context, root []byte, slot primitives.Slot) ([]byte, error) {
@@ -334,6 +336,9 @@ func (s *ChainService) ReceiveBlock(ctx context.Context, block interfaces.ReadOn
 
 // HeadSlot mocks HeadSlot method in chain service.
 func (s *ChainService) HeadSlot() primitives.Slot {
+	if s.MockHeadSlot != nil {
+		return *s.MockHeadSlot
+	}
 	if s.State == nil {
 		return 0
 	}
@@ -360,6 +365,9 @@ func (s *ChainService) HeadState(context.Context) (state.BeaconState, error) {
 
 // HeadStateReadOnly mocks HeadStateReadOnly method in chain service.
 func (s *ChainService) HeadStateReadOnly(context.Context) (state.ReadOnlyBeaconState, error) {
+	if s.HeadStateErr != nil {
+		return nil, s.HeadStateErr
+	}
 	return s.State, nil
 }
 

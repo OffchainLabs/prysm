@@ -7,9 +7,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/v5/network/httputil"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
@@ -48,11 +49,7 @@ func (c *beaconApiValidatorClient) waitForChainStart(ctx context.Context) (*ethp
 		return nil, errors.Wrapf(err, "failed to parse genesis time: %s", genesis.GenesisTime)
 	}
 
-	if !validRoot(genesis.GenesisValidatorsRoot) {
-		return nil, errors.Errorf("invalid genesis validators root: %s", genesis.GenesisValidatorsRoot)
-	}
-
-	genesisValidatorRoot, err := hexutil.Decode(genesis.GenesisValidatorsRoot)
+	genesisValidatorRoot, err := bytesutil.DecodeHexWithLength(genesis.GenesisValidatorsRoot, fieldparams.RootLength)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to decode genesis validators root")
 	}

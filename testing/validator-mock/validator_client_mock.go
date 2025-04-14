@@ -135,10 +135,10 @@ func (mr *MockValidatorClientMockRecorder) DomainData(arg0, arg1 any) *gomock.Ca
 }
 
 // Duties mocks base method.
-func (m *MockValidatorClient) Duties(arg0 context.Context, arg1 *eth.DutiesRequest) (*eth.DutiesResponse, error) {
+func (m *MockValidatorClient) Duties(arg0 context.Context, arg1 *eth.DutiesRequest) (*eth.ValidatorDutiesContainer, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Duties", arg0, arg1)
-	ret0, _ := ret[0].(*eth.DutiesResponse)
+	ret0, _ := ret[0].(*eth.ValidatorDutiesContainer)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -412,7 +412,7 @@ func (mr *MockValidatorClientMockRecorder) SubmitValidatorRegistrations(arg0, ar
 }
 
 // SubscribeCommitteeSubnets mocks base method.
-func (m *MockValidatorClient) SubscribeCommitteeSubnets(arg0 context.Context, arg1 *eth.CommitteeSubnetsSubscribeRequest, arg2 []*eth.DutiesResponse_Duty) (*emptypb.Empty, error) {
+func (m *MockValidatorClient) SubscribeCommitteeSubnets(arg0 context.Context, arg1 *eth.CommitteeSubnetsSubscribeRequest, arg2 []*eth.ValidatorDuty) (*emptypb.Empty, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SubscribeCommitteeSubnets", arg0, arg1, arg2)
 	ret0, _ := ret[0].(*emptypb.Empty)

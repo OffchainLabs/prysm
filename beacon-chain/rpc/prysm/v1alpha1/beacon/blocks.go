@@ -110,6 +110,14 @@ func convertToBlockContainer(blk interfaces.ReadOnlySignedBeaconBlock, root [32]
 		ctr.Block = &ethpb.BeaconBlockContainer_BlindedDenebBlock{BlindedDenebBlock: pbStruct}
 	case *ethpb.SignedBeaconBlockDeneb:
 		ctr.Block = &ethpb.BeaconBlockContainer_DenebBlock{DenebBlock: pbStruct}
+	case *ethpb.SignedBlindedBeaconBlockElectra:
+		ctr.Block = &ethpb.BeaconBlockContainer_BlindedElectraBlock{BlindedElectraBlock: pbStruct}
+	case *ethpb.SignedBeaconBlockElectra:
+		ctr.Block = &ethpb.BeaconBlockContainer_ElectraBlock{ElectraBlock: pbStruct}
+	case *ethpb.SignedBlindedBeaconBlockFulu:
+		ctr.Block = &ethpb.BeaconBlockContainer_BlindedFuluBlock{BlindedFuluBlock: pbStruct}
+	case *ethpb.SignedBeaconBlockFulu:
+		ctr.Block = &ethpb.BeaconBlockContainer_FuluBlock{FuluBlock: pbStruct}
 	default:
 		return nil, errors.Errorf("block type is not recognized: %d", blk.Version())
 	}

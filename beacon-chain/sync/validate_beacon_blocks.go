@@ -12,6 +12,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
 	blockfeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/block"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/operation"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
@@ -31,8 +32,9 @@ import (
 )
 
 var (
-	ErrOptimisticParent    = errors.New("parent of the block is optimistic")
-	errRejectCommitmentLen = errors.New("[REJECT] The length of KZG commitments is less than or equal to the limitation defined in Consensus Layer")
+	ErrOptimisticParent         = errors.New("parent of the block is optimistic")
+	errRejectCommitmentLen      = errors.New("[REJECT] The length of KZG commitments is less than or equal to the limitation defined in Consensus Layer")
+	ErrSlashingSignatureFailure = errors.New("proposer slashing signature verification failed")
 )
 
 // validateBeaconBlockPubSub checks that the incoming block has a valid BLS signature.
@@ -72,8 +74,17 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 		return pubsub.ValidationReject, errors.New("block.Block is nil")
 	}
 
-	// Broadcast the block on a feed to notify other services in the beacon node
+	// Broadcast the block on both block and operation feeds to notify other services in the beacon node
 	// of a received block (even if it does not process correctly through a state transition).
+	if s.cfg.operationNotifier != nil {
+		s.cfg.operationNotifier.OperationFeed().Send(&feed.Event{
+			Type: operation.BlockGossipReceived,
+			Data: &operation.BlockGossipReceivedData{
+				SignedBlock: blk,
+			},
+		})
+	}
+
 	s.cfg.blockNotifier.BlockFeed().Send(&feed.Event{
 		Type: blockfeed.ReceivedBlock,
 		Data: &blockfeed.ReceivedBlockData{
@@ -81,7 +92,7 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 		},
 	})
 
-	if features.Get().EnableSlasher {
+	if s.slasherEnabled {
 		// Feed the block header to slasher if enabled. This action
 		// is done in the background to avoid adding more load to this critical code path.
 		go func() {
@@ -101,7 +112,13 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 	// Verify the block is the first block received for the proposer for the slot.
 	if s.hasSeenBlockIndexSlot(blk.Block().Slot(), blk.Block().ProposerIndex()) {
 		// Attempt to detect and broadcast equivocation before ignoring
-		if err := s.detectAndBroadcastEquivocation(ctx, blk); err != nil {
+		err = s.detectAndBroadcastEquivocation(ctx, blk)
+		if err != nil {
+			// If signature verification fails, reject the block
+			if errors.Is(err, ErrSlashingSignatureFailure) {
+				return pubsub.ValidationReject, err
+			}
+			// In case there is some other error log but don't reject
 			log.WithError(err).Debug("Could not detect/broadcast equivocation")
 		}
 		return pubsub.ValidationIgnore, nil
@@ -405,6 +422,9 @@ func (s *Service) setSeenBlockIndexSlot(slot primitives.Slot, proposerIdx primit
 
 // Returns true if the block is marked as a bad block.
 func (s *Service) hasBadBlock(root [32]byte) bool {
+	if features.BlacklistedBlock(root) {
+		return true
+	}
 	s.badBlockLock.RLock()
 	defer s.badBlockLock.RUnlock()
 	_, seen := s.badBlockCache.Get(string(root[:]))
@@ -462,73 +482,72 @@ func getBlockFields(b interfaces.ReadOnlySignedBeaconBlock) logrus.Fields {
 	}
 }
 
-// detectAndBroadcastEquivocation checks if the given block is an equivocating block (i.e. a different block
-// with the same slot and proposer index but different signature than one we've already seen). If an equivocation
-// is detected, it creates a proposer slashing object and broadcasts it to the network before adding it to the
-// slashing pool.
+// detectAndBroadcastEquivocation checks if the given block is an equivocating block by comparing it with
+// the head block. If the blocks are from the same slot and proposer but have different signatures,
+// it creates and broadcasts a proposer slashing object after verification.
 func (s *Service) detectAndBroadcastEquivocation(ctx context.Context, blk interfaces.ReadOnlySignedBeaconBlock) error {
-	// If we've seen this proposer/slot combo before, it means this is an equivocating block
 	slot := blk.Block().Slot()
 	proposerIndex := blk.Block().ProposerIndex()
 
-	// Get the head state for block verification
-	headState, err := s.cfg.chain.HeadStateReadOnly(ctx)
+	// Get head block for comparison
+	headBlock, err := s.cfg.chain.HeadBlock(ctx)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "could not get head block")
 	}
 
-	sig1 := blk.Signature()
-	s.seenBlockLock.RLock()
-	// Create a unique cache key by combining slot and proposer index
-	// Convert slot and proposer index to 32 bytes and combine them into a single byte slice
-	b := append(bytesutil.Bytes32(uint64(slot)), bytesutil.Bytes32(uint64(proposerIndex))...)
-	existingBlock, isSeen := s.seenBlockCache.Get(string(b))
-	s.seenBlockLock.RUnlock()
-
-	if !isSeen {
+	// Only proceed if this block is from same slot and proposer as head
+	if headBlock.Block().Slot() != slot || headBlock.Block().ProposerIndex() != proposerIndex {
 		return nil
 	}
 
-	// Type assert to get the existing block
-	existingSignedBlock, ok := existingBlock.(interfaces.ReadOnlySignedBeaconBlock)
-	if !ok {
-		return errors.New("invalid type assertion for existing block")
+	// Compare signatures
+	sig1 := blk.Signature()
+	sig2 := headBlock.Signature()
+
+	// If signatures match, these are the same block
+	if sig1 == sig2 {
+		return nil
 	}
 
-	sig2 := existingSignedBlock.Signature()
+	// Extract headers for slashing
+	header1, err := blk.Header()
+	if err != nil {
+		return errors.Wrap(err, "could not get header from new block")
+	}
+	header2, err := headBlock.Header()
+	if err != nil {
+		return errors.Wrap(err, "could not get header from head block")
+	}
 
-	// Different signatures indicate equivocation
-	if sig1 != sig2 {
-		header1, err := blk.Header()
-		if err != nil {
-			return err
-		}
-		header2, err := existingSignedBlock.Header()
-		if err != nil {
-			return err
-		}
+	slashing := &ethpb.ProposerSlashing{
+		Header_1: header1,
+		Header_2: header2,
+	}
 
-		slashing := &ethpb.ProposerSlashing{
-			Header_1: header1,
-			Header_2: header2,
-		}
+	// Get state for verification
+	headState, err := s.cfg.chain.HeadStateReadOnly(ctx)
+	if err != nil {
+		return errors.Wrap(err, "could not get head state")
+	}
 
-		// Verify the proposer slashing is valid
-		if err := blocks.VerifyProposerSlashing(headState, slashing); err != nil {
-			return err
+	// Verify the slashing against current state
+	if err := blocks.VerifyProposerSlashing(headState, slashing); err != nil {
+		if errors.Is(err, blocks.ErrCouldNotVerifyBlockHeader) {
+			return errors.Wrap(ErrSlashingSignatureFailure, err.Error())
 		}
+		return errors.Wrap(err, "could not verify proposer slashing")
+	}
 
-		// Broadcast if verification passes
-		if !features.Get().DisableBroadcastSlashings {
-			if err := s.cfg.p2p.Broadcast(ctx, slashing); err != nil {
-				return errors.Wrap(err, "could not broadcast slashing object")
-			}
+	// Broadcast if verification passes
+	if !features.Get().DisableBroadcastSlashings {
+		if err := s.cfg.p2p.Broadcast(ctx, slashing); err != nil {
+			return errors.Wrap(err, "could not broadcast slashing object")
 		}
+	}
 
-		// Also insert into slashing pool
-		if err := s.cfg.slashingPool.InsertProposerSlashing(ctx, headState, slashing); err != nil {
-			return errors.Wrap(err, "could not insert proposer slashing into pool")
-		}
+	// Insert into slashing pool
+	if err := s.cfg.slashingPool.InsertProposerSlashing(ctx, headState, slashing); err != nil {
+		return errors.Wrap(err, "could not insert proposer slashing into pool")
 	}
 
 	return nil

@@ -57,7 +57,6 @@ func TestBeaconAggregateProofSubscriber_CanSaveUnaggregatedAttestation(t *testin
 	}
 	require.NoError(t, r.beaconAggregateProofSubscriber(context.Background(), a))
 
-	atts, err := r.cfg.attPool.UnaggregatedAttestations()
-	require.NoError(t, err)
+	atts := r.cfg.attPool.UnaggregatedAttestations()
 	assert.DeepEqual(t, []ethpb.Att{a.Message.Aggregate}, atts, "Did not save unaggregated attestation")
 }
