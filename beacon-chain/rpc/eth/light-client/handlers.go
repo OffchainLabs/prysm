@@ -1,7 +1,6 @@
 package lightclient
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 
@@ -11,7 +10,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared"
 	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v6/network/forks"
@@ -19,7 +17,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
 )
 
@@ -262,57 +259,4 @@ func (s *Server) GetLightClientOptimisticUpdate(w http.ResponseWriter, req *http
 		}
 		httputil.WriteJson(w, response)
 	}
-}
-
-// suitableBlock returns the latest block that satisfies all criteria required for creating a new update
-func (s *Server) suitableBlock(ctx context.Context, minSignaturesRequired uint64) (interfaces.ReadOnlySignedBeaconBlock, error) {
-	st, err := s.HeadFetcher.HeadState(ctx)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get head state")
-	}
-
-	latestBlockHeader := st.LatestBlockHeader()
-	stateRoot, err := st.HashTreeRoot(ctx)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get state root")
-	}
-	latestBlockHeader.StateRoot = stateRoot[:]
-	latestBlockHeaderRoot, err := latestBlockHeader.HashTreeRoot()
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get latest block header root")
-	}
-
-	block, err := s.Blocker.Block(ctx, latestBlockHeaderRoot[:])
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get latest block")
-	}
-	if block == nil {
-		return nil, errors.New("latest block is nil")
-	}
-
-	// Loop through the blocks until we find a block that satisfies minSignaturesRequired requirement
-	var numOfSyncCommitteeSignatures uint64
-	if syncAggregate, err := block.Block().Body().SyncAggregate(); err == nil {
-		numOfSyncCommitteeSignatures = syncAggregate.SyncCommitteeBits.Count()
-	}
-
-	for numOfSyncCommitteeSignatures < minSignaturesRequired {
-		// Get the parent block
-		parentRoot := block.Block().ParentRoot()
-		block, err = s.Blocker.Block(ctx, parentRoot[:])
-		if err != nil {
-			return nil, errors.Wrap(err, "could not get parent block")
-		}
-		if block == nil {
-			return nil, errors.New("parent block is nil")
-		}
-
-		// Get the number of sync committee signatures
-		numOfSyncCommitteeSignatures = 0
-		if syncAggregate, err := block.Block().Body().SyncAggregate(); err == nil {
-			numOfSyncCommitteeSignatures = syncAggregate.SyncCommitteeBits.Count()
-		}
-	}
-
-	return block, nil
 }
