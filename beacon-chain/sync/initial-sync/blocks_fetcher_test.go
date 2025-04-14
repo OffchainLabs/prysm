@@ -2100,6 +2100,10 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 		},
 	}
 
+	// Initialize the trusted setup.
+	err := kzg.Start()
+	require.NoError(t, err)
+
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Consistency checks.
@@ -2107,10 +2111,6 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 
 			// Create a context.
 			ctx := context.Background()
-
-			// Initialize the trusted setup.
-			err := kzg.Start()
-			require.NoError(t, err)
 
 			// Create blocks, RO data columns and data columns sidecar from slot.
 			roBlocks := make([]blocks.ROBlock, len(tc.blocksParams))
