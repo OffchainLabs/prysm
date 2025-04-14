@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	light_client "github.com/OffchainLabs/prysm/v6/consensus-types/light-client"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 
 	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
@@ -32,7 +33,7 @@ func TestLightClient_NewLightClientOptimisticUpdateFromBeaconState(t *testing.T)
 	params.OverrideBeaconConfig(cfg)
 
 	t.Run("Altair", func(t *testing.T) {
-		l := util.NewTestLightClient(t).SetupTestAltair(0, true)
+		l := util.NewTestLightClient(t, version.Altair)
 
 		update, err := lightClient.NewLightClientOptimisticUpdateFromBeaconState(l.Ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock)
 		require.NoError(t, err)
@@ -44,7 +45,7 @@ func TestLightClient_NewLightClientOptimisticUpdateFromBeaconState(t *testing.T)
 	})
 
 	t.Run("Capella", func(t *testing.T) {
-		l := util.NewTestLightClient(t).SetupTestCapella(false, 0, true)
+		l := util.NewTestLightClient(t, version.Capella)
 
 		update, err := lightClient.NewLightClientOptimisticUpdateFromBeaconState(l.Ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock)
 		require.NoError(t, err)
@@ -57,7 +58,7 @@ func TestLightClient_NewLightClientOptimisticUpdateFromBeaconState(t *testing.T)
 	})
 
 	t.Run("Deneb", func(t *testing.T) {
-		l := util.NewTestLightClient(t).SetupTestDeneb(false, 0, true)
+		l := util.NewTestLightClient(t, version.Deneb)
 
 		update, err := lightClient.NewLightClientOptimisticUpdateFromBeaconState(l.Ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock)
 		require.NoError(t, err)
@@ -70,7 +71,7 @@ func TestLightClient_NewLightClientOptimisticUpdateFromBeaconState(t *testing.T)
 	})
 
 	t.Run("Electra", func(t *testing.T) {
-		l := util.NewTestLightClient(t).SetupTestElectra(false, 0, true)
+		l := util.NewTestLightClient(t, version.Electra)
 
 		update, err := lightClient.NewLightClientOptimisticUpdateFromBeaconState(l.Ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock)
 		require.NoError(t, err)
@@ -94,7 +95,7 @@ func TestLightClient_NewLightClientFinalityUpdateFromBeaconState(t *testing.T) {
 	params.OverrideBeaconConfig(cfg)
 
 	t.Run("Altair", func(t *testing.T) {
-		l := util.NewTestLightClient(t).SetupTestAltair(0, true)
+		l := util.NewTestLightClient(t, version.Altair)
 
 		t.Run("FinalizedBlock Not Nil", func(t *testing.T) {
 			update, err := lightClient.NewLightClientFinalityUpdateFromBeaconState(l.Ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
@@ -131,7 +132,7 @@ func TestLightClient_NewLightClientFinalityUpdateFromBeaconState(t *testing.T) {
 	t.Run("Capella", func(t *testing.T) {
 
 		t.Run("FinalizedBlock Not Nil", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestCapella(false, 0, true)
+			l := util.NewTestLightClient(t, version.Capella)
 			update, err := lightClient.NewLightClientFinalityUpdateFromBeaconState(l.Ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
 			require.NoError(t, err)
 			require.NotNil(t, update, "update is nil")
@@ -205,7 +206,7 @@ func TestLightClient_NewLightClientFinalityUpdateFromBeaconState(t *testing.T) {
 		})
 
 		t.Run("FinalizedBlock In Previous Fork", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestCapellaFinalizedBlockAltair(false)
+			l := util.NewTestLightClient(t, version.Capella, util.WithFinalizedCheckpointInPrevFork())
 			update, err := lightClient.NewLightClientFinalityUpdateFromBeaconState(l.Ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
 			require.NoError(t, err)
 			require.NotNil(t, update, "update is nil")
@@ -238,7 +239,7 @@ func TestLightClient_NewLightClientFinalityUpdateFromBeaconState(t *testing.T) {
 	t.Run("Deneb", func(t *testing.T) {
 
 		t.Run("FinalizedBlock Not Nil", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestDeneb(false, 0, true)
+			l := util.NewTestLightClient(t, version.Deneb)
 
 			update, err := lightClient.NewLightClientFinalityUpdateFromBeaconState(l.Ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
 			require.NoError(t, err)
@@ -313,7 +314,7 @@ func TestLightClient_NewLightClientFinalityUpdateFromBeaconState(t *testing.T) {
 		})
 
 		t.Run("FinalizedBlock In Previous Fork", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestDenebFinalizedBlockCapella(false)
+			l := util.NewTestLightClient(t, version.Deneb, util.WithFinalizedCheckpointInPrevFork())
 
 			update, err := lightClient.NewLightClientFinalityUpdateFromBeaconState(l.Ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
 			require.NoError(t, err)
@@ -390,7 +391,7 @@ func TestLightClient_NewLightClientFinalityUpdateFromBeaconState(t *testing.T) {
 
 	t.Run("Electra", func(t *testing.T) {
 		t.Run("FinalizedBlock Not Nil", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestElectra(false, 0, true)
+			l := util.NewTestLightClient(t, version.Electra)
 
 			update, err := lightClient.NewLightClientFinalityUpdateFromBeaconState(l.Ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
 			require.NoError(t, err)
@@ -465,7 +466,7 @@ func TestLightClient_NewLightClientFinalityUpdateFromBeaconState(t *testing.T) {
 		})
 
 		t.Run("FinalizedBlock In Previous Fork", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestElectraFinalizedBlockDeneb(false)
+			l := util.NewTestLightClient(t, version.Electra, util.WithFinalizedCheckpointInPrevFork())
 
 			update, err := lightClient.NewLightClientFinalityUpdateFromBeaconState(l.Ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
 			require.NoError(t, err)
@@ -542,7 +543,7 @@ func TestLightClient_NewLightClientFinalityUpdateFromBeaconState(t *testing.T) {
 
 func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 	t.Run("Altair", func(t *testing.T) {
-		l := util.NewTestLightClient(t).SetupTestAltair(0, true)
+		l := util.NewTestLightClient(t, version.Altair)
 
 		header, err := lightClient.BlockToLightClientHeader(
 			l.Ctx,
@@ -565,7 +566,7 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 	})
 
 	t.Run("Bellatrix", func(t *testing.T) {
-		l := util.NewTestLightClient(t).SetupTestBellatrix(0, true)
+		l := util.NewTestLightClient(t, version.Bellatrix)
 
 		header, err := lightClient.BlockToLightClientHeader(
 			l.Ctx,
@@ -589,7 +590,7 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 
 	t.Run("Capella", func(t *testing.T) {
 		t.Run("Non-Blinded Beacon Block", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestCapella(false, 0, true)
+			l := util.NewTestLightClient(t, version.Capella)
 
 			header, err := lightClient.BlockToLightClientHeader(
 				l.Ctx,
@@ -650,7 +651,7 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 		})
 
 		t.Run("Blinded Beacon Block", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestCapella(true, 0, true)
+			l := util.NewTestLightClient(t, version.Capella, util.WithBlinded())
 
 			header, err := lightClient.BlockToLightClientHeader(
 				l.Ctx,
@@ -713,7 +714,7 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 
 	t.Run("Deneb", func(t *testing.T) {
 		t.Run("Non-Blinded Beacon Block", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestDeneb(false, 0, true)
+			l := util.NewTestLightClient(t, version.Deneb)
 
 			header, err := lightClient.BlockToLightClientHeader(
 				l.Ctx,
@@ -782,7 +783,7 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 		})
 
 		t.Run("Blinded Beacon Block", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestDeneb(true, 0, true)
+			l := util.NewTestLightClient(t, version.Deneb, util.WithBlinded())
 
 			header, err := lightClient.BlockToLightClientHeader(
 				l.Ctx,
@@ -853,7 +854,7 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 
 	t.Run("Electra", func(t *testing.T) {
 		t.Run("Non-Blinded Beacon Block", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestElectra(false, 0, true)
+			l := util.NewTestLightClient(t, version.Electra)
 
 			header, err := lightClient.BlockToLightClientHeader(l.Ctx, l.State.Slot(), l.Block)
 			require.NoError(t, err)
@@ -918,7 +919,7 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 		})
 
 		t.Run("Blinded Beacon Block", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestElectra(true, 0, true)
+			l := util.NewTestLightClient(t, version.Electra, util.WithBlinded())
 
 			header, err := lightClient.BlockToLightClientHeader(l.Ctx, l.State.Slot(), l.Block)
 			require.NoError(t, err)
@@ -984,7 +985,7 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 	})
 
 	t.Run("Capella fork with Altair block", func(t *testing.T) {
-		l := util.NewTestLightClient(t).SetupTestAltair(0, true)
+		l := util.NewTestLightClient(t, version.Altair)
 
 		header, err := lightClient.BlockToLightClientHeader(
 			l.Ctx,
@@ -1006,7 +1007,7 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 	})
 
 	t.Run("Deneb fork with Altair block", func(t *testing.T) {
-		l := util.NewTestLightClient(t).SetupTestAltair(0, true)
+		l := util.NewTestLightClient(t, version.Altair)
 
 		header, err := lightClient.BlockToLightClientHeader(
 			l.Ctx,
@@ -1029,7 +1030,7 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 
 	t.Run("Deneb fork with Capella block", func(t *testing.T) {
 		t.Run("Non-Blinded Beacon Block", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestCapella(false, 0, true)
+			l := util.NewTestLightClient(t, version.Capella)
 
 			header, err := lightClient.BlockToLightClientHeader(
 				l.Ctx,
@@ -1089,7 +1090,7 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 		})
 
 		t.Run("Blinded Beacon Block", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestCapella(true, 0, true)
+			l := util.NewTestLightClient(t, version.Capella, util.WithBlinded())
 
 			header, err := lightClient.BlockToLightClientHeader(
 				l.Ctx,

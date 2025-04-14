@@ -296,6 +296,22 @@ func TestVerifyAttestationNoVerifySignature_Electra(t *testing.T) {
 		err = blocks.VerifyAttestationNoVerifySignature(context.TODO(), beaconState, att)
 		assert.ErrorContains(t, "aggregation bits count 123 is different than participant count 3", err)
 	})
+	t.Run("no attester in committee", func(t *testing.T) {
+		aggBits := bitfield.NewBitlist(3)
+		committeeBits := bitfield.NewBitvector64()
+		committeeBits.SetBitAt(0, true)
+		att := &ethpb.AttestationElectra{
+			Data: &ethpb.AttestationData{
+				Source: &ethpb.Checkpoint{Epoch: 0, Root: mockRoot[:]},
+				Target: &ethpb.Checkpoint{Epoch: 0, Root: make([]byte, 32)},
+			},
+			AggregationBits: aggBits,
+			CommitteeBits:   committeeBits,
+		}
+		att.Signature = zeroSig[:]
+		err = blocks.VerifyAttestationNoVerifySignature(context.TODO(), beaconState, att)
+		assert.ErrorContains(t, "no attesting indices found for committee index 0", err)
+	})
 }
 
 func TestConvertToIndexed_OK(t *testing.T) {
