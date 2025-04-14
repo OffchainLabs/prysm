@@ -2118,7 +2118,7 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 			dataColumnsSidecarFromSlot := make(map[primitives.Slot][]*ethpb.DataColumnSidecar, len(tc.blocksParams))
 
 			for i, blockParams := range tc.blocksParams {
-				pbSignedBeaconBlock := util.NewBeaconBlockDeneb()
+				pbSignedBeaconBlock := util.NewBeaconBlockFulu()
 				pbSignedBeaconBlock.Block.Slot = blockParams.slot
 
 				if blockParams.hasBlobs {
