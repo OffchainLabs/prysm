@@ -111,6 +111,10 @@ func (dv *RODataColumnsVerifier) recordResult(req Requirement, err *error) {
 }
 
 func (dv *RODataColumnsVerifier) Valid() (err error) {
+	if ok, err := dv.results.cached(RequireValid); ok {
+		return err
+	}
+
 	defer dv.recordResult(RequireValid, &err)
 
 	for _, dataColumn := range dv.dataColumns {
@@ -123,6 +127,10 @@ func (dv *RODataColumnsVerifier) Valid() (err error) {
 }
 
 func (dv *RODataColumnsVerifier) CorrectSubnet(expectedTopics []string) (err error) {
+	if ok, err := dv.results.cached(RequireCorrectSubnet); ok {
+		return err
+	}
+
 	defer dv.recordResult(RequireCorrectSubnet, &err)
 
 	if len(expectedTopics) != len(dv.dataColumns) {
@@ -147,6 +155,10 @@ func (dv *RODataColumnsVerifier) CorrectSubnet(expectedTopics []string) (err err
 }
 
 func (dv *RODataColumnsVerifier) NotFromFutureSlot() (err error) {
+	if ok, err := dv.results.cached(RequireNotFromFutureSlot); ok {
+		return err
+	}
+
 	defer dv.recordResult(RequireNotFromFutureSlot, &err)
 
 	// Retrieve the current slot.
@@ -181,6 +193,10 @@ func (dv *RODataColumnsVerifier) NotFromFutureSlot() (err error) {
 }
 
 func (dv *RODataColumnsVerifier) SlotAboveFinalized() (err error) {
+	if ok, err := dv.results.cached(RequireSlotAboveFinalized); ok {
+		return err
+	}
+
 	defer dv.recordResult(RequireSlotAboveFinalized, &err)
 
 	// Retrieve the finalized checkpoint.
@@ -206,6 +222,10 @@ func (dv *RODataColumnsVerifier) SlotAboveFinalized() (err error) {
 }
 
 func (dv *RODataColumnsVerifier) ValidProposerSignature(ctx context.Context) (err error) {
+	if ok, err := dv.results.cached(RequireValidProposerSignature); ok {
+		return err
+	}
+
 	defer dv.recordResult(RequireValidProposerSignature, &err)
 
 	for _, dataColumn := range dv.dataColumns {
@@ -252,6 +272,10 @@ func (dv *RODataColumnsVerifier) ValidProposerSignature(ctx context.Context) (er
 }
 
 func (dv *RODataColumnsVerifier) SidecarParentSeen(parentSeen func([fieldparams.RootLength]byte) bool) (err error) {
+	if ok, err := dv.results.cached(RequireSidecarParentSeen); ok {
+		return err
+	}
+
 	defer dv.recordResult(RequireSidecarParentSeen, &err)
 
 	for _, dataColumn := range dv.dataColumns {
@@ -272,6 +296,10 @@ func (dv *RODataColumnsVerifier) SidecarParentSeen(parentSeen func([fieldparams.
 }
 
 func (dv *RODataColumnsVerifier) SidecarParentValid(badParent func([fieldparams.RootLength]byte) bool) (err error) {
+	if ok, err := dv.results.cached(RequireSidecarParentValid); ok {
+		return err
+	}
+
 	defer dv.recordResult(RequireSidecarParentValid, &err)
 
 	for _, dataColumn := range dv.dataColumns {
@@ -287,6 +315,10 @@ func (dv *RODataColumnsVerifier) SidecarParentValid(badParent func([fieldparams.
 }
 
 func (dv *RODataColumnsVerifier) SidecarParentSlotLower() (err error) {
+	if ok, err := dv.results.cached(RequireSidecarParentSlotLower); ok {
+		return err
+	}
+
 	defer dv.recordResult(RequireSidecarParentSlotLower, &err)
 
 	for _, dataColumn := range dv.dataColumns {
@@ -312,6 +344,10 @@ func (dv *RODataColumnsVerifier) SidecarParentSlotLower() (err error) {
 }
 
 func (dv *RODataColumnsVerifier) SidecarDescendsFromFinalized() (err error) {
+	if ok, err := dv.results.cached(RequireSidecarDescendsFromFinalized); ok {
+		return err
+	}
+
 	defer dv.recordResult(RequireSidecarDescendsFromFinalized, &err)
 
 	for _, dataColumn := range dv.dataColumns {
@@ -327,6 +363,10 @@ func (dv *RODataColumnsVerifier) SidecarDescendsFromFinalized() (err error) {
 }
 
 func (dv *RODataColumnsVerifier) SidecarInclusionProven() (err error) {
+	if ok, err := dv.results.cached(RequireSidecarInclusionProven); ok {
+		return err
+	}
+
 	defer dv.recordResult(RequireSidecarInclusionProven, &err)
 
 	startTime := time.Now()
@@ -343,6 +383,10 @@ func (dv *RODataColumnsVerifier) SidecarInclusionProven() (err error) {
 }
 
 func (dv *RODataColumnsVerifier) SidecarKzgProofVerified() (err error) {
+	if ok, err := dv.results.cached(RequireSidecarKzgProofVerified); ok {
+		return err
+	}
+
 	defer dv.recordResult(RequireSidecarKzgProofVerified, &err)
 
 	startTime := time.Now()
@@ -357,6 +401,10 @@ func (dv *RODataColumnsVerifier) SidecarKzgProofVerified() (err error) {
 }
 
 func (dv *RODataColumnsVerifier) SidecarProposerExpected(ctx context.Context) (err error) {
+	if ok, err := dv.results.cached(RequireSidecarProposerExpected); ok {
+		return err
+	}
+
 	defer dv.recordResult(RequireSidecarProposerExpected, &err)
 
 	for _, dataColumn := range dv.dataColumns {
