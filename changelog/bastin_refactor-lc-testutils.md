@@ -1,3 +1,3 @@
 ### Ignored
 
-- Refactor light client test utils to use functional options.
+- Refactor light client testing utils to use functional options.
