@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/api/client"
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
 	"github.com/OffchainLabs/prysm/v6/async/event"
 	"github.com/OffchainLabs/prysm/v6/cmd/validator/flags"
@@ -36,6 +37,7 @@ import (
 	validatormock "github.com/OffchainLabs/prysm/v6/testing/validator-mock"
 	"github.com/OffchainLabs/prysm/v6/validator/accounts/wallet"
 	"github.com/OffchainLabs/prysm/v6/validator/client/iface"
+	"github.com/OffchainLabs/prysm/v6/validator/client/testutil"
 	dbTest "github.com/OffchainLabs/prysm/v6/validator/db/testing"
 	"github.com/OffchainLabs/prysm/v6/validator/keymanager"
 	"github.com/OffchainLabs/prysm/v6/validator/keymanager/local"
