@@ -1327,21 +1327,6 @@ type blockParams struct {
 	hasBlobs bool
 }
 
-func TestCustodyColumns(t *testing.T) {
-	blocksFetcher := newBlocksFetcher(context.Background(), &blocksFetcherConfig{
-		p2p:         p2ptest.NewTestP2P(t),
-		custodyInfo: &peerdas.CustodyInfo{},
-	})
-
-	expected := params.BeaconConfig().CustodyRequirement
-
-	actual, err := blocksFetcher.custodyColumns()
-	require.NoError(t, err)
-
-	require.Equal(t, int(expected), len(actual))
-}
-
-// deterministicRandomness returns a random bytes array based on the seed
 func deterministicRandomness(t *testing.T, seed int64) [32]byte {
 	buf := new(bytes.Buffer)
 	err := binary.Write(buf, binary.BigEndian, seed)

@@ -771,78 +771,6 @@ func uint64MapDiffer(left, right map[uint64]bool) bool {
 	return false
 }
 
-// custodyColumns returns the columns we should custody.
-func (f *blocksFetcher) custodyColumns() (map[uint64]bool, error) {
-	// Retrieve our node ID.
-	localNodeID := f.p2p.NodeID()
-
-	// Retrieve the number of groups we should custody.
-	localCustodyGroupCount := f.custodyInfo.ActualGroupCount()
-
-	// Retrieve the local node info.
-	localNodeInfo, _, err := peerdas.Info(localNodeID, localCustodyGroupCount)
-	if err != nil {
-		return nil, errors.Wrap(err, "node info")
-	}
-
-	return localNodeInfo.CustodyColumns, nil
-}
-
-// missingColumnsFromRoot computes the columns corresponding to blocks in `bwbs` that
-// we should custody and that are not in our store.
-// The result is indexed by root.
-func (f *blocksFetcher) missingColumnsFromRoot(
-	custodyColumns map[uint64]bool,
-	minSlot primitives.Slot,
-	bwbs []blocks.BlockWithROSidecars,
-) (map[[fieldparams.RootLength]byte]map[uint64]bool, error) {
-	missingColumnsByRoot := make(map[[fieldparams.RootLength]byte]map[uint64]bool)
-	for _, bwb := range bwbs {
-		// Extract the roblock from the roblock with RO blobs.
-		roblock := bwb.Block
-
-		// Extract the block from the roblock.
-		block := roblock.Block()
-
-		// Extract the slot of the block.
-		blockSlot := block.Slot()
-
-		// Skip if the block slot is lower than the column window start.
-		if blockSlot < minSlot {
-			continue
-		}
-
-		// Retrieve the blob KZG kzgCommitments.
-		kzgCommitments, err := roblock.Block().Body().BlobKzgCommitments()
-		if err != nil {
-			return nil, errors.Wrap(err, "blob KZG commitments")
-		}
-
-		// Skip if there are no KZG commitments.
-		if len(kzgCommitments) == 0 {
-			continue
-		}
-
-		// Extract the block root.
-		root := roblock.Root()
-
-		// Retrieve the summary for the root.
-		summary := f.dcs.Summary(root)
-
-		// Compute the set of missing columns.
-		for column := range custodyColumns {
-			if !summary.HasIndex(column) {
-				if _, ok := missingColumnsByRoot[root]; !ok {
-					missingColumnsByRoot[root] = make(map[uint64]bool)
-				}
-				missingColumnsByRoot[root][column] = true
-			}
-		}
-	}
-
-	return missingColumnsByRoot, nil
-}
-
 // indicesFromRoot returns the indices indexed by root.
 func indicesFromRoot(bwbs []blocks.BlockWithROSidecars) map[[fieldparams.RootLength]byte][]int {
 	result := make(map[[fieldparams.RootLength]byte][]int, len(bwbs))
@@ -984,12 +912,6 @@ func (f *blocksFetcher) fetchDataColumnsFromPeers(
 	// Generate random identifier.
 	identifier := f.rand.Intn(maxIdentifier)
 
-	// Compute the columns we should custody.
-	localCustodyColumns, err := f.custodyColumns()
-	if err != nil {
-		return errors.Wrap(err, "custody columns")
-	}
-
 	// Compute the current slot.
 	currentSlot := f.clock.CurrentSlot()
 
@@ -999,10 +921,31 @@ func (f *blocksFetcher) fetchDataColumnsFromPeers(
 		return errors.Wrap(err, "data columns RPC min valid slot")
 	}
 
-	// Compute all missing data columns indexed by root.
-	missingColumnsByRoot, err := f.missingColumnsFromRoot(localCustodyColumns, minimumSlot, bwbs)
-	if err != nil {
-		return errors.Wrap(err, "missing columns from root")
+	// Get the node ID.
+	nodeID := f.p2p.NodeID()
+
+	// Get the actual group count.
+	actualGroupCount := f.custodyInfo.ActualGroupCount()
+
+	missingColumnsByRoot := make(map[[fieldparams.RootLength]byte]map[uint64]bool, len(bwbs))
+	for _, bwb := range bwbs {
+		// Extract the block root and the block slot
+		block := bwb.Block
+		blockRoot, blockSlot := block.Root(), block.Block().Slot()
+
+		// Skip blocks that are not in the retention period.
+		if blockSlot < minimumSlot {
+			continue
+		}
+
+		missingColumns, err := prysmsync.MissingDataColumns(block, nodeID, actualGroupCount, f.dcs)
+		if err != nil {
+			return errors.Wrap(err, "missing data columns")
+		}
+
+		if len(missingColumns) > 0 {
+			missingColumnsByRoot[blockRoot] = missingColumns
+		}
 	}
 
 	// Return early if there are no missing data columns.
