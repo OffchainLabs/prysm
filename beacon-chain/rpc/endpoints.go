@@ -946,6 +946,7 @@ func (s *Service) lightClientEndpoints(blocker lookup.Blocker, stater lookup.Sta
 		HeadFetcher:      s.cfg.HeadFetcher,
 		ChainInfoFetcher: s.cfg.ChainInfoFetcher,
 		BeaconDB:         s.cfg.BeaconDB,
+		LCStore:          s.cfg.LCStore,
 	}
 
 	const namespace = "lightclient"
