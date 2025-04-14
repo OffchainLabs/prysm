@@ -365,7 +365,7 @@ func (f *blocksFetcher) handleRequest(ctx context.Context, start primitives.Slot
 	}
 
 	// Fetch data columns.
-	response.err = f.fetchDataColumnsFromPeers(ctx, postFuluBwbs, nil, delay, batchSize)
+	response.err = f.fetchMissingDataColumnsFromPeers(ctx, postFuluBwbs, nil, delay, batchSize)
 	return response
 }
 
@@ -887,12 +887,12 @@ type bwbsMissingColumns struct {
 	missingColumnsByRoot map[[fieldparams.RootLength]byte]map[uint64]bool
 }
 
-// fetchDataColumnsFromPeers looks at the blocks in `bwbs` and retrieves all
+// fetchMissingDataColumnsFromPeers looks at the blocks in `bwbs` and retrieves all
 // data columns for blocks that have commitments, and for which our store is missing data columns
 // we should custody.
 // This function mutates `bwbs` by adding the retrieved data columns.
 // Prerequisite: `bwbs“ is sorted by slot.
-func (f *blocksFetcher) fetchDataColumnsFromPeers(
+func (f *blocksFetcher) fetchMissingDataColumnsFromPeers(
 	ctx context.Context,
 	bwbs []blocks.BlockWithROSidecars,
 	peers []peer.ID,

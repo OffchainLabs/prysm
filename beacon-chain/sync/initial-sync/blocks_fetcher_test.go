@@ -2218,7 +2218,7 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 			})
 
 			// Fetch the data columns from the peers.
-			err = blocksFetcher.fetchDataColumnsFromPeers(ctx, bwb, peersID, delay, tc.batchSize)
+			err = blocksFetcher.fetchMissingDataColumnsFromPeers(ctx, bwb, peersID, delay, tc.batchSize)
 			if !tc.isError {
 				require.NoError(t, err)
 			} else {

@@ -287,7 +287,7 @@ func (f *blocksFetcher) findForkWithPeer(ctx context.Context, pid peer.ID, slot 
 			return nil, errors.Wrap(err, "invalid blocks received in findForkWithPeer")
 		}
 		if coreTime.PeerDASIsActive(block.Block().Slot()) {
-			if err := f.fetchDataColumnsFromPeers(ctx, bwb, []peer.ID{pid}, delay, batchSize); err != nil {
+			if err := f.fetchMissingDataColumnsFromPeers(ctx, bwb, []peer.ID{pid}, delay, batchSize); err != nil {
 				return nil, errors.Wrap(err, "unable to retrieve blobs for blocks found in findForkWithPeer")
 			}
 		} else {
@@ -321,7 +321,7 @@ func (f *blocksFetcher) findAncestor(ctx context.Context, pid peer.ID, b interfa
 				return nil, errors.Wrap(err, "received invalid blocks in findAncestor")
 			}
 			if coreTime.PeerDASIsActive(b.Block().Slot()) {
-				if err := f.fetchDataColumnsFromPeers(ctx, bwb, []peer.ID{pid}, delay, batchSize); err != nil {
+				if err := f.fetchMissingDataColumnsFromPeers(ctx, bwb, []peer.ID{pid}, delay, batchSize); err != nil {
 					return nil, errors.Wrap(err, "unable to retrieve columns for blocks found in findAncestor")
 				}
 			} else {
