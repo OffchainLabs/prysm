@@ -19,57 +19,59 @@ import (
 
 const dataColumnSidecarSubTopic = "/data_column_sidecar_%d/"
 
-// GossipDataColumnSidecarRequirements defines the set of requirements that DataColumnSidecars received on gossip
-// must satisfy in order to upgrade an RODataColumn to a VerifiedRODataColumn.
-// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/p2p-interface.md#data_column_sidecar_subnet_id
-var GossipDataColumnSidecarRequirements = []Requirement{
-	RequireValid,
-	RequireCorrectSubnet,
-	RequireNotFromFutureSlot,
-	RequireSlotAboveFinalized,
-	RequireValidProposerSignature,
-	RequireSidecarParentSeen,
-	RequireSidecarParentValid,
-	RequireSidecarParentSlotLower,
-	RequireSidecarDescendsFromFinalized,
-	RequireSidecarInclusionProven,
-	RequireSidecarKzgProofVerified,
-	RequireSidecarProposerExpected,
-}
-
-// ByRootRequestDataColumnSidecarRequirements defines the set of requirements that DataColumnSidecars received
-// via the by root request must satisfy in order to upgrade an RODataColumn to a VerifiedRODataColumn.
-// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/p2p-interface.md#datacolumnsidecarsbyroot-v1
-var ByRootRequestDataColumnSidecarRequirements = []Requirement{
-	RequireValid,
-	RequireSidecarInclusionProven,
-	RequireSidecarKzgProofVerified,
-}
-
-// ByRangeRequestDataColumnSidecarRequirements defines the set of requirements that DataColumnSidecars received
-// via the by rag
-// nge request must satisfy in order to upgrade an RODataColumn to a VerifiedRODataColumn.
-// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/p2p-interface.md#datacolumnsidecarsbyrange-v1
-var ByRangeRequestDataColumnSidecarRequirements = []Requirement{
-	RequireValid,
-	RequireSidecarInclusionProven,
-	RequireSidecarKzgProofVerified,
-}
-
 var (
+	// GossipDataColumnSidecarRequirements defines the set of requirements that DataColumnSidecars received on gossip
+	// must satisfy in order to upgrade an RODataColumn to a VerifiedRODataColumn.
+	// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/p2p-interface.md#data_column_sidecar_subnet_id
+	GossipDataColumnSidecarRequirements = []Requirement{
+		RequireValid,
+		RequireCorrectSubnet,
+		RequireNotFromFutureSlot,
+		RequireSlotAboveFinalized,
+		RequireValidProposerSignature,
+		RequireSidecarParentSeen,
+		RequireSidecarParentValid,
+		RequireSidecarParentSlotLower,
+		RequireSidecarDescendsFromFinalized,
+		RequireSidecarInclusionProven,
+		RequireSidecarKzgProofVerified,
+		RequireSidecarProposerExpected,
+	}
+
+	// ByRootRequestDataColumnSidecarRequirements defines the set of requirements that DataColumnSidecars received
+	// via the by root request must satisfy in order to upgrade an RODataColumn to a VerifiedRODataColumn.
+	// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/p2p-interface.md#datacolumnsidecarsbyroot-v1
+	ByRootRequestDataColumnSidecarRequirements = []Requirement{
+		RequireValid,
+		RequireSidecarInclusionProven,
+		RequireSidecarKzgProofVerified,
+	}
+
+	// ByRangeRequestDataColumnSidecarRequirements defines the set of requirements that DataColumnSidecars received
+	// via the by rag
+	// nge request must satisfy in order to upgrade an RODataColumn to a VerifiedRODataColumn.
+	// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/p2p-interface.md#datacolumnsidecarsbyrange-v1
+	ByRangeRequestDataColumnSidecarRequirements = []Requirement{
+		RequireValid,
+		RequireSidecarInclusionProven,
+		RequireSidecarKzgProofVerified,
+	}
+
 	errColumnsInvalid = errors.New("data columns failed verification")
 	errBadTopicLength = errors.New("topic length is invalid")
 	errBadTopic       = errors.New("topic is not of the one expected")
 )
 
-type RODataColumnsVerifier struct {
-	*sharedResources
-	results                     *results
-	dataColumns                 []blocks.RODataColumn
-	verifyDataColumnsCommitment rodataColumnsCommitmentVerifier
-}
+type (
+	RODataColumnsVerifier struct {
+		*sharedResources
+		results                     *results
+		dataColumns                 []blocks.RODataColumn
+		verifyDataColumnsCommitment rodataColumnsCommitmentVerifier
+	}
 
-type rodataColumnsCommitmentVerifier func([]blocks.RODataColumn) error
+	rodataColumnsCommitmentVerifier func([]blocks.RODataColumn) error
+)
 
 var _ DataColumnsVerifier = &RODataColumnsVerifier{}
 
