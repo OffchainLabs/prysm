@@ -3,10 +3,10 @@ package structs
 import (
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-  "github.com/prysmaticlabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
 func TestDepositSnapshotFromConsensus(t *testing.T) {
