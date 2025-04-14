@@ -393,6 +393,12 @@ var (
 		Usage: "To enable the use of prysm validator client in Distributed Validator Cluster",
 		Value: false,
 	}
+	// DisableDutiesPolling disables the polling of duties on dependent root changes.
+	DisableDutiesPolling = &cli.BoolFlag{
+		Name:  "disable-duties-polling",
+		Usage: "Disables polling of duties on dependent root changes.",
+		Value: false,
+	}
 )
 
 // DefaultValidatorDir returns OS-specific default validator directory.

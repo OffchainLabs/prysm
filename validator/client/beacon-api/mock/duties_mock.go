@@ -43,10 +43,10 @@ func (m *MockdutiesProvider) EXPECT() *MockdutiesProviderMockRecorder {
 }
 
 // AttesterDuties mocks base method.
-func (m *MockdutiesProvider) AttesterDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) ([]*structs.AttesterDuty, error) {
+func (m *MockdutiesProvider) AttesterDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*structs.GetAttesterDutiesResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AttesterDuties", ctx, epoch, validatorIndices)
-	ret0, _ := ret[0].([]*structs.AttesterDuty)
+	ret0, _ := ret[0].(*structs.GetAttesterDutiesResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -73,10 +73,10 @@ func (mr *MockdutiesProviderMockRecorder) Committees(ctx, epoch any) *gomock.Cal
 }
 
 // ProposerDuties mocks base method.
-func (m *MockdutiesProvider) ProposerDuties(ctx context.Context, epoch primitives.Epoch) ([]*structs.ProposerDuty, error) {
+func (m *MockdutiesProvider) ProposerDuties(ctx context.Context, epoch primitives.Epoch) (*structs.GetProposerDutiesResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ProposerDuties", ctx, epoch)
-	ret0, _ := ret[0].([]*structs.ProposerDuty)
+	ret0, _ := ret[0].(*structs.GetProposerDutiesResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

@@ -480,6 +480,8 @@ message StreamSlotsResponse {
     (ethereum.eth.ext.cast_type) =
         "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"
   ];
+  bytes previous_duty_dependent_root = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes current_duty_dependent_root = 3 [ (ethereum.eth.ext.ssz_size) = "32" ];
 }
 
 // DEPRECATED: This endpoint StreamBlocks is superseded by the /eth/v1/events
@@ -689,6 +691,9 @@ message DutiesResponse {
 
   repeated Duty next_epoch_duties = 3;
 
+  bytes previous_duty_dependent_root = 4 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes current_duty_dependent_root = 5 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  
   message Duty {
     // The committee a validator is assigned to.
     repeated uint64 committee = 1

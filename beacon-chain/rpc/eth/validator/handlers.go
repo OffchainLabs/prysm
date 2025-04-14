@@ -327,6 +327,7 @@ func (s *Server) SubmitAggregateAndProofsV2(w http.ResponseWriter, r *http.Reque
 	versionHeader := r.Header.Get(api.VersionHeader)
 	if versionHeader == "" {
 		httputil.HandleError(w, api.VersionHeader+" header is required", http.StatusBadRequest)
+		return
 	}
 	v, err := version.FromString(versionHeader)
 	if err != nil {

@@ -5,23 +5,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	neturl "net/url"
 
 	"github.com/OffchainLabs/prysm/v6/api/apiutil"
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/network/httputil"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 )
-
-type abstractProduceBlockResponseJson struct {
-	Version string          `json:"version"`
-	Data    json.RawMessage `json:"data"`
-}
 
 func (c *beaconApiValidatorClient) beaconBlock(ctx context.Context, slot primitives.Slot, randaoReveal, graffiti []byte) (*ethpb.GenericBeaconBlock, error) {
 	queryParams := neturl.Values{}
@@ -30,47 +23,18 @@ func (c *beaconApiValidatorClient) beaconBlock(ctx context.Context, slot primiti
 		queryParams.Add("graffiti", hexutil.Encode(graffiti))
 	}
 
-	var ver string
-	var blinded bool
-	var decoder *json.Decoder
-
-	// Try v3 endpoint first. If it's not supported, then we fall back to older endpoints.
-	// We try the blinded block endpoint first. If it fails, we assume that we got a full block and try the full block endpoint.
 	queryUrl := apiutil.BuildURL(fmt.Sprintf("/eth/v3/validator/blocks/%d", slot), queryParams)
 	produceBlockV3ResponseJson := structs.ProduceBlockV3Response{}
 	err := c.jsonRestHandler.Get(ctx, queryUrl, &produceBlockV3ResponseJson)
-	errJson := &httputil.DefaultJsonError{}
 	if err != nil {
-		if !errors.As(err, &errJson) {
-			return nil, err
-		}
-		if errJson.Code != http.StatusNotFound {
-			return nil, errJson
-		}
-		log.Debug("Endpoint /eth/v3/validator/blocks is not supported, falling back to older endpoints for block proposal.")
-		fallbackResp, err := c.fallBackToBlinded(ctx, slot, queryParams)
-		errJson = &httputil.DefaultJsonError{}
-		if err != nil {
-			if !errors.As(err, &errJson) {
-				return nil, err
-			}
-			log.Debug("Endpoint /eth/v1/validator/blinded_blocks failed to produce a blinded block, trying /eth/v2/validator/blocks.")
-			fallbackResp, err = c.fallBackToFull(ctx, slot, queryParams)
-			if err != nil {
-				return nil, err
-			}
-			blinded = false
-		} else {
-			blinded = true
-		}
-		ver = fallbackResp.Version
-		decoder = json.NewDecoder(bytes.NewReader(fallbackResp.Data))
-	} else {
-		ver = produceBlockV3ResponseJson.Version
-		blinded = produceBlockV3ResponseJson.ExecutionPayloadBlinded
-		decoder = json.NewDecoder(bytes.NewReader(produceBlockV3ResponseJson.Data))
+		return nil, err
 	}
-	return processBlockResponse(ver, blinded, decoder)
+
+	return processBlockResponse(
+		produceBlockV3ResponseJson.Version,
+		produceBlockV3ResponseJson.ExecutionPayloadBlinded,
+		json.NewDecoder(bytes.NewReader(produceBlockV3ResponseJson.Data)),
+	)
 }
 
 // nolint: gocognit
@@ -214,30 +178,4 @@ func processBlockResponse(ver string, isBlinded bool, decoder *json.Decoder) (*e
 		return nil, errors.Errorf("unsupported consensus version `%s`", ver)
 	}
 	return response, nil
-}
-
-func (c *beaconApiValidatorClient) fallBackToBlinded(
-	ctx context.Context,
-	slot primitives.Slot,
-	queryParams neturl.Values,
-) (*abstractProduceBlockResponseJson, error) {
-	resp := &abstractProduceBlockResponseJson{}
-	url := apiutil.BuildURL(fmt.Sprintf("/eth/v1/validator/blinded_blocks/%d", slot), queryParams)
-	if err := c.jsonRestHandler.Get(ctx, url, resp); err != nil {
-		return nil, err
-	}
-	return resp, nil
-}
-
-func (c *beaconApiValidatorClient) fallBackToFull(
-	ctx context.Context,
-	slot primitives.Slot,
-	queryParams neturl.Values,
-) (*abstractProduceBlockResponseJson, error) {
-	resp := &abstractProduceBlockResponseJson{}
-	url := apiutil.BuildURL(fmt.Sprintf("/eth/v2/validator/blocks/%d", slot), queryParams)
-	if err := c.jsonRestHandler.Get(ctx, url, resp); err != nil {
-		return nil, err
-	}
-	return resp, nil
 }

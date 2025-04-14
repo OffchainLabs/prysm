@@ -53,11 +53,16 @@ go_test(
     srcs = ["validator_test.go"],
     embed = [":go_default_library"],
     deps = [
+        "//beacon-chain/blockchain/testing:go_default_library",
         "//beacon-chain/cache:go_default_library",
+        "//beacon-chain/p2p/testing:go_default_library",
         "//config/params:go_default_library",
+        "//consensus-types/primitives:go_default_library",
         "//consensus-types/validator:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "//testing/assert:go_default_library",
         "//testing/require:go_default_library",
+        "//time/slots:go_default_library",
+        "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",
     ],
 )
