@@ -384,6 +384,15 @@ func (s *Service) SubmitSignedAggregateSelectionProof(
 	if agg == nil || agg.IsNil() {
 		return &RpcError{Err: errors.New("signed aggregate request can't be nil"), Reason: BadRequest}
 	}
+
+	currentEpoch := slots.ToEpoch(s.GenesisTimeFetcher.CurrentSlot())
+	if agg.Version() < version.Electra && currentEpoch >= params.BeaconConfig().ElectraForkEpoch {
+		return &RpcError{Err: errors.New("old aggregate and proof, only electra aggregate and proof should be sent"), Reason: BadRequest}
+	}
+	if agg.Version() >= version.Electra && currentEpoch < params.BeaconConfig().ElectraForkEpoch {
+		return &RpcError{Err: errors.Errorf("electra aggregate and proof not supported yet. The current epoch is %d supported starting epoch is %d", currentEpoch, params.BeaconConfig().ElectraForkEpoch), Reason: BadRequest}
+	}
+
 	attAndProof := agg.AggregateAttestationAndProof()
 	att := attAndProof.AggregateVal()
 	data := att.GetData()

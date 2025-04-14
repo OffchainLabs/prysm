@@ -297,15 +297,20 @@ func TestServer_StreamSlots_OnHeadUpdated(t *testing.T) {
 
 	chainService := &chainMock.ChainService{}
 	server := &Server{
-		Ctx:           ctx,
-		BlockNotifier: chainService.BlockNotifier(),
+		Ctx:               ctx,
+		ForkchoiceFetcher: chainService,
+		BlockNotifier:     chainService.BlockNotifier(),
 	}
 	exitRoutine := make(chan bool)
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockStream := mock.NewMockBeaconNodeValidator_StreamSlotsServer(ctrl)
 
-	mockStream.EXPECT().Send(&ethpb.StreamSlotsResponse{Slot: 123}).Do(func(arg0 interface{}) {
+	mockStream.EXPECT().Send(&ethpb.StreamSlotsResponse{
+		Slot:                      123,
+		PreviousDutyDependentRoot: params.BeaconConfig().ZeroHash[:],
+		CurrentDutyDependentRoot:  params.BeaconConfig().ZeroHash[:],
+	}).Do(func(arg0 interface{}) {
 		exitRoutine <- true
 	})
 	mockStream.EXPECT().Context().Return(ctx).AnyTimes()
@@ -329,14 +334,19 @@ func TestServer_StreamSlotsVerified_OnHeadUpdated(t *testing.T) {
 	ctx := context.Background()
 	chainService := &chainMock.ChainService{}
 	server := &Server{
-		Ctx:           ctx,
-		StateNotifier: chainService.StateNotifier(),
+		Ctx:               ctx,
+		ForkchoiceFetcher: chainService,
+		StateNotifier:     chainService.StateNotifier(),
 	}
 	exitRoutine := make(chan bool)
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockStream := mock.NewMockBeaconNodeValidator_StreamSlotsServer(ctrl)
-	mockStream.EXPECT().Send(&ethpb.StreamSlotsResponse{Slot: 123}).Do(func(arg0 interface{}) {
+	mockStream.EXPECT().Send(&ethpb.StreamSlotsResponse{
+		Slot:                      123,
+		PreviousDutyDependentRoot: params.BeaconConfig().ZeroHash[:],
+		CurrentDutyDependentRoot:  params.BeaconConfig().ZeroHash[:],
+	}).Do(func(arg0 interface{}) {
 		exitRoutine <- true
 	})
 	mockStream.EXPECT().Context().Return(ctx).AnyTimes()

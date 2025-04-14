@@ -168,10 +168,6 @@ var (
 		Name:  "disable-quic",
 		Usage: "Disables connecting using the QUIC protocol with peers.",
 	}
-	DisableCommitteeAwarePacking = &cli.BoolFlag{
-		Name:  "disable-committee-aware-packing",
-		Usage: "Changes the attestation packing algorithm to one that is not aware of attesting committees.",
-	}
 	EnableDiscoveryReboot = &cli.BoolFlag{
 		Name:  "enable-discovery-reboot",
 		Usage: "Experimental: Enables the discovery listener to rebooted in the event of connectivity issues.",
@@ -247,7 +243,6 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	EnableLightClient,
 	BlobSaveFsync,
 	DisableQUIC,
-	DisableCommitteeAwarePacking,
 	EnableDiscoveryReboot,
 	enableExperimentalAttestationPool,
 	forceHeadFlag,

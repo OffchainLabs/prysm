@@ -112,6 +112,7 @@ type validator struct {
 	blacklistedPubkeysLock             sync.RWMutex
 	attSelectionLock                   sync.Mutex
 	dutiesLock                         sync.RWMutex
+	disableDutiesPolling               bool
 }
 
 type validatorStatus struct {
@@ -1139,7 +1140,49 @@ func (v *validator) StartEventStream(ctx context.Context, topics []string, event
 	v.validatorClient.StartEventStream(ctx, topics, eventsChannel)
 }
 
-func (v *validator) ProcessEvent(event *eventClient.Event) {
+func (v *validator) checkDependentRoots(ctx context.Context, head *structs.HeadEvent) error {
+	if head == nil {
+		return errors.New("received empty head event")
+	}
+	prevDepedentRoot, err := bytesutil.DecodeHexWithLength(head.PreviousDutyDependentRoot, fieldparams.RootLength)
+	if err != nil {
+		return errors.Wrap(err, "failed to decode previous duty dependent root")
+	}
+	uintSlot, err := strconv.ParseUint(head.Slot, 10, 64)
+	if err != nil {
+		return errors.Wrap(err, "Failed to parse slot")
+	}
+
+	slot := primitives.Slot(uintSlot)
+	currEpochStart, err := slots.EpochStart(slots.ToEpoch(slot))
+	if err != nil {
+		return err
+	}
+	deadline := v.SlotDeadline(slot)
+	slotCtx, cancel := context.WithDeadline(ctx, deadline)
+	defer cancel()
+	if !bytes.Equal(prevDepedentRoot, v.duties.PrevDependentRoot) {
+		if err := v.UpdateDuties(slotCtx, currEpochStart); err != nil {
+			return errors.Wrap(err, "failed to update duties")
+		}
+		log.Info("Updated duties due to previous dependent root change")
+		return nil
+	}
+	currDepedentRoot, err := bytesutil.DecodeHexWithLength(head.CurrentDutyDependentRoot, fieldparams.RootLength)
+	if err != nil {
+		return errors.Wrap(err, "failed to decode current duty dependent root")
+	}
+	if !bytes.Equal(currDepedentRoot, v.duties.CurrDependentRoot) {
+		if err := v.UpdateDuties(slotCtx, currEpochStart); err != nil {
+			return errors.Wrap(err, "failed to update duties")
+		}
+		log.Info("Updated duties due to current dependent root change")
+		return nil
+	}
+	return nil
+}
+
+func (v *validator) ProcessEvent(ctx context.Context, event *eventClient.Event) {
 	if event == nil || event.Data == nil {
 		log.Warn("Received empty event")
 	}
@@ -1157,8 +1200,14 @@ func (v *validator) ProcessEvent(event *eventClient.Event) {
 		uintSlot, err := strconv.ParseUint(head.Slot, 10, 64)
 		if err != nil {
 			log.WithError(err).Error("Failed to parse slot")
+			return
 		}
 		v.setHighestSlot(primitives.Slot(uintSlot))
+		if !v.disableDutiesPolling {
+			if err := v.checkDependentRoots(ctx, head); err != nil {
+				log.WithError(err).Error("Failed to check dependent roots")
+			}
+		}
 	default:
 		// just keep going and log the error
 		log.WithField("type", event.EventType).WithField("data", string(event.Data)).Warn("Received an unknown event")

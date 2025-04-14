@@ -61,7 +61,7 @@ type Validator interface {
 	SignValidatorRegistrationRequest(ctx context.Context, signer SigningFunc, newValidatorRegistration *ethpb.ValidatorRegistrationV1) (*ethpb.SignedValidatorRegistrationV1, bool /* isCached */, error)
 	StartEventStream(ctx context.Context, topics []string, eventsChan chan<- *event.Event)
 	EventStreamIsRunning() bool
-	ProcessEvent(event *event.Event)
+	ProcessEvent(ctx context.Context, event *event.Event)
 	ProposerSettings() *proposer.Settings
 	SetProposerSettings(context.Context, *proposer.Settings) error
 	Graffiti(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte) ([]byte, error)

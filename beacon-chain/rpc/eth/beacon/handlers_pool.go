@@ -21,6 +21,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared"
 	"github.com/OffchainLabs/prysm/v6/config/features"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	consensus_types "github.com/OffchainLabs/prysm/v6/consensus-types"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/crypto/bls"
@@ -283,6 +284,10 @@ func (s *Server) handleAttestationsElectra(
 	data json.RawMessage,
 ) (attFailures []*server.IndexedVerificationFailure, failedBroadcasts []string, err error) {
 	var sourceAttestations []*structs.SingleAttestation
+	currentEpoch := slots.ToEpoch(s.TimeFetcher.CurrentSlot())
+	if currentEpoch < params.BeaconConfig().ElectraForkEpoch {
+		return nil, nil, errors.Errorf("electra attestations have not been enabled, current epoch %d enabled epoch %d", currentEpoch, params.BeaconConfig().ElectraForkEpoch)
+	}
 
 	if err = json.Unmarshal(data, &sourceAttestations); err != nil {
 		return nil, nil, errors.Wrap(err, "failed to unmarshal attestation")
@@ -359,6 +364,10 @@ func (s *Server) handleAttestationsElectra(
 
 func (s *Server) handleAttestations(ctx context.Context, data json.RawMessage) (attFailures []*server.IndexedVerificationFailure, failedBroadcasts []string, err error) {
 	var sourceAttestations []*structs.Attestation
+
+	if slots.ToEpoch(s.TimeFetcher.CurrentSlot()) >= params.BeaconConfig().ElectraForkEpoch {
+		return nil, nil, errors.New("old attestation format, only electra attestations should be sent")
+	}
 
 	if err = json.Unmarshal(data, &sourceAttestations); err != nil {
 		return nil, nil, errors.Wrap(err, "failed to unmarshal attestation")

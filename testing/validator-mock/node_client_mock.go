@@ -15,8 +15,8 @@ import (
 
 	health "github.com/OffchainLabs/prysm/v6/api/client/beacon/health"
 	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	empty "github.com/golang/protobuf/ptypes/empty"
 	gomock "go.uber.org/mock/gomock"
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 // MockNodeClient is a mock of NodeClient interface.
@@ -44,7 +44,7 @@ func (m *MockNodeClient) EXPECT() *MockNodeClientMockRecorder {
 }
 
 // Genesis mocks base method.
-func (m *MockNodeClient) Genesis(ctx context.Context, in *empty.Empty) (*eth.Genesis, error) {
+func (m *MockNodeClient) Genesis(ctx context.Context, in *emptypb.Empty) (*eth.Genesis, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Genesis", ctx, in)
 	ret0, _ := ret[0].(*eth.Genesis)
@@ -73,7 +73,7 @@ func (mr *MockNodeClientMockRecorder) HealthTracker() *gomock.Call {
 }
 
 // Peers mocks base method.
-func (m *MockNodeClient) Peers(ctx context.Context, in *empty.Empty) (*eth.Peers, error) {
+func (m *MockNodeClient) Peers(ctx context.Context, in *emptypb.Empty) (*eth.Peers, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Peers", ctx, in)
 	ret0, _ := ret[0].(*eth.Peers)
@@ -88,7 +88,7 @@ func (mr *MockNodeClientMockRecorder) Peers(ctx, in any) *gomock.Call {
 }
 
 // SyncStatus mocks base method.
-func (m *MockNodeClient) SyncStatus(ctx context.Context, in *empty.Empty) (*eth.SyncStatus, error) {
+func (m *MockNodeClient) SyncStatus(ctx context.Context, in *emptypb.Empty) (*eth.SyncStatus, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SyncStatus", ctx, in)
 	ret0, _ := ret[0].(*eth.SyncStatus)
@@ -103,7 +103,7 @@ func (mr *MockNodeClientMockRecorder) SyncStatus(ctx, in any) *gomock.Call {
 }
 
 // Version mocks base method.
-func (m *MockNodeClient) Version(ctx context.Context, in *empty.Empty) (*eth.Version, error) {
+func (m *MockNodeClient) Version(ctx context.Context, in *emptypb.Empty) (*eth.Version, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Version", ctx, in)
 	ret0, _ := ret[0].(*eth.Version)
