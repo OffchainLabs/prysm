@@ -55,10 +55,11 @@ func TestGetDuties_OK(t *testing.T) {
 		State: bs, Root: genesisRoot[:], Genesis: time.Now(),
 	}
 	vs := &Server{
-		HeadFetcher:    chain,
-		TimeFetcher:    chain,
-		SyncChecker:    &mockSync.Sync{IsSyncing: false},
-		PayloadIDCache: cache.NewPayloadIDCache(),
+		HeadFetcher:       chain,
+		TimeFetcher:       chain,
+		ForkchoiceFetcher: chain,
+		SyncChecker:       &mockSync.Sync{IsSyncing: false},
+		PayloadIDCache:    cache.NewPayloadIDCache(),
 	}
 
 	// Test the first validator in registry.
@@ -140,11 +141,12 @@ func TestGetAltairDuties_SyncCommitteeOK(t *testing.T) {
 		State: bs, Root: genesisRoot[:], Genesis: time.Now().Add(time.Duration(-1*int64(slot-1)) * time.Second),
 	}
 	vs := &Server{
-		HeadFetcher:     chain,
-		TimeFetcher:     chain,
-		Eth1InfoFetcher: &mockExecution.Chain{},
-		SyncChecker:     &mockSync.Sync{IsSyncing: false},
-		PayloadIDCache:  cache.NewPayloadIDCache(),
+		HeadFetcher:       chain,
+		TimeFetcher:       chain,
+		ForkchoiceFetcher: chain,
+		Eth1InfoFetcher:   &mockExecution.Chain{},
+		SyncChecker:       &mockSync.Sync{IsSyncing: false},
+		PayloadIDCache:    cache.NewPayloadIDCache(),
 	}
 
 	// Test the first validator in registry.
@@ -246,11 +248,12 @@ func TestGetBellatrixDuties_SyncCommitteeOK(t *testing.T) {
 		State: bs, Root: genesisRoot[:], Genesis: time.Now().Add(time.Duration(-1*int64(slot-1)) * time.Second),
 	}
 	vs := &Server{
-		HeadFetcher:     chain,
-		TimeFetcher:     chain,
-		Eth1InfoFetcher: &mockExecution.Chain{},
-		SyncChecker:     &mockSync.Sync{IsSyncing: false},
-		PayloadIDCache:  cache.NewPayloadIDCache(),
+		HeadFetcher:       chain,
+		TimeFetcher:       chain,
+		ForkchoiceFetcher: chain,
+		Eth1InfoFetcher:   &mockExecution.Chain{},
+		SyncChecker:       &mockSync.Sync{IsSyncing: false},
+		PayloadIDCache:    cache.NewPayloadIDCache(),
 	}
 
 	// Test the first validator in registry.
@@ -338,12 +341,13 @@ func TestGetAltairDuties_UnknownPubkey(t *testing.T) {
 	require.NoError(t, err)
 
 	vs := &Server{
-		HeadFetcher:     chain,
-		TimeFetcher:     chain,
-		Eth1InfoFetcher: &mockExecution.Chain{},
-		SyncChecker:     &mockSync.Sync{IsSyncing: false},
-		DepositFetcher:  depositCache,
-		PayloadIDCache:  cache.NewPayloadIDCache(),
+		HeadFetcher:       chain,
+		ForkchoiceFetcher: chain,
+		TimeFetcher:       chain,
+		Eth1InfoFetcher:   &mockExecution.Chain{},
+		SyncChecker:       &mockSync.Sync{IsSyncing: false},
+		DepositFetcher:    depositCache,
+		PayloadIDCache:    cache.NewPayloadIDCache(),
 	}
 
 	unknownPubkey := bytesutil.PadTo([]byte{'u'}, 48)
@@ -361,7 +365,8 @@ func TestGetDuties_SlotOutOfUpperBound(t *testing.T) {
 		Genesis: time.Now(),
 	}
 	vs := &Server{
-		TimeFetcher: chain,
+		ForkchoiceFetcher: chain,
+		TimeFetcher:       chain,
 	}
 	req := &ethpb.DutiesRequest{
 		Epoch: primitives.Epoch(chain.CurrentSlot()/params.BeaconConfig().SlotsPerEpoch + 2),
@@ -396,10 +401,11 @@ func TestGetDuties_CurrentEpoch_ShouldNotFail(t *testing.T) {
 		State: bState, Root: genesisRoot[:], Genesis: time.Now(),
 	}
 	vs := &Server{
-		HeadFetcher:    chain,
-		TimeFetcher:    chain,
-		SyncChecker:    &mockSync.Sync{IsSyncing: false},
-		PayloadIDCache: cache.NewPayloadIDCache(),
+		HeadFetcher:       chain,
+		ForkchoiceFetcher: chain,
+		TimeFetcher:       chain,
+		SyncChecker:       &mockSync.Sync{IsSyncing: false},
+		PayloadIDCache:    cache.NewPayloadIDCache(),
 	}
 
 	// Test the first validator in registry.
@@ -435,10 +441,11 @@ func TestGetDuties_MultipleKeys_OK(t *testing.T) {
 		State: bs, Root: genesisRoot[:], Genesis: time.Now(),
 	}
 	vs := &Server{
-		HeadFetcher:    chain,
-		TimeFetcher:    chain,
-		SyncChecker:    &mockSync.Sync{IsSyncing: false},
-		PayloadIDCache: cache.NewPayloadIDCache(),
+		HeadFetcher:       chain,
+		ForkchoiceFetcher: chain,
+		TimeFetcher:       chain,
+		SyncChecker:       &mockSync.Sync{IsSyncing: false},
+		PayloadIDCache:    cache.NewPayloadIDCache(),
 	}
 
 	pubkey0 := deposits[0].Data.PublicKey

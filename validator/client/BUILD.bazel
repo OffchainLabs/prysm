@@ -122,6 +122,7 @@ go_test(
     embed = [":go_default_library"],
     deps = [
         "//api/client/beacon/health:go_default_library",
+        "//api/server/structs:go_default_library",
         "//async/event:go_default_library",
         "//beacon-chain/core/signing:go_default_library",
         "//cache/lru:go_default_library",
